@@ -1,23 +1,5 @@
-// This file is derived from the open source project provided by Intel Corportaion that
-// requires the following notice to be kept:
-//--------------------------------------------------------------------------------------
-// Copyright 2013 Intel Corporation
-// All Rights Reserved
-//
-// Permission is granted to use, copy, distribute and prepare derivative works of this
-// software for any purpose and without fee, provided, that the above copyright notice
-// and this statement appear in all copies.  Intel makes no representations about the
-// suitability of this software for any purpose.  THIS SOFTWARE IS PROVIDED "AS IS."
-// INTEL SPECIFICALLY DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, AND ALL LIABILITY,
-// INCLUDING CONSEQUENTIAL AND OTHER INDIRECT DAMAGES, FOR THE USE OF THIS SOFTWARE,
-// INCLUDING LIABILITY FOR INFRINGEMENT OF ANY PROPRIETARY RIGHTS, AND INCLUDING THE
-// WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.  Intel does not
-// assume any responsibility for any errors which may appear in this software nor any
-// responsibility to update it.
-//--------------------------------------------------------------------------------------
-
-#ifndef _STRCUTURES_FXH_
-#define _STRCUTURES_FXH_
+#ifndef _EPIPOLAR_LIGHT_SCATTERING_STRCUTURES_FXH_
+#define _EPIPOLAR_LIGHT_SCATTERING_STRCUTURES_FXH_
 
 #define PI 3.1415928f
 
@@ -58,87 +40,6 @@
 #   endif
 
 #endif
-
-
-#define MAX_CASCADES 8
-struct CascadeAttribs
-{
-	float4 f4LightSpaceScale;
-	float4 f4LightSpaceScaledBias;
-    float4 f4StartEndZ;
-};
-CHECK_STRUCT_ALIGNMENT(CascadeAttribs)
-
-
-struct ShadowMapAttribs
-{
-    // 0
-#ifdef __cplusplus
-    float4x4 mWorldToLightViewT; // Matrices in HLSL are COLUMN-major while float4x4 is ROW major
-#else
-    matrix mWorldToLightView;  // Transform from view space to light projection space
-#endif
-    // 16
-    CascadeAttribs Cascades[MAX_CASCADES];
-
-#ifdef __cplusplus
-    float fCascadeCamSpaceZEnd[MAX_CASCADES];
-    float4x4 mWorldToShadowMapUVDepthT[MAX_CASCADES];
-#else
-	float4 f4CascadeCamSpaceZEnd[MAX_CASCADES/4];
-    matrix mWorldToShadowMapUVDepth[MAX_CASCADES];
-#endif
-
-    // Do not use bool, because sizeof(bool)==1 !
-	BOOL bVisualizeCascades;
-
-    // float3 f3Padding;
-    // Stupid OpenGL compiler does not handle 3-component vectors properly
-    // and screws up the structure layout.
-    // Opengl.org suggests not using vec3 at all
-    int Padding0, Padding1, Padding2;
-};
-CHECK_STRUCT_ALIGNMENT(ShadowMapAttribs)
-
-
-struct LightAttribs
-{
-    float4 f4DirOnLight;
-    float4 f4AmbientLight;
-    float4 f4LightScreenPos;
-    float4 f4ExtraterrestrialSunColor;
-
-    BOOL bIsLightOnScreen;
-    // Stupid OpenGL compiler does not handle 3-component vectors properly
-    // and screws up the structure layout.
-    // Opengl.org suggests not using vec3 at all
-    int Padding0, Padding1, Padding2;
-
-    ShadowMapAttribs ShadowAttribs;
-};
-CHECK_STRUCT_ALIGNMENT(LightAttribs)
-
-
-struct CameraAttribs
-{
-    float4 f4CameraPos;            ///< Camera world position
-    float fNearPlaneZ; 
-    float fFarPlaneZ; // fNearPlaneZ < fFarPlaneZ
-    float2 f2Dummy;
-
-#ifdef __cplusplus
-    float4x4 mViewProjT;
-    //float4x4 mViewT;
-    float4x4 mProjT;
-    float4x4 mViewProjInvT;
-#else
-    matrix mViewProj;
-    //matrix mView;
-    matrix mProj;
-    matrix mViewProjInv;
-#endif
-};
-CHECK_STRUCT_ALIGNMENT(CameraAttribs)
 
 
 #define LIGHT_SCTR_TECHNIQUE_EPIPOLAR_SAMPLING 0
@@ -289,4 +190,4 @@ struct MiscDynamicParams
 };
 CHECK_STRUCT_ALIGNMENT(MiscDynamicParams)
 
-#endif //_STRCUTURES_FXH_
+#endif //_EPIPOLAR_LIGHT_SCATTERING_STRCUTURES_FXH_

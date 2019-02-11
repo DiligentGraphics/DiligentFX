@@ -1,3 +1,4 @@
+"#include \"BasicStructures.fxh\"\n"
 "#include \"AtmosphereShadersCommon.fxh\"\n"
 "\n"
 "Texture2D<float4> g_tex2DSliceEndPoints;\n"

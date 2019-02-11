@@ -1,6 +1,7 @@
 // RefineSampleLocations.fx
 // Refines sample locations using inscattering difference or z difference
 
+#include "BasicStructures.fxh"
 #include "AtmosphereShadersCommon.fxh"
 
 // In fact we only need RG16U texture to store

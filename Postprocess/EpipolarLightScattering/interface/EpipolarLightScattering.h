@@ -42,7 +42,8 @@
 #pragma once
 
 #include "ShaderMacroHelper.h"
-#include "Structures.fxh"
+#include "EpipolarLightScatteringStructures.fxh"
+#include "BasicStructures.fxh"
 #include "RenderDevice.h"
 #include "DeviceContext.h"
 #include "Buffer.h"

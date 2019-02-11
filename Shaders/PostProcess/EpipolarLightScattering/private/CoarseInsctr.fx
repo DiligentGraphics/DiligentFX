@@ -3,6 +3,7 @@
 // Coarse inscattering is used to refine sampling, while extinction is then transformed to 
 // screen space, if extinction evaluation mode is EXTINCTION_EVAL_MODE_EPIPOLAR
 
+#include "BasicStructures.fxh"
 #include "AtmosphereShadersCommon.fxh"
 
 cbuffer cbParticipatingMediaScatteringParams

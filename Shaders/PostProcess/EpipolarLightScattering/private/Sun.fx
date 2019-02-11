@@ -1,3 +1,4 @@
+#include "BasicStructures.fxh"
 #include "AtmosphereShadersCommon.fxh"
 
 cbuffer cbCameraAttribs

@@ -1,6 +1,7 @@
 //RayMarch.fx
 //Performs ray marching and computes shadowed scattering
 
+#include "BasicStructures.fxh"
 #include "AtmosphereShadersCommon.fxh"
 
 cbuffer cbParticipatingMediaScatteringParams

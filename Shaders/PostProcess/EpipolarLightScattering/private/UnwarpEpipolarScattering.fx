@@ -2,6 +2,7 @@
 // Transforms scattering and extinction from epipolar space to camera space and combines with the
 // back buffer
 
+#include "BasicStructures.fxh"
 #include "AtmosphereShadersCommon.fxh"
 
 cbuffer cbParticipatingMediaScatteringParams

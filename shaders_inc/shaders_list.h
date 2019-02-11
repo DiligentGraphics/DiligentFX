@@ -7,6 +7,10 @@ struct ShaderIncInfo
 static const ShaderIncInfo g_Shaders[] =
 {
     {
+        "BasicStructures.fxh",
+        #include "BasicStructures.fxh.h"
+    },
+    {
         "AtmosphereShadersCommon.fxh",
         #include "AtmosphereShadersCommon.fxh.h"
     },
@@ -127,7 +131,7 @@ static const ShaderIncInfo g_Shaders[] =
         #include "UpdateHighOrderScattering.fx.h"
     },
     {
-        "Structures.fxh",
-        #include "Structures.fxh.h"
+        "EpipolarLightScatteringStructures.fxh",
+        #include "EpipolarLightScatteringStructures.fxh.h"
     },
 };

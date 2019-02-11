@@ -1,7 +1,7 @@
 "// ReconstructCameraSpaceZ.fx\n"
 "// Reconstructs camera space z from depth\n"
 "\n"
-"#include \"Structures.fxh\"\n"
+"#include \"BasicStructures.fxh\"\n"
 "#include \"AtmosphereShadersCommon.fxh\"\n"
 "\n"
 "Texture2D<float>  g_tex2DDepthBuffer;\n"

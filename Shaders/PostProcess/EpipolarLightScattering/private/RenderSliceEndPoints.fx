@@ -1,4 +1,5 @@
 
+#include "BasicStructures.fxh"
 #include "AtmosphereShadersCommon.fxh"
 
 cbuffer cbLightParams

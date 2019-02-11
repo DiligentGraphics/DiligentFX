@@ -1,7 +1,7 @@
 #ifndef _ATMOSPHERE_SHADERS_COMMON_FXH_
 #define _ATMOSPHERE_SHADERS_COMMON_FXH_
 
-#include "Structures.fxh"
+#include "EpipolarLightScatteringStructures.fxh"
 
 #define FLT_MAX 3.402823466e+38f
 
