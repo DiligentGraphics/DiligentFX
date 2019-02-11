@@ -23,29 +23,42 @@
 
 #ifdef __cplusplus
 
-#ifndef BOOL
-#   define BOOL int32_t // Do not use bool, because sizeof(bool)==1 !
-#endif
+#   ifndef BOOL
+#      define BOOL int32_t // Do not use bool, because sizeof(bool)==1 !
+#   endif
 
-#ifndef TRUE
-#   define TRUE 1
-#endif
+#   ifndef TRUE
+#      define TRUE 1
+#   endif
 
-#ifndef FALSE
-#   define FALSE 0
-#endif
+#   ifndef FALSE
+#      define FALSE 0
+#   endif
+
+#   ifndef CHECK_STRUCT_ALIGNMENT
+#       define CHECK_STRUCT_ALIGNMENT(s) static_assert( sizeof(s) % 16 == 0, "sizeof(" #s ") is not multiple of 16" );
+#   endif
+
+#   ifndef DEFAULT_VALUE
+#       define DEFAULT_VALUE(x) =x
+#   endif
 
 #else
 
-#   define BOOL bool
+#   ifndef BOOL
+#       define BOOL bool
+#   endif
+
+#   ifndef CHECK_STRUCT_ALIGNMENT
+#       define CHECK_STRUCT_ALIGNMENT(s)
+#   endif
+
+#   ifndef DEFAULT_VALUE
+#       define DEFAULT_VALUE(x)
+#   endif
 
 #endif
 
-#ifdef __cplusplus
-#   define CHECK_STRUCT_ALIGNMENT(s) static_assert( sizeof(s) % 16 == 0, "structure size is not multiple of 16" );
-#else
-#   define CHECK_STRUCT_ALIGNMENT(s)
-#endif
 
 #define MAX_CASCADES 8
 struct CascadeAttribs
@@ -54,9 +67,8 @@ struct CascadeAttribs
 	float4 f4LightSpaceScaledBias;
     float4 f4StartEndZ;
 };
-#ifdef __cplusplus
-static_assert( (sizeof(CascadeAttribs) % 16) == 0, "sizeof(CascadeAttribs) is not multiple of 16" );
-#endif
+CHECK_STRUCT_ALIGNMENT(CascadeAttribs)
+
 
 struct ShadowMapAttribs
 {
@@ -86,9 +98,7 @@ struct ShadowMapAttribs
     // Opengl.org suggests not using vec3 at all
     int Padding0, Padding1, Padding2;
 };
-#ifdef __cplusplus
-static_assert( (sizeof(ShadowMapAttribs) % 16) == 0, "sizeof(ShadowMapAttribs) is not multiple of 16" );
-#endif
+CHECK_STRUCT_ALIGNMENT(ShadowMapAttribs)
 
 
 struct LightAttribs
@@ -107,6 +117,7 @@ struct LightAttribs
     ShadowMapAttribs ShadowAttribs;
 };
 CHECK_STRUCT_ALIGNMENT(LightAttribs)
+
 
 struct CameraAttribs
 {
@@ -128,6 +139,7 @@ struct CameraAttribs
 #endif
 };
 CHECK_STRUCT_ALIGNMENT(CameraAttribs)
+
 
 #define LIGHT_SCTR_TECHNIQUE_EPIPOLAR_SAMPLING 0
 #define LIGHT_SCTR_TECHNIQUE_BRUTE_FORCE 1
@@ -165,105 +177,63 @@ CHECK_STRUCT_ALIGNMENT(CameraAttribs)
 
 struct PostProcessingAttribs
 {
-    uint m_uiNumEpipolarSlices;
-    uint m_uiMaxSamplesInSlice;
-    uint m_uiInitialSampleStepInSlice;
-    uint m_uiEpipoleSamplingDensityFactor;
+    uint m_uiNumEpipolarSlices              DEFAULT_VALUE(512);
+    uint m_uiMaxSamplesInSlice              DEFAULT_VALUE(256);
+    uint m_uiInitialSampleStepInSlice       DEFAULT_VALUE(16);
+    // Note that sampling near the epipole is very cheap since only a few steps
+    // required to perform ray marching
+    uint m_uiEpipoleSamplingDensityFactor   DEFAULT_VALUE(2);
 
-    float m_fRefinementThreshold;
+    float m_fRefinementThreshold            DEFAULT_VALUE(0.03f);
     // do not use bool, because sizeof(bool)==1 and as a result bool variables
     // will be incorrectly mapped on GPU constant buffer
-    BOOL m_bShowSampling; 
-    BOOL m_bCorrectScatteringAtDepthBreaks; 
-    BOOL m_bShowDepthBreaks; 
+    BOOL m_bShowSampling                    DEFAULT_VALUE(FALSE); 
+    BOOL m_bCorrectScatteringAtDepthBreaks  DEFAULT_VALUE(FALSE); 
+    BOOL m_bShowDepthBreaks                 DEFAULT_VALUE(FALSE); 
 
-    BOOL m_bShowLightingOnly;
-    BOOL m_bOptimizeSampleLocations;
-    BOOL m_bEnableLightShafts;
-    uint m_uiInstrIntegralSteps;
+    BOOL m_bShowLightingOnly                DEFAULT_VALUE(FALSE);
+    BOOL m_bOptimizeSampleLocations         DEFAULT_VALUE(TRUE);
+    BOOL m_bEnableLightShafts               DEFAULT_VALUE(TRUE);
+    uint m_uiInstrIntegralSteps             DEFAULT_VALUE(30);
     
-    float2 m_f2ShadowMapTexelSize;
-    uint m_uiShadowMapResolution;
-    uint m_uiMinMaxShadowMapResolution;
+    float2 m_f2ShadowMapTexelSize           DEFAULT_VALUE(float2(0,0));
+    uint m_uiShadowMapResolution            DEFAULT_VALUE(0);
+    uint m_uiMinMaxShadowMapResolution      DEFAULT_VALUE(0);
 
-    BOOL m_bUse1DMinMaxTree;
-    float m_fMaxShadowMapStep;
-    float m_fMiddleGray;
-    uint m_uiLightSctrTechnique;
+    BOOL m_bUse1DMinMaxTree                 DEFAULT_VALUE(TRUE);
+    float m_fMaxShadowMapStep               DEFAULT_VALUE(16.f);
+    float m_fMiddleGray                     DEFAULT_VALUE(0.18f);
+    uint m_uiLightSctrTechnique             DEFAULT_VALUE(LIGHT_SCTR_TECHNIQUE_EPIPOLAR_SAMPLING);
 
-    int m_iNumCascades;
-    int m_iFirstCascade;
-    float m_fNumCascades;
-    float m_fFirstCascade;
+    int m_iNumCascades                      DEFAULT_VALUE(0);
+    int m_iFirstCascade                     DEFAULT_VALUE(2);
+    float m_fNumCascades                    DEFAULT_VALUE(0);
+    float m_fFirstCascade                   DEFAULT_VALUE(1);
 
-    uint m_uiCascadeProcessingMode;
-    uint m_uiRefinementCriterion;
-    BOOL m_bIs32BitMinMaxMipMap;
-    uint m_uiMultipleScatteringMode;
+    uint m_uiCascadeProcessingMode          DEFAULT_VALUE(CASCADE_PROCESSING_MODE_SINGLE_PASS);
+    uint m_uiRefinementCriterion            DEFAULT_VALUE(REFINEMENT_CRITERION_INSCTR_DIFF);
+    BOOL m_bIs32BitMinMaxMipMap             DEFAULT_VALUE(FALSE);
+    uint m_uiMultipleScatteringMode         DEFAULT_VALUE(MULTIPLE_SCTR_MODE_UNOCCLUDED);
 
-    uint m_uiSingleScatteringMode;
-    BOOL m_bAutoExposure;
-    uint m_uiToneMappingMode;
-    BOOL m_bLightAdaptation;
-    
-    float m_fWhitePoint;
-    float m_fLuminanceSaturation;
+    uint m_uiSingleScatteringMode           DEFAULT_VALUE(SINGLE_SCTR_MODE_INTEGRATION);
+    BOOL m_bAutoExposure                    DEFAULT_VALUE(TRUE);
+    uint m_uiToneMappingMode                DEFAULT_VALUE(TONE_MAPPING_MODE_UNCHARTED2);
+    BOOL m_bLightAdaptation                 DEFAULT_VALUE(TRUE);
+
+    float m_fWhitePoint                     DEFAULT_VALUE(3.f);
+    float m_fLuminanceSaturation            DEFAULT_VALUE(1.f);
     float2 f2Dummy;
     
-    uint m_uiExtinctionEvalMode;
-    BOOL m_bUseCustomSctrCoeffs;
-    float m_fAerosolDensityScale;
-    float m_fAerosolAbsorbtionScale;
+    uint m_uiExtinctionEvalMode             DEFAULT_VALUE(EXTINCTION_EVAL_MODE_EPIPOLAR);
+    BOOL m_bUseCustomSctrCoeffs             DEFAULT_VALUE(FALSE);
+    float m_fAerosolDensityScale            DEFAULT_VALUE(1.f);
+    float m_fAerosolAbsorbtionScale         DEFAULT_VALUE(0.1f);
 
-    float4 m_f4CustomRlghBeta;
-    float4 m_f4CustomMieBeta;
-
-#ifdef __cplusplus
-    PostProcessingAttribs() : 
-        m_uiNumEpipolarSlices(512),
-        m_uiMaxSamplesInSlice(256),
-        m_uiInitialSampleStepInSlice(16),
-        // Note that sampling near the epipole is very cheap since only a few steps
-        // required to perform ray marching
-        m_uiEpipoleSamplingDensityFactor(2),
-        m_fRefinementThreshold(0.03f),
-        m_bShowSampling(FALSE),
-        m_bCorrectScatteringAtDepthBreaks(FALSE),
-        m_bShowDepthBreaks(FALSE),
-        m_bShowLightingOnly(FALSE),
-        m_bOptimizeSampleLocations(TRUE),
-        m_bEnableLightShafts(TRUE),
-        m_uiInstrIntegralSteps(30),
-        m_f2ShadowMapTexelSize(0,0),
-        m_uiMinMaxShadowMapResolution(0),
-        m_bUse1DMinMaxTree(TRUE),
-        m_fMaxShadowMapStep(16.f),
-        m_fMiddleGray(0.18f),
-        m_uiLightSctrTechnique(LIGHT_SCTR_TECHNIQUE_EPIPOLAR_SAMPLING),
-        m_iNumCascades(0),
-        m_iFirstCascade(2),
-        m_fNumCascades(0),
-        m_fFirstCascade(1),
-        m_uiCascadeProcessingMode(CASCADE_PROCESSING_MODE_SINGLE_PASS),
-        m_uiRefinementCriterion(REFINEMENT_CRITERION_INSCTR_DIFF),
-        m_bIs32BitMinMaxMipMap(FALSE),
-        m_uiMultipleScatteringMode(MULTIPLE_SCTR_MODE_UNOCCLUDED),
-        m_uiSingleScatteringMode(SINGLE_SCTR_MODE_INTEGRATION),
-        m_bAutoExposure(TRUE),
-        m_uiToneMappingMode(TONE_MAPPING_MODE_UNCHARTED2),
-        m_bLightAdaptation(TRUE),
-        m_fWhitePoint(3.f),
-        m_fLuminanceSaturation(1.f),
-        m_uiExtinctionEvalMode(EXTINCTION_EVAL_MODE_EPIPOLAR),
-        m_bUseCustomSctrCoeffs(FALSE),
-        m_fAerosolDensityScale(1.f),
-        m_fAerosolAbsorbtionScale(0.1f),
-        m_f4CustomRlghBeta( 5.8e-6f, 13.5e-6f, 33.1e-6f, 0.f ),
-        m_f4CustomMieBeta(2.e-5f, 2.e-5f, 2.e-5f, 0.f)
-    {}
-#endif
+    float4 m_f4CustomRlghBeta               DEFAULT_VALUE(float4(5.8e-6f, 13.5e-6f, 33.1e-6f, 0.f));
+    float4 m_f4CustomMieBeta                DEFAULT_VALUE(float4(2.e-5f, 2.e-5f, 2.e-5f, 0.f));
 };
 CHECK_STRUCT_ALIGNMENT(PostProcessingAttribs)
+
 
 struct AirScatteringAttribs
 {
@@ -289,32 +259,17 @@ struct AirScatteringAttribs
                    // y == 1 + g^2
                    // z == -2*g
 
-    float fEarthRadius;
-    float fAtmTopHeight;
-    float2 f2ParticleScaleHeight;
+    float fEarthRadius              DEFAULT_VALUE(6360000.f);
+    float fAtmTopHeight             DEFAULT_VALUE(80000.f);
+    float2 f2ParticleScaleHeight    DEFAULT_VALUE(float2(7994.f, 1200.f));
     
-    float fTurbidity;
-    float fAtmTopRadius;
-    float m_fAerosolPhaseFuncG;
+    float fTurbidity                DEFAULT_VALUE(1.02f);
+    float fAtmTopRadius             DEFAULT_VALUE(fEarthRadius + fAtmTopHeight);
+    float m_fAerosolPhaseFuncG      DEFAULT_VALUE(0.76f);
     float m_fDummy;
-
-
-#ifdef __cplusplus
-    AirScatteringAttribs():
-        // Air molecules and aerosols are assumed to be distributed
-        // between 6360 km and 6420 km
-        fEarthRadius(6360000.f),
-        fAtmTopHeight(80000.f),
-        f2ParticleScaleHeight(7994.f, 1200.f),
-        fTurbidity(1.02f),
-        m_fAerosolPhaseFuncG(0.76f)
-    {
-        fAtmTopRadius = fEarthRadius + fAtmTopHeight;
-    }
-#endif
 };
-
 CHECK_STRUCT_ALIGNMENT(AirScatteringAttribs)
+
 
 struct MiscDynamicParams
 {
