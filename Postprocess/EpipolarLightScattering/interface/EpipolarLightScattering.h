@@ -56,23 +56,23 @@ namespace Diligent
 
 struct FrameAttribs
 {
-    IRenderDevice*  pDevice;
-    IDeviceContext* pDeviceContext;
+    IRenderDevice*  pDevice         = nullptr;
+    IDeviceContext* pDeviceContext  = nullptr;
     
-    double dElapsedTime;
+    double dElapsedTime             = 0;
 
-    LightAttribs*   pLightAttribs;
-    IBuffer*        pcbLightAttribs;
-    IBuffer*        pcbCameraAttribs;
+    LightAttribs*   pLightAttribs    = nullptr;
+    IBuffer*        pcbLightAttribs  = nullptr;
+    IBuffer*        pcbCameraAttribs = nullptr;
 
     //CameraAttribs CameraAttribs;
     
-    ITextureView*   ptex2DSrcColorBufferSRV;
-    ITextureView*   ptex2DSrcColorBufferRTV;
-    ITextureView*   ptex2DSrcDepthBufferDSV;
-    ITextureView*   ptex2DSrcDepthBufferSRV;
-    ITextureView*   ptex2DShadowMapSRV;
-    ITextureView*   pDstRTV;
+    ITextureView*   ptex2DSrcColorBufferSRV = nullptr;
+    ITextureView*   ptex2DSrcColorBufferRTV = nullptr;
+    ITextureView*   ptex2DSrcDepthBufferDSV = nullptr;
+    ITextureView*   ptex2DSrcDepthBufferSRV = nullptr;
+    ITextureView*   ptex2DShadowMapSRV      = nullptr;
+    ITextureView*   pDstRTV                 = nullptr;
 };
 
 class EpipolarLightScattering

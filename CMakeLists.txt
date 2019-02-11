@@ -4,7 +4,9 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 project(DiligentFX CXX)
 
-add_library(DiligentFX STATIC README.md)
+file(GLOB_RECURSE SHADERS LIST_DIRECTORIES false Shaders/*.*)
+
+add_library(DiligentFX STATIC README.md ${SHADERS})
 
 target_link_libraries(DiligentFX 
 PUBLIC
@@ -42,6 +44,7 @@ endforeach()
 # Convert shaders to headers and generate master header with the list of all files
 if(NOT FILE2STRING_PATH STREQUAL "")
     set(SHADER_OUTPUT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shaders_inc)
+
     file(MAKE_DIRECTORY ${SHADER_OUTPUT_DIR})
 
     set(SHADERS_LIST_FILE shaders_inc/shaders_list.h)
@@ -56,7 +59,7 @@ if(NOT FILE2STRING_PATH STREQUAL "")
         "{"
         )
 
-    foreach(FILE ${SHADER_TO_HEADER_LIST})
+    foreach(FILE ${SHADERS})
 
         get_filename_component(FILE_NAME ${FILE} NAME)
         add_custom_command(TARGET DiligentFXCustomCommands 
@@ -83,5 +86,3 @@ if(NOT FILE2STRING_PATH STREQUAL "")
 else()
     message(WARNING "File2String utility is currently unavailable on this host system. This is not an issues unless you modify epipolar light scattering shaders")
 endif()
-
-unset(SHADER_TO_HEADER_LIST CACHE)
