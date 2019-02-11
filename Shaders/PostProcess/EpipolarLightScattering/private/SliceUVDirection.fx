@@ -25,10 +25,9 @@ void RenderSliceUVDirInShadowMapTexturePS(in ScreenSizeQuadVSOutput VSOut,
                                           // Moreover, even if the shader is not using the argument,
                                           // it still must be declared.
 
-                                          in float4 f4PosPS : SV_Position,
                                           out float4 f4SliceUVDirAndStart : SV_Target )
 {
-    int iSliceInd = int(f4PosPS.x);
+    int iSliceInd = int(VSOut.f4PixelPos.x);
     // Load epipolar slice endpoints
     float4 f4SliceEndpoints = g_tex2DSliceEndPoints.Load(  int3(iSliceInd,0,0) );
     // All correct entry points are completely inside the [-1+1/W,1-1/W]x[-1+1/H,1-1/H] area
@@ -38,7 +37,7 @@ void RenderSliceUVDirInShadowMapTexturePS(in ScreenSizeQuadVSOutput VSOut,
         return;
     }
 
-    int iCascadeInd = int(f4PosPS.y);
+    int iCascadeInd = int(VSOut.f4PixelPos.y);
     matrix mWorldToShadowMapUVDepth = g_LightAttribs.ShadowAttribs.mWorldToShadowMapUVDepth[iCascadeInd];
 
     // Reconstruct slice exit point position in world space

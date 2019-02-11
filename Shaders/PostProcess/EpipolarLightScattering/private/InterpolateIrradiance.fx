@@ -13,11 +13,10 @@ void InterpolateIrradiancePS(ScreenSizeQuadVSOutput VSOut,
                              // Moreover, even if the shader is not using the argument,
                              // it still must be declared.
 
-                             in float4 f4Pos : SV_Position,
                              out float4 f4InterpolatedIrradiance : SV_Target)
 {
-    int iSampleInd = int(f4Pos.x);
-    int iSliceInd = int(f4Pos.y);
+    int iSampleInd = int(VSOut.f4PixelPos.x);
+    int iSliceInd = int(VSOut.f4PixelPos.y);
     // Get interpolation sources
     uint2 ui2InterpolationSources = g_tex2DInterpolationSource.Load( int3(iSampleInd, iSliceInd, 0) );
     float fInterpolationPos = float(iSampleInd - int(ui2InterpolationSources.x)) / float( max(ui2InterpolationSources.y - ui2InterpolationSources.x, 1u) );

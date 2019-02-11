@@ -584,10 +584,9 @@ float3 ComputeShadowedInscattering( in float2 f2RayMarchingSampleLocation,
 
 
 void RayMarchPS(in ScreenSizeQuadVSOutput VSOut,
-                in float4 f4PosPS : SV_Position,
                 out float4 f4Inscattering : SV_TARGET)
 {
-    uint2 ui2SamplePosSliceInd = uint2(f4PosPS.xy);
+    uint2 ui2SamplePosSliceInd = uint2(VSOut.f4PixelPos.xy);
     float2 f2SampleLocation = g_tex2DCoordinates.Load( int3(ui2SamplePosSliceInd, 0) );
     float fRayEndCamSpaceZ = g_tex2DEpipolarCamSpaceZ.Load( int3(ui2SamplePosSliceInd, 0) );
 
@@ -599,7 +598,7 @@ void RayMarchPS(in ScreenSizeQuadVSOutput VSOut,
     }
     f4Inscattering = F4ONE;
 #if ENABLE_LIGHT_SHAFTS
-    float fCascade = g_MiscParams.fCascadeInd + VSOut.m_fInstID;
+    float fCascade = g_MiscParams.fCascadeInd + VSOut.fInstID;
     f4Inscattering.rgb = 
         ComputeShadowedInscattering(f2SampleLocation, 
                                     fRayEndCamSpaceZ,
@@ -618,11 +617,11 @@ void RayMarchPS(in ScreenSizeQuadVSOutput VSOut,
 //    if( g_PPAttribs.m_bShowDepthBreaks )
 //        return float3(0,1,0);
 //
-//    float fCascade = g_MiscParams.fCascadeInd + VSOut.m_fInstID;
-//    float fRayEndCamSpaceZ = g_tex2DCamSpaceZ.SampleLevel( samLinearClamp, ProjToUV(VSOut.m_f2PosPS.xy), 0 );
+//    float fCascade = g_MiscParams.fCascadeInd + VSOut.fInstID;
+//    float fRayEndCamSpaceZ = g_tex2DCamSpaceZ.SampleLevel( samLinearClamp, ProjToUV(VSOut.f2NormalizedXY.xy), 0 );
 //
 //#if ENABLE_LIGHT_SHAFTS
-//    return ComputeShadowedInscattering(VSOut.m_f2PosPS.xy, 
+//    return ComputeShadowedInscattering(VSOut.f2NormalizedXY.xy, 
 //                              fRayEndCamSpaceZ,
 //                              fCascade,
 //                              false, // We cannot use min/max optimization at depth breaks
@@ -630,7 +629,7 @@ void RayMarchPS(in ScreenSizeQuadVSOutput VSOut,
 //                              );
 //#else
 //    float3 f3Inscattering, f3Extinction;
-//    ComputeUnshadowedInscattering(VSOut.m_f2PosPS.xy, fRayEndCamSpaceZ, float(g_PPAttribs.m_uiInstrIntegralSteps), f3Inscattering, f3Extinction);
+//    ComputeUnshadowedInscattering(VSOut.f2NormalizedXY.xy, fRayEndCamSpaceZ, float(g_PPAttribs.m_uiInstrIntegralSteps), f3Inscattering, f3Extinction);
 //    f3Inscattering *= g_LightAttribs.f4ExtraterrestrialSunColor.rgb;
 //    return f3Inscattering;
 //#endif
@@ -639,37 +638,36 @@ void RayMarchPS(in ScreenSizeQuadVSOutput VSOut,
 
 
 void FixAndApplyInscatteredRadiancePS(ScreenSizeQuadVSOutput VSOut,
-                                      in float4 f4PosPS : SV_Position,
                                       out float4 f4Color : SV_Target)
 {
     f4Color = float4(0.0, 1.0, 0.0, 1.0);
     if( g_PPAttribs.m_bShowDepthBreaks )
         return;
 
-    float fCamSpaceZ = g_tex2DCamSpaceZ.SampleLevel(g_tex2DCamSpaceZ_sampler, NormalizedDeviceXYToTexUV(VSOut.m_f2PosPS), 0 );
+    float fCamSpaceZ = g_tex2DCamSpaceZ.SampleLevel(g_tex2DCamSpaceZ_sampler, NormalizedDeviceXYToTexUV(VSOut.f2NormalizedXY), 0 );
     float3 f3BackgroundColor = float3(0.0, 0.0, 0.0);
     [branch]
     if( !g_PPAttribs.m_bShowLightingOnly )
     {
-        f3BackgroundColor = g_tex2DColorBuffer.Load( int3(f4PosPS.xy,0) ).rgb;
+        f3BackgroundColor = g_tex2DColorBuffer.Load( int3(VSOut.f4PixelPos.xy,0) ).rgb;
         f3BackgroundColor *= (fCamSpaceZ > g_CameraAttribs.fFarPlaneZ) ? g_LightAttribs.f4ExtraterrestrialSunColor.rgb : float3(1.0, 1.0, 1.0);
-        float3 f3ReconstructedPosWS = ProjSpaceXYZToWorldSpace(float3(VSOut.m_f2PosPS.xy, fCamSpaceZ), g_CameraAttribs.mProj, g_CameraAttribs.mViewProjInv);
+        float3 f3ReconstructedPosWS = ProjSpaceXYZToWorldSpace(float3(VSOut.f2NormalizedXY.xy, fCamSpaceZ), g_CameraAttribs.mProj, g_CameraAttribs.mViewProjInv);
         float3 f3Extinction = GetExtinction(g_CameraAttribs.f4CameraPos.xyz, f3ReconstructedPosWS);
         f3BackgroundColor *= f3Extinction.rgb;
     }
     
-    float fCascade = g_MiscParams.fCascadeInd + VSOut.m_fInstID;
+    float fCascade = g_MiscParams.fCascadeInd + VSOut.fInstID;
 
 #if ENABLE_LIGHT_SHAFTS
     float3 f3InsctrColor = 
-        ComputeShadowedInscattering(VSOut.m_f2PosPS.xy, 
+        ComputeShadowedInscattering(VSOut.f2NormalizedXY.xy, 
                               fCamSpaceZ,
                               fCascade,
                               0u // Ignored
                               );
 #else
     float3 f3InsctrColor, f3Extinction;
-    ComputeUnshadowedInscattering(VSOut.m_f2PosPS.xy, fCamSpaceZ, float(g_PPAttribs.m_uiInstrIntegralSteps), f3InsctrColor, f3Extinction);
+    ComputeUnshadowedInscattering(VSOut.f2NormalizedXY.xy, fCamSpaceZ, float(g_PPAttribs.m_uiInstrIntegralSteps), f3InsctrColor, f3Extinction);
     f3InsctrColor *= g_LightAttribs.f4ExtraterrestrialSunColor.rgb;
 #endif
 

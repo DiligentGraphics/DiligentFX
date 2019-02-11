@@ -24,10 +24,9 @@ cbuffer cbMiscDynamicParams
 //      uiMinMaxShadowMapResolution/2
 //                         
 void ComputeMinMaxShadowMapLevelPS(in ScreenSizeQuadVSOutput VSOut,
-                                   in float4 f4Pos : SV_Position,
                                    out float2 f2MinMaxDepth : SV_Target)
 {
-    uint2 uiDstSampleInd = uint2(f4Pos.xy);
+    uint2 uiDstSampleInd = uint2(VSOut.f4PixelPos.xy);
     uint2 uiSrcSample0Ind = uint2(g_MiscParams.ui4SrcDstMinMaxLevelOffset.x + (uiDstSampleInd.x - g_MiscParams.ui4SrcDstMinMaxLevelOffset.z)*2u, uiDstSampleInd.y);
     uint2 uiSrcSample1Ind = uiSrcSample0Ind + uint2(1,0);
     float2 f2MinMaxDepth0 = g_tex2DMinMaxLightSpaceDepth.Load( int3(uiSrcSample0Ind,0) ).xy;

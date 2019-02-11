@@ -108,7 +108,7 @@ float4 GenerateSliceEndpointsPS(ScreenSizeQuadVSOutput VSOut
                                 // it still must be declared
                                 ) : SV_Target
 {
-    float2 f2UV = NormalizedDeviceXYToTexUV(VSOut.m_f2PosPS);
+    float2 f2UV = NormalizedDeviceXYToTexUV(VSOut.f2NormalizedXY);
 
     // Note that due to the rasterization rules, UV coordinates are biased by 0.5 texel size.
     //

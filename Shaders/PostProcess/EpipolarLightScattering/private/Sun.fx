@@ -15,7 +15,7 @@ cbuffer cbLightParams
 
 struct SunVSOutput
 {
-    float2 f2PosPS : PosPS; // Position in projection space [-1,1]x[-1,1]
+    float2 f2NormalizedXY : NORMALIZED_XY; // Normalized device XY coordinates [-1,1]x[-1,1]
 };
 
 void SunVS(in uint VertexId : SV_VertexID,
@@ -39,7 +39,7 @@ void SunVS(in uint VertexId : SV_VertexID,
     Verts[2] = MinMaxUV.zy;
     Verts[3] = MinMaxUV.zw;
 
-    VSOut.f2PosPS = Verts[VertexId];
+    VSOut.f2NormalizedXY = Verts[VertexId];
     f4Pos = float4(Verts[VertexId], 1.0, 1.0);
 }
 
@@ -48,7 +48,7 @@ void SunPS(SunVSOutput VSOut,
 {
     float2 fCotanHalfFOV = float2( MATRIX_ELEMENT(g_CameraAttribs.mProj, 0, 0), MATRIX_ELEMENT(g_CameraAttribs.mProj, 1, 1) );
     float2 f2SunScreenSize = fTanSunAngularRadius * fCotanHalfFOV;
-    float2 f2dXY = (VSOut.f2PosPS - g_LightAttribs.f4LightScreenPos.xy) / f2SunScreenSize;
+    float2 f2dXY = (VSOut.f2NormalizedXY - g_LightAttribs.f4LightScreenPos.xy) / f2SunScreenSize;
     f4Color.rgb = sqrt(saturate(1.0 - dot(f2dXY, f2dXY))) * F3ONE;
     f4Color.a = 1.0;
 }

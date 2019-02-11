@@ -108,7 +108,7 @@
 "                                // it still must be declared\n"
 "                                ) : SV_Target\n"
 "{\n"
-"    float2 f2UV = NormalizedDeviceXYToTexUV(VSOut.m_f2PosPS);\n"
+"    float2 f2UV = NormalizedDeviceXYToTexUV(VSOut.f2NormalizedXY);\n"
 "\n"
 "    // Note that due to the rasterization rules, UV coordinates are biased by 0.5 texel size.\n"
 "    //\n"

@@ -17,23 +17,22 @@ cbuffer cbMiscDynamicParams
 // Note that min/max shadow map does not contain finest resolution level
 // The first level it contains corresponds to step == 2
 void InitializeMinMaxShadowMapPS(in ScreenSizeQuadVSOutput VSOut,
-                                 in float4 f4Pos : SV_Position,
                                  out float2 f2MinMaxDepth : SV_Target)
 {
     uint uiSliceInd;
     float fCascadeInd;
 #if USE_COMBINED_MIN_MAX_TEXTURE
-    fCascadeInd = floor(f4Pos.y / float(NUM_EPIPOLAR_SLICES));
-    uiSliceInd = uint(f4Pos.y - fCascadeInd * float(NUM_EPIPOLAR_SLICES));
+    fCascadeInd = floor(VSOut.f4PixelPos.y / float(NUM_EPIPOLAR_SLICES));
+    uiSliceInd = uint(VSOut.f4PixelPos.y - fCascadeInd * float(NUM_EPIPOLAR_SLICES));
     fCascadeInd += g_PPAttribs.m_fFirstCascade;
 #else
-    uiSliceInd = uint(f4Pos.y);
+    uiSliceInd = uint(VSOut.f4PixelPos.y);
     fCascadeInd = g_MiscParams.fCascadeInd;
 #endif
     // Load slice direction in shadow map
     float4 f4SliceUVDirAndOrigin = g_tex2DSliceUVDirAndOrigin.Load( uint3(uiSliceInd, fCascadeInd, 0) );
     // Calculate current sample position on the ray
-    float2 f2CurrUV = f4SliceUVDirAndOrigin.zw + f4SliceUVDirAndOrigin.xy * floor(f4Pos.x) * 2.f;
+    float2 f2CurrUV = f4SliceUVDirAndOrigin.zw + f4SliceUVDirAndOrigin.xy * floor(VSOut.f4PixelPos.x) * 2.f;
     
     float4 f4MinDepth = F4ONE;
     float4 f4MaxDepth = F4ZERO;

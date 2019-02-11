@@ -13,12 +13,11 @@ void GenerateCoordinateTexturePS(ScreenSizeQuadVSOutput VSOut,
                                  // arguments must have the exact same name as vertex shader 
                                  // outputs and must go in the same order.
 
-                                 in float4 f4Pos : SV_Position,
                                  out float2 f2XY : SV_Target0,
                                  out float fCamSpaceZ : SV_Target1)
 
 {
-    float4 f4SliceEndPoints = g_tex2DSliceEndPoints.Load( int3(f4Pos.y,0,0) );
+    float4 f4SliceEndPoints = g_tex2DSliceEndPoints.Load( int3(VSOut.f4PixelPos.y,0,0) );
     
     // If slice entry point is outside [-1,1]x[-1,1] area, the slice is completely invisible
     // and we can skip it from further processing.
@@ -30,7 +29,7 @@ void GenerateCoordinateTexturePS(ScreenSizeQuadVSOutput VSOut,
         discard;
     }
 
-    float2 f2UV = NormalizedDeviceXYToTexUV(VSOut.m_f2PosPS);
+    float2 f2UV = NormalizedDeviceXYToTexUV(VSOut.f2NormalizedXY);
 
     // Note that due to the rasterization rules, UV coordinates are biased by 0.5 texel size.
     //

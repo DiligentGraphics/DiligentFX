@@ -28,9 +28,8 @@ void ReconstructCameraSpaceZPS(ScreenSizeQuadVSOutput VSOut,
                                // Moreover, even if the shader is not using the argument,
                                // it still must be declared.
 
-                               in float4 f4Pos : SV_Position,
                                out float fCamSpaceZ : SV_Target)
 {
-    float fDepth = g_tex2DDepthBuffer.Load( int3(f4Pos.xy,0) );
+    float fDepth = g_tex2DDepthBuffer.Load( int3(VSOut.f4PixelPos.xy,0) );
     fCamSpaceZ = DepthToCameraZ(fDepth, g_CameraAttribs.mProj);
 }

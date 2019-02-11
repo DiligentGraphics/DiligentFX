@@ -288,11 +288,11 @@ void ApplyInscatteredRadiancePS(ScreenSizeQuadVSOutput VSOut,
 
                                 out float4 f4Color : SV_Target)
 {
-    float2 f2UV = NormalizedDeviceXYToTexUV(VSOut.m_f2PosPS);
+    float2 f2UV = NormalizedDeviceXYToTexUV(VSOut.f2NormalizedXY);
     float fCamSpaceZ = g_tex2DCamSpaceZ.SampleLevel(g_tex2DCamSpaceZ_sampler, f2UV, 0);
     
     float3 f3Inscttering, f3Extinction;
-    UnwarpEpipolarInsctrImage(VSOut.m_f2PosPS, fCamSpaceZ, f3Inscttering, f3Extinction);
+    UnwarpEpipolarInsctrImage(VSOut.f2NormalizedXY, fCamSpaceZ, f3Inscttering, f3Extinction);
 
     float3 f3BackgroundColor = F3ZERO;
     [branch]
@@ -303,7 +303,7 @@ void ApplyInscatteredRadiancePS(ScreenSizeQuadVSOutput VSOut,
         f3BackgroundColor *= (fCamSpaceZ > g_CameraAttribs.fFarPlaneZ) ? g_LightAttribs.f4ExtraterrestrialSunColor.rgb : F3ONE;
 
 #if EXTINCTION_EVAL_MODE == EXTINCTION_EVAL_MODE_PER_PIXEL
-        float3 f3ReconstructedPosWS = ProjSpaceXYZToWorldSpace(float3(VSOut.m_f2PosPS.xy, fCamSpaceZ), g_CameraAttribs.mProj, g_CameraAttribs.mViewProjInv);
+        float3 f3ReconstructedPosWS = ProjSpaceXYZToWorldSpace(float3(VSOut.f2NormalizedXY.xy, fCamSpaceZ), g_CameraAttribs.mProj, g_CameraAttribs.mViewProjInv);
         f3Extinction = GetExtinction(g_CameraAttribs.f4CameraPos.xyz, f3ReconstructedPosWS);
 #endif
         f3BackgroundColor *= f3Extinction;

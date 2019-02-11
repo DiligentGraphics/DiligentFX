@@ -68,7 +68,7 @@ float2 IntegrateParticleDensityAlongRay(in float3 f3Pos,
 void PrecomputeNetDensityToAtmTopPS( ScreenSizeQuadVSOutput VSOut,
                                      out float2 f2Density : SV_Target0 )
 {
-    float2 f2UV = NormalizedDeviceXYToTexUV(VSOut.m_f2PosPS);
+    float2 f2UV = NormalizedDeviceXYToTexUV(VSOut.f2NormalizedXY);
     // Do not allow start point be at the Earth surface and on the top of the atmosphere
     float fStartHeight = clamp( lerp(0.0, g_MediaParams.fAtmTopHeight, f2UV.x), 10.0, g_MediaParams.fAtmTopHeight-10.0 );
 

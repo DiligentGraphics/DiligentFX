@@ -20,7 +20,7 @@ void PrecomputeAmbientSkyLightPS(ScreenSizeQuadVSOutput VSOut,
 
                                  out float4 f4SkyLight : SV_Target)
 {
-    float fU = NormalizedDeviceXYToTexUV(VSOut.m_f2PosPS).x;
+    float fU = NormalizedDeviceXYToTexUV(VSOut.f2NormalizedXY).x;
     float3 f3RayStart = float3(0.0, 20.0, 0.0);
     float3 f3EarthCentre =  -float3(0.0, 1.0, 0.0) * EARTH_RADIUS;
     float fCosZenithAngle = clamp(fU * 2.0 - 1.0, -1.0, +1.0);

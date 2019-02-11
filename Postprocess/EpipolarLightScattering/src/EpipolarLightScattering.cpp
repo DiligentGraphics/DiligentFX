@@ -384,7 +384,7 @@ void EpipolarLightScattering::RenderScreenSizeQuad(IDeviceContext*         pDevi
 	pDeviceContext->SetStencilRef(StencilRef);
 
     DrawAttribs ScreenSizeQuadDrawAttrs;
-    ScreenSizeQuadDrawAttrs.NumVertices = 4;
+    ScreenSizeQuadDrawAttrs.NumVertices = 3;
 	ScreenSizeQuadDrawAttrs.NumInstances = NumQuads;
 	pDeviceContext->Draw(ScreenSizeQuadDrawAttrs);
 }

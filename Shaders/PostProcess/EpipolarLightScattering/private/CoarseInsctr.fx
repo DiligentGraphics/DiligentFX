@@ -68,21 +68,19 @@ void RenderCoarseUnshadowedInsctrPS(ScreenSizeQuadVSOutput VSOut,
                                     // Moreover, even if the shader is not using the argument,
                                     // it still must be declared.
 
-                                    in float4 f4Pos : SV_Position,
                                     out float4 f4Inscattering : SV_Target0) 
 {
     float3 f3Extinction = F3ONE;
-    ShaderFunctionInternal(f4Pos, f4Inscattering.rgb, f3Extinction );
+    ShaderFunctionInternal(VSOut.f4PixelPos, f4Inscattering.rgb, f3Extinction );
     f4Inscattering.a = 1.0;
 }
 
 // Render inscattering and extinction
 void RenderCoarseUnshadowedInsctrAndExtinctionPS(ScreenSizeQuadVSOutput VSOut,
-                                                 in float4 f4Pos : SV_Position,
                                                  out float4 f4Inscattering : SV_Target0,
                                                  out float4 f4Extinction   : SV_Target1) 
 {
-    ShaderFunctionInternal(f4Pos, f4Inscattering.rgb, f4Extinction.rgb );
+    ShaderFunctionInternal(VSOut.f4PixelPos, f4Inscattering.rgb, f4Extinction.rgb );
     f4Inscattering.a = 0.0;
     f4Extinction.a = 0.0;
 }

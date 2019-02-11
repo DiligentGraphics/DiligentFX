@@ -20,7 +20,7 @@
 "\n"
 "                                 out float4 f4SkyLight : SV_Target)\n"
 "{\n"
-"    float fU = NormalizedDeviceXYToTexUV(VSOut.m_f2PosPS).x;\n"
+"    float fU = NormalizedDeviceXYToTexUV(VSOut.f2NormalizedXY).x;\n"
 "    float3 f3RayStart = float3(0.0, 20.0, 0.0);\n"
 "    float3 f3EarthCentre =  -float3(0.0, 1.0, 0.0) * EARTH_RADIUS;\n"
 "    float fCosZenithAngle = clamp(fU * 2.0 - 1.0, -1.0, +1.0);\n"

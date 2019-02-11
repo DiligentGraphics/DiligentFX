@@ -68,7 +68,7 @@
 "void PrecomputeNetDensityToAtmTopPS( ScreenSizeQuadVSOutput VSOut,\n"
 "                                     out float2 f2Density : SV_Target0 )\n"
 "{\n"
-"    float2 f2UV = NormalizedDeviceXYToTexUV(VSOut.m_f2PosPS);\n"
+"    float2 f2UV = NormalizedDeviceXYToTexUV(VSOut.f2NormalizedXY);\n"
 "    // Do not allow start point be at the Earth surface and on the top of the atmosphere\n"
 "    float fStartHeight = clamp( lerp(0.0, g_MediaParams.fAtmTopHeight, f2UV.x), 10.0, g_MediaParams.fAtmTopHeight-10.0 );\n"
 "\n"
