@@ -65,7 +65,7 @@ float2 IntegrateParticleDensityAlongRay(in float3 f3Pos,
     return IntegrateParticleDensity(f3Pos, f3RayEnd, f3EarthCentre, fNumSteps);
 }
 
-void PrecomputeNetDensityToAtmTopPS( ScreenSizeQuadVSOutput VSOut,
+void PrecomputeNetDensityToAtmTopPS( FullScreenTriangleVSOutput VSOut,
                                      out float2 f2Density : SV_Target0 )
 {
     float2 f2UV = NormalizedDeviceXYToTexUV(VSOut.f2NormalizedXY);

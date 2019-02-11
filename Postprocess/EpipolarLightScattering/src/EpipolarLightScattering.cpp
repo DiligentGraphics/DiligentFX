@@ -243,7 +243,7 @@ EpipolarLightScattering :: EpipolarLightScattering(IRenderDevice*  pDevice,
         pPrecomputeNetDensityToAtmTopPS = CreateShader(pDevice, "PrecomputeNetDensityToAtmTop.fx", "PrecomputeNetDensityToAtmTopPS", SHADER_TYPE_PIXEL, nullptr, SHADER_VARIABLE_TYPE_STATIC);
         pPrecomputeNetDensityToAtmTopPS->BindResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
         TEXTURE_FORMAT RtvFmts[] = {TEX_FORMAT_RG32_FLOAT};
-        m_pPrecomputeNetDensityToAtmTopPSO = CreateScreenSizeQuadPSO(pDevice, "PrecomputeNetDensityToAtmTopPSO", pPrecomputeNetDensityToAtmTopPS, DSS_DisableDepth, BS_Default, 1, RtvFmts, TEX_FORMAT_UNKNOWN);
+        m_pPrecomputeNetDensityToAtmTopPSO = CreateFullScreenTrianglePSO(pDevice, "PrecomputeNetDensityToAtmTopPSO", pPrecomputeNetDensityToAtmTopPS, DSS_DisableDepth, BS_Default, 1, RtvFmts, TEX_FORMAT_UNKNOWN);
         m_pPrecomputeNetDensityToAtmTopPSO->CreateShaderResourceBinding(&m_pPrecomputeNetDensityToAtmTopSRB, true);
     }
 
@@ -337,18 +337,18 @@ void EpipolarLightScattering :: DefineMacros(ShaderMacroHelper& Macros)
 }
 
 
-RefCntAutoPtr<IPipelineState> EpipolarLightScattering :: CreateScreenSizeQuadPSO(IRenderDevice*               pDevice,
-                                                                                 const char*                  PSOName,
-                                                                                 IShader*                     PixelShader,
-                                                                                 const DepthStencilStateDesc& DSSDesc,
-                                                                                 const BlendStateDesc&        BSDesc,
-                                                                                 Uint8                        NumRTVs,
-                                                                                 TEXTURE_FORMAT               RTVFmts[],
-                                                                                 TEXTURE_FORMAT               DSVFmt)
+RefCntAutoPtr<IPipelineState> EpipolarLightScattering :: CreateFullScreenTrianglePSO(IRenderDevice*               pDevice,
+                                                                                     const char*                  PSOName,
+                                                                                     IShader*                     PixelShader,
+                                                                                     const DepthStencilStateDesc& DSSDesc,
+                                                                                     const BlendStateDesc&        BSDesc,
+                                                                                     Uint8                        NumRTVs,
+                                                                                     TEXTURE_FORMAT               RTVFmts[],
+                                                                                     TEXTURE_FORMAT               DSVFmt)
 {
     if (!m_pQuadVS)
     {
-        m_pQuadVS = CreateShader( pDevice, "ScreenSizeQuadVS.fx", "ScreenSizeQuadVS", SHADER_TYPE_VERTEX, nullptr, SHADER_VARIABLE_TYPE_STATIC );
+        m_pQuadVS = CreateShader( pDevice, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, nullptr, SHADER_VARIABLE_TYPE_STATIC );
     }
 
     PipelineStateDesc PSODesc;
@@ -372,21 +372,21 @@ RefCntAutoPtr<IPipelineState> EpipolarLightScattering :: CreateScreenSizeQuadPSO
     return PSO;
 }
 
-void EpipolarLightScattering::RenderScreenSizeQuad(IDeviceContext*         pDeviceContext, 
-                                                   IPipelineState*         PSO,
-                                                   IShaderResourceBinding* SRB,
-                                                   Uint8                   StencilRef,
-                                                   Uint32                  NumQuads)
+void EpipolarLightScattering::RenderFullScreenTriangle(IDeviceContext*         pDeviceContext, 
+                                                       IPipelineState*         PSO,
+                                                       IShaderResourceBinding* SRB,
+                                                       Uint8                   StencilRef,
+                                                       Uint32                  NumQuads)
 {
 	pDeviceContext->SetPipelineState(PSO);
     pDeviceContext->CommitShaderResources(SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
 	pDeviceContext->SetStencilRef(StencilRef);
 
-    DrawAttribs ScreenSizeQuadDrawAttrs;
-    ScreenSizeQuadDrawAttrs.NumVertices = 3;
-	ScreenSizeQuadDrawAttrs.NumInstances = NumQuads;
-	pDeviceContext->Draw(ScreenSizeQuadDrawAttrs);
+    DrawAttribs FullScreenTriangleDrawAttrs;
+    FullScreenTriangleDrawAttrs.NumVertices = 3;
+	FullScreenTriangleDrawAttrs.NumInstances = NumQuads;
+	pDeviceContext->Draw(FullScreenTriangleDrawAttrs);
 }
 
 
@@ -418,7 +418,7 @@ void EpipolarLightScattering::CreatePrecomputedOpticalDepthTexture(IRenderDevice
     ITextureView* pRTVs[] = {m_ptex2DOccludedNetDensityToAtmTopRTV};
     pDeviceContext->SetRenderTargets(1, pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
-	RenderScreenSizeQuad(pDeviceContext, m_pPrecomputeNetDensityToAtmTopPSO, m_pPrecomputeNetDensityToAtmTopSRB, 0);
+	RenderFullScreenTriangle(pDeviceContext, m_pPrecomputeNetDensityToAtmTopPSO, m_pPrecomputeNetDensityToAtmTopSRB, 0);
 
     m_uiUpToDateResourceFlags |= UpToDateResourceFlags::PrecomputedOpticalDepthTex;
 }
@@ -952,7 +952,7 @@ void EpipolarLightScattering :: ReconstructCameraSpaceZ(FrameAttribs& FrameAttri
         pReconstrCamSpaceZPS->BindResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
 
         TEXTURE_FORMAT RTVFmts[] = {CamSpaceZFmt};
-        m_pReconstrCamSpaceZPSO = CreateScreenSizeQuadPSO(FrameAttribs.pDevice, "ReconstructCameraSpaceZPSO", pReconstrCamSpaceZPS, DSS_DisableDepth, BS_Default, 1, RTVFmts, TEX_FORMAT_UNKNOWN);
+        m_pReconstrCamSpaceZPSO = CreateFullScreenTrianglePSO(FrameAttribs.pDevice, "ReconstructCameraSpaceZPSO", pReconstrCamSpaceZPS, DSS_DisableDepth, BS_Default, 1, RTVFmts, TEX_FORMAT_UNKNOWN);
         m_pReconstrCamSpaceZPSO->CreateShaderResourceBinding(&m_pReconstrCamSpaceZSRB, true);
         m_pReconstrCamSpaceZSRB->BindResources(SHADER_TYPE_PIXEL, m_pResMapping, BIND_SHADER_RESOURCES_KEEP_EXISTING);
     }
@@ -960,7 +960,7 @@ void EpipolarLightScattering :: ReconstructCameraSpaceZ(FrameAttribs& FrameAttri
     m_pReconstrCamSpaceZSRB->GetVariable(SHADER_TYPE_PIXEL, "g_tex2DDepthBuffer")->Set(FrameAttribs.ptex2DSrcDepthBufferSRV);
     ITextureView* ppRTVs[] = {m_ptex2DCamSpaceZRTV};
     FrameAttribs.pDeviceContext->SetRenderTargets(1, ppRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    RenderScreenSizeQuad(FrameAttribs.pDeviceContext, m_pReconstrCamSpaceZPSO, m_pReconstrCamSpaceZSRB);
+    RenderFullScreenTriangle(FrameAttribs.pDeviceContext, m_pReconstrCamSpaceZPSO, m_pReconstrCamSpaceZSRB);
 }
 
 void EpipolarLightScattering :: RenderSliceEndpoints(FrameAttribs& FrameAttribs)
@@ -978,13 +978,13 @@ void EpipolarLightScattering :: RenderSliceEndpoints(FrameAttribs& FrameAttribs)
         pRendedSliceEndpointsPS->BindResources( m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED );
 
         TEXTURE_FORMAT RTVFmts[] = {SliceEndpointsFmt};
-        m_pRendedSliceEndpointsPSO = CreateScreenSizeQuadPSO(FrameAttribs.pDevice, "RenderSliceEndPoints", pRendedSliceEndpointsPS, DSS_DisableDepth, BS_Default, 1, RTVFmts);
+        m_pRendedSliceEndpointsPSO = CreateFullScreenTrianglePSO(FrameAttribs.pDevice, "RenderSliceEndPoints", pRendedSliceEndpointsPS, DSS_DisableDepth, BS_Default, 1, RTVFmts);
         m_pRendedSliceEndpointsPSO->CreateShaderResourceBinding(&m_pRendedSliceEndpointsSRB, true);
     }
 
     ITextureView* ppRTVs[] = {m_ptex2DSliceEndpointsRTV};
     FrameAttribs.pDeviceContext->SetRenderTargets(1, ppRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    RenderScreenSizeQuad(FrameAttribs.pDeviceContext, m_pRendedSliceEndpointsPSO, m_pRendedSliceEndpointsSRB);
+    RenderFullScreenTriangle(FrameAttribs.pDeviceContext, m_pRendedSliceEndpointsPSO, m_pRendedSliceEndpointsSRB);
 }
 
 void EpipolarLightScattering :: RenderCoordinateTexture(FrameAttribs& FrameAttribs)
@@ -998,7 +998,7 @@ void EpipolarLightScattering :: RenderCoordinateTexture(FrameAttribs& FrameAttri
         pRendedCoordTexPS->BindResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
 
         TEXTURE_FORMAT RTVFmts[] = {CoordinateTexFmt, EpipolarCamSpaceZFmt};
-        m_pRendedCoordTexPSO = CreateScreenSizeQuadPSO(FrameAttribs.pDevice, "RenderCoordinateTexture", pRendedCoordTexPS, DSS_IncStencilAlways, BS_Default, 2, RTVFmts, EpipolarImageDepthFmt);
+        m_pRendedCoordTexPSO = CreateFullScreenTrianglePSO(FrameAttribs.pDevice, "RenderCoordinateTexture", pRendedCoordTexPS, DSS_IncStencilAlways, BS_Default, 2, RTVFmts, EpipolarImageDepthFmt);
         m_pRendedCoordTexSRB.Release();
     }
     
@@ -1018,7 +1018,7 @@ void EpipolarLightScattering :: RenderCoordinateTexture(FrameAttribs& FrameAttri
     // Depth stencil state is configured to always increment stencil value. If coordinates are outside the screen,
     // the pixel shader discards the pixel and stencil value is left untouched. All such pixels will be skipped from
     // further processing
-	RenderScreenSizeQuad(FrameAttribs.pDeviceContext, m_pRendedCoordTexPSO, m_pRendedCoordTexSRB);
+	RenderFullScreenTriangle(FrameAttribs.pDeviceContext, m_pRendedCoordTexPSO, m_pRendedCoordTexSRB);
 }
 
 void EpipolarLightScattering :: RenderCoarseUnshadowedInctr(FrameAttribs& FrameAttribs)
@@ -1046,7 +1046,7 @@ void EpipolarLightScattering :: RenderCoarseUnshadowedInctr(FrameAttribs& FrameA
                                 "RenderCoarseUnshadowedInsctrPSO";
         TEXTURE_FORMAT RTVFmts[] = {EpipolarInsctrTexFmt, EpipolarExtinctionFmt};
         Uint8 NumRTVs = m_PostProcessingAttribs.m_uiExtinctionEvalMode == EXTINCTION_EVAL_MODE_EPIPOLAR ? 2 : 1;
-        m_pRenderCoarseUnshadowedInsctrPSO = CreateScreenSizeQuadPSO(FrameAttribs.pDevice, PSOName, pRenderCoarseUnshadowedInsctrPS, DSS_StencilEqKeepStencil, BS_Default, NumRTVs, RTVFmts, EpipolarImageDepthFmt);
+        m_pRenderCoarseUnshadowedInsctrPSO = CreateFullScreenTrianglePSO(FrameAttribs.pDevice, PSOName, pRenderCoarseUnshadowedInsctrPS, DSS_StencilEqKeepStencil, BS_Default, NumRTVs, RTVFmts, EpipolarImageDepthFmt);
         m_pRenderCoarseUnshadowedInsctrSRB.Release();
     }
 
@@ -1074,7 +1074,7 @@ void EpipolarLightScattering :: RenderCoarseUnshadowedInctr(FrameAttribs& FrameA
   		m_pRenderCoarseUnshadowedInsctrSRB->BindResources(SHADER_TYPE_PIXEL, m_pResMapping, BIND_SHADER_RESOURCES_KEEP_EXISTING | BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
     }
 
-	RenderScreenSizeQuad(FrameAttribs.pDeviceContext, m_pRenderCoarseUnshadowedInsctrPSO, m_pRenderCoarseUnshadowedInsctrSRB, 1);
+	RenderFullScreenTriangle(FrameAttribs.pDeviceContext, m_pRenderCoarseUnshadowedInsctrPSO, m_pRenderCoarseUnshadowedInsctrSRB, 1);
 }
 
 void EpipolarLightScattering :: RefineSampleLocations(FrameAttribs &FrameAttribs)
@@ -1135,7 +1135,7 @@ void EpipolarLightScattering :: MarkRayMarchingSamples(FrameAttribs& FrameAttrib
         auto pMarkRayMarchingSamplesInStencilPS = CreateShader( FrameAttribs.pDevice, "MarkRayMarchingSamples.fx", "MarkRayMarchingSamplesInStencilPS", SHADER_TYPE_PIXEL, Macros, SHADER_VARIABLE_TYPE_MUTABLE );
         pMarkRayMarchingSamplesInStencilPS->BindResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
 
-        m_pMarkRayMarchingSamplesInStencilPSO = CreateScreenSizeQuadPSO(FrameAttribs.pDevice, "MarkRayMarchingSamples", pMarkRayMarchingSamplesInStencilPS, DSS_StencilEqIncStencil, BS_Default, 0, nullptr, EpipolarImageDepthFmt);
+        m_pMarkRayMarchingSamplesInStencilPSO = CreateFullScreenTrianglePSO(FrameAttribs.pDevice, "MarkRayMarchingSamples", pMarkRayMarchingSamplesInStencilPS, DSS_StencilEqIncStencil, BS_Default, 0, nullptr, EpipolarImageDepthFmt);
         m_pMarkRayMarchingSamplesInStencilSRB.Release();
     }
 
@@ -1151,7 +1151,7 @@ void EpipolarLightScattering :: MarkRayMarchingSamples(FrameAttribs& FrameAttrib
     }
 
     FrameAttribs.pDeviceContext->SetRenderTargets(0, nullptr, m_ptex2DEpipolarImageDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-	RenderScreenSizeQuad(FrameAttribs.pDeviceContext, m_pMarkRayMarchingSamplesInStencilPSO, m_pMarkRayMarchingSamplesInStencilSRB, 1);
+	RenderFullScreenTriangle(FrameAttribs.pDeviceContext, m_pMarkRayMarchingSamplesInStencilPSO, m_pMarkRayMarchingSamplesInStencilSRB, 1);
 }
 
 void EpipolarLightScattering :: RenderSliceUVDirAndOrig(FrameAttribs& FrameAttribs)
@@ -1172,7 +1172,7 @@ void EpipolarLightScattering :: RenderSliceUVDirAndOrig(FrameAttribs& FrameAttri
         auto pRenderSliceUVDirInSMPS = CreateShader(FrameAttribs.pDevice, "SliceUVDirection.fx", "RenderSliceUVDirInShadowMapTexturePS", SHADER_TYPE_PIXEL, Macros, SHADER_VARIABLE_TYPE_MUTABLE, Vars, _countof(Vars));
         pRenderSliceUVDirInSMPS->BindResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
         TEXTURE_FORMAT RTVFmts[] = {SliceUVDirAndOriginTexFmt};
-	    m_pRenderSliceUVDirInSM_PSO = CreateScreenSizeQuadPSO(FrameAttribs.pDevice, "RenderSliceUVDirAndOrigin", pRenderSliceUVDirInSMPS, DSS_DisableDepth, BS_Default, 1, RTVFmts);
+	    m_pRenderSliceUVDirInSM_PSO = CreateFullScreenTrianglePSO(FrameAttribs.pDevice, "RenderSliceUVDirAndOrigin", pRenderSliceUVDirInSMPS, DSS_DisableDepth, BS_Default, 1, RTVFmts);
 	    m_pRenderSliceUVDirInSM_SRB.Release();
     }
     
@@ -1197,7 +1197,7 @@ void EpipolarLightScattering :: RenderSliceUVDirAndOrig(FrameAttribs& FrameAttri
 
     ITextureView* ppRTVs[] = {m_ptex2DSliceUVDirAndOriginRTV};
 	FrameAttribs.pDeviceContext->SetRenderTargets(1, ppRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-	RenderScreenSizeQuad(FrameAttribs.pDeviceContext, m_pRenderSliceUVDirInSM_PSO, m_pRenderSliceUVDirInSM_SRB, 0);
+	RenderFullScreenTriangle(FrameAttribs.pDeviceContext, m_pRenderSliceUVDirInSM_PSO, m_pRenderSliceUVDirInSM_SRB, 0);
 }
 
 void EpipolarLightScattering :: Build1DMinMaxMipMap(FrameAttribs& FrameAttribs, 
@@ -1220,7 +1220,7 @@ void EpipolarLightScattering :: Build1DMinMaxMipMap(FrameAttribs& FrameAttribs,
         pInitializeMinMaxShadowMapPS->BindResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
 
         TEXTURE_FORMAT RTVFmts[] = {m_ptex2DMinMaxShadowMapSRV[0]->GetTexture()->GetDesc().Format};
-        m_pInitializeMinMaxShadowMapPSO = CreateScreenSizeQuadPSO(FrameAttribs.pDevice, "InitMinMaxShadowMap", pInitializeMinMaxShadowMapPS, DSS_DisableDepth, BS_Default, 1, RTVFmts);
+        m_pInitializeMinMaxShadowMapPSO = CreateFullScreenTrianglePSO(FrameAttribs.pDevice, "InitMinMaxShadowMap", pInitializeMinMaxShadowMapPS, DSS_DisableDepth, BS_Default, 1, RTVFmts);
         m_pInitializeMinMaxShadowMapSRB.Release();
     }
 
@@ -1235,7 +1235,7 @@ void EpipolarLightScattering :: Build1DMinMaxMipMap(FrameAttribs& FrameAttribs,
         pComputeMinMaxSMLevelPS->BindResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
         
         TEXTURE_FORMAT RTVFmts[] = {m_ptex2DMinMaxShadowMapSRV[0]->GetTexture()->GetDesc().Format};
-        m_pComputeMinMaxSMLevelPSO = CreateScreenSizeQuadPSO(FrameAttribs.pDevice, "ComputeMinMaxShadowMapLevel", pComputeMinMaxSMLevelPS, DSS_DisableDepth, BS_Default, 1, RTVFmts);
+        m_pComputeMinMaxSMLevelPSO = CreateFullScreenTrianglePSO(FrameAttribs.pDevice, "ComputeMinMaxShadowMapLevel", pComputeMinMaxSMLevelPS, DSS_DisableDepth, BS_Default, 1, RTVFmts);
         m_pComputeMinMaxSMLevelSRB[0].Release();
         m_pComputeMinMaxSMLevelSRB[1].Release();
     }
@@ -1306,13 +1306,13 @@ void EpipolarLightScattering :: Build1DMinMaxMipMap(FrameAttribs& FrameAttribs,
             }
 	        // Set dynamic variable g_tex2DLightSpaceDepthMap
 	        m_pInitializeMinMaxShadowMapSRB->GetVariable(SHADER_TYPE_PIXEL, "g_tex2DLightSpaceDepthMap")->Set(FrameAttribs.ptex2DShadowMapSRV);
-	        RenderScreenSizeQuad(FrameAttribs.pDeviceContext, m_pInitializeMinMaxShadowMapPSO, m_pInitializeMinMaxShadowMapSRB);
+	        RenderFullScreenTriangle(FrameAttribs.pDeviceContext, m_pInitializeMinMaxShadowMapPSO, m_pInitializeMinMaxShadowMapSRB);
         }
         else
         {
             // At the subsequent passes, the shader loads two min/max values from the next finer level 
             // to compute next level of the binary tree
-            RenderScreenSizeQuad(FrameAttribs.pDeviceContext, m_pComputeMinMaxSMLevelPSO, m_pComputeMinMaxSMLevelSRB[(uiParity + 1) % 2]);
+            RenderFullScreenTriangle(FrameAttribs.pDeviceContext, m_pComputeMinMaxSMLevelPSO, m_pComputeMinMaxSMLevelSRB[(uiParity + 1) % 2]);
         }
 
         // All the data must reside in 0-th texture, so copy current level, if necessary, from 1-st texture
@@ -1364,7 +1364,7 @@ void EpipolarLightScattering :: DoRayMarching(FrameAttribs& FrameAttribs,
         pDoRayMarchPS->BindResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
 
         TEXTURE_FORMAT RTVFmts[] = {EpipolarInsctrTexFmt};
-	    pDoRayMarchPSO = CreateScreenSizeQuadPSO(FrameAttribs.pDevice, "RayMarch", pDoRayMarchPS, DSS_StencilEqKeepStencil, BS_AdditiveBlend, 1, RTVFmts, EpipolarImageDepthFmt);
+	    pDoRayMarchPSO = CreateFullScreenTrianglePSO(FrameAttribs.pDevice, "RayMarch", pDoRayMarchPS, DSS_StencilEqKeepStencil, BS_AdditiveBlend, 1, RTVFmts, EpipolarImageDepthFmt);
 	    pDoRayMarchSRB.Release();
     }
 
@@ -1408,7 +1408,7 @@ void EpipolarLightScattering :: DoRayMarching(FrameAttribs& FrameAttribs,
 
     ITextureView* ppRTVs[] = {m_ptex2DInitialScatteredLightRTV};
     FrameAttribs.pDeviceContext->SetRenderTargets(1, ppRTVs, m_ptex2DEpipolarImageDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-	RenderScreenSizeQuad(FrameAttribs.pDeviceContext, pDoRayMarchPSO, pDoRayMarchSRB, 2, iNumInst);
+	RenderFullScreenTriangle(FrameAttribs.pDeviceContext, pDoRayMarchPSO, pDoRayMarchSRB, 2, iNumInst);
 }
 
 void EpipolarLightScattering :: InterpolateInsctrIrradiance(FrameAttribs& FrameAttribs)
@@ -1423,7 +1423,7 @@ void EpipolarLightScattering :: InterpolateInsctrIrradiance(FrameAttribs& FrameA
         pInterpolateIrradiancePS->BindResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
 
         TEXTURE_FORMAT RTVFmts[] = {EpipolarInsctrTexFmt};
-	    m_pInterpolateIrradiancePSO = CreateScreenSizeQuadPSO(FrameAttribs.pDevice, "InterpolateIrradiance", pInterpolateIrradiancePS, DSS_DisableDepth, BS_Default, 1, RTVFmts);
+	    m_pInterpolateIrradiancePSO = CreateFullScreenTrianglePSO(FrameAttribs.pDevice, "InterpolateIrradiance", pInterpolateIrradiancePS, DSS_DisableDepth, BS_Default, 1, RTVFmts);
 	    m_pInterpolateIrradianceSRB.Release();
     }
     
@@ -1435,7 +1435,7 @@ void EpipolarLightScattering :: InterpolateInsctrIrradiance(FrameAttribs& FrameA
 
     ITextureView* ppRTVs[] = {m_ptex2DEpipolarInscatteringRTV};
 	FrameAttribs.pDeviceContext->SetRenderTargets(1, ppRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-	RenderScreenSizeQuad(FrameAttribs.pDeviceContext, m_pInterpolateIrradiancePSO, m_pInterpolateIrradianceSRB);
+	RenderFullScreenTriangle(FrameAttribs.pDeviceContext, m_pInterpolateIrradiancePSO, m_pInterpolateIrradianceSRB);
 }
 
 
@@ -1465,7 +1465,7 @@ void EpipolarLightScattering :: UnwarpEpipolarScattering(FrameAttribs& FrameAttr
         pUnwarpEpipolarSctrImgPS->BindResources(m_pResMapping, 0);
 
         TEXTURE_FORMAT RTVFmts[] = {m_BackBufferFmt};
-	    m_pUnwarpEpipolarSctrImgPSO = CreateScreenSizeQuadPSO(FrameAttribs.pDevice, "UnwarpEpipolarScattering", pUnwarpEpipolarSctrImgPS, DSS_Default, BS_Default, 1, RTVFmts, m_DepthBufferFmt);
+	    m_pUnwarpEpipolarSctrImgPSO = CreateFullScreenTrianglePSO(FrameAttribs.pDevice, "UnwarpEpipolarScattering", pUnwarpEpipolarSctrImgPS, DSS_Default, BS_Default, 1, RTVFmts, m_DepthBufferFmt);
 	    m_pUnwarpEpipolarSctrImgSRB.Release();
     }
 
@@ -1492,7 +1492,7 @@ void EpipolarLightScattering :: UnwarpEpipolarScattering(FrameAttribs& FrameAttr
         pUnwarpAndRenderLuminancePS->BindResources(m_pResMapping, 0);
 
         TEXTURE_FORMAT RTVFmts[] = {LuminanceTexFmt};
-        m_pUnwarpAndRenderLuminancePSO = CreateScreenSizeQuadPSO(FrameAttribs.pDevice, "UnwarpAndRenderLuminance", pUnwarpAndRenderLuminancePS, DSS_DisableDepth, BS_Default, 1, RTVFmts);
+        m_pUnwarpAndRenderLuminancePSO = CreateFullScreenTrianglePSO(FrameAttribs.pDevice, "UnwarpAndRenderLuminance", pUnwarpAndRenderLuminancePS, DSS_DisableDepth, BS_Default, 1, RTVFmts);
 	    m_pUnwarpAndRenderLuminanceSRB.Release();
     }
 
@@ -1511,7 +1511,7 @@ void EpipolarLightScattering :: UnwarpEpipolarScattering(FrameAttribs& FrameAttr
 	    m_pUnwarpAndRenderLuminanceSRB->GetVariable(SHADER_TYPE_PIXEL, "g_tex2DColorBuffer")->Set(FrameAttribs.ptex2DSrcColorBufferSRV);
 
 	    // Disable depth testing - we need to render the entire image in low resolution
-	    RenderScreenSizeQuad(FrameAttribs.pDeviceContext, m_pUnwarpAndRenderLuminancePSO, m_pUnwarpAndRenderLuminanceSRB);
+	    RenderFullScreenTriangle(FrameAttribs.pDeviceContext, m_pUnwarpAndRenderLuminancePSO, m_pUnwarpAndRenderLuminanceSRB);
     }
     else
     {
@@ -1527,7 +1527,7 @@ void EpipolarLightScattering :: UnwarpEpipolarScattering(FrameAttribs& FrameAttr
 	    // Enable depth testing to write 0.0 to the depth buffer. All pixel that require 
 	    // inscattering correction (if enabled) will be discarded, so that 1.0 will be retained
 	    // This 1.0 will then be used to perform inscattering correction
-	    RenderScreenSizeQuad(FrameAttribs.pDeviceContext, m_pUnwarpEpipolarSctrImgPSO, m_pUnwarpEpipolarSctrImgSRB);
+	    RenderFullScreenTriangle(FrameAttribs.pDeviceContext, m_pUnwarpEpipolarSctrImgPSO, m_pUnwarpEpipolarSctrImgSRB);
     }
 }
 
@@ -1552,7 +1552,7 @@ void EpipolarLightScattering :: UpdateAverageLuminance(FrameAttribs& FrameAttrib
         pUpdateAverageLuminancePS->BindResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
 
         TEXTURE_FORMAT RTVFmts[] = {LuminanceTexFmt};
-	    m_pUpdateAverageLuminancePSO = CreateScreenSizeQuadPSO(FrameAttribs.pDevice, "UpdateAverageLuminance", pUpdateAverageLuminancePS, DSS_DisableDepth, BS_AlphaBlend, 1, RTVFmts);
+	    m_pUpdateAverageLuminancePSO = CreateFullScreenTrianglePSO(FrameAttribs.pDevice, "UpdateAverageLuminance", pUpdateAverageLuminancePS, DSS_DisableDepth, BS_AlphaBlend, 1, RTVFmts);
 	    m_pUpdateAverageLuminanceSRB.Release();
     }
 
@@ -1569,7 +1569,7 @@ void EpipolarLightScattering :: UpdateAverageLuminance(FrameAttribs& FrameAttrib
 
     ITextureView* ppRTVs[] = {m_ptex2DAverageLuminanceRTV};
     FrameAttribs.pDeviceContext->SetRenderTargets(1, ppRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-	RenderScreenSizeQuad(FrameAttribs.pDeviceContext, m_pUpdateAverageLuminancePSO, m_pUpdateAverageLuminanceSRB);
+	RenderFullScreenTriangle(FrameAttribs.pDeviceContext, m_pUpdateAverageLuminancePSO, m_pUpdateAverageLuminanceSRB);
 }
 
 
@@ -1610,7 +1610,7 @@ void EpipolarLightScattering :: FixInscatteringAtDepthBreaks(FrameAttribs&      
 	    // Luminance Only
 	    // Disable depth and stencil tests to render all pixels
 	    // Use default blend state to overwrite old luminance values
-	    m_pFixInsctrAtDepthBreaksPSO[0] = CreateScreenSizeQuadPSO(FrameAttribs.pDevice, "FixInsctrAtDepthBreaksLumOnly", pFixInsctrAtDepthBreaksPS[1], DSS_DisableDepth, BS_Default, 1, RTVFmts);
+	    m_pFixInsctrAtDepthBreaksPSO[0] = CreateFullScreenTrianglePSO(FrameAttribs.pDevice, "FixInsctrAtDepthBreaksLumOnly", pFixInsctrAtDepthBreaksPS[1], DSS_DisableDepth, BS_Default, 1, RTVFmts);
         m_pFixInsctrAtDepthBreaksSRB[0].Release();
 
         RTVFmts[0] = m_BackBufferFmt;
@@ -1618,14 +1618,14 @@ void EpipolarLightScattering :: FixInscatteringAtDepthBreaks(FrameAttribs&      
 	    // Depth breaks are marked with 1.0 in depth, so we enable depth test
 	    // to render only pixels that require correction
 	    // Use default blend state - the rendering is always done in single pass
-	    m_pFixInsctrAtDepthBreaksPSO[1] = CreateScreenSizeQuadPSO(FrameAttribs.pDevice, "FixInsctrAtDepthBreaks", pFixInsctrAtDepthBreaksPS[0], DSS_Default, BS_Default, 1, RTVFmts, m_DepthBufferFmt);
+	    m_pFixInsctrAtDepthBreaksPSO[1] = CreateFullScreenTrianglePSO(FrameAttribs.pDevice, "FixInsctrAtDepthBreaks", pFixInsctrAtDepthBreaksPS[0], DSS_Default, BS_Default, 1, RTVFmts, m_DepthBufferFmt);
         m_pFixInsctrAtDepthBreaksSRB[1].Release();
 
 	    // Full Screen Ray Marching
 	    // Disable depth and stencil tests since we are performing 
 	    // full screen ray marching
 	    // Use default blend state - the rendering is always done in single pass
-	    m_pFixInsctrAtDepthBreaksPSO[2] = CreateScreenSizeQuadPSO(FrameAttribs.pDevice, "FixInsctrAtDepthBreaks", pFixInsctrAtDepthBreaksPS[0], DSS_DisableDepth, BS_Default, 1, RTVFmts, m_DepthBufferFmt);
+	    m_pFixInsctrAtDepthBreaksPSO[2] = CreateFullScreenTrianglePSO(FrameAttribs.pDevice, "FixInsctrAtDepthBreaks", pFixInsctrAtDepthBreaksPS[0], DSS_DisableDepth, BS_Default, 1, RTVFmts, m_DepthBufferFmt);
 	    m_pFixInsctrAtDepthBreaksSRB[2].Release();
     }
     
@@ -1647,7 +1647,7 @@ void EpipolarLightScattering :: FixInscatteringAtDepthBreaks(FrameAttribs&      
 	// Set dynamic variable g_tex2DColorBuffer
 	FixInscatteringAtDepthBreaksSRB->GetVariable(SHADER_TYPE_PIXEL, "g_tex2DColorBuffer")->Set(FrameAttribs.ptex2DSrcColorBufferSRV);
 
-	RenderScreenSizeQuad(FrameAttribs.pDeviceContext, FixInscatteringAtDepthBreaksPSO, FixInscatteringAtDepthBreaksSRB);
+	RenderFullScreenTriangle(FrameAttribs.pDeviceContext, FixInscatteringAtDepthBreaksPSO, FixInscatteringAtDepthBreaksSRB);
 }
 
 void EpipolarLightScattering :: RenderSampleLocations(FrameAttribs& FrameAttribs)
@@ -2347,7 +2347,7 @@ void EpipolarLightScattering :: RenderSun(FrameAttribs& FrameAttribs)
         m_pRenderSunPSO->CreateShaderResourceBinding(&m_pRenderSunSRB, true);
         m_pRenderSunSRB->BindResources(SHADER_TYPE_PIXEL | SHADER_TYPE_VERTEX, m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
     }
-    RenderScreenSizeQuad(FrameAttribs.pDeviceContext, m_pRenderSunPSO, m_pRenderSunSRB);
+    RenderFullScreenTriangle(FrameAttribs.pDeviceContext, m_pRenderSunPSO, m_pRenderSunSRB);
 }
 
 void EpipolarLightScattering :: ComputeAmbientSkyLightTexture(IRenderDevice* pDevice, IDeviceContext* pContext)
@@ -2371,7 +2371,7 @@ void EpipolarLightScattering :: ComputeAmbientSkyLightTexture(IRenderDevice* pDe
         pPrecomputeAmbientSkyLightPS->BindResources( m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED );
 
         TEXTURE_FORMAT RTVFormats[] = {AmbientSkyLightTexFmt};
-	    m_pPrecomputeAmbientSkyLightPSO = CreateScreenSizeQuadPSO(pDevice, "PrecomputeAmbientSkyLight", pPrecomputeAmbientSkyLightPS, DSS_DisableDepth, BS_Default, 1, RTVFormats, TEX_FORMAT_UNKNOWN);
+	    m_pPrecomputeAmbientSkyLightPSO = CreateFullScreenTrianglePSO(pDevice, "PrecomputeAmbientSkyLight", pPrecomputeAmbientSkyLightPS, DSS_DisableDepth, BS_Default, 1, RTVFormats, TEX_FORMAT_UNKNOWN);
 
         m_pPrecomputeAmbientSkyLightPSO->CreateShaderResourceBinding(&m_pPrecomputeAmbientSkyLightSRB, true);
     }
@@ -2380,7 +2380,7 @@ void EpipolarLightScattering :: ComputeAmbientSkyLightTexture(IRenderDevice* pDe
     ITextureView *pRTVs[] = {m_ptex2DAmbientSkyLightRTV};
     pContext->SetRenderTargets(1, pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
-    RenderScreenSizeQuad(pContext, m_pPrecomputeAmbientSkyLightPSO, m_pPrecomputeAmbientSkyLightSRB);
+    RenderFullScreenTriangle(pContext, m_pPrecomputeAmbientSkyLightPSO, m_pPrecomputeAmbientSkyLightSRB);
     m_uiUpToDateResourceFlags |= UpToDateResourceFlags::AmbientSkyLightTex;
 }
 

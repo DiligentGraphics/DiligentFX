@@ -583,7 +583,7 @@ float3 ComputeShadowedInscattering( in float2 f2RayMarchingSampleLocation,
 
 
 
-void RayMarchPS(in ScreenSizeQuadVSOutput VSOut,
+void RayMarchPS(in FullScreenTriangleVSOutput VSOut,
                 out float4 f4Inscattering : SV_TARGET)
 {
     uint2 ui2SamplePosSliceInd = uint2(VSOut.f4PixelPos.xy);
@@ -612,7 +612,7 @@ void RayMarchPS(in ScreenSizeQuadVSOutput VSOut,
 }
 
 
-//float3 FixInscatteredRadiancePS(ScreenSizeQuadVSOutput VSOut) : SV_Target
+//float3 FixInscatteredRadiancePS(FullScreenTriangleVSOutput VSOut) : SV_Target
 //{
 //    if( g_PPAttribs.m_bShowDepthBreaks )
 //        return float3(0,1,0);
@@ -637,7 +637,7 @@ void RayMarchPS(in ScreenSizeQuadVSOutput VSOut,
 //}
 
 
-void FixAndApplyInscatteredRadiancePS(ScreenSizeQuadVSOutput VSOut,
+void FixAndApplyInscatteredRadiancePS(FullScreenTriangleVSOutput VSOut,
                                       out float4 f4Color : SV_Target)
 {
     f4Color = float4(0.0, 1.0, 0.0, 1.0);

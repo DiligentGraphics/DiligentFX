@@ -279,7 +279,7 @@ void UnwarpEpipolarInsctrImage( in float2 f2PosPS,
 }
 
 
-void ApplyInscatteredRadiancePS(ScreenSizeQuadVSOutput VSOut,
+void ApplyInscatteredRadiancePS(FullScreenTriangleVSOutput VSOut,
                                 // IMPORTANT: non-system generated pixel shader input
                                 // arguments must have the exact same name as vertex shader 
                                 // outputs and must go in the same order.

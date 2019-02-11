@@ -18,7 +18,7 @@
 "};\n"
 "\n"
 "#define f4IncorrectSliceUVDirAndStart float4(-10000, -10000, 0, 0)\n"
-"void RenderSliceUVDirInShadowMapTexturePS(in ScreenSizeQuadVSOutput VSOut,\n"
+"void RenderSliceUVDirInShadowMapTexturePS(in FullScreenTriangleVSOutput VSOut,\n"
 "                                          // IMPORTANT: non-system generated pixel shader input\n"
 "                                          // arguments must have the exact same name as vertex shader \n"
 "                                          // outputs and must go in the same order.\n"

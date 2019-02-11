@@ -6,7 +6,7 @@
 "Texture2D<uint2>  g_tex2DInterpolationSource;\n"
 "Texture2D<float3> g_tex2DInitialInsctrIrradiance;\n"
 "\n"
-"void InterpolateIrradiancePS(ScreenSizeQuadVSOutput VSOut,\n"
+"void InterpolateIrradiancePS(FullScreenTriangleVSOutput VSOut,\n"
 "                             // IMPORTANT: non-system generated pixel shader input\n"
 "                             // arguments must have the exact same name as vertex shader \n"
 "                             // outputs and must go in the same order.\n"

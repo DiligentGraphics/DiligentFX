@@ -18,7 +18,7 @@ cbuffer cbPostProcessingAttribs
 };
 
 #define f4IncorrectSliceUVDirAndStart float4(-10000, -10000, 0, 0)
-void RenderSliceUVDirInShadowMapTexturePS(in ScreenSizeQuadVSOutput VSOut,
+void RenderSliceUVDirInShadowMapTexturePS(in FullScreenTriangleVSOutput VSOut,
                                           // IMPORTANT: non-system generated pixel shader input
                                           // arguments must have the exact same name as vertex shader 
                                           // outputs and must go in the same order.

@@ -21,7 +21,7 @@ float DepthToCameraZ(in float fDepth, in matrix mProj)
     return MATRIX_ELEMENT(mProj,3,2) / (z - MATRIX_ELEMENT(mProj,2,2));
 }
 
-void ReconstructCameraSpaceZPS(ScreenSizeQuadVSOutput VSOut,
+void ReconstructCameraSpaceZPS(FullScreenTriangleVSOutput VSOut,
                                // IMPORTANT: non-system generated pixel shader input
                                // arguments must have the exact same name as vertex shader 
                                // outputs and must go in the same order.

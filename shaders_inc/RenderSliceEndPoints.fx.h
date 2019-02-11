@@ -101,7 +101,7 @@
 "    return f2EntryPoint;\n"
 "}\n"
 "\n"
-"float4 GenerateSliceEndpointsPS(ScreenSizeQuadVSOutput VSOut\n"
+"float4 GenerateSliceEndpointsPS(FullScreenTriangleVSOutput VSOut\n"
 "                                // IMPORTANT: non-system generated pixel shader input\n"
 "                                // arguments must go in the exact same order as VS outputs.\n"
 "                                // Moreover, even if the shader is not using the argument,\n"

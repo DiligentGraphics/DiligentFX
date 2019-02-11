@@ -19,6 +19,10 @@ static const ShaderIncInfo g_Shaders[] =
         #include "ComputeMinMaxShadowMapLevel.fx.h"
     },
     {
+        "FullScreenTriangleVS.fx",
+        #include "FullScreenTriangleVS.fx.h"
+    },
+    {
         "InitializeMinMaxShadowMap.fx",
         #include "InitializeMinMaxShadowMap.fx.h"
     },
@@ -61,10 +65,6 @@ static const ShaderIncInfo g_Shaders[] =
     {
         "ScatteringIntegrals.fxh",
         #include "ScatteringIntegrals.fxh.h"
-    },
-    {
-        "ScreenSizeQuadVS.fx",
-        #include "ScreenSizeQuadVS.fx.h"
     },
     {
         "SliceUVDirection.fx",

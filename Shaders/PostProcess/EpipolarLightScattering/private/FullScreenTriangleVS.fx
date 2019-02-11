@@ -1,13 +1,13 @@
 #include "AtmosphereShadersCommon.fxh"
 
-ScreenSizeQuadVSOutput ScreenSizeQuadVS(in uint VertexId : SV_VertexID,
+FullScreenTriangleVSOutput FullScreenTriangleVS(in uint VertexId : SV_VertexID,
                                         in uint InstID   : SV_InstanceID
                                         // IMPORTANT: PS input arguments must go in the same order as VS outputs.
                                         // Moreover, even if the shader is not using the argument,
                                         // it still must be declared.
                                         )
 {
-    ScreenSizeQuadVSOutput VSOut;
+    FullScreenTriangleVSOutput VSOut;
   
     float2 PosXY[3];
     PosXY[0] = float2(-1.0, -1.0);

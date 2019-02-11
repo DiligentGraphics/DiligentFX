@@ -23,7 +23,7 @@ cbuffer cbMiscDynamicParams
 //         |    uiMinMaxShadowMapResolution/
 //      uiMinMaxShadowMapResolution/2
 //                         
-void ComputeMinMaxShadowMapLevelPS(in ScreenSizeQuadVSOutput VSOut,
+void ComputeMinMaxShadowMapLevelPS(in FullScreenTriangleVSOutput VSOut,
                                    out float2 f2MinMaxDepth : SV_Target)
 {
     uint2 uiDstSampleInd = uint2(VSOut.f4PixelPos.xy);

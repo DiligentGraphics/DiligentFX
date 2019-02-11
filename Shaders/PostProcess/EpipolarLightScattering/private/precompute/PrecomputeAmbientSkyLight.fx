@@ -13,7 +13,7 @@ Texture3D<float3> g_tex3DMultipleSctrLUT;
 SamplerState g_tex3DMultipleSctrLUT_sampler;
 
 
-void PrecomputeAmbientSkyLightPS(ScreenSizeQuadVSOutput VSOut,
+void PrecomputeAmbientSkyLightPS(FullScreenTriangleVSOutput VSOut,
                                  // IMPORTANT: non-system generated pixel shader input
                                  // arguments must have the exact same name as vertex shader 
                                  // outputs and must go in the same order.

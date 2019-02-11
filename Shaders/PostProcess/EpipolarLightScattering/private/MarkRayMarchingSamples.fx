@@ -5,7 +5,7 @@
 
 Texture2D<uint2>  g_tex2DInterpolationSource;
 
-void MarkRayMarchingSamplesInStencilPS(ScreenSizeQuadVSOutput VSOut
+void MarkRayMarchingSamplesInStencilPS(FullScreenTriangleVSOutput VSOut
                                        // IMPORTANT: non-system generated pixel shader input
                                        // arguments must have the exact same name as vertex shader 
                                        // outputs and must go in the same order.

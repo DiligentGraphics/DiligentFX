@@ -8,7 +8,7 @@ SamplerState g_tex2DCamSpaceZ_sampler;
 
 Texture2D<float4> g_tex2DSliceEndPoints;
 
-void GenerateCoordinateTexturePS(ScreenSizeQuadVSOutput VSOut, 
+void GenerateCoordinateTexturePS(FullScreenTriangleVSOutput VSOut, 
                                  // IMPORTANT: non-system generated pixel shader input
                                  // arguments must have the exact same name as vertex shader 
                                  // outputs and must go in the same order.

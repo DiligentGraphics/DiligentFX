@@ -21,7 +21,7 @@
 "    return MATRIX_ELEMENT(mProj,3,2) / (z - MATRIX_ELEMENT(mProj,2,2));\n"
 "}\n"
 "\n"
-"void ReconstructCameraSpaceZPS(ScreenSizeQuadVSOutput VSOut,\n"
+"void ReconstructCameraSpaceZPS(FullScreenTriangleVSOutput VSOut,\n"
 "                               // IMPORTANT: non-system generated pixel shader input\n"
 "                               // arguments must have the exact same name as vertex shader \n"
 "                               // outputs and must go in the same order.\n"

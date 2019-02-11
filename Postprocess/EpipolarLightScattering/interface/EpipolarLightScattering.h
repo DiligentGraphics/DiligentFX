@@ -136,20 +136,20 @@ private:
     void CreateCamSpaceZTexture              (IRenderDevice* pDevice);
     void ResetShaderResourceBindings();
 
-    RefCntAutoPtr<IPipelineState> CreateScreenSizeQuadPSO(IRenderDevice*               pDevice,
-                                                          const char*                  PSOName,
-                                                          IShader*                     PixelShader,
-                                                          const DepthStencilStateDesc& DSSDesc,
-                                                          const BlendStateDesc&        BSDesc,
-                                                          Uint8                        NumRTVs,
-                                                          TEXTURE_FORMAT               RTVFmts[],
-                                                          TEXTURE_FORMAT               DSVFmt = TEX_FORMAT_UNKNOWN);
+    RefCntAutoPtr<IPipelineState> CreateFullScreenTrianglePSO(IRenderDevice*               pDevice,
+                                                              const char*                  PSOName,
+                                                              IShader*                     PixelShader,
+                                                              const DepthStencilStateDesc& DSSDesc,
+                                                              const BlendStateDesc&        BSDesc,
+                                                              Uint8                        NumRTVs,
+                                                              TEXTURE_FORMAT               RTVFmts[],
+                                                              TEXTURE_FORMAT               DSVFmt = TEX_FORMAT_UNKNOWN);
 
-    void RenderScreenSizeQuad(IDeviceContext*         pDeviceContext, 
-                              IPipelineState*         PSO,
-                              IShaderResourceBinding* SRB,
-                              Uint8                   StencilRef = 0,
-                              Uint32                  NumQuads   = 1);
+    void RenderFullScreenTriangle(IDeviceContext*         pDeviceContext, 
+                                  IPipelineState*         PSO,
+                                  IShaderResourceBinding* SRB,
+                                  Uint8                   StencilRef = 0,
+                                  Uint32                  NumQuads   = 1);
 
     void DefineMacros(ShaderMacroHelper& Macros);
     

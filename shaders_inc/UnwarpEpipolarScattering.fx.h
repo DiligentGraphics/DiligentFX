@@ -279,7 +279,7 @@
 "}\n"
 "\n"
 "\n"
-"void ApplyInscatteredRadiancePS(ScreenSizeQuadVSOutput VSOut,\n"
+"void ApplyInscatteredRadiancePS(FullScreenTriangleVSOutput VSOut,\n"
 "                                // IMPORTANT: non-system generated pixel shader input\n"
 "                                // arguments must have the exact same name as vertex shader \n"
 "                                // outputs and must go in the same order.\n"

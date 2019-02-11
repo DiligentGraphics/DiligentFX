@@ -61,7 +61,7 @@ void ShaderFunctionInternal(in float4 f4Pos,
 }
 
 // Render inscattering only
-void RenderCoarseUnshadowedInsctrPS(ScreenSizeQuadVSOutput VSOut, 
+void RenderCoarseUnshadowedInsctrPS(FullScreenTriangleVSOutput VSOut, 
                                     // IMPORTANT: non-system generated pixel shader input
                                     // arguments must have the exact same name as vertex shader 
                                     // outputs and must go in the same order.
@@ -76,7 +76,7 @@ void RenderCoarseUnshadowedInsctrPS(ScreenSizeQuadVSOutput VSOut,
 }
 
 // Render inscattering and extinction
-void RenderCoarseUnshadowedInsctrAndExtinctionPS(ScreenSizeQuadVSOutput VSOut,
+void RenderCoarseUnshadowedInsctrAndExtinctionPS(FullScreenTriangleVSOutput VSOut,
                                                  out float4 f4Inscattering : SV_Target0,
                                                  out float4 f4Extinction   : SV_Target1) 
 {

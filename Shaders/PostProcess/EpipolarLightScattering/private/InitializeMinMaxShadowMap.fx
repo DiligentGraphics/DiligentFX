@@ -16,7 +16,7 @@ cbuffer cbMiscDynamicParams
 
 // Note that min/max shadow map does not contain finest resolution level
 // The first level it contains corresponds to step == 2
-void InitializeMinMaxShadowMapPS(in ScreenSizeQuadVSOutput VSOut,
+void InitializeMinMaxShadowMapPS(in FullScreenTriangleVSOutput VSOut,
                                  out float2 f2MinMaxDepth : SV_Target)
 {
     uint uiSliceInd;

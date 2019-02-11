@@ -23,7 +23,7 @@
 "//         |    uiMinMaxShadowMapResolution/\n"
 "//      uiMinMaxShadowMapResolution/2\n"
 "//                         \n"
-"void ComputeMinMaxShadowMapLevelPS(in ScreenSizeQuadVSOutput VSOut,\n"
+"void ComputeMinMaxShadowMapLevelPS(in FullScreenTriangleVSOutput VSOut,\n"
 "                                   out float2 f2MinMaxDepth : SV_Target)\n"
 "{\n"
 "    uint2 uiDstSampleInd = uint2(VSOut.f4PixelPos.xy);\n"

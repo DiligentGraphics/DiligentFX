@@ -7,7 +7,7 @@ cbuffer cbMiscDynamicParams
 
 Texture2D<float>  g_tex2DLowResLuminance;
 
-void UpdateAverageLuminancePS( ScreenSizeQuadVSOutput VSOut, 
+void UpdateAverageLuminancePS( FullScreenTriangleVSOutput VSOut, 
                                // We must declare vertex shader output even though we 
                                // do not use it, because otherwise the shader will not
                                // run on NVidia GLES

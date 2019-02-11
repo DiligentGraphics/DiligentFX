@@ -101,7 +101,7 @@ float2 GetEpipolarLineEntryPoint(float2 f2ExitPoint)
     return f2EntryPoint;
 }
 
-float4 GenerateSliceEndpointsPS(ScreenSizeQuadVSOutput VSOut
+float4 GenerateSliceEndpointsPS(FullScreenTriangleVSOutput VSOut
                                 // IMPORTANT: non-system generated pixel shader input
                                 // arguments must go in the exact same order as VS outputs.
                                 // Moreover, even if the shader is not using the argument,

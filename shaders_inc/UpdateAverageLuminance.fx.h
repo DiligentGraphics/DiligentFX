@@ -7,7 +7,7 @@
 "\n"
 "Texture2D<float>  g_tex2DLowResLuminance;\n"
 "\n"
-"void UpdateAverageLuminancePS( ScreenSizeQuadVSOutput VSOut, \n"
+"void UpdateAverageLuminancePS( FullScreenTriangleVSOutput VSOut, \n"
 "                               // We must declare vertex shader output even though we \n"
 "                               // do not use it, because otherwise the shader will not\n"
 "                               // run on NVidia GLES\n"

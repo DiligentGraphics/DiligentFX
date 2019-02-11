@@ -8,7 +8,7 @@
 "\n"
 "Texture2D<float4> g_tex2DSliceEndPoints;\n"
 "\n"
-"void GenerateCoordinateTexturePS(ScreenSizeQuadVSOutput VSOut, \n"
+"void GenerateCoordinateTexturePS(FullScreenTriangleVSOutput VSOut, \n"
 "                                 // IMPORTANT: non-system generated pixel shader input\n"
 "                                 // arguments must have the exact same name as vertex shader \n"
 "                                 // outputs and must go in the same order.\n"

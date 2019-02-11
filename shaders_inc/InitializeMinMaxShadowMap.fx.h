@@ -16,7 +16,7 @@
 "\n"
 "// Note that min/max shadow map does not contain finest resolution level\n"
 "// The first level it contains corresponds to step == 2\n"
-"void InitializeMinMaxShadowMapPS(in ScreenSizeQuadVSOutput VSOut,\n"
+"void InitializeMinMaxShadowMapPS(in FullScreenTriangleVSOutput VSOut,\n"
 "                                 out float2 f2MinMaxDepth : SV_Target)\n"
 "{\n"
 "    uint uiSliceInd;\n"

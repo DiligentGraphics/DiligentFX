@@ -13,7 +13,7 @@
 "SamplerState g_tex3DMultipleSctrLUT_sampler;\n"
 "\n"
 "\n"
-"void PrecomputeAmbientSkyLightPS(ScreenSizeQuadVSOutput VSOut,\n"
+"void PrecomputeAmbientSkyLightPS(FullScreenTriangleVSOutput VSOut,\n"
 "                                 // IMPORTANT: non-system generated pixel shader input\n"
 "                                 // arguments must have the exact same name as vertex shader \n"
 "                                 // outputs and must go in the same order.\n"

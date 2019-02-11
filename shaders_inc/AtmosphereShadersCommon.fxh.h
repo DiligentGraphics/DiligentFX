@@ -118,7 +118,7 @@
 "\n"
 "#define RGB_TO_LUMINANCE float3(0.212671, 0.715160, 0.072169)\n"
 "\n"
-"struct ScreenSizeQuadVSOutput\n"
+"struct FullScreenTriangleVSOutput\n"
 "{\n"
 "    float4 f4PixelPos     : SV_Position;   // Pixel position on the screen\n"
 "    float2 f2NormalizedXY : NORMALIZED_XY; // Normalized device XY coordinates [-1,1]x[-1,1]\n"
