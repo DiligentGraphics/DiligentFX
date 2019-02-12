@@ -137,38 +137,24 @@ private:
     void CreateCamSpaceZTexture              (IRenderDevice* pDevice);
     void ResetShaderResourceBindings();
 
-    RefCntAutoPtr<IPipelineState> CreateFullScreenTrianglePSO(IRenderDevice*               pDevice,
-                                                              const char*                  PSOName,
-                                                              IShader*                     PixelShader,
-                                                              const DepthStencilStateDesc& DSSDesc,
-                                                              const BlendStateDesc&        BSDesc,
-                                                              Uint8                        NumRTVs,
-                                                              TEXTURE_FORMAT               RTVFmts[],
-                                                              TEXTURE_FORMAT               DSVFmt = TEX_FORMAT_UNKNOWN);
-
-    void RenderFullScreenTriangle(IDeviceContext*         pDeviceContext, 
-                                  IPipelineState*         PSO,
-                                  IShaderResourceBinding* SRB,
-                                  Uint8                   StencilRef = 0,
-                                  Uint32                  NumQuads   = 1);
-
     void DefineMacros(ShaderMacroHelper& Macros);
     
     const TEXTURE_FORMAT m_BackBufferFmt;
     const TEXTURE_FORMAT m_DepthBufferFmt;
     const TEXTURE_FORMAT m_OffscreenBackBufferFmt;
 
-    static constexpr TEXTURE_FORMAT CoordinateTexFmt           = TEX_FORMAT_RG32_FLOAT;
-    static constexpr TEXTURE_FORMAT SliceEndpointsFmt          = TEX_FORMAT_RGBA32_FLOAT;
-    static constexpr TEXTURE_FORMAT InterpolationSourceTexFmt  = TEX_FORMAT_RGBA32_UINT;
-    static constexpr TEXTURE_FORMAT EpipolarCamSpaceZFmt       = TEX_FORMAT_R32_FLOAT;
-    static constexpr TEXTURE_FORMAT EpipolarInsctrTexFmt       = TEX_FORMAT_RGBA16_FLOAT;
-    static constexpr TEXTURE_FORMAT EpipolarImageDepthFmt      = TEX_FORMAT_D24_UNORM_S8_UINT;
-    static constexpr TEXTURE_FORMAT EpipolarExtinctionFmt      = TEX_FORMAT_RGBA8_UNORM;
-    static constexpr TEXTURE_FORMAT AmbientSkyLightTexFmt      = TEX_FORMAT_RGBA16_FLOAT;
-    static constexpr TEXTURE_FORMAT LuminanceTexFmt            = TEX_FORMAT_R16_FLOAT;
-    static constexpr TEXTURE_FORMAT SliceUVDirAndOriginTexFmt  = TEX_FORMAT_RGBA32_FLOAT;
-    static constexpr TEXTURE_FORMAT CamSpaceZFmt               = TEX_FORMAT_R32_FLOAT;
+    static constexpr TEXTURE_FORMAT PrecomputedNetDensityTexFmt = TEX_FORMAT_RG32_FLOAT;
+    static constexpr TEXTURE_FORMAT CoordinateTexFmt            = TEX_FORMAT_RG32_FLOAT;
+    static constexpr TEXTURE_FORMAT SliceEndpointsFmt           = TEX_FORMAT_RGBA32_FLOAT;
+    static constexpr TEXTURE_FORMAT InterpolationSourceTexFmt   = TEX_FORMAT_RGBA32_UINT;
+    static constexpr TEXTURE_FORMAT EpipolarCamSpaceZFmt        = TEX_FORMAT_R32_FLOAT;
+    static constexpr TEXTURE_FORMAT EpipolarInsctrTexFmt        = TEX_FORMAT_RGBA16_FLOAT;
+    static constexpr TEXTURE_FORMAT EpipolarImageDepthFmt       = TEX_FORMAT_D24_UNORM_S8_UINT;
+    static constexpr TEXTURE_FORMAT EpipolarExtinctionFmt       = TEX_FORMAT_RGBA8_UNORM;
+    static constexpr TEXTURE_FORMAT AmbientSkyLightTexFmt       = TEX_FORMAT_RGBA16_FLOAT;
+    static constexpr TEXTURE_FORMAT LuminanceTexFmt             = TEX_FORMAT_R16_FLOAT;
+    static constexpr TEXTURE_FORMAT SliceUVDirAndOriginTexFmt   = TEX_FORMAT_RGBA32_FLOAT;
+    static constexpr TEXTURE_FORMAT CamSpaceZFmt                = TEX_FORMAT_R32_FLOAT;
 
 
     PostProcessingAttribs m_PostProcessingAttribs;
@@ -206,10 +192,7 @@ private:
     RefCntAutoPtr<ITextureView> m_ptex2DOccludedNetDensityToAtmTopSRV;
     RefCntAutoPtr<ITextureView> m_ptex2DOccludedNetDensityToAtmTopRTV;
 
-    RefCntAutoPtr<IShader> m_pQuadVS;
-    RefCntAutoPtr<IShader> m_pRefineSampleLocationsCS;
-    RefCntAutoPtr<IPipelineState>         m_pRefineSampleLocationsPSO;
-    RefCntAutoPtr<IShaderResourceBinding> m_pRefineSampleLocationsSRB;
+    RefCntAutoPtr<IShader> m_pFullScreenTriangleVS;
     
     RefCntAutoPtr<IResourceMapping> m_pResMapping;
 
@@ -224,72 +207,118 @@ private:
     RefCntAutoPtr<ITextureView> m_ptex2DSliceUVDirAndOriginRTV;
     RefCntAutoPtr<ITextureView> m_ptex2DCamSpaceZRTV;
 
-    RefCntAutoPtr<IPipelineState>         m_pRenderSampleLocationsPSO;
-    RefCntAutoPtr<IShaderResourceBinding> m_pRenderSampleLocationsSRB;
     RefCntAutoPtr<ISampler> m_pPointClampSampler, m_pLinearClampSampler;
 
-    RefCntAutoPtr<IShader> m_pPrecomputeSingleSctrCS;
-    RefCntAutoPtr<IShader> m_pComputeSctrRadianceCS;
-    RefCntAutoPtr<IShader> m_pComputeScatteringOrderCS;
-    RefCntAutoPtr<IShader> m_pInitHighOrderScatteringCS, m_pUpdateHighOrderScatteringCS;
-    RefCntAutoPtr<IShader> m_pCombineScatteringOrdersCS;
+    struct RenderTechnique
+    {
+        RefCntAutoPtr<IPipelineState>         PSO;
+        RefCntAutoPtr<IShaderResourceBinding> SRB;
+        Uint32                                PSODependencyFlags = 0;
+        Uint32                                SRBDependencyFlags = 0;
+        
+        void InitializeFullScreenTriangleTechnique(IRenderDevice*               pDevice,
+                                                   const char*                  PSOName,
+                                                   IShader*                     VertexShader,
+                                                   IShader*                     PixelShader,
+                                                   Uint8                        NumRTVs,
+                                                   TEXTURE_FORMAT               RTVFmts[],
+                                                   TEXTURE_FORMAT               DSVFmt,
+                                                   const DepthStencilStateDesc& DSSDesc,
+                                                   const BlendStateDesc&        BSDesc);
 
-    RefCntAutoPtr<IPipelineState>         m_pReconstrCamSpaceZPSO;
-    RefCntAutoPtr<IShaderResourceBinding> m_pReconstrCamSpaceZSRB;
-    RefCntAutoPtr<IPipelineState>         m_pRendedSliceEndpointsPSO;
-    RefCntAutoPtr<IShaderResourceBinding> m_pRendedSliceEndpointsSRB;
-    RefCntAutoPtr<IPipelineState>         m_pRendedCoordTexPSO;
-    RefCntAutoPtr<IShaderResourceBinding> m_pRendedCoordTexSRB;
-    RefCntAutoPtr<IPipelineState>         m_pRenderCoarseUnshadowedInsctrPSO;
-    RefCntAutoPtr<IShaderResourceBinding> m_pRenderCoarseUnshadowedInsctrSRB;
-    RefCntAutoPtr<IPipelineState>         m_pMarkRayMarchingSamplesInStencilPSO;
-    RefCntAutoPtr<IShaderResourceBinding> m_pMarkRayMarchingSamplesInStencilSRB;
-    RefCntAutoPtr<IPipelineState>         m_pRenderSliceUVDirInSM_PSO;
-    RefCntAutoPtr<IShaderResourceBinding> m_pRenderSliceUVDirInSM_SRB;
-    RefCntAutoPtr<IPipelineState>         m_pInitializeMinMaxShadowMapPSO;
-    RefCntAutoPtr<IShaderResourceBinding> m_pInitializeMinMaxShadowMapSRB;
-    RefCntAutoPtr<IPipelineState>         m_pComputeMinMaxSMLevelPSO;
+        void InitializeFullScreenTriangleTechnique(IRenderDevice*               pDevice,
+                                                   const char*                  PSOName,
+                                                   IShader*                     VertexShader,
+                                                   IShader*                     PixelShader,
+                                                   TEXTURE_FORMAT               RTVFmt,
+                                                   TEXTURE_FORMAT               DSVFmt,
+                                                   const DepthStencilStateDesc& DSSDesc,
+                                                   const BlendStateDesc&        BSDesc);
+
+        void InitializeComputeTechnique(IRenderDevice*   pDevice,
+                                        const char*      PSOName,
+                                        IShader*         ComputeShader);
+
+        void PrepareSRB(IRenderDevice* pDevice, IResourceMapping* pResMapping, Uint32 Flags);
+
+        void Render(IDeviceContext* pDeviceContext, Uint8 StencilRef = 0, Uint32 NumQuads = 1);
+
+        void DispatchCompute(IDeviceContext* pDeviceContext, const DispatchComputeAttribs& DispatchAttrs);
+
+        void CheckStaleFlags(Uint32 StalePSODependencies, Uint32 StaleSRBDependencies);
+    };
+
+    enum RENDER_TECH
+    {
+        RENDER_TECH_RECONSTRUCT_CAM_SPACE_Z = 0,
+        RENDER_TECH_RENDER_SLICE_END_POINTS,
+        RENDER_TECH_RENDER_COORD_TEXTURE,
+        RENDER_TECH_RENDER_COARSE_UNSHADOWED_INSCTR,
+        RENDER_TECH_REFINE_SAMPLE_LOCATIONS,
+        RENDER_TECH_MARK_RAY_MARCHING_SAMPLES,
+        RENDER_TECH_RENDER_SLICE_UV_DIRECTION,
+        RENDER_TECH_INIT_MIN_MAX_SHADOW_MAP,
+        RENDER_TECH_COMPUTE_MIN_MAX_SHADOW_MAP_LEVEL,
+        RENDER_TECH_RAY_MARCH_NO_MIN_MAX_OPT,
+        RENDER_TECH_RAY_MARCH_MIN_MAX_OPT,
+        RENDER_TECH_INTERPOLATE_IRRADIANCE,
+        RENDER_TECH_UNWARP_EPIPOLAR_SCATTERING,
+        RENDER_TECH_UNWARP_AND_RENDER_LUMINANCE,
+        RENDER_TECH_UPDATE_AVERAGE_LUMINANCE,
+        RENDER_TECH_FIX_INSCATTERING_LUM_ONLY,
+        RENDER_TECH_FIX_INSCATTERING,
+        RENDER_TECH_BRUTE_FORCE_RAY_MARCHING,
+        RENDER_TECH_RENDER_SUN,
+        RENDER_TECH_RENDER_SAMPLE_LOCATIONS,
+
+        // Precomputation techniques
+        RENDER_TECH_PRECOMPUTE_NET_DENSITY_TO_ATM_TOP,
+        RENDER_TECH_PRECOMPUTE_SINGLE_SCATTERING,
+        RENDER_TECH_COMPUTE_SCATTERING_RADIANCE,
+        RENDER_TECH_COMPUTE_SCATTERING_ORDER,
+        RENDER_TECH_INIT_HIGH_ORDER_SCATTERING,
+        RENDER_TECH_UPDATE_HIGH_ORDER_SCATTERING,
+        RENDER_TECH_COMBINE_SCATTERING_ORDERS,
+        RENDER_TECH_PRECOMPUTE_AMBIENT_SKY_LIGHT,
+
+        RENDER_TECH_TOTAL_TECHNIQUES
+    };
+
+    RenderTechnique m_RenderTech[RENDER_TECH_TOTAL_TECHNIQUES];
+
+    enum PSO_DEPENDENCY_FLAGS
+    {
+        PSO_DEPENDENCY_NUM_EPIPOLAR_SLICES       = 0x00001,
+        PSO_DEPENDENCY_MAX_SAMPLES_IN_SLICE      = 0x00002,
+        PSO_DEPENDENCY_INITIAL_SAMPLE_STEP       = 0x00004,
+        PSO_DEPENDENCY_EPIPOLE_SAMPLING_DENSITY  = 0x00008,
+        PSO_DEPENDENCY_CORRECT_SCATTERING        = 0x00010,
+        PSO_DEPENDENCY_OPTIMIZE_SAMPLE_LOCATIONS = 0x00020,
+        PSO_DEPENDENCY_ENABLE_LIGHT_SHAFTS       = 0x00040,
+        PSO_DEPENDENCY_USE_1D_MIN_MAX_TREE       = 0x00080,
+        PSO_DEPENDENCY_USE_COMBINED_MIN_MAX_TEX  = 0x00100,
+        PSO_DEPENDENCY_LIGHT_SCTR_TECHNIQUE      = 0x00200,
+        PSO_DEPENDENCY_CASCADE_PROCESSING_MODE   = 0x00400,
+        PSO_DEPENDENCY_REFINEMENT_CRITERION      = 0x00800,
+        PSO_DEPENDENCY_IS_32_BIT_MIN_MAX_TREE    = 0x01000,
+        PSO_DEPENDENCY_MULTIPLE_SCATTERING_MODE  = 0x02000,
+        PSO_DEPENDENCY_SINGLE_SCATTERING_MODE    = 0x04000,
+        PSO_DEPENDENCY_AUTO_EXPOSURE             = 0x08000,
+        PSO_DEPENDENCY_TONE_MAPPING_MODE         = 0x10000,
+        PSO_DEPENDENCY_LIGHT_ADAPTATION          = 0x20000,
+        PSO_DEPENDENCY_EXTINCTION_EVAL_MODE      = 0x40000
+    };
+
     RefCntAutoPtr<IShaderResourceBinding> m_pComputeMinMaxSMLevelSRB[2];
-    RefCntAutoPtr<IPipelineState>         m_pDoRayMarchPSO[2]; // 0 - min/max optimization disabled; 1 - min/max optimization enabled
-    RefCntAutoPtr<IShaderResourceBinding> m_pDoRayMarchSRB[2];
-    RefCntAutoPtr<IPipelineState>         m_pInterpolateIrradiancePSO;
-    RefCntAutoPtr<IShaderResourceBinding> m_pInterpolateIrradianceSRB;
-    RefCntAutoPtr<IPipelineState>         m_pUnwarpEpipolarSctrImgPSO;
-    RefCntAutoPtr<IShaderResourceBinding> m_pUnwarpEpipolarSctrImgSRB;
-    RefCntAutoPtr<IPipelineState>         m_pUnwarpAndRenderLuminancePSO;
-    RefCntAutoPtr<IShaderResourceBinding> m_pUnwarpAndRenderLuminanceSRB;
-    RefCntAutoPtr<IPipelineState>         m_pUpdateAverageLuminancePSO;
-    RefCntAutoPtr<IShaderResourceBinding> m_pUpdateAverageLuminanceSRB;
-    RefCntAutoPtr<IPipelineState>         m_pFixInsctrAtDepthBreaksPSO[3]; // 0 - Luminance Only,
-                                                                           // 1 - Fix Inscattering
-                                                                           // 2 - Full Screen Ray Marching
-    RefCntAutoPtr<IShaderResourceBinding> m_pFixInsctrAtDepthBreaksSRB[3];
-
-    RefCntAutoPtr<IPipelineState>         m_pPrecomputeNetDensityToAtmTopPSO;
-    RefCntAutoPtr<IShaderResourceBinding> m_pPrecomputeNetDensityToAtmTopSRB;
-    RefCntAutoPtr<IPipelineState>         m_pPrecomputeSingleSctrPSO;
-    RefCntAutoPtr<IShaderResourceBinding> m_pPrecomputeSingleSctrSRB;
-    RefCntAutoPtr<IPipelineState>         m_pComputeSctrRadiancePSO;
-    RefCntAutoPtr<IShaderResourceBinding> m_pComputeSctrRadianceSRB;
-    RefCntAutoPtr<IPipelineState>         m_pComputeScatteringOrderPSO;
-    RefCntAutoPtr<IShaderResourceBinding> m_pComputeScatteringOrderSRB;
-    RefCntAutoPtr<IPipelineState>         m_pInitHighOrderScatteringPSO, m_pUpdateHighOrderScatteringPSO;
-    RefCntAutoPtr<IShaderResourceBinding> m_pInitHighOrderScatteringSRB, m_pUpdateHighOrderScatteringSRB;
-    RefCntAutoPtr<IPipelineState>         m_pCombineScatteringOrdersPSO;
-    RefCntAutoPtr<IShaderResourceBinding> m_pCombineScatteringOrdersSRB;
-    RefCntAutoPtr<IPipelineState>         m_pRenderSunPSO;
-    RefCntAutoPtr<IShaderResourceBinding> m_pRenderSunSRB;
-    RefCntAutoPtr<IPipelineState>         m_pPrecomputeAmbientSkyLightPSO;
-    RefCntAutoPtr<IShaderResourceBinding> m_pPrecomputeAmbientSkyLightSRB;
-
-    
+   
     RefCntAutoPtr<ITexture> m_ptex3DHighOrderSctr, m_ptex3DHighOrderSctr2;
 
     RefCntAutoPtr<IBuffer> m_pcbPostProcessingAttribs;
     RefCntAutoPtr<IBuffer> m_pcbMediaAttribs;
     RefCntAutoPtr<IBuffer> m_pcbMiscParams;
 
-    Uint32 m_uiBackBufferWidth, m_uiBackBufferHeight;
+    Uint32 m_uiBackBufferWidth  = 0;
+    Uint32 m_uiBackBufferHeight = 0;
     
     //const float m_fTurbidity = 1.02f;
     AirScatteringAttribs m_MediaParams;
