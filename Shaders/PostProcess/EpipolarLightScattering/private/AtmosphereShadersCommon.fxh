@@ -20,10 +20,6 @@
 #   define MAX_SAMPLES_IN_SLICE 512
 #endif
 
-#ifndef SCREEN_RESLOUTION
-#   define SCREEN_RESLOUTION float2(1024.0, 768.0)
-#endif
-
 #ifndef OPTIMIZE_SAMPLE_LOCATIONS
 #   define OPTIMIZE_SAMPLE_LOCATIONS 1
 #endif
@@ -200,7 +196,7 @@ void GetRaySphereIntersection2(in float3 f3RayOrigin,
 }
 
 
-float4 GetOutermostScreenPixelCoords()
+float4 GetOutermostScreenPixelCoords(float4 ScreenResolution)
 {
     // The outermost visible screen pixels centers do not lie exactly on the boundary (+1 or -1), but are biased by
     // 0.5 screen pixel size inwards
@@ -215,20 +211,16 @@ float4 GetOutermostScreenPixelCoords()
     //          |                                                            |
     //          |                                                            |
     //      -1 + 1.0/Res                                                  +1 - 1.0/Res
-    //
-    // Using shader macro is much more efficient than using constant buffer variable
-    // because the compiler is able to optimize the code more aggressively
-    // return float4(-1,-1,1,1) + float4(1, 1, -1, -1)/g_PPAttribs.m_f2ScreenResolution.xyxy;
-    return float4(-1.0,-1.0,1.0,1.0) + float4(1.0, 1.0, -1.0, -1.0) / SCREEN_RESLOUTION.xyxy;
+    return float4(-1.0, -1.0, 1.0, 1.0) + float4(1.0, 1.0, -1.0, -1.0) * ScreenResolution.zwzw;
 }
 
 
 // When checking if a point is inside the screen, we must test against 
 // the biased screen boundaries 
-bool IsValidScreenLocation(in float2 f2XY)
+bool IsValidScreenLocation(in float2 f2XY, float4 ScreenResolution)
 {
     const float2 SAFETY_EPSILON = float2(0.2, 0.2);
-    return all( LessEqual( abs(f2XY), F2ONE - (F2ONE - SAFETY_EPSILON) / SCREEN_RESLOUTION.xy ) );
+    return all( LessEqual( abs(f2XY), F2ONE - (F2ONE - SAFETY_EPSILON) * ScreenResolution.zw ) );
 }
 
 

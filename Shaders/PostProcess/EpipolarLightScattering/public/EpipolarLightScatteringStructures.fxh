@@ -132,6 +132,9 @@ struct PostProcessingAttribs
 
     float4 m_f4CustomRlghBeta               DEFAULT_VALUE(float4(5.8e-6f, 13.5e-6f, 33.1e-6f, 0.f));
     float4 m_f4CustomMieBeta                DEFAULT_VALUE(float4(2.e-5f, 2.e-5f, 2.e-5f, 0.f));
+
+    // This member is automatically set by the effect
+    float4 m_f4ScreenResolution             DEFAULT_VALUE(float4(0,0,0,0));
 };
 CHECK_STRUCT_ALIGNMENT(PostProcessingAttribs)
 

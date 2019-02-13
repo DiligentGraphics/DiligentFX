@@ -2,6 +2,11 @@
 #include "BasicStructures.fxh"
 #include "AtmosphereShadersCommon.fxh"
 
+cbuffer cbPostProcessingAttribs
+{
+    PostProcessingAttribs g_PPAttribs;
+};
+
 cbuffer cbLightParams
 {
     LightAttribs g_LightAttribs;
@@ -51,7 +56,7 @@ float2 GetEpipolarLineEntryPoint(float2 f2ExitPoint)
         // Note that in fact the outermost visible screen pixels do not lie exactly on the boundary (+1 or -1), but are biased by
         // 0.5 screen pixel size inwards. Using these adjusted boundaries improves precision and results in
         // smaller number of pixels which require inscattering correction
-        float4 f4Boundaries = GetOutermostScreenPixelCoords();
+        float4 f4Boundaries = GetOutermostScreenPixelCoords(g_PPAttribs.m_f4ScreenResolution);
         bool4 b4IsCorrectIntersectionFlag = Greater( abs(f2RayDir.xyxy), 1e-5 * F4ONE );
         float4 f4DistToBoundaries = (f4Boundaries - g_LightAttribs.f4LightScreenPos.xyxy) / (f2RayDir.xyxy + BoolToFloat( Not(b4IsCorrectIntersectionFlag) ) );
         // Addition of !b4IsCorrectIntersectionFlag is required to prevent divison by zero
@@ -137,7 +142,7 @@ float4 GenerateSliceEndpointsPS(FullScreenTriangleVSOutput VSOut
     // Note that in fact the outermost visible screen pixels do not lie exactly on the boundary (+1 or -1), but are biased by
     // 0.5 screen pixel size inwards. Using these adjusted boundaries improves precision and results in
     // samller number of pixels which require inscattering correction
-    float4 f4OutermostScreenPixelCoords = GetOutermostScreenPixelCoords();// xyzw = (left, bottom, right, top)
+    float4 f4OutermostScreenPixelCoords = GetOutermostScreenPixelCoords(g_PPAttribs.m_f4ScreenResolution);// xyzw = (left, bottom, right, top)
 
     // Check if there can definitely be no correct intersection with the boundary:
     //  
@@ -199,10 +204,10 @@ float4 GenerateSliceEndpointsPS(FullScreenTriangleVSOutput VSOut
     
 #if OPTIMIZE_SAMPLE_LOCATIONS
     // If epipolar slice is not invisible, advance its exit point if necessary
-    if( IsValidScreenLocation(f2EntryPoint) )
+    if( IsValidScreenLocation(f2EntryPoint, g_PPAttribs.m_f4ScreenResolution) )
     {
         // Compute length of the epipolar line in screen pixels:
-        float fEpipolarSliceScreenLen = length( (f2ExitPoint - f2EntryPoint) * SCREEN_RESLOUTION.xy / 2.0 );
+        float fEpipolarSliceScreenLen = length( (f2ExitPoint - f2EntryPoint) * g_PPAttribs.m_f4ScreenResolution.xy / 2.0 );
         // If epipolar line is too short, update epipolar line exit point to provide 1:1 texel to screen pixel correspondence:
         f2ExitPoint = f2EntryPoint + (f2ExitPoint - f2EntryPoint) * max(float(MAX_SAMPLES_IN_SLICE) / fEpipolarSliceScreenLen, 1.0);
     }

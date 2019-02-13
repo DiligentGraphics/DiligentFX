@@ -32,7 +32,7 @@
 "    // Load epipolar slice endpoints\n"
 "    float4 f4SliceEndpoints = g_tex2DSliceEndPoints.Load(  int3(iSliceInd,0,0) );\n"
 "    // All correct entry points are completely inside the [-1+1/W,1-1/W]x[-1+1/H,1-1/H] area\n"
-"    if( !IsValidScreenLocation(f4SliceEndpoints.xy) )\n"
+"    if( !IsValidScreenLocation(f4SliceEndpoints.xy, g_PPAttribs.m_f4ScreenResolution) )\n"
 "    {\n"
 "        f4SliceUVDirAndStart = f4IncorrectSliceUVDirAndStart;\n"
 "        return;\n"

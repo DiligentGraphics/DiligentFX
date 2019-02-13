@@ -101,7 +101,7 @@ void UnwarpEpipolarInsctrImage( in float2 f2PosPS,
     // Note that in fact the outermost visible screen pixels do not lie exactly on the boundary (+1 or -1), but are biased by
     // 0.5 screen pixel size inwards. Using these adjusted boundaries improves precision and results in
     // smaller number of pixels which require inscattering correction
-    float4 f4Boundaries = GetOutermostScreenPixelCoords();//left, bottom, right, top
+    float4 f4Boundaries = GetOutermostScreenPixelCoords(g_PPAttribs.m_f4ScreenResolution);//left, bottom, right, top
     float4 f4HalfSpaceEquationTerms = (f2PosPS.xxyy - f4Boundaries.xzyw/*float4(-1,1,-1,1)*/) * f2RayDir.yyxx;
     bool4 b4HalfSpaceFlags = Less( f4HalfSpaceEquationTerms.xyyx, f4HalfSpaceEquationTerms.zzww );
 

@@ -1,5 +1,3 @@
-"// Precomputes optical depth\n"
-"\n"
 "#include \"AtmosphereShadersCommon.fxh\"\n"
 "\n"
 "\n"

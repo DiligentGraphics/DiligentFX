@@ -392,16 +392,6 @@ void EpipolarLightScattering :: OnWindowResize(IRenderDevice* pDevice, Uint32 ui
 {
     m_uiBackBufferWidth  = uiBackBufferWidth;
     m_uiBackBufferHeight = uiBackBufferHeight;
-
-    // Release all shaders that depend on SCREEN_RESLOUTION shader macro
-    // The shaders will be recreated first time they needed
-    m_RenderTech[RENDER_TECH_RENDER_COORD_TEXTURE].PSO.Release();
-    m_RenderTech[RENDER_TECH_RENDER_SLICE_END_POINTS].PSO.Release();
-    m_RenderTech[RENDER_TECH_RENDER_SLICE_UV_DIRECTION].PSO.Release();
-    m_RenderTech[RENDER_TECH_RENDER_SAMPLE_LOCATIONS].PSO.Release();
-    m_RenderTech[RENDER_TECH_UNWARP_AND_RENDER_LUMINANCE].PSO.Release();
-    m_RenderTech[RENDER_TECH_UNWARP_EPIPOLAR_SCATTERING].PSO.Release();
-
     m_ptex2DCamSpaceZRTV.Release();
 }
 
@@ -417,12 +407,6 @@ void EpipolarLightScattering :: DefineMacros(ShaderMacroHelper& Macros)
     Macros.AddShaderMacro("ENABLE_LIGHT_SHAFTS", m_PostProcessingAttribs.m_bEnableLightShafts);
     Macros.AddShaderMacro("MULTIPLE_SCATTERING_MODE", m_PostProcessingAttribs.m_uiMultipleScatteringMode);
     Macros.AddShaderMacro("SINGLE_SCATTERING_MODE", m_PostProcessingAttribs.m_uiSingleScatteringMode);
-    
-    {
-        std::stringstream ss;
-        ss<<"float2("<<m_uiBackBufferWidth<<".0,"<<m_uiBackBufferHeight<<".0)";
-        Macros.AddShaderMacro("SCREEN_RESLOUTION", ss.str());
-    }
 
     {
         std::stringstream ss;
@@ -993,7 +977,11 @@ void EpipolarLightScattering :: RenderSliceEndpoints(FrameAttribs& FrameAttribs)
         DefineMacros(Macros);
         Macros.Finalize();
 
-        auto pRendedSliceEndpointsPS = CreateShader(FrameAttribs.pDevice, "RenderSliceEndPoints.fx", "GenerateSliceEndpointsPS", SHADER_TYPE_PIXEL, Macros, SHADER_VARIABLE_TYPE_MUTABLE);
+        ShaderVariableDesc Vars[] = 
+        { 
+            {"cbPostProcessingAttribs", SHADER_VARIABLE_TYPE_STATIC}
+        };
+        auto pRendedSliceEndpointsPS = CreateShader(FrameAttribs.pDevice, "RenderSliceEndPoints.fx", "GenerateSliceEndpointsPS", SHADER_TYPE_PIXEL, Macros, SHADER_VARIABLE_TYPE_MUTABLE, Vars, _countof(Vars));
         // Bind input resources required by the shader
         pRendedSliceEndpointsPS->BindResources( m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED );
 
@@ -1132,7 +1120,6 @@ void EpipolarLightScattering :: RefineSampleLocations(FrameAttribs &FrameAttribs
 
         ShaderVariableDesc Vars[] = 
         { 
-            //{"cbLightParams", SHADER_VARIABLE_TYPE_STATIC}, 
             {"cbPostProcessingAttribs", SHADER_VARIABLE_TYPE_STATIC}
         };
         auto pRefineSampleLocationsCS = CreateShader(FrameAttribs.pDevice, "RefineSampleLocations.fx", "RefineSampleLocationsCS", SHADER_TYPE_COMPUTE, Macros, SHADER_VARIABLE_TYPE_MUTABLE, Vars, _countof(Vars));
@@ -1723,9 +1710,11 @@ void EpipolarLightScattering :: RenderSampleLocations(FrameAttribs& FrameAttribs
         ShaderMacroHelper Macros;
         DefineMacros(Macros);
         Macros.Finalize();
-
-        // Shaders use SCREEN_RESLOUTION macro
-        auto pRenderSampleLocationsVS = CreateShader( FrameAttribs.pDevice, "RenderSampling.fx", "RenderSampleLocationsVS", SHADER_TYPE_VERTEX, Macros, SHADER_VARIABLE_TYPE_MUTABLE);
+        ShaderVariableDesc Vars[] = 
+        { 
+            {"cbPostProcessingAttribs", SHADER_VARIABLE_TYPE_STATIC}
+        };
+        auto pRenderSampleLocationsVS = CreateShader( FrameAttribs.pDevice, "RenderSampling.fx", "RenderSampleLocationsVS", SHADER_TYPE_VERTEX, Macros, SHADER_VARIABLE_TYPE_MUTABLE, Vars, _countof(Vars));
         auto pRenderSampleLocationsPS = CreateShader( FrameAttribs.pDevice, "RenderSampling.fx", "RenderSampleLocationsPS", SHADER_TYPE_PIXEL, Macros, SHADER_VARIABLE_TYPE_MUTABLE);
         pRenderSampleLocationsVS->BindResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
         pRenderSampleLocationsPS->BindResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
@@ -1932,6 +1921,12 @@ void EpipolarLightScattering :: PerformPostProcessing(FrameAttribs&          Fra
                                      m_PostProcessingAttribs.m_f4CustomMieBeta  != PPAttribs.m_f4CustomMieBeta) );
 
     m_PostProcessingAttribs = PPAttribs;
+    m_PostProcessingAttribs.m_f4ScreenResolution = float4(
+        static_cast<float>(m_uiBackBufferWidth),
+        static_cast<float>(m_uiBackBufferHeight),
+        1.f / static_cast<float>(m_uiBackBufferWidth),
+        1.f / static_cast<float>(m_uiBackBufferHeight)
+    );
     m_FrameAttribs          = FrameAttribs;
     m_bUseCombinedMinMaxTexture = bUseCombinedMinMaxTexture;
 

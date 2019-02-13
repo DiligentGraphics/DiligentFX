@@ -1,5 +1,3 @@
-"// Precomputes single scattering\n"
-"\n"
 "#include \"AtmosphereShadersCommon.fxh\"\n"
 "\n"
 "#ifndef THREAD_GROUP_SIZE\n"

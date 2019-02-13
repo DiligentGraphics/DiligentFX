@@ -32,7 +32,7 @@ void RenderSliceUVDirInShadowMapTexturePS(in FullScreenTriangleVSOutput VSOut,
     // Load epipolar slice endpoints
     float4 f4SliceEndpoints = g_tex2DSliceEndPoints.Load(  int3(iSliceInd,0,0) );
     // All correct entry points are completely inside the [-1+1/W,1-1/W]x[-1+1/H,1-1/H] area
-    if( !IsValidScreenLocation(f4SliceEndpoints.xy) )
+    if( !IsValidScreenLocation(f4SliceEndpoints.xy, g_PPAttribs.m_f4ScreenResolution) )
     {
         f4SliceUVDirAndStart = f4IncorrectSliceUVDirAndStart;
         return;
