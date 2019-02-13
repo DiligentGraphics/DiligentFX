@@ -11,7 +11,7 @@ struct VSOutput
 };
 
 void RenderSampleLocationsVS(in uint VertexID : SV_VertexID,
-                             in uint InstID : SV_InstanceID,
+                             in uint InstID   : SV_InstanceID,
                              out VSOutput VSOut,
                              // IMPORTANT: non-system generated pixel shader input
                              // arguments must have the exact same name as vertex shader 

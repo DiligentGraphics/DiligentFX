@@ -124,18 +124,18 @@ private:
     void FixInscatteringAtDepthBreaks(FrameAttribs& FrameAttribs, Uint32 uiMaxStepsAlongRay, EFixInscatteringMode Mode);
     void RenderSampleLocations       (FrameAttribs& FrameAttribs);
 
-    void CreatePrecomputedOpticalDepthTexture(IRenderDevice *pDevice, IDeviceContext *pContext);
-    void CreatePrecomputedScatteringLUT      (IRenderDevice *pDevice, IDeviceContext *pContext);
-    void CreateRandomSphereSamplingTexture   (IRenderDevice *pDevice);
-    void ComputeAmbientSkyLightTexture       (IRenderDevice* pDevice, IDeviceContext *pContext);
-    void ComputeScatteringCoefficients       (IDeviceContext* pDeviceCtx = nullptr);
-    void CreateAuxTextures                   (IRenderDevice* pDevice);
-    void CreateExtinctionTexture             (IRenderDevice* pDevice);
-    void CreateAmbientSkyLightTexture        (IRenderDevice* pDevice);
-    void CreateLowResLuminanceTexture        (IRenderDevice* pDevice, IDeviceContext* pDeviceCtx);
-    void CreateSliceUVDirAndOriginTexture    (IRenderDevice* pDevice);
-    void CreateCamSpaceZTexture              (IRenderDevice* pDevice);
-    void ResetShaderResourceBindings();
+    void PrecomputeOpticalDepthTexture    (IRenderDevice *pDevice, IDeviceContext *pContext);
+    void PrecomputeScatteringLUT          (IRenderDevice *pDevice, IDeviceContext *pContext);
+    void CreateRandomSphereSamplingTexture(IRenderDevice *pDevice);
+    void ComputeAmbientSkyLightTexture    (IRenderDevice* pDevice, IDeviceContext *pContext);
+    void ComputeScatteringCoefficients    (IDeviceContext* pDeviceCtx = nullptr);
+    void CreateEpipolarTextures           (IRenderDevice* pDevice);
+    void CreateSliceEndPointsTexture      (IRenderDevice* pDevice);
+    void CreateExtinctionTexture          (IRenderDevice* pDevice);
+    void CreateAmbientSkyLightTexture     (IRenderDevice* pDevice);
+    void CreateLowResLuminanceTexture     (IRenderDevice* pDevice, IDeviceContext* pDeviceCtx);
+    void CreateSliceUVDirAndOriginTexture (IRenderDevice* pDevice);
+    void CreateCamSpaceZTexture           (IRenderDevice* pDevice);
 
     void DefineMacros(ShaderMacroHelper& Macros);
     
@@ -158,12 +158,11 @@ private:
 
 
     PostProcessingAttribs m_PostProcessingAttribs;
+    FrameAttribs          m_FrameAttribs;
+
     bool m_bUseCombinedMinMaxTexture;
     Uint32 m_uiSampleRefinementCSThreadGroupSize;
     Uint32 m_uiSampleRefinementCSMinimumThreadGroupSize;
-
-    RefCntAutoPtr<ITextureView> m_ptex2DMinMaxShadowMapSRV[2];
-    RefCntAutoPtr<ITextureView> m_ptex2DMinMaxShadowMapRTV[2];
 
     static const int sm_iNumPrecomputedHeights = 1024;
     static const int sm_iNumPrecomputedAngles  = 1024;
@@ -184,28 +183,31 @@ private:
     void CreateMinMaxShadowMap(IRenderDevice* pDevice);
 
     static const int sm_iLowResLuminanceMips = 7; // 64x64
-    RefCntAutoPtr<ITextureView> m_ptex2DLowResLuminanceRTV, m_ptex2DLowResLuminanceSRV;
-    
+    RefCntAutoPtr<ITextureView> m_ptex2DLowResLuminanceRTV;     // 64 X 64 R16F
+    RefCntAutoPtr<ITextureView> m_ptex2DLowResLuminanceSRV;
+    RefCntAutoPtr<ITextureView> m_ptex2DAverageLuminanceRTV;    // 1  X  1 R16F
+
     static const int sm_iAmbientSkyLightTexDim = 1024;
-    RefCntAutoPtr<ITextureView> m_ptex2DAmbientSkyLightSRV;
+    RefCntAutoPtr<ITextureView> m_ptex2DAmbientSkyLightSRV;    // 1024 x 1 RGBA16F
     RefCntAutoPtr<ITextureView> m_ptex2DAmbientSkyLightRTV;
-    RefCntAutoPtr<ITextureView> m_ptex2DOccludedNetDensityToAtmTopSRV;
+    RefCntAutoPtr<ITextureView> m_ptex2DOccludedNetDensityToAtmTopSRV; // 1024 x 1024 RG32F
     RefCntAutoPtr<ITextureView> m_ptex2DOccludedNetDensityToAtmTopRTV;
 
     RefCntAutoPtr<IShader> m_pFullScreenTriangleVS;
     
     RefCntAutoPtr<IResourceMapping> m_pResMapping;
 
-    RefCntAutoPtr<ITextureView> m_ptex2DCoordinateTextureRTV;
-    RefCntAutoPtr<ITextureView> m_ptex2DSliceEndpointsRTV;
-    RefCntAutoPtr<ITextureView> m_ptex2DEpipolarCamSpaceZRTV;
-    RefCntAutoPtr<ITextureView> m_ptex2DEpipolarInscatteringRTV;
-    RefCntAutoPtr<ITextureView> m_ptex2DEpipolarExtinctionRTV;
-    RefCntAutoPtr<ITextureView> m_ptex2DEpipolarImageDSV;
-    RefCntAutoPtr<ITextureView> m_ptex2DInitialScatteredLightRTV;
-    RefCntAutoPtr<ITextureView> m_ptex2DAverageLuminanceRTV;
-    RefCntAutoPtr<ITextureView> m_ptex2DSliceUVDirAndOriginRTV;
-    RefCntAutoPtr<ITextureView> m_ptex2DCamSpaceZRTV;
+    RefCntAutoPtr<ITextureView> m_ptex2DCoordinateTextureRTV;       // Max Samples X Num Slices   RG32F
+    RefCntAutoPtr<ITextureView> m_ptex2DSliceEndpointsRTV;          // Num Slices  X 1            RGBA32F
+    RefCntAutoPtr<ITextureView> m_ptex2DEpipolarCamSpaceZRTV;       // Max Samples X Num Slices   R32F
+    RefCntAutoPtr<ITextureView> m_ptex2DEpipolarInscatteringRTV;    // Max Samples X Num Slices   RGBA16F
+    RefCntAutoPtr<ITextureView> m_ptex2DEpipolarExtinctionRTV;      // Max Samples X Num Slices   RGBA8_UNORM
+    RefCntAutoPtr<ITextureView> m_ptex2DEpipolarImageDSV;           // Max Samples X Num Slices   D24S8
+    RefCntAutoPtr<ITextureView> m_ptex2DInitialScatteredLightRTV;   // Max Samples X Num Slices   RGBA16F
+    RefCntAutoPtr<ITextureView> m_ptex2DSliceUVDirAndOriginRTV;     // Num Slices  X Num Cascaes  RGBA32F
+    RefCntAutoPtr<ITextureView> m_ptex2DCamSpaceZRTV;               // BckBfrWdth  x BckBfrHght   R32F 
+    RefCntAutoPtr<ITextureView> m_ptex2DMinMaxShadowMapSRV[2];      // MinMaxSMRes x Num Slices   RG32F or RG16UNORM
+    RefCntAutoPtr<ITextureView> m_ptex2DMinMaxShadowMapRTV[2];
 
     RefCntAutoPtr<ISampler> m_pPointClampSampler, m_pLinearClampSampler;
 
@@ -309,6 +311,27 @@ private:
         PSO_DEPENDENCY_EXTINCTION_EVAL_MODE      = 0x40000
     };
 
+    enum SRB_DEPENDENCY_FLAGS
+    {
+        SRB_DEPENDENCY_LIGHT_ATTRIBS            = 0x00001,
+        SRB_DEPENDENCY_CAMERA_ATTRIBS           = 0x00002,
+        SRB_DEPENDENCY_SRC_COLOR_BUFFER         = 0x00004,
+        SRB_DEPENDENCY_SRC_DEPTH_BUFFER         = 0x00008,
+        SRB_DEPENDENCY_SHADOW_MAP               = 0x00010,
+        SRB_DEPENDENCY_MIN_MAX_SHADOW_MAP       = 0x00020,
+        SRB_DEPENDENCY_COORDINATE_TEX           = 0x00040,
+        SRB_DEPENDENCY_INTERPOLATION_SOURCE_TEX = 0x00080,
+        SRB_DEPENDENCY_SLICE_END_POINTS_TEX     = 0x00100,
+        SRB_DEPENDENCY_EPIPOLAR_CAM_SPACE_Z_TEX = 0x00200,
+        SRB_DEPENDENCY_EPIPOLAR_INSCTR_TEX      = 0x00400,
+        SRB_DEPENDENCY_EPIPOLAR_EXTINCTION_TEX  = 0x00800,
+        SRB_DEPENDENCY_EPIPOLAR_IMAGE_DEPTH     = 0x01000,
+        SRB_DEPENDENCY_INITIAL_SCTR_LIGHT_TEX   = 0x02000,
+        SRB_DEPENDENCY_AVERAGE_LUMINANCE_TEX    = 0x04000,
+        SRB_DEPENDENCY_SLICE_UV_DIR_TEX         = 0x08000,
+        SRB_DEPENDENCY_CAM_SPACE_Z_TEX          = 0x10000
+    };
+
     RefCntAutoPtr<IShaderResourceBinding> m_pComputeMinMaxSMLevelSRB[2];
    
     RefCntAutoPtr<ITexture> m_ptex3DHighOrderSctr, m_ptex3DHighOrderSctr2;
@@ -325,16 +348,11 @@ private:
 
     enum UpToDateResourceFlags
     {
-        AuxTextures                 = 0x001,
-        ExtinctionTexture           = 0x002,
-        SliceUVDirAndOriginTex      = 0x004,
-        PrecomputedOpticalDepthTex  = 0x008,
-        LowResLuminamceTex          = 0x010,
-        AmbientSkyLightTex          = 0x020,
-        PrecomputedIntegralsTex     = 0x040
+        PrecomputedOpticalDepthTex  = 0x01,
+        AmbientSkyLightTex          = 0x02,
+        PrecomputedIntegralsTex     = 0x04
     };
     Uint32 m_uiUpToDateResourceFlags;
-    RefCntAutoPtr<ITextureView> m_ptex2DShadowMapSRV;
 };
 
 }

@@ -1,5 +1,3 @@
-// Precomputes optical depth
-
 #include "AtmosphereShadersCommon.fxh"
 
 
