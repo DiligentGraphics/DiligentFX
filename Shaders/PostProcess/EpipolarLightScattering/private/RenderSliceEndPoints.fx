@@ -5,16 +5,11 @@
 cbuffer cbPostProcessingAttribs
 {
     PostProcessingAttribs g_PPAttribs;
-};
-
-cbuffer cbLightParams
-{
-    LightAttribs g_LightAttribs;
 }
 
 // This function computes entry point of the epipolar line given its exit point
 //                  
-//    g_LightAttribs.f4LightScreenPos
+//    g_PPAttribs.f4LightScreenPos
 //       *
 //        \
 //         \  f2EntryPoint
@@ -30,11 +25,11 @@ float2 GetEpipolarLineEntryPoint(float2 f2ExitPoint)
 {
     float2 f2EntryPoint;
 
-    //if( IsValidScreenLocation(g_LightAttribs.f4LightScreenPos.xy) )
-    if( g_LightAttribs.bIsLightOnScreen )
+    //if( IsValidScreenLocation(g_PPAttribs.f4LightScreenPos.xy) )
+    if (g_PPAttribs.bIsLightOnScreen)
     {
         // If light source is on the screen, its location is entry point for each epipolar line
-        f2EntryPoint = g_LightAttribs.f4LightScreenPos.xy;
+        f2EntryPoint = g_PPAttribs.f4LightScreenPos.xy;
     }
     else
     {
@@ -43,22 +38,22 @@ float2 GetEpipolarLineEntryPoint(float2 f2ExitPoint)
         
         // Compute direction from the light source to the exit point
         // Note that exit point must be located on shrinked screen boundary
-        float2 f2RayDir = f2ExitPoint.xy - g_LightAttribs.f4LightScreenPos.xy;
+        float2 f2RayDir = f2ExitPoint.xy - g_PPAttribs.f4LightScreenPos.xy;
         float fDistToExitBoundary = length(f2RayDir);
         f2RayDir /= fDistToExitBoundary;
         // Compute signed distances along the ray from the light position to all four boundaries
         // The distances are computed as follows using vector instructions:
-        // float fDistToLeftBoundary   = abs(f2RayDir.x) > 1e-5 ? (-1 - g_LightAttribs.f4LightScreenPos.x) / f2RayDir.x : -FLT_MAX;
-        // float fDistToBottomBoundary = abs(f2RayDir.y) > 1e-5 ? (-1 - g_LightAttribs.f4LightScreenPos.y) / f2RayDir.y : -FLT_MAX;
-        // float fDistToRightBoundary  = abs(f2RayDir.x) > 1e-5 ? ( 1 - g_LightAttribs.f4LightScreenPos.x) / f2RayDir.x : -FLT_MAX;
-        // float fDistToTopBoundary    = abs(f2RayDir.y) > 1e-5 ? ( 1 - g_LightAttribs.f4LightScreenPos.y) / f2RayDir.y : -FLT_MAX;
+        // float fDistToLeftBoundary   = abs(f2RayDir.x) > 1e-5 ? (-1 - g_PPAttribs.f4LightScreenPos.x) / f2RayDir.x : -FLT_MAX;
+        // float fDistToBottomBoundary = abs(f2RayDir.y) > 1e-5 ? (-1 - g_PPAttribs.f4LightScreenPos.y) / f2RayDir.y : -FLT_MAX;
+        // float fDistToRightBoundary  = abs(f2RayDir.x) > 1e-5 ? ( 1 - g_PPAttribs.f4LightScreenPos.x) / f2RayDir.x : -FLT_MAX;
+        // float fDistToTopBoundary    = abs(f2RayDir.y) > 1e-5 ? ( 1 - g_PPAttribs.f4LightScreenPos.y) / f2RayDir.y : -FLT_MAX;
         
         // Note that in fact the outermost visible screen pixels do not lie exactly on the boundary (+1 or -1), but are biased by
         // 0.5 screen pixel size inwards. Using these adjusted boundaries improves precision and results in
         // smaller number of pixels which require inscattering correction
         float4 f4Boundaries = GetOutermostScreenPixelCoords(g_PPAttribs.m_f4ScreenResolution);
         bool4 b4IsCorrectIntersectionFlag = Greater( abs(f2RayDir.xyxy), 1e-5 * F4ONE );
-        float4 f4DistToBoundaries = (f4Boundaries - g_LightAttribs.f4LightScreenPos.xyxy) / (f2RayDir.xyxy + BoolToFloat( Not(b4IsCorrectIntersectionFlag) ) );
+        float4 f4DistToBoundaries = (f4Boundaries - g_PPAttribs.f4LightScreenPos.xyxy) / (f2RayDir.xyxy + BoolToFloat( Not(b4IsCorrectIntersectionFlag) ) );
         // Addition of !b4IsCorrectIntersectionFlag is required to prevent divison by zero
         // Note that such incorrect lanes will be masked out anyway
 
@@ -86,12 +81,12 @@ float2 GetEpipolarLineEntryPoint(float2 f2ExitPoint)
         // fFirstIntersecDist = fDistToTopBoundary    < fDistToBoundary-1e-4 ? max(fFirstIntersecDist, fDistToTopBoundary)    : fFirstIntersecDist;
 
         // Now we can compute entry point:
-        f2EntryPoint = g_LightAttribs.f4LightScreenPos.xy + f2RayDir * fFirstIntersecDist;
+        f2EntryPoint = g_PPAttribs.f4LightScreenPos.xy + f2RayDir * fFirstIntersecDist;
 
         // For invalid rays, coordinates are outside [-1,1]x[-1,1] area
         // and such rays will be discarded
         //
-        //       g_LightAttribs.f4LightScreenPos
+        //       g_PPAttribs.f4LightScreenPos
         //             *
         //              \|
         //               \-f2EntryPoint
@@ -155,7 +150,7 @@ float4 GenerateSliceEndpointsPS(FullScreenTriangleVSOutput VSOut
     //                                  *                                                  
     //     Left Boundary       Bottom Boundary           Right Boundary          Top Boundary 
     //
-    bool4 b4IsInvalidBoundary = LessEqual( (g_LightAttribs.f4LightScreenPos.xyxy - f4OutermostScreenPixelCoords.xyzw) * float4(1,1,-1,-1),  F4ZERO );
+    bool4 b4IsInvalidBoundary = LessEqual( (g_PPAttribs.f4LightScreenPos.xyxy - f4OutermostScreenPixelCoords.xyzw) * float4(1,1,-1,-1),  F4ZERO );
     if( dot( BoolToFloat(b4IsInvalidBoundary), BoolToFloat(b4BoundaryFlags) ) != 0.0 )
     {
         return INVALID_EPIPOLAR_LINE;

@@ -15,11 +15,6 @@ Texture2D<float>  g_tex2DEpipolarCamSpaceZ;
 Texture2D<float3> g_tex2DScatteredColor;
 Texture2D<float>  g_tex2DAverageLuminance;
 
-cbuffer cbLightParams
-{
-    LightAttribs g_LightAttribs;
-}
-
 cbuffer cbPostProcessingAttribs
 {
     PostProcessingAttribs g_PPAttribs;
@@ -141,7 +136,7 @@ void RefineSampleLocationsCS(uint3 Gid  : SV_GroupID,
     uint uiInitialSample0GlobalInd = uiInitialSample0Ind + uiGroupStartGlobalInd;
     float2 f2InitialSample0Coords = g_tex2DCoordinates.Load( int3(uiInitialSample0GlobalInd, uiSliceInd, 0) );
     if( float(uiInitialSample0GlobalInd)/float(MAX_SAMPLES_IN_SLICE) < 0.05 && 
-        length(f2InitialSample0Coords - g_LightAttribs.f4LightScreenPos.xy) < 0.1 )
+        length(f2InitialSample0Coords - g_PPAttribs.f4LightScreenPos.xy) < 0.1 )
     {
         uiInitialSampleStep = max( uint(INITIAL_SAMPLE_STEP) / g_PPAttribs.m_uiEpipoleSamplingDensityFactor, 1u );
         uiInitialSample0Ind = (uiSampleInd / uiInitialSampleStep) * uiInitialSampleStep;

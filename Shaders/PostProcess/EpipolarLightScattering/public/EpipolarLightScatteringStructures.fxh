@@ -123,7 +123,7 @@ struct PostProcessingAttribs
 
     float m_fWhitePoint                     DEFAULT_VALUE(3.f);
     float m_fLuminanceSaturation            DEFAULT_VALUE(1.f);
-    float2 f2Dummy;
+    float2 f2Dummy                          DEFAULT_VALUE(float2(0,0));
     
     uint m_uiExtinctionEvalMode             DEFAULT_VALUE(EXTINCTION_EVAL_MODE_EPIPOLAR);
     BOOL m_bUseCustomSctrCoeffs             DEFAULT_VALUE(FALSE);
@@ -133,8 +133,14 @@ struct PostProcessingAttribs
     float4 m_f4CustomRlghBeta               DEFAULT_VALUE(float4(5.8e-6f, 13.5e-6f, 33.1e-6f, 0.f));
     float4 m_f4CustomMieBeta                DEFAULT_VALUE(float4(2.e-5f, 2.e-5f, 2.e-5f, 0.f));
 
-    // This member is automatically set by the effect
+
+    // Members below are automatically set by the effect. User-provided values are ignored
     float4 m_f4ScreenResolution             DEFAULT_VALUE(float4(0,0,0,0));
+    float4 f4LightScreenPos                 DEFAULT_VALUE(float4(0,0,0,0));
+    BOOL   bIsLightOnScreen                 DEFAULT_VALUE(FALSE);
+    int    Padding0                         DEFAULT_VALUE(0);
+    int    Padding1                         DEFAULT_VALUE(0);
+    int    Padding2                         DEFAULT_VALUE(0);
 };
 CHECK_STRUCT_ALIGNMENT(PostProcessingAttribs)
 

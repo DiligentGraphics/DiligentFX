@@ -69,7 +69,7 @@ void UnwarpEpipolarInsctrImage( in float2 f2PosPS,
                                 out float3 f3Extinction )
 {
     // Compute direction of the ray going from the light through the pixel
-    float2 f2RayDir = normalize( f2PosPS - g_LightAttribs.f4LightScreenPos.xy );
+    float2 f2RayDir = normalize( f2PosPS - g_PPAttribs.f4LightScreenPos.xy );
 
     // Find, which boundary the ray intersects. For this, we will 
     // find which two of four half spaces the f2RayDir belongs to
@@ -120,15 +120,15 @@ void UnwarpEpipolarInsctrImage( in float2 f2PosPS,
     // Note that b4SectorFlags now contains true (1) for the exit boundary and false (0) for 3 other
 
     // Compute distances to boundaries according to following lines:
-    //float fDistToLeftBoundary   = abs(f2RayDir.x) > 1e-5 ? ( -1 - g_LightAttribs.f4LightScreenPos.x) / f2RayDir.x : -FLT_MAX;
-    //float fDistToBottomBoundary = abs(f2RayDir.y) > 1e-5 ? ( -1 - g_LightAttribs.f4LightScreenPos.y) / f2RayDir.y : -FLT_MAX;
-    //float fDistToRightBoundary  = abs(f2RayDir.x) > 1e-5 ? (  1 - g_LightAttribs.f4LightScreenPos.x) / f2RayDir.x : -FLT_MAX;
-    //float fDistToTopBoundary    = abs(f2RayDir.y) > 1e-5 ? (  1 - g_LightAttribs.f4LightScreenPos.y) / f2RayDir.y : -FLT_MAX;
-    float4 f4DistToBoundaries = ( f4Boundaries - g_LightAttribs.f4LightScreenPos.xyxy ) / (f2RayDir.xyxy + BoolToFloat( Less( abs(f2RayDir.xyxy), 1e-6*F4ONE) ) );
+    //float fDistToLeftBoundary   = abs(f2RayDir.x) > 1e-5 ? ( -1 - g_PPAttribs.f4LightScreenPos.x) / f2RayDir.x : -FLT_MAX;
+    //float fDistToBottomBoundary = abs(f2RayDir.y) > 1e-5 ? ( -1 - g_PPAttribs.f4LightScreenPos.y) / f2RayDir.y : -FLT_MAX;
+    //float fDistToRightBoundary  = abs(f2RayDir.x) > 1e-5 ? (  1 - g_PPAttribs.f4LightScreenPos.x) / f2RayDir.x : -FLT_MAX;
+    //float fDistToTopBoundary    = abs(f2RayDir.y) > 1e-5 ? (  1 - g_PPAttribs.f4LightScreenPos.y) / f2RayDir.y : -FLT_MAX;
+    float4 f4DistToBoundaries = ( f4Boundaries - g_PPAttribs.f4LightScreenPos.xyxy ) / (f2RayDir.xyxy + BoolToFloat( Less( abs(f2RayDir.xyxy), 1e-6*F4ONE) ) );
     // Select distance to the exit boundary:
     float fDistToExitBoundary = dot( BoolToFloat( b4SectorFlags ), f4DistToBoundaries );
     // Compute exit point on the boundary:
-    float2 f2ExitPoint = g_LightAttribs.f4LightScreenPos.xy + f2RayDir * fDistToExitBoundary;
+    float2 f2ExitPoint = g_PPAttribs.f4LightScreenPos.xy + f2RayDir * fDistToExitBoundary;
 
     // Compute epipolar slice for each boundary:
     //if( LeftBoundary )

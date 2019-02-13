@@ -72,16 +72,7 @@ struct LightAttribs
 {
     float4 f4DirOnLight;
     float4 f4AmbientLight;
-    float4 f4LightScreenPos;
     float4 f4ExtraterrestrialSunColor;
-
-    BOOL bIsLightOnScreen;
-    // OpenGL compiler does not handle 3-component vectors properly
-    // and screws up the structure layout.
-    // Opengl.org suggests not using vec3 at all
-    int Padding0;
-    int Padding1;
-    int Padding2;
 
     ShadowMapAttribs ShadowAttribs;
 };

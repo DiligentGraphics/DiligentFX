@@ -6,9 +6,9 @@ cbuffer cbCameraAttribs
     CameraAttribs g_CameraAttribs;
 }
 
-cbuffer cbLightParams
+cbuffer cbPostProcessingAttribs
 {
-    LightAttribs g_LightAttribs;
+    PostProcessingAttribs g_PPAttribs;
 }
 
 #define fSunAngularRadius (32.0/2.0 / 60.0 * ((2.0 * PI)/180.0)) // Sun angular DIAMETER is 32 arc minutes
@@ -30,7 +30,7 @@ void SunVS(in uint VertexId : SV_VertexID,
            out float4 f4Pos : SV_Position)
 {
     float2 fCotanHalfFOV = float2( MATRIX_ELEMENT(g_CameraAttribs.mProj, 0, 0), MATRIX_ELEMENT(g_CameraAttribs.mProj, 1, 1) );
-    float2 f2SunScreenPos = g_LightAttribs.f4LightScreenPos.xy;
+    float2 f2SunScreenPos = g_PPAttribs.f4LightScreenPos.xy;
     float2 f2SunScreenSize = fTanSunAngularRadius * fCotanHalfFOV;
     float4 MinMaxUV = f2SunScreenPos.xyxy + float4(-1.0, -1.0, 1.0, 1.0) * f2SunScreenSize.xyxy;
  
@@ -49,7 +49,7 @@ void SunPS(SunVSOutput VSOut,
 {
     float2 fCotanHalfFOV = float2( MATRIX_ELEMENT(g_CameraAttribs.mProj, 0, 0), MATRIX_ELEMENT(g_CameraAttribs.mProj, 1, 1) );
     float2 f2SunScreenSize = fTanSunAngularRadius * fCotanHalfFOV;
-    float2 f2dXY = (VSOut.f2NormalizedXY - g_LightAttribs.f4LightScreenPos.xy) / f2SunScreenSize;
+    float2 f2dXY = (VSOut.f2NormalizedXY - g_PPAttribs.f4LightScreenPos.xy) / f2SunScreenSize;
     f4Color.rgb = sqrt(saturate(1.0 - dot(f2dXY, f2dXY))) * F3ONE;
     f4Color.a = 1.0;
 }

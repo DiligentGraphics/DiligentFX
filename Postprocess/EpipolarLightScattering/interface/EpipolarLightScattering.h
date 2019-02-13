@@ -62,9 +62,10 @@ struct FrameAttribs
     
     double dElapsedTime             = 0;
 
-    LightAttribs*   pLightAttribs    = nullptr;
-    IBuffer*        pcbLightAttribs  = nullptr;
-    IBuffer*        pcbCameraAttribs = nullptr;
+    const LightAttribs*   pLightAttribs    = nullptr;
+    const CameraAttribs*  pCameraAttribs   = nullptr;
+    IBuffer*              pcbLightAttribs  = nullptr;
+    IBuffer*              pcbCameraAttribs = nullptr;
 
     //CameraAttribs CameraAttribs;
     

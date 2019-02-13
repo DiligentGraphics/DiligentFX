@@ -363,8 +363,14 @@ EpipolarLightScattering :: EpipolarLightScattering(IRenderDevice*  pDevice,
 
     // Create sun rendering shaders and PSO
     {
-        RefCntAutoPtr<IShader> pSunVS = CreateShader(pDevice, "Sun.fx", "SunVS", SHADER_TYPE_VERTEX, nullptr, SHADER_VARIABLE_TYPE_MUTABLE);
-        RefCntAutoPtr<IShader> pSunPS = CreateShader(pDevice, "Sun.fx", "SunPS", SHADER_TYPE_PIXEL, nullptr, SHADER_VARIABLE_TYPE_MUTABLE);
+        ShaderVariableDesc Vars[] = 
+        { 
+            {"cbPostProcessingAttribs", SHADER_VARIABLE_TYPE_STATIC}
+        };
+        RefCntAutoPtr<IShader> pSunVS = CreateShader(pDevice, "Sun.fx", "SunVS", SHADER_TYPE_VERTEX, nullptr, SHADER_VARIABLE_TYPE_MUTABLE, Vars, _countof(Vars));
+        RefCntAutoPtr<IShader> pSunPS = CreateShader(pDevice, "Sun.fx", "SunPS", SHADER_TYPE_PIXEL,  nullptr, SHADER_VARIABLE_TYPE_MUTABLE, Vars, _countof(Vars));
+        pSunVS->BindResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+        pSunPS->BindResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
 
         PipelineStateDesc PSODesc;
         PSODesc.Name = "Render Sun";
@@ -399,14 +405,14 @@ void EpipolarLightScattering :: DefineMacros(ShaderMacroHelper& Macros)
 {
     // Define common shader macros
 
-    Macros.AddShaderMacro("NUM_EPIPOLAR_SLICES", m_PostProcessingAttribs.m_uiNumEpipolarSlices);
-    Macros.AddShaderMacro("MAX_SAMPLES_IN_SLICE", m_PostProcessingAttribs.m_uiMaxSamplesInSlice);
-    Macros.AddShaderMacro("OPTIMIZE_SAMPLE_LOCATIONS", m_PostProcessingAttribs.m_bOptimizeSampleLocations);
+    Macros.AddShaderMacro("NUM_EPIPOLAR_SLICES",          m_PostProcessingAttribs.m_uiNumEpipolarSlices);
+    Macros.AddShaderMacro("MAX_SAMPLES_IN_SLICE",         m_PostProcessingAttribs.m_uiMaxSamplesInSlice);
+    Macros.AddShaderMacro("OPTIMIZE_SAMPLE_LOCATIONS",    m_PostProcessingAttribs.m_bOptimizeSampleLocations);
     Macros.AddShaderMacro("USE_COMBINED_MIN_MAX_TEXTURE", m_bUseCombinedMinMaxTexture );
-    Macros.AddShaderMacro("EXTINCTION_EVAL_MODE", m_PostProcessingAttribs.m_uiExtinctionEvalMode );
-    Macros.AddShaderMacro("ENABLE_LIGHT_SHAFTS", m_PostProcessingAttribs.m_bEnableLightShafts);
-    Macros.AddShaderMacro("MULTIPLE_SCATTERING_MODE", m_PostProcessingAttribs.m_uiMultipleScatteringMode);
-    Macros.AddShaderMacro("SINGLE_SCATTERING_MODE", m_PostProcessingAttribs.m_uiSingleScatteringMode);
+    Macros.AddShaderMacro("EXTINCTION_EVAL_MODE",         m_PostProcessingAttribs.m_uiExtinctionEvalMode );
+    Macros.AddShaderMacro("ENABLE_LIGHT_SHAFTS",          m_PostProcessingAttribs.m_bEnableLightShafts);
+    Macros.AddShaderMacro("MULTIPLE_SCATTERING_MODE",     m_PostProcessingAttribs.m_uiMultipleScatteringMode);
+    Macros.AddShaderMacro("SINGLE_SCATTERING_MODE",       m_PostProcessingAttribs.m_uiSingleScatteringMode);
 
     {
         std::stringstream ss;
@@ -792,7 +798,7 @@ void EpipolarLightScattering :: PrecomputeScatteringLUT(IRenderDevice* pDevice, 
     ptex3DSctrRadianceSRV->SetSampler( m_pLinearClampSampler );
     ptex3DInsctrOrderSRV->SetSampler( m_pLinearClampSampler );
     m_pResMapping->AddResource( "g_rwtex3DSctrRadiance", ptex3DSctrRadiance->GetDefaultView( TEXTURE_VIEW_UNORDERED_ACCESS ), true );
-    m_pResMapping->AddResource( "g_rwtex3DInsctrOrder", ptex3DInsctrOrder->GetDefaultView( TEXTURE_VIEW_UNORDERED_ACCESS ), true );
+    m_pResMapping->AddResource( "g_rwtex3DInsctrOrder",  ptex3DInsctrOrder->GetDefaultView( TEXTURE_VIEW_UNORDERED_ACCESS ), true );
 
 
     ComputeSctrRadianceTech.SRB->BindResources( SHADER_TYPE_COMPUTE, m_pResMapping, 0 );
@@ -990,8 +996,7 @@ void EpipolarLightScattering :: RenderSliceEndpoints(FrameAttribs& FrameAttribs)
             PSO_DEPENDENCY_NUM_EPIPOLAR_SLICES  | 
             PSO_DEPENDENCY_MAX_SAMPLES_IN_SLICE |
             PSO_DEPENDENCY_OPTIMIZE_SAMPLE_LOCATIONS;
-        RendedSliceEndpointsTech.SRBDependencyFlags = 
-            SRB_DEPENDENCY_LIGHT_ATTRIBS;
+        RendedSliceEndpointsTech.SRBDependencyFlags = 0;
     }
 
     RendedSliceEndpointsTech.PrepareSRB(FrameAttribs.pDevice, m_pResMapping);
@@ -1927,6 +1932,28 @@ void EpipolarLightScattering :: PerformPostProcessing(FrameAttribs&          Fra
         1.f / static_cast<float>(m_uiBackBufferWidth),
         1.f / static_cast<float>(m_uiBackBufferHeight)
     );
+
+    auto mCameraViewProj = transposeMatrix(FrameAttribs.pCameraAttribs->mViewProjT);
+    float4 f4LightPosPS = FrameAttribs.pLightAttribs->f4DirOnLight * mCameraViewProj;
+    f4LightPosPS.x /= f4LightPosPS.w;
+    f4LightPosPS.y /= f4LightPosPS.w;
+    f4LightPosPS.z /= f4LightPosPS.w;
+    float fDistToLightOnScreen = length( (float2&)f4LightPosPS );
+    float fMaxDist = 100;
+    if( fDistToLightOnScreen > fMaxDist )
+    {
+        f4LightPosPS.x *= fMaxDist/fDistToLightOnScreen;
+        f4LightPosPS.y *= fMaxDist/fDistToLightOnScreen;
+    }
+    m_PostProcessingAttribs.f4LightScreenPos = f4LightPosPS;
+    
+    // Note that in fact the outermost visible screen pixels do not land exactly on the boundary (+1 or -1), but are biased by
+    // 0.5 screen pixel size inwards. Using these adjusted boundaries improves precision and results in
+    // smaller number of pixels which require inscattering correction
+    m_PostProcessingAttribs.bIsLightOnScreen = 
+        (fabs(m_PostProcessingAttribs.f4LightScreenPos.x) <= 1.f - 1.f/(float)m_uiBackBufferWidth && 
+         fabs(m_PostProcessingAttribs.f4LightScreenPos.y) <= 1.f - 1.f/(float)m_uiBackBufferHeight);
+
     m_FrameAttribs          = FrameAttribs;
     m_bUseCombinedMinMaxTexture = bUseCombinedMinMaxTexture;
 
@@ -1957,22 +1984,6 @@ void EpipolarLightScattering :: PerformPostProcessing(FrameAttribs&          Fra
     {
         CreateMinMaxShadowMap(FrameAttribs.pDevice);
     }
-
-#if 0
-    LightAttribs &LightAttribs = *FrameAttribs.pLightAttribs;
-    const CameraAttribs &CamAttribs = FrameAttribs.CameraAttribs;
-
-    // Note that in fact the outermost visible screen pixels do not lie exactly on the boundary (+1 or -1), but are biased by
-    // 0.5 screen pixel size inwards. Using these adjusted boundaries improves precision and results in
-    // smaller number of pixels which require inscattering correction
-    assert( LightAttribs.bIsLightOnScreen == (fabs(FrameAttribs.pLightAttribs->f4LightScreenPos.x) <= 1.f - 1.f/(float)m_uiBackBufferWidth && 
-                                              fabs(FrameAttribs.pLightAttribs->f4LightScreenPos.y) <= 1.f - 1.f/(float)m_uiBackBufferHeight) );
-
-    const auto &SMAttribs = FrameAttribs.pLightAttribs->ShadowAttribs;
-
-    UpdateConstantBuffer(FrameAttribs.pDeviceContext, m_pcbCameraAttribs, &CamAttribs, sizeof(CamAttribs));
-    //UpdateConstantBuffer(FrameAttribs.pDeviceContext, m_pcbLightAttribs, &LightAttribs, sizeof(LightAttribs));
-#endif
 
     {
         MapHelper<PostProcessingAttribs> pPPAttribsBuffData( FrameAttribs.pDeviceContext, m_pcbPostProcessingAttribs, MAP_WRITE, MAP_FLAG_DISCARD );
@@ -2360,7 +2371,7 @@ void EpipolarLightScattering :: ComputeScatteringCoefficients(IDeviceContext* pD
 
 void EpipolarLightScattering :: RenderSun(FrameAttribs& FrameAttribs)
 {
-    if( FrameAttribs.pLightAttribs->f4LightScreenPos.w <= 0 )
+    if (m_PostProcessingAttribs.f4LightScreenPos.w <= 0)
         return;
 
     auto& RenderSunTech = m_RenderTech[RENDER_TECH_RENDER_SUN];
