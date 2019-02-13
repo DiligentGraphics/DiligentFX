@@ -23,14 +23,8 @@
 
 #include <algorithm>
 
-#include "BasicMath.h"
-
-using Diligent::float4;
-using Diligent::float2;
-using Diligent::float4x4;
-using uint = uint32_t;
-
 #include "EpipolarLightScattering.h"
+#include "ShaderMacroHelper.h"
 #include "GraphicsUtilities.h"
 #include "GraphicsAccessories.h"
 #include "../../../Utilities/include/DiligentFXShaderSourceStreamFactory.h"

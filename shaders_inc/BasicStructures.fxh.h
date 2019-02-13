@@ -58,7 +58,7 @@
 "	BOOL bVisualizeCascades;\n"
 "\n"
 "    // float3 f3Padding;\n"
-"    // Stupid OpenGL compiler does not handle 3-component vectors properly\n"
+"    // OpenGL compiler does not handle 3-component vectors properly\n"
 "    // and screws up the structure layout.\n"
 "    // Opengl.org suggests not using vec3 at all\n"
 "    int Padding0;\n"

@@ -22,16 +22,23 @@
  */
 #pragma once
 
-#include "ShaderMacroHelper.h"
-#include "EpipolarLightScatteringStructures.fxh"
-#include "BasicStructures.fxh"
-#include "RenderDevice.h"
-#include "DeviceContext.h"
-#include "Buffer.h"
-#include "Texture.h"
-#include "BufferView.h"
-#include "TextureView.h"
-#include "RefCntAutoPtr.h"
+#include "../../../../DiligentCore/Common/interface/BasicMath.h"
+
+using Diligent::float4;
+using Diligent::float2;
+using Diligent::float4x4;
+using uint = uint32_t;
+
+#include "../../../Shaders/Common/public/BasicStructures.fxh"
+#include "../../../Shaders/PostProcess/EpipolarLightScattering/public/EpipolarLightScatteringStructures.fxh"
+
+#include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
+#include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/DeviceContext.h"
+#include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/Buffer.h"
+#include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/Texture.h"
+#include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/BufferView.h"
+#include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/TextureView.h"
+#include "../../../../DiligentCore/Common/interface/RefCntAutoPtr.h"
 
 namespace Diligent
 {
@@ -119,7 +126,7 @@ private:
     void CreateSliceUVDirAndOriginTexture (IRenderDevice* pDevice);
     void CreateCamSpaceZTexture           (IRenderDevice* pDevice);
 
-    void DefineMacros(ShaderMacroHelper& Macros);
+    void DefineMacros(class ShaderMacroHelper& Macros);
     
     const TEXTURE_FORMAT m_BackBufferFmt;
     const TEXTURE_FORMAT m_DepthBufferFmt;
