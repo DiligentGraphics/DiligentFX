@@ -43,13 +43,13 @@ struct FrameAttribs
     
     double dElapsedTime             = 0;
 
+    // This parameter can be null if the application does not want to provide light attribs buffer
     const LightAttribs*   pLightAttribs    = nullptr;
+    // This parameter can be null if the application does not want to provide camera attribs buffer
     const CameraAttribs*  pCameraAttribs   = nullptr;
     IBuffer*              pcbLightAttribs  = nullptr;
     IBuffer*              pcbCameraAttribs = nullptr;
 
-    //CameraAttribs CameraAttribs;
-    
     ITextureView*   ptex2DSrcColorBufferSRV = nullptr;
     ITextureView*   ptex2DSrcColorBufferRTV = nullptr;
     ITextureView*   ptex2DSrcDepthBufferDSV = nullptr;
@@ -79,32 +79,32 @@ public:
                          float4&        f4SunColorAtGround,
                          float4&        f4AmbientLight);
     
-    void RenderSun(FrameAttribs&    FrameAttribs);
+    void RenderSun();
     IBuffer* GetMediaAttribsCB(){return m_pcbMediaAttribs;}
     ITextureView* GetPrecomputedNetDensitySRV(){return m_ptex2DOccludedNetDensityToAtmTopSRV;}
     ITextureView* GetAmbientSkyLightSRV(IRenderDevice* pDevice, IDeviceContext* pContext);
 
 private:
-    void ReconstructCameraSpaceZ    (FrameAttribs& FrameAttribs);
-    void RenderSliceEndpoints       (FrameAttribs& FrameAttribs);
-    void RenderCoordinateTexture    (FrameAttribs& FrameAttribs);
-    void RenderCoarseUnshadowedInctr(FrameAttribs& FrameAttribs);
-    void RefineSampleLocations      (FrameAttribs& FrameAttribs);
-    void MarkRayMarchingSamples     (FrameAttribs& FrameAttribs);
-    void RenderSliceUVDirAndOrig    (FrameAttribs& FrameAttribs);
-    void Build1DMinMaxMipMap        (FrameAttribs& FrameAttribs, int iCascadeIndex);
-    void DoRayMarching              (FrameAttribs& FrameAttribs, Uint32 uiMaxStepsAlongRay, int iCascadeIndex);
-    void InterpolateInsctrIrradiance(FrameAttribs& FrameAttribs);
-    void UnwarpEpipolarScattering   (FrameAttribs& FrameAttribs, bool bRenderLuminance);
-    void UpdateAverageLuminance     (FrameAttribs& FrameAttribs);
+    void ReconstructCameraSpaceZ    ();
+    void RenderSliceEndpoints       ();
+    void RenderCoordinateTexture    ();
+    void RenderCoarseUnshadowedInctr();
+    void RefineSampleLocations      ();
+    void MarkRayMarchingSamples     ();
+    void RenderSliceUVDirAndOrig    ();
+    void Build1DMinMaxMipMap        (int iCascadeIndex);
+    void DoRayMarching              (Uint32 uiMaxStepsAlongRay, int iCascadeIndex);
+    void InterpolateInsctrIrradiance();
+    void UnwarpEpipolarScattering   (bool bRenderLuminance);
+    void UpdateAverageLuminance     ();
     enum class EFixInscatteringMode
     {
         LuminanceOnly = 0,
         FixInscattering = 1,
         FullScreenRayMarching = 2
     };
-    void FixInscatteringAtDepthBreaks(FrameAttribs& FrameAttribs, Uint32 uiMaxStepsAlongRay, EFixInscatteringMode Mode);
-    void RenderSampleLocations       (FrameAttribs& FrameAttribs);
+    void FixInscatteringAtDepthBreaks(Uint32 uiMaxStepsAlongRay, EFixInscatteringMode Mode);
+    void RenderSampleLocations       ();
 
     void PrecomputeOpticalDepthTexture    (IRenderDevice *pDevice, IDeviceContext *pContext);
     void PrecomputeScatteringLUT          (IRenderDevice *pDevice, IDeviceContext *pContext);
@@ -321,6 +321,8 @@ private:
     RefCntAutoPtr<IBuffer> m_pcbPostProcessingAttribs;
     RefCntAutoPtr<IBuffer> m_pcbMediaAttribs;
     RefCntAutoPtr<IBuffer> m_pcbMiscParams;
+    RefCntAutoPtr<IBuffer> m_pcbLightAttribs;
+    RefCntAutoPtr<IBuffer> m_pcbCameraAttribs;
 
     Uint32 m_uiBackBufferWidth  = 0;
     Uint32 m_uiBackBufferHeight = 0;
