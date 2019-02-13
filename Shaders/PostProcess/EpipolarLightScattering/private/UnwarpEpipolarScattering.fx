@@ -101,7 +101,7 @@ void UnwarpEpipolarInsctrImage( in float2 f2PosPS,
     // Note that in fact the outermost visible screen pixels do not lie exactly on the boundary (+1 or -1), but are biased by
     // 0.5 screen pixel size inwards. Using these adjusted boundaries improves precision and results in
     // smaller number of pixels which require inscattering correction
-    float4 f4Boundaries = GetOutermostScreenPixelCoords(g_PPAttribs.m_f4ScreenResolution);//left, bottom, right, top
+    float4 f4Boundaries = GetOutermostScreenPixelCoords(g_PPAttribs.f4ScreenResolution);//left, bottom, right, top
     float4 f4HalfSpaceEquationTerms = (f2PosPS.xxyy - f4Boundaries.xzyw/*float4(-1,1,-1,1)*/) * f2RayDir.yyxx;
     bool4 b4HalfSpaceFlags = Less( f4HalfSpaceEquationTerms.xyyx, f4HalfSpaceEquationTerms.zzww );
 
@@ -221,7 +221,7 @@ void UnwarpEpipolarInsctrImage( in float2 f2PosPS,
         // Compute depth weights in a way that if the difference is less than the threshold, the weight is 1 and
         // the weights fade out to 0 as the difference becomes larger than the threshold:
         float2 f2MaxZ = max( f2SrcLocationsCamSpaceZ, max(fCamSpaceZ,1.0) );
-        float2 f2DepthWeights = saturate( g_PPAttribs.m_fRefinementThreshold / max( abs(fCamSpaceZ-f2SrcLocationsCamSpaceZ)/f2MaxZ, g_PPAttribs.m_fRefinementThreshold ) );
+        float2 f2DepthWeights = saturate( g_PPAttribs.fRefinementThreshold / max( abs(fCamSpaceZ-f2SrcLocationsCamSpaceZ)/f2MaxZ, g_PPAttribs.fRefinementThreshold ) );
         // Note that if the sample is located outside the [-1,1]x[-1,1] area, the sample is invalid and fCurrCamSpaceZ == fInvalidCoordinate
         // Depth weight computed for such sample will be zero
         f2DepthWeights = pow(f2DepthWeights, 4.0*F2ONE);
@@ -297,7 +297,7 @@ void ApplyInscatteredRadiancePS(FullScreenTriangleVSOutput VSOut,
 
     float3 f3BackgroundColor = F3ZERO;
     [branch]
-    if( !g_PPAttribs.m_bShowLightingOnly )
+    if( !g_PPAttribs.bShowLightingOnly )
     {
         f3BackgroundColor = g_tex2DColorBuffer.SampleLevel( g_tex2DColorBuffer_sampler, f2UV, 0).rgb;
         // fFarPlaneZ is pre-multiplied with 0.999999f

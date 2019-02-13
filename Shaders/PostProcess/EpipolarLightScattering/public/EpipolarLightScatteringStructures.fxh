@@ -42,105 +42,178 @@
 #endif
 
 
-#define LIGHT_SCTR_TECHNIQUE_EPIPOLAR_SAMPLING 0
-#define LIGHT_SCTR_TECHNIQUE_BRUTE_FORCE 1
+// Epipolar light scattering
+#define LIGHT_SCTR_TECHNIQUE_EPIPOLAR_SAMPLING  0
+// High-quality brute-force ray marching for every pixel without any optimizations
+#define LIGHT_SCTR_TECHNIQUE_BRUTE_FORCE        1
 
-#define CASCADE_PROCESSING_MODE_SINGLE_PASS 0
-#define CASCADE_PROCESSING_MODE_MULTI_PASS 1
+
+// Shadow map cascade processing mode
+
+// Process all shadow map cascades in a single pass
+#define CASCADE_PROCESSING_MODE_SINGLE_PASS     0
+// Process every shadow map cascade in a separate pass
+#define CASCADE_PROCESSING_MODE_MULTI_PASS      1
+// Process every shadow map cascade in a separate pass, but use single instanced draw command
 #define CASCADE_PROCESSING_MODE_MULTI_PASS_INST 2
 
-#define REFINEMENT_CRITERION_DEPTH_DIFF 0
+
+// Epipolar sampling refinement criterion
+
+// Use depth difference to refine epipolar sampling
+#define REFINEMENT_CRITERION_DEPTH_DIFF  0
+// Use inscattering difference to refine epipolar sampling
 #define REFINEMENT_CRITERION_INSCTR_DIFF 1
 
+
 // Extinction evaluation mode used when attenuating background
-#define EXTINCTION_EVAL_MODE_PER_PIXEL 0// Evaluate extinction for each pixel using analytic formula 
-                                        // by Eric Bruneton
-#define EXTINCTION_EVAL_MODE_EPIPOLAR 1 // Render extinction in epipolar space and perform
-                                        // bilateral filtering in the same manner as for
-                                        // inscattering
 
-#define SINGLE_SCTR_MODE_NONE 0
+// Evaluate extinction for each pixel using analytic formula by Eric Bruneton
+#define EXTINCTION_EVAL_MODE_PER_PIXEL 0 
+                                        
+// Render extinction in epipolar space and perform bilateral filtering 
+// in the same manner as for inscattering
+#define EXTINCTION_EVAL_MODE_EPIPOLAR  1 
+                                         
+                                         
+// Single scattering evaluation mode
+
+// No single scattering
+#define SINGLE_SCTR_MODE_NONE        0
+// Use numerical intergarion
 #define SINGLE_SCTR_MODE_INTEGRATION 1
-#define SINGLE_SCTR_MODE_LUT 2
+// Use single scattering look-up-table
+#define SINGLE_SCTR_MODE_LUT         2
 
-#define MULTIPLE_SCTR_MODE_NONE 0
+// No higher-order scattering
+#define MULTIPLE_SCTR_MODE_NONE       0
+// Use unoccluded (unshadowed) scattering
 #define MULTIPLE_SCTR_MODE_UNOCCLUDED 1
-#define MULTIPLE_SCTR_MODE_OCCLUDED 2
+// Use occluded (shadowed) scattering
+#define MULTIPLE_SCTR_MODE_OCCLUDED   2
 
-#define TONE_MAPPING_MODE_EXP 0
-#define TONE_MAPPING_MODE_REINHARD 1
-#define TONE_MAPPING_MODE_REINHARD_MOD 2
-#define TONE_MAPPING_MODE_UNCHARTED2 3
-#define TONE_MAPPING_FILMIC_ALU 4
-#define TONE_MAPPING_LOGARITHMIC 5
-#define TONE_MAPPING_ADAPTIVE_LOG 6
+
+// Tone mapping mode
+#define TONE_MAPPING_MODE_EXP           0
+#define TONE_MAPPING_MODE_REINHARD      1
+#define TONE_MAPPING_MODE_REINHARD_MOD  2
+#define TONE_MAPPING_MODE_UNCHARTED2    3
+#define TONE_MAPPING_FILMIC_ALU         4
+#define TONE_MAPPING_LOGARITHMIC        5
+#define TONE_MAPPING_ADAPTIVE_LOG       6
 
 
 struct PostProcessingAttribs
 {
-    uint m_uiNumEpipolarSlices              DEFAULT_VALUE(512);
-    uint m_uiMaxSamplesInSlice              DEFAULT_VALUE(256);
-    uint m_uiInitialSampleStepInSlice       DEFAULT_VALUE(16);
+    // Total number of epipolar slices (or lines).
+    uint uiNumEpipolarSlices                DEFAULT_VALUE(512);
+    // Maximum number of samples on a single epipolar line.
+    uint uiMaxSamplesInSlice                DEFAULT_VALUE(256);
+    // Initial ray marching sample spacing on an epipolar line. 
+    // Additional samples are added at discontinuities.
+    uint uiInitialSampleStepInSlice         DEFAULT_VALUE(16);
+    // Sample density near the epipole where inscattering changes rapidly.
     // Note that sampling near the epipole is very cheap since only a few steps
-    // required to perform ray marching
-    uint m_uiEpipoleSamplingDensityFactor   DEFAULT_VALUE(2);
+    // required to perform ray marching.
+    uint uiEpipoleSamplingDensityFactor     DEFAULT_VALUE(2);
 
-    float m_fRefinementThreshold            DEFAULT_VALUE(0.03f);
-    // do not use bool, because sizeof(bool)==1 and as a result bool variables
-    // will be incorrectly mapped on GPU constant buffer
-    BOOL m_bShowSampling                    DEFAULT_VALUE(FALSE); 
-    BOOL m_bCorrectScatteringAtDepthBreaks  DEFAULT_VALUE(FALSE); 
-    BOOL m_bShowDepthBreaks                 DEFAULT_VALUE(FALSE); 
+    // Refinement threshold controls detection of discontinuities. Smaller values
+    // produce more samples and higher quality, but at a higher performance cost.
+    float fRefinementThreshold              DEFAULT_VALUE(0.03f);
+    // Whether to show epipolar sampling.
+    // Do not use bool, because sizeof(bool)==1 and as a result bool variables
+    // will be incorrectly mapped on GPU constant buffer.
+    BOOL bShowSampling                      DEFAULT_VALUE(FALSE); 
+    // Whether to correct inscattering at depth discontinuities. Improves quality
+    // for additional cost.
+    BOOL bCorrectScatteringAtDepthBreaks    DEFAULT_VALUE(FALSE);
+    // Whether to display pixels which are classified as depth discontinuities and which
+    // will be correct. Only has effect when bCorrectScatteringAtDepthBreaks is TRUE.
+    BOOL bShowDepthBreaks                   DEFAULT_VALUE(FALSE); 
 
-    BOOL m_bShowLightingOnly                DEFAULT_VALUE(FALSE);
-    BOOL m_bOptimizeSampleLocations         DEFAULT_VALUE(TRUE);
-    BOOL m_bEnableLightShafts               DEFAULT_VALUE(TRUE);
-    uint m_uiInstrIntegralSteps             DEFAULT_VALUE(30);
+    // Whether to show lighting only
+    BOOL bShowLightingOnly                  DEFAULT_VALUE(FALSE);
+    // Optimize sample locations to avoid oversampling. This should generally be TRUE.
+    BOOL bOptimizeSampleLocations           DEFAULT_VALUE(TRUE);
+    // Wether to enable light shafts or render unshadowed inscattering.
+    // Setting this to FALSE increases performance, but reduces visual quality.
+    BOOL bEnableLightShafts                 DEFAULT_VALUE(TRUE);
+    // Number of inscattering integral steps taken when computing unshadowed inscattering (default is OK).
+    uint uiInstrIntegralSteps               DEFAULT_VALUE(30);
     
-    float2 m_f2ShadowMapTexelSize           DEFAULT_VALUE(float2(0,0));
-    uint m_uiShadowMapResolution            DEFAULT_VALUE(0);
-    uint m_uiMinMaxShadowMapResolution      DEFAULT_VALUE(0);
+    // Size of the shadowmap texel (1/width, 1/height)
+    float2 f2ShadowMapTexelSize             DEFAULT_VALUE(float2(0,0));
+    // Maximum number of ray marching samples on a single ray. Typically this value should match the maximum 
+    // shadow map cascade resolution. Using lower value will improve performance but may result
+    // in moire patterns. Note that in most cases singificantly less samples are actually taken.
+    uint uiMaxSamplesOnTheRay               DEFAULT_VALUE(0);
+    // This defines the number of samples at the lowest level of min-max binary tree
+    // and should match the maximum cascade shadow map resolution
+    uint uiMinMaxShadowMapResolution        DEFAULT_VALUE(0);
 
-    BOOL m_bUse1DMinMaxTree                 DEFAULT_VALUE(TRUE);
-    float m_fMaxShadowMapStep               DEFAULT_VALUE(16.f);
-    float m_fMiddleGray                     DEFAULT_VALUE(0.18f);
-    uint m_uiLightSctrTechnique             DEFAULT_VALUE(LIGHT_SCTR_TECHNIQUE_EPIPOLAR_SAMPLING);
+    // Number of shadow map cascades
+    int iNumCascades                        DEFAULT_VALUE(0);
+    // First cascade to use for ray marching. Usually first few cascades are small, and ray
+    // marching them is inefficient.
+    int iFirstCascadeToRayMarch             DEFAULT_VALUE(2);
+    // Cap on the maximum shadow map step in texels. Can be increased for higher shadow map
+    // resolutions.
+    float fMaxShadowMapStep                 DEFAULT_VALUE(16.f);
+    // Whether to use 1D min/max binary tree optimization. This improves
+    // performance for higher shadow map resolution. Test it.
+    BOOL bUse1DMinMaxTree                   DEFAULT_VALUE(TRUE);
 
-    int m_iNumCascades                      DEFAULT_VALUE(0);
-    int m_iFirstCascade                     DEFAULT_VALUE(2);
-    float m_fNumCascades                    DEFAULT_VALUE(0);
-    float m_fFirstCascade                   DEFAULT_VALUE(1);
+    // Whether to use 32-bit float or 16-bit UNORM min-max binary tree.
+    BOOL bIs32BitMinMaxMipMap               DEFAULT_VALUE(FALSE);
+    // Technique used to evaluate light scattering.
+    uint uiLightSctrTechnique               DEFAULT_VALUE(LIGHT_SCTR_TECHNIQUE_EPIPOLAR_SAMPLING);
+    // Shadow map cascades processing mode.
+    uint uiCascadeProcessingMode            DEFAULT_VALUE(CASCADE_PROCESSING_MODE_SINGLE_PASS);
+    // Epipolar sampling refinement criterion.
+    uint uiRefinementCriterion              DEFAULT_VALUE(REFINEMENT_CRITERION_INSCTR_DIFF);
 
-    uint m_uiCascadeProcessingMode          DEFAULT_VALUE(CASCADE_PROCESSING_MODE_SINGLE_PASS);
-    uint m_uiRefinementCriterion            DEFAULT_VALUE(REFINEMENT_CRITERION_INSCTR_DIFF);
-    BOOL m_bIs32BitMinMaxMipMap             DEFAULT_VALUE(FALSE);
-    uint m_uiMultipleScatteringMode         DEFAULT_VALUE(MULTIPLE_SCTR_MODE_UNOCCLUDED);
-
-    uint m_uiSingleScatteringMode           DEFAULT_VALUE(SINGLE_SCTR_MODE_INTEGRATION);
-    BOOL m_bAutoExposure                    DEFAULT_VALUE(TRUE);
-    uint m_uiToneMappingMode                DEFAULT_VALUE(TONE_MAPPING_MODE_UNCHARTED2);
-    BOOL m_bLightAdaptation                 DEFAULT_VALUE(TRUE);
-
-    float m_fWhitePoint                     DEFAULT_VALUE(3.f);
-    float m_fLuminanceSaturation            DEFAULT_VALUE(1.f);
-    float2 f2Dummy                          DEFAULT_VALUE(float2(0,0));
+    // Single scattering evaluation mode.
+    uint uiSingleScatteringMode             DEFAULT_VALUE(SINGLE_SCTR_MODE_INTEGRATION);
+    // Higher-order scattering evaluation mode.
+    uint uiMultipleScatteringMode           DEFAULT_VALUE(MULTIPLE_SCTR_MODE_UNOCCLUDED);
+    // Tone mapping mode.
+    uint uiToneMappingMode                  DEFAULT_VALUE(TONE_MAPPING_MODE_UNCHARTED2);
+    // Automatically compute exposure to use in tone mapping.
+    BOOL bAutoExposure                      DEFAULT_VALUE(TRUE);
     
-    uint m_uiExtinctionEvalMode             DEFAULT_VALUE(EXTINCTION_EVAL_MODE_EPIPOLAR);
-    BOOL m_bUseCustomSctrCoeffs             DEFAULT_VALUE(FALSE);
-    float m_fAerosolDensityScale            DEFAULT_VALUE(1.f);
-    float m_fAerosolAbsorbtionScale         DEFAULT_VALUE(0.1f);
 
-    float4 m_f4CustomRlghBeta               DEFAULT_VALUE(float4(5.8e-6f, 13.5e-6f, 33.1e-6f, 0.f));
-    float4 m_f4CustomMieBeta                DEFAULT_VALUE(float4(2.e-5f, 2.e-5f, 2.e-5f, 0.f));
+    // Middle gray value used by tone mapping operators.
+    float fMiddleGray                       DEFAULT_VALUE(0.18f);
+    // Simulate eye adaptation to light changes.
+    BOOL bLightAdaptation                   DEFAULT_VALUE(TRUE);
+    // White point to use in tone mapping.
+    float fWhitePoint                       DEFAULT_VALUE(3.f);
+    // Luminance point to use in tone mapping.
+    float fLuminanceSaturation              DEFAULT_VALUE(1.f);
+    
+    // Atmospheric extinction evaluation mode.
+    uint uiExtinctionEvalMode               DEFAULT_VALUE(EXTINCTION_EVAL_MODE_EPIPOLAR);
+    // Whether to use custom scattering coefficients.
+    BOOL bUseCustomSctrCoeffs               DEFAULT_VALUE(FALSE);
+    // Aerosol density scale to use for scattering coefficient computation.
+    float fAerosolDensityScale              DEFAULT_VALUE(1.f);
+    // Aerosol absorbtion scale to use for scattering coefficient computation.
+    float fAerosolAbsorbtionScale           DEFAULT_VALUE(0.1f);
+
+    // Custom Rayleigh coefficients.
+    float4 f4CustomRlghBeta                 DEFAULT_VALUE(float4(5.8e-6f, 13.5e-6f, 33.1e-6f, 0.f));
+    // Custom Mie coefficients.
+    float4 f4CustomMieBeta                  DEFAULT_VALUE(float4(2.e-5f, 2.e-5f, 2.e-5f, 0.f));
 
 
-    // Members below are automatically set by the effect. User-provided values are ignored
-    float4 m_f4ScreenResolution             DEFAULT_VALUE(float4(0,0,0,0));
+    // Members below are automatically set by the effect. User-provided values are ignored.
+    float4 f4ScreenResolution               DEFAULT_VALUE(float4(0,0,0,0));
     float4 f4LightScreenPos                 DEFAULT_VALUE(float4(0,0,0,0));
+    
     BOOL   bIsLightOnScreen                 DEFAULT_VALUE(FALSE);
-    int    Padding0                         DEFAULT_VALUE(0);
-    int    Padding1                         DEFAULT_VALUE(0);
-    int    Padding2                         DEFAULT_VALUE(0);
+    float  fNumCascades                     DEFAULT_VALUE(0);
+    float  fFirstCascadeToRayMarch          DEFAULT_VALUE(0);
+    int    Padding0;
 };
 CHECK_STRUCT_ALIGNMENT(PostProcessingAttribs)
 
@@ -181,6 +254,7 @@ struct AirScatteringAttribs
 CHECK_STRUCT_ALIGNMENT(AirScatteringAttribs)
 
 
+// Internal structure used by the effect
 struct MiscDynamicParams
 {
     float fMaxStepsAlongRay;   // Maximum number of steps during ray tracing

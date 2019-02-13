@@ -32,7 +32,7 @@ void RenderSliceUVDirInShadowMapTexturePS(in FullScreenTriangleVSOutput VSOut,
     // Load epipolar slice endpoints
     float4 f4SliceEndpoints = g_tex2DSliceEndPoints.Load(  int3(iSliceInd,0,0) );
     // All correct entry points are completely inside the [-1+1/W,1-1/W]x[-1+1/H,1-1/H] area
-    if( !IsValidScreenLocation(f4SliceEndpoints.xy, g_PPAttribs.m_f4ScreenResolution) )
+    if( !IsValidScreenLocation(f4SliceEndpoints.xy, g_PPAttribs.f4ScreenResolution) )
     {
         f4SliceUVDirAndStart = f4IncorrectSliceUVDirAndStart;
         return;
@@ -53,7 +53,7 @@ void RenderSliceUVDirInShadowMapTexturePS(in FullScreenTriangleVSOutput VSOut,
     float2 f2SliceDir = f2SliceExitUV - f2SliceOriginUV;
     f2SliceDir /= max(abs(f2SliceDir.x), abs(f2SliceDir.y));
     
-    float4 f4BoundaryMinMaxXYXY = float4(0.0, 0.0, 1.0, 1.0) + float4(0.5, 0.5, -0.5, -0.5)*g_PPAttribs.m_f2ShadowMapTexelSize.xyxy;
+    float4 f4BoundaryMinMaxXYXY = float4(0.0, 0.0, 1.0, 1.0) + float4(0.5, 0.5, -0.5, -0.5)*g_PPAttribs.f2ShadowMapTexelSize.xyxy;
     if( any( Less( (f2SliceOriginUV.xyxy - f4BoundaryMinMaxXYXY) * float4( 1.0, 1.0, -1.0, -1.0), F4ZERO ) ) )
     {
         // If slice origin in UV coordinates falls beyond [0,1]x[0,1] region, we have
@@ -95,7 +95,7 @@ void RenderSliceUVDirInShadowMapTexturePS(in FullScreenTriangleVSOutput VSOut,
         f2SliceOriginUV = f2SliceOriginUV + fMinDist * f2SliceDir;
     }
     
-    f2SliceDir *= g_PPAttribs.m_f2ShadowMapTexelSize;
+    f2SliceDir *= g_PPAttribs.f2ShadowMapTexelSize;
 
     f4SliceUVDirAndStart = float4(f2SliceDir, f2SliceOriginUV);
 }

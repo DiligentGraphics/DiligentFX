@@ -24,7 +24,7 @@
 "#if USE_COMBINED_MIN_MAX_TEXTURE\n"
 "    fCascadeInd = floor(VSOut.f4PixelPos.y / float(NUM_EPIPOLAR_SLICES));\n"
 "    uiSliceInd = uint(VSOut.f4PixelPos.y - fCascadeInd * float(NUM_EPIPOLAR_SLICES));\n"
-"    fCascadeInd += g_PPAttribs.m_fFirstCascade;\n"
+"    fCascadeInd += g_PPAttribs.fFirstCascadeToRayMarch;\n"
 "#else\n"
 "    uiSliceInd = uint(VSOut.f4PixelPos.y);\n"
 "    fCascadeInd = g_MiscParams.fCascadeInd;\n"

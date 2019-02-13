@@ -85,7 +85,7 @@ void RefineSampleLocationsCS(uint3 Gid  : SV_GroupID,
         float fMaxZ = max(fCamSpaceZ, fRightNeighbCamSpaceZ);
         fMaxZ = max(fMaxZ, 1.0);
         // Compare the difference with the threshold
-        bool bFlag = abs(fCamSpaceZ - fRightNeighbCamSpaceZ)/fMaxZ < 0.2*g_PPAttribs.m_fRefinementThreshold;
+        bool bFlag = abs(fCamSpaceZ - fRightNeighbCamSpaceZ)/fMaxZ < 0.2*g_PPAttribs.fRefinementThreshold;
 #elif REFINEMENT_CRITERION == REFINEMENT_CRITERION_INSCTR_DIFF
         // Load inscattering for this sample and for its right neighbour
         float3 f3Insctr0 = g_tex2DScatteredColor.Load( int3(uiGlobalSampleInd,         uiSliceInd, 0) );
@@ -100,12 +100,12 @@ void RefineSampleLocationsCS(uint3 Gid  : SV_GroupID,
         // It should also account for the fact that rgb channels contribute differently
         // to the percieved brightness. For r channel the threshold should be smallest, 
         // for b channel - the largest
-        float3 f3MinInsctrThreshold = (0.02 * fAverageLum * F3ONE / RGB_TO_LUMINANCE.xyz) / g_PPAttribs.m_fMiddleGray;
+        float3 f3MinInsctrThreshold = (0.02 * fAverageLum * F3ONE / RGB_TO_LUMINANCE.xyz) / g_PPAttribs.fMiddleGray;
 
         f3MaxInsctr = max(f3MaxInsctr, f3MinInsctrThreshold);
         // Compare the difference with the threshold. If the neighbour sample is invalid, its inscattering
         // is large negative value and the difference is guaranteed to be larger than the threshold
-        bool bFlag = all( Less(abs(f3Insctr0 - f3Insctr1)/f3MaxInsctr, g_PPAttribs.m_fRefinementThreshold*float3(1.0,1.0,1.0) ) );
+        bool bFlag = all( Less(abs(f3Insctr0 - f3Insctr1)/f3MaxInsctr, g_PPAttribs.fRefinementThreshold*float3(1.0,1.0,1.0) ) );
 #endif
         // Set appropriate flag using INTERLOCKED Or:
         uint uiBit = bFlag ? (1u << (uiSampleInd % 32u)) : 0u;
@@ -138,7 +138,7 @@ void RefineSampleLocationsCS(uint3 Gid  : SV_GroupID,
     if( float(uiInitialSample0GlobalInd)/float(MAX_SAMPLES_IN_SLICE) < 0.05 && 
         length(f2InitialSample0Coords - g_PPAttribs.f4LightScreenPos.xy) < 0.1 )
     {
-        uiInitialSampleStep = max( uint(INITIAL_SAMPLE_STEP) / g_PPAttribs.m_uiEpipoleSamplingDensityFactor, 1u );
+        uiInitialSampleStep = max( uint(INITIAL_SAMPLE_STEP) / g_PPAttribs.uiEpipoleSamplingDensityFactor, 1u );
         uiInitialSample0Ind = (uiSampleInd / uiInitialSampleStep) * uiInitialSampleStep;
     }
     uint uiInitialSample1Ind = uiInitialSample0Ind + uiInitialSampleStep;
@@ -196,7 +196,7 @@ void RefineSampleLocationsCS(uint3 Gid  : SV_GroupID,
             // Find left interpolation source
             {
                 // Note that i-th flag reflects the difference between i-th and (i+1)-th samples:
-                // Flag[i] = abs(fCamSpaceZ[i] - fCamSpaceZ[i+1]) < g_PPAttribs.m_fRefinementThreshold;
+                // Flag[i] = abs(fCamSpaceZ[i] - fCamSpaceZ[i+1]) < g_PPAttribs.fRefinementThreshold;
                 // We need to find first depth break starting from iFirstDepthBreakToTheLeftInd sample
                 // and going to the left up to uiInitialSample0Ind
                 int iFirstDepthBreakToTheLeftInd = int(uiSampleInd)-1;

@@ -34,7 +34,7 @@
 "    uint2 ui2InterpolationSources = g_tex2DInterpolationSource.Load( int3(TexelIJ,0) );\n"
 "    bool bIsInterpolation = ui2InterpolationSources.x != ui2InterpolationSources.y;\n"
 "\n"
-"    float2 f2QuadSize = (bIsInterpolation ? 2.0 : 4.0)*F2ONE * g_PPAttribs.m_f4ScreenResolution.zw;\n"
+"    float2 f2QuadSize = (bIsInterpolation ? 2.0 : 4.0)*F2ONE * g_PPAttribs.f4ScreenResolution.zw;\n"
 "    float4 MinMaxUV = float4(f2QuadCenterPos.x-f2QuadSize.x, f2QuadCenterPos.y - f2QuadSize.y, f2QuadCenterPos.x+f2QuadSize.x, f2QuadCenterPos.y + f2QuadSize.y);\n"
 "    \n"
 "    float3 f3Color = bIsInterpolation ? float3(0.5,0.0,0.0) : float3(1.0,0.0,0.0);\n"

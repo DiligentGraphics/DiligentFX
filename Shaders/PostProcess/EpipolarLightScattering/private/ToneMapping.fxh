@@ -28,7 +28,7 @@ float3 ToneMap(in float3 f3Color)
     float fAveLogLum = GetAverageSceneLuminance();
     
     //const float middleGray = 1.03 - 2 / (2 + log10(fAveLogLum+1));
-    float middleGray = g_PPAttribs.m_fMiddleGray;
+    float middleGray = g_PPAttribs.fMiddleGray;
     // Compute scale factor such that average luminance maps to middle gray
     float fLumScale = middleGray / fAveLogLum;
     
@@ -37,12 +37,12 @@ float3 ToneMap(in float3 f3Color)
     float fScaledPixelLum = fInitialPixelLum * fLumScale;
     float3 f3ScaledColor = f3Color * fLumScale;
 
-    float whitePoint = g_PPAttribs.m_fWhitePoint;
+    float whitePoint = g_PPAttribs.fWhitePoint;
 
 #if TONE_MAPPING_MODE == TONE_MAPPING_MODE_EXP
     
     float  fToneMappedLum = 1.0 - exp( -fScaledPixelLum );
-    return fToneMappedLum * pow(f3Color / fInitialPixelLum, g_PPAttribs.m_fLuminanceSaturation * F3ONE);
+    return fToneMappedLum * pow(f3Color / fInitialPixelLum, g_PPAttribs.fLuminanceSaturation * F3ONE);
 
 #elif TONE_MAPPING_MODE == TONE_MAPPING_MODE_REINHARD || TONE_MAPPING_MODE == TONE_MAPPING_MODE_REINHARD_MOD
 
@@ -56,7 +56,7 @@ float3 ToneMap(in float3 f3Color)
 #   else
 	    float  fToneMappedLum = L_xy * (1.0 + L_xy / (whitePoint*whitePoint)) / (1.0 + L_xy);
 #   endif
-	return fToneMappedLum * pow(f3Color / fInitialPixelLum, g_PPAttribs.m_fLuminanceSaturation * F3ONE);
+	return fToneMappedLum * pow(f3Color / fInitialPixelLum, g_PPAttribs.fLuminanceSaturation * F3ONE);
 
 #elif TONE_MAPPING_MODE == TONE_MAPPING_MODE_UNCHARTED2
 
@@ -79,7 +79,7 @@ float3 ToneMap(in float3 f3Color)
     
     // http://www.mpi-inf.mpg.de/resources/tmo/logmap/logmap.pdf
     float fToneMappedLum = log10(1.0 + fScaledPixelLum) / log10(1.0 + whitePoint);
-	return fToneMappedLum * pow(f3Color / fInitialPixelLum, g_PPAttribs.m_fLuminanceSaturation * F3ONE);
+	return fToneMappedLum * pow(f3Color / fInitialPixelLum, g_PPAttribs.fLuminanceSaturation * F3ONE);
 
 #elif TONE_MAPPING_MODE == TONE_MAPPING_ADAPTIVE_LOG
 
@@ -88,7 +88,7 @@ float3 ToneMap(in float3 f3Color)
     float fToneMappedLum = 
         1.0 / log10(1.0 + whitePoint) *
         log(1.0 + fScaledPixelLum) / log( 2.0 + 8.0 * pow( fScaledPixelLum / whitePoint, log(Bias) / log(0.5)) );
-	return fToneMappedLum * pow(f3Color / fInitialPixelLum, g_PPAttribs.m_fLuminanceSaturation * F3ONE);
+	return fToneMappedLum * pow(f3Color / fInitialPixelLum, g_PPAttribs.fLuminanceSaturation * F3ONE);
 
 #endif
 }

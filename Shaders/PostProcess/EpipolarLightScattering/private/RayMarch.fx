@@ -139,13 +139,13 @@ float3 ComputeShadowedInscattering( in float2 f2RayMarchingSampleLocation,
     float fDistToFirstLitSection = -1.0; // Used only in when SINGLE_SCATTERING_MODE == SINGLE_SCTR_MODE_LUT
 
 #if CASCADE_PROCESSING_MODE == CASCADE_PROCESSING_MODE_SINGLE_PASS
-    for(; uiCascadeInd < uint(g_PPAttribs.m_iNumCascades); ++uiCascadeInd, ++fCascadeInd)
+    for(; uiCascadeInd < uint(g_PPAttribs.iNumCascades); ++uiCascadeInd, ++fCascadeInd)
 #else
     for(int i=0; i<1; ++i)
 #endif
     {
         float2 f2CascadeStartEndCamSpaceZ = g_LightAttribs.ShadowAttribs.Cascades[uiCascadeInd].f4StartEndZ.xy;
-        float fCascadeStartCamSpaceZ = f2CascadeStartEndCamSpaceZ.x;//(uiCascadeInd > (uint)g_PPAttribs.m_iFirstCascade) ? f2CascadeStartEndCamSpaceZ.x : 0;
+        float fCascadeStartCamSpaceZ = f2CascadeStartEndCamSpaceZ.x;//(uiCascadeInd > (uint)g_PPAttribs.iFirstCascadeToRayMarch) ? f2CascadeStartEndCamSpaceZ.x : 0;
         fCascadeEndCamSpaceZ = f2CascadeStartEndCamSpaceZ.y;
         
         // Check if the ray terminates before it enters current cascade 
@@ -200,7 +200,7 @@ float3 ComputeShadowedInscattering( in float2 f2RayMarchingSampleLocation,
             #if CASCADE_PROCESSING_MODE == CASCADE_PROCESSING_MODE_SINGLE_PASS
                 continue;
             #else
-                if( int(uiCascadeInd) == g_PPAttribs.m_iNumCascades-1 )
+                if( int(uiCascadeInd) == g_PPAttribs.iNumCascades-1 )
                     // We need to process remaining part of the ray
                     break;
                 else
@@ -244,7 +244,7 @@ float3 ComputeShadowedInscattering( in float2 f2RayMarchingSampleLocation,
             f2SliceOriginUV = f4SliceUVDirAndOrigin.zw;
          
             #if USE_COMBINED_MIN_MAX_TEXTURE
-                uiMinMaxTexYInd = uiEpipolarSliceInd + (uiCascadeInd - uint(g_PPAttribs.m_iFirstCascade)) * g_PPAttribs.m_uiNumEpipolarSlices;
+                uiMinMaxTexYInd = uiEpipolarSliceInd + (uiCascadeInd - uint(g_PPAttribs.iFirstCascadeToRayMarch)) * g_PPAttribs.uiNumEpipolarSlices;
             #else
                 uiMinMaxTexYInd = uiEpipolarSliceInd;
             #endif
@@ -253,7 +253,7 @@ float3 ComputeShadowedInscattering( in float2 f2RayMarchingSampleLocation,
         {
             //Calculate length of the trace step in light projection space
             float fMaxTraceDirDim = max( abs(f3ShadowMapTraceDir.x), abs(f3ShadowMapTraceDir.y) );
-            fShadowMapUVStepLen = (fMaxTraceDirDim > 0.0) ? (g_PPAttribs.m_f2ShadowMapTexelSize.x / fMaxTraceDirDim) : 0.0;
+            fShadowMapUVStepLen = (fMaxTraceDirDim > 0.0) ? (g_PPAttribs.f2ShadowMapTexelSize.x / fMaxTraceDirDim) : 0.0;
             // Take into account maximum number of steps specified by the g_MiscParams.fMaxStepsAlongRay
             fShadowMapUVStepLen = max(fTraceLenInShadowMapUVSpace/g_MiscParams.fMaxStepsAlongRay, fShadowMapUVStepLen);
         }
@@ -277,9 +277,9 @@ float3 ComputeShadowedInscattering( in float2 f2RayMarchingSampleLocation,
         uint uiCurrTreeLevel = 0u;
         // Note that min/max shadow map does not contain finest resolution level
         // The first level it contains corresponds to step == 2
-        int iLevelDataOffset = -int(g_PPAttribs.m_uiMinMaxShadowMapResolution);
+        int iLevelDataOffset = -int(g_PPAttribs.uiMinMaxShadowMapResolution);
         float fStepScale = 1.0;
-        float fMaxStepScale = g_PPAttribs.m_fMaxShadowMapStep;
+        float fMaxStepScale = g_PPAttribs.fMaxShadowMapStep;
 
         #if SINGLE_SCATTERING_MODE == SINGLE_SCTR_MODE_INTEGRATION
         {
@@ -321,7 +321,7 @@ float3 ComputeShadowedInscattering( in float2 f2RayMarchingSampleLocation,
                 // the sample is located at the appropriate position, advance to the next coarser level
                 if( 2.0*fStepScale < fMaxStepScale && ((uiCurrSamplePos & ((2u<<uiCurrTreeLevel)-1u)) == 0u) )
                 {
-                    iLevelDataOffset += int(g_PPAttribs.m_uiMinMaxShadowMapResolution >> uiCurrTreeLevel);
+                    iLevelDataOffset += int(g_PPAttribs.uiMinMaxShadowMapResolution >> uiCurrTreeLevel);
                     uiCurrTreeLevel++;
                     fStepScale *= 2.f;
                 }
@@ -362,7 +362,7 @@ float3 ComputeShadowedInscattering( in float2 f2RayMarchingSampleLocation,
                         break;
                     // If the ray section is neither fully lit, nor shadowed, we have to go to the finer level
                     uiCurrTreeLevel--;
-                    iLevelDataOffset -= int(g_PPAttribs.m_uiMinMaxShadowMapResolution >> uiCurrTreeLevel);
+                    iLevelDataOffset -= int(g_PPAttribs.uiMinMaxShadowMapResolution >> uiCurrTreeLevel);
                     fStepScale /= 2.f;
                 };
 
@@ -460,7 +460,7 @@ float3 ComputeShadowedInscattering( in float2 f2RayMarchingSampleLocation,
     float fRemainingLength = 0.0;
     if( 
 #if CASCADE_PROCESSING_MODE != CASCADE_PROCESSING_MODE_SINGLE_PASS
-        int(uiCascadeInd) == g_PPAttribs.m_iNumCascades-1 && 
+        int(uiCascadeInd) == g_PPAttribs.iNumCascades-1 && 
 #endif
         fRayEndCamSpaceZ > fCascadeEndCamSpaceZ 
        )
@@ -607,7 +607,7 @@ void RayMarchPS(in FullScreenTriangleVSOutput VSOut,
                                     ui2SamplePosSliceInd.y);
 #else
     float3 f3Extinction;
-    ComputeUnshadowedInscattering(f2SampleLocation, fRayEndCamSpaceZ, float(g_PPAttribs.m_uiInstrIntegralSteps), f4Inscattering.rgb, f3Extinction);
+    ComputeUnshadowedInscattering(f2SampleLocation, fRayEndCamSpaceZ, float(g_PPAttribs.uiInstrIntegralSteps), f4Inscattering.rgb, f3Extinction);
     f4Inscattering.rgb *= g_LightAttribs.f4ExtraterrestrialSunColor.rgb;
 #endif
 }
@@ -615,7 +615,7 @@ void RayMarchPS(in FullScreenTriangleVSOutput VSOut,
 
 //float3 FixInscatteredRadiancePS(FullScreenTriangleVSOutput VSOut) : SV_Target
 //{
-//    if( g_PPAttribs.m_bShowDepthBreaks )
+//    if( g_PPAttribs.bShowDepthBreaks )
 //        return float3(0,1,0);
 //
 //    float fCascade = g_MiscParams.fCascadeInd + VSOut.fInstID;
@@ -630,7 +630,7 @@ void RayMarchPS(in FullScreenTriangleVSOutput VSOut,
 //                              );
 //#else
 //    float3 f3Inscattering, f3Extinction;
-//    ComputeUnshadowedInscattering(VSOut.f2NormalizedXY.xy, fRayEndCamSpaceZ, float(g_PPAttribs.m_uiInstrIntegralSteps), f3Inscattering, f3Extinction);
+//    ComputeUnshadowedInscattering(VSOut.f2NormalizedXY.xy, fRayEndCamSpaceZ, float(g_PPAttribs.uiInstrIntegralSteps), f3Inscattering, f3Extinction);
 //    f3Inscattering *= g_LightAttribs.f4ExtraterrestrialSunColor.rgb;
 //    return f3Inscattering;
 //#endif
@@ -642,13 +642,13 @@ void FixAndApplyInscatteredRadiancePS(FullScreenTriangleVSOutput VSOut,
                                       out float4 f4Color : SV_Target)
 {
     f4Color = float4(0.0, 1.0, 0.0, 1.0);
-    if( g_PPAttribs.m_bShowDepthBreaks )
+    if( g_PPAttribs.bShowDepthBreaks )
         return;
 
     float fCamSpaceZ = g_tex2DCamSpaceZ.SampleLevel(g_tex2DCamSpaceZ_sampler, NormalizedDeviceXYToTexUV(VSOut.f2NormalizedXY), 0 );
     float3 f3BackgroundColor = float3(0.0, 0.0, 0.0);
     [branch]
-    if( !g_PPAttribs.m_bShowLightingOnly )
+    if( !g_PPAttribs.bShowLightingOnly )
     {
         f3BackgroundColor = g_tex2DColorBuffer.Load( int3(VSOut.f4PixelPos.xy,0) ).rgb;
         f3BackgroundColor *= (fCamSpaceZ > g_CameraAttribs.fFarPlaneZ) ? g_LightAttribs.f4ExtraterrestrialSunColor.rgb : float3(1.0, 1.0, 1.0);
@@ -668,7 +668,7 @@ void FixAndApplyInscatteredRadiancePS(FullScreenTriangleVSOutput VSOut,
                               );
 #else
     float3 f3InsctrColor, f3Extinction;
-    ComputeUnshadowedInscattering(VSOut.f2NormalizedXY.xy, fCamSpaceZ, float(g_PPAttribs.m_uiInstrIntegralSteps), f3InsctrColor, f3Extinction);
+    ComputeUnshadowedInscattering(VSOut.f2NormalizedXY.xy, fCamSpaceZ, float(g_PPAttribs.uiInstrIntegralSteps), f3InsctrColor, f3Extinction);
     f3InsctrColor *= g_LightAttribs.f4ExtraterrestrialSunColor.rgb;
 #endif
 

@@ -24,7 +24,7 @@ void GenerateCoordinateTexturePS(FullScreenTriangleVSOutput VSOut,
     // If slice entry point is outside [-1,1]x[-1,1] area, the slice is completely invisible
     // and we can skip it from further processing.
     // Note that slice exit point can lie outside the screen, if sample locations are optimized
-    if (!IsValidScreenLocation(f4SliceEndPoints.xy, g_PPAttribs.m_f4ScreenResolution))
+    if (!IsValidScreenLocation(f4SliceEndPoints.xy, g_PPAttribs.f4ScreenResolution))
     {
         // Discard invalid slices
         // Such slices will not be marked in the stencil and as a result will always be skipped
@@ -49,7 +49,7 @@ void GenerateCoordinateTexturePS(FullScreenTriangleVSOutput VSOut,
 
     // Compute interpolated position between entry and exit points:
     f2XY = lerp(f4SliceEndPoints.xy, f4SliceEndPoints.zw, fSamplePosOnEpipolarLine);
-    if (!IsValidScreenLocation(f2XY, g_PPAttribs.m_f4ScreenResolution))
+    if (!IsValidScreenLocation(f2XY, g_PPAttribs.f4ScreenResolution))
     {
         // Discard pixels that fall behind the screen
         // This can happen if slice exit point was optimized
