@@ -1,11 +1,7 @@
-#include "AtmosphereShadersCommon.fxh"
+#include "FullScreenTriangleVSOutput.fxh"
 
 FullScreenTriangleVSOutput FullScreenTriangleVS(in uint VertexId : SV_VertexID,
-                                        in uint InstID   : SV_InstanceID
-                                        // IMPORTANT: PS input arguments must go in the same order as VS outputs.
-                                        // Moreover, even if the shader is not using the argument,
-                                        // it still must be declared.
-                                        )
+                                                in uint InstID   : SV_InstanceID)
 {
     FullScreenTriangleVSOutput VSOut;
   

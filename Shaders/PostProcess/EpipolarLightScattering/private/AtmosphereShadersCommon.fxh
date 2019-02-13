@@ -1,6 +1,7 @@
 #ifndef _ATMOSPHERE_SHADERS_COMMON_FXH_
 #define _ATMOSPHERE_SHADERS_COMMON_FXH_
 
+#include "FullScreenTriangleVSOutput.fxh"
 #include "EpipolarLightScatteringStructures.fxh"
 
 #define FLT_MAX 3.402823466e+38f
@@ -113,13 +114,6 @@
 #define INVALID_EPIPOLAR_LINE float4(-1000.0, -1000.0, -100.0, -100.0)
 
 #define RGB_TO_LUMINANCE float3(0.212671, 0.715160, 0.072169)
-
-struct FullScreenTriangleVSOutput
-{
-    float4 f4PixelPos     : SV_Position;   // Pixel position on the screen
-    float2 f2NormalizedXY : NORMALIZED_XY; // Normalized device XY coordinates [-1,1]x[-1,1]
-    float  fInstID        : INSTANCE_ID;
-};
 
 // GLSL compiler is so bad that it cannot properly handle matrices passed as structure members!
 float3 ProjSpaceXYZToWorldSpace(in float3 f3PosPS, in float4x4 mProj, in float4x4 mViewProjInv /*CameraAttribs CamAttribs <- DO NOT DO THIS*/)

@@ -7,6 +7,14 @@ struct ShaderIncInfo
 static const ShaderIncInfo g_Shaders[] =
 {
     {
+        "FullScreenTriangleVS.fx",
+        #include "FullScreenTriangleVS.fx.h"
+    },
+    {
+        "FullScreenTriangleVSOutput.fxh",
+        #include "FullScreenTriangleVSOutput.fxh.h"
+    },
+    {
         "BasicStructures.fxh",
         #include "BasicStructures.fxh.h"
     },
@@ -21,10 +29,6 @@ static const ShaderIncInfo g_Shaders[] =
     {
         "ComputeMinMaxShadowMapLevel.fx",
         #include "ComputeMinMaxShadowMapLevel.fx.h"
-    },
-    {
-        "FullScreenTriangleVS.fx",
-        #include "FullScreenTriangleVS.fx.h"
     },
     {
         "InitializeMinMaxShadowMap.fx",
