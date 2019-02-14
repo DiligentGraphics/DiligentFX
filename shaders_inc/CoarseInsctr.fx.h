@@ -58,7 +58,7 @@
 "                                  7.0, // Use hard-coded constant here so that compiler can optimize the code\n"
 "                                       // more efficiently\n"
 "                                  f3Inscattering, f3Extinction);\n"
-"    f3Inscattering *= g_LightAttribs.f4ExtraterrestrialSunColor.rgb;\n"
+"    f3Inscattering *= g_LightAttribs.f4Intensity.rgb;\n"
 "}\n"
 "\n"
 "// Render inscattering only\n"

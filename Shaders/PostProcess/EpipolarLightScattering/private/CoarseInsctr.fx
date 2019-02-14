@@ -58,7 +58,7 @@ void ShaderFunctionInternal(in float4 f4Pos,
                                   7.0, // Use hard-coded constant here so that compiler can optimize the code
                                        // more efficiently
                                   f3Inscattering, f3Extinction);
-    f3Inscattering *= g_LightAttribs.f4ExtraterrestrialSunColor.rgb;
+    f3Inscattering *= g_LightAttribs.f4Intensity.rgb;
 }
 
 // Render inscattering only

@@ -301,7 +301,7 @@ void ApplyInscatteredRadiancePS(FullScreenTriangleVSOutput VSOut,
     {
         f3BackgroundColor = g_tex2DColorBuffer.SampleLevel( g_tex2DColorBuffer_sampler, f2UV, 0).rgb;
         // fFarPlaneZ is pre-multiplied with 0.999999f
-        f3BackgroundColor *= (fCamSpaceZ > g_CameraAttribs.fFarPlaneZ) ? g_LightAttribs.f4ExtraterrestrialSunColor.rgb : F3ONE;
+        f3BackgroundColor *= (fCamSpaceZ > g_CameraAttribs.fFarPlaneZ) ? g_LightAttribs.f4Intensity.rgb : F3ONE;
 
 #if EXTINCTION_EVAL_MODE == EXTINCTION_EVAL_MODE_PER_PIXEL
         float3 f3ReconstructedPosWS = ProjSpaceXYZToWorldSpace(float3(VSOut.f2NormalizedXY.xy, fCamSpaceZ), g_CameraAttribs.mProj, g_CameraAttribs.mViewProjInv);

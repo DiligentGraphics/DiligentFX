@@ -579,7 +579,7 @@ float3 ComputeShadowedInscattering( in float2 f2RayMarchingSampleLocation,
     }
     #endif
 
-    return f3InsctrIntegral * g_LightAttribs.f4ExtraterrestrialSunColor.rgb;
+    return f3InsctrIntegral * g_LightAttribs.f4Intensity.rgb;
 }
 
 
@@ -608,7 +608,7 @@ void RayMarchPS(in FullScreenTriangleVSOutput VSOut,
 #else
     float3 f3Extinction;
     ComputeUnshadowedInscattering(f2SampleLocation, fRayEndCamSpaceZ, float(g_PPAttribs.uiInstrIntegralSteps), f4Inscattering.rgb, f3Extinction);
-    f4Inscattering.rgb *= g_LightAttribs.f4ExtraterrestrialSunColor.rgb;
+    f4Inscattering.rgb *= g_LightAttribs.f4Intensity.rgb;
 #endif
 }
 
@@ -631,7 +631,7 @@ void RayMarchPS(in FullScreenTriangleVSOutput VSOut,
 //#else
 //    float3 f3Inscattering, f3Extinction;
 //    ComputeUnshadowedInscattering(VSOut.f2NormalizedXY.xy, fRayEndCamSpaceZ, float(g_PPAttribs.uiInstrIntegralSteps), f3Inscattering, f3Extinction);
-//    f3Inscattering *= g_LightAttribs.f4ExtraterrestrialSunColor.rgb;
+//    f3Inscattering *= g_LightAttribs.f4Intensity.rgb;
 //    return f3Inscattering;
 //#endif
 //
@@ -651,7 +651,7 @@ void FixAndApplyInscatteredRadiancePS(FullScreenTriangleVSOutput VSOut,
     if( !g_PPAttribs.bShowLightingOnly )
     {
         f3BackgroundColor = g_tex2DColorBuffer.Load( int3(VSOut.f4PixelPos.xy,0) ).rgb;
-        f3BackgroundColor *= (fCamSpaceZ > g_CameraAttribs.fFarPlaneZ) ? g_LightAttribs.f4ExtraterrestrialSunColor.rgb : float3(1.0, 1.0, 1.0);
+        f3BackgroundColor *= (fCamSpaceZ > g_CameraAttribs.fFarPlaneZ) ? g_LightAttribs.f4Intensity.rgb : float3(1.0, 1.0, 1.0);
         float3 f3ReconstructedPosWS = ProjSpaceXYZToWorldSpace(float3(VSOut.f2NormalizedXY.xy, fCamSpaceZ), g_CameraAttribs.mProj, g_CameraAttribs.mViewProjInv);
         float3 f3Extinction = GetExtinction(g_CameraAttribs.f4CameraPos.xyz, f3ReconstructedPosWS);
         f3BackgroundColor *= f3Extinction.rgb;
@@ -669,7 +669,7 @@ void FixAndApplyInscatteredRadiancePS(FullScreenTriangleVSOutput VSOut,
 #else
     float3 f3InsctrColor, f3Extinction;
     ComputeUnshadowedInscattering(VSOut.f2NormalizedXY.xy, fCamSpaceZ, float(g_PPAttribs.uiInstrIntegralSteps), f3InsctrColor, f3Extinction);
-    f3InsctrColor *= g_LightAttribs.f4ExtraterrestrialSunColor.rgb;
+    f3InsctrColor *= g_LightAttribs.f4Intensity.rgb;
 #endif
 
     f4Color.rgb = (f3BackgroundColor + f3InsctrColor);

@@ -72,7 +72,7 @@
 "{\n"
 "    float4 f4Direction;\n"
 "    float4 f4AmbientLight;\n"
-"    float4 f4ExtraterrestrialSunColor;\n"
+"    float4 f4Intensity; // Extraterrestrial sun radiance\n"
 "\n"
 "    ShadowMapAttribs ShadowAttribs;\n"
 "};\n"

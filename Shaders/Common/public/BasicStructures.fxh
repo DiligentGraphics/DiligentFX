@@ -72,7 +72,7 @@ struct LightAttribs
 {
     float4 f4Direction;
     float4 f4AmbientLight;
-    float4 f4ExtraterrestrialSunColor;
+    float4 f4Intensity; // Extraterrestrial sun radiance
 
     ShadowMapAttribs ShadowAttribs;
 };
