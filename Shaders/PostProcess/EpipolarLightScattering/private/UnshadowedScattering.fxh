@@ -32,7 +32,7 @@ void ComputeUnshadowedInscattering(float2 f2SampleLocation,
                                     f3RayEnd,
                                     f3ViewDir,
                                     f3EarthCentre,
-                                    g_LightAttribs.f4DirOnLight.xyz,
+                                    -g_LightAttribs.f4Direction.xyz,
                                     fNumSteps,
                                     f3Inscattering,
                                     f3Extinction);
@@ -59,9 +59,9 @@ void ComputeUnshadowedInscattering(float2 f2SampleLocation,
     // we must assure that if the first look-up is above (below) horizon, then the second look-up
     // is also above (below) horizon. 
     float4 f4UVWQ = float4(-1.0, -1.0, -1.0, -1.0);
-    f3Inscattering +=                LookUpPrecomputedScattering(f3RayStart, f3ViewDir, f3EarthCentre, g_LightAttribs.f4DirOnLight.xyz, tex3DSctrLUT, tex3DSctrLUT_sampler, f4UVWQ); 
+    f3Inscattering +=                LookUpPrecomputedScattering(f3RayStart, f3ViewDir, f3EarthCentre, -g_LightAttribs.f4Direction.xyz, tex3DSctrLUT, tex3DSctrLUT_sampler, f4UVWQ); 
     // Provide previous look-up coordinates to the function to assure that look-ups are consistent
-    f3Inscattering -= f3Extinction * LookUpPrecomputedScattering(f3RayEnd,   f3ViewDir, f3EarthCentre, g_LightAttribs.f4DirOnLight.xyz, tex3DSctrLUT, tex3DSctrLUT_sampler, f4UVWQ);
+    f3Inscattering -= f3Extinction * LookUpPrecomputedScattering(f3RayEnd,   f3ViewDir, f3EarthCentre, -g_LightAttribs.f4Direction.xyz, tex3DSctrLUT, tex3DSctrLUT_sampler, f4UVWQ);
     #undef tex3DSctrLUT
     #undef tex3DSctrLUT_sampler
 #endif

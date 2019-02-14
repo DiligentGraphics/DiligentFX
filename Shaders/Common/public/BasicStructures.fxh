@@ -70,7 +70,7 @@ CHECK_STRUCT_ALIGNMENT(ShadowMapAttribs)
 
 struct LightAttribs
 {
-    float4 f4DirOnLight;
+    float4 f4Direction;
     float4 f4AmbientLight;
     float4 f4ExtraterrestrialSunColor;
 

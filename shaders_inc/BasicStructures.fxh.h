@@ -70,7 +70,7 @@
 "\n"
 "struct LightAttribs\n"
 "{\n"
-"    float4 f4DirOnLight;\n"
+"    float4 f4Direction;\n"
 "    float4 f4AmbientLight;\n"
 "    float4 f4ExtraterrestrialSunColor;\n"
 "\n"

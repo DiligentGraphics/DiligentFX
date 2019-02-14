@@ -1883,7 +1883,7 @@ void EpipolarLightScattering :: PerformPostProcessing(FrameAttribs&          fra
     );
 
     auto mCameraViewProj = transposeMatrix(frameAttribs.pCameraAttribs->mViewProjT);
-    float4 f4LightPosPS = frameAttribs.pLightAttribs->f4DirOnLight * mCameraViewProj;
+    float4 f4LightPosPS = -frameAttribs.pLightAttribs->f4Direction * mCameraViewProj;
     f4LightPosPS.x /= f4LightPosPS.w;
     f4LightPosPS.y /= f4LightPosPS.w;
     f4LightPosPS.z /= f4LightPosPS.w;
