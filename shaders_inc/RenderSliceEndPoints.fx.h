@@ -4,7 +4,7 @@
 "\n"
 "cbuffer cbPostProcessingAttribs\n"
 "{\n"
-"    PostProcessingAttribs g_PPAttribs;\n"
+"    EpipolarLightScatteringAttribs g_PPAttribs;\n"
 "}\n"
 "\n"
 "// This function computes entry point of the epipolar line given its exit point\n"

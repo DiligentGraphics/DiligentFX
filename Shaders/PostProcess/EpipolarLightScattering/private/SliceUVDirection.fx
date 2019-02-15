@@ -15,7 +15,7 @@ cbuffer cbCameraAttribs
 
 cbuffer cbPostProcessingAttribs
 {
-    PostProcessingAttribs g_PPAttribs;
+    EpipolarLightScatteringAttribs g_PPAttribs;
 };
 
 #define f4IncorrectSliceUVDirAndStart float4(-10000, -10000, 0, 0)

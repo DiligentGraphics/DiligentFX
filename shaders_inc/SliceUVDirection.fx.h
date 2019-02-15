@@ -15,7 +15,7 @@
 "\n"
 "cbuffer cbPostProcessingAttribs\n"
 "{\n"
-"    PostProcessingAttribs g_PPAttribs;\n"
+"    EpipolarLightScatteringAttribs g_PPAttribs;\n"
 "};\n"
 "\n"
 "#define f4IncorrectSliceUVDirAndStart float4(-10000, -10000, 0, 0)\n"

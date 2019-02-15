@@ -21,7 +21,7 @@ cbuffer cbLightParams
 
 cbuffer cbPostProcessingAttribs
 {
-    PostProcessingAttribs g_PPAttribs;
+    EpipolarLightScatteringAttribs g_PPAttribs;
 };
 
 cbuffer cbMiscDynamicParams
@@ -674,7 +674,8 @@ void FixAndApplyInscatteredRadiancePS(FullScreenTriangleVSOutput VSOut,
 
     f4Color.rgb = (f3BackgroundColor + f3InsctrColor);
 #if PERFORM_TONE_MAPPING
-    f4Color.rgb = ToneMap(f3BackgroundColor + f3InsctrColor);
+    float fAveLogLum = GetAverageSceneLuminance(g_tex2DAverageLuminance);
+    f4Color.rgb = ToneMap(f3BackgroundColor + f3InsctrColor, g_PPAttribs.ToneMapping, fAveLogLum);
 #else
     const float DELTA = 0.00001;
     f4Color.rgb = log( max(DELTA, dot(f3BackgroundColor + f3InsctrColor, RGB_TO_LUMINANCE)) ) * F3ONE;

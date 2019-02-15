@@ -1,8 +1,6 @@
 #ifndef _EPIPOLAR_LIGHT_SCATTERING_STRCUTURES_FXH_
 #define _EPIPOLAR_LIGHT_SCATTERING_STRCUTURES_FXH_
 
-#define PI 3.1415928f
-
 #ifdef __cplusplus
 
 #   ifndef BOOL
@@ -18,7 +16,7 @@
 #   endif
 
 #   ifndef CHECK_STRUCT_ALIGNMENT
-#       define CHECK_STRUCT_ALIGNMENT(s) static_assert( sizeof(s) % 16 == 0, "sizeof(" #s ") is not multiple of 16" );
+#       define CHECK_STRUCT_ALIGNMENT(s) static_assert( sizeof(s) % 16 == 0, "sizeof(" #s ") is not multiple of 16" )
 #   endif
 
 #   ifndef DEFAULT_VALUE
@@ -93,17 +91,7 @@
 #define MULTIPLE_SCTR_MODE_OCCLUDED   2
 
 
-// Tone mapping mode
-#define TONE_MAPPING_MODE_EXP           0
-#define TONE_MAPPING_MODE_REINHARD      1
-#define TONE_MAPPING_MODE_REINHARD_MOD  2
-#define TONE_MAPPING_MODE_UNCHARTED2    3
-#define TONE_MAPPING_FILMIC_ALU         4
-#define TONE_MAPPING_LOGARITHMIC        5
-#define TONE_MAPPING_ADAPTIVE_LOG       6
-
-
-struct PostProcessingAttribs
+struct EpipolarLightScatteringAttribs
 {
     // Total number of epipolar slices (or lines).
     uint uiNumEpipolarSlices                DEFAULT_VALUE(512);
@@ -176,35 +164,25 @@ struct PostProcessingAttribs
     uint uiSingleScatteringMode             DEFAULT_VALUE(SINGLE_SCTR_MODE_INTEGRATION);
     // Higher-order scattering evaluation mode.
     uint uiMultipleScatteringMode           DEFAULT_VALUE(MULTIPLE_SCTR_MODE_UNOCCLUDED);
-    // Tone mapping mode.
-    uint uiToneMappingMode                  DEFAULT_VALUE(TONE_MAPPING_MODE_UNCHARTED2);
-    // Automatically compute exposure to use in tone mapping.
-    BOOL bAutoExposure                      DEFAULT_VALUE(TRUE);
-    
-
-    // Middle gray value used by tone mapping operators.
-    float fMiddleGray                       DEFAULT_VALUE(0.18f);
-    // Simulate eye adaptation to light changes.
-    BOOL bLightAdaptation                   DEFAULT_VALUE(TRUE);
-    // White point to use in tone mapping.
-    float fWhitePoint                       DEFAULT_VALUE(3.f);
-    // Luminance point to use in tone mapping.
-    float fLuminanceSaturation              DEFAULT_VALUE(1.f);
-    
     // Atmospheric extinction evaluation mode.
     uint uiExtinctionEvalMode               DEFAULT_VALUE(EXTINCTION_EVAL_MODE_EPIPOLAR);
     // Whether to use custom scattering coefficients.
     BOOL bUseCustomSctrCoeffs               DEFAULT_VALUE(FALSE);
+
     // Aerosol density scale to use for scattering coefficient computation.
     float fAerosolDensityScale              DEFAULT_VALUE(1.f);
     // Aerosol absorbtion scale to use for scattering coefficient computation.
     float fAerosolAbsorbtionScale           DEFAULT_VALUE(0.1f);
+    uint PaddingA0;
+    uint PaddingA1;
 
     // Custom Rayleigh coefficients.
     float4 f4CustomRlghBeta                 DEFAULT_VALUE(float4(5.8e-6f, 13.5e-6f, 33.1e-6f, 0.f));
     // Custom Mie coefficients.
     float4 f4CustomMieBeta                  DEFAULT_VALUE(float4(2.e-5f, 2.e-5f, 2.e-5f, 0.f));
 
+    // ToneMappingStructures.fxh must be included before EpipolarLightScatteringStructures.fxh
+    ToneMappingAttribs  ToneMapping;
 
     // Members below are automatically set by the effect. User-provided values are ignored.
     float4 f4ScreenResolution               DEFAULT_VALUE(float4(0,0,0,0));
@@ -213,9 +191,9 @@ struct PostProcessingAttribs
     BOOL   bIsLightOnScreen                 DEFAULT_VALUE(FALSE);
     float  fNumCascades                     DEFAULT_VALUE(0);
     float  fFirstCascadeToRayMarch          DEFAULT_VALUE(0);
-    int    Padding0;
+    int    PaddingB0;
 };
-CHECK_STRUCT_ALIGNMENT(PostProcessingAttribs)
+CHECK_STRUCT_ALIGNMENT(EpipolarLightScatteringAttribs);
 
 
 struct AirScatteringAttribs
@@ -251,7 +229,7 @@ struct AirScatteringAttribs
     float m_fAerosolPhaseFuncG      DEFAULT_VALUE(0.76f);
     float m_fDummy;
 };
-CHECK_STRUCT_ALIGNMENT(AirScatteringAttribs)
+CHECK_STRUCT_ALIGNMENT(AirScatteringAttribs);
 
 
 // Internal structure used by the effect
@@ -271,6 +249,6 @@ struct MiscDynamicParams
     uint4 ui4SrcDstMinMaxLevelOffset;
 #endif
 };
-CHECK_STRUCT_ALIGNMENT(MiscDynamicParams)
+CHECK_STRUCT_ALIGNMENT(MiscDynamicParams);
 
 #endif //_EPIPOLAR_LIGHT_SCATTERING_STRCUTURES_FXH_

@@ -30,6 +30,7 @@ using Diligent::float4x4;
 using uint = uint32_t;
 
 #include "../../../Shaders/Common/public/BasicStructures.fxh"
+#include "../../../Shaders/PostProcess/ToneMapping/public/ToneMappingStructures.fxh"
 #include "../../../Shaders/PostProcess/EpipolarLightScattering/public/EpipolarLightScatteringStructures.fxh"
 
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
@@ -43,31 +44,31 @@ using uint = uint32_t;
 namespace Diligent
 {
 
-struct FrameAttribs
-{
-    IRenderDevice*  pDevice         = nullptr;
-    IDeviceContext* pDeviceContext  = nullptr;
-    
-    double dElapsedTime             = 0;
-
-    // This parameter can be null if the application does not want to provide light attribs buffer
-    const LightAttribs*   pLightAttribs    = nullptr;
-    // This parameter can be null if the application does not want to provide camera attribs buffer
-    const CameraAttribs*  pCameraAttribs   = nullptr;
-    IBuffer*              pcbLightAttribs  = nullptr;
-    IBuffer*              pcbCameraAttribs = nullptr;
-
-    ITextureView*   ptex2DSrcColorBufferSRV = nullptr;
-    ITextureView*   ptex2DSrcColorBufferRTV = nullptr;
-    ITextureView*   ptex2DSrcDepthBufferDSV = nullptr;
-    ITextureView*   ptex2DSrcDepthBufferSRV = nullptr;
-    ITextureView*   ptex2DShadowMapSRV      = nullptr;
-    ITextureView*   pDstRTV                 = nullptr;
-};
-
 class EpipolarLightScattering
 {
 public:
+    struct FrameAttribs
+    {
+        IRenderDevice*  pDevice         = nullptr;
+        IDeviceContext* pDeviceContext  = nullptr;
+    
+        double dElapsedTime             = 0;
+
+        // This parameter can be null if the application does not want to provide light attribs buffer
+        const LightAttribs*   pLightAttribs    = nullptr;
+        // This parameter can be null if the application does not want to provide camera attribs buffer
+        const CameraAttribs*  pCameraAttribs   = nullptr;
+        IBuffer*              pcbLightAttribs  = nullptr;
+        IBuffer*              pcbCameraAttribs = nullptr;
+
+        ITextureView*   ptex2DSrcColorBufferSRV = nullptr;
+        ITextureView*   ptex2DSrcColorBufferRTV = nullptr;
+        ITextureView*   ptex2DSrcDepthBufferDSV = nullptr;
+        ITextureView*   ptex2DSrcDepthBufferSRV = nullptr;
+        ITextureView*   ptex2DShadowMapSRV      = nullptr;
+        ITextureView*   pDstRTV                 = nullptr;
+    };
+
     EpipolarLightScattering(IRenderDevice*  in_pDevice, 
                             IDeviceContext* in_pContext,
                             TEXTURE_FORMAT  BackBufferFmt,
@@ -78,8 +79,8 @@ public:
 
     void OnWindowResize(IRenderDevice* pDevice, Uint32 uiBackBufferWidth, Uint32 uiBackBufferHeight);
 
-    void PerformPostProcessing(FrameAttribs&            FrameAttribs,
-                               PostProcessingAttribs&   PPAttribs);
+    void PerformPostProcessing(FrameAttribs&                     FrameAttribs,
+                               EpipolarLightScatteringAttribs&   PPAttribs);
 
     void ComputeSunColor(const float3&  vDirectionOnSun,
                          const float4&  f4ExtraterrestrialSunColor,
@@ -146,8 +147,8 @@ private:
     static constexpr TEXTURE_FORMAT CamSpaceZFmt                = TEX_FORMAT_R32_FLOAT;
 
 
-    PostProcessingAttribs m_PostProcessingAttribs;
-    FrameAttribs          m_FrameAttribs;
+    EpipolarLightScatteringAttribs m_PostProcessingAttribs;
+    FrameAttribs                   m_FrameAttribs;
 
     bool m_bUseCombinedMinMaxTexture;
     Uint32 m_uiSampleRefinementCSThreadGroupSize;

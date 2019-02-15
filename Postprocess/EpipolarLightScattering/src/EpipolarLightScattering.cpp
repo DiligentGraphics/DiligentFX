@@ -308,8 +308,8 @@ EpipolarLightScattering :: EpipolarLightScattering(IRenderDevice*  pDevice,
 {
     pDevice->CreateResourceMapping(ResourceMappingDesc(), &m_pResMapping);
     
-    CreateUniformBuffer(pDevice, sizeof( PostProcessingAttribs ), "Postprocessing Attribs CB", &m_pcbPostProcessingAttribs);
-    CreateUniformBuffer(pDevice, sizeof( MiscDynamicParams ),     "Misc Dynamic Params CB",    &m_pcbMiscParams);
+    CreateUniformBuffer(pDevice, sizeof( EpipolarLightScatteringAttribs ), "Epipolar Light Scattering Attribs CB", &m_pcbPostProcessingAttribs);
+    CreateUniformBuffer(pDevice, sizeof( MiscDynamicParams ),              "Misc Dynamic Params CB",    &m_pcbMiscParams);
 
     {
         BufferDesc CBDesc;
@@ -444,7 +444,7 @@ void EpipolarLightScattering :: CreateRandomSphereSamplingTexture(IRenderDevice*
     {
         float4 &f4Sample = SphereSampling[iSample];
         f4Sample.z = ((float)rand()/(float)RAND_MAX) * 2.f - 1.f;
-        float t = ((float)rand()/(float)RAND_MAX) * 2.f * PI;
+        float t = ((float)rand()/(float)RAND_MAX) * 2.f * (float)M_PI;
         float r = sqrt( std::max(1.f - f4Sample.z*f4Sample.z, 0.f) );
         f4Sample.x = r * cos(t);
         f4Sample.y = r * sin(t);
@@ -1069,7 +1069,7 @@ void EpipolarLightScattering :: RefineSampleLocations()
         Macros.AddShaderMacro("INITIAL_SAMPLE_STEP", m_PostProcessingAttribs.uiInitialSampleStepInSlice);
         Macros.AddShaderMacro("THREAD_GROUP_SIZE"  , m_uiSampleRefinementCSThreadGroupSize );
         Macros.AddShaderMacro("REFINEMENT_CRITERION", m_PostProcessingAttribs.uiRefinementCriterion );
-        Macros.AddShaderMacro("AUTO_EXPOSURE",        m_PostProcessingAttribs.bAutoExposure);
+        Macros.AddShaderMacro("AUTO_EXPOSURE",        m_PostProcessingAttribs.ToneMapping.bAutoExposure);
         Macros.Finalize();
 
         ShaderVariableDesc Vars[] = 
@@ -1448,8 +1448,8 @@ void EpipolarLightScattering :: UnwarpEpipolarScattering(bool bRenderLuminance)
         ShaderMacroHelper Macros;
         DefineMacros(Macros);
         Macros.AddShaderMacro("PERFORM_TONE_MAPPING", true);
-        Macros.AddShaderMacro("AUTO_EXPOSURE", m_PostProcessingAttribs.bAutoExposure);
-        Macros.AddShaderMacro("TONE_MAPPING_MODE", m_PostProcessingAttribs.uiToneMappingMode);
+        Macros.AddShaderMacro("AUTO_EXPOSURE", m_PostProcessingAttribs.ToneMapping.bAutoExposure);
+        Macros.AddShaderMacro("TONE_MAPPING_MODE", m_PostProcessingAttribs.ToneMapping.uiToneMappingMode);
         Macros.AddShaderMacro("CORRECT_INSCATTERING_AT_DEPTH_BREAKS", m_PostProcessingAttribs.bCorrectScatteringAtDepthBreaks);
         Macros.Finalize();
         
@@ -1537,7 +1537,7 @@ void EpipolarLightScattering :: UpdateAverageLuminance()
     {
         ShaderMacroHelper Macros;
         DefineMacros(Macros);
-        Macros.AddShaderMacro( "LIGHT_ADAPTATION", m_PostProcessingAttribs.bLightAdaptation );
+        Macros.AddShaderMacro( "LIGHT_ADAPTATION", m_PostProcessingAttribs.ToneMapping.bLightAdaptation );
         // static_cast<int>() is required because Run() gets its arguments by reference
         // and gcc will try to find reference to sm_iLowResLuminanceMips, which does not exist
         Macros.AddShaderMacro("LOW_RES_LUMINANCE_MIPS", static_cast<int>(sm_iLowResLuminanceMips) );
@@ -1579,8 +1579,8 @@ void EpipolarLightScattering :: FixInscatteringAtDepthBreaks(Uint32             
         DefineMacros(Macros);
         Macros.AddShaderMacro("CASCADE_PROCESSING_MODE", CASCADE_PROCESSING_MODE_SINGLE_PASS);
         Macros.AddShaderMacro("PERFORM_TONE_MAPPING",    !bRenderLuminance);
-        Macros.AddShaderMacro("AUTO_EXPOSURE",           m_PostProcessingAttribs.bAutoExposure);
-        Macros.AddShaderMacro("TONE_MAPPING_MODE",       m_PostProcessingAttribs.uiToneMappingMode);
+        Macros.AddShaderMacro("AUTO_EXPOSURE",           m_PostProcessingAttribs.ToneMapping.bAutoExposure);
+        Macros.AddShaderMacro("TONE_MAPPING_MODE",       m_PostProcessingAttribs.ToneMapping.uiToneMappingMode);
         Macros.AddShaderMacro("USE_1D_MIN_MAX_TREE",     false);
         Macros.Finalize();
 
@@ -1755,8 +1755,8 @@ void EpipolarLightScattering :: CreateAmbientSkyLightTexture(IRenderDevice* pDev
 	m_ptex2DAmbientSkyLightSRV->SetSampler(m_pLinearClampSampler);
 }
 
-void EpipolarLightScattering :: PerformPostProcessing(FrameAttribs&          frameAttribs,
-                                                      PostProcessingAttribs& PPAttribs)
+void EpipolarLightScattering :: PerformPostProcessing(FrameAttribs&                   frameAttribs,
+                                                      EpipolarLightScatteringAttribs& PPAttribs)
 {
     Uint32 StalePSODependencyFlags = 0;
 #define CHECK_PSO_DEPENDENCY(Flag, Member)StalePSODependencyFlags |= (PPAttribs.Member != m_PostProcessingAttribs.Member) ? Flag : 0
@@ -1774,9 +1774,9 @@ void EpipolarLightScattering :: PerformPostProcessing(FrameAttribs&          fra
     CHECK_PSO_DEPENDENCY(PSO_DEPENDENCY_IS_32_BIT_MIN_MAX_TREE,     bIs32BitMinMaxMipMap);
     CHECK_PSO_DEPENDENCY(PSO_DEPENDENCY_MULTIPLE_SCATTERING_MODE,   uiMultipleScatteringMode);
     CHECK_PSO_DEPENDENCY(PSO_DEPENDENCY_SINGLE_SCATTERING_MODE,     uiSingleScatteringMode);
-    CHECK_PSO_DEPENDENCY(PSO_DEPENDENCY_AUTO_EXPOSURE,              bAutoExposure);
-    CHECK_PSO_DEPENDENCY(PSO_DEPENDENCY_TONE_MAPPING_MODE,          uiToneMappingMode);
-    CHECK_PSO_DEPENDENCY(PSO_DEPENDENCY_LIGHT_ADAPTATION,           bLightAdaptation);
+    CHECK_PSO_DEPENDENCY(PSO_DEPENDENCY_AUTO_EXPOSURE,              ToneMapping.bAutoExposure);
+    CHECK_PSO_DEPENDENCY(PSO_DEPENDENCY_TONE_MAPPING_MODE,          ToneMapping.uiToneMappingMode);
+    CHECK_PSO_DEPENDENCY(PSO_DEPENDENCY_LIGHT_ADAPTATION,           ToneMapping.bLightAdaptation);
     CHECK_PSO_DEPENDENCY(PSO_DEPENDENCY_EXTINCTION_EVAL_MODE,       uiExtinctionEvalMode);
 #undef CHECK_PSO_DEPENDENCY
 
@@ -1965,7 +1965,7 @@ void EpipolarLightScattering :: PerformPostProcessing(FrameAttribs&          fra
     }
 
     {
-        MapHelper<PostProcessingAttribs> pPPAttribsBuffData( m_FrameAttribs.pDeviceContext, m_pcbPostProcessingAttribs, MAP_WRITE, MAP_FLAG_DISCARD );
+        MapHelper<EpipolarLightScatteringAttribs> pPPAttribsBuffData( m_FrameAttribs.pDeviceContext, m_pcbPostProcessingAttribs, MAP_WRITE, MAP_FLAG_DISCARD );
         memcpy(pPPAttribsBuffData, &m_PostProcessingAttribs, sizeof(m_PostProcessingAttribs));
     }
 
@@ -1983,7 +1983,7 @@ void EpipolarLightScattering :: PerformPostProcessing(FrameAttribs&          fra
         PrecomputeScatteringLUT(m_FrameAttribs.pDevice, m_FrameAttribs.pDeviceContext);
     }
 
-    if (/*m_PostProcessingAttribs.bAutoExposure &&*/ !m_ptex2DLowResLuminanceRTV)
+    if (/*m_PostProcessingAttribs.ToneMapping.bAutoExposure &&*/ !m_ptex2DLowResLuminanceRTV)
     {
         CreateLowResLuminanceTexture(m_FrameAttribs.pDevice, m_FrameAttribs.pDeviceContext);
     }
@@ -2049,7 +2049,7 @@ void EpipolarLightScattering :: PerformPostProcessing(FrameAttribs&          fra
         const Uint32 uiMaxStepsAlongRayAtDepthBreak0 = std::min(m_PostProcessingAttribs.uiMaxSamplesOnTheRay/4, 256u);
         //const Uint32 uiMaxStepsAlongRayAtDepthBreak1 = std::min(m_PostProcessingAttribs.uiMaxSamplesOnTheRay/8, 128u);
 
-        if (m_PostProcessingAttribs.bAutoExposure)
+        if (m_PostProcessingAttribs.ToneMapping.bAutoExposure)
         {
             // Render scene luminance to low-resolution texture
             ITextureView *pRTVs[] = { m_ptex2DLowResLuminanceRTV };
@@ -2082,7 +2082,7 @@ void EpipolarLightScattering :: PerformPostProcessing(FrameAttribs&          fra
     }
     else if (m_PostProcessingAttribs.uiLightSctrTechnique == LIGHT_SCTR_TECHNIQUE_BRUTE_FORCE)
     {
-        if (m_PostProcessingAttribs.bAutoExposure)
+        if (m_PostProcessingAttribs.ToneMapping.bAutoExposure)
         {
             // Render scene luminance to low-resolution texture
             ITextureView *pRTVs[] = { m_ptex2DLowResLuminanceRTV };

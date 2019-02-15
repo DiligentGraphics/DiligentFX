@@ -4,7 +4,7 @@
 
 cbuffer cbPostProcessingAttribs
 {
-    PostProcessingAttribs g_PPAttribs;
+    EpipolarLightScatteringAttribs g_PPAttribs;
 }
 
 // This function computes entry point of the epipolar line given its exit point

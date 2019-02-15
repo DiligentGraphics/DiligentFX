@@ -6,7 +6,7 @@
 "\n"
 "cbuffer cbPostProcessingAttribs\n"
 "{\n"
-"    PostProcessingAttribs g_PPAttribs;\n"
+"    EpipolarLightScatteringAttribs g_PPAttribs;\n"
 "};\n"
 "\n"
 "cbuffer cbMiscDynamicParams\n"

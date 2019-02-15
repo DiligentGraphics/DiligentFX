@@ -83,10 +83,6 @@ static const ShaderIncInfo g_Shaders[] =
         #include "Sun.fx.h"
     },
     {
-        "ToneMapping.fxh",
-        #include "ToneMapping.fxh.h"
-    },
-    {
         "UnshadowedScattering.fxh",
         #include "UnshadowedScattering.fxh.h"
     },
@@ -137,5 +133,13 @@ static const ShaderIncInfo g_Shaders[] =
     {
         "EpipolarLightScatteringStructures.fxh",
         #include "EpipolarLightScatteringStructures.fxh.h"
+    },
+    {
+        "ToneMapping.fxh",
+        #include "ToneMapping.fxh.h"
+    },
+    {
+        "ToneMappingStructures.fxh",
+        #include "ToneMappingStructures.fxh.h"
     },
 };

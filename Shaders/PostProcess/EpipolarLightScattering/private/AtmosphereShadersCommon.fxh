@@ -2,8 +2,10 @@
 #define _ATMOSPHERE_SHADERS_COMMON_FXH_
 
 #include "FullScreenTriangleVSOutput.fxh"
+#include "ToneMappingStructures.fxh"
 #include "EpipolarLightScatteringStructures.fxh"
 
+#define PI      3.1415928f
 #define FLT_MAX 3.402823466e+38f
 
 #define F4ZERO float4(0.0, 0.0, 0.0, 0.0)
@@ -144,10 +146,10 @@ float3 WorldSpaceToShadowMapUV(in float3 f3PosWS, in matrix mWorldToShadowMapUVD
 }
 
 
-void GetRaySphereIntersection(in float3 f3RayOrigin,
-                              in float3 f3RayDirection,
-                              in float3 f3SphereCenter,
-                              in float fSphereRadius,
+void GetRaySphereIntersection(in  float3 f3RayOrigin,
+                              in  float3 f3RayDirection,
+                              in  float3 f3SphereCenter,
+                              in  float  fSphereRadius,
                               out float2 f2Intersections)
 {
     // http://wiki.cgsociety.org/index.php/Ray_Sphere_Intersection
@@ -158,7 +160,7 @@ void GetRaySphereIntersection(in float3 f3RayOrigin,
     float D = B*B - 4.0*A*C;
     // If discriminant is negative, there are no real roots hence the ray misses the
     // sphere
-    if( D<0.0 )
+    if (D < 0.0)
     {
         f2Intersections = float2(-1.0, -1.0);
     }
@@ -169,10 +171,10 @@ void GetRaySphereIntersection(in float3 f3RayOrigin,
     }
 }
 
-void GetRaySphereIntersection2(in float3 f3RayOrigin,
-                               in float3 f3RayDirection,
-                               in float3 f3SphereCenter,
-                               in float2 f2SphereRadius,
+void GetRaySphereIntersection2(in  float3 f3RayOrigin,
+                               in  float3 f3RayDirection,
+                               in  float3 f3SphereCenter,
+                               in  float2 f2SphereRadius,
                                out float4 f4Intersections)
 {
     // http://wiki.cgsociety.org/index.php/Ray_Sphere_Intersection
@@ -217,5 +219,15 @@ bool IsValidScreenLocation(in float2 f2XY, float4 ScreenResolution)
     return all( LessEqual( abs(f2XY), F2ONE - (F2ONE - SAFETY_EPSILON) * ScreenResolution.zw ) );
 }
 
+float GetAverageSceneLuminance(in Texture2D<float> tex2DAverageLuminance)
+{
+#if AUTO_EXPOSURE
+    float fAveLogLum = tex2DAverageLuminance.Load( int3(0,0,0) );
+#else
+    float fAveLogLum =  0.1;
+#endif
+    fAveLogLum = max(0.05, fAveLogLum); // Average luminance is an approximation to the key of the scene
+    return fAveLogLum;
+}
 
 #endif //_ATMOSPHERE_SHADERS_COMMON_FXH_

@@ -2,7 +2,7 @@
 
 cbuffer cbPostProcessingAttribs
 {
-    PostProcessingAttribs g_PPAttribs;
+    EpipolarLightScatteringAttribs g_PPAttribs;
 };
 
 Texture2D<float2> g_tex2DCoordinates;

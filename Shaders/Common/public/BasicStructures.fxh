@@ -9,7 +9,7 @@
 #   endif
 
 #   ifndef CHECK_STRUCT_ALIGNMENT
-#       define CHECK_STRUCT_ALIGNMENT(s) static_assert( sizeof(s) % 16 == 0, "sizeof(" #s ") is not multiple of 16" );
+#       define CHECK_STRUCT_ALIGNMENT(s) static_assert( sizeof(s) % 16 == 0, "sizeof(" #s ") is not multiple of 16" )
 #   endif
 
 #else
@@ -31,7 +31,7 @@ struct CascadeAttribs
 	float4 f4LightSpaceScaledBias;
     float4 f4StartEndZ;
 };
-CHECK_STRUCT_ALIGNMENT(CascadeAttribs)
+CHECK_STRUCT_ALIGNMENT(CascadeAttribs);
 
 
 #define MAX_CASCADES 8
@@ -65,7 +65,7 @@ struct ShadowMapAttribs
     int Padding1;
     int Padding2;
 };
-CHECK_STRUCT_ALIGNMENT(ShadowMapAttribs)
+CHECK_STRUCT_ALIGNMENT(ShadowMapAttribs);
 
 
 struct LightAttribs
@@ -76,7 +76,7 @@ struct LightAttribs
 
     ShadowMapAttribs ShadowAttribs;
 };
-CHECK_STRUCT_ALIGNMENT(LightAttribs)
+CHECK_STRUCT_ALIGNMENT(LightAttribs);
 
 
 struct CameraAttribs
@@ -98,7 +98,7 @@ struct CameraAttribs
     matrix mViewProjInv;
 #endif
 };
-CHECK_STRUCT_ALIGNMENT(CameraAttribs)
+CHECK_STRUCT_ALIGNMENT(CameraAttribs);
 
 
 #endif //_BASIC_STRUCTURES_FXH_

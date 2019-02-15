@@ -145,11 +145,12 @@ void InsctrLUTCoords2WorldParams(in float4 f4UVWQ,
     fCosSunViewAngle    = clamp(fCosSunViewAngle, f2MinMaxCosSunViewAngle.x, f2MinMaxCosSunViewAngle.y);
 }
 
-float4 WorldParams2InsctrLUTCoords(float fHeight,
-                                   float fCosViewZenithAngle,
-                                   float fCosSunZenithAngle,
-                                   float fCosSunViewAngle,
-                                   in float4 f4RefUVWQ)
+float4 WorldParams2InsctrLUTCoords(float  fHeight,
+                                   float  fCosViewZenithAngle,
+                                   float  fCosSunZenithAngle,
+                                   float  fCosSunViewAngle,
+                                   float  fAtmTopHeight,
+                                   float4 f4RefUVWQ)
 {
     float4 f4UVWQ;
 
@@ -157,8 +158,8 @@ float4 WorldParams2InsctrLUTCoords(float fHeight,
     // avoid numeric issues at the Earth surface and the top of the atmosphere
     // (ray/Earth and ray/top of the atmosphere intersection tests are unstable when fHeight == 0 and
     // fHeight == AtmTopHeight respectively)
-    fHeight = clamp(fHeight, SafetyHeightMargin, g_MediaParams.fAtmTopHeight - SafetyHeightMargin);
-    f4UVWQ.x = saturate( (fHeight - SafetyHeightMargin) / (g_MediaParams.fAtmTopHeight - 2.0*SafetyHeightMargin) );
+    fHeight = clamp(fHeight, SafetyHeightMargin, fAtmTopHeight - SafetyHeightMargin);
+    f4UVWQ.x = saturate( (fHeight - SafetyHeightMargin) / (fAtmTopHeight - 2.0*SafetyHeightMargin) );
 
 #if NON_LINEAR_PARAMETERIZATION
     f4UVWQ.x = pow(f4UVWQ.x, HeightPower);
@@ -187,9 +188,10 @@ float4 WorldParams2InsctrLUTCoords(float fHeight,
 float4 WorldParams2InsctrLUTCoords(float fHeight,
                                    float fCosViewZenithAngle,
                                    float fCosSunZenithAngle,
-                                   float fCosSunViewAngle ) 
+                                   float fCosSunViewAngle,
+                                   float fAtmTopHeight) 
 {
-    return WorldParams2InsctrLUTCoords( fHeight, fCosViewZenithAngle, fCosSunZenithAngle, fCosSunViewAngle,
+    return WorldParams2InsctrLUTCoords( fHeight, fCosViewZenithAngle, fCosSunZenithAngle, fCosSunViewAngle, fAtmTopHeight,
                                         float4(-1.0, -1.0, -1.0, -1.0) );
 }
 
@@ -235,7 +237,7 @@ float3 LookUpPrecomputedScattering(float3 f3StartPoint,
 
     // Provide previous look-up coordinates
     f4UVWQ = WorldParams2InsctrLUTCoords(fHeightAboveSurface, fCosViewZenithAngle,
-                                         fCosSunZenithAngle, fCosSunViewAngle, 
+                                         fCosSunZenithAngle, fCosSunViewAngle, g_MediaParams.fAtmTopHeight,
                                          f4UVWQ);
 
     float3 f3UVW0; 

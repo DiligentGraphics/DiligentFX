@@ -8,7 +8,7 @@
 "\n"
 "cbuffer cbPostProcessingAttribs\n"
 "{\n"
-"    PostProcessingAttribs g_PPAttribs;\n"
+"    EpipolarLightScatteringAttribs g_PPAttribs;\n"
 "}\n"
 "\n"
 "#define fSunAngularRadius (32.0/2.0 / 60.0 * ((2.0 * PI)/180.0)) // Sun angular DIAMETER is 32 arc minutes\n"

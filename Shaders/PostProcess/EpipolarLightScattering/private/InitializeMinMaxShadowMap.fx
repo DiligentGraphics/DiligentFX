@@ -6,7 +6,7 @@ SamplerState g_tex2DLightSpaceDepthMap_sampler;
 
 cbuffer cbPostProcessingAttribs
 {
-    PostProcessingAttribs g_PPAttribs;
+    EpipolarLightScatteringAttribs g_PPAttribs;
 };
 
 cbuffer cbMiscDynamicParams

@@ -2,7 +2,7 @@
 "\n"
 "cbuffer cbPostProcessingAttribs\n"
 "{\n"
-"    PostProcessingAttribs g_PPAttribs;\n"
+"    EpipolarLightScatteringAttribs g_PPAttribs;\n"
 "};\n"
 "\n"
 "Texture2D<float>  g_tex2DCamSpaceZ;\n"
