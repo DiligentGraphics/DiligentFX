@@ -9,11 +9,11 @@
 #define FLT_MAX 3.402823466e+38f
 
 #define F4ZERO float4(0.0, 0.0, 0.0, 0.0)
-#define F4ONE float4(1.0, 1.0, 1.0, 1.0)
+#define F4ONE  float4(1.0, 1.0, 1.0, 1.0)
 #define F3ZERO float3(0.0, 0.0, 0.0)
-#define F3ONE float3(1.0, 1.0, 1.0)
+#define F3ONE  float3(1.0, 1.0, 1.0)
 #define F2ZERO float2(0.0, 0.0)
-#define F2ONE float2(1.0, 1.0)
+#define F2ONE  float2(1.0, 1.0)
 
 #ifndef NUM_EPIPOLAR_SLICES
 #   define NUM_EPIPOLAR_SLICES 1024

@@ -25,42 +25,34 @@ cbuffer cbCameraAttribs
     CameraAttribs g_CameraAttribs;
 }
 
-cbuffer cbMiscDynamicParams
-{
-    MiscDynamicParams g_MiscParams;
-}
-
-Texture2D<float2> g_tex2DOccludedNetDensityToAtmTop;
-SamplerState g_tex2DOccludedNetDensityToAtmTop_sampler;
-
 Texture2D<float4> g_tex2DSliceEndPoints;
-SamplerState g_tex2DSliceEndPoints_sampler; // Linear clamp
+SamplerState      g_tex2DSliceEndPoints_sampler; // Linear clamp
 
 Texture2D<float>  g_tex2DEpipolarCamSpaceZ;
-SamplerState g_tex2DEpipolarCamSpaceZ_sampler; // Linear clamp
+SamplerState      g_tex2DEpipolarCamSpaceZ_sampler; // Linear clamp
 
 Texture2D<float3> g_tex2DScatteredColor;
-SamplerState g_tex2DScatteredColor_sampler; // Linear clamp
+SamplerState      g_tex2DScatteredColor_sampler; // Linear clamp
 
 Texture2D<float>  g_tex2DCamSpaceZ;
-SamplerState g_tex2DCamSpaceZ_sampler; // Linear clamp
+SamplerState      g_tex2DCamSpaceZ_sampler; // Linear clamp
 
 Texture2D<float4> g_tex2DColorBuffer;
-SamplerState g_tex2DColorBuffer_sampler; // Point clamp
+SamplerState      g_tex2DColorBuffer_sampler; // Point clamp
 
 Texture2D<float4> g_tex2DSliceUVDirAndOrigin;
 
 Texture2D<float2> g_tex2DMinMaxLightSpaceDepth;
 
-Texture2DArray<float> g_tex2DLightSpaceDepthMap;
+Texture2DArray<float>  g_tex2DLightSpaceDepthMap;
 SamplerComparisonState g_tex2DLightSpaceDepthMap_sampler;
 
 Texture2D<float>  g_tex2DAverageLuminance;
 
 Texture2D<float3> g_tex2DEpipolarExtinction;
-SamplerState g_tex2DEpipolarExtinction_sampler; // Linear clamp
+SamplerState      g_tex2DEpipolarExtinction_sampler; // Linear clamp
 
-#include "ScatteringIntegrals.fxh"
+#include "Extinction.fxh"
 #include "ToneMapping.fxh"
 
 void UnwarpEpipolarInsctrImage( in float2 f2PosPS, 

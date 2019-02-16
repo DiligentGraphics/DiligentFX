@@ -24,14 +24,14 @@
 
 #include "../../../../DiligentCore/Common/interface/BasicMath.h"
 
-using Diligent::float4;
-using Diligent::float2;
-using Diligent::float4x4;
+namespace Diligent
+{
 using uint = uint32_t;
 
 #include "../../../Shaders/Common/public/BasicStructures.fxh"
 #include "../../../Shaders/PostProcess/ToneMapping/public/ToneMappingStructures.fxh"
 #include "../../../Shaders/PostProcess/EpipolarLightScattering/public/EpipolarLightScatteringStructures.fxh"
+}
 
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/DeviceContext.h"
@@ -54,11 +54,11 @@ public:
     
         double dElapsedTime             = 0;
 
-        // This parameter can be null if the application does not want to provide light attribs buffer
         const LightAttribs*   pLightAttribs    = nullptr;
-        // This parameter can be null if the application does not want to provide camera attribs buffer
         const CameraAttribs*  pCameraAttribs   = nullptr;
+        // If this parameter is null, the effect will use its own buffer.
         IBuffer*              pcbLightAttribs  = nullptr;
+        // If this parameter is null, the effect will use its own buffer.
         IBuffer*              pcbCameraAttribs = nullptr;
 
         ITextureView*   ptex2DSrcColorBufferSRV = nullptr;
@@ -126,6 +126,7 @@ private:
     void CreateLowResLuminanceTexture     (IRenderDevice* pDevice, IDeviceContext* pDeviceCtx);
     void CreateSliceUVDirAndOriginTexture (IRenderDevice* pDevice);
     void CreateCamSpaceZTexture           (IRenderDevice* pDevice);
+    void CreateMinMaxShadowMap            (IRenderDevice* pDevice);
 
     void DefineMacros(class ShaderMacroHelper& Macros);
     
@@ -167,10 +168,7 @@ private:
     RefCntAutoPtr<ITextureView> m_ptex3DMultipleScatteringSRV;
     
     const Uint32 m_uiNumRandomSamplesOnSphere;
-    
     RefCntAutoPtr<ITextureView> m_ptex2DSphereRandomSamplingSRV;
-
-    void CreateMinMaxShadowMap(IRenderDevice* pDevice);
 
     static const int sm_iLowResLuminanceMips = 7; // 64x64
     RefCntAutoPtr<ITextureView> m_ptex2DLowResLuminanceRTV;     // 64 X 64 R16F
@@ -178,7 +176,7 @@ private:
     RefCntAutoPtr<ITextureView> m_ptex2DAverageLuminanceRTV;    // 1  X  1 R16F
 
     static const int sm_iAmbientSkyLightTexDim = 1024;
-    RefCntAutoPtr<ITextureView> m_ptex2DAmbientSkyLightSRV;    // 1024 x 1 RGBA16F
+    RefCntAutoPtr<ITextureView> m_ptex2DAmbientSkyLightSRV;            // 1024 x 1 RGBA16F
     RefCntAutoPtr<ITextureView> m_ptex2DAmbientSkyLightRTV;
     RefCntAutoPtr<ITextureView> m_ptex2DOccludedNetDensityToAtmTopSRV; // 1024 x 1024 RG32F
     RefCntAutoPtr<ITextureView> m_ptex2DOccludedNetDensityToAtmTopRTV;

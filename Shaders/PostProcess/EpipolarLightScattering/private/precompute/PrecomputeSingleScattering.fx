@@ -27,7 +27,7 @@ void PrecomputeSingleScatteringCS(uint3 ThreadId  : SV_DispatchThreadID)
     // Get attributes for the current point
     float4 f4LUTCoords = LUTCoordsFromThreadID(ThreadId);
     float fHeight, fCosViewZenithAngle, fCosSunZenithAngle, fCosSunViewAngle;
-    InsctrLUTCoords2WorldParams( f4LUTCoords, fHeight, fCosViewZenithAngle, fCosSunZenithAngle, fCosSunViewAngle );
+    InsctrLUTCoords2WorldParams( f4LUTCoords, g_MediaParams.fAtmTopHeight, fHeight, fCosViewZenithAngle, fCosSunZenithAngle, fCosSunViewAngle );
     float3 f3EarthCentre =  - float3(0.0, 1.0, 0.0) * EARTH_RADIUS;
     float3 f3RayStart = float3(0.0, fHeight, 0.0);
     float3 f3ViewDir = ComputeViewDir(fCosViewZenithAngle);

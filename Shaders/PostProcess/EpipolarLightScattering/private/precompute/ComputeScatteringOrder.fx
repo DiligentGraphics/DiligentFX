@@ -25,7 +25,7 @@ void ComputeScatteringOrderCS(uint3 ThreadId  : SV_DispatchThreadID)
     // Get attributes for the current point
     float4 f4LUTCoords = LUTCoordsFromThreadID(ThreadId);
     float fHeight, fCosViewZenithAngle, fCosSunZenithAngle, fCosSunViewAngle;
-    InsctrLUTCoords2WorldParams(f4LUTCoords, fHeight, fCosViewZenithAngle, fCosSunZenithAngle, fCosSunViewAngle );
+    InsctrLUTCoords2WorldParams(f4LUTCoords, g_MediaParams.fAtmTopHeight, fHeight, fCosViewZenithAngle, fCosSunZenithAngle, fCosSunViewAngle );
     float3 f3EarthCentre =  - float3(0.0, 1.0, 0.0) * EARTH_RADIUS;
     float3 f3RayStart = float3(0.0, fHeight, 0.0);
     float3 f3ViewDir = ComputeViewDir(fCosViewZenithAngle);
@@ -58,7 +58,15 @@ void ComputeScatteringOrderCS(uint3 ThreadId  : SV_DispatchThreadID)
     float fStepLen = fRayLength / fNumSamples;
 
     float4 f4UVWQ = -F4ONE;
-    float3 f3PrevSctrRadiance = LookUpPrecomputedScattering(f3RayStart, f3ViewDir, f3EarthCentre, f3DirOnLight.xyz, g_tex3DPointwiseSctrRadiance, g_tex3DPointwiseSctrRadiance_sampler, f4UVWQ); 
+    float3 f3PrevSctrRadiance = LookUpPrecomputedScattering(
+        f3RayStart,
+        f3ViewDir,
+        f3EarthCentre,
+        f3DirOnLight.xyz,
+        g_MediaParams.fAtmTopHeight,
+        g_tex3DPointwiseSctrRadiance,
+        g_tex3DPointwiseSctrRadiance_sampler,
+        f4UVWQ); 
     float2 f2PrevParticleDensity = exp( -fHeight / PARTICLE_SCALE_HEIGHT );
 
     float2 f2NetParticleDensityFromCam = F2ZERO;
@@ -83,7 +91,16 @@ void ComputeScatteringOrderCS(uint3 ThreadId  : SV_DispatchThreadID)
 
         // Get attenuated scattered light radiance in the current point
         float4 f4UVWQ = -F4ONE;
-        float3 f3SctrRadiance = f3ExtinctionFromCam * LookUpPrecomputedScattering(f3Pos, f3ViewDir, f3EarthCentre, f3DirOnLight.xyz, g_tex3DPointwiseSctrRadiance, g_tex3DPointwiseSctrRadiance_sampler, f4UVWQ); 
+        float3 f3SctrRadiance = f3ExtinctionFromCam *
+            LookUpPrecomputedScattering(
+                f3Pos,
+                f3ViewDir,
+                f3EarthCentre,
+                f3DirOnLight.xyz,
+                g_MediaParams.fAtmTopHeight,
+                g_tex3DPointwiseSctrRadiance,
+                g_tex3DPointwiseSctrRadiance_sampler,
+                f4UVWQ); 
         // Update in-scattering integral
         f3Inscattering += (f3SctrRadiance +  f3PrevSctrRadiance) * (fStepLen/2.0);
         f3PrevSctrRadiance = f3SctrRadiance;

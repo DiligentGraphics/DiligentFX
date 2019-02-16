@@ -220,6 +220,7 @@ struct AirScatteringAttribs
                    // y == 1 + g^2
                    // z == -2*g
 
+    // Earth parameters can't be chnaged at run time
     float fEarthRadius              DEFAULT_VALUE(6360000.f);
     float fAtmTopHeight             DEFAULT_VALUE(80000.f);
     float2 f2ParticleScaleHeight    DEFAULT_VALUE(float2(7994.f, 1200.f));

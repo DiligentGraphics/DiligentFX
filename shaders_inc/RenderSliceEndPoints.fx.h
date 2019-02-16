@@ -1,5 +1,4 @@
 "\n"
-"#include \"BasicStructures.fxh\"\n"
 "#include \"AtmosphereShadersCommon.fxh\"\n"
 "\n"
 "cbuffer cbPostProcessingAttribs\n"

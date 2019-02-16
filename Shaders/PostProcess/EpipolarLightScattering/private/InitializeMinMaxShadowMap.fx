@@ -1,18 +1,21 @@
 #include "AtmosphereShadersCommon.fxh"
 
 Texture2D<float4> g_tex2DSliceUVDirAndOrigin;
+
 Texture2DArray<float> g_tex2DLightSpaceDepthMap;
-SamplerState g_tex2DLightSpaceDepthMap_sampler;
+SamplerState          g_tex2DLightSpaceDepthMap_sampler;
 
 cbuffer cbPostProcessingAttribs
 {
     EpipolarLightScatteringAttribs g_PPAttribs;
 };
 
+#if !USE_COMBINED_MIN_MAX_TEXTURE
 cbuffer cbMiscDynamicParams
 {
     MiscDynamicParams g_MiscParams;
 }
+#endif
 
 // Note that min/max shadow map does not contain finest resolution level
 // The first level it contains corresponds to step == 2

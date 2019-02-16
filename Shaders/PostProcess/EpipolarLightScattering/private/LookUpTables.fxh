@@ -86,11 +86,12 @@ float TexCoord2ZenithAngle(float fTexCoord, float fHeight, in float fTexDim, flo
 }
 
 
-void InsctrLUTCoords2WorldParams(in float4 f4UVWQ,
-                                 out float fHeight,
-                                 out float fCosViewZenithAngle,
-                                 out float fCosSunZenithAngle,
-                                 out float fCosSunViewAngle)
+void InsctrLUTCoords2WorldParams(in  float4 f4UVWQ,
+                                 in  float  fAtmTopHeight,
+                                 out float  fHeight,
+                                 out float  fCosViewZenithAngle,
+                                 out float  fCosSunZenithAngle,
+                                 out float  fCosSunViewAngle)
 {
 #if NON_LINEAR_PARAMETERIZATION
     // Rescale to exactly 0,1 range
@@ -99,7 +100,7 @@ void InsctrLUTCoords2WorldParams(in float4 f4UVWQ,
     f4UVWQ.x = pow( f4UVWQ.x, 1.0/HeightPower );
     // Allowable height range is limited to [SafetyHeightMargin, AtmTopHeight - SafetyHeightMargin] to
     // avoid numeric issues at the Earth surface and the top of the atmosphere
-    fHeight = f4UVWQ.x * (g_MediaParams.fAtmTopHeight - 2.0*SafetyHeightMargin) + SafetyHeightMargin;
+    fHeight = f4UVWQ.x * (fAtmTopHeight - 2.0*SafetyHeightMargin) + SafetyHeightMargin;
 
     fCosViewZenithAngle = TexCoord2ZenithAngle(f4UVWQ.y, fHeight, PRECOMPUTED_SCTR_LUT_DIM.y, ViewZenithPower);
     
@@ -114,7 +115,7 @@ void InsctrLUTCoords2WorldParams(in float4 f4UVWQ,
 
     // Allowable height range is limited to [SafetyHeightMargin, AtmTopHeight - SafetyHeightMargin] to
     // avoid numeric issues at the Earth surface and the top of the atmosphere
-    fHeight = f4UVWQ.x * (g_MediaParams.fAtmTopHeight - 2*SafetyHeightMargin) + SafetyHeightMargin;
+    fHeight = f4UVWQ.x * (fAtmTopHeight - 2*SafetyHeightMargin) + SafetyHeightMargin;
 
     fCosViewZenithAngle = f4UVWQ.y * 2.0 - 1.0;
     fCosSunZenithAngle  = f4UVWQ.z * 2.0 - 1.0;
@@ -219,12 +220,13 @@ float3 ComputeLightDir(in float3 f3ViewDir, in float fCosSunZenithAngle, in floa
 }
 
 
-float3 LookUpPrecomputedScattering(float3 f3StartPoint, 
-                                   float3 f3ViewDir, 
-                                   float3 f3EarthCentre,
-                                   float3 f3DirOnLight,
+float3 LookUpPrecomputedScattering(in float3 f3StartPoint, 
+                                   in float3 f3ViewDir, 
+                                   in float3 f3EarthCentre,
+                                   in float3 f3DirOnLight,
+                                   in float  fAtmTopHeight,
                                    in Texture3D<float3> tex3DScatteringLUT,
-                                   in SamplerState tex3DScatteringLUT_sampler,
+                                   in SamplerState      tex3DScatteringLUT_sampler,
                                    inout float4 f4UVWQ)
 {
     float3 f3EarthCentreToPointDir = f3StartPoint - f3EarthCentre;
@@ -237,7 +239,7 @@ float3 LookUpPrecomputedScattering(float3 f3StartPoint,
 
     // Provide previous look-up coordinates
     f4UVWQ = WorldParams2InsctrLUTCoords(fHeightAboveSurface, fCosViewZenithAngle,
-                                         fCosSunZenithAngle, fCosSunViewAngle, g_MediaParams.fAtmTopHeight,
+                                         fCosSunZenithAngle, fCosSunViewAngle, fAtmTopHeight,
                                          f4UVWQ);
 
     float3 f3UVW0; 

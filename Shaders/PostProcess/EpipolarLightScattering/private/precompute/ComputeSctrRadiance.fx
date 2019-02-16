@@ -29,7 +29,7 @@ void ComputeSctrRadianceCS(uint3 ThreadId  : SV_DispatchThreadID)
     // Get attributes for the current point
     float4 f4LUTCoords = LUTCoordsFromThreadID(ThreadId);
     float fHeight, fCosViewZenithAngle, fCosSunZenithAngle, fCosSunViewAngle;
-    InsctrLUTCoords2WorldParams( f4LUTCoords, fHeight, fCosViewZenithAngle, fCosSunZenithAngle, fCosSunViewAngle );
+    InsctrLUTCoords2WorldParams( f4LUTCoords, g_MediaParams.fAtmTopHeight, fHeight, fCosViewZenithAngle, fCosSunZenithAngle, fCosSunViewAngle );
     float3 f3EarthCentre =  - float3(0.0, 1.0, 0.0) * EARTH_RADIUS;
     float3 f3RayStart = float3(0.0, fHeight, 0.0);
     float3 f3ViewDir = ComputeViewDir(fCosViewZenithAngle);
@@ -46,7 +46,15 @@ void ComputeSctrRadianceCS(uint3 ThreadId  : SV_DispatchThreadID)
         float3 f3RandomDir = normalize( g_tex2DSphereRandomSampling.Load(int3(iSample,0,0)) );
         // Get the previous order in-scattered light when looking in direction f3RandomDir (the light thus goes in direction -f3RandomDir)
         float4 f4UVWQ = -F4ONE;
-        float3 f3PrevOrderSctr = LookUpPrecomputedScattering(f3RayStart, f3RandomDir, f3EarthCentre, f3DirOnLight.xyz, g_tex3DPreviousSctrOrder, g_tex3DPreviousSctrOrder_sampler, f4UVWQ); 
+        float3 f3PrevOrderSctr = LookUpPrecomputedScattering(
+            f3RayStart,
+            f3RandomDir,
+            f3EarthCentre,
+            f3DirOnLight.xyz,
+            g_MediaParams.fAtmTopHeight,
+            g_tex3DPreviousSctrOrder,
+            g_tex3DPreviousSctrOrder_sampler,
+            f4UVWQ); 
         
         // Apply phase functions for each type of particles
         // Note that total scattering coefficients are baked into the angular scattering coeffs

@@ -5,8 +5,8 @@ cbuffer cbPostProcessingAttribs
     EpipolarLightScatteringAttribs g_PPAttribs;
 };
 
-Texture2D<float>  g_tex2DCamSpaceZ;
-SamplerState g_tex2DCamSpaceZ_sampler;
+Texture2D<float> g_tex2DCamSpaceZ;
+SamplerState     g_tex2DCamSpaceZ_sampler;
 
 Texture2D<float4> g_tex2DSliceEndPoints;
 

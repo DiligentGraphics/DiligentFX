@@ -35,7 +35,15 @@ void PrecomputeAmbientSkyLightPS(FullScreenTriangleVSOutput VSOut,
         f3RandomDir.y = abs(f3RandomDir.y);
         // Get multiple scattered light radiance when looking in direction f3RandomDir (the light thus goes in direction -f3RandomDir)
         float4 f4UVWQ = -F4ONE;
-        float3 f3Sctr = LookUpPrecomputedScattering(f3RayStart, f3RandomDir, f3EarthCentre, f3DirOnLight.xyz, g_tex3DMultipleSctrLUT, g_tex3DMultipleSctrLUT_sampler, f4UVWQ); 
+        float3 f3Sctr = LookUpPrecomputedScattering(
+            f3RayStart,
+            f3RandomDir,
+            f3EarthCentre,
+            f3DirOnLight.xyz,
+            g_MediaParams.fAtmTopHeight,
+            g_tex3DMultipleSctrLUT,
+            g_tex3DMultipleSctrLUT_sampler,
+            f4UVWQ); 
         // Accumulate ambient irradiance through the horizontal plane
         f4SkyLight.rgb += f3Sctr * dot(f3RandomDir, float3(0.0, 1.0, 0.0));
     }

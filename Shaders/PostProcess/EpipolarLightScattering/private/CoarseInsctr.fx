@@ -22,31 +22,32 @@ cbuffer cbLightParams
 }
 
 Texture2D<float2> g_tex2DOccludedNetDensityToAtmTop;
-SamplerState g_tex2DOccludedNetDensityToAtmTop_sampler;
+SamplerState      g_tex2DOccludedNetDensityToAtmTop_sampler;
 
 Texture2D<float>  g_tex2DEpipolarCamSpaceZ;
 
 Texture2D<float2> g_tex2DMinMaxLightSpaceDepth;
 
-Texture2DArray<float> g_tex2DLightSpaceDepthMap;
+Texture2DArray<float>  g_tex2DLightSpaceDepthMap;
 SamplerComparisonState g_tex2DLightSpaceDepthMap_sampler;
 
 Texture2D<float2> g_tex2DCoordinates;
 
 Texture3D<float3> g_tex3DSingleSctrLUT;
-SamplerState g_tex3DSingleSctrLUT_sampler;
+SamplerState      g_tex3DSingleSctrLUT_sampler;
 
 Texture3D<float3> g_tex3DHighOrderSctrLUT;
-SamplerState g_tex3DHighOrderSctrLUT_sampler;
+SamplerState      g_tex3DHighOrderSctrLUT_sampler;
 
 Texture3D<float3> g_tex3DMultipleSctrLUT;
-SamplerState g_tex3DMultipleSctrLUT_sampler;
+SamplerState      g_tex3DMultipleSctrLUT_sampler;
 
 #include "LookUpTables.fxh"
 #include "ScatteringIntegrals.fxh"
+#include "Extinction.fxh"
 #include "UnshadowedScattering.fxh"
 
-void ShaderFunctionInternal(in float4 f4Pos,
+void ShaderFunctionInternal(in float4  f4Pos,
                             out float3 f3Inscattering, 
                             out float3 f3Extinction)
 {

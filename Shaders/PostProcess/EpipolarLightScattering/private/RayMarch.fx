@@ -30,7 +30,7 @@ cbuffer cbMiscDynamicParams
 }
 
 Texture2D<float2> g_tex2DOccludedNetDensityToAtmTop;
-SamplerState g_tex2DOccludedNetDensityToAtmTop_sampler;
+SamplerState      g_tex2DOccludedNetDensityToAtmTop_sampler;
 
 Texture2D<float>  g_tex2DEpipolarCamSpaceZ;
 
@@ -38,32 +38,34 @@ Texture2D<float4> g_tex2DSliceUVDirAndOrigin;
 
 Texture2D<float2> g_tex2DMinMaxLightSpaceDepth;
 
-Texture2DArray<float> g_tex2DLightSpaceDepthMap;
+Texture2DArray<float>  g_tex2DLightSpaceDepthMap;
 SamplerComparisonState g_tex2DLightSpaceDepthMap_sampler;
 
 Texture2D<float2> g_tex2DCoordinates;
 
 Texture2D<float>  g_tex2DCamSpaceZ;
-SamplerState g_tex2DCamSpaceZ_sampler;
+SamplerState      g_tex2DCamSpaceZ_sampler;
 
 Texture2D<float4> g_tex2DColorBuffer;
 
 Texture2D<float>  g_tex2DAverageLuminance;
 
 Texture3D<float3> g_tex3DSingleSctrLUT;
-SamplerState g_tex3DSingleSctrLUT_sampler;
+SamplerState      g_tex3DSingleSctrLUT_sampler;
 
 Texture3D<float3> g_tex3DHighOrderSctrLUT;
-SamplerState g_tex3DHighOrderSctrLUT_sampler;
+SamplerState      g_tex3DHighOrderSctrLUT_sampler;
 
 Texture3D<float3> g_tex3DMultipleSctrLUT;
-SamplerState g_tex3DMultipleSctrLUT_sampler;
+SamplerState      g_tex3DMultipleSctrLUT_sampler;
 
 
 #include "LookUpTables.fxh"
 #include "ScatteringIntegrals.fxh"
+#include "Extinction.fxh"
 #include "UnshadowedScattering.fxh"
 #include "ToneMapping.fxh"
+
 
 // This function calculates inscattered light integral over the ray from the camera to 
 // the specified world space position using ray marching
@@ -530,7 +532,16 @@ float3 ComputeShadowedInscattering( in float2 f2RayMarchingSampleLocation,
 
             float3 f3ExtinctionToStart = GetExtinctionUnverified(f3RestrainedCameraPos, f3LitSectionStart, f3ViewDir, f3EarthCentre);
             float4 f4UVWQ = float4(-1.0, -1.0, -1.0, -1.0);
-            f3MultipleScattering = f3ExtinctionToStart * LookUpPrecomputedScattering(f3LitSectionStart, f3ViewDir, f3EarthCentre, -g_LightAttribs.f4Direction.xyz, tex3DSctrLUT, tex3DSctrLUT_sampler, f4UVWQ); 
+            f3MultipleScattering = f3ExtinctionToStart *
+                LookUpPrecomputedScattering(
+                    f3LitSectionStart,
+                    f3ViewDir,
+                    f3EarthCentre,
+                    -g_LightAttribs.f4Direction.xyz,
+                    g_MediaParams.fAtmTopHeight,
+                    tex3DSctrLUT,
+                    tex3DSctrLUT_sampler,
+                    f4UVWQ); 
         
             float3 f3ExtinctionToEnd = GetExtinctionUnverified(f3RestrainedCameraPos, f3LitSectionEnd, f3ViewDir,  f3EarthCentre);
             // To avoid artifacts, we must be consistent when performing look-ups into the scattering texture, i.e.
@@ -538,7 +549,16 @@ float3 ComputeShadowedInscattering( in float2 f2RayMarchingSampleLocation,
             // is also above (below) horizon.
             // We provide previous look-up coordinates to the function so that it is able to figure out where the first look-up
             // was performed
-            f3MultipleScattering -= f3ExtinctionToEnd * LookUpPrecomputedScattering(f3LitSectionEnd, f3ViewDir, f3EarthCentre, -g_LightAttribs.f4Direction.xyz, tex3DSctrLUT, tex3DSctrLUT_sampler, f4UVWQ);
+            f3MultipleScattering -= f3ExtinctionToEnd *
+                LookUpPrecomputedScattering(
+                    f3LitSectionEnd,
+                    f3ViewDir,
+                    f3EarthCentre,
+                    -g_LightAttribs.f4Direction.xyz,
+                    g_MediaParams.fAtmTopHeight,
+                    tex3DSctrLUT,
+                    tex3DSctrLUT_sampler,
+                    f4UVWQ);
         
             f3InsctrIntegral += max(f3MultipleScattering, float3(0.0, 0.0, 0.0));
         }
@@ -548,12 +568,28 @@ float3 ComputeShadowedInscattering( in float2 f2RayMarchingSampleLocation,
         {
             float3 f3Extinction = GetExtinctionUnverified(f3RestrainedCameraPos, f3RemainingRayStart, f3ViewDir, f3EarthCentre);
             float4 f4UVWQ = float4(-1.0, -1.0, -1.0, -1.0);
-            float3 f3RemainingInsctr = 
-                f3Extinction * LookUpPrecomputedScattering(f3RemainingRayStart, f3ViewDir, f3EarthCentre, -g_LightAttribs.f4Direction.xyz, tex3DSctrLUT, tex3DSctrLUT_sampler, f4UVWQ);
+            float3 f3RemainingInsctr = f3Extinction *
+                LookUpPrecomputedScattering(
+                    f3RemainingRayStart,
+                    f3ViewDir,
+                    f3EarthCentre,
+                    -g_LightAttribs.f4Direction.xyz,
+                    g_MediaParams.fAtmTopHeight,
+                    tex3DSctrLUT,
+                    tex3DSctrLUT_sampler,
+                    f4UVWQ);
         
             f3Extinction = GetExtinctionUnverified(f3RestrainedCameraPos, f3RayEnd, f3ViewDir, f3EarthCentre);
-            f3RemainingInsctr -= 
-                f3Extinction * LookUpPrecomputedScattering(f3RayEnd, f3ViewDir, f3EarthCentre, -g_LightAttribs.f4Direction.xyz, tex3DSctrLUT, tex3DSctrLUT_sampler, f4UVWQ);
+            f3RemainingInsctr -= f3Extinction *
+                LookUpPrecomputedScattering(
+                    f3RayEnd,
+                    f3ViewDir,
+                    f3EarthCentre,
+                    -g_LightAttribs.f4Direction.xyz,
+                    g_MediaParams.fAtmTopHeight,
+                    tex3DSctrLUT,
+                    tex3DSctrLUT_sampler,
+                    f4UVWQ);
 
             f3InsctrIntegral += max(f3RemainingInsctr, float3(0.0, 0.0, 0.0));
         }
@@ -568,12 +604,30 @@ float3 ComputeShadowedInscattering( in float2 f2RayMarchingSampleLocation,
         
         float4 f4UVWQ = float4(-1.0, -1.0, -1.0, -1.0);
         f3Extinction = GetExtinctionUnverified(f3RestrainedCameraPos, f3RayStart, f3ViewDir, f3EarthCentre);
-        f3HighOrderScattering += f3Extinction * LookUpPrecomputedScattering(f3RayStart, f3ViewDir, f3EarthCentre, -g_LightAttribs.f4Direction.xyz, g_tex3DHighOrderSctrLUT, g_tex3DHighOrderSctrLUT_sampler, f4UVWQ); 
+        f3HighOrderScattering += f3Extinction *
+            LookUpPrecomputedScattering(
+                f3RayStart,
+                f3ViewDir,
+                f3EarthCentre,
+                -g_LightAttribs.f4Direction.xyz,
+                g_MediaParams.fAtmTopHeight,
+                g_tex3DHighOrderSctrLUT,
+                g_tex3DHighOrderSctrLUT_sampler,
+                f4UVWQ); 
         
         f3Extinction = GetExtinctionUnverified(f3RestrainedCameraPos, f3RayEnd, f3ViewDir, f3EarthCentre);
         // We provide previous look-up coordinates to the function so that it is able to figure out where the first look-up
         // was performed
-        f3HighOrderScattering -= f3Extinction * LookUpPrecomputedScattering(f3RayEnd, f3ViewDir, f3EarthCentre, -g_LightAttribs.f4Direction.xyz, g_tex3DHighOrderSctrLUT, g_tex3DHighOrderSctrLUT_sampler, f4UVWQ); 
+        f3HighOrderScattering -= f3Extinction *
+            LookUpPrecomputedScattering(
+                f3RayEnd,
+                f3ViewDir,
+                f3EarthCentre,
+                -g_LightAttribs.f4Direction.xyz,
+                g_MediaParams.fAtmTopHeight,
+                g_tex3DHighOrderSctrLUT,
+                g_tex3DHighOrderSctrLUT_sampler,
+                f4UVWQ);
 
         f3InsctrIntegral += f3HighOrderScattering;
     }

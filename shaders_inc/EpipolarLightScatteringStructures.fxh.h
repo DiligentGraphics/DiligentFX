@@ -220,6 +220,7 @@
 "                   // y == 1 + g^2\n"
 "                   // z == -2*g\n"
 "\n"
+"    // Earth parameters can\'t be chnaged at run time\n"
 "    float fEarthRadius              DEFAULT_VALUE(6360000.f);\n"
 "    float fAtmTopHeight             DEFAULT_VALUE(80000.f);\n"
 "    float2 f2ParticleScaleHeight    DEFAULT_VALUE(float2(7994.f, 1200.f));\n"

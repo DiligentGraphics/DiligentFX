@@ -1,5 +1,4 @@
 
-#include "BasicStructures.fxh"
 #include "AtmosphereShadersCommon.fxh"
 
 cbuffer cbPostProcessingAttribs

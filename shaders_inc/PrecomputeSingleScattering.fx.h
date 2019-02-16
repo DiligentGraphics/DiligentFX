@@ -27,7 +27,7 @@
 "    // Get attributes for the current point\n"
 "    float4 f4LUTCoords = LUTCoordsFromThreadID(ThreadId);\n"
 "    float fHeight, fCosViewZenithAngle, fCosSunZenithAngle, fCosSunViewAngle;\n"
-"    InsctrLUTCoords2WorldParams( f4LUTCoords, fHeight, fCosViewZenithAngle, fCosSunZenithAngle, fCosSunViewAngle );\n"
+"    InsctrLUTCoords2WorldParams( f4LUTCoords, g_MediaParams.fAtmTopHeight, fHeight, fCosViewZenithAngle, fCosSunZenithAngle, fCosSunViewAngle );\n"
 "    float3 f3EarthCentre =  - float3(0.0, 1.0, 0.0) * EARTH_RADIUS;\n"
 "    float3 f3RayStart = float3(0.0, fHeight, 0.0);\n"
 "    float3 f3ViewDir = ComputeViewDir(fCosViewZenithAngle);\n"

@@ -31,6 +31,10 @@ static const ShaderIncInfo g_Shaders[] =
         #include "ComputeMinMaxShadowMapLevel.fx.h"
     },
     {
+        "Extinction.fxh",
+        #include "Extinction.fxh.h"
+    },
+    {
         "InitializeMinMaxShadowMap.fx",
         #include "InitializeMinMaxShadowMap.fx.h"
     },
