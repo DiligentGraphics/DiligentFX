@@ -1,9 +1,12 @@
 # EpipolarLightScattering
 
-This post-processing effect creates realistic high-quality light scattering effects.
+![](media/LightScattering.png)
+
+This post-processing effect renders realistic high-quality light scattering effects.
 The effect works by smartly placing expensive ray-marching samples along the epipolar lines
 that start at the light source and interpolating the radiance between these samples.
 
+![](media/EpipolarSampling.png)
 
 ## Parameters 
 
@@ -69,6 +72,12 @@ The following parameters control the effect
 * f4CustomMieBeta  - Custom Mie coefficients.
 
 ## Integration
+
+The effect requires the following data:
+* Shader and render target views of the original color buffer
+* Shader and depth-stencil views of the original depth buffer
+* Shadow map
+* Light and color attributes
 
 The code snippet below shows how to use the epipolar light scattering post-processing effect.
 For the full soure code, see [Atmospheric scattering sample](https://github.com/DiligentGraphics/DiligentSamples/tree/master/Samples/Atmosphere).
