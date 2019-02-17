@@ -93,14 +93,16 @@
 
 struct EpipolarLightScatteringAttribs
 {
-    // Total number of epipolar slices (or lines).
+    // Total number of epipolar slices (or lines). For high quality effect,
+    // set this value to (Screen Width + Screen Height)/2
     uint uiNumEpipolarSlices                DEFAULT_VALUE(512);
     // Maximum number of samples on a single epipolar line.
+    // For high quality effect, set this value to max(Screen Width, Screen Height)/2. 
     uint uiMaxSamplesInSlice                DEFAULT_VALUE(256);
     // Initial ray marching sample spacing on an epipolar line. 
     // Additional samples are added at discontinuities.
     uint uiInitialSampleStepInSlice         DEFAULT_VALUE(16);
-    // Sample density near the epipole where inscattering changes rapidly.
+    // Sample density scale near the epipole where inscattering changes rapidly.
     // Note that sampling near the epipole is very cheap since only a few steps
     // required to perform ray marching.
     uint uiEpipoleSamplingDensityFactor     DEFAULT_VALUE(2);
@@ -116,7 +118,7 @@ struct EpipolarLightScatteringAttribs
     // for additional cost.
     BOOL bCorrectScatteringAtDepthBreaks    DEFAULT_VALUE(FALSE);
     // Whether to display pixels which are classified as depth discontinuities and which
-    // will be correct. Only has effect when bCorrectScatteringAtDepthBreaks is TRUE.
+    // will be corrected. Only has effect when bCorrectScatteringAtDepthBreaks is TRUE.
     BOOL bShowDepthBreaks                   DEFAULT_VALUE(FALSE); 
 
     // Whether to show lighting only
