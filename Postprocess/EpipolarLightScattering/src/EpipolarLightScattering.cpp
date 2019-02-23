@@ -2003,7 +2003,7 @@ void EpipolarLightScattering :: PerformPostProcessing(FrameAttribs&             
         CreateCamSpaceZTexture(m_FrameAttribs.pDevice);
     }
 
-    if (!m_ptex2DMinMaxShadowMapSRV[0] && m_PostProcessingAttribs.bUse1DMinMaxTree)
+    if (m_PostProcessingAttribs.bEnableLightShafts && m_PostProcessingAttribs.bUse1DMinMaxTree && !m_ptex2DMinMaxShadowMapSRV[0])
     {
         CreateMinMaxShadowMap(m_FrameAttribs.pDevice);
     }
