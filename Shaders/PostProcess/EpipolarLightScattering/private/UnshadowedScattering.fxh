@@ -15,17 +15,38 @@ void ComputeUnshadowedInscattering(float2 f2SampleLocation,
     f3ViewDir /= fRayLength;
 
     float3 f3EarthCentre =  - float3(0.0, 1.0, 0.0) * EARTH_RADIUS;
-    float2 f2RayAtmTopIsecs;
-    GetRaySphereIntersection( f3CameraPos, f3ViewDir, f3EarthCentre, 
-                              ATM_TOP_RADIUS, 
-                              f2RayAtmTopIsecs);
+    float4 f4Isecs;
+    GetRaySphereIntersection2(f3CameraPos, f3ViewDir, f3EarthCentre, 
+                              float2(ATM_TOP_RADIUS, EARTH_RADIUS), f4Isecs);
+    float2 f2RayAtmTopIsecs = f4Isecs.xy; 
+    float2 f2RayEarthIsecs  = f4Isecs.zw;
+
     if( f2RayAtmTopIsecs.y <= 0.0 )
+    {
+        //                                                          view dir
+        //                                                        /
+        //             d<0                                       /
+        //               *--------->                            *
+        //            .      .                             .   /  . 
+        //  .  '                    '  .         .  '         /\         '  .
+        //                                                   /  f2rayatmtopisecs.y < 0
+        //
+        // the camera is outside the atmosphere and the ray either does not intersect the
+        // top of it or the intersection point is behind the camera. In either
+        // case there is no inscattering
         return;
+    }
 
     float3 f3RayStart = f3CameraPos + f3ViewDir * max(0.0, f2RayAtmTopIsecs.x);
     if( fCamSpaceZ > g_CameraAttribs.fFarPlaneZ ) // fFarPlaneZ is pre-multiplied with 0.999999f
         fRayLength = +FLT_MAX;
-    float3 f3RayEnd = f3CameraPos + f3ViewDir * min(fRayLength, f2RayAtmTopIsecs.y);
+    fRayLength = min(fRayLength, f2RayAtmTopIsecs.y);
+    // If there is an intersection with the Earth surface, limit the tracing distance to the intersection
+    if( f2RayEarthIsecs.x > 0.0 )
+    {
+        fRayLength = min(fRayLength, f2RayEarthIsecs.x);
+    }    
+    float3 f3RayEnd = f3CameraPos + f3ViewDir * fRayLength;
 
 #if SINGLE_SCATTERING_MODE == SINGLE_SCTR_MODE_INTEGRATION
     IntegrateUnshadowedInscattering(f3RayStart, 
