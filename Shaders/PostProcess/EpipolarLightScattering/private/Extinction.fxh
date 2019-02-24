@@ -47,7 +47,7 @@ float3 GetExtinction(in float3 f3StartPos, in float3 f3EndPos)
     float fRayLength = length(f3EyeDir);
     f3EyeDir /= fRayLength;
 
-    float3 f3EarthCentre = /*g_CameraAttribs.f4CameraPos.xyz*float3(1,0,1)*/ - float3(0.0, 1.0, 0.0) * EARTH_RADIUS;
+    float3 f3EarthCentre = /*g_CameraAttribs.f4Position.xyz*float3(1,0,1)*/ - float3(0.0, 1.0, 0.0) * EARTH_RADIUS;
 
     float2 f2RayAtmTopIsecs = float2(0.0, 0.0); 
     // Compute intersections of the view ray with the atmosphere

@@ -47,7 +47,7 @@ void RenderSliceUVDirInShadowMapTexturePS(in FullScreenTriangleVSOutput VSOut,
     float2 f2SliceExitUV = WorldSpaceToShadowMapUV(f3SliceExitWS, mWorldToShadowMapUVDepth).xy;
     
     // Compute camera position in shadow map UV space
-    float2 f2SliceOriginUV = WorldSpaceToShadowMapUV(g_CameraAttribs.f4CameraPos.xyz, mWorldToShadowMapUVDepth).xy;
+    float2 f2SliceOriginUV = WorldSpaceToShadowMapUV(g_CameraAttribs.f4Position.xyz, mWorldToShadowMapUVDepth).xy;
 
     // Compute slice direction in shadow map UV space
     float2 f2SliceDir = f2SliceExitUV - f2SliceOriginUV;

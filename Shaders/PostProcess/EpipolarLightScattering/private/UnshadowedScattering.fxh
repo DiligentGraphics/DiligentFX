@@ -9,7 +9,7 @@ void ComputeUnshadowedInscattering(float2 f2SampleLocation,
     f3Inscattering = float3(0.0, 0.0, 0.0);
     f3Extinction = float3(1.0, 1.0, 1.0);
     float3 f3RayTermination = ProjSpaceXYZToWorldSpace( float3(f2SampleLocation, fCamSpaceZ), g_CameraAttribs.mProj, g_CameraAttribs.mViewProjInv );
-    float3 f3CameraPos = g_CameraAttribs.f4CameraPos.xyz;
+    float3 f3CameraPos = g_CameraAttribs.f4Position.xyz;
     float3 f3ViewDir = f3RayTermination - f3CameraPos;
     float fRayLength = length(f3ViewDir);
     f3ViewDir /= fRayLength;

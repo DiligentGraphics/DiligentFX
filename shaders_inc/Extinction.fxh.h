@@ -47,7 +47,7 @@
 "    float fRayLength = length(f3EyeDir);\n"
 "    f3EyeDir /= fRayLength;\n"
 "\n"
-"    float3 f3EarthCentre = /*g_CameraAttribs.f4CameraPos.xyz*float3(1,0,1)*/ - float3(0.0, 1.0, 0.0) * EARTH_RADIUS;\n"
+"    float3 f3EarthCentre = /*g_CameraAttribs.f4Position.xyz*float3(1,0,1)*/ - float3(0.0, 1.0, 0.0) * EARTH_RADIUS;\n"
 "\n"
 "    float2 f2RayAtmTopIsecs = float2(0.0, 0.0); \n"
 "    // Compute intersections of the view ray with the atmosphere\n"

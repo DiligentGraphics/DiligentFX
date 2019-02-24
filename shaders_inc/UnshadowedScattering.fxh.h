@@ -9,7 +9,7 @@
 "    f3Inscattering = float3(0.0, 0.0, 0.0);\n"
 "    f3Extinction = float3(1.0, 1.0, 1.0);\n"
 "    float3 f3RayTermination = ProjSpaceXYZToWorldSpace( float3(f2SampleLocation, fCamSpaceZ), g_CameraAttribs.mProj, g_CameraAttribs.mViewProjInv );\n"
-"    float3 f3CameraPos = g_CameraAttribs.f4CameraPos.xyz;\n"
+"    float3 f3CameraPos = g_CameraAttribs.f4Position.xyz;\n"
 "    float3 f3ViewDir = f3RayTermination - f3CameraPos;\n"
 "    float fRayLength = length(f3ViewDir);\n"
 "    f3ViewDir /= fRayLength;\n"

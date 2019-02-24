@@ -81,22 +81,31 @@ CHECK_STRUCT_ALIGNMENT(LightAttribs);
 
 struct CameraAttribs
 {
-    float4 f4CameraPos;            ///< Camera world position
+    float4 f4Position;     // Camera world position
+    float4 f4ViewportSize; // (width, height, 1/width, 1/height)
+
+    float2 f2ViewportOrigin; // (min x, min y)
     float fNearPlaneZ; 
     float fFarPlaneZ; // fNearPlaneZ < fFarPlaneZ
-    float2 f2Dummy;
 
 #ifdef __cplusplus
-    float4x4 mViewProjT;
-    //float4x4 mViewT;
+    float4x4 mViewT;
     float4x4 mProjT;
+    float4x4 mViewProjT;
+    float4x4 mViewInvT;
+    float4x4 mProjInvT;
     float4x4 mViewProjInvT;
 #else
-    matrix mViewProj;
-    //matrix mView;
+    matrix mView;
     matrix mProj;
+    matrix mViewProj;
+    matrix mViewInv;
+    matrix mProjInv;
     matrix mViewProjInv;
 #endif
+
+    float4 f4ExtraData[5]; // Any appliation-specific data
+    // Sizeof(CameraAttribs) == 256*2
 };
 CHECK_STRUCT_ALIGNMENT(CameraAttribs);
 

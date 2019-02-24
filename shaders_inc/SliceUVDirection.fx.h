@@ -47,7 +47,7 @@
 "    float2 f2SliceExitUV = WorldSpaceToShadowMapUV(f3SliceExitWS, mWorldToShadowMapUVDepth).xy;\n"
 "    \n"
 "    // Compute camera position in shadow map UV space\n"
-"    float2 f2SliceOriginUV = WorldSpaceToShadowMapUV(g_CameraAttribs.f4CameraPos.xyz, mWorldToShadowMapUVDepth).xy;\n"
+"    float2 f2SliceOriginUV = WorldSpaceToShadowMapUV(g_CameraAttribs.f4Position.xyz, mWorldToShadowMapUVDepth).xy;\n"
 "\n"
 "    // Compute slice direction in shadow map UV space\n"
 "    float2 f2SliceDir = f2SliceExitUV - f2SliceOriginUV;\n"

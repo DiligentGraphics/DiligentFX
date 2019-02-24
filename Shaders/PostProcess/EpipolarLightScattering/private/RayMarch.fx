@@ -74,7 +74,7 @@ float3 ComputeShadowedInscattering( in float2 f2RayMarchingSampleLocation,
                                     in float fCascadeInd,
                                     uint uiEpipolarSliceInd )
 {   
-    float3 f3CameraPos = g_CameraAttribs.f4CameraPos.xyz;
+    float3 f3CameraPos = g_CameraAttribs.f4Position.xyz;
     uint uiCascadeInd = uint(fCascadeInd);
     
     // Compute the ray termination point, full ray length and view direction
@@ -707,7 +707,7 @@ void FixAndApplyInscatteredRadiancePS(FullScreenTriangleVSOutput VSOut,
         f3BackgroundColor = g_tex2DColorBuffer.Load( int3(VSOut.f4PixelPos.xy,0) ).rgb;
         f3BackgroundColor *= (fCamSpaceZ > g_CameraAttribs.fFarPlaneZ) ? g_LightAttribs.f4Intensity.rgb : float3(1.0, 1.0, 1.0);
         float3 f3ReconstructedPosWS = ProjSpaceXYZToWorldSpace(float3(VSOut.f2NormalizedXY.xy, fCamSpaceZ), g_CameraAttribs.mProj, g_CameraAttribs.mViewProjInv);
-        float3 f3Extinction = GetExtinction(g_CameraAttribs.f4CameraPos.xyz, f3ReconstructedPosWS);
+        float3 f3Extinction = GetExtinction(g_CameraAttribs.f4Position.xyz, f3ReconstructedPosWS);
         f3BackgroundColor *= f3Extinction.rgb;
     }
     
