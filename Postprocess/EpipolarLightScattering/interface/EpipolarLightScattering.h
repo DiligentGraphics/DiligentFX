@@ -206,28 +206,31 @@ private:
         Uint32                                PSODependencyFlags = 0;
         Uint32                                SRBDependencyFlags = 0;
         
-        void InitializeFullScreenTriangleTechnique(IRenderDevice*               pDevice,
-                                                   const char*                  PSOName,
-                                                   IShader*                     VertexShader,
-                                                   IShader*                     PixelShader,
-                                                   Uint8                        NumRTVs,
-                                                   TEXTURE_FORMAT               RTVFmts[],
-                                                   TEXTURE_FORMAT               DSVFmt,
-                                                   const DepthStencilStateDesc& DSSDesc,
-                                                   const BlendStateDesc&        BSDesc);
+        void InitializeFullScreenTriangleTechnique(IRenderDevice*                    pDevice,
+                                                   const char*                       PSOName,
+                                                   IShader*                          VertexShader,
+                                                   IShader*                          PixelShader,
+                                                   const PipelineResourceLayoutDesc& ResourceLayout,
+                                                   Uint8                             NumRTVs,
+                                                   TEXTURE_FORMAT                    RTVFmts[],
+                                                   TEXTURE_FORMAT                    DSVFmt,
+                                                   const DepthStencilStateDesc&      DSSDesc,
+                                                   const BlendStateDesc&             BSDesc);
 
-        void InitializeFullScreenTriangleTechnique(IRenderDevice*               pDevice,
-                                                   const char*                  PSOName,
-                                                   IShader*                     VertexShader,
-                                                   IShader*                     PixelShader,
-                                                   TEXTURE_FORMAT               RTVFmt,
-                                                   TEXTURE_FORMAT               DSVFmt,
-                                                   const DepthStencilStateDesc& DSSDesc,
-                                                   const BlendStateDesc&        BSDesc);
+        void InitializeFullScreenTriangleTechnique(IRenderDevice*                    pDevice,
+                                                   const char*                       PSOName,
+                                                   IShader*                          VertexShader,
+                                                   IShader*                          PixelShader,
+                                                   const PipelineResourceLayoutDesc& ResourceLayout,
+                                                   TEXTURE_FORMAT                    RTVFmt,
+                                                   TEXTURE_FORMAT                    DSVFmt,
+                                                   const DepthStencilStateDesc&      DSSDesc,
+                                                   const BlendStateDesc&             BSDesc);
 
-        void InitializeComputeTechnique(IRenderDevice*   pDevice,
-                                        const char*      PSOName,
-                                        IShader*         ComputeShader);
+        void InitializeComputeTechnique(IRenderDevice*                    pDevice,
+                                        const char*                       PSOName,
+                                        IShader*                          ComputeShader,
+                                        const PipelineResourceLayoutDesc& ResourceLayout);
 
         void PrepareSRB(IRenderDevice* pDevice, IResourceMapping* pResMapping, Uint32 Flags);
 

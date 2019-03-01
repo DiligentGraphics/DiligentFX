@@ -169,18 +169,20 @@ void RenderFullScreenTriangle(IDeviceContext*         pDeviceContext,
 
 
 void EpipolarLightScattering::RenderTechnique::InitializeFullScreenTriangleTechnique(
-                                                IRenderDevice*               pDevice,
-                                                const char*                  PSOName,
-                                                IShader*                     VertexShader,
-                                                IShader*                     PixelShader,
-                                                Uint8                        NumRTVs,
-                                                TEXTURE_FORMAT               RTVFmts[],
-                                                TEXTURE_FORMAT               DSVFmt  = TEX_FORMAT_UNKNOWN,
-                                                const DepthStencilStateDesc& DSSDesc = DSS_Default,
-                                                const BlendStateDesc&        BSDesc  = BS_Default)
+                                                IRenderDevice*                    pDevice,
+                                                const char*                       PSOName,
+                                                IShader*                          VertexShader,
+                                                IShader*                          PixelShader,
+                                                const PipelineResourceLayoutDesc& ResourceLayout,
+                                                Uint8                             NumRTVs,
+                                                TEXTURE_FORMAT                    RTVFmts[],
+                                                TEXTURE_FORMAT                    DSVFmt  = TEX_FORMAT_UNKNOWN,
+                                                const DepthStencilStateDesc&      DSSDesc = DSS_Default,
+                                                const BlendStateDesc&             BSDesc  = BS_Default)
 {
     PipelineStateDesc PSODesc;
-    PSODesc.Name = PSOName;
+    PSODesc.Name           = PSOName;
+    PSODesc.ResourceLayout = ResourceLayout;
     auto& GraphicsPipeline = PSODesc.GraphicsPipeline;
     GraphicsPipeline.RasterizerDesc.FillMode              = FILL_MODE_SOLID;
     GraphicsPipeline.RasterizerDesc.CullMode              = CULL_MODE_NONE;
@@ -201,24 +203,27 @@ void EpipolarLightScattering::RenderTechnique::InitializeFullScreenTriangleTechn
 }
 
 void EpipolarLightScattering::RenderTechnique::InitializeFullScreenTriangleTechnique(
-                                                   IRenderDevice*               pDevice,
-                                                   const char*                  PSOName,
-                                                   IShader*                     VertexShader,
-                                                   IShader*                     PixelShader,
-                                                   TEXTURE_FORMAT               RTVFmt,
-                                                   TEXTURE_FORMAT               DSVFmt  = TEX_FORMAT_UNKNOWN,
-                                                   const DepthStencilStateDesc& DSSDesc = DSS_DisableDepth,
-                                                   const BlendStateDesc&        BSDesc  = BS_Default)
+                                                   IRenderDevice*                    pDevice,
+                                                   const char*                       PSOName,
+                                                   IShader*                          VertexShader,
+                                                   IShader*                          PixelShader,
+                                                   const PipelineResourceLayoutDesc& ResourceLayout,
+                                                   TEXTURE_FORMAT                    RTVFmt,
+                                                   TEXTURE_FORMAT                    DSVFmt  = TEX_FORMAT_UNKNOWN,
+                                                   const DepthStencilStateDesc&      DSSDesc = DSS_DisableDepth,
+                                                   const BlendStateDesc&             BSDesc  = BS_Default)
 {
-    InitializeFullScreenTriangleTechnique(pDevice, PSOName, VertexShader, PixelShader, 1, &RTVFmt, DSVFmt, DSSDesc, BSDesc);
+    InitializeFullScreenTriangleTechnique(pDevice, PSOName, VertexShader, PixelShader, ResourceLayout, 1, &RTVFmt, DSVFmt, DSSDesc, BSDesc);
 }
 
-void EpipolarLightScattering::RenderTechnique::InitializeComputeTechnique(IRenderDevice* pDevice,
-                                                                          const char*    PSOName,
-                                                                          IShader*       ComputeShader)
+void EpipolarLightScattering::RenderTechnique::InitializeComputeTechnique(IRenderDevice*                    pDevice,
+                                                                          const char*                       PSOName,
+                                                                          IShader*                          ComputeShader,
+                                                                          const PipelineResourceLayoutDesc& ResourceLayout)
 {
     PipelineStateDesc PSODesc;
     PSODesc.Name                = PSOName;
+    PSODesc.ResourceLayout      = ResourceLayout;
     PSODesc.IsComputePipeline   = true;
     PSODesc.ComputePipeline.pCS = ComputeShader;
     PSO.Release();
@@ -265,29 +270,19 @@ RefCntAutoPtr<IShader> CreateShader(IRenderDevice*            pDevice,
                                     const Char*               FileName, 
                                     const Char*               EntryPoint, 
                                     SHADER_TYPE               Type, 
-                                    const ShaderMacro*        Macros, 
-                                    SHADER_VARIABLE_TYPE      DefaultVarType, 
-                                    const ShaderVariableDesc* pVarDesc          = nullptr, 
-                                    Uint32                    NumVars           = 0,
-                                    const StaticSamplerDesc*  StaticSamplers    = nullptr,
-                                    Uint32                    NumStaticSamplers = 0)
+                                    const ShaderMacro*        Macros = nullptr)
 {
-    ShaderCreationAttribs Attribs;
-    Attribs.EntryPoint               = EntryPoint;
-    Attribs.FilePath                 = FileName;
-    Attribs.Macros                   = Macros;
-    Attribs.SourceLanguage           = SHADER_SOURCE_LANGUAGE_HLSL;
-    Attribs.Desc.ShaderType          = Type;
-    Attribs.Desc.Name                = EntryPoint;
-    Attribs.Desc.VariableDesc        = pVarDesc;
-    Attribs.Desc.NumVariables        = NumVars;
-    Attribs.Desc.DefaultVariableType = DefaultVarType;
-    Attribs.Desc.StaticSamplers      = StaticSamplers;
-    Attribs.Desc.NumStaticSamplers   = NumStaticSamplers;
-    Attribs.pShaderSourceStreamFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();
-    Attribs.UseCombinedTextureSamplers = true;
+    ShaderCreateInfo ShaderCI;
+    ShaderCI.EntryPoint                 = EntryPoint;
+    ShaderCI.FilePath                   = FileName;
+    ShaderCI.Macros                     = Macros;
+    ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
+    ShaderCI.Desc.ShaderType            = Type;
+    ShaderCI.Desc.Name                  = EntryPoint;
+    ShaderCI.pShaderSourceStreamFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();
+    ShaderCI.UseCombinedTextureSamplers = true;
     RefCntAutoPtr<IShader> pShader;
-    pDevice->CreateShader( Attribs, &pShader );
+    pDevice->CreateShader( ShaderCI, &pShader );
     return pShader;
 }
 
@@ -329,8 +324,7 @@ EpipolarLightScattering :: EpipolarLightScattering(IRenderDevice*  pDevice,
 
     pDevice->CreateSampler(Sam_LinearClamp, &m_pLinearClampSampler);
     pDevice->CreateSampler(Sam_PointClamp,  &m_pPointClampSampler);
-    m_pFullScreenTriangleVS = CreateShader(pDevice, "FullScreenTriangleVS.fx", "FullScreenTriangleVS",
-                                           SHADER_TYPE_VERTEX, nullptr, SHADER_VARIABLE_TYPE_STATIC);
+    m_pFullScreenTriangleVS = CreateShader(pDevice, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
 
     ComputeScatteringCoefficients(pContext);
 
@@ -416,12 +410,13 @@ void EpipolarLightScattering::PrecomputeOpticalDepthTexture(IRenderDevice*  pDev
     if (!PrecomputeNetDensityToAtmTopTech.PSO)
     {
         RefCntAutoPtr<IShader> pPrecomputeNetDensityToAtmTopPS;
-        pPrecomputeNetDensityToAtmTopPS = CreateShader(pDevice, "PrecomputeNetDensityToAtmTop.fx", "PrecomputeNetDensityToAtmTopPS",
-                                                       SHADER_TYPE_PIXEL, nullptr, SHADER_VARIABLE_TYPE_STATIC);
-        pPrecomputeNetDensityToAtmTopPS->BindResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+        pPrecomputeNetDensityToAtmTopPS = CreateShader(pDevice, "PrecomputeNetDensityToAtmTop.fx", "PrecomputeNetDensityToAtmTopPS", SHADER_TYPE_PIXEL);
+        PipelineResourceLayoutDesc ResourceLayout;
+        ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_STATIC;
         PrecomputeNetDensityToAtmTopTech.
             InitializeFullScreenTriangleTechnique(pDevice, "PrecomputeNetDensityToAtmTopPSO", m_pFullScreenTriangleVS,
-                                                  pPrecomputeNetDensityToAtmTopPS, PrecomputedNetDensityTexFmt);
+                                                  pPrecomputeNetDensityToAtmTopPS, ResourceLayout, PrecomputedNetDensityTexFmt);
+        PrecomputeNetDensityToAtmTopTech.PSO->BindStaticResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
     }
 
     PrecomputeNetDensityToAtmTopTech.PrepareSRB(pDevice, m_pResMapping);
@@ -625,8 +620,10 @@ void EpipolarLightScattering :: PrecomputeScatteringLUT(IRenderDevice* pDevice, 
         Macros.AddShaderMacro( "THREAD_GROUP_SIZE", ThreadGroupSize );
         Macros.Finalize();
         auto pPrecomputeSingleSctrCS = CreateShader(pDevice, "PrecomputeSingleScattering.fx", "PrecomputeSingleScatteringCS",
-                                                    SHADER_TYPE_COMPUTE, Macros, SHADER_VARIABLE_TYPE_DYNAMIC);
-        PrecomputeSingleSctrTech.InitializeComputeTechnique(pDevice, "PrecomputeSingleScattering", pPrecomputeSingleSctrCS);
+                                                    SHADER_TYPE_COMPUTE, Macros);
+        PipelineResourceLayoutDesc ResourceLayout;
+        ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC;
+        PrecomputeSingleSctrTech.InitializeComputeTechnique(pDevice, "PrecomputeSingleScattering", pPrecomputeSingleSctrCS, ResourceLayout);
         PrecomputeSingleSctrTech.PrepareSRB(pDevice, m_pResMapping, 0);
     }
     
@@ -639,8 +636,10 @@ void EpipolarLightScattering :: PrecomputeScatteringLUT(IRenderDevice* pDevice, 
         Macros.AddShaderMacro( "NUM_RANDOM_SPHERE_SAMPLES", m_uiNumRandomSamplesOnSphere );
         Macros.Finalize();
         auto pComputeSctrRadianceCS = CreateShader(pDevice, "ComputeSctrRadiance.fx", "ComputeSctrRadianceCS",
-                                                   SHADER_TYPE_COMPUTE, Macros, SHADER_VARIABLE_TYPE_DYNAMIC);
-        ComputeSctrRadianceTech.InitializeComputeTechnique(pDevice, "ComputeSctrRadiance", pComputeSctrRadianceCS);
+                                                   SHADER_TYPE_COMPUTE, Macros);
+        PipelineResourceLayoutDesc ResourceLayout;
+        ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC;
+        ComputeSctrRadianceTech.InitializeComputeTechnique(pDevice, "ComputeSctrRadiance", pComputeSctrRadianceCS, ResourceLayout);
         ComputeSctrRadianceTech.PrepareSRB(pDevice, m_pResMapping, 0);
     }
 
@@ -652,8 +651,10 @@ void EpipolarLightScattering :: PrecomputeScatteringLUT(IRenderDevice* pDevice, 
         Macros.AddShaderMacro( "THREAD_GROUP_SIZE", ThreadGroupSize );
         Macros.Finalize();
         auto pComputeScatteringOrderCS = CreateShader(pDevice, "ComputeScatteringOrder.fx", "ComputeScatteringOrderCS",
-                                                      SHADER_TYPE_COMPUTE, Macros, SHADER_VARIABLE_TYPE_DYNAMIC);
-        ComputeScatteringOrderTech.InitializeComputeTechnique(pDevice, "ComputeScatteringOrder", pComputeScatteringOrderCS);
+                                                      SHADER_TYPE_COMPUTE, Macros);
+        PipelineResourceLayoutDesc ResourceLayout;
+        ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC;
+        ComputeScatteringOrderTech.InitializeComputeTechnique(pDevice, "ComputeScatteringOrder", pComputeScatteringOrderCS, ResourceLayout);
         ComputeScatteringOrderTech.PrepareSRB(pDevice, m_pResMapping, 0);
     }
 
@@ -665,8 +666,10 @@ void EpipolarLightScattering :: PrecomputeScatteringLUT(IRenderDevice* pDevice, 
         Macros.AddShaderMacro( "THREAD_GROUP_SIZE", ThreadGroupSize );
         Macros.Finalize();
         auto pInitHighOrderScatteringCS = CreateShader(pDevice, "InitHighOrderScattering.fx", "InitHighOrderScatteringCS",
-                                                       SHADER_TYPE_COMPUTE, Macros, SHADER_VARIABLE_TYPE_DYNAMIC);
-        InitHighOrderScatteringTech.InitializeComputeTechnique(pDevice, "InitHighOrderScattering", pInitHighOrderScatteringCS);
+                                                       SHADER_TYPE_COMPUTE, Macros);
+        PipelineResourceLayoutDesc ResourceLayout;
+        ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC;
+        InitHighOrderScatteringTech.InitializeComputeTechnique(pDevice, "InitHighOrderScattering", pInitHighOrderScatteringCS, ResourceLayout);
         InitHighOrderScatteringTech.PrepareSRB(pDevice, m_pResMapping, 0);
     }
 
@@ -678,8 +681,10 @@ void EpipolarLightScattering :: PrecomputeScatteringLUT(IRenderDevice* pDevice, 
         Macros.AddShaderMacro( "THREAD_GROUP_SIZE", ThreadGroupSize );
         Macros.Finalize();
         auto pUpdateHighOrderScatteringCS = CreateShader(pDevice, "UpdateHighOrderScattering.fx", "UpdateHighOrderScatteringCS",
-                                                         SHADER_TYPE_COMPUTE, Macros, SHADER_VARIABLE_TYPE_DYNAMIC);
-        UpdateHighOrderScatteringTech.InitializeComputeTechnique(pDevice, "UpdateHighOrderScattering", pUpdateHighOrderScatteringCS);
+                                                         SHADER_TYPE_COMPUTE, Macros);
+        PipelineResourceLayoutDesc ResourceLayout;
+        ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC;
+        UpdateHighOrderScatteringTech.InitializeComputeTechnique(pDevice, "UpdateHighOrderScattering", pUpdateHighOrderScatteringCS, ResourceLayout);
         UpdateHighOrderScatteringTech.PrepareSRB(pDevice, m_pResMapping, 0);
     }
 
@@ -691,8 +696,10 @@ void EpipolarLightScattering :: PrecomputeScatteringLUT(IRenderDevice* pDevice, 
         Macros.AddShaderMacro( "THREAD_GROUP_SIZE", ThreadGroupSize );
         Macros.Finalize();
         auto pCombineScatteringOrdersCS = CreateShader(pDevice, "CombineScatteringOrders.fx", "CombineScatteringOrdersCS",
-                                                       SHADER_TYPE_COMPUTE, Macros, SHADER_VARIABLE_TYPE_DYNAMIC);
-        CombineScatteringOrdersTech.InitializeComputeTechnique(pDevice, "CombineScatteringOrders", pCombineScatteringOrdersCS);
+                                                       SHADER_TYPE_COMPUTE, Macros);
+        PipelineResourceLayoutDesc ResourceLayout;
+        ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC;
+        CombineScatteringOrdersTech.InitializeComputeTechnique(pDevice, "CombineScatteringOrders", pCombineScatteringOrdersCS, ResourceLayout);
         CombineScatteringOrdersTech.PrepareSRB(pDevice, m_pResMapping, 0);
     }
 
@@ -918,12 +925,14 @@ void EpipolarLightScattering :: ReconstructCameraSpaceZ()
         DefineMacros(Macros);
         Macros.Finalize();
         auto pReconstrCamSpaceZPS = CreateShader(m_FrameAttribs.pDevice, "ReconstructCameraSpaceZ.fx", "ReconstructCameraSpaceZPS",
-                                                 SHADER_TYPE_PIXEL, Macros, SHADER_VARIABLE_TYPE_MUTABLE);
-        // Bind input resources required by the shader
-        pReconstrCamSpaceZPS->BindResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
-
+                                                 SHADER_TYPE_PIXEL, Macros);
+        PipelineResourceLayoutDesc ResourceLayout;
+        ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
         ReconstrCamSpaceZTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "ReconstructCameraSpaceZPSO", m_pFullScreenTriangleVS,
-                                                                    pReconstrCamSpaceZPS, CamSpaceZFmt);
+                                                                    pReconstrCamSpaceZPS, ResourceLayout, CamSpaceZFmt);
+        // Bind input resources required by the shader
+        ReconstrCamSpaceZTech.PSO->BindStaticResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+
         ReconstrCamSpaceZTech.SRBDependencyFlags = 
             SRB_DEPENDENCY_CAMERA_ATTRIBS | 
             SRB_DEPENDENCY_SRC_DEPTH_BUFFER;
@@ -944,17 +953,21 @@ void EpipolarLightScattering :: RenderSliceEndpoints()
         DefineMacros(Macros);
         Macros.Finalize();
 
-        ShaderVariableDesc Vars[] = 
-        { 
-            {"cbPostProcessingAttribs", SHADER_VARIABLE_TYPE_STATIC}
-        };
         auto pRendedSliceEndpointsPS = CreateShader(m_FrameAttribs.pDevice, "RenderSliceEndPoints.fx", "GenerateSliceEndpointsPS",
-                                                    SHADER_TYPE_PIXEL, Macros, SHADER_VARIABLE_TYPE_MUTABLE, Vars, _countof(Vars));
-        // Bind input resources required by the shader
-        pRendedSliceEndpointsPS->BindResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
-
+                                                    SHADER_TYPE_PIXEL, Macros);
+        PipelineResourceLayoutDesc ResourceLayout;
+        ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
+        ShaderResourceVariableDesc Vars[] = 
+        { 
+            {SHADER_TYPE_PIXEL, "cbPostProcessingAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
+        };
+        ResourceLayout.Variables    = Vars;
+        ResourceLayout.NumVariables = _countof(Vars);
         RendedSliceEndpointsTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "RenderSliceEndPoints", m_pFullScreenTriangleVS,
-                                                                       pRendedSliceEndpointsPS, SliceEndpointsFmt);
+                                                                       pRendedSliceEndpointsPS, ResourceLayout, SliceEndpointsFmt);
+        // Bind static resources required by the shaders
+        RendedSliceEndpointsTech.PSO->BindStaticResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+
         RendedSliceEndpointsTech.PSODependencyFlags =
             PSO_DEPENDENCY_NUM_EPIPOLAR_SLICES  | 
             PSO_DEPENDENCY_MAX_SAMPLES_IN_SLICE |
@@ -977,12 +990,15 @@ void EpipolarLightScattering :: RenderCoordinateTexture()
         DefineMacros(Macros);
         Macros.Finalize();
         auto pRendedCoordTexPS = CreateShader(m_FrameAttribs.pDevice, "RenderCoordinateTexture.fx", "GenerateCoordinateTexturePS",
-                                              SHADER_TYPE_PIXEL, Macros, SHADER_VARIABLE_TYPE_MUTABLE);
-        pRendedCoordTexPS->BindResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+                                              SHADER_TYPE_PIXEL, Macros);
+        PipelineResourceLayoutDesc ResourceLayout;
+        ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
 
         TEXTURE_FORMAT RTVFmts[] = {CoordinateTexFmt, EpipolarCamSpaceZFmt};
         RendedCoordTexTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "RenderCoordinateTexture", m_pFullScreenTriangleVS,
-                                                                 pRendedCoordTexPS, 2, RTVFmts, EpipolarImageDepthFmt, DSS_IncStencilAlways);
+                                                                 pRendedCoordTexPS, ResourceLayout, 2, RTVFmts, EpipolarImageDepthFmt, DSS_IncStencilAlways);
+        RendedCoordTexTech.PSO->BindStaticResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+
         RendedCoordTexTech.PSODependencyFlags = PSO_DEPENDENCY_MAX_SAMPLES_IN_SLICE;
         RendedCoordTexTech.SRBDependencyFlags = 
             SRB_DEPENDENCY_CAM_SPACE_Z_TEX      |
@@ -1017,17 +1033,20 @@ void EpipolarLightScattering :: RenderCoarseUnshadowedInctr()
                 "RenderCoarseUnshadowedInsctrAndExtinctionPS" : 
                 "RenderCoarseUnshadowedInsctrPS";
 
-        //ShaderVariableDesc Vars[] = 
-        //{ 
-        //    {"cbParticipatingMediaScatteringParams", SHADER_VARIABLE_TYPE_STATIC}, // It does not really matter if these are 
-        //    {"g_tex2DOccludedNetDensityToAtmTop",    SHADER_VARIABLE_TYPE_STATIC}, // static or mutable, so to avoid warnings
-        //    {"g_tex3DSingleSctrLUT",                 SHADER_VARIABLE_TYPE_STATIC}, // we will not explicitly specify the types 
-        //    {"g_tex3DHighOrderSctrLUT",              SHADER_VARIABLE_TYPE_STATIC}, 
-        //    {"g_tex3DMultipleSctrLUT",               SHADER_VARIABLE_TYPE_STATIC}, 
-        //};
         auto pRenderCoarseUnshadowedInsctrPS = CreateShader(m_FrameAttribs.pDevice, "CoarseInsctr.fx", EntryPoint, SHADER_TYPE_PIXEL,
-                                                            Macros, SHADER_VARIABLE_TYPE_MUTABLE);
-        pRenderCoarseUnshadowedInsctrPS->BindResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+                                                            Macros);
+        PipelineResourceLayoutDesc ResourceLayout;
+        ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
+        //ShaderResourceVariableDesc Vars[] = 
+        //{ 
+        //    {SHADER_TYPE_PIXEL, "cbParticipatingMediaScatteringParams", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}, // It does not really matter if these are 
+        //    {SHADER_TYPE_PIXEL, "g_tex2DOccludedNetDensityToAtmTop",    SHADER_RESOURCE_VARIABLE_TYPE_STATIC}, // static or mutable, so to avoid warnings
+        //    {SHADER_TYPE_PIXEL, "g_tex3DSingleSctrLUT",                 SHADER_RESOURCE_VARIABLE_TYPE_STATIC}, // we will not explicitly specify the types 
+        //    {SHADER_TYPE_PIXEL, "g_tex3DHighOrderSctrLUT",              SHADER_RESOURCE_VARIABLE_TYPE_STATIC}, 
+        //    {SHADER_TYPE_PIXEL, "g_tex3DMultipleSctrLUT",               SHADER_RESOURCE_VARIABLE_TYPE_STATIC}, 
+        //};
+        //ResourceLayout.Variables    = Vars;
+        //ResourceLayout.NumVariables = _countof(Vars);
 
         const auto* PSOName = m_PostProcessingAttribs.uiExtinctionEvalMode == EXTINCTION_EVAL_MODE_EPIPOLAR ? 
                                 "RenderCoarseUnshadowedInsctrAndExtinctionPSO" : 
@@ -1035,8 +1054,10 @@ void EpipolarLightScattering :: RenderCoarseUnshadowedInctr()
         TEXTURE_FORMAT RTVFmts[] = {EpipolarInsctrTexFmt, EpipolarExtinctionFmt};
         Uint8 NumRTVs = m_PostProcessingAttribs.uiExtinctionEvalMode == EXTINCTION_EVAL_MODE_EPIPOLAR ? 2 : 1;
         RenderCoarseUnshadowedInsctrTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, PSOName, m_pFullScreenTriangleVS,
-                                                                               pRenderCoarseUnshadowedInsctrPS, NumRTVs, RTVFmts,
+                                                                               pRenderCoarseUnshadowedInsctrPS, ResourceLayout, NumRTVs, RTVFmts,
                                                                                EpipolarImageDepthFmt, DSS_StencilEqKeepStencil);
+        RenderCoarseUnshadowedInsctrTech.PSO->BindStaticResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+
         RenderCoarseUnshadowedInsctrTech.PSODependencyFlags = 
             PSO_DEPENDENCY_EXTINCTION_EVAL_MODE   | 
             PSO_DEPENDENCY_SINGLE_SCATTERING_MODE | 
@@ -1093,14 +1114,21 @@ void EpipolarLightScattering :: RefineSampleLocations()
         Macros.AddShaderMacro("AUTO_EXPOSURE",        m_PostProcessingAttribs.ToneMapping.bAutoExposure);
         Macros.Finalize();
 
-        ShaderVariableDesc Vars[] = 
-        { 
-            {"cbPostProcessingAttribs", SHADER_VARIABLE_TYPE_STATIC}
-        };
         auto pRefineSampleLocationsCS = CreateShader(m_FrameAttribs.pDevice, "RefineSampleLocations.fx", "RefineSampleLocationsCS",
-                                                     SHADER_TYPE_COMPUTE, Macros, SHADER_VARIABLE_TYPE_MUTABLE, Vars, _countof(Vars));
-        pRefineSampleLocationsCS->BindResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
-        RefineSampleLocationsTech.InitializeComputeTechnique(m_FrameAttribs.pDevice, "RefineSampleLocations", pRefineSampleLocationsCS);
+                                                     SHADER_TYPE_COMPUTE, Macros);
+
+        PipelineResourceLayoutDesc ResourceLayout;
+        ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
+        ShaderResourceVariableDesc Vars[] = 
+        { 
+            {SHADER_TYPE_PIXEL, "cbPostProcessingAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
+        };
+        ResourceLayout.Variables    = Vars;
+        ResourceLayout.NumVariables = _countof(Vars);
+
+        RefineSampleLocationsTech.InitializeComputeTechnique(m_FrameAttribs.pDevice, "RefineSampleLocations", pRefineSampleLocationsCS, ResourceLayout);
+        RefineSampleLocationsTech.PSO->BindStaticResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+
         RefineSampleLocationsTech.PSODependencyFlags = 
             PSO_DEPENDENCY_MAX_SAMPLES_IN_SLICE  |
             PSO_DEPENDENCY_INITIAL_SAMPLE_STEP   |
@@ -1133,11 +1161,14 @@ void EpipolarLightScattering :: MarkRayMarchingSamples()
         Macros.Finalize();
 
         auto pMarkRayMarchingSamplesInStencilPS = CreateShader(m_FrameAttribs.pDevice, "MarkRayMarchingSamples.fx", "MarkRayMarchingSamplesInStencilPS",
-                                                               SHADER_TYPE_PIXEL, Macros, SHADER_VARIABLE_TYPE_MUTABLE);
-        pMarkRayMarchingSamplesInStencilPS->BindResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+                                                               SHADER_TYPE_PIXEL, Macros);
+        PipelineResourceLayoutDesc ResourceLayout;
+        ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
         MarkRayMarchingSamplesInStencilTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "MarkRayMarchingSamples",
                                                                                   m_pFullScreenTriangleVS, pMarkRayMarchingSamplesInStencilPS,
-                                                                                  0, nullptr, EpipolarImageDepthFmt, DSS_StencilEqIncStencil);
+                                                                                  ResourceLayout, 0, nullptr, EpipolarImageDepthFmt, DSS_StencilEqIncStencil);
+        MarkRayMarchingSamplesInStencilTech.PSO->BindStaticResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+
         MarkRayMarchingSamplesInStencilTech.SRBDependencyFlags = SRB_DEPENDENCY_INTERPOLATION_SOURCE_TEX;
     }
 
@@ -1160,16 +1191,22 @@ void EpipolarLightScattering :: RenderSliceUVDirAndOrig()
         DefineMacros(Macros);
         Macros.Finalize();
 
-       ShaderVariableDesc Vars[] = 
-        { 
-            {"cbPostProcessingAttribs", SHADER_VARIABLE_TYPE_STATIC}
-        };
         auto pRenderSliceUVDirInSMPS = CreateShader(m_FrameAttribs.pDevice, "SliceUVDirection.fx", "RenderSliceUVDirInShadowMapTexturePS",
-                                                    SHADER_TYPE_PIXEL, Macros, SHADER_VARIABLE_TYPE_MUTABLE, Vars, _countof(Vars));
-        pRenderSliceUVDirInSMPS->BindResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+                                                    SHADER_TYPE_PIXEL, Macros);
+        PipelineResourceLayoutDesc ResourceLayout;
+        ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
+        ShaderResourceVariableDesc Vars[] = 
+        { 
+            {SHADER_TYPE_PIXEL, "cbPostProcessingAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
+        };
+        ResourceLayout.Variables    = Vars;
+        ResourceLayout.NumVariables = _countof(Vars);
+            
         RenderSliceUVDirInSMTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "RenderSliceUVDirAndOrigin",
                                                                        m_pFullScreenTriangleVS, pRenderSliceUVDirInSMPS,
-                                                                       SliceUVDirAndOriginTexFmt);
+                                                                       ResourceLayout, SliceUVDirAndOriginTexFmt);
+        RenderSliceUVDirInSMTech.PSO->BindStaticResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+
         RenderSliceUVDirInSMTech.SRBDependencyFlags =
             SRB_DEPENDENCY_CAMERA_ATTRIBS       |
             SRB_DEPENDENCY_LIGHT_ATTRIBS        |
@@ -1198,21 +1235,24 @@ void EpipolarLightScattering :: Build1DMinMaxMipMap(int iCascadeIndex)
         Macros.AddShaderMacro("IS_32BIT_MIN_MAX_MAP", m_PostProcessingAttribs.bIs32BitMinMaxMipMap);
         Macros.Finalize();
 
-        std::vector<ShaderVariableDesc> Vars =
+        auto pInitializeMinMaxShadowMapPS = CreateShader(m_FrameAttribs.pDevice, "InitializeMinMaxShadowMap.fx", "InitializeMinMaxShadowMapPS",
+                                                         SHADER_TYPE_PIXEL, Macros);
+        PipelineResourceLayoutDesc ResourceLayout;
+        ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
+        std::vector<ShaderResourceVariableDesc> Vars =
         { 
-            {"cbPostProcessingAttribs", SHADER_VARIABLE_TYPE_STATIC}
+            {SHADER_TYPE_PIXEL, "cbPostProcessingAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
         };
         if (!m_bUseCombinedMinMaxTexture)
-            Vars.emplace_back("cbMiscDynamicParams", SHADER_VARIABLE_TYPE_STATIC);
-
-        auto pInitializeMinMaxShadowMapPS = CreateShader(m_FrameAttribs.pDevice, "InitializeMinMaxShadowMap.fx", "InitializeMinMaxShadowMapPS",
-                                                         SHADER_TYPE_PIXEL, Macros, SHADER_VARIABLE_TYPE_MUTABLE, Vars.data(), static_cast<Uint32>(Vars.size()));
-        pInitializeMinMaxShadowMapPS->BindResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
-
+            Vars.emplace_back(SHADER_TYPE_PIXEL,  "cbMiscDynamicParams", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
+        ResourceLayout.Variables    = Vars.data();
+        ResourceLayout.NumVariables = static_cast<Uint32>(Vars.size());
         TEXTURE_FORMAT ShadowMapFmt = m_ptex2DMinMaxShadowMapSRV[0]->GetTexture()->GetDesc().Format;
         InitMinMaxShadowMapTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "InitMinMaxShadowMap",
                                                                       m_pFullScreenTriangleVS, pInitializeMinMaxShadowMapPS,
-                                                                      ShadowMapFmt);
+                                                                      ResourceLayout, ShadowMapFmt);
+        InitMinMaxShadowMapTech.PSO->BindStaticResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+
         InitMinMaxShadowMapTech.PSODependencyFlags = 
             PSO_DEPENDENCY_NUM_EPIPOLAR_SLICES      |
             PSO_DEPENDENCY_USE_1D_MIN_MAX_TREE      |
@@ -1230,17 +1270,23 @@ void EpipolarLightScattering :: Build1DMinMaxMipMap(int iCascadeIndex)
         DefineMacros(Macros);
         Macros.Finalize();
 
-        ShaderVariableDesc VarDesc[] =
-        {
-            {"cbMiscDynamicParams", SHADER_VARIABLE_TYPE_STATIC}
-        };
         auto pComputeMinMaxSMLevelPS = CreateShader(m_FrameAttribs.pDevice, "ComputeMinMaxShadowMapLevel.fx", "ComputeMinMaxShadowMapLevelPS",
-                                                    SHADER_TYPE_PIXEL, Macros, SHADER_VARIABLE_TYPE_MUTABLE, VarDesc, _countof(VarDesc));
-        pComputeMinMaxSMLevelPS->BindResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+                                                    SHADER_TYPE_PIXEL, Macros);
         
+        PipelineResourceLayoutDesc ResourceLayout;
+        ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
+        ShaderResourceVariableDesc VarDesc[] =
+        {
+            {SHADER_TYPE_PIXEL, "cbMiscDynamicParams", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
+        };
+        ResourceLayout.Variables    = VarDesc;
+        ResourceLayout.NumVariables = _countof(VarDesc);
+
         TEXTURE_FORMAT ShadowMapFmt = m_ptex2DMinMaxShadowMapSRV[0]->GetTexture()->GetDesc().Format;
         ComputeMinMaxSMLevelTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "ComputeMinMaxShadowMapLevel",
-                                                                       m_pFullScreenTriangleVS, pComputeMinMaxSMLevelPS, ShadowMapFmt);
+                                                                       m_pFullScreenTriangleVS, pComputeMinMaxSMLevelPS, ResourceLayout, ShadowMapFmt);
+        ComputeMinMaxSMLevelTech.PSO->BindStaticResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+
         ComputeMinMaxSMLevelTech.PSODependencyFlags = PSO_DEPENDENCY_IS_32_BIT_MIN_MAX_TREE;
         ComputeMinMaxSMLevelTech.SRBDependencyFlags = SRB_DEPENDENCY_MIN_MAX_SHADOW_MAP;
 
@@ -1353,19 +1399,21 @@ void EpipolarLightScattering :: DoRayMarching(Uint32 uiMaxStepsAlongRay,
         Macros.AddShaderMacro("USE_1D_MIN_MAX_TREE",     m_PostProcessingAttribs.bUse1DMinMaxTree);
         Macros.Finalize();
 
-        //ShaderVariableDesc Vars[] =
+        auto pDoRayMarchPS = CreateShader(m_FrameAttribs.pDevice, "RayMarch.fx", "RayMarchPS", SHADER_TYPE_PIXEL, Macros);
+        PipelineResourceLayoutDesc ResourceLayout;
+        ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
+        //ShaderResourceVariableDesc Vars[] =
         //{ 
-        //    {"cbParticipatingMediaScatteringParams", SHADER_VARIABLE_TYPE_STATIC}, // It does not really matter if these are  
-        //    {"cbPostProcessingAttribs",              SHADER_VARIABLE_TYPE_STATIC}, // static or mutable, so to avoid warnings
-        //    {"cbMiscDynamicParams",                  SHADER_VARIABLE_TYPE_STATIC}  // we will not explicitly specify the types
+        //    {SHADER_TYPE_PIXEL, "cbParticipatingMediaScatteringParams", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}, // It does not really matter if these are  
+        //    {SHADER_TYPE_PIXEL, "cbPostProcessingAttribs",              SHADER_RESOURCE_VARIABLE_TYPE_STATIC}, // static or mutable, so to avoid warnings
+        //    {SHADER_TYPE_PIXEL, "cbMiscDynamicParams",                  SHADER_RESOURCE_VARIABLE_TYPE_STATIC}  // we will not explicitly specify the types
         //};
-        auto pDoRayMarchPS = CreateShader(m_FrameAttribs.pDevice, "RayMarch.fx", "RayMarchPS", SHADER_TYPE_PIXEL,
-                                          Macros, SHADER_VARIABLE_TYPE_MUTABLE);
-        pDoRayMarchPS->BindResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
 
         DoRayMarchTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "RayMarch", m_pFullScreenTriangleVS,
-                                                             pDoRayMarchPS, EpipolarInsctrTexFmt, EpipolarImageDepthFmt,
+                                                             pDoRayMarchPS, ResourceLayout, EpipolarInsctrTexFmt, EpipolarImageDepthFmt,
                                                              DSS_StencilEqKeepStencil, BS_AdditiveBlend);
+        DoRayMarchTech.PSO->BindStaticResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+
         DoRayMarchTech.PSODependencyFlags = 
             PSO_DEPENDENCY_USE_1D_MIN_MAX_TREE      | 
             PSO_DEPENDENCY_CASCADE_PROCESSING_MODE  |
@@ -1435,12 +1483,15 @@ void EpipolarLightScattering :: InterpolateInsctrIrradiance()
         Macros.Finalize();
 
         auto pInterpolateIrradiancePS = CreateShader(m_FrameAttribs.pDevice, "InterpolateIrradiance.fx", "InterpolateIrradiancePS",
-                                                     SHADER_TYPE_PIXEL, Macros, SHADER_VARIABLE_TYPE_MUTABLE);
-        pInterpolateIrradiancePS->BindResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
-
+                                                     SHADER_TYPE_PIXEL, Macros);
+        
+        PipelineResourceLayoutDesc ResourceLayout;
+        ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
         InterpolateIrradianceTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "InterpolateIrradiance",
                                                                         m_pFullScreenTriangleVS, pInterpolateIrradiancePS,
-                                                                        EpipolarInsctrTexFmt);
+                                                                        ResourceLayout, EpipolarInsctrTexFmt);
+        InterpolateIrradianceTech.PSO->BindStaticResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+
         InterpolateIrradianceTech.SRBDependencyFlags =
             SRB_DEPENDENCY_INTERPOLATION_SOURCE_TEX | 
             SRB_DEPENDENCY_INITIAL_SCTR_LIGHT_TEX;
@@ -1480,19 +1531,24 @@ void EpipolarLightScattering :: UnwarpEpipolarScattering(bool bRenderLuminance)
         Macros.AddShaderMacro("CORRECT_INSCATTERING_AT_DEPTH_BREAKS", m_PostProcessingAttribs.bCorrectScatteringAtDepthBreaks);
         Macros.Finalize();
         
-        ShaderVariableDesc Vars[] =
-        { 
-            //{"cbParticipatingMediaScatteringParams", SHADER_VARIABLE_TYPE_STATIC}, // To avoid warnings
-            {"cbPostProcessingAttribs",              SHADER_VARIABLE_TYPE_STATIC}
-        };
-
         auto pUnwarpEpipolarSctrImgPS = CreateShader(m_FrameAttribs.pDevice, "UnwarpEpipolarScattering.fx", "ApplyInscatteredRadiancePS",
-                                                     SHADER_TYPE_PIXEL, Macros, SHADER_VARIABLE_TYPE_MUTABLE, Vars, _countof(Vars) );
-        pUnwarpEpipolarSctrImgPS->BindResources(m_pResMapping, 0);
+                                                     SHADER_TYPE_PIXEL, Macros);
+        
+        PipelineResourceLayoutDesc ResourceLayout;
+        ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
+        ShaderResourceVariableDesc Vars[] =
+        { 
+            //{SHADER_TYPE_PIXEL, "cbParticipatingMediaScatteringParams", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}, // To avoid warnings
+            {SHADER_TYPE_PIXEL, "cbPostProcessingAttribs",              SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
+        };
+        ResourceLayout.Variables    = Vars;
+        ResourceLayout.NumVariables = _countof(Vars);
 
         UnwarpEpipolarSctrImgTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "UnwarpEpipolarScattering",
                                                                         m_pFullScreenTriangleVS, pUnwarpEpipolarSctrImgPS,
-                                                                        m_BackBufferFmt, m_DepthBufferFmt, DSS_Default);
+                                                                        ResourceLayout, m_BackBufferFmt, m_DepthBufferFmt, DSS_Default);
+        UnwarpEpipolarSctrImgTech.PSO->BindStaticResources(m_pResMapping, 0);
+
         UnwarpEpipolarSctrImgTech.PSODependencyFlags = 
             PSO_DEPENDENCY_NUM_EPIPOLAR_SLICES  | 
             PSO_DEPENDENCY_MAX_SAMPLES_IN_SLICE |
@@ -1514,19 +1570,24 @@ void EpipolarLightScattering :: UnwarpEpipolarScattering(bool bRenderLuminance)
         Macros.AddShaderMacro("CORRECT_INSCATTERING_AT_DEPTH_BREAKS", false);
         Macros.Finalize();
         
-        ShaderVariableDesc Vars[] =
+        ShaderResourceVariableDesc Vars[] =
         { 
-            //{"cbParticipatingMediaScatteringParams", SHADER_VARIABLE_TYPE_STATIC}, // To avoid warnings
-            {"cbPostProcessingAttribs",              SHADER_VARIABLE_TYPE_STATIC}
+            //{SHADER_TYPE_PIXEL, "cbParticipatingMediaScatteringParams", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}, // To avoid warnings
+            {SHADER_TYPE_PIXEL, "cbPostProcessingAttribs",              SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
         };
 
         auto pUnwarpAndRenderLuminancePS = CreateShader(m_FrameAttribs.pDevice, "UnwarpEpipolarScattering.fx", "ApplyInscatteredRadiancePS",
-                                                        SHADER_TYPE_PIXEL, Macros, SHADER_VARIABLE_TYPE_MUTABLE, Vars, _countof(Vars) );
-        pUnwarpAndRenderLuminancePS->BindResources(m_pResMapping, 0);
-
+                                                        SHADER_TYPE_PIXEL, Macros);
+        
+        PipelineResourceLayoutDesc ResourceLayout;
+        ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
+        ResourceLayout.Variables           = Vars;
+        ResourceLayout.NumVariables        = _countof(Vars);
         UnwarpAndRenderLuminanceTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "UnwarpAndRenderLuminance",
                                                                            m_pFullScreenTriangleVS, pUnwarpAndRenderLuminancePS,
-                                                                           LuminanceTexFmt);
+                                                                           ResourceLayout, LuminanceTexFmt);
+        UnwarpAndRenderLuminanceTech.PSO->BindStaticResources(m_pResMapping, 0);
+
         UnwarpAndRenderLuminanceTech.PSODependencyFlags = 
             PSO_DEPENDENCY_NUM_EPIPOLAR_SLICES  | 
             PSO_DEPENDENCY_MAX_SAMPLES_IN_SLICE |
@@ -1574,19 +1635,23 @@ void EpipolarLightScattering :: UpdateAverageLuminance()
         Macros.AddShaderMacro("LOW_RES_LUMINANCE_MIPS", static_cast<int>(sm_iLowResLuminanceMips) );
         Macros.Finalize();
 
-        ShaderVariableDesc Vars[] =
-        { 
-            {"cbMiscDynamicParams", SHADER_VARIABLE_TYPE_STATIC}
-        };
-
         auto pUpdateAverageLuminancePS = CreateShader(m_FrameAttribs.pDevice, "UpdateAverageLuminance.fx", "UpdateAverageLuminancePS",
-                                                      SHADER_TYPE_PIXEL, Macros, SHADER_VARIABLE_TYPE_MUTABLE, Vars, _countof(Vars));
-        pUpdateAverageLuminancePS->BindResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
-
+                                                      SHADER_TYPE_PIXEL, Macros);
+        
+        PipelineResourceLayoutDesc ResourceLayout;
+        ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
+        ShaderResourceVariableDesc Vars[] =
+        { 
+            {SHADER_TYPE_PIXEL, "cbMiscDynamicParams", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
+        };
+        ResourceLayout.Variables    = Vars;
+        ResourceLayout.NumVariables = _countof(Vars);
         UpdateAverageLuminanceTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "UpdateAverageLuminance",
                                                                          m_pFullScreenTriangleVS, pUpdateAverageLuminancePS,
-                                                                         LuminanceTexFmt, TEX_FORMAT_UNKNOWN,
+                                                                         ResourceLayout, LuminanceTexFmt, TEX_FORMAT_UNKNOWN,
                                                                          DSS_DisableDepth, BS_AlphaBlend);
+        UpdateAverageLuminanceTech.PSO->BindStaticResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+
         UpdateAverageLuminanceTech.PSODependencyFlags = PSO_DEPENDENCY_LIGHT_ADAPTATION;
     }
 
@@ -1619,16 +1684,18 @@ void EpipolarLightScattering :: FixInscatteringAtDepthBreaks(Uint32             
         Macros.AddShaderMacro("USE_1D_MIN_MAX_TREE",     false);
         Macros.Finalize();
 
-        ShaderVariableDesc Vars[] =
-        { 
-            {"cbParticipatingMediaScatteringParams", SHADER_VARIABLE_TYPE_STATIC},
-            {"cbPostProcessingAttribs",              SHADER_VARIABLE_TYPE_STATIC} 
-            //{"cbMiscDynamicParams",                  SHADER_VARIABLE_TYPE_STATIC} // To avoid warning
-        };
-
         auto pFixInsctrAtDepthBreaksPS = CreateShader(m_FrameAttribs.pDevice, "RayMarch.fx", "FixAndApplyInscatteredRadiancePS",
-                                                      SHADER_TYPE_PIXEL, Macros, SHADER_VARIABLE_TYPE_MUTABLE, Vars, _countof(Vars));
-        pFixInsctrAtDepthBreaksPS->BindResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+                                                      SHADER_TYPE_PIXEL);
+        PipelineResourceLayoutDesc ResourceLayout;
+        ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
+        ShaderResourceVariableDesc Vars[] =
+        { 
+            {SHADER_TYPE_PIXEL, "cbParticipatingMediaScatteringParams", SHADER_RESOURCE_VARIABLE_TYPE_STATIC},
+            {SHADER_TYPE_PIXEL, "cbPostProcessingAttribs",              SHADER_RESOURCE_VARIABLE_TYPE_STATIC} 
+            //{SHADER_TYPE_PIXEL, "cbMiscDynamicParams",                  SHADER_RESOURCE_VARIABLE_TYPE_STATIC} // To avoid warning
+        };
+        ResourceLayout.Variables    = Vars;
+        ResourceLayout.NumVariables = _countof(Vars);
 
         if (Mode == EFixInscatteringMode::LuminanceOnly)
         {
@@ -1637,7 +1704,7 @@ void EpipolarLightScattering :: FixInscatteringAtDepthBreaks(Uint32             
 	        // Use default blend state to overwrite old luminance values
 	        FixInsctrAtDepthBreaksTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "FixInsctrAtDepthBreaksLumOnly",
                                                                              m_pFullScreenTriangleVS, pFixInsctrAtDepthBreaksPS,
-                                                                             LuminanceTexFmt);
+                                                                             ResourceLayout, LuminanceTexFmt);
         }
         else if (Mode == EFixInscatteringMode::FixInscattering)
         {
@@ -1647,7 +1714,7 @@ void EpipolarLightScattering :: FixInscatteringAtDepthBreaks(Uint32             
 	        // Use default blend state - the rendering is always done in single pass
 	        FixInsctrAtDepthBreaksTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "FixInsctrAtDepthBreaks",
                                                                              m_pFullScreenTriangleVS, pFixInsctrAtDepthBreaksPS,
-                                                                             m_BackBufferFmt, m_DepthBufferFmt, DSS_Default);
+                                                                             ResourceLayout, m_BackBufferFmt, m_DepthBufferFmt, DSS_Default);
         }
         else if (Mode == EFixInscatteringMode::FullScreenRayMarching)
         {
@@ -1657,8 +1724,10 @@ void EpipolarLightScattering :: FixInscatteringAtDepthBreaks(Uint32             
 	        // Use default blend state - the rendering is always done in single pass
 	        FixInsctrAtDepthBreaksTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "FixInsctrAtDepthBreaks",
                                                                              m_pFullScreenTriangleVS, pFixInsctrAtDepthBreaksPS,
-                                                                             m_BackBufferFmt, m_DepthBufferFmt, DSS_DisableDepth);
+                                                                             ResourceLayout, m_BackBufferFmt, m_DepthBufferFmt, DSS_DisableDepth);
         }
+        FixInsctrAtDepthBreaksTech.PSO->BindStaticResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+
 
         FixInsctrAtDepthBreaksTech.PSODependencyFlags = 
             PSO_DEPENDENCY_CASCADE_PROCESSING_MODE  |
@@ -1703,18 +1772,21 @@ void EpipolarLightScattering :: RenderSampleLocations()
         ShaderMacroHelper Macros;
         DefineMacros(Macros);
         Macros.Finalize();
-        ShaderVariableDesc Vars[] = 
-        { 
-            {"cbPostProcessingAttribs", SHADER_VARIABLE_TYPE_STATIC}
-        };
+
         auto pRenderSampleLocationsVS = CreateShader(m_FrameAttribs.pDevice, "RenderSampling.fx", "RenderSampleLocationsVS",
-                                                     SHADER_TYPE_VERTEX, Macros, SHADER_VARIABLE_TYPE_MUTABLE, Vars, _countof(Vars));
+                                                     SHADER_TYPE_VERTEX, Macros);
         auto pRenderSampleLocationsPS = CreateShader(m_FrameAttribs.pDevice, "RenderSampling.fx", "RenderSampleLocationsPS",
-                                                     SHADER_TYPE_PIXEL, Macros, SHADER_VARIABLE_TYPE_MUTABLE);
-        pRenderSampleLocationsVS->BindResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
-        pRenderSampleLocationsPS->BindResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+                                                     SHADER_TYPE_PIXEL, Macros);
 
         PipelineStateDesc PSODesc;
+        PSODesc.ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
+        ShaderResourceVariableDesc Vars[] = 
+        { 
+            {SHADER_TYPE_VERTEX, "cbPostProcessingAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
+        };
+        PSODesc.ResourceLayout.Variables    = Vars;
+        PSODesc.ResourceLayout.NumVariables = _countof(Vars);
+
         PSODesc.Name = "Render sample locations PSO";
         auto& GraphicsPipeline = PSODesc.GraphicsPipeline;
         GraphicsPipeline.RasterizerDesc.FillMode              = FILL_MODE_SOLID;
@@ -1729,6 +1801,8 @@ void EpipolarLightScattering :: RenderSampleLocations()
         GraphicsPipeline.DSVFormat         = m_DepthBufferFmt;
         GraphicsPipeline.PrimitiveTopology = PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
         m_FrameAttribs.pDevice->CreatePipelineState(PSODesc, &RenderSampleLocationsTech.PSO);
+        RenderSampleLocationsTech.PSO->BindStaticResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+
         RenderSampleLocationsTech.SRB.Release();
 
         RenderSampleLocationsTech.PSODependencyFlags = 
@@ -2400,18 +2474,18 @@ void EpipolarLightScattering :: RenderSun()
     auto& RenderSunTech = m_RenderTech[RENDER_TECH_RENDER_SUN];
     if (!RenderSunTech.PSO)
     {
-        ShaderVariableDesc Vars[] = 
-        { 
-            {"cbPostProcessingAttribs", SHADER_VARIABLE_TYPE_STATIC}
-        };
-        RefCntAutoPtr<IShader> pSunVS = CreateShader(m_FrameAttribs.pDevice, "Sun.fx", "SunVS", SHADER_TYPE_VERTEX,
-                                                     nullptr, SHADER_VARIABLE_TYPE_MUTABLE, Vars, _countof(Vars));
-        RefCntAutoPtr<IShader> pSunPS = CreateShader(m_FrameAttribs.pDevice, "Sun.fx", "SunPS", SHADER_TYPE_PIXEL,
-                                                     nullptr, SHADER_VARIABLE_TYPE_MUTABLE, Vars, _countof(Vars));
-        pSunVS->BindResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
-        pSunPS->BindResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+        RefCntAutoPtr<IShader> pSunVS = CreateShader(m_FrameAttribs.pDevice, "Sun.fx", "SunVS", SHADER_TYPE_VERTEX);
+        RefCntAutoPtr<IShader> pSunPS = CreateShader(m_FrameAttribs.pDevice, "Sun.fx", "SunPS", SHADER_TYPE_PIXEL);
 
         PipelineStateDesc PSODesc;
+        PSODesc.ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
+        ShaderResourceVariableDesc Vars[] = 
+        { 
+            {SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL, "cbPostProcessingAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
+        };
+        PSODesc.ResourceLayout.Variables    = Vars;
+        PSODesc.ResourceLayout.NumVariables = _countof(Vars);
+
         PSODesc.Name = "Render Sun";
         auto& GraphicsPipeline = PSODesc.GraphicsPipeline;
         GraphicsPipeline.RasterizerDesc.FillMode = FILL_MODE_SOLID;
@@ -2425,6 +2499,8 @@ void EpipolarLightScattering :: RenderSun()
         GraphicsPipeline.DSVFormat = m_DepthBufferFmt;
         GraphicsPipeline.PrimitiveTopology = PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
         m_FrameAttribs.pDevice->CreatePipelineState(PSODesc, &RenderSunTech.PSO);
+        RenderSunTech.PSO->BindStaticResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+
         RenderSunTech.SRBDependencyFlags = SRB_DEPENDENCY_CAMERA_ATTRIBS;
     }
 
@@ -2460,12 +2536,14 @@ void EpipolarLightScattering :: ComputeAmbientSkyLightTexture(IRenderDevice* pDe
         Macros.AddShaderMacro( "NUM_RANDOM_SPHERE_SAMPLES", m_uiNumRandomSamplesOnSphere );
         Macros.Finalize();
         auto pPrecomputeAmbientSkyLightPS = CreateShader(pDevice, "PrecomputeAmbientSkyLight.fx", "PrecomputeAmbientSkyLightPS",
-                                                         SHADER_TYPE_PIXEL, Macros, SHADER_VARIABLE_TYPE_STATIC );
-        pPrecomputeAmbientSkyLightPS->BindResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
-
+                                                         SHADER_TYPE_PIXEL, Macros);
+        
+        PipelineResourceLayoutDesc ResourceLayout;
+        ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_STATIC;
         PrecomputeAmbientSkyLightTech.InitializeFullScreenTriangleTechnique(pDevice, "PrecomputeAmbientSkyLight",
                                                                             m_pFullScreenTriangleVS, pPrecomputeAmbientSkyLightPS,
-                                                                            AmbientSkyLightTexFmt);
+                                                                            ResourceLayout, AmbientSkyLightTexFmt);
+        PrecomputeAmbientSkyLightTech.PSO->BindStaticResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
     }
     
     // Create 2-D texture, shader resource and target view buffers on the device
