@@ -416,7 +416,7 @@ void EpipolarLightScattering::PrecomputeOpticalDepthTexture(IRenderDevice*  pDev
         PrecomputeNetDensityToAtmTopTech.
             InitializeFullScreenTriangleTechnique(pDevice, "PrecomputeNetDensityToAtmTopPSO", m_pFullScreenTriangleVS,
                                                   pPrecomputeNetDensityToAtmTopPS, ResourceLayout, PrecomputedNetDensityTexFmt);
-        PrecomputeNetDensityToAtmTopTech.PSO->BindStaticResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+        PrecomputeNetDensityToAtmTopTech.PSO->BindStaticResources(SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL, m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
     }
 
     PrecomputeNetDensityToAtmTopTech.PrepareSRB(pDevice, m_pResMapping);
@@ -931,7 +931,7 @@ void EpipolarLightScattering :: ReconstructCameraSpaceZ()
         ReconstrCamSpaceZTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "ReconstructCameraSpaceZPSO", m_pFullScreenTriangleVS,
                                                                     pReconstrCamSpaceZPS, ResourceLayout, CamSpaceZFmt);
         // Bind input resources required by the shader
-        ReconstrCamSpaceZTech.PSO->BindStaticResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+        ReconstrCamSpaceZTech.PSO->BindStaticResources(SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL, m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
 
         ReconstrCamSpaceZTech.SRBDependencyFlags = 
             SRB_DEPENDENCY_CAMERA_ATTRIBS | 
@@ -966,7 +966,7 @@ void EpipolarLightScattering :: RenderSliceEndpoints()
         RendedSliceEndpointsTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "RenderSliceEndPoints", m_pFullScreenTriangleVS,
                                                                        pRendedSliceEndpointsPS, ResourceLayout, SliceEndpointsFmt);
         // Bind static resources required by the shaders
-        RendedSliceEndpointsTech.PSO->BindStaticResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+        RendedSliceEndpointsTech.PSO->BindStaticResources(SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL, m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
 
         RendedSliceEndpointsTech.PSODependencyFlags =
             PSO_DEPENDENCY_NUM_EPIPOLAR_SLICES  | 
@@ -997,7 +997,7 @@ void EpipolarLightScattering :: RenderCoordinateTexture()
         TEXTURE_FORMAT RTVFmts[] = {CoordinateTexFmt, EpipolarCamSpaceZFmt};
         RendedCoordTexTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "RenderCoordinateTexture", m_pFullScreenTriangleVS,
                                                                  pRendedCoordTexPS, ResourceLayout, 2, RTVFmts, EpipolarImageDepthFmt, DSS_IncStencilAlways);
-        RendedCoordTexTech.PSO->BindStaticResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+        RendedCoordTexTech.PSO->BindStaticResources(SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL, m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
 
         RendedCoordTexTech.PSODependencyFlags = PSO_DEPENDENCY_MAX_SAMPLES_IN_SLICE;
         RendedCoordTexTech.SRBDependencyFlags = 
@@ -1056,7 +1056,7 @@ void EpipolarLightScattering :: RenderCoarseUnshadowedInctr()
         RenderCoarseUnshadowedInsctrTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, PSOName, m_pFullScreenTriangleVS,
                                                                                pRenderCoarseUnshadowedInsctrPS, ResourceLayout, NumRTVs, RTVFmts,
                                                                                EpipolarImageDepthFmt, DSS_StencilEqKeepStencil);
-        RenderCoarseUnshadowedInsctrTech.PSO->BindStaticResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+        RenderCoarseUnshadowedInsctrTech.PSO->BindStaticResources(SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL, m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
 
         RenderCoarseUnshadowedInsctrTech.PSODependencyFlags = 
             PSO_DEPENDENCY_EXTINCTION_EVAL_MODE   | 
@@ -1127,7 +1127,7 @@ void EpipolarLightScattering :: RefineSampleLocations()
         ResourceLayout.NumVariables = _countof(Vars);
 
         RefineSampleLocationsTech.InitializeComputeTechnique(m_FrameAttribs.pDevice, "RefineSampleLocations", pRefineSampleLocationsCS, ResourceLayout);
-        RefineSampleLocationsTech.PSO->BindStaticResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+        RefineSampleLocationsTech.PSO->BindStaticResources(SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL, m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
 
         RefineSampleLocationsTech.PSODependencyFlags = 
             PSO_DEPENDENCY_MAX_SAMPLES_IN_SLICE  |
@@ -1167,7 +1167,7 @@ void EpipolarLightScattering :: MarkRayMarchingSamples()
         MarkRayMarchingSamplesInStencilTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "MarkRayMarchingSamples",
                                                                                   m_pFullScreenTriangleVS, pMarkRayMarchingSamplesInStencilPS,
                                                                                   ResourceLayout, 0, nullptr, EpipolarImageDepthFmt, DSS_StencilEqIncStencil);
-        MarkRayMarchingSamplesInStencilTech.PSO->BindStaticResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+        MarkRayMarchingSamplesInStencilTech.PSO->BindStaticResources(SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL, m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
 
         MarkRayMarchingSamplesInStencilTech.SRBDependencyFlags = SRB_DEPENDENCY_INTERPOLATION_SOURCE_TEX;
     }
@@ -1205,7 +1205,7 @@ void EpipolarLightScattering :: RenderSliceUVDirAndOrig()
         RenderSliceUVDirInSMTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "RenderSliceUVDirAndOrigin",
                                                                        m_pFullScreenTriangleVS, pRenderSliceUVDirInSMPS,
                                                                        ResourceLayout, SliceUVDirAndOriginTexFmt);
-        RenderSliceUVDirInSMTech.PSO->BindStaticResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+        RenderSliceUVDirInSMTech.PSO->BindStaticResources(SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL, m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
 
         RenderSliceUVDirInSMTech.SRBDependencyFlags =
             SRB_DEPENDENCY_CAMERA_ATTRIBS       |
@@ -1251,7 +1251,7 @@ void EpipolarLightScattering :: Build1DMinMaxMipMap(int iCascadeIndex)
         InitMinMaxShadowMapTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "InitMinMaxShadowMap",
                                                                       m_pFullScreenTriangleVS, pInitializeMinMaxShadowMapPS,
                                                                       ResourceLayout, ShadowMapFmt);
-        InitMinMaxShadowMapTech.PSO->BindStaticResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+        InitMinMaxShadowMapTech.PSO->BindStaticResources(SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL, m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
 
         InitMinMaxShadowMapTech.PSODependencyFlags = 
             PSO_DEPENDENCY_NUM_EPIPOLAR_SLICES      |
@@ -1285,7 +1285,7 @@ void EpipolarLightScattering :: Build1DMinMaxMipMap(int iCascadeIndex)
         TEXTURE_FORMAT ShadowMapFmt = m_ptex2DMinMaxShadowMapSRV[0]->GetTexture()->GetDesc().Format;
         ComputeMinMaxSMLevelTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "ComputeMinMaxShadowMapLevel",
                                                                        m_pFullScreenTriangleVS, pComputeMinMaxSMLevelPS, ResourceLayout, ShadowMapFmt);
-        ComputeMinMaxSMLevelTech.PSO->BindStaticResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+        ComputeMinMaxSMLevelTech.PSO->BindStaticResources(SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL, m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
 
         ComputeMinMaxSMLevelTech.PSODependencyFlags = PSO_DEPENDENCY_IS_32_BIT_MIN_MAX_TREE;
         ComputeMinMaxSMLevelTech.SRBDependencyFlags = SRB_DEPENDENCY_MIN_MAX_SHADOW_MAP;
@@ -1412,7 +1412,7 @@ void EpipolarLightScattering :: DoRayMarching(Uint32 uiMaxStepsAlongRay,
         DoRayMarchTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "RayMarch", m_pFullScreenTriangleVS,
                                                              pDoRayMarchPS, ResourceLayout, EpipolarInsctrTexFmt, EpipolarImageDepthFmt,
                                                              DSS_StencilEqKeepStencil, BS_AdditiveBlend);
-        DoRayMarchTech.PSO->BindStaticResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+        DoRayMarchTech.PSO->BindStaticResources(SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL, m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
 
         DoRayMarchTech.PSODependencyFlags = 
             PSO_DEPENDENCY_USE_1D_MIN_MAX_TREE      | 
@@ -1490,7 +1490,7 @@ void EpipolarLightScattering :: InterpolateInsctrIrradiance()
         InterpolateIrradianceTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "InterpolateIrradiance",
                                                                         m_pFullScreenTriangleVS, pInterpolateIrradiancePS,
                                                                         ResourceLayout, EpipolarInsctrTexFmt);
-        InterpolateIrradianceTech.PSO->BindStaticResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+        InterpolateIrradianceTech.PSO->BindStaticResources(SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL, m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
 
         InterpolateIrradianceTech.SRBDependencyFlags =
             SRB_DEPENDENCY_INTERPOLATION_SOURCE_TEX | 
@@ -1547,7 +1547,7 @@ void EpipolarLightScattering :: UnwarpEpipolarScattering(bool bRenderLuminance)
         UnwarpEpipolarSctrImgTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "UnwarpEpipolarScattering",
                                                                         m_pFullScreenTriangleVS, pUnwarpEpipolarSctrImgPS,
                                                                         ResourceLayout, m_BackBufferFmt, m_DepthBufferFmt, DSS_Default);
-        UnwarpEpipolarSctrImgTech.PSO->BindStaticResources(m_pResMapping, 0);
+        UnwarpEpipolarSctrImgTech.PSO->BindStaticResources(SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL, m_pResMapping, 0);
 
         UnwarpEpipolarSctrImgTech.PSODependencyFlags = 
             PSO_DEPENDENCY_NUM_EPIPOLAR_SLICES  | 
@@ -1586,7 +1586,7 @@ void EpipolarLightScattering :: UnwarpEpipolarScattering(bool bRenderLuminance)
         UnwarpAndRenderLuminanceTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "UnwarpAndRenderLuminance",
                                                                            m_pFullScreenTriangleVS, pUnwarpAndRenderLuminancePS,
                                                                            ResourceLayout, LuminanceTexFmt);
-        UnwarpAndRenderLuminanceTech.PSO->BindStaticResources(m_pResMapping, 0);
+        UnwarpAndRenderLuminanceTech.PSO->BindStaticResources(SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL, m_pResMapping, 0);
 
         UnwarpAndRenderLuminanceTech.PSODependencyFlags = 
             PSO_DEPENDENCY_NUM_EPIPOLAR_SLICES  | 
@@ -1650,7 +1650,7 @@ void EpipolarLightScattering :: UpdateAverageLuminance()
                                                                          m_pFullScreenTriangleVS, pUpdateAverageLuminancePS,
                                                                          ResourceLayout, LuminanceTexFmt, TEX_FORMAT_UNKNOWN,
                                                                          DSS_DisableDepth, BS_AlphaBlend);
-        UpdateAverageLuminanceTech.PSO->BindStaticResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+        UpdateAverageLuminanceTech.PSO->BindStaticResources(SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL, m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
 
         UpdateAverageLuminanceTech.PSODependencyFlags = PSO_DEPENDENCY_LIGHT_ADAPTATION;
     }
@@ -1726,7 +1726,7 @@ void EpipolarLightScattering :: FixInscatteringAtDepthBreaks(Uint32             
                                                                              m_pFullScreenTriangleVS, pFixInsctrAtDepthBreaksPS,
                                                                              ResourceLayout, m_BackBufferFmt, m_DepthBufferFmt, DSS_DisableDepth);
         }
-        FixInsctrAtDepthBreaksTech.PSO->BindStaticResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+        FixInsctrAtDepthBreaksTech.PSO->BindStaticResources(SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL, m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
 
 
         FixInsctrAtDepthBreaksTech.PSODependencyFlags = 
@@ -1801,7 +1801,7 @@ void EpipolarLightScattering :: RenderSampleLocations()
         GraphicsPipeline.DSVFormat         = m_DepthBufferFmt;
         GraphicsPipeline.PrimitiveTopology = PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
         m_FrameAttribs.pDevice->CreatePipelineState(PSODesc, &RenderSampleLocationsTech.PSO);
-        RenderSampleLocationsTech.PSO->BindStaticResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+        RenderSampleLocationsTech.PSO->BindStaticResources(SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL, m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
 
         RenderSampleLocationsTech.SRB.Release();
 
@@ -2499,7 +2499,7 @@ void EpipolarLightScattering :: RenderSun()
         GraphicsPipeline.DSVFormat = m_DepthBufferFmt;
         GraphicsPipeline.PrimitiveTopology = PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
         m_FrameAttribs.pDevice->CreatePipelineState(PSODesc, &RenderSunTech.PSO);
-        RenderSunTech.PSO->BindStaticResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+        RenderSunTech.PSO->BindStaticResources(SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL, m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
 
         RenderSunTech.SRBDependencyFlags = SRB_DEPENDENCY_CAMERA_ATTRIBS;
     }
@@ -2543,7 +2543,7 @@ void EpipolarLightScattering :: ComputeAmbientSkyLightTexture(IRenderDevice* pDe
         PrecomputeAmbientSkyLightTech.InitializeFullScreenTriangleTechnique(pDevice, "PrecomputeAmbientSkyLight",
                                                                             m_pFullScreenTriangleVS, pPrecomputeAmbientSkyLightPS,
                                                                             ResourceLayout, AmbientSkyLightTexFmt);
-        PrecomputeAmbientSkyLightTech.PSO->BindStaticResources(m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+        PrecomputeAmbientSkyLightTech.PSO->BindStaticResources(SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL, m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
     }
     
     // Create 2-D texture, shader resource and target view buffers on the device
