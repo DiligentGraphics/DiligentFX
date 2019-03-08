@@ -1033,8 +1033,7 @@ void EpipolarLightScattering :: RenderCoarseUnshadowedInctr()
                 "RenderCoarseUnshadowedInsctrAndExtinctionPS" : 
                 "RenderCoarseUnshadowedInsctrPS";
 
-        auto pRenderCoarseUnshadowedInsctrPS = CreateShader(m_FrameAttribs.pDevice, "CoarseInsctr.fx", EntryPoint, SHADER_TYPE_PIXEL,
-                                                            Macros);
+        auto pRenderCoarseUnshadowedInsctrPS = CreateShader(m_FrameAttribs.pDevice, "CoarseInsctr.fx", EntryPoint, SHADER_TYPE_PIXEL, Macros);
         PipelineResourceLayoutDesc ResourceLayout;
         ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
         //ShaderResourceVariableDesc Vars[] = 
@@ -1685,7 +1684,7 @@ void EpipolarLightScattering :: FixInscatteringAtDepthBreaks(Uint32             
         Macros.Finalize();
 
         auto pFixInsctrAtDepthBreaksPS = CreateShader(m_FrameAttribs.pDevice, "RayMarch.fx", "FixAndApplyInscatteredRadiancePS",
-                                                      SHADER_TYPE_PIXEL);
+                                                      SHADER_TYPE_PIXEL, Macros);
         PipelineResourceLayoutDesc ResourceLayout;
         ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
         ShaderResourceVariableDesc Vars[] =
