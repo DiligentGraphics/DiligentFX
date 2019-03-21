@@ -1353,8 +1353,6 @@ void EpipolarLightScattering :: Build1DMinMaxMipMap(int iCascadeIndex)
             // PCF filtering at the sample location and its next neighbor along the slice 
             // and outputs min/max depths
             InitMinMaxShadowMapTech.PrepareSRB(m_FrameAttribs.pDevice, m_pResMapping);
-	        // Set dynamic variable g_tex2DLightSpaceDepthMap
-	        InitMinMaxShadowMapTech.SRB->GetVariable(SHADER_TYPE_PIXEL, "g_tex2DLightSpaceDepthMap")->Set(m_FrameAttribs.ptex2DShadowMapSRV);
 	        InitMinMaxShadowMapTech.Render(m_FrameAttribs.pDeviceContext);
         }
         else
@@ -1462,7 +1460,6 @@ void EpipolarLightScattering :: DoRayMarching(Uint32 uiMaxStepsAlongRay,
     // Depth stencil state is configured to pass only these pixels and discard the rest
 	if (!DoRayMarchTech.SRB && m_FrameAttribs.pDevice->GetDeviceCaps().IsVulkanDevice())
     {
-        m_pResMapping->AddResource("g_tex2DColorBuffer", m_FrameAttribs.ptex2DSrcColorBufferSRV, false);
         m_FrameAttribs.ptex2DSrcColorBufferSRV->SetSampler(m_pLinearClampSampler);
     }
     DoRayMarchTech.PrepareSRB(m_FrameAttribs.pDevice, m_pResMapping);
@@ -1601,18 +1598,12 @@ void EpipolarLightScattering :: UnwarpEpipolarScattering(bool bRenderLuminance)
     {
         UnwarpAndRenderLuminanceTech.PrepareSRB(m_FrameAttribs.pDevice, m_pResMapping, BIND_SHADER_RESOURCES_KEEP_EXISTING);
 
-	    // Set dynamic variable g_tex2DColorBuffer
-	    UnwarpAndRenderLuminanceTech.SRB->GetVariable(SHADER_TYPE_PIXEL, "g_tex2DColorBuffer")->Set(m_FrameAttribs.ptex2DSrcColorBufferSRV);
-
 	    // Disable depth testing - we need to render the entire image in low resolution
 	    UnwarpAndRenderLuminanceTech.Render(m_FrameAttribs.pDeviceContext);
     }
     else
     {
         UnwarpEpipolarSctrImgTech.PrepareSRB(m_FrameAttribs.pDevice, m_pResMapping, BIND_SHADER_RESOURCES_KEEP_EXISTING);
-
-	    // Set dynamic variable g_tex2DColorBuffer
-	    UnwarpEpipolarSctrImgTech.SRB->GetVariable(SHADER_TYPE_PIXEL, "g_tex2DColorBuffer")->Set(m_FrameAttribs.ptex2DSrcColorBufferSRV);
 
 	    // Enable depth testing to write 0.0 to the depth buffer. All pixel that require 
 	    // inscattering correction (if enabled) will be discarded, so that 1.0 will be retained
@@ -1756,9 +1747,6 @@ void EpipolarLightScattering :: FixInscatteringAtDepthBreaks(Uint32             
     }
 
     FixInsctrAtDepthBreaksTech.PrepareSRB(m_FrameAttribs.pDevice, m_pResMapping, BIND_SHADER_RESOURCES_KEEP_EXISTING);
-
-	// Set dynamic variable g_tex2DColorBuffer
-	FixInsctrAtDepthBreaksTech.SRB->GetVariable(SHADER_TYPE_PIXEL, "g_tex2DColorBuffer")->Set(m_FrameAttribs.ptex2DSrcColorBufferSRV);
 
 	FixInsctrAtDepthBreaksTech.Render(m_FrameAttribs.pDeviceContext);
 }
@@ -1972,6 +1960,9 @@ void EpipolarLightScattering :: PerformPostProcessing(FrameAttribs&             
 
     for(int i=0; i < RENDER_TECH_TOTAL_TECHNIQUES; ++i)
         m_RenderTech[i].CheckStaleFlags(StalePSODependencyFlags, StaleSRBDependencyFlags);
+
+    if (StaleSRBDependencyFlags & SRB_DEPENDENCY_SRC_COLOR_BUFFER)
+        m_pResMapping->AddResource("g_tex2DColorBuffer", frameAttribs.ptex2DSrcColorBufferSRV, false);
 
     if (StaleSRBDependencyFlags & SRB_DEPENDENCY_MIN_MAX_SHADOW_MAP)
     {
