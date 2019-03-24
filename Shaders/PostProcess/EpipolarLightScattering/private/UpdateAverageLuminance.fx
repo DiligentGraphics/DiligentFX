@@ -1,9 +1,11 @@
 #include "AtmosphereShadersCommon.fxh"
 
+#if LIGHT_ADAPTATION
 cbuffer cbMiscDynamicParams
 {
     MiscDynamicParams g_MiscParams;
 }
+#endif
 
 Texture2D<float>  g_tex2DLowResLuminance;
 

@@ -26,11 +26,6 @@ SamplerState      g_tex2DOccludedNetDensityToAtmTop_sampler;
 
 Texture2D<float>  g_tex2DEpipolarCamSpaceZ;
 
-Texture2D<float2> g_tex2DMinMaxLightSpaceDepth;
-
-Texture2DArray<float>  g_tex2DLightSpaceDepthMap;
-SamplerComparisonState g_tex2DLightSpaceDepthMap_sampler;
-
 Texture2D<float2> g_tex2DCoordinates;
 
 Texture3D<float3> g_tex3DSingleSctrLUT;

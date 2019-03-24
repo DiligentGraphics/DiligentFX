@@ -49,8 +49,10 @@ SamplerComparisonState g_tex2DLightSpaceDepthMap_sampler;
 
 Texture2D<float>  g_tex2DAverageLuminance;
 
-Texture2D<float3> g_tex2DEpipolarExtinction;
-SamplerState      g_tex2DEpipolarExtinction_sampler; // Linear clamp
+#if EXTINCTION_EVAL_MODE == EXTINCTION_EVAL_MODE_EPIPOLAR
+    Texture2D<float3> g_tex2DEpipolarExtinction;
+    SamplerState      g_tex2DEpipolarExtinction_sampler; // Linear clamp
+#endif
 
 #include "Extinction.fxh"
 #include "ToneMapping.fxh"

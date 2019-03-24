@@ -22,6 +22,9 @@
  */
 
 #include <algorithm>
+#include <unordered_set>
+#include <array>
+#include <cstring>
 
 #include "EpipolarLightScattering.h"
 #include "ShaderMacroHelper.h"
@@ -993,7 +996,12 @@ void EpipolarLightScattering :: RenderCoordinateTexture()
                                               SHADER_TYPE_PIXEL, Macros);
         PipelineResourceLayoutDesc ResourceLayout;
         ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
-
+        StaticSamplerDesc StaticSamplers[] =
+        {
+            {SHADER_TYPE_PIXEL, "g_tex2DCamSpaceZ", Sam_LinearClamp}
+        };
+        ResourceLayout.StaticSamplers    = StaticSamplers;
+        ResourceLayout.NumStaticSamplers = _countof(StaticSamplers);
         TEXTURE_FORMAT RTVFmts[] = {CoordinateTexFmt, EpipolarCamSpaceZFmt};
         RendedCoordTexTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "RenderCoordinateTexture", m_pFullScreenTriangleVS,
                                                                  pRendedCoordTexPS, ResourceLayout, 2, RTVFmts, EpipolarImageDepthFmt, DSS_IncStencilAlways);
@@ -1036,16 +1044,37 @@ void EpipolarLightScattering :: RenderCoarseUnshadowedInctr()
         auto pRenderCoarseUnshadowedInsctrPS = CreateShader(m_FrameAttribs.pDevice, "CoarseInsctr.fx", EntryPoint, SHADER_TYPE_PIXEL, Macros);
         PipelineResourceLayoutDesc ResourceLayout;
         ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
-        //ShaderResourceVariableDesc Vars[] = 
-        //{ 
-        //    {SHADER_TYPE_PIXEL, "cbParticipatingMediaScatteringParams", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}, // It does not really matter if these are 
-        //    {SHADER_TYPE_PIXEL, "g_tex2DOccludedNetDensityToAtmTop",    SHADER_RESOURCE_VARIABLE_TYPE_STATIC}, // static or mutable, so to avoid warnings
-        //    {SHADER_TYPE_PIXEL, "g_tex3DSingleSctrLUT",                 SHADER_RESOURCE_VARIABLE_TYPE_STATIC}, // we will not explicitly specify the types 
-        //    {SHADER_TYPE_PIXEL, "g_tex3DHighOrderSctrLUT",              SHADER_RESOURCE_VARIABLE_TYPE_STATIC}, 
-        //    {SHADER_TYPE_PIXEL, "g_tex3DMultipleSctrLUT",               SHADER_RESOURCE_VARIABLE_TYPE_STATIC}, 
-        //};
-        //ResourceLayout.Variables    = Vars;
-        //ResourceLayout.NumVariables = _countof(Vars);
+        std::vector<ShaderResourceVariableDesc> Vars;
+        std::vector<StaticSamplerDesc>          StaticSamplers;
+
+        std::unordered_set<std::string> ResourceNames;
+        const auto ResCount = pRenderCoarseUnshadowedInsctrPS->GetResourceCount();
+        for (Uint32 r=0; r < ResCount; ++r)
+            ResourceNames.emplace(pRenderCoarseUnshadowedInsctrPS->GetResource(r).Name);
+
+        const std::array<std::string, 4> StaticTextures =
+        {
+            "g_tex3DSingleSctrLUT",
+            "g_tex3DHighOrderSctrLUT",
+            "g_tex3DMultipleSctrLUT",
+            "g_tex2DOccludedNetDensityToAtmTop"
+        };
+        for(const auto& Tex : StaticTextures)
+        {
+            if (ResourceNames.find(Tex) != ResourceNames.end())
+            {
+                Vars.emplace_back(SHADER_TYPE_PIXEL, Tex.c_str(), SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
+                StaticSamplers.emplace_back(SHADER_TYPE_PIXEL, Tex.c_str(), Sam_LinearClamp);
+            }
+        }
+
+        if (ResourceNames.find("cbParticipatingMediaScatteringParams") != ResourceNames.end())
+            Vars.emplace_back(SHADER_TYPE_PIXEL, "cbParticipatingMediaScatteringParams", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
+
+        ResourceLayout.Variables         = Vars.data();
+        ResourceLayout.NumVariables      = static_cast<Uint32>(Vars.size());
+        ResourceLayout.StaticSamplers    = StaticSamplers.data();
+        ResourceLayout.NumStaticSamplers = static_cast<Uint32>(StaticSamplers.size());
 
         const auto* PSOName = m_PostProcessingAttribs.uiExtinctionEvalMode == EXTINCTION_EVAL_MODE_EPIPOLAR ? 
                                 "RenderCoarseUnshadowedInsctrAndExtinctionPSO" : 
@@ -1065,8 +1094,6 @@ void EpipolarLightScattering :: RenderCoarseUnshadowedInctr()
             SRB_DEPENDENCY_CAMERA_ATTRIBS           |
             SRB_DEPENDENCY_LIGHT_ATTRIBS            |
             SRB_DEPENDENCY_EPIPOLAR_CAM_SPACE_Z_TEX |
-            SRB_DEPENDENCY_MIN_MAX_SHADOW_MAP       |
-            SRB_DEPENDENCY_SHADOW_MAP               |
             SRB_DEPENDENCY_COORDINATE_TEX;
     }
 
@@ -1120,13 +1147,13 @@ void EpipolarLightScattering :: RefineSampleLocations()
         ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
         ShaderResourceVariableDesc Vars[] = 
         { 
-            {SHADER_TYPE_PIXEL, "cbPostProcessingAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
+            {SHADER_TYPE_COMPUTE, "cbPostProcessingAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
         };
         ResourceLayout.Variables    = Vars;
         ResourceLayout.NumVariables = _countof(Vars);
 
         RefineSampleLocationsTech.InitializeComputeTechnique(m_FrameAttribs.pDevice, "RefineSampleLocations", pRefineSampleLocationsCS, ResourceLayout);
-        RefineSampleLocationsTech.PSO->BindStaticResources(SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL, m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
+        RefineSampleLocationsTech.PSO->BindStaticResources(SHADER_TYPE_COMPUTE, m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
 
         RefineSampleLocationsTech.PSODependencyFlags = 
             PSO_DEPENDENCY_MAX_SAMPLES_IN_SLICE  |
@@ -1244,8 +1271,17 @@ void EpipolarLightScattering :: Build1DMinMaxMipMap(int iCascadeIndex)
         };
         if (!m_bUseCombinedMinMaxTexture)
             Vars.emplace_back(SHADER_TYPE_PIXEL,  "cbMiscDynamicParams", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
-        ResourceLayout.Variables    = Vars.data();
-        ResourceLayout.NumVariables = static_cast<Uint32>(Vars.size());
+        
+        StaticSamplerDesc StaticSamplers[] = 
+        {
+            {SHADER_TYPE_PIXEL, "g_tex2DLightSpaceDepthMap", Sam_LinearClamp} // Linear, not comparison
+        };
+
+        ResourceLayout.Variables         = Vars.data();
+        ResourceLayout.NumVariables      = static_cast<Uint32>(Vars.size());
+        ResourceLayout.StaticSamplers    = StaticSamplers;
+        ResourceLayout.NumStaticSamplers = _countof(StaticSamplers);
+
         TEXTURE_FORMAT ShadowMapFmt = m_ptex2DMinMaxShadowMapSRV[0]->GetTexture()->GetDesc().Format;
         InitMinMaxShadowMapTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "InitMinMaxShadowMap",
                                                                       m_pFullScreenTriangleVS, pInitializeMinMaxShadowMapPS,
@@ -1304,9 +1340,6 @@ void EpipolarLightScattering :: Build1DMinMaxMipMap(int iCascadeIndex)
         }
     }
         
-    auto pShadowSampler = m_FrameAttribs.ptex2DShadowMapSRV->GetSampler();
-    m_FrameAttribs.ptex2DShadowMapSRV->SetSampler( m_pLinearClampSampler );
-
     auto iMinMaxTexHeight = m_PostProcessingAttribs.uiNumEpipolarSlices;
     if( m_bUseCombinedMinMaxTexture )
         iMinMaxTexHeight *= (m_PostProcessingAttribs.iNumCascades - m_PostProcessingAttribs.iFirstCascadeToRayMarch);
@@ -1380,8 +1413,6 @@ void EpipolarLightScattering :: Build1DMinMaxMipMap(int iCascadeIndex)
         uiPrevXOffset = uiXOffset;
         uiXOffset += m_PostProcessingAttribs.uiMinMaxShadowMapResolution / iStep;
     }
-    
-    m_FrameAttribs.ptex2DShadowMapSRV->SetSampler( pShadowSampler );
 }
 
 void EpipolarLightScattering :: DoRayMarching(Uint32 uiMaxStepsAlongRay, 
@@ -1399,12 +1430,44 @@ void EpipolarLightScattering :: DoRayMarching(Uint32 uiMaxStepsAlongRay,
         auto pDoRayMarchPS = CreateShader(m_FrameAttribs.pDevice, "RayMarch.fx", "RayMarchPS", SHADER_TYPE_PIXEL, Macros);
         PipelineResourceLayoutDesc ResourceLayout;
         ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
-        //ShaderResourceVariableDesc Vars[] =
-        //{ 
-        //    {SHADER_TYPE_PIXEL, "cbParticipatingMediaScatteringParams", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}, // It does not really matter if these are  
-        //    {SHADER_TYPE_PIXEL, "cbPostProcessingAttribs",              SHADER_RESOURCE_VARIABLE_TYPE_STATIC}, // static or mutable, so to avoid warnings
-        //    {SHADER_TYPE_PIXEL, "cbMiscDynamicParams",                  SHADER_RESOURCE_VARIABLE_TYPE_STATIC}  // we will not explicitly specify the types
-        //};
+        std::vector<ShaderResourceVariableDesc> Vars;
+        std::vector<StaticSamplerDesc>          StaticSamplers;
+
+        std::unordered_set<std::string> ResourceNames;
+        const auto ResCount = pDoRayMarchPS->GetResourceCount();
+        for (Uint32 r=0; r < ResCount; ++r)
+            ResourceNames.emplace(pDoRayMarchPS->GetResource(r).Name);
+
+        const std::array<std::string, 4> StaticLinearTextures =
+        {
+            "g_tex3DSingleSctrLUT",
+            "g_tex3DHighOrderSctrLUT",
+            "g_tex3DMultipleSctrLUT",
+            "g_tex2DOccludedNetDensityToAtmTop"
+        };
+        for(const auto& Tex : StaticLinearTextures)
+        {
+            if (ResourceNames.find(Tex) != ResourceNames.end())
+            {
+                Vars.emplace_back(SHADER_TYPE_PIXEL, Tex.c_str(), SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
+                StaticSamplers.emplace_back(SHADER_TYPE_PIXEL, Tex.c_str(), Sam_LinearClamp);
+            }
+        }
+
+        if (ResourceNames.find("cbParticipatingMediaScatteringParams") != ResourceNames.end())
+            Vars.emplace_back(SHADER_TYPE_PIXEL, "cbParticipatingMediaScatteringParams", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
+        if (ResourceNames.find("cbPostProcessingAttribs") != ResourceNames.end())
+            Vars.emplace_back(SHADER_TYPE_PIXEL, "cbPostProcessingAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
+        if (ResourceNames.find("cbMiscDynamicParams") != ResourceNames.end())
+            Vars.emplace_back(SHADER_TYPE_PIXEL, "cbMiscDynamicParams", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
+
+        if (ResourceNames.find("g_tex2DCamSpaceZ") != ResourceNames.end())
+            StaticSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_tex2DCamSpaceZ", Sam_LinearClamp);
+
+        ResourceLayout.Variables         = Vars.data();
+        ResourceLayout.NumVariables      = static_cast<Uint32>(Vars.size());
+        ResourceLayout.StaticSamplers    = StaticSamplers.data();
+        ResourceLayout.NumStaticSamplers = static_cast<Uint32>(StaticSamplers.size());
 
         DoRayMarchTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "RayMarch", m_pFullScreenTriangleVS,
                                                              pDoRayMarchPS, ResourceLayout, EpipolarInsctrTexFmt, EpipolarImageDepthFmt,
@@ -1458,10 +1521,6 @@ void EpipolarLightScattering :: DoRayMarching(Uint32 uiMaxStepsAlongRay,
 
     // Depth stencil view now contains 2 for these pixels, for which ray marchings is to be performed
     // Depth stencil state is configured to pass only these pixels and discard the rest
-	if (!DoRayMarchTech.SRB && m_FrameAttribs.pDevice->GetDeviceCaps().IsVulkanDevice())
-    {
-        m_FrameAttribs.ptex2DSrcColorBufferSRV->SetSampler(m_pLinearClampSampler);
-    }
     DoRayMarchTech.PrepareSRB(m_FrameAttribs.pDevice, m_pResMapping);
 
     ITextureView* ppRTVs[] = {m_ptex2DInitialScatteredLightRTV};
@@ -1537,8 +1596,22 @@ void EpipolarLightScattering :: UnwarpEpipolarScattering(bool bRenderLuminance)
             //{SHADER_TYPE_PIXEL, "cbParticipatingMediaScatteringParams", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}, // To avoid warnings
             {SHADER_TYPE_PIXEL, "cbPostProcessingAttribs",              SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
         };
-        ResourceLayout.Variables    = Vars;
-        ResourceLayout.NumVariables = _countof(Vars);
+
+        std::vector<StaticSamplerDesc> StaticSamplers = 
+        {
+            {SHADER_TYPE_PIXEL, "g_tex2DSliceEndPoints",    Sam_LinearClamp},
+            {SHADER_TYPE_PIXEL, "g_tex2DEpipolarCamSpaceZ", Sam_LinearClamp},
+            {SHADER_TYPE_PIXEL, "g_tex2DScatteredColor",    Sam_LinearClamp},
+            {SHADER_TYPE_PIXEL, "g_tex2DCamSpaceZ",         Sam_LinearClamp},
+            {SHADER_TYPE_PIXEL, "g_tex2DColorBuffer",       Sam_PointClamp}
+        };
+        if (m_PostProcessingAttribs.uiExtinctionEvalMode == EXTINCTION_EVAL_MODE_EPIPOLAR)
+            StaticSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_tex2DEpipolarExtinction", Sam_LinearClamp);
+
+        ResourceLayout.Variables         = Vars;
+        ResourceLayout.NumVariables      = _countof(Vars);
+        ResourceLayout.StaticSamplers    = StaticSamplers.data();
+        ResourceLayout.NumStaticSamplers = static_cast<Uint32>(StaticSamplers.size());
 
         UnwarpEpipolarSctrImgTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "UnwarpEpipolarScattering",
                                                                         m_pFullScreenTriangleVS, pUnwarpEpipolarSctrImgPS,
@@ -1565,20 +1638,35 @@ void EpipolarLightScattering :: UnwarpEpipolarScattering(bool bRenderLuminance)
         // No inscattering correction - we need to render the entire image in low resolution
         Macros.AddShaderMacro("CORRECT_INSCATTERING_AT_DEPTH_BREAKS", false);
         Macros.Finalize();
-        
-        ShaderResourceVariableDesc Vars[] =
-        { 
-            //{SHADER_TYPE_PIXEL, "cbParticipatingMediaScatteringParams", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}, // To avoid warnings
-            {SHADER_TYPE_PIXEL, "cbPostProcessingAttribs",              SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
-        };
 
         auto pUnwarpAndRenderLuminancePS = CreateShader(m_FrameAttribs.pDevice, "UnwarpEpipolarScattering.fx", "ApplyInscatteredRadiancePS",
                                                         SHADER_TYPE_PIXEL, Macros);
         
         PipelineResourceLayoutDesc ResourceLayout;
         ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
-        ResourceLayout.Variables           = Vars;
-        ResourceLayout.NumVariables        = _countof(Vars);
+
+        ShaderResourceVariableDesc Vars[] =
+        { 
+            //{SHADER_TYPE_PIXEL, "cbParticipatingMediaScatteringParams", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}, // To avoid warnings
+            {SHADER_TYPE_PIXEL, "cbPostProcessingAttribs",              SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
+        };
+
+        std::vector<StaticSamplerDesc> StaticSamplers = 
+        {
+            {SHADER_TYPE_PIXEL, "g_tex2DSliceEndPoints",    Sam_LinearClamp},
+            {SHADER_TYPE_PIXEL, "g_tex2DEpipolarCamSpaceZ", Sam_LinearClamp},
+            {SHADER_TYPE_PIXEL, "g_tex2DScatteredColor",    Sam_LinearClamp},
+            {SHADER_TYPE_PIXEL, "g_tex2DCamSpaceZ",         Sam_LinearClamp},
+            {SHADER_TYPE_PIXEL, "g_tex2DColorBuffer",       Sam_PointClamp}
+        };
+        if (m_PostProcessingAttribs.uiExtinctionEvalMode == EXTINCTION_EVAL_MODE_EPIPOLAR)
+            StaticSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_tex2DEpipolarExtinction", Sam_LinearClamp);
+
+        ResourceLayout.Variables         = Vars;
+        ResourceLayout.NumVariables      = _countof(Vars);
+        ResourceLayout.StaticSamplers    = StaticSamplers.data();
+        ResourceLayout.NumStaticSamplers = static_cast<Uint32>(StaticSamplers.size());
+
         UnwarpAndRenderLuminanceTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "UnwarpAndRenderLuminance",
                                                                            m_pFullScreenTriangleVS, pUnwarpAndRenderLuminancePS,
                                                                            ResourceLayout, LuminanceTexFmt);
@@ -1591,8 +1679,6 @@ void EpipolarLightScattering :: UnwarpEpipolarScattering(bool bRenderLuminance)
         UnwarpAndRenderLuminanceTech.SRBDependencyFlags = SRBDependencies;
     }
 
-    m_FrameAttribs.ptex2DSrcColorBufferSRV->SetSampler(m_pPointClampSampler);
-    
     // Unwarp inscattering image and apply it to attenuated backgorund
     if(bRenderLuminance)
     {
@@ -1634,8 +1720,11 @@ void EpipolarLightScattering :: UpdateAverageLuminance()
         { 
             {SHADER_TYPE_PIXEL, "cbMiscDynamicParams", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
         };
-        ResourceLayout.Variables    = Vars;
-        ResourceLayout.NumVariables = _countof(Vars);
+        if (m_PostProcessingAttribs.ToneMapping.bLightAdaptation)
+        {
+            ResourceLayout.Variables    = Vars;
+            ResourceLayout.NumVariables = _countof(Vars);
+        }
         UpdateAverageLuminanceTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "UpdateAverageLuminance",
                                                                          m_pFullScreenTriangleVS, pUpdateAverageLuminancePS,
                                                                          ResourceLayout, LuminanceTexFmt, TEX_FORMAT_UNKNOWN,
@@ -1678,14 +1767,45 @@ void EpipolarLightScattering :: FixInscatteringAtDepthBreaks(Uint32             
                                                       SHADER_TYPE_PIXEL, Macros);
         PipelineResourceLayoutDesc ResourceLayout;
         ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
-        ShaderResourceVariableDesc Vars[] =
-        { 
-            {SHADER_TYPE_PIXEL, "cbParticipatingMediaScatteringParams", SHADER_RESOURCE_VARIABLE_TYPE_STATIC},
-            {SHADER_TYPE_PIXEL, "cbPostProcessingAttribs",              SHADER_RESOURCE_VARIABLE_TYPE_STATIC} 
-            //{SHADER_TYPE_PIXEL, "cbMiscDynamicParams",                  SHADER_RESOURCE_VARIABLE_TYPE_STATIC} // To avoid warning
+
+        std::vector<ShaderResourceVariableDesc> Vars;
+        std::vector<StaticSamplerDesc>          StaticSamplers;
+
+        std::unordered_set<std::string> ResourceNames;
+        const auto ResCount = pFixInsctrAtDepthBreaksPS->GetResourceCount();
+        for (Uint32 r=0; r < ResCount; ++r)
+            ResourceNames.emplace(pFixInsctrAtDepthBreaksPS->GetResource(r).Name);
+
+        const std::array<std::string, 4> StaticLinearTextures =
+        {
+            "g_tex3DSingleSctrLUT",
+            "g_tex3DHighOrderSctrLUT",
+            "g_tex3DMultipleSctrLUT",
+            "g_tex2DOccludedNetDensityToAtmTop"
         };
-        ResourceLayout.Variables    = Vars;
-        ResourceLayout.NumVariables = _countof(Vars);
+        for(const auto& Tex : StaticLinearTextures)
+        {
+            if (ResourceNames.find(Tex) != ResourceNames.end())
+            {
+                Vars.emplace_back(SHADER_TYPE_PIXEL, Tex.c_str(), SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
+                StaticSamplers.emplace_back(SHADER_TYPE_PIXEL, Tex.c_str(), Sam_LinearClamp);
+            }
+        }
+
+        if (ResourceNames.find("cbParticipatingMediaScatteringParams") != ResourceNames.end())
+            Vars.emplace_back(SHADER_TYPE_PIXEL, "cbParticipatingMediaScatteringParams", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
+        if (ResourceNames.find("cbPostProcessingAttribs") != ResourceNames.end())
+            Vars.emplace_back(SHADER_TYPE_PIXEL, "cbPostProcessingAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
+        if (ResourceNames.find("cbMiscDynamicParams") != ResourceNames.end())
+            Vars.emplace_back(SHADER_TYPE_PIXEL, "cbMiscDynamicParams", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
+
+        if (ResourceNames.find("g_tex2DCamSpaceZ") != ResourceNames.end())
+            StaticSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_tex2DCamSpaceZ", Sam_LinearClamp);
+
+        ResourceLayout.Variables         = Vars.data();
+        ResourceLayout.NumVariables      = static_cast<Uint32>(Vars.size());
+        ResourceLayout.StaticSamplers    = StaticSamplers.data();
+        ResourceLayout.NumStaticSamplers = static_cast<Uint32>(StaticSamplers.size());
 
         if (Mode == EFixInscatteringMode::LuminanceOnly)
         {
