@@ -1265,20 +1265,18 @@ void EpipolarLightScattering :: Build1DMinMaxMipMap(int iCascadeIndex)
                                                          SHADER_TYPE_PIXEL, Macros);
         PipelineResourceLayoutDesc ResourceLayout;
         ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
-        std::vector<ShaderResourceVariableDesc> Vars =
-        { 
-            {SHADER_TYPE_PIXEL, "cbPostProcessingAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
+        ShaderResourceVariableDesc Vars[] =
+        {
+            {SHADER_TYPE_PIXEL, m_bUseCombinedMinMaxTexture ? "cbPostProcessingAttribs" : "cbMiscDynamicParams", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
         };
-        if (!m_bUseCombinedMinMaxTexture)
-            Vars.emplace_back(SHADER_TYPE_PIXEL,  "cbMiscDynamicParams", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
         
         StaticSamplerDesc StaticSamplers[] = 
         {
             {SHADER_TYPE_PIXEL, "g_tex2DLightSpaceDepthMap", Sam_LinearClamp} // Linear, not comparison
         };
 
-        ResourceLayout.Variables         = Vars.data();
-        ResourceLayout.NumVariables      = static_cast<Uint32>(Vars.size());
+        ResourceLayout.Variables         = Vars;
+        ResourceLayout.NumVariables      = _countof(Vars);
         ResourceLayout.StaticSamplers    = StaticSamplers;
         ResourceLayout.NumStaticSamplers = _countof(StaticSamplers);
 

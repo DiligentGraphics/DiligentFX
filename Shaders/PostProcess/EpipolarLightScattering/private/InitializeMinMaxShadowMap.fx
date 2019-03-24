@@ -5,12 +5,12 @@ Texture2D<float4> g_tex2DSliceUVDirAndOrigin;
 Texture2DArray<float> g_tex2DLightSpaceDepthMap;
 SamplerState          g_tex2DLightSpaceDepthMap_sampler;
 
+#if USE_COMBINED_MIN_MAX_TEXTURE
 cbuffer cbPostProcessingAttribs
 {
     EpipolarLightScatteringAttribs g_PPAttribs;
-};
-
-#if !USE_COMBINED_MIN_MAX_TEXTURE
+}
+#else
 cbuffer cbMiscDynamicParams
 {
     MiscDynamicParams g_MiscParams;
