@@ -779,7 +779,7 @@ void EpipolarLightScattering :: PrecomputeScatteringLUT(IRenderDevice* pDevice, 
     for(int iSctrOrder = 1; iSctrOrder < iNumScatteringOrders; ++iSctrOrder)
     {
         // Step 1: compute differential in-scattering
-        ComputeSctrRadianceTech.SRB->GetVariable(SHADER_TYPE_COMPUTE, "g_tex3DPreviousSctrOrder" )->Set( (iSctrOrder == 1) ? m_ptex3DSingleScatteringSRV : ptex3DInsctrOrderSRV);
+        ComputeSctrRadianceTech.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "g_tex3DPreviousSctrOrder" )->Set( (iSctrOrder == 1) ? m_ptex3DSingleScatteringSRV : ptex3DInsctrOrderSRV);
         ComputeSctrRadianceTech.DispatchCompute(pContext, DispatchAttrs);
 
         // It seemse like on Intel GPU, the driver accumulates work into big batch. 
@@ -789,7 +789,7 @@ void EpipolarLightScattering :: PrecomputeScatteringLUT(IRenderDevice* pDevice, 
         pContext->Flush();
 
         // Step 2: integrate differential in-scattering
-        ComputeScatteringOrderTech.SRB->GetVariable( SHADER_TYPE_COMPUTE, "g_tex3DPointwiseSctrRadiance" )->Set( ptex3DSctrRadianceSRV );
+        ComputeScatteringOrderTech.SRB->GetVariableByName( SHADER_TYPE_COMPUTE, "g_tex3DPointwiseSctrRadiance" )->Set( ptex3DSctrRadianceSRV );
         ComputeScatteringOrderTech.DispatchCompute(pContext, DispatchAttrs);
 
         RenderTechnique* pRenderTech = nullptr;
@@ -802,10 +802,10 @@ void EpipolarLightScattering :: PrecomputeScatteringLUT(IRenderDevice* pDevice, 
         {
             pRenderTech = &m_RenderTech[RENDER_TECH_UPDATE_HIGH_ORDER_SCATTERING];
             std::swap( m_ptex3DHighOrderSctr, m_ptex3DHighOrderSctr2 );
-            pRenderTech->SRB->GetVariable( SHADER_TYPE_COMPUTE, "g_tex3DHighOrderOrderScattering" )->Set( m_ptex3DHighOrderSctr2->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE) );
+            pRenderTech->SRB->GetVariableByName( SHADER_TYPE_COMPUTE, "g_tex3DHighOrderOrderScattering" )->Set( m_ptex3DHighOrderSctr2->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE) );
         }
-        pRenderTech->SRB->GetVariable( SHADER_TYPE_COMPUTE, "g_rwtex3DHighOrderSctr" )->Set( m_ptex3DHighOrderSctr->GetDefaultView( TEXTURE_VIEW_UNORDERED_ACCESS ) );
-        pRenderTech->SRB->GetVariable( SHADER_TYPE_COMPUTE, "g_tex3DCurrentOrderScattering" )->Set( ptex3DInsctrOrderSRV );
+        pRenderTech->SRB->GetVariableByName( SHADER_TYPE_COMPUTE, "g_rwtex3DHighOrderSctr" )->Set( m_ptex3DHighOrderSctr->GetDefaultView( TEXTURE_VIEW_UNORDERED_ACCESS ) );
+        pRenderTech->SRB->GetVariableByName( SHADER_TYPE_COMPUTE, "g_tex3DCurrentOrderScattering" )->Set( ptex3DInsctrOrderSRV );
         pRenderTech->DispatchCompute(pContext, DispatchAttrs);
         
         // Flush the command buffer to force execution of compute shaders and avoid device
@@ -941,7 +941,7 @@ void EpipolarLightScattering :: ReconstructCameraSpaceZ()
             SRB_DEPENDENCY_SRC_DEPTH_BUFFER;
     }
     ReconstrCamSpaceZTech.PrepareSRB(m_FrameAttribs.pDevice, m_pResMapping, BIND_SHADER_RESOURCES_KEEP_EXISTING);
-    ReconstrCamSpaceZTech.SRB->GetVariable(SHADER_TYPE_PIXEL, "g_tex2DDepthBuffer")->Set(m_FrameAttribs.ptex2DSrcDepthBufferSRV);
+    ReconstrCamSpaceZTech.SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_tex2DDepthBuffer")->Set(m_FrameAttribs.ptex2DSrcDepthBufferSRV);
     ITextureView* ppRTVs[] = {m_ptex2DCamSpaceZRTV};
     m_FrameAttribs.pDeviceContext->SetRenderTargets(1, ppRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     ReconstrCamSpaceZTech.Render(m_FrameAttribs.pDeviceContext);
@@ -1332,7 +1332,7 @@ void EpipolarLightScattering :: Build1DMinMaxMipMap(int iCascadeIndex)
         for(int Parity = 0; Parity < 2; ++Parity)
         {
             ComputeMinMaxSMLevelTech.PSO->CreateShaderResourceBinding(&m_pComputeMinMaxSMLevelSRB[Parity], true);
-            auto* pVar = m_pComputeMinMaxSMLevelSRB[Parity]->GetVariable(SHADER_TYPE_PIXEL, "g_tex2DMinMaxLightSpaceDepth");
+            auto* pVar = m_pComputeMinMaxSMLevelSRB[Parity]->GetVariableByName(SHADER_TYPE_PIXEL, "g_tex2DMinMaxLightSpaceDepth");
             pVar->Set(m_ptex2DMinMaxShadowMapSRV[Parity]);
             m_pComputeMinMaxSMLevelSRB[Parity]->BindResources(SHADER_TYPE_PIXEL | SHADER_TYPE_VERTEX, m_pResMapping, BIND_SHADER_RESOURCES_KEEP_EXISTING | BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
         }
