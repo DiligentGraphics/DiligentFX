@@ -30,12 +30,35 @@
 
 namespace Diligent
 {
-    class DiligentFXShaderSourceStreamFactory : public IShaderSourceInputStreamFactory
+    class DiligentFXShaderSourceStreamFactory final : public IShaderSourceInputStreamFactory
     {
     public:
         static DiligentFXShaderSourceStreamFactory& GetInstance();
 
-        virtual void CreateInputStream(const Char *Name, IFileStream **ppStream)override;
+        virtual void CreateInputStream(const Char *Name, IFileStream **ppStream)override final;
+
+        virtual void QueryInterface(const INTERFACE_ID& IID, IObject** ppInterface)override final
+        {
+            UNSUPPORTED("This method is not implemented and should never be called");
+        }
+
+        virtual CounterValueType AddRef()override final
+        {
+            UNSUPPORTED("This method is not implemented and should never be called");
+            return 0;
+        }
+
+        virtual CounterValueType Release()override final
+        {
+            UNSUPPORTED("This method is not implemented and should never be called");
+            return 0;
+        }
+
+        virtual IReferenceCounters* GetReferenceCounters()const override final
+        {
+            UNSUPPORTED("This method is not implemented and should never be called");
+            return nullptr;
+        }
 
     private:
         DiligentFXShaderSourceStreamFactory();
