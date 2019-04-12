@@ -54,16 +54,12 @@ struct ShadowMapAttribs
     matrix mWorldToShadowMapUVDepth[MAX_CASCADES];
 #endif
 
+    // Number of shadow cascades
+    int   iNumCascades;
+    float fNumCascades;
     // Do not use bool, because sizeof(bool)==1 !
-	BOOL bVisualizeCascades;
-
-    // float3 f3Padding;
-    // OpenGL compiler does not handle 3-component vectors properly
-    // and screws up the structure layout.
-    // Opengl.org suggests not using vec3 at all
-    int Padding0;
-    int Padding1;
-    int Padding2;
+	BOOL  bVisualizeCascades;
+    float fCascadePartitioningFactor;
 };
 CHECK_STRUCT_ALIGNMENT(ShadowMapAttribs);
 
