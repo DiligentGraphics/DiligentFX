@@ -18,7 +18,7 @@
 "cbuffer cbPostProcessingAttribs\n"
 "{\n"
 "    EpipolarLightScatteringAttribs g_PPAttribs;\n"
-"};\n"
+"}\n"
 "\n"
 "cbuffer cbCameraAttribs\n"
 "{\n"

@@ -18,7 +18,7 @@ cbuffer cbLightParams
 cbuffer cbPostProcessingAttribs
 {
     EpipolarLightScatteringAttribs g_PPAttribs;
-};
+}
 
 cbuffer cbCameraAttribs
 {
