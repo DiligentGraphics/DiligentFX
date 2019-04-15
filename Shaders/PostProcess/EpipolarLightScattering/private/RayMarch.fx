@@ -34,12 +34,17 @@ SamplerState      g_tex2DOccludedNetDensityToAtmTop_sampler;
 
 Texture2D<float>  g_tex2DEpipolarCamSpaceZ;
 
-Texture2D<float4> g_tex2DSliceUVDirAndOrigin;
+#if ENABLE_LIGHT_SHAFTS
 
-Texture2D<float2> g_tex2DMinMaxLightSpaceDepth;
+#   if USE_1D_MIN_MAX_TREE
+    Texture2D<float4> g_tex2DSliceUVDirAndOrigin;
+    Texture2D<float2> g_tex2DMinMaxLightSpaceDepth;
+#   endif
 
 Texture2DArray<float>  g_tex2DLightSpaceDepthMap;
 SamplerComparisonState g_tex2DLightSpaceDepthMap_sampler;
+
+#endif
 
 Texture2D<float2> g_tex2DCoordinates;
 
@@ -67,6 +72,7 @@ SamplerState      g_tex3DMultipleSctrLUT_sampler;
 #include "ToneMapping.fxh"
 
 
+#if ENABLE_LIGHT_SHAFTS
 // This function calculates inscattered light integral over the ray from the camera to 
 // the specified world space position using ray marching
 float3 ComputeShadowedInscattering( in float2 f2RayMarchingSampleLocation,
@@ -635,7 +641,7 @@ float3 ComputeShadowedInscattering( in float2 f2RayMarchingSampleLocation,
 
     return f3InsctrIntegral * g_LightAttribs.f4Intensity.rgb;
 }
-
+#endif
 
 
 void RayMarchPS(in FullScreenTriangleVSOutput VSOut,

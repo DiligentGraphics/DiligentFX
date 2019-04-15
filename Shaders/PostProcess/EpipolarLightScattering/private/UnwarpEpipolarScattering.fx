@@ -40,13 +40,6 @@ SamplerState      g_tex2DCamSpaceZ_sampler; // Linear clamp
 Texture2D<float4> g_tex2DColorBuffer;
 SamplerState      g_tex2DColorBuffer_sampler; // Point clamp
 
-Texture2D<float4> g_tex2DSliceUVDirAndOrigin;
-
-Texture2D<float2> g_tex2DMinMaxLightSpaceDepth;
-
-Texture2DArray<float>  g_tex2DLightSpaceDepthMap;
-SamplerComparisonState g_tex2DLightSpaceDepthMap_sampler;
-
 Texture2D<float>  g_tex2DAverageLuminance;
 
 #if EXTINCTION_EVAL_MODE == EXTINCTION_EVAL_MODE_EPIPOLAR
