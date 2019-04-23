@@ -2108,7 +2108,7 @@ void EpipolarLightScattering :: PerformPostProcessing(FrameAttribs&             
         1.f / static_cast<float>(m_uiBackBufferHeight)
     );
 
-    auto mCameraViewProj = transposeMatrix(frameAttribs.pCameraAttribs->mViewProjT);
+    auto mCameraViewProj = frameAttribs.pCameraAttribs->mViewProjT.Transpose();
     float4 f4LightPosPS = -frameAttribs.pLightAttribs->f4Direction * mCameraViewProj;
     f4LightPosPS.x /= f4LightPosPS.w;
     f4LightPosPS.y /= f4LightPosPS.w;
