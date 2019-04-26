@@ -13,6 +13,7 @@ PUBLIC
     BuildSettings
     GraphicsEngine
     GraphicsTools
+    AssetLoader
 )
 set_common_target_properties(DiligentFX)
 
@@ -29,6 +30,7 @@ target_include_directories(DiligentFX PUBLIC
 
 add_subdirectory(Utilities)
 add_subdirectory(Postprocess)
+add_subdirectory(GLTF_PBR_Renderer)
 
 get_target_property(SOURCE DiligentFX SOURCES)
 

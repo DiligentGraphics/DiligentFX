@@ -1,0 +1,7 @@
+"#include \"FullScreenTriangleVSOutput.fxh\"\n"
+"\n"
+"void PrecomputeBRDF_PS(FullScreenTriangleVSOutput VSOut,\n"
+"                       out float2 f2BRDF : SV_Target)\n"
+"{\n"
+"    f2BRDF = float2(0,0);\n"
+"}\n"
