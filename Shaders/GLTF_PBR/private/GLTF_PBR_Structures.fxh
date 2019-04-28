@@ -58,14 +58,14 @@ struct GLTFMaterialInfo
 	float4  SpecularFactor;
 
 	int     Workflow;
-	int     BaseColorTextureSet;
-	int     PhysicalDescriptorTextureSet;
-	int     NormalTextureSet;	
+	float   BaseColorTextureUVSelector;
+	float   PhysicalDescriptorTextureUVSelector;
+	float   NormalTextureUVSelector; 
 
-	int     OcclusionTextureSet;
-	int     EmissiveTextureSet;
-	float   MetallicFactor;	
-	float   RoughnessFactor;	
+	float   OcclusionTextureUVSelector;
+	float   EmissiveTextureUVSelector;
+	float   MetallicFactor;
+	float   RoughnessFactor;
 
 	int     UseAlphaMask;	
 	float   AlphaMaskCutoff;

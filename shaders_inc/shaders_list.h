@@ -19,8 +19,8 @@ static const ShaderIncInfo g_Shaders[] =
         #include "BasicStructures.fxh.h"
     },
     {
-        "GLTF_PBR_Common.fxh",
-        #include "GLTF_PBR_Common.fxh.h"
+        "PBR_Common.fxh",
+        #include "PBR_Common.fxh.h"
     },
     {
         "GLTF_PBR_Structures.fxh",

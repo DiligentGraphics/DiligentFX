@@ -39,10 +39,9 @@ namespace Diligent
 
 
 
-GLTF_PBR_Renderer::GLTF_PBR_Renderer(IRenderDevice*     pDevice,
-                                     IDeviceContext*    pCtx,
-                                     TEXTURE_FORMAT     RTVFmt,
-                                     TEXTURE_FORMAT     DSVFmt)
+GLTF_PBR_Renderer::GLTF_PBR_Renderer(IRenderDevice*    pDevice,
+                                     IDeviceContext*   pCtx,
+                                     const CreateInfo& CI)
 {
     PrecomputeBRDF(pDevice, pCtx);
     
@@ -73,20 +72,31 @@ GLTF_PBR_Renderer::GLTF_PBR_Renderer(IRenderDevice*     pDevice,
         std::vector<Uint32> Data(TexDim*TexDim, 0xFFFFFFFF);
         TextureSubResData Level0Data{Data.data(), TexDim * 4};
         TextureData InitData{&Level0Data, 1};
-        RefCntAutoPtr<ITexture> pDummyWhiteTex;
-        pDevice->CreateTexture(TexDesc, &InitData, &pDummyWhiteTex);
-        m_pDummyWhiteTexSRV = pDummyWhiteTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        RefCntAutoPtr<ITexture> pWhiteTex;
+        pDevice->CreateTexture(TexDesc, &InitData, &pWhiteTex);
+        m_pWhiteTexSRV = pWhiteTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
 
-        StateTransitionDesc Barrier{pDummyWhiteTex, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE};
-        Barrier.UpdateResourceState = true;
-        pCtx->TransitionResourceStates(1, &Barrier);
+        for(auto& c : Data) c=0;
+        RefCntAutoPtr<ITexture> pBlackTex;
+        pDevice->CreateTexture(TexDesc, &InitData, &pBlackTex);
+        m_pBlackTexSRV = pBlackTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+
+        StateTransitionDesc Barriers[] = 
+        {
+            {pWhiteTex, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE},
+            {pBlackTex, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE}
+        };
+        Barriers[0].UpdateResourceState = true;
+        Barriers[1].UpdateResourceState = true;
+        pCtx->TransitionResourceStates(_countof(Barriers), Barriers);
 
         RefCntAutoPtr<ISampler> pDefaultSampler;
         pDevice->CreateSampler(Sam_LinearClamp, &pDefaultSampler);
-        m_pDummyWhiteTexSRV->SetSampler(pDefaultSampler);
+        m_pWhiteTexSRV->SetSampler(pDefaultSampler);
+        m_pBlackTexSRV->SetSampler(pDefaultSampler);
     }
 
-    CreatePSO(pDevice, RTVFmt, DSVFmt);
+    CreatePSO(pDevice, CI.RTVFmt, CI.DSVFmt, CI.AllowDebugView);
 }
 
 void GLTF_PBR_Renderer::PrecomputeBRDF(IRenderDevice*   pDevice,
@@ -155,7 +165,8 @@ void GLTF_PBR_Renderer::PrecomputeBRDF(IRenderDevice*   pDevice,
 
 void GLTF_PBR_Renderer::CreatePSO(IRenderDevice*   pDevice,
                                   TEXTURE_FORMAT   RTVFmt,
-                                  TEXTURE_FORMAT   DSVFmt)
+                                  TEXTURE_FORMAT   DSVFmt,
+                                  bool             AllowDebugView)
 {
     PipelineStateDesc PSODesc;
     PSODesc.Name = "Render GLTF PBR PSO";
@@ -166,7 +177,6 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice*   pDevice,
     PSODesc.GraphicsPipeline.DSVFormat                    = DSVFmt;
     PSODesc.GraphicsPipeline.PrimitiveTopology            = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     PSODesc.GraphicsPipeline.RasterizerDesc.CullMode      = CULL_MODE_BACK;
-    PSODesc.GraphicsPipeline.RasterizerDesc.FrontCounterClockwise = true;
 
     ShaderCreateInfo ShaderCI;
     ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
@@ -175,6 +185,7 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice*   pDevice,
 
     ShaderMacroHelper Macros;
     Macros.AddShaderMacro("MAX_NUM_JOINTS", GLTF::Mesh::TransformData::MaxNumJoints);
+    Macros.AddShaderMacro("ALLOW_DEBUG_VIEW", AllowDebugView);
     ShaderCI.Macros = Macros;
     RefCntAutoPtr<IShader> pVS;
     {
@@ -246,18 +257,19 @@ IShaderResourceBinding* GLTF_PBR_Renderer::CreateMaterialSRB(GLTF::Material&  Ma
     //pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_PrefilteredMap");
     
     pSRB->GetVariableByName(SHADER_TYPE_VERTEX, "cbCameraAttribs")->Set(pCameraAttribs);
-    //pSRB->GetVariableByName(SHADER_TYPE_VERTEX, "cbLightAttribs")->Set(pLightAttribs);
+    pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbCameraAttribs")->Set(pCameraAttribs);
+    pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbLightAttribs")->Set(pLightAttribs);
 
-    auto SetTexture = [&](ITexture* pTexture, const char* VarName)
+    auto SetTexture = [&](ITexture* pTexture, ITextureView* pDefaultTexSRV, const char* VarName)
     {
-        ITextureView* pTexSRV = pTexture != nullptr ? pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE) : m_pDummyWhiteTexSRV;
+        ITextureView* pTexSRV = pTexture != nullptr ? pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE) : pDefaultTexSRV;
         pSRB->GetVariableByName(SHADER_TYPE_PIXEL, VarName)->Set(pTexSRV);
     };
-    SetTexture(Material.pBaseColorTexture,         "g_ColorMap");
-    SetTexture(Material.pMetallicRoughnessTexture, "g_PhysicalDescriptorMap");
-    SetTexture(Material.pNormalTexture,            "g_NormalMap");
-    SetTexture(Material.pOcclusionTexture,         "g_AOMap");
-    SetTexture(Material.pEmissiveTexture,          "g_EmissiveMap");
+    SetTexture(Material.pBaseColorTexture,        m_pWhiteTexSRV, "g_ColorMap");
+    SetTexture(Material.pMetallicRoughnessTexture,m_pWhiteTexSRV, "g_PhysicalDescriptorMap");
+    SetTexture(Material.pNormalTexture,           m_pWhiteTexSRV, "g_NormalMap");
+    SetTexture(Material.pOcclusionTexture,        m_pBlackTexSRV, "g_AOMap");
+    SetTexture(Material.pEmissiveTexture,         m_pBlackTexSRV, "g_EmissiveMap");
 
     auto it = m_SRBCache.find(&Material);
     if (it != m_SRBCache.end())
@@ -331,12 +343,14 @@ void GLTF_PBR_Renderer::RenderGLTFNode(IDeviceContext*              pCtx,
             {
                 MapHelper<GLTFMaterialInfo> MaterialInfo(pCtx, m_MaterialInfoCB, MAP_WRITE, MAP_FLAG_DISCARD);
 			    MaterialInfo->EmissiveFactor      = material.EmissiveFactor;
-			    // To save push constant space, availabilty and texture coordiante set are combined
-			    // -1 = texture not used for this material, >= 0 texture used and index of texture coordinate set
-			    MaterialInfo->BaseColorTextureSet = material.pBaseColorTexture != nullptr ? material.TexCoordSets.BaseColor : -1;
-			    MaterialInfo->NormalTextureSet    = material.pNormalTexture    != nullptr ? material.TexCoordSets.Normal    : -1;
-			    MaterialInfo->OcclusionTextureSet = material.pOcclusionTexture != nullptr ? material.TexCoordSets.Occlusion : -1;
-			    MaterialInfo->EmissiveTextureSet  = material.pEmissiveTexture  != nullptr ? material.TexCoordSets.Emissive  : -1;
+                auto GetUVSelector = [](const ITexture* pTexture, Uint8 TexCoordSet)
+                {
+                    return pTexture != nullptr ? static_cast<float>(TexCoordSet) : -1;
+                };
+                MaterialInfo->BaseColorTextureUVSelector = GetUVSelector(material.pBaseColorTexture, material.TexCoordSets.BaseColor);
+                MaterialInfo->NormalTextureUVSelector    = GetUVSelector(material.pNormalTexture,    material.TexCoordSets.Normal);
+                MaterialInfo->OcclusionTextureUVSelector = GetUVSelector(material.pOcclusionTexture, material.TexCoordSets.Occlusion);
+                MaterialInfo->EmissiveTextureUVSelector  = GetUVSelector(material.pEmissiveTexture,  material.TexCoordSets.Emissive);
 			    MaterialInfo->UseAlphaMask        = material.AlphaMode == GLTF::Material::ALPHAMODE_MASK ? 1 : 0;
 			    MaterialInfo->AlphaMaskCutoff     = material.AlphaCutoff;
 
@@ -348,18 +362,18 @@ void GLTF_PBR_Renderer::RenderGLTFNode(IDeviceContext*              pCtx,
 				    MaterialInfo->BaseColorFactor   = material.BaseColorFactor;
 				    MaterialInfo->MetallicFactor    = material.MetallicFactor;
 				    MaterialInfo->RoughnessFactor   = material.RoughnessFactor;
-				    MaterialInfo->PhysicalDescriptorTextureSet = material.pMetallicRoughnessTexture != nullptr ? material.TexCoordSets.MetallicRoughness : -1;
-				    MaterialInfo->BaseColorTextureSet          = material.pBaseColorTexture         != nullptr ? material.TexCoordSets.BaseColor         : -1;
+                    MaterialInfo->PhysicalDescriptorTextureUVSelector = GetUVSelector(material.pMetallicRoughnessTexture, material.TexCoordSets.MetallicRoughness);
+                    MaterialInfo->BaseColorTextureUVSelector          = GetUVSelector(material.pBaseColorTexture,         material.TexCoordSets.BaseColor);
 			    }
 
 			    if (primitive->material.pbrWorkflows.SpecularGlossiness)
                 {
 				    // Specular glossiness workflow
-				    MaterialInfo->Workflow                     = PBR_WORKFLOW_SPECULAR_GLOSINESS;
-				    MaterialInfo->PhysicalDescriptorTextureSet = material.extension.pSpecularGlossinessTexture != nullptr ? material.TexCoordSets.SpecularGlossiness : -1;
-				    MaterialInfo->BaseColorTextureSet          = material.extension.pDiffuseTexture            != nullptr ? material.TexCoordSets.BaseColor          : -1;
-				    MaterialInfo->DiffuseFactor                = material.extension.DiffuseFactor;
-				    MaterialInfo->SpecularFactor               = float4(material.extension.SpecularFactor, 1.0f);
+				    MaterialInfo->Workflow                            = PBR_WORKFLOW_SPECULAR_GLOSINESS;
+                    MaterialInfo->PhysicalDescriptorTextureUVSelector = GetUVSelector(material.extension.pSpecularGlossinessTexture, material.TexCoordSets.SpecularGlossiness);
+                    MaterialInfo->BaseColorTextureUVSelector          = GetUVSelector(material.extension.pDiffuseTexture,            material.TexCoordSets.BaseColor);
+				    MaterialInfo->DiffuseFactor                       = material.extension.DiffuseFactor;
+				    MaterialInfo->SpecularFactor                      = float4(material.extension.SpecularFactor, 1.0f);
 			    }
             }
 
