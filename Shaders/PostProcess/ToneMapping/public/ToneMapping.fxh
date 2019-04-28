@@ -1,5 +1,17 @@
 #include "ToneMappingStructures.fxh"
 
+#ifndef RGB_TO_LUMINANCE
+#   define RGB_TO_LUMINANCE float3(0.212671, 0.715160, 0.072169)
+#endif
+
+#ifndef F3ZERO
+#   define F3ZERO float3(0.0, 0.0, 0.0)
+#endif
+
+#ifndef F3ONE
+#   define F3ONE float3(1.0, 1.0, 1.0)
+#endif
+
 float3 Uncharted2Tonemap(float3 x)
 {
     // http://www.gdcvault.com/play/1012459/Uncharted_2__HDR_Lighting

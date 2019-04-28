@@ -65,6 +65,9 @@ public:
         DebugViewType DebugView         = DebugViewType::None;
         float         OcclusionStrength = 1;
         float         EmissionScale     = 1;
+        float         AverageLogLum     = 1.0f;
+        float         MiddleGray        = 0.18f;
+        float         WhitePoint        = 3.f;
     };
     void Render(IDeviceContext*    pCtx,
                 GLTF::Model&       GLTFModel,

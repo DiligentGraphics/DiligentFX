@@ -5,6 +5,7 @@
 #include "BasicStructures.fxh"
 #include "GLTF_PBR_Structures.fxh"
 #include "PBR_Common.fxh"
+#include "ToneMapping.fxh"
 
 #define  MANUAL_SRGB             1
 #define  SRGB_FAST_APPROXIMATION 1
@@ -349,6 +350,14 @@ void main(in  float4 ClipPos  : SV_Position,
     Emissive = SRGBtoLINEAR(Emissive);
     color += Emissive.rgb * g_MaterialInfo.EmissiveFactor.rgb * g_RenderParameters.EmissionScale;
 
+    ToneMappingAttribs TMAttribs;
+    TMAttribs.uiToneMappingMode    = TONE_MAPPING_MODE_UNCHARTED2;
+    TMAttribs.bAutoExposure        = false;
+    TMAttribs.fMiddleGray          = g_RenderParameters.MiddleGray;
+    TMAttribs.bLightAdaptation     = false;
+    TMAttribs.fWhitePoint          = g_RenderParameters.WhitePoint;
+    TMAttribs.fLuminanceSaturation = 1.0;
+    color = ToneMap(color, TMAttribs, g_RenderParameters.AverageLogLum);
     OutColor = float4(color, BaseColor.a);
 
 #if ALLOW_DEBUG_VIEW

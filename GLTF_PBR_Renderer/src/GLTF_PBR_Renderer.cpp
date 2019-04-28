@@ -195,6 +195,7 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice*   pDevice,
     ShaderMacroHelper Macros;
     Macros.AddShaderMacro("MAX_NUM_JOINTS", GLTF::Mesh::TransformData::MaxNumJoints);
     Macros.AddShaderMacro("ALLOW_DEBUG_VIEW", AllowDebugView);
+    Macros.AddShaderMacro("TONE_MAPPING_MODE", "TONE_MAPPING_MODE_UNCHARTED2");
     ShaderCI.Macros = Macros;
     RefCntAutoPtr<IShader> pVS;
     {
@@ -414,7 +415,10 @@ void GLTF_PBR_Renderer::UpdateRenderParams(IDeviceContext* pCtx)
     RenderParams.DebugViewType     = static_cast<int>(m_RenderParams.DebugView);
     RenderParams.OcclusionStrength = m_RenderParams.OcclusionStrength;
     RenderParams.EmissionScale     = m_RenderParams.EmissionScale;
-
+    RenderParams.AverageLogLum     = m_RenderParams.AverageLogLum;
+    RenderParams.MiddleGray        = m_RenderParams.MiddleGray;
+    RenderParams.WhitePoint        = m_RenderParams.WhitePoint;
+    
     pCtx->UpdateBuffer(m_RenderParametersCB, 0, sizeof(RenderParams), &RenderParams, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     StateTransitionDesc Barrier{m_RenderParametersCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, true};
     pCtx->TransitionResourceStates(1, &Barrier);

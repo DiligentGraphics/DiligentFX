@@ -38,15 +38,15 @@ CHECK_STRUCT_ALIGNMENT(GLTFNodeTransforms);
 
 struct GLTFRenderParameters
 {
-	float Exposure;
-	float Gamma;
+	float AverageLogLum;
+	float MiddleGray;
+    float WhitePoint;
 	float PrefilteredCubeMipLevels;
-	float ScaleIBLAmbient;
 
+	float ScaleIBLAmbient;
 	int   DebugViewType;
     float OcclusionStrength;
     float EmissionScale;
-    float Dummy2;
 };
 CHECK_STRUCT_ALIGNMENT(GLTFRenderParameters);
 
