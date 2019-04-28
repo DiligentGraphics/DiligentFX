@@ -42,7 +42,7 @@ void main(in  GLTF_VS_Input  VSIn,
           out float2 UV1      : UV1) 
 {
     matrix CombinedTransform = g_Transforms.NodeMatrix;
-	if (g_Transforms.JointCount > 0.0)
+	if (g_Transforms.JointCount > 0)
     {
 		// Mesh is skinned
 		matrix SkinMat = 

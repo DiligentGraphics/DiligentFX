@@ -47,7 +47,8 @@ GLTF_PBR_Renderer::GLTF_PBR_Renderer(IRenderDevice*    pDevice,
     
     CreateUniformBuffer(pDevice, sizeof(GLTFNodeTransforms),   "GLTF node transforms CB",   &m_TransformsCB);
     CreateUniformBuffer(pDevice, sizeof(GLTFMaterialInfo),     "GLTF material info CB",     &m_MaterialInfoCB);
-    CreateUniformBuffer(pDevice, sizeof(GLTFRenderParameters), "GLTF render parameters CB", &m_RenderParametersCB, USAGE_DEFAULT);
+    CreateUniformBuffer(pDevice, sizeof(GLTFRenderParameters), "GLTF render parameters CB", &m_RenderParametersCB,
+                        USAGE_DEFAULT, BIND_UNIFORM_BUFFER, CPU_ACCESS_NONE);
     UpdateRenderParams(pCtx);
 
     {
@@ -265,8 +266,8 @@ IShaderResourceBinding* GLTF_PBR_Renderer::CreateMaterialSRB(GLTF::Material&  Ma
     //pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_PrefilteredMap");
     
     pSRB->GetVariableByName(SHADER_TYPE_VERTEX, "cbCameraAttribs")->Set(pCameraAttribs);
-    pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbCameraAttribs")->Set(pCameraAttribs);
-    pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbLightAttribs")->Set(pLightAttribs);
+    pSRB->GetVariableByName(SHADER_TYPE_PIXEL,  "cbCameraAttribs")->Set(pCameraAttribs);
+    pSRB->GetVariableByName(SHADER_TYPE_PIXEL,  "cbLightAttribs") ->Set(pLightAttribs);
 
     auto SetTexture = [&](ITexture* pTexture, ITextureView* pDefaultTexSRV, const char* VarName)
     {

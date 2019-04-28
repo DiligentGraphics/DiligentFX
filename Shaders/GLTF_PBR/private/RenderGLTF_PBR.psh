@@ -189,7 +189,7 @@ float3 PerturbNormal(in float3 Position, in float3 Normal, in float3 TSNormal, i
     float3 pos_dy = ddy(Position);
     float3 tex_dx = ddx(float3(UV, 0.0));
     float3 tex_dy = ddy(float3(UV, 0.0));
-    float3 t = (tex_dy.t * pos_dx - tex_dx.t * pos_dy) / (tex_dx.s * tex_dy.t - tex_dy.s * tex_dx.t);
+    float3 t = (tex_dy.y * pos_dx - tex_dx.y * pos_dy) / (tex_dx.x * tex_dy.y - tex_dy.x * tex_dx.y);
 
 //#ifdef HAS_NORMALS
     float3 ng = normalize(Normal);
@@ -199,12 +199,10 @@ float3 PerturbNormal(in float3 Position, in float3 Normal, in float3 TSNormal, i
 
     t = normalize(t - ng * dot(ng, t));
     float3 b = normalize(cross(ng, t));
-    mat3 tbn = mat3(t, b, ng);
+    float3x3 tbn = MatrixFromRows(t, b, ng);
 
-    const float u_NormalScale = 1.0;
-    float3 n = normalize(tbn * ((2.0 * TSNormal - float3(1.0, 1.0, 1.0)) * float3(u_NormalScale, u_NormalScale, 1.0)));
-
-    return n;
+    TSNormal = 2.0 * TSNormal - float3(1.0, 1.0, 1.0);
+    return normalize(mul(TSNormal, tbn));
 }
 
 

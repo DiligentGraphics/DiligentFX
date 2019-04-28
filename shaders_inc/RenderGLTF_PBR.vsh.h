@@ -42,7 +42,7 @@
 "          out float2 UV1      : UV1) \n"
 "{\n"
 "    matrix CombinedTransform = g_Transforms.NodeMatrix;\n"
-"	if (g_Transforms.JointCount > 0.0)\n"
+"	if (g_Transforms.JointCount > 0)\n"
 "    {\n"
 "		// Mesh is skinned\n"
 "		matrix SkinMat = \n"
