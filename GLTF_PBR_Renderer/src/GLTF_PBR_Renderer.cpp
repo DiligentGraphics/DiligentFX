@@ -47,16 +47,18 @@ GLTF_PBR_Renderer::GLTF_PBR_Renderer(IRenderDevice*    pDevice,
     
     CreateUniformBuffer(pDevice, sizeof(GLTFNodeTransforms),   "GLTF node transforms CB",   &m_TransformsCB);
     CreateUniformBuffer(pDevice, sizeof(GLTFMaterialInfo),     "GLTF material info CB",     &m_MaterialInfoCB);
-    CreateUniformBuffer(pDevice, sizeof(GLTFRenderParameters), "GLTF render parameters CB", &m_RenderParametersCB,
-                        USAGE_DEFAULT, BIND_UNIFORM_BUFFER, CPU_ACCESS_NONE, &m_RenderParams);
+    CreateUniformBuffer(pDevice, sizeof(GLTFRenderParameters), "GLTF render parameters CB", &m_RenderParametersCB, USAGE_DEFAULT);
+    UpdateRenderParams(pCtx);
 
-    StateTransitionDesc Barriers[] = 
     {
-        {m_TransformsCB,       RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, true},
-        {m_MaterialInfoCB,     RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, true},
-        {m_RenderParametersCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, true}
-    };
-    pCtx->TransitionResourceStates(_countof(Barriers), Barriers);
+        StateTransitionDesc Barriers[] = 
+        {
+            {m_TransformsCB,       RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, true},
+            {m_MaterialInfoCB,     RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, true},
+            {m_RenderParametersCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, true}
+        };
+        pCtx->TransitionResourceStates(_countof(Barriers), Barriers);
+    }
 
     {
         static constexpr Uint32 TexDim = 8;
@@ -402,7 +404,10 @@ void GLTF_PBR_Renderer::RenderGLTFNode(IDeviceContext*              pCtx,
 void GLTF_PBR_Renderer::UpdateRenderParams(IDeviceContext* pCtx)
 {
     GLTFRenderParameters RenderParams;
-    RenderParams.DebugViewType = static_cast<int>(m_RenderParams.DebugView);
+    RenderParams.DebugViewType     = static_cast<int>(m_RenderParams.DebugView);
+    RenderParams.OcclusionStrength = m_RenderParams.OcclusionStrength;
+    RenderParams.EmissionScale     = m_RenderParams.EmissionScale;
+
     pCtx->UpdateBuffer(m_RenderParametersCB, 0, sizeof(RenderParams), &RenderParams, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     StateTransitionDesc Barrier{m_RenderParametersCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, true};
     pCtx->TransitionResourceStates(1, &Barrier);

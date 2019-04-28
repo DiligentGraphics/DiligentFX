@@ -44,8 +44,8 @@ struct GLTFRenderParameters
 	float ScaleIBLAmbient;
 
 	int   DebugViewType;
-    float Dummy0;
-    float Dummy1;
+    float OcclusionStrength;
+    float EmissionScale;
     float Dummy2;
 };
 CHECK_STRUCT_ALIGNMENT(GLTFRenderParameters);

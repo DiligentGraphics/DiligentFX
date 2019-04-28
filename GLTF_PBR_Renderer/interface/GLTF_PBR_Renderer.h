@@ -59,7 +59,9 @@ public:
             Reflectance90 = 9
         };
 
-        DebugViewType DebugView;
+        DebugViewType DebugView         = DebugViewType::None;
+        float         OcclusionStrength = 1;
+        float         EmissionScale     = 1;
     };
     void Render(IDeviceContext*    pCtx,
                 GLTF::Model&       GLTFModel,
