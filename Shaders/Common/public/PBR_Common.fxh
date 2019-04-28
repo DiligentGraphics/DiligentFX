@@ -28,8 +28,8 @@ float SmithGGXVisibilityCorrelated(float NdotL, float NdotV, float AlphaRoughnes
 {
     float AlphaRoughnessSq = AlphaRoughness * AlphaRoughness;
 
-    float GGXV = NdotL * sqrt(NdotV * NdotV * (1.0 - AlphaRoughnessSq) + AlphaRoughnessSq);
-    float GGXL = NdotV * sqrt(NdotL * NdotL * (1.0 - AlphaRoughnessSq) + AlphaRoughnessSq);
+    float GGXV = NdotL * sqrt(max(NdotV * NdotV * (1.0 - AlphaRoughnessSq) + AlphaRoughnessSq, 1e-7));
+    float GGXL = NdotV * sqrt(max(NdotL * NdotL * (1.0 - AlphaRoughnessSq) + AlphaRoughnessSq, 1e-7));
 
     return 0.5 / (GGXV + GGXL);
 }
