@@ -78,15 +78,21 @@ GLTF_PBR_Renderer::GLTF_PBR_Renderer(IRenderDevice*    pDevice,
         pDevice->CreateTexture(TexDesc, &InitData, &pWhiteTex);
         m_pWhiteTexSRV = pWhiteTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
 
-        for(auto& c : Data) c=0;
+        for(auto& c : Data) c = 0;
         RefCntAutoPtr<ITexture> pBlackTex;
         pDevice->CreateTexture(TexDesc, &InitData, &pBlackTex);
         m_pBlackTexSRV = pBlackTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
 
+        for(auto& c : Data) c = 0x00FF7F7F;
+        RefCntAutoPtr<ITexture> pDefaultNormalMap;
+        pDevice->CreateTexture(TexDesc, &InitData, &pDefaultNormalMap);
+        m_pDefaultNormalMapSRV = pDefaultNormalMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+
         StateTransitionDesc Barriers[] = 
         {
-            {pWhiteTex, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE},
-            {pBlackTex, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE}
+            {pWhiteTex,         RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE},
+            {pBlackTex,         RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE},
+            {pDefaultNormalMap, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE} 
         };
         Barriers[0].UpdateResourceState = true;
         Barriers[1].UpdateResourceState = true;
@@ -267,11 +273,11 @@ IShaderResourceBinding* GLTF_PBR_Renderer::CreateMaterialSRB(GLTF::Material&  Ma
         ITextureView* pTexSRV = pTexture != nullptr ? pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE) : pDefaultTexSRV;
         pSRB->GetVariableByName(SHADER_TYPE_PIXEL, VarName)->Set(pTexSRV);
     };
-    SetTexture(Material.pBaseColorTexture,        m_pWhiteTexSRV, "g_ColorMap");
-    SetTexture(Material.pMetallicRoughnessTexture,m_pWhiteTexSRV, "g_PhysicalDescriptorMap");
-    SetTexture(Material.pNormalTexture,           m_pWhiteTexSRV, "g_NormalMap");
-    SetTexture(Material.pOcclusionTexture,        m_pBlackTexSRV, "g_AOMap");
-    SetTexture(Material.pEmissiveTexture,         m_pBlackTexSRV, "g_EmissiveMap");
+    SetTexture(Material.pBaseColorTexture,        m_pWhiteTexSRV,         "g_ColorMap");
+    SetTexture(Material.pMetallicRoughnessTexture,m_pWhiteTexSRV,         "g_PhysicalDescriptorMap");
+    SetTexture(Material.pNormalTexture,           m_pDefaultNormalMapSRV, "g_NormalMap");
+    SetTexture(Material.pOcclusionTexture,        m_pBlackTexSRV,         "g_AOMap");
+    SetTexture(Material.pEmissiveTexture,         m_pBlackTexSRV,         "g_EmissiveMap");
 
     auto it = m_SRBCache.find(&Material);
     if (it != m_SRBCache.end())

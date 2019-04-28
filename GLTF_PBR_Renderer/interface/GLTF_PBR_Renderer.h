@@ -47,16 +47,19 @@ public:
     {
         enum class DebugViewType : int
         {
-            None          = 0,
-            BaseColor     = 1,
-            NormalMap     = 2,
-            Occlusion     = 3,
-            Emissive      = 4,
-            Metallic      = 5,
-            Roughness     = 6,
-            DiffuseColor  = 7,
-            SpecularColor = 8,
-            Reflectance90 = 9
+            None            = 0,
+            BaseColor       = 1,
+            NormalMap       = 2,
+            Occlusion       = 3,
+            Emissive        = 4,
+            Metallic        = 5,
+            Roughness       = 6,
+            DiffuseColor    = 7,
+            SpecularColor   = 8,
+            Reflectance90   = 9,
+            MeshNormal      = 10,
+            PerturbedNormal = 11,
+            NdotV           = 12
         };
 
         DebugViewType DebugView         = DebugViewType::None;
@@ -98,6 +101,7 @@ private:
 
     RefCntAutoPtr<ITextureView>   m_pWhiteTexSRV;
     RefCntAutoPtr<ITextureView>   m_pBlackTexSRV;
+    RefCntAutoPtr<ITextureView>   m_pDefaultNormalMapSRV;
     std::unordered_map<const GLTF::Material*, RefCntAutoPtr<IShaderResourceBinding>> m_SRBCache;
 
     RenderInfo m_RenderParams;

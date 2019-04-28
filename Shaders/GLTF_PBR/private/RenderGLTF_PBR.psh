@@ -180,67 +180,32 @@ float3 ApplyDirectionalLight(float3 lightDir, float3 lightColor, SurfaceInfo srf
 }
 
 
-#if 0
-
-
 // Find the normal for this fragment, pulling either from a predefined normal map
 // or from the interpolated mesh normal and tangent attributes.
-float3 getNormal()
+float3 PerturbNormal(in float3 Position, in float3 Normal, in float3 TSNormal, in float2 UV)
 {
-    float2 UV = getNormalUV();
-
     // Retrieve the tangent space matrix
-#ifndef HAS_TANGENTS
-    float3 pos_dx = dFdx(v_Position);
-    float3 pos_dy = dFdy(v_Position);
-    float3 tex_dx = dFdx(float3(UV, 0.0));
-    float3 tex_dy = dFdy(float3(UV, 0.0));
+    float3 pos_dx = ddx(Position);
+    float3 pos_dy = ddy(Position);
+    float3 tex_dx = ddx(float3(UV, 0.0));
+    float3 tex_dy = ddy(float3(UV, 0.0));
     float3 t = (tex_dy.t * pos_dx - tex_dx.t * pos_dy) / (tex_dx.s * tex_dy.t - tex_dy.s * tex_dx.t);
 
-#ifdef HAS_NORMALS
-    float3 ng = normalize(v_Normal);
-#else
-    float3 ng = cross(pos_dx, pos_dy);
-#endif
+//#ifdef HAS_NORMALS
+    float3 ng = normalize(Normal);
+//#else
+//    float3 ng = cross(pos_dx, pos_dy);
+//#endif
 
     t = normalize(t - ng * dot(ng, t));
     float3 b = normalize(cross(ng, t));
     mat3 tbn = mat3(t, b, ng);
-#else // HAS_TANGENTS
-    mat3 tbn = v_TBN;
-#endif
 
-#ifdef HAS_NORMAL_MAP
-    float3 n = texture2D(u_NormalSampler, UV).rgb;
-    n = normalize(tbn * ((2.0 * n - 1.0) * float3(u_NormalScale, u_NormalScale, 1.0)));
-#else
-    // The tbn matrix is linearly interpolated, so we need to re-normalize
-    float3 n = normalize(tbn[2].xyz);
-#endif
+    const float u_NormalScale = 1.0;
+    float3 n = normalize(tbn * ((2.0 * TSNormal - float3(1.0, 1.0, 1.0)) * float3(u_NormalScale, u_NormalScale, 1.0)));
 
     return n;
 }
-
-
-float3 TransformNormal(float3  TangentNormal,
-                       float3  WorldPos,
-                       float3  Normal,
-                       float2  UV)
-{
-	// Perturb normal, see http://www.thetenthplanet.de/archives/1180
-	float3 dPos_dx = ddx(WorldPos);
-	float3 dPos_dy = ddy(WorldPos);
-	float2 dUV_dx  = ddx(UV);
-	float2 dUV_dy  = ddy(UV);
-
-	float3 N = normalize(Normal);
-	float3 T = normalize(dPos_dx * dUV_dy.y - dPos_dy * dUV_dx.y);
-	float3 B = -normalize(cross(N, T));
-	float3x3 TBN = float3x3(T, B, N);
-
-	return normalize(TBN * TangentNormal);
-}
-#endif
 
 
 /*
@@ -286,7 +251,8 @@ void main(in  float4 ClipPos  : SV_Position,
 		discard;
 	}
     
-    float3 TSNormal     = g_NormalMap            .Sample(g_NormalMap_sampler,             lerp(UV0, UV1, g_MaterialInfo.NormalTextureUVSelector)).rgb;
+    float2 NormalMapUV  = lerp(UV0, UV1, g_MaterialInfo.NormalTextureUVSelector);
+    float3 TSNormal     = g_NormalMap            .Sample(g_NormalMap_sampler,             NormalMapUV).rgb;
     float  Occlusion    = g_AOMap                .Sample(g_AOMap_sampler,                 lerp(UV0, UV1, g_MaterialInfo.OcclusionTextureUVSelector)).r;
     float3 Emissive     = g_EmissiveMap          .Sample(g_EmissiveMap_sampler,           lerp(UV0, UV1, g_MaterialInfo.EmissiveTextureUVSelector)).rgb;
     float4 PhysicalDesc = g_PhysicalDescriptorMap.Sample(g_PhysicalDescriptorMap_sampler, lerp(UV0, UV1, g_MaterialInfo.PhysicalDescriptorTextureUVSelector));
@@ -348,14 +314,12 @@ void main(in  float4 ClipPos  : SV_Position,
 
     // LIGHTING
 
-    float3 color  = float3(0.0, 0.0, 0.0);
-    float3 normal = Normal;//getNormal();
-    float3 view   = normalize(g_CameraAttribs.f4Position.xyz - WorldPos.xyz); // Direction from surface point to camera
+    float3 color           = float3(0.0, 0.0, 0.0);
+    float3 perturbedNormal = PerturbNormal(WorldPos, Normal, TSNormal, NormalMapUV);
+    float3 view            = normalize(g_CameraAttribs.f4Position.xyz - WorldPos.xyz); // Direction from surface point to camera
 
-    color += ApplyDirectionalLight(g_LightAttribs.f4Direction.xyz, g_LightAttribs.f4Intensity.rgb, SrfInfo, normal, view);
+    color += ApplyDirectionalLight(g_LightAttribs.f4Direction.xyz, g_LightAttribs.f4Intensity.rgb, SrfInfo, perturbedNormal, view);
     
-//color = dot(view, Normal).rrr;
-//    color = view;
 //#ifdef USE_PUNCTUAL
 //    for (int i = 0; i < LIGHT_COUNT; ++i)
 //    {
@@ -384,7 +348,8 @@ void main(in  float4 ClipPos  : SV_Position,
     color = lerp(color, color * Occlusion, g_RenderParameters.OcclusionStrength);
 
     const float u_EmissiveFactor = 1.0f;
-    color += SRGBtoLINEAR(Emissive).rgb * g_MaterialInfo.EmissiveFactor.rgb * g_RenderParameters.EmissionScale;
+    Emissive = SRGBtoLINEAR(Emissive);
+    color += Emissive.rgb * g_MaterialInfo.EmissiveFactor.rgb * g_RenderParameters.EmissionScale;
 
     OutColor = float4(color, BaseColor.a);
 
@@ -394,37 +359,18 @@ void main(in  float4 ClipPos  : SV_Position,
     {
  		switch (g_RenderParameters.DebugViewType)
         {
-			case 1: OutColor.rgba = BaseColor;                       break;
-			case 2: OutColor.rgb  = TSNormal.xyz;                    break;
-			case 3: OutColor.rgb  = Occlusion.xxx;                   break;
-			case 4: OutColor.rgb  = Emissive.rgb;                    break;
-			case 5: OutColor.rgb  = SrfInfo.perceptualRoughness.rrr; break;
-			case 6: OutColor.rgb  = SrfInfo.metallic.rrr;            break;
-            case 7: OutColor.rgb  = SrfInfo.diffuseColor;            break;
-            case 8: OutColor.rgb  = SrfInfo.specularColor;           break;
-            case 9: OutColor.rgb  = SrfInfo.reflectance90;           break;
-		}
-		OutColor = SRGBtoLINEAR(OutColor);
-	}
-#endif
-
-#if 0
-	// PBR equation debug visualization
-	// "none", "Diff (l,n)", "F (l,h)", "G (l,v,h)", "D (h)", "Specular"
-	if (uboParams.debugViewEquation > 0.0)
-    {
-		int index = int(uboParams.debugViewEquation);
-		switch (index)
-        {
-			case 2:
-				outColor.rgb = F;
-				break;
-			case 3:
-				outColor.rgb = float3(G);
-				break;
-			case 4: 
-				outColor.rgb = float3(D);
-				break;
+			case  1: OutColor.rgba = BaseColor;                       break;
+			case  2: OutColor.rgb  = TSNormal.xyz;                    break;
+			case  3: OutColor.rgb  = Occlusion.xxx;                   break;
+			case  4: OutColor.rgb  = Emissive.rgb;                    break;
+			case  5: OutColor.rgb  = SrfInfo.perceptualRoughness.rrr; break;
+			case  6: OutColor.rgb  = SrfInfo.metallic.rrr;            break;
+            case  7: OutColor.rgb  = SrfInfo.diffuseColor;            break;
+            case  8: OutColor.rgb  = SrfInfo.specularColor;           break;
+            case  9: OutColor.rgb  = SrfInfo.reflectance90;           break;
+            case 10: OutColor.rgb  = abs(Normal);                     break;
+            case 11: OutColor.rgb  = abs(perturbedNormal);            break;
+            case 12: OutColor.rgb  = dot(perturbedNormal, view).xxx;  break;
 		}
 	}
 #endif
