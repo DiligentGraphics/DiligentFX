@@ -64,7 +64,7 @@ GLTF_PBR_Renderer::GLTF_PBR_Renderer(IRenderDevice*    pDevice,
     {
         static constexpr Uint32 TexDim = 8;
         TextureDesc TexDesc;
-        TexDesc.Name        = "Dummy white texture for GLTF renderer";
+        TexDesc.Name        = "White texture for GLTF renderer";
         TexDesc.Type        = RESOURCE_DIM_TEX_2D;
         TexDesc.Usage       = USAGE_STATIC;
         TexDesc.BindFlags   = BIND_SHADER_RESOURCE;
@@ -79,11 +79,13 @@ GLTF_PBR_Renderer::GLTF_PBR_Renderer(IRenderDevice*    pDevice,
         pDevice->CreateTexture(TexDesc, &InitData, &pWhiteTex);
         m_pWhiteTexSRV = pWhiteTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
 
+        TexDesc.Name = "Black texture for GLTF renderer";
         for(auto& c : Data) c = 0;
         RefCntAutoPtr<ITexture> pBlackTex;
         pDevice->CreateTexture(TexDesc, &InitData, &pBlackTex);
         m_pBlackTexSRV = pBlackTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
 
+        TexDesc.Name = "Default normal map for GLTF renderer";
         for(auto& c : Data) c = 0x00FF7F7F;
         RefCntAutoPtr<ITexture> pDefaultNormalMap;
         pDevice->CreateTexture(TexDesc, &InitData, &pDefaultNormalMap);
@@ -103,6 +105,7 @@ GLTF_PBR_Renderer::GLTF_PBR_Renderer(IRenderDevice*    pDevice,
         pDevice->CreateSampler(Sam_LinearClamp, &pDefaultSampler);
         m_pWhiteTexSRV->SetSampler(pDefaultSampler);
         m_pBlackTexSRV->SetSampler(pDefaultSampler);
+        m_pDefaultNormalMapSRV->SetSampler(pDefaultSampler);
     }
 
     CreatePSO(pDevice, CI.RTVFmt, CI.DSVFmt, CI.AllowDebugView);

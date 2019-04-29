@@ -23,6 +23,10 @@ static const ShaderIncInfo g_Shaders[] =
         #include "PBR_Common.fxh.h"
     },
     {
+        "ShaderUtilities.fxh",
+        #include "ShaderUtilities.fxh.h"
+    },
+    {
         "GLTF_PBR_Structures.fxh",
         #include "GLTF_PBR_Structures.fxh.h"
     },
