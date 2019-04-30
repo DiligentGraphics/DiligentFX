@@ -43,7 +43,7 @@
 "    float WhitePoint;\n"
 "	float PrefilteredCubeMipLevels;\n"
 "\n"
-"	float ScaleIBLAmbient;\n"
+"	float IBLScale;\n"
 "	int   DebugViewType;\n"
 "    float OcclusionStrength;\n"
 "    float EmissionScale;\n"

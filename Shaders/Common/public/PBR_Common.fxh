@@ -1,15 +1,15 @@
 #ifndef _PBR_COMMON_FXH_
 #define _PBR_COMMON_FXH_
 
-#ifndef M_PI
-#   define  M_PI 3.141592653589793
+#ifndef PI
+#   define  PI 3.141592653589793
 #endif
 
 // Lambertian diffuse
 // see https://seblagarde.wordpress.com/2012/01/08/pi-or-not-to-pi-in-game-lighting-equation/
 float3 LambertianDiffuse(float3 DiffuseColor)
 {
-	return DiffuseColor / M_PI;
+	return DiffuseColor / PI;
 }
 
 // The following equation models the Fresnel reflectance term of the spec equation (aka F())
@@ -41,7 +41,7 @@ float MicrofacetDistribution(float NdotH, float AlphaRoughness)
 {
     float AlphaRoughnessSq = AlphaRoughness * AlphaRoughness;
     float f = (NdotH * AlphaRoughnessSq - NdotH) * NdotH + 1.0;
-    return AlphaRoughnessSq / (M_PI * f * f);
+    return AlphaRoughnessSq / (PI * f * f);
 }
 
 

@@ -43,7 +43,7 @@ struct GLTFRenderParameters
     float WhitePoint;
 	float PrefilteredCubeMipLevels;
 
-	float ScaleIBLAmbient;
+	float IBLScale;
 	int   DebugViewType;
     float OcclusionStrength;
     float EmissionScale;

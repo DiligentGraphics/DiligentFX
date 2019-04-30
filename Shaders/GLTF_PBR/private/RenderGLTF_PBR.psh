@@ -35,15 +35,19 @@ cbuffer cbRenderParameters
 }
 
 
+#define USE_ENV_MAP_LOD
+#define USE_HDR_CUBEMAPS
+
+#if USE_IBL
 TextureCube  g_IrradianceMap;
 SamplerState g_IrradianceMap_sampler;
 
-TextureCube  g_PrefilteredMap;
-SamplerState g_PrefilteredMap_sampler;
+TextureCube  g_PrefilteredEnvMap;
+SamplerState g_PrefilteredEnvMap_sampler;
 
 Texture2D     g_BRDF_LUT;
 SamplerState  g_BRDF_LUT_sampler;
-
+#endif
 
 Texture2D    g_ColorMap;
 SamplerState g_ColorMap_sampler;
@@ -165,7 +169,7 @@ float3 GetPointShade(float3 pointToLight, SurfaceInfo srfInfo, float3 normal, fl
         // Calculation of analytical lighting contribution
         float3 diffuseContrib = (1.0 - F) * LambertianDiffuse(srfInfo.diffuseColor);
         float3 specContrib    = F * Vis * D;
-
+        
         // Obtain final intensity as reflectance (BRDF) scaled by the energy of the light (cosine law)
         return angularInfo.NdotL * (diffuseContrib + specContrib);
     }
@@ -206,33 +210,42 @@ float3 PerturbNormal(in float3 Position, in float3 Normal, in float3 TSNormal, i
     return normalize(mul(TSNormal, tbn));
 }
 
-
-/*
+#if USE_IBL
 // Calculation of the lighting contribution from an optional Image Based Light source.
 // Precomputed Environment Maps are required uniform inputs and are computed as outlined in [1].
 // See our README.md on Environment Maps [3] for additional discussion.
-float3 getIBLContribution(PBRInfo pbrInputs, float3 n, float3 reflection)
+void GetIBLContribution(SurfaceInfo SrfInfo, float3 n, float3 v, out float3 diffuse, out float3 specular)
 {
-	float lod = (pbrInputs.perceptualRoughness * uboParams.prefilteredCubeMipLevels);
-	// retrieve a scale and bias to F0. See [1], Figure 3
-	float3 brdf = (texture(samplerBRDFLUT, float2(pbrInputs.NdotV, 1.0 - pbrInputs.perceptualRoughness))).rgb;
-	float3 diffuseLight = SRGBtoLINEAR(tonemap(texture(samplerIrradiance, n))).rgb;
+    float NdotV = clamp(dot(n, v), 0.0, 1.0);
 
-	float3 specularLight = SRGBtoLINEAR(tonemap(textureLod(prefilteredMap, reflection, lod))).rgb;
+    float lod = clamp(SrfInfo.perceptualRoughness * float(g_RenderParameters.PrefilteredCubeMipLevels), 0.0, float(g_RenderParameters.PrefilteredCubeMipLevels));
+    float3 reflection = normalize(reflect(-v, n));
 
-	float3 diffuse = diffuseLight * pbrInputs.diffuseColor;
-	float3 specular = specularLight * (pbrInputs.specularColor * brdf.x + brdf.y);
+    float2 brdfSamplePoint = clamp(float2(NdotV, SrfInfo.perceptualRoughness), float2(0.0, 0.0), float2(1.0, 1.0));
+    // retrieve a scale and bias to F0. See [1], Figure 3
+    float2 brdf = g_BRDF_LUT.Sample(g_BRDF_LUT_sampler, brdfSamplePoint).rg;
 
-	// For presentation, this allows us to disable IBL terms
-	// For presentation, this allows us to disable IBL terms
-	diffuse *= uboParams.scaleIBLAmbient;
-	specular *= uboParams.scaleIBLAmbient;
+    float4 diffuseSample = g_IrradianceMap.Sample(g_IrradianceMap_sampler, n);
 
-	return diffuse + specular;
+#ifdef USE_ENV_MAP_LOD
+    float4 specularSample = g_PrefilteredEnvMap.SampleLevel(g_PrefilteredEnvMap_sampler, reflection, lod);
+#else
+    float4 specularSample = g_PrefilteredEnvMap.Sample(g_PrefilteredEnvMap_sampler, reflection);
+#endif
+
+#ifdef USE_HDR_CUBEMAPS
+    // Already linear.
+    float3 diffuseLight  = diffuseSample.rgb;
+    float3 specularLight = specularSample.rgb;
+#else
+    float3 diffuseLight  = SRGBtoLINEAR(diffuseSample).rgb;
+    float3 specularLight = SRGBtoLINEAR(specularSample).rgb;
+#endif
+
+    diffuse  = diffuseLight * SrfInfo.diffuseColor;
+    specular = specularLight * (SrfInfo.specularColor * brdf.x + brdf.y);
 }
-*/
-
-
+#endif
 
 void main(in  float4 ClipPos  : SV_Position,
           in  float3 WorldPos : WORLD_POS,
@@ -338,11 +351,15 @@ void main(in  float4 ClipPos  : SV_Position,
 //    }
 //#endif
 //
+    
+
     // Calculate lighting contribution from image based lighting source (IBL)
-//#ifdef USE_IBL
-//    color += getIBLContribution(materialInfo, normal, view);
-//#endif
-//
+#if USE_IBL
+    float3 diffuseIBL, specularIBL;
+    GetIBLContribution(SrfInfo, perturbedNormal, view, diffuseIBL, specularIBL);
+    color += (diffuseIBL + specularIBL) * g_RenderParameters.IBLScale;
+#endif
+
 
     color = lerp(color, color * Occlusion, g_RenderParameters.OcclusionStrength);
 
@@ -378,6 +395,10 @@ void main(in  float4 ClipPos  : SV_Position,
             case 10: OutColor.rgb  = abs(Normal);                     break;
             case 11: OutColor.rgb  = abs(perturbedNormal);            break;
             case 12: OutColor.rgb  = dot(perturbedNormal, view).xxx;  break;
+#if USE_IBL
+            case 13: OutColor.rgb  = diffuseIBL;                      break;
+            case 14: OutColor.rgb  = specularIBL;                     break;
+#endif
 		}
 	}
 #endif

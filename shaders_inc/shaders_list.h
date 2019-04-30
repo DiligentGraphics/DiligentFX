@@ -27,12 +27,28 @@ static const ShaderIncInfo g_Shaders[] =
         #include "ShaderUtilities.fxh.h"
     },
     {
+        "ComputeIrradianceMap.psh",
+        #include "ComputeIrradianceMap.psh.h"
+    },
+    {
+        "CubemapFace.vsh",
+        #include "CubemapFace.vsh.h"
+    },
+    {
+        "GLTF_PBR_PrecomputeCommon.fxh",
+        #include "GLTF_PBR_PrecomputeCommon.fxh.h"
+    },
+    {
         "GLTF_PBR_Structures.fxh",
         #include "GLTF_PBR_Structures.fxh.h"
     },
     {
         "PrecomputeGLTF_BRDF.psh",
         #include "PrecomputeGLTF_BRDF.psh.h"
+    },
+    {
+        "PrefilterEnvMap.psh",
+        #include "PrefilterEnvMap.psh.h"
     },
     {
         "RenderGLTF_PBR.psh",

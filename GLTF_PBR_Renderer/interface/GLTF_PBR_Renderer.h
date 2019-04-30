@@ -37,6 +37,7 @@ public:
         TEXTURE_FORMAT  RTVFmt         = TEX_FORMAT_UNKNOWN;
         TEXTURE_FORMAT  DSVFmt         = TEX_FORMAT_UNKNOWN;
         bool            AllowDebugView = false;
+        bool            UseIBL         = false;
     };
 
     GLTF_PBR_Renderer(IRenderDevice*    pDevice,
@@ -59,12 +60,15 @@ public:
             Reflectance90   = 9,
             MeshNormal      = 10,
             PerturbedNormal = 11,
-            NdotV           = 12
+            NdotV           = 12,
+            DiffuseIBL      = 13,
+            SpecularIBL     = 14
         };
 
         DebugViewType DebugView         = DebugViewType::None;
         float         OcclusionStrength = 1;
         float         EmissionScale     = 1;
+        float         IBLScale          = 1;
         float         AverageLogLum     = 0.5f;
         float         MiddleGray        = 0.18f;
         float         WhitePoint        = 3.f;
@@ -79,14 +83,15 @@ public:
 
     void InitializeResourceBindings(GLTF::Model& GLTFModel);
 
+    void PrecomputeCubemaps(IRenderDevice*     pDevice,
+                            IDeviceContext*    pCtx,
+                            ITextureView*      pEnvironmentMap);
+
 private:
     void PrecomputeBRDF(IRenderDevice*  pDevice,
                         IDeviceContext* pCtx);
 
-    void CreatePSO(IRenderDevice* pDevice,
-                   TEXTURE_FORMAT RTVFmt,
-                   TEXTURE_FORMAT DSVFmt,
-                   bool           AllowDebugView);
+    void CreatePSO(IRenderDevice* pDevice);
 
     void RenderGLTFNode(IDeviceContext*             pCtx,
                        const GLTF::Node*            node,
@@ -98,6 +103,8 @@ private:
                                               IBuffer*          pCameraAttribs,
                                               IBuffer*          pLightAttribs);
 
+    const CreateInfo m_Settings;
+
     static constexpr Uint32 BRDF_LUT_Dim = 512;
     RefCntAutoPtr<ITextureView>   m_pBRDF_LUT_SRV;
     RefCntAutoPtr<IPipelineState> m_pRenderGLTF_PBR_PSO;
@@ -107,11 +114,23 @@ private:
     RefCntAutoPtr<ITextureView>   m_pDefaultNormalMapSRV;
     std::unordered_map<const GLTF::Material*, RefCntAutoPtr<IShaderResourceBinding>> m_SRBCache;
 
+    static constexpr TEXTURE_FORMAT IrradianceCubeFmt    = TEX_FORMAT_RGBA32_FLOAT;
+    static constexpr TEXTURE_FORMAT PrefilteredEnvMapFmt = TEX_FORMAT_RGBA16_FLOAT;
+    static constexpr Uint32         IrradianceCubeDim    = 64;
+    static constexpr Uint32         PrefilteredEnvMapDim = 256;
+    RefCntAutoPtr<ITextureView>             m_pIrradianceCubeSRV;
+    RefCntAutoPtr<ITextureView>             m_pPrefilteredEnvMapSRV;
+    RefCntAutoPtr<IPipelineState>           m_pPrecomputeIrradianceCubePSO;
+    RefCntAutoPtr<IPipelineState>           m_pPrefilterEnvMapPSO;
+    RefCntAutoPtr<IShaderResourceBinding>   m_pPrecomputeIrradianceCubeSRB;
+    RefCntAutoPtr<IShaderResourceBinding>   m_pPrefilterEnvMapSRB;
+
     RenderInfo m_RenderParams;
 
     RefCntAutoPtr<IBuffer>    m_TransformsCB;
     RefCntAutoPtr<IBuffer>    m_MaterialInfoCB;
     RefCntAutoPtr<IBuffer>    m_RenderParametersCB;
+    RefCntAutoPtr<IBuffer>    m_PrecomputeEnvMapAttribsCB;
 };
 
 }
