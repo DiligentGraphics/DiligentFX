@@ -87,6 +87,16 @@ public:
                             IDeviceContext*    pCtx,
                             ITextureView*      pEnvironmentMap);
 
+    ITextureView* GetIrradianceCubeSRV()
+    {
+        return m_pIrradianceCubeSRV;
+    }
+
+    ITextureView* GetPrefilteredEnvMapSRV()
+    {
+        return m_pPrefilteredEnvMapSRV;
+    }
+
 private:
     void PrecomputeBRDF(IRenderDevice*  pDevice,
                         IDeviceContext* pCtx);
