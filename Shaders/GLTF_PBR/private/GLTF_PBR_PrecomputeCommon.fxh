@@ -1,22 +1,13 @@
 #ifndef _GLTF_PBR_PRECOMPUTE_COMMON_FXH_
 #define _GLTF_PBR_PRECOMPUTE_COMMON_FXH_
 
+#include "PBR_Common.fxh"
+
 #ifndef PI
 #   define PI 3.1415926536
 #endif
 
-// Based omn http://byteblacksmith.com/improvements-to-the-canonical-one-liner-glsl-rand-for-opengl-es-2-0/
-float random(float2 co)
-{
-	float a  = 12.9898;
-	float b  = 78.233;
-	float c  = 43758.5453;
-	float dt = dot(co.xy ,float2(a,b));
-	float sn = fmod(dt,3.14);
-	return frac(sin(sn) * c);
-}
-
-float2 hammersley2d(uint i, uint N) 
+float2 Hammersley2D(uint i, uint N) 
 {
 	// Radical inverse based on http://holger.dammertz.org/stuff/notes_HammersleyOnHemisphere.html
 	uint bits = (i << 16u) | (i >> 16u);
@@ -29,60 +20,21 @@ float2 hammersley2d(uint i, uint N)
 }
 
 // Based on http://blog.selfshadow.com/publications/s2013-shading-course/karis/s2013_pbs_epic_slides.pdf
-float3 importanceSample_GGX(float2 Xi, float roughness, float3 normal) 
+float3 ImportanceSampleGGX( float2 Xi, float Roughness, float3 N )
 {
-	// Maps a 2D point to a hemisphere with spread based on roughness
-	float alpha = roughness * roughness;
-	float phi = 2.0 * PI * Xi.x + random(normal.xz) * 0.1;
-	float cosTheta = sqrt((1.0 - Xi.y) / (1.0 + (alpha*alpha - 1.0) * Xi.y));
-	float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
-	float3 H = float3(sinTheta * cos(phi), sinTheta * sin(phi), cosTheta);
-
-	// Tangent space
-	float3 up       = abs(normal.z) < 0.999 ? float3(0.0, 0.0, 1.0) : float3(1.0, 0.0, 0.0);
-	float3 tangentX = normalize(cross(up, normal));
-	float3 tangentY = normalize(cross(normal, tangentX));
-
-	// Convert to world Space
-	return normalize(tangentX * H.x + tangentY * H.y + normal * H.z);
-}
-
-// Geometric Shadowing function
-float G_SchlicksmithGGX(float dotNL, float dotNV, float roughness)
-{
-	float k = (roughness * roughness) / 2.0;
-	float GL = dotNL / (dotNL * (1.0 - k) + k);
-	float GV = dotNV / (dotNV * (1.0 - k) + k);
-	return GL * GV;
-}
-
-float2 BRDF(float NoV, float roughness, uint numSamples)
-{
-	// Normal always points along z-axis for the 2D lookup 
-	const float3 N = float3(0.0, 0.0, 1.0);
-	float3 V = float3(sqrt(1.0 - NoV*NoV), 0.0, NoV);
-
-	float2 LUT = float2(0.0, 0.0);
-	for(uint i = 0u; i < numSamples; i++)
-    {
-		float2 Xi = hammersley2d(i, numSamples);
-		float3 H = importanceSample_GGX(Xi, roughness, N);
-		float3 L = 2.0 * dot(V, H) * H - V;
-
-		float dotNL = max(dot(N, L), 0.0);
-		float dotNV = max(dot(N, V), 0.0);
-		float dotVH = max(dot(V, H), 0.0); 
-		float dotNH = max(dot(H, N), 0.0);
-
-		if (dotNL > 0.0)
-        {
-			float G     = G_SchlicksmithGGX(dotNL, dotNV, roughness);
-			float G_Vis = (G * dotVH) / (dotNH * dotNV);
-			float Fc    = pow(1.0 - dotVH, 5.0);
-			LUT += float2((1.0 - Fc) * G_Vis, Fc * G_Vis);
-		}
-	}
-	return LUT / float(numSamples);
+    float a        = Roughness * Roughness;
+    float Phi      = 2.0 * PI * Xi.x;
+    float CosTheta = sqrt( (1.0 - Xi.y) / ( 1.0 + (a*a - 1) * Xi.y ) );
+    float SinTheta = sqrt( 1.0 - CosTheta * CosTheta );
+    float3 H;
+    H.x = SinTheta * cos( Phi );
+    H.y = SinTheta * sin( Phi );
+    H.z = CosTheta;
+    float3 UpVector = abs(N.z) < 0.999 ? float3(0.0, 0.0, 1.0) : float3(1.0, 0.0, 0.0);
+    float3 TangentX = normalize( cross( UpVector, N ) );
+    float3 TangentY = cross( N, TangentX );
+    // Tangent to world space
+    return TangentX * H.x + TangentY * H.y + N * H.z;
 }
 
 #endif // _GLTF_PBR_PRECOMPUTE_COMMON_FXH_

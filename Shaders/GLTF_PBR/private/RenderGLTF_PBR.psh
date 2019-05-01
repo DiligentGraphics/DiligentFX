@@ -64,34 +64,6 @@ SamplerState g_AOMap_sampler;
 Texture2D    g_EmissiveMap;
 SamplerState g_EmissiveMap_sampler;
 
-
-struct AngularInfo
-{
-    float NdotL;   // cos angle between normal and light direction
-    float NdotV;   // cos angle between normal and view direction
-    float NdotH;   // cos angle between normal and half vector
-    float LdotH;   // cos angle between light direction and half vector
-    float VdotH;   // cos angle between view direction and half vector
-};
-
-AngularInfo GetAngularInfo(float3 pointToLight, float3 normal, float3 view)
-{
-    // Standard one-letter names
-    float3 n = normalize(normal);           // Outward direction of surface point
-    float3 v = normalize(view);             // Direction from surface point to camera
-    float3 l = normalize(pointToLight);     // Direction from surface point to light
-    float3 h = normalize(l + v);            // Direction of the vector between l and v
-
-    AngularInfo info;
-    info.NdotL = clamp(dot(n, l), 0.0, 1.0);
-    info.NdotV = clamp(dot(n, v), 0.0, 1.0);
-    info.NdotH = clamp(dot(n, h), 0.0, 1.0);
-    info.LdotH = clamp(dot(l, h), 0.0, 1.0);
-    info.VdotH = clamp(dot(v, h), 0.0, 1.0);
-
-    return info;
-}
-
 float GetPerceivedBrightness(float3 rgb)
 {
     return sqrt(0.299 * rgb.r * rgb.r + 0.587 * rgb.g * rgb.g + 0.114 * rgb.b * rgb.b);
@@ -139,48 +111,14 @@ float4 SRGBtoLINEAR(float4 srgbIn)
 }
 
 
-struct SurfaceInfo
-{
-    float  perceptualRoughness;    // roughness value, as authored by the model creator (input to shader)
-    float3 reflectance0;           // full reflectance color (normal incidence angle)
-
-    float  alphaRoughness;         // roughness mapped to a more linear change in the roughness (proposed by [2])
-    float3 diffuseColor;           // color contribution from diffuse lighting
-
-    float  metallic;
-    float3 reflectance90;          // reflectance color at grazing angle
-
-    float3 specularColor;          // color contribution from specular lighting
-};
-
-
-float3 GetPointShade(float3 pointToLight, SurfaceInfo srfInfo, float3 normal, float3 view)
-{
-    AngularInfo angularInfo = GetAngularInfo(pointToLight, normal, view);
-
-    // If one of the dot products is larger than zero, no division by zero can happen. Avoids black borders.
-    if (angularInfo.NdotL > 0.0 || angularInfo.NdotV > 0.0)
-    {
-        // Calculate the shading terms for the microfacet specular shading model
-        float3 F   = SchlickReflection(angularInfo.VdotH, srfInfo.reflectance0, srfInfo.reflectance90);
-        float  Vis = SmithGGXVisibilityCorrelated(angularInfo.NdotL, angularInfo.NdotV, srfInfo.alphaRoughness);
-        float  D   = MicrofacetDistribution(angularInfo.NdotH, srfInfo.alphaRoughness);
-
-        // Calculation of analytical lighting contribution
-        float3 diffuseContrib = (1.0 - F) * LambertianDiffuse(srfInfo.diffuseColor);
-        float3 specContrib    = F * Vis * D;
-        
-        // Obtain final intensity as reflectance (BRDF) scaled by the energy of the light (cosine law)
-        return angularInfo.NdotL * (diffuseContrib + specContrib);
-    }
-
-    return float3(0.0, 0.0, 0.0);
-}
-
-float3 ApplyDirectionalLight(float3 lightDir, float3 lightColor, SurfaceInfo srfInfo, float3 normal, float3 view)
+float3 ApplyDirectionalLight(float3 lightDir, float3 lightColor, SurfaceReflectanceInfo srfInfo, float3 normal, float3 view)
 {
     float3 pointToLight = -lightDir;
-    float3 shade = GetPointShade(pointToLight, srfInfo, normal, view);
+    float3 diffuseContrib, specContrib;
+    float  NdotL;
+    BRDF(pointToLight, normal, view, srfInfo, diffuseContrib, specContrib, NdotL);
+    // Obtain final intensity as reflectance (BRDF) scaled by the energy of the light (cosine law)
+    float3 shade = (diffuseContrib + specContrib) * NdotL;
     return lightColor * shade;
 }
 
@@ -214,14 +152,18 @@ float3 PerturbNormal(in float3 Position, in float3 Normal, in float3 TSNormal, i
 // Calculation of the lighting contribution from an optional Image Based Light source.
 // Precomputed Environment Maps are required uniform inputs and are computed as outlined in [1].
 // See our README.md on Environment Maps [3] for additional discussion.
-void GetIBLContribution(SurfaceInfo SrfInfo, float3 n, float3 v, out float3 diffuse, out float3 specular)
+void GetIBLContribution(SurfaceReflectanceInfo SrfInfo,
+                        float3                 n,
+                        float3                 v,
+                        out float3 diffuse,
+                        out float3 specular)
 {
     float NdotV = clamp(dot(n, v), 0.0, 1.0);
 
-    float lod = clamp(SrfInfo.perceptualRoughness * float(g_RenderParameters.PrefilteredCubeMipLevels), 0.0, float(g_RenderParameters.PrefilteredCubeMipLevels));
+    float lod = clamp(SrfInfo.LinearRoughness * float(g_RenderParameters.PrefilteredCubeMipLevels), 0.0, float(g_RenderParameters.PrefilteredCubeMipLevels));
     float3 reflection = normalize(reflect(-v, n));
 
-    float2 brdfSamplePoint = clamp(float2(NdotV, SrfInfo.perceptualRoughness), float2(0.0, 0.0), float2(1.0, 1.0));
+    float2 brdfSamplePoint = clamp(float2(NdotV, SrfInfo.LinearRoughness), float2(0.0, 0.0), float2(1.0, 1.0));
     // retrieve a scale and bias to F0. See [1], Figure 3
     float2 brdf = g_BRDF_LUT.Sample(g_BRDF_LUT_sampler, brdfSamplePoint).rg;
 
@@ -242,8 +184,8 @@ void GetIBLContribution(SurfaceInfo SrfInfo, float3 n, float3 v, out float3 diff
     float3 specularLight = SRGBtoLINEAR(specularSample).rgb;
 #endif
 
-    diffuse  = diffuseLight * SrfInfo.diffuseColor;
-    specular = specularLight * (SrfInfo.specularColor * brdf.x + brdf.y);
+    diffuse  = diffuseLight * SrfInfo.DiffuseColor;
+    specular = specularLight * (SrfInfo.Reflectance0 * brdf.x + brdf.y);
 }
 #endif
 
@@ -269,9 +211,12 @@ void main(in  float4 ClipPos  : SV_Position,
     float3 Emissive     = g_EmissiveMap          .Sample(g_EmissiveMap_sampler,           lerp(UV0, UV1, g_MaterialInfo.EmissiveTextureUVSelector)).rgb;
     float4 PhysicalDesc = g_PhysicalDescriptorMap.Sample(g_PhysicalDescriptorMap_sampler, lerp(UV0, UV1, g_MaterialInfo.PhysicalDescriptorTextureUVSelector));
     
-    SurfaceInfo SrfInfo;
-   
-    float3 f0            = float3(0.04, 0.04, 0.04);
+    SurfaceReflectanceInfo SrfInfo;
+    float perceptualRoughness;
+    float metallic;
+    float3 specularColor;
+
+    float3 f0 = float3(0.04, 0.04, 0.04);
 
     // Metallic and Roughness material properties are packed together
     // In glTF, these factors can be specified by fixed scalar values
@@ -279,26 +224,27 @@ void main(in  float4 ClipPos  : SV_Position,
     if (g_MaterialInfo.Workflow == PBR_WORKFLOW_SPECULAR_GLOSINESS)
     {
         const float u_GlossinessFactor = 1.0;
-        SrfInfo.perceptualRoughness = (1.0 - PhysicalDesc.a * u_GlossinessFactor); // glossiness to roughness
+        perceptualRoughness = (1.0 - PhysicalDesc.a * u_GlossinessFactor); // glossiness to roughness
         f0 = PhysicalDesc.rgb * g_MaterialInfo.SpecularFactor.rgb;
 
         // f0 = specular
-        SrfInfo.specularColor = f0;
+        specularColor = f0;
         float oneMinusSpecularStrength = 1.0 - max(max(f0.r, f0.g), f0.b);
-        SrfInfo.diffuseColor = BaseColor.rgb * oneMinusSpecularStrength;
+        SrfInfo.DiffuseColor = BaseColor.rgb * oneMinusSpecularStrength;
 
         // do conversion between metallic M-R and S-G metallic
-        SrfInfo.metallic = SolveMetallic(BaseColor.rgb, SrfInfo.specularColor, oneMinusSpecularStrength);
+        metallic = SolveMetallic(BaseColor.rgb, specularColor, oneMinusSpecularStrength);
     }
     else if (g_MaterialInfo.Workflow == PBR_WORKFLOW_METALLIC_ROUGHNESS)
     {
         // Roughness is stored in the 'g' channel, metallic is stored in the 'b' channel.
         // This layout intentionally reserves the 'r' channel for (optional) occlusion map data
-        SrfInfo.perceptualRoughness = PhysicalDesc.g * g_MaterialInfo.RoughnessFactor;
-        SrfInfo.metallic            = PhysicalDesc.b * g_MaterialInfo.MetallicFactor;
+        perceptualRoughness = PhysicalDesc.g * g_MaterialInfo.RoughnessFactor;
+        metallic            = PhysicalDesc.b * g_MaterialInfo.MetallicFactor;
+        metallic            = clamp(metallic, 0.0, 1.0);
 
-        SrfInfo.diffuseColor  = BaseColor.rgb * (float3(1.0, 1.0, 1.0) - f0) * (1.0 - SrfInfo.metallic);
-        SrfInfo.specularColor = lerp(f0, BaseColor.rgb, SrfInfo.metallic);
+        SrfInfo.DiffuseColor  = BaseColor.rgb * (float3(1.0, 1.0, 1.0) - f0) * (1.0 - metallic);
+        specularColor = lerp(f0, BaseColor.rgb, metallic);
     }
 
 //#ifdef ALPHAMODE_OPAQUE
@@ -310,19 +256,18 @@ void main(in  float4 ClipPos  : SV_Position,
 //    return;
 //#endif
 
-    SrfInfo.perceptualRoughness = clamp(SrfInfo.perceptualRoughness, 0.0, 1.0);
-    SrfInfo.metallic            = clamp(SrfInfo.metallic,            0.0, 1.0);
+    perceptualRoughness = clamp(perceptualRoughness, 0.0, 1.0);
 
     // Roughness is authored as perceptual roughness; as is convention,
     // convert to material roughness by squaring the perceptual roughness [2].
-    SrfInfo.alphaRoughness = SrfInfo.perceptualRoughness * SrfInfo.perceptualRoughness;
+    SrfInfo.LinearRoughness = perceptualRoughness;//perceptualRoughness * perceptualRoughness;
 
     // Compute reflectance.
-    float reflectance = max(max(SrfInfo.specularColor.r, SrfInfo.specularColor.g), SrfInfo.specularColor.b);
+    float reflectance = max(max(specularColor.r, specularColor.g), specularColor.b);
 
-    SrfInfo.reflectance0  = SrfInfo.specularColor.rgb;
+    SrfInfo.Reflectance0  = specularColor.rgb;
     // Anything less than 2% is physically impossible and is instead considered to be shadowing. Compare to "Real-Time-Rendering" 4th editon on page 325.
-    SrfInfo.reflectance90 = clamp(reflectance * 50.0, 0.0, 1.0).xxx;
+    SrfInfo.Reflectance90 = clamp(reflectance * 50.0, 0.0, 1.0).xxx;
 
     // LIGHTING
 
@@ -387,11 +332,11 @@ void main(in  float4 ClipPos  : SV_Position,
 			case  2: OutColor.rgb  = TSNormal.xyz;                    break;
 			case  3: OutColor.rgb  = Occlusion.xxx;                   break;
 			case  4: OutColor.rgb  = Emissive.rgb;                    break;
-			case  5: OutColor.rgb  = SrfInfo.perceptualRoughness.rrr; break;
-			case  6: OutColor.rgb  = SrfInfo.metallic.rrr;            break;
-            case  7: OutColor.rgb  = SrfInfo.diffuseColor;            break;
-            case  8: OutColor.rgb  = SrfInfo.specularColor;           break;
-            case  9: OutColor.rgb  = SrfInfo.reflectance90;           break;
+			case  5: OutColor.rgb  = perceptualRoughness.rrr;         break;
+			case  6: OutColor.rgb  = metallic.rrr;                    break;
+            case  7: OutColor.rgb  = SrfInfo.DiffuseColor;            break;
+            case  8: OutColor.rgb  = SrfInfo.Reflectance0;            break;
+            case  9: OutColor.rgb  = SrfInfo.Reflectance90;           break;
             case 10: OutColor.rgb  = abs(Normal);                     break;
             case 11: OutColor.rgb  = abs(perturbedNormal);            break;
             case 12: OutColor.rgb  = dot(perturbedNormal, view).xxx;  break;
