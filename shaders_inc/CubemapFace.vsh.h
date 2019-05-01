@@ -15,4 +15,7 @@
 "    Pos = float4(PosXY[VertexId], 1.0, 1.0);\n"
 "    float4 f4WorldPos = mul(g_Rotation, Pos);\n"
 "    WorldPos = f4WorldPos.xyz / f4WorldPos.w;\n"
+"#if (defined(GLSL) || defined(GL_ES)) && !defined(TARGET_API_VULKAN)\n"
+"    Pos.y *= -1;\n"
+"#endif\n"
 "}\n"
