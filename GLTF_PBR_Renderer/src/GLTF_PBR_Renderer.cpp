@@ -487,12 +487,12 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*     pDevice,
 
 	const std::array<float4x4, 6> Matrices =
     {
-		float4x4::RotationY_GL(+PI_F / 2.f) * float4x4::RotationX_GL(+PI_F),
-		float4x4::RotationY_GL(-PI_F / 2.f) * float4x4::RotationX_GL(+PI_F),
-		float4x4::RotationX_GL(-PI_F / 2.f),
-		float4x4::RotationX_GL(+PI_F / 2.f),
-		float4x4::RotationX_GL(+PI_F),
-		float4x4::RotationZ_GL(+PI_F)
+/* +X */ float4x4::RotationY_GL(-PI_F / 2.f),
+/* -X */ float4x4::RotationY_GL(+PI_F / 2.f),
+/* +Y */ float4x4::RotationX_GL(+PI_F / 2.f),
+/* -Y */ float4x4::RotationX_GL(-PI_F / 2.f),
+/* +Z */ float4x4::Identity(),
+/* -Z */ float4x4::RotationY_GL(PI_F)
 	};
 
     pCtx->SetPipelineState(m_pPrecomputeIrradianceCubePSO);
