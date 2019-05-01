@@ -81,7 +81,7 @@ public:
                                     IBuffer*     pCameraAttribs,
                                     IBuffer*     pLightAttribs);
 
-    void InitializeResourceBindings(GLTF::Model& GLTFModel);
+    void ReleaseResourceBindings(GLTF::Model& GLTFModel);
 
     void PrecomputeCubemaps(IRenderDevice*     pDevice,
                             IDeviceContext*    pCtx,

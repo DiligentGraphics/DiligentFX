@@ -323,7 +323,7 @@ IShaderResourceBinding* GLTF_PBR_Renderer::CreateMaterialSRB(GLTF::Material&  Ma
     SetTexture(Material.pBaseColorTexture,        m_pWhiteTexSRV,         "g_ColorMap");
     SetTexture(Material.pMetallicRoughnessTexture,m_pWhiteTexSRV,         "g_PhysicalDescriptorMap");
     SetTexture(Material.pNormalTexture,           m_pDefaultNormalMapSRV, "g_NormalMap");
-    SetTexture(Material.pOcclusionTexture,        m_pBlackTexSRV,         "g_AOMap");
+    SetTexture(Material.pOcclusionTexture,        m_pWhiteTexSRV,         "g_AOMap");
     SetTexture(Material.pEmissiveTexture,         m_pBlackTexSRV,         "g_EmissiveMap");
 
     auto it = m_SRBCache.find(&Material);
@@ -573,7 +573,7 @@ void GLTF_PBR_Renderer::InitializeResourceBindings(GLTF::Model&   GLTFModel,
 	}
 }
 
-void GLTF_PBR_Renderer::InitializeResourceBindings(GLTF::Model& GLTFModel)
+void GLTF_PBR_Renderer::ReleaseResourceBindings(GLTF::Model& GLTFModel)
 {
 	for (auto& mat : GLTFModel.Materials)
     {
