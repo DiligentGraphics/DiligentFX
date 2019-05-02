@@ -546,7 +546,7 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*     pDevice,
                 Attribs->Rotation = Matrices[face];
                 Attribs->Roughness  = static_cast<float>(mip) / static_cast<float>(PrefilteredEnvMapDesc.MipLevels);
                 Attribs->EnvMapDim  = static_cast<float>(PrefilteredEnvMapDesc.Width);
-                Attribs->NumSamples = 128;
+                Attribs->NumSamples = 1024;
             }
 
             DrawAttribs drawAttrs(4, DRAW_FLAG_VERIFY_ALL);

@@ -28,6 +28,8 @@
 "        float NoL = clamp( dot( N, L ), 0.0, 1.0 );\n"
 "        if( NoL > 0 )\n"
 "        {\n"
+"            // TODO: https://placeholderart.wordpress.com/2015/07/28/implementation-notes-runtime-environment-map-filtering-for-image-based-lighting/\n"
+"\n"
 "            PrefilteredColor += g_EnvironmentMap.SampleLevel(g_EnvironmentMap_sampler, L, 0.0).rgb * NoL;\n"
 "            TotalWeight += NoL;\n"
 "        }\n"
