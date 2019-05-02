@@ -35,7 +35,8 @@ float2 IntegrateBRDF( float Roughness, float NoV, uint NumSamples )
 void PrecomputeBRDF_PS(FullScreenTriangleVSOutput VSOut,
                        out float2 f2BRDF_LUT : SV_Target)
 {
-    float NdotV           =  VSOut.f2NormalizedXY.x * 0.5 + 0.5;
-    float linearRoughness = -VSOut.f2NormalizedXY.y * 0.5 + 0.5;
+    float2 UV = NormalizedDeviceXYToTexUV(VSOut.f2NormalizedXY);
+    float NdotV           = UV.x;
+    float linearRoughness = UV.y;
     f2BRDF_LUT = IntegrateBRDF(linearRoughness, NdotV, NUM_SAMPLES);
 }
