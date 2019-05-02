@@ -185,7 +185,7 @@ void GetIBLContribution(SurfaceReflectanceInfo SrfInfo,
 #endif
 
     diffuse  = diffuseLight * SrfInfo.DiffuseColor;
-    specular = specularLight * (SrfInfo.Reflectance0 * brdf.x + brdf.y);
+    specular = specularLight * (SrfInfo.Reflectance0 * brdf.x + SrfInfo.Reflectance90 * brdf.y);
 }
 #endif
 

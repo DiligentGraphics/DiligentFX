@@ -185,7 +185,7 @@
 "#endif\n"
 "\n"
 "    diffuse  = diffuseLight * SrfInfo.DiffuseColor;\n"
-"    specular = specularLight * (SrfInfo.Reflectance0 * brdf.x + brdf.y);\n"
+"    specular = specularLight * (SrfInfo.Reflectance0 * brdf.x + SrfInfo.Reflectance90 * brdf.y);\n"
 "}\n"
 "#endif\n"
 "\n"

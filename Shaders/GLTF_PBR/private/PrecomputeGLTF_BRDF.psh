@@ -1,7 +1,7 @@
 #include "FullScreenTriangleVSOutput.fxh"
 #include "GLTF_PBR_PrecomputeCommon.fxh"
 
-#define NUM_SAMPLES 256u
+#define NUM_SAMPLES 512u
 
 float2 IntegrateBRDF( float Roughness, float NoV, uint NumSamples )
 {
@@ -22,10 +22,8 @@ float2 IntegrateBRDF( float Roughness, float NoV, uint NumSamples )
         float VoH = saturate( dot( V, H ) );
         if( NoL > 0 )
         {
-            //float G     = G_Smith( Roughness, NoV, NoL );
-            // Visibility = G(v,l,a) / (4 * (n,v) * (n,l))
-            float G     = SmithGGXVisibilityCorrelated( NoL, NoV, Roughness ) * 4.0 * NoL * NoV;
-            float G_Vis = G * VoH / (NoH * NoV);
+            // See eq. 92 in  https://google.github.io/filament/Filament.md.html#lighting/imagebasedlights
+            float G_Vis = 4.0 * SmithGGXVisibilityCorrelated( NoL, NoV, Roughness ) * VoH * NoL / NoH;
             float Fc = pow( 1 - VoH, 5.0 );
             A += (1.0 - Fc) * G_Vis;
             B += Fc * G_Vis;
@@ -37,7 +35,7 @@ float2 IntegrateBRDF( float Roughness, float NoV, uint NumSamples )
 void PrecomputeBRDF_PS(FullScreenTriangleVSOutput VSOut,
                        out float2 f2BRDF_LUT : SV_Target)
 {
-    float NdotV           = VSOut.f2NormalizedXY.x;
-    float linearRoughness = VSOut.f2NormalizedXY.y;
+    float NdotV           = VSOut.f2NormalizedXY.x * 0.5 + 0.5;
+    float linearRoughness = VSOut.f2NormalizedXY.y * 0.5 + 0.5;
     f2BRDF_LUT = IntegrateBRDF(linearRoughness, NdotV, NUM_SAMPLES);
 }
