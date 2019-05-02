@@ -244,7 +244,7 @@
 "        metallic            = clamp(metallic, 0.0, 1.0);\n"
 "\n"
 "        SrfInfo.DiffuseColor  = BaseColor.rgb * (float3(1.0, 1.0, 1.0) - f0) * (1.0 - metallic);\n"
-"        specularColor = lerp(f0, BaseColor.rgb, metallic);\n"
+"        specularColor         = lerp(f0, BaseColor.rgb, metallic);\n"
 "    }\n"
 "\n"
 "//#ifdef ALPHAMODE_OPAQUE\n"

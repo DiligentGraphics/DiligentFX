@@ -244,7 +244,7 @@ void main(in  float4 ClipPos  : SV_Position,
         metallic            = clamp(metallic, 0.0, 1.0);
 
         SrfInfo.DiffuseColor  = BaseColor.rgb * (float3(1.0, 1.0, 1.0) - f0) * (1.0 - metallic);
-        specularColor = lerp(f0, BaseColor.rgb, metallic);
+        specularColor         = lerp(f0, BaseColor.rgb, metallic);
     }
 
 //#ifdef ALPHAMODE_OPAQUE
