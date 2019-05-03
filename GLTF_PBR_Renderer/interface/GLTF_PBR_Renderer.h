@@ -53,19 +53,20 @@ public:
         {
             None            = 0,
             BaseColor       = 1,
-            NormalMap       = 2,
-            Occlusion       = 3,
-            Emissive        = 4,
-            Metallic        = 5,
-            Roughness       = 6,
-            DiffuseColor    = 7,
-            SpecularColor   = 8,
-            Reflectance90   = 9,
-            MeshNormal      = 10,
-            PerturbedNormal = 11,
-            NdotV           = 12,
-            DiffuseIBL      = 13,
-            SpecularIBL     = 14
+            Transparency    = 2,
+            NormalMap       = 3,
+            Occlusion       = 4,
+            Emissive        = 5,
+            Metallic        = 6,
+            Roughness       = 7,
+            DiffuseColor    = 8,
+            SpecularColor   = 9,
+            Reflectance90   = 10,
+            MeshNormal      = 11,
+            PerturbedNormal = 12,
+            NdotV           = 13,
+            DiffuseIBL      = 14,
+            SpecularIBL     = 15
         };
         DebugViewType DebugView         = DebugViewType::None;
 

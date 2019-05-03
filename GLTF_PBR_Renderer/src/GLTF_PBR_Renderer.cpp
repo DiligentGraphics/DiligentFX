@@ -296,18 +296,21 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice*   pDevice)
     RT0.SrcBlend       = BLEND_FACTOR_SRC_ALPHA;
     RT0.DestBlend      = BLEND_FACTOR_INV_SRC_ALPHA;
     RT0.BlendOp        = BLEND_OPERATION_ADD;
-    RT0.SrcBlendAlpha  = BLEND_FACTOR_SRC_ALPHA;
+    RT0.SrcBlendAlpha  = BLEND_FACTOR_INV_SRC_ALPHA;
     RT0.DestBlendAlpha = BLEND_FACTOR_ZERO;
     RT0.BlendOpAlpha   = BLEND_OPERATION_ADD;
     pDevice->CreatePipelineState(PSODesc, &m_pRenderGLTF_PBR_AlphaBlend_PSO);
 
-    if (m_Settings.UseIBL)
+    for(auto* PSO : {m_pRenderGLTF_PBR_PSO.RawPtr(), m_pRenderGLTF_PBR_AlphaBlend_PSO.RawPtr()})
     {
-        m_pRenderGLTF_PBR_PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "g_BRDF_LUT")->Set(m_pBRDF_LUT_SRV);
+        if (m_Settings.UseIBL)
+        {
+            PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "g_BRDF_LUT")->Set(m_pBRDF_LUT_SRV);
+        }
+        PSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "cbTransforms")->Set(m_TransformsCB);
+        PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbMaterialInfo")->Set(m_MaterialInfoCB);
+        PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbRenderParameters")->Set(m_RenderParametersCB);
     }
-    m_pRenderGLTF_PBR_PSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "cbTransforms")->Set(m_TransformsCB);
-    m_pRenderGLTF_PBR_PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbMaterialInfo")->Set(m_MaterialInfoCB);
-    m_pRenderGLTF_PBR_PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbRenderParameters")->Set(m_RenderParametersCB);
 }
 
 IShaderResourceBinding* GLTF_PBR_Renderer::CreateMaterialSRB(GLTF::Material&  Material,
