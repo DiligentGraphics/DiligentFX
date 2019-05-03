@@ -160,10 +160,10 @@ void GetIBLContribution(SurfaceReflectanceInfo SrfInfo,
 {
     float NdotV = clamp(dot(n, v), 0.0, 1.0);
 
-    float lod = clamp(SrfInfo.LinearRoughness * float(g_RenderParameters.PrefilteredCubeMipLevels), 0.0, float(g_RenderParameters.PrefilteredCubeMipLevels));
+    float lod = clamp(SrfInfo.PerceptualRoughness * float(g_RenderParameters.PrefilteredCubeMipLevels), 0.0, float(g_RenderParameters.PrefilteredCubeMipLevels));
     float3 reflection = normalize(reflect(-v, n));
 
-    float2 brdfSamplePoint = clamp(float2(NdotV, SrfInfo.LinearRoughness), float2(0.0, 0.0), float2(1.0, 1.0));
+    float2 brdfSamplePoint = clamp(float2(NdotV, SrfInfo.PerceptualRoughness), float2(0.0, 0.0), float2(1.0, 1.0));
     // retrieve a scale and bias to F0. See [1], Figure 3
     float2 brdf = g_BRDF_LUT.Sample(g_BRDF_LUT_sampler, brdfSamplePoint).rg;
 
@@ -212,7 +212,6 @@ void main(in  float4 ClipPos  : SV_Position,
     float4 PhysicalDesc = g_PhysicalDescriptorMap.Sample(g_PhysicalDescriptorMap_sampler, lerp(UV0, UV1, g_MaterialInfo.PhysicalDescriptorTextureUVSelector));
     
     SurfaceReflectanceInfo SrfInfo;
-    float perceptualRoughness;
     float metallic;
     float3 specularColor;
 
@@ -224,7 +223,7 @@ void main(in  float4 ClipPos  : SV_Position,
     if (g_MaterialInfo.Workflow == PBR_WORKFLOW_SPECULAR_GLOSINESS)
     {
         const float u_GlossinessFactor = 1.0;
-        perceptualRoughness = (1.0 - PhysicalDesc.a * u_GlossinessFactor); // glossiness to roughness
+        SrfInfo.PerceptualRoughness = (1.0 - PhysicalDesc.a * u_GlossinessFactor); // glossiness to roughness
         f0 = PhysicalDesc.rgb * g_MaterialInfo.SpecularFactor.rgb;
 
         // f0 = specular
@@ -239,9 +238,9 @@ void main(in  float4 ClipPos  : SV_Position,
     {
         // Roughness is stored in the 'g' channel, metallic is stored in the 'b' channel.
         // This layout intentionally reserves the 'r' channel for (optional) occlusion map data
-        perceptualRoughness = PhysicalDesc.g * g_MaterialInfo.RoughnessFactor;
-        metallic            = PhysicalDesc.b * g_MaterialInfo.MetallicFactor;
-        metallic            = clamp(metallic, 0.0, 1.0);
+        SrfInfo.PerceptualRoughness = PhysicalDesc.g * g_MaterialInfo.RoughnessFactor;
+        metallic                    = PhysicalDesc.b * g_MaterialInfo.MetallicFactor;
+        metallic                    = clamp(metallic, 0.0, 1.0);
 
         SrfInfo.DiffuseColor  = BaseColor.rgb * (float3(1.0, 1.0, 1.0) - f0) * (1.0 - metallic);
         specularColor         = lerp(f0, BaseColor.rgb, metallic);
@@ -256,11 +255,7 @@ void main(in  float4 ClipPos  : SV_Position,
 //    return;
 //#endif
 
-    perceptualRoughness = clamp(perceptualRoughness, 0.0, 1.0);
-
-    // Roughness is authored as perceptual roughness; as is convention,
-    // convert to material roughness by squaring the perceptual roughness [2].
-    SrfInfo.LinearRoughness = perceptualRoughness;//perceptualRoughness * perceptualRoughness;
+    SrfInfo.PerceptualRoughness = clamp(SrfInfo.PerceptualRoughness, 0.0, 1.0);
 
     // Compute reflectance.
     float reflectance = max(max(specularColor.r, specularColor.g), specularColor.b);
@@ -333,7 +328,7 @@ void main(in  float4 ClipPos  : SV_Position,
 			case  3: OutColor.rgb  = Occlusion.xxx;                   break;
 			case  4: OutColor.rgb  = Emissive.rgb;                    break;
 			case  5: OutColor.rgb  = metallic.rrr;                    break;
-			case  6: OutColor.rgb  = perceptualRoughness.rrr;         break;
+			case  6: OutColor.rgb  = SrfInfo.PerceptualRoughness.rrr; break;
             case  7: OutColor.rgb  = SrfInfo.DiffuseColor;            break;
             case  8: OutColor.rgb  = SrfInfo.Reflectance0;            break;
             case  9: OutColor.rgb  = SrfInfo.Reflectance90;           break;
