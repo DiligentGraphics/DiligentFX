@@ -1,5 +1,9 @@
 #include "GLTF_PBR_PrecomputeCommon.fxh"
 
+#ifndef OPTIMIZE_SAMPLES
+#   define OPTIMIZE_SAMPLES 1
+#endif
+
 TextureCube  g_EnvironmentMap;
 SamplerState g_EnvironmentMap_sampler;
 
@@ -24,13 +28,28 @@ float3 PrefilterEnvMap( float Roughness, float3 R )
     {
         float2 Xi = Hammersley2D( i, g_NumSamples );
         float3 H  = ImportanceSampleGGX( Xi, Roughness, N );
-        float3 L  = 2.0 * dot( V, H ) * H - V;
-        float NoL = clamp( dot( N, L ), 0.0, 1.0 );
-        if( NoL > 0 )
+        float3 L  = 2.0 * dot(V, H) * H - V;
+        float NoL = clamp(dot(N, L), 0.0, 1.0);
+		float VoH = clamp(dot(V, H), 0.0, 1.0);
+        if(NoL > 0 && VoH > 0)
         {
-            // TODO: https://placeholderart.wordpress.com/2015/07/28/implementation-notes-runtime-environment-map-filtering-for-image-based-lighting/
+#if OPTIMIZE_SAMPLES
+			// https://placeholderart.wordpress.com/2015/07/28/implementation-notes-runtime-environment-map-filtering-for-image-based-lighting/
 
-            PrefilteredColor += g_EnvironmentMap.SampleLevel(g_EnvironmentMap_sampler, L, 0.0).rgb * NoL;
+            float NoH = clamp(dot(N, H), 0.0, 1.0);
+
+			// Probability Distribution Function
+			float pdf = max(NormalDistribution_GGX(NoH, Roughness) * NoH / (4.0 * VoH), 0.0001);
+			// Slid angle of current smple
+			float OmegaS = 1.0 / (float(g_NumSamples) * pdf);
+			// Solid angle of 1 pixel across all cube faces
+			float OmegaP = 4.0 * PI / (6.0 * g_EnvMapDim * g_EnvMapDim);
+			// Biased (+1.0) mip level for better result
+			float MipLevel = (Roughness == 0.0) ? 0.0 : max(0.5 * log2(OmegaS / OmegaP) + 1.0, 0.0);
+#else
+            float MipLevel = 0.0;
+#endif
+            PrefilteredColor += g_EnvironmentMap.SampleLevel(g_EnvironmentMap_sampler, L, MipLevel).rgb * NoL;
             TotalWeight += NoL;
         }
     }
