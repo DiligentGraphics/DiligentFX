@@ -47,6 +47,8 @@ public:
 
     struct RenderInfo
     {
+        float4x4 ModelTransform = float4x4::Identity();  
+
         enum class DebugViewType : int
         {
             None            = 0,
@@ -65,8 +67,8 @@ public:
             DiffuseIBL      = 13,
             SpecularIBL     = 14
         };
-
         DebugViewType DebugView         = DebugViewType::None;
+
         float         OcclusionStrength = 1;
         float         EmissionScale     = 1;
         float         IBLScale          = 1;
@@ -105,8 +107,9 @@ private:
     void CreatePSO(IRenderDevice* pDevice);
 
     void RenderGLTFNode(IDeviceContext*             pCtx,
-                       const GLTF::Node*            node,
-                       GLTF::Material::ALPHA_MODE   AlphaMode);
+                        const GLTF::Node*           node,
+                        GLTF::Material::ALPHA_MODE  AlphaMode,
+                        const float4x4&             ModelTransform);
     
     void UpdateRenderParams(IDeviceContext* pCtx);
 

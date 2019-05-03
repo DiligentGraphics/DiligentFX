@@ -585,7 +585,8 @@ void GLTF_PBR_Renderer::ReleaseResourceBindings(GLTF::Model& GLTFModel)
 
 void GLTF_PBR_Renderer::RenderGLTFNode(IDeviceContext*              pCtx,
                                        const GLTF::Node*            node,
-                                       GLTF::Material::ALPHA_MODE   AlphaMode)
+                                       GLTF::Material::ALPHA_MODE   AlphaMode,
+                                       const float4x4&              ModelTransform)
 {
 	if (node->Mesh)
     {
@@ -610,7 +611,7 @@ void GLTF_PBR_Renderer::RenderGLTFNode(IDeviceContext*              pCtx,
 
             {
                 MapHelper<GLTFNodeTransforms> Transforms(pCtx, m_TransformsCB, MAP_WRITE, MAP_FLAG_DISCARD);
-                Transforms->NodeMatrix  = node->Mesh->Transforms.matrix;
+                Transforms->NodeMatrix  = node->Mesh->Transforms.matrix * ModelTransform;
                 Transforms->JointCount  = node->Mesh->Transforms.jointcount;
                 if (node->Mesh->Transforms.jointcount != 0)
                 {
@@ -674,7 +675,7 @@ void GLTF_PBR_Renderer::RenderGLTFNode(IDeviceContext*              pCtx,
 
 	for (const auto& child : node->Children)
     {
-		RenderGLTFNode(pCtx, child.get(), AlphaMode);
+		RenderGLTFNode(pCtx, child.get(), AlphaMode, ModelTransform);
 	}
 }
 
@@ -718,13 +719,13 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*    pCtx,
     // Opaque primitives first
 	for (const auto& node : GLTFModel.Nodes)
     {
-		RenderGLTFNode(pCtx, node.get(), GLTF::Material::ALPHAMODE_OPAQUE);
+		RenderGLTFNode(pCtx, node.get(), GLTF::Material::ALPHAMODE_OPAQUE, RenderParams.ModelTransform);
 	}
 
 	// Alpha masked primitives
 	for (const auto& node : GLTFModel.Nodes)
     {
-		RenderGLTFNode(pCtx, node.get(), GLTF::Material::ALPHAMODE_MASK);
+		RenderGLTFNode(pCtx, node.get(), GLTF::Material::ALPHAMODE_MASK, RenderParams.ModelTransform);
 	}
 
 	// Transparent primitives
@@ -732,7 +733,7 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*    pCtx,
     pCtx->SetPipelineState(m_pRenderGLTF_PBR_PSO);
 	for (const auto& node : GLTFModel.Nodes)
     {
-		RenderGLTFNode(pCtx, node.get(), GLTF::Material::ALPHAMODE_BLEND);
+		RenderGLTFNode(pCtx, node.get(), GLTF::Material::ALPHAMODE_BLEND, RenderParams.ModelTransform);
 	}
 }
 
