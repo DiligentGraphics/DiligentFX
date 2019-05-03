@@ -122,6 +122,7 @@ private:
     static constexpr Uint32 BRDF_LUT_Dim = 512;
     RefCntAutoPtr<ITextureView>   m_pBRDF_LUT_SRV;
     RefCntAutoPtr<IPipelineState> m_pRenderGLTF_PBR_PSO;
+    RefCntAutoPtr<IPipelineState> m_pRenderGLTF_PBR_AlphaBlend_PSO;
 
     RefCntAutoPtr<ITextureView>   m_pWhiteTexSRV;
     RefCntAutoPtr<ITextureView>   m_pBlackTexSRV;

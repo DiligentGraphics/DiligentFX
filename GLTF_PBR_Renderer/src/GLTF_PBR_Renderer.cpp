@@ -291,6 +291,16 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice*   pDevice)
     PSODesc.GraphicsPipeline.pPS = pPS;
     pDevice->CreatePipelineState(PSODesc, &m_pRenderGLTF_PBR_PSO);
 
+    auto& RT0 = PSODesc.GraphicsPipeline.BlendDesc.RenderTargets[0];
+    RT0.BlendEnable    = true;
+    RT0.SrcBlend       = BLEND_FACTOR_SRC_ALPHA;
+    RT0.DestBlend      = BLEND_FACTOR_INV_SRC_ALPHA;
+    RT0.BlendOp        = BLEND_OPERATION_ADD;
+    RT0.SrcBlendAlpha  = BLEND_FACTOR_SRC_ALPHA;
+    RT0.DestBlendAlpha = BLEND_FACTOR_ZERO;
+    RT0.BlendOpAlpha   = BLEND_OPERATION_ADD;
+    pDevice->CreatePipelineState(PSODesc, &m_pRenderGLTF_PBR_AlphaBlend_PSO);
+
     if (m_Settings.UseIBL)
     {
         m_pRenderGLTF_PBR_PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "g_BRDF_LUT")->Set(m_pBRDF_LUT_SRV);
@@ -730,7 +740,8 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*    pCtx,
 
 	// Transparent primitives
 	// TODO: Correct depth sorting
-    pCtx->SetPipelineState(m_pRenderGLTF_PBR_PSO);
+    // TODO: Do not set the pipeline if there are no transparent nodes
+    pCtx->SetPipelineState(m_pRenderGLTF_PBR_AlphaBlend_PSO);
 	for (const auto& node : GLTFModel.Nodes)
     {
 		RenderGLTFNode(pCtx, node.get(), GLTF::Material::ALPHAMODE_BLEND, RenderParams.ModelTransform);
