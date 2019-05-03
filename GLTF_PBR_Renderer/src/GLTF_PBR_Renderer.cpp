@@ -214,11 +214,12 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice*   pDevice)
     PSODesc.Name = "Render GLTF PBR PSO";
 
     PSODesc.IsComputePipeline = false;
-    PSODesc.GraphicsPipeline.NumRenderTargets        = 1;
-    PSODesc.GraphicsPipeline.RTVFormats[0]           = m_Settings.RTVFmt;
-    PSODesc.GraphicsPipeline.DSVFormat               = m_Settings.DSVFmt;
-    PSODesc.GraphicsPipeline.PrimitiveTopology       = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    PSODesc.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_BACK;
+    PSODesc.GraphicsPipeline.NumRenderTargets                     = 1;
+    PSODesc.GraphicsPipeline.RTVFormats[0]                        = m_Settings.RTVFmt;
+    PSODesc.GraphicsPipeline.DSVFormat                            = m_Settings.DSVFmt;
+    PSODesc.GraphicsPipeline.PrimitiveTopology                    = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    PSODesc.GraphicsPipeline.RasterizerDesc.CullMode              = CULL_MODE_BACK;
+    PSODesc.GraphicsPipeline.RasterizerDesc.FrontCounterClockwise = m_Settings.FrontCCW;
 
     ShaderCreateInfo ShaderCI;
     ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
@@ -487,12 +488,12 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*     pDevice,
 
 	const std::array<float4x4, 6> Matrices =
     {
-/* +X */ float4x4::RotationY_GL(-PI_F / 2.f),
-/* -X */ float4x4::RotationY_GL(+PI_F / 2.f),
-/* +Y */ float4x4::RotationX_GL(+PI_F / 2.f),
-/* -Y */ float4x4::RotationX_GL(-PI_F / 2.f),
+/* +X */ float4x4::RotationY(+PI_F / 2.f),
+/* -X */ float4x4::RotationY(-PI_F / 2.f),
+/* +Y */ float4x4::RotationX(-PI_F / 2.f),
+/* -Y */ float4x4::RotationX(+PI_F / 2.f),
 /* +Z */ float4x4::Identity(),
-/* -Z */ float4x4::RotationY_GL(PI_F)
+/* -Z */ float4x4::RotationY(PI_F)
 	};
 
     pCtx->SetPipelineState(m_pPrecomputeIrradianceCubePSO);
@@ -609,7 +610,7 @@ void GLTF_PBR_Renderer::RenderGLTFNode(IDeviceContext*              pCtx,
 
             {
                 MapHelper<GLTFNodeTransforms> Transforms(pCtx, m_TransformsCB, MAP_WRITE, MAP_FLAG_DISCARD);
-                Transforms->NodeMatrix  = node->Matrix * node->Mesh->Transforms.matrix;
+                Transforms->NodeMatrix  = node->Mesh->Transforms.matrix;
                 Transforms->JointCount  = node->Mesh->Transforms.jointcount;
                 if (node->Mesh->Transforms.jointcount != 0)
                 {

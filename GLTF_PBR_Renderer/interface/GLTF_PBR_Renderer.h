@@ -36,6 +36,7 @@ public:
     {
         TEXTURE_FORMAT  RTVFmt         = TEX_FORMAT_UNKNOWN;
         TEXTURE_FORMAT  DSVFmt         = TEX_FORMAT_UNKNOWN;
+        bool            FrontCCW       = false;
         bool            AllowDebugView = false;
         bool            UseIBL         = false;
     };
