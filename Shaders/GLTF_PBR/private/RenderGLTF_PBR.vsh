@@ -21,16 +21,15 @@ cbuffer cbTransforms
     GLTFNodeTransforms g_Transforms;
 }
 
-float3x3 inverse3x3(float3x3 M)
+float3x3 InverseTranspose3x3(float3x3 M)
 {
-    float3x3 M_t = transpose(M); 
     // Note that in HLSL, M_t[0] is the first row, while in GLSL, it is the 
     // first column. Luckily, determinant and inverse matrix can be equally 
     // defined through both rows and columns.
-    float det = dot(cross(M_t[0], M_t[1]), M_t[2]);
-    float3x3 adjugate = float3x3(cross(M_t[1], M_t[2]),
-                                 cross(M_t[2], M_t[0]),
-                                 cross(M_t[0], M_t[1]));
+    float det = dot(cross(M[0], M[1]), M[2]);
+    float3x3 adjugate = float3x3(cross(M[1], M[2]),
+                                 cross(M[2], M[0]),
+                                 cross(M[0], M[1]));
     return adjugate / det;
 }
 
@@ -41,11 +40,11 @@ void main(in  GLTF_VS_Input  VSIn,
           out float2 UV0      : UV0,
           out float2 UV1      : UV1) 
 {
-    matrix Transform = g_Transforms.NodeMatrix;
+    float4x4 Transform = g_Transforms.NodeMatrix;
 	if (g_Transforms.JointCount > 0)
     {
 		// Mesh is skinned
-		matrix SkinMat = 
+		float4x4 SkinMat = 
 			VSIn.Weight0.x * g_Transforms.JointMatrix[int(VSIn.Joint0.x)] +
 			VSIn.Weight0.y * g_Transforms.JointMatrix[int(VSIn.Joint0.y)] +
 			VSIn.Weight0.z * g_Transforms.JointMatrix[int(VSIn.Joint0.z)] +
@@ -55,8 +54,10 @@ void main(in  GLTF_VS_Input  VSIn,
     
 	float4 locPos = mul(Transform, float4(VSIn.Pos, 1.0));
     float3x3 NormalTransform = float3x3(Transform[0].xyz, Transform[1].xyz, Transform[2].xyz);
-    NormalTransform = transpose(inverse3x3(NormalTransform));
-	Normal = normalize(mul(NormalTransform, VSIn.Normal));
+    NormalTransform = InverseTranspose3x3(NormalTransform);
+    Normal = mul(NormalTransform, VSIn.Normal);
+    float3 NormalLen = length(Normal);
+    Normal /= max(NormalLen, 1e-5);
 
 	WorldPos = locPos.xyz / locPos.w;
 	UV0      = VSIn.UV0;

@@ -125,27 +125,32 @@ float3 ApplyDirectionalLight(float3 lightDir, float3 lightColor, SurfaceReflecta
 
 // Find the normal for this fragment, pulling either from a predefined normal map
 // or from the interpolated mesh normal and tangent attributes.
-float3 PerturbNormal(in float3 Position, in float3 Normal, in float3 TSNormal, in float2 UV)
+float3 PerturbNormal(in float3 Position, in float3 Normal, in float3 TSNormal, in float2 UV, bool HasUV)
 {
     // Retrieve the tangent space matrix
     float3 pos_dx = ddx(Position);
     float3 pos_dy = ddy(Position);
-    float3 tex_dx = ddx(float3(UV, 0.0));
-    float3 tex_dy = ddy(float3(UV, 0.0));
-    float3 t = (tex_dy.y * pos_dx - tex_dx.y * pos_dy) / (tex_dx.x * tex_dy.y - tex_dy.x * tex_dx.y);
 
-//#ifdef HAS_NORMALS
-    float3 ng = normalize(Normal);
-//#else
-//    float3 ng = cross(pos_dx, pos_dy);
-//#endif
+    float NormalLen = length(Normal);
+    float3 ng = NormalLen > 1e-5 ? (Normal/NormalLen) : normalize(cross(pos_dx, pos_dy));
 
-    t = normalize(t - ng * dot(ng, t));
-    float3 b = normalize(cross(ng, t));
-    float3x3 tbn = MatrixFromRows(t, b, ng);
+    if (HasUV)
+    {
+        float3 tex_dx = ddx(float3(UV, 0.0));
+        float3 tex_dy = ddy(float3(UV, 0.0));
+        float3 t = (tex_dy.y * pos_dx - tex_dx.y * pos_dy) / (tex_dx.x * tex_dy.y - tex_dy.x * tex_dx.y);
 
-    TSNormal = 2.0 * TSNormal - float3(1.0, 1.0, 1.0);
-    return normalize(mul(TSNormal, tbn));
+        t = normalize(t - ng * dot(ng, t));
+        float3 b = normalize(cross(ng, t));
+        float3x3 tbn = MatrixFromRows(t, b, ng);
+
+        TSNormal = 2.0 * TSNormal - float3(1.0, 1.0, 1.0);
+        return normalize(mul(TSNormal, tbn));
+    }
+    else
+    {
+        return ng;
+    }
 }
 
 #if USE_IBL
@@ -268,7 +273,7 @@ void main(in  float4 ClipPos  : SV_Position,
     // LIGHTING
 
     float3 color           = float3(0.0, 0.0, 0.0);
-    float3 perturbedNormal = g_MaterialInfo.NormalTextureUVSelector >= 0.0 ? PerturbNormal(WorldPos, Normal, TSNormal, NormalMapUV) : Normal;
+    float3 perturbedNormal = PerturbNormal(WorldPos, Normal, TSNormal, NormalMapUV, g_MaterialInfo.NormalTextureUVSelector >= 0.0);
     float3 view            = normalize(g_CameraAttribs.f4Position.xyz - WorldPos.xyz); // Direction from surface point to camera
 
     color += ApplyDirectionalLight(g_LightAttribs.f4Direction.xyz, g_LightAttribs.f4Intensity.rgb, SrfInfo, perturbedNormal, view);
