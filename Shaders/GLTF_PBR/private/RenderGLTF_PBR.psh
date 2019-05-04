@@ -267,7 +267,7 @@ void main(in  float4 ClipPos  : SV_Position,
     // LIGHTING
 
     float3 color           = float3(0.0, 0.0, 0.0);
-    float3 perturbedNormal = PerturbNormal(WorldPos, Normal, TSNormal, NormalMapUV);
+    float3 perturbedNormal = g_MaterialInfo.NormalTextureUVSelector >= 0.0 ? PerturbNormal(WorldPos, Normal, TSNormal, NormalMapUV) : Normal;
     float3 view            = normalize(g_CameraAttribs.f4Position.xyz - WorldPos.xyz); // Direction from surface point to camera
 
     color += ApplyDirectionalLight(g_LightAttribs.f4Direction.xyz, g_LightAttribs.f4Intensity.rgb, SrfInfo, perturbedNormal, view);

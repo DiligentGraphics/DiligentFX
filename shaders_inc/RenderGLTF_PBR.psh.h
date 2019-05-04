@@ -267,7 +267,7 @@
 "    // LIGHTING\n"
 "\n"
 "    float3 color           = float3(0.0, 0.0, 0.0);\n"
-"    float3 perturbedNormal = PerturbNormal(WorldPos, Normal, TSNormal, NormalMapUV);\n"
+"    float3 perturbedNormal = g_MaterialInfo.NormalTextureUVSelector >= 0.0 ? PerturbNormal(WorldPos, Normal, TSNormal, NormalMapUV) : Normal;\n"
 "    float3 view            = normalize(g_CameraAttribs.f4Position.xyz - WorldPos.xyz); // Direction from surface point to camera\n"
 "\n"
 "    color += ApplyDirectionalLight(g_LightAttribs.f4Direction.xyz, g_LightAttribs.f4Intensity.rgb, SrfInfo, perturbedNormal, view);\n"
