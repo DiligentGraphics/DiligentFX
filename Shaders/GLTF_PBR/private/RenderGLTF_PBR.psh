@@ -148,12 +148,12 @@ float3 PerturbNormal(in float3 Position, in float3 Normal, in float3 TSNormal, i
 
     if (HasUV)
     {
-        float3 tex_dx = ddx(float3(UV, 0.0));
-        float3 tex_dy = ddy(float3(UV, 0.0));
+        float2 tex_dx = ddx(UV);
+        float2 tex_dy = ddy(UV);
         float3 t = (tex_dy.y * pos_dx - tex_dx.y * pos_dy) / (tex_dx.x * tex_dy.y - tex_dy.x * tex_dx.y);
 
         t = normalize(t - ng * dot(ng, t));
-        float3 b = normalize(cross(ng, t));
+        float3 b = normalize(cross(t, ng));
         float3x3 tbn = MatrixFromRows(t, b, ng);
 
         TSNormal = 2.0 * TSNormal - float3(1.0, 1.0, 1.0);
