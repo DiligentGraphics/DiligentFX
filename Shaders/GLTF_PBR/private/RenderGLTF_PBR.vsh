@@ -41,7 +41,7 @@ void main(in  GLTF_VS_Input  VSIn,
           out float2 UV0      : UV0,
           out float2 UV1      : UV1) 
 {
-    matrix CombinedTransform = g_Transforms.NodeMatrix;
+    matrix Transform = g_Transforms.NodeMatrix;
 	if (g_Transforms.JointCount > 0)
     {
 		// Mesh is skinned
@@ -50,11 +50,11 @@ void main(in  GLTF_VS_Input  VSIn,
 			VSIn.Weight0.y * g_Transforms.JointMatrix[int(VSIn.Joint0.y)] +
 			VSIn.Weight0.z * g_Transforms.JointMatrix[int(VSIn.Joint0.z)] +
 			VSIn.Weight0.w * g_Transforms.JointMatrix[int(VSIn.Joint0.w)];
-        CombinedTransform *= SkinMat;
+        Transform = mul(Transform, SkinMat);
 	}
     
-	float4 locPos = mul(CombinedTransform, float4(VSIn.Pos, 1.0));
-    float3x3 NormalTransform = float3x3(CombinedTransform[0].xyz, CombinedTransform[1].xyz, CombinedTransform[2].xyz);
+	float4 locPos = mul(Transform, float4(VSIn.Pos, 1.0));
+    float3x3 NormalTransform = float3x3(Transform[0].xyz, Transform[1].xyz, Transform[2].xyz);
     NormalTransform = transpose(inverse3x3(NormalTransform));
 	Normal = normalize(mul(NormalTransform, VSIn.Normal));
 
