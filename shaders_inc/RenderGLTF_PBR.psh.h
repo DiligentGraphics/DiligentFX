@@ -352,7 +352,7 @@
 "            case  8: OutColor.rgb  = SrfInfo.DiffuseColor;                          break;\n"
 "            case  9: OutColor.rgb  = SrfInfo.Reflectance0;                          break;\n"
 "            case 10: OutColor.rgb  = SrfInfo.Reflectance90;                         break;\n"
-"            case 11: OutColor.rgb  = SRGBtoLINEAR(abs(Normal));                     break;\n"
+"            case 11: OutColor.rgb  = SRGBtoLINEAR(abs(Normal / max(length(Normal), 1e-3))); break;\n"
 "            case 12: OutColor.rgb  = SRGBtoLINEAR(abs(perturbedNormal));            break;\n"
 "            case 13: OutColor.rgb  = dot(perturbedNormal, view).xxx;                break;\n"
 "#if USE_IBL\n"

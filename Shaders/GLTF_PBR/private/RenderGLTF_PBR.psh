@@ -352,7 +352,7 @@ void main(in  float4 ClipPos  : SV_Position,
             case  8: OutColor.rgb  = SrfInfo.DiffuseColor;                          break;
             case  9: OutColor.rgb  = SrfInfo.Reflectance0;                          break;
             case 10: OutColor.rgb  = SrfInfo.Reflectance90;                         break;
-            case 11: OutColor.rgb  = SRGBtoLINEAR(abs(Normal));                     break;
+            case 11: OutColor.rgb  = SRGBtoLINEAR(abs(Normal / max(length(Normal), 1e-3))); break;
             case 12: OutColor.rgb  = SRGBtoLINEAR(abs(perturbedNormal));            break;
             case 13: OutColor.rgb  = dot(perturbedNormal, view).xxx;                break;
 #if USE_IBL
