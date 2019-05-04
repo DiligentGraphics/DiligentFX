@@ -54,7 +54,6 @@ struct GLTFMaterialInfo
 {
 	float4  BaseColorFactor;
 	float4  EmissiveFactor;
-	float4  DiffuseFactor;
 	float4  SpecularFactor;
 
 	int     Workflow;

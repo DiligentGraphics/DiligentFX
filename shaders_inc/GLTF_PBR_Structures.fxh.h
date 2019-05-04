@@ -54,7 +54,6 @@
 "{\n"
 "	float4  BaseColorFactor;\n"
 "	float4  EmissiveFactor;\n"
-"	float4  DiffuseFactor;\n"
 "	float4  SpecularFactor;\n"
 "\n"
 "	int     Workflow;\n"

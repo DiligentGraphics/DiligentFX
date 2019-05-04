@@ -692,7 +692,7 @@ void GLTF_PBR_Renderer::RenderGLTFNode(IDeviceContext*              pCtx,
 				    MaterialInfo->Workflow                            = PBR_WORKFLOW_SPECULAR_GLOSINESS;
                     MaterialInfo->PhysicalDescriptorTextureUVSelector = GetUVSelector(material.extension.pSpecularGlossinessTexture, material.TexCoordSets.SpecularGlossiness);
                     MaterialInfo->BaseColorTextureUVSelector          = GetUVSelector(material.extension.pDiffuseTexture,            material.TexCoordSets.BaseColor);
-				    MaterialInfo->DiffuseFactor                       = material.extension.DiffuseFactor;
+				    MaterialInfo->BaseColorFactor                     = material.extension.DiffuseFactor;
 				    MaterialInfo->SpecularFactor                      = float4(material.extension.SpecularFactor, 1.0f);
 			    }
             }
