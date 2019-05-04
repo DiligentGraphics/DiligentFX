@@ -132,7 +132,19 @@ float3 PerturbNormal(in float3 Position, in float3 Normal, in float3 TSNormal, i
     float3 pos_dy = ddy(Position);
 
     float NormalLen = length(Normal);
-    float3 ng = NormalLen > 1e-5 ? (Normal/NormalLen) : normalize(cross(pos_dx, pos_dy));
+    float3 ng;
+    if (NormalLen > 1e-5)
+    {
+        ng = Normal/NormalLen;
+    }
+    else
+    {
+        ng = normalize(cross(pos_dx, pos_dy));
+#if (defined(GLSL) || defined(GL_ES)) && !defined(TARGET_API_VULKAN)
+        // In OpenGL screen is upside-down, so we have to invert the vector
+        ng *= -1;
+#endif
+    }
 
     if (HasUV)
     {
