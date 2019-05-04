@@ -56,7 +56,7 @@ void main(in  GLTF_VS_Input  VSIn,
     float3x3 NormalTransform = float3x3(Transform[0].xyz, Transform[1].xyz, Transform[2].xyz);
     NormalTransform = InverseTranspose3x3(NormalTransform);
     Normal = mul(NormalTransform, VSIn.Normal);
-    float3 NormalLen = length(Normal);
+    float NormalLen = length(Normal);
     Normal /= max(NormalLen, 1e-5);
 
 	WorldPos = locPos.xyz / locPos.w;

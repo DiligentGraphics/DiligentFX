@@ -56,7 +56,7 @@
 "    float3x3 NormalTransform = float3x3(Transform[0].xyz, Transform[1].xyz, Transform[2].xyz);\n"
 "    NormalTransform = InverseTranspose3x3(NormalTransform);\n"
 "    Normal = mul(NormalTransform, VSIn.Normal);\n"
-"    float3 NormalLen = length(Normal);\n"
+"    float NormalLen = length(Normal);\n"
 "    Normal /= max(NormalLen, 1e-5);\n"
 "\n"
 "	WorldPos = locPos.xyz / locPos.w;\n"
