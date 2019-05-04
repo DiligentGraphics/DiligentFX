@@ -34,11 +34,21 @@ class GLTF_PBR_Renderer
 public:
     struct CreateInfo
     {
-        TEXTURE_FORMAT  RTVFmt         = TEX_FORMAT_UNKNOWN;
-        TEXTURE_FORMAT  DSVFmt         = TEX_FORMAT_UNKNOWN;
-        bool            FrontCCW       = false;
-        bool            AllowDebugView = false;
-        bool            UseIBL         = false;
+        TEXTURE_FORMAT  RTVFmt            = TEX_FORMAT_UNKNOWN;
+        TEXTURE_FORMAT  DSVFmt            = TEX_FORMAT_UNKNOWN;
+        bool            FrontCCW          = false;
+        bool            AllowDebugView    = false;
+        bool            UseIBL            = false;
+
+        /// When set to true, pipeline state will be compiled with static samplers.
+        /// When set to false, samplers from the texture views will be used.
+        bool            UseStaticSamplers = true;
+        static const SamplerDesc DefaultSampler;
+        SamplerDesc     ColorMapStaticSampler    = DefaultSampler;
+        SamplerDesc     PhysDescMapStaticSampler = DefaultSampler;
+        SamplerDesc     NormalMapStaticSampler   = DefaultSampler;
+        SamplerDesc     AOMapStaticSampler       = DefaultSampler;
+        SamplerDesc     EmissiveMapStaticSampler = DefaultSampler;
     };
 
     GLTF_PBR_Renderer(IRenderDevice*    pDevice,
@@ -73,7 +83,7 @@ public:
         float         OcclusionStrength = 1;
         float         EmissionScale     = 1;
         float         IBLScale          = 1;
-        float         AverageLogLum     = 0.2f;
+        float         AverageLogLum     = 0.3f;
         float         MiddleGray        = 0.18f;
         float         WhitePoint        = 3.f;
     };

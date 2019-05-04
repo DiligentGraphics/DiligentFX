@@ -37,6 +37,8 @@
 namespace Diligent
 {
 
+const SamplerDesc GLTF_PBR_Renderer::CreateInfo::DefaultSampler = Sam_LinearWrap;
+
 #include "../../Shaders/GLTF_PBR/private/GLTF_PBR_Structures.fxh"
 
 
@@ -272,6 +274,14 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice*   pDevice)
     };
 
     std::vector<StaticSamplerDesc> StaticSamplers;
+    if (m_Settings.UseStaticSamplers)
+    {
+        StaticSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_ColorMap",              m_Settings.ColorMapStaticSampler);
+        StaticSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_PhysicalDescriptorMap", m_Settings.PhysDescMapStaticSampler);
+        StaticSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_NormalMap",             m_Settings.NormalMapStaticSampler);
+        StaticSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_AOMap",                 m_Settings.AOMapStaticSampler);
+        StaticSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_EmissiveMap",           m_Settings.EmissiveMapStaticSampler);
+    }
 
     if (m_Settings.UseIBL)
     {
@@ -334,11 +344,25 @@ IShaderResourceBinding* GLTF_PBR_Renderer::CreateMaterialSRB(GLTF::Material&  Ma
         ITextureView* pTexSRV = pTexture != nullptr ? pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE) : pDefaultTexSRV;
         pSRB->GetVariableByName(SHADER_TYPE_PIXEL, VarName)->Set(pTexSRV);
     };
-    SetTexture(Material.pBaseColorTexture,        m_pWhiteTexSRV,         "g_ColorMap");
-    SetTexture(Material.pMetallicRoughnessTexture,m_pWhiteTexSRV,         "g_PhysicalDescriptorMap");
-    SetTexture(Material.pNormalTexture,           m_pDefaultNormalMapSRV, "g_NormalMap");
-    SetTexture(Material.pOcclusionTexture,        m_pWhiteTexSRV,         "g_AOMap");
-    SetTexture(Material.pEmissiveTexture,         m_pBlackTexSRV,         "g_EmissiveMap");
+    
+    ITexture* pBaseColorTex = nullptr;
+    ITexture* pPhysDescTex  = nullptr;
+    if (Material.workflow == GLTF::Material::PbrWorkflow::MetallicRoughness)
+    {
+        pBaseColorTex = Material.pBaseColorTexture;
+        pPhysDescTex  = Material.pMetallicRoughnessTexture;
+    }
+    else if (Material.workflow == GLTF::Material::PbrWorkflow::SpecularGlossiness)
+    {
+        pBaseColorTex = Material.extension.pDiffuseTexture;
+        pPhysDescTex  = Material.extension.pSpecularGlossinessTexture;
+    }
+
+    SetTexture(pBaseColorTex,                m_pWhiteTexSRV,         "g_ColorMap");
+    SetTexture(pPhysDescTex ,                m_pWhiteTexSRV,         "g_PhysicalDescriptorMap");
+    SetTexture(Material.pNormalTexture,      m_pDefaultNormalMapSRV, "g_NormalMap");
+    SetTexture(Material.pOcclusionTexture,   m_pWhiteTexSRV,         "g_AOMap");
+    SetTexture(Material.pEmissiveTexture,    m_pBlackTexSRV,         "g_EmissiveMap");
 
     auto it = m_SRBCache.find(&Material);
     if (it != m_SRBCache.end())
@@ -446,6 +470,10 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*     pDevice,
         ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
         ShaderCI.UseCombinedTextureSamplers = true;
         ShaderCI.pShaderSourceStreamFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();
+
+        ShaderMacroHelper Macros;
+        Macros.AddShaderMacro("OPTIMIZE_SAMPLES", 1);
+        ShaderCI.Macros = Macros;
 
         RefCntAutoPtr<IShader> pVS;
         {
@@ -560,7 +588,7 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*     pDevice,
                 Attribs->Rotation = Matrices[face];
                 Attribs->Roughness  = static_cast<float>(mip) / static_cast<float>(PrefilteredEnvMapDesc.MipLevels);
                 Attribs->EnvMapDim  = static_cast<float>(PrefilteredEnvMapDesc.Width);
-                Attribs->NumSamples = 1024;
+                Attribs->NumSamples = 256;
             }
 
             DrawAttribs drawAttrs(4, DRAW_FLAG_VERIFY_ALL);
@@ -648,7 +676,7 @@ void GLTF_PBR_Renderer::RenderGLTFNode(IDeviceContext*              pCtx,
 			    MaterialInfo->AlphaMaskCutoff     = material.AlphaCutoff;
 
 			    // TODO: glTF specs states that metallic roughness should be preferred, even if specular glosiness is present
-			    if (material.pbrWorkflows.MetallicRoughness)
+			    if (material.workflow == GLTF::Material::PbrWorkflow::MetallicRoughness)
                 {
 				    // Metallic roughness workflow
 				    MaterialInfo->Workflow          = PBR_WORKFLOW_METALLIC_ROUGHNESS;
@@ -658,8 +686,7 @@ void GLTF_PBR_Renderer::RenderGLTFNode(IDeviceContext*              pCtx,
                     MaterialInfo->PhysicalDescriptorTextureUVSelector = GetUVSelector(material.pMetallicRoughnessTexture, material.TexCoordSets.MetallicRoughness);
                     MaterialInfo->BaseColorTextureUVSelector          = GetUVSelector(material.pBaseColorTexture,         material.TexCoordSets.BaseColor);
 			    }
-
-			    if (primitive->material.pbrWorkflows.SpecularGlossiness)
+                else if (material.workflow == GLTF::Material::PbrWorkflow::SpecularGlossiness)
                 {
 				    // Specular glossiness workflow
 				    MaterialInfo->Workflow                            = PBR_WORKFLOW_SPECULAR_GLOSINESS;
