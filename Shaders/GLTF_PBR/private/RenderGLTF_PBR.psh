@@ -222,6 +222,7 @@ void main(in  float4 ClipPos  : SV_Position,
     // or from a metallic-roughness map
     if (g_MaterialInfo.Workflow == PBR_WORKFLOW_SPECULAR_GLOSINESS)
     {
+        PhysicalDesc = SRGBtoLINEAR(PhysicalDesc);
         const float u_GlossinessFactor = 1.0;
         SrfInfo.PerceptualRoughness = (1.0 - PhysicalDesc.a * u_GlossinessFactor); // glossiness to roughness
         f0 = PhysicalDesc.rgb * g_MaterialInfo.SpecularFactor.rgb;
@@ -323,22 +324,23 @@ void main(in  float4 ClipPos  : SV_Position,
     {
  		switch (g_RenderParameters.DebugViewType)
         {
-			case  1: OutColor.rgba = BaseColor;                       break;
-            case  2: OutColor.rgba = float4(BaseColor.aaa, 1.0);      break;
-			case  3: OutColor.rgb  = TSNormal.xyz;                    break;
-			case  4: OutColor.rgb  = Occlusion.xxx;                   break;
-			case  5: OutColor.rgb  = Emissive.rgb;                    break;
-			case  6: OutColor.rgb  = metallic.rrr;                    break;
-			case  7: OutColor.rgb  = SrfInfo.PerceptualRoughness.rrr; break;
-            case  8: OutColor.rgb  = SrfInfo.DiffuseColor;            break;
-            case  9: OutColor.rgb  = SrfInfo.Reflectance0;            break;
-            case 10: OutColor.rgb  = SrfInfo.Reflectance90;           break;
-            case 11: OutColor.rgb  = abs(Normal);                     break;
-            case 12: OutColor.rgb  = abs(perturbedNormal);            break;
-            case 13: OutColor.rgb  = dot(perturbedNormal, view).xxx;  break;
+			case  1: OutColor.rgba = BaseColor;                                     break;
+            case  2: OutColor.rgba = float4(BaseColor.aaa, 1.0);                    break;
+            // Apply extra srgb->linear transform to make the maps look better
+			case  3: OutColor.rgb  = SRGBtoLINEAR(TSNormal.xyz);                    break;
+			case  4: OutColor.rgb  = SRGBtoLINEAR(Occlusion.xxx);                   break;
+			case  5: OutColor.rgb  = SRGBtoLINEAR(Emissive.rgb);                    break;
+			case  6: OutColor.rgb  = SRGBtoLINEAR(metallic.rrr);                    break;
+			case  7: OutColor.rgb  = SRGBtoLINEAR(SrfInfo.PerceptualRoughness.rrr); break;
+            case  8: OutColor.rgb  = SrfInfo.DiffuseColor;                          break;
+            case  9: OutColor.rgb  = SrfInfo.Reflectance0;                          break;
+            case 10: OutColor.rgb  = SrfInfo.Reflectance90;                         break;
+            case 11: OutColor.rgb  = SRGBtoLINEAR(abs(Normal));                     break;
+            case 12: OutColor.rgb  = SRGBtoLINEAR(abs(perturbedNormal));            break;
+            case 13: OutColor.rgb  = dot(perturbedNormal, view).xxx;                break;
 #if USE_IBL
-            case 14: OutColor.rgb  = diffuseIBL;                      break;
-            case 15: OutColor.rgb  = specularIBL;                     break;
+            case 14: OutColor.rgb  = diffuseIBL;                                    break;
+            case 15: OutColor.rgb  = specularIBL;                                   break;
 #endif
 		}
 	}
