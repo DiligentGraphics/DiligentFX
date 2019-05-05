@@ -411,8 +411,8 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*     pDevice,
         ShaderCI.pShaderSourceStreamFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();
 
         ShaderMacroHelper Macros;
-        Macros.AddShaderMacro("NUM_PHI_SAMPLES",   64.f);
-        Macros.AddShaderMacro("NUM_THETA_SAMPLES", 32.f);
+        Macros.AddShaderMacro("NUM_PHI_SAMPLES",   64);
+        Macros.AddShaderMacro("NUM_THETA_SAMPLES", 32);
         ShaderCI.Macros = Macros;
         RefCntAutoPtr<IShader> pVS;
         {

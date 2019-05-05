@@ -1,11 +1,11 @@
 // Generates an irradiance cube from an environment map using convolution
 
 #ifndef NUM_PHI_SAMPLES
-#   define NUM_PHI_SAMPLES 64.0
+#   define NUM_PHI_SAMPLES 64
 #endif
 
 #ifndef NUM_THETA_SAMPLES
-#   define NUM_PHI_SAMPLES 32.0
+#   define NUM_PHI_SAMPLES 32
 #endif
 
 TextureCube  g_EnvironmentMap;
@@ -21,22 +21,22 @@ void main(in float4 Pos      : SV_Position,
 	up = cross(N, right);
 
     const float PI         = 3.14159265;
-	const float TWO_PI     = PI * 2.0;
-	const float HALF_PI    = PI * 0.5;
-	const float deltaPhi   = TWO_PI  / NUM_PHI_SAMPLES;
-	const float deltaTheta = HALF_PI / NUM_THETA_SAMPLES;
+	const float deltaPhi   = 2.0 * PI / float(NUM_PHI_SAMPLES);
+	const float deltaTheta = 0.5 * PI / float(NUM_THETA_SAMPLES);
 
 	float3 color = float3(0.0, 0.0, 0.0);
-	float sampleCount = 0;
-	for (float phi = 0.0; phi < TWO_PI; phi += deltaPhi)
+	float sampleCount = 0.0;
+    for (int p=0; p < NUM_PHI_SAMPLES; ++p)
     {
-		for (float theta = 0.0; theta < HALF_PI; theta += deltaTheta)
+        float phi = float(p) * deltaPhi;
+        for (int t=0; t < NUM_THETA_SAMPLES; ++t)
         {
-			float3 tempVec = cos(phi) * right + sin(phi) * up;
+            float theta = float(t) * deltaTheta;
+			float3 tempVec   = cos(phi) * right + sin(phi) * up;
 			float3 sampleDir = cos(theta) * N + sin(theta) * tempVec;
 			color += g_EnvironmentMap.Sample(g_EnvironmentMap_sampler, sampleDir).rgb * cos(theta) * sin(theta);
-			sampleCount++;
+			sampleCount += 1.0;
 		}
 	}
-	Color = float4(PI * color / sampleCount, 1.0);
+    Color = float4(PI * color / sampleCount, 1.0);
 }
