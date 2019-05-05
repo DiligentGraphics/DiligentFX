@@ -24,7 +24,7 @@
 "{\n"
 "    float a        = Roughness * Roughness;\n"
 "    float Phi      = 2.0 * PI * Xi.x;\n"
-"    float CosTheta = sqrt( (1.0 - Xi.y) / ( 1.0 + (a*a - 1) * Xi.y ) );\n"
+"    float CosTheta = sqrt( (1.0 - Xi.y) / ( 1.0 + (a*a - 1.0) * Xi.y ) );\n"
 "    float SinTheta = sqrt( 1.0 - CosTheta * CosTheta );\n"
 "    float3 H;\n"
 "    H.x = SinTheta * cos( Phi );\n"

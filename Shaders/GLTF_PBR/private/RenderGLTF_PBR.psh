@@ -142,7 +142,7 @@ float3 PerturbNormal(in float3 Position, in float3 Normal, in float3 TSNormal, i
         ng = normalize(cross(pos_dx, pos_dy));
 #if (defined(GLSL) || defined(GL_ES)) && !defined(TARGET_API_VULKAN)
         // In OpenGL screen is upside-down, so we have to invert the vector
-        ng *= -1;
+        ng *= -1.0;
 #endif
     }
 
@@ -321,7 +321,7 @@ void main(in  float4 ClipPos  : SV_Position,
 
     color = lerp(color, color * Occlusion, g_RenderParameters.OcclusionStrength);
 
-    const float u_EmissiveFactor = 1.0f;
+    const float u_EmissiveFactor = 1.0;
     Emissive = SRGBtoLINEAR(Emissive);
     color += Emissive.rgb * g_MaterialInfo.EmissiveFactor.rgb * g_RenderParameters.EmissionScale;
 
