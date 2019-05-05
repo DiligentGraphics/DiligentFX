@@ -47,11 +47,11 @@ struct ShadowMapAttribs
     CascadeAttribs Cascades[MAX_CASCADES];
 
 #ifdef __cplusplus
-    float fCascadeCamSpaceZEnd[MAX_CASCADES];
     float4x4 mWorldToShadowMapUVDepthT[MAX_CASCADES];
+    float fCascadeCamSpaceZEnd[MAX_CASCADES];
 #else
-	float4 f4CascadeCamSpaceZEnd[MAX_CASCADES/4];
     matrix mWorldToShadowMapUVDepth[MAX_CASCADES];
+    float4 f4CascadeCamSpaceZEnd[MAX_CASCADES/4];
 #endif
 
     // Number of shadow cascades
