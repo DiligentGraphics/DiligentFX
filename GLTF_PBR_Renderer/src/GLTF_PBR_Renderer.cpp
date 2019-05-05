@@ -629,10 +629,10 @@ void GLTF_PBR_Renderer::RenderGLTFNode(IDeviceContext*              pCtx,
                                        GLTF::Material::ALPHA_MODE   AlphaMode,
                                        const float4x4&              ModelTransform)
 {
-	if (node->Mesh)
+	if (node->_Mesh)
     {
 		// Render mesh primitives
-		for (const auto& primitive : node->Mesh->Primitives)
+		for (const auto& primitive : node->_Mesh->Primitives)
         {
             if (primitive->material.AlphaMode != AlphaMode)
                 continue;
@@ -652,12 +652,12 @@ void GLTF_PBR_Renderer::RenderGLTFNode(IDeviceContext*              pCtx,
 
             {
                 MapHelper<GLTFNodeTransforms> Transforms(pCtx, m_TransformsCB, MAP_WRITE, MAP_FLAG_DISCARD);
-                Transforms->NodeMatrix  = node->Mesh->Transforms.matrix * ModelTransform;
-                Transforms->JointCount  = node->Mesh->Transforms.jointcount;
-                if (node->Mesh->Transforms.jointcount != 0)
+                Transforms->NodeMatrix  = node->_Mesh->Transforms.matrix * ModelTransform;
+                Transforms->JointCount  = node->_Mesh->Transforms.jointcount;
+                if (node->_Mesh->Transforms.jointcount != 0)
                 {
-                    static_assert(sizeof(Transforms->JointMatrix) == sizeof(node->Mesh->Transforms.jointMatrix), "Incosistent sizes");
-                    memcpy(Transforms->JointMatrix, node->Mesh->Transforms.jointMatrix, sizeof(node->Mesh->Transforms.jointMatrix));
+                    static_assert(sizeof(Transforms->JointMatrix) == sizeof(node->_Mesh->Transforms.jointMatrix), "Incosistent sizes");
+                    memcpy(Transforms->JointMatrix, node->_Mesh->Transforms.jointMatrix, sizeof(node->_Mesh->Transforms.jointMatrix));
                 }
             }
 
