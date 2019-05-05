@@ -280,7 +280,7 @@ void main(in  float4 ClipPos  : SV_Position,
 
     SrfInfo.Reflectance0  = specularColor.rgb;
     // Anything less than 2% is physically impossible and is instead considered to be shadowing. Compare to "Real-Time-Rendering" 4th editon on page 325.
-    SrfInfo.Reflectance90 = clamp(reflectance * 50.0, 0.0, 1.0).xxx;
+    SrfInfo.Reflectance90 = clamp(reflectance * 50.0, 0.0, 1.0) * float3(1.0, 1.0, 1.0);
 
     // LIGHTING
 
@@ -341,23 +341,23 @@ void main(in  float4 ClipPos  : SV_Position,
     {
  		switch (g_RenderParameters.DebugViewType)
         {
-			case  1: OutColor.rgba = BaseColor;                                     break;
-            case  2: OutColor.rgba = float4(BaseColor.aaa, 1.0);                    break;
+			case  1: OutColor.rgba = BaseColor;                                                         break;
+            case  2: OutColor.rgba = float4(BaseColor.a, BaseColor.a, BaseColor.a, 1.0);                break;
             // Apply extra srgb->linear transform to make the maps look better
-			case  3: OutColor.rgb  = SRGBtoLINEAR(TSNormal.xyz);                    break;
-			case  4: OutColor.rgb  = SRGBtoLINEAR(Occlusion.xxx);                   break;
-			case  5: OutColor.rgb  = SRGBtoLINEAR(Emissive.rgb);                    break;
-			case  6: OutColor.rgb  = SRGBtoLINEAR(metallic.rrr);                    break;
-			case  7: OutColor.rgb  = SRGBtoLINEAR(SrfInfo.PerceptualRoughness.rrr); break;
-            case  8: OutColor.rgb  = SrfInfo.DiffuseColor;                          break;
-            case  9: OutColor.rgb  = SrfInfo.Reflectance0;                          break;
-            case 10: OutColor.rgb  = SrfInfo.Reflectance90;                         break;
-            case 11: OutColor.rgb  = SRGBtoLINEAR(abs(Normal / max(length(Normal), 1e-3))); break;
-            case 12: OutColor.rgb  = SRGBtoLINEAR(abs(perturbedNormal));            break;
-            case 13: OutColor.rgb  = dot(perturbedNormal, view).xxx;                break;
+			case  3: OutColor.rgb  = SRGBtoLINEAR(TSNormal.xyz);                                        break;
+			case  4: OutColor.rgb  = SRGBtoLINEAR(Occlusion * float3(1.0, 1.0, 1.0));                   break;
+			case  5: OutColor.rgb  = SRGBtoLINEAR(Emissive.rgb);                                        break;
+			case  6: OutColor.rgb  = SRGBtoLINEAR(metallic * float3(1.0, 1.0, 1.0) );                   break;
+			case  7: OutColor.rgb  = SRGBtoLINEAR(SrfInfo.PerceptualRoughness * float3(1.0, 1.0, 1.0)); break;
+            case  8: OutColor.rgb  = SrfInfo.DiffuseColor;                                              break;
+            case  9: OutColor.rgb  = SrfInfo.Reflectance0;                                              break;
+            case 10: OutColor.rgb  = SrfInfo.Reflectance90;                                             break;
+            case 11: OutColor.rgb  = SRGBtoLINEAR(abs(Normal / max(length(Normal), 1e-3)));             break;
+            case 12: OutColor.rgb  = SRGBtoLINEAR(abs(perturbedNormal));                                break;
+            case 13: OutColor.rgb  = dot(perturbedNormal, view) * float3(1.0, 1.0, 1.0);                break;
 #if USE_IBL
-            case 14: OutColor.rgb  = diffuseIBL;                                    break;
-            case 15: OutColor.rgb  = specularIBL;                                   break;
+            case 14: OutColor.rgb  = diffuseIBL;                                                        break;
+            case 15: OutColor.rgb  = specularIBL;                                                       break;
 #endif
 		}
 	}

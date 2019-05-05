@@ -4,7 +4,8 @@
 #ifdef __cplusplus
 
 #   ifndef CHECK_STRUCT_ALIGNMENT
-#       define CHECK_STRUCT_ALIGNMENT(s) static_assert( sizeof(s) % 16 == 0, "sizeof(" #s ") is not multiple of 16" )
+        // Note that semicolon must be part of the macro because standalone ';' may cause shader compilation error
+#       define CHECK_STRUCT_ALIGNMENT(s) static_assert( sizeof(s) % 16 == 0, "sizeof(" #s ") is not multiple of 16" );
 #   endif
 
 #else
@@ -32,7 +33,7 @@ struct GLTFNodeTransforms
     float    Dummy1;
     float    Dummy2;
 };
-CHECK_STRUCT_ALIGNMENT(GLTFNodeTransforms);
+CHECK_STRUCT_ALIGNMENT(GLTFNodeTransforms)
 
 
 
@@ -48,7 +49,7 @@ struct GLTFRenderParameters
     float OcclusionStrength;
     float EmissionScale;
 };
-CHECK_STRUCT_ALIGNMENT(GLTFRenderParameters);
+CHECK_STRUCT_ALIGNMENT(GLTFRenderParameters)
 
 struct GLTFMaterialInfo
 {
@@ -71,6 +72,6 @@ struct GLTFMaterialInfo
     float   Dummy0;
     float   Dummy1;
 };
-CHECK_STRUCT_ALIGNMENT(GLTFMaterialInfo);
+CHECK_STRUCT_ALIGNMENT(GLTFMaterialInfo)
 
 #endif // _GLTF_PBR_STRUCTURES_FXH_

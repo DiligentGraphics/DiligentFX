@@ -9,7 +9,8 @@
 #   endif
 
 #   ifndef CHECK_STRUCT_ALIGNMENT
-#       define CHECK_STRUCT_ALIGNMENT(s) static_assert( sizeof(s) % 16 == 0, "sizeof(" #s ") is not multiple of 16" )
+        // Note that semicolon must be part of the macro because standalone ';' may cause shader compilation error
+#       define CHECK_STRUCT_ALIGNMENT(s) static_assert( sizeof(s) % 16 == 0, "sizeof(" #s ") is not multiple of 16" );
 #   endif
 
 #else
@@ -31,7 +32,7 @@ struct CascadeAttribs
 	float4 f4LightSpaceScaledBias;
     float4 f4StartEndZ;
 };
-CHECK_STRUCT_ALIGNMENT(CascadeAttribs);
+CHECK_STRUCT_ALIGNMENT(CascadeAttribs)
 
 
 #define MAX_CASCADES 8
@@ -61,7 +62,7 @@ struct ShadowMapAttribs
 	BOOL  bVisualizeCascades;
     float fCascadePartitioningFactor;
 };
-CHECK_STRUCT_ALIGNMENT(ShadowMapAttribs);
+CHECK_STRUCT_ALIGNMENT(ShadowMapAttribs)
 
 
 struct LightAttribs
@@ -72,7 +73,7 @@ struct LightAttribs
 
     ShadowMapAttribs ShadowAttribs;
 };
-CHECK_STRUCT_ALIGNMENT(LightAttribs);
+CHECK_STRUCT_ALIGNMENT(LightAttribs)
 
 
 struct CameraAttribs
@@ -103,7 +104,7 @@ struct CameraAttribs
     float4 f4ExtraData[5]; // Any appliation-specific data
     // Sizeof(CameraAttribs) == 256*2
 };
-CHECK_STRUCT_ALIGNMENT(CameraAttribs);
+CHECK_STRUCT_ALIGNMENT(CameraAttribs)
 
 
 #endif //_BASIC_STRUCTURES_FXH_

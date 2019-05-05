@@ -12,7 +12,8 @@
 #   endif
 
 #   ifndef CHECK_STRUCT_ALIGNMENT
-#       define CHECK_STRUCT_ALIGNMENT(s) static_assert( sizeof(s) % 16 == 0, "sizeof(" #s ") is not multiple of 16" )
+        // Note that semicolon must be part of the macro because standalone ';' may cause shader compilation error
+#       define CHECK_STRUCT_ALIGNMENT(s) static_assert( sizeof(s) % 16 == 0, "sizeof(" #s ") is not multiple of 16" );
 #   endif
 
 #   ifndef DEFAULT_VALUE
@@ -63,6 +64,6 @@ struct ToneMappingAttribs
     uint Padding0;
     uint Padding1;
 };
-CHECK_STRUCT_ALIGNMENT(ToneMappingAttribs);
+CHECK_STRUCT_ALIGNMENT(ToneMappingAttribs)
 
 #endif // _TONE_MAPPING_STRUCTURES_FXH_
