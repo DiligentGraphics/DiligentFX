@@ -16,8 +16,10 @@
 #   endif
 
 #   ifndef CHECK_STRUCT_ALIGNMENT
-        // Note that semicolon must be part of the macro because standalone ';' may cause shader compilation error
-#       define CHECK_STRUCT_ALIGNMENT(s) static_assert( sizeof(s) % 16 == 0, "sizeof(" #s ") is not multiple of 16" );
+        // Note that defining empty macros causes GL shader compilation error on Mac, because
+        // it does not allow standalone semicolons outside of main.
+        // On the other hand, adding semicolon at the end of the macro definition causes gcc error.
+#       define CHECK_STRUCT_ALIGNMENT(s) static_assert( sizeof(s) % 16 == 0, "sizeof(" #s ") is not multiple of 16" )
 #   endif
 
 #   ifndef DEFAULT_VALUE
@@ -28,10 +30,6 @@
 
 #   ifndef BOOL
 #       define BOOL bool
-#   endif
-
-#   ifndef CHECK_STRUCT_ALIGNMENT
-#       define CHECK_STRUCT_ALIGNMENT(s)
 #   endif
 
 #   ifndef DEFAULT_VALUE
@@ -196,8 +194,9 @@ struct EpipolarLightScatteringAttribs
     float  fFirstCascadeToRayMarch          DEFAULT_VALUE(0);
     int    PaddingB0;
 };
-CHECK_STRUCT_ALIGNMENT(EpipolarLightScatteringAttribs)
-
+#ifdef CHECK_STRUCT_ALIGNMENT
+    CHECK_STRUCT_ALIGNMENT(EpipolarLightScatteringAttribs);
+#endif
 
 struct AirScatteringAttribs
 {
@@ -233,8 +232,9 @@ struct AirScatteringAttribs
     float m_fAerosolPhaseFuncG      DEFAULT_VALUE(0.76f);
     float m_fDummy;
 };
-CHECK_STRUCT_ALIGNMENT(AirScatteringAttribs)
-
+#ifdef CHECK_STRUCT_ALIGNMENT
+    CHECK_STRUCT_ALIGNMENT(AirScatteringAttribs);
+#endif
 
 // Internal structure used by the effect
 struct MiscDynamicParams
@@ -253,6 +253,8 @@ struct MiscDynamicParams
     uint4 ui4SrcDstMinMaxLevelOffset;
 #endif
 };
-CHECK_STRUCT_ALIGNMENT(MiscDynamicParams)
+#ifdef CHECK_STRUCT_ALIGNMENT
+    CHECK_STRUCT_ALIGNMENT(MiscDynamicParams);
+#endif
 
 #endif //_EPIPOLAR_LIGHT_SCATTERING_STRCUTURES_FXH_

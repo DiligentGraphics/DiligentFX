@@ -9,18 +9,16 @@
 #   endif
 
 #   ifndef CHECK_STRUCT_ALIGNMENT
-        // Note that semicolon must be part of the macro because standalone ';' may cause shader compilation error
-#       define CHECK_STRUCT_ALIGNMENT(s) static_assert( sizeof(s) % 16 == 0, "sizeof(" #s ") is not multiple of 16" );
+        // Note that defining empty macros causes GL shader compilation error on Mac, because
+        // it does not allow standalone semicolons outside of main.
+        // On the other hand, adding semicolon at the end of the macro definition causes gcc error.
+#       define CHECK_STRUCT_ALIGNMENT(s) static_assert( sizeof(s) % 16 == 0, "sizeof(" #s ") is not multiple of 16" )
 #   endif
 
 #else
 
 #   ifndef BOOL
 #       define BOOL bool
-#   endif
-
-#   ifndef CHECK_STRUCT_ALIGNMENT
-#       define CHECK_STRUCT_ALIGNMENT(s)
 #   endif
 
 #endif
@@ -32,8 +30,9 @@ struct CascadeAttribs
 	float4 f4LightSpaceScaledBias;
     float4 f4StartEndZ;
 };
-CHECK_STRUCT_ALIGNMENT(CascadeAttribs)
-
+#ifdef CHECK_STRUCT_ALIGNMENT
+    CHECK_STRUCT_ALIGNMENT(CascadeAttribs);
+#endif
 
 #define MAX_CASCADES 8
 struct ShadowMapAttribs
@@ -62,8 +61,9 @@ struct ShadowMapAttribs
 	BOOL  bVisualizeCascades;
     float fCascadePartitioningFactor;
 };
-CHECK_STRUCT_ALIGNMENT(ShadowMapAttribs)
-
+#ifdef CHECK_STRUCT_ALIGNMENT
+    CHECK_STRUCT_ALIGNMENT(ShadowMapAttribs);
+#endif
 
 struct LightAttribs
 {
@@ -73,8 +73,9 @@ struct LightAttribs
 
     ShadowMapAttribs ShadowAttribs;
 };
-CHECK_STRUCT_ALIGNMENT(LightAttribs)
-
+#ifdef CHECK_STRUCT_ALIGNMENT
+    CHECK_STRUCT_ALIGNMENT(LightAttribs);
+#endif
 
 struct CameraAttribs
 {
@@ -104,7 +105,8 @@ struct CameraAttribs
     float4 f4ExtraData[5]; // Any appliation-specific data
     // Sizeof(CameraAttribs) == 256*2
 };
-CHECK_STRUCT_ALIGNMENT(CameraAttribs)
-
+#ifdef CHECK_STRUCT_ALIGNMENT
+    CHECK_STRUCT_ALIGNMENT(CameraAttribs);
+#endif
 
 #endif //_BASIC_STRUCTURES_FXH_

@@ -4,14 +4,10 @@
 #ifdef __cplusplus
 
 #   ifndef CHECK_STRUCT_ALIGNMENT
-        // Note that semicolon must be part of the macro because standalone ';' may cause shader compilation error
-#       define CHECK_STRUCT_ALIGNMENT(s) static_assert( sizeof(s) % 16 == 0, "sizeof(" #s ") is not multiple of 16" );
-#   endif
-
-#else
-
-#   ifndef CHECK_STRUCT_ALIGNMENT
-#       define CHECK_STRUCT_ALIGNMENT(s)
+        // Note that defining empty macros causes GL shader compilation error on Mac, because
+        // it does not allow standalone semicolons outside of main.
+        // On the other hand, adding semicolon at the end of the macro definition causes gcc error.
+#       define CHECK_STRUCT_ALIGNMENT(s) static_assert( sizeof(s) % 16 == 0, "sizeof(" #s ") is not multiple of 16" )
 #   endif
 
 #endif
@@ -33,8 +29,9 @@ struct GLTFNodeTransforms
     float    Dummy1;
     float    Dummy2;
 };
-CHECK_STRUCT_ALIGNMENT(GLTFNodeTransforms)
-
+#ifdef CHECK_STRUCT_ALIGNMENT
+	CHECK_STRUCT_ALIGNMENT(GLTFNodeTransforms);
+#endif
 
 
 struct GLTFRenderParameters
@@ -49,7 +46,9 @@ struct GLTFRenderParameters
     float OcclusionStrength;
     float EmissionScale;
 };
-CHECK_STRUCT_ALIGNMENT(GLTFRenderParameters)
+#ifdef CHECK_STRUCT_ALIGNMENT
+	CHECK_STRUCT_ALIGNMENT(GLTFRenderParameters);
+#endif
 
 struct GLTFMaterialInfo
 {
@@ -72,6 +71,8 @@ struct GLTFMaterialInfo
     float   Dummy0;
     float   Dummy1;
 };
-CHECK_STRUCT_ALIGNMENT(GLTFMaterialInfo)
+#ifdef CHECK_STRUCT_ALIGNMENT
+	CHECK_STRUCT_ALIGNMENT(GLTFMaterialInfo);
+#endif
 
 #endif // _GLTF_PBR_STRUCTURES_FXH_
