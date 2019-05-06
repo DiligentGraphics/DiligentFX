@@ -326,7 +326,7 @@
 "    color += Emissive.rgb * g_MaterialInfo.EmissiveFactor.rgb * g_RenderParameters.EmissionScale;\n"
 "\n"
 "    ToneMappingAttribs TMAttribs;\n"
-"    TMAttribs.uiToneMappingMode    = TONE_MAPPING_MODE_UNCHARTED2;\n"
+"    TMAttribs.iToneMappingMode     = TONE_MAPPING_MODE_UNCHARTED2;\n"
 "    TMAttribs.bAutoExposure        = false;\n"
 "    TMAttribs.fMiddleGray          = g_RenderParameters.MiddleGray;\n"
 "    TMAttribs.bLightAdaptation     = false;\n"

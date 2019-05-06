@@ -47,13 +47,13 @@
 struct ToneMappingAttribs
 {
     // Tone mapping mode.
-    uint uiToneMappingMode                  DEFAULT_VALUE(TONE_MAPPING_MODE_UNCHARTED2);
+    int   iToneMappingMode                  DEFAULT_VALUE(TONE_MAPPING_MODE_UNCHARTED2);
     // Automatically compute exposure to use in tone mapping.
-    BOOL bAutoExposure                      DEFAULT_VALUE(TRUE);
+    BOOL  bAutoExposure                     DEFAULT_VALUE(TRUE);
     // Middle gray value used by tone mapping operators.
     float fMiddleGray                       DEFAULT_VALUE(0.18f);
     // Simulate eye adaptation to light changes.
-    BOOL bLightAdaptation                   DEFAULT_VALUE(TRUE);
+    BOOL  bLightAdaptation                  DEFAULT_VALUE(TRUE);
 
     // White point to use in tone mapping.
     float fWhitePoint                       DEFAULT_VALUE(3.f);

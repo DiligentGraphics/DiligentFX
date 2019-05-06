@@ -356,10 +356,10 @@ void EpipolarLightScattering :: DefineMacros(ShaderMacroHelper& Macros)
     Macros.AddShaderMacro("MAX_SAMPLES_IN_SLICE",         m_PostProcessingAttribs.uiMaxSamplesInSlice);
     Macros.AddShaderMacro("OPTIMIZE_SAMPLE_LOCATIONS",    m_PostProcessingAttribs.bOptimizeSampleLocations);
     Macros.AddShaderMacro("USE_COMBINED_MIN_MAX_TEXTURE", m_bUseCombinedMinMaxTexture );
-    Macros.AddShaderMacro("EXTINCTION_EVAL_MODE",         m_PostProcessingAttribs.uiExtinctionEvalMode );
+    Macros.AddShaderMacro("EXTINCTION_EVAL_MODE",         m_PostProcessingAttribs.iExtinctionEvalMode );
     Macros.AddShaderMacro("ENABLE_LIGHT_SHAFTS",          m_PostProcessingAttribs.bEnableLightShafts);
-    Macros.AddShaderMacro("MULTIPLE_SCATTERING_MODE",     m_PostProcessingAttribs.uiMultipleScatteringMode);
-    Macros.AddShaderMacro("SINGLE_SCATTERING_MODE",       m_PostProcessingAttribs.uiSingleScatteringMode);
+    Macros.AddShaderMacro("MULTIPLE_SCATTERING_MODE",     m_PostProcessingAttribs.iMultipleScatteringMode);
+    Macros.AddShaderMacro("SINGLE_SCATTERING_MODE",       m_PostProcessingAttribs.iSingleScatteringMode);
 
     {
         std::stringstream ss;
@@ -635,8 +635,8 @@ void EpipolarLightScattering :: PrecomputeScatteringLUT(IRenderDevice* pDevice, 
     {
         ShaderMacroHelper Macros;
         DefineMacros(Macros);
-        Macros.AddShaderMacro( "THREAD_GROUP_SIZE", ThreadGroupSize );
-        Macros.AddShaderMacro( "NUM_RANDOM_SPHERE_SAMPLES", m_uiNumRandomSamplesOnSphere );
+        Macros.AddShaderMacro( "THREAD_GROUP_SIZE",         ThreadGroupSize );
+        Macros.AddShaderMacro( "NUM_RANDOM_SPHERE_SAMPLES", static_cast<Int32>(m_uiNumRandomSamplesOnSphere) );
         Macros.Finalize();
         auto pComputeSctrRadianceCS = CreateShader(pDevice, "ComputeSctrRadiance.fx", "ComputeSctrRadianceCS",
                                                    SHADER_TYPE_COMPUTE, Macros);
@@ -1037,7 +1037,7 @@ void EpipolarLightScattering :: RenderCoarseUnshadowedInctr()
         DefineMacros(Macros);
         Macros.Finalize();
         auto EntryPoint = 
-            m_PostProcessingAttribs.uiExtinctionEvalMode == EXTINCTION_EVAL_MODE_EPIPOLAR ? 
+            m_PostProcessingAttribs.iExtinctionEvalMode == EXTINCTION_EVAL_MODE_EPIPOLAR ? 
                 "RenderCoarseUnshadowedInsctrAndExtinctionPS" : 
                 "RenderCoarseUnshadowedInsctrPS";
 
@@ -1076,11 +1076,11 @@ void EpipolarLightScattering :: RenderCoarseUnshadowedInctr()
         ResourceLayout.StaticSamplers    = StaticSamplers.data();
         ResourceLayout.NumStaticSamplers = static_cast<Uint32>(StaticSamplers.size());
 
-        const auto* PSOName = m_PostProcessingAttribs.uiExtinctionEvalMode == EXTINCTION_EVAL_MODE_EPIPOLAR ? 
+        const auto* PSOName = m_PostProcessingAttribs.iExtinctionEvalMode == EXTINCTION_EVAL_MODE_EPIPOLAR ? 
                                 "RenderCoarseUnshadowedInsctrAndExtinctionPSO" : 
                                 "RenderCoarseUnshadowedInsctrPSO";
         TEXTURE_FORMAT RTVFmts[] = {EpipolarInsctrTexFmt, EpipolarExtinctionFmt};
-        Uint8 NumRTVs = m_PostProcessingAttribs.uiExtinctionEvalMode == EXTINCTION_EVAL_MODE_EPIPOLAR ? 2 : 1;
+        Uint8 NumRTVs = m_PostProcessingAttribs.iExtinctionEvalMode == EXTINCTION_EVAL_MODE_EPIPOLAR ? 2 : 1;
         RenderCoarseUnshadowedInsctrTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, PSOName, m_pFullScreenTriangleVS,
                                                                                pRenderCoarseUnshadowedInsctrPS, ResourceLayout, NumRTVs, RTVFmts,
                                                                                EpipolarImageDepthFmt, DSS_StencilEqKeepStencil);
@@ -1097,7 +1097,7 @@ void EpipolarLightScattering :: RenderCoarseUnshadowedInctr()
             SRB_DEPENDENCY_COORDINATE_TEX;
     }
 
-    if (m_PostProcessingAttribs.uiExtinctionEvalMode == EXTINCTION_EVAL_MODE_EPIPOLAR && 
+    if (m_PostProcessingAttribs.iExtinctionEvalMode == EXTINCTION_EVAL_MODE_EPIPOLAR && 
         !m_ptex2DEpipolarExtinctionRTV )
     {
         // Extinction texture size is num_slices x max_samples_in_slice. So the texture must be re-created when either changes.
@@ -1105,13 +1105,13 @@ void EpipolarLightScattering :: RenderCoarseUnshadowedInctr()
     }
 
     ITextureView* ppRTVs[] = {m_ptex2DEpipolarInscatteringRTV, m_ptex2DEpipolarExtinctionRTV};
-    m_FrameAttribs.pDeviceContext->SetRenderTargets(m_PostProcessingAttribs.uiExtinctionEvalMode == EXTINCTION_EVAL_MODE_EPIPOLAR ? 2 : 1, ppRTVs, m_ptex2DEpipolarImageDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    m_FrameAttribs.pDeviceContext->SetRenderTargets(m_PostProcessingAttribs.iExtinctionEvalMode == EXTINCTION_EVAL_MODE_EPIPOLAR ? 2 : 1, ppRTVs, m_ptex2DEpipolarImageDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
     float flt16max = 65504.f; // Epipolar Inscattering is 16-bit float
     const float InvalidInsctr[] = {-flt16max, -flt16max, -flt16max, -flt16max};
     if (m_ptex2DEpipolarInscatteringRTV)
         m_FrameAttribs.pDeviceContext->ClearRenderTarget(m_ptex2DEpipolarInscatteringRTV, InvalidInsctr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    if (m_PostProcessingAttribs.uiExtinctionEvalMode == EXTINCTION_EVAL_MODE_EPIPOLAR)
+    if (m_PostProcessingAttribs.iExtinctionEvalMode == EXTINCTION_EVAL_MODE_EPIPOLAR)
     {
         const float One[] = {1, 1, 1, 1};
         m_FrameAttribs.pDeviceContext->ClearRenderTarget(m_ptex2DEpipolarExtinctionRTV, One, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
@@ -1134,9 +1134,9 @@ void EpipolarLightScattering :: RefineSampleLocations()
 
         ShaderMacroHelper Macros;
         DefineMacros(Macros);
-        Macros.AddShaderMacro("INITIAL_SAMPLE_STEP",  m_PostProcessingAttribs.uiInitialSampleStepInSlice);
-        Macros.AddShaderMacro("THREAD_GROUP_SIZE"  ,  m_uiSampleRefinementCSThreadGroupSize );
-        Macros.AddShaderMacro("REFINEMENT_CRITERION", m_PostProcessingAttribs.uiRefinementCriterion );
+        Macros.AddShaderMacro("INITIAL_SAMPLE_STEP",  static_cast<Int32>(m_PostProcessingAttribs.uiInitialSampleStepInSlice));
+        Macros.AddShaderMacro("THREAD_GROUP_SIZE"  ,  static_cast<Int32>(m_uiSampleRefinementCSThreadGroupSize) );
+        Macros.AddShaderMacro("REFINEMENT_CRITERION", m_PostProcessingAttribs.iRefinementCriterion );
         Macros.AddShaderMacro("AUTO_EXPOSURE",        m_PostProcessingAttribs.ToneMapping.bAutoExposure);
         Macros.Finalize();
 
@@ -1421,7 +1421,7 @@ void EpipolarLightScattering :: DoRayMarching(Uint32 uiMaxStepsAlongRay,
     {
         ShaderMacroHelper Macros;
         DefineMacros(Macros);
-        Macros.AddShaderMacro("CASCADE_PROCESSING_MODE", m_PostProcessingAttribs.uiCascadeProcessingMode);
+        Macros.AddShaderMacro("CASCADE_PROCESSING_MODE", m_PostProcessingAttribs.iCascadeProcessingMode);
         Macros.AddShaderMacro("USE_1D_MIN_MAX_TREE",     m_PostProcessingAttribs.bUse1DMinMaxTree);
         Macros.Finalize();
 
@@ -1501,7 +1501,7 @@ void EpipolarLightScattering :: DoRayMarching(Uint32 uiMaxStepsAlongRay,
     int iNumInst = 0;
     if (m_PostProcessingAttribs.bEnableLightShafts)
     {
-        switch (m_PostProcessingAttribs.uiCascadeProcessingMode)
+        switch (m_PostProcessingAttribs.iCascadeProcessingMode)
         {
             case CASCADE_PROCESSING_MODE_SINGLE_PASS:
             case CASCADE_PROCESSING_MODE_MULTI_PASS: 
@@ -1580,7 +1580,7 @@ void EpipolarLightScattering :: UnwarpEpipolarScattering(bool bRenderLuminance)
         DefineMacros(Macros);
         Macros.AddShaderMacro("PERFORM_TONE_MAPPING",                 true);
         Macros.AddShaderMacro("AUTO_EXPOSURE",                        m_PostProcessingAttribs.ToneMapping.bAutoExposure);
-        Macros.AddShaderMacro("TONE_MAPPING_MODE",                    m_PostProcessingAttribs.ToneMapping.uiToneMappingMode);
+        Macros.AddShaderMacro("TONE_MAPPING_MODE",                    m_PostProcessingAttribs.ToneMapping.iToneMappingMode);
         Macros.AddShaderMacro("CORRECT_INSCATTERING_AT_DEPTH_BREAKS", m_PostProcessingAttribs.bCorrectScatteringAtDepthBreaks);
         Macros.Finalize();
         
@@ -1603,7 +1603,7 @@ void EpipolarLightScattering :: UnwarpEpipolarScattering(bool bRenderLuminance)
             {SHADER_TYPE_PIXEL, "g_tex2DCamSpaceZ",         Sam_LinearClamp},
             {SHADER_TYPE_PIXEL, "g_tex2DColorBuffer",       Sam_PointClamp}
         };
-        if (m_PostProcessingAttribs.uiExtinctionEvalMode == EXTINCTION_EVAL_MODE_EPIPOLAR)
+        if (m_PostProcessingAttribs.iExtinctionEvalMode == EXTINCTION_EVAL_MODE_EPIPOLAR)
             StaticSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_tex2DEpipolarExtinction", Sam_LinearClamp);
 
         ResourceLayout.Variables         = Vars;
@@ -1657,7 +1657,7 @@ void EpipolarLightScattering :: UnwarpEpipolarScattering(bool bRenderLuminance)
             {SHADER_TYPE_PIXEL, "g_tex2DCamSpaceZ",         Sam_LinearClamp},
             {SHADER_TYPE_PIXEL, "g_tex2DColorBuffer",       Sam_PointClamp}
         };
-        if (m_PostProcessingAttribs.uiExtinctionEvalMode == EXTINCTION_EVAL_MODE_EPIPOLAR)
+        if (m_PostProcessingAttribs.iExtinctionEvalMode == EXTINCTION_EVAL_MODE_EPIPOLAR)
             StaticSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_tex2DEpipolarExtinction", Sam_LinearClamp);
 
         ResourceLayout.Variables         = Vars;
@@ -1757,7 +1757,7 @@ void EpipolarLightScattering :: FixInscatteringAtDepthBreaks(Uint32             
         Macros.AddShaderMacro("CASCADE_PROCESSING_MODE", CASCADE_PROCESSING_MODE_SINGLE_PASS);
         Macros.AddShaderMacro("PERFORM_TONE_MAPPING",    !bRenderLuminance);
         Macros.AddShaderMacro("AUTO_EXPOSURE",           m_PostProcessingAttribs.ToneMapping.bAutoExposure);
-        Macros.AddShaderMacro("TONE_MAPPING_MODE",       m_PostProcessingAttribs.ToneMapping.uiToneMappingMode);
+        Macros.AddShaderMacro("TONE_MAPPING_MODE",       m_PostProcessingAttribs.ToneMapping.iToneMappingMode);
         Macros.AddShaderMacro("USE_1D_MIN_MAX_TREE",     false);
         Macros.Finalize();
 
@@ -1991,22 +1991,22 @@ void EpipolarLightScattering :: PerformPostProcessing(FrameAttribs&             
     CHECK_PSO_DEPENDENCY(PSO_DEPENDENCY_OPTIMIZE_SAMPLE_LOCATIONS,  bOptimizeSampleLocations);
     CHECK_PSO_DEPENDENCY(PSO_DEPENDENCY_ENABLE_LIGHT_SHAFTS,        bEnableLightShafts);
     CHECK_PSO_DEPENDENCY(PSO_DEPENDENCY_USE_1D_MIN_MAX_TREE,        bUse1DMinMaxTree);
-    CHECK_PSO_DEPENDENCY(PSO_DEPENDENCY_LIGHT_SCTR_TECHNIQUE,       uiLightSctrTechnique);
-    CHECK_PSO_DEPENDENCY(PSO_DEPENDENCY_CASCADE_PROCESSING_MODE,    uiCascadeProcessingMode);
-    CHECK_PSO_DEPENDENCY(PSO_DEPENDENCY_REFINEMENT_CRITERION,       uiRefinementCriterion);
+    CHECK_PSO_DEPENDENCY(PSO_DEPENDENCY_LIGHT_SCTR_TECHNIQUE,       iLightSctrTechnique);
+    CHECK_PSO_DEPENDENCY(PSO_DEPENDENCY_CASCADE_PROCESSING_MODE,    iCascadeProcessingMode);
+    CHECK_PSO_DEPENDENCY(PSO_DEPENDENCY_REFINEMENT_CRITERION,       iRefinementCriterion);
     CHECK_PSO_DEPENDENCY(PSO_DEPENDENCY_IS_32_BIT_MIN_MAX_TREE,     bIs32BitMinMaxMipMap);
-    CHECK_PSO_DEPENDENCY(PSO_DEPENDENCY_MULTIPLE_SCATTERING_MODE,   uiMultipleScatteringMode);
-    CHECK_PSO_DEPENDENCY(PSO_DEPENDENCY_SINGLE_SCATTERING_MODE,     uiSingleScatteringMode);
+    CHECK_PSO_DEPENDENCY(PSO_DEPENDENCY_MULTIPLE_SCATTERING_MODE,   iMultipleScatteringMode);
+    CHECK_PSO_DEPENDENCY(PSO_DEPENDENCY_SINGLE_SCATTERING_MODE,     iSingleScatteringMode);
     CHECK_PSO_DEPENDENCY(PSO_DEPENDENCY_AUTO_EXPOSURE,              ToneMapping.bAutoExposure);
-    CHECK_PSO_DEPENDENCY(PSO_DEPENDENCY_TONE_MAPPING_MODE,          ToneMapping.uiToneMappingMode);
+    CHECK_PSO_DEPENDENCY(PSO_DEPENDENCY_TONE_MAPPING_MODE,          ToneMapping.iToneMappingMode);
     CHECK_PSO_DEPENDENCY(PSO_DEPENDENCY_LIGHT_ADAPTATION,           ToneMapping.bLightAdaptation);
-    CHECK_PSO_DEPENDENCY(PSO_DEPENDENCY_EXTINCTION_EVAL_MODE,       uiExtinctionEvalMode);
+    CHECK_PSO_DEPENDENCY(PSO_DEPENDENCY_EXTINCTION_EVAL_MODE,       iExtinctionEvalMode);
 #undef CHECK_PSO_DEPENDENCY
 
-    bool bUseCombinedMinMaxTexture = PPAttribs.uiCascadeProcessingMode == CASCADE_PROCESSING_MODE_SINGLE_PASS     ||
-                                     PPAttribs.uiCascadeProcessingMode == CASCADE_PROCESSING_MODE_MULTI_PASS_INST ||
+    bool bUseCombinedMinMaxTexture = PPAttribs.iCascadeProcessingMode == CASCADE_PROCESSING_MODE_SINGLE_PASS     ||
+                                     PPAttribs.iCascadeProcessingMode == CASCADE_PROCESSING_MODE_MULTI_PASS_INST ||
                                      PPAttribs.bCorrectScatteringAtDepthBreaks                                    || 
-                                     PPAttribs.uiLightSctrTechnique == LIGHT_SCTR_TECHNIQUE_BRUTE_FORCE;
+                                     PPAttribs.iLightSctrTechnique == LIGHT_SCTR_TECHNIQUE_BRUTE_FORCE;
     StalePSODependencyFlags |= (m_bUseCombinedMinMaxTexture != bUseCombinedMinMaxTexture) ? PSO_DEPENDENCY_USE_COMBINED_MIN_MAX_TEX : 0;
 
 
@@ -2202,8 +2202,8 @@ void EpipolarLightScattering :: PerformPostProcessing(FrameAttribs&             
     }
 
 
-    if ((m_PostProcessingAttribs.uiMultipleScatteringMode > MULTIPLE_SCTR_MODE_NONE ||
-         PPAttribs.uiSingleScatteringMode == SINGLE_SCTR_MODE_LUT) &&
+    if ((m_PostProcessingAttribs.iMultipleScatteringMode > MULTIPLE_SCTR_MODE_NONE ||
+         PPAttribs.iSingleScatteringMode == SINGLE_SCTR_MODE_LUT) &&
          !(m_uiUpToDateResourceFlags & UpToDateResourceFlags::PrecomputedIntegralsTex) )
     {
         PrecomputeScatteringLUT(m_FrameAttribs.pDevice, m_FrameAttribs.pDeviceContext);
@@ -2228,15 +2228,15 @@ void EpipolarLightScattering :: PerformPostProcessing(FrameAttribs&             
 
     ReconstructCameraSpaceZ();
 
-    if (m_PostProcessingAttribs.uiLightSctrTechnique == LIGHT_SCTR_TECHNIQUE_EPIPOLAR_SAMPLING)
+    if (m_PostProcessingAttribs.iLightSctrTechnique == LIGHT_SCTR_TECHNIQUE_EPIPOLAR_SAMPLING)
     {
         RenderSliceEndpoints();
 
         // Render coordinate texture and camera space z for epipolar location
         RenderCoordinateTexture();
 
-        if (m_PostProcessingAttribs.uiRefinementCriterion == REFINEMENT_CRITERION_INSCTR_DIFF || 
-            m_PostProcessingAttribs.uiExtinctionEvalMode == EXTINCTION_EVAL_MODE_EPIPOLAR)
+        if (m_PostProcessingAttribs.iRefinementCriterion == REFINEMENT_CRITERION_INSCTR_DIFF || 
+            m_PostProcessingAttribs.iExtinctionEvalMode == EXTINCTION_EVAL_MODE_EPIPOLAR)
         {
             RenderCoarseUnshadowedInctr();
         }
@@ -2257,7 +2257,7 @@ void EpipolarLightScattering :: PerformPostProcessing(FrameAttribs&             
         const float Zero[] = {0,0,0,0};
         m_FrameAttribs.pDeviceContext->ClearRenderTarget(m_ptex2DInitialScatteredLightRTV, Zero, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
-        int iLastCascade = (m_PostProcessingAttribs.bEnableLightShafts && m_PostProcessingAttribs.uiCascadeProcessingMode == CASCADE_PROCESSING_MODE_MULTI_PASS) ? m_PostProcessingAttribs.iNumCascades - 1 : m_PostProcessingAttribs.iFirstCascadeToRayMarch;
+        int iLastCascade = (m_PostProcessingAttribs.bEnableLightShafts && m_PostProcessingAttribs.iCascadeProcessingMode == CASCADE_PROCESSING_MODE_MULTI_PASS) ? m_PostProcessingAttribs.iNumCascades - 1 : m_PostProcessingAttribs.iFirstCascadeToRayMarch;
         for(int iCascadeInd = m_PostProcessingAttribs.iFirstCascadeToRayMarch; iCascadeInd <= iLastCascade; ++iCascadeInd)
         {
             // Build min/max mip map
@@ -2306,7 +2306,7 @@ void EpipolarLightScattering :: PerformPostProcessing(FrameAttribs&             
             RenderSampleLocations();
         }
     }
-    else if (m_PostProcessingAttribs.uiLightSctrTechnique == LIGHT_SCTR_TECHNIQUE_BRUTE_FORCE)
+    else if (m_PostProcessingAttribs.iLightSctrTechnique == LIGHT_SCTR_TECHNIQUE_BRUTE_FORCE)
     {
         if (m_PostProcessingAttribs.ToneMapping.bAutoExposure)
         {
@@ -2641,7 +2641,7 @@ void EpipolarLightScattering :: ComputeAmbientSkyLightTexture(IRenderDevice* pDe
     if (!PrecomputeAmbientSkyLightTech.PSO)
     {
         ShaderMacroHelper Macros;
-        Macros.AddShaderMacro( "NUM_RANDOM_SPHERE_SAMPLES", m_uiNumRandomSamplesOnSphere );
+        Macros.AddShaderMacro( "NUM_RANDOM_SPHERE_SAMPLES", static_cast<Int32>(m_uiNumRandomSamplesOnSphere) );
         Macros.Finalize();
         auto pPrecomputeAmbientSkyLightPS = CreateShader(pDevice, "PrecomputeAmbientSkyLight.fx", "PrecomputeAmbientSkyLightPS",
                                                          SHADER_TYPE_PIXEL, Macros);

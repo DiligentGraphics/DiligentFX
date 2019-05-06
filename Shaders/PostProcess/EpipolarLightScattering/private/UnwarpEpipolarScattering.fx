@@ -134,7 +134,7 @@ void UnwarpEpipolarInsctrImage( in float2 f2PosPS,
     // Now find two closest epipolar slices, from which we will interpolate
     // First, find index of the slice which precedes our slice
     // Note that 0 <= fEpipolarSlice <= 1, and both 0 and 1 refer to the first slice
-    float fPrecedingSliceInd = min( floor(fEpipolarSlice*float(NUM_EPIPOLAR_SLICES)), float(NUM_EPIPOLAR_SLICES-1) );
+    float fPrecedingSliceInd = min( floor(fEpipolarSlice * float(NUM_EPIPOLAR_SLICES)), float(NUM_EPIPOLAR_SLICES-1u) );
 
     // Compute EXACT texture coordinates of preceding and succeeding slices and their weights
     // Note that slice 0 is stored in the first texel which has exact texture coordinate 0.5/NUM_EPIPOLAR_SLICES
@@ -169,7 +169,7 @@ void UnwarpEpipolarInsctrImage( in float2 f2PosPS,
         // Note that the first sample on the line (fSamplePosOnLine==0) is exactly the Entry Point, while 
         // the last sample (fSamplePosOnLine==1) is exactly the Exit Point
         // (search for "fSamplePosOnEpipolarLine *= (float)MAX_SAMPLES_IN_SLICE / ((float)MAX_SAMPLES_IN_SLICE-1.f)")
-        float fSampleInd = fSamplePosOnLine * float(MAX_SAMPLES_IN_SLICE-1);
+        float fSampleInd = fSamplePosOnLine * float(MAX_SAMPLES_IN_SLICE-1u);
        
         // We have to manually perform bilateral filtering of the scattered radiance texture to
         // eliminate artifacts at depth discontinuities
@@ -225,7 +225,7 @@ void UnwarpEpipolarInsctrImage( in float2 f2PosPS,
         //             |                                                   |
         //             |<-------------------Clamp range------------------->|                   
         //
-        f2BilateralUWeights *= (abs(fSamplePosOnLine - 0.5) < 0.5 + 1.0 / float(MAX_SAMPLES_IN_SLICE-1)) ? 1.0 : 0.0;
+        f2BilateralUWeights *= (abs(fSamplePosOnLine - 0.5) < 0.5 + 1.0 / float(MAX_SAMPLES_IN_SLICE-1u)) ? 1.0 : 0.0;
         // We now need to compute the following weighted summ:
         //f3FilteredSliceCol = 
         //    f2BilateralUWeights.x * g_tex2DScatteredColor.SampleLevel(samPoint, f2SctrColorUV, 0, int2(0,0)) +

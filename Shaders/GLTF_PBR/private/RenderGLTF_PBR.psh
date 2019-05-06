@@ -326,7 +326,7 @@ void main(in  float4 ClipPos  : SV_Position,
     color += Emissive.rgb * g_MaterialInfo.EmissiveFactor.rgb * g_RenderParameters.EmissionScale;
 
     ToneMappingAttribs TMAttribs;
-    TMAttribs.uiToneMappingMode    = TONE_MAPPING_MODE_UNCHARTED2;
+    TMAttribs.iToneMappingMode     = TONE_MAPPING_MODE_UNCHARTED2;
     TMAttribs.bAutoExposure        = false;
     TMAttribs.fMiddleGray          = g_RenderParameters.MiddleGray;
     TMAttribs.bLightAdaptation     = false;

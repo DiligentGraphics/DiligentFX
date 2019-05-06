@@ -17,11 +17,11 @@
 #define F2ONE  float2(1.0, 1.0)
 
 #ifndef NUM_EPIPOLAR_SLICES
-#   define NUM_EPIPOLAR_SLICES 1024
+#   define NUM_EPIPOLAR_SLICES 1024u
 #endif
 
 #ifndef MAX_SAMPLES_IN_SLICE
-#   define MAX_SAMPLES_IN_SLICE 512
+#   define MAX_SAMPLES_IN_SLICE 512u
 #endif
 
 #ifndef OPTIMIZE_SAMPLE_LOCATIONS

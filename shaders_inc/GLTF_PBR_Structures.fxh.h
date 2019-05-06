@@ -13,7 +13,7 @@
 "#endif\n"
 "\n"
 "#ifndef MAX_NUM_JOINTS\n"
-"#   define MAX_NUM_JOINTS 128\n"
+"#   define MAX_NUM_JOINTS 128u\n"
 "#endif\n"
 "\n"
 "#define  PBR_WORKFLOW_METALLIC_ROUGHNESS  0\n"

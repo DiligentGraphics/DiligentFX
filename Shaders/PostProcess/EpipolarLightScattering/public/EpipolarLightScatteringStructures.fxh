@@ -155,18 +155,18 @@ struct EpipolarLightScatteringAttribs
     // Whether to use 32-bit float or 16-bit UNORM min-max binary tree.
     BOOL bIs32BitMinMaxMipMap               DEFAULT_VALUE(FALSE);
     // Technique used to evaluate light scattering.
-    uint uiLightSctrTechnique               DEFAULT_VALUE(LIGHT_SCTR_TECHNIQUE_EPIPOLAR_SAMPLING);
+    int  iLightSctrTechnique                DEFAULT_VALUE(LIGHT_SCTR_TECHNIQUE_EPIPOLAR_SAMPLING);
     // Shadow map cascades processing mode.
-    uint uiCascadeProcessingMode            DEFAULT_VALUE(CASCADE_PROCESSING_MODE_SINGLE_PASS);
+    int  iCascadeProcessingMode             DEFAULT_VALUE(CASCADE_PROCESSING_MODE_SINGLE_PASS);
     // Epipolar sampling refinement criterion.
-    uint uiRefinementCriterion              DEFAULT_VALUE(REFINEMENT_CRITERION_INSCTR_DIFF);
+    int  iRefinementCriterion               DEFAULT_VALUE(REFINEMENT_CRITERION_INSCTR_DIFF);
 
     // Single scattering evaluation mode.
-    uint uiSingleScatteringMode             DEFAULT_VALUE(SINGLE_SCTR_MODE_INTEGRATION);
+    int  iSingleScatteringMode              DEFAULT_VALUE(SINGLE_SCTR_MODE_INTEGRATION);
     // Higher-order scattering evaluation mode.
-    uint uiMultipleScatteringMode           DEFAULT_VALUE(MULTIPLE_SCTR_MODE_UNOCCLUDED);
+    int  iMultipleScatteringMode            DEFAULT_VALUE(MULTIPLE_SCTR_MODE_UNOCCLUDED);
     // Atmospheric extinction evaluation mode.
-    uint uiExtinctionEvalMode               DEFAULT_VALUE(EXTINCTION_EVAL_MODE_EPIPOLAR);
+    int  iExtinctionEvalMode                DEFAULT_VALUE(EXTINCTION_EVAL_MODE_EPIPOLAR);
     // Whether to use custom scattering coefficients.
     BOOL bUseCustomSctrCoeffs               DEFAULT_VALUE(FALSE);
 
