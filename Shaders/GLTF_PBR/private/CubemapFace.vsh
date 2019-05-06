@@ -16,6 +16,6 @@ void main(in uint VertexId     : SV_VertexID,
     float4 f4WorldPos = mul(g_Rotation, Pos);
     WorldPos = f4WorldPos.xyz / f4WorldPos.w;
 #if (defined(GLSL) || defined(GL_ES)) && !defined(TARGET_API_VULKAN)
-    Pos.y *= -1;
+    Pos.y *= -1.0;
 #endif
 }

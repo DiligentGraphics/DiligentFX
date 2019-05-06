@@ -16,6 +16,6 @@
 "    float4 f4WorldPos = mul(g_Rotation, Pos);\n"
 "    WorldPos = f4WorldPos.xyz / f4WorldPos.w;\n"
 "#if (defined(GLSL) || defined(GL_ES)) && !defined(TARGET_API_VULKAN)\n"
-"    Pos.y *= -1;\n"
+"    Pos.y *= -1.0;\n"
 "#endif\n"
 "}\n"

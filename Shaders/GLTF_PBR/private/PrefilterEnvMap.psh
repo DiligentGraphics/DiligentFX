@@ -24,14 +24,14 @@ float3 PrefilterEnvMap( float Roughness, float3 R )
     float3 V = R;
     float3 PrefilteredColor = float3(0.0, 0.0, 0.0);
     float TotalWeight = 0.0;
-    for( uint i = 0; i < g_NumSamples; i++ )
+    for( uint i = 0u; i < g_NumSamples; i++ )
     {
         float2 Xi = Hammersley2D( i, g_NumSamples );
         float3 H  = ImportanceSampleGGX( Xi, Roughness, N );
         float3 L  = 2.0 * dot(V, H) * H - V;
         float NoL = clamp(dot(N, L), 0.0, 1.0);
         float VoH = clamp(dot(V, H), 0.0, 1.0);
-        if(NoL > 0 && VoH > 0)
+        if(NoL > 0.0 && VoH > 0.0)
         {
 #if OPTIMIZE_SAMPLES
             // https://placeholderart.wordpress.com/2015/07/28/implementation-notes-runtime-environment-map-filtering-for-image-based-lighting/
