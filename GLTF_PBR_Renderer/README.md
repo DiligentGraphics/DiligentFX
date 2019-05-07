@@ -1,4 +1,4 @@
-# GLTF 2.0 Physially-based renderer
+# Physially-Based GLTF Renderer
 
 A physially-based GLTF2.0 renderer with image-based lighting. 
 
@@ -6,22 +6,22 @@ A physially-based GLTF2.0 renderer with image-based lighting.
 
 ![](screenshots/flight_helmet.jpg)
 
-The renderer implements refernce
+The renderer uses the refernce
 [GLTF2.0 lighting model](https://github.com/KhronosGroup/glTF/blob/master/specification/2.0/README.md#appendix-b-brdf-implementation).
 
-| GLTF viewer           | Diligent Engine       |
-|-----------------------|-----------------------|
+|[Khronos GLTF viewer][1]| Diligent Engine        |
+|------------------------|------------------------|
 |![](screenshots/gltf_viewer_mr_spheres.jpg)|![](screenshots/mr_spheres.jpg)|
 
 
-It is based on [GLTF sample viewer](https://github.com/KhronosGroup/glTF-Sample-Viewer) from 
+The implementation is based on [GLTF sample viewer][1] from 
 [Khronos Group](https://github.com/KhronosGroup/glTF-Sample-Viewer) and
-[Vulkan-glTF-PBR](https://github.com/SaschaWillems/Vulkan-glTF-PBR) project by [Sascha Willems](https://github.com/SaschaWillems).
+[Vulkan-glTF-PBR][2] project by [Sascha Willems](https://github.com/SaschaWillems).
 
 ## Using the renderer
 
 To initialize the renderer, populate `GLTF_PBR_Renderer::CreateInfo` structure and
-create an instance of GLTF_PBR_Renderer class:
+create an instance of `GLTF_PBR_Renderer` class:
 
 ```cpp
 auto BackBufferFmt  = m_pSwapChain->GetDesc().ColorBufferFormat;
@@ -35,8 +35,8 @@ RendererCI.FrontCCW       = true;
 m_GLTFRenderer.reset(new GLTF_PBR_Renderer(m_pDevice, m_pImmediateContext, RendererCI));
 ```
 
-Note that the front face is set to counter-clockwise because in GLTF y axis points down and
-we need to invert it, which will reverse the face winding order.
+Note that the front face is set to counter-clockwise because in GLTF, y axis points down and
+we need to invert it, which will reverse the winding order.
 
 The renderer generates all required look-up tables at run-time. For image-based lighting,
 it pre-computes irradiance cube map for diffuse component and pre-filtered environment map
@@ -70,8 +70,12 @@ For more details, see [GLTFViewer.cpp](https://github.com/DiligentGraphics/Dilig
 
 # References
 
-[GLTF2.0 Format Specification](https://github.com/KhronosGroup/glTF)
+[GLTF Sampler Viewer][1]
 
-[GLTF Sampler Viewer](https://github.com/KhronosGroup/glTF-Sample-Viewer)
+[Vulkan-glTF-PBR][2]
 
-[Vulkan-glTF-PBR](https://github.com/SaschaWillems/Vulkan-glTF-PBR)
+[GLTF2.0 Format Specification][3]
+
+[1]:(https://github.com/KhronosGroup/glTF-Sample-Viewer)
+[2]:(https://github.com/SaschaWillems/Vulkan-glTF-PBR)
+[3]:(https://github.com/KhronosGroup/glTF)
