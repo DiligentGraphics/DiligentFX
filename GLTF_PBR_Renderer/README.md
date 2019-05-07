@@ -76,6 +76,6 @@ For more details, see [GLTFViewer.cpp](https://github.com/DiligentGraphics/Dilig
 
 [GLTF2.0 Format Specification][3]
 
-[1]:(https://github.com/KhronosGroup/glTF-Sample-Viewer)
-[2]:(https://github.com/SaschaWillems/Vulkan-glTF-PBR)
-[3]:(https://github.com/KhronosGroup/glTF)
+[1]: https://github.com/KhronosGroup/glTF-Sample-Viewer
+[2]: https://github.com/SaschaWillems/Vulkan-glTF-PBR
+[3]: https://github.com/KhronosGroup/glTF
