@@ -573,7 +573,8 @@ void EpipolarLightScattering :: CreateEpipolarTextures(IRenderDevice* pDevice)
     {
 	    // MaxSamplesInSlice x NumSlices depth stencil texture to mark samples for processing,
 	    // for every epipolar sample
-        TexDesc.Name = "Epipolar Image Depth";
+        TexDesc.Name   = "Epipolar Image Depth";
+        TexDesc.Format = TEX_FORMAT_UNKNOWN;
         for (auto Fmt : {EpipolarImageDepthFmt0, EpipolarImageDepthFmt1})
         {
             const auto& FmtInfo = pDevice->GetTextureFormatInfoExt(Fmt);
