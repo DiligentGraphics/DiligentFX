@@ -140,7 +140,8 @@ private:
     static constexpr TEXTURE_FORMAT InterpolationSourceTexFmt   = TEX_FORMAT_RGBA32_UINT;
     static constexpr TEXTURE_FORMAT EpipolarCamSpaceZFmt        = TEX_FORMAT_R32_FLOAT;
     static constexpr TEXTURE_FORMAT EpipolarInsctrTexFmt        = TEX_FORMAT_RGBA16_FLOAT;
-    static constexpr TEXTURE_FORMAT EpipolarImageDepthFmt       = TEX_FORMAT_D24_UNORM_S8_UINT;
+    static constexpr TEXTURE_FORMAT EpipolarImageDepthFmt0      = TEX_FORMAT_D24_UNORM_S8_UINT;
+    static constexpr TEXTURE_FORMAT EpipolarImageDepthFmt1      = TEX_FORMAT_D32_FLOAT_S8X24_UINT;
     static constexpr TEXTURE_FORMAT EpipolarExtinctionFmt       = TEX_FORMAT_RGBA8_UNORM;
     static constexpr TEXTURE_FORMAT AmbientSkyLightTexFmt       = TEX_FORMAT_RGBA16_FLOAT;
     static constexpr TEXTURE_FORMAT LuminanceTexFmt             = TEX_FORMAT_R16_FLOAT;

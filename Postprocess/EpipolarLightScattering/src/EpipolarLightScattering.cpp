@@ -573,8 +573,19 @@ void EpipolarLightScattering :: CreateEpipolarTextures(IRenderDevice* pDevice)
     {
 	    // MaxSamplesInSlice x NumSlices depth stencil texture to mark samples for processing,
 	    // for every epipolar sample
-        TexDesc.Name      = "Epipolar Image Depth";
-	    TexDesc.Format    = EpipolarImageDepthFmt;
+        TexDesc.Name = "Epipolar Image Depth";
+        for (auto Fmt : {EpipolarImageDepthFmt0, EpipolarImageDepthFmt1})
+        {
+            const auto& FmtInfo = pDevice->GetTextureFormatInfoExt(Fmt);
+            if (FmtInfo.DepthRenderable)
+            {
+                TexDesc.Format = Fmt;
+                break;
+            }
+        }
+        if (TexDesc.Format == TEX_FORMAT_UNKNOWN)
+            LOG_ERROR_AND_THROW("Failed to find suitable depth-stencil format for epipolar image depth buffer");
+
 	    TexDesc.BindFlags = BIND_DEPTH_STENCIL;
 	    TexDesc.ClearValue.Format = TexDesc.Format;
         TexDesc.ClearValue.DepthStencil.Depth   = 1;
@@ -1003,6 +1014,7 @@ void EpipolarLightScattering :: RenderCoordinateTexture()
         ResourceLayout.StaticSamplers    = StaticSamplers;
         ResourceLayout.NumStaticSamplers = _countof(StaticSamplers);
         TEXTURE_FORMAT RTVFmts[] = {CoordinateTexFmt, EpipolarCamSpaceZFmt};
+        auto EpipolarImageDepthFmt = m_ptex2DEpipolarImageDSV->GetTexture()->GetDesc().Format;
         RendedCoordTexTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "RenderCoordinateTexture", m_pFullScreenTriangleVS,
                                                                  pRendedCoordTexPS, ResourceLayout, 2, RTVFmts, EpipolarImageDepthFmt, DSS_IncStencilAlways);
         RendedCoordTexTech.PSO->BindStaticResources(SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL, m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
@@ -1081,6 +1093,7 @@ void EpipolarLightScattering :: RenderCoarseUnshadowedInctr()
                                 "RenderCoarseUnshadowedInsctrPSO";
         TEXTURE_FORMAT RTVFmts[] = {EpipolarInsctrTexFmt, EpipolarExtinctionFmt};
         Uint8 NumRTVs = m_PostProcessingAttribs.iExtinctionEvalMode == EXTINCTION_EVAL_MODE_EPIPOLAR ? 2 : 1;
+        auto EpipolarImageDepthFmt = m_ptex2DEpipolarImageDSV->GetTexture()->GetDesc().Format;
         RenderCoarseUnshadowedInsctrTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, PSOName, m_pFullScreenTriangleVS,
                                                                                pRenderCoarseUnshadowedInsctrPS, ResourceLayout, NumRTVs, RTVFmts,
                                                                                EpipolarImageDepthFmt, DSS_StencilEqKeepStencil);
@@ -1190,6 +1203,7 @@ void EpipolarLightScattering :: MarkRayMarchingSamples()
                                                                SHADER_TYPE_PIXEL, Macros);
         PipelineResourceLayoutDesc ResourceLayout;
         ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
+        auto EpipolarImageDepthFmt = m_ptex2DEpipolarImageDSV->GetTexture()->GetDesc().Format;
         MarkRayMarchingSamplesInStencilTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "MarkRayMarchingSamples",
                                                                                   m_pFullScreenTriangleVS, pMarkRayMarchingSamplesInStencilPS,
                                                                                   ResourceLayout, 0, nullptr, EpipolarImageDepthFmt, DSS_StencilEqIncStencil);
@@ -1467,6 +1481,7 @@ void EpipolarLightScattering :: DoRayMarching(Uint32 uiMaxStepsAlongRay,
         ResourceLayout.StaticSamplers    = StaticSamplers.data();
         ResourceLayout.NumStaticSamplers = static_cast<Uint32>(StaticSamplers.size());
 
+        auto EpipolarImageDepthFmt = m_ptex2DEpipolarImageDSV->GetTexture()->GetDesc().Format;
         DoRayMarchTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "RayMarch", m_pFullScreenTriangleVS,
                                                              pDoRayMarchPS, ResourceLayout, EpipolarInsctrTexFmt, EpipolarImageDepthFmt,
                                                              DSS_StencilEqKeepStencil, BS_AdditiveBlend);
