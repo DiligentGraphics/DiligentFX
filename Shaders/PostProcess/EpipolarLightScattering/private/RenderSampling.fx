@@ -34,7 +34,7 @@ void RenderSampleLocationsVS(in uint VertexID : SV_VertexID,
     uint2 ui2InterpolationSources = g_tex2DInterpolationSource.Load( int3(TexelIJ,0) );
     bool bIsInterpolation = ui2InterpolationSources.x != ui2InterpolationSources.y;
 
-    float2 f2QuadSize = (bIsInterpolation ? 2.0 : 4.0)*F2ONE * g_PPAttribs.f4ScreenResolution.zw;
+    float2 f2QuadSize = (bIsInterpolation ? 2.0 : 4.0) * g_PPAttribs.f4ScreenResolution.zw;
     float4 MinMaxUV = float4(f2QuadCenterPos.x-f2QuadSize.x, f2QuadCenterPos.y - f2QuadSize.y, f2QuadCenterPos.x+f2QuadSize.x, f2QuadCenterPos.y + f2QuadSize.y);
     
     float3 f3Color = bIsInterpolation ? float3(0.5,0.0,0.0) : float3(1.0,0.0,0.0);
