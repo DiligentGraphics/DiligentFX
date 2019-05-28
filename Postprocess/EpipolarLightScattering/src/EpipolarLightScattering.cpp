@@ -446,7 +446,7 @@ void EpipolarLightScattering :: CreateRandomSphereSamplingTexture(IRenderDevice*
     {
         float4 &f4Sample = SphereSampling[iSample];
         f4Sample.z = ((float)rand()/(float)RAND_MAX) * 2.f - 1.f;
-        float t = ((float)rand()/(float)RAND_MAX) * 2.f * (float)M_PI;
+        float t = ((float)rand()/(float)RAND_MAX) * 2.f * PI_F;
         float r = sqrt( std::max(1.f - f4Sample.z*f4Sample.z, 0.f) );
         f4Sample.x = r * cos(t);
         f4Sample.y = r * sin(t);
@@ -2387,7 +2387,7 @@ float3 exp(const float3 &fX){ return float3(::exp(fX.x), ::exp(fX.y), ::exp(fX.z
 // fCosChi = Pi/2
 float2 ChapmanOrtho(const float2 &f2x)
 {
-    static const float fConst = static_cast<float>( sqrt(M_PI / 2) );
+    static const float fConst = sqrt(PI_F / 2.f);
     float2 f2SqrtX = float2( sqrt(f2x.x), sqrt(f2x.y) );
     return fConst * ( float2(1.f,1.f) / (2.f * f2SqrtX) + f2SqrtX );
 }
@@ -2476,7 +2476,7 @@ void EpipolarLightScattering :: ComputeScatteringCoefficients(IDeviceContext* pD
         constexpr double Pn = 0.035;     // - Depolarization factor for air which exoresses corrections 
                                          //   due to anisotropy of air molecules
 
-        constexpr double dRayleighConst = 8.0*M_PI*M_PI*M_PI * (n*n - 1.0) * (n*n - 1.0) / (3.0 * N) * (6.0 + 3.0*Pn) / (6.0 - 7.0*Pn);
+        constexpr double dRayleighConst = 8.0 * PI * PI * PI * (n*n - 1.0) * (n*n - 1.0) / (3.0 * N) * (6.0 + 3.0*Pn) / (6.0 - 7.0*Pn);
         for (int WaveNum = 0; WaveNum < 3; WaveNum++)
         {
             double dSctrCoeff;
@@ -2494,7 +2494,7 @@ void EpipolarLightScattering :: ComputeScatteringCoefficients(IDeviceContext* pD
             // normalized phase function
             // p(Theta) = 3/(16*Pi) * (1 + cos^2(Theta))
             // f4AngularRayleighSctrCoeff contains all the terms exepting 1 + cos^2(Theta):
-            f4AngularRayleighSctrCoeff[WaveNum] = static_cast<float>( 3.0 / (16.0*M_PI) * dSctrCoeff );
+            f4AngularRayleighSctrCoeff[WaveNum] = static_cast<float>( 3.0 / (16.0*PI) * dSctrCoeff );
             // f4AngularRayleighSctrCoeff[WaveNum] = f4TotalRayleighSctrCoeff[WaveNum] * p(Theta)
         }
         // Air molecules do not absorb light, so extinction coefficient is only caused by out-scattering
@@ -2533,7 +2533,7 @@ void EpipolarLightScattering :: ComputeScatteringCoefficients(IDeviceContext* pD
                 const double c = (0.6544*m_MediaParams.fTurbidity - 0.6510)*1E-16; // concentration factor
                 constexpr double v = 4; // Junge's exponent
         
-                const double dTotalMieBetaTerm = 0.434 * c * M_PI * pow(2.0*M_PI, v-2);
+                const double dTotalMieBetaTerm = 0.434 * c * PI * pow(2.0 * PI, v-2);
 
                 for (int WaveNum = 0; WaveNum < 3; WaveNum++)
                 {
@@ -2561,7 +2561,7 @@ void EpipolarLightScattering :: ComputeScatteringCoefficients(IDeviceContext* pD
             // F(theta) = 1/(4*PI) * 3*(1-g^2) / (2*(2+g^2)) * (1+cos^2(theta)) / (1 + g^2 - 2g*cos(theta))^(3/2)
             // The angular scattering coefficient is the volumetric scattering coefficient multiplied by the phase 
             // function. 1/(4*PI) is baked into the f4AngularMieSctrCoeff, the other terms are baked into f4CS_g
-            f4AngularMieSctrCoeff[WaveNum] = f4TotalMieSctrCoeff[WaveNum]  / static_cast<float>(4.0 * M_PI);
+            f4AngularMieSctrCoeff[WaveNum] = f4TotalMieSctrCoeff[WaveNum]  / (4.f * PI_F);
             // [BN08] also uses slight absorption factor which is 10% of scattering
             f4MieExtinctionCoeff[WaveNum] = f4TotalMieSctrCoeff[WaveNum] * (1.f + m_PostProcessingAttribs.fAerosolAbsorbtionScale);
         }
