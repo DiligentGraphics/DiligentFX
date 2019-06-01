@@ -289,11 +289,12 @@ RefCntAutoPtr<IShader> CreateShader(IRenderDevice*            pDevice,
     return pShader;
 }
 
-EpipolarLightScattering :: EpipolarLightScattering(IRenderDevice*  pDevice, 
-                                                   IDeviceContext* pContext,
-                                                   TEXTURE_FORMAT  BackBufferFmt,
-                                                   TEXTURE_FORMAT  DepthBufferFmt,
-                                                   TEXTURE_FORMAT  OffscreenBackBufferFmt) :
+EpipolarLightScattering :: EpipolarLightScattering(IRenderDevice*              pDevice, 
+                                                   IDeviceContext*             pContext,
+                                                   TEXTURE_FORMAT              BackBufferFmt,
+                                                   TEXTURE_FORMAT              DepthBufferFmt,
+                                                   TEXTURE_FORMAT              OffscreenBackBufferFmt,
+                                                   const AirScatteringAttribs& ScatteringAttibs) :
     m_BackBufferFmt            (BackBufferFmt),
     m_DepthBufferFmt           (DepthBufferFmt),
     m_OffscreenBackBufferFmt   (OffscreenBackBufferFmt),
@@ -302,6 +303,7 @@ EpipolarLightScattering :: EpipolarLightScattering(IRenderDevice*  pDevice,
     // Using small group size is inefficient because a lot of SIMD lanes become idle
     m_uiSampleRefinementCSMinimumThreadGroupSize(128),// Must be greater than 32
     m_uiNumRandomSamplesOnSphere(pDevice->GetDeviceCaps().DevType == DeviceType::OpenGLES ? 64 : 128),
+    m_MediaParams(ScatteringAttibs),
     m_uiUpToDateResourceFlags(0)
 {
     pDevice->CreateResourceMapping(ResourceMappingDesc(), &m_pResMapping);

@@ -69,11 +69,12 @@ public:
         ITextureView*   pDstRTV                 = nullptr;
     };
 
-    EpipolarLightScattering(IRenderDevice*  in_pDevice, 
-                            IDeviceContext* in_pContext,
-                            TEXTURE_FORMAT  BackBufferFmt,
-                            TEXTURE_FORMAT  DepthBufferFmt,
-                            TEXTURE_FORMAT  OffscreenBackBuffer);
+    EpipolarLightScattering(IRenderDevice*              in_pDevice, 
+                            IDeviceContext*             in_pContext,
+                            TEXTURE_FORMAT              BackBufferFmt,
+                            TEXTURE_FORMAT              DepthBufferFmt,
+                            TEXTURE_FORMAT              OffscreenBackBuffer,
+                            const AirScatteringAttribs& ScatteringAttibs = AirScatteringAttribs{});
     ~EpipolarLightScattering();
 
 
