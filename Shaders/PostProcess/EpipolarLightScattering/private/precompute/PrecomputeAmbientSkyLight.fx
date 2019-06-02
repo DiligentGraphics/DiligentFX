@@ -21,10 +21,10 @@ void PrecomputeAmbientSkyLightPS(FullScreenTriangleVSOutput VSOut,
                                  out float4 f4SkyLight : SV_Target)
 {
     float fU = NormalizedDeviceXYToTexUV(VSOut.f2NormalizedXY).x;
-    float3 f3RayStart = float3(0.0, 20.0, 0.0);
-    float3 f3EarthCentre =  -float3(0.0, 1.0, 0.0) * EARTH_RADIUS;
+    float3 f3RayStart     = float3(0.0, 20.0, 0.0);
+    float3 f3EarthCentre  = float3(0.0, -g_MediaParams.fEarthRadius, 0.0);
     float fCosZenithAngle = clamp(fU * 2.0 - 1.0, -1.0, +1.0);
-    float3 f3DirOnLight = float3(sqrt(saturate(1.0 - fCosZenithAngle*fCosZenithAngle)), fCosZenithAngle, 0.0);
+    float3 f3DirOnLight   = float3(sqrt(saturate(1.0 - fCosZenithAngle*fCosZenithAngle)), fCosZenithAngle, 0.0);
     f4SkyLight = F4ZERO;
     // Go through a number of random directions on the sphere
     for(int iSample = 0; iSample < NUM_RANDOM_SPHERE_SAMPLES; ++iSample)
@@ -39,6 +39,7 @@ void PrecomputeAmbientSkyLightPS(FullScreenTriangleVSOutput VSOut,
             f3RayStart,
             f3RandomDir,
             f3EarthCentre,
+            g_MediaParams.fEarthRadius,
             f3DirOnLight.xyz,
             g_MediaParams.fAtmTopHeight,
             g_tex3DMultipleSctrLUT,

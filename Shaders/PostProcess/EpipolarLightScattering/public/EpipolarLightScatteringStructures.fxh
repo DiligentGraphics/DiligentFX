@@ -89,6 +89,9 @@
 // Use occluded (shadowed) scattering
 #define MULTIPLE_SCTR_MODE_OCCLUDED   2
 
+#ifndef EARTH_RADIUS
+#   define EARTH_RADIUS 6360000.0
+#endif
 
 struct EpipolarLightScatteringAttribs
 {
@@ -182,6 +185,8 @@ struct EpipolarLightScatteringAttribs
     // Custom Mie coefficients.
     float4 f4CustomMieBeta                  DEFAULT_VALUE(float4(2.e-5f, 2.e-5f, 2.e-5f, 0.f));
 
+    float4 f4EarthCenter                    DEFAULT_VALUE(float4(0.f, -static_cast<float>(EARTH_RADIUS), 0.f, 0.f));
+
     // ToneMappingStructures.fxh must be included before EpipolarLightScatteringStructures.fxh
     ToneMappingAttribs  ToneMapping;
 
@@ -223,14 +228,17 @@ struct AirScatteringAttribs
                    // z == -2*g
 
     // Earth parameters can't be chnaged at run time
-    float fEarthRadius              DEFAULT_VALUE(6360000.f);
+    float fEarthRadius              DEFAULT_VALUE(static_cast<float>(EARTH_RADIUS));
     float fAtmTopHeight             DEFAULT_VALUE(80000.f);
-    float2 f2ParticleScaleHeight    DEFAULT_VALUE(float2(7994.f, 1200.f));
-    
     float fTurbidity                DEFAULT_VALUE(1.02f);
     float fAtmTopRadius             DEFAULT_VALUE(fEarthRadius + fAtmTopHeight);
-    float m_fAerosolPhaseFuncG      DEFAULT_VALUE(0.76f);
-    float m_fDummy;
+
+    float4 f4ParticleScaleHeight    DEFAULT_VALUE(float4(7994.f, 1200.f, 1.f/7994.f, 1.f/1200.f));
+
+    float  fAerosolPhaseFuncG       DEFAULT_VALUE(0.76f);
+    float  fDummy0;
+    float  fDummy1;
+    float  fDummy2;
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
     CHECK_STRUCT_ALIGNMENT(AirScatteringAttribs);

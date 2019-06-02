@@ -25,16 +25,16 @@ void ComputeScatteringOrderCS(uint3 ThreadId  : SV_DispatchThreadID)
     // Get attributes for the current point
     float4 f4LUTCoords = LUTCoordsFromThreadID(ThreadId);
     float fHeight, fCosViewZenithAngle, fCosSunZenithAngle, fCosSunViewAngle;
-    InsctrLUTCoords2WorldParams(f4LUTCoords, g_MediaParams.fAtmTopHeight, fHeight, fCosViewZenithAngle, fCosSunZenithAngle, fCosSunViewAngle );
-    float3 f3EarthCentre =  - float3(0.0, 1.0, 0.0) * EARTH_RADIUS;
-    float3 f3RayStart = float3(0.0, fHeight, 0.0);
-    float3 f3ViewDir = ComputeViewDir(fCosViewZenithAngle);
-    float3 f3DirOnLight = ComputeLightDir(f3ViewDir, fCosSunZenithAngle, fCosSunViewAngle);
+    InsctrLUTCoords2WorldParams(f4LUTCoords, g_MediaParams.fEarthRadius, g_MediaParams.fAtmTopHeight, fHeight, fCosViewZenithAngle, fCosSunZenithAngle, fCosSunViewAngle );
+    float3 f3EarthCentre = float3(0.0, -g_MediaParams.fEarthRadius, 0.0);
+    float3 f3RayStart    = float3(0.0, fHeight, 0.0);
+    float3 f3ViewDir     = ComputeViewDir(fCosViewZenithAngle);
+    float3 f3DirOnLight  = ComputeLightDir(f3ViewDir, fCosSunZenithAngle, fCosSunViewAngle);
     
     // Intersect the ray with the atmosphere and Earth
     float4 f4Isecs;
     GetRaySphereIntersection2( f3RayStart, f3ViewDir, f3EarthCentre, 
-                               float2(EARTH_RADIUS, ATM_TOP_RADIUS), 
+                               float2(g_MediaParams.fEarthRadius, g_MediaParams.fAtmTopRadius), 
                                f4Isecs);
     float2 f2RayEarthIsecs  = f4Isecs.xy;
     float2 f2RayAtmTopIsecs = f4Isecs.zw;
@@ -54,30 +54,31 @@ void ComputeScatteringOrderCS(uint3 ThreadId  : SV_DispatchThreadID)
     
     float3 f3RayEnd = f3RayStart + f3ViewDir * fRayLength;
 
-    const float fNumSamples = 64.0;
-    float fStepLen = fRayLength / fNumSamples;
+    const int iNumSamples = 64;
+    float fStepLen = fRayLength / float(iNumSamples);
 
     float4 f4UVWQ = -F4ONE;
     float3 f3PrevSctrRadiance = LookUpPrecomputedScattering(
         f3RayStart,
         f3ViewDir,
         f3EarthCentre,
+        g_MediaParams.fEarthRadius,
         f3DirOnLight.xyz,
         g_MediaParams.fAtmTopHeight,
         g_tex3DPointwiseSctrRadiance,
         g_tex3DPointwiseSctrRadiance_sampler,
         f4UVWQ); 
-    float2 f2PrevParticleDensity = exp( -fHeight / PARTICLE_SCALE_HEIGHT );
+    float2 f2PrevParticleDensity = exp( -float2(fHeight, fHeight) * g_MediaParams.f4ParticleScaleHeight.zw );
 
     float2 f2NetParticleDensityFromCam = F2ZERO;
     float3 f3Inscattering = F3ZERO;
 
-    for(float fSample=1.0; fSample <= fNumSamples; ++fSample)
+    for (int iSample=1; iSample <= iNumSamples; ++iSample)
     {
-        float3 f3Pos = lerp(f3RayStart, f3RayEnd, fSample/fNumSamples);
+        float3 f3Pos = lerp(f3RayStart, f3RayEnd, float(iSample)/float(iNumSamples));
 
-        float fCurrHeight = length(f3Pos - f3EarthCentre) - EARTH_RADIUS;
-        float2 f2ParticleDensity = exp( -fCurrHeight / PARTICLE_SCALE_HEIGHT );
+        float fCurrHeight = length(f3Pos - f3EarthCentre) - g_MediaParams.fEarthRadius;
+        float2 f2ParticleDensity = exp( -float2(fCurrHeight, fCurrHeight) * g_MediaParams.f4ParticleScaleHeight.zw );
 
         f2NetParticleDensityFromCam += (f2PrevParticleDensity + f2ParticleDensity) * (fStepLen / 2.0);
         f2PrevParticleDensity = f2ParticleDensity;
@@ -96,6 +97,7 @@ void ComputeScatteringOrderCS(uint3 ThreadId  : SV_DispatchThreadID)
                 f3Pos,
                 f3ViewDir,
                 f3EarthCentre,
+                g_MediaParams.fEarthRadius,
                 f3DirOnLight.xyz,
                 g_MediaParams.fAtmTopHeight,
                 g_tex3DPointwiseSctrRadiance,

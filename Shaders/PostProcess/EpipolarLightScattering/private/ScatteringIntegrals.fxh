@@ -1,21 +1,24 @@
 
 float2 GetNetParticleDensity(in float fHeightAboveSurface,
-                             in float fCosZenithAngle)
+                             in float fCosZenithAngle,
+                             in float fAtmTopHeight)
 {
-    float fRelativeHeightAboveSurface = fHeightAboveSurface / ATM_TOP_HEIGHT;
+    float fRelativeHeightAboveSurface = fHeightAboveSurface / fAtmTopHeight;
     return g_tex2DOccludedNetDensityToAtmTop.SampleLevel(g_tex2DOccludedNetDensityToAtmTop_sampler, float2(fRelativeHeightAboveSurface, fCosZenithAngle*0.5+0.5), 0);
 }
 
 float2 GetNetParticleDensity(in float3 f3Pos,
                              in float3 f3EarthCentre,
+                             in float  fEarthRadius,
+							 in float  fAtmTopHeight,
                              in float3 f3RayDir)
 {
     float3 f3EarthCentreToPointDir = f3Pos - f3EarthCentre;
     float fDistToEarthCentre = length(f3EarthCentreToPointDir);
     f3EarthCentreToPointDir /= fDistToEarthCentre;
-    float fHeightAboveSurface = fDistToEarthCentre - EARTH_RADIUS;
+    float fHeightAboveSurface = fDistToEarthCentre - fEarthRadius;
     float fCosZenithAngle = dot( f3EarthCentreToPointDir, f3RayDir );
-    return GetNetParticleDensity(fHeightAboveSurface, fCosZenithAngle);
+    return GetNetParticleDensity(fHeightAboveSurface, fCosZenithAngle, fAtmTopHeight);
 }
 
 void ApplyPhaseFunctions(inout float3 f3RayleighInscattering,
@@ -33,9 +36,12 @@ void ApplyPhaseFunctions(inout float3 f3RayleighInscattering,
 }
 
 // This function computes atmospheric properties in the given point
-void GetAtmosphereProperties(in float3 f3Pos,
-                             in float3 f3EarthCentre,
-                             in float3 f3DirOnLight,
+void GetAtmosphereProperties(in float3  f3Pos,
+                             in float3  f3EarthCentre,
+                             in float   fEarthRadius,
+                             in float   fAtmTopHeight,
+							 in float4  f4ParticleScaleHeight,
+                             in float3  f3DirOnLight,
                              out float2 f2ParticleDensity,
                              out float2 f2NetParticleDensityToAtmTop)
 {
@@ -43,13 +49,13 @@ void GetAtmosphereProperties(in float3 f3Pos,
     float3 f3EarthCentreToPointDir = f3Pos - f3EarthCentre;
     float fDistToEarthCentre = length(f3EarthCentreToPointDir);
     f3EarthCentreToPointDir /= fDistToEarthCentre;
-    float fHeightAboveSurface = fDistToEarthCentre - EARTH_RADIUS;
+    float fHeightAboveSurface = fDistToEarthCentre - fEarthRadius;
 
-    f2ParticleDensity = exp( -fHeightAboveSurface / PARTICLE_SCALE_HEIGHT );
+    f2ParticleDensity = exp( -fHeightAboveSurface * f4ParticleScaleHeight.zw );
 
     // Get net particle density from the integration point to the top of the atmosphere:
     float fCosSunZenithAngleForCurrPoint = dot( f3EarthCentreToPointDir, f3DirOnLight );
-    f2NetParticleDensityToAtmTop = GetNetParticleDensity(fHeightAboveSurface, fCosSunZenithAngleForCurrPoint);
+    f2NetParticleDensityToAtmTop = GetNetParticleDensity(fHeightAboveSurface, fCosSunZenithAngleForCurrPoint, fAtmTopHeight);
 }
 
 // This function computes differential inscattering for the given particle densities 
@@ -74,42 +80,46 @@ void ComputePointDiffInsctr(in float2 f2ParticleDensityInCurrPoint,
     f3DMieInsctr  = f2ParticleDensityInCurrPoint.y * f3TotalExtinction; 
 }
 
-void ComputeInsctrIntegral(in float3 f3RayStart,
-                           in float3 f3RayEnd,
-                           in float3 f3EarthCentre,
-                           in float3 f3DirOnLight,
+void ComputeInsctrIntegral(in float3    f3RayStart,
+                           in float3    f3RayEnd,
+                           in float3    f3EarthCentre,
+                           in float     fEarthRadius,
+                           in float     fAtmTopHeight,
+						   in float4    f4ParticleScaleHeight,
+                           in float3    f3DirOnLight,
                            inout float2 f2NetParticleDensityFromCam,
                            inout float3 f3RayleighInscattering,
                            inout float3 f3MieInscattering,
-                           const float fNumSteps)
+                           const uint   uiNumSteps)
 {
-    float3 f3Step = (f3RayEnd - f3RayStart) / fNumSteps;
+    float3 f3Step = (f3RayEnd - f3RayStart) / float(uiNumSteps);
     float fStepLen = length(f3Step);
 
 #if TRAPEZOIDAL_INTEGRATION
     // For trapezoidal integration we need to compute some variables for the starting point of the ray
     float2 f2PrevParticleDensity = float2(0.0, 0.0);
     float2 f2NetParticleDensityToAtmTop = float2(0.0, 0.0);
-    GetAtmosphereProperties(f3RayStart, f3EarthCentre, f3DirOnLight, f2PrevParticleDensity, f2NetParticleDensityToAtmTop);
+    GetAtmosphereProperties(f3RayStart, f3EarthCentre, fEarthRadius, fAtmTopHeight, f4ParticleScaleHeight, f3DirOnLight, f2PrevParticleDensity, f2NetParticleDensityToAtmTop);
 
     float3 f3PrevDiffRInsctr = float3(0.0, 0.0, 0.0), f3PrevDiffMInsctr = float3(0.0, 0.0, 0.0);
     ComputePointDiffInsctr(f2PrevParticleDensity, f2NetParticleDensityFromCam, f2NetParticleDensityToAtmTop, f3PrevDiffRInsctr, f3PrevDiffMInsctr);
 #endif
 
 
-#if TRAPEZOIDAL_INTEGRATION
-    // With trapezoidal integration, we will evaluate the function at the end of each section and 
-    // compute area of a trapezoid
-    for(float fStepNum = 1.0; fStepNum <= fNumSteps; fStepNum += 1.0)
-#else
-    // With stair-step integration, we will evaluate the function at the middle of each section and 
-    // compute area of a rectangle
-    for(float fStepNum = 0.5; fStepNum < fNumSteps; fStepNum += 1.0)
-#endif
+    for (uint uiStepNum = 0u; uiStepNum < uiNumSteps; ++uiStepNum)
     {
-        float3 f3CurrPos = f3RayStart + f3Step * fStepNum;
+#if TRAPEZOIDAL_INTEGRATION
+        // With trapezoidal integration, we will evaluate the function at the end of each section and 
+        // compute area of a trapezoid
+        float3 f3CurrPos = f3RayStart + f3Step * (float(uiStepNum) + 1.0);
+#else
+        // With stair-step integration, we will evaluate the function at the middle of each section and 
+        // compute area of a rectangle
+        float3 f3CurrPos = f3RayStart + f3Step * (float(uiStepNum) + 0.5);
+#endif
+        
         float2 f2ParticleDensity, f2NetParticleDensityToAtmTop;
-        GetAtmosphereProperties(f3CurrPos, f3EarthCentre, f3DirOnLight, f2ParticleDensity, f2NetParticleDensityToAtmTop);
+        GetAtmosphereProperties(f3CurrPos, f3EarthCentre, fEarthRadius, fAtmTopHeight, f4ParticleScaleHeight, f3DirOnLight, f2ParticleDensity, f2NetParticleDensityToAtmTop);
 
         // Accumulate net particle density from the camera to the integration point:
 #if TRAPEZOIDAL_INTEGRATION
@@ -136,14 +146,17 @@ void ComputeInsctrIntegral(in float3 f3RayStart,
 }
 
 
-void IntegrateUnshadowedInscattering(in float3 f3RayStart, 
-                                     in float3 f3RayEnd,
-                                     in float3 f3ViewDir,
-                                     in float3 f3EarthCentre,
-                                     in float3 f3DirOnLight,
-                                     const float fNumSteps,
-                                     out float3 f3Inscattering,
-                                     out float3 f3Extinction)
+void IntegrateUnshadowedInscattering(in float3   f3RayStart, 
+                                     in float3   f3RayEnd,
+                                     in float3   f3ViewDir,
+                                     in float3   f3EarthCentre,
+                                     in float    fEarthRadius,
+                                     in float    fAtmTopHeight,
+							         in float4   f4ParticleScaleHeight,
+                                     in float3   f3DirOnLight,
+                                     const uint  uiNumSteps,
+                                     out float3  f3Inscattering,
+                                     out float3  f3Extinction)
 {
     float2 f2NetParticleDensityFromCam = float2(0.0, 0.0);
     float3 f3RayleighInscattering = float3(0.0, 0.0, 0.0);
@@ -151,11 +164,14 @@ void IntegrateUnshadowedInscattering(in float3 f3RayStart,
     ComputeInsctrIntegral( f3RayStart,
                            f3RayEnd,
                            f3EarthCentre,
+                           fEarthRadius,
+                           fAtmTopHeight,
+                           f4ParticleScaleHeight,
                            f3DirOnLight,
                            f2NetParticleDensityFromCam,
                            f3RayleighInscattering,
                            f3MieInscattering,
-                           fNumSteps);
+                           uiNumSteps);
 
     float3 f3TotalRlghOpticalDepth = g_MediaParams.f4RayleighExtinctionCoeff.rgb * f2NetParticleDensityFromCam.x;
     float3 f3TotalMieOpticalDepth  = g_MediaParams.f4MieExtinctionCoeff.rgb      * f2NetParticleDensityFromCam.y;

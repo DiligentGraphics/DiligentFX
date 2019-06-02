@@ -6,33 +6,33 @@ cbuffer cbParticipatingMediaScatteringParams
     AirScatteringAttribs g_MediaParams;
 }
 
-float2 IntegrateParticleDensity(in float3 f3Start, 
-                                in float3 f3End,
-                                in float3 f3EarthCentre,
-                                float fNumSteps )
+float2 IntegrateParticleDensity(float3 f3Start, 
+                                float3 f3End,
+                                float3 f3EarthCentre,
+                                int    iNumSteps )
 {
-    float3 f3Step = (f3End - f3Start) / fNumSteps;
+    float3 f3Step = (f3End - f3Start) / float(iNumSteps);
     float fStepLen = length(f3Step);
         
     float fStartHeightAboveSurface = abs( length(f3Start - f3EarthCentre) - g_MediaParams.fEarthRadius );
-    float2 f2PrevParticleDensity = exp( -fStartHeightAboveSurface / g_MediaParams.f2ParticleScaleHeight );
+    float2 f2PrevParticleDensity = exp( -fStartHeightAboveSurface * g_MediaParams.f4ParticleScaleHeight.zw );
 
     float2 f2ParticleNetDensity = float2(0.0, 0.0);
-    for(float fStepNum = 1.0; fStepNum <= fNumSteps; fStepNum += 1.0)
+    for (int iStepNum = 1; iStepNum <= iNumSteps; ++iStepNum)
     {
-        float3 f3CurrPos = f3Start + f3Step * fStepNum;
+        float3 f3CurrPos = f3Start + f3Step * float(iStepNum);
         float fHeightAboveSurface = abs( length(f3CurrPos - f3EarthCentre) - g_MediaParams.fEarthRadius );
-        float2 f2ParticleDensity = exp( -fHeightAboveSurface / g_MediaParams.f2ParticleScaleHeight );
+        float2 f2ParticleDensity = exp( -fHeightAboveSurface * g_MediaParams.f4ParticleScaleHeight.zw );
         f2ParticleNetDensity += (f2ParticleDensity + f2PrevParticleDensity) * fStepLen / 2.0;
         f2PrevParticleDensity = f2ParticleDensity;
     }
     return f2ParticleNetDensity;
 }
 
-float2 IntegrateParticleDensityAlongRay(in float3 f3Pos, 
-                                        in float3 f3RayDir,
-                                        float3 f3EarthCentre, 
-                                        const float fNumSteps,
+float2 IntegrateParticleDensityAlongRay(float3     f3Pos, 
+                                        float3     f3RayDir,
+                                        float3     f3EarthCentre, 
+                                        const int  iNumSteps,
                                         const bool bOccludeByEarth)
 {
     if( bOccludeByEarth )
@@ -60,7 +60,7 @@ float2 IntegrateParticleDensityAlongRay(in float3 f3Pos,
 
     float3 f3RayEnd = f3Pos + f3RayDir * fIntegrationDist;
 
-    return IntegrateParticleDensity(f3Pos, f3RayEnd, f3EarthCentre, fNumSteps);
+    return IntegrateParticleDensity(f3Pos, f3RayEnd, f3EarthCentre, iNumSteps);
 }
 
 void PrecomputeNetDensityToAtmTopPS( FullScreenTriangleVSOutput VSOut,
@@ -77,6 +77,6 @@ void PrecomputeNetDensityToAtmTopPS( FullScreenTriangleVSOutput VSOut,
     
     float3 f3EarthCentre = float3(0.0, 0.0, -g_MediaParams.fEarthRadius);
 
-    const float fNumSteps = 200.0;
-    f2Density = IntegrateParticleDensityAlongRay(f3RayStart, f3RayDir, f3EarthCentre, fNumSteps, true);
+    const int iNumSteps = 200;
+    f2Density = IntegrateParticleDensityAlongRay(f3RayStart, f3RayDir, f3EarthCentre, iNumSteps, true);
 }

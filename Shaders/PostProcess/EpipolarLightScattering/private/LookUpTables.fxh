@@ -6,18 +6,18 @@
 #define SunViewPower 1.5
 
 
-float GetCosHorizonAnlge(float fHeight)
+float GetCosHorizonAngle(float fHeight, float EarthRadius)
 {
     // Due to numeric precision issues, fHeight might sometimes be slightly negative
     fHeight = max(fHeight, 0.0);
-    return -sqrt(fHeight * (2.0*EARTH_RADIUS + fHeight) ) / (EARTH_RADIUS + fHeight);
+    return -sqrt(fHeight * (2.0*EarthRadius + fHeight) ) / (EarthRadius + fHeight);
 }
 
-float ZenithAngle2TexCoord(float fCosZenithAngle, float fHeight, in float fTexDim, float power, float fPrevTexCoord)
+float ZenithAngle2TexCoord(float fCosZenithAngle, float fHeight, float EarthRadius, float fTexDim, float power, float fPrevTexCoord)
 {
     fCosZenithAngle = fCosZenithAngle;
     float fTexCoord;
-    float fCosHorzAngle = GetCosHorizonAnlge(fHeight);
+    float fCosHorzAngle = GetCosHorizonAngle(fHeight, EarthRadius);
     // When performing look-ups into the scattering texture, it is very important that all the look-ups are consistent
     // wrt to the horizon. This means that if the first look-up is above (below) horizon, then the second look-up
     // should also be above (below) horizon. 
@@ -61,11 +61,11 @@ float ZenithAngle2TexCoord(float fCosZenithAngle, float fHeight, in float fTexDi
     return fTexCoord;
 }
 
-float TexCoord2ZenithAngle(float fTexCoord, float fHeight, in float fTexDim, float power)
+float TexCoord2ZenithAngle(float fTexCoord, float fHeight, float EarthRadius, float fTexDim, float power)
 {
     float fCosZenithAngle;
 
-    float fCosHorzAngle = GetCosHorizonAnlge(fHeight);
+    float fCosHorzAngle = GetCosHorizonAngle(fHeight, EarthRadius);
     if( fTexCoord > 0.5 )
     {
         // Remap to [0,1] from the upper half of the texture [0.5 + 0.5/fTexDim, 1 - 0.5/fTexDim]
@@ -87,6 +87,7 @@ float TexCoord2ZenithAngle(float fTexCoord, float fHeight, in float fTexDim, flo
 
 
 void InsctrLUTCoords2WorldParams(in  float4 f4UVWQ,
+                                 in  float  fEarthRadius,
                                  in  float  fAtmTopHeight,
                                  out float  fHeight,
                                  out float  fCosViewZenithAngle,
@@ -102,7 +103,7 @@ void InsctrLUTCoords2WorldParams(in  float4 f4UVWQ,
     // avoid numeric issues at the Earth surface and the top of the atmosphere
     fHeight = f4UVWQ.x * (fAtmTopHeight - 2.0*SafetyHeightMargin) + SafetyHeightMargin;
 
-    fCosViewZenithAngle = TexCoord2ZenithAngle(f4UVWQ.y, fHeight, PRECOMPUTED_SCTR_LUT_DIM.y, ViewZenithPower);
+    fCosViewZenithAngle = TexCoord2ZenithAngle(f4UVWQ.y, fHeight, fEarthRadius, PRECOMPUTED_SCTR_LUT_DIM.y, ViewZenithPower);
     
     // Use Eric Bruneton's formula for cosine of the sun-zenith angle
     fCosSunZenithAngle = tan((2.0 * f4UVWQ.z - 1.0 + 0.26) * 1.1) / tan(1.26 * 1.1);
@@ -150,6 +151,7 @@ float4 WorldParams2InsctrLUTCoords(float  fHeight,
                                    float  fCosViewZenithAngle,
                                    float  fCosSunZenithAngle,
                                    float  fCosSunViewAngle,
+                                   float  fEarthRadius,
                                    float  fAtmTopHeight,
                                    float4 f4RefUVWQ)
 {
@@ -165,7 +167,7 @@ float4 WorldParams2InsctrLUTCoords(float  fHeight,
 #if NON_LINEAR_PARAMETERIZATION
     f4UVWQ.x = pow(f4UVWQ.x, HeightPower);
 
-    f4UVWQ.y = ZenithAngle2TexCoord(fCosViewZenithAngle, fHeight, PRECOMPUTED_SCTR_LUT_DIM.y, ViewZenithPower, f4RefUVWQ.y);
+    f4UVWQ.y = ZenithAngle2TexCoord(fCosViewZenithAngle, fHeight, fEarthRadius, PRECOMPUTED_SCTR_LUT_DIM.y, ViewZenithPower, f4RefUVWQ.y);
     
     // Use Eric Bruneton's formula for cosine of the sun-zenith angle
     f4UVWQ.z = (atan(max(fCosSunZenithAngle, -0.1975) * tan(1.26 * 1.1)) / 1.1 + (1.0 - 0.26)) * 0.5;
@@ -190,9 +192,10 @@ float4 WorldParams2InsctrLUTCoords(float fHeight,
                                    float fCosViewZenithAngle,
                                    float fCosSunZenithAngle,
                                    float fCosSunViewAngle,
+                                   float fEarthRadius,
                                    float fAtmTopHeight) 
 {
-    return WorldParams2InsctrLUTCoords( fHeight, fCosViewZenithAngle, fCosSunZenithAngle, fCosSunViewAngle, fAtmTopHeight,
+    return WorldParams2InsctrLUTCoords( fHeight, fCosViewZenithAngle, fCosSunZenithAngle, fCosSunViewAngle, fEarthRadius, fAtmTopHeight,
                                         float4(-1.0, -1.0, -1.0, -1.0) );
 }
 
@@ -223,6 +226,7 @@ float3 ComputeLightDir(in float3 f3ViewDir, in float fCosSunZenithAngle, in floa
 float3 LookUpPrecomputedScattering(in float3 f3StartPoint, 
                                    in float3 f3ViewDir, 
                                    in float3 f3EarthCentre,
+                                   in float  fEarthRadius,
                                    in float3 f3DirOnLight,
                                    in float  fAtmTopHeight,
                                    in Texture3D<float3> tex3DScatteringLUT,
@@ -232,15 +236,15 @@ float3 LookUpPrecomputedScattering(in float3 f3StartPoint,
     float3 f3EarthCentreToPointDir = f3StartPoint - f3EarthCentre;
     float fDistToEarthCentre = length(f3EarthCentreToPointDir);
     f3EarthCentreToPointDir /= fDistToEarthCentre;
-    float fHeightAboveSurface = fDistToEarthCentre - EARTH_RADIUS;
+    float fHeightAboveSurface = fDistToEarthCentre - fEarthRadius;
     float fCosViewZenithAngle = dot( f3EarthCentreToPointDir, f3ViewDir    );
     float fCosSunZenithAngle  = dot( f3EarthCentreToPointDir, f3DirOnLight );
     float fCosSunViewAngle    = dot( f3ViewDir,               f3DirOnLight );
 
     // Provide previous look-up coordinates
     f4UVWQ = WorldParams2InsctrLUTCoords(fHeightAboveSurface, fCosViewZenithAngle,
-                                         fCosSunZenithAngle, fCosSunViewAngle, fAtmTopHeight,
-                                         f4UVWQ);
+                                         fCosSunZenithAngle, fCosSunViewAngle, fEarthRadius,
+                                         fAtmTopHeight, f4UVWQ);
 
     float3 f3UVW0; 
     f3UVW0.xy = f4UVWQ.xy;

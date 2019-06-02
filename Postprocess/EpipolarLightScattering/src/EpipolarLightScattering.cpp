@@ -371,16 +371,6 @@ void EpipolarLightScattering :: DefineMacros(ShaderMacroHelper& Macros)
                      <<sm_iPrecomputedSctrQDim<<".0)";
         Macros.AddShaderMacro("PRECOMPUTED_SCTR_LUT_DIM", ss.str());
     }
-
-    Macros.AddShaderMacro("EARTH_RADIUS",   m_MediaParams.fEarthRadius);
-    Macros.AddShaderMacro("ATM_TOP_HEIGHT", m_MediaParams.fAtmTopHeight);
-    Macros.AddShaderMacro("ATM_TOP_RADIUS", m_MediaParams.fAtmTopRadius);
-    
-    {
-        std::stringstream ss;
-        ss<<"float2("<<m_MediaParams.f2ParticleScaleHeight.x<<".0,"<<m_MediaParams.f2ParticleScaleHeight.y<<".0)";
-        Macros.AddShaderMacro("PARTICLE_SCALE_HEIGHT", ss.str());
-    }
 }
 
 void EpipolarLightScattering::PrecomputeOpticalDepthTexture(IRenderDevice*  pDevice, 
@@ -1085,6 +1075,8 @@ void EpipolarLightScattering :: RenderCoarseUnshadowedInctr()
 
         if (ResourceNames.find("cbParticipatingMediaScatteringParams") != ResourceNames.end())
             Vars.emplace_back(SHADER_TYPE_PIXEL, "cbParticipatingMediaScatteringParams", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
+        if (ResourceNames.find("cbPostProcessingAttribs") != ResourceNames.end())
+            Vars.emplace_back(SHADER_TYPE_PIXEL, "cbPostProcessingAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
 
         ResourceLayout.Variables         = Vars.data();
         ResourceLayout.NumVariables      = static_cast<Uint32>(Vars.size());
@@ -2410,8 +2402,10 @@ float2 GetDensityIntegralFromChapmanFunc(float fHeightAboveSurface,
     // optical depth through the Earth is large, which effectively
     // occludes the light
     float fCosChi = dot(f3EarthCentreToPointDir, f3RayDir);
-    float2 f2x = (fHeightAboveSurface + SctrMediaAttribs.fEarthRadius) * float2(1.f / SctrMediaAttribs.f2ParticleScaleHeight.x, 1.f / SctrMediaAttribs.f2ParticleScaleHeight.y);
-    float2 f2VerticalAirMass = SctrMediaAttribs.f2ParticleScaleHeight * exp(-float2(fHeightAboveSurface,fHeightAboveSurface)/SctrMediaAttribs.f2ParticleScaleHeight);
+    auto f2ParticleScaleHeight    = float2(SctrMediaAttribs.f4ParticleScaleHeight.x, SctrMediaAttribs.f4ParticleScaleHeight.y);
+    auto f2ParticleScaleHeightInv = float2(SctrMediaAttribs.f4ParticleScaleHeight.z, SctrMediaAttribs.f4ParticleScaleHeight.w);
+    float2 f2x = (fHeightAboveSurface + SctrMediaAttribs.fEarthRadius) * f2ParticleScaleHeightInv;
+    float2 f2VerticalAirMass = f2ParticleScaleHeight * exp(-float2(fHeightAboveSurface,fHeightAboveSurface) * f2ParticleScaleHeightInv);
     if( fCosChi >= 0.f )
     {
         return f2VerticalAirMass * f2ChapmanRising(f2x, fCosChi);
@@ -2420,8 +2414,8 @@ float2 GetDensityIntegralFromChapmanFunc(float fHeightAboveSurface,
     {
         float fSinChi = sqrt(1.f - fCosChi*fCosChi);
         float fh0 = (fHeightAboveSurface + SctrMediaAttribs.fEarthRadius) * fSinChi - SctrMediaAttribs.fEarthRadius;
-        float2 f2VerticalAirMass0 = SctrMediaAttribs.f2ParticleScaleHeight * exp(-float2(fh0,fh0)/SctrMediaAttribs.f2ParticleScaleHeight);
-        float2 f2x0 = float2(fh0 + SctrMediaAttribs.fEarthRadius,fh0 + SctrMediaAttribs.fEarthRadius)/SctrMediaAttribs.f2ParticleScaleHeight;
+        float2 f2VerticalAirMass0 = f2ParticleScaleHeight * exp(-float2(fh0,fh0) * f2ParticleScaleHeightInv);
+        float2 f2x0 = float2(fh0 + SctrMediaAttribs.fEarthRadius,fh0 + SctrMediaAttribs.fEarthRadius) * f2ParticleScaleHeightInv;
         float2 f2ChOrtho_x0 = ChapmanOrtho(f2x0);
         float2 f2Ch = f2ChapmanRising(f2x, -fCosChi);
         return f2VerticalAirMass0 * (2.f * f2ChOrtho_x0) - f2VerticalAirMass*f2Ch;
@@ -2576,7 +2570,7 @@ void EpipolarLightScattering :: ComputeScatteringCoefficients(IDeviceContext* pD
         // F(theta) = 1/(4*PI) * 3*(1-g^2) / (2*(2+g^2)) * (1+cos^2(theta)) / (1 + g^2 - 2g*cos(theta))^(3/2)
         // 1/(4*PI) is baked into the f4AngularMieSctrCoeff
         float4 &f4CS_g = m_MediaParams.f4CS_g;
-        float f_g = m_MediaParams.m_fAerosolPhaseFuncG;
+        float f_g = m_MediaParams.fAerosolPhaseFuncG;
         f4CS_g.x = 3*(1.f - f_g*f_g) / ( 2*(2.f + f_g*f_g) );
         f4CS_g.y = 1.f + f_g*f_g;
         f4CS_g.z = -2.f*f_g;

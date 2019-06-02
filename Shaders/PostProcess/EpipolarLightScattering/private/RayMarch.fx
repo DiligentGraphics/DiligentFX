@@ -89,12 +89,12 @@ float3 ComputeShadowedInscattering( in float2 f2RayMarchingSampleLocation,
     float fFullRayLength = length(f3FullRay);
     float3 f3ViewDir = f3FullRay / fFullRayLength;
 
-    const float3 f3EarthCentre = float3(0.0, -EARTH_RADIUS, 0.0);
+    const float3 f3EarthCentre = g_PPAttribs.f4EarthCenter.xyz;
 
     // Intersect the ray with the top of the atmosphere and the Earth:
     float4 f4Isecs;
     GetRaySphereIntersection2(f3CameraPos, f3ViewDir, f3EarthCentre, 
-                              float2(ATM_TOP_RADIUS, EARTH_RADIUS), f4Isecs);
+                              float2(g_MediaParams.fAtmTopRadius, g_MediaParams.fEarthRadius), f4Isecs);
     float2 f2RayAtmTopIsecs = f4Isecs.xy; 
     float2 f2RayEarthIsecs  = f4Isecs.zw;
     
@@ -199,7 +199,7 @@ float3 ComputeShadowedInscattering( in float2 f2RayMarchingSampleLocation,
             float r = length(f3RestrainedCameraPos - f3EarthCentre);
             float fCosZenithAngle = dot(f3RestrainedCameraPos-f3EarthCentre, f3ViewDir) / r;
             float fDist = max(fDistToRayStart - fDistToAtmosphere, 0.0);
-            f2ParticleNetDensityFromCam = GetDensityIntegralAnalytic(r, fCosZenithAngle, fDist);
+            f2ParticleNetDensityFromCam = GetDensityIntegralAnalytic(r, fCosZenithAngle, fDist, g_MediaParams.fEarthRadius, g_MediaParams.f4ParticleScaleHeight);
         #endif
 
         float fRayLength = fDistToRayEnd - fDistToRayStart;
@@ -411,9 +411,9 @@ float3 ComputeShadowedInscattering( in float2 f2RayMarchingSampleLocation,
                 float3 f3EarthCentreToPointDir = f3CurrPos - f3EarthCentre;
                 float fDistToEarthCentre = length(f3EarthCentreToPointDir);
                 f3EarthCentreToPointDir /= fDistToEarthCentre;
-                float fHeightAboveSurface = fDistToEarthCentre - EARTH_RADIUS;
+                float fHeightAboveSurface = fDistToEarthCentre - g_MediaParams.fEarthRadius;
 
-                float2 f2ParticleDensity = exp( -fHeightAboveSurface / PARTICLE_SCALE_HEIGHT );
+                float2 f2ParticleDensity = exp( -float2(fHeightAboveSurface, fHeightAboveSurface) * g_MediaParams.f4ParticleScaleHeight.zw );
 
                 // Do not use this branch as it only degrades performance
                 //if( IsInLight == 0)
@@ -421,7 +421,7 @@ float3 ComputeShadowedInscattering( in float2 f2RayMarchingSampleLocation,
 
                 // Get net particle density from the integration point to the top of the atmosphere:
                 float fCosSunZenithAngle = dot( f3EarthCentreToPointDir, -g_LightAttribs.f4Direction.xyz );
-                float2 f2NetParticleDensityToAtmTop = GetNetParticleDensity(fHeightAboveSurface, fCosSunZenithAngle);
+                float2 f2NetParticleDensityToAtmTop = GetNetParticleDensity(fHeightAboveSurface, fCosSunZenithAngle, g_MediaParams.fAtmTopHeight);
         
                 // Compute total particle density from the top of the atmosphere through the integraion point to camera
                 float2 f2TotalParticleDensity = f2ParticleNetDensityFromCam + f2NetParticleDensityToAtmTop;
@@ -485,15 +485,18 @@ float3 ComputeShadowedInscattering( in float2 f2RayMarchingSampleLocation,
             // For such ray, 41 integration step will be performed
             // Also assure that at least 20 steps are always performed
             float fMinStep = 50000.0;
-            float fMumSteps = max(20.0, ceil(fRemainingLength/fMinStep) );
+            uint uiNumSteps = uint(max(20.0, ceil(fRemainingLength/fMinStep)));
             ComputeInsctrIntegral(f3RemainingRayStart,
                                   f3RayEnd,
                                   f3EarthCentre,
+                                  g_MediaParams.fEarthRadius,
+                                  g_MediaParams.fAtmTopHeight,
+                                  g_MediaParams.f4ParticleScaleHeight,
                                   -g_LightAttribs.f4Direction.xyz,
                                   f2ParticleNetDensityFromCam,
                                   f3RayleighInscattering,
                                   f3MieInscattering,
-                                  fMumSteps);
+                                  uiNumSteps);
         }
         #endif
     }
@@ -536,20 +539,23 @@ float3 ComputeShadowedInscattering( in float2 f2RayMarchingSampleLocation,
             float3 f3LitSectionStart = f3RayStart + fDistToFirstLitSection * f3ViewDir;
             float3 f3LitSectionEnd = f3LitSectionStart + fTotalLitLength * f3ViewDir;
 
-            float3 f3ExtinctionToStart = GetExtinctionUnverified(f3RestrainedCameraPos, f3LitSectionStart, f3ViewDir, f3EarthCentre);
+            float3 f3ExtinctionToStart = GetExtinctionUnverified(f3RestrainedCameraPos, f3LitSectionStart, f3ViewDir, f3EarthCentre,
+                                                                 g_MediaParams.fEarthRadius, g_MediaParams.f4ParticleScaleHeight);
             float4 f4UVWQ = float4(-1.0, -1.0, -1.0, -1.0);
             f3MultipleScattering = f3ExtinctionToStart *
                 LookUpPrecomputedScattering(
                     f3LitSectionStart,
                     f3ViewDir,
                     f3EarthCentre,
+                    g_MediaParams.fEarthRadius,
                     -g_LightAttribs.f4Direction.xyz,
                     g_MediaParams.fAtmTopHeight,
                     tex3DSctrLUT,
                     tex3DSctrLUT_sampler,
                     f4UVWQ); 
         
-            float3 f3ExtinctionToEnd = GetExtinctionUnverified(f3RestrainedCameraPos, f3LitSectionEnd, f3ViewDir,  f3EarthCentre);
+            float3 f3ExtinctionToEnd = GetExtinctionUnverified(f3RestrainedCameraPos, f3LitSectionEnd, f3ViewDir,  f3EarthCentre,
+                                                               g_MediaParams.fEarthRadius, g_MediaParams.f4ParticleScaleHeight);
             // To avoid artifacts, we must be consistent when performing look-ups into the scattering texture, i.e.
             // we must assure that if the first look-up is above (below) horizon, then the second look-up
             // is also above (below) horizon.
@@ -560,6 +566,7 @@ float3 ComputeShadowedInscattering( in float2 f2RayMarchingSampleLocation,
                     f3LitSectionEnd,
                     f3ViewDir,
                     f3EarthCentre,
+                    g_MediaParams.fEarthRadius,
                     -g_LightAttribs.f4Direction.xyz,
                     g_MediaParams.fAtmTopHeight,
                     tex3DSctrLUT,
@@ -572,25 +579,29 @@ float3 ComputeShadowedInscattering( in float2 f2RayMarchingSampleLocation,
         // Add contribution from the reminder of the ray behind the largest cascade
         if( fRemainingLength > 0.0 )
         {
-            float3 f3Extinction = GetExtinctionUnverified(f3RestrainedCameraPos, f3RemainingRayStart, f3ViewDir, f3EarthCentre);
+            float3 f3Extinction = GetExtinctionUnverified(f3RestrainedCameraPos, f3RemainingRayStart, f3ViewDir, f3EarthCentre,
+                                                          g_MediaParams.fEarthRadius, g_MediaParams.f4ParticleScaleHeight);
             float4 f4UVWQ = float4(-1.0, -1.0, -1.0, -1.0);
             float3 f3RemainingInsctr = f3Extinction *
                 LookUpPrecomputedScattering(
                     f3RemainingRayStart,
                     f3ViewDir,
                     f3EarthCentre,
+                    g_MediaParams.fEarthRadius,
                     -g_LightAttribs.f4Direction.xyz,
                     g_MediaParams.fAtmTopHeight,
                     tex3DSctrLUT,
                     tex3DSctrLUT_sampler,
                     f4UVWQ);
         
-            f3Extinction = GetExtinctionUnverified(f3RestrainedCameraPos, f3RayEnd, f3ViewDir, f3EarthCentre);
+            f3Extinction = GetExtinctionUnverified(f3RestrainedCameraPos, f3RayEnd, f3ViewDir, f3EarthCentre,
+                                                   g_MediaParams.fEarthRadius, g_MediaParams.f4ParticleScaleHeight);
             f3RemainingInsctr -= f3Extinction *
                 LookUpPrecomputedScattering(
                     f3RayEnd,
                     f3ViewDir,
                     f3EarthCentre,
+                    g_MediaParams.fEarthRadius,
                     -g_LightAttribs.f4Direction.xyz,
                     g_MediaParams.fAtmTopHeight,
                     tex3DSctrLUT,
@@ -609,19 +620,22 @@ float3 ComputeShadowedInscattering( in float2 f2RayMarchingSampleLocation,
         float3 f3HighOrderScattering = float3(0.0, 0.0, 0.0), f3Extinction = float3(0.0, 0.0, 0.0);
         
         float4 f4UVWQ = float4(-1.0, -1.0, -1.0, -1.0);
-        f3Extinction = GetExtinctionUnverified(f3RestrainedCameraPos, f3RayStart, f3ViewDir, f3EarthCentre);
+        f3Extinction = GetExtinctionUnverified(f3RestrainedCameraPos, f3RayStart, f3ViewDir, f3EarthCentre,
+                                               g_MediaParams.fEarthRadius, g_MediaParams.f4ParticleScaleHeight);
         f3HighOrderScattering += f3Extinction *
             LookUpPrecomputedScattering(
                 f3RayStart,
                 f3ViewDir,
                 f3EarthCentre,
+                g_MediaParams.fEarthRadius,
                 -g_LightAttribs.f4Direction.xyz,
                 g_MediaParams.fAtmTopHeight,
                 g_tex3DHighOrderSctrLUT,
                 g_tex3DHighOrderSctrLUT_sampler,
                 f4UVWQ); 
         
-        f3Extinction = GetExtinctionUnverified(f3RestrainedCameraPos, f3RayEnd, f3ViewDir, f3EarthCentre);
+        f3Extinction = GetExtinctionUnverified(f3RestrainedCameraPos, f3RayEnd, f3ViewDir, f3EarthCentre,
+                                               g_MediaParams.fEarthRadius, g_MediaParams.f4ParticleScaleHeight);
         // We provide previous look-up coordinates to the function so that it is able to figure out where the first look-up
         // was performed
         f3HighOrderScattering -= f3Extinction *
@@ -629,6 +643,7 @@ float3 ComputeShadowedInscattering( in float2 f2RayMarchingSampleLocation,
                 f3RayEnd,
                 f3ViewDir,
                 f3EarthCentre,
+                g_MediaParams.fEarthRadius,
                 -g_LightAttribs.f4Direction.xyz,
                 g_MediaParams.fAtmTopHeight,
                 g_tex3DHighOrderSctrLUT,
@@ -667,7 +682,15 @@ void RayMarchPS(in FullScreenTriangleVSOutput VSOut,
                                     ui2SamplePosSliceInd.y);
 #else
     float3 f3Extinction;
-    ComputeUnshadowedInscattering(f2SampleLocation, fRayEndCamSpaceZ, float(g_PPAttribs.uiInstrIntegralSteps), f4Inscattering.rgb, f3Extinction);
+    ComputeUnshadowedInscattering(f2SampleLocation,
+                                  fRayEndCamSpaceZ,
+                                  g_PPAttribs.uiInstrIntegralSteps,
+                                  g_PPAttribs.f4EarthCenter.xyz,
+                                  g_MediaParams.fEarthRadius,
+                                  g_MediaParams.fAtmTopHeight,
+                                  g_MediaParams.f4ParticleScaleHeight,
+                                  f4Inscattering.rgb,
+                                  f3Extinction);
     f4Inscattering.rgb *= g_LightAttribs.f4Intensity.rgb;
 #endif
 }
@@ -690,7 +713,7 @@ void RayMarchPS(in FullScreenTriangleVSOutput VSOut,
 //                              );
 //#else
 //    float3 f3Inscattering, f3Extinction;
-//    ComputeUnshadowedInscattering(VSOut.f2NormalizedXY.xy, fRayEndCamSpaceZ, float(g_PPAttribs.uiInstrIntegralSteps), f3Inscattering, f3Extinction);
+//    ComputeUnshadowedInscattering(VSOut.f2NormalizedXY.xy, fRayEndCamSpaceZ, g_PPAttribs.uiInstrIntegralSteps, g_PPAttribs.f4EarthCenter.xyz, f3Inscattering, f3Extinction);
 //    f3Inscattering *= g_LightAttribs.f4Intensity.rgb;
 //    return f3Inscattering;
 //#endif
@@ -713,7 +736,8 @@ void FixAndApplyInscatteredRadiancePS(FullScreenTriangleVSOutput VSOut,
         f3BackgroundColor = g_tex2DColorBuffer.Load( int3(VSOut.f4PixelPos.xy,0) ).rgb;
         f3BackgroundColor *= (fCamSpaceZ > g_CameraAttribs.fFarPlaneZ) ? g_LightAttribs.f4Intensity.rgb : float3(1.0, 1.0, 1.0);
         float3 f3ReconstructedPosWS = ProjSpaceXYZToWorldSpace(float3(VSOut.f2NormalizedXY.xy, fCamSpaceZ), g_CameraAttribs.mProj, g_CameraAttribs.mViewProjInv);
-        float3 f3Extinction = GetExtinction(g_CameraAttribs.f4Position.xyz, f3ReconstructedPosWS);
+        float3 f3Extinction = GetExtinction(g_CameraAttribs.f4Position.xyz, f3ReconstructedPosWS, g_PPAttribs.f4EarthCenter.xyz,
+                                            g_MediaParams.fEarthRadius, g_MediaParams.fAtmTopRadius, g_MediaParams.f4ParticleScaleHeight);
         f3BackgroundColor *= f3Extinction.rgb;
     }
     
@@ -728,7 +752,15 @@ void FixAndApplyInscatteredRadiancePS(FullScreenTriangleVSOutput VSOut,
                               );
 #else
     float3 f3InsctrColor, f3Extinction;
-    ComputeUnshadowedInscattering(VSOut.f2NormalizedXY.xy, fCamSpaceZ, float(g_PPAttribs.uiInstrIntegralSteps), f3InsctrColor, f3Extinction);
+    ComputeUnshadowedInscattering(VSOut.f2NormalizedXY.xy,
+                                  fCamSpaceZ,
+                                  g_PPAttribs.uiInstrIntegralSteps,
+                                  g_PPAttribs.f4EarthCenter.xyz,
+                                  g_MediaParams.fEarthRadius,
+                                  g_MediaParams.fAtmTopHeight,
+                                  g_MediaParams.f4ParticleScaleHeight,
+                                  f3InsctrColor,
+                                  f3Extinction);
     f3InsctrColor *= g_LightAttribs.f4Intensity.rgb;
 #endif
 

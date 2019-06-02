@@ -38,22 +38,6 @@
 #   define TRAPEZOIDAL_INTEGRATION 1
 #endif
 
-#ifndef EARTH_RADIUS
-#   define EARTH_RADIUS 6360000.0
-#endif
-
-#ifndef ATM_TOP_HEIGHT
-#   define ATM_TOP_HEIGHT 80000.0
-#endif
-
-#ifndef ATM_TOP_RADIUS
-#   define ATM_TOP_RADIUS (EARTH_RADIUS+ATM_TOP_HEIGHT)
-#endif
-
-#ifndef PARTICLE_SCALE_HEIGHT
-#   define PARTICLE_SCALE_HEIGHT float2(7994.0, 1200.0)
-#endif
-
 #ifndef ENABLE_LIGHT_SHAFTS
 #   define ENABLE_LIGHT_SHAFTS 1
 #endif

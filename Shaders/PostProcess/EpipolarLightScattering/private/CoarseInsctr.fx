@@ -21,6 +21,11 @@ cbuffer cbLightParams
     LightAttribs g_LightAttribs;
 }
 
+cbuffer cbPostProcessingAttribs
+{
+    EpipolarLightScatteringAttribs g_PPAttribs;
+};
+
 Texture2D<float2> g_tex2DOccludedNetDensityToAtmTop;
 SamplerState      g_tex2DOccludedNetDensityToAtmTop_sampler;
 
@@ -51,8 +56,12 @@ void ShaderFunctionInternal(in float4  f4Pos,
     float2 f2SampleLocation = g_tex2DCoordinates.Load( uint3(f4Pos.xy, 0) );
 
     ComputeUnshadowedInscattering(f2SampleLocation, fCamSpaceZ, 
-                                  7.0, // Use hard-coded constant here so that compiler can optimize the code
-                                       // more efficiently
+                                  7u, // Use hard-coded constant here so that compiler can optimize the code
+                                      // more efficiently
+                                  g_PPAttribs.f4EarthCenter.xyz,
+                                  g_MediaParams.fEarthRadius,
+                                  g_MediaParams.fAtmTopHeight,
+                                  g_MediaParams.f4ParticleScaleHeight,
                                   f3Inscattering, f3Extinction);
     f3Inscattering *= g_LightAttribs.f4Intensity.rgb;
 }
