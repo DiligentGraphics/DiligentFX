@@ -134,20 +134,20 @@ void UnwarpEpipolarInsctrImage( in float2 f2PosPS,
     // Now find two closest epipolar slices, from which we will interpolate
     // First, find index of the slice which precedes our slice
     // Note that 0 <= fEpipolarSlice <= 1, and both 0 and 1 refer to the first slice
-    float fPrecedingSliceInd = min( floor(fEpipolarSlice * float(NUM_EPIPOLAR_SLICES)), float(NUM_EPIPOLAR_SLICES-1u) );
+    float fPrecedingSliceInd = min( floor(fEpipolarSlice * float(g_PPAttribs.uiNumEpipolarSlices)), float(g_PPAttribs.uiNumEpipolarSlices-1u) );
 
     // Compute EXACT texture coordinates of preceding and succeeding slices and their weights
     // Note that slice 0 is stored in the first texel which has exact texture coordinate 0.5/NUM_EPIPOLAR_SLICES
     // (search for "fEpipolarSlice = saturate(f2UV.x - 0.5f / (float)NUM_EPIPOLAR_SLICES)"):
     float fSrcSliceV[2];
     // Compute V coordinate to refer exactly the center of the slice row
-    fSrcSliceV[0] = fPrecedingSliceInd/float(NUM_EPIPOLAR_SLICES) + 0.5/float(NUM_EPIPOLAR_SLICES);
+    fSrcSliceV[0] = fPrecedingSliceInd/float(g_PPAttribs.uiNumEpipolarSlices) + 0.5/float(g_PPAttribs.uiNumEpipolarSlices);
     // Use frac() to wrap around to the first slice from the next-to-last slice:
-    fSrcSliceV[1] = frac( fSrcSliceV[0] + 1.0/float(NUM_EPIPOLAR_SLICES) );
+    fSrcSliceV[1] = frac( fSrcSliceV[0] + 1.0/float(g_PPAttribs.uiNumEpipolarSlices) );
         
     // Compute slice weights
     float fSliceWeights[2];
-    fSliceWeights[1] = (fEpipolarSlice*float(NUM_EPIPOLAR_SLICES)) - fPrecedingSliceInd;
+    fSliceWeights[1] = (fEpipolarSlice*float(g_PPAttribs.uiNumEpipolarSlices)) - fPrecedingSliceInd;
     fSliceWeights[0] = 1.0 - fSliceWeights[1];
 
     f3Inscattering = F3ZERO;
@@ -169,7 +169,7 @@ void UnwarpEpipolarInsctrImage( in float2 f2PosPS,
         // Note that the first sample on the line (fSamplePosOnLine==0) is exactly the Entry Point, while 
         // the last sample (fSamplePosOnLine==1) is exactly the Exit Point
         // (search for "fSamplePosOnEpipolarLine *= (float)MAX_SAMPLES_IN_SLICE / ((float)MAX_SAMPLES_IN_SLICE-1.f)")
-        float fSampleInd = fSamplePosOnLine * float(MAX_SAMPLES_IN_SLICE-1u);
+        float fSampleInd = fSamplePosOnLine * float(g_PPAttribs.uiMaxSamplesInSlice-1u);
        
         // We have to manually perform bilateral filtering of the scattered radiance texture to
         // eliminate artifacts at depth discontinuities
@@ -179,7 +179,7 @@ void UnwarpEpipolarInsctrImage( in float2 f2PosPS,
         float fUWeight = fSampleInd - fPrecedingSampleInd;
         // Get texture coordinate of the left source texel. Again, offset by 0.5 is essential
         // to align with the texel center
-        float fPrecedingSampleU = (fPrecedingSampleInd + 0.5) / float(MAX_SAMPLES_IN_SLICE);
+        float fPrecedingSampleU = (fPrecedingSampleInd + 0.5) / float(g_PPAttribs.uiMaxSamplesInSlice);
     
         float2 f2SctrColorUV = float2(fPrecedingSampleU, fSrcSliceV[i]);
 
@@ -202,7 +202,7 @@ void UnwarpEpipolarInsctrImage( in float2 f2PosPS,
         // z == g_tex2DEpipolarCamSpaceZ.SampleLevel(samPointClamp, f2SctrColorUV, 0, int2(1,0))
         // w == g_tex2DEpipolarCamSpaceZ.SampleLevel(samPointClamp, f2SctrColorUV, 0, int2(0,0))
 
-        const float2 f2ScatteredColorTexDim = float2(MAX_SAMPLES_IN_SLICE, NUM_EPIPOLAR_SLICES);
+        const float2 f2ScatteredColorTexDim = float2(g_PPAttribs.uiMaxSamplesInSlice, g_PPAttribs.uiNumEpipolarSlices);
         float2 f2SrcLocationsCamSpaceZ = g_tex2DEpipolarCamSpaceZ.Gather(g_tex2DEpipolarCamSpaceZ_sampler, f2SctrColorUV + float2(0.5, 0.5) / f2ScatteredColorTexDim.xy).wz;
         
         // Compute depth weights in a way that if the difference is less than the threshold, the weight is 1 and
@@ -225,7 +225,7 @@ void UnwarpEpipolarInsctrImage( in float2 f2PosPS,
         //             |                                                   |
         //             |<-------------------Clamp range------------------->|                   
         //
-        f2BilateralUWeights *= (abs(fSamplePosOnLine - 0.5) < 0.5 + 1.0 / float(MAX_SAMPLES_IN_SLICE-1u)) ? 1.0 : 0.0;
+        f2BilateralUWeights *= (abs(fSamplePosOnLine - 0.5) < 0.5 + 1.0 / float(g_PPAttribs.uiMaxSamplesInSlice-1u)) ? 1.0 : 0.0;
         // We now need to compute the following weighted summ:
         //f3FilteredSliceCol = 
         //    f2BilateralUWeights.x * g_tex2DScatteredColor.SampleLevel(samPoint, f2SctrColorUV, 0, int2(0,0)) +

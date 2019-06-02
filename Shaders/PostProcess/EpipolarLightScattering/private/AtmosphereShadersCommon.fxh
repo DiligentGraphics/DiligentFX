@@ -6,8 +6,8 @@
 #include "EpipolarLightScatteringStructures.fxh"
 #include "ShaderUtilities.fxh"
 
-#define PI      3.1415928f
-#define FLT_MAX 3.402823466e+38f
+#define PI      3.1415928
+#define FLT_MAX 3.402823466e+38
 
 #define F4ZERO float4(0.0, 0.0, 0.0, 0.0)
 #define F4ONE  float4(1.0, 1.0, 1.0, 1.0)
@@ -15,14 +15,6 @@
 #define F3ONE  float3(1.0, 1.0, 1.0)
 #define F2ZERO float2(0.0, 0.0)
 #define F2ONE  float2(1.0, 1.0)
-
-#ifndef NUM_EPIPOLAR_SLICES
-#   define NUM_EPIPOLAR_SLICES 1024u
-#endif
-
-#ifndef MAX_SAMPLES_IN_SLICE
-#   define MAX_SAMPLES_IN_SLICE 512u
-#endif
 
 #ifndef OPTIMIZE_SAMPLE_LOCATIONS
 #   define OPTIMIZE_SAMPLE_LOCATIONS 1

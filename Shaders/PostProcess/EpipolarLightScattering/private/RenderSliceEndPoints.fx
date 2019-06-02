@@ -118,7 +118,7 @@ float4 GenerateSliceEndpointsPS(FullScreenTriangleVSOutput VSOut
     //   X - locations where rasterization happens
     //
     // We need to remove this offset. Also clamp to [0,1] to fix fp32 precision issues
-    float fEpipolarSlice = saturate(f2UV.x - 0.5 / float(NUM_EPIPOLAR_SLICES) );
+    float fEpipolarSlice = saturate(f2UV.x - 0.5 / float(g_PPAttribs.uiNumEpipolarSlices) );
 
     // fEpipolarSlice now lies in the range [0, 1 - 1/NUM_EPIPOLAR_SLICES]
     // 0 defines location in exacatly left top corner, 1 - 1/NUM_EPIPOLAR_SLICES defines
@@ -203,7 +203,7 @@ float4 GenerateSliceEndpointsPS(FullScreenTriangleVSOutput VSOut
         // Compute length of the epipolar line in screen pixels:
         float fEpipolarSliceScreenLen = length( (f2ExitPoint - f2EntryPoint) * g_PPAttribs.f4ScreenResolution.xy / 2.0 );
         // If epipolar line is too short, update epipolar line exit point to provide 1:1 texel to screen pixel correspondence:
-        f2ExitPoint = f2EntryPoint + (f2ExitPoint - f2EntryPoint) * max(float(MAX_SAMPLES_IN_SLICE) / fEpipolarSliceScreenLen, 1.0);
+        f2ExitPoint = f2EntryPoint + (f2ExitPoint - f2EntryPoint) * max(float(g_PPAttribs.uiMaxSamplesInSlice) / fEpipolarSliceScreenLen, 1.0);
     }
 #endif
 

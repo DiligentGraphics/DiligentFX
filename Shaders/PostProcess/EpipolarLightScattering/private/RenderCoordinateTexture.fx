@@ -41,10 +41,10 @@ void GenerateCoordinateTexturePS(FullScreenTriangleVSOutput VSOut,
     //   X - locations where rasterization happens
     //
     // We need remove this offset:
-    float fSamplePosOnEpipolarLine = f2UV.x - 0.5 / float(MAX_SAMPLES_IN_SLICE);
+    float fSamplePosOnEpipolarLine = f2UV.x - 0.5 / float(g_PPAttribs.uiMaxSamplesInSlice);
     // fSamplePosOnEpipolarLine is now in the range [0, 1 - 1/MAX_SAMPLES_IN_SLICE]
     // We need to rescale it to be in [0, 1]
-    fSamplePosOnEpipolarLine *= float(MAX_SAMPLES_IN_SLICE) / (float(MAX_SAMPLES_IN_SLICE)-1.0);
+    fSamplePosOnEpipolarLine *= float(g_PPAttribs.uiMaxSamplesInSlice) / (float(g_PPAttribs.uiMaxSamplesInSlice)-1.0);
     fSamplePosOnEpipolarLine = saturate(fSamplePosOnEpipolarLine);
 
     // Compute interpolated position between entry and exit points:

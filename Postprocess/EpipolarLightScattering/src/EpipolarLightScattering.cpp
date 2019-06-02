@@ -354,8 +354,6 @@ void EpipolarLightScattering :: DefineMacros(ShaderMacroHelper& Macros)
 {
     // Define common shader macros
 
-    Macros.AddShaderMacro("NUM_EPIPOLAR_SLICES",          m_PostProcessingAttribs.uiNumEpipolarSlices);
-    Macros.AddShaderMacro("MAX_SAMPLES_IN_SLICE",         m_PostProcessingAttribs.uiMaxSamplesInSlice);
     Macros.AddShaderMacro("OPTIMIZE_SAMPLE_LOCATIONS",    m_PostProcessingAttribs.bOptimizeSampleLocations);
     Macros.AddShaderMacro("USE_COMBINED_MIN_MAX_TEXTURE", m_bUseCombinedMinMaxTexture );
     Macros.AddShaderMacro("EXTINCTION_EVAL_MODE",         m_PostProcessingAttribs.iExtinctionEvalMode );
@@ -975,10 +973,7 @@ void EpipolarLightScattering :: RenderSliceEndpoints()
         // Bind static resources required by the shaders
         RendedSliceEndpointsTech.PSO->BindStaticResources(SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL, m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
 
-        RendedSliceEndpointsTech.PSODependencyFlags =
-            PSO_DEPENDENCY_NUM_EPIPOLAR_SLICES  | 
-            PSO_DEPENDENCY_MAX_SAMPLES_IN_SLICE |
-            PSO_DEPENDENCY_OPTIMIZE_SAMPLE_LOCATIONS;
+        RendedSliceEndpointsTech.PSODependencyFlags = PSO_DEPENDENCY_OPTIMIZE_SAMPLE_LOCATIONS;
         RendedSliceEndpointsTech.SRBDependencyFlags = 0;
     }
 
@@ -1012,7 +1007,7 @@ void EpipolarLightScattering :: RenderCoordinateTexture()
                                                                  pRendedCoordTexPS, ResourceLayout, 2, RTVFmts, EpipolarImageDepthFmt, DSS_IncStencilAlways);
         RendedCoordTexTech.PSO->BindStaticResources(SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL, m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
 
-        RendedCoordTexTech.PSODependencyFlags = PSO_DEPENDENCY_MAX_SAMPLES_IN_SLICE;
+        RendedCoordTexTech.PSODependencyFlags = 0;
         RendedCoordTexTech.SRBDependencyFlags = 
             SRB_DEPENDENCY_CAM_SPACE_Z_TEX      |
             SRB_DEPENDENCY_SLICE_END_POINTS_TEX;
@@ -1164,7 +1159,6 @@ void EpipolarLightScattering :: RefineSampleLocations()
         RefineSampleLocationsTech.PSO->BindStaticResources(SHADER_TYPE_COMPUTE, m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
 
         RefineSampleLocationsTech.PSODependencyFlags = 
-            PSO_DEPENDENCY_MAX_SAMPLES_IN_SLICE  |
             PSO_DEPENDENCY_INITIAL_SAMPLE_STEP   |
             PSO_DEPENDENCY_REFINEMENT_CRITERION  |
             PSO_DEPENDENCY_AUTO_EXPOSURE;
@@ -1296,7 +1290,6 @@ void EpipolarLightScattering :: Build1DMinMaxMipMap(int iCascadeIndex)
         InitMinMaxShadowMapTech.PSO->BindStaticResources(SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL, m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
 
         InitMinMaxShadowMapTech.PSODependencyFlags = 
-            PSO_DEPENDENCY_NUM_EPIPOLAR_SLICES      |
             PSO_DEPENDENCY_USE_1D_MIN_MAX_TREE      |
             PSO_DEPENDENCY_USE_COMBINED_MIN_MAX_TEX |
             PSO_DEPENDENCY_IS_32_BIT_MIN_MAX_TREE;
@@ -1627,8 +1620,6 @@ void EpipolarLightScattering :: UnwarpEpipolarScattering(bool bRenderLuminance)
         UnwarpEpipolarSctrImgTech.PSO->BindStaticResources(SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL, m_pResMapping, 0);
 
         UnwarpEpipolarSctrImgTech.PSODependencyFlags = 
-            PSO_DEPENDENCY_NUM_EPIPOLAR_SLICES  | 
-            PSO_DEPENDENCY_MAX_SAMPLES_IN_SLICE |
             PSO_DEPENDENCY_AUTO_EXPOSURE        |
             PSO_DEPENDENCY_TONE_MAPPING_MODE    |
             PSO_DEPENDENCY_CORRECT_SCATTERING   |
@@ -1680,10 +1671,7 @@ void EpipolarLightScattering :: UnwarpEpipolarScattering(bool bRenderLuminance)
                                                                            ResourceLayout, LuminanceTexFmt);
         UnwarpAndRenderLuminanceTech.PSO->BindStaticResources(SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL, m_pResMapping, 0);
 
-        UnwarpAndRenderLuminanceTech.PSODependencyFlags = 
-            PSO_DEPENDENCY_NUM_EPIPOLAR_SLICES  | 
-            PSO_DEPENDENCY_MAX_SAMPLES_IN_SLICE |
-            PSO_DEPENDENCY_EXTINCTION_EVAL_MODE;
+        UnwarpAndRenderLuminanceTech.PSODependencyFlags = PSO_DEPENDENCY_EXTINCTION_EVAL_MODE;
         UnwarpAndRenderLuminanceTech.SRBDependencyFlags = SRBDependencies;
     }
 
@@ -1920,9 +1908,7 @@ void EpipolarLightScattering :: RenderSampleLocations()
 
         RenderSampleLocationsTech.SRB.Release();
 
-        RenderSampleLocationsTech.PSODependencyFlags = 
-            PSO_DEPENDENCY_NUM_EPIPOLAR_SLICES | 
-            PSO_DEPENDENCY_MAX_SAMPLES_IN_SLICE;
+        RenderSampleLocationsTech.PSODependencyFlags = 0;
         RenderSampleLocationsTech.SRBDependencyFlags = 
             SRB_DEPENDENCY_INTERPOLATION_SOURCE_TEX | 
             SRB_DEPENDENCY_COORDINATE_TEX;
@@ -1993,8 +1979,6 @@ void EpipolarLightScattering :: PerformPostProcessing(FrameAttribs&             
 {
     Uint32 StalePSODependencyFlags = 0;
 #define CHECK_PSO_DEPENDENCY(Flag, Member)StalePSODependencyFlags |= (PPAttribs.Member != m_PostProcessingAttribs.Member) ? Flag : 0
-    CHECK_PSO_DEPENDENCY(PSO_DEPENDENCY_NUM_EPIPOLAR_SLICES,        uiNumEpipolarSlices);   
-    CHECK_PSO_DEPENDENCY(PSO_DEPENDENCY_MAX_SAMPLES_IN_SLICE,       uiMaxSamplesInSlice);
     CHECK_PSO_DEPENDENCY(PSO_DEPENDENCY_INITIAL_SAMPLE_STEP,        uiInitialSampleStepInSlice);
     CHECK_PSO_DEPENDENCY(PSO_DEPENDENCY_EPIPOLE_SAMPLING_DENSITY,   uiEpipoleSamplingDensityFactor);
     CHECK_PSO_DEPENDENCY(PSO_DEPENDENCY_CORRECT_SCATTERING,         bCorrectScatteringAtDepthBreaks); 

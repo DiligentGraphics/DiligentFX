@@ -135,7 +135,7 @@ void RefineSampleLocationsCS(uint3 Gid  : SV_GroupID,
     // are required to perform ray marching
     uint uiInitialSample0GlobalInd = uiInitialSample0Ind + uiGroupStartGlobalInd;
     float2 f2InitialSample0Coords = g_tex2DCoordinates.Load( int3(uiInitialSample0GlobalInd, uiSliceInd, 0) );
-    if( float(uiInitialSample0GlobalInd)/float(MAX_SAMPLES_IN_SLICE) < 0.05 && 
+    if( float(uiInitialSample0GlobalInd)/float(g_PPAttribs.uiMaxSamplesInSlice) < 0.05 && 
         length(f2InitialSample0Coords - g_PPAttribs.f4LightScreenPos.xy) < 0.1 )
     {
         uiInitialSampleStep = max( uint(INITIAL_SAMPLE_STEP) / g_PPAttribs.uiEpipoleSamplingDensityFactor, 1u );

@@ -25,8 +25,8 @@ void InitializeMinMaxShadowMapPS(in FullScreenTriangleVSOutput VSOut,
     uint uiSliceInd;
     float fCascadeInd;
 #if USE_COMBINED_MIN_MAX_TEXTURE
-    fCascadeInd = floor(VSOut.f4PixelPos.y / float(NUM_EPIPOLAR_SLICES));
-    uiSliceInd = uint(VSOut.f4PixelPos.y - fCascadeInd * float(NUM_EPIPOLAR_SLICES));
+    fCascadeInd = floor(VSOut.f4PixelPos.y / float(g_PPAttribs.uiNumEpipolarSlices));
+    uiSliceInd = uint(VSOut.f4PixelPos.y - fCascadeInd * float(g_PPAttribs.uiNumEpipolarSlices));
     fCascadeInd += g_PPAttribs.fFirstCascadeToRayMarch;
 #else
     uiSliceInd = uint(VSOut.f4PixelPos.y);
