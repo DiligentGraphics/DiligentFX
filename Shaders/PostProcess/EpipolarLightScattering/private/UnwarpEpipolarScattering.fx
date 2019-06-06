@@ -202,7 +202,7 @@ void UnwarpEpipolarInsctrImage( in float2 f2PosPS,
         // z == g_tex2DEpipolarCamSpaceZ.SampleLevel(samPointClamp, f2SctrColorUV, 0, int2(1,0))
         // w == g_tex2DEpipolarCamSpaceZ.SampleLevel(samPointClamp, f2SctrColorUV, 0, int2(0,0))
 
-        const float2 f2ScatteredColorTexDim = float2(g_PPAttribs.uiMaxSamplesInSlice, g_PPAttribs.uiNumEpipolarSlices);
+        float2 f2ScatteredColorTexDim = float2(g_PPAttribs.uiMaxSamplesInSlice, g_PPAttribs.uiNumEpipolarSlices);
         float2 f2SrcLocationsCamSpaceZ = g_tex2DEpipolarCamSpaceZ.Gather(g_tex2DEpipolarCamSpaceZ_sampler, f2SctrColorUV + float2(0.5, 0.5) / f2ScatteredColorTexDim.xy).wz;
         
         // Compute depth weights in a way that if the difference is less than the threshold, the weight is 1 and

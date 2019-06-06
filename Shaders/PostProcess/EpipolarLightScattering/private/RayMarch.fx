@@ -89,7 +89,7 @@ float3 ComputeShadowedInscattering( in float2 f2RayMarchingSampleLocation,
     float fFullRayLength = length(f3FullRay);
     float3 f3ViewDir = f3FullRay / fFullRayLength;
 
-    const float3 f3EarthCentre = g_PPAttribs.f4EarthCenter.xyz;
+    float3 f3EarthCentre = g_PPAttribs.f4EarthCenter.xyz;
 
     // Intersect the ray with the top of the atmosphere and the Earth:
     float4 f4Isecs;
@@ -145,7 +145,7 @@ float3 ComputeShadowedInscattering( in float2 f2RayMarchingSampleLocation,
     float fCascadeEndCamSpaceZ = 0.0;
     float fTotalLitLength = 0.0, fTotalMarchedLength = 0.0; // Required for multiple scattering
     float fDistToFirstLitSection = -1.0; // Used only in when SINGLE_SCATTERING_MODE == SINGLE_SCTR_MODE_LUT
-
+    
 #if CASCADE_PROCESSING_MODE == CASCADE_PROCESSING_MODE_SINGLE_PASS
     for(; uiCascadeInd < uint(g_PPAttribs.iNumCascades); ++uiCascadeInd, ++fCascadeInd)
 #else
@@ -493,10 +493,10 @@ float3 ComputeShadowedInscattering( in float2 f2RayMarchingSampleLocation,
                                   g_MediaParams.fAtmTopHeight,
                                   g_MediaParams.f4ParticleScaleHeight,
                                   -g_LightAttribs.f4Direction.xyz,
+                                  uiNumSteps,
                                   f2ParticleNetDensityFromCam,
                                   f3RayleighInscattering,
-                                  f3MieInscattering,
-                                  uiNumSteps);
+                                  f3MieInscattering);
         }
         #endif
     }

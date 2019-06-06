@@ -87,10 +87,10 @@ void ComputeInsctrIntegral(in float3    f3RayStart,
                            in float     fAtmTopHeight,
 						   in float4    f4ParticleScaleHeight,
                            in float3    f3DirOnLight,
+                           in uint      uiNumSteps,
                            inout float2 f2NetParticleDensityFromCam,
                            inout float3 f3RayleighInscattering,
-                           inout float3 f3MieInscattering,
-                           const uint   uiNumSteps)
+                           inout float3 f3MieInscattering)
 {
     float3 f3Step = (f3RayEnd - f3RayStart) / float(uiNumSteps);
     float fStepLen = length(f3Step);
@@ -154,7 +154,7 @@ void IntegrateUnshadowedInscattering(in float3   f3RayStart,
                                      in float    fAtmTopHeight,
 							         in float4   f4ParticleScaleHeight,
                                      in float3   f3DirOnLight,
-                                     const uint  uiNumSteps,
+                                     in uint     uiNumSteps,
                                      out float3  f3Inscattering,
                                      out float3  f3Extinction)
 {
@@ -168,10 +168,10 @@ void IntegrateUnshadowedInscattering(in float3   f3RayStart,
                            fAtmTopHeight,
                            f4ParticleScaleHeight,
                            f3DirOnLight,
+                           uiNumSteps,
                            f2NetParticleDensityFromCam,
                            f3RayleighInscattering,
-                           f3MieInscattering,
-                           uiNumSteps);
+                           f3MieInscattering);
 
     float3 f3TotalRlghOpticalDepth = g_MediaParams.f4RayleighExtinctionCoeff.rgb * f2NetParticleDensityFromCam.x;
     float3 f3TotalMieOpticalDepth  = g_MediaParams.f4MieExtinctionCoeff.rgb      * f2NetParticleDensityFromCam.y;
