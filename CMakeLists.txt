@@ -10,10 +10,10 @@ add_library(DiligentFX STATIC README.md ${SHADERS})
 
 target_link_libraries(DiligentFX 
 PUBLIC
-    BuildSettings
-    GraphicsEngine
-    GraphicsTools
-    AssetLoader
+    Diligent-BuildSettings
+    Diligent-GraphicsEngine
+    Diligent-GraphicsTools
+    Diligent-AssetLoader
 )
 set_common_target_properties(DiligentFX)
 
