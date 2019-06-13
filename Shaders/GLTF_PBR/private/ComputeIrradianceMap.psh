@@ -5,7 +5,7 @@
 #endif
 
 #ifndef NUM_THETA_SAMPLES
-#   define NUM_PHI_SAMPLES 32
+#   define NUM_THETA_SAMPLES 32
 #endif
 
 TextureCube  g_EnvironmentMap;

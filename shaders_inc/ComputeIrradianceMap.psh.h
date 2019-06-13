@@ -5,7 +5,7 @@
 "#endif\n"
 "\n"
 "#ifndef NUM_THETA_SAMPLES\n"
-"#   define NUM_PHI_SAMPLES 32\n"
+"#   define NUM_THETA_SAMPLES 32\n"
 "#endif\n"
 "\n"
 "TextureCube  g_EnvironmentMap;\n"
