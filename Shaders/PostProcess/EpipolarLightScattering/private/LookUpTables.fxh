@@ -176,7 +176,7 @@ float4 WorldParams2InsctrLUTCoords(float  fHeight,
     f4UVWQ.w = acos(fCosSunViewAngle) / PI;
     f4UVWQ.w = sign(f4UVWQ.w - 0.5) * pow( abs((f4UVWQ.w - 0.5)/0.5), SunViewPower)/2.0 + 0.5;
     
-    f4UVWQ.xzw = ((f4UVWQ * (PRECOMPUTED_SCTR_LUT_DIM - F4ONE) + 0.5) / PRECOMPUTED_SCTR_LUT_DIM).xzw;
+    f4UVWQ.xzw = ((f4UVWQ * (PRECOMPUTED_SCTR_LUT_DIM - float4(1.0, 1.0, 1.0, 1.0)) + float4(0.5, 0.5, 0.5, 0.5)) / PRECOMPUTED_SCTR_LUT_DIM).xzw;
 #else
     f4UVWQ.y = (fCosViewZenithAngle+1.f) / 2.f;
     f4UVWQ.z = (fCosSunZenithAngle +1.f) / 2.f;

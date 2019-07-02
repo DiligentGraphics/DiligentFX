@@ -54,7 +54,7 @@ void RenderSliceUVDirInShadowMapTexturePS(in FullScreenTriangleVSOutput VSOut,
     f2SliceDir /= max(abs(f2SliceDir.x), abs(f2SliceDir.y));
     
     float4 f4BoundaryMinMaxXYXY = float4(0.0, 0.0, 1.0, 1.0) + float4(0.5, 0.5, -0.5, -0.5)*g_PPAttribs.f2ShadowMapTexelSize.xyxy;
-    if( any( Less( (f2SliceOriginUV.xyxy - f4BoundaryMinMaxXYXY) * float4( 1.0, 1.0, -1.0, -1.0), F4ZERO ) ) )
+    if( any( Less( (f2SliceOriginUV.xyxy - f4BoundaryMinMaxXYXY) * float4( 1.0, 1.0, -1.0, -1.0), float4(0.0, 0.0, 0.0, 0.0) ) ) )
     {
         // If slice origin in UV coordinates falls beyond [0,1]x[0,1] region, we have
         // to continue the ray and intersect it with this rectangle
@@ -71,11 +71,11 @@ void RenderSliceUVDirInShadowMapTexturePS(in FullScreenTriangleVSOutput VSOut,
         //           
         
         // First, compute signed distances from the slice origin to all four boundaries
-        bool4 b4IsValidIsecFlag = Greater(abs(f2SliceDir.xyxy), 1e-6 * F4ONE);
+        bool4 b4IsValidIsecFlag = Greater(abs(f2SliceDir.xyxy), 1e-6 * float4(1.0, 1.0, 1.0, 1.0));
         float4 f4DistToBoundaries = (f4BoundaryMinMaxXYXY - f2SliceOriginUV.xyxy) / (f2SliceDir.xyxy + BoolToFloat( Not(b4IsValidIsecFlag) ) );
 
         //We consider only intersections in the direction of the ray
-        b4IsValidIsecFlag = And( b4IsValidIsecFlag, Greater(f4DistToBoundaries, F4ZERO) );
+        b4IsValidIsecFlag = And( b4IsValidIsecFlag, Greater(f4DistToBoundaries, float4(0.0, 0.0, 0.0, 0.0)) );
         // Compute the second intersection coordinate
         float4 f4IsecYXYX = f2SliceOriginUV.yxyx + f4DistToBoundaries * f2SliceDir.yxyx;
         

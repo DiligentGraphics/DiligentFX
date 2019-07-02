@@ -37,8 +37,8 @@ void InitializeMinMaxShadowMapPS(in FullScreenTriangleVSOutput VSOut,
     // Calculate current sample position on the ray
     float2 f2CurrUV = f4SliceUVDirAndOrigin.zw + f4SliceUVDirAndOrigin.xy * floor(VSOut.f4PixelPos.x) * 2.f;
     
-    float4 f4MinDepth = F4ONE;
-    float4 f4MaxDepth = F4ZERO;
+    float4 f4MinDepth = float4(1.0, 1.0, 1.0, 1.0);
+    float4 f4MaxDepth = float4(0.0, 0.0, 0.0, 0.0);
     // Gather 8 depths which will be used for PCF filtering for this sample and its immediate neighbor 
     // along the epipolar slice
     // Note that if the sample is located outside the shadow map, Gather() will return 0 as 

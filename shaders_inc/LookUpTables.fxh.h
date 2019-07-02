@@ -176,7 +176,7 @@
 "    f4UVWQ.w = acos(fCosSunViewAngle) / PI;\n"
 "    f4UVWQ.w = sign(f4UVWQ.w - 0.5) * pow( abs((f4UVWQ.w - 0.5)/0.5), SunViewPower)/2.0 + 0.5;\n"
 "    \n"
-"    f4UVWQ.xzw = ((f4UVWQ * (PRECOMPUTED_SCTR_LUT_DIM - F4ONE) + 0.5) / PRECOMPUTED_SCTR_LUT_DIM).xzw;\n"
+"    f4UVWQ.xzw = ((f4UVWQ * (PRECOMPUTED_SCTR_LUT_DIM - float4(1.0, 1.0, 1.0, 1.0)) + float4(0.5, 0.5, 0.5, 0.5)) / PRECOMPUTED_SCTR_LUT_DIM).xzw;\n"
 "#else\n"
 "    f4UVWQ.y = (fCosViewZenithAngle+1.f) / 2.f;\n"
 "    f4UVWQ.z = (fCosSunZenithAngle +1.f) / 2.f;\n"

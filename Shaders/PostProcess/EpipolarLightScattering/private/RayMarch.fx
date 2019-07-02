@@ -667,12 +667,12 @@ void RayMarchPS(in FullScreenTriangleVSOutput VSOut,
     float fRayEndCamSpaceZ = g_tex2DEpipolarCamSpaceZ.Load( int3(ui2SamplePosSliceInd, 0) );
 
     [branch]
-    if( any( Greater( abs( f2SampleLocation ), (1.0 + 1e-3) * F2ONE) ) )
+    if( any( Greater( abs( f2SampleLocation ), (1.0 + 1e-3) * float2(1.0, 1.0)) ) )
     {
-        f4Inscattering = F4ZERO;
+        f4Inscattering = float4(0.0, 0.0, 0.0, 0.0);
         return;
     }
-    f4Inscattering = F4ONE;
+    f4Inscattering = float4(1.0, 1.0, 1.0, 1.0);
 #if ENABLE_LIGHT_SHAFTS
     float fCascade = g_MiscParams.fCascadeInd + VSOut.fInstID;
     f4Inscattering.rgb = 
@@ -770,6 +770,6 @@ void FixAndApplyInscatteredRadiancePS(FullScreenTriangleVSOutput VSOut,
     f4Color.rgb = ToneMap(f3BackgroundColor + f3InsctrColor, g_PPAttribs.ToneMapping, fAveLogLum);
 #else
     const float DELTA = 0.00001;
-    f4Color.rgb = log( max(DELTA, dot(f3BackgroundColor + f3InsctrColor, RGB_TO_LUMINANCE)) ) * F3ONE;
+    f4Color.rgb = log( max(DELTA, dot(f3BackgroundColor + f3InsctrColor, RGB_TO_LUMINANCE)) ) * float3(1.0, 1.0, 1.0);
 #endif
 }

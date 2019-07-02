@@ -76,7 +76,7 @@
 "\n"
 "                                    out float4 f4Inscattering : SV_Target0) \n"
 "{\n"
-"    float3 f3Extinction = F3ONE;\n"
+"    float3 f3Extinction = float3(1.0, 1.0, 1.0);\n"
 "    ShaderFunctionInternal(VSOut.f4PixelPos, f4Inscattering.rgb, f3Extinction );\n"
 "    f4Inscattering.a = 1.0;\n"
 "}\n"

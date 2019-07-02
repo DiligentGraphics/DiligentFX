@@ -9,13 +9,6 @@
 #define PI      3.1415928
 #define FLT_MAX 3.402823466e+38
 
-#define F4ZERO float4(0.0, 0.0, 0.0, 0.0)
-#define F4ONE  float4(1.0, 1.0, 1.0, 1.0)
-#define F3ZERO float3(0.0, 0.0, 0.0)
-#define F3ONE  float3(1.0, 1.0, 1.0)
-#define F2ZERO float2(0.0, 0.0)
-#define F2ONE  float2(1.0, 1.0)
-
 #ifndef OPTIMIZE_SAMPLE_LOCATIONS
 #   define OPTIMIZE_SAMPLE_LOCATIONS 1
 #endif
@@ -165,7 +158,7 @@ void GetRaySphereIntersection2(in  float3 f3RayOrigin,
     float2 f2RealRootMask = float2(D.x >= 0.0 ? 1.0 : 0.0, D.y >= 0.0 ? 1.0 : 0.0);
     D = sqrt( max(D,0.0) );
     f4Intersections =   f2RealRootMask.xxyy * float4(-B - D.x, -B + D.x, -B - D.y, -B + D.y) / (2.0*A) + 
-                      (F4ONE - f2RealRootMask.xxyy) * float4(-1.0,-1.0,-1.0,-1.0);
+                      (float4(1.0, 1.0, 1.0, 1.0) - f2RealRootMask.xxyy) * float4(-1.0, -1.0, -1.0, -1.0);
 }
 
 
@@ -193,7 +186,7 @@ float4 GetOutermostScreenPixelCoords(float4 ScreenResolution)
 bool IsValidScreenLocation(in float2 f2XY, float4 ScreenResolution)
 {
     const float2 SAFETY_EPSILON = float2(0.2, 0.2);
-    return all( LessEqual( abs(f2XY), F2ONE - (F2ONE - SAFETY_EPSILON) * ScreenResolution.zw ) );
+    return all( LessEqual( abs(f2XY), float2(1.0, 1.0) - (float2(1.0, 1.0) - SAFETY_EPSILON) * ScreenResolution.zw ) );
 }
 
 float GetAverageSceneLuminance(in Texture2D<float> tex2DAverageLuminance)

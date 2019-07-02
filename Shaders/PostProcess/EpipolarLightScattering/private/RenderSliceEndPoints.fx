@@ -51,7 +51,7 @@ float2 GetEpipolarLineEntryPoint(float2 f2ExitPoint)
         // 0.5 screen pixel size inwards. Using these adjusted boundaries improves precision and results in
         // smaller number of pixels which require inscattering correction
         float4 f4Boundaries = GetOutermostScreenPixelCoords(g_PPAttribs.f4ScreenResolution);
-        bool4 b4IsCorrectIntersectionFlag = Greater( abs(f2RayDir.xyxy), 1e-5 * F4ONE );
+        bool4 b4IsCorrectIntersectionFlag = Greater( abs(f2RayDir.xyxy), 1e-5 * float4(1.0, 1.0, 1.0, 1.0) );
         float4 f4DistToBoundaries = (f4Boundaries - g_PPAttribs.f4LightScreenPos.xyxy) / (f2RayDir.xyxy + BoolToFloat( Not(b4IsCorrectIntersectionFlag) ) );
         // Addition of !b4IsCorrectIntersectionFlag is required to prevent divison by zero
         // Note that such incorrect lanes will be masked out anyway
@@ -60,7 +60,7 @@ float2 GetEpipolarLineEntryPoint(float2 f2ExitPoint)
         // This means that we need to find maximum intersection distance which is less than fDistToBoundary
         // We thus need to skip all boundaries, distance to which is greater than the distance to exit boundary
         // Using -FLT_MAX as the distance to these boundaries will result in skipping them:
-        b4IsCorrectIntersectionFlag = And( b4IsCorrectIntersectionFlag, Less( f4DistToBoundaries, (fDistToExitBoundary - 1e-4) * F4ONE ) );
+        b4IsCorrectIntersectionFlag = And( b4IsCorrectIntersectionFlag, Less( f4DistToBoundaries, (fDistToExitBoundary - 1e-4) * float4(1.0, 1.0, 1.0, 1.0) ) );
         float4 f4CorrectDist   = BoolToFloat( b4IsCorrectIntersectionFlag ) * f4DistToBoundaries;
         // When working with FLT_MAX, we must make sure that the compiler does not use mad instruction, 
         // which will screw things up due to precision issues. DO NOT use 1.0-Flag
@@ -149,7 +149,7 @@ float4 GenerateSliceEndpointsPS(FullScreenTriangleVSOutput VSOut
     //                                  *                                                  
     //     Left Boundary       Bottom Boundary           Right Boundary          Top Boundary 
     //
-    bool4 b4IsInvalidBoundary = LessEqual( (g_PPAttribs.f4LightScreenPos.xyxy - f4OutermostScreenPixelCoords.xyzw) * float4(1,1,-1,-1),  F4ZERO );
+    bool4 b4IsInvalidBoundary = LessEqual( (g_PPAttribs.f4LightScreenPos.xyxy - f4OutermostScreenPixelCoords.xyzw) * float4(1.0, 1.0, -1.0, -1.0),  float4(0.0, 0.0, 0.0, 0.0) );
     if( dot( BoolToFloat(b4IsInvalidBoundary), BoolToFloat(b4BoundaryFlags) ) != 0.0 )
     {
         return INVALID_EPIPOLAR_LINE;

@@ -50,6 +50,6 @@
 "    float2 fCotanHalfFOV = float2( MATRIX_ELEMENT(g_CameraAttribs.mProj, 0, 0), MATRIX_ELEMENT(g_CameraAttribs.mProj, 1, 1) );\n"
 "    float2 f2SunScreenSize = fTanSunAngularRadius * fCotanHalfFOV;\n"
 "    float2 f2dXY = (VSOut.f2NormalizedXY - g_PPAttribs.f4LightScreenPos.xy) / f2SunScreenSize;\n"
-"    f4Color.rgb = sqrt(saturate(1.0 - dot(f2dXY, f2dXY))) * F3ONE;\n"
+"    f4Color.rgb = sqrt(saturate(1.0 - dot(f2dXY, f2dXY))) * float3(1.0, 1.0, 1.0);\n"
 "    f4Color.a = 1.0;\n"
 "}\n"

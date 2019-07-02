@@ -44,7 +44,7 @@ void ComputeScatteringOrderCS(uint3 ThreadId  : SV_DispatchThreadID)
         // This is just a sanity check and should never happen
         // as the start point is always under the top of the 
         // atmosphere (look at InsctrLUTCoords2WorldParams())
-        g_rwtex3DInsctrOrder[ThreadId] = F3ZERO; 
+        g_rwtex3DInsctrOrder[ThreadId] = float3(0.0, 0.0, 0.0); 
         return;
     }
 
@@ -57,7 +57,7 @@ void ComputeScatteringOrderCS(uint3 ThreadId  : SV_DispatchThreadID)
     const int iNumSamples = 64;
     float fStepLen = fRayLength / float(iNumSamples);
 
-    float4 f4UVWQ = -F4ONE;
+    float4 f4UVWQ = float4(-1.0, -1.0, -1.0, -1.0);
     float3 f3PrevSctrRadiance = LookUpPrecomputedScattering(
         f3RayStart,
         f3ViewDir,
@@ -70,8 +70,8 @@ void ComputeScatteringOrderCS(uint3 ThreadId  : SV_DispatchThreadID)
         f4UVWQ); 
     float2 f2PrevParticleDensity = exp( -float2(fHeight, fHeight) * g_MediaParams.f4ParticleScaleHeight.zw );
 
-    float2 f2NetParticleDensityFromCam = F2ZERO;
-    float3 f3Inscattering = F3ZERO;
+    float2 f2NetParticleDensityFromCam = float2(0.0, 0.0);
+    float3 f3Inscattering = float3(0.0, 0.0, 0.0);
 
     for (int iSample=1; iSample <= iNumSamples; ++iSample)
     {
@@ -91,7 +91,7 @@ void ComputeScatteringOrderCS(uint3 ThreadId  : SV_DispatchThreadID)
         float3 f3ExtinctionFromCam = exp( -(f3RlghOpticalDepth + f3MieOpticalDepth) );
 
         // Get attenuated scattered light radiance in the current point
-        float4 f4UVWQ = -F4ONE;
+        float4 f4UVWQ = float4(-1.0, -1.0, -1.0, -1.0);
         float3 f3SctrRadiance = f3ExtinctionFromCam *
             LookUpPrecomputedScattering(
                 f3Pos,

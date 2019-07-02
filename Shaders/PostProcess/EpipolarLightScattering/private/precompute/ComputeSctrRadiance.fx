@@ -38,14 +38,14 @@ void ComputeSctrRadianceCS(uint3 ThreadId  : SV_DispatchThreadID)
     // Compute particle density scale factor
     float2 f2ParticleDensity = exp( -float2(fHeight, fHeight) * g_MediaParams.f4ParticleScaleHeight.zw );
     
-    float3 f3SctrRadiance = F3ZERO;
+    float3 f3SctrRadiance = float3(0.0, 0.0, 0.0);
     // Go through a number of samples randomly distributed over the sphere
     for(int iSample = 0; iSample < NUM_RANDOM_SPHERE_SAMPLES; ++iSample)
     {
         // Get random direction
         float3 f3RandomDir = normalize( g_tex2DSphereRandomSampling.Load(int3(iSample,0,0)) );
         // Get the previous order in-scattered light when looking in direction f3RandomDir (the light thus goes in direction -f3RandomDir)
-        float4 f4UVWQ = -F4ONE;
+        float4 f4UVWQ = float4(-1.0, -1.0, -1.0, -1.0);
         float3 f3PrevOrderSctr = LookUpPrecomputedScattering(
             f3RayStart,
             f3RandomDir,

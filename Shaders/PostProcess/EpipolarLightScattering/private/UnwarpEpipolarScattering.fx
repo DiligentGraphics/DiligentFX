@@ -111,7 +111,7 @@ void UnwarpEpipolarInsctrImage( in float2 f2PosPS,
     //float fDistToBottomBoundary = abs(f2RayDir.y) > 1e-5 ? ( -1 - g_PPAttribs.f4LightScreenPos.y) / f2RayDir.y : -FLT_MAX;
     //float fDistToRightBoundary  = abs(f2RayDir.x) > 1e-5 ? (  1 - g_PPAttribs.f4LightScreenPos.x) / f2RayDir.x : -FLT_MAX;
     //float fDistToTopBoundary    = abs(f2RayDir.y) > 1e-5 ? (  1 - g_PPAttribs.f4LightScreenPos.y) / f2RayDir.y : -FLT_MAX;
-    float4 f4DistToBoundaries = ( f4Boundaries - g_PPAttribs.f4LightScreenPos.xyxy ) / (f2RayDir.xyxy + BoolToFloat( Less( abs(f2RayDir.xyxy), 1e-6*F4ONE) ) );
+    float4 f4DistToBoundaries = ( f4Boundaries - g_PPAttribs.f4LightScreenPos.xyxy ) / (f2RayDir.xyxy + BoolToFloat( Less( abs(f2RayDir.xyxy), 1e-6 * float4(1.0, 1.0, 1.0, 1.0)) ) );
     // Select distance to the exit boundary:
     float fDistToExitBoundary = dot( BoolToFloat( b4SectorFlags ), f4DistToBoundaries );
     // Compute exit point on the boundary:
@@ -150,8 +150,8 @@ void UnwarpEpipolarInsctrImage( in float2 f2PosPS,
     fSliceWeights[1] = (fEpipolarSlice*float(g_PPAttribs.uiNumEpipolarSlices)) - fPrecedingSliceInd;
     fSliceWeights[0] = 1.0 - fSliceWeights[1];
 
-    f3Inscattering = F3ZERO;
-    f3Extinction = F3ZERO;
+    f3Inscattering = float3(0.0, 0.0, 0.0);
+    f3Extinction   = float3(0.0, 0.0, 0.0);
     float fTotalWeight = 0.0;
     [unroll]
     for(int i=0; i<2; ++i)
@@ -211,7 +211,7 @@ void UnwarpEpipolarInsctrImage( in float2 f2PosPS,
         float2 f2DepthWeights = saturate( g_PPAttribs.fRefinementThreshold / max( abs(fCamSpaceZ-f2SrcLocationsCamSpaceZ)/f2MaxZ, g_PPAttribs.fRefinementThreshold ) );
         // Note that if the sample is located outside the [-1,1]x[-1,1] area, the sample is invalid and fCurrCamSpaceZ == fInvalidCoordinate
         // Depth weight computed for such sample will be zero
-        f2DepthWeights = pow(f2DepthWeights, 4.0*F2ONE);
+        f2DepthWeights = pow(f2DepthWeights, float2(4.0, 4.0));
 
         // Multiply bilinear weights with the depth weights:
         float2 f2BilateralUWeights = float2(1.0-fUWeight, fUWeight) * f2DepthWeights * fSliceWeights[i];
@@ -250,7 +250,7 @@ void UnwarpEpipolarInsctrImage( in float2 f2PosPS,
 #endif
 
         // Update total weight
-        fTotalWeight += dot(f2BilateralUWeights, F2ONE);
+        fTotalWeight += dot(f2BilateralUWeights, float2(1.0, 1.0));
     }
 
 #if CORRECT_INSCATTERING_AT_DEPTH_BREAKS
@@ -282,13 +282,13 @@ void ApplyInscatteredRadiancePS(FullScreenTriangleVSOutput VSOut,
     float3 f3Inscttering, f3Extinction;
     UnwarpEpipolarInsctrImage(VSOut.f2NormalizedXY, fCamSpaceZ, f3Inscttering, f3Extinction);
 
-    float3 f3BackgroundColor = F3ZERO;
+    float3 f3BackgroundColor = float3(0.0, 0.0, 0.0);
     [branch]
     if( !g_PPAttribs.bShowLightingOnly )
     {
         f3BackgroundColor = g_tex2DColorBuffer.SampleLevel( g_tex2DColorBuffer_sampler, f2UV, 0).rgb;
         // fFarPlaneZ is pre-multiplied with 0.999999f
-        f3BackgroundColor *= (fCamSpaceZ > g_CameraAttribs.fFarPlaneZ) ? g_LightAttribs.f4Intensity.rgb : F3ONE;
+        f3BackgroundColor *= (fCamSpaceZ > g_CameraAttribs.fFarPlaneZ) ? g_LightAttribs.f4Intensity.rgb : float3(1.0, 1.0, 1.0);
 
 #if EXTINCTION_EVAL_MODE == EXTINCTION_EVAL_MODE_PER_PIXEL
         float3 f3ReconstructedPosWS = ProjSpaceXYZToWorldSpace(float3(VSOut.f2NormalizedXY.xy, fCamSpaceZ), g_CameraAttribs.mProj, g_CameraAttribs.mViewProjInv);
@@ -303,7 +303,7 @@ void ApplyInscatteredRadiancePS(FullScreenTriangleVSOutput VSOut,
     f4Color.rgb = ToneMap(f3BackgroundColor + f3Inscttering, g_PPAttribs.ToneMapping, fAveLogLum);
 #else
     const float DELTA = 0.00001;
-    f4Color.rgb = log( max(DELTA, dot(f3BackgroundColor + f3Inscttering, RGB_TO_LUMINANCE)) ) * F3ONE;
+    f4Color.rgb = log( max(DELTA, dot(f3BackgroundColor + f3Inscttering, RGB_TO_LUMINANCE)) ) * float3(1.0, 1.0, 1.0);
 #endif
     f4Color.a = 1.0;
 }

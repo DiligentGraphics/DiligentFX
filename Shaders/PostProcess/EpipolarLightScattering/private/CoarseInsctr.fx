@@ -76,7 +76,7 @@ void RenderCoarseUnshadowedInsctrPS(FullScreenTriangleVSOutput VSOut,
 
                                     out float4 f4Inscattering : SV_Target0) 
 {
-    float3 f3Extinction = F3ONE;
+    float3 f3Extinction = float3(1.0, 1.0, 1.0);
     ShaderFunctionInternal(VSOut.f4PixelPos, f4Inscattering.rgb, f3Extinction );
     f4Inscattering.a = 1.0;
 }

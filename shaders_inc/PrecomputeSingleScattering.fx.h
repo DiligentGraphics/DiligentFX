@@ -46,7 +46,7 @@
 "        // This is just a sanity check and should never happen\n"
 "        // as the start point is always under the top of the \n"
 "        // atmosphere (look at InsctrLUTCoords2WorldParams())\n"
-"        g_rwtex3DSingleScattering[ThreadId] = F3ZERO;\n"
+"        g_rwtex3DSingleScattering[ThreadId] = float3(0.0, 0.0, 0.0);\n"
 "        return;\n"
 "    }\n"
 "\n"

@@ -100,7 +100,7 @@
 "        // It should also account for the fact that rgb channels contribute differently\n"
 "        // to the percieved brightness. For r channel the threshold should be smallest, \n"
 "        // for b channel - the largest\n"
-"        float3 f3MinInsctrThreshold = (0.02 * fAverageLum * F3ONE / RGB_TO_LUMINANCE.xyz) / g_PPAttribs.ToneMapping.fMiddleGray;\n"
+"        float3 f3MinInsctrThreshold = (0.02 * fAverageLum / RGB_TO_LUMINANCE.xyz) / g_PPAttribs.ToneMapping.fMiddleGray;\n"
 "\n"
 "        f3MaxInsctr = max(f3MaxInsctr, f3MinInsctrThreshold);\n"
 "        // Compare the difference with the threshold. If the neighbour sample is invalid, its inscattering\n"
