@@ -200,4 +200,12 @@ float GetAverageSceneLuminance(in Texture2D<float> tex2DAverageLuminance)
     return fAveLogLum;
 }
 
+float2 GetWeightedLogLum(float3 Color, float MinLuminance)
+{
+    float Luminance = dot(Color, RGB_TO_LUMINANCE);
+    float LumWeight = saturate((Luminance - MinLuminance) / MinLuminance);
+    float LogLum = log(max(Luminance, 1e-5));
+    return float2(LogLum * LumWeight, LumWeight);
+}
+
 #endif //_ATMOSPHERE_SHADERS_COMMON_FXH_

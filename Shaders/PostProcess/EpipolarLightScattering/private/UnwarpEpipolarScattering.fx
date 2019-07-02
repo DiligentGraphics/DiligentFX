@@ -302,8 +302,9 @@ void ApplyInscatteredRadiancePS(FullScreenTriangleVSOutput VSOut,
     float fAveLogLum = GetAverageSceneLuminance(g_tex2DAverageLuminance);
     f4Color.rgb = ToneMap(f3BackgroundColor + f3Inscttering, g_PPAttribs.ToneMapping, fAveLogLum);
 #else
-    const float DELTA = 0.00001;
-    f4Color.rgb = log( max(DELTA, dot(f3BackgroundColor + f3Inscttering, RGB_TO_LUMINANCE)) ) * float3(1.0, 1.0, 1.0);
+    const float MinLumn = 0.01;
+    float2 LogLum_W = GetWeightedLogLum(f3BackgroundColor + f3Inscttering, MinLumn);
+    f4Color.rgb = float3(LogLum_W.x, LogLum_W.y, 0.0);
 #endif
     f4Color.a = 1.0;
 }

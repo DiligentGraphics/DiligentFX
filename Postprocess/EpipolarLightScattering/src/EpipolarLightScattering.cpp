@@ -840,7 +840,7 @@ void EpipolarLightScattering :: CreateLowResLuminanceTexture(IRenderDevice* pDev
 	TexDesc.Type      = RESOURCE_DIM_TEX_2D;
 	TexDesc.Width     = 1 << (sm_iLowResLuminanceMips-1);
     TexDesc.Height    = 1 << (sm_iLowResLuminanceMips-1);
-	TexDesc.Format    = LuminanceTexFmt,
+	TexDesc.Format    = WeightedLogLumTexFmt,
 	TexDesc.MipLevels = sm_iLowResLuminanceMips;
 	TexDesc.Usage     = USAGE_DEFAULT;
 	TexDesc.BindFlags = BIND_RENDER_TARGET | BIND_SHADER_RESOURCE;
@@ -859,6 +859,7 @@ void EpipolarLightScattering :: CreateLowResLuminanceTexture(IRenderDevice* pDev
 	TexDesc.Height      = 1;
 	TexDesc.MipLevels   = 1;
 	TexDesc.MiscFlags   = MISC_TEXTURE_FLAG_NONE;
+    TexDesc.Format      = AverageLuminanceTexFmt;
 	TexDesc.ClearValue.Color[0] = 0.1f;
     TexDesc.ClearValue.Color[1] = 0.1f;
     TexDesc.ClearValue.Color[2] = 0.1f;
@@ -1668,7 +1669,7 @@ void EpipolarLightScattering :: UnwarpEpipolarScattering(bool bRenderLuminance)
 
         UnwarpAndRenderLuminanceTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "UnwarpAndRenderLuminance",
                                                                            m_pFullScreenTriangleVS, pUnwarpAndRenderLuminancePS,
-                                                                           ResourceLayout, LuminanceTexFmt);
+                                                                           ResourceLayout, WeightedLogLumTexFmt);
         UnwarpAndRenderLuminanceTech.PSO->BindStaticResources(SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL, m_pResMapping, 0);
 
         UnwarpAndRenderLuminanceTech.PSODependencyFlags = PSO_DEPENDENCY_EXTINCTION_EVAL_MODE;
@@ -1723,7 +1724,7 @@ void EpipolarLightScattering :: UpdateAverageLuminance()
         }
         UpdateAverageLuminanceTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "UpdateAverageLuminance",
                                                                          m_pFullScreenTriangleVS, pUpdateAverageLuminancePS,
-                                                                         ResourceLayout, LuminanceTexFmt, TEX_FORMAT_UNKNOWN,
+                                                                         ResourceLayout, AverageLuminanceTexFmt, TEX_FORMAT_UNKNOWN,
                                                                          DSS_DisableDepth, BS_AlphaBlend);
         UpdateAverageLuminanceTech.PSO->BindStaticResources(SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL, m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
 
@@ -1810,7 +1811,7 @@ void EpipolarLightScattering :: FixInscatteringAtDepthBreaks(Uint32             
 	        // Use default blend state to overwrite old luminance values
 	        FixInsctrAtDepthBreaksTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "FixInsctrAtDepthBreaksLumOnly",
                                                                              m_pFullScreenTriangleVS, pFixInsctrAtDepthBreaksPS,
-                                                                             ResourceLayout, LuminanceTexFmt);
+                                                                             ResourceLayout, WeightedLogLumTexFmt);
         }
         else if (Mode == EFixInscatteringMode::FixInscattering)
         {

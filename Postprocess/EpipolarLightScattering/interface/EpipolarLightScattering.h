@@ -145,7 +145,8 @@ private:
     static constexpr TEXTURE_FORMAT EpipolarImageDepthFmt1      = TEX_FORMAT_D32_FLOAT_S8X24_UINT;
     static constexpr TEXTURE_FORMAT EpipolarExtinctionFmt       = TEX_FORMAT_RGBA8_UNORM;
     static constexpr TEXTURE_FORMAT AmbientSkyLightTexFmt       = TEX_FORMAT_RGBA16_FLOAT;
-    static constexpr TEXTURE_FORMAT LuminanceTexFmt             = TEX_FORMAT_R16_FLOAT;
+    static constexpr TEXTURE_FORMAT WeightedLogLumTexFmt        = TEX_FORMAT_RG16_FLOAT;
+    static constexpr TEXTURE_FORMAT AverageLuminanceTexFmt      = TEX_FORMAT_R16_FLOAT;
     static constexpr TEXTURE_FORMAT SliceUVDirAndOriginTexFmt   = TEX_FORMAT_RGBA32_FLOAT;
     static constexpr TEXTURE_FORMAT CamSpaceZFmt                = TEX_FORMAT_R32_FLOAT;
 

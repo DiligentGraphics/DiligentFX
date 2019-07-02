@@ -7,7 +7,7 @@ cbuffer cbMiscDynamicParams
 }
 #endif
 
-Texture2D<float>  g_tex2DLowResLuminance;
+Texture2D<float2>  g_tex2DLowResLuminance;
 
 void UpdateAverageLuminancePS( FullScreenTriangleVSOutput VSOut, 
                                // We must declare vertex shader output even though we 
@@ -21,5 +21,9 @@ void UpdateAverageLuminancePS( FullScreenTriangleVSOutput VSOut,
 #else
     float fNewLuminanceWeight = 1.0;
 #endif
-    f4Luminance = float4( exp( g_tex2DLowResLuminance.Load( int3(0,0,LOW_RES_LUMINANCE_MIPS-1) ) ), 0, 0, fNewLuminanceWeight );
+    float2 LogLum_W = g_tex2DLowResLuminance.Load( int3(0,0,LOW_RES_LUMINANCE_MIPS-1) );
+    float LogLum = LogLum_W.x / max(LogLum_W.y, 1e-6);
+    fNewLuminanceWeight *= saturate(LogLum_W.y / 1e-3);
+
+    f4Luminance = float4( exp(LogLum), 0.0, 0.0, fNewLuminanceWeight );
 }
