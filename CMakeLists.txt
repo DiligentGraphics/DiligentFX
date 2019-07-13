@@ -29,6 +29,7 @@ target_include_directories(DiligentFX PUBLIC
 )
 
 add_subdirectory(Utilities)
+add_subdirectory(Components)
 add_subdirectory(Postprocess)
 add_subdirectory(GLTF_PBR_Renderer)
 

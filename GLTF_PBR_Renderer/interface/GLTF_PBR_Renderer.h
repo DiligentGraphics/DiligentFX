@@ -22,8 +22,8 @@
  */
 
 #include <unordered_map>
-#include "RenderDevice.h"
-#include "DeviceContext.h"
+#include "../../../DiligentCore/Graphics/GraphicsEngine/interface/DeviceContext.h"
+#include "../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
 #include "../../../DiligentTools/AssetLoader/interface/GLTFLoader.h"
 
 namespace Diligent
