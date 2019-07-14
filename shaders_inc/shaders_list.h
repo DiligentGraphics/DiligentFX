@@ -27,6 +27,10 @@ static const ShaderIncInfo g_Shaders[] =
         #include "ShaderUtilities.fxh.h"
     },
     {
+        "Shadows.fxh",
+        #include "Shadows.fxh.h"
+    },
+    {
         "ComputeIrradianceMap.psh",
         #include "ComputeIrradianceMap.psh.h"
     },
