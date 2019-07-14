@@ -15,10 +15,18 @@
 #       define CHECK_STRUCT_ALIGNMENT(s) static_assert( sizeof(s) % 16 == 0, "sizeof(" #s ") is not multiple of 16" )
 #   endif
 
+#   ifndef DEFAULT_VALUE
+#       define DEFAULT_VALUE(x) =x
+#   endif
+
 #else
 
 #   ifndef BOOL
 #       define BOOL bool
+#   endif
+
+#   ifndef DEFAULT_VALUE
+#       define DEFAULT_VALUE(x)
 #   endif
 
 #endif
@@ -29,6 +37,9 @@ struct CascadeAttribs
 	float4 f4LightSpaceScale;
 	float4 f4LightSpaceScaledBias;
     float4 f4StartEndZ;
+
+    // Maximum filter radius in light projection space ([-1,+1] x [-1,+1])
+    float4 f4MaxFilterRadiusProjSpace;
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
     CHECK_STRUCT_ALIGNMENT(CascadeAttribs);
@@ -55,11 +66,16 @@ struct ShadowMapAttribs
 #endif
 
     // Number of shadow cascades
-    int   iNumCascades;
-    float fNumCascades;
+    int   iNumCascades                  DEFAULT_VALUE(0);
+    float fNumCascades                  DEFAULT_VALUE(0);
     // Do not use bool, because sizeof(bool)==1 !
-	BOOL  bVisualizeCascades;
-    float fCascadePartitioningFactor;
+	BOOL  bVisualizeCascades            DEFAULT_VALUE(0);
+    float fCascadePartitioningFactor    DEFAULT_VALUE(0.95f);
+
+    float ReceiverPlaneDepthBiasClamp   DEFAULT_VALUE(10);
+    float Dummy0;
+    float Dummy1;
+    float Dummy2;
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
     CHECK_STRUCT_ALIGNMENT(ShadowMapAttribs);

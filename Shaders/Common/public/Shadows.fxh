@@ -29,12 +29,12 @@ void FindCascade(ShadowMapAttribs ShadowAttribs,
         // In order to perform PCF filtering without getting out of the cascade shadow map,
         // we need to be far enough from its boundaries.
         if( //Cascade == (ShadowAttribs.iNumCascades - 1) || 
-            abs(f3PosInCascadeProjSpace.x) < 1.0/*- CascadeAttribs.f4LightProjSpaceFilterRadius.x*/ &&
-            abs(f3PosInCascadeProjSpace.y) < 1.0/*- CascadeAttribs.f4LightProjSpaceFilterRadius.y*/ &&
+            abs(f3PosInCascadeProjSpace.x) < 1.0 - CascadeAttribs.f4MaxFilterRadiusProjSpace.x &&
+            abs(f3PosInCascadeProjSpace.y) < 1.0 - CascadeAttribs.f4MaxFilterRadiusProjSpace.y &&
             // It is necessary to check f3PosInCascadeProjSpace.z as well since it could be behind
             // the far clipping plane of the current cascade
-            // Besides, if VSM or EVSM filtering is performed, there is also z boundary
-            NDC_MIN_Z /*+ CascadeAttribs.f4LightProjSpaceFilterRadius.z*/ < f3PosInCascadeProjSpace.z && f3PosInCascadeProjSpace.z < 1.0  /*- CascadeAttribs.f4LightProjSpaceFilterRadius.w*/ )
+            f3PosInCascadeProjSpace.z > NDC_MIN_Z + CascadeAttribs.f4MaxFilterRadiusProjSpace.z &&
+            f3PosInCascadeProjSpace.z < 1.0       - CascadeAttribs.f4MaxFilterRadiusProjSpace.w )
             break;
         else
             Cascade++;
@@ -118,7 +118,9 @@ float FilterShadowMapOptimizedPCF(in Texture2DArray<float>  tex2DShadowMap,
 
 #define SAMPLE_SHADOW_MAP(u, v) tex2DShadowMap.SampleCmpLevelZero(tex2DShadowMap_sampler, float3(base_uv.xy + float2(u,v) * shadowMapSizeInv, cascadeIdx), lightDepth + dot(float2(u, v), receiverPlaneDepthBias))
     #if SHADOW_FILTER_SIZE == 2
+
         return tex2DShadowMap.SampleCmpLevelZero(tex2DShadowMap_sampler, float3(shadowPos.xy, cascadeIdx), lightDepth);
+
     #elif SHADOW_FILTER_SIZE == 3
 
         float uw0 = (3.0 - 2.0 * s);
@@ -244,8 +246,8 @@ float ComputeShadowAmount(ShadowMapAttribs          ShadowAttribs,
     float3 f3ddYShadowMapUVDepth = ddy(f3PosInLightViewSpace) * f3CascadeLightSpaceScale * F3NDC_XYZ_TO_UVD_SCALE;
 
     float2 f2DepthSlopeScaledBias = ComputeReceiverPlaneDepthBias(f3ddXShadowMapUVDepth, f3ddYShadowMapUVDepth);
-    const float MaxSlope = 10.0;
-    f2DepthSlopeScaledBias = clamp(f2DepthSlopeScaledBias, -float2(MaxSlope, MaxSlope), float2(MaxSlope, MaxSlope));
+    float2 SlopeScaledBiasClamp = float2(ShadowAttribs.ReceiverPlaneDepthBiasClamp, ShadowAttribs.ReceiverPlaneDepthBiasClamp);
+    f2DepthSlopeScaledBias = clamp(f2DepthSlopeScaledBias, -SlopeScaledBiasClamp, SlopeScaledBiasClamp);
     uint SMWidth, SMHeight, Elems; 
     tex2DShadowMap.GetDimensions(SMWidth, SMHeight, Elems);
     float2 ShadowMapDim = float2(SMWidth, SMHeight);
@@ -256,6 +258,20 @@ float ComputeShadowAmount(ShadowMapAttribs          ShadowAttribs,
     f3ShadowMapUVDepth.z -= fractionalSamplingError;
 
     return FilterShadowMapOptimizedPCF(tex2DShadowMap, tex2DShadowMap_sampler, ShadowMapDim, f3ShadowMapUVDepth, Cascade, f2DepthSlopeScaledBias);
+}
+
+float3 GetCascadeColor(int Cascade)
+{
+    float3 f3CascadeColors[MAX_CASCADES];
+    f3CascadeColors[0] = float3(0,1,0);
+    f3CascadeColors[1] = float3(0,0,1);
+    f3CascadeColors[2] = float3(1,1,0);
+    f3CascadeColors[3] = float3(0,1,1);
+    f3CascadeColors[4] = float3(1,0,1);
+    f3CascadeColors[5] = float3(0.3, 1, 0.7);
+    f3CascadeColors[6] = float3(0.7, 0.3,1);
+    f3CascadeColors[7] = float3(1, 0.7, 0.3);
+    return f3CascadeColors[min(Cascade, MAX_CASCADES-1)];
 }
 
 #endif //_SHADOWS_FXH_

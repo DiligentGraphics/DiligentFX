@@ -73,7 +73,7 @@ void ShadowMapManager::Initialize(IRenderDevice* pDevice, const InitInfo& initIn
 }
 
 void ShadowMapManager::DistributeCascades(const DistributeCascadeInfo& Info,
-                                          ShadowMapAttribs&            shadowMapAttribs)
+                                          ShadowMapAttribs&            ShadowAttribs)
 {
     VERIFY(Info.pCameraView, "Camera view matrix must not be null");
     VERIFY(Info.pCameraProj, "Camera projection matrix must not be null");
@@ -108,7 +108,7 @@ void ShadowMapManager::DistributeCascades(const DistributeCascadeInfo& Info,
     float4x4 WorldToLightViewSpaceMatr =
         float4x4::ViewFromBasis( LightSpaceX, LightSpaceY, LightSpaceZ );
 
-    shadowMapAttribs.mWorldToLightViewT = WorldToLightViewSpaceMatr.Transpose();
+    ShadowAttribs.mWorldToLightViewT = WorldToLightViewSpaceMatr.Transpose();
 
     float3 f3CameraPosInLightSpace = *Info.pCameraPos * WorldToLightViewSpaceMatr;
 
@@ -120,7 +120,7 @@ void ShadowMapManager::DistributeCascades(const DistributeCascadeInfo& Info,
     }
 
     for(int i=0; i < MAX_CASCADES; ++i)
-        shadowMapAttribs.fCascadeCamSpaceZEnd[i] = +FLT_MAX;
+        ShadowAttribs.fCascadeCamSpaceZEnd[i] = +FLT_MAX;
 
     const auto& CameraWorld = Info.pCameraWorld != nullptr ? *Info.pCameraWorld : Info.pCameraView->Inverse();
 
@@ -129,9 +129,9 @@ void ShadowMapManager::DistributeCascades(const DistributeCascadeInfo& Info,
     m_CascadeTransforms.resize(iNumShadowCascades);
     for(int iCascade = 0; iCascade < iNumShadowCascades; ++iCascade)
     {
-        auto &CurrCascade = shadowMapAttribs.Cascades[iCascade];
-        float fCascadeNearZ = (iCascade == 0) ? fMainCamNearPlane : shadowMapAttribs.fCascadeCamSpaceZEnd[iCascade-1];
-        float &fCascadeFarZ = shadowMapAttribs.fCascadeCamSpaceZEnd[iCascade];
+        auto &CurrCascade = ShadowAttribs.Cascades[iCascade];
+        float fCascadeNearZ = (iCascade == 0) ? fMainCamNearPlane : ShadowAttribs.fCascadeCamSpaceZEnd[iCascade-1];
+        float &fCascadeFarZ = ShadowAttribs.fCascadeCamSpaceZEnd[iCascade];
         if (iCascade < iNumShadowCascades-1) 
         {
             float ratio = fMainCamFarPlane / fMainCamNearPlane;
@@ -141,7 +141,7 @@ void ShadowMapManager::DistributeCascades(const DistributeCascadeInfo& Info,
             float range = fMainCamFarPlane - fMainCamNearPlane;
             float uniformZ = fMainCamNearPlane + range * power;
 
-            fCascadeFarZ = shadowMapAttribs.fCascadePartitioningFactor * (logZ - uniformZ) + uniformZ;
+            fCascadeFarZ = ShadowAttribs.fCascadePartitioningFactor * (logZ - uniformZ) + uniformZ;
         }
         else
         {
@@ -192,41 +192,47 @@ void ShadowMapManager::DistributeCascades(const DistributeCascadeInfo& Info,
             }
         }
         
-        float fCascadeXExt = f3MaxXYZ.x - f3MinXYZ.x;
-        float fCascadeYExt = f3MaxXYZ.y - f3MinXYZ.y;
-
+        float3 f3CascadeExtent = f3MaxXYZ - f3MinXYZ;
+        float3 f3CascadeCenter = (f3MaxXYZ + f3MinXYZ) * 0.5f;
         if (Info.EqualizeExtents)
         {
-            fCascadeXExt = fCascadeYExt;
+            f3CascadeExtent.x = f3CascadeExtent.y = std::max(f3CascadeExtent.x, f3CascadeExtent.y);
         }
 
-        float fCascadeXCenter = (f3MaxXYZ.x + f3MinXYZ.x)/2.f;
-        float fCascadeYCenter = (f3MaxXYZ.y + f3MinXYZ.y)/2.f;
+        float2 f2Extension = Info.MaxFixedFilterRadius * 2.f + (Info.SnapCascades ? float2(1, 1) : float2(0,0));
 
-        float Extension = Info.MaxFilterRadius * 2.f + (Info.SnapCascades ? 1.f : 0.f);
+        // We need to remap the whole extent N x N to (N-ext) x (N-ext)
+        VERIFY_EXPR(f2CascadeSize.x > f2Extension.x && f2CascadeSize.y > f2Extension.y);
+        f3CascadeExtent.x *= f2CascadeSize.x / (f2CascadeSize.x - f2Extension.x);
+        f3CascadeExtent.y *= f2CascadeSize.y / (f2CascadeSize.y - f2Extension.y);
 
-        // We need to extend extents such that whole extent N becomes (N-ext)
-        VERIFY_EXPR(f2CascadeSize.x > Extension && f2CascadeSize.y > Extension);
-        fCascadeXExt *= f2CascadeSize.x / (f2CascadeSize.x - Extension);
-        fCascadeYExt *= f2CascadeSize.y / (f2CascadeSize.y - Extension);
+        // Filter radius is defined in projection space, thus x2
+        CurrCascade.f4MaxFilterRadiusProjSpace.x = Info.MaxFixedFilterRadius.x * 2.f / f2CascadeSize.x;
+        CurrCascade.f4MaxFilterRadiusProjSpace.y = Info.MaxFixedFilterRadius.y * 2.f / f2CascadeSize.y;
 
         // Align cascade center with the shadow map texels to alleviate temporal aliasing
         if (Info.SnapCascades)
         {
-            float fTexelXSize = fCascadeXExt / f2CascadeSize.x;
-            float fTexelYSize = fCascadeYExt / f2CascadeSize.y;
-            fCascadeXCenter = std::floor(fCascadeXCenter/fTexelXSize) * fTexelXSize;
-            fCascadeYCenter = std::floor(fCascadeYCenter/fTexelYSize) * fTexelYSize;
+            float fTexelXSize = f3CascadeExtent.x / f2CascadeSize.x;
+            float fTexelYSize = f3CascadeExtent.y / f2CascadeSize.y;
+            f3CascadeCenter.x = std::floor(f3CascadeCenter.x/fTexelXSize) * fTexelXSize;
+            f3CascadeCenter.y = std::floor(f3CascadeCenter.y/fTexelYSize) * fTexelYSize;
         }
-        // Compute new cascade min/max xy coords
-        f3MaxXYZ.x = fCascadeXCenter + fCascadeXExt/2.f;
-        f3MinXYZ.x = fCascadeXCenter - fCascadeXExt/2.f;
-        f3MaxXYZ.y = fCascadeYCenter + fCascadeYExt/2.f;
-        f3MinXYZ.y = fCascadeYCenter - fCascadeYExt/2.f;
 
-        CurrCascade.f4LightSpaceScale.x =  2.f / (f3MaxXYZ.x - f3MinXYZ.x);
-        CurrCascade.f4LightSpaceScale.y =  2.f / (f3MaxXYZ.y - f3MinXYZ.y);
-        CurrCascade.f4LightSpaceScale.z =  (IsGL ? 2.f : 1.f) / (f3MaxXYZ.z - f3MinXYZ.z);
+        // Extend cascade Z range to allow room for filtering
+        float fZExtension = std::max(Info.MaxFixedFilterRadius.x / f2CascadeSize.x, Info.MaxFixedFilterRadius.y / f2CascadeSize.y) * ShadowAttribs.ReceiverPlaneDepthBiasClamp;
+        fZExtension = std::min(fZExtension, 0.25f);
+        CurrCascade.f4MaxFilterRadiusProjSpace.z = fZExtension * (IsGL ? 2.f : 1.f);
+        CurrCascade.f4MaxFilterRadiusProjSpace.w = fZExtension * (IsGL ? 2.f : 1.f);
+        f3CascadeExtent.z *= 1.f / (1.f - fZExtension * 2.f);
+
+        // Compute new cascade min/max xy coords
+        f3MinXYZ = f3CascadeCenter - f3CascadeExtent / 2.f;
+        f3MaxXYZ = f3CascadeCenter + f3CascadeExtent / 2.f;
+
+        CurrCascade.f4LightSpaceScale.x =  2.f / f3CascadeExtent.x;
+        CurrCascade.f4LightSpaceScale.y =  2.f / f3CascadeExtent.y;
+        CurrCascade.f4LightSpaceScale.z =  (IsGL ? 2.f : 1.f) / f3CascadeExtent.z;
         // Apply bias to shift the extent to [-1,1]x[-1,1]x[0,1] for DX or to [-1,1]x[-1,1]x[-1,1] for GL
         // Find bias such that f3MinXYZ -> (-1,-1,0) for DX or (-1,-1,-1) for GL
         CurrCascade.f4LightSpaceScaledBias.x = -f3MinXYZ.x * CurrCascade.f4LightSpaceScale.x - 1.f;
@@ -249,7 +255,7 @@ void ShadowMapManager::DistributeCascades(const DistributeCascadeInfo& Info,
         float4x4 ProjToUVBias = float4x4::Translation( 0.5f, 0.5f, NDCAttribs.GetZtoDepthBias());
         
         float4x4 WorldToShadowMapUVDepthMatr = WorldToLightProjSpaceMatr * ProjToUVScale * ProjToUVBias;
-        shadowMapAttribs.mWorldToShadowMapUVDepthT[iCascade] = WorldToShadowMapUVDepthMatr.Transpose();
+        ShadowAttribs.mWorldToShadowMapUVDepthT[iCascade] = WorldToShadowMapUVDepthMatr.Transpose();
     }
 }
 

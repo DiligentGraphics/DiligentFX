@@ -68,7 +68,7 @@ public:
         bool               EqualizeExtents    = true;
 
         // Maximum shadow filter radius
-        float              MaxFilterRadius    = 0.f;
+        float2             MaxFixedFilterRadius;
 
         // Callback that allows the application to adjust z range of every cascade.
         // The callback is also called with cascade value -1 to adjust that entire camera range.
