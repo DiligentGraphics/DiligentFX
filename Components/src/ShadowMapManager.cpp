@@ -99,8 +99,8 @@ void ShadowMapManager::DistributeCascades(const DistributeCascadeInfo& Info,
     else
         LightSpaceX =  float3(0, 0, 1);
 
-    LightSpaceY = cross(LightSpaceX, LightSpaceZ);
-    LightSpaceX = cross(LightSpaceZ, LightSpaceY);
+    LightSpaceY = cross(LightSpaceZ, LightSpaceX);
+    LightSpaceX = cross(LightSpaceY, LightSpaceZ);
     LightSpaceX = normalize(LightSpaceX);
     LightSpaceY = normalize(LightSpaceY);
     
