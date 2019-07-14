@@ -255,8 +255,6 @@
 "    fractionalSamplingError = max(fractionalSamplingError, 1e-5 * f3CascadeLightSpaceScale.z);\n"
 "    f3ShadowMapUVDepth.z -= fractionalSamplingError;\n"
 "\n"
-"        //return tex2DShadowMap.SampleCmp(tex2DShadowMap_sampler, float3(f3ShadowMapUVDepth.xy, Cascade), f3ShadowMapUVDepth.z);\n"
-"\n"
 "    return FilterShadowMapOptimizedPCF(tex2DShadowMap, tex2DShadowMap_sampler, ShadowMapDim, f3ShadowMapUVDepth, Cascade, f2DepthSlopeScaledBias);\n"
 "}\n"
 "\n"
