@@ -114,6 +114,10 @@ void ShadowMapManager::DistributeCascades(const DistributeCascadeInfo& Info,
 
     float fMainCamNearPlane, fMainCamFarPlane;
     Info.pCameraProj->GetNearFarClipPlanes(fMainCamNearPlane, fMainCamFarPlane, IsGL);
+    if(Info.AdjustCascadeRange)
+    {
+        Info.AdjustCascadeRange(-1, fMainCamNearPlane, fMainCamFarPlane);
+    }
 
     for(int i=0; i < MAX_CASCADES; ++i)
         shadowMapAttribs.fCascadeCamSpaceZEnd[i] = +FLT_MAX;

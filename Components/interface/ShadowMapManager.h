@@ -70,6 +70,8 @@ public:
         // Maximum shadow filter radius
         float              MaxFilterRadius    = 0.f;
 
+        // Callback that allows the application to adjust z range of every cascade.
+        // The callback is also called with cascade value -1 to adjust that entire camera range.
         std::function<void(int, float&, float&)> AdjustCascadeRange;
     };
 
