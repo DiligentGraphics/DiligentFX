@@ -3,6 +3,11 @@
 
 // Must include BasicStructures.fxh
 
+#ifndef SHADOW_FILTER_SIZE
+#   define SHADOW_FILTER_SIZE 2
+#endif
+
+
 void FindCascade(ShadowMapAttribs ShadowAttribs,
                  float3           f3PosInLightViewSpace,
                  float            fCameraViewSpaceZ,
@@ -85,6 +90,139 @@ float2 ComputeReceiverPlaneDepthBias(float3 ShadowUVDepthDX,
 }
 
 
+
+
+//-------------------------------------------------------------------------------------------------
+// The method used in The Witness
+//-------------------------------------------------------------------------------------------------
+float FilterShadowMapOptimizedPCF(in Texture2DArray<float>  tex2DShadowMap,
+                                  in SamplerComparisonState tex2DShadowMap_sampler,
+                                  in float2                 shadowMapSize,
+                                  in float3                 shadowPos,
+                                  in int                    cascadeIdx,
+                                  in float2                 receiverPlaneDepthBias)
+{
+    float lightDepth = shadowPos.z;
+
+    float2 uv = shadowPos.xy * shadowMapSize; // 1 unit - 1 texel
+    float2 shadowMapSizeInv = 1.0 / shadowMapSize;
+
+    float2 base_uv = floor(uv + float2(0.5, 0.5));
+    float s = (uv.x + 0.5 - base_uv.x);
+    float t = (uv.y + 0.5 - base_uv.y);
+
+    base_uv -= float2(0.5, 0.5);
+    base_uv *= shadowMapSizeInv;
+
+    float sum = 0;
+
+#define SAMPLE_SHADOW_MAP(u, v) tex2DShadowMap.SampleCmpLevelZero(tex2DShadowMap_sampler, float3(base_uv.xy + float2(u,v) * shadowMapSizeInv, cascadeIdx), lightDepth + dot(float2(u, v), receiverPlaneDepthBias))
+    #if SHADOW_FILTER_SIZE == 2
+        return tex2DShadowMap.SampleCmpLevelZero(tex2DShadowMap_sampler, float3(shadowPos.xy, cascadeIdx), lightDepth);
+    #elif SHADOW_FILTER_SIZE == 3
+
+        float uw0 = (3.0 - 2.0 * s);
+        float uw1 = (1.0 + 2.0 * s);
+
+        float u0 = (2.0 - s) / uw0 - 1.0;
+        float u1 = s / uw1 + 1.0;
+
+        float vw0 = (3.0 - 2.0 * t);
+        float vw1 = (1.0 + 2.0 * t);
+
+        float v0 = (2.0 - t) / vw0 - 1;
+        float v1 = t / vw1 + 1;
+
+        sum += uw0 * vw0 * SAMPLE_SHADOW_MAP(u0, v0);
+        sum += uw1 * vw0 * SAMPLE_SHADOW_MAP(u1, v0);
+        sum += uw0 * vw1 * SAMPLE_SHADOW_MAP(u0, v1);
+        sum += uw1 * vw1 * SAMPLE_SHADOW_MAP(u1, v1);
+
+        return sum * 1.0 / 16.0;
+
+    #elif SHADOW_FILTER_SIZE == 5
+
+        float uw0 = (4.0 - 3.0 * s);
+        float uw1 = 7.0;
+        float uw2 = (1.0 + 3.0 * s);
+
+        float u0 = (3.0 - 2.0 * s) / uw0 - 2.0;
+        float u1 = (3.0 + s) / uw1;
+        float u2 = s / uw2 + 2.0;
+
+        float vw0 = (4.0 - 3.0 * t);
+        float vw1 = 7.0;
+        float vw2 = (1.0 + 3.0 * t);
+
+        float v0 = (3.0 - 2.0 * t) / vw0 - 2.0;
+        float v1 = (3.0 + t) / vw1;
+        float v2 = t / vw2 + 2;
+
+        sum += uw0 * vw0 * SAMPLE_SHADOW_MAP(u0, v0);
+        sum += uw1 * vw0 * SAMPLE_SHADOW_MAP(u1, v0);
+        sum += uw2 * vw0 * SAMPLE_SHADOW_MAP(u2, v0);
+
+        sum += uw0 * vw1 * SAMPLE_SHADOW_MAP(u0, v1);
+        sum += uw1 * vw1 * SAMPLE_SHADOW_MAP(u1, v1);
+        sum += uw2 * vw1 * SAMPLE_SHADOW_MAP(u2, v1);
+
+        sum += uw0 * vw2 * SAMPLE_SHADOW_MAP(u0, v2);
+        sum += uw1 * vw2 * SAMPLE_SHADOW_MAP(u1, v2);
+        sum += uw2 * vw2 * SAMPLE_SHADOW_MAP(u2, v2);
+
+        return sum * 1.0 / 144.0;
+
+    #elif SHADOW_FILTER_SIZE == 7
+
+        float uw0 = (5.0 * s - 6.0);
+        float uw1 = (11.0 * s - 28.0);
+        float uw2 = -(11.0 * s + 17.0);
+        float uw3 = -(5.0 * s + 1.0);
+
+        float u0 = (4.0 * s - 5.0) / uw0 - 3.0;
+        float u1 = (4.0 * s - 16.0) / uw1 - 1.0;
+        float u2 = -(7.0 * s + 5.0) / uw2 + 1.0;
+        float u3 = -s / uw3 + 3.0;
+
+        float vw0 = (5.0 * t - 6.0);
+        float vw1 = (11.0 * t - 28.0);
+        float vw2 = -(11.0 * t + 17.0);
+        float vw3 = -(5.0 * t + 1.0);
+
+        float v0 = (4.0 * t - 5.0) / vw0 - 3.0;
+        float v1 = (4.0 * t - 16.0) / vw1 - 1.0;
+        float v2 = -(7.0 * t + 5.0) / vw2 + 1.0;
+        float v3 = -t / vw3 + 3.0;
+
+        sum += uw0 * vw0 * SAMPLE_SHADOW_MAP(u0, v0);
+        sum += uw1 * vw0 * SAMPLE_SHADOW_MAP(u1, v0);
+        sum += uw2 * vw0 * SAMPLE_SHADOW_MAP(u2, v0);
+        sum += uw3 * vw0 * SAMPLE_SHADOW_MAP(u3, v0);
+
+        sum += uw0 * vw1 * SAMPLE_SHADOW_MAP(u0, v1);
+        sum += uw1 * vw1 * SAMPLE_SHADOW_MAP(u1, v1);
+        sum += uw2 * vw1 * SAMPLE_SHADOW_MAP(u2, v1);
+        sum += uw3 * vw1 * SAMPLE_SHADOW_MAP(u3, v1);
+
+        sum += uw0 * vw2 * SAMPLE_SHADOW_MAP(u0, v2);
+        sum += uw1 * vw2 * SAMPLE_SHADOW_MAP(u1, v2);
+        sum += uw2 * vw2 * SAMPLE_SHADOW_MAP(u2, v2);
+        sum += uw3 * vw2 * SAMPLE_SHADOW_MAP(u3, v2);
+
+        sum += uw0 * vw3 * SAMPLE_SHADOW_MAP(u0, v3);
+        sum += uw1 * vw3 * SAMPLE_SHADOW_MAP(u1, v3);
+        sum += uw2 * vw3 * SAMPLE_SHADOW_MAP(u2, v3);
+        sum += uw3 * vw3 * SAMPLE_SHADOW_MAP(u3, v3);
+
+        return sum * 1.0 / 2704.0;
+    #else
+        return 0.0;
+    #endif
+#undef SAMPLE_SHADOW_MAP
+}
+
+
+
 float ComputeShadowAmount(ShadowMapAttribs          ShadowAttribs,
                           in Texture2DArray<float>  tex2DShadowMap,
                           in SamplerComparisonState tex2DShadowMap_sampler,
@@ -114,29 +252,10 @@ float ComputeShadowAmount(ShadowMapAttribs          ShadowAttribs,
     f2DepthSlopeScaledBias /= ShadowMapDim.xy;
 
     float fractionalSamplingError = dot( float2(1.0, 1.0), abs(f2DepthSlopeScaledBias.xy) );
-    fractionalSamplingError = max(fractionalSamplingError, 1e-5);
+    fractionalSamplingError = max(fractionalSamplingError, 1e-5 * f3CascadeLightSpaceScale.z);
     f3ShadowMapUVDepth.z -= fractionalSamplingError;
-    
-    float fLightAmount = tex2DShadowMap.SampleCmp(tex2DShadowMap_sampler, float3(f3ShadowMapUVDepth.xy, Cascade), f3ShadowMapUVDepth.z);
 
-#if SMOOTH_SHADOWS
-        float2 Offsets[4];
-        Offsets[0] = float2(-1.0, -1.0);
-        Offsets[1] = float2(+1.0, -1.0);
-        Offsets[2] = float2(-1.0, +1.0);
-        Offsets[3] = float2(+1.0, +1.0);
-        
-        [unroll]
-        for(int i=0; i<4; ++i)
-        {
-            float fDepthBias = dot(Offsets[i].xy, f2DepthSlopeScaledBias.xy);
-            float2 f2Offset = Offsets[i].xy /  ShadowMapDim.xy;
-            fLightAmount += tex2DShadowMap.SampleCmp( tex2DShadowMap_sampler, float3(f3ShadowMapUVDepth.xy + f2Offset.xy, Cascade), f3ShadowMapUVDepth.z + fDepthBias );
-        }
-        fLightAmount /= 5.0;
-#endif
-    return fLightAmount;
+    return FilterShadowMapOptimizedPCF(tex2DShadowMap, tex2DShadowMap_sampler, ShadowMapDim, f3ShadowMapUVDepth, Cascade, f2DepthSlopeScaledBias);
 }
-
 
 #endif //_SHADOWS_FXH_
