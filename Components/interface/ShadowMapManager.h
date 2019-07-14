@@ -52,10 +52,24 @@ public:
 
     struct DistributeCascadeInfo
     {
-        const float4x4*    pCameraView = nullptr;
-        const float4x4*    pCameraProj = nullptr;
-        const float3*      pCameraPos  = nullptr;
-        const float3*      pLightDir   = nullptr;
+        const float4x4*    pCameraView  = nullptr;
+        const float4x4*    pCameraWorld = nullptr;
+        const float4x4*    pCameraProj  = nullptr;
+        const float3*      pCameraPos   = nullptr;
+        const float3*      pLightDir    = nullptr;
+
+        // Snap cascades to texels in light view space
+        bool               SnapCascades       = true;
+        
+        // Stabilize cascade extents in light view space
+        bool               StabilizeExtents   = true;
+
+        // Use same extents for X and Y axis. Enabled automatically if StabilizeExtents == true
+        bool               EqualizeExtents    = true;
+
+        // Maximum shadow filter radius
+        float              MaxFilterRadius    = 0.f;
+
         std::function<void(int, float&, float&)> AdjustCascadeRange;
     };
 
