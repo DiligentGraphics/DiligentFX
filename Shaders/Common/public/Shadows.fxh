@@ -116,10 +116,11 @@ float FilterShadowMapOptimizedPCF(in Texture2DArray<float>  tex2DShadowMap,
 
     float sum = 0;
 
-#define SAMPLE_SHADOW_MAP(u, v) tex2DShadowMap.SampleCmpLevelZero(tex2DShadowMap_sampler, float3(base_uv.xy + float2(u,v) * shadowMapSizeInv, cascadeIdx), lightDepth + dot(float2(u, v), receiverPlaneDepthBias))
+    // It is essential to clamp biased depth to [0,1] to avoid shadow leaks at cascade boundaries
+#define SAMPLE_SHADOW_MAP(u, v) tex2DShadowMap.SampleCmpLevelZero(tex2DShadowMap_sampler, float3(base_uv.xy + float2(u,v) * shadowMapSizeInv, cascadeIdx), saturate(lightDepth + dot(float2(u, v), receiverPlaneDepthBias)))
     #if SHADOW_FILTER_SIZE == 2
 
-        return tex2DShadowMap.SampleCmpLevelZero(tex2DShadowMap_sampler, float3(shadowPos.xy, cascadeIdx), lightDepth);
+        return tex2DShadowMap.SampleCmpLevelZero(tex2DShadowMap_sampler, float3(shadowPos.xy, cascadeIdx), saturate(lightDepth));
 
     #elif SHADOW_FILTER_SIZE == 3
 
