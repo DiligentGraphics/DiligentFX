@@ -73,7 +73,7 @@
 "    float fCascadePartitioningFactor    DEFAULT_VALUE(0.95f);\n"
 "\n"
 "    float ReceiverPlaneDepthBiasClamp   DEFAULT_VALUE(10);\n"
-"    float Dummy0;\n"
+"    BOOL  bVisualizeShadowing           DEFAULT_VALUE(0);\n"
 "    float Dummy1;\n"
 "    float Dummy2;\n"
 "};\n"
