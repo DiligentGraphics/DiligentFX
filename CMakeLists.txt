@@ -91,5 +91,5 @@ if(NOT FILE2STRING_PATH STREQUAL "")
         "\n};\n"
         )
 else()
-    message(WARNING "File2String utility is currently unavailable on this host system. This is not an issues unless you modify epipolar light scattering shaders")
+    message(WARNING "File2String utility is currently unavailable on this host system. This is not an issues unless you modify shaders")
 endif()

@@ -130,11 +130,11 @@ float FilterShadowMapOptimizedPCF(in Texture2DArray<float>  tex2DShadowMap,
     //
     // Note that clamping at far depth boundary makes no difference as 1 < 1 produces 0 and so does 1+x < 1
     const float DepthClamp = 1e-8;
-#define SAMPLE_SHADOW_MAP(u, v) tex2DShadowMap.SampleCmpLevelZero(tex2DShadowMap_sampler, float3(base_uv.xy + float2(u,v) * shadowMapSizeInv, cascadeIdx), max(lightDepth + dot(float2(u, v), receiverPlaneDepthBias), DepthClamp))
+#define SAMPLE_SHADOW_MAP(u, v) tex2DShadowMap.SampleCmp(tex2DShadowMap_sampler, float3(base_uv.xy + float2(u,v) * shadowMapSizeInv, cascadeIdx), max(lightDepth + dot(float2(u, v), receiverPlaneDepthBias), DepthClamp))
 
     #if SHADOW_FILTER_SIZE == 2
 
-        return tex2DShadowMap.SampleCmpLevelZero(tex2DShadowMap_sampler, float3(shadowPos.xy, cascadeIdx), max(lightDepth, DepthClamp));
+        return tex2DShadowMap.SampleCmp(tex2DShadowMap_sampler, float3(shadowPos.xy, cascadeIdx), max(lightDepth, DepthClamp));
 
     #elif SHADOW_FILTER_SIZE == 3
 
