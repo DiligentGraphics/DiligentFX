@@ -116,11 +116,25 @@ float FilterShadowMapOptimizedPCF(in Texture2DArray<float>  tex2DShadowMap,
 
     float sum = 0;
 
-    // It is essential to clamp biased depth to [0,1] to avoid shadow leaks at cascade boundaries
-#define SAMPLE_SHADOW_MAP(u, v) tex2DShadowMap.SampleCmpLevelZero(tex2DShadowMap_sampler, float3(base_uv.xy + float2(u,v) * shadowMapSizeInv, cascadeIdx), saturate(lightDepth + dot(float2(u, v), receiverPlaneDepthBias)))
+    // It is essential to clamp biased depth to 0 to avoid shadow leaks at near cascade depth boundary.
+    //        
+    //            No clamping                 With clamping
+    //                                      
+    //              \ |                             ||    
+    //       ==>     \|                             ||
+    //                |                             ||         
+    // Light ==>      |\                            |\         
+    //                | \Receiver plane             | \ Receiver plane
+    //       ==>      |  \                          |  \   
+    //                0   ...   1                   0   ...   1
+    //
+    // Note that clamping at far depth boundary makes no difference as 1 < 1 produces 0 and so does 1+x < 1
+    const float DepthClamp = 1e-8;
+#define SAMPLE_SHADOW_MAP(u, v) tex2DShadowMap.SampleCmpLevelZero(tex2DShadowMap_sampler, float3(base_uv.xy + float2(u,v) * shadowMapSizeInv, cascadeIdx), max(lightDepth + dot(float2(u, v), receiverPlaneDepthBias), DepthClamp))
+
     #if SHADOW_FILTER_SIZE == 2
 
-        return tex2DShadowMap.SampleCmpLevelZero(tex2DShadowMap_sampler, float3(shadowPos.xy, cascadeIdx), saturate(lightDepth));
+        return tex2DShadowMap.SampleCmpLevelZero(tex2DShadowMap_sampler, float3(shadowPos.xy, cascadeIdx), max(lightDepth, DepthClamp));
 
     #elif SHADOW_FILTER_SIZE == 3
 
@@ -255,7 +269,7 @@ float ComputeShadowAmount(ShadowMapAttribs          ShadowAttribs,
     f2DepthSlopeScaledBias /= ShadowMapDim.xy;
 
     float fractionalSamplingError = dot( float2(1.0, 1.0), abs(f2DepthSlopeScaledBias.xy) );
-    fractionalSamplingError = max(fractionalSamplingError, 1e-5 * f3CascadeLightSpaceScale.z);
+    fractionalSamplingError = max(fractionalSamplingError, 1e-5);
     f3ShadowMapUVDepth.z -= fractionalSamplingError;
 
     return FilterShadowMapOptimizedPCF(tex2DShadowMap, tex2DShadowMap_sampler, ShadowMapDim, f3ShadowMapUVDepth, Cascade, f2DepthSlopeScaledBias);
