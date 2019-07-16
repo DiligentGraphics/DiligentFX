@@ -65,6 +65,8 @@ struct ShadowMapAttribs
     float4 f4CascadeCamSpaceZEnd[MAX_CASCADES/4];
 #endif
 
+    float4 f4ShadowMapDim;    // Width, Height, 1/Width, 1/Height
+
     // Number of shadow cascades
     int   iNumCascades                  DEFAULT_VALUE(0);
     float fNumCascades                  DEFAULT_VALUE(0);
@@ -74,8 +76,8 @@ struct ShadowMapAttribs
 
     float ReceiverPlaneDepthBiasClamp   DEFAULT_VALUE(10);
     BOOL  bVisualizeShadowing           DEFAULT_VALUE(0);
-    float Dummy1;
-    float Dummy2;
+    float FixedDepthBias                DEFAULT_VALUE(1e-5f);
+    float Dummy;
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
     CHECK_STRUCT_ALIGNMENT(ShadowMapAttribs);

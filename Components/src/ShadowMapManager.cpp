@@ -85,6 +85,10 @@ void ShadowMapManager::DistributeCascades(const DistributeCascadeInfo& Info,
     const auto IsGL = DevCaps.IsGLDevice();
     const auto& SMDesc = m_pShadowMapSRV->GetTexture()->GetDesc();
     float2 f2CascadeSize = float2(static_cast<float>(SMDesc.Width), static_cast<float>(SMDesc.Height));
+    ShadowAttribs.f4ShadowMapDim.x = f2CascadeSize.x;
+    ShadowAttribs.f4ShadowMapDim.y = f2CascadeSize.y;
+    ShadowAttribs.f4ShadowMapDim.z = 1.f / f2CascadeSize.x;
+    ShadowAttribs.f4ShadowMapDim.w = 1.f / f2CascadeSize.y;
 
     float3 LightSpaceX, LightSpaceY, LightSpaceZ;
     LightSpaceZ = *Info.pLightDir;

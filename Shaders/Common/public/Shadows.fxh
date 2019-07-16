@@ -97,22 +97,19 @@ float2 ComputeReceiverPlaneDepthBias(float3 ShadowUVDepthDX,
 //-------------------------------------------------------------------------------------------------
 float FilterShadowMapOptimizedPCF(in Texture2DArray<float>  tex2DShadowMap,
                                   in SamplerComparisonState tex2DShadowMap_sampler,
-                                  in float2                 shadowMapSize,
+                                  in float4                 shadowMapSize,
                                   in float3                 shadowPos,
                                   in int                    cascadeIdx,
                                   in float2                 receiverPlaneDepthBias)
 {
     float lightDepth = shadowPos.z;
 
-    float2 uv = shadowPos.xy * shadowMapSize; // 1 unit - 1 texel
-    float2 shadowMapSizeInv = 1.0 / shadowMapSize;
-
+    float2 uv = shadowPos.xy * shadowMapSize.xy;
     float2 base_uv = floor(uv + float2(0.5, 0.5));
     float s = (uv.x + 0.5 - base_uv.x);
     float t = (uv.y + 0.5 - base_uv.y);
-
     base_uv -= float2(0.5, 0.5);
-    base_uv *= shadowMapSizeInv;
+    base_uv *= shadowMapSize.zw;
 
     float sum = 0;
 
@@ -130,7 +127,7 @@ float FilterShadowMapOptimizedPCF(in Texture2DArray<float>  tex2DShadowMap,
     //
     // Note that clamping at far depth boundary makes no difference as 1 < 1 produces 0 and so does 1+x < 1
     const float DepthClamp = 1e-8;
-#define SAMPLE_SHADOW_MAP(u, v) tex2DShadowMap.SampleCmp(tex2DShadowMap_sampler, float3(base_uv.xy + float2(u,v) * shadowMapSizeInv, cascadeIdx), max(lightDepth + dot(float2(u, v), receiverPlaneDepthBias), DepthClamp))
+#define SAMPLE_SHADOW_MAP(u, v) tex2DShadowMap.SampleCmp(tex2DShadowMap_sampler, float3(base_uv.xy + float2(u,v) * shadowMapSize.zw, cascadeIdx), max(lightDepth + dot(float2(u, v), receiverPlaneDepthBias), DepthClamp))
 
     #if SHADOW_FILTER_SIZE == 2
 
@@ -263,16 +260,13 @@ float ComputeShadowAmount(ShadowMapAttribs          ShadowAttribs,
     float2 f2DepthSlopeScaledBias = ComputeReceiverPlaneDepthBias(f3ddXShadowMapUVDepth, f3ddYShadowMapUVDepth);
     float2 SlopeScaledBiasClamp = float2(ShadowAttribs.ReceiverPlaneDepthBiasClamp, ShadowAttribs.ReceiverPlaneDepthBiasClamp);
     f2DepthSlopeScaledBias = clamp(f2DepthSlopeScaledBias, -SlopeScaledBiasClamp, SlopeScaledBiasClamp);
-    uint SMWidth, SMHeight, Elems; 
-    tex2DShadowMap.GetDimensions(SMWidth, SMHeight, Elems);
-    float2 ShadowMapDim = float2(SMWidth, SMHeight);
-    f2DepthSlopeScaledBias /= ShadowMapDim.xy;
+    f2DepthSlopeScaledBias *= ShadowAttribs.f4ShadowMapDim.zw;
 
-    float fractionalSamplingError = dot( float2(1.0, 1.0), abs(f2DepthSlopeScaledBias.xy) );
-    fractionalSamplingError = max(fractionalSamplingError, 1e-5);
-    f3ShadowMapUVDepth.z -= fractionalSamplingError;
+    float FractionalSamplingError = dot( float2(1.0, 1.0), abs(f2DepthSlopeScaledBias.xy) );
+    FractionalSamplingError = FractionalSamplingError + ShadowAttribs.FixedDepthBias;
+    f3ShadowMapUVDepth.z -= FractionalSamplingError;
 
-    return FilterShadowMapOptimizedPCF(tex2DShadowMap, tex2DShadowMap_sampler, ShadowMapDim, f3ShadowMapUVDepth, Cascade, f2DepthSlopeScaledBias);
+    return FilterShadowMapOptimizedPCF(tex2DShadowMap, tex2DShadowMap_sampler, ShadowAttribs.f4ShadowMapDim, f3ShadowMapUVDepth, Cascade, f2DepthSlopeScaledBias);
 }
 
 float3 GetCascadeColor(int Cascade)
