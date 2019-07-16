@@ -77,7 +77,7 @@
 "    float fReceiverPlaneDepthBiasClamp  DEFAULT_VALUE(10);\n"
 "    BOOL  bVisualizeShadowing           DEFAULT_VALUE(0);\n"
 "    float fFixedDepthBias               DEFAULT_VALUE(1e-5f);\n"
-"    float Dummy;\n"
+"    float fCascadeTransitionRegion      DEFAULT_VALUE(0.1f);\n"
 "};\n"
 "#ifdef CHECK_STRUCT_ALIGNMENT\n"
 "    CHECK_STRUCT_ALIGNMENT(ShadowMapAttribs);\n"

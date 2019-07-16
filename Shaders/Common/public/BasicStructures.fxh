@@ -77,7 +77,7 @@ struct ShadowMapAttribs
     float fReceiverPlaneDepthBiasClamp  DEFAULT_VALUE(10);
     BOOL  bVisualizeShadowing           DEFAULT_VALUE(0);
     float fFixedDepthBias               DEFAULT_VALUE(1e-5f);
-    float Dummy;
+    float fCascadeTransitionRegion      DEFAULT_VALUE(0.1f);
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
     CHECK_STRUCT_ALIGNMENT(ShadowMapAttribs);
