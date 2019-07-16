@@ -258,12 +258,12 @@ float ComputeShadowAmount(ShadowMapAttribs          ShadowAttribs,
     float3 f3ddYShadowMapUVDepth = ddy(f3PosInLightViewSpace) * f3CascadeLightSpaceScale * F3NDC_XYZ_TO_UVD_SCALE;
 
     float2 f2DepthSlopeScaledBias = ComputeReceiverPlaneDepthBias(f3ddXShadowMapUVDepth, f3ddYShadowMapUVDepth);
-    float2 SlopeScaledBiasClamp = float2(ShadowAttribs.ReceiverPlaneDepthBiasClamp, ShadowAttribs.ReceiverPlaneDepthBiasClamp);
-    f2DepthSlopeScaledBias = clamp(f2DepthSlopeScaledBias, -SlopeScaledBiasClamp, SlopeScaledBiasClamp);
+    float2 f2SlopeScaledBiasClamp = float2(ShadowAttribs.fReceiverPlaneDepthBiasClamp, ShadowAttribs.fReceiverPlaneDepthBiasClamp);
+    f2DepthSlopeScaledBias = clamp(f2DepthSlopeScaledBias, -f2SlopeScaledBiasClamp, f2SlopeScaledBiasClamp);
     f2DepthSlopeScaledBias *= ShadowAttribs.f4ShadowMapDim.zw;
 
     float FractionalSamplingError = dot( float2(1.0, 1.0), abs(f2DepthSlopeScaledBias.xy) );
-    FractionalSamplingError = FractionalSamplingError + ShadowAttribs.FixedDepthBias;
+    FractionalSamplingError = FractionalSamplingError + ShadowAttribs.fFixedDepthBias;
     f3ShadowMapUVDepth.z -= FractionalSamplingError;
 
     return FilterShadowMapOptimizedPCF(tex2DShadowMap, tex2DShadowMap_sampler, ShadowAttribs.f4ShadowMapDim, f3ShadowMapUVDepth, Cascade, f2DepthSlopeScaledBias);

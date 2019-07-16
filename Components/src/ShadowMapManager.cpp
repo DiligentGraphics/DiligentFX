@@ -224,7 +224,7 @@ void ShadowMapManager::DistributeCascades(const DistributeCascadeInfo& Info,
         }
 
         // Extend cascade Z range to allow room for filtering
-        float fZExtension = std::max(Info.MaxFixedFilterRadius.x / f2CascadeSize.x, Info.MaxFixedFilterRadius.y / f2CascadeSize.y) * ShadowAttribs.ReceiverPlaneDepthBiasClamp;
+        float fZExtension = std::max(Info.MaxFixedFilterRadius.x / f2CascadeSize.x, Info.MaxFixedFilterRadius.y / f2CascadeSize.y) * ShadowAttribs.fReceiverPlaneDepthBiasClamp;
         fZExtension = std::min(fZExtension, 0.25f);
         CurrCascade.f4MaxFilterRadiusProjSpace.z = fZExtension * (IsGL ? 2.f : 1.f);
         CurrCascade.f4MaxFilterRadiusProjSpace.w = fZExtension * (IsGL ? 2.f : 1.f);

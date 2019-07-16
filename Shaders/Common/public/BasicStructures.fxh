@@ -74,9 +74,9 @@ struct ShadowMapAttribs
 	BOOL  bVisualizeCascades            DEFAULT_VALUE(0);
     float fCascadePartitioningFactor    DEFAULT_VALUE(0.95f);
 
-    float ReceiverPlaneDepthBiasClamp   DEFAULT_VALUE(10);
+    float fReceiverPlaneDepthBiasClamp  DEFAULT_VALUE(10);
     BOOL  bVisualizeShadowing           DEFAULT_VALUE(0);
-    float FixedDepthBias                DEFAULT_VALUE(1e-5f);
+    float fFixedDepthBias               DEFAULT_VALUE(1e-5f);
     float Dummy;
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
