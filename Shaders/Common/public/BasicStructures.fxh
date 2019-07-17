@@ -38,8 +38,8 @@ struct CascadeAttribs
 	float4 f4LightSpaceScaledBias;
     float4 f4StartEndZ;
 
-    // Maximum filter radius in light projection space ([-1,+1] x [-1,+1])
-    float4 f4MaxFilterRadiusProjSpace;
+    // Cascade margin in light projection space ([-1, +1] x [-1, +1] x [-1(GL) or 0, +1])
+    float4 f4MarginProjSpace;
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
     CHECK_STRUCT_ALIGNMENT(CascadeAttribs);

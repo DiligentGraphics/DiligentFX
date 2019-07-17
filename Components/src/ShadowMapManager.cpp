@@ -211,8 +211,8 @@ void ShadowMapManager::DistributeCascades(const DistributeCascadeInfo& Info,
         f3CascadeExtent.y *= f2CascadeSize.y / (f2CascadeSize.y - f2Extension.y);
 
         // Filter radius is defined in projection space, thus x2
-        CurrCascade.f4MaxFilterRadiusProjSpace.x = Info.MaxFixedFilterRadius.x * 2.f / f2CascadeSize.x;
-        CurrCascade.f4MaxFilterRadiusProjSpace.y = Info.MaxFixedFilterRadius.y * 2.f / f2CascadeSize.y;
+        CurrCascade.f4MarginProjSpace.x = Info.MaxFixedFilterRadius.x * 2.f / f2CascadeSize.x;
+        CurrCascade.f4MarginProjSpace.y = Info.MaxFixedFilterRadius.y * 2.f / f2CascadeSize.y;
 
         // Align cascade center with the shadow map texels to alleviate temporal aliasing
         if (Info.SnapCascades)
@@ -226,8 +226,8 @@ void ShadowMapManager::DistributeCascades(const DistributeCascadeInfo& Info,
         // Extend cascade Z range to allow room for filtering
         float fZExtension = std::max(Info.MaxFixedFilterRadius.x / f2CascadeSize.x, Info.MaxFixedFilterRadius.y / f2CascadeSize.y) * ShadowAttribs.fReceiverPlaneDepthBiasClamp;
         fZExtension = std::min(fZExtension, 0.25f);
-        CurrCascade.f4MaxFilterRadiusProjSpace.z = fZExtension * (IsGL ? 2.f : 1.f);
-        CurrCascade.f4MaxFilterRadiusProjSpace.w = fZExtension * (IsGL ? 2.f : 1.f);
+        CurrCascade.f4MarginProjSpace.z = fZExtension * (IsGL ? 2.f : 1.f);
+        CurrCascade.f4MarginProjSpace.w = fZExtension * (IsGL ? 2.f : 1.f);
         f3CascadeExtent.z *= 1.f / (1.f - fZExtension * 2.f);
 
         // Compute new cascade min/max xy coords

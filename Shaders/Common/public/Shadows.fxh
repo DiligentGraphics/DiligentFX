@@ -11,6 +11,16 @@
 #   define FILTER_ACROSS_CASCADES 0
 #endif
 
+float GetDistanceToCascadeMargin(float3 f3PosInCascadeProjSpace, float4 f4MarginProjSpace)
+{
+    float4 f4DistToEdges;
+    f4DistToEdges.xy = float2(1.0, 1.0) - f4MarginProjSpace.xy - abs(f3PosInCascadeProjSpace.xy);
+    const float ZScale = 2.0 / (1.0 - NDC_MIN_Z);
+    f4DistToEdges.z = (f3PosInCascadeProjSpace.z - (NDC_MIN_Z + f4MarginProjSpace.z)) * ZScale;
+    f4DistToEdges.w = (1.0 - f4MarginProjSpace.w - f3PosInCascadeProjSpace.z) * ZScale;
+    return min(min(f4DistToEdges.x, f4DistToEdges.y), min(f4DistToEdges.z, f4DistToEdges.w));
+}
+
 void FindCascade(ShadowMapAttribs ShadowAttribs,
                  float3           f3PosInLightViewSpace,
                  float            fCameraViewSpaceZ,
@@ -30,14 +40,7 @@ void FindCascade(ShadowMapAttribs ShadowAttribs,
         CascadeAttribs Cascade = ShadowAttribs.Cascades[iCascadeIdx];
         f3CascadeLightSpaceScale = Cascade.f4LightSpaceScale.xyz;
         f3PosInCascadeProjSpace = f3PosInLightViewSpace * f3CascadeLightSpaceScale + ShadowAttribs.Cascades[iCascadeIdx].f4LightSpaceScaledBias.xyz;
-        float4 f4MaxFilterRadiusProjSpace = Cascade.f4MaxFilterRadiusProjSpace;
-
-        float4 f4DistToEdges;
-        f4DistToEdges.xy = float2(1.0, 1.0) - f4MaxFilterRadiusProjSpace.xy - abs(f3PosInCascadeProjSpace.xy);
-        const float ZScale = 2.0 / (1.0 - NDC_MIN_Z);
-        f4DistToEdges.z = (f3PosInCascadeProjSpace.z - (NDC_MIN_Z + f4MaxFilterRadiusProjSpace.z)) * ZScale;
-        f4DistToEdges.w = (1.0 - f4MaxFilterRadiusProjSpace.w - f3PosInCascadeProjSpace.z) * ZScale;
-        fMinDistToEdge = min(min(f4DistToEdges.x, f4DistToEdges.y), min(f4DistToEdges.z, f4DistToEdges.w));
+        fMinDistToEdge = GetDistanceToCascadeMargin(f3PosInCascadeProjSpace, Cascade.f4MarginProjSpace);
 
         if(fMinDistToEdge > 0.0)
             break;
@@ -279,8 +282,8 @@ float ComputeShadowAmount(in ShadowMapAttribs       ShadowAttribs,
 {
     float3 f3PosInCascadeProjSpace  = float3(0.0, 0.0, 0.0);
     float3 f3CascadeLightSpaceScale = float3(0.0, 0.0, 0.0);
-    float  fMinDistToEdge = 0.0;
-    FindCascade(ShadowAttribs, f3PosInLightViewSpace.xyz, fCameraSpaceZ, f3PosInCascadeProjSpace, f3CascadeLightSpaceScale, iCascadeIdx, fMinDistToEdge);
+    float  fMinDistToMargin = 0.0;
+    FindCascade(ShadowAttribs, f3PosInLightViewSpace.xyz, fCameraSpaceZ, f3PosInCascadeProjSpace, f3CascadeLightSpaceScale, iCascadeIdx, fMinDistToMargin);
     if( iCascadeIdx == ShadowAttribs.iNumCascades )
         return 1.0;
 
@@ -290,10 +293,13 @@ float ComputeShadowAmount(in ShadowMapAttribs       ShadowAttribs,
 #if FILTER_ACROSS_CASCADES
     if (iCascadeIdx+1 < ShadowAttribs.iNumCascades)
     {
-        float3 f3NextCascadeLightSpaceScale = ShadowAttribs.Cascades[iCascadeIdx+1].f4LightSpaceScale.xyz;
-        float3 f3PosInNextCascadeProjSpace = f3PosInLightViewSpace * f3NextCascadeLightSpaceScale + ShadowAttribs.Cascades[iCascadeIdx+1].f4LightSpaceScaledBias.xyz;
-        float NextCascadeShadow = ComputeCascadeShadow(ShadowAttribs, tex2DShadowMap, tex2DShadowMap_sampler, iCascadeIdx+1, f3PosInLightViewSpace, f3NextCascadeLightSpaceScale, f3PosInNextCascadeProjSpace);
-        fNextCascadeBlendAmount = saturate(1.0 - fMinDistToEdge / ShadowAttribs.fCascadeTransitionRegion);
+        CascadeAttribs NextCascade = ShadowAttribs.Cascades[iCascadeIdx + 1];
+        float3 f3PosInNextCascadeProjSpace = f3PosInLightViewSpace * NextCascade.f4LightSpaceScale.xyz + NextCascade.f4LightSpaceScaledBias.xyz;
+        float NextCascadeShadow = ComputeCascadeShadow(ShadowAttribs, tex2DShadowMap, tex2DShadowMap_sampler, iCascadeIdx+1, f3PosInLightViewSpace, NextCascade.f4LightSpaceScale.xyz, f3PosInNextCascadeProjSpace);
+        float fMinDistToNextCascadeMargin = GetDistanceToCascadeMargin(f3PosInNextCascadeProjSpace, NextCascade.f4MarginProjSpace);
+        fNextCascadeBlendAmount = 
+            saturate(1.0 - fMinDistToMargin / ShadowAttribs.fCascadeTransitionRegion) * 
+            saturate(fMinDistToNextCascadeMargin / ShadowAttribs.fCascadeTransitionRegion); // Make sure that we don't sample outside of the next cascade
         ShadowAmount = lerp(ShadowAmount, NextCascadeShadow, fNextCascadeBlendAmount);
     }
 #endif
