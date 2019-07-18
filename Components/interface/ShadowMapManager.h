@@ -103,13 +103,16 @@ private:
     std::vector<RefCntAutoPtr<ITextureView>> m_pShadowMapDSVs;
     RefCntAutoPtr<ITextureView>              m_pFilterableShadowMapSRV;
     std::vector<RefCntAutoPtr<ITextureView>> m_pFilterableShadowMapRTVs;
+    RefCntAutoPtr<ITextureView>              m_pIntermediateSRV;
+    RefCntAutoPtr<ITextureView>              m_pIntermediateRTV;
     RefCntAutoPtr<IBuffer>                   m_pConversionAttribsBuffer;
     std::vector<CascadeTransforms>           m_CascadeTransforms;
     struct ShadowConversionTechnique
     {
         RefCntAutoPtr<IPipelineState> HorzPassPSO;
         RefCntAutoPtr<IPipelineState> VertPassPSO;
-        RefCntAutoPtr<IShaderResourceBinding> SRB;
+        RefCntAutoPtr<IShaderResourceBinding> HorzPassSRB;
+        RefCntAutoPtr<IShaderResourceBinding> VertPassSRB;
     };
     ShadowConversionTechnique m_ConversionTech[SHADOW_MODE_EVSM4];
 };

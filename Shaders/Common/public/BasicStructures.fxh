@@ -91,6 +91,11 @@ struct ShadowMapAttribs
     float fVSMLightBleedingReduction    DEFAULT_VALUE(0);
     float fEVSMPositiveExponent         DEFAULT_VALUE(40);
     float fEVSMNegativeExponent         DEFAULT_VALUE(5);
+
+    int   iFixedFilterSize              DEFAULT_VALUE(3); // 3x3 filter
+    float fDummy0;
+    float fDummy1;
+    float fDummy2;
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
     CHECK_STRUCT_ALIGNMENT(ShadowMapAttribs);

@@ -78,6 +78,8 @@ void ShadowMapManager::Initialize(IRenderDevice* pDevice, const InitInfo& initIn
 
     m_pFilterableShadowMapSRV.Release();
     m_pFilterableShadowMapRTVs.clear();
+    m_pIntermediateSRV.Release();
+    m_pIntermediateRTV.Release();
     if (initInfo.ShadowMode == SHADOW_MODE_VSM   ||
         initInfo.ShadowMode == SHADOW_MODE_EVSM2 ||
         initInfo.ShadowMode == SHADOW_MODE_EVSM4)
@@ -104,6 +106,12 @@ void ShadowMapManager::Initialize(IRenderDevice* pDevice, const InitInfo& initIn
             ptex2DFilterableShadowMap->CreateView(RTVDesc, &m_pFilterableShadowMapRTVs[iArrSlice]);
         }
         
+        ShadowMapDesc.ArraySize = 1;
+        RefCntAutoPtr<ITexture> ptex2DIntermediate;
+        pDevice->CreateTexture(ShadowMapDesc, nullptr, &ptex2DIntermediate);
+        m_pIntermediateSRV = ptex2DIntermediate->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        m_pIntermediateRTV = ptex2DIntermediate->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET);
+
         if (initInfo.pFilterableShadowMapSampler != nullptr)
             m_pFilterableShadowMapSRV->SetSampler(initInfo.pFilterableShadowMapSampler);
 
@@ -336,6 +344,8 @@ void ShadowMapManager::InitializeConversionTechniques(TEXTURE_FORMAT FilterableS
             m_pDevice->CreateShader(VertShaderCI, &pScreenSizeTriVS);
         }
 
+        PipelineStateDesc PSODesc;
+
         ShaderCreateInfo ShaderCI;
         ShaderCI.Desc.ShaderType            = SHADER_TYPE_PIXEL;
         ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
@@ -346,6 +356,7 @@ void ShadowMapManager::InitializeConversionTechniques(TEXTURE_FORMAT FilterableS
         {
             ShaderCI.EntryPoint = "VSMHorzPS";
             ShaderCI.Desc.Name  = "VSM horizontal pass PS";
+            PSODesc.Name = "VSM horizontal pass";
         }
         else 
         {
@@ -358,8 +369,7 @@ void ShadowMapManager::InitializeConversionTechniques(TEXTURE_FORMAT FilterableS
         {
             {SHADER_TYPE_PIXEL, "g_tex2DShadowMap", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE}
         };
-        PipelineStateDesc PSODesc;
-        PSODesc.Name = "VSM horizontal pass";
+        
         PSODesc.ResourceLayout.Variables    = Variables;
         PSODesc.ResourceLayout.NumVariables = _countof(Variables);
         auto& GraphicsPipeline = PSODesc.GraphicsPipeline;
@@ -380,6 +390,7 @@ void ShadowMapManager::InitializeConversionTechniques(TEXTURE_FORMAT FilterableS
         {
             ShaderCI.EntryPoint = "VSMVertPS";
             ShaderCI.Desc.Name  = "VSM vertical pass PS";
+            PSODesc.Name = "VSM vertical pass";
         }
         else 
         {
@@ -387,8 +398,7 @@ void ShadowMapManager::InitializeConversionTechniques(TEXTURE_FORMAT FilterableS
         }
         RefCntAutoPtr<IShader> pVSMVertPS;
         m_pDevice->CreateShader(ShaderCI, &pVSMVertPS);
-        PSODesc.Name = "VSM vertical pass";
-        GraphicsPipeline.pPS = pVSMHorzPS;
+        GraphicsPipeline.pPS = pVSMVertPS;
         m_pDevice->CreatePipelineState(PSODesc, &Tech.VertPassPSO);
         Tech.VertPassPSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbConversionAttribs")->Set(m_pConversionAttribsBuffer);
     }
@@ -399,9 +409,13 @@ void ShadowMapManager::InitializeResourceBindings()
     for (int mode = SHADOW_MODE_VSM; mode <= SHADOW_MODE_VSM; ++mode)
     {
         auto& Tech = m_ConversionTech[mode];
-        Tech.SRB.Release();
-        Tech.HorzPassPSO->CreateShaderResourceBinding(&Tech.SRB, true);
-        Tech.SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_tex2DShadowMap")->Set(GetSRV());
+        Tech.HorzPassSRB.Release();
+        Tech.HorzPassPSO->CreateShaderResourceBinding(&Tech.HorzPassSRB, true);
+        Tech.HorzPassSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_tex2DShadowMap")->Set(GetSRV());
+
+        Tech.VertPassSRB.Release();
+        Tech.VertPassPSO->CreateShaderResourceBinding(&Tech.VertPassSRB, true);
+        Tech.VertPassSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_tex2DShadowMap")->Set(m_pIntermediateSRV);
     }
 }
 
@@ -411,23 +425,36 @@ void ShadowMapManager::ConvertToFilterable(IDeviceContext* pCtx, const ShadowMap
     {
         auto& Tech = m_ConversionTech[m_ShadowMode];
         const auto& ShadowMapDesc = m_pShadowMapSRV->GetTexture()->GetDesc();
-        VERIFY(ShadowMapDesc.ArraySize == ShadowAttribs.iNumCascades, "Inconsistent number of cascades");
+        VERIFY(static_cast<int>(ShadowMapDesc.ArraySize) == ShadowAttribs.iNumCascades, "Inconsistent number of cascades");
+        int iFilterRadius = (ShadowAttribs.iFixedFilterSize-1)/2;
         for (Uint32 i=0; i < ShadowMapDesc.ArraySize; ++i)
         {
-            ITextureView* pRTVs[] = {m_pFilterableShadowMapRTVs[i]};
+            ITextureView* pRTVs[] = {iFilterRadius == 0 ? m_pFilterableShadowMapRTVs[i] : m_pIntermediateRTV};
             pCtx->SetRenderTargets(1, pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
             {
                 struct ConversionAttribs
                 {
                     int iCascade;
+                    int iFilterRadius;
                 };
                 MapHelper<ConversionAttribs> pAttribs(pCtx, m_pConversionAttribsBuffer, MAP_WRITE, MAP_FLAG_DISCARD );
-                pAttribs->iCascade = i;
+                pAttribs->iCascade      = i;
+                pAttribs->iFilterRadius = iFilterRadius;
             }
             pCtx->SetPipelineState(Tech.HorzPassPSO);
-            pCtx->CommitShaderResources(Tech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+            pCtx->CommitShaderResources(Tech.HorzPassSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
             DrawAttribs drawAttribs{3, DRAW_FLAG_VERIFY_ALL};
             pCtx->Draw(drawAttribs);
+
+            if (iFilterRadius > 0)
+            {
+                pRTVs[0] = m_pFilterableShadowMapRTVs[i];
+                pCtx->SetRenderTargets(1, pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+                pCtx->SetPipelineState(Tech.VertPassPSO);
+                pCtx->CommitShaderResources(Tech.VertPassSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+                DrawAttribs drawAttribs{3, DRAW_FLAG_VERIFY_ALL};
+                pCtx->Draw(drawAttribs);
+            }
         }
     }
 }
