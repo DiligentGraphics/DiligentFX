@@ -306,36 +306,44 @@ float GetNextCascadeBlendAmount(ShadowMapAttribs    ShadowAttribs,
            saturate(NextCscdSamplingInfo.fMinDistToMargin / ShadowAttribs.fCascadeTransitionRegion); // Make sure that we don't sample outside of the next cascade
 }
 
-float FilterShadowMap(in ShadowMapAttribs       ShadowAttribs,
-                      in Texture2DArray<float>  tex2DShadowMap,
-                      in SamplerComparisonState tex2DShadowMap_sampler,
-                      in float3                 f3PosInLightViewSpace,
-                      in float                  fCameraSpaceZ,
-                      out int                   iCascadeIdx,
-                      out float                 fNextCascadeBlendAmount)
+struct FilteredShadow
+{
+    float fLightAmount;
+    int   iCascadeIdx;
+    float fNextCascadeBlendAmount;
+};
+
+FilteredShadow FilterShadowMap(in ShadowMapAttribs       ShadowAttribs,
+                               in Texture2DArray<float>  tex2DShadowMap,
+                               in SamplerComparisonState tex2DShadowMap_sampler,
+                               in float3                 f3PosInLightViewSpace,
+                               in float                  fCameraSpaceZ)
 {
     CascadeSamplingInfo SamplingInfo = FindCascade(ShadowAttribs, f3PosInLightViewSpace.xyz, fCameraSpaceZ);
-    iCascadeIdx             = SamplingInfo.iCascadeIdx;
-    fNextCascadeBlendAmount = 0.0;
+    FilteredShadow Shadow;
+    Shadow.iCascadeIdx             = SamplingInfo.iCascadeIdx;
+    Shadow.fNextCascadeBlendAmount = 0.0;
+    Shadow.fLightAmount            = 1.0;
+
     if (SamplingInfo.iCascadeIdx == ShadowAttribs.iNumCascades)
-        return 1.0;
+        return Shadow;
 
     float3 f3ddXPosInLightViewSpace = ddx(f3PosInLightViewSpace);
     float3 f3ddYPosInLightViewSpace = ddy(f3PosInLightViewSpace);
 
-    float ShadowAmount = FilterShadowCascade(ShadowAttribs, tex2DShadowMap, tex2DShadowMap_sampler, f3ddXPosInLightViewSpace, f3ddYPosInLightViewSpace, SamplingInfo);
+    Shadow.fLightAmount = FilterShadowCascade(ShadowAttribs, tex2DShadowMap, tex2DShadowMap_sampler, f3ddXPosInLightViewSpace, f3ddYPosInLightViewSpace, SamplingInfo);
     
 #if FILTER_ACROSS_CASCADES
-    if (iCascadeIdx+1 < ShadowAttribs.iNumCascades)
+    if (SamplingInfo.iCascadeIdx+1 < ShadowAttribs.iNumCascades)
     {
-        CascadeSamplingInfo NextCscdSamplingInfo = GetCascadeSamplingInfo(ShadowAttribs, f3PosInLightViewSpace, iCascadeIdx + 1);
+        CascadeSamplingInfo NextCscdSamplingInfo = GetCascadeSamplingInfo(ShadowAttribs, f3PosInLightViewSpace, SamplingInfo.iCascadeIdx + 1);
         float NextCascadeShadow = FilterShadowCascade(ShadowAttribs, tex2DShadowMap, tex2DShadowMap_sampler, f3ddXPosInLightViewSpace, f3ddYPosInLightViewSpace, NextCscdSamplingInfo);
-        fNextCascadeBlendAmount = GetNextCascadeBlendAmount(ShadowAttribs, fCameraSpaceZ, SamplingInfo, NextCscdSamplingInfo);
-        ShadowAmount = lerp(ShadowAmount, NextCascadeShadow, fNextCascadeBlendAmount);
+        Shadow.fNextCascadeBlendAmount = GetNextCascadeBlendAmount(ShadowAttribs, fCameraSpaceZ, SamplingInfo, NextCscdSamplingInfo);
+        Shadow.fLightAmount = lerp(Shadow.fLightAmount, NextCascadeShadow, Shadow.fNextCascadeBlendAmount);
     }
 #endif
 
-    return ShadowAmount;
+    return Shadow;
 }
 
 
@@ -390,43 +398,43 @@ float SampleFilterableShadowCascade(in ShadowMapAttribs       ShadowAttribs,
     return SampleVSM(ShadowAttribs, tex2DShadowMap, tex2DShadowMap_sampler, SamplingInfo, f3ddXShadowMapUVDepth.xy, f3ddYShadowMapUVDepth.xy);
 }
 
-float SampleFilterableShadowMap(in ShadowMapAttribs       ShadowAttribs,
-                                in Texture2DArray<float4> tex2DShadowMap,
-                                in SamplerState           tex2DShadowMap_sampler,
-                                in float3                 f3PosInLightViewSpace,
-                                in float                  fCameraSpaceZ,
-                                out int                   iCascadeIdx,
-                                out float                 fNextCascadeBlendAmount)
+FilteredShadow SampleFilterableShadowMap(in ShadowMapAttribs       ShadowAttribs,
+                                         in Texture2DArray<float4> tex2DShadowMap,
+                                         in SamplerState           tex2DShadowMap_sampler,
+                                         in float3                 f3PosInLightViewSpace,
+                                         in float                  fCameraSpaceZ)
 {
     CascadeSamplingInfo SamplingInfo = FindCascade(ShadowAttribs, f3PosInLightViewSpace.xyz, fCameraSpaceZ);
-    iCascadeIdx             = SamplingInfo.iCascadeIdx;
-    fNextCascadeBlendAmount = 0.0;
+    FilteredShadow Shadow;
+    Shadow.iCascadeIdx             = SamplingInfo.iCascadeIdx;
+    Shadow.fNextCascadeBlendAmount = 0.0;
+    Shadow.fLightAmount            = 1.0;
 
     if (SamplingInfo.iCascadeIdx == ShadowAttribs.iNumCascades)
-        return 1.0;
+        return Shadow;
 
     float3 f3ddXPosInLightViewSpace = ddx(f3PosInLightViewSpace);
     float3 f3ddYPosInLightViewSpace = ddy(f3PosInLightViewSpace);
 
-    float ShadowAmount = SampleFilterableShadowCascade(ShadowAttribs, tex2DShadowMap, tex2DShadowMap_sampler, f3ddXPosInLightViewSpace, f3ddYPosInLightViewSpace, SamplingInfo);
+    Shadow.fLightAmount = SampleFilterableShadowCascade(ShadowAttribs, tex2DShadowMap, tex2DShadowMap_sampler, f3ddXPosInLightViewSpace, f3ddYPosInLightViewSpace, SamplingInfo);
 
 #if FILTER_ACROSS_CASCADES
-    if (iCascadeIdx+1 < ShadowAttribs.iNumCascades)
+    if (SamplingInfo.iCascadeIdx+1 < ShadowAttribs.iNumCascades)
     {
-        CascadeSamplingInfo NextCscdSamplingInfo = GetCascadeSamplingInfo(ShadowAttribs, f3PosInLightViewSpace, iCascadeIdx + 1);
+        CascadeSamplingInfo NextCscdSamplingInfo = GetCascadeSamplingInfo(ShadowAttribs, f3PosInLightViewSpace, SamplingInfo.iCascadeIdx + 1);
         float NextCascadeShadow = SampleFilterableShadowCascade(ShadowAttribs, tex2DShadowMap, tex2DShadowMap_sampler, f3ddXPosInLightViewSpace, f3ddYPosInLightViewSpace, NextCscdSamplingInfo);
-        fNextCascadeBlendAmount = GetNextCascadeBlendAmount(ShadowAttribs, fCameraSpaceZ, SamplingInfo, NextCscdSamplingInfo);
-        ShadowAmount = lerp(ShadowAmount, NextCascadeShadow, fNextCascadeBlendAmount);
+        Shadow.fNextCascadeBlendAmount = GetNextCascadeBlendAmount(ShadowAttribs, fCameraSpaceZ, SamplingInfo, NextCscdSamplingInfo);
+        Shadow.fLightAmount = lerp(Shadow.fLightAmount, NextCascadeShadow, Shadow.fNextCascadeBlendAmount);
     }
 #endif
 
-    return ShadowAmount;
+    return Shadow;
 }
 
 
 
 
-float3 GetCascadeColor(int Cascade, float fNextCascadeBlendAmount)
+float3 GetCascadeColor(FilteredShadow Shadow)
 {
     float3 f3CascadeColors[MAX_CASCADES];
     f3CascadeColors[0] = float3(0,1,0);
@@ -437,10 +445,10 @@ float3 GetCascadeColor(int Cascade, float fNextCascadeBlendAmount)
     f3CascadeColors[5] = float3(0.3, 1, 0.7);
     f3CascadeColors[6] = float3(0.7, 0.3,1);
     f3CascadeColors[7] = float3(1, 0.7, 0.3);
-    float3 Color = f3CascadeColors[min(Cascade, MAX_CASCADES-1)];
+    float3 Color = f3CascadeColors[min(Shadow.iCascadeIdx, MAX_CASCADES-1)];
 #if FILTER_ACROSS_CASCADES
-    float3 NextCascadeColor = f3CascadeColors[min(Cascade+1, MAX_CASCADES-1)];
-    Color = lerp(Color, NextCascadeColor, fNextCascadeBlendAmount);
+    float3 NextCascadeColor = f3CascadeColors[min(Shadow.iCascadeIdx+1, MAX_CASCADES-1)];
+    Color = lerp(Color, NextCascadeColor, Shadow.fNextCascadeBlendAmount);
 #endif
     return Color;
 }
