@@ -85,8 +85,9 @@ void ShadowMapManager::Initialize(IRenderDevice* pDevice, const InitInfo& initIn
         initInfo.ShadowMode == SHADOW_MODE_EVSM4)
     {
         ShadowMapDesc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
-        if (initInfo.ShadowMode == SHADOW_MODE_VSM ||
-            initInfo.ShadowMode == SHADOW_MODE_EVSM2)
+        if (initInfo.ShadowMode == SHADOW_MODE_VSM)
+            ShadowMapDesc.Format = initInfo.Is32BitFilterableFmt ? TEX_FORMAT_RG32_FLOAT : TEX_FORMAT_RG16_UNORM;
+        else if(initInfo.ShadowMode == SHADOW_MODE_EVSM2)
             ShadowMapDesc.Format = initInfo.Is32BitFilterableFmt ? TEX_FORMAT_RG32_FLOAT : TEX_FORMAT_RG16_FLOAT;
         else if (initInfo.ShadowMode == SHADOW_MODE_EVSM4)
             ShadowMapDesc.Format = initInfo.Is32BitFilterableFmt ? TEX_FORMAT_RGBA32_FLOAT : TEX_FORMAT_RGBA16_FLOAT;
