@@ -23,6 +23,9 @@
 
 #include "ShadowMapManager.h"
 #include "AdvancedMath.h"
+#include "../../../Utilities/include/DiligentFXShaderSourceStreamFactory.h"
+#include "GraphicsUtilities.h"
+#include "MapHelper.h"
 
 namespace Diligent
 {
@@ -38,8 +41,10 @@ void ShadowMapManager::Initialize(IRenderDevice* pDevice, const InitInfo& initIn
     VERIFY(initInfo.Fmt != TEX_FORMAT_UNKNOWN, "Undefined shadow map format");
     VERIFY(initInfo.NumCascades != 0, "Number of cascades must not be zero");
     VERIFY(initInfo.Resolution != 0, "Shadow map resolution must not be zero");
+    VERIFY(initInfo.ShadowMode != 0, "Shadow mode is not specified");
 
-    m_pDevice = pDevice;
+    m_pDevice    = pDevice;
+    m_ShadowMode = initInfo.ShadowMode;
 
     TextureDesc ShadowMapDesc;
     ShadowMapDesc.Name      = "Shadow map SRV";
@@ -69,6 +74,42 @@ void ShadowMapManager::Initialize(IRenderDevice* pDevice, const InitInfo& initIn
         ShadowMapDSVDesc.FirstArraySlice = iArrSlice;
         ShadowMapDSVDesc.NumArraySlices  = 1;
         ptex2DShadowMap->CreateView(ShadowMapDSVDesc, &m_pShadowMapDSVs[iArrSlice]);
+    }
+
+    m_pFilterableShadowMapSRV.Release();
+    m_pFilterableShadowMapRTVs.clear();
+    if (initInfo.ShadowMode == SHADOW_MODE_VSM   ||
+        initInfo.ShadowMode == SHADOW_MODE_EVSM2 ||
+        initInfo.ShadowMode == SHADOW_MODE_EVSM4)
+    {
+        ShadowMapDesc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
+        if (initInfo.ShadowMode == SHADOW_MODE_VSM ||
+            initInfo.ShadowMode == SHADOW_MODE_EVSM2)
+            ShadowMapDesc.Format = initInfo.Is32BitFilterableFmt ? TEX_FORMAT_RG32_FLOAT : TEX_FORMAT_RG16_UNORM;
+        else if (initInfo.ShadowMode == SHADOW_MODE_EVSM4)
+            ShadowMapDesc.Format = initInfo.Is32BitFilterableFmt ? TEX_FORMAT_RGBA32_FLOAT : TEX_FORMAT_RGBA16_UNORM;
+
+	    RefCntAutoPtr<ITexture> ptex2DFilterableShadowMap;
+	    pDevice->CreateTexture(ShadowMapDesc, nullptr, &ptex2DFilterableShadowMap);
+        m_pFilterableShadowMapSRV = ptex2DFilterableShadowMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+
+        m_pFilterableShadowMapRTVs.resize(ShadowMapDesc.ArraySize);
+        for (Uint32 iArrSlice=0; iArrSlice < ShadowMapDesc.ArraySize; ++iArrSlice)
+        {
+            TextureViewDesc RTVDesc;
+            RTVDesc.Name            = "Filterable shadow map cascade RTV";
+            RTVDesc.ViewType        = TEXTURE_VIEW_RENDER_TARGET;
+            RTVDesc.FirstArraySlice = iArrSlice;
+            RTVDesc.NumArraySlices  = 1;
+            ptex2DFilterableShadowMap->CreateView(RTVDesc, &m_pFilterableShadowMapRTVs[iArrSlice]);
+        }
+        
+        if (initInfo.pFilterableShadowMapSampler != nullptr)
+            m_pFilterableShadowMapSRV->SetSampler(initInfo.pFilterableShadowMapSampler);
+
+        InitializeConversionTechniques(ShadowMapDesc.Format);
+
+        InitializeResourceBindings();
     }
 }
 
@@ -260,6 +301,134 @@ void ShadowMapManager::DistributeCascades(const DistributeCascadeInfo& Info,
         
         float4x4 WorldToShadowMapUVDepthMatr = WorldToLightProjSpaceMatr * ProjToUVScale * ProjToUVBias;
         ShadowAttribs.mWorldToShadowMapUVDepthT[iCascade] = WorldToShadowMapUVDepthMatr.Transpose();
+    }
+}
+
+void ShadowMapManager::InitializeConversionTechniques(TEXTURE_FORMAT FilterableShadowMapFmt)
+{
+    if (!m_pConversionAttribsBuffer)
+    {
+        CreateUniformBuffer(m_pDevice, 64, "Shadow conversion attribs CB", &m_pConversionAttribsBuffer);
+    }
+
+    RefCntAutoPtr<IShader> pScreenSizeTriVS;
+    for (int mode = SHADOW_MODE_VSM; mode <= SHADOW_MODE_VSM; ++mode)
+    {
+        auto& Tech = m_ConversionTech[mode];
+        if (Tech.HorzPassPSO) 
+        {
+            if(Tech.HorzPassPSO->GetDesc().GraphicsPipeline.RTVFormats[0] != FilterableShadowMapFmt)
+                Tech = ShadowConversionTechnique{};
+            else
+                continue; // Already up to date
+        }
+
+        if (!pScreenSizeTriVS)
+        {
+            ShaderCreateInfo VertShaderCI;
+            VertShaderCI.Desc.ShaderType            = SHADER_TYPE_VERTEX;
+            VertShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
+            VertShaderCI.UseCombinedTextureSamplers = true;
+            VertShaderCI.pShaderSourceStreamFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();
+            VertShaderCI.FilePath                   = "FullScreenTriangleVS.fx";
+            VertShaderCI.EntryPoint                 = "FullScreenTriangleVS";
+            VertShaderCI.Desc.Name                  = "FullScreenTriangleVS";
+            m_pDevice->CreateShader(VertShaderCI, &pScreenSizeTriVS);
+        }
+
+        ShaderCreateInfo ShaderCI;
+        ShaderCI.Desc.ShaderType            = SHADER_TYPE_PIXEL;
+        ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
+        ShaderCI.UseCombinedTextureSamplers = true;
+        ShaderCI.pShaderSourceStreamFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();
+        ShaderCI.FilePath                   = "ShadowConversions.fx";
+        if (mode == SHADOW_MODE_VSM)
+        {
+            ShaderCI.EntryPoint = "VSMHorzPS";
+            ShaderCI.Desc.Name  = "VSM horizontal pass PS";
+        }
+        else 
+        {
+            UNEXPECTED("Unexpected shadow mode");
+        }
+        RefCntAutoPtr<IShader> pVSMHorzPS;
+        m_pDevice->CreateShader(ShaderCI, &pVSMHorzPS);
+
+        ShaderResourceVariableDesc Variables[] = 
+        {
+            {SHADER_TYPE_PIXEL, "g_tex2DShadowMap", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE}
+        };
+        PipelineStateDesc PSODesc;
+        PSODesc.Name = "VSM horizontal pass";
+        PSODesc.ResourceLayout.Variables    = Variables;
+        PSODesc.ResourceLayout.NumVariables = _countof(Variables);
+        auto& GraphicsPipeline = PSODesc.GraphicsPipeline;
+        GraphicsPipeline.RasterizerDesc.FillMode              = FILL_MODE_SOLID;
+        GraphicsPipeline.RasterizerDesc.CullMode              = CULL_MODE_NONE;
+        GraphicsPipeline.DepthStencilDesc.DepthEnable         = False;
+        GraphicsPipeline.pVS                                  = pScreenSizeTriVS;
+        GraphicsPipeline.pPS                                  = pVSMHorzPS;
+        GraphicsPipeline.PrimitiveTopology                    = PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+        GraphicsPipeline.NumRenderTargets                     = 1;
+        GraphicsPipeline.RTVFormats[0]                        = FilterableShadowMapFmt;
+
+        m_pDevice->CreatePipelineState(PSODesc, &Tech.HorzPassPSO);
+        Tech.HorzPassPSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbConversionAttribs")->Set(m_pConversionAttribsBuffer);
+
+
+        if (mode == SHADOW_MODE_VSM)
+        {
+            ShaderCI.EntryPoint = "VSMVertPS";
+            ShaderCI.Desc.Name  = "VSM vertical pass PS";
+        }
+        else 
+        {
+            UNEXPECTED("Unexpected shadow mode");
+        }
+        RefCntAutoPtr<IShader> pVSMVertPS;
+        m_pDevice->CreateShader(ShaderCI, &pVSMVertPS);
+        PSODesc.Name = "VSM vertical pass";
+        GraphicsPipeline.pPS = pVSMHorzPS;
+        m_pDevice->CreatePipelineState(PSODesc, &Tech.VertPassPSO);
+        Tech.VertPassPSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbConversionAttribs")->Set(m_pConversionAttribsBuffer);
+    }
+}
+
+void ShadowMapManager::InitializeResourceBindings()
+{
+    for (int mode = SHADOW_MODE_VSM; mode <= SHADOW_MODE_VSM; ++mode)
+    {
+        auto& Tech = m_ConversionTech[mode];
+        Tech.SRB.Release();
+        Tech.HorzPassPSO->CreateShaderResourceBinding(&Tech.SRB, true);
+        Tech.SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_tex2DShadowMap")->Set(GetSRV());
+    }
+}
+
+void ShadowMapManager::ConvertToFilterable(IDeviceContext* pCtx, const ShadowMapAttribs& ShadowAttribs)
+{
+    if (m_ShadowMode == SHADOW_MODE_VSM || m_ShadowMode == SHADOW_MODE_EVSM2 || m_ShadowMode == SHADOW_MODE_EVSM4)
+    {
+        auto& Tech = m_ConversionTech[m_ShadowMode];
+        const auto& ShadowMapDesc = m_pShadowMapSRV->GetTexture()->GetDesc();
+        VERIFY(ShadowMapDesc.ArraySize == ShadowAttribs.iNumCascades, "Inconsistent number of cascades");
+        for (Uint32 i=0; i < ShadowMapDesc.ArraySize; ++i)
+        {
+            ITextureView* pRTVs[] = {m_pFilterableShadowMapRTVs[i]};
+            pCtx->SetRenderTargets(1, pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+            {
+                struct ConversionAttribs
+                {
+                    int iCascade;
+                };
+                MapHelper<ConversionAttribs> pAttribs(pCtx, m_pConversionAttribsBuffer, MAP_WRITE, MAP_FLAG_DISCARD );
+                pAttribs->iCascade = i;
+            }
+            pCtx->SetPipelineState(Tech.HorzPassPSO);
+            pCtx->CommitShaderResources(Tech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+            DrawAttribs drawAttribs{3, DRAW_FLAG_VERIFY_ALL};
+            pCtx->Draw(drawAttribs);
+        }
     }
 }
 

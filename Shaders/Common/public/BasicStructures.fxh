@@ -45,6 +45,14 @@ struct CascadeAttribs
     CHECK_STRUCT_ALIGNMENT(CascadeAttribs);
 #endif
 
+#define SHADOW_MODE_PCF 1
+#define SHADOW_MODE_VSM 2
+#define SHADOW_MODE_EVSM2 3
+#define SHADOW_MODE_EVSM4 4
+#ifndef SHADOW_MODE
+#   define SHADOW_MODE SHADOW_MODE_PCF
+#endif
+
 #define MAX_CASCADES 8
 struct ShadowMapAttribs
 {
@@ -78,6 +86,11 @@ struct ShadowMapAttribs
     BOOL  bVisualizeShadowing           DEFAULT_VALUE(0);
     float fFixedDepthBias               DEFAULT_VALUE(1e-5f);
     float fCascadeTransitionRegion      DEFAULT_VALUE(0.1f);
+
+    float fVSMBias                      DEFAULT_VALUE(1e-4f);
+    float fVSMLightBleedingReduction    DEFAULT_VALUE(0);
+    float fEVSMPositiveExponent         DEFAULT_VALUE(40);
+    float fEVSMNegativeExponent         DEFAULT_VALUE(5);
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
     CHECK_STRUCT_ALIGNMENT(ShadowMapAttribs);

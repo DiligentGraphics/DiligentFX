@@ -99,9 +99,6 @@ float2 ComputeReceiverPlaneDepthBias(float3 ShadowUVDepthDX,
     return biasUV;
 }
 
-
-
-
 //-------------------------------------------------------------------------------------------------
 // The method used in The Witness
 //-------------------------------------------------------------------------------------------------
@@ -245,7 +242,8 @@ float FilterShadowMapOptimizedPCF(in Texture2DArray<float>  tex2DShadowMap,
 #undef SAMPLE_SHADOW_MAP
 }
 
-float ComputeCascadeShadow(in ShadowMapAttribs       ShadowAttribs,
+
+float FilterShadowCascade(in ShadowMapAttribs       ShadowAttribs,
                            in Texture2DArray<float>  tex2DShadowMap,
                            in SamplerComparisonState tex2DShadowMap_sampler,
                            in int                    iCascadeIdx,
@@ -272,13 +270,23 @@ float ComputeCascadeShadow(in ShadowMapAttribs       ShadowAttribs,
     return FilterShadowMapOptimizedPCF(tex2DShadowMap, tex2DShadowMap_sampler, ShadowAttribs.f4ShadowMapDim, f3ShadowMapUVDepth, iCascadeIdx, f2DepthSlopeScaledBias);
 }
 
-float ComputeShadowAmount(in ShadowMapAttribs       ShadowAttribs,
-                          in Texture2DArray<float>  tex2DShadowMap,
-                          in SamplerComparisonState tex2DShadowMap_sampler,
-                          in float3                 f3PosInLightViewSpace,
-                          in float                  fCameraSpaceZ,
-                          out int                   iCascadeIdx,
-                          out float                 fNextCascadeBlendAmount)
+float GetNextCascadeBlendAmount(ShadowMapAttribs ShadowAttribs,
+                                float            fMinDistToMargin,
+                                float3           f3PosInNextCascadeProjSpace,
+                                float4           f4NextCascadeMarginProjSpace)
+{
+    float fMinDistToNextCascadeMargin = GetDistanceToCascadeMargin(f3PosInNextCascadeProjSpace, f4NextCascadeMarginProjSpace);
+    return saturate(1.0 - fMinDistToMargin / ShadowAttribs.fCascadeTransitionRegion) * 
+           saturate(fMinDistToNextCascadeMargin / ShadowAttribs.fCascadeTransitionRegion); // Make sure that we don't sample outside of the next cascade
+}
+
+float FilterShadowMap(in ShadowMapAttribs       ShadowAttribs,
+                      in Texture2DArray<float>  tex2DShadowMap,
+                      in SamplerComparisonState tex2DShadowMap_sampler,
+                      in float3                 f3PosInLightViewSpace,
+                      in float                  fCameraSpaceZ,
+                      out int                   iCascadeIdx,
+                      out float                 fNextCascadeBlendAmount)
 {
     float3 f3PosInCascadeProjSpace  = float3(0.0, 0.0, 0.0);
     float3 f3CascadeLightSpaceScale = float3(0.0, 0.0, 0.0);
@@ -287,7 +295,7 @@ float ComputeShadowAmount(in ShadowMapAttribs       ShadowAttribs,
     if( iCascadeIdx == ShadowAttribs.iNumCascades )
         return 1.0;
 
-    float ShadowAmount = ComputeCascadeShadow(ShadowAttribs, tex2DShadowMap, tex2DShadowMap_sampler, iCascadeIdx, f3PosInLightViewSpace, f3CascadeLightSpaceScale, f3PosInCascadeProjSpace);
+    float ShadowAmount = FilterShadowCascade(ShadowAttribs, tex2DShadowMap, tex2DShadowMap_sampler, iCascadeIdx, f3PosInLightViewSpace, f3CascadeLightSpaceScale, f3PosInCascadeProjSpace);
     fNextCascadeBlendAmount = 0.0;
 
 #if FILTER_ACROSS_CASCADES
@@ -295,17 +303,111 @@ float ComputeShadowAmount(in ShadowMapAttribs       ShadowAttribs,
     {
         CascadeAttribs NextCascade = ShadowAttribs.Cascades[iCascadeIdx + 1];
         float3 f3PosInNextCascadeProjSpace = f3PosInLightViewSpace * NextCascade.f4LightSpaceScale.xyz + NextCascade.f4LightSpaceScaledBias.xyz;
-        float NextCascadeShadow = ComputeCascadeShadow(ShadowAttribs, tex2DShadowMap, tex2DShadowMap_sampler, iCascadeIdx+1, f3PosInLightViewSpace, NextCascade.f4LightSpaceScale.xyz, f3PosInNextCascadeProjSpace);
-        float fMinDistToNextCascadeMargin = GetDistanceToCascadeMargin(f3PosInNextCascadeProjSpace, NextCascade.f4MarginProjSpace);
-        fNextCascadeBlendAmount = 
-            saturate(1.0 - fMinDistToMargin / ShadowAttribs.fCascadeTransitionRegion) * 
-            saturate(fMinDistToNextCascadeMargin / ShadowAttribs.fCascadeTransitionRegion); // Make sure that we don't sample outside of the next cascade
+        float NextCascadeShadow = FilterShadowCascade(ShadowAttribs, tex2DShadowMap, tex2DShadowMap_sampler, iCascadeIdx+1, f3PosInLightViewSpace, NextCascade.f4LightSpaceScale.xyz, f3PosInNextCascadeProjSpace);
+        fNextCascadeBlendAmount = GetNextCascadeBlendAmount(ShadowAttribs, fMinDistToMargin, f3PosInNextCascadeProjSpace, NextCascade.f4MarginProjSpace);
         ShadowAmount = lerp(ShadowAmount, NextCascadeShadow, fNextCascadeBlendAmount);
     }
 #endif
 
     return ShadowAmount;
 }
+
+
+
+
+// Reduces VSM light bleedning
+float ReduceLightBleeding(float pMax, float amount)
+{
+  // Remove the [0, amount] tail and linearly rescale (amount, 1].
+   return saturate((pMax - amount) / (1.0 - amount));
+}
+
+float ChebyshevUpperBound(float2 f2Moments, float fMean, float fMinVariance, float fLightBleedingReduction)
+{
+    // Compute variance
+    float Variance = f2Moments.y - (f2Moments.x * f2Moments.x);
+    Variance = max(Variance, fMinVariance);
+
+    // Compute probabilistic upper bound
+    float d = fMean - f2Moments.x;
+    float pMax = Variance / (Variance + (d * d));
+
+    pMax = ReduceLightBleeding(pMax, fLightBleedingReduction);
+
+    // One-tailed Chebyshev
+    return (fMean <= f2Moments.x ? 1.0 : pMax);
+}
+
+//-------------------------------------------------------------------------------------------------
+// Samples the VSM shadow map
+//-------------------------------------------------------------------------------------------------
+float SampleVSM(in ShadowMapAttribs       ShadowAttribs,
+                in Texture2DArray<float4> tex2DVSM,
+                in SamplerState           tex2DVSM_sampler,
+                in int                    iCascadeIdx,
+                in float3                 f3ShadowMapUVDepth,
+                in float3                 f3ddXShadowMapUVDepth,
+                in float3                 f3ddYShadowMapUVDepth)
+{
+    float2 f2Occluder = tex2DVSM.SampleGrad(tex2DVSM_sampler, float3(f3ShadowMapUVDepth.xy, iCascadeIdx), f3ddXShadowMapUVDepth.xy, f3ddYShadowMapUVDepth.xy).xy;
+    return ChebyshevUpperBound(f2Occluder, f3ShadowMapUVDepth.z, ShadowAttribs.fVSMBias, ShadowAttribs.fVSMLightBleedingReduction);
+}
+
+float SampleFilterableShadowCascade(in ShadowMapAttribs       ShadowAttribs,
+                                    in Texture2DArray<float4> tex2DShadowMap,
+                                    in SamplerState           tex2DShadowMap_sampler,
+                                    in int                    iCascadeIdx,
+                                    in float3                 f3PosInLightViewSpace,
+                                    in float3                 f3CascadeLightSpaceScale,
+                                    in float3                 f3PosInCascadeProjSpace)
+{
+    float3 f3ShadowMapUVDepth;
+    f3ShadowMapUVDepth.xy = NormalizedDeviceXYToTexUV( f3PosInCascadeProjSpace.xy );
+    f3ShadowMapUVDepth.z = NormalizedDeviceZToDepth( f3PosInCascadeProjSpace.z );
+        
+    float3 f3ddXShadowMapUVDepth = ddx(f3PosInLightViewSpace) * f3CascadeLightSpaceScale * F3NDC_XYZ_TO_UVD_SCALE;
+    float3 f3ddYShadowMapUVDepth = ddy(f3PosInLightViewSpace) * f3CascadeLightSpaceScale * F3NDC_XYZ_TO_UVD_SCALE;
+
+    return SampleVSM(ShadowAttribs, tex2DShadowMap, tex2DShadowMap_sampler, iCascadeIdx, f3ShadowMapUVDepth, 
+                     f3ddXShadowMapUVDepth, f3ddYShadowMapUVDepth);
+}
+
+
+float SampleFilterableShadowMap(in ShadowMapAttribs       ShadowAttribs,
+                                in Texture2DArray<float4> tex2DShadowMap,
+                                in SamplerState           tex2DShadowMap_sampler,
+                                in float3                 f3PosInLightViewSpace,
+                                in float                  fCameraSpaceZ,
+                                out int                   iCascadeIdx,
+                                out float                 fNextCascadeBlendAmount)
+{
+    float3 f3PosInCascadeProjSpace  = float3(0.0, 0.0, 0.0);
+    float3 f3CascadeLightSpaceScale = float3(0.0, 0.0, 0.0);
+    float  fMinDistToMargin = 0.0;
+    FindCascade(ShadowAttribs, f3PosInLightViewSpace.xyz, fCameraSpaceZ, f3PosInCascadeProjSpace, f3CascadeLightSpaceScale, iCascadeIdx, fMinDistToMargin);
+    if( iCascadeIdx == ShadowAttribs.iNumCascades )
+        return 1.0;
+
+    float ShadowAmount = SampleFilterableShadowCascade(ShadowAttribs, tex2DShadowMap, tex2DShadowMap_sampler, iCascadeIdx, f3PosInLightViewSpace, f3CascadeLightSpaceScale, f3PosInCascadeProjSpace);
+    fNextCascadeBlendAmount = 0.0;
+
+#if FILTER_ACROSS_CASCADES
+    if (iCascadeIdx+1 < ShadowAttribs.iNumCascades)
+    {
+        CascadeAttribs NextCascade = ShadowAttribs.Cascades[iCascadeIdx + 1];
+        float3 f3PosInNextCascadeProjSpace = f3PosInLightViewSpace * NextCascade.f4LightSpaceScale.xyz + NextCascade.f4LightSpaceScaledBias.xyz;
+        float NextCascadeShadow = SampleFilterableShadowCascade(ShadowAttribs, tex2DShadowMap, tex2DShadowMap_sampler, iCascadeIdx+1, f3PosInLightViewSpace, NextCascade.f4LightSpaceScale.xyz, f3PosInNextCascadeProjSpace);
+        float fMinDistToNextCascadeMargin = GetDistanceToCascadeMargin(f3PosInNextCascadeProjSpace, NextCascade.f4MarginProjSpace);
+        fNextCascadeBlendAmount = GetNextCascadeBlendAmount(ShadowAttribs, fMinDistToMargin, f3PosInNextCascadeProjSpace, NextCascade.f4MarginProjSpace);
+        ShadowAmount = lerp(ShadowAmount, NextCascadeShadow, fNextCascadeBlendAmount);
+    }
+#endif
+
+    return ShadowAmount;
+}
+
+
+
 
 float3 GetCascadeColor(int Cascade, float fNextCascadeBlendAmount)
 {

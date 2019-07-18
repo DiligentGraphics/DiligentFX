@@ -23,6 +23,7 @@
 
 #include <vector>
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
+#include "../../../DiligentCore/Graphics/GraphicsEngine/interface/DeviceContext.h"
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/Texture.h"
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/TextureView.h"
 #include "../../../DiligentCore/Common/interface/RefCntAutoPtr.h"
@@ -40,15 +41,19 @@ public:
 
     struct InitInfo
     {
-        TEXTURE_FORMAT Fmt                = TEX_FORMAT_UNKNOWN;
-        Uint32         Resolution         = 0;
-        Uint32         NumCascades        = 0;
-        ISampler*      pComparisonSampler = nullptr;
+        TEXTURE_FORMAT Fmt                         = TEX_FORMAT_UNKNOWN;
+        Uint32         Resolution                  = 0;
+        Uint32         NumCascades                 = 0;
+        ISampler*      pComparisonSampler          = nullptr;
+        ISampler*      pFilterableShadowMapSampler = nullptr;
+        int            ShadowMode                  = 0;
+        bool           Is32BitFilterableFmt        = false;
     };
     void Initialize(IRenderDevice* pDevice, const InitInfo& initInfo);
 
     ITextureView* GetSRV()                     { return m_pShadowMapSRV;           }
     ITextureView* GetCascadeDSV(Uint32 Cascade){ return m_pShadowMapDSVs[Cascade]; }
+    ITextureView* GetFilterableSRV()           { return m_pFilterableShadowMapSRV; }
 
     struct DistributeCascadeInfo
     {
@@ -84,13 +89,29 @@ public:
     void DistributeCascades(const DistributeCascadeInfo& Info,
                             ShadowMapAttribs&            shadowMapAttribs);
 
+    void ConvertToFilterable(IDeviceContext* pCtx, const ShadowMapAttribs& ShadowAttribs);
+
     const CascadeTransforms& GetCascadeTranform(Uint32 Cascade) const {return m_CascadeTransforms[Cascade];}
 
 private:
+    void InitializeConversionTechniques(TEXTURE_FORMAT FilterableShadowMapFmt);
+    void InitializeResourceBindings();
+
+    int                                      m_ShadowMode = 0;
     RefCntAutoPtr<IRenderDevice>             m_pDevice;
     RefCntAutoPtr<ITextureView>              m_pShadowMapSRV;
     std::vector<RefCntAutoPtr<ITextureView>> m_pShadowMapDSVs;
+    RefCntAutoPtr<ITextureView>              m_pFilterableShadowMapSRV;
+    std::vector<RefCntAutoPtr<ITextureView>> m_pFilterableShadowMapRTVs;
+    RefCntAutoPtr<IBuffer>                   m_pConversionAttribsBuffer;
     std::vector<CascadeTransforms>           m_CascadeTransforms;
+    struct ShadowConversionTechnique
+    {
+        RefCntAutoPtr<IPipelineState> HorzPassPSO;
+        RefCntAutoPtr<IPipelineState> VertPassPSO;
+        RefCntAutoPtr<IShaderResourceBinding> SRB;
+    };
+    ShadowConversionTechnique m_ConversionTech[SHADOW_MODE_EVSM4];
 };
 
 }

@@ -190,4 +190,8 @@ static const ShaderIncInfo g_Shaders[] =
         "ToneMappingStructures.fxh",
         #include "ToneMappingStructures.fxh.h"
     },
+    {
+        "ShadowConversions.fx",
+        #include "ShadowConversions.fx.h"
+    },
 };
