@@ -22,6 +22,8 @@
  */
 
 #include <vector>
+#include <array>
+
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/DeviceContext.h"
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/Texture.h"
@@ -109,12 +111,11 @@ private:
     std::vector<CascadeTransforms>           m_CascadeTransforms;
     struct ShadowConversionTechnique
     {
-        RefCntAutoPtr<IPipelineState> HorzPassPSO;
-        RefCntAutoPtr<IPipelineState> VertPassPSO;
-        RefCntAutoPtr<IShaderResourceBinding> HorzPassSRB;
-        RefCntAutoPtr<IShaderResourceBinding> VertPassSRB;
+        RefCntAutoPtr<IPipelineState>         PSO;
+        RefCntAutoPtr<IShaderResourceBinding> SRB;
     };
-    ShadowConversionTechnique m_ConversionTech[SHADOW_MODE_EVSM4];
+    std::array<ShadowConversionTechnique, SHADOW_MODE_EVSM4+1> m_ConversionTech;
+    ShadowConversionTechnique m_BlurVertTech;
 };
 
 }

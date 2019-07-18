@@ -96,6 +96,22 @@ CascadeSamplingInfo FindCascade(ShadowMapAttribs ShadowAttribs,
     return SamplingInfo;
 }
 
+float GetNextCascadeBlendAmount(ShadowMapAttribs    ShadowAttribs,
+                                float               fCameraViewSpaceZ,
+                                CascadeSamplingInfo SamplingInfo,
+                                CascadeSamplingInfo NextCscdSamplingInfo)
+{
+    float fDistToTransitionEdge;
+#if BEST_CASCADE_SEARCH
+    fDistToTransitionEdge = SamplingInfo.fMinDistToMargin;
+#else
+    float4 f4CascadeStartEndZ = ShadowAttribs.Cascades[SamplingInfo.iCascadeIdx].f4StartEndZ;
+    fDistToTransitionEdge = (f4CascadeStartEndZ.y - fCameraViewSpaceZ) / (f4CascadeStartEndZ.y - f4CascadeStartEndZ.x);
+#endif
+
+    return saturate(1.0 - fDistToTransitionEdge / ShadowAttribs.fCascadeTransitionRegion) * 
+           saturate(NextCscdSamplingInfo.fMinDistToMargin / ShadowAttribs.fCascadeTransitionRegion); // Make sure that we don't sample outside of the next cascade
+}
 
 float2 ComputeReceiverPlaneDepthBias(float3 ShadowUVDepthDX,
                                      float3 ShadowUVDepthDY)
@@ -289,22 +305,6 @@ float FilterShadowCascade(in ShadowMapAttribs       ShadowAttribs,
     return FilterShadowMapOptimizedPCF(tex2DShadowMap, tex2DShadowMap_sampler, ShadowAttribs.f4ShadowMapDim, SamplingInfo, f2DepthSlopeScaledBias);
 }
 
-float GetNextCascadeBlendAmount(ShadowMapAttribs    ShadowAttribs,
-                                float               fCameraViewSpaceZ,
-                                CascadeSamplingInfo SamplingInfo,
-                                CascadeSamplingInfo NextCscdSamplingInfo)
-{
-    float fDistToTransitionEdge;
-#if BEST_CASCADE_SEARCH
-    fDistToTransitionEdge = SamplingInfo.fMinDistToMargin;
-#else
-    float4 f4CascadeStartEndZ = ShadowAttribs.Cascades[SamplingInfo.iCascadeIdx].f4StartEndZ;
-    fDistToTransitionEdge = (f4CascadeStartEndZ.y - fCameraViewSpaceZ) / (f4CascadeStartEndZ.y - f4CascadeStartEndZ.x);
-#endif
-
-    return saturate(1.0 - fDistToTransitionEdge / ShadowAttribs.fCascadeTransitionRegion) * 
-           saturate(NextCscdSamplingInfo.fMinDistToMargin / ShadowAttribs.fCascadeTransitionRegion); // Make sure that we don't sample outside of the next cascade
-}
 
 struct FilteredShadow
 {
@@ -372,9 +372,23 @@ float ChebyshevUpperBound(float2 f2Moments, float fMean, float fMinVariance, flo
     return (fMean <= f2Moments.x ? 1.0 : pMax);
 }
 
-//-------------------------------------------------------------------------------------------------
-// Samples the VSM shadow map
-//-------------------------------------------------------------------------------------------------
+float2 GetEVSMExponents(float positiveExponent, float negativeExponent, bool Is32BitFormat)
+{
+    float maxExponent = Is32BitFormat ? 42.0 : 5.54;
+    // Clamp to maximum range of fp32/fp16 to prevent overflow/underflow
+    return min(float2(positiveExponent, negativeExponent), float2(maxExponent, maxExponent));
+}
+
+// Applies exponential warp to shadow map depth, input depth should be in [0, 1]
+float2 WarpDepthEVSM(float depth, float2 exponents)
+{
+    // Rescale depth into [-1, 1]
+    depth = 2.0 * depth - 1.0;
+    float pos =  exp( exponents.x * depth);
+    float neg = -exp(-exponents.y * depth);
+    return float2(pos, neg);
+}
+
 float SampleVSM(in ShadowMapAttribs       ShadowAttribs,
                 in Texture2DArray<float4> tex2DVSM,
                 in SamplerState           tex2DVSM_sampler,
@@ -386,6 +400,31 @@ float SampleVSM(in ShadowMapAttribs       ShadowAttribs,
     return ChebyshevUpperBound(f2Occluder, SamplingInfo.fDepth, ShadowAttribs.fVSMBias, ShadowAttribs.fVSMLightBleedingReduction);
 }
 
+float SampleEVSM(in ShadowMapAttribs       ShadowAttribs,
+                 in Texture2DArray<float4> tex2DEVSM,
+                 in SamplerState           tex2DEVSM_sampler,
+                 in CascadeSamplingInfo    SamplingInfo,
+                 in float2                 f2ddXShadowMapUV,
+                 in float2                 f2ddYShadowMapUV)
+{
+    float2 f2Exponents = GetEVSMExponents(ShadowAttribs.fEVSMPositiveExponent, ShadowAttribs.fEVSMNegativeExponent, ShadowAttribs.bIs32BitEVSM);
+    float2 f2WarpedDepth = WarpDepthEVSM(SamplingInfo.fDepth, f2Exponents);
+
+    float4 f4Occluder = tex2DEVSM.SampleGrad(tex2DEVSM_sampler, float3(SamplingInfo.f2UV, SamplingInfo.iCascadeIdx), f2ddXShadowMapUV, f2ddYShadowMapUV);
+
+    // Derivative of warping at depth
+    float2 f2DepthScale = ShadowAttribs.fVSMBias * f2Exponents * f2WarpedDepth;
+    float2 f2MinVariance = f2DepthScale * f2DepthScale;
+
+    float fContrib = ChebyshevUpperBound(f4Occluder.xy, f2WarpedDepth.x, f2MinVariance.x, ShadowAttribs.fVSMLightBleedingReduction);
+    #if SHADOW_MODE == SHADOW_MODE_EVSM4
+        float fNegContrib = ChebyshevUpperBound(f4Occluder.zw, f2WarpedDepth.y, f2MinVariance.y, ShadowAttribs.fVSMLightBleedingReduction);
+        fContrib = min(fContrib, fNegContrib);
+    #endif
+
+    return fContrib;
+}
+
 float SampleFilterableShadowCascade(in ShadowMapAttribs       ShadowAttribs,
                                     in Texture2DArray<float4> tex2DShadowMap,
                                     in SamplerState           tex2DShadowMap_sampler,
@@ -395,7 +434,13 @@ float SampleFilterableShadowCascade(in ShadowMapAttribs       ShadowAttribs,
 {
     float3 f3ddXShadowMapUVDepth = f3ddXPosInLightViewSpace * SamplingInfo.f3LightSpaceScale * F3NDC_XYZ_TO_UVD_SCALE;
     float3 f3ddYShadowMapUVDepth = f3ddYPosInLightViewSpace * SamplingInfo.f3LightSpaceScale * F3NDC_XYZ_TO_UVD_SCALE;
+#if SHADOW_MODE == SHADOW_MODE_VSM
     return SampleVSM(ShadowAttribs, tex2DShadowMap, tex2DShadowMap_sampler, SamplingInfo, f3ddXShadowMapUVDepth.xy, f3ddYShadowMapUVDepth.xy);
+#elif SHADOW_MODE == SHADOW_MODE_EVSM2 || SHADOW_MODE == SHADOW_MODE_EVSM4
+    return SampleEVSM(ShadowAttribs, tex2DShadowMap, tex2DShadowMap_sampler, SamplingInfo, f3ddXShadowMapUVDepth.xy, f3ddYShadowMapUVDepth.xy);
+#else
+    return 1.0;
+#endif
 }
 
 FilteredShadow SampleFilterableShadowMap(in ShadowMapAttribs       ShadowAttribs,
