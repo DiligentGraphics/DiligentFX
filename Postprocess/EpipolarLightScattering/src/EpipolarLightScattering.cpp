@@ -1489,6 +1489,7 @@ void EpipolarLightScattering :: DoRayMarching(Uint32 uiMaxStepsAlongRay,
             SRB_DEPENDENCY_LIGHT_ATTRIBS            |
             SRB_DEPENDENCY_EPIPOLAR_CAM_SPACE_Z_TEX |
             SRB_DEPENDENCY_SLICE_UV_DIR_TEX         |
+            SRB_DEPENDENCY_SHADOW_MAP               |
             SRB_DEPENDENCY_MIN_MAX_SHADOW_MAP       |
             SRB_DEPENDENCY_COORDINATE_TEX           |
             SRB_DEPENDENCY_CAM_SPACE_Z_TEX          |
@@ -2011,7 +2012,7 @@ void EpipolarLightScattering :: PerformPostProcessing(FrameAttribs&             
     CHECK_SRB_DEPENDENCY(SRB_DEPENDENCY_SRC_COLOR_BUFFER, ptex2DSrcColorBufferRTV);
     CHECK_SRB_DEPENDENCY(SRB_DEPENDENCY_SRC_DEPTH_BUFFER, ptex2DSrcDepthBufferDSV);
     CHECK_SRB_DEPENDENCY(SRB_DEPENDENCY_SRC_DEPTH_BUFFER, ptex2DSrcDepthBufferSRV);
-    CHECK_SRB_DEPENDENCY(SRB_DEPENDENCY_SHADOW_MAP, ptex2DShadowMapSRV);
+    CHECK_SRB_DEPENDENCY(SRB_DEPENDENCY_SHADOW_MAP,       ptex2DShadowMapSRV);
 #undef CHECK_SRB_DEPENDENCY
 
     auto* pcbCameraAttribs = frameAttribs.pcbCameraAttribs != nullptr ? frameAttribs.pcbCameraAttribs : m_pcbCameraAttribs;
