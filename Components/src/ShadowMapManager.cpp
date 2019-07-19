@@ -454,23 +454,38 @@ void ShadowMapManager::ConvertToFilterable(IDeviceContext* pCtx, const ShadowMap
                "Incorrect 32-bit VSM flag");
 
         int iFilterRadius = (ShadowAttribs.iFixedFilterSize-1)/2;
+        bool bSkipBlur = ShadowAttribs.iFixedFilterSize == 2;
         for (Uint32 i=0; i < ShadowMapDesc.ArraySize; ++i)
         {
-            ITextureView* pRTVs[] = {iFilterRadius == 0 ? m_pFilterableShadowMapRTVs[i] : m_pIntermediateRTV};
+            ITextureView* pRTVs[] = {bSkipBlur ? m_pFilterableShadowMapRTVs[i] : m_pIntermediateRTV};
             pCtx->SetRenderTargets(1, pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
             {
                 struct ConversionAttribs
                 {
-                    int iCascade;
-                    int iFilterRadius;
+                    int   iCascade;
+                    float fHorzFilterRadius;
+                    float fVertFilterRadius;
                     float fEVSMPositiveExponent;
-                    float fEVSMNegativeExponent;
 
+                    float fEVSMNegativeExponent;
                     int Is32BitEVSM;
                 };
                 MapHelper<ConversionAttribs> pAttribs(pCtx, m_pConversionAttribsBuffer, MAP_WRITE, MAP_FLAG_DISCARD );
                 pAttribs->iCascade      = i;
-                pAttribs->iFilterRadius = iFilterRadius;
+                if (ShadowAttribs.iFixedFilterSize > 0)
+                {
+                    pAttribs->fHorzFilterRadius = static_cast<float>(iFilterRadius);
+                    pAttribs->fVertFilterRadius = static_cast<float>(iFilterRadius);
+                }
+                else
+                {
+                    const auto& Cascade = ShadowAttribs.Cascades[i];
+                    float fNDCtoUVScale = 0.5f;
+                    float fFilterWidth  = ShadowAttribs.fFilterWorldSize * Cascade.f4LightSpaceScale.x * fNDCtoUVScale;
+                    float fFilterHeight = ShadowAttribs.fFilterWorldSize * Cascade.f4LightSpaceScale.y * fNDCtoUVScale;
+                    pAttribs->fHorzFilterRadius = fFilterWidth  / 2.f * static_cast<float>(ShadowMapDesc.Width);
+                    pAttribs->fVertFilterRadius = fFilterHeight / 2.f * static_cast<float>(ShadowMapDesc.Height);
+                }
                 pAttribs->fEVSMPositiveExponent = ShadowAttribs.fEVSMPositiveExponent;
                 pAttribs->fEVSMNegativeExponent = ShadowAttribs.fEVSMNegativeExponent;
                 pAttribs->Is32BitEVSM           = ShadowAttribs.bIs32BitEVSM;
@@ -480,7 +495,7 @@ void ShadowMapManager::ConvertToFilterable(IDeviceContext* pCtx, const ShadowMap
             DrawAttribs drawAttribs{3, DRAW_FLAG_VERIFY_ALL};
             pCtx->Draw(drawAttribs);
 
-            if (iFilterRadius > 0)
+            if (!bSkipBlur)
             {
                 pRTVs[0] = m_pFilterableShadowMapRTVs[i];
                 pCtx->SetRenderTargets(1, pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
