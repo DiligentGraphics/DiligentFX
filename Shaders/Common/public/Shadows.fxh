@@ -145,11 +145,11 @@ float2 ComputeReceiverPlaneDepthBias(float3 ShadowUVDepthDX,
 //-------------------------------------------------------------------------------------------------
 // The method used in The Witness
 //-------------------------------------------------------------------------------------------------
-float FilterShadowMapOptimizedPCF(in Texture2DArray<float>  tex2DShadowMap,
-                                  in SamplerComparisonState tex2DShadowMap_sampler,
-                                  in float4                 shadowMapSize,
-                                  in CascadeSamplingInfo    SamplingInfo,
-                                  in float2                 receiverPlaneDepthBias)
+float FilterShadowMapFixedPCF(in Texture2DArray<float>  tex2DShadowMap,
+                              in SamplerComparisonState tex2DShadowMap_sampler,
+                              in float4                 shadowMapSize,
+                              in CascadeSamplingInfo    SamplingInfo,
+                              in float2                 receiverPlaneDepthBias)
 {
     float lightDepth = SamplingInfo.fDepth;
 
@@ -285,6 +285,32 @@ float FilterShadowMapOptimizedPCF(in Texture2DArray<float>  tex2DShadowMap,
 }
 
 
+float FilterShadowMapVaryingPCF(in Texture2DArray<float>  tex2DShadowMap,
+                                in SamplerComparisonState tex2DShadowMap_sampler,
+                                in ShadowMapAttribs       ShadowAttribs,
+                                in CascadeSamplingInfo    SamplingInfo,
+                                in float2                 f2ReceiverPlaneDepthBias,
+                                in float2                 f2FilterSize)
+{
+    int2 i2MaxSamples = int2(ShadowAttribs.iMaxPCFSamplesAlongFilterSide, ShadowAttribs.iMaxPCFSamplesAlongFilterSide);
+    int2 i2NumSamples = clamp(int2(ceil(f2FilterSize * ShadowAttribs.f4ShadowMapDim.xy / 2.0)), int2(1,1), i2MaxSamples);
+    float sum = 0;
+    f2ReceiverPlaneDepthBias *= ShadowAttribs.f4ShadowMapDim.xy;
+    [loop]
+    for(int x=0; x < i2NumSamples.x; ++x)
+    {
+        [loop]
+        for(int y=0; y < i2NumSamples.y; ++y)
+        {
+            float2 f2dUV = lerp(-f2FilterSize.xy/2.0, +f2FilterSize.xy/2.0, float2(float(x) + 0.5, float(y)+0.5) / float2(i2NumSamples));
+            const float DepthClamp = 1e-8;
+            float fDepth = max(SamplingInfo.fDepth + dot(f2dUV, f2ReceiverPlaneDepthBias), DepthClamp);
+            sum += tex2DShadowMap.SampleCmp(tex2DShadowMap_sampler, float3(SamplingInfo.f2UV + f2dUV, SamplingInfo.iCascadeIdx), fDepth);
+        }
+    }
+    return sum / float(i2NumSamples.x * i2NumSamples.y);
+}
+
 float FilterShadowCascade(in ShadowMapAttribs       ShadowAttribs,
                           in Texture2DArray<float>  tex2DShadowMap,
                           in SamplerComparisonState tex2DShadowMap_sampler,
@@ -302,7 +328,12 @@ float FilterShadowCascade(in ShadowMapAttribs       ShadowAttribs,
     float FractionalSamplingError = dot( float2(1.0, 1.0), abs(f2DepthSlopeScaledBias.xy) ) + ShadowAttribs.fFixedDepthBias;
     SamplingInfo.fDepth -= FractionalSamplingError;
 
-    return FilterShadowMapOptimizedPCF(tex2DShadowMap, tex2DShadowMap_sampler, ShadowAttribs.f4ShadowMapDim, SamplingInfo, f2DepthSlopeScaledBias);
+#if SHADOW_FILTER_SIZE > 0
+    return FilterShadowMapFixedPCF(tex2DShadowMap, tex2DShadowMap_sampler, ShadowAttribs.f4ShadowMapDim, SamplingInfo, f2DepthSlopeScaledBias);
+#else
+    float2 f2FilterSize = ShadowAttribs.fFilterWorldSize * SamplingInfo.f3LightSpaceScale.xy * F3NDC_XYZ_TO_UVD_SCALE.xy;
+    return FilterShadowMapVaryingPCF(tex2DShadowMap, tex2DShadowMap_sampler, ShadowAttribs, SamplingInfo, f2DepthSlopeScaledBias, f2FilterSize);
+#endif
 }
 
 

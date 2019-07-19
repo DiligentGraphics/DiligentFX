@@ -94,8 +94,11 @@ struct ShadowMapAttribs
 
     BOOL  bIs32BitEVSM                  DEFAULT_VALUE(1);
     int   iFixedFilterSize              DEFAULT_VALUE(3); // 3x3 filter
-    float fDummy0;
-    float fDummy1;
+    float fFilterWorldSize              DEFAULT_VALUE(0);
+    int   iMaxPCFSamplesAlongFilterSide DEFAULT_VALUE(8); // When using world-size filter size, the number
+                                                          // maximum number of PCF samples in one direction.
+                                                          // The total maximum number of samples is 
+                                                          // iMaxPCFSamplesAlongFilterSide * iMaxPCFSamplesAlongFilterSide
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
     CHECK_STRUCT_ALIGNMENT(ShadowMapAttribs);
