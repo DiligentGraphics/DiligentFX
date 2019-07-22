@@ -95,10 +95,7 @@ struct ShadowMapAttribs
     BOOL  bIs32BitEVSM                  DEFAULT_VALUE(1);
     int   iFixedFilterSize              DEFAULT_VALUE(3); // 3x3 filter
     float fFilterWorldSize              DEFAULT_VALUE(0);
-    int   iMaxPCFSamplesAlongFilterSide DEFAULT_VALUE(8); // When using world-size filter size, the number
-                                                          // maximum number of PCF samples in one direction.
-                                                          // The total maximum number of samples is 
-                                                          // iMaxPCFSamplesAlongFilterSide * iMaxPCFSamplesAlongFilterSide
+    int   iMaxAnisotropy                DEFAULT_VALUE(4);
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
     CHECK_STRUCT_ALIGNMENT(ShadowMapAttribs);
@@ -106,9 +103,9 @@ struct ShadowMapAttribs
 
 struct LightAttribs
 {
-    float4 f4Direction;
-    float4 f4AmbientLight;
-    float4 f4Intensity; // Extraterrestrial sun radiance
+    float4 f4Direction      DEFAULT_VALUE(float4(0, 0,-1, 0));
+    float4 f4AmbientLight   DEFAULT_VALUE(float4(0, 0, 0, 0));
+    float4 f4Intensity      DEFAULT_VALUE(float4(1, 1, 1, 1));
 
     ShadowMapAttribs ShadowAttribs;
 };
