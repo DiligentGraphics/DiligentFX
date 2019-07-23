@@ -26,6 +26,7 @@
 #include "../../../Utilities/include/DiligentFXShaderSourceStreamFactory.h"
 #include "GraphicsUtilities.h"
 #include "MapHelper.h"
+#include "CommonlyUsedStates.h"
 
 namespace Diligent
 {
@@ -459,9 +460,21 @@ void ShadowMapManager::InitializeConversionTechniques(TEXTURE_FORMAT FilterableS
         {
             {SHADER_TYPE_PIXEL, "g_tex2DShadowMap", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE}
         };
-        
-        PSODesc.ResourceLayout.Variables    = Variables;
-        PSODesc.ResourceLayout.NumVariables = _countof(Variables);
+
+        StaticSamplerDesc StaticSamplers[] = 
+        {
+            {SHADER_TYPE_PIXEL, "g_tex2DShadowMap", Sam_LinearClamp}
+        };
+
+        if (m_pDevice->GetDeviceCaps().IsGLDevice())
+        {
+            // Even though textures are never sampled in the shader, OpenGL requires proper 
+            // sampler to be set even when texelFetch is used.
+            PSODesc.ResourceLayout.StaticSamplers    = StaticSamplers;
+            PSODesc.ResourceLayout.NumStaticSamplers = _countof(StaticSamplers);
+        }
+        PSODesc.ResourceLayout.Variables         = Variables;
+        PSODesc.ResourceLayout.NumVariables      = _countof(Variables);
         auto& GraphicsPipeline = PSODesc.GraphicsPipeline;
         GraphicsPipeline.RasterizerDesc.FillMode              = FILL_MODE_SOLID;
         GraphicsPipeline.RasterizerDesc.CullMode              = CULL_MODE_NONE;
