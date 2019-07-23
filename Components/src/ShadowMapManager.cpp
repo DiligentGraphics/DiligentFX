@@ -186,10 +186,12 @@ void ShadowMapManager::DistributeCascades(const DistributeCascadeInfo& Info,
 
     const auto& CameraWorld = Info.pCameraWorld != nullptr ? *Info.pCameraWorld : Info.pCameraView->Inverse();
 
-    int iNumCascades = SMDesc.ArraySize;
-    VERIFY(ShadowAttribs.iNumCascades == iNumCascades, "Inconsistent number of cascades");
+    int iNumCascades           = SMDesc.ArraySize;
+    ShadowAttribs.iNumCascades = iNumCascades;
+    ShadowAttribs.fNumCascades = static_cast<float>(iNumCascades);
+
     m_CascadeTransforms.resize(iNumCascades);
-    for(int iCascade = 0; iCascade < iNumCascades; ++iCascade)
+    for (int iCascade = 0; iCascade < iNumCascades; ++iCascade)
     {
         auto& CurrCascade = ShadowAttribs.Cascades[iCascade];
         float fCascadeNearZ = (iCascade == 0) ? fMainCamNearPlane : ShadowAttribs.fCascadeCamSpaceZEnd[iCascade-1];
