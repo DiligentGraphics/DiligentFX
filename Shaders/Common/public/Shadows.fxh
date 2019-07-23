@@ -188,11 +188,20 @@ float FilterShadowMapFixedPCF(in Texture2DArray<float>  tex2DShadowMap,
     //
     // Note that clamping at far depth boundary makes no difference as 1 < 1 produces 0 and so does 1+x < 1
     const float DepthClamp = 1e-8;
-#define SAMPLE_SHADOW_MAP(u, v) tex2DShadowMap.SampleCmp(tex2DShadowMap_sampler, float3(base_uv.xy + float2(u,v) * f4ShadowMapSize.zw, SamplingInfo.iCascadeIdx), max(lightDepth + dot(float2(u, v), f2ReceiverPlaneDepthBias), DepthClamp))
+#ifdef GLSL
+    // There is no OpenGL counterpart for Texture2DArray.SampleCmpLevelZero()
+    #define SAMPLE_SHADOW_MAP(u, v) tex2DShadowMap.SampleCmp(tex2DShadowMap_sampler, float3(base_uv.xy + float2(u,v) * f4ShadowMapSize.zw, SamplingInfo.iCascadeIdx), max(lightDepth + dot(float2(u, v), f2ReceiverPlaneDepthBias), DepthClamp))
+#else
+    #define SAMPLE_SHADOW_MAP(u, v) tex2DShadowMap.SampleCmpLevelZero(tex2DShadowMap_sampler, float3(base_uv.xy + float2(u,v) * f4ShadowMapSize.zw, SamplingInfo.iCascadeIdx), max(lightDepth + dot(float2(u, v), f2ReceiverPlaneDepthBias), DepthClamp))
+#endif
 
     #if SHADOW_FILTER_SIZE == 2
 
-        return tex2DShadowMap.SampleCmp(tex2DShadowMap_sampler, float3(SamplingInfo.f2UV.xy, SamplingInfo.iCascadeIdx), max(lightDepth, DepthClamp));
+        #ifdef GLSL
+            return tex2DShadowMap.SampleCmp(tex2DShadowMap_sampler, float3(SamplingInfo.f2UV.xy, SamplingInfo.iCascadeIdx), max(lightDepth, DepthClamp));
+        #else
+            return tex2DShadowMap.SampleCmpLevelZero(tex2DShadowMap_sampler, float3(SamplingInfo.f2UV.xy, SamplingInfo.iCascadeIdx), max(lightDepth, DepthClamp));
+        #endif
 
     #elif SHADOW_FILTER_SIZE == 3
 
@@ -356,7 +365,12 @@ float FilterShadowMapVaryingPCF(in Texture2DArray<float>  tex2DShadowMap,
             const float DepthClamp = 1e-8;
             float fDepth = max(SamplingInfo.fDepth + dot(f2UV - f2CenterTexel, f2ReceiverPlaneDepthBias), DepthClamp);
             f2UV *= ShadowAttribs.f4ShadowMapDim.zw;
-            Sum += tex2DShadowMap.SampleCmp(tex2DShadowMap_sampler, float3(f2UV, SamplingInfo.iCascadeIdx), fDepth) * Weight;
+            #ifdef GLSL
+                // There is no OpenGL counterpart for Texture2DArray.SampleCmpLevelZero()
+                Sum += tex2DShadowMap.SampleCmp(tex2DShadowMap_sampler, float3(f2UV, SamplingInfo.iCascadeIdx), fDepth) * Weight;
+            #else
+                Sum += tex2DShadowMap.SampleCmpLevelZero(tex2DShadowMap_sampler, float3(f2UV, SamplingInfo.iCascadeIdx), fDepth) * Weight;
+            #endif
             TotalWeight += Weight;
         }
     }
