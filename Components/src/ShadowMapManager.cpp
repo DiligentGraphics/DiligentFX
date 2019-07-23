@@ -409,11 +409,11 @@ void ShadowMapManager::InitializeConversionTechniques(TEXTURE_FORMAT FilterableS
             Tech = m_ConversionTech[SHADOW_MODE_EVSM2];
             continue;
         }
-       
+
         if (Tech.PSO) 
         {
             if(Tech.PSO->GetDesc().GraphicsPipeline.RTVFormats[0] != FilterableShadowMapFmt)
-                Tech = ShadowConversionTechnique{};
+                Tech = ShadowConversionTechnique();
             else
                 continue; // Already up to date
         }
@@ -517,7 +517,7 @@ void ShadowMapManager::InitializeResourceBindings()
             Tech.SRB = m_ConversionTech[SHADOW_MODE_EVSM2].SRB;
             continue;
         }
-        
+
         Tech.SRB.Release();
         Tech.PSO->CreateShaderResourceBinding(&Tech.SRB, true);
         Tech.SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_tex2DShadowMap")->Set(GetSRV());
