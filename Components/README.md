@@ -123,7 +123,7 @@ depending on the shadowing mode, define shadow map or filterable shadow map text
 #endif
 ```
 
-To filter shadow map, call `FilterShadowMap` or `SampleFilterableShadowMap` functions:
+To filter shadow map, call `FilterShadowMap` or `SampleFilterableShadowMap` function:
 
 ```hlsl
 FilteredShadow Shadow;
@@ -138,7 +138,7 @@ FilteredShadow Shadow;
 DiffuseIllumination *= Shadow.fLightAmount;
 ```
 
-Shadow filtering mode is controlled by a number of macroses that should be defined when creating the shader:
+Shadow filtering mode is controlled by a number of macros that should be defined when creating the shader:
 
 ```cpp
 ShaderCreateInfo ShaderCI;
