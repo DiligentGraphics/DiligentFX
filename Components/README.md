@@ -9,9 +9,10 @@ Rendering components are designed to be plug-and-play blocks of functionaliy tha
 The shadowing component implements the following BKMs:
 
 - Cascaded shadow maps with cascade stabilization
-- Optimizied fixed-size PCF or world-sized PCF kernels
+- PCF
 - Variance shadow maps
-- Two and four-component eponential variance shadow maps
+- Two and four-component exponential variance shadow maps
+- Optimized fixed-size or world-sized filter kernels
 - Best cascade search based on projection into light space
 - Filtering across cascades
 - Various artifact removal techniques
@@ -41,7 +42,7 @@ m_ShadowMapMgr.Initialize(m_pDevice, SMMgrInitInfo);
 ```
 
 Most of the fields of `ShadowMapManager::InitInfo` structure are self-explanatory. `pComparisonSampler` defines
-optional texture sample to be set in the shadow map resource view. If the sampler is null, the application is responsible
+optional texture sampler to be set in the shadow map resource view. If the sampler is `null`, the application is responsible
 for setting appropriate sampler before using the shadow map in the shader.
 
 #### Cascade Partitioning
@@ -86,8 +87,10 @@ for(int iCascade = 0; iCascade < iNumShadowCascades; ++iCascade)
     }
 
     auto* pCascadeDSV = m_ShadowMapMgr.GetCascadeDSV(iCascade);
-    m_pImmediateContext->SetRenderTargets(0, nullptr, pCascadeDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    m_pImmediateContext->ClearDepthStencil(pCascadeDSV, CLEAR_DEPTH_FLAG, 1.f, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    m_pImmediateContext->SetRenderTargets(0, nullptr, pCascadeDSV,
+                                          RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    m_pImmediateContext->ClearDepthStencil(pCascadeDSV, CLEAR_DEPTH_FLAG, 1.f, 0,
+                                           RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
     DrawMesh(m_pImmediateContext);
 }
@@ -125,14 +128,17 @@ To filter shadow map, call `FilterShadowMap` or `SampleFilterableShadowMap` func
 ```hlsl
 FilteredShadow Shadow;
 #if SHADOW_MODE == SHADOW_MODE_PCF
-    Shadow = FilterShadowMap(g_LightAttribs.ShadowAttribs, g_tex2DShadowMap, g_tex2DShadowMap_sampler, VSOut.PosInLightViewSpace, VSOut.CameraSpaceZ);
+    Shadow = FilterShadowMap(g_LightAttribs.ShadowAttribs, g_tex2DShadowMap, g_tex2DShadowMap_sampler,
+                             VSOut.PosInLightViewSpace, VSOut.CameraSpaceZ);
 #else
-    Shadow = SampleFilterableShadowMap(g_LightAttribs.ShadowAttribs, g_tex2DFilterableShadowMap, g_tex2DFilterableShadowMap_sampler, VSOut.PosInLightViewSpace, VSOut.CameraSpaceZ);
+    Shadow = SampleFilterableShadowMap(g_LightAttribs.ShadowAttribs, g_tex2DFilterableShadowMap,
+                                       g_tex2DFilterableShadowMap_sampler, VSOut.PosInLightViewSpace,
+                                       VSOut.CameraSpaceZ);
 #endif
 DiffuseIllumination *= Shadow.fLightAmount;
 ```
 
-Shadow filtering mode is controlled by a number of macroses:
+Shadow filtering mode is controlled by a number of macroses that should be defined when creating the shader:
 
 ```cpp
 ShaderCreateInfo ShaderCI;
@@ -144,7 +150,8 @@ Macros.AddShaderMacro( "BEST_CASCADE_SEARCH",    m_ShadowSettings.SearchBestCasc
 ShaderCI.Macros = Macros;
 ```
 
-[Shadows sample](https://github.com/DiligentGraphics/DiligentSamples/tree/master/Samples/Shadows) gives an example of using shadow component.
+[Shadows sample](https://github.com/DiligentGraphics/DiligentSamples/tree/master/Samples/Shadows) gives an example of
+using the shadowing component.
 
 ### References
 
