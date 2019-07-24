@@ -80,12 +80,12 @@ struct ShadowMapAttribs
     float fNumCascades                  DEFAULT_VALUE(0);
     // Do not use bool, because sizeof(bool)==1 !
 	BOOL  bVisualizeCascades            DEFAULT_VALUE(0);
-    float fCascadePartitioningFactor    DEFAULT_VALUE(0.95f);
+    BOOL  bVisualizeShadowing           DEFAULT_VALUE(0);
 
     float fReceiverPlaneDepthBiasClamp  DEFAULT_VALUE(10);
-    BOOL  bVisualizeShadowing           DEFAULT_VALUE(0);
     float fFixedDepthBias               DEFAULT_VALUE(1e-5f);
     float fCascadeTransitionRegion      DEFAULT_VALUE(0.1f);
+    int   iMaxAnisotropy                DEFAULT_VALUE(4);
 
     float fVSMBias                      DEFAULT_VALUE(1e-4f);
     float fVSMLightBleedingReduction    DEFAULT_VALUE(0);
@@ -95,7 +95,7 @@ struct ShadowMapAttribs
     BOOL  bIs32BitEVSM                  DEFAULT_VALUE(1);
     int   iFixedFilterSize              DEFAULT_VALUE(3); // 3x3 filter
     float fFilterWorldSize              DEFAULT_VALUE(0);
-    int   iMaxAnisotropy                DEFAULT_VALUE(4);
+    bool  fDummy;
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
     CHECK_STRUCT_ALIGNMENT(ShadowMapAttribs);

@@ -41,15 +41,29 @@ class ShadowMapManager
 public:
     ShadowMapManager();
 
+    /// Shadow map manager initialization info
     struct InitInfo
     {
-        TEXTURE_FORMAT Fmt                         = TEX_FORMAT_UNKNOWN;
+        /// Shadow map format. This parameter must not be TEX_FORMAT_UNKNOWN.
+        TEXTURE_FORMAT Format                      = TEX_FORMAT_UNKNOWN;
+
+        /// Shadow map resolution, must not be 0.
         Uint32         Resolution                  = 0;
+
+        /// Number of shadow cascades, must not be 0.
         Uint32         NumCascades                 = 0;
-        ISampler*      pComparisonSampler          = nullptr;
-        ISampler*      pFilterableShadowMapSampler = nullptr;
+
+        /// Shadow mode (see SHADOW_MODE_* defines in BasicStructures.fxh), must not be 0.
         int            ShadowMode                  = 0;
+
+        /// Wether to use 32-bit or 16-bit filterable textures
         bool           Is32BitFilterableFmt        = false;
+
+        /// Optional comparison sampler to be set in the shadow map resource view
+        ISampler*      pComparisonSampler          = nullptr;
+
+        /// Optional sampler to be set in the filterable shadow map representation
+        ISampler*      pFilterableShadowMapSampler = nullptr;
     };
     void Initialize(IRenderDevice* pDevice, const InitInfo& initInfo);
 
@@ -59,23 +73,33 @@ public:
 
     struct DistributeCascadeInfo
     {
+        /// Pointer to camera view matrix, must not be null.
         const float4x4*    pCameraView  = nullptr;
+        
+        /// Pointer to camera world matrix.
         const float4x4*    pCameraWorld = nullptr;
+
+        /// Pointer to camera projection matrix, must not be null.
         const float4x4*    pCameraProj  = nullptr;
-        const float3*      pCameraPos   = nullptr;
+
+        /// Pointer to light direction, must not be null.
         const float3*      pLightDir    = nullptr;
 
-        // Snap cascades to texels in light view space
+        /// Wether to snap cascades to texels in light view space
         bool               SnapCascades       = true;
         
-        // Stabilize cascade extents in light view space
+        /// Wether to stabilize cascade extents in light view space
         bool               StabilizeExtents   = true;
 
-        // Use same extents for X and Y axis. Enabled automatically if StabilizeExtents == true
+        /// Wether to use same extents for X and Y axis. Enabled automatically if StabilizeExtents == true
         bool               EqualizeExtents    = true;
 
-        // Callback that allows the application to adjust z range of every cascade.
-        // The callback is also called with cascade value -1 to adjust that entire camera range.
+        /// Cascade partitioning factor that defines the ratio between fully linear (0.0) and 
+        /// fully logarithmic (1.0) partitioning.
+        float              fPartitioningFactor = 0.95f;
+
+        /// Callback that allows the application to adjust z range of every cascade.
+        /// The callback is also called with cascade value -1 to adjust that entire camera range.
         std::function<void(int, float&, float&)> AdjustCascadeRange;
     };
 

@@ -39,10 +39,10 @@ ShadowMapManager::ShadowMapManager()
 void ShadowMapManager::Initialize(IRenderDevice* pDevice, const InitInfo& initInfo)
 {
     VERIFY_EXPR(pDevice != nullptr);
-    VERIFY(initInfo.Fmt != TEX_FORMAT_UNKNOWN, "Undefined shadow map format");
+    VERIFY(initInfo.Format      != TEX_FORMAT_UNKNOWN, "Undefined shadow map format");
     VERIFY(initInfo.NumCascades != 0, "Number of cascades must not be zero");
-    VERIFY(initInfo.Resolution != 0, "Shadow map resolution must not be zero");
-    VERIFY(initInfo.ShadowMode != 0, "Shadow mode is not specified");
+    VERIFY(initInfo.Resolution  != 0, "Shadow map resolution must not be zero");
+    VERIFY(initInfo.ShadowMode  != 0, "Shadow mode is not specified");
 
     m_pDevice    = pDevice;
     m_ShadowMode = initInfo.ShadowMode;
@@ -54,7 +54,7 @@ void ShadowMapManager::Initialize(IRenderDevice* pDevice, const InitInfo& initIn
     ShadowMapDesc.Height    = initInfo.Resolution;
     ShadowMapDesc.MipLevels = 1;
     ShadowMapDesc.ArraySize = initInfo.NumCascades;
-    ShadowMapDesc.Format    = initInfo.Fmt;
+    ShadowMapDesc.Format    = initInfo.Format;
     ShadowMapDesc.BindFlags = BIND_SHADER_RESOURCE | BIND_DEPTH_STENCIL;
 
 	RefCntAutoPtr<ITexture> ptex2DShadowMap;
@@ -129,7 +129,6 @@ void ShadowMapManager::DistributeCascades(const DistributeCascadeInfo& Info,
     VERIFY(Info.pCameraView, "Camera view matrix must not be null");
     VERIFY(Info.pCameraProj, "Camera projection matrix must not be null");
     VERIFY(Info.pLightDir, "Light direction must not be null");
-    VERIFY(Info.pCameraPos, "Camera position must not be null");
     VERIFY(m_pDevice, "Shadow map manager is not initialized");
 
     const auto& DevCaps = m_pDevice->GetDeviceCaps();
@@ -172,7 +171,9 @@ void ShadowMapManager::DistributeCascades(const DistributeCascadeInfo& Info,
 
     ShadowAttribs.mWorldToLightViewT = WorldToLightViewSpaceMatr.Transpose();
 
-    float3 f3CameraPosInLightSpace = *Info.pCameraPos * WorldToLightViewSpaceMatr;
+    const auto& CameraWorld = Info.pCameraWorld != nullptr ? *Info.pCameraWorld : Info.pCameraView->Inverse();
+    const float3 f3CameraPos = {CameraWorld._41, CameraWorld._42, CameraWorld._43};
+    const float3 f3CameraPosInLightSpace = f3CameraPos * WorldToLightViewSpaceMatr;
 
     float fMainCamNearPlane, fMainCamFarPlane;
     Info.pCameraProj->GetNearFarClipPlanes(fMainCamNearPlane, fMainCamFarPlane, IsGL);
@@ -183,9 +184,7 @@ void ShadowMapManager::DistributeCascades(const DistributeCascadeInfo& Info,
 
     for(int i=0; i < MAX_CASCADES; ++i)
         ShadowAttribs.fCascadeCamSpaceZEnd[i] = +FLT_MAX;
-
-    const auto& CameraWorld = Info.pCameraWorld != nullptr ? *Info.pCameraWorld : Info.pCameraView->Inverse();
-
+    
     int iNumCascades           = SMDesc.ArraySize;
     ShadowAttribs.iNumCascades = iNumCascades;
     ShadowAttribs.fNumCascades = static_cast<float>(iNumCascades);
@@ -205,7 +204,7 @@ void ShadowMapManager::DistributeCascades(const DistributeCascadeInfo& Info,
             float range = fMainCamFarPlane - fMainCamNearPlane;
             float uniformZ = fMainCamNearPlane + range * power;
 
-            fCascadeFarZ = ShadowAttribs.fCascadePartitioningFactor * (logZ - uniformZ) + uniformZ;
+            fCascadeFarZ = Info.fPartitioningFactor * (logZ - uniformZ) + uniformZ;
         }
         else
         {
