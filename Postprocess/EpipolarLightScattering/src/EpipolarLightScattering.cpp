@@ -33,6 +33,7 @@
 #include "../../../Utilities/include/DiligentFXShaderSourceStreamFactory.h"
 #include "MapHelper.h"
 #include "CommonlyUsedStates.h"
+#include "Align.h"
 
 #define _USE_MATH_DEFINES
 #include <math.h>
@@ -1979,6 +1980,41 @@ void EpipolarLightScattering :: CreateAmbientSkyLightTexture(IRenderDevice* pDev
 void EpipolarLightScattering :: PerformPostProcessing(FrameAttribs&                   frameAttribs,
                                                       EpipolarLightScatteringAttribs& PPAttribs)
 {
+    VERIFY(PPAttribs.uiNumEpipolarSlices > 0, "Number of epipolar slices must not be 0");
+    VERIFY(PPAttribs.uiMaxSamplesInSlice > 0, "Max samples in slice must not be 0");
+    VERIFY(PPAttribs.uiInitialSampleStepInSlice > 0, "Initial sample step in slice must not be 0");
+    VERIFY(IsPowerOfTwo(PPAttribs.uiInitialSampleStepInSlice), "Initial sample step in slice (", PPAttribs.uiInitialSampleStepInSlice, ") must be power of two");
+    VERIFY(PPAttribs.uiEpipoleSamplingDensityFactor > 0, "Epipole sampling density factor must not be 0");
+    VERIFY(IsPowerOfTwo(PPAttribs.uiEpipoleSamplingDensityFactor), "Epipole sampling desity factor (", PPAttribs.uiEpipoleSamplingDensityFactor, ") must be power of two");
+    VERIFY(PPAttribs.uiInstrIntegralSteps > 0, "Inscattering integral steps must not be 0");
+    VERIFY(PPAttribs.f2ShadowMapTexelSize.x != 0 && PPAttribs.f2ShadowMapTexelSize.y != 0, "Shadow map texel size must not be 0");
+    VERIFY(PPAttribs.uiMaxSamplesOnTheRay != 0, "Max samples on the ray must not be 0");
+    VERIFY(PPAttribs.uiMinMaxShadowMapResolution != 0, "Minmax shadow map resolution must not be 0");
+    VERIFY(PPAttribs.iNumCascades != 0, "Num cascades must not be 0");
+    VERIFY(PPAttribs.iFirstCascadeToRayMarch < PPAttribs.iNumCascades, "First cascade to ray march (", PPAttribs.fFirstCascadeToRayMarch, ") is invalid");
+    VERIFY(PPAttribs.fMaxShadowMapStep != 0, "Max shadow map step must not be 0");
+    VERIFY(PPAttribs.iLightSctrTechnique == LIGHT_SCTR_TECHNIQUE_EPIPOLAR_SAMPLING ||
+           PPAttribs.iLightSctrTechnique == LIGHT_SCTR_TECHNIQUE_BRUTE_FORCE,
+          "Incorrect light scattering technique (", PPAttribs.iLightSctrTechnique, ")");
+    VERIFY(PPAttribs.iCascadeProcessingMode == CASCADE_PROCESSING_MODE_SINGLE_PASS ||
+           PPAttribs.iCascadeProcessingMode == CASCADE_PROCESSING_MODE_MULTI_PASS  ||
+           PPAttribs.iCascadeProcessingMode == CASCADE_PROCESSING_MODE_MULTI_PASS_INST,
+          "Incorrect cascade processing mode (", PPAttribs.iCascadeProcessingMode, ")");
+    VERIFY(PPAttribs.iRefinementCriterion == REFINEMENT_CRITERION_DEPTH_DIFF ||
+           PPAttribs.iRefinementCriterion == REFINEMENT_CRITERION_INSCTR_DIFF,
+          "Incorrect refinement criterion (", PPAttribs.iRefinementCriterion, ")");
+    VERIFY(PPAttribs.iSingleScatteringMode == SINGLE_SCTR_MODE_NONE        ||
+           PPAttribs.iSingleScatteringMode == SINGLE_SCTR_MODE_INTEGRATION ||
+           PPAttribs.iSingleScatteringMode == SINGLE_SCTR_MODE_LUT,
+          "Incorrect single scattering mode (", PPAttribs.iSingleScatteringMode, ")");
+    VERIFY(PPAttribs.iMultipleScatteringMode == MULTIPLE_SCTR_MODE_NONE       ||
+           PPAttribs.iMultipleScatteringMode == MULTIPLE_SCTR_MODE_UNOCCLUDED ||
+           PPAttribs.iMultipleScatteringMode == MULTIPLE_SCTR_MODE_OCCLUDED,
+          "Incorrect multiple scattering mode (", PPAttribs.iMultipleScatteringMode, ")");
+    VERIFY(PPAttribs.iExtinctionEvalMode == EXTINCTION_EVAL_MODE_PER_PIXEL ||
+           PPAttribs.iExtinctionEvalMode == EXTINCTION_EVAL_MODE_EPIPOLAR,
+          "Incorrect extinction evaluation mode (", PPAttribs.iExtinctionEvalMode, ")");
+
     Uint32 StalePSODependencyFlags = 0;
 #define CHECK_PSO_DEPENDENCY(Flag, Member)StalePSODependencyFlags |= (PPAttribs.Member != m_PostProcessingAttribs.Member) ? Flag : 0
     CHECK_PSO_DEPENDENCY(PSO_DEPENDENCY_INITIAL_SAMPLE_STEP,        uiInitialSampleStepInSlice);
