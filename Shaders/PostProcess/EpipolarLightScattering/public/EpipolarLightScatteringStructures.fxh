@@ -106,7 +106,7 @@ struct EpipolarLightScatteringAttribs
     uint uiInitialSampleStepInSlice         DEFAULT_VALUE(16);
     // Sample density scale near the epipole where inscattering changes rapidly.
     // Note that sampling near the epipole is very cheap since only a few steps
-    // required to perform ray marching.
+    // are required to perform ray marching.
     uint uiEpipoleSamplingDensityFactor     DEFAULT_VALUE(2);
 
     // Refinement threshold controls detection of discontinuities. Smaller values

@@ -76,7 +76,8 @@ public:
             PerturbedNormal = 12,
             NdotV           = 13,
             DiffuseIBL      = 14,
-            SpecularIBL     = 15
+            SpecularIBL     = 15,
+            NumDebugViews
         };
         DebugViewType DebugView         = DebugViewType::None;
 

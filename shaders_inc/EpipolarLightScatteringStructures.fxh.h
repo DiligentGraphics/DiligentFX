@@ -106,7 +106,7 @@
 "    uint uiInitialSampleStepInSlice         DEFAULT_VALUE(16);\n"
 "    // Sample density scale near the epipole where inscattering changes rapidly.\n"
 "    // Note that sampling near the epipole is very cheap since only a few steps\n"
-"    // required to perform ray marching.\n"
+"    // are required to perform ray marching.\n"
 "    uint uiEpipoleSamplingDensityFactor     DEFAULT_VALUE(2);\n"
 "\n"
 "    // Refinement threshold controls detection of discontinuities. Smaller values\n"
