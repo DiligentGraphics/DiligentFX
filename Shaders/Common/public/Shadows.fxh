@@ -172,7 +172,7 @@ float FilterShadowMapFixedPCF(in Texture2DArray<float>  tex2DShadowMap,
     base_uv -= float2(0.5, 0.5);
     base_uv *= f4ShadowMapSize.zw;
 
-    float sum = 0;
+    float sum = 0.0;
 
     // It is essential to clamp biased depth to 0 to avoid shadow leaks at near cascade depth boundary.
     //        
@@ -214,8 +214,8 @@ float FilterShadowMapFixedPCF(in Texture2DArray<float>  tex2DShadowMap,
         float vw0 = (3.0 - 2.0 * t);
         float vw1 = (1.0 + 2.0 * t);
 
-        float v0 = (2.0 - t) / vw0 - 1;
-        float v1 = t / vw1 + 1;
+        float v0 = (2.0 - t) / vw0 - 1.0;
+        float v1 = t / vw1 + 1.0;
 
         sum += uw0 * vw0 * SAMPLE_SHADOW_MAP(u0, v0);
         sum += uw1 * vw0 * SAMPLE_SHADOW_MAP(u1, v0);
@@ -240,7 +240,7 @@ float FilterShadowMapFixedPCF(in Texture2DArray<float>  tex2DShadowMap,
 
         float v0 = (3.0 - 2.0 * t) / vw0 - 2.0;
         float v1 = (3.0 + t) / vw1;
-        float v2 = t / vw2 + 2;
+        float v2 = t / vw2 + 2.0;
 
         sum += uw0 * vw0 * SAMPLE_SHADOW_MAP(u0, v0);
         sum += uw1 * vw0 * SAMPLE_SHADOW_MAP(u1, v0);
@@ -596,7 +596,7 @@ float3 GetCascadeColor(FilteredShadow Shadow)
     f3CascadeColors[4] = float3(1,0,1);
     f3CascadeColors[5] = float3(0.3, 1, 0.7);
     f3CascadeColors[6] = float3(0.7, 0.3,1);
-    f3CascadeColors[7] = float3(1, 0.7, 0.3);
+    f3CascadeColors[7] = float3(1.0, 0.7, 0.3);
     float3 Color = f3CascadeColors[min(Shadow.iCascadeIdx, MAX_CASCADES-1)];
 #if FILTER_ACROSS_CASCADES
     float3 NextCascadeColor = f3CascadeColors[min(Shadow.iCascadeIdx+1, MAX_CASCADES-1)];
