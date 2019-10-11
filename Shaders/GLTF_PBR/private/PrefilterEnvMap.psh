@@ -9,7 +9,7 @@ SamplerState g_EnvironmentMap_sampler;
 
 cbuffer FilterAttribs
 {
-    float4x4 g_Rotation;
+    float4x4 g_RotationUnused;
 
     float    g_Roughness;
     float    g_EnvMapDim;

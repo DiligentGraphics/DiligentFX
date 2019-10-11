@@ -9,7 +9,7 @@
 "\n"
 "cbuffer FilterAttribs\n"
 "{\n"
-"    float4x4 g_Rotation;\n"
+"    float4x4 g_RotationUnused;\n"
 "\n"
 "    float    g_Roughness;\n"
 "    float    g_EnvMapDim;\n"
