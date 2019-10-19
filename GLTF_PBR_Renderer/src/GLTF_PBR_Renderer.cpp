@@ -701,9 +701,9 @@ void GLTF_PBR_Renderer::RenderGLTFNode(IDeviceContext*              pCtx,
 
 			if (primitive->hasIndices)
             {
-                DrawAttribs drawAttrs(primitive->IndexCount, VT_UINT32, DRAW_FLAG_VERIFY_ALL);
+                DrawIndexedAttribs drawAttrs(primitive->IndexCount, VT_UINT32, DRAW_FLAG_VERIFY_ALL);
                 drawAttrs.FirstIndexLocation = primitive->FirstIndex;
-                pCtx->Draw(drawAttrs);
+                pCtx->DrawIndexed(drawAttrs);
 			}
             else
             {
