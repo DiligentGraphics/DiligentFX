@@ -172,8 +172,8 @@ void ShadowMapManager::DistributeCascades(const DistributeCascadeInfo& Info,
     ShadowAttribs.mWorldToLightViewT = WorldToLightViewSpaceMatr.Transpose();
 
     const auto& CameraWorld = Info.pCameraWorld != nullptr ? *Info.pCameraWorld : Info.pCameraView->Inverse();
-    const float3 f3CameraPos = {CameraWorld._41, CameraWorld._42, CameraWorld._43};
-    const float3 f3CameraPosInLightSpace = f3CameraPos * WorldToLightViewSpaceMatr;
+    //const float3 f3CameraPos = {CameraWorld._41, CameraWorld._42, CameraWorld._43};
+    //const float3 f3CameraPosInLightSpace = f3CameraPos * WorldToLightViewSpaceMatr;
 
     float fMainCamNearPlane, fMainCamFarPlane;
     Info.pCameraProj->GetNearFarClipPlanes(fMainCamNearPlane, fMainCamFarPlane, IsGL);

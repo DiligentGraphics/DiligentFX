@@ -1056,10 +1056,10 @@ void EpipolarLightScattering :: RenderCoarseUnshadowedInctr()
 
         const std::array<std::string, 4> StaticTextures =
         {
-            "g_tex3DSingleSctrLUT",
-            "g_tex3DHighOrderSctrLUT",
-            "g_tex3DMultipleSctrLUT",
-            "g_tex2DOccludedNetDensityToAtmTop"
+            std::string{"g_tex3DSingleSctrLUT"},
+            std::string{"g_tex3DHighOrderSctrLUT"},
+            std::string{"g_tex3DMultipleSctrLUT"},
+            std::string{"g_tex2DOccludedNetDensityToAtmTop"}
         };
         for(const auto& Tex : StaticTextures)
         {
