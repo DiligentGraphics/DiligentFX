@@ -535,7 +535,7 @@ void ShadowMapManager::ConvertToFilterable(IDeviceContext* pCtx, const ShadowMap
         VERIFY(static_cast<int>(ShadowMapDesc.ArraySize) == ShadowAttribs.iNumCascades, "Inconsistent number of cascades");
         const auto& FilterableSMDesc = m_pFilterableShadowMapSRV->GetTexture()->GetDesc();
         VERIFY(ShadowAttribs.bIs32BitEVSM == (FilterableSMDesc.Format == TEX_FORMAT_RGBA32_FLOAT || FilterableSMDesc.Format == TEX_FORMAT_RG32_FLOAT),
-               "Incorrect 32-bit VSM flag");
+               "Incorrect 32-bit VSM flag"); (void)FilterableSMDesc;
 
         int iFilterRadius = (ShadowAttribs.iFixedFilterSize-1)/2;
         bool bSkipBlur = ShadowAttribs.iFixedFilterSize == 2;
