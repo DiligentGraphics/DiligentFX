@@ -2042,19 +2042,29 @@ void EpipolarLightScattering :: PerformPostProcessing(FrameAttribs&             
     StalePSODependencyFlags |= (m_bUseCombinedMinMaxTexture != bUseCombinedMinMaxTexture) ? PSO_DEPENDENCY_USE_COMBINED_MIN_MAX_TEX : 0;
 
 
-    Uint32 StaleSRBDependencyFlags = 0;
-#define CHECK_SRB_DEPENDENCY(Flag, Member)StaleSRBDependencyFlags |= (m_FrameAttribs.Member != frameAttribs.Member) ? Flag : 0
-    CHECK_SRB_DEPENDENCY(SRB_DEPENDENCY_SRC_COLOR_BUFFER, ptex2DSrcColorBufferSRV);
-    CHECK_SRB_DEPENDENCY(SRB_DEPENDENCY_SRC_COLOR_BUFFER, ptex2DSrcColorBufferRTV);
-    CHECK_SRB_DEPENDENCY(SRB_DEPENDENCY_SRC_DEPTH_BUFFER, ptex2DSrcDepthBufferDSV);
-    CHECK_SRB_DEPENDENCY(SRB_DEPENDENCY_SRC_DEPTH_BUFFER, ptex2DSrcDepthBufferSRV);
-    CHECK_SRB_DEPENDENCY(SRB_DEPENDENCY_SHADOW_MAP,       ptex2DShadowMapSRV);
-#undef CHECK_SRB_DEPENDENCY
-
     auto* pcbCameraAttribs = frameAttribs.pcbCameraAttribs != nullptr ? frameAttribs.pcbCameraAttribs : m_pcbCameraAttribs;
     auto* pcbLightAttribs  = frameAttribs.pcbLightAttribs  != nullptr ? frameAttribs.pcbLightAttribs  : m_pcbLightAttribs;
-    StaleSRBDependencyFlags |= (!pcbCameraAttribs || m_FrameAttribs.pcbCameraAttribs != pcbCameraAttribs) ? SRB_DEPENDENCY_CAMERA_ATTRIBS : 0;
-    StaleSRBDependencyFlags |= (!pcbLightAttribs  || m_FrameAttribs.pcbLightAttribs  != pcbLightAttribs)  ? SRB_DEPENDENCY_LIGHT_ATTRIBS  : 0;
+
+    UserResourceIds NewUserResourceIds;
+    NewUserResourceIds.LightAttribs      = pcbCameraAttribs != nullptr ? pcbCameraAttribs->GetUniqueID() : -1;
+    NewUserResourceIds.CameraAttribs     = pcbLightAttribs  != nullptr ? pcbLightAttribs->GetUniqueID()  : -1;
+    NewUserResourceIds.SrcColorBufferSRV = frameAttribs.ptex2DSrcColorBufferSRV->GetUniqueID();
+    NewUserResourceIds.SrcColorBufferRTV = frameAttribs.ptex2DSrcColorBufferRTV->GetUniqueID();
+    NewUserResourceIds.SrcDepthBufferDSV = frameAttribs.ptex2DSrcDepthBufferDSV->GetUniqueID();
+    NewUserResourceIds.SrcDepthBufferSRV = frameAttribs.ptex2DSrcDepthBufferSRV->GetUniqueID();
+    NewUserResourceIds.ShadowMapSRV      = frameAttribs.ptex2DShadowMapSRV->GetUniqueID();
+
+    Uint32 StaleSRBDependencyFlags = 0;
+#define CHECK_SRB_DEPENDENCY(Flag, Member)StaleSRBDependencyFlags |= (m_UserResourceIds.Member != NewUserResourceIds.Member) ? Flag : 0
+    CHECK_SRB_DEPENDENCY(SRB_DEPENDENCY_SRC_COLOR_BUFFER, SrcColorBufferSRV);
+    CHECK_SRB_DEPENDENCY(SRB_DEPENDENCY_SRC_COLOR_BUFFER, SrcColorBufferRTV);
+    CHECK_SRB_DEPENDENCY(SRB_DEPENDENCY_SRC_DEPTH_BUFFER, SrcDepthBufferDSV);
+    CHECK_SRB_DEPENDENCY(SRB_DEPENDENCY_SRC_DEPTH_BUFFER, SrcDepthBufferSRV);
+    CHECK_SRB_DEPENDENCY(SRB_DEPENDENCY_SHADOW_MAP,       ShadowMapSRV);
+#undef CHECK_SRB_DEPENDENCY
+
+    StaleSRBDependencyFlags |= (!pcbCameraAttribs || m_UserResourceIds.CameraAttribs != NewUserResourceIds.CameraAttribs) ? SRB_DEPENDENCY_CAMERA_ATTRIBS : 0;
+    StaleSRBDependencyFlags |= (!pcbLightAttribs  || m_UserResourceIds.LightAttribs  != NewUserResourceIds.LightAttribs)  ? SRB_DEPENDENCY_LIGHT_ATTRIBS  : 0;
 
     if (PPAttribs.uiNumEpipolarSlices != m_PostProcessingAttribs.uiNumEpipolarSlices || 
         PPAttribs.uiMaxSamplesInSlice != m_PostProcessingAttribs.uiMaxSamplesInSlice)
@@ -2169,6 +2179,7 @@ void EpipolarLightScattering :: PerformPostProcessing(FrameAttribs&             
     m_FrameAttribs                  = frameAttribs;
     m_FrameAttribs.pcbCameraAttribs = pcbCameraAttribs;
     m_FrameAttribs.pcbLightAttribs  = pcbLightAttribs;
+    m_UserResourceIds               = NewUserResourceIds;
        
     if (frameAttribs.pcbCameraAttribs == nullptr)
     {

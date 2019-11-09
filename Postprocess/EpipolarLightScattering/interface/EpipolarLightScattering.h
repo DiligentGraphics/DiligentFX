@@ -154,6 +154,17 @@ private:
     EpipolarLightScatteringAttribs m_PostProcessingAttribs;
     FrameAttribs                   m_FrameAttribs;
 
+    struct UserResourceIds
+    {
+        Int32 LightAttribs      = -1;
+        Int32 CameraAttribs     = -1;
+        Int32 SrcColorBufferSRV = -1;
+        Int32 SrcColorBufferRTV = -1;
+        Int32 SrcDepthBufferDSV = -1;
+        Int32 SrcDepthBufferSRV = -1;
+        Int32 ShadowMapSRV      = -1;
+    }m_UserResourceIds;
+
     bool m_bUseCombinedMinMaxTexture;
     Uint32 m_uiSampleRefinementCSThreadGroupSize;
     Uint32 m_uiSampleRefinementCSMinimumThreadGroupSize;
