@@ -8,6 +8,13 @@ file(GLOB_RECURSE SHADERS LIST_DIRECTORIES false Shaders/*.*)
 
 add_library(DiligentFX STATIC README.md ${SHADERS})
 
+file(RELATIVE_PATH DILIGENT_FX_DIR "${CMAKE_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}")
+
+if(NOT INSTALL_DILIGENT_FX)
+    set(INSTALL_DILIGENT_FX ${INSTALL_DILIGENT_CORE})
+endif()
+
+
 target_link_libraries(DiligentFX 
 PUBLIC
     Diligent-BuildSettings
@@ -92,4 +99,22 @@ if(NOT FILE2STRING_PATH STREQUAL "")
         )
 else()
     message(WARNING "File2String utility is currently unavailable on this host system. This is not an issues unless you modify shaders")
+endif()
+
+
+if(INSTALL_DILIGENT_FX)
+    install(TARGETS				 DiligentFX
+            ARCHIVE DESTINATION "lib/${DILIGENT_FX_DIR}/$<CONFIG>"
+            LIBRARY DESTINATION "bin/${DILIGENT_FX_DIR}/$<CONFIG>"
+            RUNTIME DESTINATION "bin/${DILIGENT_FX_DIR}/$<CONFIG>"
+    )
+    install(DIRECTORY    PostProcess/EpipolarLightScattering/interface
+            DESTINATION  "headers/${DILIGENT_FX_DIR}/PostProcess/EpipolarLightScattering"
+    )
+    install(DIRECTORY    Components/interface
+            DESTINATION  "headers/${DILIGENT_FX_DIR}/Components"
+    )
+    install(DIRECTORY    GLTF_PBR_Renderer/interface
+            DESTINATION  "headers/${DILIGENT_FX_DIR}/GLTF_PBR_Renderer"
+    )
 endif()
