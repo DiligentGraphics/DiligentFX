@@ -117,4 +117,9 @@ if(INSTALL_DILIGENT_FX)
     install(DIRECTORY    GLTF_PBR_Renderer/interface
             DESTINATION  "headers/${DILIGENT_FX_DIR}/GLTF_PBR_Renderer"
     )
+    install(DIRECTORY    Shaders
+            DESTINATION  "."
+            FILES_MATCHING PATTERN "public/*.*"
+            PATTERN "private" EXCLUDE
+    )
 endif()
