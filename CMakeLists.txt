@@ -31,8 +31,9 @@ set_target_properties(DiligentFX DiligentFXCustomCommands PROPERTIES
     FOLDER DiligentFX
 )
 
-target_include_directories(DiligentFX PUBLIC
-    Shaders/Common/public
+target_include_directories(DiligentFX
+PUBLIC
+    .
 )
 
 add_subdirectory(Utilities)

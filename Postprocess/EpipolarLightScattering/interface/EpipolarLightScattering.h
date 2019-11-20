@@ -22,17 +22,6 @@
  */
 #pragma once
 
-#include "../../../../DiligentCore/Common/interface/BasicMath.h"
-
-namespace Diligent
-{
-using uint = uint32_t;
-
-#include "../../../Shaders/Common/public/BasicStructures.fxh"
-#include "../../../Shaders/PostProcess/ToneMapping/public/ToneMappingStructures.fxh"
-#include "../../../Shaders/PostProcess/EpipolarLightScattering/public/EpipolarLightScatteringStructures.fxh"
-}
-
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/DeviceContext.h"
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/Buffer.h"
@@ -40,9 +29,17 @@ using uint = uint32_t;
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/BufferView.h"
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/TextureView.h"
 #include "../../../../DiligentCore/Common/interface/RefCntAutoPtr.h"
+#include "../../../../DiligentCore/Common/interface/BasicMath.h"
 
 namespace Diligent
 {
+
+using uint = uint32_t;
+
+#include "Shaders/Common/public/BasicStructures.fxh"
+#include "Shaders/PostProcess/ToneMapping/public/ToneMappingStructures.fxh"
+#include "Shaders/PostProcess/EpipolarLightScattering/public/EpipolarLightScatteringStructures.fxh"
+
 
 class EpipolarLightScattering
 {
