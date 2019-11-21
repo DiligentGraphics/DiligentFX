@@ -11,9 +11,9 @@ add_library(DiligentFX STATIC README.md ${SHADERS})
 file(RELATIVE_PATH DILIGENT_FX_DIR "${CMAKE_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}")
 
 if(PLATFORM_WIN32 OR PLATFORM_UNIVERSAL_WINDOWS OR PLATFORM_LINUX OR PLATFORM_MACOS OR PLATFORM_IOS)
-    option(INSTALL_DILIGENT_FX "Install DiligentFX module headers and libraries" ON)
+    option(DILIGENT_INSTALL_FX "Install DiligentFX module headers and libraries" ON)
 else()
-    set(INSTALL_DILIGENT_FX OFF)
+    set(DILIGENT_INSTALL_FX OFF)
 endif()
 
 target_link_libraries(DiligentFX 
@@ -104,7 +104,7 @@ else()
 endif()
 
 
-if(INSTALL_DILIGENT_FX)
+if(DILIGENT_INSTALL_FX)
     install(TARGETS				 DiligentFX
             ARCHIVE DESTINATION "lib/${DILIGENT_FX_DIR}/$<CONFIG>"
             LIBRARY DESTINATION "bin/${DILIGENT_FX_DIR}/$<CONFIG>"
