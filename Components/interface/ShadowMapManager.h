@@ -41,6 +41,8 @@ class ShadowMapManager
 public:
     ShadowMapManager();
 
+    // clang-format off
+
     /// Shadow map manager initialization info
     struct InitInfo
     {
@@ -103,6 +105,8 @@ public:
         std::function<void(int, float&, float&)> AdjustCascadeRange;
     };
 
+    // clang-format on
+
     struct CascadeTransforms
     {
         float4x4 Proj;
@@ -114,7 +118,7 @@ public:
 
     void ConvertToFilterable(IDeviceContext* pCtx, const ShadowMapAttribs& ShadowAttribs);
 
-    const CascadeTransforms& GetCascadeTranform(Uint32 Cascade) const {return m_CascadeTransforms[Cascade];}
+    const CascadeTransforms& GetCascadeTranform(Uint32 Cascade) const { return m_CascadeTransforms[Cascade]; }
 
 private:
     void InitializeConversionTechniques(TEXTURE_FORMAT FilterableShadowMapFmt);
@@ -135,8 +139,8 @@ private:
         RefCntAutoPtr<IPipelineState>         PSO;
         RefCntAutoPtr<IShaderResourceBinding> SRB;
     };
-    std::array<ShadowConversionTechnique, SHADOW_MODE_EVSM4+1> m_ConversionTech;
-    ShadowConversionTechnique m_BlurVertTech;
+    std::array<ShadowConversionTechnique, SHADOW_MODE_EVSM4 + 1> m_ConversionTech;
+    ShadowConversionTechnique                                    m_BlurVertTech;
 };
 
-}
+} // namespace Diligent
