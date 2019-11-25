@@ -38,27 +38,27 @@ DiligentFXShaderSourceStreamFactory& DiligentFXShaderSourceStreamFactory::GetIns
 
 DiligentFXShaderSourceStreamFactory::DiligentFXShaderSourceStreamFactory()
 {
-    for(size_t i=0; i < _countof(g_Shaders); ++i)
+    for (size_t i = 0; i < _countof(g_Shaders); ++i)
     {
         m_NameToSourceMap.emplace(g_Shaders[i].FileName, g_Shaders[i].Source);
     }
 }
 
-void DiligentFXShaderSourceStreamFactory::CreateInputStream( const Char* Name, IFileStream** ppStream )
+void DiligentFXShaderSourceStreamFactory::CreateInputStream(const Char* Name, IFileStream** ppStream)
 {
     auto SourceIt = m_NameToSourceMap.find(Name);
-    if(SourceIt != m_NameToSourceMap.end())
+    if (SourceIt != m_NameToSourceMap.end())
     {
         RefCntAutoPtr<StringDataBlobImpl> pDataBlob(MakeNewRCObj<StringDataBlobImpl>()(SourceIt->second));
-        RefCntAutoPtr<MemoryFileStream> pMemStream(MakeNewRCObj<MemoryFileStream>()(pDataBlob));
+        RefCntAutoPtr<MemoryFileStream>   pMemStream(MakeNewRCObj<MemoryFileStream>()(pDataBlob));
 
-        pMemStream->QueryInterface( IID_FileStream, reinterpret_cast<IObject**>(ppStream) );
+        pMemStream->QueryInterface(IID_FileStream, reinterpret_cast<IObject**>(ppStream));
     }
     else
     {
         *ppStream = nullptr;
-        LOG_ERROR( "Failed to create input stream for source file ", Name );
+        LOG_ERROR("Failed to create input stream for source file ", Name);
     }
 }
 
-}
+} // namespace Diligent

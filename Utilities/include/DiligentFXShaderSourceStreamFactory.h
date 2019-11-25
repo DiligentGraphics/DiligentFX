@@ -30,38 +30,40 @@
 
 namespace Diligent
 {
-    class DiligentFXShaderSourceStreamFactory final : public IShaderSourceInputStreamFactory
+
+class DiligentFXShaderSourceStreamFactory final : public IShaderSourceInputStreamFactory
+{
+public:
+    static DiligentFXShaderSourceStreamFactory& GetInstance();
+
+    virtual void CreateInputStream(const Char* Name, IFileStream** ppStream) override final;
+
+    virtual void QueryInterface(const INTERFACE_ID& IID, IObject** ppInterface) override final
     {
-    public:
-        static DiligentFXShaderSourceStreamFactory& GetInstance();
+        UNSUPPORTED("This method is not implemented and should never be called");
+    }
 
-        virtual void CreateInputStream(const Char *Name, IFileStream **ppStream)override final;
+    virtual CounterValueType AddRef() override final
+    {
+        UNSUPPORTED("This method is not implemented and should never be called");
+        return 0;
+    }
 
-        virtual void QueryInterface(const INTERFACE_ID& IID, IObject** ppInterface)override final
-        {
-            UNSUPPORTED("This method is not implemented and should never be called");
-        }
+    virtual CounterValueType Release() override final
+    {
+        UNSUPPORTED("This method is not implemented and should never be called");
+        return 0;
+    }
 
-        virtual CounterValueType AddRef()override final
-        {
-            UNSUPPORTED("This method is not implemented and should never be called");
-            return 0;
-        }
+    virtual IReferenceCounters* GetReferenceCounters() const override final
+    {
+        UNSUPPORTED("This method is not implemented and should never be called");
+        return nullptr;
+    }
 
-        virtual CounterValueType Release()override final
-        {
-            UNSUPPORTED("This method is not implemented and should never be called");
-            return 0;
-        }
+private:
+    DiligentFXShaderSourceStreamFactory();
+    std::unordered_map<HashMapStringKey, const Char*, HashMapStringKey::Hasher> m_NameToSourceMap;
+};
 
-        virtual IReferenceCounters* GetReferenceCounters()const override final
-        {
-            UNSUPPORTED("This method is not implemented and should never be called");
-            return nullptr;
-        }
-
-    private:
-        DiligentFXShaderSourceStreamFactory();
-        std::unordered_map<HashMapStringKey, const Char*, HashMapStringKey::Hasher> m_NameToSourceMap;
-    };
-}
+} // namespace Diligent

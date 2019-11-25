@@ -2254,7 +2254,7 @@ void EpipolarLightScattering ::PerformPostProcessing(FrameAttribs&              
             VERIFY_EXPR(StaleSRBDependencyFlags & SRB_DEPENDENCY_LIGHT_ATTRIBS);
         }
         MapHelper<LightAttribs> LightAttribs(m_FrameAttribs.pDeviceContext, m_pcbLightAttribs, MAP_WRITE, MAP_FLAG_DISCARD);
-        *LightAttribs                  = *m_FrameAttribs.pLightAttribs;
+        *LightAttribs = *m_FrameAttribs.pLightAttribs;
 
         m_FrameAttribs.pcbLightAttribs = m_pcbLightAttribs;
     }
