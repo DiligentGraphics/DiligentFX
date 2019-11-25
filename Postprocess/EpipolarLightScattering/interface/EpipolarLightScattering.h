@@ -46,27 +46,27 @@ class EpipolarLightScattering
 public:
     struct FrameAttribs
     {
-        IRenderDevice*  pDevice         = nullptr;
-        IDeviceContext* pDeviceContext  = nullptr;
-    
-        double dElapsedTime             = 0;
+        IRenderDevice*  pDevice        = nullptr;
+        IDeviceContext* pDeviceContext = nullptr;
 
-        const LightAttribs*   pLightAttribs    = nullptr;
-        const CameraAttribs*  pCameraAttribs   = nullptr;
-        // If this parameter is null, the effect will use its own buffer.
-        IBuffer*              pcbLightAttribs  = nullptr;
-        // If this parameter is null, the effect will use its own buffer.
-        IBuffer*              pcbCameraAttribs = nullptr;
+        double dElapsedTime = 0;
 
-        ITextureView*   ptex2DSrcColorBufferSRV = nullptr;
-        ITextureView*   ptex2DSrcColorBufferRTV = nullptr;
-        ITextureView*   ptex2DSrcDepthBufferDSV = nullptr;
-        ITextureView*   ptex2DSrcDepthBufferSRV = nullptr;
-        ITextureView*   ptex2DShadowMapSRV      = nullptr;
-        ITextureView*   pDstRTV                 = nullptr;
+        const LightAttribs*  pLightAttribs  = nullptr;
+        const CameraAttribs* pCameraAttribs = nullptr;
+        // If this parameter is null, the effect will use its own buffer.
+        IBuffer* pcbLightAttribs = nullptr;
+        // If this parameter is null, the effect will use its own buffer.
+        IBuffer* pcbCameraAttribs = nullptr;
+
+        ITextureView* ptex2DSrcColorBufferSRV = nullptr;
+        ITextureView* ptex2DSrcColorBufferRTV = nullptr;
+        ITextureView* ptex2DSrcDepthBufferDSV = nullptr;
+        ITextureView* ptex2DSrcDepthBufferSRV = nullptr;
+        ITextureView* ptex2DShadowMapSRV      = nullptr;
+        ITextureView* pDstRTV                 = nullptr;
     };
 
-    EpipolarLightScattering(IRenderDevice*              in_pDevice, 
+    EpipolarLightScattering(IRenderDevice*              in_pDevice,
                             IDeviceContext*             in_pContext,
                             TEXTURE_FORMAT              BackBufferFmt,
                             TEXTURE_FORMAT              DepthBufferFmt,
@@ -77,57 +77,57 @@ public:
 
     void OnWindowResize(IRenderDevice* pDevice, Uint32 uiBackBufferWidth, Uint32 uiBackBufferHeight);
 
-    void PerformPostProcessing(FrameAttribs&                     FrameAttribs,
-                               EpipolarLightScatteringAttribs&   PPAttribs);
+    void PerformPostProcessing(FrameAttribs&                   FrameAttribs,
+                               EpipolarLightScatteringAttribs& PPAttribs);
 
-    void ComputeSunColor(const float3&  vDirectionOnSun,
-                         const float4&  f4ExtraterrestrialSunColor,
-                         float4&        f4SunColorAtGround,
-                         float4&        f4AmbientLight);
-    
-    void RenderSun();
-    IBuffer* GetMediaAttribsCB(){return m_pcbMediaAttribs;}
-    ITextureView* GetPrecomputedNetDensitySRV(){return m_ptex2DOccludedNetDensityToAtmTopSRV;}
+    void ComputeSunColor(const float3& vDirectionOnSun,
+                         const float4& f4ExtraterrestrialSunColor,
+                         float4&       f4SunColorAtGround,
+                         float4&       f4AmbientLight);
+
+    void          RenderSun();
+    IBuffer*      GetMediaAttribsCB() { return m_pcbMediaAttribs; }
+    ITextureView* GetPrecomputedNetDensitySRV() { return m_ptex2DOccludedNetDensityToAtmTopSRV; }
     ITextureView* GetAmbientSkyLightSRV(IRenderDevice* pDevice, IDeviceContext* pContext);
 
 private:
-    void ReconstructCameraSpaceZ    ();
-    void RenderSliceEndpoints       ();
-    void RenderCoordinateTexture    ();
+    void ReconstructCameraSpaceZ();
+    void RenderSliceEndpoints();
+    void RenderCoordinateTexture();
     void RenderCoarseUnshadowedInctr();
-    void RefineSampleLocations      ();
-    void MarkRayMarchingSamples     ();
-    void RenderSliceUVDirAndOrig    ();
-    void Build1DMinMaxMipMap        (int iCascadeIndex);
-    void DoRayMarching              (Uint32 uiMaxStepsAlongRay, int iCascadeIndex);
+    void RefineSampleLocations();
+    void MarkRayMarchingSamples();
+    void RenderSliceUVDirAndOrig();
+    void Build1DMinMaxMipMap(int iCascadeIndex);
+    void DoRayMarching(Uint32 uiMaxStepsAlongRay, int iCascadeIndex);
     void InterpolateInsctrIrradiance();
-    void UnwarpEpipolarScattering   (bool bRenderLuminance);
-    void UpdateAverageLuminance     ();
+    void UnwarpEpipolarScattering(bool bRenderLuminance);
+    void UpdateAverageLuminance();
     enum class EFixInscatteringMode
     {
-        LuminanceOnly = 0,
-        FixInscattering = 1,
+        LuminanceOnly         = 0,
+        FixInscattering       = 1,
         FullScreenRayMarching = 2
     };
     void FixInscatteringAtDepthBreaks(Uint32 uiMaxStepsAlongRay, EFixInscatteringMode Mode);
-    void RenderSampleLocations       ();
+    void RenderSampleLocations();
 
-    void PrecomputeOpticalDepthTexture    (IRenderDevice *pDevice, IDeviceContext *pContext);
-    void PrecomputeScatteringLUT          (IRenderDevice *pDevice, IDeviceContext *pContext);
-    void CreateRandomSphereSamplingTexture(IRenderDevice *pDevice);
-    void ComputeAmbientSkyLightTexture    (IRenderDevice* pDevice, IDeviceContext *pContext);
-    void ComputeScatteringCoefficients    (IDeviceContext* pDeviceCtx = nullptr);
-    void CreateEpipolarTextures           (IRenderDevice* pDevice);
-    void CreateSliceEndPointsTexture      (IRenderDevice* pDevice);
-    void CreateExtinctionTexture          (IRenderDevice* pDevice);
-    void CreateAmbientSkyLightTexture     (IRenderDevice* pDevice);
-    void CreateLowResLuminanceTexture     (IRenderDevice* pDevice, IDeviceContext* pDeviceCtx);
-    void CreateSliceUVDirAndOriginTexture (IRenderDevice* pDevice);
-    void CreateCamSpaceZTexture           (IRenderDevice* pDevice);
-    void CreateMinMaxShadowMap            (IRenderDevice* pDevice);
+    void PrecomputeOpticalDepthTexture(IRenderDevice* pDevice, IDeviceContext* pContext);
+    void PrecomputeScatteringLUT(IRenderDevice* pDevice, IDeviceContext* pContext);
+    void CreateRandomSphereSamplingTexture(IRenderDevice* pDevice);
+    void ComputeAmbientSkyLightTexture(IRenderDevice* pDevice, IDeviceContext* pContext);
+    void ComputeScatteringCoefficients(IDeviceContext* pDeviceCtx = nullptr);
+    void CreateEpipolarTextures(IRenderDevice* pDevice);
+    void CreateSliceEndPointsTexture(IRenderDevice* pDevice);
+    void CreateExtinctionTexture(IRenderDevice* pDevice);
+    void CreateAmbientSkyLightTexture(IRenderDevice* pDevice);
+    void CreateLowResLuminanceTexture(IRenderDevice* pDevice, IDeviceContext* pDeviceCtx);
+    void CreateSliceUVDirAndOriginTexture(IRenderDevice* pDevice);
+    void CreateCamSpaceZTexture(IRenderDevice* pDevice);
+    void CreateMinMaxShadowMap(IRenderDevice* pDevice);
 
     void DefineMacros(class ShaderMacroHelper& Macros);
-    
+
     const TEXTURE_FORMAT m_BackBufferFmt;
     const TEXTURE_FORMAT m_DepthBufferFmt;
     const TEXTURE_FORMAT m_OffscreenBackBufferFmt;
@@ -160,9 +160,9 @@ private:
         Int32 SrcDepthBufferDSV = -1;
         Int32 SrcDepthBufferSRV = -1;
         Int32 ShadowMapSRV      = -1;
-    }m_UserResourceIds;
+    } m_UserResourceIds;
 
-    bool m_bUseCombinedMinMaxTexture;
+    bool   m_bUseCombinedMinMaxTexture;
     Uint32 m_uiSampleRefinementCSThreadGroupSize;
     Uint32 m_uiSampleRefinementCSMinimumThreadGroupSize;
 
@@ -177,35 +177,35 @@ private:
     RefCntAutoPtr<ITextureView> m_ptex3DSingleScatteringSRV;
     RefCntAutoPtr<ITextureView> m_ptex3DHighOrderScatteringSRV;
     RefCntAutoPtr<ITextureView> m_ptex3DMultipleScatteringSRV;
-    
-    const Uint32 m_uiNumRandomSamplesOnSphere;
+
+    const Uint32                m_uiNumRandomSamplesOnSphere;
     RefCntAutoPtr<ITextureView> m_ptex2DSphereRandomSamplingSRV;
 
-    static const int sm_iLowResLuminanceMips = 7; // 64x64
-    RefCntAutoPtr<ITextureView> m_ptex2DLowResLuminanceRTV;     // 64 X 64 R16F
+    static const int            sm_iLowResLuminanceMips = 7; // 64x64
+    RefCntAutoPtr<ITextureView> m_ptex2DLowResLuminanceRTV;  // 64 X 64 R16F
     RefCntAutoPtr<ITextureView> m_ptex2DLowResLuminanceSRV;
-    RefCntAutoPtr<ITextureView> m_ptex2DAverageLuminanceRTV;    // 1  X  1 R16F
+    RefCntAutoPtr<ITextureView> m_ptex2DAverageLuminanceRTV; // 1  X  1 R16F
 
-    static const int sm_iAmbientSkyLightTexDim = 1024;
-    RefCntAutoPtr<ITextureView> m_ptex2DAmbientSkyLightSRV;            // 1024 x 1 RGBA16F
+    static const int            sm_iAmbientSkyLightTexDim = 1024;
+    RefCntAutoPtr<ITextureView> m_ptex2DAmbientSkyLightSRV; // 1024 x 1 RGBA16F
     RefCntAutoPtr<ITextureView> m_ptex2DAmbientSkyLightRTV;
     RefCntAutoPtr<ITextureView> m_ptex2DOccludedNetDensityToAtmTopSRV; // 1024 x 1024 RG32F
     RefCntAutoPtr<ITextureView> m_ptex2DOccludedNetDensityToAtmTopRTV;
 
     RefCntAutoPtr<IShader> m_pFullScreenTriangleVS;
-    
+
     RefCntAutoPtr<IResourceMapping> m_pResMapping;
 
-    RefCntAutoPtr<ITextureView> m_ptex2DCoordinateTextureRTV;       // Max Samples X Num Slices   RG32F
-    RefCntAutoPtr<ITextureView> m_ptex2DSliceEndpointsRTV;          // Num Slices  X 1            RGBA32F
-    RefCntAutoPtr<ITextureView> m_ptex2DEpipolarCamSpaceZRTV;       // Max Samples X Num Slices   R32F
-    RefCntAutoPtr<ITextureView> m_ptex2DEpipolarInscatteringRTV;    // Max Samples X Num Slices   RGBA16F
-    RefCntAutoPtr<ITextureView> m_ptex2DEpipolarExtinctionRTV;      // Max Samples X Num Slices   RGBA8_UNORM
-    RefCntAutoPtr<ITextureView> m_ptex2DEpipolarImageDSV;           // Max Samples X Num Slices   D24S8
-    RefCntAutoPtr<ITextureView> m_ptex2DInitialScatteredLightRTV;   // Max Samples X Num Slices   RGBA16F
-    RefCntAutoPtr<ITextureView> m_ptex2DSliceUVDirAndOriginRTV;     // Num Slices  X Num Cascaes  RGBA32F
-    RefCntAutoPtr<ITextureView> m_ptex2DCamSpaceZRTV;               // BckBfrWdth  x BckBfrHght   R32F 
-    RefCntAutoPtr<ITextureView> m_ptex2DMinMaxShadowMapSRV[2];      // MinMaxSMRes x Num Slices   RG32F or RG16UNORM
+    RefCntAutoPtr<ITextureView> m_ptex2DCoordinateTextureRTV;     // Max Samples X Num Slices   RG32F
+    RefCntAutoPtr<ITextureView> m_ptex2DSliceEndpointsRTV;        // Num Slices  X 1            RGBA32F
+    RefCntAutoPtr<ITextureView> m_ptex2DEpipolarCamSpaceZRTV;     // Max Samples X Num Slices   R32F
+    RefCntAutoPtr<ITextureView> m_ptex2DEpipolarInscatteringRTV;  // Max Samples X Num Slices   RGBA16F
+    RefCntAutoPtr<ITextureView> m_ptex2DEpipolarExtinctionRTV;    // Max Samples X Num Slices   RGBA8_UNORM
+    RefCntAutoPtr<ITextureView> m_ptex2DEpipolarImageDSV;         // Max Samples X Num Slices   D24S8
+    RefCntAutoPtr<ITextureView> m_ptex2DInitialScatteredLightRTV; // Max Samples X Num Slices   RGBA16F
+    RefCntAutoPtr<ITextureView> m_ptex2DSliceUVDirAndOriginRTV;   // Num Slices  X Num Cascaes  RGBA32F
+    RefCntAutoPtr<ITextureView> m_ptex2DCamSpaceZRTV;             // BckBfrWdth  x BckBfrHght   R32F
+    RefCntAutoPtr<ITextureView> m_ptex2DMinMaxShadowMapSRV[2];    // MinMaxSMRes x Num Slices   RG32F or RG16UNORM
     RefCntAutoPtr<ITextureView> m_ptex2DMinMaxShadowMapRTV[2];
 
     RefCntAutoPtr<ISampler> m_pPointClampSampler, m_pLinearClampSampler;
@@ -216,7 +216,7 @@ private:
         RefCntAutoPtr<IShaderResourceBinding> SRB;
         Uint32                                PSODependencyFlags = 0;
         Uint32                                SRBDependencyFlags = 0;
-        
+
         void InitializeFullScreenTriangleTechnique(IRenderDevice*                    pDevice,
                                                    const char*                       PSOName,
                                                    IShader*                          VertexShader,
@@ -333,7 +333,7 @@ private:
     };
 
     RefCntAutoPtr<IShaderResourceBinding> m_pComputeMinMaxSMLevelSRB[2];
-   
+
     RefCntAutoPtr<ITexture> m_ptex3DHighOrderSctr, m_ptex3DHighOrderSctr2;
 
     RefCntAutoPtr<IBuffer> m_pcbPostProcessingAttribs;
@@ -344,17 +344,17 @@ private:
 
     Uint32 m_uiBackBufferWidth  = 0;
     Uint32 m_uiBackBufferHeight = 0;
-    
+
     //const float m_fTurbidity = 1.02f;
     AirScatteringAttribs m_MediaParams;
 
     enum UpToDateResourceFlags
     {
-        PrecomputedOpticalDepthTex  = 0x01,
-        AmbientSkyLightTex          = 0x02,
-        PrecomputedIntegralsTex     = 0x04
+        PrecomputedOpticalDepthTex = 0x01,
+        AmbientSkyLightTex         = 0x02,
+        PrecomputedIntegralsTex    = 0x04
     };
     Uint32 m_uiUpToDateResourceFlags;
 };
 
-}
+} // namespace Diligent
