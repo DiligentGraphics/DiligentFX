@@ -34,21 +34,21 @@ class GLTF_PBR_Renderer
 public:
     struct CreateInfo
     {
-        TEXTURE_FORMAT  RTVFmt            = TEX_FORMAT_UNKNOWN;
-        TEXTURE_FORMAT  DSVFmt            = TEX_FORMAT_UNKNOWN;
-        bool            FrontCCW          = false;
-        bool            AllowDebugView    = false;
-        bool            UseIBL            = false;
+        TEXTURE_FORMAT RTVFmt         = TEX_FORMAT_UNKNOWN;
+        TEXTURE_FORMAT DSVFmt         = TEX_FORMAT_UNKNOWN;
+        bool           FrontCCW       = false;
+        bool           AllowDebugView = false;
+        bool           UseIBL         = false;
 
         /// When set to true, pipeline state will be compiled with static samplers.
         /// When set to false, samplers from the texture views will be used.
-        bool            UseStaticSamplers = true;
+        bool                     UseStaticSamplers = true;
         static const SamplerDesc DefaultSampler;
-        SamplerDesc     ColorMapStaticSampler    = DefaultSampler;
-        SamplerDesc     PhysDescMapStaticSampler = DefaultSampler;
-        SamplerDesc     NormalMapStaticSampler   = DefaultSampler;
-        SamplerDesc     AOMapStaticSampler       = DefaultSampler;
-        SamplerDesc     EmissiveMapStaticSampler = DefaultSampler;
+        SamplerDesc              ColorMapStaticSampler    = DefaultSampler;
+        SamplerDesc              PhysDescMapStaticSampler = DefaultSampler;
+        SamplerDesc              NormalMapStaticSampler   = DefaultSampler;
+        SamplerDesc              AOMapStaticSampler       = DefaultSampler;
+        SamplerDesc              EmissiveMapStaticSampler = DefaultSampler;
     };
 
     GLTF_PBR_Renderer(IRenderDevice*    pDevice,
@@ -57,7 +57,7 @@ public:
 
     struct RenderInfo
     {
-        float4x4 ModelTransform = float4x4::Identity();  
+        float4x4 ModelTransform = float4x4::Identity();
 
         enum class DebugViewType : int
         {
@@ -79,18 +79,18 @@ public:
             SpecularIBL     = 15,
             NumDebugViews
         };
-        DebugViewType DebugView         = DebugViewType::None;
+        DebugViewType DebugView = DebugViewType::None;
 
-        float         OcclusionStrength = 1;
-        float         EmissionScale     = 1;
-        float         IBLScale          = 1;
-        float         AverageLogLum     = 0.3f;
-        float         MiddleGray        = 0.18f;
-        float         WhitePoint        = 3.f;
+        float OcclusionStrength = 1;
+        float EmissionScale     = 1;
+        float IBLScale          = 1;
+        float AverageLogLum     = 0.3f;
+        float MiddleGray        = 0.18f;
+        float WhitePoint        = 3.f;
     };
-    void Render(IDeviceContext*    pCtx,
-                GLTF::Model&       GLTFModel,
-                const RenderInfo&  RenderParams);
+    void Render(IDeviceContext*   pCtx,
+                GLTF::Model&      GLTFModel,
+                const RenderInfo& RenderParams);
 
     void InitializeResourceBindings(GLTF::Model& GLTFModel,
                                     IBuffer*     pCameraAttribs,
@@ -98,9 +98,9 @@ public:
 
     void ReleaseResourceBindings(GLTF::Model& GLTFModel);
 
-    void PrecomputeCubemaps(IRenderDevice*     pDevice,
-                            IDeviceContext*    pCtx,
-                            ITextureView*      pEnvironmentMap);
+    void PrecomputeCubemaps(IRenderDevice*  pDevice,
+                            IDeviceContext* pCtx,
+                            ITextureView*   pEnvironmentMap);
 
     ITextureView* GetIrradianceCubeSRV()
     {
@@ -118,46 +118,46 @@ private:
 
     void CreatePSO(IRenderDevice* pDevice);
 
-    void RenderGLTFNode(IDeviceContext*             pCtx,
-                        const GLTF::Node*           node,
-                        GLTF::Material::ALPHA_MODE  AlphaMode,
-                        const float4x4&             ModelTransform);
-    
+    void RenderGLTFNode(IDeviceContext*            pCtx,
+                        const GLTF::Node*          node,
+                        GLTF::Material::ALPHA_MODE AlphaMode,
+                        const float4x4&            ModelTransform);
+
     void UpdateRenderParams(IDeviceContext* pCtx);
 
-    IShaderResourceBinding* CreateMaterialSRB(GLTF::Material&   Material,
-                                              IBuffer*          pCameraAttribs,
-                                              IBuffer*          pLightAttribs);
+    IShaderResourceBinding* CreateMaterialSRB(GLTF::Material& Material,
+                                              IBuffer*        pCameraAttribs,
+                                              IBuffer*        pLightAttribs);
 
     const CreateInfo m_Settings;
 
-    static constexpr Uint32 BRDF_LUT_Dim = 512;
+    static constexpr Uint32       BRDF_LUT_Dim = 512;
     RefCntAutoPtr<ITextureView>   m_pBRDF_LUT_SRV;
     RefCntAutoPtr<IPipelineState> m_pRenderGLTF_PBR_PSO;
     RefCntAutoPtr<IPipelineState> m_pRenderGLTF_PBR_AlphaBlend_PSO;
 
-    RefCntAutoPtr<ITextureView>   m_pWhiteTexSRV;
-    RefCntAutoPtr<ITextureView>   m_pBlackTexSRV;
-    RefCntAutoPtr<ITextureView>   m_pDefaultNormalMapSRV;
+    RefCntAutoPtr<ITextureView>                                                      m_pWhiteTexSRV;
+    RefCntAutoPtr<ITextureView>                                                      m_pBlackTexSRV;
+    RefCntAutoPtr<ITextureView>                                                      m_pDefaultNormalMapSRV;
     std::unordered_map<const GLTF::Material*, RefCntAutoPtr<IShaderResourceBinding>> m_SRBCache;
 
-    static constexpr TEXTURE_FORMAT IrradianceCubeFmt    = TEX_FORMAT_RGBA32_FLOAT;
-    static constexpr TEXTURE_FORMAT PrefilteredEnvMapFmt = TEX_FORMAT_RGBA16_FLOAT;
-    static constexpr Uint32         IrradianceCubeDim    = 64;
-    static constexpr Uint32         PrefilteredEnvMapDim = 256;
-    RefCntAutoPtr<ITextureView>             m_pIrradianceCubeSRV;
-    RefCntAutoPtr<ITextureView>             m_pPrefilteredEnvMapSRV;
-    RefCntAutoPtr<IPipelineState>           m_pPrecomputeIrradianceCubePSO;
-    RefCntAutoPtr<IPipelineState>           m_pPrefilterEnvMapPSO;
-    RefCntAutoPtr<IShaderResourceBinding>   m_pPrecomputeIrradianceCubeSRB;
-    RefCntAutoPtr<IShaderResourceBinding>   m_pPrefilterEnvMapSRB;
+    static constexpr TEXTURE_FORMAT       IrradianceCubeFmt    = TEX_FORMAT_RGBA32_FLOAT;
+    static constexpr TEXTURE_FORMAT       PrefilteredEnvMapFmt = TEX_FORMAT_RGBA16_FLOAT;
+    static constexpr Uint32               IrradianceCubeDim    = 64;
+    static constexpr Uint32               PrefilteredEnvMapDim = 256;
+    RefCntAutoPtr<ITextureView>           m_pIrradianceCubeSRV;
+    RefCntAutoPtr<ITextureView>           m_pPrefilteredEnvMapSRV;
+    RefCntAutoPtr<IPipelineState>         m_pPrecomputeIrradianceCubePSO;
+    RefCntAutoPtr<IPipelineState>         m_pPrefilterEnvMapPSO;
+    RefCntAutoPtr<IShaderResourceBinding> m_pPrecomputeIrradianceCubeSRB;
+    RefCntAutoPtr<IShaderResourceBinding> m_pPrefilterEnvMapSRB;
 
     RenderInfo m_RenderParams;
 
-    RefCntAutoPtr<IBuffer>    m_TransformsCB;
-    RefCntAutoPtr<IBuffer>    m_MaterialInfoCB;
-    RefCntAutoPtr<IBuffer>    m_RenderParametersCB;
-    RefCntAutoPtr<IBuffer>    m_PrecomputeEnvMapAttribsCB;
+    RefCntAutoPtr<IBuffer> m_TransformsCB;
+    RefCntAutoPtr<IBuffer> m_MaterialInfoCB;
+    RefCntAutoPtr<IBuffer> m_RenderParametersCB;
+    RefCntAutoPtr<IBuffer> m_PrecomputeEnvMapAttribsCB;
 };
 
-}
+} // namespace Diligent
