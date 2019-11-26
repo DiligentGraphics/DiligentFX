@@ -35,7 +35,7 @@ before_build:
   - echo add_subdirectory(DiligentCore) >> CMakeLists.txt
   - echo add_subdirectory(DiligentTools) >> CMakeLists.txt
   - echo add_subdirectory(DiligentFX) >> CMakeLists.txt
-  - cmake -S . -B ./build -G "Visual Studio 15 2017" -A x64
+  - cmake -S . -B ./build -G "Visual Studio 15 2017" -A %PLATFORM%
 
 build:
   project: c:\projects\build\DiligentFX_Test.sln
