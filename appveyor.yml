@@ -1,0 +1,19 @@
+version: '2.4.{build}'
+
+# branches to build
+branches:
+  # whitelist
+  only:
+    - master
+
+# clone directory
+clone_folder: c:\projects\DiligentFX
+
+install:
+  # clone submodules
+  - git submodule update --init --recursive
+  - git clone https://github.com/DiligentGraphics/DiligentCore.git ../DiligentCore
+  
+before_build:
+  - cd c:\projects\DiligentFX\BuildTools\FormatValidation
+  - validate_format_win.bat
