@@ -6,7 +6,10 @@ branches:
   only:
     - master
 
-environment: 
+image:
+- Visual Studio 2017
+
+environment:
   matrix:
     - platform: x64
       configuration: Debug
