@@ -5,6 +5,7 @@ DiligentFX is the [Diligent Engine](https://github.com/DiligentGraphics/Diligent
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](License.txt)
 [![Chat on gitter](https://badges.gitter.im/gitterHQ/gitter.png)](https://gitter.im/diligent-engine)
 [![Build Status](https://ci.appveyor.com/api/projects/status/github/DiligentGraphics/DiligentFX?svg=true)](https://ci.appveyor.com/project/DiligentGraphics/diligentfx)
+[![Build Status](https://travis-ci.org/DiligentGraphics/DiligentFX.svg?branch=master)](https://travis-ci.org/DiligentGraphics/DiligentFX)
 
 The framework implements the following components
 
