@@ -89,7 +89,7 @@ script:
     echo "Project(DiligentFX_Test)" >> CMakeLists.txt
     echo "add_subdirectory(DiligentCore)" >> CMakeLists.txt
     echo "add_subdirectory(DiligentTools)" >> CMakeLists.txt
-	echo "add_subdirectory(DiligentFX)" >> CMakeLists.txt
+    echo "add_subdirectory(DiligentFX)" >> CMakeLists.txt
   - mkdir build
   - cd build
   - |
