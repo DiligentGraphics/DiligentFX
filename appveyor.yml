@@ -6,14 +6,41 @@ branches:
   only:
     - master
 
+environment: 
+  matrix:
+    # Win32/x64/Debug
+    - platform: x64
+      configuration: Debug
+      
+    # Win32/x64/Release
+    - platform: x64
+      configuration: Release
+
 # clone directory
 clone_folder: c:\projects\DiligentFX
 
 install:
   # clone submodules
-  - git submodule update --init --recursive
-  - git clone https://github.com/DiligentGraphics/DiligentCore.git ../DiligentCore
+  - git clone https://github.com/DiligentGraphics/DiligentCore.git ../DiligentCore --recursive
+  - git clone https://github.com/DiligentGraphics/DiligentTools.git ../DiligentTools --recursive
   
+  # Install a recent CMake
+  - set CMAKE_URL="https://github.com/Kitware/CMake/releases/download/v3.15.4/cmake-3.15.4-win64-x64.zip"
+  - appveyor DownloadFile %CMAKE_URL% -FileName cmake.zip
+  - 7z x cmake.zip -oC:\projects\deps > nul
+  - move C:\projects\deps\cmake-* C:\projects\deps\cmake # Move to a version-agnostic directory
+  - set PATH=C:\projects\deps\cmake\bin;C:\Python37;%PATH%
+  - cmake --version
+  - python --version
+
 before_build:
   - cd c:\projects\DiligentFX\BuildTools\FormatValidation
   - validate_format_win.bat
+  - cd c:\projects
+  - echo "cmake_minimum_required (VERSION 3.6) Project(DiligentFX_Test) add_subdirectory(DiligentCore) add_subdirectory(DiligentTools) add_subdirectory(DiligentFX)" | CMakeLists.txt
+  - cmake -S . -B ./build -G "Visual Studio 15 2017" -A Win64
+
+build:
+  project: c:\projects\build\DiligentFX_Test.sln
+  verbosity: minimal
+  parallel: true
