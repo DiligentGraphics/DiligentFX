@@ -39,7 +39,7 @@ PUBLIC
 
 add_subdirectory(Utilities)
 add_subdirectory(Components)
-add_subdirectory(Postprocess)
+add_subdirectory(PostProcess)
 add_subdirectory(GLTF_PBR_Renderer)
 
 get_target_property(SOURCE DiligentFX SOURCES)
