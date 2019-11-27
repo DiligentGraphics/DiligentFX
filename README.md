@@ -9,8 +9,8 @@ DiligentFX is the [Diligent Engine](https://github.com/DiligentGraphics/Diligent
 
 The framework implements the following components
 
-* [Epipolar light scattering post-effect](https://github.com/DiligentGraphics/DiligentFX/tree/master/Postprocess/EpipolarLightScattering)
-<img src="https://github.com/DiligentGraphics/DiligentFX/blob/master/Postprocess/EpipolarLightScattering/media/LightScattering.png" width=240>
+* [Epipolar light scattering post-effect](https://github.com/DiligentGraphics/DiligentFX/tree/master/PostProcess/EpipolarLightScattering)
+<img src="https://github.com/DiligentGraphics/DiligentFX/blob/master/PostProcess/EpipolarLightScattering/media/LightScattering.png" width=240>
 
 * [Tone mapping utilities](https://github.com/DiligentGraphics/DiligentFX/tree/master/Shaders/PostProcess/ToneMapping/public)
 
