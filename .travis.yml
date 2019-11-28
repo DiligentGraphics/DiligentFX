@@ -41,9 +41,10 @@ matrix:
       - IOS=true
 
 script:
-  
-  - . ./BuildTools/FormatValidation/validate_format_linux.sh
-  - cd ..
+
+  - cd ./BuildTools/FormatValidation
+  - . ../../../DiligentCore/BuildTools/Scripts/travis/validate_format.sh
+  - cd ../../..
   - |
     echo "cmake_minimum_required(VERSION 3.6)" > CMakeLists.txt
     echo "Project(DiligentFX_Test)" >> CMakeLists.txt
