@@ -42,7 +42,7 @@ matrix:
 
 script:
   
-  # Run cmake
+  - . ./BuildTools/FormatValidation/validate_format_linux.sh
   - cd ..
   - |
     echo "cmake_minimum_required(VERSION 3.6)" > CMakeLists.txt
