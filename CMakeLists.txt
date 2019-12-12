@@ -42,6 +42,10 @@ add_subdirectory(Components)
 add_subdirectory(PostProcess)
 add_subdirectory(GLTF_PBR_Renderer)
 
+if(DILIGENT_BUILD_TESTS)
+    add_subdirectory(UnitTests)
+endif()
+
 get_target_property(SOURCE DiligentFX SOURCES)
 
 foreach(FILE ${SOURCE}) 
