@@ -7,7 +7,7 @@ branches:
     - master
 
 image:
-- Visual Studio 2017
+- Visual Studio 2019
 
 environment:
   matrix:
@@ -36,7 +36,7 @@ before_build:
   - echo add_subdirectory(DiligentTools) >> CMakeLists.txt
   - echo add_subdirectory(DiligentFX) >> CMakeLists.txt
   - echo %PLATFORM%
-  - cmake -S . -B ./build -G "Visual Studio 15 2017" -A %PLATFORM%
+  - cmake -S . -B ./build -D DILIGENT_BUILD_TESTS=TRUE -G "Visual Studio 16 2019" -A %PLATFORM%
 
 build:
   project: c:\projects\build\DiligentFX_Test.sln
