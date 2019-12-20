@@ -22,4 +22,3 @@
  */
 
 #include "GLTF_PBR_Renderer/interface/GLTF_PBR_Renderer.h"
-
