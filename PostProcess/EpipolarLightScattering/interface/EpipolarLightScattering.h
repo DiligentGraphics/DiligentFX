@@ -58,12 +58,26 @@ public:
         // If this parameter is null, the effect will use its own buffer.
         IBuffer* pcbCameraAttribs = nullptr;
 
+        /// Shader resource view of the source color buffer.
         ITextureView* ptex2DSrcColorBufferSRV = nullptr;
+
+        /// Render target view of the source color buffer. This RTV is used to render the sun.
         ITextureView* ptex2DSrcColorBufferRTV = nullptr;
+
+        /// Depth-stencil view of the source depth. This DSV is used to render the sun.
         ITextureView* ptex2DSrcDepthBufferDSV = nullptr;
+
+        /// Shader resource view of the source depth.
         ITextureView* ptex2DSrcDepthBufferSRV = nullptr;
-        ITextureView* ptex2DShadowMapSRV      = nullptr;
-        ITextureView* pDstRTV                 = nullptr;
+
+        /// Render target view of the destination color buffer where final image will be rendered.
+        ITextureView* ptex2DDstColorBufferRTV = nullptr;
+
+        /// Depth-stencil view of the destination depth buffer where.
+        ITextureView* ptex2DDstDepthBufferDSV = nullptr;
+
+        /// Shadow map shader resource view
+        ITextureView* ptex2DShadowMapSRV = nullptr;
     };
 
     EpipolarLightScattering(IRenderDevice*              in_pDevice,
@@ -85,7 +99,8 @@ public:
                          float4&       f4SunColorAtGround,
                          float4&       f4AmbientLight);
 
-    void          RenderSun();
+    void RenderSun();
+
     IBuffer*      GetMediaAttribsCB() { return m_pcbMediaAttribs; }
     ITextureView* GetPrecomputedNetDensitySRV() { return m_ptex2DOccludedNetDensityToAtmTopSRV; }
     ITextureView* GetAmbientSkyLightSRV(IRenderDevice* pDevice, IDeviceContext* pContext);

@@ -291,12 +291,12 @@ static RefCntAutoPtr<IShader> CreateShader(IRenderDevice*     pDevice,
     return pShader;
 }
 
-EpipolarLightScattering ::EpipolarLightScattering(IRenderDevice*              pDevice,
-                                                  IDeviceContext*             pContext,
-                                                  TEXTURE_FORMAT              BackBufferFmt,
-                                                  TEXTURE_FORMAT              DepthBufferFmt,
-                                                  TEXTURE_FORMAT              OffscreenBackBufferFmt,
-                                                  const AirScatteringAttribs& ScatteringAttibs) :
+EpipolarLightScattering::EpipolarLightScattering(IRenderDevice*              pDevice,
+                                                 IDeviceContext*             pContext,
+                                                 TEXTURE_FORMAT              BackBufferFmt,
+                                                 TEXTURE_FORMAT              DepthBufferFmt,
+                                                 TEXTURE_FORMAT              OffscreenBackBufferFmt,
+                                                 const AirScatteringAttribs& ScatteringAttibs) :
     m_BackBufferFmt(BackBufferFmt),
     m_DepthBufferFmt(DepthBufferFmt),
     m_OffscreenBackBufferFmt(OffscreenBackBufferFmt),
@@ -344,19 +344,19 @@ EpipolarLightScattering ::EpipolarLightScattering(IRenderDevice*              pD
     CreateAmbientSkyLightTexture(pDevice);
 }
 
-EpipolarLightScattering ::~EpipolarLightScattering()
+EpipolarLightScattering::~EpipolarLightScattering()
 {
 }
 
 
-void EpipolarLightScattering ::OnWindowResize(IRenderDevice* pDevice, Uint32 uiBackBufferWidth, Uint32 uiBackBufferHeight)
+void EpipolarLightScattering::OnWindowResize(IRenderDevice* pDevice, Uint32 uiBackBufferWidth, Uint32 uiBackBufferHeight)
 {
     m_uiBackBufferWidth  = uiBackBufferWidth;
     m_uiBackBufferHeight = uiBackBufferHeight;
     m_ptex2DCamSpaceZRTV.Release();
 }
 
-void EpipolarLightScattering ::DefineMacros(ShaderMacroHelper& Macros)
+void EpipolarLightScattering::DefineMacros(ShaderMacroHelper& Macros)
 {
     // Define common shader macros
 
@@ -427,7 +427,7 @@ void EpipolarLightScattering::PrecomputeOpticalDepthTexture(IRenderDevice*  pDev
 
 
 
-void EpipolarLightScattering ::CreateRandomSphereSamplingTexture(IRenderDevice* pDevice)
+void EpipolarLightScattering::CreateRandomSphereSamplingTexture(IRenderDevice* pDevice)
 {
     TextureDesc RandomSphereSamplingTexDesc;
     RandomSphereSamplingTexDesc.Type      = RESOURCE_DIM_TEX_2D;
@@ -464,7 +464,7 @@ void EpipolarLightScattering ::CreateRandomSphereSamplingTexture(IRenderDevice* 
     m_pResMapping->AddResource("g_tex2DSphereRandomSampling", m_ptex2DSphereRandomSamplingSRV, true);
 }
 
-void EpipolarLightScattering ::CreateEpipolarTextures(IRenderDevice* pDevice)
+void EpipolarLightScattering::CreateEpipolarTextures(IRenderDevice* pDevice)
 {
     TextureDesc TexDesc;
     TexDesc.Type      = RESOURCE_DIM_TEX_2D;
@@ -594,7 +594,7 @@ void EpipolarLightScattering ::CreateEpipolarTextures(IRenderDevice* pDevice)
     }
 }
 
-void EpipolarLightScattering ::CreateSliceEndPointsTexture(IRenderDevice* pDevice)
+void EpipolarLightScattering::CreateSliceEndPointsTexture(IRenderDevice* pDevice)
 {
     // NumSlices x 1 RGBA32F texture to store end point coordinates for every epipolar slice
     TextureDesc TexDesc;
@@ -621,7 +621,7 @@ void EpipolarLightScattering ::CreateSliceEndPointsTexture(IRenderDevice* pDevic
     m_pResMapping->AddResource("g_tex2DSliceEndPoints", tex2DSliceEndpointsSRV, false);
 }
 
-void EpipolarLightScattering ::PrecomputeScatteringLUT(IRenderDevice* pDevice, IDeviceContext* pContext)
+void EpipolarLightScattering::PrecomputeScatteringLUT(IRenderDevice* pDevice, IDeviceContext* pContext)
 {
     const int ThreadGroupSize          = pDevice->GetDeviceCaps().DevType == DeviceType::OpenGLES ? 8 : 16;
     auto&     PrecomputeSingleSctrTech = m_RenderTech[RENDER_TECH_PRECOMPUTE_SINGLE_SCATTERING];
@@ -843,7 +843,7 @@ void EpipolarLightScattering ::PrecomputeScatteringLUT(IRenderDevice* pDevice, I
     m_uiUpToDateResourceFlags |= UpToDateResourceFlags::PrecomputedIntegralsTex;
 }
 
-void EpipolarLightScattering ::CreateLowResLuminanceTexture(IRenderDevice* pDevice, IDeviceContext* pDeviceCtx)
+void EpipolarLightScattering::CreateLowResLuminanceTexture(IRenderDevice* pDevice, IDeviceContext* pDeviceCtx)
 {
     // Create low-resolution texture to store image luminance
     TextureDesc TexDesc;
@@ -890,7 +890,7 @@ void EpipolarLightScattering ::CreateLowResLuminanceTexture(IRenderDevice* pDevi
     m_pResMapping->AddResource("g_tex2DAverageLuminance", tex2DAverageLuminanceSRV, false);
 }
 
-void EpipolarLightScattering ::CreateSliceUVDirAndOriginTexture(IRenderDevice* pDevice)
+void EpipolarLightScattering::CreateSliceUVDirAndOriginTexture(IRenderDevice* pDevice)
 {
     TextureDesc TexDesc;
     TexDesc.Name      = "Slice UV Dir and Origin";
@@ -910,7 +910,7 @@ void EpipolarLightScattering ::CreateSliceUVDirAndOriginTexture(IRenderDevice* p
     m_pResMapping->AddResource("g_tex2DSliceUVDirAndOrigin", tex2DSliceUVDirAndOriginSRV, false);
 }
 
-void EpipolarLightScattering ::CreateCamSpaceZTexture(IRenderDevice* pDevice)
+void EpipolarLightScattering::CreateCamSpaceZTexture(IRenderDevice* pDevice)
 {
     TextureDesc TexDesc;
     TexDesc.Name      = "Cam-space Z";
@@ -932,7 +932,7 @@ void EpipolarLightScattering ::CreateCamSpaceZTexture(IRenderDevice* pDevice)
     m_pResMapping->AddResource("g_tex2DCamSpaceZ", tex2DCamSpaceZSRV, false);
 }
 
-void EpipolarLightScattering ::ReconstructCameraSpaceZ()
+void EpipolarLightScattering::ReconstructCameraSpaceZ()
 {
     // Depth buffer is non-linear and cannot be interpolated directly
     // We have to reconstruct camera space z to be able to use bilinear filtering
@@ -963,7 +963,7 @@ void EpipolarLightScattering ::ReconstructCameraSpaceZ()
     ReconstrCamSpaceZTech.Render(m_FrameAttribs.pDeviceContext);
 }
 
-void EpipolarLightScattering ::RenderSliceEndpoints()
+void EpipolarLightScattering::RenderSliceEndpoints()
 {
     auto& RendedSliceEndpointsTech = m_RenderTech[RENDER_TECH_RENDER_SLICE_END_POINTS];
     if (!RendedSliceEndpointsTech.PSO)
@@ -997,7 +997,7 @@ void EpipolarLightScattering ::RenderSliceEndpoints()
     RendedSliceEndpointsTech.Render(m_FrameAttribs.pDeviceContext);
 }
 
-void EpipolarLightScattering ::RenderCoordinateTexture()
+void EpipolarLightScattering::RenderCoordinateTexture()
 {
     auto& RendedCoordTexTech = m_RenderTech[RENDER_TECH_RENDER_COORD_TEXTURE];
     if (!RendedCoordTexTech.PSO)
@@ -1044,7 +1044,7 @@ void EpipolarLightScattering ::RenderCoordinateTexture()
     RendedCoordTexTech.Render(m_FrameAttribs.pDeviceContext);
 }
 
-void EpipolarLightScattering ::RenderCoarseUnshadowedInctr()
+void EpipolarLightScattering::RenderCoarseUnshadowedInctr()
 {
     auto& RenderCoarseUnshadowedInsctrTech = m_RenderTech[RENDER_TECH_RENDER_COARSE_UNSHADOWED_INSCTR];
     if (!RenderCoarseUnshadowedInsctrTech.PSO)
@@ -1144,7 +1144,7 @@ void EpipolarLightScattering ::RenderCoarseUnshadowedInctr()
     RenderCoarseUnshadowedInsctrTech.Render(m_FrameAttribs.pDeviceContext, 1);
 }
 
-void EpipolarLightScattering ::RefineSampleLocations()
+void EpipolarLightScattering::RefineSampleLocations()
 {
     auto& RefineSampleLocationsTech = m_RenderTech[RENDER_TECH_REFINE_SAMPLE_LOCATIONS];
     if (!RefineSampleLocationsTech.PSO)
@@ -1201,7 +1201,7 @@ void EpipolarLightScattering ::RefineSampleLocations()
     RefineSampleLocationsTech.DispatchCompute(m_FrameAttribs.pDeviceContext, DispatchAttrs);
 }
 
-void EpipolarLightScattering ::MarkRayMarchingSamples()
+void EpipolarLightScattering::MarkRayMarchingSamples()
 {
     auto& MarkRayMarchingSamplesInStencilTech = m_RenderTech[RENDER_TECH_MARK_RAY_MARCHING_SAMPLES];
     if (!MarkRayMarchingSamplesInStencilTech.PSO)
@@ -1234,7 +1234,7 @@ void EpipolarLightScattering ::MarkRayMarchingSamples()
     MarkRayMarchingSamplesInStencilTech.Render(m_FrameAttribs.pDeviceContext, 1);
 }
 
-void EpipolarLightScattering ::RenderSliceUVDirAndOrig()
+void EpipolarLightScattering::RenderSliceUVDirAndOrig()
 {
     auto& RenderSliceUVDirInSMTech = m_RenderTech[RENDER_TECH_RENDER_SLICE_UV_DIRECTION];
     if (!RenderSliceUVDirInSMTech.PSO)
@@ -1280,7 +1280,7 @@ void EpipolarLightScattering ::RenderSliceUVDirAndOrig()
     RenderSliceUVDirInSMTech.Render(m_FrameAttribs.pDeviceContext);
 }
 
-void EpipolarLightScattering ::Build1DMinMaxMipMap(int iCascadeIndex)
+void EpipolarLightScattering::Build1DMinMaxMipMap(int iCascadeIndex)
 {
     auto& InitMinMaxShadowMapTech = m_RenderTech[RENDER_TECH_INIT_MIN_MAX_SHADOW_MAP];
     if (!InitMinMaxShadowMapTech.PSO)
@@ -1434,6 +1434,8 @@ void EpipolarLightScattering ::Build1DMinMaxMipMap(int iCascadeIndex)
             SrcBox.MinY = 0;
             SrcBox.MaxY = iMinMaxTexHeight;
 
+            m_FrameAttribs.pDeviceContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
+
             CopyTextureAttribs CopyAttribs(tex2DMinMaxShadowMap1, RESOURCE_STATE_TRANSITION_MODE_TRANSITION, tex2DMinMaxShadowMap0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
             CopyAttribs.pSrcBox = &SrcBox;
             CopyAttribs.DstX    = uiXOffset;
@@ -1445,8 +1447,8 @@ void EpipolarLightScattering ::Build1DMinMaxMipMap(int iCascadeIndex)
     }
 }
 
-void EpipolarLightScattering ::DoRayMarching(Uint32 uiMaxStepsAlongRay,
-                                             int    iCascadeIndex)
+void EpipolarLightScattering::DoRayMarching(Uint32 uiMaxStepsAlongRay,
+                                            int    iCascadeIndex)
 {
     auto& DoRayMarchTech = m_RenderTech[m_PostProcessingAttribs.bUse1DMinMaxTree ? RENDER_TECH_RAY_MARCH_MIN_MAX_OPT : RENDER_TECH_RAY_MARCH_NO_MIN_MAX_OPT];
     if (!DoRayMarchTech.PSO)
@@ -1564,7 +1566,7 @@ void EpipolarLightScattering ::DoRayMarching(Uint32 uiMaxStepsAlongRay,
     DoRayMarchTech.Render(m_FrameAttribs.pDeviceContext, 2, iNumInst);
 }
 
-void EpipolarLightScattering ::InterpolateInsctrIrradiance()
+void EpipolarLightScattering::InterpolateInsctrIrradiance()
 {
     auto& InterpolateIrradianceTech = m_RenderTech[RENDER_TECH_INTERPOLATE_IRRADIANCE];
     if (!InterpolateIrradianceTech.PSO)
@@ -1596,7 +1598,7 @@ void EpipolarLightScattering ::InterpolateInsctrIrradiance()
 }
 
 
-void EpipolarLightScattering ::UnwarpEpipolarScattering(bool bRenderLuminance)
+void EpipolarLightScattering::UnwarpEpipolarScattering(bool bRenderLuminance)
 {
     static constexpr Uint32 SRBDependencies =
         SRB_DEPENDENCY_CAMERA_ATTRIBS |
@@ -1736,7 +1738,7 @@ void EpipolarLightScattering ::UnwarpEpipolarScattering(bool bRenderLuminance)
     }
 }
 
-void EpipolarLightScattering ::UpdateAverageLuminance()
+void EpipolarLightScattering::UpdateAverageLuminance()
 {
     auto& UpdateAverageLuminanceTech = m_RenderTech[RENDER_TECH_UPDATE_AVERAGE_LUMINANCE];
     if (!UpdateAverageLuminanceTech.PSO)
@@ -1788,8 +1790,8 @@ void EpipolarLightScattering ::UpdateAverageLuminance()
 }
 
 
-void EpipolarLightScattering ::FixInscatteringAtDepthBreaks(Uint32               uiMaxStepsAlongRay,
-                                                            EFixInscatteringMode Mode)
+void EpipolarLightScattering::FixInscatteringAtDepthBreaks(Uint32               uiMaxStepsAlongRay,
+                                                           EFixInscatteringMode Mode)
 {
     auto& FixInsctrAtDepthBreaksTech = m_RenderTech[RENDER_TECH_FIX_INSCATTERING_LUM_ONLY + static_cast<int>(Mode)];
     if (!FixInsctrAtDepthBreaksTech.PSO)
@@ -1918,7 +1920,7 @@ void EpipolarLightScattering ::FixInscatteringAtDepthBreaks(Uint32              
     FixInsctrAtDepthBreaksTech.Render(m_FrameAttribs.pDeviceContext);
 }
 
-void EpipolarLightScattering ::RenderSampleLocations()
+void EpipolarLightScattering::RenderSampleLocations()
 {
     auto& RenderSampleLocationsTech = m_RenderTech[RENDER_TECH_RENDER_SAMPLE_LOCATIONS];
     if (!RenderSampleLocationsTech.PSO)
@@ -1978,7 +1980,7 @@ void EpipolarLightScattering ::RenderSampleLocations()
     m_FrameAttribs.pDeviceContext->Draw(Attribs);
 }
 
-void EpipolarLightScattering ::CreateExtinctionTexture(IRenderDevice* pDevice)
+void EpipolarLightScattering::CreateExtinctionTexture(IRenderDevice* pDevice)
 {
     TextureDesc TexDesc;
     TexDesc.Name                = "Epipolar Extinction",
@@ -2005,7 +2007,7 @@ void EpipolarLightScattering ::CreateExtinctionTexture(IRenderDevice* pDevice)
     m_ptex2DEpipolarExtinctionRTV = tex2DEpipolarExtinction->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET);
 }
 
-void EpipolarLightScattering ::CreateAmbientSkyLightTexture(IRenderDevice* pDevice)
+void EpipolarLightScattering::CreateAmbientSkyLightTexture(IRenderDevice* pDevice)
 {
     TextureDesc TexDesc;
     TexDesc.Name      = "Ambient Sky Light";
@@ -2024,44 +2026,52 @@ void EpipolarLightScattering ::CreateAmbientSkyLightTexture(IRenderDevice* pDevi
     m_ptex2DAmbientSkyLightSRV->SetSampler(m_pLinearClampSampler);
 }
 
-void EpipolarLightScattering ::PerformPostProcessing(FrameAttribs&                   frameAttribs,
-                                                     EpipolarLightScatteringAttribs& PPAttribs)
+void EpipolarLightScattering::PerformPostProcessing(FrameAttribs&                   frameAttribs,
+                                                    EpipolarLightScatteringAttribs& PPAttribs)
 {
-    VERIFY(PPAttribs.uiNumEpipolarSlices > 0, "Number of epipolar slices must not be 0");
-    VERIFY(PPAttribs.uiMaxSamplesInSlice > 0, "Max samples in slice must not be 0");
-    VERIFY(PPAttribs.uiInitialSampleStepInSlice > 0, "Initial sample step in slice must not be 0");
-    VERIFY(IsPowerOfTwo(PPAttribs.uiInitialSampleStepInSlice), "Initial sample step in slice (", PPAttribs.uiInitialSampleStepInSlice, ") must be power of two");
-    VERIFY(PPAttribs.uiEpipoleSamplingDensityFactor > 0, "Epipole sampling density factor must not be 0");
-    VERIFY(IsPowerOfTwo(PPAttribs.uiEpipoleSamplingDensityFactor), "Epipole sampling desity factor (", PPAttribs.uiEpipoleSamplingDensityFactor, ") must be power of two");
-    VERIFY(PPAttribs.uiInstrIntegralSteps > 0, "Inscattering integral steps must not be 0");
-    VERIFY(PPAttribs.f2ShadowMapTexelSize.x != 0 && PPAttribs.f2ShadowMapTexelSize.y != 0, "Shadow map texel size must not be 0");
-    VERIFY(PPAttribs.uiMaxSamplesOnTheRay != 0, "Max samples on the ray must not be 0");
-    VERIFY(PPAttribs.uiMinMaxShadowMapResolution != 0, "Minmax shadow map resolution must not be 0");
-    VERIFY(PPAttribs.iNumCascades != 0, "Num cascades must not be 0");
-    VERIFY(PPAttribs.iFirstCascadeToRayMarch < PPAttribs.iNumCascades, "First cascade to ray march (", PPAttribs.fFirstCascadeToRayMarch, ") is invalid");
-    VERIFY(PPAttribs.fMaxShadowMapStep != 0, "Max shadow map step must not be 0");
+    DEV_CHECK_ERR(frameAttribs.ptex2DSrcColorBufferSRV, "Source color buffer SRV must not be null");
+    DEV_CHECK_ERR(frameAttribs.ptex2DSrcColorBufferRTV, "Source color buffer RTV must not be null");
+    DEV_CHECK_ERR(frameAttribs.ptex2DSrcDepthBufferDSV, "Source depth buffer DSV must not be null");
+    DEV_CHECK_ERR(frameAttribs.ptex2DSrcDepthBufferSRV, "Source depth buffer SRV must not be null");
+    DEV_CHECK_ERR(frameAttribs.ptex2DDstColorBufferRTV, "Destination color buffer RTV must not be null");
+    DEV_CHECK_ERR(frameAttribs.ptex2DDstDepthBufferDSV, "Source depth buffer DSV must not be null");
+    DEV_CHECK_ERR(frameAttribs.ptex2DShadowMapSRV, "Shadow map SRV must not be null");
+
+    DEV_CHECK_ERR(PPAttribs.uiNumEpipolarSlices > 0, "Number of epipolar slices must not be 0");
+    DEV_CHECK_ERR(PPAttribs.uiMaxSamplesInSlice > 0, "Max samples in slice must not be 0");
+    DEV_CHECK_ERR(PPAttribs.uiInitialSampleStepInSlice > 0, "Initial sample step in slice must not be 0");
+    DEV_CHECK_ERR(IsPowerOfTwo(PPAttribs.uiInitialSampleStepInSlice), "Initial sample step in slice (", PPAttribs.uiInitialSampleStepInSlice, ") must be power of two");
+    DEV_CHECK_ERR(PPAttribs.uiEpipoleSamplingDensityFactor > 0, "Epipole sampling density factor must not be 0");
+    DEV_CHECK_ERR(IsPowerOfTwo(PPAttribs.uiEpipoleSamplingDensityFactor), "Epipole sampling desity factor (", PPAttribs.uiEpipoleSamplingDensityFactor, ") must be power of two");
+    DEV_CHECK_ERR(PPAttribs.uiInstrIntegralSteps > 0, "Inscattering integral steps must not be 0");
+    DEV_CHECK_ERR(PPAttribs.f2ShadowMapTexelSize.x != 0 && PPAttribs.f2ShadowMapTexelSize.y != 0, "Shadow map texel size must not be 0");
+    DEV_CHECK_ERR(PPAttribs.uiMaxSamplesOnTheRay != 0, "Max samples on the ray must not be 0");
+    DEV_CHECK_ERR(PPAttribs.uiMinMaxShadowMapResolution != 0, "Minmax shadow map resolution must not be 0");
+    DEV_CHECK_ERR(PPAttribs.iNumCascades != 0, "Num cascades must not be 0");
+    DEV_CHECK_ERR(PPAttribs.iFirstCascadeToRayMarch < PPAttribs.iNumCascades, "First cascade to ray march (", PPAttribs.fFirstCascadeToRayMarch, ") is invalid");
+    DEV_CHECK_ERR(PPAttribs.fMaxShadowMapStep != 0, "Max shadow map step must not be 0");
     // clang-format off
-    VERIFY(PPAttribs.iLightSctrTechnique == LIGHT_SCTR_TECHNIQUE_EPIPOLAR_SAMPLING ||
-           PPAttribs.iLightSctrTechnique == LIGHT_SCTR_TECHNIQUE_BRUTE_FORCE,
-           "Incorrect light scattering technique (", PPAttribs.iLightSctrTechnique, ")");
-    VERIFY(PPAttribs.iCascadeProcessingMode == CASCADE_PROCESSING_MODE_SINGLE_PASS ||
-           PPAttribs.iCascadeProcessingMode == CASCADE_PROCESSING_MODE_MULTI_PASS ||
-           PPAttribs.iCascadeProcessingMode == CASCADE_PROCESSING_MODE_MULTI_PASS_INST,
-           "Incorrect cascade processing mode (", PPAttribs.iCascadeProcessingMode, ")");
-    VERIFY(PPAttribs.iRefinementCriterion == REFINEMENT_CRITERION_DEPTH_DIFF ||
-           PPAttribs.iRefinementCriterion == REFINEMENT_CRITERION_INSCTR_DIFF,
-           "Incorrect refinement criterion (", PPAttribs.iRefinementCriterion, ")");
-    VERIFY(PPAttribs.iSingleScatteringMode == SINGLE_SCTR_MODE_NONE ||
-           PPAttribs.iSingleScatteringMode == SINGLE_SCTR_MODE_INTEGRATION ||
-           PPAttribs.iSingleScatteringMode == SINGLE_SCTR_MODE_LUT,
-           "Incorrect single scattering mode (", PPAttribs.iSingleScatteringMode, ")");
-    VERIFY(PPAttribs.iMultipleScatteringMode == MULTIPLE_SCTR_MODE_NONE ||
-           PPAttribs.iMultipleScatteringMode == MULTIPLE_SCTR_MODE_UNOCCLUDED ||
-           PPAttribs.iMultipleScatteringMode == MULTIPLE_SCTR_MODE_OCCLUDED,
-           "Incorrect multiple scattering mode (", PPAttribs.iMultipleScatteringMode, ")");
-    VERIFY(PPAttribs.iExtinctionEvalMode == EXTINCTION_EVAL_MODE_PER_PIXEL ||
-           PPAttribs.iExtinctionEvalMode == EXTINCTION_EVAL_MODE_EPIPOLAR,
-           "Incorrect extinction evaluation mode (", PPAttribs.iExtinctionEvalMode, ")");
+    DEV_CHECK_ERR(PPAttribs.iLightSctrTechnique == LIGHT_SCTR_TECHNIQUE_EPIPOLAR_SAMPLING ||
+                  PPAttribs.iLightSctrTechnique == LIGHT_SCTR_TECHNIQUE_BRUTE_FORCE,
+                  "Incorrect light scattering technique (", PPAttribs.iLightSctrTechnique, ")");
+    DEV_CHECK_ERR(PPAttribs.iCascadeProcessingMode == CASCADE_PROCESSING_MODE_SINGLE_PASS ||
+                  PPAttribs.iCascadeProcessingMode == CASCADE_PROCESSING_MODE_MULTI_PASS ||
+                  PPAttribs.iCascadeProcessingMode == CASCADE_PROCESSING_MODE_MULTI_PASS_INST,
+                  "Incorrect cascade processing mode (", PPAttribs.iCascadeProcessingMode, ")");
+    DEV_CHECK_ERR(PPAttribs.iRefinementCriterion == REFINEMENT_CRITERION_DEPTH_DIFF ||
+                  PPAttribs.iRefinementCriterion == REFINEMENT_CRITERION_INSCTR_DIFF,
+                  "Incorrect refinement criterion (", PPAttribs.iRefinementCriterion, ")");
+    DEV_CHECK_ERR(PPAttribs.iSingleScatteringMode == SINGLE_SCTR_MODE_NONE ||
+                  PPAttribs.iSingleScatteringMode == SINGLE_SCTR_MODE_INTEGRATION ||
+                  PPAttribs.iSingleScatteringMode == SINGLE_SCTR_MODE_LUT,
+                  "Incorrect single scattering mode (", PPAttribs.iSingleScatteringMode, ")");
+    DEV_CHECK_ERR(PPAttribs.iMultipleScatteringMode == MULTIPLE_SCTR_MODE_NONE ||
+                  PPAttribs.iMultipleScatteringMode == MULTIPLE_SCTR_MODE_UNOCCLUDED ||
+                  PPAttribs.iMultipleScatteringMode == MULTIPLE_SCTR_MODE_OCCLUDED,
+                  "Incorrect multiple scattering mode (", PPAttribs.iMultipleScatteringMode, ")");
+    DEV_CHECK_ERR(PPAttribs.iExtinctionEvalMode == EXTINCTION_EVAL_MODE_PER_PIXEL ||
+                  PPAttribs.iExtinctionEvalMode == EXTINCTION_EVAL_MODE_EPIPOLAR,
+                  "Incorrect extinction evaluation mode (", PPAttribs.iExtinctionEvalMode, ")");
     
     Uint32 StalePSODependencyFlags = 0;
 #define CHECK_PSO_DEPENDENCY(Flag, Member)StalePSODependencyFlags |= (PPAttribs.Member != m_PostProcessingAttribs.Member) ? Flag : 0
@@ -2385,10 +2395,10 @@ void EpipolarLightScattering ::PerformPostProcessing(FrameAttribs&              
             UpdateAverageLuminance();
         }
         // Set the main back & depth buffers
-        m_FrameAttribs.pDeviceContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        m_FrameAttribs.pDeviceContext->SetRenderTargets(1, &frameAttribs.ptex2DDstColorBufferRTV, frameAttribs.ptex2DDstDepthBufferDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
         // Clear depth to 1.0.
-        m_FrameAttribs.pDeviceContext->ClearDepthStencil(nullptr, CLEAR_DEPTH_FLAG, 1.f, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        m_FrameAttribs.pDeviceContext->ClearDepthStencil(frameAttribs.ptex2DDstDepthBufferDSV, CLEAR_DEPTH_FLAG, 1.f, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         // Transform inscattering irradiance from epipolar coordinates back to rectangular
         // The shader will write 0.0 to the depth buffer, but all pixel that require inscattering
         // correction will be discarded and will keep 1.0
@@ -2420,16 +2430,14 @@ void EpipolarLightScattering ::PerformPostProcessing(FrameAttribs&              
         }
 
         // Set the main back & depth buffers
-        m_FrameAttribs.pDeviceContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        m_FrameAttribs.pDeviceContext->SetRenderTargets(1, &frameAttribs.ptex2DDstColorBufferRTV, frameAttribs.ptex2DDstDepthBufferDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
         FixInscatteringAtDepthBreaks(m_PostProcessingAttribs.uiMaxSamplesOnTheRay, EFixInscatteringMode::FullScreenRayMarching);
     }
-
-    m_FrameAttribs.pDeviceContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 }
 
 
-void EpipolarLightScattering ::CreateMinMaxShadowMap(IRenderDevice* pDevice)
+void EpipolarLightScattering::CreateMinMaxShadowMap(IRenderDevice* pDevice)
 {
     TextureDesc MinMaxShadowMapTexDesc;
     MinMaxShadowMapTexDesc.Type      = RESOURCE_DIM_TEX_2D;
@@ -2511,10 +2519,10 @@ float2 GetDensityIntegralFromChapmanFunc(float                       fHeightAbov
     }
 }
 
-void EpipolarLightScattering ::ComputeSunColor(const float3& vDirectionOnSun,
-                                               const float4& f4ExtraterrestrialSunColor,
-                                               float4&       f4SunColorAtGround,
-                                               float4&       f4AmbientLight)
+void EpipolarLightScattering::ComputeSunColor(const float3& vDirectionOnSun,
+                                              const float4& f4ExtraterrestrialSunColor,
+                                              float4&       f4SunColorAtGround,
+                                              float4&       f4AmbientLight)
 {
 
     // Compute the ambient light values
@@ -2536,7 +2544,7 @@ void EpipolarLightScattering ::ComputeSunColor(const float3& vDirectionOnSun,
     (float3&)f4SunColorAtGround    = ((float3&)f4ExtraterrestrialSunColor) * f3TotalExtinction * fEarthReflectance;
 }
 
-void EpipolarLightScattering ::ComputeScatteringCoefficients(IDeviceContext* pDeviceCtx)
+void EpipolarLightScattering::ComputeScatteringCoefficients(IDeviceContext* pDeviceCtx)
 {
     // For details, see "A practical Analytic Model for Daylight" by Preetham & Hoffman, p.23
 
@@ -2675,7 +2683,7 @@ void EpipolarLightScattering ::ComputeScatteringCoefficients(IDeviceContext* pDe
 }
 
 
-void EpipolarLightScattering ::RenderSun()
+void EpipolarLightScattering::RenderSun()
 {
     if (m_PostProcessingAttribs.f4LightScreenPos.w <= 0)
         return;
@@ -2728,7 +2736,7 @@ void EpipolarLightScattering ::RenderSun()
     m_FrameAttribs.pDeviceContext->Draw(DrawAttrs);
 }
 
-void EpipolarLightScattering ::ComputeAmbientSkyLightTexture(IRenderDevice* pDevice, IDeviceContext* pContext)
+void EpipolarLightScattering::ComputeAmbientSkyLightTexture(IRenderDevice* pDevice, IDeviceContext* pContext)
 {
     if (!(m_uiUpToDateResourceFlags & UpToDateResourceFlags::PrecomputedOpticalDepthTex))
     {
@@ -2767,7 +2775,7 @@ void EpipolarLightScattering ::ComputeAmbientSkyLightTexture(IRenderDevice* pDev
 }
 
 
-ITextureView* EpipolarLightScattering ::GetAmbientSkyLightSRV(IRenderDevice* pDevice, IDeviceContext* pContext)
+ITextureView* EpipolarLightScattering::GetAmbientSkyLightSRV(IRenderDevice* pDevice, IDeviceContext* pContext)
 {
     if (!(m_uiUpToDateResourceFlags & UpToDateResourceFlags::AmbientSkyLightTex))
     {
