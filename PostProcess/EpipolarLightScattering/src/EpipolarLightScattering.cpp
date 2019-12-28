@@ -304,11 +304,19 @@ EpipolarLightScattering::EpipolarLightScattering(IRenderDevice*              pDe
     m_uiSampleRefinementCSThreadGroupSize(0),
     // Using small group size is inefficient because a lot of SIMD lanes become idle
     m_uiSampleRefinementCSMinimumThreadGroupSize(128), // Must be greater than 32
-    m_uiNumRandomSamplesOnSphere(pDevice->GetDeviceCaps().DevType == DeviceType::OpenGLES ? 64 : 128),
     m_MediaParams(ScatteringAttibs),
     m_uiUpToDateResourceFlags(0)
 {
     pDevice->CreateResourceMapping(ResourceMappingDesc(), &m_pResMapping);
+    const auto& deviceCaps = pDevice->GetDeviceCaps();
+    if (deviceCaps.DevType == DeviceType::OpenGLES || deviceCaps.AdaterType == ADAPTER_TYPE_SOFTWARE)
+    {
+        m_uiNumRandomSamplesOnSphere /= 2;
+        m_iPrecomputedSctrUDim /= 2;
+        m_iPrecomputedSctrVDim /= 2;
+        m_iPrecomputedSctrWDim /= 2;
+        m_iPrecomputedSctrQDim /= 2;
+    }
 
     // clang-format off
     CreateUniformBuffer(pDevice, sizeof(EpipolarLightScatteringAttribs), "Epipolar Light Scattering Attribs CB", &m_pcbPostProcessingAttribs);
@@ -371,10 +379,10 @@ void EpipolarLightScattering::DefineMacros(ShaderMacroHelper& Macros)
 
     {
         std::stringstream ss;
-        ss << "float4(" << sm_iPrecomputedSctrUDim << ".0,"
-           << sm_iPrecomputedSctrVDim << ".0,"
-           << sm_iPrecomputedSctrWDim << ".0,"
-           << sm_iPrecomputedSctrQDim << ".0)";
+        ss << "float4(" << m_iPrecomputedSctrUDim << ".0,"
+           << m_iPrecomputedSctrVDim << ".0,"
+           << m_iPrecomputedSctrWDim << ".0,"
+           << m_iPrecomputedSctrQDim << ".0)";
         Macros.AddShaderMacro("PRECOMPUTED_SCTR_LUT_DIM", ss.str());
     }
 }
@@ -726,9 +734,9 @@ void EpipolarLightScattering::PrecomputeScatteringLUT(IRenderDevice* pDevice, ID
 
     TextureDesc PrecomputedSctrTexDesc;
     PrecomputedSctrTexDesc.Type      = RESOURCE_DIM_TEX_3D;
-    PrecomputedSctrTexDesc.Width     = sm_iPrecomputedSctrUDim;
-    PrecomputedSctrTexDesc.Height    = sm_iPrecomputedSctrVDim;
-    PrecomputedSctrTexDesc.Depth     = sm_iPrecomputedSctrWDim * sm_iPrecomputedSctrQDim;
+    PrecomputedSctrTexDesc.Width     = m_iPrecomputedSctrUDim;
+    PrecomputedSctrTexDesc.Height    = m_iPrecomputedSctrVDim;
+    PrecomputedSctrTexDesc.Depth     = m_iPrecomputedSctrWDim * m_iPrecomputedSctrQDim;
     PrecomputedSctrTexDesc.MipLevels = 1;
     PrecomputedSctrTexDesc.Format    = TEX_FORMAT_RGBA16_FLOAT;
     PrecomputedSctrTexDesc.Usage     = USAGE_DEFAULT;

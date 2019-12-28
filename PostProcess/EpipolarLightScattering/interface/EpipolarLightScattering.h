@@ -184,16 +184,16 @@ private:
     static const int sm_iNumPrecomputedHeights = 1024;
     static const int sm_iNumPrecomputedAngles  = 1024;
 
-    static const int sm_iPrecomputedSctrUDim = 32;
-    static const int sm_iPrecomputedSctrVDim = 128;
-    static const int sm_iPrecomputedSctrWDim = 64;
-    static const int sm_iPrecomputedSctrQDim = 16;
+    int m_iPrecomputedSctrUDim = 32;
+    int m_iPrecomputedSctrVDim = 128;
+    int m_iPrecomputedSctrWDim = 64;
+    int m_iPrecomputedSctrQDim = 16;
 
     RefCntAutoPtr<ITextureView> m_ptex3DSingleScatteringSRV;
     RefCntAutoPtr<ITextureView> m_ptex3DHighOrderScatteringSRV;
     RefCntAutoPtr<ITextureView> m_ptex3DMultipleScatteringSRV;
 
-    const Uint32                m_uiNumRandomSamplesOnSphere;
+    Uint32                      m_uiNumRandomSamplesOnSphere = 128;
     RefCntAutoPtr<ITextureView> m_ptex2DSphereRandomSamplingSRV;
 
     static const int            sm_iLowResLuminanceMips = 7; // 64x64
