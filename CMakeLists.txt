@@ -110,18 +110,18 @@ endif()
 
 if(DILIGENT_INSTALL_FX)
     install(TARGETS				 DiligentFX
-            ARCHIVE DESTINATION "lib/${DILIGENT_FX_DIR}/$<CONFIG>"
-            LIBRARY DESTINATION "bin/${DILIGENT_FX_DIR}/$<CONFIG>"
-            RUNTIME DESTINATION "bin/${DILIGENT_FX_DIR}/$<CONFIG>"
+            ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}/${DILIGENT_FX_DIR}/$<CONFIG>"
+            LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}/${DILIGENT_FX_DIR}/$<CONFIG>"
+            RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}/${DILIGENT_FX_DIR}/$<CONFIG>"
     )
     install(DIRECTORY    PostProcess/EpipolarLightScattering/interface
-            DESTINATION  "headers/${DILIGENT_FX_DIR}/PostProcess/EpipolarLightScattering"
+            DESTINATION  "${CMAKE_INSTALL_INCLUDEDIR}/${DILIGENT_FX_DIR}/PostProcess/EpipolarLightScattering"
     )
     install(DIRECTORY    Components/interface
-            DESTINATION  "headers/${DILIGENT_FX_DIR}/Components"
+            DESTINATION  "${CMAKE_INSTALL_INCLUDEDIR}/${DILIGENT_FX_DIR}/Components"
     )
     install(DIRECTORY    GLTF_PBR_Renderer/interface
-            DESTINATION  "headers/${DILIGENT_FX_DIR}/GLTF_PBR_Renderer"
+            DESTINATION  "${CMAKE_INSTALL_INCLUDEDIR}/${DILIGENT_FX_DIR}/GLTF_PBR_Renderer"
     )
     install(DIRECTORY    Shaders
             DESTINATION  "."
