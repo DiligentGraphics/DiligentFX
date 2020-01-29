@@ -25,6 +25,8 @@
  *  of the possibility of such damages.
  */
 
+#include <cfloat>
+
 #include "ShadowMapManager.h"
 #include "AdvancedMath.hpp"
 #include "../../../Utilities/include/DiligentFXShaderSourceStreamFactory.h"
