@@ -31,13 +31,13 @@
 #include <cstring>
 
 #include "EpipolarLightScattering.h"
-#include "ShaderMacroHelper.h"
+#include "ShaderMacroHelper.hpp"
 #include "GraphicsUtilities.h"
-#include "GraphicsAccessories.h"
+#include "GraphicsAccessories.hpp"
 #include "../../../Utilities/include/DiligentFXShaderSourceStreamFactory.h"
-#include "MapHelper.h"
+#include "MapHelper.hpp"
 #include "CommonlyUsedStates.h"
-#include "Align.h"
+#include "Align.hpp"
 
 #define _USE_MATH_DEFINES
 #include <math.h>
@@ -313,7 +313,7 @@ EpipolarLightScattering::EpipolarLightScattering(IRenderDevice*              pDe
 {
     pDevice->CreateResourceMapping(ResourceMappingDesc(), &m_pResMapping);
     const auto& deviceCaps = pDevice->GetDeviceCaps();
-    if (deviceCaps.DevType == DeviceType::OpenGLES || deviceCaps.AdaterType == ADAPTER_TYPE_SOFTWARE)
+    if (deviceCaps.DevType == RENDER_DEVICE_TYPE_GLES || deviceCaps.AdaterType == ADAPTER_TYPE_SOFTWARE)
     {
         m_uiNumRandomSamplesOnSphere /= 2;
         m_iPrecomputedSctrUDim /= 2;
@@ -635,7 +635,7 @@ void EpipolarLightScattering::CreateSliceEndPointsTexture(IRenderDevice* pDevice
 
 void EpipolarLightScattering::PrecomputeScatteringLUT(IRenderDevice* pDevice, IDeviceContext* pContext)
 {
-    const int ThreadGroupSize          = pDevice->GetDeviceCaps().DevType == DeviceType::OpenGLES ? 8 : 16;
+    const int ThreadGroupSize          = pDevice->GetDeviceCaps().DevType == RENDER_DEVICE_TYPE_GLES ? 8 : 16;
     auto&     PrecomputeSingleSctrTech = m_RenderTech[RENDER_TECH_PRECOMPUTE_SINGLE_SCATTERING];
     if (!PrecomputeSingleSctrTech.PSO)
     {
@@ -800,7 +800,7 @@ void EpipolarLightScattering::PrecomputeScatteringLUT(IRenderDevice* pDevice, ID
     InitHighOrderScatteringTech.SRB->BindResources(SHADER_TYPE_COMPUTE, m_pResMapping, 0);
     UpdateHighOrderScatteringTech.SRB->BindResources(SHADER_TYPE_COMPUTE, m_pResMapping, 0);
 
-    const int iNumScatteringOrders = pDevice->GetDeviceCaps().DevType == DeviceType::OpenGLES ? 3 : 4;
+    const int iNumScatteringOrders = pDevice->GetDeviceCaps().DevType == RENDER_DEVICE_TYPE_GLES ? 3 : 4;
     for (int iSctrOrder = 1; iSctrOrder < iNumScatteringOrders; ++iSctrOrder)
     {
         // Step 1: compute differential in-scattering
@@ -1080,7 +1080,11 @@ void EpipolarLightScattering::RenderCoarseUnshadowedInctr()
 
         const auto ResCount = pRenderCoarseUnshadowedInsctrPS->GetResourceCount();
         for (Uint32 r = 0; r < ResCount; ++r)
-            ResourceNames.emplace(pRenderCoarseUnshadowedInsctrPS->GetResource(r).Name);
+        {
+            ShaderResourceDesc ResourceDesc;
+            pRenderCoarseUnshadowedInsctrPS->GetResourceDesc(r, ResourceDesc);
+            ResourceNames.emplace(ResourceDesc.Name);
+        }
 
         // clang-format off
         const std::array<std::string, 4> StaticTextures =
@@ -1482,7 +1486,11 @@ void EpipolarLightScattering::DoRayMarching(Uint32 uiMaxStepsAlongRay,
 
         const auto ResCount = pDoRayMarchPS->GetResourceCount();
         for (Uint32 r = 0; r < ResCount; ++r)
-            ResourceNames.emplace(pDoRayMarchPS->GetResource(r).Name);
+        {
+            ShaderResourceDesc ResourceDesc;
+            pDoRayMarchPS->GetResourceDesc(r, ResourceDesc);
+            ResourceNames.emplace(ResourceDesc.Name);
+        }
 
         // clang-format off
         const std::array<std::string, 4> StaticLinearTextures =
@@ -1833,7 +1841,11 @@ void EpipolarLightScattering::FixInscatteringAtDepthBreaks(Uint32               
 
         const auto ResCount = pFixInsctrAtDepthBreaksPS->GetResourceCount();
         for (Uint32 r = 0; r < ResCount; ++r)
-            ResourceNames.emplace(pFixInsctrAtDepthBreaksPS->GetResource(r).Name);
+        {
+            ShaderResourceDesc ResourceDesc;
+            pFixInsctrAtDepthBreaksPS->GetResourceDesc(r, ResourceDesc);
+            ResourceNames.emplace(ResourceDesc.Name);
+        }
 
         // clang-format off
         const std::array<std::string, 4> StaticLinearTextures =

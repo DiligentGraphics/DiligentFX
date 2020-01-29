@@ -31,12 +31,12 @@
 #include "GLTF_PBR_Renderer.h"
 #include "../../../Utilities/include/DiligentFXShaderSourceStreamFactory.h"
 #include "CommonlyUsedStates.h"
-#include "HashUtils.h"
-#include "ShaderMacroHelper.h"
-#include "BasicMath.h"
+#include "HashUtils.hpp"
+#include "ShaderMacroHelper.hpp"
+#include "BasicMath.hpp"
 #include "GraphicsUtilities.h"
-#include "MapHelper.h"
-#include "GraphicsAccessories.h"
+#include "MapHelper.hpp"
+#include "GraphicsAccessories.hpp"
 
 namespace Diligent
 {

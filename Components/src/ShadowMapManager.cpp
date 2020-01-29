@@ -26,10 +26,10 @@
  */
 
 #include "ShadowMapManager.h"
-#include "AdvancedMath.h"
+#include "AdvancedMath.hpp"
 #include "../../../Utilities/include/DiligentFXShaderSourceStreamFactory.h"
 #include "GraphicsUtilities.h"
-#include "MapHelper.h"
+#include "MapHelper.hpp"
 #include "CommonlyUsedStates.h"
 
 namespace Diligent

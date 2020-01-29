@@ -28,9 +28,9 @@
 #pragma once
 
 #include <unordered_map>
-#include "BasicFileStream.h"
+#include "BasicFileStream.hpp"
 #include "Shader.h"
-#include "HashUtils.h"
+#include "HashUtils.hpp"
 
 namespace Diligent
 {
@@ -47,13 +47,13 @@ public:
         UNSUPPORTED("This method is not implemented and should never be called");
     }
 
-    virtual CounterValueType AddRef() override final
+    virtual ReferenceCounterValueType AddRef() override final
     {
         UNSUPPORTED("This method is not implemented and should never be called");
         return 0;
     }
 
-    virtual CounterValueType Release() override final
+    virtual ReferenceCounterValueType Release() override final
     {
         UNSUPPORTED("This method is not implemented and should never be called");
         return 0;

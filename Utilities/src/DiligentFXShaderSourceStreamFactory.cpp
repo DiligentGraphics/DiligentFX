@@ -26,9 +26,9 @@
  */
 
 #include "../include/DiligentFXShaderSourceStreamFactory.h"
-#include "MemoryFileStream.h"
-#include "StringDataBlobImpl.h"
-#include "RefCntAutoPtr.h"
+#include "MemoryFileStream.hpp"
+#include "StringDataBlobImpl.hpp"
+#include "RefCntAutoPtr.hpp"
 #include "../../../shaders_inc/shaders_list.h"
 
 namespace Diligent

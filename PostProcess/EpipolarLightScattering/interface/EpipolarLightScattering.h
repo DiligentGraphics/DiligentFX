@@ -32,8 +32,8 @@
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/Texture.h"
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/BufferView.h"
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/TextureView.h"
-#include "../../../../DiligentCore/Common/interface/RefCntAutoPtr.h"
-#include "../../../../DiligentCore/Common/interface/BasicMath.h"
+#include "../../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
+#include "../../../../DiligentCore/Common/interface/BasicMath.hpp"
 
 namespace Diligent
 {
