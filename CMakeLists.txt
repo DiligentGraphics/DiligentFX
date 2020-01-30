@@ -136,5 +136,9 @@ if(DILIGENT_INSTALL_FX)
     )
 endif()
 
+set_target_properties(DiligentFX PROPERTIES
+    FOLDER DiligentFX
+)
+
 # Create a custom target to run source code formatting validation command
 add_format_validation_target(DiligentFX "${CMAKE_CURRENT_SOURCE_DIR}" DiligentFX)
