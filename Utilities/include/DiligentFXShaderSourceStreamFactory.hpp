@@ -40,26 +40,26 @@ class DiligentFXShaderSourceStreamFactory final : public IShaderSourceInputStrea
 public:
     static DiligentFXShaderSourceStreamFactory& GetInstance();
 
-    virtual void CreateInputStream(const Char* Name, IFileStream** ppStream) override final;
+    virtual void DILIGENT_CALL_TYPE CreateInputStream(const Char* Name, IFileStream** ppStream) override final;
 
-    virtual void QueryInterface(const INTERFACE_ID& IID, IObject** ppInterface) override final
+    virtual void DILIGENT_CALL_TYPE QueryInterface(const INTERFACE_ID& IID, IObject** ppInterface) override final
     {
         UNSUPPORTED("This method is not implemented and should never be called");
     }
 
-    virtual ReferenceCounterValueType AddRef() override final
-    {
-        UNSUPPORTED("This method is not implemented and should never be called");
-        return 0;
-    }
-
-    virtual ReferenceCounterValueType Release() override final
+    virtual ReferenceCounterValueType DILIGENT_CALL_TYPE AddRef() override final
     {
         UNSUPPORTED("This method is not implemented and should never be called");
         return 0;
     }
 
-    virtual IReferenceCounters* GetReferenceCounters() const override final
+    virtual ReferenceCounterValueType DILIGENT_CALL_TYPE Release() override final
+    {
+        UNSUPPORTED("This method is not implemented and should never be called");
+        return 0;
+    }
+
+    virtual IReferenceCounters* DILIGENT_CALL_TYPE GetReferenceCounters() const override final
     {
         UNSUPPORTED("This method is not implemented and should never be called");
         return nullptr;
