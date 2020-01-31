@@ -5,7 +5,7 @@ set(SOURCE
 )
 
 set(INCLUDE
-    "${CMAKE_CURRENT_SOURCE_DIR}/interface/GLTF_PBR_Renderer.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/interface/GLTF_PBR_Renderer.hpp"
 )
 
 target_sources(DiligentFX PRIVATE ${SOURCE} ${INCLUDE})

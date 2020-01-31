@@ -30,11 +30,11 @@
 #include <array>
 #include <cstring>
 
-#include "EpipolarLightScattering.h"
+#include "EpipolarLightScattering.hpp"
 #include "ShaderMacroHelper.hpp"
 #include "GraphicsUtilities.h"
 #include "GraphicsAccessories.hpp"
-#include "../../../Utilities/include/DiligentFXShaderSourceStreamFactory.h"
+#include "../../../Utilities/include/DiligentFXShaderSourceStreamFactory.hpp"
 #include "MapHelper.hpp"
 #include "CommonlyUsedStates.h"
 #include "Align.hpp"

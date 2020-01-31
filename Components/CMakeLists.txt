@@ -5,7 +5,7 @@ set(SOURCE
 )
 
 set(INCLUDE
-    "${CMAKE_CURRENT_SOURCE_DIR}/interface/ShadowMapManager.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/interface/ShadowMapManager.hpp"
 )
 
 target_sources(DiligentFX PRIVATE ${SOURCE} ${INCLUDE})

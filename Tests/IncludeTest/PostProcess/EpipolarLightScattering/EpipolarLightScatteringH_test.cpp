@@ -25,4 +25,4 @@
  *  of the possibility of such damages.
  */
 
-#include "PostProcess/EpipolarLightScattering/interface/EpipolarLightScattering.h"
+#include "PostProcess/EpipolarLightScattering/interface/EpipolarLightScattering.hpp"

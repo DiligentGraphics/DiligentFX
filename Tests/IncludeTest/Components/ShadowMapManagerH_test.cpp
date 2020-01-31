@@ -25,4 +25,4 @@
  *  of the possibility of such damages.
  */
 
-#include "Components/interface/ShadowMapManager.h"
+#include "Components/interface/ShadowMapManager.hpp"

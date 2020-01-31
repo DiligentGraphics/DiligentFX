@@ -28,8 +28,8 @@
 #include <cstring>
 #include <array>
 
-#include "GLTF_PBR_Renderer.h"
-#include "../../../Utilities/include/DiligentFXShaderSourceStreamFactory.h"
+#include "GLTF_PBR_Renderer.hpp"
+#include "../../../Utilities/include/DiligentFXShaderSourceStreamFactory.hpp"
 #include "CommonlyUsedStates.h"
 #include "HashUtils.hpp"
 #include "ShaderMacroHelper.hpp"

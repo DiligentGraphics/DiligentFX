@@ -25,7 +25,7 @@
  *  of the possibility of such damages.
  */
 
-#include "../include/DiligentFXShaderSourceStreamFactory.h"
+#include "../include/DiligentFXShaderSourceStreamFactory.hpp"
 #include "MemoryFileStream.hpp"
 #include "StringDataBlobImpl.hpp"
 #include "RefCntAutoPtr.hpp"

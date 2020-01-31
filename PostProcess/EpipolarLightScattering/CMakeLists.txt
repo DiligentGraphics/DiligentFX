@@ -5,7 +5,7 @@ set(SOURCE
 )
 
 set(INCLUDE
-    "${CMAKE_CURRENT_SOURCE_DIR}/interface/EpipolarLightScattering.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/interface/EpipolarLightScattering.hpp"
 )
 
 target_sources(DiligentFX PRIVATE ${SOURCE} ${INCLUDE})
