@@ -104,6 +104,9 @@ public:
         /// fully logarithmic (1.0) partitioning.
         float              fPartitioningFactor = 0.95f;
 
+        /// Wether to use right-handed or left-handed light view transform matrix
+        bool               RightHandedLightViewTransform = true;
+
         /// Callback that allows the application to adjust z range of every cascade.
         /// The callback is also called with cascade value -1 to adjust that entire camera range.
         std::function<void(int, float&, float&)> AdjustCascadeRange;

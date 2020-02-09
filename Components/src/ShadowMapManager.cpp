@@ -170,7 +170,7 @@ void ShadowMapManager::DistributeCascades(const DistributeCascadeInfo& Info,
     LightSpaceY = cross(LightSpaceZ, LightSpaceX);
     LightSpaceX = cross(LightSpaceY, LightSpaceZ);
     LightSpaceX = normalize(LightSpaceX);
-    LightSpaceY = normalize(LightSpaceY);
+    LightSpaceY = normalize(LightSpaceY) * (Info.RightHandedLightViewTransform ? +1.f : -1.f);
 
     float4x4 WorldToLightViewSpaceMatr =
         float4x4::ViewFromBasis(LightSpaceX, LightSpaceY, LightSpaceZ);
