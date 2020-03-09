@@ -4,7 +4,7 @@ DiligentFX is the [Diligent Engine](https://github.com/DiligentGraphics/Diligent
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](License.txt)
 [![Chat on gitter](https://badges.gitter.im/gitterHQ/gitter.png)](https://gitter.im/diligent-engine)
-[![Build Status](https://ci.appveyor.com/api/projects/status/c2apfh841rk7d6s1?svg=true)](https://ci.appveyor.com/project/TheMostDiligent/diligentfx)
+[![Build Status](https://ci.appveyor.com/api/projects/status/github/DiligentGraphics/DiligentFX?svg=true)](https://ci.appveyor.com/project/DiligentGraphics/diligentfx)
 [![Build Status](https://travis-ci.org/DiligentGraphics/DiligentFX.svg?branch=master)](https://travis-ci.org/DiligentGraphics/DiligentFX)
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/e676fd09e6b34ce1a0b42242738b86e0)](https://www.codacy.com/manual/DiligentGraphics/DiligentFX?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=DiligentGraphics/DiligentFX&amp;utm_campaign=Badge_Grade)
 
