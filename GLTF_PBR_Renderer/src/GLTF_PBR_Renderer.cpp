@@ -239,7 +239,7 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
     Macros.AddShaderMacro("MAX_NUM_JOINTS", Uint32{GLTF::Mesh::TransformData::MaxNumJoints});
     Macros.AddShaderMacro("ALLOW_DEBUG_VIEW", m_Settings.AllowDebugView);
     Macros.AddShaderMacro("TONE_MAPPING_MODE", "TONE_MAPPING_MODE_UNCHARTED2");
-    Macros.AddShaderMacro("USE_IBL", m_Settings.UseIBL);
+    Macros.AddShaderMacro("GLTF_PBR_USE_IBL", m_Settings.UseIBL);
     ShaderCI.Macros = Macros;
     RefCntAutoPtr<IShader> pVS;
     {

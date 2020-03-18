@@ -43,10 +43,6 @@ static const ShaderIncInfo g_Shaders[] =
         #include "GLTF_PBR_PrecomputeCommon.fxh.h"
     },
     {
-        "GLTF_PBR_Structures.fxh",
-        #include "GLTF_PBR_Structures.fxh.h"
-    },
-    {
         "PrecomputeGLTF_BRDF.psh",
         #include "PrecomputeGLTF_BRDF.psh.h"
     },
@@ -61,6 +57,10 @@ static const ShaderIncInfo g_Shaders[] =
     {
         "RenderGLTF_PBR.vsh",
         #include "RenderGLTF_PBR.vsh.h"
+    },
+    {
+        "GLTF_PBR_Shading.fxh",
+        #include "GLTF_PBR_Shading.fxh.h"
     },
     {
         "GLTF_PBR_Structures.fxh",

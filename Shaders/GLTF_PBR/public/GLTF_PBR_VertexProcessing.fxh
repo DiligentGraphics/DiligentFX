@@ -1,5 +1,5 @@
-#ifndef _GLTF_PBR_VERTEX_SHADING_FXH_
-#define _GLTF_PBR_VERTEX_SHADING_FXH_
+#ifndef _GLTF_PBR_VERTEX_PROCESSING_FXH_
+#define _GLTF_PBR_VERTEX_PROCESSING_FXH_
 
 #include "GLTF_PBR_Structures.fxh"
 
@@ -59,4 +59,4 @@ GLTF_TransformedVertex GLTF_TransformVertex(GLTF_Vertex              Vert,
     return TransformedVert;
 }
 
-#endif // _GLTF_PBR_VERTEX_SHADING_FXH_
+#endif // _GLTF_PBR_VERTEX_PROCESSING_FXH_
