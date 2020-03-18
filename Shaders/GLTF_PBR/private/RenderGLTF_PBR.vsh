@@ -18,7 +18,7 @@ cbuffer cbCameraAttribs
 
 cbuffer cbTransforms
 {
-    GLTFNodeTransforms g_Transforms;
+    GLTFNodeShaderTransforms g_Transforms;
 }
 
 float3x3 InverseTranspose3x3(float3x3 M)

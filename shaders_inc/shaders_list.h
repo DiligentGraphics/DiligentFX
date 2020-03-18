@@ -63,6 +63,10 @@ static const ShaderIncInfo g_Shaders[] =
         #include "RenderGLTF_PBR.vsh.h"
     },
     {
+        "GLTF_PBR_Structures.fxh",
+        #include "GLTF_PBR_Structures.fxh.h"
+    },
+    {
         "AtmosphereShadersCommon.fxh",
         #include "AtmosphereShadersCommon.fxh.h"
     },

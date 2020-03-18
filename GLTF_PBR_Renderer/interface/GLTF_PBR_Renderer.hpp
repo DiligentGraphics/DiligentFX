@@ -26,12 +26,16 @@
  */
 
 #include <unordered_map>
+#include <functional>
+
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/DeviceContext.h"
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
 #include "../../../DiligentTools/AssetLoader/interface/GLTFLoader.hpp"
 
 namespace Diligent
 {
+
+#include "../../Shaders/GLTF_PBR/private/GLTF_PBR_Structures.fxh"
 
 class GLTF_PBR_Renderer
 {
@@ -63,6 +67,16 @@ public:
     {
         float4x4 ModelTransform = float4x4::Identity();
 
+        enum ALPHA_MODE_FLAGS : Uint32
+        {
+            ALPHA_MODE_FLAG_NONE   = 0,
+            ALPHA_MODE_FLAG_OPAQUE = 1 << GLTF::Material::ALPHAMODE_OPAQUE,
+            ALPHA_MODE_FLAG_MASK   = 1 << GLTF::Material::ALPHAMODE_MASK,
+            ALPHA_MODE_FLAG_BLEND  = 1 << GLTF::Material::ALPHAMODE_BLEND,
+            ALPHA_MODE_FLAG_ALL    = ALPHA_MODE_FLAG_OPAQUE | ALPHA_MODE_FLAG_MASK | ALPHA_MODE_FLAG_BLEND
+        };
+        ALPHA_MODE_FLAGS AlphaModes = ALPHA_MODE_FLAG_ALL;
+
         enum class DebugViewType : int
         {
             None            = 0,
@@ -92,9 +106,31 @@ public:
         float MiddleGray        = 0.18f;
         float WhitePoint        = 3.f;
     };
-    void Render(IDeviceContext*   pCtx,
-                GLTF::Model&      GLTFModel,
-                const RenderInfo& RenderParams);
+
+    struct GLTFNodeRenderInfo
+    {
+        const GLTF::Material* pMaterial = nullptr;
+
+        GLTFNodeShaderTransforms ShaderTransforms;
+        GLTFMaterialShaderInfo   MaterialShaderInfo;
+
+        VALUE_TYPE IndexType = VT_UNDEFINED;
+        union
+        {
+            Uint32 IndexCount;
+            Uint32 VertexCount;
+        };
+        Uint32 FirstIndex = 0;
+
+        GLTFNodeRenderInfo() noexcept :
+            IndexCount{0}
+        {}
+    };
+
+    void Render(IDeviceContext*                                pCtx,
+                GLTF::Model&                                   GLTFModel,
+                const RenderInfo&                              RenderParams,
+                std::function<void(const GLTFNodeRenderInfo&)> RenderNodeCallback = nullptr);
 
     void InitializeResourceBindings(GLTF::Model& GLTFModel,
                                     IBuffer*     pCameraAttribs,
@@ -122,10 +158,12 @@ private:
 
     void CreatePSO(IRenderDevice* pDevice);
 
-    void RenderGLTFNode(IDeviceContext*            pCtx,
-                        const GLTF::Node*          node,
-                        GLTF::Material::ALPHA_MODE AlphaMode,
-                        const float4x4&            ModelTransform);
+    void RenderGLTFNode(IDeviceContext*                                pCtx,
+                        const GLTF::Node*                              node,
+                        GLTF::Material::ALPHA_MODE                     AlphaMode,
+                        const float4x4&                                ModelTransform,
+                        std::function<void(const GLTFNodeRenderInfo&)> RenderNodeCallback = nullptr);
+
 
     void UpdateRenderParams(IDeviceContext* pCtx);
 
@@ -140,9 +178,10 @@ private:
     RefCntAutoPtr<IPipelineState> m_pRenderGLTF_PBR_PSO;
     RefCntAutoPtr<IPipelineState> m_pRenderGLTF_PBR_AlphaBlend_PSO;
 
-    RefCntAutoPtr<ITextureView>                                                      m_pWhiteTexSRV;
-    RefCntAutoPtr<ITextureView>                                                      m_pBlackTexSRV;
-    RefCntAutoPtr<ITextureView>                                                      m_pDefaultNormalMapSRV;
+    RefCntAutoPtr<ITextureView> m_pWhiteTexSRV;
+    RefCntAutoPtr<ITextureView> m_pBlackTexSRV;
+    RefCntAutoPtr<ITextureView> m_pDefaultNormalMapSRV;
+
     std::unordered_map<const GLTF::Material*, RefCntAutoPtr<IShaderResourceBinding>> m_SRBCache;
 
     static constexpr TEXTURE_FORMAT       IrradianceCubeFmt    = TEX_FORMAT_RGBA32_FLOAT;
@@ -163,5 +202,7 @@ private:
     RefCntAutoPtr<IBuffer> m_RenderParametersCB;
     RefCntAutoPtr<IBuffer> m_PrecomputeEnvMapAttribsCB;
 };
+
+DEFINE_FLAG_ENUM_OPERATORS(GLTF_PBR_Renderer::RenderInfo::ALPHA_MODE_FLAGS);
 
 } // namespace Diligent

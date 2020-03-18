@@ -26,12 +26,12 @@ cbuffer cbLightAttribs
 
 cbuffer cbMaterialInfo
 {
-    GLTFMaterialInfo g_MaterialInfo;
+    GLTFMaterialShaderInfo g_MaterialInfo;
 }
 
 cbuffer cbRenderParameters
 {
-    GLTFRenderParameters g_RenderParameters;
+    GLTFRendererShaderParameters g_RenderParameters;
 }
 
 

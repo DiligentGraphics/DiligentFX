@@ -18,7 +18,7 @@
 "\n"
 "cbuffer cbTransforms\n"
 "{\n"
-"    GLTFNodeTransforms g_Transforms;\n"
+"    GLTFNodeShaderTransforms g_Transforms;\n"
 "}\n"
 "\n"
 "float3x3 InverseTranspose3x3(float3x3 M)\n"
