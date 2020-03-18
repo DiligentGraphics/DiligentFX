@@ -113,8 +113,11 @@ void main(in  float4 ClipPos  : SV_Position,
     
 
     // Calculate lighting contribution from image based lighting source (IBL)
+    GLTF_PBR_IBL_Contribution IBLContrib;
+    IBLContrib.f3Diffuse  = float3(0.0, 0.0, 0.0);
+    IBLContrib.f3Specular = float3(0.0, 0.0, 0.0);
 #if GLTF_PBR_USE_IBL
-    GLTF_PBR_IBL_Contribution IBLContrib =
+    IBLContrib =
         GLTF_PBR_GetIBLContribution(SrfInfo, perturbedNormal, view, float(g_RenderParameters.PrefilteredCubeMipLevels),
                            g_BRDF_LUT,          g_BRDF_LUT_sampler, 
                            g_IrradianceMap,     g_IrradianceMap_sampler,

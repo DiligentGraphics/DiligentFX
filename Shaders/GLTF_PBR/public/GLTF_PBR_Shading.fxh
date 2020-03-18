@@ -15,11 +15,6 @@
 #define GLTF_PBR_USE_ENV_MAP_LOD
 #define GLTF_PBR_USE_HDR_CUBEMAPS
 
-#ifndef GLTF_PBR_USE_IBL
-#   define GLTF_PBR_USE_IBL 0
-#endif
-
-
 float GetPerceivedBrightness(float3 rgb)
 {
     return sqrt(0.299 * rgb.r * rgb.r + 0.587 * rgb.g * rgb.g + 0.114 * rgb.b * rgb.b);
@@ -124,7 +119,6 @@ float3 GLTF_PBR_PerturbNormal(in float3 Position, in float3 Normal, in float3 TS
 }
 
 
-#if GLTF_PBR_USE_IBL
 struct GLTF_PBR_IBL_Contribution
 {
     float3 f3Diffuse;
@@ -177,7 +171,7 @@ GLTF_PBR_IBL_Contribution GLTF_PBR_GetIBLContribution(
     IBLContrib.f3Specular = specularLight * (SrfInfo.Reflectance0 * brdf.x + SrfInfo.Reflectance90 * brdf.y);
     return IBLContrib;
 }
-#endif
+
 
 SurfaceReflectanceInfo GLTF_PBR_GetSurfaceReflectance(GLTFMaterialShaderInfo MaterialInfo,
                                                       float4                 BaseColor,
