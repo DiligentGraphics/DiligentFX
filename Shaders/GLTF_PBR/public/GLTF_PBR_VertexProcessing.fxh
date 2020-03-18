@@ -3,14 +3,6 @@
 
 #include "GLTF_PBR_Structures.fxh"
 
-struct GLTF_Vertex
-{
-    float3 Pos;
-    float3 Normal;
-    float4 Joint0;
-    float4 Weight0;
-};
-
 struct GLTF_TransformedVertex
 {
     float3 WorldPos;
@@ -30,27 +22,16 @@ float3x3 InverseTranspose3x3(float3x3 M)
     return adjugate / det;
 }
 
-GLTF_TransformedVertex GLTF_TransformVertex(GLTF_Vertex              Vert,
-                                            GLTFNodeShaderTransforms Transforms)
+GLTF_TransformedVertex GLTF_TransformVertex(in float3    Pos,
+                                            in float3    Normal,
+                                            in float4x4  Transform)
 {
     GLTF_TransformedVertex TransformedVert;
-
-    float4x4 Transform = Transforms.NodeMatrix;
-	if (Transforms.JointCount > 0)
-    {
-		// Mesh is skinned
-		float4x4 SkinMat = 
-			Vert.Weight0.x * Transforms.JointMatrix[int(Vert.Joint0.x)] +
-			Vert.Weight0.y * Transforms.JointMatrix[int(Vert.Joint0.y)] +
-			Vert.Weight0.z * Transforms.JointMatrix[int(Vert.Joint0.z)] +
-			Vert.Weight0.w * Transforms.JointMatrix[int(Vert.Joint0.w)];
-        Transform = mul(Transform, SkinMat);
-	}
     
-	float4 locPos = mul(Transform, float4(Vert.Pos, 1.0));
+	float4 locPos = mul(Transform, float4(Pos, 1.0));
     float3x3 NormalTransform = float3x3(Transform[0].xyz, Transform[1].xyz, Transform[2].xyz);
     NormalTransform = InverseTranspose3x3(NormalTransform);
-    float3 Normal = mul(NormalTransform, Vert.Normal);
+    Normal = mul(NormalTransform, Normal);
     float NormalLen = length(Normal);
     TransformedVert.Normal = Normal / max(NormalLen, 1e-5);
 
