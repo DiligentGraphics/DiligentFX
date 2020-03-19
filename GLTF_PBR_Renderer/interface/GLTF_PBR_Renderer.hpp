@@ -37,46 +37,89 @@ namespace Diligent
 
 #include "../../Shaders/GLTF_PBR/public/GLTF_PBR_Structures.fxh"
 
+/// Implementation of a GLTF PBR renderer
 class GLTF_PBR_Renderer
 {
 public:
+    /// Renderer create info
     struct CreateInfo
     {
-        TEXTURE_FORMAT RTVFmt         = TEX_FORMAT_UNKNOWN;
-        TEXTURE_FORMAT DSVFmt         = TEX_FORMAT_UNKNOWN;
-        bool           FrontCCW       = false;
-        bool           AllowDebugView = false;
-        bool           UseIBL         = false;
+        /// Render target format.
+        TEXTURE_FORMAT RTVFmt = TEX_FORMAT_UNKNOWN;
+
+        /// Depth-buffer format.
+
+        /// \note   If both RTV and DSV formats are TEX_FORMAT_UNKNOWN,
+        ///         the renderer will not initialize PSO, uniform buffers and other
+        ///         resources. It is expected that an application will use custom
+        ///         render callback function.
+        TEXTURE_FORMAT DSVFmt = TEX_FORMAT_UNKNOWN;
+
+        /// Indicates if front face is CCW.
+        bool FrontCCW = false;
+
+        /// Indicates if the renderer should allow debug views.
+        /// Rendering with debug views disabled is more efficient.
+        bool AllowDebugView = false;
+
+        /// Indicates whether to use IBL.
+        bool UseIBL = false;
 
         /// When set to true, pipeline state will be compiled with static samplers.
         /// When set to false, samplers from the texture views will be used.
-        bool                     UseStaticSamplers = true;
+        bool UseStaticSamplers = true;
+
         static const SamplerDesc DefaultSampler;
-        SamplerDesc              ColorMapStaticSampler    = DefaultSampler;
-        SamplerDesc              PhysDescMapStaticSampler = DefaultSampler;
-        SamplerDesc              NormalMapStaticSampler   = DefaultSampler;
-        SamplerDesc              AOMapStaticSampler       = DefaultSampler;
-        SamplerDesc              EmissiveMapStaticSampler = DefaultSampler;
+
+        /// Static sampler for color map texture.
+        SamplerDesc ColorMapStaticSampler = DefaultSampler;
+
+        /// Static sampler for physical description map texture.
+        SamplerDesc PhysDescMapStaticSampler = DefaultSampler;
+
+        /// Static sampler for normal map texture.
+        SamplerDesc NormalMapStaticSampler = DefaultSampler;
+
+        /// Static sampler for AO texture.
+        SamplerDesc AOMapStaticSampler = DefaultSampler;
+
+        /// Static sampler for emissive map texture.
+        SamplerDesc EmissiveMapStaticSampler = DefaultSampler;
     };
 
+    /// Initializes the renderer
     GLTF_PBR_Renderer(IRenderDevice*    pDevice,
                       IDeviceContext*   pCtx,
                       const CreateInfo& CI);
 
+    /// Rendering information
     struct RenderInfo
     {
+        /// Model transform matrix
         float4x4 ModelTransform = float4x4::Identity();
 
+        /// Alpha mode flags
         enum ALPHA_MODE_FLAGS : Uint32
         {
-            ALPHA_MODE_FLAG_NONE   = 0,
+            /// Render nothing
+            ALPHA_MODE_FLAG_NONE = 0,
+
+            /// Render opaque matetrials
             ALPHA_MODE_FLAG_OPAQUE = 1 << GLTF::Material::ALPHAMODE_OPAQUE,
-            ALPHA_MODE_FLAG_MASK   = 1 << GLTF::Material::ALPHAMODE_MASK,
-            ALPHA_MODE_FLAG_BLEND  = 1 << GLTF::Material::ALPHAMODE_BLEND,
-            ALPHA_MODE_FLAG_ALL    = ALPHA_MODE_FLAG_OPAQUE | ALPHA_MODE_FLAG_MASK | ALPHA_MODE_FLAG_BLEND
+
+            /// Render alpha-masked matetrials
+            ALPHA_MODE_FLAG_MASK = 1 << GLTF::Material::ALPHAMODE_MASK,
+
+            /// Render alpha-blended matetrials
+            ALPHA_MODE_FLAG_BLEND = 1 << GLTF::Material::ALPHAMODE_BLEND,
+
+            /// Render all materials
+            ALPHA_MODE_FLAG_ALL = ALPHA_MODE_FLAG_OPAQUE | ALPHA_MODE_FLAG_MASK | ALPHA_MODE_FLAG_BLEND
         };
+        /// Flag indicating which alpha modes to render
         ALPHA_MODE_FLAGS AlphaModes = ALPHA_MODE_FLAG_ALL;
 
+        /// Debug view type
         enum class DebugViewType : int
         {
             None            = 0,
@@ -99,27 +142,48 @@ public:
         };
         DebugViewType DebugView = DebugViewType::None;
 
+        /// Ambient occlusion strength
         float OcclusionStrength = 1;
-        float EmissionScale     = 1;
-        float IBLScale          = 1;
-        float AverageLogLum     = 0.3f;
-        float MiddleGray        = 0.18f;
-        float WhitePoint        = 3.f;
+
+        /// Emission scale
+        float EmissionScale = 1;
+
+        /// IBL scale
+        float IBLScale = 1;
+
+        /// Average log luminance used by tone mapping
+        float AverageLogLum = 0.3f;
+
+        /// Middle gray value used by tone mapping
+        float MiddleGray = 0.18f;
+
+        /// White point value used by tone mapping
+        float WhitePoint = 3.f;
     };
 
+    /// GLTF node rendering info passed to the custom render callback
     struct GLTFNodeRenderInfo
     {
+        /// GLTF material
         const GLTF::Material* pMaterial = nullptr;
 
+        /// GLTF node shader transforms
         GLTFNodeShaderTransforms ShaderTransforms;
-        GLTFMaterialShaderInfo   MaterialShaderInfo;
 
+        /// GLTF material shader information
+        GLTFMaterialShaderInfo MaterialShaderInfo;
+
+        /// Index type for indexed primitives, or VT_UNDEFINED for non-indexed ones
         VALUE_TYPE IndexType = VT_UNDEFINED;
         union
         {
+            /// Index count for indexed primitives
             Uint32 IndexCount;
+
+            /// Vertex count for non-indexed primitives
             Uint32 VertexCount;
         };
+        /// First index for indexed primitives
         Uint32 FirstIndex = 0;
 
         GLTFNodeRenderInfo() noexcept :
@@ -127,29 +191,60 @@ public:
         {}
     };
 
+    /// Renders the given GLTF model.
+
+    /// \param [in] pCtx               - Device context to record rendering commands to.
+    /// \param [in] GLTFModel          - GLTF model to render.
+    /// \param [in] RenderParams       - Render parameters.
+    /// \param [in] RenderNodeCallback - Optional render call back function that should be called
+    ///                                  for every GLTF node instead of rendering it.
     void Render(IDeviceContext*                                pCtx,
                 GLTF::Model&                                   GLTFModel,
                 const RenderInfo&                              RenderParams,
                 std::function<void(const GLTFNodeRenderInfo&)> RenderNodeCallback = nullptr);
 
+    /// Initializes resource bindings for a given GLTF model
     void InitializeResourceBindings(GLTF::Model& GLTFModel,
                                     IBuffer*     pCameraAttribs,
                                     IBuffer*     pLightAttribs);
 
+    /// Releases resource bindings for a given GLTF model
     void ReleaseResourceBindings(GLTF::Model& GLTFModel);
 
+    /// Precompute cubemaps used by IBL.
     void PrecomputeCubemaps(IRenderDevice*  pDevice,
                             IDeviceContext* pCtx,
                             ITextureView*   pEnvironmentMap);
 
-    ITextureView* GetIrradianceCubeSRV()
-    {
-        return m_pIrradianceCubeSRV;
-    }
+    // clang-format off
+    ITextureView* GetIrradianceCubeSRV()    { return m_pIrradianceCubeSRV; }
+    ITextureView* GetPrefilteredEnvMapSRV() { return m_pPrefilteredEnvMapSRV; }
+    ITextureView* GetWhiteTexSRV()          { return m_pWhiteTexSRV; }
+    ITextureView* GetBlackTexSRV()          { return m_pBlackTexSRV; }
+    ITextureView* GetDefaultNormalMapSRV()  { return m_pDefaultNormalMapSRV; }
+    // clang-format on
 
-    ITextureView* GetPrefilteredEnvMapSRV()
+    /// Creates a shader resource binding for the given material.
+
+    /// \param [in] Material       - GLTF material to create SRB for.
+    /// \param [in] pCameraAttribs - Camera attributes constant buffer to set in the SRB.
+    /// \param [in] pLightAttribs  - Light attributes constant buffer to set in the SRB.
+    /// \param [in] pPSO           - Optional PSO object to use to create the SRB instead of the
+    ///                              default PSO.
+    /// \return                      Created shader resource binding.
+    IShaderResourceBinding* CreateMaterialSRB(GLTF::Material& Material,
+                                              IBuffer*        pCameraAttribs,
+                                              IBuffer*        pLightAttribs,
+                                              IPipelineState* pPSO = nullptr);
+
+    /// Finds a shader resource binding for the given material.
+
+    /// \param [in] Material - GLTF material to find SRB for.
+    /// \return                Shader resource binding.
+    IShaderResourceBinding* GetMaterialSRB(const GLTF::Material* material)
     {
-        return m_pPrefilteredEnvMapSRV;
+        auto it = m_SRBCache.find(material);
+        return it != m_SRBCache.end() ? it->second.RawPtr() : nullptr;
     }
 
 private:
@@ -167,10 +262,6 @@ private:
 
     void UpdateRenderParams(IDeviceContext* pCtx);
 
-    IShaderResourceBinding* CreateMaterialSRB(GLTF::Material& Material,
-                                              IBuffer*        pCameraAttribs,
-                                              IBuffer*        pLightAttribs);
-
     const CreateInfo m_Settings;
 
     static constexpr Uint32       BRDF_LUT_Dim = 512;
@@ -184,10 +275,11 @@ private:
 
     std::unordered_map<const GLTF::Material*, RefCntAutoPtr<IShaderResourceBinding>> m_SRBCache;
 
-    static constexpr TEXTURE_FORMAT       IrradianceCubeFmt    = TEX_FORMAT_RGBA32_FLOAT;
-    static constexpr TEXTURE_FORMAT       PrefilteredEnvMapFmt = TEX_FORMAT_RGBA16_FLOAT;
-    static constexpr Uint32               IrradianceCubeDim    = 64;
-    static constexpr Uint32               PrefilteredEnvMapDim = 256;
+    static constexpr TEXTURE_FORMAT IrradianceCubeFmt    = TEX_FORMAT_RGBA32_FLOAT;
+    static constexpr TEXTURE_FORMAT PrefilteredEnvMapFmt = TEX_FORMAT_RGBA16_FLOAT;
+    static constexpr Uint32         IrradianceCubeDim    = 64;
+    static constexpr Uint32         PrefilteredEnvMapDim = 256;
+
     RefCntAutoPtr<ITextureView>           m_pIrradianceCubeSRV;
     RefCntAutoPtr<ITextureView>           m_pPrefilteredEnvMapSRV;
     RefCntAutoPtr<IPipelineState>         m_pPrecomputeIrradianceCubePSO;
