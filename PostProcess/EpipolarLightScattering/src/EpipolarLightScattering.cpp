@@ -1397,7 +1397,7 @@ void EpipolarLightScattering::Build1DMinMaxMipMap(int iCascadeIndex)
     Uint32 uiXOffset     = 0;
     Uint32 uiPrevXOffset = 0;
     Uint32 uiParity      = 0;
-#ifdef _DEBUG
+#ifdef DILIGENT_DEBUG
     {
         const auto& MinMaxShadowMapTexDesc = m_ptex2DMinMaxShadowMapRTV[0]->GetTexture()->GetDesc();
         VERIFY_EXPR(MinMaxShadowMapTexDesc.Width == m_PostProcessingAttribs.uiMinMaxShadowMapResolution);
