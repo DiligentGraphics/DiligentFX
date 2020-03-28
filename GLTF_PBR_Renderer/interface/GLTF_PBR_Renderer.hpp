@@ -259,15 +259,47 @@ private:
                         const float4x4&                                ModelTransform,
                         std::function<void(const GLTFNodeRenderInfo&)> RenderNodeCallback = nullptr);
 
+    struct PSOKey
+    {
+        PSOKey() noexcept {};
+        PSOKey(GLTF::Material::ALPHA_MODE _AlphaMode, bool _DoubleSided) :
+            AlphaMode{_AlphaMode},
+            DoubleSided{_DoubleSided}
+        {}
+
+        GLTF::Material::ALPHA_MODE AlphaMode   = GLTF::Material::ALPHAMODE_OPAQUE;
+        bool                       DoubleSided = false;
+    };
+
+    static size_t GetPSOIdx(const PSOKey& Key)
+    {
+        return (Key.AlphaMode == GLTF::Material::ALPHAMODE_BLEND ? 1 : 0) + (Key.DoubleSided ? 2 : 0);
+    }
+
+    void AddPSO(const PSOKey& Key, RefCntAutoPtr<IPipelineState> pPSO)
+    {
+        auto Idx = GetPSOIdx(Key);
+        if (Idx >= m_PSOCache.size())
+            m_PSOCache.resize(Idx + 1);
+        VERIFY_EXPR(!m_PSOCache[Idx]);
+        m_PSOCache[Idx] = std::move(pPSO);
+    }
+
+    IPipelineState* GetPSO(const PSOKey& Key)
+    {
+        auto Idx = GetPSOIdx(Key);
+        VERIFY_EXPR(Idx < m_PSOCache.size());
+        return Idx < m_PSOCache.size() ? m_PSOCache[Idx].RawPtr() : nullptr;
+    }
 
     void UpdateRenderParams(IDeviceContext* pCtx);
 
     const CreateInfo m_Settings;
 
-    static constexpr Uint32       BRDF_LUT_Dim = 512;
-    RefCntAutoPtr<ITextureView>   m_pBRDF_LUT_SRV;
-    RefCntAutoPtr<IPipelineState> m_pRenderGLTF_PBR_PSO;
-    RefCntAutoPtr<IPipelineState> m_pRenderGLTF_PBR_AlphaBlend_PSO;
+    static constexpr Uint32     BRDF_LUT_Dim = 512;
+    RefCntAutoPtr<ITextureView> m_pBRDF_LUT_SRV;
+
+    std::vector<RefCntAutoPtr<IPipelineState>> m_PSOCache;
 
     RefCntAutoPtr<ITextureView> m_pWhiteTexSRV;
     RefCntAutoPtr<ITextureView> m_pBlackTexSRV;

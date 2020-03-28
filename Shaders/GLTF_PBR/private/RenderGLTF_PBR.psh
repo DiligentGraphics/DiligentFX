@@ -58,12 +58,13 @@ Texture2D    g_EmissiveMap;
 SamplerState g_EmissiveMap_sampler;
 
 
-void main(in  float4 ClipPos  : SV_Position,
-          in  float3 WorldPos : WORLD_POS,
-          in  float3 Normal   : NORMAL,
-          in  float2 UV0      : UV0,
-          in  float2 UV1      : UV1,
-          out float4 OutColor : SV_Target)
+void main(in  float4 ClipPos     : SV_Position,
+          in  float3 WorldPos    : WORLD_POS,
+          in  float3 Normal      : NORMAL,
+          in  float2 UV0         : UV0,
+          in  float2 UV1         : UV1,
+          in  bool   IsFrontFace : SV_IsFrontFace,
+          out float4 OutColor    : SV_Target)
 {
     float4 BaseColor = g_ColorMap.Sample(g_ColorMap_sampler, lerp(UV0, UV1, g_MaterialInfo.BaseColorTextureUVSelector));
     BaseColor = SRGBtoLINEAR(BaseColor) * g_MaterialInfo.BaseColorFactor;
@@ -74,6 +75,8 @@ void main(in  float4 ClipPos  : SV_Position,
 		discard;
 	}
     
+    Normal *= IsFrontFace ? +1.0 : -1.0;
+
     float2 NormalMapUV  = lerp(UV0, UV1, g_MaterialInfo.NormalTextureUVSelector);
     float3 TSNormal     = g_NormalMap            .Sample(g_NormalMap_sampler,             NormalMapUV).rgb;
     float  Occlusion    = g_AOMap                .Sample(g_AOMap_sampler,                 lerp(UV0, UV1, g_MaterialInfo.OcclusionTextureUVSelector)).r;

@@ -318,7 +318,24 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
 
     PSODesc.GraphicsPipeline.pVS = pVS;
     PSODesc.GraphicsPipeline.pPS = pPS;
-    pDevice->CreatePipelineState(PSODesc, &m_pRenderGLTF_PBR_PSO);
+
+    {
+        PSOKey Key{GLTF::Material::ALPHAMODE_OPAQUE, false};
+
+        RefCntAutoPtr<IPipelineState> pSingleSidedOpaquePSO;
+        pDevice->CreatePipelineState(PSODesc, &pSingleSidedOpaquePSO);
+        AddPSO(Key, std::move(pSingleSidedOpaquePSO));
+
+        PSODesc.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_NONE;
+
+        Key.DoubleSided = true;
+
+        RefCntAutoPtr<IPipelineState> pDobleSidedOpaquePSO;
+        pDevice->CreatePipelineState(PSODesc, &pDobleSidedOpaquePSO);
+        AddPSO(Key, std::move(pDobleSidedOpaquePSO));
+    }
+
+    PSODesc.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_BACK;
 
     auto& RT0          = PSODesc.GraphicsPipeline.BlendDesc.RenderTargets[0];
     RT0.BlendEnable    = true;
@@ -328,9 +345,24 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
     RT0.SrcBlendAlpha  = BLEND_FACTOR_INV_SRC_ALPHA;
     RT0.DestBlendAlpha = BLEND_FACTOR_ZERO;
     RT0.BlendOpAlpha   = BLEND_OPERATION_ADD;
-    pDevice->CreatePipelineState(PSODesc, &m_pRenderGLTF_PBR_AlphaBlend_PSO);
 
-    for (auto* PSO : {m_pRenderGLTF_PBR_PSO.RawPtr(), m_pRenderGLTF_PBR_AlphaBlend_PSO.RawPtr()})
+    {
+        PSOKey Key{GLTF::Material::ALPHAMODE_BLEND, false};
+
+        RefCntAutoPtr<IPipelineState> pSingleSidedBlendPSO;
+        pDevice->CreatePipelineState(PSODesc, &pSingleSidedBlendPSO);
+        AddPSO(Key, std::move(pSingleSidedBlendPSO));
+
+        PSODesc.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_NONE;
+
+        Key.DoubleSided = true;
+
+        RefCntAutoPtr<IPipelineState> pDoubleSidedBlendPSO;
+        pDevice->CreatePipelineState(PSODesc, &pDoubleSidedBlendPSO);
+        AddPSO(Key, std::move(pDoubleSidedBlendPSO));
+    }
+
+    for (auto& PSO : m_PSOCache)
     {
         if (m_Settings.UseIBL)
         {
@@ -350,7 +382,7 @@ IShaderResourceBinding* GLTF_PBR_Renderer::CreateMaterialSRB(GLTF::Material& Mat
                                                              IPipelineState* pPSO)
 {
     if (pPSO == nullptr)
-        pPSO = m_pRenderGLTF_PBR_PSO;
+        pPSO = GetPSO(PSOKey{});
 
     RefCntAutoPtr<IShaderResourceBinding> pSRB;
     pPSO->CreateShaderResourceBinding(&pSRB, true);
@@ -688,6 +720,9 @@ void GLTF_PBR_Renderer::RenderGLTFNode(IDeviceContext*                          
             const auto& material = primitive->material;
             if (RenderNodeCallback == nullptr)
             {
+                auto* pPSO = GetPSO(PSOKey{AlphaMode, material.DoubleSided});
+                pCtx->SetPipelineState(pPSO);
+
                 pSRB = GetMaterialSRB(&material);
                 if (pSRB == nullptr)
                 {
@@ -858,8 +893,6 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*                                pC
         {
             pCtx->SetIndexBuffer(GLTFModel.pIndexBuffer, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         }
-
-        pCtx->SetPipelineState(m_pRenderGLTF_PBR_PSO);
     }
     else
     {
@@ -889,12 +922,6 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*                                pC
 
     // Transparent primitives
     // TODO: Correct depth sorting
-    // TODO: Do not set the pipeline if there are no transparent nodes
-    if (RenderNodeCallback == nullptr)
-    {
-        pCtx->SetPipelineState(m_pRenderGLTF_PBR_AlphaBlend_PSO);
-    }
-
     if (RenderParams.AlphaModes & RenderInfo::ALPHA_MODE_FLAG_BLEND)
     {
         for (const auto& node : GLTFModel.Nodes)
