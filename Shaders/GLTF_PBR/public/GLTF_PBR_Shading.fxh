@@ -78,7 +78,7 @@ float3 GLTF_PBR_ApplyDirectionalLight(float3 lightDir, float3 lightColor, Surfac
 
 // Find the normal for this fragment, pulling either from a predefined normal map
 // or from the interpolated mesh normal and tangent attributes.
-float3 GLTF_PBR_PerturbNormal(in float3 Position, in float3 Normal, in float3 TSNormal, in float2 UV, bool HasUV)
+float3 GLTF_PBR_PerturbNormal(in float3 Position, in float3 Normal, in float3 TSNormal, in float2 UV, bool HasUV, bool IsFrontFace)
 {
     // Retrieve the tangent space matrix
     float3 pos_dx = ddx(Position);
@@ -109,12 +109,11 @@ float3 GLTF_PBR_PerturbNormal(in float3 Position, in float3 Normal, in float3 TS
         float3 b = normalize(cross(t, ng));
         float3x3 tbn = MatrixFromRows(t, b, ng);
 
-        TSNormal = 2.0 * TSNormal - float3(1.0, 1.0, 1.0);
-        return normalize(mul(TSNormal, tbn));
+        return normalize(mul(TSNormal * (IsFrontFace ? +1.0 : -1.0), tbn));
     }
     else
     {
-        return ng;
+        return ng * (IsFrontFace ? +1.0 : -1.0);
     }
 }
 

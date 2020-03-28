@@ -75,10 +75,8 @@ void main(in  float4 ClipPos     : SV_Position,
 		discard;
 	}
     
-    Normal *= IsFrontFace ? +1.0 : -1.0;
-
     float2 NormalMapUV  = lerp(UV0, UV1, g_MaterialInfo.NormalTextureUVSelector);
-    float3 TSNormal     = g_NormalMap            .Sample(g_NormalMap_sampler,             NormalMapUV).rgb;
+    float3 TSNormal     = g_NormalMap            .Sample(g_NormalMap_sampler,             NormalMapUV).rgb * float3(2.0, 2.0, 2.0) - float3(1.0, 1.0, 1.0);
     float  Occlusion    = g_AOMap                .Sample(g_AOMap_sampler,                 lerp(UV0, UV1, g_MaterialInfo.OcclusionTextureUVSelector)).r;
     float3 Emissive     = g_EmissiveMap          .Sample(g_EmissiveMap_sampler,           lerp(UV0, UV1, g_MaterialInfo.EmissiveTextureUVSelector)).rgb;
     float4 PhysicalDesc = g_PhysicalDescriptorMap.Sample(g_PhysicalDescriptorMap_sampler, lerp(UV0, UV1, g_MaterialInfo.PhysicalDescriptorTextureUVSelector));
@@ -87,8 +85,7 @@ void main(in  float4 ClipPos     : SV_Position,
     SurfaceReflectanceInfo SrfInfo = GLTF_PBR_GetSurfaceReflectance(g_MaterialInfo, BaseColor, PhysicalDesc, metallic);
 
     // LIGHTING
-
-    float3 perturbedNormal = GLTF_PBR_PerturbNormal(WorldPos, Normal, TSNormal, NormalMapUV, g_MaterialInfo.NormalTextureUVSelector >= 0.0);
+    float3 perturbedNormal = GLTF_PBR_PerturbNormal(WorldPos, Normal, TSNormal, NormalMapUV, g_MaterialInfo.NormalTextureUVSelector >= 0.0, IsFrontFace);
     float3 view            = normalize(g_CameraAttribs.f4Position.xyz - WorldPos.xyz); // Direction from surface point to camera
 
     float3 color = float3(0.0, 0.0, 0.0);
