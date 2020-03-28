@@ -721,6 +721,7 @@ void GLTF_PBR_Renderer::RenderGLTFNode(IDeviceContext*                          
             if (RenderNodeCallback == nullptr)
             {
                 auto* pPSO = GetPSO(PSOKey{AlphaMode, material.DoubleSided});
+                VERIFY_EXPR(pPSO != nullptr);
                 pCtx->SetPipelineState(pPSO);
 
                 pSRB = GetMaterialSRB(&material);
