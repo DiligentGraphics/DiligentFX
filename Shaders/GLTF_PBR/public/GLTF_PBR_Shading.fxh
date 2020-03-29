@@ -3,6 +3,7 @@
 
 #include "GLTF_PBR_Structures.fxh"
 #include "PBR_Common.fxh"
+#include "ShaderUtilities.fxh"
 
 #ifndef GLTF_PBR_MANUAL_SRGB
 #   define  GLTF_PBR_MANUAL_SRGB    1
@@ -101,15 +102,7 @@ float3 GLTF_PBR_PerturbNormal(in float3 Position, in float3 Normal, in float3 TS
 
     if (HasUV)
     {
-        float2 tex_dx = ddx(UV);
-        float2 tex_dy = ddy(UV);
-        float3 t = (tex_dy.y * pos_dx - tex_dx.y * pos_dy) / (tex_dx.x * tex_dy.y - tex_dy.x * tex_dx.y);
-
-        t = normalize(t - ng * dot(ng, t));
-        float3 b = normalize(cross(t, ng));
-        float3x3 tbn = MatrixFromRows(t, b, ng);
-
-        return normalize(mul(TSNormal * (IsFrontFace ? +1.0 : -1.0), tbn));
+        return TransformTangentSpaceNormal(Position, ng, TSNormal * (IsFrontFace ? +1.0 : -1.0), UV);
     }
     else
     {
