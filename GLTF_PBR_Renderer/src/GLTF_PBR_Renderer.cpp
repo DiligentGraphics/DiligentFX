@@ -167,7 +167,9 @@ void GLTF_PBR_Renderer::PrecomputeBRDF(IRenderDevice*  pDevice,
 
     RefCntAutoPtr<IPipelineState> PrecomputeBRDF_PSO;
     {
-        PipelineStateDesc PSODesc;
+        PipelineStateCreateInfo PSOCreateInfo;
+        PipelineStateDesc&      PSODesc = PSOCreateInfo.PSODesc;
+
         PSODesc.Name = "Precompute GLTF BRDF LUT PSO";
 
         PSODesc.IsComputePipeline                             = false;
@@ -203,7 +205,7 @@ void GLTF_PBR_Renderer::PrecomputeBRDF(IRenderDevice*  pDevice,
         // Finally, create the pipeline state
         PSODesc.GraphicsPipeline.pVS = pVS;
         PSODesc.GraphicsPipeline.pPS = pPS;
-        pDevice->CreatePipelineState(PSODesc, &PrecomputeBRDF_PSO);
+        pDevice->CreatePipelineState(PSOCreateInfo, &PrecomputeBRDF_PSO);
     }
     pCtx->SetPipelineState(PrecomputeBRDF_PSO);
     pCtx->CommitShaderResources(nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
@@ -223,7 +225,9 @@ void GLTF_PBR_Renderer::PrecomputeBRDF(IRenderDevice*  pDevice,
 
 void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
 {
-    PipelineStateDesc PSODesc;
+    PipelineStateCreateInfo PSOCreateInfo;
+    PipelineStateDesc&      PSODesc = PSOCreateInfo.PSODesc;
+
     PSODesc.Name = "Render GLTF PBR PSO";
 
     PSODesc.IsComputePipeline                                     = false;
@@ -323,7 +327,7 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
         PSOKey Key{GLTF::Material::ALPHAMODE_OPAQUE, false};
 
         RefCntAutoPtr<IPipelineState> pSingleSidedOpaquePSO;
-        pDevice->CreatePipelineState(PSODesc, &pSingleSidedOpaquePSO);
+        pDevice->CreatePipelineState(PSOCreateInfo, &pSingleSidedOpaquePSO);
         AddPSO(Key, std::move(pSingleSidedOpaquePSO));
 
         PSODesc.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_NONE;
@@ -331,7 +335,7 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
         Key.DoubleSided = true;
 
         RefCntAutoPtr<IPipelineState> pDobleSidedOpaquePSO;
-        pDevice->CreatePipelineState(PSODesc, &pDobleSidedOpaquePSO);
+        pDevice->CreatePipelineState(PSOCreateInfo, &pDobleSidedOpaquePSO);
         AddPSO(Key, std::move(pDobleSidedOpaquePSO));
     }
 
@@ -350,7 +354,7 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
         PSOKey Key{GLTF::Material::ALPHAMODE_BLEND, false};
 
         RefCntAutoPtr<IPipelineState> pSingleSidedBlendPSO;
-        pDevice->CreatePipelineState(PSODesc, &pSingleSidedBlendPSO);
+        pDevice->CreatePipelineState(PSOCreateInfo, &pSingleSidedBlendPSO);
         AddPSO(Key, std::move(pSingleSidedBlendPSO));
 
         PSODesc.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_NONE;
@@ -358,7 +362,7 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
         Key.DoubleSided = true;
 
         RefCntAutoPtr<IPipelineState> pDoubleSidedBlendPSO;
-        pDevice->CreatePipelineState(PSODesc, &pDoubleSidedBlendPSO);
+        pDevice->CreatePipelineState(PSOCreateInfo, &pDoubleSidedBlendPSO);
         AddPSO(Key, std::move(pDoubleSidedBlendPSO));
     }
 
@@ -494,7 +498,9 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*  pDevice,
             pDevice->CreateShader(ShaderCI, &pPS);
         }
 
-        PipelineStateDesc PSODesc;
+        PipelineStateCreateInfo PSOCreateInfo;
+        PipelineStateDesc&      PSODesc = PSOCreateInfo.PSODesc;
+
         PSODesc.Name              = "Precompute irradiance cube PSO";
         PSODesc.IsComputePipeline = false;
 
@@ -525,7 +531,7 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*  pDevice,
         PSODesc.ResourceLayout.NumStaticSamplers = _countof(StaticSamplers);
         PSODesc.ResourceLayout.StaticSamplers    = StaticSamplers;
 
-        pDevice->CreatePipelineState(PSODesc, &m_pPrecomputeIrradianceCubePSO);
+        pDevice->CreatePipelineState(PSOCreateInfo, &m_pPrecomputeIrradianceCubePSO);
         m_pPrecomputeIrradianceCubePSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "cbTransform")->Set(m_PrecomputeEnvMapAttribsCB);
         m_pPrecomputeIrradianceCubePSO->CreateShaderResourceBinding(&m_pPrecomputeIrradianceCubeSRB, true);
     }
@@ -560,7 +566,9 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*  pDevice,
             pDevice->CreateShader(ShaderCI, &pPS);
         }
 
-        PipelineStateDesc PSODesc;
+        PipelineStateCreateInfo PSOCreateInfo;
+        PipelineStateDesc&      PSODesc = PSOCreateInfo.PSODesc;
+
         PSODesc.Name              = "Prefilter environment map PSO";
         PSODesc.IsComputePipeline = false;
 
@@ -591,7 +599,7 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*  pDevice,
         PSODesc.ResourceLayout.NumStaticSamplers = _countof(StaticSamplers);
         PSODesc.ResourceLayout.StaticSamplers    = StaticSamplers;
 
-        pDevice->CreatePipelineState(PSODesc, &m_pPrefilterEnvMapPSO);
+        pDevice->CreatePipelineState(PSOCreateInfo, &m_pPrefilterEnvMapPSO);
         m_pPrefilterEnvMapPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "cbTransform")->Set(m_PrecomputeEnvMapAttribsCB);
         m_pPrefilterEnvMapPSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "FilterAttribs")->Set(m_PrecomputeEnvMapAttribsCB);
         m_pPrefilterEnvMapPSO->CreateShaderResourceBinding(&m_pPrefilterEnvMapSRB, true);

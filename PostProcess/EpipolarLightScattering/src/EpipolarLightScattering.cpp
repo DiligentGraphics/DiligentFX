@@ -188,7 +188,9 @@ void EpipolarLightScattering::RenderTechnique::InitializeFullScreenTriangleTechn
     const DepthStencilStateDesc&      DSSDesc = DSS_Default,
     const BlendStateDesc&             BSDesc  = BS_Default)
 {
-    PipelineStateDesc PSODesc;
+    PipelineStateCreateInfo PSOCreateInfo;
+    PipelineStateDesc&      PSODesc = PSOCreateInfo.PSODesc;
+
     PSODesc.Name           = PSOName;
     PSODesc.ResourceLayout = ResourceLayout;
 
@@ -209,7 +211,7 @@ void EpipolarLightScattering::RenderTechnique::InitializeFullScreenTriangleTechn
 
     PSO.Release();
     SRB.Release();
-    pDevice->CreatePipelineState(PSODesc, &PSO);
+    pDevice->CreatePipelineState(PSOCreateInfo, &PSO);
 }
 
 void EpipolarLightScattering::RenderTechnique::InitializeFullScreenTriangleTechnique(
@@ -231,14 +233,16 @@ void EpipolarLightScattering::RenderTechnique::InitializeComputeTechnique(IRende
                                                                           IShader*                          ComputeShader,
                                                                           const PipelineResourceLayoutDesc& ResourceLayout)
 {
-    PipelineStateDesc PSODesc;
+    PipelineStateCreateInfo PSOCreateInfo;
+    PipelineStateDesc&      PSODesc = PSOCreateInfo.PSODesc;
+
     PSODesc.Name                = PSOName;
     PSODesc.ResourceLayout      = ResourceLayout;
     PSODesc.IsComputePipeline   = true;
     PSODesc.ComputePipeline.pCS = ComputeShader;
     PSO.Release();
     SRB.Release();
-    pDevice->CreatePipelineState(PSODesc, &PSO);
+    pDevice->CreatePipelineState(PSOCreateInfo, &PSO);
 }
 
 void EpipolarLightScattering::RenderTechnique::PrepareSRB(IRenderDevice* pDevice, IResourceMapping* pResMapping, Uint32 Flags = BIND_SHADER_RESOURCES_KEEP_EXISTING | BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED)
@@ -1958,11 +1962,17 @@ void EpipolarLightScattering::RenderSampleLocations()
         auto pRenderSampleLocationsPS = CreateShader(m_FrameAttribs.pDevice, "RenderSampling.fx", "RenderSampleLocationsPS",
                                                      SHADER_TYPE_PIXEL, Macros);
 
-        PipelineStateDesc PSODesc;
+        PipelineStateCreateInfo PSOCreateInfo;
+        PipelineStateDesc&      PSODesc = PSOCreateInfo.PSODesc;
+
         PSODesc.ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
+        // clang-format off
         ShaderResourceVariableDesc Vars[] =
-            {
-                {SHADER_TYPE_VERTEX, "cbPostProcessingAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}};
+        {
+            {SHADER_TYPE_VERTEX, "cbPostProcessingAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
+        };
+        // clang-format on
+
         PSODesc.ResourceLayout.Variables    = Vars;
         PSODesc.ResourceLayout.NumVariables = _countof(Vars);
 
@@ -1979,7 +1989,7 @@ void EpipolarLightScattering::RenderSampleLocations()
         GraphicsPipeline.RTVFormats[0]                        = m_BackBufferFmt;
         GraphicsPipeline.DSVFormat                            = m_DepthBufferFmt;
         GraphicsPipeline.PrimitiveTopology                    = PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
-        m_FrameAttribs.pDevice->CreatePipelineState(PSODesc, &RenderSampleLocationsTech.PSO);
+        m_FrameAttribs.pDevice->CreatePipelineState(PSOCreateInfo, &RenderSampleLocationsTech.PSO);
         RenderSampleLocationsTech.PSO->BindStaticResources(SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL, m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
 
         RenderSampleLocationsTech.SRB.Release();
@@ -2718,7 +2728,9 @@ void EpipolarLightScattering::RenderSun()
         RefCntAutoPtr<IShader> pSunVS = CreateShader(m_FrameAttribs.pDevice, "Sun.fx", "SunVS", SHADER_TYPE_VERTEX);
         RefCntAutoPtr<IShader> pSunPS = CreateShader(m_FrameAttribs.pDevice, "Sun.fx", "SunPS", SHADER_TYPE_PIXEL);
 
-        PipelineStateDesc PSODesc;
+        PipelineStateCreateInfo PSOCreateInfo;
+        PipelineStateDesc&      PSODesc = PSOCreateInfo.PSODesc;
+
         PSODesc.ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
         // clang-format off
         ShaderResourceVariableDesc Vars[] =
@@ -2741,7 +2753,7 @@ void EpipolarLightScattering::RenderSun()
         GraphicsPipeline.RTVFormats[0]                        = m_OffscreenBackBufferFmt;
         GraphicsPipeline.DSVFormat                            = m_DepthBufferFmt;
         GraphicsPipeline.PrimitiveTopology                    = PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
-        m_FrameAttribs.pDevice->CreatePipelineState(PSODesc, &RenderSunTech.PSO);
+        m_FrameAttribs.pDevice->CreatePipelineState(PSOCreateInfo, &RenderSunTech.PSO);
         RenderSunTech.PSO->BindStaticResources(SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL, m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);
 
         RenderSunTech.SRBDependencyFlags = SRB_DEPENDENCY_CAMERA_ATTRIBS;

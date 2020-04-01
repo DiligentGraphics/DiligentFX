@@ -438,7 +438,8 @@ void ShadowMapManager::InitializeConversionTechniques(TEXTURE_FORMAT FilterableS
             m_pDevice->CreateShader(VertShaderCI, &pScreenSizeTriVS);
         }
 
-        PipelineStateDesc PSODesc;
+        PipelineStateCreateInfo PSOCreateInfo;
+        PipelineStateDesc&      PSODesc = PSOCreateInfo.PSODesc;
 
         ShaderCreateInfo ShaderCI;
         ShaderCI.Desc.ShaderType            = SHADER_TYPE_PIXEL;
@@ -496,7 +497,7 @@ void ShadowMapManager::InitializeConversionTechniques(TEXTURE_FORMAT FilterableS
         GraphicsPipeline.NumRenderTargets             = 1;
         GraphicsPipeline.RTVFormats[0]                = FilterableShadowMapFmt;
 
-        m_pDevice->CreatePipelineState(PSODesc, &Tech.PSO);
+        m_pDevice->CreatePipelineState(PSOCreateInfo, &Tech.PSO);
         Tech.PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbConversionAttribs")->Set(m_pConversionAttribsBuffer);
 
         if (m_BlurVertTech.PSO && m_BlurVertTech.PSO->GetDesc().GraphicsPipeline.RTVFormats[0] != FilterableShadowMapFmt)
@@ -510,7 +511,7 @@ void ShadowMapManager::InitializeConversionTechniques(TEXTURE_FORMAT FilterableS
             RefCntAutoPtr<IShader> pVertBlurPS;
             m_pDevice->CreateShader(ShaderCI, &pVertBlurPS);
             GraphicsPipeline.pPS = pVertBlurPS;
-            m_pDevice->CreatePipelineState(PSODesc, &m_BlurVertTech.PSO);
+            m_pDevice->CreatePipelineState(PSOCreateInfo, &m_BlurVertTech.PSO);
             m_BlurVertTech.PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbConversionAttribs")->Set(m_pConversionAttribsBuffer);
         }
     }
