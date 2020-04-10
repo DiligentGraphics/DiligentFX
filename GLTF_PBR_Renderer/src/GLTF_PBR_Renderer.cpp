@@ -857,7 +857,7 @@ void GLTF_PBR_Renderer::RenderGLTFNode(IDeviceContext*                          
 
     for (const auto& child : node->Children)
     {
-        RenderGLTFNode(pCtx, child.get(), AlphaMode, ModelTransform);
+        RenderGLTFNode(pCtx, child.get(), AlphaMode, ModelTransform, RenderNodeCallback);
     }
 }
 
