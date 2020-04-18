@@ -2060,12 +2060,10 @@ void EpipolarLightScattering::CreateAmbientSkyLightTexture(IRenderDevice* pDevic
     m_ptex2DAmbientSkyLightSRV->SetSampler(m_pLinearClampSampler);
 }
 
-void EpipolarLightScattering::PerformPostProcessing(FrameAttribs&                   frameAttribs,
-                                                    EpipolarLightScatteringAttribs& PPAttribs)
+void EpipolarLightScattering::PrepareForNewFrame(FrameAttribs&                   frameAttribs,
+                                                 EpipolarLightScatteringAttribs& PPAttribs)
 {
     DEV_CHECK_ERR(frameAttribs.ptex2DSrcColorBufferSRV, "Source color buffer SRV must not be null");
-    DEV_CHECK_ERR(frameAttribs.ptex2DSrcColorBufferRTV, "Source color buffer RTV must not be null");
-    DEV_CHECK_ERR(frameAttribs.ptex2DSrcDepthBufferDSV, "Source depth buffer DSV must not be null");
     DEV_CHECK_ERR(frameAttribs.ptex2DSrcDepthBufferSRV, "Source depth buffer SRV must not be null");
     DEV_CHECK_ERR(frameAttribs.ptex2DDstColorBufferRTV, "Destination color buffer RTV must not be null");
     DEV_CHECK_ERR(frameAttribs.ptex2DDstDepthBufferDSV, "Source depth buffer DSV must not be null");
@@ -2140,8 +2138,6 @@ void EpipolarLightScattering::PerformPostProcessing(FrameAttribs&               
     NewUserResourceIds.LightAttribs      = pcbCameraAttribs != nullptr ? pcbCameraAttribs->GetUniqueID() : -1;
     NewUserResourceIds.CameraAttribs     = pcbLightAttribs  != nullptr ? pcbLightAttribs->GetUniqueID()  : -1;
     NewUserResourceIds.SrcColorBufferSRV = frameAttribs.ptex2DSrcColorBufferSRV->GetUniqueID();
-    NewUserResourceIds.SrcColorBufferRTV = frameAttribs.ptex2DSrcColorBufferRTV->GetUniqueID();
-    NewUserResourceIds.SrcDepthBufferDSV = frameAttribs.ptex2DSrcDepthBufferDSV->GetUniqueID();
     NewUserResourceIds.SrcDepthBufferSRV = frameAttribs.ptex2DSrcDepthBufferSRV->GetUniqueID();
     NewUserResourceIds.ShadowMapSRV      = frameAttribs.ptex2DShadowMapSRV->GetUniqueID();
     // clang-format on
@@ -2149,8 +2145,6 @@ void EpipolarLightScattering::PerformPostProcessing(FrameAttribs&               
     Uint32 StaleSRBDependencyFlags = 0;
 #define CHECK_SRB_DEPENDENCY(Flag, Member) StaleSRBDependencyFlags |= (m_UserResourceIds.Member != NewUserResourceIds.Member) ? Flag : 0
     CHECK_SRB_DEPENDENCY(SRB_DEPENDENCY_SRC_COLOR_BUFFER, SrcColorBufferSRV);
-    CHECK_SRB_DEPENDENCY(SRB_DEPENDENCY_SRC_COLOR_BUFFER, SrcColorBufferRTV);
-    CHECK_SRB_DEPENDENCY(SRB_DEPENDENCY_SRC_DEPTH_BUFFER, SrcDepthBufferDSV);
     CHECK_SRB_DEPENDENCY(SRB_DEPENDENCY_SRC_DEPTH_BUFFER, SrcDepthBufferSRV);
     CHECK_SRB_DEPENDENCY(SRB_DEPENDENCY_SHADOW_MAP, ShadowMapSRV);
 #undef CHECK_SRB_DEPENDENCY
@@ -2336,15 +2330,26 @@ void EpipolarLightScattering::PerformPostProcessing(FrameAttribs&               
         memcpy(pPPAttribsBuffData, &m_PostProcessingAttribs, sizeof(m_PostProcessingAttribs));
     }
 
+    // clang-format off
+    m_pResMapping->AddResource("g_tex2DLightSpaceDepthMap", m_FrameAttribs.ptex2DShadowMapSRV, false);
+    m_pResMapping->AddResource("cbCameraAttribs",           m_FrameAttribs.pcbCameraAttribs, false);
+    m_pResMapping->AddResource("cbLightParams",             m_FrameAttribs.pcbLightAttribs, false);
+    // clang-format on
+}
+
+void EpipolarLightScattering::PerformPostProcessing()
+{
+    // Note that pecomputation methods change render targets and pipelines
+    // (CreateLowResLuminanceTexture changes render targets). If they are moved to
+    // PrepareForNewFrame, an application must be required to restore states afterwards
 
     if (!(m_uiUpToDateResourceFlags & UpToDateResourceFlags::PrecomputedOpticalDepthTex))
     {
         PrecomputeOpticalDepthTexture(m_FrameAttribs.pDevice, m_FrameAttribs.pDeviceContext);
     }
 
-
     if ((m_PostProcessingAttribs.iMultipleScatteringMode > MULTIPLE_SCTR_MODE_NONE ||
-         PPAttribs.iSingleScatteringMode == SINGLE_SCTR_MODE_LUT) &&
+         m_PostProcessingAttribs.iSingleScatteringMode == SINGLE_SCTR_MODE_LUT) &&
         !(m_uiUpToDateResourceFlags & UpToDateResourceFlags::PrecomputedIntegralsTex))
     {
         PrecomputeScatteringLUT(m_FrameAttribs.pDevice, m_FrameAttribs.pDeviceContext);
@@ -2355,19 +2360,6 @@ void EpipolarLightScattering::PerformPostProcessing(FrameAttribs&               
         CreateLowResLuminanceTexture(m_FrameAttribs.pDevice, m_FrameAttribs.pDeviceContext);
     }
 
-    // clang-format off
-    //m_pResMapping->AddResource("g_tex2DDepthBuffer", FrameAttribs.ptex2DSrcDepthBufferSRV, false);
-    //m_pResMapping->AddResource("g_tex2DColorBuffer", FrameAttribs.ptex2DSrcColorBufferSRV, false);
-    m_pResMapping->AddResource("g_tex2DLightSpaceDepthMap", m_FrameAttribs.ptex2DShadowMapSRV, false);
-    m_pResMapping->AddResource("cbCameraAttribs",           m_FrameAttribs.pcbCameraAttribs, false);
-    m_pResMapping->AddResource("cbLightParams",             m_FrameAttribs.pcbLightAttribs, false);
-    // clang-format on
-
-    {
-        ITextureView* pRTVs[] = {m_FrameAttribs.ptex2DSrcColorBufferRTV};
-        m_FrameAttribs.pDeviceContext->SetRenderTargets(_countof(pRTVs), pRTVs, m_FrameAttribs.ptex2DSrcDepthBufferDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-        RenderSun();
-    }
 
     ReconstructCameraSpaceZ();
 
@@ -2429,10 +2421,10 @@ void EpipolarLightScattering::PerformPostProcessing(FrameAttribs&               
             UpdateAverageLuminance();
         }
         // Set the main back & depth buffers
-        m_FrameAttribs.pDeviceContext->SetRenderTargets(1, &frameAttribs.ptex2DDstColorBufferRTV, frameAttribs.ptex2DDstDepthBufferDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        m_FrameAttribs.pDeviceContext->SetRenderTargets(1, &m_FrameAttribs.ptex2DDstColorBufferRTV, m_FrameAttribs.ptex2DDstDepthBufferDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
         // Clear depth to 1.0.
-        m_FrameAttribs.pDeviceContext->ClearDepthStencil(frameAttribs.ptex2DDstDepthBufferDSV, CLEAR_DEPTH_FLAG, 1.f, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        m_FrameAttribs.pDeviceContext->ClearDepthStencil(m_FrameAttribs.ptex2DDstDepthBufferDSV, CLEAR_DEPTH_FLAG, 1.f, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         // Transform inscattering irradiance from epipolar coordinates back to rectangular
         // The shader will write 0.0 to the depth buffer, but all pixel that require inscattering
         // correction will be discarded and will keep 1.0
@@ -2464,7 +2456,7 @@ void EpipolarLightScattering::PerformPostProcessing(FrameAttribs&               
         }
 
         // Set the main back & depth buffers
-        m_FrameAttribs.pDeviceContext->SetRenderTargets(1, &frameAttribs.ptex2DDstColorBufferRTV, frameAttribs.ptex2DDstDepthBufferDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        m_FrameAttribs.pDeviceContext->SetRenderTargets(1, &m_FrameAttribs.ptex2DDstColorBufferRTV, m_FrameAttribs.ptex2DDstDepthBufferDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
         FixInscatteringAtDepthBreaks(m_PostProcessingAttribs.uiMaxSamplesOnTheRay, EFixInscatteringMode::FullScreenRayMarching);
     }
@@ -2717,12 +2709,26 @@ void EpipolarLightScattering::ComputeScatteringCoefficients(IDeviceContext* pDev
 }
 
 
-void EpipolarLightScattering::RenderSun()
+void EpipolarLightScattering::RenderSun(TEXTURE_FORMAT RTVFormat,
+                                        TEXTURE_FORMAT DSVFormat,
+                                        Uint8          SampleCount)
 {
     if (m_PostProcessingAttribs.f4LightScreenPos.w <= 0)
         return;
 
     auto& RenderSunTech = m_RenderTech[RENDER_TECH_RENDER_SUN];
+    if (RenderSunTech.PSO)
+    {
+        const auto& PSODesc = RenderSunTech.PSO->GetDesc();
+        if (PSODesc.GraphicsPipeline.RTVFormats[0] != RTVFormat ||
+            PSODesc.GraphicsPipeline.DSVFormat != DSVFormat ||
+            PSODesc.GraphicsPipeline.SmplDesc.Count != SampleCount)
+        {
+            RenderSunTech.PSO.Release();
+            RenderSunTech.SRB.Release();
+        }
+    }
+
     if (!RenderSunTech.PSO)
     {
         RefCntAutoPtr<IShader> pSunVS = CreateShader(m_FrameAttribs.pDevice, "Sun.fx", "SunVS", SHADER_TYPE_VERTEX);
@@ -2750,8 +2756,9 @@ void EpipolarLightScattering::RenderSun()
         GraphicsPipeline.pVS                                  = pSunVS;
         GraphicsPipeline.pPS                                  = pSunPS;
         GraphicsPipeline.NumRenderTargets                     = 1;
-        GraphicsPipeline.RTVFormats[0]                        = m_OffscreenBackBufferFmt;
-        GraphicsPipeline.DSVFormat                            = m_DepthBufferFmt;
+        GraphicsPipeline.RTVFormats[0]                        = RTVFormat;
+        GraphicsPipeline.DSVFormat                            = DSVFormat;
+        GraphicsPipeline.SmplDesc.Count                       = SampleCount;
         GraphicsPipeline.PrimitiveTopology                    = PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
         m_FrameAttribs.pDevice->CreatePipelineState(PSOCreateInfo, &RenderSunTech.PSO);
         RenderSunTech.PSO->BindStaticResources(SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL, m_pResMapping, BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED);

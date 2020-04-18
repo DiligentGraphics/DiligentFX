@@ -65,19 +65,13 @@ public:
         /// Shader resource view of the source color buffer.
         ITextureView* ptex2DSrcColorBufferSRV = nullptr;
 
-        /// Render target view of the source color buffer. This RTV is used to render the sun.
-        ITextureView* ptex2DSrcColorBufferRTV = nullptr;
-
-        /// Depth-stencil view of the source depth. This DSV is used to render the sun.
-        ITextureView* ptex2DSrcDepthBufferDSV = nullptr;
-
         /// Shader resource view of the source depth.
         ITextureView* ptex2DSrcDepthBufferSRV = nullptr;
 
         /// Render target view of the destination color buffer where final image will be rendered.
         ITextureView* ptex2DDstColorBufferRTV = nullptr;
 
-        /// Depth-stencil view of the destination depth buffer where.
+        /// Depth-stencil view of the destination depth buffer where final image will be rendered.
         ITextureView* ptex2DDstDepthBufferDSV = nullptr;
 
         /// Shadow map shader resource view
@@ -95,15 +89,23 @@ public:
 
     void OnWindowResize(IRenderDevice* pDevice, Uint32 uiBackBufferWidth, Uint32 uiBackBufferHeight);
 
-    void PerformPostProcessing(FrameAttribs&                   FrameAttribs,
-                               EpipolarLightScatteringAttribs& PPAttribs);
+    /// The method prepares internal resources and states for processing the next frame.
+    /// It must be called at the beginning of every frame before any other
+    /// rendering method (RenderSun, PerformPostProcessing) can be called.
+    void PrepareForNewFrame(FrameAttribs&                   FrameAttribs,
+                            EpipolarLightScatteringAttribs& PPAttribs);
 
     void ComputeSunColor(const float3& vDirectionOnSun,
                          const float4& f4ExtraterrestrialSunColor,
                          float4&       f4SunColorAtGround,
                          float4&       f4AmbientLight);
 
-    void RenderSun();
+    void RenderSun(TEXTURE_FORMAT RTVFormat,
+                   TEXTURE_FORMAT DSVFormat,
+                   Uint8          SampleCount);
+
+    void PerformPostProcessing();
+
 
     IBuffer*      GetMediaAttribsCB() { return m_pcbMediaAttribs; }
     ITextureView* GetPrecomputedNetDensitySRV() { return m_ptex2DOccludedNetDensityToAtmTopSRV; }
@@ -175,8 +177,6 @@ private:
         Int32 LightAttribs      = -1;
         Int32 CameraAttribs     = -1;
         Int32 SrcColorBufferSRV = -1;
-        Int32 SrcColorBufferRTV = -1;
-        Int32 SrcDepthBufferDSV = -1;
         Int32 SrcDepthBufferSRV = -1;
         Int32 ShadowMapSRV      = -1;
     } m_UserResourceIds;
