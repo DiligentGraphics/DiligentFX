@@ -59,9 +59,6 @@ void ShaderFunctionInternal(in float4  f4Pos,
                                   7u, // Use hard-coded constant here so that compiler can optimize the code
                                       // more efficiently
                                   g_PPAttribs.f4EarthCenter.xyz,
-                                  g_MediaParams.fEarthRadius,
-                                  g_MediaParams.fAtmTopHeight,
-                                  g_MediaParams.f4ParticleScaleHeight,
                                   f3Inscattering, f3Extinction);
     f3Inscattering *= g_LightAttribs.f4Intensity.rgb;
 }

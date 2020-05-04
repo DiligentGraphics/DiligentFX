@@ -229,16 +229,16 @@ struct AirScatteringAttribs
 
     // Earth parameters can't be chnaged at run time
     float fEarthRadius              DEFAULT_VALUE(static_cast<float>(EARTH_RADIUS));
-    float fAtmTopHeight             DEFAULT_VALUE(80000.f);
+    float fAtmBottomAltitude        DEFAULT_VALUE(0.f);     // Altitude of the bottom atmosphere boundary (sea level by default)
+    float fAtmTopAltitude           DEFAULT_VALUE(80000.f); // Altitude of the top atmosphere boundary, 80 km by default
     float fTurbidity                DEFAULT_VALUE(1.02f);
-    float fAtmTopRadius             DEFAULT_VALUE(fEarthRadius + fAtmTopHeight);
+
+    float fAtmBottomRadius          DEFAULT_VALUE(fEarthRadius + fAtmBottomAltitude);
+    float fAtmTopRadius             DEFAULT_VALUE(fEarthRadius + fAtmTopAltitude);
+    float fAtmAltitudeRangeInv      DEFAULT_VALUE(1.f / (fAtmTopAltitude - fAtmBottomAltitude));
+    float fAerosolPhaseFuncG        DEFAULT_VALUE(0.76f);
 
     float4 f4ParticleScaleHeight    DEFAULT_VALUE(float4(7994.f, 1200.f, 1.f/7994.f, 1.f/1200.f));
-
-    float  fAerosolPhaseFuncG       DEFAULT_VALUE(0.76f);
-    float  fDummy0;
-    float  fDummy1;
-    float  fDummy2;
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
     CHECK_STRUCT_ALIGNMENT(AirScatteringAttribs);

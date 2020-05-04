@@ -293,7 +293,7 @@ void ApplyInscatteredRadiancePS(FullScreenTriangleVSOutput VSOut,
 #if EXTINCTION_EVAL_MODE == EXTINCTION_EVAL_MODE_PER_PIXEL
         float3 f3ReconstructedPosWS = ProjSpaceXYZToWorldSpace(float3(VSOut.f2NormalizedXY.xy, fCamSpaceZ), g_CameraAttribs.mProj, g_CameraAttribs.mViewProjInv);
         f3Extinction = GetExtinction(g_CameraAttribs.f4Position.xyz, f3ReconstructedPosWS, g_PPAttribs.f4EarthCenter.xyz,
-                                     g_MediaParams.fEarthRadius, g_MediaParams.fAtmTopRadius, g_MediaParams.f4ParticleScaleHeight);
+                                     g_MediaParams.fAtmBottomRadius, g_MediaParams.fAtmTopRadius, g_MediaParams.f4ParticleScaleHeight);
 #endif
         f3BackgroundColor *= f3Extinction;
     }

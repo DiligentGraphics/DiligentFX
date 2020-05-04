@@ -4,9 +4,6 @@ void ComputeUnshadowedInscattering(float2     f2SampleLocation,
                                    float      fCamSpaceZ,
                                    uint       uiNumSteps,
                                    float3     f3EarthCentre,
-                                   float      fEarthRadius,
-                                   float      fAtmTopHeight,
-                                   float4     f4ParticleScaleHeight,
                                    out float3 f3Inscattering,
                                    out float3 f3Extinction)
 {
@@ -20,7 +17,7 @@ void ComputeUnshadowedInscattering(float2     f2SampleLocation,
 
     float4 f4Isecs;
     GetRaySphereIntersection2(f3CameraPos, f3ViewDir, f3EarthCentre, 
-                              float2(fEarthRadius + fAtmTopHeight, fEarthRadius), f4Isecs);
+                              float2(g_MediaParams.fAtmTopRadius, g_MediaParams.fAtmBottomRadius), f4Isecs);
     float2 f2RayAtmTopIsecs = f4Isecs.xy; 
     float2 f2RayEarthIsecs  = f4Isecs.zw;
 
@@ -56,9 +53,10 @@ void ComputeUnshadowedInscattering(float2     f2SampleLocation,
                                     f3RayEnd,
                                     f3ViewDir,
                                     f3EarthCentre,
-                                    fEarthRadius,
-                                    fAtmTopHeight,
-                                    f4ParticleScaleHeight,
+                                    g_MediaParams.fEarthRadius,
+                                    g_MediaParams.fAtmBottomAltitude,
+                                    g_MediaParams.fAtmAltitudeRangeInv,
+                                    g_MediaParams.f4ParticleScaleHeight,
                                     -g_LightAttribs.f4Direction.xyz,
                                     uiNumSteps,
                                     f3Inscattering,
@@ -80,7 +78,7 @@ void ComputeUnshadowedInscattering(float2     f2SampleLocation,
     #define tex3DSctrLUT_sampler g_tex3DSingleSctrLUT_sampler
 #endif
 
-    f3Extinction = GetExtinctionUnverified(f3RayStart, f3RayEnd, f3ViewDir, f3EarthCentre, fEarthRadius, f4ParticleScaleHeight);
+    f3Extinction = GetExtinctionUnverified(f3RayStart, f3RayEnd, f3ViewDir, f3EarthCentre, g_MediaParams.fEarthRadius, g_MediaParams.f4ParticleScaleHeight);
 
     // To avoid artifacts, we must be consistent when performing look-ups into the scattering texture, i.e.
     // we must assure that if the first look-up is above (below) horizon, then the second look-up
@@ -93,7 +91,8 @@ void ComputeUnshadowedInscattering(float2     f2SampleLocation,
             f3EarthCentre,
             g_MediaParams.fEarthRadius,
             -g_LightAttribs.f4Direction.xyz,
-            g_MediaParams.fAtmTopHeight,
+            g_MediaParams.fAtmBottomAltitude,
+            g_MediaParams.fAtmTopAltitude,
             tex3DSctrLUT,
             tex3DSctrLUT_sampler,
             f4UVWQ); 
@@ -106,7 +105,8 @@ void ComputeUnshadowedInscattering(float2     f2SampleLocation,
             f3EarthCentre,
             g_MediaParams.fEarthRadius,
             -g_LightAttribs.f4Direction.xyz,
-            g_MediaParams.fAtmTopHeight,
+            g_MediaParams.fAtmBottomAltitude,
+            g_MediaParams.fAtmTopAltitude,
             tex3DSctrLUT,
             tex3DSctrLUT_sampler,
             f4UVWQ);

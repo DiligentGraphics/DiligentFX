@@ -1,24 +1,26 @@
 
-float2 GetNetParticleDensity(in float fHeightAboveSurface,
-                             in float fCosZenithAngle,
-                             in float fAtmTopHeight)
+// Returns net particle density to the atmosphere top
+//
+//                    | Zenith   .'
+//                    | angle  .'
+//                    |      .'
+//                    |    .'
+//                    |  .'
+//           _ _ _ _ _|.'
+//            A       |
+//  fAltitude |       |
+//           _V_ _ _ _|
+//              .  '  '  '  .
+//           .'               '.
+//          '                   '
+float2 GetNetParticleDensity(in float fAltitude,            // Altitude (height above the sea level) of the starting point
+                             in float fCosZenithAngle,      // Cosine of the zenith angle
+                             in float fAtmBottomAltitude,   // Altitude of the bottom atmosphere boundary
+                             in float fAtmAltitudeRangeInv  // 1 / (fAtmTopAltitude - fAtmBottomAltitude)
+                             )
 {
-    float fRelativeHeightAboveSurface = fHeightAboveSurface / fAtmTopHeight;
-    return g_tex2DOccludedNetDensityToAtmTop.SampleLevel(g_tex2DOccludedNetDensityToAtmTop_sampler, float2(fRelativeHeightAboveSurface, fCosZenithAngle*0.5+0.5), 0);
-}
-
-float2 GetNetParticleDensity(in float3 f3Pos,
-                             in float3 f3EarthCentre,
-                             in float  fEarthRadius,
-							 in float  fAtmTopHeight,
-                             in float3 f3RayDir)
-{
-    float3 f3EarthCentreToPointDir = f3Pos - f3EarthCentre;
-    float fDistToEarthCentre = length(f3EarthCentreToPointDir);
-    f3EarthCentreToPointDir /= fDistToEarthCentre;
-    float fHeightAboveSurface = fDistToEarthCentre - fEarthRadius;
-    float fCosZenithAngle = dot( f3EarthCentreToPointDir, f3RayDir );
-    return GetNetParticleDensity(fHeightAboveSurface, fCosZenithAngle, fAtmTopHeight);
+    float fNormalizedAltitude = (fAltitude - fAtmBottomAltitude) * fAtmAltitudeRangeInv;
+    return g_tex2DOccludedNetDensityToAtmTop.SampleLevel(g_tex2DOccludedNetDensityToAtmTop_sampler, float2(fNormalizedAltitude, fCosZenithAngle*0.5+0.5), 0);
 }
 
 void ApplyPhaseFunctions(inout float3 f3RayleighInscattering,
@@ -39,7 +41,8 @@ void ApplyPhaseFunctions(inout float3 f3RayleighInscattering,
 void GetAtmosphereProperties(in float3  f3Pos,
                              in float3  f3EarthCentre,
                              in float   fEarthRadius,
-                             in float   fAtmTopHeight,
+                             in float   fAtmBottomAltitude,
+                             in float   fAtmAltitudeRangeInv,
 							 in float4  f4ParticleScaleHeight,
                              in float3  f3DirOnLight,
                              out float2 f2ParticleDensity,
@@ -55,7 +58,7 @@ void GetAtmosphereProperties(in float3  f3Pos,
 
     // Get net particle density from the integration point to the top of the atmosphere:
     float fCosSunZenithAngleForCurrPoint = dot( f3EarthCentreToPointDir, f3DirOnLight );
-    f2NetParticleDensityToAtmTop = GetNetParticleDensity(fHeightAboveSurface, fCosSunZenithAngleForCurrPoint, fAtmTopHeight);
+    f2NetParticleDensityToAtmTop = GetNetParticleDensity(fHeightAboveSurface, fCosSunZenithAngleForCurrPoint, fAtmBottomAltitude, fAtmAltitudeRangeInv);
 }
 
 // This function computes differential inscattering for the given particle densities 
@@ -84,7 +87,8 @@ void ComputeInsctrIntegral(in float3    f3RayStart,
                            in float3    f3RayEnd,
                            in float3    f3EarthCentre,
                            in float     fEarthRadius,
-                           in float     fAtmTopHeight,
+                           in float     fAtmBottomAltitude,
+                           in float     fAtmAltitudeRangeInv,
 						   in float4    f4ParticleScaleHeight,
                            in float3    f3DirOnLight,
                            in uint      uiNumSteps,
@@ -99,7 +103,15 @@ void ComputeInsctrIntegral(in float3    f3RayStart,
     // For trapezoidal integration we need to compute some variables for the starting point of the ray
     float2 f2PrevParticleDensity = float2(0.0, 0.0);
     float2 f2NetParticleDensityToAtmTop = float2(0.0, 0.0);
-    GetAtmosphereProperties(f3RayStart, f3EarthCentre, fEarthRadius, fAtmTopHeight, f4ParticleScaleHeight, f3DirOnLight, f2PrevParticleDensity, f2NetParticleDensityToAtmTop);
+    GetAtmosphereProperties(f3RayStart,
+                            f3EarthCentre,
+                            fEarthRadius,
+                            fAtmBottomAltitude,
+                            fAtmAltitudeRangeInv,
+                            f4ParticleScaleHeight,
+                            f3DirOnLight,
+                            f2PrevParticleDensity,
+                            f2NetParticleDensityToAtmTop);
 
     float3 f3PrevDiffRInsctr = float3(0.0, 0.0, 0.0), f3PrevDiffMInsctr = float3(0.0, 0.0, 0.0);
     ComputePointDiffInsctr(f2PrevParticleDensity, f2NetParticleDensityFromCam, f2NetParticleDensityToAtmTop, f3PrevDiffRInsctr, f3PrevDiffMInsctr);
@@ -119,7 +131,15 @@ void ComputeInsctrIntegral(in float3    f3RayStart,
 #endif
         
         float2 f2ParticleDensity, f2NetParticleDensityToAtmTop;
-        GetAtmosphereProperties(f3CurrPos, f3EarthCentre, fEarthRadius, fAtmTopHeight, f4ParticleScaleHeight, f3DirOnLight, f2ParticleDensity, f2NetParticleDensityToAtmTop);
+        GetAtmosphereProperties(f3CurrPos,
+                                f3EarthCentre,
+                                fEarthRadius,
+                                fAtmBottomAltitude,
+                                fAtmAltitudeRangeInv,
+                                f4ParticleScaleHeight,
+                                f3DirOnLight,
+                                f2ParticleDensity,
+                                f2NetParticleDensityToAtmTop);
 
         // Accumulate net particle density from the camera to the integration point:
 #if TRAPEZOIDAL_INTEGRATION
@@ -151,7 +171,8 @@ void IntegrateUnshadowedInscattering(in float3   f3RayStart,
                                      in float3   f3ViewDir,
                                      in float3   f3EarthCentre,
                                      in float    fEarthRadius,
-                                     in float    fAtmTopHeight,
+                                     in float    fAtmBottomAltitude,
+                                     in float    fAtmAltitudeRangeInv,
 							         in float4   f4ParticleScaleHeight,
                                      in float3   f3DirOnLight,
                                      in uint     uiNumSteps,
@@ -165,7 +186,8 @@ void IntegrateUnshadowedInscattering(in float3   f3RayStart,
                            f3RayEnd,
                            f3EarthCentre,
                            fEarthRadius,
-                           fAtmTopHeight,
+                           fAtmBottomAltitude,
+                           fAtmAltitudeRangeInv,
                            f4ParticleScaleHeight,
                            f3DirOnLight,
                            uiNumSteps,

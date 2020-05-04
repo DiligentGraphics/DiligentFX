@@ -37,9 +37,9 @@ float2 IntegrateParticleDensityAlongRay(float3     f3Pos,
 {
     if( bOccludeByEarth )
     {
-        // If the ray intersects the Earth, return huge optical depth
+        // If the ray hits the bottom atmosphere boundary, return huge optical depth
         float2 f2RayEarthIsecs; 
-        GetRaySphereIntersection(f3Pos, f3RayDir, f3EarthCentre, g_MediaParams.fEarthRadius, f2RayEarthIsecs);
+        GetRaySphereIntersection(f3Pos, f3RayDir, f3EarthCentre, g_MediaParams.fAtmBottomRadius, f2RayEarthIsecs);
         if( f2RayEarthIsecs.x > 0.0 )
             return float2(1e+20, 1e+20);
     }
@@ -68,7 +68,7 @@ void PrecomputeNetDensityToAtmTopPS( FullScreenTriangleVSOutput VSOut,
 {
     float2 f2UV = NormalizedDeviceXYToTexUV(VSOut.f2NormalizedXY);
     // Do not allow start point be at the Earth surface and on the top of the atmosphere
-    float fStartHeight = clamp( lerp(0.0, g_MediaParams.fAtmTopHeight, f2UV.x), 10.0, g_MediaParams.fAtmTopHeight-10.0 );
+    float fStartHeight = clamp( lerp(g_MediaParams.fAtmBottomAltitude, g_MediaParams.fAtmTopAltitude, f2UV.x), 10.0, g_MediaParams.fAtmTopAltitude-10.0 );
 
     float fCosTheta = f2UV.y * 2.0 - 1.0;
     float fSinTheta = sqrt( saturate(1.0 - fCosTheta*fCosTheta) );

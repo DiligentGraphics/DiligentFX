@@ -315,6 +315,11 @@ EpipolarLightScattering::EpipolarLightScattering(IRenderDevice*              pDe
     m_MediaParams(ScatteringAttibs),
     m_uiUpToDateResourceFlags(0)
 {
+    VERIFY_EXPR(m_MediaParams.fAtmTopAltitude > m_MediaParams.fAtmBottomAltitude);
+    m_MediaParams.fAtmTopRadius        = m_MediaParams.fEarthRadius + m_MediaParams.fAtmTopAltitude;
+    m_MediaParams.fAtmBottomRadius     = m_MediaParams.fEarthRadius + m_MediaParams.fAtmBottomAltitude;
+    m_MediaParams.fAtmAltitudeRangeInv = 1.f / (m_MediaParams.fAtmTopAltitude - m_MediaParams.fAtmBottomAltitude);
+
     pDevice->CreateResourceMapping(ResourceMappingDesc(), &m_pResMapping);
     const auto& deviceCaps = pDevice->GetDeviceCaps();
     if (deviceCaps.DevType == RENDER_DEVICE_TYPE_GLES || deviceCaps.AdaterType == ADAPTER_TYPE_SOFTWARE)

@@ -6,18 +6,49 @@
 #define SunViewPower 1.5
 
 
-float GetCosHorizonAngle(float fHeight, float EarthRadius)
+// Returns the cosine of the horizon angle for the given altitude
+// (height above the sphere surface) and sphere radius
+//      
+//                    |
+//           _ _ _ _ _| Horizon angle  
+//            A       |'. 
+//  fAltitude |       |  '.
+//           _V_ _ _ _|    '.
+//              .  '  '  '  .'.
+//           .'               '.
+//          '                   '
+float GetCosHorizonAngle(float fAltitude, float fSphereRadius)
 {
-    // Due to numeric precision issues, fHeight might sometimes be slightly negative
-    fHeight = max(fHeight, 0.0);
-    return -sqrt(fHeight * (2.0*EarthRadius + fHeight) ) / (EarthRadius + fHeight);
+    fAltitude = max(fAltitude, 0.0);
+    return -sqrt(fAltitude * (2.0 * fSphereRadius + fAltitude)) / (fSphereRadius + fAltitude);
 }
 
-float ZenithAngle2TexCoord(float fCosZenithAngle, float fHeight, float EarthRadius, float fTexDim, float power, float fPrevTexCoord)
+
+// Returns the lookup table zenith angle coordinate
+//
+//                    | Zenith   .'
+//                    | angle  .'
+//                    |      .'
+//                    |    .'
+//                    |  .'
+//           _ _ _ _ _|.'
+//            A       |
+//  fAltitude |       |
+//           _V_ _ _ _|
+//              .  '  '  '  .
+//           .'               '.
+//          '                   '
+float ZenithAngle2TexCoord(float fCosZenithAngle,       // Cosine of the zenith angle
+                           float fAltitude,             // Altitude (height above the sea level)
+                           float fEarthRadius,          // Earth radius at sea level
+                           float fAtmBottomAltitude,    // Altitude of the bottom atmosphere boundary (wrt sea level)
+                           float fTexDim,               // Look-up texture dimension
+                           float power,                 // Non-linear transform power
+                           float fPrevTexCoord          // Previous look-up texture coordinate
+                          )
 {
-    fCosZenithAngle = fCosZenithAngle;
-    float fTexCoord;
-    float fCosHorzAngle = GetCosHorizonAngle(fHeight, EarthRadius);
+    float fCosHorizonAngle = GetCosHorizonAngle(fAltitude - fAtmBottomAltitude, fEarthRadius + fAtmBottomAltitude);
+
     // When performing look-ups into the scattering texture, it is very important that all the look-ups are consistent
     // wrt to the horizon. This means that if the first look-up is above (below) horizon, then the second look-up
     // should also be above (below) horizon. 
@@ -25,11 +56,13 @@ float ZenithAngle2TexCoord(float fCosZenithAngle, float fHeight, float EarthRadi
     // horizon. If texture coordinate is negative, then this is the first look-up
     bool bIsAboveHorizon = fPrevTexCoord >= 0.5;
     bool bIsBelowHorizon = 0.0 <= fPrevTexCoord && fPrevTexCoord < 0.5;
-    if(  bIsAboveHorizon || 
-        !bIsBelowHorizon && (fCosZenithAngle > fCosHorzAngle) )
+
+    float fTexCoord;
+    if ( bIsAboveHorizon || 
+        !bIsBelowHorizon && (fCosZenithAngle > fCosHorizonAngle))
     {
         // Scale to [0,1]
-        fTexCoord = saturate( (fCosZenithAngle - fCosHorzAngle) / (1.0 - fCosHorzAngle) );
+        fTexCoord = saturate( (fCosZenithAngle - fCosHorizonAngle) / (1.0 - fCosHorizonAngle) );
         fTexCoord = pow(fTexCoord, power);
         // Now remap texture coordinate to the upper half of the texture.
         // To avoid filtering across discontinuity at 0.5, we must map
@@ -44,11 +77,11 @@ float ZenithAngle2TexCoord(float fCosZenithAngle, float fHeight, float EarthRadi
     }
     else
     {
-        fTexCoord = saturate( (fCosHorzAngle - fCosZenithAngle) / (fCosHorzAngle - (-1.0)) );
+        fTexCoord = saturate( (fCosHorizonAngle - fCosZenithAngle) / (fCosHorizonAngle - (-1.0)) );
         fTexCoord = pow(fTexCoord, power);
         // Now remap texture coordinate to the lower half of the texture.
         // To avoid filtering across discontinuity at 0.5, we must map
-        // the texture coordinate to [0.5, 0.5 - 0.5/fTexDim]
+        // the texture coordinate to [0.5/fTexDim, 0.5 - 0.5/fTexDim]
         //
         //      0.5   1.5        D/2-0.5             texture coordinate x dimension
         //       |     |            |       
@@ -61,11 +94,19 @@ float ZenithAngle2TexCoord(float fCosZenithAngle, float fHeight, float EarthRadi
     return fTexCoord;
 }
 
-float TexCoord2ZenithAngle(float fTexCoord, float fHeight, float EarthRadius, float fTexDim, float power)
+
+// Transforms zenith angle look-up coordinate into the cosine of the zenith angle
+float TexCoord2ZenithAngle(float fTexCoord,             // Texture coordinate
+                           float fAltitde,              // Altitude (height above the sea level)
+                           float fEarthRadius,          // Earth radius at sea level
+                           float fAtmBottomAltitude,    // Altitude of the bottom atmosphere boundary (wrt sea level)
+                           float fTexDim,               // Look-up texture dimension
+                           float power                  // Non-linear transform power
+                          )
 {
     float fCosZenithAngle;
 
-    float fCosHorzAngle = GetCosHorizonAngle(fHeight, EarthRadius);
+    float fCosHorzAngle = GetCosHorizonAngle(fAltitde - fAtmBottomAltitude, fEarthRadius + fAtmBottomAltitude);
     if( fTexCoord > 0.5 )
     {
         // Remap to [0,1] from the upper half of the texture [0.5 + 0.5/fTexDim, 1 - 0.5/fTexDim]
@@ -76,7 +117,7 @@ float TexCoord2ZenithAngle(float fTexCoord, float fHeight, float EarthRadius, fl
     }
     else
     {
-        // Remap to [0,1] from the lower half of the texture [0.5, 0.5 - 0.5/fTexDim]
+        // Remap to [0,1] from the lower half of the texture [0.5/fTexDim, 0.5 - 0.5/fTexDim]
         fTexCoord = saturate((fTexCoord - 0.5 / fTexDim) * fTexDim / (fTexDim/2.0 - 1.0));
         fTexCoord = pow(fTexCoord, 1.0/power);
         // Assure that the ray DOES hit Earth
@@ -85,11 +126,12 @@ float TexCoord2ZenithAngle(float fTexCoord, float fHeight, float EarthRadius, fl
     return fCosZenithAngle;
 }
 
-
+// Transforms inscattering look-up table coordinates into world parameters
 void InsctrLUTCoords2WorldParams(in  float4 f4UVWQ,
                                  in  float  fEarthRadius,
-                                 in  float  fAtmTopHeight,
-                                 out float  fHeight,
+                                 in  float  fAtmBottomAltitude,
+                                 in  float  fAtmTopAltitude,
+                                 out float  fAltitude,
                                  out float  fCosViewZenithAngle,
                                  out float  fCosSunZenithAngle,
                                  out float  fCosSunViewAngle)
@@ -99,11 +141,11 @@ void InsctrLUTCoords2WorldParams(in  float4 f4UVWQ,
     f4UVWQ.xzw = saturate(( f4UVWQ * PRECOMPUTED_SCTR_LUT_DIM - float4(0.5,0.5,0.5,0.5) ) / ( PRECOMPUTED_SCTR_LUT_DIM - float4(1.0,1.0,1.0,1.0) )).xzw;
 
     f4UVWQ.x = pow( f4UVWQ.x, 1.0/HeightPower );
-    // Allowable height range is limited to [SafetyHeightMargin, AtmTopHeight - SafetyHeightMargin] to
-    // avoid numeric issues at the Earth surface and the top of the atmosphere
-    fHeight = f4UVWQ.x * (fAtmTopHeight - 2.0*SafetyHeightMargin) + SafetyHeightMargin;
+    // Allowable altitude range is limited to [fAtmBottomAltitude + SafetyHeightMargin, fAtmTopAltitude - SafetyHeightMargin] to
+    // avoid numeric issues at the atmosphere boundaries
+    fAltitude = f4UVWQ.x * ((fAtmTopAltitude - fAtmBottomAltitude) - 2.0 * SafetyHeightMargin) + (fAtmBottomAltitude + SafetyHeightMargin);
 
-    fCosViewZenithAngle = TexCoord2ZenithAngle(f4UVWQ.y, fHeight, fEarthRadius, PRECOMPUTED_SCTR_LUT_DIM.y, ViewZenithPower);
+    fCosViewZenithAngle = TexCoord2ZenithAngle(f4UVWQ.y, fAltitude, fEarthRadius, fAtmBottomAltitude, PRECOMPUTED_SCTR_LUT_DIM.y, ViewZenithPower);
     
     // Use Eric Bruneton's formula for cosine of the sun-zenith angle
     fCosSunZenithAngle = tan((2.0 * f4UVWQ.z - 1.0 + 0.26) * 1.1) / tan(1.26 * 1.1);
@@ -114,9 +156,9 @@ void InsctrLUTCoords2WorldParams(in  float4 f4UVWQ,
     // Rescale to exactly 0,1 range
     f4UVWQ = (f4UVWQ * PRECOMPUTED_SCTR_LUT_DIM - float4(0.5,0.5,0.5,0.5)) / (PRECOMPUTED_SCTR_LUT_DIM-float4(1.0,1.0,1.0,1.0));
 
-    // Allowable height range is limited to [SafetyHeightMargin, AtmTopHeight - SafetyHeightMargin] to
-    // avoid numeric issues at the Earth surface and the top of the atmosphere
-    fHeight = f4UVWQ.x * (fAtmTopHeight - 2*SafetyHeightMargin) + SafetyHeightMargin;
+    // Allowable altitude range is limited to [fAtmBottomAltitude + SafetyHeightMargin, fAtmTopAltitude - SafetyHeightMargin] to
+    // avoid numeric issues at the atmosphere boundaries
+    fAltitude = f4UVWQ.x * ((fAtmTopAltitude - fAtmBottomAltitude) - 2.0 * SafetyHeightMargin) + (fAtmBottomAltitude + SafetyHeightMargin);
 
     fCosViewZenithAngle = f4UVWQ.y * 2.0 - 1.0;
     fCosSunZenithAngle  = f4UVWQ.z * 2.0 - 1.0;
@@ -147,27 +189,27 @@ void InsctrLUTCoords2WorldParams(in  float4 f4UVWQ,
     fCosSunViewAngle    = clamp(fCosSunViewAngle, f2MinMaxCosSunViewAngle.x, f2MinMaxCosSunViewAngle.y);
 }
 
-float4 WorldParams2InsctrLUTCoords(float  fHeight,
+float4 WorldParams2InsctrLUTCoords(float  fAltitude,
                                    float  fCosViewZenithAngle,
                                    float  fCosSunZenithAngle,
                                    float  fCosSunViewAngle,
                                    float  fEarthRadius,
-                                   float  fAtmTopHeight,
+                                   float  fAtmBottomAltitude,
+                                   float  fAtmTopAltitude,
                                    float4 f4RefUVWQ)
 {
     float4 f4UVWQ;
 
-    // Limit allowable height range to [SafetyHeightMargin, AtmTopHeight - SafetyHeightMargin] to
-    // avoid numeric issues at the Earth surface and the top of the atmosphere
-    // (ray/Earth and ray/top of the atmosphere intersection tests are unstable when fHeight == 0 and
-    // fHeight == AtmTopHeight respectively)
-    fHeight = clamp(fHeight, SafetyHeightMargin, fAtmTopHeight - SafetyHeightMargin);
-    f4UVWQ.x = saturate( (fHeight - SafetyHeightMargin) / (fAtmTopHeight - 2.0*SafetyHeightMargin) );
+    // Limit allowable altitude range to [fAtmBottomAltitude + SafetyHeightMargin, AtmTopAltitude - SafetyHeightMargin] to
+    // avoid numeric issues at the atmosphere boundaries.
+    // (ray/sphere intersection tests are unstable when fAltitude == fAtmBottomAltitude and fAltitude == AtmTopAltitude)
+    fAltitude = clamp(fAltitude, fAtmBottomAltitude + SafetyHeightMargin, fAtmTopAltitude - SafetyHeightMargin);
+    f4UVWQ.x = saturate( (fAltitude - (fAtmBottomAltitude + SafetyHeightMargin)) / ((fAtmTopAltitude - fAtmBottomAltitude) - 2.0*SafetyHeightMargin) );
 
 #if NON_LINEAR_PARAMETERIZATION
     f4UVWQ.x = pow(f4UVWQ.x, HeightPower);
 
-    f4UVWQ.y = ZenithAngle2TexCoord(fCosViewZenithAngle, fHeight, fEarthRadius, PRECOMPUTED_SCTR_LUT_DIM.y, ViewZenithPower, f4RefUVWQ.y);
+    f4UVWQ.y = ZenithAngle2TexCoord(fCosViewZenithAngle, fAltitude, fEarthRadius, fAtmBottomAltitude, PRECOMPUTED_SCTR_LUT_DIM.y, ViewZenithPower, f4RefUVWQ.y);
     
     // Use Eric Bruneton's formula for cosine of the sun-zenith angle
     f4UVWQ.z = (atan(max(fCosSunZenithAngle, -0.1975) * tan(1.26 * 1.1)) / 1.1 + (1.0 - 0.26)) * 0.5;
@@ -187,18 +229,6 @@ float4 WorldParams2InsctrLUTCoords(float  fHeight,
 
     return f4UVWQ;
 }
-
-float4 WorldParams2InsctrLUTCoords(float fHeight,
-                                   float fCosViewZenithAngle,
-                                   float fCosSunZenithAngle,
-                                   float fCosSunViewAngle,
-                                   float fEarthRadius,
-                                   float fAtmTopHeight) 
-{
-    return WorldParams2InsctrLUTCoords( fHeight, fCosViewZenithAngle, fCosSunZenithAngle, fCosSunViewAngle, fEarthRadius, fAtmTopHeight,
-                                        float4(-1.0, -1.0, -1.0, -1.0) );
-}
-
 
 float3 ComputeViewDir(in float fCosViewZenithAngle)
 {
@@ -228,7 +258,8 @@ float3 LookUpPrecomputedScattering(in float3 f3StartPoint,
                                    in float3 f3EarthCentre,
                                    in float  fEarthRadius,
                                    in float3 f3DirOnLight,
-                                   in float  fAtmTopHeight,
+                                   in float  fAtmBottomAltitude,
+                                   in float  fAtmTopAltitude,
                                    in Texture3D<float3> tex3DScatteringLUT,
                                    in SamplerState      tex3DScatteringLUT_sampler,
                                    inout float4 f4UVWQ)
@@ -236,15 +267,20 @@ float3 LookUpPrecomputedScattering(in float3 f3StartPoint,
     float3 f3EarthCentreToPointDir = f3StartPoint - f3EarthCentre;
     float fDistToEarthCentre = length(f3EarthCentreToPointDir);
     f3EarthCentreToPointDir /= fDistToEarthCentre;
-    float fHeightAboveSurface = fDistToEarthCentre - fEarthRadius;
+    float fAltitude          = fDistToEarthCentre - fEarthRadius; // Height above sea level
     float fCosViewZenithAngle = dot( f3EarthCentreToPointDir, f3ViewDir    );
     float fCosSunZenithAngle  = dot( f3EarthCentreToPointDir, f3DirOnLight );
     float fCosSunViewAngle    = dot( f3ViewDir,               f3DirOnLight );
 
     // Provide previous look-up coordinates
-    f4UVWQ = WorldParams2InsctrLUTCoords(fHeightAboveSurface, fCosViewZenithAngle,
-                                         fCosSunZenithAngle, fCosSunViewAngle, fEarthRadius,
-                                         fAtmTopHeight, f4UVWQ);
+    f4UVWQ = WorldParams2InsctrLUTCoords(fAltitude,
+                                         fCosViewZenithAngle,
+                                         fCosSunZenithAngle, 
+                                         fCosSunViewAngle, 
+                                         fEarthRadius,
+                                         fAtmBottomAltitude,
+                                         fAtmTopAltitude,
+                                         f4UVWQ);
 
     float3 f3UVW0; 
     f3UVW0.xy = f4UVWQ.xy;
