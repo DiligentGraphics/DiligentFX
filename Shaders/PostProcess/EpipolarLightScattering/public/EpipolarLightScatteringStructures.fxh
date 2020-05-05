@@ -90,7 +90,8 @@
 #define MULTIPLE_SCTR_MODE_OCCLUDED   2
 
 #ifndef EARTH_RADIUS
-#   define EARTH_RADIUS 6360000.0
+    // Average Earth radius at sea level
+#   define EARTH_RADIUS 6371000.0
 #endif
 
 struct EpipolarLightScatteringAttribs
