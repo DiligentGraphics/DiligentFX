@@ -62,7 +62,6 @@ void ComputeScatteringOrderCS(uint3 ThreadId  : SV_DispatchThreadID)
     float3 f3RayEnd = f3RayStart + f3ViewDir * fRayLength;
 
     const int iNumSamples = 64;
-    float fStepLen = fRayLength / float(iNumSamples);
 
     float4 f4UVWQ = float4(-1.0, -1.0, -1.0, -1.0);
     float3 f3PrevSctrRadiance = LookUpPrecomputedScattering(
@@ -81,10 +80,22 @@ void ComputeScatteringOrderCS(uint3 ThreadId  : SV_DispatchThreadID)
     float2 f2NetParticleDensityFromCam = float2(0.0, 0.0);
     float3 f3Inscattering = float3(0.0, 0.0, 0.0);
 
-    for (int iSample=1; iSample <= iNumSamples; ++iSample)
-    {
-        float3 f3Pos = lerp(f3RayStart, f3RayEnd, float(iSample)/float(iNumSamples));
+    // We want to place more samples when the starting point is close to the surface,
+    // but for high altitudes linear distribution works better.
+    float fStartAltitude = length(f3RayStart - f3EarthCentre) - g_MediaParams.fEarthRadius;
+    float pwr = lerp(2.0, 1.0, saturate((fStartAltitude - g_MediaParams.fAtmBottomAltitude) * g_MediaParams.fAtmAltitudeRangeInv));
 
+    float fPrevSampleDist = 0.0;
+    for (int iSample = 1; iSample <= iNumSamples; ++iSample)
+    {
+        // We need to place more samples closer to the start point and fewer samples farther away.
+        // The ad-hoc power function does the job well.
+        float r = pow(float(iSample) / float(iNumSamples), pwr);
+        float3 f3Pos = lerp(f3RayStart, f3RayEnd, r);
+        float fCurrSampleDist = fRayLength * r;
+        float fStepLen = fCurrSampleDist - fPrevSampleDist;
+        fPrevSampleDist = fCurrSampleDist;
+        
         float fCurrHeight = length(f3Pos - f3EarthCentre) - g_MediaParams.fEarthRadius;
         float2 f2ParticleDensity = exp( -float2(fCurrHeight, fCurrHeight) * g_MediaParams.f4ParticleScaleHeight.zw );
 

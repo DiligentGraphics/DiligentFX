@@ -96,13 +96,9 @@ void ComputeInsctrIntegral(in float3    f3RayStart,
                            inout float3 f3RayleighInscattering,
                            inout float3 f3MieInscattering)
 {
-    float3 f3Step = (f3RayEnd - f3RayStart) / float(uiNumSteps);
-    float fStepLen = length(f3Step);
-
-#if TRAPEZOIDAL_INTEGRATION
-    // For trapezoidal integration we need to compute some variables for the starting point of the ray
+    // Evaluate the integrand at the starting point
     float2 f2PrevParticleDensity = float2(0.0, 0.0);
-    float2 f2NetParticleDensityToAtmTop = float2(0.0, 0.0);
+    float2 f2NetParticleDensityToAtmTop;
     GetAtmosphereProperties(f3RayStart,
                             f3EarthCentre,
                             fEarthRadius,
@@ -113,24 +109,33 @@ void ComputeInsctrIntegral(in float3    f3RayStart,
                             f2PrevParticleDensity,
                             f2NetParticleDensityToAtmTop);
 
-    float3 f3PrevDiffRInsctr = float3(0.0, 0.0, 0.0), f3PrevDiffMInsctr = float3(0.0, 0.0, 0.0);
+    float3 f3PrevDiffRInsctr = float3(0.0, 0.0, 0.0);
+    float3 f3PrevDiffMInsctr = float3(0.0, 0.0, 0.0);
     ComputePointDiffInsctr(f2PrevParticleDensity, f2NetParticleDensityFromCam, f2NetParticleDensityToAtmTop, f3PrevDiffRInsctr, f3PrevDiffMInsctr);
-#endif
 
+    float fRayLen = length(f3RayEnd - f3RayStart);
 
-    for (uint uiStepNum = 0u; uiStepNum < uiNumSteps; ++uiStepNum)
+    // We want to place more samples when the starting point is close to the surface,
+    // but for high altitudes linear distribution works better.
+    float fStartAltitude = length(f3RayStart - f3EarthCentre) - fEarthRadius;
+    float pwr = lerp(2.0, 1.0, saturate((fStartAltitude - fAtmBottomAltitude) * fAtmAltitudeRangeInv));
+
+    float fPrevSampleDist = 0.0;
+    for (uint uiSampleNum = 1u; uiSampleNum <= uiNumSteps; ++uiSampleNum)
     {
-#if TRAPEZOIDAL_INTEGRATION
-        // With trapezoidal integration, we will evaluate the function at the end of each section and 
-        // compute area of a trapezoid
-        float3 f3CurrPos = f3RayStart + f3Step * (float(uiStepNum) + 1.0);
-#else
-        // With stair-step integration, we will evaluate the function at the middle of each section and 
-        // compute area of a rectangle
-        float3 f3CurrPos = f3RayStart + f3Step * (float(uiStepNum) + 0.5);
-#endif
+        // Evaluate the function at the end of each section and compute the area of a trapezoid
         
-        float2 f2ParticleDensity, f2NetParticleDensityToAtmTop;
+        // We need to place more samples closer to the start point and fewer samples farther away.
+        // I tried to use more scientific approach (see the bottom of the file), however
+        // it did not work out because uniform media assumption is inapplicable.
+        // So instead we will use ad-hoc approach (power function) that works quite well.
+        float r = pow(float(uiSampleNum) / float(uiNumSteps), pwr);
+        float3 f3CurrPos = lerp(f3RayStart, f3RayEnd, r);
+        float fCurrSampleDist = fRayLen * r;
+        float fStepLen = fCurrSampleDist - fPrevSampleDist;
+        fPrevSampleDist = fCurrSampleDist;
+
+        float2 f2ParticleDensity;
         GetAtmosphereProperties(f3CurrPos,
                                 f3EarthCentre,
                                 fEarthRadius,
@@ -142,26 +147,17 @@ void ComputeInsctrIntegral(in float3    f3RayStart,
                                 f2NetParticleDensityToAtmTop);
 
         // Accumulate net particle density from the camera to the integration point:
-#if TRAPEZOIDAL_INTEGRATION
         f2NetParticleDensityFromCam += (f2PrevParticleDensity + f2ParticleDensity) * (fStepLen / 2.0);
         f2PrevParticleDensity = f2ParticleDensity;
-#else
-        f2NetParticleDensityFromCam += f2ParticleDensity * fStepLen;
-#endif
 
         float3 f3DRlghInsctr, f3DMieInsctr;
         ComputePointDiffInsctr(f2ParticleDensity, f2NetParticleDensityFromCam, f2NetParticleDensityToAtmTop, f3DRlghInsctr, f3DMieInsctr);
 
-#if TRAPEZOIDAL_INTEGRATION
         f3RayleighInscattering += (f3DRlghInsctr + f3PrevDiffRInsctr) * (fStepLen / 2.0);
         f3MieInscattering      += (f3DMieInsctr  + f3PrevDiffMInsctr) * (fStepLen / 2.0);
 
         f3PrevDiffRInsctr = f3DRlghInsctr;
         f3PrevDiffMInsctr = f3DMieInsctr;
-#else
-        f3RayleighInscattering += f3DRlghInsctr * fStepLen;
-        f3MieInscattering      += f3DMieInsctr * fStepLen;
-#endif
     }
 }
 
@@ -207,3 +203,28 @@ void IntegrateUnshadowedInscattering(in float3   f3RayStart,
 
     f3Inscattering = f3RayleighInscattering + f3MieInscattering;
 }
+
+
+// BACKUP
+//
+// To better distribute samples for numerical integration I tried used the following simplifying assumptions:
+// - Uniform media density
+// - No light extinction
+// Under these assumptions the total amount of light inscattered from 0 to distance t will be computed by
+//
+//      I(t) = Integral(exp(-a*x), 0 -> t) = 1/a * (1 - exp(-a*t))
+//
+// We want to find sampling that produces even distribution for function I(t):
+//
+//      I(tn) = I(D) * n / N, where D is the total distance and N is the total sample count.
+//
+// From here:
+//
+//      1/a * (1 - exp(-a*tn)) = I(D) * n / N
+//      1 - exp(-a*tn) = a * I(D) * n / N
+//      exp(-a*tn) = 1 - a * I(D) * n / N
+//      tn = -1/a * log(1 - a * I(D) * n / N) = -1/a * log(1 - n/N * (1 - exp(-a*D)))
+//
+// This unfortunately did not work because homogeneous media assumption is inappropriate:
+// -  when a = 1e-5, the distribution is basically linear
+// -  when a = 1e-4, the first N-1 samples cover first 50% distance, while the last one covers the remaining 50% distance
