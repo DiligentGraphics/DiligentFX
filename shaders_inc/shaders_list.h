@@ -187,6 +187,10 @@ static const ShaderIncInfo g_Shaders[] =
         #include "UpdateHighOrderScattering.fx.h"
     },
     {
+        "EpipolarLightScatteringFunctions.fxh",
+        #include "EpipolarLightScatteringFunctions.fxh.h"
+    },
+    {
         "EpipolarLightScatteringStructures.fxh",
         #include "EpipolarLightScatteringStructures.fxh.h"
     },
