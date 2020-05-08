@@ -391,21 +391,29 @@ IShaderResourceBinding* GLTF_PBR_Renderer::CreateMaterialSRB(GLTF::Material& Mat
     RefCntAutoPtr<IShaderResourceBinding> pSRB;
     pPSO->CreateShaderResourceBinding(&pSRB, true);
 
-    // clang-format off
-    pSRB->GetVariableByName(SHADER_TYPE_VERTEX, "cbCameraAttribs")->Set(pCameraAttribs);
-    pSRB->GetVariableByName(SHADER_TYPE_PIXEL,  "cbCameraAttribs")->Set(pCameraAttribs);
-    pSRB->GetVariableByName(SHADER_TYPE_PIXEL,  "cbLightAttribs") ->Set(pLightAttribs);
+    if (auto* pCameraAttribsVSVar = pSRB->GetVariableByName(SHADER_TYPE_VERTEX, "cbCameraAttribs"))
+        pCameraAttribsVSVar->Set(pCameraAttribs);
+
+    if (auto* pCameraAttribsPSVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbCameraAttribs"))
+        pCameraAttribsPSVar->Set(pCameraAttribs);
+
+    if (auto* pLightAttribsPSVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbLightAttribs"))
+        pLightAttribsPSVar->Set(pLightAttribs);
+
     if (m_Settings.UseIBL)
     {
-        pSRB->GetVariableByName(SHADER_TYPE_PIXEL,  "g_IrradianceMap")->Set(m_pIrradianceCubeSRV);
-        pSRB->GetVariableByName(SHADER_TYPE_PIXEL,  "g_PrefilteredEnvMap") ->Set(m_pPrefilteredEnvMapSRV);
+        if (auto* pIrradianceMapPSVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_IrradianceMap"))
+            pIrradianceMapPSVar->Set(m_pIrradianceCubeSRV);
+
+        if (auto* pPrefilteredEnvMap = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_PrefilteredEnvMap"))
+            pPrefilteredEnvMap->Set(m_pPrefilteredEnvMapSRV);
     }
-    // clang-format on
 
     auto SetTexture = [&](ITexture* pTexture, ITextureView* pDefaultTexSRV, const char* VarName) //
     {
         ITextureView* pTexSRV = pTexture != nullptr ? pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE) : pDefaultTexSRV;
-        pSRB->GetVariableByName(SHADER_TYPE_PIXEL, VarName)->Set(pTexSRV);
+        if (auto* pVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, VarName))
+            pVar->Set(pTexSRV);
     };
 
     ITexture* pBaseColorTex = nullptr;
