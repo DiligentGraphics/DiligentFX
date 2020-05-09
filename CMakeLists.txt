@@ -17,8 +17,9 @@ else()
 endif()
 
 target_link_libraries(DiligentFX 
-PUBLIC
+PRIVATE
     Diligent-BuildSettings
+PUBLIC
     Diligent-GraphicsEngine
     Diligent-GraphicsTools
     Diligent-AssetLoader
