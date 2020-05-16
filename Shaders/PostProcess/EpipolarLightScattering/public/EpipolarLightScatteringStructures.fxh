@@ -139,11 +139,15 @@ struct EpipolarLightScatteringAttribs
     // Maximum number of ray marching samples on a single ray. Typically this value should match the maximum 
     // shadow map cascade resolution. Using lower value will improve performance but may result
     // in moire patterns. Note that in most cases singificantly less samples are actually taken.
-    uint uiMaxSamplesOnTheRay               DEFAULT_VALUE(0);
+    uint uiMaxSamplesOnTheRay               DEFAULT_VALUE(512);
+    // Maximum number of ray marching samples on a single ray when running scattering correction pass.
+    // This value should typically be much lower than the maximum number of samples on a single ray.
+    // Note that 1D min-max optimization is not available when correcting scattering at depth breaks.
+    uint uiMaxSamplesOnTheRayAtDepthBreak   DEFAULT_VALUE(32);
+
     // This defines the number of samples at the lowest level of min-max binary tree
     // and should match the maximum cascade shadow map resolution
     uint uiMinMaxShadowMapResolution        DEFAULT_VALUE(0);
-
     // Number of shadow map cascades
     int iNumCascades                        DEFAULT_VALUE(0);
     // First cascade to use for ray marching. Usually first few cascades are small, and ray
@@ -152,34 +156,33 @@ struct EpipolarLightScatteringAttribs
     // Cap on the maximum shadow map step in texels. Can be increased for higher shadow map
     // resolutions.
     float fMaxShadowMapStep                 DEFAULT_VALUE(16.f);
+
     // Whether to use 1D min/max binary tree optimization. This improves
     // performance for higher shadow map resolution. Test it.
     BOOL bUse1DMinMaxTree                   DEFAULT_VALUE(TRUE);
-
     // Whether to use 32-bit float or 16-bit UNORM min-max binary tree.
     BOOL bIs32BitMinMaxMipMap               DEFAULT_VALUE(FALSE);
     // Technique used to evaluate light scattering.
     int  iLightSctrTechnique                DEFAULT_VALUE(LIGHT_SCTR_TECHNIQUE_EPIPOLAR_SAMPLING);
     // Shadow map cascades processing mode.
     int  iCascadeProcessingMode             DEFAULT_VALUE(CASCADE_PROCESSING_MODE_SINGLE_PASS);
+
     // Epipolar sampling refinement criterion.
     int  iRefinementCriterion               DEFAULT_VALUE(REFINEMENT_CRITERION_INSCTR_DIFF);
-
     // Single scattering evaluation mode.
     int  iSingleScatteringMode              DEFAULT_VALUE(SINGLE_SCTR_MODE_INTEGRATION);
     // Higher-order scattering evaluation mode.
     int  iMultipleScatteringMode            DEFAULT_VALUE(MULTIPLE_SCTR_MODE_UNOCCLUDED);
     // Atmospheric extinction evaluation mode.
     int  iExtinctionEvalMode                DEFAULT_VALUE(EXTINCTION_EVAL_MODE_EPIPOLAR);
+
     // Whether to use custom scattering coefficients.
     BOOL bUseCustomSctrCoeffs               DEFAULT_VALUE(FALSE);
-
     // Aerosol density scale to use for scattering coefficient computation.
     float fAerosolDensityScale              DEFAULT_VALUE(1.f);
     // Aerosol absorbtion scale to use for scattering coefficient computation.
     float fAerosolAbsorbtionScale           DEFAULT_VALUE(0.1f);
     uint PaddingA0;
-    uint PaddingA1;
 
     // Custom Rayleigh coefficients.
     float4 f4CustomRlghBeta                 DEFAULT_VALUE(float4(5.8e-6f, 13.5e-6f, 33.1e-6f, 0.f));
