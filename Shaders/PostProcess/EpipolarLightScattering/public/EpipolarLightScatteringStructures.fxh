@@ -140,10 +140,10 @@ struct EpipolarLightScatteringAttribs
     // shadow map cascade resolution. Using lower value will improve performance but may result
     // in moire patterns. Note that in most cases singificantly less samples are actually taken.
     uint uiMaxSamplesOnTheRay               DEFAULT_VALUE(512);
-    // Maximum number of ray marching samples on a single ray when running scattering correction pass.
-    // This value should typically be much lower than the maximum number of samples on a single ray.
-    // Note that 1D min-max optimization is not available when correcting scattering at depth breaks.
-    uint uiMaxSamplesOnTheRayAtDepthBreak   DEFAULT_VALUE(32);
+    // The number of ray marching samples on a ray when running scattering correction pass.
+    // This value should typically be much lower than the maximum number of samples on a single ray
+    // because 1D min-max optimization is not available during the correction pass.
+    uint uiNumSamplesOnTheRayAtDepthBreak   DEFAULT_VALUE(32);
 
     // This defines the number of samples at the lowest level of min-max binary tree
     // and should match the maximum cascade shadow map resolution

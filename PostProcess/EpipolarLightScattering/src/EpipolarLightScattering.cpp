@@ -2083,7 +2083,7 @@ void EpipolarLightScattering::PrepareForNewFrame(FrameAttribs&                  
     DEV_CHECK_ERR(PPAttribs.uiInstrIntegralSteps > 0, "Inscattering integral steps must not be 0");
     DEV_CHECK_ERR(PPAttribs.f2ShadowMapTexelSize.x != 0 && PPAttribs.f2ShadowMapTexelSize.y != 0, "Shadow map texel size must not be 0");
     DEV_CHECK_ERR(PPAttribs.uiMaxSamplesOnTheRay != 0, "Max samples on the ray must not be 0");
-    DEV_CHECK_ERR(!PPAttribs.bCorrectScatteringAtDepthBreaks || PPAttribs.uiMaxSamplesOnTheRayAtDepthBreak != 0, "Max samples on the ray at depth correction pass must not be 0");
+    DEV_CHECK_ERR(!PPAttribs.bCorrectScatteringAtDepthBreaks || PPAttribs.uiNumSamplesOnTheRayAtDepthBreak != 0, "Num samples on the ray at depth correction pass must not be 0");
     DEV_CHECK_ERR(PPAttribs.uiMinMaxShadowMapResolution != 0, "Minmax shadow map resolution must not be 0");
     DEV_CHECK_ERR(PPAttribs.iNumCascades != 0, "Num cascades must not be 0");
     DEV_CHECK_ERR(PPAttribs.iFirstCascadeToRayMarch < PPAttribs.iNumCascades, "First cascade to ray march (", PPAttribs.fFirstCascadeToRayMarch, ") is invalid");
@@ -2436,7 +2436,7 @@ void EpipolarLightScattering::PerformPostProcessing()
         // Correct inscattering for pixels, for which no suitable interpolation sources were found
         if (m_PostProcessingAttribs.bCorrectScatteringAtDepthBreaks)
         {
-            FixInscatteringAtDepthBreaks(m_PostProcessingAttribs.uiMaxSamplesOnTheRayAtDepthBreak, EFixInscatteringMode::FixInscattering);
+            FixInscatteringAtDepthBreaks(m_PostProcessingAttribs.uiNumSamplesOnTheRayAtDepthBreak, EFixInscatteringMode::FixInscattering);
         }
 
         if (m_PostProcessingAttribs.bShowSampling)
