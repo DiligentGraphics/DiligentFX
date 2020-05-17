@@ -70,12 +70,19 @@ void main(in  float4 ClipPos     : SV_Position,
     BaseColor = SRGBtoLINEAR(BaseColor) * g_MaterialInfo.BaseColorFactor;
     //BaseColor *= getVertexColor();
 
+    float2 NormalMapUV  = lerp(UV0, UV1, g_MaterialInfo.NormalTextureUVSelector);
+
+    // We have to compute gradients in uniform flow control to avoid issues with perturbed normal
+    float3 dWorldPos_dx = ddx(WorldPos);
+    float3 dWorldPos_dy = ddy(WorldPos);
+    float2 dNormalMapUV_dx = ddx(NormalMapUV);
+    float2 dNormalMapUV_dy = ddy(NormalMapUV);
+
 	if (g_MaterialInfo.UseAlphaMask != 0 && BaseColor.a < g_MaterialInfo.AlphaMaskCutoff)
     {
 		discard;
 	}
     
-    float2 NormalMapUV  = lerp(UV0, UV1, g_MaterialInfo.NormalTextureUVSelector);
     float3 TSNormal     = g_NormalMap            .Sample(g_NormalMap_sampler,             NormalMapUV).rgb * float3(2.0, 2.0, 2.0) - float3(1.0, 1.0, 1.0);
     float  Occlusion    = g_AOMap                .Sample(g_AOMap_sampler,                 lerp(UV0, UV1, g_MaterialInfo.OcclusionTextureUVSelector)).r;
     float3 Emissive     = g_EmissiveMap          .Sample(g_EmissiveMap_sampler,           lerp(UV0, UV1, g_MaterialInfo.EmissiveTextureUVSelector)).rgb;
@@ -85,8 +92,9 @@ void main(in  float4 ClipPos     : SV_Position,
     SurfaceReflectanceInfo SrfInfo = GLTF_PBR_GetSurfaceReflectance(g_MaterialInfo, BaseColor, PhysicalDesc, metallic);
 
     // LIGHTING
-    float3 perturbedNormal = GLTF_PBR_PerturbNormal(WorldPos, Normal, TSNormal, NormalMapUV, g_MaterialInfo.NormalTextureUVSelector >= 0.0, IsFrontFace);
-    float3 view            = normalize(g_CameraAttribs.f4Position.xyz - WorldPos.xyz); // Direction from surface point to camera
+    float3 perturbedNormal = GLTF_PBR_PerturbNormal(dWorldPos_dx, dWorldPos_dy, dNormalMapUV_dx, dNormalMapUV_dy, 
+                                                    Normal, TSNormal, g_MaterialInfo.NormalTextureUVSelector >= 0.0, IsFrontFace);
+    float3 view = normalize(g_CameraAttribs.f4Position.xyz - WorldPos.xyz); // Direction from surface point to camera
 
     float3 color = float3(0.0, 0.0, 0.0);
     color += GLTF_PBR_ApplyDirectionalLight(g_LightAttribs.f4Direction.xyz, g_LightAttribs.f4Intensity.rgb, SrfInfo, perturbedNormal, view);

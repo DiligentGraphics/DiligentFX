@@ -79,12 +79,16 @@ float3 GLTF_PBR_ApplyDirectionalLight(float3 lightDir, float3 lightColor, Surfac
 
 // Find the normal for this fragment, pulling either from a predefined normal map
 // or from the interpolated mesh normal and tangent attributes.
-float3 GLTF_PBR_PerturbNormal(in float3 Position, in float3 Normal, in float3 TSNormal, in float2 UV, bool HasUV, bool IsFrontFace)
+float3 GLTF_PBR_PerturbNormal(in float3 dPos_dx,
+                              in float3 dPos_dy,
+                              in float2 dUV_dx,
+                              in float2 dUV_dy,
+                              in float3 Normal,
+                              in float3 TSNormal,
+                              bool      HasUV,
+                              bool      IsFrontFace)
 {
     // Retrieve the tangent space matrix
-    float3 pos_dx = ddx(Position);
-    float3 pos_dy = ddy(Position);
-
     float NormalLen = length(Normal);
     float3 ng;
     if (NormalLen > 1e-5)
@@ -93,7 +97,7 @@ float3 GLTF_PBR_PerturbNormal(in float3 Position, in float3 Normal, in float3 TS
     }
     else
     {
-        ng = normalize(cross(pos_dx, pos_dy));
+        ng = normalize(cross(dPos_dx, dPos_dy));
 #if (defined(GLSL) || defined(GL_ES)) && !defined(TARGET_API_VULKAN)
         // In OpenGL screen is upside-down, so we have to invert the vector
         ng *= -1.0;
@@ -102,7 +106,7 @@ float3 GLTF_PBR_PerturbNormal(in float3 Position, in float3 Normal, in float3 TS
 
     if (HasUV)
     {
-        return TransformTangentSpaceNormal(Position, ng, TSNormal * (IsFrontFace ? +1.0 : -1.0), UV);
+        return TransformTangentSpaceNormalGrad(dPos_dx, dPos_dy, dUV_dx, dUV_dy, ng, TSNormal * (IsFrontFace ? +1.0 : -1.0));
     }
     else
     {
