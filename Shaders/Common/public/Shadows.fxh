@@ -418,6 +418,8 @@ FilteredShadow FilterShadowMap(in ShadowMapAttribs       ShadowAttribs,
                                in Texture2DArray<float>  tex2DShadowMap,
                                in SamplerComparisonState tex2DShadowMap_sampler,
                                in float3                 f3PosInLightViewSpace,
+                               in float3                 f3ddXPosInLightViewSpace,
+                               in float3                 f3ddYPosInLightViewSpace,
                                in float                  fCameraSpaceZ)
 {
     CascadeSamplingInfo SamplingInfo = FindCascade(ShadowAttribs, f3PosInLightViewSpace.xyz, fCameraSpaceZ);
@@ -428,9 +430,6 @@ FilteredShadow FilterShadowMap(in ShadowMapAttribs       ShadowAttribs,
 
     if (SamplingInfo.iCascadeIdx == ShadowAttribs.iNumCascades)
         return Shadow;
-
-    float3 f3ddXPosInLightViewSpace = ddx(f3PosInLightViewSpace);
-    float3 f3ddYPosInLightViewSpace = ddy(f3PosInLightViewSpace);
 
     Shadow.fLightAmount = FilterShadowCascade(ShadowAttribs, tex2DShadowMap, tex2DShadowMap_sampler, f3ddXPosInLightViewSpace, f3ddYPosInLightViewSpace, SamplingInfo);
     
@@ -550,6 +549,8 @@ FilteredShadow SampleFilterableShadowMap(in ShadowMapAttribs       ShadowAttribs
                                          in Texture2DArray<float4> tex2DShadowMap,
                                          in SamplerState           tex2DShadowMap_sampler,
                                          in float3                 f3PosInLightViewSpace,
+                                         in float3                 f3ddXPosInLightViewSpace,
+                                         in float3                 f3ddYPosInLightViewSpace,
                                          in float                  fCameraSpaceZ)
 {
     CascadeSamplingInfo SamplingInfo = FindCascade(ShadowAttribs, f3PosInLightViewSpace.xyz, fCameraSpaceZ);
@@ -560,9 +561,6 @@ FilteredShadow SampleFilterableShadowMap(in ShadowMapAttribs       ShadowAttribs
 
     if (SamplingInfo.iCascadeIdx == ShadowAttribs.iNumCascades)
         return Shadow;
-
-    float3 f3ddXPosInLightViewSpace = ddx(f3PosInLightViewSpace);
-    float3 f3ddYPosInLightViewSpace = ddy(f3PosInLightViewSpace);
 
     Shadow.fLightAmount = SampleFilterableShadowCascade(ShadowAttribs, tex2DShadowMap, tex2DShadowMap_sampler, f3ddXPosInLightViewSpace, f3ddYPosInLightViewSpace, SamplingInfo);
 
