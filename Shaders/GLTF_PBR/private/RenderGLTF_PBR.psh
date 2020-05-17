@@ -51,11 +51,15 @@ SamplerState g_PhysicalDescriptorMap_sampler;
 Texture2D    g_NormalMap;
 SamplerState g_NormalMap_sampler;
 
+#if GLTF_PBR_USE_AO
 Texture2D    g_AOMap;
 SamplerState g_AOMap_sampler;
+#endif
 
+#if GLTF_PBR_USE_EMISSIVE
 Texture2D    g_EmissiveMap;
 SamplerState g_EmissiveMap_sampler;
+#endif
 
 
 void main(in  float4 ClipPos     : SV_Position,
@@ -82,10 +86,19 @@ void main(in  float4 ClipPos     : SV_Position,
     {
 		discard;
 	}
-    
-    float3 TSNormal     = g_NormalMap            .Sample(g_NormalMap_sampler,             NormalMapUV).rgb * float3(2.0, 2.0, 2.0) - float3(1.0, 1.0, 1.0);
-    float  Occlusion    = g_AOMap                .Sample(g_AOMap_sampler,                 lerp(UV0, UV1, g_MaterialInfo.OcclusionTextureUVSelector)).r;
-    float3 Emissive     = g_EmissiveMap          .Sample(g_EmissiveMap_sampler,           lerp(UV0, UV1, g_MaterialInfo.EmissiveTextureUVSelector)).rgb;
+
+    float3 TSNormal = g_NormalMap.Sample(g_NormalMap_sampler, NormalMapUV).rgb * float3(2.0, 2.0, 2.0) - float3(1.0, 1.0, 1.0);
+
+    float Occlusion = 1.0;
+#if GLTF_PBR_USE_AO
+    Occlusion = g_AOMap.Sample(g_AOMap_sampler, lerp(UV0, UV1, g_MaterialInfo.OcclusionTextureUVSelector)).r;
+#endif
+
+    float3 Emissive = float3(0.0, 0.0, 0.0);
+#if GLTF_PBR_USE_EMISSIVE
+    Emissive = g_EmissiveMap.Sample(g_EmissiveMap_sampler, lerp(UV0, UV1, g_MaterialInfo.EmissiveTextureUVSelector)).rgb;
+#endif
+
     float4 PhysicalDesc = g_PhysicalDescriptorMap.Sample(g_PhysicalDescriptorMap_sampler, lerp(UV0, UV1, g_MaterialInfo.PhysicalDescriptorTextureUVSelector));
     
     float metallic;
@@ -133,12 +146,15 @@ void main(in  float4 ClipPos     : SV_Position,
     color += (IBLContrib.f3Diffuse + IBLContrib.f3Specular) * g_RenderParameters.IBLScale;
 #endif
 
-
+#if GLTF_PBR_USE_AO
     color = lerp(color, color * Occlusion, g_RenderParameters.OcclusionStrength);
+#endif
 
+#if GLTF_PBR_USE_EMISSIVE
     const float u_EmissiveFactor = 1.0;
     Emissive = SRGBtoLINEAR(Emissive);
     color += Emissive.rgb * g_MaterialInfo.EmissiveFactor.rgb * g_RenderParameters.EmissionScale;
+#endif
 
     ToneMappingAttribs TMAttribs;
     TMAttribs.iToneMappingMode     = TONE_MAPPING_MODE_UNCHARTED2;

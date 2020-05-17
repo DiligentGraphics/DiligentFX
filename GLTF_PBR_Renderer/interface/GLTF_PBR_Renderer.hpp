@@ -65,6 +65,12 @@ public:
         /// Indicates whether to use IBL.
         bool UseIBL = false;
 
+        /// Whether to use ambient occlusion texture.
+        bool UseAO = true;
+
+        /// Whether to use emissive texture.
+        bool UseEmissive = true;
+
         /// When set to true, pipeline state will be compiled with static samplers.
         /// When set to false, samplers from the texture views will be used.
         bool UseStaticSamplers = true;

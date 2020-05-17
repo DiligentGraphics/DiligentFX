@@ -248,6 +248,8 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
     Macros.AddShaderMacro("ALLOW_DEBUG_VIEW", m_Settings.AllowDebugView);
     Macros.AddShaderMacro("TONE_MAPPING_MODE", "TONE_MAPPING_MODE_UNCHARTED2");
     Macros.AddShaderMacro("GLTF_PBR_USE_IBL", m_Settings.UseIBL);
+    Macros.AddShaderMacro("GLTF_PBR_USE_AO", m_Settings.UseAO);
+    Macros.AddShaderMacro("GLTF_PBR_USE_EMISSIVE", m_Settings.UseEmissive);
     ShaderCI.Macros = Macros;
     RefCntAutoPtr<IShader> pVS;
     {
@@ -275,8 +277,8 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
         {1, 0, 3, VT_FLOAT32},   //float3 Normal  : ATTRIB1;
         {2, 0, 2, VT_FLOAT32},   //float2 UV0     : ATTRIB2;
         {3, 0, 2, VT_FLOAT32},   //float2 UV1     : ATTRIB3;
-        {4, 0, 4, VT_FLOAT32},   //float4 Joint0  : ATTRIB4;
-        {5, 0, 4, VT_FLOAT32}    //float4 Weight0 : ATTRIB5;
+        {4, 1, 4, VT_FLOAT32},   //float4 Joint0  : ATTRIB4;
+        {5, 1, 4, VT_FLOAT32}    //float4 Weight0 : ATTRIB5;
     };
     // clang-format on
     PSODesc.GraphicsPipeline.InputLayout.LayoutElements = Inputs;
@@ -299,10 +301,18 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
         StaticSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_ColorMap",              m_Settings.ColorMapStaticSampler);
         StaticSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_PhysicalDescriptorMap", m_Settings.PhysDescMapStaticSampler);
         StaticSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_NormalMap",             m_Settings.NormalMapStaticSampler);
-        StaticSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_AOMap",                 m_Settings.AOMapStaticSampler);
-        StaticSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_EmissiveMap",           m_Settings.EmissiveMapStaticSampler);
     }
     // clang-format on
+
+    if (m_Settings.UseAO)
+    {
+        StaticSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_AOMap", m_Settings.AOMapStaticSampler);
+    }
+
+    if (m_Settings.UseEmissive)
+    {
+        StaticSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_EmissiveMap", m_Settings.EmissiveMapStaticSampler);
+    }
 
     if (m_Settings.UseIBL)
     {
@@ -430,12 +440,18 @@ IShaderResourceBinding* GLTF_PBR_Renderer::CreateMaterialSRB(GLTF::Material& Mat
     }
 
     // clang-format off
-    SetTexture(pBaseColorTex,                m_pWhiteTexSRV,         "g_ColorMap");
-    SetTexture(pPhysDescTex ,                m_pWhiteTexSRV,         "g_PhysicalDescriptorMap");
-    SetTexture(Material.pNormalTexture,      m_pDefaultNormalMapSRV, "g_NormalMap");
-    SetTexture(Material.pOcclusionTexture,   m_pWhiteTexSRV,         "g_AOMap");
-    SetTexture(Material.pEmissiveTexture,    m_pBlackTexSRV,         "g_EmissiveMap");
+    SetTexture(pBaseColorTex,           m_pWhiteTexSRV,         "g_ColorMap");
+    SetTexture(pPhysDescTex ,           m_pWhiteTexSRV,         "g_PhysicalDescriptorMap");
+    SetTexture(Material.pNormalTexture, m_pDefaultNormalMapSRV, "g_NormalMap");
     // clang-format on
+    if (m_Settings.UseAO)
+    {
+        SetTexture(Material.pOcclusionTexture, m_pWhiteTexSRV, "g_AOMap");
+    }
+    if (m_Settings.UseEmissive)
+    {
+        SetTexture(Material.pEmissiveTexture, m_pBlackTexSRV, "g_EmissiveMap");
+    }
 
     auto it = m_SRBCache.find(&Material);
     if (it != m_SRBCache.end())
@@ -903,8 +919,8 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*                                pC
 
     if (RenderNodeCallback == nullptr)
     {
-        IBuffer* pVBs[]    = {GLTFModel.pVertexBuffer};
-        Uint32   Offsets[] = {0};
+        IBuffer* pVBs[]                  = {GLTFModel.pVertexBuffer[0], GLTFModel.pVertexBuffer[1]};
+        Uint32   Offsets[_countof(pVBs)] = {};
         pCtx->SetVertexBuffers(0, _countof(pVBs), pVBs, Offsets, RESOURCE_STATE_TRANSITION_MODE_TRANSITION, SET_VERTEX_BUFFERS_FLAG_RESET);
         if (GLTFModel.pIndexBuffer)
         {
