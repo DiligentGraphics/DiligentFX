@@ -404,11 +404,17 @@ IShaderResourceBinding* GLTF_PBR_Renderer::CreateMaterialSRB(GLTF::Material& Mat
     if (auto* pCameraAttribsVSVar = pSRB->GetVariableByName(SHADER_TYPE_VERTEX, "cbCameraAttribs"))
         pCameraAttribsVSVar->Set(pCameraAttribs);
 
-    if (auto* pCameraAttribsPSVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbCameraAttribs"))
-        pCameraAttribsPSVar->Set(pCameraAttribs);
+    if (pCameraAttribs != nullptr)
+    {
+        if (auto* pCameraAttribsPSVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbCameraAttribs"))
+            pCameraAttribsPSVar->Set(pCameraAttribs);
+    }
 
-    if (auto* pLightAttribsPSVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbLightAttribs"))
-        pLightAttribsPSVar->Set(pLightAttribs);
+    if (pLightAttribs != nullptr)
+    {
+        if (auto* pLightAttribsPSVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbLightAttribs"))
+            pLightAttribsPSVar->Set(pLightAttribs);
+    }
 
     if (m_Settings.UseIBL)
     {
