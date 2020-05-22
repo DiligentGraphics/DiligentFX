@@ -98,7 +98,7 @@ float3 GLTF_PBR_PerturbNormal(in float3 dPos_dx,
     else
     {
         ng = normalize(cross(dPos_dx, dPos_dy));
-#if (defined(GLSL) || defined(GL_ES)) && !defined(TARGET_API_VULKAN)
+#if (defined(GLSL) || defined(GL_ES)) && !defined(VULKAN)
         // In OpenGL screen is upside-down, so we have to invert the vector
         ng *= -1.0;
 #endif

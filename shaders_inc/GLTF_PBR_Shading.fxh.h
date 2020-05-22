@@ -98,7 +98,7 @@
 "    else\n"
 "    {\n"
 "        ng = normalize(cross(dPos_dx, dPos_dy));\n"
-"#if (defined(GLSL) || defined(GL_ES)) && !defined(TARGET_API_VULKAN)\n"
+"#if (defined(GLSL) || defined(GL_ES)) && !defined(VULKAN)\n"
 "        // In OpenGL screen is upside-down, so we have to invert the vector\n"
 "        ng *= -1.0;\n"
 "#endif\n"
