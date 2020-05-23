@@ -25,6 +25,8 @@
  *  of the possibility of such damages.
  */
 
+#pragma once
+
 #include <unordered_map>
 #include <functional>
 
