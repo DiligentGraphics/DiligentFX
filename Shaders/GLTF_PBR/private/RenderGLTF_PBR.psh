@@ -102,7 +102,18 @@ void main(in  float4 ClipPos     : SV_Position,
     float4 PhysicalDesc = g_PhysicalDescriptorMap.Sample(g_PhysicalDescriptorMap_sampler, lerp(UV0, UV1, g_MaterialInfo.PhysicalDescriptorTextureUVSelector));
     
     float metallic;
-    SurfaceReflectanceInfo SrfInfo = GLTF_PBR_GetSurfaceReflectance(g_MaterialInfo, BaseColor, PhysicalDesc, metallic);
+    if (g_MaterialInfo.Workflow == PBR_WORKFLOW_SPECULAR_GLOSINESS)
+    {
+        PhysicalDesc.rgb = SRGBtoLINEAR(PhysicalDesc.rgb) * g_MaterialInfo.SpecularFactor.rgb;
+        const float u_GlossinessFactor = 1.0;
+        PhysicalDesc.a *= u_GlossinessFactor;
+    }
+    else if(g_MaterialInfo.Workflow == PBR_WORKFLOW_METALLIC_ROUGHNESS)
+    {
+        PhysicalDesc.g = saturate(PhysicalDesc.g * g_MaterialInfo.RoughnessFactor);
+        PhysicalDesc.b = saturate(PhysicalDesc.b * g_MaterialInfo.MetallicFactor);
+    }
+    SurfaceReflectanceInfo SrfInfo = GLTF_PBR_GetSurfaceReflectance(g_MaterialInfo.Workflow, BaseColor, PhysicalDesc, metallic);
 
     // LIGHTING
     float3 perturbedNormal = GLTF_PBR_PerturbNormal(dWorldPos_dx, dWorldPos_dy, dNormalMapUV_dx, dNormalMapUV_dy, 

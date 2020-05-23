@@ -168,11 +168,17 @@ GLTF_PBR_IBL_Contribution GLTF_PBR_GetIBLContribution(
     return IBLContrib;
 }
 
+/// Calculates surface reflectance info
 
-SurfaceReflectanceInfo GLTF_PBR_GetSurfaceReflectance(GLTFMaterialShaderInfo MaterialInfo,
-                                                      float4                 BaseColor,
-                                                      float4                 PhysicalDesc,
-                                                      out float              metallic)
+/// \param [in]  Workflow     - PBR workflow (PBR_WORKFLOW_SPECULAR_GLOSINESS or PBR_WORKFLOW_METALLIC_ROUGHNESS).
+/// \param [in]  BaseColor    - Material base color.
+/// \param [in]  PhysicalDesc - Physical material description. For Metallic-roughness workflow,
+///                             'g' channel stores roughness, 'b' channel stores metallic.
+/// \param [out] Metallic     - Metallic value used for shading.
+SurfaceReflectanceInfo GLTF_PBR_GetSurfaceReflectance(int        Workflow,
+                                                      float4     BaseColor,
+                                                      float4     PhysicalDesc,
+                                                      out float  Metallic)
 {
     SurfaceReflectanceInfo SrfInfo;
 
@@ -183,12 +189,10 @@ SurfaceReflectanceInfo GLTF_PBR_GetSurfaceReflectance(GLTFMaterialShaderInfo Mat
     // Metallic and Roughness material properties are packed together
     // In glTF, these factors can be specified by fixed scalar values
     // or from a metallic-roughness map
-    if (MaterialInfo.Workflow == PBR_WORKFLOW_SPECULAR_GLOSINESS)
+    if (Workflow == PBR_WORKFLOW_SPECULAR_GLOSINESS)
     {
-        PhysicalDesc = SRGBtoLINEAR(PhysicalDesc);
-        const float u_GlossinessFactor = 1.0;
-        SrfInfo.PerceptualRoughness = (1.0 - PhysicalDesc.a * u_GlossinessFactor); // glossiness to roughness
-        f0 = PhysicalDesc.rgb * MaterialInfo.SpecularFactor.rgb;
+        SrfInfo.PerceptualRoughness = 1.0 - PhysicalDesc.a; // glossiness to roughness
+        f0 = PhysicalDesc.rgb;
 
         // f0 = specular
         specularColor = f0;
@@ -196,18 +200,17 @@ SurfaceReflectanceInfo GLTF_PBR_GetSurfaceReflectance(GLTFMaterialShaderInfo Mat
         SrfInfo.DiffuseColor = BaseColor.rgb * oneMinusSpecularStrength;
 
         // do conversion between metallic M-R and S-G metallic
-        metallic = GLTF_PBR_SolveMetallic(BaseColor.rgb, specularColor, oneMinusSpecularStrength);
+        Metallic = GLTF_PBR_SolveMetallic(BaseColor.rgb, specularColor, oneMinusSpecularStrength);
     }
-    else if (MaterialInfo.Workflow == PBR_WORKFLOW_METALLIC_ROUGHNESS)
+    else if (Workflow == PBR_WORKFLOW_METALLIC_ROUGHNESS)
     {
         // Roughness is stored in the 'g' channel, metallic is stored in the 'b' channel.
         // This layout intentionally reserves the 'r' channel for (optional) occlusion map data
-        SrfInfo.PerceptualRoughness = PhysicalDesc.g * MaterialInfo.RoughnessFactor;
-        metallic                    = PhysicalDesc.b * MaterialInfo.MetallicFactor;
-        metallic                    = clamp(metallic, 0.0, 1.0);
+        SrfInfo.PerceptualRoughness = PhysicalDesc.g;
+        Metallic                    = PhysicalDesc.b;
 
-        SrfInfo.DiffuseColor  = BaseColor.rgb * (float3(1.0, 1.0, 1.0) - f0) * (1.0 - metallic);
-        specularColor         = lerp(f0, BaseColor.rgb, metallic);
+        SrfInfo.DiffuseColor  = BaseColor.rgb * (float3(1.0, 1.0, 1.0) - f0) * (1.0 - Metallic);
+        specularColor         = lerp(f0, BaseColor.rgb, Metallic);
     }
 
 //#ifdef ALPHAMODE_OPAQUE
