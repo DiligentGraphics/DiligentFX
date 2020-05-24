@@ -94,7 +94,7 @@
 "    // the same.\n"
 "    // What differs is that in GL, NDC z is transformed from [-1,+1] to [0,1]\n"
 "    // before storing in the depth buffer, which we will have to inverse.\n"
-"    float fNDC_Z = DepthToNormalizedDeviceZ(f3PosPS.z, mProj);\n"
+"    float fNDC_Z = CameraZToNormalizedDeviceZ(f3PosPS.z, mProj);\n"
 "    float4 ReconstructedPosWS = mul( float4(f3PosPS.xy, fNDC_Z, 1.0), mViewProjInv );\n"
 "    ReconstructedPosWS /= ReconstructedPosWS.w;\n"
 "    return ReconstructedPosWS.xyz;\n"

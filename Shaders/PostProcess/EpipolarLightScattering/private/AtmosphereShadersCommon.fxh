@@ -94,7 +94,7 @@ float3 ProjSpaceXYZToWorldSpace(in float3 f3PosPS, in float4x4 mProj, in float4x
     // the same.
     // What differs is that in GL, NDC z is transformed from [-1,+1] to [0,1]
     // before storing in the depth buffer, which we will have to inverse.
-    float fNDC_Z = DepthToNormalizedDeviceZ(f3PosPS.z, mProj);
+    float fNDC_Z = CameraZToNormalizedDeviceZ(f3PosPS.z, mProj);
     float4 ReconstructedPosWS = mul( float4(f3PosPS.xy, fNDC_Z, 1.0), mViewProjInv );
     ReconstructedPosWS /= ReconstructedPosWS.w;
     return ReconstructedPosWS.xyz;
