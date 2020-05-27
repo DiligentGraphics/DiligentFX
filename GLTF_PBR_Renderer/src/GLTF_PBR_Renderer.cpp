@@ -393,7 +393,8 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
 IShaderResourceBinding* GLTF_PBR_Renderer::CreateMaterialSRB(GLTF::Material& Material,
                                                              IBuffer*        pCameraAttribs,
                                                              IBuffer*        pLightAttribs,
-                                                             IPipelineState* pPSO)
+                                                             IPipelineState* pPSO,
+                                                             size_t          TypeId)
 {
     if (pPSO == nullptr)
         pPSO = GetPSO(PSOKey{});
@@ -459,7 +460,10 @@ IShaderResourceBinding* GLTF_PBR_Renderer::CreateMaterialSRB(GLTF::Material& Mat
         SetTexture(Material.pEmissiveTexture, m_pBlackTexSRV, "g_EmissiveMap");
     }
 
-    auto it = m_SRBCache.find(&Material);
+
+    SRBCacheKey SRBKey{&Material, TypeId};
+
+    auto it = m_SRBCache.find(SRBKey);
     if (it != m_SRBCache.end())
     {
         it->second = std::move(pSRB);
@@ -467,7 +471,7 @@ IShaderResourceBinding* GLTF_PBR_Renderer::CreateMaterialSRB(GLTF::Material& Mat
     }
     else
     {
-        auto new_it = m_SRBCache.emplace(&Material, std::move(pSRB));
+        auto new_it = m_SRBCache.emplace(SRBKey, std::move(pSRB));
         VERIFY_EXPR(new_it.second);
         return new_it.first->second;
     }
@@ -728,11 +732,11 @@ void GLTF_PBR_Renderer::InitializeResourceBindings(GLTF::Model& GLTFModel,
     }
 }
 
-void GLTF_PBR_Renderer::ReleaseResourceBindings(GLTF::Model& GLTFModel)
+void GLTF_PBR_Renderer::ReleaseResourceBindings(GLTF::Model& GLTFModel, size_t SRBTypeId)
 {
     for (auto& mat : GLTFModel.Materials)
     {
-        m_SRBCache.erase(&mat);
+        m_SRBCache.erase(SRBCacheKey{&mat, SRBTypeId});
     }
 }
 
@@ -741,7 +745,8 @@ void GLTF_PBR_Renderer::RenderGLTFNode(IDeviceContext*                          
                                        const GLTF::Node*                              node,
                                        GLTF::Material::ALPHA_MODE                     AlphaMode,
                                        const float4x4&                                ModelTransform,
-                                       std::function<void(const GLTFNodeRenderInfo&)> RenderNodeCallback)
+                                       std::function<void(const GLTFNodeRenderInfo&)> RenderNodeCallback,
+                                       size_t                                         SRBTypeId)
 {
     if (node->_Mesh)
     {
@@ -762,7 +767,7 @@ void GLTF_PBR_Renderer::RenderGLTFNode(IDeviceContext*                          
                 VERIFY_EXPR(pPSO != nullptr);
                 pCtx->SetPipelineState(pPSO);
 
-                pSRB = GetMaterialSRB(&material);
+                pSRB = GetMaterialSRB(&material, SRBTypeId);
                 if (pSRB == nullptr)
                 {
                     LOG_ERROR_MESSAGE("Unable to find SRB for GLTF material. Please call GLTF_PBR_Renderer::InitializeResourceBindings()");
@@ -887,7 +892,7 @@ void GLTF_PBR_Renderer::RenderGLTFNode(IDeviceContext*                          
 
     for (const auto& child : node->Children)
     {
-        RenderGLTFNode(pCtx, child.get(), AlphaMode, ModelTransform, RenderNodeCallback);
+        RenderGLTFNode(pCtx, child.get(), AlphaMode, ModelTransform, RenderNodeCallback, SRBTypeId);
     }
 }
 
@@ -915,7 +920,8 @@ void GLTF_PBR_Renderer::UpdateRenderParams(IDeviceContext* pCtx)
 void GLTF_PBR_Renderer::Render(IDeviceContext*                                pCtx,
                                GLTF::Model&                                   GLTFModel,
                                const RenderInfo&                              RenderParams,
-                               std::function<void(const GLTFNodeRenderInfo&)> RenderNodeCallback)
+                               std::function<void(const GLTFNodeRenderInfo&)> RenderNodeCallback,
+                               size_t                                         SRBTypeId)
 {
     if (memcmp(&RenderParams, &m_RenderParams, sizeof(m_RenderParams)) != 0)
     {
@@ -944,7 +950,7 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*                                pC
     {
         for (const auto& node : GLTFModel.Nodes)
         {
-            RenderGLTFNode(pCtx, node.get(), GLTF::Material::ALPHAMODE_OPAQUE, RenderParams.ModelTransform, RenderNodeCallback);
+            RenderGLTFNode(pCtx, node.get(), GLTF::Material::ALPHAMODE_OPAQUE, RenderParams.ModelTransform, RenderNodeCallback, SRBTypeId);
         }
     }
 
@@ -954,7 +960,7 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*                                pC
     {
         for (const auto& node : GLTFModel.Nodes)
         {
-            RenderGLTFNode(pCtx, node.get(), GLTF::Material::ALPHAMODE_MASK, RenderParams.ModelTransform, RenderNodeCallback);
+            RenderGLTFNode(pCtx, node.get(), GLTF::Material::ALPHAMODE_MASK, RenderParams.ModelTransform, RenderNodeCallback, SRBTypeId);
         }
     }
 
@@ -965,7 +971,7 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*                                pC
     {
         for (const auto& node : GLTFModel.Nodes)
         {
-            RenderGLTFNode(pCtx, node.get(), GLTF::Material::ALPHAMODE_BLEND, RenderParams.ModelTransform, RenderNodeCallback);
+            RenderGLTFNode(pCtx, node.get(), GLTF::Material::ALPHAMODE_BLEND, RenderParams.ModelTransform, RenderNodeCallback, SRBTypeId);
         }
     }
 }
