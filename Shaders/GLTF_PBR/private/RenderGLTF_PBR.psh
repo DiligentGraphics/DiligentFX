@@ -82,10 +82,10 @@ void main(in  float4 ClipPos     : SV_Position,
     float2 dNormalMapUV_dx = ddx(NormalMapUV);
     float2 dNormalMapUV_dy = ddy(NormalMapUV);
 
-	if (g_MaterialInfo.UseAlphaMask != 0 && BaseColor.a < g_MaterialInfo.AlphaMaskCutoff)
+    if (g_MaterialInfo.UseAlphaMask != 0 && BaseColor.a < g_MaterialInfo.AlphaMaskCutoff)
     {
-		discard;
-	}
+        discard;
+    }
 
     float3 TSNormal = g_NormalMap.Sample(g_NormalMap_sampler, NormalMapUV).rgb * float3(2.0, 2.0, 2.0) - float3(1.0, 1.0, 1.0);
 
@@ -178,19 +178,19 @@ void main(in  float4 ClipPos     : SV_Position,
     OutColor = float4(color, BaseColor.a);
 
 #if ALLOW_DEBUG_VIEW
-	// Shader inputs debug visualization
-	if (g_RenderParameters.DebugViewType != 0)
+    // Shader inputs debug visualization
+    if (g_RenderParameters.DebugViewType != 0)
     {
- 		switch (g_RenderParameters.DebugViewType)
+        switch (g_RenderParameters.DebugViewType)
         {
-			case  1: OutColor.rgba = BaseColor;                                                         break;
+            case  1: OutColor.rgba = BaseColor;                                                         break;
             case  2: OutColor.rgba = float4(BaseColor.a, BaseColor.a, BaseColor.a, 1.0);                break;
             // Apply extra srgb->linear transform to make the maps look better
-			case  3: OutColor.rgb  = SRGBtoLINEAR(TSNormal.xyz);                                        break;
-			case  4: OutColor.rgb  = SRGBtoLINEAR(Occlusion * float3(1.0, 1.0, 1.0));                   break;
-			case  5: OutColor.rgb  = SRGBtoLINEAR(Emissive.rgb);                                        break;
-			case  6: OutColor.rgb  = SRGBtoLINEAR(metallic * float3(1.0, 1.0, 1.0) );                   break;
-			case  7: OutColor.rgb  = SRGBtoLINEAR(SrfInfo.PerceptualRoughness * float3(1.0, 1.0, 1.0)); break;
+            case  3: OutColor.rgb  = SRGBtoLINEAR(TSNormal.xyz);                                        break;
+            case  4: OutColor.rgb  = SRGBtoLINEAR(Occlusion * float3(1.0, 1.0, 1.0));                   break;
+            case  5: OutColor.rgb  = SRGBtoLINEAR(Emissive.rgb);                                        break;
+            case  6: OutColor.rgb  = SRGBtoLINEAR(metallic * float3(1.0, 1.0, 1.0) );                   break;
+            case  7: OutColor.rgb  = SRGBtoLINEAR(SrfInfo.PerceptualRoughness * float3(1.0, 1.0, 1.0)); break;
             case  8: OutColor.rgb  = SrfInfo.DiffuseColor;                                              break;
             case  9: OutColor.rgb  = SrfInfo.Reflectance0;                                              break;
             case 10: OutColor.rgb  = SrfInfo.Reflectance90;                                             break;
@@ -201,8 +201,8 @@ void main(in  float4 ClipPos     : SV_Position,
             case 14: OutColor.rgb  = IBLContrib.f3Diffuse;                                                break;
             case 15: OutColor.rgb  = IBLContrib.f3Specular;                                               break;
 #endif
-		}
-	}
+        }
+    }
 #endif
 
 }

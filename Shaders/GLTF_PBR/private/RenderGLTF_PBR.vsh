@@ -32,16 +32,16 @@ void main(in  GLTF_VS_Input  VSIn,
     // performance degradation on Vulkan because glslang/SPIRV-Tools are apparently not able
     // to eliminate the copy of g_Transforms structure.
     float4x4 Transform = g_Transforms.NodeMatrix;
-	if (g_Transforms.JointCount > 0)
+    if (g_Transforms.JointCount > 0)
     {
-		// Mesh is skinned
-		float4x4 SkinMat = 
-			VSIn.Weight0.x * g_Transforms.JointMatrix[int(VSIn.Joint0.x)] +
-			VSIn.Weight0.y * g_Transforms.JointMatrix[int(VSIn.Joint0.y)] +
-			VSIn.Weight0.z * g_Transforms.JointMatrix[int(VSIn.Joint0.z)] +
-			VSIn.Weight0.w * g_Transforms.JointMatrix[int(VSIn.Joint0.w)];
+        // Mesh is skinned
+        float4x4 SkinMat = 
+            VSIn.Weight0.x * g_Transforms.JointMatrix[int(VSIn.Joint0.x)] +
+            VSIn.Weight0.y * g_Transforms.JointMatrix[int(VSIn.Joint0.y)] +
+            VSIn.Weight0.z * g_Transforms.JointMatrix[int(VSIn.Joint0.z)] +
+            VSIn.Weight0.w * g_Transforms.JointMatrix[int(VSIn.Joint0.w)];
         Transform = mul(Transform, SkinMat);
-	}
+    }
 
     GLTF_TransformedVertex TransformedVert = GLTF_TransformVertex(VSIn.Pos, VSIn.Normal, Transform);
 
