@@ -275,8 +275,8 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
     {
         {0, 0, 3, VT_FLOAT32},   //float3 Pos     : ATTRIB0;
         {1, 1, 3, VT_FLOAT32},   //float3 Normal  : ATTRIB1;
-        {2, 1, 2, VT_FLOAT32},   //float2 UV0     : ATTRIB2;
-        {3, 1, 2, VT_FLOAT32},   //float2 UV1     : ATTRIB3;
+        {2, 0, 2, VT_FLOAT32},   //float2 UV0     : ATTRIB2;
+        {3, 0, 2, VT_FLOAT32},   //float2 UV1     : ATTRIB3;
         {4, 2, 4, VT_FLOAT32},   //float4 Joint0  : ATTRIB4;
         {5, 2, 4, VT_FLOAT32}    //float4 Weight0 : ATTRIB5;
     };
