@@ -115,12 +115,29 @@ float GetNextCascadeBlendAmount(ShadowMapAttribs    ShadowAttribs,
                                 CascadeSamplingInfo SamplingInfo,
                                 CascadeSamplingInfo NextCscdSamplingInfo)
 {
-    float fDistToTransitionEdge;
-#if BEST_CASCADE_SEARCH
-    fDistToTransitionEdge = SamplingInfo.fMinDistToMargin;
-#else
     float4 f4CascadeStartEndZ = ShadowAttribs.Cascades[SamplingInfo.iCascadeIdx].f4StartEndZ;
-    fDistToTransitionEdge = (f4CascadeStartEndZ.y - fCameraViewSpaceZ) / (f4CascadeStartEndZ.y - f4CascadeStartEndZ.x);
+    float fDistToTransitionEdge = (f4CascadeStartEndZ.y - fCameraViewSpaceZ) / (f4CascadeStartEndZ.y - f4CascadeStartEndZ.x);
+
+#if BEST_CASCADE_SEARCH
+    // Use the maximum of the camera Z - based distance and the minimal distance
+    // to the cascade margin.
+    // Using the maximum of the two avoids unnecessary transitions shown below.
+    fDistToTransitionEdge = max(fDistToTransitionEdge, SamplingInfo.fMinDistToMargin);
+    //        /  
+    //       /
+    //      /______________
+    //     /|              |
+    //    / |              |
+    //   /  | ___          |
+    //  /   ||   |         |
+    //  \   ||___|         |
+    //   \  |<-.           |
+    //    \ |   \          |
+    //     \|____\_________|
+    //      \     \       
+    //       \    This area is very close to the margin of cascade 1.
+    //        \   If we only use fMinDistToMargin, it will be morphed with cascade 2,
+    //            which will look very bad, especially near the boundary of cascade 0.  
 #endif
 
     return saturate(1.0 - fDistToTransitionEdge / ShadowAttribs.fCascadeTransitionRegion) * 
