@@ -127,26 +127,19 @@ GLTF_PBR_Renderer::GLTF_PBR_Renderer(IRenderDevice*    pDevice,
     if (CI.RTVFmt != TEX_FORMAT_UNKNOWN || CI.DSVFmt != TEX_FORMAT_UNKNOWN)
     {
         CreateUniformBuffer(pDevice, sizeof(GLTFNodeShaderTransforms), "GLTF node transforms CB", &m_TransformsCB);
-        CreateUniformBuffer(pDevice, sizeof(GLTFMaterialShaderInfo), "GLTF material info CB", &m_MaterialInfoCB);
-        CreateUniformBuffer(pDevice, sizeof(GLTFRendererShaderParameters), "GLTF renderer parameters CB", &m_RenderParametersCB,
-                            USAGE_DEFAULT, BIND_UNIFORM_BUFFER, CPU_ACCESS_NONE);
+        CreateUniformBuffer(pDevice, sizeof(GLTFMaterialShaderInfo) + sizeof(GLTFRendererShaderParameters), "GLTF attribs CB", &m_GLTFAttribsCB);
 
         // clang-format off
         StateTransitionDesc Barriers[] = 
         {
-            {m_TransformsCB,       RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, true},
-            {m_MaterialInfoCB,     RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, true}
-
-            // m_RenderParametersCB buffer will be transitioned to correct state by UpdateRenderParams() function
-            // {m_RenderParametersCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, true}
+            {m_TransformsCB,  RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, true},
+            {m_GLTFAttribsCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, true}
         };
         // clang-format on
         pCtx->TransitionResourceStates(_countof(Barriers), Barriers);
 
         CreatePSO(pDevice);
     }
-
-    UpdateRenderParams(pCtx);
 }
 
 void GLTF_PBR_Renderer::PrecomputeBRDF(IRenderDevice*  pDevice,
@@ -288,9 +281,8 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
     // clang-format off
     std::vector<ShaderResourceVariableDesc> Vars = 
     {
-        {SHADER_TYPE_VERTEX, "cbTransforms",       SHADER_RESOURCE_VARIABLE_TYPE_STATIC},
-        {SHADER_TYPE_PIXEL,  "cbMaterialInfo",     SHADER_RESOURCE_VARIABLE_TYPE_STATIC},
-        {SHADER_TYPE_PIXEL,  "cbRenderParameters", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
+        {SHADER_TYPE_VERTEX, "cbTransforms",  SHADER_RESOURCE_VARIABLE_TYPE_STATIC},
+        {SHADER_TYPE_PIXEL,  "cbGLTFAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
     };
     // clang-format on
 
@@ -384,8 +376,7 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
         }
         // clang-format off
         PSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "cbTransforms")->Set(m_TransformsCB);
-        PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbMaterialInfo")->Set(m_MaterialInfoCB);
-        PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbRenderParameters")->Set(m_RenderParametersCB);
+        PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbGLTFAttribs")->Set(m_GLTFAttribsCB);
         // clang-format on
     }
 }
@@ -809,7 +800,25 @@ void GLTF_PBR_Renderer::RenderGLTFNode(IDeviceContext*                          
                 GLTFMaterialShaderInfo* pMaterialInfo = nullptr;
                 if (RenderNodeCallback == nullptr)
                 {
-                    pCtx->MapBuffer(m_MaterialInfoCB, MAP_WRITE, MAP_FLAG_DISCARD, reinterpret_cast<PVoid&>(pMaterialInfo));
+                    struct GLTFAttribs
+                    {
+                        GLTFRendererShaderParameters RenderParameters;
+                        GLTFMaterialShaderInfo       MaterialInfo;
+                    };
+                    GLTFAttribs* pGLTFAttribs = nullptr;
+                    pCtx->MapBuffer(m_GLTFAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD, reinterpret_cast<PVoid&>(pGLTFAttribs));
+                    pMaterialInfo = &pGLTFAttribs->MaterialInfo;
+
+                    auto& RenderParams = pGLTFAttribs->RenderParameters;
+
+                    RenderParams.DebugViewType            = static_cast<int>(m_RenderParams.DebugView);
+                    RenderParams.OcclusionStrength        = m_RenderParams.OcclusionStrength;
+                    RenderParams.EmissionScale            = m_RenderParams.EmissionScale;
+                    RenderParams.AverageLogLum            = m_RenderParams.AverageLogLum;
+                    RenderParams.MiddleGray               = m_RenderParams.MiddleGray;
+                    RenderParams.WhitePoint               = m_RenderParams.WhitePoint;
+                    RenderParams.IBLScale                 = m_RenderParams.IBLScale;
+                    RenderParams.PrefilteredCubeMipLevels = m_Settings.UseIBL ? static_cast<float>(m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels) : 0.f;
                 }
                 else
                 {
@@ -852,7 +861,7 @@ void GLTF_PBR_Renderer::RenderGLTFNode(IDeviceContext*                          
 
                 if (RenderNodeCallback == nullptr)
                 {
-                    pCtx->UnmapBuffer(m_MaterialInfoCB, MAP_WRITE);
+                    pCtx->UnmapBuffer(m_GLTFAttribsCB, MAP_WRITE);
                 }
             }
 
@@ -896,38 +905,13 @@ void GLTF_PBR_Renderer::RenderGLTFNode(IDeviceContext*                          
     }
 }
 
-void GLTF_PBR_Renderer::UpdateRenderParams(IDeviceContext* pCtx)
-{
-    GLTFRendererShaderParameters RenderParams;
-    RenderParams.DebugViewType            = static_cast<int>(m_RenderParams.DebugView);
-    RenderParams.OcclusionStrength        = m_RenderParams.OcclusionStrength;
-    RenderParams.EmissionScale            = m_RenderParams.EmissionScale;
-    RenderParams.AverageLogLum            = m_RenderParams.AverageLogLum;
-    RenderParams.MiddleGray               = m_RenderParams.MiddleGray;
-    RenderParams.WhitePoint               = m_RenderParams.WhitePoint;
-    RenderParams.IBLScale                 = m_RenderParams.IBLScale;
-    RenderParams.PrefilteredCubeMipLevels = m_Settings.UseIBL ? static_cast<float>(m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels) : 0.f;
-
-    if (pCtx != nullptr && m_RenderParametersCB)
-    {
-        pCtx->UpdateBuffer(m_RenderParametersCB, 0, sizeof(RenderParams), &RenderParams, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-        StateTransitionDesc Barrier{m_RenderParametersCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, true};
-        pCtx->TransitionResourceStates(1, &Barrier);
-    }
-}
-
-
 void GLTF_PBR_Renderer::Render(IDeviceContext*                                pCtx,
                                GLTF::Model&                                   GLTFModel,
                                const RenderInfo&                              RenderParams,
                                std::function<void(const GLTFNodeRenderInfo&)> RenderNodeCallback,
                                size_t                                         SRBTypeId)
 {
-    if (memcmp(&RenderParams, &m_RenderParams, sizeof(m_RenderParams)) != 0)
-    {
-        m_RenderParams = RenderParams;
-        UpdateRenderParams(pCtx);
-    }
+    m_RenderParams = RenderParams;
 
     if (RenderNodeCallback == nullptr)
     {

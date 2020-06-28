@@ -20,16 +20,11 @@ cbuffer cbLightAttribs
     LightAttribs g_LightAttribs;
 }
 
-cbuffer cbMaterialInfo
-{
-    GLTFMaterialShaderInfo g_MaterialInfo;
-}
-
-cbuffer cbRenderParameters
+cbuffer cbGLTFAttribs
 {
     GLTFRendererShaderParameters g_RenderParameters;
+    GLTFMaterialShaderInfo       g_MaterialInfo;
 }
-
 
 #if GLTF_PBR_USE_IBL
 TextureCube  g_IrradianceMap;

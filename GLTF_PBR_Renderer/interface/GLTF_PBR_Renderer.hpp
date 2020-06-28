@@ -312,8 +312,6 @@ private:
         return Idx < m_PSOCache.size() ? m_PSOCache[Idx].RawPtr() : nullptr;
     }
 
-    void UpdateRenderParams(IDeviceContext* pCtx);
-
     const CreateInfo m_Settings;
 
     static constexpr Uint32     BRDF_LUT_Dim = 512;
@@ -369,8 +367,7 @@ private:
     RenderInfo m_RenderParams;
 
     RefCntAutoPtr<IBuffer> m_TransformsCB;
-    RefCntAutoPtr<IBuffer> m_MaterialInfoCB;
-    RefCntAutoPtr<IBuffer> m_RenderParametersCB;
+    RefCntAutoPtr<IBuffer> m_GLTFAttribsCB;
     RefCntAutoPtr<IBuffer> m_PrecomputeEnvMapAttribsCB;
 };
 
