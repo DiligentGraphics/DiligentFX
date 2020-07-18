@@ -48,7 +48,15 @@ DiligentFXShaderSourceStreamFactory::DiligentFXShaderSourceStreamFactory()
     }
 }
 
-void DiligentFXShaderSourceStreamFactory::CreateInputStream(const Char* Name, IFileStream** ppStream)
+void DiligentFXShaderSourceStreamFactory::CreateInputStream(const Char*   Name,
+                                                            IFileStream** ppStream)
+{
+    CreateInputStream2(Name, CREATE_SHADER_SOURCE_INPUT_STREAM_FLAG_NONE, ppStream);
+}
+
+void DiligentFXShaderSourceStreamFactory::CreateInputStream2(const Char*                             Name,
+                                                             CREATE_SHADER_SOURCE_INPUT_STREAM_FLAGS Flags,
+                                                             IFileStream**                           ppStream)
 {
     auto SourceIt = m_NameToSourceMap.find(Name);
     if (SourceIt != m_NameToSourceMap.end())
@@ -61,7 +69,10 @@ void DiligentFXShaderSourceStreamFactory::CreateInputStream(const Char* Name, IF
     else
     {
         *ppStream = nullptr;
-        LOG_ERROR("Failed to create input stream for source file ", Name);
+        if ((Flags & CREATE_SHADER_SOURCE_INPUT_STREAM_FLAG_SILENT) == 0)
+        {
+            LOG_ERROR("Failed to create input stream for source file ", Name);
+        }
     }
 }
 
