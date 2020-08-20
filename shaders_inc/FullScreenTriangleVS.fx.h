@@ -12,7 +12,7 @@
 "    float2 f2XY = PosXY[VertexId];\n"
 "    VSOut.f2NormalizedXY = f2XY;\n"
 "    VSOut.fInstID = float( InstID );\n"
-"    \n"
+"\n"
 "    // Write 0 to the depth buffer\n"
 "    // NDC_MIN_Z ==  0 in DX\n"
 "    // NDC_MIN_Z == -1 in GL\n"
