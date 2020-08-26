@@ -176,13 +176,14 @@ struct EpipolarLightScatteringAttribs
     // Atmospheric extinction evaluation mode.
     int  iExtinctionEvalMode                DEFAULT_VALUE(EXTINCTION_EVAL_MODE_EPIPOLAR);
 
+    // Whether to use Ozone approximation (ignored when custom scattering coefficients are used).
+    BOOL bUseOzoneApproximation             DEFAULT_VALUE(TRUE);
     // Whether to use custom scattering coefficients.
     BOOL bUseCustomSctrCoeffs               DEFAULT_VALUE(FALSE);
     // Aerosol density scale to use for scattering coefficient computation.
     float fAerosolDensityScale              DEFAULT_VALUE(1.f);
     // Aerosol absorbtion scale to use for scattering coefficient computation.
     float fAerosolAbsorbtionScale           DEFAULT_VALUE(0.1f);
-    uint PaddingA0;
 
     // Custom Rayleigh coefficients.
     float4 f4CustomRlghBeta                 DEFAULT_VALUE(float4(5.8e-6f, 13.5e-6f, 33.1e-6f, 0.f));
@@ -201,7 +202,7 @@ struct EpipolarLightScatteringAttribs
     BOOL   bIsLightOnScreen                 DEFAULT_VALUE(FALSE);
     float  fNumCascades                     DEFAULT_VALUE(0);
     float  fFirstCascadeToRayMarch          DEFAULT_VALUE(0);
-    int    PaddingB0;
+    int    Padding0;
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
     CHECK_STRUCT_ALIGNMENT(EpipolarLightScatteringAttribs);
