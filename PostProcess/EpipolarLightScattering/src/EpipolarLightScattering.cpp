@@ -2235,8 +2235,9 @@ void EpipolarLightScattering::PrepareForNewFrame(FrameAttribs&                  
                                 m_PostProcessingAttribs.fAerosolDensityScale    != PPAttribs.fAerosolDensityScale    ||
                                 m_PostProcessingAttribs.fAerosolAbsorbtionScale != PPAttribs.fAerosolAbsorbtionScale ||
                                 (PPAttribs.bUseCustomSctrCoeffs && 
-                                    (m_PostProcessingAttribs.f4CustomRlghBeta != PPAttribs.f4CustomRlghBeta ||
-                                     m_PostProcessingAttribs.f4CustomMieBeta  != PPAttribs.f4CustomMieBeta) );
+                                    (m_PostProcessingAttribs.f4CustomRlghBeta        != PPAttribs.f4CustomRlghBeta ||
+                                     m_PostProcessingAttribs.f4CustomMieBeta         != PPAttribs.f4CustomMieBeta ||
+                                     m_PostProcessingAttribs.f4CustomOzoneAbsorption != PPAttribs.f4CustomOzoneAbsorption) );
     // clang-format on
 
     m_PostProcessingAttribs = PPAttribs;
@@ -2624,20 +2625,27 @@ void EpipolarLightScattering::ComputeScatteringCoefficients(IDeviceContext* pDev
         f4RayleighExtinctionCoeff = f4TotalRayleighSctrCoeff;
     }
 
-    if (m_PostProcessingAttribs.bUseOzoneApproximation && !m_PostProcessingAttribs.bUseCustomSctrCoeffs)
+    if (m_PostProcessingAttribs.bUseOzoneApproximation)
     {
         // As noted in [1], taking into account ozone particle absorption is essential to reproduce
         // the blue of the zenith sky. Without ozone, the sky can appear too yellow overall, especially
         // at sunset/sunrise. Ozone should be concentrated 32km up in the sky, however the author suggests
         // to use the same distribution as the Rayleigh particle distribution, which allows simply adding
-        // ozone absorption to Rayleigh absorption.
+        // ozone absorption to Rayleigh extinction.
         //
         // 1. Physically Based Sky, Atmosphere and Cloud Rendering in Frostbite, Sebastien Hillaire
         //    (Physically-Based Shading in Theory and Practice, Siggraph 2016)
 
-        // Add Ozone absorption coefficients from [1] to total Rayleigh extinction coefficient
-        const float4 f4OzoneAbsorption = float4{3.426f, 8.298f, 0.356f, 0.f} * 6e-7f;
-        m_MediaParams.f4RayleighExtinctionCoeff += f4OzoneAbsorption;
+        if (m_PostProcessingAttribs.bUseCustomSctrCoeffs)
+        {
+            m_MediaParams.f4RayleighExtinctionCoeff += m_PostProcessingAttribs.f4CustomOzoneAbsorption;
+        }
+        else
+        {
+            // Add Ozone absorption coefficients from [1] to total Rayleigh extinction coefficient
+            const float4 f4OzoneAbsorption = float4{3.426f, 8.298f, 0.356f, 0.f} * 6e-7f;
+            m_MediaParams.f4RayleighExtinctionCoeff += f4OzoneAbsorption;
+        }
     }
 
     // Calculate angular and total scattering coefficients for Mie scattering:
