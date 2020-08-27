@@ -2642,8 +2642,12 @@ void EpipolarLightScattering::ComputeScatteringCoefficients(IDeviceContext* pDev
         }
         else
         {
-            // Add Ozone absorption coefficients from [1] to total Rayleigh extinction coefficient
-            const float4 f4OzoneAbsorption = float4{3.426f, 8.298f, 0.356f, 0.f} * 6e-7f;
+            // Add Ozone absorption coefficients from [2] to the total Rayleigh extinction coefficients
+            //
+            //  2. A Scalable and Production Ready Sky and Atmosphere Rendering Technique, Sebastien Hillaire,
+            //     Eurographics Symposium on Rendering 2020
+
+            const float4 f4OzoneAbsorption = float4{0.650f, 1.881f, 0.085f, 0.f} * 1e-6f;
             m_MediaParams.f4RayleighExtinctionCoeff += f4OzoneAbsorption;
         }
     }

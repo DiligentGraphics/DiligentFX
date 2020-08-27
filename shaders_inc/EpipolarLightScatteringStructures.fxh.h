@@ -190,7 +190,7 @@
 "    // Custom Mie coefficients.\n"
 "    float4 f4CustomMieBeta                  DEFAULT_VALUE(float4(2.e-5f, 2.e-5f, 2.e-5f, 0.f));\n"
 "    // Custom Ozone absorption coefficient.\n"
-"    float4 f4CustomOzoneAbsorption          DEFAULT_VALUE(float4(3.426f, 8.298f, 0.356f, 0.f) * 6e-7f);\n"
+"    float4 f4CustomOzoneAbsorption          DEFAULT_VALUE(float4(0.650f, 1.881f, 0.085f, 0.f) * 1e-6f);\n"
 "\n"
 "    float4 f4EarthCenter                    DEFAULT_VALUE(float4(0.f, -static_cast<float>(EARTH_RADIUS), 0.f, 0.f));\n"
 "\n"
