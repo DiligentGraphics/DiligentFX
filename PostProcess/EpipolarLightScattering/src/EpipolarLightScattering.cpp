@@ -2633,7 +2633,7 @@ void EpipolarLightScattering::ComputeScatteringCoefficients(IDeviceContext* pDev
         // to use the same distribution as the Rayleigh particle distribution, which allows simply adding
         // ozone absorption to Rayleigh extinction.
         //
-        // 1. Physically Based Sky, Atmosphere and Cloud Rendering in Frostbite, Sebastien Hillaire
+        // 1. Physically Based Sky, Atmosphere and Cloud Rendering in Frostbite, Sebastien Hillaire
         //    (Physically-Based Shading in Theory and Practice, Siggraph 2016)
 
         if (m_PostProcessingAttribs.bUseCustomSctrCoeffs)
@@ -2644,7 +2644,7 @@ void EpipolarLightScattering::ComputeScatteringCoefficients(IDeviceContext* pDev
         {
             // Add Ozone absorption coefficients from [2] to the total Rayleigh extinction coefficients
             //
-            //  2. A Scalable and Production Ready Sky and Atmosphere Rendering Technique, Sebastien Hillaire,
+            //  2. A Scalable and Production Ready Sky and Atmosphere Rendering Technique, Sebastien Hillaire,
             //     Eurographics Symposium on Rendering 2020
 
             const float4 f4OzoneAbsorption = float4{0.650f, 1.881f, 0.085f, 0.f} * 1e-6f;
