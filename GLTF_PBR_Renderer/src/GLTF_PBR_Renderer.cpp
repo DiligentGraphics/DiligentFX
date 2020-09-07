@@ -201,7 +201,7 @@ void GLTF_PBR_Renderer::PrecomputeBRDF(IRenderDevice*  pDevice,
         pDevice->CreatePipelineState(PSOCreateInfo, &PrecomputeBRDF_PSO);
     }
     pCtx->SetPipelineState(PrecomputeBRDF_PSO);
-    pCtx->CommitShaderResources(nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
     ITextureView* pRTVs[] = {pBRDF_LUT->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET)};
     pCtx->SetRenderTargets(1, pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     DrawAttribs attrs(3, DRAW_FLAG_VERIFY_ALL);
