@@ -165,7 +165,7 @@ void GLTF_PBR_Renderer::PrecomputeBRDF(IRenderDevice*  pDevice,
 
         PSODesc.Name = "Precompute GLTF BRDF LUT PSO";
 
-        PSODesc.IsComputePipeline                             = false;
+        PSODesc.PipelineType                                  = PIPELINE_TYPE_GRAPHICS;
         PSODesc.GraphicsPipeline.NumRenderTargets             = 1;
         PSODesc.GraphicsPipeline.RTVFormats[0]                = TexDesc.Format;
         PSODesc.GraphicsPipeline.PrimitiveTopology            = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
@@ -223,7 +223,7 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
 
     PSODesc.Name = "Render GLTF PBR PSO";
 
-    PSODesc.IsComputePipeline                                     = false;
+    PSODesc.PipelineType                                          = PIPELINE_TYPE_GRAPHICS;
     PSODesc.GraphicsPipeline.NumRenderTargets                     = 1;
     PSODesc.GraphicsPipeline.RTVFormats[0]                        = m_Settings.RTVFmt;
     PSODesc.GraphicsPipeline.DSVFormat                            = m_Settings.DSVFmt;
@@ -526,8 +526,8 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*  pDevice,
         PipelineStateCreateInfo PSOCreateInfo;
         PipelineStateDesc&      PSODesc = PSOCreateInfo.PSODesc;
 
-        PSODesc.Name              = "Precompute irradiance cube PSO";
-        PSODesc.IsComputePipeline = false;
+        PSODesc.Name         = "Precompute irradiance cube PSO";
+        PSODesc.PipelineType = PIPELINE_TYPE_GRAPHICS;
 
         PSODesc.GraphicsPipeline.NumRenderTargets             = 1;
         PSODesc.GraphicsPipeline.RTVFormats[0]                = IrradianceCubeFmt;
@@ -594,8 +594,8 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*  pDevice,
         PipelineStateCreateInfo PSOCreateInfo;
         PipelineStateDesc&      PSODesc = PSOCreateInfo.PSODesc;
 
-        PSODesc.Name              = "Prefilter environment map PSO";
-        PSODesc.IsComputePipeline = false;
+        PSODesc.Name         = "Prefilter environment map PSO";
+        PSODesc.PipelineType = PIPELINE_TYPE_GRAPHICS;
 
         PSODesc.GraphicsPipeline.NumRenderTargets             = 1;
         PSODesc.GraphicsPipeline.RTVFormats[0]                = PrefilteredEnvMapFmt;

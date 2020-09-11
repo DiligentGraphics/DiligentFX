@@ -238,7 +238,7 @@ void EpipolarLightScattering::RenderTechnique::InitializeComputeTechnique(IRende
 
     PSODesc.Name                = PSOName;
     PSODesc.ResourceLayout      = ResourceLayout;
-    PSODesc.IsComputePipeline   = true;
+    PSODesc.PipelineType        = PIPELINE_TYPE_COMPUTE;
     PSODesc.ComputePipeline.pCS = ComputeShader;
     PSO.Release();
     SRB.Release();
