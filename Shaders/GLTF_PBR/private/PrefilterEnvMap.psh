@@ -63,4 +63,5 @@ void main(in float4  Pos      : SV_Position,
 {		
     float3 R = normalize(WorldPos);
     Color.rgb = PrefilterEnvMap(g_Roughness, R);
+    Color.a = 0.0;
 }

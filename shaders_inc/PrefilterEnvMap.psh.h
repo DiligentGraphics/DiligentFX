@@ -63,4 +63,5 @@
 "{		\n"
 "    float3 R = normalize(WorldPos);\n"
 "    Color.rgb = PrefilterEnvMap(g_Roughness, R);\n"
+"    Color.a = 0.0;\n"
 "}\n"
