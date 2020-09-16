@@ -596,7 +596,7 @@ void EpipolarLightScattering::CreateEpipolarTextures(IRenderDevice* pDevice)
         for (auto Fmt : {EpipolarImageDepthFmt0, EpipolarImageDepthFmt1})
         {
             const auto& FmtInfo = pDevice->GetTextureFormatInfoExt(Fmt);
-            if (FmtInfo.DepthRenderable)
+            if (FmtInfo.BindFlags & BIND_DEPTH_STENCIL)
             {
                 TexDesc.Format = Fmt;
                 break;
