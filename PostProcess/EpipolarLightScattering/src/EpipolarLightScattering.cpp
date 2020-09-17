@@ -322,7 +322,7 @@ EpipolarLightScattering::EpipolarLightScattering(IRenderDevice*              pDe
 
     pDevice->CreateResourceMapping(ResourceMappingDesc(), &m_pResMapping);
     const auto& deviceCaps = pDevice->GetDeviceCaps();
-    if (deviceCaps.DevType == RENDER_DEVICE_TYPE_GLES || deviceCaps.AdaterType == ADAPTER_TYPE_SOFTWARE)
+    if (deviceCaps.DevType == RENDER_DEVICE_TYPE_GLES || deviceCaps.AdapterInfo.Type == ADAPTER_TYPE_SOFTWARE)
     {
         m_uiNumRandomSamplesOnSphere /= 2;
         m_iPrecomputedSctrUDim /= 2;
