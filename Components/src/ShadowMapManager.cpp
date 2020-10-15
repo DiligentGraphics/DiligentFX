@@ -419,7 +419,7 @@ void ShadowMapManager::InitializeConversionTechniques(TEXTURE_FORMAT FilterableS
 
         if (Tech.PSO)
         {
-            if (Tech.PSO->GetDesc().GraphicsPipeline.RTVFormats[0] != FilterableShadowMapFmt)
+            if (Tech.PSO->GetGraphicsPipelineDesc().RTVFormats[0] != FilterableShadowMapFmt)
                 Tech = ShadowConversionTechnique();
             else
                 continue; // Already up to date
@@ -438,8 +438,8 @@ void ShadowMapManager::InitializeConversionTechniques(TEXTURE_FORMAT FilterableS
             m_pDevice->CreateShader(VertShaderCI, &pScreenSizeTriVS);
         }
 
-        PipelineStateCreateInfo PSOCreateInfo;
-        PipelineStateDesc&      PSODesc = PSOCreateInfo.PSODesc;
+        GraphicsPipelineStateCreateInfo PSOCreateInfo;
+        PipelineStateDesc&              PSODesc = PSOCreateInfo.PSODesc;
 
         ShaderCreateInfo ShaderCI;
         ShaderCI.Desc.ShaderType            = SHADER_TYPE_PIXEL;
@@ -486,21 +486,21 @@ void ShadowMapManager::InitializeConversionTechniques(TEXTURE_FORMAT FilterableS
         PSODesc.ResourceLayout.Variables    = Variables;
         PSODesc.ResourceLayout.NumVariables = _countof(Variables);
 
-        auto& GraphicsPipeline = PSODesc.GraphicsPipeline;
+        auto& GraphicsPipeline = PSOCreateInfo.GraphicsPipeline;
 
         GraphicsPipeline.RasterizerDesc.FillMode      = FILL_MODE_SOLID;
         GraphicsPipeline.RasterizerDesc.CullMode      = CULL_MODE_NONE;
         GraphicsPipeline.DepthStencilDesc.DepthEnable = False;
-        GraphicsPipeline.pVS                          = pScreenSizeTriVS;
-        GraphicsPipeline.pPS                          = pVSMHorzPS;
+        PSOCreateInfo.pVS                             = pScreenSizeTriVS;
+        PSOCreateInfo.pPS                             = pVSMHorzPS;
         GraphicsPipeline.PrimitiveTopology            = PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
         GraphicsPipeline.NumRenderTargets             = 1;
         GraphicsPipeline.RTVFormats[0]                = FilterableShadowMapFmt;
 
-        m_pDevice->CreatePipelineState(PSOCreateInfo, &Tech.PSO);
+        m_pDevice->CreateGraphicsPipelineState(PSOCreateInfo, &Tech.PSO);
         Tech.PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbConversionAttribs")->Set(m_pConversionAttribsBuffer);
 
-        if (m_BlurVertTech.PSO && m_BlurVertTech.PSO->GetDesc().GraphicsPipeline.RTVFormats[0] != FilterableShadowMapFmt)
+        if (m_BlurVertTech.PSO && m_BlurVertTech.PSO->GetGraphicsPipelineDesc().RTVFormats[0] != FilterableShadowMapFmt)
             m_BlurVertTech.PSO.Release();
 
         if (!m_BlurVertTech.PSO)
@@ -510,8 +510,8 @@ void ShadowMapManager::InitializeConversionTechniques(TEXTURE_FORMAT FilterableS
             PSODesc.Name        = "Vertical blur pass PSO";
             RefCntAutoPtr<IShader> pVertBlurPS;
             m_pDevice->CreateShader(ShaderCI, &pVertBlurPS);
-            GraphicsPipeline.pPS = pVertBlurPS;
-            m_pDevice->CreatePipelineState(PSOCreateInfo, &m_BlurVertTech.PSO);
+            PSOCreateInfo.pPS = pVertBlurPS;
+            m_pDevice->CreateGraphicsPipelineState(PSOCreateInfo, &m_BlurVertTech.PSO);
             m_BlurVertTech.PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbConversionAttribs")->Set(m_pConversionAttribsBuffer);
         }
     }

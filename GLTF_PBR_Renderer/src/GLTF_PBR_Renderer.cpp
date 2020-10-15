@@ -160,17 +160,17 @@ void GLTF_PBR_Renderer::PrecomputeBRDF(IRenderDevice*  pDevice,
 
     RefCntAutoPtr<IPipelineState> PrecomputeBRDF_PSO;
     {
-        PipelineStateCreateInfo PSOCreateInfo;
-        PipelineStateDesc&      PSODesc = PSOCreateInfo.PSODesc;
+        GraphicsPipelineStateCreateInfo PSOCreateInfo;
+        PipelineStateDesc&              PSODesc = PSOCreateInfo.PSODesc;
 
         PSODesc.Name = "Precompute GLTF BRDF LUT PSO";
 
-        PSODesc.PipelineType                                  = PIPELINE_TYPE_GRAPHICS;
-        PSODesc.GraphicsPipeline.NumRenderTargets             = 1;
-        PSODesc.GraphicsPipeline.RTVFormats[0]                = TexDesc.Format;
-        PSODesc.GraphicsPipeline.PrimitiveTopology            = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-        PSODesc.GraphicsPipeline.RasterizerDesc.CullMode      = CULL_MODE_NONE;
-        PSODesc.GraphicsPipeline.DepthStencilDesc.DepthEnable = False;
+        PSODesc.PipelineType                                        = PIPELINE_TYPE_GRAPHICS;
+        PSOCreateInfo.GraphicsPipeline.NumRenderTargets             = 1;
+        PSOCreateInfo.GraphicsPipeline.RTVFormats[0]                = TexDesc.Format;
+        PSOCreateInfo.GraphicsPipeline.PrimitiveTopology            = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+        PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode      = CULL_MODE_NONE;
+        PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthEnable = False;
 
         ShaderCreateInfo ShaderCI;
         ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
@@ -196,9 +196,9 @@ void GLTF_PBR_Renderer::PrecomputeBRDF(IRenderDevice*  pDevice,
         }
 
         // Finally, create the pipeline state
-        PSODesc.GraphicsPipeline.pVS = pVS;
-        PSODesc.GraphicsPipeline.pPS = pPS;
-        pDevice->CreatePipelineState(PSOCreateInfo, &PrecomputeBRDF_PSO);
+        PSOCreateInfo.pVS = pVS;
+        PSOCreateInfo.pPS = pPS;
+        pDevice->CreateGraphicsPipelineState(PSOCreateInfo, &PrecomputeBRDF_PSO);
     }
     pCtx->SetPipelineState(PrecomputeBRDF_PSO);
 
@@ -218,18 +218,18 @@ void GLTF_PBR_Renderer::PrecomputeBRDF(IRenderDevice*  pDevice,
 
 void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
 {
-    PipelineStateCreateInfo PSOCreateInfo;
-    PipelineStateDesc&      PSODesc = PSOCreateInfo.PSODesc;
+    GraphicsPipelineStateCreateInfo PSOCreateInfo;
+    PipelineStateDesc&              PSODesc = PSOCreateInfo.PSODesc;
 
     PSODesc.Name = "Render GLTF PBR PSO";
 
-    PSODesc.PipelineType                                          = PIPELINE_TYPE_GRAPHICS;
-    PSODesc.GraphicsPipeline.NumRenderTargets                     = 1;
-    PSODesc.GraphicsPipeline.RTVFormats[0]                        = m_Settings.RTVFmt;
-    PSODesc.GraphicsPipeline.DSVFormat                            = m_Settings.DSVFmt;
-    PSODesc.GraphicsPipeline.PrimitiveTopology                    = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    PSODesc.GraphicsPipeline.RasterizerDesc.CullMode              = CULL_MODE_BACK;
-    PSODesc.GraphicsPipeline.RasterizerDesc.FrontCounterClockwise = m_Settings.FrontCCW;
+    PSODesc.PipelineType                                                = PIPELINE_TYPE_GRAPHICS;
+    PSOCreateInfo.GraphicsPipeline.NumRenderTargets                     = 1;
+    PSOCreateInfo.GraphicsPipeline.RTVFormats[0]                        = m_Settings.RTVFmt;
+    PSOCreateInfo.GraphicsPipeline.DSVFormat                            = m_Settings.DSVFmt;
+    PSOCreateInfo.GraphicsPipeline.PrimitiveTopology                    = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode              = CULL_MODE_BACK;
+    PSOCreateInfo.GraphicsPipeline.RasterizerDesc.FrontCounterClockwise = m_Settings.FrontCCW;
 
     ShaderCreateInfo ShaderCI;
     ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
@@ -274,8 +274,8 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
         {5, 1, 4, VT_FLOAT32}    //float4 Weight0 : ATTRIB5;
     };
     // clang-format on
-    PSODesc.GraphicsPipeline.InputLayout.LayoutElements = Inputs;
-    PSODesc.GraphicsPipeline.InputLayout.NumElements    = _countof(Inputs);
+    PSOCreateInfo.GraphicsPipeline.InputLayout.LayoutElements = Inputs;
+    PSOCreateInfo.GraphicsPipeline.InputLayout.NumElements    = _countof(Inputs);
 
     PSODesc.ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
     // clang-format off
@@ -322,28 +322,28 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
     PSODesc.ResourceLayout.NumStaticSamplers = static_cast<Uint32>(StaticSamplers.size());
     PSODesc.ResourceLayout.StaticSamplers    = !StaticSamplers.empty() ? StaticSamplers.data() : nullptr;
 
-    PSODesc.GraphicsPipeline.pVS = pVS;
-    PSODesc.GraphicsPipeline.pPS = pPS;
+    PSOCreateInfo.pVS = pVS;
+    PSOCreateInfo.pPS = pPS;
 
     {
         PSOKey Key{GLTF::Material::ALPHAMODE_OPAQUE, false};
 
         RefCntAutoPtr<IPipelineState> pSingleSidedOpaquePSO;
-        pDevice->CreatePipelineState(PSOCreateInfo, &pSingleSidedOpaquePSO);
+        pDevice->CreateGraphicsPipelineState(PSOCreateInfo, &pSingleSidedOpaquePSO);
         AddPSO(Key, std::move(pSingleSidedOpaquePSO));
 
-        PSODesc.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_NONE;
+        PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_NONE;
 
         Key.DoubleSided = true;
 
         RefCntAutoPtr<IPipelineState> pDobleSidedOpaquePSO;
-        pDevice->CreatePipelineState(PSOCreateInfo, &pDobleSidedOpaquePSO);
+        pDevice->CreateGraphicsPipelineState(PSOCreateInfo, &pDobleSidedOpaquePSO);
         AddPSO(Key, std::move(pDobleSidedOpaquePSO));
     }
 
-    PSODesc.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_BACK;
+    PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_BACK;
 
-    auto& RT0          = PSODesc.GraphicsPipeline.BlendDesc.RenderTargets[0];
+    auto& RT0          = PSOCreateInfo.GraphicsPipeline.BlendDesc.RenderTargets[0];
     RT0.BlendEnable    = true;
     RT0.SrcBlend       = BLEND_FACTOR_SRC_ALPHA;
     RT0.DestBlend      = BLEND_FACTOR_INV_SRC_ALPHA;
@@ -356,15 +356,15 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
         PSOKey Key{GLTF::Material::ALPHAMODE_BLEND, false};
 
         RefCntAutoPtr<IPipelineState> pSingleSidedBlendPSO;
-        pDevice->CreatePipelineState(PSOCreateInfo, &pSingleSidedBlendPSO);
+        pDevice->CreateGraphicsPipelineState(PSOCreateInfo, &pSingleSidedBlendPSO);
         AddPSO(Key, std::move(pSingleSidedBlendPSO));
 
-        PSODesc.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_NONE;
+        PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_NONE;
 
         Key.DoubleSided = true;
 
         RefCntAutoPtr<IPipelineState> pDoubleSidedBlendPSO;
-        pDevice->CreatePipelineState(PSOCreateInfo, &pDoubleSidedBlendPSO);
+        pDevice->CreateGraphicsPipelineState(PSOCreateInfo, &pDoubleSidedBlendPSO);
         AddPSO(Key, std::move(pDoubleSidedBlendPSO));
     }
 
@@ -523,19 +523,20 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*  pDevice,
             pDevice->CreateShader(ShaderCI, &pPS);
         }
 
-        PipelineStateCreateInfo PSOCreateInfo;
-        PipelineStateDesc&      PSODesc = PSOCreateInfo.PSODesc;
+        GraphicsPipelineStateCreateInfo PSOCreateInfo;
+        PipelineStateDesc&              PSODesc = PSOCreateInfo.PSODesc;
 
         PSODesc.Name         = "Precompute irradiance cube PSO";
         PSODesc.PipelineType = PIPELINE_TYPE_GRAPHICS;
 
-        PSODesc.GraphicsPipeline.NumRenderTargets             = 1;
-        PSODesc.GraphicsPipeline.RTVFormats[0]                = IrradianceCubeFmt;
-        PSODesc.GraphicsPipeline.PrimitiveTopology            = PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
-        PSODesc.GraphicsPipeline.RasterizerDesc.CullMode      = CULL_MODE_NONE;
-        PSODesc.GraphicsPipeline.DepthStencilDesc.DepthEnable = False;
-        PSODesc.GraphicsPipeline.pVS                          = pVS;
-        PSODesc.GraphicsPipeline.pPS                          = pPS;
+        PSOCreateInfo.GraphicsPipeline.NumRenderTargets             = 1;
+        PSOCreateInfo.GraphicsPipeline.RTVFormats[0]                = IrradianceCubeFmt;
+        PSOCreateInfo.GraphicsPipeline.PrimitiveTopology            = PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+        PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode      = CULL_MODE_NONE;
+        PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthEnable = False;
+
+        PSOCreateInfo.pVS = pVS;
+        PSOCreateInfo.pPS = pPS;
 
         PSODesc.ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_STATIC;
         // clang-format off
@@ -556,7 +557,7 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*  pDevice,
         PSODesc.ResourceLayout.NumStaticSamplers = _countof(StaticSamplers);
         PSODesc.ResourceLayout.StaticSamplers    = StaticSamplers;
 
-        pDevice->CreatePipelineState(PSOCreateInfo, &m_pPrecomputeIrradianceCubePSO);
+        pDevice->CreateGraphicsPipelineState(PSOCreateInfo, &m_pPrecomputeIrradianceCubePSO);
         m_pPrecomputeIrradianceCubePSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "cbTransform")->Set(m_PrecomputeEnvMapAttribsCB);
         m_pPrecomputeIrradianceCubePSO->CreateShaderResourceBinding(&m_pPrecomputeIrradianceCubeSRB, true);
     }
@@ -591,19 +592,20 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*  pDevice,
             pDevice->CreateShader(ShaderCI, &pPS);
         }
 
-        PipelineStateCreateInfo PSOCreateInfo;
-        PipelineStateDesc&      PSODesc = PSOCreateInfo.PSODesc;
+        GraphicsPipelineStateCreateInfo PSOCreateInfo;
+        PipelineStateDesc&              PSODesc = PSOCreateInfo.PSODesc;
 
         PSODesc.Name         = "Prefilter environment map PSO";
         PSODesc.PipelineType = PIPELINE_TYPE_GRAPHICS;
 
-        PSODesc.GraphicsPipeline.NumRenderTargets             = 1;
-        PSODesc.GraphicsPipeline.RTVFormats[0]                = PrefilteredEnvMapFmt;
-        PSODesc.GraphicsPipeline.PrimitiveTopology            = PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
-        PSODesc.GraphicsPipeline.RasterizerDesc.CullMode      = CULL_MODE_NONE;
-        PSODesc.GraphicsPipeline.DepthStencilDesc.DepthEnable = False;
-        PSODesc.GraphicsPipeline.pVS                          = pVS;
-        PSODesc.GraphicsPipeline.pPS                          = pPS;
+        PSOCreateInfo.GraphicsPipeline.NumRenderTargets             = 1;
+        PSOCreateInfo.GraphicsPipeline.RTVFormats[0]                = PrefilteredEnvMapFmt;
+        PSOCreateInfo.GraphicsPipeline.PrimitiveTopology            = PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+        PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode      = CULL_MODE_NONE;
+        PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthEnable = False;
+
+        PSOCreateInfo.pVS = pVS;
+        PSOCreateInfo.pPS = pPS;
 
         PSODesc.ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_STATIC;
         // clang-format off
@@ -624,7 +626,7 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*  pDevice,
         PSODesc.ResourceLayout.NumStaticSamplers = _countof(StaticSamplers);
         PSODesc.ResourceLayout.StaticSamplers    = StaticSamplers;
 
-        pDevice->CreatePipelineState(PSOCreateInfo, &m_pPrefilterEnvMapPSO);
+        pDevice->CreateGraphicsPipelineState(PSOCreateInfo, &m_pPrefilterEnvMapPSO);
         m_pPrefilterEnvMapPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "cbTransform")->Set(m_PrecomputeEnvMapAttribsCB);
         m_pPrefilterEnvMapPSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "FilterAttribs")->Set(m_PrecomputeEnvMapAttribsCB);
         m_pPrefilterEnvMapPSO->CreateShaderResourceBinding(&m_pPrefilterEnvMapSRB, true);
