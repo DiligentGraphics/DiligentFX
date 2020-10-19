@@ -82,7 +82,7 @@ GLTF_PBR_Renderer::GLTF_PBR_Renderer(IRenderDevice*    pDevice,
         TextureDesc TexDesc;
         TexDesc.Name      = "White texture for GLTF renderer";
         TexDesc.Type      = RESOURCE_DIM_TEX_2D;
-        TexDesc.Usage     = USAGE_STATIC;
+        TexDesc.Usage     = USAGE_IMMUTABLE;
         TexDesc.BindFlags = BIND_SHADER_RESOURCE;
         TexDesc.Width     = TexDim;
         TexDesc.Height    = TexDim;

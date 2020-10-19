@@ -456,7 +456,7 @@ void EpipolarLightScattering::CreateRandomSphereSamplingTexture(IRenderDevice* p
     RandomSphereSamplingTexDesc.Height    = 1;
     RandomSphereSamplingTexDesc.MipLevels = 1;
     RandomSphereSamplingTexDesc.Format    = TEX_FORMAT_RGBA32_FLOAT;
-    RandomSphereSamplingTexDesc.Usage     = USAGE_STATIC;
+    RandomSphereSamplingTexDesc.Usage     = USAGE_IMMUTABLE;
     RandomSphereSamplingTexDesc.BindFlags = BIND_SHADER_RESOURCE;
 
     std::vector<float4> SphereSampling(m_uiNumRandomSamplesOnSphere);
