@@ -161,16 +161,17 @@ void GLTF_PBR_Renderer::PrecomputeBRDF(IRenderDevice*  pDevice,
     RefCntAutoPtr<IPipelineState> PrecomputeBRDF_PSO;
     {
         GraphicsPipelineStateCreateInfo PSOCreateInfo;
-        PipelineStateDesc&              PSODesc = PSOCreateInfo.PSODesc;
+        PipelineStateDesc&              PSODesc          = PSOCreateInfo.PSODesc;
+        GraphicsPipelineDesc&           GraphicsPipeline = PSOCreateInfo.GraphicsPipeline;
 
-        PSODesc.Name = "Precompute GLTF BRDF LUT PSO";
+        PSODesc.Name         = "Precompute GLTF BRDF LUT PSO";
+        PSODesc.PipelineType = PIPELINE_TYPE_GRAPHICS;
 
-        PSODesc.PipelineType                                        = PIPELINE_TYPE_GRAPHICS;
-        PSOCreateInfo.GraphicsPipeline.NumRenderTargets             = 1;
-        PSOCreateInfo.GraphicsPipeline.RTVFormats[0]                = TexDesc.Format;
-        PSOCreateInfo.GraphicsPipeline.PrimitiveTopology            = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-        PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode      = CULL_MODE_NONE;
-        PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthEnable = False;
+        GraphicsPipeline.NumRenderTargets             = 1;
+        GraphicsPipeline.RTVFormats[0]                = TexDesc.Format;
+        GraphicsPipeline.PrimitiveTopology            = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+        GraphicsPipeline.RasterizerDesc.CullMode      = CULL_MODE_NONE;
+        GraphicsPipeline.DepthStencilDesc.DepthEnable = False;
 
         ShaderCreateInfo ShaderCI;
         ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
@@ -219,17 +220,18 @@ void GLTF_PBR_Renderer::PrecomputeBRDF(IRenderDevice*  pDevice,
 void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
 {
     GraphicsPipelineStateCreateInfo PSOCreateInfo;
-    PipelineStateDesc&              PSODesc = PSOCreateInfo.PSODesc;
+    PipelineStateDesc&              PSODesc          = PSOCreateInfo.PSODesc;
+    GraphicsPipelineDesc&           GraphicsPipeline = PSOCreateInfo.GraphicsPipeline;
 
-    PSODesc.Name = "Render GLTF PBR PSO";
+    PSODesc.Name         = "Render GLTF PBR PSO";
+    PSODesc.PipelineType = PIPELINE_TYPE_GRAPHICS;
 
-    PSODesc.PipelineType                                                = PIPELINE_TYPE_GRAPHICS;
-    PSOCreateInfo.GraphicsPipeline.NumRenderTargets                     = 1;
-    PSOCreateInfo.GraphicsPipeline.RTVFormats[0]                        = m_Settings.RTVFmt;
-    PSOCreateInfo.GraphicsPipeline.DSVFormat                            = m_Settings.DSVFmt;
-    PSOCreateInfo.GraphicsPipeline.PrimitiveTopology                    = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode              = CULL_MODE_BACK;
-    PSOCreateInfo.GraphicsPipeline.RasterizerDesc.FrontCounterClockwise = m_Settings.FrontCCW;
+    GraphicsPipeline.NumRenderTargets                     = 1;
+    GraphicsPipeline.RTVFormats[0]                        = m_Settings.RTVFmt;
+    GraphicsPipeline.DSVFormat                            = m_Settings.DSVFmt;
+    GraphicsPipeline.PrimitiveTopology                    = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    GraphicsPipeline.RasterizerDesc.CullMode              = CULL_MODE_BACK;
+    GraphicsPipeline.RasterizerDesc.FrontCounterClockwise = m_Settings.FrontCCW;
 
     ShaderCreateInfo ShaderCI;
     ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
@@ -524,16 +526,17 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*  pDevice,
         }
 
         GraphicsPipelineStateCreateInfo PSOCreateInfo;
-        PipelineStateDesc&              PSODesc = PSOCreateInfo.PSODesc;
+        PipelineStateDesc&              PSODesc          = PSOCreateInfo.PSODesc;
+        GraphicsPipelineDesc&           GraphicsPipeline = PSOCreateInfo.GraphicsPipeline;
 
         PSODesc.Name         = "Precompute irradiance cube PSO";
         PSODesc.PipelineType = PIPELINE_TYPE_GRAPHICS;
 
-        PSOCreateInfo.GraphicsPipeline.NumRenderTargets             = 1;
-        PSOCreateInfo.GraphicsPipeline.RTVFormats[0]                = IrradianceCubeFmt;
-        PSOCreateInfo.GraphicsPipeline.PrimitiveTopology            = PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
-        PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode      = CULL_MODE_NONE;
-        PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthEnable = False;
+        GraphicsPipeline.NumRenderTargets             = 1;
+        GraphicsPipeline.RTVFormats[0]                = IrradianceCubeFmt;
+        GraphicsPipeline.PrimitiveTopology            = PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+        GraphicsPipeline.RasterizerDesc.CullMode      = CULL_MODE_NONE;
+        GraphicsPipeline.DepthStencilDesc.DepthEnable = False;
 
         PSOCreateInfo.pVS = pVS;
         PSOCreateInfo.pPS = pPS;
@@ -593,16 +596,17 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*  pDevice,
         }
 
         GraphicsPipelineStateCreateInfo PSOCreateInfo;
-        PipelineStateDesc&              PSODesc = PSOCreateInfo.PSODesc;
+        PipelineStateDesc&              PSODesc          = PSOCreateInfo.PSODesc;
+        GraphicsPipelineDesc&           GraphicsPipeline = PSOCreateInfo.GraphicsPipeline;
 
         PSODesc.Name         = "Prefilter environment map PSO";
         PSODesc.PipelineType = PIPELINE_TYPE_GRAPHICS;
 
-        PSOCreateInfo.GraphicsPipeline.NumRenderTargets             = 1;
-        PSOCreateInfo.GraphicsPipeline.RTVFormats[0]                = PrefilteredEnvMapFmt;
-        PSOCreateInfo.GraphicsPipeline.PrimitiveTopology            = PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
-        PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode      = CULL_MODE_NONE;
-        PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthEnable = False;
+        GraphicsPipeline.NumRenderTargets             = 1;
+        GraphicsPipeline.RTVFormats[0]                = PrefilteredEnvMapFmt;
+        GraphicsPipeline.PrimitiveTopology            = PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+        GraphicsPipeline.RasterizerDesc.CullMode      = CULL_MODE_NONE;
+        GraphicsPipeline.DepthStencilDesc.DepthEnable = False;
 
         PSOCreateInfo.pVS = pVS;
         PSOCreateInfo.pPS = pPS;
