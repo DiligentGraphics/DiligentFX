@@ -74,26 +74,26 @@ public:
         /// Whether to use emissive texture.
         bool UseEmissive = true;
 
-        /// When set to true, pipeline state will be compiled with static samplers.
+        /// When set to true, pipeline state will be compiled with immutable samplers.
         /// When set to false, samplers from the texture views will be used.
-        bool UseStaticSamplers = true;
+        bool UseImmutableSamplers = true;
 
         static const SamplerDesc DefaultSampler;
 
-        /// Static sampler for color map texture.
-        SamplerDesc ColorMapStaticSampler = DefaultSampler;
+        /// Immutable sampler for color map texture.
+        SamplerDesc ColorMapImmutableSampler = DefaultSampler;
 
-        /// Static sampler for physical description map texture.
-        SamplerDesc PhysDescMapStaticSampler = DefaultSampler;
+        /// Immutable sampler for physical description map texture.
+        SamplerDesc PhysDescMapImmutableSampler = DefaultSampler;
 
-        /// Static sampler for normal map texture.
-        SamplerDesc NormalMapStaticSampler = DefaultSampler;
+        /// Immutable sampler for normal map texture.
+        SamplerDesc NormalMapImmutableSampler = DefaultSampler;
 
-        /// Static sampler for AO texture.
-        SamplerDesc AOMapStaticSampler = DefaultSampler;
+        /// Immutable sampler for AO texture.
+        SamplerDesc AOMapImmutableSampler = DefaultSampler;
 
-        /// Static sampler for emissive map texture.
-        SamplerDesc EmissiveMapStaticSampler = DefaultSampler;
+        /// Immutable sampler for emissive map texture.
+        SamplerDesc EmissiveMapImmutableSampler = DefaultSampler;
     };
 
     /// Initializes the renderer

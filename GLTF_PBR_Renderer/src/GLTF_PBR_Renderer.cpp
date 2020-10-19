@@ -288,24 +288,24 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
     };
     // clang-format on
 
-    std::vector<StaticSamplerDesc> StaticSamplers;
+    std::vector<ImmutableSamplerDesc> ImtblSamplers;
     // clang-format off
-    if (m_Settings.UseStaticSamplers)
+    if (m_Settings.UseImmutableSamplers)
     {
-        StaticSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_ColorMap",              m_Settings.ColorMapStaticSampler);
-        StaticSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_PhysicalDescriptorMap", m_Settings.PhysDescMapStaticSampler);
-        StaticSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_NormalMap",             m_Settings.NormalMapStaticSampler);
+        ImtblSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_ColorMap",              m_Settings.ColorMapImmutableSampler);
+        ImtblSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_PhysicalDescriptorMap", m_Settings.PhysDescMapImmutableSampler);
+        ImtblSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_NormalMap",             m_Settings.NormalMapImmutableSampler);
     }
     // clang-format on
 
     if (m_Settings.UseAO)
     {
-        StaticSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_AOMap", m_Settings.AOMapStaticSampler);
+        ImtblSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_AOMap", m_Settings.AOMapImmutableSampler);
     }
 
     if (m_Settings.UseEmissive)
     {
-        StaticSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_EmissiveMap", m_Settings.EmissiveMapStaticSampler);
+        ImtblSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_EmissiveMap", m_Settings.EmissiveMapImmutableSampler);
     }
 
     if (m_Settings.UseIBL)
@@ -313,16 +313,16 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
         Vars.emplace_back(SHADER_TYPE_PIXEL, "g_BRDF_LUT", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
 
         // clang-format off
-        StaticSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_BRDF_LUT",          Sam_LinearClamp);
-        StaticSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_IrradianceMap",     Sam_LinearClamp);
-        StaticSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_PrefilteredEnvMap", Sam_LinearClamp);
+        ImtblSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_BRDF_LUT",          Sam_LinearClamp);
+        ImtblSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_IrradianceMap",     Sam_LinearClamp);
+        ImtblSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_PrefilteredEnvMap", Sam_LinearClamp);
         // clang-format on
     }
 
-    PSODesc.ResourceLayout.NumVariables      = static_cast<Uint32>(Vars.size());
-    PSODesc.ResourceLayout.Variables         = Vars.data();
-    PSODesc.ResourceLayout.NumStaticSamplers = static_cast<Uint32>(StaticSamplers.size());
-    PSODesc.ResourceLayout.StaticSamplers    = !StaticSamplers.empty() ? StaticSamplers.data() : nullptr;
+    PSODesc.ResourceLayout.NumVariables         = static_cast<Uint32>(Vars.size());
+    PSODesc.ResourceLayout.Variables            = Vars.data();
+    PSODesc.ResourceLayout.NumImmutableSamplers = static_cast<Uint32>(ImtblSamplers.size());
+    PSODesc.ResourceLayout.ImmutableSamplers    = !ImtblSamplers.empty() ? ImtblSamplers.data() : nullptr;
 
     PSOCreateInfo.pVS = pVS;
     PSOCreateInfo.pPS = pPS;
@@ -552,13 +552,13 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*  pDevice,
         PSODesc.ResourceLayout.Variables    = Vars;
 
         // clang-format off
-        StaticSamplerDesc StaticSamplers[] =
+        ImmutableSamplerDesc ImtblSamplers[] =
         {
             {SHADER_TYPE_PIXEL, "g_EnvironmentMap", Sam_LinearClamp}
         };
         // clang-format on
-        PSODesc.ResourceLayout.NumStaticSamplers = _countof(StaticSamplers);
-        PSODesc.ResourceLayout.StaticSamplers    = StaticSamplers;
+        PSODesc.ResourceLayout.NumImmutableSamplers = _countof(ImtblSamplers);
+        PSODesc.ResourceLayout.ImmutableSamplers    = ImtblSamplers;
 
         pDevice->CreateGraphicsPipelineState(PSOCreateInfo, &m_pPrecomputeIrradianceCubePSO);
         m_pPrecomputeIrradianceCubePSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "cbTransform")->Set(m_PrecomputeEnvMapAttribsCB);
@@ -622,13 +622,13 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*  pDevice,
         PSODesc.ResourceLayout.Variables    = Vars;
 
         // clang-format off
-        StaticSamplerDesc StaticSamplers[] =
+        ImmutableSamplerDesc ImtblSamplers[] =
         {
             {SHADER_TYPE_PIXEL, "g_EnvironmentMap", Sam_LinearClamp}
         };
         // clang-format on
-        PSODesc.ResourceLayout.NumStaticSamplers = _countof(StaticSamplers);
-        PSODesc.ResourceLayout.StaticSamplers    = StaticSamplers;
+        PSODesc.ResourceLayout.NumImmutableSamplers = _countof(ImtblSamplers);
+        PSODesc.ResourceLayout.ImmutableSamplers    = ImtblSamplers;
 
         pDevice->CreateGraphicsPipelineState(PSOCreateInfo, &m_pPrefilterEnvMapPSO);
         m_pPrefilterEnvMapPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "cbTransform")->Set(m_PrecomputeEnvMapAttribsCB);

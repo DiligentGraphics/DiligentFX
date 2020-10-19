@@ -471,7 +471,7 @@ void ShadowMapManager::InitializeConversionTechniques(TEXTURE_FORMAT FilterableS
                 {SHADER_TYPE_PIXEL, "g_tex2DShadowMap", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE} //
             };
 
-        StaticSamplerDesc StaticSamplers[] =
+        ImmutableSamplerDesc ImtblSampler[] =
             {
                 {SHADER_TYPE_PIXEL, "g_tex2DShadowMap", Sam_LinearClamp} //
             };
@@ -480,8 +480,8 @@ void ShadowMapManager::InitializeConversionTechniques(TEXTURE_FORMAT FilterableS
         {
             // Even though textures are never sampled in the shader, OpenGL requires proper
             // sampler to be set even when texelFetch is used.
-            PSODesc.ResourceLayout.StaticSamplers    = StaticSamplers;
-            PSODesc.ResourceLayout.NumStaticSamplers = _countof(StaticSamplers);
+            PSODesc.ResourceLayout.ImmutableSamplers    = ImtblSampler;
+            PSODesc.ResourceLayout.NumImmutableSamplers = _countof(ImtblSampler);
         }
         PSODesc.ResourceLayout.Variables    = Variables;
         PSODesc.ResourceLayout.NumVariables = _countof(Variables);

@@ -1031,13 +1031,13 @@ void EpipolarLightScattering::RenderCoordinateTexture()
         PipelineResourceLayoutDesc ResourceLayout;
         ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
         // clang-format off
-        StaticSamplerDesc StaticSamplers[] =
+        ImmutableSamplerDesc ImtblSamplers[] =
         {
             {SHADER_TYPE_PIXEL, "g_tex2DCamSpaceZ", Sam_LinearClamp}
         };
         // clang-format on
-        ResourceLayout.StaticSamplers        = StaticSamplers;
-        ResourceLayout.NumStaticSamplers     = _countof(StaticSamplers);
+        ResourceLayout.ImmutableSamplers     = ImtblSamplers;
+        ResourceLayout.NumImmutableSamplers  = _countof(ImtblSamplers);
         TEXTURE_FORMAT RTVFmts[]             = {CoordinateTexFmt, EpipolarCamSpaceZFmt};
         auto           EpipolarImageDepthFmt = m_ptex2DEpipolarImageDSV->GetTexture()->GetDesc().Format;
         RendedCoordTexTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "RenderCoordinateTexture", m_pFullScreenTriangleVS,
@@ -1083,7 +1083,7 @@ void EpipolarLightScattering::RenderCoarseUnshadowedInctr()
         PipelineResourceLayoutDesc ResourceLayout;
         ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
         std::vector<ShaderResourceVariableDesc> Vars;
-        std::vector<StaticSamplerDesc>          StaticSamplers;
+        std::vector<ImmutableSamplerDesc>       ImtblSamplers;
 
         std::unordered_set<std::string> ResourceNames;
 
@@ -1109,7 +1109,7 @@ void EpipolarLightScattering::RenderCoarseUnshadowedInctr()
             if (ResourceNames.find(Tex) != ResourceNames.end())
             {
                 Vars.emplace_back(SHADER_TYPE_PIXEL, Tex.c_str(), SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
-                StaticSamplers.emplace_back(SHADER_TYPE_PIXEL, Tex.c_str(), Sam_LinearClamp);
+                ImtblSamplers.emplace_back(SHADER_TYPE_PIXEL, Tex.c_str(), Sam_LinearClamp);
             }
         }
 
@@ -1118,10 +1118,10 @@ void EpipolarLightScattering::RenderCoarseUnshadowedInctr()
         if (ResourceNames.find("cbPostProcessingAttribs") != ResourceNames.end())
             Vars.emplace_back(SHADER_TYPE_PIXEL, "cbPostProcessingAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
 
-        ResourceLayout.Variables         = Vars.data();
-        ResourceLayout.NumVariables      = static_cast<Uint32>(Vars.size());
-        ResourceLayout.StaticSamplers    = StaticSamplers.data();
-        ResourceLayout.NumStaticSamplers = static_cast<Uint32>(StaticSamplers.size());
+        ResourceLayout.Variables            = Vars.data();
+        ResourceLayout.NumVariables         = static_cast<Uint32>(Vars.size());
+        ResourceLayout.ImmutableSamplers    = ImtblSamplers.data();
+        ResourceLayout.NumImmutableSamplers = static_cast<Uint32>(ImtblSamplers.size());
 
         const auto* PSOName = m_PostProcessingAttribs.iExtinctionEvalMode == EXTINCTION_EVAL_MODE_EPIPOLAR ?
             "RenderCoarseUnshadowedInsctrAndExtinctionPSO" :
@@ -1325,16 +1325,16 @@ void EpipolarLightScattering::Build1DMinMaxMipMap(int iCascadeIndex)
             {SHADER_TYPE_PIXEL, m_bUseCombinedMinMaxTexture ? "cbPostProcessingAttribs" : "cbMiscDynamicParams", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
         };
 
-        StaticSamplerDesc StaticSamplers[] =
+        ImmutableSamplerDesc ImtblSamplers[] =
         {
             {SHADER_TYPE_PIXEL, "g_tex2DLightSpaceDepthMap", Sam_LinearClamp} // Linear, not comparison
         };
         // clang-format on
 
-        ResourceLayout.Variables         = Vars;
-        ResourceLayout.NumVariables      = _countof(Vars);
-        ResourceLayout.StaticSamplers    = StaticSamplers;
-        ResourceLayout.NumStaticSamplers = _countof(StaticSamplers);
+        ResourceLayout.Variables            = Vars;
+        ResourceLayout.NumVariables         = _countof(Vars);
+        ResourceLayout.ImmutableSamplers    = ImtblSamplers;
+        ResourceLayout.NumImmutableSamplers = _countof(ImtblSamplers);
 
         TEXTURE_FORMAT ShadowMapFmt = m_ptex2DMinMaxShadowMapSRV[0]->GetTexture()->GetDesc().Format;
         InitMinMaxShadowMapTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "InitMinMaxShadowMap",
@@ -1489,7 +1489,7 @@ void EpipolarLightScattering::DoRayMarching(Uint32 uiMaxStepsAlongRay,
         PipelineResourceLayoutDesc ResourceLayout;
         ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
         std::vector<ShaderResourceVariableDesc> Vars;
-        std::vector<StaticSamplerDesc>          StaticSamplers;
+        std::vector<ImmutableSamplerDesc>       ImtblSamplers;
 
         std::unordered_set<std::string> ResourceNames;
 
@@ -1515,7 +1515,7 @@ void EpipolarLightScattering::DoRayMarching(Uint32 uiMaxStepsAlongRay,
             if (ResourceNames.find(Tex) != ResourceNames.end())
             {
                 Vars.emplace_back(SHADER_TYPE_PIXEL, Tex.c_str(), SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
-                StaticSamplers.emplace_back(SHADER_TYPE_PIXEL, Tex.c_str(), Sam_LinearClamp);
+                ImtblSamplers.emplace_back(SHADER_TYPE_PIXEL, Tex.c_str(), Sam_LinearClamp);
             }
         }
 
@@ -1527,12 +1527,12 @@ void EpipolarLightScattering::DoRayMarching(Uint32 uiMaxStepsAlongRay,
             Vars.emplace_back(SHADER_TYPE_PIXEL, "cbMiscDynamicParams", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
 
         if (ResourceNames.find("g_tex2DCamSpaceZ") != ResourceNames.end())
-            StaticSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_tex2DCamSpaceZ", Sam_LinearClamp);
+            ImtblSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_tex2DCamSpaceZ", Sam_LinearClamp);
 
-        ResourceLayout.Variables         = Vars.data();
-        ResourceLayout.NumVariables      = static_cast<Uint32>(Vars.size());
-        ResourceLayout.StaticSamplers    = StaticSamplers.data();
-        ResourceLayout.NumStaticSamplers = static_cast<Uint32>(StaticSamplers.size());
+        ResourceLayout.Variables            = Vars.data();
+        ResourceLayout.NumVariables         = static_cast<Uint32>(Vars.size());
+        ResourceLayout.ImmutableSamplers    = ImtblSamplers.data();
+        ResourceLayout.NumImmutableSamplers = static_cast<Uint32>(ImtblSamplers.size());
 
         auto EpipolarImageDepthFmt = m_ptex2DEpipolarImageDSV->GetTexture()->GetDesc().Format;
         DoRayMarchTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "RayMarch", m_pFullScreenTriangleVS,
@@ -1667,7 +1667,7 @@ void EpipolarLightScattering::UnwarpEpipolarScattering(bool bRenderLuminance)
             {SHADER_TYPE_PIXEL, "cbPostProcessingAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
         };
 
-        std::vector<StaticSamplerDesc> StaticSamplers =
+        std::vector<ImmutableSamplerDesc> ImtblSamplers =
         {
             {SHADER_TYPE_PIXEL, "g_tex2DSliceEndPoints",    Sam_LinearClamp},
             {SHADER_TYPE_PIXEL, "g_tex2DEpipolarCamSpaceZ", Sam_LinearClamp},
@@ -1677,12 +1677,12 @@ void EpipolarLightScattering::UnwarpEpipolarScattering(bool bRenderLuminance)
         };
         // clang-format on
         if (m_PostProcessingAttribs.iExtinctionEvalMode == EXTINCTION_EVAL_MODE_EPIPOLAR)
-            StaticSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_tex2DEpipolarExtinction", Sam_LinearClamp);
+            ImtblSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_tex2DEpipolarExtinction", Sam_LinearClamp);
 
-        ResourceLayout.Variables         = Vars;
-        ResourceLayout.NumVariables      = _countof(Vars);
-        ResourceLayout.StaticSamplers    = StaticSamplers.data();
-        ResourceLayout.NumStaticSamplers = static_cast<Uint32>(StaticSamplers.size());
+        ResourceLayout.Variables            = Vars;
+        ResourceLayout.NumVariables         = _countof(Vars);
+        ResourceLayout.ImmutableSamplers    = ImtblSamplers.data();
+        ResourceLayout.NumImmutableSamplers = static_cast<Uint32>(ImtblSamplers.size());
 
         UnwarpEpipolarSctrImgTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "UnwarpEpipolarScattering",
                                                                         m_pFullScreenTriangleVS, pUnwarpEpipolarSctrImgPS,
@@ -1721,7 +1721,7 @@ void EpipolarLightScattering::UnwarpEpipolarScattering(bool bRenderLuminance)
             {SHADER_TYPE_PIXEL, "cbPostProcessingAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
         };
 
-        std::vector<StaticSamplerDesc> StaticSamplers =
+        std::vector<ImmutableSamplerDesc> ImtblSamplers =
         {
             {SHADER_TYPE_PIXEL, "g_tex2DSliceEndPoints",    Sam_LinearClamp},
             {SHADER_TYPE_PIXEL, "g_tex2DEpipolarCamSpaceZ", Sam_LinearClamp},
@@ -1732,12 +1732,12 @@ void EpipolarLightScattering::UnwarpEpipolarScattering(bool bRenderLuminance)
         // clang-format on
 
         if (m_PostProcessingAttribs.iExtinctionEvalMode == EXTINCTION_EVAL_MODE_EPIPOLAR)
-            StaticSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_tex2DEpipolarExtinction", Sam_LinearClamp);
+            ImtblSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_tex2DEpipolarExtinction", Sam_LinearClamp);
 
-        ResourceLayout.Variables         = Vars;
-        ResourceLayout.NumVariables      = _countof(Vars);
-        ResourceLayout.StaticSamplers    = StaticSamplers.data();
-        ResourceLayout.NumStaticSamplers = static_cast<Uint32>(StaticSamplers.size());
+        ResourceLayout.Variables            = Vars;
+        ResourceLayout.NumVariables         = _countof(Vars);
+        ResourceLayout.ImmutableSamplers    = ImtblSamplers.data();
+        ResourceLayout.NumImmutableSamplers = static_cast<Uint32>(ImtblSamplers.size());
 
         UnwarpAndRenderLuminanceTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "UnwarpAndRenderLuminance",
                                                                            m_pFullScreenTriangleVS, pUnwarpAndRenderLuminancePS,
@@ -1844,7 +1844,7 @@ void EpipolarLightScattering::FixInscatteringAtDepthBreaks(Uint32               
         ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
 
         std::vector<ShaderResourceVariableDesc> Vars;
-        std::vector<StaticSamplerDesc>          StaticSamplers;
+        std::vector<ImmutableSamplerDesc>       ImtblSamplers;
 
         std::unordered_set<std::string> ResourceNames;
 
@@ -1870,7 +1870,7 @@ void EpipolarLightScattering::FixInscatteringAtDepthBreaks(Uint32               
             if (ResourceNames.find(Tex) != ResourceNames.end())
             {
                 Vars.emplace_back(SHADER_TYPE_PIXEL, Tex.c_str(), SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
-                StaticSamplers.emplace_back(SHADER_TYPE_PIXEL, Tex.c_str(), Sam_LinearClamp);
+                ImtblSamplers.emplace_back(SHADER_TYPE_PIXEL, Tex.c_str(), Sam_LinearClamp);
             }
         }
 
@@ -1882,12 +1882,12 @@ void EpipolarLightScattering::FixInscatteringAtDepthBreaks(Uint32               
             Vars.emplace_back(SHADER_TYPE_PIXEL, "cbMiscDynamicParams", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
 
         if (ResourceNames.find("g_tex2DCamSpaceZ") != ResourceNames.end())
-            StaticSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_tex2DCamSpaceZ", Sam_LinearClamp);
+            ImtblSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_tex2DCamSpaceZ", Sam_LinearClamp);
 
-        ResourceLayout.Variables         = Vars.data();
-        ResourceLayout.NumVariables      = static_cast<Uint32>(Vars.size());
-        ResourceLayout.StaticSamplers    = StaticSamplers.data();
-        ResourceLayout.NumStaticSamplers = static_cast<Uint32>(StaticSamplers.size());
+        ResourceLayout.Variables            = Vars.data();
+        ResourceLayout.NumVariables         = static_cast<Uint32>(Vars.size());
+        ResourceLayout.ImmutableSamplers    = ImtblSamplers.data();
+        ResourceLayout.NumImmutableSamplers = static_cast<Uint32>(ImtblSamplers.size());
 
         if (Mode == EFixInscatteringMode::LuminanceOnly)
         {
