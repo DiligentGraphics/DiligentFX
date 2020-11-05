@@ -454,19 +454,23 @@ IShaderResourceBinding* GLTF_PBR_Renderer::CreateMaterialSRB(GLTF::Material& Mat
     }
 
 
-    SRBCacheKey SRBKey{&Material, TypeId};
+    {
+        SRBCacheKey SRBKey{&Material, TypeId};
 
-    auto it = m_SRBCache.find(SRBKey);
-    if (it != m_SRBCache.end())
-    {
-        it->second = std::move(pSRB);
-        return it->second;
-    }
-    else
-    {
-        auto new_it = m_SRBCache.emplace(SRBKey, std::move(pSRB));
-        VERIFY_EXPR(new_it.second);
-        return new_it.first->second;
+        std::lock_guard<std::mutex> Lock{m_SRBCacheMtx};
+
+        auto it = m_SRBCache.find(SRBKey);
+        if (it != m_SRBCache.end())
+        {
+            it->second = std::move(pSRB);
+            return it->second;
+        }
+        else
+        {
+            auto new_it = m_SRBCache.emplace(SRBKey, std::move(pSRB));
+            VERIFY_EXPR(new_it.second);
+            return new_it.first->second;
+        }
     }
 }
 
@@ -731,6 +735,7 @@ void GLTF_PBR_Renderer::InitializeResourceBindings(GLTF::Model& GLTFModel,
 
 void GLTF_PBR_Renderer::ReleaseResourceBindings(GLTF::Model& GLTFModel, size_t SRBTypeId)
 {
+    std::lock_guard<std::mutex> Lock{m_SRBCacheMtx};
     for (auto& mat : GLTFModel.Materials)
     {
         m_SRBCache.erase(SRBCacheKey{&mat, SRBTypeId});

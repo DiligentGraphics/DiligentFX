@@ -29,6 +29,7 @@
 
 #include <unordered_map>
 #include <functional>
+#include <mutex>
 
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/DeviceContext.h"
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
@@ -350,6 +351,8 @@ private:
             }
         };
     };
+
+    std::mutex                                                                                  m_SRBCacheMtx;
     std::unordered_map<SRBCacheKey, RefCntAutoPtr<IShaderResourceBinding>, SRBCacheKey::Hasher> m_SRBCache;
 
     static constexpr TEXTURE_FORMAT IrradianceCubeFmt    = TEX_FORMAT_RGBA32_FLOAT;
