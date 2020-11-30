@@ -10,6 +10,10 @@
 #   define ALLOW_DEBUG_VIEW 0
 #endif
 
+#ifndef USE_TEXTURE_ATLAS
+#   define USE_TEXTURE_ATLAS 0
+#endif
+
 cbuffer cbCameraAttribs
 {
     CameraAttribs g_CameraAttribs;
@@ -56,6 +60,18 @@ Texture2D    g_EmissiveMap;
 SamplerState g_EmissiveMap_sampler;
 #endif
 
+float2 GetTextureUV(in float2 UV0, in  float2 UV1, float Selector, float4 ScaleBias)
+{
+    float2 UV = lerp(UV0, UV1, Selector);
+#if USE_TEXTURE_ATLAS
+    {
+        UV = frac(UV);
+        UV = UV * ScaleBias.xy + ScaleBias.zw;
+    }
+#endif
+    return UV;
+}
+
 
 void main(in  float4 ClipPos     : SV_Position,
           in  float3 WorldPos    : WORLD_POS,
@@ -65,7 +81,8 @@ void main(in  float4 ClipPos     : SV_Position,
           in  bool   IsFrontFace : SV_IsFrontFace,
           out float4 OutColor    : SV_Target)
 {
-    float4 BaseColor = g_ColorMap.Sample(g_ColorMap_sampler, lerp(UV0, UV1, g_MaterialInfo.BaseColorTextureUVSelector));
+    float2 BaseColorUV = GetTextureUV(UV0, UV1, g_MaterialInfo.BaseColorTextureUVSelector, g_MaterialInfo.BaseColorUVScaleBias);
+    float4 BaseColor = g_ColorMap.Sample(g_ColorMap_sampler, BaseColorUV);
     BaseColor = SRGBtoLINEAR(BaseColor) * g_MaterialInfo.BaseColorFactor;
     //BaseColor *= getVertexColor();
 
@@ -76,6 +93,14 @@ void main(in  float4 ClipPos     : SV_Position,
     float3 dWorldPos_dy = ddy(WorldPos);
     float2 dNormalMapUV_dx = ddx(NormalMapUV);
     float2 dNormalMapUV_dy = ddy(NormalMapUV);
+#if USE_TEXTURE_ATLAS
+    {
+        NormalMapUV = frac(NormalMapUV);
+        NormalMapUV = NormalMapUV * g_MaterialInfo.NormalMapUVScaleBias.xy + g_MaterialInfo.NormalMapUVScaleBias.zw;
+        dNormalMapUV_dx *= g_MaterialInfo.NormalMapUVScaleBias.xy;
+        dNormalMapUV_dy *= g_MaterialInfo.NormalMapUVScaleBias.xy;
+    }
+#endif
 
     if (g_MaterialInfo.UseAlphaMask != 0 && BaseColor.a < g_MaterialInfo.AlphaMaskCutoff)
     {
@@ -86,15 +111,23 @@ void main(in  float4 ClipPos     : SV_Position,
 
     float Occlusion = 1.0;
 #if GLTF_PBR_USE_AO
-    Occlusion = g_AOMap.Sample(g_AOMap_sampler, lerp(UV0, UV1, g_MaterialInfo.OcclusionTextureUVSelector)).r;
+    {
+        float2 OcclusionUV = GetTextureUV(UV0, UV1, g_MaterialInfo.OcclusionTextureUVSelector, g_MaterialInfo.OcclusionUVScaleBias);
+        Occlusion = g_AOMap.Sample(g_AOMap_sampler, OcclusionUV).r;
+    }
 #endif
 
     float3 Emissive = float3(0.0, 0.0, 0.0);
 #if GLTF_PBR_USE_EMISSIVE
-    Emissive = g_EmissiveMap.Sample(g_EmissiveMap_sampler, lerp(UV0, UV1, g_MaterialInfo.EmissiveTextureUVSelector)).rgb;
+    {
+        float2 EmissiveUV = GetTextureUV(UV0, UV1, g_MaterialInfo.EmissiveTextureUVSelector, g_MaterialInfo.EmissiveUVScaleBias);
+        Emissive = g_EmissiveMap.Sample(g_EmissiveMap_sampler, EmissiveUV).rgb;
+    }
 #endif
 
-    float4 PhysicalDesc = g_PhysicalDescriptorMap.Sample(g_PhysicalDescriptorMap_sampler, lerp(UV0, UV1, g_MaterialInfo.PhysicalDescriptorTextureUVSelector));
+
+    float2 PhysicalDescUV = GetTextureUV(UV0, UV1, g_MaterialInfo.PhysicalDescriptorTextureUVSelector, g_MaterialInfo.PhysicalDescriptorUVScaleBias);
+    float4 PhysicalDesc = g_PhysicalDescriptorMap.Sample(g_PhysicalDescriptorMap_sampler, PhysicalDescUV);
     
     float metallic;
     if (g_MaterialInfo.Workflow == PBR_WORKFLOW_SPECULAR_GLOSINESS)

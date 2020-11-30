@@ -245,6 +245,7 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
     Macros.AddShaderMacro("GLTF_PBR_USE_IBL", m_Settings.UseIBL);
     Macros.AddShaderMacro("GLTF_PBR_USE_AO", m_Settings.UseAO);
     Macros.AddShaderMacro("GLTF_PBR_USE_EMISSIVE", m_Settings.UseEmissive);
+    Macros.AddShaderMacro("USE_TEXTURE_ATLAS", m_Settings.UseTextureAtals);
     ShaderCI.Macros = Macros;
     RefCntAutoPtr<IShader> pVS;
     {
@@ -849,6 +850,11 @@ void GLTF_PBR_Renderer::RenderGLTFNode(IDeviceContext*                          
                 pMaterialInfo->UseAlphaMask               = material.AlphaMode == GLTF::Material::ALPHAMODE_MASK ? 1 : 0;
                 pMaterialInfo->AlphaMaskCutoff            = material.AlphaCutoff;
 
+                pMaterialInfo->BaseColorUVScaleBias = material.TexCoordSets.BaseColorScaleBias;
+                pMaterialInfo->NormalMapUVScaleBias = material.TexCoordSets.NormalScaleBias;
+                pMaterialInfo->OcclusionUVScaleBias = material.TexCoordSets.OcclusionScaleBias;
+                pMaterialInfo->EmissiveUVScaleBias  = material.TexCoordSets.EmissiveScaleBias;
+
                 // TODO: glTF specs states that metallic roughness should be preferred, even if specular glosiness is present
                 if (material.workflow == GLTF::Material::PbrWorkflow::MetallicRoughness)
                 {
@@ -859,6 +865,7 @@ void GLTF_PBR_Renderer::RenderGLTFNode(IDeviceContext*                          
                     pMaterialInfo->RoughnessFactor                     = material.RoughnessFactor;
                     pMaterialInfo->PhysicalDescriptorTextureUVSelector = GetUVSelector(material.pMetallicRoughnessTexture, material.TexCoordSets.MetallicRoughness);
                     pMaterialInfo->BaseColorTextureUVSelector          = GetUVSelector(material.pBaseColorTexture, material.TexCoordSets.BaseColor);
+                    pMaterialInfo->PhysicalDescriptorUVScaleBias       = material.TexCoordSets.MetallicRoughnessScaleBias;
                 }
                 else if (material.workflow == GLTF::Material::PbrWorkflow::SpecularGlossiness)
                 {
@@ -868,6 +875,7 @@ void GLTF_PBR_Renderer::RenderGLTFNode(IDeviceContext*                          
                     pMaterialInfo->BaseColorTextureUVSelector          = GetUVSelector(material.extension.pDiffuseTexture, material.TexCoordSets.BaseColor);
                     pMaterialInfo->BaseColorFactor                     = material.extension.DiffuseFactor;
                     pMaterialInfo->SpecularFactor                      = float4(material.extension.SpecularFactor, 1.0f);
+                    pMaterialInfo->PhysicalDescriptorUVScaleBias       = material.TexCoordSets.SpecularGlossinessScaleBias;
                 }
 
                 if (RenderNodeCallback == nullptr)

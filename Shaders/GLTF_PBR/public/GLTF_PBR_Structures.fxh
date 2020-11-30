@@ -66,6 +66,14 @@ struct GLTFMaterialShaderInfo
 	float   MetallicFactor;
 	float   RoughnessFactor;
 
+    // When texture atlas is used, UV scale and bias applied to
+    // each texture coordinate set
+    float4 BaseColorUVScaleBias;
+    float4 PhysicalDescriptorUVScaleBias;
+    float4 NormalMapUVScaleBias;
+    float4 OcclusionUVScaleBias;
+    float4 EmissiveUVScaleBias;
+
 	int     UseAlphaMask;	
 	float   AlphaMaskCutoff;
     float   Dummy0;

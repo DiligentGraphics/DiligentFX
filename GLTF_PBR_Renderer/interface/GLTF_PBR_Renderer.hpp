@@ -79,6 +79,9 @@ public:
         /// When set to false, samplers from the texture views will be used.
         bool UseImmutableSamplers = true;
 
+        /// Whether to use texture atlas (e.g. apply UV transforms when sampling textures).
+        bool UseTextureAtals = false;
+
         static const SamplerDesc DefaultSampler;
 
         /// Immutable sampler for color map texture.
