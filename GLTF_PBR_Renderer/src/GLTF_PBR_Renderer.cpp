@@ -384,7 +384,8 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
     }
 }
 
-IShaderResourceBinding* GLTF_PBR_Renderer::CreateMaterialSRB(GLTF::Material& Material,
+IShaderResourceBinding* GLTF_PBR_Renderer::CreateMaterialSRB(GLTF::Model&    Model,
+                                                             GLTF::Material& Material,
                                                              IBuffer*        pCameraAttribs,
                                                              IBuffer*        pLightAttribs,
                                                              IPipelineState* pPSO,
@@ -420,38 +421,49 @@ IShaderResourceBinding* GLTF_PBR_Renderer::CreateMaterialSRB(GLTF::Material& Mat
             pPrefilteredEnvMap->Set(m_pPrefilteredEnvMapSRV);
     }
 
-    auto SetTexture = [&](ITexture* pTexture, ITextureView* pDefaultTexSRV, const char* VarName) //
+    auto SetTexture = [&](GLTF::Material::TEXTURE_ID TexId, ITextureView* pDefaultTexSRV, const char* VarName) //
     {
-        ITextureView* pTexSRV = pTexture != nullptr ? pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE) : pDefaultTexSRV;
+        ITextureView* pTexSRV = nullptr;
+
+        auto TexIdx = Material.Textures[TexId].Index;
+        if (TexIdx >= 0)
+        {
+            if (auto* pTexture = Model.GetTexture(TexIdx))
+                pTexSRV = pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        }
+
+        if (pTexSRV == nullptr)
+            pTexSRV = pDefaultTexSRV;
+
         if (auto* pVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, VarName))
             pVar->Set(pTexSRV);
     };
 
-    ITexture* pBaseColorTex = nullptr;
-    ITexture* pPhysDescTex  = nullptr;
+    GLTF::Material::TEXTURE_ID BaseColorTexId = GLTF::Material::TEXTURE_ID_BASE_COLOR;
+    GLTF::Material::TEXTURE_ID PhysDescTexId  = GLTF::Material::TEXTURE_ID_METALL_ROUGHNESS;
     if (Material.workflow == GLTF::Material::PbrWorkflow::MetallicRoughness)
     {
-        pBaseColorTex = Material.pBaseColorTexture;
-        pPhysDescTex  = Material.pMetallicRoughnessTexture;
     }
     else if (Material.workflow == GLTF::Material::PbrWorkflow::SpecularGlossiness)
     {
-        pBaseColorTex = Material.extension.pDiffuseTexture;
-        pPhysDescTex  = Material.extension.pSpecularGlossinessTexture;
+        BaseColorTexId = GLTF::Material::TEXTURE_ID_DIFFUSE;
+        PhysDescTexId  = GLTF::Material::TEXTURE_ID_SPEC_GLOSS;
+    }
+    else
+    {
+        UNEXPECTED("Unexpected workflow");
     }
 
-    // clang-format off
-    SetTexture(pBaseColorTex,           m_pWhiteTexSRV,         "g_ColorMap");
-    SetTexture(pPhysDescTex ,           m_pWhiteTexSRV,         "g_PhysicalDescriptorMap");
-    SetTexture(Material.pNormalTexture, m_pDefaultNormalMapSRV, "g_NormalMap");
-    // clang-format on
+    SetTexture(BaseColorTexId, m_pWhiteTexSRV, "g_ColorMap");
+    SetTexture(PhysDescTexId, m_pWhiteTexSRV, "g_PhysicalDescriptorMap");
+    SetTexture(GLTF::Material::TEXTURE_ID_NORMAL_MAP, m_pDefaultNormalMapSRV, "g_NormalMap");
     if (m_Settings.UseAO)
     {
-        SetTexture(Material.pOcclusionTexture, m_pWhiteTexSRV, "g_AOMap");
+        SetTexture(GLTF::Material::TEXTURE_ID_OCCLUSION, m_pWhiteTexSRV, "g_AOMap");
     }
     if (m_Settings.UseEmissive)
     {
-        SetTexture(Material.pEmissiveTexture, m_pBlackTexSRV, "g_EmissiveMap");
+        SetTexture(GLTF::Material::TEXTURE_ID_EMISSIVE, m_pBlackTexSRV, "g_EmissiveMap");
     }
 
 
@@ -730,7 +742,7 @@ void GLTF_PBR_Renderer::InitializeResourceBindings(GLTF::Model& GLTFModel,
 {
     for (auto& mat : GLTFModel.Materials)
     {
-        CreateMaterialSRB(mat, pCameraAttribs, pLightAttribs);
+        CreateMaterialSRB(GLTFModel, mat, pCameraAttribs, pLightAttribs);
     }
 }
 
@@ -744,17 +756,13 @@ void GLTF_PBR_Renderer::ReleaseResourceBindings(GLTF::Model& GLTFModel, size_t S
 }
 
 
-void GLTF_PBR_Renderer::RenderGLTFNode(IDeviceContext*                                pCtx,
-                                       const GLTF::Node*                              node,
-                                       GLTF::Material::ALPHA_MODE                     AlphaMode,
-                                       const float4x4&                                ModelTransform,
-                                       std::function<void(const GLTFNodeRenderInfo&)> RenderNodeCallback,
-                                       size_t                                         SRBTypeId)
+void GLTF_PBR_Renderer::GLTFNodeRenderer::Render(const GLTF::Node&          Node,
+                                                 GLTF::Material::ALPHA_MODE AlphaMode)
 {
-    if (node->_Mesh)
+    if (Node._Mesh)
     {
         // Render mesh primitives
-        for (const auto& primitive : node->_Mesh->Primitives)
+        for (const auto& primitive : Node._Mesh->Primitives)
         {
             if (primitive->material.AlphaMode != AlphaMode)
                 continue;
@@ -766,11 +774,11 @@ void GLTF_PBR_Renderer::RenderGLTFNode(IDeviceContext*                          
             const auto& material = primitive->material;
             if (RenderNodeCallback == nullptr)
             {
-                auto* pPSO = GetPSO(PSOKey{AlphaMode, material.DoubleSided});
+                auto* pPSO = Renderer.GetPSO(PSOKey{AlphaMode, material.DoubleSided});
                 VERIFY_EXPR(pPSO != nullptr);
                 pCtx->SetPipelineState(pPSO);
 
-                pSRB = GetMaterialSRB(&material, SRBTypeId);
+                pSRB = Renderer.GetMaterialSRB(&material, SRBTypeId);
                 if (pSRB == nullptr)
                 {
                     LOG_ERROR_MESSAGE("Unable to find SRB for GLTF material. Please call GLTF_PBR_Renderer::InitializeResourceBindings()");
@@ -787,24 +795,24 @@ void GLTF_PBR_Renderer::RenderGLTFNode(IDeviceContext*                          
                 GLTFNodeShaderTransforms* pTransforms = nullptr;
                 if (RenderNodeCallback == nullptr)
                 {
-                    pCtx->MapBuffer(m_TransformsCB, MAP_WRITE, MAP_FLAG_DISCARD, reinterpret_cast<PVoid&>(pTransforms));
+                    pCtx->MapBuffer(Renderer.m_TransformsCB, MAP_WRITE, MAP_FLAG_DISCARD, reinterpret_cast<PVoid&>(pTransforms));
                 }
                 else
                 {
                     pTransforms = &NodeRI.ShaderTransforms;
                 }
 
-                pTransforms->NodeMatrix = node->_Mesh->Transforms.matrix * ModelTransform;
-                pTransforms->JointCount = node->_Mesh->Transforms.jointcount;
-                if (node->_Mesh->Transforms.jointcount != 0)
+                pTransforms->NodeMatrix = Node._Mesh->Transforms.matrix * RenderParams.ModelTransform;
+                pTransforms->JointCount = Node._Mesh->Transforms.jointcount;
+                if (Node._Mesh->Transforms.jointcount != 0)
                 {
-                    static_assert(sizeof(pTransforms->JointMatrix) == sizeof(node->_Mesh->Transforms.jointMatrix), "Incosistent sizes");
-                    memcpy(pTransforms->JointMatrix, node->_Mesh->Transforms.jointMatrix, sizeof(node->_Mesh->Transforms.jointMatrix));
+                    static_assert(sizeof(pTransforms->JointMatrix) == sizeof(Node._Mesh->Transforms.jointMatrix), "Incosistent sizes");
+                    memcpy(pTransforms->JointMatrix, Node._Mesh->Transforms.jointMatrix, sizeof(Node._Mesh->Transforms.jointMatrix));
                 }
 
                 if (RenderNodeCallback == nullptr)
                 {
-                    pCtx->UnmapBuffer(m_TransformsCB, MAP_WRITE);
+                    pCtx->UnmapBuffer(Renderer.m_TransformsCB, MAP_WRITE);
                 }
             }
 
@@ -817,20 +825,23 @@ void GLTF_PBR_Renderer::RenderGLTFNode(IDeviceContext*                          
                         GLTFRendererShaderParameters RenderParameters;
                         GLTFMaterialShaderInfo       MaterialInfo;
                     };
+                    static_assert(sizeof(GLTFAttribs) <= 256, "Size of dynamic GLTFAttribs buffer exceeds 256 bytes. "
+                                                              "It may be worth trying to reduce the size or just live with it.");
+
                     GLTFAttribs* pGLTFAttribs = nullptr;
-                    pCtx->MapBuffer(m_GLTFAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD, reinterpret_cast<PVoid&>(pGLTFAttribs));
+                    pCtx->MapBuffer(Renderer.m_GLTFAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD, reinterpret_cast<PVoid&>(pGLTFAttribs));
                     pMaterialInfo = &pGLTFAttribs->MaterialInfo;
 
-                    auto& RenderParams = pGLTFAttribs->RenderParameters;
+                    auto& ShaderParams = pGLTFAttribs->RenderParameters;
 
-                    RenderParams.DebugViewType            = static_cast<int>(m_RenderParams.DebugView);
-                    RenderParams.OcclusionStrength        = m_RenderParams.OcclusionStrength;
-                    RenderParams.EmissionScale            = m_RenderParams.EmissionScale;
-                    RenderParams.AverageLogLum            = m_RenderParams.AverageLogLum;
-                    RenderParams.MiddleGray               = m_RenderParams.MiddleGray;
-                    RenderParams.WhitePoint               = m_RenderParams.WhitePoint;
-                    RenderParams.IBLScale                 = m_RenderParams.IBLScale;
-                    RenderParams.PrefilteredCubeMipLevels = m_Settings.UseIBL ? static_cast<float>(m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels) : 0.f;
+                    ShaderParams.DebugViewType            = static_cast<int>(Renderer.m_RenderParams.DebugView);
+                    ShaderParams.OcclusionStrength        = Renderer.m_RenderParams.OcclusionStrength;
+                    ShaderParams.EmissionScale            = Renderer.m_RenderParams.EmissionScale;
+                    ShaderParams.AverageLogLum            = Renderer.m_RenderParams.AverageLogLum;
+                    ShaderParams.MiddleGray               = Renderer.m_RenderParams.MiddleGray;
+                    ShaderParams.WhitePoint               = Renderer.m_RenderParams.WhitePoint;
+                    ShaderParams.IBLScale                 = Renderer.m_RenderParams.IBLScale;
+                    ShaderParams.PrefilteredCubeMipLevels = Renderer.m_Settings.UseIBL ? static_cast<float>(Renderer.m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels) : 0.f;
                 }
                 else
                 {
@@ -839,48 +850,59 @@ void GLTF_PBR_Renderer::RenderGLTFNode(IDeviceContext*                          
 
                 pMaterialInfo->EmissiveFactor = material.EmissiveFactor;
 
-                auto GetUVSelector = [](const ITexture* pTexture, Uint8 TexCoordSet) {
-                    return pTexture != nullptr ? static_cast<float>(TexCoordSet) : -1;
+                pMaterialInfo->NormalTextureUVSelector    = material.Textures[GLTF::Material::TEXTURE_ID_NORMAL_MAP].CoordSet;
+                pMaterialInfo->OcclusionTextureUVSelector = material.Textures[GLTF::Material::TEXTURE_ID_OCCLUSION].CoordSet;
+                pMaterialInfo->EmissiveTextureUVSelector  = material.Textures[GLTF::Material::TEXTURE_ID_EMISSIVE].CoordSet;
+
+                pMaterialInfo->UseAlphaMask    = material.AlphaMode == GLTF::Material::ALPHAMODE_MASK ? 1 : 0;
+                pMaterialInfo->AlphaMaskCutoff = material.AlphaCutoff;
+
+                auto GetUVScaleBias = [&](GLTF::Material::TEXTURE_ID TexId) //
+                {
+                    auto TexIndex = material.Textures[TexId].Index;
+                    return (TexIndex >= 0) ?
+                        GLTFModel.Textures[TexIndex].UVScaleBias :
+                        float4{1, 1, 0, 0};
                 };
 
-                pMaterialInfo->BaseColorTextureUVSelector = GetUVSelector(material.pBaseColorTexture, material.TexCoordSets.BaseColor);
-                pMaterialInfo->NormalTextureUVSelector    = GetUVSelector(material.pNormalTexture, material.TexCoordSets.Normal);
-                pMaterialInfo->OcclusionTextureUVSelector = GetUVSelector(material.pOcclusionTexture, material.TexCoordSets.Occlusion);
-                pMaterialInfo->EmissiveTextureUVSelector  = GetUVSelector(material.pEmissiveTexture, material.TexCoordSets.Emissive);
-                pMaterialInfo->UseAlphaMask               = material.AlphaMode == GLTF::Material::ALPHAMODE_MASK ? 1 : 0;
-                pMaterialInfo->AlphaMaskCutoff            = material.AlphaCutoff;
+                pMaterialInfo->NormalMapUVScaleBias = GetUVScaleBias(GLTF::Material::TEXTURE_ID_NORMAL_MAP);
+                pMaterialInfo->OcclusionUVScaleBias = GetUVScaleBias(GLTF::Material::TEXTURE_ID_OCCLUSION);
+                pMaterialInfo->EmissiveUVScaleBias  = GetUVScaleBias(GLTF::Material::TEXTURE_ID_EMISSIVE);
 
-                pMaterialInfo->BaseColorUVScaleBias = material.TexCoordSets.BaseColorScaleBias;
-                pMaterialInfo->NormalMapUVScaleBias = material.TexCoordSets.NormalScaleBias;
-                pMaterialInfo->OcclusionUVScaleBias = material.TexCoordSets.OcclusionScaleBias;
-                pMaterialInfo->EmissiveUVScaleBias  = material.TexCoordSets.EmissiveScaleBias;
-
+                GLTF::Material::TEXTURE_ID BaseColorTexId = GLTF::Material::TEXTURE_ID_BASE_COLOR;
+                GLTF::Material::TEXTURE_ID PhysDescTexId  = GLTF::Material::TEXTURE_ID_METALL_ROUGHNESS;
                 // TODO: glTF specs states that metallic roughness should be preferred, even if specular glosiness is present
                 if (material.workflow == GLTF::Material::PbrWorkflow::MetallicRoughness)
                 {
                     // Metallic roughness workflow
-                    pMaterialInfo->Workflow                            = PBR_WORKFLOW_METALLIC_ROUGHNESS;
-                    pMaterialInfo->BaseColorFactor                     = material.BaseColorFactor;
-                    pMaterialInfo->MetallicFactor                      = material.MetallicFactor;
-                    pMaterialInfo->RoughnessFactor                     = material.RoughnessFactor;
-                    pMaterialInfo->PhysicalDescriptorTextureUVSelector = GetUVSelector(material.pMetallicRoughnessTexture, material.TexCoordSets.MetallicRoughness);
-                    pMaterialInfo->BaseColorTextureUVSelector          = GetUVSelector(material.pBaseColorTexture, material.TexCoordSets.BaseColor);
-                    pMaterialInfo->PhysicalDescriptorUVScaleBias       = material.TexCoordSets.MetallicRoughnessScaleBias;
+                    pMaterialInfo->Workflow        = PBR_WORKFLOW_METALLIC_ROUGHNESS;
+                    pMaterialInfo->MetallicFactor  = material.MetallicFactor;
+                    pMaterialInfo->RoughnessFactor = material.RoughnessFactor;
+                    pMaterialInfo->BaseColorFactor = material.BaseColorFactor;
                 }
                 else if (material.workflow == GLTF::Material::PbrWorkflow::SpecularGlossiness)
                 {
                     // Specular glossiness workflow
-                    pMaterialInfo->Workflow                            = PBR_WORKFLOW_SPECULAR_GLOSINESS;
-                    pMaterialInfo->PhysicalDescriptorTextureUVSelector = GetUVSelector(material.extension.pSpecularGlossinessTexture, material.TexCoordSets.SpecularGlossiness);
-                    pMaterialInfo->BaseColorTextureUVSelector          = GetUVSelector(material.extension.pDiffuseTexture, material.TexCoordSets.BaseColor);
-                    pMaterialInfo->BaseColorFactor                     = material.extension.DiffuseFactor;
-                    pMaterialInfo->SpecularFactor                      = float4(material.extension.SpecularFactor, 1.0f);
-                    pMaterialInfo->PhysicalDescriptorUVScaleBias       = material.TexCoordSets.SpecularGlossinessScaleBias;
+                    pMaterialInfo->Workflow        = PBR_WORKFLOW_SPECULAR_GLOSINESS;
+                    pMaterialInfo->SpecularFactor  = material.SpecularFactor;
+                    pMaterialInfo->BaseColorFactor = material.DiffuseFactor;
+
+                    BaseColorTexId = GLTF::Material::TEXTURE_ID_DIFFUSE;
+                    PhysDescTexId  = GLTF::Material::TEXTURE_ID_SPEC_GLOSS;
                 }
+                else
+                {
+                    UNEXPECTED("Unexpected workflow");
+                }
+
+                pMaterialInfo->BaseColorTextureUVSelector          = material.Textures[BaseColorTexId].CoordSet;
+                pMaterialInfo->PhysicalDescriptorTextureUVSelector = material.Textures[PhysDescTexId].CoordSet;
+                pMaterialInfo->BaseColorUVScaleBias                = GetUVScaleBias(BaseColorTexId);
+                pMaterialInfo->PhysicalDescriptorUVScaleBias       = GetUVScaleBias(PhysDescTexId);
 
                 if (RenderNodeCallback == nullptr)
                 {
-                    pCtx->UnmapBuffer(m_GLTFAttribsCB, MAP_WRITE);
+                    pCtx->UnmapBuffer(Renderer.m_GLTFAttribsCB, MAP_WRITE);
                 }
             }
 
@@ -918,9 +940,9 @@ void GLTF_PBR_Renderer::RenderGLTFNode(IDeviceContext*                          
         }
     }
 
-    for (const auto& child : node->Children)
+    for (const auto& child : Node.Children)
     {
-        RenderGLTFNode(pCtx, child.get(), AlphaMode, ModelTransform, RenderNodeCallback, SRBTypeId);
+        Render(*child, AlphaMode);
     }
 }
 
@@ -947,13 +969,22 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*                                pC
         // An application should bind index buffers and PSOs
     }
 
+    GLTFNodeRenderer NodeRenderer //
+        {
+            *this,
+            pCtx,
+            GLTFModel,
+            RenderParams,
+            RenderNodeCallback,
+            SRBTypeId //
+        };
 
     // Opaque primitives first
     if (RenderParams.AlphaModes & RenderInfo::ALPHA_MODE_FLAG_OPAQUE)
     {
         for (const auto& node : GLTFModel.Nodes)
         {
-            RenderGLTFNode(pCtx, node.get(), GLTF::Material::ALPHAMODE_OPAQUE, RenderParams.ModelTransform, RenderNodeCallback, SRBTypeId);
+            NodeRenderer.Render(*node, GLTF::Material::ALPHAMODE_OPAQUE);
         }
     }
 
@@ -963,7 +994,7 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*                                pC
     {
         for (const auto& node : GLTFModel.Nodes)
         {
-            RenderGLTFNode(pCtx, node.get(), GLTF::Material::ALPHAMODE_MASK, RenderParams.ModelTransform, RenderNodeCallback, SRBTypeId);
+            NodeRenderer.Render(*node, GLTF::Material::ALPHAMODE_MASK);
         }
     }
 
@@ -974,7 +1005,7 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*                                pC
     {
         for (const auto& node : GLTFModel.Nodes)
         {
-            RenderGLTFNode(pCtx, node.get(), GLTF::Material::ALPHAMODE_BLEND, RenderParams.ModelTransform, RenderNodeCallback, SRBTypeId);
+            NodeRenderer.Render(*node, GLTF::Material::ALPHAMODE_BLEND);
         }
     }
 }

@@ -242,6 +242,7 @@ public:
 
     /// Creates a shader resource binding for the given material.
 
+    /// \param [in] Model          - GLTF model that keeps material textures.
     /// \param [in] Material       - GLTF material to create SRB for.
     /// \param [in] pCameraAttribs - Camera attributes constant buffer to set in the SRB.
     /// \param [in] pLightAttribs  - Light attributes constant buffer to set in the SRB.
@@ -253,7 +254,8 @@ public:
     ///                              An application may use this type to differentiate e.g. shadow-pass SRBs
     ///                              from color-pass SRBs.
     /// \return                      Created shader resource binding.
-    IShaderResourceBinding* CreateMaterialSRB(GLTF::Material& Material,
+    IShaderResourceBinding* CreateMaterialSRB(GLTF::Model&    Model,
+                                              GLTF::Material& Material,
                                               IBuffer*        pCameraAttribs,
                                               IBuffer*        pLightAttribs,
                                               IPipelineState* pPSO   = nullptr,
@@ -375,6 +377,19 @@ private:
     RefCntAutoPtr<IBuffer> m_TransformsCB;
     RefCntAutoPtr<IBuffer> m_GLTFAttribsCB;
     RefCntAutoPtr<IBuffer> m_PrecomputeEnvMapAttribsCB;
+
+    struct GLTFNodeRenderer
+    {
+        GLTF_PBR_Renderer&                             Renderer;
+        IDeviceContext* const                          pCtx;
+        GLTF::Model&                                   GLTFModel;
+        const RenderInfo&                              RenderParams;
+        std::function<void(const GLTFNodeRenderInfo&)> RenderNodeCallback;
+        const size_t                                   SRBTypeId;
+
+        void Render(const GLTF::Node&          Node,
+                    GLTF::Material::ALPHA_MODE AlphaMode);
+    };
 };
 
 DEFINE_FLAG_ENUM_OPERATORS(GLTF_PBR_Renderer::RenderInfo::ALPHA_MODE_FLAGS);
