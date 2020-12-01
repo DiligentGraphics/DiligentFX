@@ -861,7 +861,7 @@ void GLTF_PBR_Renderer::GLTFNodeRenderer::Render(const GLTF::Node&          Node
                 {
                     auto TexIndex = material.Textures[TexId].Index;
                     return (TexIndex >= 0) ?
-                        GLTFModel.Textures[TexIndex].UVScaleBias :
+                        GLTFModel.GetUVScaleBias(TexIndex) :
                         float4{1, 1, 0, 0};
                 };
 
@@ -956,12 +956,19 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*                                pC
 
     if (RenderNodeCallback == nullptr)
     {
-        IBuffer* pVBs[]                  = {GLTFModel.pVertexBuffer[0], GLTFModel.pVertexBuffer[1]};
-        Uint32   Offsets[_countof(pVBs)] = {};
-        pCtx->SetVertexBuffers(0, _countof(pVBs), pVBs, Offsets, RESOURCE_STATE_TRANSITION_MODE_TRANSITION, SET_VERTEX_BUFFERS_FLAG_RESET);
-        if (GLTFModel.pIndexBuffer)
+        std::array<Uint32, 2>   Offsets;
+        std::array<IBuffer*, 2> pVBs = //
+            {
+                GLTFModel.GetBuffer(GLTF::Model::BUFFER_ID_VERTEX0, Offsets[0]),
+                GLTFModel.GetBuffer(GLTF::Model::BUFFER_ID_VERTEX1, Offsets[1]) //
+            };
+        pCtx->SetVertexBuffers(0, static_cast<Uint32>(pVBs.size()), pVBs.data(), Offsets.data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION, SET_VERTEX_BUFFERS_FLAG_RESET);
+
+        Uint32 IBOffset     = 0;
+        auto*  pIndexBuffer = GLTFModel.GetBuffer(GLTF::Model::BUFFER_ID_INDEX, IBOffset);
+        if (pIndexBuffer)
         {
-            pCtx->SetIndexBuffer(GLTFModel.pIndexBuffer, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+            pCtx->SetIndexBuffer(pIndexBuffer, IBOffset, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         }
     }
     else
