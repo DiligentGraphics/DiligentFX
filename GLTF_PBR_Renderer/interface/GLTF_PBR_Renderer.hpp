@@ -199,6 +199,9 @@ public:
         /// First index for indexed primitives
         Uint32 FirstIndex = 0;
 
+        /// Base vertex for indexed primitives or start vertex location for non-indexed.
+        Uint32 BaseVertex = 0;
+
         GLTFNodeRenderInfo() noexcept :
             IndexCount{0}
         {}
@@ -386,6 +389,9 @@ private:
         const RenderInfo&                              RenderParams;
         std::function<void(const GLTFNodeRenderInfo&)> RenderNodeCallback;
         const size_t                                   SRBTypeId;
+
+        const Uint32 FirstIndexLocation;
+        const Uint32 BaseVertex;
 
         void Render(const GLTF::Node&          Node,
                     GLTF::Material::ALPHA_MODE AlphaMode);

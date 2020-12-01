@@ -911,14 +911,16 @@ void GLTF_PBR_Renderer::GLTFNodeRenderer::Render(const GLTF::Node&          Node
                 if (RenderNodeCallback == nullptr)
                 {
                     DrawIndexedAttribs drawAttrs(primitive->IndexCount, VT_UINT32, DRAW_FLAG_VERIFY_ALL);
-                    drawAttrs.FirstIndexLocation = primitive->FirstIndex;
+                    drawAttrs.FirstIndexLocation = FirstIndexLocation + primitive->FirstIndex;
+                    drawAttrs.BaseVertex         = BaseVertex;
                     pCtx->DrawIndexed(drawAttrs);
                 }
                 else
                 {
                     NodeRI.IndexType  = VT_UINT32;
                     NodeRI.IndexCount = primitive->IndexCount;
-                    NodeRI.FirstIndex = primitive->FirstIndex;
+                    NodeRI.FirstIndex = FirstIndexLocation + primitive->FirstIndex;
+                    NodeRI.BaseVertex = BaseVertex;
                     RenderNodeCallback(NodeRI);
                 }
             }
@@ -927,6 +929,7 @@ void GLTF_PBR_Renderer::GLTFNodeRenderer::Render(const GLTF::Node&          Node
                 if (RenderNodeCallback == nullptr)
                 {
                     DrawAttribs drawAttrs(primitive->VertexCount, DRAW_FLAG_VERIFY_ALL);
+                    drawAttrs.StartVertexLocation = BaseVertex;
                     pCtx->Draw(drawAttrs);
                 }
                 else
@@ -934,6 +937,7 @@ void GLTF_PBR_Renderer::GLTFNodeRenderer::Render(const GLTF::Node&          Node
                     NodeRI.IndexType   = VT_UNDEFINED;
                     NodeRI.VertexCount = primitive->VertexCount;
                     NodeRI.FirstIndex  = 0;
+                    NodeRI.BaseVertex  = BaseVertex;
                     RenderNodeCallback(NodeRI);
                 }
             }
@@ -956,19 +960,17 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*                                pC
 
     if (RenderNodeCallback == nullptr)
     {
-        std::array<Uint32, 2>   Offsets;
-        std::array<IBuffer*, 2> pVBs = //
+        std::array<Uint32, 2>   Offsets = {};
+        std::array<IBuffer*, 2> pVBs =
             {
-                GLTFModel.GetBuffer(GLTF::Model::BUFFER_ID_VERTEX0, Offsets[0]),
-                GLTFModel.GetBuffer(GLTF::Model::BUFFER_ID_VERTEX1, Offsets[1]) //
+                GLTFModel.GetBuffer(GLTF::Model::BUFFER_ID_VERTEX0),
+                GLTFModel.GetBuffer(GLTF::Model::BUFFER_ID_VERTEX1) //
             };
         pCtx->SetVertexBuffers(0, static_cast<Uint32>(pVBs.size()), pVBs.data(), Offsets.data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION, SET_VERTEX_BUFFERS_FLAG_RESET);
 
-        Uint32 IBOffset     = 0;
-        auto*  pIndexBuffer = GLTFModel.GetBuffer(GLTF::Model::BUFFER_ID_INDEX, IBOffset);
-        if (pIndexBuffer)
+        if (auto* pIndexBuffer = GLTFModel.GetBuffer(GLTF::Model::BUFFER_ID_INDEX))
         {
-            pCtx->SetIndexBuffer(pIndexBuffer, IBOffset, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+            pCtx->SetIndexBuffer(pIndexBuffer, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         }
     }
     else
@@ -983,7 +985,9 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*                                pC
             GLTFModel,
             RenderParams,
             RenderNodeCallback,
-            SRBTypeId //
+            SRBTypeId,
+            GLTFModel.GetFirstIndexLocation(),
+            GLTFModel.GetBaseVertex() //
         };
 
     // Opaque primitives first
