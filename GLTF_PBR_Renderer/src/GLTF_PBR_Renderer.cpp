@@ -246,6 +246,8 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
     Macros.AddShaderMacro("GLTF_PBR_USE_AO", m_Settings.UseAO);
     Macros.AddShaderMacro("GLTF_PBR_USE_EMISSIVE", m_Settings.UseEmissive);
     Macros.AddShaderMacro("USE_TEXTURE_ATLAS", m_Settings.UseTextureAtals);
+    Macros.AddShaderMacro("PBR_WORKFLOW_METALLIC_ROUGHNESS", GLTF::Material::PBR_WORKFLOW_METALL_ROUGH);
+    Macros.AddShaderMacro("PBR_WORKFLOW_SPECULAR_GLOSINESS", GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS);
     ShaderCI.Macros = Macros;
     RefCntAutoPtr<IShader> pVS;
     {
@@ -425,7 +427,7 @@ IShaderResourceBinding* GLTF_PBR_Renderer::CreateMaterialSRB(GLTF::Model&    Mod
     {
         ITextureView* pTexSRV = nullptr;
 
-        auto TexIdx = Material.Textures[TexId].Index;
+        auto TexIdx = Material.TextureIds[TexId];
         if (TexIdx >= 0)
         {
             if (auto* pTexture = Model.GetTexture(TexIdx, nullptr, nullptr))
@@ -439,23 +441,8 @@ IShaderResourceBinding* GLTF_PBR_Renderer::CreateMaterialSRB(GLTF::Model&    Mod
             pVar->Set(pTexSRV);
     };
 
-    GLTF::Material::TEXTURE_ID BaseColorTexId = GLTF::Material::TEXTURE_ID_BASE_COLOR;
-    GLTF::Material::TEXTURE_ID PhysDescTexId  = GLTF::Material::TEXTURE_ID_METALL_ROUGHNESS;
-    if (Material.workflow == GLTF::Material::PbrWorkflow::MetallicRoughness)
-    {
-    }
-    else if (Material.workflow == GLTF::Material::PbrWorkflow::SpecularGlossiness)
-    {
-        BaseColorTexId = GLTF::Material::TEXTURE_ID_DIFFUSE;
-        PhysDescTexId  = GLTF::Material::TEXTURE_ID_SPEC_GLOSS;
-    }
-    else
-    {
-        UNEXPECTED("Unexpected workflow");
-    }
-
-    SetTexture(BaseColorTexId, m_pWhiteTexSRV, "g_ColorMap");
-    SetTexture(PhysDescTexId, m_pWhiteTexSRV, "g_PhysicalDescriptorMap");
+    SetTexture(GLTF::Material::TEXTURE_ID_BASE_COLOR, m_pWhiteTexSRV, "g_ColorMap");
+    SetTexture(GLTF::Material::TEXTURE_ID_PHYSICAL_DESC, m_pWhiteTexSRV, "g_PhysicalDescriptorMap");
     SetTexture(GLTF::Material::TEXTURE_ID_NORMAL_MAP, m_pDefaultNormalMapSRV, "g_NormalMap");
     if (m_Settings.UseAO)
     {
@@ -817,20 +804,22 @@ void GLTF_PBR_Renderer::GLTFNodeRenderer::Render(const GLTF::Node&          Node
             }
 
             {
-                GLTFMaterialShaderInfo* pMaterialInfo = nullptr;
+                GLTF::Material::ShaderAttribs* pMaterialAttribs = nullptr;
                 if (RenderNodeCallback == nullptr)
                 {
                     struct GLTFAttribs
                     {
-                        GLTFRendererShaderParameters RenderParameters;
-                        GLTFMaterialShaderInfo       MaterialInfo;
+                        GLTFRendererShaderParameters  RenderParameters;
+                        GLTF::Material::ShaderAttribs MaterialInfo;
+                        static_assert(sizeof(GLTFMaterialShaderInfo) == sizeof(GLTF::Material::ShaderAttribs),
+                                      "The sizeof(GLTFMaterialShaderInfo) is incosistent with sizeof(GLTF::Material::ShaderAttribs)");
                     };
                     static_assert(sizeof(GLTFAttribs) <= 256, "Size of dynamic GLTFAttribs buffer exceeds 256 bytes. "
                                                               "It may be worth trying to reduce the size or just live with it.");
 
                     GLTFAttribs* pGLTFAttribs = nullptr;
                     pCtx->MapBuffer(Renderer.m_GLTFAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD, reinterpret_cast<PVoid&>(pGLTFAttribs));
-                    pMaterialInfo = &pGLTFAttribs->MaterialInfo;
+                    pMaterialAttribs = &pGLTFAttribs->MaterialInfo;
 
                     auto& ShaderParams = pGLTFAttribs->RenderParameters;
 
@@ -845,60 +834,10 @@ void GLTF_PBR_Renderer::GLTFNodeRenderer::Render(const GLTF::Node&          Node
                 }
                 else
                 {
-                    pMaterialInfo = &NodeRI.MaterialShaderInfo;
+                    pMaterialAttribs = &NodeRI.MaterialShaderInfo;
                 }
 
-                pMaterialInfo->EmissiveFactor = material.EmissiveFactor;
-
-                pMaterialInfo->NormalTextureUVSelector    = material.Textures[GLTF::Material::TEXTURE_ID_NORMAL_MAP].CoordSet;
-                pMaterialInfo->OcclusionTextureUVSelector = material.Textures[GLTF::Material::TEXTURE_ID_OCCLUSION].CoordSet;
-                pMaterialInfo->EmissiveTextureUVSelector  = material.Textures[GLTF::Material::TEXTURE_ID_EMISSIVE].CoordSet;
-
-                pMaterialInfo->UseAlphaMask    = material.AlphaMode == GLTF::Material::ALPHAMODE_MASK ? 1 : 0;
-                pMaterialInfo->AlphaMaskCutoff = material.AlphaCutoff;
-
-                auto GetUVScaleBias = [&](GLTF::Material::TEXTURE_ID TexId) //
-                {
-                    auto TexIndex = material.Textures[TexId].Index;
-                    return (TexIndex >= 0) ?
-                        GLTFModel.GetUVScaleBias(TexIndex) :
-                        float4{1, 1, 0, 0};
-                };
-
-                pMaterialInfo->NormalMapUVScaleBias = GetUVScaleBias(GLTF::Material::TEXTURE_ID_NORMAL_MAP);
-                pMaterialInfo->OcclusionUVScaleBias = GetUVScaleBias(GLTF::Material::TEXTURE_ID_OCCLUSION);
-                pMaterialInfo->EmissiveUVScaleBias  = GetUVScaleBias(GLTF::Material::TEXTURE_ID_EMISSIVE);
-
-                GLTF::Material::TEXTURE_ID BaseColorTexId = GLTF::Material::TEXTURE_ID_BASE_COLOR;
-                GLTF::Material::TEXTURE_ID PhysDescTexId  = GLTF::Material::TEXTURE_ID_METALL_ROUGHNESS;
-                // TODO: glTF specs states that metallic roughness should be preferred, even if specular glosiness is present
-                if (material.workflow == GLTF::Material::PbrWorkflow::MetallicRoughness)
-                {
-                    // Metallic roughness workflow
-                    pMaterialInfo->Workflow        = PBR_WORKFLOW_METALLIC_ROUGHNESS;
-                    pMaterialInfo->MetallicFactor  = material.MetallicFactor;
-                    pMaterialInfo->RoughnessFactor = material.RoughnessFactor;
-                    pMaterialInfo->BaseColorFactor = material.BaseColorFactor;
-                }
-                else if (material.workflow == GLTF::Material::PbrWorkflow::SpecularGlossiness)
-                {
-                    // Specular glossiness workflow
-                    pMaterialInfo->Workflow        = PBR_WORKFLOW_SPECULAR_GLOSINESS;
-                    pMaterialInfo->SpecularFactor  = material.SpecularFactor;
-                    pMaterialInfo->BaseColorFactor = material.DiffuseFactor;
-
-                    BaseColorTexId = GLTF::Material::TEXTURE_ID_DIFFUSE;
-                    PhysDescTexId  = GLTF::Material::TEXTURE_ID_SPEC_GLOSS;
-                }
-                else
-                {
-                    UNEXPECTED("Unexpected workflow");
-                }
-
-                pMaterialInfo->BaseColorTextureUVSelector          = material.Textures[BaseColorTexId].CoordSet;
-                pMaterialInfo->PhysicalDescriptorTextureUVSelector = material.Textures[PhysDescTexId].CoordSet;
-                pMaterialInfo->BaseColorUVScaleBias                = GetUVScaleBias(BaseColorTexId);
-                pMaterialInfo->PhysicalDescriptorUVScaleBias       = GetUVScaleBias(PhysDescTexId);
+                *pMaterialAttribs = material.Attribs;
 
                 if (RenderNodeCallback == nullptr)
                 {

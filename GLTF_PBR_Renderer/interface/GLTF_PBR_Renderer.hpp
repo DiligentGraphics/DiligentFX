@@ -184,7 +184,7 @@ public:
         GLTFNodeShaderTransforms ShaderTransforms;
 
         /// GLTF material shader information
-        GLTFMaterialShaderInfo MaterialShaderInfo;
+        GLTF::Material::ShaderAttribs MaterialShaderInfo;
 
         /// Index type for indexed primitives, or VT_UNDEFINED for non-indexed ones
         VALUE_TYPE IndexType = VT_UNDEFINED;
