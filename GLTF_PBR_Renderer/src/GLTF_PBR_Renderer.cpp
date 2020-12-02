@@ -428,7 +428,7 @@ IShaderResourceBinding* GLTF_PBR_Renderer::CreateMaterialSRB(GLTF::Model&    Mod
         auto TexIdx = Material.Textures[TexId].Index;
         if (TexIdx >= 0)
         {
-            if (auto* pTexture = Model.GetTexture(TexIdx))
+            if (auto* pTexture = Model.GetTexture(TexIdx, nullptr, nullptr))
                 pTexSRV = pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
         }
 
@@ -963,12 +963,12 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*                                pC
         std::array<Uint32, 2>   Offsets = {};
         std::array<IBuffer*, 2> pVBs =
             {
-                GLTFModel.GetBuffer(GLTF::Model::BUFFER_ID_VERTEX0),
-                GLTFModel.GetBuffer(GLTF::Model::BUFFER_ID_VERTEX1) //
+                GLTFModel.GetBuffer(GLTF::Model::BUFFER_ID_VERTEX0, nullptr, nullptr),
+                GLTFModel.GetBuffer(GLTF::Model::BUFFER_ID_VERTEX1, nullptr, nullptr) //
             };
         pCtx->SetVertexBuffers(0, static_cast<Uint32>(pVBs.size()), pVBs.data(), Offsets.data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION, SET_VERTEX_BUFFERS_FLAG_RESET);
 
-        if (auto* pIndexBuffer = GLTFModel.GetBuffer(GLTF::Model::BUFFER_ID_INDEX))
+        if (auto* pIndexBuffer = GLTFModel.GetBuffer(GLTF::Model::BUFFER_ID_INDEX, nullptr, nullptr))
         {
             pCtx->SetIndexBuffer(pIndexBuffer, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         }

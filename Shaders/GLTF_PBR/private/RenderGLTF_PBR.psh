@@ -226,8 +226,8 @@ void main(in  float4 ClipPos     : SV_Position,
             case 12: OutColor.rgb  = SRGBtoLINEAR(abs(perturbedNormal));                                break;
             case 13: OutColor.rgb  = dot(perturbedNormal, view) * float3(1.0, 1.0, 1.0);                break;
 #if GLTF_PBR_USE_IBL
-            case 14: OutColor.rgb  = IBLContrib.f3Diffuse;                                                break;
-            case 15: OutColor.rgb  = IBLContrib.f3Specular;                                               break;
+            case 14: OutColor.rgb  = IBLContrib.f3Diffuse;                                              break;
+            case 15: OutColor.rgb  = IBLContrib.f3Specular;                                             break;
 #endif
         }
     }
