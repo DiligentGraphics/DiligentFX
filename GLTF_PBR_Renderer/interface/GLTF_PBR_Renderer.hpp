@@ -122,13 +122,13 @@ public:
             ALPHA_MODE_FLAG_NONE = 0,
 
             /// Render opaque matetrials
-            ALPHA_MODE_FLAG_OPAQUE = 1 << GLTF::Material::ALPHAMODE_OPAQUE,
+            ALPHA_MODE_FLAG_OPAQUE = 1 << GLTF::Material::ALPHA_MODE_OPAQUE,
 
             /// Render alpha-masked matetrials
-            ALPHA_MODE_FLAG_MASK = 1 << GLTF::Material::ALPHAMODE_MASK,
+            ALPHA_MODE_FLAG_MASK = 1 << GLTF::Material::ALPHA_MODE_MASK,
 
             /// Render alpha-blended matetrials
-            ALPHA_MODE_FLAG_BLEND = 1 << GLTF::Material::ALPHAMODE_BLEND,
+            ALPHA_MODE_FLAG_BLEND = 1 << GLTF::Material::ALPHA_MODE_BLEND,
 
             /// Render all materials
             ALPHA_MODE_FLAG_ALL = ALPHA_MODE_FLAG_OPAQUE | ALPHA_MODE_FLAG_MASK | ALPHA_MODE_FLAG_BLEND
@@ -178,36 +178,6 @@ public:
         float WhitePoint = 3.f;
     };
 
-    /// GLTF node rendering info passed to the custom render callback
-    struct GLTFNodeRenderInfo
-    {
-        /// GLTF material
-        Uint32 MaterialId = 0;
-
-        /// GLTF node transforms
-        const GLTF::Mesh::TransformData* pTransformData = nullptr;
-
-        /// Index type for indexed primitives, or VT_UNDEFINED for non-indexed ones
-        VALUE_TYPE IndexType = VT_UNDEFINED;
-        union
-        {
-            /// Index count for indexed primitives
-            Uint32 IndexCount;
-
-            /// Vertex count for non-indexed primitives
-            Uint32 VertexCount;
-        };
-        /// First index for indexed primitives
-        Uint32 FirstIndex = 0;
-
-        /// Base vertex for indexed primitives or start vertex location for non-indexed.
-        Uint32 BaseVertex = 0;
-
-        GLTFNodeRenderInfo() noexcept :
-            IndexCount{0}
-        {}
-    };
-
     struct ModelResourceBindings
     {
         void Clear()
@@ -225,13 +195,11 @@ public:
     /// \param [in] ResourceBindings   - Model shader resource bindings.
     /// \param [in] RenderNodeCallback - Optional render call back function that should be called
     ///                                  for every GLTF node instead of rendering it.
-    /// \param [in] SRBTypeId          - Optional application-defined SRB type that was given to
-    ///                                  CreateMaterialSRB.
-    void Render(IDeviceContext*                                pCtx,
-                GLTF::Model&                                   GLTFModel,
-                const RenderInfo&                              RenderParams,
-                const ModelResourceBindings&                   ResourceBindings,
-                std::function<void(const GLTFNodeRenderInfo&)> RenderNodeCallback = nullptr);
+    /// \param [in] ResourceBindings   - GLTF model shader resource bindings.
+    void Render(IDeviceContext*              pCtx,
+                GLTF::Model&                 GLTFModel,
+                const RenderInfo&            RenderParams,
+                const ModelResourceBindings& ResourceBindings);
 
     /// Creates resource bindings for a given GLTF model
     ModelResourceBindings CreateResourceBindings(GLTF::Model& GLTFModel,
@@ -276,12 +244,11 @@ private:
 
     void CreatePSO(IRenderDevice* pDevice);
 
-    void RenderGLTFNode(IDeviceContext*                                pCtx,
-                        const GLTF::Node*                              node,
-                        GLTF::Material::ALPHA_MODE                     AlphaMode,
-                        const float4x4&                                ModelTransform,
-                        std::function<void(const GLTFNodeRenderInfo&)> RenderNodeCallback,
-                        size_t                                         SRBTypeId);
+    void RenderGLTFNode(IDeviceContext*            pCtx,
+                        const GLTF::Node*          node,
+                        GLTF::Material::ALPHA_MODE AlphaMode,
+                        const float4x4&            ModelTransform,
+                        size_t                     SRBTypeId);
 
     struct PSOKey
     {
@@ -291,13 +258,13 @@ private:
             DoubleSided{_DoubleSided}
         {}
 
-        GLTF::Material::ALPHA_MODE AlphaMode   = GLTF::Material::ALPHAMODE_OPAQUE;
+        GLTF::Material::ALPHA_MODE AlphaMode   = GLTF::Material::ALPHA_MODE_OPAQUE;
         bool                       DoubleSided = false;
     };
 
     static size_t GetPSOIdx(const PSOKey& Key)
     {
-        return (Key.AlphaMode == GLTF::Material::ALPHAMODE_BLEND ? 1 : 0) + (Key.DoubleSided ? 2 : 0);
+        return (Key.AlphaMode == GLTF::Material::ALPHA_MODE_BLEND ? 1 : 0) + (Key.DoubleSided ? 2 : 0);
     }
 
     void AddPSO(const PSOKey& Key, RefCntAutoPtr<IPipelineState> pPSO)
@@ -349,12 +316,11 @@ private:
 
     struct GLTFNodeRenderer
     {
-        GLTF_PBR_Renderer&                             Renderer;
-        IDeviceContext* const                          pCtx;
-        GLTF::Model&                                   GLTFModel;
-        const RenderInfo&                              RenderParams;
-        const ModelResourceBindings&                   ResourceBindings;
-        std::function<void(const GLTFNodeRenderInfo&)> RenderNodeCallback;
+        GLTF_PBR_Renderer&           Renderer;
+        IDeviceContext* const        pCtx;
+        GLTF::Model&                 GLTFModel;
+        const RenderInfo&            RenderParams;
+        const ModelResourceBindings& ResourceBindings;
 
         const Uint32 FirstIndexLocation;
         const Uint32 BaseVertex;
