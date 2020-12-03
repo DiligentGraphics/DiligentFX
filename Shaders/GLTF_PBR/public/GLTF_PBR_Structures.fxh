@@ -68,8 +68,18 @@ struct GLTFMaterialShaderInfo
 
 	float   OcclusionTextureUVSelector;
 	float   EmissiveTextureUVSelector;
+    float   BaseColorSlice;
+    float   PhysicalDescriptorSlice;
+
+    float   NormalSlice;
+    float   OcclusionSlice;
+    float   EmissiveSlice;
 	float   MetallicFactor;
+
 	float   RoughnessFactor;
+	int     UseAlphaMask;	
+	float   AlphaMaskCutoff;
+    float   Dummy0;
 
     // When texture atlas is used, UV scale and bias applied to
     // each texture coordinate set
@@ -78,11 +88,6 @@ struct GLTFMaterialShaderInfo
     float4 NormalMapUVScaleBias;
     float4 OcclusionUVScaleBias;
     float4 EmissiveUVScaleBias;
-
-	int     UseAlphaMask;	
-	float   AlphaMaskCutoff;
-    float   Dummy0;
-    float   Dummy1;
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
 	CHECK_STRUCT_ALIGNMENT(GLTFMaterialShaderInfo);

@@ -41,23 +41,23 @@ Texture2D     g_BRDF_LUT;
 SamplerState  g_BRDF_LUT_sampler;
 #endif
 
-Texture2D    g_ColorMap;
-SamplerState g_ColorMap_sampler;
+Texture2DArray g_ColorMap;
+SamplerState   g_ColorMap_sampler;
 
-Texture2D    g_PhysicalDescriptorMap;
-SamplerState g_PhysicalDescriptorMap_sampler;
+Texture2DArray g_PhysicalDescriptorMap;
+SamplerState   g_PhysicalDescriptorMap_sampler;
 
-Texture2D    g_NormalMap;
-SamplerState g_NormalMap_sampler;
+Texture2DArray g_NormalMap;
+SamplerState   g_NormalMap_sampler;
 
 #if GLTF_PBR_USE_AO
-Texture2D    g_AOMap;
-SamplerState g_AOMap_sampler;
+Texture2DArray g_AOMap;
+SamplerState   g_AOMap_sampler;
 #endif
 
 #if GLTF_PBR_USE_EMISSIVE
-Texture2D    g_EmissiveMap;
-SamplerState g_EmissiveMap_sampler;
+Texture2DArray g_EmissiveMap;
+SamplerState   g_EmissiveMap_sampler;
 #endif
 
 float2 GetTextureUV(in float2 UV0, in  float2 UV1, float Selector, float4 ScaleBias)
@@ -82,7 +82,7 @@ void main(in  float4 ClipPos     : SV_Position,
           out float4 OutColor    : SV_Target)
 {
     float2 BaseColorUV = GetTextureUV(UV0, UV1, g_MaterialInfo.BaseColorTextureUVSelector, g_MaterialInfo.BaseColorUVScaleBias);
-    float4 BaseColor = g_ColorMap.Sample(g_ColorMap_sampler, BaseColorUV);
+    float4 BaseColor = g_ColorMap.Sample(g_ColorMap_sampler, float3(BaseColorUV, g_MaterialInfo.BaseColorSlice));
     BaseColor = SRGBtoLINEAR(BaseColor) * g_MaterialInfo.BaseColorFactor;
     //BaseColor *= getVertexColor();
 
@@ -107,13 +107,13 @@ void main(in  float4 ClipPos     : SV_Position,
         discard;
     }
 
-    float3 TSNormal = g_NormalMap.Sample(g_NormalMap_sampler, NormalMapUV).rgb * float3(2.0, 2.0, 2.0) - float3(1.0, 1.0, 1.0);
+    float3 TSNormal = g_NormalMap.Sample(g_NormalMap_sampler, float3(NormalMapUV, g_MaterialInfo.NormalSlice)).rgb * float3(2.0, 2.0, 2.0) - float3(1.0, 1.0, 1.0);
 
     float Occlusion = 1.0;
 #if GLTF_PBR_USE_AO
     {
         float2 OcclusionUV = GetTextureUV(UV0, UV1, g_MaterialInfo.OcclusionTextureUVSelector, g_MaterialInfo.OcclusionUVScaleBias);
-        Occlusion = g_AOMap.Sample(g_AOMap_sampler, OcclusionUV).r;
+        Occlusion = g_AOMap.Sample(g_AOMap_sampler, float3(OcclusionUV, g_MaterialInfo.OcclusionSlice)).r;
     }
 #endif
 
@@ -121,13 +121,13 @@ void main(in  float4 ClipPos     : SV_Position,
 #if GLTF_PBR_USE_EMISSIVE
     {
         float2 EmissiveUV = GetTextureUV(UV0, UV1, g_MaterialInfo.EmissiveTextureUVSelector, g_MaterialInfo.EmissiveUVScaleBias);
-        Emissive = g_EmissiveMap.Sample(g_EmissiveMap_sampler, EmissiveUV).rgb;
+        Emissive = g_EmissiveMap.Sample(g_EmissiveMap_sampler, float3(EmissiveUV, g_MaterialInfo.EmissiveSlice)).rgb;
     }
 #endif
 
 
     float2 PhysicalDescUV = GetTextureUV(UV0, UV1, g_MaterialInfo.PhysicalDescriptorTextureUVSelector, g_MaterialInfo.PhysicalDescriptorUVScaleBias);
-    float4 PhysicalDesc = g_PhysicalDescriptorMap.Sample(g_PhysicalDescriptorMap_sampler, PhysicalDescUV);
+    float4 PhysicalDesc = g_PhysicalDescriptorMap.Sample(g_PhysicalDescriptorMap_sampler, float3(PhysicalDescUV, g_MaterialInfo.PhysicalDescriptorSlice));
     
     float metallic;
     if (g_MaterialInfo.Workflow == PBR_WORKFLOW_SPECULAR_GLOSINESS)
