@@ -390,18 +390,23 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
     }
 }
 
-IShaderResourceBinding* GLTF_PBR_Renderer::CreateMaterialSRB(GLTF::Model&    Model,
-                                                             GLTF::Material& Material,
-                                                             IBuffer*        pCameraAttribs,
-                                                             IBuffer*        pLightAttribs,
-                                                             IPipelineState* pPSO,
-                                                             size_t          TypeId)
+void GLTF_PBR_Renderer::CreateMaterialSRB(GLTF::Model&             Model,
+                                          GLTF::Material&          Material,
+                                          IBuffer*                 pCameraAttribs,
+                                          IBuffer*                 pLightAttribs,
+                                          IPipelineState*          pPSO,
+                                          IShaderResourceBinding** ppMaterialSRB)
 {
     if (pPSO == nullptr)
         pPSO = GetPSO(PSOKey{});
 
-    RefCntAutoPtr<IShaderResourceBinding> pSRB;
-    pPSO->CreateShaderResourceBinding(&pSRB, true);
+    pPSO->CreateShaderResourceBinding(ppMaterialSRB, true);
+    auto* pSRB = *ppMaterialSRB;
+    if (pSRB == nullptr)
+    {
+        LOG_ERROR_MESSAGE("Failed to create material SRB");
+        return;
+    }
 
     if (auto* pCameraAttribsVSVar = pSRB->GetVariableByName(SHADER_TYPE_VERTEX, "cbCameraAttribs"))
         pCameraAttribsVSVar->Set(pCameraAttribs);
@@ -455,26 +460,6 @@ IShaderResourceBinding* GLTF_PBR_Renderer::CreateMaterialSRB(GLTF::Model&    Mod
     if (m_Settings.UseEmissive)
     {
         SetTexture(GLTF::Material::TEXTURE_ID_EMISSIVE, m_pBlackTexSRV, "g_EmissiveMap");
-    }
-
-
-    {
-        SRBCacheKey SRBKey{&Material, TypeId};
-
-        std::lock_guard<std::mutex> Lock{m_SRBCacheMtx};
-
-        auto it = m_SRBCache.find(SRBKey);
-        if (it != m_SRBCache.end())
-        {
-            it->second = std::move(pSRB);
-            return it->second;
-        }
-        else
-        {
-            auto new_it = m_SRBCache.emplace(SRBKey, std::move(pSRB));
-            VERIFY_EXPR(new_it.second);
-            return new_it.first->second;
-        }
     }
 }
 
@@ -727,53 +712,50 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*  pDevice,
 }
 
 
-void GLTF_PBR_Renderer::InitializeResourceBindings(GLTF::Model& GLTFModel,
-                                                   IBuffer*     pCameraAttribs,
-                                                   IBuffer*     pLightAttribs)
+GLTF_PBR_Renderer::ModelResourceBindings GLTF_PBR_Renderer::CreateResourceBindings(
+    GLTF::Model& GLTFModel,
+    IBuffer*     pCameraAttribs,
+    IBuffer*     pLightAttribs)
 {
-    for (auto& mat : GLTFModel.Materials)
+    ModelResourceBindings ResourceBindings;
+    ResourceBindings.MaterialSRB.resize(GLTFModel.Materials.size());
+    for (size_t mat = 0; mat < GLTFModel.Materials.size(); ++mat)
     {
-        CreateMaterialSRB(GLTFModel, mat, pCameraAttribs, pLightAttribs);
+        CreateMaterialSRB(GLTFModel, GLTFModel.Materials[mat], pCameraAttribs, pLightAttribs, nullptr, &ResourceBindings.MaterialSRB[mat]);
     }
+    return ResourceBindings;
 }
-
-void GLTF_PBR_Renderer::ReleaseResourceBindings(GLTF::Model& GLTFModel, size_t SRBTypeId)
-{
-    std::lock_guard<std::mutex> Lock{m_SRBCacheMtx};
-    for (auto& mat : GLTFModel.Materials)
-    {
-        m_SRBCache.erase(SRBCacheKey{&mat, SRBTypeId});
-    }
-}
-
 
 void GLTF_PBR_Renderer::GLTFNodeRenderer::Render(const GLTF::Node&          Node,
                                                  GLTF::Material::ALPHA_MODE AlphaMode)
 {
-    if (Node._Mesh)
+    if (Node.Mesh)
     {
         // Render mesh primitives
-        for (const auto& primitive : Node._Mesh->Primitives)
+        for (const auto& primitive : Node.Mesh->Primitives)
         {
-            if (primitive->material.AlphaMode != AlphaMode)
+            const auto& material = GLTFModel.Materials[primitive.MaterialId];
+            if (material.AlphaMode != AlphaMode)
                 continue;
 
-            const auto& material = primitive->material;
             if (RenderNodeCallback == nullptr)
             {
                 auto* pPSO = Renderer.GetPSO(PSOKey{AlphaMode, material.DoubleSided});
                 VERIFY_EXPR(pPSO != nullptr);
                 pCtx->SetPipelineState(pPSO);
 
-                auto* pSRB = Renderer.GetMaterialSRB(&material, SRBTypeId);
+                VERIFY(primitive.MaterialId < ResourceBindings.MaterialSRB.size(),
+                       "Material index is out of bounds. This mostl likely indicates that shader resources were initialized for a different model.");
+
+                IShaderResourceBinding* const pSRB = ResourceBindings.MaterialSRB[primitive.MaterialId].RawPtr<IShaderResourceBinding>();
                 if (pSRB == nullptr)
                 {
-                    LOG_ERROR_MESSAGE("Unable to find SRB for GLTF material. Please call GLTF_PBR_Renderer::InitializeResourceBindings()");
+                    LOG_ERROR_MESSAGE("Unable to find SRB for GLTF material. Please call GLTF_PBR_Renderer::CreateResourceBindings()");
                     continue;
                 }
                 pCtx->CommitShaderResources(pSRB, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
 
-                size_t JointCount = Node._Mesh->Transforms.jointMatrices.size();
+                size_t JointCount = Node.Mesh->Transforms.jointMatrices.size();
                 if (JointCount > Renderer.m_Settings.MaxJointCount)
                 {
                     LOG_WARNING_MESSAGE("The number of joints in the mesh (", JointCount, ") exceeds the maximum number (", Renderer.m_Settings.MaxJointCount,
@@ -783,15 +765,15 @@ void GLTF_PBR_Renderer::GLTFNodeRenderer::Render(const GLTF::Node&          Node
 
                 {
                     MapHelper<GLTFNodeShaderTransforms> pTransforms{pCtx, Renderer.m_TransformsCB, MAP_WRITE, MAP_FLAG_DISCARD};
-                    pTransforms->NodeMatrix = Node._Mesh->Transforms.matrix * RenderParams.ModelTransform;
+                    pTransforms->NodeMatrix = Node.Mesh->Transforms.matrix * RenderParams.ModelTransform;
                     pTransforms->JointCount = static_cast<int>(JointCount);
                 }
 
-                if (JointCount != 0 && pLastAnimatedMesh != Node._Mesh.get())
+                if (JointCount != 0 && pLastAnimatedMesh != Node.Mesh.get())
                 {
                     MapHelper<float4x4> pJoints{pCtx, Renderer.m_JointsBuffer, MAP_WRITE, MAP_FLAG_DISCARD};
-                    memcpy(pJoints, Node._Mesh->Transforms.jointMatrices.data(), JointCount * sizeof(float4x4));
-                    pLastAnimatedMesh = Node._Mesh.get();
+                    memcpy(pJoints, Node.Mesh->Transforms.jointMatrices.data(), JointCount * sizeof(float4x4));
+                    pLastAnimatedMesh = Node.Mesh.get();
                 }
 
                 {
@@ -821,16 +803,16 @@ void GLTF_PBR_Renderer::GLTFNodeRenderer::Render(const GLTF::Node&          Node
                     ShaderParams.PrefilteredCubeMipLevels = Renderer.m_Settings.UseIBL ? static_cast<float>(Renderer.m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels) : 0.f;
                 }
 
-                if (primitive->hasIndices)
+                if (primitive.HasIndices())
                 {
-                    DrawIndexedAttribs drawAttrs{primitive->IndexCount, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
-                    drawAttrs.FirstIndexLocation = FirstIndexLocation + primitive->FirstIndex;
+                    DrawIndexedAttribs drawAttrs{primitive.IndexCount, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
+                    drawAttrs.FirstIndexLocation = FirstIndexLocation + primitive.FirstIndex;
                     drawAttrs.BaseVertex         = BaseVertex;
                     pCtx->DrawIndexed(drawAttrs);
                 }
                 else
                 {
-                    DrawAttribs drawAttrs{primitive->VertexCount, DRAW_FLAG_VERIFY_ALL};
+                    DrawAttribs drawAttrs{primitive.VertexCount, DRAW_FLAG_VERIFY_ALL};
                     drawAttrs.StartVertexLocation = BaseVertex;
                     pCtx->Draw(drawAttrs);
                 }
@@ -839,18 +821,18 @@ void GLTF_PBR_Renderer::GLTFNodeRenderer::Render(const GLTF::Node&          Node
             {
                 GLTFNodeRenderInfo NodeRI;
                 NodeRI.pMaterial      = &material;
-                NodeRI.pTransformData = &Node._Mesh->Transforms;
-                NodeRI.IndexType      = primitive->hasIndices ? VT_UINT32 : VT_UNDEFINED;
+                NodeRI.pTransformData = &Node.Mesh->Transforms;
+                NodeRI.IndexType      = primitive.HasIndices() ? VT_UINT32 : VT_UNDEFINED;
                 NodeRI.BaseVertex     = BaseVertex;
 
-                if (primitive->hasIndices)
+                if (primitive.HasIndices())
                 {
-                    NodeRI.IndexCount = primitive->IndexCount;
-                    NodeRI.FirstIndex = FirstIndexLocation + primitive->FirstIndex;
+                    NodeRI.IndexCount = primitive.IndexCount;
+                    NodeRI.FirstIndex = FirstIndexLocation + primitive.FirstIndex;
                 }
                 else
                 {
-                    NodeRI.VertexCount = primitive->VertexCount;
+                    NodeRI.VertexCount = primitive.VertexCount;
                 }
 
                 RenderNodeCallback(NodeRI);
@@ -873,9 +855,12 @@ void GLTF_PBR_Renderer::Begin(IDeviceContext* pCtx)
 void GLTF_PBR_Renderer::Render(IDeviceContext*                                pCtx,
                                GLTF::Model&                                   GLTFModel,
                                const RenderInfo&                              RenderParams,
-                               std::function<void(const GLTFNodeRenderInfo&)> RenderNodeCallback,
-                               size_t                                         SRBTypeId)
+                               const ModelResourceBindings&                   ResourceBindings,
+                               std::function<void(const GLTFNodeRenderInfo&)> RenderNodeCallback)
 {
+    DEV_CHECK_ERR(ResourceBindings.MaterialSRB.size() == GLTFModel.Materials.size(),
+                  "The number of material shader resource bindings is not consistent with the number of materials");
+
     m_RenderParams = RenderParams;
 
     if (RenderNodeCallback == nullptr)
@@ -904,8 +889,8 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*                                pC
             pCtx,
             GLTFModel,
             RenderParams,
+            ResourceBindings,
             RenderNodeCallback,
-            SRBTypeId,
             GLTFModel.GetFirstIndexLocation(),
             GLTFModel.GetBaseVertex() //
         };

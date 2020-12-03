@@ -208,11 +208,17 @@ public:
         {}
     };
 
+    struct ModelResourceBindings
+    {
+        std::vector<RefCntAutoPtr<IShaderResourceBinding>> MaterialSRB;
+    };
+
     /// Renders the given GLTF model.
 
     /// \param [in] pCtx               - Device context to record rendering commands to.
     /// \param [in] GLTFModel          - GLTF model to render.
     /// \param [in] RenderParams       - Render parameters.
+    /// \param [in] ResourceBindings   - Model shader resource bindings.
     /// \param [in] RenderNodeCallback - Optional render call back function that should be called
     ///                                  for every GLTF node instead of rendering it.
     /// \param [in] SRBTypeId          - Optional application-defined SRB type that was given to
@@ -220,16 +226,13 @@ public:
     void Render(IDeviceContext*                                pCtx,
                 GLTF::Model&                                   GLTFModel,
                 const RenderInfo&                              RenderParams,
-                std::function<void(const GLTFNodeRenderInfo&)> RenderNodeCallback = nullptr,
-                size_t                                         SRBTypeId          = 0);
+                const ModelResourceBindings&                   ResourceBindings,
+                std::function<void(const GLTFNodeRenderInfo&)> RenderNodeCallback = nullptr);
 
-    /// Initializes resource bindings for a given GLTF model
-    void InitializeResourceBindings(GLTF::Model& GLTFModel,
-                                    IBuffer*     pCameraAttribs,
-                                    IBuffer*     pLightAttribs);
-
-    /// Releases resource bindings for a given GLTF model and SRB type
-    void ReleaseResourceBindings(GLTF::Model& GLTFModel, size_t SRBTypeId = 0);
+    /// Creates resource bindings for a given GLTF model
+    ModelResourceBindings CreateResourceBindings(GLTF::Model& GLTFModel,
+                                                 IBuffer*     pCameraAttribs,
+                                                 IBuffer*     pLightAttribs);
 
     /// Precompute cubemaps used by IBL.
     void PrecomputeCubemaps(IRenderDevice*  pDevice,
@@ -251,30 +254,15 @@ public:
     /// \param [in] pCameraAttribs - Camera attributes constant buffer to set in the SRB.
     /// \param [in] pLightAttribs  - Light attributes constant buffer to set in the SRB.
     /// \param [in] pPSO           - Optional PSO object to use to create the SRB instead of the
-    ///                              default PSO.
-    /// \param [in] TypeId         - Optional application-defined type to associate created SRB object with.
-    ///                              This type can be used when retreiving the SRB with GetMaterialSRB or
-    ///                              rendering the model with Render.
-    ///                              An application may use this type to differentiate e.g. shadow-pass SRBs
-    ///                              from color-pass SRBs.
-    /// \return                      Created shader resource binding.
-    IShaderResourceBinding* CreateMaterialSRB(GLTF::Model&    Model,
-                                              GLTF::Material& Material,
-                                              IBuffer*        pCameraAttribs,
-                                              IBuffer*        pLightAttribs,
-                                              IPipelineState* pPSO   = nullptr,
-                                              size_t          TypeId = 0);
-
-    /// Finds a shader resource binding for the given material.
-
-    /// \param [in] Material - GLTF material to find SRB for.
-    /// \param [in] TypeId   - Optional application-defined type ID that was given to CreateMaterialSRB.
-    /// \return                Shader resource binding.
-    IShaderResourceBinding* GetMaterialSRB(const GLTF::Material* material, size_t TypeId = 0)
-    {
-        auto it = m_SRBCache.find(SRBCacheKey{material, TypeId});
-        return it != m_SRBCache.end() ? it->second.RawPtr() : nullptr;
-    }
+    ///                              default PSO. Can be null
+    /// \param [out] ppMaterialSRB - Pointer to memory location where the pointer to the SRB object
+    ///                              will be written.
+    void CreateMaterialSRB(GLTF::Model&             Model,
+                           GLTF::Material&          Material,
+                           IBuffer*                 pCameraAttribs,
+                           IBuffer*                 pLightAttribs,
+                           IPipelineState*          pPSO,
+                           IShaderResourceBinding** ppMaterialSRB);
 
     void Begin(IDeviceContext* pCtx);
 
@@ -335,36 +323,6 @@ private:
     RefCntAutoPtr<ITextureView> m_pBlackTexSRV;
     RefCntAutoPtr<ITextureView> m_pDefaultNormalMapSRV;
 
-    struct SRBCacheKey
-    {
-        const GLTF::Material* pMaterial = nullptr;
-        size_t                TypeId    = 0;
-
-        SRBCacheKey() = default;
-
-        SRBCacheKey(const GLTF::Material* _pMaterial,
-                    size_t                _TypeId) :
-            pMaterial{_pMaterial},
-            TypeId{_TypeId}
-        {}
-
-
-        bool operator==(const SRBCacheKey& Key) const
-        {
-            return pMaterial == Key.pMaterial && TypeId == Key.TypeId;
-        }
-
-        struct Hasher
-        {
-            size_t operator()(const SRBCacheKey& Key) const
-            {
-                return ComputeHash(Key.pMaterial, Key.TypeId);
-            }
-        };
-    };
-
-    std::mutex                                                                                  m_SRBCacheMtx;
-    std::unordered_map<SRBCacheKey, RefCntAutoPtr<IShaderResourceBinding>, SRBCacheKey::Hasher> m_SRBCache;
 
     static constexpr TEXTURE_FORMAT IrradianceCubeFmt    = TEX_FORMAT_RGBA32_FLOAT;
     static constexpr TEXTURE_FORMAT PrefilteredEnvMapFmt = TEX_FORMAT_RGBA16_FLOAT;
@@ -391,8 +349,8 @@ private:
         IDeviceContext* const                          pCtx;
         GLTF::Model&                                   GLTFModel;
         const RenderInfo&                              RenderParams;
+        const ModelResourceBindings&                   ResourceBindings;
         std::function<void(const GLTFNodeRenderInfo&)> RenderNodeCallback;
-        const size_t                                   SRBTypeId;
 
         const Uint32 FirstIndexLocation;
         const Uint32 BaseVertex;
