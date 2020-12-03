@@ -128,24 +128,14 @@ GLTF_PBR_Renderer::GLTF_PBR_Renderer(IRenderDevice*    pDevice,
     {
         CreateUniformBuffer(pDevice, sizeof(GLTFNodeShaderTransforms), "GLTF node transforms CB", &m_TransformsCB);
         CreateUniformBuffer(pDevice, sizeof(GLTFMaterialShaderInfo) + sizeof(GLTFRendererShaderParameters), "GLTF attribs CB", &m_GLTFAttribsCB);
-
-        {
-            BufferDesc BuffDesc;
-            BuffDesc.Name              = "GLTF joint tranforms";
-            BuffDesc.Usage             = USAGE_DEFAULT;
-            BuffDesc.uiSizeInBytes     = sizeof(float4x4) * m_Settings.MaxJointCount;
-            BuffDesc.BindFlags         = BIND_SHADER_RESOURCE;
-            BuffDesc.Mode              = BUFFER_MODE_STRUCTURED;
-            BuffDesc.ElementByteStride = sizeof(float4x4);
-            pDevice->CreateBuffer(BuffDesc, nullptr, &m_JointsBuffer);
-        }
+        CreateUniformBuffer(pDevice, static_cast<Uint32>(sizeof(float4x4) * m_Settings.MaxJointCount), "GLTF joint tranforms", &m_JointsBuffer);
 
         // clang-format off
         StateTransitionDesc Barriers[] = 
         {
             {m_TransformsCB,  RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, true},
             {m_GLTFAttribsCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, true},
-            {m_JointsBuffer,  RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, true}
+            {m_JointsBuffer,  RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, true}
         };
         // clang-format on
         pCtx->TransitionResourceStates(_countof(Barriers), Barriers);
@@ -251,6 +241,7 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
     ShaderCI.pShaderSourceStreamFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();
 
     ShaderMacroHelper Macros;
+    Macros.AddShaderMacro("MAX_JOINT_COUNT", m_Settings.MaxJointCount);
     Macros.AddShaderMacro("ALLOW_DEBUG_VIEW", m_Settings.AllowDebugView);
     Macros.AddShaderMacro("TONE_MAPPING_MODE", "TONE_MAPPING_MODE_UNCHARTED2");
     Macros.AddShaderMacro("GLTF_PBR_USE_IBL", m_Settings.UseIBL);
@@ -297,9 +288,9 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
     // clang-format off
     std::vector<ShaderResourceVariableDesc> Vars = 
     {
-        {SHADER_TYPE_VERTEX, "cbTransforms",  SHADER_RESOURCE_VARIABLE_TYPE_STATIC},
-        {SHADER_TYPE_PIXEL,  "cbGLTFAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC},
-        {SHADER_TYPE_VERTEX, "g_Joints",      SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
+        {SHADER_TYPE_VERTEX, "cbTransforms",      SHADER_RESOURCE_VARIABLE_TYPE_STATIC},
+        {SHADER_TYPE_PIXEL,  "cbGLTFAttribs",     SHADER_RESOURCE_VARIABLE_TYPE_STATIC},
+        {SHADER_TYPE_VERTEX, "cbJointTransforms", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
     };
     // clang-format on
 
@@ -394,7 +385,7 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
         // clang-format off
         PSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "cbTransforms")->Set(m_TransformsCB);
         PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbGLTFAttribs")->Set(m_GLTFAttribsCB);
-        PSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "g_Joints")->Set(m_JointsBuffer->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+        PSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "cbJointTransforms")->Set(m_JointsBuffer);
         // clang-format on
     }
 }
@@ -796,12 +787,11 @@ void GLTF_PBR_Renderer::GLTFNodeRenderer::Render(const GLTF::Node&          Node
                     pTransforms->JointCount = static_cast<int>(JointCount);
                 }
 
-                if (JointCount != 0)
+                if (JointCount != 0 && pLastAnimatedMesh != Node._Mesh.get())
                 {
-                    // TODO: rework as dynamic buffer - need to map it every frame before the first use
-                    pCtx->UpdateBuffer(Renderer.m_JointsBuffer, 0, static_cast<Uint32>(JointCount * sizeof(float4x4)), Node._Mesh->Transforms.jointMatrices.data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-                    StateTransitionDesc Barrier{Renderer.m_JointsBuffer, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, true};
-                    pCtx->TransitionResourceStates(1, &Barrier);
+                    MapHelper<float4x4> pJoints{pCtx, Renderer.m_JointsBuffer, MAP_WRITE, MAP_FLAG_DISCARD};
+                    memcpy(pJoints, Node._Mesh->Transforms.jointMatrices.data(), JointCount * sizeof(float4x4));
+                    pLastAnimatedMesh = Node._Mesh.get();
                 }
 
                 {
@@ -872,6 +862,12 @@ void GLTF_PBR_Renderer::GLTFNodeRenderer::Render(const GLTF::Node&          Node
     {
         Render(*child, AlphaMode);
     }
+}
+
+void GLTF_PBR_Renderer::Begin(IDeviceContext* pCtx)
+{
+    // In next-gen backends, dynamic buffers must be mapped before the first use in every frame
+    MapHelper<float4x4> pJoints{pCtx, m_JointsBuffer, MAP_WRITE, MAP_FLAG_DISCARD};
 }
 
 void GLTF_PBR_Renderer::Render(IDeviceContext*                                pCtx,

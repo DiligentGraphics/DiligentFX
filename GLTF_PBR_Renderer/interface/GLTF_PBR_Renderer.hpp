@@ -30,6 +30,7 @@
 #include <unordered_map>
 #include <functional>
 #include <mutex>
+#include <vector>
 
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/DeviceContext.h"
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
@@ -275,6 +276,8 @@ public:
         return it != m_SRBCache.end() ? it->second.RawPtr() : nullptr;
     }
 
+    void Begin(IDeviceContext* pCtx);
+
 private:
     void PrecomputeBRDF(IRenderDevice*  pDevice,
                         IDeviceContext* pCtx);
@@ -393,6 +396,8 @@ private:
 
         const Uint32 FirstIndexLocation;
         const Uint32 BaseVertex;
+
+        const GLTF::Mesh* pLastAnimatedMesh = nullptr;
 
         void Render(const GLTF::Node&          Node,
                     GLTF::Material::ALPHA_MODE AlphaMode);
