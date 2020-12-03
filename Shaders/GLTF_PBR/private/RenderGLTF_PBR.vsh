@@ -20,6 +20,12 @@ cbuffer cbTransforms
 {
     GLTFNodeShaderTransforms g_Transforms;
 }
+
+struct JointTransform
+{
+    float4x4 Matrix;
+};
+StructuredBuffer<JointTransform> g_Joints;
     
 void main(in  GLTF_VS_Input  VSIn,
           out float4 ClipPos  : SV_Position,
@@ -36,10 +42,10 @@ void main(in  GLTF_VS_Input  VSIn,
     {
         // Mesh is skinned
         float4x4 SkinMat = 
-            VSIn.Weight0.x * g_Transforms.JointMatrix[int(VSIn.Joint0.x)] +
-            VSIn.Weight0.y * g_Transforms.JointMatrix[int(VSIn.Joint0.y)] +
-            VSIn.Weight0.z * g_Transforms.JointMatrix[int(VSIn.Joint0.z)] +
-            VSIn.Weight0.w * g_Transforms.JointMatrix[int(VSIn.Joint0.w)];
+            VSIn.Weight0.x * g_Joints[int(VSIn.Joint0.x)].Matrix +
+            VSIn.Weight0.y * g_Joints[int(VSIn.Joint0.y)].Matrix +
+            VSIn.Weight0.z * g_Joints[int(VSIn.Joint0.z)].Matrix +
+            VSIn.Weight0.w * g_Joints[int(VSIn.Joint0.w)].Matrix;
         Transform = mul(Transform, SkinMat);
     }
 

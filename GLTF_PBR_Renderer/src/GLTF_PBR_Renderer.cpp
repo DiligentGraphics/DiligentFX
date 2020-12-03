@@ -129,11 +129,23 @@ GLTF_PBR_Renderer::GLTF_PBR_Renderer(IRenderDevice*    pDevice,
         CreateUniformBuffer(pDevice, sizeof(GLTFNodeShaderTransforms), "GLTF node transforms CB", &m_TransformsCB);
         CreateUniformBuffer(pDevice, sizeof(GLTFMaterialShaderInfo) + sizeof(GLTFRendererShaderParameters), "GLTF attribs CB", &m_GLTFAttribsCB);
 
+        {
+            BufferDesc BuffDesc;
+            BuffDesc.Name              = "GLTF joint tranforms";
+            BuffDesc.Usage             = USAGE_DEFAULT;
+            BuffDesc.uiSizeInBytes     = sizeof(float4x4) * m_Settings.MaxJointCount;
+            BuffDesc.BindFlags         = BIND_SHADER_RESOURCE;
+            BuffDesc.Mode              = BUFFER_MODE_STRUCTURED;
+            BuffDesc.ElementByteStride = sizeof(float4x4);
+            pDevice->CreateBuffer(BuffDesc, nullptr, &m_JointsBuffer);
+        }
+
         // clang-format off
         StateTransitionDesc Barriers[] = 
         {
             {m_TransformsCB,  RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, true},
-            {m_GLTFAttribsCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, true}
+            {m_GLTFAttribsCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, true},
+            {m_JointsBuffer,  RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, true}
         };
         // clang-format on
         pCtx->TransitionResourceStates(_countof(Barriers), Barriers);
@@ -239,7 +251,6 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
     ShaderCI.pShaderSourceStreamFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();
 
     ShaderMacroHelper Macros;
-    Macros.AddShaderMacro("MAX_NUM_JOINTS", Uint32{GLTF::Mesh::TransformData::MaxNumJoints});
     Macros.AddShaderMacro("ALLOW_DEBUG_VIEW", m_Settings.AllowDebugView);
     Macros.AddShaderMacro("TONE_MAPPING_MODE", "TONE_MAPPING_MODE_UNCHARTED2");
     Macros.AddShaderMacro("GLTF_PBR_USE_IBL", m_Settings.UseIBL);
@@ -287,7 +298,8 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
     std::vector<ShaderResourceVariableDesc> Vars = 
     {
         {SHADER_TYPE_VERTEX, "cbTransforms",  SHADER_RESOURCE_VARIABLE_TYPE_STATIC},
-        {SHADER_TYPE_PIXEL,  "cbGLTFAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
+        {SHADER_TYPE_PIXEL,  "cbGLTFAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC},
+        {SHADER_TYPE_VERTEX, "g_Joints",      SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
     };
     // clang-format on
 
@@ -382,6 +394,7 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
         // clang-format off
         PSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "cbTransforms")->Set(m_TransformsCB);
         PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbGLTFAttribs")->Set(m_GLTFAttribsCB);
+        PSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "g_Joints")->Set(m_JointsBuffer->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
         // clang-format on
     }
 }
@@ -754,10 +767,6 @@ void GLTF_PBR_Renderer::GLTFNodeRenderer::Render(const GLTF::Node&          Node
             if (primitive->material.AlphaMode != AlphaMode)
                 continue;
 
-            GLTFNodeRenderInfo NodeRI;
-
-            IShaderResourceBinding* pSRB = nullptr;
-
             const auto& material = primitive->material;
             if (RenderNodeCallback == nullptr)
             {
@@ -765,47 +774,36 @@ void GLTF_PBR_Renderer::GLTFNodeRenderer::Render(const GLTF::Node&          Node
                 VERIFY_EXPR(pPSO != nullptr);
                 pCtx->SetPipelineState(pPSO);
 
-                pSRB = Renderer.GetMaterialSRB(&material, SRBTypeId);
+                auto* pSRB = Renderer.GetMaterialSRB(&material, SRBTypeId);
                 if (pSRB == nullptr)
                 {
                     LOG_ERROR_MESSAGE("Unable to find SRB for GLTF material. Please call GLTF_PBR_Renderer::InitializeResourceBindings()");
                     continue;
                 }
                 pCtx->CommitShaderResources(pSRB, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
-            }
-            else
-            {
-                NodeRI.pMaterial = &material;
-            }
 
-            {
-                GLTFNodeShaderTransforms* pTransforms = nullptr;
-                if (RenderNodeCallback == nullptr)
+                size_t JointCount = Node._Mesh->Transforms.jointMatrices.size();
+                if (JointCount > Renderer.m_Settings.MaxJointCount)
                 {
-                    pCtx->MapBuffer(Renderer.m_TransformsCB, MAP_WRITE, MAP_FLAG_DISCARD, reinterpret_cast<PVoid&>(pTransforms));
-                }
-                else
-                {
-                    pTransforms = &NodeRI.ShaderTransforms;
+                    LOG_WARNING_MESSAGE("The number of joints in the mesh (", JointCount, ") exceeds the maximum number (", Renderer.m_Settings.MaxJointCount,
+                                        ") reserved in the buffer. Increase MaxJointCount when initializing the renderer.");
+                    JointCount = Renderer.m_Settings.MaxJointCount;
                 }
 
-                pTransforms->NodeMatrix = Node._Mesh->Transforms.matrix * RenderParams.ModelTransform;
-                pTransforms->JointCount = Node._Mesh->Transforms.jointcount;
-                if (Node._Mesh->Transforms.jointcount != 0)
                 {
-                    static_assert(sizeof(pTransforms->JointMatrix) == sizeof(Node._Mesh->Transforms.jointMatrix), "Incosistent sizes");
-                    memcpy(pTransforms->JointMatrix, Node._Mesh->Transforms.jointMatrix, sizeof(Node._Mesh->Transforms.jointMatrix));
+                    MapHelper<GLTFNodeShaderTransforms> pTransforms{pCtx, Renderer.m_TransformsCB, MAP_WRITE, MAP_FLAG_DISCARD};
+                    pTransforms->NodeMatrix = Node._Mesh->Transforms.matrix * RenderParams.ModelTransform;
+                    pTransforms->JointCount = static_cast<int>(JointCount);
                 }
 
-                if (RenderNodeCallback == nullptr)
+                if (JointCount != 0)
                 {
-                    pCtx->UnmapBuffer(Renderer.m_TransformsCB, MAP_WRITE);
+                    // TODO: rework as dynamic buffer - need to map it every frame before the first use
+                    pCtx->UpdateBuffer(Renderer.m_JointsBuffer, 0, static_cast<Uint32>(JointCount * sizeof(float4x4)), Node._Mesh->Transforms.jointMatrices.data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+                    StateTransitionDesc Barrier{Renderer.m_JointsBuffer, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, true};
+                    pCtx->TransitionResourceStates(1, &Barrier);
                 }
-            }
 
-            {
-                GLTF::Material::ShaderAttribs* pMaterialAttribs = nullptr;
-                if (RenderNodeCallback == nullptr)
                 {
                     struct GLTFAttribs
                     {
@@ -817,9 +815,9 @@ void GLTF_PBR_Renderer::GLTFNodeRenderer::Render(const GLTF::Node&          Node
                     static_assert(sizeof(GLTFAttribs) <= 256, "Size of dynamic GLTFAttribs buffer exceeds 256 bytes. "
                                                               "It may be worth trying to reduce the size or just live with it.");
 
-                    GLTFAttribs* pGLTFAttribs = nullptr;
-                    pCtx->MapBuffer(Renderer.m_GLTFAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD, reinterpret_cast<PVoid&>(pGLTFAttribs));
-                    pMaterialAttribs = &pGLTFAttribs->MaterialInfo;
+                    MapHelper<GLTFAttribs> pGLTFAttribs{pCtx, Renderer.m_GLTFAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
+
+                    pGLTFAttribs->MaterialInfo = material.Attribs;
 
                     auto& ShaderParams = pGLTFAttribs->RenderParameters;
 
@@ -832,53 +830,40 @@ void GLTF_PBR_Renderer::GLTFNodeRenderer::Render(const GLTF::Node&          Node
                     ShaderParams.IBLScale                 = Renderer.m_RenderParams.IBLScale;
                     ShaderParams.PrefilteredCubeMipLevels = Renderer.m_Settings.UseIBL ? static_cast<float>(Renderer.m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels) : 0.f;
                 }
-                else
-                {
-                    pMaterialAttribs = &NodeRI.MaterialShaderInfo;
-                }
 
-                *pMaterialAttribs = material.Attribs;
-
-                if (RenderNodeCallback == nullptr)
+                if (primitive->hasIndices)
                 {
-                    pCtx->UnmapBuffer(Renderer.m_GLTFAttribsCB, MAP_WRITE);
-                }
-            }
-
-            if (primitive->hasIndices)
-            {
-                if (RenderNodeCallback == nullptr)
-                {
-                    DrawIndexedAttribs drawAttrs(primitive->IndexCount, VT_UINT32, DRAW_FLAG_VERIFY_ALL);
+                    DrawIndexedAttribs drawAttrs{primitive->IndexCount, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
                     drawAttrs.FirstIndexLocation = FirstIndexLocation + primitive->FirstIndex;
                     drawAttrs.BaseVertex         = BaseVertex;
                     pCtx->DrawIndexed(drawAttrs);
                 }
                 else
                 {
-                    NodeRI.IndexType  = VT_UINT32;
-                    NodeRI.IndexCount = primitive->IndexCount;
-                    NodeRI.FirstIndex = FirstIndexLocation + primitive->FirstIndex;
-                    NodeRI.BaseVertex = BaseVertex;
-                    RenderNodeCallback(NodeRI);
+                    DrawAttribs drawAttrs{primitive->VertexCount, DRAW_FLAG_VERIFY_ALL};
+                    drawAttrs.StartVertexLocation = BaseVertex;
+                    pCtx->Draw(drawAttrs);
                 }
             }
             else
             {
-                if (RenderNodeCallback == nullptr)
+                GLTFNodeRenderInfo NodeRI;
+                NodeRI.pMaterial      = &material;
+                NodeRI.pTransformData = &Node._Mesh->Transforms;
+                NodeRI.IndexType      = primitive->hasIndices ? VT_UINT32 : VT_UNDEFINED;
+                NodeRI.BaseVertex     = BaseVertex;
+
+                if (primitive->hasIndices)
                 {
-                    DrawAttribs drawAttrs(primitive->VertexCount, DRAW_FLAG_VERIFY_ALL);
-                    drawAttrs.StartVertexLocation = BaseVertex;
-                    pCtx->Draw(drawAttrs);
+                    NodeRI.IndexCount = primitive->IndexCount;
+                    NodeRI.FirstIndex = FirstIndexLocation + primitive->FirstIndex;
                 }
                 else
                 {
-                    NodeRI.IndexType   = VT_UNDEFINED;
                     NodeRI.VertexCount = primitive->VertexCount;
-                    NodeRI.FirstIndex  = 0;
-                    NodeRI.BaseVertex  = BaseVertex;
-                    RenderNodeCallback(NodeRI);
                 }
+
+                RenderNodeCallback(NodeRI);
             }
         }
     }

@@ -98,6 +98,9 @@ public:
 
         /// Immutable sampler for emissive map texture.
         SamplerDesc EmissiveMapImmutableSampler = DefaultSampler;
+
+        /// Maximum number of joints
+        Uint32 MaxJointCount = 64;
     };
 
     /// Initializes the renderer
@@ -180,11 +183,8 @@ public:
         /// GLTF material
         const GLTF::Material* pMaterial = nullptr;
 
-        /// GLTF node shader transforms
-        GLTFNodeShaderTransforms ShaderTransforms;
-
-        /// GLTF material shader information
-        GLTF::Material::ShaderAttribs MaterialShaderInfo;
+        /// GLTF node transforms
+        const GLTF::Mesh::TransformData* pTransformData = nullptr;
 
         /// Index type for indexed primitives, or VT_UNDEFINED for non-indexed ones
         VALUE_TYPE IndexType = VT_UNDEFINED;
@@ -380,6 +380,7 @@ private:
     RefCntAutoPtr<IBuffer> m_TransformsCB;
     RefCntAutoPtr<IBuffer> m_GLTFAttribsCB;
     RefCntAutoPtr<IBuffer> m_PrecomputeEnvMapAttribsCB;
+    RefCntAutoPtr<IBuffer> m_JointsBuffer;
 
     struct GLTFNodeRenderer
     {

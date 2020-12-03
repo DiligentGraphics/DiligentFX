@@ -12,10 +12,6 @@
 
 #endif
 
-#ifndef MAX_NUM_JOINTS
-#   define MAX_NUM_JOINTS 128u
-#endif
-
 #ifndef PBR_WORKFLOW_METALLIC_ROUGHNESS
 #   define PBR_WORKFLOW_METALLIC_ROUGHNESS 0
 #endif
@@ -27,7 +23,6 @@
 struct GLTFNodeShaderTransforms
 {
 	float4x4 NodeMatrix;
-	float4x4 JointMatrix[MAX_NUM_JOINTS];
 
 	int      JointCount;
     float    Dummy0;
