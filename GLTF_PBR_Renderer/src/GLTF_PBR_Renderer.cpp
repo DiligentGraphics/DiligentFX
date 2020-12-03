@@ -820,7 +820,7 @@ void GLTF_PBR_Renderer::GLTFNodeRenderer::Render(const GLTF::Node&          Node
             else
             {
                 GLTFNodeRenderInfo NodeRI;
-                NodeRI.pMaterial      = &material;
+                NodeRI.MaterialId     = primitive.MaterialId;
                 NodeRI.pTransformData = &Node.Mesh->Transforms;
                 NodeRI.IndexType      = primitive.HasIndices() ? VT_UINT32 : VT_UNDEFINED;
                 NodeRI.BaseVertex     = BaseVertex;

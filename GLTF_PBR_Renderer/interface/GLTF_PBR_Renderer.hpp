@@ -182,7 +182,7 @@ public:
     struct GLTFNodeRenderInfo
     {
         /// GLTF material
-        const GLTF::Material* pMaterial = nullptr;
+        Uint32 MaterialId = 0;
 
         /// GLTF node transforms
         const GLTF::Mesh::TransformData* pTransformData = nullptr;
@@ -210,6 +210,10 @@ public:
 
     struct ModelResourceBindings
     {
+        void Clear()
+        {
+            MaterialSRB.clear();
+        }
         std::vector<RefCntAutoPtr<IShaderResourceBinding>> MaterialSRB;
     };
 
