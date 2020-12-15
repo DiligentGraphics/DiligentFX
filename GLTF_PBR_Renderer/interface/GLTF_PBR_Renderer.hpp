@@ -178,28 +178,39 @@ public:
         float WhitePoint = 3.f;
     };
 
+    /// GLTF Model shader resource binding information
     struct ModelResourceBindings
     {
         void Clear()
         {
             MaterialSRB.clear();
         }
+        /// Shader resource binding for every material
         std::vector<RefCntAutoPtr<IShaderResourceBinding>> MaterialSRB;
     };
 
-    /// Renders the given GLTF model.
+    /// GLTF resource cache shader resource binding information
+    struct ResourceCacheBindings
+    {
+        /// Resource version
+        Uint32 Version = 0;
 
-    /// \param [in] pCtx               - Device context to record rendering commands to.
-    /// \param [in] GLTFModel          - GLTF model to render.
-    /// \param [in] RenderParams       - Render parameters.
-    /// \param [in] ResourceBindings   - Model shader resource bindings.
-    /// \param [in] RenderNodeCallback - Optional render call back function that should be called
-    ///                                  for every GLTF node instead of rendering it.
-    /// \param [in] ResourceBindings   - GLTF model shader resource bindings.
-    void Render(IDeviceContext*              pCtx,
-                GLTF::Model&                 GLTFModel,
-                const RenderInfo&            RenderParams,
-                const ModelResourceBindings& ResourceBindings);
+        RefCntAutoPtr<IShaderResourceBinding> pSRB;
+    };
+
+    /// Renders a GLTF model.
+
+    /// \param [in] pCtx           - Device context to record rendering commands to.
+    /// \param [in] GLTFModel      - GLTF model to render.
+    /// \param [in] RenderParams   - Render parameters.
+    /// \param [in] pModelBindings - The model's shader resource binding information.
+    /// \param [in] pCacheBindings - Shader resource cache binding information, if the
+    ///                              model has been created using the cache.
+    void Render(IDeviceContext*        pCtx,
+                GLTF::Model&           GLTFModel,
+                const RenderInfo&      RenderParams,
+                ModelResourceBindings* pModelBindings,
+                ResourceCacheBindings* pCacheBindings = nullptr);
 
     /// Creates resource bindings for a given GLTF model
     ModelResourceBindings CreateResourceBindings(GLTF::Model& GLTFModel,
@@ -236,7 +247,43 @@ public:
                            IPipelineState*          pPSO,
                            IShaderResourceBinding** ppMaterialSRB);
 
+
+    /// Creates a shader resource binding for a GTLF resource cache.
+
+    /// \param [in] pDevice        - Render device that may be needed by the resource cache to create
+    ///                              internal objects.
+    /// \param [in] pCtx           - Device context that may be needed by the resource cache to initialize
+    ///                              internal objects.
+    /// \param [in] CacheUseInfo   - GLTF resource cache usage information.
+    /// \param [in] pCameraAttribs - Camera attributes constant buffer to set in the SRB.
+    /// \param [in] pLightAttribs  - Light attributes constant buffer to set in the SRB.
+    /// \param [in] pPSO           - Optional PSO object to use to create the SRB instead of the
+    ///                              default PSO. Can be null
+    /// \param [out] ppCacheSRB    - Pointer to memory location where the pointer to the SRB object
+    ///                              will be written.
+    void CreateResourceCacheSRB(IRenderDevice*              pDevice,
+                                IDeviceContext*             pCtx,
+                                GLTF::ResourceCacheUseInfo& CacheUseInfo,
+                                IBuffer*                    pCameraAttribs,
+                                IBuffer*                    pLightAttribs,
+                                IPipelineState*             pPSO,
+                                IShaderResourceBinding**    ppCacheSRB);
+
+    /// Prepares the renderer for rendering objects.
+    /// This method must be called at least once per frame.
     void Begin(IDeviceContext* pCtx);
+
+
+    /// Prepares the renderer for rendering objects from the resource cache.
+    /// This method must be called at least once per frame before the first object
+    /// from the cache is rendered.
+    void Begin(IRenderDevice*              pDevice,
+               IDeviceContext*             pCtx,
+               GLTF::ResourceCacheUseInfo& CacheUseInfo,
+               ResourceCacheBindings&      Bindings,
+               IBuffer*                    pCameraAttribs,
+               IBuffer*                    pLightAttribs,
+               IPipelineState*             pPSO = nullptr);
 
 private:
     void PrecomputeBRDF(IRenderDevice*  pDevice,
@@ -244,11 +291,9 @@ private:
 
     void CreatePSO(IRenderDevice* pDevice);
 
-    void RenderGLTFNode(IDeviceContext*            pCtx,
-                        const GLTF::Node*          node,
-                        GLTF::Material::ALPHA_MODE AlphaMode,
-                        const float4x4&            ModelTransform,
-                        size_t                     SRBTypeId);
+    void InitCommonSRBVars(IShaderResourceBinding* pSRB,
+                           IBuffer*                pCameraAttribs,
+                           IBuffer*                pLightAttribs);
 
     struct PSOKey
     {
@@ -258,13 +303,26 @@ private:
             DoubleSided{_DoubleSided}
         {}
 
+        bool operator==(const PSOKey& rhs) const
+        {
+            return AlphaMode == rhs.AlphaMode && DoubleSided == rhs.DoubleSided;
+        }
+        bool operator!=(const PSOKey& rhs) const
+        {
+            return AlphaMode != rhs.AlphaMode || DoubleSided != rhs.DoubleSided;
+        }
+
         GLTF::Material::ALPHA_MODE AlphaMode   = GLTF::Material::ALPHA_MODE_OPAQUE;
         bool                       DoubleSided = false;
     };
 
     static size_t GetPSOIdx(const PSOKey& Key)
     {
-        return (Key.AlphaMode == GLTF::Material::ALPHA_MODE_BLEND ? 1 : 0) + (Key.DoubleSided ? 2 : 0);
+        size_t PSOIdx;
+
+        PSOIdx = Key.AlphaMode == GLTF::Material::ALPHA_MODE_BLEND ? 1 : 0;
+        PSOIdx = PSOIdx * 2 + (Key.DoubleSided ? 1 : 0);
+        return PSOIdx;
     }
 
     void AddPSO(const PSOKey& Key, RefCntAutoPtr<IPipelineState> pPSO)
@@ -313,25 +371,8 @@ private:
     RefCntAutoPtr<IBuffer> m_GLTFAttribsCB;
     RefCntAutoPtr<IBuffer> m_PrecomputeEnvMapAttribsCB;
     RefCntAutoPtr<IBuffer> m_JointsBuffer;
-
-    struct GLTFNodeRenderer
-    {
-        GLTF_PBR_Renderer&           Renderer;
-        IDeviceContext* const        pCtx;
-        GLTF::Model&                 GLTFModel;
-        const RenderInfo&            RenderParams;
-        const ModelResourceBindings& ResourceBindings;
-
-        const Uint32 FirstIndexLocation;
-        const Uint32 BaseVertex;
-
-        const GLTF::Mesh* pLastAnimatedMesh = nullptr;
-
-        void Render(const GLTF::Node&          Node,
-                    GLTF::Material::ALPHA_MODE AlphaMode);
-    };
 };
 
-DEFINE_FLAG_ENUM_OPERATORS(GLTF_PBR_Renderer::RenderInfo::ALPHA_MODE_FLAGS);
+DEFINE_FLAG_ENUM_OPERATORS(GLTF_PBR_Renderer::RenderInfo::ALPHA_MODE_FLAGS)
 
 } // namespace Diligent
