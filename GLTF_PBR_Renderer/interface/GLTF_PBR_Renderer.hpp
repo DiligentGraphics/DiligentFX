@@ -351,6 +351,7 @@ private:
     RefCntAutoPtr<ITextureView> m_pWhiteTexSRV;
     RefCntAutoPtr<ITextureView> m_pBlackTexSRV;
     RefCntAutoPtr<ITextureView> m_pDefaultNormalMapSRV;
+    RefCntAutoPtr<ITextureView> m_pDefaultPhysDescSRV;
 
 
     static constexpr TEXTURE_FORMAT IrradianceCubeFmt    = TEX_FORMAT_RGBA32_FLOAT;

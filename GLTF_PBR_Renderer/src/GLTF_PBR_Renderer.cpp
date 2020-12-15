@@ -107,12 +107,19 @@ GLTF_PBR_Renderer::GLTF_PBR_Renderer(IRenderDevice*    pDevice,
         pDevice->CreateTexture(TexDesc, &InitData, &pDefaultNormalMap);
         m_pDefaultNormalMapSRV = pDefaultNormalMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
 
+        TexDesc.Name = "Default physical description map for GLTF renderer";
+        for (auto& c : Data) c = 0x0000FF00;
+        RefCntAutoPtr<ITexture> pDefaultPhysDesc;
+        pDevice->CreateTexture(TexDesc, &InitData, &pDefaultPhysDesc);
+        m_pDefaultPhysDescSRV = pDefaultPhysDesc->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+
         // clang-format off
         StateTransitionDesc Barriers[] = 
         {
             {pWhiteTex,         RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, true},
             {pBlackTex,         RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, true},
-            {pDefaultNormalMap, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, true} 
+            {pDefaultNormalMap, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, true},
+            {pDefaultPhysDesc,  RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, true} 
         };
         // clang-format on
         pCtx->TransitionResourceStates(_countof(Barriers), Barriers);
@@ -461,7 +468,7 @@ void GLTF_PBR_Renderer::CreateMaterialSRB(GLTF::Model&             Model,
     };
 
     SetTexture(GLTF::Material::TEXTURE_ID_BASE_COLOR, m_pWhiteTexSRV, "g_ColorMap");
-    SetTexture(GLTF::Material::TEXTURE_ID_PHYSICAL_DESC, m_pWhiteTexSRV, "g_PhysicalDescriptorMap");
+    SetTexture(GLTF::Material::TEXTURE_ID_PHYSICAL_DESC, m_pDefaultPhysDescSRV, "g_PhysicalDescriptorMap");
     SetTexture(GLTF::Material::TEXTURE_ID_NORMAL_MAP, m_pDefaultNormalMapSRV, "g_NormalMap");
     if (m_Settings.UseAO)
     {
