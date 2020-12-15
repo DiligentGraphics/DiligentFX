@@ -869,9 +869,10 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*        pCtx,
             GLTF::Material::ALPHA_MODE_BLEND,  // Transparent primitives - last (TODO: depth sorting)
         };
 
-    const GLTF::Mesh* pLastAnimatedMesh = nullptr;
-    IPipelineState*   pCurrPSO          = nullptr;
-    PSOKey            CurrPSOKey;
+    const GLTF::Mesh*       pLastAnimatedMesh = nullptr;
+    IPipelineState*         pCurrPSO          = nullptr;
+    IShaderResourceBinding* pCurrSRB          = nullptr;
+    PSOKey                  CurrPSOKey;
 
     for (auto AlphaMode : AlphaModes)
     {
@@ -900,10 +901,7 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*        pCtx,
                     pCurrPSO = GetPSO(CurrPSOKey);
                     VERIFY_EXPR(pCurrPSO != nullptr);
                     pCtx->SetPipelineState(pCurrPSO);
-                    if (pCacheBindings != nullptr)
-                    {
-                        pCtx->CommitShaderResources(pCacheBindings->pSRB, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
-                    }
+                    pCurrSRB = nullptr;
                 }
                 else
                 {
@@ -917,7 +915,20 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*        pCtx,
 
                     IShaderResourceBinding* const pSRB = pModelBindings->MaterialSRB[primitive.MaterialId].RawPtr<IShaderResourceBinding>();
                     DEV_CHECK_ERR(pSRB != nullptr, "Unable to find SRB for GLTF material.");
-                    pCtx->CommitShaderResources(pSRB, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
+                    if (pCurrSRB != pSRB)
+                    {
+                        pCurrSRB = pSRB;
+                        pCtx->CommitShaderResources(pSRB, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
+                    }
+                }
+                else
+                {
+                    VERIFY_EXPR(pCacheBindings != nullptr);
+                    if (pCurrSRB != pCacheBindings->pSRB)
+                    {
+                        pCurrSRB = pCacheBindings->pSRB;
+                        pCtx->CommitShaderResources(pCurrSRB, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
+                    }
                 }
 
                 size_t JointCount = Mesh.Transforms.jointMatrices.size();
