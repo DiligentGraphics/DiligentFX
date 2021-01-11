@@ -451,13 +451,23 @@ void GLTF_PBR_Renderer::CreateMaterialSRB(GLTF::Model&             Model,
 
     auto SetTexture = [&](GLTF::Material::TEXTURE_ID TexId, ITextureView* pDefaultTexSRV, const char* VarName) //
     {
-        ITextureView* pTexSRV = nullptr;
+        RefCntAutoPtr<ITextureView> pTexSRV;
 
         auto TexIdx = Material.TextureIds[TexId];
         if (TexIdx >= 0)
         {
             if (auto* pTexture = Model.GetTexture(TexIdx))
-                pTexSRV = pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+            {
+                if (pTexture->GetDesc().Type == RESOURCE_DIM_TEX_2D_ARRAY)
+                    pTexSRV = pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+                else
+                {
+                    TextureViewDesc SRVDesc;
+                    SRVDesc.ViewType   = TEXTURE_VIEW_SHADER_RESOURCE;
+                    SRVDesc.TextureDim = RESOURCE_DIM_TEX_2D_ARRAY;
+                    pTexture->CreateView(SRVDesc, &pTexSRV);
+                }
+            }
         }
 
         if (pTexSRV == nullptr)
