@@ -113,7 +113,7 @@
 "    }\n"
 "#endif\n"
 "\n"
-"    if (g_MaterialInfo.UseAlphaMask != 0 && BaseColor.a < g_MaterialInfo.AlphaMaskCutoff)\n"
+"    if (g_MaterialInfo.AlphaMode == GLTF_ALPHA_MODE_MASK && BaseColor.a < g_MaterialInfo.AlphaMaskCutoff)\n"
 "    {\n"
 "        discard;\n"
 "    }\n"

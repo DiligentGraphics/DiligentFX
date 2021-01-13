@@ -20,6 +20,20 @@
 #   define PBR_WORKFLOW_SPECULAR_GLOSINESS 1
 #endif
 
+
+#ifndef GLTF_ALPHA_MODE_OPAQUE
+#   define GLTF_ALPHA_MODE_OPAQUE 0
+#endif
+
+#ifndef GLTF_ALPHA_MODE_MASK
+#   define GLTF_ALPHA_MODE_MASK 1
+#endif
+
+#ifndef GLTF_ALPHA_MODE_BLEND
+#   define GLTF_ALPHA_MODE_BLEND 2
+#endif
+
+
 struct GLTFNodeShaderTransforms
 {
 	float4x4 NodeMatrix;
@@ -72,7 +86,7 @@ struct GLTFMaterialShaderInfo
 	float   MetallicFactor;
 
 	float   RoughnessFactor;
-	int     UseAlphaMask;	
+	int     AlphaMode;	
 	float   AlphaMaskCutoff;
     float   Dummy0;
 

@@ -257,6 +257,9 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
     Macros.AddShaderMacro("USE_TEXTURE_ATLAS", m_Settings.UseTextureAtals);
     Macros.AddShaderMacro("PBR_WORKFLOW_METALLIC_ROUGHNESS", GLTF::Material::PBR_WORKFLOW_METALL_ROUGH);
     Macros.AddShaderMacro("PBR_WORKFLOW_SPECULAR_GLOSINESS", GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS);
+    Macros.AddShaderMacro("GLTF_ALPHA_MODE_OPAQUE", GLTF::Material::ALPHA_MODE_OPAQUE);
+    Macros.AddShaderMacro("GLTF_ALPHA_MODE_MASK", GLTF::Material::ALPHA_MODE_MASK);
+    Macros.AddShaderMacro("GLTF_ALPHA_MODE_BLEND", GLTF::Material::ALPHA_MODE_BLEND);
     ShaderCI.Macros = Macros;
     RefCntAutoPtr<IShader> pVS;
     {
@@ -904,7 +907,7 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*        pCtx,
             for (const auto& primitive : Mesh.Primitives)
             {
                 const auto& material = GLTFModel.Materials[primitive.MaterialId];
-                if (material.AlphaMode != AlphaMode)
+                if (material.Attribs.AlphaMode != AlphaMode)
                     continue;
 
                 const PSOKey Key{AlphaMode, material.DoubleSided};
