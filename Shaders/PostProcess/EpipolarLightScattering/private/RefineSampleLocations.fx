@@ -79,7 +79,7 @@ void RefineSampleLocationsCS(uint3 Gid  : SV_GroupID,
     if( bIsValidThread )
     {
 #if REFINEMENT_CRITERION == REFINEMENT_CRITERION_DEPTH_DIFF
-        // Load camera space Z for this sample and for its right neighbour (remeber to use global sample index)
+        // Load camera space Z for this sample and for its right neighbour (remember to use global sample index)
         float fCamSpaceZ =            g_tex2DEpipolarCamSpaceZ.Load( int3(uiGlobalSampleInd,         uiSliceInd, 0) );
         float fRightNeighbCamSpaceZ = g_tex2DEpipolarCamSpaceZ.Load( int3( int(uiGlobalSampleInd)+1, uiSliceInd, 0) );
         float fMaxZ = max(fCamSpaceZ, fRightNeighbCamSpaceZ);
@@ -95,10 +95,10 @@ void RefineSampleLocationsCS(uint3 Gid  : SV_GroupID,
         // Compute minimum inscattering threshold based on the average scene luminance
         float fAverageLum = GetAverageSceneLuminance(g_tex2DAverageLuminance);
         // Inscattering threshold should be proportional to the average scene luminance and
-        // inversely proportional to the middle gray level (the higher middle gray, the briter the scene,
-        // thus the less the theshold)
+        // inversely proportional to the middle gray level (the higher middle gray, the brighter the scene,
+        // thus the less the threshold)
         // It should also account for the fact that rgb channels contribute differently
-        // to the percieved brightness. For r channel the threshold should be smallest, 
+        // to the perceived brightness. For r channel the threshold should be smallest, 
         // for b channel - the largest
         float3 f3MinInsctrThreshold = (0.02 * fAverageLum / RGB_TO_LUMINANCE.xyz) / g_PPAttribs.ToneMapping.fMiddleGray;
 
@@ -143,7 +143,7 @@ void RefineSampleLocationsCS(uint3 Gid  : SV_GroupID,
     }
     uint uiInitialSample1Ind = uiInitialSample0Ind + uiInitialSampleStep;
 
-    // Remeber that the last sample in each epipolar slice must be ray marching one
+    // Remember that the last sample in each epipolar slice must be ray marching one
     uint uiInterpolationTexWidth, uiInterpolationTexHeight;
     g_rwtex2DInterpolationSource.GetDimensions(uiInterpolationTexWidth, uiInterpolationTexHeight);
     if( Gid.x == uiInterpolationTexWidth/uint(THREAD_GROUP_SIZE) - 1u )

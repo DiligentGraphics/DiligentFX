@@ -96,7 +96,7 @@ for(int iCascade = 0; iCascade < iNumShadowCascades; ++iCascade)
 }
 ```
 
-When using filterable represenations, the shadow map must be post-processed before it can be used in a shader: 
+When using filterable representations, the shadow map must be post-processed before it can be used in a shader: 
 
 ```cpp
 if (m_ShadowSettings.iShadowMode > SHADOW_MODE_PCF)

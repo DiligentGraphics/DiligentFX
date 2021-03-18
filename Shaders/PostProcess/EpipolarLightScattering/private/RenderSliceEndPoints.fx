@@ -53,7 +53,7 @@ float2 GetEpipolarLineEntryPoint(float2 f2ExitPoint)
         float4 f4Boundaries = GetOutermostScreenPixelCoords(g_PPAttribs.f4ScreenResolution);
         bool4 b4IsCorrectIntersectionFlag = Greater( abs(f2RayDir.xyxy), 1e-5 * float4(1.0, 1.0, 1.0, 1.0) );
         float4 f4DistToBoundaries = (f4Boundaries - g_PPAttribs.f4LightScreenPos.xyxy) / (f2RayDir.xyxy + BoolToFloat( Not(b4IsCorrectIntersectionFlag) ) );
-        // Addition of !b4IsCorrectIntersectionFlag is required to prevent divison by zero
+        // Addition of !b4IsCorrectIntersectionFlag is required to prevent division by zero
         // Note that such incorrect lanes will be masked out anyway
 
         // We now need to find first intersection BEFORE the intersection with the exit boundary
@@ -135,7 +135,7 @@ float4 GenerateSliceEndpointsPS(FullScreenTriangleVSOutput VSOut
 
     // Note that in fact the outermost visible screen pixels do not lie exactly on the boundary (+1 or -1), but are biased by
     // 0.5 screen pixel size inwards. Using these adjusted boundaries improves precision and results in
-    // samller number of pixels which require inscattering correction
+    // smaller number of pixels which require inscattering correction
     float4 f4OutermostScreenPixelCoords = GetOutermostScreenPixelCoords(g_PPAttribs.f4ScreenResolution);// xyzw = (left, bottom, right, top)
 
     // Check if there can definitely be no correct intersection with the boundary:

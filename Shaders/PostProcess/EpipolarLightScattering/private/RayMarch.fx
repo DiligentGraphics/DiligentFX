@@ -191,7 +191,7 @@ float3 ComputeShadowedInscattering( in float2 f2RayMarchingSampleLocation,
         fDistToRayEnd   = max(fDistToRayEnd,   f2RayAtmTopIsecs.x);
         
         // To properly compute scattering from the space, we must 
-        // set up ray end position before extiting the loop
+        // set up ray end position before exiting the loop
         f3RayEnd   = f3CameraPos + f3ViewDir * fDistToRayEnd;
         f3RayStart = f3CameraPos + f3ViewDir * fDistToRayStart;
 
@@ -267,7 +267,7 @@ float3 ComputeShadowedInscattering( in float2 f2RayMarchingSampleLocation,
         }
         #endif
 
-        // Calcualte ray step length in world space
+        // Calculate ray step length in world space
         float fRayStepLengthWS = fRayLength * (fShadowMapUVStepLen / fTraceLenInShadowMapUVSpace);
         // Note that fTraceLenInShadowMapUVSpace can be very small when looking directly at sun
         // Since fShadowMapUVStepLen is at least one shadow map texel in size, 
