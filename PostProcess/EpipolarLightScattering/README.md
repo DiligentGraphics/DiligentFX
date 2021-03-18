@@ -28,13 +28,13 @@ The following parameters control the effect
                          produce more samples and higher quality, but at a higher performance cost.
 * bShowSampling    - Whether to show epipolar sampling.
 * bCorrectScatteringAtDepthBreaks - Whether to correct inscattering at depth discontinuities. Improves quality
-                                    for additional cost. It may be preferrable to increase the number of slices
+                                    for additional cost. It may be preferable to increase the number of slices
                                     and or maximum number of samples on an epipolar line instead.
 * bShowDepthBreaks  -  Whether to display pixels which are classified as depth discontinuities and which
                        will be corrected. Only has effect when bCorrectScatteringAtDepthBreaks is TRUE.
 * bShowLightingOnly - Whether to show lighting only
 * bOptimizeSampleLocations - Optimize sample locations to avoid oversampling. This should generally be TRUE.
-* bEnableLightShafts  - Wether to enable light shafts or render unshadowed inscattering.
+* bEnableLightShafts  - Whether to enable light shafts or render unshadowed inscattering.
                         Setting this to FALSE increases performance, but reduces visual quality.
 * uiInstrIntegralSteps  - Number of inscattering integral steps taken when computing unshadowed inscattering
                           Default value is OK and should not be changed.
@@ -68,7 +68,7 @@ The following parameters control the effect
 * uiExtinctionEvalMode - Atmospheric extinction evaluation mode.
 * bUseCustomSctrCoeffs - Whether to use custom scattering coefficients.
 * fAerosolDensityScale - Aerosol density scale to use for scattering coefficient computation.
-* fAerosolAbsorbtionScale - Aerosol absorbtion scale to use for scattering coefficient computation.
+* fAerosolAbsorbtionScale - Aerosol absorption scale to use for scattering coefficient computation.
 * f4CustomRlghBeta - Custom Rayleigh coefficients.
 * f4CustomMieBeta  - Custom Mie coefficients.
 
@@ -81,7 +81,7 @@ The effect requires the following data:
 * Light and color attributes
 
 The code snippet below shows how to use the epipolar light scattering post-processing effect.
-For the full soure code, see [Atmospheric scattering sample](https://github.com/DiligentGraphics/DiligentSamples/tree/master/Samples/Atmosphere).
+For the full source code, see [Atmospheric scattering sample](https://github.com/DiligentGraphics/DiligentSamples/tree/master/Samples/Atmosphere).
 
 ```cpp
 EpipolarLightScattering::FrameAttribs FrameAttribs;

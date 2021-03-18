@@ -62,7 +62,7 @@ public:
         /// Shadow mode (see SHADOW_MODE_* defines in BasicStructures.fxh), must not be 0.
         int            ShadowMode                  = 0;
 
-        /// Wether to use 32-bit or 16-bit filterable textures
+        /// Whether to use 32-bit or 16-bit filterable textures
         bool           Is32BitFilterableFmt        = false;
 
         /// Optional comparison sampler to be set in the shadow map resource view
@@ -91,20 +91,20 @@ public:
         /// Pointer to light direction, must not be null.
         const float3*      pLightDir    = nullptr;
 
-        /// Wether to snap cascades to texels in light view space
+        /// Whether to snap cascades to texels in light view space
         bool               SnapCascades       = true;
         
-        /// Wether to stabilize cascade extents in light view space
+        /// Whether to stabilize cascade extents in light view space
         bool               StabilizeExtents   = true;
 
-        /// Wether to use same extents for X and Y axis. Enabled automatically if StabilizeExtents == true
+        /// Whether to use same extents for X and Y axis. Enabled automatically if StabilizeExtents == true
         bool               EqualizeExtents    = true;
 
         /// Cascade partitioning factor that defines the ratio between fully linear (0.0) and 
         /// fully logarithmic (1.0) partitioning.
         float              fPartitioningFactor = 0.95f;
 
-        /// Wether to use right-handed or left-handed light view transform matrix
+        /// Whether to use right-handed or left-handed light view transform matrix
         bool               UseRightHandedLightViewTransform = true;
 
         /// Callback that allows the application to adjust z range of every cascade.

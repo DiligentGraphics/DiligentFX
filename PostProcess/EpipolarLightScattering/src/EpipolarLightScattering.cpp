@@ -58,7 +58,7 @@ static const DepthStencilStateDesc DSS_CmpEqNoWrites
 // Pixel shader discards pixels that should not be further processed, thus keeping the
 // stencil value untouched.
 // For instance, pixel shader performing epipolar coordinates generation discards all 
-// sampes, whoose coordinates are outside the screen [-1,1]x[-1,1] area.
+// sampes, whose coordinates are outside the screen [-1,1]x[-1,1] area.
 static const DepthStencilStateDesc DSS_IncStencilAlways
 {
     False,                  // DepthEnable
@@ -86,7 +86,7 @@ static const DepthStencilStateDesc DSS_IncStencilAlways
 
 // Disable depth testing, stencil testing function equal, increment stencil.
 // This state is used to process only those pixels that were marked at the previous pass.
-// All pixels whith different stencil value are discarded from further processing as well
+// All pixels with different stencil value are discarded from further processing as well
 // as some pixels can also be discarded during the draw call.
 // For instance, pixel shader marking ray marching samples processes only those pixels which are inside
 // the screen. It also discards all but those samples that are interpolated from themselves.
@@ -903,7 +903,7 @@ void EpipolarLightScattering::CreateLowResLuminanceTexture(IRenderDevice* pDevic
     auto* tex2DAverageLuminanceSRV = tex2DAverageLuminance->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
     m_ptex2DAverageLuminanceRTV    = tex2DAverageLuminance->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET);
     tex2DAverageLuminanceSRV->SetSampler(m_pLinearClampSampler);
-    // Set intial luminance to 1
+    // Set initial luminance to 1
     ITextureView* pRTVs[] = {m_ptex2DAverageLuminanceRTV};
     pDeviceCtx->SetRenderTargets(1, pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     pDeviceCtx->ClearRenderTarget(m_ptex2DAverageLuminanceRTV, TexDesc.ClearValue.Color, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
@@ -1748,7 +1748,7 @@ void EpipolarLightScattering::UnwarpEpipolarScattering(bool bRenderLuminance)
         UnwarpAndRenderLuminanceTech.SRBDependencyFlags = SRBDependencies;
     }
 
-    // Unwarp inscattering image and apply it to attenuated backgorund
+    // Unwarp inscattering image and apply it to attenuated background
     if (bRenderLuminance)
     {
         UnwarpAndRenderLuminanceTech.PrepareSRB(m_FrameAttribs.pDevice, m_pResMapping, BIND_SHADER_RESOURCES_KEEP_EXISTING);

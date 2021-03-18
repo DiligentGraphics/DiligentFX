@@ -6,7 +6,7 @@ A physially-based GLTF2.0 renderer with image-based lighting.
 
 ![](screenshots/flight_helmet.jpg)
 
-The renderer uses the refernce
+The renderer uses the reference
 [GLTF2.0 lighting model](https://github.com/KhronosGroup/glTF/blob/master/specification/2.0/README.md#appendix-b-brdf-implementation).
 
 |[Khronos GLTF viewer][1]| Diligent Engine        |
@@ -52,7 +52,7 @@ m_GLTFRenderer->PrecomputeCubemaps(m_pDevice, m_pImmediateContext, m_Environment
 The renderer itself does not implement any loading functionality. Use
 [Asset Loader](https://github.com/DiligentGraphics/DiligentTools/tree/master/AssetLoader) to load GLTF
 models. When model is loaded, it is important to call `InitializeResourceBindings()` method
-to let the renderer intiailize internal shader resource binding objects:
+to let the renderer initialize internal shader resource binding objects:
 
 ```cpp
 m_Model.reset(new GLTF::Model(m_pDevice, m_pImmediateContext, Path));

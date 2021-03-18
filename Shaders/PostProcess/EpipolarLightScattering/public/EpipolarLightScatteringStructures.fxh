@@ -128,7 +128,7 @@ struct EpipolarLightScatteringAttribs
     BOOL bShowLightingOnly                  DEFAULT_VALUE(FALSE);
     // Optimize sample locations to avoid oversampling. This should generally be TRUE.
     BOOL bOptimizeSampleLocations           DEFAULT_VALUE(TRUE);
-    // Wether to enable light shafts or render unshadowed inscattering.
+    // Whether to enable light shafts or render unshadowed inscattering.
     // Setting this to FALSE increases performance, but reduces visual quality.
     BOOL bEnableLightShafts                 DEFAULT_VALUE(TRUE);
     // Number of inscattering integral steps taken when computing unshadowed inscattering (default is OK).
@@ -182,7 +182,7 @@ struct EpipolarLightScatteringAttribs
     BOOL bUseCustomSctrCoeffs               DEFAULT_VALUE(FALSE);
     // Aerosol density scale to use for scattering coefficient computation.
     float fAerosolDensityScale              DEFAULT_VALUE(1.f);
-    // Aerosol absorbtion scale to use for scattering coefficient computation.
+    // Aerosol absorption scale to use for scattering coefficient computation.
     float fAerosolAbsorbtionScale           DEFAULT_VALUE(0.1f);
 
     // Custom Rayleigh coefficients.
