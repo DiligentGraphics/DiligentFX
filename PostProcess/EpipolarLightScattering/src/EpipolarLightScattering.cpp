@@ -307,7 +307,6 @@ EpipolarLightScattering::EpipolarLightScattering(IRenderDevice*              pDe
                                                  const AirScatteringAttribs& ScatteringAttibs) :
     m_BackBufferFmt(BackBufferFmt),
     m_DepthBufferFmt(DepthBufferFmt),
-    m_OffscreenBackBufferFmt(OffscreenBackBufferFmt),
     m_bUseCombinedMinMaxTexture(false),
     m_uiSampleRefinementCSThreadGroupSize(0),
     // Using small group size is inefficient because a lot of SIMD lanes become idle
@@ -2191,9 +2190,9 @@ void EpipolarLightScattering::PrepareForNewFrame(FrameAttribs&                  
             (PPAttribs.iFirstCascadeToRayMarch != m_PostProcessingAttribs.iFirstCascadeToRayMarch || 
              PPAttribs.iNumCascades            != m_PostProcessingAttribs.iNumCascades)))
     {
-        for (int i = 0; i < _countof(m_ptex2DMinMaxShadowMapSRV); ++i)
+        for (size_t i = 0; i < _countof(m_ptex2DMinMaxShadowMapSRV); ++i)
             m_ptex2DMinMaxShadowMapSRV[i].Release();
-        for (int i = 0; i < _countof(m_ptex2DMinMaxShadowMapRTV); ++i)
+        for (size_t i = 0; i < _countof(m_ptex2DMinMaxShadowMapRTV); ++i)
             m_ptex2DMinMaxShadowMapRTV[i].Release();
     }
 
