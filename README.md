@@ -2,6 +2,14 @@
 
 DiligentFX is the [Diligent Engine](https://github.com/DiligentGraphics/DiligentEngine)'s high-level rendering framework.
 
+| Platform                                                                                                                                    |   Build Status                    |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| <img src="https://github.com/DiligentGraphics/DiligentCore/blob/master/media/windows-logo.png" width=24 valign="middle"> Windows            | [![Build Status](https://github.com/DiligentGraphics/DiligentFX/workflows/Windows/badge.svg?branch=master)](https://github.com/DiligentGraphics/DiligentFX/actions/workflows/windows.yml?query=branch%3Amaster) |
+| <img src="https://github.com/DiligentGraphics/DiligentCore/blob/master/media/uwindows-logo.png" width=24 valign="middle"> Universal Windows | [![Build Status](https://github.com/DiligentGraphics/DiligentFX/workflows/UWP/badge.svg?branch=master)](https://github.com/DiligentGraphics/DiligentFX/actions/workflows/uwp.yml?query=branch%3Amaster)         |
+| <img src="https://github.com/DiligentGraphics/DiligentCore/blob/master/media/linux-logo.png" width=24 valign="middle"> Linux                | [![Build Status](https://github.com/DiligentGraphics/DiligentFX/workflows/Linux/badge.svg?branch=master)](https://github.com/DiligentGraphics/DiligentFX/actions/workflows/linux.yml?query=branch%3Amaster)     |
+| <img src="https://github.com/DiligentGraphics/DiligentCore/blob/master/media/macos-logo.png" width=24 valign="middle"> MacOS                | [![Build Status](https://github.com/DiligentGraphics/DiligentFX/workflows/MacOS/badge.svg?branch=master)](https://github.com/DiligentGraphics/DiligentFX/actions/workflows/macos.yml?query=branch%3Amaster)     |
+| <img src="https://github.com/DiligentGraphics/DiligentCore/blob/master/media/apple-logo.png" width=24 valign="middle"> iOS                  | [![Build Status](https://github.com/DiligentGraphics/DiligentFX/workflows/iOS/badge.svg?branch=master)](https://github.com/DiligentGraphics/DiligentFX/actions/workflows/ios.yml?query=branch%3Amaster)         |
+
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](License.txt)
 [![Chat on gitter](https://badges.gitter.im/gitterHQ/gitter.png)](https://gitter.im/diligent-engine)
 [![Chat on Discord](https://img.shields.io/discord/730091778081947680?logo=discord)](https://discord.gg/t7HGBK7)

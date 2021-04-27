@@ -1,0 +1,59 @@
+name: UWP
+
+on: [push, pull_request]
+
+jobs:
+  build-uwp:
+    strategy:
+      matrix:
+        toolset: [x64]
+        config: [Debug, Release]
+
+    runs-on: windows-latest
+    name: UWP, ${{ matrix.config }} ${{ matrix.toolset }}
+
+    steps:
+    - name: Clone DiligentFX
+      uses: actions/checkout@v2
+      with:
+        path:       DiligentFX
+        submodules: recursive
+
+    - name: Clone DiligentTools
+      uses: actions/checkout@v2
+      with:
+        repository: 'DiligentGraphics/DiligentTools'
+        path:       DiligentTools
+        submodules: recursive
+        
+    - name: Clone DiligentCore
+      uses: actions/checkout@v2
+      with:
+        repository: 'DiligentGraphics/DiligentCore'
+        path:       DiligentCore
+        submodules: recursive
+
+    - name: Format validation
+      working-directory: DiligentFX
+      shell: cmd
+      run: |
+        cd BuildTools\FormatValidation
+        validate_format_win.bat
+
+    - name: Configure CMake
+      if: success()
+      shell: bash
+      run: |
+        echo "cmake_minimum_required(VERSION 3.6)" > CMakeLists.txt
+        echo "Project(DiligentFX_Test)" >> CMakeLists.txt
+        echo "add_subdirectory(DiligentCore)" >> CMakeLists.txt
+        echo "add_subdirectory(DiligentTools)" >> CMakeLists.txt
+        echo "add_subdirectory(DiligentFX)" >> CMakeLists.txt
+        cd $GITHUB_WORKSPACE/DiligentCore/BuildTools/Scripts/github_actions
+        ./configure_cmake.sh "uwp" "${{runner.workspace}}" ${{ matrix.config }} ${{ matrix.toolset }}
+
+    - name: Build
+      if: success()
+      working-directory: ${{runner.workspace}}/build
+      shell: bash
+      run: cmake --build . --config ${{ matrix.config }} --target install
