@@ -52,11 +52,9 @@ jobs:
       if: success()
       shell: bash
       run: |
-        echo "cmake_minimum_required(VERSION 3.6)" > CMakeLists.txt
-        echo "Project(DiligentFX_Test)" >> CMakeLists.txt
-        echo "add_subdirectory(DiligentCore)" >> CMakeLists.txt
-        echo "add_subdirectory(DiligentTools)" >> CMakeLists.txt
-        echo "add_subdirectory(DiligentFX)" >> CMakeLists.txt
+        cd $GITHUB_WORKSPACE/DiligentFX/BuildTools/Scripts/github_actions
+        chmod +x create_cmake.sh
+        ./create_cmake.sh "$GITHUB_WORKSPACE"
         cd $GITHUB_WORKSPACE/DiligentCore/BuildTools/Scripts/github_actions
         chmod +x configure_cmake.sh
         ./configure_cmake.sh "macos" "${{runner.workspace}}" ${{ matrix.config }}
@@ -65,4 +63,4 @@ jobs:
       if: success()
       working-directory: ${{runner.workspace}}/build
       shell: bash
-      run: cmake --build . --config ${{ matrix.config }} --target install
+      run: cmake --build . --config ${{ matrix.config }} --target install -j2
