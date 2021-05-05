@@ -320,8 +320,8 @@ EpipolarLightScattering::EpipolarLightScattering(IRenderDevice*              pDe
     m_MediaParams.fAtmAltitudeRangeInv = 1.f / (m_MediaParams.fAtmTopAltitude - m_MediaParams.fAtmBottomAltitude);
 
     pDevice->CreateResourceMapping(ResourceMappingDesc(), &m_pResMapping);
-    const auto& deviceCaps = pDevice->GetDeviceCaps();
-    if (deviceCaps.DevType == RENDER_DEVICE_TYPE_GLES || deviceCaps.AdapterInfo.Type == ADAPTER_TYPE_SOFTWARE)
+    const auto& adapterInfo = pDevice->GetAdapterInfo();
+    if (adapterInfo.Capabilities.DevType == RENDER_DEVICE_TYPE_GLES || adapterInfo.Type == ADAPTER_TYPE_SOFTWARE)
     {
         m_uiNumRandomSamplesOnSphere /= 2;
         m_iPrecomputedSctrUDim /= 2;
