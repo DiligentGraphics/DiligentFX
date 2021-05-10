@@ -24,7 +24,7 @@ jobs:
         repository: 'DiligentGraphics/DiligentTools'
         path:       DiligentTools
         submodules: recursive
-        
+
     - name: Clone DiligentCore
       uses: actions/checkout@v2
       with:
@@ -42,8 +42,7 @@ jobs:
     - name: Configure dependencies
       if: success()
       run: |
-        sudo apt-get install build-essential pkg-config libx11-dev libxcursor-dev \
-          libxinerama-dev libgl1-mesa-dev libglu-dev libasound2-dev libpulse-dev libudev-dev libxi-dev libxrandr-dev yasm
+        sudo apt-get install build-essential libx11-dev libgl1-mesa-dev
 
     - name: Configure CMake
       if: success()
@@ -87,7 +86,7 @@ jobs:
         repository: 'DiligentGraphics/DiligentTools'
         path:       DiligentTools
         submodules: recursive
-        
+
     - name: Clone DiligentCore
       uses: actions/checkout@v2
       with:
@@ -105,8 +104,7 @@ jobs:
     - name: Configure dependencies
       if: success()
       run: |
-        sudo apt-get install build-essential pkg-config libx11-dev libxcursor-dev \
-          libxinerama-dev libgl1-mesa-dev libglu-dev libasound2-dev libpulse-dev libudev-dev libxi-dev libxrandr-dev yasm
+        sudo apt-get install build-essential libx11-dev libgl1-mesa-dev
 
     - name: Configure CMake
       if: success()
