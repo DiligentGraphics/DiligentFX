@@ -136,8 +136,8 @@ void ShadowMapManager::DistributeCascades(const DistributeCascadeInfo& Info,
     VERIFY(Info.pLightDir, "Light direction must not be null");
     VERIFY(m_pDevice, "Shadow map manager is not initialized");
 
-    const auto& DevCaps = m_pDevice->GetDeviceCaps();
-    const auto  IsGL    = DevCaps.IsGLDevice();
+    const auto& DevInfo = m_pDevice->GetDeviceInfo();
+    const auto  IsGL    = DevInfo.IsGLDevice();
     const auto& SMDesc  = m_pShadowMapSRV->GetTexture()->GetDesc();
 
     float2 f2ShadowMapSize = float2(static_cast<float>(SMDesc.Width), static_cast<float>(SMDesc.Height));
@@ -391,7 +391,7 @@ void ShadowMapManager::DistributeCascades(const DistributeCascadeInfo& Info,
         float4x4& WorldToLightProjSpaceMatr = m_CascadeTransforms[iCascade].WorldToLightProjSpace;
         WorldToLightProjSpaceMatr           = WorldToLightViewSpaceMatr * CascadeProjMatr;
 
-        const auto& NDCAttribs    = DevCaps.GetNDCAttribs();
+        const auto& NDCAttribs    = DevInfo.GetNDCAttribs();
         float4x4    ProjToUVScale = float4x4::Scale(0.5f, NDCAttribs.YtoVScale, NDCAttribs.ZtoDepthScale);
         float4x4    ProjToUVBias  = float4x4::Translation(0.5f, 0.5f, NDCAttribs.GetZtoDepthBias());
 
@@ -476,7 +476,7 @@ void ShadowMapManager::InitializeConversionTechniques(TEXTURE_FORMAT FilterableS
                 {SHADER_TYPE_PIXEL, "g_tex2DShadowMap", Sam_LinearClamp} //
             };
 
-        if (m_pDevice->GetDeviceCaps().IsGLDevice())
+        if (m_pDevice->GetDeviceInfo().IsGLDevice())
         {
             // Even though textures are never sampled in the shader, OpenGL requires proper
             // sampler to be set even when texelFetch is used.
