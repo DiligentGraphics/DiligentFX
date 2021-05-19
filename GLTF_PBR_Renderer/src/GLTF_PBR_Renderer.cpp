@@ -783,6 +783,9 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*  pDevice,
     };
     // clang-format on
     pCtx->TransitionResourceStates(_countof(Barriers), Barriers);
+
+    // To avoid crashes on some low-end Android devices
+    pCtx->Flush();
 }
 
 
