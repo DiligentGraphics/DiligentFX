@@ -35,6 +35,13 @@ add_subdirectory(Utilities)
 add_subdirectory(Components)
 add_subdirectory(PostProcess)
 add_subdirectory(GLTF_PBR_Renderer)
+add_subdirectory(FrameGraph)
+
+target_link_libraries(DiligentFX 
+PUBLIC
+    Diligent-FrameGraph
+)
+
 
 if(DILIGENT_BUILD_TESTS)
     add_subdirectory(Tests)

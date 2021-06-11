@@ -34,6 +34,7 @@
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/TextureView.h"
 #include "../../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
 #include "../../../../DiligentCore/Common/interface/BasicMath.hpp"
+#include "../../../FrameGraph/interface/FrameGraphBase.hpp"
 
 namespace Diligent
 {
@@ -112,10 +113,13 @@ public:
     ITextureView* GetAmbientSkyLightSRV(IRenderDevice* pDevice, IDeviceContext* pContext);
 
 private:
-    void ReconstructCameraSpaceZ();
-    void RenderSliceEndpoints();
-    void RenderCoordinateTexture();
-    void RenderCoarseUnshadowedInctr();
+    struct NodeBase;
+
+    RefCntAutoPtr<NodeBase> CreateReconstructCameraSpaceZNode();
+    RefCntAutoPtr<NodeBase> CreateRenderSliceEndpointsNode();
+    RefCntAutoPtr<NodeBase> CreateRenderCoordinateTextureNode();
+    RefCntAutoPtr<NodeBase> CreateRenderCoarseUnshadowedInctrNode();
+
     void RefineSampleLocations();
     void MarkRayMarchingSamples();
     void RenderSliceUVDirAndOrig();
@@ -139,18 +143,18 @@ private:
     void ComputeAmbientSkyLightTexture(IRenderDevice* pDevice, IDeviceContext* pContext);
     void ComputeScatteringCoefficients(IDeviceContext* pDeviceCtx = nullptr);
     void CreateEpipolarTextures(IRenderDevice* pDevice);
-    void CreateSliceEndPointsTexture(IRenderDevice* pDevice);
-    void CreateExtinctionTexture(IRenderDevice* pDevice);
     void CreateAmbientSkyLightTexture(IRenderDevice* pDevice);
     void CreateLowResLuminanceTexture(IRenderDevice* pDevice, IDeviceContext* pDeviceCtx);
     void CreateSliceUVDirAndOriginTexture(IRenderDevice* pDevice);
-    void CreateCamSpaceZTexture(IRenderDevice* pDevice);
+    void CreateCamSpaceZTexture(IRenderDevice* pDevice){};
     void CreateMinMaxShadowMap(IRenderDevice* pDevice);
 
     void DefineMacros(class ShaderMacroHelper& Macros);
 
     const TEXTURE_FORMAT m_BackBufferFmt;
     const TEXTURE_FORMAT m_DepthBufferFmt;
+
+    TEXTURE_FORMAT m_EpipolarImageDepthFmt = TEX_FORMAT_UNKNOWN;
 
     static constexpr TEXTURE_FORMAT PrecomputedNetDensityTexFmt = TEX_FORMAT_RG32_FLOAT;
     static constexpr TEXTURE_FORMAT CoordinateTexFmt            = TEX_FORMAT_RG32_FLOAT;
@@ -166,7 +170,6 @@ private:
     static constexpr TEXTURE_FORMAT AverageLuminanceTexFmt      = TEX_FORMAT_R16_FLOAT;
     static constexpr TEXTURE_FORMAT SliceUVDirAndOriginTexFmt   = TEX_FORMAT_RGBA32_FLOAT;
     static constexpr TEXTURE_FORMAT CamSpaceZFmt                = TEX_FORMAT_R32_FLOAT;
-
 
     EpipolarLightScatteringAttribs m_PostProcessingAttribs;
     FrameAttribs                   m_FrameAttribs;
@@ -214,11 +217,16 @@ private:
 
     RefCntAutoPtr<IResourceMapping> m_pResMapping;
 
-    RefCntAutoPtr<ITextureView> m_ptex2DCoordinateTextureRTV;     // Max Samples X Num Slices   RG32F
-    RefCntAutoPtr<ITextureView> m_ptex2DSliceEndpointsRTV;        // Num Slices  X 1            RGBA32F
-    RefCntAutoPtr<ITextureView> m_ptex2DEpipolarCamSpaceZRTV;     // Max Samples X Num Slices   R32F
-    RefCntAutoPtr<ITextureView> m_ptex2DEpipolarInscatteringRTV;  // Max Samples X Num Slices   RGBA16F
-    RefCntAutoPtr<ITextureView> m_ptex2DEpipolarExtinctionRTV;    // Max Samples X Num Slices   RGBA8_UNORM
+    TextureDesc GetEpipolarTexDesc(const char* Name, TEXTURE_FORMAT Fmt, BIND_FLAGS BindFlags = BIND_RENDER_TARGET | BIND_SHADER_RESOURCE) const; // Max Samples X Num Slices  Fmt
+
+    TextureDesc GetCameraSpaceZDesc() const;         // BckBfrWdth  x BckBfrHght   R32F
+    TextureDesc GetCoordinateTextureDesc() const;    // Max Samples X Num Slices   RG32F
+    TextureDesc GetSliceEndPointsTexDesc() const;    // Num Slices  X 1            RGBA32F
+    TextureDesc GetEpipolarCamSpaceZDesc() const;    // Max Samples X Num Slices   R32F
+    TextureDesc GetEpipolarDepthDesc() const;        // Max Samples X Num Slices   D24S8 or D32S8X32
+    TextureDesc GetEpipolarInscatteringDesc() const; // Max Samples X Num Slices   RGBA16F
+    TextureDesc GetEpipolarExtinctionDesc() const;   // Max Samples X Num Slices   RGBA8_UNORM
+
     RefCntAutoPtr<ITextureView> m_ptex2DEpipolarImageDSV;         // Max Samples X Num Slices   D24S8
     RefCntAutoPtr<ITextureView> m_ptex2DInitialScatteredLightRTV; // Max Samples X Num Slices   RGBA16F
     RefCntAutoPtr<ITextureView> m_ptex2DSliceUVDirAndOriginRTV;   // Num Slices  X Num Cascaes  RGBA32F
@@ -241,7 +249,7 @@ private:
                                                    IShader*                          PixelShader,
                                                    const PipelineResourceLayoutDesc& ResourceLayout,
                                                    Uint8                             NumRTVs,
-                                                   TEXTURE_FORMAT                    RTVFmts[],
+                                                   const TEXTURE_FORMAT              RTVFmts[],
                                                    TEXTURE_FORMAT                    DSVFmt,
                                                    const DepthStencilStateDesc&      DSSDesc,
                                                    const BlendStateDesc&             BSDesc);
@@ -348,6 +356,16 @@ private:
         SRB_DEPENDENCY_AVERAGE_LUMINANCE_TEX    = 0x04000,
         SRB_DEPENDENCY_SLICE_UV_DIR_TEX         = 0x08000,
         SRB_DEPENDENCY_CAM_SPACE_Z_TEX          = 0x10000
+    };
+
+    struct NodeBase : public FrameGraph::NodeBase, public RenderTechnique
+    {
+        NodeBase(IReferenceCounters* pRefCounters, EpipolarLightScattering& Sctr) :
+            FrameGraph::NodeBase{pRefCounters},
+            LightSctr{Sctr}
+        {}
+
+        EpipolarLightScattering& LightSctr;
     };
 
     RefCntAutoPtr<IShaderResourceBinding> m_pComputeMinMaxSMLevelSRB[2];
