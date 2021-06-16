@@ -245,7 +245,7 @@ void EpipolarLightScattering::RenderTechnique::InitializeComputeTechnique(IRende
     pDevice->CreateComputePipelineState(PSOCreateInfo, &PSO);
 }
 
-void EpipolarLightScattering::RenderTechnique::PrepareSRB(IRenderDevice* pDevice, IResourceMapping* pResMapping, Uint32 Flags = BIND_SHADER_RESOURCES_KEEP_EXISTING | BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED)
+void EpipolarLightScattering::RenderTechnique::PrepareSRB(IRenderDevice* pDevice, IResourceMapping* pResMapping, BIND_SHADER_RESOURCES_FLAGS Flags = BIND_SHADER_RESOURCES_KEEP_EXISTING | BIND_SHADER_RESOURCES_VERIFY_ALL_RESOLVED)
 {
     if (!SRB)
     {
@@ -658,7 +658,7 @@ void EpipolarLightScattering::PrecomputeScatteringLUT(IRenderDevice* pDevice, ID
         PipelineResourceLayoutDesc ResourceLayout;
         ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC;
         PrecomputeSingleSctrTech.InitializeComputeTechnique(pDevice, "PrecomputeSingleScattering", pPrecomputeSingleSctrCS, ResourceLayout);
-        PrecomputeSingleSctrTech.PrepareSRB(pDevice, m_pResMapping, 0);
+        PrecomputeSingleSctrTech.PrepareSRB(pDevice, m_pResMapping, BIND_SHADER_RESOURCES_UPDATE_ALL);
     }
 
     auto& ComputeSctrRadianceTech = m_RenderTech[RENDER_TECH_COMPUTE_SCATTERING_RADIANCE];
@@ -675,7 +675,7 @@ void EpipolarLightScattering::PrecomputeScatteringLUT(IRenderDevice* pDevice, ID
         PipelineResourceLayoutDesc ResourceLayout;
         ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC;
         ComputeSctrRadianceTech.InitializeComputeTechnique(pDevice, "ComputeSctrRadiance", pComputeSctrRadianceCS, ResourceLayout);
-        ComputeSctrRadianceTech.PrepareSRB(pDevice, m_pResMapping, 0);
+        ComputeSctrRadianceTech.PrepareSRB(pDevice, m_pResMapping, BIND_SHADER_RESOURCES_UPDATE_ALL);
     }
 
     auto& ComputeScatteringOrderTech = m_RenderTech[RENDER_TECH_COMPUTE_SCATTERING_ORDER];
@@ -691,7 +691,7 @@ void EpipolarLightScattering::PrecomputeScatteringLUT(IRenderDevice* pDevice, ID
         PipelineResourceLayoutDesc ResourceLayout;
         ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC;
         ComputeScatteringOrderTech.InitializeComputeTechnique(pDevice, "ComputeScatteringOrder", pComputeScatteringOrderCS, ResourceLayout);
-        ComputeScatteringOrderTech.PrepareSRB(pDevice, m_pResMapping, 0);
+        ComputeScatteringOrderTech.PrepareSRB(pDevice, m_pResMapping, BIND_SHADER_RESOURCES_UPDATE_ALL);
     }
 
     auto& InitHighOrderScatteringTech = m_RenderTech[RENDER_TECH_INIT_HIGH_ORDER_SCATTERING];
@@ -707,7 +707,7 @@ void EpipolarLightScattering::PrecomputeScatteringLUT(IRenderDevice* pDevice, ID
         PipelineResourceLayoutDesc ResourceLayout;
         ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC;
         InitHighOrderScatteringTech.InitializeComputeTechnique(pDevice, "InitHighOrderScattering", pInitHighOrderScatteringCS, ResourceLayout);
-        InitHighOrderScatteringTech.PrepareSRB(pDevice, m_pResMapping, 0);
+        InitHighOrderScatteringTech.PrepareSRB(pDevice, m_pResMapping, BIND_SHADER_RESOURCES_UPDATE_ALL);
     }
 
     auto& UpdateHighOrderScatteringTech = m_RenderTech[RENDER_TECH_UPDATE_HIGH_ORDER_SCATTERING];
@@ -723,7 +723,7 @@ void EpipolarLightScattering::PrecomputeScatteringLUT(IRenderDevice* pDevice, ID
         PipelineResourceLayoutDesc ResourceLayout;
         ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC;
         UpdateHighOrderScatteringTech.InitializeComputeTechnique(pDevice, "UpdateHighOrderScattering", pUpdateHighOrderScatteringCS, ResourceLayout);
-        UpdateHighOrderScatteringTech.PrepareSRB(pDevice, m_pResMapping, 0);
+        UpdateHighOrderScatteringTech.PrepareSRB(pDevice, m_pResMapping, BIND_SHADER_RESOURCES_UPDATE_ALL);
     }
 
     auto& CombineScatteringOrdersTech = m_RenderTech[RENDER_TECH_COMBINE_SCATTERING_ORDERS];
@@ -739,7 +739,7 @@ void EpipolarLightScattering::PrecomputeScatteringLUT(IRenderDevice* pDevice, ID
         PipelineResourceLayoutDesc ResourceLayout;
         ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC;
         CombineScatteringOrdersTech.InitializeComputeTechnique(pDevice, "CombineScatteringOrders", pCombineScatteringOrdersCS, ResourceLayout);
-        CombineScatteringOrdersTech.PrepareSRB(pDevice, m_pResMapping, 0);
+        CombineScatteringOrdersTech.PrepareSRB(pDevice, m_pResMapping, BIND_SHADER_RESOURCES_UPDATE_ALL);
     }
 
     if (!m_ptex2DSphereRandomSamplingSRV)
@@ -804,10 +804,10 @@ void EpipolarLightScattering::PrecomputeScatteringLUT(IRenderDevice* pDevice, ID
     m_pResMapping->AddResource("g_rwtex3DInsctrOrder", ptex3DInsctrOrder->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS), true);
 
 
-    ComputeSctrRadianceTech.SRB->BindResources(SHADER_TYPE_COMPUTE, m_pResMapping, 0);
-    ComputeScatteringOrderTech.SRB->BindResources(SHADER_TYPE_COMPUTE, m_pResMapping, 0);
-    InitHighOrderScatteringTech.SRB->BindResources(SHADER_TYPE_COMPUTE, m_pResMapping, 0);
-    UpdateHighOrderScatteringTech.SRB->BindResources(SHADER_TYPE_COMPUTE, m_pResMapping, 0);
+    ComputeSctrRadianceTech.SRB->BindResources(SHADER_TYPE_COMPUTE, m_pResMapping, BIND_SHADER_RESOURCES_UPDATE_ALL);
+    ComputeScatteringOrderTech.SRB->BindResources(SHADER_TYPE_COMPUTE, m_pResMapping, BIND_SHADER_RESOURCES_UPDATE_ALL);
+    InitHighOrderScatteringTech.SRB->BindResources(SHADER_TYPE_COMPUTE, m_pResMapping, BIND_SHADER_RESOURCES_UPDATE_ALL);
+    UpdateHighOrderScatteringTech.SRB->BindResources(SHADER_TYPE_COMPUTE, m_pResMapping, BIND_SHADER_RESOURCES_UPDATE_ALL);
 
     const int iNumScatteringOrders = pDevice->GetDeviceInfo().Type == RENDER_DEVICE_TYPE_GLES ? 3 : 4;
     for (int iSctrOrder = 1; iSctrOrder < iNumScatteringOrders; ++iSctrOrder)
@@ -1687,7 +1687,7 @@ void EpipolarLightScattering::UnwarpEpipolarScattering(bool bRenderLuminance)
         UnwarpEpipolarSctrImgTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "UnwarpEpipolarScattering",
                                                                         m_pFullScreenTriangleVS, pUnwarpEpipolarSctrImgPS,
                                                                         ResourceLayout, m_BackBufferFmt, m_DepthBufferFmt, DSS_Default);
-        UnwarpEpipolarSctrImgTech.PSO->BindStaticResources(SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL, m_pResMapping, 0);
+        UnwarpEpipolarSctrImgTech.PSO->BindStaticResources(SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL, m_pResMapping, BIND_SHADER_RESOURCES_UPDATE_ALL);
 
         UnwarpEpipolarSctrImgTech.PSODependencyFlags =
             PSO_DEPENDENCY_AUTO_EXPOSURE |
@@ -1742,7 +1742,7 @@ void EpipolarLightScattering::UnwarpEpipolarScattering(bool bRenderLuminance)
         UnwarpAndRenderLuminanceTech.InitializeFullScreenTriangleTechnique(m_FrameAttribs.pDevice, "UnwarpAndRenderLuminance",
                                                                            m_pFullScreenTriangleVS, pUnwarpAndRenderLuminancePS,
                                                                            ResourceLayout, WeightedLogLumTexFmt);
-        UnwarpAndRenderLuminanceTech.PSO->BindStaticResources(SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL, m_pResMapping, 0);
+        UnwarpAndRenderLuminanceTech.PSO->BindStaticResources(SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL, m_pResMapping, BIND_SHADER_RESOURCES_UPDATE_ALL);
 
         UnwarpAndRenderLuminanceTech.PSODependencyFlags = PSO_DEPENDENCY_EXTINCTION_EVAL_MODE;
         UnwarpAndRenderLuminanceTech.SRBDependencyFlags = SRBDependencies;

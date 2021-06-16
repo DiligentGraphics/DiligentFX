@@ -725,8 +725,7 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*  pDevice,
     {
         for (Uint32 face = 0; face < 6; ++face)
         {
-            TextureViewDesc RTVDesc(TEXTURE_VIEW_RENDER_TARGET, RESOURCE_DIM_TEX_2D_ARRAY);
-            RTVDesc.Name            = "RTV for irradiance cube texture";
+            TextureViewDesc RTVDesc{"RTV for irradiance cube texture", TEXTURE_VIEW_RENDER_TARGET, RESOURCE_DIM_TEX_2D_ARRAY};
             RTVDesc.MostDetailedMip = mip;
             RTVDesc.FirstArraySlice = face;
             RTVDesc.NumArraySlices  = 1;
@@ -752,8 +751,7 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*  pDevice,
     {
         for (Uint32 face = 0; face < 6; ++face)
         {
-            TextureViewDesc RTVDesc(TEXTURE_VIEW_RENDER_TARGET, RESOURCE_DIM_TEX_2D_ARRAY);
-            RTVDesc.Name            = "RTV for prefiltered env map cube texture";
+            TextureViewDesc RTVDesc{"RTV for prefiltered env map cube texture", TEXTURE_VIEW_RENDER_TARGET, RESOURCE_DIM_TEX_2D_ARRAY};
             RTVDesc.MostDetailedMip = mip;
             RTVDesc.FirstArraySlice = face;
             RTVDesc.NumArraySlices  = 1;
