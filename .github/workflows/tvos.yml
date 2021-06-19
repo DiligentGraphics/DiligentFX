@@ -1,0 +1,66 @@
+name: tvOS
+
+on: [push, pull_request]
+
+jobs:
+  build-tvos-clang:
+    strategy:
+      matrix:
+        config: [Debug]
+
+    runs-on: macos-latest
+    name: tvOS, ${{ matrix.config }}
+
+    steps:
+    - name: Clone DiligentFX
+      uses: actions/checkout@v2
+      with:
+        path:       DiligentFX
+        submodules: recursive
+
+    - name: Clone DiligentTools
+      uses: actions/checkout@v2
+      with:
+        repository: 'DiligentGraphics/DiligentTools'
+        path:       DiligentTools
+        submodules: recursive
+        
+    - name: Clone DiligentCore
+      uses: actions/checkout@v2
+      with:
+        repository: 'DiligentGraphics/DiligentCore'
+        path:       DiligentCore
+        submodules: recursive
+
+    - name: Format validation
+      working-directory: DiligentFX
+      shell: bash
+      run: |
+        cd ./BuildTools/FormatValidation
+        ./validate_format_mac.sh
+
+    - name: Download Vulkan SDK
+      if: success()
+      working-directory: DiligentCore
+      shell: bash
+      run: |
+        cd ./BuildTools/Scripts/github_actions
+        chmod +x vulkan_sdk.sh
+        ./vulkan_sdk.sh
+
+    - name: Configure CMake
+      if: success()
+      shell: bash
+      run: |
+        cd $GITHUB_WORKSPACE/DiligentFX/BuildTools/Scripts/github_actions
+        chmod +x create_cmake.sh
+        ./create_cmake.sh "$GITHUB_WORKSPACE"
+        cd $GITHUB_WORKSPACE/DiligentCore/BuildTools/Scripts/github_actions
+        chmod +x configure_cmake.sh
+        ./configure_cmake.sh "tvos" "${{runner.workspace}}" ${{ matrix.config }} "-DDILIGENT_NO_GLSLANG=ON -DDILIGENT_NO_HLSL=ON"
+
+    - name: Build
+      if: success()
+      working-directory: ${{runner.workspace}}/build
+      shell: bash
+      run: cmake --build . --config ${{ matrix.config }} -j2
