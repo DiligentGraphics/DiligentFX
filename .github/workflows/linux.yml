@@ -62,7 +62,7 @@ jobs:
       if: success()
       working-directory: ${{runner.workspace}}/build
       shell: bash
-      run: cmake --build . --config ${{ matrix.config }} --target install -j2
+      run: cmake --build . --config ${{ matrix.config }} -j2
 
 
   build-clang-10:
@@ -124,4 +124,4 @@ jobs:
       if: success()
       working-directory: ${{runner.workspace}}/build
       shell: bash
-      run: cmake --build . --config ${{ matrix.config }} --target install -j2
+      run: cmake --build . --config ${{ matrix.config }} -j2

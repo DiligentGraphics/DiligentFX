@@ -25,7 +25,7 @@ jobs:
         repository: 'DiligentGraphics/DiligentTools'
         path:       DiligentTools
         submodules: recursive
-        
+
     - name: Clone DiligentCore
       uses: actions/checkout@v2
       with:
@@ -53,7 +53,7 @@ jobs:
       if: success()
       working-directory: ${{runner.workspace}}/build
       shell: bash
-      run: cmake --build . --config ${{ matrix.config }} --target install -j2
+      run: cmake --build . --config ${{ matrix.config }} -j2
 
 
   build-win10-dev:
@@ -106,9 +106,9 @@ jobs:
       if: success()
       working-directory: ${{runner.workspace}}/build
       shell: bash
-      run: cmake --build . --config ${{ matrix.config }} --target install -j2
-      
-      
+      run: cmake --build . --config ${{ matrix.config }} -j2
+
+
   build-win8:
     strategy:
       matrix:
@@ -131,7 +131,7 @@ jobs:
         repository: 'DiligentGraphics/DiligentTools'
         path:       DiligentTools
         submodules: recursive
-        
+
     - name: Clone DiligentCore
       uses: actions/checkout@v2
       with:
@@ -159,4 +159,4 @@ jobs:
       if: success()
       working-directory: ${{runner.workspace}}/build
       shell: bash
-      run: cmake --build . --config ${{ matrix.config }} --target install -j2
+      run: cmake --build . --config ${{ matrix.config }} -j2
