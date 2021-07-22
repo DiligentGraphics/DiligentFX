@@ -97,6 +97,8 @@ struct GLTFMaterialShaderInfo
     float4 NormalMapUVScaleBias;
     float4 OcclusionUVScaleBias;
     float4 EmissiveUVScaleBias;
+
+	float4 CustomData;
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
 	CHECK_STRUCT_ALIGNMENT(GLTFMaterialShaderInfo);

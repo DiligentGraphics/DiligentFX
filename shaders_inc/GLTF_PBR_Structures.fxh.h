@@ -97,6 +97,8 @@
 "    float4 NormalMapUVScaleBias;\n"
 "    float4 OcclusionUVScaleBias;\n"
 "    float4 EmissiveUVScaleBias;\n"
+"\n"
+"	float4 CustomData;\n"
 "};\n"
 "#ifdef CHECK_STRUCT_ALIGNMENT\n"
 "	CHECK_STRUCT_ALIGNMENT(GLTFMaterialShaderInfo);\n"
