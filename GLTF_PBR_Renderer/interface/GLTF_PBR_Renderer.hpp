@@ -81,7 +81,7 @@ public:
         bool UseImmutableSamplers = true;
 
         /// Whether to use texture atlas (e.g. apply UV transforms when sampling textures).
-        bool UseTextureAtals = false;
+        bool UseTextureAtlas = false;
 
         static const SamplerDesc DefaultSampler;
 
