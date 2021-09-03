@@ -6,7 +6,7 @@
 "#include \"EpipolarLightScatteringStructures.fxh\"\n"
 "#include \"ShaderUtilities.fxh\"\n"
 "\n"
-"#define PI      3.1415928\n"
+"#define PI      3.1415927\n"
 "#define FLT_MAX 3.402823466e+38\n"
 "\n"
 "#ifndef OPTIMIZE_SAMPLE_LOCATIONS\n"
