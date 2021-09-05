@@ -337,11 +337,11 @@ EpipolarLightScattering::EpipolarLightScattering(IRenderDevice*              pDe
 
     {
         BufferDesc CBDesc;
-        CBDesc.Usage         = USAGE_DEFAULT;
-        CBDesc.BindFlags     = BIND_UNIFORM_BUFFER;
-        CBDesc.uiSizeInBytes = sizeof(AirScatteringAttribs);
+        CBDesc.Usage     = USAGE_DEFAULT;
+        CBDesc.BindFlags = BIND_UNIFORM_BUFFER;
+        CBDesc.Size      = sizeof(AirScatteringAttribs);
 
-        BufferData InitData{&m_MediaParams, CBDesc.uiSizeInBytes};
+        BufferData InitData{&m_MediaParams, CBDesc.Size};
         pDevice->CreateBuffer(CBDesc, &InitData, &m_pcbMediaAttribs);
     }
 
@@ -1126,6 +1126,7 @@ void EpipolarLightScattering::RenderCoarseUnshadowedInctr()
         const auto* PSOName = m_PostProcessingAttribs.iExtinctionEvalMode == EXTINCTION_EVAL_MODE_EPIPOLAR ?
             "RenderCoarseUnshadowedInsctrAndExtinctionPSO" :
             "RenderCoarseUnshadowedInsctrPSO";
+
         TEXTURE_FORMAT RTVFmts[]             = {EpipolarInsctrTexFmt, EpipolarExtinctionFmt};
         Uint8          NumRTVs               = m_PostProcessingAttribs.iExtinctionEvalMode == EXTINCTION_EVAL_MODE_EPIPOLAR ? 2 : 1;
         auto           EpipolarImageDepthFmt = m_ptex2DEpipolarImageDSV->GetTexture()->GetDesc().Format;
