@@ -1,0 +1,73 @@
+name: Pre-checks
+
+on: [push, pull_request]
+
+jobs:
+  run-win10:
+
+    runs-on: windows-latest
+    name: Win10 -> Pre-checks
+
+    steps:
+    - name: Clone DiligentFX
+      uses: actions/checkout@v2
+      with:
+        path: DiligentFX
+
+    - name: Clone DiligentCore
+      uses: actions/checkout@v2
+      with:
+        repository: 'DiligentGraphics/DiligentCore'
+        path:       DiligentCore
+
+    - name: Format validation
+      shell: cmd
+      run: |
+        cd DiligentFX\BuildTools\FormatValidation
+        validate_format_win.bat
+
+  run-linux:
+
+    runs-on: ubuntu-latest
+    name: Linux -> Pre-checks
+
+    steps:
+    - name: Clone DiligentFX
+      uses: actions/checkout@v2
+      with:
+        path: DiligentFX
+
+    - name: Clone DiligentCore
+      uses: actions/checkout@v2
+      with:
+        repository: 'DiligentGraphics/DiligentCore'
+        path:       DiligentCore
+
+    - name: Format validation
+      shell: bash
+      run: |
+        cd $GITHUB_WORKSPACE/DiligentFX/BuildTools/FormatValidation
+        ./validate_format_linux.sh
+
+  run-macos:
+
+    runs-on: macos-latest
+    name: MacOS -> Pre-Checks
+
+    steps:
+    - name: Clone DiligentFX
+      uses: actions/checkout@v2
+      with:
+        path: DiligentFX
+
+    - name: Clone DiligentCore
+      uses: actions/checkout@v2
+      with:
+        repository: 'DiligentGraphics/DiligentCore'
+        path:       DiligentCore
+
+    - name: Format validation
+      shell: bash
+      run: |
+        cd $GITHUB_WORKSPACE/DiligentFX/BuildTools/FormatValidation
+        ./validate_format_mac.sh

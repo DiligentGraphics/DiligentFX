@@ -9,7 +9,7 @@ jobs:
         config: [Debug, Release]
 
     runs-on: ubuntu-latest
-    name: Linux x64, GCC 9, ${{ matrix.config }}
+    name: Linux -> x64, GCC 9, ${{ matrix.config }}
 
     steps:
     - name: Clone DiligentFX
@@ -31,13 +31,6 @@ jobs:
         repository: 'DiligentGraphics/DiligentCore'
         path:       DiligentCore
         submodules: recursive
-
-    - name: Format validation
-      working-directory: DiligentFX
-      shell: bash
-      run: |
-        cd ./BuildTools/FormatValidation
-        ./validate_format_linux.sh
 
     - name: Configure dependencies
       if: success()
@@ -71,7 +64,7 @@ jobs:
         config: [Debug, Release]
 
     runs-on: ubuntu-latest
-    name: Linux x64, Clang 10, ${{ matrix.config }}
+    name: Linux -> x64, Clang 10, ${{ matrix.config }}
 
     steps:
     - name: Clone DiligentFX
@@ -93,13 +86,6 @@ jobs:
         repository: 'DiligentGraphics/DiligentCore'
         path:       DiligentCore
         submodules: recursive
-
-    - name: Format validation
-      working-directory: DiligentFX
-      shell: bash
-      run: |
-        cd ./BuildTools/FormatValidation
-        ./validate_format_linux.sh
 
     - name: Configure dependencies
       if: success()

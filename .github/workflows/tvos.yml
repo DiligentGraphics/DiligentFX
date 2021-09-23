@@ -9,7 +9,7 @@ jobs:
         config: [Debug]
 
     runs-on: macos-latest
-    name: tvOS, ${{ matrix.config }}
+    name: MacOS -> tvOS, ${{ matrix.config }}
 
     steps:
     - name: Clone DiligentFX
@@ -32,13 +32,6 @@ jobs:
         path:       DiligentCore
         submodules: recursive
 
-    - name: Format validation
-      working-directory: DiligentFX
-      shell: bash
-      run: |
-        cd ./BuildTools/FormatValidation
-        ./validate_format_mac.sh
-
     - name: Download Vulkan SDK
       if: success()
       working-directory: DiligentCore
@@ -57,7 +50,7 @@ jobs:
         ./create_cmake.sh "$GITHUB_WORKSPACE"
         cd $GITHUB_WORKSPACE/DiligentCore/BuildTools/Scripts/github_actions
         chmod +x configure_cmake.sh
-        ./configure_cmake.sh "tvos" "${{runner.workspace}}" ${{ matrix.config }} "-DDILIGENT_NO_GLSLANG=ON -DDILIGENT_NO_HLSL=ON"
+        ./configure_cmake.sh "tvos" "${{runner.workspace}}" ${{ matrix.config }}
 
     - name: Build
       if: success()

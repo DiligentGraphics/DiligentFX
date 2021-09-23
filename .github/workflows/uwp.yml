@@ -10,7 +10,7 @@ jobs:
         config: [Debug, Release]
 
     runs-on: windows-latest
-    name: UWP, ${{ matrix.config }} ${{ matrix.toolset }}
+    name: Win10 -> UWP-${{ matrix.toolset }}, ${{ matrix.config }} 
 
     steps:
     - name: Clone DiligentFX
@@ -33,13 +33,6 @@ jobs:
         path:       DiligentCore
         submodules: recursive
 
-    - name: Format validation
-      working-directory: DiligentFX
-      shell: cmd
-      run: |
-        cd BuildTools\FormatValidation
-        validate_format_win.bat
-
     - name: Configure CMake
       if: success()
       shell: bash
@@ -47,7 +40,7 @@ jobs:
         cd $GITHUB_WORKSPACE/DiligentFX/BuildTools/Scripts/github_actions
         ./create_cmake.sh "$GITHUB_WORKSPACE"
         cd $GITHUB_WORKSPACE/DiligentCore/BuildTools/Scripts/github_actions
-        ./configure_cmake.sh "uwp" "${{runner.workspace}}" ${{ matrix.config }} ${{ matrix.toolset }}
+        ./configure_cmake.sh "uwp" "${{runner.workspace}}" ${{ matrix.toolset }} ${{ matrix.config }}
 
     - name: Build
       if: success()
