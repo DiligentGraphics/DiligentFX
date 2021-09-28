@@ -1,0 +1,172 @@
+name: Emscripten
+
+on: [push, pull_request]
+
+jobs:
+  build-win10:
+    strategy:
+      matrix:
+        config: [Debug, Release]
+
+    runs-on: windows-latest
+    name: Win10 -> Emscripten, ${{ matrix.config }}
+
+    steps:
+    - name: Clone DiligentFX
+      uses: actions/checkout@v2
+      with:
+        path:       DiligentFX
+        submodules: recursive
+
+    - name: Clone DiligentTools
+      uses: actions/checkout@v2
+      with:
+        repository: 'DiligentGraphics/DiligentTools'
+        path:       DiligentTools
+        submodules: recursive
+
+    - name: Clone DiligentCore
+      uses: actions/checkout@v2
+      with:
+        repository: 'DiligentGraphics/DiligentCore'
+        path:       DiligentCore
+        submodules: recursive
+
+    - name: Configure Ninja
+      uses: seanmiddleditch/gha-setup-ninja@master
+
+    - name: Configure Emscripten SDK version
+      if: success()
+      shell: bash
+      run: |
+        cd $GITHUB_WORKSPACE/DiligentCore/BuildTools/Scripts/github_actions
+        ./emscripten_sdk.sh "$GITHUB_WORKSPACE"
+
+    - name: Configure CMake
+      if: success()
+      shell: bash
+      run: |
+        cd $GITHUB_WORKSPACE/DiligentFX/BuildTools/Scripts/github_actions
+        ./create_cmake.sh "$GITHUB_WORKSPACE"
+        cd $GITHUB_WORKSPACE/DiligentCore/BuildTools/Scripts/github_actions
+        ./configure_cmake.sh "emscripten" "${{runner.workspace}}" ${{ matrix.config }}
+
+    - name: Build
+      if: success()
+      working-directory: ${{runner.workspace}}/build
+      shell: bash
+      run: cmake --build . 
+
+  build-linux:
+    strategy:
+      matrix:
+        config: [Debug, Release]
+
+    runs-on: ubuntu-latest
+    name: Linux -> Emscripten, ${{ matrix.config }}
+
+    steps:   
+    - name: Clone DiligentFX
+      uses: actions/checkout@v2
+      with:
+        path:       DiligentFX
+        submodules: recursive
+
+    - name: Clone DiligentTools
+      uses: actions/checkout@v2
+      with:
+        repository: 'DiligentGraphics/DiligentTools'
+        path: DiligentTools
+        submodules: recursive
+
+    - name: Clone DiligentCore
+      uses: actions/checkout@v2
+      with:
+        repository: 'DiligentGraphics/DiligentCore'
+        path:       DiligentCore
+        submodules: recursive
+
+    - name: Configure Ninja
+      uses: seanmiddleditch/gha-setup-ninja@master
+
+    - name: Configure Emscripten SDK version
+      if: success()
+      shell: bash
+      run: |
+        cd $GITHUB_WORKSPACE/DiligentCore/BuildTools/Scripts/github_actions
+        chmod +x ./emscripten_sdk.sh
+        ./emscripten_sdk.sh "$GITHUB_WORKSPACE"
+
+    - name: Configure CMake
+      if: success()
+      shell: bash
+      run: |
+        cd $GITHUB_WORKSPACE/DiligentFX/BuildTools/Scripts/github_actions
+        chmod +x create_cmake.sh
+        ./create_cmake.sh "$GITHUB_WORKSPACE"
+        cd $GITHUB_WORKSPACE/DiligentCore/BuildTools/Scripts/github_actions
+        chmod +x configure_cmake.sh
+        ./configure_cmake.sh "emscripten" "${{runner.workspace}}" ${{ matrix.config }}
+
+    - name: Build
+      if: success()
+      working-directory: ${{runner.workspace}}/build
+      shell: bash
+      run: cmake --build . 
+
+  build-macos:
+    strategy:
+      matrix:
+        config: [Debug]
+
+    runs-on: macos-latest
+    name: MacOS -> Emscripten, ${{ matrix.config }}
+
+    steps:
+    - name: Clone DiligentFX
+      uses: actions/checkout@v2
+      with:
+        path:       DiligentFX
+        submodules: recursive
+
+    - name: Clone DiligentTools
+      uses: actions/checkout@v2
+      with:
+        repository: 'DiligentGraphics/DiligentTools'
+        path: DiligentTools
+        submodules: recursive
+
+    - name: Clone DiligentCore
+      uses: actions/checkout@v2
+      with:
+        repository: 'DiligentGraphics/DiligentCore'
+        path:       DiligentCore
+        submodules: recursive
+
+    - name: Configure Ninja
+      uses: seanmiddleditch/gha-setup-ninja@master
+
+    - name: Configure Emscripten SDK version
+      if: success()
+      shell: bash
+      run: |
+        cd $GITHUB_WORKSPACE/DiligentCore/BuildTools/Scripts/github_actions
+        chmod +x ./emscripten_sdk.sh
+        ./emscripten_sdk.sh "$GITHUB_WORKSPACE"
+
+    - name: Configure CMake
+      if: success()
+      shell: bash
+      run: |
+        cd $GITHUB_WORKSPACE/DiligentFX/BuildTools/Scripts/github_actions
+        chmod +x create_cmake.sh
+        ./create_cmake.sh "$GITHUB_WORKSPACE"
+        cd $GITHUB_WORKSPACE/DiligentCore/BuildTools/Scripts/github_actions
+        chmod +x configure_cmake.sh
+        ./configure_cmake.sh "emscripten" "${{runner.workspace}}" ${{ matrix.config }}
+
+    - name: Build
+      if: success()
+      working-directory: ${{runner.workspace}}/build
+      shell: bash
+      run: cmake --build .
