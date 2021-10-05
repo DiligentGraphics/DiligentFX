@@ -193,7 +193,7 @@ public:
     struct ResourceCacheBindings
     {
         /// Resource version
-        Uint32 Version = 0;
+        Uint32 Version = ~0u;
 
         RefCntAutoPtr<IShaderResourceBinding> pSRB;
     };
