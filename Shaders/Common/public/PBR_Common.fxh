@@ -13,11 +13,35 @@ float3 LambertianDiffuse(float3 DiffuseColor)
 }
 
 // The following equation models the Fresnel reflectance term of the spec equation (aka F())
-// Implementation of fresnel from "An Inexpensive BRDF Model for Physically based Rendering" by Christophe Schlick
-// (https://www.cs.virginia.edu/~jdl/bib/appearance/analytic%20models/schlick94b.pdf), Equation 15
+// Implementation of fresnel term from "An Inexpensive BRDF Model for Physically based Rendering" by Christophe Schlick
+// https://en.wikipedia.org/wiki/Schlick%27s_approximation
+//
+//      Rf(Theta) = Rf(0) + (1 - Rf(0)) * (1 - cos(Theta))^5
+//
+//
+//           '.       |       .'
+//             '.     |Theta.' 
+//               '.   |   .'
+//                 '. | .'
+//        ___________'.'___________
+//                   '|
+//                  ' |
+//                 '  |
+//                '   |
+//               ' Phi|
+//
+// Note that precise relfectance term is given by the following expression:
+//
+//      Rf(Theta) = 0.5 * (sin^2(Theta - Phi) / sin^2(Theta + Phi) + tan^2(Theta - Phi) / tan^2(Theta + Phi))
+//
+#define SCHLICK_REFLECTION(VdotH, Reflectance0, Reflectance90) ((Reflectance0) + ((Reflectance90) - (Reflectance0)) * pow(clamp(1.0 - (VdotH), 0.0, 1.0), 5.0))
+float SchlickReflection(float VdotH, float Reflectance0, float Reflectance90)
+{
+    return SCHLICK_REFLECTION(VdotH, Reflectance0, Reflectance90);
+}
 float3 SchlickReflection(float VdotH, float3 Reflectance0, float3 Reflectance90)
 {
-    return Reflectance0 + (Reflectance90 - Reflectance0) * pow(clamp(1.0 - VdotH, 0.0, 1.0), 5.0);
+    return SCHLICK_REFLECTION(VdotH, Reflectance0, Reflectance90);
 }
 
 // Visibility = G(v,l,a) / (4 * (n,v) * (n,l))
