@@ -78,7 +78,7 @@ if(NOT FILE2STRING_PATH STREQUAL "")
         get_filename_component(FILE_NAME ${FILE} NAME)
         set(CONVERTED_FILE ${SHADER_OUTPUT_DIR}/${FILE_NAME}.h)
         add_custom_command(OUTPUT ${CONVERTED_FILE}
-                           COMMAND ${FILE2STRING_PATH} ${FILE} ${CONVERTED_FILE}
+                           COMMAND ${PYTHON_EXECUTABLE} ${FILE2STRING_PATH} ${FILE} ${CONVERTED_FILE}
                            MAIN_DEPENDENCY ${FILE} # the primary input source file to the command
                            COMMENT "Processing shader ${FILE}"
                            VERBATIM)
