@@ -225,6 +225,7 @@ public:
     // clang-format off
     ITextureView* GetIrradianceCubeSRV()    { return m_pIrradianceCubeSRV; }
     ITextureView* GetPrefilteredEnvMapSRV() { return m_pPrefilteredEnvMapSRV; }
+    ITextureView* GetBRDFLUTSRV()           { return m_pBRDF_LUT_SRV; }
     ITextureView* GetWhiteTexSRV()          { return m_pWhiteTexSRV; }
     ITextureView* GetBlackTexSRV()          { return m_pBlackTexSRV; }
     ITextureView* GetDefaultNormalMapSRV()  { return m_pDefaultNormalMapSRV; }
