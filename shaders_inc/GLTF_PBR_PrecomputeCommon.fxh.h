@@ -7,7 +7,7 @@
 "#   define PI 3.1415926536\n"
 "#endif\n"
 "\n"
-"float2 Hammersley2D(uint i, uint N) \n"
+"float2 Hammersley2D(uint i, uint N)\n"
 "{\n"
 "    // Radical inverse based on http://holger.dammertz.org/stuff/notes_HammersleyOnHemisphere.html\n"
 "    uint bits = (i << 16u) | (i >> 16u);\n"

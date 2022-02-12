@@ -22,7 +22,7 @@
 "//         |     |\n"
 "//         |    uiMinMaxShadowMapResolution/\n"
 "//      uiMinMaxShadowMapResolution/2\n"
-"//                         \n"
+"//\n"
 "void ComputeMinMaxShadowMapLevelPS(in FullScreenTriangleVSOutput VSOut,\n"
 "                                   out float2 f2MinMaxDepth : SV_Target)\n"
 "{\n"

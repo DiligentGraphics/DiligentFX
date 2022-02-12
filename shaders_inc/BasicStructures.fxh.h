@@ -119,7 +119,7 @@
 "    float4 f4ViewportSize; // (width, height, 1/width, 1/height)\n"
 "\n"
 "    float2 f2ViewportOrigin; // (min x, min y)\n"
-"    float fNearPlaneZ; \n"
+"    float fNearPlaneZ;\n"
 "    float fFarPlaneZ; // fNearPlaneZ < fFarPlaneZ\n"
 "\n"
 "#ifdef __cplusplus\n"

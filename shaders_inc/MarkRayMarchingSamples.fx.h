@@ -7,7 +7,7 @@
 "\n"
 "void MarkRayMarchingSamplesInStencilPS(FullScreenTriangleVSOutput VSOut\n"
 "                                       // IMPORTANT: non-system generated pixel shader input\n"
-"                                       // arguments must have the exact same name as vertex shader \n"
+"                                       // arguments must have the exact same name as vertex shader\n"
 "                                       // outputs and must go in the same order.\n"
 "                                       // Moreover, even if the shader is not using the argument,\n"
 "                                       // it still must be declared.\n"

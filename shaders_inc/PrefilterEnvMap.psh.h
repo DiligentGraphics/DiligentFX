@@ -60,7 +60,7 @@
 "void main(in float4  Pos      : SV_Position,\n"
 "          in float3  WorldPos : WORLD_POS,\n"
 "          out float4 Color    : SV_Target)\n"
-"{		\n"
+"{\n"
 "    float3 R = normalize(WorldPos);\n"
 "    Color.rgb = PrefilterEnvMap(g_Roughness, R);\n"
 "    Color.a = 0.0;\n"
