@@ -9,7 +9,7 @@ jobs:
         config: [Debug, Release]
 
     runs-on: ubuntu-latest
-    name: Linux -> x64, GCC 9, ${{ matrix.config }}
+    name: Linux -> x64, GCC, ${{ matrix.config }}
 
     steps:
     - name: Clone DiligentFX
@@ -58,13 +58,13 @@ jobs:
       run: cmake --build . --config ${{ matrix.config }} -j2
 
 
-  build-clang-10:
+  build-clang-12:
     strategy:
       matrix:
         config: [Debug, Release]
 
     runs-on: ubuntu-latest
-    name: Linux -> x64, Clang 10, ${{ matrix.config }}
+    name: Linux -> x64, Clang, ${{ matrix.config }}
 
     steps:
     - name: Clone DiligentFX
@@ -95,8 +95,8 @@ jobs:
     - name: Configure CMake
       if: success()
       env:
-        CC: clang-10
-        CXX: clang++-10
+        CC: clang-12
+        CXX: clang++-12
       shell: bash
       run: |
         cd $GITHUB_WORKSPACE/DiligentFX/BuildTools/Scripts/github_actions
