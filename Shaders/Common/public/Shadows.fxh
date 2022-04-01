@@ -11,6 +11,10 @@
 #   define FILTER_ACROSS_CASCADES 0
 #endif
 
+#ifndef BEST_CASCADE_SEARCH
+#   define BEST_CASCADE_SEARCH 0
+#endif
+
 // Returns the minimum distance to cascade margin.
 // If the point lies outside, the distance will be negative.
 //  +1  ____________________ 
@@ -47,7 +51,6 @@ struct CascadeSamplingInfo
 CascadeSamplingInfo GetCascadeSamplingInfo(ShadowMapAttribs ShadowAttribs,
                                            float3           f3PosInLightViewSpace,
                                            int              iCascadeIdx)
-                                
 {
     CascadeAttribs Cascade = ShadowAttribs.Cascades[iCascadeIdx];
     float3 f3CascadeLightSpaceScale = Cascade.f4LightSpaceScale.xyz;
