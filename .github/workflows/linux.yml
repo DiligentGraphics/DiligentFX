@@ -3,7 +3,7 @@ name: Linux
 on: [push, pull_request]
 
 jobs:
-  build-gcc-9:
+  make-gcc-9:
     strategy:
       matrix:
         config: [Debug, Release]
@@ -58,7 +58,7 @@ jobs:
       run: cmake --build . --config ${{ matrix.config }} -j2
 
 
-  build-clang-12:
+  ninja-clang-12:
     strategy:
       matrix:
         config: [Debug, Release]

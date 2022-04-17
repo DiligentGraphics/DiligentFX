@@ -3,7 +3,7 @@ name: Windows
 on: [push, pull_request]
 
 jobs:
-  build-win10:
+  vs-win10:
     strategy:
       matrix:
         toolset: [Win32, x64]
@@ -49,7 +49,7 @@ jobs:
       run: cmake --build . --config ${{ matrix.config }} -j2
 
 
-  build-win10-dev:
+  vs-win10-dev:
     strategy:
       matrix:
         toolset: [x64]
@@ -71,7 +71,7 @@ jobs:
         repository: 'DiligentGraphics/DiligentTools'
         path:       DiligentTools
         submodules: recursive
-        
+
     - name: Clone DiligentCore
       uses: actions/checkout@v2
       with:
@@ -95,7 +95,63 @@ jobs:
       run: cmake --build . --config ${{ matrix.config }} -j2
 
 
-  build-win8:
+  ninja-win10:
+    strategy:
+      matrix:
+        toolset: [x64]
+        config: [Debug]
+
+    runs-on: windows-2019
+    name: Win10-Ninja -> ${{ matrix.toolset }}, ${{ matrix.config }}
+
+    steps:
+    - name: Clone DiligentFX
+      uses: actions/checkout@v2
+      with:
+        path:       DiligentFX
+        submodules: recursive
+
+    - name: Clone DiligentTools
+      uses: actions/checkout@v2
+      with:
+        repository: 'DiligentGraphics/DiligentTools'
+        path:       DiligentTools
+        submodules: recursive
+
+    - name: Clone DiligentCore
+      uses: actions/checkout@v2
+      with:
+        repository: 'DiligentGraphics/DiligentCore'
+        path:       DiligentCore
+        submodules: recursive
+
+    - name: Setup Ninja
+      uses: seanmiddleditch/gha-setup-ninja@master
+
+    - name: Setup VS Development Environment
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: ${{ matrix.toolset }}
+
+    - name: Configure CMake
+      if: success()
+      env:
+        CMAKE_GENERATOR: Ninja
+      shell: bash
+      run: |
+        cd $GITHUB_WORKSPACE/DiligentFX/BuildTools/Scripts/github_actions
+        ./create_cmake.sh "$GITHUB_WORKSPACE"
+        cd $GITHUB_WORKSPACE/DiligentCore/BuildTools/Scripts/github_actions
+        ./configure_cmake.sh "win" "${{runner.workspace}}" ${{ matrix.toolset }} ${{ matrix.config }}
+
+    - name: Build
+      if: success()
+      working-directory: ${{runner.workspace}}/build
+      shell: bash
+      run: cmake --build . --config ${{ matrix.config }} -j2
+
+
+  vs-win8:
     strategy:
       matrix:
         toolset: [x64]
