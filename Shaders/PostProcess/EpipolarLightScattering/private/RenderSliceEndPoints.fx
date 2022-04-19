@@ -36,7 +36,7 @@ float2 GetEpipolarLineEntryPoint(float2 f2ExitPoint)
         // the screen boundaries
         
         // Compute direction from the light source to the exit point
-        // Note that exit point must be located on shrinked screen boundary
+        // Note that exit point must be located on the shrunk screen boundary
         float2 f2RayDir = f2ExitPoint.xy - g_PPAttribs.f4LightScreenPos.xy;
         float fDistToExitBoundary = length(f2RayDir);
         f2RayDir /= fDistToExitBoundary;
@@ -193,7 +193,7 @@ float4 GenerateSliceEndpointsPS(FullScreenTriangleVSOutput VSOut
     // Select the right coordinates for the boundary
     float2 f2ExitPointPosOnBnd = float2( dot(f4BoundaryXPos, BoolToFloat(b4BoundaryFlags)), dot(f4BoundaryYPos, BoolToFloat(b4BoundaryFlags)) );
     float2 f2ExitPoint = lerp(f4OutermostScreenPixelCoords.xy, f4OutermostScreenPixelCoords.zw, f2ExitPointPosOnBnd);
-    // GetEpipolarLineEntryPoint() gets exit point on SHRINKED boundary
+    // GetEpipolarLineEntryPoint() gets exit point on the SHRUNK boundary
     float2 f2EntryPoint = GetEpipolarLineEntryPoint(f2ExitPoint);
     
 #if OPTIMIZE_SAMPLE_LOCATIONS
