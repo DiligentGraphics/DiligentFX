@@ -330,7 +330,7 @@ jobs:
 
   #########  Emscripten  #########
   emscripten-build:
-    needs: [win-precheks, linux-precheks]
+    needs: linux-precheks
 
     strategy:
       matrix:
