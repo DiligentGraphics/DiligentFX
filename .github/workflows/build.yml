@@ -127,25 +127,8 @@ jobs:
     name: Win10 -> ${{ matrix.name }}-${{ matrix.toolset }}, ${{ matrix.build_type }}
 
     steps:
-    - name: Clone DiligentCore
-      uses: actions/checkout@v2
-      with:
-        repository: 'DiligentGraphics/DiligentCore'
-        path:       DiligentCore
-        submodules: recursive
-
-    - name: Clone DiligentTools
-      uses: actions/checkout@v2
-      with:
-        repository: 'DiligentGraphics/DiligentTools'
-        path:       DiligentTools
-        submodules: recursive
-
-    - name: Clone DiligentFX
-      uses: actions/checkout@v2
-      with:
-        path:       DiligentFX
-        submodules: recursive
+    - name: Checkout
+      uses: DiligentGraphics/github-action/checkout@master
 
     - name: Setup Ninja
       if: ${{ success() && matrix.cmake_generator == 'Ninja' }}
@@ -200,25 +183,8 @@ jobs:
     name: Linux -> ${{ matrix.name }}-x64, ${{ matrix.build_type }}
 
     steps:
-    - name: Clone DiligentCore
-      uses: actions/checkout@v2
-      with:
-        repository: 'DiligentGraphics/DiligentCore'
-        path:       DiligentCore
-        submodules: recursive
-
-    - name: Clone DiligentTools
-      uses: actions/checkout@v2
-      with:
-        repository: 'DiligentGraphics/DiligentTools'
-        path:       DiligentTools
-        submodules: recursive
-
-    - name: Clone DiligentFX
-      uses: actions/checkout@v2
-      with:
-        path:       DiligentFX
-        submodules: recursive
+    - name: Checkout
+      uses: DiligentGraphics/github-action/checkout@master
 
     - name: Configure dependencies
       if: success()
@@ -280,25 +246,8 @@ jobs:
     name: MacOS -> ${{ matrix.platform }}-${{ matrix.build_type }}
 
     steps:
-    - name: Clone DiligentCore
-      uses: actions/checkout@v2
-      with:
-        repository: 'DiligentGraphics/DiligentCore'
-        path:       DiligentCore
-        submodules: recursive
-
-    - name: Clone DiligentTools
-      uses: actions/checkout@v2
-      with:
-        repository: 'DiligentGraphics/DiligentTools'
-        path:       DiligentTools
-        submodules: recursive
-
-    - name: Clone DiligentFX
-      uses: actions/checkout@v2
-      with:
-        path:       DiligentFX
-        submodules: recursive
+    - name: Checkout
+      uses: DiligentGraphics/github-action/checkout@master
 
     - name: Download Vulkan SDK
       if: success()
@@ -352,25 +301,8 @@ jobs:
     name: ${{ matrix.host_name }} -> Emscripten, ${{ matrix.build_type }}
 
     steps:
-    - name: Clone DiligentCore
-      uses: actions/checkout@v2
-      with:
-        repository: 'DiligentGraphics/DiligentCore'
-        path:       DiligentCore
-        submodules: recursive
-
-    - name: Clone DiligentTools
-      uses: actions/checkout@v2
-      with:
-        repository: 'DiligentGraphics/DiligentTools'
-        path:       DiligentTools
-        submodules: recursive
-
-    - name: Clone DiligentFX
-      uses: actions/checkout@v2
-      with:
-        path:       DiligentFX
-        submodules: recursive
+    - name: Checkout
+      uses: DiligentGraphics/github-action/checkout@master
 
     - name: Configure Ninja
       uses: seanmiddleditch/gha-setup-ninja@master
