@@ -155,9 +155,7 @@ jobs:
 
     - name: Build
       if: success()
-      working-directory: ${{runner.workspace}}/build
-      shell: bash
-      run: cmake --build . --config ${{ matrix.build_type }} -j2
+      uses: DiligentGraphics/github-action/build@master
 
 
 
@@ -207,9 +205,7 @@ jobs:
 
     - name: Build
       if: success()
-      working-directory: ${{runner.workspace}}/build
-      shell: bash
-      run: cmake --build . --config ${{ matrix.build_type }} -j2
+      uses: DiligentGraphics/github-action/build@master
 
 
 
@@ -259,9 +255,7 @@ jobs:
 
     - name: Build
       if: success()
-      working-directory: ${{runner.workspace}}/build
-      shell: bash
-      run: cmake --build . --config ${{ matrix.build_type }} -j2
+      uses: DiligentGraphics/github-action/build@master
 
 
 
@@ -307,6 +301,4 @@ jobs:
 
     - name: Build
       if: success()
-      working-directory: ${{runner.workspace}}/build
-      shell: bash
-      run: cmake --build .
+      uses: DiligentGraphics/github-action/build@master
