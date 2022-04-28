@@ -51,7 +51,7 @@ jobs:
       with:
         check_filenames: true
         ignore_words_file: ./DiligentFX/.github/.codespellignore
-        skip: ./DiligentFX/ThirdParty
+        skip: ./DiligentFX/.git,./DiligentFX/ThirdParty
         path: ./DiligentFX
 
   macos-precheks:
