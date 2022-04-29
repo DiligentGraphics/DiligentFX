@@ -88,7 +88,7 @@ jobs:
         toolset:         ["Win32", "x64"]
         build_type:      ["Debug", "Release"]
         cmake_generator: ["Visual Studio 17 2022"]
-        cmake_args:      [""]
+        cmake_args:      ["-DDILIGENT_NO_GLSLANG=ON -DDILIGENT_NO_HLSL=ON"]
         platform:        ["Win32"]
 
         include:
@@ -97,21 +97,21 @@ jobs:
             toolset:         "x64"
             build_type:      "RelWithDebInfo"
             cmake_generator: "Visual Studio 17 2022"
-            cmake_args:      "-DDILIGENT_DEVELOPMENT=ON"
+            cmake_args:      "-DDILIGENT_NO_GLSLANG=ON -DDILIGENT_NO_HLSL=ON -DDILIGENT_DEVELOPMENT=ON"
 
           - name:            "Win8.1"
             platform:        "Win32"
             toolset:         "x64"
             build_type:      "Release"
             cmake_generator: "Visual Studio 17 2022"
-            cmake_args:      "-DCMAKE_SYSTEM_VERSION=8.1"
+            cmake_args:      "-DDILIGENT_NO_GLSLANG=ON -DDILIGENT_NO_HLSL=ON -DCMAKE_SYSTEM_VERSION=8.1"
 
           - name:            "Win10-Ninja"
             platform:        "Win32"
             toolset:         "x64"
             build_type:      "Debug"
             cmake_generator: "Ninja"
-            cmake_args:      ""
+            cmake_args:      "-DDILIGENT_NO_GLSLANG=ON -DDILIGENT_NO_HLSL=ON"
 
           - name:            "UWP"
             platform:        "UWP"
@@ -165,7 +165,8 @@ jobs:
       matrix:
         name:       ["GCC", "Clang"]
         build_type: ["Debug", "Release"]
-        cmake_args: [""]
+        # Do not build GLSLang and friends to save time as it is built by Core and Engine CI.
+        cmake_args: ["-DDILIGENT_NO_GLSLANG=ON -DDILIGENT_NO_HLSL=ON"]
         include:
           - name:            "GCC"
             cmake_generator: "Unix Makefiles"
@@ -215,26 +216,12 @@ jobs:
       matrix:
         platform:   ["MacOS", "iOS", "tvOS"]
         build_type: ["Debug", "Release"]
-
+        # Do not build GLSLang and friends to save time as it is built by Core and Engine CI.
+        cmake_args: ["-DDILIGENT_NO_GLSLANG=ON -DDILIGENT_NO_HLSL=ON"]
         exclude:
           # Exclude tvOS-Release
           - platform:   "tvOS"
             build_type: "Release"
-
-        include:
-          - platform:   "MacOS"
-            build_type: "Debug"
-            cmake_args: ""
-
-          - platform:   "MacOS"
-            build_type: "Release"
-            cmake_args: ""
-
-          - platform:  "iOS"
-            cmake_args: ""
-
-          - platform:   "tvOS"
-            cmake_args: ""
 
     name: MacOS -> ${{ matrix.platform }}-${{ matrix.build_type }}
 
@@ -303,7 +290,6 @@ jobs:
       uses: DiligentGraphics/github-action/configure-cmake@v1
       with:
         build-type: ${{ matrix.build_type }}
-        cmake-args: "-DDILIGENT_BUILD_FX_INCLUDE_TEST=ON"
 
     - name: Build
       if:   success()
