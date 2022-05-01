@@ -131,7 +131,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: DiligentGraphics/github-action/checkout@master
+      uses: DiligentGraphics/github-action/checkout@v1
 
     - name: Set up build environment
       if: success()
@@ -152,7 +152,7 @@ jobs:
 
     - name: Build
       if: success()
-      uses: DiligentGraphics/github-action/build@master
+      uses: DiligentGraphics/github-action/build@v1
 
 
 
@@ -182,7 +182,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: DiligentGraphics/github-action/checkout@master
+      uses: DiligentGraphics/github-action/checkout@v1
 
     - name: Set up build environment
       if:   success()
@@ -203,7 +203,7 @@ jobs:
 
     - name: Build
       if: success()
-      uses: DiligentGraphics/github-action/build@master
+      uses: DiligentGraphics/github-action/build@v1
 
 
 
@@ -227,7 +227,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: DiligentGraphics/github-action/checkout@master
+      uses: DiligentGraphics/github-action/checkout@v1
 
     - name: Set up build environment
       if:   success()
@@ -244,7 +244,7 @@ jobs:
 
     - name: Build
       if:   success()
-      uses: DiligentGraphics/github-action/build@master
+      uses: DiligentGraphics/github-action/build@v1
 
 
 
@@ -277,7 +277,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: DiligentGraphics/github-action/checkout@master
+      uses: DiligentGraphics/github-action/checkout@v1
 
     - name: Set up build environment
       if:   success()
@@ -293,4 +293,4 @@ jobs:
 
     - name: Build
       if:   success()
-      uses: DiligentGraphics/github-action/build@master
+      uses: DiligentGraphics/github-action/build@v1
