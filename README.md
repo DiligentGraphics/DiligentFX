@@ -16,7 +16,7 @@ DiligentFX is the [Diligent Engine](https://github.com/DiligentGraphics/Diligent
 [![Chat on gitter](https://badges.gitter.im/gitterHQ/gitter.png)](https://gitter.im/diligent-engine)
 [![Chat on Discord](https://img.shields.io/discord/730091778081947680?logo=discord)](https://discord.gg/t7HGBK7)
 [![Appveyor Build Status](https://ci.appveyor.com/api/projects/status/github/DiligentGraphics/DiligentFX?svg=true)](https://ci.appveyor.com/project/DiligentGraphics/diligentfx)
-[![Code Scanning](https://github.com/DiligentGraphics/DiligentFX/actions/workflows/codeql.yml/badge.svg?branch=master)](https://github.com/DiligentGraphics/DiligentFX/actions/workflows/codeql.yml?query=branch%3Amaster)
+[![MSVC Code Analysis](https://github.com/DiligentGraphics/DiligentFX/actions/workflows/msvc_analysis.yml/badge.svg?branch=master)](https://github.com/DiligentGraphics/DiligentFX/actions/workflows/msvc_analysis.yml?query=branch%3Amaster)
 [![Lines of Code](https://tokei.rs/b1/github.com/DiligentGraphics/DiligentFX)](https://github.com/DiligentGraphics/DiligentFX)
 
 The framework implements the following components
