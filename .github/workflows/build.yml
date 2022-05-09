@@ -113,6 +113,13 @@ jobs:
             cmake_generator: "Ninja"
             cmake_args:      "-DDILIGENT_NO_GLSLANG=ON -DDILIGENT_NO_HLSL=ON"
 
+          - name:            "MinGW"
+            platform:        "Win32"
+            toolset:         "x64"
+            build_type:      "Release"
+            cmake_generator: "MinGW Makefiles"
+            cmake_args:      "-DDILIGENT_NO_GLSLANG=ON -DDILIGENT_NO_HLSL=ON"
+
           - name:            "UWP"
             platform:        "UWP"
             toolset:         "x64"
