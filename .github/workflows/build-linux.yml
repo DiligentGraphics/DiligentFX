@@ -1,0 +1,82 @@
+name: Linux build
+
+on: [push, pull_request]
+
+jobs:
+  precheks:
+    name:    Linux -> Pre-checks
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Clone DiligentCore
+      uses: actions/checkout@v2
+      with:
+        repository: DiligentGraphics/DiligentCore
+        path:       DiligentCore
+
+    - name: Clone DiligentFX
+      uses: actions/checkout@v2
+      with:
+        path: DiligentFX
+
+    - name: Format validation
+      shell: bash
+      working-directory: ${{github.workspace}}/DiligentFX/BuildTools/FormatValidation
+      run: ./validate_format_linux.sh
+
+    - name: Codespell
+      uses: codespell-project/actions-codespell@master
+      with:
+        check_filenames: true
+        ignore_words_file: ./DiligentFX/.github/.codespellignore
+        skip: ./DiligentFX/.git,./DiligentFX/ThirdParty
+        path: ./DiligentFX
+
+        
+  build:
+    needs:   precheks
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        name:       ["GCC", "Clang"]
+        build_type: ["Debug", "Release"]
+        # Do not build GLSLang and friends to save time as it is built by Core and Engine CI.
+        cmake_args: ["-DDILIGENT_NO_GLSLANG=ON -DDILIGENT_NO_HLSL=ON"]
+        include:
+          - name:            "GCC"
+            cmake_generator: "Unix Makefiles"
+            cc:              "gcc-9"
+            cxx:             "g++-9"
+
+          - name:            "Clang"
+            cmake_generator: "Ninja"
+            cc:              "clang-12"
+            cxx:             "clang++-12"
+
+    name: Linux -> ${{ matrix.name }}-x64, ${{ matrix.build_type }}
+
+    steps:
+    - name: Checkout
+      uses: DiligentGraphics/github-action/checkout@v1
+
+    - name: Set up build environment
+      if:   success()
+      uses: DiligentGraphics/github-action/setup-build-env@v1
+      with:
+        platform:        Linux
+        cmake-generator: ${{ matrix.cmake_generator }}
+
+    - name: Configure CMake
+      if:   success()
+      uses: DiligentGraphics/github-action/configure-cmake@v1
+      with:
+        cc:         ${{ matrix.cc }}
+        cxx:        ${{ matrix.cxx }}
+        generator:  ${{ matrix.cmake_generator }}
+        build-type: ${{ matrix.build_type }}
+        cmake-args: ${{ matrix.cmake_args }}
+
+    - name: Build
+      if: success()
+      uses: DiligentGraphics/github-action/build@v1

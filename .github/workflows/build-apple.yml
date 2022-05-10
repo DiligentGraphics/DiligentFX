@@ -1,0 +1,64 @@
+name: MacOS/iOS/tvOS build
+
+on: [push, pull_request]
+
+jobs:
+  precheks:
+    name:    MacOS -> Pre-Checks
+    runs-on: macos-latest
+
+    steps:
+    - name: Clone DiligentCore
+      uses: actions/checkout@v2
+      with:
+        repository: DiligentGraphics/DiligentCore
+        path:       DiligentCore
+
+    - name: Clone DiligentFX
+      uses: actions/checkout@v2
+      with:
+        path: DiligentFX
+
+    - name: Format validation
+      shell: bash
+      working-directory: ${{github.workspace}}/DiligentFX/BuildTools/FormatValidation
+      run: ./validate_format_mac.sh
+      
+
+  build:
+    needs:   precheks
+    runs-on: macos-latest
+
+    strategy:
+      matrix:
+        platform:   ["MacOS", "iOS", "tvOS"]
+        build_type: ["Debug", "Release"]
+        # Do not build GLSLang and friends to save time as it is built by Core and Engine CI.
+        cmake_args: ["-DDILIGENT_NO_GLSLANG=ON -DDILIGENT_NO_HLSL=ON"]
+        exclude:
+          # Exclude tvOS-Release
+          - platform:   "tvOS"
+            build_type: "Release"
+
+    name: MacOS -> ${{ matrix.platform }}-${{ matrix.build_type }}
+
+    steps:
+    - name: Checkout
+      uses: DiligentGraphics/github-action/checkout@v1
+
+    - name: Set up build environment
+      if:   success()
+      uses: DiligentGraphics/github-action/setup-build-env@v1
+      with:
+        platform: ${{ matrix.platform }}
+
+    - name: Configure CMake
+      if:   success()
+      uses: DiligentGraphics/github-action/configure-cmake@v1
+      with:
+        build-type: ${{ matrix.build_type }}
+        cmake-args: ${{ matrix.cmake_args }}
+
+    - name: Build
+      if:   success()
+      uses: DiligentGraphics/github-action/build@v1
