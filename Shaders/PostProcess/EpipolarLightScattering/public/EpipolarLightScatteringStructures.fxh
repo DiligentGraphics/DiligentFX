@@ -204,7 +204,7 @@ struct EpipolarLightScatteringAttribs
     BOOL   bIsLightOnScreen                 DEFAULT_VALUE(FALSE);
     float  fNumCascades                     DEFAULT_VALUE(0);
     float  fFirstCascadeToRayMarch          DEFAULT_VALUE(0);
-    int    Padding0;
+    int    Padding0                         DEFAULT_VALUE(0);
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
     CHECK_STRUCT_ALIGNMENT(EpipolarLightScatteringAttribs);

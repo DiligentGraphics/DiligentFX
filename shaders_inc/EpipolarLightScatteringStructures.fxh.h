@@ -204,7 +204,7 @@
 "    BOOL   bIsLightOnScreen                 DEFAULT_VALUE(FALSE);\n"
 "    float  fNumCascades                     DEFAULT_VALUE(0);\n"
 "    float  fFirstCascadeToRayMarch          DEFAULT_VALUE(0);\n"
-"    int    Padding0;\n"
+"    int    Padding0                         DEFAULT_VALUE(0);\n"
 "};\n"
 "#ifdef CHECK_STRUCT_ALIGNMENT\n"
 "    CHECK_STRUCT_ALIGNMENT(EpipolarLightScatteringAttribs);\n"

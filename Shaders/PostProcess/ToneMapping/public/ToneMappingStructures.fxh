@@ -59,8 +59,8 @@ struct ToneMappingAttribs
     float fWhitePoint                       DEFAULT_VALUE(3.f);
     // Luminance point to use in tone mapping.
     float fLuminanceSaturation              DEFAULT_VALUE(1.f);
-    uint Padding0;
-    uint Padding1;
+    uint Padding0                           DEFAULT_VALUE(0);
+    uint Padding1                           DEFAULT_VALUE(0);
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
     CHECK_STRUCT_ALIGNMENT(ToneMappingAttribs);
