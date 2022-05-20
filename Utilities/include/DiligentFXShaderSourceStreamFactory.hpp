@@ -71,7 +71,7 @@ public:
 
 private:
     DiligentFXShaderSourceStreamFactory();
-    std::unordered_map<HashMapStringKey, const Char*, HashMapStringKey::Hasher> m_NameToSourceMap;
+    std::unordered_map<HashMapStringKey, const Char*> m_NameToSourceMap;
 };
 
 } // namespace Diligent
