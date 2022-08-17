@@ -13,9 +13,9 @@ jobs:
             build_type:      "Debug"
             # Only build Direct3D11 backend as Core libraries are analysed in the Core module
             cmake_args:      "-DDILIGENT_NO_OPENGL=ON -DDILIGENT_NO_DIRECT3D12=ON -DDILIGENT_NO_VULKAN=ON"
-            cmake_generator: "Visual Studio 17 2022"
+            cmake_generator: "Visual Studio 16 2019"
 
-    runs-on: windows-2022
+    runs-on: windows-2019
     name: ${{ matrix.host_name }} -> MSVC Analysis, ${{ matrix.toolset }}, ${{ matrix.build_type }}
 
     permissions:
