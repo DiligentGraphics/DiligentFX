@@ -154,7 +154,7 @@ float4 GenerateSliceEndpointsPS(FullScreenTriangleVSOutput VSOut
     {
         return INVALID_EPIPOLAR_LINE;
     }
-    // Additinal check above is required to eliminate false epipolar lines which can appear is shown below.
+    // Additional check above is required to eliminate false epipolar lines which can appear is shown below.
     // The reason is that we have to use some safety delta when performing check in IsValidScreenLocation() 
     // function. If we do not do this, we will miss valid entry points due to precision issues.
     // As a result there could appear false entry points which fall into the safety region, but in fact lie

@@ -234,7 +234,7 @@ struct AirScatteringAttribs
                    // y == 1 + g^2
                    // z == -2*g
 
-    // Earth parameters can't be chnaged at run time
+    // Earth parameters can't be changed at run time
     float fEarthRadius              DEFAULT_VALUE(static_cast<float>(EARTH_RADIUS));
     float fAtmBottomAltitude        DEFAULT_VALUE(0.f);     // Altitude of the bottom atmosphere boundary (sea level by default)
     float fAtmTopAltitude           DEFAULT_VALUE(80000.f); // Altitude of the top atmosphere boundary, 80 km by default

@@ -234,7 +234,7 @@
 "                   // y == 1 + g^2\n"
 "                   // z == -2*g\n"
 "\n"
-"    // Earth parameters can\'t be chnaged at run time\n"
+"    // Earth parameters can\'t be changed at run time\n"
 "    float fEarthRadius              DEFAULT_VALUE(static_cast<float>(EARTH_RADIUS));\n"
 "    float fAtmBottomAltitude        DEFAULT_VALUE(0.f);     // Altitude of the bottom atmosphere boundary (sea level by default)\n"
 "    float fAtmTopAltitude           DEFAULT_VALUE(80000.f); // Altitude of the top atmosphere boundary, 80 km by default\n"

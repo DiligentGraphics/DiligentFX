@@ -154,7 +154,7 @@
 "    {\n"
 "        return INVALID_EPIPOLAR_LINE;\n"
 "    }\n"
-"    // Additinal check above is required to eliminate false epipolar lines which can appear is shown below.\n"
+"    // Additional check above is required to eliminate false epipolar lines which can appear is shown below.\n"
 "    // The reason is that we have to use some safety delta when performing check in IsValidScreenLocation()\n"
 "    // function. If we do not do this, we will miss valid entry points due to precision issues.\n"
 "    // As a result there could appear false entry points which fall into the safety region, but in fact lie\n"
