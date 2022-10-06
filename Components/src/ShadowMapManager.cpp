@@ -428,13 +428,11 @@ void ShadowMapManager::InitializeConversionTechniques(TEXTURE_FORMAT FilterableS
         if (!pScreenSizeTriVS)
         {
             ShaderCreateInfo VertShaderCI;
-            VertShaderCI.Desc.ShaderType            = SHADER_TYPE_VERTEX;
+            VertShaderCI.Desc                       = {"FullScreenTriangleVS", SHADER_TYPE_VERTEX, true};
             VertShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
-            VertShaderCI.UseCombinedTextureSamplers = true;
             VertShaderCI.pShaderSourceStreamFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();
             VertShaderCI.FilePath                   = "FullScreenTriangleVS.fx";
             VertShaderCI.EntryPoint                 = "FullScreenTriangleVS";
-            VertShaderCI.Desc.Name                  = "FullScreenTriangleVS";
             m_pDevice->CreateShader(VertShaderCI, &pScreenSizeTriVS);
         }
 
@@ -442,21 +440,19 @@ void ShadowMapManager::InitializeConversionTechniques(TEXTURE_FORMAT FilterableS
         PipelineStateDesc&              PSODesc = PSOCreateInfo.PSODesc;
 
         ShaderCreateInfo ShaderCI;
-        ShaderCI.Desc.ShaderType            = SHADER_TYPE_PIXEL;
         ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
-        ShaderCI.UseCombinedTextureSamplers = true;
         ShaderCI.pShaderSourceStreamFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();
         ShaderCI.FilePath                   = "ShadowConversions.fx";
         if (mode == SHADOW_MODE_VSM)
         {
             ShaderCI.EntryPoint = "VSMHorzPS";
-            ShaderCI.Desc.Name  = "VSM horizontal pass PS";
+            ShaderCI.Desc       = {"VSM horizontal pass PS", SHADER_TYPE_PIXEL, true};
             PSODesc.Name        = "VSM horizontal pass";
         }
         else if (mode == SHADOW_MODE_EVSM2)
         {
             ShaderCI.EntryPoint = "EVSMHorzPS";
-            ShaderCI.Desc.Name  = "EVSM horizontal pass PS";
+            ShaderCI.Desc       = {"EVSM horizontal pass PS", SHADER_TYPE_PIXEL, true};
             PSODesc.Name        = "EVSM horizontal pass";
         }
         else

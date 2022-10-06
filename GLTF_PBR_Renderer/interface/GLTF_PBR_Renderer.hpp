@@ -304,11 +304,11 @@ private:
             DoubleSided{_DoubleSided}
         {}
 
-        bool operator==(const PSOKey& rhs) const
+        bool operator==(const PSOKey& rhs) const noexcept
         {
             return AlphaMode == rhs.AlphaMode && DoubleSided == rhs.DoubleSided;
         }
-        bool operator!=(const PSOKey& rhs) const
+        bool operator!=(const PSOKey& rhs) const noexcept
         {
             return AlphaMode != rhs.AlphaMode || DoubleSided != rhs.DoubleSided;
         }

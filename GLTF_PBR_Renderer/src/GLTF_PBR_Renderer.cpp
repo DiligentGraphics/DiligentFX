@@ -184,24 +184,21 @@ void GLTF_PBR_Renderer::PrecomputeBRDF(IRenderDevice*  pDevice,
 
         ShaderCreateInfo ShaderCI;
         ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
-        ShaderCI.UseCombinedTextureSamplers = true;
         ShaderCI.pShaderSourceStreamFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();
         RefCntAutoPtr<IShader> pVS;
         {
-            ShaderCI.Desc.ShaderType = SHADER_TYPE_VERTEX;
-            ShaderCI.EntryPoint      = "FullScreenTriangleVS";
-            ShaderCI.Desc.Name       = "Full screen triangle VS";
-            ShaderCI.FilePath        = "FullScreenTriangleVS.fx";
+            ShaderCI.Desc       = {"Full screen triangle VS", SHADER_TYPE_VERTEX, true};
+            ShaderCI.EntryPoint = "FullScreenTriangleVS";
+            ShaderCI.FilePath   = "FullScreenTriangleVS.fx";
             pDevice->CreateShader(ShaderCI, &pVS);
         }
 
         // Create pixel shader
         RefCntAutoPtr<IShader> pPS;
         {
-            ShaderCI.Desc.ShaderType = SHADER_TYPE_PIXEL;
-            ShaderCI.EntryPoint      = "PrecomputeBRDF_PS";
-            ShaderCI.Desc.Name       = "Precompute GLTF BRDF PS";
-            ShaderCI.FilePath        = "PrecomputeGLTF_BRDF.psh";
+            ShaderCI.Desc       = {"Precompute GLTF BRDF PS", SHADER_TYPE_PIXEL, true};
+            ShaderCI.EntryPoint = "PrecomputeBRDF_PS";
+            ShaderCI.FilePath   = "PrecomputeGLTF_BRDF.psh";
             pDevice->CreateShader(ShaderCI, &pPS);
         }
 
@@ -244,7 +241,6 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
 
     ShaderCreateInfo ShaderCI;
     ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
-    ShaderCI.UseCombinedTextureSamplers = true;
     ShaderCI.pShaderSourceStreamFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();
 
     ShaderMacroHelper Macros;
@@ -263,20 +259,18 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
     ShaderCI.Macros = Macros;
     RefCntAutoPtr<IShader> pVS;
     {
-        ShaderCI.Desc.ShaderType = SHADER_TYPE_VERTEX;
-        ShaderCI.EntryPoint      = "main";
-        ShaderCI.Desc.Name       = "GLTF PBR VS";
-        ShaderCI.FilePath        = "RenderGLTF_PBR.vsh";
+        ShaderCI.Desc       = {"GLTF PBR VS", SHADER_TYPE_VERTEX, true};
+        ShaderCI.EntryPoint = "main";
+        ShaderCI.FilePath   = "RenderGLTF_PBR.vsh";
         pDevice->CreateShader(ShaderCI, &pVS);
     }
 
     // Create pixel shader
     RefCntAutoPtr<IShader> pPS;
     {
-        ShaderCI.Desc.ShaderType = SHADER_TYPE_PIXEL;
-        ShaderCI.EntryPoint      = "main";
-        ShaderCI.Desc.Name       = "GLTF PBR PS";
-        ShaderCI.FilePath        = "RenderGLTF_PBR.psh";
+        ShaderCI.Desc       = {"GLTF PBR PS", SHADER_TYPE_PIXEL, true};
+        ShaderCI.EntryPoint = "main";
+        ShaderCI.FilePath   = "RenderGLTF_PBR.psh";
         pDevice->CreateShader(ShaderCI, &pPS);
     }
 
@@ -566,7 +560,6 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*  pDevice,
     {
         ShaderCreateInfo ShaderCI;
         ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
-        ShaderCI.UseCombinedTextureSamplers = true;
         ShaderCI.pShaderSourceStreamFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();
 
         ShaderMacroHelper Macros;
@@ -575,20 +568,18 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*  pDevice,
         ShaderCI.Macros = Macros;
         RefCntAutoPtr<IShader> pVS;
         {
-            ShaderCI.Desc.ShaderType = SHADER_TYPE_VERTEX;
-            ShaderCI.EntryPoint      = "main";
-            ShaderCI.Desc.Name       = "Cubemap face VS";
-            ShaderCI.FilePath        = "CubemapFace.vsh";
+            ShaderCI.Desc       = {"Cubemap face VS", SHADER_TYPE_VERTEX, true};
+            ShaderCI.EntryPoint = "main";
+            ShaderCI.FilePath   = "CubemapFace.vsh";
             pDevice->CreateShader(ShaderCI, &pVS);
         }
 
         // Create pixel shader
         RefCntAutoPtr<IShader> pPS;
         {
-            ShaderCI.Desc.ShaderType = SHADER_TYPE_PIXEL;
-            ShaderCI.EntryPoint      = "main";
-            ShaderCI.Desc.Name       = "Precompute irradiance cube map PS";
-            ShaderCI.FilePath        = "ComputeIrradianceMap.psh";
+            ShaderCI.Desc       = {"Precompute irradiance cube map PS", SHADER_TYPE_PIXEL, true};
+            ShaderCI.EntryPoint = "main";
+            ShaderCI.FilePath   = "ComputeIrradianceMap.psh";
             pDevice->CreateShader(ShaderCI, &pPS);
         }
 
@@ -636,7 +627,6 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*  pDevice,
     {
         ShaderCreateInfo ShaderCI;
         ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
-        ShaderCI.UseCombinedTextureSamplers = true;
         ShaderCI.pShaderSourceStreamFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();
 
         ShaderMacroHelper Macros;
@@ -645,20 +635,18 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*  pDevice,
 
         RefCntAutoPtr<IShader> pVS;
         {
-            ShaderCI.Desc.ShaderType = SHADER_TYPE_VERTEX;
-            ShaderCI.EntryPoint      = "main";
-            ShaderCI.Desc.Name       = "Cubemap face VS";
-            ShaderCI.FilePath        = "CubemapFace.vsh";
+            ShaderCI.Desc       = {"Cubemap face VS", SHADER_TYPE_VERTEX, true};
+            ShaderCI.EntryPoint = "main";
+            ShaderCI.FilePath   = "CubemapFace.vsh";
             pDevice->CreateShader(ShaderCI, &pVS);
         }
 
         // Create pixel shader
         RefCntAutoPtr<IShader> pPS;
         {
-            ShaderCI.Desc.ShaderType = SHADER_TYPE_PIXEL;
-            ShaderCI.EntryPoint      = "main";
-            ShaderCI.Desc.Name       = "Prefilter environment map PS";
-            ShaderCI.FilePath        = "PrefilterEnvMap.psh";
+            ShaderCI.Desc       = {"Prefilter environment map PS", SHADER_TYPE_PIXEL, true};
+            ShaderCI.EntryPoint = "main";
+            ShaderCI.FilePath   = "PrefilterEnvMap.psh";
             pDevice->CreateShader(ShaderCI, &pPS);
         }
 

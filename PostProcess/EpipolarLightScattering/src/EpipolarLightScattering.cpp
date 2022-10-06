@@ -286,14 +286,14 @@ static RefCntAutoPtr<IShader> CreateShader(IRenderDevice*     pDevice,
                                            const ShaderMacro* Macros = nullptr)
 {
     ShaderCreateInfo ShaderCI;
-    ShaderCI.EntryPoint                 = EntryPoint;
-    ShaderCI.FilePath                   = FileName;
-    ShaderCI.Macros                     = Macros;
-    ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
-    ShaderCI.Desc.ShaderType            = Type;
-    ShaderCI.Desc.Name                  = EntryPoint;
-    ShaderCI.pShaderSourceStreamFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();
-    ShaderCI.UseCombinedTextureSamplers = true;
+    ShaderCI.EntryPoint                      = EntryPoint;
+    ShaderCI.FilePath                        = FileName;
+    ShaderCI.Macros                          = Macros;
+    ShaderCI.SourceLanguage                  = SHADER_SOURCE_LANGUAGE_HLSL;
+    ShaderCI.Desc.ShaderType                 = Type;
+    ShaderCI.Desc.Name                       = EntryPoint;
+    ShaderCI.pShaderSourceStreamFactory      = &DiligentFXShaderSourceStreamFactory::GetInstance();
+    ShaderCI.Desc.UseCombinedTextureSamplers = true;
     RefCntAutoPtr<IShader> pShader;
     pDevice->CreateShader(ShaderCI, &pShader);
     return pShader;
