@@ -31,6 +31,7 @@
 #include "BasicFileStream.hpp"
 #include "Shader.h"
 #include "HashUtils.hpp"
+#include "DummyReferenceCounters.hpp"
 
 namespace Diligent
 {
@@ -48,30 +49,42 @@ public:
 
     virtual void DILIGENT_CALL_TYPE QueryInterface(const INTERFACE_ID& IID, IObject** ppInterface) override final
     {
-        UNSUPPORTED("This method is not implemented and should never be called");
+        if (ppInterface == nullptr)
+            return;
+
+        *ppInterface = nullptr;
+        if (IID == IID_Unknown || IID == IID_IShaderSourceInputStreamFactory)
+        {
+            *ppInterface = this;
+            (*ppInterface)->AddRef();
+        }
     }
 
     virtual ReferenceCounterValueType DILIGENT_CALL_TYPE AddRef() override final
     {
-        UNSUPPORTED("This method is not implemented and should never be called");
-        return 0;
+        return m_RefCounters.AddStrongRef();
     }
 
     virtual ReferenceCounterValueType DILIGENT_CALL_TYPE Release() override final
     {
-        UNSUPPORTED("This method is not implemented and should never be called");
-        return 0;
+        return m_RefCounters.ReleaseStrongRef();
     }
 
     virtual IReferenceCounters* DILIGENT_CALL_TYPE GetReferenceCounters() const override final
     {
-        UNSUPPORTED("This method is not implemented and should never be called");
-        return nullptr;
+        return const_cast<IReferenceCounters*>(static_cast<const IReferenceCounters*>(&m_RefCounters));
     }
 
 private:
     DiligentFXShaderSourceStreamFactory();
-    std::unordered_map<HashMapStringKey, const Char*> m_NameToSourceMap;
+
+    using NameToSourceMapType = std::unordered_map<HashMapStringKey, const Char*>;
+    static NameToSourceMapType InitNameToSourceMap();
+
+private:
+    DummyReferenceCounters<DiligentFXShaderSourceStreamFactory> m_RefCounters;
+
+    const NameToSourceMapType m_NameToSourceMap;
 };
 
 } // namespace Diligent
