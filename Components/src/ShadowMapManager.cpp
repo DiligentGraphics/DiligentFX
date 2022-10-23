@@ -33,6 +33,7 @@
 #include "GraphicsUtilities.h"
 #include "MapHelper.hpp"
 #include "CommonlyUsedStates.h"
+#include "RenderStateCache.hpp"
 
 namespace Diligent
 {
@@ -41,7 +42,7 @@ ShadowMapManager::ShadowMapManager()
 {
 }
 
-void ShadowMapManager::Initialize(IRenderDevice* pDevice, const InitInfo& initInfo)
+void ShadowMapManager::Initialize(IRenderDevice* pDevice, IRenderStateCache* pStateCache, const InitInfo& initInfo)
 {
     VERIFY_EXPR(pDevice != nullptr);
     VERIFY(initInfo.Format != TEX_FORMAT_UNKNOWN, "Undefined shadow map format");
@@ -49,8 +50,9 @@ void ShadowMapManager::Initialize(IRenderDevice* pDevice, const InitInfo& initIn
     VERIFY(initInfo.Resolution != 0, "Shadow map resolution must not be zero");
     VERIFY(initInfo.ShadowMode != 0, "Shadow mode is not specified");
 
-    m_pDevice    = pDevice;
-    m_ShadowMode = initInfo.ShadowMode;
+    m_pDevice     = pDevice;
+    m_pStateCache = pStateCache;
+    m_ShadowMode  = initInfo.ShadowMode;
 
     TextureDesc ShadowMapDesc;
     ShadowMapDesc.Name      = "Shadow map SRV";
@@ -407,6 +409,8 @@ void ShadowMapManager::InitializeConversionTechniques(TEXTURE_FORMAT FilterableS
         CreateUniformBuffer(m_pDevice, 64, "Shadow conversion attribs CB", &m_pConversionAttribsBuffer);
     }
 
+    RenderDeviceWithCache<false> DeviceWithCache{m_pDevice, m_pStateCache};
+
     RefCntAutoPtr<IShader> pScreenSizeTriVS;
     for (int mode = SHADOW_MODE_VSM; mode <= SHADOW_MODE_EVSM4; ++mode)
     {
@@ -433,7 +437,8 @@ void ShadowMapManager::InitializeConversionTechniques(TEXTURE_FORMAT FilterableS
             VertShaderCI.pShaderSourceStreamFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();
             VertShaderCI.FilePath                   = "FullScreenTriangleVS.fx";
             VertShaderCI.EntryPoint                 = "FullScreenTriangleVS";
-            m_pDevice->CreateShader(VertShaderCI, &pScreenSizeTriVS);
+
+            pScreenSizeTriVS = DeviceWithCache.CreateShader(VertShaderCI);
         }
 
         GraphicsPipelineStateCreateInfo PSOCreateInfo;
@@ -459,8 +464,7 @@ void ShadowMapManager::InitializeConversionTechniques(TEXTURE_FORMAT FilterableS
         {
             UNEXPECTED("Unexpected shadow mode");
         }
-        RefCntAutoPtr<IShader> pVSMHorzPS;
-        m_pDevice->CreateShader(ShaderCI, &pVSMHorzPS);
+        auto pVSMHorzPS = DeviceWithCache.CreateShader(ShaderCI);
 
         ShaderResourceVariableDesc Variables[] =
             {
@@ -493,7 +497,7 @@ void ShadowMapManager::InitializeConversionTechniques(TEXTURE_FORMAT FilterableS
         GraphicsPipeline.NumRenderTargets             = 1;
         GraphicsPipeline.RTVFormats[0]                = FilterableShadowMapFmt;
 
-        m_pDevice->CreateGraphicsPipelineState(PSOCreateInfo, &Tech.PSO);
+        Tech.PSO = DeviceWithCache.CreateGraphicsPipelineState(PSOCreateInfo);
         Tech.PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbConversionAttribs")->Set(m_pConversionAttribsBuffer);
 
         if (m_BlurVertTech.PSO && m_BlurVertTech.PSO->GetGraphicsPipelineDesc().RTVFormats[0] != FilterableShadowMapFmt)
@@ -504,10 +508,10 @@ void ShadowMapManager::InitializeConversionTechniques(TEXTURE_FORMAT FilterableS
             ShaderCI.EntryPoint = "VertBlurPS";
             ShaderCI.Desc.Name  = "Vertical blur pass PS";
             PSODesc.Name        = "Vertical blur pass PSO";
-            RefCntAutoPtr<IShader> pVertBlurPS;
-            m_pDevice->CreateShader(ShaderCI, &pVertBlurPS);
-            PSOCreateInfo.pPS = pVertBlurPS;
-            m_pDevice->CreateGraphicsPipelineState(PSOCreateInfo, &m_BlurVertTech.PSO);
+
+            auto pVertBlurPS   = DeviceWithCache.CreateShader(ShaderCI);
+            PSOCreateInfo.pPS  = pVertBlurPS;
+            m_BlurVertTech.PSO = DeviceWithCache.CreateGraphicsPipelineState(PSOCreateInfo);
             m_BlurVertTech.PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbConversionAttribs")->Set(m_pConversionAttribsBuffer);
         }
     }

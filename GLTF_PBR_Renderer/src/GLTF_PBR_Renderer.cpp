@@ -37,20 +37,22 @@
 #include "GraphicsUtilities.h"
 #include "MapHelper.hpp"
 #include "GraphicsAccessories.hpp"
+#include "RenderStateCache.hpp"
 
 namespace Diligent
 {
 
 const SamplerDesc GLTF_PBR_Renderer::CreateInfo::DefaultSampler = Sam_LinearWrap;
 
-GLTF_PBR_Renderer::GLTF_PBR_Renderer(IRenderDevice*    pDevice,
-                                     IDeviceContext*   pCtx,
-                                     const CreateInfo& CI) :
+GLTF_PBR_Renderer::GLTF_PBR_Renderer(IRenderDevice*     pDevice,
+                                     IRenderStateCache* pStateCache,
+                                     IDeviceContext*    pCtx,
+                                     const CreateInfo&  CI) :
     m_Settings{CI}
 {
     if (m_Settings.UseIBL)
     {
-        PrecomputeBRDF(pDevice, pCtx);
+        PrecomputeBRDF(pDevice, pStateCache, pCtx);
 
         TextureDesc TexDesc;
         TexDesc.Name      = "Irradiance cube map for GLTF renderer";
@@ -147,13 +149,16 @@ GLTF_PBR_Renderer::GLTF_PBR_Renderer(IRenderDevice*    pDevice,
         // clang-format on
         pCtx->TransitionResourceStates(_countof(Barriers), Barriers);
 
-        CreatePSO(pDevice);
+        CreatePSO(pDevice, pStateCache);
     }
 }
 
-void GLTF_PBR_Renderer::PrecomputeBRDF(IRenderDevice*  pDevice,
-                                       IDeviceContext* pCtx)
+void GLTF_PBR_Renderer::PrecomputeBRDF(IRenderDevice*     pDevice,
+                                       IRenderStateCache* pStateCache,
+                                       IDeviceContext*    pCtx)
 {
+    RenderDeviceWithCache<false> Device{pDevice, pStateCache};
+
     TextureDesc TexDesc;
     TexDesc.Name      = "GLTF BRDF Look-up texture";
     TexDesc.Type      = RESOURCE_DIM_TEX_2D;
@@ -163,9 +168,8 @@ void GLTF_PBR_Renderer::PrecomputeBRDF(IRenderDevice*  pDevice,
     TexDesc.Height    = BRDF_LUT_Dim;
     TexDesc.Format    = TEX_FORMAT_RG16_FLOAT;
     TexDesc.MipLevels = 1;
-    RefCntAutoPtr<ITexture> pBRDF_LUT;
-    pDevice->CreateTexture(TexDesc, nullptr, &pBRDF_LUT);
-    m_pBRDF_LUT_SRV = pBRDF_LUT->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+    auto pBRDF_LUT    = Device.CreateTexture(TexDesc);
+    m_pBRDF_LUT_SRV   = pBRDF_LUT->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
 
     RefCntAutoPtr<IPipelineState> PrecomputeBRDF_PSO;
     {
@@ -190,7 +194,8 @@ void GLTF_PBR_Renderer::PrecomputeBRDF(IRenderDevice*  pDevice,
             ShaderCI.Desc       = {"Full screen triangle VS", SHADER_TYPE_VERTEX, true};
             ShaderCI.EntryPoint = "FullScreenTriangleVS";
             ShaderCI.FilePath   = "FullScreenTriangleVS.fx";
-            pDevice->CreateShader(ShaderCI, &pVS);
+
+            pVS = Device.CreateShader(ShaderCI);
         }
 
         // Create pixel shader
@@ -199,13 +204,14 @@ void GLTF_PBR_Renderer::PrecomputeBRDF(IRenderDevice*  pDevice,
             ShaderCI.Desc       = {"Precompute GLTF BRDF PS", SHADER_TYPE_PIXEL, true};
             ShaderCI.EntryPoint = "PrecomputeBRDF_PS";
             ShaderCI.FilePath   = "PrecomputeGLTF_BRDF.psh";
-            pDevice->CreateShader(ShaderCI, &pPS);
+
+            pPS = Device.CreateShader(ShaderCI);
         }
 
         // Finally, create the pipeline state
-        PSOCreateInfo.pVS = pVS;
-        PSOCreateInfo.pPS = pPS;
-        pDevice->CreateGraphicsPipelineState(PSOCreateInfo, &PrecomputeBRDF_PSO);
+        PSOCreateInfo.pVS  = pVS;
+        PSOCreateInfo.pPS  = pPS;
+        PrecomputeBRDF_PSO = Device.CreateGraphicsPipelineState(PSOCreateInfo);
     }
     pCtx->SetPipelineState(PrecomputeBRDF_PSO);
 
@@ -223,8 +229,10 @@ void GLTF_PBR_Renderer::PrecomputeBRDF(IRenderDevice*  pDevice,
     pCtx->TransitionResourceStates(_countof(Barriers), Barriers);
 }
 
-void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
+void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice, IRenderStateCache* pStateCache)
 {
+    RenderDeviceWithCache<false> Device{pDevice, pStateCache};
+
     GraphicsPipelineStateCreateInfo PSOCreateInfo;
     PipelineStateDesc&              PSODesc          = PSOCreateInfo.PSODesc;
     GraphicsPipelineDesc&           GraphicsPipeline = PSOCreateInfo.GraphicsPipeline;
@@ -262,7 +270,8 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
         ShaderCI.Desc       = {"GLTF PBR VS", SHADER_TYPE_VERTEX, true};
         ShaderCI.EntryPoint = "main";
         ShaderCI.FilePath   = "RenderGLTF_PBR.vsh";
-        pDevice->CreateShader(ShaderCI, &pVS);
+
+        pVS = Device.CreateShader(ShaderCI);
     }
 
     // Create pixel shader
@@ -271,7 +280,8 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
         ShaderCI.Desc       = {"GLTF PBR PS", SHADER_TYPE_PIXEL, true};
         ShaderCI.EntryPoint = "main";
         ShaderCI.FilePath   = "RenderGLTF_PBR.psh";
-        pDevice->CreateShader(ShaderCI, &pPS);
+
+        pPS = Device.CreateShader(ShaderCI);
     }
 
     // clang-format off
@@ -340,16 +350,14 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
     {
         PSOKey Key{GLTF::Material::ALPHA_MODE_OPAQUE, false};
 
-        RefCntAutoPtr<IPipelineState> pSingleSidedOpaquePSO;
-        pDevice->CreateGraphicsPipelineState(PSOCreateInfo, &pSingleSidedOpaquePSO);
+        auto pSingleSidedOpaquePSO = Device.CreateGraphicsPipelineState(PSOCreateInfo);
         AddPSO(Key, std::move(pSingleSidedOpaquePSO));
 
         PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_NONE;
 
         Key.DoubleSided = true;
 
-        RefCntAutoPtr<IPipelineState> pDobleSidedOpaquePSO;
-        pDevice->CreateGraphicsPipelineState(PSOCreateInfo, &pDobleSidedOpaquePSO);
+        auto pDobleSidedOpaquePSO = Device.CreateGraphicsPipelineState(PSOCreateInfo);
         AddPSO(Key, std::move(pDobleSidedOpaquePSO));
     }
 
@@ -367,16 +375,14 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice)
     {
         PSOKey Key{GLTF::Material::ALPHA_MODE_BLEND, false};
 
-        RefCntAutoPtr<IPipelineState> pSingleSidedBlendPSO;
-        pDevice->CreateGraphicsPipelineState(PSOCreateInfo, &pSingleSidedBlendPSO);
+        auto pSingleSidedBlendPSO = Device.CreateGraphicsPipelineState(PSOCreateInfo);
         AddPSO(Key, std::move(pSingleSidedBlendPSO));
 
         PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_NONE;
 
         Key.DoubleSided = true;
 
-        RefCntAutoPtr<IPipelineState> pDoubleSidedBlendPSO;
-        pDevice->CreateGraphicsPipelineState(PSOCreateInfo, &pDoubleSidedBlendPSO);
+        auto pDoubleSidedBlendPSO = Device.CreateGraphicsPipelineState(PSOCreateInfo);
         AddPSO(Key, std::move(pDoubleSidedBlendPSO));
     }
 
@@ -531,15 +537,18 @@ void GLTF_PBR_Renderer::CreateResourceCacheSRB(IRenderDevice*              pDevi
     }
 }
 
-void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*  pDevice,
-                                           IDeviceContext* pCtx,
-                                           ITextureView*   pEnvironmentMap)
+void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*     pDevice,
+                                           IRenderStateCache* pStateCache,
+                                           IDeviceContext*    pCtx,
+                                           ITextureView*      pEnvironmentMap)
 {
     if (!m_Settings.UseIBL)
     {
         LOG_WARNING_MESSAGE("IBL is disabled, so precomputing cube maps will have no effect");
         return;
     }
+
+    RenderDeviceWithCache<false> Device{pDevice, pStateCache};
 
     struct PrecomputeEnvMapAttribs
     {
@@ -571,7 +580,8 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*  pDevice,
             ShaderCI.Desc       = {"Cubemap face VS", SHADER_TYPE_VERTEX, true};
             ShaderCI.EntryPoint = "main";
             ShaderCI.FilePath   = "CubemapFace.vsh";
-            pDevice->CreateShader(ShaderCI, &pVS);
+
+            pVS = Device.CreateShader(ShaderCI);
         }
 
         // Create pixel shader
@@ -580,7 +590,8 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*  pDevice,
             ShaderCI.Desc       = {"Precompute irradiance cube map PS", SHADER_TYPE_PIXEL, true};
             ShaderCI.EntryPoint = "main";
             ShaderCI.FilePath   = "ComputeIrradianceMap.psh";
-            pDevice->CreateShader(ShaderCI, &pPS);
+
+            pPS = Device.CreateShader(ShaderCI);
         }
 
         GraphicsPipelineStateCreateInfo PSOCreateInfo;
@@ -618,7 +629,7 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*  pDevice,
         PSODesc.ResourceLayout.NumImmutableSamplers = _countof(ImtblSamplers);
         PSODesc.ResourceLayout.ImmutableSamplers    = ImtblSamplers;
 
-        pDevice->CreateGraphicsPipelineState(PSOCreateInfo, &m_pPrecomputeIrradianceCubePSO);
+        m_pPrecomputeIrradianceCubePSO = Device.CreateGraphicsPipelineState(PSOCreateInfo);
         m_pPrecomputeIrradianceCubePSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "cbTransform")->Set(m_PrecomputeEnvMapAttribsCB);
         m_pPrecomputeIrradianceCubePSO->CreateShaderResourceBinding(&m_pPrecomputeIrradianceCubeSRB, true);
     }
@@ -638,7 +649,8 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*  pDevice,
             ShaderCI.Desc       = {"Cubemap face VS", SHADER_TYPE_VERTEX, true};
             ShaderCI.EntryPoint = "main";
             ShaderCI.FilePath   = "CubemapFace.vsh";
-            pDevice->CreateShader(ShaderCI, &pVS);
+
+            pVS = Device.CreateShader(ShaderCI);
         }
 
         // Create pixel shader
@@ -647,7 +659,8 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*  pDevice,
             ShaderCI.Desc       = {"Prefilter environment map PS", SHADER_TYPE_PIXEL, true};
             ShaderCI.EntryPoint = "main";
             ShaderCI.FilePath   = "PrefilterEnvMap.psh";
-            pDevice->CreateShader(ShaderCI, &pPS);
+
+            pPS = Device.CreateShader(ShaderCI);
         }
 
         GraphicsPipelineStateCreateInfo PSOCreateInfo;
@@ -685,7 +698,7 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*  pDevice,
         PSODesc.ResourceLayout.NumImmutableSamplers = _countof(ImtblSamplers);
         PSODesc.ResourceLayout.ImmutableSamplers    = ImtblSamplers;
 
-        pDevice->CreateGraphicsPipelineState(PSOCreateInfo, &m_pPrefilterEnvMapPSO);
+        m_pPrefilterEnvMapPSO = Device.CreateGraphicsPipelineState(PSOCreateInfo);
         m_pPrefilterEnvMapPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "cbTransform")->Set(m_PrecomputeEnvMapAttribsCB);
         m_pPrefilterEnvMapPSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "FilterAttribs")->Set(m_PrecomputeEnvMapAttribsCB);
         m_pPrefilterEnvMapPSO->CreateShaderResourceBinding(&m_pPrefilterEnvMapSRB, true);

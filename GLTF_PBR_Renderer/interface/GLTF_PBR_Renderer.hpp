@@ -34,6 +34,7 @@
 
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/DeviceContext.h"
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
+#include "../../../DiligentCore/Graphics/GraphicsTools/interface/RenderStateCache.h"
 #include "../../../DiligentCore/Common/interface/HashUtils.hpp"
 #include "../../../DiligentTools/AssetLoader/interface/GLTFLoader.hpp"
 
@@ -105,9 +106,10 @@ public:
     };
 
     /// Initializes the renderer
-    GLTF_PBR_Renderer(IRenderDevice*    pDevice,
-                      IDeviceContext*   pCtx,
-                      const CreateInfo& CI);
+    GLTF_PBR_Renderer(IRenderDevice*     pDevice,
+                      IRenderStateCache* pStateCache,
+                      IDeviceContext*    pCtx,
+                      const CreateInfo&  CI);
 
     /// Rendering information
     struct RenderInfo
@@ -218,9 +220,10 @@ public:
                                                  IBuffer*     pLightAttribs);
 
     /// Precompute cubemaps used by IBL.
-    void PrecomputeCubemaps(IRenderDevice*  pDevice,
-                            IDeviceContext* pCtx,
-                            ITextureView*   pEnvironmentMap);
+    void PrecomputeCubemaps(IRenderDevice*     pDevice,
+                            IRenderStateCache* pStateCache,
+                            IDeviceContext*    pCtx,
+                            ITextureView*      pEnvironmentMap);
 
     // clang-format off
     ITextureView* GetIrradianceCubeSRV()    { return m_pIrradianceCubeSRV; }
@@ -287,10 +290,11 @@ public:
                IPipelineState*             pPSO = nullptr);
 
 private:
-    void PrecomputeBRDF(IRenderDevice*  pDevice,
-                        IDeviceContext* pCtx);
+    void PrecomputeBRDF(IRenderDevice*     pDevice,
+                        IRenderStateCache* pStateCache,
+                        IDeviceContext*    pCtx);
 
-    void CreatePSO(IRenderDevice* pDevice);
+    void CreatePSO(IRenderDevice* pDevice, IRenderStateCache* pStateCache);
 
     void InitCommonSRBVars(IShaderResourceBinding* pSRB,
                            IBuffer*                pCameraAttribs,

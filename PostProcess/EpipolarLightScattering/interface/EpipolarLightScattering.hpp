@@ -32,6 +32,7 @@
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/Texture.h"
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/BufferView.h"
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/TextureView.h"
+#include "../../../../DiligentCore/Graphics/GraphicsTools/interface/RenderStateCache.h"
 #include "../../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
 #include "../../../../DiligentCore/Common/interface/BasicMath.hpp"
 
@@ -50,7 +51,13 @@ class EpipolarLightScattering
 public:
     struct FrameAttribs
     {
-        IRenderDevice*  pDevice        = nullptr;
+        /// Render device that may be used to create new objects needed for this frame, if any.
+        IRenderDevice* pDevice = nullptr;
+
+        /// Optional render state cache to optimize state loading.
+        IRenderStateCache* pStateCache = nullptr;
+
+        /// Device context that will record the rendering commands.
         IDeviceContext* pDeviceContext = nullptr;
 
         double dElapsedTime = 0;
@@ -78,8 +85,9 @@ public:
         ITextureView* ptex2DShadowMapSRV = nullptr;
     };
 
-    EpipolarLightScattering(IRenderDevice*              in_pDevice,
-                            IDeviceContext*             in_pContext,
+    EpipolarLightScattering(IRenderDevice*              pDevice,
+                            IRenderStateCache*          pStateCache,
+                            IDeviceContext*             pContext,
                             TEXTURE_FORMAT              BackBufferFmt,
                             TEXTURE_FORMAT              DepthBufferFmt,
                             TEXTURE_FORMAT              OffscreenBackBuffer,
@@ -109,7 +117,7 @@ public:
 
     IBuffer*      GetMediaAttribsCB() { return m_pcbMediaAttribs; }
     ITextureView* GetPrecomputedNetDensitySRV() { return m_ptex2DOccludedNetDensityToAtmTopSRV; }
-    ITextureView* GetAmbientSkyLightSRV(IRenderDevice* pDevice, IDeviceContext* pContext);
+    ITextureView* GetAmbientSkyLightSRV(IRenderDevice* pDevice, IRenderStateCache* pStateCache, IDeviceContext* pContext);
 
 private:
     void ReconstructCameraSpaceZ();
@@ -133,10 +141,10 @@ private:
     void FixInscatteringAtDepthBreaks(Uint32 uiMaxStepsAlongRay, EFixInscatteringMode Mode);
     void RenderSampleLocations();
 
-    void PrecomputeOpticalDepthTexture(IRenderDevice* pDevice, IDeviceContext* pContext);
-    void PrecomputeScatteringLUT(IRenderDevice* pDevice, IDeviceContext* pContext);
+    void PrecomputeOpticalDepthTexture(IRenderDevice* pDevice, IRenderStateCache* pStateCache, IDeviceContext* pContext);
+    void PrecomputeScatteringLUT(IRenderDevice* pDevice, IRenderStateCache* pStateCache, IDeviceContext* pContext);
     void CreateRandomSphereSamplingTexture(IRenderDevice* pDevice);
-    void ComputeAmbientSkyLightTexture(IRenderDevice* pDevice, IDeviceContext* pContext);
+    void ComputeAmbientSkyLightTexture(IRenderDevice* pDevice, IRenderStateCache* pStateCache, IDeviceContext* pContext);
     void ComputeScatteringCoefficients(IDeviceContext* pDeviceCtx = nullptr);
     void CreateEpipolarTextures(IRenderDevice* pDevice);
     void CreateSliceEndPointsTexture(IRenderDevice* pDevice);
@@ -236,6 +244,7 @@ private:
         Uint32                                SRBDependencyFlags = 0;
 
         void InitializeFullScreenTriangleTechnique(IRenderDevice*                    pDevice,
+                                                   IRenderStateCache*                pStateCache,
                                                    const char*                       PSOName,
                                                    IShader*                          VertexShader,
                                                    IShader*                          PixelShader,
@@ -247,6 +256,7 @@ private:
                                                    const BlendStateDesc&             BSDesc);
 
         void InitializeFullScreenTriangleTechnique(IRenderDevice*                    pDevice,
+                                                   IRenderStateCache*                pStateCache,
                                                    const char*                       PSOName,
                                                    IShader*                          VertexShader,
                                                    IShader*                          PixelShader,
@@ -257,6 +267,7 @@ private:
                                                    const BlendStateDesc&             BSDesc);
 
         void InitializeComputeTechnique(IRenderDevice*                    pDevice,
+                                        IRenderStateCache*                pStateCache,
                                         const char*                       PSOName,
                                         IShader*                          ComputeShader,
                                         const PipelineResourceLayoutDesc& ResourceLayout);
