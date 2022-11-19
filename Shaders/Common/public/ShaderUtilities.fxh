@@ -22,7 +22,11 @@ float3 TransformTangentSpaceNormalGrad(in float3 dPos_dx,     // Position dx der
 {
 	float3 n = MacroNormal;
 
-    float3 t = (dUV_dy.y * dPos_dx - dUV_dx.y * dPos_dy) / (dUV_dx.x * dUV_dy.y - dUV_dy.x * dUV_dx.y);
+    float d = dUV_dx.x * dUV_dy.y - dUV_dy.x * dUV_dx.y;
+    if (d == 0.0)
+        return n;
+
+    float3 t = (dUV_dy.y * dPos_dx - dUV_dx.y * dPos_dy) / d;
     t = normalize(t - n * dot(n, t));
 
     float3 b = normalize(cross(t, n));
