@@ -107,6 +107,48 @@ float NormalDistribution_GGX(float NdotH, float AlphaRoughness)
     return a2 / (PI * f * f);
 }
 
+
+// Samples a normal from Visible Normal Distribution as described in
+// "Sampling the GGX Distribution of Visible Normals" (2018) by Eric Heitz
+//
+// Notes:
+//      - View direction must be pointing away from the surface.
+//      - Returned normal is in tangent space with Z up.
+//      - Returned normal should be used to reflect the view direction and obtain
+//        the sampling direction.
+//
+// https://jcgt.org/published/0007/04/01/
+// https://github.com/TheRealMJP/DXRPathTracer/blob/master/DXRPathTracer/RayTrace.hlsl
+float3 SmithGGXSampleVisibleNormal(float3 View, // View direction in tangent space
+                                   float  ax,   // X roughness
+                                   float  ay,   // Y roughness
+                                   float  u1,   // Uniform random variable in [0, 1]
+                                   float  u2    // Uniform random variable in [0, 1]
+                                   )
+{
+    // Stretch the view vector so we are sampling as if roughness==1
+    float3 V = normalize(float3(View.x * ax, View.y * ay, View.z));
+
+    // Build an orthonormal basis with V, T, and B
+    float3 T = (V.z < 0.999) ? normalize(cross(V, float3(0, 0, 1))) : float3(1, 0, 0);
+    float3 B = cross(T, V);
+
+    // Choose a point on a disk with each half of the disk weighted
+    // proportionally to its projection onto direction V
+    float a = 1.0 / (1.0 + V.z);
+    float r = sqrt(u1);
+    float phi = (u2 < a) ? (u2 / a) * PI : PI + (u2 - a) / (1.0 - a) * PI;
+    float p1 = r * cos(phi);
+    float p2 = r * sin(phi) * ((u2 < a) ? 1.0 : V.z);
+
+    // Calculate the normal in this stretched tangent space
+    float3 n = p1 * T + p2 * B + sqrt(max(0.0, 1.0 - p1 * p1 - p2 * p2)) * V;
+
+    // Unstretch and normalize the normal
+    return normalize(float3(ax * n.x, ay * n.y, max(0.0, n.z)));
+}
+
+
 // Returns the probability of sampling direction L for the view direction V and normal N
 // using the visible normals distribution.
 // [1] "Sampling the GGX Distribution of Visible Normals" (2018) by Eric Heitz
