@@ -56,16 +56,81 @@ float SmithGGXVisibilityCorrelated(float NdotL, float NdotV, float AlphaRoughnes
     return 0.5 / (GGXV + GGXL);
 }
 
+// Smith GGX shadow-masking function G(v,l,a)
+float SmithGGXShadowMasking(float NdotL, float NdotV, float AlphaRoughness)
+{
+    return 4.0 * NdotL * NdotV * SmithGGXVisibilityCorrelated(NdotL, NdotV, AlphaRoughness);
+}
+
+// Smith GGX masking function G1
+// [1] "Sampling the GGX Distribution of Visible Normals" (2018) by Eric Heitz - eq. (2)
+// https://jcgt.org/published/0007/04/01/
+float SmithGGXMasking(float NdotV, float AlphaRoughness)
+{
+    float a2 = AlphaRoughness * AlphaRoughness;
+
+    // In [1], eq. (2) is defined for the tangent-space view direction V:
+    //
+    //                                        1
+    //      G1(V) = -----------------------------------------------------------
+    //                                    {      (ax*V.x)^2 + (ay*V.y)^2)  }
+    //               1 + 0.5 * ( -1 + sqrt{ 1 + -------------------------- } )
+    //                                    {              V.z^2             }
+    // 
+    // Note that [1] uses notation N for the micronormal, but in our case N is the macronormal,
+    // while micronormal is H (aka the halfway vector).
+    // 
+    // After multiplying both nominator and denominator by 2*V.z and given that in our
+    // case ax = ay = a, we get:
+    // 
+    //                                2 * V.z                                        2 * V.z
+    //      G1(V) = ------------------------------------------- =  ----------------------------------------
+    //               V.z + sqrt{ V.z^2 + a2 * (V.x^2 + V.y^2) }     V.z + sqrt{ V.z^2 + a2 * (1 - V.z^2) }
+    //
+    // Since V.z = NdotV, we finally get:
+
+    float Denom = NdotV + sqrt(a2 + (1.0 - a2) * NdotV * NdotV);
+    return 2.0 * max(NdotV, 0.0) / max(Denom, 1e-6);
+}
+
+
 // The following equation(s) model the distribution of microfacet normals across the area being drawn (aka D())
 // Implementation from "Average Irregularity Representation of a Roughened Surface for Ray Reflection" by T. S. Trowbridge, and K. P. Reitz
 // Follows the distribution function recommended in the SIGGRAPH 2013 course notes from EPIC Games [1], Equation 3.
 float NormalDistribution_GGX(float NdotH, float AlphaRoughness)
 {
+    // [1] "Sampling the GGX Distribution of Visible Normals" (2018) by Eric Heitz - eq. (1)
+    // https://jcgt.org/published/0007/04/01/
+
     float a2 = AlphaRoughness * AlphaRoughness;
     float f = NdotH * NdotH * (a2 - 1.0)  + 1.0;
     return a2 / (PI * f * f);
 }
 
+// Returns the probability of sampling direction L for the view direction V and normal N
+// using the visible normals distribution.
+// [1] "Sampling the GGX Distribution of Visible Normals" (2018) by Eric Heitz
+// https://jcgt.org/published/0007/04/01/
+float SmithGGXSampleDirectionPDF(float3 V, float3 N, float3 L, float AlphaRoughness)
+{
+    // Micronormal is the halfway vector
+    float3 H = normalize(V + L);
+
+    float NdotH = dot(H, N);
+    float NdotV = dot(N, V);
+    float NdotL = dot(N, L);
+    //float VdotH = dot(V, H);
+    if (NdotH <= 0.0 || NdotV <= 0.0 || NdotL <= 0.0)
+        return 0.0;
+
+    // Note that [1] uses notation N for the micronormal, but in our case N is the macronormal,
+    // while micronormal is H (aka the halfway vector).
+    float NDF = NormalDistribution_GGX(NdotH, AlphaRoughness); // (1) - D(N)
+    float G1  = SmithGGXMasking(NdotV, AlphaRoughness);        // (2) - G1(V)
+
+    float VNDF = G1 /* * VdotH */ * NDF / NdotV; // (3) - Dv(N)
+    return  VNDF / (4.0 /* * VdotH */); // (17) - VdotH cancels out
+}
 
 struct AngularInfo
 {
