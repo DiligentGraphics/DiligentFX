@@ -45,7 +45,7 @@ float3 SchlickReflection(float VdotH, float3 Reflectance0, float3 Reflectance90)
 }
 
 // Visibility = G(v,l,a) / (4 * (n,v) * (n,l))
-// see https://google.github.io/filament/Filament.md.html#materialsystem/specularbrdf/geometricshadowing(specularg)
+// see https://google.github.io/filament/Filament.md.html#materialsystem/specularbrdf
 float SmithGGXVisibilityCorrelated(float NdotL, float NdotV, float AlphaRoughness)
 {
     float a2 = AlphaRoughness * AlphaRoughness;
@@ -208,13 +208,14 @@ struct SurfaceReflectanceInfo
     float3 DiffuseColor;
 };
 
-void BRDF(in float3                 PointToLight, 
-          in float3                 Normal,
-          in float3                 View,
-          in SurfaceReflectanceInfo SrfInfo,
-          out float3                DiffuseContrib,
-          out float3                SpecContrib,
-          out float                 NdotL)
+// BRDF with Lambertian diffuse term and Smith-GGX specular term.
+void SmithGGX_BRDF(in float3                 PointToLight, 
+                   in float3                 Normal,
+                   in float3                 View,
+                   in SurfaceReflectanceInfo SrfInfo,
+                   out float3                DiffuseContrib,
+                   out float3                SpecContrib,
+                   out float                 NdotL)
 {
     AngularInfo angularInfo = GetAngularInfo(PointToLight, Normal, View);
 

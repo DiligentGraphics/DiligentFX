@@ -70,7 +70,7 @@
 "    float3 pointToLight = -lightDir;\n"
 "    float3 diffuseContrib, specContrib;\n"
 "    float  NdotL;\n"
-"    BRDF(pointToLight, normal, view, srfInfo, diffuseContrib, specContrib, NdotL);\n"
+"    SmithGGX_BRDF(pointToLight, normal, view, srfInfo, diffuseContrib, specContrib, NdotL);\n"
 "    // Obtain final intensity as reflectance (BRDF) scaled by the energy of the light (cosine law)\n"
 "    float3 shade = (diffuseContrib + specContrib) * NdotL;\n"
 "    return lightColor * shade;\n"

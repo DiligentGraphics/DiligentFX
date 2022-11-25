@@ -70,7 +70,7 @@ float3 GLTF_PBR_ApplyDirectionalLight(float3 lightDir, float3 lightColor, Surfac
     float3 pointToLight = -lightDir;
     float3 diffuseContrib, specContrib;
     float  NdotL;
-    BRDF(pointToLight, normal, view, srfInfo, diffuseContrib, specContrib, NdotL);
+    SmithGGX_BRDF(pointToLight, normal, view, srfInfo, diffuseContrib, specContrib, NdotL);
     // Obtain final intensity as reflectance (BRDF) scaled by the energy of the light (cosine law)
     float3 shade = (diffuseContrib + specContrib) * NdotL;
     return lightColor * shade;
