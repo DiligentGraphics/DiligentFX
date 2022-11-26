@@ -2,7 +2,7 @@
 #define _PBR_COMMON_FXH_
 
 #ifndef PI
-#   define  PI 3.141592653589793
+#    define PI 3.141592653589793
 #endif
 
 // Lambertian diffuse
@@ -20,7 +20,7 @@ float3 LambertianDiffuse(float3 DiffuseColor)
 //
 //
 //           '.       |       .'
-//             '.     |Theta.' 
+//             '.     |Theta.'
 //               '.   |   .'
 //                 '. | .'
 //        ___________'.'___________
@@ -76,13 +76,13 @@ float SmithGGXMasking(float NdotV, float AlphaRoughness)
     //                                    {      (ax*V.x)^2 + (ay*V.y)^2)  }
     //               1 + 0.5 * ( -1 + sqrt{ 1 + -------------------------- } )
     //                                    {              V.z^2             }
-    // 
+    //
     // Note that [1] uses notation N for the micronormal, but in our case N is the macronormal,
     // while micronormal is H (aka the halfway vector).
-    // 
+    //
     // After multiplying both nominator and denominator by 2*V.z and given that in our
     // case ax = ay = a, we get:
-    // 
+    //
     //                                2 * V.z                                        2 * V.z
     //      G1(V) = ------------------------------------------- =  ----------------------------------------
     //               V.z + sqrt{ V.z^2 + a2 * (V.x^2 + V.y^2) }     V.z + sqrt{ V.z^2 + a2 * (1 - V.z^2) }
@@ -102,8 +102,13 @@ float NormalDistribution_GGX(float NdotH, float AlphaRoughness)
     // [1] "Sampling the GGX Distribution of Visible Normals" (2018) by Eric Heitz - eq. (1)
     // https://jcgt.org/published/0007/04/01/
 
-    float a2 = AlphaRoughness * AlphaRoughness;
-    float f = NdotH * NdotH * (a2 - 1.0)  + 1.0;
+    // Make sure we reasonably handle AlphaRoughness == 0
+    // (which corresponds to delta function)
+    AlphaRoughness = max(AlphaRoughness, 1e-3);
+
+    float a2  = AlphaRoughness * AlphaRoughness;
+    float nh2 = NdotH * NdotH;
+    float f   = nh2 * a2 + (1.0 - nh2);
     return a2 / (PI * f * f);
 }
 
@@ -124,7 +129,7 @@ float3 SmithGGXSampleVisibleNormal(float3 View, // View direction in tangent spa
                                    float  ay,   // Y roughness
                                    float  u1,   // Uniform random variable in [0, 1]
                                    float  u2    // Uniform random variable in [0, 1]
-                                   )
+)
 {
     // Stretch the view vector so we are sampling as if roughness==1
     float3 V = normalize(float3(View.x * ax, View.y * ay, View.z));
@@ -176,11 +181,11 @@ float SmithGGXSampleDirectionPDF(float3 V, float3 N, float3 L, float AlphaRoughn
 
 struct AngularInfo
 {
-    float NdotL;   // cos angle between normal and light direction
-    float NdotV;   // cos angle between normal and view direction
-    float NdotH;   // cos angle between normal and half vector
-    float LdotH;   // cos angle between light direction and half vector
-    float VdotH;   // cos angle between view direction and half vector
+    float NdotL; // cos angle between normal and light direction
+    float NdotV; // cos angle between normal and view direction
+    float NdotH; // cos angle between normal and half vector
+    float LdotH; // cos angle between light direction and half vector
+    float VdotH; // cos angle between view direction and half vector
 };
 
 AngularInfo GetAngularInfo(float3 PointToLight, float3 Normal, float3 View)
@@ -209,7 +214,7 @@ struct SurfaceReflectanceInfo
 };
 
 // BRDF with Lambertian diffuse term and Smith-GGX specular term.
-void SmithGGX_BRDF(in float3                 PointToLight, 
+void SmithGGX_BRDF(in float3                 PointToLight,
                    in float3                 Normal,
                    in float3                 View,
                    in SurfaceReflectanceInfo SrfInfo,
@@ -235,7 +240,7 @@ void SmithGGX_BRDF(in float3                 PointToLight,
         // It is not a mistake that AlphaRoughness = PerceptualRoughness ^ 2 and that
         // SmithGGXVisibilityCorrelated and NormalDistribution_GGX then use a2 = AlphaRoughness ^ 2.
         // See eq. 3 in https://blog.selfshadow.com/publications/s2013-shading-course/karis/s2013_pbs_epic_notes_v2.pdf
-        float AlphaRoughness = SrfInfo.PerceptualRoughness * SrfInfo.PerceptualRoughness;
+        float  AlphaRoughness = SrfInfo.PerceptualRoughness * SrfInfo.PerceptualRoughness;
         float  D   = NormalDistribution_GGX(angularInfo.NdotH, AlphaRoughness);
         float  Vis = SmithGGXVisibilityCorrelated(angularInfo.NdotL, angularInfo.NdotV, AlphaRoughness);
         float3 F   = SchlickReflection(angularInfo.VdotH, SrfInfo.Reflectance0, SrfInfo.Reflectance90);
