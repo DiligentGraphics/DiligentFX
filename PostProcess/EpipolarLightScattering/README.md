@@ -3,7 +3,7 @@
 ![](media/LightScattering.png)
 
 This post-processing effect renders realistic high-quality light scattering effects and is 
-based on this [article by Intel](https://software.intel.com/en-us/blogs/2013/09/19/otdoor-light-scattering-sample-update).
+based on this [sample from Intel](https://github.com/GameTechDev/OutdoorLightScattering).
 The effect works by smartly placing expensive ray-marching samples along the epipolar lines
 that start at the light source and interpolating the radiance between these samples.
 
