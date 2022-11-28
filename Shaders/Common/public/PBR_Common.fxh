@@ -56,7 +56,7 @@ float SmithGGXVisibilityCorrelated(float NdotL, float NdotV, float AlphaRoughnes
     return 0.5 / (GGXV + GGXL);
 }
 
-// Smith GGX shadow-masking function G(v,l,a)
+// Smith GGX shadow-masking function G(v,l,a) (aka G2)
 float SmithGGXShadowMasking(float NdotL, float NdotV, float AlphaRoughness)
 {
     return 4.0 * NdotL * NdotV * SmithGGXVisibilityCorrelated(NdotL, NdotV, AlphaRoughness);
@@ -114,16 +114,16 @@ float NormalDistribution_GGX(float NdotH, float AlphaRoughness)
 
 
 // Samples a normal from Visible Normal Distribution as described in
-// "Sampling the GGX Distribution of Visible Normals" (2018) by Eric Heitz
+// [1] "A Simpler and Exact Sampling Routine for the GGX Distribution of Visible Normals" (2017) by Eric Heitz
+//     https://hal.archives-ouvertes.fr/hal-01509746/document
+// [2] "Sampling the GGX Distribution of Visible Normals" (2018) by Eric Heitz
+//     https://jcgt.org/published/0007/04/01/
 //
 // Notes:
 //      - View direction must be pointing away from the surface.
 //      - Returned normal is in tangent space with Z up.
 //      - Returned normal should be used to reflect the view direction and obtain
 //        the sampling direction.
-//
-// https://jcgt.org/published/0007/04/01/
-// https://github.com/TheRealMJP/DXRPathTracer/blob/master/DXRPathTracer/RayTrace.hlsl
 float3 SmithGGXSampleVisibleNormal(float3 View, // View direction in tangent space
                                    float  ax,   // X roughness
                                    float  ay,   // Y roughness
@@ -132,11 +132,16 @@ float3 SmithGGXSampleVisibleNormal(float3 View, // View direction in tangent spa
 )
 {
     // Stretch the view vector so we are sampling as if roughness==1
-    float3 V = normalize(float3(View.x * ax, View.y * ay, View.z));
+    float3 V = normalize(View * float3(ax, ay, 1.0));
 
-    // Build an orthonormal basis with V, T, and B
-    float3 T = (V.z < 0.999) ? normalize(cross(V, float3(0, 0, 1))) : float3(1, 0, 0);
-    float3 B = cross(T, V);
+#if 1
+    // Technique from [1]
+    // Note: while [2] claims to provide a better parameterization, it produces
+    //       subjectively noisier images, so we will stick with method from [1].
+
+    // Build an orthonormal basis with V, T1, and T2
+    float3 T1 = (V.z < 0.999) ? normalize(cross(V, float3(0.0, 0.0, 1.0))) : float3(1.0, 0.0, 0.0);
+    float3 T2 = cross(T1, V);
 
     // Choose a point on a disk with each half of the disk weighted
     // proportionally to its projection onto direction V
@@ -145,14 +150,32 @@ float3 SmithGGXSampleVisibleNormal(float3 View, // View direction in tangent spa
     float phi = (u2 < a) ? (u2 / a) * PI : PI + (u2 - a) / (1.0 - a) * PI;
     float p1 = r * cos(phi);
     float p2 = r * sin(phi) * ((u2 < a) ? 1.0 : V.z);
+#else
+    // Technique from [2]
+    // Note: [1] uses earlier parameterization that cannot be used with view directions located in the lower
+    //       hemisphere (View.z < 0). Though this is not a problem for classic microfacet BSDF models,
+    //       [2] provides a better approximation that is not subject to this limitation.
 
-    // Calculate the normal in this stretched tangent space
-    float3 n = p1 * T + p2 * B + sqrt(max(0.0, 1.0 - p1 * p1 - p2 * p2)) * V;
+    // Build orthonormal basis (with special case if cross product is zero) (Section 4.1)
+    float lensq = dot(V.xy, V.xy);
+    float3 T1 = lensq > 0.0 ? float3(-V.y, V.x, 0.0) / sqrt(lensq) : float3(1.0, 0.0, 0.0);
+    float3 T2 = cross(V, T1);
 
-    // Unstretch and normalize the normal
-    return normalize(float3(ax * n.x, ay * n.y, max(0.0, n.z)));
+    // Sample the projected area (Section 4.2)
+    float r   = sqrt(u1);
+    float phi = 2.0 * PI * u2;
+    float p1 = r * cos(phi);
+    float p2 = r * sin(phi);
+    float s  = 0.5 * (1.0 + V.z);
+    p2 = (1.0 - s) * sqrt(1.0 - p1 * p1) + s * p2;
+#endif
+
+    // Calculate the normal in the stretched tangent space
+    float3 N = p1 * T1 + p2 * T2 + sqrt(max(0.0, 1.0 - p1 * p1 - p2 * p2)) * V;
+
+    // Transform the normal back to the ellipsoid configuration
+    return normalize(float3(ax * N.x, ay * N.y, max(0.0, N.z)));
 }
-
 
 // Returns the probability of sampling direction L for the view direction V and normal N
 // using the visible normals distribution.
