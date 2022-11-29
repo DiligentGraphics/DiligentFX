@@ -44,10 +44,18 @@ float3 SchlickReflection(float VdotH, float3 Reflectance0, float3 Reflectance90)
     return SCHLICK_REFLECTION(VdotH, Reflectance0, Reflectance90);
 }
 
-// Visibility = G(v,l,a) / (4 * (n,v) * (n,l))
+// Visibility = G2(v,l,a) / (4 * (n,v) * (n,l))
 // see https://google.github.io/filament/Filament.md.html#materialsystem/specularbrdf
 float SmithGGXVisibilityCorrelated(float NdotL, float NdotV, float AlphaRoughness)
 {
+    // G1 (masking) is % microfacets visible in 1 direction
+    // G2 (shadow-masking) is % microfacets visible in 2 directions
+    // If uncorrelated:
+    //    G2(NdotL, NdotV) = G1(NdotL) * G1(NdotV)
+    //    Less realistic as higher points are more likely visible to both L and V
+    //
+    // https://ubm-twvideo01.s3.amazonaws.com/o1/vault/gdc2017/Presentations/Hammon_Earl_PBR_Diffuse_Lighting.pdf
+
     float a2 = AlphaRoughness * AlphaRoughness;
 
     float GGXV = NdotL * sqrt(max(NdotV * NdotV * (1.0 - a2) + a2, 1e-7));
@@ -56,7 +64,7 @@ float SmithGGXVisibilityCorrelated(float NdotL, float NdotV, float AlphaRoughnes
     return 0.5 / (GGXV + GGXL);
 }
 
-// Smith GGX shadow-masking function G(v,l,a) (aka G2)
+// Smith GGX shadow-masking function G2(v,l,a)
 float SmithGGXShadowMasking(float NdotL, float NdotV, float AlphaRoughness)
 {
     return 4.0 * NdotL * NdotV * SmithGGXVisibilityCorrelated(NdotL, NdotV, AlphaRoughness);
@@ -96,10 +104,10 @@ float SmithGGXMasking(float NdotV, float AlphaRoughness)
 
 // The following equation(s) model the distribution of microfacet normals across the area being drawn (aka D())
 // Implementation from "Average Irregularity Representation of a Roughened Surface for Ray Reflection" by T. S. Trowbridge, and K. P. Reitz
-// Follows the distribution function recommended in the SIGGRAPH 2013 course notes from EPIC Games [1], Equation 3.
+// Follows the distribution function recommended in the SIGGRAPH 2013 course notes from EPIC Games, Equation 3.
 float NormalDistribution_GGX(float NdotH, float AlphaRoughness)
 {
-    // [1] "Sampling the GGX Distribution of Visible Normals" (2018) by Eric Heitz - eq. (1)
+    // "Sampling the GGX Distribution of Visible Normals" (2018) by Eric Heitz - eq. (1)
     // https://jcgt.org/published/0007/04/01/
 
     // Make sure we reasonably handle AlphaRoughness == 0
@@ -253,12 +261,12 @@ void SmithGGX_BRDF(in float3                 PointToLight,
     // If one of the dot products is larger than zero, no division by zero can happen. Avoids black borders.
     if (angularInfo.NdotL > 0.0 || angularInfo.NdotV > 0.0)
     {
-        //           D(h,a) * G(v,l,a) * F(v,h,f0)
+        //           D(h,a) * G2(v,l,a) * F(v,h,f0)
         // f(v,l) = -------------------------------- = D(h,a) * Vis(v,l,a) * F(v,h,f0)
         //               4 * (n,v) * (n,l)
         // where
         //
-        // Vis(v,l,a) = G(v,l,a) / (4 * (n,v) * (n,l))
+        // Vis(v,l,a) = G2(v,l,a) / (4 * (n,v) * (n,l))
 
         // It is not a mistake that AlphaRoughness = PerceptualRoughness ^ 2 and that
         // SmithGGXVisibilityCorrelated and NormalDistribution_GGX then use a2 = AlphaRoughness ^ 2.
