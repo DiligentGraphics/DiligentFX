@@ -47,7 +47,7 @@ const SamplerDesc GLTF_PBR_Renderer::CreateInfo::DefaultSampler = Sam_LinearWrap
 GLTF_PBR_Renderer::GLTF_PBR_Renderer(IRenderDevice*     pDevice,
                                      IRenderStateCache* pStateCache,
                                      IDeviceContext*    pCtx,
-                                     const CreateInfo&  CI, 
+                                     const CreateInfo&  CI,
                                      int                numBRDFSamples) :
     m_Settings{CI}
 {

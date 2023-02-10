@@ -225,8 +225,8 @@ public:
                             IRenderStateCache* pStateCache,
                             IDeviceContext*    pCtx,
                             ITextureView*      pEnvironmentMap,
-                            int                numPhiSamples = 64, 
-                            int                numThetaSamples = 32, 
+                            int                numPhiSamples   = 64,
+                            int                numThetaSamples = 32,
                             int                optimizeSamples = 1);
 
     // clang-format off
