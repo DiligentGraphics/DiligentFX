@@ -109,7 +109,8 @@ public:
     GLTF_PBR_Renderer(IRenderDevice*     pDevice,
                       IRenderStateCache* pStateCache,
                       IDeviceContext*    pCtx,
-                      const CreateInfo&  CI);
+                      const CreateInfo&  CI,
+                      int                numBRDFSamples = 512);
 
     /// Rendering information
     struct RenderInfo
@@ -223,7 +224,10 @@ public:
     void PrecomputeCubemaps(IRenderDevice*     pDevice,
                             IRenderStateCache* pStateCache,
                             IDeviceContext*    pCtx,
-                            ITextureView*      pEnvironmentMap);
+                            ITextureView*      pEnvironmentMap,
+                            int                numPhiSamples = 64, 
+                            int                numThetaSamples = 32, 
+                            int                optimizeSamples = 1);
 
     // clang-format off
     ITextureView* GetIrradianceCubeSRV()    { return m_pIrradianceCubeSRV; }
@@ -292,7 +296,8 @@ public:
 private:
     void PrecomputeBRDF(IRenderDevice*     pDevice,
                         IRenderStateCache* pStateCache,
-                        IDeviceContext*    pCtx);
+                        IDeviceContext*    pCtx,
+                        int                numBRDFSamples = 512);
 
     void CreatePSO(IRenderDevice* pDevice, IRenderStateCache* pStateCache);
 
