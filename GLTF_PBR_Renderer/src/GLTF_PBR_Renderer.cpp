@@ -47,13 +47,12 @@ const SamplerDesc GLTF_PBR_Renderer::CreateInfo::DefaultSampler = Sam_LinearWrap
 GLTF_PBR_Renderer::GLTF_PBR_Renderer(IRenderDevice*     pDevice,
                                      IRenderStateCache* pStateCache,
                                      IDeviceContext*    pCtx,
-                                     const CreateInfo&  CI,
-                                     int                numBRDFSamples) :
+                                     const CreateInfo&  CI) :
     m_Settings{CI}
 {
     if (m_Settings.UseIBL)
     {
-        PrecomputeBRDF(pDevice, pStateCache, pCtx, numBRDFSamples);
+        PrecomputeBRDF(pDevice, pStateCache, pCtx, m_Settings.NumBRDFSamples);
 
         TextureDesc TexDesc;
         TexDesc.Name      = "Irradiance cube map for GLTF renderer";
@@ -157,7 +156,7 @@ GLTF_PBR_Renderer::GLTF_PBR_Renderer(IRenderDevice*     pDevice,
 void GLTF_PBR_Renderer::PrecomputeBRDF(IRenderDevice*     pDevice,
                                        IRenderStateCache* pStateCache,
                                        IDeviceContext*    pCtx,
-                                       int                numBRDFSamples)
+                                       Uint32             NumBRDFSamples)
 {
     RenderDeviceWithCache<false> Device{pDevice, pStateCache};
 
@@ -193,7 +192,7 @@ void GLTF_PBR_Renderer::PrecomputeBRDF(IRenderDevice*     pDevice,
         ShaderCI.pShaderSourceStreamFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();
 
         ShaderMacroHelper Macros;
-        Macros.AddShaderMacro("NUM_SAMPLES", numBRDFSamples);
+        Macros.AddShaderMacro("NUM_SAMPLES", NumBRDFSamples);
         ShaderCI.Macros = Macros;
 
         RefCntAutoPtr<IShader> pVS;
@@ -548,9 +547,9 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*     pDevice,
                                            IRenderStateCache* pStateCache,
                                            IDeviceContext*    pCtx,
                                            ITextureView*      pEnvironmentMap,
-                                           int                numPhiSamples,
-                                           int                numThetaSamples,
-                                           int                optimizeSamples)
+                                           Uint32             NumPhiSamples,
+                                           Uint32             NumThetaSamples,
+                                           bool               OptimizeSamples)
 {
     if (!m_Settings.UseIBL)
     {
@@ -582,8 +581,8 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*     pDevice,
         ShaderCI.pShaderSourceStreamFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();
 
         ShaderMacroHelper Macros;
-        Macros.AddShaderMacro("NUM_PHI_SAMPLES", numPhiSamples);
-        Macros.AddShaderMacro("NUM_THETA_SAMPLES", numThetaSamples);
+        Macros.AddShaderMacro("NUM_PHI_SAMPLES", NumPhiSamples);
+        Macros.AddShaderMacro("NUM_THETA_SAMPLES", NumThetaSamples);
         ShaderCI.Macros = Macros;
         RefCntAutoPtr<IShader> pVS;
         {
@@ -651,7 +650,7 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*     pDevice,
         ShaderCI.pShaderSourceStreamFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();
 
         ShaderMacroHelper Macros;
-        Macros.AddShaderMacro("OPTIMIZE_SAMPLES", optimizeSamples);
+        Macros.AddShaderMacro("OPTIMIZE_SAMPLES", OptimizeSamples ? 1 : 0);
         ShaderCI.Macros = Macros;
 
         RefCntAutoPtr<IShader> pVS;

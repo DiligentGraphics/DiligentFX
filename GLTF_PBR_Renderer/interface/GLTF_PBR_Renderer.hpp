@@ -103,14 +103,16 @@ public:
 
         /// Maximum number of joints
         Uint32 MaxJointCount = 64;
+
+        /// Number of samples for BRDF LUT creation
+        Uint32 NumBRDFSamples = 512;
     };
 
     /// Initializes the renderer
     GLTF_PBR_Renderer(IRenderDevice*     pDevice,
                       IRenderStateCache* pStateCache,
                       IDeviceContext*    pCtx,
-                      const CreateInfo&  CI,
-                      int                numBRDFSamples = 512);
+                      const CreateInfo&  CI);
 
     /// Rendering information
     struct RenderInfo
@@ -225,9 +227,9 @@ public:
                             IRenderStateCache* pStateCache,
                             IDeviceContext*    pCtx,
                             ITextureView*      pEnvironmentMap,
-                            int                numPhiSamples   = 64,
-                            int                numThetaSamples = 32,
-                            int                optimizeSamples = 1);
+                            Uint32             NumPhiSamples   = 64,
+                            Uint32             NumThetaSamples = 32,
+                            bool               OptimizeSamples = true);
 
     // clang-format off
     ITextureView* GetIrradianceCubeSRV()    { return m_pIrradianceCubeSRV; }
@@ -297,7 +299,7 @@ private:
     void PrecomputeBRDF(IRenderDevice*     pDevice,
                         IRenderStateCache* pStateCache,
                         IDeviceContext*    pCtx,
-                        int                numBRDFSamples = 512);
+                        Uint32             NumBRDFSamples = 512);
 
     void CreatePSO(IRenderDevice* pDevice, IRenderStateCache* pStateCache);
 
