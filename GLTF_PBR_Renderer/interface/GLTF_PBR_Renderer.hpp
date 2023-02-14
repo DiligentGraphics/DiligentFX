@@ -103,6 +103,9 @@ public:
 
         /// Maximum number of joints
         Uint32 MaxJointCount = 64;
+
+        /// Number of samples for BRDF LUT creation
+        Uint32 NumBRDFSamples = 512;
     };
 
     /// Initializes the renderer
@@ -223,7 +226,10 @@ public:
     void PrecomputeCubemaps(IRenderDevice*     pDevice,
                             IRenderStateCache* pStateCache,
                             IDeviceContext*    pCtx,
-                            ITextureView*      pEnvironmentMap);
+                            ITextureView*      pEnvironmentMap,
+                            Uint32             NumPhiSamples   = 64,
+                            Uint32             NumThetaSamples = 32,
+                            bool               OptimizeSamples = true);
 
     // clang-format off
     ITextureView* GetIrradianceCubeSRV()    { return m_pIrradianceCubeSRV; }
@@ -292,7 +298,8 @@ public:
 private:
     void PrecomputeBRDF(IRenderDevice*     pDevice,
                         IRenderStateCache* pStateCache,
-                        IDeviceContext*    pCtx);
+                        IDeviceContext*    pCtx,
+                        Uint32             NumBRDFSamples = 512);
 
     void CreatePSO(IRenderDevice* pDevice, IRenderStateCache* pStateCache);
 

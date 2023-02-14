@@ -1,7 +1,9 @@
 #include "FullScreenTriangleVSOutput.fxh"
 #include "GLTF_PBR_PrecomputeCommon.fxh"
 
-#define NUM_SAMPLES 512u
+#ifndef NUM_SAMPLES
+#    define NUM_SAMPLES 512u
+#endif
 
 float2 IntegrateBRDF( float Roughness, float NoV, uint NumSamples )
 {
