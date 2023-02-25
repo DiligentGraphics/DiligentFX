@@ -715,7 +715,7 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*     pDevice,
 
 
     // clang-format off
-	const std::array<float4x4, 6> Matrices =
+    const std::array<float4x4, 6> Matrices =
     {
 /* +X */ float4x4::RotationY(+PI_F / 2.f),
 /* -X */ float4x4::RotationY(-PI_F / 2.f),
@@ -723,7 +723,7 @@ void GLTF_PBR_Renderer::PrecomputeCubemaps(IRenderDevice*     pDevice,
 /* -Y */ float4x4::RotationX(+PI_F / 2.f),
 /* +Z */ float4x4::Identity(),
 /* -Z */ float4x4::RotationY(PI_F)
-	};
+    };
     // clang-format on
 
     pCtx->SetPipelineState(m_pPrecomputeIrradianceCubePSO);
@@ -852,8 +852,8 @@ void GLTF_PBR_Renderer::Begin(IRenderDevice*              pDevice,
 
     std::array<IBuffer*, 2> pVBs =
         {
-            CacheUseInfo.pResourceMgr->GetBuffer(CacheUseInfo.VertexBuffer0Idx, pDevice, pCtx),
-            CacheUseInfo.pResourceMgr->GetBuffer(CacheUseInfo.VertexBuffer1Idx, pDevice, pCtx) //
+            CacheUseInfo.pResourceMgr->GetBuffer(CacheUseInfo.VertexBufferIdx[0], pDevice, pCtx),
+            CacheUseInfo.pResourceMgr->GetBuffer(CacheUseInfo.VertexBufferIdx[1], pDevice, pCtx) //
         };
     pCtx->SetVertexBuffers(0, static_cast<Uint32>(pVBs.size()), pVBs.data(), nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION, SET_VERTEX_BUFFERS_FLAG_RESET);
 
@@ -877,12 +877,12 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*        pCtx,
     {
         std::array<IBuffer*, 2> pVBs =
             {
-                GLTFModel.GetBuffer(GLTF::Model::BUFFER_ID_VERTEX_BASIC_ATTRIBS),
-                GLTFModel.GetBuffer(GLTF::Model::BUFFER_ID_VERTEX_SKIN_ATTRIBS) //
+                GLTFModel.GetVertexBuffer(GLTF::Model::VERTEX_BUFFER_ID_BASIC_ATTRIBS),
+                GLTFModel.GetVertexBuffer(GLTF::Model::VERTEX_BUFFER_ID_SKIN_ATTRIBS) //
             };
         pCtx->SetVertexBuffers(0, static_cast<Uint32>(pVBs.size()), pVBs.data(), nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION, SET_VERTEX_BUFFERS_FLAG_RESET);
 
-        if (auto* pIndexBuffer = GLTFModel.GetBuffer(GLTF::Model::BUFFER_ID_INDEX))
+        if (auto* pIndexBuffer = GLTFModel.GetIndexBuffer())
         {
             pCtx->SetIndexBuffer(pIndexBuffer, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         }

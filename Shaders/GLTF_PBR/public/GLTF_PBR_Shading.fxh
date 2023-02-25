@@ -48,14 +48,14 @@ float3 SRGBtoLINEAR(float3 srgbIn)
 {
 #ifdef GLTF_PBR_MANUAL_SRGB
 #   ifdef SRGB_FAST_APPROXIMATION
-    	float3 linOut = pow(saturate(srgbIn.xyz), float3(2.2, 2.2, 2.2));
+        float3 linOut = pow(saturate(srgbIn.xyz), float3(2.2, 2.2, 2.2));
 #   else
-	    float3 bLess  = step(float3(0.04045, 0.04045, 0.04045), srgbIn.xyz);
-	    float3 linOut = mix( srgbIn.xyz/12.92, pow(saturate((srgbIn.xyz + float3(0.055, 0.055, 0.055)) / 1.055), float3(2.4, 2.4, 2.4)), bLess );
+        float3 bLess  = step(float3(0.04045, 0.04045, 0.04045), srgbIn.xyz);
+        float3 linOut = mix( srgbIn.xyz/12.92, pow(saturate((srgbIn.xyz + float3(0.055, 0.055, 0.055)) / 1.055), float3(2.4, 2.4, 2.4)), bLess );
 #   endif
-	    return linOut;
+        return linOut;
 #else
-	return srgbIn;
+    return srgbIn;
 #endif
 }
 
