@@ -28,14 +28,14 @@ GLTF_TransformedVertex GLTF_TransformVertex(in float3    Pos,
 {
     GLTF_TransformedVertex TransformedVert;
     
-	float4 locPos = mul(Transform, float4(Pos, 1.0));
+    float4 locPos = mul(Transform, float4(Pos, 1.0));
     float3x3 NormalTransform = float3x3(Transform[0].xyz, Transform[1].xyz, Transform[2].xyz);
     NormalTransform = InverseTranspose3x3(NormalTransform);
     Normal = mul(NormalTransform, Normal);
     float NormalLen = length(Normal);
     TransformedVert.Normal = Normal / max(NormalLen, 1e-5);
 
-	TransformedVert.WorldPos = locPos.xyz / locPos.w;
+    TransformedVert.WorldPos = locPos.xyz / locPos.w;
 
     return TransformedVert;
 }
