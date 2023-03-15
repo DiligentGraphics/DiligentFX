@@ -207,15 +207,17 @@ public:
 
     /// \param [in] pCtx           - Device context to record rendering commands to.
     /// \param [in] GLTFModel      - GLTF model to render.
+    /// \param [in] Transforms     - The model transforms.
     /// \param [in] RenderParams   - Render parameters.
     /// \param [in] pModelBindings - The model's shader resource binding information.
     /// \param [in] pCacheBindings - Shader resource cache binding information, if the
     ///                              model has been created using the cache.
-    void Render(IDeviceContext*        pCtx,
-                GLTF::Model&           GLTFModel,
-                const RenderInfo&      RenderParams,
-                ModelResourceBindings* pModelBindings,
-                ResourceCacheBindings* pCacheBindings = nullptr);
+    void Render(IDeviceContext*              pCtx,
+                const GLTF::Model&           GLTFModel,
+                const GLTF::ModelTransforms& Transforms,
+                const RenderInfo&            RenderParams,
+                ModelResourceBindings*       pModelBindings,
+                ResourceCacheBindings*       pCacheBindings = nullptr);
 
     /// Creates resource bindings for a given GLTF model
     ModelResourceBindings CreateResourceBindings(GLTF::Model& GLTFModel,

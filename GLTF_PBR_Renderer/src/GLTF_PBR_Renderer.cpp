@@ -861,15 +861,22 @@ void GLTF_PBR_Renderer::Begin(IRenderDevice*              pDevice,
     pCtx->SetIndexBuffer(pIndexBuffer, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 }
 
-void GLTF_PBR_Renderer::Render(IDeviceContext*        pCtx,
-                               GLTF::Model&           GLTFModel,
-                               const RenderInfo&      RenderParams,
-                               ModelResourceBindings* pModelBindings,
-                               ResourceCacheBindings* pCacheBindings)
+void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
+                               const GLTF::Model&           GLTFModel,
+                               const GLTF::ModelTransforms& Transforms,
+                               const RenderInfo&            RenderParams,
+                               ModelResourceBindings*       pModelBindings,
+                               ResourceCacheBindings*       pCacheBindings)
 {
     DEV_CHECK_ERR((pModelBindings != nullptr) ^ (pCacheBindings != nullptr), "Either model bindings or cache bindings must not be null");
     DEV_CHECK_ERR(pModelBindings == nullptr || pModelBindings->MaterialSRB.size() == GLTFModel.Materials.size(),
                   "The number of material shader resource bindings is not consistent with the number of materials");
+
+    if (!GLTFModel.CompatibleWithTransforms(Transforms))
+    {
+        UNEXPECTED("Model transforms are incompatible with the model");
+        return;
+    }
 
     m_RenderParams = RenderParams;
 
@@ -905,12 +912,15 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*        pCtx,
 
     for (auto AlphaMode : AlphaModes)
     {
-        for (const auto* pNode : GLTFModel.LinearNodes)
+        for (size_t i = 0; i < GLTFModel.LinearNodes.size(); ++i)
         {
-            if (!pNode->pMesh)
+            const auto& Node = GLTFModel.LinearNodes[i];
+            if (!Node.pMesh)
                 continue;
 
-            const auto& Mesh = *pNode->pMesh;
+            const auto& Mesh = *Node.pMesh;
+            VERIFY_EXPR(Node.Index == static_cast<int>(i));
+            const auto& NodeGlobalMatrix = Transforms.NodeGlobalMatrices[i];
 
             // Render mesh primitives
             for (const auto& primitive : Mesh.Primitives)
@@ -960,25 +970,31 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*        pCtx,
                     }
                 }
 
-                size_t JointCount = Mesh.Transforms.jointMatrices.size();
-                if (JointCount > m_Settings.MaxJointCount)
+                size_t JointCount = 0;
+                if (Node.SkinTransformsIndex >= 0 && Node.SkinTransformsIndex < static_cast<int>(Transforms.Skins.size()))
                 {
-                    LOG_WARNING_MESSAGE("The number of joints in the mesh (", JointCount, ") exceeds the maximum number (", m_Settings.MaxJointCount,
-                                        ") reserved in the buffer. Increase MaxJointCount when initializing the renderer.");
-                    JointCount = m_Settings.MaxJointCount;
+                    const auto& JointMatrices = Transforms.Skins[Node.SkinTransformsIndex].JointMatrices;
+
+                    JointCount = JointMatrices.size();
+                    if (JointCount > m_Settings.MaxJointCount)
+                    {
+                        LOG_WARNING_MESSAGE("The number of joints in the mesh (", JointCount, ") exceeds the maximum number (", m_Settings.MaxJointCount,
+                                            ") reserved in the buffer. Increase MaxJointCount when initializing the renderer.");
+                        JointCount = m_Settings.MaxJointCount;
+                    }
+
+                    if (JointCount != 0 && pLastAnimatedMesh != &Mesh)
+                    {
+                        MapHelper<float4x4> pJoints{pCtx, m_JointsBuffer, MAP_WRITE, MAP_FLAG_DISCARD};
+                        memcpy(pJoints, JointMatrices.data(), JointCount * sizeof(float4x4));
+                        pLastAnimatedMesh = &Mesh;
+                    }
                 }
 
                 {
                     MapHelper<GLTFNodeShaderTransforms> pTransforms{pCtx, m_TransformsCB, MAP_WRITE, MAP_FLAG_DISCARD};
-                    pTransforms->NodeMatrix = Mesh.Transforms.matrix * RenderParams.ModelTransform;
+                    pTransforms->NodeMatrix = NodeGlobalMatrix * RenderParams.ModelTransform;
                     pTransforms->JointCount = static_cast<int>(JointCount);
-                }
-
-                if (JointCount != 0 && pLastAnimatedMesh != &Mesh)
-                {
-                    MapHelper<float4x4> pJoints{pCtx, m_JointsBuffer, MAP_WRITE, MAP_FLAG_DISCARD};
-                    memcpy(pJoints, Mesh.Transforms.jointMatrices.data(), JointCount * sizeof(float4x4));
-                    pLastAnimatedMesh = &Mesh;
                 }
 
                 {
