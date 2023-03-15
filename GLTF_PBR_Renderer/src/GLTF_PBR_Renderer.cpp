@@ -905,9 +905,8 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
             GLTF::Material::ALPHA_MODE_BLEND,  // Transparent primitives - last (TODO: depth sorting)
         };
 
-    const GLTF::Mesh*       pLastAnimatedMesh = nullptr;
-    IPipelineState*         pCurrPSO          = nullptr;
-    IShaderResourceBinding* pCurrSRB          = nullptr;
+    IPipelineState*         pCurrPSO = nullptr;
+    IShaderResourceBinding* pCurrSRB = nullptr;
     PSOKey                  CurrPSOKey;
 
     for (auto AlphaMode : AlphaModes)
@@ -983,11 +982,10 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
                         JointCount = m_Settings.MaxJointCount;
                     }
 
-                    if (JointCount != 0 && pLastAnimatedMesh != &Mesh)
+                    if (JointCount != 0)
                     {
                         MapHelper<float4x4> pJoints{pCtx, m_JointsBuffer, MAP_WRITE, MAP_FLAG_DISCARD};
                         memcpy(pJoints, JointMatrices.data(), JointCount * sizeof(float4x4));
-                        pLastAnimatedMesh = &Mesh;
                     }
                 }
 
