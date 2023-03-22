@@ -2118,45 +2118,52 @@ void EpipolarLightScattering::PrepareForNewFrame(FrameAttribs&                  
     DEV_CHECK_ERR(frameAttribs.ptex2DSrcDepthBufferSRV, "Source depth buffer SRV must not be null");
     DEV_CHECK_ERR(frameAttribs.ptex2DDstColorBufferRTV, "Destination color buffer RTV must not be null");
     DEV_CHECK_ERR(frameAttribs.ptex2DDstDepthBufferDSV, "Source depth buffer DSV must not be null");
-    DEV_CHECK_ERR(frameAttribs.ptex2DShadowMapSRV, "Shadow map SRV must not be null");
+    DEV_CHECK_ERR(frameAttribs.ptex2DShadowMapSRV || !PPAttribs.bEnableLightShafts, "Shadow map SRV must not be null");
 
-    DEV_CHECK_ERR(PPAttribs.uiNumEpipolarSlices > 0, "Number of epipolar slices must not be 0");
-    DEV_CHECK_ERR(PPAttribs.uiMaxSamplesInSlice > 0, "Max samples in slice must not be 0");
-    DEV_CHECK_ERR(PPAttribs.uiInitialSampleStepInSlice > 0, "Initial sample step in slice must not be 0");
-    DEV_CHECK_ERR(IsPowerOfTwo(PPAttribs.uiInitialSampleStepInSlice), "Initial sample step in slice (", PPAttribs.uiInitialSampleStepInSlice, ") must be power of two");
-    DEV_CHECK_ERR(PPAttribs.uiEpipoleSamplingDensityFactor > 0, "Epipole sampling density factor must not be 0");
-    DEV_CHECK_ERR(IsPowerOfTwo(PPAttribs.uiEpipoleSamplingDensityFactor), "Epipole sampling desity factor (", PPAttribs.uiEpipoleSamplingDensityFactor, ") must be power of two");
-    DEV_CHECK_ERR(PPAttribs.uiInstrIntegralSteps > 0, "Inscattering integral steps must not be 0");
-    DEV_CHECK_ERR(PPAttribs.f2ShadowMapTexelSize.x != 0 && PPAttribs.f2ShadowMapTexelSize.y != 0, "Shadow map texel size must not be 0");
-    DEV_CHECK_ERR(PPAttribs.uiMaxSamplesOnTheRay != 0, "Max samples on the ray must not be 0");
-    DEV_CHECK_ERR(!PPAttribs.bCorrectScatteringAtDepthBreaks || PPAttribs.uiNumSamplesOnTheRayAtDepthBreak != 0, "Num samples on the ray at depth correction pass must not be 0");
-    DEV_CHECK_ERR(PPAttribs.uiMinMaxShadowMapResolution != 0, "Minmax shadow map resolution must not be 0");
-    DEV_CHECK_ERR(PPAttribs.iNumCascades != 0, "Num cascades must not be 0");
-    DEV_CHECK_ERR(PPAttribs.iFirstCascadeToRayMarch < PPAttribs.iNumCascades, "First cascade to ray march (", PPAttribs.fFirstCascadeToRayMarch, ") is invalid");
-    DEV_CHECK_ERR(PPAttribs.fMaxShadowMapStep != 0, "Max shadow map step must not be 0");
-    // clang-format off
-    DEV_CHECK_ERR(PPAttribs.iLightSctrTechnique == LIGHT_SCTR_TECHNIQUE_EPIPOLAR_SAMPLING ||
-                  PPAttribs.iLightSctrTechnique == LIGHT_SCTR_TECHNIQUE_BRUTE_FORCE,
+    DEV_CHECK_ERR((PPAttribs.iLightSctrTechnique == LIGHT_SCTR_TECHNIQUE_EPIPOLAR_SAMPLING ||
+                   PPAttribs.iLightSctrTechnique == LIGHT_SCTR_TECHNIQUE_BRUTE_FORCE),
                   "Incorrect light scattering technique (", PPAttribs.iLightSctrTechnique, ")");
-    DEV_CHECK_ERR(PPAttribs.iCascadeProcessingMode == CASCADE_PROCESSING_MODE_SINGLE_PASS ||
-                  PPAttribs.iCascadeProcessingMode == CASCADE_PROCESSING_MODE_MULTI_PASS ||
-                  PPAttribs.iCascadeProcessingMode == CASCADE_PROCESSING_MODE_MULTI_PASS_INST,
+    DEV_CHECK_ERR((PPAttribs.iCascadeProcessingMode == CASCADE_PROCESSING_MODE_SINGLE_PASS ||
+                   PPAttribs.iCascadeProcessingMode == CASCADE_PROCESSING_MODE_MULTI_PASS ||
+                   PPAttribs.iCascadeProcessingMode == CASCADE_PROCESSING_MODE_MULTI_PASS_INST),
                   "Incorrect cascade processing mode (", PPAttribs.iCascadeProcessingMode, ")");
-    DEV_CHECK_ERR(PPAttribs.iRefinementCriterion == REFINEMENT_CRITERION_DEPTH_DIFF ||
-                  PPAttribs.iRefinementCriterion == REFINEMENT_CRITERION_INSCTR_DIFF,
+    DEV_CHECK_ERR((PPAttribs.iRefinementCriterion == REFINEMENT_CRITERION_DEPTH_DIFF ||
+                   PPAttribs.iRefinementCriterion == REFINEMENT_CRITERION_INSCTR_DIFF),
                   "Incorrect refinement criterion (", PPAttribs.iRefinementCriterion, ")");
-    DEV_CHECK_ERR(PPAttribs.iSingleScatteringMode == SINGLE_SCTR_MODE_NONE ||
-                  PPAttribs.iSingleScatteringMode == SINGLE_SCTR_MODE_INTEGRATION ||
-                  PPAttribs.iSingleScatteringMode == SINGLE_SCTR_MODE_LUT,
+    DEV_CHECK_ERR((PPAttribs.iSingleScatteringMode == SINGLE_SCTR_MODE_NONE ||
+                   PPAttribs.iSingleScatteringMode == SINGLE_SCTR_MODE_INTEGRATION ||
+                   PPAttribs.iSingleScatteringMode == SINGLE_SCTR_MODE_LUT),
                   "Incorrect single scattering mode (", PPAttribs.iSingleScatteringMode, ")");
-    DEV_CHECK_ERR(PPAttribs.iMultipleScatteringMode == MULTIPLE_SCTR_MODE_NONE ||
-                  PPAttribs.iMultipleScatteringMode == MULTIPLE_SCTR_MODE_UNOCCLUDED ||
-                  PPAttribs.iMultipleScatteringMode == MULTIPLE_SCTR_MODE_OCCLUDED,
+    DEV_CHECK_ERR((PPAttribs.iMultipleScatteringMode == MULTIPLE_SCTR_MODE_NONE ||
+                   PPAttribs.iMultipleScatteringMode == MULTIPLE_SCTR_MODE_UNOCCLUDED ||
+                   PPAttribs.iMultipleScatteringMode == MULTIPLE_SCTR_MODE_OCCLUDED),
                   "Incorrect multiple scattering mode (", PPAttribs.iMultipleScatteringMode, ")");
-    DEV_CHECK_ERR(PPAttribs.iExtinctionEvalMode == EXTINCTION_EVAL_MODE_PER_PIXEL ||
-                  PPAttribs.iExtinctionEvalMode == EXTINCTION_EVAL_MODE_EPIPOLAR,
+    DEV_CHECK_ERR((PPAttribs.iExtinctionEvalMode == EXTINCTION_EVAL_MODE_PER_PIXEL ||
+                   PPAttribs.iExtinctionEvalMode == EXTINCTION_EVAL_MODE_EPIPOLAR),
                   "Incorrect extinction evaluation mode (", PPAttribs.iExtinctionEvalMode, ")");
-    
+
+    if (PPAttribs.iLightSctrTechnique == LIGHT_SCTR_TECHNIQUE_EPIPOLAR_SAMPLING)
+    {
+        DEV_CHECK_ERR(PPAttribs.uiNumEpipolarSlices > 0, "Number of epipolar slices must not be 0");
+        DEV_CHECK_ERR(PPAttribs.uiMaxSamplesInSlice > 0, "Max samples in slice must not be 0");
+        DEV_CHECK_ERR(PPAttribs.uiInitialSampleStepInSlice > 0, "Initial sample step in slice must not be 0");
+        DEV_CHECK_ERR(IsPowerOfTwo(PPAttribs.uiInitialSampleStepInSlice), "Initial sample step in slice (", PPAttribs.uiInitialSampleStepInSlice, ") must be power of two");
+        DEV_CHECK_ERR(PPAttribs.uiEpipoleSamplingDensityFactor > 0, "Epipole sampling density factor must not be 0");
+        DEV_CHECK_ERR(IsPowerOfTwo(PPAttribs.uiEpipoleSamplingDensityFactor), "Epipole sampling desity factor (", PPAttribs.uiEpipoleSamplingDensityFactor, ") must be power of two");
+        DEV_CHECK_ERR(PPAttribs.uiMaxSamplesOnTheRay != 0, "Max samples on the ray must not be 0");
+        DEV_CHECK_ERR(!PPAttribs.bCorrectScatteringAtDepthBreaks || PPAttribs.uiNumSamplesOnTheRayAtDepthBreak != 0, "Num samples on the ray at depth correction pass must not be 0");
+    }
+    DEV_CHECK_ERR(PPAttribs.uiInstrIntegralSteps > 0, "Inscattering integral steps must not be 0");
+    if (PPAttribs.bEnableLightShafts)
+    {
+        DEV_CHECK_ERR(PPAttribs.f2ShadowMapTexelSize.x != 0 && PPAttribs.f2ShadowMapTexelSize.y != 0, "Shadow map texel size must not be 0");
+        DEV_CHECK_ERR(PPAttribs.uiMinMaxShadowMapResolution != 0, "Minmax shadow map resolution must not be 0");
+        DEV_CHECK_ERR(PPAttribs.iNumCascades != 0, "Num cascades must not be 0");
+        DEV_CHECK_ERR(PPAttribs.fMaxShadowMapStep != 0, "Max shadow map step must not be 0");
+        DEV_CHECK_ERR(PPAttribs.iFirstCascadeToRayMarch < PPAttribs.iNumCascades, "First cascade to ray march (", PPAttribs.fFirstCascadeToRayMarch, ") is invalid");
+    }
+    // clang-format off
+
     Uint32 StalePSODependencyFlags = 0;
 #define CHECK_PSO_DEPENDENCY(Flag, Member)StalePSODependencyFlags |= (PPAttribs.Member != m_PostProcessingAttribs.Member) ? Flag : 0
     CHECK_PSO_DEPENDENCY(PSO_DEPENDENCY_INITIAL_SAMPLE_STEP,        uiInitialSampleStepInSlice);
@@ -2191,7 +2198,7 @@ void EpipolarLightScattering::PrepareForNewFrame(FrameAttribs&                  
     NewUserResourceIds.CameraAttribs     = pcbLightAttribs  != nullptr ? pcbLightAttribs->GetUniqueID()  : -1;
     NewUserResourceIds.SrcColorBufferSRV = frameAttribs.ptex2DSrcColorBufferSRV->GetUniqueID();
     NewUserResourceIds.SrcDepthBufferSRV = frameAttribs.ptex2DSrcDepthBufferSRV->GetUniqueID();
-    NewUserResourceIds.ShadowMapSRV      = frameAttribs.ptex2DShadowMapSRV->GetUniqueID();
+    NewUserResourceIds.ShadowMapSRV      = frameAttribs.ptex2DShadowMapSRV ? frameAttribs.ptex2DShadowMapSRV->GetUniqueID() : -1;
     // clang-format on
 
     Uint32 StaleSRBDependencyFlags = 0;
@@ -2359,24 +2366,27 @@ void EpipolarLightScattering::PrepareForNewFrame(FrameAttribs&                  
         ComputeScatteringCoefficients(m_FrameAttribs.pDeviceContext);
     }
 
-    if (!m_ptex2DCoordinateTextureRTV)
-    {
-        CreateEpipolarTextures(m_FrameAttribs.pDevice);
-    }
-
-    if (!m_ptex2DSliceEndpointsRTV)
-    {
-        CreateSliceEndPointsTexture(m_FrameAttribs.pDevice);
-    }
-
     if (!m_ptex2DCamSpaceZRTV)
     {
         CreateCamSpaceZTexture(m_FrameAttribs.pDevice);
     }
 
-    if (m_PostProcessingAttribs.bEnableLightShafts && m_PostProcessingAttribs.bUse1DMinMaxTree && !m_ptex2DMinMaxShadowMapSRV[0])
+    if (PPAttribs.iLightSctrTechnique == LIGHT_SCTR_TECHNIQUE_EPIPOLAR_SAMPLING)
     {
-        CreateMinMaxShadowMap(m_FrameAttribs.pDevice);
+        if (!m_ptex2DCoordinateTextureRTV)
+        {
+            CreateEpipolarTextures(m_FrameAttribs.pDevice);
+        }
+
+        if (!m_ptex2DSliceEndpointsRTV)
+        {
+            CreateSliceEndPointsTexture(m_FrameAttribs.pDevice);
+        }
+
+        if (m_PostProcessingAttribs.bEnableLightShafts && m_PostProcessingAttribs.bUse1DMinMaxTree && !m_ptex2DMinMaxShadowMapSRV[0])
+        {
+            CreateMinMaxShadowMap(m_FrameAttribs.pDevice);
+        }
     }
 
     {
@@ -2384,11 +2394,10 @@ void EpipolarLightScattering::PrepareForNewFrame(FrameAttribs&                  
         memcpy(pPPAttribsBuffData, &m_PostProcessingAttribs, sizeof(m_PostProcessingAttribs));
     }
 
-    // clang-format off
-    m_pResMapping->AddResource("g_tex2DLightSpaceDepthMap", m_FrameAttribs.ptex2DShadowMapSRV, false);
-    m_pResMapping->AddResource("cbCameraAttribs",           m_FrameAttribs.pcbCameraAttribs, false);
-    m_pResMapping->AddResource("cbLightParams",             m_FrameAttribs.pcbLightAttribs, false);
-    // clang-format on
+    if (m_FrameAttribs.ptex2DShadowMapSRV)
+        m_pResMapping->AddResource("g_tex2DLightSpaceDepthMap", m_FrameAttribs.ptex2DShadowMapSRV, false);
+    m_pResMapping->AddResource("cbCameraAttribs", m_FrameAttribs.pcbCameraAttribs, false);
+    m_pResMapping->AddResource("cbLightParams", m_FrameAttribs.pcbLightAttribs, false);
 }
 
 void EpipolarLightScattering::PerformPostProcessing()
