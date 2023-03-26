@@ -70,20 +70,20 @@ struct GLTFMaterialShaderInfo
 	float4  EmissiveFactor;
 	float4  SpecularFactor;
 
-	int     Workflow;
-	float   BaseColorTextureUVSelector;
-	float   PhysicalDescriptorTextureUVSelector;
-	float   NormalTextureUVSelector; 
+	int   Workflow;
+    float UVSelector0;
+    float UVSelector1;
+    float UVSelector2;
 
-	float   OcclusionTextureUVSelector;
-	float   EmissiveTextureUVSelector;
-    float   BaseColorSlice;
-    float   PhysicalDescriptorSlice;
+    float UVSelector3;
+    float UVSelector4;
+    float TextureSlice0;
+    float TextureSlice1;
 
-    float   NormalSlice;
-    float   OcclusionSlice;
-    float   EmissiveSlice;
-	float   MetallicFactor;
+    float TextureSlice2;
+    float TextureSlice3;
+    float TextureSlice4;
+	float MetallicFactor;
 
 	float   RoughnessFactor;
 	int     AlphaMode;	
@@ -92,16 +92,78 @@ struct GLTFMaterialShaderInfo
 
     // When texture atlas is used, UV scale and bias applied to
     // each texture coordinate set
-    float4 BaseColorUVScaleBias;
-    float4 PhysicalDescriptorUVScaleBias;
-    float4 NormalMapUVScaleBias;
-    float4 OcclusionUVScaleBias;
-    float4 EmissiveUVScaleBias;
+    float4 UVScaleBias0;
+    float4 UVScaleBias1;
+    float4 UVScaleBias2;
+    float4 UVScaleBias3;
+    float4 UVScaleBias4;
 
 	float4 CustomData;
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
 	CHECK_STRUCT_ALIGNMENT(GLTFMaterialShaderInfo);
+#endif
+
+#ifndef BaseColorTextureUVSelector
+#   define BaseColorTextureUVSelector UVSelector0
+#endif
+
+#ifndef PhysicalDescriptorTextureUVSelector
+#   define PhysicalDescriptorTextureUVSelector UVSelector1
+#endif
+
+#ifndef NormalTextureUVSelector
+#   define NormalTextureUVSelector UVSelector2
+#endif
+
+#ifndef OcclusionTextureUVSelector
+#   define OcclusionTextureUVSelector UVSelector3
+#endif
+
+#ifndef EmissiveTextureUVSelector
+#   define EmissiveTextureUVSelector UVSelector4
+#endif
+
+
+#ifndef BaseColorSlice
+#   define BaseColorSlice TextureSlice0
+#endif
+
+#ifndef PhysicalDescriptorSlice
+#   define PhysicalDescriptorSlice TextureSlice1
+#endif
+
+#ifndef NormalSlice
+#   define NormalSlice TextureSlice2
+#endif
+
+#ifndef OcclusionSlice
+#   define OcclusionSlice TextureSlice3
+#endif
+
+#ifndef EmissiveSlice
+#   define EmissiveSlice TextureSlice4
+#endif
+
+
+#ifndef BaseColorUVScaleBias
+#   define BaseColorUVScaleBias UVScaleBias0
+#endif
+
+#ifndef PhysicalDescriptorUVScaleBias
+#   define PhysicalDescriptorUVScaleBias UVScaleBias1
+#endif
+
+#ifndef NormalMapUVScaleBias
+#   define NormalMapUVScaleBias UVScaleBias2
+#endif
+
+#ifndef OcclusionUVScaleBias
+#   define OcclusionUVScaleBias UVScaleBias3
+#endif
+
+#ifndef EmissiveUVScaleBias
+#   define EmissiveUVScaleBias UVScaleBias4
 #endif
 
 #endif // _GLTF_PBR_STRUCTURES_FXH_

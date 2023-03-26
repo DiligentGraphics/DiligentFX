@@ -458,11 +458,11 @@ void GLTF_PBR_Renderer::CreateMaterialSRB(GLTF::Model&             Model,
 
     InitCommonSRBVars(pSRB, pCameraAttribs, pLightAttribs);
 
-    auto SetTexture = [&](GLTF::Material::TEXTURE_ID TexId, ITextureView* pDefaultTexSRV, const char* VarName) //
+    auto SetTexture = [&](Uint32 TexAttribId, ITextureView* pDefaultTexSRV, const char* VarName) //
     {
         RefCntAutoPtr<ITextureView> pTexSRV;
 
-        auto TexIdx = Material.TextureIds[TexId];
+        auto TexIdx = Material.TextureIds[TexAttribId];
         if (TexIdx >= 0)
         {
             if (auto* pTexture = Model.GetTexture(TexIdx))
@@ -486,16 +486,24 @@ void GLTF_PBR_Renderer::CreateMaterialSRB(GLTF::Model&             Model,
             pVar->Set(pTexSRV);
     };
 
-    SetTexture(GLTF::Material::TEXTURE_ID_BASE_COLOR, m_pWhiteTexSRV, "g_ColorMap");
-    SetTexture(GLTF::Material::TEXTURE_ID_PHYSICAL_DESC, m_pDefaultPhysDescSRV, "g_PhysicalDescriptorMap");
-    SetTexture(GLTF::Material::TEXTURE_ID_NORMAL_MAP, m_pDefaultNormalMapSRV, "g_NormalMap");
+    VERIFY_EXPR(Model.GetTextureAttibuteIndex(GLTF::BaseColorTextureName) == GLTF::DefaultBaseColorTextureAttribId);
+    VERIFY_EXPR(Model.GetTextureAttibuteIndex(GLTF::MetallicRoughnessTextureName) == GLTF::DefaultMetallicRoughnessTextureAttribId);
+    VERIFY_EXPR(Model.GetTextureAttibuteIndex(GLTF::NormalTextureName) == GLTF::DefaultNormalTextureAttribId);
+    VERIFY_EXPR(Model.GetTextureAttibuteIndex(GLTF::OcclusionTextureName) == GLTF::DefaultOcclusionTextureAttribId);
+    VERIFY_EXPR(Model.GetTextureAttibuteIndex(GLTF::EmissiveTextureName) == GLTF::DefaultEmissiveTextureAttribId);
+    VERIFY_EXPR(Model.GetTextureAttibuteIndex(GLTF::DiffuseTextureName) == GLTF::DefaultDiffuseTextureAttribId);
+    VERIFY_EXPR(Model.GetTextureAttibuteIndex(GLTF::SpecularGlossinessTextureName) == GLTF::DefaultSpecularGlossinessTextureAttibId);
+
+    SetTexture(GLTF::DefaultBaseColorTextureAttribId, m_pWhiteTexSRV, "g_ColorMap");
+    SetTexture(GLTF::DefaultMetallicRoughnessTextureAttribId, m_pDefaultPhysDescSRV, "g_PhysicalDescriptorMap");
+    SetTexture(GLTF::DefaultNormalTextureAttribId, m_pDefaultNormalMapSRV, "g_NormalMap");
     if (m_Settings.UseAO)
     {
-        SetTexture(GLTF::Material::TEXTURE_ID_OCCLUSION, m_pWhiteTexSRV, "g_AOMap");
+        SetTexture(GLTF::DefaultOcclusionTextureAttribId, m_pWhiteTexSRV, "g_AOMap");
     }
     if (m_Settings.UseEmissive)
     {
-        SetTexture(GLTF::Material::TEXTURE_ID_EMISSIVE, m_pBlackTexSRV, "g_EmissiveMap");
+        SetTexture(GLTF::DefaultEmissiveTextureAttribId, m_pBlackTexSRV, "g_EmissiveMap");
     }
 }
 

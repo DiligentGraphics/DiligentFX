@@ -2117,7 +2117,7 @@ void EpipolarLightScattering::PrepareForNewFrame(FrameAttribs&                  
     DEV_CHECK_ERR(frameAttribs.ptex2DSrcColorBufferSRV, "Source color buffer SRV must not be null");
     DEV_CHECK_ERR(frameAttribs.ptex2DSrcDepthBufferSRV, "Source depth buffer SRV must not be null");
     DEV_CHECK_ERR(frameAttribs.ptex2DDstColorBufferRTV, "Destination color buffer RTV must not be null");
-    DEV_CHECK_ERR(frameAttribs.ptex2DDstDepthBufferDSV, "Source depth buffer DSV must not be null");
+    DEV_CHECK_ERR(frameAttribs.ptex2DDstDepthBufferDSV, "Destination depth buffer DSV must not be null");
     DEV_CHECK_ERR(frameAttribs.ptex2DShadowMapSRV || !PPAttribs.bEnableLightShafts, "Shadow map SRV must not be null");
 
     DEV_CHECK_ERR((PPAttribs.iLightSctrTechnique == LIGHT_SCTR_TECHNIQUE_EPIPOLAR_SAMPLING ||
