@@ -15,6 +15,10 @@ static const ShaderIncInfo g_Shaders[] =
         #include "FullScreenTriangleVSOutput.fxh.h"
     },
     {
+        "AtlasSampling.fxh",
+        #include "AtlasSampling.fxh.h"
+    },
+    {
         "BasicStructures.fxh",
         #include "BasicStructures.fxh.h"
     },
