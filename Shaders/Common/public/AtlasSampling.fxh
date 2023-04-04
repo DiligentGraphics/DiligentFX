@@ -31,28 +31,11 @@ struct SampleTextureAtlasAttribs
     ///   - (z,w) - region offset
     float4 f4UVRegion;
 
-    /// Smooth texture coordinate gradient in x direction.
+    /// Smooth texture coordinate gradient in x direction (ddx(f2SmoothUV)).
     float2 f2dSmoothUV_dx;
 
-    /// Smooth texture coordinate gradient in y direction.
+    /// Smooth texture coordinate gradient in y direction (ddy(f2SmoothUV)).
     float2 f2dSmoothUV_dy;
-
-    /// The exponent factor that is applied to the LOD-based margin part:
-    ///
-    ///     f2LodMargin = 0.5 / f2AtlasDim * exp2(ceil(LOD) * Attribs.fLodMarginExpFactor);
-    ///
-    /// The default value is 1.0, but if textures in the atlas have significant
-    /// non-power-of-two dimensions, larger factor may be necessary as higher
-    /// mip levels will become considerably misaligned.
-    float fLodMarginExpFactor; /* = 1.0 */
-
-    /// The scaling factor that is applied to the gradient-based margin part:
-    ///
-    ///     f2GradientMargin = 0.5 * (abs(f2dUV_dx) + abs(f2dUV_dy)) * Attribs.fGradientMarginScale;
-    ///
-    /// The default value is 1.0, but if textures in the atlas have significant
-    /// non-power-of-two dimensions, larger factor may be necessary.
-    float fGradientMarginScale; /* = 1.0 */
 
     /// The dimension of the smallest mip level that contains valid data.
     /// For example, for a 4x4 block-compressed texture atlas, the dimension of the smallest
@@ -64,6 +47,7 @@ struct SampleTextureAtlasAttribs
 
 
 /// Samples texture atlas in a way that avoids artifacts at the texture region boundaries.
+/// This function is intended to be used with the dynamic texture atlas (IDynamicTextureAtlas).
 
 /// \param [in] Atlas         - Texture atlas.
 /// \param [in] Atlas_sampler - Sampler state for the texture atlas.
@@ -88,7 +72,7 @@ float4 SampleTextureAtlas(Texture2DArray            Atlas,
     float  fElements;
     Atlas.GetDimensions(f2AtlasDim.x, f2AtlasDim.y, fElements);
     // The margin must be no less than half the pixel size in the selected LOD.
-    float2 f2LodMargin = 0.5 / f2AtlasDim * exp2(ceil(LOD) * Attribs.fLodMarginExpFactor);
+    float2 f2LodMargin = 0.5 / f2AtlasDim * exp2(ceil(LOD));
 
 
     // Use gradients to make sure that the sampling area does not
@@ -103,7 +87,7 @@ float4 SampleTextureAtlas(Texture2DArray            Atlas,
     // |____________________|            <-------->
     //                                       abs(f2dUV_dx.x) + abs(f2dUV_dy.x)
     //
-    float2 f2GradientMargin = 0.5 * (abs(f2dUV_dx) + abs(f2dUV_dy)) * Attribs.fGradientMarginScale;
+    float2 f2GradientMargin = 0.5 * (abs(f2dUV_dx) + abs(f2dUV_dy));
 
     float2 f2Margin = f2LodMargin + f2GradientMargin;
     // Limit the margin by 1/2 of the texture region size to prevent boundaries from overlapping.
@@ -119,12 +103,29 @@ float4 SampleTextureAtlas(Texture2DArray            Atlas,
     float2 f2dIJ_dy = f2dUV_dy * f2AtlasDim.xy;
     float  fMaxGrad = max(length(f2dIJ_dx), length(f2dIJ_dy));
 
+    // Note that dynamic texture atlas aligns allocations using the minimum dimension.
+    // This guarantees that filtering will not sample from the neighboring regions in all levels
+    // up to the one where the smallest dimension becomes max(1, Attribs.fSmallestValidLevelDim).
+    //
+    //    8   [ * ]
+    //        |
+    //   16   [ *  * ]
+    //        |
+    //   32   [ *  *  *  * ]
+    //        |
+    //   64   [ *  *  *  *  *  *  *  * ]
+    //    |
+    // Aligned placement
+
     // Compute the region's minimum dimension in pixels.
     float fMinRegionDim = min(f2AtlasDim.x * f4UVRegion.x, f2AtlasDim.y * f4UVRegion.y);
     // If the smallest valid level dimension is N, we should avoid the maximum gradient
     // becoming larger than fMinRegionDim/N.
     // This will guarantee that we will not sample levels above the smallest valid one.
-    float fMaxGradLimit = Attribs.fSmallestValidLevelDim > 0.0 ? fMinRegionDim / Attribs.fSmallestValidLevelDim : 1e+6;
+    // Clamp the smallest valid level dimension to 2.0 so that we fully fade-out to mean
+    // color when the gradient becomes equal the min dimension.
+    float fSmallestValidLevelDim = max(Attribs.fSmallestValidLevelDim, 2.0);
+    float fMaxGradLimit = fMinRegionDim / fSmallestValidLevelDim;
 
     // Rescale the gradients to avoid sampling above the level with the smallest valid dimension.
     float GradScale = min(1.0, fMaxGradLimit / fMaxGrad);
