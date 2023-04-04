@@ -43,6 +43,9 @@ struct SampleTextureAtlasAttribs
     /// neighboring regions, which may not be available at the time the region is packed into
     /// the atlas.
     float fSmallestValidLevelDim; /* = 4.0 */
+
+    /// Indicates if the texture data is non-filterable (e.g. material indices).
+    bool IsNonFilterable;
 };
 
 
@@ -128,7 +131,7 @@ float4 SampleTextureAtlas(Texture2DArray            Atlas,
     float fMaxGradLimit = fMinRegionDim / fSmallestValidLevelDim;
 
     // Smoothly fade-out to mean color when the gradient is in the range [fMaxGradLimit, fMaxGradLimit * 2.0]
-    float fMeanColorFadeoutFactor = saturate((fMaxGrad - fMaxGradLimit) / fMaxGradLimit);
+    float fMeanColorFadeoutFactor = Attribs.IsNonFilterable ? 0.0 : saturate((fMaxGrad - fMaxGradLimit) / fMaxGradLimit);
     float4 f4Color = float4(0.0, 0.0, 0.0, 0.0);
 
     if (fMeanColorFadeoutFactor < 1.0)
@@ -149,7 +152,6 @@ float4 SampleTextureAtlas(Texture2DArray            Atlas,
                               Atlas.SampleLevel(Atlas_sampler, float3(f4UVRegion.zw + float2(0.25, 0.75) * f4UVRegion.xy, Attribs.fSlice), LastValidLOD) +
                               Atlas.SampleLevel(Atlas_sampler, float3(f4UVRegion.zw + float2(0.75, 0.75) * f4UVRegion.xy, Attribs.fSlice), LastValidLOD)) *
                              0.25;
-
 
         f4Color = lerp(f4Color, f4MeanColor, fMeanColorFadeoutFactor);
     }
