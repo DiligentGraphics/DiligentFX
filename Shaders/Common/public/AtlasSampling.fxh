@@ -127,13 +127,20 @@ float4 SampleTextureAtlas(Texture2DArray            Atlas,
     float fSmallestValidLevelDim = max(Attribs.fSmallestValidLevelDim, 2.0);
     float fMaxGradLimit = fMinRegionDim / fSmallestValidLevelDim;
 
-    // Rescale the gradients to avoid sampling above the level with the smallest valid dimension.
-    float GradScale = min(1.0, fMaxGradLimit / fMaxGrad);
-    f2dUV_dx *= GradScale;
-    f2dUV_dy *= GradScale;
-    float4 f4Color = Atlas.SampleGrad(Atlas_sampler, float3(f2UV, Attribs.fSlice), f2dUV_dx, f2dUV_dy);
+    // Smoothly fade-out to mean color when the gradient is in the range [fMaxGradLimit, fMaxGradLimit * 2.0]
+    float fMeanColorFadeoutFactor = saturate((fMaxGrad - fMaxGradLimit) / fMaxGradLimit);
+    float4 f4Color = float4(0.0, 0.0, 0.0, 0.0);
 
-    if (fMaxGrad > fMaxGradLimit)
+    if (fMeanColorFadeoutFactor < 1.0)
+    {
+        // Rescale the gradients to avoid sampling above the level with the smallest valid dimension.
+        float GradScale = min(1.0, fMaxGradLimit / fMaxGrad);
+        f2dUV_dx *= GradScale;
+        f2dUV_dy *= GradScale;
+        f4Color = Atlas.SampleGrad(Atlas_sampler, float3(f2UV, Attribs.fSlice), f2dUV_dx, f2dUV_dy);
+    }
+
+    if (fMeanColorFadeoutFactor > 0.0)
     {
         // Manually compute the mean color from the coarsest available level.
         float LastValidLOD = log2(fMaxGradLimit);
@@ -143,8 +150,8 @@ float4 SampleTextureAtlas(Texture2DArray            Atlas,
                               Atlas.SampleLevel(Atlas_sampler, float3(f4UVRegion.zw + float2(0.75, 0.75) * f4UVRegion.xy, Attribs.fSlice), LastValidLOD)) *
                              0.25;
 
-        // Smoothly fade-out to mean color when the gradient is in the range [fMaxGradLimit, fMaxGradLimit * 2.0]
-        f4Color = lerp(f4Color, f4MeanColor, saturate((fMaxGrad - fMaxGradLimit) / fMaxGradLimit));
+
+        f4Color = lerp(f4Color, f4MeanColor, fMeanColorFadeoutFactor);
     }
 
     return f4Color;
