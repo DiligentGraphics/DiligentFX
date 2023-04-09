@@ -507,13 +507,13 @@ void GLTF_PBR_Renderer::CreateMaterialSRB(GLTF::Model&             Model,
     }
 }
 
-void GLTF_PBR_Renderer::CreateResourceCacheSRB(IRenderDevice*              pDevice,
-                                               IDeviceContext*             pCtx,
-                                               GLTF::ResourceCacheUseInfo& CacheUseInfo,
-                                               IBuffer*                    pCameraAttribs,
-                                               IBuffer*                    pLightAttribs,
-                                               IPipelineState*             pPSO,
-                                               IShaderResourceBinding**    ppCacheSRB)
+void GLTF_PBR_Renderer::CreateResourceCacheSRB(IRenderDevice*           pDevice,
+                                               IDeviceContext*          pCtx,
+                                               ResourceCacheUseInfo&    CacheUseInfo,
+                                               IBuffer*                 pCameraAttribs,
+                                               IBuffer*                 pLightAttribs,
+                                               IPipelineState*          pPSO,
+                                               IShaderResourceBinding** ppCacheSRB)
 {
     DEV_CHECK_ERR(CacheUseInfo.pResourceMgr != nullptr, "Resource manager must not be null");
 
@@ -828,15 +828,16 @@ void GLTF_PBR_Renderer::Begin(IDeviceContext* pCtx)
     }
 }
 
-void GLTF_PBR_Renderer::Begin(IRenderDevice*              pDevice,
-                              IDeviceContext*             pCtx,
-                              GLTF::ResourceCacheUseInfo& CacheUseInfo,
-                              ResourceCacheBindings&      Bindings,
-                              IBuffer*                    pCameraAttribs,
-                              IBuffer*                    pLightAttribs,
-                              IPipelineState*             pPSO)
+void GLTF_PBR_Renderer::Begin(IRenderDevice*         pDevice,
+                              IDeviceContext*        pCtx,
+                              ResourceCacheUseInfo&  CacheUseInfo,
+                              ResourceCacheBindings& Bindings,
+                              IBuffer*               pCameraAttribs,
+                              IBuffer*               pLightAttribs,
+                              IPipelineState*        pPSO)
 {
-    VERIFY_EXPR(CacheUseInfo.pResourceMgr != nullptr);
+    VERIFY(CacheUseInfo.pResourceMgr != nullptr, "Resource manager must not be null.");
+    VERIFY(CacheUseInfo.VtxLayoutKey != GLTF::ResourceManager::VertexLayoutKey{}, "Vertex layout key must not be null.");
 
     Begin(pCtx);
 
@@ -858,14 +859,22 @@ void GLTF_PBR_Renderer::Begin(IRenderDevice*              pDevice,
 
     pCtx->TransitionShaderResources(pPSO, Bindings.pSRB);
 
-    std::array<IBuffer*, 2> pVBs =
-        {
-            CacheUseInfo.pResourceMgr->GetBuffer(CacheUseInfo.VertexBufferIdx[0], pDevice, pCtx),
-            CacheUseInfo.pResourceMgr->GetBuffer(CacheUseInfo.VertexBufferIdx[1], pDevice, pCtx) //
-        };
-    pCtx->SetVertexBuffers(0, static_cast<Uint32>(pVBs.size()), pVBs.data(), nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION, SET_VERTEX_BUFFERS_FLAG_RESET);
+    if (auto* pVertexPool = CacheUseInfo.pResourceMgr->GetVertexPool(CacheUseInfo.VtxLayoutKey))
+    {
+        const auto& PoolDesc = pVertexPool->GetDesc();
 
-    auto* pIndexBuffer = CacheUseInfo.pResourceMgr->GetBuffer(CacheUseInfo.IndexBufferIdx, pDevice, pCtx);
+        std::array<IBuffer*, 8> pVBs; // Do not zero-initialize
+        for (Uint32 i = 0; i < PoolDesc.NumElements; ++i)
+        {
+            pVBs[i] = pVertexPool->GetBuffer(i, pDevice, pCtx);
+            if ((pVBs[i]->GetDesc().BindFlags & BIND_VERTEX_BUFFER) == 0)
+                pVBs[i] = nullptr;
+        }
+
+        pCtx->SetVertexBuffers(0, PoolDesc.NumElements, pVBs.data(), nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION, SET_VERTEX_BUFFERS_FLAG_RESET);
+    }
+
+    auto* pIndexBuffer = CacheUseInfo.pResourceMgr->GetIndexBuffer(pDevice, pCtx);
     pCtx->SetIndexBuffer(pIndexBuffer, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 }
 

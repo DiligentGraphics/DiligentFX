@@ -260,6 +260,34 @@ public:
                            IShaderResourceBinding** ppMaterialSRB);
 
 
+    /// GLTF resource cache use information.
+    struct ResourceCacheUseInfo
+    {
+        /// A pointer to the resource manager.
+        GLTF::ResourceManager* pResourceMgr = nullptr;
+
+        /// Vertex layout key.
+        GLTF::ResourceManager::VertexLayoutKey VtxLayoutKey;
+
+        /// Base color texture format.
+        TEXTURE_FORMAT BaseColorFormat = TEX_FORMAT_RGBA8_UNORM;
+
+        /// Base color texture format for alpha-cut and alpha-blend materials.
+        TEXTURE_FORMAT BaseColorAlphaFormat = TEX_FORMAT_RGBA8_UNORM;
+
+        /// Physical descriptor texture format.
+        TEXTURE_FORMAT PhysicalDescFormat = TEX_FORMAT_RGBA8_UNORM;
+
+        /// Normal map format.
+        TEXTURE_FORMAT NormalFormat = TEX_FORMAT_RGBA8_UNORM;
+
+        /// Occlusion texture format.
+        TEXTURE_FORMAT OcclusionFormat = TEX_FORMAT_RGBA8_UNORM;
+
+        /// Emissive texture format.
+        TEXTURE_FORMAT EmissiveFormat = TEX_FORMAT_RGBA8_UNORM;
+    };
+
     /// Creates a shader resource binding for a GTLF resource cache.
 
     /// \param [in] pDevice        - Render device that may be needed by the resource cache to create
@@ -273,13 +301,13 @@ public:
     ///                              default PSO. Can be null
     /// \param [out] ppCacheSRB    - Pointer to memory location where the pointer to the SRB object
     ///                              will be written.
-    void CreateResourceCacheSRB(IRenderDevice*              pDevice,
-                                IDeviceContext*             pCtx,
-                                GLTF::ResourceCacheUseInfo& CacheUseInfo,
-                                IBuffer*                    pCameraAttribs,
-                                IBuffer*                    pLightAttribs,
-                                IPipelineState*             pPSO,
-                                IShaderResourceBinding**    ppCacheSRB);
+    void CreateResourceCacheSRB(IRenderDevice*           pDevice,
+                                IDeviceContext*          pCtx,
+                                ResourceCacheUseInfo&    CacheUseInfo,
+                                IBuffer*                 pCameraAttribs,
+                                IBuffer*                 pLightAttribs,
+                                IPipelineState*          pPSO,
+                                IShaderResourceBinding** ppCacheSRB);
 
     /// Prepares the renderer for rendering objects.
     /// This method must be called at least once per frame.
@@ -289,13 +317,13 @@ public:
     /// Prepares the renderer for rendering objects from the resource cache.
     /// This method must be called at least once per frame before the first object
     /// from the cache is rendered.
-    void Begin(IRenderDevice*              pDevice,
-               IDeviceContext*             pCtx,
-               GLTF::ResourceCacheUseInfo& CacheUseInfo,
-               ResourceCacheBindings&      Bindings,
-               IBuffer*                    pCameraAttribs,
-               IBuffer*                    pLightAttribs,
-               IPipelineState*             pPSO = nullptr);
+    void Begin(IRenderDevice*         pDevice,
+               IDeviceContext*        pCtx,
+               ResourceCacheUseInfo&  CacheUseInfo,
+               ResourceCacheBindings& Bindings,
+               IBuffer*               pCameraAttribs,
+               IBuffer*               pLightAttribs,
+               IPipelineState*        pPSO = nullptr);
 
 private:
     void PrecomputeBRDF(IRenderDevice*     pDevice,
