@@ -5,14 +5,17 @@
 #include "BasicStructures.fxh"
 #include "GLTF_PBR_Shading.fxh"
 #include "ToneMapping.fxh"
-#include "AtlasSampling.fxh"
+
+#ifndef USE_TEXTURE_ATLAS
+#   define USE_TEXTURE_ATLAS 0
+#endif
 
 #ifndef ALLOW_DEBUG_VIEW
 #   define ALLOW_DEBUG_VIEW 0
 #endif
 
-#ifndef USE_TEXTURE_ATLAS
-#   define USE_TEXTURE_ATLAS 0
+#if USE_TEXTURE_ATLAS
+#   include "AtlasSampling.fxh"
 #endif
 
 cbuffer cbCameraAttribs
