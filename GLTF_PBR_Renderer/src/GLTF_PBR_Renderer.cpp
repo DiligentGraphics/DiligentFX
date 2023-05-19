@@ -891,9 +891,15 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
 
     if (!GLTFModel.CompatibleWithTransforms(Transforms))
     {
-        UNEXPECTED("Model transforms are incompatible with the model");
+        DEV_ERROR("Model transforms are incompatible with the model");
         return;
     }
+    if (RenderParams.SceneIndex >= GLTFModel.Scenes.size())
+    {
+        DEV_ERROR("Invalid scene index ", RenderParams.SceneIndex);
+        return;
+    }
+    const auto& Scene = GLTFModel.Scenes[RenderParams.SceneIndex];
 
     m_RenderParams = RenderParams;
 
@@ -928,15 +934,15 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
 
     for (auto AlphaMode : AlphaModes)
     {
-        for (size_t i = 0; i < GLTFModel.LinearNodes.size(); ++i)
+        for (const auto* pNode : Scene.LinearNodes)
         {
-            const auto& Node = GLTFModel.LinearNodes[i];
+            VERIFY_EXPR(pNode != nullptr);
+            const auto& Node = *pNode;
             if (!Node.pMesh)
                 continue;
 
-            const auto& Mesh = *Node.pMesh;
-            VERIFY_EXPR(Node.Index == static_cast<int>(i));
-            const auto& NodeGlobalMatrix = Transforms.NodeGlobalMatrices[i];
+            const auto& Mesh             = *Node.pMesh;
+            const auto& NodeGlobalMatrix = Transforms.NodeGlobalMatrices[Node.Index];
 
             // Render mesh primitives
             for (const auto& primitive : Mesh.Primitives)

@@ -117,6 +117,9 @@ public:
     /// Rendering information
     struct RenderInfo
     {
+        /// Index of the scene to render
+        Uint32 SceneIndex = 0;
+
         /// Model transform matrix
         float4x4 ModelTransform = float4x4::Identity();
 
