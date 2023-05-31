@@ -122,6 +122,8 @@ float4 SampleTextureAtlas(Texture2DArray            Atlas,
 
     // Compute the region's minimum dimension in pixels.
     float fMinRegionDim = min(f2AtlasDim.x * f4UVRegion.x, f2AtlasDim.y * f4UVRegion.y);
+    // Avoid division by zero
+    fMinRegionDim = max(fMinRegionDim, 1.0);
     // If the smallest valid level dimension is N, we should avoid the maximum gradient
     // becoming larger than fMinRegionDim/N.
     // This will guarantee that we will not sample levels above the smallest valid one.
@@ -137,7 +139,7 @@ float4 SampleTextureAtlas(Texture2DArray            Atlas,
     if (fMeanColorFadeoutFactor < 1.0)
     {
         // Rescale the gradients to avoid sampling above the level with the smallest valid dimension.
-        float GradScale = min(1.0, fMaxGradLimit / fMaxGrad);
+        float GradScale = min(1.0, fMaxGradLimit / max(fMaxGrad, 1e-5));
         f2dUV_dx *= GradScale;
         f2dUV_dy *= GradScale;
         f4Color = Atlas.SampleGrad(Atlas_sampler, float3(f2UV, Attribs.fSlice), f2dUV_dx, f2dUV_dy);
