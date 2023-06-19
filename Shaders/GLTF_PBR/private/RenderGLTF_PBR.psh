@@ -4,6 +4,7 @@
 
 #include "BasicStructures.fxh"
 #include "GLTF_PBR_Shading.fxh"
+#include "GLTF_PBR_Structures.fxh"
 #include "ToneMapping.fxh"
 
 #ifndef USE_TEXTURE_ATLAS

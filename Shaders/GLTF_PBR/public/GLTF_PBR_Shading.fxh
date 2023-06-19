@@ -1,7 +1,6 @@
 #ifndef _GLTF_PBR_SHADING_FXH_
 #define _GLTF_PBR_SHADING_FXH_
 
-#include "GLTF_PBR_Structures.fxh"
 #include "PBR_Common.fxh"
 #include "ShaderUtilities.fxh"
 
@@ -16,42 +15,42 @@
 #define GLTF_PBR_USE_ENV_MAP_LOD
 #define GLTF_PBR_USE_HDR_CUBEMAPS
 
-float GetPerceivedBrightness(float3 rgb)
+float GetPerceivedBrightness(FLOAT3 rgb)
 {
-    return sqrt(0.299 * rgb.r * rgb.r + 0.587 * rgb.g * rgb.g + 0.114 * rgb.b * rgb.b);
+    return sqrt(FLOAT(0.299) * rgb.r * rgb.r + FLOAT(0.587) * rgb.g * rgb.g + FLOAT(0.114) * rgb.b * rgb.b);
 }
 
 // https://github.com/KhronosGroup/glTF/blob/master/extensions/2.0/Khronos/KHR_materials_pbrSpecularGlossiness/examples/convert-between-workflows/js/three.pbrUtilities.js#L34
-float GLTF_PBR_SolveMetallic(float3 diffuse,
-                             float3 specular,
-                             float  oneMinusSpecularStrength)
+FLOAT GLTF_PBR_SolveMetallic(FLOAT3 diffuse,
+                             FLOAT3 specular,
+                             FLOAT  oneMinusSpecularStrength)
 {
-    const float c_MinReflectance = 0.04;
-    float specularBrightness = GetPerceivedBrightness(specular);
+    const FLOAT c_MinReflectance = 0.04;
+    FLOAT specularBrightness = GetPerceivedBrightness(specular);
     if (specularBrightness < c_MinReflectance)
     {
-        return 0.0;
+        return _0f;
     }
 
-    float diffuseBrightness = GetPerceivedBrightness(diffuse);
+    FLOAT diffuseBrightness = GetPerceivedBrightness(diffuse);
 
-    float a = c_MinReflectance;
-    float b = diffuseBrightness * oneMinusSpecularStrength / (1.0 - c_MinReflectance) + specularBrightness - 2.0 * c_MinReflectance;
-    float c = c_MinReflectance - specularBrightness;
-    float D = b * b - 4.0 * a * c;
+    FLOAT a = c_MinReflectance;
+    FLOAT b = diffuseBrightness * oneMinusSpecularStrength / (_1f - c_MinReflectance) + specularBrightness - _2f * c_MinReflectance;
+    FLOAT c = c_MinReflectance - specularBrightness;
+    FLOAT D = b * b - FLOAT(4.0) * a * c;
 
-    return clamp((-b + sqrt(D)) / (2.0 * a), 0.0, 1.0);
+    return clamp((-b + sqrt(D)) / (_2f * a), _0f, _1f);
 }
 
 
-float3 SRGBtoLINEAR(float3 srgbIn)
+FLOAT3 SRGBtoLINEAR(FLOAT3 srgbIn)
 {
 #ifdef GLTF_PBR_MANUAL_SRGB
 #   ifdef SRGB_FAST_APPROXIMATION
-        float3 linOut = pow(saturate(srgbIn.xyz), float3(2.2, 2.2, 2.2));
+        FLOAT3 linOut = pow(saturate(srgbIn.xyz), FLOAT3(2.2, 2.2, 2.2));
 #   else
-        float3 bLess  = step(float3(0.04045, 0.04045, 0.04045), srgbIn.xyz);
-        float3 linOut = mix( srgbIn.xyz/12.92, pow(saturate((srgbIn.xyz + float3(0.055, 0.055, 0.055)) / 1.055), float3(2.4, 2.4, 2.4)), bLess );
+        FLOAT3 bLess  = step(FLOAT3(0.04045, 0.04045, 0.04045), srgbIn.xyz);
+        FLOAT3 linOut = mix( srgbIn.xyz / FLOAT(12.92), pow(saturate((srgbIn.xyz + FLOAT3(0.055, 0.055, 0.055)) / FLOAT(1.055)), FLOAT3(2.4, 2.4, 2.4)), bLess );
 #   endif
         return linOut;
 #else
@@ -59,38 +58,38 @@ float3 SRGBtoLINEAR(float3 srgbIn)
 #endif
 }
 
-float4 SRGBtoLINEAR(float4 srgbIn)
+FLOAT4 SRGBtoLINEAR(FLOAT4 srgbIn)
 {
-    return float4(SRGBtoLINEAR(srgbIn.xyz), srgbIn.w);
+    return FLOAT4(SRGBtoLINEAR(srgbIn.xyz), srgbIn.w);
 }
 
 
-float3 GLTF_PBR_ApplyDirectionalLight(float3 lightDir, float3 lightColor, SurfaceReflectanceInfo srfInfo, float3 normal, float3 view)
+FLOAT3 GLTF_PBR_ApplyDirectionalLight(FLOAT3 lightDir, FLOAT3 lightColor, SurfaceReflectanceInfo srfInfo, FLOAT3 normal, FLOAT3 view)
 {
-    float3 pointToLight = -lightDir;
-    float3 diffuseContrib, specContrib;
-    float  NdotL;
+    FLOAT3 pointToLight = -lightDir;
+    FLOAT3 diffuseContrib, specContrib;
+    FLOAT  NdotL;
     SmithGGX_BRDF(pointToLight, normal, view, srfInfo, diffuseContrib, specContrib, NdotL);
     // Obtain final intensity as reflectance (BRDF) scaled by the energy of the light (cosine law)
-    float3 shade = (diffuseContrib + specContrib) * NdotL;
+    FLOAT3 shade = (diffuseContrib + specContrib) * NdotL;
     return lightColor * shade;
 }
 
 
 // Find the normal for this fragment, pulling either from a predefined normal map
 // or from the interpolated mesh normal and tangent attributes.
-float3 GLTF_PBR_PerturbNormal(in float3 dPos_dx,
-                              in float3 dPos_dy,
-                              in float2 dUV_dx,
-                              in float2 dUV_dy,
-                              in float3 Normal,
-                              in float3 TSNormal,
+FLOAT3 GLTF_PBR_PerturbNormal(in FLOAT3 dPos_dx,
+                              in FLOAT3 dPos_dy,
+                              in FLOAT2 dUV_dx,
+                              in FLOAT2 dUV_dy,
+                              in FLOAT3 Normal,
+                              in FLOAT3 TSNormal,
                               bool      HasUV,
                               bool      IsFrontFace)
 {
     // Retrieve the tangent space matrix
-    float NormalLen = length(Normal);
-    float3 ng;
+    FLOAT NormalLen = length(Normal);
+    FLOAT3 ng;
     if (NormalLen > 1e-5)
     {
         ng = Normal/NormalLen;
@@ -100,25 +99,25 @@ float3 GLTF_PBR_PerturbNormal(in float3 dPos_dx,
         ng = normalize(cross(dPos_dx, dPos_dy));
 #if (defined(GLSL) || defined(GL_ES)) && !defined(VULKAN)
         // In OpenGL screen is upside-down, so we have to invert the vector
-        ng *= -1.0;
+        ng *= -_1f;
 #endif
     }
 
     if (HasUV)
     {
-        return TransformTangentSpaceNormalGrad(dPos_dx, dPos_dy, dUV_dx, dUV_dy, ng, TSNormal * (IsFrontFace ? +1.0 : -1.0));
+        return TransformTangentSpaceNormalGrad(dPos_dx, dPos_dy, dUV_dx, dUV_dy, ng, TSNormal * (IsFrontFace ? +_1f : -_1f));
     }
     else
     {
-        return ng * (IsFrontFace ? +1.0 : -1.0);
+        return ng * (IsFrontFace ? +_1f : -_1f);
     }
 }
 
 
 struct GLTF_PBR_IBL_Contribution
 {
-    float3 f3Diffuse;
-    float3 f3Specular;
+    FLOAT3 f3Diffuse;
+    FLOAT3 f3Specular;
 };
 
 // Calculation of the lighting contribution from an optional Image Based Light source.
@@ -126,9 +125,9 @@ struct GLTF_PBR_IBL_Contribution
 // See our README.md on Environment Maps [3] for additional discussion.
 GLTF_PBR_IBL_Contribution GLTF_PBR_GetIBLContribution(
                         in SurfaceReflectanceInfo SrfInfo,
-                        in float3                 n,
-                        in float3                 v,
-                        in float                  PrefilteredCubeMipLevels,
+                        in FLOAT3                 n,
+                        in FLOAT3                 v,
+                        in FLOAT                  PrefilteredCubeMipLevels,
                         in Texture2D              BRDF_LUT,
                         in SamplerState           BRDF_LUT_sampler,
                         in TextureCube            IrradianceMap,
@@ -136,30 +135,30 @@ GLTF_PBR_IBL_Contribution GLTF_PBR_GetIBLContribution(
                         in TextureCube            PrefilteredEnvMap,
                         in SamplerState           PrefilteredEnvMap_sampler)
 {
-    float NdotV = clamp(dot(n, v), 0.0, 1.0);
+    FLOAT NdotV = clamp(dot(n, v), _0f, _1f);
 
-    float lod = clamp(SrfInfo.PerceptualRoughness * PrefilteredCubeMipLevels, 0.0, PrefilteredCubeMipLevels);
-    float3 reflection = normalize(reflect(-v, n));
+    FLOAT lod = clamp(SrfInfo.PerceptualRoughness * PrefilteredCubeMipLevels, _0f, PrefilteredCubeMipLevels);
+    FLOAT3 reflection = normalize(reflect(-v, n));
 
-    float2 brdfSamplePoint = clamp(float2(NdotV, SrfInfo.PerceptualRoughness), float2(0.0, 0.0), float2(1.0, 1.0));
+    FLOAT2 brdfSamplePoint = clamp(FLOAT2(NdotV, SrfInfo.PerceptualRoughness), FLOAT2(0.0, 0.0), FLOAT2(1.0, 1.0));
     // retrieve a scale and bias to F0. See [1], Figure 3
-    float2 brdf = BRDF_LUT.Sample(BRDF_LUT_sampler, brdfSamplePoint).rg;
+    FLOAT2 brdf = BRDF_LUT.Sample(BRDF_LUT_sampler, brdfSamplePoint).rg;
 
-    float4 diffuseSample = IrradianceMap.Sample(IrradianceMap_sampler, n);
+    FLOAT4 diffuseSample = IrradianceMap.Sample(IrradianceMap_sampler, n);
 
 #ifdef GLTF_PBR_USE_ENV_MAP_LOD
-    float4 specularSample = PrefilteredEnvMap.SampleLevel(PrefilteredEnvMap_sampler, reflection, lod);
+    FLOAT4 specularSample = PrefilteredEnvMap.SampleLevel(PrefilteredEnvMap_sampler, reflection, lod);
 #else
-    float4 specularSample = PrefilteredEnvMap.Sample(PrefilteredEnvMap_sampler, reflection);
+    FLOAT4 specularSample = PrefilteredEnvMap.Sample(PrefilteredEnvMap_sampler, reflection);
 #endif
 
 #ifdef GLTF_PBR_USE_HDR_CUBEMAPS
     // Already linear.
-    float3 diffuseLight  = diffuseSample.rgb;
-    float3 specularLight = specularSample.rgb;
+    FLOAT3 diffuseLight  = diffuseSample.rgb;
+    FLOAT3 specularLight = specularSample.rgb;
 #else
-    float3 diffuseLight  = SRGBtoLINEAR(diffuseSample).rgb;
-    float3 specularLight = SRGBtoLINEAR(specularSample).rgb;
+    FLOAT3 diffuseLight  = SRGBtoLINEAR(diffuseSample).rgb;
+    FLOAT3 specularLight = SRGBtoLINEAR(specularSample).rgb;
 #endif
 
     GLTF_PBR_IBL_Contribution IBLContrib;
@@ -175,28 +174,28 @@ GLTF_PBR_IBL_Contribution GLTF_PBR_GetIBLContribution(
 /// \param [in]  PhysicalDesc - Physical material description. For Metallic-roughness workflow,
 ///                             'g' channel stores roughness, 'b' channel stores metallic.
 /// \param [out] Metallic     - Metallic value used for shading.
-SurfaceReflectanceInfo GLTF_PBR_GetSurfaceReflectance(int        Workflow,
-                                                      float4     BaseColor,
-                                                      float4     PhysicalDesc,
-                                                      out float  Metallic)
+SurfaceReflectanceInfo GLTF_PBR_GetSurfaceReflectance(int       Workflow,
+                                                      FLOAT4    BaseColor,
+                                                      FLOAT4    PhysicalDesc,
+                                                      out FLOAT Metallic)
 {
     SurfaceReflectanceInfo SrfInfo;
 
-    float3 SpecularColor;
+    FLOAT3 SpecularColor;
 
-    float3 f0 = float3(0.04, 0.04, 0.04);
+    FLOAT3 f0 = FLOAT3(0.04, 0.04, 0.04);
 
     // Metallic and Roughness material properties are packed together
     // In glTF, these factors can be specified by fixed scalar values
     // or from a metallic-roughness map
     if (Workflow == PBR_WORKFLOW_SPECULAR_GLOSINESS)
     {
-        SrfInfo.PerceptualRoughness = 1.0 - PhysicalDesc.a; // glossiness to roughness
+        SrfInfo.PerceptualRoughness = _1f - PhysicalDesc.a; // glossiness to roughness
         f0 = PhysicalDesc.rgb;
 
         // f0 = specular
         SpecularColor = f0;
-        float oneMinusSpecularStrength = 1.0 - max(max(f0.r, f0.g), f0.b);
+        FLOAT oneMinusSpecularStrength = _1f - max(max(f0.r, f0.g), f0.b);
         SrfInfo.DiffuseColor = BaseColor.rgb * oneMinusSpecularStrength;
 
         // do conversion between metallic M-R and S-G metallic
@@ -209,7 +208,7 @@ SurfaceReflectanceInfo GLTF_PBR_GetSurfaceReflectance(int        Workflow,
         SrfInfo.PerceptualRoughness = PhysicalDesc.g;
         Metallic                    = PhysicalDesc.b;
 
-        SrfInfo.DiffuseColor  = BaseColor.rgb * (float3(1.0, 1.0, 1.0) - f0) * (1.0 - Metallic);
+        SrfInfo.DiffuseColor  = BaseColor.rgb * (FLOAT3(1.0, 1.0, 1.0) - f0) * (_1f - Metallic);
         SpecularColor         = lerp(f0, BaseColor.rgb, Metallic);
     }
 
@@ -218,43 +217,43 @@ SurfaceReflectanceInfo GLTF_PBR_GetSurfaceReflectance(int        Workflow,
 //#endif
 //
 //#ifdef MATERIAL_UNLIT
-//    gl_FragColor = float4(gammaCorrection(baseColor.rgb), baseColor.a);
+//    gl_FragColor = FLOAT4(gammaCorrection(baseColor.rgb), baseColor.a);
 //    return;
 //#endif
 
-    SrfInfo.PerceptualRoughness = clamp(SrfInfo.PerceptualRoughness, 0.0, 1.0);
+    SrfInfo.PerceptualRoughness = clamp(SrfInfo.PerceptualRoughness, _0f, _1f);
 
     // Compute reflectance.
-    float3 Reflectance0  = SpecularColor;
-    float  MaxR0         = max(max(Reflectance0.r, Reflectance0.g), Reflectance0.b);
+    FLOAT3 Reflectance0  = SpecularColor;
+    FLOAT  MaxR0         = max(max(Reflectance0.r, Reflectance0.g), Reflectance0.b);
     // Anything less than 2% is physically impossible and is instead considered to be shadowing. Compare to "Real-Time-Rendering" 4th editon on page 325.
-    float R90 = clamp(MaxR0 * 50.0, 0.0, 1.0);
+    FLOAT R90 = clamp(MaxR0 * FLOAT(50.0), _0f, _1f);
 
     SrfInfo.Reflectance0  = Reflectance0;
-    SrfInfo.Reflectance90 = float3(R90, R90, R90);
+    SrfInfo.Reflectance90 = FLOAT3(R90, R90, R90);
 
     return SrfInfo;
 }
 
 /// Calculates surface reflectance info for Metallic-roughness workflow
-SurfaceReflectanceInfo GLTF_PBR_GetSurfaceReflectanceMR(float3 BaseColor,
-                                                        float  Metallic,
-                                                        float  Roughness)
+SurfaceReflectanceInfo GLTF_PBR_GetSurfaceReflectanceMR(FLOAT3 BaseColor,
+                                                        FLOAT  Metallic,
+                                                        FLOAT  Roughness)
 {
     SurfaceReflectanceInfo SrfInfo;
 
-    float f0 = 0.04;
+    FLOAT f0 = 0.04;
 
     SrfInfo.PerceptualRoughness = Roughness;
-    SrfInfo.DiffuseColor        = BaseColor * ((1.0 - f0) * (1.0 - Metallic));
+    SrfInfo.DiffuseColor        = BaseColor * ((_1f - f0) * (_1f - Metallic));
         
-    float3 Reflectance0 = lerp(float3(f0, f0, f0), BaseColor, Metallic);
-    float  MaxR0        = max(max(Reflectance0.r, Reflectance0.g), Reflectance0.b);
+    FLOAT3 Reflectance0 = lerp(FLOAT3(f0, f0, f0), BaseColor, Metallic);
+    FLOAT  MaxR0        = max(max(Reflectance0.r, Reflectance0.g), Reflectance0.b);
     // Anything less than 2% is physically impossible and is instead considered to be shadowing. Compare to "Real-Time-Rendering" 4th editon on page 325.
-    float R90 = min(MaxR0 * 50.0, 1.0);
+    FLOAT R90 = min(MaxR0 * FLOAT(50.0), _1f);
     
     SrfInfo.Reflectance0  = Reflectance0;
-    SrfInfo.Reflectance90 = float3(R90, R90, R90);
+    SrfInfo.Reflectance90 = FLOAT3(R90, R90, R90);
 
     return SrfInfo;
 }

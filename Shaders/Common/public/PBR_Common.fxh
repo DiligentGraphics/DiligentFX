@@ -1,13 +1,37 @@
 #ifndef _PBR_COMMON_FXH_
 #define _PBR_COMMON_FXH_
 
+#ifndef FLOAT
+#   define FLOAT float
+#endif
+
+#ifndef FLOAT2
+#   define FLOAT2 float2
+#endif
+
+#ifndef FLOAT3
+#   define FLOAT3 float3
+#endif
+
+#ifndef FLOAT4
+#   define FLOAT4 float4
+#endif
+
+#ifndef EPSILON
+#   define EPSILON 1e-7
+#endif
+
+#define _0f FLOAT(0.0)
+#define _1f FLOAT(1.0)
+#define _2f FLOAT(2.0)
+
 #ifndef PI
-#    define PI 3.141592653589793
+#    define PI FLOAT(3.141592653589793)
 #endif
 
 // Lambertian diffuse
 // see https://seblagarde.wordpress.com/2012/01/08/pi-or-not-to-pi-in-game-lighting-equation/
-float3 LambertianDiffuse(float3 DiffuseColor)
+FLOAT3 LambertianDiffuse(FLOAT3 DiffuseColor)
 {
     return DiffuseColor / PI;
 }
@@ -34,19 +58,19 @@ float3 LambertianDiffuse(float3 DiffuseColor)
 //
 //      Rf(Theta) = 0.5 * (sin^2(Theta - Phi) / sin^2(Theta + Phi) + tan^2(Theta - Phi) / tan^2(Theta + Phi))
 //
-#define SCHLICK_REFLECTION(VdotH, Reflectance0, Reflectance90) ((Reflectance0) + ((Reflectance90) - (Reflectance0)) * pow(clamp(1.0 - (VdotH), 0.0, 1.0), 5.0))
-float SchlickReflection(float VdotH, float Reflectance0, float Reflectance90)
+#define SCHLICK_REFLECTION(VdotH, Reflectance0, Reflectance90) ((Reflectance0) + ((Reflectance90) - (Reflectance0)) * pow(clamp(_1f - (VdotH), _0f, _1f), FLOAT(5.0)))
+FLOAT SchlickReflection(FLOAT VdotH, FLOAT Reflectance0, FLOAT Reflectance90)
 {
     return SCHLICK_REFLECTION(VdotH, Reflectance0, Reflectance90);
 }
-float3 SchlickReflection(float VdotH, float3 Reflectance0, float3 Reflectance90)
+FLOAT3 SchlickReflection(FLOAT VdotH, FLOAT3 Reflectance0, FLOAT3 Reflectance90)
 {
     return SCHLICK_REFLECTION(VdotH, Reflectance0, Reflectance90);
 }
 
 // Visibility = G2(v,l,a) / (4 * (n,v) * (n,l))
 // see https://google.github.io/filament/Filament.md.html#materialsystem/specularbrdf
-float SmithGGXVisibilityCorrelated(float NdotL, float NdotV, float AlphaRoughness)
+FLOAT SmithGGXVisibilityCorrelated(FLOAT NdotL, FLOAT NdotV, FLOAT AlphaRoughness)
 {
     // G1 (masking) is % microfacets visible in 1 direction
     // G2 (shadow-masking) is % microfacets visible in 2 directions
@@ -56,26 +80,26 @@ float SmithGGXVisibilityCorrelated(float NdotL, float NdotV, float AlphaRoughnes
     //
     // https://ubm-twvideo01.s3.amazonaws.com/o1/vault/gdc2017/Presentations/Hammon_Earl_PBR_Diffuse_Lighting.pdf
 
-    float a2 = AlphaRoughness * AlphaRoughness;
+    FLOAT a2 = AlphaRoughness * AlphaRoughness;
 
-    float GGXV = NdotL * sqrt(max(NdotV * NdotV * (1.0 - a2) + a2, 1e-7));
-    float GGXL = NdotV * sqrt(max(NdotL * NdotL * (1.0 - a2) + a2, 1e-7));
+    FLOAT GGXV = NdotL * sqrt(max(NdotV * NdotV * (_1f - a2) + a2, EPSILON));
+    FLOAT GGXL = NdotV * sqrt(max(NdotL * NdotL * (_1f - a2) + a2, EPSILON));
 
-    return 0.5 / (GGXV + GGXL);
+    return FLOAT(0.5) / (GGXV + GGXL);
 }
 
 // Smith GGX shadow-masking function G2(v,l,a)
-float SmithGGXShadowMasking(float NdotL, float NdotV, float AlphaRoughness)
+FLOAT SmithGGXShadowMasking(FLOAT NdotL, FLOAT NdotV, FLOAT AlphaRoughness)
 {
-    return 4.0 * NdotL * NdotV * SmithGGXVisibilityCorrelated(NdotL, NdotV, AlphaRoughness);
+    return FLOAT(4.0) * NdotL * NdotV * SmithGGXVisibilityCorrelated(NdotL, NdotV, AlphaRoughness);
 }
 
 // Smith GGX masking function G1
 // [1] "Sampling the GGX Distribution of Visible Normals" (2018) by Eric Heitz - eq. (2)
 // https://jcgt.org/published/0007/04/01/
-float SmithGGXMasking(float NdotV, float AlphaRoughness)
+FLOAT SmithGGXMasking(FLOAT NdotV, FLOAT AlphaRoughness)
 {
-    float a2 = AlphaRoughness * AlphaRoughness;
+    FLOAT a2 = AlphaRoughness * AlphaRoughness;
 
     // In [1], eq. (2) is defined for the tangent-space view direction V:
     //
@@ -97,26 +121,26 @@ float SmithGGXMasking(float NdotV, float AlphaRoughness)
     //
     // Since V.z = NdotV, we finally get:
 
-    float Denom = NdotV + sqrt(a2 + (1.0 - a2) * NdotV * NdotV);
-    return 2.0 * max(NdotV, 0.0) / max(Denom, 1e-6);
+    FLOAT Denom = NdotV + sqrt(a2 + (_1f - a2) * NdotV * NdotV);
+    return _2f * max(NdotV, _0f) / max(Denom, EPSILON);
 }
 
 
 // The following equation(s) model the distribution of microfacet normals across the area being drawn (aka D())
 // Implementation from "Average Irregularity Representation of a Roughened Surface for Ray Reflection" by T. S. Trowbridge, and K. P. Reitz
 // Follows the distribution function recommended in the SIGGRAPH 2013 course notes from EPIC Games, Equation 3.
-float NormalDistribution_GGX(float NdotH, float AlphaRoughness)
+FLOAT NormalDistribution_GGX(FLOAT NdotH, FLOAT AlphaRoughness)
 {
     // "Sampling the GGX Distribution of Visible Normals" (2018) by Eric Heitz - eq. (1)
     // https://jcgt.org/published/0007/04/01/
 
     // Make sure we reasonably handle AlphaRoughness == 0
     // (which corresponds to delta function)
-    AlphaRoughness = max(AlphaRoughness, 1e-3);
+    AlphaRoughness = max(AlphaRoughness, FLOAT(1e-3));
 
-    float a2  = AlphaRoughness * AlphaRoughness;
-    float nh2 = NdotH * NdotH;
-    float f   = nh2 * a2 + (1.0 - nh2);
+    FLOAT a2  = AlphaRoughness * AlphaRoughness;
+    FLOAT nh2 = NdotH * NdotH;
+    FLOAT f   = nh2 * a2 + (_1f - nh2);
     return a2 / (PI * f * f);
 }
 
@@ -132,15 +156,15 @@ float NormalDistribution_GGX(float NdotH, float AlphaRoughness)
 //      - Returned normal is in tangent space with Z up.
 //      - Returned normal should be used to reflect the view direction and obtain
 //        the sampling direction.
-float3 SmithGGXSampleVisibleNormal(float3 View, // View direction in tangent space
-                                   float  ax,   // X roughness
-                                   float  ay,   // Y roughness
-                                   float  u1,   // Uniform random variable in [0, 1]
-                                   float  u2    // Uniform random variable in [0, 1]
+FLOAT3 SmithGGXSampleVisibleNormal(FLOAT3 View, // View direction in tangent space
+                                   FLOAT  ax,   // X roughness
+                                   FLOAT  ay,   // Y roughness
+                                   FLOAT  u1,   // Uniform random variable in [0, 1]
+                                   FLOAT  u2    // Uniform random variable in [0, 1]
 )
 {
     // Stretch the view vector so we are sampling as if roughness==1
-    float3 V = normalize(View * float3(ax, ay, 1.0));
+    FLOAT3 V = normalize(View * FLOAT3(ax, ay, _1f));
 
 #if 1
     // Technique from [1]
@@ -148,16 +172,16 @@ float3 SmithGGXSampleVisibleNormal(float3 View, // View direction in tangent spa
     //       subjectively noisier images, so we will stick with method from [1].
 
     // Build an orthonormal basis with V, T1, and T2
-    float3 T1 = (V.z < 0.999) ? normalize(cross(V, float3(0.0, 0.0, 1.0))) : float3(1.0, 0.0, 0.0);
-    float3 T2 = cross(T1, V);
+    FLOAT3 T1 = (V.z < FLOAT(0.999)) ? normalize(cross(V, FLOAT3(0.0, 0.0, 1.0))) : FLOAT3(1.0, 0.0, 0.0);
+    FLOAT3 T2 = cross(T1, V);
 
     // Choose a point on a disk with each half of the disk weighted
     // proportionally to its projection onto direction V
-    float a = 1.0 / (1.0 + V.z);
-    float r = sqrt(u1);
-    float phi = (u2 < a) ? (u2 / a) * PI : PI + (u2 - a) / (1.0 - a) * PI;
-    float p1 = r * cos(phi);
-    float p2 = r * sin(phi) * ((u2 < a) ? 1.0 : V.z);
+    FLOAT a = _1f / (_1f + V.z);
+    FLOAT r = sqrt(u1);
+    FLOAT phi = (u2 < a) ? (u2 / a) * PI : PI + (u2 - a) / (_1f - a) * PI;
+    FLOAT p1 = r * cos(phi);
+    FLOAT p2 = r * sin(phi) * ((u2 < a) ? _1f : V.z);
 #else
     // Technique from [2]
     // Note: [1] uses earlier parameterization that cannot be used with view directions located in the lower
@@ -165,101 +189,101 @@ float3 SmithGGXSampleVisibleNormal(float3 View, // View direction in tangent spa
     //       [2] provides a better approximation that is not subject to this limitation.
 
     // Build orthonormal basis (with special case if cross product is zero) (Section 4.1)
-    float lensq = dot(V.xy, V.xy);
-    float3 T1 = lensq > 0.0 ? float3(-V.y, V.x, 0.0) / sqrt(lensq) : float3(1.0, 0.0, 0.0);
-    float3 T2 = cross(V, T1);
+    FLOAT lensq = dot(V.xy, V.xy);
+    FLOAT3 T1 = lensq > _0f ? FLOAT3(-V.y, V.x, _0f) / sqrt(lensq) : FLOAT3(1.0, 0.0, 0.0);
+    FLOAT3 T2 = cross(V, T1);
 
     // Sample the projected area (Section 4.2)
-    float r   = sqrt(u1);
-    float phi = 2.0 * PI * u2;
-    float p1 = r * cos(phi);
-    float p2 = r * sin(phi);
-    float s  = 0.5 * (1.0 + V.z);
-    p2 = (1.0 - s) * sqrt(1.0 - p1 * p1) + s * p2;
+    FLOAT r   = sqrt(u1);
+    FLOAT phi = _2f * PI * u2;
+    FLOAT p1 = r * cos(phi);
+    FLOAT p2 = r * sin(phi);
+    FLOAT s  = FLOAT(0.5) * (_1f + V.z);
+    p2 = (_1f - s) * sqrt(_1f - p1 * p1) + s * p2;
 #endif
 
     // Calculate the normal in the stretched tangent space
-    float3 N = p1 * T1 + p2 * T2 + sqrt(max(0.0, 1.0 - p1 * p1 - p2 * p2)) * V;
+    FLOAT3 N = p1 * T1 + p2 * T2 + sqrt(max(_0f, _1f - p1 * p1 - p2 * p2)) * V;
 
     // Transform the normal back to the ellipsoid configuration
-    return normalize(float3(ax * N.x, ay * N.y, max(0.0, N.z)));
+    return normalize(FLOAT3(ax * N.x, ay * N.y, max(_0f, N.z)));
 }
 
 // Returns the probability of sampling direction L for the view direction V and normal N
 // using the visible normals distribution.
 // [1] "Sampling the GGX Distribution of Visible Normals" (2018) by Eric Heitz
 // https://jcgt.org/published/0007/04/01/
-float SmithGGXSampleDirectionPDF(float3 V, float3 N, float3 L, float AlphaRoughness)
+FLOAT SmithGGXSampleDirectionPDF(FLOAT3 V, FLOAT3 N, FLOAT3 L, FLOAT AlphaRoughness)
 {
     // Micronormal is the halfway vector
-    float3 H = normalize(V + L);
+    FLOAT3 H = normalize(V + L);
 
-    float NdotH = dot(H, N);
-    float NdotV = dot(N, V);
-    float NdotL = dot(N, L);
-    //float VdotH = dot(V, H);
-    if (NdotH <= 0.0 || NdotV <= 0.0 || NdotL <= 0.0)
-        return 0.0;
+    FLOAT NdotH = dot(H, N);
+    FLOAT NdotV = dot(N, V);
+    FLOAT NdotL = dot(N, L);
+    //FLOAT VdotH = dot(V, H);
+    if (NdotH <= _0f || NdotV <= _0f || NdotL <= _0f)
+        return _0f;
 
     // Note that [1] uses notation N for the micronormal, but in our case N is the macronormal,
     // while micronormal is H (aka the halfway vector).
-    float NDF = NormalDistribution_GGX(NdotH, AlphaRoughness); // (1) - D(N)
-    float G1  = SmithGGXMasking(NdotV, AlphaRoughness);        // (2) - G1(V)
+    FLOAT NDF = NormalDistribution_GGX(NdotH, AlphaRoughness); // (1) - D(N)
+    FLOAT G1  = SmithGGXMasking(NdotV, AlphaRoughness);        // (2) - G1(V)
 
-    float VNDF = G1 /* * VdotH */ * NDF / NdotV; // (3) - Dv(N)
-    return  VNDF / (4.0 /* * VdotH */); // (17) - VdotH cancels out
+    FLOAT VNDF = G1 /* * VdotH */ * NDF / NdotV; // (3) - Dv(N)
+    return  VNDF / (FLOAT(4.0) /* * VdotH */); // (17) - VdotH cancels out
 }
 
 struct AngularInfo
 {
-    float NdotL; // cos angle between normal and light direction
-    float NdotV; // cos angle between normal and view direction
-    float NdotH; // cos angle between normal and half vector
-    float LdotH; // cos angle between light direction and half vector
-    float VdotH; // cos angle between view direction and half vector
+    FLOAT NdotL; // cos angle between normal and light direction
+    FLOAT NdotV; // cos angle between normal and view direction
+    FLOAT NdotH; // cos angle between normal and half vector
+    FLOAT LdotH; // cos angle between light direction and half vector
+    FLOAT VdotH; // cos angle between view direction and half vector
 };
 
-AngularInfo GetAngularInfo(float3 PointToLight, float3 Normal, float3 View)
+AngularInfo GetAngularInfo(FLOAT3 PointToLight, FLOAT3 Normal, FLOAT3 View)
 {
-    float3 n = normalize(Normal);       // Outward direction of surface point
-    float3 v = normalize(View);         // Direction from surface point to camera
-    float3 l = normalize(PointToLight); // Direction from surface point to light
-    float3 h = normalize(l + v);        // Direction of the vector between l and v
+    FLOAT3 n = normalize(Normal);       // Outward direction of surface point
+    FLOAT3 v = normalize(View);         // Direction from surface point to camera
+    FLOAT3 l = normalize(PointToLight); // Direction from surface point to light
+    FLOAT3 h = normalize(l + v);        // Direction of the vector between l and v
 
     AngularInfo info;
-    info.NdotL = clamp(dot(n, l), 0.0, 1.0);
-    info.NdotV = clamp(dot(n, v), 0.0, 1.0);
-    info.NdotH = clamp(dot(n, h), 0.0, 1.0);
-    info.LdotH = clamp(dot(l, h), 0.0, 1.0);
-    info.VdotH = clamp(dot(v, h), 0.0, 1.0);
+    info.NdotL = clamp(dot(n, l), _0f, _1f);
+    info.NdotV = clamp(dot(n, v), _0f, _1f);
+    info.NdotH = clamp(dot(n, h), _0f, _1f);
+    info.LdotH = clamp(dot(l, h), _0f, _1f);
+    info.VdotH = clamp(dot(v, h), _0f, _1f);
 
     return info;
 }
 
 struct SurfaceReflectanceInfo
 {
-    float  PerceptualRoughness;
-    float3 Reflectance0;
-    float3 Reflectance90;
-    float3 DiffuseColor;
+    FLOAT  PerceptualRoughness;
+    FLOAT3 Reflectance0;
+    FLOAT3 Reflectance90;
+    FLOAT3 DiffuseColor;
 };
 
 // BRDF with Lambertian diffuse term and Smith-GGX specular term.
-void SmithGGX_BRDF(in float3                 PointToLight,
-                   in float3                 Normal,
-                   in float3                 View,
+void SmithGGX_BRDF(in FLOAT3                 PointToLight,
+                   in FLOAT3                 Normal,
+                   in FLOAT3                 View,
                    in SurfaceReflectanceInfo SrfInfo,
-                   out float3                DiffuseContrib,
-                   out float3                SpecContrib,
-                   out float                 NdotL)
+                   out FLOAT3                DiffuseContrib,
+                   out FLOAT3                SpecContrib,
+                   out FLOAT                 NdotL)
 {
     AngularInfo angularInfo = GetAngularInfo(PointToLight, Normal, View);
 
-    DiffuseContrib = float3(0.0, 0.0, 0.0);
-    SpecContrib    = float3(0.0, 0.0, 0.0);
+    DiffuseContrib = FLOAT3(0.0, 0.0, 0.0);
+    SpecContrib    = FLOAT3(0.0, 0.0, 0.0);
     NdotL          = angularInfo.NdotL;
     // If one of the dot products is larger than zero, no division by zero can happen. Avoids black borders.
-    if (angularInfo.NdotL > 0.0 || angularInfo.NdotV > 0.0)
+    if (angularInfo.NdotL > _0f || angularInfo.NdotV > _0f)
     {
         //           D(h,a) * G2(v,l,a) * F(v,h,f0)
         // f(v,l) = -------------------------------- = D(h,a) * Vis(v,l,a) * F(v,h,f0)
@@ -271,12 +295,12 @@ void SmithGGX_BRDF(in float3                 PointToLight,
         // It is not a mistake that AlphaRoughness = PerceptualRoughness ^ 2 and that
         // SmithGGXVisibilityCorrelated and NormalDistribution_GGX then use a2 = AlphaRoughness ^ 2.
         // See eq. 3 in https://blog.selfshadow.com/publications/s2013-shading-course/karis/s2013_pbs_epic_notes_v2.pdf
-        float  AlphaRoughness = SrfInfo.PerceptualRoughness * SrfInfo.PerceptualRoughness;
-        float  D   = NormalDistribution_GGX(angularInfo.NdotH, AlphaRoughness);
-        float  Vis = SmithGGXVisibilityCorrelated(angularInfo.NdotL, angularInfo.NdotV, AlphaRoughness);
-        float3 F   = SchlickReflection(angularInfo.VdotH, SrfInfo.Reflectance0, SrfInfo.Reflectance90);
+        FLOAT  AlphaRoughness = SrfInfo.PerceptualRoughness * SrfInfo.PerceptualRoughness;
+        FLOAT  D   = NormalDistribution_GGX(angularInfo.NdotH, AlphaRoughness);
+        FLOAT  Vis = SmithGGXVisibilityCorrelated(angularInfo.NdotL, angularInfo.NdotV, AlphaRoughness);
+        FLOAT3 F   = SchlickReflection(angularInfo.VdotH, SrfInfo.Reflectance0, SrfInfo.Reflectance90);
 
-        DiffuseContrib = (1.0 - F) * LambertianDiffuse(SrfInfo.DiffuseColor);
+        DiffuseContrib = (_1f - F) * LambertianDiffuse(SrfInfo.DiffuseColor);
         SpecContrib    = F * Vis * D;
     }
 }
