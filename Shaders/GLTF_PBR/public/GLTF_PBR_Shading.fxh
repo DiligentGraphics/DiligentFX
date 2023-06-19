@@ -182,7 +182,7 @@ SurfaceReflectanceInfo GLTF_PBR_GetSurfaceReflectance(int        Workflow,
 {
     SurfaceReflectanceInfo SrfInfo;
 
-    float3 specularColor;
+    float3 SpecularColor;
 
     float3 f0 = float3(0.04, 0.04, 0.04);
 
@@ -195,12 +195,12 @@ SurfaceReflectanceInfo GLTF_PBR_GetSurfaceReflectance(int        Workflow,
         f0 = PhysicalDesc.rgb;
 
         // f0 = specular
-        specularColor = f0;
+        SpecularColor = f0;
         float oneMinusSpecularStrength = 1.0 - max(max(f0.r, f0.g), f0.b);
         SrfInfo.DiffuseColor = BaseColor.rgb * oneMinusSpecularStrength;
 
         // do conversion between metallic M-R and S-G metallic
-        Metallic = GLTF_PBR_SolveMetallic(BaseColor.rgb, specularColor, oneMinusSpecularStrength);
+        Metallic = GLTF_PBR_SolveMetallic(BaseColor.rgb, SpecularColor, oneMinusSpecularStrength);
     }
     else if (Workflow == PBR_WORKFLOW_METALLIC_ROUGHNESS)
     {
@@ -210,7 +210,7 @@ SurfaceReflectanceInfo GLTF_PBR_GetSurfaceReflectance(int        Workflow,
         Metallic                    = PhysicalDesc.b;
 
         SrfInfo.DiffuseColor  = BaseColor.rgb * (float3(1.0, 1.0, 1.0) - f0) * (1.0 - Metallic);
-        specularColor         = lerp(f0, BaseColor.rgb, Metallic);
+        SpecularColor         = lerp(f0, BaseColor.rgb, Metallic);
     }
 
 //#ifdef ALPHAMODE_OPAQUE
@@ -225,11 +225,36 @@ SurfaceReflectanceInfo GLTF_PBR_GetSurfaceReflectance(int        Workflow,
     SrfInfo.PerceptualRoughness = clamp(SrfInfo.PerceptualRoughness, 0.0, 1.0);
 
     // Compute reflectance.
-    float reflectance = max(max(specularColor.r, specularColor.g), specularColor.b);
-
-    SrfInfo.Reflectance0  = specularColor.rgb;
+    float3 Reflectance0  = SpecularColor;
+    float  MaxR0         = max(max(Reflectance0.r, Reflectance0.g), Reflectance0.b);
     // Anything less than 2% is physically impossible and is instead considered to be shadowing. Compare to "Real-Time-Rendering" 4th editon on page 325.
-    SrfInfo.Reflectance90 = clamp(reflectance * 50.0, 0.0, 1.0) * float3(1.0, 1.0, 1.0);
+    float R90 = clamp(MaxR0 * 50.0, 0.0, 1.0);
+
+    SrfInfo.Reflectance0  = Reflectance0;
+    SrfInfo.Reflectance90 = float3(R90, R90, R90);
+
+    return SrfInfo;
+}
+
+/// Calculates surface reflectance info for Metallic-roughness workflow
+SurfaceReflectanceInfo GLTF_PBR_GetSurfaceReflectanceMR(float3 BaseColor,
+                                                        float  Metallic,
+                                                        float  Roughness)
+{
+    SurfaceReflectanceInfo SrfInfo;
+
+    float f0 = 0.04;
+
+    SrfInfo.PerceptualRoughness = Roughness;
+    SrfInfo.DiffuseColor        = BaseColor * ((1.0 - f0) * (1.0 - Metallic));
+        
+    float3 Reflectance0 = lerp(float3(f0, f0, f0), BaseColor, Metallic);
+    float  MaxR0        = max(max(Reflectance0.r, Reflectance0.g), Reflectance0.b);
+    // Anything less than 2% is physically impossible and is instead considered to be shadowing. Compare to "Real-Time-Rendering" 4th editon on page 325.
+    float R90 = min(MaxR0 * 50.0, 1.0);
+    
+    SrfInfo.Reflectance0  = Reflectance0;
+    SrfInfo.Reflectance90 = float3(R90, R90, R90);
 
     return SrfInfo;
 }
