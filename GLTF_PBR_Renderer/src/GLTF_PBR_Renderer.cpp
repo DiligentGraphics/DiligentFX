@@ -438,25 +438,19 @@ void GLTF_PBR_Renderer::InitCommonSRBVars(IShaderResourceBinding* pSRB,
 }
 
 
-void GLTF_PBR_Renderer::CreateMaterialSRB(GLTF::Model&             Model,
-                                          GLTF::Material&          Material,
-                                          IBuffer*                 pCameraAttribs,
-                                          IBuffer*                 pLightAttribs,
-                                          IPipelineState*          pPSO,
-                                          IShaderResourceBinding** ppMaterialSRB)
+void GLTF_PBR_Renderer::InitMaterialSRB(GLTF::Model&            Model,
+                                        GLTF::Material&         Material,
+                                        IBuffer*                pCameraAttribs,
+                                        IBuffer*                pLightAttribs,
+                                        IShaderResourceBinding* pMaterialSRB)
 {
-    if (pPSO == nullptr)
-        pPSO = GetPSO(PSOKey{});
-
-    pPSO->CreateShaderResourceBinding(ppMaterialSRB, true);
-    auto* const pSRB = *ppMaterialSRB;
-    if (pSRB == nullptr)
+    if (pMaterialSRB == nullptr)
     {
         LOG_ERROR_MESSAGE("Failed to create material SRB");
         return;
     }
 
-    InitCommonSRBVars(pSRB, pCameraAttribs, pLightAttribs);
+    InitCommonSRBVars(pMaterialSRB, pCameraAttribs, pLightAttribs);
 
     auto SetTexture = [&](Uint32 TexAttribId, ITextureView* pDefaultTexSRV, const char* VarName) //
     {
@@ -482,7 +476,7 @@ void GLTF_PBR_Renderer::CreateMaterialSRB(GLTF::Model&             Model,
         if (pTexSRV == nullptr)
             pTexSRV = pDefaultTexSRV;
 
-        if (auto* pVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, VarName))
+        if (auto* pVar = pMaterialSRB->GetVariableByName(SHADER_TYPE_PIXEL, VarName))
             pVar->Set(pTexSRV);
     };
 
@@ -810,11 +804,20 @@ GLTF_PBR_Renderer::ModelResourceBindings GLTF_PBR_Renderer::CreateResourceBindin
     IBuffer*     pCameraAttribs,
     IBuffer*     pLightAttribs)
 {
+    auto* pPSO = GetPSO(PSOKey{});
+    if (pPSO == nullptr)
+    {
+        UNEXPECTED("Failed to find PSO for GLTF model");
+        return {};
+    }
+
     ModelResourceBindings ResourceBindings;
     ResourceBindings.MaterialSRB.resize(GLTFModel.Materials.size());
     for (size_t mat = 0; mat < GLTFModel.Materials.size(); ++mat)
     {
-        CreateMaterialSRB(GLTFModel, GLTFModel.Materials[mat], pCameraAttribs, pLightAttribs, nullptr, &ResourceBindings.MaterialSRB[mat]);
+        auto& pMatSRB = ResourceBindings.MaterialSRB[mat];
+        pPSO->CreateShaderResourceBinding(&pMatSRB, true);
+        InitMaterialSRB(GLTFModel, GLTFModel.Materials[mat], pCameraAttribs, pLightAttribs, pMatSRB);
     }
     return ResourceBindings;
 }

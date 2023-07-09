@@ -245,23 +245,18 @@ public:
     ITextureView* GetDefaultNormalMapSRV()  { return m_pDefaultNormalMapSRV; }
     // clang-format on
 
-    /// Creates a shader resource binding for the given material.
+    /// Initializes a shader resource binding for the given material.
 
     /// \param [in] Model          - GLTF model that keeps material textures.
     /// \param [in] Material       - GLTF material to create SRB for.
     /// \param [in] pCameraAttribs - Camera attributes constant buffer to set in the SRB.
     /// \param [in] pLightAttribs  - Light attributes constant buffer to set in the SRB.
-    /// \param [in] pPSO           - Optional PSO object to use to create the SRB instead of the
-    ///                              default PSO. Can be null
-    /// \param [out] ppMaterialSRB - Pointer to memory location where the pointer to the SRB object
-    ///                              will be written.
-    void CreateMaterialSRB(GLTF::Model&             Model,
-                           GLTF::Material&          Material,
-                           IBuffer*                 pCameraAttribs,
-                           IBuffer*                 pLightAttribs,
-                           IPipelineState*          pPSO,
-                           IShaderResourceBinding** ppMaterialSRB);
-
+    /// \param [in] pMaterialSRB   - A pointer to the SRB object to initialize.
+    void InitMaterialSRB(GLTF::Model&            Model,
+                         GLTF::Material&         Material,
+                         IBuffer*                pCameraAttribs,
+                         IBuffer*                pLightAttribs,
+                         IShaderResourceBinding* pMaterialSRB);
 
     /// GLTF resource cache use information.
     struct ResourceCacheUseInfo
