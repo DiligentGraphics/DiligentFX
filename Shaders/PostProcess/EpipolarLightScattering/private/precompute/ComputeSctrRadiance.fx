@@ -17,7 +17,7 @@ SamplerState g_tex3DPreviousSctrOrder_sampler;
 
 Texture2D<float3> g_tex2DSphereRandomSampling;
 
-RWTexture3D</*format = rgba32f*/float3> g_rwtex3DSctrRadiance;
+RWTexture3D</*format = rgba32f*/float4> g_rwtex3DSctrRadiance;
 
 // This shader pre-computes the radiance of light scattered at a given point in given
 // direction. It multiplies the previous order in-scattered light with the phase function 
@@ -41,10 +41,10 @@ void ComputeSctrRadianceCS(uint3 ThreadId  : SV_DispatchThreadID)
     float3 f3RayStart    = float3(0.0, fAltitude, 0.0);
     float3 f3ViewDir     = ComputeViewDir(fCosViewZenithAngle);
     float3 f3DirOnLight  = ComputeLightDir(f3ViewDir, fCosSunZenithAngle, fCosSunViewAngle);
-    
+
     // Compute particle density scale factor
     float2 f2ParticleDensity = exp( -float2(fAltitude, fAltitude) * g_MediaParams.f4ParticleScaleHeight.zw );
-    
+
     float3 f3SctrRadiance = float3(0.0, 0.0, 0.0);
     // Go through a number of samples randomly distributed over the sphere
     for(int iSample = 0; iSample < NUM_RANDOM_SPHERE_SAMPLES; ++iSample)
@@ -64,7 +64,7 @@ void ComputeSctrRadianceCS(uint3 ThreadId  : SV_DispatchThreadID)
             g_tex3DPreviousSctrOrder,
             g_tex3DPreviousSctrOrder_sampler,
             f4UVWQ); 
-        
+
         // Apply phase functions for each type of particles
         // Note that total scattering coefficients are baked into the angular scattering coeffs
         float3 f3DRlghInsctr = f2ParticleDensity.x * f3PrevOrderSctr;
@@ -81,6 +81,6 @@ void ComputeSctrRadianceCS(uint3 ThreadId  : SV_DispatchThreadID)
     // numeric integration
     f3SctrRadiance *= 4.0*PI / float(NUM_RANDOM_SPHERE_SAMPLES);
 
-    g_rwtex3DSctrRadiance[ThreadId] = f3SctrRadiance;
+    g_rwtex3DSctrRadiance[ThreadId] = float4(f3SctrRadiance, 0.0);
 }
 

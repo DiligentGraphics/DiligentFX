@@ -16,7 +16,7 @@ SamplerState g_tex2DOccludedNetDensityToAtmTop_sampler;
 #include "ScatteringIntegrals.fxh"
 #include "PrecomputeCommon.fxh"
 
-RWTexture3D</*format = rgba16f*/float3> g_rwtex3DSingleScattering;
+RWTexture3D</*format = rgba16f*/float4> g_rwtex3DSingleScattering;
 
 
 // This shader pre-computes the radiance of single scattering at a given point in given
@@ -39,7 +39,7 @@ void PrecomputeSingleScatteringCS(uint3 ThreadId  : SV_DispatchThreadID)
     float3 f3RayStart    = float3(0.0, fAltitude, 0.0);
     float3 f3ViewDir     = ComputeViewDir(fCosViewZenithAngle);
     float3 f3DirOnLight  = ComputeLightDir(f3ViewDir, fCosSunZenithAngle, fCosSunViewAngle);
-  
+
     // Intersect view ray with the atmosphere boundaries
     float4 f4Isecs;
     GetRaySphereIntersection2( f3RayStart, f3ViewDir, f3EarthCentre, 
@@ -53,7 +53,7 @@ void PrecomputeSingleScatteringCS(uint3 ThreadId  : SV_DispatchThreadID)
         // This is just a sanity check and should never happen
         // as the start point is always under the top of the 
         // atmosphere (look at InsctrLUTCoords2WorldParams())
-        g_rwtex3DSingleScattering[ThreadId] = float3(0.0, 0.0, 0.0);
+        g_rwtex3DSingleScattering[ThreadId] = float4(0.0, 0.0, 0.0, 0.0);
         return;
     }
 
@@ -62,7 +62,7 @@ void PrecomputeSingleScatteringCS(uint3 ThreadId  : SV_DispatchThreadID)
     // If ray hits Earth, limit the length by the distance to the surface
     if(f2RayEarthIsecs.x > 0.0)
         fRayLength = min(fRayLength, f2RayEarthIsecs.x);
-    
+
     float3 f3RayEnd = f3RayStart + f3ViewDir * fRayLength;
 
     // Integrate single-scattering
@@ -80,5 +80,5 @@ void PrecomputeSingleScatteringCS(uint3 ThreadId  : SV_DispatchThreadID)
                                     f3Inscattering,
                                     f3Extinction);
 
-    g_rwtex3DSingleScattering[ThreadId] = f3Inscattering;
+    g_rwtex3DSingleScattering[ThreadId] = float4(f3Inscattering, 0.0);
 }
