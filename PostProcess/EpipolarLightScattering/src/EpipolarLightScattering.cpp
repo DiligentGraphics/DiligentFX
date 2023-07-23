@@ -324,7 +324,7 @@ EpipolarLightScattering::EpipolarLightScattering(IRenderDevice*              pDe
     m_MediaParams.fAtmBottomRadius     = m_MediaParams.fEarthRadius + m_MediaParams.fAtmBottomAltitude;
     m_MediaParams.fAtmAltitudeRangeInv = 1.f / (m_MediaParams.fAtmTopAltitude - m_MediaParams.fAtmBottomAltitude);
 
-    pDevice->CreateResourceMapping(ResourceMappingDesc(), &m_pResMapping);
+    pDevice->CreateResourceMapping(ResourceMappingCreateInfo{}, &m_pResMapping);
     const auto AdapterType = pDevice->GetAdapterInfo().Type;
     if (AdapterType == ADAPTER_TYPE_SOFTWARE || AdapterType == ADAPTER_TYPE_INTEGRATED)
     {
