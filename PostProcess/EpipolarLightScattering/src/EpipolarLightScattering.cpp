@@ -283,12 +283,12 @@ void EpipolarLightScattering::RenderTechnique::CheckStaleFlags(Uint32 StalePSODe
     }
 }
 
-static RefCntAutoPtr<IShader> CreateShader(IRenderDevice*     pDevice,
-                                           IRenderStateCache* pStateCache,
-                                           const Char*        FileName,
-                                           const Char*        EntryPoint,
-                                           SHADER_TYPE        Type,
-                                           const ShaderMacro* Macros = nullptr)
+static RefCntAutoPtr<IShader> CreateShader(IRenderDevice*          pDevice,
+                                           IRenderStateCache*      pStateCache,
+                                           const Char*             FileName,
+                                           const Char*             EntryPoint,
+                                           SHADER_TYPE             Type,
+                                           const ShaderMacroArray& Macros = {})
 {
     ShaderCreateInfo ShaderCI;
     ShaderCI.EntryPoint                      = EntryPoint;
@@ -657,7 +657,6 @@ void EpipolarLightScattering::PrecomputeScatteringLUT(IRenderDevice* pDevice, IR
         ShaderMacroHelper Macros;
         DefineMacros(Macros);
         Macros.AddShaderMacro("THREAD_GROUP_SIZE", ThreadGroupSize);
-        Macros.Finalize();
         auto pPrecomputeSingleSctrCS =
             CreateShader(pDevice, pStateCache, "PrecomputeSingleScattering.fx", "PrecomputeSingleScatteringCS",
                          SHADER_TYPE_COMPUTE, Macros);
@@ -674,7 +673,6 @@ void EpipolarLightScattering::PrecomputeScatteringLUT(IRenderDevice* pDevice, IR
         DefineMacros(Macros);
         Macros.AddShaderMacro("THREAD_GROUP_SIZE", ThreadGroupSize);
         Macros.AddShaderMacro("NUM_RANDOM_SPHERE_SAMPLES", static_cast<Int32>(m_uiNumRandomSamplesOnSphere));
-        Macros.Finalize();
         auto pComputeSctrRadianceCS =
             CreateShader(pDevice, pStateCache, "ComputeSctrRadiance.fx", "ComputeSctrRadianceCS",
                          SHADER_TYPE_COMPUTE, Macros);
@@ -690,7 +688,6 @@ void EpipolarLightScattering::PrecomputeScatteringLUT(IRenderDevice* pDevice, IR
         ShaderMacroHelper Macros;
         DefineMacros(Macros);
         Macros.AddShaderMacro("THREAD_GROUP_SIZE", ThreadGroupSize);
-        Macros.Finalize();
         auto pComputeScatteringOrderCS =
             CreateShader(pDevice, pStateCache, "ComputeScatteringOrder.fx", "ComputeScatteringOrderCS",
                          SHADER_TYPE_COMPUTE, Macros);
@@ -706,7 +703,6 @@ void EpipolarLightScattering::PrecomputeScatteringLUT(IRenderDevice* pDevice, IR
         ShaderMacroHelper Macros;
         DefineMacros(Macros);
         Macros.AddShaderMacro("THREAD_GROUP_SIZE", ThreadGroupSize);
-        Macros.Finalize();
         auto pInitHighOrderScatteringCS =
             CreateShader(pDevice, pStateCache, "InitHighOrderScattering.fx", "InitHighOrderScatteringCS",
                          SHADER_TYPE_COMPUTE, Macros);
@@ -722,7 +718,6 @@ void EpipolarLightScattering::PrecomputeScatteringLUT(IRenderDevice* pDevice, IR
         ShaderMacroHelper Macros;
         DefineMacros(Macros);
         Macros.AddShaderMacro("THREAD_GROUP_SIZE", ThreadGroupSize);
-        Macros.Finalize();
         auto pUpdateHighOrderScatteringCS =
             CreateShader(pDevice, pStateCache, "UpdateHighOrderScattering.fx", "UpdateHighOrderScatteringCS",
                          SHADER_TYPE_COMPUTE, Macros);
@@ -738,7 +733,6 @@ void EpipolarLightScattering::PrecomputeScatteringLUT(IRenderDevice* pDevice, IR
         ShaderMacroHelper Macros;
         DefineMacros(Macros);
         Macros.AddShaderMacro("THREAD_GROUP_SIZE", ThreadGroupSize);
-        Macros.Finalize();
         auto pCombineScatteringOrdersCS =
             CreateShader(pDevice, pStateCache, "CombineScatteringOrders.fx", "CombineScatteringOrdersCS",
                          SHADER_TYPE_COMPUTE, Macros);
@@ -968,7 +962,6 @@ void EpipolarLightScattering::ReconstructCameraSpaceZ()
     {
         ShaderMacroHelper Macros;
         DefineMacros(Macros);
-        Macros.Finalize();
         auto pReconstrCamSpaceZPS =
             CreateShader(m_FrameAttribs.pDevice, m_FrameAttribs.pStateCache, "ReconstructCameraSpaceZ.fx", "ReconstructCameraSpaceZPS",
                          SHADER_TYPE_PIXEL, Macros);
@@ -998,7 +991,6 @@ void EpipolarLightScattering::RenderSliceEndpoints()
     {
         ShaderMacroHelper Macros;
         DefineMacros(Macros);
-        Macros.Finalize();
 
         auto pRendedSliceEndpointsPS =
             CreateShader(m_FrameAttribs.pDevice, m_FrameAttribs.pStateCache,
@@ -1034,7 +1026,7 @@ void EpipolarLightScattering::RenderCoordinateTexture()
     {
         ShaderMacroHelper Macros;
         DefineMacros(Macros);
-        Macros.Finalize();
+
         auto pRendedCoordTexPS = CreateShader(
             m_FrameAttribs.pDevice, m_FrameAttribs.pStateCache,
             "RenderCoordinateTexture.fx", "GenerateCoordinateTexturePS",
@@ -1084,7 +1076,7 @@ void EpipolarLightScattering::RenderCoarseUnshadowedInctr()
     {
         ShaderMacroHelper Macros;
         DefineMacros(Macros);
-        Macros.Finalize();
+
         auto EntryPoint =
             m_PostProcessingAttribs.iExtinctionEvalMode == EXTINCTION_EVAL_MODE_EPIPOLAR ?
             "RenderCoarseUnshadowedInsctrAndExtinctionPS" :
@@ -1202,7 +1194,6 @@ void EpipolarLightScattering::RefineSampleLocations()
         Macros.AddShaderMacro("REFINEMENT_CRITERION", m_PostProcessingAttribs.iRefinementCriterion);
         Macros.AddShaderMacro("AUTO_EXPOSURE",        m_PostProcessingAttribs.ToneMapping.bAutoExposure);
         // clang-format on
-        Macros.Finalize();
 
         auto pRefineSampleLocationsCS = CreateShader(m_FrameAttribs.pDevice, m_FrameAttribs.pStateCache, "RefineSampleLocations.fx", "RefineSampleLocationsCS",
                                                      SHADER_TYPE_COMPUTE, Macros);
@@ -1247,7 +1238,6 @@ void EpipolarLightScattering::MarkRayMarchingSamples()
     {
         ShaderMacroHelper Macros;
         DefineMacros(Macros);
-        Macros.Finalize();
 
         auto pMarkRayMarchingSamplesInStencilPS =
             CreateShader(m_FrameAttribs.pDevice, m_FrameAttribs.pStateCache,
@@ -1282,7 +1272,6 @@ void EpipolarLightScattering::RenderSliceUVDirAndOrig()
     {
         ShaderMacroHelper Macros;
         DefineMacros(Macros);
-        Macros.Finalize();
 
         auto pRenderSliceUVDirInSMPS =
             CreateShader(m_FrameAttribs.pDevice, m_FrameAttribs.pStateCache,
@@ -1331,7 +1320,6 @@ void EpipolarLightScattering::Build1DMinMaxMipMap(int iCascadeIndex)
         ShaderMacroHelper Macros;
         DefineMacros(Macros);
         Macros.AddShaderMacro("IS_32BIT_MIN_MAX_MAP", m_PostProcessingAttribs.bIs32BitMinMaxMipMap);
-        Macros.Finalize();
 
         auto pInitializeMinMaxShadowMapPS = CreateShader(
             m_FrameAttribs.pDevice, m_FrameAttribs.pStateCache,
@@ -1377,7 +1365,6 @@ void EpipolarLightScattering::Build1DMinMaxMipMap(int iCascadeIndex)
     {
         ShaderMacroHelper Macros;
         DefineMacros(Macros);
-        Macros.Finalize();
 
         auto pComputeMinMaxSMLevelPS = CreateShader(
             m_FrameAttribs.pDevice, m_FrameAttribs.pStateCache,
@@ -1506,7 +1493,6 @@ void EpipolarLightScattering::DoRayMarching(Uint32 uiMaxStepsAlongRay,
         DefineMacros(Macros);
         Macros.AddShaderMacro("CASCADE_PROCESSING_MODE", m_PostProcessingAttribs.iCascadeProcessingMode);
         Macros.AddShaderMacro("USE_1D_MIN_MAX_TREE", m_PostProcessingAttribs.bUse1DMinMaxTree);
-        Macros.Finalize();
 
         auto pDoRayMarchPS =
             CreateShader(m_FrameAttribs.pDevice, m_FrameAttribs.pStateCache, "RayMarch.fx", "RayMarchPS", SHADER_TYPE_PIXEL, Macros);
@@ -1627,7 +1613,6 @@ void EpipolarLightScattering::InterpolateInsctrIrradiance()
     {
         ShaderMacroHelper Macros;
         DefineMacros(Macros);
-        Macros.Finalize();
 
         auto pInterpolateIrradiancePS = CreateShader(
             m_FrameAttribs.pDevice, m_FrameAttribs.pStateCache,
@@ -1681,7 +1666,6 @@ void EpipolarLightScattering::UnwarpEpipolarScattering(bool bRenderLuminance)
         Macros.AddShaderMacro("TONE_MAPPING_MODE",                    m_PostProcessingAttribs.ToneMapping.iToneMappingMode);
         Macros.AddShaderMacro("CORRECT_INSCATTERING_AT_DEPTH_BREAKS", m_PostProcessingAttribs.bCorrectScatteringAtDepthBreaks);
         // clang-format on
-        Macros.Finalize();
 
         auto pUnwarpEpipolarSctrImgPS = CreateShader(
             m_FrameAttribs.pDevice, m_FrameAttribs.pStateCache,
@@ -1737,7 +1721,6 @@ void EpipolarLightScattering::UnwarpEpipolarScattering(bool bRenderLuminance)
         Macros.AddShaderMacro("PERFORM_TONE_MAPPING", false);
         // No inscattering correction - we need to render the entire image in low resolution
         Macros.AddShaderMacro("CORRECT_INSCATTERING_AT_DEPTH_BREAKS", false);
-        Macros.Finalize();
 
         auto pUnwarpAndRenderLuminancePS = CreateShader(
             m_FrameAttribs.pDevice, m_FrameAttribs.pStateCache,
@@ -1812,7 +1795,6 @@ void EpipolarLightScattering::UpdateAverageLuminance()
         // static_cast<int>() is required because Run() gets its arguments by reference
         // and gcc will try to find reference to sm_iLowResLuminanceMips, which does not exist
         Macros.AddShaderMacro("LOW_RES_LUMINANCE_MIPS", static_cast<int>(sm_iLowResLuminanceMips));
-        Macros.Finalize();
 
         auto pUpdateAverageLuminancePS = CreateShader(
             m_FrameAttribs.pDevice, m_FrameAttribs.pStateCache,
@@ -1872,7 +1854,6 @@ void EpipolarLightScattering::FixInscatteringAtDepthBreaks(Uint32               
         Macros.AddShaderMacro("TONE_MAPPING_MODE",       m_PostProcessingAttribs.ToneMapping.iToneMappingMode);
         Macros.AddShaderMacro("USE_1D_MIN_MAX_TREE",     false);
         // clang-format on
-        Macros.Finalize();
 
         auto pFixInsctrAtDepthBreaksPS = CreateShader(
             m_FrameAttribs.pDevice, m_FrameAttribs.pStateCache,
@@ -2001,7 +1982,6 @@ void EpipolarLightScattering::RenderSampleLocations()
     {
         ShaderMacroHelper Macros;
         DefineMacros(Macros);
-        Macros.Finalize();
 
         auto pRenderSampleLocationsVS = CreateShader(
             m_FrameAttribs.pDevice, m_FrameAttribs.pStateCache,
@@ -2884,7 +2864,7 @@ void EpipolarLightScattering::ComputeAmbientSkyLightTexture(IRenderDevice* pDevi
     {
         ShaderMacroHelper Macros;
         Macros.AddShaderMacro("NUM_RANDOM_SPHERE_SAMPLES", static_cast<Int32>(m_uiNumRandomSamplesOnSphere));
-        Macros.Finalize();
+
         auto pPrecomputeAmbientSkyLightPS = CreateShader(pDevice, pStateCache, "PrecomputeAmbientSkyLight.fx", "PrecomputeAmbientSkyLightPS",
                                                          SHADER_TYPE_PIXEL, Macros);
 
