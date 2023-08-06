@@ -57,6 +57,8 @@ endforeach()
 
 # Convert shaders to headers and generate master header with the list of all files
 if(NOT FILE2STRING_PATH STREQUAL "")
+    find_package(Python3 REQUIRED)
+
     set(SHADER_OUTPUT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shaders_inc)
 
     file(MAKE_DIRECTORY ${SHADER_OUTPUT_DIR})
@@ -78,7 +80,7 @@ if(NOT FILE2STRING_PATH STREQUAL "")
         get_filename_component(FILE_NAME ${FILE} NAME)
         set(CONVERTED_FILE ${SHADER_OUTPUT_DIR}/${FILE_NAME}.h)
         add_custom_command(OUTPUT ${CONVERTED_FILE}
-                           COMMAND ${PYTHON_EXECUTABLE} ${FILE2STRING_PATH} ${FILE} ${CONVERTED_FILE}
+                           COMMAND ${Python3_EXECUTABLE} ${FILE2STRING_PATH} ${FILE} ${CONVERTED_FILE}
                            MAIN_DEPENDENCY ${FILE} # the primary input source file to the command
                            COMMENT "Processing shader ${FILE}"
                            VERBATIM)
