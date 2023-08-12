@@ -95,7 +95,7 @@ struct ShadowMapAttribs
     BOOL  bIs32BitEVSM                  DEFAULT_VALUE(1);
     int   iFixedFilterSize              DEFAULT_VALUE(3); // 3x3 filter
     float fFilterWorldSize              DEFAULT_VALUE(0);
-    bool  fDummy;
+    BOOL  fDummy;
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
     CHECK_STRUCT_ALIGNMENT(ShadowMapAttribs);

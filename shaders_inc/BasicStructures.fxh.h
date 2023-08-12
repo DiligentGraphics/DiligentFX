@@ -95,7 +95,7 @@
 "    BOOL  bIs32BitEVSM                  DEFAULT_VALUE(1);\n"
 "    int   iFixedFilterSize              DEFAULT_VALUE(3); // 3x3 filter\n"
 "    float fFilterWorldSize              DEFAULT_VALUE(0);\n"
-"    bool  fDummy;\n"
+"    BOOL  fDummy;\n"
 "};\n"
 "#ifdef CHECK_STRUCT_ALIGNMENT\n"
 "    CHECK_STRUCT_ALIGNMENT(ShadowMapAttribs);\n"
