@@ -1,5 +1,5 @@
 /*
- *  Copyright 2019-2022 Diligent Graphics LLC
+ *  Copyright 2019-2023 Diligent Graphics LLC
  *  Copyright 2015-2019 Egor Yusov
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -82,7 +82,7 @@ public:
     {
         /// Pointer to camera view matrix, must not be null.
         const float4x4*    pCameraView  = nullptr;
-        
+
         /// Pointer to camera world matrix.
         const float4x4*    pCameraWorld = nullptr;
 
@@ -94,8 +94,9 @@ public:
 
         /// Whether to snap cascades to texels in light view space
         bool               SnapCascades       = true;
-        
-        /// Whether to stabilize cascade extents in light view space
+
+        /// Whether to stabilize cascade extents in light view space,
+        /// so that they do not change when camera rotates.
         bool               StabilizeExtents   = true;
 
         /// Whether to use same extents for X and Y axis. Enabled automatically if StabilizeExtents == true
@@ -110,7 +111,25 @@ public:
 
         /// Callback that allows the application to adjust z range of every cascade.
         /// The callback is also called with cascade value -1 to adjust that entire camera range.
-        std::function<void(int, float&, float&)> AdjustCascadeRange;
+        ///
+        /// \param [in]  CascadeIdx - Cascade index, or -1 for the entire camera range.
+        /// \param [out] MinZ       - Minimum z value of the cascade range.
+        /// \param [out] MaxZ       - Maximum z value of the cascade range.
+        std::function<void(int CascadeIdx, float& MinZ, float& MaxZ)> AdjustCascadeRange;
+
+        /// Callback that allows the application to adjust cascade center.
+        ///
+        /// \param [in]    Cascade                   - Cascade index.
+        /// \param [in]    WorldToLightViewSpaceMatr - World to light view space transform matrix.
+        /// \param [in]    TexelXSize                - Shadow map texel size along X axis.
+        /// \param [in]    TexelYSize                - Shadow map texel size along Y axis.
+        /// \param [inout] CascadeCenterX            - Cascade center X coordinate.
+        /// \param [inout] CascadeCenterY            - Cascade center Y coordinate.
+        ///
+        /// \ramarks    The main use case for this callback is to adjust the cascade center to
+        ///             to snap it to texels in light view space in scenarios where global
+        ///             origin is dynamic (such as terrain rendering). 
+        std::function<void(int Cascade, const float4x4& WorldToLightViewSpaceMatr, float TexelXSize, float TexelYSize, float& CascadeCenterX, float& CascadeCenterY)> AdjustCascadeCenter;
     };
 
     // clang-format on

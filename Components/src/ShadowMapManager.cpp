@@ -1,5 +1,5 @@
 /*
- *  Copyright 2019-2022 Diligent Graphics LLC
+ *  Copyright 2019-2023 Diligent Graphics LLC
  *  Copyright 2015-2019 Egor Yusov
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -359,6 +359,10 @@ void ShadowMapManager::DistributeCascades(const DistributeCascadeInfo& Info,
             float fTexelYSize = f3CascadeExtent.y / f2ShadowMapSize.y;
             f3CascadeCenter.x = std::round(f3CascadeCenter.x / fTexelXSize) * fTexelXSize;
             f3CascadeCenter.y = std::round(f3CascadeCenter.y / fTexelYSize) * fTexelYSize;
+            if (Info.AdjustCascadeCenter)
+            {
+                Info.AdjustCascadeCenter(iCascade, WorldToLightViewSpaceMatr, fTexelXSize, fTexelYSize, f3CascadeCenter.x, f3CascadeCenter.y);
+            }
         }
 
         // Extend cascade Z range to allow room for filtering
