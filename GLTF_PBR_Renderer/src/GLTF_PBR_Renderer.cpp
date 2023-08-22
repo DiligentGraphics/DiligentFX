@@ -525,7 +525,7 @@ void GLTF_PBR_Renderer::CreateResourceCacheSRB(IRenderDevice*           pDevice,
     {
         if (auto* pVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, VarName))
         {
-            if (auto* pTexture = CacheUseInfo.pResourceMgr->GetTexture(Fmt, pDevice, pCtx))
+            if (auto* pTexture = CacheUseInfo.pResourceMgr->UpdateTexture(Fmt, pDevice, pCtx))
             {
                 pVar->Set(pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
             }
@@ -869,7 +869,7 @@ void GLTF_PBR_Renderer::Begin(IRenderDevice*         pDevice,
         std::array<IBuffer*, 8> pVBs; // Do not zero-initialize
         for (Uint32 i = 0; i < PoolDesc.NumElements; ++i)
         {
-            pVBs[i] = pVertexPool->GetBuffer(i, pDevice, pCtx);
+            pVBs[i] = pVertexPool->Update(i, pDevice, pCtx);
             if ((pVBs[i]->GetDesc().BindFlags & BIND_VERTEX_BUFFER) == 0)
                 pVBs[i] = nullptr;
         }
@@ -877,7 +877,7 @@ void GLTF_PBR_Renderer::Begin(IRenderDevice*         pDevice,
         pCtx->SetVertexBuffers(0, PoolDesc.NumElements, pVBs.data(), nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION, SET_VERTEX_BUFFERS_FLAG_RESET);
     }
 
-    auto* pIndexBuffer = CacheUseInfo.pResourceMgr->GetIndexBuffer(pDevice, pCtx);
+    auto* pIndexBuffer = CacheUseInfo.pResourceMgr->UpdateIndexBuffer(pDevice, pCtx);
     pCtx->SetIndexBuffer(pIndexBuffer, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 }
 
