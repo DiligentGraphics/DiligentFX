@@ -6,12 +6,14 @@ set(SOURCE
     src/Material.cpp
     src/Mesh.cpp
     src/RenderDelegate.cpp
+    src/Renderer.cpp
 )
 
 set(INCLUDE
     include/Material.hpp
     include/Mesh.hpp
     include/RenderDelegate.hpp
+    include/Renderer.hpp
 )
 
 add_library(Diligent-Hydrogent STATIC README.md ${SOURCE} ${INCLUDE})
@@ -84,7 +86,9 @@ PRIVATE
     usd_vt
     NO_WERROR
     EnableRTTI # USD requires RTTI
+    Diligent-GraphicsEngine
     Diligent-BasicPlatform
+    Diligent-GraphicsTools
 )
 
 if(PLATFORM_WIN32 OR PLATFORM_UNIVERSAL_WINDOWS)
