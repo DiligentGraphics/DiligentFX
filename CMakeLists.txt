@@ -36,6 +36,10 @@ add_subdirectory(Components)
 add_subdirectory(PostProcess)
 add_subdirectory(GLTF_PBR_Renderer)
 
+if(DILIGENT_USD_PATH)
+    add_subdirectory(Hydrogent)
+endif()
+
 if(DILIGENT_BUILD_TESTS)
     add_subdirectory(Tests)
 endif()
