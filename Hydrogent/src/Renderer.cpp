@@ -25,6 +25,7 @@
  */
 
 #include "Renderer.hpp"
+#include "EngineMemory.h"
 
 namespace Diligent
 {
@@ -32,9 +33,17 @@ namespace Diligent
 namespace USD
 {
 
-HnRenderer::HnRenderer(IRenderDevice* pDevice,
-                       TEXTURE_FORMAT RTVFormat,
-                       TEXTURE_FORMAT DSVFormat) :
+void CreateHnRenderer(IRenderDevice* pDevice, TEXTURE_FORMAT RTVFormat, TEXTURE_FORMAT DSVFormat, HnRenderer** ppRenderer)
+{
+    auto* pRenderer = NEW_RC_OBJ(GetRawAllocator(), "HnRenderer instance", HnRenderer)(pDevice, RTVFormat, DSVFormat);
+    pRenderer->QueryInterface(IID_Unknown, reinterpret_cast<IObject**>(ppRenderer));
+}
+
+HnRenderer::HnRenderer(IReferenceCounters* pRefCounters,
+                       IRenderDevice*      pDevice,
+                       TEXTURE_FORMAT      RTVFormat,
+                       TEXTURE_FORMAT      DSVFormat) :
+    TBase{pRefCounters},
     m_Device{pDevice}
 {
 }

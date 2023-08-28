@@ -39,12 +39,8 @@ if(${CMAKE_GENERATOR} MATCHES "Visual Studio")
     )
 
     target_link_directories(Diligent-Hydrogent
-    PRIVATE
+    PUBLIC
         ${DILIGENT_USD_PATH}/$<CONFIG>/lib
-    )
-
-    set_target_properties(Diligent-Hydrogent PROPERTIES
-        VS_DEBUGGER_ENVIRONMENT "PATH=%PATH%;${DILIGENT_USD_PATH}/$<CONFIG>/lib;${DILIGENT_USD_PATH}/$<CONFIG>/bin"
     )
 else()
     file(GLOB BOOST_INCLUDE_DEBUG "${DILIGENT_USD_PATH}/Debug/boost-*")
@@ -55,7 +51,7 @@ else()
     )
 
     target_link_directories(Diligent-Hydrogent
-    PRIVATE
+    PUBLIC
         ${DILIGENT_USD_PATH}/lib
     )
 endif()
@@ -67,7 +63,7 @@ PRIVATE
 )
 
 target_link_directories(Diligent-Hydrogent
-PRIVATE 
+PUBLIC 
     ${Python3_LIBRARY_DIRS}
 )
 
@@ -76,7 +72,7 @@ add_library(EnableRTTI INTERFACE)
 target_compile_options(EnableRTTI INTERFACE /GR)
 
 target_link_libraries(Diligent-Hydrogent
-PRIVATE
+PUBLIC
     usd_sdf
     usd_tf
     usd_usd
@@ -84,6 +80,7 @@ PRIVATE
     usd_hd
     usd_usdImaging
     usd_vt
+PRIVATE
     NO_WERROR
     EnableRTTI # USD requires RTTI
     Diligent-GraphicsEngine

@@ -32,6 +32,7 @@
 #include "DeviceContext.h"
 #include "RefCntAutoPtr.hpp"
 #include "BasicMath.hpp"
+#include "ObjectBase.hpp"
 
 namespace Diligent
 {
@@ -41,10 +42,15 @@ namespace USD
 
 class RenderDelegate;
 
-class HnRenderer
+class HnRenderer : public ObjectBase<IObject>
 {
 public:
-    HnRenderer(IRenderDevice* pDevice, TEXTURE_FORMAT RTVFormat, TEXTURE_FORMAT DSVFormat);
+    using TBase = ObjectBase<IObject>;
+
+    HnRenderer(IReferenceCounters* pRefCounters,
+               IRenderDevice*      pDevice,
+               TEXTURE_FORMAT      RTVFormat,
+               TEXTURE_FORMAT      DSVFormat);
     ~HnRenderer();
 
     void LoadUSDStage(const char* FileName);
@@ -54,6 +60,8 @@ public:
 private:
     RenderDeviceWithCache_N m_Device;
 };
+
+void CreateHnRenderer(IRenderDevice* pDevice, TEXTURE_FORMAT RTVFormat, TEXTURE_FORMAT DSVFormat, HnRenderer** ppRenderer);
 
 } // namespace USD
 
