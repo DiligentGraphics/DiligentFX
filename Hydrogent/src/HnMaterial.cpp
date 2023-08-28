@@ -24,8 +24,11 @@
  *  of the possibility of such damages.
  */
 
+#include "HnMaterial.hpp"
 
-#include "Mesh.hpp"
+#include "pxr/imaging/hd/sceneDelegate.h"
+
+#include "DebugUtilities.hpp"
 
 namespace Diligent
 {
@@ -33,56 +36,33 @@ namespace Diligent
 namespace USD
 {
 
-std::shared_ptr<HnMesh> HnMesh::Create(pxr::TfToken const& typeId, pxr::SdfPath const& id)
+std::shared_ptr<HnMaterial> HnMaterial::Create(pxr::SdfPath const& id)
 {
-    return std::shared_ptr<HnMesh>(new HnMesh{typeId, id});
+    return std::shared_ptr<HnMaterial>(new HnMaterial{id});
 }
 
-HnMesh::HnMesh(pxr::TfToken const& typeId,
-               pxr::SdfPath const& id) :
-    pxr::HdMesh{id}
-{
-}
-
-HnMesh::~HnMesh()
+HnMaterial::HnMaterial(pxr::SdfPath const& id) :
+    pxr::HdMaterial{id}
 {
 }
 
-pxr::HdDirtyBits HnMesh::GetInitialDirtyBitsMask() const
+HnMaterial::~HnMaterial()
 {
-    // Set all bits except the varying flag
-    return pxr::HdChangeTracker::AllSceneDirtyBits & ~pxr::HdChangeTracker::Varying;
 }
 
-void HnMesh::Sync(pxr::HdSceneDelegate* delegate,
-                  pxr::HdRenderParam*   renderParam,
-                  pxr::HdDirtyBits*     dirtyBits,
-                  pxr::TfToken const&   reprToken)
+void HnMaterial::Sync(pxr::HdSceneDelegate* sceneDelegate,
+                      pxr::HdRenderParam*   renderParam,
+                      pxr::HdDirtyBits*     dirtyBits)
 {
-    if (*dirtyBits == pxr::HdChangeTracker::Clean)
+    if (*dirtyBits == pxr::HdMaterial::Clean)
         return;
 
-    *dirtyBits &= ~pxr::HdChangeTracker::AllSceneDirtyBits;
+    *dirtyBits = HdMaterial::Clean;
 }
 
-pxr::TfTokenVector const& HnMesh::GetBuiltinPrimvarNames() const
+pxr::HdDirtyBits HnMaterial::GetInitialDirtyBitsMask() const
 {
-    static const pxr::TfTokenVector names{};
-    return names;
-}
-
-pxr::HdDirtyBits HnMesh::_PropagateDirtyBits(pxr::HdDirtyBits bits) const
-{
-    return bits;
-}
-
-void HnMesh::_InitRepr(pxr::TfToken const& reprToken, pxr::HdDirtyBits* dirtyBits)
-{
-    auto it = std::find_if(_reprs.begin(), _reprs.end(), _ReprComparator(reprToken));
-    if (it == _reprs.end())
-    {
-        _reprs.emplace_back(reprToken, pxr::HdReprSharedPtr());
-    }
+    return pxr::HdMaterial::AllDirty;
 }
 
 } // namespace USD

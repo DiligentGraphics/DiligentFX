@@ -24,11 +24,8 @@
  *  of the possibility of such damages.
  */
 
-#include "Material.hpp"
-
-#include "pxr/imaging/hd/sceneDelegate.h"
-
-#include "DebugUtilities.hpp"
+#include "HnRenderer.hpp"
+#include "EngineMemory.h"
 
 namespace Diligent
 {
@@ -36,33 +33,35 @@ namespace Diligent
 namespace USD
 {
 
-std::shared_ptr<HnMaterial> HnMaterial::Create(pxr::SdfPath const& id)
+void CreateHnRenderer(IRenderDevice* pDevice, TEXTURE_FORMAT RTVFormat, TEXTURE_FORMAT DSVFormat, HnRenderer** ppRenderer)
 {
-    return std::shared_ptr<HnMaterial>(new HnMaterial{id});
+    auto* pRenderer = NEW_RC_OBJ(GetRawAllocator(), "HnRenderer instance", HnRenderer)(pDevice, RTVFormat, DSVFormat);
+    pRenderer->QueryInterface(IID_Unknown, reinterpret_cast<IObject**>(ppRenderer));
 }
 
-HnMaterial::HnMaterial(pxr::SdfPath const& id) :
-    pxr::HdMaterial{id}
+HnRenderer::HnRenderer(IReferenceCounters* pRefCounters,
+                       IRenderDevice*      pDevice,
+                       TEXTURE_FORMAT      RTVFormat,
+                       TEXTURE_FORMAT      DSVFormat) :
+    TBase{pRefCounters},
+    m_Device{pDevice}
 {
 }
 
-HnMaterial::~HnMaterial()
+HnRenderer::~HnRenderer()
 {
 }
 
-void HnMaterial::Sync(pxr::HdSceneDelegate* sceneDelegate,
-                      pxr::HdRenderParam*   renderParam,
-                      pxr::HdDirtyBits*     dirtyBits)
+void HnRenderer::LoadUSDStage(const char* FileName)
 {
-    if (*dirtyBits == pxr::HdMaterial::Clean)
-        return;
-
-    *dirtyBits = HdMaterial::Clean;
 }
 
-pxr::HdDirtyBits HnMaterial::GetInitialDirtyBitsMask() const
+void HnRenderer::Update()
 {
-    return pxr::HdMaterial::AllDirty;
+}
+
+void HnRenderer::Draw(IDeviceContext* pCtx, const float4x4& CameraViewProj)
+{
 }
 
 } // namespace USD

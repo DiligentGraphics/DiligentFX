@@ -3,17 +3,17 @@ cmake_minimum_required (VERSION 3.13)
 project(Diligent-Hydrogent CXX)
 
 set(SOURCE
-    src/Material.cpp
-    src/Mesh.cpp
-    src/RenderDelegate.cpp
-    src/Renderer.cpp
+    src/HnMaterial.cpp
+    src/HnMesh.cpp
+    src/HnRenderDelegate.cpp
+    src/HnRenderer.cpp
 )
 
 set(INCLUDE
-    include/Material.hpp
-    include/Mesh.hpp
-    include/RenderDelegate.hpp
-    include/Renderer.hpp
+    include/HnMaterial.hpp
+    include/HnMesh.hpp
+    include/HnRenderDelegate.hpp
+    include/HnRenderer.hpp
 )
 
 add_library(Diligent-Hydrogent STATIC README.md ${SOURCE} ${INCLUDE})

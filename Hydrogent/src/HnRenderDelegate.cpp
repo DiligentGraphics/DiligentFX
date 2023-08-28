@@ -24,9 +24,9 @@
  *  of the possibility of such damages.
  */
 
-#include "RenderDelegate.hpp"
-#include "Mesh.hpp"
-#include "Material.hpp"
+#include "HnRenderDelegate.hpp"
+#include "HnMesh.hpp"
+#include "HnMaterial.hpp"
 #include "DebugUtilities.hpp"
 
 #include "pxr/imaging/hd/material.h"

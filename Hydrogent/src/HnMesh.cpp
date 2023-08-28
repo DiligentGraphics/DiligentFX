@@ -24,8 +24,8 @@
  *  of the possibility of such damages.
  */
 
-#include "Renderer.hpp"
-#include "EngineMemory.h"
+
+#include "HnMesh.hpp"
 
 namespace Diligent
 {
@@ -33,35 +33,56 @@ namespace Diligent
 namespace USD
 {
 
-void CreateHnRenderer(IRenderDevice* pDevice, TEXTURE_FORMAT RTVFormat, TEXTURE_FORMAT DSVFormat, HnRenderer** ppRenderer)
+std::shared_ptr<HnMesh> HnMesh::Create(pxr::TfToken const& typeId, pxr::SdfPath const& id)
 {
-    auto* pRenderer = NEW_RC_OBJ(GetRawAllocator(), "HnRenderer instance", HnRenderer)(pDevice, RTVFormat, DSVFormat);
-    pRenderer->QueryInterface(IID_Unknown, reinterpret_cast<IObject**>(ppRenderer));
+    return std::shared_ptr<HnMesh>(new HnMesh{typeId, id});
 }
 
-HnRenderer::HnRenderer(IReferenceCounters* pRefCounters,
-                       IRenderDevice*      pDevice,
-                       TEXTURE_FORMAT      RTVFormat,
-                       TEXTURE_FORMAT      DSVFormat) :
-    TBase{pRefCounters},
-    m_Device{pDevice}
+HnMesh::HnMesh(pxr::TfToken const& typeId,
+               pxr::SdfPath const& id) :
+    pxr::HdMesh{id}
 {
 }
 
-HnRenderer::~HnRenderer()
+HnMesh::~HnMesh()
 {
 }
 
-void HnRenderer::LoadUSDStage(const char* FileName)
+pxr::HdDirtyBits HnMesh::GetInitialDirtyBitsMask() const
 {
+    // Set all bits except the varying flag
+    return pxr::HdChangeTracker::AllSceneDirtyBits & ~pxr::HdChangeTracker::Varying;
 }
 
-void HnRenderer::Update()
+void HnMesh::Sync(pxr::HdSceneDelegate* delegate,
+                  pxr::HdRenderParam*   renderParam,
+                  pxr::HdDirtyBits*     dirtyBits,
+                  pxr::TfToken const&   reprToken)
 {
+    if (*dirtyBits == pxr::HdChangeTracker::Clean)
+        return;
+
+    *dirtyBits &= ~pxr::HdChangeTracker::AllSceneDirtyBits;
 }
 
-void HnRenderer::Draw(IDeviceContext* pCtx, const float4x4& CameraViewProj)
+pxr::TfTokenVector const& HnMesh::GetBuiltinPrimvarNames() const
 {
+    static const pxr::TfTokenVector names{};
+    return names;
+}
+
+pxr::HdDirtyBits HnMesh::_PropagateDirtyBits(pxr::HdDirtyBits bits) const
+{
+    return bits;
+}
+
+void HnMesh::_InitRepr(pxr::TfToken const& reprToken, pxr::HdDirtyBits* dirtyBits)
+{
+    auto it = std::find_if(_reprs.begin(), _reprs.end(), _ReprComparator(reprToken));
+    if (it == _reprs.end())
+    {
+        _reprs.emplace_back(reprToken, pxr::HdReprSharedPtr());
+    }
 }
 
 } // namespace USD
