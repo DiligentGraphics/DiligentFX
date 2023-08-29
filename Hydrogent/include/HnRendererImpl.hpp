@@ -39,7 +39,9 @@
 #include "pxr/usd/usd/stage.h"
 #include "pxr/imaging/hd/tokens.h"
 #include "pxr/imaging/hd/renderIndex.h"
+#include "pxr/imaging/hd/engine.h"
 #include "pxr/usdImaging/usdImaging/delegate.h"
+
 
 namespace Diligent
 {
@@ -75,9 +77,12 @@ private:
 
     std::unique_ptr<HnRenderDelegate> m_RenderDelegate;
 
-    pxr::UsdStageRefPtr      m_Stage;
-    pxr::HdRenderIndex*      m_RenderIndex     = nullptr;
-    pxr::UsdImagingDelegate* m_ImagingDelegate = nullptr;
+    pxr::UsdStageRefPtr        m_Stage;
+    pxr::HdEngine              m_Engine;
+    pxr::HdRenderIndex*        m_RenderIndex     = nullptr;
+    pxr::UsdImagingDelegate*   m_ImagingDelegate = nullptr;
+    pxr::TfTokenVector         m_RenderTags;
+    pxr::HdRenderPassSharedPtr m_GeometryPass;
 };
 
 } // namespace USD

@@ -39,6 +39,7 @@ namespace USD
 {
 
 class HnMaterial;
+class HnMesh;
 
 /// USD render delegate implementation in Hydrogent.
 class HnRenderDelegate final : public pxr::HdRenderDelegate
@@ -169,6 +170,7 @@ private:
     static const pxr::TfTokenVector SupportedBPrimTypes;
 
     std::unordered_map<std::string, std::shared_ptr<HnMaterial>> m_Materials;
+    std::unordered_map<std::string, std::shared_ptr<HnMesh>>     m_Meshes;
 };
 
 } // namespace USD

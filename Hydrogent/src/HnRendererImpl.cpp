@@ -28,6 +28,9 @@
 #include "HnRenderDelegate.hpp"
 #include "EngineMemory.h"
 
+#include "pxr/imaging/hd/task.h"
+#include "pxr/imaging/hd/unitTestNullRenderPass.h"
+
 namespace Diligent
 {
 
@@ -68,11 +71,56 @@ void HnRendererImpl::LoadUSDStage(const char* FileName)
     m_RenderIndex     = pxr::HdRenderIndex::New(m_RenderDelegate.get(), pxr::HdDriverVector{});
     m_ImagingDelegate = new pxr::UsdImagingDelegate(m_RenderIndex, pxr::SdfPath::AbsoluteRootPath());
     m_ImagingDelegate->Populate(m_Stage->GetPseudoRoot());
+
+    m_RenderTags = {pxr::HdRenderTagTokens->geometry};
+
+    auto Collection = pxr::HdRprimCollection{pxr::HdTokens->geometry, pxr::HdReprSelector(pxr::HdReprTokens->hull)};
+    m_GeometryPass  = pxr::HdRenderPassSharedPtr{new pxr::Hd_UnitTestNullRenderPass{m_RenderIndex, Collection}};
 }
+
+
+namespace
+{
+
+class SyncTask final : public pxr::HdTask
+{
+public:
+    SyncTask(pxr::HdRenderPassSharedPtr const& renderPass, pxr::TfTokenVector const& renderTags) :
+        pxr::HdTask{pxr::SdfPath::EmptyPath()},
+        m_RenderPass{renderPass},
+        m_RenderTags{renderTags}
+    {}
+
+    void Sync(pxr::HdSceneDelegate* delegate, pxr::HdTaskContext* ctx, pxr::HdDirtyBits* dirtyBits) override final
+    {
+        m_RenderPass->Sync();
+
+        *dirtyBits = pxr::HdChangeTracker::Clean;
+    }
+
+    void Prepare(pxr::HdTaskContext* ctx, pxr::HdRenderIndex* renderIndex) override final {}
+
+    void Execute(pxr::HdTaskContext* ctx) override final {}
+
+    const pxr::TfTokenVector& GetRenderTags() const override final
+    {
+        return m_RenderTags;
+    }
+
+private:
+    pxr::HdRenderPassSharedPtr m_RenderPass;
+    pxr::TfTokenVector         m_RenderTags;
+};
+
+} // namespace
+
 
 void HnRendererImpl::Update()
 {
     m_ImagingDelegate->ApplyPendingUpdates();
+    pxr::HdTaskSharedPtrVector tasks = {
+        std::make_shared<SyncTask>(m_GeometryPass, m_RenderTags)};
+    m_Engine.Execute(&m_ImagingDelegate->GetRenderIndex(), &tasks);
 }
 
 void HnRendererImpl::Draw(IDeviceContext* pCtx, const float4x4& CameraViewProj)

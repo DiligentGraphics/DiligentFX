@@ -108,11 +108,13 @@ void HnRenderDelegate::DestroyInstancer(pxr::HdInstancer* instancer)
 pxr::HdRprim* HnRenderDelegate::CreateRprim(pxr::TfToken const& typeId,
                                             pxr::SdfPath const& rprimId)
 {
-    return nullptr;
+    auto it = m_Meshes.emplace(rprimId.GetString(), HnMesh::Create(typeId, rprimId));
+    return it.first->second.get();
 }
 
 void HnRenderDelegate::DestroyRprim(pxr::HdRprim* rPrim)
 {
+    m_Meshes.erase(rPrim->GetId().GetString());
 }
 
 pxr::HdSprim* HnRenderDelegate::CreateSprim(pxr::TfToken const& typeId,
