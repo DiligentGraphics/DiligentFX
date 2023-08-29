@@ -36,13 +36,18 @@
 #include "BasicMath.hpp"
 #include "ObjectBase.hpp"
 
+#include "pxr/usd/usd/stage.h"
+#include "pxr/imaging/hd/tokens.h"
+#include "pxr/imaging/hd/renderIndex.h"
+#include "pxr/usdImaging/usdImaging/delegate.h"
+
 namespace Diligent
 {
 
 namespace USD
 {
 
-class RenderDelegate;
+class HnRenderDelegate;
 
 class HnRendererImpl final : public ObjectBase<IHnRenderer>
 {
@@ -67,6 +72,12 @@ public:
 
 private:
     RenderDeviceWithCache_N m_Device;
+
+    std::unique_ptr<HnRenderDelegate> m_RenderDelegate;
+
+    pxr::UsdStageRefPtr      m_Stage;
+    pxr::HdRenderIndex*      m_RenderIndex     = nullptr;
+    pxr::UsdImagingDelegate* m_ImagingDelegate = nullptr;
 };
 
 } // namespace USD

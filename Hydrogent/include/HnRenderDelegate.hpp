@@ -38,8 +38,7 @@ namespace Diligent
 namespace USD
 {
 
-class Mesh;
-class Material;
+class HnMaterial;
 
 /// USD render delegate implementation in Hydrogent.
 class HnRenderDelegate final : public pxr::HdRenderDelegate
@@ -168,6 +167,8 @@ private:
     static const pxr::TfTokenVector SupportedRPrimTypes;
     static const pxr::TfTokenVector SupportedSPrimTypes;
     static const pxr::TfTokenVector SupportedBPrimTypes;
+
+    std::unordered_map<std::string, std::shared_ptr<HnMaterial>> m_Materials;
 };
 
 } // namespace USD

@@ -118,6 +118,15 @@ void HnRenderDelegate::DestroyRprim(pxr::HdRprim* rPrim)
 pxr::HdSprim* HnRenderDelegate::CreateSprim(pxr::TfToken const& typeId,
                                             pxr::SdfPath const& sprimId)
 {
+    if (typeId == pxr::HdPrimTypeTokens->material)
+    {
+        auto it = m_Materials.emplace(sprimId.GetString(), HnMaterial::Create(sprimId));
+        return it.first->second.get();
+    }
+    else
+    {
+        UNEXPECTED("Unexpected Sprim Type: ", typeId.GetText());
+    }
     return nullptr;
 }
 
@@ -128,6 +137,14 @@ pxr::HdSprim* HnRenderDelegate::CreateFallbackSprim(pxr::TfToken const& typeId)
 
 void HnRenderDelegate::DestroySprim(pxr::HdSprim* sprim)
 {
+    if (auto* material = dynamic_cast<pxr::HdMaterial*>(sprim))
+    {
+        m_Materials.erase(material->GetId().GetString());
+    }
+    else if (sprim != nullptr)
+    {
+        UNEXPECTED("Unexpected Sprim Type: ", sprim->GetId().GetString());
+    }
 }
 
 pxr::HdBprim* HnRenderDelegate::CreateBprim(pxr::TfToken const& typeId,

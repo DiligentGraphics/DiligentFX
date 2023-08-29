@@ -25,6 +25,7 @@
  */
 
 #include "HnRendererImpl.hpp"
+#include "HnRenderDelegate.hpp"
 #include "EngineMemory.h"
 
 namespace Diligent
@@ -44,20 +45,34 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters* pRefCounters,
                                TEXTURE_FORMAT      RTVFormat,
                                TEXTURE_FORMAT      DSVFormat) :
     TBase{pRefCounters},
-    m_Device{pDevice}
+    m_Device{pDevice},
+    m_RenderDelegate{HnRenderDelegate::Create()}
 {
 }
 
 HnRendererImpl::~HnRendererImpl()
 {
+    delete m_ImagingDelegate;
+    delete m_RenderIndex;
 }
 
 void HnRendererImpl::LoadUSDStage(const char* FileName)
 {
+    m_Stage = pxr::UsdStage::Open(FileName);
+    if (!m_Stage)
+    {
+        LOG_ERROR_MESSAGE("Failed to open USD stage '", FileName, "'");
+        return;
+    }
+
+    m_RenderIndex     = pxr::HdRenderIndex::New(m_RenderDelegate.get(), pxr::HdDriverVector{});
+    m_ImagingDelegate = new pxr::UsdImagingDelegate(m_RenderIndex, pxr::SdfPath::AbsoluteRootPath());
+    m_ImagingDelegate->Populate(m_Stage->GetPseudoRoot());
 }
 
 void HnRendererImpl::Update()
 {
+    m_ImagingDelegate->ApplyPendingUpdates();
 }
 
 void HnRendererImpl::Draw(IDeviceContext* pCtx, const float4x4& CameraViewProj)
