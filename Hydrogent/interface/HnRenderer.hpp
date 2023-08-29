@@ -24,8 +24,12 @@
  *  of the possibility of such damages.
  */
 
-#include "HnRenderer.hpp"
-#include "EngineMemory.h"
+#pragma once
+
+#include "../../../Primitives/interface/Object.h"
+#include "../../../Graphics/GraphicsEngine/interface/RenderDevice.h"
+#include "../../../Graphics/GraphicsEngine/interface/DeviceContext.h"
+#include "../../../Common/interface/BasicMath.hpp"
 
 namespace Diligent
 {
@@ -33,36 +37,21 @@ namespace Diligent
 namespace USD
 {
 
-void CreateHnRenderer(IRenderDevice* pDevice, TEXTURE_FORMAT RTVFormat, TEXTURE_FORMAT DSVFormat, HnRenderer** ppRenderer)
-{
-    auto* pRenderer = NEW_RC_OBJ(GetRawAllocator(), "HnRenderer instance", HnRenderer)(pDevice, RTVFormat, DSVFormat);
-    pRenderer->QueryInterface(IID_Unknown, reinterpret_cast<IObject**>(ppRenderer));
-}
+// {EA95099B-E894-47A6-AF33-B20096C4CF44}
+static const INTERFACE_ID IID_HnRenderer =
+    {0xea95099b, 0xe894, 0x47a6, {0xaf, 0x33, 0xb2, 0x0, 0x96, 0xc4, 0xcf, 0x44}};
 
-HnRenderer::HnRenderer(IReferenceCounters* pRefCounters,
-                       IRenderDevice*      pDevice,
-                       TEXTURE_FORMAT      RTVFormat,
-                       TEXTURE_FORMAT      DSVFormat) :
-    TBase{pRefCounters},
-    m_Device{pDevice}
+class IHnRenderer : public IObject
 {
-}
+public:
+    virtual void LoadUSDStage(const char* FileName) = 0;
 
-HnRenderer::~HnRenderer()
-{
-}
+    virtual void Update() = 0;
 
-void HnRenderer::LoadUSDStage(const char* FileName)
-{
-}
+    virtual void Draw(IDeviceContext* pCtx, const float4x4& CameraViewProj) = 0;
+};
 
-void HnRenderer::Update()
-{
-}
-
-void HnRenderer::Draw(IDeviceContext* pCtx, const float4x4& CameraViewProj)
-{
-}
+void CreateHnRenderer(IRenderDevice* pDevice, TEXTURE_FORMAT RTVFormat, TEXTURE_FORMAT DSVFormat, IHnRenderer** ppRenderer);
 
 } // namespace USD
 

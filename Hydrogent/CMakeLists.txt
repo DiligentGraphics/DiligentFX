@@ -6,18 +6,21 @@ set(SOURCE
     src/HnMaterial.cpp
     src/HnMesh.cpp
     src/HnRenderDelegate.cpp
-    src/HnRenderer.cpp
+    src/HnRendererImpl.cpp
 )
 
 set(INCLUDE
     include/HnMaterial.hpp
     include/HnMesh.hpp
     include/HnRenderDelegate.hpp
-    include/HnRenderer.hpp
+    include/HnRendererImpl.hpp
 )
 
-add_library(Diligent-Hydrogent STATIC README.md ${SOURCE} ${INCLUDE})
-target_include_directories(Diligent-Hydrogent PUBLIC include)
+set(INTERFACE
+    interface/HnRenderer.hpp
+)
+
+add_library(Diligent-Hydrogent STATIC README.md ${SOURCE} ${INCLUDE} ${INTERFACE})
 
 set_common_target_properties(Diligent-Hydrogent)
 
@@ -57,6 +60,8 @@ else()
 endif()
 
 target_include_directories(Diligent-Hydrogent
+PUBLIC
+    interface
 PRIVATE
     include
     ${Python3_INCLUDE_DIRS}
@@ -99,3 +104,5 @@ endif()
 set_target_properties(Diligent-Hydrogent PROPERTIES
     FOLDER DiligentFX
 )
+
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${SOURCE} ${INCLUDE} ${INTERFACE})

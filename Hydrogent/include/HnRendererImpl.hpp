@@ -28,6 +28,8 @@
 
 #include <memory>
 
+#include "HnRenderer.hpp"
+
 #include "RenderStateCache.hpp"
 #include "DeviceContext.h"
 #include "RefCntAutoPtr.hpp"
@@ -42,26 +44,30 @@ namespace USD
 
 class RenderDelegate;
 
-class HnRenderer : public ObjectBase<IObject>
+class HnRendererImpl final : public ObjectBase<IHnRenderer>
 {
 public:
-    using TBase = ObjectBase<IObject>;
+    using TBase = ObjectBase<IHnRenderer>;
 
-    HnRenderer(IReferenceCounters* pRefCounters,
-               IRenderDevice*      pDevice,
-               TEXTURE_FORMAT      RTVFormat,
-               TEXTURE_FORMAT      DSVFormat);
-    ~HnRenderer();
+    // {B8E2E916-B4E6-4C1E-A2DD-78FCD763F43E}
+    static constexpr INTERFACE_ID IID_Impl =
+        {0xb8e2e916, 0xb4e6, 0x4c1e, {0xa2, 0xdd, 0x78, 0xfc, 0xd7, 0x63, 0xf4, 0x3e}};
 
-    void LoadUSDStage(const char* FileName);
-    void Update();
-    void Draw(IDeviceContext* pCtx, const float4x4& CameraViewProj);
+    HnRendererImpl(IReferenceCounters* pRefCounters,
+                   IRenderDevice*      pDevice,
+                   TEXTURE_FORMAT      RTVFormat,
+                   TEXTURE_FORMAT      DSVFormat);
+    ~HnRendererImpl();
+
+    IMPLEMENT_QUERY_INTERFACE2_IN_PLACE(IID_HnRenderer, IID_Impl, TBase)
+
+    void LoadUSDStage(const char* FileName) override final;
+    void Update() override final;
+    void Draw(IDeviceContext* pCtx, const float4x4& CameraViewProj) override final;
 
 private:
     RenderDeviceWithCache_N m_Device;
 };
-
-void CreateHnRenderer(IRenderDevice* pDevice, TEXTURE_FORMAT RTVFormat, TEXTURE_FORMAT DSVFormat, HnRenderer** ppRenderer);
 
 } // namespace USD
 
