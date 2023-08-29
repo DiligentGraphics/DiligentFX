@@ -197,8 +197,8 @@ pxr::TfToken GetMaterialTag(const pxr::VtDictionary& Metadata, const pxr::HdMate
 // whether the output named outputName is known to Sdr and using either
 // the default value specified by the SdrShaderProperty or using a
 // default constructed value of the type specified by SdrShaderProperty.
-static pxr::VtValue GetNodeFallbackValue(const pxr::HdMaterialNode2& Node,
-                                         const pxr::TfToken&         OutputName)
+pxr::VtValue GetNodeFallbackValue(const pxr::HdMaterialNode2& Node,
+                                  const pxr::TfToken&         OutputName)
 {
     pxr::SdrRegistry& ShaderReg = pxr::SdrRegistry::GetInstance();
 
@@ -322,6 +322,44 @@ pxr::VtValue GetParamFallbackValue(const pxr::HdMaterialNetwork2& Network,
     return pxr::VtValue{pxr::GfVec3f{0}};
 }
 
+pxr::TfToken GetPrimvarNameAttributeValue(const pxr::SdrShaderNodeConstPtr& SdrNode,
+                                          const pxr::HdMaterialNode2&       Node,
+                                          const pxr::TfToken&               PropName)
+{
+    pxr::VtValue vtName;
+
+    // If the name of the primvar was authored, the material adapter would have
+    // put that that authored value in the node's parameter list.
+    // The authored value is the strongest opinion/
+
+    const auto& param_it = Node.parameters.find(PropName);
+    if (param_it != Node.parameters.end())
+    {
+        vtName = param_it->second;
+    }
+
+    // If we didn't find an authored value consult Sdr for the default value.
+    if (vtName.IsEmpty() && SdrNode)
+    {
+        if (pxr::SdrShaderPropertyConstPtr SdrPrimvarInput = SdrNode->GetShaderInput(PropName))
+        {
+            vtName = SdrPrimvarInput->GetDefaultValue();
+        }
+    }
+
+    if (vtName.IsHolding<TfToken>())
+    {
+        return vtName.UncheckedGet<TfToken>();
+    }
+    else if (vtName.IsHolding<std::string>())
+    {
+        return TfToken(vtName.UncheckedGet<std::string>());
+    }
+
+    return pxr::TfToken{};
+}
+
+
 } // namespace
 
 HnMaterialNetwork::HnMaterialNetwork(const pxr::SdfPath&              SdfPath,
@@ -372,9 +410,7 @@ void HnMaterialNetwork::LoadMaterialParams(const pxr::HdMaterialNetwork2& Networ
         pxr::SdfPathSet VisitedNodes;
         for (const TfToken& InputName : SdrNode->GetInputNames())
         {
-            //_MakeParamsForInputParameter(
-            //    network, node, inputName, &visitedNodes,
-            //    params, textureDescriptors, materialTag);
+            ProcessInputParameter(Network, Node, InputName, VisitedNodes);
         }
     }
     else
@@ -397,7 +433,7 @@ void HnMaterialNetwork::LoadMaterialParams(const pxr::HdMaterialNetwork2& Networ
     {
         // Create HnMaterialParameter for each primvar the terminal says it
         // needs.
-        // Primvars come from 'attributes' in the glslfx and are seperate from
+        // Primvars come from 'attributes' in the glslfx and are separate from
         // the input 'parameters'. We need to create a material param for them
         // so that these primvars survive 'primvar filtering' that discards any
         // unused primvars on the mesh.
@@ -409,9 +445,201 @@ void HnMaterialNetwork::LoadMaterialParams(const pxr::HdMaterialNetwork2& Networ
 
         for (const TfToken& PrimvarName : Primvars)
         {
-            //_MakeMaterialParamsForAdditionalPrimvar(primvarName, params);
+            AddPrimvarParameter(PrimvarName);
         }
     }
+}
+
+void HnMaterialNetwork::AddPrimvarParameter(const pxr::TfToken& PrimvarName)
+{
+    m_Parameters.emplace_back(HnMaterialParameter::ParamType::AdditionalPrimvar, PrimvarName);
+}
+
+
+void HnMaterialNetwork::AddUnconnectedParam(const pxr::TfToken& ParamName)
+{
+    m_Parameters.emplace_back(HnMaterialParameter::ParamType::Fallback, ParamName);
+}
+
+
+void HnMaterialNetwork::ProcessInputParameter(const pxr::HdMaterialNetwork2& Network,
+                                              const pxr::HdMaterialNode2&    Node,
+                                              const pxr::TfToken&            ParamName,
+                                              pxr::SdfPathSet&               VisitedNodes)
+{
+    pxr::SdrRegistry& ShaderReg = pxr::SdrRegistry::GetInstance();
+
+    // Resolve what is connected to this param (eg. primvar, texture, nothing)
+    // and then make the correct HdSt_MaterialParam for it.
+    auto const& conn_it = Node.inputConnections.find(ParamName);
+    if (conn_it != Node.inputConnections.end())
+    {
+        const std::vector<pxr::HdMaterialConnection2>& Connections = conn_it->second;
+        if (!Connections.empty())
+        {
+            // Find the node that is connected to this input
+            const pxr::HdMaterialConnection2& Conn  = Connections.front();
+            auto const&                       up_it = Network.nodes.find(Conn.upstreamNode);
+
+            if (up_it != Network.nodes.end())
+            {
+                const pxr::SdfPath&         UpstreamPath       = up_it->first;
+                const pxr::TfToken&         UpstreamOutputName = Conn.upstreamOutputName;
+                const pxr::HdMaterialNode2& UpstreamNode       = up_it->second;
+
+                pxr::SdrShaderNodeConstPtr UpstreamSdr =
+                    ShaderReg.GetShaderNodeByIdentifier(
+                        UpstreamNode.nodeTypeId,
+                        {pxr::HioGlslfxTokens->glslfx, HnMaterialPrivateTokens->mtlx});
+
+                if (UpstreamSdr)
+                {
+                    pxr::TfToken SdrRole{UpstreamSdr->GetRole()};
+                    if (SdrRole == pxr::SdrNodeRole->Texture)
+                    {
+                        AddTextureParam(
+                            Network,
+                            UpstreamNode,
+                            Node,
+                            UpstreamPath,
+                            UpstreamOutputName,
+                            ParamName,
+                            VisitedNodes);
+                        return;
+                    }
+                    else if (SdrRole == pxr::SdrNodeRole->Primvar)
+                    {
+                        AddPrimvarReaderParam(
+                            Network,
+                            UpstreamNode,
+                            UpstreamPath,
+                            ParamName,
+                            VisitedNodes);
+                        return;
+                    }
+                    else if (SdrRole == pxr::SdrNodeRole->Field)
+                    {
+                        AddFieldReaderParam(
+                            Network,
+                            UpstreamNode,
+                            UpstreamPath,
+                            ParamName,
+                            VisitedNodes);
+                        return;
+                    }
+                    else if (SdrRole == pxr::SdrNodeRole->Math)
+                    {
+                        AddTransform2dParam(
+                            Network,
+                            UpstreamNode,
+                            UpstreamPath,
+                            ParamName,
+                            VisitedNodes);
+                        return;
+                    }
+                }
+                else
+                {
+                    LOG_WARNING_MESSAGE("Unrecognized connected node: ", UpstreamNode.nodeTypeId.GetText());
+                }
+            }
+        }
+    }
+
+    // Nothing (supported) was connected, output a fallback material param
+    AddUnconnectedParam(ParamName);
+}
+
+void HnMaterialNetwork::AddTextureParam(const pxr::HdMaterialNetwork2& Network,
+                                        const pxr::HdMaterialNode2&    Node,
+                                        const pxr::HdMaterialNode2&    DownstreamNode, // needed to determine def value
+                                        const pxr::SdfPath&            NodePath,
+                                        const pxr::TfToken&            OutputName,
+                                        const pxr::TfToken&            ParamName,
+                                        pxr::SdfPathSet&               VisitedNodes)
+{
+}
+
+void HnMaterialNetwork::AddPrimvarReaderParam(const pxr::HdMaterialNetwork2& Network,
+                                              const pxr::HdMaterialNode2&    Node,
+                                              const pxr::SdfPath&            NodePath,
+                                              const pxr::TfToken&            ParamName,
+                                              pxr::SdfPathSet&               VisitedNodes)
+{
+    if (!VisitedNodes.emplace(NodePath).second)
+        return;
+
+    pxr::SdrRegistry& ShaderReg = pxr::SdrRegistry::GetInstance();
+
+    pxr::SdrShaderNodeConstPtr SdrNode =
+        ShaderReg.GetShaderNodeByIdentifierAndType(Node.nodeTypeId, pxr::HioGlslfxTokens->glslfx);
+
+    HnMaterialParameter Param{HnMaterialParameter::ParamType::PrimvarRedirect, ParamName};
+
+    // A node may require 'additional primvars' to function correctly.
+    for (auto const& PropName : SdrNode->GetAdditionalPrimvarProperties())
+    {
+        pxr::TfToken PrimvarName = GetPrimvarNameAttributeValue(SdrNode, Node, PropName);
+        if (!PrimvarName.IsEmpty())
+        {
+            Param.SamplerCoords.push_back(PrimvarName);
+        }
+    }
+
+    m_Parameters.emplace_back(std::move(Param));
+}
+
+void HnMaterialNetwork::AddFieldReaderParam(const pxr::HdMaterialNetwork2& Network,
+                                            const pxr::HdMaterialNode2&    Node,
+                                            const pxr::SdfPath&            NodePath,
+                                            const pxr::TfToken&            ParamName,
+                                            pxr::SdfPathSet&               VisitedNodes)
+{
+    if (!VisitedNodes.emplace(NodePath).second)
+        return;
+
+    // Volume Fields act more like a primvar then a texture.
+    // There is a `Volume` prim with 'fields' that may point to a
+    // OpenVDB file. We have to find the 'inputs:fieldname' on the
+    // HWFieldReader in the material network to know what 'field' to use.
+    // See also HdStVolume and HdStField for how volume textures are
+    // inserted into Storm.
+
+    HnMaterialParameter Param{HnMaterialParameter::ParamType::FieldRedirect, ParamName};
+
+    // XXX Why HnMaterialPrivateTokens->fieldname:
+    // Hard-coding the name of the attribute of HwFieldReader identifying
+    // the field name for now.
+    // The equivalent of the generic mechanism Sdr provides for primvars
+    // is missing for fields: UsdPrimvarReader.inputs:varname is tagged with
+    // SdrMetadata as primvarProperty="1" so that we can use
+    // SdrNode->GetAdditionalPrimvarProperties to know what attribute to use.
+    const pxr::TfToken& VarName = HnMaterialPrivateTokens->fieldname;
+
+    auto const& param_it = Node.parameters.find(VarName);
+    if (param_it != Node.parameters.end())
+    {
+        pxr::VtValue FieldName = param_it->second;
+        if (FieldName.IsHolding<pxr::TfToken>())
+        {
+            // Stashing name of field in _samplerCoords.
+            Param.SamplerCoords.push_back(FieldName.UncheckedGet<pxr::TfToken>());
+        }
+        else if (FieldName.IsHolding<std::string>())
+        {
+            Param.SamplerCoords.push_back(pxr::TfToken{FieldName.UncheckedGet<std::string>()});
+        }
+    }
+
+    m_Parameters.emplace_back(std::move(Param));
+}
+
+void HnMaterialNetwork::AddTransform2dParam(const pxr::HdMaterialNetwork2& Network,
+                                            const pxr::HdMaterialNode2&    Node,
+                                            const pxr::SdfPath&            NodePath,
+                                            const pxr::TfToken&            ParamName,
+                                            pxr::SdfPathSet&               VisitedNodes)
+{
 }
 
 } // namespace USD

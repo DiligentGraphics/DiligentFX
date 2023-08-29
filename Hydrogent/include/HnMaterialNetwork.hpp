@@ -78,7 +78,7 @@ struct HnMaterialParameter final
 
     HnMaterialParameter(ParamType                 _Type,
                         const pxr::TfToken&       _Name,
-                        const pxr::VtValue&       _FallbackValue,
+                        const pxr::VtValue&       _FallbackValue       = pxr::VtValue{},
                         const pxr::TfTokenVector& _SamplerCoords       = pxr::TfTokenVector{},
                         pxr::HdTextureType        _TextureType         = pxr::HdTextureType::Uv,
                         const std::string&        _Swizzle             = std::string{},
@@ -152,6 +152,40 @@ public:
 private:
     void LoadMaterialParams(const pxr::HdMaterialNetwork2& Network,
                             const pxr::HdMaterialNode2&    Node);
+
+    void AddPrimvarParameter(const pxr::TfToken& PrimvarName);
+    void AddUnconnectedParam(const pxr::TfToken& ParamName);
+
+    void ProcessInputParameter(const pxr::HdMaterialNetwork2& Network,
+                               const pxr::HdMaterialNode2&    Node,
+                               const pxr::TfToken&            ParamName,
+                               pxr::SdfPathSet&               VisitedNodes);
+
+    void AddTextureParam(const pxr::HdMaterialNetwork2& Network,
+                         const pxr::HdMaterialNode2&    Node,
+                         const pxr::HdMaterialNode2&    DownstreamNode, // needed to determine def value
+                         const pxr::SdfPath&            NodePath,
+                         const pxr::TfToken&            OutputName,
+                         const pxr::TfToken&            ParamName,
+                         pxr::SdfPathSet&               VisitedNodes);
+
+    void AddPrimvarReaderParam(const pxr::HdMaterialNetwork2& Network,
+                               const pxr::HdMaterialNode2&    Node,
+                               const pxr::SdfPath&            NodePath,
+                               const pxr::TfToken&            ParamName,
+                               pxr::SdfPathSet&               VisitedNodes);
+
+    void AddFieldReaderParam(const pxr::HdMaterialNetwork2& Network,
+                             const pxr::HdMaterialNode2&    Node,
+                             const pxr::SdfPath&            NodePath,
+                             const pxr::TfToken&            ParamName,
+                             pxr::SdfPathSet&               VisitedNodes);
+
+    void AddTransform2dParam(const pxr::HdMaterialNetwork2& Network,
+                             const pxr::HdMaterialNode2&    Node,
+                             const pxr::SdfPath&            NodePath,
+                             const pxr::TfToken&            ParamName,
+                             pxr::SdfPathSet&               VisitedNodes);
 
 private:
     // Material tag is used to sort draw items by material tag.
