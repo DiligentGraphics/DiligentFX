@@ -1,0 +1,165 @@
+/*
+ *  Copyright 2023 Diligent Graphics LLC
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ *  In no event and under no legal theory, whether in tort (including negligence),
+ *  contract, or otherwise, unless required by applicable law (such as deliberate
+ *  and grossly negligent acts) or agreed to in writing, shall any Contributor be
+ *  liable for any damages, including any direct, indirect, special, incidental,
+ *  or consequential damages of any character arising as a result of this License or
+ *  out of the use or inability to use the software (including but not limited to damages
+ *  for loss of goodwill, work stoppage, computer failure or malfunction, or any and
+ *  all other commercial damages or losses), even if such Contributor has been advised
+ *  of the possibility of such damages.
+ */
+
+#pragma once
+
+// NoteL tbb.h must be included first to avoid compilation errors in tbb headers.
+#include "tbb/tbb.h"
+
+#include "pxr/base/vt/dictionary.h"
+#include "pxr/usd/sdf/path.h"
+#include "pxr/imaging/hd/material.h"
+
+namespace Diligent
+{
+
+namespace USD
+{
+
+struct HnMaterialParameter final
+{
+    // Indicates the kind of material parameter.
+    enum class ParamType
+    {
+        Unknown,
+
+        // A shader-specified fallback value that is
+        // not connected to either a primvar or texture.
+        Fallback,
+
+        // A parameter that is connected to a texture.
+        Texture,
+
+        // Creates an accessor HdGet_name() that either reads a
+        // primvar with a potentially different name (given in
+        // samplerCoords) if it exists or uses the fallback value.
+        // It corresponds to a primvar reader shading node.
+        PrimvarRedirect,
+
+        // Creates an accessor HdGet_name(vec3) that either reads
+        // from a field texture with a potentially different name (given
+        // in samplerCoords) if it exists or uses the fallback value.
+        // It corresponds to a field reader shading node.
+        FieldRedirect,
+
+        // Additional primvar needed by material. One that is not connected to
+        // a input parameter (ParamTypePrimvar).
+        AdditionalPrimvar,
+
+        // This is a parameter that is connected to a transform2d node
+        Transform2d
+    };
+
+    HnMaterialParameter();
+    ~HnMaterialParameter();
+
+    HnMaterialParameter(ParamType                 _Type,
+                        const pxr::TfToken&       _Name,
+                        const pxr::VtValue&       _FallbackValue,
+                        const pxr::TfTokenVector& _SamplerCoords       = pxr::TfTokenVector{},
+                        pxr::HdTextureType        _TextureType         = pxr::HdTextureType::Uv,
+                        const std::string&        _Swizzle             = std::string{},
+                        bool                      _IsPremultiplied     = false,
+                        size_t                    _ArrayOfTexturesSize = 0);
+
+    bool IsTexture() const
+    {
+        return Type == ParamType::Texture;
+    }
+    bool IsPrimvarRedirect() const
+    {
+        return Type == ParamType::PrimvarRedirect;
+    }
+    bool IsFieldRedirect() const
+    {
+        return Type == ParamType::FieldRedirect;
+    }
+    bool IsFallback() const
+    {
+        return Type == ParamType::Fallback;
+    }
+    bool IsAdditionalPrimvar() const
+    {
+        return Type == ParamType::AdditionalPrimvar;
+    }
+    bool IsTransform2d() const
+    {
+        return Type == ParamType::Transform2d;
+    }
+    bool IsArrayOfTextures() const
+    {
+        return IsTexture() && ArrayOfTexturesSize > 0;
+    }
+
+    ParamType          Type = ParamType::Unknown;
+    pxr::TfToken       Name;
+    pxr::VtValue       FallbackValue;
+    pxr::TfTokenVector SamplerCoords;
+    pxr::HdTextureType TextureType;
+    std::string        Swizzle;
+    bool               IsPremultiplied = false;
+
+    // If paramType is ParamTypeTexture, this indicates both if the textures
+    // should be bound as an array of textures and the size of the array. If
+    // arrayOfTexturesSize is 0, then do not bind as an array of textures, but
+    // rather a single texture (whereas arrayOfTexturesSize = 1 indicates an
+    // array of textures of size 1).
+    size_t ArrayOfTexturesSize = 0;
+};
+
+
+class HnMaterialNetwork final
+{
+public:
+    HnMaterialNetwork();
+
+    HnMaterialNetwork(const pxr::SdfPath&              SdfPath,
+                      const pxr::HdMaterialNetworkMap& hdNetworkMap) noexcept(false);
+
+
+    HnMaterialNetwork(HnMaterialNetwork&&) = default;
+    HnMaterialNetwork& operator=(HnMaterialNetwork&&) = default;
+
+    ~HnMaterialNetwork();
+
+    const pxr::TfToken&      GetTag() const { return m_Tag; }
+    const pxr::VtDictionary& GetMetadata() const { return m_Metadata; }
+    const auto&              GetParameters() const { return m_Parameters; }
+
+private:
+    void LoadMaterialParams(const pxr::HdMaterialNetwork2& Network,
+                            const pxr::HdMaterialNode2&    Node);
+
+private:
+    // Material tag is used to sort draw items by material tag.
+    pxr::TfToken                     m_Tag;
+    pxr::VtDictionary                m_Metadata;
+    std::vector<HnMaterialParameter> m_Parameters;
+};
+
+} // namespace USD
+
+} // namespace Diligent

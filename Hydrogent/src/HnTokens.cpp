@@ -24,13 +24,7 @@
  *  of the possibility of such damages.
  */
 
-#pragma once
-
-#include <memory>
-
-#include "HnMaterialNetwork.hpp"
-
-#include "pxr/imaging/hd/material.h"
+#include "HnTokens.hpp"
 
 namespace Diligent
 {
@@ -38,28 +32,7 @@ namespace Diligent
 namespace USD
 {
 
-/// Hydra material implementation in Hydrogent.
-class HnMaterial final : public pxr::HdMaterial
-{
-public:
-    static std::shared_ptr<HnMaterial> Create(pxr::SdfPath const& id);
-
-    ~HnMaterial();
-
-    // Synchronizes state from the delegate to this object.
-    virtual void Sync(pxr::HdSceneDelegate* sceneDelegate,
-                      pxr::HdRenderParam*   renderParam,
-                      pxr::HdDirtyBits*     dirtyBits) override final;
-
-    // Returns the minimal set of dirty bits to place in the
-    // change tracker for use in the first sync of this prim.
-    virtual pxr::HdDirtyBits GetInitialDirtyBitsMask() const override final;
-
-private:
-    HnMaterial(pxr::SdfPath const& id);
-
-    HnMaterialNetwork m_Network;
-};
+TF_DEFINE_PUBLIC_TOKENS(HnMaterialTagTokens, HN_MATERIAL_TAG_TOKENS);
 
 } // namespace USD
 

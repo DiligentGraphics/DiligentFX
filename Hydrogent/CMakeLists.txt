@@ -4,16 +4,20 @@ project(Diligent-Hydrogent CXX)
 
 set(SOURCE
     src/HnMaterial.cpp
+    src/HnMaterialNetwork.cpp
     src/HnMesh.cpp
     src/HnRenderDelegate.cpp
     src/HnRendererImpl.cpp
+    src/HnTokens.cpp
 )
 
 set(INCLUDE
     include/HnMaterial.hpp
+    include/HnMaterialNetwork.hpp
     include/HnMesh.hpp
     include/HnRenderDelegate.hpp
     include/HnRendererImpl.hpp
+    include/HnTokens.hpp
 )
 
 set(INTERFACE
@@ -78,6 +82,7 @@ target_compile_options(EnableRTTI INTERFACE /GR)
 
 target_link_libraries(Diligent-Hydrogent
 PUBLIC
+    usd_gf
     usd_sdf
     usd_tf
     usd_usd
@@ -85,6 +90,9 @@ PUBLIC
     usd_hd
     usd_usdImaging
     usd_vt
+    usd_hio
+    usd_sdr
+    usd_ndr
 PRIVATE
     NO_WERROR
     EnableRTTI # USD requires RTTI

@@ -57,6 +57,29 @@ void HnMaterial::Sync(pxr::HdSceneDelegate* sceneDelegate,
     if (*dirtyBits == pxr::HdMaterial::Clean)
         return;
 
+    pxr::VtValue vtMat = sceneDelegate->GetMaterialResource(GetId());
+    if (vtMat.IsHolding<pxr::HdMaterialNetworkMap>())
+    {
+        const pxr::HdMaterialNetworkMap& hdNetworkMap = vtMat.UncheckedGet<pxr::HdMaterialNetworkMap>();
+        if (!hdNetworkMap.terminals.empty() && !hdNetworkMap.map.empty())
+        {
+            try
+            {
+                m_Network = HnMaterialNetwork{GetId(), hdNetworkMap};
+            }
+            catch (const std::runtime_error& err)
+            {
+                LOG_ERROR_MESSAGE("Failed to create material network for material ", GetId(), ": ", err.what());
+                m_Network = {};
+            }
+            catch (...)
+            {
+                LOG_ERROR_MESSAGE("Failed to create material network for material ", GetId(), ": unknown error");
+                m_Network = {};
+            }
+        }
+    }
+
     *dirtyBits = HdMaterial::Clean;
 }
 
