@@ -36,12 +36,61 @@ namespace USD
 {
 
 // clang-format off
+
+#define HN_TOKENS              \
+    (constantLighting)         \
+    (packedSmoothNormals)      \
+    (smoothNormals)            \
+    (packedFlatNormals)        \
+    (flatNormals)              \
+    (scale)                    \
+    (bias)                     \
+    (rotation)                 \
+    (translation)              \
+    (sRGB)                     \
+    (raw)                      \
+    ((_double, "double"))      \
+    ((_float, "float"))        \
+    ((_int, "int"))            \
+    ((colorSpaceAuto, "auto")) \
+    (fvarIndices)              \
+    (fvarPatchParam)           \
+    (coarseFaceIndex)          \
+    (processedFaceCounts)      \
+    (processedFaceIndices)     \
+    (geomSubsetFaceIndices)    \
+    (pointSizeScale)           \
+    (screenSpaceWidths)        \
+    (minScreenSpaceWidths)     \
+    (shadowCompareTextures)
+
 #define HN_MATERIAL_TAG_TOKENS \
     (defaultTag)               \
     (masked)                   \
     (additive)                 \
     (translucent)              \
     (volume)
+
+#define HN_SDR_METADATA_TOKENS \
+    (swizzle)
+
+#define HN_TEXTURE_TOKENS  \
+    (wrapS)                \
+    (wrapT)                \
+    (wrapR)                \
+    (black)                \
+    (clamp)                \
+    (mirror)               \
+    (repeat)               \
+    (useMetadata)          \
+    (minFilter)            \
+    (magFilter)            \
+    (linear)               \
+    (nearest)              \
+    (linearMipmapLinear)   \
+    (linearMipmapNearest)  \
+    (nearestMipmapLinear)  \
+    (nearestMipmapNearest)
 // clang-format on
 
 using TfToken = pxr::TfToken;
@@ -49,6 +98,9 @@ template <typename T>
 using TfStaticData = pxr::TfStaticData<T>;
 
 TF_DECLARE_PUBLIC_TOKENS(HnMaterialTagTokens, HN_MATERIAL_TAG_TOKENS);
+TF_DECLARE_PUBLIC_TOKENS(HnSdrMetadataTokens, HN_SDR_METADATA_TOKENS);
+TF_DECLARE_PUBLIC_TOKENS(HnTextureTokens, HN_TEXTURE_TOKENS);
+TF_DECLARE_PUBLIC_TOKENS(HnTokens, HN_TOKENS);
 
 } // namespace USD
 

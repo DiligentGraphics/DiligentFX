@@ -33,6 +33,8 @@
 #include "pxr/usd/sdf/path.h"
 #include "pxr/imaging/hd/material.h"
 
+#include "HnTextureIdentifier.hpp"
+
 namespace Diligent
 {
 
@@ -118,7 +120,7 @@ struct HnMaterialParameter final
     pxr::TfToken       Name;
     pxr::VtValue       FallbackValue;
     pxr::TfTokenVector SamplerCoords;
-    pxr::HdTextureType TextureType;
+    pxr::HdTextureType TextureType = pxr::HdTextureType::Uv;
     std::string        Swizzle;
     bool               IsPremultiplied = false;
 
@@ -145,15 +147,42 @@ public:
 
     ~HnMaterialNetwork();
 
+    // Information necessary to allocate a texture.
+    struct TextureDescriptor
+    {
+        // Name by which the texture will be accessed, i.e., the name
+        // of the accessor for thexture will be HdGet_name(...).
+        // It is generated from the input name the corresponding texture
+        // node is connected to.
+        pxr::TfToken Name;
+
+        HnTextureIdentifier      TextureId;
+        pxr::HdSamplerParameters SamplerParams;
+
+        // Memory request in bytes.
+        size_t MemoryRequest = 0;
+
+        // The texture is not just identified by a file path attribute
+        // on the texture prim but there is special API to texture prim
+        // to obtain the texture.
+        //
+        // This is used for draw targets.
+        bool UseTexturePrimToFindTexture = false;
+
+        // This is used for draw targets and hashing.
+        pxr::SdfPath TexturePrim;
+    };
+
     const pxr::TfToken&      GetTag() const { return m_Tag; }
     const pxr::VtDictionary& GetMetadata() const { return m_Metadata; }
     const auto&              GetParameters() const { return m_Parameters; }
+    const auto&              GetTextures() const { return m_Textures; }
 
 private:
     void LoadMaterialParams(const pxr::HdMaterialNetwork2& Network,
                             const pxr::HdMaterialNode2&    Node);
 
-    void AddPrimvarParameter(const pxr::TfToken& PrimvarName);
+    void AddAdditionalPrimvarParameter(const pxr::TfToken& PrimvarName);
     void AddUnconnectedParam(const pxr::TfToken& ParamName);
 
     void ProcessInputParameter(const pxr::HdMaterialNetwork2& Network,
@@ -192,6 +221,7 @@ private:
     pxr::TfToken                     m_Tag;
     pxr::VtDictionary                m_Metadata;
     std::vector<HnMaterialParameter> m_Parameters;
+    std::vector<TextureDescriptor>   m_Textures;
 };
 
 } // namespace USD

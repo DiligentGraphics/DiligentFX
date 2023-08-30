@@ -18,6 +18,7 @@ set(INCLUDE
     include/HnRenderDelegate.hpp
     include/HnRendererImpl.hpp
     include/HnTokens.hpp
+    include/HnTextureIdentifier.hpp
 )
 
 set(INTERFACE

@@ -24,7 +24,11 @@
  *  of the possibility of such damages.
  */
 
-#include "HnTokens.hpp"
+#pragma once
+
+#include "pxr/pxr.h"
+#include "pxr/base/tf/token.h"
+#include "pxr/imaging/hd/enums.h"
 
 namespace Diligent
 {
@@ -32,10 +36,20 @@ namespace Diligent
 namespace USD
 {
 
-TF_DEFINE_PUBLIC_TOKENS(HnMaterialTagTokens, HN_MATERIAL_TAG_TOKENS);
-TF_DEFINE_PUBLIC_TOKENS(HnSdrMetadataTokens, HN_SDR_METADATA_TOKENS);
-TF_DEFINE_PUBLIC_TOKENS(HnTextureTokens, HN_TEXTURE_TOKENS);
-TF_DEFINE_PUBLIC_TOKENS(HnTokens, HN_TOKENS);
+struct HnSubTextureIdentifier
+{
+    pxr::HdTextureType Type;
+    pxr::TfToken       FilePath;
+    pxr::TfToken       SourceColorSpace;
+    bool               FlipVertically   = false;
+    bool               PremultiplyAlpha = false;
+};
+
+struct HnTextureIdentifier
+{
+    pxr::TfToken           FilePath;
+    HnSubTextureIdentifier SubtextureId;
+};
 
 } // namespace USD
 
