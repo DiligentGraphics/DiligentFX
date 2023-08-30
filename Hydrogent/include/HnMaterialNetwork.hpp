@@ -179,8 +179,8 @@ public:
     const auto&              GetTextures() const { return m_Textures; }
 
 private:
-    void LoadMaterialParams(const pxr::HdMaterialNetwork2& Network,
-                            const pxr::HdMaterialNode2&    Node);
+    void LoadParams(const pxr::HdMaterialNetwork2& Network,
+                    const pxr::HdMaterialNode2&    Node);
 
     void AddAdditionalPrimvarParameter(const pxr::TfToken& PrimvarName);
     void AddUnconnectedParam(const pxr::TfToken& ParamName);

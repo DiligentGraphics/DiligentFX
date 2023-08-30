@@ -107,19 +107,35 @@ const pxr::HdMaterialNode2* GetTerminalNode(const pxr::HdMaterialNetwork2& Netwo
                                             const pxr::TfToken&            TerminalToken,
                                             pxr::SdfPath&                  TerminalPath)
 {
-    // Get the Surface or Volume Terminal
+    // Find the node that is upstream of the terminal, e.g.
+    // the node that is connected to the terminal's input.
     const auto terminal_it = Network.terminals.find(TerminalToken);
     if (terminal_it == Network.terminals.end())
         return nullptr;
 
-    TerminalPath       = terminal_it->second.upstreamNode;
-    const auto node_it = Network.nodes.find(TerminalPath);
+    //
+    //             upstreamNode
+    //                 A
+    //                 |
+    //                 | HdMaterialConnection2
+    //                 |
+    //              Terminal
+    //
+    const pxr::HdMaterialConnection2& TerminalConnection = terminal_it->second;
+
+    const auto node_it = Network.nodes.find(TerminalConnection.upstreamNode);
+    if (node_it == Network.nodes.end())
+    {
+        LOG_ERROR_MESSAGE("Unable to find upstream node ", TerminalConnection.upstreamNode, " of terminal ", TerminalToken);
+        return nullptr;
+    }
+
+    TerminalPath = TerminalConnection.upstreamNode;
     return &node_it->second;
 }
 
-using HioGlslfxSharedPtr = std::shared_ptr<pxr::HioGlslfx>;
-
-HioGlslfxSharedPtr GetGlslfxForTerminal(const pxr::TfToken& NodeTypeId)
+#if 0
+std::shared_ptr<pxr::HioGlslfx> GetGlslfxForTerminal(const pxr::TfToken& NodeTypeId)
 {
     // If there is a URI, we will use that, otherwise we will try to use
     // the source code.
@@ -148,8 +164,10 @@ HioGlslfxSharedPtr GetGlslfxForTerminal(const pxr::TfToken& NodeTypeId)
 
     return nullptr;
 }
+#endif
 
-pxr::TfToken GetMaterialTag(const pxr::VtDictionary& Metadata, const pxr::HdMaterialNode2& Terminal)
+pxr::TfToken GetMaterialTag(const pxr::VtDictionary&    Metadata,
+                            const pxr::HdMaterialNode2& Terminal)
 {
     // Strongest materialTag opinion is a hardcoded tag in glslfx meta data.
     // This can be used for masked, additive, translucent or volume materials.
@@ -263,15 +281,19 @@ pxr::VtValue GetParamFallbackValue(const pxr::HdMaterialNetwork2& Network,
         {
             if (!conn_it->second.empty())
             {
-                const pxr::HdMaterialConnection2& con          = conn_it->second.front();
-                const auto&                       pn_it        = Network.nodes.find(con.upstreamNode);
-                const pxr::HdMaterialNode2&       UpstreamNode = pn_it->second;
+                const pxr::HdMaterialConnection2& Connection = conn_it->second.front();
 
-                const pxr::VtValue FallbackValue =
-                    GetNodeFallbackValue(UpstreamNode, con.upstreamOutputName);
-                if (!FallbackValue.IsEmpty())
+                const auto up_it = Network.nodes.find(Connection.upstreamNode);
+                if (up_it != Network.nodes.end())
                 {
-                    return FallbackValue;
+                    const pxr::HdMaterialNode2& UpstreamNode = up_it->second;
+
+                    const pxr::VtValue FallbackValue =
+                        GetNodeFallbackValue(UpstreamNode, Connection.upstreamOutputName);
+                    if (!FallbackValue.IsEmpty())
+                    {
+                        return FallbackValue;
+                    }
                 }
             }
         }
@@ -588,8 +610,6 @@ HnMaterialParameter GetPrimvarReaderParam(const pxr::HdMaterialNetwork2& Network
 HnMaterialNetwork::HnMaterialNetwork(const pxr::SdfPath&              SdfPath,
                                      const pxr::HdMaterialNetworkMap& hdNetworkMap) noexcept(false)
 {
-    // The fragment source comes from the 'surface' network or the
-    // 'volume' network.
     bool                    IsVolume      = false;
     pxr::HdMaterialNetwork2 Network2      = HdConvertToHdMaterialNetwork2(hdNetworkMap, &IsVolume);
     const pxr::TfToken&     TerminalToken = IsVolume ? pxr::HdMaterialTerminalTokens->volume : pxr::HdMaterialTerminalTokens->surface;
@@ -597,21 +617,29 @@ HnMaterialNetwork::HnMaterialNetwork(const pxr::SdfPath&              SdfPath,
     pxr::SdfPath                TerminalPath;
     const pxr::HdMaterialNode2* TerminalNode = GetTerminalNode(Network2, TerminalToken, TerminalPath);
     if (TerminalNode == nullptr)
+    {
         return;
+    }
 
+    // Glslfx is only used to extract metadata, which is in turn used
+    // to determine the material tag.
+#if 0
     // Extract the glslfx and metadata for surface/volume.
-    auto Glslfx = GetGlslfxForTerminal(TerminalNode->nodeTypeId);
-    if (!Glslfx || !Glslfx->IsValid())
-        return;
+    if (auto Glslfx = GetGlslfxForTerminal(TerminalNode->nodeTypeId))
+    {
+        if (Glslfx->IsValid())
+        {
+            m_Metadata = Glslfx->GetMetadata();
+        }
+    }
+#endif
+    m_Tag = GetMaterialTag(m_Metadata, *TerminalNode);
 
-    m_Metadata = Glslfx->GetMetadata();
-    m_Tag      = GetMaterialTag(m_Metadata, *TerminalNode);
-
-    LoadMaterialParams(Network2, *TerminalNode);
+    LoadParams(Network2, *TerminalNode);
 }
 
-void HnMaterialNetwork::LoadMaterialParams(const pxr::HdMaterialNetwork2& Network,
-                                           const pxr::HdMaterialNode2&    Node)
+void HnMaterialNetwork::LoadParams(const pxr::HdMaterialNetwork2& Network,
+                                   const pxr::HdMaterialNode2&    Node)
 {
     // Hydrogent currently supports two material configurations.
     // A custom glslfx file or a PreviewSurface material network.
@@ -788,7 +816,7 @@ void HnMaterialNetwork::AddTextureParam(const pxr::HdMaterialNetwork2& Network,
     pxr::SdrShaderNodeConstPtr SdrNode =
         ShaderReg.GetShaderNodeByIdentifier(Node.nodeTypeId, {pxr::HioGlslfxTokens->glslfx, HnMaterialPrivateTokens->mtlx});
 
-    HnMaterialParameter TexParam{HnMaterialParameter ::ParamType::Texture, ParamName};
+    HnMaterialParameter TexParam{HnMaterialParameter::ParamType::Texture, ParamName};
 
     // Get swizzle metadata if possible
     if (pxr::SdrShaderPropertyConstPtr SdrProperty = SdrNode->GetShaderOutput(OutputName))
