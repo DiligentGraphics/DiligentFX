@@ -51,7 +51,7 @@ public:
     virtual void Draw(IDeviceContext* pCtx, const float4x4& CameraViewProj) = 0;
 };
 
-void CreateHnRenderer(IRenderDevice* pDevice, TEXTURE_FORMAT RTVFormat, TEXTURE_FORMAT DSVFormat, IHnRenderer** ppRenderer);
+void CreateHnRenderer(IRenderDevice* pDevice, IDeviceContext* pContext, TEXTURE_FORMAT RTVFormat, TEXTURE_FORMAT DSVFormat, IHnRenderer** ppRenderer);
 
 } // namespace USD
 

@@ -69,9 +69,15 @@ void HnMesh::Sync(pxr::HdSceneDelegate* Delegate,
     if (*DirtyBits == pxr::HdChangeTracker::Clean)
         return;
 
+    const pxr::SdfPath& Id = GetId();
     if (Delegate != nullptr && DirtyBits != nullptr)
     {
         UpdateRepr(*Delegate, RenderParam, *DirtyBits, ReprToken);
+    }
+
+    if (*DirtyBits & pxr::HdChangeTracker::DirtyMaterialId)
+    {
+        m_MaterialId = Delegate->GetMaterialId(Id);
     }
 
     *DirtyBits &= ~pxr::HdChangeTracker::AllSceneDirtyBits;

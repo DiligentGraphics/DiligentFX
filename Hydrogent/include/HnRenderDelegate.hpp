@@ -34,6 +34,7 @@
 
 #include "RenderDevice.h"
 #include "RefCntAutoPtr.hpp"
+#include "HnTextureRegistry.hpp"
 
 namespace Diligent
 {
@@ -48,9 +49,9 @@ class HnMesh;
 class HnRenderDelegate final : public pxr::HdRenderDelegate
 {
 public:
-    static std::unique_ptr<HnRenderDelegate> Create(IRenderDevice* pDevice);
+    static std::unique_ptr<HnRenderDelegate> Create(IRenderDevice* pDevice, IDeviceContext* pContext);
 
-    HnRenderDelegate(IRenderDevice* pDevice);
+    HnRenderDelegate(IRenderDevice* pDevice, IDeviceContext* pContext);
 
     virtual ~HnRenderDelegate() override final;
 
@@ -169,12 +170,19 @@ public:
 
     const auto& GetMeshes() const { return m_Meshes; }
 
+    HnTextureRegistry& GetTextureRegistry() { return m_TextureRegistry; }
+
+    const HnMaterial* GetMaterial(const char* Id) const;
+
 private:
     static const pxr::TfTokenVector SupportedRPrimTypes;
     static const pxr::TfTokenVector SupportedSPrimTypes;
     static const pxr::TfTokenVector SupportedBPrimTypes;
 
-    RefCntAutoPtr<IRenderDevice> m_pDevice;
+    RefCntAutoPtr<IRenderDevice>  m_pDevice;
+    RefCntAutoPtr<IDeviceContext> m_pContext;
+
+    HnTextureRegistry m_TextureRegistry;
 
     std::unordered_map<std::string, std::shared_ptr<HnMaterial>> m_Materials;
     std::unordered_map<std::string, std::shared_ptr<HnMesh>>     m_Meshes;

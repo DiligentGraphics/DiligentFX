@@ -27,6 +27,8 @@
 #include "HnRendererImpl.hpp"
 #include "HnRenderDelegate.hpp"
 #include "HnMesh.hpp"
+#include "HnMaterial.hpp"
+#include "HnTokens.hpp"
 
 #include "EngineMemory.h"
 #include "MapHelper.hpp"
@@ -65,11 +67,15 @@ void main(in  VSInput VSIn,
 {
     PSIn.Pos    = mul( float4(VSIn.Pos,1.0), g_WorldViewProj);
     PSIn.Normal = VSIn.Normal;
-    PSIn.UV     = VSIn.UV;
+    PSIn.UV     = float2(VSIn.UV.x, 1.0 - VSIn.UV.y);
 }
 )";
 
 static constexpr char PSSource[] = R"(
+
+Texture2D<float4> g_Texture;
+SamplerState      g_Texture_sampler;
+
 struct PSInput 
 { 
     float4 Pos   : SV_POSITION; 
@@ -87,23 +93,24 @@ void main(in  PSInput  PSIn,
 {
     float3 LightDir = float3(0, -1, 0);
     float DiffuseLight = max(0, dot(PSIn.Normal, -LightDir));
-    PSOut.Color = float4(PSIn.UV, 0, 1) * DiffuseLight; 
+    PSOut.Color = g_Texture.Sample(g_Texture_sampler, PSIn.UV) * DiffuseLight; 
 }
 )";
 
-void CreateHnRenderer(IRenderDevice* pDevice, TEXTURE_FORMAT RTVFormat, TEXTURE_FORMAT DSVFormat, IHnRenderer** ppRenderer)
+void CreateHnRenderer(IRenderDevice* pDevice, IDeviceContext* pContext, TEXTURE_FORMAT RTVFormat, TEXTURE_FORMAT DSVFormat, IHnRenderer** ppRenderer)
 {
-    auto* pRenderer = NEW_RC_OBJ(GetRawAllocator(), "HnRenderer instance", HnRendererImpl)(pDevice, RTVFormat, DSVFormat);
+    auto* pRenderer = NEW_RC_OBJ(GetRawAllocator(), "HnRenderer instance", HnRendererImpl)(pDevice, pContext, RTVFormat, DSVFormat);
     pRenderer->QueryInterface(IID_HnRenderer, reinterpret_cast<IObject**>(ppRenderer));
 }
 
 HnRendererImpl::HnRendererImpl(IReferenceCounters* pRefCounters,
                                IRenderDevice*      pDevice,
+                               IDeviceContext*     pContext,
                                TEXTURE_FORMAT      RTVFormat,
                                TEXTURE_FORMAT      DSVFormat) :
     TBase{pRefCounters},
     m_Device{pDevice},
-    m_RenderDelegate{HnRenderDelegate::Create(pDevice)}
+    m_RenderDelegate{HnRenderDelegate::Create(pDevice, pContext)}
 {
     ShaderCreateInfo ShaderCI;
     ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL;
@@ -133,6 +140,9 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters* pRefCounters,
         {2, 2, 2, VT_FLOAT32}, // UV
     };
 
+    PipelineResourceLayoutDescX ResourceLayout;
+    ResourceLayout.AddVariable(SHADER_TYPE_PIXEL, "g_Texture", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
+
     GraphicsPipelineStateCreateInfoX PsoCI{"USD PSO"};
     PsoCI
         .AddShader(pVS)
@@ -140,6 +150,7 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters* pRefCounters,
         .SetRasterizerDesc(FILL_MODE_SOLID, CULL_MODE_BACK)
         .SetInputLayout(InputLayout)
         .SetPrimitiveTopology(PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+        .SetResourceLayout(ResourceLayout)
         .AddRenderTarget(RTVFormat)
         .SetDepthFormat(DSVFormat);
 
@@ -228,6 +239,11 @@ void HnRendererImpl::Draw(IDeviceContext* pCtx, const float4x4& CameraViewProj)
 
         auto& Mesh = *mesh_it.second;
 
+        const auto& MaterialId = Mesh.GetMaterialId();
+        const auto* pMaterial  = m_RenderDelegate->GetMaterial(MaterialId.GetText());
+        if (pMaterial == nullptr)
+            return;
+
         auto* pVB0 = Mesh.GetVertexBuffer(HnMesh::VERTEX_BUFFER_ID_POSITION);
         auto* pVB1 = Mesh.GetVertexBuffer(HnMesh::VERTEX_BUFFER_ID_NORMAL);
         auto* pVB2 = Mesh.GetVertexBuffer(HnMesh::VERTEX_BUFFER_ID_TEXCOORD);
@@ -235,6 +251,10 @@ void HnRendererImpl::Draw(IDeviceContext* pCtx, const float4x4& CameraViewProj)
 
         if (pVB0 == nullptr || pVB1 == nullptr || pVB2 == nullptr || pIB == nullptr)
             continue;
+
+        auto* pDiffuseColor = pMaterial->GetTexture(HnTokens->diffuseColor);
+        if (pDiffuseColor == nullptr || !pDiffuseColor->pTexture)
+            return;
 
         // Bind vertex and index buffers
         IBuffer* pBuffs[] = {pVB0, pVB1, pVB2};
@@ -247,6 +267,8 @@ void HnRendererImpl::Draw(IDeviceContext* pCtx, const float4x4& CameraViewProj)
 
             *CBConstants = (Mesh.GetTransform() * CameraViewProj).Transpose();
         }
+
+        m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_Texture")->Set(pDiffuseColor->pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 
         pCtx->SetPipelineState(m_pPSO);
         pCtx->CommitShaderResources(m_pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);

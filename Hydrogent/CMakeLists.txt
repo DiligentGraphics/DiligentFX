@@ -9,6 +9,8 @@ set(SOURCE
     src/HnRenderDelegate.cpp
     src/HnRendererImpl.cpp
     src/HnTokens.cpp
+    src/HnTextureRegistry.cpp
+    src/HnTextureUtils.cpp
 )
 
 set(INCLUDE
@@ -19,6 +21,8 @@ set(INCLUDE
     include/HnRendererImpl.hpp
     include/HnTokens.hpp
     include/HnTextureIdentifier.hpp
+    include/HnTextureRegistry.hpp
+    include/HnTextureUtils.hpp
 )
 
 set(INTERFACE
@@ -84,6 +88,7 @@ target_compile_options(EnableRTTI INTERFACE /GR)
 target_link_libraries(Diligent-Hydrogent
 PUBLIC
     usd_gf
+    usd_ar
     usd_sdf
     usd_tf
     usd_usd
@@ -100,6 +105,7 @@ PRIVATE
     Diligent-GraphicsEngine
     Diligent-BasicPlatform
     Diligent-GraphicsTools
+    Diligent-TextureLoader
 )
 
 if(PLATFORM_WIN32 OR PLATFORM_UNIVERSAL_WINDOWS)

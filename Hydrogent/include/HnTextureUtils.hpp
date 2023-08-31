@@ -26,13 +26,8 @@
 
 #pragma once
 
-#include <memory>
-#include <unordered_map>
-
-#include "HnMaterialNetwork.hpp"
-#include "HnTextureRegistry.hpp"
-
-#include "pxr/imaging/hd/material.h"
+#include "TextureLoader.h"
+#include "RefCntAutoPtr.hpp"
 
 namespace Diligent
 {
@@ -40,35 +35,8 @@ namespace Diligent
 namespace USD
 {
 
-/// Hydra material implementation in Hydrogent.
-class HnMaterial final : public pxr::HdMaterial
-{
-public:
-    static std::shared_ptr<HnMaterial> Create(const pxr::SdfPath& id);
-
-    ~HnMaterial();
-
-    // Synchronizes state from the delegate to this object.
-    virtual void Sync(pxr::HdSceneDelegate* sceneDelegate,
-                      pxr::HdRenderParam*   renderParam,
-                      pxr::HdDirtyBits*     dirtyBits) override final;
-
-    // Returns the minimal set of dirty bits to place in the
-    // change tracker for use in the first sync of this prim.
-    virtual pxr::HdDirtyBits GetInitialDirtyBitsMask() const override final;
-
-    const HnTextureRegistry::TextureHandle* GetTexture(const pxr::TfToken& Name) const;
-
-private:
-    HnMaterial(pxr::SdfPath const& id);
-
-    void AllocateTextures(HnTextureRegistry& TexRegistry);
-
-private:
-    HnMaterialNetwork m_Network;
-
-    std::unordered_map<pxr::TfToken, HnTextureRegistry::TextureHandleSharedPtr, pxr::TfToken::HashFunctor> m_Textures;
-};
+RefCntAutoPtr<ITextureLoader> CreateTextureLoaderFromSdfPath(const char*            SdfPath,
+                                                             const TextureLoadInfo& LoadInfo);
 
 } // namespace USD
 

@@ -37,9 +37,9 @@ namespace Diligent
 namespace USD
 {
 
-std::unique_ptr<HnRenderDelegate> HnRenderDelegate::Create(IRenderDevice* pDevice)
+std::unique_ptr<HnRenderDelegate> HnRenderDelegate::Create(IRenderDevice* pDevice, IDeviceContext* pContext)
 {
-    return std::make_unique<HnRenderDelegate>(pDevice);
+    return std::make_unique<HnRenderDelegate>(pDevice, pContext);
 }
 
 // clang-format off
@@ -59,8 +59,10 @@ const pxr::TfTokenVector HnRenderDelegate::SupportedBPrimTypes =
 };
 // clang-format on
 
-HnRenderDelegate::HnRenderDelegate(IRenderDevice* pDevice) :
-    m_pDevice{pDevice}
+HnRenderDelegate::HnRenderDelegate(IRenderDevice* pDevice, IDeviceContext* pContext) :
+    m_pDevice{pDevice},
+    m_pContext{pContext},
+    m_TextureRegistry{pDevice}
 {
 }
 
@@ -167,10 +169,17 @@ void HnRenderDelegate::DestroyBprim(pxr::HdBprim* bprim)
 
 void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
 {
+    m_TextureRegistry.Commit(m_pContext);
     for (auto& mesh_it : m_Meshes)
     {
         mesh_it.second->CommitGPUResources(m_pDevice);
     }
+}
+
+const HnMaterial* HnRenderDelegate::GetMaterial(const char* Id) const
+{
+    auto it = m_Materials.find(Id);
+    return it != m_Materials.end() ? it->second.get() : nullptr;
 }
 
 } // namespace USD

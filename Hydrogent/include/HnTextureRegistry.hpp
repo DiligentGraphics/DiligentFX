@@ -27,12 +27,18 @@
 #pragma once
 
 #include <memory>
+#include <mutex>
 #include <unordered_map>
 
-#include "HnMaterialNetwork.hpp"
-#include "HnTextureRegistry.hpp"
+#include "pxr/pxr.h"
+#include "pxr/base/tf/token.h"
 
-#include "pxr/imaging/hd/material.h"
+#include "RenderDevice.h"
+#include "DeviceContext.h"
+#include "RefCntAutoPtr.hpp"
+#include "TextureLoader.h"
+
+#include "HnTextureIdentifier.hpp"
 
 namespace Diligent
 {
@@ -40,34 +46,37 @@ namespace Diligent
 namespace USD
 {
 
-/// Hydra material implementation in Hydrogent.
-class HnMaterial final : public pxr::HdMaterial
+class HnTextureRegistry final
 {
 public:
-    static std::shared_ptr<HnMaterial> Create(const pxr::SdfPath& id);
+    HnTextureRegistry(IRenderDevice* pDevice);
+    ~HnTextureRegistry();
 
-    ~HnMaterial();
+    void Commit(IDeviceContext* pContext);
 
-    // Synchronizes state from the delegate to this object.
-    virtual void Sync(pxr::HdSceneDelegate* sceneDelegate,
-                      pxr::HdRenderParam*   renderParam,
-                      pxr::HdDirtyBits*     dirtyBits) override final;
+    struct TextureHandle
+    {
+        RefCntAutoPtr<ITexture> pTexture;
+    };
 
-    // Returns the minimal set of dirty bits to place in the
-    // change tracker for use in the first sync of this prim.
-    virtual pxr::HdDirtyBits GetInitialDirtyBitsMask() const override final;
+    using TextureHandleSharedPtr = std::shared_ptr<TextureHandle>;
 
-    const HnTextureRegistry::TextureHandle* GetTexture(const pxr::TfToken& Name) const;
-
-private:
-    HnMaterial(pxr::SdfPath const& id);
-
-    void AllocateTextures(HnTextureRegistry& TexRegistry);
+    TextureHandleSharedPtr Allocate(const HnTextureIdentifier& TexId);
 
 private:
-    HnMaterialNetwork m_Network;
+    RefCntAutoPtr<IRenderDevice> m_pDevice;
 
-    std::unordered_map<pxr::TfToken, HnTextureRegistry::TextureHandleSharedPtr, pxr::TfToken::HashFunctor> m_Textures;
+    std::mutex                                                                                m_TexturesMtx;
+    std::unordered_map<pxr::TfToken, std::weak_ptr<TextureHandle>, pxr::TfToken::HashFunctor> m_Textures;
+
+    struct PendingTextureInfo
+    {
+        RefCntAutoPtr<ITextureLoader> pLoader;
+        TextureHandleSharedPtr        Handle;
+    };
+
+    std::mutex                                                                      m_PendingTexturesMtx;
+    std::unordered_map<pxr::TfToken, PendingTextureInfo, pxr::TfToken::HashFunctor> m_PendingTextures;
 };
 
 } // namespace USD

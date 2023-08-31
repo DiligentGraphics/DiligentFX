@@ -62,6 +62,7 @@ public:
 
     HnRendererImpl(IReferenceCounters* pRefCounters,
                    IRenderDevice*      pDevice,
+                   IDeviceContext*     pContext,
                    TEXTURE_FORMAT      RTVFormat,
                    TEXTURE_FORMAT      DSVFormat);
     ~HnRendererImpl();

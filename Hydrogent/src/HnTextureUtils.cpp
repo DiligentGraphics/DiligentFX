@@ -24,15 +24,10 @@
  *  of the possibility of such damages.
  */
 
-#pragma once
+#include "HnTextureUtils.hpp"
 
-#include <memory>
-#include <unordered_map>
-
-#include "HnMaterialNetwork.hpp"
-#include "HnTextureRegistry.hpp"
-
-#include "pxr/imaging/hd/material.h"
+#include "pxr/usd/ar/asset.h"
+#include "pxr/usd/ar/resolver.h"
 
 namespace Diligent
 {
@@ -40,35 +35,25 @@ namespace Diligent
 namespace USD
 {
 
-/// Hydra material implementation in Hydrogent.
-class HnMaterial final : public pxr::HdMaterial
+RefCntAutoPtr<ITextureLoader> CreateTextureLoaderFromSdfPath(const char*            SdfPath,
+                                                             const TextureLoadInfo& LoadInfo)
 {
-public:
-    static std::shared_ptr<HnMaterial> Create(const pxr::SdfPath& id);
 
-    ~HnMaterial();
+    pxr::ArResolvedPath           ResolvedPath{SdfPath};
+    std::shared_ptr<pxr::ArAsset> Asset = pxr::ArGetResolver().OpenAsset(ResolvedPath);
+    if (!Asset)
+        return {};
 
-    // Synchronizes state from the delegate to this object.
-    virtual void Sync(pxr::HdSceneDelegate* sceneDelegate,
-                      pxr::HdRenderParam*   renderParam,
-                      pxr::HdDirtyBits*     dirtyBits) override final;
 
-    // Returns the minimal set of dirty bits to place in the
-    // change tracker for use in the first sync of this prim.
-    virtual pxr::HdDirtyBits GetInitialDirtyBitsMask() const override final;
+    std::shared_ptr<const char> Buffer = Asset->GetBuffer();
+    if (!Buffer)
+        return {};
 
-    const HnTextureRegistry::TextureHandle* GetTexture(const pxr::TfToken& Name) const;
+    RefCntAutoPtr<ITextureLoader> pLoader;
+    CreateTextureLoaderFromMemory(Buffer.get(), Asset->GetSize(), IMAGE_FILE_FORMAT_UNKNOWN, true, LoadInfo, &pLoader);
 
-private:
-    HnMaterial(pxr::SdfPath const& id);
-
-    void AllocateTextures(HnTextureRegistry& TexRegistry);
-
-private:
-    HnMaterialNetwork m_Network;
-
-    std::unordered_map<pxr::TfToken, HnTextureRegistry::TextureHandleSharedPtr, pxr::TfToken::HashFunctor> m_Textures;
-};
+    return pLoader;
+}
 
 } // namespace USD
 

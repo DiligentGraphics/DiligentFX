@@ -25,6 +25,7 @@
  */
 
 #include "HnMaterial.hpp"
+#include "HnRenderDelegate.hpp"
 
 #include "pxr/imaging/hd/sceneDelegate.h"
 
@@ -36,12 +37,12 @@ namespace Diligent
 namespace USD
 {
 
-std::shared_ptr<HnMaterial> HnMaterial::Create(pxr::SdfPath const& id)
+std::shared_ptr<HnMaterial> HnMaterial::Create(const pxr::SdfPath& id)
 {
     return std::shared_ptr<HnMaterial>(new HnMaterial{id});
 }
 
-HnMaterial::HnMaterial(pxr::SdfPath const& id) :
+HnMaterial::HnMaterial(const pxr::SdfPath& id) :
     pxr::HdMaterial{id}
 {
 }
@@ -50,14 +51,14 @@ HnMaterial::~HnMaterial()
 {
 }
 
-void HnMaterial::Sync(pxr::HdSceneDelegate* sceneDelegate,
-                      pxr::HdRenderParam*   renderParam,
-                      pxr::HdDirtyBits*     dirtyBits)
+void HnMaterial::Sync(pxr::HdSceneDelegate* SceneDelegate,
+                      pxr::HdRenderParam*   RenderParam,
+                      pxr::HdDirtyBits*     DirtyBits)
 {
-    if (*dirtyBits == pxr::HdMaterial::Clean)
+    if (*DirtyBits == pxr::HdMaterial::Clean)
         return;
 
-    pxr::VtValue vtMat = sceneDelegate->GetMaterialResource(GetId());
+    pxr::VtValue vtMat = SceneDelegate->GetMaterialResource(GetId());
     if (vtMat.IsHolding<pxr::HdMaterialNetworkMap>())
     {
         const pxr::HdMaterialNetworkMap& hdNetworkMap = vtMat.UncheckedGet<pxr::HdMaterialNetworkMap>();
@@ -78,9 +79,29 @@ void HnMaterial::Sync(pxr::HdSceneDelegate* sceneDelegate,
                 m_Network = {};
             }
         }
+
+        HnTextureRegistry& TexRegistry = static_cast<HnRenderDelegate*>(SceneDelegate->GetRenderIndex().GetRenderDelegate())->GetTextureRegistry();
+        AllocateTextures(TexRegistry);
     }
 
-    *dirtyBits = HdMaterial::Clean;
+    *DirtyBits = HdMaterial::Clean;
+}
+
+void HnMaterial::AllocateTextures(HnTextureRegistry& TexRegistry)
+{
+    for (const HnMaterialNetwork::TextureDescriptor& TexDescriptor : m_Network.GetTextures())
+    {
+        if (auto pTex = TexRegistry.Allocate(TexDescriptor.TextureId))
+        {
+            m_Textures[TexDescriptor.Name] = pTex;
+        }
+    }
+}
+
+const HnTextureRegistry::TextureHandle* HnMaterial::GetTexture(const pxr::TfToken& Name) const
+{
+    auto tex_it = m_Textures.find(Name);
+    return tex_it != m_Textures.end() ? tex_it->second.get() : nullptr;
 }
 
 pxr::HdDirtyBits HnMaterial::GetInitialDirtyBitsMask() const

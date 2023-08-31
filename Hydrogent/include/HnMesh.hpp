@@ -90,6 +90,8 @@ public:
 
     const float4x4& GetTransform() const { return m_Transform; }
 
+    const pxr::SdfPath& GetMaterialId() const { return m_MaterialId; }
+
 protected:
     // This callback from Rprim gives the prim an opportunity to set
     // additional dirty bits based on those already set.
@@ -139,6 +141,8 @@ private:
     Uint32 m_NumEdges     = 0;
 
     float4x4 m_Transform = float4x4::Identity();
+
+    pxr::SdfPath m_MaterialId;
 
     RefCntAutoPtr<IBuffer> m_pTriangleIndexBuffer;
     RefCntAutoPtr<IBuffer> m_pEdgeIndexBuffer;
