@@ -37,9 +37,9 @@ namespace Diligent
 namespace USD
 {
 
-std::unique_ptr<HnRenderDelegate> HnRenderDelegate::Create()
+std::unique_ptr<HnRenderDelegate> HnRenderDelegate::Create(IRenderDevice* pDevice)
 {
-    return std::make_unique<HnRenderDelegate>();
+    return std::make_unique<HnRenderDelegate>(pDevice);
 }
 
 // clang-format off
@@ -59,7 +59,8 @@ const pxr::TfTokenVector HnRenderDelegate::SupportedBPrimTypes =
 };
 // clang-format on
 
-HnRenderDelegate::HnRenderDelegate()
+HnRenderDelegate::HnRenderDelegate(IRenderDevice* pDevice) :
+    m_pDevice{pDevice}
 {
 }
 
@@ -166,6 +167,10 @@ void HnRenderDelegate::DestroyBprim(pxr::HdBprim* bprim)
 
 void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
 {
+    for (auto& mesh_it : m_Meshes)
+    {
+        mesh_it.second->CommitGPUResources(m_pDevice);
+    }
 }
 
 } // namespace USD

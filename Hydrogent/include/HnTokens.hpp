@@ -62,7 +62,8 @@ namespace USD
     (pointSizeScale)           \
     (screenSpaceWidths)        \
     (minScreenSpaceWidths)     \
-    (shadowCompareTextures)
+    (shadowCompareTextures)    \
+    (st0)
 
 #define HN_MATERIAL_TAG_TOKENS \
     (defaultTag)               \

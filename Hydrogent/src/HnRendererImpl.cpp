@@ -49,7 +49,7 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters* pRefCounters,
                                TEXTURE_FORMAT      DSVFormat) :
     TBase{pRefCounters},
     m_Device{pDevice},
-    m_RenderDelegate{HnRenderDelegate::Create()}
+    m_RenderDelegate{HnRenderDelegate::Create(pDevice)}
 {
 }
 

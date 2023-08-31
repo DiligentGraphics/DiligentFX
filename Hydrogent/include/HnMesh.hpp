@@ -27,11 +27,18 @@
 #pragma once
 
 #include <memory>
+#include <unordered_map>
 
 // NoteL tbb.h must be included before mesh.h to avoid compilation errors in tbb headers.
 #include "tbb/tbb.h"
 #include "pxr/imaging/hd/mesh.h"
 #include "pxr/base/tf/token.h"
+
+#include "RenderDevice.h"
+#include "Buffer.h"
+#include "RefCntAutoPtr.hpp"
+#include "GraphicsTypesX.hpp"
+#include "BasicMath.hpp"
 
 namespace Diligent
 {
@@ -43,10 +50,17 @@ namespace USD
 class HnMesh final : public pxr::HdMesh
 {
 public:
-    static std::shared_ptr<HnMesh> Create(pxr::TfToken const& typeId,
-                                          pxr::SdfPath const& id);
+    static std::shared_ptr<HnMesh> Create(const pxr::TfToken& typeId,
+                                          const pxr::SdfPath& id);
 
     ~HnMesh();
+
+    struct GpuVertex
+    {
+        float3 Pos;
+        float3 Normal;
+        float2 UV;
+    };
 
     // Returns the set of dirty bits that should be
     // added to the change tracker for this prim, when this prim is inserted.
@@ -54,14 +68,23 @@ public:
 
     /// Pull invalidated scene data and prepare/update the renderable
     /// representation.
-    virtual void Sync(pxr::HdSceneDelegate* delegate,
-                      pxr::HdRenderParam*   renderParam,
-                      pxr::HdDirtyBits*     dirtyBits,
-                      pxr::TfToken const&   reprToken) override final;
+    virtual void Sync(pxr::HdSceneDelegate* Delegate,
+                      pxr::HdRenderParam*   RenderParam,
+                      pxr::HdDirtyBits*     DirtyBits,
+                      const pxr::TfToken&   ReprToken) override final;
 
     // Returns the names of built-in primvars, i.e. primvars that
     // are part of the core geometric schema for this prim.
-    virtual pxr::TfTokenVector const& GetBuiltinPrimvarNames() const override final;
+    virtual const pxr::TfTokenVector& GetBuiltinPrimvarNames() const override final;
+
+    void CommitGPUResources(IRenderDevice* pDevice);
+
+    IBuffer* GetVertexBuffer() const { return m_pVertexBuffer; }
+    IBuffer* GetTriangleIndexBuffer() const { return m_pTriangleIndexBuffer; }
+    IBuffer* GetEdgeIndexBuffer() const { return m_pEdgeIndexBuffer; }
+
+    Uint32 GetNumTriangles() const { return m_NumTriangles; }
+    Uint32 GetNumEdges() const { return m_NumEdges; }
 
 protected:
     // This callback from Rprim gives the prim an opportunity to set
@@ -71,11 +94,60 @@ protected:
     // Initialize the given representation of this Rprim.
     // This is called prior to syncing the prim, the first time the repr
     // is used.
-    virtual void _InitRepr(pxr::TfToken const& reprToken, pxr::HdDirtyBits* dirtyBits) override final;
+    virtual void _InitRepr(const pxr::TfToken& reprToken, pxr::HdDirtyBits* dirtyBits) override final;
+
+    void UpdateVertexBuffer(const RenderDeviceX_N& Device);
+    void UpdateIndexBuffer(const RenderDeviceX_N& Device);
 
 private:
-    HnMesh(pxr::TfToken const& typeId,
-           pxr::SdfPath const& id);
+    HnMesh(const pxr::TfToken& typeId,
+           const pxr::SdfPath& id);
+
+    void UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
+                    pxr::HdRenderParam*   RenderParam,
+                    pxr::HdDirtyBits&     DirtyBits,
+                    const pxr::TfToken&   ReprToken);
+
+    void UpdateVertexPrims(pxr::HdSceneDelegate& SceneDelegate,
+                           pxr::HdRenderParam*   RenderParam,
+                           pxr::HdDirtyBits&     DirtyBits,
+                           const pxr::TfToken&   ReprToken);
+
+    void UpdateDrawItem(pxr::HdSceneDelegate&       SceneDelegate,
+                        pxr::HdRenderParam*         RenderParam,
+                        pxr::HdDrawItem&            DrawItem,
+                        pxr::HdDirtyBits&           DirtyBits,
+                        const pxr::TfToken&         ReprToken,
+                        const pxr::HdReprSharedPtr& Repr,
+                        const pxr::HdMeshReprDesc&  Desc,
+                        bool                        RequireSmoothNormals,
+                        bool                        RequireFlatNormals,
+                        int                         GeomSubsetDescIndex);
+
+    void UpdateTopology(pxr::HdSceneDelegate& SceneDelegate,
+                        pxr::HdRenderParam*   RenderParam,
+                        pxr::HdDirtyBits&     DirtyBits,
+                        const pxr::TfToken&   ReprToken);
+
+private:
+    pxr::HdMeshTopology m_Topology;
+
+    struct IndexData
+    {
+        pxr::VtVec3iArray TrianglesFaceIndices;
+        pxr::VtIntArray   PrimitiveParam;
+        pxr::VtIntArray   TrianglesEdgeIndices;
+    };
+    std::unique_ptr<IndexData> m_IndexData;
+
+    std::unordered_map<pxr::TfToken, std::shared_ptr<pxr::HdBufferSource>, pxr::TfToken::HashFunctor> m_BufferSources;
+
+    Uint32 m_NumTriangles = 0;
+    Uint32 m_NumEdges     = 0;
+
+    RefCntAutoPtr<IBuffer> m_pTriangleIndexBuffer;
+    RefCntAutoPtr<IBuffer> m_pEdgeIndexBuffer;
+    RefCntAutoPtr<IBuffer> m_pVertexBuffer;
 };
 
 } // namespace USD

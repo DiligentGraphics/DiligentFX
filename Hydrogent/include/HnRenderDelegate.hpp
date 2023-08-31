@@ -32,6 +32,9 @@
 
 #include "pxr/imaging/hd/renderDelegate.h"
 
+#include "RenderDevice.h"
+#include "RefCntAutoPtr.hpp"
+
 namespace Diligent
 {
 
@@ -45,9 +48,9 @@ class HnMesh;
 class HnRenderDelegate final : public pxr::HdRenderDelegate
 {
 public:
-    static std::unique_ptr<HnRenderDelegate> Create();
+    static std::unique_ptr<HnRenderDelegate> Create(IRenderDevice* pDevice);
 
-    HnRenderDelegate();
+    HnRenderDelegate(IRenderDevice* pDevice);
 
     virtual ~HnRenderDelegate() override final;
 
@@ -168,6 +171,8 @@ private:
     static const pxr::TfTokenVector SupportedRPrimTypes;
     static const pxr::TfTokenVector SupportedSPrimTypes;
     static const pxr::TfTokenVector SupportedBPrimTypes;
+
+    RefCntAutoPtr<IRenderDevice> m_pDevice;
 
     std::unordered_map<std::string, std::shared_ptr<HnMaterial>> m_Materials;
     std::unordered_map<std::string, std::shared_ptr<HnMesh>>     m_Meshes;
