@@ -28,6 +28,7 @@
 
 #include <memory>
 #include <unordered_map>
+#include <array>
 
 // NoteL tbb.h must be included before mesh.h to avoid compilation errors in tbb headers.
 #include "tbb/tbb.h"
@@ -55,13 +56,6 @@ public:
 
     ~HnMesh();
 
-    struct GpuVertex
-    {
-        float3 Pos;
-        float3 Normal;
-        float2 UV;
-    };
-
     // Returns the set of dirty bits that should be
     // added to the change tracker for this prim, when this prim is inserted.
     virtual pxr::HdDirtyBits GetInitialDirtyBitsMask() const override final;
@@ -79,7 +73,15 @@ public:
 
     void CommitGPUResources(IRenderDevice* pDevice);
 
-    IBuffer* GetVertexBuffer() const { return m_pVertexBuffer; }
+    enum VERTEX_BUFFER_ID
+    {
+        VERTEX_BUFFER_ID_POSITION = 0,
+        VERTEX_BUFFER_ID_NORMAL,
+        VERTEX_BUFFER_ID_TEXCOORD,
+        VERTEX_BUFFER_ID_COUNT
+    };
+
+    IBuffer* GetVertexBuffer(VERTEX_BUFFER_ID BufferId) const { return m_pVertexBuffers[BufferId]; }
     IBuffer* GetTriangleIndexBuffer() const { return m_pTriangleIndexBuffer; }
     IBuffer* GetEdgeIndexBuffer() const { return m_pEdgeIndexBuffer; }
 
@@ -98,7 +100,7 @@ protected:
     // is used.
     virtual void _InitRepr(const pxr::TfToken& reprToken, pxr::HdDirtyBits* dirtyBits) override final;
 
-    void UpdateVertexBuffer(const RenderDeviceX_N& Device);
+    void UpdateVertexBuffers(const RenderDeviceX_N& Device);
     void UpdateIndexBuffer(const RenderDeviceX_N& Device);
 
 private:
@@ -140,7 +142,8 @@ private:
 
     RefCntAutoPtr<IBuffer> m_pTriangleIndexBuffer;
     RefCntAutoPtr<IBuffer> m_pEdgeIndexBuffer;
-    RefCntAutoPtr<IBuffer> m_pVertexBuffer;
+
+    std::array<RefCntAutoPtr<IBuffer>, VERTEX_BUFFER_ID_COUNT> m_pVertexBuffers;
 };
 
 } // namespace USD

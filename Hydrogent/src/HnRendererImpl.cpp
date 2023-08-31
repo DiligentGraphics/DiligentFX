@@ -129,8 +129,8 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters* pRefCounters,
 
     InputLayoutDescX InputLayout{
         {0, 0, 3, VT_FLOAT32}, // Position
-        {1, 0, 3, VT_FLOAT32}, // Normal
-        {2, 0, 2, VT_FLOAT32}, // UV
+        {1, 1, 3, VT_FLOAT32}, // Normal
+        {2, 2, 2, VT_FLOAT32}, // UV
     };
 
     GraphicsPipelineStateCreateInfoX PsoCI{"USD PSO"};
@@ -228,14 +228,16 @@ void HnRendererImpl::Draw(IDeviceContext* pCtx, const float4x4& CameraViewProj)
 
         auto& Mesh = *mesh_it.second;
 
-        auto* pVB = Mesh.GetVertexBuffer();
-        auto* pIB = Mesh.GetTriangleIndexBuffer();
+        auto* pVB0 = Mesh.GetVertexBuffer(HnMesh::VERTEX_BUFFER_ID_POSITION);
+        auto* pVB1 = Mesh.GetVertexBuffer(HnMesh::VERTEX_BUFFER_ID_NORMAL);
+        auto* pVB2 = Mesh.GetVertexBuffer(HnMesh::VERTEX_BUFFER_ID_TEXCOORD);
+        auto* pIB  = Mesh.GetTriangleIndexBuffer();
 
-        if (pVB == nullptr || pIB == nullptr)
+        if (pVB0 == nullptr || pVB1 == nullptr || pVB2 == nullptr || pIB == nullptr)
             continue;
 
         // Bind vertex and index buffers
-        IBuffer* pBuffs[] = {pVB};
+        IBuffer* pBuffs[] = {pVB0, pVB1, pVB2};
         pCtx->SetVertexBuffers(0, _countof(pBuffs), pBuffs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         pCtx->SetIndexBuffer(pIB, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 

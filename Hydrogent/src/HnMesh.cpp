@@ -223,55 +223,49 @@ void HnMesh::UpdateVertexPrims(pxr::HdSceneDelegate& SceneDelegate,
     DirtyBits &= ~pxr::HdChangeTracker::DirtyPrimvar;
 }
 
-void HnMesh::UpdateVertexBuffer(const RenderDeviceX_N& Device)
+void HnMesh::UpdateVertexBuffers(const RenderDeviceX_N& Device)
 {
     VERIFY_EXPR(!m_BufferSources.empty());
 
-    const auto Name = GetId().GetString() + " - Vertex Buffer";
+    for (auto source_it : m_BufferSources)
+    {
+        const auto& PrimName = source_it.first;
 
-    const auto NumVerts = static_cast<size_t>(m_Topology.GetNumPoints());
-    BufferDesc Desc{
-        Name.c_str(),
-        NumVerts * sizeof(GpuVertex),
-        BIND_VERTEX_BUFFER,
-        USAGE_IMMUTABLE,
-    };
-    std::vector<GpuVertex> Vertices(NumVerts);
+        VERTEX_BUFFER_ID BufferId = VERTEX_BUFFER_ID_COUNT;
+        if (PrimName == pxr::HdTokens->points)
+            BufferId = VERTEX_BUFFER_ID_POSITION;
+        else if (PrimName == pxr::HdTokens->normals)
+            BufferId = VERTEX_BUFFER_ID_NORMAL;
+        else if (PrimName == HnTokens->st0)
+            BufferId = VERTEX_BUFFER_ID_TEXCOORD;
+        else
+            continue;
 
-    auto PopulateElement = [&](const pxr::TfToken Name, Uint32 ElementOffset, Uint32 ElementSize) {
-        const auto source_it = m_BufferSources.find(Name);
-        if (source_it == m_BufferSources.end())
-            return;
-
-        auto pSource = source_it->second.get();
+        auto pSource = source_it.second.get();
         if (pSource == nullptr)
             return;
 
+        const auto NumVerts = static_cast<size_t>(m_Topology.GetNumPoints());
         VERIFY_EXPR(pSource->GetNumElements() == NumVerts);
 
-        const auto DataType = pSource->GetTupleType().type;
-        if (HdDataSizeOfType(DataType) != ElementSize)
-        {
-            UNEXPECTED("Data source element size ", HdDataSizeOfType(DataType), " does not match the expected element size ", ElementSize);
-            return;
-        }
+        const auto ElementType = pSource->GetTupleType().type;
+        const auto ElementSize = HdDataSizeOfType(ElementType);
+        VERIFY((BufferId == VERTEX_BUFFER_ID_POSITION && ElementSize == sizeof(float) * 3 ||
+                BufferId == VERTEX_BUFFER_ID_NORMAL && ElementSize == sizeof(float) * 3 ||
+                BufferId == VERTEX_BUFFER_ID_TEXCOORD && ElementSize == sizeof(float) * 2),
+               "Unexpected element size");
 
-        const auto* pSrcData = static_cast<const Uint8*>(pSource->GetData());
-        auto*       pDstData = Vertices.data();
-        for (Uint32 i = 0; i < NumVerts; ++i)
-        {
-            std::memcpy(reinterpret_cast<Uint8*>(pDstData + i) + ElementOffset,
-                        pSrcData + ElementSize * i,
-                        ElementSize);
-        }
-    };
+        const auto Name = GetId().GetString() + " - " + PrimName.GetString();
+        BufferDesc Desc{
+            Name.c_str(),
+            NumVerts * ElementSize,
+            BIND_VERTEX_BUFFER,
+            USAGE_IMMUTABLE,
+        };
 
-    PopulateElement(pxr::HdTokens->points, offsetof(GpuVertex, Pos), sizeof(float) * 3);
-    PopulateElement(pxr::HdTokens->normals, offsetof(GpuVertex, Normal), sizeof(float) * 3);
-    PopulateElement(HnTokens->st0, offsetof(GpuVertex, UV), sizeof(float) * 2);
-
-    BufferData InitData{Vertices.data(), Desc.Size};
-    m_pVertexBuffer = Device.CreateBuffer(Desc, &InitData);
+        BufferData InitData{pSource->GetData(), Desc.Size};
+        m_pVertexBuffers[BufferId] = Device.CreateBuffer(Desc, &InitData);
+    }
 
     m_BufferSources.clear();
 }
@@ -325,7 +319,7 @@ void HnMesh::CommitGPUResources(IRenderDevice* pDevice)
 
     if (!m_BufferSources.empty())
     {
-        UpdateVertexBuffer(pDevice);
+        UpdateVertexBuffers(pDevice);
     }
 }
 
