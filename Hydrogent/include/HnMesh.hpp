@@ -86,6 +86,8 @@ public:
     Uint32 GetNumTriangles() const { return m_NumTriangles; }
     Uint32 GetNumEdges() const { return m_NumEdges; }
 
+    const float4x4& GetTransform() const { return m_Transform; }
+
 protected:
     // This callback from Rprim gives the prim an opportunity to set
     // additional dirty bits based on those already set.
@@ -113,17 +115,6 @@ private:
                            pxr::HdDirtyBits&     DirtyBits,
                            const pxr::TfToken&   ReprToken);
 
-    void UpdateDrawItem(pxr::HdSceneDelegate&       SceneDelegate,
-                        pxr::HdRenderParam*         RenderParam,
-                        pxr::HdDrawItem&            DrawItem,
-                        pxr::HdDirtyBits&           DirtyBits,
-                        const pxr::TfToken&         ReprToken,
-                        const pxr::HdReprSharedPtr& Repr,
-                        const pxr::HdMeshReprDesc&  Desc,
-                        bool                        RequireSmoothNormals,
-                        bool                        RequireFlatNormals,
-                        int                         GeomSubsetDescIndex);
-
     void UpdateTopology(pxr::HdSceneDelegate& SceneDelegate,
                         pxr::HdRenderParam*   RenderParam,
                         pxr::HdDirtyBits&     DirtyBits,
@@ -144,6 +135,8 @@ private:
 
     Uint32 m_NumTriangles = 0;
     Uint32 m_NumEdges     = 0;
+
+    float4x4 m_Transform = float4x4::Identity();
 
     RefCntAutoPtr<IBuffer> m_pTriangleIndexBuffer;
     RefCntAutoPtr<IBuffer> m_pEdgeIndexBuffer;

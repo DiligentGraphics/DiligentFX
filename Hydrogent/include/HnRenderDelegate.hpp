@@ -167,6 +167,8 @@ public:
     // memory.
     virtual void CommitResources(pxr::HdChangeTracker* tracker) override final;
 
+    const auto& GetMeshes() const { return m_Meshes; }
+
 private:
     static const pxr::TfTokenVector SupportedRPrimTypes;
     static const pxr::TfTokenVector SupportedSPrimTypes;

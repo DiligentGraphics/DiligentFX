@@ -26,7 +26,10 @@
 
 #include "HnRendererImpl.hpp"
 #include "HnRenderDelegate.hpp"
+#include "HnMesh.hpp"
+
 #include "EngineMemory.h"
+#include "MapHelper.hpp"
 
 #include "pxr/imaging/hd/task.h"
 #include "pxr/imaging/hd/unitTestNullRenderPass.h"
@@ -36,6 +39,57 @@ namespace Diligent
 
 namespace USD
 {
+
+static constexpr char VSSource[] = R"(
+cbuffer Constants
+{
+    float4x4 g_WorldViewProj;
+};
+
+struct VSInput
+{
+    float3 Pos    : ATTRIB0;
+    float3 Normal : ATTRIB1;
+    float2 UV     : ATTRIB2;
+};
+
+struct PSInput 
+{ 
+    float4 Pos   : SV_POSITION; 
+    float3 Normal: NORMAL;
+    float2 UV    : TEXCOORD;
+};
+
+void main(in  VSInput VSIn,
+          out PSInput PSIn) 
+{
+    PSIn.Pos    = mul( float4(VSIn.Pos,1.0), g_WorldViewProj);
+    PSIn.Normal = VSIn.Normal;
+    PSIn.UV     = VSIn.UV;
+}
+)";
+
+static constexpr char PSSource[] = R"(
+struct PSInput 
+{ 
+    float4 Pos   : SV_POSITION; 
+    float3 Normal: NORMAL;
+    float2 UV    : TEXCOORD;
+};
+
+struct PSOutput
+{ 
+    float4 Color : SV_TARGET; 
+};
+
+void main(in  PSInput  PSIn,
+          out PSOutput PSOut)
+{
+    float3 LightDir = float3(0, -1, 0);
+    float DiffuseLight = max(0, dot(PSIn.Normal, -LightDir));
+    PSOut.Color = float4(PSIn.UV, 0, 1) * DiffuseLight; 
+}
+)";
 
 void CreateHnRenderer(IRenderDevice* pDevice, TEXTURE_FORMAT RTVFormat, TEXTURE_FORMAT DSVFormat, IHnRenderer** ppRenderer)
 {
@@ -51,6 +105,48 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters* pRefCounters,
     m_Device{pDevice},
     m_RenderDelegate{HnRenderDelegate::Create(pDevice)}
 {
+    ShaderCreateInfo ShaderCI;
+    ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL;
+
+    RefCntAutoPtr<IShader> pVS;
+    {
+        ShaderCI.Desc       = {"Usd VS", SHADER_TYPE_VERTEX, true};
+        ShaderCI.EntryPoint = "main";
+        ShaderCI.Source     = VSSource;
+
+        pVS = m_Device.CreateShader(ShaderCI);
+    }
+
+    // Create pixel shader
+    RefCntAutoPtr<IShader> pPS;
+    {
+        ShaderCI.Desc       = {"Usd PS", SHADER_TYPE_PIXEL, true};
+        ShaderCI.EntryPoint = "main";
+        ShaderCI.Source     = PSSource;
+
+        pPS = m_Device.CreateShader(ShaderCI);
+    }
+
+    InputLayoutDescX InputLayout{
+        {0, 0, 3, VT_FLOAT32}, // Position
+        {1, 0, 3, VT_FLOAT32}, // Normal
+        {2, 0, 2, VT_FLOAT32}, // UV
+    };
+
+    GraphicsPipelineStateCreateInfoX PsoCI{"USD PSO"};
+    PsoCI
+        .AddShader(pVS)
+        .AddShader(pPS)
+        .SetRasterizerDesc(FILL_MODE_SOLID, CULL_MODE_BACK)
+        .SetInputLayout(InputLayout)
+        .SetPrimitiveTopology(PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+        .AddRenderTarget(RTVFormat)
+        .SetDepthFormat(DSVFormat);
+
+    m_pPSO         = m_Device.CreateGraphicsPipelineState(PsoCI);
+    m_pVSConstants = m_Device.CreateBuffer("Constant buffer", sizeof(float4x4));
+    m_pPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "Constants")->Set(m_pVSConstants);
+    m_pPSO->CreateShaderResourceBinding(&m_pSRB, true);
 }
 
 HnRendererImpl::~HnRendererImpl()
@@ -125,6 +221,36 @@ void HnRendererImpl::Update()
 
 void HnRendererImpl::Draw(IDeviceContext* pCtx, const float4x4& CameraViewProj)
 {
+    for (auto mesh_it : m_RenderDelegate->GetMeshes())
+    {
+        if (!mesh_it.second)
+            continue;
+
+        auto& Mesh = *mesh_it.second;
+
+        auto* pVB = Mesh.GetVertexBuffer();
+        auto* pIB = Mesh.GetTriangleIndexBuffer();
+
+        if (pVB == nullptr || pIB == nullptr)
+            continue;
+
+        // Bind vertex and index buffers
+        IBuffer* pBuffs[] = {pVB};
+        pCtx->SetVertexBuffers(0, _countof(pBuffs), pBuffs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        pCtx->SetIndexBuffer(pIB, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+        {
+            // Map the buffer and write current world-view-projection matrix
+            MapHelper<float4x4> CBConstants{pCtx, m_pVSConstants, MAP_WRITE, MAP_FLAG_DISCARD};
+
+            *CBConstants = (Mesh.GetTransform() * CameraViewProj).Transpose();
+        }
+
+        pCtx->SetPipelineState(m_pPSO);
+        pCtx->CommitShaderResources(m_pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        Diligent::DrawIndexedAttribs DrawAttrs{Mesh.GetNumTriangles() * 3, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
+        pCtx->DrawIndexed(DrawAttrs);
+    }
 }
 
 } // namespace USD

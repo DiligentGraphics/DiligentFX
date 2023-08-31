@@ -119,73 +119,18 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
     if (!CurrRepr)
         return;
 
+    const pxr::SdfPath& Id = GetId();
+
     UpdateTopology(SceneDelegate, RenderParam, DirtyBits, ReprToken);
     UpdateVertexPrims(SceneDelegate, RenderParam, DirtyBits, ReprToken);
 
-    _MeshReprConfig::DescArray ReprDescs = _GetReprDesc(ReprToken);
-
-    // Iterate through all reprdescs for the current repr to figure out if any
-    // of them requires smooth normals or flat normals. If either (or both)
-    // are required, we will calculate them once and clean the bits.
-    bool RequireSmoothNormals = false;
-    bool RequireFlatNormals   = false;
-    for (const pxr::HdMeshReprDesc& Desc : ReprDescs)
+    if (pxr::HdChangeTracker::IsTransformDirty(DirtyBits, Id))
     {
-        if (Desc.flatShadingEnabled)
-        {
-            RequireFlatNormals = true;
-        }
-        else
-        {
-            RequireSmoothNormals = true;
-        }
-    }
-
-    // For each relevant draw item, update dirty buffer sources.
-    int DrawItemIndex       = 0;
-    int GeomSubsetDescIndex = 0;
-    for (const pxr::HdMeshReprDesc& Desc : ReprDescs)
-    {
-        if (Desc.geomStyle == pxr::HdMeshGeomStyleInvalid)
-            continue;
-
-        pxr::HdDrawItem& DrawItem = *CurrRepr->GetDrawItem(DrawItemIndex++);
-
-        if (pxr::HdChangeTracker::IsDirty(DirtyBits))
-        {
-            UpdateDrawItem(SceneDelegate,
-                           RenderParam,
-                           DrawItem,
-                           DirtyBits,
-                           ReprToken,
-                           CurrRepr,
-                           Desc,
-                           RequireSmoothNormals,
-                           RequireFlatNormals,
-                           GeomSubsetDescIndex);
-        }
-
-        if (Desc.geomStyle != pxr::HdMeshGeomStylePoints)
-        {
-            GeomSubsetDescIndex++;
-        }
+        pxr::GfMatrix4d Transform = SceneDelegate.GetTransform(Id);
+        m_Transform               = float4x4::MakeMatrix(Transform.data());
     }
 
     DirtyBits &= ~pxr::HdChangeTracker::NewRepr;
-}
-
-
-void HnMesh::UpdateDrawItem(pxr::HdSceneDelegate&       SceneDelegate,
-                            pxr::HdRenderParam*         RenderParam,
-                            pxr::HdDrawItem&            DrawItem,
-                            pxr::HdDirtyBits&           DirtyBits,
-                            const pxr::TfToken&         ReprToken,
-                            const pxr::HdReprSharedPtr& Repr,
-                            const pxr::HdMeshReprDesc&  Desc,
-                            bool                        RequireSmoothNormals,
-                            bool                        RequireFlatNormals,
-                            int                         GeomSubsetDescIndex)
-{
 }
 
 void HnMesh::UpdateTopology(pxr::HdSceneDelegate& SceneDelegate,

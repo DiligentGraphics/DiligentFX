@@ -83,6 +83,10 @@ private:
     pxr::UsdImagingDelegate*   m_ImagingDelegate = nullptr;
     pxr::TfTokenVector         m_RenderTags;
     pxr::HdRenderPassSharedPtr m_GeometryPass;
+
+    RefCntAutoPtr<IPipelineState>         m_pPSO;
+    RefCntAutoPtr<IShaderResourceBinding> m_pSRB;
+    RefCntAutoPtr<IBuffer>                m_pVSConstants;
 };
 
 } // namespace USD
