@@ -91,7 +91,7 @@ void HnMaterial::AllocateTextures(HnTextureRegistry& TexRegistry)
 {
     for (const HnMaterialNetwork::TextureDescriptor& TexDescriptor : m_Network.GetTextures())
     {
-        if (auto pTex = TexRegistry.Allocate(TexDescriptor.TextureId))
+        if (auto pTex = TexRegistry.Allocate(TexDescriptor.TextureId, TexDescriptor.SamplerParams))
         {
             m_Textures[TexDescriptor.Name] = pTex;
         }

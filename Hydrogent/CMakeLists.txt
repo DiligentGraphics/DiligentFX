@@ -11,6 +11,7 @@ set(SOURCE
     src/HnTokens.cpp
     src/HnTextureRegistry.cpp
     src/HnTextureUtils.cpp
+    src/HnTypeConversions.cpp
 )
 
 set(INCLUDE
@@ -23,6 +24,7 @@ set(INCLUDE
     include/HnTextureIdentifier.hpp
     include/HnTextureRegistry.hpp
     include/HnTextureUtils.hpp
+    include/HnTypeConversions.hpp
 )
 
 set(INTERFACE

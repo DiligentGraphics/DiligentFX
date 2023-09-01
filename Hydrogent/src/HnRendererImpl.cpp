@@ -67,7 +67,7 @@ void main(in  VSInput VSIn,
 {
     PSIn.Pos    = mul( float4(VSIn.Pos,1.0), g_WorldViewProj);
     PSIn.Normal = VSIn.Normal;
-    PSIn.UV     = float2(VSIn.UV.x, 1.0 - VSIn.UV.y);
+    PSIn.UV     = VSIn.UV;
 }
 )";
 

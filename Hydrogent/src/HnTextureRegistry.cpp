@@ -26,6 +26,8 @@
 
 #include "HnTextureRegistry.hpp"
 #include "HnTextureUtils.hpp"
+#include "HnTokens.hpp"
+#include "HnTypeConversions.hpp"
 
 #include <mutex>
 
@@ -44,7 +46,7 @@ HnTextureRegistry::~HnTextureRegistry()
 {
 }
 
-static void InitializeHandle(IRenderDevice* pDevice, ITextureLoader* pLoader, HnTextureRegistry::TextureHandle& Handle)
+static void InitializeHandle(IRenderDevice* pDevice, ITextureLoader* pLoader, const SamplerDesc& SamDesc, HnTextureRegistry::TextureHandle& Handle)
 {
     VERIFY_EXPR(!Handle.pTexture);
     pLoader->CreateTexture(pDevice, &Handle.pTexture);
@@ -53,9 +55,6 @@ static void InitializeHandle(IRenderDevice* pDevice, ITextureLoader* pLoader, Hn
 
     RefCntAutoPtr<ISampler> pSampler;
 
-    SamplerDesc SamDesc;
-    SamDesc.AddressU = TEXTURE_ADDRESS_WRAP;
-    SamDesc.AddressV = TEXTURE_ADDRESS_WRAP;
     pDevice->CreateSampler(SamDesc, &pSampler);
     VERIFY_EXPR(pSampler);
     Handle.pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE)->SetSampler(pSampler);
@@ -66,11 +65,12 @@ void HnTextureRegistry::Commit(IDeviceContext* pContext)
     std::lock_guard<std::mutex> Lock{m_PendingTexturesMtx};
     for (auto tex_it : m_PendingTextures)
     {
-        InitializeHandle(m_pDevice, tex_it.second.pLoader, *tex_it.second.Handle);
+        InitializeHandle(m_pDevice, tex_it.second.pLoader, tex_it.second.SamDesc, *tex_it.second.Handle);
     }
 }
 
-HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const HnTextureIdentifier& TexId)
+HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const HnTextureIdentifier&      TexId,
+                                                                      const pxr::HdSamplerParameters& SamplerParams)
 {
     return m_Cache.Get(
         TexId.FilePath,
@@ -79,6 +79,14 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const HnTe
 
             TextureLoadInfo LoadInfo;
 
+            // TODO: why do textures need to be flipped vertically?
+            LoadInfo.FlipVertically = !TexId.SubtextureId.FlipVertically;
+
+            if (TexId.SubtextureId.SourceColorSpace == "auto" || TexId.SubtextureId.SourceColorSpace == HnTokens->sRGB)
+                LoadInfo.IsSRGB = true;
+
+            LoadInfo.PermultiplyAlpha = TexId.SubtextureId.PremultiplyAlpha;
+
             auto pLoader = CreateTextureLoaderFromSdfPath(TexId.FilePath.GetText(), LoadInfo);
             if (!pLoader)
             {
@@ -86,14 +94,15 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const HnTe
                 return TextureHandleSharedPtr{};
             }
 
+            auto SamDesc = HdSamplerParametersToSamplerDesc(SamplerParams);
             if (m_pDevice->GetDeviceInfo().Features.MultithreadedResourceCreation)
             {
-                InitializeHandle(m_pDevice, pLoader, *TexHandle);
+                InitializeHandle(m_pDevice, pLoader, SamDesc, *TexHandle);
             }
             else
             {
                 std::lock_guard<std::mutex> Lock{m_PendingTexturesMtx};
-                m_PendingTextures.emplace(TexId.FilePath, PendingTextureInfo{std::move(pLoader), TexHandle});
+                m_PendingTextures.emplace(TexId.FilePath, PendingTextureInfo{std::move(pLoader), SamDesc, TexHandle});
             }
 
             return TexHandle;

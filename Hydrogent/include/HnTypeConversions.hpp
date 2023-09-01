@@ -26,21 +26,11 @@
 
 #pragma once
 
-#include <memory>
-#include <mutex>
-#include <unordered_map>
+#include "GraphicsTypes.h"
+#include "Sampler.h"
 
 #include "pxr/pxr.h"
-#include "pxr/base/tf/token.h"
 #include "pxr/imaging/hd/types.h"
-
-#include "RenderDevice.h"
-#include "DeviceContext.h"
-#include "RefCntAutoPtr.hpp"
-#include "TextureLoader.h"
-#include "ObjectsRegistry.hpp"
-
-#include "HnTextureIdentifier.hpp"
 
 namespace Diligent
 {
@@ -48,39 +38,13 @@ namespace Diligent
 namespace USD
 {
 
-class HnTextureRegistry final
-{
-public:
-    HnTextureRegistry(IRenderDevice* pDevice);
-    ~HnTextureRegistry();
+TEXTURE_ADDRESS_MODE HdWrapToAddressMode(pxr::HdWrap hdWrap);
+FILTER_TYPE          HdMagFilterToFilterType(pxr::HdMagFilter hdMinFilter);
+void                 HdMinFilterToMinMipFilterType(pxr::HdMinFilter hdMinFilter, FILTER_TYPE& MinFilter, FILTER_TYPE& MipFilter);
+COMPARISON_FUNCTION  HdCompareFunctionToComparisonFunction(pxr::HdCompareFunction hdComparFunc);
 
-    void Commit(IDeviceContext* pContext);
+SamplerDesc HdSamplerParametersToSamplerDesc(const pxr::HdSamplerParameters& hdSamplerParams);
 
-    struct TextureHandle
-    {
-        RefCntAutoPtr<ITexture> pTexture;
-    };
-
-    using TextureHandleSharedPtr = std::shared_ptr<TextureHandle>;
-
-    TextureHandleSharedPtr Allocate(const HnTextureIdentifier&      TexId,
-                                    const pxr::HdSamplerParameters& SamplerParams);
-
-private:
-    RefCntAutoPtr<IRenderDevice> m_pDevice;
-
-    ObjectsRegistry<pxr::TfToken, TextureHandleSharedPtr, pxr::TfToken::HashFunctor> m_Cache;
-
-    struct PendingTextureInfo
-    {
-        RefCntAutoPtr<ITextureLoader> pLoader;
-        SamplerDesc                   SamDesc;
-        TextureHandleSharedPtr        Handle;
-    };
-
-    std::mutex                                                                      m_PendingTexturesMtx;
-    std::unordered_map<pxr::TfToken, PendingTextureInfo, pxr::TfToken::HashFunctor> m_PendingTextures;
-};
 
 } // namespace USD
 
