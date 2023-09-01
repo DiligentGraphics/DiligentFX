@@ -26,7 +26,6 @@
 
 #include "HnTextureRegistry.hpp"
 #include "HnTextureUtils.hpp"
-#include "HnTokens.hpp"
 #include "HnTypeConversions.hpp"
 
 #include <mutex>
@@ -80,11 +79,8 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const HnTe
             TextureLoadInfo LoadInfo;
 
             // TODO: why do textures need to be flipped vertically?
-            LoadInfo.FlipVertically = !TexId.SubtextureId.FlipVertically;
-
-            if (TexId.SubtextureId.SourceColorSpace == "auto" || TexId.SubtextureId.SourceColorSpace == HnTokens->sRGB)
-                LoadInfo.IsSRGB = true;
-
+            LoadInfo.FlipVertically   = !TexId.SubtextureId.FlipVertically;
+            LoadInfo.IsSRGB           = TexId.SubtextureId.IsSRGB;
             LoadInfo.PermultiplyAlpha = TexId.SubtextureId.PremultiplyAlpha;
 
             auto pLoader = CreateTextureLoaderFromSdfPath(TexId.FilePath.GetText(), LoadInfo);

@@ -563,7 +563,8 @@ pxr::HdSamplerParameters GetSamplerParameters(const pxr::SdfPath&               
     };
 }
 
-HnSubTextureIdentifier GetSubtextureIdentifier(const pxr::HdTextureType& TextureType,
+HnSubTextureIdentifier GetSubtextureIdentifier(const pxr::TfToken&       ParamName,
+                                               const pxr::HdTextureType& TextureType,
                                                const pxr::TfToken&       NodeType,
                                                bool                      PremultiplyAlpha,
                                                const pxr::TfToken&       SourceColorSpace)
@@ -571,7 +572,16 @@ HnSubTextureIdentifier GetSubtextureIdentifier(const pxr::HdTextureType& Texture
     HnSubTextureIdentifier TextureId;
     TextureId.Type             = TextureType;
     TextureId.PremultiplyAlpha = PremultiplyAlpha;
-    TextureId.SourceColorSpace = SourceColorSpace;
+
+    if (SourceColorSpace == HnTokens->sRGB)
+    {
+        TextureId.IsSRGB = true;
+    }
+    else if (SourceColorSpace == "auto")
+    {
+        TextureId.IsSRGB = ParamName == HnTokens->diffuseColor;
+    }
+
     if (TextureType == pxr::HdTextureType::Uv)
     {
         TextureId.FlipVertically = NodeType == HnMaterialPrivateTokens->HwUvTexture_1;
@@ -929,6 +939,7 @@ void HnMaterialNetwork::AddTextureParam(const pxr::HdMaterialNetwork2& Network,
                 TextureId = HnTextureIdentifier{
                     TfToken{filePath},
                     GetSubtextureIdentifier(
+                        ParamName,
                         TexParam.TextureType,
                         Node.nodeTypeId,
                         TexParam.IsPremultiplied,

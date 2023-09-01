@@ -40,9 +40,10 @@ struct HnSubTextureIdentifier
 {
     pxr::HdTextureType Type;
     pxr::TfToken       FilePath;
-    pxr::TfToken       SourceColorSpace;
-    bool               FlipVertically   = false;
-    bool               PremultiplyAlpha = false;
+
+    bool IsSRGB           = false;
+    bool FlipVertically   = false;
+    bool PremultiplyAlpha = false;
 };
 
 struct HnTextureIdentifier
