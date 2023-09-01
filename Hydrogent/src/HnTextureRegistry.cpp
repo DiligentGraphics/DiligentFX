@@ -72,28 +72,32 @@ void HnTextureRegistry::Commit(IDeviceContext* pContext)
 
 HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const HnTextureIdentifier& TexId)
 {
-    auto TexHandle = std::make_shared<TextureHandle>();
+    return m_Cache.Get(
+        TexId.FilePath,
+        [&]() {
+            auto TexHandle = std::make_shared<TextureHandle>();
 
-    TextureLoadInfo LoadInfo;
+            TextureLoadInfo LoadInfo;
 
-    auto pLoader = CreateTextureLoaderFromSdfPath(TexId.FilePath.GetText(), LoadInfo);
-    if (!pLoader)
-    {
-        LOG_ERROR_MESSAGE("Failed to create texture loader for texture ", TexId.FilePath);
-        return {};
-    }
+            auto pLoader = CreateTextureLoaderFromSdfPath(TexId.FilePath.GetText(), LoadInfo);
+            if (!pLoader)
+            {
+                LOG_ERROR_MESSAGE("Failed to create texture loader for texture ", TexId.FilePath);
+                return TextureHandleSharedPtr{};
+            }
 
-    if (m_pDevice->GetDeviceInfo().Features.MultithreadedResourceCreation)
-    {
-        InitializeHandle(m_pDevice, pLoader, *TexHandle);
-    }
-    else
-    {
-        std::lock_guard<std::mutex> Lock{m_PendingTexturesMtx};
-        m_PendingTextures.emplace(TexId.FilePath, PendingTextureInfo{std::move(pLoader), TexHandle});
-    }
+            if (m_pDevice->GetDeviceInfo().Features.MultithreadedResourceCreation)
+            {
+                InitializeHandle(m_pDevice, pLoader, *TexHandle);
+            }
+            else
+            {
+                std::lock_guard<std::mutex> Lock{m_PendingTexturesMtx};
+                m_PendingTextures.emplace(TexId.FilePath, PendingTextureInfo{std::move(pLoader), TexHandle});
+            }
 
-    return TexHandle;
+            return TexHandle;
+        });
 }
 
 } // namespace USD

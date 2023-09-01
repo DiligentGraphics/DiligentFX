@@ -37,6 +37,7 @@
 #include "DeviceContext.h"
 #include "RefCntAutoPtr.hpp"
 #include "TextureLoader.h"
+#include "ObjectsRegistry.hpp"
 
 #include "HnTextureIdentifier.hpp"
 
@@ -66,8 +67,7 @@ public:
 private:
     RefCntAutoPtr<IRenderDevice> m_pDevice;
 
-    std::mutex                                                                                m_TexturesMtx;
-    std::unordered_map<pxr::TfToken, std::weak_ptr<TextureHandle>, pxr::TfToken::HashFunctor> m_Textures;
+    ObjectsRegistry<pxr::TfToken, TextureHandleSharedPtr, pxr::TfToken::HashFunctor> m_Cache;
 
     struct PendingTextureInfo
     {
