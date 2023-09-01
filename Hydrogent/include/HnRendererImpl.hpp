@@ -88,6 +88,7 @@ private:
     RefCntAutoPtr<IPipelineState>         m_pPSO;
     RefCntAutoPtr<IShaderResourceBinding> m_pSRB;
     RefCntAutoPtr<IBuffer>                m_pVSConstants;
+    RefCntAutoPtr<ITextureView>           m_pWhiteTexSRV;
 };
 
 } // namespace USD

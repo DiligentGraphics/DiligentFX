@@ -158,6 +158,30 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters* pRefCounters,
     m_pVSConstants = m_Device.CreateBuffer("Constant buffer", sizeof(float4x4));
     m_pPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "Constants")->Set(m_pVSConstants);
     m_pPSO->CreateShaderResourceBinding(&m_pSRB, true);
+
+    {
+        RefCntAutoPtr<ITexture> pWhiteTex;
+
+        TextureDesc TexDesc;
+        TexDesc.Name      = "White texture";
+        TexDesc.Type      = RESOURCE_DIM_TEX_2D;
+        TexDesc.Width     = 8;
+        TexDesc.Height    = 8;
+        TexDesc.Format    = TEX_FORMAT_RGBA8_UNORM;
+        TexDesc.BindFlags = BIND_SHADER_RESOURCE;
+        TexDesc.Usage     = USAGE_IMMUTABLE;
+        TexDesc.MipLevels = 1;
+
+        std::vector<Uint8> Data(TexDesc.Width * TexDesc.Height * 4, 255u);
+        TextureSubResData  Mip0Data{Data.data(), TexDesc.Width * 4};
+        TextureData        InitData{&Mip0Data, 1};
+
+        pWhiteTex      = m_Device.CreateTexture(TexDesc, &InitData);
+        m_pWhiteTexSRV = pWhiteTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+
+        auto pSamler = m_Device.CreateSampler(SamplerDesc{});
+        m_pWhiteTexSRV->SetSampler(pSamler);
+    }
 }
 
 HnRendererImpl::~HnRendererImpl()
@@ -252,9 +276,11 @@ void HnRendererImpl::Draw(IDeviceContext* pCtx, const float4x4& CameraViewProj)
         if (pVB0 == nullptr || pVB1 == nullptr || pVB2 == nullptr || pIB == nullptr)
             continue;
 
+        ITextureView* pDiffuseTexSRV = m_pWhiteTexSRV;
+
         auto* pDiffuseColor = pMaterial->GetTexture(HnTokens->diffuseColor);
-        if (pDiffuseColor == nullptr || !pDiffuseColor->pTexture)
-            return;
+        if (pDiffuseColor != nullptr && pDiffuseColor->pTexture)
+            pDiffuseTexSRV = pDiffuseColor->pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
 
         // Bind vertex and index buffers
         IBuffer* pBuffs[] = {pVB0, pVB1, pVB2};
@@ -268,7 +294,7 @@ void HnRendererImpl::Draw(IDeviceContext* pCtx, const float4x4& CameraViewProj)
             *CBConstants = (Mesh.GetTransform() * CameraViewProj).Transpose();
         }
 
-        m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_Texture")->Set(pDiffuseColor->pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+        m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_Texture")->Set(pDiffuseTexSRV);
 
         pCtx->SetPipelineState(m_pPSO);
         pCtx->CommitShaderResources(m_pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
