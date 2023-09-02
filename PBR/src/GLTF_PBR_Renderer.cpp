@@ -42,6 +42,25 @@
 namespace Diligent
 {
 
+namespace
+{
+
+namespace HLSL
+{
+
+struct PBRAttribs
+{
+    GLTFNodeShaderTransforms      Transforms;
+    PBRRendererShaderParameters   RenderParameters;
+    GLTF::Material::ShaderAttribs MaterialInfo;
+    static_assert(sizeof(PBRMaterialShaderInfo) == sizeof(GLTF::Material::ShaderAttribs),
+                  "The sizeof(PBRMaterialShaderInfo) is inconsistent with sizeof(GLTF::Material::ShaderAttribs)");
+};
+
+} // namespace HLSL
+
+} // namespace
+
 const SamplerDesc GLTF_PBR_Renderer::CreateInfo::DefaultSampler = Sam_LinearWrap;
 
 GLTF_PBR_Renderer::GLTF_PBR_Renderer(IRenderDevice*     pDevice,
@@ -135,14 +154,12 @@ GLTF_PBR_Renderer::GLTF_PBR_Renderer(IRenderDevice*     pDevice,
 
     if (CI.RTVFmt != TEX_FORMAT_UNKNOWN || CI.DSVFmt != TEX_FORMAT_UNKNOWN)
     {
-        CreateUniformBuffer(pDevice, sizeof(GLTFNodeShaderTransforms), "GLTF node transforms CB", &m_TransformsCB);
-        CreateUniformBuffer(pDevice, sizeof(PBRMaterialShaderInfo) + sizeof(PBRRendererShaderParameters), "GLTF attribs CB", &m_GLTFAttribsCB);
+        CreateUniformBuffer(pDevice, sizeof(HLSL::PBRAttribs), "GLTF attribs CB", &m_GLTFAttribsCB);
         CreateUniformBuffer(pDevice, static_cast<Uint32>(sizeof(float4x4) * m_Settings.MaxJointCount), "GLTF joint transforms", &m_JointsBuffer);
 
         // clang-format off
         StateTransitionDesc Barriers[] = 
         {
-            {m_TransformsCB,  RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE},
             {m_GLTFAttribsCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE},
             {m_JointsBuffer,  RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE}
         };
@@ -261,9 +278,9 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice, IRenderStateCache* pSt
     Macros.AddShaderMacro("MAX_JOINT_COUNT", m_Settings.MaxJointCount);
     Macros.AddShaderMacro("ALLOW_DEBUG_VIEW", m_Settings.AllowDebugView);
     Macros.AddShaderMacro("TONE_MAPPING_MODE", "TONE_MAPPING_MODE_UNCHARTED2");
-    Macros.AddShaderMacro("GLTF_PBR_USE_IBL", m_Settings.UseIBL);
-    Macros.AddShaderMacro("GLTF_PBR_USE_AO", m_Settings.UseAO);
-    Macros.AddShaderMacro("GLTF_PBR_USE_EMISSIVE", m_Settings.UseEmissive);
+    Macros.AddShaderMacro("PBR_USE_IBL", m_Settings.UseIBL);
+    Macros.AddShaderMacro("PBR_USE_AO", m_Settings.UseAO);
+    Macros.AddShaderMacro("PBR_USE_EMISSIVE", m_Settings.UseEmissive);
     Macros.AddShaderMacro("USE_TEXTURE_ATLAS", m_Settings.UseTextureAtlas);
     Macros.AddShaderMacro("PBR_WORKFLOW_METALLIC_ROUGHNESS", GLTF::Material::PBR_WORKFLOW_METALL_ROUGH);
     Macros.AddShaderMacro("PBR_WORKFLOW_SPECULAR_GLOSINESS", GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS);
@@ -277,7 +294,7 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice, IRenderStateCache* pSt
     {
         ShaderCI.Desc       = {"GLTF PBR VS", SHADER_TYPE_VERTEX, true};
         ShaderCI.EntryPoint = "main";
-        ShaderCI.FilePath   = "RenderGLTF_PBR.vsh";
+        ShaderCI.FilePath   = "RenderPBR.vsh";
 
         pVS = Device.CreateShader(ShaderCI);
     }
@@ -287,7 +304,7 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice, IRenderStateCache* pSt
     {
         ShaderCI.Desc       = {"GLTF PBR PS", SHADER_TYPE_PIXEL, true};
         ShaderCI.EntryPoint = "main";
-        ShaderCI.FilePath   = "RenderGLTF_PBR.psh";
+        ShaderCI.FilePath   = "RenderPBR.psh";
 
         pPS = Device.CreateShader(ShaderCI);
     }
@@ -310,8 +327,7 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice, IRenderStateCache* pSt
     // clang-format off
     std::vector<ShaderResourceVariableDesc> Vars = 
     {
-        {SHADER_TYPE_VERTEX, "cbTransforms",      SHADER_RESOURCE_VARIABLE_TYPE_STATIC},
-        {SHADER_TYPE_PIXEL,  "cbGLTFAttribs",     SHADER_RESOURCE_VARIABLE_TYPE_STATIC},
+        {SHADER_TYPE_VS_PS,  "cbPBRAttribs",      SHADER_RESOURCE_VARIABLE_TYPE_STATIC},
         {SHADER_TYPE_VERTEX, "cbJointTransforms", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
     };
     // clang-format on
@@ -401,8 +417,7 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice, IRenderStateCache* pSt
             PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "g_BRDF_LUT")->Set(m_pBRDF_LUT_SRV);
         }
         // clang-format off
-        PSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "cbTransforms")->Set(m_TransformsCB);
-        PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbGLTFAttribs")->Set(m_GLTFAttribsCB);
+        PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbPBRAttribs")->Set(m_GLTFAttribsCB);
         PSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "cbJointTransforms")->Set(m_JointsBuffer);
         // clang-format on
     }
@@ -1018,27 +1033,14 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
                 }
 
                 {
-                    MapHelper<GLTFNodeShaderTransforms> pTransforms{pCtx, m_TransformsCB, MAP_WRITE, MAP_FLAG_DISCARD};
-                    pTransforms->NodeMatrix = NodeGlobalMatrix * RenderParams.ModelTransform;
-                    pTransforms->JointCount = static_cast<int>(JointCount);
-                }
+                    MapHelper<HLSL::PBRAttribs> pAttribs{pCtx, m_GLTFAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
 
-                {
-                    struct GLTFAttribs
-                    {
-                        PBRRendererShaderParameters   RenderParameters;
-                        GLTF::Material::ShaderAttribs MaterialInfo;
-                        static_assert(sizeof(PBRMaterialShaderInfo) == sizeof(GLTF::Material::ShaderAttribs),
-                                      "The sizeof(PBRMaterialShaderInfo) is inconsistent with sizeof(GLTF::Material::ShaderAttribs)");
-                    };
-                    static_assert(sizeof(GLTFAttribs) <= 256, "Size of dynamic GLTFAttribs buffer exceeds 256 bytes. "
-                                                              "It may be worth trying to reduce the size or just live with it.");
+                    pAttribs->Transforms.NodeMatrix = NodeGlobalMatrix * RenderParams.ModelTransform;
+                    pAttribs->Transforms.JointCount = static_cast<int>(JointCount);
 
-                    MapHelper<GLTFAttribs> pGLTFAttribs{pCtx, m_GLTFAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
+                    pAttribs->MaterialInfo = material.Attribs;
 
-                    pGLTFAttribs->MaterialInfo = material.Attribs;
-
-                    auto& ShaderParams = pGLTFAttribs->RenderParameters;
+                    auto& ShaderParams = pAttribs->RenderParameters;
 
                     ShaderParams.DebugViewType            = static_cast<int>(m_RenderParams.DebugView);
                     ShaderParams.OcclusionStrength        = m_RenderParams.OcclusionStrength;

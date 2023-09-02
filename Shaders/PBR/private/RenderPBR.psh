@@ -28,13 +28,14 @@ cbuffer cbLightAttribs
     LightAttribs g_LightAttribs;
 }
 
-cbuffer cbGLTFAttribs
+cbuffer cbPBRAttribs
 {
+    GLTFNodeShaderTransforms    g_Transforms;
     PBRRendererShaderParameters g_RenderParameters;
     PBRMaterialShaderInfo       g_MaterialInfo;
 }
 
-#if GLTF_PBR_USE_IBL
+#if PBR_USE_IBL
 TextureCube  g_IrradianceMap;
 SamplerState g_IrradianceMap_sampler;
 
@@ -54,24 +55,24 @@ SamplerState   g_PhysicalDescriptorMap_sampler;
 Texture2DArray g_NormalMap;
 SamplerState   g_NormalMap_sampler;
 
-#if GLTF_PBR_USE_AO
+#if PBR_USE_AO
 Texture2DArray g_AOMap;
 SamplerState   g_AOMap_sampler;
 #endif
 
-#if GLTF_PBR_USE_EMISSIVE
+#if PBR_USE_EMISSIVE
 Texture2DArray g_EmissiveMap;
 SamplerState   g_EmissiveMap_sampler;
 #endif
 
-float4 SampleGLTFTexture(Texture2DArray Tex,
-                         SamplerState   Tex_sampler,
-                         float2         UV0,
-                         float2         UV1,
-                         float          Selector, 
-                         float4         ScaleBias,
-                         float          Slice,
-                         float4         DefaultValue)
+float4 SampleTexture(Texture2DArray Tex,
+                     SamplerState   Tex_sampler,
+                     float2         UV0,
+                     float2         UV1,
+                     float          Selector, 
+                     float4         ScaleBias,
+                     float          Slice,
+                     float4         DefaultValue)
 {
     float2 UV = lerp(UV0, UV1, Selector);
 #if USE_TEXTURE_ATLAS
@@ -105,8 +106,8 @@ void main(in  float4 ClipPos     : SV_Position,
           in  bool   IsFrontFace : SV_IsFrontFace,
           out float4 OutColor    : SV_Target)
 {
-    float4 BaseColor = SampleGLTFTexture(g_ColorMap, g_ColorMap_sampler, UV0, UV1, g_MaterialInfo.BaseColorTextureUVSelector,
-                                         g_MaterialInfo.BaseColorUVScaleBias, g_MaterialInfo.BaseColorSlice, float4(1.0, 1.0, 1.0, 1.0));
+    float4 BaseColor = SampleTexture(g_ColorMap, g_ColorMap_sampler, UV0, UV1, g_MaterialInfo.BaseColorTextureUVSelector,
+                                     g_MaterialInfo.BaseColorUVScaleBias, g_MaterialInfo.BaseColorSlice, float4(1.0, 1.0, 1.0, 1.0));
     BaseColor = SRGBtoLINEAR(BaseColor) * g_MaterialInfo.BaseColorFactor;
     //BaseColor *= getVertexColor();
 
@@ -156,21 +157,21 @@ void main(in  float4 ClipPos     : SV_Position,
     }
 
     float Occlusion = 1.0;
-#if GLTF_PBR_USE_AO
-    Occlusion = SampleGLTFTexture(g_AOMap, g_AOMap_sampler, UV0, UV1, g_MaterialInfo.OcclusionTextureUVSelector, 
-                                  g_MaterialInfo.OcclusionUVScaleBias, g_MaterialInfo.OcclusionSlice, float4(1.0, 1.0, 1.0, 1.0)).r;
+#if PBR_USE_AO
+    Occlusion = SampleTexture(g_AOMap, g_AOMap_sampler, UV0, UV1, g_MaterialInfo.OcclusionTextureUVSelector, 
+                              g_MaterialInfo.OcclusionUVScaleBias, g_MaterialInfo.OcclusionSlice, float4(1.0, 1.0, 1.0, 1.0)).r;
 #endif
 
     float3 Emissive = float3(0.0, 0.0, 0.0);
-#if GLTF_PBR_USE_EMISSIVE
-    Emissive = SampleGLTFTexture(g_EmissiveMap, g_EmissiveMap_sampler, UV0, UV1, g_MaterialInfo.EmissiveTextureUVSelector, 
-                                 g_MaterialInfo.EmissiveUVScaleBias, g_MaterialInfo.EmissiveSlice, float4(0.0, 0.0, 0.0, 0.0)).rgb;
+#if PBR_USE_EMISSIVE
+    Emissive = SampleTexture(g_EmissiveMap, g_EmissiveMap_sampler, UV0, UV1, g_MaterialInfo.EmissiveTextureUVSelector, 
+                             g_MaterialInfo.EmissiveUVScaleBias, g_MaterialInfo.EmissiveSlice, float4(0.0, 0.0, 0.0, 0.0)).rgb;
 #endif
 
-    float4 PhysicalDesc = SampleGLTFTexture(g_PhysicalDescriptorMap, g_PhysicalDescriptorMap_sampler, 
-                                            UV0, UV1, g_MaterialInfo.PhysicalDescriptorTextureUVSelector, 
-                                            g_MaterialInfo.PhysicalDescriptorUVScaleBias, g_MaterialInfo.PhysicalDescriptorSlice,
-                                             float4(0.0, 1.0, 0.0, 0.0));
+    float4 PhysicalDesc = SampleTexture(g_PhysicalDescriptorMap, g_PhysicalDescriptorMap_sampler, 
+                                        UV0, UV1, g_MaterialInfo.PhysicalDescriptorTextureUVSelector, 
+                                        g_MaterialInfo.PhysicalDescriptorUVScaleBias, g_MaterialInfo.PhysicalDescriptorSlice,
+                                        float4(0.0, 1.0, 0.0, 0.0));
 
     float metallic;
     if (g_MaterialInfo.Workflow == PBR_WORKFLOW_SPECULAR_GLOSINESS)
@@ -219,7 +220,7 @@ void main(in  float4 ClipPos     : SV_Position,
     IBL_Contribution IBLContrib;
     IBLContrib.f3Diffuse  = float3(0.0, 0.0, 0.0);
     IBLContrib.f3Specular = float3(0.0, 0.0, 0.0);
-#if GLTF_PBR_USE_IBL
+#if PBR_USE_IBL
     IBLContrib =
         GetIBLContribution(SrfInfo, perturbedNormal, view, float(g_RenderParameters.PrefilteredCubeMipLevels),
                            g_BRDF_LUT,          g_BRDF_LUT_sampler, 
@@ -228,11 +229,11 @@ void main(in  float4 ClipPos     : SV_Position,
     color += (IBLContrib.f3Diffuse + IBLContrib.f3Specular) * g_RenderParameters.IBLScale;
 #endif
 
-#if GLTF_PBR_USE_AO
+#if PBR_USE_AO
     color = lerp(color, color * Occlusion, g_RenderParameters.OcclusionStrength);
 #endif
 
-#if GLTF_PBR_USE_EMISSIVE
+#if PBR_USE_EMISSIVE
     const float u_EmissiveFactor = 1.0;
     Emissive = SRGBtoLINEAR(Emissive);
     color += Emissive.rgb * g_MaterialInfo.EmissiveFactor.rgb * g_RenderParameters.EmissionScale;
@@ -268,12 +269,11 @@ void main(in  float4 ClipPos     : SV_Position,
             case 11: OutColor.rgb  = SRGBtoLINEAR(abs(Normal / max(length(Normal), 1e-3)));             break;
             case 12: OutColor.rgb  = SRGBtoLINEAR(abs(perturbedNormal));                                break;
             case 13: OutColor.rgb  = dot(perturbedNormal, view) * float3(1.0, 1.0, 1.0);                break;
-#if GLTF_PBR_USE_IBL
+#if PBR_USE_IBL
             case 14: OutColor.rgb  = IBLContrib.f3Diffuse;                                              break;
             case 15: OutColor.rgb  = IBLContrib.f3Specular;                                             break;
 #endif
         }
     }
 #endif
-
 }

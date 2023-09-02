@@ -408,7 +408,6 @@ private:
 
     RenderInfo m_RenderParams;
 
-    RefCntAutoPtr<IBuffer> m_TransformsCB;
     RefCntAutoPtr<IBuffer> m_GLTFAttribsCB;
     RefCntAutoPtr<IBuffer> m_PrecomputeEnvMapAttribsCB;
     RefCntAutoPtr<IBuffer> m_JointsBuffer;

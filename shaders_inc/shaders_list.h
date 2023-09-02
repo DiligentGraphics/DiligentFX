@@ -55,12 +55,12 @@ static const ShaderIncInfo g_Shaders[] =
         #include "PrefilterEnvMap.psh.h"
     },
     {
-        "RenderGLTF_PBR.psh",
-        #include "RenderGLTF_PBR.psh.h"
+        "RenderPBR.psh",
+        #include "RenderPBR.psh.h"
     },
     {
-        "RenderGLTF_PBR.vsh",
-        #include "RenderGLTF_PBR.vsh.h"
+        "RenderPBR.vsh",
+        #include "RenderPBR.vsh.h"
     },
     {
         "PBR_Shading.fxh",

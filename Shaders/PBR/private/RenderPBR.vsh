@@ -17,7 +17,7 @@ cbuffer cbCameraAttribs
     CameraAttribs g_CameraAttribs;
 }
 
-cbuffer cbTransforms
+cbuffer cbPBRAttribs
 {
     GLTFNodeShaderTransforms g_Transforms;
 }
