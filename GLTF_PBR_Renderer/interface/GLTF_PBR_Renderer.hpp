@@ -41,7 +41,7 @@
 namespace Diligent
 {
 
-#include "Shaders/GLTF_PBR/public/PBR_Structures.fxh"
+#include "Shaders/PBR/public/PBR_Structures.fxh"
 
 /// Implementation of a GLTF PBR renderer
 class GLTF_PBR_Renderer

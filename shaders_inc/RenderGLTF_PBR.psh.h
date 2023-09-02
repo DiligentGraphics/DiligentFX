@@ -188,7 +188,7 @@
 "\n"
 "    // LIGHTING\n"
 "    float3 perturbedNormal = PerturbNormal(dWorldPos_dx, dWorldPos_dy, dNormalMapUV_dx, dNormalMapUV_dy,\n"
-"                                                    Normal, TSNormal, g_MaterialInfo.NormalTextureUVSelector >= 0.0, IsFrontFace);\n"
+"                                           Normal, TSNormal, g_MaterialInfo.NormalTextureUVSelector >= 0.0, IsFrontFace);\n"
 "    float3 view = normalize(g_CameraAttribs.f4Position.xyz - WorldPos.xyz); // Direction from surface point to camera\n"
 "\n"
 "    float3 color = float3(0.0, 0.0, 0.0);\n"
