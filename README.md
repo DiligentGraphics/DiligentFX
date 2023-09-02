@@ -25,8 +25,8 @@ The framework implements the following components
 
 * [Tone mapping utilities](https://github.com/DiligentGraphics/DiligentFX/tree/master/Shaders/PostProcess/ToneMapping/public)
 
-* [Physically-Based GLTF2.0 Renderer](https://github.com/DiligentGraphics/DiligentFX/tree/master/GLTF_PBR_Renderer)
-<img src="https://github.com/DiligentGraphics/DiligentFX/blob/master/GLTF_PBR_Renderer/screenshots/flight_helmet.jpg" width=240>
+* [Physically-Based GLTF2.0 Renderer](https://github.com/DiligentGraphics/DiligentFX/tree/master/PBR)
+<img src="https://github.com/DiligentGraphics/DiligentFX/blob/master/PBR/screenshots/flight_helmet.jpg" width=240>
 
 * [Shadows](https://github.com/DiligentGraphics/DiligentFX/tree/master/Components#shadows)
 <img src="https://github.com/DiligentGraphics/DiligentFX/blob/master/Components/media/Powerplant-Shadows.jpg" width=240>

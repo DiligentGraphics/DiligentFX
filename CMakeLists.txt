@@ -34,7 +34,7 @@ PUBLIC
 add_subdirectory(Utilities)
 add_subdirectory(Components)
 add_subdirectory(PostProcess)
-add_subdirectory(GLTF_PBR_Renderer)
+add_subdirectory(PBR)
 
 if(DILIGENT_USD_PATH)
     add_subdirectory(Hydrogent)
@@ -133,8 +133,8 @@ if(DILIGENT_INSTALL_FX)
     install(DIRECTORY    Components/interface
             DESTINATION  "${CMAKE_INSTALL_INCLUDEDIR}/${DILIGENT_FX_DIR}/Components"
     )
-    install(DIRECTORY    GLTF_PBR_Renderer/interface
-            DESTINATION  "${CMAKE_INSTALL_INCLUDEDIR}/${DILIGENT_FX_DIR}/GLTF_PBR_Renderer"
+    install(DIRECTORY    PBR/interface
+            DESTINATION  "${CMAKE_INSTALL_INCLUDEDIR}/${DILIGENT_FX_DIR}/PBR"
     )
     install(DIRECTORY    Shaders
             DESTINATION  "."

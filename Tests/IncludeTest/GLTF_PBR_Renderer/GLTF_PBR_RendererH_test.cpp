@@ -25,4 +25,4 @@
  *  of the possibility of such damages.
  */
 
-#include "GLTF_PBR_Renderer/interface/GLTF_PBR_Renderer.hpp"
+#include "PBR/interface/GLTF_PBR_Renderer.hpp"
