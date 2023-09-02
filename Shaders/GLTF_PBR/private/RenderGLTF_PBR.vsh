@@ -1,5 +1,6 @@
 #include "BasicStructures.fxh"
-#include "GLTF_PBR_VertexProcessing.fxh"
+#include "VertexProcessing.fxh"
+#include "PBR_Structures.fxh"
 
 struct GLTF_VS_Input
 {

@@ -1,14 +1,11 @@
-#ifndef _GLTF_PBR_VERTEX_PROCESSING_FXH_
-#define _GLTF_PBR_VERTEX_PROCESSING_FXH_
-
-#include "GLTF_PBR_Structures.fxh"
+#ifndef _VERTEX_PROCESSING_FXH_
+#define _VERTEX_PROCESSING_FXH_
 
 struct GLTF_TransformedVertex
 {
     float3 WorldPos;
     float3 Normal;
 };
-
 
 float3x3 InverseTranspose3x3(float3x3 M)
 {
@@ -22,9 +19,9 @@ float3x3 InverseTranspose3x3(float3x3 M)
     return adjugate / det;
 }
 
-GLTF_TransformedVertex GLTF_TransformVertex(in float3    Pos,
-                                            in float3    Normal,
-                                            in float4x4  Transform)
+GLTF_TransformedVertex GLTF_TransformVertex(in float3   Pos,
+                                            in float3   Normal,
+                                            in float4x4 Transform)
 {
     GLTF_TransformedVertex TransformedVert;
     
@@ -40,4 +37,4 @@ GLTF_TransformedVertex GLTF_TransformVertex(in float3    Pos,
     return TransformedVert;
 }
 
-#endif // _GLTF_PBR_VERTEX_PROCESSING_FXH_
+#endif // _VERTEX_PROCESSING_FXH_

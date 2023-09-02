@@ -1,5 +1,5 @@
-#ifndef _GLTF_PBR_STRUCTURES_FXH_
-#define _GLTF_PBR_STRUCTURES_FXH_
+#ifndef _PBR_STRUCTURES_FXH_
+#define _PBR_STRUCTURES_FXH_
 
 #ifdef __cplusplus
 
@@ -21,16 +21,16 @@
 #endif
 
 
-#ifndef GLTF_ALPHA_MODE_OPAQUE
-#   define GLTF_ALPHA_MODE_OPAQUE 0
+#ifndef PBR_ALPHA_MODE_OPAQUE
+#   define PBR_ALPHA_MODE_OPAQUE 0
 #endif
 
-#ifndef GLTF_ALPHA_MODE_MASK
-#   define GLTF_ALPHA_MODE_MASK 1
+#ifndef PBR_ALPHA_MODE_MASK
+#   define PBR_ALPHA_MODE_MASK 1
 #endif
 
-#ifndef GLTF_ALPHA_MODE_BLEND
-#   define GLTF_ALPHA_MODE_BLEND 2
+#ifndef PBR_ALPHA_MODE_BLEND
+#   define PBR_ALPHA_MODE_BLEND 2
 #endif
 
 
@@ -48,7 +48,7 @@ struct GLTFNodeShaderTransforms
 #endif
 
 
-struct GLTFRendererShaderParameters
+struct PBRRendererShaderParameters
 {
 	float AverageLogLum;
 	float MiddleGray;
@@ -61,10 +61,10 @@ struct GLTFRendererShaderParameters
     float EmissionScale;
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
-	CHECK_STRUCT_ALIGNMENT(GLTFRendererShaderParameters);
+	CHECK_STRUCT_ALIGNMENT(PBRRendererShaderParameters);
 #endif
 
-struct GLTFMaterialShaderInfo
+struct PBRMaterialShaderInfo
 {
 	float4  BaseColorFactor;
 	float4  EmissiveFactor;
@@ -85,10 +85,10 @@ struct GLTFMaterialShaderInfo
     float TextureSlice4;
 	float MetallicFactor;
 
-	float   RoughnessFactor;
-	int     AlphaMode;	
-	float   AlphaMaskCutoff;
-    float   Dummy0;
+	float RoughnessFactor;
+	int   AlphaMode;	
+	float AlphaMaskCutoff;
+    float Dummy0;
 
     // When texture atlas is used, UV scale and bias applied to
     // each texture coordinate set
@@ -101,7 +101,7 @@ struct GLTFMaterialShaderInfo
 	float4 CustomData;
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
-	CHECK_STRUCT_ALIGNMENT(GLTFMaterialShaderInfo);
+	CHECK_STRUCT_ALIGNMENT(PBRMaterialShaderInfo);
 #endif
 
 #ifndef BaseColorTextureUVSelector
@@ -166,4 +166,4 @@ struct GLTFMaterialShaderInfo
 #   define EmissiveUVScaleBias UVScaleBias4
 #endif
 
-#endif // _GLTF_PBR_STRUCTURES_FXH_
+#endif // _PBR_STRUCTURES_FXH_

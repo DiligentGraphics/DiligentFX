@@ -43,12 +43,12 @@ static const ShaderIncInfo g_Shaders[] =
         #include "CubemapFace.vsh.h"
     },
     {
-        "GLTF_PBR_PrecomputeCommon.fxh",
-        #include "GLTF_PBR_PrecomputeCommon.fxh.h"
+        "PBR_PrecomputeCommon.fxh",
+        #include "PBR_PrecomputeCommon.fxh.h"
     },
     {
-        "PrecomputeGLTF_BRDF.psh",
-        #include "PrecomputeGLTF_BRDF.psh.h"
+        "PrecomputeBRDF.psh",
+        #include "PrecomputeBRDF.psh.h"
     },
     {
         "PrefilterEnvMap.psh",
@@ -63,16 +63,16 @@ static const ShaderIncInfo g_Shaders[] =
         #include "RenderGLTF_PBR.vsh.h"
     },
     {
-        "GLTF_PBR_Shading.fxh",
-        #include "GLTF_PBR_Shading.fxh.h"
+        "PBR_Shading.fxh",
+        #include "PBR_Shading.fxh.h"
     },
     {
-        "GLTF_PBR_Structures.fxh",
-        #include "GLTF_PBR_Structures.fxh.h"
+        "PBR_Structures.fxh",
+        #include "PBR_Structures.fxh.h"
     },
     {
-        "GLTF_PBR_VertexProcessing.fxh",
-        #include "GLTF_PBR_VertexProcessing.fxh.h"
+        "VertexProcessing.fxh",
+        #include "VertexProcessing.fxh.h"
     },
     {
         "AtmosphereShadersCommon.fxh",

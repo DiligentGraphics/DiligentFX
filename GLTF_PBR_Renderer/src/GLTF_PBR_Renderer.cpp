@@ -136,7 +136,7 @@ GLTF_PBR_Renderer::GLTF_PBR_Renderer(IRenderDevice*     pDevice,
     if (CI.RTVFmt != TEX_FORMAT_UNKNOWN || CI.DSVFmt != TEX_FORMAT_UNKNOWN)
     {
         CreateUniformBuffer(pDevice, sizeof(GLTFNodeShaderTransforms), "GLTF node transforms CB", &m_TransformsCB);
-        CreateUniformBuffer(pDevice, sizeof(GLTFMaterialShaderInfo) + sizeof(GLTFRendererShaderParameters), "GLTF attribs CB", &m_GLTFAttribsCB);
+        CreateUniformBuffer(pDevice, sizeof(PBRMaterialShaderInfo) + sizeof(PBRRendererShaderParameters), "GLTF attribs CB", &m_GLTFAttribsCB);
         CreateUniformBuffer(pDevice, static_cast<Uint32>(sizeof(float4x4) * m_Settings.MaxJointCount), "GLTF joint transforms", &m_JointsBuffer);
 
         // clang-format off
@@ -209,7 +209,7 @@ void GLTF_PBR_Renderer::PrecomputeBRDF(IRenderDevice*     pDevice,
         {
             ShaderCI.Desc       = {"Precompute GLTF BRDF PS", SHADER_TYPE_PIXEL, true};
             ShaderCI.EntryPoint = "PrecomputeBRDF_PS";
-            ShaderCI.FilePath   = "PrecomputeGLTF_BRDF.psh";
+            ShaderCI.FilePath   = "PrecomputeBRDF.psh";
 
             pPS = Device.CreateShader(ShaderCI);
         }
@@ -267,9 +267,11 @@ void GLTF_PBR_Renderer::CreatePSO(IRenderDevice* pDevice, IRenderStateCache* pSt
     Macros.AddShaderMacro("USE_TEXTURE_ATLAS", m_Settings.UseTextureAtlas);
     Macros.AddShaderMacro("PBR_WORKFLOW_METALLIC_ROUGHNESS", GLTF::Material::PBR_WORKFLOW_METALL_ROUGH);
     Macros.AddShaderMacro("PBR_WORKFLOW_SPECULAR_GLOSINESS", GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS);
-    Macros.AddShaderMacro("GLTF_ALPHA_MODE_OPAQUE", GLTF::Material::ALPHA_MODE_OPAQUE);
-    Macros.AddShaderMacro("GLTF_ALPHA_MODE_MASK", GLTF::Material::ALPHA_MODE_MASK);
-    Macros.AddShaderMacro("GLTF_ALPHA_MODE_BLEND", GLTF::Material::ALPHA_MODE_BLEND);
+    Macros.AddShaderMacro("PBR_ALPHA_MODE_OPAQUE", GLTF::Material::ALPHA_MODE_OPAQUE);
+    Macros.AddShaderMacro("PBR_ALPHA_MODE_MASK", GLTF::Material::ALPHA_MODE_MASK);
+    Macros.AddShaderMacro("PBR_ALPHA_MODE_BLEND", GLTF::Material::ALPHA_MODE_BLEND);
+    Macros.AddShaderMacro("USE_IBL_ENV_MAP_LOD", true);
+    Macros.AddShaderMacro("USE_HDR_IBL_CUBEMAPS", true);
     ShaderCI.Macros = Macros;
     RefCntAutoPtr<IShader> pVS;
     {
@@ -1024,10 +1026,10 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
                 {
                     struct GLTFAttribs
                     {
-                        GLTFRendererShaderParameters  RenderParameters;
+                        PBRRendererShaderParameters   RenderParameters;
                         GLTF::Material::ShaderAttribs MaterialInfo;
-                        static_assert(sizeof(GLTFMaterialShaderInfo) == sizeof(GLTF::Material::ShaderAttribs),
-                                      "The sizeof(GLTFMaterialShaderInfo) is inconsistent with sizeof(GLTF::Material::ShaderAttribs)");
+                        static_assert(sizeof(PBRMaterialShaderInfo) == sizeof(GLTF::Material::ShaderAttribs),
+                                      "The sizeof(PBRMaterialShaderInfo) is inconsistent with sizeof(GLTF::Material::ShaderAttribs)");
                     };
                     static_assert(sizeof(GLTFAttribs) <= 256, "Size of dynamic GLTFAttribs buffer exceeds 256 bytes. "
                                                               "It may be worth trying to reduce the size or just live with it.");

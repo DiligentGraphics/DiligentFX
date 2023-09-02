@@ -1,4 +1,4 @@
-"#include \"GLTF_PBR_PrecomputeCommon.fxh\"\n"
+"#include \"PBR_PrecomputeCommon.fxh\"\n"
 "\n"
 "#ifndef OPTIMIZE_SAMPLES\n"
 "#   define OPTIMIZE_SAMPLES 1\n"

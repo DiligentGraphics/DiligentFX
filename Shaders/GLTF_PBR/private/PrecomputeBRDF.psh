@@ -1,5 +1,5 @@
 #include "FullScreenTriangleVSOutput.fxh"
-#include "GLTF_PBR_PrecomputeCommon.fxh"
+#include "PBR_PrecomputeCommon.fxh"
 
 #ifndef NUM_SAMPLES
 #    define NUM_SAMPLES 512u

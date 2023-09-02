@@ -1,5 +1,5 @@
-#ifndef _GLTF_PBR_PRECOMPUTE_COMMON_FXH_
-#define _GLTF_PBR_PRECOMPUTE_COMMON_FXH_
+#ifndef _PBR_PRECOMPUTE_COMMON_FXH_
+#define _PBR_PRECOMPUTE_COMMON_FXH_
 
 #include "PBR_Common.fxh"
 
@@ -37,4 +37,4 @@ float3 ImportanceSampleGGX( float2 Xi, float Roughness, float3 N )
     return TangentX * H.x + TangentY * H.y + N * H.z;
 }
 
-#endif // _GLTF_PBR_PRECOMPUTE_COMMON_FXH_
+#endif // _PBR_PRECOMPUTE_COMMON_FXH_
