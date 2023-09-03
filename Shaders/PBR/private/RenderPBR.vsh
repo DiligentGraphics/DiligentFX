@@ -19,7 +19,7 @@ cbuffer cbCameraAttribs
 
 cbuffer cbPBRAttribs
 {
-    GLTFNodeShaderTransforms g_Transforms;
+    PBRShaderAttribs g_PBRAttribs;
 }
 
 #ifndef MAX_JOINT_COUNT
@@ -41,8 +41,8 @@ void main(in  GLTF_VS_Input  VSIn,
     // Warning: moving this block into GLTF_TransformVertex() function causes huge
     // performance degradation on Vulkan because glslang/SPIRV-Tools are apparently not able
     // to eliminate the copy of g_Transforms structure.
-    float4x4 Transform = g_Transforms.NodeMatrix;
-    if (g_Transforms.JointCount > 0)
+    float4x4 Transform = g_PBRAttribs.Transforms.NodeMatrix;
+    if (g_PBRAttribs.Transforms.JointCount > 0)
     {
         // Mesh is skinned
         float4x4 SkinMat = 

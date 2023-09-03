@@ -30,9 +30,7 @@ cbuffer cbLightAttribs
 
 cbuffer cbPBRAttribs
 {
-    GLTFNodeShaderTransforms    g_Transforms;
-    PBRRendererShaderParameters g_RenderParameters;
-    PBRMaterialShaderInfo       g_MaterialInfo;
+    PBRShaderAttribs g_PBRAttribs;
 }
 
 #if PBR_USE_IBL
@@ -106,12 +104,12 @@ void main(in  float4 ClipPos     : SV_Position,
           in  bool   IsFrontFace : SV_IsFrontFace,
           out float4 OutColor    : SV_Target)
 {
-    float4 BaseColor = SampleTexture(g_ColorMap, g_ColorMap_sampler, UV0, UV1, g_MaterialInfo.BaseColorTextureUVSelector,
-                                     g_MaterialInfo.BaseColorUVScaleBias, g_MaterialInfo.BaseColorSlice, float4(1.0, 1.0, 1.0, 1.0));
-    BaseColor = SRGBtoLINEAR(BaseColor) * g_MaterialInfo.BaseColorFactor;
+    float4 BaseColor = SampleTexture(g_ColorMap, g_ColorMap_sampler, UV0, UV1, g_PBRAttribs.Material.BaseColorTextureUVSelector,
+                                     g_PBRAttribs.Material.BaseColorUVScaleBias, g_PBRAttribs.Material.BaseColorSlice, float4(1.0, 1.0, 1.0, 1.0));
+    BaseColor = SRGBtoLINEAR(BaseColor) * g_PBRAttribs.Material.BaseColorFactor;
     //BaseColor *= getVertexColor();
 
-    float2 NormalMapUV  = lerp(UV0, UV1, g_MaterialInfo.NormalTextureUVSelector);
+    float2 NormalMapUV  = lerp(UV0, UV1, g_PBRAttribs.Material.NormalTextureUVSelector);
 
     // We have to compute gradients in uniform flow control to avoid issues with perturbed normal
     float3 dWorldPos_dx = ddx(WorldPos);
@@ -121,36 +119,36 @@ void main(in  float4 ClipPos     : SV_Position,
 #if USE_TEXTURE_ATLAS
     {
         NormalMapUV = frac(NormalMapUV);
-        NormalMapUV = NormalMapUV * g_MaterialInfo.NormalMapUVScaleBias.xy + g_MaterialInfo.NormalMapUVScaleBias.zw;
-        dNormalMapUV_dx *= g_MaterialInfo.NormalMapUVScaleBias.xy;
-        dNormalMapUV_dy *= g_MaterialInfo.NormalMapUVScaleBias.xy;
+        NormalMapUV = NormalMapUV * g_PBRAttribs.Material.NormalMapUVScaleBias.xy + g_PBRAttribs.Material.NormalMapUVScaleBias.zw;
+        dNormalMapUV_dx *= g_PBRAttribs.Material.NormalMapUVScaleBias.xy;
+        dNormalMapUV_dy *= g_PBRAttribs.Material.NormalMapUVScaleBias.xy;
     }
 #endif
 
-    if (g_MaterialInfo.AlphaMode == PBR_ALPHA_MODE_MASK && BaseColor.a < g_MaterialInfo.AlphaMaskCutoff)
+    if (g_PBRAttribs.Material.AlphaMode == PBR_ALPHA_MODE_MASK && BaseColor.a < g_PBRAttribs.Material.AlphaMaskCutoff)
     {
         discard;
     }
 
     float3 TSNormal = float3(0.0, 0.0, 1.0);
-    if (g_MaterialInfo.NormalTextureUVSelector >= 0.0)
+    if (g_PBRAttribs.Material.NormalTextureUVSelector >= 0.0)
     {
 #if USE_TEXTURE_ATLAS
         {
             SampleTextureAtlasAttribs SampleAttribs;
             SampleAttribs.f2UV                   = NormalMapUV;
-            SampleAttribs.f2SmoothUV             = lerp(UV0, UV1, g_MaterialInfo.NormalTextureUVSelector) * g_MaterialInfo.NormalMapUVScaleBias.xy;
+            SampleAttribs.f2SmoothUV             = lerp(UV0, UV1, g_PBRAttribs.Material.NormalTextureUVSelector) * g_PBRAttribs.Material.NormalMapUVScaleBias.xy;
             SampleAttribs.f2dSmoothUV_dx         = dNormalMapUV_dx;
             SampleAttribs.f2dSmoothUV_dy         = dNormalMapUV_dy;
-            SampleAttribs.fSlice                 = g_MaterialInfo.NormalSlice;
-            SampleAttribs.f4UVRegion             = g_MaterialInfo.NormalMapUVScaleBias;
+            SampleAttribs.fSlice                 = g_PBRAttribs.Material.NormalSlice;
+            SampleAttribs.f4UVRegion             = g_PBRAttribs.Material.NormalMapUVScaleBias;
             SampleAttribs.fSmallestValidLevelDim = 4.0;
             SampleAttribs.IsNonFilterable        = false;
             TSNormal = SampleTextureAtlas(g_NormalMap, g_NormalMap_sampler, SampleAttribs).xyz;
         }
 #else
         {
-            TSNormal = g_NormalMap.Sample(g_NormalMap_sampler, float3(NormalMapUV, g_MaterialInfo.NormalSlice)).xyz;
+            TSNormal = g_NormalMap.Sample(g_NormalMap_sampler, float3(NormalMapUV, g_PBRAttribs.Material.NormalSlice)).xyz;
         }
 #endif
         TSNormal = TSNormal * float3(2.0, 2.0, 2.0) - float3(1.0, 1.0, 1.0);
@@ -158,38 +156,38 @@ void main(in  float4 ClipPos     : SV_Position,
 
     float Occlusion = 1.0;
 #if PBR_USE_AO
-    Occlusion = SampleTexture(g_AOMap, g_AOMap_sampler, UV0, UV1, g_MaterialInfo.OcclusionTextureUVSelector, 
-                              g_MaterialInfo.OcclusionUVScaleBias, g_MaterialInfo.OcclusionSlice, float4(1.0, 1.0, 1.0, 1.0)).r;
+    Occlusion = SampleTexture(g_AOMap, g_AOMap_sampler, UV0, UV1, g_PBRAttribs.Material.OcclusionTextureUVSelector, 
+                              g_PBRAttribs.Material.OcclusionUVScaleBias, g_PBRAttribs.Material.OcclusionSlice, float4(1.0, 1.0, 1.0, 1.0)).r;
 #endif
 
     float3 Emissive = float3(0.0, 0.0, 0.0);
 #if PBR_USE_EMISSIVE
-    Emissive = SampleTexture(g_EmissiveMap, g_EmissiveMap_sampler, UV0, UV1, g_MaterialInfo.EmissiveTextureUVSelector, 
-                             g_MaterialInfo.EmissiveUVScaleBias, g_MaterialInfo.EmissiveSlice, float4(0.0, 0.0, 0.0, 0.0)).rgb;
+    Emissive = SampleTexture(g_EmissiveMap, g_EmissiveMap_sampler, UV0, UV1, g_PBRAttribs.Material.EmissiveTextureUVSelector, 
+                             g_PBRAttribs.Material.EmissiveUVScaleBias, g_PBRAttribs.Material.EmissiveSlice, float4(0.0, 0.0, 0.0, 0.0)).rgb;
 #endif
 
     float4 PhysicalDesc = SampleTexture(g_PhysicalDescriptorMap, g_PhysicalDescriptorMap_sampler, 
-                                        UV0, UV1, g_MaterialInfo.PhysicalDescriptorTextureUVSelector, 
-                                        g_MaterialInfo.PhysicalDescriptorUVScaleBias, g_MaterialInfo.PhysicalDescriptorSlice,
+                                        UV0, UV1, g_PBRAttribs.Material.PhysicalDescriptorTextureUVSelector, 
+                                        g_PBRAttribs.Material.PhysicalDescriptorUVScaleBias, g_PBRAttribs.Material.PhysicalDescriptorSlice,
                                         float4(0.0, 1.0, 0.0, 0.0));
 
     float metallic;
-    if (g_MaterialInfo.Workflow == PBR_WORKFLOW_SPECULAR_GLOSINESS)
+    if (g_PBRAttribs.Material.Workflow == PBR_WORKFLOW_SPECULAR_GLOSINESS)
     {
-        PhysicalDesc.rgb = SRGBtoLINEAR(PhysicalDesc.rgb) * g_MaterialInfo.SpecularFactor.rgb;
+        PhysicalDesc.rgb = SRGBtoLINEAR(PhysicalDesc.rgb) * g_PBRAttribs.Material.SpecularFactor.rgb;
         const float u_GlossinessFactor = 1.0;
         PhysicalDesc.a *= u_GlossinessFactor;
     }
-    else if(g_MaterialInfo.Workflow == PBR_WORKFLOW_METALLIC_ROUGHNESS)
+    else if(g_PBRAttribs.Material.Workflow == PBR_WORKFLOW_METALLIC_ROUGHNESS)
     {
-        PhysicalDesc.g = saturate(PhysicalDesc.g * g_MaterialInfo.RoughnessFactor);
-        PhysicalDesc.b = saturate(PhysicalDesc.b * g_MaterialInfo.MetallicFactor);
+        PhysicalDesc.g = saturate(PhysicalDesc.g * g_PBRAttribs.Material.RoughnessFactor);
+        PhysicalDesc.b = saturate(PhysicalDesc.b * g_PBRAttribs.Material.MetallicFactor);
     }
-    SurfaceReflectanceInfo SrfInfo = GetSurfaceReflectance(g_MaterialInfo.Workflow, BaseColor, PhysicalDesc, metallic);
+    SurfaceReflectanceInfo SrfInfo = GetSurfaceReflectance(g_PBRAttribs.Material.Workflow, BaseColor, PhysicalDesc, metallic);
 
     // LIGHTING
     float3 perturbedNormal = PerturbNormal(dWorldPos_dx, dWorldPos_dy, dNormalMapUV_dx, dNormalMapUV_dy, 
-                                           Normal, TSNormal, g_MaterialInfo.NormalTextureUVSelector >= 0.0, IsFrontFace);
+                                           Normal, TSNormal, g_PBRAttribs.Material.NormalTextureUVSelector >= 0.0, IsFrontFace);
     float3 view = normalize(g_CameraAttribs.f4Position.xyz - WorldPos.xyz); // Direction from surface point to camera
 
     float3 color = float3(0.0, 0.0, 0.0);
@@ -222,38 +220,38 @@ void main(in  float4 ClipPos     : SV_Position,
     IBLContrib.f3Specular = float3(0.0, 0.0, 0.0);
 #if PBR_USE_IBL
     IBLContrib =
-        GetIBLContribution(SrfInfo, perturbedNormal, view, float(g_RenderParameters.PrefilteredCubeMipLevels),
+        GetIBLContribution(SrfInfo, perturbedNormal, view, float(g_PBRAttribs.Renderer.PrefilteredCubeMipLevels),
                            g_BRDF_LUT,          g_BRDF_LUT_sampler, 
                            g_IrradianceMap,     g_IrradianceMap_sampler,
                            g_PrefilteredEnvMap, g_PrefilteredEnvMap_sampler);
-    color += (IBLContrib.f3Diffuse + IBLContrib.f3Specular) * g_RenderParameters.IBLScale;
+    color += (IBLContrib.f3Diffuse + IBLContrib.f3Specular) * g_PBRAttribs.Renderer.IBLScale;
 #endif
 
 #if PBR_USE_AO
-    color = lerp(color, color * Occlusion, g_RenderParameters.OcclusionStrength);
+    color = lerp(color, color * Occlusion, g_PBRAttribs.Renderer.OcclusionStrength);
 #endif
 
 #if PBR_USE_EMISSIVE
     const float u_EmissiveFactor = 1.0;
     Emissive = SRGBtoLINEAR(Emissive);
-    color += Emissive.rgb * g_MaterialInfo.EmissiveFactor.rgb * g_RenderParameters.EmissionScale;
+    color += Emissive.rgb * g_PBRAttribs.Material.EmissiveFactor.rgb * g_PBRAttribs.Renderer.EmissionScale;
 #endif
 
     ToneMappingAttribs TMAttribs;
     TMAttribs.iToneMappingMode     = TONE_MAPPING_MODE_UNCHARTED2;
     TMAttribs.bAutoExposure        = false;
-    TMAttribs.fMiddleGray          = g_RenderParameters.MiddleGray;
+    TMAttribs.fMiddleGray          = g_PBRAttribs.Renderer.MiddleGray;
     TMAttribs.bLightAdaptation     = false;
-    TMAttribs.fWhitePoint          = g_RenderParameters.WhitePoint;
+    TMAttribs.fWhitePoint          = g_PBRAttribs.Renderer.WhitePoint;
     TMAttribs.fLuminanceSaturation = 1.0;
-    color = ToneMap(color, TMAttribs, g_RenderParameters.AverageLogLum);
+    color = ToneMap(color, TMAttribs, g_PBRAttribs.Renderer.AverageLogLum);
     OutColor = float4(color, BaseColor.a);
 
 #if ALLOW_DEBUG_VIEW
     // Shader inputs debug visualization
-    if (g_RenderParameters.DebugViewType != 0)
+    if (g_PBRAttribs.Renderer.DebugViewType != 0)
     {
-        switch (g_RenderParameters.DebugViewType)
+        switch (g_PBRAttribs.Renderer.DebugViewType)
         {
             case  1: OutColor.rgba = BaseColor;                                                         break;
             case  2: OutColor.rgba = float4(BaseColor.a, BaseColor.a, BaseColor.a, 1.0);                break;

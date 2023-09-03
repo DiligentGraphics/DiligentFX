@@ -27,87 +27,19 @@
 
 #pragma once
 
-#include <unordered_map>
-#include <functional>
-#include <mutex>
+#include "PBR_Renderer.hpp"
+
 #include <vector>
 
-#include "../../../DiligentCore/Graphics/GraphicsEngine/interface/DeviceContext.h"
-#include "../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
-#include "../../../DiligentCore/Graphics/GraphicsTools/interface/RenderStateCache.h"
-#include "../../../DiligentCore/Common/interface/HashUtils.hpp"
 #include "../../../DiligentTools/AssetLoader/interface/GLTFLoader.hpp"
 
 namespace Diligent
 {
 
-#include "Shaders/PBR/public/PBR_Structures.fxh"
-
 /// Implementation of a GLTF PBR renderer
-class GLTF_PBR_Renderer
+class GLTF_PBR_Renderer : public PBR_Renderer
 {
 public:
-    /// Renderer create info
-    struct CreateInfo
-    {
-        /// Render target format.
-        TEXTURE_FORMAT RTVFmt = TEX_FORMAT_UNKNOWN;
-
-        /// Depth-buffer format.
-
-        /// \note   If both RTV and DSV formats are TEX_FORMAT_UNKNOWN,
-        ///         the renderer will not initialize PSO, uniform buffers and other
-        ///         resources. It is expected that an application will use custom
-        ///         render callback function.
-        TEXTURE_FORMAT DSVFmt = TEX_FORMAT_UNKNOWN;
-
-        /// Indicates if front face is CCW.
-        bool FrontCCW = false;
-
-        /// Indicates if the renderer should allow debug views.
-        /// Rendering with debug views disabled is more efficient.
-        bool AllowDebugView = false;
-
-        /// Indicates whether to use IBL.
-        bool UseIBL = false;
-
-        /// Whether to use ambient occlusion texture.
-        bool UseAO = true;
-
-        /// Whether to use emissive texture.
-        bool UseEmissive = true;
-
-        /// When set to true, pipeline state will be compiled with immutable samplers.
-        /// When set to false, samplers from the texture views will be used.
-        bool UseImmutableSamplers = true;
-
-        /// Whether to use texture atlas (e.g. apply UV transforms when sampling textures).
-        bool UseTextureAtlas = false;
-
-        static const SamplerDesc DefaultSampler;
-
-        /// Immutable sampler for color map texture.
-        SamplerDesc ColorMapImmutableSampler = DefaultSampler;
-
-        /// Immutable sampler for physical description map texture.
-        SamplerDesc PhysDescMapImmutableSampler = DefaultSampler;
-
-        /// Immutable sampler for normal map texture.
-        SamplerDesc NormalMapImmutableSampler = DefaultSampler;
-
-        /// Immutable sampler for AO texture.
-        SamplerDesc AOMapImmutableSampler = DefaultSampler;
-
-        /// Immutable sampler for emissive map texture.
-        SamplerDesc EmissiveMapImmutableSampler = DefaultSampler;
-
-        /// Maximum number of joints
-        Uint32 MaxJointCount = 64;
-
-        /// Number of samples for BRDF LUT creation
-        Uint32 NumBRDFSamples = 512;
-    };
-
     /// Initializes the renderer
     GLTF_PBR_Renderer(IRenderDevice*     pDevice,
                       IRenderStateCache* pStateCache,
@@ -227,23 +159,6 @@ public:
                                                  IBuffer*     pCameraAttribs,
                                                  IBuffer*     pLightAttribs);
 
-    /// Precompute cubemaps used by IBL.
-    void PrecomputeCubemaps(IRenderDevice*     pDevice,
-                            IRenderStateCache* pStateCache,
-                            IDeviceContext*    pCtx,
-                            ITextureView*      pEnvironmentMap,
-                            Uint32             NumPhiSamples   = 64,
-                            Uint32             NumThetaSamples = 32,
-                            bool               OptimizeSamples = true);
-
-    // clang-format off
-    ITextureView* GetIrradianceCubeSRV()    { return m_pIrradianceCubeSRV; }
-    ITextureView* GetPrefilteredEnvMapSRV() { return m_pPrefilteredEnvMapSRV; }
-    ITextureView* GetBRDFLUTSRV()           { return m_pBRDF_LUT_SRV; }
-    ITextureView* GetWhiteTexSRV()          { return m_pWhiteTexSRV; }
-    ITextureView* GetBlackTexSRV()          { return m_pBlackTexSRV; }
-    ITextureView* GetDefaultNormalMapSRV()  { return m_pDefaultNormalMapSRV; }
-    // clang-format on
 
     /// Initializes a shader resource binding for the given material.
 
@@ -324,93 +239,9 @@ public:
                IPipelineState*        pPSO = nullptr);
 
 private:
-    void PrecomputeBRDF(IRenderDevice*     pDevice,
-                        IRenderStateCache* pStateCache,
-                        IDeviceContext*    pCtx,
-                        Uint32             NumBRDFSamples = 512);
-
-    void CreatePSO(IRenderDevice* pDevice, IRenderStateCache* pStateCache);
-
-    void InitCommonSRBVars(IShaderResourceBinding* pSRB,
-                           IBuffer*                pCameraAttribs,
-                           IBuffer*                pLightAttribs);
-
-    struct PSOKey
-    {
-        PSOKey() noexcept {};
-        PSOKey(GLTF::Material::ALPHA_MODE _AlphaMode, bool _DoubleSided) :
-            AlphaMode{_AlphaMode},
-            DoubleSided{_DoubleSided}
-        {}
-
-        bool operator==(const PSOKey& rhs) const noexcept
-        {
-            return AlphaMode == rhs.AlphaMode && DoubleSided == rhs.DoubleSided;
-        }
-        bool operator!=(const PSOKey& rhs) const noexcept
-        {
-            return AlphaMode != rhs.AlphaMode || DoubleSided != rhs.DoubleSided;
-        }
-
-        GLTF::Material::ALPHA_MODE AlphaMode   = GLTF::Material::ALPHA_MODE_OPAQUE;
-        bool                       DoubleSided = false;
-    };
-
-    static size_t GetPSOIdx(const PSOKey& Key)
-    {
-        size_t PSOIdx;
-
-        PSOIdx = Key.AlphaMode == GLTF::Material::ALPHA_MODE_BLEND ? 1 : 0;
-        PSOIdx = PSOIdx * 2 + (Key.DoubleSided ? 1 : 0);
-        return PSOIdx;
-    }
-
-    void AddPSO(const PSOKey& Key, RefCntAutoPtr<IPipelineState> pPSO)
-    {
-        auto Idx = GetPSOIdx(Key);
-        if (Idx >= m_PSOCache.size())
-            m_PSOCache.resize(Idx + 1);
-        VERIFY_EXPR(!m_PSOCache[Idx]);
-        m_PSOCache[Idx] = std::move(pPSO);
-    }
-
-    IPipelineState* GetPSO(const PSOKey& Key)
-    {
-        auto Idx = GetPSOIdx(Key);
-        VERIFY_EXPR(Idx < m_PSOCache.size());
-        return Idx < m_PSOCache.size() ? m_PSOCache[Idx].RawPtr() : nullptr;
-    }
-
-    const CreateInfo m_Settings;
-
-    static constexpr Uint32     BRDF_LUT_Dim = 512;
-    RefCntAutoPtr<ITextureView> m_pBRDF_LUT_SRV;
-
-    std::vector<RefCntAutoPtr<IPipelineState>> m_PSOCache;
-
-    RefCntAutoPtr<ITextureView> m_pWhiteTexSRV;
-    RefCntAutoPtr<ITextureView> m_pBlackTexSRV;
-    RefCntAutoPtr<ITextureView> m_pDefaultNormalMapSRV;
-    RefCntAutoPtr<ITextureView> m_pDefaultPhysDescSRV;
-
-
-    static constexpr TEXTURE_FORMAT IrradianceCubeFmt    = TEX_FORMAT_RGBA32_FLOAT;
-    static constexpr TEXTURE_FORMAT PrefilteredEnvMapFmt = TEX_FORMAT_RGBA16_FLOAT;
-    static constexpr Uint32         IrradianceCubeDim    = 64;
-    static constexpr Uint32         PrefilteredEnvMapDim = 256;
-
-    RefCntAutoPtr<ITextureView>           m_pIrradianceCubeSRV;
-    RefCntAutoPtr<ITextureView>           m_pPrefilteredEnvMapSRV;
-    RefCntAutoPtr<IPipelineState>         m_pPrecomputeIrradianceCubePSO;
-    RefCntAutoPtr<IPipelineState>         m_pPrefilterEnvMapPSO;
-    RefCntAutoPtr<IShaderResourceBinding> m_pPrecomputeIrradianceCubeSRB;
-    RefCntAutoPtr<IShaderResourceBinding> m_pPrefilterEnvMapSRB;
+    static ALPHA_MODE GltfAlphaModeToAlphaMode(GLTF::Material::ALPHA_MODE GltfAlphaMode);
 
     RenderInfo m_RenderParams;
-
-    RefCntAutoPtr<IBuffer> m_GLTFAttribsCB;
-    RefCntAutoPtr<IBuffer> m_PrecomputeEnvMapAttribsCB;
-    RefCntAutoPtr<IBuffer> m_JointsBuffer;
 };
 
 DEFINE_FLAG_ENUM_OPERATORS(GLTF_PBR_Renderer::RenderInfo::ALPHA_MODE_FLAGS)

@@ -64,6 +64,7 @@ struct PBRRendererShaderParameters
 	CHECK_STRUCT_ALIGNMENT(PBRRendererShaderParameters);
 #endif
 
+
 struct PBRMaterialShaderInfo
 {
 	float4  BaseColorFactor;
@@ -103,6 +104,18 @@ struct PBRMaterialShaderInfo
 #ifdef CHECK_STRUCT_ALIGNMENT
 	CHECK_STRUCT_ALIGNMENT(PBRMaterialShaderInfo);
 #endif
+
+
+struct PBRShaderAttribs
+{
+    GLTFNodeShaderTransforms    Transforms;
+    PBRMaterialShaderInfo       Material;
+    PBRRendererShaderParameters Renderer;
+};
+#ifdef CHECK_STRUCT_ALIGNMENT
+	CHECK_STRUCT_ALIGNMENT(PBRShaderAttribs);
+#endif
+
 
 #ifndef BaseColorTextureUVSelector
 #   define BaseColorTextureUVSelector UVSelector0
