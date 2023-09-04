@@ -41,6 +41,21 @@ namespace USD
 static const INTERFACE_ID IID_HnRenderer =
     {0xea95099b, 0xe894, 0x47a6, {0xaf, 0x33, 0xb2, 0x0, 0x96, 0xc4, 0xcf, 0x44}};
 
+struct HnRendererCreateInfo
+{
+    /// Render target format.
+    TEXTURE_FORMAT RTVFormat = TEX_FORMAT_UNKNOWN;
+
+    /// Depth-buffer format.
+    TEXTURE_FORMAT DSVFormat = TEX_FORMAT_UNKNOWN;
+
+    /// Camera attributes constant buffer.
+    IBuffer* pCameraAttribsCB = nullptr;
+
+    /// Light attributes constant buffer.
+    IBuffer* pLightAttribsCB = nullptr;
+};
+
 class IHnRenderer : public IObject
 {
 public:
@@ -49,9 +64,11 @@ public:
     virtual void Update() = 0;
 
     virtual void Draw(IDeviceContext* pCtx, const float4x4& CameraViewProj) = 0;
+
+    virtual void SetEnvironmentMap(IDeviceContext* pCtx, ITextureView* pEnvironmentMapSRV) = 0;
 };
 
-void CreateHnRenderer(IRenderDevice* pDevice, IDeviceContext* pContext, TEXTURE_FORMAT RTVFormat, TEXTURE_FORMAT DSVFormat, IHnRenderer** ppRenderer);
+void CreateHnRenderer(IRenderDevice* pDevice, IDeviceContext* pContext, const HnRendererCreateInfo& CI, IHnRenderer** ppRenderer);
 
 } // namespace USD
 

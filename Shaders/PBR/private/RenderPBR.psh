@@ -47,8 +47,15 @@ SamplerState  g_BRDF_LUT_sampler;
 Texture2DArray g_ColorMap;
 SamplerState   g_ColorMap_sampler;
 
+#if USE_SEPARATE_METALLIC_ROUGHNESS_TEXTURES
+Texture2DArray g_RoughnessMap;
+SamplerState   g_RoughnessMap_sampler;
+Texture2DArray g_MetallicMap;
+SamplerState   g_MetallicMap_sampler;
+#else
 Texture2DArray g_PhysicalDescriptorMap;
 SamplerState   g_PhysicalDescriptorMap_sampler;
+#endif
 
 Texture2DArray g_NormalMap;
 SamplerState   g_NormalMap_sampler;
@@ -158,6 +165,7 @@ void main(in  float4 ClipPos     : SV_Position,
 #if PBR_USE_AO
     Occlusion = SampleTexture(g_AOMap, g_AOMap_sampler, UV0, UV1, g_PBRAttribs.Material.OcclusionTextureUVSelector, 
                               g_PBRAttribs.Material.OcclusionUVScaleBias, g_PBRAttribs.Material.OcclusionSlice, float4(1.0, 1.0, 1.0, 1.0)).r;
+    Occlusion *= g_PBRAttribs.Material.OcclusionFactor;
 #endif
 
     float3 Emissive = float3(0.0, 0.0, 0.0);
@@ -166,11 +174,23 @@ void main(in  float4 ClipPos     : SV_Position,
                              g_PBRAttribs.Material.EmissiveUVScaleBias, g_PBRAttribs.Material.EmissiveSlice, float4(0.0, 0.0, 0.0, 0.0)).rgb;
 #endif
 
-    float4 PhysicalDesc = SampleTexture(g_PhysicalDescriptorMap, g_PhysicalDescriptorMap_sampler, 
-                                        UV0, UV1, g_PBRAttribs.Material.PhysicalDescriptorTextureUVSelector, 
-                                        g_PBRAttribs.Material.PhysicalDescriptorUVScaleBias, g_PBRAttribs.Material.PhysicalDescriptorSlice,
-                                        float4(0.0, 1.0, 0.0, 0.0));
-
+    float4 PhysicalDesc = float4(0.0, 0.0, 0.0, 0.0);
+#if USE_SEPARATE_METALLIC_ROUGHNESS_TEXTURES
+    PhysicalDesc.b = SampleTexture(g_MetallicMap, g_MetallicMap_sampler, 
+                                   UV0, UV1, g_PBRAttribs.Material.PhysicalDescriptorTextureUVSelector, 
+                                   g_PBRAttribs.Material.PhysicalDescriptorUVScaleBias, g_PBRAttribs.Material.PhysicalDescriptorSlice,
+                                   float4(0.0, 1.0, 0.0, 0.0)).r;
+    PhysicalDesc.g = SampleTexture(g_RoughnessMap, g_RoughnessMap_sampler, 
+                                   UV0, UV1, g_PBRAttribs.Material.PhysicalDescriptorTextureUVSelector, 
+                                   g_PBRAttribs.Material.PhysicalDescriptorUVScaleBias, g_PBRAttribs.Material.PhysicalDescriptorSlice,
+                                   float4(0.0, 1.0, 0.0, 0.0)).r;
+#else   
+    PhysicalDesc = SampleTexture(g_PhysicalDescriptorMap, g_PhysicalDescriptorMap_sampler, 
+                                 UV0, UV1, g_PBRAttribs.Material.PhysicalDescriptorTextureUVSelector, 
+                                 g_PBRAttribs.Material.PhysicalDescriptorUVScaleBias, g_PBRAttribs.Material.PhysicalDescriptorSlice,
+                                 float4(0.0, 1.0, 0.0, 0.0));
+#endif
+    
     float metallic;
     if (g_PBRAttribs.Material.Workflow == PBR_WORKFLOW_SPECULAR_GLOSINESS)
     {

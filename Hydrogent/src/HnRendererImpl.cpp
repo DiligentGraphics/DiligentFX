@@ -31,6 +31,7 @@
 #include "HnTokens.hpp"
 
 #include "EngineMemory.h"
+#include "PBR_Renderer.hpp"
 #include "MapHelper.hpp"
 
 #include "pxr/imaging/hd/task.h"
@@ -42,146 +43,68 @@ namespace Diligent
 namespace USD
 {
 
-static constexpr char VSSource[] = R"(
-cbuffer Constants
+namespace HLSL
 {
-    float4x4 g_WorldViewProj;
-};
 
-struct VSInput
+namespace
 {
-    float3 Pos    : ATTRIB0;
-    float3 Normal : ATTRIB1;
-    float2 UV     : ATTRIB2;
-};
-
-struct PSInput 
-{ 
-    float4 Pos   : SV_POSITION; 
-    float3 Normal: NORMAL;
-    float2 UV    : TEXCOORD;
-};
-
-void main(in  VSInput VSIn,
-          out PSInput PSIn) 
-{
-    PSIn.Pos    = mul( float4(VSIn.Pos,1.0), g_WorldViewProj);
-    PSIn.Normal = VSIn.Normal;
-    PSIn.UV     = VSIn.UV;
+#include "Shaders/PBR/public/PBR_Structures.fxh"
 }
-)";
 
-static constexpr char PSSource[] = R"(
+} // namespace HLSL
 
-Texture2D<float4> g_Texture;
-SamplerState      g_Texture_sampler;
-
-struct PSInput 
-{ 
-    float4 Pos   : SV_POSITION; 
-    float3 Normal: NORMAL;
-    float2 UV    : TEXCOORD;
-};
-
-struct PSOutput
-{ 
-    float4 Color : SV_TARGET; 
-};
-
-void main(in  PSInput  PSIn,
-          out PSOutput PSOut)
+void CreateHnRenderer(IRenderDevice* pDevice, IDeviceContext* pContext, const HnRendererCreateInfo& CI, IHnRenderer** ppRenderer)
 {
-    float3 LightDir = float3(0, -1, 0);
-    float DiffuseLight = max(0, dot(PSIn.Normal, -LightDir));
-    PSOut.Color = g_Texture.Sample(g_Texture_sampler, PSIn.UV) * DiffuseLight; 
-}
-)";
-
-void CreateHnRenderer(IRenderDevice* pDevice, IDeviceContext* pContext, TEXTURE_FORMAT RTVFormat, TEXTURE_FORMAT DSVFormat, IHnRenderer** ppRenderer)
-{
-    auto* pRenderer = NEW_RC_OBJ(GetRawAllocator(), "HnRenderer instance", HnRendererImpl)(pDevice, pContext, RTVFormat, DSVFormat);
+    auto* pRenderer = NEW_RC_OBJ(GetRawAllocator(), "HnRenderer instance", HnRendererImpl)(pDevice, pContext, CI);
     pRenderer->QueryInterface(IID_HnRenderer, reinterpret_cast<IObject**>(ppRenderer));
 }
 
-HnRendererImpl::HnRendererImpl(IReferenceCounters* pRefCounters,
-                               IRenderDevice*      pDevice,
-                               IDeviceContext*     pContext,
-                               TEXTURE_FORMAT      RTVFormat,
-                               TEXTURE_FORMAT      DSVFormat) :
+
+HnRendererImpl::HnRendererImpl(IReferenceCounters*         pRefCounters,
+                               IRenderDevice*              pDevice,
+                               IDeviceContext*             pContext,
+                               const HnRendererCreateInfo& CI) :
     TBase{pRefCounters},
     m_Device{pDevice},
-    m_RenderDelegate{HnRenderDelegate::Create(pDevice, pContext)}
+    m_CameraAttribsCB{CI.pCameraAttribsCB},
+    m_LightAttribsCB{CI.pLightAttribsCB},
+    m_PBRRenderer{
+        std::make_shared<PBR_Renderer>(
+            pDevice,
+            nullptr,
+            pContext,
+            [](const HnRendererCreateInfo& CI) {
+                PBR_Renderer::CreateInfo PBRRendererCI;
+                PBRRendererCI.RTVFmt = CI.RTVFormat;
+                PBRRendererCI.DSVFmt = CI.DSVFormat;
+
+                PBRRendererCI.UseIBL      = true;
+                PBRRendererCI.UseAO       = true;
+                PBRRendererCI.UseEmissive = false;
+
+                // Use samplers from texture views
+                PBRRendererCI.UseImmutableSamplers = false;
+                // Disable animation
+                PBRRendererCI.MaxJointCount = 0;
+                // Use separate textures for metallic and roughness
+                PBRRendererCI.UseSeparateMetallicRoughnessTextures = true;
+
+                static constexpr LayoutElement Inputs[] =
+                    {
+                        {0, 0, 3, VT_FLOAT32}, //float3 Pos     : ATTRIB0;
+                        {1, 1, 3, VT_FLOAT32}, //float3 Normal  : ATTRIB1;
+                        {2, 2, 2, VT_FLOAT32}, //float2 UV0     : ATTRIB2;
+                        {3, 3, 2, VT_FLOAT32}, //float2 UV1     : ATTRIB3;
+                    };
+
+                PBRRendererCI.InputLayout.LayoutElements = Inputs;
+                PBRRendererCI.InputLayout.NumElements    = _countof(Inputs);
+
+                return PBRRendererCI;
+            }(CI)),
+    },
+    m_RenderDelegate{HnRenderDelegate::Create({pDevice, pContext, m_CameraAttribsCB, m_LightAttribsCB, m_PBRRenderer})}
 {
-    ShaderCreateInfo ShaderCI;
-    ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL;
-
-    RefCntAutoPtr<IShader> pVS;
-    {
-        ShaderCI.Desc       = {"Usd VS", SHADER_TYPE_VERTEX, true};
-        ShaderCI.EntryPoint = "main";
-        ShaderCI.Source     = VSSource;
-
-        pVS = m_Device.CreateShader(ShaderCI);
-    }
-
-    // Create pixel shader
-    RefCntAutoPtr<IShader> pPS;
-    {
-        ShaderCI.Desc       = {"Usd PS", SHADER_TYPE_PIXEL, true};
-        ShaderCI.EntryPoint = "main";
-        ShaderCI.Source     = PSSource;
-
-        pPS = m_Device.CreateShader(ShaderCI);
-    }
-
-    InputLayoutDescX InputLayout{
-        {0, 0, 3, VT_FLOAT32}, // Position
-        {1, 1, 3, VT_FLOAT32}, // Normal
-        {2, 2, 2, VT_FLOAT32}, // UV
-    };
-
-    PipelineResourceLayoutDescX ResourceLayout;
-    ResourceLayout.AddVariable(SHADER_TYPE_PIXEL, "g_Texture", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
-
-    GraphicsPipelineStateCreateInfoX PsoCI{"USD PSO"};
-    PsoCI
-        .AddShader(pVS)
-        .AddShader(pPS)
-        .SetRasterizerDesc(FILL_MODE_SOLID, CULL_MODE_BACK)
-        .SetInputLayout(InputLayout)
-        .SetPrimitiveTopology(PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
-        .SetResourceLayout(ResourceLayout)
-        .AddRenderTarget(RTVFormat)
-        .SetDepthFormat(DSVFormat);
-
-    m_pPSO         = m_Device.CreateGraphicsPipelineState(PsoCI);
-    m_pVSConstants = m_Device.CreateBuffer("Constant buffer", sizeof(float4x4));
-    m_pPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "Constants")->Set(m_pVSConstants);
-    m_pPSO->CreateShaderResourceBinding(&m_pSRB, true);
-
-    {
-        RefCntAutoPtr<ITexture> pWhiteTex;
-
-        TextureDesc TexDesc;
-        TexDesc.Name      = "White texture";
-        TexDesc.Type      = RESOURCE_DIM_TEX_2D;
-        TexDesc.Width     = 8;
-        TexDesc.Height    = 8;
-        TexDesc.Format    = TEX_FORMAT_RGBA8_UNORM;
-        TexDesc.BindFlags = BIND_SHADER_RESOURCE;
-        TexDesc.Usage     = USAGE_IMMUTABLE;
-        TexDesc.MipLevels = 1;
-
-        std::vector<Uint8> Data(TexDesc.Width * TexDesc.Height * 4, 255u);
-        TextureSubResData  Mip0Data{Data.data(), TexDesc.Width * 4};
-        TextureData        InitData{&Mip0Data, 1};
-
-        pWhiteTex      = m_Device.CreateTexture(TexDesc, &InitData);
-        m_pWhiteTexSRV = pWhiteTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-
-        auto pSamler = m_Device.CreateSampler(SamplerDesc{});
-        m_pWhiteTexSRV->SetSampler(pSamler);
-    }
 }
 
 HnRendererImpl::~HnRendererImpl()
@@ -256,7 +179,13 @@ void HnRendererImpl::Update()
 
 void HnRendererImpl::Draw(IDeviceContext* pCtx, const float4x4& CameraViewProj)
 {
-    for (auto mesh_it : m_RenderDelegate->GetMeshes())
+    const auto& Meshes = m_RenderDelegate->GetMeshes();
+    if (Meshes.empty())
+        return;
+
+    pCtx->SetPipelineState(m_PBRRenderer->GetPSO({}));
+
+    for (auto mesh_it : Meshes)
     {
         if (!mesh_it.second)
             continue;
@@ -268,39 +197,51 @@ void HnRendererImpl::Draw(IDeviceContext* pCtx, const float4x4& CameraViewProj)
         if (pMaterial == nullptr)
             return;
 
+        auto* pSRB = pMaterial->GetSRB();
         auto* pVB0 = Mesh.GetVertexBuffer(HnMesh::VERTEX_BUFFER_ID_POSITION);
         auto* pVB1 = Mesh.GetVertexBuffer(HnMesh::VERTEX_BUFFER_ID_NORMAL);
         auto* pVB2 = Mesh.GetVertexBuffer(HnMesh::VERTEX_BUFFER_ID_TEXCOORD);
         auto* pIB  = Mesh.GetTriangleIndexBuffer();
 
-        if (pVB0 == nullptr || pVB1 == nullptr || pVB2 == nullptr || pIB == nullptr)
+        if (pVB0 == nullptr || pVB1 == nullptr || pVB2 == nullptr || pIB == nullptr || pSRB == nullptr)
             continue;
 
-        ITextureView* pDiffuseTexSRV = m_pWhiteTexSRV;
-
-        auto* pDiffuseColor = pMaterial->GetTexture(HnTokens->diffuseColor);
-        if (pDiffuseColor != nullptr && pDiffuseColor->pTexture)
-            pDiffuseTexSRV = pDiffuseColor->pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-
         // Bind vertex and index buffers
-        IBuffer* pBuffs[] = {pVB0, pVB1, pVB2};
+        IBuffer* pBuffs[] = {pVB0, pVB1, pVB2, pVB2};
         pCtx->SetVertexBuffers(0, _countof(pBuffs), pBuffs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         pCtx->SetIndexBuffer(pIB, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
+        const auto& ShaderAttribs = pMaterial->GetShaderAttribs();
         {
-            // Map the buffer and write current world-view-projection matrix
-            MapHelper<float4x4> CBConstants{pCtx, m_pVSConstants, MAP_WRITE, MAP_FLAG_DISCARD};
+            MapHelper<HLSL::PBRShaderAttribs> pAttribs{pCtx, m_PBRRenderer->GetPBRAttribsCB(), MAP_WRITE, MAP_FLAG_DISCARD};
 
-            *CBConstants = (Mesh.GetTransform() * CameraViewProj).Transpose();
+            pAttribs->Transforms.NodeMatrix = Mesh.GetTransform();
+            pAttribs->Transforms.JointCount = 0;
+
+            static_assert(sizeof(pAttribs->Material) == sizeof(ShaderAttribs), "The sizeof(PBRMaterialShaderInfo) is inconsistent with sizeof(ShaderAttribs)");
+            memcpy(&pAttribs->Material, &ShaderAttribs, sizeof(ShaderAttribs));
+
+            auto& RendererParams = pAttribs->Renderer;
+
+            RendererParams.DebugViewType            = 0;     //static_cast<int>(m_RenderParams.DebugView);
+            RendererParams.OcclusionStrength        = 1;     //m_RenderParams.OcclusionStrength;
+            RendererParams.EmissionScale            = 1;     //m_RenderParams.EmissionScale;
+            RendererParams.AverageLogLum            = 0.3f;  //m_RenderParams.AverageLogLum;
+            RendererParams.MiddleGray               = 0.18f; //m_RenderParams.MiddleGray;
+            RendererParams.WhitePoint               = 3.0f;  //m_RenderParams.WhitePoint;
+            RendererParams.IBLScale                 = 1;     //m_RenderParams.IBLScale;
+            RendererParams.PrefilteredCubeMipLevels = 5;     //m_Settings.UseIBL ? static_cast<float>(m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels) : 0.f;
         }
 
-        m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_Texture")->Set(pDiffuseTexSRV);
-
-        pCtx->SetPipelineState(m_pPSO);
-        pCtx->CommitShaderResources(m_pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        pCtx->CommitShaderResources(pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         Diligent::DrawIndexedAttribs DrawAttrs{Mesh.GetNumTriangles() * 3, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
         pCtx->DrawIndexed(DrawAttrs);
     }
+}
+
+void HnRendererImpl::SetEnvironmentMap(IDeviceContext* pCtx, ITextureView* pEnvironmentMapSRV)
+{
+    m_PBRRenderer->PrecomputeCubemaps(m_Device, m_Device, pCtx, pEnvironmentMapSRV);
 }
 
 } // namespace USD

@@ -89,7 +89,7 @@ struct PBRMaterialShaderInfo
 	float RoughnessFactor;
 	int   AlphaMode;	
 	float AlphaMaskCutoff;
-    float Dummy0;
+    float OcclusionFactor;
 
     // When texture atlas is used, UV scale and bias applied to
     // each texture coordinate set

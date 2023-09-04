@@ -141,21 +141,22 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
         m_pWhiteTexSRV->SetSampler(pDefaultSampler);
         m_pBlackTexSRV->SetSampler(pDefaultSampler);
         m_pDefaultNormalMapSRV->SetSampler(pDefaultSampler);
+        m_pDefaultPhysDescSRV->SetSampler(pDefaultSampler);
     }
 
     if (CI.RTVFmt != TEX_FORMAT_UNKNOWN || CI.DSVFmt != TEX_FORMAT_UNKNOWN)
     {
         CreateUniformBuffer(pDevice, sizeof(HLSL::PBRShaderAttribs), "PBR attribs CB", &m_PBRAttribsCB);
-        CreateUniformBuffer(pDevice, static_cast<Uint32>(sizeof(float4x4) * m_Settings.MaxJointCount), "PBR joint transforms", &m_JointsBuffer);
-
-        // clang-format off
-        StateTransitionDesc Barriers[] = 
+        if (m_Settings.MaxJointCount > 0)
         {
-            {m_PBRAttribsCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE},
-            {m_JointsBuffer,  RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE}
-        };
-        // clang-format on
-        pCtx->TransitionResourceStates(_countof(Barriers), Barriers);
+            CreateUniformBuffer(pDevice, static_cast<Uint32>(sizeof(float4x4) * m_Settings.MaxJointCount), "PBR joint transforms", &m_JointsBuffer);
+        }
+
+        std::vector<StateTransitionDesc> Barriers;
+        Barriers.emplace_back(m_PBRAttribsCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE);
+        if (m_JointsBuffer)
+            Barriers.emplace_back(m_JointsBuffer, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE);
+        pCtx->TransitionResourceStates(static_cast<Uint32>(Barriers.size()), Barriers.data());
 
         CreatePSO(pDevice, pStateCache);
     }
@@ -323,24 +324,12 @@ void PBR_Renderer::PrecomputeCubemaps(IRenderDevice*     pDevice,
         PSOCreateInfo.pVS = pVS;
         PSOCreateInfo.pPS = pPS;
 
-        PSODesc.ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_STATIC;
-        // clang-format off
-        ShaderResourceVariableDesc Vars[] = 
-        {
-            {SHADER_TYPE_PIXEL, "g_EnvironmentMap", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC}
-        };
-        // clang-format on
-        PSODesc.ResourceLayout.NumVariables = _countof(Vars);
-        PSODesc.ResourceLayout.Variables    = Vars;
-
-        // clang-format off
-        ImmutableSamplerDesc ImtblSamplers[] =
-        {
-            {SHADER_TYPE_PIXEL, "g_EnvironmentMap", Sam_LinearClamp}
-        };
-        // clang-format on
-        PSODesc.ResourceLayout.NumImmutableSamplers = _countof(ImtblSamplers);
-        PSODesc.ResourceLayout.ImmutableSamplers    = ImtblSamplers;
+        PipelineResourceLayoutDescX ResourceLayout;
+        ResourceLayout
+            .SetDefaultVariableType(SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+            .AddVariable(SHADER_TYPE_PIXEL, "g_EnvironmentMap", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_EnvironmentMap", Sam_LinearClamp);
+        PSODesc.ResourceLayout = ResourceLayout;
 
         m_pPrecomputeIrradianceCubePSO = Device.CreateGraphicsPipelineState(PSOCreateInfo);
         m_pPrecomputeIrradianceCubePSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "cbTransform")->Set(m_PrecomputeEnvMapAttribsCB);
@@ -392,24 +381,12 @@ void PBR_Renderer::PrecomputeCubemaps(IRenderDevice*     pDevice,
         PSOCreateInfo.pVS = pVS;
         PSOCreateInfo.pPS = pPS;
 
-        PSODesc.ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_STATIC;
-        // clang-format off
-        ShaderResourceVariableDesc Vars[] = 
-        {
-            {SHADER_TYPE_PIXEL, "g_EnvironmentMap", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC}
-        };
-        // clang-format on
-        PSODesc.ResourceLayout.NumVariables = _countof(Vars);
-        PSODesc.ResourceLayout.Variables    = Vars;
-
-        // clang-format off
-        ImmutableSamplerDesc ImtblSamplers[] =
-        {
-            {SHADER_TYPE_PIXEL, "g_EnvironmentMap", Sam_LinearClamp}
-        };
-        // clang-format on
-        PSODesc.ResourceLayout.NumImmutableSamplers = _countof(ImtblSamplers);
-        PSODesc.ResourceLayout.ImmutableSamplers    = ImtblSamplers;
+        PipelineResourceLayoutDescX ResourceLayout;
+        ResourceLayout
+            .SetDefaultVariableType(SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+            .AddVariable(SHADER_TYPE_PIXEL, "g_EnvironmentMap", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_EnvironmentMap", Sam_LinearClamp);
+        PSODesc.ResourceLayout = ResourceLayout;
 
         m_pPrefilterEnvMapPSO = Device.CreateGraphicsPipelineState(PSOCreateInfo);
         m_pPrefilterEnvMapPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "cbTransform")->Set(m_PrecomputeEnvMapAttribsCB);
@@ -511,9 +488,6 @@ void PBR_Renderer::InitCommonSRBVars(IShaderResourceBinding* pSRB,
     {
         if (auto* pCameraAttribsVSVar = pSRB->GetVariableByName(SHADER_TYPE_VERTEX, "cbCameraAttribs"))
             pCameraAttribsVSVar->Set(pCameraAttribs);
-
-        if (auto* pCameraAttribsPSVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbCameraAttribs"))
-            pCameraAttribsPSVar->Set(pCameraAttribs);
     }
 
     if (pLightAttribs != nullptr)
@@ -556,7 +530,7 @@ void PBR_Renderer::CreatePSO(IRenderDevice* pDevice, IRenderStateCache* pStateCa
     ShaderCI.pShaderSourceStreamFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();
 
     ShaderMacroHelper Macros;
-    Macros.AddShaderMacro("MAX_JOINT_COUNT", m_Settings.MaxJointCount);
+    Macros.AddShaderMacro("MAX_JOINT_COUNT", static_cast<int>(m_Settings.MaxJointCount));
     Macros.AddShaderMacro("ALLOW_DEBUG_VIEW", m_Settings.AllowDebugView);
     Macros.AddShaderMacro("TONE_MAPPING_MODE", "TONE_MAPPING_MODE_UNCHARTED2");
     Macros.AddShaderMacro("PBR_USE_IBL", m_Settings.UseIBL);
@@ -570,6 +544,8 @@ void PBR_Renderer::CreatePSO(IRenderDevice* pDevice, IRenderStateCache* pStateCa
     Macros.AddShaderMacro("PBR_ALPHA_MODE_BLEND", ALPHA_MODE_BLEND);
     Macros.AddShaderMacro("USE_IBL_ENV_MAP_LOD", true);
     Macros.AddShaderMacro("USE_HDR_IBL_CUBEMAPS", true);
+    Macros.AddShaderMacro("USE_SEPARATE_METALLIC_ROUGHNESS_TEXTURES", m_Settings.UseSeparateMetallicRoughnessTextures);
+
     ShaderCI.Macros = Macros;
     RefCntAutoPtr<IShader> pVS;
     {
@@ -590,64 +566,70 @@ void PBR_Renderer::CreatePSO(IRenderDevice* pDevice, IRenderStateCache* pStateCa
         pPS = Device.CreateShader(ShaderCI);
     }
 
-    // clang-format off
-    LayoutElement Inputs[] =
+    InputLayoutDescX InputLayout;
+    if (m_Settings.InputLayout.NumElements != 0)
     {
-        {0, 0, 3, VT_FLOAT32},   //float3 Pos     : ATTRIB0;
-        {1, 0, 3, VT_FLOAT32},   //float3 Normal  : ATTRIB1;
-        {2, 0, 2, VT_FLOAT32},   //float2 UV0     : ATTRIB2;
-        {3, 0, 2, VT_FLOAT32},   //float2 UV1     : ATTRIB3;
-        {4, 1, 4, VT_FLOAT32},   //float4 Joint0  : ATTRIB4;
-        {5, 1, 4, VT_FLOAT32}    //float4 Weight0 : ATTRIB5;
-    };
-    // clang-format on
-    PSOCreateInfo.GraphicsPipeline.InputLayout.LayoutElements = Inputs;
-    PSOCreateInfo.GraphicsPipeline.InputLayout.NumElements    = _countof(Inputs);
+        PSOCreateInfo.GraphicsPipeline.InputLayout = m_Settings.InputLayout;
+    }
+    else
+    {
+        InputLayout
+            .Add(0u, 0u, 3u, VT_FLOAT32)  //float3 Pos     : ATTRIB0;
+            .Add(1u, 0u, 3u, VT_FLOAT32)  //float3 Normal  : ATTRIB1;
+            .Add(2u, 0u, 2u, VT_FLOAT32)  //float2 UV0     : ATTRIB2;
+            .Add(3u, 0u, 2u, VT_FLOAT32); //float2 UV1     : ATTRIB3;
+        if (m_Settings.MaxJointCount > 0)
+        {
+            InputLayout
+                .Add(4u, 1u, 4u, VT_FLOAT32)  //float4 Joint0  : ATTRIB4;
+                .Add(5u, 1u, 4u, VT_FLOAT32); //float4 Weight0 : ATTRIB5;
+        }
+        PSOCreateInfo.GraphicsPipeline.InputLayout = InputLayout;
+    }
 
-    PSODesc.ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
-    // clang-format off
-    std::vector<ShaderResourceVariableDesc> Vars = 
-    {
-        {SHADER_TYPE_VS_PS,  "cbPBRAttribs",      SHADER_RESOURCE_VARIABLE_TYPE_STATIC},
-        {SHADER_TYPE_VERTEX, "cbJointTransforms", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
-    };
-    // clang-format on
+    PipelineResourceLayoutDescX ResourceLayout;
+    ResourceLayout.SetDefaultVariableType(SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
+
+    ResourceLayout
+        .AddVariable(SHADER_TYPE_VS_PS, "cbPBRAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+        .AddVariable(SHADER_TYPE_VS_PS, "cbCameraAttribs", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
+
+    if (m_Settings.MaxJointCount > 0)
+        ResourceLayout.AddVariable(SHADER_TYPE_VERTEX, "cbJointTransforms", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
 
     std::vector<ImmutableSamplerDesc> ImtblSamplers;
-    // clang-format off
     if (m_Settings.UseImmutableSamplers)
     {
-        ImtblSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_ColorMap",              m_Settings.ColorMapImmutableSampler);
-        ImtblSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_PhysicalDescriptorMap", m_Settings.PhysDescMapImmutableSampler);
-        ImtblSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_NormalMap",             m_Settings.NormalMapImmutableSampler);
-    }
-    // clang-format on
+        // clang-format off
+        ResourceLayout
+            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_ColorMap",              m_Settings.ColorMapImmutableSampler)
+            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_PhysicalDescriptorMap", m_Settings.PhysDescMapImmutableSampler)
+            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_NormalMap",             m_Settings.NormalMapImmutableSampler);
+        // clang-format on
 
-    if (m_Settings.UseAO)
-    {
-        ImtblSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_AOMap", m_Settings.AOMapImmutableSampler);
-    }
+        if (m_Settings.UseAO)
+        {
+            ResourceLayout.AddImmutableSampler(SHADER_TYPE_PIXEL, "g_AOMap", m_Settings.AOMapImmutableSampler);
+        }
 
-    if (m_Settings.UseEmissive)
-    {
-        ImtblSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_EmissiveMap", m_Settings.EmissiveMapImmutableSampler);
+        if (m_Settings.UseEmissive)
+        {
+            ResourceLayout.AddImmutableSampler(SHADER_TYPE_PIXEL, "g_EmissiveMap", m_Settings.EmissiveMapImmutableSampler);
+        }
     }
 
     if (m_Settings.UseIBL)
     {
-        Vars.emplace_back(SHADER_TYPE_PIXEL, "g_BRDF_LUT", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
+        ResourceLayout.AddVariable(SHADER_TYPE_PIXEL, "g_BRDF_LUT", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
 
         // clang-format off
-        ImtblSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_BRDF_LUT",          Sam_LinearClamp);
-        ImtblSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_IrradianceMap",     Sam_LinearClamp);
-        ImtblSamplers.emplace_back(SHADER_TYPE_PIXEL, "g_PrefilteredEnvMap", Sam_LinearClamp);
+        ResourceLayout.AddImmutableSampler(SHADER_TYPE_PIXEL, "g_BRDF_LUT",          Sam_LinearClamp);
+        ResourceLayout.AddImmutableSampler(SHADER_TYPE_PIXEL, "g_IrradianceMap",     Sam_LinearClamp);
+        ResourceLayout.AddImmutableSampler(SHADER_TYPE_PIXEL, "g_PrefilteredEnvMap", Sam_LinearClamp);
         // clang-format on
     }
 
-    PSODesc.ResourceLayout.NumVariables         = static_cast<Uint32>(Vars.size());
-    PSODesc.ResourceLayout.Variables            = Vars.data();
-    PSODesc.ResourceLayout.NumImmutableSamplers = static_cast<Uint32>(ImtblSamplers.size());
-    PSODesc.ResourceLayout.ImmutableSamplers    = !ImtblSamplers.empty() ? ImtblSamplers.data() : nullptr;
+    PSODesc.ResourceLayout = ResourceLayout;
 
     PSOCreateInfo.pVS = pVS;
     PSOCreateInfo.pPS = pPS;
@@ -697,10 +679,11 @@ void PBR_Renderer::CreatePSO(IRenderDevice* pDevice, IRenderStateCache* pStateCa
         {
             PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "g_BRDF_LUT")->Set(m_pBRDF_LUT_SRV);
         }
-        // clang-format off
         PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbPBRAttribs")->Set(m_PBRAttribsCB);
-        PSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "cbJointTransforms")->Set(m_JointsBuffer);
-        // clang-format on
+        if (m_Settings.MaxJointCount > 0)
+        {
+            PSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "cbJointTransforms")->Set(m_JointsBuffer);
+        }
     }
 }
 
@@ -711,6 +694,18 @@ void PBR_Renderer::AddPSO(const PSOKey& Key, RefCntAutoPtr<IPipelineState> pPSO)
         m_PSOCache.resize(Idx + 1);
     VERIFY_EXPR(!m_PSOCache[Idx]);
     m_PSOCache[Idx] = std::move(pPSO);
+}
+
+void PBR_Renderer::CreateResourceBinding(IShaderResourceBinding** ppSRB)
+{
+    auto* pPSO = GetPSO(PSOKey{});
+    if (pPSO == nullptr)
+    {
+        UNEXPECTED("Failed to find PSO");
+        return;
+    }
+
+    pPSO->CreateShaderResourceBinding(ppSRB, true);
 }
 
 } // namespace Diligent

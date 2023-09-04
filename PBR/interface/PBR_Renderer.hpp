@@ -77,6 +77,10 @@ public:
         /// Whether to use texture atlas (e.g. apply UV transforms when sampling textures).
         bool UseTextureAtlas = false;
 
+        /// Whether to use separate textures for metallic and roughness
+        /// instead of a combined physical description texture.
+        bool UseSeparateMetallicRoughnessTextures = false;
+
         static const SamplerDesc DefaultSampler;
 
         /// Immutable sampler for color map texture.
@@ -94,11 +98,16 @@ public:
         /// Immutable sampler for emissive map texture.
         SamplerDesc EmissiveMapImmutableSampler = DefaultSampler;
 
-        /// The maximum number of joints
+        /// The maximum number of joints.
+        ///
+        /// If set to 0, the animation will be disabled.
         Uint32 MaxJointCount = 64;
 
         /// The number of samples for BRDF LUT creation
         Uint32 NumBRDFSamples = 512;
+
+        /// Optional input layout description.
+        InputLayoutDesc InputLayout;
     };
 
     enum ALPHA_MODE
@@ -124,12 +133,13 @@ public:
     ~PBR_Renderer();
 
     // clang-format off
-    ITextureView* GetIrradianceCubeSRV()    { return m_pIrradianceCubeSRV; }
-    ITextureView* GetPrefilteredEnvMapSRV() { return m_pPrefilteredEnvMapSRV; }
-    ITextureView* GetBRDFLUTSRV()           { return m_pBRDF_LUT_SRV; }
-    ITextureView* GetWhiteTexSRV()          { return m_pWhiteTexSRV; }
-    ITextureView* GetBlackTexSRV()          { return m_pBlackTexSRV; }
-    ITextureView* GetDefaultNormalMapSRV()  { return m_pDefaultNormalMapSRV; }
+    ITextureView* GetIrradianceCubeSRV() const    { return m_pIrradianceCubeSRV; }
+    ITextureView* GetPrefilteredEnvMapSRV() const { return m_pPrefilteredEnvMapSRV; }
+    ITextureView* GetBRDFLUTSRV() const           { return m_pBRDF_LUT_SRV; }
+    ITextureView* GetWhiteTexSRV() const          { return m_pWhiteTexSRV; }
+    ITextureView* GetBlackTexSRV() const          { return m_pBlackTexSRV; }
+    ITextureView* GetDefaultNormalMapSRV() const  { return m_pDefaultNormalMapSRV; }
+    IBuffer*      GetPBRAttribsCB() const         {return m_PBRAttribsCB;}
     // clang-format on
 
     /// Precompute cubemaps used by IBL.
@@ -141,7 +151,8 @@ public:
                             Uint32             NumThetaSamples = 32,
                             bool               OptimizeSamples = true);
 
-protected:
+    void CreateResourceBinding(IShaderResourceBinding** ppSRB);
+
     struct PSOKey
     {
         PSOKey() noexcept {};
@@ -163,6 +174,18 @@ protected:
         bool       DoubleSided = false;
     };
 
+    IPipelineState* GetPSO(const PSOKey& Key) const
+    {
+        auto Idx = GetPSOIdx(Key);
+        VERIFY_EXPR(Idx < m_PSOCache.size());
+        return Idx < m_PSOCache.size() ? m_PSOCache[Idx].RawPtr() : nullptr;
+    }
+
+    void InitCommonSRBVars(IShaderResourceBinding* pSRB,
+                           IBuffer*                pCameraAttribs,
+                           IBuffer*                pLightAttribs);
+
+protected:
     static size_t GetPSOIdx(const PSOKey& Key)
     {
         size_t PSOIdx;
@@ -172,26 +195,15 @@ protected:
         return PSOIdx;
     }
 
-    IPipelineState* GetPSO(const PSOKey& Key) const
-    {
-        auto Idx = GetPSOIdx(Key);
-        VERIFY_EXPR(Idx < m_PSOCache.size());
-        return Idx < m_PSOCache.size() ? m_PSOCache[Idx].RawPtr() : nullptr;
-    }
-
     void AddPSO(const PSOKey& Key, RefCntAutoPtr<IPipelineState> pPSO);
-
-    void CreatePSO(IRenderDevice* pDevice, IRenderStateCache* pStateCache);
-
-    void InitCommonSRBVars(IShaderResourceBinding* pSRB,
-                           IBuffer*                pCameraAttribs,
-                           IBuffer*                pLightAttribs);
 
 private:
     void PrecomputeBRDF(IRenderDevice*     pDevice,
                         IRenderStateCache* pStateCache,
                         IDeviceContext*    pCtx,
                         Uint32             NumBRDFSamples = 512);
+
+    void CreatePSO(IRenderDevice* pDevice, IRenderStateCache* pStateCache);
 
 protected:
     const CreateInfo m_Settings;

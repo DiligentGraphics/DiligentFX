@@ -46,6 +46,8 @@
 namespace Diligent
 {
 
+class PBR_Renderer;
+
 namespace USD
 {
 
@@ -60,21 +62,26 @@ public:
     static constexpr INTERFACE_ID IID_Impl =
         {0xb8e2e916, 0xb4e6, 0x4c1e, {0xa2, 0xdd, 0x78, 0xfc, 0xd7, 0x63, 0xf4, 0x3e}};
 
-    HnRendererImpl(IReferenceCounters* pRefCounters,
-                   IRenderDevice*      pDevice,
-                   IDeviceContext*     pContext,
-                   TEXTURE_FORMAT      RTVFormat,
-                   TEXTURE_FORMAT      DSVFormat);
+    HnRendererImpl(IReferenceCounters*         pRefCounters,
+                   IRenderDevice*              pDevice,
+                   IDeviceContext*             pContext,
+                   const HnRendererCreateInfo& CI);
     ~HnRendererImpl();
 
     IMPLEMENT_QUERY_INTERFACE2_IN_PLACE(IID_HnRenderer, IID_Impl, TBase)
 
-    void LoadUSDStage(const char* FileName) override final;
-    void Update() override final;
-    void Draw(IDeviceContext* pCtx, const float4x4& CameraViewProj) override final;
+    virtual void LoadUSDStage(const char* FileName) override final;
+    virtual void Update() override final;
+    virtual void Draw(IDeviceContext* pCtx, const float4x4& CameraViewProj) override final;
+    virtual void SetEnvironmentMap(IDeviceContext* pCtx, ITextureView* pEnvironmentMapSRV) override final;
 
 private:
     RenderDeviceWithCache_N m_Device;
+
+    RefCntAutoPtr<IBuffer> m_CameraAttribsCB;
+    RefCntAutoPtr<IBuffer> m_LightAttribsCB;
+
+    std::shared_ptr<PBR_Renderer> m_PBRRenderer;
 
     std::unique_ptr<HnRenderDelegate> m_RenderDelegate;
 
@@ -84,11 +91,6 @@ private:
     pxr::UsdImagingDelegate*   m_ImagingDelegate = nullptr;
     pxr::TfTokenVector         m_RenderTags;
     pxr::HdRenderPassSharedPtr m_GeometryPass;
-
-    RefCntAutoPtr<IPipelineState>         m_pPSO;
-    RefCntAutoPtr<IShaderResourceBinding> m_pSRB;
-    RefCntAutoPtr<IBuffer>                m_pVSConstants;
-    RefCntAutoPtr<ITextureView>           m_pWhiteTexSRV;
 };
 
 } // namespace USD

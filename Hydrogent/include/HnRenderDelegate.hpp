@@ -39,6 +39,8 @@
 namespace Diligent
 {
 
+class PBR_Renderer;
+
 namespace USD
 {
 
@@ -49,9 +51,18 @@ class HnMesh;
 class HnRenderDelegate final : public pxr::HdRenderDelegate
 {
 public:
-    static std::unique_ptr<HnRenderDelegate> Create(IRenderDevice* pDevice, IDeviceContext* pContext);
+    struct CreateInfo
+    {
+        IRenderDevice*  pDevice        = nullptr;
+        IDeviceContext* pContext       = nullptr;
+        IBuffer*        pCameraAttribs = nullptr;
+        IBuffer*        pLightAttribs  = nullptr;
 
-    HnRenderDelegate(IRenderDevice* pDevice, IDeviceContext* pContext);
+        std::shared_ptr<PBR_Renderer> PBRRenderer;
+    };
+    static std::unique_ptr<HnRenderDelegate> Create(const CreateInfo& CI);
+
+    HnRenderDelegate(const CreateInfo& CI);
 
     virtual ~HnRenderDelegate() override final;
 
@@ -181,6 +192,9 @@ private:
 
     RefCntAutoPtr<IRenderDevice>  m_pDevice;
     RefCntAutoPtr<IDeviceContext> m_pContext;
+    RefCntAutoPtr<IBuffer>        m_CameraAttribsCB;
+    RefCntAutoPtr<IBuffer>        m_LightAttribsCB;
+    std::shared_ptr<PBR_Renderer> m_PBRRenderer;
 
     HnTextureRegistry m_TextureRegistry;
 

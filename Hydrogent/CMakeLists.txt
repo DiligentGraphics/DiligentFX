@@ -109,6 +109,7 @@ PRIVATE
     Diligent-GraphicsTools
     Diligent-TextureLoader
     Diligent-Common
+    DiligentFX
 )
 
 if(PLATFORM_WIN32 OR PLATFORM_UNIVERSAL_WINDOWS)

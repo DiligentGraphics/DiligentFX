@@ -89,7 +89,7 @@
 "	float RoughnessFactor;\n"
 "	int   AlphaMode;\n"
 "	float AlphaMaskCutoff;\n"
-"    float Dummy0;\n"
+"    float OcclusionFactor;\n"
 "\n"
 "    // When texture atlas is used, UV scale and bias applied to\n"
 "    // each texture coordinate set\n"

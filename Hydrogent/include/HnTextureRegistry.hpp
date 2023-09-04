@@ -59,6 +59,7 @@ public:
     struct TextureHandle
     {
         RefCntAutoPtr<ITexture> pTexture;
+        RefCntAutoPtr<ISampler> pSampler;
     };
 
     using TextureHandleSharedPtr = std::shared_ptr<TextureHandle>;

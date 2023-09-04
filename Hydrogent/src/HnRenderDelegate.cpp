@@ -37,9 +37,9 @@ namespace Diligent
 namespace USD
 {
 
-std::unique_ptr<HnRenderDelegate> HnRenderDelegate::Create(IRenderDevice* pDevice, IDeviceContext* pContext)
+std::unique_ptr<HnRenderDelegate> HnRenderDelegate::Create(const CreateInfo& CI)
 {
-    return std::make_unique<HnRenderDelegate>(pDevice, pContext);
+    return std::make_unique<HnRenderDelegate>(CI);
 }
 
 // clang-format off
@@ -59,10 +59,13 @@ const pxr::TfTokenVector HnRenderDelegate::SupportedBPrimTypes =
 };
 // clang-format on
 
-HnRenderDelegate::HnRenderDelegate(IRenderDevice* pDevice, IDeviceContext* pContext) :
-    m_pDevice{pDevice},
-    m_pContext{pContext},
-    m_TextureRegistry{pDevice}
+HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
+    m_pDevice{CI.pDevice},
+    m_pContext{CI.pContext},
+    m_CameraAttribsCB{CI.pCameraAttribs},
+    m_LightAttribsCB{CI.pLightAttribs},
+    m_PBRRenderer{CI.PBRRenderer},
+    m_TextureRegistry{CI.pDevice}
 {
 }
 
@@ -170,7 +173,11 @@ void HnRenderDelegate::DestroyBprim(pxr::HdBprim* bprim)
 void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
 {
     m_TextureRegistry.Commit(m_pContext);
-    for (auto& mesh_it : m_Meshes)
+    for (auto mat_it : m_Materials)
+    {
+        mat_it.second->UpdateSRB(m_pDevice, *m_PBRRenderer, m_CameraAttribsCB, m_LightAttribsCB);
+    }
+    for (auto mesh_it : m_Meshes)
     {
         mesh_it.second->CommitGPUResources(m_pDevice);
     }

@@ -34,11 +34,25 @@
 
 #include "pxr/imaging/hd/material.h"
 
+#include "RenderDevice.h"
+#include "ShaderResourceBinding.h"
+#include "RefCntAutoPtr.hpp"
+#include "BasicMath.hpp"
+
 namespace Diligent
 {
 
+class PBR_Renderer;
+
 namespace USD
 {
+
+namespace HLSL
+{
+
+#include "Shaders/PBR/public/PBR_Structures.fxh"
+
+}
 
 /// Hydra material implementation in Hydrogent.
 class HnMaterial final : public pxr::HdMaterial
@@ -49,15 +63,24 @@ public:
     ~HnMaterial();
 
     // Synchronizes state from the delegate to this object.
-    virtual void Sync(pxr::HdSceneDelegate* sceneDelegate,
-                      pxr::HdRenderParam*   renderParam,
-                      pxr::HdDirtyBits*     dirtyBits) override final;
+    virtual void Sync(pxr::HdSceneDelegate* SceneDelegate,
+                      pxr::HdRenderParam*   RenderParam,
+                      pxr::HdDirtyBits*     DirtyBits) override final;
 
     // Returns the minimal set of dirty bits to place in the
     // change tracker for use in the first sync of this prim.
     virtual pxr::HdDirtyBits GetInitialDirtyBitsMask() const override final;
 
     const HnTextureRegistry::TextureHandle* GetTexture(const pxr::TfToken& Name) const;
+
+    void UpdateSRB(IRenderDevice* pDevice,
+                   PBR_Renderer&  PbrRenderer,
+                   IBuffer*       pCameraAttribs,
+                   IBuffer*       pLightAttribs);
+
+    IShaderResourceBinding* GetSRB() const { return m_SRB; }
+
+    const HLSL::PBRMaterialShaderInfo& GetShaderAttribs() const { return m_ShaderAttribs; }
 
 private:
     HnMaterial(pxr::SdfPath const& id);
@@ -68,6 +91,10 @@ private:
     HnMaterialNetwork m_Network;
 
     std::unordered_map<pxr::TfToken, HnTextureRegistry::TextureHandleSharedPtr, pxr::TfToken::HashFunctor> m_Textures;
+
+    RefCntAutoPtr<IShaderResourceBinding> m_SRB;
+
+    HLSL::PBRMaterialShaderInfo m_ShaderAttribs{};
 };
 
 } // namespace USD

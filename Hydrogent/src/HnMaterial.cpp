@@ -26,9 +26,11 @@
 
 #include "HnMaterial.hpp"
 #include "HnRenderDelegate.hpp"
+#include "HnTokens.hpp"
 
 #include "pxr/imaging/hd/sceneDelegate.h"
 
+#include "PBR_Renderer.hpp"
 #include "DebugUtilities.hpp"
 
 namespace Diligent
@@ -82,6 +84,57 @@ void HnMaterial::Sync(pxr::HdSceneDelegate* SceneDelegate,
 
         HnTextureRegistry& TexRegistry = static_cast<HnRenderDelegate*>(SceneDelegate->GetRenderIndex().GetRenderDelegate())->GetTextureRegistry();
         AllocateTextures(TexRegistry);
+
+        m_ShaderAttribs.BaseColorFactor = float4{1, 1, 1, 1};
+        m_ShaderAttribs.EmissiveFactor  = float4{1, 1, 1, 1};
+        m_ShaderAttribs.SpecularFactor  = float4{1, 1, 1, 1};
+        m_ShaderAttribs.MetallicFactor  = 1;
+        m_ShaderAttribs.RoughnessFactor = 1;
+        m_ShaderAttribs.OcclusionFactor = 1;
+
+        const auto& MaterialParams = m_Network.GetParameters();
+
+        auto SetFallbackValue = [&](const pxr::TfToken& Name, auto SetValue) {
+            if (m_Textures.find(Name) != m_Textures.end())
+                return;
+
+            for (const auto Param : MaterialParams)
+            {
+                if (Param.Type == HnMaterialParameter::ParamType::Fallback && Param.Name == Name)
+                {
+                    SetValue(Param.FallbackValue);
+                    break;
+                }
+            }
+        };
+
+        SetFallbackValue(HnTokens->diffuseColor, [this](const pxr::VtValue& Val) {
+            m_ShaderAttribs.BaseColorFactor.MakeVector(Val.Get<pxr::GfVec4f>().data());
+        });
+        SetFallbackValue(HnTokens->metallic, [this](const pxr::VtValue& Val) {
+            m_ShaderAttribs.MetallicFactor = Val.Get<float>();
+        });
+        SetFallbackValue(HnTokens->roughness, [this](const pxr::VtValue& Val) {
+            m_ShaderAttribs.RoughnessFactor = Val.Get<float>();
+        });
+        SetFallbackValue(HnTokens->occlusion, [this](const pxr::VtValue& Val) {
+            m_ShaderAttribs.OcclusionFactor = Val.Get<float>();
+        });
+
+        m_ShaderAttribs.Workflow      = PBR_Renderer::PBR_WORKFLOW_METALL_ROUGH;
+        m_ShaderAttribs.UVSelector0   = 0;
+        m_ShaderAttribs.UVSelector1   = 0;
+        m_ShaderAttribs.UVSelector2   = 0;
+        m_ShaderAttribs.UVSelector3   = 0;
+        m_ShaderAttribs.UVSelector4   = 0;
+        m_ShaderAttribs.TextureSlice0 = 0;
+        m_ShaderAttribs.TextureSlice1 = 0;
+        m_ShaderAttribs.TextureSlice2 = 0;
+        m_ShaderAttribs.TextureSlice3 = 0;
+        m_ShaderAttribs.TextureSlice4 = 0;
+
+        m_ShaderAttribs.AlphaMode       = PBR_Renderer::ALPHA_MODE_OPAQUE;
+        m_ShaderAttribs.AlphaMaskCutoff = 0.5f;
     }
 
     *DirtyBits = HdMaterial::Clean;
@@ -107,6 +160,58 @@ const HnTextureRegistry::TextureHandle* HnMaterial::GetTexture(const pxr::TfToke
 pxr::HdDirtyBits HnMaterial::GetInitialDirtyBitsMask() const
 {
     return pxr::HdMaterial::AllDirty;
+}
+
+void HnMaterial::UpdateSRB(IRenderDevice* pDevice,
+                           PBR_Renderer&  PbrRenderer,
+                           IBuffer*       pCameraAttribs,
+                           IBuffer*       pLightAttribs)
+{
+    if (m_SRB)
+        return;
+
+    PbrRenderer.CreateResourceBinding(&m_SRB);
+
+    PbrRenderer.InitCommonSRBVars(m_SRB, pCameraAttribs, pLightAttribs);
+
+    auto SetTexture = [&](const pxr::TfToken& Name, ITextureView* pDefaultTexSRV, const char* VarName) //
+    {
+        RefCntAutoPtr<ITextureView> pTexSRV;
+
+        if (auto* pTexHandle = GetTexture(Name))
+        {
+            if (pTexHandle->pTexture)
+            {
+                const auto& TexDesc = pTexHandle->pTexture->GetDesc();
+                if (TexDesc.Type == RESOURCE_DIM_TEX_2D_ARRAY)
+                    pTexSRV = pTexHandle->pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+                else
+                {
+                    const auto Name = std::string{"Tex2DArray view of texture '"} + TexDesc.Name + "'";
+
+                    TextureViewDesc SRVDesc;
+                    SRVDesc.Name       = Name.c_str();
+                    SRVDesc.ViewType   = TEXTURE_VIEW_SHADER_RESOURCE;
+                    SRVDesc.TextureDim = RESOURCE_DIM_TEX_2D_ARRAY;
+                    pTexHandle->pTexture->CreateView(SRVDesc, &pTexSRV);
+
+                    pTexSRV->SetSampler(pTexHandle->pSampler);
+                }
+            }
+        }
+
+        if (pTexSRV == nullptr)
+            pTexSRV = pDefaultTexSRV;
+
+        if (auto* pVar = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, VarName))
+            pVar->Set(pTexSRV);
+    };
+
+    SetTexture(HnTokens->diffuseColor, PbrRenderer.GetWhiteTexSRV(), "g_ColorMap");
+    SetTexture(HnTokens->metallic, PbrRenderer.GetWhiteTexSRV(), "g_MetallicMap");
+    SetTexture(HnTokens->roughness, PbrRenderer.GetWhiteTexSRV(), "g_RoughnessMap");
+    SetTexture(HnTokens->normal, PbrRenderer.GetDefaultNormalMapSRV(), "g_NormalMap");
+    SetTexture(HnTokens->occlusion, PbrRenderer.GetWhiteTexSRV(), "g_AOMap");
 }
 
 } // namespace USD

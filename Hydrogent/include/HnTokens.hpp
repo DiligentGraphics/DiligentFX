@@ -64,6 +64,10 @@ namespace USD
     (minScreenSpaceWidths)     \
     (shadowCompareTextures)    \
     (diffuseColor)             \
+    (metallic)                 \
+    (roughness)                \
+    (normal)                   \
+    (occlusion)                \
     (st0)
 
 #define HN_MATERIAL_TAG_TOKENS \

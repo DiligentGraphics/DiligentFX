@@ -52,11 +52,9 @@ static void InitializeHandle(IRenderDevice* pDevice, ITextureLoader* pLoader, co
     if (!Handle.pTexture)
         return;
 
-    RefCntAutoPtr<ISampler> pSampler;
-
-    pDevice->CreateSampler(SamDesc, &pSampler);
-    VERIFY_EXPR(pSampler);
-    Handle.pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE)->SetSampler(pSampler);
+    pDevice->CreateSampler(SamDesc, &Handle.pSampler);
+    VERIFY_EXPR(Handle.pSampler);
+    Handle.pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE)->SetSampler(Handle.pSampler);
 }
 
 void HnTextureRegistry::Commit(IDeviceContext* pContext)
@@ -77,6 +75,7 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const HnTe
             auto TexHandle = std::make_shared<TextureHandle>();
 
             TextureLoadInfo LoadInfo;
+            LoadInfo.Name = TexId.FilePath.GetText();
 
             // TODO: why do textures need to be flipped vertically?
             LoadInfo.FlipVertically   = !TexId.SubtextureId.FlipVertically;

@@ -177,19 +177,12 @@ GLTF_PBR_Renderer::ModelResourceBindings GLTF_PBR_Renderer::CreateResourceBindin
     IBuffer*     pCameraAttribs,
     IBuffer*     pLightAttribs)
 {
-    auto* pPSO = GetPSO(PSOKey{});
-    if (pPSO == nullptr)
-    {
-        UNEXPECTED("Failed to find PSO for GLTF model");
-        return {};
-    }
-
     ModelResourceBindings ResourceBindings;
     ResourceBindings.MaterialSRB.resize(GLTFModel.Materials.size());
     for (size_t mat = 0; mat < GLTFModel.Materials.size(); ++mat)
     {
         auto& pMatSRB = ResourceBindings.MaterialSRB[mat];
-        pPSO->CreateShaderResourceBinding(&pMatSRB, true);
+        CreateResourceBinding(&pMatSRB);
         InitMaterialSRB(GLTFModel, GLTFModel.Materials[mat], pCameraAttribs, pLightAttribs, pMatSRB);
     }
     return ResourceBindings;

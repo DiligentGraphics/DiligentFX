@@ -2,14 +2,20 @@
 #include "VertexProcessing.fxh"
 #include "PBR_Structures.fxh"
 
+#ifndef MAX_JOINT_COUNT
+#   define MAX_JOINT_COUNT 64
+#endif
+
 struct GLTF_VS_Input
 {
     float3 Pos     : ATTRIB0;
     float3 Normal  : ATTRIB1;
     float2 UV0     : ATTRIB2;
     float2 UV1     : ATTRIB3;
+#if MAX_JOINT_COUNT > 0
     float4 Joint0  : ATTRIB4;
     float4 Weight0 : ATTRIB5;
+#endif
 };
 
 cbuffer cbCameraAttribs
@@ -22,14 +28,12 @@ cbuffer cbPBRAttribs
     PBRShaderAttribs g_PBRAttribs;
 }
 
-#ifndef MAX_JOINT_COUNT
-#   define MAX_JOINT_COUNT 64
-#endif
-
+#if MAX_JOINT_COUNT > 0
 cbuffer cbJointTransforms
 {
     float4x4 g_Joints[MAX_JOINT_COUNT];
 }
+#endif
     
 void main(in  GLTF_VS_Input  VSIn,
           out float4 ClipPos  : SV_Position,
@@ -42,6 +46,8 @@ void main(in  GLTF_VS_Input  VSIn,
     // performance degradation on Vulkan because glslang/SPIRV-Tools are apparently not able
     // to eliminate the copy of g_Transforms structure.
     float4x4 Transform = g_PBRAttribs.Transforms.NodeMatrix;
+
+#if MAX_JOINT_COUNT > 0
     if (g_PBRAttribs.Transforms.JointCount > 0)
     {
         // Mesh is skinned
@@ -52,7 +58,8 @@ void main(in  GLTF_VS_Input  VSIn,
             VSIn.Weight0.w * g_Joints[int(VSIn.Joint0.w)];
         Transform = mul(Transform, SkinMat);
     }
-
+#endif
+    
     GLTF_TransformedVertex TransformedVert = GLTF_TransformVertex(VSIn.Pos, VSIn.Normal, Transform);
 
     ClipPos  = mul(float4(TransformedVert.WorldPos, 1.0), g_CameraAttribs.mViewProj);
