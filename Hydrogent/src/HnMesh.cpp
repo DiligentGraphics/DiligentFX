@@ -31,6 +31,7 @@
 #include "DebugUtilities.hpp"
 #include "GraphicsTypesX.hpp"
 
+#include "pxr/base/gf/vec2f.h"
 #include "pxr/imaging/hd/meshUtil.h"
 #include "pxr/imaging/hd/vtBufferSource.h"
 
@@ -224,6 +225,20 @@ void HnMesh::UpdateVertexPrims(pxr::HdSceneDelegate& SceneDelegate,
         }
 
         m_BufferSources.emplace(PrimDesc.name, std::move(BufferSource));
+    }
+
+    // Create dummy texture coordinates if they are not present
+    if (m_BufferSources.find(HnTokens->st0) == m_BufferSources.end())
+    {
+        pxr::VtValue DummyUVs;
+        DummyUVs          = pxr::VtArray<pxr::GfVec2f>{static_cast<size_t>(NumPoints), pxr::GfVec2f{0}};
+        auto BufferSource = std::make_shared<pxr::HdVtBufferSource>(
+            HnTokens->st0,
+            DummyUVs,
+            1,    // values per element
+            false // whether doubles are supported or must be converted to floats
+        );
+        m_BufferSources.emplace(HnTokens->st0, std::move(BufferSource));
     }
 
     DirtyBits &= ~pxr::HdChangeTracker::DirtyPrimvar;

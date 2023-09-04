@@ -579,7 +579,7 @@ HnSubTextureIdentifier GetSubtextureIdentifier(const pxr::TfToken&       ParamNa
     }
     else if (SourceColorSpace == "auto")
     {
-        TextureId.IsSRGB = ParamName == HnTokens->diffuseColor;
+        //TextureId.IsSRGB = ParamName == HnTokens->diffuseColor;
     }
 
     if (TextureType == pxr::HdTextureType::Uv)

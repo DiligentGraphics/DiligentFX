@@ -109,7 +109,7 @@ void HnMaterial::Sync(pxr::HdSceneDelegate* SceneDelegate,
         };
 
         SetFallbackValue(HnTokens->diffuseColor, [this](const pxr::VtValue& Val) {
-            m_ShaderAttribs.BaseColorFactor.MakeVector(Val.Get<pxr::GfVec4f>().data());
+            m_ShaderAttribs.BaseColorFactor = float4{float3::MakeVector(Val.Get<pxr::GfVec3f>().data()), 1};
         });
         SetFallbackValue(HnTokens->metallic, [this](const pxr::VtValue& Val) {
             m_ShaderAttribs.MetallicFactor = Val.Get<float>();
