@@ -140,23 +140,6 @@ static const DepthStencilStateDesc DSS_StencilEqKeepStencil =
 		COMPARISON_FUNC_EQUAL   // StencilFunc
 	}
 };
-
-static const BlendStateDesc BS_AdditiveBlend = 
-{
-    False, // AlphaToCoverageEnable
-    False, // IndependentBlendEnable
-    RenderTargetBlendDesc
-    {
-        True,                // BlendEnable
-        False,               // LogicOperationEnable
-        BLEND_FACTOR_ONE,    // SrcBlend
-        BLEND_FACTOR_ONE,    // DestBlend
-        BLEND_OPERATION_ADD, // BlendOp
-        BLEND_FACTOR_ONE,    // SrcBlendAlpha
-        BLEND_FACTOR_ONE,    // DestBlendAlpha
-        BLEND_OPERATION_ADD  // BlendOpAlpha
-    }
-};
 // clang-format on
 
 static void RenderFullScreenTriangle(IDeviceContext*         pDeviceContext,
