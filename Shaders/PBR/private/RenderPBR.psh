@@ -103,24 +103,29 @@ float4 SampleTexture(Texture2DArray Tex,
 #endif
 }
 
-void main(in  float4 ClipPos     : SV_Position,
-          in  float3 WorldPos    : WORLD_POS,
-          in  float3 Normal      : NORMAL,
-          in  float2 UV0         : UV0,
-          in  float2 UV1         : UV1,
-          in  bool   IsFrontFace : SV_IsFrontFace,
-          out float4 OutColor    : SV_Target)
+struct PbrVsOutput
 {
-    float4 BaseColor = SampleTexture(g_ColorMap, g_ColorMap_sampler, UV0, UV1, g_PBRAttribs.Material.BaseColorTextureUVSelector,
+    float4 ClipPos  : SV_Position;
+    float3 WorldPos : WORLD_POS;
+    float3 Normal   : NORMAL;
+    float2 UV0      : UV0;
+    float2 UV1      : UV1;
+};
+
+void main(in  PbrVsOutput VSOut,
+          in  bool        IsFrontFace : SV_IsFrontFace,
+          out float4      OutColor    : SV_Target)
+{
+    float4 BaseColor = SampleTexture(g_ColorMap, g_ColorMap_sampler, VSOut.UV0, VSOut.UV1, g_PBRAttribs.Material.BaseColorTextureUVSelector,
                                      g_PBRAttribs.Material.BaseColorUVScaleBias, g_PBRAttribs.Material.BaseColorSlice, float4(1.0, 1.0, 1.0, 1.0));
     BaseColor = SRGBtoLINEAR(BaseColor) * g_PBRAttribs.Material.BaseColorFactor;
     //BaseColor *= getVertexColor();
 
-    float2 NormalMapUV  = lerp(UV0, UV1, g_PBRAttribs.Material.NormalTextureUVSelector);
+    float2 NormalMapUV  = lerp(VSOut.UV0, VSOut.UV1, g_PBRAttribs.Material.NormalTextureUVSelector);
 
     // We have to compute gradients in uniform flow control to avoid issues with perturbed normal
-    float3 dWorldPos_dx = ddx(WorldPos);
-    float3 dWorldPos_dy = ddy(WorldPos);
+    float3 dWorldPos_dx = ddx(VSOut.WorldPos);
+    float3 dWorldPos_dy = ddy(VSOut.WorldPos);
     float2 dNormalMapUV_dx = ddx(NormalMapUV);
     float2 dNormalMapUV_dy = ddy(NormalMapUV);
 #if USE_TEXTURE_ATLAS
@@ -144,7 +149,7 @@ void main(in  float4 ClipPos     : SV_Position,
         {
             SampleTextureAtlasAttribs SampleAttribs;
             SampleAttribs.f2UV                   = NormalMapUV;
-            SampleAttribs.f2SmoothUV             = lerp(UV0, UV1, g_PBRAttribs.Material.NormalTextureUVSelector) * g_PBRAttribs.Material.NormalMapUVScaleBias.xy;
+            SampleAttribs.f2SmoothUV             = lerp(VSOut.UV0, VSOut.UV1, g_PBRAttribs.Material.NormalTextureUVSelector) * g_PBRAttribs.Material.NormalMapUVScaleBias.xy;
             SampleAttribs.f2dSmoothUV_dx         = dNormalMapUV_dx;
             SampleAttribs.f2dSmoothUV_dy         = dNormalMapUV_dy;
             SampleAttribs.fSlice                 = g_PBRAttribs.Material.NormalSlice;
@@ -163,30 +168,30 @@ void main(in  float4 ClipPos     : SV_Position,
 
     float Occlusion = 1.0;
 #if PBR_USE_AO
-    Occlusion = SampleTexture(g_AOMap, g_AOMap_sampler, UV0, UV1, g_PBRAttribs.Material.OcclusionTextureUVSelector, 
+    Occlusion = SampleTexture(g_AOMap, g_AOMap_sampler, VSOut.UV0, VSOut.UV1, g_PBRAttribs.Material.OcclusionTextureUVSelector, 
                               g_PBRAttribs.Material.OcclusionUVScaleBias, g_PBRAttribs.Material.OcclusionSlice, float4(1.0, 1.0, 1.0, 1.0)).r;
     Occlusion *= g_PBRAttribs.Material.OcclusionFactor;
 #endif
 
     float3 Emissive = float3(0.0, 0.0, 0.0);
 #if PBR_USE_EMISSIVE
-    Emissive = SampleTexture(g_EmissiveMap, g_EmissiveMap_sampler, UV0, UV1, g_PBRAttribs.Material.EmissiveTextureUVSelector, 
+    Emissive = SampleTexture(g_EmissiveMap, g_EmissiveMap_sampler, VSOut.UV0, VSOut.UV1, g_PBRAttribs.Material.EmissiveTextureUVSelector, 
                              g_PBRAttribs.Material.EmissiveUVScaleBias, g_PBRAttribs.Material.EmissiveSlice, float4(0.0, 0.0, 0.0, 0.0)).rgb;
 #endif
 
     float4 PhysicalDesc = float4(0.0, 0.0, 0.0, 0.0);
 #if USE_SEPARATE_METALLIC_ROUGHNESS_TEXTURES
     PhysicalDesc.b = SampleTexture(g_MetallicMap, g_MetallicMap_sampler, 
-                                   UV0, UV1, g_PBRAttribs.Material.PhysicalDescriptorTextureUVSelector, 
+                                   VSOut.UV0, VSOut.UV1, g_PBRAttribs.Material.PhysicalDescriptorTextureUVSelector, 
                                    g_PBRAttribs.Material.PhysicalDescriptorUVScaleBias, g_PBRAttribs.Material.PhysicalDescriptorSlice,
                                    float4(0.0, 1.0, 0.0, 0.0)).r;
     PhysicalDesc.g = SampleTexture(g_RoughnessMap, g_RoughnessMap_sampler, 
-                                   UV0, UV1, g_PBRAttribs.Material.PhysicalDescriptorTextureUVSelector, 
+                                   VSOut.UV0, VSOut.UV1, g_PBRAttribs.Material.PhysicalDescriptorTextureUVSelector, 
                                    g_PBRAttribs.Material.PhysicalDescriptorUVScaleBias, g_PBRAttribs.Material.PhysicalDescriptorSlice,
                                    float4(0.0, 1.0, 0.0, 0.0)).r;
 #else   
     PhysicalDesc = SampleTexture(g_PhysicalDescriptorMap, g_PhysicalDescriptorMap_sampler, 
-                                 UV0, UV1, g_PBRAttribs.Material.PhysicalDescriptorTextureUVSelector, 
+                                 VSOut.UV0, VSOut.UV1, g_PBRAttribs.Material.PhysicalDescriptorTextureUVSelector, 
                                  g_PBRAttribs.Material.PhysicalDescriptorUVScaleBias, g_PBRAttribs.Material.PhysicalDescriptorSlice,
                                  float4(0.0, 1.0, 0.0, 0.0));
 #endif
@@ -207,8 +212,8 @@ void main(in  float4 ClipPos     : SV_Position,
 
     // LIGHTING
     float3 perturbedNormal = PerturbNormal(dWorldPos_dx, dWorldPos_dy, dNormalMapUV_dx, dNormalMapUV_dy, 
-                                           Normal, TSNormal, g_PBRAttribs.Material.NormalTextureUVSelector >= 0.0, IsFrontFace);
-    float3 view = normalize(g_CameraAttribs.f4Position.xyz - WorldPos.xyz); // Direction from surface point to camera
+                                           VSOut.Normal, TSNormal, g_PBRAttribs.Material.NormalTextureUVSelector >= 0.0, IsFrontFace);
+    float3 view = normalize(g_CameraAttribs.f4Position.xyz - VSOut.WorldPos.xyz); // Direction from surface point to camera
 
     float3 color = float3(0.0, 0.0, 0.0);
     color += ApplyDirectionalLight(g_LightAttribs.f4Direction.xyz, g_LightAttribs.f4Intensity.rgb, SrfInfo, perturbedNormal, view);
@@ -284,7 +289,7 @@ void main(in  float4 ClipPos     : SV_Position,
             case  8: OutColor.rgb  = SrfInfo.DiffuseColor;                                              break;
             case  9: OutColor.rgb  = SrfInfo.Reflectance0;                                              break;
             case 10: OutColor.rgb  = SrfInfo.Reflectance90;                                             break;
-            case 11: OutColor.rgb  = SRGBtoLINEAR(abs(Normal / max(length(Normal), 1e-3)));             break;
+            case 11: OutColor.rgb  = SRGBtoLINEAR(abs(VSOut.Normal / max(length(VSOut.Normal), 1e-3)));             break;
             case 12: OutColor.rgb  = SRGBtoLINEAR(abs(perturbedNormal));                                break;
             case 13: OutColor.rgb  = dot(perturbedNormal, view) * float3(1.0, 1.0, 1.0);                break;
 #if PBR_USE_IBL

@@ -6,19 +6,23 @@
 #   define MAX_JOINT_COUNT 64
 #endif
 
-struct GLTF_VS_Input
+struct VertexAttribs
 {
-    float3 Pos     : ATTRIB0;
-    float3 Normal  : ATTRIB1;
-    float2 UV0     : ATTRIB2;
-    float2 UV1     : ATTRIB3;
-#if MAX_JOINT_COUNT > 0
-    float4 Joint0  : ATTRIB4;
-    float4 Weight0 : ATTRIB5;
-#endif
+    float3 Pos    : ATTRIB0;
+    float3 Normal : ATTRIB1;
+    float2 UV0    : ATTRIB2;
+    float2 UV1    : ATTRIB3;
 };
 
-cbuffer cbCameraAttribs
+#if MAX_JOINT_COUNT > 0
+struct SkinningAttribs
+{
+    float4 Joint0  : ATTRIB4;
+    float4 Weight0 : ATTRIB5;
+};
+#endif
+
+cbuffer cbCameraAttribs 
 {
     CameraAttribs g_CameraAttribs;
 }
@@ -34,13 +38,21 @@ cbuffer cbJointTransforms
     float4x4 g_Joints[MAX_JOINT_COUNT];
 }
 #endif
-    
-void main(in  GLTF_VS_Input  VSIn,
-          out float4 ClipPos  : SV_Position,
-          out float3 WorldPos : WORLD_POS,
-          out float3 Normal   : NORMAL,
-          out float2 UV0      : UV0,
-          out float2 UV1      : UV1) 
+
+struct PbrVsOutput
+{
+    float4 ClipPos  : SV_Position;
+    float3 WorldPos : WORLD_POS;
+    float3 Normal   : NORMAL;
+    float2 UV0      : UV0;
+    float2 UV1      : UV1;
+};
+
+void VSMainInternal(in  VertexAttribs   Vert,
+#if MAX_JOINT_COUNT > 0
+                    in  SkinningAttribs Skinning,
+#endif
+                    out PbrVsOutput     VSOut)
 {
     // Warning: moving this block into GLTF_TransformVertex() function causes huge
     // performance degradation on Vulkan because glslang/SPIRV-Tools are apparently not able
@@ -52,19 +64,38 @@ void main(in  GLTF_VS_Input  VSIn,
     {
         // Mesh is skinned
         float4x4 SkinMat = 
-            VSIn.Weight0.x * g_Joints[int(VSIn.Joint0.x)] +
-            VSIn.Weight0.y * g_Joints[int(VSIn.Joint0.y)] +
-            VSIn.Weight0.z * g_Joints[int(VSIn.Joint0.z)] +
-            VSIn.Weight0.w * g_Joints[int(VSIn.Joint0.w)];
+            Skinning.Weight0.x * g_Joints[int(Skinning.Joint0.x)] +
+            Skinning.Weight0.y * g_Joints[int(Skinning.Joint0.y)] +
+            Skinning.Weight0.z * g_Joints[int(Skinning.Joint0.z)] +
+            Skinning.Weight0.w * g_Joints[int(Skinning.Joint0.w)];
         Transform = mul(Transform, SkinMat);
     }
 #endif
-    
-    GLTF_TransformedVertex TransformedVert = GLTF_TransformVertex(VSIn.Pos, VSIn.Normal, Transform);
 
-    ClipPos  = mul(float4(TransformedVert.WorldPos, 1.0), g_CameraAttribs.mViewProj);
-    WorldPos = TransformedVert.WorldPos;
-    Normal   = TransformedVert.Normal;
-    UV0      = VSIn.UV0;
-    UV1      = VSIn.UV1;
+    GLTF_TransformedVertex TransformedVert = GLTF_TransformVertex(Vert.Pos, Vert.Normal, Transform);
+
+    VSOut.ClipPos  = mul(float4(TransformedVert.WorldPos, 1.0), g_CameraAttribs.mViewProj);
+    VSOut.WorldPos = TransformedVert.WorldPos;
+    VSOut.Normal   = TransformedVert.Normal;
+    VSOut.UV0      = Vert.UV0;
+    VSOut.UV1      = Vert.UV1;
 }
+
+#if MAX_JOINT_COUNT > 0
+
+void VSMainSkinned(in  VertexAttribs   Vert,
+                   in  SkinningAttribs Skinning,
+                   out PbrVsOutput     VSOut)
+{
+    VSMainInternal(Vert, Skinning, VSOut);
+}
+
+#else
+
+void VSMain(in  VertexAttribs Vert,
+            out PbrVsOutput   VSOut)
+{
+    VSMainInternal(Vert, VSOut);
+}
+
+#endif

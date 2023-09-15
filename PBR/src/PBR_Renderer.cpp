@@ -550,7 +550,7 @@ void PBR_Renderer::CreatePSO(IRenderDevice* pDevice, IRenderStateCache* pStateCa
     RefCntAutoPtr<IShader> pVS;
     {
         ShaderCI.Desc       = {"PBR VS", SHADER_TYPE_VERTEX, true};
-        ShaderCI.EntryPoint = "main";
+        ShaderCI.EntryPoint = m_Settings.MaxJointCount > 0 ? "VSMainSkinned" : "VSMain";
         ShaderCI.FilePath   = "RenderPBR.vsh";
 
         pVS = Device.CreateShader(ShaderCI);
