@@ -27,6 +27,10 @@ static const ShaderIncInfo g_Shaders[] =
         #include "PBR_Common.fxh.h"
     },
     {
+        "SRGBUtilities.fxh",
+        #include "SRGBUtilities.fxh.h"
+    },
+    {
         "ShaderUtilities.fxh",
         #include "ShaderUtilities.fxh.h"
     },

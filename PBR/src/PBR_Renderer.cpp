@@ -532,6 +532,7 @@ void PBR_Renderer::CreatePSO(IRenderDevice* pDevice, IRenderStateCache* pStateCa
     ShaderMacroHelper Macros;
     Macros.AddShaderMacro("MAX_JOINT_COUNT", static_cast<int>(m_Settings.MaxJointCount));
     Macros.AddShaderMacro("ALLOW_DEBUG_VIEW", m_Settings.AllowDebugView);
+    Macros.AddShaderMacro("CONVERT_OUTPUT_TO_SRGB", m_Settings.ConvertOutputToSRGB);
     Macros.AddShaderMacro("TONE_MAPPING_MODE", "TONE_MAPPING_MODE_UNCHARTED2");
     Macros.AddShaderMacro("PBR_USE_IBL", m_Settings.UseIBL);
     Macros.AddShaderMacro("PBR_USE_AO", m_Settings.UseAO);
@@ -545,6 +546,10 @@ void PBR_Renderer::CreatePSO(IRenderDevice* pDevice, IRenderStateCache* pStateCa
     Macros.AddShaderMacro("USE_IBL_ENV_MAP_LOD", true);
     Macros.AddShaderMacro("USE_HDR_IBL_CUBEMAPS", true);
     Macros.AddShaderMacro("USE_SEPARATE_METALLIC_ROUGHNESS_TEXTURES", m_Settings.UseSeparateMetallicRoughnessTextures);
+
+    Macros.AddShaderMacro("TEX_COLOR_CONVERSION_MODE_NONE", CreateInfo::TEX_COLOR_CONVERSION_MODE_NONE);
+    Macros.AddShaderMacro("TEX_COLOR_CONVERSION_MODE_SRGB_TO_LINEAR", CreateInfo::TEX_COLOR_CONVERSION_MODE_SRGB_TO_LINEAR);
+    Macros.AddShaderMacro("TEX_COLOR_CONVERSION_MODE", m_Settings.TexColorConversionMode);
 
     ShaderCI.Macros = Macros;
     RefCntAutoPtr<IShader> pVS;

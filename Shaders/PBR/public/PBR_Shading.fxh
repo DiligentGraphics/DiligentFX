@@ -4,13 +4,24 @@
 #include "PBR_Structures.fxh"
 #include "PBR_Common.fxh"
 #include "ShaderUtilities.fxh"
+#include "SRGBUtilities.fxh"
 
-#ifndef MANUAL_SRGB_TO_LINEAR
-#   define  MANUAL_SRGB_TO_LINEAR 1
+#ifndef TEX_COLOR_CONVERSION_MODE_NONE
+#   define TEX_COLOR_CONVERSION_MODE_NONE 0
 #endif
 
-#ifndef SRGB_FAST_APPROXIMATION
-#   define  SRGB_FAST_APPROXIMATION 1
+#ifndef TEX_COLOR_CONVERSION_MODE_SRGB_TO_LINEAR
+#   define TEX_COLOR_CONVERSION_MODE_SRGB_TO_LINEAR 1
+#endif
+
+#ifndef TEX_COLOR_CONVERSION_MODE
+#   define TEX_COLOR_CONVERSION_MODE TEX_COLOR_CONVERSION_MODE_SRGB_TO_LINEAR
+#endif
+
+#if TEX_COLOR_CONVERSION_MODE == TEX_COLOR_CONVERSION_MODE_NONE
+#   define  TO_LINEAR(x) (x)
+#elif TEX_COLOR_CONVERSION_MODE == TEX_COLOR_CONVERSION_MODE_SRGB_TO_LINEAR
+#   define  TO_LINEAR FastSRGBToLinear
 #endif
 
 #ifndef USE_IBL_ENV_MAP_LOD
@@ -47,28 +58,6 @@ float SolveMetallic(float3 diffuse,
 
     return clamp((-b + sqrt(D)) / (2.0 * a), 0.0, 1.0);
 }
-
-
-float3 SRGBtoLINEAR(float3 srgbIn)
-{
-#if MANUAL_SRGB_TO_LINEAR
-#   if SRGB_FAST_APPROXIMATION
-        float3 linOut = pow(saturate(srgbIn.xyz), float3(2.2, 2.2, 2.2));
-#   else
-        float3 bLess  = step(float3(0.04045, 0.04045, 0.04045), srgbIn.xyz);
-        float3 linOut = mix( srgbIn.xyz/12.92, pow(saturate((srgbIn.xyz + float3(0.055, 0.055, 0.055)) / 1.055), float3(2.4, 2.4, 2.4)), bLess );
-#   endif
-        return linOut;
-#else
-    return srgbIn;
-#endif
-}
-
-float4 SRGBtoLINEAR(float4 srgbIn)
-{
-    return float4(SRGBtoLINEAR(srgbIn.xyz), srgbIn.w);
-}
-
 
 float3 ApplyDirectionalLight(float3 lightDir, float3 lightColor, SurfaceReflectanceInfo srfInfo, float3 normal, float3 view)
 {
@@ -162,8 +151,8 @@ IBL_Contribution GetIBLContribution(in SurfaceReflectanceInfo SrfInfo,
     float3 diffuseLight  = diffuseSample.rgb;
     float3 specularLight = specularSample.rgb;
 #else
-    float3 diffuseLight  = SRGBtoLINEAR(diffuseSample).rgb;
-    float3 specularLight = SRGBtoLINEAR(specularSample).rgb;
+    float3 diffuseLight  = TO_LINEAR(diffuseSample.rgb);
+    float3 specularLight = TO_LINEAR(specularSample.rgb);
 #endif
 
     IBL_Contribution IBLContrib;

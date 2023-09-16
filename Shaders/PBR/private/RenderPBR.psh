@@ -118,7 +118,7 @@ void main(in  PbrVsOutput VSOut,
 {
     float4 BaseColor = SampleTexture(g_ColorMap, g_ColorMap_sampler, VSOut.UV0, VSOut.UV1, g_PBRAttribs.Material.BaseColorTextureUVSelector,
                                      g_PBRAttribs.Material.BaseColorUVScaleBias, g_PBRAttribs.Material.BaseColorSlice, float4(1.0, 1.0, 1.0, 1.0));
-    BaseColor = SRGBtoLINEAR(BaseColor) * g_PBRAttribs.Material.BaseColorFactor;
+    BaseColor = float4(TO_LINEAR(BaseColor.rgb), BaseColor.a) * g_PBRAttribs.Material.BaseColorFactor;
     //BaseColor *= getVertexColor();
 
     float2 NormalMapUV  = lerp(VSOut.UV0, VSOut.UV1, g_PBRAttribs.Material.NormalTextureUVSelector);
@@ -177,6 +177,7 @@ void main(in  PbrVsOutput VSOut,
 #if PBR_USE_EMISSIVE
     Emissive = SampleTexture(g_EmissiveMap, g_EmissiveMap_sampler, VSOut.UV0, VSOut.UV1, g_PBRAttribs.Material.EmissiveTextureUVSelector, 
                              g_PBRAttribs.Material.EmissiveUVScaleBias, g_PBRAttribs.Material.EmissiveSlice, float4(0.0, 0.0, 0.0, 0.0)).rgb;
+    Emissive = TO_LINEAR(Emissive);
 #endif
 
     float4 PhysicalDesc = float4(0.0, 0.0, 0.0, 0.0);
@@ -199,12 +200,13 @@ void main(in  PbrVsOutput VSOut,
     float metallic;
     if (g_PBRAttribs.Material.Workflow == PBR_WORKFLOW_SPECULAR_GLOSINESS)
     {
-        PhysicalDesc.rgb = SRGBtoLINEAR(PhysicalDesc.rgb) * g_PBRAttribs.Material.SpecularFactor.rgb;
+        PhysicalDesc.rgb = TO_LINEAR(PhysicalDesc.rgb) * g_PBRAttribs.Material.SpecularFactor.rgb;
         const float u_GlossinessFactor = 1.0;
         PhysicalDesc.a *= u_GlossinessFactor;
     }
     else if(g_PBRAttribs.Material.Workflow == PBR_WORKFLOW_METALLIC_ROUGHNESS)
     {
+        // PhysicalDesc should already be in linear space
         PhysicalDesc.g = saturate(PhysicalDesc.g * g_PBRAttribs.Material.RoughnessFactor);
         PhysicalDesc.b = saturate(PhysicalDesc.b * g_PBRAttribs.Material.MetallicFactor);
     }
@@ -257,8 +259,6 @@ void main(in  PbrVsOutput VSOut,
 #endif
 
 #if PBR_USE_EMISSIVE
-    const float u_EmissiveFactor = 1.0;
-    Emissive = SRGBtoLINEAR(Emissive);
     color += Emissive.rgb * g_PBRAttribs.Material.EmissiveFactor.rgb * g_PBRAttribs.Renderer.EmissionScale;
 #endif
 
@@ -278,25 +278,28 @@ void main(in  PbrVsOutput VSOut,
     {
         switch (g_PBRAttribs.Renderer.DebugViewType)
         {
-            case  1: OutColor.rgba = BaseColor;                                                         break;
-            case  2: OutColor.rgba = float4(BaseColor.a, BaseColor.a, BaseColor.a, 1.0);                break;
-            // Apply extra srgb->linear transform to make the maps look better
-            case  3: OutColor.rgb  = SRGBtoLINEAR(TSNormal.xyz);                                        break;
-            case  4: OutColor.rgb  = SRGBtoLINEAR(Occlusion * float3(1.0, 1.0, 1.0));                   break;
-            case  5: OutColor.rgb  = SRGBtoLINEAR(Emissive.rgb);                                        break;
-            case  6: OutColor.rgb  = SRGBtoLINEAR(metallic * float3(1.0, 1.0, 1.0) );                   break;
-            case  7: OutColor.rgb  = SRGBtoLINEAR(SrfInfo.PerceptualRoughness * float3(1.0, 1.0, 1.0)); break;
-            case  8: OutColor.rgb  = SrfInfo.DiffuseColor;                                              break;
-            case  9: OutColor.rgb  = SrfInfo.Reflectance0;                                              break;
-            case 10: OutColor.rgb  = SrfInfo.Reflectance90;                                             break;
-            case 11: OutColor.rgb  = SRGBtoLINEAR(abs(VSOut.Normal / max(length(VSOut.Normal), 1e-3)));             break;
-            case 12: OutColor.rgb  = SRGBtoLINEAR(abs(perturbedNormal));                                break;
-            case 13: OutColor.rgb  = dot(perturbedNormal, view) * float3(1.0, 1.0, 1.0);                break;
+            case  1: OutColor.rgba = BaseColor;                                            break;
+            case  2: OutColor.rgba = float4(BaseColor.a, BaseColor.a, BaseColor.a, 1.0);   break;
+            case  3: OutColor.rgb  = TSNormal.xyz;                                         break;
+            case  4: OutColor.rgb  = Occlusion * float3(1.0, 1.0, 1.0);                    break;
+            case  5: OutColor.rgb  = Emissive.rgb;                                         break;
+            case  6: OutColor.rgb  = metallic * float3(1.0, 1.0, 1.0);                     break;
+            case  7: OutColor.rgb  = SrfInfo.PerceptualRoughness * float3(1.0, 1.0, 1.0);  break;
+            case  8: OutColor.rgb  = SrfInfo.DiffuseColor;                                 break;
+            case  9: OutColor.rgb  = SrfInfo.Reflectance0;                                 break;
+            case 10: OutColor.rgb  = SrfInfo.Reflectance90;                                break;
+            case 11: OutColor.rgb  = abs(VSOut.Normal / max(length(VSOut.Normal), 1e-3));  break;
+            case 12: OutColor.rgb  = abs(perturbedNormal);                                 break;
+            case 13: OutColor.rgb  = dot(perturbedNormal, view) * float3(1.0, 1.0, 1.0);   break;
 #if PBR_USE_IBL
-            case 14: OutColor.rgb  = IBLContrib.f3Diffuse;                                              break;
-            case 15: OutColor.rgb  = IBLContrib.f3Specular;                                             break;
+            case 14: OutColor.rgb  = IBLContrib.f3Diffuse;                                 break;
+            case 15: OutColor.rgb  = IBLContrib.f3Specular;                                break;
 #endif
         }
     }
+#endif
+
+#if CONVERT_OUTPUT_TO_SRGB
+    OutColor.rgb = FastLinearToSRGB(OutColor.rgb);
 #endif
 }

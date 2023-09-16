@@ -81,6 +81,9 @@ public:
         /// instead of a combined physical description texture.
         bool UseSeparateMetallicRoughnessTextures = false;
 
+        /// Manually convert shader output to sRGB color space.
+        bool ConvertOutputToSRGB = false;
+
         static const SamplerDesc DefaultSampler;
 
         /// Immutable sampler for color map texture.
@@ -108,6 +111,28 @@ public:
 
         /// Optional input layout description.
         InputLayoutDesc InputLayout;
+
+        /// Conversion mode applied to diffuse, specular and emissive textures.
+        ///
+        /// \note   Normal map, ambient occlusion and physical description textures are
+        ///         always assumed to be in linear color space.
+        enum TEX_COLOR_CONVERSION_MODE
+        {
+            /// Sampled texture colors are used as is.
+            ///
+            /// \remarks    This mode should be used if the textures are in linear color space,
+            ///             or if the texture is in sRGB color space and the texture view is
+            ///             also in sRGB color space (which ensures that sRGB->linear conversion
+            ///             is performed by the GPU).
+            TEX_COLOR_CONVERSION_MODE_NONE = 0,
+
+            /// Manually convert texture colors from sRGB to linear color space.
+            ///
+            /// \remarks    This mode should be used if the textures are in sRGB color space,
+            ///             but the texture views are in linear color space.
+            TEX_COLOR_CONVERSION_MODE_SRGB_TO_LINEAR,
+        };
+        TEX_COLOR_CONVERSION_MODE TexColorConversionMode = TEX_COLOR_CONVERSION_MODE_SRGB_TO_LINEAR;
     };
 
     enum ALPHA_MODE
