@@ -183,10 +183,10 @@ void HnMaterial::UpdateSRB(IRenderDevice* pDevice,
             if (pTexHandle->pTexture)
             {
                 const auto& TexDesc = pTexHandle->pTexture->GetDesc();
-                if (TexDesc.Type == RESOURCE_DIM_TEX_2D_ARRAY)
-                    pTexSRV = pTexHandle->pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-                else
+                if (TexDesc.Type == RESOURCE_DIM_TEX_2D)
                 {
+                    UNEXPECTED("2D textures should be loaded as single-slice 2D array textures");
+
                     const auto Name = std::string{"Tex2DArray view of texture '"} + TexDesc.Name + "'";
 
                     TextureViewDesc SRVDesc;
@@ -196,6 +196,10 @@ void HnMaterial::UpdateSRB(IRenderDevice* pDevice,
                     pTexHandle->pTexture->CreateView(SRVDesc, &pTexSRV);
 
                     pTexSRV->SetSampler(pTexHandle->pSampler);
+                }
+                else
+                {
+                    pTexSRV = pTexHandle->pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
                 }
             }
         }

@@ -48,7 +48,20 @@ HnTextureRegistry::~HnTextureRegistry()
 static void InitializeHandle(IRenderDevice* pDevice, ITextureLoader* pLoader, const SamplerDesc& SamDesc, HnTextureRegistry::TextureHandle& Handle)
 {
     VERIFY_EXPR(!Handle.pTexture);
-    pLoader->CreateTexture(pDevice, &Handle.pTexture);
+    if (pLoader->GetTextureDesc().Type == RESOURCE_DIM_TEX_2D)
+    {
+        auto TexDesc = pLoader->GetTextureDesc();
+        // PBR Renderer expects 2D textures to be 2D array textures
+        TexDesc.Type      = RESOURCE_DIM_TEX_2D_ARRAY;
+        TexDesc.ArraySize = 1;
+
+        TextureData InitData = pLoader->GetTextureData();
+        pDevice->CreateTexture(TexDesc, &InitData, &Handle.pTexture);
+    }
+    else
+    {
+        pLoader->CreateTexture(pDevice, &Handle.pTexture);
+    }
     if (!Handle.pTexture)
         return;
 
@@ -64,6 +77,7 @@ void HnTextureRegistry::Commit(IDeviceContext* pContext)
     {
         InitializeHandle(m_pDevice, tex_it.second.pLoader, tex_it.second.SamDesc, *tex_it.second.Handle);
     }
+    m_PendingTextures.clear();
 }
 
 HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const HnTextureIdentifier&      TexId,
