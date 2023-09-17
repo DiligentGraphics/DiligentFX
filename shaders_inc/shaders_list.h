@@ -7,6 +7,14 @@ struct ShaderIncInfo
 static const ShaderIncInfo g_Shaders[] =
 {
     {
+        "EnvMap.psh",
+        #include "EnvMap.psh.h"
+    },
+    {
+        "EnvMap.vsh",
+        #include "EnvMap.vsh.h"
+    },
+    {
         "FullScreenTriangleVS.fx",
         #include "FullScreenTriangleVS.fx.h"
     },

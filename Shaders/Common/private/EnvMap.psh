@@ -1,0 +1,34 @@
+#include "BasicStructures.fxh"
+#include "ToneMapping.fxh"
+
+cbuffer cbCameraAttribs
+{
+    CameraAttribs g_CameraAttribs;
+}
+
+cbuffer cbEnvMapRenderAttribs
+{
+    ToneMappingAttribs g_ToneMappingAttribs;
+
+    float AverageLogLum;
+    float MipLevel;
+    float Unusued1;
+    float Unusued2;
+}
+
+TextureCube  EnvMap;
+SamplerState EnvMap_sampler;
+
+void main(in  float4 Pos     : SV_Position,
+          in  float4 ClipPos : CLIP_POS,
+          out float4 Color   : SV_Target)
+{
+    float4 WorldPos = mul(ClipPos, g_CameraAttribs.mViewProjInv);
+    float3 Direction = WorldPos.xyz / WorldPos.w - g_CameraAttribs.f4Position.xyz;
+    float3 EnvRadiance = EnvMap.SampleLevel(EnvMap_sampler, Direction, MipLevel).rgb;
+    Color.rgb = ToneMap(EnvRadiance.rgb, g_ToneMappingAttribs, AverageLogLum);
+#if CONVERT_OUTPUT_TO_SRGB
+    Color.rgb = pow(Color.rgb, float3(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2));
+#endif
+    Color.a = 1.0;
+}
