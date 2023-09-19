@@ -58,6 +58,19 @@ struct HnRendererCreateInfo
     IBuffer* pLightAttribsCB = nullptr;
 };
 
+struct HnDrawAttribs
+{
+    float4x4 CameraViewProj = float4x4::Identity();
+
+    int   DebugView         = 0;
+    float OcclusionStrength = 1;
+    float EmissionScale     = 1;
+    float AverageLogLum     = 0.3f;
+    float MiddleGray        = 0.18f;
+    float WhitePoint        = 3.0f;
+    float IBLScale          = 1;
+};
+
 class IHnRenderer : public IObject
 {
 public:
@@ -65,7 +78,7 @@ public:
 
     virtual void Update() = 0;
 
-    virtual void Draw(IDeviceContext* pCtx, const float4x4& CameraViewProj) = 0;
+    virtual void Draw(IDeviceContext* pCtx, const HnDrawAttribs& Attribs) = 0;
 
     virtual void SetEnvironmentMap(IDeviceContext* pCtx, ITextureView* pEnvironmentMapSRV) = 0;
 };

@@ -149,6 +149,28 @@ public:
         PBR_WORKFLOW_SPEC_GLOSS
     };
 
+    /// Debug view type
+    enum class DebugViewType : int
+    {
+        None            = 0,
+        BaseColor       = 1,
+        Transparency    = 2,
+        NormalMap       = 3,
+        Occlusion       = 4,
+        Emissive        = 5,
+        Metallic        = 6,
+        Roughness       = 7,
+        DiffuseColor    = 8,
+        SpecularColor   = 9,
+        Reflectance90   = 10,
+        MeshNormal      = 11,
+        PerturbedNormal = 12,
+        NdotV           = 13,
+        DiffuseIBL      = 14,
+        SpecularIBL     = 15,
+        NumDebugViews
+    };
+
     /// Initializes the renderer
     PBR_Renderer(IRenderDevice*     pDevice,
                  IRenderStateCache* pStateCache,

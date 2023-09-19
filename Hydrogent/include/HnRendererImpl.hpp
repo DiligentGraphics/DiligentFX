@@ -73,7 +73,7 @@ public:
 
     virtual void LoadUSDStage(const char* FileName) override final;
     virtual void Update() override final;
-    virtual void Draw(IDeviceContext* pCtx, const float4x4& CameraViewProj) override final;
+    virtual void Draw(IDeviceContext* pCtx, const HnDrawAttribs& Attribs) override final;
     virtual void SetEnvironmentMap(IDeviceContext* pCtx, ITextureView* pEnvironmentMapSRV) override final;
 
 private:

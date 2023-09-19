@@ -79,9 +79,10 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters*         pRefCounters,
                 PBRRendererCI.RTVFmt = CI.RTVFormat;
                 PBRRendererCI.DSVFmt = CI.DSVFormat;
 
-                PBRRendererCI.UseIBL      = true;
-                PBRRendererCI.UseAO       = true;
-                PBRRendererCI.UseEmissive = false;
+                PBRRendererCI.AllowDebugView = true;
+                PBRRendererCI.UseIBL         = true;
+                PBRRendererCI.UseAO          = true;
+                PBRRendererCI.UseEmissive    = false;
 
                 // Use samplers from texture views
                 PBRRendererCI.UseImmutableSamplers = false;
@@ -192,7 +193,7 @@ void HnRendererImpl::Update()
     m_Engine.Execute(&m_ImagingDelegate->GetRenderIndex(), &tasks);
 }
 
-void HnRendererImpl::Draw(IDeviceContext* pCtx, const float4x4& CameraViewProj)
+void HnRendererImpl::Draw(IDeviceContext* pCtx, const HnDrawAttribs& Attribs)
 {
     const auto& Meshes = m_RenderDelegate->GetMeshes();
     if (Meshes.empty())
@@ -203,16 +204,16 @@ void HnRendererImpl::Draw(IDeviceContext* pCtx, const float4x4& CameraViewProj)
         Diligent::HLSL::ToneMappingAttribs TMAttribs;
         TMAttribs.iToneMappingMode     = TONE_MAPPING_MODE_UNCHARTED2;
         TMAttribs.bAutoExposure        = 0;
-        TMAttribs.fMiddleGray          = 0.18f; //m_RenderParams.MiddleGray;
+        TMAttribs.fMiddleGray          = Attribs.MiddleGray;
         TMAttribs.bLightAdaptation     = 0;
-        TMAttribs.fWhitePoint          = 3.0f; //m_RenderParams.WhitePoint;
+        TMAttribs.fWhitePoint          = Attribs.WhitePoint;
         TMAttribs.fLuminanceSaturation = 1.0;
 
         EnvMapRenderer::RenderAttribs EnvMapAttribs;
         EnvMapAttribs.pContext      = pCtx;
         EnvMapAttribs.pEnvMap       = pEnvMapSRV;
-        EnvMapAttribs.AverageLogLum = 0.3f; //m_RenderParams.AverageLogLum;
-        EnvMapAttribs.MipLevel      = 1;    //m_EnvMapMipLevel;
+        EnvMapAttribs.AverageLogLum = Attribs.AverageLogLum;
+        EnvMapAttribs.MipLevel      = 1;
 
         m_EnvMapRenderer->Render(EnvMapAttribs, TMAttribs);
     }
@@ -262,14 +263,14 @@ void HnRendererImpl::Draw(IDeviceContext* pCtx, const float4x4& CameraViewProj)
 
                 auto& RendererParams = pAttribs->Renderer;
 
-                RendererParams.DebugViewType            = 0;     //static_cast<int>(m_RenderParams.DebugView);
-                RendererParams.OcclusionStrength        = 1;     //m_RenderParams.OcclusionStrength;
-                RendererParams.EmissionScale            = 1;     //m_RenderParams.EmissionScale;
-                RendererParams.AverageLogLum            = 0.3f;  //m_RenderParams.AverageLogLum;
-                RendererParams.MiddleGray               = 0.18f; //m_RenderParams.MiddleGray;
-                RendererParams.WhitePoint               = 3.0f;  //m_RenderParams.WhitePoint;
-                RendererParams.IBLScale                 = 1;     //m_RenderParams.IBLScale;
-                RendererParams.PrefilteredCubeMipLevels = 5;     //m_Settings.UseIBL ? static_cast<float>(m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels) : 0.f;
+                RendererParams.DebugViewType            = Attribs.DebugView;
+                RendererParams.OcclusionStrength        = Attribs.OcclusionStrength;
+                RendererParams.EmissionScale            = Attribs.EmissionScale;
+                RendererParams.AverageLogLum            = Attribs.AverageLogLum;
+                RendererParams.MiddleGray               = Attribs.MiddleGray;
+                RendererParams.WhitePoint               = Attribs.WhitePoint;
+                RendererParams.IBLScale                 = Attribs.IBLScale;
+                RendererParams.PrefilteredCubeMipLevels = 5; //m_Settings.UseIBL ? static_cast<float>(m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels) : 0.f;
             }
 
             pCtx->CommitShaderResources(pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
