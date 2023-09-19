@@ -211,6 +211,33 @@ pxr::TfToken GetMaterialTag(const pxr::VtDictionary&    Metadata,
     return IsTranslucent ? HnMaterialTagTokens->translucent : HnMaterialTagTokens->defaultTag;
 }
 
+float GetTerminalOpacityThreshold(const pxr::HdMaterialNode2& Terminal)
+{
+    for (const auto param_it : Terminal.parameters)
+    {
+        if (param_it.first == HnMaterialPrivateTokens->opacityThreshold)
+        {
+            const pxr::VtValue& vtOpacityThreshold = param_it.second;
+            return vtOpacityThreshold.Get<float>();
+        }
+    }
+    return 0;
+}
+
+float GetTerminalOpacity(const pxr::HdMaterialNode2& Terminal)
+{
+    for (const auto param_it : Terminal.parameters)
+    {
+        if (param_it.first == HnMaterialPrivateTokens->opacity)
+        {
+            const pxr::VtValue& vtOpacity = param_it.second;
+            return vtOpacity.Get<float>();
+        }
+    }
+    return 1;
+}
+
+
 // Get the fallback value for material node, first consulting Sdr to find
 // whether the node has an input for the fallback value and then checking
 // whether the output named outputName is known to Sdr and using either
@@ -643,7 +670,9 @@ HnMaterialNetwork::HnMaterialNetwork(const pxr::SdfPath&              SdfPath,
         }
     }
 #endif
-    m_Tag = GetMaterialTag(m_Metadata, *TerminalNode);
+    m_Tag              = GetMaterialTag(m_Metadata, *TerminalNode);
+    m_OpacityThreshold = GetTerminalOpacityThreshold(*TerminalNode);
+    m_Opacity          = GetTerminalOpacity(*TerminalNode);
 
     LoadParams(Network2, *TerminalNode);
 }

@@ -133,8 +133,16 @@ void HnMaterial::Sync(pxr::HdSceneDelegate* SceneDelegate,
         m_ShaderAttribs.TextureSlice3 = 0;
         m_ShaderAttribs.TextureSlice4 = 0;
 
-        m_ShaderAttribs.AlphaMode       = PBR_Renderer::ALPHA_MODE_OPAQUE;
-        m_ShaderAttribs.AlphaMaskCutoff = 0.5f;
+        const auto& Tag = m_Network.GetTag();
+        if (Tag == HnMaterialTagTokens->translucent)
+            m_ShaderAttribs.AlphaMode = PBR_Renderer::ALPHA_MODE_BLEND;
+        else if (Tag == HnMaterialTagTokens->masked)
+            PBR_Renderer::ALPHA_MODE_MASK;
+        else
+            PBR_Renderer::ALPHA_MODE_OPAQUE;
+
+        m_ShaderAttribs.AlphaMaskCutoff   = m_Network.GetOpacityThreshold();
+        m_ShaderAttribs.BaseColorFactor.a = m_Network.GetOpacity();
     }
 
     *DirtyBits = HdMaterial::Clean;

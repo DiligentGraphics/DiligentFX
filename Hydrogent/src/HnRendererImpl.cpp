@@ -217,59 +217,65 @@ void HnRendererImpl::Draw(IDeviceContext* pCtx, const float4x4& CameraViewProj)
         m_EnvMapRenderer->Render(EnvMapAttribs, TMAttribs);
     }
 
-    pCtx->SetPipelineState(m_PBRRenderer->GetPSO({}));
-
-    for (auto mesh_it : Meshes)
+    for (auto AlphaMode : {PBR_Renderer::ALPHA_MODE_OPAQUE, PBR_Renderer::ALPHA_MODE_MASK, PBR_Renderer::ALPHA_MODE_BLEND})
     {
-        if (!mesh_it.second)
-            continue;
+        pCtx->SetPipelineState(m_PBRRenderer->GetPSO({AlphaMode, /*DoubleSided = */ false}));
 
-        auto& Mesh = *mesh_it.second;
-
-        const auto& MaterialId = Mesh.GetMaterialId();
-        const auto* pMaterial  = m_RenderDelegate->GetMaterial(MaterialId.GetText());
-        if (pMaterial == nullptr)
-            return;
-
-        auto* pSRB = pMaterial->GetSRB();
-        auto* pVB0 = Mesh.GetVertexBuffer(HnMesh::VERTEX_BUFFER_ID_POSITION);
-        auto* pVB1 = Mesh.GetVertexBuffer(HnMesh::VERTEX_BUFFER_ID_NORMAL);
-        auto* pVB2 = Mesh.GetVertexBuffer(HnMesh::VERTEX_BUFFER_ID_TEXCOORD);
-        auto* pIB  = Mesh.GetTriangleIndexBuffer();
-
-        if (pVB0 == nullptr || pVB1 == nullptr || pVB2 == nullptr || pIB == nullptr || pSRB == nullptr)
-            continue;
-
-        // Bind vertex and index buffers
-        IBuffer* pBuffs[] = {pVB0, pVB1, pVB2, pVB2};
-        pCtx->SetVertexBuffers(0, _countof(pBuffs), pBuffs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-        pCtx->SetIndexBuffer(pIB, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-
-        const auto& ShaderAttribs = pMaterial->GetShaderAttribs();
+        for (auto mesh_it : Meshes)
         {
-            MapHelper<HLSL::PBRShaderAttribs> pAttribs{pCtx, m_PBRRenderer->GetPBRAttribsCB(), MAP_WRITE, MAP_FLAG_DISCARD};
+            if (!mesh_it.second)
+                continue;
 
-            pAttribs->Transforms.NodeMatrix = Mesh.GetTransform();
-            pAttribs->Transforms.JointCount = 0;
+            auto& Mesh = *mesh_it.second;
 
-            static_assert(sizeof(pAttribs->Material) == sizeof(ShaderAttribs), "The sizeof(PBRMaterialShaderInfo) is inconsistent with sizeof(ShaderAttribs)");
-            memcpy(&pAttribs->Material, &ShaderAttribs, sizeof(ShaderAttribs));
+            const auto& MaterialId = Mesh.GetMaterialId();
+            const auto* pMaterial  = m_RenderDelegate->GetMaterial(MaterialId.GetText());
+            if (pMaterial == nullptr)
+                return;
 
-            auto& RendererParams = pAttribs->Renderer;
+            const auto& ShaderAttribs = pMaterial->GetShaderAttribs();
+            if (ShaderAttribs.AlphaMode != AlphaMode)
+                continue;
 
-            RendererParams.DebugViewType            = 0;     //static_cast<int>(m_RenderParams.DebugView);
-            RendererParams.OcclusionStrength        = 1;     //m_RenderParams.OcclusionStrength;
-            RendererParams.EmissionScale            = 1;     //m_RenderParams.EmissionScale;
-            RendererParams.AverageLogLum            = 0.3f;  //m_RenderParams.AverageLogLum;
-            RendererParams.MiddleGray               = 0.18f; //m_RenderParams.MiddleGray;
-            RendererParams.WhitePoint               = 3.0f;  //m_RenderParams.WhitePoint;
-            RendererParams.IBLScale                 = 1;     //m_RenderParams.IBLScale;
-            RendererParams.PrefilteredCubeMipLevels = 5;     //m_Settings.UseIBL ? static_cast<float>(m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels) : 0.f;
+            auto* pSRB = pMaterial->GetSRB();
+            auto* pVB0 = Mesh.GetVertexBuffer(HnMesh::VERTEX_BUFFER_ID_POSITION);
+            auto* pVB1 = Mesh.GetVertexBuffer(HnMesh::VERTEX_BUFFER_ID_NORMAL);
+            auto* pVB2 = Mesh.GetVertexBuffer(HnMesh::VERTEX_BUFFER_ID_TEXCOORD);
+            auto* pIB  = Mesh.GetTriangleIndexBuffer();
+
+            if (pVB0 == nullptr || pVB1 == nullptr || pVB2 == nullptr || pIB == nullptr || pSRB == nullptr)
+                continue;
+
+            // Bind vertex and index buffers
+            IBuffer* pBuffs[] = {pVB0, pVB1, pVB2, pVB2};
+            pCtx->SetVertexBuffers(0, _countof(pBuffs), pBuffs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+            pCtx->SetIndexBuffer(pIB, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+            {
+                MapHelper<HLSL::PBRShaderAttribs> pAttribs{pCtx, m_PBRRenderer->GetPBRAttribsCB(), MAP_WRITE, MAP_FLAG_DISCARD};
+
+                pAttribs->Transforms.NodeMatrix = Mesh.GetTransform();
+                pAttribs->Transforms.JointCount = 0;
+
+                static_assert(sizeof(pAttribs->Material) == sizeof(ShaderAttribs), "The sizeof(PBRMaterialShaderInfo) is inconsistent with sizeof(ShaderAttribs)");
+                memcpy(&pAttribs->Material, &ShaderAttribs, sizeof(ShaderAttribs));
+
+                auto& RendererParams = pAttribs->Renderer;
+
+                RendererParams.DebugViewType            = 0;     //static_cast<int>(m_RenderParams.DebugView);
+                RendererParams.OcclusionStrength        = 1;     //m_RenderParams.OcclusionStrength;
+                RendererParams.EmissionScale            = 1;     //m_RenderParams.EmissionScale;
+                RendererParams.AverageLogLum            = 0.3f;  //m_RenderParams.AverageLogLum;
+                RendererParams.MiddleGray               = 0.18f; //m_RenderParams.MiddleGray;
+                RendererParams.WhitePoint               = 3.0f;  //m_RenderParams.WhitePoint;
+                RendererParams.IBLScale                 = 1;     //m_RenderParams.IBLScale;
+                RendererParams.PrefilteredCubeMipLevels = 5;     //m_Settings.UseIBL ? static_cast<float>(m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels) : 0.f;
+            }
+
+            pCtx->CommitShaderResources(pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+            DrawIndexedAttribs DrawAttrs{Mesh.GetNumTriangles() * 3, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
+            pCtx->DrawIndexed(DrawAttrs);
         }
-
-        pCtx->CommitShaderResources(pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-        Diligent::DrawIndexedAttribs DrawAttrs{Mesh.GetNumTriangles() * 3, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
-        pCtx->DrawIndexed(DrawAttrs);
     }
 }
 

@@ -178,6 +178,9 @@ public:
     const auto&              GetParameters() const { return m_Parameters; }
     const auto&              GetTextures() const { return m_Textures; }
 
+    float GetOpacity() const { return m_Opacity; }
+    float GetOpacityThreshold() const { return m_OpacityThreshold; }
+
 private:
     void LoadParams(const pxr::HdMaterialNetwork2& Network,
                     const pxr::HdMaterialNode2&    Node);
@@ -222,6 +225,9 @@ private:
     pxr::VtDictionary                m_Metadata;
     std::vector<HnMaterialParameter> m_Parameters;
     std::vector<TextureDescriptor>   m_Textures;
+
+    float m_OpacityThreshold = 0.0f;
+    float m_Opacity          = 1.0f;
 };
 
 } // namespace USD
