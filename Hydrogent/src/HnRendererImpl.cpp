@@ -32,6 +32,7 @@
 
 #include "EngineMemory.h"
 #include "PBR_Renderer.hpp"
+#include "EnvMapRenderer.hpp"
 #include "MapHelper.hpp"
 
 #include "pxr/imaging/hd/task.h"
@@ -49,7 +50,7 @@ namespace HLSL
 namespace
 {
 #include "Shaders/PBR/public/PBR_Structures.fxh"
-}
+} // namespace
 
 } // namespace HLSL
 
@@ -89,6 +90,8 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters*         pRefCounters,
                 // Use separate textures for metallic and roughness
                 PBRRendererCI.UseSeparateMetallicRoughnessTextures = true;
 
+                PBRRendererCI.ConvertOutputToSRGB = CI.ConvertOutputToSRGB;
+
                 static constexpr LayoutElement Inputs[] =
                     {
                         {0, 0, 3, VT_FLOAT32}, //float3 Pos     : ATTRIB0;
@@ -103,6 +106,18 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters*         pRefCounters,
                 return PBRRendererCI;
             }(CI)),
     },
+    m_EnvMapRenderer{
+        std::make_unique<EnvMapRenderer>(
+            [](const HnRendererCreateInfo& CI, IRenderDevice* pDevice) {
+                EnvMapRenderer::CreateInfo EnvMapRndrCI;
+                EnvMapRndrCI.pDevice             = pDevice;
+                EnvMapRndrCI.pCameraAttribsCB    = CI.pCameraAttribsCB;
+                EnvMapRndrCI.RTVFormat           = CI.RTVFormat;
+                EnvMapRndrCI.DSVFormat           = CI.DSVFormat;
+                EnvMapRndrCI.ConvertOutputToSRGB = CI.ConvertOutputToSRGB;
+
+                return EnvMapRndrCI;
+            }(CI, pDevice))},
     m_RenderDelegate{HnRenderDelegate::Create({pDevice, pContext, m_CameraAttribsCB, m_LightAttribsCB, m_PBRRenderer})}
 {
 }
@@ -182,6 +197,25 @@ void HnRendererImpl::Draw(IDeviceContext* pCtx, const float4x4& CameraViewProj)
     const auto& Meshes = m_RenderDelegate->GetMeshes();
     if (Meshes.empty())
         return;
+
+    if (auto* pEnvMapSRV = m_PBRRenderer->GetPrefilteredEnvMapSRV())
+    {
+        Diligent::HLSL::ToneMappingAttribs TMAttribs;
+        TMAttribs.iToneMappingMode     = TONE_MAPPING_MODE_UNCHARTED2;
+        TMAttribs.bAutoExposure        = 0;
+        TMAttribs.fMiddleGray          = 0.18f; //m_RenderParams.MiddleGray;
+        TMAttribs.bLightAdaptation     = 0;
+        TMAttribs.fWhitePoint          = 3.0f; //m_RenderParams.WhitePoint;
+        TMAttribs.fLuminanceSaturation = 1.0;
+
+        EnvMapRenderer::RenderAttribs EnvMapAttribs;
+        EnvMapAttribs.pContext      = pCtx;
+        EnvMapAttribs.pEnvMap       = pEnvMapSRV;
+        EnvMapAttribs.AverageLogLum = 0.3f; //m_RenderParams.AverageLogLum;
+        EnvMapAttribs.MipLevel      = 1;    //m_EnvMapMipLevel;
+
+        m_EnvMapRenderer->Render(EnvMapAttribs, TMAttribs);
+    }
 
     pCtx->SetPipelineState(m_PBRRenderer->GetPSO({}));
 

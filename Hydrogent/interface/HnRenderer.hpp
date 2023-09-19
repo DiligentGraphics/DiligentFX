@@ -49,6 +49,8 @@ struct HnRendererCreateInfo
     /// Depth-buffer format.
     TEXTURE_FORMAT DSVFormat = TEX_FORMAT_UNKNOWN;
 
+    bool ConvertOutputToSRGB = false;
+
     /// Camera attributes constant buffer.
     IBuffer* pCameraAttribsCB = nullptr;
 

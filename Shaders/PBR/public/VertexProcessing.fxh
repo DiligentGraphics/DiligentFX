@@ -24,7 +24,7 @@ GLTF_TransformedVertex GLTF_TransformVertex(in float3   Pos,
                                             in float4x4 Transform)
 {
     GLTF_TransformedVertex TransformedVert;
-    
+
     float4 locPos = mul(Transform, float4(Pos, 1.0));
     float3x3 NormalTransform = float3x3(Transform[0].xyz, Transform[1].xyz, Transform[2].xyz);
     NormalTransform = InverseTranspose3x3(NormalTransform);

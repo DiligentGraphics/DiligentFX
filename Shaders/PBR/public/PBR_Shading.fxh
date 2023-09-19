@@ -240,12 +240,12 @@ SurfaceReflectanceInfo GetSurfaceReflectanceMR(float3 BaseColor,
 
     SrfInfo.PerceptualRoughness = Roughness;
     SrfInfo.DiffuseColor        = BaseColor * ((1.0 - f0) * (1.0 - Metallic));
-        
+
     float3 Reflectance0 = lerp(float3(f0, f0, f0), BaseColor, Metallic);
     float  MaxR0        = max(max(Reflectance0.r, Reflectance0.g), Reflectance0.b);
     // Anything less than 2% is physically impossible and is instead considered to be shadowing. Compare to "Real-Time-Rendering" 4th editon on page 325.
     float R90 = min(MaxR0 * 50.0, 1.0);
-    
+
     SrfInfo.Reflectance0  = Reflectance0;
     SrfInfo.Reflectance90 = float3(R90, R90, R90);
 
