@@ -79,6 +79,7 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters*         pRefCounters,
                 PBRRendererCI.RTVFmt = CI.RTVFormat;
                 PBRRendererCI.DSVFmt = CI.DSVFormat;
 
+                PBRRendererCI.FrontCCW       = CI.FrontCCW;
                 PBRRendererCI.AllowDebugView = true;
                 PBRRendererCI.UseIBL         = true;
                 PBRRendererCI.UseAO          = true;
@@ -253,15 +254,15 @@ void HnRendererImpl::Draw(IDeviceContext* pCtx, const HnDrawAttribs& Attribs)
             pCtx->SetIndexBuffer(pIB, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
             {
-                MapHelper<HLSL::PBRShaderAttribs> pAttribs{pCtx, m_PBRRenderer->GetPBRAttribsCB(), MAP_WRITE, MAP_FLAG_DISCARD};
+                MapHelper<HLSL::PBRShaderAttribs> pDstShaderAttribs{pCtx, m_PBRRenderer->GetPBRAttribsCB(), MAP_WRITE, MAP_FLAG_DISCARD};
 
-                pAttribs->Transforms.NodeMatrix = Mesh.GetTransform();
-                pAttribs->Transforms.JointCount = 0;
+                pDstShaderAttribs->Transforms.NodeMatrix = Mesh.GetTransform() * Attribs.Transform;
+                pDstShaderAttribs->Transforms.JointCount = 0;
 
-                static_assert(sizeof(pAttribs->Material) == sizeof(ShaderAttribs), "The sizeof(PBRMaterialShaderInfo) is inconsistent with sizeof(ShaderAttribs)");
-                memcpy(&pAttribs->Material, &ShaderAttribs, sizeof(ShaderAttribs));
+                static_assert(sizeof(pDstShaderAttribs->Material) == sizeof(ShaderAttribs), "The sizeof(PBRMaterialShaderInfo) is inconsistent with sizeof(ShaderAttribs)");
+                memcpy(&pDstShaderAttribs->Material, &ShaderAttribs, sizeof(ShaderAttribs));
 
-                auto& RendererParams = pAttribs->Renderer;
+                auto& RendererParams = pDstShaderAttribs->Renderer;
 
                 RendererParams.DebugViewType            = Attribs.DebugView;
                 RendererParams.OcclusionStrength        = Attribs.OcclusionStrength;

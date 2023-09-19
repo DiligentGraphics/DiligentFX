@@ -49,6 +49,8 @@ struct HnRendererCreateInfo
     /// Depth-buffer format.
     TEXTURE_FORMAT DSVFormat = TEX_FORMAT_UNKNOWN;
 
+    bool FrontCCW = false;
+
     bool ConvertOutputToSRGB = false;
 
     /// Camera attributes constant buffer.
@@ -60,7 +62,7 @@ struct HnRendererCreateInfo
 
 struct HnDrawAttribs
 {
-    float4x4 CameraViewProj = float4x4::Identity();
+    float4x4 Transform = float4x4::Identity();
 
     int   DebugView         = 0;
     float OcclusionStrength = 1;

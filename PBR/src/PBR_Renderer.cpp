@@ -660,8 +660,8 @@ void PBR_Renderer::CreatePSO(IRenderDevice* pDevice, IRenderStateCache* pStateCa
     RT0.SrcBlend       = BLEND_FACTOR_SRC_ALPHA;
     RT0.DestBlend      = BLEND_FACTOR_INV_SRC_ALPHA;
     RT0.BlendOp        = BLEND_OPERATION_ADD;
-    RT0.SrcBlendAlpha  = BLEND_FACTOR_INV_SRC_ALPHA;
-    RT0.DestBlendAlpha = BLEND_FACTOR_ZERO;
+    RT0.SrcBlendAlpha  = BLEND_FACTOR_ONE;
+    RT0.DestBlendAlpha = BLEND_FACTOR_INV_SRC_ALPHA;
     RT0.BlendOpAlpha   = BLEND_OPERATION_ADD;
 
     {
