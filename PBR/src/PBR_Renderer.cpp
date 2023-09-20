@@ -530,26 +530,48 @@ void PBR_Renderer::CreatePSO(IRenderDevice* pDevice, IRenderStateCache* pStateCa
     ShaderCI.pShaderSourceStreamFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();
 
     ShaderMacroHelper Macros;
-    Macros.AddShaderMacro("MAX_JOINT_COUNT", static_cast<int>(m_Settings.MaxJointCount));
-    Macros.AddShaderMacro("ALLOW_DEBUG_VIEW", m_Settings.AllowDebugView);
-    Macros.AddShaderMacro("CONVERT_OUTPUT_TO_SRGB", m_Settings.ConvertOutputToSRGB);
-    Macros.AddShaderMacro("TONE_MAPPING_MODE", "TONE_MAPPING_MODE_UNCHARTED2");
-    Macros.AddShaderMacro("PBR_USE_IBL", m_Settings.UseIBL);
-    Macros.AddShaderMacro("PBR_USE_AO", m_Settings.UseAO);
-    Macros.AddShaderMacro("PBR_USE_EMISSIVE", m_Settings.UseEmissive);
-    Macros.AddShaderMacro("USE_TEXTURE_ATLAS", m_Settings.UseTextureAtlas);
-    Macros.AddShaderMacro("PBR_WORKFLOW_METALLIC_ROUGHNESS", PBR_WORKFLOW_METALL_ROUGH);
-    Macros.AddShaderMacro("PBR_WORKFLOW_SPECULAR_GLOSINESS", PBR_WORKFLOW_SPEC_GLOSS);
-    Macros.AddShaderMacro("PBR_ALPHA_MODE_OPAQUE", ALPHA_MODE_OPAQUE);
-    Macros.AddShaderMacro("PBR_ALPHA_MODE_MASK", ALPHA_MODE_MASK);
-    Macros.AddShaderMacro("PBR_ALPHA_MODE_BLEND", ALPHA_MODE_BLEND);
-    Macros.AddShaderMacro("USE_IBL_ENV_MAP_LOD", true);
-    Macros.AddShaderMacro("USE_HDR_IBL_CUBEMAPS", true);
-    Macros.AddShaderMacro("USE_SEPARATE_METALLIC_ROUGHNESS_TEXTURES", m_Settings.UseSeparateMetallicRoughnessTextures);
+    Macros.Add("MAX_JOINT_COUNT", static_cast<int>(m_Settings.MaxJointCount));
+    Macros.Add("ALLOW_DEBUG_VIEW", m_Settings.AllowDebugView);
+    Macros.Add("CONVERT_OUTPUT_TO_SRGB", m_Settings.ConvertOutputToSRGB);
+    Macros.Add("TONE_MAPPING_MODE", "TONE_MAPPING_MODE_UNCHARTED2");
+    Macros.Add("PBR_USE_IBL", m_Settings.UseIBL);
+    Macros.Add("PBR_USE_AO", m_Settings.UseAO);
+    Macros.Add("PBR_USE_EMISSIVE", m_Settings.UseEmissive);
+    Macros.Add("USE_TEXTURE_ATLAS", m_Settings.UseTextureAtlas);
+    Macros.Add("PBR_WORKFLOW_METALLIC_ROUGHNESS", PBR_WORKFLOW_METALL_ROUGH);
+    Macros.Add("PBR_WORKFLOW_SPECULAR_GLOSINESS", PBR_WORKFLOW_SPEC_GLOSS);
+    Macros.Add("PBR_ALPHA_MODE_OPAQUE", ALPHA_MODE_OPAQUE);
+    Macros.Add("PBR_ALPHA_MODE_MASK", ALPHA_MODE_MASK);
+    Macros.Add("PBR_ALPHA_MODE_BLEND", ALPHA_MODE_BLEND);
+    Macros.Add("USE_IBL_ENV_MAP_LOD", true);
+    Macros.Add("USE_HDR_IBL_CUBEMAPS", true);
+    Macros.Add("USE_SEPARATE_METALLIC_ROUGHNESS_TEXTURES", m_Settings.UseSeparateMetallicRoughnessTextures);
 
-    Macros.AddShaderMacro("TEX_COLOR_CONVERSION_MODE_NONE", CreateInfo::TEX_COLOR_CONVERSION_MODE_NONE);
-    Macros.AddShaderMacro("TEX_COLOR_CONVERSION_MODE_SRGB_TO_LINEAR", CreateInfo::TEX_COLOR_CONVERSION_MODE_SRGB_TO_LINEAR);
-    Macros.AddShaderMacro("TEX_COLOR_CONVERSION_MODE", m_Settings.TexColorConversionMode);
+    // clang-format off
+    Macros.Add("DEBUG_VIEW_NONE",             static_cast<int>(DebugViewType::None));
+    Macros.Add("DEBUG_VIEW_TEXCOORD0",        static_cast<int>(DebugViewType::Texcoord0));
+    Macros.Add("DEBUG_VIEW_BASE_COLOR",       static_cast<int>(DebugViewType::BaseColor));
+    Macros.Add("DEBUG_VIEW_TRANSPARENCY",     static_cast<int>(DebugViewType::Transparency));
+    Macros.Add("DEBUG_VIEW_NORMAL_MAP",       static_cast<int>(DebugViewType::NormalMap));
+    Macros.Add("DEBUG_VIEW_OCCLUSION",        static_cast<int>(DebugViewType::Occlusion));
+    Macros.Add("DEBUG_VIEW_EMISSIVE",         static_cast<int>(DebugViewType::Emissive));
+    Macros.Add("DEBUG_VIEW_METALLIC",         static_cast<int>(DebugViewType::Metallic));
+    Macros.Add("DEBUG_VIEW_ROUGHNESS",        static_cast<int>(DebugViewType::Roughness));
+    Macros.Add("DEBUG_VIEW_DIFFUSE_COLOR",    static_cast<int>(DebugViewType::DiffuseColor));
+    Macros.Add("DEBUG_VIEW_SPECULAR_COLOR",   static_cast<int>(DebugViewType::SpecularColor));
+    Macros.Add("DEBUG_VIEW_REFLECTANCE90",    static_cast<int>(DebugViewType::Reflectance90));
+    Macros.Add("DEBUG_VIEW_MESH_NORMAL",      static_cast<int>(DebugViewType::MeshNormal));
+    Macros.Add("DEBUG_VIEW_PERTURBED_NORMAL", static_cast<int>(DebugViewType::PerturbedNormal));
+    Macros.Add("DEBUG_VIEW_NDOTV",            static_cast<int>(DebugViewType::NdotV));
+    Macros.Add("DEBUG_VIEW_DIRECT_LIGHTING",  static_cast<int>(DebugViewType::DirectLighting));
+    Macros.Add("DEBUG_VIEW_DIFFUSE_IBL",      static_cast<int>(DebugViewType::DiffuseIBL));
+    Macros.Add("DEBUG_VIEW_SPECULAR_IBL",     static_cast<int>(DebugViewType::SpecularIBL));
+    // clang-format on
+
+
+    Macros.Add("TEX_COLOR_CONVERSION_MODE_NONE", CreateInfo::TEX_COLOR_CONVERSION_MODE_NONE);
+    Macros.Add("TEX_COLOR_CONVERSION_MODE_SRGB_TO_LINEAR", CreateInfo::TEX_COLOR_CONVERSION_MODE_SRGB_TO_LINEAR);
+    Macros.Add("TEX_COLOR_CONVERSION_MODE", m_Settings.TexColorConversionMode);
 
     ShaderCI.Macros = Macros;
     RefCntAutoPtr<IShader> pVS;

@@ -217,8 +217,9 @@ void main(in  PbrVsOutput VSOut,
                                            VSOut.Normal, TSNormal, g_PBRAttribs.Material.NormalTextureUVSelector >= 0.0, IsFrontFace);
     float3 view = normalize(g_CameraAttribs.f4Position.xyz - VSOut.WorldPos.xyz); // Direction from surface point to camera
 
-    float3 color = float3(0.0, 0.0, 0.0);
-    color += ApplyDirectionalLight(g_LightAttribs.f4Direction.xyz, g_LightAttribs.f4Intensity.rgb, SrfInfo, perturbedNormal, view);
+
+    float3 DirectLighting = ApplyDirectionalLight(g_LightAttribs.f4Direction.xyz, g_LightAttribs.f4Intensity.rgb, SrfInfo, perturbedNormal, view);
+    float3 color = DirectLighting;
 
 //#ifdef USE_PUNCTUAL
 //    for (int i = 0; i < LIGHT_COUNT; ++i)
@@ -278,22 +279,24 @@ void main(in  PbrVsOutput VSOut,
     {
         switch (g_PBRAttribs.Renderer.DebugViewType)
         {
-            case  1: OutColor.rgba = BaseColor;                                            break;
-            case  2: OutColor.rgba = float4(BaseColor.a, BaseColor.a, BaseColor.a, 1.0);   break;
-            case  3: OutColor.rgb  = TSNormal.xyz;                                         break;
-            case  4: OutColor.rgb  = Occlusion * float3(1.0, 1.0, 1.0);                    break;
-            case  5: OutColor.rgb  = Emissive.rgb;                                         break;
-            case  6: OutColor.rgb  = metallic * float3(1.0, 1.0, 1.0);                     break;
-            case  7: OutColor.rgb  = SrfInfo.PerceptualRoughness * float3(1.0, 1.0, 1.0);  break;
-            case  8: OutColor.rgb  = SrfInfo.DiffuseColor;                                 break;
-            case  9: OutColor.rgb  = SrfInfo.Reflectance0;                                 break;
-            case 10: OutColor.rgb  = SrfInfo.Reflectance90;                                break;
-            case 11: OutColor.rgb  = abs(VSOut.Normal / max(length(VSOut.Normal), 1e-3));  break;
-            case 12: OutColor.rgb  = abs(perturbedNormal);                                 break;
-            case 13: OutColor.rgb  = dot(perturbedNormal, view) * float3(1.0, 1.0, 1.0);   break;
+            case DEBUG_VIEW_BASE_COLOR:       OutColor.rgba = BaseColor;                                            break;
+            case DEBUG_VIEW_TEXCOORD0:        OutColor.rgb  = float3(VSOut.UV0, 0.0);                               break;
+            case DEBUG_VIEW_TRANSPARENCY:     OutColor.rgba = float4(BaseColor.a, BaseColor.a, BaseColor.a, 1.0);   break;
+            case DEBUG_VIEW_NORMAL_MAP:       OutColor.rgb  = TSNormal.xyz;                                         break;
+            case DEBUG_VIEW_OCCLUSION:        OutColor.rgb  = Occlusion * float3(1.0, 1.0, 1.0);                    break;
+            case DEBUG_VIEW_EMISSIVE:         OutColor.rgb  = Emissive.rgb;                                         break;
+            case DEBUG_VIEW_METALLIC:         OutColor.rgb  = metallic * float3(1.0, 1.0, 1.0);                     break;
+            case DEBUG_VIEW_ROUGHNESS:        OutColor.rgb  = SrfInfo.PerceptualRoughness * float3(1.0, 1.0, 1.0);  break;
+            case DEBUG_VIEW_DIFFUSE_COLOR:    OutColor.rgb  = SrfInfo.DiffuseColor;                                 break;
+            case DEBUG_VIEW_SPECULAR_COLOR:   OutColor.rgb  = SrfInfo.Reflectance0;                                 break;
+            case DEBUG_VIEW_REFLECTANCE90:    OutColor.rgb  = SrfInfo.Reflectance90;                                break;
+            case DEBUG_VIEW_MESH_NORMAL:      OutColor.rgb  = abs(VSOut.Normal / max(length(VSOut.Normal), 1e-3));  break;
+            case DEBUG_VIEW_PERTURBED_NORMAL: OutColor.rgb  = abs(perturbedNormal);                                 break;
+            case DEBUG_VIEW_NDOTV:            OutColor.rgb  = dot(perturbedNormal, view) * float3(1.0, 1.0, 1.0);   break;
+            case DEBUG_VIEW_DIRECT_LIGHTING:  OutColor.rgb  = DirectLighting;                                       break;
 #if PBR_USE_IBL
-            case 14: OutColor.rgb  = IBLContrib.f3Diffuse;                                 break;
-            case 15: OutColor.rgb  = IBLContrib.f3Specular;                                break;
+            case DEBUG_VIEW_DIFFUSE_IBL:      OutColor.rgb  = IBLContrib.f3Diffuse;                                 break;
+            case DEBUG_VIEW_SPECULAR_IBL:     OutColor.rgb  = IBLContrib.f3Specular;                                break;
 #endif
         }
     }
