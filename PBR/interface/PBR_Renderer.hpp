@@ -253,6 +253,7 @@ private:
                         Uint32             NumBRDFSamples = 512);
 
     void CreatePSO(IRenderDevice* pDevice, IRenderStateCache* pStateCache);
+    void CreateSignature(IRenderDevice* pDevice, IRenderStateCache* pStateCache);
 
 protected:
     const CreateInfo m_Settings;
@@ -282,6 +283,7 @@ protected:
     RefCntAutoPtr<IBuffer> m_PrecomputeEnvMapAttribsCB;
     RefCntAutoPtr<IBuffer> m_JointsBuffer;
 
+    RefCntAutoPtr<IPipelineResourceSignature>  m_ResourceSignature;
     std::vector<RefCntAutoPtr<IPipelineState>> m_PSOCache;
 };
 
