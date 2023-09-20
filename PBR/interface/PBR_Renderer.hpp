@@ -31,7 +31,9 @@
 #include "../../../DiligentCore/Platforms/Basic/interface/DebugUtilities.hpp"
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/DeviceContext.h"
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
+#include "../../../DiligentCore/Graphics/GraphicsEngine/interface/GraphicsTypesX.hpp"
 #include "../../../DiligentCore/Graphics/GraphicsTools/interface/RenderStateCache.h"
+#include "../../../DiligentCore/Graphics/GraphicsTools/interface/ShaderMacroHelper.hpp"
 #include "../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
 
 namespace Diligent
@@ -235,6 +237,9 @@ public:
                            IBuffer*                pLightAttribs);
 
 protected:
+    ShaderMacroHelper DefineMacros() const;
+    InputLayoutDescX  GetInputLayout() const;
+
     static size_t GetPSOIdx(const PSOKey& Key)
     {
         size_t PSOIdx;

@@ -75,6 +75,14 @@ static const ShaderIncInfo g_Shaders[] =
         #include "RenderPBR.vsh.h"
     },
     {
+        "RenderPBRCommon.fxh",
+        #include "RenderPBRCommon.fxh.h"
+    },
+    {
+        "RenderWireframe.psh",
+        #include "RenderWireframe.psh.h"
+    },
+    {
         "PBR_Shading.fxh",
         #include "PBR_Shading.fxh.h"
     },

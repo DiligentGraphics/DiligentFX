@@ -129,9 +129,9 @@ private:
 
     struct IndexData
     {
-        pxr::VtVec3iArray TrianglesFaceIndices;
-        pxr::VtIntArray   PrimitiveParam;
-        pxr::VtIntArray   TrianglesEdgeIndices;
+        pxr::VtVec3iArray         TrianglesFaceIndices;
+        pxr::VtIntArray           PrimitiveParam;
+        std::vector<pxr::GfVec2i> MeshEdgeIndices;
     };
     std::unique_ptr<IndexData> m_IndexData;
 

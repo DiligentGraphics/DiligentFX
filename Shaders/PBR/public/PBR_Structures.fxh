@@ -59,6 +59,8 @@ struct PBRRendererShaderParameters
 	int   DebugViewType;
     float OcclusionStrength;
     float EmissionScale;
+
+    float4 WireframeColor;
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
 	CHECK_STRUCT_ALIGNMENT(PBRRendererShaderParameters);

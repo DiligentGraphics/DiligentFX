@@ -46,7 +46,7 @@
 namespace Diligent
 {
 
-class PBR_Renderer;
+class USD_Renderer;
 class EnvMapRenderer;
 
 namespace USD
@@ -82,7 +82,7 @@ private:
     RefCntAutoPtr<IBuffer> m_CameraAttribsCB;
     RefCntAutoPtr<IBuffer> m_LightAttribsCB;
 
-    std::shared_ptr<PBR_Renderer>   m_PBRRenderer;
+    std::shared_ptr<USD_Renderer>   m_USDRenderer;
     std::unique_ptr<EnvMapRenderer> m_EnvMapRenderer;
 
     std::unique_ptr<HnRenderDelegate> m_RenderDelegate;

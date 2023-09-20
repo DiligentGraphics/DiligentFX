@@ -5,6 +5,7 @@
 #include "BasicStructures.fxh"
 #include "PBR_Shading.fxh"
 #include "ToneMapping.fxh"
+#include "RenderPBRCommon.fxh"
 
 #ifndef USE_TEXTURE_ATLAS
 #   define USE_TEXTURE_ATLAS 0
@@ -103,15 +104,6 @@ float4 SampleTexture(Texture2DArray Tex,
 #endif
 }
 
-struct PbrVsOutput
-{
-    float4 ClipPos  : SV_Position;
-    float3 WorldPos : WORLD_POS;
-    float3 Normal   : NORMAL;
-    float2 UV0      : UV0;
-    float2 UV1      : UV1;
-};
-
 void main(in  PbrVsOutput VSOut,
           in  bool        IsFrontFace : SV_IsFrontFace,
           out float4      OutColor    : SV_Target)
@@ -190,13 +182,13 @@ void main(in  PbrVsOutput VSOut,
                                    VSOut.UV0, VSOut.UV1, g_PBRAttribs.Material.PhysicalDescriptorTextureUVSelector, 
                                    g_PBRAttribs.Material.PhysicalDescriptorUVScaleBias, g_PBRAttribs.Material.PhysicalDescriptorSlice,
                                    float4(0.0, 1.0, 0.0, 0.0)).r;
-#else   
-    PhysicalDesc = SampleTexture(g_PhysicalDescriptorMap, g_PhysicalDescriptorMap_sampler, 
-                                 VSOut.UV0, VSOut.UV1, g_PBRAttribs.Material.PhysicalDescriptorTextureUVSelector, 
+#else
+    PhysicalDesc = SampleTexture(g_PhysicalDescriptorMap, g_PhysicalDescriptorMap_sampler,
+                                 VSOut.UV0, VSOut.UV1, g_PBRAttribs.Material.PhysicalDescriptorTextureUVSelector,
                                  g_PBRAttribs.Material.PhysicalDescriptorUVScaleBias, g_PBRAttribs.Material.PhysicalDescriptorSlice,
                                  float4(0.0, 1.0, 0.0, 0.0));
 #endif
-    
+
     float metallic;
     if (g_PBRAttribs.Material.Workflow == PBR_WORKFLOW_SPECULAR_GLOSINESS)
     {
@@ -204,7 +196,7 @@ void main(in  PbrVsOutput VSOut,
         const float u_GlossinessFactor = 1.0;
         PhysicalDesc.a *= u_GlossinessFactor;
     }
-    else if(g_PBRAttribs.Material.Workflow == PBR_WORKFLOW_METALLIC_ROUGHNESS)
+    else if (g_PBRAttribs.Material.Workflow == PBR_WORKFLOW_METALLIC_ROUGHNESS)
     {
         // PhysicalDesc should already be in linear space
         PhysicalDesc.g = saturate(PhysicalDesc.g * g_PBRAttribs.Material.RoughnessFactor);
@@ -213,7 +205,7 @@ void main(in  PbrVsOutput VSOut,
     SurfaceReflectanceInfo SrfInfo = GetSurfaceReflectance(g_PBRAttribs.Material.Workflow, BaseColor, PhysicalDesc, metallic);
 
     // LIGHTING
-    float3 perturbedNormal = PerturbNormal(dWorldPos_dx, dWorldPos_dy, dNormalMapUV_dx, dNormalMapUV_dy, 
+    float3 perturbedNormal = PerturbNormal(dWorldPos_dx, dWorldPos_dy, dNormalMapUV_dx, dNormalMapUV_dy,
                                            VSOut.Normal, TSNormal, g_PBRAttribs.Material.NormalTextureUVSelector >= 0.0, IsFrontFace);
     float3 view = normalize(g_CameraAttribs.f4Position.xyz - VSOut.WorldPos.xyz); // Direction from surface point to camera
 

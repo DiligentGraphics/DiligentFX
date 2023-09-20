@@ -1,6 +1,7 @@
 #include "BasicStructures.fxh"
 #include "VertexProcessing.fxh"
 #include "PBR_Structures.fxh"
+#include "RenderPBRCommon.fxh"
 
 #ifndef MAX_JOINT_COUNT
 #   define MAX_JOINT_COUNT 64
@@ -38,15 +39,6 @@ cbuffer cbJointTransforms
     float4x4 g_Joints[MAX_JOINT_COUNT];
 }
 #endif
-
-struct PbrVsOutput
-{
-    float4 ClipPos  : SV_Position;
-    float3 WorldPos : WORLD_POS;
-    float3 Normal   : NORMAL;
-    float2 UV0      : UV0;
-    float2 UV1      : UV1;
-};
 
 void VSMainInternal(in  VertexAttribs   Vert,
 #if MAX_JOINT_COUNT > 0

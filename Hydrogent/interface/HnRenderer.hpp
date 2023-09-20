@@ -60,6 +60,13 @@ struct HnRendererCreateInfo
     IBuffer* pLightAttribsCB = nullptr;
 };
 
+enum HN_RENDER_MODE
+{
+    HN_RENDER_MODE_SOLID,
+    HN_RENDER_MODE_MESH_EDGES,
+    HN_RENDER_MODE_COUNT
+};
+
 struct HnDrawAttribs
 {
     float4x4 Transform = float4x4::Identity();
@@ -71,6 +78,10 @@ struct HnDrawAttribs
     float MiddleGray        = 0.18f;
     float WhitePoint        = 3.0f;
     float IBLScale          = 1;
+
+    float4 WireframeColor = float4{1, 1, 1, 1};
+
+    HN_RENDER_MODE RenderMode = HN_RENDER_MODE_SOLID;
 };
 
 class IHnRenderer : public IObject

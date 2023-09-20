@@ -30,7 +30,6 @@
 #include <vector>
 
 #include "RenderStateCache.hpp"
-#include "ShaderMacroHelper.hpp"
 #include "GraphicsUtilities.h"
 #include "CommonlyUsedStates.h"
 #include "BasicMath.hpp"
@@ -584,28 +583,8 @@ void PBR_Renderer::CreateSignature(IRenderDevice* pDevice, IRenderStateCache* pS
     }
 }
 
-void PBR_Renderer::CreatePSO(IRenderDevice* pDevice, IRenderStateCache* pStateCache)
+ShaderMacroHelper PBR_Renderer::DefineMacros() const
 {
-    RenderDeviceWithCache<false> Device{pDevice, pStateCache};
-
-    GraphicsPipelineStateCreateInfo PSOCreateInfo;
-    PipelineStateDesc&              PSODesc          = PSOCreateInfo.PSODesc;
-    GraphicsPipelineDesc&           GraphicsPipeline = PSOCreateInfo.GraphicsPipeline;
-
-    PSODesc.Name         = "Render PBR PSO";
-    PSODesc.PipelineType = PIPELINE_TYPE_GRAPHICS;
-
-    GraphicsPipeline.NumRenderTargets                     = 1;
-    GraphicsPipeline.RTVFormats[0]                        = m_Settings.RTVFmt;
-    GraphicsPipeline.DSVFormat                            = m_Settings.DSVFmt;
-    GraphicsPipeline.PrimitiveTopology                    = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    GraphicsPipeline.RasterizerDesc.CullMode              = CULL_MODE_BACK;
-    GraphicsPipeline.RasterizerDesc.FrontCounterClockwise = m_Settings.FrontCCW;
-
-    ShaderCreateInfo ShaderCI;
-    ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
-    ShaderCI.pShaderSourceStreamFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();
-
     ShaderMacroHelper Macros;
     Macros.Add("MAX_JOINT_COUNT", static_cast<int>(m_Settings.MaxJointCount));
     Macros.Add("ALLOW_DEBUG_VIEW", m_Settings.AllowDebugView);
@@ -649,7 +628,59 @@ void PBR_Renderer::CreatePSO(IRenderDevice* pDevice, IRenderStateCache* pStateCa
     Macros.Add("TEX_COLOR_CONVERSION_MODE_SRGB_TO_LINEAR", CreateInfo::TEX_COLOR_CONVERSION_MODE_SRGB_TO_LINEAR);
     Macros.Add("TEX_COLOR_CONVERSION_MODE", m_Settings.TexColorConversionMode);
 
-    ShaderCI.Macros = Macros;
+    return Macros;
+}
+
+InputLayoutDescX PBR_Renderer::GetInputLayout() const
+{
+    InputLayoutDescX InputLayout;
+    if (m_Settings.InputLayout.NumElements != 0)
+    {
+        InputLayout = m_Settings.InputLayout;
+    }
+    else
+    {
+        InputLayout
+            .Add(0u, 0u, 3u, VT_FLOAT32)  //float3 Pos     : ATTRIB0;
+            .Add(1u, 0u, 3u, VT_FLOAT32)  //float3 Normal  : ATTRIB1;
+            .Add(2u, 0u, 2u, VT_FLOAT32)  //float2 UV0     : ATTRIB2;
+            .Add(3u, 0u, 2u, VT_FLOAT32); //float2 UV1     : ATTRIB3;
+        if (m_Settings.MaxJointCount > 0)
+        {
+            InputLayout
+                .Add(4u, 1u, 4u, VT_FLOAT32)  //float4 Joint0  : ATTRIB4;
+                .Add(5u, 1u, 4u, VT_FLOAT32); //float4 Weight0 : ATTRIB5;
+        }
+    }
+
+    return InputLayout;
+}
+
+void PBR_Renderer::CreatePSO(IRenderDevice* pDevice, IRenderStateCache* pStateCache)
+{
+    RenderDeviceWithCache<false> Device{pDevice, pStateCache};
+
+    GraphicsPipelineStateCreateInfo PSOCreateInfo;
+    PipelineStateDesc&              PSODesc          = PSOCreateInfo.PSODesc;
+    GraphicsPipelineDesc&           GraphicsPipeline = PSOCreateInfo.GraphicsPipeline;
+
+    PSODesc.Name         = "Render PBR PSO";
+    PSODesc.PipelineType = PIPELINE_TYPE_GRAPHICS;
+
+    GraphicsPipeline.NumRenderTargets                     = 1;
+    GraphicsPipeline.RTVFormats[0]                        = m_Settings.RTVFmt;
+    GraphicsPipeline.DSVFormat                            = m_Settings.DSVFmt;
+    GraphicsPipeline.PrimitiveTopology                    = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    GraphicsPipeline.RasterizerDesc.CullMode              = CULL_MODE_BACK;
+    GraphicsPipeline.RasterizerDesc.FrontCounterClockwise = m_Settings.FrontCCW;
+
+    ShaderCreateInfo ShaderCI;
+    ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
+    ShaderCI.pShaderSourceStreamFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();
+
+    const auto Macros = DefineMacros();
+    ShaderCI.Macros   = Macros;
+
     RefCntAutoPtr<IShader> pVS;
     {
         ShaderCI.Desc       = {"PBR VS", SHADER_TYPE_VERTEX, true};
@@ -669,26 +700,8 @@ void PBR_Renderer::CreatePSO(IRenderDevice* pDevice, IRenderStateCache* pStateCa
         pPS = Device.CreateShader(ShaderCI);
     }
 
-    InputLayoutDescX InputLayout;
-    if (m_Settings.InputLayout.NumElements != 0)
-    {
-        PSOCreateInfo.GraphicsPipeline.InputLayout = m_Settings.InputLayout;
-    }
-    else
-    {
-        InputLayout
-            .Add(0u, 0u, 3u, VT_FLOAT32)  //float3 Pos     : ATTRIB0;
-            .Add(1u, 0u, 3u, VT_FLOAT32)  //float3 Normal  : ATTRIB1;
-            .Add(2u, 0u, 2u, VT_FLOAT32)  //float2 UV0     : ATTRIB2;
-            .Add(3u, 0u, 2u, VT_FLOAT32); //float2 UV1     : ATTRIB3;
-        if (m_Settings.MaxJointCount > 0)
-        {
-            InputLayout
-                .Add(4u, 1u, 4u, VT_FLOAT32)  //float4 Joint0  : ATTRIB4;
-                .Add(5u, 1u, 4u, VT_FLOAT32); //float4 Weight0 : ATTRIB5;
-        }
-        PSOCreateInfo.GraphicsPipeline.InputLayout = InputLayout;
-    }
+    const auto InputLayout                     = GetInputLayout();
+    PSOCreateInfo.GraphicsPipeline.InputLayout = InputLayout;
 
     IPipelineResourceSignature* ppSignatures[] = {m_ResourceSignature};
     PSOCreateInfo.ppResourceSignatures         = ppSignatures;

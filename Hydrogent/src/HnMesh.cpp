@@ -157,7 +157,8 @@ void HnMesh::UpdateTopology(pxr::HdSceneDelegate& SceneDelegate,
     MeshUtil.ComputeTriangleIndices(
         &m_IndexData->TrianglesFaceIndices,
         &m_IndexData->PrimitiveParam,
-        &m_IndexData->TrianglesEdgeIndices);
+        nullptr);
+    MeshUtil.EnumerateEdges(&m_IndexData->MeshEdgeIndices);
 
     DirtyBits &= ~pxr::HdChangeTracker::DirtyTopology;
 }
@@ -315,7 +316,7 @@ void HnMesh::UpdateIndexBuffer(const RenderDeviceX_N& Device)
     {
         const auto Name = GetId().GetString() + " - Edge Index Buffer";
 
-        m_NumEdges = static_cast<size_t>(m_IndexData->TrianglesEdgeIndices.size()) / 2;
+        m_NumEdges = static_cast<size_t>(m_IndexData->MeshEdgeIndices.size());
 
         BufferDesc Desc{
             Name.c_str(),
@@ -324,7 +325,7 @@ void HnMesh::UpdateIndexBuffer(const RenderDeviceX_N& Device)
             USAGE_IMMUTABLE,
         };
 
-        BufferData InitData{m_IndexData->TrianglesEdgeIndices.data(), Desc.Size};
+        BufferData InitData{m_IndexData->MeshEdgeIndices.data(), Desc.Size};
         m_pEdgeIndexBuffer = Device.CreateBuffer(Desc, &InitData);
     }
 

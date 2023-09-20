@@ -59,6 +59,8 @@
 "	int   DebugViewType;\n"
 "    float OcclusionStrength;\n"
 "    float EmissionScale;\n"
+"\n"
+"    float4 WireframeColor;\n"
 "};\n"
 "#ifdef CHECK_STRUCT_ALIGNMENT\n"
 "	CHECK_STRUCT_ALIGNMENT(PBRRendererShaderParameters);\n"

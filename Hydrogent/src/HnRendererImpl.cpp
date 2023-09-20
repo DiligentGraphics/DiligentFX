@@ -31,7 +31,7 @@
 #include "HnTokens.hpp"
 
 #include "EngineMemory.h"
-#include "PBR_Renderer.hpp"
+#include "USD_Renderer.hpp"
 #include "EnvMapRenderer.hpp"
 #include "MapHelper.hpp"
 
@@ -69,30 +69,30 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters*         pRefCounters,
     m_Device{pDevice},
     m_CameraAttribsCB{CI.pCameraAttribsCB},
     m_LightAttribsCB{CI.pLightAttribsCB},
-    m_PBRRenderer{
-        std::make_shared<PBR_Renderer>(
+    m_USDRenderer{
+        std::make_shared<USD_Renderer>(
             pDevice,
             nullptr,
             pContext,
             [](const HnRendererCreateInfo& CI) {
-                PBR_Renderer::CreateInfo PBRRendererCI;
-                PBRRendererCI.RTVFmt = CI.RTVFormat;
-                PBRRendererCI.DSVFmt = CI.DSVFormat;
+                USD_Renderer::CreateInfo USDRendererCI;
+                USDRendererCI.RTVFmt = CI.RTVFormat;
+                USDRendererCI.DSVFmt = CI.DSVFormat;
 
-                PBRRendererCI.FrontCCW       = CI.FrontCCW;
-                PBRRendererCI.AllowDebugView = true;
-                PBRRendererCI.UseIBL         = true;
-                PBRRendererCI.UseAO          = true;
-                PBRRendererCI.UseEmissive    = false;
+                USDRendererCI.FrontCCW       = CI.FrontCCW;
+                USDRendererCI.AllowDebugView = true;
+                USDRendererCI.UseIBL         = true;
+                USDRendererCI.UseAO          = true;
+                USDRendererCI.UseEmissive    = false;
 
                 // Use samplers from texture views
-                PBRRendererCI.UseImmutableSamplers = false;
+                USDRendererCI.UseImmutableSamplers = false;
                 // Disable animation
-                PBRRendererCI.MaxJointCount = 0;
+                USDRendererCI.MaxJointCount = 0;
                 // Use separate textures for metallic and roughness
-                PBRRendererCI.UseSeparateMetallicRoughnessTextures = true;
+                USDRendererCI.UseSeparateMetallicRoughnessTextures = true;
 
-                PBRRendererCI.ConvertOutputToSRGB = CI.ConvertOutputToSRGB;
+                USDRendererCI.ConvertOutputToSRGB = CI.ConvertOutputToSRGB;
 
                 static constexpr LayoutElement Inputs[] =
                     {
@@ -102,10 +102,10 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters*         pRefCounters,
                         {3, 3, 2, VT_FLOAT32}, //float2 UV1     : ATTRIB3;
                     };
 
-                PBRRendererCI.InputLayout.LayoutElements = Inputs;
-                PBRRendererCI.InputLayout.NumElements    = _countof(Inputs);
+                USDRendererCI.InputLayout.LayoutElements = Inputs;
+                USDRendererCI.InputLayout.NumElements    = _countof(Inputs);
 
-                return PBRRendererCI;
+                return USDRendererCI;
             }(CI)),
     },
     m_EnvMapRenderer{
@@ -120,7 +120,7 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters*         pRefCounters,
 
                 return EnvMapRndrCI;
             }(CI, pDevice))},
-    m_RenderDelegate{HnRenderDelegate::Create({pDevice, pContext, m_CameraAttribsCB, m_LightAttribsCB, m_PBRRenderer})}
+    m_RenderDelegate{HnRenderDelegate::Create({pDevice, pContext, m_CameraAttribsCB, m_LightAttribsCB, m_USDRenderer})}
 {
 }
 
@@ -200,7 +200,7 @@ void HnRendererImpl::Draw(IDeviceContext* pCtx, const HnDrawAttribs& Attribs)
     if (Meshes.empty())
         return;
 
-    if (auto* pEnvMapSRV = m_PBRRenderer->GetPrefilteredEnvMapSRV())
+    if (auto* pEnvMapSRV = m_USDRenderer->GetPrefilteredEnvMapSRV())
     {
         Diligent::HLSL::ToneMappingAttribs TMAttribs;
         TMAttribs.iToneMappingMode     = TONE_MAPPING_MODE_UNCHARTED2;
@@ -219,9 +219,12 @@ void HnRendererImpl::Draw(IDeviceContext* pCtx, const HnDrawAttribs& Attribs)
         m_EnvMapRenderer->Render(EnvMapAttribs, TMAttribs);
     }
 
-    for (auto AlphaMode : {PBR_Renderer::ALPHA_MODE_OPAQUE, PBR_Renderer::ALPHA_MODE_MASK, PBR_Renderer::ALPHA_MODE_BLEND})
+    for (auto AlphaMode : {USD_Renderer::ALPHA_MODE_OPAQUE, USD_Renderer::ALPHA_MODE_MASK, USD_Renderer::ALPHA_MODE_BLEND})
     {
-        pCtx->SetPipelineState(m_PBRRenderer->GetPSO({AlphaMode, /*DoubleSided = */ false}));
+        if (Attribs.RenderMode == HN_RENDER_MODE_MESH_EDGES)
+            pCtx->SetPipelineState(m_USDRenderer->GetMeshEdgesPSO());
+        else
+            pCtx->SetPipelineState(m_USDRenderer->GetPSO({AlphaMode, /*DoubleSided = */ false}));
 
         for (auto mesh_it : Meshes)
         {
@@ -243,7 +246,9 @@ void HnRendererImpl::Draw(IDeviceContext* pCtx, const HnDrawAttribs& Attribs)
             auto* pVB0 = Mesh.GetVertexBuffer(HnMesh::VERTEX_BUFFER_ID_POSITION);
             auto* pVB1 = Mesh.GetVertexBuffer(HnMesh::VERTEX_BUFFER_ID_NORMAL);
             auto* pVB2 = Mesh.GetVertexBuffer(HnMesh::VERTEX_BUFFER_ID_TEXCOORD);
-            auto* pIB  = Mesh.GetTriangleIndexBuffer();
+            auto* pIB  = (Attribs.RenderMode == HN_RENDER_MODE_MESH_EDGES) ?
+                Mesh.GetEdgeIndexBuffer() :
+                Mesh.GetTriangleIndexBuffer();
 
             if (pVB0 == nullptr || pVB1 == nullptr || pVB2 == nullptr || pIB == nullptr || pSRB == nullptr)
                 continue;
@@ -254,7 +259,7 @@ void HnRendererImpl::Draw(IDeviceContext* pCtx, const HnDrawAttribs& Attribs)
             pCtx->SetIndexBuffer(pIB, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
             {
-                MapHelper<HLSL::PBRShaderAttribs> pDstShaderAttribs{pCtx, m_PBRRenderer->GetPBRAttribsCB(), MAP_WRITE, MAP_FLAG_DISCARD};
+                MapHelper<HLSL::PBRShaderAttribs> pDstShaderAttribs{pCtx, m_USDRenderer->GetPBRAttribsCB(), MAP_WRITE, MAP_FLAG_DISCARD};
 
                 pDstShaderAttribs->Transforms.NodeMatrix = Mesh.GetTransform() * Attribs.Transform;
                 pDstShaderAttribs->Transforms.JointCount = 0;
@@ -272,10 +277,14 @@ void HnRendererImpl::Draw(IDeviceContext* pCtx, const HnDrawAttribs& Attribs)
                 RendererParams.WhitePoint               = Attribs.WhitePoint;
                 RendererParams.IBLScale                 = Attribs.IBLScale;
                 RendererParams.PrefilteredCubeMipLevels = 5; //m_Settings.UseIBL ? static_cast<float>(m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels) : 0.f;
+                RendererParams.WireframeColor           = Attribs.WireframeColor;
             }
 
             pCtx->CommitShaderResources(pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-            DrawIndexedAttribs DrawAttrs{Mesh.GetNumTriangles() * 3, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
+            DrawIndexedAttribs DrawAttrs = (Attribs.RenderMode == HN_RENDER_MODE_MESH_EDGES) ?
+                DrawIndexedAttribs{Mesh.GetNumEdges() * 2, VT_UINT32, DRAW_FLAG_VERIFY_ALL} :
+                DrawIndexedAttribs{Mesh.GetNumTriangles() * 3, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
+
             pCtx->DrawIndexed(DrawAttrs);
         }
     }
@@ -283,7 +292,7 @@ void HnRendererImpl::Draw(IDeviceContext* pCtx, const HnDrawAttribs& Attribs)
 
 void HnRendererImpl::SetEnvironmentMap(IDeviceContext* pCtx, ITextureView* pEnvironmentMapSRV)
 {
-    m_PBRRenderer->PrecomputeCubemaps(m_Device, m_Device, pCtx, pEnvironmentMapSRV);
+    m_USDRenderer->PrecomputeCubemaps(m_Device, m_Device, pCtx, pEnvironmentMapSRV);
 }
 
 } // namespace USD
