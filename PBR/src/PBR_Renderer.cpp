@@ -768,11 +768,11 @@ void PBR_Renderer::CreatePSO(IRenderDevice* pDevice, IRenderStateCache* pStateCa
         }
         PSOCreateInfo.pPS = pMeshIdPS;
 
-        PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_NONE;
+        PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_BACK;
 
         m_MeshIdPSO[0] = Device.CreateGraphicsPipelineState(PSOCreateInfo);
 
-        PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_BACK;
+        PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_NONE;
 
         m_MeshIdPSO[1] = Device.CreateGraphicsPipelineState(PSOCreateInfo);
     }

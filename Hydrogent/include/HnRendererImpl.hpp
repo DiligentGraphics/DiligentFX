@@ -106,6 +106,7 @@ private:
     pxr::HdRenderPassSharedPtr m_GeometryPass;
 
     RefCntAutoPtr<ITexture> m_MeshIdTexture;
+    RefCntAutoPtr<ITexture> m_DepthBuffer;
 
     GPUCompletionAwaitQueue<RefCntAutoPtr<ITexture>> m_MeshIdReadBackQueue;
 };

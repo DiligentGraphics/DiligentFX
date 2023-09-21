@@ -381,12 +381,26 @@ void HnRendererImpl::RenderPrimId(IDeviceContext* pContext, ITextureView* pDepth
         TexDesc.MipLevels = 1;
 
         m_MeshIdTexture = m_Device.CreateTexture(TexDesc, nullptr);
+
+        if (m_Device.GetDeviceInfo().IsGLDevice())
+        {
+            // We can't use the default framebuffer's depth buffer with our own render target,
+            // so we have to create a copy.
+            m_DepthBuffer.Release();
+            auto DepthDescCopy = DepthDesc;
+            DepthDescCopy.Name = "Depth buffer copy";
+            m_DepthBuffer      = m_Device.CreateTexture(DepthDescCopy, nullptr);
+        }
     }
 
+    if (m_DepthBuffer)
+        pDepthBuffer = m_DepthBuffer->GetDefaultView(TEXTURE_VIEW_DEPTH_STENCIL);
     ITextureView* pRTVs[] = {m_MeshIdTexture->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET)};
     pContext->SetRenderTargets(_countof(pRTVs), pRTVs, pDepthBuffer, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     float ClearColor[] = {0, 0, 0, 0};
     pContext->ClearRenderTarget(pRTVs[0], ClearColor, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    if (m_DepthBuffer)
+        pContext->ClearDepthStencil(pDepthBuffer, CLEAR_DEPTH_FLAG, 1.f, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
     const auto& Meshes = m_RenderDelegate->GetMeshes();
     if (Meshes.empty())
