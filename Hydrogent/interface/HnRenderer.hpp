@@ -31,6 +31,8 @@
 #include "../../../Graphics/GraphicsEngine/interface/DeviceContext.h"
 #include "../../../Common/interface/BasicMath.hpp"
 
+#include "pxr/usd/usd/stage.h"
+
 namespace Diligent
 {
 
@@ -87,7 +89,7 @@ struct HnDrawAttribs
 class IHnRenderer : public IObject
 {
 public:
-    virtual void LoadUSDStage(const char* FileName) = 0;
+    virtual void LoadUSDStage(pxr::UsdStageRefPtr& Stage) = 0;
 
     virtual void Update() = 0;
 

@@ -67,6 +67,7 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters*         pRefCounters,
                                const HnRendererCreateInfo& CI) :
     TBase{pRefCounters},
     m_Device{pDevice},
+    m_Context{pContext},
     m_CameraAttribsCB{CI.pCameraAttribsCB},
     m_LightAttribsCB{CI.pLightAttribsCB},
     m_USDRenderer{
@@ -119,8 +120,7 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters*         pRefCounters,
                 EnvMapRndrCI.ConvertOutputToSRGB = CI.ConvertOutputToSRGB;
 
                 return EnvMapRndrCI;
-            }(CI, pDevice))},
-    m_RenderDelegate{HnRenderDelegate::Create({pDevice, pContext, m_CameraAttribsCB, m_LightAttribsCB, m_USDRenderer})}
+            }(CI, pDevice))}
 {
 }
 
@@ -130,14 +130,11 @@ HnRendererImpl::~HnRendererImpl()
     delete m_RenderIndex;
 }
 
-void HnRendererImpl::LoadUSDStage(const char* FileName)
+void HnRendererImpl::LoadUSDStage(pxr::UsdStageRefPtr& Stage)
 {
-    m_Stage = pxr::UsdStage::Open(FileName);
-    if (!m_Stage)
-    {
-        LOG_ERROR_MESSAGE("Failed to open USD stage '", FileName, "'");
-        return;
-    }
+    m_Stage = Stage;
+
+    m_RenderDelegate = HnRenderDelegate::Create({m_Device, m_Context, m_CameraAttribsCB, m_LightAttribsCB, m_USDRenderer});
 
     m_RenderIndex     = pxr::HdRenderIndex::New(m_RenderDelegate.get(), pxr::HdDriverVector{});
     m_ImagingDelegate = new pxr::UsdImagingDelegate(m_RenderIndex, pxr::SdfPath::AbsoluteRootPath());

@@ -71,13 +71,14 @@ public:
 
     IMPLEMENT_QUERY_INTERFACE2_IN_PLACE(IID_HnRenderer, IID_Impl, TBase)
 
-    virtual void LoadUSDStage(const char* FileName) override final;
+    virtual void LoadUSDStage(pxr::UsdStageRefPtr& Stage) override final;
     virtual void Update() override final;
     virtual void Draw(IDeviceContext* pCtx, const HnDrawAttribs& Attribs) override final;
     virtual void SetEnvironmentMap(IDeviceContext* pCtx, ITextureView* pEnvironmentMapSRV) override final;
 
 private:
-    RenderDeviceWithCache_N m_Device;
+    RenderDeviceWithCache_N       m_Device;
+    RefCntAutoPtr<IDeviceContext> m_Context;
 
     RefCntAutoPtr<IBuffer> m_CameraAttribsCB;
     RefCntAutoPtr<IBuffer> m_LightAttribsCB;
