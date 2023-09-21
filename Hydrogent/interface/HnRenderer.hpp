@@ -84,8 +84,11 @@ struct HnDrawAttribs
     bool EnablePrimIdQueries = false;
 
     float4 WireframeColor = float4{1, 1, 1, 1};
+    float4 SlectionColor  = float4{0.25f, 0.25f, 0.1f, 0.0f};
 
     HN_RENDER_MODE RenderMode = HN_RENDER_MODE_SOLID;
+
+    const char* SelectedPrim = nullptr;
 };
 
 class IHnRenderer : public IObject
@@ -99,6 +102,17 @@ public:
 
     virtual void SetEnvironmentMap(IDeviceContext* pCtx, ITextureView* pEnvironmentMapSRV) = 0;
 
+    /// Queries primitive Id from the previously rendered primitive Id texture.
+    ///
+    /// \param [in] pCtx - device context to run graphics commands.
+    /// \param [in] X    - query x coordinate.
+    /// \param [in] Y    - query x coordinate.
+    ///
+    /// \return     If query result is not available, returns nullptr.
+    ///             If query result is available, but no primitive is selected, returns empty string.
+    ///             Otherwise, returns the primitive SDF path.
+    ///
+    /// \remarks    Only a single query per frame is supported.
     virtual const char* QueryPrimId(IDeviceContext* pCtx, Uint32 X, Uint32 Y) = 0;
 
     virtual void RenderPrimId(IDeviceContext* pCtx, ITextureView* pDepthBuffer, const float4x4& Transform) = 0;

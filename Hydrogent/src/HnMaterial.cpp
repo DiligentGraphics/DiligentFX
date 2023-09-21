@@ -86,7 +86,7 @@ void HnMaterial::Sync(pxr::HdSceneDelegate* SceneDelegate,
         AllocateTextures(TexRegistry);
 
         m_ShaderAttribs.BaseColorFactor = float4{1, 1, 1, 1};
-        m_ShaderAttribs.EmissiveFactor  = float4{1, 1, 1, 1};
+        m_ShaderAttribs.EmissiveFactor  = float4{0, 0, 0, 0};
         m_ShaderAttribs.SpecularFactor  = float4{1, 1, 1, 1};
         m_ShaderAttribs.MetallicFactor  = 1;
         m_ShaderAttribs.RoughnessFactor = 1;
@@ -224,6 +224,8 @@ void HnMaterial::UpdateSRB(IRenderDevice* pDevice,
     SetTexture(HnTokens->roughness, PbrRenderer.GetWhiteTexSRV(), "g_RoughnessMap");
     SetTexture(HnTokens->normal, PbrRenderer.GetDefaultNormalMapSRV(), "g_NormalMap");
     SetTexture(HnTokens->occlusion, PbrRenderer.GetWhiteTexSRV(), "g_AOMap");
+    if (auto* pVar = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_EmissiveMap"))
+        pVar->Set(PbrRenderer.GetWhiteTexSRV());
 }
 
 } // namespace USD

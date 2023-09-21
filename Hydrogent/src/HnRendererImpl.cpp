@@ -84,7 +84,7 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters*         pRefCounters,
                 USDRendererCI.AllowDebugView        = true;
                 USDRendererCI.UseIBL                = true;
                 USDRendererCI.UseAO                 = true;
-                USDRendererCI.UseEmissive           = false;
+                USDRendererCI.UseEmissive           = true;
                 USDRendererCI.EnableMeshIdRendering = true;
 
                 // Use samplers from texture views
@@ -277,6 +277,9 @@ void HnRendererImpl::RenderMesh(IDeviceContext* pCtx, const HnMesh& Mesh, const 
         static_assert(sizeof(pDstShaderAttribs->Material) == sizeof(ShaderAttribs), "The sizeof(PBRMaterialShaderInfo) is inconsistent with sizeof(ShaderAttribs)");
         memcpy(&pDstShaderAttribs->Material, &ShaderAttribs, sizeof(ShaderAttribs));
 
+        if (Attribs.SelectedPrim != nullptr && Mesh.GetId().GetString() == Attribs.SelectedPrim)
+            pDstShaderAttribs->Material.EmissiveFactor = ShaderAttribs.EmissiveFactor + Attribs.SlectionColor;
+
         auto& RendererParams = pDstShaderAttribs->Renderer;
 
         RendererParams.DebugViewType            = Attribs.DebugView;
@@ -306,7 +309,10 @@ void HnRendererImpl::SetEnvironmentMap(IDeviceContext* pCtx, ITextureView* pEnvi
 
 const char* HnRendererImpl::QueryPrimId(IDeviceContext* pCtx, Uint32 X, Uint32 Y)
 {
-    Uint32 MeshUid = 0;
+    if (!m_MeshIdTexture)
+        return nullptr;
+
+    Uint32 MeshUid = ~0u;
     while (auto pStagingTex = m_MeshIdReadBackQueue.GetFirstCompleted())
     {
         {
@@ -345,7 +351,10 @@ const char* HnRendererImpl::QueryPrimId(IDeviceContext* pCtx, Uint32 X, Uint32 Y
     pCtx->CopyTexture(CopyAttribs);
     m_MeshIdReadBackQueue.Enqueue(pCtx, std::move(pStagingTex));
 
-    return MeshUid != 0 ? m_RenderDelegate->GetMeshPrimId(MeshUid) : nullptr;
+    if (MeshUid == ~0u)
+        return nullptr;
+    else
+        return MeshUid != 0 ? m_RenderDelegate->GetMeshPrimId(MeshUid) : "";
 }
 
 void HnRendererImpl::RenderPrimId(IDeviceContext* pContext, ITextureView* pDepthBuffer, const float4x4& Transform)
