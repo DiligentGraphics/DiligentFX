@@ -35,6 +35,7 @@
 #include "RefCntAutoPtr.hpp"
 #include "BasicMath.hpp"
 #include "ObjectBase.hpp"
+#include "GPUCompletionAwaitQueue.hpp"
 
 #include "pxr/usd/usd/stage.h"
 #include "pxr/imaging/hd/tokens.h"
@@ -53,6 +54,8 @@ namespace USD
 {
 
 class HnRenderDelegate;
+class HnMesh;
+class HnMaterial;
 
 class HnRendererImpl final : public ObjectBase<IHnRenderer>
 {
@@ -76,6 +79,13 @@ public:
     virtual void Draw(IDeviceContext* pCtx, const HnDrawAttribs& Attribs) override final;
     virtual void SetEnvironmentMap(IDeviceContext* pCtx, ITextureView* pEnvironmentMapSRV) override final;
 
+    virtual const char* QueryPrimId(IDeviceContext* pCtx, Uint32 X, Uint32 Y) override final;
+
+    void RenderPrimId(IDeviceContext* pContext, ITextureView* pDepthBuffer, const float4x4& Transform) override final;
+
+private:
+    void RenderMesh(IDeviceContext* pCtx, const HnMesh& Mesh, const HnMaterial& Material, const HnDrawAttribs& Attribs);
+
 private:
     RenderDeviceWithCache_N       m_Device;
     RefCntAutoPtr<IDeviceContext> m_Context;
@@ -94,6 +104,10 @@ private:
     pxr::UsdImagingDelegate*   m_ImagingDelegate = nullptr;
     pxr::TfTokenVector         m_RenderTags;
     pxr::HdRenderPassSharedPtr m_GeometryPass;
+
+    RefCntAutoPtr<ITexture> m_MeshIdTexture;
+
+    GPUCompletionAwaitQueue<RefCntAutoPtr<ITexture>> m_MeshIdReadBackQueue;
 };
 
 } // namespace USD

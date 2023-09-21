@@ -29,6 +29,7 @@
 #include <memory>
 #include <unordered_map>
 #include <string>
+#include <atomic>
 
 #include "pxr/imaging/hd/renderDelegate.h"
 
@@ -185,6 +186,8 @@ public:
 
     const HnMaterial* GetMaterial(const char* Id) const;
 
+    const char* GetMeshPrimId(Uint32 UID) const;
+
 private:
     static const pxr::TfTokenVector SupportedRPrimTypes;
     static const pxr::TfTokenVector SupportedSPrimTypes;
@@ -198,8 +201,11 @@ private:
 
     HnTextureRegistry m_TextureRegistry;
 
+    std::atomic<Uint32> m_MeshUIDCounter{1};
+
     std::unordered_map<std::string, std::shared_ptr<HnMaterial>> m_Materials;
     std::unordered_map<std::string, std::shared_ptr<HnMesh>>     m_Meshes;
+    std::unordered_map<Uint32, std::string>                      m_MeshUIDToPrimId;
 };
 
 } // namespace USD

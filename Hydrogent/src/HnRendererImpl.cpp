@@ -80,11 +80,12 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters*         pRefCounters,
                 USDRendererCI.RTVFmt = CI.RTVFormat;
                 USDRendererCI.DSVFmt = CI.DSVFormat;
 
-                USDRendererCI.FrontCCW       = CI.FrontCCW;
-                USDRendererCI.AllowDebugView = true;
-                USDRendererCI.UseIBL         = true;
-                USDRendererCI.UseAO          = true;
-                USDRendererCI.UseEmissive    = false;
+                USDRendererCI.FrontCCW              = CI.FrontCCW;
+                USDRendererCI.AllowDebugView        = true;
+                USDRendererCI.UseIBL                = true;
+                USDRendererCI.UseAO                 = true;
+                USDRendererCI.UseEmissive           = false;
+                USDRendererCI.EnableMeshIdRendering = true;
 
                 // Use samplers from texture views
                 USDRendererCI.UseImmutableSamplers = false;
@@ -120,7 +121,8 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters*         pRefCounters,
                 EnvMapRndrCI.ConvertOutputToSRGB = CI.ConvertOutputToSRGB;
 
                 return EnvMapRndrCI;
-            }(CI, pDevice))}
+            }(CI, pDevice))},
+    m_MeshIdReadBackQueue{pDevice}
 {
 }
 
@@ -216,6 +218,7 @@ void HnRendererImpl::Draw(IDeviceContext* pCtx, const HnDrawAttribs& Attribs)
         m_EnvMapRenderer->Render(EnvMapAttribs, TMAttribs);
     }
 
+    // TODO: handle double-sided materials
     for (auto AlphaMode : {USD_Renderer::ALPHA_MODE_OPAQUE, USD_Renderer::ALPHA_MODE_MASK, USD_Renderer::ALPHA_MODE_BLEND})
     {
         if (Attribs.RenderMode == HN_RENDER_MODE_MESH_EDGES)
@@ -239,57 +242,172 @@ void HnRendererImpl::Draw(IDeviceContext* pCtx, const HnDrawAttribs& Attribs)
             if (ShaderAttribs.AlphaMode != AlphaMode)
                 continue;
 
-            auto* pSRB = pMaterial->GetSRB();
-            auto* pVB0 = Mesh.GetVertexBuffer(HnMesh::VERTEX_BUFFER_ID_POSITION);
-            auto* pVB1 = Mesh.GetVertexBuffer(HnMesh::VERTEX_BUFFER_ID_NORMAL);
-            auto* pVB2 = Mesh.GetVertexBuffer(HnMesh::VERTEX_BUFFER_ID_TEXCOORD);
-            auto* pIB  = (Attribs.RenderMode == HN_RENDER_MODE_MESH_EDGES) ?
-                Mesh.GetEdgeIndexBuffer() :
-                Mesh.GetTriangleIndexBuffer();
-
-            if (pVB0 == nullptr || pVB1 == nullptr || pVB2 == nullptr || pIB == nullptr || pSRB == nullptr)
-                continue;
-
-            // Bind vertex and index buffers
-            IBuffer* pBuffs[] = {pVB0, pVB1, pVB2, pVB2};
-            pCtx->SetVertexBuffers(0, _countof(pBuffs), pBuffs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-            pCtx->SetIndexBuffer(pIB, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-
-            {
-                MapHelper<HLSL::PBRShaderAttribs> pDstShaderAttribs{pCtx, m_USDRenderer->GetPBRAttribsCB(), MAP_WRITE, MAP_FLAG_DISCARD};
-
-                pDstShaderAttribs->Transforms.NodeMatrix = Mesh.GetTransform() * Attribs.Transform;
-                pDstShaderAttribs->Transforms.JointCount = 0;
-
-                static_assert(sizeof(pDstShaderAttribs->Material) == sizeof(ShaderAttribs), "The sizeof(PBRMaterialShaderInfo) is inconsistent with sizeof(ShaderAttribs)");
-                memcpy(&pDstShaderAttribs->Material, &ShaderAttribs, sizeof(ShaderAttribs));
-
-                auto& RendererParams = pDstShaderAttribs->Renderer;
-
-                RendererParams.DebugViewType            = Attribs.DebugView;
-                RendererParams.OcclusionStrength        = Attribs.OcclusionStrength;
-                RendererParams.EmissionScale            = Attribs.EmissionScale;
-                RendererParams.AverageLogLum            = Attribs.AverageLogLum;
-                RendererParams.MiddleGray               = Attribs.MiddleGray;
-                RendererParams.WhitePoint               = Attribs.WhitePoint;
-                RendererParams.IBLScale                 = Attribs.IBLScale;
-                RendererParams.PrefilteredCubeMipLevels = 5; //m_Settings.UseIBL ? static_cast<float>(m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels) : 0.f;
-                RendererParams.WireframeColor           = Attribs.WireframeColor;
-            }
-
-            pCtx->CommitShaderResources(pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-            DrawIndexedAttribs DrawAttrs = (Attribs.RenderMode == HN_RENDER_MODE_MESH_EDGES) ?
-                DrawIndexedAttribs{Mesh.GetNumEdges() * 2, VT_UINT32, DRAW_FLAG_VERIFY_ALL} :
-                DrawIndexedAttribs{Mesh.GetNumTriangles() * 3, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
-
-            pCtx->DrawIndexed(DrawAttrs);
+            RenderMesh(pCtx, Mesh, *pMaterial, Attribs);
         }
     }
+}
+
+void HnRendererImpl::RenderMesh(IDeviceContext* pCtx, const HnMesh& Mesh, const HnMaterial& Material, const HnDrawAttribs& Attribs)
+{
+    auto* pSRB = Material.GetSRB();
+    auto* pVB0 = Mesh.GetVertexBuffer(HnMesh::VERTEX_BUFFER_ID_POSITION);
+    auto* pVB1 = Mesh.GetVertexBuffer(HnMesh::VERTEX_BUFFER_ID_NORMAL);
+    auto* pVB2 = Mesh.GetVertexBuffer(HnMesh::VERTEX_BUFFER_ID_TEXCOORD);
+
+    const auto& ShaderAttribs = Material.GetShaderAttribs();
+
+    auto* pIB = (Attribs.RenderMode == HN_RENDER_MODE_MESH_EDGES) ?
+        Mesh.GetEdgeIndexBuffer() :
+        Mesh.GetTriangleIndexBuffer();
+
+    if (pVB0 == nullptr || pVB1 == nullptr || pVB2 == nullptr || pIB == nullptr || pSRB == nullptr)
+        return;
+
+    // Bind vertex and index buffers
+    IBuffer* pBuffs[] = {pVB0, pVB1, pVB2, pVB2};
+    pCtx->SetVertexBuffers(0, _countof(pBuffs), pBuffs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    pCtx->SetIndexBuffer(pIB, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+    {
+        MapHelper<HLSL::PBRShaderAttribs> pDstShaderAttribs{pCtx, m_USDRenderer->GetPBRAttribsCB(), MAP_WRITE, MAP_FLAG_DISCARD};
+
+        pDstShaderAttribs->Transforms.NodeMatrix = Mesh.GetTransform() * Attribs.Transform;
+        pDstShaderAttribs->Transforms.JointCount = 0;
+
+        static_assert(sizeof(pDstShaderAttribs->Material) == sizeof(ShaderAttribs), "The sizeof(PBRMaterialShaderInfo) is inconsistent with sizeof(ShaderAttribs)");
+        memcpy(&pDstShaderAttribs->Material, &ShaderAttribs, sizeof(ShaderAttribs));
+
+        auto& RendererParams = pDstShaderAttribs->Renderer;
+
+        RendererParams.DebugViewType            = Attribs.DebugView;
+        RendererParams.OcclusionStrength        = Attribs.OcclusionStrength;
+        RendererParams.EmissionScale            = Attribs.EmissionScale;
+        RendererParams.AverageLogLum            = Attribs.AverageLogLum;
+        RendererParams.MiddleGray               = Attribs.MiddleGray;
+        RendererParams.WhitePoint               = Attribs.WhitePoint;
+        RendererParams.IBLScale                 = Attribs.IBLScale;
+        RendererParams.PrefilteredCubeMipLevels = 5; //m_Settings.UseIBL ? static_cast<float>(m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels) : 0.f;
+        RendererParams.WireframeColor           = Attribs.WireframeColor;
+        RendererParams.MeshId                   = Mesh.GetUID();
+    }
+
+    pCtx->CommitShaderResources(pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    DrawIndexedAttribs DrawAttrs = (Attribs.RenderMode == HN_RENDER_MODE_MESH_EDGES) ?
+        DrawIndexedAttribs{Mesh.GetNumEdges() * 2, VT_UINT32, DRAW_FLAG_VERIFY_ALL} :
+        DrawIndexedAttribs{Mesh.GetNumTriangles() * 3, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
+
+    pCtx->DrawIndexed(DrawAttrs);
 }
 
 void HnRendererImpl::SetEnvironmentMap(IDeviceContext* pCtx, ITextureView* pEnvironmentMapSRV)
 {
     m_USDRenderer->PrecomputeCubemaps(m_Device, m_Device, pCtx, pEnvironmentMapSRV);
+}
+
+const char* HnRendererImpl::QueryPrimId(IDeviceContext* pCtx, Uint32 X, Uint32 Y)
+{
+    Uint32 MeshUid = 0;
+    while (auto pStagingTex = m_MeshIdReadBackQueue.GetFirstCompleted())
+    {
+        {
+            MappedTextureSubresource MappedData;
+            pCtx->MapTextureSubresource(pStagingTex, 0, 0, MAP_READ, MAP_FLAG_DO_NOT_WAIT, nullptr, MappedData);
+            MeshUid = *static_cast<const Uint32*>(MappedData.pData);
+            pCtx->UnmapTextureSubresource(pStagingTex, 0, 0);
+        }
+        m_MeshIdReadBackQueue.Recycle(std::move(pStagingTex));
+    }
+
+    auto pStagingTex = m_MeshIdReadBackQueue.GetRecycled();
+    if (!pStagingTex)
+    {
+        TextureDesc StagingTexDesc;
+        StagingTexDesc.Name           = "Mesh ID staging tex";
+        StagingTexDesc.Usage          = USAGE_STAGING;
+        StagingTexDesc.Type           = RESOURCE_DIM_TEX_2D;
+        StagingTexDesc.BindFlags      = BIND_NONE;
+        StagingTexDesc.Format         = m_MeshIdTexture->GetDesc().Format;
+        StagingTexDesc.Width          = 1;
+        StagingTexDesc.Height         = 1;
+        StagingTexDesc.MipLevels      = 1;
+        StagingTexDesc.CPUAccessFlags = CPU_ACCESS_READ;
+        pStagingTex                   = m_Device.CreateTexture(StagingTexDesc, nullptr);
+        VERIFY_EXPR(pStagingTex);
+    }
+
+    CopyTextureAttribs CopyAttribs;
+    CopyAttribs.pSrcTexture = m_MeshIdTexture;
+    CopyAttribs.pDstTexture = pStagingTex;
+    Box SrcBox{X, X + 1, Y, Y + 1};
+    CopyAttribs.pSrcBox                  = &SrcBox;
+    CopyAttribs.SrcTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
+    CopyAttribs.DstTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
+    pCtx->CopyTexture(CopyAttribs);
+    m_MeshIdReadBackQueue.Enqueue(pCtx, std::move(pStagingTex));
+
+    return MeshUid != 0 ? m_RenderDelegate->GetMeshPrimId(MeshUid) : nullptr;
+}
+
+void HnRendererImpl::RenderPrimId(IDeviceContext* pContext, ITextureView* pDepthBuffer, const float4x4& Transform)
+{
+    const auto& DepthDesc = pDepthBuffer->GetTexture()->GetDesc();
+    if (m_MeshIdTexture)
+    {
+        const auto& MeshIdDesc = m_MeshIdTexture->GetDesc();
+        if (MeshIdDesc.Width != DepthDesc.Width || MeshIdDesc.Height != DepthDesc.Height)
+        {
+            m_MeshIdTexture.Release();
+        }
+    }
+
+    if (!m_MeshIdTexture)
+    {
+        TextureDesc TexDesc;
+        TexDesc.Name      = "Mesh ID";
+        TexDesc.Type      = RESOURCE_DIM_TEX_2D;
+        TexDesc.BindFlags = BIND_RENDER_TARGET;
+        TexDesc.Format    = TEX_FORMAT_RGBA8_UINT;
+        TexDesc.Width     = DepthDesc.Width;
+        TexDesc.Height    = DepthDesc.Height;
+        TexDesc.MipLevels = 1;
+
+        m_MeshIdTexture = m_Device.CreateTexture(TexDesc, nullptr);
+    }
+
+    ITextureView* pRTVs[] = {m_MeshIdTexture->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET)};
+    pContext->SetRenderTargets(_countof(pRTVs), pRTVs, pDepthBuffer, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    float ClearColor[] = {0, 0, 0, 0};
+    pContext->ClearRenderTarget(pRTVs[0], ClearColor, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+    const auto& Meshes = m_RenderDelegate->GetMeshes();
+    if (Meshes.empty())
+        return;
+
+    auto* pMeshIdPSO = m_USDRenderer->GetMeshIdPSO(false);
+    if (pMeshIdPSO == nullptr)
+        return;
+
+    // TODO: handle double-sided materials
+    pContext->SetPipelineState(pMeshIdPSO);
+
+    HnDrawAttribs Attribs;
+    Attribs.Transform = Transform;
+    for (auto mesh_it : Meshes)
+    {
+        if (!mesh_it.second)
+            continue;
+
+        auto& Mesh = *mesh_it.second;
+
+        const auto& MaterialId = Mesh.GetMaterialId();
+        const auto* pMaterial  = m_RenderDelegate->GetMaterial(MaterialId.GetText());
+        if (pMaterial == nullptr)
+            return;
+
+        RenderMesh(pContext, Mesh, *pMaterial, Attribs);
+    }
+
+    pContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
 }
 
 } // namespace USD

@@ -61,6 +61,11 @@ struct PBRRendererShaderParameters
     float EmissionScale;
 
     float4 WireframeColor;
+
+    uint MeshId;
+    uint Padding0;
+    uint Padding1;
+    uint Padding2;
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
 	CHECK_STRUCT_ALIGNMENT(PBRRendererShaderParameters);

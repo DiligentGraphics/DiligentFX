@@ -748,6 +748,34 @@ void PBR_Renderer::CreatePSO(IRenderDevice* pDevice, IRenderStateCache* pStateCa
         auto pDoubleSidedBlendPSO = Device.CreateGraphicsPipelineState(PSOCreateInfo);
         AddPSO(Key, std::move(pDoubleSidedBlendPSO));
     }
+
+
+    if (m_Settings.EnableMeshIdRendering)
+    {
+        PSOCreateInfo.PSODesc.Name = "Render Mesh Id PSO";
+
+        PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthFunc = COMPARISON_FUNC_LESS_EQUAL;
+        PSOCreateInfo.GraphicsPipeline.BlendDesc                  = BS_Default;
+        PSOCreateInfo.GraphicsPipeline.RTVFormats[0]              = MeshIdFmt;
+
+        RefCntAutoPtr<IShader> pMeshIdPS;
+        {
+            ShaderCI.Desc       = {"Mesh Id PS", SHADER_TYPE_PIXEL, true};
+            ShaderCI.EntryPoint = "main";
+            ShaderCI.FilePath   = "RenderMeshId.psh";
+
+            pMeshIdPS = Device.CreateShader(ShaderCI);
+        }
+        PSOCreateInfo.pPS = pMeshIdPS;
+
+        PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_NONE;
+
+        m_MeshIdPSO[0] = Device.CreateGraphicsPipelineState(PSOCreateInfo);
+
+        PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_BACK;
+
+        m_MeshIdPSO[1] = Device.CreateGraphicsPipelineState(PSOCreateInfo);
+    }
 }
 
 void PBR_Renderer::AddPSO(const PSOKey& Key, RefCntAutoPtr<IPipelineState> pPSO)

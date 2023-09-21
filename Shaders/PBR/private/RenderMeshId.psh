@@ -1,0 +1,20 @@
+#include "RenderPBRCommon.fxh"
+#include "PBR_Structures.fxh"
+
+cbuffer cbPBRAttribs
+{
+    PBRShaderAttribs g_PBRAttribs;
+}
+
+void main(in PbrVsOutput VSOut,
+          out uint4 OutMeshId : SV_Target)
+{
+    OutMeshId.r = (g_PBRAttribs.Renderer.MeshId >> 0u) & 0xFFu;
+    OutMeshId.g = (g_PBRAttribs.Renderer.MeshId >> 8u) & 0xFFu;
+    OutMeshId.b = (g_PBRAttribs.Renderer.MeshId >> 16u) & 0xFFu;
+    OutMeshId.a = (g_PBRAttribs.Renderer.MeshId >> 24u) & 0xFFu;
+    //OutMeshId.r = float((g_PBRAttribs.Renderer.MeshId >>  0u) & 0xFFu) / 255.0;
+    //OutMeshId.g = float((g_PBRAttribs.Renderer.MeshId >>  8u) & 0xFFu) / 255.0;
+    //OutMeshId.b = float((g_PBRAttribs.Renderer.MeshId >> 16u) & 0xFFu) / 255.0;
+    //OutMeshId.a = float((g_PBRAttribs.Renderer.MeshId >> 24u) & 0xFFu) / 255.0;
+}

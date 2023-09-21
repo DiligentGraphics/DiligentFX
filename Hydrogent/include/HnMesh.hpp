@@ -52,7 +52,8 @@ class HnMesh final : public pxr::HdMesh
 {
 public:
     static std::shared_ptr<HnMesh> Create(const pxr::TfToken& typeId,
-                                          const pxr::SdfPath& id);
+                                          const pxr::SdfPath& id,
+                                          Uint32              UID);
 
     ~HnMesh();
 
@@ -92,6 +93,8 @@ public:
 
     const pxr::SdfPath& GetMaterialId() const { return m_MaterialId; }
 
+    Uint32 GetUID() const { return m_UID; }
+
 protected:
     // This callback from Rprim gives the prim an opportunity to set
     // additional dirty bits based on those already set.
@@ -107,7 +110,8 @@ protected:
 
 private:
     HnMesh(const pxr::TfToken& typeId,
-           const pxr::SdfPath& id);
+           const pxr::SdfPath& id,
+           Uint32              UID);
 
     void UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
                     pxr::HdRenderParam*   RenderParam,
@@ -125,6 +129,8 @@ private:
                         const pxr::TfToken&   ReprToken);
 
 private:
+    const Uint32 m_UID;
+
     pxr::HdMeshTopology m_Topology;
 
     struct IndexData

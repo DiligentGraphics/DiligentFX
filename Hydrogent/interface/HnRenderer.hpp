@@ -81,6 +81,8 @@ struct HnDrawAttribs
     float WhitePoint        = 3.0f;
     float IBLScale          = 1;
 
+    bool EnablePrimIdQueries = false;
+
     float4 WireframeColor = float4{1, 1, 1, 1};
 
     HN_RENDER_MODE RenderMode = HN_RENDER_MODE_SOLID;
@@ -96,6 +98,10 @@ public:
     virtual void Draw(IDeviceContext* pCtx, const HnDrawAttribs& Attribs) = 0;
 
     virtual void SetEnvironmentMap(IDeviceContext* pCtx, ITextureView* pEnvironmentMapSRV) = 0;
+
+    virtual const char* QueryPrimId(IDeviceContext* pCtx, Uint32 X, Uint32 Y) = 0;
+
+    virtual void RenderPrimId(IDeviceContext* pCtx, ITextureView* pDepthBuffer, const float4x4& Transform) = 0;
 };
 
 void CreateHnRenderer(IRenderDevice* pDevice, IDeviceContext* pContext, const HnRendererCreateInfo& CI, IHnRenderer** ppRenderer);

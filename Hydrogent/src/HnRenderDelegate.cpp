@@ -114,7 +114,9 @@ void HnRenderDelegate::DestroyInstancer(pxr::HdInstancer* instancer)
 pxr::HdRprim* HnRenderDelegate::CreateRprim(pxr::TfToken const& typeId,
                                             pxr::SdfPath const& rprimId)
 {
-    auto it = m_Meshes.emplace(rprimId.GetString(), HnMesh::Create(typeId, rprimId));
+    auto it = m_Meshes.emplace(rprimId.GetString(), HnMesh::Create(typeId, rprimId, m_MeshUIDCounter.fetch_add(1)));
+
+    m_MeshUIDToPrimId[it.first->second->GetUID()] = rprimId.GetString();
     return it.first->second.get();
 }
 
@@ -187,6 +189,12 @@ const HnMaterial* HnRenderDelegate::GetMaterial(const char* Id) const
 {
     auto it = m_Materials.find(Id);
     return it != m_Materials.end() ? it->second.get() : nullptr;
+}
+
+const char* HnRenderDelegate::GetMeshPrimId(Uint32 UID) const
+{
+    auto it = m_MeshUIDToPrimId.find(UID);
+    return it != m_MeshUIDToPrimId.end() ? it->second.c_str() : nullptr;
 }
 
 } // namespace USD

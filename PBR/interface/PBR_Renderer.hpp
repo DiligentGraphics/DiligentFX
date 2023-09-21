@@ -27,6 +27,7 @@
 #pragma once
 
 #include <vector>
+#include <array>
 
 #include "../../../DiligentCore/Platforms/Basic/interface/DebugUtilities.hpp"
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/DeviceContext.h"
@@ -85,6 +86,9 @@ public:
 
         /// Manually convert shader output to sRGB color space.
         bool ConvertOutputToSRGB = false;
+
+        /// Whether to enable rendering mesh Ids to a separate render target.
+        bool EnableMeshIdRendering = false;
 
         static const SamplerDesc DefaultSampler;
 
@@ -232,6 +236,11 @@ public:
         return Idx < m_PSOCache.size() ? m_PSOCache[Idx].RawPtr() : nullptr;
     }
 
+    IPipelineState* GetMeshIdPSO(bool DoubleSided) const
+    {
+        return m_MeshIdPSO[DoubleSided ? 1 : 0];
+    }
+
     void InitCommonSRBVars(IShaderResourceBinding* pSRB,
                            IBuffer*                pCameraAttribs,
                            IBuffer*                pLightAttribs);
@@ -274,6 +283,7 @@ protected:
 
     static constexpr TEXTURE_FORMAT IrradianceCubeFmt    = TEX_FORMAT_RGBA32_FLOAT;
     static constexpr TEXTURE_FORMAT PrefilteredEnvMapFmt = TEX_FORMAT_RGBA16_FLOAT;
+    static constexpr TEXTURE_FORMAT MeshIdFmt            = TEX_FORMAT_RGBA8_UINT;
     static constexpr Uint32         IrradianceCubeDim    = 64;
     static constexpr Uint32         PrefilteredEnvMapDim = 256;
 
@@ -288,8 +298,9 @@ protected:
     RefCntAutoPtr<IBuffer> m_PrecomputeEnvMapAttribsCB;
     RefCntAutoPtr<IBuffer> m_JointsBuffer;
 
-    RefCntAutoPtr<IPipelineResourceSignature>  m_ResourceSignature;
-    std::vector<RefCntAutoPtr<IPipelineState>> m_PSOCache;
+    RefCntAutoPtr<IPipelineResourceSignature>    m_ResourceSignature;
+    std::vector<RefCntAutoPtr<IPipelineState>>   m_PSOCache;
+    std::array<RefCntAutoPtr<IPipelineState>, 2> m_MeshIdPSO;
 };
 
 } // namespace Diligent
