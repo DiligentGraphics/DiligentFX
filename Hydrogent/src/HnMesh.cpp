@@ -232,20 +232,6 @@ void HnMesh::UpdateVertexPrims(pxr::HdSceneDelegate& SceneDelegate,
         m_BufferSources.emplace(PrimDesc.name, std::move(BufferSource));
     }
 
-    // Create dummy texture coordinates if they are not present
-    if (m_BufferSources.find(HnTokens->st0) == m_BufferSources.end())
-    {
-        pxr::VtValue DummyUVs;
-        DummyUVs          = pxr::VtArray<pxr::GfVec2f>{static_cast<size_t>(NumPoints), pxr::GfVec2f{0}};
-        auto BufferSource = std::make_shared<pxr::HdVtBufferSource>(
-            HnTokens->st0,
-            DummyUVs,
-            1,    // values per element
-            false // whether doubles are supported or must be converted to floats
-        );
-        m_BufferSources.emplace(HnTokens->st0, std::move(BufferSource));
-    }
-
     DirtyBits &= ~pxr::HdChangeTracker::DirtyPrimvar;
 }
 
@@ -256,18 +242,7 @@ void HnMesh::UpdateVertexBuffers(const RenderDeviceX_N& Device)
     for (auto source_it : m_BufferSources)
     {
         const auto& PrimName = source_it.first;
-
-        VERTEX_BUFFER_ID BufferId = VERTEX_BUFFER_ID_COUNT;
-        if (PrimName == pxr::HdTokens->points)
-            BufferId = VERTEX_BUFFER_ID_POSITION;
-        else if (PrimName == pxr::HdTokens->normals)
-            BufferId = VERTEX_BUFFER_ID_NORMAL;
-        else if (PrimName == HnTokens->st0)
-            BufferId = VERTEX_BUFFER_ID_TEXCOORD;
-        else
-            continue;
-
-        auto pSource = source_it.second.get();
+        const auto  pSource  = source_it.second.get();
         if (pSource == nullptr)
             return;
 
@@ -276,10 +251,10 @@ void HnMesh::UpdateVertexBuffers(const RenderDeviceX_N& Device)
 
         const auto ElementType = pSource->GetTupleType().type;
         const auto ElementSize = HdDataSizeOfType(ElementType);
-        VERIFY((BufferId == VERTEX_BUFFER_ID_POSITION && ElementSize == sizeof(float) * 3 ||
-                BufferId == VERTEX_BUFFER_ID_NORMAL && ElementSize == sizeof(float) * 3 ||
-                BufferId == VERTEX_BUFFER_ID_TEXCOORD && ElementSize == sizeof(float) * 2),
-               "Unexpected element size");
+        if (PrimName == pxr::HdTokens->points)
+            VERIFY(ElementSize == sizeof(float) * 3, "Unexpected vertex size");
+        else if (PrimName == pxr::HdTokens->normals)
+            VERIFY(ElementSize == sizeof(float) * 3, "Unexpected normal size");
 
         const auto Name = GetId().GetString() + " - " + PrimName.GetString();
         BufferDesc Desc{
@@ -290,7 +265,7 @@ void HnMesh::UpdateVertexBuffers(const RenderDeviceX_N& Device)
         };
 
         BufferData InitData{pSource->GetData(), Desc.Size};
-        m_pVertexBuffers[BufferId] = Device.CreateBuffer(Desc, &InitData);
+        m_VertexBuffers[PrimName] = Device.CreateBuffer(Desc, &InitData);
     }
 
     m_BufferSources.clear();
@@ -347,6 +322,12 @@ void HnMesh::CommitGPUResources(IRenderDevice* pDevice)
     {
         UpdateVertexBuffers(pDevice);
     }
+}
+
+IBuffer* HnMesh::GetVertexBuffer(const pxr::TfToken& Name) const
+{
+    auto it = m_VertexBuffers.find(Name);
+    return it != m_VertexBuffers.end() ? it->second.RawPtr() : nullptr;
 }
 
 } // namespace USD

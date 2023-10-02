@@ -187,14 +187,20 @@ private:
 
 void HnRendererImpl::Update()
 {
-    m_ImagingDelegate->ApplyPendingUpdates();
-    pxr::HdTaskSharedPtrVector tasks = {
-        std::make_shared<SyncTask>(m_GeometryPass, m_RenderTags)};
-    m_Engine.Execute(&m_ImagingDelegate->GetRenderIndex(), &tasks);
+    if (m_ImagingDelegate)
+    {
+        m_ImagingDelegate->ApplyPendingUpdates();
+        pxr::HdTaskSharedPtrVector tasks = {
+            std::make_shared<SyncTask>(m_GeometryPass, m_RenderTags)};
+        m_Engine.Execute(&m_ImagingDelegate->GetRenderIndex(), &tasks);
+    }
 }
 
 void HnRendererImpl::Draw(IDeviceContext* pCtx, const HnDrawAttribs& Attribs)
 {
+    if (!m_RenderDelegate)
+        return;
+
     const auto& Meshes = m_RenderDelegate->GetMeshes();
     if (Meshes.empty())
         return;
@@ -249,10 +255,34 @@ void HnRendererImpl::Draw(IDeviceContext* pCtx, const HnDrawAttribs& Attribs)
 
 void HnRendererImpl::RenderMesh(IDeviceContext* pCtx, const HnMesh& Mesh, const HnMaterial& Material, const HnDrawAttribs& Attribs)
 {
-    auto* pSRB = Material.GetSRB();
-    auto* pVB0 = Mesh.GetVertexBuffer(HnMesh::VERTEX_BUFFER_ID_POSITION);
-    auto* pVB1 = Mesh.GetVertexBuffer(HnMesh::VERTEX_BUFFER_ID_NORMAL);
-    auto* pVB2 = Mesh.GetVertexBuffer(HnMesh::VERTEX_BUFFER_ID_TEXCOORD);
+    auto* pSRB       = Material.GetSRB();
+    auto* pPosVB     = Mesh.GetVertexBuffer(pxr::HdTokens->points);
+    auto* pNormalsVB = Mesh.GetVertexBuffer(pxr::HdTokens->normals);
+
+    // Our shader currently supports two texture coordinate sets.
+    // Gather vertex buffers for both sets.
+    const auto& TexCoordSets    = Material.GetTextureCoordinateSets();
+    IBuffer*    pTexCoordVBs[2] = {};
+    for (size_t i = 0; i < TexCoordSets.size(); ++i)
+    {
+        const auto& TexCoordSet = TexCoordSets[i];
+        if (!TexCoordSet.PrimVarName.IsEmpty())
+        {
+            pTexCoordVBs[i] = Mesh.GetVertexBuffer(TexCoordSet.PrimVarName);
+            if (!pTexCoordVBs[i])
+            {
+                LOG_ERROR_MESSAGE("Failed to find texture coordinates vertex buffer '", TexCoordSet.PrimVarName.GetText(), "' in mesh '", Mesh.GetId().GetText(), "'");
+            }
+        }
+    }
+
+    for (size_t i = 0; i < _countof(pTexCoordVBs); ++i)
+    {
+        // Temporary workaround - assign normals VB to texture coordinate VB if the latter is not available.
+        // Texture coordinates will not be used in the shader anyway, but we need to have valid VB bound.
+        if (pTexCoordVBs[i] == nullptr)
+            pTexCoordVBs[i] = pNormalsVB;
+    }
 
     const auto& ShaderAttribs = Material.GetShaderAttribs();
 
@@ -260,11 +290,11 @@ void HnRendererImpl::RenderMesh(IDeviceContext* pCtx, const HnMesh& Mesh, const 
         Mesh.GetEdgeIndexBuffer() :
         Mesh.GetTriangleIndexBuffer();
 
-    if (pVB0 == nullptr || pVB1 == nullptr || pVB2 == nullptr || pIB == nullptr || pSRB == nullptr)
+    if (pPosVB == nullptr || pNormalsVB == nullptr || pTexCoordVBs[0] == nullptr || pTexCoordVBs[1] == nullptr || pIB == nullptr || pSRB == nullptr)
         return;
 
     // Bind vertex and index buffers
-    IBuffer* pBuffs[] = {pVB0, pVB1, pVB2, pVB2};
+    IBuffer* pBuffs[] = {pPosVB, pNormalsVB, pTexCoordVBs[0], pTexCoordVBs[1]};
     pCtx->SetVertexBuffers(0, _countof(pBuffs), pBuffs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     pCtx->SetIndexBuffer(pIB, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 

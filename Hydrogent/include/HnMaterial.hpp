@@ -28,6 +28,7 @@
 
 #include <memory>
 #include <unordered_map>
+#include <vector>
 
 #include "HnMaterialNetwork.hpp"
 #include "HnTextureRegistry.hpp"
@@ -82,10 +83,19 @@ public:
 
     const HLSL::PBRMaterialShaderInfo& GetShaderAttribs() const { return m_ShaderAttribs; }
 
+    /// Texture coordinate set info
+    struct TextureCoordinateSetInfo
+    {
+        /// Texture coordinate set primvar name (e.g. "st")
+        pxr::TfToken PrimVarName;
+    };
+    const auto& GetTextureCoordinateSets() const { return m_TexCoords; }
+
 private:
     HnMaterial(pxr::SdfPath const& id);
 
-    void AllocateTextures(HnTextureRegistry& TexRegistry);
+    using TexNameToCoordSetMapType = std::unordered_map<pxr::TfToken, size_t, pxr::TfToken::HashFunctor>;
+    void AllocateTextures(HnTextureRegistry& TexRegistry, TexNameToCoordSetMapType& TexNameToCoordSetMap);
 
 private:
     HnMaterialNetwork m_Network;
@@ -95,6 +105,8 @@ private:
     RefCntAutoPtr<IShaderResourceBinding> m_SRB;
 
     HLSL::PBRMaterialShaderInfo m_ShaderAttribs{};
+
+    std::vector<TextureCoordinateSetInfo> m_TexCoords;
 };
 
 } // namespace USD

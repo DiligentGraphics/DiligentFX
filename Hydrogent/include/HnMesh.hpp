@@ -28,7 +28,6 @@
 
 #include <memory>
 #include <unordered_map>
-#include <array>
 
 // NoteL tbb.h must be included before mesh.h to avoid compilation errors in tbb headers.
 #include "tbb/tbb.h"
@@ -74,15 +73,10 @@ public:
 
     void CommitGPUResources(IRenderDevice* pDevice);
 
-    enum VERTEX_BUFFER_ID
-    {
-        VERTEX_BUFFER_ID_POSITION = 0,
-        VERTEX_BUFFER_ID_NORMAL,
-        VERTEX_BUFFER_ID_TEXCOORD,
-        VERTEX_BUFFER_ID_COUNT
-    };
+    /// Returns vertex buffer for the given primvar name (e.g. "points", "normals", etc.).
+    /// If the buffer doesn't exist, returns nullptr.
+    IBuffer* GetVertexBuffer(const pxr::TfToken& Name) const;
 
-    IBuffer* GetVertexBuffer(VERTEX_BUFFER_ID BufferId) const { return m_pVertexBuffers[BufferId]; }
     IBuffer* GetTriangleIndexBuffer() const { return m_pTriangleIndexBuffer; }
     IBuffer* GetEdgeIndexBuffer() const { return m_pEdgeIndexBuffer; }
 
@@ -153,7 +147,7 @@ private:
     RefCntAutoPtr<IBuffer> m_pTriangleIndexBuffer;
     RefCntAutoPtr<IBuffer> m_pEdgeIndexBuffer;
 
-    std::array<RefCntAutoPtr<IBuffer>, VERTEX_BUFFER_ID_COUNT> m_pVertexBuffers;
+    std::unordered_map<pxr::TfToken, RefCntAutoPtr<IBuffer>, pxr::TfToken::HashFunctor> m_VertexBuffers;
 };
 
 } // namespace USD

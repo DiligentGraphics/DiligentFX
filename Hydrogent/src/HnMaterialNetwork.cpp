@@ -1034,7 +1034,7 @@ void HnMaterialNetwork::AddTextureParam(const pxr::HdMaterialNetwork2& Network,
                 }
                 else if (SdrRole == pxr::SdrNodeRole->Math)
                 {
-                    UNSUPPORTED("Transform2D is not currently supported");
+                    LOG_ERROR_MESSAGE("Transform2D is not currently supported");
 #if 0
                     HdSt_MaterialParamVector transform2dParams;
 

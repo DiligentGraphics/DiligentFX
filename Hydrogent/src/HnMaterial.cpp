@@ -83,7 +83,9 @@ void HnMaterial::Sync(pxr::HdSceneDelegate* SceneDelegate,
         }
 
         HnTextureRegistry& TexRegistry = static_cast<HnRenderDelegate*>(SceneDelegate->GetRenderIndex().GetRenderDelegate())->GetTextureRegistry();
-        AllocateTextures(TexRegistry);
+
+        TexNameToCoordSetMapType TexNameToCoordSetMap;
+        AllocateTextures(TexRegistry, TexNameToCoordSetMap);
 
         m_ShaderAttribs.BaseColorFactor = float4{1, 1, 1, 1};
         m_ShaderAttribs.EmissiveFactor  = float4{0, 0, 0, 0};
@@ -121,12 +123,14 @@ void HnMaterial::Sync(pxr::HdSceneDelegate* SceneDelegate,
             m_ShaderAttribs.OcclusionFactor = Val.Get<float>();
         });
 
-        m_ShaderAttribs.Workflow      = PBR_Renderer::PBR_WORKFLOW_METALL_ROUGH;
-        m_ShaderAttribs.UVSelector0   = 0;
-        m_ShaderAttribs.UVSelector1   = 0;
-        m_ShaderAttribs.UVSelector2   = 0;
-        m_ShaderAttribs.UVSelector3   = 0;
-        m_ShaderAttribs.UVSelector4   = 0;
+        m_ShaderAttribs.Workflow    = PBR_Renderer::PBR_WORKFLOW_METALL_ROUGH;
+        m_ShaderAttribs.UVSelector0 = static_cast<float>(TexNameToCoordSetMap[HnTokens->diffuseColor]);
+        m_ShaderAttribs.UVSelector1 = static_cast<float>(TexNameToCoordSetMap[HnTokens->metallic]);
+        if (TexNameToCoordSetMap[HnTokens->metallic] != TexNameToCoordSetMap[HnTokens->roughness])
+            LOG_ERROR_MESSAGE("Metallic and roughness textures must use the same texture coordinates");
+        m_ShaderAttribs.UVSelector2   = static_cast<float>(TexNameToCoordSetMap[HnTokens->normal]);
+        m_ShaderAttribs.UVSelector3   = static_cast<float>(TexNameToCoordSetMap[HnTokens->occlusion]);
+        m_ShaderAttribs.UVSelector4   = static_cast<float>(TexNameToCoordSetMap[HnTokens->emissive]);
         m_ShaderAttribs.TextureSlice0 = 0;
         m_ShaderAttribs.TextureSlice1 = 0;
         m_ShaderAttribs.TextureSlice2 = 0;
@@ -148,13 +152,46 @@ void HnMaterial::Sync(pxr::HdSceneDelegate* SceneDelegate,
     *DirtyBits = HdMaterial::Clean;
 }
 
-void HnMaterial::AllocateTextures(HnTextureRegistry& TexRegistry)
+void HnMaterial::AllocateTextures(HnTextureRegistry& TexRegistry, TexNameToCoordSetMapType& TexNameToCoordSetMap)
 {
+    std::unordered_map<pxr::TfToken, size_t, pxr::TfToken::HashFunctor> TexCoordMapping;
     for (const HnMaterialNetwork::TextureDescriptor& TexDescriptor : m_Network.GetTextures())
     {
         if (auto pTex = TexRegistry.Allocate(TexDescriptor.TextureId, TexDescriptor.SamplerParams))
         {
             m_Textures[TexDescriptor.Name] = pTex;
+            // Find texture coordinate
+            size_t TexCoordIdx = ~size_t{0};
+            for (const HnMaterialParameter& Param : m_Network.GetParameters())
+            {
+                if (Param.Type == HnMaterialParameter::ParamType::Texture && Param.Name == TexDescriptor.Name)
+                {
+                    if (!Param.SamplerCoords.empty())
+                    {
+                        if (Param.SamplerCoords.size() > 1)
+                            LOG_WARNING_MESSAGE("Texture '", TexDescriptor.Name, "' has ", Param.SamplerCoords.size(), " texture coordinates. Only the first set will be used");
+                        const pxr::TfToken& TexCoordName = Param.SamplerCoords[0];
+
+                        auto it_inserted = TexCoordMapping.emplace(TexCoordName, TexCoordMapping.size());
+                        TexCoordIdx      = it_inserted.first->second;
+                        if (it_inserted.second)
+                        {
+                            m_TexCoords.resize(TexCoordIdx + 1);
+                            m_TexCoords[TexCoordIdx] = {TexCoordName};
+                        }
+                    }
+                    else
+                    {
+                        LOG_ERROR_MESSAGE("Texture '", TexDescriptor.Name, "' has no texture coordinates");
+                    }
+                    break;
+                }
+            }
+
+            if (TexCoordIdx == ~size_t{0})
+            {
+                LOG_ERROR_MESSAGE("Failed to find texture coordinates for texture '", TexDescriptor.Name, "'");
+            }
         }
     }
 }
