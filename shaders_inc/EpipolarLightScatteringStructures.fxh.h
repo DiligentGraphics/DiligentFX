@@ -138,7 +138,7 @@
 "    float2 f2ShadowMapTexelSize             DEFAULT_VALUE(float2(0,0));\n"
 "    // Maximum number of ray marching samples on a single ray. Typically this value should match the maximum\n"
 "    // shadow map cascade resolution. Using lower value will improve performance but may result\n"
-"    // in moire patterns. Note that in most cases singificantly less samples are actually taken.\n"
+"    // in moire patterns. Note that in most cases significantly less samples are actually taken.\n"
 "    uint uiMaxSamplesOnTheRay               DEFAULT_VALUE(512);\n"
 "    // The number of ray marching samples on a ray when running scattering correction pass.\n"
 "    // This value should typically be much lower than the maximum number of samples on a single ray\n"

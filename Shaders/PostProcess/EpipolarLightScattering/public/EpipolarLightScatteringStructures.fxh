@@ -138,7 +138,7 @@ struct EpipolarLightScatteringAttribs
     float2 f2ShadowMapTexelSize             DEFAULT_VALUE(float2(0,0));
     // Maximum number of ray marching samples on a single ray. Typically this value should match the maximum 
     // shadow map cascade resolution. Using lower value will improve performance but may result
-    // in moire patterns. Note that in most cases singificantly less samples are actually taken.
+    // in moire patterns. Note that in most cases significantly less samples are actually taken.
     uint uiMaxSamplesOnTheRay               DEFAULT_VALUE(512);
     // The number of ray marching samples on a ray when running scattering correction pass.
     // This value should typically be much lower than the maximum number of samples on a single ray

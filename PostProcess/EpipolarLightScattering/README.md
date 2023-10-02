@@ -41,7 +41,7 @@ The following parameters control the effect
 * f2ShadowMapTexelSize  - Size of the shadowmap texel (1/width, 1/height)
 * uiMaxSamplesOnTheRay  - Maximum number of ray marching samples on a single ray. Typically this value should match the maximum 
                           shadow map cascade resolution. Using lower value will improve performance but may result
-                          in moire patterns. Note that in most cases singificantly less samples are actually taken.
+                          in moire patterns. Note that in most cases significantly less samples are actually taken.
 * uiMinMaxShadowMapResolution - Defines the number of samples at the lowest level of min-max binary tree
                                 and should match the maximum cascade shadow map resolution.
 * iNumCascades - Number of shadow map cascades
