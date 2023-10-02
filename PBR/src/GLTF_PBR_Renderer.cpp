@@ -404,6 +404,7 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
                     RendererParams.MiddleGray               = m_RenderParams.MiddleGray;
                     RendererParams.WhitePoint               = m_RenderParams.WhitePoint;
                     RendererParams.IBLScale                 = m_RenderParams.IBLScale;
+                    RendererParams.HighlightColor           = m_RenderParams.HighlightColor;
                     RendererParams.PrefilteredCubeMipLevels = m_Settings.UseIBL ? static_cast<float>(m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels) : 0.f;
                 }
 

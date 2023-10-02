@@ -95,6 +95,9 @@ public:
 
         /// White point value used by tone mapping
         float WhitePoint = 3.f;
+
+        /// Highlight color that is applied to the mesh after tone mapping
+        float4 HighlightColor = float4{0, 0, 0, 0};
     };
 
     /// GLTF Model shader resource binding information

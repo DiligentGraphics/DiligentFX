@@ -61,6 +61,7 @@ struct PBRRendererShaderParameters
     float EmissionScale;
 
     float4 WireframeColor;
+    float4 HighlightColor;
 
     uint MeshId;
     uint Padding0;

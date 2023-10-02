@@ -61,6 +61,7 @@
 "    float EmissionScale;\n"
 "\n"
 "    float4 WireframeColor;\n"
+"    float4 HighlightColor;\n"
 "\n"
 "    uint MeshId;\n"
 "    uint Padding0;\n"

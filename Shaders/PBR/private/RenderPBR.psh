@@ -255,6 +255,7 @@ void main(in  PbrVsOutput VSOut,
     color += Emissive.rgb * g_PBRAttribs.Material.EmissiveFactor.rgb * g_PBRAttribs.Renderer.EmissionScale;
 #endif
 
+    // Perform tone mapping
     ToneMappingAttribs TMAttribs;
     TMAttribs.iToneMappingMode     = TONE_MAPPING_MODE_UNCHARTED2;
     TMAttribs.bAutoExposure        = false;
@@ -263,6 +264,10 @@ void main(in  PbrVsOutput VSOut,
     TMAttribs.fWhitePoint          = g_PBRAttribs.Renderer.WhitePoint;
     TMAttribs.fLuminanceSaturation = 1.0;
     color = ToneMap(color, TMAttribs, g_PBRAttribs.Renderer.AverageLogLum);
+
+    // Add highlight color
+    color = lerp(color, g_PBRAttribs.Renderer.HighlightColor.rgb, g_PBRAttribs.Renderer.HighlightColor.a);
+
     OutColor = float4(color, BaseColor.a);
 
 #if ALLOW_DEBUG_VIEW
