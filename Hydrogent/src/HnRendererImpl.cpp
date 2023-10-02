@@ -307,8 +307,9 @@ void HnRendererImpl::RenderMesh(IDeviceContext* pCtx, const HnMesh& Mesh, const 
         static_assert(sizeof(pDstShaderAttribs->Material) == sizeof(ShaderAttribs), "The sizeof(PBRMaterialShaderInfo) is inconsistent with sizeof(ShaderAttribs)");
         memcpy(&pDstShaderAttribs->Material, &ShaderAttribs, sizeof(ShaderAttribs));
 
-        if (Attribs.SelectedPrim != nullptr && Mesh.GetId().GetString() == Attribs.SelectedPrim)
-            pDstShaderAttribs->Material.EmissiveFactor = ShaderAttribs.EmissiveFactor + Attribs.SlectionColor;
+        pDstShaderAttribs->Renderer.HighlightColor = (Attribs.SelectedPrim != nullptr && Mesh.GetId().GetString() == Attribs.SelectedPrim) ?
+            Attribs.SlectionColor :
+            float4{0, 0, 0, 0};
 
         auto& RendererParams = pDstShaderAttribs->Renderer;
 

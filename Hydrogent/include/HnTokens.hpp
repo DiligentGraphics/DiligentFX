@@ -68,7 +68,7 @@ namespace USD
     (roughness)                \
     (normal)                   \
     (occlusion)                \
-    (emissive)
+    (emissiveColor)
 
 #define HN_MATERIAL_TAG_TOKENS \
     (defaultTag)               \

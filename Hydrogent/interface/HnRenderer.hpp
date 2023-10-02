@@ -84,7 +84,7 @@ struct HnDrawAttribs
     bool EnablePrimIdQueries = false;
 
     float4 WireframeColor = float4{1, 1, 1, 1};
-    float4 SlectionColor  = float4{0.25f, 0.25f, 0.1f, 0.0f};
+    float4 SlectionColor  = float4{0.25f, 0.25f, 0.1f, 0.5f};
 
     HN_RENDER_MODE RenderMode = HN_RENDER_MODE_SOLID;
 

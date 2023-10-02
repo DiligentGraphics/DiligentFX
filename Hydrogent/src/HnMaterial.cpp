@@ -88,7 +88,7 @@ void HnMaterial::Sync(pxr::HdSceneDelegate* SceneDelegate,
         AllocateTextures(TexRegistry, TexNameToCoordSetMap);
 
         m_ShaderAttribs.BaseColorFactor = float4{1, 1, 1, 1};
-        m_ShaderAttribs.EmissiveFactor  = float4{0, 0, 0, 0};
+        m_ShaderAttribs.EmissiveFactor  = float4{1, 1, 1, 1};
         m_ShaderAttribs.SpecularFactor  = float4{1, 1, 1, 1};
         m_ShaderAttribs.MetallicFactor  = 1;
         m_ShaderAttribs.RoughnessFactor = 1;
@@ -130,7 +130,7 @@ void HnMaterial::Sync(pxr::HdSceneDelegate* SceneDelegate,
             LOG_ERROR_MESSAGE("Metallic and roughness textures must use the same texture coordinates");
         m_ShaderAttribs.UVSelector2   = static_cast<float>(TexNameToCoordSetMap[HnTokens->normal]);
         m_ShaderAttribs.UVSelector3   = static_cast<float>(TexNameToCoordSetMap[HnTokens->occlusion]);
-        m_ShaderAttribs.UVSelector4   = static_cast<float>(TexNameToCoordSetMap[HnTokens->emissive]);
+        m_ShaderAttribs.UVSelector4   = static_cast<float>(TexNameToCoordSetMap[HnTokens->emissiveColor]);
         m_ShaderAttribs.TextureSlice0 = 0;
         m_ShaderAttribs.TextureSlice1 = 0;
         m_ShaderAttribs.TextureSlice2 = 0;
@@ -261,8 +261,7 @@ void HnMaterial::UpdateSRB(IRenderDevice* pDevice,
     SetTexture(HnTokens->roughness, PbrRenderer.GetWhiteTexSRV(), "g_RoughnessMap");
     SetTexture(HnTokens->normal, PbrRenderer.GetDefaultNormalMapSRV(), "g_NormalMap");
     SetTexture(HnTokens->occlusion, PbrRenderer.GetWhiteTexSRV(), "g_AOMap");
-    if (auto* pVar = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_EmissiveMap"))
-        pVar->Set(PbrRenderer.GetWhiteTexSRV());
+    SetTexture(HnTokens->emissiveColor, PbrRenderer.GetBlackTexSRV(), "g_EmissiveMap");
 }
 
 } // namespace USD
