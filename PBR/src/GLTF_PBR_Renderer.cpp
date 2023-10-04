@@ -316,6 +316,9 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
             // Render mesh primitives
             for (const auto& primitive : Mesh.Primitives)
             {
+                if (primitive.VertexCount == 0 && primitive.IndexCount == 0)
+                    continue;
+
                 const auto& material = GLTFModel.Materials[primitive.MaterialId];
                 if (material.Attribs.AlphaMode != AlphaMode)
                     continue;
