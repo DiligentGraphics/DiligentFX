@@ -124,6 +124,23 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters*         pRefCounters,
             }(CI, pDevice))},
     m_MeshIdReadBackQueue{pDevice}
 {
+    m_PSOFlags |=
+        PBR_Renderer::PSO_FLAG_USE_VERTEX_NORMALS |
+        PBR_Renderer::PSO_FLAG_USE_TEXCOORD0 |
+        PBR_Renderer::PSO_FLAG_USE_TEXCOORD1 |
+        PBR_Renderer::PSO_FLAG_USE_DIFFUSE_MAP |
+        PBR_Renderer::PSO_FLAG_USE_NORMAL_MAP |
+        PBR_Renderer::PSO_FLAG_USE_METALLIC_MAP |
+        PBR_Renderer::PSO_FLAG_USE_ROUGHNESS_MAP;
+
+    m_PSOFlags |=
+        PBR_Renderer::PSO_FLAG_USE_AO_MAP |
+        PBR_Renderer::PSO_FLAG_USE_EMISSIVE_MAP |
+        PBR_Renderer::PSO_FLAG_USE_IBL |
+        PBR_Renderer::PSO_FLAG_ALLOW_DEBUG_VIEW;
+
+    if (CI.ConvertOutputToSRGB)
+        m_PSOFlags |= PBR_Renderer::PSO_FLAG_CONVERT_TO_SRGB;
 }
 
 HnRendererImpl::~HnRendererImpl()
@@ -228,9 +245,9 @@ void HnRendererImpl::Draw(IDeviceContext* pCtx, const HnDrawAttribs& Attribs)
     for (auto AlphaMode : {USD_Renderer::ALPHA_MODE_OPAQUE, USD_Renderer::ALPHA_MODE_MASK, USD_Renderer::ALPHA_MODE_BLEND})
     {
         if (Attribs.RenderMode == HN_RENDER_MODE_MESH_EDGES)
-            pCtx->SetPipelineState(m_USDRenderer->GetMeshEdgesPSO());
+            pCtx->SetPipelineState(m_USDRenderer->GetMeshEdgesPSO({m_PSOFlags, USD_Renderer::ALPHA_MODE_OPAQUE, /*DoubleSided = */ false}, true));
         else
-            pCtx->SetPipelineState(m_USDRenderer->GetPSO({AlphaMode, /*DoubleSided = */ false}));
+            pCtx->SetPipelineState(m_USDRenderer->GetPSO({m_PSOFlags, AlphaMode, /*DoubleSided = */ false}, true));
 
         for (auto mesh_it : Meshes)
         {
@@ -335,7 +352,7 @@ void HnRendererImpl::RenderMesh(IDeviceContext* pCtx, const HnMesh& Mesh, const 
 
 void HnRendererImpl::SetEnvironmentMap(IDeviceContext* pCtx, ITextureView* pEnvironmentMapSRV)
 {
-    m_USDRenderer->PrecomputeCubemaps(m_Device, m_Device, pCtx, pEnvironmentMapSRV);
+    m_USDRenderer->PrecomputeCubemaps(pCtx, pEnvironmentMapSRV);
 }
 
 const char* HnRendererImpl::QueryPrimId(IDeviceContext* pCtx, Uint32 X, Uint32 Y)
@@ -437,7 +454,7 @@ void HnRendererImpl::RenderPrimId(IDeviceContext* pContext, ITextureView* pDepth
     if (Meshes.empty())
         return;
 
-    auto* pMeshIdPSO = m_USDRenderer->GetMeshIdPSO(false);
+    auto* pMeshIdPSO = m_USDRenderer->GetMeshIdPSO({m_PSOFlags, USD_Renderer::ALPHA_MODE_OPAQUE, /*DoubleSided = */ false}, true);
     if (pMeshIdPSO == nullptr)
         return;
 

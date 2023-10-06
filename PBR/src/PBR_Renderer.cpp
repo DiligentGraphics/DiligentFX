@@ -34,7 +34,9 @@
 #include "CommonlyUsedStates.h"
 #include "BasicMath.hpp"
 #include "MapHelper.hpp"
+#include "GraphicsAccessories.hpp"
 #include "../../../Utilities/include/DiligentFXShaderSourceStreamFactory.hpp"
+#include "ShaderSourceFactoryUtils.h"
 
 namespace Diligent
 {
@@ -57,11 +59,12 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
                            IRenderStateCache* pStateCache,
                            IDeviceContext*    pCtx,
                            const CreateInfo&  CI) :
-    m_Settings{CI}
+    m_Settings{CI},
+    m_Device{pDevice, pStateCache}
 {
     if (m_Settings.UseIBL)
     {
-        PrecomputeBRDF(pDevice, pStateCache, pCtx, m_Settings.NumBRDFSamples);
+        PrecomputeBRDF(pCtx, m_Settings.NumBRDFSamples);
 
         TextureDesc TexDesc;
         TexDesc.Name      = "Irradiance cube map for PBR renderer";
@@ -74,17 +77,16 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
         TexDesc.ArraySize = 6;
         TexDesc.MipLevels = 0;
 
-        RefCntAutoPtr<ITexture> IrradainceCubeTex;
-        pDevice->CreateTexture(TexDesc, nullptr, &IrradainceCubeTex);
-        m_pIrradianceCubeSRV = IrradainceCubeTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        auto IrradainceCubeTex = m_Device.CreateTexture(TexDesc);
+        m_pIrradianceCubeSRV   = IrradainceCubeTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
 
         TexDesc.Name   = "Prefiltered environment map for PBR renderer";
         TexDesc.Width  = PrefilteredEnvMapDim;
         TexDesc.Height = PrefilteredEnvMapDim;
         TexDesc.Format = PrefilteredEnvMapFmt;
-        RefCntAutoPtr<ITexture> PrefilteredEnvMapTex;
-        pDevice->CreateTexture(TexDesc, nullptr, &PrefilteredEnvMapTex);
-        m_pPrefilteredEnvMapSRV = PrefilteredEnvMapTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+
+        auto PrefilteredEnvMapTex = m_Device.CreateTexture(TexDesc);
+        m_pPrefilteredEnvMapSRV   = PrefilteredEnvMapTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
     }
 
     {
@@ -99,29 +101,26 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
         TexDesc.Height    = TexDim;
         TexDesc.Format    = TEX_FORMAT_RGBA8_UNORM;
         TexDesc.MipLevels = 1;
-        std::vector<Uint32>     Data(TexDim * TexDim, 0xFFFFFFFF);
-        TextureSubResData       Level0Data{Data.data(), TexDim * 4};
-        TextureData             InitData{&Level0Data, 1};
-        RefCntAutoPtr<ITexture> pWhiteTex;
-        pDevice->CreateTexture(TexDesc, &InitData, &pWhiteTex);
+        std::vector<Uint32> Data(TexDim * TexDim, 0xFFFFFFFF);
+        TextureSubResData   Level0Data{Data.data(), TexDim * 4};
+        TextureData         InitData{&Level0Data, 1};
+
+        auto pWhiteTex = m_Device.CreateTexture(TexDesc, &InitData);
         m_pWhiteTexSRV = pWhiteTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
 
         TexDesc.Name = "Black texture for PBR renderer";
         for (auto& c : Data) c = 0;
-        RefCntAutoPtr<ITexture> pBlackTex;
-        pDevice->CreateTexture(TexDesc, &InitData, &pBlackTex);
+        auto pBlackTex = m_Device.CreateTexture(TexDesc, &InitData);
         m_pBlackTexSRV = pBlackTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
 
         TexDesc.Name = "Default normal map for PBR renderer";
         for (auto& c : Data) c = 0x00FF7F7F;
-        RefCntAutoPtr<ITexture> pDefaultNormalMap;
-        pDevice->CreateTexture(TexDesc, &InitData, &pDefaultNormalMap);
+        auto pDefaultNormalMap = m_Device.CreateTexture(TexDesc, &InitData);
         m_pDefaultNormalMapSRV = pDefaultNormalMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
 
         TexDesc.Name = "Default physical description map for PBR renderer";
         for (auto& c : Data) c = 0x0000FF00;
-        RefCntAutoPtr<ITexture> pDefaultPhysDesc;
-        pDevice->CreateTexture(TexDesc, &InitData, &pDefaultPhysDesc);
+        auto pDefaultPhysDesc = m_Device.CreateTexture(TexDesc, &InitData);
         m_pDefaultPhysDescSRV = pDefaultPhysDesc->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
 
         // clang-format off
@@ -135,8 +134,7 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
         // clang-format on
         pCtx->TransitionResourceStates(_countof(Barriers), Barriers);
 
-        RefCntAutoPtr<ISampler> pDefaultSampler;
-        pDevice->CreateSampler(Sam_LinearClamp, &pDefaultSampler);
+        auto pDefaultSampler = m_Device.CreateSampler(Sam_LinearClamp);
         m_pWhiteTexSRV->SetSampler(pDefaultSampler);
         m_pBlackTexSRV->SetSampler(pDefaultSampler);
         m_pDefaultNormalMapSRV->SetSampler(pDefaultSampler);
@@ -156,25 +154,16 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
         pCtx->TransitionResourceStates(static_cast<Uint32>(Barriers.size()), Barriers.data());
     }
 
-    CreateSignature(pDevice, pStateCache);
-
-    if (CI.RTVFmt != TEX_FORMAT_UNKNOWN || CI.DSVFmt != TEX_FORMAT_UNKNOWN)
-    {
-        CreatePSO(pDevice, pStateCache);
-    }
+    CreateSignature();
 }
 
 PBR_Renderer::~PBR_Renderer()
 {
 }
 
-void PBR_Renderer::PrecomputeBRDF(IRenderDevice*     pDevice,
-                                  IRenderStateCache* pStateCache,
-                                  IDeviceContext*    pCtx,
-                                  Uint32             NumBRDFSamples)
+void PBR_Renderer::PrecomputeBRDF(IDeviceContext* pCtx,
+                                  Uint32          NumBRDFSamples)
 {
-    RenderDeviceWithCache<false> Device{pDevice, pStateCache};
-
     TextureDesc TexDesc;
     TexDesc.Name      = "BRDF Look-up texture";
     TexDesc.Type      = RESOURCE_DIM_TEX_2D;
@@ -184,7 +173,7 @@ void PBR_Renderer::PrecomputeBRDF(IRenderDevice*     pDevice,
     TexDesc.Height    = BRDF_LUT_Dim;
     TexDesc.Format    = TEX_FORMAT_RG16_FLOAT;
     TexDesc.MipLevels = 1;
-    auto pBRDF_LUT    = Device.CreateTexture(TexDesc);
+    auto pBRDF_LUT    = m_Device.CreateTexture(TexDesc);
     m_pBRDF_LUT_SRV   = pBRDF_LUT->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
 
     RefCntAutoPtr<IPipelineState> PrecomputeBRDF_PSO;
@@ -216,7 +205,7 @@ void PBR_Renderer::PrecomputeBRDF(IRenderDevice*     pDevice,
             ShaderCI.EntryPoint = "FullScreenTriangleVS";
             ShaderCI.FilePath   = "FullScreenTriangleVS.fx";
 
-            pVS = Device.CreateShader(ShaderCI);
+            pVS = m_Device.CreateShader(ShaderCI);
         }
 
         // Create pixel shader
@@ -226,13 +215,13 @@ void PBR_Renderer::PrecomputeBRDF(IRenderDevice*     pDevice,
             ShaderCI.EntryPoint = "PrecomputeBRDF_PS";
             ShaderCI.FilePath   = "PrecomputeBRDF.psh";
 
-            pPS = Device.CreateShader(ShaderCI);
+            pPS = m_Device.CreateShader(ShaderCI);
         }
 
         // Finally, create the pipeline state
         PSOCreateInfo.pVS  = pVS;
         PSOCreateInfo.pPS  = pPS;
-        PrecomputeBRDF_PSO = Device.CreateGraphicsPipelineState(PSOCreateInfo);
+        PrecomputeBRDF_PSO = m_Device.CreateGraphicsPipelineState(PSOCreateInfo);
     }
     pCtx->SetPipelineState(PrecomputeBRDF_PSO);
 
@@ -250,21 +239,17 @@ void PBR_Renderer::PrecomputeBRDF(IRenderDevice*     pDevice,
     pCtx->TransitionResourceStates(_countof(Barriers), Barriers);
 }
 
-void PBR_Renderer::PrecomputeCubemaps(IRenderDevice*     pDevice,
-                                      IRenderStateCache* pStateCache,
-                                      IDeviceContext*    pCtx,
-                                      ITextureView*      pEnvironmentMap,
-                                      Uint32             NumPhiSamples,
-                                      Uint32             NumThetaSamples,
-                                      bool               OptimizeSamples)
+void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
+                                      ITextureView*   pEnvironmentMap,
+                                      Uint32          NumPhiSamples,
+                                      Uint32          NumThetaSamples,
+                                      bool            OptimizeSamples)
 {
     if (!m_Settings.UseIBL)
     {
         LOG_WARNING_MESSAGE("IBL is disabled, so precomputing cube maps will have no effect");
         return;
     }
-
-    RenderDeviceWithCache<false> Device{pDevice, pStateCache};
 
     struct PrecomputeEnvMapAttribs
     {
@@ -278,7 +263,7 @@ void PBR_Renderer::PrecomputeCubemaps(IRenderDevice*     pDevice,
 
     if (!m_PrecomputeEnvMapAttribsCB)
     {
-        CreateUniformBuffer(pDevice, sizeof(PrecomputeEnvMapAttribs), "Precompute env map attribs CB", &m_PrecomputeEnvMapAttribsCB);
+        CreateUniformBuffer(m_Device, sizeof(PrecomputeEnvMapAttribs), "Precompute env map attribs CB", &m_PrecomputeEnvMapAttribsCB);
     }
 
     if (!m_pPrecomputeIrradianceCubePSO)
@@ -297,7 +282,7 @@ void PBR_Renderer::PrecomputeCubemaps(IRenderDevice*     pDevice,
             ShaderCI.EntryPoint = "main";
             ShaderCI.FilePath   = "CubemapFace.vsh";
 
-            pVS = Device.CreateShader(ShaderCI);
+            pVS = m_Device.CreateShader(ShaderCI);
         }
 
         // Create pixel shader
@@ -307,7 +292,7 @@ void PBR_Renderer::PrecomputeCubemaps(IRenderDevice*     pDevice,
             ShaderCI.EntryPoint = "main";
             ShaderCI.FilePath   = "ComputeIrradianceMap.psh";
 
-            pPS = Device.CreateShader(ShaderCI);
+            pPS = m_Device.CreateShader(ShaderCI);
         }
 
         GraphicsPipelineStateCreateInfo PSOCreateInfo;
@@ -333,7 +318,7 @@ void PBR_Renderer::PrecomputeCubemaps(IRenderDevice*     pDevice,
             .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_EnvironmentMap", Sam_LinearClamp);
         PSODesc.ResourceLayout = ResourceLayout;
 
-        m_pPrecomputeIrradianceCubePSO = Device.CreateGraphicsPipelineState(PSOCreateInfo);
+        m_pPrecomputeIrradianceCubePSO = m_Device.CreateGraphicsPipelineState(PSOCreateInfo);
         m_pPrecomputeIrradianceCubePSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "cbTransform")->Set(m_PrecomputeEnvMapAttribsCB);
         m_pPrecomputeIrradianceCubePSO->CreateShaderResourceBinding(&m_pPrecomputeIrradianceCubeSRB, true);
     }
@@ -354,7 +339,7 @@ void PBR_Renderer::PrecomputeCubemaps(IRenderDevice*     pDevice,
             ShaderCI.EntryPoint = "main";
             ShaderCI.FilePath   = "CubemapFace.vsh";
 
-            pVS = Device.CreateShader(ShaderCI);
+            pVS = m_Device.CreateShader(ShaderCI);
         }
 
         // Create pixel shader
@@ -364,7 +349,7 @@ void PBR_Renderer::PrecomputeCubemaps(IRenderDevice*     pDevice,
             ShaderCI.EntryPoint = "main";
             ShaderCI.FilePath   = "PrefilterEnvMap.psh";
 
-            pPS = Device.CreateShader(ShaderCI);
+            pPS = m_Device.CreateShader(ShaderCI);
         }
 
         GraphicsPipelineStateCreateInfo PSOCreateInfo;
@@ -390,7 +375,7 @@ void PBR_Renderer::PrecomputeCubemaps(IRenderDevice*     pDevice,
             .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_EnvironmentMap", Sam_LinearClamp);
         PSODesc.ResourceLayout = ResourceLayout;
 
-        m_pPrefilterEnvMapPSO = Device.CreateGraphicsPipelineState(PSOCreateInfo);
+        m_pPrefilterEnvMapPSO = m_Device.CreateGraphicsPipelineState(PSOCreateInfo);
         m_pPrefilterEnvMapPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "cbTransform")->Set(m_PrecomputeEnvMapAttribsCB);
         m_pPrefilterEnvMapPSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "FilterAttribs")->Set(m_PrecomputeEnvMapAttribsCB);
         m_pPrefilterEnvMapPSO->CreateShaderResourceBinding(&m_pPrefilterEnvMapSRB, true);
@@ -508,10 +493,8 @@ void PBR_Renderer::InitCommonSRBVars(IShaderResourceBinding* pSRB,
     }
 }
 
-void PBR_Renderer::CreateSignature(IRenderDevice* pDevice, IRenderStateCache* pStateCache)
+void PBR_Renderer::CreateSignature()
 {
-    RenderDeviceWithCache<false> Device{pDevice, pStateCache};
-
     PipelineResourceSignatureDescX SignatureDesc{"PBR Renderer Resource Signature"};
     SignatureDesc
         .SetUseCombinedTextureSamplers(true)
@@ -570,7 +553,7 @@ void PBR_Renderer::CreateSignature(IRenderDevice* pDevice, IRenderStateCache* pS
             .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_PrefilteredEnvMap", Sam_LinearClamp);
     }
 
-    m_ResourceSignature = Device.CreatePipelineResourceSignature(SignatureDesc);
+    m_ResourceSignature = m_Device.CreatePipelineResourceSignature(SignatureDesc);
 
     if (m_Settings.UseIBL)
     {
@@ -583,7 +566,7 @@ void PBR_Renderer::CreateSignature(IRenderDevice* pDevice, IRenderStateCache* pS
     }
 }
 
-ShaderMacroHelper PBR_Renderer::DefineMacros() const
+ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS PSOFlags) const
 {
     ShaderMacroHelper Macros;
     Macros.Add("MAX_JOINT_COUNT", static_cast<int>(m_Settings.MaxJointCount));
@@ -624,6 +607,28 @@ ShaderMacroHelper PBR_Renderer::DefineMacros() const
     Macros.Add("DEBUG_VIEW_SPECULAR_IBL",     static_cast<int>(DebugViewType::SpecularIBL));
     // clang-format on
 
+#define ADD_PSO_FLAG_MACRO(Flag) Macros.Add(#Flag, (PSOFlags & PSO_FLAG_##Flag) != PSO_FLAG_NONE)
+    ADD_PSO_FLAG_MACRO(USE_VERTEX_COLORS);
+    ADD_PSO_FLAG_MACRO(USE_VERTEX_NORMALS);
+    ADD_PSO_FLAG_MACRO(USE_TEXCOORD0);
+    ADD_PSO_FLAG_MACRO(USE_TEXCOORD1);
+    ADD_PSO_FLAG_MACRO(USE_JOINTS);
+
+    ADD_PSO_FLAG_MACRO(USE_DIFFUSE_MAP);
+    ADD_PSO_FLAG_MACRO(USE_NORMAL_MAP);
+    ADD_PSO_FLAG_MACRO(USE_METALLIC_MAP);
+    ADD_PSO_FLAG_MACRO(USE_ROUGHNESS_MAP);
+    ADD_PSO_FLAG_MACRO(USE_PHYS_DESC_MAP);
+    ADD_PSO_FLAG_MACRO(USE_AO_MAP);
+    ADD_PSO_FLAG_MACRO(USE_EMISSIVE_MAP);
+    ADD_PSO_FLAG_MACRO(USE_IBL);
+
+    //ADD_PSO_FLAG_MACRO(FRONT_CCW);
+    //ADD_PSO_FLAG_MACRO(ALLOW_DEBUG_VIEW);
+    //ADD_PSO_FLAG_MACRO(USE_TEXTURE_ATLAS);
+    //ADD_PSO_FLAG_MACRO(CONVERT_TO_SRGB);
+#undef ADD_PSO_FLAG_MACRO
+
     Macros.Add("TEX_COLOR_CONVERSION_MODE_NONE", CreateInfo::TEX_COLOR_CONVERSION_MODE_NONE);
     Macros.Add("TEX_COLOR_CONVERSION_MODE_SRGB_TO_LINEAR", CreateInfo::TEX_COLOR_CONVERSION_MODE_SRGB_TO_LINEAR);
     Macros.Add("TEX_COLOR_CONVERSION_MODE", m_Settings.TexColorConversionMode);
@@ -631,63 +636,137 @@ ShaderMacroHelper PBR_Renderer::DefineMacros() const
     return Macros;
 }
 
-InputLayoutDescX PBR_Renderer::GetInputLayout() const
+void PBR_Renderer::GetVSInputStructAndLayout(PSO_FLAGS         PSOFlags,
+                                             std::string&      VSInputStruct,
+                                             InputLayoutDescX& InputLayout) const
 {
-    InputLayoutDescX InputLayout;
+    //struct VSInput
+    //{
+    //    float3 Pos     : ATTRIB0;
+    //    float3 Normal  : ATTRIB1;
+    //    float2 UV0     : ATTRIB2;
+    //    float2 UV1     : ATTRIB3;
+    //    float4 Joint0  : ATTRIB4;
+    //    float4 Weight0 : ATTRIB5;
+    //    float4 Color   : ATTRIB6;
+    //};
+
     if (m_Settings.InputLayout.NumElements != 0)
     {
         InputLayout = m_Settings.InputLayout;
     }
     else
     {
+        InputLayout.Clear();
         InputLayout
             .Add(0u, 0u, 3u, VT_FLOAT32)  //float3 Pos     : ATTRIB0;
             .Add(1u, 0u, 3u, VT_FLOAT32)  //float3 Normal  : ATTRIB1;
             .Add(2u, 0u, 2u, VT_FLOAT32)  //float2 UV0     : ATTRIB2;
-            .Add(3u, 0u, 2u, VT_FLOAT32); //float2 UV1     : ATTRIB3;
-        if (m_Settings.MaxJointCount > 0)
-        {
-            InputLayout
-                .Add(4u, 1u, 4u, VT_FLOAT32)  //float4 Joint0  : ATTRIB4;
-                .Add(5u, 1u, 4u, VT_FLOAT32); //float4 Weight0 : ATTRIB5;
-        }
+            .Add(3u, 0u, 2u, VT_FLOAT32)  //float2 UV1     : ATTRIB3;
+            .Add(4u, 1u, 4u, VT_FLOAT32)  //float4 Joint0  : ATTRIB4;
+            .Add(5u, 1u, 4u, VT_FLOAT32)  //float4 Weight0 : ATTRIB5;
+            .Add(6u, 2u, 4u, VT_FLOAT32); //float4 Color   : ATTRIB6;
+
+        // TODO: need to compute offsets and strides
     }
 
-    return InputLayout;
+    std::stringstream ss;
+    ss << "struct VSInput" << std::endl
+       << "{" << std::endl;
+
+    auto ProccessAttrib = [&](const char* Type, Uint32 NumComponents, const char* Name, Uint32 Index, PSO_FLAGS Flag) //
+    {
+        if (Flag == PSO_FLAG_NONE || (PSOFlags & Flag) != 0)
+        {
+            ss << "    " << std::setw(7) << Type << NumComponents << std::setw(9) << Name << ": ATTRIB" << Index << ";" << std::endl;
+#ifdef DILIGENT_DEVELOPMENT
+            {
+                bool AttribFound = false;
+                for (Uint32 i = 0; i < InputLayout.GetNumElements(); ++i)
+                {
+                    const auto& Elem = InputLayout[i];
+                    if (Elem.InputIndex == Index)
+                    {
+                        AttribFound = true;
+                        DEV_CHECK_ERR(Elem.NumComponents == NumComponents, "Input layout element '", Name, "' (index ", Index, ") has ", Elem.NumComponents, " components, but shader expects ", NumComponents);
+                        DEV_CHECK_ERR(Elem.ValueType == VT_FLOAT32, "Input layout element '", Name, "' (index ", Index, ") has value type ", GetValueTypeString(Elem.ValueType), ", but shader expects float");
+                        break;
+                    }
+                }
+                DEV_CHECK_ERR(AttribFound, "Input layout does not contain attribute '", Name, "' (index ", Index, ")");
+            }
+#endif
+        }
+        else
+        {
+            // Remove attribute from layout
+            for (Uint32 i = 0; i < InputLayout.GetNumElements(); ++i)
+            {
+                const auto& Elem = InputLayout[i];
+                if (Elem.InputIndex == Index)
+                {
+                    InputLayout.Remove(i);
+                    break;
+                }
+            }
+        }
+    };
+
+    // clang-format off
+    ProccessAttrib("float", 3, "Pos",     0, PSO_FLAG_NONE);
+    ProccessAttrib("float", 3, "Normal",  1, PSO_FLAG_USE_VERTEX_NORMALS);
+    ProccessAttrib("float", 2, "UV0",     2, PSO_FLAG_USE_TEXCOORD0);
+    ProccessAttrib("float", 2, "UV1",     3, PSO_FLAG_USE_TEXCOORD1);
+    ProccessAttrib("float", 4, "Joint0",  4, PSO_FLAG_USE_JOINTS);
+    ProccessAttrib("float", 4, "Weight0", 5, PSO_FLAG_USE_JOINTS);
+    ProccessAttrib("float", 4, "Color",   6, PSO_FLAG_USE_VERTEX_COLORS);
+    // clang-format on
+
+    ss << "};" << std::endl;
+
+    VSInputStruct = ss.str();
 }
 
-void PBR_Renderer::CreatePSO(IRenderDevice* pDevice, IRenderStateCache* pStateCache)
+void PBR_Renderer::CreatePSO(PSO_FLAGS PSOFlags, TEXTURE_FORMAT RTVFmt, TEXTURE_FORMAT DSVFmt)
 {
-    RenderDeviceWithCache<false> Device{pDevice, pStateCache};
-
     GraphicsPipelineStateCreateInfo PSOCreateInfo;
     PipelineStateDesc&              PSODesc          = PSOCreateInfo.PSODesc;
     GraphicsPipelineDesc&           GraphicsPipeline = PSOCreateInfo.GraphicsPipeline;
 
-    PSODesc.Name         = "Render PBR PSO";
-    PSODesc.PipelineType = PIPELINE_TYPE_GRAPHICS;
-
     GraphicsPipeline.NumRenderTargets                     = 1;
-    GraphicsPipeline.RTVFormats[0]                        = m_Settings.RTVFmt;
-    GraphicsPipeline.DSVFormat                            = m_Settings.DSVFmt;
+    GraphicsPipeline.RTVFormats[0]                        = RTVFmt;
+    GraphicsPipeline.DSVFormat                            = DSVFmt;
     GraphicsPipeline.PrimitiveTopology                    = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    GraphicsPipeline.RasterizerDesc.CullMode              = CULL_MODE_BACK;
     GraphicsPipeline.RasterizerDesc.FrontCounterClockwise = m_Settings.FrontCCW;
+
+    InputLayoutDescX InputLayout;
+    std::string      VSInputStruct;
+    GetVSInputStructAndLayout(PSOFlags, VSInputStruct, InputLayout);
+
+    MemoryShaderSourceFileInfo                     VSInputStructSource{"VSInputStruct.generated", VSInputStruct};
+    MemoryShaderSourceFactoryCreateInfo            MemorySourceFactoryCI{&VSInputStructSource, 1};
+    RefCntAutoPtr<IShaderSourceInputStreamFactory> pMemorySourceFactory;
+    CreateMemoryShaderSourceFactory(MemorySourceFactoryCI, &pMemorySourceFactory);
+
+    IShaderSourceInputStreamFactory*               ppShaderSourceFactories[] = {&DiligentFXShaderSourceStreamFactory::GetInstance(), pMemorySourceFactory};
+    CompoundShaderSourceFactoryCreateInfo          CompoundSourceFactoryCI{ppShaderSourceFactories, _countof(ppShaderSourceFactories)};
+    RefCntAutoPtr<IShaderSourceInputStreamFactory> pCompoundSourceFactory;
+    CreateCompoundShaderSourceFactory(CompoundSourceFactoryCI, &pCompoundSourceFactory);
 
     ShaderCreateInfo ShaderCI;
     ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
-    ShaderCI.pShaderSourceStreamFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();
+    ShaderCI.pShaderSourceStreamFactory = pCompoundSourceFactory;
 
-    const auto Macros = DefineMacros();
+    const auto Macros = DefineMacros(PSOFlags);
     ShaderCI.Macros   = Macros;
 
     RefCntAutoPtr<IShader> pVS;
     {
         ShaderCI.Desc       = {"PBR VS", SHADER_TYPE_VERTEX, true};
-        ShaderCI.EntryPoint = m_Settings.MaxJointCount > 0 ? "VSMainSkinned" : "VSMain";
+        ShaderCI.EntryPoint = "main";
         ShaderCI.FilePath   = "RenderPBR.vsh";
 
-        pVS = Device.CreateShader(ShaderCI);
+        pVS = m_Device.CreateShader(ShaderCI);
     }
 
     // Create pixel shader
@@ -697,10 +776,9 @@ void PBR_Renderer::CreatePSO(IRenderDevice* pDevice, IRenderStateCache* pStateCa
         ShaderCI.EntryPoint = "main";
         ShaderCI.FilePath   = "RenderPBR.psh";
 
-        pPS = Device.CreateShader(ShaderCI);
+        pPS = m_Device.CreateShader(ShaderCI);
     }
 
-    const auto InputLayout                     = GetInputLayout();
     PSOCreateInfo.GraphicsPipeline.InputLayout = InputLayout;
 
     IPipelineResourceSignature* ppSignatures[] = {m_ResourceSignature};
@@ -710,53 +788,50 @@ void PBR_Renderer::CreatePSO(IRenderDevice* pDevice, IRenderStateCache* pStateCa
     PSOCreateInfo.pVS = pVS;
     PSOCreateInfo.pPS = pPS;
 
+    for (auto AlphaMode : {ALPHA_MODE_OPAQUE, ALPHA_MODE_BLEND})
     {
-        PSOKey Key{ALPHA_MODE_OPAQUE, false};
+        if (AlphaMode == ALPHA_MODE_OPAQUE)
+        {
+            PSOCreateInfo.GraphicsPipeline.BlendDesc = BS_Default;
+        }
+        else
+        {
+            auto& RT0          = GraphicsPipeline.BlendDesc.RenderTargets[0];
+            RT0.BlendEnable    = true;
+            RT0.SrcBlend       = BLEND_FACTOR_SRC_ALPHA;
+            RT0.DestBlend      = BLEND_FACTOR_INV_SRC_ALPHA;
+            RT0.BlendOp        = BLEND_OPERATION_ADD;
+            RT0.SrcBlendAlpha  = BLEND_FACTOR_ONE;
+            RT0.DestBlendAlpha = BLEND_FACTOR_INV_SRC_ALPHA;
+            RT0.BlendOpAlpha   = BLEND_OPERATION_ADD;
+        }
 
-        auto pSingleSidedOpaquePSO = Device.CreateGraphicsPipelineState(PSOCreateInfo);
-        AddPSO(Key, std::move(pSingleSidedOpaquePSO));
+        for (auto CullMode : {CULL_MODE_BACK, CULL_MODE_NONE})
+        {
+            std::string PSOName{"PBR PSO"};
+            PSOName += (AlphaMode == ALPHA_MODE_OPAQUE ? " - opaque" : " - blend");
+            PSOName += (CullMode == CULL_MODE_BACK ? " - backface culling" : " - no culling");
+            PSODesc.Name = PSOName.c_str();
 
-        PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_NONE;
-
-        Key.DoubleSided = true;
-
-        auto pDobleSidedOpaquePSO = Device.CreateGraphicsPipelineState(PSOCreateInfo);
-        AddPSO(Key, std::move(pDobleSidedOpaquePSO));
+            GraphicsPipeline.RasterizerDesc.CullMode   = CullMode;
+            const auto DoubleSided                     = CullMode == CULL_MODE_NONE;
+            auto       PSO                             = m_Device.CreateGraphicsPipelineState(PSOCreateInfo);
+            m_PSOs[{PSOFlags, AlphaMode, DoubleSided}] = PSO;
+            if (AlphaMode == ALPHA_MODE_BLEND)
+            {
+                // Mask and blend use the same PSO
+                m_PSOs[{PSOFlags, ALPHA_MODE_MASK, DoubleSided}] = PSO;
+            }
+        }
     }
-
-    PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_BACK;
-
-    auto& RT0          = PSOCreateInfo.GraphicsPipeline.BlendDesc.RenderTargets[0];
-    RT0.BlendEnable    = true;
-    RT0.SrcBlend       = BLEND_FACTOR_SRC_ALPHA;
-    RT0.DestBlend      = BLEND_FACTOR_INV_SRC_ALPHA;
-    RT0.BlendOp        = BLEND_OPERATION_ADD;
-    RT0.SrcBlendAlpha  = BLEND_FACTOR_ONE;
-    RT0.DestBlendAlpha = BLEND_FACTOR_INV_SRC_ALPHA;
-    RT0.BlendOpAlpha   = BLEND_OPERATION_ADD;
-
-    {
-        PSOKey Key{ALPHA_MODE_BLEND, false};
-
-        auto pSingleSidedBlendPSO = Device.CreateGraphicsPipelineState(PSOCreateInfo);
-        AddPSO(Key, std::move(pSingleSidedBlendPSO));
-
-        PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_NONE;
-
-        Key.DoubleSided = true;
-
-        auto pDoubleSidedBlendPSO = Device.CreateGraphicsPipelineState(PSOCreateInfo);
-        AddPSO(Key, std::move(pDoubleSidedBlendPSO));
-    }
-
 
     if (m_Settings.EnableMeshIdRendering)
     {
         PSOCreateInfo.PSODesc.Name = "Render Mesh Id PSO";
 
-        PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthFunc = COMPARISON_FUNC_LESS_EQUAL;
-        PSOCreateInfo.GraphicsPipeline.BlendDesc                  = BS_Default;
-        PSOCreateInfo.GraphicsPipeline.RTVFormats[0]              = MeshIdFmt;
+        GraphicsPipeline.DepthStencilDesc.DepthFunc = COMPARISON_FUNC_LESS_EQUAL;
+        GraphicsPipeline.BlendDesc                  = BS_Default;
+        GraphicsPipeline.RTVFormats[0]              = MeshIdFmt;
 
         RefCntAutoPtr<IShader> pMeshIdPS;
         {
@@ -764,32 +839,50 @@ void PBR_Renderer::CreatePSO(IRenderDevice* pDevice, IRenderStateCache* pStateCa
             ShaderCI.EntryPoint = "main";
             ShaderCI.FilePath   = "RenderMeshId.psh";
 
-            pMeshIdPS = Device.CreateShader(ShaderCI);
+            pMeshIdPS = m_Device.CreateShader(ShaderCI);
         }
         PSOCreateInfo.pPS = pMeshIdPS;
 
-        PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_BACK;
+        for (auto CullMode : {CULL_MODE_BACK, CULL_MODE_NONE})
+        {
+            GraphicsPipeline.RasterizerDesc.CullMode = CullMode;
+            const auto DoubleSided                   = CullMode == CULL_MODE_NONE;
 
-        m_MeshIdPSO[0] = Device.CreateGraphicsPipelineState(PSOCreateInfo);
-
-        PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_NONE;
-
-        m_MeshIdPSO[1] = Device.CreateGraphicsPipelineState(PSOCreateInfo);
+            m_MeshIdPSOs[{PSOFlags, ALPHA_MODE_OPAQUE, DoubleSided}] = m_Device.CreateGraphicsPipelineState(PSOCreateInfo);
+        }
     }
-}
-
-void PBR_Renderer::AddPSO(const PSOKey& Key, RefCntAutoPtr<IPipelineState> pPSO)
-{
-    auto Idx = GetPSOIdx(Key);
-    if (Idx >= m_PSOCache.size())
-        m_PSOCache.resize(Idx + 1);
-    VERIFY_EXPR(!m_PSOCache[Idx]);
-    m_PSOCache[Idx] = std::move(pPSO);
 }
 
 void PBR_Renderer::CreateResourceBinding(IShaderResourceBinding** ppSRB)
 {
     m_ResourceSignature->CreateShaderResourceBinding(ppSRB, true);
+}
+
+IPipelineState* PBR_Renderer::GetPSO(PSOCacheType& PSOCache, const PSOKey& Key, std::function<void()> CreatePSO)
+{
+    auto it = PSOCache.find(Key);
+    if (it == PSOCache.end() && CreatePSO != nullptr)
+    {
+        CreatePSO();
+
+        it = PSOCache.find(Key);
+        VERIFY_EXPR(it != PSOCache.end());
+    }
+
+    return it != PSOCache.end() ? it->second.RawPtr() : nullptr;
+}
+
+IPipelineState* PBR_Renderer::GetPSO(const PSOKey& Key, bool CreateIfNull)
+{
+    return GetPSO(m_PSOs, Key, [&]() { CreatePSO(Key.Flags, m_Settings.RTVFmt, m_Settings.DSVFmt); });
+}
+
+IPipelineState* PBR_Renderer::GetMeshIdPSO(const PSOKey& _Key, bool CreateIfNull)
+{
+    auto Key      = _Key;
+    Key.AlphaMode = ALPHA_MODE_OPAQUE;
+
+    return GetPSO(m_MeshIdPSOs, Key, [&]() { CreatePSO(Key.Flags, MeshIdFmt, m_Settings.DSVFmt); });
 }
 
 } // namespace Diligent

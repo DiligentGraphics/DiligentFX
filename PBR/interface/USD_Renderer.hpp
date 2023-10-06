@@ -41,13 +41,13 @@ public:
                  IDeviceContext*    pCtx,
                  const CreateInfo&  CI);
 
-    IPipelineState* GetMeshEdgesPSO() const { return m_MeshEdgesPSO; }
+    IPipelineState* GetMeshEdgesPSO(const PSOKey& Key, bool CreateIfNull);
 
 private:
-    void CreatMeshEdgesPSO(IRenderDevice* pDevice, IRenderStateCache* pStateCache);
+    void CreateMeshEdgesPSO(PSO_FLAGS PSOFlags, TEXTURE_FORMAT RTVFmt, TEXTURE_FORMAT DSVFmt);
 
 private:
-    RefCntAutoPtr<IPipelineState> m_MeshEdgesPSO;
+    PSOCacheType m_MeshEdgesPSOs;
 };
 
 } // namespace Diligent

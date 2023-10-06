@@ -36,6 +36,7 @@
 #include "BasicMath.hpp"
 #include "ObjectBase.hpp"
 #include "GPUCompletionAwaitQueue.hpp"
+#include "USD_Renderer.hpp"
 
 #include "pxr/usd/usd/stage.h"
 #include "pxr/imaging/hd/tokens.h"
@@ -47,7 +48,6 @@
 namespace Diligent
 {
 
-class USD_Renderer;
 class EnvMapRenderer;
 
 namespace USD
@@ -109,6 +109,8 @@ private:
     RefCntAutoPtr<ITexture> m_DepthBuffer;
 
     GPUCompletionAwaitQueue<RefCntAutoPtr<ITexture>> m_MeshIdReadBackQueue;
+
+    PBR_Renderer::PSO_FLAGS m_PSOFlags = PBR_Renderer::PSO_FLAG_NONE;
 };
 
 } // namespace USD

@@ -63,6 +63,26 @@ GLTF_PBR_Renderer::GLTF_PBR_Renderer(IRenderDevice*     pDevice,
                                      const CreateInfo&  CI) :
     PBR_Renderer{pDevice, pStateCache, pCtx, CI}
 {
+    m_PSOFlags |=
+        PSO_FLAG_USE_VERTEX_NORMALS |
+        PSO_FLAG_USE_TEXCOORD0 |
+        PSO_FLAG_USE_TEXCOORD1 |
+        PSO_FLAG_USE_JOINTS |
+        PSO_FLAG_USE_DIFFUSE_MAP |
+        PSO_FLAG_USE_NORMAL_MAP |
+        PSO_FLAG_USE_PHYS_DESC_MAP;
+    if (CI.UseAO)
+        m_PSOFlags |= PSO_FLAG_USE_AO_MAP;
+    if (CI.UseEmissive)
+        m_PSOFlags |= PSO_FLAG_USE_EMISSIVE_MAP;
+    if (CI.UseIBL)
+        m_PSOFlags |= PSO_FLAG_USE_IBL;
+    if (CI.AllowDebugView)
+        m_PSOFlags |= PSO_FLAG_ALLOW_DEBUG_VIEW;
+    if (CI.UseTextureAtlas)
+        m_PSOFlags |= PSO_FLAG_USE_TEXTURE_ATLAS;
+    if (CI.ConvertOutputToSRGB)
+        m_PSOFlags |= PSO_FLAG_CONVERT_TO_SRGB;
 }
 
 void GLTF_PBR_Renderer::InitMaterialSRB(GLTF::Model&            Model,
@@ -133,12 +153,11 @@ void GLTF_PBR_Renderer::CreateResourceCacheSRB(IRenderDevice*           pDevice,
                                                ResourceCacheUseInfo&    CacheUseInfo,
                                                IBuffer*                 pCameraAttribs,
                                                IBuffer*                 pLightAttribs,
-                                               IPipelineState*          pPSO,
                                                IShaderResourceBinding** ppCacheSRB)
 {
     DEV_CHECK_ERR(CacheUseInfo.pResourceMgr != nullptr, "Resource manager must not be null");
 
-    pPSO->CreateShaderResourceBinding(ppCacheSRB, true);
+    m_ResourceSignature->CreateShaderResourceBinding(ppCacheSRB, true);
     IShaderResourceBinding* const pSRB = *ppCacheSRB;
     if (pSRB == nullptr)
     {
@@ -202,22 +221,18 @@ void GLTF_PBR_Renderer::Begin(IRenderDevice*         pDevice,
                               ResourceCacheUseInfo&  CacheUseInfo,
                               ResourceCacheBindings& Bindings,
                               IBuffer*               pCameraAttribs,
-                              IBuffer*               pLightAttribs,
-                              IPipelineState*        pPSO)
+                              IBuffer*               pLightAttribs)
 {
     VERIFY(CacheUseInfo.pResourceMgr != nullptr, "Resource manager must not be null.");
     VERIFY(CacheUseInfo.VtxLayoutKey != GLTF::ResourceManager::VertexLayoutKey{}, "Vertex layout key must not be null.");
 
     Begin(pCtx);
 
-    if (pPSO == nullptr)
-        pPSO = GetPSO(PSOKey{});
-
     auto TextureVersion = CacheUseInfo.pResourceMgr->GetTextureVersion();
     if (!Bindings.pSRB || Bindings.Version != TextureVersion)
     {
         Bindings.pSRB.Release();
-        CreateResourceCacheSRB(pDevice, pCtx, CacheUseInfo, pCameraAttribs, pLightAttribs, pPSO, &Bindings.pSRB);
+        CreateResourceCacheSRB(pDevice, pCtx, CacheUseInfo, pCameraAttribs, pLightAttribs, &Bindings.pSRB);
         if (!Bindings.pSRB)
         {
             LOG_ERROR_MESSAGE("Failed to create an SRB for GLTF resource cache");
@@ -226,7 +241,8 @@ void GLTF_PBR_Renderer::Begin(IRenderDevice*         pDevice,
         Bindings.Version = TextureVersion;
     }
 
-    pCtx->TransitionShaderResources(pPSO, Bindings.pSRB);
+    if (auto pPSO = GetPSO(PSOKey{m_PSOFlags, PBR_Renderer::ALPHA_MODE_OPAQUE, false}, true))
+        pCtx->TransitionShaderResources(pPSO, Bindings.pSRB);
 
     if (auto* pVertexPool = CacheUseInfo.pResourceMgr->GetVertexPool(CacheUseInfo.VtxLayoutKey))
     {
@@ -323,7 +339,7 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
                 if (material.Attribs.AlphaMode != AlphaMode)
                     continue;
 
-                const PSOKey Key{GltfAlphaModeToAlphaMode(AlphaMode), material.DoubleSided};
+                const PSOKey Key{m_PSOFlags, GltfAlphaModeToAlphaMode(AlphaMode), material.DoubleSided};
 
                 if (Key != CurrPSOKey)
                 {
@@ -332,14 +348,14 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
                 }
                 if (pCurrPSO == nullptr)
                 {
-                    pCurrPSO = GetPSO(CurrPSOKey);
+                    pCurrPSO = GetPSO(CurrPSOKey, true);
                     VERIFY_EXPR(pCurrPSO != nullptr);
                     pCtx->SetPipelineState(pCurrPSO);
                     pCurrSRB = nullptr;
                 }
                 else
                 {
-                    VERIFY_EXPR(pCurrPSO == GetPSO(PSOKey{GltfAlphaModeToAlphaMode(AlphaMode), material.DoubleSided}));
+                    VERIFY_EXPR(pCurrPSO == GetPSO(PSOKey{m_PSOFlags, GltfAlphaModeToAlphaMode(AlphaMode), material.DoubleSided}, false));
                 }
 
                 if (pModelBindings != nullptr)

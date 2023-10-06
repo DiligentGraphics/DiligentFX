@@ -192,8 +192,6 @@ public:
     /// \param [in] CacheUseInfo   - GLTF resource cache usage information.
     /// \param [in] pCameraAttribs - Camera attributes constant buffer to set in the SRB.
     /// \param [in] pLightAttribs  - Light attributes constant buffer to set in the SRB.
-    /// \param [in] pPSO           - Optional PSO object to use to create the SRB instead of the
-    ///                              default PSO. Can be null
     /// \param [out] ppCacheSRB    - Pointer to memory location where the pointer to the SRB object
     ///                              will be written.
     void CreateResourceCacheSRB(IRenderDevice*           pDevice,
@@ -201,7 +199,6 @@ public:
                                 ResourceCacheUseInfo&    CacheUseInfo,
                                 IBuffer*                 pCameraAttribs,
                                 IBuffer*                 pLightAttribs,
-                                IPipelineState*          pPSO,
                                 IShaderResourceBinding** ppCacheSRB);
 
     /// Prepares the renderer for rendering objects.
@@ -217,13 +214,14 @@ public:
                ResourceCacheUseInfo&  CacheUseInfo,
                ResourceCacheBindings& Bindings,
                IBuffer*               pCameraAttribs,
-               IBuffer*               pLightAttribs,
-               IPipelineState*        pPSO = nullptr);
+               IBuffer*               pLightAttribs);
 
 private:
     static ALPHA_MODE GltfAlphaModeToAlphaMode(GLTF::Material::ALPHA_MODE GltfAlphaMode);
 
     RenderInfo m_RenderParams;
+
+    PSO_FLAGS m_PSOFlags = PSO_FLAG_NONE;
 };
 
 DEFINE_FLAG_ENUM_OPERATORS(GLTF_PBR_Renderer::RenderInfo::ALPHA_MODE_FLAGS)

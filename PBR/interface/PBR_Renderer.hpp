@@ -26,16 +26,17 @@
 
 #pragma once
 
-#include <vector>
-#include <array>
+#include <unordered_map>
+#include <functional>
 
 #include "../../../DiligentCore/Platforms/Basic/interface/DebugUtilities.hpp"
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/DeviceContext.h"
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/GraphicsTypesX.hpp"
-#include "../../../DiligentCore/Graphics/GraphicsTools/interface/RenderStateCache.h"
+#include "../../../DiligentCore/Graphics/GraphicsTools/interface/RenderStateCache.hpp"
 #include "../../../DiligentCore/Graphics/GraphicsTools/interface/ShaderMacroHelper.hpp"
 #include "../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
+#include "../../../DiligentCore/Common/interface/HashUtils.hpp"
 
 namespace Diligent
 {
@@ -198,79 +199,96 @@ public:
     // clang-format on
 
     /// Precompute cubemaps used by IBL.
-    void PrecomputeCubemaps(IRenderDevice*     pDevice,
-                            IRenderStateCache* pStateCache,
-                            IDeviceContext*    pCtx,
-                            ITextureView*      pEnvironmentMap,
-                            Uint32             NumPhiSamples   = 64,
-                            Uint32             NumThetaSamples = 32,
-                            bool               OptimizeSamples = true);
+    void PrecomputeCubemaps(IDeviceContext* pCtx,
+                            ITextureView*   pEnvironmentMap,
+                            Uint32          NumPhiSamples   = 64,
+                            Uint32          NumThetaSamples = 32,
+                            bool            OptimizeSamples = true);
 
     void CreateResourceBinding(IShaderResourceBinding** ppSRB);
+
+    enum PSO_FLAGS : Uint32
+    {
+        PSO_FLAG_NONE               = 0u,
+        PSO_FLAG_USE_VERTEX_COLORS  = 1u << 0u,
+        PSO_FLAG_USE_VERTEX_NORMALS = 1u << 1u,
+        PSO_FLAG_USE_TEXCOORD0      = 1u << 2u,
+        PSO_FLAG_USE_TEXCOORD1      = 1u << 3u,
+        PSO_FLAG_USE_JOINTS         = 1u << 4u,
+
+        PSO_FLAG_USE_DIFFUSE_MAP   = 1u << 5u,
+        PSO_FLAG_USE_NORMAL_MAP    = 1u << 6u,
+        PSO_FLAG_USE_METALLIC_MAP  = 1u << 7u,
+        PSO_FLAG_USE_ROUGHNESS_MAP = 1u << 8u,
+        PSO_FLAG_USE_PHYS_DESC_MAP = 1u << 9u,
+        PSO_FLAG_USE_AO_MAP        = 1u << 10u,
+        PSO_FLAG_USE_EMISSIVE_MAP  = 1u << 11u,
+        PSO_FLAG_USE_IBL           = 1u << 12u,
+
+        PSO_FLAG_FRONT_CCW         = 1u << 13u,
+        PSO_FLAG_ALLOW_DEBUG_VIEW  = 1u << 14u,
+        PSO_FLAG_USE_TEXTURE_ATLAS = 1u << 15u,
+        PSO_FLAG_CONVERT_TO_SRGB   = 1u << 16u,
+    };
 
     struct PSOKey
     {
         PSOKey() noexcept {};
-        PSOKey(ALPHA_MODE _AlphaMode, bool _DoubleSided) :
+        PSOKey(PSO_FLAGS _Flags, ALPHA_MODE _AlphaMode, bool _DoubleSided) noexcept :
+            Flags{_Flags},
             AlphaMode{_AlphaMode},
             DoubleSided{_DoubleSided}
         {}
 
         bool operator==(const PSOKey& rhs) const noexcept
         {
-            return AlphaMode == rhs.AlphaMode && DoubleSided == rhs.DoubleSided;
+            return Flags == rhs.Flags && AlphaMode == rhs.AlphaMode && DoubleSided == rhs.DoubleSided;
         }
         bool operator!=(const PSOKey& rhs) const noexcept
         {
-            return AlphaMode != rhs.AlphaMode || DoubleSided != rhs.DoubleSided;
+            return Flags != rhs.Flags || AlphaMode != rhs.AlphaMode || DoubleSided != rhs.DoubleSided;
         }
 
+        PSO_FLAGS  Flags       = PSO_FLAG_NONE;
         ALPHA_MODE AlphaMode   = ALPHA_MODE_OPAQUE;
         bool       DoubleSided = false;
+
+        struct Hasher
+        {
+            size_t operator()(const PSOKey& Key) const noexcept
+            {
+                return ComputeHash(Key.Flags, Key.AlphaMode, Key.DoubleSided);
+            }
+        };
     };
 
-    IPipelineState* GetPSO(const PSOKey& Key) const
-    {
-        auto Idx = GetPSOIdx(Key);
-        VERIFY_EXPR(Idx < m_PSOCache.size());
-        return Idx < m_PSOCache.size() ? m_PSOCache[Idx].RawPtr() : nullptr;
-    }
-
-    IPipelineState* GetMeshIdPSO(bool DoubleSided) const
-    {
-        return m_MeshIdPSO[DoubleSided ? 1 : 0];
-    }
+    IPipelineState* GetPSO(const PSOKey& Key, bool CreateIfNull);
+    IPipelineState* GetMeshIdPSO(const PSOKey& Key, bool CreateIfNull);
 
     void InitCommonSRBVars(IShaderResourceBinding* pSRB,
                            IBuffer*                pCameraAttribs,
                            IBuffer*                pLightAttribs);
 
 protected:
-    ShaderMacroHelper DefineMacros() const;
-    InputLayoutDescX  GetInputLayout() const;
+    ShaderMacroHelper DefineMacros(PSO_FLAGS PSOFlags) const;
 
-    static size_t GetPSOIdx(const PSOKey& Key)
-    {
-        size_t PSOIdx;
+    void GetVSInputStructAndLayout(PSO_FLAGS PSOFlags, std::string& VSInputStruct, InputLayoutDescX& InputLayout) const;
 
-        PSOIdx = Key.AlphaMode == ALPHA_MODE_BLEND ? 1 : 0;
-        PSOIdx = PSOIdx * 2 + (Key.DoubleSided ? 1 : 0);
-        return PSOIdx;
-    }
+    using PSOCacheType = std::unordered_map<PSOKey, RefCntAutoPtr<IPipelineState>, PSOKey::Hasher>;
 
-    void AddPSO(const PSOKey& Key, RefCntAutoPtr<IPipelineState> pPSO);
+    static IPipelineState* GetPSO(PSOCacheType& PSOCache, const PSOKey& Key, std::function<void()> CreatePSO);
 
 private:
-    void PrecomputeBRDF(IRenderDevice*     pDevice,
-                        IRenderStateCache* pStateCache,
-                        IDeviceContext*    pCtx,
-                        Uint32             NumBRDFSamples = 512);
+    void PrecomputeBRDF(IDeviceContext* pCtx,
+                        Uint32          NumBRDFSamples = 512);
 
-    void CreatePSO(IRenderDevice* pDevice, IRenderStateCache* pStateCache);
-    void CreateSignature(IRenderDevice* pDevice, IRenderStateCache* pStateCache);
+    void CreatePSO(PSO_FLAGS PSOFlags, TEXTURE_FORMAT RTVFmt, TEXTURE_FORMAT DSVFmt);
+    void CreateSignature();
 
 protected:
     const CreateInfo m_Settings;
+
+    RenderDeviceWithCache_N m_Device;
 
     static constexpr Uint32     BRDF_LUT_Dim = 512;
     RefCntAutoPtr<ITextureView> m_pBRDF_LUT_SRV;
@@ -298,9 +316,12 @@ protected:
     RefCntAutoPtr<IBuffer> m_PrecomputeEnvMapAttribsCB;
     RefCntAutoPtr<IBuffer> m_JointsBuffer;
 
-    RefCntAutoPtr<IPipelineResourceSignature>    m_ResourceSignature;
-    std::vector<RefCntAutoPtr<IPipelineState>>   m_PSOCache;
-    std::array<RefCntAutoPtr<IPipelineState>, 2> m_MeshIdPSO;
+    RefCntAutoPtr<IPipelineResourceSignature> m_ResourceSignature;
+
+    PSOCacheType m_PSOs;
+    PSOCacheType m_MeshIdPSOs;
 };
+
+DEFINE_FLAG_ENUM_OPERATORS(PBR_Renderer::PSO_FLAGS)
 
 } // namespace Diligent

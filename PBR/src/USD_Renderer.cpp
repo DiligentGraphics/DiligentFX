@@ -28,6 +28,7 @@
 
 #include "RenderStateCache.hpp"
 #include "../../../Utilities/include/DiligentFXShaderSourceStreamFactory.hpp"
+#include "ShaderSourceFactoryUtils.h"
 
 namespace Diligent
 {
@@ -38,13 +39,10 @@ USD_Renderer::USD_Renderer(IRenderDevice*     pDevice,
                            const CreateInfo&  CI) :
     PBR_Renderer{pDevice, pStateCache, pCtx, CI}
 {
-    CreatMeshEdgesPSO(pDevice, pStateCache);
 }
 
-void USD_Renderer::CreatMeshEdgesPSO(IRenderDevice* pDevice, IRenderStateCache* pStateCache)
+void USD_Renderer::CreateMeshEdgesPSO(PSO_FLAGS PSOFlags, TEXTURE_FORMAT RTVFmt, TEXTURE_FORMAT DSVFmt)
 {
-    RenderDeviceWithCache<false> Device{pDevice, pStateCache};
-
     GraphicsPipelineStateCreateInfo PSOCreateInfo;
     PipelineStateDesc&              PSODesc          = PSOCreateInfo.PSODesc;
     GraphicsPipelineDesc&           GraphicsPipeline = PSOCreateInfo.GraphicsPipeline;
@@ -53,15 +51,29 @@ void USD_Renderer::CreatMeshEdgesPSO(IRenderDevice* pDevice, IRenderStateCache* 
     PSODesc.PipelineType = PIPELINE_TYPE_GRAPHICS;
 
     GraphicsPipeline.NumRenderTargets  = 1;
-    GraphicsPipeline.RTVFormats[0]     = m_Settings.RTVFmt;
-    GraphicsPipeline.DSVFormat         = m_Settings.DSVFmt;
+    GraphicsPipeline.RTVFormats[0]     = RTVFmt;
+    GraphicsPipeline.DSVFormat         = DSVFmt;
     GraphicsPipeline.PrimitiveTopology = PRIMITIVE_TOPOLOGY_LINE_LIST;
+
+    InputLayoutDescX InputLayout;
+    std::string      VSInputStruct;
+    GetVSInputStructAndLayout(PSOFlags, VSInputStruct, InputLayout);
+
+    MemoryShaderSourceFileInfo                     VSInputStructSource{"VSInputStruct.generated", VSInputStruct};
+    MemoryShaderSourceFactoryCreateInfo            MemorySourceFactoryCI{&VSInputStructSource, 1};
+    RefCntAutoPtr<IShaderSourceInputStreamFactory> pMemorySourceFactory;
+    CreateMemoryShaderSourceFactory(MemorySourceFactoryCI, &pMemorySourceFactory);
+
+    IShaderSourceInputStreamFactory*               ppShaderSourceFactories[] = {&DiligentFXShaderSourceStreamFactory::GetInstance(), pMemorySourceFactory};
+    CompoundShaderSourceFactoryCreateInfo          CompoundSourceFactoryCI{ppShaderSourceFactories, _countof(ppShaderSourceFactories)};
+    RefCntAutoPtr<IShaderSourceInputStreamFactory> pCompoundSourceFactory;
+    CreateCompoundShaderSourceFactory(CompoundSourceFactoryCI, &pCompoundSourceFactory);
 
     ShaderCreateInfo ShaderCI;
     ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
-    ShaderCI.pShaderSourceStreamFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();
+    ShaderCI.pShaderSourceStreamFactory = pCompoundSourceFactory;
 
-    const auto Macros = DefineMacros();
+    const auto Macros = DefineMacros(PSO_FLAG_NONE);
     ShaderCI.Macros   = Macros;
 
     RefCntAutoPtr<IShader> pVS;
@@ -70,7 +82,7 @@ void USD_Renderer::CreatMeshEdgesPSO(IRenderDevice* pDevice, IRenderStateCache* 
         ShaderCI.EntryPoint = m_Settings.MaxJointCount > 0 ? "VSMainSkinned" : "VSMain";
         ShaderCI.FilePath   = "RenderPBR.vsh";
 
-        pVS = Device.CreateShader(ShaderCI);
+        pVS = m_Device.CreateShader(ShaderCI);
     }
 
     // Create pixel shader
@@ -80,10 +92,9 @@ void USD_Renderer::CreatMeshEdgesPSO(IRenderDevice* pDevice, IRenderStateCache* 
         ShaderCI.EntryPoint = "main";
         ShaderCI.FilePath   = "RenderWireframe.psh";
 
-        pPS = Device.CreateShader(ShaderCI);
+        pPS = m_Device.CreateShader(ShaderCI);
     }
 
-    const auto InputLayout                     = GetInputLayout();
     PSOCreateInfo.GraphicsPipeline.InputLayout = InputLayout;
 
     IPipelineResourceSignature* ppSignatures[] = {m_ResourceSignature};
@@ -93,7 +104,21 @@ void USD_Renderer::CreatMeshEdgesPSO(IRenderDevice* pDevice, IRenderStateCache* 
     PSOCreateInfo.pVS = pVS;
     PSOCreateInfo.pPS = pPS;
 
-    m_MeshEdgesPSO = Device.CreateGraphicsPipelineState(PSOCreateInfo);
+    for (auto CullMode : {CULL_MODE_BACK, CULL_MODE_NONE})
+    {
+        GraphicsPipeline.RasterizerDesc.CullMode = CullMode;
+        const auto DoubleSided                   = CullMode == CULL_MODE_NONE;
+
+        m_MeshEdgesPSOs[{PSOFlags, ALPHA_MODE_OPAQUE, DoubleSided}] = m_Device.CreateGraphicsPipelineState(PSOCreateInfo);
+    }
+}
+
+IPipelineState* USD_Renderer::GetMeshEdgesPSO(const PSOKey& _Key, bool CreateIfNull)
+{
+    auto Key      = _Key;
+    Key.AlphaMode = ALPHA_MODE_OPAQUE;
+
+    return GetPSO(m_MeshEdgesPSOs, Key, [&]() { CreateMeshEdgesPSO(Key.Flags, m_Settings.RTVFmt, m_Settings.DSVFmt); });
 }
 
 } // namespace Diligent
