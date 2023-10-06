@@ -69,13 +69,7 @@ if(NOT FILE2STRING_PATH STREQUAL "")
 
     set(SHADERS_LIST_FILE shaders_inc/shaders_list.h)
     file(WRITE ${SHADERS_LIST_FILE}
-        "struct ShaderIncInfo\n"
-        "{\n"
-        "    const char* const FileName;\n"
-        "    const char* const Source;\n"
-        "};\n"
-        "\n"
-        "static const ShaderIncInfo g_Shaders[] =\n"
+        "static const MemoryShaderSourceFileInfo g_Shaders[] =\n"
         "{"
         )
 

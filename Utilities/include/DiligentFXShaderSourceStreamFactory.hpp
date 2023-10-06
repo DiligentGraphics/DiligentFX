@@ -1,5 +1,5 @@
 /*
- *  Copyright 2019-2022 Diligent Graphics LLC
+ *  Copyright 2019-2023 Diligent Graphics LLC
  *  Copyright 2015-2019 Egor Yusov
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,64 +27,21 @@
 
 #pragma once
 
-#include <unordered_map>
-#include "BasicFileStream.hpp"
 #include "Shader.h"
-#include "HashUtils.hpp"
-#include "DummyReferenceCounters.hpp"
+#include "RefCntAutoPtr.hpp"
 
 namespace Diligent
 {
 
-class DiligentFXShaderSourceStreamFactory final : public IShaderSourceInputStreamFactory
+class DiligentFXShaderSourceStreamFactory final
 {
 public:
-    static DiligentFXShaderSourceStreamFactory& GetInstance();
-
-    virtual void DILIGENT_CALL_TYPE CreateInputStream(const Char* Name, IFileStream** ppStream) override final;
-
-    virtual void DILIGENT_CALL_TYPE CreateInputStream2(const Char*                             Name,
-                                                       CREATE_SHADER_SOURCE_INPUT_STREAM_FLAGS Flags,
-                                                       IFileStream**                           ppStream) override final;
-
-    virtual void DILIGENT_CALL_TYPE QueryInterface(const INTERFACE_ID& IID, IObject** ppInterface) override final
-    {
-        if (ppInterface == nullptr)
-            return;
-
-        *ppInterface = nullptr;
-        if (IID == IID_Unknown || IID == IID_IShaderSourceInputStreamFactory)
-        {
-            *ppInterface = this;
-            (*ppInterface)->AddRef();
-        }
-    }
-
-    virtual ReferenceCounterValueType DILIGENT_CALL_TYPE AddRef() override final
-    {
-        return m_RefCounters.AddStrongRef();
-    }
-
-    virtual ReferenceCounterValueType DILIGENT_CALL_TYPE Release() override final
-    {
-        return m_RefCounters.ReleaseStrongRef();
-    }
-
-    virtual IReferenceCounters* DILIGENT_CALL_TYPE GetReferenceCounters() const override final
-    {
-        return const_cast<IReferenceCounters*>(static_cast<const IReferenceCounters*>(&m_RefCounters));
-    }
+    static IShaderSourceInputStreamFactory& GetInstance();
 
 private:
     DiligentFXShaderSourceStreamFactory();
 
-    using NameToSourceMapType = std::unordered_map<HashMapStringKey, const Char*>;
-    static NameToSourceMapType InitNameToSourceMap();
-
-private:
-    DummyReferenceCounters<DiligentFXShaderSourceStreamFactory> m_RefCounters;
-
-    const NameToSourceMapType m_NameToSourceMap;
+    RefCntAutoPtr<IShaderSourceInputStreamFactory> m_pFactory;
 };
 
 } // namespace Diligent

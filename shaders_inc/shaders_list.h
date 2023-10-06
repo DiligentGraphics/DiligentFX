@@ -1,10 +1,4 @@
-struct ShaderIncInfo
-{
-    const char* const FileName;
-    const char* const Source;
-};
-
-static const ShaderIncInfo g_Shaders[] =
+static const MemoryShaderSourceFileInfo g_Shaders[] =
 {
     {
         "EnvMap.psh",
