@@ -5,7 +5,18 @@
 #include "BasicStructures.fxh"
 #include "PBR_Shading.fxh"
 #include "ToneMapping.fxh"
-#include "RenderPBRCommon.fxh"
+
+#include "VSOutputStruct.generated"
+// struct VSOutput
+// {
+//     float4 ClipPos  : SV_Position;
+//     float3 WorldPos : WORLD_POS;
+//     float4 Color    : COLOR;
+//     float3 Normal   : NORMAL;
+//     float2 UV0      : UV0;
+//     float2 UV1      : UV1;
+// };
+
 
 #ifndef USE_TEXTURE_ATLAS
 #   define USE_TEXTURE_ATLAS 0
@@ -34,86 +45,261 @@ cbuffer cbPBRAttribs
     PBRShaderAttribs g_PBRAttribs;
 }
 
-#if PBR_USE_IBL
-TextureCube  g_IrradianceMap;
-SamplerState g_IrradianceMap_sampler;
+#if USE_IBL
+    TextureCube  g_IrradianceMap;
+    SamplerState g_IrradianceMap_sampler;
 
-TextureCube  g_PrefilteredEnvMap;
-SamplerState g_PrefilteredEnvMap_sampler;
+    TextureCube  g_PrefilteredEnvMap;
+    SamplerState g_PrefilteredEnvMap_sampler;
 
-Texture2D     g_BRDF_LUT;
-SamplerState  g_BRDF_LUT_sampler;
+    Texture2D     g_BRDF_LUT;
+    SamplerState  g_BRDF_LUT_sampler;
 #endif
 
-Texture2DArray g_ColorMap;
-SamplerState   g_ColorMap_sampler;
+#if USE_COLOR_MAP
+    Texture2DArray g_ColorMap;
+    SamplerState   g_ColorMap_sampler;
+#endif
 
-#if USE_SEPARATE_METALLIC_ROUGHNESS_TEXTURES
-Texture2DArray g_RoughnessMap;
-SamplerState   g_RoughnessMap_sampler;
-Texture2DArray g_MetallicMap;
-SamplerState   g_MetallicMap_sampler;
+#if USE_METALLIC_MAP
+    Texture2DArray g_MetallicMap;
+    SamplerState   g_MetallicMap_sampler;
+#endif
+
+#if USE_ROUGHNESS_MAP
+    Texture2DArray g_RoughnessMap;
+    SamplerState   g_RoughnessMap_sampler;
+#endif
+
+#if USE_PHYS_DESC_MAP
+    Texture2DArray g_PhysicalDescriptorMap;
+    SamplerState   g_PhysicalDescriptorMap_sampler;
+#endif
+
+#if USE_NORMAL_MAP
+    Texture2DArray g_NormalMap;
+    SamplerState   g_NormalMap_sampler;
+#endif
+
+#if USE_AO_MAP
+    Texture2DArray g_AOMap;
+    SamplerState   g_AOMap_sampler;
+#endif
+
+#if USE_EMISSIVE_MAP
+    Texture2DArray g_EmissiveMap;
+    SamplerState   g_EmissiveMap_sampler;
+#endif
+
+
+float2 SelectUV(VSOutput VSOut, float Selector)
+{
+#if USE_TEXCOORD0 && USE_TEXCOORD1
+    return lerp(VSOut.UV0, VSOut.UV1, Selector);
+#elif USE_TEXCOORD0
+    return VSOut.UV0;
+#elif USE_TEXCOORD1
+    return VSOut.UV1;
 #else
-Texture2DArray g_PhysicalDescriptorMap;
-SamplerState   g_PhysicalDescriptorMap_sampler;
+    return float2(0.0, 0.0);
 #endif
-
-Texture2DArray g_NormalMap;
-SamplerState   g_NormalMap_sampler;
-
-#if PBR_USE_AO
-Texture2DArray g_AOMap;
-SamplerState   g_AOMap_sampler;
-#endif
-
-#if PBR_USE_EMISSIVE
-Texture2DArray g_EmissiveMap;
-SamplerState   g_EmissiveMap_sampler;
-#endif
+}
 
 float4 SampleTexture(Texture2DArray Tex,
                      SamplerState   Tex_sampler,
-                     float2         UV0,
-                     float2         UV1,
+                     VSOutput       VSOut,
                      float          Selector, 
                      float4         ScaleBias,
                      float          Slice,
                      float4         DefaultValue)
 {
-    float2 UV = lerp(UV0, UV1, Selector);
-#if USE_TEXTURE_ATLAS
-    if (Selector < 0.0)
+#   if USE_TEXCOORD0 || USE_TEXCOORD1
+    {
+        float2 UV = SelectUV(VSOut, Selector);
+#       if USE_TEXTURE_ATLAS
+        {
+            if (Selector < 0.0)
+            {
+                return DefaultValue;
+            }
+            else
+            {
+                SampleTextureAtlasAttribs SampleAttribs;
+                SampleAttribs.f2UV                   = frac(UV) * ScaleBias.xy + ScaleBias.zw;
+                SampleAttribs.f2SmoothUV             = UV * ScaleBias.xy;
+                SampleAttribs.f2dSmoothUV_dx         = ddx(UV) * ScaleBias.xy;
+                SampleAttribs.f2dSmoothUV_dy         = ddy(UV) * ScaleBias.xy;
+                SampleAttribs.fSlice                 = Slice;
+                SampleAttribs.f4UVRegion             = ScaleBias;
+                SampleAttribs.fSmallestValidLevelDim = 4.0;
+                SampleAttribs.IsNonFilterable        = false;
+                return SampleTextureAtlas(Tex, Tex_sampler, SampleAttribs);
+            }
+        }
+#       else
+        {
+            return Tex.Sample(Tex_sampler, float3(UV, Slice));
+        }
+#       endif
+    }
+#   else
     {
         return DefaultValue;
     }
-    else
-    {
-        SampleTextureAtlasAttribs SampleAttribs;
-        SampleAttribs.f2UV                   = frac(UV) * ScaleBias.xy + ScaleBias.zw;
-        SampleAttribs.f2SmoothUV             = UV * ScaleBias.xy;
-        SampleAttribs.f2dSmoothUV_dx         = ddx(UV) * ScaleBias.xy;
-        SampleAttribs.f2dSmoothUV_dy         = ddy(UV) * ScaleBias.xy;
-        SampleAttribs.fSlice                 = Slice;
-        SampleAttribs.f4UVRegion             = ScaleBias;
-        SampleAttribs.fSmallestValidLevelDim = 4.0;
-        SampleAttribs.IsNonFilterable        = false;
-        return SampleTextureAtlas(Tex, Tex_sampler, SampleAttribs);
-    }
-#else
-    return Tex.Sample(Tex_sampler, float3(UV, Slice));
-#endif
+#   endif
 }
 
-void main(in  PbrVsOutput VSOut,
-          in  bool        IsFrontFace : SV_IsFrontFace,
-          out float4      OutColor    : SV_Target)
+float4 GetBaseColor(VSOutput VSOut)
 {
-    float4 BaseColor = SampleTexture(g_ColorMap, g_ColorMap_sampler, VSOut.UV0, VSOut.UV1, g_PBRAttribs.Material.BaseColorTextureUVSelector,
-                                     g_PBRAttribs.Material.BaseColorUVScaleBias, g_PBRAttribs.Material.BaseColorSlice, float4(1.0, 1.0, 1.0, 1.0));
-    BaseColor = float4(TO_LINEAR(BaseColor.rgb), BaseColor.a) * g_PBRAttribs.Material.BaseColorFactor;
-    //BaseColor *= getVertexColor();
+    float4 BaseColor = float4(1.0, 1.0, 1.0, 1.0);
 
-    float2 NormalMapUV  = lerp(VSOut.UV0, VSOut.UV1, g_PBRAttribs.Material.NormalTextureUVSelector);
+#   if USE_COLOR_MAP
+    {
+        BaseColor = SampleTexture(g_ColorMap,
+                                  g_ColorMap_sampler,
+                                  VSOut,
+                                  g_PBRAttribs.Material.BaseColorTextureUVSelector,
+                                  g_PBRAttribs.Material.BaseColorUVScaleBias,
+                                  g_PBRAttribs.Material.BaseColorSlice,
+                                  float4(1.0, 1.0, 1.0, 1.0));
+        BaseColor = float4(TO_LINEAR(BaseColor.rgb), BaseColor.a);
+    }
+#   endif
+
+#   if USE_VERTEX_COLORS
+    {
+        BaseColor *= VSOut.Color;
+    }
+#   endif
+    return BaseColor * g_PBRAttribs.Material.BaseColorFactor;
+}
+
+float3 GetMicroNormal(VSOutput VSOut,
+                      float2 NormalMapUV,
+                      float2 dNormalMapUV_dx,
+                      float2 dNormalMapUV_dy)
+{
+    float3 MicroNormal = float3(0.5, 0.5, 1.0);
+
+#   if USE_NORMAL_MAP && (USE_TEXCOORD0 || USE_TEXCOORD1)
+    {
+#       if USE_TEXTURE_ATLAS
+        {
+            if (g_PBRAttribs.Material.NormalTextureUVSelector >= 0.0)
+            {
+                SampleTextureAtlasAttribs SampleAttribs;
+                SampleAttribs.f2UV                   = NormalMapUV;
+                SampleAttribs.f2SmoothUV             = SelectUV(VSOut, g_PBRAttribs.Material.NormalTextureUVSelector) * g_PBRAttribs.Material.NormalMapUVScaleBias.xy;
+                SampleAttribs.f2dSmoothUV_dx         = dNormalMapUV_dx;
+                SampleAttribs.f2dSmoothUV_dy         = dNormalMapUV_dy;
+                SampleAttribs.fSlice                 = g_PBRAttribs.Material.NormalSlice;
+                SampleAttribs.f4UVRegion             = g_PBRAttribs.Material.NormalMapUVScaleBias;
+                SampleAttribs.fSmallestValidLevelDim = 4.0;
+                SampleAttribs.IsNonFilterable        = false;
+                MicroNormal = SampleTextureAtlas(g_NormalMap, g_NormalMap_sampler, SampleAttribs).xyz;
+            }
+        }
+#       else
+        {
+            MicroNormal = g_NormalMap.Sample(g_NormalMap_sampler, float3(NormalMapUV, g_PBRAttribs.Material.NormalSlice)).xyz;
+        }
+#       endif
+    }
+#endif
+
+    return MicroNormal * float3(2.0, 2.0, 2.0) - float3(1.0, 1.0, 1.0);
+}
+
+float GetOcclusion(VSOutput VSOut)
+{
+    float Occlusion = 1.0;
+#   if USE_AO_MAP
+    {
+        Occlusion = SampleTexture(g_AOMap,
+                                  g_AOMap_sampler,
+                                  VSOut,
+                                  g_PBRAttribs.Material.OcclusionTextureUVSelector,
+                                  g_PBRAttribs.Material.OcclusionUVScaleBias,
+                                  g_PBRAttribs.Material.OcclusionSlice,
+                                  float4(1.0, 1.0, 1.0, 1.0)).r;
+    }
+#   endif
+    return Occlusion * g_PBRAttribs.Material.OcclusionFactor;
+}
+
+float3 GetEmissive(VSOutput VSOut)
+{
+    float3 Emissive = float3(0.0, 0.0, 0.0);
+    
+#   if USE_EMISSIVE_MAP
+    {
+        Emissive = SampleTexture(g_EmissiveMap,
+                                 g_EmissiveMap_sampler,
+                                 VSOut,
+                                 g_PBRAttribs.Material.EmissiveTextureUVSelector,
+                                 g_PBRAttribs.Material.EmissiveUVScaleBias,
+                                 g_PBRAttribs.Material.EmissiveSlice,
+                                 float4(0.0, 0.0, 0.0, 0.0)).rgb;
+        Emissive = TO_LINEAR(Emissive);
+    }
+#   endif
+    return Emissive * g_PBRAttribs.Material.EmissiveFactor.rgb;
+}
+
+float4 GetPhysicalDesc(VSOutput VSOut)
+{
+    // Set defaults to 1 so that if the textures are not available, the values
+    // are controlled by the metallic/roughness scale factors.
+    float4 PhysicalDesc = float4(1.0, 1.0, 1.0, 1.0);
+#   if USE_PHYS_DESC_MAP
+    {
+        PhysicalDesc = SampleTexture(g_PhysicalDescriptorMap,
+                                     g_PhysicalDescriptorMap_sampler,
+                                     VSOut,
+                                     g_PBRAttribs.Material.PhysicalDescriptorTextureUVSelector,
+                                     g_PBRAttribs.Material.PhysicalDescriptorUVScaleBias,
+                                     g_PBRAttribs.Material.PhysicalDescriptorSlice,
+                                     float4(1.0, 1.0, 1.0, 1.0));
+    }
+#   else
+    {
+#       if USE_METALLIC_MAP
+        {
+            PhysicalDesc.b = SampleTexture(g_MetallicMap,
+                                           g_MetallicMap_sampler,
+                                           VSOut,
+                                           g_PBRAttribs.Material.PhysicalDescriptorTextureUVSelector,
+                                           g_PBRAttribs.Material.PhysicalDescriptorUVScaleBias,
+                                           g_PBRAttribs.Material.PhysicalDescriptorSlice,
+                                           float4(1.0, 1.0, 1.0, 1.0)).r;
+        }
+#       endif
+
+#       if USE_ROUGHNESS_MAP
+        {
+            PhysicalDesc.g = SampleTexture(g_RoughnessMap,
+                                           g_RoughnessMap_sampler,
+                                           VSOut,
+                                           g_PBRAttribs.Material.PhysicalDescriptorTextureUVSelector,
+                                           g_PBRAttribs.Material.PhysicalDescriptorUVScaleBias,
+                                           g_PBRAttribs.Material.PhysicalDescriptorSlice,
+                                           float4(1.0, 1.0, 1.0, 1.0)).r;
+        
+        }
+#       endif
+    }
+#endif 
+ 
+    return PhysicalDesc;
+}
+
+void main(in  VSOutput VSOut,
+          in  bool     IsFrontFace : SV_IsFrontFace,
+          out float4   OutColor    : SV_Target)
+{
+    float4 BaseColor = GetBaseColor(VSOut);
+
+    float2 NormalMapUV  = SelectUV(VSOut, g_PBRAttribs.Material.NormalTextureUVSelector);
 
     // We have to compute gradients in uniform flow control to avoid issues with perturbed normal
     float3 dWorldPos_dx = ddx(VSOut.WorldPos);
@@ -134,63 +320,12 @@ void main(in  PbrVsOutput VSOut,
         discard;
     }
 
-    float3 TSNormal = float3(0.0, 0.0, 1.0);
-    if (g_PBRAttribs.Material.NormalTextureUVSelector >= 0.0)
-    {
-#if USE_TEXTURE_ATLAS
-        {
-            SampleTextureAtlasAttribs SampleAttribs;
-            SampleAttribs.f2UV                   = NormalMapUV;
-            SampleAttribs.f2SmoothUV             = lerp(VSOut.UV0, VSOut.UV1, g_PBRAttribs.Material.NormalTextureUVSelector) * g_PBRAttribs.Material.NormalMapUVScaleBias.xy;
-            SampleAttribs.f2dSmoothUV_dx         = dNormalMapUV_dx;
-            SampleAttribs.f2dSmoothUV_dy         = dNormalMapUV_dy;
-            SampleAttribs.fSlice                 = g_PBRAttribs.Material.NormalSlice;
-            SampleAttribs.f4UVRegion             = g_PBRAttribs.Material.NormalMapUVScaleBias;
-            SampleAttribs.fSmallestValidLevelDim = 4.0;
-            SampleAttribs.IsNonFilterable        = false;
-            TSNormal = SampleTextureAtlas(g_NormalMap, g_NormalMap_sampler, SampleAttribs).xyz;
-        }
-#else
-        {
-            TSNormal = g_NormalMap.Sample(g_NormalMap_sampler, float3(NormalMapUV, g_PBRAttribs.Material.NormalSlice)).xyz;
-        }
-#endif
-        TSNormal = TSNormal * float3(2.0, 2.0, 2.0) - float3(1.0, 1.0, 1.0);
-    }
+    float3 TSNormal     = GetMicroNormal(VSOut, NormalMapUV, dNormalMapUV_dx, dNormalMapUV_dy);
+    float  Occlusion    = GetOcclusion(VSOut);
+    float3 Emissive     = GetEmissive(VSOut);
+    float4 PhysicalDesc = GetPhysicalDesc(VSOut);
 
-    float Occlusion = 1.0;
-#if PBR_USE_AO
-    Occlusion = SampleTexture(g_AOMap, g_AOMap_sampler, VSOut.UV0, VSOut.UV1, g_PBRAttribs.Material.OcclusionTextureUVSelector, 
-                              g_PBRAttribs.Material.OcclusionUVScaleBias, g_PBRAttribs.Material.OcclusionSlice, float4(1.0, 1.0, 1.0, 1.0)).r;
-    Occlusion *= g_PBRAttribs.Material.OcclusionFactor;
-#endif
-
-    float3 Emissive = float3(0.0, 0.0, 0.0);
-#if PBR_USE_EMISSIVE
-    Emissive = SampleTexture(g_EmissiveMap, g_EmissiveMap_sampler, VSOut.UV0, VSOut.UV1, g_PBRAttribs.Material.EmissiveTextureUVSelector, 
-                             g_PBRAttribs.Material.EmissiveUVScaleBias, g_PBRAttribs.Material.EmissiveSlice, float4(0.0, 0.0, 0.0, 0.0)).rgb;
-    Emissive = TO_LINEAR(Emissive);
-#endif
-
-    float4 PhysicalDesc = float4(0.0, 0.0, 0.0, 0.0);
-#if USE_SEPARATE_METALLIC_ROUGHNESS_TEXTURES
-    PhysicalDesc.b = SampleTexture(g_MetallicMap, g_MetallicMap_sampler, 
-                                   VSOut.UV0, VSOut.UV1, g_PBRAttribs.Material.PhysicalDescriptorTextureUVSelector, 
-                                   g_PBRAttribs.Material.PhysicalDescriptorUVScaleBias, g_PBRAttribs.Material.PhysicalDescriptorSlice,
-                                   float4(0.0, 1.0, 0.0, 0.0)).r;
-    PhysicalDesc.g = SampleTexture(g_RoughnessMap, g_RoughnessMap_sampler, 
-                                   VSOut.UV0, VSOut.UV1, g_PBRAttribs.Material.PhysicalDescriptorTextureUVSelector, 
-                                   g_PBRAttribs.Material.PhysicalDescriptorUVScaleBias, g_PBRAttribs.Material.PhysicalDescriptorSlice,
-                                   float4(0.0, 1.0, 0.0, 0.0)).r;
-#else
-    PhysicalDesc = SampleTexture(g_PhysicalDescriptorMap, g_PhysicalDescriptorMap_sampler,
-                                 VSOut.UV0, VSOut.UV1, g_PBRAttribs.Material.PhysicalDescriptorTextureUVSelector,
-                                 g_PBRAttribs.Material.PhysicalDescriptorUVScaleBias, g_PBRAttribs.Material.PhysicalDescriptorSlice,
-                                 float4(0.0, 1.0, 0.0, 0.0));
-#endif
-
-    float metallic;
-    if (g_PBRAttribs.Material.Workflow == PBR_WORKFLOW_SPECULAR_GLOSINESS)
+     if (g_PBRAttribs.Material.Workflow == PBR_WORKFLOW_SPECULAR_GLOSINESS)
     {
         PhysicalDesc.rgb = TO_LINEAR(PhysicalDesc.rgb) * g_PBRAttribs.Material.SpecularFactor.rgb;
         const float u_GlossinessFactor = 1.0;
@@ -202,58 +337,79 @@ void main(in  PbrVsOutput VSOut,
         PhysicalDesc.g = saturate(PhysicalDesc.g * g_PBRAttribs.Material.RoughnessFactor);
         PhysicalDesc.b = saturate(PhysicalDesc.b * g_PBRAttribs.Material.MetallicFactor);
     }
+    float metallic = 0.0;
     SurfaceReflectanceInfo SrfInfo = GetSurfaceReflectance(g_PBRAttribs.Material.Workflow, BaseColor, PhysicalDesc, metallic);
 
-    // LIGHTING
-    float3 perturbedNormal = PerturbNormal(dWorldPos_dx, dWorldPos_dy, dNormalMapUV_dx, dNormalMapUV_dy,
-                                           VSOut.Normal, TSNormal, g_PBRAttribs.Material.NormalTextureUVSelector >= 0.0, IsFrontFace);
     float3 view = normalize(g_CameraAttribs.f4Position.xyz - VSOut.WorldPos.xyz); // Direction from surface point to camera
 
+    float3 color           = BaseColor.rgb;
+    float3 perturbedNormal = float3(0.0, 0.0, 0.0);
+    float3 DirectLighting  = float3(0.0, 0.0, 0.0);
 
-    float3 DirectLighting = ApplyDirectionalLight(g_LightAttribs.f4Direction.xyz, g_LightAttribs.f4Intensity.rgb, SrfInfo, perturbedNormal, view);
-    float3 color = DirectLighting;
-
-//#ifdef USE_PUNCTUAL
-//    for (int i = 0; i < LIGHT_COUNT; ++i)
-//    {
-//        Light light = u_Lights[i];
-//        if (light.type == LightType_Directional)
-//        {
-//            color += applyDirectionalLight(light, materialInfo, normal, view);
-//        }
-//        else if (light.type == LightType_Point)
-//        {
-//            color += applyPointLight(light, materialInfo, normal, view);
-//        }
-//        else if (light.type == LightType_Spot)
-//        {
-//            color += applySpotLight(light, materialInfo, normal, view);
-//        }
-//    }
-//#endif
-//
-
-
-    // Calculate lighting contribution from image based lighting source (IBL)
     IBL_Contribution IBLContrib;
     IBLContrib.f3Diffuse  = float3(0.0, 0.0, 0.0);
     IBLContrib.f3Specular = float3(0.0, 0.0, 0.0);
-#if PBR_USE_IBL
-    IBLContrib =
-        GetIBLContribution(SrfInfo, perturbedNormal, view, float(g_PBRAttribs.Renderer.PrefilteredCubeMipLevels),
-                           g_BRDF_LUT,          g_BRDF_LUT_sampler, 
-                           g_IrradianceMap,     g_IrradianceMap_sampler,
-                           g_PrefilteredEnvMap, g_PrefilteredEnvMap_sampler);
-    color += (IBLContrib.f3Diffuse + IBLContrib.f3Specular) * g_PBRAttribs.Renderer.IBLScale;
+
+#if USE_VERTEX_NORMALS
+    {
+        // LIGHTING
+        perturbedNormal = PerturbNormal(dWorldPos_dx,
+                                        dWorldPos_dy,
+                                        dNormalMapUV_dx,
+                                        dNormalMapUV_dy,
+                                        VSOut.Normal,
+                                        TSNormal,
+                                        g_PBRAttribs.Material.NormalTextureUVSelector >= 0.0,
+                                        IsFrontFace);
+
+        DirectLighting = ApplyDirectionalLight(g_LightAttribs.f4Direction.xyz, g_LightAttribs.f4Intensity.rgb, SrfInfo, perturbedNormal, view);
+        color = DirectLighting;
+
+        //#ifdef USE_PUNCTUAL
+        //    for (int i = 0; i < LIGHT_COUNT; ++i)
+        //    {
+        //        Light light = u_Lights[i];
+        //        if (light.type == LightType_Directional)
+        //        {
+        //            color += applyDirectionalLight(light, materialInfo, normal, view);
+        //        }
+        //        else if (light.type == LightType_Point)
+        //        {
+        //            color += applyPointLight(light, materialInfo, normal, view);
+        //        }
+        //        else if (light.type == LightType_Spot)
+        //        {
+        //            color += applySpotLight(light, materialInfo, normal, view);
+        //        }
+        //    }
+        //#endif
+        //
+
+        // Calculate lighting contribution from image based lighting source (IBL)
+#       if USE_IBL
+        {
+            IBLContrib =
+                GetIBLContribution(SrfInfo, perturbedNormal, view, float(g_PBRAttribs.Renderer.PrefilteredCubeMipLevels),
+                                   g_BRDF_LUT,          g_BRDF_LUT_sampler,
+                                   g_IrradianceMap,     g_IrradianceMap_sampler,
+                                   g_PrefilteredEnvMap, g_PrefilteredEnvMap_sampler);
+            color += (IBLContrib.f3Diffuse + IBLContrib.f3Specular) * g_PBRAttribs.Renderer.IBLScale;
+        }
+#       endif
+    }
+#   endif
+
+#   if USE_AO_MAP
+    {
+        color = lerp(color, color * Occlusion, g_PBRAttribs.Renderer.OcclusionStrength);
+    }
 #endif
 
-#if PBR_USE_AO
-    color = lerp(color, color * Occlusion, g_PBRAttribs.Renderer.OcclusionStrength);
-#endif
-
-#if PBR_USE_EMISSIVE
-    color += Emissive.rgb * g_PBRAttribs.Material.EmissiveFactor.rgb * g_PBRAttribs.Renderer.EmissionScale;
-#endif
+#   if USE_EMISSIVE_MAP
+    {
+        color += Emissive.rgb * g_PBRAttribs.Renderer.EmissionScale;
+    }
+#   endif
 
     // Perform tone mapping
     ToneMappingAttribs TMAttribs;
@@ -270,7 +426,7 @@ void main(in  PbrVsOutput VSOut,
 
     OutColor = float4(color, BaseColor.a);
 
-#if ALLOW_DEBUG_VIEW
+#   if ALLOW_DEBUG_VIEW
     // Shader inputs debug visualization
     if (g_PBRAttribs.Renderer.DebugViewType != 0)
     {
@@ -291,15 +447,17 @@ void main(in  PbrVsOutput VSOut,
             case DEBUG_VIEW_PERTURBED_NORMAL: OutColor.rgb  = abs(perturbedNormal);                                 break;
             case DEBUG_VIEW_NDOTV:            OutColor.rgb  = dot(perturbedNormal, view) * float3(1.0, 1.0, 1.0);   break;
             case DEBUG_VIEW_DIRECT_LIGHTING:  OutColor.rgb  = DirectLighting;                                       break;
-#if PBR_USE_IBL
+#   if USE_IBL
             case DEBUG_VIEW_DIFFUSE_IBL:      OutColor.rgb  = IBLContrib.f3Diffuse;                                 break;
             case DEBUG_VIEW_SPECULAR_IBL:     OutColor.rgb  = IBLContrib.f3Specular;                                break;
-#endif
+#   endif
         }
     }
-#endif
+#   endif
 
-#if CONVERT_OUTPUT_TO_SRGB
-    OutColor.rgb = FastLinearToSRGB(OutColor.rgb);
-#endif
+#   if CONVERT_OUTPUT_TO_SRGB
+    {
+        OutColor.rgb = FastLinearToSRGB(OutColor.rgb);
+    }
+#   endif
 }

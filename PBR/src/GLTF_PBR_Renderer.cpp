@@ -63,26 +63,27 @@ GLTF_PBR_Renderer::GLTF_PBR_Renderer(IRenderDevice*     pDevice,
                                      const CreateInfo&  CI) :
     PBR_Renderer{pDevice, pStateCache, pCtx, CI}
 {
-    m_PSOFlags |=
+    m_SupportedPSOFlags |=
         PSO_FLAG_USE_VERTEX_NORMALS |
         PSO_FLAG_USE_TEXCOORD0 |
         PSO_FLAG_USE_TEXCOORD1 |
         PSO_FLAG_USE_JOINTS |
-        PSO_FLAG_USE_DIFFUSE_MAP |
+        PSO_FLAG_USE_COLOR_MAP |
         PSO_FLAG_USE_NORMAL_MAP |
         PSO_FLAG_USE_PHYS_DESC_MAP;
-    if (CI.UseAO)
-        m_PSOFlags |= PSO_FLAG_USE_AO_MAP;
-    if (CI.UseEmissive)
-        m_PSOFlags |= PSO_FLAG_USE_EMISSIVE_MAP;
-    if (CI.UseIBL)
-        m_PSOFlags |= PSO_FLAG_USE_IBL;
-    if (CI.AllowDebugView)
-        m_PSOFlags |= PSO_FLAG_ALLOW_DEBUG_VIEW;
-    if (CI.UseTextureAtlas)
-        m_PSOFlags |= PSO_FLAG_USE_TEXTURE_ATLAS;
-    if (CI.ConvertOutputToSRGB)
-        m_PSOFlags |= PSO_FLAG_CONVERT_TO_SRGB;
+
+    if (CI.EnableAO)
+        m_SupportedPSOFlags |= PSO_FLAG_USE_AO_MAP;
+    if (CI.EnableEmissive)
+        m_SupportedPSOFlags |= PSO_FLAG_USE_EMISSIVE_MAP;
+    if (CI.EnableIBL)
+        m_SupportedPSOFlags |= PSO_FLAG_USE_IBL;
+
+    m_SupportedPSOFlags |=
+        PSO_FLAG_FRONT_CCW |
+        PSO_FLAG_ALLOW_DEBUG_VIEW |
+        PSO_FLAG_USE_TEXTURE_ATLAS |
+        PSO_FLAG_CONVERT_OUTPUT_TO_SRGB;
 }
 
 void GLTF_PBR_Renderer::InitMaterialSRB(GLTF::Model&            Model,
@@ -138,11 +139,11 @@ void GLTF_PBR_Renderer::InitMaterialSRB(GLTF::Model&            Model,
     SetTexture(GLTF::DefaultBaseColorTextureAttribId, m_pWhiteTexSRV, "g_ColorMap");
     SetTexture(GLTF::DefaultMetallicRoughnessTextureAttribId, m_pDefaultPhysDescSRV, "g_PhysicalDescriptorMap");
     SetTexture(GLTF::DefaultNormalTextureAttribId, m_pDefaultNormalMapSRV, "g_NormalMap");
-    if (m_Settings.UseAO)
+    if (m_Settings.EnableAO)
     {
         SetTexture(GLTF::DefaultOcclusionTextureAttribId, m_pWhiteTexSRV, "g_AOMap");
     }
-    if (m_Settings.UseEmissive)
+    if (m_Settings.EnableEmissive)
     {
         SetTexture(GLTF::DefaultEmissiveTextureAttribId, m_pBlackTexSRV, "g_EmissiveMap");
     }
@@ -181,11 +182,11 @@ void GLTF_PBR_Renderer::CreateResourceCacheSRB(IRenderDevice*           pDevice,
     SetTexture(CacheUseInfo.BaseColorFormat, "g_ColorMap");
     SetTexture(CacheUseInfo.PhysicalDescFormat, "g_PhysicalDescriptorMap");
     SetTexture(CacheUseInfo.NormalFormat, "g_NormalMap");
-    if (m_Settings.UseAO)
+    if (m_Settings.EnableAO)
     {
         SetTexture(CacheUseInfo.OcclusionFormat, "g_AOMap");
     }
-    if (m_Settings.UseEmissive)
+    if (m_Settings.EnableEmissive)
     {
         SetTexture(CacheUseInfo.EmissiveFormat, "g_EmissiveMap");
     }
@@ -241,8 +242,7 @@ void GLTF_PBR_Renderer::Begin(IRenderDevice*         pDevice,
         Bindings.Version = TextureVersion;
     }
 
-    if (auto pPSO = GetPSO(PSOKey{m_PSOFlags, PBR_Renderer::ALPHA_MODE_OPAQUE, false}, true))
-        pCtx->TransitionShaderResources(pPSO, Bindings.pSRB);
+    pCtx->TransitionShaderResources(Bindings.pSRB);
 
     if (auto* pVertexPool = CacheUseInfo.pResourceMgr->GetVertexPool(CacheUseInfo.VtxLayoutKey))
     {
@@ -317,6 +317,7 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
     IShaderResourceBinding* pCurrSRB = nullptr;
     PSOKey                  CurrPSOKey;
 
+    auto PSOFlags = RenderParams.Flags & m_SupportedPSOFlags;
     for (auto AlphaMode : AlphaModes)
     {
         for (const auto* pNode : Scene.LinearNodes)
@@ -339,7 +340,7 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
                 if (material.Attribs.AlphaMode != AlphaMode)
                     continue;
 
-                const PSOKey Key{m_PSOFlags, GltfAlphaModeToAlphaMode(AlphaMode), material.DoubleSided};
+                const PSOKey Key{PSOFlags, GltfAlphaModeToAlphaMode(AlphaMode), material.DoubleSided};
 
                 if (Key != CurrPSOKey)
                 {
@@ -355,7 +356,7 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
                 }
                 else
                 {
-                    VERIFY_EXPR(pCurrPSO == GetPSO(PSOKey{m_PSOFlags, GltfAlphaModeToAlphaMode(AlphaMode), material.DoubleSided}, false));
+                    VERIFY_EXPR(pCurrPSO == GetPSO(PSOKey{PSOFlags, GltfAlphaModeToAlphaMode(AlphaMode), material.DoubleSided}, false));
                 }
 
                 if (pModelBindings != nullptr)
@@ -424,7 +425,7 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
                     RendererParams.WhitePoint               = m_RenderParams.WhitePoint;
                     RendererParams.IBLScale                 = m_RenderParams.IBLScale;
                     RendererParams.HighlightColor           = m_RenderParams.HighlightColor;
-                    RendererParams.PrefilteredCubeMipLevels = m_Settings.UseIBL ? static_cast<float>(m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels) : 0.f;
+                    RendererParams.PrefilteredCubeMipLevels = m_Settings.EnableIBL ? static_cast<float>(m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels) : 0.f;
                 }
 
                 if (primitive.HasIndices())

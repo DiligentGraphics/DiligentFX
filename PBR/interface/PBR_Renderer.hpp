@@ -58,35 +58,25 @@ public:
         ///         render callback function.
         TEXTURE_FORMAT DSVFmt = TEX_FORMAT_UNKNOWN;
 
-        /// Indicates if front face is CCW.
-        bool FrontCCW = false;
+        /// Indicates whether to enable IBL.
+        /// A pipeline state can use IBL only if this flag is set to true.
+        bool EnableIBL = true;
 
-        /// Indicates if the renderer should allow debug views.
-        /// Rendering with debug views disabled is more efficient.
-        bool AllowDebugView = false;
+        /// Whether to use enable ambient occlusion.
+        /// A pipeline state can use AO only if this flag is set to true.
+        bool EnableAO = true;
 
-        /// Indicates whether to use IBL.
-        bool UseIBL = false;
-
-        /// Whether to use ambient occlusion texture.
-        bool UseAO = true;
-
-        /// Whether to use emissive texture.
-        bool UseEmissive = true;
+        /// Whether to enable emissive texture.
+        /// A pipeline state can use emissive texture only if this flag is set to true.
+        bool EnableEmissive = true;
 
         /// When set to true, pipeline state will be compiled with immutable samplers.
         /// When set to false, samplers from the texture views will be used.
         bool UseImmutableSamplers = true;
 
-        /// Whether to use texture atlas (e.g. apply UV transforms when sampling textures).
-        bool UseTextureAtlas = false;
-
         /// Whether to use separate textures for metallic and roughness
         /// instead of a combined physical description texture.
         bool UseSeparateMetallicRoughnessTextures = false;
-
-        /// Manually convert shader output to sRGB color space.
-        bool ConvertOutputToSRGB = false;
 
         /// Whether to enable rendering mesh Ids to a separate render target.
         bool EnableMeshIdRendering = false;
@@ -216,7 +206,7 @@ public:
         PSO_FLAG_USE_TEXCOORD1      = 1u << 3u,
         PSO_FLAG_USE_JOINTS         = 1u << 4u,
 
-        PSO_FLAG_USE_DIFFUSE_MAP   = 1u << 5u,
+        PSO_FLAG_USE_COLOR_MAP     = 1u << 5u,
         PSO_FLAG_USE_NORMAL_MAP    = 1u << 6u,
         PSO_FLAG_USE_METALLIC_MAP  = 1u << 7u,
         PSO_FLAG_USE_ROUGHNESS_MAP = 1u << 8u,
@@ -225,10 +215,28 @@ public:
         PSO_FLAG_USE_EMISSIVE_MAP  = 1u << 11u,
         PSO_FLAG_USE_IBL           = 1u << 12u,
 
-        PSO_FLAG_FRONT_CCW         = 1u << 13u,
-        PSO_FLAG_ALLOW_DEBUG_VIEW  = 1u << 14u,
-        PSO_FLAG_USE_TEXTURE_ATLAS = 1u << 15u,
-        PSO_FLAG_CONVERT_TO_SRGB   = 1u << 16u,
+        PSO_FLAG_FRONT_CCW              = 1u << 13u,
+        PSO_FLAG_ALLOW_DEBUG_VIEW       = 1u << 14u,
+        PSO_FLAG_USE_TEXTURE_ATLAS      = 1u << 15u,
+        PSO_FLAG_CONVERT_OUTPUT_TO_SRGB = 1u << 16u,
+
+        PSO_FLAG_LAST = PSO_FLAG_CONVERT_OUTPUT_TO_SRGB,
+
+        PSO_FLAG_DEFAULT =
+            PSO_FLAG_USE_VERTEX_COLORS |
+            PSO_FLAG_USE_VERTEX_NORMALS |
+            PSO_FLAG_USE_TEXCOORD0 |
+            PSO_FLAG_USE_TEXCOORD1 |
+            PSO_FLAG_USE_JOINTS |
+            PSO_FLAG_USE_COLOR_MAP |
+            PSO_FLAG_USE_NORMAL_MAP |
+            PSO_FLAG_USE_PHYS_DESC_MAP |
+            PSO_FLAG_USE_AO_MAP |
+            PSO_FLAG_USE_EMISSIVE_MAP |
+            PSO_FLAG_USE_IBL |
+            PSO_FLAG_FRONT_CCW,
+
+        PSO_FLAG_ALL = PSO_FLAG_LAST * 2u - 1u,
     };
 
     struct PSOKey
@@ -276,7 +284,9 @@ protected:
 
     using PSOCacheType = std::unordered_map<PSOKey, RefCntAutoPtr<IPipelineState>, PSOKey::Hasher>;
 
-    static IPipelineState* GetPSO(PSOCacheType& PSOCache, const PSOKey& Key, std::function<void()> CreatePSO);
+    IPipelineState* GetPSO(PSOCacheType& PSOCache, PSOKey Key, std::function<void()> CreatePSO);
+
+    static std::string GetVSOutputStruct(PSO_FLAGS PSOFlags);
 
 private:
     void PrecomputeBRDF(IDeviceContext* pCtx,

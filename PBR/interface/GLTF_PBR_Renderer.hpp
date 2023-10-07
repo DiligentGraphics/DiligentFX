@@ -98,6 +98,8 @@ public:
 
         /// Highlight color that is applied to the mesh after tone mapping
         float4 HighlightColor = float4{0, 0, 0, 0};
+
+        PSO_FLAGS Flags = PSO_FLAG_DEFAULT;
     };
 
     /// GLTF Model shader resource binding information
@@ -221,7 +223,7 @@ private:
 
     RenderInfo m_RenderParams;
 
-    PSO_FLAGS m_PSOFlags = PSO_FLAG_NONE;
+    PSO_FLAGS m_SupportedPSOFlags = PSO_FLAG_NONE;
 };
 
 DEFINE_FLAG_ENUM_OPERATORS(GLTF_PBR_Renderer::RenderInfo::ALPHA_MODE_FLAGS)

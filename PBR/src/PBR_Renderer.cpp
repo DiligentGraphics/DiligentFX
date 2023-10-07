@@ -62,7 +62,7 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
     m_Settings{CI},
     m_Device{pDevice, pStateCache}
 {
-    if (m_Settings.UseIBL)
+    if (m_Settings.EnableIBL)
     {
         PrecomputeBRDF(pCtx, m_Settings.NumBRDFSamples);
 
@@ -245,7 +245,7 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
                                       Uint32          NumThetaSamples,
                                       bool            OptimizeSamples)
 {
-    if (!m_Settings.UseIBL)
+    if (!m_Settings.EnableIBL)
     {
         LOG_WARNING_MESSAGE("IBL is disabled, so precomputing cube maps will have no effect");
         return;
@@ -483,7 +483,7 @@ void PBR_Renderer::InitCommonSRBVars(IShaderResourceBinding* pSRB,
             pLightAttribsPSVar->Set(pLightAttribs);
     }
 
-    if (m_Settings.UseIBL)
+    if (m_Settings.EnableIBL)
     {
         if (auto* pIrradianceMapPSVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_IrradianceMap"))
             pIrradianceMapPSVar->Set(m_pIrradianceCubeSRV);
@@ -530,17 +530,17 @@ void PBR_Renderer::CreateSignature()
         AddTextureAndSampler("g_PhysicalDescriptorMap", m_Settings.PhysDescMapImmutableSampler);
     }
 
-    if (m_Settings.UseAO)
+    if (m_Settings.EnableAO)
     {
         AddTextureAndSampler("g_AOMap", m_Settings.AOMapImmutableSampler);
     }
 
-    if (m_Settings.UseEmissive)
+    if (m_Settings.EnableEmissive)
     {
         AddTextureAndSampler("g_EmissiveMap", m_Settings.EmissiveMapImmutableSampler);
     }
 
-    if (m_Settings.UseIBL)
+    if (m_Settings.EnableIBL)
     {
         SignatureDesc
             .AddResource(SHADER_TYPE_PIXEL, "g_BRDF_LUT", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
@@ -555,7 +555,7 @@ void PBR_Renderer::CreateSignature()
 
     m_ResourceSignature = m_Device.CreatePipelineResourceSignature(SignatureDesc);
 
-    if (m_Settings.UseIBL)
+    if (m_Settings.EnableIBL)
     {
         m_ResourceSignature->GetStaticVariableByName(SHADER_TYPE_PIXEL, "g_BRDF_LUT")->Set(m_pBRDF_LUT_SRV);
     }
@@ -570,13 +570,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS PSOFlags) const
 {
     ShaderMacroHelper Macros;
     Macros.Add("MAX_JOINT_COUNT", static_cast<int>(m_Settings.MaxJointCount));
-    Macros.Add("ALLOW_DEBUG_VIEW", m_Settings.AllowDebugView);
-    Macros.Add("CONVERT_OUTPUT_TO_SRGB", m_Settings.ConvertOutputToSRGB);
     Macros.Add("TONE_MAPPING_MODE", "TONE_MAPPING_MODE_UNCHARTED2");
-    Macros.Add("PBR_USE_IBL", m_Settings.UseIBL);
-    Macros.Add("PBR_USE_AO", m_Settings.UseAO);
-    Macros.Add("PBR_USE_EMISSIVE", m_Settings.UseEmissive);
-    Macros.Add("USE_TEXTURE_ATLAS", m_Settings.UseTextureAtlas);
     Macros.Add("PBR_WORKFLOW_METALLIC_ROUGHNESS", PBR_WORKFLOW_METALL_ROUGH);
     Macros.Add("PBR_WORKFLOW_SPECULAR_GLOSINESS", PBR_WORKFLOW_SPEC_GLOSS);
     Macros.Add("PBR_ALPHA_MODE_OPAQUE", ALPHA_MODE_OPAQUE);
@@ -614,7 +608,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS PSOFlags) const
     ADD_PSO_FLAG_MACRO(USE_TEXCOORD1);
     ADD_PSO_FLAG_MACRO(USE_JOINTS);
 
-    ADD_PSO_FLAG_MACRO(USE_DIFFUSE_MAP);
+    ADD_PSO_FLAG_MACRO(USE_COLOR_MAP);
     ADD_PSO_FLAG_MACRO(USE_NORMAL_MAP);
     ADD_PSO_FLAG_MACRO(USE_METALLIC_MAP);
     ADD_PSO_FLAG_MACRO(USE_ROUGHNESS_MAP);
@@ -624,9 +618,9 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS PSOFlags) const
     ADD_PSO_FLAG_MACRO(USE_IBL);
 
     //ADD_PSO_FLAG_MACRO(FRONT_CCW);
-    //ADD_PSO_FLAG_MACRO(ALLOW_DEBUG_VIEW);
-    //ADD_PSO_FLAG_MACRO(USE_TEXTURE_ATLAS);
-    //ADD_PSO_FLAG_MACRO(CONVERT_TO_SRGB);
+    ADD_PSO_FLAG_MACRO(ALLOW_DEBUG_VIEW);
+    ADD_PSO_FLAG_MACRO(USE_TEXTURE_ATLAS);
+    ADD_PSO_FLAG_MACRO(CONVERT_OUTPUT_TO_SRGB);
 #undef ADD_PSO_FLAG_MACRO
 
     Macros.Add("TEX_COLOR_CONVERSION_MODE_NONE", CreateInfo::TEX_COLOR_CONVERSION_MODE_NONE);
@@ -727,6 +721,43 @@ void PBR_Renderer::GetVSInputStructAndLayout(PSO_FLAGS         PSOFlags,
     VSInputStruct = ss.str();
 }
 
+std::string PBR_Renderer::GetVSOutputStruct(PSO_FLAGS PSOFlags)
+{
+    // struct VSOutput
+    // {
+    //     float4 ClipPos  : SV_Position;
+    //     float3 WorldPos : WORLD_POS;
+    //     float4 Color    : COLOR;
+    //     float3 Normal   : NORMAL;
+    //     float2 UV0      : UV0;
+    //     float2 UV1      : UV1;
+    // };
+
+    std::stringstream ss;
+    ss << "struct VSOutput" << std::endl
+       << "{" << std::endl
+       << "    float4 ClipPos  : SV_Position;" << std::endl
+       << "    float3 WorldPos : WORLD_POS;" << std::endl;
+    if (PSOFlags & PSO_FLAG_USE_VERTEX_COLORS)
+    {
+        ss << "    float4 Color    : COLOR;" << std::endl;
+    }
+    if (PSOFlags & PSO_FLAG_USE_VERTEX_NORMALS)
+    {
+        ss << "    float3 Normal   : NORMAL;" << std::endl;
+    }
+    if (PSOFlags & PSO_FLAG_USE_TEXCOORD0)
+    {
+        ss << "    float2 UV0      : UV0;" << std::endl;
+    }
+    if (PSOFlags & PSO_FLAG_USE_TEXCOORD1)
+    {
+        ss << "    float2 UV1      : UV1;" << std::endl;
+    }
+    ss << "};" << std::endl;
+    return ss.str();
+}
+
 void PBR_Renderer::CreatePSO(PSO_FLAGS PSOFlags, TEXTURE_FORMAT RTVFmt, TEXTURE_FORMAT DSVFmt)
 {
     GraphicsPipelineStateCreateInfo PSOCreateInfo;
@@ -737,14 +768,20 @@ void PBR_Renderer::CreatePSO(PSO_FLAGS PSOFlags, TEXTURE_FORMAT RTVFmt, TEXTURE_
     GraphicsPipeline.RTVFormats[0]                        = RTVFmt;
     GraphicsPipeline.DSVFormat                            = DSVFmt;
     GraphicsPipeline.PrimitiveTopology                    = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    GraphicsPipeline.RasterizerDesc.FrontCounterClockwise = m_Settings.FrontCCW;
+    GraphicsPipeline.RasterizerDesc.FrontCounterClockwise = (PSOFlags & PSO_FLAG_FRONT_CCW) != 0;
 
     InputLayoutDescX InputLayout;
     std::string      VSInputStruct;
     GetVSInputStructAndLayout(PSOFlags, VSInputStruct, InputLayout);
 
-    MemoryShaderSourceFileInfo                     VSInputStructSource{"VSInputStruct.generated", VSInputStruct};
-    MemoryShaderSourceFactoryCreateInfo            MemorySourceFactoryCI{&VSInputStructSource, 1};
+    auto VSOutputStruct = GetVSOutputStruct(PSOFlags);
+
+    MemoryShaderSourceFileInfo GeneratedSources[] =
+        {
+            MemoryShaderSourceFileInfo{"VSInputStruct.generated", VSInputStruct},
+            MemoryShaderSourceFileInfo{"VSOutputStruct.generated", VSOutputStruct},
+        };
+    MemoryShaderSourceFactoryCreateInfo            MemorySourceFactoryCI{GeneratedSources, _countof(GeneratedSources)};
     RefCntAutoPtr<IShaderSourceInputStreamFactory> pMemorySourceFactory;
     CreateMemoryShaderSourceFactory(MemorySourceFactoryCI, &pMemorySourceFactory);
 
@@ -858,8 +895,33 @@ void PBR_Renderer::CreateResourceBinding(IShaderResourceBinding** ppSRB)
     m_ResourceSignature->CreateShaderResourceBinding(ppSRB, true);
 }
 
-IPipelineState* PBR_Renderer::GetPSO(PSOCacheType& PSOCache, const PSOKey& Key, std::function<void()> CreatePSO)
+IPipelineState* PBR_Renderer::GetPSO(PSOCacheType& PSOCache, PSOKey Key, std::function<void()> CreatePSO)
 {
+    if (!m_Settings.EnableIBL)
+    {
+        Key.Flags &= ~PSO_FLAG_USE_IBL;
+    }
+    if (!m_Settings.EnableAO)
+    {
+        Key.Flags &= ~PSO_FLAG_USE_AO_MAP;
+    }
+    if (!m_Settings.EnableEmissive)
+    {
+        Key.Flags &= ~PSO_FLAG_USE_EMISSIVE_MAP;
+    }
+    if (m_Settings.MaxJointCount == 0)
+    {
+        Key.Flags &= ~PSO_FLAG_USE_JOINTS;
+    }
+    if (m_Settings.UseSeparateMetallicRoughnessTextures)
+    {
+        DEV_CHECK_ERR((Key.Flags & PSO_FLAG_USE_PHYS_DESC_MAP) == 0, "Physical descriptor map is not enabled");
+    }
+    else
+    {
+        DEV_CHECK_ERR((Key.Flags & (PSO_FLAG_USE_METALLIC_MAP | PSO_FLAG_USE_ROUGHNESS_MAP)) == 0, "Separate metallic and roughness maps are not enaled");
+    }
+
     auto it = PSOCache.find(Key);
     if (it == PSOCache.end() && CreatePSO != nullptr)
     {

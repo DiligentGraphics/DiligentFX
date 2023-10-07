@@ -80,11 +80,6 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters*         pRefCounters,
                 USDRendererCI.RTVFmt = CI.RTVFormat;
                 USDRendererCI.DSVFmt = CI.DSVFormat;
 
-                USDRendererCI.FrontCCW              = CI.FrontCCW;
-                USDRendererCI.AllowDebugView        = true;
-                USDRendererCI.UseIBL                = true;
-                USDRendererCI.UseAO                 = true;
-                USDRendererCI.UseEmissive           = true;
                 USDRendererCI.EnableMeshIdRendering = true;
 
                 // Use samplers from texture views
@@ -93,8 +88,6 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters*         pRefCounters,
                 USDRendererCI.MaxJointCount = 0;
                 // Use separate textures for metallic and roughness
                 USDRendererCI.UseSeparateMetallicRoughnessTextures = true;
-
-                USDRendererCI.ConvertOutputToSRGB = CI.ConvertOutputToSRGB;
 
                 static constexpr LayoutElement Inputs[] =
                     {
@@ -128,7 +121,7 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters*         pRefCounters,
         PBR_Renderer::PSO_FLAG_USE_VERTEX_NORMALS |
         PBR_Renderer::PSO_FLAG_USE_TEXCOORD0 |
         PBR_Renderer::PSO_FLAG_USE_TEXCOORD1 |
-        PBR_Renderer::PSO_FLAG_USE_DIFFUSE_MAP |
+        PBR_Renderer::PSO_FLAG_USE_COLOR_MAP |
         PBR_Renderer::PSO_FLAG_USE_NORMAL_MAP |
         PBR_Renderer::PSO_FLAG_USE_METALLIC_MAP |
         PBR_Renderer::PSO_FLAG_USE_ROUGHNESS_MAP;
@@ -139,8 +132,11 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters*         pRefCounters,
         PBR_Renderer::PSO_FLAG_USE_IBL |
         PBR_Renderer::PSO_FLAG_ALLOW_DEBUG_VIEW;
 
+    if (CI.FrontCCW)
+        m_PSOFlags |= PBR_Renderer::PSO_FLAG_FRONT_CCW;
+
     if (CI.ConvertOutputToSRGB)
-        m_PSOFlags |= PBR_Renderer::PSO_FLAG_CONVERT_TO_SRGB;
+        m_PSOFlags |= PBR_Renderer::PSO_FLAG_CONVERT_OUTPUT_TO_SRGB;
 }
 
 HnRendererImpl::~HnRendererImpl()
