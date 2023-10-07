@@ -81,7 +81,7 @@ GLTF_PBR_Renderer::GLTF_PBR_Renderer(IRenderDevice*     pDevice,
 
     m_SupportedPSOFlags |=
         PSO_FLAG_FRONT_CCW |
-        PSO_FLAG_ALLOW_DEBUG_VIEW |
+        PSO_FLAG_ENABLE_DEBUG_VIEW |
         PSO_FLAG_USE_TEXTURE_ATLAS |
         PSO_FLAG_CONVERT_OUTPUT_TO_SRGB;
 }

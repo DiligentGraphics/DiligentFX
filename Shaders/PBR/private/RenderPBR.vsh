@@ -67,7 +67,13 @@ void main(in  VSInput  VSIn,
     }
 #endif
 
-    GLTF_TransformedVertex TransformedVert = GLTF_TransformVertex(VSIn.Pos, VSIn.Normal, Transform);
+#if USE_VERTEX_NORMALS
+    float3 Normal = VSIn.Normal;
+#else
+    float3 Normal = float3(0.0, 0.0, 1.0);
+#endif
+
+    GLTF_TransformedVertex TransformedVert = GLTF_TransformVertex(VSIn.Pos, Normal, Transform);
 
     VSOut.ClipPos  = mul(float4(TransformedVert.WorldPos, 1.0), g_CameraAttribs.mViewProj);
     VSOut.WorldPos = TransformedVert.WorldPos;

@@ -130,7 +130,7 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters*         pRefCounters,
         PBR_Renderer::PSO_FLAG_USE_AO_MAP |
         PBR_Renderer::PSO_FLAG_USE_EMISSIVE_MAP |
         PBR_Renderer::PSO_FLAG_USE_IBL |
-        PBR_Renderer::PSO_FLAG_ALLOW_DEBUG_VIEW;
+        PBR_Renderer::PSO_FLAG_ENABLE_DEBUG_VIEW;
 
     if (CI.FrontCCW)
         m_PSOFlags |= PBR_Renderer::PSO_FLAG_FRONT_CCW;

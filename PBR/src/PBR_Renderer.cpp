@@ -618,7 +618,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS PSOFlags) const
     ADD_PSO_FLAG_MACRO(USE_IBL);
 
     //ADD_PSO_FLAG_MACRO(FRONT_CCW);
-    ADD_PSO_FLAG_MACRO(ALLOW_DEBUG_VIEW);
+    ADD_PSO_FLAG_MACRO(ENABLE_DEBUG_VIEW);
     ADD_PSO_FLAG_MACRO(USE_TEXTURE_ATLAS);
     ADD_PSO_FLAG_MACRO(CONVERT_OUTPUT_TO_SRGB);
 #undef ADD_PSO_FLAG_MACRO
@@ -660,9 +660,9 @@ void PBR_Renderer::GetVSInputStructAndLayout(PSO_FLAGS         PSOFlags,
             .Add(4u, 1u, 4u, VT_FLOAT32)  //float4 Joint0  : ATTRIB4;
             .Add(5u, 1u, 4u, VT_FLOAT32)  //float4 Weight0 : ATTRIB5;
             .Add(6u, 2u, 4u, VT_FLOAT32); //float4 Color   : ATTRIB6;
-
-        // TODO: need to compute offsets and strides
     }
+    // Resolve offsets and strides before removing elements from the layout
+    InputLayout.ResolveAutoOffsetsAndStrides();
 
     std::stringstream ss;
     ss << "struct VSInput" << std::endl

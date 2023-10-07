@@ -426,14 +426,16 @@ void main(in  VSOutput VSOut,
 
     OutColor = float4(color, BaseColor.a);
 
-#   if ALLOW_DEBUG_VIEW
+#   if ENABLE_DEBUG_VIEW
     // Shader inputs debug visualization
     if (g_PBRAttribs.Renderer.DebugViewType != 0)
     {
         switch (g_PBRAttribs.Renderer.DebugViewType)
         {
             case DEBUG_VIEW_BASE_COLOR:       OutColor.rgba = BaseColor;                                            break;
+#   if USE_TEXCOORD0
             case DEBUG_VIEW_TEXCOORD0:        OutColor.rgb  = float3(VSOut.UV0, 0.0);                               break;
+#   endif
             case DEBUG_VIEW_TRANSPARENCY:     OutColor.rgba = float4(BaseColor.a, BaseColor.a, BaseColor.a, 1.0);   break;
             case DEBUG_VIEW_NORMAL_MAP:       OutColor.rgb  = TSNormal.xyz;                                         break;
             case DEBUG_VIEW_OCCLUSION:        OutColor.rgb  = Occlusion * float3(1.0, 1.0, 1.0);                    break;
@@ -443,10 +445,12 @@ void main(in  VSOutput VSOut,
             case DEBUG_VIEW_DIFFUSE_COLOR:    OutColor.rgb  = SrfInfo.DiffuseColor;                                 break;
             case DEBUG_VIEW_SPECULAR_COLOR:   OutColor.rgb  = SrfInfo.Reflectance0;                                 break;
             case DEBUG_VIEW_REFLECTANCE90:    OutColor.rgb  = SrfInfo.Reflectance90;                                break;
+#   if USE_VERTEX_NORMALS
             case DEBUG_VIEW_MESH_NORMAL:      OutColor.rgb  = abs(VSOut.Normal / max(length(VSOut.Normal), 1e-3));  break;
             case DEBUG_VIEW_PERTURBED_NORMAL: OutColor.rgb  = abs(perturbedNormal);                                 break;
             case DEBUG_VIEW_NDOTV:            OutColor.rgb  = dot(perturbedNormal, view) * float3(1.0, 1.0, 1.0);   break;
             case DEBUG_VIEW_DIRECT_LIGHTING:  OutColor.rgb  = DirectLighting;                                       break;
+#   endif
 #   if USE_IBL
             case DEBUG_VIEW_DIFFUSE_IBL:      OutColor.rgb  = IBLContrib.f3Diffuse;                                 break;
             case DEBUG_VIEW_SPECULAR_IBL:     OutColor.rgb  = IBLContrib.f3Specular;                                break;

@@ -216,7 +216,7 @@ public:
         PSO_FLAG_USE_IBL           = 1u << 12u,
 
         PSO_FLAG_FRONT_CCW              = 1u << 13u,
-        PSO_FLAG_ALLOW_DEBUG_VIEW       = 1u << 14u,
+        PSO_FLAG_ENABLE_DEBUG_VIEW      = 1u << 14u,
         PSO_FLAG_USE_TEXTURE_ATLAS      = 1u << 15u,
         PSO_FLAG_CONVERT_OUTPUT_TO_SRGB = 1u << 16u,
 
