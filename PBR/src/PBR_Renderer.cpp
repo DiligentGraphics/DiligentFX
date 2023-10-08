@@ -43,6 +43,16 @@ namespace Diligent
 
 const SamplerDesc PBR_Renderer::CreateInfo::DefaultSampler = Sam_LinearWrap;
 
+const PBR_Renderer::PSO_FLAGS PBR_Renderer::PbrPSOKey::SupportedFlags = PSO_FLAG_ALL;
+
+const PBR_Renderer::PSO_FLAGS PBR_Renderer::WireframePSOKey::SupportedFlags =
+    PSO_FLAG_USE_JOINTS |
+    PSO_FLAG_FRONT_CCW;
+
+const PBR_Renderer::PSO_FLAGS PBR_Renderer::MeshIdPSOKey::SupportedFlags =
+    PSO_FLAG_USE_JOINTS |
+    PSO_FLAG_FRONT_CCW;
+
 namespace
 {
 
@@ -963,23 +973,17 @@ void PBR_Renderer::CreateResourceBinding(IShaderResourceBinding** ppSRB)
 
 IPipelineState* PBR_Renderer::GetPbrPSO(const PbrPSOKey& Key, bool CreateIfNull)
 {
-    return GetPSO(m_PbrPSOs, Key, PSO_FLAG_ALL, CreateIfNull, std::mem_fn(&PBR_Renderer::CreatePbrPSO));
+    return GetPSO(m_PbrPSOs, Key, CreateIfNull, std::mem_fn(&PBR_Renderer::CreatePbrPSO));
 }
 
 IPipelineState* PBR_Renderer::GetMeshIdPSO(const MeshIdPSOKey& Key, bool CreateIfNull)
 {
-    constexpr auto MeshIdPsoFlags =
-        PSO_FLAG_USE_JOINTS |
-        PSO_FLAG_FRONT_CCW;
-    return GetPSO(m_MeshIdPSOs, Key, MeshIdPsoFlags, CreateIfNull, std::mem_fn(&PBR_Renderer::CreateMeshIdPSO));
+    return GetPSO(m_MeshIdPSOs, Key, CreateIfNull, std::mem_fn(&PBR_Renderer::CreateMeshIdPSO));
 }
 
 IPipelineState* PBR_Renderer::GetWireframePSO(const WireframePSOKey& Key, bool CreateIfNull)
 {
-    constexpr auto WireframePsoFlags =
-        PSO_FLAG_USE_JOINTS |
-        PSO_FLAG_FRONT_CCW;
-    return GetPSO(m_WireframePSOs, Key, WireframePsoFlags, CreateIfNull, std::mem_fn(&PBR_Renderer::CreateWireframePSO));
+    return GetPSO(m_WireframePSOs, Key, CreateIfNull, std::mem_fn(&PBR_Renderer::CreateWireframePSO));
 }
 
 } // namespace Diligent

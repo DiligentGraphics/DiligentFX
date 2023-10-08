@@ -237,101 +237,102 @@ public:
         PSO_FLAG_ALL = PSO_FLAG_LAST * 2u - 1u,
     };
 
-    struct PbrPSOKey
-    {
-        PSO_FLAGS  Flags       = PSO_FLAG_NONE;
-        ALPHA_MODE AlphaMode   = ALPHA_MODE_OPAQUE;
-        bool       DoubleSided = false;
-
-        PbrPSOKey() noexcept {};
-        PbrPSOKey(PSO_FLAGS _Flags, ALPHA_MODE _AlphaMode, bool _DoubleSided) noexcept :
-            Flags{_Flags},
-            AlphaMode{_AlphaMode},
-            DoubleSided{_DoubleSided}
-        {}
-
-        bool operator==(const PbrPSOKey& rhs) const noexcept
-        {
-            return Flags == rhs.Flags && AlphaMode == rhs.AlphaMode && DoubleSided == rhs.DoubleSided;
-        }
-        bool operator!=(const PbrPSOKey& rhs) const noexcept
-        {
-            return Flags != rhs.Flags || AlphaMode != rhs.AlphaMode || DoubleSided != rhs.DoubleSided;
-        }
-
-        struct Hasher
-        {
-            size_t operator()(const PbrPSOKey& Key) const noexcept
-            {
-                return ComputeHash(Key.Flags, Key.AlphaMode, Key.DoubleSided);
-            }
-        };
-    };
-    IPipelineState* GetPbrPSO(const PbrPSOKey& Key, bool CreateIfNull);
-
-
-    struct WireframePSOKey
-    {
-        PSO_FLAGS          Flags       = PSO_FLAG_NONE;
-        PRIMITIVE_TOPOLOGY Topology    = PRIMITIVE_TOPOLOGY_UNDEFINED;
-        bool               DoubleSided = false;
-
-        WireframePSOKey() noexcept {};
-        WireframePSOKey(PSO_FLAGS _Flags, PRIMITIVE_TOPOLOGY _Topology, bool _DoubleSided) noexcept :
-            Flags{_Flags},
-            Topology{_Topology},
-            DoubleSided{_DoubleSided}
-        {}
-
-        bool operator==(const WireframePSOKey& rhs) const noexcept
-        {
-            return Flags == rhs.Flags && Topology == rhs.Topology && DoubleSided == rhs.DoubleSided;
-        }
-
-        bool operator!=(const WireframePSOKey& rhs) const noexcept
-        {
-            return Flags != rhs.Flags || Topology != rhs.Topology || DoubleSided != rhs.DoubleSided;
-        }
-
-        struct Hasher
-        {
-            size_t operator()(const WireframePSOKey& Key) const noexcept
-            {
-                return ComputeHash(Key.Flags, Key.Topology, Key.DoubleSided);
-            }
-        };
-    };
-    IPipelineState* GetWireframePSO(const WireframePSOKey& Key, bool CreateIfNull);
-
-
-    struct MeshIdPSOKey
+    struct PSOKey
     {
         PSO_FLAGS Flags       = PSO_FLAG_NONE;
         bool      DoubleSided = false;
 
-        MeshIdPSOKey() noexcept {};
-        MeshIdPSOKey(PSO_FLAGS _Flags, bool _DoubleSided) noexcept :
-            Flags{_Flags},
-            DoubleSided{_DoubleSided}
+        constexpr PSOKey() noexcept {};
+        constexpr PSOKey(PSO_FLAGS _Flags, bool _DoubleSided) noexcept :
+            Flags{_Flags}, DoubleSided{_DoubleSided}
         {}
 
-        bool operator==(const MeshIdPSOKey& rhs) const noexcept
+        constexpr bool operator==(const PSOKey& rhs) const noexcept
         {
             return Flags == rhs.Flags && DoubleSided == rhs.DoubleSided;
         }
-
-        bool operator!=(const MeshIdPSOKey& rhs) const noexcept
+        constexpr bool operator!=(const PSOKey& rhs) const noexcept
         {
             return Flags != rhs.Flags || DoubleSided != rhs.DoubleSided;
         }
 
         struct Hasher
         {
-            size_t operator()(const MeshIdPSOKey& Key) const noexcept
+            size_t operator()(const PSOKey& Key) const noexcept
             {
                 return ComputeHash(Key.Flags, Key.DoubleSided);
             }
         };
+    };
+
+    struct PbrPSOKey : PSOKey
+    {
+        static const PSO_FLAGS SupportedFlags;
+
+        ALPHA_MODE AlphaMode = ALPHA_MODE_OPAQUE;
+
+        PbrPSOKey() noexcept {};
+        PbrPSOKey(PSO_FLAGS _Flags, ALPHA_MODE _AlphaMode, bool _DoubleSided) noexcept;
+
+        bool operator==(const PbrPSOKey& rhs) const noexcept
+        {
+            return PSOKey::operator==(rhs) && AlphaMode == rhs.AlphaMode;
+        }
+        bool operator!=(const PbrPSOKey& rhs) const noexcept
+        {
+            return PSOKey::operator!=(rhs) || AlphaMode != rhs.AlphaMode;
+        }
+
+        struct Hasher
+        {
+            size_t operator()(const PbrPSOKey& Key) const noexcept
+            {
+                size_t Hash = PSOKey::Hasher{}(Key);
+                HashCombine(Hash, Key.AlphaMode);
+                return Hash;
+            }
+        };
+    };
+    IPipelineState* GetPbrPSO(const PbrPSOKey& Key, bool CreateIfNull);
+
+
+    struct WireframePSOKey : PSOKey
+    {
+        static const PSO_FLAGS SupportedFlags;
+
+        PRIMITIVE_TOPOLOGY Topology = PRIMITIVE_TOPOLOGY_UNDEFINED;
+
+        WireframePSOKey() noexcept {};
+        WireframePSOKey(PSO_FLAGS _Flags, PRIMITIVE_TOPOLOGY _Topology, bool _DoubleSided) noexcept;
+
+        bool operator==(const WireframePSOKey& rhs) const noexcept
+        {
+            return PSOKey::operator==(rhs) && Topology == rhs.Topology;
+        }
+
+        bool operator!=(const WireframePSOKey& rhs) const noexcept
+        {
+            return PSOKey::operator!=(rhs) || Topology != rhs.Topology;
+        }
+
+        struct Hasher
+        {
+            size_t operator()(const WireframePSOKey& Key) const noexcept
+            {
+                size_t Hash = PSOKey::Hasher{}(Key);
+                HashCombine(Hash, Key.Topology);
+                return Hash;
+            }
+        };
+    };
+    IPipelineState* GetWireframePSO(const WireframePSOKey& Key, bool CreateIfNull);
+
+    struct MeshIdPSOKey : PSOKey
+    {
+        static const PSO_FLAGS SupportedFlags;
+
+        MeshIdPSOKey() noexcept {};
+        MeshIdPSOKey(PSO_FLAGS _Flags, bool _DoubleSided) noexcept;
     };
     IPipelineState* GetMeshIdPSO(const MeshIdPSOKey& Key, bool CreateIfNull);
 
@@ -347,7 +348,6 @@ protected:
     template <typename KeyType, class CreatePSOType>
     IPipelineState* GetPSO(std::unordered_map<KeyType, RefCntAutoPtr<IPipelineState>, typename KeyType::Hasher>& PSOCache,
                            KeyType                                                                               Key,
-                           PSO_FLAGS                                                                             SupportedFlags,
                            bool                                                                                  CreateIfNull,
                            CreatePSOType&&                                                                       CreatePSO);
 
@@ -410,14 +410,32 @@ protected:
 
 DEFINE_FLAG_ENUM_OPERATORS(PBR_Renderer::PSO_FLAGS)
 
+inline PBR_Renderer::PbrPSOKey::PbrPSOKey(PSO_FLAGS  _Flags,
+                                          ALPHA_MODE _AlphaMode,
+                                          bool       _DoubleSided) noexcept :
+    PSOKey{_Flags & SupportedFlags, _DoubleSided},
+    AlphaMode{_AlphaMode}
+{}
+
+inline PBR_Renderer::WireframePSOKey::WireframePSOKey(PSO_FLAGS          _Flags,
+                                                      PRIMITIVE_TOPOLOGY _Topology,
+                                                      bool               _DoubleSided) noexcept :
+    PSOKey{_Flags & SupportedFlags, _DoubleSided},
+    Topology{_Topology}
+{}
+
+inline PBR_Renderer::MeshIdPSOKey::MeshIdPSOKey(PSO_FLAGS _Flags,
+                                                bool      _DoubleSided) noexcept :
+    PSOKey{_Flags & SupportedFlags, _DoubleSided}
+{}
+
 template <typename KeyType, class CreatePSOType>
 IPipelineState* PBR_Renderer::GetPSO(std::unordered_map<KeyType, RefCntAutoPtr<IPipelineState>, typename KeyType::Hasher>& PSOCache,
                                      KeyType                                                                               Key,
-                                     PSO_FLAGS                                                                             SupportedFlags,
                                      bool                                                                                  CreateIfNull,
                                      CreatePSOType&&                                                                       CreatePSO)
 {
-    Key.Flags &= SupportedFlags;
+    Key.Flags &= KeyType::SupportedFlags;
 
     if (!m_Settings.EnableIBL)
     {
