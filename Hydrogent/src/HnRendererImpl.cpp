@@ -115,26 +115,11 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters*         pRefCounters,
             }(CI, pDevice))},
     m_MeshIdReadBackQueue{pDevice}
 {
-    m_PSOFlags |=
-        PBR_Renderer::PSO_FLAG_USE_VERTEX_NORMALS |
-        PBR_Renderer::PSO_FLAG_USE_TEXCOORD0 |
-        PBR_Renderer::PSO_FLAG_USE_TEXCOORD1 |
-        PBR_Renderer::PSO_FLAG_USE_COLOR_MAP |
-        PBR_Renderer::PSO_FLAG_USE_NORMAL_MAP |
-        PBR_Renderer::PSO_FLAG_USE_METALLIC_MAP |
-        PBR_Renderer::PSO_FLAG_USE_ROUGHNESS_MAP;
-
-    m_PSOFlags |=
-        PBR_Renderer::PSO_FLAG_USE_AO_MAP |
-        PBR_Renderer::PSO_FLAG_USE_EMISSIVE_MAP |
-        PBR_Renderer::PSO_FLAG_USE_IBL |
-        PBR_Renderer::PSO_FLAG_ENABLE_DEBUG_VIEW;
-
     if (CI.FrontCCW)
-        m_PSOFlags |= PBR_Renderer::PSO_FLAG_FRONT_CCW;
+        m_DefaultPSOFlags |= PBR_Renderer::PSO_FLAG_FRONT_CCW;
 
     if (CI.ConvertOutputToSRGB)
-        m_PSOFlags |= PBR_Renderer::PSO_FLAG_CONVERT_OUTPUT_TO_SRGB;
+        m_DefaultPSOFlags |= PBR_Renderer::PSO_FLAG_CONVERT_OUTPUT_TO_SRGB;
 }
 
 HnRendererImpl::~HnRendererImpl()
@@ -299,30 +284,46 @@ void HnRendererImpl::RenderMesh(IDeviceContext*          pCtx,
         }
     }
 
-    for (size_t i = 0; i < _countof(pTexCoordVBs); ++i)
-    {
-        // Temporary workaround - assign normals VB to texture coordinate VB if the latter is not available.
-        // Texture coordinates will not be used in the shader anyway, but we need to have valid VB bound.
-        if (pTexCoordVBs[i] == nullptr)
-            pTexCoordVBs[i] = pNormalsVB;
-    }
-
     const auto& ShaderAttribs = Material.GetShaderAttribs();
 
     auto* pIB = (Attribs.RenderMode == HN_RENDER_MODE_MESH_EDGES) ?
         Mesh.GetEdgeIndexBuffer() :
         Mesh.GetTriangleIndexBuffer();
 
-    if (pPosVB == nullptr || pNormalsVB == nullptr || pTexCoordVBs[0] == nullptr || pTexCoordVBs[1] == nullptr || pIB == nullptr || pSRB == nullptr)
+    if (pPosVB == nullptr || pIB == nullptr || pSRB == nullptr)
         return;
 
     IPipelineState* pPSO = nullptr;
-    if (Attribs.RenderMode == HN_RENDER_MODE_MESH_EDGES)
-        pPSO = m_USDRenderer->GetWireframePSO({m_PSOFlags, PRIMITIVE_TOPOLOGY_LINE_LIST, /*DoubleSided = */ false}, true);
-    else if (Attribs.RenderMode == HN_RENDER_MODE_SOLID)
-        pPSO = m_USDRenderer->GetPbrPSO({m_PSOFlags, AlphaMode, /*DoubleSided = */ false}, true);
+    if (Attribs.RenderMode == HN_RENDER_MODE_SOLID)
+    {
+        auto PSOFlags = m_DefaultPSOFlags;
+        if (pNormalsVB != nullptr)
+            PSOFlags |= PBR_Renderer::PSO_FLAG_USE_VERTEX_NORMALS;
+        if (pTexCoordVBs[0] != nullptr)
+            PSOFlags |= PBR_Renderer::PSO_FLAG_USE_TEXCOORD0;
+        if (pTexCoordVBs[1] != nullptr)
+            PSOFlags |= PBR_Renderer::PSO_FLAG_USE_TEXCOORD1;
+
+        PSOFlags |=
+            PBR_Renderer::PSO_FLAG_USE_COLOR_MAP |
+            PBR_Renderer::PSO_FLAG_USE_NORMAL_MAP |
+            PBR_Renderer::PSO_FLAG_USE_METALLIC_MAP |
+            PBR_Renderer::PSO_FLAG_USE_ROUGHNESS_MAP |
+            PBR_Renderer::PSO_FLAG_USE_AO_MAP |
+            PBR_Renderer::PSO_FLAG_USE_EMISSIVE_MAP |
+            PBR_Renderer::PSO_FLAG_USE_IBL |
+            PBR_Renderer::PSO_FLAG_ENABLE_DEBUG_VIEW;
+
+        pPSO = m_USDRenderer->GetPbrPSO({PSOFlags, AlphaMode, /*DoubleSided = */ false}, true);
+    }
+    else if (Attribs.RenderMode == HN_RENDER_MODE_MESH_EDGES)
+    {
+        pPSO = m_USDRenderer->GetWireframePSO({m_DefaultPSOFlags, PRIMITIVE_TOPOLOGY_LINE_LIST, /*DoubleSided = */ false}, true);
+    }
     else
-        pPSO = m_USDRenderer->GetMeshIdPSO({m_PSOFlags, /*DoubleSided = */ false}, true);
+    {
+        pPSO = m_USDRenderer->GetMeshIdPSO({m_DefaultPSOFlags, /*DoubleSided = */ false}, true);
+    }
     pCtx->SetPipelineState(pPSO);
 
     // Bind vertex and index buffers

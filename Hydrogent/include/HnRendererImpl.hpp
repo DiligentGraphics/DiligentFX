@@ -117,7 +117,7 @@ private:
 
     GPUCompletionAwaitQueue<RefCntAutoPtr<ITexture>> m_MeshIdReadBackQueue;
 
-    PBR_Renderer::PSO_FLAGS m_PSOFlags = PBR_Renderer::PSO_FLAG_NONE;
+    PBR_Renderer::PSO_FLAGS m_DefaultPSOFlags = PBR_Renderer::PSO_FLAG_NONE;
 
     struct MeshRenderInfo
     {
