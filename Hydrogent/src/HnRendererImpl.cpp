@@ -207,13 +207,47 @@ void HnRendererImpl::Update()
     }
 }
 
-void HnRendererImpl::Draw(IDeviceContext* pCtx, const HnDrawAttribs& Attribs)
+void HnRendererImpl::RenderMeshes(IDeviceContext* pCtx, const HnDrawAttribs& Attribs)
 {
-    if (!m_RenderDelegate)
-        return;
+    for (auto& List : m_RenderLists)
+        List.clear();
 
     const auto& Meshes = m_RenderDelegate->GetMeshes();
     if (Meshes.empty())
+        return;
+
+    for (auto mesh_it : Meshes)
+    {
+        if (!mesh_it.second)
+            continue;
+
+        auto& Mesh = *mesh_it.second;
+
+        const auto& MaterialId = Mesh.GetMaterialId();
+        const auto* pMaterial  = m_RenderDelegate->GetMaterial(MaterialId.GetText());
+        if (pMaterial == nullptr)
+            return;
+
+        const auto& ShaderAttribs = pMaterial->GetShaderAttribs();
+        const auto  AlphaMode     = ShaderAttribs.AlphaMode;
+
+        m_RenderLists[AlphaMode].emplace_back(Mesh, *pMaterial);
+    }
+
+    // TODO: handle double-sided materials
+    for (auto AlphaMode : {USD_Renderer::ALPHA_MODE_OPAQUE, USD_Renderer::ALPHA_MODE_MASK, USD_Renderer::ALPHA_MODE_BLEND})
+    {
+        const auto& List = m_RenderLists[AlphaMode];
+        for (const auto& MeshRI : List)
+        {
+            RenderMesh(pCtx, MeshRI.Mesh, MeshRI.Material, Attribs, AlphaMode);
+        }
+    }
+}
+
+void HnRendererImpl::Draw(IDeviceContext* pCtx, const HnDrawAttribs& Attribs)
+{
+    if (!m_RenderDelegate)
         return;
 
     if (auto* pEnvMapSRV = m_USDRenderer->GetPrefilteredEnvMapSRV())
@@ -235,36 +269,14 @@ void HnRendererImpl::Draw(IDeviceContext* pCtx, const HnDrawAttribs& Attribs)
         m_EnvMapRenderer->Render(EnvMapAttribs, TMAttribs);
     }
 
-    // TODO: handle double-sided materials
-    for (auto AlphaMode : {USD_Renderer::ALPHA_MODE_OPAQUE, USD_Renderer::ALPHA_MODE_MASK, USD_Renderer::ALPHA_MODE_BLEND})
-    {
-        if (Attribs.RenderMode == HN_RENDER_MODE_MESH_EDGES)
-            pCtx->SetPipelineState(m_USDRenderer->GetWireframePSO({m_PSOFlags, PRIMITIVE_TOPOLOGY_LINE_LIST, /*DoubleSided = */ false}, true));
-        else
-            pCtx->SetPipelineState(m_USDRenderer->GetPbrPSO({m_PSOFlags, AlphaMode, /*DoubleSided = */ false}, true));
-
-        for (auto mesh_it : Meshes)
-        {
-            if (!mesh_it.second)
-                continue;
-
-            auto& Mesh = *mesh_it.second;
-
-            const auto& MaterialId = Mesh.GetMaterialId();
-            const auto* pMaterial  = m_RenderDelegate->GetMaterial(MaterialId.GetText());
-            if (pMaterial == nullptr)
-                return;
-
-            const auto& ShaderAttribs = pMaterial->GetShaderAttribs();
-            if (ShaderAttribs.AlphaMode != AlphaMode)
-                continue;
-
-            RenderMesh(pCtx, Mesh, *pMaterial, Attribs);
-        }
-    }
+    RenderMeshes(pCtx, Attribs);
 }
 
-void HnRendererImpl::RenderMesh(IDeviceContext* pCtx, const HnMesh& Mesh, const HnMaterial& Material, const HnDrawAttribs& Attribs)
+void HnRendererImpl::RenderMesh(IDeviceContext*          pCtx,
+                                const HnMesh&            Mesh,
+                                const HnMaterial&        Material,
+                                const HnDrawAttribs&     Attribs,
+                                USD_Renderer::ALPHA_MODE AlphaMode)
 {
     auto* pSRB       = Material.GetSRB();
     auto* pPosVB     = Mesh.GetVertexBuffer(pxr::HdTokens->points);
@@ -303,6 +315,15 @@ void HnRendererImpl::RenderMesh(IDeviceContext* pCtx, const HnMesh& Mesh, const 
 
     if (pPosVB == nullptr || pNormalsVB == nullptr || pTexCoordVBs[0] == nullptr || pTexCoordVBs[1] == nullptr || pIB == nullptr || pSRB == nullptr)
         return;
+
+    IPipelineState* pPSO = nullptr;
+    if (Attribs.RenderMode == HN_RENDER_MODE_MESH_EDGES)
+        pPSO = m_USDRenderer->GetWireframePSO({m_PSOFlags, PRIMITIVE_TOPOLOGY_LINE_LIST, /*DoubleSided = */ false}, true);
+    else if (Attribs.RenderMode == HN_RENDER_MODE_SOLID)
+        pPSO = m_USDRenderer->GetPbrPSO({m_PSOFlags, AlphaMode, /*DoubleSided = */ false}, true);
+    else
+        pPSO = m_USDRenderer->GetMeshIdPSO({m_PSOFlags, /*DoubleSided = */ false}, true);
+    pCtx->SetPipelineState(pPSO);
 
     // Bind vertex and index buffers
     IBuffer* pBuffs[] = {pPosVB, pNormalsVB, pTexCoordVBs[0], pTexCoordVBs[1]};
@@ -448,29 +469,10 @@ void HnRendererImpl::RenderPrimId(IDeviceContext* pContext, ITextureView* pDepth
     if (Meshes.empty())
         return;
 
-    auto* pMeshIdPSO = m_USDRenderer->GetMeshIdPSO({m_PSOFlags, /*DoubleSided = */ false}, true);
-    if (pMeshIdPSO == nullptr)
-        return;
-
-    // TODO: handle double-sided materials
-    pContext->SetPipelineState(pMeshIdPSO);
-
     HnDrawAttribs Attribs;
-    Attribs.Transform = Transform;
-    for (auto mesh_it : Meshes)
-    {
-        if (!mesh_it.second)
-            continue;
-
-        auto& Mesh = *mesh_it.second;
-
-        const auto& MaterialId = Mesh.GetMaterialId();
-        const auto* pMaterial  = m_RenderDelegate->GetMaterial(MaterialId.GetText());
-        if (pMaterial == nullptr)
-            return;
-
-        RenderMesh(pContext, Mesh, *pMaterial, Attribs);
-    }
+    Attribs.Transform  = Transform;
+    Attribs.RenderMode = HN_RENDER_MODE_COUNT; // Temporary solution
+    RenderMeshes(pContext, Attribs);
 
     pContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
 }

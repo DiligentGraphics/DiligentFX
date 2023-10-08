@@ -27,6 +27,8 @@
 #pragma once
 
 #include <memory>
+#include <vector>
+#include <array>
 
 #include "HnRenderer.hpp"
 
@@ -84,7 +86,12 @@ public:
     void RenderPrimId(IDeviceContext* pContext, ITextureView* pDepthBuffer, const float4x4& Transform) override final;
 
 private:
-    void RenderMesh(IDeviceContext* pCtx, const HnMesh& Mesh, const HnMaterial& Material, const HnDrawAttribs& Attribs);
+    void RenderMesh(IDeviceContext*          pCtx,
+                    const HnMesh&            Mesh,
+                    const HnMaterial&        Material,
+                    const HnDrawAttribs&     Attribs,
+                    USD_Renderer::ALPHA_MODE AlphaMode);
+    void RenderMeshes(IDeviceContext* pCtx, const HnDrawAttribs& Attribs);
 
 private:
     RenderDeviceWithCache_N       m_Device;
@@ -111,6 +118,18 @@ private:
     GPUCompletionAwaitQueue<RefCntAutoPtr<ITexture>> m_MeshIdReadBackQueue;
 
     PBR_Renderer::PSO_FLAGS m_PSOFlags = PBR_Renderer::PSO_FLAG_NONE;
+
+    struct MeshRenderInfo
+    {
+        const HnMesh&     Mesh;
+        const HnMaterial& Material;
+
+        MeshRenderInfo(const HnMesh& _Mesh, const HnMaterial& _Material) noexcept :
+            Mesh{_Mesh},
+            Material{_Material}
+        {}
+    };
+    std::array<std::vector<MeshRenderInfo>, USD_Renderer::ALPHA_MODE_NUM_MODES> m_RenderLists;
 };
 
 } // namespace USD
