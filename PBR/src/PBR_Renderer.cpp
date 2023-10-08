@@ -874,35 +874,46 @@ void PBR_Renderer::CreatePbrPSO(PSO_FLAGS PSOFlags, TEXTURE_FORMAT RTVFmt, TEXTU
             }
         }
     }
+}
 
-#if 0
-    if (m_Settings.EnableMeshIdRendering)
+void PBR_Renderer::CreateMeshIdPSO(PSO_FLAGS PSOFlags, TEXTURE_FORMAT RTVFmt, TEXTURE_FORMAT DSVFmt)
+{
+    GraphicsPipelineStateCreateInfo PSOCreateInfo;
+    PipelineStateDesc&              PSODesc          = PSOCreateInfo.PSODesc;
+    GraphicsPipelineDesc&           GraphicsPipeline = PSOCreateInfo.GraphicsPipeline;
+
+    GraphicsPipeline.NumRenderTargets                     = 1;
+    GraphicsPipeline.RTVFormats[0]                        = MeshIdFmt;
+    GraphicsPipeline.DSVFormat                            = DSVFmt;
+    GraphicsPipeline.PrimitiveTopology                    = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    GraphicsPipeline.RasterizerDesc.FrontCounterClockwise = (PSOFlags & PSO_FLAG_FRONT_CCW) != 0;
+    GraphicsPipeline.DepthStencilDesc.DepthFunc           = COMPARISON_FUNC_LESS_EQUAL;
+
+    InputLayoutDescX       InputLayout;
+    RefCntAutoPtr<IShader> pVS;
+    RefCntAutoPtr<IShader> pPS;
+    CreateShaders(PSOFlags, "RenderPBR.vsh", "Mesh ID VS", "RenderMeshId.psh", "Mesh ID PS", pVS, pPS, InputLayout);
+
+    PSOCreateInfo.GraphicsPipeline.InputLayout = InputLayout;
+
+    IPipelineResourceSignature* ppSignatures[] = {m_ResourceSignature};
+    PSOCreateInfo.ppResourceSignatures         = ppSignatures;
+    PSOCreateInfo.ResourceSignaturesCount      = _countof(ppSignatures);
+
+    PSOCreateInfo.pVS = pVS;
+    PSOCreateInfo.pPS = pPS;
+
+    for (auto CullMode : {CULL_MODE_BACK, CULL_MODE_NONE})
     {
-        PSOCreateInfo.PSODesc.Name = "Render Mesh Id PSO";
+        std::string PSOName{"Mesh ID PSO"};
+        PSOName += (CullMode == CULL_MODE_BACK ? " - backface culling" : " - no culling");
+        PSODesc.Name = PSOName.c_str();
 
-        GraphicsPipeline.DepthStencilDesc.DepthFunc = COMPARISON_FUNC_LESS_EQUAL;
-        GraphicsPipeline.BlendDesc                  = BS_Default;
-        GraphicsPipeline.RTVFormats[0]              = MeshIdFmt;
+        GraphicsPipeline.RasterizerDesc.CullMode = CullMode;
+        const auto DoubleSided                   = CullMode == CULL_MODE_NONE;
 
-        RefCntAutoPtr<IShader> pMeshIdPS;
-        {
-            ShaderCI.Desc       = {"Mesh Id PS", SHADER_TYPE_PIXEL, true};
-            ShaderCI.EntryPoint = "main";
-            ShaderCI.FilePath   = "RenderMeshId.psh";
-
-            pMeshIdPS = m_Device.CreateShader(ShaderCI);
-        }
-        PSOCreateInfo.pPS = pMeshIdPS;
-
-        for (auto CullMode : {CULL_MODE_BACK, CULL_MODE_NONE})
-        {
-            GraphicsPipeline.RasterizerDesc.CullMode = CullMode;
-            const auto DoubleSided                   = CullMode == CULL_MODE_NONE;
-
-            m_MeshIdPSOs[{PSOFlags, ALPHA_MODE_OPAQUE, DoubleSided}] = m_Device.CreateGraphicsPipelineState(PSOCreateInfo);
-        }
+        m_MeshIdPSOs[{PSOFlags, DoubleSided}] = m_Device.CreateGraphicsPipelineState(PSOCreateInfo);
     }
-#endif
 }
 
 void PBR_Renderer::CreateWireframePSO(PSO_FLAGS PSOFlags, TEXTURE_FORMAT RTVFmt, TEXTURE_FORMAT DSVFmt, PRIMITIVE_TOPOLOGY Topology)
@@ -960,19 +971,26 @@ IPipelineState* PBR_Renderer::GetPbrPSO(const PbrPSOKey& Key, bool CreateIfNull)
                   });
 }
 
-IPipelineState* PBR_Renderer::GetMeshIdPSO(const PbrPSOKey& _Key, bool CreateIfNull)
+IPipelineState* PBR_Renderer::GetMeshIdPSO(const MeshIdPSOKey& _Key, bool CreateIfNull)
 {
-    //auto Key      = _Key;
-    //Key.AlphaMode = ALPHA_MODE_OPAQUE;
+    constexpr auto MeshIdPsoFlags =
+        PSO_FLAG_USE_JOINTS |
+        PSO_FLAG_FRONT_CCW;
 
-    //return GetPSO(m_MeshIdPSOs, Key, [&]() { CreatePSO(Key.Flags, MeshIdFmt, m_Settings.DSVFmt); });
-    return nullptr;
+    auto Key = _Key;
+    Key.Flags &= MeshIdPsoFlags;
+
+    return GetPSO(m_MeshIdPSOs, Key,
+                  [&]() {
+                      if (CreateIfNull)
+                          CreateMeshIdPSO(Key.Flags, m_Settings.RTVFmt, m_Settings.DSVFmt);
+                      return CreateIfNull;
+                  });
 }
 
 IPipelineState* PBR_Renderer::GetWireframePSO(const WireframePSOKey& _Key, bool CreateIfNull)
 {
     constexpr auto WireframePsoFlags =
-        PSO_FLAG_USE_VERTEX_COLORS |
         PSO_FLAG_USE_JOINTS |
         PSO_FLAG_FRONT_CCW;
 

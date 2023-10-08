@@ -1,13 +1,13 @@
-#include "RenderPBRCommon.fxh"
 #include "PBR_Structures.fxh"
+#include "VSOutputStruct.generated"
 
 cbuffer cbPBRAttribs
 {
     PBRShaderAttribs g_PBRAttribs;
 }
 
-void main(in PbrVsOutput VSOut,
-          out uint4 OutMeshId : SV_Target)
+void main(in VSOutput VSOut,
+          out uint4   OutMeshId : SV_Target)
 {
     OutMeshId.r = (g_PBRAttribs.Renderer.MeshId >> 0u) & 0xFFu;
     OutMeshId.g = (g_PBRAttribs.Renderer.MeshId >> 8u) & 0xFFu;

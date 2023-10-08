@@ -270,9 +270,8 @@ public:
             }
         };
     };
-
     IPipelineState* GetPbrPSO(const PbrPSOKey& Key, bool CreateIfNull);
-    IPipelineState* GetMeshIdPSO(const PbrPSOKey& Key, bool CreateIfNull);
+
 
     struct WireframePSOKey
     {
@@ -305,9 +304,39 @@ public:
             }
         };
     };
-
     IPipelineState* GetWireframePSO(const WireframePSOKey& Key, bool CreateIfNull);
 
+
+    struct MeshIdPSOKey
+    {
+        PSO_FLAGS Flags       = PSO_FLAG_NONE;
+        bool      DoubleSided = false;
+
+        MeshIdPSOKey() noexcept {};
+        MeshIdPSOKey(PSO_FLAGS _Flags, bool _DoubleSided) noexcept :
+            Flags{_Flags},
+            DoubleSided{_DoubleSided}
+        {}
+
+        bool operator==(const MeshIdPSOKey& rhs) const noexcept
+        {
+            return Flags == rhs.Flags && DoubleSided == rhs.DoubleSided;
+        }
+
+        bool operator!=(const MeshIdPSOKey& rhs) const noexcept
+        {
+            return Flags != rhs.Flags || DoubleSided != rhs.DoubleSided;
+        }
+
+        struct Hasher
+        {
+            size_t operator()(const MeshIdPSOKey& Key) const noexcept
+            {
+                return ComputeHash(Key.Flags, Key.DoubleSided);
+            }
+        };
+    };
+    IPipelineState* GetMeshIdPSO(const MeshIdPSOKey& Key, bool CreateIfNull);
 
     void InitCommonSRBVars(IShaderResourceBinding* pSRB,
                            IBuffer*                pCameraAttribs,
@@ -338,6 +367,7 @@ private:
 
     void CreatePbrPSO(PSO_FLAGS PSOFlags, TEXTURE_FORMAT RTVFmt, TEXTURE_FORMAT DSVFmt);
     void CreateWireframePSO(PSO_FLAGS PSOFlags, TEXTURE_FORMAT RTVFmt, TEXTURE_FORMAT DSVFmt, PRIMITIVE_TOPOLOGY Topology);
+    void CreateMeshIdPSO(PSO_FLAGS PSOFlags, TEXTURE_FORMAT RTVFmt, TEXTURE_FORMAT DSVFmt);
     void CreateSignature();
 
 protected:
@@ -372,9 +402,8 @@ protected:
 
     RefCntAutoPtr<IPipelineResourceSignature> m_ResourceSignature;
 
-    std::unordered_map<PbrPSOKey, RefCntAutoPtr<IPipelineState>, PbrPSOKey::Hasher> m_PbrPSOs;
-    std::unordered_map<PbrPSOKey, RefCntAutoPtr<IPipelineState>, PbrPSOKey::Hasher> m_MeshIdPSOs;
-
+    std::unordered_map<PbrPSOKey, RefCntAutoPtr<IPipelineState>, PbrPSOKey::Hasher>             m_PbrPSOs;
+    std::unordered_map<MeshIdPSOKey, RefCntAutoPtr<IPipelineState>, MeshIdPSOKey::Hasher>       m_MeshIdPSOs;
     std::unordered_map<WireframePSOKey, RefCntAutoPtr<IPipelineState>, WireframePSOKey::Hasher> m_WireframePSOs;
 };
 

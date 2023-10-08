@@ -450,7 +450,7 @@ void HnRendererImpl::RenderPrimId(IDeviceContext* pContext, ITextureView* pDepth
     if (Meshes.empty())
         return;
 
-    auto* pMeshIdPSO = m_USDRenderer->GetMeshIdPSO({m_PSOFlags, USD_Renderer::ALPHA_MODE_OPAQUE, /*DoubleSided = */ false}, true);
+    auto* pMeshIdPSO = m_USDRenderer->GetMeshIdPSO({m_PSOFlags, /*DoubleSided = */ false}, true);
     if (pMeshIdPSO == nullptr)
         return;
 
