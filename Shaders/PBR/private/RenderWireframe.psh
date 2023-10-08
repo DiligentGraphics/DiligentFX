@@ -1,13 +1,13 @@
-#include "RenderPBRCommon.fxh"
 #include "PBR_Structures.fxh"
+#include "VSOutputStruct.generated"
 
 cbuffer cbPBRAttribs
 {
     PBRShaderAttribs g_PBRAttribs;
 }
 
-void main(in PbrVsOutput VSOut,
-          out float4 OutColor : SV_Target)
+void main(in  VSOutput VSOut,
+          out float4   OutColor : SV_Target)
 {
     OutColor = g_PBRAttribs.Renderer.WireframeColor;
 }

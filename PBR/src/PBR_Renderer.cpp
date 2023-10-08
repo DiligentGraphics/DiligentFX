@@ -758,20 +758,16 @@ std::string PBR_Renderer::GetVSOutputStruct(PSO_FLAGS PSOFlags)
     return ss.str();
 }
 
-void PBR_Renderer::CreatePSO(PSO_FLAGS PSOFlags, TEXTURE_FORMAT RTVFmt, TEXTURE_FORMAT DSVFmt)
+void PBR_Renderer::CreateShaders(PSO_FLAGS               PSOFlags,
+                                 const char*             VSPath,
+                                 const char*             VSName,
+                                 const char*             PSPath,
+                                 const char*             PSName,
+                                 RefCntAutoPtr<IShader>& pVS,
+                                 RefCntAutoPtr<IShader>& pPS,
+                                 InputLayoutDescX&       InputLayout)
 {
-    GraphicsPipelineStateCreateInfo PSOCreateInfo;
-    PipelineStateDesc&              PSODesc          = PSOCreateInfo.PSODesc;
-    GraphicsPipelineDesc&           GraphicsPipeline = PSOCreateInfo.GraphicsPipeline;
-
-    GraphicsPipeline.NumRenderTargets                     = 1;
-    GraphicsPipeline.RTVFormats[0]                        = RTVFmt;
-    GraphicsPipeline.DSVFormat                            = DSVFmt;
-    GraphicsPipeline.PrimitiveTopology                    = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    GraphicsPipeline.RasterizerDesc.FrontCounterClockwise = (PSOFlags & PSO_FLAG_FRONT_CCW) != 0;
-
-    InputLayoutDescX InputLayout;
-    std::string      VSInputStruct;
+    std::string VSInputStruct;
     GetVSInputStructAndLayout(PSOFlags, VSInputStruct, InputLayout);
 
     auto VSOutputStruct = GetVSOutputStruct(PSOFlags);
@@ -797,24 +793,41 @@ void PBR_Renderer::CreatePSO(PSO_FLAGS PSOFlags, TEXTURE_FORMAT RTVFmt, TEXTURE_
     const auto Macros = DefineMacros(PSOFlags);
     ShaderCI.Macros   = Macros;
 
-    RefCntAutoPtr<IShader> pVS;
     {
-        ShaderCI.Desc       = {"PBR VS", SHADER_TYPE_VERTEX, true};
+        ShaderCI.Desc       = {VSName, SHADER_TYPE_VERTEX, true};
         ShaderCI.EntryPoint = "main";
-        ShaderCI.FilePath   = "RenderPBR.vsh";
+        ShaderCI.FilePath   = VSPath;
 
         pVS = m_Device.CreateShader(ShaderCI);
     }
 
     // Create pixel shader
-    RefCntAutoPtr<IShader> pPS;
     {
-        ShaderCI.Desc       = {"PBR PS", SHADER_TYPE_PIXEL, true};
+        ShaderCI.Desc       = {PSName, SHADER_TYPE_PIXEL, true};
         ShaderCI.EntryPoint = "main";
-        ShaderCI.FilePath   = "RenderPBR.psh";
+        ShaderCI.FilePath   = PSPath;
 
         pPS = m_Device.CreateShader(ShaderCI);
     }
+}
+
+
+void PBR_Renderer::CreatePbrPSO(PSO_FLAGS PSOFlags, TEXTURE_FORMAT RTVFmt, TEXTURE_FORMAT DSVFmt)
+{
+    GraphicsPipelineStateCreateInfo PSOCreateInfo;
+    PipelineStateDesc&              PSODesc          = PSOCreateInfo.PSODesc;
+    GraphicsPipelineDesc&           GraphicsPipeline = PSOCreateInfo.GraphicsPipeline;
+
+    GraphicsPipeline.NumRenderTargets                     = 1;
+    GraphicsPipeline.RTVFormats[0]                        = RTVFmt;
+    GraphicsPipeline.DSVFormat                            = DSVFmt;
+    GraphicsPipeline.PrimitiveTopology                    = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    GraphicsPipeline.RasterizerDesc.FrontCounterClockwise = (PSOFlags & PSO_FLAG_FRONT_CCW) != 0;
+
+    InputLayoutDescX       InputLayout;
+    RefCntAutoPtr<IShader> pVS;
+    RefCntAutoPtr<IShader> pPS;
+    CreateShaders(PSOFlags, "RenderPBR.vsh", "PBR VS", "RenderPBR.psh", "PBR PS", pVS, pPS, InputLayout);
 
     PSOCreateInfo.GraphicsPipeline.InputLayout = InputLayout;
 
@@ -850,18 +863,19 @@ void PBR_Renderer::CreatePSO(PSO_FLAGS PSOFlags, TEXTURE_FORMAT RTVFmt, TEXTURE_
             PSOName += (CullMode == CULL_MODE_BACK ? " - backface culling" : " - no culling");
             PSODesc.Name = PSOName.c_str();
 
-            GraphicsPipeline.RasterizerDesc.CullMode   = CullMode;
-            const auto DoubleSided                     = CullMode == CULL_MODE_NONE;
-            auto       PSO                             = m_Device.CreateGraphicsPipelineState(PSOCreateInfo);
-            m_PSOs[{PSOFlags, AlphaMode, DoubleSided}] = PSO;
+            GraphicsPipeline.RasterizerDesc.CullMode      = CullMode;
+            const auto DoubleSided                        = CullMode == CULL_MODE_NONE;
+            auto       PSO                                = m_Device.CreateGraphicsPipelineState(PSOCreateInfo);
+            m_PbrPSOs[{PSOFlags, AlphaMode, DoubleSided}] = PSO;
             if (AlphaMode == ALPHA_MODE_BLEND)
             {
                 // Mask and blend use the same PSO
-                m_PSOs[{PSOFlags, ALPHA_MODE_MASK, DoubleSided}] = PSO;
+                m_PbrPSOs[{PSOFlags, ALPHA_MODE_MASK, DoubleSided}] = PSO;
             }
         }
     }
 
+#if 0
     if (m_Settings.EnableMeshIdRendering)
     {
         PSOCreateInfo.PSODesc.Name = "Render Mesh Id PSO";
@@ -888,6 +902,47 @@ void PBR_Renderer::CreatePSO(PSO_FLAGS PSOFlags, TEXTURE_FORMAT RTVFmt, TEXTURE_
             m_MeshIdPSOs[{PSOFlags, ALPHA_MODE_OPAQUE, DoubleSided}] = m_Device.CreateGraphicsPipelineState(PSOCreateInfo);
         }
     }
+#endif
+}
+
+void PBR_Renderer::CreateWireframePSO(PSO_FLAGS PSOFlags, TEXTURE_FORMAT RTVFmt, TEXTURE_FORMAT DSVFmt, PRIMITIVE_TOPOLOGY Topology)
+{
+    GraphicsPipelineStateCreateInfo PSOCreateInfo;
+    PipelineStateDesc&              PSODesc          = PSOCreateInfo.PSODesc;
+    GraphicsPipelineDesc&           GraphicsPipeline = PSOCreateInfo.GraphicsPipeline;
+
+    GraphicsPipeline.NumRenderTargets                     = 1;
+    GraphicsPipeline.RTVFormats[0]                        = RTVFmt;
+    GraphicsPipeline.DSVFormat                            = DSVFmt;
+    GraphicsPipeline.PrimitiveTopology                    = Topology;
+    GraphicsPipeline.RasterizerDesc.FillMode              = FILL_MODE_WIREFRAME;
+    GraphicsPipeline.RasterizerDesc.FrontCounterClockwise = (PSOFlags & PSO_FLAG_FRONT_CCW) != 0;
+
+    InputLayoutDescX       InputLayout;
+    RefCntAutoPtr<IShader> pVS;
+    RefCntAutoPtr<IShader> pPS;
+    CreateShaders(PSOFlags, "RenderPBR.vsh", "Wireframe VS", "RenderWireframe.psh", "Wireframe PS", pVS, pPS, InputLayout);
+
+    PSOCreateInfo.GraphicsPipeline.InputLayout = InputLayout;
+
+    IPipelineResourceSignature* ppSignatures[] = {m_ResourceSignature};
+    PSOCreateInfo.ppResourceSignatures         = ppSignatures;
+    PSOCreateInfo.ResourceSignaturesCount      = _countof(ppSignatures);
+
+    PSOCreateInfo.pVS = pVS;
+    PSOCreateInfo.pPS = pPS;
+
+    for (auto CullMode : {CULL_MODE_BACK, CULL_MODE_NONE})
+    {
+        std::string PSOName{"Wireframe PSO"};
+        PSOName += (CullMode == CULL_MODE_BACK ? " - backface culling" : " - no culling");
+        PSODesc.Name = PSOName.c_str();
+
+        GraphicsPipeline.RasterizerDesc.CullMode = CullMode;
+        const auto DoubleSided                   = CullMode == CULL_MODE_NONE;
+
+        m_WireframePSOs[{PSOFlags, Topology, DoubleSided}] = m_Device.CreateGraphicsPipelineState(PSOCreateInfo);
+    }
 }
 
 void PBR_Renderer::CreateResourceBinding(IShaderResourceBinding** ppSRB)
@@ -895,56 +950,41 @@ void PBR_Renderer::CreateResourceBinding(IShaderResourceBinding** ppSRB)
     m_ResourceSignature->CreateShaderResourceBinding(ppSRB, true);
 }
 
-IPipelineState* PBR_Renderer::GetPSO(PSOCacheType& PSOCache, PSOKey Key, std::function<void()> CreatePSO)
+IPipelineState* PBR_Renderer::GetPbrPSO(const PbrPSOKey& Key, bool CreateIfNull)
 {
-    if (!m_Settings.EnableIBL)
-    {
-        Key.Flags &= ~PSO_FLAG_USE_IBL;
-    }
-    if (!m_Settings.EnableAO)
-    {
-        Key.Flags &= ~PSO_FLAG_USE_AO_MAP;
-    }
-    if (!m_Settings.EnableEmissive)
-    {
-        Key.Flags &= ~PSO_FLAG_USE_EMISSIVE_MAP;
-    }
-    if (m_Settings.MaxJointCount == 0)
-    {
-        Key.Flags &= ~PSO_FLAG_USE_JOINTS;
-    }
-    if (m_Settings.UseSeparateMetallicRoughnessTextures)
-    {
-        DEV_CHECK_ERR((Key.Flags & PSO_FLAG_USE_PHYS_DESC_MAP) == 0, "Physical descriptor map is not enabled");
-    }
-    else
-    {
-        DEV_CHECK_ERR((Key.Flags & (PSO_FLAG_USE_METALLIC_MAP | PSO_FLAG_USE_ROUGHNESS_MAP)) == 0, "Separate metallic and roughness maps are not enaled");
-    }
-
-    auto it = PSOCache.find(Key);
-    if (it == PSOCache.end() && CreatePSO != nullptr)
-    {
-        CreatePSO();
-
-        it = PSOCache.find(Key);
-        VERIFY_EXPR(it != PSOCache.end());
-    }
-
-    return it != PSOCache.end() ? it->second.RawPtr() : nullptr;
+    return GetPSO(m_PbrPSOs, Key,
+                  [&]() {
+                      if (CreateIfNull)
+                          CreatePbrPSO(Key.Flags, m_Settings.RTVFmt, m_Settings.DSVFmt);
+                      return CreateIfNull;
+                  });
 }
 
-IPipelineState* PBR_Renderer::GetPSO(const PSOKey& Key, bool CreateIfNull)
+IPipelineState* PBR_Renderer::GetMeshIdPSO(const PbrPSOKey& _Key, bool CreateIfNull)
 {
-    return GetPSO(m_PSOs, Key, [&]() { CreatePSO(Key.Flags, m_Settings.RTVFmt, m_Settings.DSVFmt); });
+    //auto Key      = _Key;
+    //Key.AlphaMode = ALPHA_MODE_OPAQUE;
+
+    //return GetPSO(m_MeshIdPSOs, Key, [&]() { CreatePSO(Key.Flags, MeshIdFmt, m_Settings.DSVFmt); });
+    return nullptr;
 }
 
-IPipelineState* PBR_Renderer::GetMeshIdPSO(const PSOKey& _Key, bool CreateIfNull)
+IPipelineState* PBR_Renderer::GetWireframePSO(const WireframePSOKey& _Key, bool CreateIfNull)
 {
-    auto Key      = _Key;
-    Key.AlphaMode = ALPHA_MODE_OPAQUE;
+    constexpr auto WireframePsoFlags =
+        PSO_FLAG_USE_VERTEX_COLORS |
+        PSO_FLAG_USE_JOINTS |
+        PSO_FLAG_FRONT_CCW;
 
-    return GetPSO(m_MeshIdPSOs, Key, [&]() { CreatePSO(Key.Flags, MeshIdFmt, m_Settings.DSVFmt); });
+    auto Key = _Key;
+    Key.Flags &= WireframePsoFlags;
+
+    return GetPSO(m_WireframePSOs, Key,
+                  [&]() {
+                      if (CreateIfNull)
+                          CreateWireframePSO(Key.Flags, m_Settings.RTVFmt, m_Settings.DSVFmt, Key.Topology);
+                      return CreateIfNull;
+                  });
 }
 
 } // namespace Diligent

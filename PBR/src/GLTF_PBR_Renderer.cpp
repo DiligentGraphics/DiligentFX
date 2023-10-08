@@ -28,6 +28,7 @@
 #include "GLTF_PBR_Renderer.hpp"
 
 #include <array>
+#include <functional>
 
 #include "BasicMath.hpp"
 #include "MapHelper.hpp"
@@ -303,6 +304,29 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
         }
     }
 
+    for (auto& List : m_RenderLists)
+        List.clear();
+
+    for (const auto* pNode : Scene.LinearNodes)
+    {
+        VERIFY_EXPR(pNode != nullptr);
+        if (pNode->pMesh == nullptr)
+            continue;
+
+        for (const auto& primitive : pNode->pMesh->Primitives)
+        {
+            if (primitive.VertexCount == 0 && primitive.IndexCount == 0)
+                continue;
+
+            const auto& Material  = GLTFModel.Materials[primitive.MaterialId];
+            const auto  AlphaMode = Material.Attribs.AlphaMode;
+            if ((RenderParams.AlphaModes & (1u << AlphaMode)) == 0)
+                continue;
+
+            m_RenderLists[AlphaMode].emplace_back(primitive, *pNode);
+        }
+    }
+
     const auto FirstIndexLocation = GLTFModel.GetFirstIndexLocation();
     const auto BaseVertex         = GLTFModel.GetBaseVertex();
 
@@ -315,132 +339,133 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
 
     IPipelineState*         pCurrPSO = nullptr;
     IShaderResourceBinding* pCurrSRB = nullptr;
-    PSOKey                  CurrPSOKey;
+    PbrPSOKey               CurrPbrPsoKey;
+    WireframePSOKey         CurrWireframePsoKey;
 
-    auto PSOFlags = RenderParams.Flags & m_SupportedPSOFlags;
+    const auto PSOFlags = RenderParams.Flags & m_SupportedPSOFlags;
     for (auto AlphaMode : AlphaModes)
     {
-        for (const auto* pNode : Scene.LinearNodes)
+        const auto& RenderList = m_RenderLists[AlphaMode];
+        for (const auto& PrimRI : RenderList)
         {
-            VERIFY_EXPR(pNode != nullptr);
-            const auto& Node = *pNode;
-            if (!Node.pMesh)
-                continue;
-
-            const auto& Mesh             = *Node.pMesh;
+            const auto& Node             = PrimRI.Node;
+            const auto& primitive        = PrimRI.Primitive;
+            const auto& material         = GLTFModel.Materials[primitive.MaterialId];
             const auto& NodeGlobalMatrix = Transforms.NodeGlobalMatrices[Node.Index];
 
-            // Render mesh primitives
-            for (const auto& primitive : Mesh.Primitives)
-            {
-                if (primitive.VertexCount == 0 && primitive.IndexCount == 0)
-                    continue;
-
-                const auto& material = GLTFModel.Materials[primitive.MaterialId];
-                if (material.Attribs.AlphaMode != AlphaMode)
-                    continue;
-
-                const PSOKey Key{PSOFlags, GltfAlphaModeToAlphaMode(AlphaMode), material.DoubleSided};
-
-                if (Key != CurrPSOKey)
+            auto UpdatePSO = [this, pCtx, &pCurrPSO](const auto& NewKey, auto& CurrKey, auto&& GetPSO) {
+                if (NewKey != CurrKey)
                 {
-                    CurrPSOKey = Key;
-                    pCurrPSO   = nullptr;
+                    CurrKey  = NewKey;
+                    pCurrPSO = nullptr;
                 }
+
                 if (pCurrPSO == nullptr)
                 {
-                    pCurrPSO = GetPSO(CurrPSOKey, true);
+                    pCurrPSO = GetPSO(this, NewKey, true);
                     VERIFY_EXPR(pCurrPSO != nullptr);
                     pCtx->SetPipelineState(pCurrPSO);
-                    pCurrSRB = nullptr;
                 }
                 else
                 {
-                    VERIFY_EXPR(pCurrPSO == GetPSO(PSOKey{PSOFlags, GltfAlphaModeToAlphaMode(AlphaMode), material.DoubleSided}, false));
+                    VERIFY_EXPR(pCurrPSO == GetPSO(this, NewKey, false));
                 }
+            };
+            if (RenderParams.Wireframe)
+            {
+                UpdatePSO(WireframePSOKey{PSOFlags, PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, material.DoubleSided},
+                          CurrWireframePsoKey,
+                          std::mem_fn(&GLTF_PBR_Renderer::GetWireframePSO));
+            }
+            else
+            {
+                UpdatePSO(PbrPSOKey{PSOFlags, GltfAlphaModeToAlphaMode(AlphaMode), material.DoubleSided},
+                          CurrPbrPsoKey,
+                          std::mem_fn(&GLTF_PBR_Renderer::GetPbrPSO));
+            }
 
-                if (pModelBindings != nullptr)
+            if (pModelBindings != nullptr)
+            {
+                VERIFY(primitive.MaterialId < pModelBindings->MaterialSRB.size(),
+                       "Material index is out of bounds. This most likely indicates that shader resources were initialized for a different model.");
+
+                IShaderResourceBinding* const pSRB = pModelBindings->MaterialSRB[primitive.MaterialId];
+                DEV_CHECK_ERR(pSRB != nullptr, "Unable to find SRB for GLTF material.");
+                if (pCurrSRB != pSRB)
                 {
-                    VERIFY(primitive.MaterialId < pModelBindings->MaterialSRB.size(),
-                           "Material index is out of bounds. This mostl likely indicates that shader resources were initialized for a different model.");
-
-                    IShaderResourceBinding* const pSRB = pModelBindings->MaterialSRB[primitive.MaterialId];
-                    DEV_CHECK_ERR(pSRB != nullptr, "Unable to find SRB for GLTF material.");
-                    if (pCurrSRB != pSRB)
-                    {
-                        pCurrSRB = pSRB;
-                        pCtx->CommitShaderResources(pSRB, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
-                    }
+                    pCurrSRB = pSRB;
+                    pCtx->CommitShaderResources(pSRB, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
                 }
-                else
+            }
+            else
+            {
+                VERIFY_EXPR(pCacheBindings != nullptr);
+                if (pCurrSRB != pCacheBindings->pSRB)
                 {
-                    VERIFY_EXPR(pCacheBindings != nullptr);
-                    if (pCurrSRB != pCacheBindings->pSRB)
-                    {
-                        pCurrSRB = pCacheBindings->pSRB;
-                        pCtx->CommitShaderResources(pCurrSRB, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
-                    }
+                    pCurrSRB = pCacheBindings->pSRB;
+                    pCtx->CommitShaderResources(pCurrSRB, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
                 }
+            }
 
-                size_t JointCount = 0;
-                if (Node.SkinTransformsIndex >= 0 && Node.SkinTransformsIndex < static_cast<int>(Transforms.Skins.size()))
+            size_t JointCount = 0;
+            if (Node.SkinTransformsIndex >= 0 && Node.SkinTransformsIndex < static_cast<int>(Transforms.Skins.size()))
+            {
+                const auto& JointMatrices = Transforms.Skins[Node.SkinTransformsIndex].JointMatrices;
+
+                JointCount = JointMatrices.size();
+                if (JointCount > m_Settings.MaxJointCount)
                 {
-                    const auto& JointMatrices = Transforms.Skins[Node.SkinTransformsIndex].JointMatrices;
-
-                    JointCount = JointMatrices.size();
-                    if (JointCount > m_Settings.MaxJointCount)
-                    {
-                        LOG_WARNING_MESSAGE("The number of joints in the mesh (", JointCount, ") exceeds the maximum number (", m_Settings.MaxJointCount,
-                                            ") reserved in the buffer. Increase MaxJointCount when initializing the renderer.");
-                        JointCount = m_Settings.MaxJointCount;
-                    }
-
-                    if (JointCount != 0)
-                    {
-                        MapHelper<float4x4> pJoints{pCtx, m_JointsBuffer, MAP_WRITE, MAP_FLAG_DISCARD};
-                        memcpy(pJoints, JointMatrices.data(), JointCount * sizeof(float4x4));
-                    }
+                    LOG_WARNING_MESSAGE("The number of joints in the mesh (", JointCount, ") exceeds the maximum number (", m_Settings.MaxJointCount,
+                                        ") reserved in the buffer. Increase MaxJointCount when initializing the renderer.");
+                    JointCount = m_Settings.MaxJointCount;
                 }
 
+                if (JointCount != 0)
                 {
-                    MapHelper<HLSL::PBRShaderAttribs> pAttribs{pCtx, m_PBRAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
-
-                    pAttribs->Transforms.NodeMatrix = NodeGlobalMatrix * RenderParams.ModelTransform;
-                    pAttribs->Transforms.JointCount = static_cast<int>(JointCount);
-
-
-                    static_assert(sizeof(pAttribs->Material) == sizeof(material.Attribs),
-                                  "The sizeof(PBRMaterialShaderInfo) is inconsistent with sizeof(GLTF::Material::ShaderAttribs)");
-                    memcpy(&pAttribs->Material, &material.Attribs, sizeof(material.Attribs));
-                    static_assert(static_cast<PBR_WORKFLOW>(GLTF::Material::PBR_WORKFLOW_METALL_ROUGH) == PBR_WORKFLOW_METALL_ROUGH, "GLTF::Material::PBR_WORKFLOW_METALL_ROUGH != PBR_WORKFLOW_METALL_ROUGH");
-                    static_assert(static_cast<PBR_WORKFLOW>(GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS) == PBR_WORKFLOW_SPEC_GLOSS, "GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS != PBR_WORKFLOW_SPEC_GLOSS");
-
-                    auto& RendererParams = pAttribs->Renderer;
-
-                    RendererParams.DebugViewType            = static_cast<int>(m_RenderParams.DebugView);
-                    RendererParams.OcclusionStrength        = m_RenderParams.OcclusionStrength;
-                    RendererParams.EmissionScale            = m_RenderParams.EmissionScale;
-                    RendererParams.AverageLogLum            = m_RenderParams.AverageLogLum;
-                    RendererParams.MiddleGray               = m_RenderParams.MiddleGray;
-                    RendererParams.WhitePoint               = m_RenderParams.WhitePoint;
-                    RendererParams.IBLScale                 = m_RenderParams.IBLScale;
-                    RendererParams.HighlightColor           = m_RenderParams.HighlightColor;
-                    RendererParams.PrefilteredCubeMipLevels = m_Settings.EnableIBL ? static_cast<float>(m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels) : 0.f;
+                    MapHelper<float4x4> pJoints{pCtx, m_JointsBuffer, MAP_WRITE, MAP_FLAG_DISCARD};
+                    memcpy(pJoints, JointMatrices.data(), JointCount * sizeof(float4x4));
                 }
+            }
 
-                if (primitive.HasIndices())
-                {
-                    DrawIndexedAttribs drawAttrs{primitive.IndexCount, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
-                    drawAttrs.FirstIndexLocation = FirstIndexLocation + primitive.FirstIndex;
-                    drawAttrs.BaseVertex         = BaseVertex;
-                    pCtx->DrawIndexed(drawAttrs);
-                }
-                else
-                {
-                    DrawAttribs drawAttrs{primitive.VertexCount, DRAW_FLAG_VERIFY_ALL};
-                    drawAttrs.StartVertexLocation = BaseVertex;
-                    pCtx->Draw(drawAttrs);
-                }
+            {
+                MapHelper<HLSL::PBRShaderAttribs> pAttribs{pCtx, m_PBRAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
+
+                pAttribs->Transforms.NodeMatrix = NodeGlobalMatrix * RenderParams.ModelTransform;
+                pAttribs->Transforms.JointCount = static_cast<int>(JointCount);
+
+
+                static_assert(sizeof(pAttribs->Material) == sizeof(material.Attribs),
+                              "The sizeof(PBRMaterialShaderInfo) is inconsistent with sizeof(GLTF::Material::ShaderAttribs)");
+                memcpy(&pAttribs->Material, &material.Attribs, sizeof(material.Attribs));
+                static_assert(static_cast<PBR_WORKFLOW>(GLTF::Material::PBR_WORKFLOW_METALL_ROUGH) == PBR_WORKFLOW_METALL_ROUGH, "GLTF::Material::PBR_WORKFLOW_METALL_ROUGH != PBR_WORKFLOW_METALL_ROUGH");
+                static_assert(static_cast<PBR_WORKFLOW>(GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS) == PBR_WORKFLOW_SPEC_GLOSS, "GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS != PBR_WORKFLOW_SPEC_GLOSS");
+
+                auto& RendererParams = pAttribs->Renderer;
+
+                RendererParams.DebugViewType            = static_cast<int>(m_RenderParams.DebugView);
+                RendererParams.OcclusionStrength        = m_RenderParams.OcclusionStrength;
+                RendererParams.EmissionScale            = m_RenderParams.EmissionScale;
+                RendererParams.AverageLogLum            = m_RenderParams.AverageLogLum;
+                RendererParams.MiddleGray               = m_RenderParams.MiddleGray;
+                RendererParams.WhitePoint               = m_RenderParams.WhitePoint;
+                RendererParams.IBLScale                 = m_RenderParams.IBLScale;
+                RendererParams.HighlightColor           = m_RenderParams.HighlightColor;
+                RendererParams.WireframeColor           = m_RenderParams.WireframeColor;
+                RendererParams.PrefilteredCubeMipLevels = m_Settings.EnableIBL ? static_cast<float>(m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels) : 0.f;
+            }
+
+            if (primitive.HasIndices())
+            {
+                DrawIndexedAttribs drawAttrs{primitive.IndexCount, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
+                drawAttrs.FirstIndexLocation = FirstIndexLocation + primitive.FirstIndex;
+                drawAttrs.BaseVertex         = BaseVertex;
+                pCtx->DrawIndexed(drawAttrs);
+            }
+            else
+            {
+                DrawAttribs drawAttrs{primitive.VertexCount, DRAW_FLAG_VERIFY_ALL};
+                drawAttrs.StartVertexLocation = BaseVertex;
+                pCtx->Draw(drawAttrs);
             }
         }
     }

@@ -40,14 +40,6 @@ public:
                  IRenderStateCache* pStateCache,
                  IDeviceContext*    pCtx,
                  const CreateInfo&  CI);
-
-    IPipelineState* GetMeshEdgesPSO(const PSOKey& Key, bool CreateIfNull);
-
-private:
-    void CreateMeshEdgesPSO(PSO_FLAGS PSOFlags, TEXTURE_FORMAT RTVFmt, TEXTURE_FORMAT DSVFmt);
-
-private:
-    PSOCacheType m_MeshEdgesPSOs;
 };
 
 } // namespace Diligent

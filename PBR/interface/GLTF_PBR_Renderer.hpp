@@ -30,6 +30,7 @@
 #include "PBR_Renderer.hpp"
 
 #include <vector>
+#include <array>
 
 #include "../../../DiligentTools/AssetLoader/interface/GLTFLoader.hpp"
 
@@ -99,7 +100,11 @@ public:
         /// Highlight color that is applied to the mesh after tone mapping
         float4 HighlightColor = float4{0, 0, 0, 0};
 
+        float4 WireframeColor = float4{0.8f, 0.7f, 0.5f, 1.0f};
+
         PSO_FLAGS Flags = PSO_FLAG_DEFAULT;
+
+        bool Wireframe = false;
     };
 
     /// GLTF Model shader resource binding information
@@ -221,9 +226,23 @@ public:
 private:
     static ALPHA_MODE GltfAlphaModeToAlphaMode(GLTF::Material::ALPHA_MODE GltfAlphaMode);
 
+private:
     RenderInfo m_RenderParams;
 
     PSO_FLAGS m_SupportedPSOFlags = PSO_FLAG_NONE;
+
+    struct PrimitiveRenderInfo
+    {
+        const GLTF::Primitive& Primitive;
+        const GLTF::Node&      Node;
+
+        PrimitiveRenderInfo(const GLTF::Primitive& _Primitive,
+                            const GLTF::Node&      _Node) noexcept :
+            Primitive{_Primitive},
+            Node{_Node}
+        {}
+    };
+    std::array<std::vector<PrimitiveRenderInfo>, GLTF::Material::ALPHA_MODE_NUM_MODES> m_RenderLists;
 };
 
 DEFINE_FLAG_ENUM_OPERATORS(GLTF_PBR_Renderer::RenderInfo::ALPHA_MODE_FLAGS)

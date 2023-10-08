@@ -241,9 +241,9 @@ void HnRendererImpl::Draw(IDeviceContext* pCtx, const HnDrawAttribs& Attribs)
     for (auto AlphaMode : {USD_Renderer::ALPHA_MODE_OPAQUE, USD_Renderer::ALPHA_MODE_MASK, USD_Renderer::ALPHA_MODE_BLEND})
     {
         if (Attribs.RenderMode == HN_RENDER_MODE_MESH_EDGES)
-            pCtx->SetPipelineState(m_USDRenderer->GetMeshEdgesPSO({m_PSOFlags, USD_Renderer::ALPHA_MODE_OPAQUE, /*DoubleSided = */ false}, true));
+            pCtx->SetPipelineState(m_USDRenderer->GetWireframePSO({m_PSOFlags, PRIMITIVE_TOPOLOGY_LINE_LIST, /*DoubleSided = */ false}, true));
         else
-            pCtx->SetPipelineState(m_USDRenderer->GetPSO({m_PSOFlags, AlphaMode, /*DoubleSided = */ false}, true));
+            pCtx->SetPipelineState(m_USDRenderer->GetPbrPSO({m_PSOFlags, AlphaMode, /*DoubleSided = */ false}, true));
 
         for (auto mesh_it : Meshes)
         {

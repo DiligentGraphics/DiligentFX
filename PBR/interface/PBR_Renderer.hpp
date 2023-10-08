@@ -199,7 +199,8 @@ public:
 
     enum PSO_FLAGS : Uint32
     {
-        PSO_FLAG_NONE               = 0u,
+        PSO_FLAG_NONE = 0u,
+
         PSO_FLAG_USE_VERTEX_COLORS  = 1u << 0u,
         PSO_FLAG_USE_VERTEX_NORMALS = 1u << 1u,
         PSO_FLAG_USE_TEXCOORD0      = 1u << 2u,
@@ -239,39 +240,74 @@ public:
         PSO_FLAG_ALL = PSO_FLAG_LAST * 2u - 1u,
     };
 
-    struct PSOKey
+    struct PbrPSOKey
     {
-        PSOKey() noexcept {};
-        PSOKey(PSO_FLAGS _Flags, ALPHA_MODE _AlphaMode, bool _DoubleSided) noexcept :
+        PSO_FLAGS  Flags       = PSO_FLAG_NONE;
+        ALPHA_MODE AlphaMode   = ALPHA_MODE_OPAQUE;
+        bool       DoubleSided = false;
+
+        PbrPSOKey() noexcept {};
+        PbrPSOKey(PSO_FLAGS _Flags, ALPHA_MODE _AlphaMode, bool _DoubleSided) noexcept :
             Flags{_Flags},
             AlphaMode{_AlphaMode},
             DoubleSided{_DoubleSided}
         {}
 
-        bool operator==(const PSOKey& rhs) const noexcept
+        bool operator==(const PbrPSOKey& rhs) const noexcept
         {
             return Flags == rhs.Flags && AlphaMode == rhs.AlphaMode && DoubleSided == rhs.DoubleSided;
         }
-        bool operator!=(const PSOKey& rhs) const noexcept
+        bool operator!=(const PbrPSOKey& rhs) const noexcept
         {
             return Flags != rhs.Flags || AlphaMode != rhs.AlphaMode || DoubleSided != rhs.DoubleSided;
         }
 
-        PSO_FLAGS  Flags       = PSO_FLAG_NONE;
-        ALPHA_MODE AlphaMode   = ALPHA_MODE_OPAQUE;
-        bool       DoubleSided = false;
-
         struct Hasher
         {
-            size_t operator()(const PSOKey& Key) const noexcept
+            size_t operator()(const PbrPSOKey& Key) const noexcept
             {
                 return ComputeHash(Key.Flags, Key.AlphaMode, Key.DoubleSided);
             }
         };
     };
 
-    IPipelineState* GetPSO(const PSOKey& Key, bool CreateIfNull);
-    IPipelineState* GetMeshIdPSO(const PSOKey& Key, bool CreateIfNull);
+    IPipelineState* GetPbrPSO(const PbrPSOKey& Key, bool CreateIfNull);
+    IPipelineState* GetMeshIdPSO(const PbrPSOKey& Key, bool CreateIfNull);
+
+    struct WireframePSOKey
+    {
+        PSO_FLAGS          Flags       = PSO_FLAG_NONE;
+        PRIMITIVE_TOPOLOGY Topology    = PRIMITIVE_TOPOLOGY_UNDEFINED;
+        bool               DoubleSided = false;
+
+        WireframePSOKey() noexcept {};
+        WireframePSOKey(PSO_FLAGS _Flags, PRIMITIVE_TOPOLOGY _Topology, bool _DoubleSided) noexcept :
+            Flags{_Flags},
+            Topology{_Topology},
+            DoubleSided{_DoubleSided}
+        {}
+
+        bool operator==(const WireframePSOKey& rhs) const noexcept
+        {
+            return Flags == rhs.Flags && Topology == rhs.Topology && DoubleSided == rhs.DoubleSided;
+        }
+
+        bool operator!=(const WireframePSOKey& rhs) const noexcept
+        {
+            return Flags != rhs.Flags || Topology != rhs.Topology || DoubleSided != rhs.DoubleSided;
+        }
+
+        struct Hasher
+        {
+            size_t operator()(const WireframePSOKey& Key) const noexcept
+            {
+                return ComputeHash(Key.Flags, Key.Topology, Key.DoubleSided);
+            }
+        };
+    };
+
+    IPipelineState* GetWireframePSO(const WireframePSOKey& Key, bool CreateIfNull);
+
 
     void InitCommonSRBVars(IShaderResourceBinding* pSRB,
                            IBuffer*                pCameraAttribs,
@@ -282,17 +318,26 @@ protected:
 
     void GetVSInputStructAndLayout(PSO_FLAGS PSOFlags, std::string& VSInputStruct, InputLayoutDescX& InputLayout) const;
 
-    using PSOCacheType = std::unordered_map<PSOKey, RefCntAutoPtr<IPipelineState>, PSOKey::Hasher>;
-
-    IPipelineState* GetPSO(PSOCacheType& PSOCache, PSOKey Key, std::function<void()> CreatePSO);
+    template <typename KeyType, class CreatePSOType>
+    IPipelineState* GetPSO(std::unordered_map<KeyType, RefCntAutoPtr<IPipelineState>, typename KeyType::Hasher>& PSOCache, KeyType Key, CreatePSOType&& CreatePSO);
 
     static std::string GetVSOutputStruct(PSO_FLAGS PSOFlags);
+
+    void CreateShaders(PSO_FLAGS               PSOFlags,
+                       const char*             VSPath,
+                       const char*             VSName,
+                       const char*             PSPath,
+                       const char*             PSName,
+                       RefCntAutoPtr<IShader>& pVS,
+                       RefCntAutoPtr<IShader>& pPS,
+                       InputLayoutDescX&       InputLayout);
 
 private:
     void PrecomputeBRDF(IDeviceContext* pCtx,
                         Uint32          NumBRDFSamples = 512);
 
-    void CreatePSO(PSO_FLAGS PSOFlags, TEXTURE_FORMAT RTVFmt, TEXTURE_FORMAT DSVFmt);
+    void CreatePbrPSO(PSO_FLAGS PSOFlags, TEXTURE_FORMAT RTVFmt, TEXTURE_FORMAT DSVFmt);
+    void CreateWireframePSO(PSO_FLAGS PSOFlags, TEXTURE_FORMAT RTVFmt, TEXTURE_FORMAT DSVFmt, PRIMITIVE_TOPOLOGY Topology);
     void CreateSignature();
 
 protected:
@@ -307,7 +352,6 @@ protected:
     RefCntAutoPtr<ITextureView> m_pBlackTexSRV;
     RefCntAutoPtr<ITextureView> m_pDefaultNormalMapSRV;
     RefCntAutoPtr<ITextureView> m_pDefaultPhysDescSRV;
-
 
     static constexpr TEXTURE_FORMAT IrradianceCubeFmt    = TEX_FORMAT_RGBA32_FLOAT;
     static constexpr TEXTURE_FORMAT PrefilteredEnvMapFmt = TEX_FORMAT_RGBA16_FLOAT;
@@ -328,10 +372,53 @@ protected:
 
     RefCntAutoPtr<IPipelineResourceSignature> m_ResourceSignature;
 
-    PSOCacheType m_PSOs;
-    PSOCacheType m_MeshIdPSOs;
+    std::unordered_map<PbrPSOKey, RefCntAutoPtr<IPipelineState>, PbrPSOKey::Hasher> m_PbrPSOs;
+    std::unordered_map<PbrPSOKey, RefCntAutoPtr<IPipelineState>, PbrPSOKey::Hasher> m_MeshIdPSOs;
+
+    std::unordered_map<WireframePSOKey, RefCntAutoPtr<IPipelineState>, WireframePSOKey::Hasher> m_WireframePSOs;
 };
 
 DEFINE_FLAG_ENUM_OPERATORS(PBR_Renderer::PSO_FLAGS)
+
+template <typename KeyType, class CreatePSOType>
+IPipelineState* PBR_Renderer::GetPSO(std::unordered_map<KeyType, RefCntAutoPtr<IPipelineState>, typename KeyType::Hasher>& PSOCache, KeyType Key, CreatePSOType&& CreatePSO)
+{
+    if (!m_Settings.EnableIBL)
+    {
+        Key.Flags &= ~PSO_FLAG_USE_IBL;
+    }
+    if (!m_Settings.EnableAO)
+    {
+        Key.Flags &= ~PSO_FLAG_USE_AO_MAP;
+    }
+    if (!m_Settings.EnableEmissive)
+    {
+        Key.Flags &= ~PSO_FLAG_USE_EMISSIVE_MAP;
+    }
+    if (m_Settings.MaxJointCount == 0)
+    {
+        Key.Flags &= ~PSO_FLAG_USE_JOINTS;
+    }
+    if (m_Settings.UseSeparateMetallicRoughnessTextures)
+    {
+        DEV_CHECK_ERR((Key.Flags & PSO_FLAG_USE_PHYS_DESC_MAP) == 0, "Physical descriptor map is not enabled");
+    }
+    else
+    {
+        DEV_CHECK_ERR((Key.Flags & (PSO_FLAG_USE_METALLIC_MAP | PSO_FLAG_USE_ROUGHNESS_MAP)) == 0, "Separate metallic and roughness maps are not enaled");
+    }
+
+    auto it = PSOCache.find(Key);
+    if (it == PSOCache.end())
+    {
+        if (CreatePSO())
+        {
+            it = PSOCache.find(Key);
+            VERIFY_EXPR(it != PSOCache.end());
+        }
+    }
+
+    return it != PSOCache.end() ? it->second.RawPtr() : nullptr;
+}
 
 } // namespace Diligent
