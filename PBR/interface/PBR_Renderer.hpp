@@ -348,7 +348,11 @@ protected:
     void GetVSInputStructAndLayout(PSO_FLAGS PSOFlags, std::string& VSInputStruct, InputLayoutDescX& InputLayout) const;
 
     template <typename KeyType, class CreatePSOType>
-    IPipelineState* GetPSO(std::unordered_map<KeyType, RefCntAutoPtr<IPipelineState>, typename KeyType::Hasher>& PSOCache, KeyType Key, CreatePSOType&& CreatePSO);
+    IPipelineState* GetPSO(std::unordered_map<KeyType, RefCntAutoPtr<IPipelineState>, typename KeyType::Hasher>& PSOCache,
+                           KeyType                                                                               Key,
+                           PSO_FLAGS                                                                             SupportedFlags,
+                           bool                                                                                  CreateIfNull,
+                           CreatePSOType&&                                                                       CreatePSO);
 
     static std::string GetVSOutputStruct(PSO_FLAGS PSOFlags);
 
@@ -365,9 +369,9 @@ private:
     void PrecomputeBRDF(IDeviceContext* pCtx,
                         Uint32          NumBRDFSamples = 512);
 
-    void CreatePbrPSO(PSO_FLAGS PSOFlags, TEXTURE_FORMAT RTVFmt, TEXTURE_FORMAT DSVFmt);
-    void CreateWireframePSO(PSO_FLAGS PSOFlags, TEXTURE_FORMAT RTVFmt, TEXTURE_FORMAT DSVFmt, PRIMITIVE_TOPOLOGY Topology);
-    void CreateMeshIdPSO(PSO_FLAGS PSOFlags, TEXTURE_FORMAT RTVFmt, TEXTURE_FORMAT DSVFmt);
+    void CreatePbrPSO(const PbrPSOKey& Key);
+    void CreateWireframePSO(const WireframePSOKey& Key);
+    void CreateMeshIdPSO(const MeshIdPSOKey& Key);
     void CreateSignature();
 
 protected:
@@ -410,8 +414,14 @@ protected:
 DEFINE_FLAG_ENUM_OPERATORS(PBR_Renderer::PSO_FLAGS)
 
 template <typename KeyType, class CreatePSOType>
-IPipelineState* PBR_Renderer::GetPSO(std::unordered_map<KeyType, RefCntAutoPtr<IPipelineState>, typename KeyType::Hasher>& PSOCache, KeyType Key, CreatePSOType&& CreatePSO)
+IPipelineState* PBR_Renderer::GetPSO(std::unordered_map<KeyType, RefCntAutoPtr<IPipelineState>, typename KeyType::Hasher>& PSOCache,
+                                     KeyType                                                                               Key,
+                                     PSO_FLAGS                                                                             SupportedFlags,
+                                     bool                                                                                  CreateIfNull,
+                                     CreatePSOType&&                                                                       CreatePSO)
 {
+    Key.Flags &= SupportedFlags;
+
     if (!m_Settings.EnableIBL)
     {
         Key.Flags &= ~PSO_FLAG_USE_IBL;
@@ -440,8 +450,9 @@ IPipelineState* PBR_Renderer::GetPSO(std::unordered_map<KeyType, RefCntAutoPtr<I
     auto it = PSOCache.find(Key);
     if (it == PSOCache.end())
     {
-        if (CreatePSO())
+        if (CreateIfNull)
         {
+            CreatePSO(this, Key);
             it = PSOCache.find(Key);
             VERIFY_EXPR(it != PSOCache.end());
         }
