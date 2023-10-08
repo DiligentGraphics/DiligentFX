@@ -78,9 +78,6 @@ public:
         /// instead of a combined physical description texture.
         bool UseSeparateMetallicRoughnessTextures = false;
 
-        /// Whether to enable rendering mesh Ids to a separate render target.
-        bool EnableMeshIdRendering = false;
-
         static const SamplerDesc DefaultSampler;
 
         /// Immutable sampler for color map texture.

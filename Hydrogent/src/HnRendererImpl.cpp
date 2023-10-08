@@ -80,8 +80,6 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters*         pRefCounters,
                 USDRendererCI.RTVFmt = CI.RTVFormat;
                 USDRendererCI.DSVFmt = CI.DSVFormat;
 
-                USDRendererCI.EnableMeshIdRendering = true;
-
                 // Use samplers from texture views
                 USDRendererCI.UseImmutableSamplers = false;
                 // Disable animation
