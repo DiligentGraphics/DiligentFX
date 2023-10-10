@@ -103,7 +103,20 @@ public:
         /// The number of samples for BRDF LUT creation
         Uint32 NumBRDFSamples = 512;
 
-        /// Optional input layout description.
+        /// Input layout description.
+        ///
+        /// \remarks    The renderer uses the following input layout:
+        ///
+        ///                 struct VSInput
+        ///                 {
+        ///                     float3 Pos     : ATTRIB0;
+        ///                     float3 Normal  : ATTRIB1; // If PSO_FLAG_USE_VERTEX_NORMALS is set
+        ///                     float2 UV0     : ATTRIB2; // If PSO_FLAG_USE_TEXCOORD0 is set
+        ///                     float2 UV1     : ATTRIB3; // If PSO_FLAG_USE_TEXCOORD1 is set
+        ///                     float4 Joint0  : ATTRIB4; // If PSO_FLAG_USE_JOINTS is set
+        ///                     float4 Weight0 : ATTRIB5; // If PSO_FLAG_USE_JOINTS is set
+        ///                     float4 Color   : ATTRIB6; // If PSO_FLAG_USE_VERTEX_COLORS is set
+        ///                 };
         InputLayoutDesc InputLayout;
 
         /// Conversion mode applied to diffuse, specular and emissive textures.
@@ -372,7 +385,8 @@ private:
     void CreateSignature();
 
 protected:
-    const CreateInfo m_Settings;
+    const InputLayoutDescX m_InputLayout;
+    const CreateInfo       m_Settings;
 
     RenderDeviceWithCache_N m_Device;
 

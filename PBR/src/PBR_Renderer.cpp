@@ -69,9 +69,16 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
                            IRenderStateCache* pStateCache,
                            IDeviceContext*    pCtx,
                            const CreateInfo&  CI) :
-    m_Settings{CI},
+    m_InputLayout{CI.InputLayout},
+    m_Settings{
+        [](CreateInfo CI, const InputLayoutDesc& InputLayout) {
+            CI.InputLayout = InputLayout;
+            return CI;
+        }(CI, m_InputLayout)},
     m_Device{pDevice, pStateCache}
 {
+    DEV_CHECK_ERR(m_Settings.InputLayout.NumElements != 0, "Input layout must not be empty");
+
     if (m_Settings.EnableIBL)
     {
         PrecomputeBRDF(pCtx, m_Settings.NumBRDFSamples);
@@ -654,52 +661,57 @@ void PBR_Renderer::GetVSInputStructAndLayout(PSO_FLAGS         PSOFlags,
     //    float4 Weight0 : ATTRIB5;
     //    float4 Color   : ATTRIB6;
     //};
+    struct VSAttribInfo
+    {
+        const Uint32      Index;
+        const char* const Name;
+        const VALUE_TYPE  Type;
+        const Uint32      NumComponents;
+        const PSO_FLAGS   Flag;
+    };
+    static constexpr std::array<VSAttribInfo, 7> VSAttribs = //
+        {
+            // clang-format off
+            VSAttribInfo{0, "Pos",     VT_FLOAT32, 3, PSO_FLAG_NONE},
+            VSAttribInfo{1, "Normal",  VT_FLOAT32, 3, PSO_FLAG_USE_VERTEX_NORMALS},
+            VSAttribInfo{2, "UV0",     VT_FLOAT32, 2, PSO_FLAG_USE_TEXCOORD0},
+            VSAttribInfo{3, "UV1",     VT_FLOAT32, 2, PSO_FLAG_USE_TEXCOORD1},
+            VSAttribInfo{4, "Joint0",  VT_FLOAT32, 4, PSO_FLAG_USE_JOINTS},
+            VSAttribInfo{5, "Weight0", VT_FLOAT32, 4, PSO_FLAG_USE_JOINTS},
+            VSAttribInfo{6, "Color",   VT_FLOAT32, 4, PSO_FLAG_USE_VERTEX_COLORS}
+            // clang-format on
+        };
 
-    if (m_Settings.InputLayout.NumElements != 0)
-    {
-        InputLayout = m_Settings.InputLayout;
-    }
-    else
-    {
-        InputLayout.Clear();
-        InputLayout
-            .Add(0u, 0u, 3u, VT_FLOAT32)  //float3 Pos     : ATTRIB0;
-            .Add(1u, 0u, 3u, VT_FLOAT32)  //float3 Normal  : ATTRIB1;
-            .Add(2u, 0u, 2u, VT_FLOAT32)  //float2 UV0     : ATTRIB2;
-            .Add(3u, 0u, 2u, VT_FLOAT32)  //float2 UV1     : ATTRIB3;
-            .Add(4u, 1u, 4u, VT_FLOAT32)  //float4 Joint0  : ATTRIB4;
-            .Add(5u, 1u, 4u, VT_FLOAT32)  //float4 Weight0 : ATTRIB5;
-            .Add(6u, 2u, 4u, VT_FLOAT32); //float4 Color   : ATTRIB6;
-    }
-    // Resolve offsets and strides before removing elements from the layout
+    InputLayout = m_Settings.InputLayout;
     InputLayout.ResolveAutoOffsetsAndStrides();
 
     std::stringstream ss;
     ss << "struct VSInput" << std::endl
        << "{" << std::endl;
 
-    auto ProccessAttrib = [&](const char* Type, Uint32 NumComponents, const char* Name, Uint32 Index, PSO_FLAGS Flag) //
+    for (const auto& Attrib : VSAttribs)
     {
-        if (Flag == PSO_FLAG_NONE || (PSOFlags & Flag) != 0)
+        if (Attrib.Flag == PSO_FLAG_NONE || (PSOFlags & Attrib.Flag) != 0)
         {
-            ss << "    " << std::setw(7) << Type << NumComponents << std::setw(9) << Name << ": ATTRIB" << Index << ";" << std::endl;
 #ifdef DILIGENT_DEVELOPMENT
             {
                 bool AttribFound = false;
                 for (Uint32 i = 0; i < InputLayout.GetNumElements(); ++i)
                 {
                     const auto& Elem = InputLayout[i];
-                    if (Elem.InputIndex == Index)
+                    if (Elem.InputIndex == Attrib.Index)
                     {
                         AttribFound = true;
-                        DEV_CHECK_ERR(Elem.NumComponents == NumComponents, "Input layout element '", Name, "' (index ", Index, ") has ", Elem.NumComponents, " components, but shader expects ", NumComponents);
-                        DEV_CHECK_ERR(Elem.ValueType == VT_FLOAT32, "Input layout element '", Name, "' (index ", Index, ") has value type ", GetValueTypeString(Elem.ValueType), ", but shader expects float");
+                        DEV_CHECK_ERR(Elem.NumComponents == Attrib.NumComponents, "Input layout element '", Attrib.Name, "' (index ", Attrib.Index, ") has ", Elem.NumComponents, " components, but shader expects ", Attrib.NumComponents);
+                        DEV_CHECK_ERR(Elem.ValueType == Attrib.Type, "Input layout element '", Attrib.Name, "' (index ", Attrib.Index, ") has value type ", GetValueTypeString(Elem.ValueType), ", but shader expects ", GetValueTypeString(Attrib.Type));
                         break;
                     }
                 }
-                DEV_CHECK_ERR(AttribFound, "Input layout does not contain attribute '", Name, "' (index ", Index, ")");
+                DEV_CHECK_ERR(AttribFound, "Input layout does not contain attribute '", Attrib.Name, "' (index ", Attrib.Index, ")");
             }
 #endif
+            VERIFY_EXPR(Attrib.Type == VT_FLOAT32);
+            ss << "    " << std::setw(7) << "float" << Attrib.NumComponents << std::setw(9) << Attrib.Name << ": ATTRIB" << Attrib.Index << ";" << std::endl;
         }
         else
         {
@@ -707,24 +719,14 @@ void PBR_Renderer::GetVSInputStructAndLayout(PSO_FLAGS         PSOFlags,
             for (Uint32 i = 0; i < InputLayout.GetNumElements(); ++i)
             {
                 const auto& Elem = InputLayout[i];
-                if (Elem.InputIndex == Index)
+                if (Elem.InputIndex == Attrib.Index)
                 {
                     InputLayout.Remove(i);
                     break;
                 }
             }
         }
-    };
-
-    // clang-format off
-    ProccessAttrib("float", 3, "Pos",     0, PSO_FLAG_NONE);
-    ProccessAttrib("float", 3, "Normal",  1, PSO_FLAG_USE_VERTEX_NORMALS);
-    ProccessAttrib("float", 2, "UV0",     2, PSO_FLAG_USE_TEXCOORD0);
-    ProccessAttrib("float", 2, "UV1",     3, PSO_FLAG_USE_TEXCOORD1);
-    ProccessAttrib("float", 4, "Joint0",  4, PSO_FLAG_USE_JOINTS);
-    ProccessAttrib("float", 4, "Weight0", 5, PSO_FLAG_USE_JOINTS);
-    ProccessAttrib("float", 4, "Color",   6, PSO_FLAG_USE_VERTEX_COLORS);
-    // clang-format on
+    }
 
     ss << "};" << std::endl;
 

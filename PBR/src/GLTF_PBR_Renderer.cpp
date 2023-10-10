@@ -58,11 +58,36 @@ namespace HLSL
 
 } // namespace
 
+namespace
+{
+
+struct PBRRendererCreateInfoWrapper
+{
+    PBRRendererCreateInfoWrapper(const PBR_Renderer::CreateInfo& _CI) :
+        CI{_CI}
+    {
+        if (CI.InputLayout.NumElements == 0)
+        {
+            InputLayout    = GLTF::VertexAttributesToInputLayout(GLTF::DefaultVertexAttributes.data(), GLTF::DefaultVertexAttributes.size());
+            CI.InputLayout = InputLayout;
+        }
+    }
+
+    operator const PBR_Renderer::CreateInfo &() const
+    {
+        return CI;
+    }
+
+    PBR_Renderer::CreateInfo CI;
+    InputLayoutDescX         InputLayout;
+};
+
+} // namespace
 GLTF_PBR_Renderer::GLTF_PBR_Renderer(IRenderDevice*     pDevice,
                                      IRenderStateCache* pStateCache,
                                      IDeviceContext*    pCtx,
                                      const CreateInfo&  CI) :
-    PBR_Renderer{pDevice, pStateCache, pCtx, CI}
+    PBR_Renderer{pDevice, pStateCache, pCtx, PBRRendererCreateInfoWrapper{CI}}
 {
     m_SupportedPSOFlags |=
         PSO_FLAG_USE_VERTEX_NORMALS |
@@ -289,6 +314,7 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
 
     m_RenderParams = RenderParams;
 
+    auto PSOFlags = RenderParams.Flags & m_SupportedPSOFlags;
     if (pModelBindings != nullptr)
     {
         std::array<IBuffer*, 2> pVBs =
@@ -297,6 +323,9 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
                 GLTFModel.GetVertexBuffer(GLTF::Model::VERTEX_BUFFER_ID_SKIN_ATTRIBS) //
             };
         pCtx->SetVertexBuffers(0, static_cast<Uint32>(pVBs.size()), pVBs.data(), nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION, SET_VERTEX_BUFFERS_FLAG_RESET);
+
+        if (pVBs[1] == nullptr)
+            PSOFlags &= ~PSO_FLAG_USE_JOINTS;
 
         if (auto* pIndexBuffer = GLTFModel.GetIndexBuffer())
         {
@@ -342,7 +371,6 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
     PbrPSOKey               CurrPbrPsoKey;
     WireframePSOKey         CurrWireframePsoKey;
 
-    const auto PSOFlags = RenderParams.Flags & m_SupportedPSOFlags;
     for (auto AlphaMode : AlphaModes)
     {
         const auto& RenderList = m_RenderLists[AlphaMode];
