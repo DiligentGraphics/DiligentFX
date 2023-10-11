@@ -230,7 +230,7 @@ float GetOcclusion(VSOutput VSOut)
 float3 GetEmissive(VSOutput VSOut)
 {
     float3 Emissive = float3(0.0, 0.0, 0.0);
-    
+
 #   if USE_EMISSIVE_MAP
     {
         Emissive = SampleTexture(g_EmissiveMap,
@@ -284,12 +284,12 @@ float4 GetPhysicalDesc(VSOutput VSOut)
                                            g_PBRAttribs.Material.PhysicalDescriptorUVScaleBias,
                                            g_PBRAttribs.Material.PhysicalDescriptorSlice,
                                            float4(1.0, 1.0, 1.0, 1.0)).r;
-        
+
         }
 #       endif
     }
 #endif 
- 
+
     return PhysicalDesc;
 }
 
@@ -342,60 +342,58 @@ void main(in  VSOutput VSOut,
 
     float3 view = normalize(g_CameraAttribs.f4Position.xyz - VSOut.WorldPos.xyz); // Direction from surface point to camera
 
-    float3 color           = BaseColor.rgb;
-    float3 perturbedNormal = float3(0.0, 0.0, 0.0);
-    float3 DirectLighting  = float3(0.0, 0.0, 0.0);
+#if USE_VERTEX_NORMALS
+    float3 MeshNormal = VSOut.Normal;
+#else
+    // PerturbNormal can handle zero-length mesh normals.
+    float3 MeshNormal = float3(0.0, 0.0, 0.0);
+#endif
 
+    // LIGHTING
+    float3 perturbedNormal = PerturbNormal(dWorldPos_dx,
+                                           dWorldPos_dy,
+                                           dNormalMapUV_dx,
+                                           dNormalMapUV_dy,
+                                           MeshNormal,
+                                           TSNormal,
+                                           g_PBRAttribs.Material.NormalTextureUVSelector >= 0.0,
+                                           IsFrontFace);
+
+    float3 DirectLighting = ApplyDirectionalLight(g_LightAttribs.f4Direction.xyz, g_LightAttribs.f4Intensity.rgb, SrfInfo, perturbedNormal, view);
+    float3 color = DirectLighting;
+
+    //#ifdef USE_PUNCTUAL
+    //    for (int i = 0; i < LIGHT_COUNT; ++i)
+    //    {
+    //        Light light = u_Lights[i];
+    //        if (light.type == LightType_Directional)
+    //        {
+    //            color += applyDirectionalLight(light, materialInfo, normal, view);
+    //        }
+    //        else if (light.type == LightType_Point)
+    //        {
+    //            color += applyPointLight(light, materialInfo, normal, view);
+    //        }
+    //        else if (light.type == LightType_Spot)
+    //        {
+    //            color += applySpotLight(light, materialInfo, normal, view);
+    //        }
+    //    }
+    //#endif
+    //
+
+    // Calculate lighting contribution from image based lighting source (IBL)
     IBL_Contribution IBLContrib;
     IBLContrib.f3Diffuse  = float3(0.0, 0.0, 0.0);
     IBLContrib.f3Specular = float3(0.0, 0.0, 0.0);
-
-#if USE_VERTEX_NORMALS
+#   if USE_IBL
     {
-        // LIGHTING
-        perturbedNormal = PerturbNormal(dWorldPos_dx,
-                                        dWorldPos_dy,
-                                        dNormalMapUV_dx,
-                                        dNormalMapUV_dy,
-                                        VSOut.Normal,
-                                        TSNormal,
-                                        g_PBRAttribs.Material.NormalTextureUVSelector >= 0.0,
-                                        IsFrontFace);
-
-        DirectLighting = ApplyDirectionalLight(g_LightAttribs.f4Direction.xyz, g_LightAttribs.f4Intensity.rgb, SrfInfo, perturbedNormal, view);
-        color = DirectLighting;
-
-        //#ifdef USE_PUNCTUAL
-        //    for (int i = 0; i < LIGHT_COUNT; ++i)
-        //    {
-        //        Light light = u_Lights[i];
-        //        if (light.type == LightType_Directional)
-        //        {
-        //            color += applyDirectionalLight(light, materialInfo, normal, view);
-        //        }
-        //        else if (light.type == LightType_Point)
-        //        {
-        //            color += applyPointLight(light, materialInfo, normal, view);
-        //        }
-        //        else if (light.type == LightType_Spot)
-        //        {
-        //            color += applySpotLight(light, materialInfo, normal, view);
-        //        }
-        //    }
-        //#endif
-        //
-
-        // Calculate lighting contribution from image based lighting source (IBL)
-#       if USE_IBL
-        {
-            IBLContrib =
-                GetIBLContribution(SrfInfo, perturbedNormal, view, float(g_PBRAttribs.Renderer.PrefilteredCubeMipLevels),
-                                   g_BRDF_LUT,          g_BRDF_LUT_sampler,
-                                   g_IrradianceMap,     g_IrradianceMap_sampler,
-                                   g_PrefilteredEnvMap, g_PrefilteredEnvMap_sampler);
-            color += (IBLContrib.f3Diffuse + IBLContrib.f3Specular) * g_PBRAttribs.Renderer.IBLScale;
-        }
-#       endif
+        IBLContrib =
+            GetIBLContribution(SrfInfo, perturbedNormal, view, float(g_PBRAttribs.Renderer.PrefilteredCubeMipLevels),
+                                g_BRDF_LUT,          g_BRDF_LUT_sampler,
+                                g_IrradianceMap,     g_IrradianceMap_sampler,
+                                g_PrefilteredEnvMap, g_PrefilteredEnvMap_sampler);
+        color += (IBLContrib.f3Diffuse + IBLContrib.f3Specular) * g_PBRAttribs.Renderer.IBLScale;
     }
 #   endif
 
@@ -445,12 +443,10 @@ void main(in  VSOutput VSOut,
             case DEBUG_VIEW_DIFFUSE_COLOR:    OutColor.rgb  = SrfInfo.DiffuseColor;                                 break;
             case DEBUG_VIEW_SPECULAR_COLOR:   OutColor.rgb  = SrfInfo.Reflectance0;                                 break;
             case DEBUG_VIEW_REFLECTANCE90:    OutColor.rgb  = SrfInfo.Reflectance90;                                break;
-#   if USE_VERTEX_NORMALS
-            case DEBUG_VIEW_MESH_NORMAL:      OutColor.rgb  = abs(VSOut.Normal / max(length(VSOut.Normal), 1e-3));  break;
+            case DEBUG_VIEW_MESH_NORMAL:      OutColor.rgb  = abs(MeshNormal/ max(length(MeshNormal), 1e-3));  break;
             case DEBUG_VIEW_PERTURBED_NORMAL: OutColor.rgb  = abs(perturbedNormal);                                 break;
             case DEBUG_VIEW_NDOTV:            OutColor.rgb  = dot(perturbedNormal, view) * float3(1.0, 1.0, 1.0);   break;
             case DEBUG_VIEW_DIRECT_LIGHTING:  OutColor.rgb  = DirectLighting;                                       break;
-#   endif
 #   if USE_IBL
             case DEBUG_VIEW_DIFFUSE_IBL:      OutColor.rgb  = IBLContrib.f3Diffuse;                                 break;
             case DEBUG_VIEW_SPECULAR_IBL:     OutColor.rgb  = IBLContrib.f3Specular;                                break;
