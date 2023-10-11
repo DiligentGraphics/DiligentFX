@@ -934,11 +934,13 @@ void PBR_Renderer::CreateWireframePSO(const WireframePSOKey& Key)
     PipelineStateDesc&              PSODesc          = PSOCreateInfo.PSODesc;
     GraphicsPipelineDesc&           GraphicsPipeline = PSOCreateInfo.GraphicsPipeline;
 
-    GraphicsPipeline.NumRenderTargets                     = 1;
-    GraphicsPipeline.RTVFormats[0]                        = m_Settings.RTVFmt;
-    GraphicsPipeline.DSVFormat                            = m_Settings.DSVFmt;
-    GraphicsPipeline.PrimitiveTopology                    = Key.Topology;
-    GraphicsPipeline.RasterizerDesc.FillMode              = FILL_MODE_WIREFRAME;
+    GraphicsPipeline.NumRenderTargets  = 1;
+    GraphicsPipeline.RTVFormats[0]     = m_Settings.RTVFmt;
+    GraphicsPipeline.DSVFormat         = m_Settings.DSVFmt;
+    GraphicsPipeline.PrimitiveTopology = Key.Topology;
+    if (Key.Topology != PRIMITIVE_TOPOLOGY_LINE_LIST && Key.Topology != PRIMITIVE_TOPOLOGY_LINE_STRIP &&
+        Key.Topology != PRIMITIVE_TOPOLOGY_LINE_LIST_ADJ && Key.Topology != PRIMITIVE_TOPOLOGY_LINE_STRIP_ADJ)
+        GraphicsPipeline.RasterizerDesc.FillMode = FILL_MODE_WIREFRAME;
     GraphicsPipeline.RasterizerDesc.FrontCounterClockwise = (Key.Flags & PSO_FLAG_FRONT_CCW) != 0;
 
     InputLayoutDescX       InputLayout;
