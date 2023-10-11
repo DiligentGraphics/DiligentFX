@@ -90,6 +90,7 @@ GLTF_PBR_Renderer::GLTF_PBR_Renderer(IRenderDevice*     pDevice,
     PBR_Renderer{pDevice, pStateCache, pCtx, PBRRendererCreateInfoWrapper{CI}}
 {
     m_SupportedPSOFlags |=
+        PSO_FLAG_USE_VERTEX_COLORS |
         PSO_FLAG_USE_VERTEX_NORMALS |
         PSO_FLAG_USE_TEXCOORD0 |
         PSO_FLAG_USE_TEXCOORD1 |
@@ -154,13 +155,13 @@ void GLTF_PBR_Renderer::InitMaterialSRB(GLTF::Model&            Model,
             pVar->Set(pTexSRV);
     };
 
-    VERIFY_EXPR(Model.GetTextureAttibuteIndex(GLTF::BaseColorTextureName) == GLTF::DefaultBaseColorTextureAttribId);
-    VERIFY_EXPR(Model.GetTextureAttibuteIndex(GLTF::MetallicRoughnessTextureName) == GLTF::DefaultMetallicRoughnessTextureAttribId);
-    VERIFY_EXPR(Model.GetTextureAttibuteIndex(GLTF::NormalTextureName) == GLTF::DefaultNormalTextureAttribId);
-    VERIFY_EXPR(Model.GetTextureAttibuteIndex(GLTF::OcclusionTextureName) == GLTF::DefaultOcclusionTextureAttribId);
-    VERIFY_EXPR(Model.GetTextureAttibuteIndex(GLTF::EmissiveTextureName) == GLTF::DefaultEmissiveTextureAttribId);
-    VERIFY_EXPR(Model.GetTextureAttibuteIndex(GLTF::DiffuseTextureName) == GLTF::DefaultDiffuseTextureAttribId);
-    VERIFY_EXPR(Model.GetTextureAttibuteIndex(GLTF::SpecularGlossinessTextureName) == GLTF::DefaultSpecularGlossinessTextureAttibId);
+    VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::BaseColorTextureName) == GLTF::DefaultBaseColorTextureAttribId);
+    VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::MetallicRoughnessTextureName) == GLTF::DefaultMetallicRoughnessTextureAttribId);
+    VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::NormalTextureName) == GLTF::DefaultNormalTextureAttribId);
+    VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::OcclusionTextureName) == GLTF::DefaultOcclusionTextureAttribId);
+    VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::EmissiveTextureName) == GLTF::DefaultEmissiveTextureAttribId);
+    VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::DiffuseTextureName) == GLTF::DefaultDiffuseTextureAttribId);
+    VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::SpecularGlossinessTextureName) == GLTF::DefaultSpecularGlossinessTextureAttibId);
 
     SetTexture(GLTF::DefaultBaseColorTextureAttribId, m_pWhiteTexSRV, "g_ColorMap");
     SetTexture(GLTF::DefaultMetallicRoughnessTextureAttribId, m_pDefaultPhysDescSRV, "g_PhysicalDescriptorMap");
@@ -314,24 +315,43 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
 
     m_RenderParams = RenderParams;
 
-    auto PSOFlags = RenderParams.Flags & m_SupportedPSOFlags;
     if (pModelBindings != nullptr)
     {
-        std::array<IBuffer*, 2> pVBs =
-            {
-                GLTFModel.GetVertexBuffer(GLTF::Model::VERTEX_BUFFER_ID_BASIC_ATTRIBS),
-                GLTFModel.GetVertexBuffer(GLTF::Model::VERTEX_BUFFER_ID_SKIN_ATTRIBS) //
-            };
-        pCtx->SetVertexBuffers(0, static_cast<Uint32>(pVBs.size()), pVBs.data(), nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION, SET_VERTEX_BUFFERS_FLAG_RESET);
+        std::array<IBuffer*, 8> pVBs;
 
-        if (pVBs[1] == nullptr)
-            PSOFlags &= ~PSO_FLAG_USE_JOINTS;
+        const auto NumVBs = static_cast<Uint32>(GLTFModel.GetVertexBufferCount());
+        VERIFY_EXPR(NumVBs <= pVBs.size());
+        for (Uint32 i = 0; i < NumVBs; ++i)
+            pVBs[i] = GLTFModel.GetVertexBuffer(i);
+        pCtx->SetVertexBuffers(0, NumVBs, pVBs.data(), nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION, SET_VERTEX_BUFFERS_FLAG_RESET);
 
         if (auto* pIndexBuffer = GLTFModel.GetIndexBuffer())
         {
             pCtx->SetIndexBuffer(pIndexBuffer, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         }
     }
+
+    auto VertexAttribFlags = PSO_FLAG_NONE;
+    for (Uint32 i = 0; i < GLTFModel.GetNumVertexAttributes(); ++i)
+    {
+        if (!GLTFModel.IsVertexAttributeEnabled(i))
+            continue;
+        const auto& Attrib = GLTFModel.GetVertexAttribute(i);
+        if (strcmp(Attrib.Name, GLTF::PositionAttributeName) == 0)
+            VertexAttribFlags |= PSO_FLAG_NONE; // Position is always enabled
+        else if (strcmp(Attrib.Name, GLTF::NormalAttributeName) == 0)
+            VertexAttribFlags |= PSO_FLAG_USE_VERTEX_NORMALS;
+        else if (strcmp(Attrib.Name, GLTF::Texcoord0AttributeName) == 0)
+            VertexAttribFlags |= PSO_FLAG_USE_TEXCOORD0;
+        else if (strcmp(Attrib.Name, GLTF::Texcoord1AttributeName) == 0)
+            VertexAttribFlags |= PSO_FLAG_USE_TEXCOORD1;
+        else if (strcmp(Attrib.Name, GLTF::JointsAttributeName) == 0)
+            VertexAttribFlags |= PSO_FLAG_USE_JOINTS;
+        else if (strcmp(Attrib.Name, GLTF::VertexColorAttributeName) == 0)
+            VertexAttribFlags |= PSO_FLAG_USE_VERTEX_COLORS;
+    }
+
+    auto PSOFlags = RenderParams.Flags & m_SupportedPSOFlags & (VertexAttribFlags | ~PSO_FLAG_VERTEX_ATTRIBS);
 
     for (auto& List : m_RenderLists)
         List.clear();
