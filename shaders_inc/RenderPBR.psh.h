@@ -443,7 +443,7 @@
 "            case DEBUG_VIEW_DIFFUSE_COLOR:    OutColor.rgb  = SrfInfo.DiffuseColor;                                 break;\n"
 "            case DEBUG_VIEW_SPECULAR_COLOR:   OutColor.rgb  = SrfInfo.Reflectance0;                                 break;\n"
 "            case DEBUG_VIEW_REFLECTANCE90:    OutColor.rgb  = SrfInfo.Reflectance90;                                break;\n"
-"            case DEBUG_VIEW_MESH_NORMAL:      OutColor.rgb  = abs(MeshNormal/ max(length(MeshNormal), 1e-3));  break;\n"
+"            case DEBUG_VIEW_MESH_NORMAL:      OutColor.rgb  = abs(MeshNormal/ max(length(MeshNormal), 1e-3));       break;\n"
 "            case DEBUG_VIEW_PERTURBED_NORMAL: OutColor.rgb  = abs(perturbedNormal);                                 break;\n"
 "            case DEBUG_VIEW_NDOTV:            OutColor.rgb  = dot(perturbedNormal, view) * float3(1.0, 1.0, 1.0);   break;\n"
 "            case DEBUG_VIEW_DIRECT_LIGHTING:  OutColor.rgb  = DirectLighting;                                       break;\n"
