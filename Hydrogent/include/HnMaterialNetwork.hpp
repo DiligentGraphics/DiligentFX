@@ -26,9 +26,6 @@
 
 #pragma once
 
-// NoteL tbb.h must be included first to avoid compilation errors in tbb headers.
-#include "tbb/tbb.h"
-
 #include "pxr/base/vt/dictionary.h"
 #include "pxr/usd/sdf/path.h"
 #include "pxr/imaging/hd/material.h"

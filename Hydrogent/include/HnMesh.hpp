@@ -29,8 +29,7 @@
 #include <memory>
 #include <unordered_map>
 
-// NoteL tbb.h must be included before mesh.h to avoid compilation errors in tbb headers.
-#include "tbb/tbb.h"
+#include "pxr/imaging/hd/types.h"
 #include "pxr/imaging/hd/mesh.h"
 #include "pxr/base/tf/token.h"
 
