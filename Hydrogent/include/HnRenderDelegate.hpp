@@ -184,9 +184,17 @@ public:
 
     HnTextureRegistry& GetTextureRegistry() { return m_TextureRegistry; }
 
-    const HnMaterial* GetMaterial(const char* Id) const;
+    const HnMaterial* GetMaterial(const pxr::SdfPath& Id) const;
 
-    const char* GetMeshPrimId(Uint32 UID) const;
+    const pxr::SdfPath* GetMeshPrimId(Uint32 UID) const;
+
+    std::shared_ptr<HnMesh>& GetMesh(const pxr::SdfPath& Id)
+    {
+        static const std::shared_ptr<HnMesh> NullMesh;
+
+        auto it = m_Meshes.find(Id);
+        return it != m_Meshes.end() ? it->second : NullMesh;
+    }
 
 private:
     static const pxr::TfTokenVector SupportedRPrimTypes;
@@ -203,9 +211,9 @@ private:
 
     std::atomic<Uint32> m_MeshUIDCounter{1};
 
-    std::unordered_map<std::string, std::shared_ptr<HnMaterial>> m_Materials;
-    std::unordered_map<std::string, std::shared_ptr<HnMesh>>     m_Meshes;
-    std::unordered_map<Uint32, std::string>                      m_MeshUIDToPrimId;
+    std::unordered_map<pxr::SdfPath, std::shared_ptr<HnMaterial>, pxr::SdfPath::Hash> m_Materials;
+    std::unordered_map<pxr::SdfPath, std::shared_ptr<HnMesh>, pxr::SdfPath::Hash>     m_Meshes;
+    std::unordered_map<Uint32, pxr::SdfPath>                                          m_MeshUIDToPrimId;
 };
 
 } // namespace USD

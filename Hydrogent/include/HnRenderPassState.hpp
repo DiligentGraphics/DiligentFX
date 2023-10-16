@@ -26,14 +26,14 @@
 
 #pragma once
 
-#include "GraphicsTypes.h"
-#include "Sampler.h"
 #include "RasterizerState.h"
-#include "DepthStencilState.h"
 #include "BlendState.h"
+#include "DepthStencilState.h"
+#include "PipelineState.h"
+#include "DeviceContext.h"
 
-#include "pxr/pxr.h"
 #include "pxr/imaging/hd/types.h"
+#include "pxr/imaging/hd/renderPassState.h"
 
 namespace Diligent
 {
@@ -41,17 +41,35 @@ namespace Diligent
 namespace USD
 {
 
-TEXTURE_ADDRESS_MODE HdWrapToAddressMode(pxr::HdWrap hdWrap);
-FILTER_TYPE          HdMagFilterToFilterType(pxr::HdMagFilter hdMinFilter);
-void                 HdMinFilterToMinMipFilterType(pxr::HdMinFilter hdMinFilter, FILTER_TYPE& MinFilter, FILTER_TYPE& MipFilter);
-COMPARISON_FUNCTION  HdCompareFunctionToComparisonFunction(pxr::HdCompareFunction hdComparFunc);
+/// Hydra render pass state implementation in Hydrogent.
+class HnRenderPassState final : public pxr::HdRenderPassState
+{
+public:
+    static pxr::HdRenderPassStateSharedPtr Create();
 
-SamplerDesc HdSamplerParametersToSamplerDesc(const pxr::HdSamplerParameters& hdSamplerParams);
+    HnRenderPassState();
 
-CULL_MODE       HdCullStyleToCullMode(pxr::HdCullStyle hdCullStyle);
-STENCIL_OP      HdStencilOpToStencilOp(pxr::HdStencilOp hdStencilOp);
-BLEND_OPERATION HdBlendOpToBlendOperation(pxr::HdBlendOp hdBlendOp);
-BLEND_FACTOR    HdBlendFactorToBlendFactor(pxr::HdBlendFactor hdBlendFactor);
+    void Begin(IDeviceContext* pContext);
+
+    void SetColorFormat(TEXTURE_FORMAT ColorFormat)
+    {
+        m_ColorFormat = ColorFormat;
+    }
+    void SetDepthFormat(TEXTURE_FORMAT DepthFormat)
+    {
+        m_DepthFormat = DepthFormat;
+    }
+
+private:
+    RasterizerStateDesc   GetRasterizerState() const;
+    DepthStencilStateDesc GetDepthStencilState() const;
+    BlendStateDesc        GetBlendState() const;
+    GraphicsPipelineDesc  GetGraphicsPipelineDesc() const;
+
+private:
+    TEXTURE_FORMAT m_ColorFormat = TEX_FORMAT_UNKNOWN;
+    TEXTURE_FORMAT m_DepthFormat = TEX_FORMAT_UNKNOWN;
+};
 
 } // namespace USD
 

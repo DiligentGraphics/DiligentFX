@@ -24,16 +24,10 @@
  *  of the possibility of such damages.
  */
 
-#pragma once
+#include "HnRenderPass.hpp"
+#include "HnRenderDelegate.hpp"
 
-#include "GraphicsTypes.h"
-#include "Sampler.h"
-#include "RasterizerState.h"
-#include "DepthStencilState.h"
-#include "BlendState.h"
-
-#include "pxr/pxr.h"
-#include "pxr/imaging/hd/types.h"
+#include "pxr/imaging/hd/renderIndex.h"
 
 namespace Diligent
 {
@@ -41,17 +35,38 @@ namespace Diligent
 namespace USD
 {
 
-TEXTURE_ADDRESS_MODE HdWrapToAddressMode(pxr::HdWrap hdWrap);
-FILTER_TYPE          HdMagFilterToFilterType(pxr::HdMagFilter hdMinFilter);
-void                 HdMinFilterToMinMipFilterType(pxr::HdMinFilter hdMinFilter, FILTER_TYPE& MinFilter, FILTER_TYPE& MipFilter);
-COMPARISON_FUNCTION  HdCompareFunctionToComparisonFunction(pxr::HdCompareFunction hdComparFunc);
+pxr::HdRenderPassSharedPtr HnRenderPass::Create(pxr::HdRenderIndex*           pIndex,
+                                                const pxr::HdRprimCollection& Collection)
+{
+    return pxr::HdRenderPassSharedPtr{new HnRenderPass{pIndex, Collection}};
+}
 
-SamplerDesc HdSamplerParametersToSamplerDesc(const pxr::HdSamplerParameters& hdSamplerParams);
+HnRenderPass::HnRenderPass(pxr::HdRenderIndex*           pIndex,
+                           const pxr::HdRprimCollection& Collection) :
+    pxr::HdRenderPass{pIndex, Collection}
+{}
 
-CULL_MODE       HdCullStyleToCullMode(pxr::HdCullStyle hdCullStyle);
-STENCIL_OP      HdStencilOpToStencilOp(pxr::HdStencilOp hdStencilOp);
-BLEND_OPERATION HdBlendOpToBlendOperation(pxr::HdBlendOp hdBlendOp);
-BLEND_FACTOR    HdBlendFactorToBlendFactor(pxr::HdBlendFactor hdBlendFactor);
+void HnRenderPass::_Execute(pxr::HdRenderPassStateSharedPtr const& State,
+                            pxr::TfTokenVector const&              Tags)
+{
+    pxr::HdRenderIndex* pRenderIndex    = GetRenderIndex();
+    HnRenderDelegate*   pRenderDelegate = static_cast<HnRenderDelegate*>(pRenderIndex->GetRenderDelegate());
+
+    const pxr::HdRprimCollection&           Collection = GetRprimCollection();
+    pxr::HdRenderIndex::HdDrawItemPtrVector DrawItems  = pRenderIndex->GetDrawItems(Collection, Tags);
+    for (const pxr::HdDrawItem* pDrawItem : DrawItems)
+    {
+        if (!pDrawItem->GetVisible())
+            continue;
+
+        const pxr::SdfPath& RPrimID = pDrawItem->GetRprimID();
+        if (auto& pMesh = pRenderDelegate->GetMesh(RPrimID))
+        {
+            //LOG_INFO_MESSAGE("RPrimID: ", RPrimID.GetText());
+            //pMesh->Draw(State);
+        }
+    }
+}
 
 } // namespace USD
 

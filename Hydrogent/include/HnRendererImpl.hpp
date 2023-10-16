@@ -81,7 +81,7 @@ public:
     virtual void Draw(IDeviceContext* pCtx, const HnDrawAttribs& Attribs) override final;
     virtual void SetEnvironmentMap(IDeviceContext* pCtx, ITextureView* pEnvironmentMapSRV) override final;
 
-    virtual const char* QueryPrimId(IDeviceContext* pCtx, Uint32 X, Uint32 Y) override final;
+    virtual const pxr::SdfPath* QueryPrimId(IDeviceContext* pCtx, Uint32 X, Uint32 Y) override final;
 
     void RenderPrimId(IDeviceContext* pContext, ITextureView* pDepthBuffer, const float4x4& Transform) override final;
 

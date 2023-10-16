@@ -88,7 +88,7 @@ struct HnDrawAttribs
 
     HN_RENDER_MODE RenderMode = HN_RENDER_MODE_SOLID;
 
-    const char* SelectedPrim = nullptr;
+    const pxr::SdfPath* SelectedPrim = nullptr;
 };
 
 class IHnRenderer : public IObject
@@ -113,7 +113,7 @@ public:
     ///             Otherwise, returns the primitive SDF path.
     ///
     /// \remarks    Only a single query per frame is supported.
-    virtual const char* QueryPrimId(IDeviceContext* pCtx, Uint32 X, Uint32 Y) = 0;
+    virtual const pxr::SdfPath* QueryPrimId(IDeviceContext* pCtx, Uint32 X, Uint32 Y) = 0;
 
     virtual void RenderPrimId(IDeviceContext* pCtx, ITextureView* pDepthBuffer, const float4x4& Transform) = 0;
 };

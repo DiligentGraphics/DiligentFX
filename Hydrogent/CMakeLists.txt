@@ -8,6 +8,8 @@ set(SOURCE
     src/HnMesh.cpp
     src/HnRenderDelegate.cpp
     src/HnRendererImpl.cpp
+    src/HnRenderPass.cpp
+    src/HnRenderPassState.cpp
     src/HnTokens.cpp
     src/HnTextureRegistry.cpp
     src/HnTextureUtils.cpp
@@ -20,6 +22,8 @@ set(INCLUDE
     include/HnMesh.hpp
     include/HnRenderDelegate.hpp
     include/HnRendererImpl.hpp
+    include/HnRenderPass.hpp
+    include/HnRenderPassState.hpp
     include/HnTokens.hpp
     include/HnTextureIdentifier.hpp
     include/HnTextureRegistry.hpp

@@ -27,6 +27,7 @@
 #include "HnRenderDelegate.hpp"
 #include "HnMesh.hpp"
 #include "HnMaterial.hpp"
+#include "HnRenderPass.hpp"
 #include "DebugUtilities.hpp"
 
 #include "pxr/imaging/hd/material.h"
@@ -97,7 +98,7 @@ pxr::HdResourceRegistrySharedPtr HnRenderDelegate::GetResourceRegistry() const
 pxr::HdRenderPassSharedPtr HnRenderDelegate::CreateRenderPass(pxr::HdRenderIndex*           index,
                                                               pxr::HdRprimCollection const& collection)
 {
-    return {};
+    return HnRenderPass::Create(index, collection);
 }
 
 
@@ -114,15 +115,15 @@ void HnRenderDelegate::DestroyInstancer(pxr::HdInstancer* instancer)
 pxr::HdRprim* HnRenderDelegate::CreateRprim(pxr::TfToken const& typeId,
                                             pxr::SdfPath const& rprimId)
 {
-    auto it = m_Meshes.emplace(rprimId.GetString(), HnMesh::Create(typeId, rprimId, m_MeshUIDCounter.fetch_add(1)));
+    auto it = m_Meshes.emplace(rprimId, HnMesh::Create(typeId, rprimId, m_MeshUIDCounter.fetch_add(1)));
 
-    m_MeshUIDToPrimId[it.first->second->GetUID()] = rprimId.GetString();
+    m_MeshUIDToPrimId[it.first->second->GetUID()] = rprimId;
     return it.first->second.get();
 }
 
 void HnRenderDelegate::DestroyRprim(pxr::HdRprim* rPrim)
 {
-    m_Meshes.erase(rPrim->GetId().GetString());
+    m_Meshes.erase(rPrim->GetId());
 }
 
 pxr::HdSprim* HnRenderDelegate::CreateSprim(pxr::TfToken const& typeId,
@@ -130,7 +131,7 @@ pxr::HdSprim* HnRenderDelegate::CreateSprim(pxr::TfToken const& typeId,
 {
     if (typeId == pxr::HdPrimTypeTokens->material)
     {
-        auto it = m_Materials.emplace(sprimId.GetString(), HnMaterial::Create(sprimId));
+        auto it = m_Materials.emplace(sprimId, HnMaterial::Create(sprimId));
         return it.first->second.get();
     }
     else
@@ -149,7 +150,7 @@ void HnRenderDelegate::DestroySprim(pxr::HdSprim* sprim)
 {
     if (auto* material = dynamic_cast<pxr::HdMaterial*>(sprim))
     {
-        m_Materials.erase(material->GetId().GetString());
+        m_Materials.erase(material->GetId());
     }
     else if (sprim != nullptr)
     {
@@ -185,16 +186,16 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
     }
 }
 
-const HnMaterial* HnRenderDelegate::GetMaterial(const char* Id) const
+const HnMaterial* HnRenderDelegate::GetMaterial(const pxr::SdfPath& Id) const
 {
     auto it = m_Materials.find(Id);
     return it != m_Materials.end() ? it->second.get() : nullptr;
 }
 
-const char* HnRenderDelegate::GetMeshPrimId(Uint32 UID) const
+const pxr::SdfPath* HnRenderDelegate::GetMeshPrimId(Uint32 UID) const
 {
     auto it = m_MeshUIDToPrimId.find(UID);
-    return it != m_MeshUIDToPrimId.end() ? it->second.c_str() : nullptr;
+    return it != m_MeshUIDToPrimId.end() ? &it->second : nullptr;
 }
 
 } // namespace USD

@@ -26,6 +26,8 @@
 
 #include "HnTypeConversions.hpp"
 
+#include "DebugUtilities.hpp"
+
 namespace Diligent
 {
 
@@ -133,6 +135,90 @@ SamplerDesc HdSamplerParametersToSamplerDesc(const pxr::HdSamplerParameters& hdS
     }
 
     return Desc;
+}
+
+CULL_MODE HdCullStyleToCullMode(pxr::HdCullStyle hdCullStyle)
+{
+    switch (hdCullStyle)
+    {
+        // clang-format off
+        case pxr::HdCullStyleDontCare: return CULL_MODE_BACK;
+        case pxr::HdCullStyleNothing:  return CULL_MODE_NONE;
+        case pxr::HdCullStyleBack:     return CULL_MODE_BACK;
+        case pxr::HdCullStyleFront:    return CULL_MODE_FRONT;
+        case pxr::HdCullStyleBackUnlessDoubleSided:  return CULL_MODE_BACK;
+        case pxr::HdCullStyleFrontUnlessDoubleSided: return CULL_MODE_FRONT;
+        // clang-format on
+        default:
+            UNEXPECTED("Unexpected cull mode");
+            return CULL_MODE_NONE;
+    }
+}
+
+STENCIL_OP HdStencilOpToStencilOp(pxr::HdStencilOp hdStencilOp)
+{
+    switch (hdStencilOp)
+    {
+        // clang-format off
+        case pxr::HdStencilOpKeep:          return STENCIL_OP_KEEP;
+        case pxr::HdStencilOpZero:          return STENCIL_OP_ZERO;
+        case pxr::HdStencilOpReplace:       return STENCIL_OP_REPLACE;
+        case pxr::HdStencilOpIncrement:     return STENCIL_OP_INCR_SAT;
+        case pxr::HdStencilOpIncrementWrap: return STENCIL_OP_INCR_WRAP;
+        case pxr::HdStencilOpDecrement:     return STENCIL_OP_DECR_SAT;
+        case pxr::HdStencilOpDecrementWrap: return STENCIL_OP_DECR_WRAP;
+        case pxr::HdStencilOpInvert:        return STENCIL_OP_INVERT;
+        // clang-format on
+        default:
+            UNEXPECTED("Unexpected stencil operation");
+            return STENCIL_OP_KEEP;
+    }
+}
+
+BLEND_OPERATION HdBlendOpToBlendOperation(pxr::HdBlendOp hdBlendOp)
+{
+    switch (hdBlendOp)
+    {
+        // clang-format off
+        case pxr::HdBlendOpAdd:             return BLEND_OPERATION_ADD;
+        case pxr::HdBlendOpSubtract:        return BLEND_OPERATION_SUBTRACT;
+        case pxr::HdBlendOpReverseSubtract: return BLEND_OPERATION_REV_SUBTRACT;
+        case pxr::HdBlendOpMin:             return BLEND_OPERATION_MIN;
+        case pxr::HdBlendOpMax:             return BLEND_OPERATION_MAX;
+        // clang-format on
+        default:
+            UNEXPECTED("Unexpected blend operation");
+            return BLEND_OPERATION_ADD;
+    }
+}
+
+BLEND_FACTOR HdBlendFactorToBlendFactor(pxr::HdBlendFactor hdBlendFactor)
+{
+    switch (hdBlendFactor)
+    {
+        // clang-format off
+        case pxr::HdBlendFactorZero:                  return BLEND_FACTOR_ZERO;
+        case pxr::HdBlendFactorOne:                   return BLEND_FACTOR_ONE;
+        case pxr::HdBlendFactorSrcColor:              return BLEND_FACTOR_SRC_COLOR;
+        case pxr::HdBlendFactorOneMinusSrcColor:      return BLEND_FACTOR_INV_SRC_COLOR;
+        case pxr::HdBlendFactorDstColor:              return BLEND_FACTOR_DEST_COLOR;
+        case pxr::HdBlendFactorOneMinusDstColor:      return BLEND_FACTOR_INV_DEST_COLOR;
+        case pxr::HdBlendFactorSrcAlpha:              return BLEND_FACTOR_SRC_ALPHA;
+        case pxr::HdBlendFactorOneMinusSrcAlpha:      return BLEND_FACTOR_INV_SRC_ALPHA;
+        case pxr::HdBlendFactorConstantColor:         return BLEND_FACTOR_BLEND_FACTOR;
+        case pxr::HdBlendFactorOneMinusConstantColor: return BLEND_FACTOR_INV_BLEND_FACTOR;
+        case pxr::HdBlendFactorConstantAlpha:         return BLEND_FACTOR_BLEND_FACTOR;
+        case pxr::HdBlendFactorOneMinusConstantAlpha: return BLEND_FACTOR_INV_BLEND_FACTOR;
+        case pxr::HdBlendFactorSrcAlphaSaturate:      return BLEND_FACTOR_SRC_ALPHA_SAT;
+        case pxr::HdBlendFactorSrc1Color:             return BLEND_FACTOR_SRC1_COLOR;
+        case pxr::HdBlendFactorOneMinusSrc1Color:     return BLEND_FACTOR_INV_SRC1_COLOR;
+        case pxr::HdBlendFactorSrc1Alpha:             return BLEND_FACTOR_SRC1_ALPHA;
+        case pxr::HdBlendFactorOneMinusSrc1Alpha:     return BLEND_FACTOR_INV_SRC1_ALPHA;
+        // clang-format on
+        default:
+            UNEXPECTED("Unexpected blend factor");
+            return BLEND_FACTOR_ZERO;
+    }
 }
 
 } // namespace USD

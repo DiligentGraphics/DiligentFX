@@ -26,14 +26,8 @@
 
 #pragma once
 
-#include "GraphicsTypes.h"
-#include "Sampler.h"
-#include "RasterizerState.h"
-#include "DepthStencilState.h"
-#include "BlendState.h"
-
-#include "pxr/pxr.h"
 #include "pxr/imaging/hd/types.h"
+#include "pxr/imaging/hd/renderPass.h"
 
 namespace Diligent
 {
@@ -41,17 +35,22 @@ namespace Diligent
 namespace USD
 {
 
-TEXTURE_ADDRESS_MODE HdWrapToAddressMode(pxr::HdWrap hdWrap);
-FILTER_TYPE          HdMagFilterToFilterType(pxr::HdMagFilter hdMinFilter);
-void                 HdMinFilterToMinMipFilterType(pxr::HdMinFilter hdMinFilter, FILTER_TYPE& MinFilter, FILTER_TYPE& MipFilter);
-COMPARISON_FUNCTION  HdCompareFunctionToComparisonFunction(pxr::HdCompareFunction hdComparFunc);
+/// Hydra render pass implementation in Hydrogent.
+class HnRenderPass final : public pxr::HdRenderPass
+{
+public:
+    static pxr::HdRenderPassSharedPtr Create(pxr::HdRenderIndex*           pIndex,
+                                             const pxr::HdRprimCollection& Collection);
 
-SamplerDesc HdSamplerParametersToSamplerDesc(const pxr::HdSamplerParameters& hdSamplerParams);
+    HnRenderPass(pxr::HdRenderIndex*           pIndex,
+                 const pxr::HdRprimCollection& Collection);
 
-CULL_MODE       HdCullStyleToCullMode(pxr::HdCullStyle hdCullStyle);
-STENCIL_OP      HdStencilOpToStencilOp(pxr::HdStencilOp hdStencilOp);
-BLEND_OPERATION HdBlendOpToBlendOperation(pxr::HdBlendOp hdBlendOp);
-BLEND_FACTOR    HdBlendFactorToBlendFactor(pxr::HdBlendFactor hdBlendFactor);
+protected:
+    // Virtual API: Execute the buckets corresponding to renderTags;
+    // renderTags.empty() implies execute everything.
+    virtual void _Execute(const pxr::HdRenderPassStateSharedPtr& State,
+                          const pxr::TfTokenVector&              Tags) override final;
+};
 
 } // namespace USD
 

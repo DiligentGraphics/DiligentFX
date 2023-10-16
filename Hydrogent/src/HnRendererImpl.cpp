@@ -36,7 +36,7 @@
 #include "MapHelper.hpp"
 
 #include "pxr/imaging/hd/task.h"
-#include "pxr/imaging/hd/unitTestNullRenderPass.h"
+#include "pxr/imaging/hd/renderPass.h"
 
 namespace Diligent
 {
@@ -141,7 +141,7 @@ void HnRendererImpl::LoadUSDStage(pxr::UsdStageRefPtr& Stage)
     m_RenderTags = {pxr::HdRenderTagTokens->geometry};
 
     auto Collection = pxr::HdRprimCollection{pxr::HdTokens->geometry, pxr::HdReprSelector(pxr::HdReprTokens->hull)};
-    m_GeometryPass  = pxr::HdRenderPassSharedPtr{new pxr::Hd_UnitTestNullRenderPass{m_RenderIndex, Collection}};
+    m_GeometryPass  = m_RenderDelegate->CreateRenderPass(m_RenderIndex, Collection);
 }
 
 
@@ -166,7 +166,10 @@ public:
 
     void Prepare(pxr::HdTaskContext* ctx, pxr::HdRenderIndex* renderIndex) override final {}
 
-    void Execute(pxr::HdTaskContext* ctx) override final {}
+    void Execute(pxr::HdTaskContext* ctx) override final
+    {
+        m_RenderPass->Execute({}, m_RenderTags);
+    }
 
     const pxr::TfTokenVector& GetRenderTags() const override final
     {
@@ -209,7 +212,7 @@ void HnRendererImpl::RenderMeshes(IDeviceContext* pCtx, const HnDrawAttribs& Att
         auto& Mesh = *mesh_it.second;
 
         const auto& MaterialId = Mesh.GetMaterialId();
-        const auto* pMaterial  = m_RenderDelegate->GetMaterial(MaterialId.GetText());
+        const auto* pMaterial  = m_RenderDelegate->GetMaterial(MaterialId);
         if (pMaterial == nullptr)
             return;
 
@@ -340,7 +343,7 @@ void HnRendererImpl::RenderMesh(IDeviceContext*          pCtx,
         static_assert(sizeof(pDstShaderAttribs->Material) == sizeof(ShaderAttribs), "The sizeof(PBRMaterialShaderInfo) is inconsistent with sizeof(ShaderAttribs)");
         memcpy(&pDstShaderAttribs->Material, &ShaderAttribs, sizeof(ShaderAttribs));
 
-        pDstShaderAttribs->Renderer.HighlightColor = (Attribs.SelectedPrim != nullptr && Mesh.GetId().GetString() == Attribs.SelectedPrim) ?
+        pDstShaderAttribs->Renderer.HighlightColor = (Attribs.SelectedPrim != nullptr && Mesh.GetId() == *Attribs.SelectedPrim) ?
             Attribs.SlectionColor :
             float4{0, 0, 0, 0};
 
@@ -371,7 +374,7 @@ void HnRendererImpl::SetEnvironmentMap(IDeviceContext* pCtx, ITextureView* pEnvi
     m_USDRenderer->PrecomputeCubemaps(pCtx, pEnvironmentMapSRV);
 }
 
-const char* HnRendererImpl::QueryPrimId(IDeviceContext* pCtx, Uint32 X, Uint32 Y)
+const pxr::SdfPath* HnRendererImpl::QueryPrimId(IDeviceContext* pCtx, Uint32 X, Uint32 Y)
 {
     if (!m_MeshIdTexture)
         return nullptr;
@@ -415,10 +418,11 @@ const char* HnRendererImpl::QueryPrimId(IDeviceContext* pCtx, Uint32 X, Uint32 Y
     pCtx->CopyTexture(CopyAttribs);
     m_MeshIdReadBackQueue.Enqueue(pCtx, std::move(pStagingTex));
 
+    static const pxr::SdfPath EmptyPath;
     if (MeshUid == ~0u)
         return nullptr;
     else
-        return MeshUid != 0 ? m_RenderDelegate->GetMeshPrimId(MeshUid) : "";
+        return MeshUid != 0 ? m_RenderDelegate->GetMeshPrimId(MeshUid) : &EmptyPath;
 }
 
 void HnRendererImpl::RenderPrimId(IDeviceContext* pContext, ITextureView* pDepthBuffer, const float4x4& Transform)
