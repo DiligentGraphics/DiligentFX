@@ -215,11 +215,12 @@ public:
         PSO_FLAG_USE_EMISSIVE_MAP  = 1u << 11u,
         PSO_FLAG_USE_IBL           = 1u << 12u,
 
-        PSO_FLAG_ENABLE_DEBUG_VIEW      = 1u << 13u,
-        PSO_FLAG_USE_TEXTURE_ATLAS      = 1u << 14u,
-        PSO_FLAG_CONVERT_OUTPUT_TO_SRGB = 1u << 15u,
+        PSO_FLAG_ENABLE_DEBUG_VIEW         = 1u << 13u,
+        PSO_FLAG_USE_TEXTURE_ATLAS         = 1u << 14u,
+        PSO_FLAG_CONVERT_OUTPUT_TO_SRGB    = 1u << 15u,
+        PSO_FLAG_ENABLE_CUSTOM_DATA_OUTPUT = 1u << 16u,
 
-        PSO_FLAG_LAST = PSO_FLAG_CONVERT_OUTPUT_TO_SRGB,
+        PSO_FLAG_LAST = PSO_FLAG_ENABLE_CUSTOM_DATA_OUTPUT,
 
         PSO_FLAG_VERTEX_ATTRIBS =
             PSO_FLAG_USE_VERTEX_COLORS |
@@ -389,6 +390,7 @@ protected:
                            bool                                                                                  CreateIfNull);
 
     static std::string GetVSOutputStruct(PSO_FLAGS PSOFlags);
+    static std::string GetPSOutputStruct(PSO_FLAGS PSOFlags);
 
     void CreateShaders(PSO_FLAGS               PSOFlags,
                        const char*             VSPath,

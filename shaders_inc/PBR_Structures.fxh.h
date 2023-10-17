@@ -63,6 +63,8 @@
 "    float4 WireframeColor;\n"
 "    float4 HighlightColor;\n"
 "\n"
+"    float4 CustomData;\n"
+"\n"
 "    uint MeshId;\n"
 "    uint Padding0;\n"
 "    uint Padding1;\n"

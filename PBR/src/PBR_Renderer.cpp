@@ -591,6 +591,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS PSOFlags) const
     Macros.Add("USE_HDR_IBL_CUBEMAPS", true);
     Macros.Add("USE_SEPARATE_METALLIC_ROUGHNESS_TEXTURES", m_Settings.UseSeparateMetallicRoughnessTextures);
 
+    static_assert(static_cast<int>(DebugViewType::NumDebugViews) == 18, "Did you add debug view? You may need to handle it here.");
     // clang-format off
     Macros.Add("DEBUG_VIEW_NONE",             static_cast<int>(DebugViewType::None));
     Macros.Add("DEBUG_VIEW_TEXCOORD0",        static_cast<int>(DebugViewType::Texcoord0));
@@ -612,6 +613,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS PSOFlags) const
     Macros.Add("DEBUG_VIEW_SPECULAR_IBL",     static_cast<int>(DebugViewType::SpecularIBL));
     // clang-format on
 
+    static_assert(PSO_FLAG_LAST == 1u << 16u, "Did you add new PSO Flag? You may need to handle it here.");
 #define ADD_PSO_FLAG_MACRO(Flag) Macros.Add(#Flag, (PSOFlags & PSO_FLAG_##Flag) != PSO_FLAG_NONE)
     ADD_PSO_FLAG_MACRO(USE_VERTEX_COLORS);
     ADD_PSO_FLAG_MACRO(USE_VERTEX_NORMALS);
@@ -632,6 +634,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS PSOFlags) const
     ADD_PSO_FLAG_MACRO(ENABLE_DEBUG_VIEW);
     ADD_PSO_FLAG_MACRO(USE_TEXTURE_ATLAS);
     ADD_PSO_FLAG_MACRO(CONVERT_OUTPUT_TO_SRGB);
+    ADD_PSO_FLAG_MACRO(ENABLE_CUSTOM_DATA_OUTPUT);
 #undef ADD_PSO_FLAG_MACRO
 
     Macros.Add("TEX_COLOR_CONVERSION_MODE_NONE", CreateInfo::TEX_COLOR_CONVERSION_MODE_NONE);
@@ -764,6 +767,26 @@ std::string PBR_Renderer::GetVSOutputStruct(PSO_FLAGS PSOFlags)
     return ss.str();
 }
 
+std::string PBR_Renderer::GetPSOutputStruct(PSO_FLAGS PSOFlags)
+{
+    // struct PSOutput
+    // {
+    //     float4 Color      : SV_Target0;
+    //     float4 CustomData : SV_Target1;
+    // };
+
+    std::stringstream ss;
+    ss << "struct PSOutput" << std::endl
+       << "{" << std::endl
+       << "    float4 Color      : SV_Target0;" << std::endl;
+    if (PSOFlags & PSO_FLAG_ENABLE_CUSTOM_DATA_OUTPUT)
+    {
+        ss << "    float4 CustomData : SV_Target1;" << std::endl;
+    }
+    ss << "};" << std::endl;
+    return ss.str();
+}
+
 void PBR_Renderer::CreateShaders(PSO_FLAGS               PSOFlags,
                                  const char*             VSPath,
                                  const char*             VSName,
@@ -776,12 +799,14 @@ void PBR_Renderer::CreateShaders(PSO_FLAGS               PSOFlags,
     std::string VSInputStruct;
     GetVSInputStructAndLayout(PSOFlags, VSInputStruct, InputLayout);
 
-    auto VSOutputStruct = GetVSOutputStruct(PSOFlags);
+    const auto VSOutputStruct = GetVSOutputStruct(PSOFlags);
+    const auto PSOutputStruct = GetPSOutputStruct(PSOFlags);
 
     MemoryShaderSourceFileInfo GeneratedSources[] =
         {
             MemoryShaderSourceFileInfo{"VSInputStruct.generated", VSInputStruct},
             MemoryShaderSourceFileInfo{"VSOutputStruct.generated", VSOutputStruct},
+            MemoryShaderSourceFileInfo{"PSOutputStruct.generated", PSOutputStruct},
         };
     MemoryShaderSourceFactoryCreateInfo            MemorySourceFactoryCI{GeneratedSources, _countof(GeneratedSources)};
     RefCntAutoPtr<IShaderSourceInputStreamFactory> pMemorySourceFactory;

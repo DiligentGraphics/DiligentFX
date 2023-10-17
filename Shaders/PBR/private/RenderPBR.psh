@@ -17,6 +17,13 @@
 //     float2 UV1      : UV1;
 // };
 
+#include "PSOutputStruct.generated"
+// struct PSOutput
+// {
+//     float4 Color      : SV_Target0;
+//     float4 CustomData : SV_Target1;
+// };
+
 
 #ifndef USE_TEXTURE_ATLAS
 #   define USE_TEXTURE_ATLAS 0
@@ -295,7 +302,7 @@ float4 GetPhysicalDesc(VSOutput VSOut)
 
 void main(in  VSOutput VSOut,
           in  bool     IsFrontFace : SV_IsFrontFace,
-          out float4   OutColor    : SV_Target)
+          out PSOutput PSOut)
 {
     float4 BaseColor = GetBaseColor(VSOut);
 
@@ -422,7 +429,7 @@ void main(in  VSOutput VSOut,
     // Add highlight color
     color = lerp(color, g_PBRAttribs.Renderer.HighlightColor.rgb, g_PBRAttribs.Renderer.HighlightColor.a);
 
-    OutColor = float4(color, BaseColor.a);
+    float4 OutColor = float4(color, BaseColor.a);
 
 #   if ENABLE_DEBUG_VIEW
     // Shader inputs debug visualization
@@ -458,6 +465,14 @@ void main(in  VSOutput VSOut,
 #   if CONVERT_OUTPUT_TO_SRGB
     {
         OutColor.rgb = FastLinearToSRGB(OutColor.rgb);
+    }
+#   endif
+
+    PSOut.Color = OutColor;
+
+#   if ENABLE_CUSTOM_DATA_OUTPUT
+    {
+        PSOut.CustomData = g_PBRAttribs.Renderer.CustomData;
     }
 #   endif
 }

@@ -63,6 +63,8 @@ struct PBRRendererShaderParameters
     float4 WireframeColor;
     float4 HighlightColor;
 
+    float4 CustomData;
+
     uint MeshId;
     uint Padding0;
     uint Padding1;
