@@ -61,10 +61,6 @@ static const MemoryShaderSourceFileInfo g_Shaders[] =
         #include "PrefilterEnvMap.psh.h"
     },
     {
-        "RenderMeshId.psh",
-        #include "RenderMeshId.psh.h"
-    },
-    {
         "RenderPBR.psh",
         #include "RenderPBR.psh.h"
     },

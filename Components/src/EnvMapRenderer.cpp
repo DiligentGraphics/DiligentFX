@@ -104,8 +104,9 @@ EnvMapRenderer::EnvMapRenderer(const CreateInfo& CI)
         .AddShader(pVS)
         .AddShader(pPS)
         .SetPrimitiveTopology(PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
-        .AddRenderTarget(CI.RTVFormat)
         .SetDepthFormat(CI.DSVFormat);
+    for (Uint32 i = 0; i < CI.NumRenderTargets; ++i)
+        PsoCI.AddRenderTarget(CI.RTVFormats[i]);
 
     PsoCI.GraphicsPipeline.DepthStencilDesc.DepthFunc = COMPARISON_FUNC_LESS_EQUAL;
 

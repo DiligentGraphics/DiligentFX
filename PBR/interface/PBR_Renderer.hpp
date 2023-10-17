@@ -307,15 +307,6 @@ public:
         WireframePSOKey(PSO_FLAGS _Flags, bool _DoubleSided) noexcept;
     };
 
-    struct MeshIdPSOKey : PSOKey
-    {
-        static const PSO_FLAGS SupportedFlags;
-
-        MeshIdPSOKey() noexcept {};
-        MeshIdPSOKey(PSO_FLAGS _Flags, bool _DoubleSided) noexcept;
-    };
-
-
     template <typename PsoHashMapType, typename PsoKeyType>
     class PsoCacheAccessor
     {
@@ -360,15 +351,12 @@ public:
     };
 
     using PbrPsoHashMapType       = std::unordered_map<PbrPSOKey, RefCntAutoPtr<IPipelineState>, PbrPSOKey::Hasher>;
-    using MeshIdPsoHashMapType    = std::unordered_map<MeshIdPSOKey, RefCntAutoPtr<IPipelineState>, MeshIdPSOKey::Hasher>;
     using WireframePsoHashMapType = std::unordered_map<WireframePSOKey, RefCntAutoPtr<IPipelineState>, WireframePSOKey::Hasher>;
 
     using PbrPsoCacheAccessor       = PsoCacheAccessor<PbrPsoHashMapType, PbrPSOKey>;
-    using MeshIdPsoCacheAccessor    = PsoCacheAccessor<MeshIdPsoHashMapType, MeshIdPSOKey>;
     using WireframePsoCacheAccessor = PsoCacheAccessor<WireframePsoHashMapType, WireframePSOKey>;
 
     PbrPsoCacheAccessor       GetPbrPsoCacheAccessor(const GraphicsPipelineDesc& GraphicsDesc);
-    MeshIdPsoCacheAccessor    GetMeshIdPsoCacheAccessor(const GraphicsPipelineDesc& GraphicsDesc);
     WireframePsoCacheAccessor GetWireframePsoCacheAccessor(const GraphicsPipelineDesc& GraphicsDesc);
 
     void InitCommonSRBVars(IShaderResourceBinding* pSRB,
@@ -407,7 +395,6 @@ private:
 
     void CreatePbrPSO(PbrPsoHashMapType& PbrPSOs, const GraphicsPipelineDesc& GraphicsDesc, const PbrPSOKey& Key);
     void CreateWireframePSO(WireframePsoHashMapType& WireframePSOs, const GraphicsPipelineDesc& GraphicsDesc, const WireframePSOKey& Key);
-    void CreateMeshIdPSO(MeshIdPsoHashMapType& MeshIdPSOs, const GraphicsPipelineDesc& GraphicsDesc, const MeshIdPSOKey& Key);
     void CreateSignature();
 
 protected:
@@ -443,7 +430,6 @@ protected:
     RefCntAutoPtr<IPipelineResourceSignature> m_ResourceSignature;
 
     std::unordered_map<GraphicsPipelineDesc, PbrPsoHashMapType>       m_PbrPSOs;
-    std::unordered_map<GraphicsPipelineDesc, MeshIdPsoHashMapType>    m_MeshIdPSOs;
     std::unordered_map<GraphicsPipelineDesc, WireframePsoHashMapType> m_WireframePSOs;
 };
 
@@ -461,11 +447,6 @@ inline PBR_Renderer::WireframePSOKey::WireframePSOKey(PSO_FLAGS _Flags,
     PSOKey{_Flags & SupportedFlags, _DoubleSided}
 {}
 
-inline PBR_Renderer::MeshIdPSOKey::MeshIdPSOKey(PSO_FLAGS _Flags,
-                                                bool      _DoubleSided) noexcept :
-    PSOKey{_Flags & SupportedFlags, _DoubleSided}
-{}
-
 template <>
 struct PBR_Renderer::GetPSOHelper<PBR_Renderer::PbrPSOKey>
 {
@@ -476,12 +457,6 @@ template <>
 struct PBR_Renderer::GetPSOHelper<PBR_Renderer::WireframePSOKey>
 {
     static constexpr decltype(&PBR_Renderer::CreateWireframePSO) CreatePSO = &PBR_Renderer::CreateWireframePSO;
-};
-
-template <>
-struct PBR_Renderer::GetPSOHelper<PBR_Renderer::MeshIdPSOKey>
-{
-    static constexpr decltype(&PBR_Renderer::CreateMeshIdPSO) CreatePSO = &PBR_Renderer::CreateMeshIdPSO;
 };
 
 template <typename KeyType>

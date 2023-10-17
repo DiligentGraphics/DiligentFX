@@ -73,6 +73,8 @@ struct HnDrawAttribs
 {
     float4x4 Transform = float4x4::Identity();
 
+    ITextureView* pDstRTV = nullptr;
+
     int   DebugView         = 0;
     float OcclusionStrength = 1;
     float EmissionScale     = 1;
@@ -114,8 +116,6 @@ public:
     ///
     /// \remarks    Only a single query per frame is supported.
     virtual const pxr::SdfPath* QueryPrimId(IDeviceContext* pCtx, Uint32 X, Uint32 Y) = 0;
-
-    virtual void RenderPrimId(IDeviceContext* pCtx, ITextureView* pDepthBuffer, const float4x4& Transform) = 0;
 };
 
 void CreateHnRenderer(IRenderDevice* pDevice, IDeviceContext* pContext, const HnRendererCreateInfo& CI, IHnRenderer** ppRenderer);

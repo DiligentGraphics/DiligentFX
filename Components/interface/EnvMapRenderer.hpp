@@ -48,8 +48,9 @@ public:
         IRenderStateCache* pStateCache      = nullptr;
         IBuffer*           pCameraAttribsCB = nullptr;
 
-        TEXTURE_FORMAT RTVFormat = TEX_FORMAT_RGBA8_UNORM_SRGB;
-        TEXTURE_FORMAT DSVFormat = TEX_FORMAT_D32_FLOAT;
+        Uint8          NumRenderTargets                        = 1;
+        TEXTURE_FORMAT RTVFormats[DILIGENT_MAX_RENDER_TARGETS] = {TEX_FORMAT_RGBA8_UNORM_SRGB};
+        TEXTURE_FORMAT DSVFormat                               = TEX_FORMAT_D32_FLOAT;
 
         int ToneMappingMode = TONE_MAPPING_MODE_UNCHARTED2;
 

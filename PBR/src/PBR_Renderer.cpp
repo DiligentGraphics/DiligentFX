@@ -45,7 +45,6 @@ const SamplerDesc PBR_Renderer::CreateInfo::DefaultSampler = Sam_LinearWrap;
 
 const PBR_Renderer::PSO_FLAGS PBR_Renderer::PbrPSOKey::SupportedFlags       = PSO_FLAG_ALL;
 const PBR_Renderer::PSO_FLAGS PBR_Renderer::WireframePSOKey::SupportedFlags = PSO_FLAG_USE_JOINTS;
-const PBR_Renderer::PSO_FLAGS PBR_Renderer::MeshIdPSOKey::SupportedFlags    = PSO_FLAG_USE_JOINTS;
 
 namespace
 {
@@ -902,40 +901,6 @@ void PBR_Renderer::CreatePbrPSO(PbrPsoHashMapType& PbrPSOs, const GraphicsPipeli
     }
 }
 
-void PBR_Renderer::CreateMeshIdPSO(MeshIdPsoHashMapType& MeshIdPSOs, const GraphicsPipelineDesc& GraphicsDesc, const MeshIdPSOKey& Key)
-{
-    GraphicsPipelineStateCreateInfo PSOCreateInfo;
-    PipelineStateDesc&              PSODesc          = PSOCreateInfo.PSODesc;
-    GraphicsPipelineDesc&           GraphicsPipeline = PSOCreateInfo.GraphicsPipeline;
-
-    InputLayoutDescX       InputLayout;
-    RefCntAutoPtr<IShader> pVS;
-    RefCntAutoPtr<IShader> pPS;
-    CreateShaders(Key.Flags, "RenderPBR.vsh", "Mesh ID VS", "RenderMeshId.psh", "Mesh ID PS", pVS, pPS, InputLayout);
-
-    GraphicsPipeline             = GraphicsDesc;
-    GraphicsPipeline.InputLayout = InputLayout;
-
-    IPipelineResourceSignature* ppSignatures[] = {m_ResourceSignature};
-    PSOCreateInfo.ppResourceSignatures         = ppSignatures;
-    PSOCreateInfo.ResourceSignaturesCount      = _countof(ppSignatures);
-
-    PSOCreateInfo.pVS = pVS;
-    PSOCreateInfo.pPS = pPS;
-
-    for (auto CullMode : {CULL_MODE_BACK, CULL_MODE_NONE})
-    {
-        std::string PSOName{"Mesh ID PSO"};
-        PSOName += (CullMode == CULL_MODE_BACK ? " - backface culling" : " - no culling");
-        PSODesc.Name = PSOName.c_str();
-
-        GraphicsPipeline.RasterizerDesc.CullMode = CullMode;
-        const auto DoubleSided                   = CullMode == CULL_MODE_NONE;
-
-        MeshIdPSOs[{Key.Flags, DoubleSided}] = m_Device.CreateGraphicsPipelineState(PSOCreateInfo);
-    }
-}
-
 void PBR_Renderer::CreateWireframePSO(WireframePsoHashMapType& WireframePSOs, const GraphicsPipelineDesc& GraphicsDesc, const WireframePSOKey& Key)
 {
     GraphicsPipelineStateCreateInfo PSOCreateInfo;
@@ -980,14 +945,6 @@ PBR_Renderer::PbrPsoCacheAccessor PBR_Renderer::GetPbrPsoCacheAccessor(const Gra
     auto it = m_PbrPSOs.find(GraphicsDesc);
     if (it == m_PbrPSOs.end())
         it = m_PbrPSOs.emplace(GraphicsDesc, PbrPsoHashMapType{}).first;
-    return {*this, it->second, it->first};
-}
-
-PBR_Renderer::MeshIdPsoCacheAccessor PBR_Renderer::GetMeshIdPsoCacheAccessor(const GraphicsPipelineDesc& GraphicsDesc)
-{
-    auto it = m_MeshIdPSOs.find(GraphicsDesc);
-    if (it == m_MeshIdPSOs.end())
-        it = m_MeshIdPSOs.emplace(GraphicsDesc, MeshIdPsoHashMapType{}).first;
     return {*this, it->second, it->first};
 }
 

@@ -64,11 +64,6 @@ struct PBRRendererShaderParameters
     float4 HighlightColor;
 
     float4 CustomData;
-
-    uint MeshId;
-    uint Padding0;
-    uint Padding1;
-    uint Padding2;
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
 	CHECK_STRUCT_ALIGNMENT(PBRRendererShaderParameters);
