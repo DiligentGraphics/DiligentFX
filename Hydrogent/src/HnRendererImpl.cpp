@@ -308,11 +308,29 @@ struct PSInput
 };
 
 Texture2D g_ColorBuffer;
+Texture2D g_MeshId;
 
 void main(in PSInput PSIn,
           out float4 Color : SV_Target0) 
 {
     Color = g_ColorBuffer.Load(int3(PSIn.Pos.xy, 0));
+
+    float IsSelected0 = g_MeshId.Load(int3(PSIn.Pos.xy + float2(-1.0, -1.0), 0)).r < 0.0 ? +1.0 : -1.0;
+    float IsSelected1 = g_MeshId.Load(int3(PSIn.Pos.xy + float2( 0.0, -1.0), 0)).r < 0.0 ? +1.0 : -1.0;
+    float IsSelected2 = g_MeshId.Load(int3(PSIn.Pos.xy + float2(+1.0, -1.0), 0)).r < 0.0 ? +1.0 : -1.0;
+
+    float IsSelected3 = g_MeshId.Load(int3(PSIn.Pos.xy + float2(-1.0,  0.0), 0)).r < 0.0 ? +1.0 : -1.0;
+    float IsSelected4 = g_MeshId.Load(int3(PSIn.Pos.xy + float2( 0.0,  0.0), 0)).r < 0.0 ? +1.0 : -1.0;
+    float IsSelected5 = g_MeshId.Load(int3(PSIn.Pos.xy + float2(+1.0,  0.0), 0)).r < 0.0 ? +1.0 : -1.0;
+
+    float IsSelected6 = g_MeshId.Load(int3(PSIn.Pos.xy + float2(-1.0, +1.0), 0)).r < 0.0 ? +1.0 : -1.0;
+    float IsSelected7 = g_MeshId.Load(int3(PSIn.Pos.xy + float2( 0.0, +1.0), 0)).r < 0.0 ? +1.0 : -1.0;
+    float IsSelected8 = g_MeshId.Load(int3(PSIn.Pos.xy + float2(+1.0, +1.0), 0)).r < 0.0 ? +1.0 : -1.0;
+
+    float Outline = IsSelected0 + IsSelected1 + IsSelected2 + IsSelected3 + IsSelected4 + IsSelected5 + IsSelected6 + IsSelected7 + IsSelected8;
+    Outline = saturate(1.0 - abs(Outline) / 9.0);
+
+    Color.rgb += Outline * float3(0.25, 0.25, 0.1f);
 
 #if CONVERT_OUTPUT_TO_SRGB
     Color.rgb = pow(Color.rgb, float3(1.0/2.2, 1.0/2.2, 1.0/2.2));
@@ -357,7 +375,9 @@ void HnRendererImpl::PreparePostProcess(TEXTURE_FORMAT RTVFmt)
         }
 
         PipelineResourceLayoutDescX ResourceLauout;
-        ResourceLauout.AddVariable(SHADER_TYPE_PIXEL, "g_ColorBuffer", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
+        ResourceLauout
+            .AddVariable(SHADER_TYPE_PIXEL, "g_ColorBuffer", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+            .AddVariable(SHADER_TYPE_PIXEL, "g_MeshId", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
 
         GraphicsPipelineStateCreateInfoX PsoCI{"Post process"};
         PsoCI
@@ -423,6 +443,7 @@ void HnRendererImpl::Draw(IDeviceContext* pCtx, const HnDrawAttribs& Attribs)
 
         pCtx->SetPipelineState(m_PostProcess.PSO);
         m_PostProcess.SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_ColorBuffer")->Set(m_ColorBuffer->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+        m_PostProcess.SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_MeshId")->Set(m_MeshIdTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
         pCtx->CommitShaderResources(m_PostProcess.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         pCtx->Draw({3, DRAW_FLAG_VERIFY_ALL});
     }
@@ -512,10 +533,6 @@ void HnRendererImpl::RenderMesh(IDeviceContext*          pCtx,
         static_assert(sizeof(pDstShaderAttribs->Material) == sizeof(ShaderAttribs), "The sizeof(PBRMaterialShaderInfo) is inconsistent with sizeof(ShaderAttribs)");
         memcpy(&pDstShaderAttribs->Material, &ShaderAttribs, sizeof(ShaderAttribs));
 
-        pDstShaderAttribs->Renderer.HighlightColor = (Attribs.SelectedPrim != nullptr && Mesh.GetId() == *Attribs.SelectedPrim) ?
-            Attribs.SlectionColor :
-            float4{0, 0, 0, 0};
-
         auto& RendererParams = pDstShaderAttribs->Renderer;
 
         RendererParams.DebugViewType            = Attribs.DebugView;
@@ -527,7 +544,12 @@ void HnRendererImpl::RenderMesh(IDeviceContext*          pCtx,
         RendererParams.IBLScale                 = Attribs.IBLScale;
         RendererParams.PrefilteredCubeMipLevels = 5; //m_Settings.UseIBL ? static_cast<float>(m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels) : 0.f;
         RendererParams.WireframeColor           = Attribs.WireframeColor;
-        RendererParams.CustomData               = float4{static_cast<float>(Mesh.GetUID()), 0, 0, 1};
+        RendererParams.HighlightColor           = float4{0, 0, 0, 0};
+
+        auto CustomData = float4{static_cast<float>(Mesh.GetUID()), 0, 0, 1};
+        if (Attribs.SelectedPrim != nullptr && Mesh.GetId() == *Attribs.SelectedPrim)
+            CustomData.x *= -1;
+        RendererParams.CustomData = CustomData;
     }
 
     pCtx->CommitShaderResources(pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
@@ -554,7 +576,7 @@ const pxr::SdfPath* HnRendererImpl::QueryPrimId(IDeviceContext* pCtx, Uint32 X, 
         {
             MappedTextureSubresource MappedData;
             pCtx->MapTextureSubresource(pStagingTex, 0, 0, MAP_READ, MAP_FLAG_DO_NOT_WAIT, nullptr, MappedData);
-            MeshUid = static_cast<Uint32>(*static_cast<const float*>(MappedData.pData));
+            MeshUid = static_cast<Uint32>(std::abs(*static_cast<const float*>(MappedData.pData)));
             pCtx->UnmapTextureSubresource(pStagingTex, 0, 0);
         }
         m_MeshIdReadBackQueue.Recycle(std::move(pStagingTex));
