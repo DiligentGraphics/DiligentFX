@@ -35,6 +35,7 @@
 #include "EnvMapRenderer.hpp"
 #include "MapHelper.hpp"
 #include "CommonlyUsedStates.h"
+#include "HnShaderSourceFactory.hpp"
 
 #include "pxr/imaging/hd/task.h"
 #include "pxr/imaging/hd/renderPass.h"
@@ -284,61 +285,6 @@ void HnRendererImpl::PrepareRenderTargets(ITextureView* pDstRtv)
     }
 }
 
-static constexpr char ScreeTriVSSource[] = R"(
-struct PSInput 
-{ 
-    float4 Pos : SV_POSITION;
-};
-void main(in  uint    VertID : SV_VertexID,
-          out PSInput PSIn) 
-{
-    float2 ClipXY[3];
-    ClipXY[0] = float2(-1.0, -1.0);
-    ClipXY[1] = float2(-1.0,  3.0);
-    ClipXY[2] = float2( 3.0, -1.0);
-
-    PSIn.Pos = float4(ClipXY[VertID], 0.0, 1.0);
-}
-)";
-
-static constexpr char PostProcessPSSource[] = R"(
-struct PSInput 
-{ 
-    float4 Pos : SV_POSITION;
-};
-
-Texture2D g_ColorBuffer;
-Texture2D g_MeshId;
-
-void main(in PSInput PSIn,
-          out float4 Color : SV_Target0) 
-{
-    Color = g_ColorBuffer.Load(int3(PSIn.Pos.xy, 0));
-
-    float IsSelected0 = g_MeshId.Load(int3(PSIn.Pos.xy + float2(-1.0, -1.0), 0)).r < 0.0 ? +1.0 : -1.0;
-    float IsSelected1 = g_MeshId.Load(int3(PSIn.Pos.xy + float2( 0.0, -1.0), 0)).r < 0.0 ? +1.0 : -1.0;
-    float IsSelected2 = g_MeshId.Load(int3(PSIn.Pos.xy + float2(+1.0, -1.0), 0)).r < 0.0 ? +1.0 : -1.0;
-
-    float IsSelected3 = g_MeshId.Load(int3(PSIn.Pos.xy + float2(-1.0,  0.0), 0)).r < 0.0 ? +1.0 : -1.0;
-    float IsSelected4 = g_MeshId.Load(int3(PSIn.Pos.xy + float2( 0.0,  0.0), 0)).r < 0.0 ? +1.0 : -1.0;
-    float IsSelected5 = g_MeshId.Load(int3(PSIn.Pos.xy + float2(+1.0,  0.0), 0)).r < 0.0 ? +1.0 : -1.0;
-
-    float IsSelected6 = g_MeshId.Load(int3(PSIn.Pos.xy + float2(-1.0, +1.0), 0)).r < 0.0 ? +1.0 : -1.0;
-    float IsSelected7 = g_MeshId.Load(int3(PSIn.Pos.xy + float2( 0.0, +1.0), 0)).r < 0.0 ? +1.0 : -1.0;
-    float IsSelected8 = g_MeshId.Load(int3(PSIn.Pos.xy + float2(+1.0, +1.0), 0)).r < 0.0 ? +1.0 : -1.0;
-
-    float Outline = IsSelected0 + IsSelected1 + IsSelected2 + IsSelected3 + IsSelected4 + IsSelected5 + IsSelected6 + IsSelected7 + IsSelected8;
-    Outline = saturate(1.0 - abs(Outline) / 9.0);
-
-    Color.rgb += Outline * float3(0.25, 0.25, 0.1f);
-
-#if CONVERT_OUTPUT_TO_SRGB
-    Color.rgb = pow(Color.rgb, float3(1.0/2.2, 1.0/2.2, 1.0/2.2));
-#endif
-}
-
-)";
-
 void HnRendererImpl::PreparePostProcess(TEXTURE_FORMAT RTVFmt)
 {
     if (m_PostProcess.PSO)
@@ -350,7 +296,8 @@ void HnRendererImpl::PreparePostProcess(TEXTURE_FORMAT RTVFmt)
     if (!m_PostProcess.PSO)
     {
         ShaderCreateInfo ShaderCI;
-        ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL;
+        ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
+        ShaderCI.pShaderSourceStreamFactory = &HnShaderSourceFactory::GetInstance();
 
         ShaderMacroHelper Macros;
         Macros.Add("CONVERT_OUTPUT_TO_SRGB", m_ConvertOutputToSRGB);
@@ -360,7 +307,7 @@ void HnRendererImpl::PreparePostProcess(TEXTURE_FORMAT RTVFmt)
         {
             ShaderCI.Desc       = {"Post process VS", SHADER_TYPE_VERTEX, true};
             ShaderCI.EntryPoint = "main";
-            ShaderCI.Source     = ScreeTriVSSource;
+            ShaderCI.FilePath   = "PostProcess.vsh";
 
             pVS = m_Device.CreateShader(ShaderCI);
         }
@@ -369,7 +316,7 @@ void HnRendererImpl::PreparePostProcess(TEXTURE_FORMAT RTVFmt)
         {
             ShaderCI.Desc       = {"Post process PS", SHADER_TYPE_PIXEL, true};
             ShaderCI.EntryPoint = "main";
-            ShaderCI.Source     = PostProcessPSSource;
+            ShaderCI.FilePath   = "PostProcess.psh";
 
             pPS = m_Device.CreateShader(ShaderCI);
         }

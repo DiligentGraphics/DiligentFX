@@ -1,5 +1,7 @@
 cmake_minimum_required (VERSION 3.6)
 
+include(BuildUtils.cmake)
+
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 project(DiligentFX CXX)
@@ -60,57 +62,17 @@ foreach(FILE ${SOURCE})
 endforeach()
 
 # Convert shaders to headers and generate master header with the list of all files
-if(NOT FILE2STRING_PATH STREQUAL "")
-    find_package(Python3 REQUIRED)
+set(SHADER_OUTPUT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shaders_inc)
+set(SHADERS_LIST_FILE shaders_inc/shaders_list.h)
+convert_shaders_to_headers("${SHADERS}" ${SHADER_OUTPUT_DIR} ${SHADERS_LIST_FILE} SHADERS_INC_LIST)
 
-    set(SHADER_OUTPUT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shaders_inc)
-
-    file(MAKE_DIRECTORY ${SHADER_OUTPUT_DIR})
-
-    set(SHADERS_LIST_FILE shaders_inc/shaders_list.h)
-    file(WRITE ${SHADERS_LIST_FILE}
-        "static const MemoryShaderSourceFileInfo g_Shaders[] =\n"
-        "{"
-        )
-
-    foreach(FILE ${SHADERS})
-
-        get_filename_component(FILE_NAME ${FILE} NAME)
-        set(CONVERTED_FILE ${SHADER_OUTPUT_DIR}/${FILE_NAME}.h)
-        add_custom_command(OUTPUT ${CONVERTED_FILE}
-                           COMMAND ${Python3_EXECUTABLE} ${FILE2STRING_PATH} ${FILE} ${CONVERTED_FILE}
-                           MAIN_DEPENDENCY ${FILE} # the primary input source file to the command
-                           COMMENT "Processing shader ${FILE}"
-                           VERBATIM)
-
-        string(REPLACE "." "_" VAR_NAME "${FILE_NAME}")
-        file(APPEND ${SHADERS_LIST_FILE}
-                "\n    {"
-                "\n        \"${FILE_NAME}\","
-                "\n        #include \"${FILE_NAME}.h\""
-                "\n    },"
-            )
-
-            list(APPEND SHADERS_INC_LIST ${CONVERTED_FILE})
-
-    endforeach()
-    file(APPEND ${SHADERS_LIST_FILE}
-        "\n};\n"
-        )
-else()
-    message(WARNING "File2String utility is currently unavailable on this host system. This is not an issues unless you modify shaders")
-endif()
-
-set_source_files_properties(
-    ${SHADERS_INC_LIST}
-    PROPERTIES GENERATED TRUE
-)
 target_sources(DiligentFX PRIVATE
     # A target created in the same directory (CMakeLists.txt file) that specifies any output of the 
     # custom command as a source file is given a rule to generate the file using the command at build time. 
     ${SHADERS_INC_LIST}
 )
 source_group("generated" FILES
+    ${SHADERS_LIST_FILE}
     ${SHADERS_INC_LIST}
 )
 

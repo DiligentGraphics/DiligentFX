@@ -9,6 +9,7 @@ set(SOURCE
     src/HnRenderDelegate.cpp
     src/HnRendererImpl.cpp
     src/HnRenderPass.cpp
+    src/HnShaderSourceFactory.cpp
     src/HnRenderPassState.cpp
     src/HnTokens.cpp
     src/HnTextureRegistry.cpp
@@ -23,6 +24,7 @@ set(INCLUDE
     include/HnRenderDelegate.hpp
     include/HnRendererImpl.hpp
     include/HnRenderPass.hpp
+    include/HnShaderSourceFactory.hpp
     include/HnRenderPassState.hpp
     include/HnTokens.hpp
     include/HnTextureIdentifier.hpp
@@ -35,7 +37,15 @@ set(INTERFACE
     interface/HnRenderer.hpp
 )
 
-add_library(Diligent-Hydrogent STATIC README.md ${SOURCE} ${INCLUDE} ${INTERFACE})
+file(GLOB_RECURSE SHADERS LIST_DIRECTORIES false shaders/*.*)
+
+# Convert shaders to headers and generate master header with the list of all files
+set(SHADER_OUTPUT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shaders_inc)
+set(SHADERS_LIST_FILE ${SHADER_OUTPUT_DIR}/shaders_list.h)
+convert_shaders_to_headers("${SHADERS}" ${SHADER_OUTPUT_DIR} ${SHADERS_LIST_FILE} SHADERS_INC_LIST)
+
+set(HYDROGENT_SOURCE ${SOURCE} ${INCLUDE} ${INTERFACE} ${SHADERS} ${SHADERS_LIST_FILE} ${SHADERS_INC_LIST} README.md)
+add_library(Diligent-Hydrogent STATIC ${HYDROGENT_SOURCE})
 
 set_common_target_properties(Diligent-Hydrogent)
 
@@ -135,4 +145,4 @@ set_target_properties(Diligent-Hydrogent PROPERTIES
     FOLDER DiligentFX
 )
 
-source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${SOURCE} ${INCLUDE} ${INTERFACE})
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${HYDROGENT_SOURCE})
