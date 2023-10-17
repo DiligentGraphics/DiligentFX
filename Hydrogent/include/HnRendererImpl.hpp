@@ -103,6 +103,10 @@ private:
     std::shared_ptr<USD_Renderer>   m_USDRenderer;
     std::unique_ptr<EnvMapRenderer> m_EnvMapRenderer;
 
+    USD_Renderer::PbrPsoCacheAccessor       m_PbrPSOCache;
+    USD_Renderer::WireframePsoCacheAccessor m_WireframePSOCache;
+    USD_Renderer::MeshIdPsoCacheAccessor    m_MeshIdPSOCache;
+
     std::unique_ptr<HnRenderDelegate> m_RenderDelegate;
 
     pxr::UsdStageRefPtr        m_Stage;

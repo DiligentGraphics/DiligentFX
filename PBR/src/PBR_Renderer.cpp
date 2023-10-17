@@ -43,15 +43,9 @@ namespace Diligent
 
 const SamplerDesc PBR_Renderer::CreateInfo::DefaultSampler = Sam_LinearWrap;
 
-const PBR_Renderer::PSO_FLAGS PBR_Renderer::PbrPSOKey::SupportedFlags = PSO_FLAG_ALL;
-
-const PBR_Renderer::PSO_FLAGS PBR_Renderer::WireframePSOKey::SupportedFlags =
-    PSO_FLAG_USE_JOINTS |
-    PSO_FLAG_FRONT_CCW;
-
-const PBR_Renderer::PSO_FLAGS PBR_Renderer::MeshIdPSOKey::SupportedFlags =
-    PSO_FLAG_USE_JOINTS |
-    PSO_FLAG_FRONT_CCW;
+const PBR_Renderer::PSO_FLAGS PBR_Renderer::PbrPSOKey::SupportedFlags       = PSO_FLAG_ALL;
+const PBR_Renderer::PSO_FLAGS PBR_Renderer::WireframePSOKey::SupportedFlags = PSO_FLAG_USE_JOINTS;
+const PBR_Renderer::PSO_FLAGS PBR_Renderer::MeshIdPSOKey::SupportedFlags    = PSO_FLAG_USE_JOINTS;
 
 namespace
 {
@@ -824,24 +818,19 @@ void PBR_Renderer::CreateShaders(PSO_FLAGS               PSOFlags,
 }
 
 
-void PBR_Renderer::CreatePbrPSO(const PbrPSOKey& Key)
+void PBR_Renderer::CreatePbrPSO(PbrPsoHashMapType& PbrPSOs, const GraphicsPipelineDesc& GraphicsDesc, const PbrPSOKey& Key)
 {
     GraphicsPipelineStateCreateInfo PSOCreateInfo;
     PipelineStateDesc&              PSODesc          = PSOCreateInfo.PSODesc;
     GraphicsPipelineDesc&           GraphicsPipeline = PSOCreateInfo.GraphicsPipeline;
-
-    GraphicsPipeline.NumRenderTargets                     = 1;
-    GraphicsPipeline.RTVFormats[0]                        = m_Settings.RTVFmt;
-    GraphicsPipeline.DSVFormat                            = m_Settings.DSVFmt;
-    GraphicsPipeline.PrimitiveTopology                    = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    GraphicsPipeline.RasterizerDesc.FrontCounterClockwise = (Key.Flags & PSO_FLAG_FRONT_CCW) != 0;
 
     InputLayoutDescX       InputLayout;
     RefCntAutoPtr<IShader> pVS;
     RefCntAutoPtr<IShader> pPS;
     CreateShaders(Key.Flags, "RenderPBR.vsh", "PBR VS", "RenderPBR.psh", "PBR PS", pVS, pPS, InputLayout);
 
-    PSOCreateInfo.GraphicsPipeline.InputLayout = InputLayout;
+    GraphicsPipeline             = GraphicsDesc;
+    GraphicsPipeline.InputLayout = InputLayout;
 
     IPipelineResourceSignature* ppSignatures[] = {m_ResourceSignature};
     PSOCreateInfo.ppResourceSignatures         = ppSignatures;
@@ -875,38 +864,32 @@ void PBR_Renderer::CreatePbrPSO(const PbrPSOKey& Key)
             PSOName += (CullMode == CULL_MODE_BACK ? " - backface culling" : " - no culling");
             PSODesc.Name = PSOName.c_str();
 
-            GraphicsPipeline.RasterizerDesc.CullMode       = CullMode;
-            const auto DoubleSided                         = CullMode == CULL_MODE_NONE;
-            auto       PSO                                 = m_Device.CreateGraphicsPipelineState(PSOCreateInfo);
-            m_PbrPSOs[{Key.Flags, AlphaMode, DoubleSided}] = PSO;
+            GraphicsPipeline.RasterizerDesc.CullMode     = CullMode;
+            const auto DoubleSided                       = CullMode == CULL_MODE_NONE;
+            auto       PSO                               = m_Device.CreateGraphicsPipelineState(PSOCreateInfo);
+            PbrPSOs[{Key.Flags, AlphaMode, DoubleSided}] = PSO;
             if (AlphaMode == ALPHA_MODE_BLEND)
             {
                 // Mask and blend use the same PSO
-                m_PbrPSOs[{Key.Flags, ALPHA_MODE_MASK, DoubleSided}] = PSO;
+                PbrPSOs[{Key.Flags, ALPHA_MODE_MASK, DoubleSided}] = PSO;
             }
         }
     }
 }
 
-void PBR_Renderer::CreateMeshIdPSO(const MeshIdPSOKey& Key)
+void PBR_Renderer::CreateMeshIdPSO(MeshIdPsoHashMapType& MeshIdPSOs, const GraphicsPipelineDesc& GraphicsDesc, const MeshIdPSOKey& Key)
 {
     GraphicsPipelineStateCreateInfo PSOCreateInfo;
     PipelineStateDesc&              PSODesc          = PSOCreateInfo.PSODesc;
     GraphicsPipelineDesc&           GraphicsPipeline = PSOCreateInfo.GraphicsPipeline;
-
-    GraphicsPipeline.NumRenderTargets                     = 1;
-    GraphicsPipeline.RTVFormats[0]                        = MeshIdFmt;
-    GraphicsPipeline.DSVFormat                            = m_Settings.DSVFmt;
-    GraphicsPipeline.PrimitiveTopology                    = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    GraphicsPipeline.RasterizerDesc.FrontCounterClockwise = (Key.Flags & PSO_FLAG_FRONT_CCW) != 0;
-    GraphicsPipeline.DepthStencilDesc.DepthFunc           = COMPARISON_FUNC_LESS_EQUAL;
 
     InputLayoutDescX       InputLayout;
     RefCntAutoPtr<IShader> pVS;
     RefCntAutoPtr<IShader> pPS;
     CreateShaders(Key.Flags, "RenderPBR.vsh", "Mesh ID VS", "RenderMeshId.psh", "Mesh ID PS", pVS, pPS, InputLayout);
 
-    PSOCreateInfo.GraphicsPipeline.InputLayout = InputLayout;
+    GraphicsPipeline             = GraphicsDesc;
+    GraphicsPipeline.InputLayout = InputLayout;
 
     IPipelineResourceSignature* ppSignatures[] = {m_ResourceSignature};
     PSOCreateInfo.ppResourceSignatures         = ppSignatures;
@@ -924,31 +907,23 @@ void PBR_Renderer::CreateMeshIdPSO(const MeshIdPSOKey& Key)
         GraphicsPipeline.RasterizerDesc.CullMode = CullMode;
         const auto DoubleSided                   = CullMode == CULL_MODE_NONE;
 
-        m_MeshIdPSOs[{Key.Flags, DoubleSided}] = m_Device.CreateGraphicsPipelineState(PSOCreateInfo);
+        MeshIdPSOs[{Key.Flags, DoubleSided}] = m_Device.CreateGraphicsPipelineState(PSOCreateInfo);
     }
 }
 
-void PBR_Renderer::CreateWireframePSO(const WireframePSOKey& Key)
+void PBR_Renderer::CreateWireframePSO(WireframePsoHashMapType& WireframePSOs, const GraphicsPipelineDesc& GraphicsDesc, const WireframePSOKey& Key)
 {
     GraphicsPipelineStateCreateInfo PSOCreateInfo;
     PipelineStateDesc&              PSODesc          = PSOCreateInfo.PSODesc;
     GraphicsPipelineDesc&           GraphicsPipeline = PSOCreateInfo.GraphicsPipeline;
-
-    GraphicsPipeline.NumRenderTargets  = 1;
-    GraphicsPipeline.RTVFormats[0]     = m_Settings.RTVFmt;
-    GraphicsPipeline.DSVFormat         = m_Settings.DSVFmt;
-    GraphicsPipeline.PrimitiveTopology = Key.Topology;
-    if (Key.Topology != PRIMITIVE_TOPOLOGY_LINE_LIST && Key.Topology != PRIMITIVE_TOPOLOGY_LINE_STRIP &&
-        Key.Topology != PRIMITIVE_TOPOLOGY_LINE_LIST_ADJ && Key.Topology != PRIMITIVE_TOPOLOGY_LINE_STRIP_ADJ)
-        GraphicsPipeline.RasterizerDesc.FillMode = FILL_MODE_WIREFRAME;
-    GraphicsPipeline.RasterizerDesc.FrontCounterClockwise = (Key.Flags & PSO_FLAG_FRONT_CCW) != 0;
 
     InputLayoutDescX       InputLayout;
     RefCntAutoPtr<IShader> pVS;
     RefCntAutoPtr<IShader> pPS;
     CreateShaders(Key.Flags, "RenderPBR.vsh", "Wireframe VS", "RenderWireframe.psh", "Wireframe PS", pVS, pPS, InputLayout);
 
-    PSOCreateInfo.GraphicsPipeline.InputLayout = InputLayout;
+    GraphicsPipeline             = GraphicsDesc;
+    GraphicsPipeline.InputLayout = InputLayout;
 
     IPipelineResourceSignature* ppSignatures[] = {m_ResourceSignature};
     PSOCreateInfo.ppResourceSignatures         = ppSignatures;
@@ -966,7 +941,7 @@ void PBR_Renderer::CreateWireframePSO(const WireframePSOKey& Key)
         GraphicsPipeline.RasterizerDesc.CullMode = CullMode;
         const auto DoubleSided                   = CullMode == CULL_MODE_NONE;
 
-        m_WireframePSOs[{Key.Flags, Key.Topology, DoubleSided}] = m_Device.CreateGraphicsPipelineState(PSOCreateInfo);
+        WireframePSOs[{Key.Flags, DoubleSided}] = m_Device.CreateGraphicsPipelineState(PSOCreateInfo);
     }
 }
 
@@ -975,19 +950,28 @@ void PBR_Renderer::CreateResourceBinding(IShaderResourceBinding** ppSRB)
     m_ResourceSignature->CreateShaderResourceBinding(ppSRB, true);
 }
 
-IPipelineState* PBR_Renderer::GetPbrPSO(const PbrPSOKey& Key, bool CreateIfNull)
+PBR_Renderer::PbrPsoCacheAccessor PBR_Renderer::GetPbrPsoCacheAccessor(const GraphicsPipelineDesc& GraphicsDesc)
 {
-    return GetPSO(m_PbrPSOs, Key, CreateIfNull, std::mem_fn(&PBR_Renderer::CreatePbrPSO));
+    auto it = m_PbrPSOs.find(GraphicsDesc);
+    if (it == m_PbrPSOs.end())
+        it = m_PbrPSOs.emplace(GraphicsDesc, PbrPsoHashMapType{}).first;
+    return {*this, it->second, it->first};
 }
 
-IPipelineState* PBR_Renderer::GetMeshIdPSO(const MeshIdPSOKey& Key, bool CreateIfNull)
+PBR_Renderer::MeshIdPsoCacheAccessor PBR_Renderer::GetMeshIdPsoCacheAccessor(const GraphicsPipelineDesc& GraphicsDesc)
 {
-    return GetPSO(m_MeshIdPSOs, Key, CreateIfNull, std::mem_fn(&PBR_Renderer::CreateMeshIdPSO));
+    auto it = m_MeshIdPSOs.find(GraphicsDesc);
+    if (it == m_MeshIdPSOs.end())
+        it = m_MeshIdPSOs.emplace(GraphicsDesc, MeshIdPsoHashMapType{}).first;
+    return {*this, it->second, it->first};
 }
 
-IPipelineState* PBR_Renderer::GetWireframePSO(const WireframePSOKey& Key, bool CreateIfNull)
+PBR_Renderer::WireframePsoCacheAccessor PBR_Renderer::GetWireframePsoCacheAccessor(const GraphicsPipelineDesc& GraphicsDesc)
 {
-    return GetPSO(m_WireframePSOs, Key, CreateIfNull, std::mem_fn(&PBR_Renderer::CreateWireframePSO));
+    auto it = m_WireframePSOs.find(GraphicsDesc);
+    if (it == m_WireframePSOs.end())
+        it = m_WireframePSOs.emplace(GraphicsDesc, WireframePsoHashMapType{}).first;
+    return {*this, it->second, it->first};
 }
 
 } // namespace Diligent

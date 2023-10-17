@@ -77,8 +77,6 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters*         pRefCounters,
             pContext,
             [](const HnRendererCreateInfo& CI) {
                 USD_Renderer::CreateInfo USDRendererCI;
-                USDRendererCI.RTVFmt = CI.RTVFormat;
-                USDRendererCI.DSVFmt = CI.DSVFormat;
 
                 // Use samplers from texture views
                 USDRendererCI.UseImmutableSamplers = false;
@@ -115,8 +113,28 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters*         pRefCounters,
             }(CI, pDevice))},
     m_MeshIdReadBackQueue{pDevice}
 {
-    if (CI.FrontCCW)
-        m_DefaultPSOFlags |= PBR_Renderer::PSO_FLAG_FRONT_CCW;
+    GraphicsPipelineDesc GraphicsDesc;
+    GraphicsDesc.NumRenderTargets                     = 1;
+    GraphicsDesc.RTVFormats[0]                        = CI.RTVFormat;
+    GraphicsDesc.DSVFormat                            = CI.DSVFormat;
+    GraphicsDesc.PrimitiveTopology                    = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    GraphicsDesc.RasterizerDesc.FrontCounterClockwise = CI.FrontCCW;
+
+    m_PbrPSOCache = m_USDRenderer->GetPbrPsoCacheAccessor(GraphicsDesc);
+    VERIFY_EXPR(m_PbrPSOCache);
+
+    GraphicsDesc.PrimitiveTopology = PRIMITIVE_TOPOLOGY_LINE_LIST;
+
+    m_WireframePSOCache = m_USDRenderer->GetWireframePsoCacheAccessor(GraphicsDesc);
+    VERIFY_EXPR(m_WireframePSOCache);
+
+    GraphicsDesc.NumRenderTargets           = 1;
+    GraphicsDesc.RTVFormats[0]              = TEX_FORMAT_RGBA8_UINT;
+    GraphicsDesc.PrimitiveTopology          = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    GraphicsDesc.DepthStencilDesc.DepthFunc = COMPARISON_FUNC_LESS_EQUAL;
+
+    m_MeshIdPSOCache = m_USDRenderer->GetMeshIdPsoCacheAccessor(GraphicsDesc);
+    VERIFY_EXPR(m_MeshIdPSOCache);
 
     if (CI.ConvertOutputToSRGB)
         m_DefaultPSOFlags |= PBR_Renderer::PSO_FLAG_CONVERT_OUTPUT_TO_SRGB;
@@ -317,15 +335,15 @@ void HnRendererImpl::RenderMesh(IDeviceContext*          pCtx,
             PBR_Renderer::PSO_FLAG_USE_IBL |
             PBR_Renderer::PSO_FLAG_ENABLE_DEBUG_VIEW;
 
-        pPSO = m_USDRenderer->GetPbrPSO({PSOFlags, AlphaMode, /*DoubleSided = */ false}, true);
+        pPSO = m_PbrPSOCache.Get({PSOFlags, AlphaMode, /*DoubleSided = */ false}, true);
     }
     else if (Attribs.RenderMode == HN_RENDER_MODE_MESH_EDGES)
     {
-        pPSO = m_USDRenderer->GetWireframePSO({m_DefaultPSOFlags, PRIMITIVE_TOPOLOGY_LINE_LIST, /*DoubleSided = */ false}, true);
+        pPSO = m_WireframePSOCache.Get({m_DefaultPSOFlags, /*DoubleSided = */ false}, true);
     }
     else
     {
-        pPSO = m_USDRenderer->GetMeshIdPSO({m_DefaultPSOFlags, /*DoubleSided = */ false}, true);
+        pPSO = m_MeshIdPSOCache.Get({m_DefaultPSOFlags, /*DoubleSided = */ false}, true);
     }
     pCtx->SetPipelineState(pPSO);
 

@@ -107,10 +107,24 @@ GLTF_PBR_Renderer::GLTF_PBR_Renderer(IRenderDevice*     pDevice,
         m_SupportedPSOFlags |= PSO_FLAG_USE_IBL;
 
     m_SupportedPSOFlags |=
-        PSO_FLAG_FRONT_CCW |
         PSO_FLAG_ENABLE_DEBUG_VIEW |
         PSO_FLAG_USE_TEXTURE_ATLAS |
         PSO_FLAG_CONVERT_OUTPUT_TO_SRGB;
+
+    {
+        GraphicsPipelineDesc GraphicsDesc;
+        GraphicsDesc.NumRenderTargets                     = 1;
+        GraphicsDesc.RTVFormats[0]                        = CI.RTVFmt;
+        GraphicsDesc.DSVFormat                            = CI.DSVFmt;
+        GraphicsDesc.PrimitiveTopology                    = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+        GraphicsDesc.RasterizerDesc.FrontCounterClockwise = CI.FrontCounterClockwise;
+
+        m_PbrPSOCache = GetPbrPsoCacheAccessor(GraphicsDesc);
+
+        GraphicsDesc.RasterizerDesc.FillMode = FILL_MODE_WIREFRAME;
+
+        m_WireframePSOCache = GetWireframePsoCacheAccessor(GraphicsDesc);
+    }
 }
 
 void GLTF_PBR_Renderer::InitMaterialSRB(GLTF::Model&            Model,
@@ -401,7 +415,7 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
             const auto& material         = GLTFModel.Materials[primitive.MaterialId];
             const auto& NodeGlobalMatrix = Transforms.NodeGlobalMatrices[Node.Index];
 
-            auto UpdatePSO = [this, pCtx, &pCurrPSO](const auto& NewKey, auto& CurrKey, auto&& GetPSO) {
+            auto UpdatePSO = [pCtx, &pCurrPSO](const auto& NewKey, auto& CurrKey, auto& PSOCache) {
                 if (NewKey != CurrKey)
                 {
                     CurrKey  = NewKey;
@@ -410,26 +424,26 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
 
                 if (pCurrPSO == nullptr)
                 {
-                    pCurrPSO = GetPSO(this, NewKey, true);
+                    pCurrPSO = PSOCache.Get(NewKey, true);
                     VERIFY_EXPR(pCurrPSO != nullptr);
                     pCtx->SetPipelineState(pCurrPSO);
                 }
                 else
                 {
-                    VERIFY_EXPR(pCurrPSO == GetPSO(this, NewKey, false));
+                    VERIFY_EXPR(pCurrPSO == PSOCache.Get(NewKey, false));
                 }
             };
             if (RenderParams.Wireframe)
             {
-                UpdatePSO(WireframePSOKey{PSOFlags, PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, material.DoubleSided},
+                UpdatePSO(WireframePSOKey{PSOFlags, material.DoubleSided},
                           CurrWireframePsoKey,
-                          std::mem_fn(&GLTF_PBR_Renderer::GetWireframePSO));
+                          m_WireframePSOCache);
             }
             else
             {
                 UpdatePSO(PbrPSOKey{PSOFlags, GltfAlphaModeToAlphaMode(AlphaMode), material.DoubleSided},
                           CurrPbrPsoKey,
-                          std::mem_fn(&GLTF_PBR_Renderer::GetPbrPSO));
+                          m_PbrPSOCache);
             }
 
             if (pModelBindings != nullptr)

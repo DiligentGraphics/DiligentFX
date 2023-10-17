@@ -41,6 +41,17 @@ namespace Diligent
 class GLTF_PBR_Renderer : public PBR_Renderer
 {
 public:
+    struct CreateInfo : public PBR_Renderer::CreateInfo
+    {
+        /// Render target format.
+        TEXTURE_FORMAT RTVFmt = TEX_FORMAT_UNKNOWN;
+
+        /// Depth-buffer format.
+        TEXTURE_FORMAT DSVFmt = TEX_FORMAT_UNKNOWN;
+
+        bool FrontCounterClockwise = false;
+    };
+
     /// Initializes the renderer
     GLTF_PBR_Renderer(IRenderDevice*     pDevice,
                       IRenderStateCache* pStateCache,
@@ -243,6 +254,9 @@ private:
         {}
     };
     std::array<std::vector<PrimitiveRenderInfo>, GLTF::Material::ALPHA_MODE_NUM_MODES> m_RenderLists;
+
+    PbrPsoCacheAccessor       m_PbrPSOCache;
+    WireframePsoCacheAccessor m_WireframePSOCache;
 };
 
 DEFINE_FLAG_ENUM_OPERATORS(GLTF_PBR_Renderer::RenderInfo::ALPHA_MODE_FLAGS)

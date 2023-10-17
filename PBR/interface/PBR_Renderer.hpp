@@ -47,17 +47,6 @@ public:
     /// Renderer create info
     struct CreateInfo
     {
-        /// Render target format.
-        TEXTURE_FORMAT RTVFmt = TEX_FORMAT_UNKNOWN;
-
-        /// Depth-buffer format.
-
-        /// \note   If both RTV and DSV formats are TEX_FORMAT_UNKNOWN,
-        ///         the renderer will not initialize PSO, uniform buffers and other
-        ///         resources. It is expected that an application will use custom
-        ///         render callback function.
-        TEXTURE_FORMAT DSVFmt = TEX_FORMAT_UNKNOWN;
-
         /// Indicates whether to enable IBL.
         /// A pipeline state can use IBL only if this flag is set to true.
         bool EnableIBL = true;
@@ -226,10 +215,9 @@ public:
         PSO_FLAG_USE_EMISSIVE_MAP  = 1u << 11u,
         PSO_FLAG_USE_IBL           = 1u << 12u,
 
-        PSO_FLAG_FRONT_CCW              = 1u << 13u,
-        PSO_FLAG_ENABLE_DEBUG_VIEW      = 1u << 14u,
-        PSO_FLAG_USE_TEXTURE_ATLAS      = 1u << 15u,
-        PSO_FLAG_CONVERT_OUTPUT_TO_SRGB = 1u << 16u,
+        PSO_FLAG_ENABLE_DEBUG_VIEW      = 1u << 13u,
+        PSO_FLAG_USE_TEXTURE_ATLAS      = 1u << 14u,
+        PSO_FLAG_CONVERT_OUTPUT_TO_SRGB = 1u << 15u,
 
         PSO_FLAG_LAST = PSO_FLAG_CONVERT_OUTPUT_TO_SRGB,
 
@@ -247,8 +235,7 @@ public:
             PSO_FLAG_USE_PHYS_DESC_MAP |
             PSO_FLAG_USE_AO_MAP |
             PSO_FLAG_USE_EMISSIVE_MAP |
-            PSO_FLAG_USE_IBL |
-            PSO_FLAG_FRONT_CCW,
+            PSO_FLAG_USE_IBL,
 
         PSO_FLAG_ALL = PSO_FLAG_LAST * 2u - 1u,
     };
@@ -309,39 +296,15 @@ public:
             }
         };
     };
-    IPipelineState* GetPbrPSO(const PbrPSOKey& Key, bool CreateIfNull);
 
 
     struct WireframePSOKey : PSOKey
     {
         static const PSO_FLAGS SupportedFlags;
 
-        PRIMITIVE_TOPOLOGY Topology = PRIMITIVE_TOPOLOGY_UNDEFINED;
-
         WireframePSOKey() noexcept {};
-        WireframePSOKey(PSO_FLAGS _Flags, PRIMITIVE_TOPOLOGY _Topology, bool _DoubleSided) noexcept;
-
-        bool operator==(const WireframePSOKey& rhs) const noexcept
-        {
-            return PSOKey::operator==(rhs) && Topology == rhs.Topology;
-        }
-
-        bool operator!=(const WireframePSOKey& rhs) const noexcept
-        {
-            return PSOKey::operator!=(rhs) || Topology != rhs.Topology;
-        }
-
-        struct Hasher
-        {
-            size_t operator()(const WireframePSOKey& Key) const noexcept
-            {
-                size_t Hash = PSOKey::Hasher{}(Key);
-                HashCombine(Hash, Key.Topology);
-                return Hash;
-            }
-        };
+        WireframePSOKey(PSO_FLAGS _Flags, bool _DoubleSided) noexcept;
     };
-    IPipelineState* GetWireframePSO(const WireframePSOKey& Key, bool CreateIfNull);
 
     struct MeshIdPSOKey : PSOKey
     {
@@ -350,7 +313,62 @@ public:
         MeshIdPSOKey() noexcept {};
         MeshIdPSOKey(PSO_FLAGS _Flags, bool _DoubleSided) noexcept;
     };
-    IPipelineState* GetMeshIdPSO(const MeshIdPSOKey& Key, bool CreateIfNull);
+
+
+    template <typename PsoHashMapType, typename PsoKeyType>
+    class PsoCacheAccessor
+    {
+    public:
+        PsoCacheAccessor() noexcept
+        {}
+
+        PsoCacheAccessor(const PsoCacheAccessor&) = default;
+        PsoCacheAccessor(PsoCacheAccessor&&)      = default;
+        PsoCacheAccessor& operator=(const PsoCacheAccessor&) = default;
+        PsoCacheAccessor& operator=(PsoCacheAccessor&&) = default;
+
+        explicit operator bool() const noexcept
+        {
+            return m_pRenderer != nullptr && m_pPsoHashMap != nullptr && m_pGraphicsDesc != nullptr;
+        }
+
+        IPipelineState* Get(const PsoKeyType& Key, bool CreateIfNull) const
+        {
+            if (!*this)
+            {
+                UNEXPECTED("Accessor is not initialized");
+                return nullptr;
+            }
+            return m_pRenderer->GetPSO(*m_pPsoHashMap, *m_pGraphicsDesc, Key, CreateIfNull);
+        }
+
+    private:
+        friend PBR_Renderer;
+        PsoCacheAccessor(PBR_Renderer&               Renderer,
+                         PsoHashMapType&             PsoHashMap,
+                         const GraphicsPipelineDesc& GraphicsDesc) noexcept :
+            m_pRenderer{&Renderer},
+            m_pPsoHashMap{&PsoHashMap},
+            m_pGraphicsDesc{&GraphicsDesc}
+        {}
+
+    private:
+        PBR_Renderer*               m_pRenderer     = nullptr;
+        PsoHashMapType*             m_pPsoHashMap   = nullptr;
+        const GraphicsPipelineDesc* m_pGraphicsDesc = nullptr;
+    };
+
+    using PbrPsoHashMapType       = std::unordered_map<PbrPSOKey, RefCntAutoPtr<IPipelineState>, PbrPSOKey::Hasher>;
+    using MeshIdPsoHashMapType    = std::unordered_map<MeshIdPSOKey, RefCntAutoPtr<IPipelineState>, MeshIdPSOKey::Hasher>;
+    using WireframePsoHashMapType = std::unordered_map<WireframePSOKey, RefCntAutoPtr<IPipelineState>, WireframePSOKey::Hasher>;
+
+    using PbrPsoCacheAccessor       = PsoCacheAccessor<PbrPsoHashMapType, PbrPSOKey>;
+    using MeshIdPsoCacheAccessor    = PsoCacheAccessor<MeshIdPsoHashMapType, MeshIdPSOKey>;
+    using WireframePsoCacheAccessor = PsoCacheAccessor<WireframePsoHashMapType, WireframePSOKey>;
+
+    PbrPsoCacheAccessor       GetPbrPsoCacheAccessor(const GraphicsPipelineDesc& GraphicsDesc);
+    MeshIdPsoCacheAccessor    GetMeshIdPsoCacheAccessor(const GraphicsPipelineDesc& GraphicsDesc);
+    WireframePsoCacheAccessor GetWireframePsoCacheAccessor(const GraphicsPipelineDesc& GraphicsDesc);
 
     void InitCommonSRBVars(IShaderResourceBinding* pSRB,
                            IBuffer*                pCameraAttribs,
@@ -361,11 +379,14 @@ protected:
 
     void GetVSInputStructAndLayout(PSO_FLAGS PSOFlags, std::string& VSInputStruct, InputLayoutDescX& InputLayout) const;
 
-    template <typename KeyType, class CreatePSOType>
+    template <typename KeyType>
+    struct GetPSOHelper;
+
+    template <typename KeyType>
     IPipelineState* GetPSO(std::unordered_map<KeyType, RefCntAutoPtr<IPipelineState>, typename KeyType::Hasher>& PSOCache,
+                           const GraphicsPipelineDesc&                                                           GraphicsDesc,
                            KeyType                                                                               Key,
-                           bool                                                                                  CreateIfNull,
-                           CreatePSOType&&                                                                       CreatePSO);
+                           bool                                                                                  CreateIfNull);
 
     static std::string GetVSOutputStruct(PSO_FLAGS PSOFlags);
 
@@ -382,9 +403,9 @@ private:
     void PrecomputeBRDF(IDeviceContext* pCtx,
                         Uint32          NumBRDFSamples = 512);
 
-    void CreatePbrPSO(const PbrPSOKey& Key);
-    void CreateWireframePSO(const WireframePSOKey& Key);
-    void CreateMeshIdPSO(const MeshIdPSOKey& Key);
+    void CreatePbrPSO(PbrPsoHashMapType& PbrPSOs, const GraphicsPipelineDesc& GraphicsDesc, const PbrPSOKey& Key);
+    void CreateWireframePSO(WireframePsoHashMapType& WireframePSOs, const GraphicsPipelineDesc& GraphicsDesc, const WireframePSOKey& Key);
+    void CreateMeshIdPSO(MeshIdPsoHashMapType& MeshIdPSOs, const GraphicsPipelineDesc& GraphicsDesc, const MeshIdPSOKey& Key);
     void CreateSignature();
 
 protected:
@@ -403,7 +424,6 @@ protected:
 
     static constexpr TEXTURE_FORMAT IrradianceCubeFmt    = TEX_FORMAT_RGBA32_FLOAT;
     static constexpr TEXTURE_FORMAT PrefilteredEnvMapFmt = TEX_FORMAT_RGBA16_FLOAT;
-    static constexpr TEXTURE_FORMAT MeshIdFmt            = TEX_FORMAT_RGBA8_UINT;
     static constexpr Uint32         IrradianceCubeDim    = 64;
     static constexpr Uint32         PrefilteredEnvMapDim = 256;
 
@@ -420,9 +440,9 @@ protected:
 
     RefCntAutoPtr<IPipelineResourceSignature> m_ResourceSignature;
 
-    std::unordered_map<PbrPSOKey, RefCntAutoPtr<IPipelineState>, PbrPSOKey::Hasher>             m_PbrPSOs;
-    std::unordered_map<MeshIdPSOKey, RefCntAutoPtr<IPipelineState>, MeshIdPSOKey::Hasher>       m_MeshIdPSOs;
-    std::unordered_map<WireframePSOKey, RefCntAutoPtr<IPipelineState>, WireframePSOKey::Hasher> m_WireframePSOs;
+    std::unordered_map<GraphicsPipelineDesc, PbrPsoHashMapType>       m_PbrPSOs;
+    std::unordered_map<GraphicsPipelineDesc, MeshIdPsoHashMapType>    m_MeshIdPSOs;
+    std::unordered_map<GraphicsPipelineDesc, WireframePsoHashMapType> m_WireframePSOs;
 };
 
 DEFINE_FLAG_ENUM_OPERATORS(PBR_Renderer::PSO_FLAGS)
@@ -434,11 +454,9 @@ inline PBR_Renderer::PbrPSOKey::PbrPSOKey(PSO_FLAGS  _Flags,
     AlphaMode{_AlphaMode}
 {}
 
-inline PBR_Renderer::WireframePSOKey::WireframePSOKey(PSO_FLAGS          _Flags,
-                                                      PRIMITIVE_TOPOLOGY _Topology,
-                                                      bool               _DoubleSided) noexcept :
-    PSOKey{_Flags & SupportedFlags, _DoubleSided},
-    Topology{_Topology}
+inline PBR_Renderer::WireframePSOKey::WireframePSOKey(PSO_FLAGS _Flags,
+                                                      bool      _DoubleSided) noexcept :
+    PSOKey{_Flags & SupportedFlags, _DoubleSided}
 {}
 
 inline PBR_Renderer::MeshIdPSOKey::MeshIdPSOKey(PSO_FLAGS _Flags,
@@ -446,11 +464,29 @@ inline PBR_Renderer::MeshIdPSOKey::MeshIdPSOKey(PSO_FLAGS _Flags,
     PSOKey{_Flags & SupportedFlags, _DoubleSided}
 {}
 
-template <typename KeyType, class CreatePSOType>
+template <>
+struct PBR_Renderer::GetPSOHelper<PBR_Renderer::PbrPSOKey>
+{
+    static constexpr decltype(&PBR_Renderer::CreatePbrPSO) CreatePSO = &PBR_Renderer::CreatePbrPSO;
+};
+
+template <>
+struct PBR_Renderer::GetPSOHelper<PBR_Renderer::WireframePSOKey>
+{
+    static constexpr decltype(&PBR_Renderer::CreateWireframePSO) CreatePSO = &PBR_Renderer::CreateWireframePSO;
+};
+
+template <>
+struct PBR_Renderer::GetPSOHelper<PBR_Renderer::MeshIdPSOKey>
+{
+    static constexpr decltype(&PBR_Renderer::CreateMeshIdPSO) CreatePSO = &PBR_Renderer::CreateMeshIdPSO;
+};
+
+template <typename KeyType>
 IPipelineState* PBR_Renderer::GetPSO(std::unordered_map<KeyType, RefCntAutoPtr<IPipelineState>, typename KeyType::Hasher>& PSOCache,
+                                     const GraphicsPipelineDesc&                                                           GraphicsDesc,
                                      KeyType                                                                               Key,
-                                     bool                                                                                  CreateIfNull,
-                                     CreatePSOType&&                                                                       CreatePSO)
+                                     bool                                                                                  CreateIfNull)
 {
     Key.Flags &= KeyType::SupportedFlags;
 
@@ -484,7 +520,7 @@ IPipelineState* PBR_Renderer::GetPSO(std::unordered_map<KeyType, RefCntAutoPtr<I
     {
         if (CreateIfNull)
         {
-            CreatePSO(this, Key);
+            (this->*GetPSOHelper<KeyType>::CreatePSO)(PSOCache, GraphicsDesc, Key);
             it = PSOCache.find(Key);
             VERIFY_EXPR(it != PSOCache.end());
         }
