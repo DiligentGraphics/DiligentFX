@@ -52,6 +52,7 @@ namespace HLSL
 namespace
 {
 #include "Shaders/PBR/public/PBR_Structures.fxh"
+#include "../shaders/HnPostProcessStructures.fxh"
 } // namespace
 
 } // namespace HLSL
@@ -71,6 +72,7 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters*         pRefCounters,
     m_Context{pContext},
     m_CameraAttribsCB{CI.pCameraAttribsCB},
     m_LightAttribsCB{CI.pLightAttribsCB},
+    m_PostProcessAttribsCB{m_Device.CreateBuffer("Post process attribs CB", sizeof(HLSL::PostProcessAttribs))},
     m_ConvertOutputToSRGB{CI.ConvertOutputToSRGB},
     m_USDRenderer{
         std::make_shared<USD_Renderer>(
@@ -307,7 +309,7 @@ void HnRendererImpl::PreparePostProcess(TEXTURE_FORMAT RTVFmt)
         {
             ShaderCI.Desc       = {"Post process VS", SHADER_TYPE_VERTEX, true};
             ShaderCI.EntryPoint = "main";
-            ShaderCI.FilePath   = "PostProcess.vsh";
+            ShaderCI.FilePath   = "HnPostProcess.vsh";
 
             pVS = m_Device.CreateShader(ShaderCI);
         }
@@ -316,7 +318,7 @@ void HnRendererImpl::PreparePostProcess(TEXTURE_FORMAT RTVFmt)
         {
             ShaderCI.Desc       = {"Post process PS", SHADER_TYPE_PIXEL, true};
             ShaderCI.EntryPoint = "main";
-            ShaderCI.FilePath   = "PostProcess.psh";
+            ShaderCI.FilePath   = "HnPostProcess.psh";
 
             pPS = m_Device.CreateShader(ShaderCI);
         }
@@ -337,6 +339,7 @@ void HnRendererImpl::PreparePostProcess(TEXTURE_FORMAT RTVFmt)
             .SetPrimitiveTopology(PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 
         m_PostProcess.PSO = m_Device.CreateGraphicsPipelineState(PsoCI);
+        m_PostProcess.PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbPostProcessAttribs")->Set(m_PostProcessAttribsCB);
         m_PostProcess.PSO->CreateShaderResourceBinding(&m_PostProcess.SRB, true);
     }
 }
@@ -383,17 +386,25 @@ void HnRendererImpl::Draw(IDeviceContext* pCtx, const HnDrawAttribs& Attribs)
     }
 
     RenderMeshes(pCtx, Attribs);
+    PerformPostProcess(pCtx, Attribs);
+}
+
+void HnRendererImpl::PerformPostProcess(IDeviceContext* pCtx, const HnDrawAttribs& Attribs)
+{
+    ITextureView* pRTVs[] = {Attribs.pDstRTV};
+    pCtx->SetRenderTargets(_countof(pRTVs), pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
     {
-        ITextureView* pRTVs[] = {Attribs.pDstRTV};
-        pCtx->SetRenderTargets(_countof(pRTVs), pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-
-        pCtx->SetPipelineState(m_PostProcess.PSO);
-        m_PostProcess.SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_ColorBuffer")->Set(m_ColorBuffer->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
-        m_PostProcess.SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_MeshId")->Set(m_MeshIdTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
-        pCtx->CommitShaderResources(m_PostProcess.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-        pCtx->Draw({3, DRAW_FLAG_VERIFY_ALL});
+        MapHelper<HLSL::PostProcessAttribs> pDstShaderAttribs{pCtx, m_PostProcessAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
+        pDstShaderAttribs->SelectionOutlineColor          = Attribs.SlectionColor;
+        pDstShaderAttribs->NonselectionDesaturationFactor = Attribs.SelectedPrim != nullptr && !Attribs.SelectedPrim->IsEmpty() ? 0.5f : 0.f;
     }
+
+    pCtx->SetPipelineState(m_PostProcess.PSO);
+    m_PostProcess.SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_ColorBuffer")->Set(m_ColorBuffer->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+    m_PostProcess.SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_MeshId")->Set(m_MeshIdTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+    pCtx->CommitShaderResources(m_PostProcess.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    pCtx->Draw({3, DRAW_FLAG_VERIFY_ALL});
 }
 
 void HnRendererImpl::RenderMesh(IDeviceContext*          pCtx,

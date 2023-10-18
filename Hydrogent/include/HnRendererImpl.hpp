@@ -93,6 +93,7 @@ private:
 
     void PrepareRenderTargets(ITextureView* pDstRtv);
     void PreparePostProcess(TEXTURE_FORMAT RTVFmt);
+    void PerformPostProcess(IDeviceContext* pCtx, const HnDrawAttribs& Attribs);
 
 private:
     RenderDeviceWithCache_N       m_Device;
@@ -100,6 +101,7 @@ private:
 
     RefCntAutoPtr<IBuffer> m_CameraAttribsCB;
     RefCntAutoPtr<IBuffer> m_LightAttribsCB;
+    RefCntAutoPtr<IBuffer> m_PostProcessAttribsCB;
 
     const bool m_ConvertOutputToSRGB;
 

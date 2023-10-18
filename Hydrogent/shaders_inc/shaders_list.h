@@ -1,11 +1,15 @@
 static const MemoryShaderSourceFileInfo g_Shaders[] =
 {
     {
-        "PostProcess.psh",
-        #include "PostProcess.psh.h"
+        "HnPostProcess.psh",
+        #include "HnPostProcess.psh.h"
     },
     {
-        "PostProcess.vsh",
-        #include "PostProcess.vsh.h"
+        "HnPostProcess.vsh",
+        #include "HnPostProcess.vsh.h"
+    },
+    {
+        "HnPostProcessStructures.fxh",
+        #include "HnPostProcessStructures.fxh.h"
     },
 };

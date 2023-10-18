@@ -70,6 +70,7 @@ target_sources(DiligentFX PRIVATE
     # A target created in the same directory (CMakeLists.txt file) that specifies any output of the 
     # custom command as a source file is given a rule to generate the file using the command at build time. 
     ${SHADERS_INC_LIST}
+    ${SHADERS_LIST_FILE}
 )
 source_group("generated" FILES
     ${SHADERS_LIST_FILE}
