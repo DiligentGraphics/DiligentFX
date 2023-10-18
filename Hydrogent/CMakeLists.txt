@@ -15,6 +15,9 @@ set(SOURCE
     src/HnTextureRegistry.cpp
     src/HnTextureUtils.cpp
     src/HnTypeConversions.cpp
+    src/Tasks/HnTask.cpp
+    src/Tasks/HnRenderTask.cpp
+    src/Tasks/HnPostProcessTask.cpp
 )
 
 set(INCLUDE
@@ -31,6 +34,9 @@ set(INCLUDE
     include/HnTextureRegistry.hpp
     include/HnTextureUtils.hpp
     include/HnTypeConversions.hpp
+    include/Tasks/HnTask.hpp
+    include/Tasks/HnRenderTask.hpp
+    include/Tasks/HnPostProcessTask.hpp
 )
 
 set(INTERFACE
