@@ -29,6 +29,7 @@
 #include "HnMesh.hpp"
 #include "HnMaterial.hpp"
 #include "HnTokens.hpp"
+#include "Tasks/HnTaskController.hpp"
 
 #include "EngineMemory.h"
 #include "USD_Renderer.hpp"
@@ -148,10 +149,15 @@ void HnRendererImpl::LoadUSDStage(pxr::UsdStageRefPtr& Stage)
     m_Stage = Stage;
 
     m_RenderDelegate = HnRenderDelegate::Create({m_Device, m_Context, m_CameraAttribsCB, m_LightAttribsCB, m_USDRenderer});
+    m_RenderIndex    = pxr::HdRenderIndex::New(m_RenderDelegate.get(), pxr::HdDriverVector{});
 
-    m_RenderIndex     = pxr::HdRenderIndex::New(m_RenderDelegate.get(), pxr::HdDriverVector{});
-    m_ImagingDelegate = new pxr::UsdImagingDelegate(m_RenderIndex, pxr::SdfPath::AbsoluteRootPath());
+    const pxr::SdfPath SceneDelegateId = pxr::SdfPath::AbsoluteRootPath();
+
+    m_ImagingDelegate = new pxr::UsdImagingDelegate(m_RenderIndex, SceneDelegateId);
     m_ImagingDelegate->Populate(m_Stage->GetPseudoRoot());
+
+    const pxr::SdfPath TaskControllerId = SceneDelegateId.AppendChild(pxr::TfToken{"_HnTaskController_"});
+    m_TaskController                    = std::make_unique<HnTaskController>(*m_RenderIndex, TaskControllerId);
 
     m_RenderTags = {pxr::HdRenderTagTokens->geometry};
 
@@ -204,8 +210,8 @@ void HnRendererImpl::Update()
     if (m_ImagingDelegate)
     {
         m_ImagingDelegate->ApplyPendingUpdates();
-        pxr::HdTaskSharedPtrVector tasks = {
-            std::make_shared<SyncTask>(m_GeometryPass, m_RenderTags)};
+        pxr::HdTaskSharedPtrVector tasks = m_TaskController->GetRenderingTasks();
+        tasks.push_back(std::make_shared<SyncTask>(m_GeometryPass, m_RenderTags));
         m_Engine.Execute(&m_ImagingDelegate->GetRenderIndex(), &tasks);
     }
 }

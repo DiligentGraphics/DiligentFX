@@ -32,12 +32,12 @@ namespace Diligent
 namespace USD
 {
 
-HnPostProcessTask::TaskSharedPtr HnPostProcessTask::Create(const pxr::SdfPath& Id)
+HnPostProcessTask::TaskSharedPtr HnPostProcessTask::Create(pxr::HdSceneDelegate& ParamsDelegate, const pxr::SdfPath& Id)
 {
-    return TaskSharedPtr(new HnPostProcessTask{Id});
+    return TaskSharedPtr(new HnPostProcessTask{&ParamsDelegate, Id});
 }
 
-HnPostProcessTask::HnPostProcessTask(const pxr::SdfPath& Id) :
+HnPostProcessTask::HnPostProcessTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id) :
     HnTask{Id}
 {
 }

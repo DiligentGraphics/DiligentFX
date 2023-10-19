@@ -18,6 +18,7 @@ set(SOURCE
     src/Tasks/HnTask.cpp
     src/Tasks/HnRenderTask.cpp
     src/Tasks/HnPostProcessTask.cpp
+    src/Tasks/HnTaskController.cpp
 )
 
 set(INCLUDE
@@ -37,6 +38,7 @@ set(INCLUDE
     include/Tasks/HnTask.hpp
     include/Tasks/HnRenderTask.hpp
     include/Tasks/HnPostProcessTask.hpp
+    include/Tasks/HnTaskController.hpp
 )
 
 set(INTERFACE
@@ -116,6 +118,7 @@ INTERFACE
     usd_hio
     usd_sdr
     usd_ndr
+    usd_trace
 )
 
 target_include_directories(Diligent-Hydrogent

@@ -39,6 +39,7 @@
 #include "ObjectBase.hpp"
 #include "GPUCompletionAwaitQueue.hpp"
 #include "USD_Renderer.hpp"
+#include "Tasks/HnTaskController.hpp"
 
 #include "pxr/usd/usd/stage.h"
 #include "pxr/imaging/hd/tokens.h"
@@ -58,6 +59,7 @@ namespace USD
 class HnRenderDelegate;
 class HnMesh;
 class HnMaterial;
+class HnTaskController;
 
 class HnRendererImpl final : public ObjectBase<IHnRenderer>
 {
@@ -112,6 +114,7 @@ private:
     USD_Renderer::WireframePsoCacheAccessor m_WireframePSOCache;
 
     std::unique_ptr<HnRenderDelegate> m_RenderDelegate;
+    std::unique_ptr<HnTaskController> m_TaskController;
 
     pxr::UsdStageRefPtr        m_Stage;
     pxr::HdEngine              m_Engine;

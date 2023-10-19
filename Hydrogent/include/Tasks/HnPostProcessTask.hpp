@@ -34,15 +34,27 @@ namespace Diligent
 namespace USD
 {
 
+struct HnPostProcessTaskParams
+{
+    constexpr bool operator==(const HnPostProcessTaskParams& rhs) const
+    {
+        return true;
+    }
+    constexpr bool operator!=(const HnPostProcessTaskParams& rhs) const
+    {
+        return !(*this == rhs);
+    }
+};
+
 /// Post processing task implementation in Hydrogent.
 class HnPostProcessTask final : public HnTask
 {
 public:
     using TaskSharedPtr = std::shared_ptr<HnPostProcessTask>;
 
-    static TaskSharedPtr Create(const pxr::SdfPath& id);
+    static TaskSharedPtr Create(pxr::HdSceneDelegate& ParamsDelegate, const pxr::SdfPath& id);
 
-    HnPostProcessTask(const pxr::SdfPath& Id);
+    HnPostProcessTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id);
     ~HnPostProcessTask();
 
     virtual void Sync(pxr::HdSceneDelegate* Delegate,
