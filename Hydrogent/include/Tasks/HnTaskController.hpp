@@ -27,9 +27,11 @@
 #pragma once
 
 #include <memory>
-#include <array>
+#include <unordered_map>
 
 #include "Tasks/HnTask.hpp"
+
+#include "DebugUtilities.hpp"
 
 namespace Diligent
 {
@@ -44,6 +46,13 @@ struct HnPostProcessTaskParams;
 class HnTaskController
 {
 public:
+    using TaskUID                                      = uint64_t;
+    static constexpr TaskUID TaskUID_RenderDefault     = 0x287af907f3a740a0;
+    static constexpr TaskUID TaskUID_RenderMasked      = 0xf5290fec47594711;
+    static constexpr TaskUID TaskUID_RenderAdditive    = 0x37d45531106c4c52;
+    static constexpr TaskUID TaskUID_RenderTranslucent = 0xa015c7e45941407e;
+    static constexpr TaskUID TaskUID_PostProcess       = 0x1f5367e65d034500;
+
     HnTaskController(pxr::HdRenderIndex& RenderIndex,
                      const pxr::SdfPath& ControllerId);
 
@@ -54,7 +63,7 @@ public:
 
     const pxr::SdfPath& GetControllerId() const { return m_ControllerId; }
 
-    const pxr::HdTaskSharedPtrVector GetRenderingTasks() const;
+    const pxr::HdTaskSharedPtrVector GetTasks(const std::vector<TaskUID>* TaskOrder = nullptr) const;
 
     /// Sets new collection for the render tasks.
     void SetCollection(const pxr::HdRprimCollection& Collection);
@@ -68,21 +77,22 @@ public:
     /// Sets new render tags for the render tasks.
     void SetRenderTags(const pxr::TfTokenVector& RenderTags);
 
-    enum TASK_ID
-    {
-        TASK_ID_RENDER_DEFAULT,
-        TASK_ID_RENDER_MASKED,
-        TASK_ID_RENDER_ADDITIVE,
-        TASK_ID_RENDER_TRANSLUCENT,
-        TASK_ID_POST_PROCESS,
-        TASK_ID_COUNT
-    };
-    pxr::HdTaskSharedPtr GetTask(TASK_ID idx) const;
+    /// Sets the parameter value
+    void SetParameter(const pxr::SdfPath& Id, const pxr::TfToken& ValueKey, pxr::VtValue Value);
+
+    template <typename TaskType>
+    void CreateTask(const pxr::SdfPath& TaskId,
+                    TaskUID             UID);
+
+    pxr::HdTaskSharedPtr GetTask(TaskUID UID) const;
+
+    void RemoveTask(TaskUID UID);
 
 private:
     pxr::SdfPath GetRenderTaskId(const pxr::TfToken& MaterialTag) const;
-    pxr::SdfPath CreateRenderTask(const pxr::TfToken& MaterialTag);
-    pxr::SdfPath CreatePostProcessTask();
+
+    void CreateRenderTask(const pxr::TfToken& MaterialTag, TaskUID UID);
+    void CreatePostProcessTask();
 
 private:
     pxr::HdRenderIndex& m_RenderIndex;
@@ -92,8 +102,19 @@ private:
     class TaskParamsDelegate;
     std::unique_ptr<TaskParamsDelegate> m_ParamsDelegate;
 
-    std::array<pxr::SdfPath, TASK_ID_COUNT> m_TaskIds;
+    std::unordered_map<TaskUID, pxr::SdfPath> m_TaskIds;
+
+    std::vector<TaskUID> m_DefaultTaskOrder;
 };
+
+template <typename TaskType>
+void HnTaskController::CreateTask(const pxr::SdfPath& TaskId,
+                                  TaskUID             UID)
+{
+    m_RenderIndex.InsertTask<HnRenderTask>(m_ParamsDelegate.get(), TaskId);
+    auto it_inserted = m_TaskIds.emplace(UID, TaskId);
+    VERIFY(!it_inserted.second, "Task with UID ", UID, " already exists: ", it_inserted.first->second.GetText());
+}
 
 } // namespace USD
 
