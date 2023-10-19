@@ -28,6 +28,8 @@
 
 #include "HnTask.hpp"
 
+#include "pxr/imaging/hd/renderPass.h"
+
 namespace Diligent
 {
 
@@ -62,6 +64,15 @@ public:
 
 
     virtual void Execute(pxr::HdTaskContext* TaskCtx) override final;
+
+    const pxr::TfTokenVector& GetRenderTags() const
+    {
+        return m_RenderTags;
+    }
+
+private:
+    pxr::TfTokenVector         m_RenderTags;
+    pxr::HdRenderPassSharedPtr m_RenderPass;
 };
 
 } // namespace USD

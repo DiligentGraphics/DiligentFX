@@ -50,6 +50,20 @@ protected:
     // renderTags.empty() implies execute everything.
     virtual void _Execute(const pxr::HdRenderPassStateSharedPtr& State,
                           const pxr::TfTokenVector&              Tags) override final;
+
+    virtual void _MarkCollectionDirty() override final;
+
+private:
+    void UpdateDrawItems(const pxr::TfTokenVector& RenderTags);
+
+private:
+    pxr::HdRenderIndex::HdDrawItemPtrVector m_DrawItems;
+
+    unsigned int m_CollectionVersion     = ~0u;
+    unsigned int m_RprimRenderTagVersion = ~0u;
+    unsigned int m_TaskRenderTagsVersion = ~0u;
+
+    pxr::TfTokenVector m_RenderTags;
 };
 
 } // namespace USD

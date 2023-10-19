@@ -49,12 +49,12 @@ HnRenderPass::HnRenderPass(pxr::HdRenderIndex*           pIndex,
 void HnRenderPass::_Execute(pxr::HdRenderPassStateSharedPtr const& State,
                             pxr::TfTokenVector const&              Tags)
 {
+    UpdateDrawItems(Tags);
+
     pxr::HdRenderIndex* pRenderIndex    = GetRenderIndex();
     HnRenderDelegate*   pRenderDelegate = static_cast<HnRenderDelegate*>(pRenderIndex->GetRenderDelegate());
 
-    const pxr::HdRprimCollection&           Collection = GetRprimCollection();
-    pxr::HdRenderIndex::HdDrawItemPtrVector DrawItems  = pRenderIndex->GetDrawItems(Collection, Tags);
-    for (const pxr::HdDrawItem* pDrawItem : DrawItems)
+    for (const pxr::HdDrawItem* pDrawItem : m_DrawItems)
     {
         if (!pDrawItem->GetVisible())
             continue;
@@ -67,6 +67,65 @@ void HnRenderPass::_Execute(pxr::HdRenderPassStateSharedPtr const& State,
         }
     }
 }
+
+void HnRenderPass::_MarkCollectionDirty()
+{
+    // Force any cached data based on collection to be refreshed.
+    m_CollectionVersion = ~0u;
+}
+
+void HnRenderPass::UpdateDrawItems(const pxr::TfTokenVector& RenderTags)
+{
+    pxr::HdRenderIndex* pRenderIndex    = GetRenderIndex();
+    HnRenderDelegate*   pRenderDelegate = static_cast<HnRenderDelegate*>(pRenderIndex->GetRenderDelegate());
+
+    const pxr::HdRprimCollection& Collection = GetRprimCollection();
+    const pxr::HdChangeTracker&   Tracker    = pRenderIndex->GetChangeTracker();
+
+    const unsigned int CollectionVersion     = Tracker.GetCollectionVersion(Collection.GetName());
+    const unsigned int RprimRenderTagVersion = Tracker.GetRenderTagVersion();
+    const unsigned int TaskRenderTagsVersion = Tracker.GetTaskRenderTagsVersion();
+    //const unsigned int MaterialTagsVersion        = GetMaterialTagsVersion(pRenderIndex);
+    //const unsigned int GeomSubsetDrawItemsVersion = GetGeomSubsetDrawItemsVersion(pRenderIndex);
+
+    const bool CollectionChanged     = (m_CollectionVersion != CollectionVersion);
+    const bool RprimRenderTagChanged = (m_RprimRenderTagVersion != RprimRenderTagVersion);
+    //const bool MaterialTagsChanged        = (m_MaterialTagsVersion != MaterialTagsVersion);
+    //const bool GeomSubsetDrawItemsChanged = (m_GeomSubsetDrawItemsVersion != GeomSubsetDrawItemsVersion);
+
+    bool TaskRenderTagsChanged = false;
+    if (m_TaskRenderTagsVersion != TaskRenderTagsVersion)
+    {
+        m_TaskRenderTagsVersion = TaskRenderTagsVersion;
+        if (m_RenderTags != RenderTags)
+        {
+            m_RenderTags          = RenderTags;
+            TaskRenderTagsChanged = true;
+        }
+    }
+
+    if (CollectionChanged ||
+        RprimRenderTagChanged ||
+        //MaterialTagsChanged ||
+        //GeomSubsetDrawItemsChanged ||
+        TaskRenderTagsChanged)
+    {
+        //const HnRenderParam* const RenderParam = static_cast<HnRenderParam*>(pRenderIndex->GetRenderDelegate()->GetRenderParam());
+        //if (RenderParam->HasMaterialTag(Collection.GetMaterialTag()))
+        {
+            m_DrawItems = GetRenderIndex()->GetDrawItems(Collection, RenderTags);
+        }
+        //else
+        //{
+        //    // There is no prim with the desired material tag.
+        //    m_DrawItems.clear()
+        //}
+    }
+
+    m_CollectionVersion     = CollectionVersion;
+    m_RprimRenderTagVersion = RprimRenderTagVersion;
+}
+
 
 } // namespace USD
 

@@ -178,8 +178,6 @@ public:
 
     void Sync(pxr::HdSceneDelegate* delegate, pxr::HdTaskContext* ctx, pxr::HdDirtyBits* dirtyBits) override final
     {
-        m_RenderPass->Sync();
-
         *dirtyBits = pxr::HdChangeTracker::Clean;
     }
 

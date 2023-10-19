@@ -26,6 +26,10 @@
 
 #include "Tasks/HnRenderRprimsTask.hpp"
 
+#include "pxr/imaging/hd/renderDelegate.h"
+
+#include "DebugUtilities.hpp"
+
 namespace Diligent
 {
 
@@ -45,6 +49,49 @@ void HnRenderRprimsTask::Sync(pxr::HdSceneDelegate* Delegate,
                               pxr::HdTaskContext*   TaskCtx,
                               pxr::HdDirtyBits*     DirtyBits)
 {
+    VERIFY_EXPR(Delegate != nullptr && TaskCtx != nullptr && DirtyBits != nullptr);
+
+    if (*DirtyBits & pxr::HdChangeTracker::DirtyCollection)
+    {
+        pxr::VtValue CollectionVal = Delegate->Get(GetId(), pxr::HdTokens->collection);
+
+        pxr::HdRprimCollection Collection = CollectionVal.Get<pxr::HdRprimCollection>();
+
+        if (Collection.GetName().IsEmpty())
+        {
+            m_RenderPass.reset();
+        }
+        else
+        {
+            if (!m_RenderPass)
+            {
+                pxr::HdRenderIndex&    Index          = Delegate->GetRenderIndex();
+                pxr::HdRenderDelegate* RenderDelegate = Index.GetRenderDelegate();
+                m_RenderPass                          = RenderDelegate->CreateRenderPass(&Index, Collection);
+            }
+            else
+            {
+                m_RenderPass->SetRprimCollection(Collection);
+            }
+        }
+    }
+
+    if (*DirtyBits & pxr::HdChangeTracker::DirtyParams)
+    {
+        // TODO
+    }
+
+    if (*DirtyBits & pxr::HdChangeTracker::DirtyRenderTags)
+    {
+        m_RenderTags = _GetTaskRenderTags(Delegate);
+    }
+
+    if (m_RenderPass)
+    {
+        m_RenderPass->Sync();
+    }
+
+    *DirtyBits = pxr::HdChangeTracker::Clean;
 }
 
 void HnRenderRprimsTask::Prepare(pxr::HdTaskContext* TaskCtx,
@@ -54,6 +101,13 @@ void HnRenderRprimsTask::Prepare(pxr::HdTaskContext* TaskCtx,
 
 void HnRenderRprimsTask::Execute(pxr::HdTaskContext* TaskCtx)
 {
+    // TODO
+    pxr::HdRenderPassStateSharedPtr RenderPassState;
+
+    if (m_RenderPass)
+    {
+        m_RenderPass->Execute(RenderPassState, GetRenderTags());
+    }
 }
 
 } // namespace USD

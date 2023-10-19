@@ -232,7 +232,7 @@ void HnTaskController::CreateRenderRprimsTask(const pxr::TfToken& MaterialTag, T
 
     pxr::HdRprimCollection Collection{
         pxr::HdTokens->geometry,
-        pxr::HdReprSelector{pxr::HdReprTokens->smoothHull},
+        pxr::HdReprSelector{pxr::HdReprTokens->hull},
         false, // forcedRepr
         MaterialTag,
     };
