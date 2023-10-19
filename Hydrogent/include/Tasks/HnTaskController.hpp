@@ -40,19 +40,19 @@ namespace Diligent
 namespace USD
 {
 
-struct HnRenderTaskParams;
+struct HnRenderRprimsTaskParams;
 struct HnPostProcessTaskParams;
 
 /// Task controller implementation in Hydrogent.
 class HnTaskController
 {
 public:
-    using TaskUID                                      = uint64_t;
-    static constexpr TaskUID TaskUID_RenderDefault     = 0x287af907f3a740a0;
-    static constexpr TaskUID TaskUID_RenderMasked      = 0xf5290fec47594711;
-    static constexpr TaskUID TaskUID_RenderAdditive    = 0x37d45531106c4c52;
-    static constexpr TaskUID TaskUID_RenderTranslucent = 0xa015c7e45941407e;
-    static constexpr TaskUID TaskUID_PostProcess       = 0x1f5367e65d034500;
+    using TaskUID                                            = uint64_t;
+    static constexpr TaskUID TaskUID_RenderRprimsDefault     = 0x287af907f3a740a0;
+    static constexpr TaskUID TaskUID_RenderRprimsMasked      = 0xf5290fec47594711;
+    static constexpr TaskUID TaskUID_RenderRprimsAdditive    = 0x37d45531106c4c52;
+    static constexpr TaskUID TaskUID_RenderRprimsTranslucent = 0xa015c7e45941407e;
+    static constexpr TaskUID TaskUID_PostProcess             = 0x1f5367e65d034500;
 
     HnTaskController(pxr::HdRenderIndex& RenderIndex,
                      const pxr::SdfPath& ControllerId);
@@ -79,7 +79,7 @@ public:
     void SetCollection(const pxr::HdRprimCollection& Collection);
 
     /// Sets new params for the render tasks.
-    void SetRenderParams(const HnRenderTaskParams& Params);
+    void SetRenderParams(const HnRenderRprimsTaskParams& Params);
 
     /// Sets new params for the post-process task.
     void SetPostProcessParams(const HnPostProcessTaskParams& Params);
@@ -99,9 +99,9 @@ public:
     void RemoveTask(TaskUID UID);
 
 private:
-    pxr::SdfPath GetRenderTaskId(const pxr::TfToken& MaterialTag) const;
+    pxr::SdfPath GetRenderRprimsTaskId(const pxr::TfToken& MaterialTag) const;
 
-    void CreateRenderTask(const pxr::TfToken& MaterialTag, TaskUID UID);
+    void CreateRenderRprimsTask(const pxr::TfToken& MaterialTag, TaskUID UID);
     void CreatePostProcessTask();
 
 private:
@@ -122,9 +122,9 @@ template <typename TaskType>
 void HnTaskController::CreateTask(const pxr::SdfPath& TaskId,
                                   TaskUID             UID)
 {
-    m_RenderIndex.InsertTask<HnRenderTask>(m_ParamsDelegate.get(), TaskId);
+    m_RenderIndex.InsertTask<HnRenderRprimsTask>(m_ParamsDelegate.get(), TaskId);
     auto it_inserted = m_TaskUIDs.emplace(UID, TaskId);
-    VERIFY(!it_inserted.second, "Task with UID ", UID, " already exists: ", it_inserted.first->second.GetText());
+    VERIFY(it_inserted.second, "Task with UID ", UID, " already exists: ", it_inserted.first->second.GetText());
 }
 
 } // namespace USD

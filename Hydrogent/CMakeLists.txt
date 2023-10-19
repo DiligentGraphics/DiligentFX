@@ -16,7 +16,7 @@ set(SOURCE
     src/HnTextureUtils.cpp
     src/HnTypeConversions.cpp
     src/Tasks/HnTask.cpp
-    src/Tasks/HnRenderTask.cpp
+    src/Tasks/HnRenderRprimsTask.cpp
     src/Tasks/HnPostProcessTask.cpp
     src/Tasks/HnTaskController.cpp
 )
@@ -36,7 +36,7 @@ set(INCLUDE
     include/HnTextureUtils.hpp
     include/HnTypeConversions.hpp
     include/Tasks/HnTask.hpp
-    include/Tasks/HnRenderTask.hpp
+    include/Tasks/HnRenderRprimsTask.hpp
     include/Tasks/HnPostProcessTask.hpp
     include/Tasks/HnTaskController.hpp
 )

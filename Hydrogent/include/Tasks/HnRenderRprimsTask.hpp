@@ -34,28 +34,28 @@ namespace Diligent
 namespace USD
 {
 
-struct HnRenderTaskParams
+struct HnRenderRprimsTaskParams
 {
-    constexpr bool operator==(const HnRenderTaskParams& rhs) const
+    constexpr bool operator==(const HnRenderRprimsTaskParams& rhs) const
     {
         return true;
     }
-    constexpr bool operator!=(const HnRenderTaskParams& rhs) const
+    constexpr bool operator!=(const HnRenderRprimsTaskParams& rhs) const
     {
         return !(*this == rhs);
     }
 };
 
 /// Render task implementation in Hydrogent.
-class HnRenderTask final : public HnTask
+class HnRenderRprimsTask final : public HnTask
 {
 public:
-    using TaskSharedPtr = std::shared_ptr<HnRenderTask>;
+    using TaskSharedPtr = std::shared_ptr<HnRenderRprimsTask>;
 
     static TaskSharedPtr Create(pxr::HdSceneDelegate& ParamsDelegate, const pxr::SdfPath& Id);
 
-    HnRenderTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id);
-    ~HnRenderTask();
+    HnRenderRprimsTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id);
+    ~HnRenderRprimsTask();
 
     virtual void Sync(pxr::HdSceneDelegate* Delegate,
                       pxr::HdTaskContext*   TaskCtx,

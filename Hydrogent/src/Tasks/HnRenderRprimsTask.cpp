@@ -24,7 +24,7 @@
  *  of the possibility of such damages.
  */
 
-#include "Tasks/HnRenderTask.hpp"
+#include "Tasks/HnRenderRprimsTask.hpp"
 
 namespace Diligent
 {
@@ -32,32 +32,32 @@ namespace Diligent
 namespace USD
 {
 
-HnRenderTask::TaskSharedPtr HnRenderTask::Create(pxr::HdSceneDelegate& ParamsDelegate, const pxr::SdfPath& Id)
+HnRenderRprimsTask::TaskSharedPtr HnRenderRprimsTask::Create(pxr::HdSceneDelegate& ParamsDelegate, const pxr::SdfPath& Id)
 {
-    return TaskSharedPtr(new HnRenderTask{&ParamsDelegate, Id});
+    return TaskSharedPtr(new HnRenderRprimsTask{&ParamsDelegate, Id});
 }
 
-HnRenderTask::HnRenderTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id) :
+HnRenderRprimsTask::HnRenderRprimsTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id) :
     HnTask{Id}
 {
 }
 
-HnRenderTask::~HnRenderTask()
+HnRenderRprimsTask::~HnRenderRprimsTask()
 {
 }
 
-void HnRenderTask::Sync(pxr::HdSceneDelegate* Delegate,
-                        pxr::HdTaskContext*   TaskCtx,
-                        pxr::HdDirtyBits*     DirtyBits)
+void HnRenderRprimsTask::Sync(pxr::HdSceneDelegate* Delegate,
+                              pxr::HdTaskContext*   TaskCtx,
+                              pxr::HdDirtyBits*     DirtyBits)
 {
 }
 
-void HnRenderTask::Prepare(pxr::HdTaskContext* TaskCtx,
-                           pxr::HdRenderIndex* RenderIndex)
+void HnRenderRprimsTask::Prepare(pxr::HdTaskContext* TaskCtx,
+                                 pxr::HdRenderIndex* RenderIndex)
 {
 }
 
-void HnRenderTask::Execute(pxr::HdTaskContext* TaskCtx)
+void HnRenderRprimsTask::Execute(pxr::HdTaskContext* TaskCtx)
 {
 }
 
