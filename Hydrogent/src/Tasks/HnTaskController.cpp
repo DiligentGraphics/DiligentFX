@@ -53,6 +53,13 @@ TF_DEFINE_PRIVATE_TOKENS(
 );
 // clang-format on
 
+static constexpr std::array<HnTaskController::TASK_ID, 4> RenderTaskIds = {
+    HnTaskController::TASK_ID_RENDER_DEFAULT,
+    HnTaskController::TASK_ID_RENDER_MASKED,
+    HnTaskController::TASK_ID_RENDER_ADDITIVE,
+    HnTaskController::TASK_ID_RENDER_TRANSLUCENT,
+};
+
 } // namespace
 
 class HnTaskController::TaskParamsDelegate final : public pxr::HdSceneDelegate
@@ -166,13 +173,10 @@ HnTaskController::HnTaskController(pxr::HdRenderIndex& RenderIndex,
     m_ControllerId{ControllerId},
     m_ParamsDelegate{std::make_unique<TaskParamsDelegate>(RenderIndex, ControllerId)}
 {
-    for (const auto& MaterialTag : {HnMaterialTagTokens->defaultTag,
-                                    HnMaterialTagTokens->masked,
-                                    HnMaterialTagTokens->additive,
-                                    HnMaterialTagTokens->translucent})
-    {
-        m_RenderTaskIds.push_back(CreateRenderTask(MaterialTag));
-    }
+    m_TaskIds[TASK_ID_RENDER_DEFAULT]     = CreateRenderTask(HnMaterialTagTokens->defaultTag);
+    m_TaskIds[TASK_ID_RENDER_MASKED]      = CreateRenderTask(HnMaterialTagTokens->masked);
+    m_TaskIds[TASK_ID_RENDER_ADDITIVE]    = CreateRenderTask(HnMaterialTagTokens->additive);
+    m_TaskIds[TASK_ID_RENDER_TRANSLUCENT] = CreateRenderTask(HnMaterialTagTokens->translucent);
 
     m_TaskIds[TASK_ID_POST_PROCESS] = CreatePostProcessTask();
 }
@@ -180,11 +184,6 @@ HnTaskController::HnTaskController(pxr::HdRenderIndex& RenderIndex,
 HnTaskController::~HnTaskController()
 {
     // Remove all tasks from the render index
-    for (const auto& Id : m_RenderTaskIds)
-    {
-        m_RenderIndex.RemoveTask(Id);
-    }
-
     for (const auto& Id : m_TaskIds)
     {
         if (!Id.IsEmpty())
@@ -192,6 +191,12 @@ HnTaskController::~HnTaskController()
             m_RenderIndex.RemoveTask(Id);
         }
     }
+}
+
+pxr::HdTaskSharedPtr HnTaskController::GetTask(TASK_ID idx) const
+{
+    const auto& TaskId = m_TaskIds[idx];
+    return !TaskId.IsEmpty() ? m_RenderIndex.GetTask(TaskId) : nullptr;
 }
 
 pxr::SdfPath HnTaskController::GetRenderTaskId(const pxr::TfToken& MaterialTag) const
@@ -241,13 +246,11 @@ pxr::SdfPath HnTaskController::CreatePostProcessTask()
 const pxr::HdTaskSharedPtrVector HnTaskController::GetRenderingTasks() const
 {
     pxr::HdTaskSharedPtrVector Tasks;
-
-    for (const pxr::SdfPath& Id : m_RenderTaskIds)
-    {
-        Tasks.push_back(m_RenderIndex.GetTask(Id));
-    }
-
-    for (auto idx : {TASK_ID_POST_PROCESS})
+    for (auto idx : {TASK_ID_RENDER_DEFAULT,
+                     TASK_ID_RENDER_MASKED,
+                     TASK_ID_RENDER_ADDITIVE,
+                     TASK_ID_RENDER_TRANSLUCENT,
+                     TASK_ID_POST_PROCESS})
     {
         if (!m_TaskIds[idx].IsEmpty())
         {
@@ -261,8 +264,12 @@ const pxr::HdTaskSharedPtrVector HnTaskController::GetRenderingTasks() const
 void HnTaskController::SetCollection(const pxr::HdRprimCollection& Collection)
 {
     pxr::HdRprimCollection NewCollection = Collection;
-    for (const pxr::SdfPath& TaskId : m_RenderTaskIds)
+    for (const auto idx : RenderTaskIds)
     {
+        const auto& TaskId = m_TaskIds[idx];
+        if (TaskId.IsEmpty())
+            continue;
+
         pxr::HdRprimCollection OldCollection = m_ParamsDelegate->GetParameter<pxr::HdRprimCollection>(TaskId, pxr::HdTokens->collection);
 
         const pxr::TfToken& OldMaterialTag = OldCollection.GetMaterialTag();
@@ -278,8 +285,12 @@ void HnTaskController::SetCollection(const pxr::HdRprimCollection& Collection)
 
 void HnTaskController::SetRenderParams(const HnRenderTaskParams& Params)
 {
-    for (const pxr::SdfPath& TaskId : m_RenderTaskIds)
+    for (const auto idx : RenderTaskIds)
     {
+        const auto& TaskId = m_TaskIds[idx];
+        if (TaskId.IsEmpty())
+            continue;
+
         HnRenderTaskParams OldParams = m_ParamsDelegate->GetParameter<HnRenderTaskParams>(TaskId, pxr::HdTokens->params);
         if (OldParams == Params)
             continue;
@@ -305,8 +316,12 @@ void HnTaskController::SetPostProcessParams(const HnPostProcessTaskParams& Param
 
 void HnTaskController::SetRenderTags(const pxr::TfTokenVector& RenderTags)
 {
-    for (const pxr::SdfPath& TaskId : m_RenderTaskIds)
+    for (const auto idx : RenderTaskIds)
     {
+        const auto& TaskId = m_TaskIds[idx];
+        if (TaskId.IsEmpty())
+            continue;
+
         pxr::TfTokenVector OldRenderTags = m_ParamsDelegate->GetParameter<pxr::TfTokenVector>(TaskId, pxr::HdTokens->renderTags);
         if (OldRenderTags == RenderTags)
             continue;

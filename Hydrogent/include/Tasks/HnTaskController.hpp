@@ -68,6 +68,17 @@ public:
     /// Sets new render tags for the render tasks.
     void SetRenderTags(const pxr::TfTokenVector& RenderTags);
 
+    enum TASK_ID
+    {
+        TASK_ID_RENDER_DEFAULT,
+        TASK_ID_RENDER_MASKED,
+        TASK_ID_RENDER_ADDITIVE,
+        TASK_ID_RENDER_TRANSLUCENT,
+        TASK_ID_POST_PROCESS,
+        TASK_ID_COUNT
+    };
+    pxr::HdTaskSharedPtr GetTask(TASK_ID idx) const;
+
 private:
     pxr::SdfPath GetRenderTaskId(const pxr::TfToken& MaterialTag) const;
     pxr::SdfPath CreateRenderTask(const pxr::TfToken& MaterialTag);
@@ -81,13 +92,6 @@ private:
     class TaskParamsDelegate;
     std::unique_ptr<TaskParamsDelegate> m_ParamsDelegate;
 
-    pxr::SdfPathVector m_RenderTaskIds;
-
-    enum TASK_ID
-    {
-        TASK_ID_POST_PROCESS,
-        TASK_ID_COUNT
-    };
     std::array<pxr::SdfPath, TASK_ID_COUNT> m_TaskIds;
 };
 
