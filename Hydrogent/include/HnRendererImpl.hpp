@@ -113,13 +113,15 @@ private:
     USD_Renderer::PbrPsoCacheAccessor       m_PbrPSOCache;
     USD_Renderer::WireframePsoCacheAccessor m_WireframePSOCache;
 
-    std::unique_ptr<HnRenderDelegate> m_RenderDelegate;
-    std::unique_ptr<HnTaskController> m_TaskController;
+    pxr::UsdStageRefPtr m_Stage;
 
-    pxr::UsdStageRefPtr        m_Stage;
-    pxr::HdEngine              m_Engine;
-    pxr::HdRenderIndex*        m_RenderIndex     = nullptr;
-    pxr::UsdImagingDelegate*   m_ImagingDelegate = nullptr;
+    std::unique_ptr<HnRenderDelegate>        m_RenderDelegate;
+    std::unique_ptr<pxr::HdRenderIndex>      m_RenderIndex;
+    std::unique_ptr<pxr::UsdImagingDelegate> m_ImagingDelegate;
+    std::unique_ptr<HnTaskController>        m_TaskController;
+
+    pxr::HdEngine m_Engine;
+
     pxr::TfTokenVector         m_RenderTags;
     pxr::HdRenderPassSharedPtr m_GeometryPass;
 

@@ -140,8 +140,6 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters*         pRefCounters,
 
 HnRendererImpl::~HnRendererImpl()
 {
-    delete m_ImagingDelegate;
-    delete m_RenderIndex;
 }
 
 void HnRendererImpl::LoadUSDStage(pxr::UsdStageRefPtr& Stage)
@@ -149,11 +147,11 @@ void HnRendererImpl::LoadUSDStage(pxr::UsdStageRefPtr& Stage)
     m_Stage = Stage;
 
     m_RenderDelegate = HnRenderDelegate::Create({m_Device, m_Context, m_CameraAttribsCB, m_LightAttribsCB, m_USDRenderer});
-    m_RenderIndex    = pxr::HdRenderIndex::New(m_RenderDelegate.get(), pxr::HdDriverVector{});
+    m_RenderIndex.reset(pxr::HdRenderIndex::New(m_RenderDelegate.get(), pxr::HdDriverVector{}));
 
     const pxr::SdfPath SceneDelegateId = pxr::SdfPath::AbsoluteRootPath();
 
-    m_ImagingDelegate = new pxr::UsdImagingDelegate(m_RenderIndex, SceneDelegateId);
+    m_ImagingDelegate = std::make_unique<pxr::UsdImagingDelegate>(m_RenderIndex.get(), SceneDelegateId);
     m_ImagingDelegate->Populate(m_Stage->GetPseudoRoot());
 
     const pxr::SdfPath TaskControllerId = SceneDelegateId.AppendChild(pxr::TfToken{"_HnTaskController_"});
@@ -162,7 +160,7 @@ void HnRendererImpl::LoadUSDStage(pxr::UsdStageRefPtr& Stage)
     m_RenderTags = {pxr::HdRenderTagTokens->geometry};
 
     auto Collection = pxr::HdRprimCollection{pxr::HdTokens->geometry, pxr::HdReprSelector(pxr::HdReprTokens->hull)};
-    m_GeometryPass  = m_RenderDelegate->CreateRenderPass(m_RenderIndex, Collection);
+    m_GeometryPass  = m_RenderDelegate->CreateRenderPass(m_RenderIndex.get(), Collection);
 }
 
 
