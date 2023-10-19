@@ -54,13 +54,6 @@ TF_DEFINE_PRIVATE_TOKENS(
 );
 // clang-format on
 
-static constexpr std::array<HnTaskController::TaskUID, 4> RenderTaskUIDs = {
-    HnTaskController::TaskUID_RenderDefault,
-    HnTaskController::TaskUID_RenderMasked,
-    HnTaskController::TaskUID_RenderAdditive,
-    HnTaskController::TaskUID_RenderTranslucent,
-};
-
 } // namespace
 
 class HnTaskController::TaskParamsDelegate final : public pxr::HdSceneDelegate
@@ -194,29 +187,29 @@ HnTaskController::HnTaskController(pxr::HdRenderIndex& RenderIndex,
 HnTaskController::~HnTaskController()
 {
     // Remove all tasks from the render index
-    for (const auto& it : m_TaskIds)
+    for (const auto& it : m_TaskUIDs)
     {
         m_RenderIndex.RemoveTask(it.second);
     }
-    m_TaskIds.clear();
+    m_TaskUIDs.clear();
 }
 
 pxr::HdTaskSharedPtr HnTaskController::GetTask(TaskUID UID) const
 {
-    auto it = m_TaskIds.find(UID);
-    return it == m_TaskIds.end() ?
+    auto it = m_TaskUIDs.find(UID);
+    return it == m_TaskUIDs.end() ?
         m_RenderIndex.GetTask(it->second) :
         nullptr;
 }
 
 void HnTaskController::RemoveTask(TaskUID UID)
 {
-    auto it = m_TaskIds.find(UID);
-    if (it == m_TaskIds.end())
+    auto it = m_TaskUIDs.find(UID);
+    if (it == m_TaskUIDs.end())
         return;
 
     m_RenderIndex.RemoveTask(it->second);
-    m_TaskIds.erase(it);
+    m_TaskUIDs.erase(it);
 }
 
 pxr::SdfPath HnTaskController::GetRenderTaskId(const pxr::TfToken& MaterialTag) const
@@ -233,7 +226,7 @@ void HnTaskController::SetParameter(const pxr::SdfPath& Id, const TfToken& Value
 
 void HnTaskController::CreateRenderTask(const pxr::TfToken& MaterialTag, TaskUID UID)
 {
-    const pxr::SdfPath RenderTaskId = GetRenderTaskId(MaterialTag);
+    pxr::SdfPath RenderTaskId = GetRenderTaskId(MaterialTag);
     // Note that we pass the delegate to the scene index. This delegate will be passed
     // to the task's Sync() method.
     CreateTask<HnRenderTask>(RenderTaskId, UID);
@@ -253,6 +246,8 @@ void HnTaskController::CreateRenderTask(const pxr::TfToken& MaterialTag, TaskUID
     m_ParamsDelegate->SetParameter(RenderTaskId, pxr::HdTokens->params, TaskParams);
     m_ParamsDelegate->SetParameter(RenderTaskId, pxr::HdTokens->collection, Collection);
     m_ParamsDelegate->SetParameter(RenderTaskId, pxr::HdTokens->renderTags, RenderTags);
+
+    m_RenderTaskIds.emplace_back(std::move(RenderTaskId));
 }
 
 void HnTaskController::CreatePostProcessTask()
@@ -272,8 +267,8 @@ const pxr::HdTaskSharedPtrVector HnTaskController::GetTasks(const std::vector<Ta
     pxr::HdTaskSharedPtrVector Tasks;
     for (auto UID : *TaskOrder)
     {
-        auto it = m_TaskIds.find(UID);
-        if (it == m_TaskIds.end())
+        auto it = m_TaskUIDs.find(UID);
+        if (it == m_TaskUIDs.end())
             continue;
 
         Tasks.push_back(m_RenderIndex.GetTask(it->second));
@@ -285,14 +280,8 @@ const pxr::HdTaskSharedPtrVector HnTaskController::GetTasks(const std::vector<Ta
 void HnTaskController::SetCollection(const pxr::HdRprimCollection& Collection)
 {
     pxr::HdRprimCollection NewCollection = Collection;
-    for (const auto UID : RenderTaskUIDs)
+    for (const auto& TaskId : m_RenderTaskIds)
     {
-        auto it = m_TaskIds.find(UID);
-        if (it == m_TaskIds.end())
-            continue;
-
-        const auto& TaskId = it->second;
-
         pxr::HdRprimCollection OldCollection = m_ParamsDelegate->GetParameter<pxr::HdRprimCollection>(TaskId, pxr::HdTokens->collection);
 
         const pxr::TfToken& OldMaterialTag = OldCollection.GetMaterialTag();
@@ -308,14 +297,8 @@ void HnTaskController::SetCollection(const pxr::HdRprimCollection& Collection)
 
 void HnTaskController::SetRenderParams(const HnRenderTaskParams& Params)
 {
-    for (const auto UID : RenderTaskUIDs)
+    for (const auto& TaskId : m_RenderTaskIds)
     {
-        auto it = m_TaskIds.find(UID);
-        if (it == m_TaskIds.end())
-            continue;
-
-        const auto& TaskId = it->second;
-
         HnRenderTaskParams OldParams = m_ParamsDelegate->GetParameter<HnRenderTaskParams>(TaskId, pxr::HdTokens->params);
         if (OldParams == Params)
             continue;
@@ -327,8 +310,8 @@ void HnTaskController::SetRenderParams(const HnRenderTaskParams& Params)
 
 void HnTaskController::SetPostProcessParams(const HnPostProcessTaskParams& Params)
 {
-    const auto it = m_TaskIds.find(TaskUID_PostProcess);
-    if (it == m_TaskIds.end())
+    const auto it = m_TaskUIDs.find(TaskUID_PostProcess);
+    if (it == m_TaskUIDs.end())
         return;
 
     const auto& TaskId = it->second;
@@ -343,14 +326,8 @@ void HnTaskController::SetPostProcessParams(const HnPostProcessTaskParams& Param
 
 void HnTaskController::SetRenderTags(const pxr::TfTokenVector& RenderTags)
 {
-    for (const auto UID : RenderTaskUIDs)
+    for (const auto& TaskId : m_RenderTaskIds)
     {
-        auto it = m_TaskIds.find(UID);
-        if (it == m_TaskIds.end())
-            continue;
-
-        const auto& TaskId = it->second;
-
         pxr::TfTokenVector OldRenderTags = m_ParamsDelegate->GetParameter<pxr::TfTokenVector>(TaskId, pxr::HdTokens->renderTags);
         if (OldRenderTags == RenderTags)
             continue;

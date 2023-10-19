@@ -28,6 +28,7 @@
 
 #include <memory>
 #include <unordered_map>
+#include <vector>
 
 #include "Tasks/HnTask.hpp"
 
@@ -63,6 +64,15 @@ public:
 
     const pxr::SdfPath& GetControllerId() const { return m_ControllerId; }
 
+    /// Returns the task list that can be passed to the Hydra engine for execution.
+    ///
+    /// \param [in] TaskOrder - Optional task order. If not specified, the default order is used:
+    ///                         - RenderDefault
+    ///                         - RenderMasked
+    ///                         - RenderAdditive
+    ///                         - RenderTranslucent
+    ///                         - PostProcess
+    /// \return The task list that can be passed to pxr::HdEngine::Execute.
     const pxr::HdTaskSharedPtrVector GetTasks(const std::vector<TaskUID>* TaskOrder = nullptr) const;
 
     /// Sets new collection for the render tasks.
@@ -102,9 +112,10 @@ private:
     class TaskParamsDelegate;
     std::unique_ptr<TaskParamsDelegate> m_ParamsDelegate;
 
-    std::unordered_map<TaskUID, pxr::SdfPath> m_TaskIds;
+    std::unordered_map<TaskUID, pxr::SdfPath> m_TaskUIDs;
 
-    std::vector<TaskUID> m_DefaultTaskOrder;
+    std::vector<TaskUID>      m_DefaultTaskOrder;
+    std::vector<pxr::SdfPath> m_RenderTaskIds;
 };
 
 template <typename TaskType>
@@ -112,7 +123,7 @@ void HnTaskController::CreateTask(const pxr::SdfPath& TaskId,
                                   TaskUID             UID)
 {
     m_RenderIndex.InsertTask<HnRenderTask>(m_ParamsDelegate.get(), TaskId);
-    auto it_inserted = m_TaskIds.emplace(UID, TaskId);
+    auto it_inserted = m_TaskUIDs.emplace(UID, TaskId);
     VERIFY(!it_inserted.second, "Task with UID ", UID, " already exists: ", it_inserted.first->second.GetText());
 }
 

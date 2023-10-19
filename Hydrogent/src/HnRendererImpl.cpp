@@ -208,7 +208,7 @@ void HnRendererImpl::Update()
     if (m_ImagingDelegate)
     {
         m_ImagingDelegate->ApplyPendingUpdates();
-        pxr::HdTaskSharedPtrVector tasks = m_TaskController->GetRenderingTasks();
+        pxr::HdTaskSharedPtrVector tasks = m_TaskController->GetTasks();
         tasks.push_back(std::make_shared<SyncTask>(m_GeometryPass, m_RenderTags));
         m_Engine.Execute(&m_ImagingDelegate->GetRenderIndex(), &tasks);
     }
