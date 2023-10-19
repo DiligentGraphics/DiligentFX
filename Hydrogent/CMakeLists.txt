@@ -17,6 +17,7 @@ set(SOURCE
     src/HnTypeConversions.cpp
     src/Tasks/HnTask.cpp
     src/Tasks/HnRenderRprimsTask.cpp
+    src/Tasks/HnRenderEnvMapTask.cpp
     src/Tasks/HnPostProcessTask.cpp
     src/Tasks/HnTaskController.cpp
 )
@@ -37,6 +38,7 @@ set(INCLUDE
     include/HnTypeConversions.hpp
     include/Tasks/HnTask.hpp
     include/Tasks/HnRenderRprimsTask.hpp
+    include/Tasks/HnRenderEnvMapTask.hpp
     include/Tasks/HnPostProcessTask.hpp
     include/Tasks/HnTaskController.hpp
 )

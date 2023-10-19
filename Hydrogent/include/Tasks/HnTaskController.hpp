@@ -52,6 +52,7 @@ public:
     static constexpr TaskUID TaskUID_RenderRprimsMasked      = 0xf5290fec47594711;
     static constexpr TaskUID TaskUID_RenderRprimsAdditive    = 0x37d45531106c4c52;
     static constexpr TaskUID TaskUID_RenderRprimsTranslucent = 0xa015c7e45941407e;
+    static constexpr TaskUID TaskUID_RenderEnvMap            = 0xf646122e1dc74bab;
     static constexpr TaskUID TaskUID_PostProcess             = 0x1f5367e65d034500;
 
     HnTaskController(pxr::HdRenderIndex& RenderIndex,
@@ -67,10 +68,11 @@ public:
     /// Returns the task list that can be passed to the Hydra engine for execution.
     ///
     /// \param [in] TaskOrder - Optional task order. If not specified, the default order is used:
-    ///                         - RenderDefault
-    ///                         - RenderMasked
-    ///                         - RenderAdditive
-    ///                         - RenderTranslucent
+    ///                         - RenderRprimsDefault
+    ///                         - RenderRprimsMasked
+    ///                         - RenderEnvMap
+    ///                         - RenderRprimsAdditive
+    ///                         - RenderRprimsTranslucent
     ///                         - PostProcess
     /// \return The task list that can be passed to pxr::HdEngine::Execute.
     const pxr::HdTaskSharedPtrVector GetTasks(const std::vector<TaskUID>* TaskOrder = nullptr) const;
@@ -102,6 +104,7 @@ private:
     pxr::SdfPath GetRenderRprimsTaskId(const pxr::TfToken& MaterialTag) const;
 
     void CreateRenderRprimsTask(const pxr::TfToken& MaterialTag, TaskUID UID);
+    void CreateRenderEnvMapTask();
     void CreatePostProcessTask();
 
 private:
