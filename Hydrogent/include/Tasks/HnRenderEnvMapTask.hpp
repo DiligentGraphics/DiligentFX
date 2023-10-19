@@ -50,10 +50,6 @@ struct HnRenderEnvMapTaskParams
 class HnRenderEnvMapTask final : public HnTask
 {
 public:
-    using TaskSharedPtr = std::shared_ptr<HnRenderEnvMapTask>;
-
-    static TaskSharedPtr Create(pxr::HdSceneDelegate& ParamsDelegate, const pxr::SdfPath& id);
-
     HnRenderEnvMapTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id);
     ~HnRenderEnvMapTask();
 

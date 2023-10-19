@@ -31,6 +31,7 @@
 
 #include "Tasks/HnRenderRprimsTask.hpp"
 #include "Tasks/HnRenderEnvMapTask.hpp"
+#include "Tasks/HnReadRprimIdTask.hpp"
 #include "Tasks/HnPostProcessTask.hpp"
 #include "HnTokens.hpp"
 #include "HashUtils.hpp"
@@ -48,8 +49,9 @@ namespace
 TF_DEFINE_PRIVATE_TOKENS(
     HnTaskControllerTokens,
 
-    (postProcessTask)
     (renderEnvMapTask)
+    (readRprimIdTask)
+    (postProcessTask)
 
     (renderBufferDescriptor)
     (renderTags)
@@ -169,22 +171,14 @@ HnTaskController::HnTaskController(pxr::HdRenderIndex& RenderIndex,
     m_ControllerId{ControllerId},
     m_ParamsDelegate{std::make_unique<TaskParamsDelegate>(RenderIndex, ControllerId)}
 {
+    // Task creation order defines the default task order
     CreateRenderRprimsTask(HnMaterialTagTokens->defaultTag, TaskUID_RenderRprimsDefault);
     CreateRenderRprimsTask(HnMaterialTagTokens->masked, TaskUID_RenderRprimsMasked);
+    CreateRenderEnvMapTask();
     CreateRenderRprimsTask(HnMaterialTagTokens->additive, TaskUID_RenderRprimsAdditive);
     CreateRenderRprimsTask(HnMaterialTagTokens->translucent, TaskUID_RenderRprimsTranslucent);
-    CreateRenderEnvMapTask();
+    CreateReadRprimIdTask();
     CreatePostProcessTask();
-
-    m_DefaultTaskOrder =
-        {
-            TaskUID_RenderRprimsDefault,
-            TaskUID_RenderRprimsMasked,
-            TaskUID_RenderEnvMap,
-            TaskUID_RenderRprimsAdditive,
-            TaskUID_RenderRprimsTranslucent,
-            TaskUID_PostProcess,
-        };
 }
 
 HnTaskController::~HnTaskController()
@@ -251,6 +245,7 @@ void HnTaskController::CreateRenderRprimsTask(const pxr::TfToken& MaterialTag, T
     m_ParamsDelegate->SetParameter(RenderRprimsTaskId, pxr::HdTokens->renderTags, RenderTags);
 
     m_RenderTaskIds.emplace_back(std::move(RenderRprimsTaskId));
+    m_DefaultTaskOrder.emplace_back(UID);
 }
 
 void HnTaskController::CreatePostProcessTask()
@@ -260,6 +255,7 @@ void HnTaskController::CreatePostProcessTask()
 
     HnPostProcessTaskParams TaskParams;
     m_ParamsDelegate->SetParameter(PostProcessTaskId, pxr::HdTokens->params, TaskParams);
+    m_DefaultTaskOrder.emplace_back(TaskUID_PostProcess);
 }
 
 void HnTaskController::CreateRenderEnvMapTask()
@@ -269,6 +265,17 @@ void HnTaskController::CreateRenderEnvMapTask()
 
     HnRenderEnvMapTaskParams TaskParams;
     m_ParamsDelegate->SetParameter(RenderEnvMapTaskId, pxr::HdTokens->params, TaskParams);
+    m_DefaultTaskOrder.emplace_back(TaskUID_RenderEnvMap);
+}
+
+void HnTaskController::CreateReadRprimIdTask()
+{
+    const pxr::SdfPath ReadRprimTaskId = GetControllerId().AppendChild(HnTaskControllerTokens->readRprimIdTask);
+    CreateTask<HnReadRprimIdTask>(ReadRprimTaskId, TaskUID_ReadRprimId);
+
+    HnReadRprimIdTaskParams TaskParams;
+    m_ParamsDelegate->SetParameter(ReadRprimTaskId, pxr::HdTokens->params, TaskParams);
+    m_DefaultTaskOrder.emplace_back(TaskUID_ReadRprimId);
 }
 
 const pxr::HdTaskSharedPtrVector HnTaskController::GetTasks(const std::vector<TaskUID>* TaskOrder) const

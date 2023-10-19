@@ -24,7 +24,9 @@
  *  of the possibility of such damages.
  */
 
-#include "Tasks/HnPostProcessTask.hpp"
+#pragma once
+
+#include "HnTask.hpp"
 
 namespace Diligent
 {
@@ -32,29 +34,35 @@ namespace Diligent
 namespace USD
 {
 
-HnPostProcessTask::HnPostProcessTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id) :
-    HnTask{Id}
+struct HnReadRprimIdTaskParams
 {
-}
+    constexpr bool operator==(const HnReadRprimIdTaskParams& rhs) const
+    {
+        return true;
+    }
+    constexpr bool operator!=(const HnReadRprimIdTaskParams& rhs) const
+    {
+        return !(*this == rhs);
+    }
+};
 
-HnPostProcessTask::~HnPostProcessTask()
+/// Render task implementation in Hydrogent.
+class HnReadRprimIdTask final : public HnTask
 {
-}
+public:
+    HnReadRprimIdTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id);
+    ~HnReadRprimIdTask();
 
-void HnPostProcessTask::Sync(pxr::HdSceneDelegate* Delegate,
-                             pxr::HdTaskContext*   TaskCtx,
-                             pxr::HdDirtyBits*     DirtyBits)
-{
-}
+    virtual void Sync(pxr::HdSceneDelegate* Delegate,
+                      pxr::HdTaskContext*   TaskCtx,
+                      pxr::HdDirtyBits*     DirtyBits) override final;
 
-void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
-                                pxr::HdRenderIndex* RenderIndex)
-{
-}
+    virtual void Prepare(pxr::HdTaskContext* TaskCtx,
+                         pxr::HdRenderIndex* RenderIndex) override final;
 
-void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
-{
-}
+
+    virtual void Execute(pxr::HdTaskContext* TaskCtx) override final;
+};
 
 } // namespace USD
 

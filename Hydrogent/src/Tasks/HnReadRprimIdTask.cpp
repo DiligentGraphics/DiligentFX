@@ -24,7 +24,7 @@
  *  of the possibility of such damages.
  */
 
-#include "Tasks/HnPostProcessTask.hpp"
+#include "Tasks/HnReadRprimIdTask.hpp"
 
 namespace Diligent
 {
@@ -32,27 +32,27 @@ namespace Diligent
 namespace USD
 {
 
-HnPostProcessTask::HnPostProcessTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id) :
+HnReadRprimIdTask::HnReadRprimIdTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id) :
     HnTask{Id}
 {
 }
 
-HnPostProcessTask::~HnPostProcessTask()
+HnReadRprimIdTask::~HnReadRprimIdTask()
 {
 }
 
-void HnPostProcessTask::Sync(pxr::HdSceneDelegate* Delegate,
+void HnReadRprimIdTask::Sync(pxr::HdSceneDelegate* Delegate,
                              pxr::HdTaskContext*   TaskCtx,
                              pxr::HdDirtyBits*     DirtyBits)
 {
 }
 
-void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
+void HnReadRprimIdTask::Prepare(pxr::HdTaskContext* TaskCtx,
                                 pxr::HdRenderIndex* RenderIndex)
 {
 }
 
-void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
+void HnReadRprimIdTask::Execute(pxr::HdTaskContext* TaskCtx)
 {
 }
 

@@ -53,6 +53,7 @@ public:
     static constexpr TaskUID TaskUID_RenderRprimsAdditive    = 0x37d45531106c4c52;
     static constexpr TaskUID TaskUID_RenderRprimsTranslucent = 0xa015c7e45941407e;
     static constexpr TaskUID TaskUID_RenderEnvMap            = 0xf646122e1dc74bab;
+    static constexpr TaskUID TaskUID_ReadRprimId             = 0x199572fe7ff144ef;
     static constexpr TaskUID TaskUID_PostProcess             = 0x1f5367e65d034500;
 
     HnTaskController(pxr::HdRenderIndex& RenderIndex,
@@ -73,6 +74,7 @@ public:
     ///                         - RenderEnvMap
     ///                         - RenderRprimsAdditive
     ///                         - RenderRprimsTranslucent
+    ///                         - ReadRprimId
     ///                         - PostProcess
     /// \return The task list that can be passed to pxr::HdEngine::Execute.
     const pxr::HdTaskSharedPtrVector GetTasks(const std::vector<TaskUID>* TaskOrder = nullptr) const;
@@ -105,6 +107,7 @@ private:
 
     void CreateRenderRprimsTask(const pxr::TfToken& MaterialTag, TaskUID UID);
     void CreateRenderEnvMapTask();
+    void CreateReadRprimIdTask();
     void CreatePostProcessTask();
 
 private:

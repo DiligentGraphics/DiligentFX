@@ -50,10 +50,6 @@ struct HnPostProcessTaskParams
 class HnPostProcessTask final : public HnTask
 {
 public:
-    using TaskSharedPtr = std::shared_ptr<HnPostProcessTask>;
-
-    static TaskSharedPtr Create(pxr::HdSceneDelegate& ParamsDelegate, const pxr::SdfPath& id);
-
     HnPostProcessTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id);
     ~HnPostProcessTask();
 

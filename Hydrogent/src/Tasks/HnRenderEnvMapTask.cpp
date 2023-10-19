@@ -32,11 +32,6 @@ namespace Diligent
 namespace USD
 {
 
-HnRenderEnvMapTask::TaskSharedPtr HnRenderEnvMapTask::Create(pxr::HdSceneDelegate& ParamsDelegate, const pxr::SdfPath& Id)
-{
-    return TaskSharedPtr(new HnRenderEnvMapTask{&ParamsDelegate, Id});
-}
-
 HnRenderEnvMapTask::HnRenderEnvMapTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id) :
     HnTask{Id}
 {

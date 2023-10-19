@@ -50,10 +50,6 @@ struct HnRenderRprimsTaskParams
 class HnRenderRprimsTask final : public HnTask
 {
 public:
-    using TaskSharedPtr = std::shared_ptr<HnRenderRprimsTask>;
-
-    static TaskSharedPtr Create(pxr::HdSceneDelegate& ParamsDelegate, const pxr::SdfPath& Id);
-
     HnRenderRprimsTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id);
     ~HnRenderRprimsTask();
 

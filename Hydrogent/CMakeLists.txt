@@ -19,6 +19,7 @@ set(SOURCE
     src/Tasks/HnRenderRprimsTask.cpp
     src/Tasks/HnRenderEnvMapTask.cpp
     src/Tasks/HnPostProcessTask.cpp
+    src/Tasks/HnReadRprimIdTask.cpp
     src/Tasks/HnTaskController.cpp
 )
 
@@ -40,6 +41,7 @@ set(INCLUDE
     include/Tasks/HnRenderRprimsTask.hpp
     include/Tasks/HnRenderEnvMapTask.hpp
     include/Tasks/HnPostProcessTask.hpp
+    include/Tasks/HnReadRprimIdTask.hpp
     include/Tasks/HnTaskController.hpp
 )
 

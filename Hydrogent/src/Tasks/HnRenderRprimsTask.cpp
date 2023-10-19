@@ -32,11 +32,6 @@ namespace Diligent
 namespace USD
 {
 
-HnRenderRprimsTask::TaskSharedPtr HnRenderRprimsTask::Create(pxr::HdSceneDelegate& ParamsDelegate, const pxr::SdfPath& Id)
-{
-    return TaskSharedPtr(new HnRenderRprimsTask{&ParamsDelegate, Id});
-}
-
 HnRenderRprimsTask::HnRenderRprimsTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id) :
     HnTask{Id}
 {
