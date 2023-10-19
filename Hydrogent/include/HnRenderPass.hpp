@@ -29,11 +29,17 @@
 #include "pxr/imaging/hd/types.h"
 #include "pxr/imaging/hd/renderPass.h"
 
+#include "DeviceContext.h"
+#include "USD_Renderer.hpp"
+
 namespace Diligent
 {
 
 namespace USD
 {
+
+class HnMesh;
+class HnMaterial;
 
 /// Hydra render pass implementation in Hydrogent.
 class HnRenderPass final : public pxr::HdRenderPass
@@ -56,7 +62,15 @@ protected:
 private:
     void UpdateDrawItems(const pxr::TfTokenVector& RenderTags);
 
+    void RenderMesh(IDeviceContext*   pCtx,
+                    const HnMesh&     Mesh,
+                    const HnMaterial& Material);
+
 private:
+    std::shared_ptr<USD_Renderer>           m_USDRenderer;
+    USD_Renderer::PbrPsoCacheAccessor       m_PbrPSOCache;
+    USD_Renderer::WireframePsoCacheAccessor m_WireframePSOCache;
+
     pxr::HdRenderIndex::HdDrawItemPtrVector m_DrawItems;
 
     unsigned int m_CollectionVersion     = ~0u;

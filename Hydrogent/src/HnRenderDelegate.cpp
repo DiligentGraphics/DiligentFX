@@ -29,6 +29,7 @@
 #include "HnMaterial.hpp"
 #include "HnRenderPass.hpp"
 #include "DebugUtilities.hpp"
+#include "USD_Renderer.hpp"
 
 #include "pxr/imaging/hd/material.h"
 
@@ -65,7 +66,35 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
     m_pContext{CI.pContext},
     m_CameraAttribsCB{CI.pCameraAttribs},
     m_LightAttribsCB{CI.pLightAttribs},
-    m_PBRRenderer{CI.PBRRenderer},
+    m_USDRenderer{
+        std::make_shared<USD_Renderer>(
+            CI.pDevice,
+            CI.pStateCache,
+            CI.pContext,
+            []() {
+                USD_Renderer::CreateInfo USDRendererCI;
+
+                // Use samplers from texture views
+                USDRendererCI.UseImmutableSamplers = false;
+                // Disable animation
+                USDRendererCI.MaxJointCount = 0;
+                // Use separate textures for metallic and roughness
+                USDRendererCI.UseSeparateMetallicRoughnessTextures = true;
+
+                static constexpr LayoutElement Inputs[] =
+                    {
+                        {0, 0, 3, VT_FLOAT32}, //float3 Pos     : ATTRIB0;
+                        {1, 1, 3, VT_FLOAT32}, //float3 Normal  : ATTRIB1;
+                        {2, 2, 2, VT_FLOAT32}, //float2 UV0     : ATTRIB2;
+                        {3, 3, 2, VT_FLOAT32}, //float2 UV1     : ATTRIB3;
+                    };
+
+                USDRendererCI.InputLayout.LayoutElements = Inputs;
+                USDRendererCI.InputLayout.NumElements    = _countof(Inputs);
+
+                return USDRendererCI;
+            }()),
+    },
     m_TextureRegistry{CI.pDevice}
 {
 }
@@ -178,7 +207,7 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
     m_TextureRegistry.Commit(m_pContext);
     for (auto mat_it : m_Materials)
     {
-        mat_it.second->UpdateSRB(m_pDevice, *m_PBRRenderer, m_CameraAttribsCB, m_LightAttribsCB);
+        mat_it.second->UpdateSRB(m_pDevice, *m_USDRenderer, m_CameraAttribsCB, m_LightAttribsCB);
     }
     for (auto mesh_it : m_Meshes)
     {

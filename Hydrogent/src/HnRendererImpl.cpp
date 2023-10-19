@@ -75,35 +75,6 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters*         pRefCounters,
     m_LightAttribsCB{CI.pLightAttribsCB},
     m_PostProcessAttribsCB{m_Device.CreateBuffer("Post process attribs CB", sizeof(HLSL::PostProcessAttribs))},
     m_ConvertOutputToSRGB{CI.ConvertOutputToSRGB},
-    m_USDRenderer{
-        std::make_shared<USD_Renderer>(
-            pDevice,
-            nullptr,
-            pContext,
-            [](const HnRendererCreateInfo& CI) {
-                USD_Renderer::CreateInfo USDRendererCI;
-
-                // Use samplers from texture views
-                USDRendererCI.UseImmutableSamplers = false;
-                // Disable animation
-                USDRendererCI.MaxJointCount = 0;
-                // Use separate textures for metallic and roughness
-                USDRendererCI.UseSeparateMetallicRoughnessTextures = true;
-
-                static constexpr LayoutElement Inputs[] =
-                    {
-                        {0, 0, 3, VT_FLOAT32}, //float3 Pos     : ATTRIB0;
-                        {1, 1, 3, VT_FLOAT32}, //float3 Normal  : ATTRIB1;
-                        {2, 2, 2, VT_FLOAT32}, //float2 UV0     : ATTRIB2;
-                        {3, 3, 2, VT_FLOAT32}, //float2 UV1     : ATTRIB3;
-                    };
-
-                USDRendererCI.InputLayout.LayoutElements = Inputs;
-                USDRendererCI.InputLayout.NumElements    = _countof(Inputs);
-
-                return USDRendererCI;
-            }(CI)),
-    },
     m_EnvMapRenderer{
         std::make_unique<EnvMapRenderer>(
             [](const HnRendererCreateInfo& CI, IRenderDevice* pDevice) {
@@ -111,31 +82,14 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters*         pRefCounters,
                 EnvMapRndrCI.pDevice          = pDevice;
                 EnvMapRndrCI.pCameraAttribsCB = CI.pCameraAttribsCB;
                 EnvMapRndrCI.NumRenderTargets = 2;
-                EnvMapRndrCI.RTVFormats[0]    = ColorBufferFormat;
-                EnvMapRndrCI.RTVFormats[1]    = MeshIdFormat;
-                EnvMapRndrCI.DSVFormat        = DepthFormat;
+                EnvMapRndrCI.RTVFormats[0]    = HnRenderDelegate::ColorBufferFormat;
+                EnvMapRndrCI.RTVFormats[1]    = HnRenderDelegate::MeshIdFormat;
+                EnvMapRndrCI.DSVFormat        = HnRenderDelegate::DepthFormat;
 
                 return EnvMapRndrCI;
             }(CI, pDevice))},
     m_MeshIdReadBackQueue{pDevice}
 {
-    GraphicsPipelineDesc GraphicsDesc;
-    GraphicsDesc.NumRenderTargets                     = 2;
-    GraphicsDesc.RTVFormats[0]                        = ColorBufferFormat;
-    GraphicsDesc.RTVFormats[1]                        = MeshIdFormat;
-    GraphicsDesc.DSVFormat                            = DepthFormat;
-    GraphicsDesc.PrimitiveTopology                    = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    GraphicsDesc.RasterizerDesc.FrontCounterClockwise = CI.FrontCCW;
-
-    m_PbrPSOCache = m_USDRenderer->GetPbrPsoCacheAccessor(GraphicsDesc);
-    VERIFY_EXPR(m_PbrPSOCache);
-
-    GraphicsDesc.PrimitiveTopology = PRIMITIVE_TOPOLOGY_LINE_LIST;
-
-    m_WireframePSOCache = m_USDRenderer->GetWireframePsoCacheAccessor(GraphicsDesc);
-    VERIFY_EXPR(m_WireframePSOCache);
-
-    m_DefaultPSOFlags = PBR_Renderer::PSO_FLAG_ENABLE_CUSTOM_DATA_OUTPUT;
 }
 
 HnRendererImpl::~HnRendererImpl()
@@ -146,7 +100,7 @@ void HnRendererImpl::LoadUSDStage(pxr::UsdStageRefPtr& Stage)
 {
     m_Stage = Stage;
 
-    m_RenderDelegate = HnRenderDelegate::Create({m_Device, m_Context, m_CameraAttribsCB, m_LightAttribsCB, m_USDRenderer});
+    m_RenderDelegate = HnRenderDelegate::Create({m_Device, m_Context, nullptr, m_CameraAttribsCB, m_LightAttribsCB});
     m_RenderIndex.reset(pxr::HdRenderIndex::New(m_RenderDelegate.get(), pxr::HdDriverVector{}));
 
     const pxr::SdfPath SceneDelegateId = pxr::SdfPath::AbsoluteRootPath();
@@ -156,97 +110,13 @@ void HnRendererImpl::LoadUSDStage(pxr::UsdStageRefPtr& Stage)
 
     const pxr::SdfPath TaskControllerId = SceneDelegateId.AppendChild(pxr::TfToken{"_HnTaskController_"});
     m_TaskController                    = std::make_unique<HnTaskController>(*m_RenderIndex, TaskControllerId);
-
-    m_RenderTags = {pxr::HdRenderTagTokens->geometry};
-
-    auto Collection = pxr::HdRprimCollection{pxr::HdTokens->geometry, pxr::HdReprSelector(pxr::HdReprTokens->hull)};
-    m_GeometryPass  = m_RenderDelegate->CreateRenderPass(m_RenderIndex.get(), Collection);
 }
-
-
-namespace
-{
-
-class SyncTask final : public pxr::HdTask
-{
-public:
-    SyncTask(pxr::HdRenderPassSharedPtr const& renderPass, pxr::TfTokenVector const& renderTags) :
-        pxr::HdTask{pxr::SdfPath::EmptyPath()},
-        m_RenderPass{renderPass},
-        m_RenderTags{renderTags}
-    {}
-
-    void Sync(pxr::HdSceneDelegate* delegate, pxr::HdTaskContext* ctx, pxr::HdDirtyBits* dirtyBits) override final
-    {
-        *dirtyBits = pxr::HdChangeTracker::Clean;
-    }
-
-    void Prepare(pxr::HdTaskContext* ctx, pxr::HdRenderIndex* renderIndex) override final {}
-
-    void Execute(pxr::HdTaskContext* ctx) override final
-    {
-        m_RenderPass->Execute({}, m_RenderTags);
-    }
-
-    const pxr::TfTokenVector& GetRenderTags() const override final
-    {
-        return m_RenderTags;
-    }
-
-private:
-    pxr::HdRenderPassSharedPtr m_RenderPass;
-    pxr::TfTokenVector         m_RenderTags;
-};
-
-} // namespace
-
 
 void HnRendererImpl::Update()
 {
     if (m_ImagingDelegate)
     {
         m_ImagingDelegate->ApplyPendingUpdates();
-        pxr::HdTaskSharedPtrVector tasks = m_TaskController->GetTasks();
-        tasks.push_back(std::make_shared<SyncTask>(m_GeometryPass, m_RenderTags));
-        m_Engine.Execute(&m_ImagingDelegate->GetRenderIndex(), &tasks);
-    }
-}
-
-void HnRendererImpl::RenderMeshes(IDeviceContext* pCtx, const HnDrawAttribs& Attribs)
-{
-    for (auto& List : m_RenderLists)
-        List.clear();
-
-    const auto& Meshes = m_RenderDelegate->GetMeshes();
-    if (Meshes.empty())
-        return;
-
-    for (auto mesh_it : Meshes)
-    {
-        if (!mesh_it.second)
-            continue;
-
-        auto& Mesh = *mesh_it.second;
-
-        const auto& MaterialId = Mesh.GetMaterialId();
-        const auto* pMaterial  = m_RenderDelegate->GetMaterial(MaterialId);
-        if (pMaterial == nullptr)
-            return;
-
-        const auto& ShaderAttribs = pMaterial->GetShaderAttribs();
-        const auto  AlphaMode     = ShaderAttribs.AlphaMode;
-
-        m_RenderLists[AlphaMode].emplace_back(Mesh, *pMaterial);
-    }
-
-    // TODO: handle double-sided materials
-    for (auto AlphaMode : {USD_Renderer::ALPHA_MODE_OPAQUE, USD_Renderer::ALPHA_MODE_MASK, USD_Renderer::ALPHA_MODE_BLEND})
-    {
-        const auto& List = m_RenderLists[AlphaMode];
-        for (const auto& MeshRI : List)
-        {
-            RenderMesh(pCtx, MeshRI.Mesh, MeshRI.Material, Attribs, AlphaMode);
-        }
     }
 }
 
@@ -272,18 +142,18 @@ void HnRendererImpl::PrepareRenderTargets(ITextureView* pDstRtv)
         TexDesc.Type      = RESOURCE_DIM_TEX_2D;
         TexDesc.Width     = DstTexDesc.Width;
         TexDesc.Height    = DstTexDesc.Height;
-        TexDesc.Format    = ColorBufferFormat;
+        TexDesc.Format    = HnRenderDelegate::ColorBufferFormat;
         TexDesc.BindFlags = BIND_RENDER_TARGET | BIND_SHADER_RESOURCE;
         TexDesc.MipLevels = 1;
         m_ColorBuffer     = m_Device.CreateTexture(TexDesc);
 
         TexDesc.Name      = "Mesh ID buffer";
-        TexDesc.Format    = MeshIdFormat;
+        TexDesc.Format    = HnRenderDelegate::MeshIdFormat;
         TexDesc.BindFlags = BIND_RENDER_TARGET | BIND_SHADER_RESOURCE;
         m_MeshIdTexture   = m_Device.CreateTexture(TexDesc);
 
         TexDesc.Name      = "Depth buffer";
-        TexDesc.Format    = DepthFormat;
+        TexDesc.Format    = HnRenderDelegate::DepthFormat;
         TexDesc.BindFlags = BIND_DEPTH_STENCIL;
         m_DepthBufferDSV  = m_Device.CreateTexture(TexDesc)->GetDefaultView(TEXTURE_VIEW_DEPTH_STENCIL);
     }
@@ -368,7 +238,7 @@ void HnRendererImpl::Draw(IDeviceContext* pCtx, const HnDrawAttribs& Attribs)
         pCtx->ClearDepthStencil(m_DepthBufferDSV, CLEAR_DEPTH_FLAG, 1.f, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     }
 
-    if (auto* pEnvMapSRV = m_USDRenderer->GetPrefilteredEnvMapSRV())
+    if (auto* pEnvMapSRV = m_RenderDelegate->GetUSDRenderer()->GetPrefilteredEnvMapSRV())
     {
         Diligent::HLSL::ToneMappingAttribs TMAttribs;
         TMAttribs.iToneMappingMode     = TONE_MAPPING_MODE_UNCHARTED2;
@@ -387,7 +257,9 @@ void HnRendererImpl::Draw(IDeviceContext* pCtx, const HnDrawAttribs& Attribs)
         m_EnvMapRenderer->Render(EnvMapAttribs, TMAttribs);
     }
 
-    RenderMeshes(pCtx, Attribs);
+    pxr::HdTaskSharedPtrVector tasks = m_TaskController->GetTasks();
+    m_Engine.Execute(&m_ImagingDelegate->GetRenderIndex(), &tasks);
+
     PerformPostProcess(pCtx, Attribs);
 }
 
@@ -409,120 +281,9 @@ void HnRendererImpl::PerformPostProcess(IDeviceContext* pCtx, const HnDrawAttrib
     pCtx->Draw({3, DRAW_FLAG_VERIFY_ALL});
 }
 
-void HnRendererImpl::RenderMesh(IDeviceContext*          pCtx,
-                                const HnMesh&            Mesh,
-                                const HnMaterial&        Material,
-                                const HnDrawAttribs&     Attribs,
-                                USD_Renderer::ALPHA_MODE AlphaMode)
-{
-    auto* pSRB       = Material.GetSRB();
-    auto* pPosVB     = Mesh.GetVertexBuffer(pxr::HdTokens->points);
-    auto* pNormalsVB = Mesh.GetVertexBuffer(pxr::HdTokens->normals);
-
-    // Our shader currently supports two texture coordinate sets.
-    // Gather vertex buffers for both sets.
-    const auto& TexCoordSets    = Material.GetTextureCoordinateSets();
-    IBuffer*    pTexCoordVBs[2] = {};
-    for (size_t i = 0; i < TexCoordSets.size(); ++i)
-    {
-        const auto& TexCoordSet = TexCoordSets[i];
-        if (!TexCoordSet.PrimVarName.IsEmpty())
-        {
-            pTexCoordVBs[i] = Mesh.GetVertexBuffer(TexCoordSet.PrimVarName);
-            if (!pTexCoordVBs[i])
-            {
-                LOG_ERROR_MESSAGE("Failed to find texture coordinates vertex buffer '", TexCoordSet.PrimVarName.GetText(), "' in mesh '", Mesh.GetId().GetText(), "'");
-            }
-        }
-    }
-
-    const auto& ShaderAttribs = Material.GetShaderAttribs();
-
-    auto* pIB = (Attribs.RenderMode == HN_RENDER_MODE_MESH_EDGES) ?
-        Mesh.GetEdgeIndexBuffer() :
-        Mesh.GetTriangleIndexBuffer();
-
-    if (pPosVB == nullptr || pIB == nullptr || pSRB == nullptr)
-        return;
-
-    IPipelineState* pPSO = nullptr;
-    if (Attribs.RenderMode == HN_RENDER_MODE_SOLID)
-    {
-        auto PSOFlags = m_DefaultPSOFlags;
-        if (pNormalsVB != nullptr)
-            PSOFlags |= PBR_Renderer::PSO_FLAG_USE_VERTEX_NORMALS;
-        if (pTexCoordVBs[0] != nullptr)
-            PSOFlags |= PBR_Renderer::PSO_FLAG_USE_TEXCOORD0;
-        if (pTexCoordVBs[1] != nullptr)
-            PSOFlags |= PBR_Renderer::PSO_FLAG_USE_TEXCOORD1;
-
-        PSOFlags |=
-            PBR_Renderer::PSO_FLAG_USE_COLOR_MAP |
-            PBR_Renderer::PSO_FLAG_USE_NORMAL_MAP |
-            PBR_Renderer::PSO_FLAG_USE_METALLIC_MAP |
-            PBR_Renderer::PSO_FLAG_USE_ROUGHNESS_MAP |
-            PBR_Renderer::PSO_FLAG_USE_AO_MAP |
-            PBR_Renderer::PSO_FLAG_USE_EMISSIVE_MAP |
-            PBR_Renderer::PSO_FLAG_USE_IBL |
-            PBR_Renderer::PSO_FLAG_ENABLE_DEBUG_VIEW;
-
-        pPSO = m_PbrPSOCache.Get({PSOFlags, AlphaMode, /*DoubleSided = */ false}, true);
-    }
-    else if (Attribs.RenderMode == HN_RENDER_MODE_MESH_EDGES)
-    {
-        pPSO = m_WireframePSOCache.Get({m_DefaultPSOFlags, /*DoubleSided = */ false}, true);
-    }
-    else
-    {
-        UNEXPECTED("Unexpected render mode");
-        return;
-    }
-    pCtx->SetPipelineState(pPSO);
-
-    // Bind vertex and index buffers
-    IBuffer* pBuffs[] = {pPosVB, pNormalsVB, pTexCoordVBs[0], pTexCoordVBs[1]};
-    pCtx->SetVertexBuffers(0, _countof(pBuffs), pBuffs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    pCtx->SetIndexBuffer(pIB, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-
-    {
-        MapHelper<HLSL::PBRShaderAttribs> pDstShaderAttribs{pCtx, m_USDRenderer->GetPBRAttribsCB(), MAP_WRITE, MAP_FLAG_DISCARD};
-
-        pDstShaderAttribs->Transforms.NodeMatrix = Mesh.GetTransform() * Attribs.Transform;
-        pDstShaderAttribs->Transforms.JointCount = 0;
-
-        static_assert(sizeof(pDstShaderAttribs->Material) == sizeof(ShaderAttribs), "The sizeof(PBRMaterialShaderInfo) is inconsistent with sizeof(ShaderAttribs)");
-        memcpy(&pDstShaderAttribs->Material, &ShaderAttribs, sizeof(ShaderAttribs));
-
-        auto& RendererParams = pDstShaderAttribs->Renderer;
-
-        RendererParams.DebugViewType            = Attribs.DebugView;
-        RendererParams.OcclusionStrength        = Attribs.OcclusionStrength;
-        RendererParams.EmissionScale            = Attribs.EmissionScale;
-        RendererParams.AverageLogLum            = Attribs.AverageLogLum;
-        RendererParams.MiddleGray               = Attribs.MiddleGray;
-        RendererParams.WhitePoint               = Attribs.WhitePoint;
-        RendererParams.IBLScale                 = Attribs.IBLScale;
-        RendererParams.PrefilteredCubeMipLevels = 5; //m_Settings.UseIBL ? static_cast<float>(m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels) : 0.f;
-        RendererParams.WireframeColor           = Attribs.WireframeColor;
-        RendererParams.HighlightColor           = float4{0, 0, 0, 0};
-
-        auto CustomData = float4{static_cast<float>(Mesh.GetUID()), 0, 0, 1};
-        if (Attribs.SelectedPrim != nullptr && Mesh.GetId() == *Attribs.SelectedPrim)
-            CustomData.x *= -1;
-        RendererParams.CustomData = CustomData;
-    }
-
-    pCtx->CommitShaderResources(pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    DrawIndexedAttribs DrawAttrs = (Attribs.RenderMode == HN_RENDER_MODE_MESH_EDGES) ?
-        DrawIndexedAttribs{Mesh.GetNumEdges() * 2, VT_UINT32, DRAW_FLAG_VERIFY_ALL} :
-        DrawIndexedAttribs{Mesh.GetNumTriangles() * 3, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
-
-    pCtx->DrawIndexed(DrawAttrs);
-}
-
 void HnRendererImpl::SetEnvironmentMap(IDeviceContext* pCtx, ITextureView* pEnvironmentMapSRV)
 {
-    m_USDRenderer->PrecomputeCubemaps(pCtx, pEnvironmentMapSRV);
+    m_RenderDelegate->GetUSDRenderer()->PrecomputeCubemaps(pCtx, pEnvironmentMapSRV);
 }
 
 const pxr::SdfPath* HnRendererImpl::QueryPrimId(IDeviceContext* pCtx, Uint32 X, Uint32 Y)

@@ -34,13 +34,14 @@
 #include "pxr/imaging/hd/renderDelegate.h"
 
 #include "RenderDevice.h"
+#include "RenderStateCache.h"
 #include "RefCntAutoPtr.hpp"
 #include "HnTextureRegistry.hpp"
 
 namespace Diligent
 {
 
-class PBR_Renderer;
+class USD_Renderer;
 
 namespace USD
 {
@@ -54,12 +55,11 @@ class HnRenderDelegate final : public pxr::HdRenderDelegate
 public:
     struct CreateInfo
     {
-        IRenderDevice*  pDevice        = nullptr;
-        IDeviceContext* pContext       = nullptr;
-        IBuffer*        pCameraAttribs = nullptr;
-        IBuffer*        pLightAttribs  = nullptr;
-
-        std::shared_ptr<PBR_Renderer> PBRRenderer;
+        IRenderDevice*     pDevice        = nullptr;
+        IDeviceContext*    pContext       = nullptr;
+        IRenderStateCache* pStateCache    = nullptr;
+        IBuffer*           pCameraAttribs = nullptr;
+        IBuffer*           pLightAttribs  = nullptr;
     };
     static std::unique_ptr<HnRenderDelegate> Create(const CreateInfo& CI);
 
@@ -196,6 +196,16 @@ public:
         return it != m_Meshes.end() ? it->second : NullMesh;
     }
 
+    std::shared_ptr<USD_Renderer> GetUSDRenderer() { return m_USDRenderer; }
+
+    IRenderDevice*  GetDevice() { return m_pDevice; }
+    IDeviceContext* GetDeviceContext() { return m_pContext; }
+
+    // TODO: needs to be dynamic
+    static constexpr TEXTURE_FORMAT ColorBufferFormat = TEX_FORMAT_R11G11B10_FLOAT;
+    static constexpr TEXTURE_FORMAT MeshIdFormat      = TEX_FORMAT_R32_FLOAT;
+    static constexpr TEXTURE_FORMAT DepthFormat       = TEX_FORMAT_D32_FLOAT;
+
 private:
     static const pxr::TfTokenVector SupportedRPrimTypes;
     static const pxr::TfTokenVector SupportedSPrimTypes;
@@ -205,7 +215,7 @@ private:
     RefCntAutoPtr<IDeviceContext> m_pContext;
     RefCntAutoPtr<IBuffer>        m_CameraAttribsCB;
     RefCntAutoPtr<IBuffer>        m_LightAttribsCB;
-    std::shared_ptr<PBR_Renderer> m_PBRRenderer;
+    std::shared_ptr<USD_Renderer> m_USDRenderer;
 
     HnTextureRegistry m_TextureRegistry;
 

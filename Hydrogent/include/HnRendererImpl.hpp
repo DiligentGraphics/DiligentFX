@@ -38,7 +38,6 @@
 #include "BasicMath.hpp"
 #include "ObjectBase.hpp"
 #include "GPUCompletionAwaitQueue.hpp"
-#include "USD_Renderer.hpp"
 #include "Tasks/HnTaskController.hpp"
 
 #include "pxr/usd/usd/stage.h"
@@ -86,13 +85,6 @@ public:
     virtual const pxr::SdfPath* QueryPrimId(IDeviceContext* pCtx, Uint32 X, Uint32 Y) override final;
 
 private:
-    void RenderMesh(IDeviceContext*          pCtx,
-                    const HnMesh&            Mesh,
-                    const HnMaterial&        Material,
-                    const HnDrawAttribs&     Attribs,
-                    USD_Renderer::ALPHA_MODE AlphaMode);
-    void RenderMeshes(IDeviceContext* pCtx, const HnDrawAttribs& Attribs);
-
     void PrepareRenderTargets(ITextureView* pDstRtv);
     void PreparePostProcess(TEXTURE_FORMAT RTVFmt);
     void PerformPostProcess(IDeviceContext* pCtx, const HnDrawAttribs& Attribs);
@@ -107,11 +99,7 @@ private:
 
     const bool m_ConvertOutputToSRGB;
 
-    std::shared_ptr<USD_Renderer>   m_USDRenderer;
     std::unique_ptr<EnvMapRenderer> m_EnvMapRenderer;
-
-    USD_Renderer::PbrPsoCacheAccessor       m_PbrPSOCache;
-    USD_Renderer::WireframePsoCacheAccessor m_WireframePSOCache;
 
     pxr::UsdStageRefPtr m_Stage;
 
@@ -122,32 +110,11 @@ private:
 
     pxr::HdEngine m_Engine;
 
-    pxr::TfTokenVector         m_RenderTags;
-    pxr::HdRenderPassSharedPtr m_GeometryPass;
-
     RefCntAutoPtr<ITexture>     m_ColorBuffer;
     RefCntAutoPtr<ITexture>     m_MeshIdTexture;
     RefCntAutoPtr<ITextureView> m_DepthBufferDSV;
 
     GPUCompletionAwaitQueue<RefCntAutoPtr<ITexture>> m_MeshIdReadBackQueue;
-
-    PBR_Renderer::PSO_FLAGS m_DefaultPSOFlags = PBR_Renderer::PSO_FLAG_NONE;
-
-    static constexpr TEXTURE_FORMAT ColorBufferFormat = TEX_FORMAT_R11G11B10_FLOAT;
-    static constexpr TEXTURE_FORMAT MeshIdFormat      = TEX_FORMAT_R32_FLOAT;
-    static constexpr TEXTURE_FORMAT DepthFormat       = TEX_FORMAT_D32_FLOAT;
-
-    struct MeshRenderInfo
-    {
-        const HnMesh&     Mesh;
-        const HnMaterial& Material;
-
-        MeshRenderInfo(const HnMesh& _Mesh, const HnMaterial& _Material) noexcept :
-            Mesh{_Mesh},
-            Material{_Material}
-        {}
-    };
-    std::array<std::vector<MeshRenderInfo>, USD_Renderer::ALPHA_MODE_NUM_MODES> m_RenderLists;
 
     struct PostProcessState
     {

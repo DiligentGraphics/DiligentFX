@@ -26,8 +26,12 @@
 
 #include "HnRenderPass.hpp"
 #include "HnRenderDelegate.hpp"
+#include "HnMesh.hpp"
+#include "HnMaterial.hpp"
 
 #include "pxr/imaging/hd/renderIndex.h"
+
+#include "MapHelper.hpp"
 
 namespace Diligent
 {
@@ -44,15 +48,39 @@ pxr::HdRenderPassSharedPtr HnRenderPass::Create(pxr::HdRenderIndex*           pI
 HnRenderPass::HnRenderPass(pxr::HdRenderIndex*           pIndex,
                            const pxr::HdRprimCollection& Collection) :
     pxr::HdRenderPass{pIndex, Collection}
-{}
+{
+    HnRenderDelegate* pRenderDelegate = static_cast<HnRenderDelegate*>(pIndex->GetRenderDelegate());
+
+    m_USDRenderer = pRenderDelegate->GetUSDRenderer();
+
+    GraphicsPipelineDesc GraphicsDesc;
+    // TODO: these parameters should be taken from the render pass state
+    GraphicsDesc.NumRenderTargets                     = 2;
+    GraphicsDesc.RTVFormats[0]                        = HnRenderDelegate::ColorBufferFormat;
+    GraphicsDesc.RTVFormats[1]                        = HnRenderDelegate::MeshIdFormat;
+    GraphicsDesc.DSVFormat                            = HnRenderDelegate::DepthFormat;
+    GraphicsDesc.PrimitiveTopology                    = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    GraphicsDesc.RasterizerDesc.FrontCounterClockwise = true;
+
+    m_PbrPSOCache = m_USDRenderer->GetPbrPsoCacheAccessor(GraphicsDesc);
+    VERIFY_EXPR(m_PbrPSOCache);
+
+    GraphicsDesc.PrimitiveTopology = PRIMITIVE_TOPOLOGY_LINE_LIST;
+
+    m_WireframePSOCache = m_USDRenderer->GetWireframePsoCacheAccessor(GraphicsDesc);
+    VERIFY_EXPR(m_WireframePSOCache);
+}
 
 void HnRenderPass::_Execute(pxr::HdRenderPassStateSharedPtr const& State,
                             pxr::TfTokenVector const&              Tags)
 {
     UpdateDrawItems(Tags);
+    if (m_DrawItems.empty())
+        return;
 
     pxr::HdRenderIndex* pRenderIndex    = GetRenderIndex();
     HnRenderDelegate*   pRenderDelegate = static_cast<HnRenderDelegate*>(pRenderIndex->GetRenderDelegate());
+    IDeviceContext*     pCtx            = pRenderDelegate->GetDeviceContext();
 
     for (const pxr::HdDrawItem* pDrawItem : m_DrawItems)
     {
@@ -62,8 +90,12 @@ void HnRenderPass::_Execute(pxr::HdRenderPassStateSharedPtr const& State,
         const pxr::SdfPath& RPrimID = pDrawItem->GetRprimID();
         if (auto& pMesh = pRenderDelegate->GetMesh(RPrimID))
         {
-            //LOG_INFO_MESSAGE("RPrimID: ", RPrimID.GetText());
-            //pMesh->Draw(State);
+            const auto& MaterialId = pMesh->GetMaterialId();
+            const auto* pMaterial  = pRenderDelegate->GetMaterial(MaterialId);
+            if (pMaterial == nullptr)
+                continue;
+
+            RenderMesh(pCtx, *pMesh, *pMaterial);
         }
     }
 }
@@ -126,6 +158,121 @@ void HnRenderPass::UpdateDrawItems(const pxr::TfTokenVector& RenderTags)
     m_RprimRenderTagVersion = RprimRenderTagVersion;
 }
 
+
+void HnRenderPass::RenderMesh(IDeviceContext*   pCtx,
+                              const HnMesh&     Mesh,
+                              const HnMaterial& Material)
+{
+    auto* const pSRB          = Material.GetSRB();
+    auto* const pPosVB        = Mesh.GetVertexBuffer(pxr::HdTokens->points);
+    auto* const pNormalsVB    = Mesh.GetVertexBuffer(pxr::HdTokens->normals);
+    const auto& ShaderAttribs = Material.GetShaderAttribs();
+
+    // Our shader currently supports two texture coordinate sets.
+    // Gather vertex buffers for both sets.
+    const auto& TexCoordSets    = Material.GetTextureCoordinateSets();
+    IBuffer*    pTexCoordVBs[2] = {};
+    for (size_t i = 0; i < TexCoordSets.size(); ++i)
+    {
+        const auto& TexCoordSet = TexCoordSets[i];
+        if (!TexCoordSet.PrimVarName.IsEmpty())
+        {
+            pTexCoordVBs[i] = Mesh.GetVertexBuffer(TexCoordSet.PrimVarName);
+            if (!pTexCoordVBs[i])
+            {
+                LOG_ERROR_MESSAGE("Failed to find texture coordinates vertex buffer '", TexCoordSet.PrimVarName.GetText(), "' in mesh '", Mesh.GetId().GetText(), "'");
+            }
+        }
+    }
+
+    auto* pIB = //(Attribs.RenderMode == HN_RENDER_MODE_MESH_EDGES) ?
+        //Mesh.GetEdgeIndexBuffer() :
+        Mesh.GetTriangleIndexBuffer();
+
+    if (pPosVB == nullptr || pIB == nullptr || pSRB == nullptr)
+        return;
+
+    auto PSOFlags = PBR_Renderer::PSO_FLAG_ENABLE_CUSTOM_DATA_OUTPUT;
+
+    IPipelineState* pPSO = nullptr;
+    //if (Attribs.RenderMode == HN_RENDER_MODE_SOLID)
+    {
+        if (pNormalsVB != nullptr)
+            PSOFlags |= PBR_Renderer::PSO_FLAG_USE_VERTEX_NORMALS;
+        if (pTexCoordVBs[0] != nullptr)
+            PSOFlags |= PBR_Renderer::PSO_FLAG_USE_TEXCOORD0;
+        if (pTexCoordVBs[1] != nullptr)
+            PSOFlags |= PBR_Renderer::PSO_FLAG_USE_TEXCOORD1;
+
+        PSOFlags |=
+            PBR_Renderer::PSO_FLAG_USE_COLOR_MAP |
+            PBR_Renderer::PSO_FLAG_USE_NORMAL_MAP |
+            PBR_Renderer::PSO_FLAG_USE_METALLIC_MAP |
+            PBR_Renderer::PSO_FLAG_USE_ROUGHNESS_MAP |
+            PBR_Renderer::PSO_FLAG_USE_AO_MAP |
+            PBR_Renderer::PSO_FLAG_USE_EMISSIVE_MAP |
+            PBR_Renderer::PSO_FLAG_USE_IBL |
+            PBR_Renderer::PSO_FLAG_ENABLE_DEBUG_VIEW;
+
+        pPSO = m_PbrPSOCache.Get({PSOFlags, static_cast<PBR_Renderer::ALPHA_MODE>(ShaderAttribs.AlphaMode), /*DoubleSided = */ false}, true);
+    }
+    //else if (Attribs.RenderMode == HN_RENDER_MODE_MESH_EDGES)
+    //{
+    //    pPSO = m_WireframePSOCache.Get({PSOFlags, /*DoubleSided = */ false}, true);
+    //}
+    //else
+    //{
+    //    UNEXPECTED("Unexpected render mode");
+    //    return;
+    //}
+    pCtx->SetPipelineState(pPSO);
+
+    // Bind vertex and index buffers
+    IBuffer* pBuffs[] = {pPosVB, pNormalsVB, pTexCoordVBs[0], pTexCoordVBs[1]};
+    pCtx->SetVertexBuffers(0, _countof(pBuffs), pBuffs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    pCtx->SetIndexBuffer(pIB, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+    {
+        MapHelper<HLSL::PBRShaderAttribs> pDstShaderAttribs{pCtx, m_USDRenderer->GetPBRAttribsCB(), MAP_WRITE, MAP_FLAG_DISCARD};
+
+        float4x4 InvYAxis = float4x4::Identity();
+        InvYAxis._22      = -1;
+        auto Transform    = InvYAxis;
+
+        pDstShaderAttribs->Transforms.NodeMatrix = Mesh.GetTransform() * Transform; // * Attribs.Transform;
+        pDstShaderAttribs->Transforms.JointCount = 0;
+
+        static_assert(sizeof(pDstShaderAttribs->Material) == sizeof(ShaderAttribs), "The sizeof(PBRMaterialShaderInfo) is inconsistent with sizeof(ShaderAttribs)");
+        memcpy(&pDstShaderAttribs->Material, &ShaderAttribs, sizeof(ShaderAttribs));
+
+        auto& RendererParams = pDstShaderAttribs->Renderer;
+
+        RendererParams.DebugViewType     = 0;   //Attribs.DebugView;
+        RendererParams.OcclusionStrength = 1.0; //Attribs.OcclusionStrength;
+        RendererParams.EmissionScale     = 1.0; //Attribs.EmissionScale;
+        RendererParams.IBLScale          = 1.0; //Attribs.IBLScale;
+
+        RendererParams.PrefilteredCubeMipLevels = 5;                  //m_Settings.UseIBL ? static_cast<float>(m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels) : 0.f;
+        RendererParams.WireframeColor           = float4{1, 1, 1, 1}; //Attribs.WireframeColor;
+        RendererParams.HighlightColor           = float4{0, 0, 0, 0};
+
+        RendererParams.AverageLogLum = 0.3f;  //Attribs.AverageLogLum;
+        RendererParams.MiddleGray    = 0.18f; //Attribs.MiddleGray;
+        RendererParams.WhitePoint    = 3.0f;  //Attribs.WhitePoint;
+
+        auto CustomData = float4{static_cast<float>(Mesh.GetUID()), 0, 0, 1};
+        //if (Attribs.SelectedPrim != nullptr && Mesh.GetId() == *Attribs.SelectedPrim)
+        //    CustomData.x *= -1;
+        RendererParams.CustomData = CustomData;
+    }
+
+    pCtx->CommitShaderResources(pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    DrawIndexedAttribs DrawAttrs = //(Attribs.RenderMode == HN_RENDER_MODE_MESH_EDGES) ?
+        //DrawIndexedAttribs{Mesh.GetNumEdges() * 2, VT_UINT32, DRAW_FLAG_VERIFY_ALL} :
+        DrawIndexedAttribs{Mesh.GetNumTriangles() * 3, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
+
+    pCtx->DrawIndexed(DrawAttrs);
+}
 
 } // namespace USD
 
