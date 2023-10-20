@@ -88,6 +88,7 @@ private:
     void PrepareRenderTargets(ITextureView* pDstRtv);
     void PreparePostProcess(TEXTURE_FORMAT RTVFmt);
     void PerformPostProcess(IDeviceContext* pCtx, const HnDrawAttribs& Attribs);
+    void DestroyStageResources();
 
 private:
     RenderDeviceWithCache_N       m_Device;

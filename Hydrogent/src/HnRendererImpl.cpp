@@ -94,10 +94,22 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters*         pRefCounters,
 
 HnRendererImpl::~HnRendererImpl()
 {
+    DestroyStageResources();
+}
+
+void HnRendererImpl::DestroyStageResources()
+{
+    m_TaskController.reset();
+    m_ImagingDelegate.reset();
+    m_RenderIndex.reset();
+    m_RenderDelegate.reset();
+    m_Stage.Reset();
 }
 
 void HnRendererImpl::LoadUSDStage(pxr::UsdStageRefPtr& Stage)
 {
+    DestroyStageResources();
+
     m_Stage = Stage;
 
     m_RenderDelegate = HnRenderDelegate::Create({m_Device, m_Context, nullptr, m_CameraAttribsCB, m_LightAttribsCB});
