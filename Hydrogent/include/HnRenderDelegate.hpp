@@ -33,9 +33,10 @@
 
 #include "pxr/imaging/hd/renderDelegate.h"
 
-#include "RenderDevice.h"
-#include "RenderStateCache.h"
-#include "RefCntAutoPtr.hpp"
+#include "../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
+#include "../../../DiligentCore/Graphics/GraphicsTools/interface/RenderStateCache.h"
+#include "../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
+
 #include "HnTextureRegistry.hpp"
 
 namespace Diligent

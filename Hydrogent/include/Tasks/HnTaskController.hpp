@@ -32,7 +32,7 @@
 
 #include "Tasks/HnTask.hpp"
 
-#include "DebugUtilities.hpp"
+#include "../../../../DiligentCore/Platforms/Basic/interface/DebugUtilities.hpp"
 
 namespace Diligent
 {

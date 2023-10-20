@@ -26,11 +26,11 @@
 
 #pragma once
 
-#include "RasterizerState.h"
-#include "BlendState.h"
-#include "DepthStencilState.h"
-#include "PipelineState.h"
-#include "DeviceContext.h"
+#include "../../../DiligentCore/Graphics/GraphicsEngine/interface/RasterizerState.h"
+#include "../../../DiligentCore/Graphics/GraphicsEngine/interface/BlendState.h"
+#include "../../../DiligentCore/Graphics/GraphicsEngine/interface/DepthStencilState.h"
+#include "../../../DiligentCore/Graphics/GraphicsEngine/interface/PipelineState.h"
+#include "../../../DiligentCore/Graphics/GraphicsEngine/interface/DeviceContext.h"
 
 #include "pxr/imaging/hd/types.h"
 #include "pxr/imaging/hd/renderPassState.h"

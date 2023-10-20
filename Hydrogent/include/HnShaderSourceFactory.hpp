@@ -26,8 +26,8 @@
 
 #pragma once
 
-#include "Shader.h"
-#include "RefCntAutoPtr.hpp"
+#include "../../../DiligentCore/Graphics/GraphicsEngine/interface/Shader.h"
+#include "../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
 
 namespace Diligent
 {

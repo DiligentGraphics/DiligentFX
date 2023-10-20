@@ -32,12 +32,13 @@
 
 #include "HnRenderer.hpp"
 
-#include "RenderStateCache.hpp"
-#include "DeviceContext.h"
-#include "RefCntAutoPtr.hpp"
-#include "BasicMath.hpp"
-#include "ObjectBase.hpp"
-#include "GPUCompletionAwaitQueue.hpp"
+#include "../../../DiligentCore/Graphics/GraphicsTools/interface/RenderStateCache.hpp"
+#include "../../../DiligentCore/Graphics/GraphicsEngine/interface/DeviceContext.h"
+#include "../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
+#include "../../../DiligentCore/Common/interface/BasicMath.hpp"
+#include "../../../DiligentCore/Common/interface/ObjectBase.hpp"
+#include "../../../DiligentCore/Graphics/GraphicsTools/interface/GPUCompletionAwaitQueue.hpp"
+
 #include "Tasks/HnTaskController.hpp"
 
 #include "pxr/usd/usd/stage.h"

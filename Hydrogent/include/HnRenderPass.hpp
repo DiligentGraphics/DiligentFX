@@ -29,8 +29,8 @@
 #include "pxr/imaging/hd/types.h"
 #include "pxr/imaging/hd/renderPass.h"
 
-#include "DeviceContext.h"
-#include "USD_Renderer.hpp"
+#include "../../../DiligentCore/Graphics/GraphicsEngine/interface/DeviceContext.h"
+#include "../../../DiligentFX/PBR/interface/USD_Renderer.hpp"
 
 namespace Diligent
 {

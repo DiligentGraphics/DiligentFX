@@ -35,10 +35,10 @@
 
 #include "pxr/imaging/hd/material.h"
 
-#include "RenderDevice.h"
-#include "ShaderResourceBinding.h"
-#include "RefCntAutoPtr.hpp"
-#include "BasicMath.hpp"
+#include "../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
+#include "../../../DiligentCore/Graphics/GraphicsEngine/interface/ShaderResourceBinding.h"
+#include "../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
+#include "../../../DiligentCore/Common/interface/BasicMath.hpp"
 
 namespace Diligent
 {

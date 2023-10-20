@@ -33,11 +33,11 @@
 #include "pxr/imaging/hd/mesh.h"
 #include "pxr/base/tf/token.h"
 
-#include "RenderDevice.h"
-#include "Buffer.h"
-#include "RefCntAutoPtr.hpp"
-#include "GraphicsTypesX.hpp"
-#include "BasicMath.hpp"
+#include "../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
+#include "../../../DiligentCore/Graphics/GraphicsEngine/interface/Buffer.h"
+#include "../../../DiligentCore/Graphics/GraphicsEngine/interface/GraphicsTypesX.hpp"
+#include "../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
+#include "../../../DiligentCore/Common/interface/BasicMath.hpp"
 
 namespace Diligent
 {
