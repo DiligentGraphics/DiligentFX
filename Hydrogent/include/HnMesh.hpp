@@ -124,6 +124,12 @@ private:
                         pxr::HdDirtyBits&     DirtyBits,
                         const pxr::TfToken&   ReprToken);
 
+    void AddGeometrySubsetDrawItems(const pxr::HdMeshReprDesc& ReprDesc,
+                                    size_t                     NumGeomSubsets,
+                                    pxr::HdRepr&               Repr);
+    void UpdateDrawItemsForGeometrySubsets(pxr::HdSceneDelegate& SceneDelegate,
+                                           pxr::HdRenderParam*   RenderParam);
+
 private:
     const Uint32 m_UID;
 

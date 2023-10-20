@@ -81,7 +81,9 @@ static pxr::TfToken ComputeMaterialTag(pxr::HdSceneDelegate* Delegate,
 void HnMesh::UpdateReprMaterialTags(pxr::HdSceneDelegate* SceneDelegate,
                                     pxr::HdRenderParam*   RenderParam)
 {
-    pxr::TfToken MeshMaterialTag = ComputeMaterialTag(SceneDelegate, GetMaterialId());
+    const pxr::TfToken        MeshMaterialTag = ComputeMaterialTag(SceneDelegate, GetMaterialId());
+    const pxr::HdGeomSubsets& GeomSubsets     = m_Topology.GetGeomSubsets();
+    const size_t              NumGeomSubsets  = GeomSubsets.size();
     for (auto const& token_repr : _reprs)
     {
         const pxr::TfToken&        Token = token_repr.first;
@@ -101,21 +103,18 @@ void HnMesh::UpdateReprMaterialTags(pxr::HdSceneDelegate* SceneDelegate,
             }
 
             // Update geom subset draw items if they exist
-            if (Desc.geomStyle == pxr::HdMeshGeomStylePoints)
-                continue;
-
-            const pxr::HdGeomSubsets& GeomSubsets = m_Topology.GetGeomSubsets();
-            const size_t              NumSubsets  = GeomSubsets.size();
-            for (size_t i = 0; i < NumSubsets; ++i)
+            if (Desc.geomStyle != pxr::HdMeshGeomStylePoints)
             {
-                pxr::HdDrawItem* Item = Repr->GetDrawItemForGeomSubset(GeomSubsetDescIdx, NumSubsets, i);
-                if (Item == nullptr)
-                    continue;
-
-                const pxr::SdfPath& MaterialId = GeomSubsets[i].materialId;
-                Item->SetMaterialTag(ComputeMaterialTag(SceneDelegate, MaterialId));
+                for (size_t i = 0; i < NumGeomSubsets; ++i)
+                {
+                    if (pxr::HdDrawItem* Item = Repr->GetDrawItemForGeomSubset(GeomSubsetDescIdx, NumGeomSubsets, i))
+                    {
+                        const pxr::SdfPath& MaterialId = GeomSubsets[i].materialId;
+                        Item->SetMaterialTag(ComputeMaterialTag(SceneDelegate, MaterialId));
+                    }
+                }
+                ++GeomSubsetDescIdx;
             }
-            ++GeomSubsetDescIdx;
         }
     }
 }
@@ -174,6 +173,18 @@ pxr::HdDirtyBits HnMesh::_PropagateDirtyBits(pxr::HdDirtyBits bits) const
     return bits;
 }
 
+void HnMesh::AddGeometrySubsetDrawItems(const pxr::HdMeshReprDesc& ReprDesc, size_t NumGeomSubsets, pxr::HdRepr& Repr)
+{
+    if (ReprDesc.geomStyle == pxr::HdMeshGeomStylePoints)
+        return;
+
+    for (size_t i = 0; i < NumGeomSubsets; ++i)
+    {
+        pxr::HdRepr::DrawItemUniquePtr Item = std::make_unique<pxr::HdDrawItem>(&_sharedData);
+        Repr.AddGeomSubsetDrawItem(std::move(Item));
+    }
+}
+
 void HnMesh::_InitRepr(const pxr::TfToken& ReprToken, pxr::HdDirtyBits* DirtyBits)
 {
     auto it = std::find_if(_reprs.begin(), _reprs.end(), _ReprComparator(ReprToken));
@@ -186,13 +197,15 @@ void HnMesh::_InitRepr(const pxr::TfToken& ReprToken, pxr::HdDirtyBits* DirtyBit
     // set dirty bit to say we need to sync a new repr
     *DirtyBits |= pxr::HdChangeTracker::NewRepr;
 
-    _MeshReprConfig::DescArray ReprDescs = _GetReprDesc(ReprToken);
+    _MeshReprConfig::DescArray ReprDescs      = _GetReprDesc(ReprToken);
+    const size_t               NumGeomSubsets = m_Topology.GetGeomSubsets().size();
     for (const pxr::HdMeshReprDesc& Desc : ReprDescs)
     {
         if (Desc.geomStyle == pxr::HdMeshGeomStyleInvalid)
             continue;
 
         Repr.AddDrawItem(std::make_unique<pxr::HdDrawItem>(&_sharedData));
+        AddGeometrySubsetDrawItems(Desc, NumGeomSubsets, Repr);
     }
 }
 
@@ -219,6 +232,30 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
     DirtyBits &= ~pxr::HdChangeTracker::NewRepr;
 }
 
+
+void HnMesh::UpdateDrawItemsForGeometrySubsets(pxr::HdSceneDelegate& SceneDelegate,
+                                               pxr::HdRenderParam*   RenderParam)
+{
+    // (Re)create geom subset draw items
+    const size_t NumGeomSubsets = m_Topology.GetGeomSubsets().size();
+    for (auto const& token_repr : _reprs)
+    {
+        const pxr::TfToken&        Token = token_repr.first;
+        pxr::HdReprSharedPtr       Repr  = token_repr.second;
+        _MeshReprConfig::DescArray Descs = _GetReprDesc(Token);
+
+        // Clear all previous geom subset draw items.
+        Repr->ClearGeomSubsetDrawItems();
+        for (const pxr::HdMeshReprDesc& Desc : Descs)
+        {
+            if (Desc.geomStyle == pxr::HdMeshGeomStyleInvalid)
+                continue;
+
+            AddGeometrySubsetDrawItems(Desc, NumGeomSubsets, *Repr);
+        }
+    }
+}
+
 void HnMesh::UpdateTopology(pxr::HdSceneDelegate& SceneDelegate,
                             pxr::HdRenderParam*   RenderParam,
                             pxr::HdDirtyBits&     DirtyBits,
@@ -228,7 +265,14 @@ void HnMesh::UpdateTopology(pxr::HdSceneDelegate& SceneDelegate,
     if (!pxr::HdChangeTracker::IsTopologyDirty(DirtyBits, Id))
         return;
 
-    m_Topology = HdMesh::GetMeshTopology(&SceneDelegate);
+    pxr::HdMeshTopology Topology           = HdMesh::GetMeshTopology(&SceneDelegate);
+    bool                GeomSubsetsChanged = Topology.GetGeomSubsets() != m_Topology.GetGeomSubsets();
+
+    m_Topology = Topology;
+    if (GeomSubsetsChanged)
+    {
+        UpdateDrawItemsForGeometrySubsets(SceneDelegate, RenderParam);
+    }
 
     m_IndexData = std::make_unique<IndexData>();
 
