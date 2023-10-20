@@ -91,6 +91,8 @@ public:
     };
     const auto& GetTextureCoordinateSets() const { return m_TexCoords; }
 
+    const pxr::TfToken& GetTag() const { return m_Network.GetTag(); }
+
 private:
     HnMaterial(pxr::SdfPath const& id);
 

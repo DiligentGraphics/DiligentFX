@@ -101,6 +101,9 @@ protected:
     void UpdateVertexBuffers(const RenderDeviceX_N& Device);
     void UpdateIndexBuffer(const RenderDeviceX_N& Device);
 
+    void UpdateReprMaterialTags(pxr::HdSceneDelegate* SceneDelegate,
+                                pxr::HdRenderParam*   RenderParam);
+
 private:
     HnMesh(const pxr::TfToken& typeId,
            const pxr::SdfPath& id,

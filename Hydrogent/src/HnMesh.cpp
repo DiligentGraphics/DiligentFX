@@ -27,6 +27,7 @@
 
 #include "HnMesh.hpp"
 #include "HnTokens.hpp"
+#include "HnMaterial.hpp"
 
 #include "DebugUtilities.hpp"
 #include "GraphicsTypesX.hpp"
@@ -66,6 +67,60 @@ pxr::HdDirtyBits HnMesh::GetInitialDirtyBitsMask() const
     return pxr::HdChangeTracker::AllSceneDirtyBits & ~pxr::HdChangeTracker::Varying;
 }
 
+static pxr::TfToken ComputeMaterialTag(pxr::HdSceneDelegate* Delegate,
+                                       const pxr::SdfPath&   MaterialId)
+{
+    if (const HnMaterial* Material = static_cast<const HnMaterial*>(Delegate->GetRenderIndex().GetSprim(pxr::HdPrimTypeTokens->material, MaterialId)))
+    {
+        return Material->GetTag();
+    }
+
+    return HnMaterialTagTokens->defaultTag;
+}
+
+void HnMesh::UpdateReprMaterialTags(pxr::HdSceneDelegate* SceneDelegate,
+                                    pxr::HdRenderParam*   RenderParam)
+{
+    pxr::TfToken MeshMaterialTag = ComputeMaterialTag(SceneDelegate, GetMaterialId());
+    for (auto const& token_repr : _reprs)
+    {
+        const pxr::TfToken&        Token = token_repr.first;
+        pxr::HdReprSharedPtr       Repr  = token_repr.second;
+        _MeshReprConfig::DescArray Descs = _GetReprDesc(Token);
+
+        size_t DrawItemIdx       = 0;
+        size_t GeomSubsetDescIdx = 0;
+        for (const auto& Desc : Descs)
+        {
+            if (Desc.geomStyle == pxr::HdMeshGeomStyleInvalid)
+                continue;
+
+            {
+                pxr::HdDrawItem* Item = Repr->GetDrawItem(DrawItemIdx++);
+                Item->SetMaterialTag(MeshMaterialTag);
+            }
+
+            // Update geom subset draw items if they exist
+            if (Desc.geomStyle == pxr::HdMeshGeomStylePoints)
+                continue;
+
+            const pxr::HdGeomSubsets& GeomSubsets = m_Topology.GetGeomSubsets();
+            const size_t              NumSubsets  = GeomSubsets.size();
+            for (size_t i = 0; i < NumSubsets; ++i)
+            {
+                pxr::HdDrawItem* Item = Repr->GetDrawItemForGeomSubset(GeomSubsetDescIdx, NumSubsets, i);
+                if (Item == nullptr)
+                    continue;
+
+                const pxr::SdfPath& MaterialId = GeomSubsets[i].materialId;
+                Item->SetMaterialTag(ComputeMaterialTag(SceneDelegate, MaterialId));
+            }
+            ++GeomSubsetDescIdx;
+        }
+    }
+}
+
+
 void HnMesh::Sync(pxr::HdSceneDelegate* Delegate,
                   pxr::HdRenderParam*   RenderParam,
                   pxr::HdDirtyBits*     DirtyBits,
@@ -73,6 +128,21 @@ void HnMesh::Sync(pxr::HdSceneDelegate* Delegate,
 {
     if (*DirtyBits == pxr::HdChangeTracker::Clean)
         return;
+
+    bool UpdateMaterialTags = false;
+    if (*DirtyBits & pxr::HdChangeTracker::DirtyMaterialId)
+    {
+        const pxr::SdfPath& MaterialId = Delegate->GetMaterialId(GetId());
+        if (GetMaterialId() != MaterialId)
+        {
+            SetMaterialId(MaterialId);
+        }
+        UpdateMaterialTags = true;
+    }
+    if (*DirtyBits & (pxr::HdChangeTracker::DirtyDisplayStyle | pxr::HdChangeTracker::NewRepr))
+    {
+        UpdateMaterialTags = true;
+    }
 
     const pxr::SdfPath& Id = GetId();
     if (Delegate != nullptr && DirtyBits != nullptr)
@@ -83,6 +153,11 @@ void HnMesh::Sync(pxr::HdSceneDelegate* Delegate,
     if (*DirtyBits & pxr::HdChangeTracker::DirtyMaterialId)
     {
         m_MaterialId = Delegate->GetMaterialId(Id);
+    }
+
+    if (UpdateMaterialTags)
+    {
+        UpdateReprMaterialTags(Delegate, RenderParam);
     }
 
     *DirtyBits &= ~pxr::HdChangeTracker::AllSceneDirtyBits;
