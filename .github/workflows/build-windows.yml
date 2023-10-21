@@ -46,13 +46,6 @@ jobs:
             cmake_generator: "Visual Studio 17 2022"
             cmake_args:      "-DDILIGENT_NO_GLSLANG=ON -DDILIGENT_NO_HLSL=ON -DDILIGENT_DEVELOPMENT=ON"
 
-          - name:            "Win8.1"
-            platform:        "Win32"
-            toolset:         "x64"
-            build_type:      "Release"
-            cmake_generator: "Visual Studio 17 2022"
-            cmake_args:      "-DDILIGENT_NO_GLSLANG=ON -DDILIGENT_NO_HLSL=ON -DCMAKE_SYSTEM_VERSION=8.1"
-
           - name:            "Win10-Ninja"
             platform:        "Win32"
             toolset:         "x64"
