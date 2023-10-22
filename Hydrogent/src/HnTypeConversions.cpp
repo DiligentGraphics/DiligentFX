@@ -25,6 +25,7 @@
  */
 
 #include "HnTypeConversions.hpp"
+#include "HnTokens.hpp"
 
 #include "DebugUtilities.hpp"
 
@@ -219,6 +220,16 @@ BLEND_FACTOR HdBlendFactorToBlendFactor(pxr::HdBlendFactor hdBlendFactor)
             UNEXPECTED("Unexpected blend factor");
             return BLEND_FACTOR_ZERO;
     }
+}
+
+PBR_Renderer::ALPHA_MODE MaterialTagToPbrAlphaMode(const pxr::TfToken& MaterialTag)
+{
+    if (MaterialTag == HnMaterialTagTokens->translucent)
+        return PBR_Renderer::ALPHA_MODE_BLEND;
+    else if (MaterialTag == HnMaterialTagTokens->masked)
+        return PBR_Renderer::ALPHA_MODE_MASK;
+    else
+        return PBR_Renderer::ALPHA_MODE_OPAQUE;
 }
 
 } // namespace USD

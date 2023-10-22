@@ -27,6 +27,7 @@
 #include "HnMaterial.hpp"
 #include "HnRenderDelegate.hpp"
 #include "HnTokens.hpp"
+#include "HnTypeConversions.hpp"
 
 #include "pxr/imaging/hd/sceneDelegate.h"
 
@@ -137,13 +138,7 @@ void HnMaterial::Sync(pxr::HdSceneDelegate* SceneDelegate,
         m_ShaderAttribs.TextureSlice3 = 0;
         m_ShaderAttribs.TextureSlice4 = 0;
 
-        const auto& Tag = m_Network.GetTag();
-        if (Tag == HnMaterialTagTokens->translucent)
-            m_ShaderAttribs.AlphaMode = PBR_Renderer::ALPHA_MODE_BLEND;
-        else if (Tag == HnMaterialTagTokens->masked)
-            PBR_Renderer::ALPHA_MODE_MASK;
-        else
-            PBR_Renderer::ALPHA_MODE_OPAQUE;
+        m_ShaderAttribs.AlphaMode = MaterialTagToPbrAlphaMode(m_Network.GetTag());
 
         m_ShaderAttribs.AlphaMaskCutoff   = m_Network.GetOpacityThreshold();
         m_ShaderAttribs.BaseColorFactor.a = m_Network.GetOpacity();

@@ -72,6 +72,7 @@ private:
     unsigned int m_TaskRenderTagsVersion = ~0u;
 
     pxr::TfTokenVector m_RenderTags;
+    pxr::TfToken       m_MaterialTag;
 };
 
 } // namespace USD

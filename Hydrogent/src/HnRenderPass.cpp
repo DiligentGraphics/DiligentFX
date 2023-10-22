@@ -29,6 +29,7 @@
 #include "HnRenderDelegate.hpp"
 #include "HnMesh.hpp"
 #include "HnMaterial.hpp"
+#include "HnTypeConversions.hpp"
 
 #include "pxr/imaging/hd/renderIndex.h"
 
@@ -96,7 +97,7 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
         pRenderDelegate->GetDeviceContext(),
         USDRenderer->GetPBRAttribsCB(),
         static_cast<const HnRenderPassState&>(*RPState),
-        PBR_Renderer::ALPHA_MODE_OPAQUE,
+        MaterialTagToPbrAlphaMode(m_MaterialTag),
     };
 
     GraphicsPipelineDesc GraphicsDesc = State.RPState.GetGraphicsPipelineDesc();
@@ -148,18 +149,18 @@ void HnRenderPass::UpdateDrawItems(const pxr::TfTokenVector& RenderTags)
     pxr::HdRenderIndex* pRenderIndex = GetRenderIndex();
     //HnRenderDelegate*   pRenderDelegate = static_cast<HnRenderDelegate*>(pRenderIndex->GetRenderDelegate());
 
-    const pxr::HdRprimCollection& Collection = GetRprimCollection();
-    const pxr::HdChangeTracker&   Tracker    = pRenderIndex->GetChangeTracker();
+    const pxr::HdRprimCollection& Collection  = GetRprimCollection();
+    const pxr::HdChangeTracker&   Tracker     = pRenderIndex->GetChangeTracker();
+    const pxr::TfToken&           MaterialTag = Collection.GetMaterialTag();
 
     const unsigned int CollectionVersion     = Tracker.GetCollectionVersion(Collection.GetName());
     const unsigned int RprimRenderTagVersion = Tracker.GetRenderTagVersion();
     const unsigned int TaskRenderTagsVersion = Tracker.GetTaskRenderTagsVersion();
-    //const unsigned int MaterialTagsVersion        = GetMaterialTagsVersion(pRenderIndex);
     //const unsigned int GeomSubsetDrawItemsVersion = GetGeomSubsetDrawItemsVersion(pRenderIndex);
 
     const bool CollectionChanged     = (m_CollectionVersion != CollectionVersion);
     const bool RprimRenderTagChanged = (m_RprimRenderTagVersion != RprimRenderTagVersion);
-    //const bool MaterialTagsChanged        = (m_MaterialTagsVersion != MaterialTagsVersion);
+    const bool MaterialTagChanged    = (m_MaterialTag != MaterialTag);
     //const bool GeomSubsetDrawItemsChanged = (m_GeomSubsetDrawItemsVersion != GeomSubsetDrawItemsVersion);
 
     bool TaskRenderTagsChanged = false;
@@ -175,7 +176,7 @@ void HnRenderPass::UpdateDrawItems(const pxr::TfTokenVector& RenderTags)
 
     if (CollectionChanged ||
         RprimRenderTagChanged ||
-        //MaterialTagsChanged ||
+        MaterialTagChanged ||
         //GeomSubsetDrawItemsChanged ||
         TaskRenderTagsChanged)
     {
@@ -193,6 +194,7 @@ void HnRenderPass::UpdateDrawItems(const pxr::TfTokenVector& RenderTags)
 
     m_CollectionVersion     = CollectionVersion;
     m_RprimRenderTagVersion = RprimRenderTagVersion;
+    m_MaterialTag           = MaterialTag;
 }
 
 
@@ -253,7 +255,10 @@ void HnRenderPass::RenderMesh(RenderState&      State,
             PBR_Renderer::PSO_FLAG_USE_IBL |
             PBR_Renderer::PSO_FLAG_ENABLE_DEBUG_VIEW;
 
-        pPSO = State.PbrPSOCache.Get({PSOFlags, static_cast<PBR_Renderer::ALPHA_MODE>(ShaderAttribs.AlphaMode), /*DoubleSided = */ false}, true);
+        VERIFY(ShaderAttribs.AlphaMode == State.AlphaMode,
+               "Alpha mode derived from the material tag is not consistent with the alpha mode in the shader attributes. "
+               "This may indicate an issue in how alpha mode is determined in the material, or (less likely) an issue in Rprim sorting by Hydra.");
+        pPSO = State.PbrPSOCache.Get({PSOFlags, static_cast<PBR_Renderer::ALPHA_MODE>(State.AlphaMode), /*DoubleSided = */ false}, true);
     }
     else if (RenderMode == HN_RENDER_MODE_MESH_EDGES)
     {

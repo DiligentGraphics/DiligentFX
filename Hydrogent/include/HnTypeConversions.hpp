@@ -31,6 +31,7 @@
 #include "RasterizerState.h"
 #include "DepthStencilState.h"
 #include "BlendState.h"
+#include "PBR_Renderer.hpp"
 
 #include "pxr/pxr.h"
 #include "pxr/imaging/hd/types.h"
@@ -52,6 +53,8 @@ CULL_MODE       HdCullStyleToCullMode(pxr::HdCullStyle hdCullStyle);
 STENCIL_OP      HdStencilOpToStencilOp(pxr::HdStencilOp hdStencilOp);
 BLEND_OPERATION HdBlendOpToBlendOperation(pxr::HdBlendOp hdBlendOp);
 BLEND_FACTOR    HdBlendFactorToBlendFactor(pxr::HdBlendFactor hdBlendFactor);
+
+PBR_Renderer::ALPHA_MODE MaterialTagToPbrAlphaMode(const pxr::TfToken& MaterialTag);
 
 } // namespace USD
 
