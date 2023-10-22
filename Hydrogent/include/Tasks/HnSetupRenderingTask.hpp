@@ -44,12 +44,30 @@ struct HnSetupRenderingTaskParams
     constexpr bool operator==(const HnSetupRenderingTaskParams& rhs) const
     {
         // clang-format off
-        return RenderMode        == rhs.RenderMode &&
-               DebugView         == rhs.DebugView &&
-               OcclusionStrength == rhs.OcclusionStrength &&
-               EmissionScale     == rhs.EmissionScale &&
-               IBLScale          == rhs.IBLScale &&
-               Transform         == rhs.Transform;
+        return ColorFormat          == rhs.ColorFormat &&
+               MeshIdFormat         == rhs.MeshIdFormat &&
+               DepthFormat          == rhs.DepthFormat &&
+               RenderMode           == rhs.RenderMode &&
+               FrontFaceCCW         == rhs.FrontFaceCCW &&
+               DebugView            == rhs.DebugView &&
+               OcclusionStrength    == rhs.OcclusionStrength &&
+               EmissionScale        == rhs.EmissionScale &&
+               IBLScale             == rhs.IBLScale &&
+               Transform            == rhs.Transform &&
+               DepthBias            == rhs.DepthBias &&
+               SlopeScaledDepthBias == rhs.SlopeScaledDepthBias &&
+               DepthFunc            == rhs.DepthFunc &&
+               DepthBiasEnabled     == rhs.DepthBiasEnabled &&
+               DepthTestEnabled     == rhs.DepthTestEnabled &&
+               DepthClampEnabled    == rhs.DepthClampEnabled &&
+               CullStyle            == rhs.CullStyle &&
+               StencilFunc          == rhs.StencilFunc &&
+               StencilRef           == rhs.StencilRef &&
+               StencilMask          == rhs.StencilMask &&
+               StencilFailOp        == rhs.StencilFailOp &&
+               StencilZFailOp       == rhs.StencilZFailOp &&
+               StencilZPassOp       == rhs.StencilZPassOp &&
+               StencilEnabled       == rhs.StencilEnabled;
         // clang-format on
     }
     constexpr bool operator!=(const HnSetupRenderingTaskParams& rhs) const
@@ -57,7 +75,13 @@ struct HnSetupRenderingTaskParams
         return !(*this == rhs);
     }
 
+    TEXTURE_FORMAT ColorFormat  = TEX_FORMAT_UNKNOWN;
+    TEXTURE_FORMAT MeshIdFormat = TEX_FORMAT_UNKNOWN;
+    TEXTURE_FORMAT DepthFormat  = TEX_FORMAT_UNKNOWN;
+
     HN_RENDER_MODE RenderMode = HN_RENDER_MODE_SOLID;
+
+    bool FrontFaceCCW = false;
 
     int   DebugView         = 0;
     float OcclusionStrength = 1;
@@ -65,6 +89,23 @@ struct HnSetupRenderingTaskParams
     float IBLScale          = 1;
 
     float4x4 Transform = float4x4::Identity();
+
+    float                  DepthBias            = 0;
+    float                  SlopeScaledDepthBias = 0;
+    pxr::HdCompareFunction DepthFunc            = pxr::HdCmpFuncLess;
+    bool                   DepthBiasEnabled     = false;
+    bool                   DepthTestEnabled     = true;
+    bool                   DepthClampEnabled    = false;
+
+    pxr::HdCullStyle CullStyle = pxr::HdCullStyleBack;
+
+    pxr::HdCompareFunction StencilFunc    = pxr::HdCmpFuncAlways;
+    int                    StencilRef     = 0;
+    int                    StencilMask    = 0xFF;
+    pxr::HdStencilOp       StencilFailOp  = pxr::HdStencilOpKeep;
+    pxr::HdStencilOp       StencilZFailOp = pxr::HdStencilOpKeep;
+    pxr::HdStencilOp       StencilZPassOp = pxr::HdStencilOpKeep;
+    bool                   StencilEnabled = false;
 };
 
 /// Post processing task implementation in Hydrogent.

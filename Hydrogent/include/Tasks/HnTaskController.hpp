@@ -41,6 +41,7 @@ namespace USD
 
 struct HnSetupRenderingTaskParams;
 struct HnPostProcessTaskParams;
+struct HnRenderRprimsTaskParams;
 
 /// Task controller implementation in Hydrogent.
 class HnTaskController
@@ -114,6 +115,12 @@ public:
     template <typename TaskParamsType>
     bool SetTaskParams(TaskUID          UID,
                        TaskParamsType&& Params);
+
+    template <typename TaskParamsType>
+    bool SetTaskParams(const pxr::SdfPath& Id,
+                       TaskParamsType&&    Params);
+
+    void SetRenderRprimParams(const HnRenderRprimsTaskParams& Params);
 
     pxr::HdTaskSharedPtr GetTask(TaskUID UID) const;
 
@@ -235,15 +242,9 @@ void HnTaskController::CreateTask(const pxr::TfToken& TaskId,
 }
 
 template <typename TaskParamsType>
-bool HnTaskController::SetTaskParams(TaskUID          UID,
-                                     TaskParamsType&& Params)
+bool HnTaskController::SetTaskParams(const pxr::SdfPath& TaskId,
+                                     TaskParamsType&&    Params)
 {
-    const auto it = m_TaskUIDs.find(UID);
-    if (it == m_TaskUIDs.end())
-        return false;
-
-    const auto& TaskId = it->second;
-
     TaskParamsType OldParams = m_ParamsDelegate.GetParameter<std::remove_reference<TaskParamsType>::type>(TaskId, pxr::HdTokens->params);
     if (OldParams == Params)
         return false;
@@ -252,6 +253,17 @@ bool HnTaskController::SetTaskParams(TaskUID          UID,
     m_RenderIndex.GetChangeTracker().MarkTaskDirty(TaskId, pxr::HdChangeTracker::DirtyParams);
 
     return true;
+}
+
+template <typename TaskParamsType>
+bool HnTaskController::SetTaskParams(TaskUID          UID,
+                                     TaskParamsType&& Params)
+{
+    const auto it = m_TaskUIDs.find(UID);
+    if (it == m_TaskUIDs.end())
+        return false;
+
+    return SetTaskParams(it->second, std::forward<TaskParamsType>(Params));
 }
 
 } // namespace USD

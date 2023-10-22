@@ -46,7 +46,6 @@ HnRenderPassState::HnRenderPassState()
 
 void HnRenderPassState::Begin(IDeviceContext* pContext)
 {
-    VERIFY(_stencilMask == 0, "Stencil mask is not supported");
     VERIFY(!_depthMaskEnabled, "Depth mask is not supported");
     VERIFY(_camera == nullptr, "Camera is not used");
     VERIFY(!_framing.IsValid(), "Framing is not used");
@@ -80,7 +79,8 @@ RasterizerStateDesc HnRenderPassState::GetRasterizerState() const
 
     RasterizerStateDesc RSState;
 
-    RSState.DepthClipEnable = !_depthClampEnabled;
+    RSState.DepthClipEnable       = !_depthClampEnabled;
+    RSState.FrontCounterClockwise = m_FrontFaceCCW;
     if (_depthBiasEnabled)
     {
         RSState.DepthBias            = _depthBiasConstantFactor;
@@ -96,6 +96,8 @@ DepthStencilStateDesc HnRenderPassState::GetDepthStencilState() const
     DSSState.DepthEnable             = _depthTestEnabled;
     DSSState.DepthFunc               = HdCompareFunctionToComparisonFunction(_depthFunc);
     DSSState.StencilEnable           = _stencilEnabled;
+    DSSState.StencilReadMask         = static_cast<Uint8>(_stencilMask);
+    DSSState.StencilWriteMask        = static_cast<Uint8>(_stencilMask);
     DSSState.FrontFace.StencilFunc   = HdCompareFunctionToComparisonFunction(_stencilFunc);
     DSSState.FrontFace.StencilFailOp = HdStencilOpToStencilOp(_stencilFailOp);
     DSSState.FrontFace.StencilPassOp = HdStencilOpToStencilOp(_stencilZPassOp);

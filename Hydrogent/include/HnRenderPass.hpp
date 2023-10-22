@@ -29,9 +29,6 @@
 #include "pxr/imaging/hd/types.h"
 #include "pxr/imaging/hd/renderPass.h"
 
-#include "../../../DiligentCore/Graphics/GraphicsEngine/interface/DeviceContext.h"
-#include "../../../DiligentFX/PBR/interface/USD_Renderer.hpp"
-
 namespace Diligent
 {
 
@@ -40,7 +37,6 @@ namespace USD
 
 class HnMesh;
 class HnMaterial;
-class HnRenderPassState;
 
 /// Hydra render pass implementation in Hydrogent.
 class HnRenderPass final : public pxr::HdRenderPass
@@ -55,7 +51,7 @@ public:
 protected:
     // Virtual API: Execute the buckets corresponding to renderTags;
     // renderTags.empty() implies execute everything.
-    virtual void _Execute(const pxr::HdRenderPassStateSharedPtr& State,
+    virtual void _Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
                           const pxr::TfTokenVector&              Tags) override final;
 
     virtual void _MarkCollectionDirty() override final;
@@ -63,16 +59,12 @@ protected:
 private:
     void UpdateDrawItems(const pxr::TfTokenVector& RenderTags);
 
-    void RenderMesh(IDeviceContext*          pCtx,
-                    const HnRenderPassState& State,
-                    const HnMesh&            Mesh,
-                    const HnMaterial&        Material);
+    struct RenderState;
+    void RenderMesh(RenderState&      State,
+                    const HnMesh&     Mesh,
+                    const HnMaterial& Material);
 
 private:
-    std::shared_ptr<USD_Renderer>           m_USDRenderer;
-    USD_Renderer::PbrPsoCacheAccessor       m_PbrPSOCache;
-    USD_Renderer::WireframePsoCacheAccessor m_WireframePSOCache;
-
     pxr::HdRenderIndex::HdDrawItemPtrVector m_DrawItems;
 
     unsigned int m_CollectionVersion     = ~0u;

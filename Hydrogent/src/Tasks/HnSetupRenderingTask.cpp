@@ -54,6 +54,25 @@ void HnSetupRenderingTask::UpdateRenderPassState(const HnSetupRenderingTaskParam
     m_RenderPassState->SetEmissionScale(Params.EmissionScale);
     m_RenderPassState->SetIBLScale(Params.IBLScale);
     m_RenderPassState->SetTransform(Params.Transform);
+
+    VERIFY_EXPR(Params.ColorFormat != TEX_FORMAT_UNKNOWN);
+    m_RenderPassState->SetNumRenderTargets(Params.MeshIdFormat != TEX_FORMAT_UNKNOWN ? 2 : 1);
+    m_RenderPassState->SetRenderTargetFormat(0, Params.ColorFormat);
+    m_RenderPassState->SetRenderTargetFormat(1, Params.MeshIdFormat);
+    m_RenderPassState->SetDepthStencilFormat(Params.DepthFormat);
+
+    m_RenderPassState->SetDepthBias(Params.DepthBias, Params.SlopeScaledDepthBias);
+    m_RenderPassState->SetDepthFunc(Params.DepthFunc);
+    m_RenderPassState->SetDepthBiasEnabled(Params.DepthBiasEnabled);
+    m_RenderPassState->SetEnableDepthTest(Params.DepthTestEnabled);
+    m_RenderPassState->SetEnableDepthClamp(Params.DepthClampEnabled);
+
+    m_RenderPassState->SetCullStyle(Params.CullStyle);
+
+    m_RenderPassState->SetStencil(Params.StencilFunc, Params.StencilRef, Params.StencilMask,
+                                  Params.StencilFailOp, Params.StencilZFailOp, Params.StencilZPassOp);
+
+    m_RenderPassState->SetFrontFaceCCW(Params.FrontFaceCCW);
 }
 
 void HnSetupRenderingTask::Sync(pxr::HdSceneDelegate* Delegate,

@@ -89,6 +89,8 @@ struct HnRenderParams
     float IBLScale          = 1;
 
     HN_RENDER_MODE RenderMode = HN_RENDER_MODE_SOLID;
+
+    bool FrontFaceCCW = false;
 };
 
 class IHnRenderer : public IObject

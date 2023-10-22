@@ -208,6 +208,14 @@ void HnTaskController::CreateRenderRprimsTask(const pxr::TfToken& MaterialTag, T
     m_ParamsDelegate.SetParameter(RenderRprimsTaskId, pxr::HdTokens->renderTags, RenderTags);
 }
 
+void HnTaskController::SetRenderRprimParams(const HnRenderRprimsTaskParams& Params)
+{
+    for (const auto& TaskId : m_RenderTaskIds)
+    {
+        SetTaskParams(TaskId, Params);
+    }
+}
+
 void HnTaskController::CreatePostProcessTask()
 {
     HnPostProcessTaskParams TaskParams;

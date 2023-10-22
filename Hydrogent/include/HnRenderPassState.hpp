@@ -55,11 +55,11 @@ public:
 
     void Begin(IDeviceContext* pContext);
 
-    void SetRTVFormat(Uint32 RT, TEXTURE_FORMAT Fmt)
+    void SetRenderTargetFormat(Uint32 RT, TEXTURE_FORMAT Fmt)
     {
         m_RTVFormats[RT] = Fmt;
     }
-    void SetDepthFormat(TEXTURE_FORMAT DepthFormat)
+    void SetDepthStencilFormat(TEXTURE_FORMAT DepthFormat)
     {
         m_DepthFormat = DepthFormat;
     }
@@ -75,6 +75,15 @@ public:
     HN_RENDER_MODE GetRenderMode() const
     {
         return m_RenderMode;
+    }
+
+    void SetFrontFaceCCW(bool FrontFaceCCW)
+    {
+        m_FrontFaceCCW = FrontFaceCCW;
+    }
+    bool GetFrontFaceCCW() const
+    {
+        return m_FrontFaceCCW;
     }
 
     void SetDebugView(int DebugView)
@@ -133,6 +142,8 @@ private:
     TEXTURE_FORMAT                                 m_DepthFormat      = TEX_FORMAT_UNKNOWN;
 
     HN_RENDER_MODE m_RenderMode = HN_RENDER_MODE_SOLID;
+
+    bool m_FrontFaceCCW = false;
 
     int   m_DebugView         = 0;
     float m_OcclusionStrength = 1;

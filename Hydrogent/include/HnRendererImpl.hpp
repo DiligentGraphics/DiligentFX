@@ -113,6 +113,10 @@ private:
 
     pxr::HdEngine m_Engine;
 
+    static constexpr TEXTURE_FORMAT ColorBufferFormat = TEX_FORMAT_R11G11B10_FLOAT;
+    static constexpr TEXTURE_FORMAT MeshIdFormat      = TEX_FORMAT_R32_FLOAT;
+    static constexpr TEXTURE_FORMAT DepthFormat       = TEX_FORMAT_D32_FLOAT;
+
     RefCntAutoPtr<ITexture>     m_ColorBuffer;
     RefCntAutoPtr<ITexture>     m_MeshIdTexture;
     RefCntAutoPtr<ITextureView> m_DepthBufferDSV;

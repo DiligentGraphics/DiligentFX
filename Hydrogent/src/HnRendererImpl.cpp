@@ -83,9 +83,9 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters*         pRefCounters,
                 EnvMapRndrCI.pDevice          = pDevice;
                 EnvMapRndrCI.pCameraAttribsCB = CI.pCameraAttribsCB;
                 EnvMapRndrCI.NumRenderTargets = 2;
-                EnvMapRndrCI.RTVFormats[0]    = HnRenderDelegate::ColorBufferFormat;
-                EnvMapRndrCI.RTVFormats[1]    = HnRenderDelegate::MeshIdFormat;
-                EnvMapRndrCI.DSVFormat        = HnRenderDelegate::DepthFormat;
+                EnvMapRndrCI.RTVFormats[0]    = ColorBufferFormat;
+                EnvMapRndrCI.RTVFormats[1]    = MeshIdFormat;
+                EnvMapRndrCI.DSVFormat        = DepthFormat;
 
                 return EnvMapRndrCI;
             }(CI, pDevice))},
@@ -139,7 +139,11 @@ void HnRendererImpl::Update()
     if (m_RenderParamsChanged)
     {
         HnSetupRenderingTaskParams Params;
+        Params.ColorFormat       = ColorBufferFormat;
+        Params.MeshIdFormat      = MeshIdFormat;
+        Params.DepthFormat       = DepthFormat;
         Params.RenderMode        = m_RenderParams.RenderMode;
+        Params.FrontFaceCCW      = m_RenderParams.FrontFaceCCW;
         Params.DebugView         = m_RenderParams.DebugView;
         Params.OcclusionStrength = m_RenderParams.OcclusionStrength;
         Params.EmissionScale     = m_RenderParams.EmissionScale;
@@ -176,18 +180,18 @@ void HnRendererImpl::PrepareRenderTargets(ITextureView* pDstRtv)
         TexDesc.Type      = RESOURCE_DIM_TEX_2D;
         TexDesc.Width     = DstTexDesc.Width;
         TexDesc.Height    = DstTexDesc.Height;
-        TexDesc.Format    = HnRenderDelegate::ColorBufferFormat;
+        TexDesc.Format    = ColorBufferFormat;
         TexDesc.BindFlags = BIND_RENDER_TARGET | BIND_SHADER_RESOURCE;
         TexDesc.MipLevels = 1;
         m_ColorBuffer     = m_Device.CreateTexture(TexDesc);
 
         TexDesc.Name      = "Mesh ID buffer";
-        TexDesc.Format    = HnRenderDelegate::MeshIdFormat;
+        TexDesc.Format    = MeshIdFormat;
         TexDesc.BindFlags = BIND_RENDER_TARGET | BIND_SHADER_RESOURCE;
         m_MeshIdTexture   = m_Device.CreateTexture(TexDesc);
 
         TexDesc.Name      = "Depth buffer";
-        TexDesc.Format    = HnRenderDelegate::DepthFormat;
+        TexDesc.Format    = DepthFormat;
         TexDesc.BindFlags = BIND_DEPTH_STENCIL;
         m_DepthBufferDSV  = m_Device.CreateTexture(TexDesc)->GetDefaultView(TEXTURE_VIEW_DEPTH_STENCIL);
     }
