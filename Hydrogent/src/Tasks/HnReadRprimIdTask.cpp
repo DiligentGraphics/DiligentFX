@@ -26,6 +26,8 @@
 
 #include "Tasks/HnReadRprimIdTask.hpp"
 
+#include "DebugUtilities.hpp"
+
 namespace Diligent
 {
 
@@ -45,6 +47,21 @@ void HnReadRprimIdTask::Sync(pxr::HdSceneDelegate* Delegate,
                              pxr::HdTaskContext*   TaskCtx,
                              pxr::HdDirtyBits*     DirtyBits)
 {
+    if (*DirtyBits & pxr::HdChangeTracker::DirtyParams)
+    {
+        pxr::VtValue ParamsValue = Delegate->Get(GetId(), pxr::HdTokens->params);
+        if (ParamsValue.IsHolding<HnReadRprimIdTaskParams>())
+        {
+            HnReadRprimIdTaskParams Params = ParamsValue.UncheckedGet<HnReadRprimIdTaskParams>();
+            (void)Params;
+        }
+        else
+        {
+            UNEXPECTED("Unknown task parameters type: ", ParamsValue.GetTypeName());
+        }
+    }
+
+    *DirtyBits = pxr::HdChangeTracker::Clean;
 }
 
 void HnReadRprimIdTask::Prepare(pxr::HdTaskContext* TaskCtx,

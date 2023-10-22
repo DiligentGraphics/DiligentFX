@@ -24,9 +24,11 @@
  *  of the possibility of such damages.
  */
 
-#include "Tasks/HnPostProcessTask.hpp"
+#pragma once
 
-#include "DebugUtilities.hpp"
+#include <memory>
+
+#include "HnTask.hpp"
 
 namespace Diligent
 {
@@ -34,44 +36,40 @@ namespace Diligent
 namespace USD
 {
 
-HnPostProcessTask::HnPostProcessTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id) :
-    HnTask{Id}
-{
-}
+class HnRenderPassState;
 
-HnPostProcessTask::~HnPostProcessTask()
+struct HnSetupRenderingTaskParams
 {
-}
-
-void HnPostProcessTask::Sync(pxr::HdSceneDelegate* Delegate,
-                             pxr::HdTaskContext*   TaskCtx,
-                             pxr::HdDirtyBits*     DirtyBits)
-{
-    if (*DirtyBits & pxr::HdChangeTracker::DirtyParams)
+    constexpr bool operator==(const HnSetupRenderingTaskParams& rhs) const
     {
-        pxr::VtValue ParamsValue = Delegate->Get(GetId(), pxr::HdTokens->params);
-        if (ParamsValue.IsHolding<HnPostProcessTaskParams>())
-        {
-            HnPostProcessTaskParams Params = ParamsValue.UncheckedGet<HnPostProcessTaskParams>();
-            (void)Params;
-        }
-        else
-        {
-            UNEXPECTED("Unknown task parameters type: ", ParamsValue.GetTypeName());
-        }
+        return true;
     }
+    constexpr bool operator!=(const HnSetupRenderingTaskParams& rhs) const
+    {
+        return !(*this == rhs);
+    }
+};
 
-    *DirtyBits = pxr::HdChangeTracker::Clean;
-}
-
-void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
-                                pxr::HdRenderIndex* RenderIndex)
+/// Post processing task implementation in Hydrogent.
+class HnSetupRenderingTask final : public HnTask
 {
-}
+public:
+    HnSetupRenderingTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id);
+    ~HnSetupRenderingTask();
 
-void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
-{
-}
+    virtual void Sync(pxr::HdSceneDelegate* Delegate,
+                      pxr::HdTaskContext*   TaskCtx,
+                      pxr::HdDirtyBits*     DirtyBits) override final;
+
+    virtual void Prepare(pxr::HdTaskContext* TaskCtx,
+                         pxr::HdRenderIndex* PostProcessIndex) override final;
+
+
+    virtual void Execute(pxr::HdTaskContext* TaskCtx) override final;
+
+private:
+    std::shared_ptr<HnRenderPassState> m_RenderPassState;
+};
 
 } // namespace USD
 

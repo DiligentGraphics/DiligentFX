@@ -24,7 +24,9 @@
  *  of the possibility of such damages.
  */
 
-#include "Tasks/HnPostProcessTask.hpp"
+#include "Tasks/HnSetupRenderingTask.hpp"
+#include "HnRenderPassState.hpp"
+#include "HnTokens.hpp"
 
 #include "DebugUtilities.hpp"
 
@@ -34,25 +36,26 @@ namespace Diligent
 namespace USD
 {
 
-HnPostProcessTask::HnPostProcessTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id) :
-    HnTask{Id}
+HnSetupRenderingTask::HnSetupRenderingTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id) :
+    HnTask{Id},
+    m_RenderPassState{std::make_shared<HnRenderPassState>()}
 {
 }
 
-HnPostProcessTask::~HnPostProcessTask()
+HnSetupRenderingTask::~HnSetupRenderingTask()
 {
 }
 
-void HnPostProcessTask::Sync(pxr::HdSceneDelegate* Delegate,
-                             pxr::HdTaskContext*   TaskCtx,
-                             pxr::HdDirtyBits*     DirtyBits)
+void HnSetupRenderingTask::Sync(pxr::HdSceneDelegate* Delegate,
+                                pxr::HdTaskContext*   TaskCtx,
+                                pxr::HdDirtyBits*     DirtyBits)
 {
     if (*DirtyBits & pxr::HdChangeTracker::DirtyParams)
     {
         pxr::VtValue ParamsValue = Delegate->Get(GetId(), pxr::HdTokens->params);
-        if (ParamsValue.IsHolding<HnPostProcessTaskParams>())
+        if (ParamsValue.IsHolding<HnSetupRenderingTaskParams>())
         {
-            HnPostProcessTaskParams Params = ParamsValue.UncheckedGet<HnPostProcessTaskParams>();
+            HnSetupRenderingTaskParams Params = ParamsValue.UncheckedGet<HnSetupRenderingTaskParams>();
             (void)Params;
         }
         else
@@ -64,12 +67,13 @@ void HnPostProcessTask::Sync(pxr::HdSceneDelegate* Delegate,
     *DirtyBits = pxr::HdChangeTracker::Clean;
 }
 
-void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
-                                pxr::HdRenderIndex* RenderIndex)
+void HnSetupRenderingTask::Prepare(pxr::HdTaskContext* TaskCtx,
+                                   pxr::HdRenderIndex* RenderIndex)
 {
+    (*TaskCtx)[HnTokens->renderPassState] = pxr::VtValue{m_RenderPassState};
 }
 
-void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
+void HnSetupRenderingTask::Execute(pxr::HdTaskContext* TaskCtx)
 {
 }
 

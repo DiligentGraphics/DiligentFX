@@ -26,6 +26,9 @@
 
 #include "Tasks/HnRenderRprimsTask.hpp"
 
+#include "HnRenderPassState.hpp"
+#include "HnTokens.hpp"
+
 #include "pxr/imaging/hd/renderDelegate.h"
 
 #include "DebugUtilities.hpp"
@@ -78,7 +81,16 @@ void HnRenderRprimsTask::Sync(pxr::HdSceneDelegate* Delegate,
 
     if (*DirtyBits & pxr::HdChangeTracker::DirtyParams)
     {
-        // TODO
+        pxr::VtValue ParamsValue = Delegate->Get(GetId(), pxr::HdTokens->params);
+        if (ParamsValue.IsHolding<HnRenderRprimsTaskParams>())
+        {
+            HnRenderRprimsTaskParams Params = ParamsValue.UncheckedGet<HnRenderRprimsTaskParams>();
+            (void)Params;
+        }
+        else
+        {
+            UNEXPECTED("Unknown task parameters type: ", ParamsValue.GetTypeName());
+        }
     }
 
     if (*DirtyBits & pxr::HdChangeTracker::DirtyRenderTags)
@@ -101,11 +113,13 @@ void HnRenderRprimsTask::Prepare(pxr::HdTaskContext* TaskCtx,
 
 void HnRenderRprimsTask::Execute(pxr::HdTaskContext* TaskCtx)
 {
-    // TODO
-    pxr::HdRenderPassStateSharedPtr RenderPassState;
-
     if (m_RenderPass)
     {
+        // Render pass state is initialized by the setup rendering task.
+        // It is shared between all instances of the render rprims task.
+        std::shared_ptr<HnRenderPassState> RenderPassState;
+        _GetTaskContextData(TaskCtx, HnTokens->renderPassState, &RenderPassState);
+        VERIFY(RenderPassState, "Render pass state is null. This likely indicates that setup rendering task has not been created or executed.");
         m_RenderPass->Execute(RenderPassState, GetRenderTags());
     }
 }

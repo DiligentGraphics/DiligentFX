@@ -48,6 +48,7 @@ class HnTaskController
 {
 public:
     using TaskUID                                            = uint64_t;
+    static constexpr TaskUID TaskUID_SetupRendering          = 0x8362faac57354542;
     static constexpr TaskUID TaskUID_RenderRprimsDefault     = 0x287af907f3a740a0;
     static constexpr TaskUID TaskUID_RenderRprimsMasked      = 0xf5290fec47594711;
     static constexpr TaskUID TaskUID_RenderRprimsAdditive    = 0x37d45531106c4c52;
@@ -69,6 +70,7 @@ public:
     /// Returns the task list that can be passed to the Hydra engine for execution.
     ///
     /// \param [in] TaskOrder - Optional task order. If not specified, the default order is used:
+    ///                         - SetupRendering
     ///                         - RenderRprimsDefault
     ///                         - RenderRprimsMasked
     ///                         - RenderEnvMap
@@ -94,9 +96,23 @@ public:
     /// Sets the parameter value
     void SetParameter(const pxr::SdfPath& Id, const pxr::TfToken& ValueKey, pxr::VtValue Value);
 
-    template <typename TaskType>
+    /// Creates a new render task.
+    /// \param [in] TaskId - The task ID that will be used to register the task in the render index.
+    /// \param [in] UID    - The task UID that will be used to identify the task in the task controller.
+    /// \param [in] Params - The task parameters that will be associated with the task using the task ID.
+    template <typename TaskType, typename TaskParamsType>
     void CreateTask(const pxr::SdfPath& TaskId,
-                    TaskUID             UID);
+                    TaskUID             UID,
+                    TaskParamsType&&    Params);
+
+    /// Creates a new render task.
+    ///
+    /// This is method is similar to the one above, but it automatically appends the task ID
+    /// as child of the controller ID.
+    template <typename TaskType, typename TaskParamsType>
+    void CreateTask(const pxr::TfToken& TaskId,
+                    TaskUID             UID,
+                    TaskParamsType&&    Params);
 
     pxr::HdTaskSharedPtr GetTask(TaskUID UID) const;
 
@@ -105,6 +121,7 @@ public:
 private:
     pxr::SdfPath GetRenderRprimsTaskId(const pxr::TfToken& MaterialTag) const;
 
+    void CreateSetupRenderingTask();
     void CreateRenderRprimsTask(const pxr::TfToken& MaterialTag, TaskUID UID);
     void CreateRenderEnvMapTask();
     void CreateReadRprimIdTask();
@@ -124,13 +141,25 @@ private:
     std::vector<pxr::SdfPath> m_RenderTaskIds;
 };
 
-template <typename TaskType>
+template <typename TaskType, typename TaskParamsType>
 void HnTaskController::CreateTask(const pxr::SdfPath& TaskId,
-                                  TaskUID             UID)
+                                  TaskUID             UID,
+                                  TaskParamsType&&    Params)
 {
-    m_RenderIndex.InsertTask<HnRenderRprimsTask>(m_ParamsDelegate.get(), TaskId);
+    m_RenderIndex.InsertTask<TaskType>(m_ParamsDelegate.get(), TaskId);
     auto it_inserted = m_TaskUIDs.emplace(UID, TaskId);
     VERIFY(it_inserted.second, "Task with UID ", UID, " already exists: ", it_inserted.first->second.GetText());
+
+    m_ParamsDelegate->SetParameter(TaskId, pxr::HdTokens->params, std::forward<TaskParamsType>(Params));
+    m_DefaultTaskOrder.emplace_back(UID);
+}
+
+template <typename TaskType, typename TaskParamsType>
+void HnTaskController::CreateTask(const pxr::TfToken& TaskId,
+                                  TaskUID             UID,
+                                  TaskParamsType&&    Params)
+{
+    CreateTask<TaskType>(pxr::SdfPath{GetControllerId().AppendChild(TaskId)}, UID, std::forward<TaskParamsType>(Params));
 }
 
 } // namespace USD

@@ -16,6 +16,7 @@ set(SOURCE
     src/HnTextureUtils.cpp
     src/HnTypeConversions.cpp
     src/Tasks/HnTask.cpp
+    src/Tasks/HnSetupRenderingTask.cpp
     src/Tasks/HnRenderRprimsTask.cpp
     src/Tasks/HnRenderEnvMapTask.cpp
     src/Tasks/HnPostProcessTask.cpp
@@ -38,6 +39,7 @@ set(INCLUDE
     include/HnTextureUtils.hpp
     include/HnTypeConversions.hpp
     include/Tasks/HnTask.hpp
+    include/Tasks/HnSetupRenderingTask.hpp
     include/Tasks/HnRenderRprimsTask.hpp
     include/Tasks/HnRenderEnvMapTask.hpp
     include/Tasks/HnPostProcessTask.hpp
@@ -123,6 +125,7 @@ INTERFACE
     usd_sdr
     usd_ndr
     usd_trace
+    usd_cameraUtil
 )
 
 target_include_directories(Diligent-Hydrogent
