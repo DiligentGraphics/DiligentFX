@@ -26,6 +26,9 @@
 
 #include "Tasks/HnReadRprimIdTask.hpp"
 
+#include "HnRenderDelegate.hpp"
+#include "HnTokens.hpp"
+
 #include "DebugUtilities.hpp"
 
 namespace Diligent
@@ -52,8 +55,7 @@ void HnReadRprimIdTask::Sync(pxr::HdSceneDelegate* Delegate,
         pxr::VtValue ParamsValue = Delegate->Get(GetId(), pxr::HdTokens->params);
         if (ParamsValue.IsHolding<HnReadRprimIdTaskParams>())
         {
-            HnReadRprimIdTaskParams Params = ParamsValue.UncheckedGet<HnReadRprimIdTaskParams>();
-            (void)Params;
+            m_Params = ParamsValue.UncheckedGet<HnReadRprimIdTaskParams>();
         }
         else
         {
@@ -67,10 +69,89 @@ void HnReadRprimIdTask::Sync(pxr::HdSceneDelegate* Delegate,
 void HnReadRprimIdTask::Prepare(pxr::HdTaskContext* TaskCtx,
                                 pxr::HdRenderIndex* RenderIndex)
 {
+    m_RenderIndex = RenderIndex;
+
+    if (!m_MeshIdReadBackQueue)
+    {
+        HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+        m_MeshIdReadBackQueue            = std::make_unique<MeshIdReadBackQueueType>(RenderDelegate->GetDevice());
+    }
 }
 
 void HnReadRprimIdTask::Execute(pxr::HdTaskContext* TaskCtx)
 {
+    m_MeshIndex = InvalidMeshIndex;
+
+    if (!m_Params.IsEnabled)
+        return;
+
+    if (m_RenderIndex == nullptr)
+    {
+        UNEXPECTED("Render index is null. This likely indicates that Prepare() has not been called.");
+        return;
+    }
+    if (m_MeshIdReadBackQueue == nullptr)
+    {
+        UNEXPECTED("Mesh ID readback queue is null.");
+        return;
+    }
+    ITextureView* pMeshIdRTV = GetRenderBufferTarget(*m_RenderIndex, TaskCtx, HnRenderResourceTokens->meshIdTarget);
+    if (pMeshIdRTV == nullptr)
+    {
+        UNEXPECTED("Mesh Id RTV is not set in the task context");
+        return;
+    }
+
+    auto* const pMeshIdTexture = pMeshIdRTV->GetTexture();
+    const auto& MeshIdRTVDesc  = pMeshIdTexture->GetDesc();
+    if (m_Params.LocationX >= MeshIdRTVDesc.GetWidth() ||
+        m_Params.LocationY >= MeshIdRTVDesc.GetHeight())
+    {
+        return;
+    }
+
+    HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+    IDeviceContext*   pCtx           = RenderDelegate->GetDeviceContext();
+
+    while (auto pStagingTex = m_MeshIdReadBackQueue->GetFirstCompleted())
+    {
+        {
+            MappedTextureSubresource MappedData;
+            pCtx->MapTextureSubresource(pStagingTex, 0, 0, MAP_READ, MAP_FLAG_DO_NOT_WAIT, nullptr, MappedData);
+            m_MeshIndex = static_cast<Uint32>(std::abs(*static_cast<const float*>(MappedData.pData)));
+            pCtx->UnmapTextureSubresource(pStagingTex, 0, 0);
+        }
+        m_MeshIdReadBackQueue->Recycle(std::move(pStagingTex));
+    }
+
+    auto pStagingTex = m_MeshIdReadBackQueue->GetRecycled();
+    if (!pStagingTex)
+    {
+        TextureDesc StagingTexDesc;
+        StagingTexDesc.Name           = "Mesh ID staging tex";
+        StagingTexDesc.Usage          = USAGE_STAGING;
+        StagingTexDesc.Type           = RESOURCE_DIM_TEX_2D;
+        StagingTexDesc.BindFlags      = BIND_NONE;
+        StagingTexDesc.Format         = MeshIdRTVDesc.Format;
+        StagingTexDesc.Width          = 1;
+        StagingTexDesc.Height         = 1;
+        StagingTexDesc.MipLevels      = 1;
+        StagingTexDesc.CPUAccessFlags = CPU_ACCESS_READ;
+
+        IRenderDevice* pDevice = RenderDelegate->GetDevice();
+        pDevice->CreateTexture(StagingTexDesc, nullptr, &pStagingTex);
+        VERIFY_EXPR(pStagingTex);
+    }
+
+    CopyTextureAttribs CopyAttribs;
+    CopyAttribs.pSrcTexture = pMeshIdTexture;
+    CopyAttribs.pDstTexture = pStagingTex;
+    Box SrcBox{m_Params.LocationX, m_Params.LocationX + 1, m_Params.LocationY, m_Params.LocationY + 1};
+    CopyAttribs.pSrcBox                  = &SrcBox;
+    CopyAttribs.SrcTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
+    CopyAttribs.DstTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
+    pCtx->CopyTexture(CopyAttribs);
+    m_MeshIdReadBackQueue->Enqueue(pCtx, std::move(pStagingTex));
 }
 
 } // namespace USD

@@ -37,7 +37,6 @@
 #include "../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
 #include "../../../DiligentCore/Common/interface/BasicMath.hpp"
 #include "../../../DiligentCore/Common/interface/ObjectBase.hpp"
-#include "../../../DiligentCore/Graphics/GraphicsTools/interface/GPUCompletionAwaitQueue.hpp"
 
 #include "Tasks/HnTaskController.hpp"
 
@@ -108,8 +107,6 @@ private:
     static constexpr TEXTURE_FORMAT ColorBufferFormat = TEX_FORMAT_R11G11B10_FLOAT;
     static constexpr TEXTURE_FORMAT MeshIdFormat      = TEX_FORMAT_R32_FLOAT;
     static constexpr TEXTURE_FORMAT DepthFormat       = TEX_FORMAT_D32_FLOAT;
-
-    GPUCompletionAwaitQueue<RefCntAutoPtr<ITexture>> m_MeshIdReadBackQueue;
 
     HnRenderParams m_RenderParams;
     bool           m_RenderParamsChanged = true;

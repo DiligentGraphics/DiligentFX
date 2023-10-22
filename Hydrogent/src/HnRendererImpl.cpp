@@ -35,9 +35,6 @@
 
 #include "EngineMemory.h"
 #include "USD_Renderer.hpp"
-#include "EnvMapRenderer.hpp"
-#include "MapHelper.hpp"
-#include "CommonlyUsedStates.h"
 #include "HnRenderBuffer.hpp"
 
 #include "pxr/imaging/hd/task.h"
@@ -65,8 +62,7 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters*         pRefCounters,
     m_Context{pContext},
     m_CameraAttribsCB{CI.pCameraAttribsCB},
     m_LightAttribsCB{CI.pLightAttribsCB},
-    m_ConvertOutputToSRGB{CI.ConvertOutputToSRGB},
-    m_MeshIdReadBackQueue{pDevice}
+    m_ConvertOutputToSRGB{CI.ConvertOutputToSRGB}
 {
 }
 
@@ -173,43 +169,7 @@ const pxr::SdfPath* HnRendererImpl::QueryPrimId(IDeviceContext* pCtx, Uint32 X, 
         return nullptr;
 
     Uint32 MeshUid = ~0u;
-    while (auto pStagingTex = m_MeshIdReadBackQueue.GetFirstCompleted())
-    {
-        {
-            MappedTextureSubresource MappedData;
-            pCtx->MapTextureSubresource(pStagingTex, 0, 0, MAP_READ, MAP_FLAG_DO_NOT_WAIT, nullptr, MappedData);
-            MeshUid = static_cast<Uint32>(std::abs(*static_cast<const float*>(MappedData.pData)));
-            pCtx->UnmapTextureSubresource(pStagingTex, 0, 0);
-        }
-        m_MeshIdReadBackQueue.Recycle(std::move(pStagingTex));
-    }
 
-    auto pStagingTex = m_MeshIdReadBackQueue.GetRecycled();
-    if (!pStagingTex)
-    {
-        TextureDesc StagingTexDesc;
-        StagingTexDesc.Name           = "Mesh ID staging tex";
-        StagingTexDesc.Usage          = USAGE_STAGING;
-        StagingTexDesc.Type           = RESOURCE_DIM_TEX_2D;
-        StagingTexDesc.BindFlags      = BIND_NONE;
-        StagingTexDesc.Format         = m_MeshIdTexture->GetDesc().Format;
-        StagingTexDesc.Width          = 1;
-        StagingTexDesc.Height         = 1;
-        StagingTexDesc.MipLevels      = 1;
-        StagingTexDesc.CPUAccessFlags = CPU_ACCESS_READ;
-        pStagingTex                   = m_Device.CreateTexture(StagingTexDesc, nullptr);
-        VERIFY_EXPR(pStagingTex);
-    }
-
-    CopyTextureAttribs CopyAttribs;
-    CopyAttribs.pSrcTexture = m_MeshIdTexture;
-    CopyAttribs.pDstTexture = pStagingTex;
-    Box SrcBox{X, X + 1, Y, Y + 1};
-    CopyAttribs.pSrcBox                  = &SrcBox;
-    CopyAttribs.SrcTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
-    CopyAttribs.DstTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
-    pCtx->CopyTexture(CopyAttribs);
-    m_MeshIdReadBackQueue.Enqueue(pCtx, std::move(pStagingTex));
 
     static const pxr::SdfPath EmptyPath;
     if (MeshUid == ~0u)

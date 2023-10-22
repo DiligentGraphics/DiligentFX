@@ -28,6 +28,10 @@
 
 #include "HnTask.hpp"
 
+#include <memory>
+
+#include "../../../../DiligentCore/Graphics/GraphicsTools/interface/GPUCompletionAwaitQueue.hpp"
+
 namespace Diligent
 {
 
@@ -36,10 +40,19 @@ namespace USD
 
 struct HnReadRprimIdTaskParams
 {
+    bool   IsEnabled = false;
+    Uint32 LocationX = 0;
+    Uint32 LocationY = 0;
+
     constexpr bool operator==(const HnReadRprimIdTaskParams& rhs) const
     {
-        return true;
+        // clang-format off
+        return IsEnabled == rhs.IsEnabled &&
+               LocationX == rhs.LocationX &&
+               LocationY == rhs.LocationY;
+        // clang-format on
     }
+
     constexpr bool operator!=(const HnReadRprimIdTaskParams& rhs) const
     {
         return !(*this == rhs);
@@ -62,6 +75,22 @@ public:
 
 
     virtual void Execute(pxr::HdTaskContext* TaskCtx) override final;
+
+    static constexpr Uint32 InvalidMeshIndex = ~0u;
+
+    /// Returns the mesh index that was read from the mesh id target last time the task was executed.
+    /// If Mesh Id is not available, returns ~0u.
+    Uint32 GetMeshIndex() const { return m_MeshIndex; }
+
+private:
+    pxr::HdRenderIndex* m_RenderIndex = nullptr;
+
+    using MeshIdReadBackQueueType = GPUCompletionAwaitQueue<RefCntAutoPtr<ITexture>>;
+    std::unique_ptr<MeshIdReadBackQueueType> m_MeshIdReadBackQueue;
+
+    HnReadRprimIdTaskParams m_Params;
+
+    Uint32 m_MeshIndex = InvalidMeshIndex;
 };
 
 } // namespace USD
