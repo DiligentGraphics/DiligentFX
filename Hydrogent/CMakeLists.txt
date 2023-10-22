@@ -6,6 +6,7 @@ set(SOURCE
     src/HnMaterial.cpp
     src/HnMaterialNetwork.cpp
     src/HnMesh.cpp
+    src/HnBuffer.cpp
     src/HnRenderBuffer.cpp
     src/HnRenderDelegate.cpp
     src/HnRendererImpl.cpp
@@ -29,6 +30,7 @@ set(INCLUDE
     include/HnMaterial.hpp
     include/HnMaterialNetwork.hpp
     include/HnMesh.hpp
+    include/HnBuffer.hpp
     include/HnRenderBuffer.hpp
     include/HnRenderDelegate.hpp
     include/HnRendererImpl.hpp
