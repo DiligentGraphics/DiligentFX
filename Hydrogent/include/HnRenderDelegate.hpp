@@ -199,9 +199,9 @@ public:
 
     std::shared_ptr<USD_Renderer> GetUSDRenderer() { return m_USDRenderer; }
 
-    IRenderDevice*  GetDevice() { return m_pDevice; }
-    IDeviceContext* GetDeviceContext() { return m_pContext; }
-    IBuffer*        GetCameraAttribsCB() { return m_CameraAttribsCB; }
+    IRenderDevice*  GetDevice() const { return m_pDevice; }
+    IDeviceContext* GetDeviceContext() const { return m_pContext; }
+    IBuffer*        GetCameraAttribsCB() const { return m_CameraAttribsCB; }
 
 private:
     static const pxr::TfTokenVector SupportedRPrimTypes;

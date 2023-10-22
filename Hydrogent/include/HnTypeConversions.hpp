@@ -56,6 +56,9 @@ BLEND_FACTOR    HdBlendFactorToBlendFactor(pxr::HdBlendFactor hdBlendFactor);
 
 PBR_Renderer::ALPHA_MODE MaterialTagToPbrAlphaMode(const pxr::TfToken& MaterialTag);
 
+TEXTURE_FORMAT HdFormatToTextureFormat(pxr::HdFormat hdFormat);
+pxr::HdFormat  TextureFormatToHdFormat(TEXTURE_FORMAT TexFmt);
+
 } // namespace USD
 
 } // namespace Diligent

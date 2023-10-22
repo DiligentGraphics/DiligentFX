@@ -232,6 +232,98 @@ PBR_Renderer::ALPHA_MODE MaterialTagToPbrAlphaMode(const pxr::TfToken& MaterialT
         return PBR_Renderer::ALPHA_MODE_OPAQUE;
 }
 
+TEXTURE_FORMAT HdFormatToTextureFormat(pxr::HdFormat hdFormat)
+{
+    static_assert(pxr::HdFormatCount == 29, "Please handle the new format below");
+    switch (hdFormat)
+    {
+        case pxr::HdFormatInvalid: return TEX_FORMAT_UNKNOWN;
+
+        case pxr::HdFormatUNorm8: return TEX_FORMAT_R8_UNORM;
+        case pxr::HdFormatUNorm8Vec2: return TEX_FORMAT_RG8_UNORM;
+        case pxr::HdFormatUNorm8Vec3: UNSUPPORTED("Diligent does not support RGB formats"); return TEX_FORMAT_UNKNOWN;
+        case pxr::HdFormatUNorm8Vec4: return TEX_FORMAT_RGBA8_UNORM;
+
+        case pxr::HdFormatSNorm8: return TEX_FORMAT_R8_SNORM;
+        case pxr::HdFormatSNorm8Vec2: return TEX_FORMAT_RG8_SNORM;
+        case pxr::HdFormatSNorm8Vec3: UNSUPPORTED("Diligent does not support RGB formats"); return TEX_FORMAT_UNKNOWN;
+        case pxr::HdFormatSNorm8Vec4: return TEX_FORMAT_RGBA8_SNORM;
+
+        case pxr::HdFormatFloat16: return TEX_FORMAT_R16_FLOAT;
+        case pxr::HdFormatFloat16Vec2: return TEX_FORMAT_RG16_FLOAT;
+        case pxr::HdFormatFloat16Vec3: UNSUPPORTED("Diligent does not support RGB formats"); return TEX_FORMAT_UNKNOWN;
+        case pxr::HdFormatFloat16Vec4: return TEX_FORMAT_RGBA16_FLOAT;
+
+        case pxr::HdFormatFloat32: return TEX_FORMAT_R32_FLOAT;
+        case pxr::HdFormatFloat32Vec2: return TEX_FORMAT_RG32_FLOAT;
+        case pxr::HdFormatFloat32Vec3: UNSUPPORTED("Diligent does not support RGB formats"); return TEX_FORMAT_UNKNOWN;
+        case pxr::HdFormatFloat32Vec4: return TEX_FORMAT_RGBA32_FLOAT;
+
+        case pxr::HdFormatInt16: return TEX_FORMAT_R16_SINT;
+        case pxr::HdFormatInt16Vec2: return TEX_FORMAT_RG16_SINT;
+        case pxr::HdFormatInt16Vec3: UNSUPPORTED("Diligent does not support RGB formats"); return TEX_FORMAT_UNKNOWN;
+        case pxr::HdFormatInt16Vec4: return TEX_FORMAT_RGBA16_SINT;
+
+        case pxr::HdFormatUInt16: return TEX_FORMAT_R16_UINT;
+        case pxr::HdFormatUInt16Vec2: return TEX_FORMAT_RG16_UINT;
+        case pxr::HdFormatUInt16Vec3: UNSUPPORTED("Diligent does not support RGB formats"); return TEX_FORMAT_UNKNOWN;
+        case pxr::HdFormatUInt16Vec4: return TEX_FORMAT_RGBA16_UINT;
+
+        case pxr::HdFormatInt32: return TEX_FORMAT_R32_SINT;
+        case pxr::HdFormatInt32Vec2: return TEX_FORMAT_RG32_SINT;
+        case pxr::HdFormatInt32Vec3: UNSUPPORTED("Diligent does not support RGB formats"); return TEX_FORMAT_UNKNOWN;
+        case pxr::HdFormatInt32Vec4: return TEX_FORMAT_RGBA32_SINT;
+
+        case pxr::HdFormatFloat32UInt8: return TEX_FORMAT_D32_FLOAT_S8X24_UINT;
+
+        default:
+            UNEXPECTED("Unexpected format");
+            return TEX_FORMAT_UNKNOWN;
+    }
+}
+
+pxr::HdFormat TextureFormatToHdFormat(TEXTURE_FORMAT TexFmt)
+{
+    switch (TexFmt)
+    {
+        case TEX_FORMAT_UNKNOWN: return pxr::HdFormatInvalid;
+
+        case TEX_FORMAT_R8_UNORM: return pxr::HdFormatUNorm8;
+        case TEX_FORMAT_RG8_UNORM: return pxr::HdFormatUNorm8Vec2;
+        case TEX_FORMAT_RGBA8_UNORM: return pxr::HdFormatUNorm8Vec4;
+
+        case TEX_FORMAT_R8_SNORM: return pxr::HdFormatSNorm8;
+        case TEX_FORMAT_RG8_SNORM: return pxr::HdFormatSNorm8Vec2;
+        case TEX_FORMAT_RGBA8_SNORM: return pxr::HdFormatSNorm8Vec4;
+
+        case TEX_FORMAT_R16_FLOAT: return pxr::HdFormatFloat16;
+        case TEX_FORMAT_RG16_FLOAT: return pxr::HdFormatFloat16Vec2;
+        case TEX_FORMAT_RGBA16_FLOAT: return pxr::HdFormatFloat16Vec4;
+
+        case TEX_FORMAT_R32_FLOAT: return pxr::HdFormatFloat32;
+        case TEX_FORMAT_RG32_FLOAT: return pxr::HdFormatFloat32Vec2;
+        case TEX_FORMAT_RGBA32_FLOAT: return pxr::HdFormatFloat32Vec4;
+
+        case TEX_FORMAT_R16_SINT: return pxr::HdFormatInt16;
+        case TEX_FORMAT_RG16_SINT: return pxr::HdFormatInt16Vec2;
+        case TEX_FORMAT_RGBA16_SINT: return pxr::HdFormatInt16Vec4;
+
+        case TEX_FORMAT_R16_UINT: return pxr::HdFormatUInt16;
+        case TEX_FORMAT_RG16_UINT: return pxr::HdFormatUInt16Vec2;
+        case TEX_FORMAT_RGBA16_UINT: return pxr::HdFormatUInt16Vec4;
+
+        case TEX_FORMAT_R32_SINT: return pxr::HdFormatInt32;
+        case TEX_FORMAT_RG32_SINT: return pxr::HdFormatInt32Vec2;
+        case TEX_FORMAT_RGBA32_SINT: return pxr::HdFormatInt32Vec4;
+
+        case TEX_FORMAT_D32_FLOAT_S8X24_UINT: return pxr::HdFormatFloat32UInt8;
+
+        default:
+            UNSUPPORTED("This format is not supported in Hydra");
+            return pxr::HdFormatInvalid;
+    }
+}
+
 } // namespace USD
 
 } // namespace Diligent
