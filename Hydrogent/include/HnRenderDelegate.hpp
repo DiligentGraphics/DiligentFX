@@ -221,6 +221,8 @@ private:
     std::unordered_map<pxr::SdfPath, std::shared_ptr<HnMaterial>, pxr::SdfPath::Hash> m_Materials;
     std::unordered_map<pxr::SdfPath, std::shared_ptr<HnMesh>, pxr::SdfPath::Hash>     m_Meshes;
     std::unordered_map<Uint32, pxr::SdfPath>                                          m_MeshUIDToPrimId;
+
+    std::unordered_map<pxr::HdBprim*, std::unique_ptr<pxr::HdBprim>> m_BPrims;
 };
 
 } // namespace USD

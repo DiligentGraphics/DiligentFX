@@ -43,8 +43,10 @@ class HnRenderDelegate;
 class HnRenderBuffer final : public pxr::HdRenderBuffer
 {
 public:
+    HnRenderBuffer(const pxr::SdfPath& Id);
     HnRenderBuffer(const pxr::SdfPath& Id, const HnRenderDelegate* RnederDelegate);
-    HnRenderBuffer(const pxr::SdfPath& Id, ITexture* pTexture);
+    HnRenderBuffer(const pxr::SdfPath& Id, ITextureView* pTarget);
+
     ~HnRenderBuffer() override;
 
     // Allocate a buffer.  Can be called from Sync(), or directly.
@@ -99,13 +101,19 @@ public:
     // other parts of Hydra, such as a HdTask to get access to this resource.
     virtual pxr::VtValue GetResource(bool MultiSampled) const override final;
 
+    void SetTarget(ITextureView* pTarget);
+
+    void ReleaseTarget();
+
+    ITextureView* GetTarget() const { return m_pTarget; }
+
 protected:
     // Deallocate the buffer, freeing any owned resources.
     virtual void _Deallocate() override final;
 
 private:
-    RefCntAutoPtr<ITexture>       m_pTexture;
-    const HnRenderDelegate* const m_RenderDelegate = nullptr;
+    RefCntAutoPtr<ITextureView> m_pTarget;
+    const HnRenderDelegate*     m_RenderDelegate = nullptr;
 };
 
 } // namespace USD

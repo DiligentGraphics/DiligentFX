@@ -38,8 +38,10 @@
 #include "MapHelper.hpp"
 #include "CommonlyUsedStates.h"
 #include "HnShaderSourceFactory.hpp"
+#include "HnRenderBuffer.hpp"
 
 #include "pxr/imaging/hd/task.h"
+#include "pxr/imaging/hd/tokens.h"
 #include "pxr/imaging/hd/renderPass.h"
 
 namespace Diligent
@@ -110,6 +112,9 @@ void HnRendererImpl::LoadUSDStage(pxr::UsdStageRefPtr& Stage)
 
     const pxr::SdfPath TaskControllerId = SceneDelegateId.AppendChild(pxr::TfToken{"_HnTaskController_"});
     m_TaskController                    = std::make_unique<HnTaskController>(*m_RenderIndex, TaskControllerId);
+
+    m_FinalColorTargetId = SceneDelegateId.AppendChild(pxr::TfToken{"_HnFinalColorTarget_"});
+    m_RenderIndex->InsertBprim(pxr::HdPrimTypeTokens->renderBuffer, m_ImagingDelegate.get(), m_FinalColorTargetId);
 }
 
 void HnRendererImpl::SetParams(const HnRenderParams& Params)
@@ -126,16 +131,17 @@ void HnRendererImpl::Update()
     if (m_RenderParamsChanged)
     {
         HnSetupRenderingTaskParams Params;
-        Params.ColorFormat       = ColorBufferFormat;
-        Params.MeshIdFormat      = MeshIdFormat;
-        Params.DepthFormat       = DepthFormat;
-        Params.RenderMode        = m_RenderParams.RenderMode;
-        Params.FrontFaceCCW      = m_RenderParams.FrontFaceCCW;
-        Params.DebugView         = m_RenderParams.DebugView;
-        Params.OcclusionStrength = m_RenderParams.OcclusionStrength;
-        Params.EmissionScale     = m_RenderParams.EmissionScale;
-        Params.IBLScale          = m_RenderParams.IBLScale;
-        Params.Transform         = m_RenderParams.Transform;
+        Params.ColorFormat        = ColorBufferFormat;
+        Params.MeshIdFormat       = MeshIdFormat;
+        Params.DepthFormat        = DepthFormat;
+        Params.RenderMode         = m_RenderParams.RenderMode;
+        Params.FrontFaceCCW       = m_RenderParams.FrontFaceCCW;
+        Params.DebugView          = m_RenderParams.DebugView;
+        Params.OcclusionStrength  = m_RenderParams.OcclusionStrength;
+        Params.EmissionScale      = m_RenderParams.EmissionScale;
+        Params.IBLScale           = m_RenderParams.IBLScale;
+        Params.Transform          = m_RenderParams.Transform;
+        Params.FinalColorTargetId = m_FinalColorTargetId;
         m_TaskController->SetTaskParams(HnTaskController::TaskUID_SetupRendering, Params);
 
         m_RenderParamsChanged = false;
@@ -246,6 +252,10 @@ void HnRendererImpl::Draw(IDeviceContext* pCtx, const HnDrawAttribs& Attribs)
     if (!m_RenderDelegate)
         return;
 
+    auto* FinalColorTarget = static_cast<HnRenderBuffer*>(m_RenderIndex->GetBprim(pxr::HdPrimTypeTokens->renderBuffer, m_FinalColorTargetId));
+    VERIFY_EXPR(FinalColorTarget != nullptr);
+    FinalColorTarget->SetTarget(Attribs.pDstRTV);
+
     PrepareRenderTargets(Attribs.pDstRTV);
     PreparePostProcess(Attribs.pDstRTV->GetDesc().Format);
 
@@ -265,6 +275,8 @@ void HnRendererImpl::Draw(IDeviceContext* pCtx, const HnDrawAttribs& Attribs)
 
     pxr::HdTaskSharedPtrVector tasks = m_TaskController->GetTasks();
     m_Engine.Execute(&m_ImagingDelegate->GetRenderIndex(), &tasks);
+
+    FinalColorTarget->ReleaseTarget();
 
     PerformPostProcess(pCtx, Attribs);
 }

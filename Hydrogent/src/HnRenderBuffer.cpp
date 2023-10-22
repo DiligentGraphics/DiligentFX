@@ -37,15 +37,20 @@ namespace Diligent
 namespace USD
 {
 
+HnRenderBuffer::HnRenderBuffer(const pxr::SdfPath& Id) :
+    pxr::HdRenderBuffer{Id}
+{
+}
+
 HnRenderBuffer::HnRenderBuffer(const pxr::SdfPath& Id, const HnRenderDelegate* RnederDelegate) :
     pxr::HdRenderBuffer{Id},
     m_RenderDelegate{RnederDelegate}
 {
 }
 
-HnRenderBuffer::HnRenderBuffer(const pxr::SdfPath& Id, ITexture* pTexture) :
+HnRenderBuffer::HnRenderBuffer(const pxr::SdfPath& Id, ITextureView* pTarget) :
     pxr::HdRenderBuffer{Id},
-    m_pTexture{pTexture}
+    m_pTarget{pTarget}
 {
 }
 
@@ -57,6 +62,9 @@ bool HnRenderBuffer::Allocate(const pxr::GfVec3i& Dimensions,
                               pxr::HdFormat       Format,
                               bool                MultiSampled)
 {
+    if (!(Dimensions[0] > 0 && Dimensions[1] > 0 && Format != pxr::HdFormatInvalid))
+        return false;
+
     if (m_RenderDelegate == nullptr)
     {
         UNEXPECTED("Texture cannot be allocated without render delegate");
@@ -73,52 +81,69 @@ bool HnRenderBuffer::Allocate(const pxr::GfVec3i& Dimensions,
     TexDesc.MipLevels = 1;
     TexDesc.Format    = HdFormatToTextureFormat(Format);
 
-    const auto FmtAttribs = GetTextureFormatAttribs(TexDesc.Format);
-    if (FmtAttribs.ComponentType == COMPONENT_TYPE_DEPTH || FmtAttribs.ComponentType == COMPONENT_TYPE_DEPTH_STENCIL)
-        TexDesc.BindFlags = BIND_DEPTH_STENCIL;
-    else
-        TexDesc.BindFlags = BIND_RENDER_TARGET;
-    TexDesc.BindFlags |= BIND_SHADER_RESOURCE;
+    const auto IsDepth = GetTextureFormatAttribs(TexDesc.Format).IsDepthStencil();
+    TexDesc.BindFlags  = (IsDepth ? BIND_DEPTH_STENCIL : BIND_RENDER_TARGET) | BIND_SHADER_RESOURCE;
 
     TexDesc.Usage       = USAGE_DEFAULT;
     TexDesc.SampleCount = MultiSampled ? 4 : 1;
 
-    if (m_pTexture && m_pTexture->GetDesc() == TexDesc)
+    if (m_pTarget && m_pTarget->GetTexture()->GetDesc() == TexDesc)
         return true;
 
-    m_pTexture.Release();
-    auto* pDevice = static_cast<const HnRenderDelegate*>(m_RenderDelegate)->GetDevice();
-    pDevice->CreateTexture(TexDesc, nullptr, &m_pTexture);
-    VERIFY(m_pTexture, "Failed to create render buffer texture ", Name);
+    m_pTarget.Release();
+    auto* const pDevice = static_cast<const HnRenderDelegate*>(m_RenderDelegate)->GetDevice();
 
-    return m_pTexture != nullptr;
+    RefCntAutoPtr<ITexture> pTexture;
+    pDevice->CreateTexture(TexDesc, nullptr, &pTexture);
+    if (!pTexture)
+    {
+        UNEXPECTED("Failed to create render buffer texture ", Name);
+        return false;
+    }
+
+    m_pTarget = pTexture->GetDefaultView(IsDepth ? TEXTURE_VIEW_DEPTH_STENCIL : TEXTURE_VIEW_RENDER_TARGET);
+    VERIFY(m_pTarget, "Failed to get default view for render buffer texture ", Name);
+
+    return m_pTarget != nullptr;
 }
 
 unsigned int HnRenderBuffer::GetWidth() const
 {
-    return m_pTexture ? m_pTexture->GetDesc().GetWidth() : 0;
+    if (!m_pTarget)
+        return 0;
+
+    const auto MipLevelProps = GetMipLevelProperties(m_pTarget->GetTexture()->GetDesc(), m_pTarget->GetDesc().MostDetailedMip);
+    return MipLevelProps.LogicalWidth;
 }
 
 unsigned int HnRenderBuffer::GetHeight() const
 {
-    return m_pTexture ? m_pTexture->GetDesc().GetHeight() : 0;
+    if (!m_pTarget)
+        return 0;
+
+    const auto MipLevelProps = GetMipLevelProperties(m_pTarget->GetTexture()->GetDesc(), m_pTarget->GetDesc().MostDetailedMip);
+    return MipLevelProps.LogicalHeight;
 }
 
 unsigned int HnRenderBuffer::GetDepth() const
 {
-    return m_pTexture ? m_pTexture->GetDesc().GetDepth() : 0;
+    if (!m_pTarget)
+        return 0;
+
+    const auto MipLevelProps = GetMipLevelProperties(m_pTarget->GetTexture()->GetDesc(), m_pTarget->GetDesc().MostDetailedMip);
+    return MipLevelProps.Depth;
 }
 
 pxr::HdFormat HnRenderBuffer::GetFormat() const
 {
-    return m_pTexture ?
-        TextureFormatToHdFormat(m_pTexture->GetDesc().Format) :
+    return m_pTarget ?
+        TextureFormatToHdFormat(m_pTarget->GetDesc().Format) :
         pxr::HdFormatInvalid;
 }
 
 bool HnRenderBuffer::IsMultiSampled() const
 {
-    return m_pTexture ? m_pTexture->GetDesc().SampleCount > 1 : false;
+    return m_pTarget ? m_pTarget->GetTexture()->GetDesc().SampleCount > 1 : false;
 }
 
 void* HnRenderBuffer::Map()
@@ -147,12 +172,22 @@ bool HnRenderBuffer::IsConverged() const
 
 pxr::VtValue HnRenderBuffer::GetResource(bool MultiSampled) const
 {
-    return m_pTexture ? pxr::VtValue{m_pTexture.RawPtr()} : pxr::VtValue{};
+    return m_pTarget ? pxr::VtValue{m_pTarget.RawPtr()} : pxr::VtValue{};
 }
 
 void HnRenderBuffer::_Deallocate()
 {
-    m_pTexture.Release();
+    m_pTarget.Release();
+}
+
+void HnRenderBuffer::SetTarget(ITextureView* pTarget)
+{
+    m_pTarget = pTarget;
+}
+
+void HnRenderBuffer::ReleaseTarget()
+{
+    m_pTarget.Release();
 }
 
 } // namespace USD

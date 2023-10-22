@@ -98,6 +98,15 @@ namespace USD
     (linearMipmapNearest)  \
     (nearestMipmapLinear)  \
     (nearestMipmapNearest)
+
+#define HN_RENDER_RESOURCE_TOKENS \
+    (cameraAttribsBuffer)         \
+    (lightAttribsBuffer)          \
+    (offscreenColorTarget)        \
+    (finalColorTarget)            \
+    (meshIdTarget)                \
+    (depthBuffer)
+
 // clang-format on
 
 using TfToken = pxr::TfToken;
@@ -108,6 +117,7 @@ TF_DECLARE_PUBLIC_TOKENS(HnMaterialTagTokens, HN_MATERIAL_TAG_TOKENS);
 TF_DECLARE_PUBLIC_TOKENS(HnSdrMetadataTokens, HN_SDR_METADATA_TOKENS);
 TF_DECLARE_PUBLIC_TOKENS(HnTextureTokens, HN_TEXTURE_TOKENS);
 TF_DECLARE_PUBLIC_TOKENS(HnTokens, HN_TOKENS);
+TF_DECLARE_PUBLIC_TOKENS(HnRenderResourceTokens, HN_RENDER_RESOURCE_TOKENS);
 
 } // namespace USD
 

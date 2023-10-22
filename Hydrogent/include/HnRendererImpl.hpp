@@ -128,6 +128,8 @@ private:
 
     HnRenderParams m_RenderParams;
     bool           m_RenderParamsChanged = true;
+
+    pxr::SdfPath m_FinalColorTargetId;
 };
 
 } // namespace USD

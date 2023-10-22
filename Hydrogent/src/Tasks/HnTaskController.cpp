@@ -108,7 +108,11 @@ bool HnTaskController::TaskParamsDelegate::IsEnabled(const pxr::TfToken& Option)
 
 pxr::HdRenderBufferDescriptor HnTaskController::TaskParamsDelegate::GetRenderBufferDescriptor(const pxr::SdfPath& Id)
 {
-    return GetParameter<pxr::HdRenderBufferDescriptor>(Id, HnTaskControllerTokens->renderBufferDescriptor);
+    if (HasParameter(Id, HnTaskControllerTokens->renderBufferDescriptor))
+    {
+        return GetParameter<pxr::HdRenderBufferDescriptor>(Id, HnTaskControllerTokens->renderBufferDescriptor);
+    }
+    return pxr::HdRenderBufferDescriptor{};
 }
 
 pxr::TfTokenVector HnTaskController::TaskParamsDelegate::GetTaskRenderTags(const pxr::SdfPath& TaskId)

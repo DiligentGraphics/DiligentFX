@@ -67,7 +67,8 @@ struct HnSetupRenderingTaskParams
                StencilFailOp        == rhs.StencilFailOp &&
                StencilZFailOp       == rhs.StencilZFailOp &&
                StencilZPassOp       == rhs.StencilZPassOp &&
-               StencilEnabled       == rhs.StencilEnabled;
+               StencilEnabled       == rhs.StencilEnabled &&
+               FinalColorTargetId   == rhs.FinalColorTargetId;
         // clang-format on
     }
     constexpr bool operator!=(const HnSetupRenderingTaskParams& rhs) const
@@ -106,6 +107,8 @@ struct HnSetupRenderingTaskParams
     pxr::HdStencilOp       StencilZFailOp = pxr::HdStencilOpKeep;
     pxr::HdStencilOp       StencilZPassOp = pxr::HdStencilOpKeep;
     bool                   StencilEnabled = false;
+
+    pxr::SdfPath FinalColorTargetId;
 };
 
 /// Post processing task implementation in Hydrogent.
@@ -127,9 +130,15 @@ public:
 
 private:
     void UpdateRenderPassState(const HnSetupRenderingTaskParams& Params);
+    void PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex, pxr::HdTaskContext* TaskCtx, ITextureView* pFinalColorRTV);
 
 private:
     std::shared_ptr<HnRenderPassState> m_RenderPassState;
+
+    pxr::SdfPath m_FinalColorTargetId;
+    pxr::SdfPath m_OffscreenColorTargetId;
+    pxr::SdfPath m_MeshIdTargetId;
+    pxr::SdfPath m_DepthBufferId;
 };
 
 } // namespace USD

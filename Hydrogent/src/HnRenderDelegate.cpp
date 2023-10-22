@@ -30,6 +30,7 @@
 #include "HnRenderPass.hpp"
 #include "DebugUtilities.hpp"
 #include "USD_Renderer.hpp"
+#include "HnRenderBuffer.hpp"
 
 #include "pxr/imaging/hd/material.h"
 
@@ -58,6 +59,7 @@ const pxr::TfTokenVector HnRenderDelegate::SupportedSPrimTypes =
 
 const pxr::TfTokenVector HnRenderDelegate::SupportedBPrimTypes =
 {
+    pxr::HdPrimTypeTokens->renderBuffer
 };
 // clang-format on
 
@@ -190,6 +192,13 @@ void HnRenderDelegate::DestroySprim(pxr::HdSprim* sprim)
 pxr::HdBprim* HnRenderDelegate::CreateBprim(pxr::TfToken const& typeId,
                                             pxr::SdfPath const& bprimId)
 {
+    if (typeId == pxr::HdPrimTypeTokens->renderBuffer)
+    {
+        auto  RenderBuffer = std::make_unique<HnRenderBuffer>(bprimId);
+        auto* BPrim        = RenderBuffer.get();
+        m_BPrims.emplace(BPrim, std::move(RenderBuffer));
+        return BPrim;
+    }
     return nullptr;
 }
 
@@ -200,6 +209,7 @@ pxr::HdBprim* HnRenderDelegate::CreateFallbackBprim(pxr::TfToken const& typeId)
 
 void HnRenderDelegate::DestroyBprim(pxr::HdBprim* bprim)
 {
+    m_BPrims.erase(bprim);
 }
 
 void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
