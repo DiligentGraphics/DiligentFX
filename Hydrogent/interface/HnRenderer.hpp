@@ -29,7 +29,8 @@
 #include "../../../Primitives/interface/Object.h"
 #include "../../../Graphics/GraphicsEngine/interface/RenderDevice.h"
 #include "../../../Graphics/GraphicsEngine/interface/DeviceContext.h"
-#include "../../../Common/interface/BasicMath.hpp"
+
+#include "HnTypes.hpp"
 
 #include "pxr/usd/usd/stage.h"
 
@@ -62,35 +63,32 @@ struct HnRendererCreateInfo
     IBuffer* pLightAttribsCB = nullptr;
 };
 
-enum HN_RENDER_MODE
-{
-    HN_RENDER_MODE_SOLID,
-    HN_RENDER_MODE_MESH_EDGES,
-    HN_RENDER_MODE_COUNT
-};
-
 struct HnDrawAttribs
 {
-    float4x4 Transform = float4x4::Identity();
-
     ITextureView* pDstRTV = nullptr;
 
-    int   DebugView         = 0;
-    float OcclusionStrength = 1;
-    float EmissionScale     = 1;
-    float AverageLogLum     = 0.3f;
-    float MiddleGray        = 0.18f;
-    float WhitePoint        = 3.0f;
-    float IBLScale          = 1;
+    float AverageLogLum = 0.3f;
+    float MiddleGray    = 0.18f;
+    float WhitePoint    = 3.0f;
 
     bool EnablePrimIdQueries = false;
 
     float4 WireframeColor = float4{1, 1, 1, 1};
     float4 SlectionColor  = float4{0.75f, 0.75f, 0.25f, 0.5f};
 
-    HN_RENDER_MODE RenderMode = HN_RENDER_MODE_SOLID;
-
     const pxr::SdfPath* SelectedPrim = nullptr;
+};
+
+struct HnRenderParams
+{
+    float4x4 Transform = float4x4::Identity();
+
+    int   DebugView         = 0;
+    float OcclusionStrength = 1;
+    float EmissionScale     = 1;
+    float IBLScale          = 1;
+
+    HN_RENDER_MODE RenderMode = HN_RENDER_MODE_SOLID;
 };
 
 class IHnRenderer : public IObject
@@ -99,6 +97,8 @@ public:
     virtual void LoadUSDStage(pxr::UsdStageRefPtr& Stage) = 0;
 
     virtual void Update() = 0;
+
+    virtual void SetParams(const HnRenderParams& Params) = 0;
 
     virtual void Draw(IDeviceContext* pCtx, const HnDrawAttribs& Attribs) = 0;
 

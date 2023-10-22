@@ -46,6 +46,16 @@ HnSetupRenderingTask::~HnSetupRenderingTask()
 {
 }
 
+void HnSetupRenderingTask::UpdateRenderPassState(const HnSetupRenderingTaskParams& Params)
+{
+    m_RenderPassState->SetRenderMode(Params.RenderMode);
+    m_RenderPassState->SetDebugView(Params.DebugView);
+    m_RenderPassState->SetOcclusionStrength(Params.OcclusionStrength);
+    m_RenderPassState->SetEmissionScale(Params.EmissionScale);
+    m_RenderPassState->SetIBLScale(Params.IBLScale);
+    m_RenderPassState->SetTransform(Params.Transform);
+}
+
 void HnSetupRenderingTask::Sync(pxr::HdSceneDelegate* Delegate,
                                 pxr::HdTaskContext*   TaskCtx,
                                 pxr::HdDirtyBits*     DirtyBits)
@@ -56,7 +66,7 @@ void HnSetupRenderingTask::Sync(pxr::HdSceneDelegate* Delegate,
         if (ParamsValue.IsHolding<HnSetupRenderingTaskParams>())
         {
             HnSetupRenderingTaskParams Params = ParamsValue.UncheckedGet<HnSetupRenderingTaskParams>();
-            (void)Params;
+            UpdateRenderPassState(Params);
         }
         else
         {

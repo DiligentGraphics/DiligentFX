@@ -48,6 +48,7 @@ set(INCLUDE
 )
 
 set(INTERFACE
+    interface/HnTypes.hpp
     interface/HnRenderer.hpp
 )
 

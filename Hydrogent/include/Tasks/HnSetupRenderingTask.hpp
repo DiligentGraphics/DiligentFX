@@ -29,6 +29,7 @@
 #include <memory>
 
 #include "HnTask.hpp"
+#include "../interface/HnTypes.hpp"
 
 namespace Diligent
 {
@@ -42,12 +43,28 @@ struct HnSetupRenderingTaskParams
 {
     constexpr bool operator==(const HnSetupRenderingTaskParams& rhs) const
     {
-        return true;
+        // clang-format off
+        return RenderMode        == rhs.RenderMode &&
+               DebugView         == rhs.DebugView &&
+               OcclusionStrength == rhs.OcclusionStrength &&
+               EmissionScale     == rhs.EmissionScale &&
+               IBLScale          == rhs.IBLScale &&
+               Transform         == rhs.Transform;
+        // clang-format on
     }
     constexpr bool operator!=(const HnSetupRenderingTaskParams& rhs) const
     {
         return !(*this == rhs);
     }
+
+    HN_RENDER_MODE RenderMode = HN_RENDER_MODE_SOLID;
+
+    int   DebugView         = 0;
+    float OcclusionStrength = 1;
+    float EmissionScale     = 1;
+    float IBLScale          = 1;
+
+    float4x4 Transform = float4x4::Identity();
 };
 
 /// Post processing task implementation in Hydrogent.
@@ -66,6 +83,9 @@ public:
 
 
     virtual void Execute(pxr::HdTaskContext* TaskCtx) override final;
+
+private:
+    void UpdateRenderPassState(const HnSetupRenderingTaskParams& Params);
 
 private:
     std::shared_ptr<HnRenderPassState> m_RenderPassState;

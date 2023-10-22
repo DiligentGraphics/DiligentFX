@@ -40,6 +40,7 @@ namespace USD
 
 class HnMesh;
 class HnMaterial;
+class HnRenderPassState;
 
 /// Hydra render pass implementation in Hydrogent.
 class HnRenderPass final : public pxr::HdRenderPass
@@ -62,9 +63,10 @@ protected:
 private:
     void UpdateDrawItems(const pxr::TfTokenVector& RenderTags);
 
-    void RenderMesh(IDeviceContext*   pCtx,
-                    const HnMesh&     Mesh,
-                    const HnMaterial& Material);
+    void RenderMesh(IDeviceContext*          pCtx,
+                    const HnRenderPassState& State,
+                    const HnMesh&            Mesh,
+                    const HnMaterial&        Material);
 
 private:
     std::shared_ptr<USD_Renderer>           m_USDRenderer;

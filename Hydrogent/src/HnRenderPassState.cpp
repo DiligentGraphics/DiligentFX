@@ -145,9 +145,10 @@ GraphicsPipelineDesc HnRenderPassState::GetGraphicsPipelineDesc() const
     GraphicsPipeline.RasterizerDesc   = GetRasterizerState();
     GraphicsPipeline.DepthStencilDesc = GetDepthStencilState();
 
-    GraphicsPipeline.NumRenderTargets = m_ColorFormat != TEX_FORMAT_UNKNOWN ? 1 : 0;
-    GraphicsPipeline.RTVFormats[0]    = m_ColorFormat;
-    GraphicsPipeline.DSVFormat        = m_DepthFormat;
+    GraphicsPipeline.NumRenderTargets = m_NumRenderTargets;
+    for (Uint32 rt = 0; rt < m_NumRenderTargets; ++rt)
+        GraphicsPipeline.RTVFormats[rt] = m_RTVFormats[rt];
+    GraphicsPipeline.DSVFormat = m_DepthFormat;
 
     return GraphicsPipeline;
 }

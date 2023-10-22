@@ -26,11 +26,15 @@
 
 #pragma once
 
+#include <array>
+
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/RasterizerState.h"
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/BlendState.h"
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/DepthStencilState.h"
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/PipelineState.h"
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/DeviceContext.h"
+
+#include "../interface/HnTypes.hpp"
 
 #include "pxr/imaging/hd/types.h"
 #include "pxr/imaging/hd/renderPassState.h"
@@ -51,24 +55,91 @@ public:
 
     void Begin(IDeviceContext* pContext);
 
-    void SetColorFormat(TEXTURE_FORMAT ColorFormat)
+    void SetRTVFormat(Uint32 RT, TEXTURE_FORMAT Fmt)
     {
-        m_ColorFormat = ColorFormat;
+        m_RTVFormats[RT] = Fmt;
     }
     void SetDepthFormat(TEXTURE_FORMAT DepthFormat)
     {
         m_DepthFormat = DepthFormat;
     }
+    void SetNumRenderTargets(Uint32 NumRTs)
+    {
+        m_NumRenderTargets = NumRTs;
+    }
 
-private:
+    void SetRenderMode(HN_RENDER_MODE RenderMode)
+    {
+        m_RenderMode = RenderMode;
+    }
+    HN_RENDER_MODE GetRenderMode() const
+    {
+        return m_RenderMode;
+    }
+
+    void SetDebugView(int DebugView)
+    {
+        m_DebugView = DebugView;
+    }
+    int GetDebugView() const
+    {
+        return m_DebugView;
+    }
+
+    void SetOcclusionStrength(float OcclusionStrength)
+    {
+        m_OcclusionStrength = OcclusionStrength;
+    }
+    float GetOcclusionStrength() const
+    {
+        return m_OcclusionStrength;
+    }
+
+    void SetEmissionScale(float EmissionScale)
+    {
+        m_EmissionScale = EmissionScale;
+    }
+    float GetEmissionScale() const
+    {
+        return m_EmissionScale;
+    }
+
+    void SetIBLScale(float IBLScale)
+    {
+        m_IBLScale = IBLScale;
+    }
+    float GetIBLScale() const
+    {
+        return m_IBLScale;
+    }
+
+    void SetTransform(const float4x4& Transform)
+    {
+        m_Transform = Transform;
+    }
+    const float4x4& GetTransform() const
+    {
+        return m_Transform;
+    }
+
     RasterizerStateDesc   GetRasterizerState() const;
     DepthStencilStateDesc GetDepthStencilState() const;
     BlendStateDesc        GetBlendState() const;
     GraphicsPipelineDesc  GetGraphicsPipelineDesc() const;
 
 private:
-    TEXTURE_FORMAT m_ColorFormat = TEX_FORMAT_UNKNOWN;
-    TEXTURE_FORMAT m_DepthFormat = TEX_FORMAT_UNKNOWN;
+    Uint32                                         m_NumRenderTargets = 0;
+    std::array<TEXTURE_FORMAT, MAX_RENDER_TARGETS> m_RTVFormats       = {};
+    TEXTURE_FORMAT                                 m_DepthFormat      = TEX_FORMAT_UNKNOWN;
+
+    HN_RENDER_MODE m_RenderMode = HN_RENDER_MODE_SOLID;
+
+    int   m_DebugView         = 0;
+    float m_OcclusionStrength = 1;
+    float m_EmissionScale     = 1;
+    float m_IBLScale          = 1;
+
+    float4x4 m_Transform = float4x4::Identity();
 };
 
 } // namespace USD

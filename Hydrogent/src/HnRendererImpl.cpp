@@ -30,6 +30,7 @@
 #include "HnMaterial.hpp"
 #include "HnTokens.hpp"
 #include "Tasks/HnTaskController.hpp"
+#include "Tasks/HnSetupRenderingTask.hpp"
 
 #include "EngineMemory.h"
 #include "USD_Renderer.hpp"
@@ -124,12 +125,33 @@ void HnRendererImpl::LoadUSDStage(pxr::UsdStageRefPtr& Stage)
     m_TaskController                    = std::make_unique<HnTaskController>(*m_RenderIndex, TaskControllerId);
 }
 
+void HnRendererImpl::SetParams(const HnRenderParams& Params)
+{
+    m_RenderParams        = Params;
+    m_RenderParamsChanged = true;
+}
+
 void HnRendererImpl::Update()
 {
-    if (m_ImagingDelegate)
+    if (!m_RenderDelegate || !m_ImagingDelegate)
+        return;
+
+    if (m_RenderParamsChanged)
     {
-        m_ImagingDelegate->ApplyPendingUpdates();
+        HnSetupRenderingTaskParams Params;
+        Params.RenderMode        = m_RenderParams.RenderMode;
+        Params.DebugView         = m_RenderParams.DebugView;
+        Params.OcclusionStrength = m_RenderParams.OcclusionStrength;
+        Params.EmissionScale     = m_RenderParams.EmissionScale;
+        Params.IBLScale          = m_RenderParams.IBLScale;
+        Params.Transform         = m_RenderParams.Transform;
+        m_TaskController->SetTaskParams(HnTaskController::TaskUID_SetupRendering, Params);
+
+        m_RenderParamsChanged = false;
     }
+
+
+    m_ImagingDelegate->ApplyPendingUpdates();
 }
 
 void HnRendererImpl::PrepareRenderTargets(ITextureView* pDstRtv)

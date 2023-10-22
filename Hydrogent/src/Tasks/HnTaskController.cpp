@@ -62,116 +62,70 @@ TF_DEFINE_PRIVATE_TOKENS(
 
 } // namespace
 
-class HnTaskController::TaskParamsDelegate final : public pxr::HdSceneDelegate
+
+HnTaskController::TaskParamsDelegate::ParamKey::ParamKey(const pxr::SdfPath& _Path, const pxr::TfToken& _ValueKey) :
+    Path{_Path},
+    ValueKey{_ValueKey},
+    Hash{ComputeHash(pxr::SdfPath::Hash{}(_Path), pxr::TfToken::HashFunctor{}(_ValueKey))}
+{}
+
+HnTaskController::TaskParamsDelegate::TaskParamsDelegate(pxr::HdRenderIndex& Index,
+                                                         const pxr::SdfPath& Id) :
+    pxr::HdSceneDelegate{&Index, Id}
+{}
+
+HnTaskController::TaskParamsDelegate::~TaskParamsDelegate()
 {
-public:
-    TaskParamsDelegate(pxr::HdRenderIndex& Index,
-                       const pxr::SdfPath& Id) :
-        pxr::HdSceneDelegate{&Index, Id}
-    {}
+}
 
-    ~TaskParamsDelegate() override final
+bool HnTaskController::TaskParamsDelegate::HasParameter(const pxr::SdfPath& Id, const pxr::TfToken& ValueKey) const
+{
+    return m_ParamsCache.find({Id, ValueKey}) != m_ParamsCache.end();
+}
+
+pxr::VtValue HnTaskController::TaskParamsDelegate::Get(const pxr::SdfPath& Id, const pxr::TfToken& ValueKey)
+{
+    auto it = m_ParamsCache.find({Id, ValueKey});
+    return it != m_ParamsCache.end() ? it->second : pxr::VtValue{};
+}
+
+pxr::GfMatrix4d HnTaskController::TaskParamsDelegate::GetTransform(const pxr::SdfPath& Id)
+{
+    auto it = m_ParamsCache.find({Id, pxr::HdTokens->transform});
+    return it != m_ParamsCache.end() ? it->second.Get<pxr::GfMatrix4d>() : pxr::GfMatrix4d{1.0};
+}
+
+pxr::VtValue HnTaskController::TaskParamsDelegate::GetLightParamValue(const pxr::SdfPath& Id,
+                                                                      const pxr::TfToken& ParamName)
+{
+    return Get(Id, ParamName);
+}
+
+bool HnTaskController::TaskParamsDelegate::IsEnabled(const pxr::TfToken& Option) const
+{
+    return HdSceneDelegate::IsEnabled(Option);
+}
+
+pxr::HdRenderBufferDescriptor HnTaskController::TaskParamsDelegate::GetRenderBufferDescriptor(const pxr::SdfPath& Id)
+{
+    return GetParameter<pxr::HdRenderBufferDescriptor>(Id, HnTaskControllerTokens->renderBufferDescriptor);
+}
+
+pxr::TfTokenVector HnTaskController::TaskParamsDelegate::GetTaskRenderTags(const pxr::SdfPath& TaskId)
+{
+    if (HasParameter(TaskId, HnTaskControllerTokens->renderTags))
     {
+        return GetParameter<pxr::TfTokenVector>(TaskId, HnTaskControllerTokens->renderTags);
     }
-
-    template <typename T>
-    void SetParameter(const pxr::SdfPath& Id, const pxr::TfToken& ValueKey, T&& Value)
-    {
-        m_ParamsCache[{Id, ValueKey}] = std::forward<T>(Value);
-    }
-
-    template <typename T>
-    T GetParameter(const pxr::SdfPath& Id, const TfToken& ValueKey) const
-    {
-        auto it = m_ParamsCache.find({Id, ValueKey});
-        if (it == m_ParamsCache.end())
-        {
-            UNEXPECTED("Parameter ", ValueKey, " is not set for ", Id);
-            return {};
-        }
-
-        VERIFY(it->second.IsHolding<T>(), "Unexpected parameter type");
-        return it->second.Get<T>();
-    }
-
-    bool HasParameter(const pxr::SdfPath& Id, const TfToken& ValueKey) const
-    {
-        return m_ParamsCache.find({Id, ValueKey}) != m_ParamsCache.end();
-    }
-
-    pxr::VtValue Get(const pxr::SdfPath& Id, const TfToken& ValueKey) override final
-    {
-        auto it = m_ParamsCache.find({Id, ValueKey});
-        return it != m_ParamsCache.end() ? it->second : pxr::VtValue{};
-    }
-
-    pxr::GfMatrix4d GetTransform(const pxr::SdfPath& Id) override final
-    {
-        auto it = m_ParamsCache.find({Id, pxr::HdTokens->transform});
-        return it != m_ParamsCache.end() ? it->second.Get<pxr::GfMatrix4d>() : pxr::GfMatrix4d{1.0};
-    }
-
-    pxr::VtValue GetLightParamValue(const pxr::SdfPath& Id,
-                                    const pxr::TfToken& ParamName) override
-    {
-        return Get(Id, ParamName);
-    }
-
-    bool IsEnabled(const TfToken& Option) const override final
-    {
-        return HdSceneDelegate::IsEnabled(Option);
-    }
-
-    pxr::HdRenderBufferDescriptor GetRenderBufferDescriptor(const pxr::SdfPath& Id) override final
-    {
-        return GetParameter<pxr::HdRenderBufferDescriptor>(Id, HnTaskControllerTokens->renderBufferDescriptor);
-    }
-
-    pxr::TfTokenVector GetTaskRenderTags(const pxr::SdfPath& TaskId) override final
-    {
-        if (HasParameter(TaskId, HnTaskControllerTokens->renderTags))
-        {
-            return GetParameter<pxr::TfTokenVector>(TaskId, HnTaskControllerTokens->renderTags);
-        }
-        return pxr::TfTokenVector{};
-    }
-
-private:
-    struct ParamKey
-    {
-        const pxr::SdfPath Path;
-        const pxr::TfToken ValueKey;
-        const size_t       Hash;
-
-        ParamKey(const pxr::SdfPath& _Path, const pxr::TfToken& _ValueKey) :
-            Path{_Path},
-            ValueKey{_ValueKey},
-            Hash{ComputeHash(pxr::SdfPath::Hash{}(_Path), pxr::TfToken::HashFunctor{}(_ValueKey))}
-        {}
-
-        bool operator==(const ParamKey& rhs) const
-        {
-            return Hash && rhs.Hash && Path == rhs.Path && ValueKey == rhs.ValueKey;
-        }
-
-        struct Hasher
-        {
-            size_t operator()(const ParamKey& Key) const
-            {
-                return Key.Hash;
-            }
-        };
-    };
-
-    std::unordered_map<ParamKey, pxr::VtValue, ParamKey::Hasher> m_ParamsCache;
-};
+    return pxr::TfTokenVector{};
+}
 
 
 HnTaskController::HnTaskController(pxr::HdRenderIndex& RenderIndex,
                                    const pxr::SdfPath& ControllerId) :
     m_RenderIndex{RenderIndex},
     m_ControllerId{ControllerId},
-    m_ParamsDelegate{std::make_unique<TaskParamsDelegate>(RenderIndex, ControllerId)}
+    m_ParamsDelegate{RenderIndex, ControllerId}
 {
     // Task creation order defines the default task order
     CreateSetupRenderingTask();
@@ -212,9 +166,9 @@ void HnTaskController::RemoveTask(TaskUID UID)
     m_TaskUIDs.erase(it);
 }
 
-void HnTaskController::SetParameter(const pxr::SdfPath& Id, const TfToken& ValueKey, pxr::VtValue Value)
+void HnTaskController::SetParameter(const pxr::SdfPath& TaskId, const TfToken& ValueKey, pxr::VtValue Value)
 {
-    m_ParamsDelegate->SetParameter(Id, ValueKey, std::move(Value));
+    m_ParamsDelegate.SetParameter(TaskId, ValueKey, std::move(Value));
 }
 
 void HnTaskController::CreateSetupRenderingTask()
@@ -249,9 +203,9 @@ void HnTaskController::CreateRenderRprimsTask(const pxr::TfToken& MaterialTag, T
 
     pxr::TfTokenVector RenderTags = {pxr::HdRenderTagTokens->geometry};
 
-    m_ParamsDelegate->SetParameter(RenderRprimsTaskId, pxr::HdTokens->params, TaskParams);
-    m_ParamsDelegate->SetParameter(RenderRprimsTaskId, pxr::HdTokens->collection, Collection);
-    m_ParamsDelegate->SetParameter(RenderRprimsTaskId, pxr::HdTokens->renderTags, RenderTags);
+    m_ParamsDelegate.SetParameter(RenderRprimsTaskId, pxr::HdTokens->params, TaskParams);
+    m_ParamsDelegate.SetParameter(RenderRprimsTaskId, pxr::HdTokens->collection, Collection);
+    m_ParamsDelegate.SetParameter(RenderRprimsTaskId, pxr::HdTokens->renderTags, RenderTags);
 }
 
 void HnTaskController::CreatePostProcessTask()
@@ -295,7 +249,7 @@ void HnTaskController::SetCollection(const pxr::HdRprimCollection& Collection)
     pxr::HdRprimCollection NewCollection = Collection;
     for (const auto& TaskId : m_RenderTaskIds)
     {
-        pxr::HdRprimCollection OldCollection = m_ParamsDelegate->GetParameter<pxr::HdRprimCollection>(TaskId, pxr::HdTokens->collection);
+        pxr::HdRprimCollection OldCollection = m_ParamsDelegate.GetParameter<pxr::HdRprimCollection>(TaskId, pxr::HdTokens->collection);
 
         const pxr::TfToken& OldMaterialTag = OldCollection.GetMaterialTag();
         NewCollection.SetMaterialTag(OldMaterialTag);
@@ -303,49 +257,20 @@ void HnTaskController::SetCollection(const pxr::HdRprimCollection& Collection)
         if (OldCollection == NewCollection)
             continue;
 
-        m_ParamsDelegate->SetParameter(TaskId, pxr::HdTokens->collection, NewCollection);
+        m_ParamsDelegate.SetParameter(TaskId, pxr::HdTokens->collection, NewCollection);
         m_RenderIndex.GetChangeTracker().MarkTaskDirty(TaskId, pxr::HdChangeTracker::DirtyCollection);
     }
-}
-
-void HnTaskController::SetRenderParams(const HnRenderRprimsTaskParams& Params)
-{
-    for (const auto& TaskId : m_RenderTaskIds)
-    {
-        HnRenderRprimsTaskParams OldParams = m_ParamsDelegate->GetParameter<HnRenderRprimsTaskParams>(TaskId, pxr::HdTokens->params);
-        if (OldParams == Params)
-            continue;
-
-        m_ParamsDelegate->SetParameter(TaskId, pxr::HdTokens->params, Params);
-        m_RenderIndex.GetChangeTracker().MarkTaskDirty(TaskId, pxr::HdChangeTracker::DirtyParams);
-    }
-}
-
-void HnTaskController::SetPostProcessParams(const HnPostProcessTaskParams& Params)
-{
-    const auto it = m_TaskUIDs.find(TaskUID_PostProcess);
-    if (it == m_TaskUIDs.end())
-        return;
-
-    const auto& TaskId = it->second;
-
-    HnPostProcessTaskParams OldParams = m_ParamsDelegate->GetParameter<HnPostProcessTaskParams>(TaskId, pxr::HdTokens->params);
-    if (OldParams == Params)
-        return;
-
-    m_ParamsDelegate->SetParameter(TaskId, pxr::HdTokens->params, Params);
-    m_RenderIndex.GetChangeTracker().MarkTaskDirty(TaskId, pxr::HdChangeTracker::DirtyParams);
 }
 
 void HnTaskController::SetRenderTags(const pxr::TfTokenVector& RenderTags)
 {
     for (const auto& TaskId : m_RenderTaskIds)
     {
-        pxr::TfTokenVector OldRenderTags = m_ParamsDelegate->GetParameter<pxr::TfTokenVector>(TaskId, pxr::HdTokens->renderTags);
+        pxr::TfTokenVector OldRenderTags = m_ParamsDelegate.GetParameter<pxr::TfTokenVector>(TaskId, pxr::HdTokens->renderTags);
         if (OldRenderTags == RenderTags)
             continue;
 
-        m_ParamsDelegate->SetParameter(TaskId, pxr::HdTokens->renderTags, RenderTags);
+        m_ParamsDelegate.SetParameter(TaskId, pxr::HdTokens->renderTags, RenderTags);
         m_RenderIndex.GetChangeTracker().MarkTaskDirty(TaskId, pxr::HdChangeTracker::DirtyRenderTags);
     }
 }

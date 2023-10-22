@@ -26,7 +26,6 @@
 
 #pragma once
 
-#include <memory>
 #include <unordered_map>
 #include <vector>
 
@@ -40,7 +39,7 @@ namespace Diligent
 namespace USD
 {
 
-struct HnRenderRprimsTaskParams;
+struct HnSetupRenderingTaskParams;
 struct HnPostProcessTaskParams;
 
 /// Task controller implementation in Hydrogent.
@@ -84,17 +83,15 @@ public:
     /// Sets new collection for the render tasks.
     void SetCollection(const pxr::HdRprimCollection& Collection);
 
-    /// Sets new params for the render tasks.
-    void SetRenderParams(const HnRenderRprimsTaskParams& Params);
-
-    /// Sets new params for the post-process task.
-    void SetPostProcessParams(const HnPostProcessTaskParams& Params);
-
     /// Sets new render tags for the render tasks.
     void SetRenderTags(const pxr::TfTokenVector& RenderTags);
 
     /// Sets the parameter value
-    void SetParameter(const pxr::SdfPath& Id, const pxr::TfToken& ValueKey, pxr::VtValue Value);
+    void SetParameter(const pxr::SdfPath& TaskId, const pxr::TfToken& ValueKey, pxr::VtValue Value);
+
+    /// Sets the parameter value
+    template <typename ParamterType>
+    void SetParameter(const pxr::SdfPath& TaskId, const pxr::TfToken& ValueKey, ParamterType&& Value);
 
     /// Creates a new render task.
     /// \param [in] TaskId - The task ID that will be used to register the task in the render index.
@@ -114,6 +111,10 @@ public:
                     TaskUID             UID,
                     TaskParamsType&&    Params);
 
+    template <typename TaskParamsType>
+    bool SetTaskParams(TaskUID          UID,
+                       TaskParamsType&& Params);
+
     pxr::HdTaskSharedPtr GetTask(TaskUID UID) const;
 
     void RemoveTask(TaskUID UID);
@@ -132,8 +133,73 @@ private:
     const pxr::SdfPath  m_ControllerId;
 
     // Custom delegate to pass parameters to the render tasks.
-    class TaskParamsDelegate;
-    std::unique_ptr<TaskParamsDelegate> m_ParamsDelegate;
+    class HnTaskController::TaskParamsDelegate final : public pxr::HdSceneDelegate
+    {
+    public:
+        TaskParamsDelegate(pxr::HdRenderIndex& Index,
+                           const pxr::SdfPath& Id);
+        ~TaskParamsDelegate() override final;
+
+        template <typename T>
+        void SetParameter(const pxr::SdfPath& Id, const pxr::TfToken& ValueKey, T&& Value)
+        {
+            m_ParamsCache[{Id, ValueKey}] = std::forward<T>(Value);
+        }
+
+        template <typename T>
+        T GetParameter(const pxr::SdfPath& Id, const pxr::TfToken& ValueKey) const
+        {
+            auto it = m_ParamsCache.find({Id, ValueKey});
+            if (it == m_ParamsCache.end())
+            {
+                UNEXPECTED("Parameter ", ValueKey, " is not set for ", Id);
+                return {};
+            }
+
+            VERIFY(it->second.IsHolding<T>(), "Unexpected parameter type");
+            return it->second.Get<T>();
+        }
+
+        virtual bool HasParameter(const pxr::SdfPath& Id, const pxr::TfToken& ValueKey) const;
+
+        virtual pxr::VtValue Get(const pxr::SdfPath& Id, const pxr::TfToken& ValueKey) override final;
+
+        virtual pxr::GfMatrix4d GetTransform(const pxr::SdfPath& Id) override final;
+
+        virtual pxr::VtValue GetLightParamValue(const pxr::SdfPath& Id, const pxr::TfToken& ParamName) override final;
+
+        virtual bool IsEnabled(const pxr::TfToken& Option) const override final;
+
+        virtual pxr::HdRenderBufferDescriptor GetRenderBufferDescriptor(const pxr::SdfPath& Id) override final;
+
+        virtual pxr::TfTokenVector GetTaskRenderTags(const pxr::SdfPath& TaskId) override final;
+
+    private:
+        struct ParamKey
+        {
+            const pxr::SdfPath Path;
+            const pxr::TfToken ValueKey;
+            const size_t       Hash;
+
+            ParamKey(const pxr::SdfPath& _Path, const pxr::TfToken& _ValueKey);
+
+            bool operator==(const ParamKey& rhs) const
+            {
+                return Hash && rhs.Hash && Path == rhs.Path && ValueKey == rhs.ValueKey;
+            }
+
+            struct Hasher
+            {
+                size_t operator()(const ParamKey& Key) const
+                {
+                    return Key.Hash;
+                }
+            };
+        };
+
+        std::unordered_map<ParamKey, pxr::VtValue, ParamKey::Hasher> m_ParamsCache;
+    };
+    TaskParamsDelegate m_ParamsDelegate;
 
     std::unordered_map<TaskUID, pxr::SdfPath> m_TaskUIDs;
 
@@ -141,16 +207,22 @@ private:
     std::vector<pxr::SdfPath> m_RenderTaskIds;
 };
 
+template <typename ParamterType>
+void HnTaskController::SetParameter(const pxr::SdfPath& TaskId, const pxr::TfToken& ValueKey, ParamterType&& Value)
+{
+    m_ParamsDelegate.SetParameter(TaskId, pxr::HdTokens->params, std::forward<TaskParamsType>(Params));
+}
+
 template <typename TaskType, typename TaskParamsType>
 void HnTaskController::CreateTask(const pxr::SdfPath& TaskId,
                                   TaskUID             UID,
                                   TaskParamsType&&    Params)
 {
-    m_RenderIndex.InsertTask<TaskType>(m_ParamsDelegate.get(), TaskId);
+    m_RenderIndex.InsertTask<TaskType>(&m_ParamsDelegate, TaskId);
     auto it_inserted = m_TaskUIDs.emplace(UID, TaskId);
     VERIFY(it_inserted.second, "Task with UID ", UID, " already exists: ", it_inserted.first->second.GetText());
 
-    m_ParamsDelegate->SetParameter(TaskId, pxr::HdTokens->params, std::forward<TaskParamsType>(Params));
+    m_ParamsDelegate.SetParameter(TaskId, pxr::HdTokens->params, std::forward<TaskParamsType>(Params));
     m_DefaultTaskOrder.emplace_back(UID);
 }
 
@@ -160,6 +232,26 @@ void HnTaskController::CreateTask(const pxr::TfToken& TaskId,
                                   TaskParamsType&&    Params)
 {
     CreateTask<TaskType>(pxr::SdfPath{GetControllerId().AppendChild(TaskId)}, UID, std::forward<TaskParamsType>(Params));
+}
+
+template <typename TaskParamsType>
+bool HnTaskController::SetTaskParams(TaskUID          UID,
+                                     TaskParamsType&& Params)
+{
+    const auto it = m_TaskUIDs.find(UID);
+    if (it == m_TaskUIDs.end())
+        return false;
+
+    const auto& TaskId = it->second;
+
+    TaskParamsType OldParams = m_ParamsDelegate.GetParameter<std::remove_reference<TaskParamsType>::type>(TaskId, pxr::HdTokens->params);
+    if (OldParams == Params)
+        return false;
+
+    m_ParamsDelegate.SetParameter(TaskId, pxr::HdTokens->params, std::forward<TaskParamsType>(Params));
+    m_RenderIndex.GetChangeTracker().MarkTaskDirty(TaskId, pxr::HdChangeTracker::DirtyParams);
+
+    return true;
 }
 
 } // namespace USD

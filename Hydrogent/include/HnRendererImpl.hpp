@@ -80,6 +80,7 @@ public:
 
     virtual void LoadUSDStage(pxr::UsdStageRefPtr& Stage) override final;
     virtual void Update() override final;
+    virtual void SetParams(const HnRenderParams& Params) override final;
     virtual void Draw(IDeviceContext* pCtx, const HnDrawAttribs& Attribs) override final;
     virtual void SetEnvironmentMap(IDeviceContext* pCtx, ITextureView* pEnvironmentMapSRV) override final;
 
@@ -124,6 +125,9 @@ private:
         RefCntAutoPtr<IShaderResourceBinding> SRB;
     };
     PostProcessState m_PostProcess;
+
+    HnRenderParams m_RenderParams;
+    bool           m_RenderParamsChanged = true;
 };
 
 } // namespace USD

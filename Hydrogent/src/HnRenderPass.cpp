@@ -25,6 +25,7 @@
  */
 
 #include "HnRenderPass.hpp"
+#include "HnRenderPassState.hpp"
 #include "HnRenderDelegate.hpp"
 #include "HnMesh.hpp"
 #include "HnMaterial.hpp"
@@ -71,12 +72,20 @@ HnRenderPass::HnRenderPass(pxr::HdRenderIndex*           pIndex,
     VERIFY_EXPR(m_WireframePSOCache);
 }
 
-void HnRenderPass::_Execute(pxr::HdRenderPassStateSharedPtr const& State,
-                            pxr::TfTokenVector const&              Tags)
+void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& State,
+                            const pxr::TfTokenVector&              Tags)
 {
     UpdateDrawItems(Tags);
     if (m_DrawItems.empty())
         return;
+
+    // Render pass state is initialized by the setup rendering task, and
+    // passed from the render Rprims task.
+    if (!State)
+    {
+        UNEXPECTED("Render pass state should not be null");
+        return;
+    }
 
     pxr::HdRenderIndex* pRenderIndex    = GetRenderIndex();
     HnRenderDelegate*   pRenderDelegate = static_cast<HnRenderDelegate*>(pRenderIndex->GetRenderDelegate());
@@ -95,7 +104,7 @@ void HnRenderPass::_Execute(pxr::HdRenderPassStateSharedPtr const& State,
             if (pMaterial == nullptr)
                 continue;
 
-            RenderMesh(pCtx, *pMesh, *pMaterial);
+            RenderMesh(pCtx, *static_cast<const HnRenderPassState*>(State.get()), *pMesh, *pMaterial);
         }
     }
 }
@@ -159,9 +168,10 @@ void HnRenderPass::UpdateDrawItems(const pxr::TfTokenVector& RenderTags)
 }
 
 
-void HnRenderPass::RenderMesh(IDeviceContext*   pCtx,
-                              const HnMesh&     Mesh,
-                              const HnMaterial& Material)
+void HnRenderPass::RenderMesh(IDeviceContext*          pCtx,
+                              const HnRenderPassState& State,
+                              const HnMesh&            Mesh,
+                              const HnMaterial&        Material)
 {
     auto* const pSRB          = Material.GetSRB();
     auto* const pPosVB        = Mesh.GetVertexBuffer(pxr::HdTokens->points);
@@ -185,8 +195,10 @@ void HnRenderPass::RenderMesh(IDeviceContext*   pCtx,
         }
     }
 
-    auto* pIB = //(Attribs.RenderMode == HN_RENDER_MODE_MESH_EDGES) ?
-        //Mesh.GetEdgeIndexBuffer() :
+    const auto RenderMode = State.GetRenderMode();
+
+    auto* pIB = (RenderMode == HN_RENDER_MODE_MESH_EDGES) ?
+        Mesh.GetEdgeIndexBuffer() :
         Mesh.GetTriangleIndexBuffer();
 
     if (pPosVB == nullptr || pIB == nullptr || pSRB == nullptr)
@@ -195,7 +207,7 @@ void HnRenderPass::RenderMesh(IDeviceContext*   pCtx,
     auto PSOFlags = PBR_Renderer::PSO_FLAG_ENABLE_CUSTOM_DATA_OUTPUT;
 
     IPipelineState* pPSO = nullptr;
-    //if (Attribs.RenderMode == HN_RENDER_MODE_SOLID)
+    if (RenderMode == HN_RENDER_MODE_SOLID)
     {
         if (pNormalsVB != nullptr)
             PSOFlags |= PBR_Renderer::PSO_FLAG_USE_VERTEX_NORMALS;
@@ -216,15 +228,15 @@ void HnRenderPass::RenderMesh(IDeviceContext*   pCtx,
 
         pPSO = m_PbrPSOCache.Get({PSOFlags, static_cast<PBR_Renderer::ALPHA_MODE>(ShaderAttribs.AlphaMode), /*DoubleSided = */ false}, true);
     }
-    //else if (Attribs.RenderMode == HN_RENDER_MODE_MESH_EDGES)
-    //{
-    //    pPSO = m_WireframePSOCache.Get({PSOFlags, /*DoubleSided = */ false}, true);
-    //}
-    //else
-    //{
-    //    UNEXPECTED("Unexpected render mode");
-    //    return;
-    //}
+    else if (RenderMode == HN_RENDER_MODE_MESH_EDGES)
+    {
+        pPSO = m_WireframePSOCache.Get({PSOFlags, /*DoubleSided = */ false}, true);
+    }
+    else
+    {
+        UNEXPECTED("Unexpected render mode");
+        return;
+    }
     pCtx->SetPipelineState(pPSO);
 
     // Bind vertex and index buffers
@@ -235,11 +247,7 @@ void HnRenderPass::RenderMesh(IDeviceContext*   pCtx,
     {
         MapHelper<HLSL::PBRShaderAttribs> pDstShaderAttribs{pCtx, m_USDRenderer->GetPBRAttribsCB(), MAP_WRITE, MAP_FLAG_DISCARD};
 
-        float4x4 InvYAxis = float4x4::Identity();
-        InvYAxis._22      = -1;
-        auto Transform    = InvYAxis;
-
-        pDstShaderAttribs->Transforms.NodeMatrix = Mesh.GetTransform() * Transform; // * Attribs.Transform;
+        pDstShaderAttribs->Transforms.NodeMatrix = Mesh.GetTransform() * State.GetTransform();
         pDstShaderAttribs->Transforms.JointCount = 0;
 
         static_assert(sizeof(pDstShaderAttribs->Material) == sizeof(ShaderAttribs), "The sizeof(PBRMaterialShaderInfo) is inconsistent with sizeof(ShaderAttribs)");
@@ -247,10 +255,10 @@ void HnRenderPass::RenderMesh(IDeviceContext*   pCtx,
 
         auto& RendererParams = pDstShaderAttribs->Renderer;
 
-        RendererParams.DebugViewType     = 0;   //Attribs.DebugView;
-        RendererParams.OcclusionStrength = 1.0; //Attribs.OcclusionStrength;
-        RendererParams.EmissionScale     = 1.0; //Attribs.EmissionScale;
-        RendererParams.IBLScale          = 1.0; //Attribs.IBLScale;
+        RendererParams.DebugViewType     = State.GetDebugView();
+        RendererParams.OcclusionStrength = State.GetOcclusionStrength();
+        RendererParams.EmissionScale     = State.GetEmissionScale();
+        RendererParams.IBLScale          = State.GetIBLScale();
 
         RendererParams.PrefilteredCubeMipLevels = 5;                  //m_Settings.UseIBL ? static_cast<float>(m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels) : 0.f;
         RendererParams.WireframeColor           = float4{1, 1, 1, 1}; //Attribs.WireframeColor;
@@ -267,8 +275,8 @@ void HnRenderPass::RenderMesh(IDeviceContext*   pCtx,
     }
 
     pCtx->CommitShaderResources(pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    DrawIndexedAttribs DrawAttrs = //(Attribs.RenderMode == HN_RENDER_MODE_MESH_EDGES) ?
-        //DrawIndexedAttribs{Mesh.GetNumEdges() * 2, VT_UINT32, DRAW_FLAG_VERIFY_ALL} :
+    DrawIndexedAttribs DrawAttrs = (RenderMode == HN_RENDER_MODE_MESH_EDGES) ?
+        DrawIndexedAttribs{Mesh.GetNumEdges() * 2, VT_UINT32, DRAW_FLAG_VERIFY_ALL} :
         DrawIndexedAttribs{Mesh.GetNumTriangles() * 3, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
 
     pCtx->DrawIndexed(DrawAttrs);
