@@ -28,6 +28,12 @@
 
 #include "HnTask.hpp"
 
+#include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/PipelineState.h"
+#include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/ShaderResourceBinding.h"
+#include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/Buffer.h"
+#include "../../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
+#include "../../../../DiligentCore/Common/interface/BasicMath.hpp"
+
 namespace Diligent
 {
 
@@ -36,10 +42,18 @@ namespace USD
 
 struct HnPostProcessTaskParams
 {
+    bool ConvertOutputToSRGB = false;
+
+    float4 SelectionColor = float4{0.75f, 0.75f, 0.25f, 0.5f};
+
     constexpr bool operator==(const HnPostProcessTaskParams& rhs) const
     {
-        return true;
+        // clang-format off
+        return ConvertOutputToSRGB == rhs.ConvertOutputToSRGB &&
+               SelectionColor      == rhs.SelectionColor;
+        // clang-format on
     }
+
     constexpr bool operator!=(const HnPostProcessTaskParams& rhs) const
     {
         return !(*this == rhs);
@@ -62,6 +76,20 @@ public:
 
 
     virtual void Execute(pxr::HdTaskContext* TaskCtx) override final;
+
+private:
+    void PreparePSO(TEXTURE_FORMAT RTVFormat);
+
+private:
+    pxr::HdRenderIndex* m_RenderIndex = nullptr;
+
+    HnPostProcessTaskParams m_Params;
+
+    bool m_PsoIsDirty = true;
+
+    RefCntAutoPtr<IPipelineState>         m_PSO;
+    RefCntAutoPtr<IShaderResourceBinding> m_SRB;
+    RefCntAutoPtr<IBuffer>                m_PostProcessAttribsCB;
 };
 
 } // namespace USD

@@ -31,13 +31,13 @@
 #include "HnTokens.hpp"
 #include "Tasks/HnTaskController.hpp"
 #include "Tasks/HnSetupRenderingTask.hpp"
+#include "Tasks/HnPostProcessTask.hpp"
 
 #include "EngineMemory.h"
 #include "USD_Renderer.hpp"
 #include "EnvMapRenderer.hpp"
 #include "MapHelper.hpp"
 #include "CommonlyUsedStates.h"
-#include "HnShaderSourceFactory.hpp"
 #include "HnRenderBuffer.hpp"
 
 #include "pxr/imaging/hd/task.h"
@@ -49,17 +49,6 @@ namespace Diligent
 
 namespace USD
 {
-
-namespace HLSL
-{
-
-namespace
-{
-#include "Shaders/PBR/public/PBR_Structures.fxh"
-#include "../shaders/HnPostProcessStructures.fxh"
-} // namespace
-
-} // namespace HLSL
 
 void CreateHnRenderer(IRenderDevice* pDevice, IDeviceContext* pContext, const HnRendererCreateInfo& CI, IHnRenderer** ppRenderer)
 {
@@ -76,7 +65,6 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters*         pRefCounters,
     m_Context{pContext},
     m_CameraAttribsCB{CI.pCameraAttribsCB},
     m_LightAttribsCB{CI.pLightAttribsCB},
-    m_PostProcessAttribsCB{m_Device.CreateBuffer("Post process attribs CB", sizeof(HLSL::PostProcessAttribs))},
     m_ConvertOutputToSRGB{CI.ConvertOutputToSRGB},
     m_MeshIdReadBackQueue{pDevice}
 {
@@ -115,6 +103,12 @@ void HnRendererImpl::LoadUSDStage(pxr::UsdStageRefPtr& Stage)
 
     m_FinalColorTargetId = SceneDelegateId.AppendChild(pxr::TfToken{"_HnFinalColorTarget_"});
     m_RenderIndex->InsertBprim(pxr::HdPrimTypeTokens->renderBuffer, m_ImagingDelegate.get(), m_FinalColorTargetId);
+
+    {
+        HnPostProcessTaskParams Params;
+        Params.ConvertOutputToSRGB = m_ConvertOutputToSRGB;
+        m_TaskController->SetTaskParams(HnTaskController::TaskUID_PostProcess, Params);
+    }
 }
 
 void HnRendererImpl::SetParams(const HnRenderParams& Params)
@@ -151,102 +145,6 @@ void HnRendererImpl::Update()
     m_ImagingDelegate->ApplyPendingUpdates();
 }
 
-void HnRendererImpl::PrepareRenderTargets(ITextureView* pDstRtv)
-{
-    VERIFY(pDstRtv != nullptr, "Destination render target view must not be null");
-    const auto& DstTexDesc = pDstRtv->GetTexture()->GetDesc();
-    if (m_ColorBuffer)
-    {
-        const auto& ColBuffDesc = m_ColorBuffer->GetDesc();
-        if (ColBuffDesc.Width != DstTexDesc.Width || ColBuffDesc.Height != DstTexDesc.Height)
-        {
-            m_ColorBuffer.Release();
-            m_MeshIdTexture.Release();
-            m_DepthBufferDSV.Release();
-        }
-    }
-
-    if (!m_ColorBuffer)
-    {
-        TextureDesc TexDesc;
-        TexDesc.Name      = "Color buffer";
-        TexDesc.Type      = RESOURCE_DIM_TEX_2D;
-        TexDesc.Width     = DstTexDesc.Width;
-        TexDesc.Height    = DstTexDesc.Height;
-        TexDesc.Format    = ColorBufferFormat;
-        TexDesc.BindFlags = BIND_RENDER_TARGET | BIND_SHADER_RESOURCE;
-        TexDesc.MipLevels = 1;
-        m_ColorBuffer     = m_Device.CreateTexture(TexDesc);
-
-        TexDesc.Name      = "Mesh ID buffer";
-        TexDesc.Format    = MeshIdFormat;
-        TexDesc.BindFlags = BIND_RENDER_TARGET | BIND_SHADER_RESOURCE;
-        m_MeshIdTexture   = m_Device.CreateTexture(TexDesc);
-
-        TexDesc.Name      = "Depth buffer";
-        TexDesc.Format    = DepthFormat;
-        TexDesc.BindFlags = BIND_DEPTH_STENCIL;
-        m_DepthBufferDSV  = m_Device.CreateTexture(TexDesc)->GetDefaultView(TEXTURE_VIEW_DEPTH_STENCIL);
-    }
-}
-
-void HnRendererImpl::PreparePostProcess(TEXTURE_FORMAT RTVFmt)
-{
-    if (m_PostProcess.PSO)
-    {
-        if (m_PostProcess.PSO->GetGraphicsPipelineDesc().RTVFormats[0] != RTVFmt)
-            m_PostProcess.PSO.Release();
-    }
-
-    if (!m_PostProcess.PSO)
-    {
-        ShaderCreateInfo ShaderCI;
-        ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
-        ShaderCI.pShaderSourceStreamFactory = &HnShaderSourceFactory::GetInstance();
-
-        ShaderMacroHelper Macros;
-        Macros.Add("CONVERT_OUTPUT_TO_SRGB", m_ConvertOutputToSRGB);
-        ShaderCI.Macros = Macros;
-
-        RefCntAutoPtr<IShader> pVS;
-        {
-            ShaderCI.Desc       = {"Post process VS", SHADER_TYPE_VERTEX, true};
-            ShaderCI.EntryPoint = "main";
-            ShaderCI.FilePath   = "HnPostProcess.vsh";
-
-            pVS = m_Device.CreateShader(ShaderCI);
-        }
-
-        RefCntAutoPtr<IShader> pPS;
-        {
-            ShaderCI.Desc       = {"Post process PS", SHADER_TYPE_PIXEL, true};
-            ShaderCI.EntryPoint = "main";
-            ShaderCI.FilePath   = "HnPostProcess.psh";
-
-            pPS = m_Device.CreateShader(ShaderCI);
-        }
-
-        PipelineResourceLayoutDescX ResourceLauout;
-        ResourceLauout
-            .AddVariable(SHADER_TYPE_PIXEL, "g_ColorBuffer", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_MeshId", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
-
-        GraphicsPipelineStateCreateInfoX PsoCI{"Post process"};
-        PsoCI
-            .AddRenderTarget(RTVFmt)
-            .AddShader(pVS)
-            .AddShader(pPS)
-            .SetDepthStencilDesc(DSS_DisableDepth)
-            .SetRasterizerDesc(RS_SolidFillNoCull)
-            .SetResourceLayout(ResourceLauout)
-            .SetPrimitiveTopology(PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-
-        m_PostProcess.PSO = m_Device.CreateGraphicsPipelineState(PsoCI);
-        m_PostProcess.PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbPostProcessAttribs")->Set(m_PostProcessAttribsCB);
-        m_PostProcess.PSO->CreateShaderResourceBinding(&m_PostProcess.SRB, true);
-    }
-}
-
 void HnRendererImpl::Draw(IDeviceContext* pCtx, const HnDrawAttribs& Attribs)
 {
     if (!m_RenderDelegate)
@@ -256,47 +154,10 @@ void HnRendererImpl::Draw(IDeviceContext* pCtx, const HnDrawAttribs& Attribs)
     VERIFY_EXPR(FinalColorTarget != nullptr);
     FinalColorTarget->SetTarget(Attribs.pDstRTV);
 
-    PrepareRenderTargets(Attribs.pDstRTV);
-    PreparePostProcess(Attribs.pDstRTV->GetDesc().Format);
-
-    {
-        ITextureView* pRTVs[] =
-            {
-                m_ColorBuffer->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET),
-                m_MeshIdTexture->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET),
-            };
-        pCtx->SetRenderTargets(_countof(pRTVs), pRTVs, m_DepthBufferDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-        constexpr float ClearColor[] = {0.35f, 0.35f, 0.35f, 0};
-        pCtx->ClearRenderTarget(pRTVs[0], ClearColor, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-        constexpr float Zero[] = {0, 0, 0, 0};
-        pCtx->ClearRenderTarget(pRTVs[1], Zero, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-        pCtx->ClearDepthStencil(m_DepthBufferDSV, CLEAR_DEPTH_FLAG, 1.f, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    }
-
     pxr::HdTaskSharedPtrVector tasks = m_TaskController->GetTasks();
     m_Engine.Execute(&m_ImagingDelegate->GetRenderIndex(), &tasks);
 
     FinalColorTarget->ReleaseTarget();
-
-    PerformPostProcess(pCtx, Attribs);
-}
-
-void HnRendererImpl::PerformPostProcess(IDeviceContext* pCtx, const HnDrawAttribs& Attribs)
-{
-    ITextureView* pRTVs[] = {Attribs.pDstRTV};
-    pCtx->SetRenderTargets(_countof(pRTVs), pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-
-    {
-        MapHelper<HLSL::PostProcessAttribs> pDstShaderAttribs{pCtx, m_PostProcessAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
-        pDstShaderAttribs->SelectionOutlineColor          = Attribs.SlectionColor;
-        pDstShaderAttribs->NonselectionDesaturationFactor = Attribs.SelectedPrim != nullptr && !Attribs.SelectedPrim->IsEmpty() ? 0.5f : 0.f;
-    }
-
-    pCtx->SetPipelineState(m_PostProcess.PSO);
-    m_PostProcess.SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_ColorBuffer")->Set(m_ColorBuffer->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
-    m_PostProcess.SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_MeshId")->Set(m_MeshIdTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
-    pCtx->CommitShaderResources(m_PostProcess.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    pCtx->Draw({3, DRAW_FLAG_VERIFY_ALL});
 }
 
 void HnRendererImpl::SetEnvironmentMap(IDeviceContext* pCtx, ITextureView* pEnvironmentMapSRV)
@@ -306,6 +167,8 @@ void HnRendererImpl::SetEnvironmentMap(IDeviceContext* pCtx, ITextureView* pEnvi
 
 const pxr::SdfPath* HnRendererImpl::QueryPrimId(IDeviceContext* pCtx, Uint32 X, Uint32 Y)
 {
+    return nullptr;
+#if 0
     if (!m_MeshIdTexture)
         return nullptr;
 
@@ -353,6 +216,7 @@ const pxr::SdfPath* HnRendererImpl::QueryPrimId(IDeviceContext* pCtx, Uint32 X, 
         return nullptr;
     else
         return MeshUid != 0 ? m_RenderDelegate->GetMeshPrimId(MeshUid) : &EmptyPath;
+#endif
 }
 
 } // namespace USD

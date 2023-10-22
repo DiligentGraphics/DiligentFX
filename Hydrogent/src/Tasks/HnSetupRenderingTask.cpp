@@ -103,6 +103,9 @@ void HnSetupRenderingTask::Sync(pxr::HdSceneDelegate* Delegate,
             HnSetupRenderingTaskParams Params = ParamsValue.UncheckedGet<HnSetupRenderingTaskParams>();
 
             m_FinalColorTargetId = Params.FinalColorTargetId;
+            m_ClearColor         = Params.ClearColor;
+            m_ClearDepth         = Params.ClearDepth;
+
             UpdateRenderPassState(Params);
         }
         else
@@ -126,15 +129,15 @@ void HnSetupRenderingTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
     const auto& FinalRTVDesc    = pFinalColorRTV->GetDesc();
     const auto& FinalTargetDesc = pFinalColorRTV->GetTexture()->GetDesc();
 
-    auto UpdateBrim = [&](const pxr::SdfPath& Id, TEXTURE_FORMAT Format, const char* Name) {
+    auto UpdateBrim = [&](const pxr::SdfPath& Id, TEXTURE_FORMAT Format, const char* Name) -> ITextureView* {
         if (Format == TEX_FORMAT_UNKNOWN)
-            return;
+            return nullptr;
 
         HnRenderBuffer* Renderbuffer = static_cast<HnRenderBuffer*>(RenderIndex->GetBprim(pxr::HdPrimTypeTokens->renderBuffer, Id));
         if (Renderbuffer == nullptr)
         {
             UNEXPECTED("Render buffer is not set at Id ", Id);
-            return;
+            return nullptr;
         }
 
         if (auto* pView = Renderbuffer->GetTarget())
@@ -144,7 +147,7 @@ void HnSetupRenderingTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
             if (TargetDesc.GetWidth() == FinalTargetDesc.GetWidth() &&
                 TargetDesc.GetHeight() == FinalTargetDesc.GetHeight() &&
                 ViewDesc.Format == Format)
-                return;
+                return pView;
         }
 
         const bool  IsDepth = GetTextureFormatAttribs(Format).IsDepthStencil();
@@ -160,7 +163,7 @@ void HnSetupRenderingTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
         if (!pTarget)
         {
             UNEXPECTED("Failed to create ", Name, " texture");
-            return;
+            return nullptr;
         }
         LOG_INFO_MESSAGE("HnSetupRenderingTask: created ", TargetDesc.GetWidth(), "x", TargetDesc.GetHeight(), " ", Name, " texture");
 
@@ -168,39 +171,51 @@ void HnSetupRenderingTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
         VERIFY(pView != nullptr, "Failed to get texture view for target ", Name);
 
         Renderbuffer->SetTarget(pView);
+
+        return pView;
     };
-    UpdateBrim(m_OffscreenColorTargetId, m_RenderPassState->GetRenderTargetFormat(0), "Offscreen color target");
-    UpdateBrim(m_MeshIdTargetId, m_RenderPassState->GetRenderTargetFormat(1), "Mesh Id target");
-    UpdateBrim(m_DepthBufferId, m_RenderPassState->GetDepthStencilFormat(), "Depth buffer");
+    m_pFinalColorRTV = UpdateBrim(m_OffscreenColorTargetId, m_RenderPassState->GetRenderTargetFormat(0), "Offscreen color target");
+    m_pMeshIdRTV     = UpdateBrim(m_MeshIdTargetId, m_RenderPassState->GetRenderTargetFormat(1), "Mesh Id target");
+    m_pDepthDSV      = UpdateBrim(m_DepthBufferId, m_RenderPassState->GetDepthStencilFormat(), "Depth buffer");
 }
 
 void HnSetupRenderingTask::Prepare(pxr::HdTaskContext* TaskCtx,
                                    pxr::HdRenderIndex* RenderIndex)
 {
     (*TaskCtx)[HnTokens->renderPassState]                    = pxr::VtValue{m_RenderPassState};
+    (*TaskCtx)[HnRenderResourceTokens->finalColorTarget]     = pxr::VtValue{m_FinalColorTargetId};
     (*TaskCtx)[HnRenderResourceTokens->offscreenColorTarget] = pxr::VtValue{m_OffscreenColorTargetId};
     (*TaskCtx)[HnRenderResourceTokens->meshIdTarget]         = pxr::VtValue{m_MeshIdTargetId};
 
-    HnRenderBuffer* FinalColorTarget = static_cast<HnRenderBuffer*>(RenderIndex->GetBprim(pxr::HdPrimTypeTokens->renderBuffer, m_FinalColorTargetId));
-    if (FinalColorTarget != nullptr)
+    if (ITextureView* pFinalColorRTV = GetRenderBufferTarget(*RenderIndex, m_FinalColorTargetId))
     {
-        if (auto* pRTV = FinalColorTarget->GetTarget())
-        {
-            PrepareRenderTargets(RenderIndex, TaskCtx, pRTV);
-        }
-        else
-        {
-            UNEXPECTED("Final color target is not initialized in Bprim ", m_FinalColorTargetId);
-        }
+        PrepareRenderTargets(RenderIndex, TaskCtx, pFinalColorRTV);
     }
     else
     {
-        UNEXPECTED("Final color target Bprim is not set at Id ", m_FinalColorTargetId);
+        UNEXPECTED("Unable to get final color target from Bprim ", m_FinalColorTargetId);
     }
+
+    m_RenderIndex = RenderIndex;
 }
 
 void HnSetupRenderingTask::Execute(pxr::HdTaskContext* TaskCtx)
 {
+    if (m_RenderIndex == nullptr)
+    {
+        UNEXPECTED("Render index is null. This likely indicates that Prepare() has not been called.");
+        return;
+    }
+
+    ITextureView* pRTVs[] = {m_pFinalColorRTV, m_pMeshIdRTV};
+
+    auto* pCtx = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate())->GetDeviceContext();
+
+    pCtx->SetRenderTargets(_countof(pRTVs), pRTVs, m_pDepthDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    pCtx->ClearRenderTarget(pRTVs[0], m_ClearColor.Data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    constexpr float Zero[] = {0, 0, 0, 0};
+    pCtx->ClearRenderTarget(pRTVs[1], Zero, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    pCtx->ClearDepthStencil(m_pDepthDSV, CLEAR_DEPTH_FLAG, m_ClearDepth, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 }
 
 } // namespace USD

@@ -26,13 +26,34 @@
 
 #include "Tasks/HnPostProcessTask.hpp"
 
+#include "HnTokens.hpp"
+#include "HnShaderSourceFactory.hpp"
+#include "HnRenderDelegate.hpp"
+
 #include "DebugUtilities.hpp"
+#include "TextureView.h"
+#include "RenderStateCache.hpp"
+#include "ShaderMacroHelper.hpp"
+#include "CommonlyUsedStates.h"
+#include "GraphicsUtilities.h"
+#include "MapHelper.hpp"
 
 namespace Diligent
 {
 
 namespace USD
 {
+
+namespace HLSL
+{
+
+namespace
+{
+#include "Shaders/PBR/public/PBR_Structures.fxh"
+#include "../shaders/HnPostProcessStructures.fxh"
+} // namespace
+
+} // namespace HLSL
 
 HnPostProcessTask::HnPostProcessTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id) :
     HnTask{Id}
@@ -41,6 +62,90 @@ HnPostProcessTask::HnPostProcessTask(pxr::HdSceneDelegate* ParamsDelegate, const
 
 HnPostProcessTask::~HnPostProcessTask()
 {
+}
+
+void HnPostProcessTask::PreparePSO(TEXTURE_FORMAT RTVFormat)
+{
+    if (m_PSO)
+    {
+        if (m_PsoIsDirty || m_PSO->GetGraphicsPipelineDesc().RTVFormats[0] != RTVFormat)
+        {
+            m_PSO.Release();
+            m_SRB.Release();
+        }
+    }
+
+    if (m_PSO)
+        return;
+
+    HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+
+    RenderDeviceWithCache_N Device{RenderDelegate->GetDevice(), RenderDelegate->GetRenderStateCache()};
+
+    ShaderCreateInfo ShaderCI;
+    ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
+    ShaderCI.pShaderSourceStreamFactory = &HnShaderSourceFactory::GetInstance();
+
+    ShaderMacroHelper Macros;
+    Macros.Add("CONVERT_OUTPUT_TO_SRGB", m_Params.ConvertOutputToSRGB);
+    ShaderCI.Macros = Macros;
+
+    RefCntAutoPtr<IShader> pVS;
+    {
+        ShaderCI.Desc       = {"Post process VS", SHADER_TYPE_VERTEX, true};
+        ShaderCI.EntryPoint = "main";
+        ShaderCI.FilePath   = "HnPostProcess.vsh";
+
+        pVS = Device.CreateShader(ShaderCI);
+        if (!pVS)
+        {
+            UNEXPECTED("Failed to create post process VS");
+            return;
+        }
+    }
+
+    RefCntAutoPtr<IShader> pPS;
+    {
+        ShaderCI.Desc       = {"Post process PS", SHADER_TYPE_PIXEL, true};
+        ShaderCI.EntryPoint = "main";
+        ShaderCI.FilePath   = "HnPostProcess.psh";
+
+        pPS = Device.CreateShader(ShaderCI);
+        if (!pPS)
+        {
+            UNEXPECTED("Failed to create post process PS");
+            return;
+        }
+    }
+
+    PipelineResourceLayoutDescX ResourceLauout;
+    ResourceLauout
+        .AddVariable(SHADER_TYPE_PIXEL, "g_ColorBuffer", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+        .AddVariable(SHADER_TYPE_PIXEL, "g_MeshId", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
+
+    GraphicsPipelineStateCreateInfoX PsoCI{"Post process"};
+    PsoCI
+        .AddRenderTarget(RTVFormat)
+        .AddShader(pVS)
+        .AddShader(pPS)
+        .SetDepthStencilDesc(DSS_DisableDepth)
+        .SetRasterizerDesc(RS_SolidFillNoCull)
+        .SetResourceLayout(ResourceLauout)
+        .SetPrimitiveTopology(PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+
+    m_PSO = Device.CreateGraphicsPipelineState(PsoCI);
+    if (!m_PSO)
+    {
+        UNEXPECTED("Failed to create post process PSO");
+        return;
+    }
+    m_PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbPostProcessAttribs")->Set(m_PostProcessAttribsCB);
+
+    m_SRB.Release();
+    m_PSO->CreateShaderResourceBinding(&m_SRB, true);
+    VERIFY_EXPR(m_SRB);
+
+    m_PsoIsDirty = false;
 }
 
 void HnPostProcessTask::Sync(pxr::HdSceneDelegate* Delegate,
@@ -53,7 +158,14 @@ void HnPostProcessTask::Sync(pxr::HdSceneDelegate* Delegate,
         if (ParamsValue.IsHolding<HnPostProcessTaskParams>())
         {
             HnPostProcessTaskParams Params = ParamsValue.UncheckedGet<HnPostProcessTaskParams>();
-            (void)Params;
+
+            if (m_Params.ConvertOutputToSRGB != Params.ConvertOutputToSRGB)
+            {
+                // In OpenGL we can't release PSO in Worker thread
+                m_PsoIsDirty = true;
+            }
+
+            m_Params = Params;
         }
         else
         {
@@ -67,10 +179,80 @@ void HnPostProcessTask::Sync(pxr::HdSceneDelegate* Delegate,
 void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
                                 pxr::HdRenderIndex* RenderIndex)
 {
+    m_RenderIndex = RenderIndex;
+
+    ITextureView* pFinalColorRTV = GetRenderBufferTarget(*RenderIndex, TaskCtx, HnRenderResourceTokens->finalColorTarget);
+    if (pFinalColorRTV == nullptr)
+    {
+        UNEXPECTED("Final color target RTV is not set in the task context");
+        return;
+    }
+
+    if (!m_PostProcessAttribsCB)
+    {
+        HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+        CreateUniformBuffer(RenderDelegate->GetDevice(), sizeof(HLSL::PostProcessAttribs), "Post process attribs CB", &m_PostProcessAttribsCB);
+        VERIFY(m_PostProcessAttribsCB, "Failed to create post process attribs CB");
+    }
+
+    PreparePSO(pFinalColorRTV->GetDesc().Format);
 }
 
 void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
 {
+    if (m_RenderIndex == nullptr)
+    {
+        UNEXPECTED("Render index is null. This likely indicates that Prepare() has not been called.");
+        return;
+    }
+    ITextureView* pFinalColorRTV = GetRenderBufferTarget(*m_RenderIndex, TaskCtx, HnRenderResourceTokens->finalColorTarget);
+    if (pFinalColorRTV == nullptr)
+    {
+        UNEXPECTED("Final color target RTV is not set in the task context");
+        return;
+    }
+    ITextureView* pOffscreenColorRTV = GetRenderBufferTarget(*m_RenderIndex, TaskCtx, HnRenderResourceTokens->offscreenColorTarget);
+    if (pOffscreenColorRTV == nullptr)
+    {
+        UNEXPECTED("Offscreen color RTV is not set in the task context");
+        return;
+    }
+    ITextureView* pMeshIdRTV = GetRenderBufferTarget(*m_RenderIndex, TaskCtx, HnRenderResourceTokens->meshIdTarget);
+    if (pMeshIdRTV == nullptr)
+    {
+        UNEXPECTED("Mesh Id RTV is not set in the task context");
+        return;
+    }
+    ITextureView* pOffscreenColorSRV = pOffscreenColorRTV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+    if (pOffscreenColorSRV == nullptr)
+    {
+        UNEXPECTED("Offscreen color SRV is null");
+        return;
+    }
+    ITextureView* pMeshIdSRV = pMeshIdRTV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+    if (pMeshIdSRV == nullptr)
+    {
+        UNEXPECTED("Mesh Id SRV is null");
+        return;
+    }
+
+    HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+    IDeviceContext*   pCtx           = RenderDelegate->GetDeviceContext();
+
+    ITextureView* pRTVs[] = {pFinalColorRTV};
+    pCtx->SetRenderTargets(_countof(pRTVs), pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+    {
+        MapHelper<HLSL::PostProcessAttribs> pDstShaderAttribs{pCtx, m_PostProcessAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
+        pDstShaderAttribs->SelectionOutlineColor          = m_Params.SelectionColor;
+        pDstShaderAttribs->NonselectionDesaturationFactor = 0; //Attribs.SelectedPrim != nullptr && !Attribs.SelectedPrim->IsEmpty() ? 0.5f : 0.f;
+    }
+
+    pCtx->SetPipelineState(m_PSO);
+    m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_ColorBuffer")->Set(pOffscreenColorSRV);
+    m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_MeshId")->Set(pMeshIdSRV);
+    pCtx->CommitShaderResources(m_SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    pCtx->Draw({3, DRAW_FLAG_VERIFY_ALL});
 }
 
 } // namespace USD

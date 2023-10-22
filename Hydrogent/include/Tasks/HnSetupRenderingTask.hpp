@@ -31,8 +31,12 @@
 #include "HnTask.hpp"
 #include "../interface/HnTypes.hpp"
 
+#include "../../../../DiligentCore/Common/interface/BasicMath.hpp"
+
 namespace Diligent
 {
+
+struct ITextureView;
 
 namespace USD
 {
@@ -53,6 +57,8 @@ struct HnSetupRenderingTaskParams
                OcclusionStrength    == rhs.OcclusionStrength &&
                EmissionScale        == rhs.EmissionScale &&
                IBLScale             == rhs.IBLScale &&
+               ClearColor           == rhs.ClearColor &&
+               ClearDepth           == rhs.ClearDepth &&
                Transform            == rhs.Transform &&
                DepthBias            == rhs.DepthBias &&
                SlopeScaledDepthBias == rhs.SlopeScaledDepthBias &&
@@ -88,6 +94,9 @@ struct HnSetupRenderingTaskParams
     float OcclusionStrength = 1;
     float EmissionScale     = 1;
     float IBLScale          = 1;
+
+    float4 ClearColor;
+    float  ClearDepth = 1.f;
 
     float4x4 Transform = float4x4::Identity();
 
@@ -139,6 +148,15 @@ private:
     pxr::SdfPath m_OffscreenColorTargetId;
     pxr::SdfPath m_MeshIdTargetId;
     pxr::SdfPath m_DepthBufferId;
+
+    float4 m_ClearColor;
+    float  m_ClearDepth = 1.f;
+
+    pxr::HdRenderIndex* m_RenderIndex = nullptr;
+
+    ITextureView* m_pFinalColorRTV = nullptr;
+    ITextureView* m_pMeshIdRTV     = nullptr;
+    ITextureView* m_pDepthDSV      = nullptr;
 };
 
 } // namespace USD

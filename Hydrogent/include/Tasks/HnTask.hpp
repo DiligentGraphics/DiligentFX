@@ -29,9 +29,13 @@
 #include <memory>
 
 #include "pxr/imaging/hd/task.h"
+#include "pxr/imaging/hd/renderIndex.h"
+
 
 namespace Diligent
 {
+
+struct ITextureView;
 
 namespace USD
 {
@@ -46,6 +50,9 @@ public:
 
 protected:
     std::shared_ptr<HnRenderPassState> GetRenderPassState(pxr::HdTaskContext* TaskCtx) const;
+
+    static ITextureView* GetRenderBufferTarget(pxr::HdRenderIndex& RenderIndex, const pxr::SdfPath& RenderBufferId);
+    ITextureView*        GetRenderBufferTarget(pxr::HdRenderIndex& RenderIndex, pxr::HdTaskContext* TaskCtx, const pxr::TfToken& Name) const;
 };
 
 } // namespace USD

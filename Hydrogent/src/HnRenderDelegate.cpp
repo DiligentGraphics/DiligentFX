@@ -66,12 +66,13 @@ const pxr::TfTokenVector HnRenderDelegate::SupportedBPrimTypes =
 HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
     m_pDevice{CI.pDevice},
     m_pContext{CI.pContext},
+    m_pRenderStateCache{CI.pRenderStateCache},
     m_CameraAttribsCB{CI.pCameraAttribs},
     m_LightAttribsCB{CI.pLightAttribs},
     m_USDRenderer{
         std::make_shared<USD_Renderer>(
             CI.pDevice,
-            CI.pStateCache,
+            CI.pRenderStateCache,
             CI.pContext,
             []() {
                 USD_Renderer::CreateInfo USDRendererCI;

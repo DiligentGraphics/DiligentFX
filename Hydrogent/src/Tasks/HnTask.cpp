@@ -26,6 +26,7 @@
 
 #include "Tasks/HnTask.hpp"
 #include "HnTokens.hpp"
+#include "HnRenderBuffer.hpp"
 
 namespace Diligent
 {
@@ -43,6 +44,36 @@ std::shared_ptr<HnRenderPassState> HnTask::GetRenderPassState(pxr::HdTaskContext
     std::shared_ptr<HnRenderPassState> RenderPassState;
     _GetTaskContextData(TaskCtx, HnTokens->renderPassState, &RenderPassState);
     return RenderPassState;
+}
+
+ITextureView* HnTask::GetRenderBufferTarget(pxr::HdRenderIndex& RenderIndex, const pxr::SdfPath& RenderBufferId)
+{
+    HnRenderBuffer* RenderBuffer = static_cast<HnRenderBuffer*>(RenderIndex.GetBprim(pxr::HdPrimTypeTokens->renderBuffer, RenderBufferId));
+    if (RenderBuffer == nullptr)
+    {
+        UNEXPECTED("Render buffer Bprim is not set at Id ", RenderBufferId);
+        return nullptr;
+    }
+
+    return RenderBuffer->GetTarget();
+}
+
+ITextureView* HnTask::GetRenderBufferTarget(pxr::HdRenderIndex& RenderIndex, pxr::HdTaskContext* TaskCtx, const pxr::TfToken& Name) const
+{
+    auto id_it = TaskCtx->find(Name);
+    if (id_it == TaskCtx->end())
+    {
+        UNEXPECTED("Render buffer Name '", Name, "' is not set in the task context");
+        return nullptr;
+    }
+
+    if (!id_it->second.IsHolding<pxr::SdfPath>())
+    {
+        UNEXPECTED("Render buffer VtValue '", Name, "' is not holding SdfPath");
+        return nullptr;
+    }
+
+    return GetRenderBufferTarget(RenderIndex, id_it->second.Get<pxr::SdfPath>());
 }
 
 } // namespace USD

@@ -85,9 +85,6 @@ public:
     virtual const pxr::SdfPath* QueryPrimId(IDeviceContext* pCtx, Uint32 X, Uint32 Y) override final;
 
 private:
-    void PrepareRenderTargets(ITextureView* pDstRtv);
-    void PreparePostProcess(TEXTURE_FORMAT RTVFmt);
-    void PerformPostProcess(IDeviceContext* pCtx, const HnDrawAttribs& Attribs);
     void DestroyStageResources();
 
 private:
@@ -96,7 +93,6 @@ private:
 
     RefCntAutoPtr<IBuffer> m_CameraAttribsCB;
     RefCntAutoPtr<IBuffer> m_LightAttribsCB;
-    RefCntAutoPtr<IBuffer> m_PostProcessAttribsCB;
 
     const bool m_ConvertOutputToSRGB;
 
@@ -113,18 +109,7 @@ private:
     static constexpr TEXTURE_FORMAT MeshIdFormat      = TEX_FORMAT_R32_FLOAT;
     static constexpr TEXTURE_FORMAT DepthFormat       = TEX_FORMAT_D32_FLOAT;
 
-    RefCntAutoPtr<ITexture>     m_ColorBuffer;
-    RefCntAutoPtr<ITexture>     m_MeshIdTexture;
-    RefCntAutoPtr<ITextureView> m_DepthBufferDSV;
-
     GPUCompletionAwaitQueue<RefCntAutoPtr<ITexture>> m_MeshIdReadBackQueue;
-
-    struct PostProcessState
-    {
-        RefCntAutoPtr<IPipelineState>         PSO;
-        RefCntAutoPtr<IShaderResourceBinding> SRB;
-    };
-    PostProcessState m_PostProcess;
 
     HnRenderParams m_RenderParams;
     bool           m_RenderParamsChanged = true;

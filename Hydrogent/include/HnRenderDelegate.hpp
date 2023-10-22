@@ -56,11 +56,11 @@ class HnRenderDelegate final : public pxr::HdRenderDelegate
 public:
     struct CreateInfo
     {
-        IRenderDevice*     pDevice        = nullptr;
-        IDeviceContext*    pContext       = nullptr;
-        IRenderStateCache* pStateCache    = nullptr;
-        IBuffer*           pCameraAttribs = nullptr;
-        IBuffer*           pLightAttribs  = nullptr;
+        IRenderDevice*     pDevice           = nullptr;
+        IDeviceContext*    pContext          = nullptr;
+        IRenderStateCache* pRenderStateCache = nullptr;
+        IBuffer*           pCameraAttribs    = nullptr;
+        IBuffer*           pLightAttribs     = nullptr;
     };
     static std::unique_ptr<HnRenderDelegate> Create(const CreateInfo& CI);
 
@@ -199,17 +199,20 @@ public:
 
     std::shared_ptr<USD_Renderer> GetUSDRenderer() { return m_USDRenderer; }
 
-    IRenderDevice*  GetDevice() const { return m_pDevice; }
-    IDeviceContext* GetDeviceContext() const { return m_pContext; }
-    IBuffer*        GetCameraAttribsCB() const { return m_CameraAttribsCB; }
+    IRenderDevice*     GetDevice() const { return m_pDevice; }
+    IDeviceContext*    GetDeviceContext() const { return m_pContext; }
+    IRenderStateCache* GetRenderStateCache() const { return m_pRenderStateCache; }
+    IBuffer*           GetCameraAttribsCB() const { return m_CameraAttribsCB; }
 
 private:
     static const pxr::TfTokenVector SupportedRPrimTypes;
     static const pxr::TfTokenVector SupportedSPrimTypes;
     static const pxr::TfTokenVector SupportedBPrimTypes;
 
-    RefCntAutoPtr<IRenderDevice>  m_pDevice;
-    RefCntAutoPtr<IDeviceContext> m_pContext;
+    RefCntAutoPtr<IRenderDevice>     m_pDevice;
+    RefCntAutoPtr<IDeviceContext>    m_pContext;
+    RefCntAutoPtr<IRenderStateCache> m_pRenderStateCache;
+
     RefCntAutoPtr<IBuffer>        m_CameraAttribsCB;
     RefCntAutoPtr<IBuffer>        m_LightAttribsCB;
     std::shared_ptr<USD_Renderer> m_USDRenderer;
