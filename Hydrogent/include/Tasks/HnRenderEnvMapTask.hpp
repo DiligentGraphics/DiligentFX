@@ -26,10 +26,14 @@
 
 #pragma once
 
+#include <memory>
+
 #include "HnTask.hpp"
 
 namespace Diligent
 {
+
+class EnvMapRenderer;
 
 namespace USD
 {
@@ -62,6 +66,11 @@ public:
 
 
     virtual void Execute(pxr::HdTaskContext* TaskCtx) override final;
+
+private:
+    std::unique_ptr<EnvMapRenderer> m_EnvMapRenderer;
+
+    pxr::HdRenderIndex* m_RenderIndex = nullptr;
 };
 
 } // namespace USD

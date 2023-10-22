@@ -26,6 +26,8 @@
 
 #pragma once
 
+#include <memory>
+
 #include "pxr/imaging/hd/task.h"
 
 namespace Diligent
@@ -34,11 +36,16 @@ namespace Diligent
 namespace USD
 {
 
+class HnRenderPassState;
+
 /// Hydra task implementation in Hydrogent.
 class HnTask : public pxr::HdTask
 {
 public:
     HnTask(const pxr::SdfPath& Id);
+
+protected:
+    std::shared_ptr<HnRenderPassState> GetRenderPassState(pxr::HdTaskContext* TaskCtx) const;
 };
 
 } // namespace USD

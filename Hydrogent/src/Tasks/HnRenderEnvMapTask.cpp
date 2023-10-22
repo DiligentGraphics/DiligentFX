@@ -25,6 +25,12 @@
  */
 
 #include "Tasks/HnRenderEnvMapTask.hpp"
+#include "HnRenderDelegate.hpp"
+#include "HnRenderPassState.hpp"
+#include "HnTokens.hpp"
+
+#include "EnvMapRenderer.hpp"
+#include "USD_Renderer.hpp"
 
 #include "DebugUtilities.hpp"
 
@@ -67,10 +73,65 @@ void HnRenderEnvMapTask::Sync(pxr::HdSceneDelegate* Delegate,
 void HnRenderEnvMapTask::Prepare(pxr::HdTaskContext* TaskCtx,
                                  pxr::HdRenderIndex* RenderIndex)
 {
+    m_RenderIndex = RenderIndex;
+
+    if (!m_EnvMapRenderer)
+    {
+        std::shared_ptr<HnRenderPassState> RenderPassState = GetRenderPassState(TaskCtx);
+        if (RenderPassState)
+        {
+            HnRenderDelegate* pRenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+
+            EnvMapRenderer::CreateInfo EnvMapRndrCI;
+            EnvMapRndrCI.pDevice          = pRenderDelegate->GetDevice();
+            EnvMapRndrCI.pCameraAttribsCB = pRenderDelegate->GetCameraAttribsCB();
+            EnvMapRndrCI.NumRenderTargets = RenderPassState->GetNumRenderTargets();
+            for (Uint32 rt = 0; rt < EnvMapRndrCI.NumRenderTargets; ++rt)
+                EnvMapRndrCI.RTVFormats[rt] = RenderPassState->GetRenderTargetFormat(rt);
+            EnvMapRndrCI.DSVFormat = RenderPassState->GetDepthStencilFormat();
+
+            m_EnvMapRenderer = std::make_unique<EnvMapRenderer>(EnvMapRndrCI);
+        }
+        else
+        {
+            UNEXPECTED("Render pass state is not set");
+        }
+    }
 }
 
 void HnRenderEnvMapTask::Execute(pxr::HdTaskContext* TaskCtx)
 {
+    if (!m_EnvMapRenderer)
+        return;
+
+    HnRenderDelegate* pRenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+
+    auto& USDRenderer = pRenderDelegate->GetUSDRenderer();
+    if (!USDRenderer)
+    {
+        UNEXPECTED("USD renderer is not initialized");
+        return;
+    }
+
+    auto* pEnvMapSRV = USDRenderer->GetPrefilteredEnvMapSRV();
+    if (pEnvMapSRV == nullptr)
+        return;
+
+    Diligent::HLSL::ToneMappingAttribs TMAttribs;
+    TMAttribs.iToneMappingMode     = TONE_MAPPING_MODE_UNCHARTED2;
+    TMAttribs.bAutoExposure        = 0;
+    TMAttribs.fMiddleGray          = 0.18f;
+    TMAttribs.bLightAdaptation     = 0;
+    TMAttribs.fWhitePoint          = 3.0f;
+    TMAttribs.fLuminanceSaturation = 1.0;
+
+    EnvMapRenderer::RenderAttribs EnvMapAttribs;
+    EnvMapAttribs.pContext      = pRenderDelegate->GetDeviceContext();
+    EnvMapAttribs.pEnvMap       = pEnvMapSRV;
+    EnvMapAttribs.AverageLogLum = 0.3f;
+    EnvMapAttribs.MipLevel      = 1;
+
+    m_EnvMapRenderer->Render(EnvMapAttribs, TMAttribs);
 }
 
 } // namespace USD

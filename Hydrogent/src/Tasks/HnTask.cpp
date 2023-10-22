@@ -25,6 +25,7 @@
  */
 
 #include "Tasks/HnTask.hpp"
+#include "HnTokens.hpp"
 
 namespace Diligent
 {
@@ -35,6 +36,13 @@ namespace USD
 HnTask::HnTask(const pxr::SdfPath& Id) :
     pxr::HdTask{Id}
 {
+}
+
+std::shared_ptr<HnRenderPassState> HnTask::GetRenderPassState(pxr::HdTaskContext* TaskCtx) const
+{
+    std::shared_ptr<HnRenderPassState> RenderPassState;
+    _GetTaskContextData(TaskCtx, HnTokens->renderPassState, &RenderPassState);
+    return RenderPassState;
 }
 
 } // namespace USD

@@ -55,9 +55,9 @@ public:
 
     void Begin(IDeviceContext* pContext);
 
-    void SetRenderTargetFormat(Uint32 RT, TEXTURE_FORMAT Fmt)
+    void SetRenderTargetFormat(Uint32 rt, TEXTURE_FORMAT Fmt)
     {
-        m_RTVFormats[RT] = Fmt;
+        m_RTVFormats[rt] = Fmt;
     }
     void SetDepthStencilFormat(TEXTURE_FORMAT DepthFormat)
     {
@@ -129,6 +129,19 @@ public:
     const float4x4& GetTransform() const
     {
         return m_Transform;
+    }
+
+    Uint32 GetNumRenderTargets() const
+    {
+        return m_NumRenderTargets;
+    }
+    TEXTURE_FORMAT GetRenderTargetFormat(Uint32 rt) const
+    {
+        return m_RTVFormats[rt];
+    }
+    TEXTURE_FORMAT GetDepthStencilFormat() const
+    {
+        return m_DepthFormat;
     }
 
     RasterizerStateDesc   GetRasterizerState() const;

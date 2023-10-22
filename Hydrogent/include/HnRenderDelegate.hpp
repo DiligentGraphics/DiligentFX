@@ -201,6 +201,7 @@ public:
 
     IRenderDevice*  GetDevice() { return m_pDevice; }
     IDeviceContext* GetDeviceContext() { return m_pContext; }
+    IBuffer*        GetCameraAttribsCB() { return m_CameraAttribsCB; }
 
 private:
     static const pxr::TfTokenVector SupportedRPrimTypes;

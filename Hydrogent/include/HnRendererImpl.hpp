@@ -51,8 +51,6 @@
 namespace Diligent
 {
 
-class EnvMapRenderer;
-
 namespace USD
 {
 
@@ -101,8 +99,6 @@ private:
     RefCntAutoPtr<IBuffer> m_PostProcessAttribsCB;
 
     const bool m_ConvertOutputToSRGB;
-
-    std::unique_ptr<EnvMapRenderer> m_EnvMapRenderer;
 
     pxr::UsdStageRefPtr m_Stage;
 

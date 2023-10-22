@@ -76,19 +76,6 @@ HnRendererImpl::HnRendererImpl(IReferenceCounters*         pRefCounters,
     m_LightAttribsCB{CI.pLightAttribsCB},
     m_PostProcessAttribsCB{m_Device.CreateBuffer("Post process attribs CB", sizeof(HLSL::PostProcessAttribs))},
     m_ConvertOutputToSRGB{CI.ConvertOutputToSRGB},
-    m_EnvMapRenderer{
-        std::make_unique<EnvMapRenderer>(
-            [](const HnRendererCreateInfo& CI, IRenderDevice* pDevice) {
-                EnvMapRenderer::CreateInfo EnvMapRndrCI;
-                EnvMapRndrCI.pDevice          = pDevice;
-                EnvMapRndrCI.pCameraAttribsCB = CI.pCameraAttribsCB;
-                EnvMapRndrCI.NumRenderTargets = 2;
-                EnvMapRndrCI.RTVFormats[0]    = ColorBufferFormat;
-                EnvMapRndrCI.RTVFormats[1]    = MeshIdFormat;
-                EnvMapRndrCI.DSVFormat        = DepthFormat;
-
-                return EnvMapRndrCI;
-            }(CI, pDevice))},
     m_MeshIdReadBackQueue{pDevice}
 {
 }
@@ -274,25 +261,6 @@ void HnRendererImpl::Draw(IDeviceContext* pCtx, const HnDrawAttribs& Attribs)
         constexpr float Zero[] = {0, 0, 0, 0};
         pCtx->ClearRenderTarget(pRTVs[1], Zero, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         pCtx->ClearDepthStencil(m_DepthBufferDSV, CLEAR_DEPTH_FLAG, 1.f, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    }
-
-    if (auto* pEnvMapSRV = m_RenderDelegate->GetUSDRenderer()->GetPrefilteredEnvMapSRV())
-    {
-        Diligent::HLSL::ToneMappingAttribs TMAttribs;
-        TMAttribs.iToneMappingMode     = TONE_MAPPING_MODE_UNCHARTED2;
-        TMAttribs.bAutoExposure        = 0;
-        TMAttribs.fMiddleGray          = Attribs.MiddleGray;
-        TMAttribs.bLightAdaptation     = 0;
-        TMAttribs.fWhitePoint          = Attribs.WhitePoint;
-        TMAttribs.fLuminanceSaturation = 1.0;
-
-        EnvMapRenderer::RenderAttribs EnvMapAttribs;
-        EnvMapAttribs.pContext      = pCtx;
-        EnvMapAttribs.pEnvMap       = pEnvMapSRV;
-        EnvMapAttribs.AverageLogLum = Attribs.AverageLogLum;
-        EnvMapAttribs.MipLevel      = 1;
-
-        m_EnvMapRenderer->Render(EnvMapAttribs, TMAttribs);
     }
 
     pxr::HdTaskSharedPtrVector tasks = m_TaskController->GetTasks();
