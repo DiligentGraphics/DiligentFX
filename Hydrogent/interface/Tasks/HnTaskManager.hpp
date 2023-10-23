@@ -126,6 +126,12 @@ public:
 
     void RemoveTask(TaskUID UID);
 
+    /// Returns the Id of the selected Rprim:
+    /// - if no selected Rprim data is available, returns nullptr.
+    /// - if no Rprim is selected, returns empty path.
+    /// - if an Rprim is selected, returns the Sdf Path of the selected Rprim.
+    const pxr::SdfPath* GetSelectedRprimId() const;
+
 private:
     pxr::SdfPath GetRenderRprimsTaskId(const pxr::TfToken& MaterialTag) const;
 

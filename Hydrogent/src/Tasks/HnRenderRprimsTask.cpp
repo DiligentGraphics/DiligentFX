@@ -62,6 +62,7 @@ void HnRenderRprimsTask::UpdateRenderPassParams(const HnRenderRprimsTaskParams& 
     RenderPassParams.IBLScale          = Params.IBLScale;
     RenderPassParams.WireframeColor    = Params.WireframeColor;
     RenderPassParams.Transform         = Params.Transform;
+    RenderPassParams.SelectedPrimId    = Params.SelectedPrimId;
     static_cast<HnRenderPass*>(m_RenderPass.get())->SetMeshRenderParams(RenderPassParams);
 }
 

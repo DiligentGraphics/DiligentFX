@@ -52,6 +52,8 @@ struct HnRenderRprimsTaskParams
 
     float4x4 Transform = float4x4::Identity();
 
+    pxr::SdfPath SelectedPrimId;
+
     constexpr bool operator==(const HnRenderRprimsTaskParams& rhs) const
     {
         // clang-format off
@@ -61,7 +63,8 @@ struct HnRenderRprimsTaskParams
                EmissionScale     == rhs.EmissionScale &&
                IBLScale          == rhs.IBLScale &&
                WireframeColor    == rhs.WireframeColor &&
-               Transform         == rhs.Transform;
+               Transform         == rhs.Transform &&
+               SelectedPrimId    == rhs.SelectedPrimId;
         // clang-format on
     }
 

@@ -302,8 +302,8 @@ void HnRenderPass::RenderMesh(RenderState&      State,
         RendererParams.WhitePoint    = 3.0f;
 
         auto CustomData = float4{static_cast<float>(Mesh.GetUID()), 0, 0, 1};
-        //if (Attribs.SelectedPrim != nullptr && Mesh.GetId() == *Attribs.SelectedPrim)
-        //    CustomData.x *= -1;
+        if (Mesh.GetId() == m_Params.SelectedPrimId)
+            CustomData.x *= -1;
         RendererParams.CustomData = CustomData;
     }
 

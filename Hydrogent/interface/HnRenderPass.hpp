@@ -52,6 +52,8 @@ struct HnMeshRenderParams
     float4 WireframeColor = float4(1, 1, 1, 1);
 
     float4x4 Transform = float4x4::Identity();
+
+    pxr::SdfPath SelectedPrimId;
 };
 
 /// Hydra render pass implementation in Hydrogent.

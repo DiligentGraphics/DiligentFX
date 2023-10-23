@@ -36,6 +36,7 @@
 #include "Tasks/HnPostProcessTask.hpp"
 #include "HnTokens.hpp"
 #include "HashUtils.hpp"
+#include "HnRenderDelegate.hpp"
 
 namespace Diligent
 {
@@ -155,7 +156,7 @@ HnTaskManager::~HnTaskManager()
 pxr::HdTaskSharedPtr HnTaskManager::GetTask(TaskUID UID) const
 {
     auto it = m_TaskUIDs.find(UID);
-    return it == m_TaskUIDs.end() ?
+    return it != m_TaskUIDs.end() ?
         m_RenderIndex.GetTask(it->second) :
         nullptr;
 }
@@ -286,6 +287,25 @@ void HnTaskManager::SetRenderTags(const pxr::TfTokenVector& RenderTags)
 
         m_ParamsDelegate.SetParameter(TaskId, pxr::HdTokens->renderTags, RenderTags);
         m_RenderIndex.GetChangeTracker().MarkTaskDirty(TaskId, pxr::HdChangeTracker::DirtyRenderTags);
+    }
+}
+
+const pxr::SdfPath* HnTaskManager::GetSelectedRprimId() const
+{
+    pxr::HdTaskSharedPtr pReadRprimIdTask = GetTask(TaskUID_ReadRprimId);
+    if (!pReadRprimIdTask)
+        return nullptr;
+
+    HnReadRprimIdTask& ReadRprimIdTask = static_cast<HnReadRprimIdTask&>(*pReadRprimIdTask);
+    const Uint32       MeshIdx         = ReadRprimIdTask.GetMeshIndex();
+    if (MeshIdx == HnReadRprimIdTask::InvalidMeshIndex)
+    {
+        static const pxr::SdfPath EmptyPath;
+        return &EmptyPath;
+    }
+    else
+    {
+        return static_cast<const HnRenderDelegate*>(GetRenderIndex().GetRenderDelegate())->GetMeshPrimId(MeshIdx);
     }
 }
 

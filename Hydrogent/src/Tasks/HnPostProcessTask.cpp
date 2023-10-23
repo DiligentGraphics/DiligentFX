@@ -259,7 +259,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
     {
         MapHelper<HLSL::PostProcessAttribs> pDstShaderAttribs{pCtx, m_PostProcessAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
         pDstShaderAttribs->SelectionOutlineColor          = m_Params.SelectionColor;
-        pDstShaderAttribs->NonselectionDesaturationFactor = 0; //m_Params.NonselectionDesaturationFactor; //Attribs.SelectedPrim != nullptr && !Attribs.SelectedPrim->IsEmpty() ? 0.5f : 0.f;
+        pDstShaderAttribs->NonselectionDesaturationFactor = m_Params.NonselectionDesaturationFactor;
 
         pDstShaderAttribs->ToneMapping.iToneMappingMode     = m_Params.ToneMappingMode;
         pDstShaderAttribs->ToneMapping.bAutoExposure        = 0;
