@@ -245,7 +245,7 @@ template <typename TaskParamsType>
 bool HnTaskManager::SetTaskParams(const pxr::SdfPath& TaskId,
                                   TaskParamsType&&    Params)
 {
-    TaskParamsType OldParams = m_ParamsDelegate.GetParameter<std::remove_reference<TaskParamsType>::type>(TaskId, pxr::HdTokens->params);
+    auto OldParams = m_ParamsDelegate.GetParameter<std::remove_reference<TaskParamsType>::type>(TaskId, pxr::HdTokens->params);
     if (OldParams == Params)
         return false;
 

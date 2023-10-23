@@ -36,13 +36,12 @@
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
 #include "../../../DiligentCore/Graphics/GraphicsTools/interface/RenderStateCache.h"
 #include "../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
+#include "../../PBR/interface/USD_Renderer.hpp"
 
 #include "HnTextureRegistry.hpp"
 
 namespace Diligent
 {
-
-class USD_Renderer;
 
 namespace USD
 {

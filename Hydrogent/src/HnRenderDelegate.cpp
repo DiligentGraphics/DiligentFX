@@ -29,7 +29,6 @@
 #include "HnMaterial.hpp"
 #include "HnRenderPass.hpp"
 #include "DebugUtilities.hpp"
-#include "USD_Renderer.hpp"
 #include "HnRenderBuffer.hpp"
 
 #include "pxr/imaging/hd/material.h"
