@@ -26,7 +26,7 @@
 
 #include "EnvMapRenderer.hpp"
 
-#include "../../../Utilities/include/DiligentFXShaderSourceStreamFactory.hpp"
+#include "../../Utilities/include/DiligentFXShaderSourceStreamFactory.hpp"
 #include "ShaderMacroHelper.hpp"
 #include "RenderStateCache.hpp"
 #include "CommonlyUsedStates.h"

@@ -35,7 +35,7 @@
 #include "BasicMath.hpp"
 #include "MapHelper.hpp"
 #include "GraphicsAccessories.hpp"
-#include "../../../Utilities/include/DiligentFXShaderSourceStreamFactory.hpp"
+#include "../../Utilities/include/DiligentFXShaderSourceStreamFactory.hpp"
 #include "ShaderSourceFactoryUtils.h"
 
 namespace Diligent

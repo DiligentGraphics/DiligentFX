@@ -29,7 +29,7 @@
 
 #include "ShadowMapManager.hpp"
 #include "AdvancedMath.hpp"
-#include "../../../Utilities/include/DiligentFXShaderSourceStreamFactory.hpp"
+#include "../../Utilities/include/DiligentFXShaderSourceStreamFactory.hpp"
 #include "GraphicsUtilities.h"
 #include "MapHelper.hpp"
 #include "CommonlyUsedStates.h"
