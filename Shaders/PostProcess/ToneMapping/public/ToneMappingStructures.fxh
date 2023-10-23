@@ -36,13 +36,14 @@
 
 
 // Tone mapping mode
-#define TONE_MAPPING_MODE_EXP           0
-#define TONE_MAPPING_MODE_REINHARD      1
-#define TONE_MAPPING_MODE_REINHARD_MOD  2
-#define TONE_MAPPING_MODE_UNCHARTED2    3
-#define TONE_MAPPING_FILMIC_ALU         4
-#define TONE_MAPPING_LOGARITHMIC        5
-#define TONE_MAPPING_ADAPTIVE_LOG       6
+#define TONE_MAPPING_MODE_NONE          0
+#define TONE_MAPPING_MODE_EXP           1
+#define TONE_MAPPING_MODE_REINHARD      2
+#define TONE_MAPPING_MODE_REINHARD_MOD  3
+#define TONE_MAPPING_MODE_UNCHARTED2    4
+#define TONE_MAPPING_FILMIC_ALU         5
+#define TONE_MAPPING_LOGARITHMIC        6
+#define TONE_MAPPING_ADAPTIVE_LOG       7
 
 struct ToneMappingAttribs
 {
