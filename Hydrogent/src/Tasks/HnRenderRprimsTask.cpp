@@ -27,6 +27,7 @@
 #include "Tasks/HnRenderRprimsTask.hpp"
 
 #include "HnRenderPassState.hpp"
+#include "HnRenderPass.hpp"
 #include "HnTokens.hpp"
 
 #include "pxr/imaging/hd/renderDelegate.h"
@@ -46,6 +47,22 @@ HnRenderRprimsTask::HnRenderRprimsTask(pxr::HdSceneDelegate* ParamsDelegate, con
 
 HnRenderRprimsTask::~HnRenderRprimsTask()
 {
+}
+
+void HnRenderRprimsTask::UpdateRenderPassParams(const HnRenderRprimsTaskParams& Params)
+{
+    if (!m_RenderPass)
+        return;
+
+    HnMeshRenderParams RenderPassParams;
+    RenderPassParams.RenderMode        = Params.RenderMode;
+    RenderPassParams.DebugView         = Params.DebugView;
+    RenderPassParams.OcclusionStrength = Params.OcclusionStrength;
+    RenderPassParams.EmissionScale     = Params.EmissionScale;
+    RenderPassParams.IBLScale          = Params.IBLScale;
+    RenderPassParams.WireframeColor    = Params.WireframeColor;
+    RenderPassParams.Transform         = Params.Transform;
+    static_cast<HnRenderPass*>(m_RenderPass.get())->SetMeshRenderParams(RenderPassParams);
 }
 
 void HnRenderRprimsTask::Sync(pxr::HdSceneDelegate* Delegate,
@@ -71,6 +88,8 @@ void HnRenderRprimsTask::Sync(pxr::HdSceneDelegate* Delegate,
                 pxr::HdRenderIndex&    Index          = Delegate->GetRenderIndex();
                 pxr::HdRenderDelegate* RenderDelegate = Index.GetRenderDelegate();
                 m_RenderPass                          = RenderDelegate->CreateRenderPass(&Index, Collection);
+                // Need to set params for the new render pass.
+                *DirtyBits |= pxr::HdChangeTracker::DirtyParams;
             }
             else
             {
@@ -85,7 +104,7 @@ void HnRenderRprimsTask::Sync(pxr::HdSceneDelegate* Delegate,
         if (ParamsValue.IsHolding<HnRenderRprimsTaskParams>())
         {
             HnRenderRprimsTaskParams Params = ParamsValue.UncheckedGet<HnRenderRprimsTaskParams>();
-            (void)Params;
+            UpdateRenderPassParams(Params);
         }
         else
         {

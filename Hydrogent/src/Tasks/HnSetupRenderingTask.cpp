@@ -64,13 +64,6 @@ HnSetupRenderingTask::~HnSetupRenderingTask()
 
 void HnSetupRenderingTask::UpdateRenderPassState(const HnSetupRenderingTaskParams& Params)
 {
-    m_RenderPassState->SetRenderMode(Params.RenderMode);
-    m_RenderPassState->SetDebugView(Params.DebugView);
-    m_RenderPassState->SetOcclusionStrength(Params.OcclusionStrength);
-    m_RenderPassState->SetEmissionScale(Params.EmissionScale);
-    m_RenderPassState->SetIBLScale(Params.IBLScale);
-    m_RenderPassState->SetTransform(Params.Transform);
-
     VERIFY_EXPR(Params.ColorFormat != TEX_FORMAT_UNKNOWN);
     m_RenderPassState->SetNumRenderTargets(Params.MeshIdFormat != TEX_FORMAT_UNKNOWN ? 2 : 1);
     m_RenderPassState->SetRenderTargetFormat(0, Params.ColorFormat);

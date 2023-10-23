@@ -27,6 +27,9 @@
 #pragma once
 
 #include "HnTask.hpp"
+#include "HnTypes.hpp"
+
+#include "../../../Common/interface/BasicMath.hpp"
 
 #include "pxr/imaging/hd/renderPass.h"
 
@@ -38,10 +41,30 @@ namespace USD
 
 struct HnRenderRprimsTaskParams
 {
+    HN_RENDER_MODE RenderMode = HN_RENDER_MODE_SOLID;
+
+    int   DebugView         = 0;
+    float OcclusionStrength = 1;
+    float EmissionScale     = 1;
+    float IBLScale          = 1;
+
+    float4 WireframeColor = float4(1, 1, 1, 1);
+
+    float4x4 Transform = float4x4::Identity();
+
     constexpr bool operator==(const HnRenderRprimsTaskParams& rhs) const
     {
-        return true;
+        // clang-format off
+        return RenderMode        == rhs.RenderMode &&
+               DebugView         == rhs.DebugView &&
+               OcclusionStrength == rhs.OcclusionStrength &&
+               EmissionScale     == rhs.EmissionScale &&
+               IBLScale          == rhs.IBLScale &&
+               WireframeColor    == rhs.WireframeColor &&
+               Transform         == rhs.Transform;
+        // clang-format on
     }
+
     constexpr bool operator!=(const HnRenderRprimsTaskParams& rhs) const
     {
         return !(*this == rhs);
@@ -69,6 +92,9 @@ public:
     {
         return m_RenderTags;
     }
+
+private:
+    void UpdateRenderPassParams(const HnRenderRprimsTaskParams& Params);
 
 private:
     pxr::TfTokenVector         m_RenderTags;

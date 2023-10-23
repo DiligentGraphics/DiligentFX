@@ -29,6 +29,8 @@
 #include "pxr/imaging/hd/types.h"
 #include "pxr/imaging/hd/renderPass.h"
 
+#include "HnTypes.hpp"
+
 namespace Diligent
 {
 
@@ -37,6 +39,20 @@ namespace USD
 
 class HnMesh;
 class HnMaterial;
+
+struct HnMeshRenderParams
+{
+    HN_RENDER_MODE RenderMode = HN_RENDER_MODE_SOLID;
+
+    int   DebugView         = 0;
+    float OcclusionStrength = 1;
+    float EmissionScale     = 1;
+    float IBLScale          = 1;
+
+    float4 WireframeColor = float4(1, 1, 1, 1);
+
+    float4x4 Transform = float4x4::Identity();
+};
 
 /// Hydra render pass implementation in Hydrogent.
 class HnRenderPass final : public pxr::HdRenderPass
@@ -47,6 +63,11 @@ public:
 
     HnRenderPass(pxr::HdRenderIndex*           pIndex,
                  const pxr::HdRprimCollection& Collection);
+
+    void SetMeshRenderParams(const HnMeshRenderParams& Params)
+    {
+        m_Params = Params;
+    }
 
 protected:
     // Virtual API: Execute the buckets corresponding to renderTags;
@@ -65,6 +86,8 @@ private:
                     const HnMaterial& Material);
 
 private:
+    HnMeshRenderParams m_Params;
+
     pxr::HdRenderIndex::HdDrawItemPtrVector m_DrawItems;
 
     unsigned int m_CollectionVersion     = ~0u;

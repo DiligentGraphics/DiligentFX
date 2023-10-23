@@ -59,7 +59,6 @@ struct HnRenderPass::RenderState
     IDeviceContext* const pCtx;
     IBuffer* const        pPBRAttribsCB;
 
-    const HnRenderPassState&       RPState;
     const PBR_Renderer::ALPHA_MODE AlphaMode;
 
     USD_Renderer::PbrPsoCacheAccessor       PbrPSOCache;
@@ -96,19 +95,17 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
     RenderState State{
         pRenderDelegate->GetDeviceContext(),
         USDRenderer->GetPBRAttribsCB(),
-        static_cast<const HnRenderPassState&>(*RPState),
         MaterialTagToPbrAlphaMode(m_MaterialTag),
     };
 
-    GraphicsPipelineDesc GraphicsDesc = State.RPState.GetGraphicsPipelineDesc();
-    const HN_RENDER_MODE RenderMode   = State.RPState.GetRenderMode();
-    if (RenderMode == HN_RENDER_MODE_SOLID)
+    GraphicsPipelineDesc GraphicsDesc = static_cast<const HnRenderPassState*>(RPState.get())->GetGraphicsPipelineDesc();
+    if (m_Params.RenderMode == HN_RENDER_MODE_SOLID)
     {
         GraphicsDesc.PrimitiveTopology = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
         State.PbrPSOCache              = USDRenderer->GetPbrPsoCacheAccessor(GraphicsDesc);
         VERIFY_EXPR(State.PbrPSOCache);
     }
-    else if (RenderMode == HN_RENDER_MODE_MESH_EDGES)
+    else if (m_Params.RenderMode == HN_RENDER_MODE_MESH_EDGES)
     {
         GraphicsDesc.PrimitiveTopology = PRIMITIVE_TOPOLOGY_LINE_LIST;
         State.WireframePSOCache        = USDRenderer->GetWireframePsoCacheAccessor(GraphicsDesc);
@@ -224,9 +221,7 @@ void HnRenderPass::RenderMesh(RenderState&      State,
         }
     }
 
-    const auto RenderMode = State.RPState.GetRenderMode();
-
-    auto* pIB = (RenderMode == HN_RENDER_MODE_MESH_EDGES) ?
+    auto* pIB = (m_Params.RenderMode == HN_RENDER_MODE_MESH_EDGES) ?
         Mesh.GetEdgeIndexBuffer() :
         Mesh.GetTriangleIndexBuffer();
 
@@ -236,7 +231,7 @@ void HnRenderPass::RenderMesh(RenderState&      State,
     auto PSOFlags = PBR_Renderer::PSO_FLAG_ENABLE_CUSTOM_DATA_OUTPUT;
 
     IPipelineState* pPSO = nullptr;
-    if (RenderMode == HN_RENDER_MODE_SOLID)
+    if (m_Params.RenderMode == HN_RENDER_MODE_SOLID)
     {
         if (pNormalsVB != nullptr)
             PSOFlags |= PBR_Renderer::PSO_FLAG_USE_VERTEX_NORMALS;
@@ -260,7 +255,7 @@ void HnRenderPass::RenderMesh(RenderState&      State,
                "This may indicate an issue in how alpha mode is determined in the material, or (less likely) an issue in Rprim sorting by Hydra.");
         pPSO = State.PbrPSOCache.Get({PSOFlags, static_cast<PBR_Renderer::ALPHA_MODE>(State.AlphaMode), /*DoubleSided = */ false}, true);
     }
-    else if (RenderMode == HN_RENDER_MODE_MESH_EDGES)
+    else if (m_Params.RenderMode == HN_RENDER_MODE_MESH_EDGES)
     {
         pPSO = State.WireframePSOCache.Get({PSOFlags, /*DoubleSided = */ false}, true);
     }
@@ -284,7 +279,7 @@ void HnRenderPass::RenderMesh(RenderState&      State,
     {
         MapHelper<HLSL::PBRShaderAttribs> pDstShaderAttribs{State.pCtx, State.pPBRAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
 
-        pDstShaderAttribs->Transforms.NodeMatrix = Mesh.GetTransform() * State.RPState.GetTransform();
+        pDstShaderAttribs->Transforms.NodeMatrix = Mesh.GetTransform() * m_Params.Transform;
         pDstShaderAttribs->Transforms.JointCount = 0;
 
         static_assert(sizeof(pDstShaderAttribs->Material) == sizeof(ShaderAttribs), "The sizeof(PBRMaterialShaderInfo) is inconsistent with sizeof(ShaderAttribs)");
@@ -292,13 +287,13 @@ void HnRenderPass::RenderMesh(RenderState&      State,
 
         auto& RendererParams = pDstShaderAttribs->Renderer;
 
-        RendererParams.DebugViewType     = State.RPState.GetDebugView();
-        RendererParams.OcclusionStrength = State.RPState.GetOcclusionStrength();
-        RendererParams.EmissionScale     = State.RPState.GetEmissionScale();
-        RendererParams.IBLScale          = State.RPState.GetIBLScale();
+        RendererParams.DebugViewType     = m_Params.DebugView;
+        RendererParams.OcclusionStrength = m_Params.OcclusionStrength;
+        RendererParams.EmissionScale     = m_Params.EmissionScale;
+        RendererParams.IBLScale          = m_Params.IBLScale;
 
-        RendererParams.PrefilteredCubeMipLevels = 5;                  //m_Settings.UseIBL ? static_cast<float>(m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels) : 0.f;
-        RendererParams.WireframeColor           = float4{1, 1, 1, 1}; //Attribs.WireframeColor;
+        RendererParams.PrefilteredCubeMipLevels = 5; //m_Settings.UseIBL ? static_cast<float>(m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels) : 0.f;
+        RendererParams.WireframeColor           = m_Params.WireframeColor;
         RendererParams.HighlightColor           = float4{0, 0, 0, 0};
 
         // Tone mapping is performed in the post-processing pass
@@ -313,7 +308,7 @@ void HnRenderPass::RenderMesh(RenderState&      State,
     }
 
     State.pCtx->CommitShaderResources(pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    DrawIndexedAttribs DrawAttrs = (RenderMode == HN_RENDER_MODE_MESH_EDGES) ?
+    DrawIndexedAttribs DrawAttrs = (m_Params.RenderMode == HN_RENDER_MODE_MESH_EDGES) ?
         DrawIndexedAttribs{Mesh.GetNumEdges() * 2, VT_UINT32, DRAW_FLAG_VERIFY_ALL} :
         DrawIndexedAttribs{Mesh.GetNumTriangles() * 3, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
 

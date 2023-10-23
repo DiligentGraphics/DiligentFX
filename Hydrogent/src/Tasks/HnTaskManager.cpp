@@ -210,6 +210,8 @@ void HnTaskManager::CreateRenderRprimsTask(const pxr::TfToken& MaterialTag, Task
     m_ParamsDelegate.SetParameter(RenderRprimsTaskId, pxr::HdTokens->params, TaskParams);
     m_ParamsDelegate.SetParameter(RenderRprimsTaskId, pxr::HdTokens->collection, Collection);
     m_ParamsDelegate.SetParameter(RenderRprimsTaskId, pxr::HdTokens->renderTags, RenderTags);
+
+    m_RenderTaskIds.emplace_back(RenderRprimsTaskId);
 }
 
 void HnTaskManager::SetRenderRprimParams(const HnRenderRprimsTaskParams& Params)

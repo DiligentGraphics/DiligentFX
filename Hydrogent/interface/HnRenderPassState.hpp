@@ -68,15 +68,6 @@ public:
         m_NumRenderTargets = NumRTs;
     }
 
-    void SetRenderMode(HN_RENDER_MODE RenderMode)
-    {
-        m_RenderMode = RenderMode;
-    }
-    HN_RENDER_MODE GetRenderMode() const
-    {
-        return m_RenderMode;
-    }
-
     void SetFrontFaceCCW(bool FrontFaceCCW)
     {
         m_FrontFaceCCW = FrontFaceCCW;
@@ -84,51 +75,6 @@ public:
     bool GetFrontFaceCCW() const
     {
         return m_FrontFaceCCW;
-    }
-
-    void SetDebugView(int DebugView)
-    {
-        m_DebugView = DebugView;
-    }
-    int GetDebugView() const
-    {
-        return m_DebugView;
-    }
-
-    void SetOcclusionStrength(float OcclusionStrength)
-    {
-        m_OcclusionStrength = OcclusionStrength;
-    }
-    float GetOcclusionStrength() const
-    {
-        return m_OcclusionStrength;
-    }
-
-    void SetEmissionScale(float EmissionScale)
-    {
-        m_EmissionScale = EmissionScale;
-    }
-    float GetEmissionScale() const
-    {
-        return m_EmissionScale;
-    }
-
-    void SetIBLScale(float IBLScale)
-    {
-        m_IBLScale = IBLScale;
-    }
-    float GetIBLScale() const
-    {
-        return m_IBLScale;
-    }
-
-    void SetTransform(const float4x4& Transform)
-    {
-        m_Transform = Transform;
-    }
-    const float4x4& GetTransform() const
-    {
-        return m_Transform;
     }
 
     Uint32 GetNumRenderTargets() const
@@ -154,16 +100,7 @@ private:
     std::array<TEXTURE_FORMAT, MAX_RENDER_TARGETS> m_RTVFormats       = {};
     TEXTURE_FORMAT                                 m_DepthFormat      = TEX_FORMAT_UNKNOWN;
 
-    HN_RENDER_MODE m_RenderMode = HN_RENDER_MODE_SOLID;
-
     bool m_FrontFaceCCW = false;
-
-    int   m_DebugView         = 0;
-    float m_OcclusionStrength = 1;
-    float m_EmissionScale     = 1;
-    float m_IBLScale          = 1;
-
-    float4x4 m_Transform = float4x4::Identity();
 };
 
 } // namespace USD
