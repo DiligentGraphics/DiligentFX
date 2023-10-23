@@ -38,7 +38,7 @@
 #include "../../../DiligentCore/Common/interface/BasicMath.hpp"
 #include "../../../DiligentCore/Common/interface/ObjectBase.hpp"
 
-#include "Tasks/HnTaskController.hpp"
+#include "Tasks/HnTaskManager.hpp"
 
 #include "pxr/usd/usd/stage.h"
 #include "pxr/imaging/hd/tokens.h"
@@ -56,7 +56,6 @@ namespace USD
 class HnRenderDelegate;
 class HnMesh;
 class HnMaterial;
-class HnTaskController;
 
 class HnRendererImpl final : public ObjectBase<IHnRenderer>
 {
@@ -100,7 +99,7 @@ private:
     std::unique_ptr<HnRenderDelegate>        m_RenderDelegate;
     std::unique_ptr<pxr::HdRenderIndex>      m_RenderIndex;
     std::unique_ptr<pxr::UsdImagingDelegate> m_ImagingDelegate;
-    std::unique_ptr<HnTaskController>        m_TaskController;
+    std::unique_ptr<HnTaskManager>           m_TaskManager;
 
     pxr::HdEngine m_Engine;
 

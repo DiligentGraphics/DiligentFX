@@ -29,7 +29,7 @@
 #include "HnMesh.hpp"
 #include "HnMaterial.hpp"
 #include "HnTokens.hpp"
-#include "Tasks/HnTaskController.hpp"
+#include "Tasks/HnTaskManager.hpp"
 #include "Tasks/HnSetupRenderingTask.hpp"
 #include "Tasks/HnPostProcessTask.hpp"
 
@@ -73,7 +73,7 @@ HnRendererImpl::~HnRendererImpl()
 
 void HnRendererImpl::DestroyStageResources()
 {
-    m_TaskController.reset();
+    m_TaskManager.reset();
     m_ImagingDelegate.reset();
     m_RenderIndex.reset();
     m_RenderDelegate.reset();
@@ -94,8 +94,8 @@ void HnRendererImpl::LoadUSDStage(pxr::UsdStageRefPtr& Stage)
     m_ImagingDelegate = std::make_unique<pxr::UsdImagingDelegate>(m_RenderIndex.get(), SceneDelegateId);
     m_ImagingDelegate->Populate(m_Stage->GetPseudoRoot());
 
-    const pxr::SdfPath TaskControllerId = SceneDelegateId.AppendChild(pxr::TfToken{"_HnTaskController_"});
-    m_TaskController                    = std::make_unique<HnTaskController>(*m_RenderIndex, TaskControllerId);
+    const pxr::SdfPath TaskManagerId = SceneDelegateId.AppendChild(pxr::TfToken{"_HnTaskManager_"});
+    m_TaskManager                    = std::make_unique<HnTaskManager>(*m_RenderIndex, TaskManagerId);
 
     m_FinalColorTargetId = SceneDelegateId.AppendChild(pxr::TfToken{"_HnFinalColorTarget_"});
     m_RenderIndex->InsertBprim(pxr::HdPrimTypeTokens->renderBuffer, m_ImagingDelegate.get(), m_FinalColorTargetId);
@@ -103,7 +103,7 @@ void HnRendererImpl::LoadUSDStage(pxr::UsdStageRefPtr& Stage)
     {
         HnPostProcessTaskParams Params;
         Params.ConvertOutputToSRGB = m_ConvertOutputToSRGB;
-        m_TaskController->SetTaskParams(HnTaskController::TaskUID_PostProcess, Params);
+        m_TaskManager->SetTaskParams(HnTaskManager::TaskUID_PostProcess, Params);
     }
 }
 
@@ -132,7 +132,7 @@ void HnRendererImpl::Update()
         Params.IBLScale           = m_RenderParams.IBLScale;
         Params.Transform          = m_RenderParams.Transform;
         Params.FinalColorTargetId = m_FinalColorTargetId;
-        m_TaskController->SetTaskParams(HnTaskController::TaskUID_SetupRendering, Params);
+        m_TaskManager->SetTaskParams(HnTaskManager::TaskUID_SetupRendering, Params);
 
         m_RenderParamsChanged = false;
     }
@@ -150,7 +150,7 @@ void HnRendererImpl::Draw(IDeviceContext* pCtx, const HnDrawAttribs& Attribs)
     VERIFY_EXPR(FinalColorTarget != nullptr);
     FinalColorTarget->SetTarget(Attribs.pDstRTV);
 
-    pxr::HdTaskSharedPtrVector tasks = m_TaskController->GetTasks();
+    pxr::HdTaskSharedPtrVector tasks = m_TaskManager->GetTasks();
     m_Engine.Execute(&m_ImagingDelegate->GetRenderIndex(), &tasks);
 
     FinalColorTarget->ReleaseTarget();

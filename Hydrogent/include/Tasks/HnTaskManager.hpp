@@ -43,8 +43,8 @@ struct HnSetupRenderingTaskParams;
 struct HnPostProcessTaskParams;
 struct HnRenderRprimsTaskParams;
 
-/// Task controller implementation in Hydrogent.
-class HnTaskController
+/// Task manager implementation in Hydrogent.
+class HnTaskManager
 {
 public:
     using TaskUID                                            = uint64_t;
@@ -57,15 +57,15 @@ public:
     static constexpr TaskUID TaskUID_ReadRprimId             = 0x199572fe7ff144ef;
     static constexpr TaskUID TaskUID_PostProcess             = 0x1f5367e65d034500;
 
-    HnTaskController(pxr::HdRenderIndex& RenderIndex,
-                     const pxr::SdfPath& ControllerId);
+    HnTaskManager(pxr::HdRenderIndex& RenderIndex,
+                  const pxr::SdfPath& ManagerId);
 
-    ~HnTaskController();
+    ~HnTaskManager();
 
     const pxr::HdRenderIndex& GetRenderIndex() const { return m_RenderIndex; }
     pxr::HdRenderIndex&       GetRenderIndex() { return m_RenderIndex; }
 
-    const pxr::SdfPath& GetControllerId() const { return m_ControllerId; }
+    const pxr::SdfPath& GetId() const { return m_ManagerId; }
 
     /// Returns the task list that can be passed to the Hydra engine for execution.
     ///
@@ -96,7 +96,7 @@ public:
 
     /// Creates a new render task.
     /// \param [in] TaskId - The task ID that will be used to register the task in the render index.
-    /// \param [in] UID    - The task UID that will be used to identify the task in the task controller.
+    /// \param [in] UID    - The task UID that will be used to identify the task in the task manager.
     /// \param [in] Params - The task parameters that will be associated with the task using the task ID.
     template <typename TaskType, typename TaskParamsType>
     void CreateTask(const pxr::SdfPath& TaskId,
@@ -106,7 +106,7 @@ public:
     /// Creates a new render task.
     ///
     /// This is method is similar to the one above, but it automatically appends the task ID
-    /// as child of the controller ID.
+    /// as child of the manager ID.
     template <typename TaskType, typename TaskParamsType>
     void CreateTask(const pxr::TfToken& TaskId,
                     TaskUID             UID,
@@ -137,10 +137,10 @@ private:
 
 private:
     pxr::HdRenderIndex& m_RenderIndex;
-    const pxr::SdfPath  m_ControllerId;
+    const pxr::SdfPath  m_ManagerId;
 
     // Custom delegate to pass parameters to the render tasks.
-    class HnTaskController::TaskParamsDelegate final : public pxr::HdSceneDelegate
+    class HnTaskManager::TaskParamsDelegate final : public pxr::HdSceneDelegate
     {
     public:
         TaskParamsDelegate(pxr::HdRenderIndex& Index,
@@ -215,15 +215,15 @@ private:
 };
 
 template <typename ParamterType>
-void HnTaskController::SetParameter(const pxr::SdfPath& TaskId, const pxr::TfToken& ValueKey, ParamterType&& Value)
+void HnTaskManager::SetParameter(const pxr::SdfPath& TaskId, const pxr::TfToken& ValueKey, ParamterType&& Value)
 {
     m_ParamsDelegate.SetParameter(TaskId, pxr::HdTokens->params, std::forward<TaskParamsType>(Params));
 }
 
 template <typename TaskType, typename TaskParamsType>
-void HnTaskController::CreateTask(const pxr::SdfPath& TaskId,
-                                  TaskUID             UID,
-                                  TaskParamsType&&    Params)
+void HnTaskManager::CreateTask(const pxr::SdfPath& TaskId,
+                               TaskUID             UID,
+                               TaskParamsType&&    Params)
 {
     m_RenderIndex.InsertTask<TaskType>(&m_ParamsDelegate, TaskId);
     auto it_inserted = m_TaskUIDs.emplace(UID, TaskId);
@@ -234,16 +234,16 @@ void HnTaskController::CreateTask(const pxr::SdfPath& TaskId,
 }
 
 template <typename TaskType, typename TaskParamsType>
-void HnTaskController::CreateTask(const pxr::TfToken& TaskId,
-                                  TaskUID             UID,
-                                  TaskParamsType&&    Params)
+void HnTaskManager::CreateTask(const pxr::TfToken& TaskId,
+                               TaskUID             UID,
+                               TaskParamsType&&    Params)
 {
-    CreateTask<TaskType>(pxr::SdfPath{GetControllerId().AppendChild(TaskId)}, UID, std::forward<TaskParamsType>(Params));
+    CreateTask<TaskType>(pxr::SdfPath{GetId().AppendChild(TaskId)}, UID, std::forward<TaskParamsType>(Params));
 }
 
 template <typename TaskParamsType>
-bool HnTaskController::SetTaskParams(const pxr::SdfPath& TaskId,
-                                     TaskParamsType&&    Params)
+bool HnTaskManager::SetTaskParams(const pxr::SdfPath& TaskId,
+                                  TaskParamsType&&    Params)
 {
     TaskParamsType OldParams = m_ParamsDelegate.GetParameter<std::remove_reference<TaskParamsType>::type>(TaskId, pxr::HdTokens->params);
     if (OldParams == Params)
@@ -256,8 +256,8 @@ bool HnTaskController::SetTaskParams(const pxr::SdfPath& TaskId,
 }
 
 template <typename TaskParamsType>
-bool HnTaskController::SetTaskParams(TaskUID          UID,
-                                     TaskParamsType&& Params)
+bool HnTaskManager::SetTaskParams(TaskUID          UID,
+                                  TaskParamsType&& Params)
 {
     const auto it = m_TaskUIDs.find(UID);
     if (it == m_TaskUIDs.end())

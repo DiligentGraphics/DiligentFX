@@ -24,7 +24,7 @@
  *  of the possibility of such damages.
  */
 
-#include "Tasks/HnTaskController.hpp"
+#include "Tasks/HnTaskManager.hpp"
 
 #include <atomic>
 #include <array>
@@ -48,7 +48,7 @@ namespace
 
 // clang-format off
 TF_DEFINE_PRIVATE_TOKENS(
-    HnTaskControllerTokens,
+    HnTaskManagerTokens,
 
     (setupRendering)
     (renderEnvMapTask)
@@ -63,73 +63,73 @@ TF_DEFINE_PRIVATE_TOKENS(
 } // namespace
 
 
-HnTaskController::TaskParamsDelegate::ParamKey::ParamKey(const pxr::SdfPath& _Path, const pxr::TfToken& _ValueKey) :
+HnTaskManager::TaskParamsDelegate::ParamKey::ParamKey(const pxr::SdfPath& _Path, const pxr::TfToken& _ValueKey) :
     Path{_Path},
     ValueKey{_ValueKey},
     Hash{ComputeHash(pxr::SdfPath::Hash{}(_Path), pxr::TfToken::HashFunctor{}(_ValueKey))}
 {}
 
-HnTaskController::TaskParamsDelegate::TaskParamsDelegate(pxr::HdRenderIndex& Index,
-                                                         const pxr::SdfPath& Id) :
+HnTaskManager::TaskParamsDelegate::TaskParamsDelegate(pxr::HdRenderIndex& Index,
+                                                      const pxr::SdfPath& Id) :
     pxr::HdSceneDelegate{&Index, Id}
 {}
 
-HnTaskController::TaskParamsDelegate::~TaskParamsDelegate()
+HnTaskManager::TaskParamsDelegate::~TaskParamsDelegate()
 {
 }
 
-bool HnTaskController::TaskParamsDelegate::HasParameter(const pxr::SdfPath& Id, const pxr::TfToken& ValueKey) const
+bool HnTaskManager::TaskParamsDelegate::HasParameter(const pxr::SdfPath& Id, const pxr::TfToken& ValueKey) const
 {
     return m_ParamsCache.find({Id, ValueKey}) != m_ParamsCache.end();
 }
 
-pxr::VtValue HnTaskController::TaskParamsDelegate::Get(const pxr::SdfPath& Id, const pxr::TfToken& ValueKey)
+pxr::VtValue HnTaskManager::TaskParamsDelegate::Get(const pxr::SdfPath& Id, const pxr::TfToken& ValueKey)
 {
     auto it = m_ParamsCache.find({Id, ValueKey});
     return it != m_ParamsCache.end() ? it->second : pxr::VtValue{};
 }
 
-pxr::GfMatrix4d HnTaskController::TaskParamsDelegate::GetTransform(const pxr::SdfPath& Id)
+pxr::GfMatrix4d HnTaskManager::TaskParamsDelegate::GetTransform(const pxr::SdfPath& Id)
 {
     auto it = m_ParamsCache.find({Id, pxr::HdTokens->transform});
     return it != m_ParamsCache.end() ? it->second.Get<pxr::GfMatrix4d>() : pxr::GfMatrix4d{1.0};
 }
 
-pxr::VtValue HnTaskController::TaskParamsDelegate::GetLightParamValue(const pxr::SdfPath& Id,
-                                                                      const pxr::TfToken& ParamName)
+pxr::VtValue HnTaskManager::TaskParamsDelegate::GetLightParamValue(const pxr::SdfPath& Id,
+                                                                   const pxr::TfToken& ParamName)
 {
     return Get(Id, ParamName);
 }
 
-bool HnTaskController::TaskParamsDelegate::IsEnabled(const pxr::TfToken& Option) const
+bool HnTaskManager::TaskParamsDelegate::IsEnabled(const pxr::TfToken& Option) const
 {
     return HdSceneDelegate::IsEnabled(Option);
 }
 
-pxr::HdRenderBufferDescriptor HnTaskController::TaskParamsDelegate::GetRenderBufferDescriptor(const pxr::SdfPath& Id)
+pxr::HdRenderBufferDescriptor HnTaskManager::TaskParamsDelegate::GetRenderBufferDescriptor(const pxr::SdfPath& Id)
 {
-    if (HasParameter(Id, HnTaskControllerTokens->renderBufferDescriptor))
+    if (HasParameter(Id, HnTaskManagerTokens->renderBufferDescriptor))
     {
-        return GetParameter<pxr::HdRenderBufferDescriptor>(Id, HnTaskControllerTokens->renderBufferDescriptor);
+        return GetParameter<pxr::HdRenderBufferDescriptor>(Id, HnTaskManagerTokens->renderBufferDescriptor);
     }
     return pxr::HdRenderBufferDescriptor{};
 }
 
-pxr::TfTokenVector HnTaskController::TaskParamsDelegate::GetTaskRenderTags(const pxr::SdfPath& TaskId)
+pxr::TfTokenVector HnTaskManager::TaskParamsDelegate::GetTaskRenderTags(const pxr::SdfPath& TaskId)
 {
-    if (HasParameter(TaskId, HnTaskControllerTokens->renderTags))
+    if (HasParameter(TaskId, HnTaskManagerTokens->renderTags))
     {
-        return GetParameter<pxr::TfTokenVector>(TaskId, HnTaskControllerTokens->renderTags);
+        return GetParameter<pxr::TfTokenVector>(TaskId, HnTaskManagerTokens->renderTags);
     }
     return pxr::TfTokenVector{};
 }
 
 
-HnTaskController::HnTaskController(pxr::HdRenderIndex& RenderIndex,
-                                   const pxr::SdfPath& ControllerId) :
+HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
+                             const pxr::SdfPath& ManagerId) :
     m_RenderIndex{RenderIndex},
-    m_ControllerId{ControllerId},
-    m_ParamsDelegate{RenderIndex, ControllerId}
+    m_ManagerId{ManagerId},
+    m_ParamsDelegate{RenderIndex, ManagerId}
 {
     // Task creation order defines the default task order
     CreateSetupRenderingTask();
@@ -142,7 +142,7 @@ HnTaskController::HnTaskController(pxr::HdRenderIndex& RenderIndex,
     CreatePostProcessTask();
 }
 
-HnTaskController::~HnTaskController()
+HnTaskManager::~HnTaskManager()
 {
     // Remove all tasks from the render index
     for (const auto& it : m_TaskUIDs)
@@ -152,7 +152,7 @@ HnTaskController::~HnTaskController()
     m_TaskUIDs.clear();
 }
 
-pxr::HdTaskSharedPtr HnTaskController::GetTask(TaskUID UID) const
+pxr::HdTaskSharedPtr HnTaskManager::GetTask(TaskUID UID) const
 {
     auto it = m_TaskUIDs.find(UID);
     return it == m_TaskUIDs.end() ?
@@ -160,7 +160,7 @@ pxr::HdTaskSharedPtr HnTaskController::GetTask(TaskUID UID) const
         nullptr;
 }
 
-void HnTaskController::RemoveTask(TaskUID UID)
+void HnTaskManager::RemoveTask(TaskUID UID)
 {
     auto it = m_TaskUIDs.find(UID);
     if (it == m_TaskUIDs.end())
@@ -170,25 +170,25 @@ void HnTaskController::RemoveTask(TaskUID UID)
     m_TaskUIDs.erase(it);
 }
 
-void HnTaskController::SetParameter(const pxr::SdfPath& TaskId, const TfToken& ValueKey, pxr::VtValue Value)
+void HnTaskManager::SetParameter(const pxr::SdfPath& TaskId, const TfToken& ValueKey, pxr::VtValue Value)
 {
     m_ParamsDelegate.SetParameter(TaskId, ValueKey, std::move(Value));
 }
 
-void HnTaskController::CreateSetupRenderingTask()
+void HnTaskManager::CreateSetupRenderingTask()
 {
     HnSetupRenderingTaskParams TaskParams;
-    CreateTask<HnSetupRenderingTask>(HnTaskControllerTokens->setupRendering, TaskUID_SetupRendering, TaskParams);
+    CreateTask<HnSetupRenderingTask>(HnTaskManagerTokens->setupRendering, TaskUID_SetupRendering, TaskParams);
 }
 
-pxr::SdfPath HnTaskController::GetRenderRprimsTaskId(const pxr::TfToken& MaterialTag) const
+pxr::SdfPath HnTaskManager::GetRenderRprimsTaskId(const pxr::TfToken& MaterialTag) const
 {
     std::string Id = std::string{"RenderRprimsTask_"} + MaterialTag.GetString();
     std::replace(Id.begin(), Id.end(), ':', '_');
-    return GetControllerId().AppendChild(TfToken{Id});
+    return GetId().AppendChild(TfToken{Id});
 }
 
-void HnTaskController::CreateRenderRprimsTask(const pxr::TfToken& MaterialTag, TaskUID UID)
+void HnTaskManager::CreateRenderRprimsTask(const pxr::TfToken& MaterialTag, TaskUID UID)
 {
     HnRenderRprimsTaskParams TaskParams;
     pxr::SdfPath             RenderRprimsTaskId = GetRenderRprimsTaskId(MaterialTag);
@@ -212,7 +212,7 @@ void HnTaskController::CreateRenderRprimsTask(const pxr::TfToken& MaterialTag, T
     m_ParamsDelegate.SetParameter(RenderRprimsTaskId, pxr::HdTokens->renderTags, RenderTags);
 }
 
-void HnTaskController::SetRenderRprimParams(const HnRenderRprimsTaskParams& Params)
+void HnTaskManager::SetRenderRprimParams(const HnRenderRprimsTaskParams& Params)
 {
     for (const auto& TaskId : m_RenderTaskIds)
     {
@@ -220,25 +220,25 @@ void HnTaskController::SetRenderRprimParams(const HnRenderRprimsTaskParams& Para
     }
 }
 
-void HnTaskController::CreatePostProcessTask()
+void HnTaskManager::CreatePostProcessTask()
 {
     HnPostProcessTaskParams TaskParams;
-    CreateTask<HnPostProcessTask>(HnTaskControllerTokens->postProcessTask, TaskUID_PostProcess, TaskParams);
+    CreateTask<HnPostProcessTask>(HnTaskManagerTokens->postProcessTask, TaskUID_PostProcess, TaskParams);
 }
 
-void HnTaskController::CreateRenderEnvMapTask()
+void HnTaskManager::CreateRenderEnvMapTask()
 {
     HnRenderEnvMapTaskParams TaskParams;
-    CreateTask<HnRenderEnvMapTask>(HnTaskControllerTokens->renderEnvMapTask, TaskUID_RenderEnvMap, TaskParams);
+    CreateTask<HnRenderEnvMapTask>(HnTaskManagerTokens->renderEnvMapTask, TaskUID_RenderEnvMap, TaskParams);
 }
 
-void HnTaskController::CreateReadRprimIdTask()
+void HnTaskManager::CreateReadRprimIdTask()
 {
     HnReadRprimIdTaskParams TaskParams;
-    CreateTask<HnReadRprimIdTask>(HnTaskControllerTokens->readRprimIdTask, TaskUID_ReadRprimId, TaskParams);
+    CreateTask<HnReadRprimIdTask>(HnTaskManagerTokens->readRprimIdTask, TaskUID_ReadRprimId, TaskParams);
 }
 
-const pxr::HdTaskSharedPtrVector HnTaskController::GetTasks(const std::vector<TaskUID>* TaskOrder) const
+const pxr::HdTaskSharedPtrVector HnTaskManager::GetTasks(const std::vector<TaskUID>* TaskOrder) const
 {
     if (TaskOrder == nullptr)
         TaskOrder = &m_DefaultTaskOrder;
@@ -256,7 +256,7 @@ const pxr::HdTaskSharedPtrVector HnTaskController::GetTasks(const std::vector<Ta
     return Tasks;
 }
 
-void HnTaskController::SetCollection(const pxr::HdRprimCollection& Collection)
+void HnTaskManager::SetCollection(const pxr::HdRprimCollection& Collection)
 {
     pxr::HdRprimCollection NewCollection = Collection;
     for (const auto& TaskId : m_RenderTaskIds)
@@ -274,7 +274,7 @@ void HnTaskController::SetCollection(const pxr::HdRprimCollection& Collection)
     }
 }
 
-void HnTaskController::SetRenderTags(const pxr::TfTokenVector& RenderTags)
+void HnTaskManager::SetRenderTags(const pxr::TfTokenVector& RenderTags)
 {
     for (const auto& TaskId : m_RenderTaskIds)
     {

@@ -23,7 +23,7 @@ set(SOURCE
     src/Tasks/HnRenderEnvMapTask.cpp
     src/Tasks/HnPostProcessTask.cpp
     src/Tasks/HnReadRprimIdTask.cpp
-    src/Tasks/HnTaskController.cpp
+    src/Tasks/HnTaskManager.cpp
 )
 
 set(INCLUDE
@@ -48,7 +48,7 @@ set(INCLUDE
     include/Tasks/HnRenderEnvMapTask.hpp
     include/Tasks/HnPostProcessTask.hpp
     include/Tasks/HnReadRprimIdTask.hpp
-    include/Tasks/HnTaskController.hpp
+    include/Tasks/HnTaskManager.hpp
 )
 
 set(INTERFACE
