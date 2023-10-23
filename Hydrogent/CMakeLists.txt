@@ -27,31 +27,31 @@ set(SOURCE
 )
 
 set(INCLUDE
-    include/HnMaterial.hpp
-    include/HnMaterialNetwork.hpp
-    include/HnMesh.hpp
-    include/HnBuffer.hpp
-    include/HnRenderBuffer.hpp
-    include/HnRenderDelegate.hpp
-    include/HnRendererImpl.hpp
-    include/HnRenderPass.hpp
     include/HnShaderSourceFactory.hpp
-    include/HnRenderPassState.hpp
-    include/HnTokens.hpp
-    include/HnTextureIdentifier.hpp
-    include/HnTextureRegistry.hpp
-    include/HnTextureUtils.hpp
     include/HnTypeConversions.hpp
-    include/Tasks/HnTask.hpp
-    include/Tasks/HnSetupRenderingTask.hpp
-    include/Tasks/HnRenderRprimsTask.hpp
-    include/Tasks/HnRenderEnvMapTask.hpp
-    include/Tasks/HnPostProcessTask.hpp
-    include/Tasks/HnReadRprimIdTask.hpp
-    include/Tasks/HnTaskManager.hpp
+    include/HnTextureUtils.hpp
 )
 
 set(INTERFACE
+    interface/HnMaterial.hpp
+    interface/HnMaterialNetwork.hpp
+    interface/HnMesh.hpp
+    interface/HnBuffer.hpp
+    interface/HnRenderBuffer.hpp
+    interface/HnRenderDelegate.hpp
+    interface/HnRendererImpl.hpp
+    interface/HnRenderPass.hpp
+    interface/HnRenderPassState.hpp
+    interface/HnTokens.hpp
+    interface/HnTextureIdentifier.hpp
+    interface/HnTextureRegistry.hpp
+    interface/Tasks/HnTask.hpp
+    interface/Tasks/HnSetupRenderingTask.hpp
+    interface/Tasks/HnRenderRprimsTask.hpp
+    interface/Tasks/HnRenderEnvMapTask.hpp
+    interface/Tasks/HnPostProcessTask.hpp
+    interface/Tasks/HnReadRprimIdTask.hpp
+    interface/Tasks/HnTaskManager.hpp
     interface/HnTypes.hpp
     interface/HnRenderer.hpp
 )
