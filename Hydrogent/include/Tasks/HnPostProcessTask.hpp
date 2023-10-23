@@ -46,11 +46,26 @@ struct HnPostProcessTaskParams
 
     float4 SelectionColor = float4{0.75f, 0.75f, 0.25f, 0.5f};
 
+    float NonselectionDesaturationFactor = 0.5f;
+
+    // Tone mappig attribs
+    int   ToneMappingMode     = 0;     // TONE_MAPPING_MODE enum
+    float MiddleGray          = 0.18f; // Middle gray luminance
+    float WhitePoint          = 3.0f;  // White point luminance
+    float LuminanceSaturation = 1.0;   // Luminance saturation factor
+    float AverageLogLum       = 0.3f;  // Average log luminance of the scene
+
     constexpr bool operator==(const HnPostProcessTaskParams& rhs) const
     {
         // clang-format off
         return ConvertOutputToSRGB == rhs.ConvertOutputToSRGB &&
-               SelectionColor      == rhs.SelectionColor;
+               SelectionColor      == rhs.SelectionColor &&
+               NonselectionDesaturationFactor == rhs.NonselectionDesaturationFactor &&
+               ToneMappingMode     == rhs.ToneMappingMode &&
+               MiddleGray          == rhs.MiddleGray &&
+               WhitePoint          == rhs.WhitePoint &&
+               LuminanceSaturation == rhs.LuminanceSaturation &&
+               AverageLogLum       == rhs.AverageLogLum;
         // clang-format on
     }
 

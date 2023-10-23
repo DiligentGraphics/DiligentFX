@@ -1,3 +1,4 @@
+#include "ToneMapping.fxh"
 #include "HnPostProcessStructures.fxh"
 
 struct PSInput
@@ -17,6 +18,10 @@ void main(in PSInput PSIn,
           out float4 Color : SV_Target0)
 {
     Color = g_ColorBuffer.Load(int3(PSIn.Pos.xy, 0));
+
+#if TONE_MAPPING_MODE > TONE_MAPPING_MODE_NONE
+    Color.rgb = ToneMap(Color.rgb, g_Attribs.ToneMapping, g_Attribs.AverageLogLum);
+#endif
 
     float IsSelected0 = g_MeshId.Load(int3(PSIn.Pos.xy + float2(-1.0, -1.0), 0)).r < 0.0 ? -1.0 : +1.0;
     float IsSelected1 = g_MeshId.Load(int3(PSIn.Pos.xy + float2( 0.0, -1.0), 0)).r < 0.0 ? -1.0 : +1.0;

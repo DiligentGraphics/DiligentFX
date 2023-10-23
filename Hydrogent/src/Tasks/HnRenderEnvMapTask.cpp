@@ -118,7 +118,8 @@ void HnRenderEnvMapTask::Execute(pxr::HdTaskContext* TaskCtx)
         return;
 
     Diligent::HLSL::ToneMappingAttribs TMAttribs;
-    TMAttribs.iToneMappingMode     = TONE_MAPPING_MODE_UNCHARTED2;
+    // Tone mapping is performed in the post-processing pass
+    TMAttribs.iToneMappingMode     = TONE_MAPPING_MODE_NONE;
     TMAttribs.bAutoExposure        = 0;
     TMAttribs.fMiddleGray          = 0.18f;
     TMAttribs.bLightAdaptation     = 0;

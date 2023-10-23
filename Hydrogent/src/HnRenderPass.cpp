@@ -301,9 +301,10 @@ void HnRenderPass::RenderMesh(RenderState&      State,
         RendererParams.WireframeColor           = float4{1, 1, 1, 1}; //Attribs.WireframeColor;
         RendererParams.HighlightColor           = float4{0, 0, 0, 0};
 
-        RendererParams.AverageLogLum = 0.3f;  //Attribs.AverageLogLum;
-        RendererParams.MiddleGray    = 0.18f; //Attribs.MiddleGray;
-        RendererParams.WhitePoint    = 3.0f;  //Attribs.WhitePoint;
+        // Tone mapping is performed in the post-processing pass
+        RendererParams.AverageLogLum = 0.3f;
+        RendererParams.MiddleGray    = 0.18f;
+        RendererParams.WhitePoint    = 3.0f;
 
         auto CustomData = float4{static_cast<float>(Mesh.GetUID()), 0, 0, 1};
         //if (Attribs.SelectedPrim != nullptr && Mesh.GetId() == *Attribs.SelectedPrim)

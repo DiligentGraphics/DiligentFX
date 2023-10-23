@@ -103,6 +103,7 @@ void HnRendererImpl::LoadUSDStage(pxr::UsdStageRefPtr& Stage)
     {
         HnPostProcessTaskParams Params;
         Params.ConvertOutputToSRGB = m_ConvertOutputToSRGB;
+        Params.ToneMappingMode     = 4; // Uncharted2
         m_TaskManager->SetTaskParams(HnTaskManager::TaskUID_PostProcess, Params);
     }
 }
@@ -136,7 +137,6 @@ void HnRendererImpl::Update()
 
         m_RenderParamsChanged = false;
     }
-
 
     m_ImagingDelegate->ApplyPendingUpdates();
 }

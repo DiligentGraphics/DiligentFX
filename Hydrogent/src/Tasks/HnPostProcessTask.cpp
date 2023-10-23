@@ -37,6 +37,8 @@
 #include "CommonlyUsedStates.h"
 #include "GraphicsUtilities.h"
 #include "MapHelper.hpp"
+#include "../../../Utilities/include/DiligentFXShaderSourceStreamFactory.hpp"
+#include "ShaderSourceFactoryUtils.h"
 
 namespace Diligent
 {
@@ -49,6 +51,7 @@ namespace HLSL
 
 namespace
 {
+#include "Shaders/PostProcess/ToneMapping/public/ToneMappingStructures.fxh"
 #include "Shaders/PBR/public/PBR_Structures.fxh"
 #include "../shaders/HnPostProcessStructures.fxh"
 } // namespace
@@ -83,11 +86,21 @@ void HnPostProcessTask::PreparePSO(TEXTURE_FORMAT RTVFormat)
     RenderDeviceWithCache_N Device{RenderDelegate->GetDevice(), RenderDelegate->GetRenderStateCache()};
 
     ShaderCreateInfo ShaderCI;
-    ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
-    ShaderCI.pShaderSourceStreamFactory = &HnShaderSourceFactory::GetInstance();
+    ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL;
+
+    IShaderSourceInputStreamFactory* ppShaderSourceFactories[] =
+        {
+            &HnShaderSourceFactory::GetInstance(),
+            &DiligentFXShaderSourceStreamFactory::GetInstance(),
+        };
+    CompoundShaderSourceFactoryCreateInfo          CompoundSourceFactoryCI{ppShaderSourceFactories, _countof(ppShaderSourceFactories)};
+    RefCntAutoPtr<IShaderSourceInputStreamFactory> pCompoundSourceFactory;
+    CreateCompoundShaderSourceFactory(CompoundSourceFactoryCI, &pCompoundSourceFactory);
+    ShaderCI.pShaderSourceStreamFactory = pCompoundSourceFactory;
 
     ShaderMacroHelper Macros;
     Macros.Add("CONVERT_OUTPUT_TO_SRGB", m_Params.ConvertOutputToSRGB);
+    Macros.Add("TONE_MAPPING_MODE", m_Params.ToneMappingMode);
     ShaderCI.Macros = Macros;
 
     RefCntAutoPtr<IShader> pVS;
@@ -159,7 +172,8 @@ void HnPostProcessTask::Sync(pxr::HdSceneDelegate* Delegate,
         {
             HnPostProcessTaskParams Params = ParamsValue.UncheckedGet<HnPostProcessTaskParams>();
 
-            if (m_Params.ConvertOutputToSRGB != Params.ConvertOutputToSRGB)
+            if (m_Params.ConvertOutputToSRGB != Params.ConvertOutputToSRGB ||
+                m_Params.ToneMappingMode != Params.ToneMappingMode)
             {
                 // In OpenGL we can't release PSO in Worker thread
                 m_PsoIsDirty = true;
@@ -245,9 +259,16 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
     {
         MapHelper<HLSL::PostProcessAttribs> pDstShaderAttribs{pCtx, m_PostProcessAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
         pDstShaderAttribs->SelectionOutlineColor          = m_Params.SelectionColor;
-        pDstShaderAttribs->NonselectionDesaturationFactor = 0; //Attribs.SelectedPrim != nullptr && !Attribs.SelectedPrim->IsEmpty() ? 0.5f : 0.f;
-    }
+        pDstShaderAttribs->NonselectionDesaturationFactor = 0; //m_Params.NonselectionDesaturationFactor; //Attribs.SelectedPrim != nullptr && !Attribs.SelectedPrim->IsEmpty() ? 0.5f : 0.f;
 
+        pDstShaderAttribs->ToneMapping.iToneMappingMode     = m_Params.ToneMappingMode;
+        pDstShaderAttribs->ToneMapping.bAutoExposure        = 0;
+        pDstShaderAttribs->ToneMapping.fMiddleGray          = m_Params.MiddleGray;
+        pDstShaderAttribs->ToneMapping.bLightAdaptation     = 0;
+        pDstShaderAttribs->ToneMapping.fWhitePoint          = m_Params.WhitePoint;
+        pDstShaderAttribs->ToneMapping.fLuminanceSaturation = m_Params.LuminanceSaturation;
+        pDstShaderAttribs->AverageLogLum                    = m_Params.AverageLogLum;
+    }
     pCtx->SetPipelineState(m_PSO);
     m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_ColorBuffer")->Set(pOffscreenColorSRV);
     m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_MeshId")->Set(pMeshIdSRV);
