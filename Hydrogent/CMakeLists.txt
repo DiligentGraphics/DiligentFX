@@ -9,7 +9,6 @@ set(SOURCE
     src/HnBuffer.cpp
     src/HnRenderBuffer.cpp
     src/HnRenderDelegate.cpp
-    src/HnRendererImpl.cpp
     src/HnRenderPass.cpp
     src/HnShaderSourceFactory.cpp
     src/HnRenderPassState.cpp
@@ -39,10 +38,10 @@ set(INTERFACE
     interface/HnBuffer.hpp
     interface/HnRenderBuffer.hpp
     interface/HnRenderDelegate.hpp
-    interface/HnRendererImpl.hpp
     interface/HnRenderPass.hpp
     interface/HnRenderPassState.hpp
     interface/HnTokens.hpp
+    interface/HnTypes.hpp
     interface/HnTextureIdentifier.hpp
     interface/HnTextureRegistry.hpp
     interface/Tasks/HnTask.hpp
@@ -52,8 +51,6 @@ set(INTERFACE
     interface/Tasks/HnPostProcessTask.hpp
     interface/Tasks/HnReadRprimIdTask.hpp
     interface/Tasks/HnTaskManager.hpp
-    interface/HnTypes.hpp
-    interface/HnRenderer.hpp
 )
 
 file(GLOB_RECURSE SHADERS LIST_DIRECTORIES false shaders/*.*)
