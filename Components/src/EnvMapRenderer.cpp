@@ -31,6 +31,7 @@
 #include "RenderStateCache.hpp"
 #include "CommonlyUsedStates.h"
 #include "MapHelper.hpp"
+#include "GraphicsUtilities.h"
 
 namespace Diligent
 {
@@ -55,14 +56,27 @@ struct EnvMapRenderAttribs
 
 } // namespace HLSL
 
-EnvMapRenderer::EnvMapRenderer(const CreateInfo& CI)
+EnvMapRenderer::EnvMapRenderer(const CreateInfo& CI) :
+    m_pDevice{CI.pDevice},
+    m_pStateCache{CI.pStateCache},
+    m_pCameraAttribsCB{CI.pCameraAttribsCB},
+    m_RTVFormats{CI.RTVFormats, CI.RTVFormats + CI.NumRenderTargets},
+    m_DSVFormat{CI.DSVFormat}
 {
-    DEV_CHECK_ERR(CI.pDevice != nullptr, "Device must not be null");
-    DEV_CHECK_ERR(CI.pCameraAttribsCB != nullptr, "Camera Attribs CB must not be null");
+    DEV_CHECK_ERR(m_pDevice != nullptr, "Device must not be null");
+    DEV_CHECK_ERR(m_pCameraAttribsCB != nullptr, "Camera Attribs CB must not be null");
 
-    RenderDeviceWithCache<true> Device{CI.pDevice, CI.pStateCache};
+    CreateUniformBuffer(m_pDevice, sizeof(HLSL::EnvMapRenderAttribs), "EnvMap Render Attribs CB", &m_RenderAttribsCB);
+    VERIFY_EXPR(m_RenderAttribsCB != nullptr);
+}
 
-    m_RenderAttribsCB = Device.CreateBuffer("EnvMap Render Attribs CB", sizeof(HLSL::EnvMapRenderAttribs));
+IPipelineState* EnvMapRenderer::GetPSO(const PSOKey& Key)
+{
+    auto it = m_PSOs.find(Key);
+    if (it != m_PSOs.end())
+        return it->second;
+
+    RenderDeviceWithCache_N Device{m_pDevice, m_pStateCache};
 
     ShaderCreateInfo ShaderCI;
     ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
@@ -70,8 +84,8 @@ EnvMapRenderer::EnvMapRenderer(const CreateInfo& CI)
 
     ShaderMacroHelper Macros;
     Macros
-        .Add("CONVERT_OUTPUT_TO_SRGB", CI.ConvertOutputToSRGB)
-        .Add("TONE_MAPPING_MODE", CI.ToneMappingMode);
+        .Add("CONVERT_OUTPUT_TO_SRGB", Key.ConvertOutputToSRGB)
+        .Add("TONE_MAPPING_MODE", Key.ToneMappingMode);
     ShaderCI.Macros = Macros;
 
     RefCntAutoPtr<IShader> pVS;
@@ -81,6 +95,11 @@ EnvMapRenderer::EnvMapRenderer(const CreateInfo& CI)
         ShaderCI.FilePath   = "EnvMap.vsh";
 
         pVS = Device.CreateShader(ShaderCI);
+        if (!pVS)
+        {
+            UNEXPECTED("Failed to create environment map vertex shader");
+            return nullptr;
+        }
     }
 
     // Create pixel shader
@@ -91,6 +110,11 @@ EnvMapRenderer::EnvMapRenderer(const CreateInfo& CI)
         ShaderCI.FilePath   = "EnvMap.psh";
 
         pPS = Device.CreateShader(ShaderCI);
+        if (!pPS)
+        {
+            UNEXPECTED("Failed to create environment map pixel shader");
+            return nullptr;
+        }
     }
 
     PipelineResourceLayoutDescX ResourceLauout;
@@ -104,18 +128,30 @@ EnvMapRenderer::EnvMapRenderer(const CreateInfo& CI)
         .AddShader(pVS)
         .AddShader(pPS)
         .SetPrimitiveTopology(PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
-        .SetDepthFormat(CI.DSVFormat);
-    for (Uint32 i = 0; i < CI.NumRenderTargets; ++i)
-        PsoCI.AddRenderTarget(CI.RTVFormats[i]);
+        .SetDepthFormat(m_DSVFormat);
+    for (auto RTVFormat : m_RTVFormats)
+        PsoCI.AddRenderTarget(RTVFormat);
 
     PsoCI.GraphicsPipeline.DepthStencilDesc.DepthFunc = COMPARISON_FUNC_LESS_EQUAL;
 
-    m_PSO = Device.CreateGraphicsPipelineState(PsoCI);
-    m_PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbCameraAttribs")->Set(CI.pCameraAttribsCB);
-    m_PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbEnvMapRenderAttribs")->Set(m_RenderAttribsCB);
-    m_PSO->CreateShaderResourceBinding(&m_SRB, true);
-    m_pEnvMapVar = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "EnvMap");
-    VERIFY_EXPR(m_pEnvMapVar != nullptr);
+    auto PSO = Device.CreateGraphicsPipelineState(PsoCI);
+    if (!PSO)
+    {
+        UNEXPECTED("Failed to create environment map PSO");
+        return nullptr;
+    }
+    PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbCameraAttribs")->Set(m_pCameraAttribsCB);
+    PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbEnvMapRenderAttribs")->Set(m_RenderAttribsCB);
+
+    if (!m_SRB)
+    {
+        PSO->CreateShaderResourceBinding(&m_SRB, true);
+        m_pEnvMapVar = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "EnvMap");
+        VERIFY_EXPR(m_pEnvMapVar != nullptr);
+    }
+
+    m_PSOs.emplace(Key, PSO);
+    return PSO;
 }
 
 void EnvMapRenderer::Render(const RenderAttribs& Attribs, const HLSL::ToneMappingAttribs& ToneMapping)
@@ -132,6 +168,13 @@ void EnvMapRenderer::Render(const RenderAttribs& Attribs, const HLSL::ToneMappin
         return;
     }
 
+    auto* pPSO = GetPSO({ToneMapping.iToneMappingMode, Attribs.ConvertOutputToSRGB});
+    if (pPSO == nullptr)
+    {
+        UNEXPECTED("Failed to get PSO");
+        return;
+    }
+
     m_pEnvMapVar->Set(Attribs.pEnvMap);
 
     {
@@ -141,7 +184,7 @@ void EnvMapRenderer::Render(const RenderAttribs& Attribs, const HLSL::ToneMappin
         EnvMapAttribs->MipLevel      = Attribs.MipLevel;
     }
 
-    Attribs.pContext->SetPipelineState(m_PSO);
+    Attribs.pContext->SetPipelineState(pPSO);
     Attribs.pContext->CommitShaderResources(m_SRB, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
     DrawAttribs drawAttribs{3, DRAW_FLAG_VERIFY_ALL};
     Attribs.pContext->Draw(drawAttribs);

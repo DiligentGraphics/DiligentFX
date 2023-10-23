@@ -423,7 +423,7 @@
 "    {\n"
 "        // Perform tone mapping\n"
 "        ToneMappingAttribs TMAttribs;\n"
-"        TMAttribs.iToneMappingMode     = TONE_MAPPING_MODE_UNCHARTED2;\n"
+"        TMAttribs.iToneMappingMode     = TONE_MAPPING_MODE;\n"
 "        TMAttribs.bAutoExposure        = false;\n"
 "        TMAttribs.fMiddleGray          = g_PBRAttribs.Renderer.MiddleGray;\n"
 "        TMAttribs.bLightAdaptation     = false;\n"

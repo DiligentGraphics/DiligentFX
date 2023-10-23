@@ -24,11 +24,15 @@
  *  of the possibility of such damages.
  */
 
+#include <unordered_map>
+#include <vector>
+
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/DeviceContext.h"
 #include "../../../DiligentCore/Graphics/GraphicsTools/interface/RenderStateCache.h"
 #include "../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
 #include "../../../DiligentCore/Common/interface/BasicMath.hpp"
+#include "../../../DiligentCore/Common/interface/HashUtils.hpp"
 
 namespace Diligent
 {
@@ -38,7 +42,7 @@ namespace HLSL
 #include "../../Shaders/PostProcess/ToneMapping/public/ToneMappingStructures.fxh"
 } // namespace HLSL
 
-/// Renders environment map.
+/// Renders the environment map.
 class EnvMapRenderer
 {
 public:
@@ -51,11 +55,6 @@ public:
         Uint8          NumRenderTargets                        = 1;
         TEXTURE_FORMAT RTVFormats[DILIGENT_MAX_RENDER_TARGETS] = {TEX_FORMAT_RGBA8_UNORM_SRGB};
         TEXTURE_FORMAT DSVFormat                               = TEX_FORMAT_D32_FLOAT;
-
-        int ToneMappingMode = TONE_MAPPING_MODE_UNCHARTED2;
-
-        /// Manually convert shader output to sRGB color space.
-        bool ConvertOutputToSRGB = false;
     };
     EnvMapRenderer(const CreateInfo& CI);
 
@@ -66,13 +65,51 @@ public:
 
         float AverageLogLum = 1;
         float MipLevel      = 0;
+
+        /// Manually convert shader output to sRGB color space.
+        bool ConvertOutputToSRGB = false;
     };
     void Render(const RenderAttribs& Attribs, const HLSL::ToneMappingAttribs& ToneMapping);
 
+
+    struct PSOKey
+    {
+        const int  ToneMappingMode;
+        const bool ConvertOutputToSRGB;
+
+        PSOKey(int _ToneMappingMode, bool _ConvertOutputToSRGB) :
+            ToneMappingMode{_ToneMappingMode},
+            ConvertOutputToSRGB{_ConvertOutputToSRGB}
+        {}
+
+        constexpr bool operator==(const PSOKey& rhs) const
+        {
+            return (ToneMappingMode == rhs.ToneMappingMode &&
+                    ConvertOutputToSRGB == rhs.ConvertOutputToSRGB);
+        }
+
+        struct Hasher
+        {
+            size_t operator()(const PSOKey& Key) const
+            {
+                return ComputeHash(Key.ToneMappingMode, Key.ConvertOutputToSRGB);
+            }
+        };
+    };
+    IPipelineState* GetPSO(const PSOKey& Key);
+
 private:
-    RefCntAutoPtr<IPipelineState>         m_PSO;
+    RefCntAutoPtr<IRenderDevice>     m_pDevice;
+    RefCntAutoPtr<IRenderStateCache> m_pStateCache;
+    RefCntAutoPtr<IBuffer>           m_pCameraAttribsCB;
+    RefCntAutoPtr<IBuffer>           m_RenderAttribsCB;
+
+    const std::vector<TEXTURE_FORMAT> m_RTVFormats;
+    const TEXTURE_FORMAT              m_DSVFormat;
+
+    std::unordered_map<PSOKey, RefCntAutoPtr<IPipelineState>, PSOKey::Hasher> m_PSOs;
+
     RefCntAutoPtr<IShaderResourceBinding> m_SRB;
-    RefCntAutoPtr<IBuffer>                m_RenderAttribsCB;
     IShaderResourceVariable*              m_pEnvMapVar = nullptr;
 };
 
