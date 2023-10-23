@@ -219,8 +219,9 @@ public:
         PSO_FLAG_USE_TEXTURE_ATLAS         = 1u << 14u,
         PSO_FLAG_CONVERT_OUTPUT_TO_SRGB    = 1u << 15u,
         PSO_FLAG_ENABLE_CUSTOM_DATA_OUTPUT = 1u << 16u,
+        PSO_FLAG_ENABLE_TONE_MAPPING       = 1u << 17u,
 
-        PSO_FLAG_LAST = PSO_FLAG_ENABLE_CUSTOM_DATA_OUTPUT,
+        PSO_FLAG_LAST = PSO_FLAG_ENABLE_TONE_MAPPING,
 
         PSO_FLAG_VERTEX_ATTRIBS =
             PSO_FLAG_USE_VERTEX_COLORS |
@@ -236,7 +237,8 @@ public:
             PSO_FLAG_USE_PHYS_DESC_MAP |
             PSO_FLAG_USE_AO_MAP |
             PSO_FLAG_USE_EMISSIVE_MAP |
-            PSO_FLAG_USE_IBL,
+            PSO_FLAG_USE_IBL |
+            PSO_FLAG_ENABLE_TONE_MAPPING,
 
         PSO_FLAG_ALL = PSO_FLAG_LAST * 2u - 1u,
     };

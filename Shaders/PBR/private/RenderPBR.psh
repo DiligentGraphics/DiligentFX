@@ -4,7 +4,10 @@
 
 #include "BasicStructures.fxh"
 #include "PBR_Shading.fxh"
-#include "ToneMapping.fxh"
+
+#if ENABLE_TONE_MAPPING
+#   include "ToneMapping.fxh"
+#endif
 
 #include "VSOutputStruct.generated"
 // struct VSOutput
@@ -416,15 +419,19 @@ void main(in  VSOutput VSOut,
     }
 #   endif
 
-    // Perform tone mapping
-    ToneMappingAttribs TMAttribs;
-    TMAttribs.iToneMappingMode     = TONE_MAPPING_MODE_UNCHARTED2;
-    TMAttribs.bAutoExposure        = false;
-    TMAttribs.fMiddleGray          = g_PBRAttribs.Renderer.MiddleGray;
-    TMAttribs.bLightAdaptation     = false;
-    TMAttribs.fWhitePoint          = g_PBRAttribs.Renderer.WhitePoint;
-    TMAttribs.fLuminanceSaturation = 1.0;
-    color = ToneMap(color, TMAttribs, g_PBRAttribs.Renderer.AverageLogLum);
+#if ENABLE_TONE_MAPPING
+    {
+        // Perform tone mapping
+        ToneMappingAttribs TMAttribs;
+        TMAttribs.iToneMappingMode     = TONE_MAPPING_MODE;
+        TMAttribs.bAutoExposure        = false;
+        TMAttribs.fMiddleGray          = g_PBRAttribs.Renderer.MiddleGray;
+        TMAttribs.bLightAdaptation     = false;
+        TMAttribs.fWhitePoint          = g_PBRAttribs.Renderer.WhitePoint;
+        TMAttribs.fLuminanceSaturation = 1.0;
+        color = ToneMap(color, TMAttribs, g_PBRAttribs.Renderer.AverageLogLum);
+    }
+#endif
 
     // Add highlight color
     color = lerp(color, g_PBRAttribs.Renderer.HighlightColor.rgb, g_PBRAttribs.Renderer.HighlightColor.a);
