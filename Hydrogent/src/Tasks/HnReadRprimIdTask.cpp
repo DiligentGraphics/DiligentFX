@@ -52,15 +52,7 @@ void HnReadRprimIdTask::Sync(pxr::HdSceneDelegate* Delegate,
 {
     if (*DirtyBits & pxr::HdChangeTracker::DirtyParams)
     {
-        pxr::VtValue ParamsValue = Delegate->Get(GetId(), pxr::HdTokens->params);
-        if (ParamsValue.IsHolding<HnReadRprimIdTaskParams>())
-        {
-            m_Params = ParamsValue.UncheckedGet<HnReadRprimIdTaskParams>();
-        }
-        else
-        {
-            UNEXPECTED("Unknown task parameters type: ", ParamsValue.GetTypeName());
-        }
+        GetTaskParams(Delegate, m_Params);
     }
 
     *DirtyBits = pxr::HdChangeTracker::Clean;

@@ -55,15 +55,9 @@ void HnRenderEnvMapTask::Sync(pxr::HdSceneDelegate* Delegate,
 {
     if (*DirtyBits & pxr::HdChangeTracker::DirtyParams)
     {
-        pxr::VtValue ParamsValue = Delegate->Get(GetId(), pxr::HdTokens->params);
-        if (ParamsValue.IsHolding<HnRenderEnvMapTaskParams>())
+        HnRenderEnvMapTaskParams Params;
+        if (GetTaskParams(Delegate, Params))
         {
-            HnRenderEnvMapTaskParams Params = ParamsValue.UncheckedGet<HnRenderEnvMapTaskParams>();
-            (void)Params;
-        }
-        else
-        {
-            UNEXPECTED("Unknown task parameters type: ", ParamsValue.GetTypeName());
         }
     }
 

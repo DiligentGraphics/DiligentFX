@@ -31,6 +31,7 @@
 #include "pxr/imaging/hd/task.h"
 #include "pxr/imaging/hd/renderIndex.h"
 
+#include "../../../../DiligentCore/Platforms/Basic/interface/DebugUtilities.hpp"
 
 namespace Diligent
 {
@@ -53,6 +54,22 @@ protected:
 
     static ITextureView* GetRenderBufferTarget(pxr::HdRenderIndex& RenderIndex, const pxr::SdfPath& RenderBufferId);
     ITextureView*        GetRenderBufferTarget(pxr::HdRenderIndex& RenderIndex, pxr::HdTaskContext* TaskCtx, const pxr::TfToken& Name) const;
+
+    template <typename ParamType>
+    bool GetTaskParams(pxr::HdSceneDelegate* Delegate, ParamType& Param)
+    {
+        pxr::VtValue ParamsValue = Delegate->Get(GetId(), pxr::HdTokens->params);
+        if (ParamsValue.IsHolding<ParamType>())
+        {
+            Param = ParamsValue.UncheckedGet<ParamType>();
+            return true;
+        }
+        else
+        {
+            UNEXPECTED("Parameters type ", ParamsValue.GetTypeName(), " is not recognized by task ", GetId());
+            return false;
+        }
+    }
 };
 
 } // namespace USD

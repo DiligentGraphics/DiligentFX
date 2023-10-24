@@ -90,20 +90,14 @@ void HnSetupRenderingTask::Sync(pxr::HdSceneDelegate* Delegate,
 {
     if (*DirtyBits & pxr::HdChangeTracker::DirtyParams)
     {
-        pxr::VtValue ParamsValue = Delegate->Get(GetId(), pxr::HdTokens->params);
-        if (ParamsValue.IsHolding<HnSetupRenderingTaskParams>())
+        HnSetupRenderingTaskParams Params;
+        if (GetTaskParams(Delegate, Params))
         {
-            HnSetupRenderingTaskParams Params = ParamsValue.UncheckedGet<HnSetupRenderingTaskParams>();
-
             m_FinalColorTargetId = Params.FinalColorTargetId;
             m_ClearColor         = Params.ClearColor;
             m_ClearDepth         = Params.ClearDepth;
 
             UpdateRenderPassState(Params);
-        }
-        else
-        {
-            UNEXPECTED("Unknown task parameters type: ", ParamsValue.GetTypeName());
         }
     }
 

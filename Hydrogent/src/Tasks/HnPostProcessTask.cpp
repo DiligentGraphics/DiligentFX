@@ -167,11 +167,9 @@ void HnPostProcessTask::Sync(pxr::HdSceneDelegate* Delegate,
 {
     if (*DirtyBits & pxr::HdChangeTracker::DirtyParams)
     {
-        pxr::VtValue ParamsValue = Delegate->Get(GetId(), pxr::HdTokens->params);
-        if (ParamsValue.IsHolding<HnPostProcessTaskParams>())
+        HnPostProcessTaskParams Params;
+        if (GetTaskParams(Delegate, Params))
         {
-            HnPostProcessTaskParams Params = ParamsValue.UncheckedGet<HnPostProcessTaskParams>();
-
             if (m_Params.ConvertOutputToSRGB != Params.ConvertOutputToSRGB ||
                 m_Params.ToneMappingMode != Params.ToneMappingMode)
             {
@@ -180,10 +178,6 @@ void HnPostProcessTask::Sync(pxr::HdSceneDelegate* Delegate,
             }
 
             m_Params = Params;
-        }
-        else
-        {
-            UNEXPECTED("Unknown task parameters type: ", ParamsValue.GetTypeName());
         }
     }
 
