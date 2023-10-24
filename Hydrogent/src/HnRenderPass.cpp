@@ -105,9 +105,10 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
         State.PbrPSOCache              = USDRenderer->GetPbrPsoCacheAccessor(GraphicsDesc);
         VERIFY_EXPR(State.PbrPSOCache);
     }
-    else if (m_Params.RenderMode == HN_RENDER_MODE_MESH_EDGES)
+    else if (m_Params.RenderMode == HN_RENDER_MODE_MESH_EDGES ||
+             m_Params.RenderMode == HN_RENDER_MODE_POINTS)
     {
-        GraphicsDesc.PrimitiveTopology = PRIMITIVE_TOPOLOGY_LINE_LIST;
+        GraphicsDesc.PrimitiveTopology = m_Params.RenderMode == HN_RENDER_MODE_MESH_EDGES ? PRIMITIVE_TOPOLOGY_LINE_LIST : PRIMITIVE_TOPOLOGY_POINT_LIST;
         State.WireframePSOCache        = USDRenderer->GetWireframePsoCacheAccessor(GraphicsDesc);
         VERIFY_EXPR(State.WireframePSOCache);
     }
@@ -204,6 +205,9 @@ void HnRenderPass::RenderMesh(RenderState&      State,
     auto* const pNormalsVB    = Mesh.GetVertexBuffer(pxr::HdTokens->normals);
     const auto& ShaderAttribs = Material.GetShaderAttribs();
 
+    if (pPosVB == nullptr || pSRB == nullptr)
+        return;
+
     // Our shader currently supports two texture coordinate sets.
     // Gather vertex buffers for both sets.
     const auto& TexCoordSets    = Material.GetTextureCoordinateSets();
@@ -221,12 +225,30 @@ void HnRenderPass::RenderMesh(RenderState&      State,
         }
     }
 
-    auto* pIB = (m_Params.RenderMode == HN_RENDER_MODE_MESH_EDGES) ?
-        Mesh.GetEdgeIndexBuffer() :
-        Mesh.GetTriangleIndexBuffer();
+    IBuffer* pIB = nullptr;
+    switch (m_Params.RenderMode)
+    {
+        case HN_RENDER_MODE_SOLID:
+            pIB = Mesh.GetTriangleIndexBuffer();
+            if (pIB == nullptr)
+                return;
+            break;
 
-    if (pPosVB == nullptr || pIB == nullptr || pSRB == nullptr)
-        return;
+        case HN_RENDER_MODE_MESH_EDGES:
+            pIB = Mesh.GetEdgeIndexBuffer();
+            if (pIB == nullptr)
+                return;
+            break;
+
+        case HN_RENDER_MODE_POINTS:
+            pIB = nullptr;
+            break;
+
+        default:
+            UNEXPECTED("Unexpected render mode");
+            return;
+    }
+    static_assert(HN_RENDER_MODE_COUNT == 3, "Please handle the new render mode in the switch above");
 
     auto PSOFlags = PBR_Renderer::PSO_FLAG_ENABLE_CUSTOM_DATA_OUTPUT;
 
@@ -255,7 +277,8 @@ void HnRenderPass::RenderMesh(RenderState&      State,
                "This may indicate an issue in how alpha mode is determined in the material, or (less likely) an issue in Rprim sorting by Hydra.");
         pPSO = State.PbrPSOCache.Get({PSOFlags, static_cast<PBR_Renderer::ALPHA_MODE>(State.AlphaMode), /*DoubleSided = */ false}, true);
     }
-    else if (m_Params.RenderMode == HN_RENDER_MODE_MESH_EDGES)
+    else if (m_Params.RenderMode == HN_RENDER_MODE_MESH_EDGES ||
+             m_Params.RenderMode == HN_RENDER_MODE_POINTS)
     {
         pPSO = State.WireframePSOCache.Get({PSOFlags, /*DoubleSided = */ false}, true);
     }
@@ -274,7 +297,10 @@ void HnRenderPass::RenderMesh(RenderState&      State,
     // Bind vertex and index buffers
     IBuffer* pBuffs[] = {pPosVB, pNormalsVB, pTexCoordVBs[0], pTexCoordVBs[1]};
     State.pCtx->SetVertexBuffers(0, _countof(pBuffs), pBuffs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    State.pCtx->SetIndexBuffer(pIB, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    if (pIB != nullptr)
+    {
+        State.pCtx->SetIndexBuffer(pIB, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    }
 
     {
         MapHelper<HLSL::PBRShaderAttribs> pDstShaderAttribs{State.pCtx, State.pPBRAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
@@ -308,11 +334,21 @@ void HnRenderPass::RenderMesh(RenderState&      State,
     }
 
     State.pCtx->CommitShaderResources(pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    DrawIndexedAttribs DrawAttrs = (m_Params.RenderMode == HN_RENDER_MODE_MESH_EDGES) ?
-        DrawIndexedAttribs{Mesh.GetNumEdges() * 2, VT_UINT32, DRAW_FLAG_VERIFY_ALL} :
-        DrawIndexedAttribs{Mesh.GetNumTriangles() * 3, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
 
-    State.pCtx->DrawIndexed(DrawAttrs);
+    if (pIB != nullptr)
+    {
+        VERIFY_EXPR(m_Params.RenderMode == HN_RENDER_MODE_SOLID || m_Params.RenderMode == HN_RENDER_MODE_MESH_EDGES);
+        DrawIndexedAttribs DrawAttrs = (m_Params.RenderMode == HN_RENDER_MODE_MESH_EDGES) ?
+            DrawIndexedAttribs{Mesh.GetNumEdges() * 2, VT_UINT32, DRAW_FLAG_VERIFY_ALL} :
+            DrawIndexedAttribs{Mesh.GetNumTriangles() * 3, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
+        State.pCtx->DrawIndexed(DrawAttrs);
+    }
+    else
+    {
+        VERIFY_EXPR(m_Params.RenderMode == HN_RENDER_MODE_POINTS);
+        DrawAttribs DrawAttrs{Mesh.GetNumPoints(), DRAW_FLAG_VERIFY_ALL};
+        State.pCtx->Draw(DrawAttrs);
+    }
 }
 
 } // namespace USD

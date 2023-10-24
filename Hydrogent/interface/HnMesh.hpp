@@ -81,6 +81,7 @@ public:
 
     Uint32 GetNumTriangles() const { return m_NumTriangles; }
     Uint32 GetNumEdges() const { return m_NumEdges; }
+    Uint32 GetNumPoints() const { return m_Topology.GetNumPoints(); }
 
     const float4x4& GetTransform() const { return m_Transform; }
 

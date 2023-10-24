@@ -45,6 +45,8 @@ enum HN_RENDER_MODE
     /// Render wireframe
     HN_RENDER_MODE_MESH_EDGES,
 
+    /// Render points
+    HN_RENDER_MODE_POINTS,
 
     HN_RENDER_MODE_COUNT
 };
