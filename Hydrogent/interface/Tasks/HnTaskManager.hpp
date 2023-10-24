@@ -67,7 +67,7 @@ public:
 
     const pxr::SdfPath& GetId() const { return m_ManagerId; }
 
-    /// Returns the task list that can be passed to the Hydra engine for execution.
+    /// Returns the list of tasks that can be passed to the Hydra engine for execution.
     ///
     /// \param [in] TaskOrder - Optional task order. If not specified, the default order is used:
     ///                         - SetupRendering
@@ -78,7 +78,9 @@ public:
     ///                         - RenderRprimsTranslucent
     ///                         - ReadRprimId
     ///                         - PostProcess
-    /// \return The task list that can be passed to pxr::HdEngine::Execute.
+    /// \return The list of tasks that can be passed to pxr::HdEngine::Execute.
+    ///
+    /// \remarks Only enabled tasks are returned.
     const pxr::HdTaskSharedPtrVector GetTasks(const std::vector<TaskUID>* TaskOrder = nullptr) const;
 
     /// Sets new collection for the render tasks.
@@ -98,10 +100,12 @@ public:
     /// \param [in] TaskId - The task ID that will be used to register the task in the render index.
     /// \param [in] UID    - The task UID that will be used to identify the task in the task manager.
     /// \param [in] Params - The task parameters that will be associated with the task using the task ID.
+    /// \param [in] Enabled - Whether the task is enabled.
     template <typename TaskType, typename TaskParamsType>
     void CreateTask(const pxr::SdfPath& TaskId,
                     TaskUID             UID,
-                    TaskParamsType&&    Params);
+                    TaskParamsType&&    Params,
+                    bool                Enabled = true);
 
     /// Creates a new render task.
     ///
@@ -110,7 +114,8 @@ public:
     template <typename TaskType, typename TaskParamsType>
     void CreateTask(const pxr::TfToken& TaskId,
                     TaskUID             UID,
-                    TaskParamsType&&    Params);
+                    TaskParamsType&&    Params,
+                    bool                Enabled = true);
 
     template <typename TaskParamsType>
     bool SetTaskParams(TaskUID          UID,
@@ -121,6 +126,9 @@ public:
                        TaskParamsType&&    Params);
 
     void SetRenderRprimParams(const HnRenderRprimsTaskParams& Params);
+
+    void EnableTask(TaskUID UID, bool Enable);
+    bool IsTaskEnabled(TaskUID UID) const;
 
     pxr::HdTaskSharedPtr GetTask(TaskUID UID) const;
 
@@ -214,7 +222,12 @@ private:
     };
     TaskParamsDelegate m_ParamsDelegate;
 
-    std::unordered_map<TaskUID, pxr::SdfPath> m_TaskUIDs;
+    struct TaskInfo
+    {
+        pxr::SdfPath Id;
+        bool         Enabled = false;
+    };
+    std::unordered_map<TaskUID, TaskInfo> m_TaskInfo;
 
     std::vector<TaskUID>      m_DefaultTaskOrder;
     std::vector<pxr::SdfPath> m_RenderTaskIds;
@@ -229,11 +242,12 @@ void HnTaskManager::SetParameter(const pxr::SdfPath& TaskId, const pxr::TfToken&
 template <typename TaskType, typename TaskParamsType>
 void HnTaskManager::CreateTask(const pxr::SdfPath& TaskId,
                                TaskUID             UID,
-                               TaskParamsType&&    Params)
+                               TaskParamsType&&    Params,
+                               bool                Enabled)
 {
     m_RenderIndex.InsertTask<TaskType>(&m_ParamsDelegate, TaskId);
-    auto it_inserted = m_TaskUIDs.emplace(UID, TaskId);
-    VERIFY(it_inserted.second, "Task with UID ", UID, " already exists: ", it_inserted.first->second.GetText());
+    auto it_inserted = m_TaskInfo.emplace(UID, TaskInfo{TaskId, Enabled});
+    VERIFY(it_inserted.second, "Task with UID ", UID, " already exists: ", it_inserted.first->second.Id.GetText());
 
     m_ParamsDelegate.SetParameter(TaskId, pxr::HdTokens->params, std::forward<TaskParamsType>(Params));
     m_DefaultTaskOrder.emplace_back(UID);
@@ -242,9 +256,10 @@ void HnTaskManager::CreateTask(const pxr::SdfPath& TaskId,
 template <typename TaskType, typename TaskParamsType>
 void HnTaskManager::CreateTask(const pxr::TfToken& TaskId,
                                TaskUID             UID,
-                               TaskParamsType&&    Params)
+                               TaskParamsType&&    Params,
+                               bool                Enabled)
 {
-    CreateTask<TaskType>(pxr::SdfPath{GetId().AppendChild(TaskId)}, UID, std::forward<TaskParamsType>(Params));
+    CreateTask<TaskType>(pxr::SdfPath{GetId().AppendChild(TaskId)}, UID, std::forward<TaskParamsType>(Params), Enabled);
 }
 
 template <typename TaskParamsType>
@@ -265,11 +280,11 @@ template <typename TaskParamsType>
 bool HnTaskManager::SetTaskParams(TaskUID          UID,
                                   TaskParamsType&& Params)
 {
-    const auto it = m_TaskUIDs.find(UID);
-    if (it == m_TaskUIDs.end())
+    const auto it = m_TaskInfo.find(UID);
+    if (it == m_TaskInfo.end())
         return false;
 
-    return SetTaskParams(it->second, std::forward<TaskParamsType>(Params));
+    return SetTaskParams(it->second.Id, std::forward<TaskParamsType>(Params));
 }
 
 } // namespace USD

@@ -146,29 +146,29 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
 HnTaskManager::~HnTaskManager()
 {
     // Remove all tasks from the render index
-    for (const auto& it : m_TaskUIDs)
+    for (const auto& it : m_TaskInfo)
     {
-        m_RenderIndex.RemoveTask(it.second);
+        m_RenderIndex.RemoveTask(it.second.Id);
     }
-    m_TaskUIDs.clear();
+    m_TaskInfo.clear();
 }
 
 pxr::HdTaskSharedPtr HnTaskManager::GetTask(TaskUID UID) const
 {
-    auto it = m_TaskUIDs.find(UID);
-    return it != m_TaskUIDs.end() ?
-        m_RenderIndex.GetTask(it->second) :
+    auto it = m_TaskInfo.find(UID);
+    return it != m_TaskInfo.end() ?
+        m_RenderIndex.GetTask(it->second.Id) :
         nullptr;
 }
 
 void HnTaskManager::RemoveTask(TaskUID UID)
 {
-    auto it = m_TaskUIDs.find(UID);
-    if (it == m_TaskUIDs.end())
+    auto it = m_TaskInfo.find(UID);
+    if (it == m_TaskInfo.end())
         return;
 
-    m_RenderIndex.RemoveTask(it->second);
-    m_TaskUIDs.erase(it);
+    m_RenderIndex.RemoveTask(it->second.Id);
+    m_TaskInfo.erase(it);
 }
 
 void HnTaskManager::SetParameter(const pxr::SdfPath& TaskId, const TfToken& ValueKey, pxr::VtValue Value)
@@ -247,13 +247,17 @@ const pxr::HdTaskSharedPtrVector HnTaskManager::GetTasks(const std::vector<TaskU
         TaskOrder = &m_DefaultTaskOrder;
 
     pxr::HdTaskSharedPtrVector Tasks;
+    Tasks.reserve(TaskOrder->size());
     for (auto UID : *TaskOrder)
     {
-        auto it = m_TaskUIDs.find(UID);
-        if (it == m_TaskUIDs.end())
+        auto it = m_TaskInfo.find(UID);
+        if (it == m_TaskInfo.end())
             continue;
 
-        Tasks.push_back(m_RenderIndex.GetTask(it->second));
+        if (!it->second.Enabled)
+            continue;
+
+        Tasks.push_back(m_RenderIndex.GetTask(it->second.Id));
     }
 
     return Tasks;
@@ -307,6 +311,21 @@ const pxr::SdfPath* HnTaskManager::GetSelectedRprimId() const
     {
         return static_cast<const HnRenderDelegate*>(GetRenderIndex().GetRenderDelegate())->GetMeshPrimId(MeshIdx);
     }
+}
+
+void HnTaskManager::EnableTask(TaskUID UID, bool Enable)
+{
+    auto it = m_TaskInfo.find(UID);
+    if (it == m_TaskInfo.end())
+        return;
+
+    it->second.Enabled = Enable;
+}
+
+bool HnTaskManager::IsTaskEnabled(TaskUID UID) const
+{
+    auto it = m_TaskInfo.find(UID);
+    return it != m_TaskInfo.end() ? it->second.Enabled : false;
 }
 
 } // namespace USD
