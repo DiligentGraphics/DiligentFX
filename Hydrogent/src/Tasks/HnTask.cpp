@@ -60,20 +60,15 @@ ITextureView* HnTask::GetRenderBufferTarget(pxr::HdRenderIndex& RenderIndex, con
 
 ITextureView* HnTask::GetRenderBufferTarget(pxr::HdRenderIndex& RenderIndex, pxr::HdTaskContext* TaskCtx, const pxr::TfToken& Name) const
 {
-    auto id_it = TaskCtx->find(Name);
-    if (id_it == TaskCtx->end())
+    pxr::SdfPath RenderBufferId;
+    if (GetTaskContextData(TaskCtx, Name, RenderBufferId))
     {
-        UNEXPECTED("Render buffer Name '", Name, "' is not set in the task context");
+        return GetRenderBufferTarget(RenderIndex, RenderBufferId);
+    }
+    else
+    {
         return nullptr;
     }
-
-    if (!id_it->second.IsHolding<pxr::SdfPath>())
-    {
-        UNEXPECTED("Render buffer VtValue '", Name, "' is not holding SdfPath");
-        return nullptr;
-    }
-
-    return GetRenderBufferTarget(RenderIndex, id_it->second.Get<pxr::SdfPath>());
 }
 
 } // namespace USD

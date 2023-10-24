@@ -56,7 +56,33 @@ protected:
     ITextureView*        GetRenderBufferTarget(pxr::HdRenderIndex& RenderIndex, pxr::HdTaskContext* TaskCtx, const pxr::TfToken& Name) const;
 
     template <typename ParamType>
-    bool GetTaskParams(pxr::HdSceneDelegate* Delegate, ParamType& Param)
+    bool GetTaskContextData(pxr::HdTaskContext* TaskCtx, const pxr::TfToken& Name, ParamType& Param) const
+    {
+        if (TaskCtx == nullptr)
+        {
+            UNEXPECTED("Task context is null");
+            return false;
+        }
+
+        auto param_it = TaskCtx->find(Name);
+        if (param_it == TaskCtx->end())
+        {
+            UNEXPECTED("Parameter '", Name, "' is not set in the task context");
+            return false;
+        }
+
+        if (!param_it->second.IsHolding<ParamType>())
+        {
+            UNEXPECTED("Type ", param_it->second.GetTypeName(), " is not expected for parameter ", Name);
+            return false;
+        }
+
+        Param = param_it->second.UncheckedGet<ParamType>();
+        return true;
+    }
+
+    template <typename ParamType>
+    bool GetTaskParams(pxr::HdSceneDelegate* Delegate, ParamType& Param) const
     {
         pxr::VtValue ParamsValue = Delegate->Get(GetId(), pxr::HdTokens->params);
         if (ParamsValue.IsHolding<ParamType>())
