@@ -146,15 +146,26 @@ void HnRenderDelegate::DestroyInstancer(pxr::HdInstancer* instancer)
 pxr::HdRprim* HnRenderDelegate::CreateRprim(pxr::TfToken const& typeId,
                                             pxr::SdfPath const& rprimId)
 {
-    auto it = m_Meshes.emplace(rprimId, HnMesh::Create(typeId, rprimId, m_MeshUIDCounter.fetch_add(1)));
+    if (typeId == pxr::HdPrimTypeTokens->mesh)
+    {
+        auto it = m_Meshes.emplace(rprimId, HnMesh::Create(typeId, rprimId, m_MeshUIDCounter.fetch_add(1)));
 
-    m_MeshUIDToPrimId[it.first->second->GetUID()] = rprimId;
-    return it.first->second.get();
+        m_MeshUIDToPrimId[it.first->second->GetUID()] = rprimId;
+        return it.first->second.get();
+    }
+    else
+    {
+        UNEXPECTED("Unexpected Rprim Type: ", typeId.GetText());
+        return nullptr;
+    }
 }
 
 void HnRenderDelegate::DestroyRprim(pxr::HdRprim* rPrim)
 {
-    m_Meshes.erase(rPrim->GetId());
+    if (rPrim != nullptr)
+    {
+        m_Meshes.erase(rPrim->GetId());
+    }
 }
 
 pxr::HdSprim* HnRenderDelegate::CreateSprim(pxr::TfToken const& typeId,
@@ -168,8 +179,8 @@ pxr::HdSprim* HnRenderDelegate::CreateSprim(pxr::TfToken const& typeId,
     else
     {
         UNEXPECTED("Unexpected Sprim Type: ", typeId.GetText());
+        return nullptr;
     }
-    return nullptr;
 }
 
 pxr::HdSprim* HnRenderDelegate::CreateFallbackSprim(pxr::TfToken const& typeId)
@@ -196,10 +207,14 @@ pxr::HdBprim* HnRenderDelegate::CreateBprim(pxr::TfToken const& typeId,
     {
         auto  RenderBuffer = std::make_unique<HnRenderBuffer>(bprimId);
         auto* BPrim        = RenderBuffer.get();
-        m_BPrims.emplace(BPrim, std::move(RenderBuffer));
+        m_BPrims.emplace(bprimId, std::move(RenderBuffer));
         return BPrim;
     }
-    return nullptr;
+    else
+    {
+        UNEXPECTED("Unexpected Bprim Type: ", typeId.GetText());
+        return nullptr;
+    }
 }
 
 pxr::HdBprim* HnRenderDelegate::CreateFallbackBprim(pxr::TfToken const& typeId)
@@ -209,7 +224,10 @@ pxr::HdBprim* HnRenderDelegate::CreateFallbackBprim(pxr::TfToken const& typeId)
 
 void HnRenderDelegate::DestroyBprim(pxr::HdBprim* bprim)
 {
-    m_BPrims.erase(bprim);
+    if (bprim != nullptr)
+    {
+        m_BPrims.erase(bprim->GetId());
+    }
 }
 
 void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
