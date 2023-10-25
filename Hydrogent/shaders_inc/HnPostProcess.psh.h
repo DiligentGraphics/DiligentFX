@@ -23,6 +23,7 @@
 "    Color.rgb = ToneMap(Color.rgb, g_Attribs.ToneMapping, g_Attribs.AverageLogLum);\n"
 "#endif\n"
 "\n"
+"    // Selected rprim is rendered with negative index\n"
 "    float IsSelected0 = g_MeshId.Load(int3(PSIn.Pos.xy + float2(-1.0, -1.0), 0)).r < 0.0 ? -1.0 : +1.0;\n"
 "    float IsSelected1 = g_MeshId.Load(int3(PSIn.Pos.xy + float2( 0.0, -1.0), 0)).r < 0.0 ? -1.0 : +1.0;\n"
 "    float IsSelected2 = g_MeshId.Load(int3(PSIn.Pos.xy + float2(+1.0, -1.0), 0)).r < 0.0 ? -1.0 : +1.0;\n"

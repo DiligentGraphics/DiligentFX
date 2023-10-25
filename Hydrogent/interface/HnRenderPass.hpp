@@ -49,7 +49,8 @@ struct HnMeshRenderParams
     float EmissionScale     = 1;
     float IBLScale          = 1;
 
-    float4 WireframeColor = float4(1, 1, 1, 1);
+    float4 WireframeColor = float4{1, 1, 1, 1};
+    float4 PointColor     = float4{1, 1, 1, 1};
 
     float4x4 Transform = float4x4::Identity();
 

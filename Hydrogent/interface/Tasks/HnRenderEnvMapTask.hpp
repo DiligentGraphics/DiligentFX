@@ -50,7 +50,7 @@ struct HnRenderEnvMapTaskParams
     }
 };
 
-/// Post processing task implementation in Hydrogent.
+/// Renders the environment map.
 class HnRenderEnvMapTask final : public HnTask
 {
 public:

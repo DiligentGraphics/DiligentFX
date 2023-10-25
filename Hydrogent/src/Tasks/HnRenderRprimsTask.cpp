@@ -61,6 +61,7 @@ void HnRenderRprimsTask::UpdateRenderPassParams(const HnRenderRprimsTaskParams& 
     RenderPassParams.EmissionScale     = Params.EmissionScale;
     RenderPassParams.IBLScale          = Params.IBLScale;
     RenderPassParams.WireframeColor    = Params.WireframeColor;
+    RenderPassParams.PointColor        = Params.PointColor;
     RenderPassParams.Transform         = Params.Transform;
     RenderPassParams.SelectedPrimId    = Params.SelectedPrimId;
     static_cast<HnRenderPass*>(m_RenderPass.get())->SetMeshRenderParams(RenderPassParams);
@@ -74,9 +75,8 @@ void HnRenderRprimsTask::Sync(pxr::HdSceneDelegate* Delegate,
 
     if (*DirtyBits & pxr::HdChangeTracker::DirtyCollection)
     {
-        pxr::VtValue CollectionVal = Delegate->Get(GetId(), pxr::HdTokens->collection);
-
-        pxr::HdRprimCollection Collection = CollectionVal.Get<pxr::HdRprimCollection>();
+        pxr::VtValue           CollectionVal = Delegate->Get(GetId(), pxr::HdTokens->collection);
+        pxr::HdRprimCollection Collection    = CollectionVal.Get<pxr::HdRprimCollection>();
 
         if (Collection.GetName().IsEmpty())
         {
@@ -101,15 +101,10 @@ void HnRenderRprimsTask::Sync(pxr::HdSceneDelegate* Delegate,
 
     if (*DirtyBits & pxr::HdChangeTracker::DirtyParams)
     {
-        pxr::VtValue ParamsValue = Delegate->Get(GetId(), pxr::HdTokens->params);
-        if (ParamsValue.IsHolding<HnRenderRprimsTaskParams>())
+        HnRenderRprimsTaskParams Params;
+        if (GetTaskParams(Delegate, Params))
         {
-            HnRenderRprimsTaskParams Params = ParamsValue.UncheckedGet<HnRenderRprimsTaskParams>();
             UpdateRenderPassParams(Params);
-        }
-        else
-        {
-            UNEXPECTED("Unknown task parameters type: ", ParamsValue.GetTypeName());
         }
     }
 

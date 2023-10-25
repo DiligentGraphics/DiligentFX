@@ -59,7 +59,7 @@ struct HnReadRprimIdTaskParams
     }
 };
 
-/// Render task implementation in Hydrogent.
+/// Reads RPrim index from the mesh id target.
 class HnReadRprimIdTask final : public HnTask
 {
 public:

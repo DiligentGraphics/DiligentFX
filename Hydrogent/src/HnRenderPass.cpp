@@ -320,7 +320,7 @@ void HnRenderPass::RenderMesh(RenderState&      State,
         RendererParams.IBLScale          = m_Params.IBLScale;
 
         RendererParams.PrefilteredCubeMipLevels = 5; //m_Settings.UseIBL ? static_cast<float>(m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels) : 0.f;
-        RendererParams.WireframeColor           = m_Params.WireframeColor;
+        RendererParams.WireframeColor           = m_Params.RenderMode == HN_RENDER_MODE_POINTS ? m_Params.PointColor : m_Params.WireframeColor;
         RendererParams.HighlightColor           = float4{0, 0, 0, 0};
 
         // Tone mapping is performed in the post-processing pass

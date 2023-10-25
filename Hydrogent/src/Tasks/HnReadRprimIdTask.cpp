@@ -87,6 +87,9 @@ void HnReadRprimIdTask::Execute(pxr::HdTaskContext* TaskCtx)
         UNEXPECTED("Mesh ID readback queue is null.");
         return;
     }
+
+    // Render target Bprims are initialized by the HnSetupRenderingTask.
+
     ITextureView* pMeshIdRTV = GetRenderBufferTarget(*m_RenderIndex, TaskCtx, HnRenderResourceTokens->meshIdTarget);
     if (pMeshIdRTV == nullptr)
     {

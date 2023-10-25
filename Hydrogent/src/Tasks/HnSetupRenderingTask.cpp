@@ -143,7 +143,7 @@ void HnSetupRenderingTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
         auto TargetDesc      = FinalTargetDesc;
         TargetDesc.Name      = Name;
         TargetDesc.Format    = Format;
-        TargetDesc.BindFlags = (IsDepth ? BIND_DEPTH_STENCIL : BIND_RENDER_TARGET) | BIND_SHADER_RESOURCE;
+        TargetDesc.BindFlags = IsDepth ? BIND_DEPTH_STENCIL : (BIND_RENDER_TARGET | BIND_SHADER_RESOURCE);
 
         RefCntAutoPtr<ITexture> pTarget;
         pDevice->CreateTexture(TargetDesc, nullptr, &pTarget);
@@ -203,6 +203,7 @@ void HnSetupRenderingTask::Execute(pxr::HdTaskContext* TaskCtx)
     constexpr float Zero[] = {0, 0, 0, 0};
     pCtx->ClearRenderTarget(pRTVs[1], Zero, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     pCtx->ClearDepthStencil(m_pDepthDSV, CLEAR_DEPTH_FLAG, m_ClearDepth, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    pCtx->SetStencilRef(m_RenderPassState->GetStencilRef());
 }
 
 } // namespace USD

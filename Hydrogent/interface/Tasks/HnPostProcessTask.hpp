@@ -46,6 +46,7 @@ struct HnPostProcessTaskParams
 
     float4 SelectionColor = float4{0.75f, 0.75f, 0.25f, 0.5f};
 
+    /// Desaturation factor for non-selected objects
     float NonselectionDesaturationFactor = 0.0f;
 
     // Tone mappig attribs
@@ -75,7 +76,18 @@ struct HnPostProcessTaskParams
     }
 };
 
-/// Post processing task implementation in Hydrogent.
+/// Performs post processing:
+/// - Tone mapping
+/// - Selection outline
+/// - Converts output to sRGB, if needed
+///
+/// \remarks The task uses MeshId buffer to determine which pixels belong to selected objects.
+///          The index of the selected objects is negative.
+///
+///          The task gets offscreen color and mesh id Bprim buffer ids from the task context.
+///          It then retrieves the buffers from the render index.
+///          The final color buffer is also retrieved from the render index using the FinalColorTargetId
+///          extracted from the context.
 class HnPostProcessTask final : public HnTask
 {
 public:

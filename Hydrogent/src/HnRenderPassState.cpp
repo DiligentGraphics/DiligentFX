@@ -60,14 +60,11 @@ void HnRenderPassState::Begin(IDeviceContext* pContext)
     VERIFY(_stepSizeLighting == 0, "Step size lighting is not supported");
 
     //GfVec4f _overrideColor;
-    //GfVec4f _wireframeColor;
-    //GfVec4f _pointColor;
     //GfVec4f _maskColor;
     //GfVec4f _indicatorColor;
     //float   _pointSelectedSize;
     //GfVec2f _drawRange;
 
-    pContext->SetStencilRef(_stencilRef);
     pContext->SetBlendFactors(_blendConstantColor.data());
     Viewport VP{_viewport[0], _viewport[1], _viewport[2], _viewport[3]};
     pContext->SetViewports(1, &VP, 0, 0);

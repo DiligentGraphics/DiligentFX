@@ -49,9 +49,12 @@ struct HnRenderRprimsTaskParams
     float IBLScale          = 1;
 
     float4 WireframeColor = float4(1, 1, 1, 1);
+    float4 PointColor     = float4(1, 1, 1, 1);
 
     float4x4 Transform = float4x4::Identity();
 
+    /// Selected prim id.
+    /// Selected rprim is rendered with negative index.
     pxr::SdfPath SelectedPrimId;
 
     constexpr bool operator==(const HnRenderRprimsTaskParams& rhs) const
@@ -74,7 +77,9 @@ struct HnRenderRprimsTaskParams
     }
 };
 
-/// Render task implementation in Hydrogent.
+/// Renders the Rprims by executing the render pass.
+/// The task should be executed after the HnSetupRenderingTask that prepares
+/// render targets and sets the required task context parameters.
 class HnRenderRprimsTask final : public HnTask
 {
 public:

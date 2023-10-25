@@ -51,15 +51,9 @@ struct HnSetupRenderingTaskParams
         return ColorFormat          == rhs.ColorFormat &&
                MeshIdFormat         == rhs.MeshIdFormat &&
                DepthFormat          == rhs.DepthFormat &&
-               RenderMode           == rhs.RenderMode &&
                FrontFaceCCW         == rhs.FrontFaceCCW &&
-               DebugView            == rhs.DebugView &&
-               OcclusionStrength    == rhs.OcclusionStrength &&
-               EmissionScale        == rhs.EmissionScale &&
-               IBLScale             == rhs.IBLScale &&
                ClearColor           == rhs.ClearColor &&
                ClearDepth           == rhs.ClearDepth &&
-               Transform            == rhs.Transform &&
                DepthBias            == rhs.DepthBias &&
                SlopeScaledDepthBias == rhs.SlopeScaledDepthBias &&
                DepthFunc            == rhs.DepthFunc &&
@@ -86,19 +80,10 @@ struct HnSetupRenderingTaskParams
     TEXTURE_FORMAT MeshIdFormat = TEX_FORMAT_UNKNOWN;
     TEXTURE_FORMAT DepthFormat  = TEX_FORMAT_UNKNOWN;
 
-    HN_RENDER_MODE RenderMode = HN_RENDER_MODE_SOLID;
-
     bool FrontFaceCCW = false;
 
-    int   DebugView         = 0;
-    float OcclusionStrength = 1;
-    float EmissionScale     = 1;
-    float IBLScale          = 1;
-
-    float4 ClearColor;
+    float4 ClearColor = {0, 0, 0, 0};
     float  ClearDepth = 1.f;
-
-    float4x4 Transform = float4x4::Identity();
 
     float                  DepthBias            = 0;
     float                  SlopeScaledDepthBias = 0;
@@ -120,7 +105,15 @@ struct HnSetupRenderingTaskParams
     pxr::SdfPath FinalColorTargetId;
 };
 
-/// Post processing task implementation in Hydrogent.
+/// Sets up rendering state for subsequent tasks:
+/// - Prepares color and mesh id render targets and depth buffer
+///   - Retrieves final color Bprim from the render index using the FinalColorTargetId
+///   - (Re)creates the render targets if necessary
+///   - Inserts them into the render index as Bprims
+///   - Passes Bprim Id to subsequent tasks via the task context
+/// - Updates render pass state
+/// - Updates task context with the render pass state so that subsequent tasks can use it
+/// - Binds and clears render targets and depth buffer
 class HnSetupRenderingTask final : public HnTask
 {
 public:

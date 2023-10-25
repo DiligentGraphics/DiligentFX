@@ -23,6 +23,7 @@ void main(in PSInput PSIn,
     Color.rgb = ToneMap(Color.rgb, g_Attribs.ToneMapping, g_Attribs.AverageLogLum);
 #endif
 
+    // Selected rprim is rendered with negative index
     float IsSelected0 = g_MeshId.Load(int3(PSIn.Pos.xy + float2(-1.0, -1.0), 0)).r < 0.0 ? -1.0 : +1.0;
     float IsSelected1 = g_MeshId.Load(int3(PSIn.Pos.xy + float2( 0.0, -1.0), 0)).r < 0.0 ? -1.0 : +1.0;
     float IsSelected2 = g_MeshId.Load(int3(PSIn.Pos.xy + float2(+1.0, -1.0), 0)).r < 0.0 ? -1.0 : +1.0;

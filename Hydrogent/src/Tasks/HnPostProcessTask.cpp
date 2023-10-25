@@ -189,6 +189,7 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
 {
     m_RenderIndex = RenderIndex;
 
+    // Final color Bprim is initialized by the HnSetupRenderingTask.
     ITextureView* pFinalColorRTV = GetRenderBufferTarget(*RenderIndex, TaskCtx, HnRenderResourceTokens->finalColorTarget);
     if (pFinalColorRTV == nullptr)
     {
@@ -213,6 +214,9 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         UNEXPECTED("Render index is null. This likely indicates that Prepare() has not been called.");
         return;
     }
+
+    // Render target Bprims are initialized by the HnSetupRenderingTask.
+
     ITextureView* pFinalColorRTV = GetRenderBufferTarget(*m_RenderIndex, TaskCtx, HnRenderResourceTokens->finalColorTarget);
     if (pFinalColorRTV == nullptr)
     {
