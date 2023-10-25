@@ -138,6 +138,10 @@ void HnReadRprimIdTask::Execute(pxr::HdTaskContext* TaskCtx)
         VERIFY_EXPR(pStagingTex);
     }
 
+    // Unbind render targets from the device context since Diligent will have to do this anyway
+    // and will print a warning if the targets are still bound.
+    pCtx->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
+
     CopyTextureAttribs CopyAttribs;
     CopyAttribs.pSrcTexture = pMeshIdTexture;
     CopyAttribs.pDstTexture = pStagingTex;
