@@ -126,95 +126,105 @@ pxr::HdResourceRegistrySharedPtr HnRenderDelegate::GetResourceRegistry() const
     return {};
 }
 
-pxr::HdRenderPassSharedPtr HnRenderDelegate::CreateRenderPass(pxr::HdRenderIndex*           index,
-                                                              pxr::HdRprimCollection const& collection)
+pxr::HdRenderPassSharedPtr HnRenderDelegate::CreateRenderPass(pxr::HdRenderIndex*           Index,
+                                                              const pxr::HdRprimCollection& Collection)
 {
-    return HnRenderPass::Create(index, collection);
+    return HnRenderPass::Create(Index, Collection);
 }
 
 
-pxr::HdInstancer* HnRenderDelegate::CreateInstancer(pxr::HdSceneDelegate* delegate,
-                                                    pxr::SdfPath const&   id)
+pxr::HdInstancer* HnRenderDelegate::CreateInstancer(pxr::HdSceneDelegate* Delegate,
+                                                    const pxr::SdfPath&   Id)
 {
     return nullptr;
 }
 
-void HnRenderDelegate::DestroyInstancer(pxr::HdInstancer* instancer)
+void HnRenderDelegate::DestroyInstancer(pxr::HdInstancer* Instancer)
 {
 }
 
-pxr::HdRprim* HnRenderDelegate::CreateRprim(pxr::TfToken const& typeId,
-                                            pxr::SdfPath const& rprimId)
+pxr::HdRprim* HnRenderDelegate::CreateRprim(const pxr::TfToken& TypeId,
+                                            const pxr::SdfPath& RPrimId)
 {
-    if (typeId == pxr::HdPrimTypeTokens->mesh)
+    pxr::HdRprim* RPrim    = nullptr;
+    const Uint32  RPrimUID = m_RPrimNextUID.fetch_add(1);
+    if (TypeId == pxr::HdPrimTypeTokens->mesh)
     {
-        auto it = m_Meshes.emplace(rprimId, HnMesh::Create(typeId, rprimId, m_MeshUIDCounter.fetch_add(1)));
-
-        m_MeshUIDToPrimId[it.first->second->GetUID()] = rprimId;
-        return it.first->second.get();
+        HnMesh* Mesh = HnMesh::Create(TypeId, RPrimId, RPrimUID);
+        {
+            std::lock_guard<std::mutex> Guard{m_RPrimUIDToSdfPathMtx};
+            m_RPrimUIDToSdfPath[RPrimUID] = RPrimId;
+        }
+        {
+            std::lock_guard<std::mutex> Guard{m_MeshesMtx};
+            m_Meshes.emplace(Mesh);
+        }
+        RPrim = Mesh;
     }
     else
     {
-        UNEXPECTED("Unexpected Rprim Type: ", typeId.GetText());
-        return nullptr;
+        UNEXPECTED("Unexpected Rprim Type: ", TypeId.GetText());
     }
+
+    return RPrim;
 }
 
 void HnRenderDelegate::DestroyRprim(pxr::HdRprim* rPrim)
 {
-    if (rPrim != nullptr)
     {
-        m_Meshes.erase(rPrim->GetId());
+        std::lock_guard<std::mutex> Guard{m_MeshesMtx};
+        m_Meshes.erase(static_cast<HnMesh*>(rPrim));
     }
+    delete rPrim;
 }
 
-pxr::HdSprim* HnRenderDelegate::CreateSprim(pxr::TfToken const& typeId,
-                                            pxr::SdfPath const& sprimId)
+pxr::HdSprim* HnRenderDelegate::CreateSprim(const pxr::TfToken& TypeId,
+                                            const pxr::SdfPath& SPrimId)
 {
-    if (typeId == pxr::HdPrimTypeTokens->material)
+    pxr::HdSprim* SPrim = nullptr;
+    if (TypeId == pxr::HdPrimTypeTokens->material)
     {
-        auto it = m_Materials.emplace(sprimId, HnMaterial::Create(sprimId));
-        return it.first->second.get();
+        HnMaterial* Mat = HnMaterial::Create(SPrimId);
+        {
+            std::lock_guard<std::mutex> Guard{m_MaterialsMtx};
+            m_Materials.emplace(Mat);
+        }
+        SPrim = Mat;
     }
     else
     {
-        UNEXPECTED("Unexpected Sprim Type: ", typeId.GetText());
-        return nullptr;
+        UNEXPECTED("Unexpected Sprim Type: ", TypeId.GetText());
     }
+    return SPrim;
 }
 
-pxr::HdSprim* HnRenderDelegate::CreateFallbackSprim(pxr::TfToken const& typeId)
+pxr::HdSprim* HnRenderDelegate::CreateFallbackSprim(const pxr::TfToken& TypeId)
 {
     return nullptr;
 }
 
-void HnRenderDelegate::DestroySprim(pxr::HdSprim* sprim)
+void HnRenderDelegate::DestroySprim(pxr::HdSprim* SPrim)
 {
-    if (auto* material = dynamic_cast<pxr::HdMaterial*>(sprim))
     {
-        m_Materials.erase(material->GetId());
+        std::lock_guard<std::mutex> Guard{m_MaterialsMtx};
+        m_Materials.erase(static_cast<HnMaterial*>(SPrim));
     }
-    else if (sprim != nullptr)
-    {
-        UNEXPECTED("Unexpected Sprim Type: ", sprim->GetId().GetString());
-    }
+    delete SPrim;
 }
 
-pxr::HdBprim* HnRenderDelegate::CreateBprim(pxr::TfToken const& typeId,
-                                            pxr::SdfPath const& bprimId)
+pxr::HdBprim* HnRenderDelegate::CreateBprim(const pxr::TfToken& TypeId,
+                                            const pxr::SdfPath& BPrimId)
 {
-    if (typeId == pxr::HdPrimTypeTokens->renderBuffer)
+    pxr::HdBprim* BPrim = nullptr;
+    if (TypeId == pxr::HdPrimTypeTokens->renderBuffer)
     {
-        auto  RenderBuffer = std::make_unique<HnRenderBuffer>(bprimId);
-        auto* BPrim        = RenderBuffer.get();
-        m_BPrims.emplace(bprimId, std::move(RenderBuffer));
-        return BPrim;
+        BPrim = new HnRenderBuffer{BPrimId};
     }
     else
     {
-        UNEXPECTED("Unexpected Bprim Type: ", typeId.GetText());
-        return nullptr;
+        UNEXPECTED("Unexpected Bprim Type: ", TypeId.GetText());
     }
+    return BPrim;
 }
 
 pxr::HdBprim* HnRenderDelegate::CreateFallbackBprim(pxr::TfToken const& typeId)
@@ -222,37 +232,38 @@ pxr::HdBprim* HnRenderDelegate::CreateFallbackBprim(pxr::TfToken const& typeId)
     return nullptr;
 }
 
-void HnRenderDelegate::DestroyBprim(pxr::HdBprim* bprim)
+void HnRenderDelegate::DestroyBprim(pxr::HdBprim* BPrim)
 {
-    if (bprim != nullptr)
-    {
-        m_BPrims.erase(bprim->GetId());
-    }
+    delete BPrim;
 }
 
 void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
 {
     m_TextureRegistry.Commit(m_pContext);
-    for (auto mat_it : m_Materials)
+
     {
-        mat_it.second->UpdateSRB(m_pDevice, *m_USDRenderer, m_CameraAttribsCB, m_LightAttribsCB);
+        std::lock_guard<std::mutex> Guard{m_MaterialsMtx};
+        for (auto* pMat : m_Materials)
+        {
+            pMat->UpdateSRB(m_pDevice, *m_USDRenderer, m_CameraAttribsCB, m_LightAttribsCB);
+        }
     }
-    for (auto mesh_it : m_Meshes)
+
     {
-        mesh_it.second->CommitGPUResources(m_pDevice);
+        std::lock_guard<std::mutex> Guard{m_MeshesMtx};
+        for (auto* pMesh : m_Meshes)
+        {
+            pMesh->CommitGPUResources(m_pDevice);
+        }
     }
 }
 
-const HnMaterial* HnRenderDelegate::GetMaterial(const pxr::SdfPath& Id) const
+const pxr::SdfPath* HnRenderDelegate::GetRPrimId(Uint32 UID) const
 {
-    auto it = m_Materials.find(Id);
-    return it != m_Materials.end() ? it->second.get() : nullptr;
-}
+    std::lock_guard<std::mutex> Guard{m_RPrimUIDToSdfPathMtx};
 
-const pxr::SdfPath* HnRenderDelegate::GetMeshPrimId(Uint32 UID) const
-{
-    auto it = m_MeshUIDToPrimId.find(UID);
-    return it != m_MeshUIDToPrimId.end() ? &it->second : nullptr;
+    auto it = m_RPrimUIDToSdfPath.find(UID);
+    return it != m_RPrimUIDToSdfPath.end() ? &it->second : nullptr;
 }
 
 } // namespace USD

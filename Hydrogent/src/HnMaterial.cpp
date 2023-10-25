@@ -40,9 +40,9 @@ namespace Diligent
 namespace USD
 {
 
-std::shared_ptr<HnMaterial> HnMaterial::Create(const pxr::SdfPath& id)
+HnMaterial* HnMaterial::Create(const pxr::SdfPath& id)
 {
-    return std::shared_ptr<HnMaterial>(new HnMaterial{id});
+    return new HnMaterial{id};
 }
 
 HnMaterial::HnMaterial(const pxr::SdfPath& id) :

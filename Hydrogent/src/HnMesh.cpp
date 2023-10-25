@@ -42,11 +42,11 @@ namespace Diligent
 namespace USD
 {
 
-std::shared_ptr<HnMesh> HnMesh::Create(pxr::TfToken const& typeId,
-                                       pxr::SdfPath const& id,
-                                       Uint32              UID)
+HnMesh* HnMesh::Create(pxr::TfToken const& typeId,
+                       pxr::SdfPath const& id,
+                       Uint32              UID)
 {
-    return std::shared_ptr<HnMesh>(new HnMesh{typeId, id, UID});
+    return new HnMesh{typeId, id, UID};
 }
 
 HnMesh::HnMesh(pxr::TfToken const& typeId,

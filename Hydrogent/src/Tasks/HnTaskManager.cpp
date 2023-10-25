@@ -294,7 +294,7 @@ void HnTaskManager::SetRenderTags(const pxr::TfTokenVector& RenderTags)
     }
 }
 
-const pxr::SdfPath* HnTaskManager::GetSelectedRprimId() const
+const pxr::SdfPath* HnTaskManager::GetSelectedRPrimId() const
 {
     pxr::HdTaskSharedPtr pReadRprimIdTask = GetTask(TaskUID_ReadRprimId);
     if (!pReadRprimIdTask)
@@ -309,7 +309,7 @@ const pxr::SdfPath* HnTaskManager::GetSelectedRprimId() const
     }
     else
     {
-        return static_cast<const HnRenderDelegate*>(GetRenderIndex().GetRenderDelegate())->GetMeshPrimId(MeshIdx);
+        return static_cast<const HnRenderDelegate*>(GetRenderIndex().GetRenderDelegate())->GetRPrimId(MeshIdx);
     }
 }
 

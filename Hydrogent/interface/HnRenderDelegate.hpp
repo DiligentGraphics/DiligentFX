@@ -28,8 +28,10 @@
 
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 #include <string>
 #include <atomic>
+#include <mutex>
 
 #include "pxr/imaging/hd/renderDelegate.h"
 
@@ -89,12 +91,12 @@ public:
     //
 
     // Request to create a new renderpass.
-    // \param index the render index to bind to the new renderpass.
-    // \param collection the rprim collection to bind to the new renderpass.
+    // \param Index      - the render index to bind to the new renderpass.
+    // \param Collection - the rprim collection to bind to the new renderpass.
     // \return A shared pointer to the new renderpass or empty on error.
     //
-    virtual pxr::HdRenderPassSharedPtr CreateRenderPass(pxr::HdRenderIndex*           index,
-                                                        pxr::HdRprimCollection const& collection) override final;
+    virtual pxr::HdRenderPassSharedPtr CreateRenderPass(pxr::HdRenderIndex*           Index,
+                                                        const pxr::HdRprimCollection& Collection) override final;
 
 
     //
@@ -102,10 +104,10 @@ public:
     //
 
     // Request to create a new instancer.
-    // \param id The unique identifier of this instancer.
+    // \param  Id - The unique identifier of this instancer.
     // \return A pointer to the new instancer or nullptr on error.
-    virtual pxr::HdInstancer* CreateInstancer(pxr::HdSceneDelegate* delegate,
-                                              pxr::SdfPath const&   id) override final;
+    virtual pxr::HdInstancer* CreateInstancer(pxr::HdSceneDelegate* Delegate,
+                                              const pxr::SdfPath&   Id) override final;
 
     virtual void DestroyInstancer(pxr::HdInstancer* instancer) override final;
 
@@ -117,40 +119,40 @@ public:
 
 
     // Request to Allocate and Construct a new Rprim.
-    // \param typeId the type identifier of the prim to allocate
-    // \param rprimId a unique identifier for the prim
+    // \param TypeId  - the type identifier of the prim to allocate
+    // \param RPrimId - a unique identifier for the prim
     // \return A pointer to the new prim or nullptr on error.
-    virtual pxr::HdRprim* CreateRprim(pxr::TfToken const& typeId,
-                                      pxr::SdfPath const& rprimId) override final;
+    virtual pxr::HdRprim* CreateRprim(const pxr::TfToken& TypeId,
+                                      const pxr::SdfPath& RPrimId) override final;
 
     // Request to Destruct and deallocate the prim.
     virtual void DestroyRprim(pxr::HdRprim* rPrim) override final;
 
     // Request to Allocate and Construct a new Sprim.
-    // \param typeId the type identifier of the prim to allocate
-    // \param sprimId a unique identifier for the prim
+    // \param TypeId  - the type identifier of the prim to allocate
+    // \param SPrimId - a unique identifier for the prim
     // \return A pointer to the new prim or nullptr on error.
-    virtual pxr::HdSprim* CreateSprim(pxr::TfToken const& typeId,
-                                      pxr::SdfPath const& sprimId) override final;
+    virtual pxr::HdSprim* CreateSprim(const pxr::TfToken& TypeId,
+                                      const pxr::SdfPath& SPrimId) override final;
 
     // Request to Allocate and Construct an Sprim to use as a standin, if there
     // if an error with another another Sprim of the same type.  For example,
     // if another prim references a non-exisiting Sprim, the fallback could
     // be used.
     //
-    // \param typeId the type identifier of the prim to allocate
+    // \param TypeId  - the type identifier of the prim to allocate
     // \return A pointer to the new prim or nullptr on error.
-    virtual pxr::HdSprim* CreateFallbackSprim(pxr::TfToken const& typeId) override final;
+    virtual pxr::HdSprim* CreateFallbackSprim(const pxr::TfToken& TypeId) override final;
 
     // Request to Destruct and deallocate the prim.
     virtual void DestroySprim(pxr::HdSprim* sprim) override final;
 
     // Request to Allocate and Construct a new Bprim.
-    // \param typeId the type identifier of the prim to allocate
-    // \param sprimId a unique identifier for the prim
+    // \param TypeId  - the type identifier of the prim to allocate
+    // \param BPrimId - a unique identifier for the prim
     // \return A pointer to the new prim or nullptr on error.
-    virtual pxr::HdBprim* CreateBprim(pxr::TfToken const& typeId,
-                                      pxr::SdfPath const& bprimId) override final;
+    virtual pxr::HdBprim* CreateBprim(const pxr::TfToken& TypeId,
+                                      const pxr::SdfPath& BPrimId) override final;
 
 
     // Request to Allocate and Construct a Bprim to use as a standin, if there
@@ -158,12 +160,12 @@ public:
     // if another prim references a non-exisiting Bprim, the fallback could
     // be used.
     //
-    // \param typeId the type identifier of the prim to allocate
+    // \param TypeId - the type identifier of the prim to allocate
     // \return A pointer to the new prim or nullptr on error.
-    virtual pxr::HdBprim* CreateFallbackBprim(pxr::TfToken const& typeId) override final;
+    virtual pxr::HdBprim* CreateFallbackBprim(const pxr::TfToken& TypeId) override final;
 
     // Request to Destruct and deallocate the prim.
-    virtual void DestroyBprim(pxr::HdBprim* bprim) override final;
+    virtual void DestroyBprim(pxr::HdBprim* BPrim) override final;
 
     //
     // Sync, Execute & Dispatch Hooks
@@ -178,23 +180,11 @@ public:
     //
     // For example, the render delegate might fill primvar buffers or texture
     // memory.
-    virtual void CommitResources(pxr::HdChangeTracker* tracker) override final;
-
-    const auto& GetMeshes() const { return m_Meshes; }
+    virtual void CommitResources(pxr::HdChangeTracker* Tracker) override final;
 
     HnTextureRegistry& GetTextureRegistry() { return m_TextureRegistry; }
 
-    const HnMaterial* GetMaterial(const pxr::SdfPath& Id) const;
-
-    const pxr::SdfPath* GetMeshPrimId(Uint32 UID) const;
-
-    std::shared_ptr<HnMesh>& GetMesh(const pxr::SdfPath& Id)
-    {
-        static const std::shared_ptr<HnMesh> NullMesh;
-
-        auto it = m_Meshes.find(Id);
-        return it != m_Meshes.end() ? it->second : NullMesh;
-    }
+    const pxr::SdfPath* GetRPrimId(Uint32 UID) const;
 
     std::shared_ptr<USD_Renderer> GetUSDRenderer() { return m_USDRenderer; }
 
@@ -218,13 +208,15 @@ private:
 
     HnTextureRegistry m_TextureRegistry;
 
-    std::atomic<Uint32> m_MeshUIDCounter{1};
+    std::atomic<Uint32>                      m_RPrimNextUID{1};
+    mutable std::mutex                       m_RPrimUIDToSdfPathMtx;
+    std::unordered_map<Uint32, pxr::SdfPath> m_RPrimUIDToSdfPath;
 
-    std::unordered_map<pxr::SdfPath, std::shared_ptr<HnMaterial>, pxr::SdfPath::Hash> m_Materials;
-    std::unordered_map<pxr::SdfPath, std::shared_ptr<HnMesh>, pxr::SdfPath::Hash>     m_Meshes;
-    std::unordered_map<Uint32, pxr::SdfPath>                                          m_MeshUIDToPrimId;
+    std::mutex                  m_MeshesMtx;
+    std::unordered_set<HnMesh*> m_Meshes;
 
-    std::unordered_map<pxr::SdfPath, std::unique_ptr<pxr::HdBprim>, pxr::SdfPath::Hash> m_BPrims;
+    std::mutex                      m_MaterialsMtx;
+    std::unordered_set<HnMaterial*> m_Materials;
 };
 
 } // namespace USD

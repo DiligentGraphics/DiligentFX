@@ -59,7 +59,7 @@ namespace HLSL
 class HnMaterial final : public pxr::HdMaterial
 {
 public:
-    static std::shared_ptr<HnMaterial> Create(const pxr::SdfPath& id);
+    static HnMaterial* Create(const pxr::SdfPath& id);
 
     ~HnMaterial();
 

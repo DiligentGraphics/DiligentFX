@@ -138,7 +138,7 @@ public:
     /// - if no selected Rprim data is available, returns nullptr.
     /// - if no Rprim is selected, returns empty path.
     /// - if an Rprim is selected, returns the Sdf Path of the selected Rprim.
-    const pxr::SdfPath* GetSelectedRprimId() const;
+    const pxr::SdfPath* GetSelectedRPrimId() const;
 
 private:
     pxr::SdfPath GetRenderRprimsTaskId(const pxr::TfToken& MaterialTag) const;

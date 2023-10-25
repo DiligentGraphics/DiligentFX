@@ -124,15 +124,16 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
             continue;
 
         const pxr::SdfPath& RPrimID = pDrawItem->GetRprimID();
-        if (auto& pMesh = pRenderDelegate->GetMesh(RPrimID))
-        {
-            const auto& MaterialId = pMesh->GetMaterialId();
-            const auto* pMaterial  = pRenderDelegate->GetMaterial(MaterialId);
-            if (pMaterial == nullptr)
-                continue;
+        const pxr::HdRprim* pRPrim  = pRenderIndex->GetRprim(RPrimID);
+        if (pRPrim == nullptr)
+            continue;
 
-            RenderMesh(State, *pMesh, *pMaterial);
-        }
+        const auto&         MaterialId = pRPrim->GetMaterialId();
+        const pxr::HdSprim* pMaterial  = pRenderIndex->GetSprim(pxr::HdPrimTypeTokens->material, MaterialId);
+        if (pMaterial == nullptr)
+            continue;
+
+        RenderMesh(State, *static_cast<const HnMesh*>(pRPrim), *static_cast<const HnMaterial*>(pMaterial));
     }
 }
 

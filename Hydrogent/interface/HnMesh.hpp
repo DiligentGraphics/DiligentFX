@@ -49,9 +49,9 @@ namespace USD
 class HnMesh final : public pxr::HdMesh
 {
 public:
-    static std::shared_ptr<HnMesh> Create(const pxr::TfToken& typeId,
-                                          const pxr::SdfPath& id,
-                                          Uint32              UID);
+    static HnMesh* Create(const pxr::TfToken& typeId,
+                          const pxr::SdfPath& id,
+                          Uint32              UID);
 
     ~HnMesh();
 
