@@ -110,6 +110,7 @@ INTERFACE
 if(MSVC)
     target_compile_definitions(USD_LIBS INTERFACE NOMINMAX)
     target_compile_options(USD_LIBS INTERFACE /wd4244 /wd4305 /wd4127 /wd4267)
+    target_compile_options(Diligent-Hydrogent PRIVATE /permissive-)
 endif()
 
 target_link_libraries(USD_LIBS

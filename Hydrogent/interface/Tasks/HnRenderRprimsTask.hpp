@@ -96,7 +96,7 @@ public:
 
     virtual void Execute(pxr::HdTaskContext* TaskCtx) override final;
 
-    const pxr::TfTokenVector& GetRenderTags() const
+    virtual const pxr::TfTokenVector& GetRenderTags() const override final
     {
         return m_RenderTags;
     }

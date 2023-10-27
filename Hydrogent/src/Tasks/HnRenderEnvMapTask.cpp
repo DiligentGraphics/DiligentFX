@@ -100,7 +100,7 @@ void HnRenderEnvMapTask::Execute(pxr::HdTaskContext* TaskCtx)
 
     HnRenderDelegate* pRenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
 
-    auto& USDRenderer = pRenderDelegate->GetUSDRenderer();
+    auto USDRenderer = pRenderDelegate->GetUSDRenderer();
     if (!USDRenderer)
     {
         UNEXPECTED("USD renderer is not initialized");

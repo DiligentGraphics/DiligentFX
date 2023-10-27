@@ -154,7 +154,7 @@ private:
     const pxr::SdfPath  m_ManagerId;
 
     // Custom delegate to pass parameters to the render tasks.
-    class HnTaskManager::TaskParamsDelegate final : public pxr::HdSceneDelegate
+    class TaskParamsDelegate final : public pxr::HdSceneDelegate
     {
     public:
         TaskParamsDelegate(pxr::HdRenderIndex& Index,
@@ -236,7 +236,7 @@ private:
 template <typename ParamterType>
 void HnTaskManager::SetParameter(const pxr::SdfPath& TaskId, const pxr::TfToken& ValueKey, ParamterType&& Value)
 {
-    m_ParamsDelegate.SetParameter(TaskId, pxr::HdTokens->params, std::forward<TaskParamsType>(Params));
+    m_ParamsDelegate.SetParameter(TaskId, pxr::HdTokens->params, std::forward<ParamterType>(Value));
 }
 
 template <typename TaskType, typename TaskParamsType>
@@ -266,7 +266,7 @@ template <typename TaskParamsType>
 bool HnTaskManager::SetTaskParams(const pxr::SdfPath& TaskId,
                                   TaskParamsType&&    Params)
 {
-    auto OldParams = m_ParamsDelegate.GetParameter<std::remove_reference<TaskParamsType>::type>(TaskId, pxr::HdTokens->params);
+    auto OldParams = m_ParamsDelegate.GetParameter<typename std::remove_reference<TaskParamsType>::type>(TaskId, pxr::HdTokens->params);
     if (OldParams == Params)
         return false;
 

@@ -85,7 +85,7 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
     pxr::HdRenderIndex* pRenderIndex    = GetRenderIndex();
     HnRenderDelegate*   pRenderDelegate = static_cast<HnRenderDelegate*>(pRenderIndex->GetRenderDelegate());
 
-    auto& USDRenderer = pRenderDelegate->GetUSDRenderer();
+    auto USDRenderer = pRenderDelegate->GetUSDRenderer();
     if (!USDRenderer)
     {
         UNEXPECTED("USD renderer is not initialized");

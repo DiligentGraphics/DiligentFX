@@ -192,6 +192,7 @@ public:
     IDeviceContext*    GetDeviceContext() const { return m_pContext; }
     IRenderStateCache* GetRenderStateCache() const { return m_pRenderStateCache; }
     IBuffer*           GetCameraAttribsCB() const { return m_CameraAttribsCB; }
+    IBuffer*           GetLightAttribsCB() const { return m_LightAttribsCB; }
 
 private:
     static const pxr::TfTokenVector SupportedRPrimTypes;
