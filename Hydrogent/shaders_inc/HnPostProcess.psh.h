@@ -49,4 +49,6 @@
 "#if CONVERT_OUTPUT_TO_SRGB\n"
 "    Color.rgb = pow(Color.rgb, float3(1.0/2.2, 1.0/2.2, 1.0/2.2));\n"
 "#endif\n"
+"\n"
+"    Color.a = 1.0;\n"
 "}\n"
