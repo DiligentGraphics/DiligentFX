@@ -79,7 +79,7 @@ public:
     static constexpr Uint32 InvalidMeshIndex = ~0u;
 
     /// Returns the mesh index that was read from the mesh id target last time the task was executed.
-    /// If Mesh Id is not available, returns ~0u.
+    /// If Mesh Id is not available, returns InvalidMeshIndex (~0u).
     Uint32 GetMeshIndex() const { return m_MeshIndex; }
 
 private:

@@ -304,12 +304,16 @@ const pxr::SdfPath* HnTaskManager::GetSelectedRPrimId() const
     const Uint32       MeshIdx         = ReadRprimIdTask.GetMeshIndex();
     if (MeshIdx == HnReadRprimIdTask::InvalidMeshIndex)
     {
-        static const pxr::SdfPath EmptyPath;
-        return &EmptyPath;
+        // Data is not yet available
+        return nullptr;
     }
     else
     {
-        return static_cast<const HnRenderDelegate*>(GetRenderIndex().GetRenderDelegate())->GetRPrimId(MeshIdx);
+        const pxr::SdfPath*       rPRimId = static_cast<const HnRenderDelegate*>(GetRenderIndex().GetRenderDelegate())->GetRPrimId(MeshIdx);
+        static const pxr::SdfPath EmptyPath;
+        return rPRimId != nullptr ?
+            rPRimId :
+            &EmptyPath; // Return empty path to indicate that the data is available, but no RPrim is not selected
     }
 }
 
