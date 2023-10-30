@@ -64,6 +64,20 @@ void HnRenderEnvMapTask::Sync(pxr::HdSceneDelegate* Delegate,
     *DirtyBits = pxr::HdChangeTracker::Clean;
 }
 
+static constexpr char EnvMapPSMain[] = R"(
+void main(in  float4 Pos       : SV_Position,
+          in  float4 ClipPos   : CLIP_POS,
+          out float4 Color     : SV_Target0,
+          out float4 MeshId    : SV_Target1,
+          out float4 Selection : SV_Target2)
+{
+    Color.rgb = SampleEnvMap(ClipPos);
+    Color.a = 1.0;
+    MeshId = float4(0.0, 0.0, 0.0, 1.0);
+	Selection = float4(0.0, 0.0, 0.0, 1.0);
+}
+)";
+
 void HnRenderEnvMapTask::Prepare(pxr::HdTaskContext* TaskCtx,
                                  pxr::HdRenderIndex* RenderIndex)
 {
@@ -84,6 +98,14 @@ void HnRenderEnvMapTask::Prepare(pxr::HdTaskContext* TaskCtx,
                 EnvMapRndrCI.RTVFormats[rt] = RenderPassState->GetRenderTargetFormat(rt);
             EnvMapRndrCI.DSVFormat = RenderPassState->GetDepthStencilFormat();
 
+            if (EnvMapRndrCI.pDevice->GetDeviceInfo().IsGLDevice())
+            {
+                // Normally, environment map shader does not need to write to MeshID and Selection
+                // target. However, in OpenGL this somehow results in color output also being
+                // written to both MeshID and Selection targets. To work around this issue, we
+                // use a shader that writes 0 to both targets.
+                EnvMapRndrCI.PSMainSource = EnvMapPSMain;
+            }
             m_EnvMapRenderer = std::make_unique<EnvMapRenderer>(EnvMapRndrCI);
         }
         else
