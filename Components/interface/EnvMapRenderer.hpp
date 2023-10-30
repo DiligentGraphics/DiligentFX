@@ -55,6 +55,8 @@ public:
         Uint8          NumRenderTargets                        = 1;
         TEXTURE_FORMAT RTVFormats[DILIGENT_MAX_RENDER_TARGETS] = {TEX_FORMAT_RGBA8_UNORM_SRGB};
         TEXTURE_FORMAT DSVFormat                               = TEX_FORMAT_D32_FLOAT;
+
+        const char* PSMainSource = nullptr;
     };
     EnvMapRenderer(const CreateInfo& CI);
 
@@ -106,6 +108,7 @@ private:
 
     const std::vector<TEXTURE_FORMAT> m_RTVFormats;
     const TEXTURE_FORMAT              m_DSVFormat;
+    const std::string                 m_PSMainSource;
 
     std::unordered_map<PSOKey, RefCntAutoPtr<IPipelineState>, PSOKey::Hasher> m_PSOs;
 

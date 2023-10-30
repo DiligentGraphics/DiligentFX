@@ -817,7 +817,6 @@ void PBR_Renderer::CreateShaders(PSO_FLAGS               PSOFlags,
     const auto VSOutputStruct = GetVSOutputStruct(PSOFlags);
 
     std::string PSMainSource;
-
     if (m_Settings.GetPSMainSource)
     {
         PSMainSource = m_Settings.GetPSMainSource(PSOFlags);

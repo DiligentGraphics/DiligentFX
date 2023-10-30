@@ -19,13 +19,11 @@ cbuffer cbEnvMapRenderAttribs
 TextureCube  EnvMap;
 SamplerState EnvMap_sampler;
 
-void main(in  float4 Pos     : SV_Position,
-          in  float4 ClipPos : CLIP_POS,
-          out float4 Color   : SV_Target)
+float3 SampleEnvMap(in float4 ClipPos)
 {
-    float4 WorldPos = mul(ClipPos, g_CameraAttribs.mViewProjInv);
+    float4 WorldPos  = mul(ClipPos, g_CameraAttribs.mViewProjInv);
     float3 Direction = WorldPos.xyz / WorldPos.w - g_CameraAttribs.f4Position.xyz;
-    Color.rgb = EnvMap.SampleLevel(EnvMap_sampler, Direction, MipLevel).rgb;
+    float3 Color     = EnvMap.SampleLevel(EnvMap_sampler, Direction, MipLevel).rgb;
 
 #if TONE_MAPPING_MODE > TONE_MAPPING_MODE_NONE    
     Color.rgb = ToneMap(Color.rgb, g_ToneMappingAttribs, AverageLogLum);
@@ -35,5 +33,14 @@ void main(in  float4 Pos     : SV_Position,
     Color.rgb = pow(Color.rgb, float3(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2));
 #endif
 
-    Color.a = 1.0;
+    return Color;
 }
+
+#include "PSMainGenerated.generated"
+// void main(in  float4 Pos     : SV_Position,
+//           in  float4 ClipPos : CLIP_POS,
+//           out float4 Color   : SV_Target)
+// {
+//     Color.rgb = SampleEnvMap(ClipPos);
+//     Color.a = 1.0;
+// }

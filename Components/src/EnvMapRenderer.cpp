@@ -32,6 +32,7 @@
 #include "CommonlyUsedStates.h"
 #include "MapHelper.hpp"
 #include "GraphicsUtilities.h"
+#include "ShaderSourceFactoryUtils.h"
 
 namespace Diligent
 {
@@ -61,7 +62,8 @@ EnvMapRenderer::EnvMapRenderer(const CreateInfo& CI) :
     m_pStateCache{CI.pStateCache},
     m_pCameraAttribsCB{CI.pCameraAttribsCB},
     m_RTVFormats{CI.RTVFormats, CI.RTVFormats + CI.NumRenderTargets},
-    m_DSVFormat{CI.DSVFormat}
+    m_DSVFormat{CI.DSVFormat},
+    m_PSMainSource{CI.PSMainSource != nullptr ? CI.PSMainSource : ""}
 {
     DEV_CHECK_ERR(m_pDevice != nullptr, "Device must not be null");
     DEV_CHECK_ERR(m_pCameraAttribsCB != nullptr, "Camera Attribs CB must not be null");
@@ -69,6 +71,16 @@ EnvMapRenderer::EnvMapRenderer(const CreateInfo& CI) :
     CreateUniformBuffer(m_pDevice, sizeof(HLSL::EnvMapRenderAttribs), "EnvMap Render Attribs CB", &m_RenderAttribsCB);
     VERIFY_EXPR(m_RenderAttribsCB != nullptr);
 }
+
+static constexpr char DefaultPSMain[] = R"(
+void main(in  float4 Pos     : SV_Position,
+          in  float4 ClipPos : CLIP_POS,
+          out float4 Color   : SV_Target)
+{
+    Color.rgb = SampleEnvMap(ClipPos);
+    Color.a = 1.0;
+}
+)";
 
 IPipelineState* EnvMapRenderer::GetPSO(const PSOKey& Key)
 {
@@ -78,9 +90,26 @@ IPipelineState* EnvMapRenderer::GetPSO(const PSOKey& Key)
 
     RenderDeviceWithCache_N Device{m_pDevice, m_pStateCache};
 
+    std::string PSMainSource = m_PSMainSource;
+    if (PSMainSource.empty())
+        PSMainSource = DefaultPSMain;
+
+    MemoryShaderSourceFileInfo GeneratedSources[] =
+        {
+            MemoryShaderSourceFileInfo{"PSMainGenerated.generated", PSMainSource},
+        };
+    MemoryShaderSourceFactoryCreateInfo            MemorySourceFactoryCI{GeneratedSources, _countof(GeneratedSources)};
+    RefCntAutoPtr<IShaderSourceInputStreamFactory> pMemorySourceFactory;
+    CreateMemoryShaderSourceFactory(MemorySourceFactoryCI, &pMemorySourceFactory);
+
+    IShaderSourceInputStreamFactory*               ppShaderSourceFactories[] = {&DiligentFXShaderSourceStreamFactory::GetInstance(), pMemorySourceFactory};
+    CompoundShaderSourceFactoryCreateInfo          CompoundSourceFactoryCI{ppShaderSourceFactories, _countof(ppShaderSourceFactories)};
+    RefCntAutoPtr<IShaderSourceInputStreamFactory> pCompoundSourceFactory;
+    CreateCompoundShaderSourceFactory(CompoundSourceFactoryCI, &pCompoundSourceFactory);
+
     ShaderCreateInfo ShaderCI;
     ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
-    ShaderCI.pShaderSourceStreamFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();
+    ShaderCI.pShaderSourceStreamFactory = pCompoundSourceFactory;
 
     ShaderMacroHelper Macros;
     Macros
