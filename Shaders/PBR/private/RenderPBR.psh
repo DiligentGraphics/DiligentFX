@@ -20,14 +20,6 @@
 //     float2 UV1      : UV1;
 // };
 
-#include "PSOutputStruct.generated"
-// struct PSOutput
-// {
-//     float4 Color      : SV_Target0;
-//     float4 CustomData : SV_Target1;
-// };
-
-
 #ifndef USE_TEXTURE_ATLAS
 #   define USE_TEXTURE_ATLAS 0
 #endif
@@ -303,9 +295,8 @@ float4 GetPhysicalDesc(VSOutput VSOut)
     return PhysicalDesc;
 }
 
-void main(in  VSOutput VSOut,
-          in  bool     IsFrontFace : SV_IsFrontFace,
-          out PSOutput PSOut)
+float4 ComputePbrSurfaceColor(in  VSOutput VSOut,
+                              in  bool     IsFrontFace)
 {
     float4 BaseColor = GetBaseColor(VSOut);
 
@@ -475,11 +466,26 @@ void main(in  VSOutput VSOut,
     }
 #   endif
 
-    PSOut.Color = OutColor;
-
-#   if ENABLE_CUSTOM_DATA_OUTPUT
-    {
-        PSOut.CustomData = g_PBRAttribs.Renderer.CustomData;
-    }
-#   endif
+    return OutColor;
 }
+
+
+#include "PSMainGenerated.generated"
+// struct PSOutput
+// {
+//     float4 Color      : SV_Target0;
+//     float4 CustomData : SV_Target1;
+// };
+//
+// void main(in VSOutput VSOut,
+//           in bool IsFrontFace : SV_IsFrontFace,
+//           out PSOutput PSOut)
+// {
+//     PSOut.Color = ComputePbrSurfaceColor(VSOut, IsFrontFace);
+// 
+// #if ENABLE_CUSTOM_DATA_OUTPUT
+//     {
+//         PSOut.CustomData = g_PBRAttribs.Renderer.CustomData;
+//     }
+// #endif
+// }

@@ -44,6 +44,8 @@ namespace Diligent
 class PBR_Renderer
 {
 public:
+    enum PSO_FLAGS : Uint32;
+
     /// Renderer create info
     struct CreateInfo
     {
@@ -129,6 +131,11 @@ public:
             TEX_COLOR_CONVERSION_MODE_SRGB_TO_LINEAR,
         };
         TEX_COLOR_CONVERSION_MODE TexColorConversionMode = TEX_COLOR_CONVERSION_MODE_SRGB_TO_LINEAR;
+
+        /// An optional user-provided callback function that is used to generate the pixel
+        /// shader's main function source code for the specified PSO flags. If null, the renderer
+        /// will use the default implementation.
+        std::function<std::string(PSO_FLAGS PsoFlags)> GetPSMainShaderSource = nullptr;
     };
 
     enum ALPHA_MODE
@@ -223,6 +230,8 @@ public:
 
         PSO_FLAG_LAST = PSO_FLAG_ENABLE_TONE_MAPPING,
 
+        PSO_FLAG_FIRST_USER_DEFINED = PSO_FLAG_LAST << 1u,
+
         PSO_FLAG_VERTEX_ATTRIBS =
             PSO_FLAG_USE_VERTEX_COLORS |
             PSO_FLAG_USE_VERTEX_NORMALS |
@@ -241,6 +250,8 @@ public:
             PSO_FLAG_ENABLE_TONE_MAPPING,
 
         PSO_FLAG_ALL = PSO_FLAG_LAST * 2u - 1u,
+
+        PSO_FLAG_ALL_USER_DEFINED = ~(PSO_FLAG_FIRST_USER_DEFINED - 1u)
     };
 
     struct PSOKey

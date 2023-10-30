@@ -43,8 +43,8 @@ namespace Diligent
 
 const SamplerDesc PBR_Renderer::CreateInfo::DefaultSampler = Sam_LinearWrap;
 
-const PBR_Renderer::PSO_FLAGS PBR_Renderer::PbrPSOKey::SupportedFlags       = PSO_FLAG_ALL;
-const PBR_Renderer::PSO_FLAGS PBR_Renderer::WireframePSOKey::SupportedFlags = PSO_FLAG_USE_JOINTS;
+const PBR_Renderer::PSO_FLAGS PBR_Renderer::PbrPSOKey::SupportedFlags       = PSO_FLAG_ALL | PSO_FLAG_ALL_USER_DEFINED;
+const PBR_Renderer::PSO_FLAGS PBR_Renderer::WireframePSOKey::SupportedFlags = PSO_FLAG_USE_JOINTS | PSO_FLAG_ALL_USER_DEFINED;
 
 namespace
 {
@@ -787,6 +787,21 @@ std::string PBR_Renderer::GetPSOutputStruct(PSO_FLAGS PSOFlags)
     return ss.str();
 }
 
+static constexpr char DefaultPSMainSource[] = R"(
+void main(in VSOutput VSOut,
+        in bool IsFrontFace : SV_IsFrontFace,
+        out PSOutput PSOut)
+{
+    PSOut.Color = ComputePbrSurfaceColor(VSOut, IsFrontFace);
+ 
+#if ENABLE_CUSTOM_DATA_OUTPUT
+    {
+        PSOut.CustomData = g_PBRAttribs.Renderer.CustomData;
+    }
+#endif
+}
+)";
+
 void PBR_Renderer::CreateShaders(PSO_FLAGS               PSOFlags,
                                  const char*             VSPath,
                                  const char*             VSName,
@@ -800,13 +815,22 @@ void PBR_Renderer::CreateShaders(PSO_FLAGS               PSOFlags,
     GetVSInputStructAndLayout(PSOFlags, VSInputStruct, InputLayout);
 
     const auto VSOutputStruct = GetVSOutputStruct(PSOFlags);
-    const auto PSOutputStruct = GetPSOutputStruct(PSOFlags);
 
+    std::string PSMainSource;
+
+    if (m_Settings.GetPSMainShaderSource)
+    {
+        PSMainSource = m_Settings.GetPSMainShaderSource(PSOFlags);
+    }
+    else
+    {
+        PSMainSource = GetPSOutputStruct(PSOFlags) + DefaultPSMainSource;
+    }
     MemoryShaderSourceFileInfo GeneratedSources[] =
         {
             MemoryShaderSourceFileInfo{"VSInputStruct.generated", VSInputStruct},
             MemoryShaderSourceFileInfo{"VSOutputStruct.generated", VSOutputStruct},
-            MemoryShaderSourceFileInfo{"PSOutputStruct.generated", PSOutputStruct},
+            MemoryShaderSourceFileInfo{"PSMainGenerated.generated", PSMainSource},
         };
     MemoryShaderSourceFactoryCreateInfo            MemorySourceFactoryCI{GeneratedSources, _countof(GeneratedSources)};
     RefCntAutoPtr<IShaderSourceInputStreamFactory> pMemorySourceFactory;
@@ -943,6 +967,8 @@ void PBR_Renderer::CreateResourceBinding(IShaderResourceBinding** ppSRB)
 
 PBR_Renderer::PbrPsoCacheAccessor PBR_Renderer::GetPbrPsoCacheAccessor(const GraphicsPipelineDesc& GraphicsDesc)
 {
+    VERIFY(GraphicsDesc.InputLayout == InputLayoutDesc{}, "Input layout is ignored. It is defined in create info");
+
     auto it = m_PbrPSOs.find(GraphicsDesc);
     if (it == m_PbrPSOs.end())
         it = m_PbrPSOs.emplace(GraphicsDesc, PbrPsoHashMapType{}).first;
@@ -951,6 +977,8 @@ PBR_Renderer::PbrPsoCacheAccessor PBR_Renderer::GetPbrPsoCacheAccessor(const Gra
 
 PBR_Renderer::WireframePsoCacheAccessor PBR_Renderer::GetWireframePsoCacheAccessor(const GraphicsPipelineDesc& GraphicsDesc)
 {
+    VERIFY(GraphicsDesc.InputLayout == InputLayoutDesc{}, "Input layout is ignored. It is defined in create info");
+
     auto it = m_WireframePSOs.find(GraphicsDesc);
     if (it == m_WireframePSOs.end())
         it = m_WireframePSOs.emplace(GraphicsDesc, WireframePsoHashMapType{}).first;
