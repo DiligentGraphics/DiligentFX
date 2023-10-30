@@ -135,7 +135,7 @@ public:
         /// An optional user-provided callback function that is used to generate the pixel
         /// shader's main function source code for the specified PSO flags. If null, the renderer
         /// will use the default implementation.
-        std::function<std::string(PSO_FLAGS PsoFlags)> GetPSMainShaderSource = nullptr;
+        std::function<std::string(PSO_FLAGS PsoFlags)> GetPSMainSource = nullptr;
     };
 
     enum ALPHA_MODE

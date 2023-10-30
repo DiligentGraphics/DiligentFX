@@ -331,10 +331,12 @@ void HnRenderPass::RenderMesh(RenderState&      State,
         RendererParams.MiddleGray    = 0.18f;
         RendererParams.WhitePoint    = 3.0f;
 
-        auto CustomData = float4{static_cast<float>(Mesh.GetUID()), 0, 0, 1};
-        if (Mesh.GetId().HasPrefix(m_Params.SelectedPrimId))
-            CustomData.x *= -1;
-        RendererParams.CustomData = CustomData;
+        RendererParams.CustomData = float4{
+            static_cast<float>(Mesh.GetUID()),
+            Mesh.GetId().HasPrefix(m_Params.SelectedPrimId) ? 1.f : 0.f,
+            0,
+            0,
+        };
     }
 
     State.pCtx->CommitShaderResources(pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);

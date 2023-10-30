@@ -76,9 +76,10 @@ struct HnSetupRenderingTaskParams
         return !(*this == rhs);
     }
 
-    TEXTURE_FORMAT ColorFormat  = TEX_FORMAT_UNKNOWN;
-    TEXTURE_FORMAT MeshIdFormat = TEX_FORMAT_UNKNOWN;
-    TEXTURE_FORMAT DepthFormat  = TEX_FORMAT_UNKNOWN;
+    TEXTURE_FORMAT ColorFormat     = TEX_FORMAT_RGBA16_FLOAT;
+    TEXTURE_FORMAT MeshIdFormat    = TEX_FORMAT_R32_FLOAT;
+    TEXTURE_FORMAT SelectionFormat = TEX_FORMAT_R8_UNORM;
+    TEXTURE_FORMAT DepthFormat     = TEX_FORMAT_D32_FLOAT;
 
     bool FrontFaceCCW = false;
 
@@ -140,6 +141,7 @@ private:
     pxr::SdfPath m_FinalColorTargetId;
     pxr::SdfPath m_OffscreenColorTargetId;
     pxr::SdfPath m_MeshIdTargetId;
+    pxr::SdfPath m_SelectionTargetId;
     pxr::SdfPath m_DepthBufferId;
 
     float4 m_ClearColor;
@@ -149,6 +151,7 @@ private:
 
     ITextureView* m_pFinalColorRTV = nullptr;
     ITextureView* m_pMeshIdRTV     = nullptr;
+    ITextureView* m_pSelectionRTV  = nullptr;
     ITextureView* m_pDepthDSV      = nullptr;
 };
 

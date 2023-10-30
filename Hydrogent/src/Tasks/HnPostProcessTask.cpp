@@ -134,7 +134,7 @@ void HnPostProcessTask::PreparePSO(TEXTURE_FORMAT RTVFormat)
     PipelineResourceLayoutDescX ResourceLauout;
     ResourceLauout
         .AddVariable(SHADER_TYPE_PIXEL, "g_ColorBuffer", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-        .AddVariable(SHADER_TYPE_PIXEL, "g_MeshId", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
+        .AddVariable(SHADER_TYPE_PIXEL, "g_Selection", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
 
     GraphicsPipelineStateCreateInfoX PsoCI{"Post process"};
     PsoCI
@@ -229,8 +229,8 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         UNEXPECTED("Offscreen color RTV is not set in the task context");
         return;
     }
-    ITextureView* pMeshIdRTV = GetRenderBufferTarget(*m_RenderIndex, TaskCtx, HnRenderResourceTokens->meshIdTarget);
-    if (pMeshIdRTV == nullptr)
+    ITextureView* pSelectionRTV = GetRenderBufferTarget(*m_RenderIndex, TaskCtx, HnRenderResourceTokens->selectionTarget);
+    if (pSelectionRTV == nullptr)
     {
         UNEXPECTED("Mesh Id RTV is not set in the task context");
         return;
@@ -241,8 +241,8 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         UNEXPECTED("Offscreen color SRV is null");
         return;
     }
-    ITextureView* pMeshIdSRV = pMeshIdRTV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-    if (pMeshIdSRV == nullptr)
+    ITextureView* pSelectionSRV = pSelectionRTV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+    if (pSelectionSRV == nullptr)
     {
         UNEXPECTED("Mesh Id SRV is null");
         return;
@@ -269,7 +269,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
     }
     pCtx->SetPipelineState(m_PSO);
     m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_ColorBuffer")->Set(pOffscreenColorSRV);
-    m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_MeshId")->Set(pMeshIdSRV);
+    m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_Selection")->Set(pSelectionSRV);
     pCtx->CommitShaderResources(m_SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     pCtx->Draw({3, DRAW_FLAG_VERIFY_ALL});
 }

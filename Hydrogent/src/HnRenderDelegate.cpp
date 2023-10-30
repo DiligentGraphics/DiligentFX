@@ -62,6 +62,30 @@ const pxr::TfTokenVector HnRenderDelegate::SupportedBPrimTypes =
 };
 // clang-format on
 
+static std::string GetPbrPSMainSource(USD_Renderer::PSO_FLAGS PSOFlags)
+{
+    VERIFY(PSOFlags & USD_Renderer::PSO_FLAG_ENABLE_CUSTOM_DATA_OUTPUT, "Custom output flag is expected to be set");
+    return R"(
+struct PSOutput
+{
+    float4 Color      : SV_Target0;
+    float4 MeshID     : SV_Target1;
+    float4 IsSelected : SV_Target2;
+};
+
+void main(in VSOutput VSOut,
+          in bool IsFrontFace : SV_IsFrontFace,
+          out PSOutput PSOut)
+{
+    PSOut.Color = ComputePbrSurfaceColor(VSOut, IsFrontFace);
+
+    // It is important to set alpha to 1.0 as all targets are rendered with the same blend mode
+    PSOut.MeshID     = float4(g_PBRAttribs.Renderer.CustomData.x, 0.0, 0.0, 1.0);
+    PSOut.IsSelected = float4(g_PBRAttribs.Renderer.CustomData.y, 0.0, 0.0, 1.0);
+}
+)";
+}
+
 HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
     m_pDevice{CI.pDevice},
     m_pContext{CI.pContext},
@@ -93,6 +117,8 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
 
                 USDRendererCI.InputLayout.LayoutElements = Inputs;
                 USDRendererCI.InputLayout.NumElements    = _countof(Inputs);
+
+                USDRendererCI.GetPSMainSource = GetPbrPSMainSource;
 
                 return USDRendererCI;
             }()),

@@ -113,7 +113,7 @@ void HnReadRprimIdTask::Execute(pxr::HdTaskContext* TaskCtx)
         {
             MappedTextureSubresource MappedData;
             pCtx->MapTextureSubresource(pStagingTex, 0, 0, MAP_READ, MAP_FLAG_DO_NOT_WAIT, nullptr, MappedData);
-            m_MeshIndex = static_cast<Uint32>(std::abs(*static_cast<const float*>(MappedData.pData)));
+            m_MeshIndex = static_cast<Uint32>(*static_cast<const float*>(MappedData.pData));
             pCtx->UnmapTextureSubresource(pStagingTex, 0, 0);
         }
         m_MeshIdReadBackQueue->Recycle(std::move(pStagingTex));

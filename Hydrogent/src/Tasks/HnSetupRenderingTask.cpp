@@ -55,6 +55,7 @@ HnSetupRenderingTask::HnSetupRenderingTask(pxr::HdSceneDelegate* ParamsDelegate,
     };
     m_OffscreenColorTargetId = InitBrim(HnRenderResourceTokens->offscreenColorTarget);
     m_MeshIdTargetId         = InitBrim(HnRenderResourceTokens->meshIdTarget);
+    m_SelectionTargetId      = InitBrim(HnRenderResourceTokens->selectionTarget);
     m_DepthBufferId          = InitBrim(HnRenderResourceTokens->depthBuffer);
 }
 
@@ -65,9 +66,10 @@ HnSetupRenderingTask::~HnSetupRenderingTask()
 void HnSetupRenderingTask::UpdateRenderPassState(const HnSetupRenderingTaskParams& Params)
 {
     VERIFY_EXPR(Params.ColorFormat != TEX_FORMAT_UNKNOWN);
-    m_RenderPassState->SetNumRenderTargets(Params.MeshIdFormat != TEX_FORMAT_UNKNOWN ? 2 : 1);
+    m_RenderPassState->SetNumRenderTargets(3);
     m_RenderPassState->SetRenderTargetFormat(0, Params.ColorFormat);
     m_RenderPassState->SetRenderTargetFormat(1, Params.MeshIdFormat);
+    m_RenderPassState->SetRenderTargetFormat(2, Params.SelectionFormat);
     m_RenderPassState->SetDepthStencilFormat(Params.DepthFormat);
 
     m_RenderPassState->SetDepthBias(Params.DepthBias, Params.SlopeScaledDepthBias);
@@ -120,6 +122,8 @@ void HnSetupRenderingTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
         if (Format == TEX_FORMAT_UNKNOWN)
             return nullptr;
 
+        VERIFY_EXPR(!Id.IsEmpty());
+
         HnRenderBuffer* Renderbuffer = static_cast<HnRenderBuffer*>(RenderIndex->GetBprim(pxr::HdPrimTypeTokens->renderBuffer, Id));
         if (Renderbuffer == nullptr)
         {
@@ -163,6 +167,7 @@ void HnSetupRenderingTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
     };
     m_pFinalColorRTV = UpdateBrim(m_OffscreenColorTargetId, m_RenderPassState->GetRenderTargetFormat(0), "Offscreen color target");
     m_pMeshIdRTV     = UpdateBrim(m_MeshIdTargetId, m_RenderPassState->GetRenderTargetFormat(1), "Mesh Id target");
+    m_pSelectionRTV  = UpdateBrim(m_SelectionTargetId, m_RenderPassState->GetRenderTargetFormat(2), "Selection target");
     m_pDepthDSV      = UpdateBrim(m_DepthBufferId, m_RenderPassState->GetDepthStencilFormat(), "Depth buffer");
 }
 
@@ -173,6 +178,7 @@ void HnSetupRenderingTask::Prepare(pxr::HdTaskContext* TaskCtx,
     (*TaskCtx)[HnRenderResourceTokens->finalColorTarget]     = pxr::VtValue{m_FinalColorTargetId};
     (*TaskCtx)[HnRenderResourceTokens->offscreenColorTarget] = pxr::VtValue{m_OffscreenColorTargetId};
     (*TaskCtx)[HnRenderResourceTokens->meshIdTarget]         = pxr::VtValue{m_MeshIdTargetId};
+    (*TaskCtx)[HnRenderResourceTokens->selectionTarget]      = pxr::VtValue{m_SelectionTargetId};
 
     if (ITextureView* pFinalColorRTV = GetRenderBufferTarget(*RenderIndex, m_FinalColorTargetId))
     {
@@ -194,14 +200,15 @@ void HnSetupRenderingTask::Execute(pxr::HdTaskContext* TaskCtx)
         return;
     }
 
-    ITextureView* pRTVs[] = {m_pFinalColorRTV, m_pMeshIdRTV};
+    ITextureView* pRTVs[] = {m_pFinalColorRTV, m_pMeshIdRTV, m_pSelectionRTV};
 
     auto* pCtx = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate())->GetDeviceContext();
 
     pCtx->SetRenderTargets(_countof(pRTVs), pRTVs, m_pDepthDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    pCtx->ClearRenderTarget(pRTVs[0], m_ClearColor.Data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    pCtx->ClearRenderTarget(m_pFinalColorRTV, m_ClearColor.Data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     constexpr float Zero[] = {0, 0, 0, 0};
-    pCtx->ClearRenderTarget(pRTVs[1], Zero, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    pCtx->ClearRenderTarget(m_pMeshIdRTV, Zero, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    pCtx->ClearRenderTarget(m_pSelectionRTV, Zero, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     pCtx->ClearDepthStencil(m_pDepthDSV, CLEAR_DEPTH_FLAG, m_ClearDepth, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     pCtx->SetStencilRef(m_RenderPassState->GetStencilRef());
 }

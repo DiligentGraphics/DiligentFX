@@ -12,7 +12,7 @@ cbuffer cbPostProcessAttribs
 }
 
 Texture2D g_ColorBuffer;
-Texture2D g_MeshId;
+Texture2D g_Selection;
 
 void main(in PSInput PSIn,
           out float4 Color : SV_Target0)
@@ -24,21 +24,20 @@ void main(in PSInput PSIn,
 #endif
 
     // Selected rprim is rendered with negative index
-    float IsSelected0 = g_MeshId.Load(int3(PSIn.Pos.xy + float2(-1.0, -1.0), 0)).r < 0.0 ? -1.0 : +1.0;
-    float IsSelected1 = g_MeshId.Load(int3(PSIn.Pos.xy + float2( 0.0, -1.0), 0)).r < 0.0 ? -1.0 : +1.0;
-    float IsSelected2 = g_MeshId.Load(int3(PSIn.Pos.xy + float2(+1.0, -1.0), 0)).r < 0.0 ? -1.0 : +1.0;
+    float IsSelected0 = g_Selection.Load(int3(PSIn.Pos.xy + float2(-1.0, -1.0), 0)).r;
+    float IsSelected1 = g_Selection.Load(int3(PSIn.Pos.xy + float2( 0.0, -1.0), 0)).r;
+    float IsSelected2 = g_Selection.Load(int3(PSIn.Pos.xy + float2(+1.0, -1.0), 0)).r;
 
-    float IsSelected3 = g_MeshId.Load(int3(PSIn.Pos.xy + float2(-1.0,  0.0), 0)).r < 0.0 ? -1.0 : +1.0;
-    float IsSelected4 = g_MeshId.Load(int3(PSIn.Pos.xy + float2( 0.0,  0.0), 0)).r < 0.0 ? -1.0 : +1.0;
-    float IsSelected5 = g_MeshId.Load(int3(PSIn.Pos.xy + float2(+1.0,  0.0), 0)).r < 0.0 ? -1.0 : +1.0;
+    float IsSelected3 = g_Selection.Load(int3(PSIn.Pos.xy + float2(-1.0,  0.0), 0)).r;
+    float IsSelected4 = g_Selection.Load(int3(PSIn.Pos.xy + float2( 0.0,  0.0), 0)).r;
+    float IsSelected5 = g_Selection.Load(int3(PSIn.Pos.xy + float2(+1.0,  0.0), 0)).r;
 
-    float IsSelected6 = g_MeshId.Load(int3(PSIn.Pos.xy + float2(-1.0, +1.0), 0)).r < 0.0 ? -1.0 : +1.0;
-    float IsSelected7 = g_MeshId.Load(int3(PSIn.Pos.xy + float2( 0.0, +1.0), 0)).r < 0.0 ? -1.0 : +1.0;
-    float IsSelected8 = g_MeshId.Load(int3(PSIn.Pos.xy + float2(+1.0, +1.0), 0)).r < 0.0 ? -1.0 : +1.0;
+    float IsSelected6 = g_Selection.Load(int3(PSIn.Pos.xy + float2(-1.0, +1.0), 0)).r;
+    float IsSelected7 = g_Selection.Load(int3(PSIn.Pos.xy + float2( 0.0, +1.0), 0)).r;
+    float IsSelected8 = g_Selection.Load(int3(PSIn.Pos.xy + float2(+1.0, +1.0), 0)).r;
 
     float Outline = IsSelected0 + IsSelected1 + IsSelected2 + IsSelected3 + IsSelected4 + IsSelected5 + IsSelected6 + IsSelected7 + IsSelected8;
-    //Outline = (9.0 - Outline) * (Outline > 0.0 ? 1.0 / 8.0 : 0.0);
-    Outline = (Outline > 0.0 && Outline < 9.0) ? 1.0 : 0.0;
+    Outline = (Outline > 4.0 && Outline < 9.0) ? 1.0 : 0.0;
 
     float DesatFactor = g_Attribs.NonselectionDesaturationFactor * saturate(IsSelected4);
     float Luminance = dot(Color.rgb, float3(0.2126, 0.7152, 0.0722));
