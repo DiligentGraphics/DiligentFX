@@ -140,6 +140,12 @@ public:
     /// - if an Rprim is selected, returns the Sdf Path of the selected Rprim.
     const pxr::SdfPath* GetSelectedRPrimId() const;
 
+    /// Enables or disables the tasks associated with the specified material tag.
+    void EnableMaterial(const pxr::TfToken& MaterialTag, bool Enable);
+
+    /// Returns true if the tasks associated with the specified material tag are enabled.
+    bool IsMaterialEnabled(const pxr::TfToken& MaterialTag) const;
+
 private:
     pxr::SdfPath GetRenderRprimsTaskId(const pxr::TfToken& MaterialTag) const;
 

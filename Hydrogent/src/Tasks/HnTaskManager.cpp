@@ -332,6 +332,55 @@ bool HnTaskManager::IsTaskEnabled(TaskUID UID) const
     return it != m_TaskInfo.end() ? it->second.Enabled : false;
 }
 
+void HnTaskManager::EnableMaterial(const pxr::TfToken& MaterialTag, bool Enable)
+{
+    if (MaterialTag == HnMaterialTagTokens->defaultTag)
+    {
+        EnableTask(TaskUID_RenderRprimsDefault, Enable);
+    }
+    else if (MaterialTag == HnMaterialTagTokens->masked)
+    {
+        EnableTask(TaskUID_RenderRprimsMasked, Enable);
+    }
+    else if (MaterialTag == HnMaterialTagTokens->additive)
+    {
+        EnableTask(TaskUID_RenderRprimsAdditive, Enable);
+    }
+    else if (MaterialTag == HnMaterialTagTokens->translucent)
+    {
+        EnableTask(TaskUID_RenderRprimsTranslucent, Enable);
+    }
+    else
+    {
+        UNEXPECTED("Unknown material tag ", MaterialTag);
+    }
+}
+
+bool HnTaskManager::IsMaterialEnabled(const pxr::TfToken& MaterialTag) const
+{
+    if (MaterialTag == HnMaterialTagTokens->defaultTag)
+    {
+        return IsTaskEnabled(TaskUID_RenderRprimsDefault);
+    }
+    else if (MaterialTag == HnMaterialTagTokens->masked)
+    {
+        return IsTaskEnabled(TaskUID_RenderRprimsMasked);
+    }
+    else if (MaterialTag == HnMaterialTagTokens->additive)
+    {
+        return IsTaskEnabled(TaskUID_RenderRprimsAdditive);
+    }
+    else if (MaterialTag == HnMaterialTagTokens->translucent)
+    {
+        return IsTaskEnabled(TaskUID_RenderRprimsTranslucent);
+    }
+    else
+    {
+        UNEXPECTED("Unknown material tag ", MaterialTag);
+        return false;
+    }
+}
+
 } // namespace USD
 
 } // namespace Diligent
