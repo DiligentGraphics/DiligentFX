@@ -46,7 +46,7 @@ struct HnPostProcessTaskParams
 
     float4 SelectionColor = float4{0.75f, 0.75f, 0.25f, 0.5f};
 
-    /// Desaturation factor for non-selected objects
+    /// Desaturation factor for unselected objects
     float NonselectionDesaturationFactor = 0.0f;
 
     // Tone mappig attribs

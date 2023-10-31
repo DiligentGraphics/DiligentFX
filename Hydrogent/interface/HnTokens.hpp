@@ -69,7 +69,8 @@ namespace USD
     (normal)                   \
     (occlusion)                \
     (emissiveColor)            \
-    (renderPassState)
+    (renderPassState) 	       \
+    (renderPassParams) 	       
 
 #define HN_MATERIAL_TAG_TOKENS \
     (defaultTag)               \

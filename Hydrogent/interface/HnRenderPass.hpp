@@ -57,6 +57,22 @@ struct HnMeshRenderParams
     pxr::SdfPath SelectedPrimId;
 };
 
+struct HnRenderPassParams
+{
+    enum class SelectionType
+    {
+        All,
+        Unselected,
+        Selected
+    };
+    SelectionType Selection = SelectionType::All;
+
+    constexpr bool operator==(const HnRenderPassParams& rhs) const
+    {
+        return Selection == rhs.Selection;
+    }
+};
+
 /// Hydra render pass implementation in Hydrogent.
 class HnRenderPass final : public pxr::HdRenderPass
 {
@@ -67,10 +83,8 @@ public:
     HnRenderPass(pxr::HdRenderIndex*           pIndex,
                  const pxr::HdRprimCollection& Collection);
 
-    void SetMeshRenderParams(const HnMeshRenderParams& Params)
-    {
-        m_Params = Params;
-    }
+    void SetParams(const HnRenderPassParams& Params);
+    void SetMeshRenderParams(const HnMeshRenderParams& Params);
 
 protected:
     // Virtual API: Execute the buckets corresponding to renderTags;
@@ -89,7 +103,8 @@ private:
                     const HnMaterial& Material);
 
 private:
-    HnMeshRenderParams m_Params;
+    HnRenderPassParams m_Params;
+    HnMeshRenderParams m_RenderParams;
 
     pxr::HdRenderIndex::HdDrawItemPtrVector m_DrawItems;
 

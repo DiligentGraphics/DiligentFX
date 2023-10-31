@@ -89,6 +89,19 @@ void HnRenderRprimsTask::Sync(pxr::HdSceneDelegate* Delegate,
                 pxr::HdRenderIndex&    Index          = Delegate->GetRenderIndex();
                 pxr::HdRenderDelegate* RenderDelegate = Index.GetRenderDelegate();
                 m_RenderPass                          = RenderDelegate->CreateRenderPass(&Index, Collection);
+
+                {
+                    pxr::VtValue ParamsValue = Delegate->Get(GetId(), HnTokens->renderPassParams);
+                    if (ParamsValue.IsHolding<HnRenderPassParams>())
+                    {
+                        HnRenderPassParams RenderPassParams = ParamsValue.UncheckedGet<HnRenderPassParams>();
+                        static_cast<HnRenderPass*>(m_RenderPass.get())->SetParams(RenderPassParams);
+                    }
+                    else
+                    {
+                        UNEXPECTED("Unexpected type of render pass parameters ", ParamsValue.GetTypeName());
+                    }
+                }
                 // Need to set params for the new render pass.
                 *DirtyBits |= pxr::HdChangeTracker::DirtyParams;
             }

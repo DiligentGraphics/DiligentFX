@@ -42,20 +42,25 @@ namespace USD
 struct HnSetupRenderingTaskParams;
 struct HnPostProcessTaskParams;
 struct HnRenderRprimsTaskParams;
+struct HnRenderPassParams;
 
 /// Task manager implementation in Hydrogent.
 class HnTaskManager
 {
 public:
-    using TaskUID                                            = uint64_t;
-    static constexpr TaskUID TaskUID_SetupRendering          = 0x8362faac57354542;
-    static constexpr TaskUID TaskUID_RenderRprimsDefault     = 0x287af907f3a740a0;
-    static constexpr TaskUID TaskUID_RenderRprimsMasked      = 0xf5290fec47594711;
-    static constexpr TaskUID TaskUID_RenderRprimsAdditive    = 0x37d45531106c4c52;
-    static constexpr TaskUID TaskUID_RenderRprimsTranslucent = 0xa015c7e45941407e;
-    static constexpr TaskUID TaskUID_RenderEnvMap            = 0xf646122e1dc74bab;
-    static constexpr TaskUID TaskUID_ReadRprimId             = 0x199572fe7ff144ef;
-    static constexpr TaskUID TaskUID_PostProcess             = 0x1f5367e65d034500;
+    using TaskUID                                                    = uint64_t;
+    static constexpr TaskUID TaskUID_SetupRendering                  = 0x8362faac57354542;
+    static constexpr TaskUID TaskUID_RenderRprimsDefaultSelected     = 0x1cdf84fa9ab5423e;
+    static constexpr TaskUID TaskUID_RenderRprimsMaskedSelected      = 0xe926da1de43d4f47;
+    static constexpr TaskUID TaskUID_RenderRprimsDefaultUnselected   = 0x287af907f3a740a0;
+    static constexpr TaskUID TaskUID_RenderRprimsMaskedUnselected    = 0xf5290fec47594711;
+    static constexpr TaskUID TaskUID_RenderRprimsAdditive            = 0x37d45531106c4c52;
+    static constexpr TaskUID TaskUID_RenderRprimsTranslucent         = 0xa015c7e45941407e;
+    static constexpr TaskUID TaskUID_RenderRprimsAdditiveSelected    = 0x2cb8a35254ec46da;
+    static constexpr TaskUID TaskUID_RenderRprimsTranslucentSelected = 0x50a786394d834b4f;
+    static constexpr TaskUID TaskUID_RenderEnvMap                    = 0xf646122e1dc74bab;
+    static constexpr TaskUID TaskUID_ReadRprimId                     = 0x199572fe7ff144ef;
+    static constexpr TaskUID TaskUID_PostProcess                     = 0x1f5367e65d034500;
 
     HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                   const pxr::SdfPath& ManagerId);
@@ -71,11 +76,15 @@ public:
     ///
     /// \param [in] TaskOrder - Optional task order. If not specified, the default order is used:
     ///                         - SetupRendering
-    ///                         - RenderRprimsDefault
-    ///                         - RenderRprimsMasked
+    ///                         - RenderRprimsDefaultSelected
+    ///                         - RenderRprimsMaskedSelected
+    ///                         - RenderRprimsDefaultUnselected
+    ///                         - RenderRprimsMaskedUnselected
     ///                         - RenderEnvMap
     ///                         - RenderRprimsAdditive
     ///                         - RenderRprimsTranslucent
+    ///                         - RenderRprimsAdditiveSelected
+    ///                         - RenderRprimsTranslucentSelected
     ///                         - ReadRprimId
     ///                         - PostProcess
     /// \return The list of tasks that can be passed to pxr::HdEngine::Execute.
@@ -147,10 +156,10 @@ public:
     bool IsMaterialEnabled(const pxr::TfToken& MaterialTag) const;
 
 private:
-    pxr::SdfPath GetRenderRprimsTaskId(const pxr::TfToken& MaterialTag) const;
+    pxr::SdfPath GetRenderRprimsTaskId(const pxr::TfToken& MaterialTag, const HnRenderPassParams& RenderPassParams) const;
 
     void CreateSetupRenderingTask();
-    void CreateRenderRprimsTask(const pxr::TfToken& MaterialTag, TaskUID UID);
+    void CreateRenderRprimsTask(const pxr::TfToken& MaterialTag, TaskUID UID, const HnRenderPassParams& RenderPassParams);
     void CreateRenderEnvMapTask();
     void CreateReadRprimIdTask();
     void CreatePostProcessTask();

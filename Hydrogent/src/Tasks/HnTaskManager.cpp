@@ -37,6 +37,7 @@
 #include "HnTokens.hpp"
 #include "HashUtils.hpp"
 #include "HnRenderDelegate.hpp"
+#include "HnRenderPass.hpp"
 
 namespace Diligent
 {
@@ -134,11 +135,31 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
 {
     // Task creation order defines the default task order
     CreateSetupRenderingTask();
-    CreateRenderRprimsTask(HnMaterialTagTokens->defaultTag, TaskUID_RenderRprimsDefault);
-    CreateRenderRprimsTask(HnMaterialTagTokens->masked, TaskUID_RenderRprimsMasked);
+    CreateRenderRprimsTask(HnMaterialTagTokens->defaultTag,
+                           TaskUID_RenderRprimsDefaultSelected,
+                           {HnRenderPassParams::SelectionType::Selected});
+    CreateRenderRprimsTask(HnMaterialTagTokens->masked,
+                           TaskUID_RenderRprimsMaskedSelected,
+                           {HnRenderPassParams::SelectionType::Selected});
+    CreateRenderRprimsTask(HnMaterialTagTokens->defaultTag,
+                           TaskUID_RenderRprimsDefaultUnselected,
+                           {HnRenderPassParams::SelectionType::Unselected});
+    CreateRenderRprimsTask(HnMaterialTagTokens->masked,
+                           TaskUID_RenderRprimsMaskedUnselected,
+                           {HnRenderPassParams::SelectionType::Unselected});
     CreateRenderEnvMapTask();
-    CreateRenderRprimsTask(HnMaterialTagTokens->additive, TaskUID_RenderRprimsAdditive);
-    CreateRenderRprimsTask(HnMaterialTagTokens->translucent, TaskUID_RenderRprimsTranslucent);
+    CreateRenderRprimsTask(HnMaterialTagTokens->additive,
+                           TaskUID_RenderRprimsAdditive,
+                           {HnRenderPassParams::SelectionType::All});
+    CreateRenderRprimsTask(HnMaterialTagTokens->translucent,
+                           TaskUID_RenderRprimsTranslucent,
+                           {HnRenderPassParams::SelectionType::All});
+    //CreateRenderRprimsTask(HnMaterialTagTokens->additive,
+    //                       TaskUID_RenderRprimsAdditiveSelected,
+    //                       {HnRenderPassParams::SelectionType::Selected});
+    //CreateRenderRprimsTask(HnMaterialTagTokens->translucent,
+    //                       TaskUID_RenderRprimsTranslucentSelected,
+    //                       {HnRenderPassParams::SelectionType::Selected});
     CreateReadRprimIdTask();
     CreatePostProcessTask();
 }
@@ -182,17 +203,34 @@ void HnTaskManager::CreateSetupRenderingTask()
     CreateTask<HnSetupRenderingTask>(HnTaskManagerTokens->setupRendering, TaskUID_SetupRendering, TaskParams);
 }
 
-pxr::SdfPath HnTaskManager::GetRenderRprimsTaskId(const pxr::TfToken& MaterialTag) const
+pxr::SdfPath HnTaskManager::GetRenderRprimsTaskId(const pxr::TfToken& MaterialTag, const HnRenderPassParams& RenderPassParams) const
 {
     std::string Id = std::string{"RenderRprimsTask_"} + MaterialTag.GetString();
     std::replace(Id.begin(), Id.end(), ':', '_');
+    switch (RenderPassParams.Selection)
+    {
+        case HnRenderPassParams::SelectionType::All:
+            Id += "_All";
+            break;
+
+        case HnRenderPassParams::SelectionType::Unselected:
+            Id += "_Unselected";
+            break;
+
+        case HnRenderPassParams::SelectionType::Selected:
+            Id += "_Selected";
+            break;
+
+        default:
+            UNEXPECTED("Unknown selection type");
+    }
     return GetId().AppendChild(TfToken{Id});
 }
 
-void HnTaskManager::CreateRenderRprimsTask(const pxr::TfToken& MaterialTag, TaskUID UID)
+void HnTaskManager::CreateRenderRprimsTask(const pxr::TfToken& MaterialTag, TaskUID UID, const HnRenderPassParams& RenderPassParams)
 {
     HnRenderRprimsTaskParams TaskParams;
-    pxr::SdfPath             RenderRprimsTaskId = GetRenderRprimsTaskId(MaterialTag);
+    pxr::SdfPath             RenderRprimsTaskId = GetRenderRprimsTaskId(MaterialTag, RenderPassParams);
     // Note that we pass the delegate to the scene index. This delegate will be passed
     // to the task's Sync() method.
     CreateTask<HnRenderRprimsTask>(RenderRprimsTaskId, UID, TaskParams);
@@ -211,6 +249,8 @@ void HnTaskManager::CreateRenderRprimsTask(const pxr::TfToken& MaterialTag, Task
     m_ParamsDelegate.SetParameter(RenderRprimsTaskId, pxr::HdTokens->params, TaskParams);
     m_ParamsDelegate.SetParameter(RenderRprimsTaskId, pxr::HdTokens->collection, Collection);
     m_ParamsDelegate.SetParameter(RenderRprimsTaskId, pxr::HdTokens->renderTags, RenderTags);
+
+    m_ParamsDelegate.SetParameter(RenderRprimsTaskId, HnTokens->renderPassParams, RenderPassParams);
 
     m_RenderTaskIds.emplace_back(RenderRprimsTaskId);
 }
@@ -336,19 +376,23 @@ void HnTaskManager::EnableMaterial(const pxr::TfToken& MaterialTag, bool Enable)
 {
     if (MaterialTag == HnMaterialTagTokens->defaultTag)
     {
-        EnableTask(TaskUID_RenderRprimsDefault, Enable);
+        EnableTask(TaskUID_RenderRprimsDefaultSelected, Enable);
+        EnableTask(TaskUID_RenderRprimsDefaultUnselected, Enable);
     }
     else if (MaterialTag == HnMaterialTagTokens->masked)
     {
-        EnableTask(TaskUID_RenderRprimsMasked, Enable);
+        EnableTask(TaskUID_RenderRprimsMaskedSelected, Enable);
+        EnableTask(TaskUID_RenderRprimsMaskedUnselected, Enable);
     }
     else if (MaterialTag == HnMaterialTagTokens->additive)
     {
         EnableTask(TaskUID_RenderRprimsAdditive, Enable);
+        EnableTask(TaskUID_RenderRprimsAdditiveSelected, Enable);
     }
     else if (MaterialTag == HnMaterialTagTokens->translucent)
     {
         EnableTask(TaskUID_RenderRprimsTranslucent, Enable);
+        EnableTask(TaskUID_RenderRprimsTranslucentSelected, Enable);
     }
     else
     {
@@ -360,11 +404,11 @@ bool HnTaskManager::IsMaterialEnabled(const pxr::TfToken& MaterialTag) const
 {
     if (MaterialTag == HnMaterialTagTokens->defaultTag)
     {
-        return IsTaskEnabled(TaskUID_RenderRprimsDefault);
+        return IsTaskEnabled(TaskUID_RenderRprimsDefaultUnselected);
     }
     else if (MaterialTag == HnMaterialTagTokens->masked)
     {
-        return IsTaskEnabled(TaskUID_RenderRprimsMasked);
+        return IsTaskEnabled(TaskUID_RenderRprimsMaskedUnselected);
     }
     else if (MaterialTag == HnMaterialTagTokens->additive)
     {

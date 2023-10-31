@@ -99,16 +99,16 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
     };
 
     GraphicsPipelineDesc GraphicsDesc = static_cast<const HnRenderPassState*>(RPState.get())->GetGraphicsPipelineDesc();
-    if (m_Params.RenderMode == HN_RENDER_MODE_SOLID)
+    if (m_RenderParams.RenderMode == HN_RENDER_MODE_SOLID)
     {
         GraphicsDesc.PrimitiveTopology = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
         State.PbrPSOCache              = USDRenderer->GetPbrPsoCacheAccessor(GraphicsDesc);
         VERIFY_EXPR(State.PbrPSOCache);
     }
-    else if (m_Params.RenderMode == HN_RENDER_MODE_MESH_EDGES ||
-             m_Params.RenderMode == HN_RENDER_MODE_POINTS)
+    else if (m_RenderParams.RenderMode == HN_RENDER_MODE_MESH_EDGES ||
+             m_RenderParams.RenderMode == HN_RENDER_MODE_POINTS)
     {
-        GraphicsDesc.PrimitiveTopology = m_Params.RenderMode == HN_RENDER_MODE_MESH_EDGES ? PRIMITIVE_TOPOLOGY_LINE_LIST : PRIMITIVE_TOPOLOGY_POINT_LIST;
+        GraphicsDesc.PrimitiveTopology = m_RenderParams.RenderMode == HN_RENDER_MODE_MESH_EDGES ? PRIMITIVE_TOPOLOGY_LINE_LIST : PRIMITIVE_TOPOLOGY_POINT_LIST;
         State.WireframePSOCache        = USDRenderer->GetWireframePsoCacheAccessor(GraphicsDesc);
         VERIFY_EXPR(State.WireframePSOCache);
     }
@@ -144,6 +144,19 @@ void HnRenderPass::_MarkCollectionDirty()
 {
     // Force any cached data based on collection to be refreshed.
     m_CollectionVersion = ~0u;
+}
+
+void HnRenderPass::SetMeshRenderParams(const HnMeshRenderParams& Params)
+{
+    if (m_RenderParams.SelectedPrimId != Params.SelectedPrimId)
+        _MarkCollectionDirty();
+
+    m_RenderParams = Params;
+}
+
+void HnRenderPass::SetParams(const HnRenderPassParams& Params)
+{
+    m_Params = Params;
 }
 
 void HnRenderPass::UpdateDrawItems(const pxr::TfTokenVector& RenderTags)
@@ -182,10 +195,20 @@ void HnRenderPass::UpdateDrawItems(const pxr::TfTokenVector& RenderTags)
         //GeomSubsetDrawItemsChanged ||
         TaskRenderTagsChanged)
     {
+        m_DrawItems.clear();
         //const HnRenderParam* const RenderParam = static_cast<HnRenderParam*>(pRenderIndex->GetRenderDelegate()->GetRenderParam());
         //if (RenderParam->HasMaterialTag(Collection.GetMaterialTag()))
         {
-            m_DrawItems = GetRenderIndex()->GetDrawItems(Collection, RenderTags);
+            auto DrawItems = GetRenderIndex()->GetDrawItems(Collection, RenderTags);
+            for (auto& pDrawItem : DrawItems)
+            {
+                const bool IsSelected = pDrawItem->GetRprimID().HasPrefix(m_RenderParams.SelectedPrimId);
+                if (((m_Params.Selection == HnRenderPassParams::SelectionType::Selected || m_Params.Selection == HnRenderPassParams::SelectionType::All) && IsSelected) ||
+                    (m_Params.Selection == HnRenderPassParams::SelectionType::Unselected && !IsSelected))
+                {
+                    m_DrawItems.emplace_back(std::move(pDrawItem));
+                }
+            }
         }
         //else
         //{
@@ -230,7 +253,7 @@ void HnRenderPass::RenderMesh(RenderState&      State,
     }
 
     IBuffer* pIB = nullptr;
-    switch (m_Params.RenderMode)
+    switch (m_RenderParams.RenderMode)
     {
         case HN_RENDER_MODE_SOLID:
             pIB = Mesh.GetTriangleIndexBuffer();
@@ -257,7 +280,7 @@ void HnRenderPass::RenderMesh(RenderState&      State,
     auto PSOFlags = PBR_Renderer::PSO_FLAG_ENABLE_CUSTOM_DATA_OUTPUT;
 
     IPipelineState* pPSO = nullptr;
-    if (m_Params.RenderMode == HN_RENDER_MODE_SOLID)
+    if (m_RenderParams.RenderMode == HN_RENDER_MODE_SOLID)
     {
         if (pNormalsVB != nullptr)
             PSOFlags |= PBR_Renderer::PSO_FLAG_USE_VERTEX_NORMALS;
@@ -281,8 +304,8 @@ void HnRenderPass::RenderMesh(RenderState&      State,
                "This may indicate an issue in how alpha mode is determined in the material, or (less likely) an issue in Rprim sorting by Hydra.");
         pPSO = State.PbrPSOCache.Get({PSOFlags, static_cast<PBR_Renderer::ALPHA_MODE>(State.AlphaMode), /*DoubleSided = */ false}, true);
     }
-    else if (m_Params.RenderMode == HN_RENDER_MODE_MESH_EDGES ||
-             m_Params.RenderMode == HN_RENDER_MODE_POINTS)
+    else if (m_RenderParams.RenderMode == HN_RENDER_MODE_MESH_EDGES ||
+             m_RenderParams.RenderMode == HN_RENDER_MODE_POINTS)
     {
         pPSO = State.WireframePSOCache.Get({PSOFlags, /*DoubleSided = */ false}, true);
     }
@@ -309,7 +332,7 @@ void HnRenderPass::RenderMesh(RenderState&      State,
     {
         MapHelper<HLSL::PBRShaderAttribs> pDstShaderAttribs{State.pCtx, State.pPBRAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
 
-        pDstShaderAttribs->Transforms.NodeMatrix = Mesh.GetTransform() * m_Params.Transform;
+        pDstShaderAttribs->Transforms.NodeMatrix = Mesh.GetTransform() * m_RenderParams.Transform;
         pDstShaderAttribs->Transforms.JointCount = 0;
 
         static_assert(sizeof(pDstShaderAttribs->Material) == sizeof(ShaderAttribs), "The sizeof(PBRMaterialShaderInfo) is inconsistent with sizeof(ShaderAttribs)");
@@ -317,13 +340,13 @@ void HnRenderPass::RenderMesh(RenderState&      State,
 
         auto& RendererParams = pDstShaderAttribs->Renderer;
 
-        RendererParams.DebugViewType     = m_Params.DebugView;
-        RendererParams.OcclusionStrength = m_Params.OcclusionStrength;
-        RendererParams.EmissionScale     = m_Params.EmissionScale;
-        RendererParams.IBLScale          = m_Params.IBLScale;
+        RendererParams.DebugViewType     = m_RenderParams.DebugView;
+        RendererParams.OcclusionStrength = m_RenderParams.OcclusionStrength;
+        RendererParams.EmissionScale     = m_RenderParams.EmissionScale;
+        RendererParams.IBLScale          = m_RenderParams.IBLScale;
 
         RendererParams.PrefilteredCubeMipLevels = 5; //m_Settings.UseIBL ? static_cast<float>(m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels) : 0.f;
-        RendererParams.WireframeColor           = m_Params.RenderMode == HN_RENDER_MODE_POINTS ? m_Params.PointColor : m_Params.WireframeColor;
+        RendererParams.WireframeColor           = m_RenderParams.RenderMode == HN_RENDER_MODE_POINTS ? m_RenderParams.PointColor : m_RenderParams.WireframeColor;
         RendererParams.HighlightColor           = float4{0, 0, 0, 0};
 
         // Tone mapping is performed in the post-processing pass
@@ -333,7 +356,7 @@ void HnRenderPass::RenderMesh(RenderState&      State,
 
         RendererParams.CustomData = float4{
             static_cast<float>(Mesh.GetUID()),
-            Mesh.GetId().HasPrefix(m_Params.SelectedPrimId) ? 1.f : 0.f,
+            Mesh.GetId().HasPrefix(m_RenderParams.SelectedPrimId) ? 1.f : 0.f,
             0,
             0,
         };
@@ -343,15 +366,15 @@ void HnRenderPass::RenderMesh(RenderState&      State,
 
     if (pIB != nullptr)
     {
-        VERIFY_EXPR(m_Params.RenderMode == HN_RENDER_MODE_SOLID || m_Params.RenderMode == HN_RENDER_MODE_MESH_EDGES);
-        DrawIndexedAttribs DrawAttrs = (m_Params.RenderMode == HN_RENDER_MODE_MESH_EDGES) ?
+        VERIFY_EXPR(m_RenderParams.RenderMode == HN_RENDER_MODE_SOLID || m_RenderParams.RenderMode == HN_RENDER_MODE_MESH_EDGES);
+        DrawIndexedAttribs DrawAttrs = (m_RenderParams.RenderMode == HN_RENDER_MODE_MESH_EDGES) ?
             DrawIndexedAttribs{Mesh.GetNumEdges() * 2, VT_UINT32, DRAW_FLAG_VERIFY_ALL} :
             DrawIndexedAttribs{Mesh.GetNumTriangles() * 3, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
         State.pCtx->DrawIndexed(DrawAttrs);
     }
     else
     {
-        VERIFY_EXPR(m_Params.RenderMode == HN_RENDER_MODE_POINTS);
+        VERIFY_EXPR(m_RenderParams.RenderMode == HN_RENDER_MODE_POINTS);
         DrawAttribs DrawAttrs{Mesh.GetNumPoints(), DRAW_FLAG_VERIFY_ALL};
         State.pCtx->Draw(DrawAttrs);
     }
