@@ -216,7 +216,7 @@ void HnSetupRenderingTask::Execute(pxr::HdTaskContext* TaskCtx)
     auto* pCtx = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate())->GetDeviceContext();
 
     pCtx->SetRenderTargets(_countof(pRTVs), pRTVs, Targets.DepthDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    pCtx->ClearRenderTarget(Targets.FinalColorRTV, m_ClearColor.Data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    pCtx->ClearRenderTarget(Targets.OffscreenColorRTV, m_ClearColor.Data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     constexpr float Zero[] = {0, 0, 0, 0};
     pCtx->ClearRenderTarget(Targets.MeshIdRTV, Zero, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     pCtx->ClearRenderTarget(Targets.SelectionRTV, Zero, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);

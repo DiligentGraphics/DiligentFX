@@ -33,11 +33,44 @@
 namespace Diligent
 {
 
+static std::string GetUsdPbrPSMainSource(USD_Renderer::PSO_FLAGS PSOFlags)
+{
+    VERIFY(PSOFlags & USD_Renderer::PSO_FLAG_ENABLE_CUSTOM_DATA_OUTPUT, "Custom output flag is expected to be set");
+    return R"(
+struct PSOutput
+{
+    float4 Color      : SV_Target0;
+    float4 MeshID     : SV_Target1;
+    float4 IsSelected : SV_Target2;
+};
+
+void main(in VSOutput VSOut,
+          in bool IsFrontFace : SV_IsFrontFace,
+          out PSOutput PSOut)
+{
+    PSOut.Color = ComputePbrSurfaceColor(VSOut, IsFrontFace);
+
+    // It is important to set alpha to 1.0 as all targets are rendered with the same blend mode
+    PSOut.MeshID     = float4(g_PBRAttribs.Renderer.CustomData.x, 0.0, 0.0, 1.0);
+    PSOut.IsSelected = float4(g_PBRAttribs.Renderer.CustomData.y, 0.0, 0.0, 1.0);
+}
+)";
+}
+
 USD_Renderer::USD_Renderer(IRenderDevice*     pDevice,
                            IRenderStateCache* pStateCache,
                            IDeviceContext*    pCtx,
                            const CreateInfo&  CI) :
-    PBR_Renderer{pDevice, pStateCache, pCtx, CI}
+    PBR_Renderer{
+        pDevice,
+        pStateCache,
+        pCtx,
+        [](CreateInfo CI) {
+            if (CI.GetPSMainSource == nullptr)
+                CI.GetPSMainSource = GetUsdPbrPSMainSource;
+            return CI;
+        }(CI),
+    }
 {
 }
 
