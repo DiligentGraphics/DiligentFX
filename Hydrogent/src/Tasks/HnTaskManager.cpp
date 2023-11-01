@@ -135,25 +135,26 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
 {
     // Task creation order defines the default task order
     CreateSetupRenderingTask();
+    static constexpr auto USD_PSO_FLAG_ENABLE_MESH_ID_AND_SELECTION_OUTPUT = USD_Renderer::USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT | USD_Renderer::USD_PSO_FLAG_ENABLE_SELECTION_OUTPUT;
     CreateRenderRprimsTask(HnMaterialTagTokens->defaultTag,
                            TaskUID_RenderRprimsDefaultSelected,
-                           {HnRenderPassParams::SelectionType::Selected});
+                           {HnRenderPassParams::SelectionType::Selected, USD_PSO_FLAG_ENABLE_MESH_ID_AND_SELECTION_OUTPUT});
     CreateRenderRprimsTask(HnMaterialTagTokens->masked,
                            TaskUID_RenderRprimsMaskedSelected,
-                           {HnRenderPassParams::SelectionType::Selected});
+                           {HnRenderPassParams::SelectionType::Selected, USD_PSO_FLAG_ENABLE_MESH_ID_AND_SELECTION_OUTPUT});
     CreateRenderRprimsTask(HnMaterialTagTokens->defaultTag,
                            TaskUID_RenderRprimsDefaultUnselected,
-                           {HnRenderPassParams::SelectionType::Unselected});
+                           {HnRenderPassParams::SelectionType::Unselected, USD_Renderer::USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT});
     CreateRenderRprimsTask(HnMaterialTagTokens->masked,
                            TaskUID_RenderRprimsMaskedUnselected,
-                           {HnRenderPassParams::SelectionType::Unselected});
+                           {HnRenderPassParams::SelectionType::Unselected, USD_Renderer::USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT});
     CreateRenderEnvMapTask();
     CreateRenderRprimsTask(HnMaterialTagTokens->additive,
                            TaskUID_RenderRprimsAdditive,
-                           {HnRenderPassParams::SelectionType::All});
+                           {HnRenderPassParams::SelectionType::All, USD_PSO_FLAG_ENABLE_MESH_ID_AND_SELECTION_OUTPUT});
     CreateRenderRprimsTask(HnMaterialTagTokens->translucent,
                            TaskUID_RenderRprimsTranslucent,
-                           {HnRenderPassParams::SelectionType::All});
+                           {HnRenderPassParams::SelectionType::All, USD_PSO_FLAG_ENABLE_MESH_ID_AND_SELECTION_OUTPUT});
     //CreateRenderRprimsTask(HnMaterialTagTokens->additive,
     //                       TaskUID_RenderRprimsAdditiveSelected,
     //                       {HnRenderPassParams::SelectionType::Selected});

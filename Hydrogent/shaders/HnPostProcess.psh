@@ -39,7 +39,7 @@ void main(in PSInput PSIn,
     float Outline = IsSelected0 + IsSelected1 + IsSelected2 + IsSelected3 + IsSelected4 + IsSelected5 + IsSelected6 + IsSelected7 + IsSelected8;
     Outline = (Outline > 4.0 && Outline < 9.0) ? 1.0 : 0.0;
 
-    float DesatFactor = g_Attribs.NonselectionDesaturationFactor * saturate(IsSelected4);
+    float DesatFactor = g_Attribs.NonselectionDesaturationFactor * saturate(1.0 - IsSelected4);
     float Luminance = dot(Color.rgb, float3(0.2126, 0.7152, 0.0722));
     Color.rgb = lerp(Color.rgb, float3(Luminance, Luminance, Luminance), DesatFactor);
 

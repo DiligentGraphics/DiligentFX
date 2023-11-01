@@ -203,7 +203,8 @@ void HnRenderPass::UpdateDrawItems(const pxr::TfTokenVector& RenderTags)
             for (auto& pDrawItem : DrawItems)
             {
                 const bool IsSelected = pDrawItem->GetRprimID().HasPrefix(m_RenderParams.SelectedPrimId);
-                if (((m_Params.Selection == HnRenderPassParams::SelectionType::Selected || m_Params.Selection == HnRenderPassParams::SelectionType::All) && IsSelected) ||
+                if ((m_Params.Selection == HnRenderPassParams::SelectionType::All) ||
+                    (m_Params.Selection == HnRenderPassParams::SelectionType::Selected && IsSelected) ||
                     (m_Params.Selection == HnRenderPassParams::SelectionType::Unselected && !IsSelected))
                 {
                     m_DrawItems.emplace_back(std::move(pDrawItem));
@@ -277,7 +278,7 @@ void HnRenderPass::RenderMesh(RenderState&      State,
     }
     static_assert(HN_RENDER_MODE_COUNT == 3, "Please handle the new render mode in the switch above");
 
-    auto PSOFlags = PBR_Renderer::PSO_FLAG_ENABLE_CUSTOM_DATA_OUTPUT;
+    auto PSOFlags = static_cast<PBR_Renderer::PSO_FLAGS>(m_Params.UsdPsoFlags);
 
     IPipelineState* pPSO = nullptr;
     if (m_RenderParams.RenderMode == HN_RENDER_MODE_SOLID)

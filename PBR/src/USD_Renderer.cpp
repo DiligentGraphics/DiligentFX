@@ -33,28 +33,39 @@
 namespace Diligent
 {
 
-static std::string GetUsdPbrPSMainSource(USD_Renderer::PSO_FLAGS PSOFlags)
+std::string USD_Renderer::GetUsdPbrPSMainSource(USD_Renderer::PSO_FLAGS PSOFlags)
 {
-    VERIFY(PSOFlags & USD_Renderer::PSO_FLAG_ENABLE_CUSTOM_DATA_OUTPUT, "Custom output flag is expected to be set");
-    return R"(
-struct PSOutput
-{
-    float4 Color      : SV_Target0;
-    float4 MeshID     : SV_Target1;
-    float4 IsSelected : SV_Target2;
-};
+    std::stringstream ss;
+    ss << "struct PSOutput" << std::endl
+       << '{' << std::endl
+       << "    float4 Color      : SV_Target" << m_ColorTargetIndex << ';' << std::endl;
 
+    if (PSOFlags & USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT)
+        ss << "    float4 MeshID     : SV_Target" << m_MeshIdTargetIndex << ';' << std::endl;
+
+    if (PSOFlags & USD_PSO_FLAG_ENABLE_SELECTION_OUTPUT)
+        ss << "    float4 IsSelected : SV_Target" << m_SelectionTargetIndex << ';' << std::endl;
+
+    ss << "};" << std::endl;
+
+    ss << R"(
 void main(in VSOutput VSOut,
           in bool IsFrontFace : SV_IsFrontFace,
           out PSOutput PSOut)
 {
     PSOut.Color = ComputePbrSurfaceColor(VSOut, IsFrontFace);
+)";
 
     // It is important to set alpha to 1.0 as all targets are rendered with the same blend mode
-    PSOut.MeshID     = float4(g_PBRAttribs.Renderer.CustomData.x, 0.0, 0.0, 1.0);
-    PSOut.IsSelected = float4(g_PBRAttribs.Renderer.CustomData.y, 0.0, 0.0, 1.0);
-}
-)";
+    if (PSOFlags & USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT)
+        ss << "    PSOut.MeshID     = float4(g_PBRAttribs.Renderer.CustomData.x, 0.0, 0.0, 1.0);" << std::endl;
+
+    if (PSOFlags & USD_PSO_FLAG_ENABLE_SELECTION_OUTPUT)
+        ss << "    PSOut.IsSelected = float4(g_PBRAttribs.Renderer.CustomData.y, 0.0, 0.0, 1.0);" << std::endl;
+
+    ss << "}" << std::endl;
+
+    return ss.str();
 }
 
 USD_Renderer::USD_Renderer(IRenderDevice*     pDevice,
@@ -65,12 +76,17 @@ USD_Renderer::USD_Renderer(IRenderDevice*     pDevice,
         pDevice,
         pStateCache,
         pCtx,
-        [](CreateInfo CI) {
+        [this](CreateInfo CI) {
             if (CI.GetPSMainSource == nullptr)
-                CI.GetPSMainSource = GetUsdPbrPSMainSource;
+                CI.GetPSMainSource = [this](USD_Renderer::PSO_FLAGS PSOFlags) {
+                    return GetUsdPbrPSMainSource(PSOFlags);
+                };
             return CI;
         }(CI),
-    }
+    },
+    m_ColorTargetIndex{CI.ColorTargetIndex},
+    m_MeshIdTargetIndex{CI.MeshIdTargetIndex},
+    m_SelectionTargetIndex{CI.SelectionTargetIndex}
 {
 }
 

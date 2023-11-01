@@ -29,6 +29,8 @@
 #include "pxr/imaging/hd/types.h"
 #include "pxr/imaging/hd/renderPass.h"
 
+#include "../../PBR/interface/USD_Renderer.hpp"
+
 #include "HnTypes.hpp"
 
 namespace Diligent
@@ -67,9 +69,11 @@ struct HnRenderPassParams
     };
     SelectionType Selection = SelectionType::All;
 
+    USD_Renderer::USD_PSO_FLAGS UsdPsoFlags = USD_Renderer::USD_PSO_FLAG_NONE;
+
     constexpr bool operator==(const HnRenderPassParams& rhs) const
     {
-        return Selection == rhs.Selection;
+        return Selection == rhs.Selection && UsdPsoFlags == rhs.UsdPsoFlags;
     }
 };
 

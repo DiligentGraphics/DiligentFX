@@ -35,11 +35,32 @@ namespace Diligent
 class USD_Renderer : public PBR_Renderer
 {
 public:
+    struct CreateInfo : PBR_Renderer::CreateInfo
+    {
+        Uint32 ColorTargetIndex     = 0;
+        Uint32 MeshIdTargetIndex    = 1;
+        Uint32 SelectionTargetIndex = 2;
+    };
     /// Initializes the renderer
     USD_Renderer(IRenderDevice*     pDevice,
                  IRenderStateCache* pStateCache,
                  IDeviceContext*    pCtx,
                  const CreateInfo&  CI);
+    enum USD_PSO_FLAGS
+    {
+        USD_PSO_FLAG_NONE                    = 0,
+        USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT   = PSO_FLAG_FIRST_USER_DEFINED << 0u,
+        USD_PSO_FLAG_ENABLE_SELECTION_OUTPUT = PSO_FLAG_FIRST_USER_DEFINED << 1u,
+    };
+
+private:
+    std::string GetUsdPbrPSMainSource(USD_Renderer::PSO_FLAGS PSOFlags);
+
+private:
+    const Uint32 m_ColorTargetIndex;
+    const Uint32 m_MeshIdTargetIndex;
+    const Uint32 m_SelectionTargetIndex;
 };
+DEFINE_FLAG_ENUM_OPERATORS(USD_Renderer::USD_PSO_FLAGS)
 
 } // namespace Diligent

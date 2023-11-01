@@ -39,7 +39,7 @@
 "    float Outline = IsSelected0 + IsSelected1 + IsSelected2 + IsSelected3 + IsSelected4 + IsSelected5 + IsSelected6 + IsSelected7 + IsSelected8;\n"
 "    Outline = (Outline > 4.0 && Outline < 9.0) ? 1.0 : 0.0;\n"
 "\n"
-"    float DesatFactor = g_Attribs.NonselectionDesaturationFactor * saturate(IsSelected4);\n"
+"    float DesatFactor = g_Attribs.NonselectionDesaturationFactor * saturate(1.0 - IsSelected4);\n"
 "    float Luminance = dot(Color.rgb, float3(0.2126, 0.7152, 0.0722));\n"
 "    Color.rgb = lerp(Color.rgb, float3(Luminance, Luminance, Luminance), DesatFactor);\n"
 "\n"
