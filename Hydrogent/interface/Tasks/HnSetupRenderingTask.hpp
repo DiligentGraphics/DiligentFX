@@ -148,11 +148,6 @@ private:
     float  m_ClearDepth = 1.f;
 
     pxr::HdRenderIndex* m_RenderIndex = nullptr;
-
-    ITextureView* m_pFinalColorRTV = nullptr;
-    ITextureView* m_pMeshIdRTV     = nullptr;
-    ITextureView* m_pSelectionRTV  = nullptr;
-    ITextureView* m_pDepthDSV      = nullptr;
 };
 
 } // namespace USD

@@ -33,6 +33,7 @@
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/DepthStencilState.h"
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/PipelineState.h"
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/DeviceContext.h"
+#include "../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
 
 #include "../interface/HnTypes.hpp"
 
@@ -95,12 +96,42 @@ public:
     BlendStateDesc        GetBlendState() const;
     GraphicsPipelineDesc  GetGraphicsPipelineDesc() const;
 
+    struct FramebufferTargets
+    {
+        ITextureView* FinalColorRTV     = nullptr;
+        ITextureView* OffscreenColorRTV = nullptr;
+        ITextureView* MeshIdRTV         = nullptr;
+        ITextureView* SelectionRTV      = nullptr;
+        ITextureView* DepthDSV          = nullptr;
+
+        constexpr explicit operator bool() const
+        {
+            // clang-format off
+            return FinalColorRTV     != nullptr &&
+                   OffscreenColorRTV != nullptr &&
+                   MeshIdRTV         != nullptr &&
+                   SelectionRTV      != nullptr &&
+                   DepthDSV          != nullptr;
+            // clang-format on
+        }
+    };
+    void SetFramebufferTargets(const FramebufferTargets& Targets)
+    {
+        m_FramebufferTargets = Targets;
+    }
+    const FramebufferTargets& GetFramebufferTargets() const
+    {
+        return m_FramebufferTargets;
+    }
+
 private:
     Uint32                                         m_NumRenderTargets = 0;
     std::array<TEXTURE_FORMAT, MAX_RENDER_TARGETS> m_RTVFormats       = {};
     TEXTURE_FORMAT                                 m_DepthFormat      = TEX_FORMAT_UNKNOWN;
 
     bool m_FrontFaceCCW = false;
+
+    FramebufferTargets m_FramebufferTargets;
 };
 
 } // namespace USD

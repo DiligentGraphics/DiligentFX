@@ -165,10 +165,14 @@ void HnSetupRenderingTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
 
         return pView;
     };
-    m_pFinalColorRTV = UpdateBrim(m_OffscreenColorTargetId, m_RenderPassState->GetRenderTargetFormat(0), "Offscreen color target");
-    m_pMeshIdRTV     = UpdateBrim(m_MeshIdTargetId, m_RenderPassState->GetRenderTargetFormat(1), "Mesh Id target");
-    m_pSelectionRTV  = UpdateBrim(m_SelectionTargetId, m_RenderPassState->GetRenderTargetFormat(2), "Selection target");
-    m_pDepthDSV      = UpdateBrim(m_DepthBufferId, m_RenderPassState->GetDepthStencilFormat(), "Depth buffer");
+
+    HnRenderPassState::FramebufferTargets FBTargets;
+    FBTargets.FinalColorRTV     = pFinalColorRTV;
+    FBTargets.OffscreenColorRTV = UpdateBrim(m_OffscreenColorTargetId, m_RenderPassState->GetRenderTargetFormat(0), "Offscreen color target");
+    FBTargets.MeshIdRTV         = UpdateBrim(m_MeshIdTargetId, m_RenderPassState->GetRenderTargetFormat(1), "Mesh Id target");
+    FBTargets.SelectionRTV      = UpdateBrim(m_SelectionTargetId, m_RenderPassState->GetRenderTargetFormat(2), "Selection target");
+    FBTargets.DepthDSV          = UpdateBrim(m_DepthBufferId, m_RenderPassState->GetDepthStencilFormat(), "Depth buffer");
+    m_RenderPassState->SetFramebufferTargets(FBTargets);
 }
 
 void HnSetupRenderingTask::Prepare(pxr::HdTaskContext* TaskCtx,
@@ -200,16 +204,23 @@ void HnSetupRenderingTask::Execute(pxr::HdTaskContext* TaskCtx)
         return;
     }
 
-    ITextureView* pRTVs[] = {m_pFinalColorRTV, m_pMeshIdRTV, m_pSelectionRTV};
+    const auto& Targets = m_RenderPassState->GetFramebufferTargets();
+    if (!Targets)
+    {
+        UNEXPECTED("Framebuffer targets are not set");
+        return;
+    }
+
+    ITextureView* pRTVs[] = {Targets.OffscreenColorRTV, Targets.MeshIdRTV, Targets.SelectionRTV};
 
     auto* pCtx = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate())->GetDeviceContext();
 
-    pCtx->SetRenderTargets(_countof(pRTVs), pRTVs, m_pDepthDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    pCtx->ClearRenderTarget(m_pFinalColorRTV, m_ClearColor.Data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    pCtx->SetRenderTargets(_countof(pRTVs), pRTVs, Targets.DepthDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    pCtx->ClearRenderTarget(Targets.FinalColorRTV, m_ClearColor.Data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     constexpr float Zero[] = {0, 0, 0, 0};
-    pCtx->ClearRenderTarget(m_pMeshIdRTV, Zero, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    pCtx->ClearRenderTarget(m_pSelectionRTV, Zero, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    pCtx->ClearDepthStencil(m_pDepthDSV, CLEAR_DEPTH_FLAG, m_ClearDepth, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    pCtx->ClearRenderTarget(Targets.MeshIdRTV, Zero, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    pCtx->ClearRenderTarget(Targets.SelectionRTV, Zero, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    pCtx->ClearDepthStencil(Targets.DepthDSV, CLEAR_DEPTH_FLAG, m_ClearDepth, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     pCtx->SetStencilRef(m_RenderPassState->GetStencilRef());
 }
 
