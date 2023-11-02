@@ -43,9 +43,6 @@ std::string USD_Renderer::GetUsdPbrPSMainSource(USD_Renderer::PSO_FLAGS PSOFlags
     if (PSOFlags & USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT)
         ss << "    float4 MeshID     : SV_Target" << m_MeshIdTargetIndex << ';' << std::endl;
 
-    if (PSOFlags & USD_PSO_FLAG_ENABLE_SELECTION_OUTPUT)
-        ss << "    float4 IsSelected : SV_Target" << m_SelectionTargetIndex << ';' << std::endl;
-
     ss << "};" << std::endl;
 
     ss << R"(
@@ -59,9 +56,6 @@ void main(in VSOutput VSOut,
     // It is important to set alpha to 1.0 as all targets are rendered with the same blend mode
     if (PSOFlags & USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT)
         ss << "    PSOut.MeshID     = float4(g_PBRAttribs.Renderer.CustomData.x, 0.0, 0.0, 1.0);" << std::endl;
-
-    if (PSOFlags & USD_PSO_FLAG_ENABLE_SELECTION_OUTPUT)
-        ss << "    PSOut.IsSelected = float4(g_PBRAttribs.Renderer.CustomData.y, 0.0, 0.0, 1.0);" << std::endl;
 
     ss << "}" << std::endl;
 
@@ -85,8 +79,7 @@ USD_Renderer::USD_Renderer(IRenderDevice*     pDevice,
         }(CI),
     },
     m_ColorTargetIndex{CI.ColorTargetIndex},
-    m_MeshIdTargetIndex{CI.MeshIdTargetIndex},
-    m_SelectionTargetIndex{CI.SelectionTargetIndex}
+    m_MeshIdTargetIndex{CI.MeshIdTargetIndex}
 {
 }
 

@@ -17,6 +17,7 @@ set(SOURCE
     src/HnTextureUtils.cpp
     src/HnTypeConversions.cpp
     src/Tasks/HnTask.cpp
+    src/Tasks/HnCopySelectionDepthTask.cpp
     src/Tasks/HnSetupRenderingTask.cpp
     src/Tasks/HnRenderRprimsTask.cpp
     src/Tasks/HnRenderEnvMapTask.cpp
@@ -45,6 +46,7 @@ set(INTERFACE
     interface/HnTextureIdentifier.hpp
     interface/HnTextureRegistry.hpp
     interface/Tasks/HnTask.hpp
+    interface/Tasks/HnCopySelectionDepthTask.hpp
     interface/Tasks/HnSetupRenderingTask.hpp
     interface/Tasks/HnRenderRprimsTask.hpp
     interface/Tasks/HnRenderEnvMapTask.hpp

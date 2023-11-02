@@ -31,6 +31,7 @@
 
 #include "Tasks/HnSetupRenderingTask.hpp"
 #include "Tasks/HnRenderRprimsTask.hpp"
+#include "Tasks/HnCopySelectionDepthTask.hpp"
 #include "Tasks/HnRenderEnvMapTask.hpp"
 #include "Tasks/HnReadRprimIdTask.hpp"
 #include "Tasks/HnPostProcessTask.hpp"
@@ -53,6 +54,7 @@ TF_DEFINE_PRIVATE_TOKENS(
     HnTaskManagerTokens,
 
     (setupRendering)
+    (copySelectionDepth)
     (renderEnvMapTask)
     (readRprimIdTask)
     (postProcessTask)
@@ -135,26 +137,44 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
 {
     // Task creation order defines the default task order
     CreateSetupRenderingTask();
-    static constexpr auto USD_PSO_FLAG_ENABLE_MESH_ID_AND_SELECTION_OUTPUT = USD_Renderer::USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT | USD_Renderer::USD_PSO_FLAG_ENABLE_SELECTION_OUTPUT;
     CreateRenderRprimsTask(HnMaterialTagTokens->defaultTag,
                            TaskUID_RenderRprimsDefaultSelected,
-                           {HnRenderPassParams::SelectionType::Selected, USD_PSO_FLAG_ENABLE_MESH_ID_AND_SELECTION_OUTPUT});
+                           {
+                               HnRenderPassParams::SelectionType::Selected,
+                               USD_Renderer::USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT,
+                           });
     CreateRenderRprimsTask(HnMaterialTagTokens->masked,
                            TaskUID_RenderRprimsMaskedSelected,
-                           {HnRenderPassParams::SelectionType::Selected, USD_PSO_FLAG_ENABLE_MESH_ID_AND_SELECTION_OUTPUT});
+                           {
+                               HnRenderPassParams::SelectionType::Selected,
+                               USD_Renderer::USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT,
+                           });
+    CreateCopySelectionDepthTask();
     CreateRenderRprimsTask(HnMaterialTagTokens->defaultTag,
                            TaskUID_RenderRprimsDefaultUnselected,
-                           {HnRenderPassParams::SelectionType::Unselected, USD_Renderer::USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT});
+                           {
+                               HnRenderPassParams::SelectionType::Unselected,
+                               USD_Renderer::USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT,
+                           });
     CreateRenderRprimsTask(HnMaterialTagTokens->masked,
                            TaskUID_RenderRprimsMaskedUnselected,
-                           {HnRenderPassParams::SelectionType::Unselected, USD_Renderer::USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT});
+                           {
+                               HnRenderPassParams::SelectionType::Unselected,
+                               USD_Renderer::USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT,
+                           });
     CreateRenderEnvMapTask();
     CreateRenderRprimsTask(HnMaterialTagTokens->additive,
                            TaskUID_RenderRprimsAdditive,
-                           {HnRenderPassParams::SelectionType::All, USD_PSO_FLAG_ENABLE_MESH_ID_AND_SELECTION_OUTPUT});
+                           {
+                               HnRenderPassParams::SelectionType::All,
+                               USD_Renderer::USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT,
+                           });
     CreateRenderRprimsTask(HnMaterialTagTokens->translucent,
                            TaskUID_RenderRprimsTranslucent,
-                           {HnRenderPassParams::SelectionType::All, USD_PSO_FLAG_ENABLE_MESH_ID_AND_SELECTION_OUTPUT});
+                           {
+                               HnRenderPassParams::SelectionType::All,
+                               USD_Renderer::USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT,
+                           });
     //CreateRenderRprimsTask(HnMaterialTagTokens->additive,
     //                       TaskUID_RenderRprimsAdditiveSelected,
     //                       {HnRenderPassParams::SelectionType::Selected});
@@ -268,6 +288,12 @@ void HnTaskManager::CreatePostProcessTask()
 {
     HnPostProcessTaskParams TaskParams;
     CreateTask<HnPostProcessTask>(HnTaskManagerTokens->postProcessTask, TaskUID_PostProcess, TaskParams);
+}
+
+void HnTaskManager::CreateCopySelectionDepthTask()
+{
+    HnCopySelectionDepthTaskParams TaskParams;
+    CreateTask<HnCopySelectionDepthTask>(HnTaskManagerTokens->copySelectionDepth, TaskUID_CopySelectionDepth, TaskParams);
 }
 
 void HnTaskManager::CreateRenderEnvMapTask()

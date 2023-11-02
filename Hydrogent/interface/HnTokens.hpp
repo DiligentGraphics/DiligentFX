@@ -106,7 +106,7 @@ namespace USD
     (offscreenColorTarget)        \
     (finalColorTarget)            \
     (meshIdTarget)                \
-    (selectionTarget)             \
+    (selectionDepthBuffer)        \
     (depthBuffer)
 
 // clang-format on

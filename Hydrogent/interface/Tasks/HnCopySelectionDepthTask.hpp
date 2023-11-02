@@ -26,38 +26,43 @@
 
 #pragma once
 
-#include "PBR_Renderer.hpp"
+#include "HnTask.hpp"
 
 namespace Diligent
 {
 
-/// Implementation of a GLTF PBR renderer
-class USD_Renderer : public PBR_Renderer
+namespace USD
+{
+
+struct HnCopySelectionDepthTaskParams
+{
+    constexpr operator bool() const
+    {
+        return true;
+    }
+};
+
+/// Copies depth buffer to the selection depth buffer.
+class HnCopySelectionDepthTask final : public HnTask
 {
 public:
-    struct CreateInfo : PBR_Renderer::CreateInfo
-    {
-        Uint32 ColorTargetIndex  = 0;
-        Uint32 MeshIdTargetIndex = 1;
-    };
-    /// Initializes the renderer
-    USD_Renderer(IRenderDevice*     pDevice,
-                 IRenderStateCache* pStateCache,
-                 IDeviceContext*    pCtx,
-                 const CreateInfo&  CI);
-    enum USD_PSO_FLAGS
-    {
-        USD_PSO_FLAG_NONE                  = 0,
-        USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT = PSO_FLAG_FIRST_USER_DEFINED << 0u
-    };
+    HnCopySelectionDepthTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id);
+    ~HnCopySelectionDepthTask();
+
+    virtual void Sync(pxr::HdSceneDelegate* Delegate,
+                      pxr::HdTaskContext*   TaskCtx,
+                      pxr::HdDirtyBits*     DirtyBits) override final;
+
+    virtual void Prepare(pxr::HdTaskContext* TaskCtx,
+                         pxr::HdRenderIndex* PostProcessIndex) override final;
+
+
+    virtual void Execute(pxr::HdTaskContext* TaskCtx) override final;
 
 private:
-    std::string GetUsdPbrPSMainSource(USD_Renderer::PSO_FLAGS PSOFlags);
-
-private:
-    const Uint32 m_ColorTargetIndex;
-    const Uint32 m_MeshIdTargetIndex;
+    pxr::HdRenderIndex* m_RenderIndex = nullptr;
 };
-DEFINE_FLAG_ENUM_OPERATORS(USD_Renderer::USD_PSO_FLAGS)
+
+} // namespace USD
 
 } // namespace Diligent

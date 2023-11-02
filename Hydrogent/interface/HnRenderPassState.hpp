@@ -101,7 +101,7 @@ public:
         ITextureView* FinalColorRTV     = nullptr;
         ITextureView* OffscreenColorRTV = nullptr;
         ITextureView* MeshIdRTV         = nullptr;
-        ITextureView* SelectionRTV      = nullptr;
+        ITextureView* SelectionDepthDSV = nullptr;
         ITextureView* DepthDSV          = nullptr;
 
         constexpr explicit operator bool() const
@@ -110,7 +110,7 @@ public:
             return FinalColorRTV     != nullptr &&
                    OffscreenColorRTV != nullptr &&
                    MeshIdRTV         != nullptr &&
-                   SelectionRTV      != nullptr &&
+                   SelectionDepthDSV != nullptr &&
                    DepthDSV          != nullptr;
             // clang-format on
         }

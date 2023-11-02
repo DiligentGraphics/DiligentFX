@@ -134,7 +134,8 @@ void HnPostProcessTask::PreparePSO(TEXTURE_FORMAT RTVFormat)
     PipelineResourceLayoutDescX ResourceLauout;
     ResourceLauout
         .AddVariable(SHADER_TYPE_PIXEL, "g_ColorBuffer", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-        .AddVariable(SHADER_TYPE_PIXEL, "g_Selection", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
+        .AddVariable(SHADER_TYPE_PIXEL, "g_Depth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+        .AddVariable(SHADER_TYPE_PIXEL, "g_SelectionDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
 
     GraphicsPipelineStateCreateInfoX PsoCI{"Post process"};
     PsoCI
@@ -229,10 +230,16 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         UNEXPECTED("Offscreen color RTV is not set in the task context");
         return;
     }
-    ITextureView* pSelectionRTV = GetRenderBufferTarget(*m_RenderIndex, TaskCtx, HnRenderResourceTokens->selectionTarget);
-    if (pSelectionRTV == nullptr)
+    ITextureView* pDepthDSV = GetRenderBufferTarget(*m_RenderIndex, TaskCtx, HnRenderResourceTokens->depthBuffer);
+    if (pDepthDSV == nullptr)
     {
-        UNEXPECTED("Mesh Id RTV is not set in the task context");
+        UNEXPECTED("Depth buffer is not set in the task context");
+        return;
+    }
+    ITextureView* pSelectionDepthDSV = GetRenderBufferTarget(*m_RenderIndex, TaskCtx, HnRenderResourceTokens->selectionDepthBuffer);
+    if (pSelectionDepthDSV == nullptr)
+    {
+        UNEXPECTED("Selection depth buffer is not set in the task context");
         return;
     }
     ITextureView* pOffscreenColorSRV = pOffscreenColorRTV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
@@ -241,10 +248,16 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         UNEXPECTED("Offscreen color SRV is null");
         return;
     }
-    ITextureView* pSelectionSRV = pSelectionRTV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-    if (pSelectionSRV == nullptr)
+    ITextureView* pDepthSRV = pDepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+    if (pDepthSRV == nullptr)
     {
-        UNEXPECTED("Mesh Id SRV is null");
+        UNEXPECTED("Depth SRV is null");
+        return;
+    }
+    ITextureView* pSelectionDepthSRV = pSelectionDepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+    if (pSelectionDepthSRV == nullptr)
+    {
+        UNEXPECTED("Selection depth SRV is null");
         return;
     }
 
@@ -269,7 +282,8 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
     }
     pCtx->SetPipelineState(m_PSO);
     m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_ColorBuffer")->Set(pOffscreenColorSRV);
-    m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_Selection")->Set(pSelectionSRV);
+    m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_Depth")->Set(pDepthSRV);
+    m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_SelectionDepth")->Set(pSelectionDepthSRV);
     pCtx->CommitShaderResources(m_SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     pCtx->Draw({3, DRAW_FLAG_VERIFY_ALL});
 }

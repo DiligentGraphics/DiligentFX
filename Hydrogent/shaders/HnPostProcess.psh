@@ -12,7 +12,8 @@ cbuffer cbPostProcessAttribs
 }
 
 Texture2D g_ColorBuffer;
-Texture2D g_Selection;
+Texture2D g_SelectionDepth;
+Texture2D g_Depth;
 
 void main(in PSInput PSIn,
           out float4 Color : SV_Target0)
@@ -23,23 +24,29 @@ void main(in PSInput PSIn,
     Color.rgb = ToneMap(Color.rgb, g_Attribs.ToneMapping, g_Attribs.AverageLogLum);
 #endif
 
-    // Selected rprim is rendered with negative index
-    float IsSelected0 = g_Selection.Load(int3(PSIn.Pos.xy + float2(-1.0, -1.0), 0)).r;
-    float IsSelected1 = g_Selection.Load(int3(PSIn.Pos.xy + float2( 0.0, -1.0), 0)).r;
-    float IsSelected2 = g_Selection.Load(int3(PSIn.Pos.xy + float2(+1.0, -1.0), 0)).r;
+    float SelectionDepth = g_SelectionDepth.Load(int3(PSIn.Pos.xy + float2(0.0, 0.0), 0)).r;
+    float Depth          = g_Depth.Load(int3(PSIn.Pos.xy + float2(0.0, 0.0), 0)).r;
+    
+    float IsSelected0 = g_SelectionDepth.Load(int3(PSIn.Pos.xy + float2(-1.0, -1.0), 0)).r != 1.0 ? 1.0 : 0.0;
+    float IsSelected1 = g_SelectionDepth.Load(int3(PSIn.Pos.xy + float2(0.0, -1.0), 0)).r != 1.0 ? 1.0 : 0.0;
+    float IsSelected2 = g_SelectionDepth.Load(int3(PSIn.Pos.xy + float2(+1.0, -1.0), 0)).r != 1.0 ? 1.0 : 0.0;
 
-    float IsSelected3 = g_Selection.Load(int3(PSIn.Pos.xy + float2(-1.0,  0.0), 0)).r;
-    float IsSelected4 = g_Selection.Load(int3(PSIn.Pos.xy + float2( 0.0,  0.0), 0)).r;
-    float IsSelected5 = g_Selection.Load(int3(PSIn.Pos.xy + float2(+1.0,  0.0), 0)).r;
+    float IsSelected3 = g_SelectionDepth.Load(int3(PSIn.Pos.xy + float2(-1.0, 0.0), 0)).r != 1.0 ? 1.0 : 0.0;
+    float IsSelected4 = SelectionDepth != 1.0 ? 1.0 : 0.0;
+    float IsSelected5 = g_SelectionDepth.Load(int3(PSIn.Pos.xy + float2(+1.0, 0.0), 0)).r != 1.0 ? 1.0 : 0.0;
 
-    float IsSelected6 = g_Selection.Load(int3(PSIn.Pos.xy + float2(-1.0, +1.0), 0)).r;
-    float IsSelected7 = g_Selection.Load(int3(PSIn.Pos.xy + float2( 0.0, +1.0), 0)).r;
-    float IsSelected8 = g_Selection.Load(int3(PSIn.Pos.xy + float2(+1.0, +1.0), 0)).r;
+    float IsSelected6 = g_SelectionDepth.Load(int3(PSIn.Pos.xy + float2(-1.0, +1.0), 0)).r != 1.0 ? 1.0 : 0.0;
+    float IsSelected7 = g_SelectionDepth.Load(int3(PSIn.Pos.xy + float2(0.0, +1.0), 0)).r != 1.0 ? 1.0 : 0.0;
+    float IsSelected8 = g_SelectionDepth.Load(int3(PSIn.Pos.xy + float2(+1.0, +1.0), 0)).r != 1.0 ? 1.0 : 0.0;
 
     float Outline = IsSelected0 + IsSelected1 + IsSelected2 + IsSelected3 + IsSelected4 + IsSelected5 + IsSelected6 + IsSelected7 + IsSelected8;
     Outline = (Outline > 4.0 && Outline < 9.0) ? 1.0 : 0.0;
 
-    float DesatFactor = g_Attribs.NonselectionDesaturationFactor * saturate(1.0 - IsSelected4);
+    float DesatFactor = saturate(1.0 - IsSelected4);
+    if (SelectionDepth != Depth)
+        DesatFactor = 1.0;
+    DesatFactor *= g_Attribs.NonselectionDesaturationFactor;
+    
     float Luminance = dot(Color.rgb, float3(0.2126, 0.7152, 0.0722));
     Color.rgb = lerp(Color.rgb, float3(Luminance, Luminance, Luminance), DesatFactor);
 

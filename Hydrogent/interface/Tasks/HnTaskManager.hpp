@@ -52,6 +52,7 @@ public:
     static constexpr TaskUID TaskUID_SetupRendering                  = 0x8362faac57354542;
     static constexpr TaskUID TaskUID_RenderRprimsDefaultSelected     = 0x1cdf84fa9ab5423e;
     static constexpr TaskUID TaskUID_RenderRprimsMaskedSelected      = 0xe926da1de43d4f47;
+    static constexpr TaskUID TaskUID_CopySelectionDepth              = 0xf3026cea7404c64a;
     static constexpr TaskUID TaskUID_RenderRprimsDefaultUnselected   = 0x287af907f3a740a0;
     static constexpr TaskUID TaskUID_RenderRprimsMaskedUnselected    = 0xf5290fec47594711;
     static constexpr TaskUID TaskUID_RenderRprimsAdditive            = 0x37d45531106c4c52;
@@ -78,6 +79,7 @@ public:
     ///                         - SetupRendering
     ///                         - RenderRprimsDefaultSelected
     ///                         - RenderRprimsMaskedSelected
+    /// 						- CopySelectionDepth
     ///                         - RenderRprimsDefaultUnselected
     ///                         - RenderRprimsMaskedUnselected
     ///                         - RenderEnvMap
@@ -162,6 +164,7 @@ private:
     void CreateRenderRprimsTask(const pxr::TfToken& MaterialTag, TaskUID UID, const HnRenderPassParams& RenderPassParams);
     void CreateRenderEnvMapTask();
     void CreateReadRprimIdTask();
+    void CreateCopySelectionDepthTask();
     void CreatePostProcessTask();
 
 private:
