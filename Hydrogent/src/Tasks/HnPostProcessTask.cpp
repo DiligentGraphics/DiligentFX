@@ -29,6 +29,7 @@
 #include "HnTokens.hpp"
 #include "HnShaderSourceFactory.hpp"
 #include "HnRenderDelegate.hpp"
+#include "HnRenderPassState.hpp"
 
 #include "DebugUtilities.hpp"
 #include "TextureView.h"
@@ -133,9 +134,8 @@ void HnPostProcessTask::PreparePSO(TEXTURE_FORMAT RTVFormat)
 
     PipelineResourceLayoutDescX ResourceLauout;
     ResourceLauout
-        .AddVariable(SHADER_TYPE_PIXEL, "g_ColorBuffer", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-        .AddVariable(SHADER_TYPE_PIXEL, "g_Depth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-        .AddVariable(SHADER_TYPE_PIXEL, "g_SelectionDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
+        .SetDefaultVariableType(SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
+        .AddVariable(SHADER_TYPE_PIXEL, "cbPostProcessAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
 
     GraphicsPipelineStateCreateInfoX PsoCI{"Post process"};
     PsoCI
@@ -156,8 +156,6 @@ void HnPostProcessTask::PreparePSO(TEXTURE_FORMAT RTVFormat)
     m_PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbPostProcessAttribs")->Set(m_PostProcessAttribsCB);
 
     m_SRB.Release();
-    m_PSO->CreateShaderResourceBinding(&m_SRB, true);
-    VERIFY_EXPR(m_SRB);
 
     m_PsoIsDirty = false;
 }
@@ -191,8 +189,8 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
     m_RenderIndex = RenderIndex;
 
     // Final color Bprim is initialized by the HnSetupRenderingTask.
-    ITextureView* pFinalColorRTV = GetRenderBufferTarget(*RenderIndex, TaskCtx, HnRenderResourceTokens->finalColorTarget);
-    if (pFinalColorRTV == nullptr)
+    m_FinalColorRTV = GetRenderBufferTarget(*RenderIndex, TaskCtx, HnRenderResourceTokens->finalColorTarget);
+    if (m_FinalColorRTV == nullptr)
     {
         UNEXPECTED("Final color target RTV is not set in the task context");
         return;
@@ -205,7 +203,78 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
         VERIFY(m_PostProcessAttribsCB, "Failed to create post process attribs CB");
     }
 
-    PreparePSO(pFinalColorRTV->GetDesc().Format);
+    PreparePSO(m_FinalColorRTV->GetDesc().Format);
+    if (std::shared_ptr<HnRenderPassState> RenderPassState = GetRenderPassState(TaskCtx))
+    {
+        PrepareSRB(*RenderPassState);
+    }
+    else
+    {
+        UNEXPECTED("Render pass state is not set in the task context");
+    }
+}
+
+void HnPostProcessTask::PrepareSRB(const HnRenderPassState& RPState)
+{
+    if (!m_PSO)
+    {
+        UNEXPECTED("PSO is null");
+        return;
+    }
+
+    const auto& FBTargets = RPState.GetFramebufferTargets();
+    if (!FBTargets)
+    {
+        UNEXPECTED("Framebuffer targets are null");
+        return;
+    }
+
+    ITextureView* pOffscreenColorSRV = FBTargets.OffscreenColorRTV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+    if (pOffscreenColorSRV == nullptr)
+    {
+        UNEXPECTED("Offscreen color SRV is null");
+        return;
+    }
+    ITextureView* pDepthSRV = FBTargets.DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+    if (pDepthSRV == nullptr)
+    {
+        UNEXPECTED("Depth SRV is null");
+        return;
+    }
+    ITextureView* pSelectionDepthSRV = FBTargets.SelectionDepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+    if (pSelectionDepthSRV == nullptr)
+    {
+        UNEXPECTED("Selection depth SRV is null");
+        return;
+    }
+
+    if (m_SRB && m_ShaderVars)
+    {
+        if (m_ShaderVars.Color->Get() != pOffscreenColorSRV ||
+            m_ShaderVars.Depth->Get() != pDepthSRV ||
+            m_ShaderVars.SelectionDepth->Get() != pSelectionDepthSRV)
+        {
+            m_SRB.Release();
+            m_ShaderVars = {};
+        }
+    }
+
+    if (!m_SRB)
+    {
+        m_PSO->CreateShaderResourceBinding(&m_SRB, true);
+        VERIFY_EXPR(m_SRB);
+        m_ShaderVars.Color          = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_ColorBuffer");
+        m_ShaderVars.Depth          = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_Depth");
+        m_ShaderVars.SelectionDepth = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_SelectionDepth");
+        VERIFY_EXPR(m_ShaderVars.Color != nullptr && m_ShaderVars.Depth != nullptr && m_ShaderVars.SelectionDepth != nullptr);
+
+        if (m_ShaderVars.Color != nullptr)
+            m_ShaderVars.Color->Set(pOffscreenColorSRV);
+        if (m_ShaderVars.Depth != nullptr)
+            m_ShaderVars.Depth->Set(pDepthSRV);
+        if (m_ShaderVars.SelectionDepth != nullptr)
+            m_ShaderVars.SelectionDepth->Set(pSelectionDepthSRV);
+    }
 }
 
 void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
@@ -216,55 +285,22 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         return;
     }
 
-    // Render target Bprims are initialized by the HnSetupRenderingTask.
+    if (!m_PSO || !m_SRB)
+    {
+        UNEXPECTED("Render technique is not initialized");
+        return;
+    }
 
-    ITextureView* pFinalColorRTV = GetRenderBufferTarget(*m_RenderIndex, TaskCtx, HnRenderResourceTokens->finalColorTarget);
-    if (pFinalColorRTV == nullptr)
+    if (m_FinalColorRTV == nullptr)
     {
-        UNEXPECTED("Final color target RTV is not set in the task context");
-        return;
-    }
-    ITextureView* pOffscreenColorRTV = GetRenderBufferTarget(*m_RenderIndex, TaskCtx, HnRenderResourceTokens->offscreenColorTarget);
-    if (pOffscreenColorRTV == nullptr)
-    {
-        UNEXPECTED("Offscreen color RTV is not set in the task context");
-        return;
-    }
-    ITextureView* pDepthDSV = GetRenderBufferTarget(*m_RenderIndex, TaskCtx, HnRenderResourceTokens->depthBuffer);
-    if (pDepthDSV == nullptr)
-    {
-        UNEXPECTED("Depth buffer is not set in the task context");
-        return;
-    }
-    ITextureView* pSelectionDepthDSV = GetRenderBufferTarget(*m_RenderIndex, TaskCtx, HnRenderResourceTokens->selectionDepthBuffer);
-    if (pSelectionDepthDSV == nullptr)
-    {
-        UNEXPECTED("Selection depth buffer is not set in the task context");
-        return;
-    }
-    ITextureView* pOffscreenColorSRV = pOffscreenColorRTV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-    if (pOffscreenColorSRV == nullptr)
-    {
-        UNEXPECTED("Offscreen color SRV is null");
-        return;
-    }
-    ITextureView* pDepthSRV = pDepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-    if (pDepthSRV == nullptr)
-    {
-        UNEXPECTED("Depth SRV is null");
-        return;
-    }
-    ITextureView* pSelectionDepthSRV = pSelectionDepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-    if (pSelectionDepthSRV == nullptr)
-    {
-        UNEXPECTED("Selection depth SRV is null");
+        UNEXPECTED("Final color target RTV is null. This likely indicates that Prepare() has not been called.");
         return;
     }
 
     HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
     IDeviceContext*   pCtx           = RenderDelegate->GetDeviceContext();
 
-    ITextureView* pRTVs[] = {pFinalColorRTV};
+    ITextureView* pRTVs[] = {m_FinalColorRTV};
     pCtx->SetRenderTargets(_countof(pRTVs), pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
     {
@@ -281,9 +317,6 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         pDstShaderAttribs->AverageLogLum                    = m_Params.AverageLogLum;
     }
     pCtx->SetPipelineState(m_PSO);
-    m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_ColorBuffer")->Set(pOffscreenColorSRV);
-    m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_Depth")->Set(pDepthSRV);
-    m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_SelectionDepth")->Set(pSelectionDepthSRV);
     pCtx->CommitShaderResources(m_SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     pCtx->Draw({3, DRAW_FLAG_VERIFY_ALL});
 }

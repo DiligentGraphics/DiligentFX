@@ -40,6 +40,8 @@ namespace Diligent
 namespace USD
 {
 
+class HnRenderPassState;
+
 struct HnPostProcessTaskParams
 {
     bool ConvertOutputToSRGB = false;
@@ -106,6 +108,7 @@ public:
 
 private:
     void PreparePSO(TEXTURE_FORMAT RTVFormat);
+    void PrepareSRB(const HnRenderPassState& RPState);
 
 private:
     pxr::HdRenderIndex* m_RenderIndex = nullptr;
@@ -114,9 +117,24 @@ private:
 
     bool m_PsoIsDirty = true;
 
-    RefCntAutoPtr<IPipelineState>         m_PSO;
+    RefCntAutoPtr<IPipelineState> m_PSO;
+    RefCntAutoPtr<IBuffer>        m_PostProcessAttribsCB;
+
+    ITextureView* m_FinalColorRTV = nullptr; // Set in Prepare()
+
     RefCntAutoPtr<IShaderResourceBinding> m_SRB;
-    RefCntAutoPtr<IBuffer>                m_PostProcessAttribsCB;
+    struct ShaderVariables
+    {
+        IShaderResourceVariable* Color          = nullptr;
+        IShaderResourceVariable* Depth          = nullptr;
+        IShaderResourceVariable* SelectionDepth = nullptr;
+
+        constexpr operator bool() const
+        {
+            return Color != nullptr && Depth != nullptr && SelectionDepth != nullptr;
+        }
+    };
+    ShaderVariables m_ShaderVars;
 };
 
 } // namespace USD
