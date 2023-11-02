@@ -27,17 +27,17 @@ void main(in PSInput PSIn,
     float SelectionDepth = g_SelectionDepth.Load(int3(PSIn.Pos.xy + float2(0.0, 0.0), 0)).r;
     float Depth          = g_Depth.Load(int3(PSIn.Pos.xy + float2(0.0, 0.0), 0)).r;
     
-    float IsSelected0 = g_SelectionDepth.Load(int3(PSIn.Pos.xy + float2(-1.0, -1.0), 0)).r != 1.0 ? 1.0 : 0.0;
-    float IsSelected1 = g_SelectionDepth.Load(int3(PSIn.Pos.xy + float2(0.0, -1.0), 0)).r != 1.0 ? 1.0 : 0.0;
-    float IsSelected2 = g_SelectionDepth.Load(int3(PSIn.Pos.xy + float2(+1.0, -1.0), 0)).r != 1.0 ? 1.0 : 0.0;
+    float IsSelected0 = g_SelectionDepth.Load(int3(PSIn.Pos.xy + float2(-1.0, -1.0), 0)).r != g_Attribs.ClearDepth ? 1.0 : 0.0;
+    float IsSelected1 = g_SelectionDepth.Load(int3(PSIn.Pos.xy + float2( 0.0, -1.0), 0)).r != g_Attribs.ClearDepth ? 1.0 : 0.0;
+    float IsSelected2 = g_SelectionDepth.Load(int3(PSIn.Pos.xy + float2(+1.0, -1.0), 0)).r != g_Attribs.ClearDepth ? 1.0 : 0.0;
 
-    float IsSelected3 = g_SelectionDepth.Load(int3(PSIn.Pos.xy + float2(-1.0, 0.0), 0)).r != 1.0 ? 1.0 : 0.0;
-    float IsSelected4 = SelectionDepth != 1.0 ? 1.0 : 0.0;
-    float IsSelected5 = g_SelectionDepth.Load(int3(PSIn.Pos.xy + float2(+1.0, 0.0), 0)).r != 1.0 ? 1.0 : 0.0;
+    float IsSelected3 = g_SelectionDepth.Load(int3(PSIn.Pos.xy + float2(-1.0, 0.0), 0)).r != g_Attribs.ClearDepth ? 1.0 : 0.0;
+    float IsSelected4 = SelectionDepth                                                    != g_Attribs.ClearDepth ? 1.0 : 0.0;
+    float IsSelected5 = g_SelectionDepth.Load(int3(PSIn.Pos.xy + float2(+1.0, 0.0), 0)).r != g_Attribs.ClearDepth ? 1.0 : 0.0;
 
-    float IsSelected6 = g_SelectionDepth.Load(int3(PSIn.Pos.xy + float2(-1.0, +1.0), 0)).r != 1.0 ? 1.0 : 0.0;
-    float IsSelected7 = g_SelectionDepth.Load(int3(PSIn.Pos.xy + float2(0.0, +1.0), 0)).r != 1.0 ? 1.0 : 0.0;
-    float IsSelected8 = g_SelectionDepth.Load(int3(PSIn.Pos.xy + float2(+1.0, +1.0), 0)).r != 1.0 ? 1.0 : 0.0;
+    float IsSelected6 = g_SelectionDepth.Load(int3(PSIn.Pos.xy + float2(-1.0, +1.0), 0)).r != g_Attribs.ClearDepth ? 1.0 : 0.0;
+    float IsSelected7 = g_SelectionDepth.Load(int3(PSIn.Pos.xy + float2( 0.0, +1.0), 0)).r != g_Attribs.ClearDepth ? 1.0 : 0.0;
+    float IsSelected8 = g_SelectionDepth.Load(int3(PSIn.Pos.xy + float2(+1.0, +1.0), 0)).r != g_Attribs.ClearDepth ? 1.0 : 0.0;
 
     float Outline = IsSelected0 + IsSelected1 + IsSelected2 + IsSelected3 + IsSelected4 + IsSelected5 + IsSelected6 + IsSelected7 + IsSelected8;
     Outline = (Outline > 4.0 && Outline < 9.0) ? 1.0 : 0.0;

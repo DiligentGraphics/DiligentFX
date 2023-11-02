@@ -143,9 +143,6 @@ private:
     pxr::SdfPath m_SelectionDepthBufferId;
     pxr::SdfPath m_DepthBufferId;
 
-    float4 m_ClearColor;
-    float  m_ClearDepth = 1.f;
-
     pxr::HdRenderIndex* m_RenderIndex = nullptr;
 };
 

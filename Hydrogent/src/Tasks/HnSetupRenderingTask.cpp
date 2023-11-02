@@ -83,6 +83,8 @@ void HnSetupRenderingTask::UpdateRenderPassState(const HnSetupRenderingTaskParam
                                   Params.StencilFailOp, Params.StencilZFailOp, Params.StencilZPassOp);
 
     m_RenderPassState->SetFrontFaceCCW(Params.FrontFaceCCW);
+    m_RenderPassState->SetClearColor(Params.ClearColor);
+    m_RenderPassState->SetClearDepth(Params.ClearDepth);
 }
 
 void HnSetupRenderingTask::Sync(pxr::HdSceneDelegate* Delegate,
@@ -95,9 +97,6 @@ void HnSetupRenderingTask::Sync(pxr::HdSceneDelegate* Delegate,
         if (GetTaskParams(Delegate, Params))
         {
             m_FinalColorTargetId = Params.FinalColorTargetId;
-            m_ClearColor         = Params.ClearColor;
-            m_ClearDepth         = Params.ClearDepth;
-
             UpdateRenderPassState(Params);
         }
     }
@@ -218,10 +217,10 @@ void HnSetupRenderingTask::Execute(pxr::HdTaskContext* TaskCtx)
     // We first render selected objects using the selection depth buffer.
     // Selection depth buffer is copied to the main depth buffer by the HnCopySelectionDepthTask.
     pCtx->SetRenderTargets(_countof(pRTVs), pRTVs, Targets.SelectionDepthDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    pCtx->ClearRenderTarget(Targets.OffscreenColorRTV, m_ClearColor.Data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    pCtx->ClearRenderTarget(Targets.OffscreenColorRTV, m_RenderPassState->GetClearColor().Data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     constexpr float Zero[] = {0, 0, 0, 0};
     pCtx->ClearRenderTarget(Targets.MeshIdRTV, Zero, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    pCtx->ClearDepthStencil(Targets.SelectionDepthDSV, CLEAR_DEPTH_FLAG, m_ClearDepth, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    pCtx->ClearDepthStencil(Targets.SelectionDepthDSV, CLEAR_DEPTH_FLAG, m_RenderPassState->GetClearDepth(), 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     pCtx->SetStencilRef(m_RenderPassState->GetStencilRef());
 }
 

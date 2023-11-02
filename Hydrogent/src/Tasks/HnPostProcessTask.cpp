@@ -206,6 +206,7 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
     PreparePSO(m_FinalColorRTV->GetDesc().Format);
     if (std::shared_ptr<HnRenderPassState> RenderPassState = GetRenderPassState(TaskCtx))
     {
+        m_ClearDepth = RenderPassState->GetClearDepth();
         PrepareSRB(*RenderPassState);
     }
     else
@@ -315,6 +316,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         pDstShaderAttribs->ToneMapping.fWhitePoint          = m_Params.WhitePoint;
         pDstShaderAttribs->ToneMapping.fLuminanceSaturation = m_Params.LuminanceSaturation;
         pDstShaderAttribs->AverageLogLum                    = m_Params.AverageLogLum;
+        pDstShaderAttribs->ClearDepth                       = m_ClearDepth;
     }
     pCtx->SetPipelineState(m_PSO);
     pCtx->CommitShaderResources(m_SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);

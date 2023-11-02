@@ -7,7 +7,7 @@
 "\n"
 "    float NonselectionDesaturationFactor;\n"
 "    float AverageLogLum;\n"
-"    float Padding1;\n"
+"    float ClearDepth;\n"
 "    float Padding2;\n"
 "\n"
 "    ToneMappingAttribs ToneMapping;\n"

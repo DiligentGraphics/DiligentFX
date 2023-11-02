@@ -34,6 +34,7 @@
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/PipelineState.h"
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/DeviceContext.h"
 #include "../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
+#include "../../../DiligentCore/Common/interface/BasicMath.hpp"
 
 #include "../interface/HnTypes.hpp"
 
@@ -124,6 +125,24 @@ public:
         return m_FramebufferTargets;
     }
 
+    void SetClearColor(const float4& ClearColor)
+    {
+        m_ClearColor = ClearColor;
+    }
+    const float4& GetClearColor() const
+    {
+        return m_ClearColor;
+    }
+
+    void SetClearDepth(float ClearDepth)
+    {
+        m_ClearDepth = ClearDepth;
+    }
+    float GetClearDepth() const
+    {
+        return m_ClearDepth;
+    }
+
 private:
     Uint32                                         m_NumRenderTargets = 0;
     std::array<TEXTURE_FORMAT, MAX_RENDER_TARGETS> m_RTVFormats       = {};
@@ -132,6 +151,9 @@ private:
     bool m_FrontFaceCCW = false;
 
     FramebufferTargets m_FramebufferTargets;
+
+    float4 m_ClearColor = {0, 0, 0, 0};
+    float  m_ClearDepth = 1.f;
 };
 
 } // namespace USD

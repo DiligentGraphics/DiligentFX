@@ -7,7 +7,7 @@ struct PostProcessAttribs
 
     float NonselectionDesaturationFactor;
     float AverageLogLum;
-    float Padding1;
+    float ClearDepth;
     float Padding2;
 
     ToneMappingAttribs ToneMapping;

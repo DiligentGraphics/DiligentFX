@@ -121,6 +121,7 @@ private:
     RefCntAutoPtr<IBuffer>        m_PostProcessAttribsCB;
 
     ITextureView* m_FinalColorRTV = nullptr; // Set in Prepare()
+    float         m_ClearDepth    = 1.f;     // Set in Prepare()
 
     RefCntAutoPtr<IShaderResourceBinding> m_SRB;
     struct ShaderVariables
