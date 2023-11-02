@@ -32,6 +32,7 @@
 #include "Tasks/HnSetupRenderingTask.hpp"
 #include "Tasks/HnRenderRprimsTask.hpp"
 #include "Tasks/HnCopySelectionDepthTask.hpp"
+#include "Tasks/HnSetupSelectionDepthTask.hpp"
 #include "Tasks/HnRenderEnvMapTask.hpp"
 #include "Tasks/HnReadRprimIdTask.hpp"
 #include "Tasks/HnPostProcessTask.hpp"
@@ -56,6 +57,7 @@ TF_DEFINE_PRIVATE_TOKENS(
     (setupRendering)
     (copySelectionDepth)
     (renderEnvMapTask)
+    (setupSelectionDepth)
     (readRprimIdTask)
     (postProcessTask)
 
@@ -141,46 +143,53 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                            TaskUID_RenderRprimsDefaultSelected,
                            {
                                HnRenderPassParams::SelectionType::Selected,
-                               USD_Renderer::USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT,
+                               USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_AND_MESH_ID_OUTPUTS,
                            });
     CreateRenderRprimsTask(HnMaterialTagTokens->masked,
                            TaskUID_RenderRprimsMaskedSelected,
                            {
                                HnRenderPassParams::SelectionType::Selected,
-                               USD_Renderer::USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT,
+                               USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_AND_MESH_ID_OUTPUTS,
                            });
     CreateCopySelectionDepthTask();
     CreateRenderRprimsTask(HnMaterialTagTokens->defaultTag,
                            TaskUID_RenderRprimsDefaultUnselected,
                            {
                                HnRenderPassParams::SelectionType::Unselected,
-                               USD_Renderer::USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT,
+                               USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_AND_MESH_ID_OUTPUTS,
                            });
     CreateRenderRprimsTask(HnMaterialTagTokens->masked,
                            TaskUID_RenderRprimsMaskedUnselected,
                            {
                                HnRenderPassParams::SelectionType::Unselected,
-                               USD_Renderer::USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT,
+                               USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_AND_MESH_ID_OUTPUTS,
                            });
     CreateRenderEnvMapTask();
     CreateRenderRprimsTask(HnMaterialTagTokens->additive,
                            TaskUID_RenderRprimsAdditive,
                            {
                                HnRenderPassParams::SelectionType::All,
-                               USD_Renderer::USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT,
+                               USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_AND_MESH_ID_OUTPUTS,
                            });
     CreateRenderRprimsTask(HnMaterialTagTokens->translucent,
                            TaskUID_RenderRprimsTranslucent,
                            {
                                HnRenderPassParams::SelectionType::All,
-                               USD_Renderer::USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT,
+                               USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_AND_MESH_ID_OUTPUTS,
                            });
-    //CreateRenderRprimsTask(HnMaterialTagTokens->additive,
-    //                       TaskUID_RenderRprimsAdditiveSelected,
-    //                       {HnRenderPassParams::SelectionType::Selected});
-    //CreateRenderRprimsTask(HnMaterialTagTokens->translucent,
-    //                       TaskUID_RenderRprimsTranslucentSelected,
-    //                       {HnRenderPassParams::SelectionType::Selected});
+    CreateSetupSelectionDepthTask();
+    CreateRenderRprimsTask(HnMaterialTagTokens->additive,
+                           TaskUID_RenderRprimsAdditiveSelected,
+                           {
+                               HnRenderPassParams::SelectionType::Selected,
+                               USD_Renderer::USD_PSO_FLAG_NONE,
+                           });
+    CreateRenderRprimsTask(HnMaterialTagTokens->translucent,
+                           TaskUID_RenderRprimsTranslucentSelected,
+                           {
+                               HnRenderPassParams::SelectionType::Selected,
+                               USD_Renderer::USD_PSO_FLAG_NONE,
+                           });
     CreateReadRprimIdTask();
     CreatePostProcessTask();
 }
@@ -294,6 +303,12 @@ void HnTaskManager::CreateCopySelectionDepthTask()
 {
     HnCopySelectionDepthTaskParams TaskParams;
     CreateTask<HnCopySelectionDepthTask>(HnTaskManagerTokens->copySelectionDepth, TaskUID_CopySelectionDepth, TaskParams);
+}
+
+void HnTaskManager::CreateSetupSelectionDepthTask()
+{
+    HnSetupSelectionDepthTaskParams TaskParams;
+    CreateTask<HnSetupSelectionDepthTask>(HnTaskManagerTokens->setupSelectionDepth, TaskUID_SetupSelectionDepth, TaskParams);
 }
 
 void HnTaskManager::CreateRenderEnvMapTask()

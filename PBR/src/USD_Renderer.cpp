@@ -36,26 +36,41 @@ namespace Diligent
 std::string USD_Renderer::GetUsdPbrPSMainSource(USD_Renderer::PSO_FLAGS PSOFlags)
 {
     std::stringstream ss;
-    ss << "struct PSOutput" << std::endl
-       << '{' << std::endl
-       << "    float4 Color      : SV_Target" << m_ColorTargetIndex << ';' << std::endl;
+    if (PSOFlags & USD_PSO_FLAG_ENABLE_ALL_OUTPUTS)
+    {
+        ss << "struct PSOutput" << std::endl
+           << '{' << std::endl;
+        if (PSOFlags & USD_PSO_FLAG_ENABLE_COLOR_OUTPUT)
+            ss << "    float4 Color      : SV_Target" << m_ColorTargetIndex << ';' << std::endl;
 
-    if (PSOFlags & USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT)
-        ss << "    float4 MeshID     : SV_Target" << m_MeshIdTargetIndex << ';' << std::endl;
+        if (PSOFlags & USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT)
+            ss << "    float4 MeshID     : SV_Target" << m_MeshIdTargetIndex << ';' << std::endl;
 
-    ss << "};" << std::endl;
+        ss << "};" << std::endl;
+    }
 
     ss << R"(
 void main(in VSOutput VSOut,
-          in bool IsFrontFace : SV_IsFrontFace,
-          out PSOutput PSOut)
+          in bool IsFrontFace : SV_IsFrontFace)";
+    if (PSOFlags & USD_PSO_FLAG_ENABLE_ALL_OUTPUTS)
+    {
+        ss << "," << std::endl
+           << "    out PSOutput PSOut";
+    }
+    ss << R"()
 {
-    PSOut.Color = ComputePbrSurfaceColor(VSOut, IsFrontFace);
+    float4 Color = ComputePbrSurfaceColor(VSOut, IsFrontFace);
 )";
 
-    // It is important to set alpha to 1.0 as all targets are rendered with the same blend mode
-    if (PSOFlags & USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT)
-        ss << "    PSOut.MeshID     = float4(g_PBRAttribs.Renderer.CustomData.x, 0.0, 0.0, 1.0);" << std::endl;
+    if (PSOFlags & USD_PSO_FLAG_ENABLE_ALL_OUTPUTS)
+    {
+        if (PSOFlags & USD_PSO_FLAG_ENABLE_COLOR_OUTPUT)
+            ss << "    PSOut.Color = Color;" << std::endl;
+
+        // It is important to set alpha to 1.0 as all targets are rendered with the same blend mode
+        if (PSOFlags & USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT)
+            ss << "    PSOut.MeshID     = float4(g_PBRAttribs.Renderer.CustomData.x, 0.0, 0.0, 1.0);" << std::endl;
+    }
 
     ss << "}" << std::endl;
 

@@ -99,6 +99,13 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
     };
 
     GraphicsPipelineDesc GraphicsDesc = static_cast<const HnRenderPassState*>(RPState.get())->GetGraphicsPipelineDesc();
+    if (m_Params.UsdPsoFlags == USD_Renderer::USD_PSO_FLAG_NONE)
+    {
+        for (Uint32 i = 0; i < GraphicsDesc.NumRenderTargets; ++i)
+            GraphicsDesc.RTVFormats[i] = TEX_FORMAT_UNKNOWN;
+        GraphicsDesc.NumRenderTargets = 0;
+    }
+
     if (m_RenderParams.RenderMode == HN_RENDER_MODE_SOLID)
     {
         GraphicsDesc.PrimitiveTopology = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
@@ -199,17 +206,25 @@ void HnRenderPass::UpdateDrawItems(const pxr::TfTokenVector& RenderTags)
         //const HnRenderParam* const RenderParam = static_cast<HnRenderParam*>(pRenderIndex->GetRenderDelegate()->GetRenderParam());
         //if (RenderParam->HasMaterialTag(Collection.GetMaterialTag()))
         {
-            auto DrawItems = GetRenderIndex()->GetDrawItems(Collection, RenderTags);
-            for (auto& pDrawItem : DrawItems)
+            pxr::HdRenderIndex::HdDrawItemPtrVector DrawItems = GetRenderIndex()->GetDrawItems(Collection, RenderTags);
+            if (m_Params.Selection == HnRenderPassParams::SelectionType::All)
             {
-                const bool IsSelected = pDrawItem->GetRprimID().HasPrefix(m_RenderParams.SelectedPrimId);
-                if ((m_Params.Selection == HnRenderPassParams::SelectionType::All) ||
-                    (m_Params.Selection == HnRenderPassParams::SelectionType::Selected && IsSelected) ||
-                    (m_Params.Selection == HnRenderPassParams::SelectionType::Unselected && !IsSelected))
+                m_DrawItems = std::move(DrawItems);
+            }
+            else
+            {
+                for (auto& pDrawItem : DrawItems)
                 {
-                    m_DrawItems.emplace_back(std::move(pDrawItem));
+                    const bool IsSelected = pDrawItem->GetRprimID().HasPrefix(m_RenderParams.SelectedPrimId);
+                    if ((m_Params.Selection == HnRenderPassParams::SelectionType::Selected && IsSelected) ||
+                        (m_Params.Selection == HnRenderPassParams::SelectionType::Unselected && !IsSelected))
+                    {
+                        m_DrawItems.emplace_back(std::move(pDrawItem));
+                    }
                 }
             }
+            // GetDrawItems() uses multithreading, so the order of draw items is not deterministic.
+            std::sort(m_DrawItems.begin(), m_DrawItems.end());
         }
         //else
         //{
@@ -283,23 +298,25 @@ void HnRenderPass::RenderMesh(RenderState&      State,
     IPipelineState* pPSO = nullptr;
     if (m_RenderParams.RenderMode == HN_RENDER_MODE_SOLID)
     {
-        if (pNormalsVB != nullptr)
+        if (pNormalsVB != nullptr && (m_Params.UsdPsoFlags & USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_OUTPUT) != 0)
             PSOFlags |= PBR_Renderer::PSO_FLAG_USE_VERTEX_NORMALS;
         if (pTexCoordVBs[0] != nullptr)
             PSOFlags |= PBR_Renderer::PSO_FLAG_USE_TEXCOORD0;
         if (pTexCoordVBs[1] != nullptr)
             PSOFlags |= PBR_Renderer::PSO_FLAG_USE_TEXCOORD1;
 
-        PSOFlags |=
-            PBR_Renderer::PSO_FLAG_USE_COLOR_MAP |
-            PBR_Renderer::PSO_FLAG_USE_NORMAL_MAP |
-            PBR_Renderer::PSO_FLAG_USE_METALLIC_MAP |
-            PBR_Renderer::PSO_FLAG_USE_ROUGHNESS_MAP |
-            PBR_Renderer::PSO_FLAG_USE_AO_MAP |
-            PBR_Renderer::PSO_FLAG_USE_EMISSIVE_MAP |
-            PBR_Renderer::PSO_FLAG_USE_IBL |
-            PBR_Renderer::PSO_FLAG_ENABLE_DEBUG_VIEW;
-
+        PSOFlags |= PBR_Renderer::PSO_FLAG_USE_COLOR_MAP;
+        if (m_Params.UsdPsoFlags & USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_OUTPUT)
+        {
+            PSOFlags |=
+                PBR_Renderer::PSO_FLAG_USE_NORMAL_MAP |
+                PBR_Renderer::PSO_FLAG_USE_METALLIC_MAP |
+                PBR_Renderer::PSO_FLAG_USE_ROUGHNESS_MAP |
+                PBR_Renderer::PSO_FLAG_USE_AO_MAP |
+                PBR_Renderer::PSO_FLAG_USE_EMISSIVE_MAP |
+                PBR_Renderer::PSO_FLAG_USE_IBL |
+                PBR_Renderer::PSO_FLAG_ENABLE_DEBUG_VIEW;
+        }
         VERIFY(ShaderAttribs.AlphaMode == State.AlphaMode,
                "Alpha mode derived from the material tag is not consistent with the alpha mode in the shader attributes. "
                "This may indicate an issue in how alpha mode is determined in the material, or (less likely) an issue in Rprim sorting by Hydra.");

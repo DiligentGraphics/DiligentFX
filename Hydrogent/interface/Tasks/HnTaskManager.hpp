@@ -57,6 +57,7 @@ public:
     static constexpr TaskUID TaskUID_RenderRprimsMaskedUnselected    = 0xf5290fec47594711;
     static constexpr TaskUID TaskUID_RenderRprimsAdditive            = 0x37d45531106c4c52;
     static constexpr TaskUID TaskUID_RenderRprimsTranslucent         = 0xa015c7e45941407e;
+    static constexpr TaskUID TaskUID_SetupSelectionDepth             = 0x97087dc2bbdc4876;
     static constexpr TaskUID TaskUID_RenderRprimsAdditiveSelected    = 0x2cb8a35254ec46da;
     static constexpr TaskUID TaskUID_RenderRprimsTranslucentSelected = 0x50a786394d834b4f;
     static constexpr TaskUID TaskUID_RenderEnvMap                    = 0xf646122e1dc74bab;
@@ -85,6 +86,7 @@ public:
     ///                         - RenderEnvMap
     ///                         - RenderRprimsAdditive
     ///                         - RenderRprimsTranslucent
+    ///                         - SetupSelectionDepth
     ///                         - RenderRprimsAdditiveSelected
     ///                         - RenderRprimsTranslucentSelected
     ///                         - ReadRprimId
@@ -165,6 +167,7 @@ private:
     void CreateRenderEnvMapTask();
     void CreateReadRprimIdTask();
     void CreateCopySelectionDepthTask();
+    void CreateSetupSelectionDepthTask();
     void CreatePostProcessTask();
 
 private:
