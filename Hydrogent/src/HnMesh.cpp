@@ -228,6 +228,10 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
         pxr::GfMatrix4d Transform = SceneDelegate.GetTransform(Id);
         m_Transform               = float4x4::MakeMatrix(Transform.data());
     }
+    if (pxr::HdChangeTracker::IsVisibilityDirty(DirtyBits, Id))
+    {
+        m_IsVisible = SceneDelegate.GetVisible(Id);
+    }
 
     DirtyBits &= ~pxr::HdChangeTracker::NewRepr;
 }

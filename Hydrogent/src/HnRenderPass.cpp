@@ -212,6 +212,9 @@ void HnRenderPass::RenderMesh(RenderState&      State,
     if (pPosVB == nullptr || pSRB == nullptr)
         return;
 
+    if (!Mesh.IsVisible())
+        return;
+
     // Our shader currently supports two texture coordinate sets.
     // Gather vertex buffers for both sets.
     const auto& TexCoordSets    = Material.GetTextureCoordinateSets();

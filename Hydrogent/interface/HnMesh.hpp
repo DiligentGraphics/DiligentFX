@@ -83,6 +83,7 @@ public:
     Uint32 GetNumEdges() const { return m_NumEdges; }
     Uint32 GetNumPoints() const { return m_Topology.GetNumPoints(); }
 
+    const bool      IsVisible() const { return m_IsVisible; }
     const float4x4& GetTransform() const { return m_Transform; }
 
     const pxr::SdfPath& GetMaterialId() const { return m_MaterialId; }
@@ -146,6 +147,7 @@ private:
 
     std::unordered_map<pxr::TfToken, std::shared_ptr<pxr::HdBufferSource>, pxr::TfToken::HashFunctor> m_BufferSources;
 
+    bool   m_IsVisible    = true;
     Uint32 m_NumTriangles = 0;
     Uint32 m_NumEdges     = 0;
 
