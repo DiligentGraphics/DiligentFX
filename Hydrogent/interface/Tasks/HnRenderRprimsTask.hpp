@@ -79,7 +79,8 @@ struct HnRenderRprimsTaskParams
 
 /// Renders the Rprims by executing the render pass.
 /// The task should be executed after the HnSetupRenderingTask that prepares
-/// render targets and sets the required task context parameters.
+/// the render targets and sets the required task context and render pass state
+/// parameters.
 class HnRenderRprimsTask final : public HnTask
 {
 public:

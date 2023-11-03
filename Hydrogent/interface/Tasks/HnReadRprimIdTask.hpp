@@ -59,7 +59,7 @@ struct HnReadRprimIdTaskParams
     }
 };
 
-/// Reads RPrim index from the mesh id target.
+/// Reads the RPrim index from the mesh id target.
 class HnReadRprimIdTask final : public HnTask
 {
 public:

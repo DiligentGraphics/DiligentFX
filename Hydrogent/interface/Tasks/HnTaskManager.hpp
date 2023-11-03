@@ -39,8 +39,6 @@ namespace Diligent
 namespace USD
 {
 
-struct HnSetupRenderingTaskParams;
-struct HnPostProcessTaskParams;
 struct HnRenderRprimsTaskParams;
 struct HnRenderPassParams;
 
@@ -76,21 +74,52 @@ public:
 
     /// Returns the list of tasks that can be passed to the Hydra engine for execution.
     ///
-    /// \param [in] TaskOrder - Optional task order. If not specified, the default order is used:
+    /// \param [in] TaskOrder - Optional task order. If not specified, the following default order is used:
     ///                         - SetupRendering
+    ///                             * Prepares render targets
+    ///                             * Binds the Color and Mesh Id render targes and the the selection depth buffer
     ///                         - RenderRprimsDefaultSelected
+    ///                             * Renders only selected Rprims with the default material tag
     ///                         - RenderRprimsMaskedSelected
+    ///                             * Renders only selected Rprims with the masked material tag
     /// 						- CopySelectionDepth
+    ///                             * Copies the selection depth buffer to the main depth buffer
+    ///                             * Binds the Color and Mesh Id render targes and the main depth buffer
     ///                         - RenderRprimsDefaultUnselected
+    ///                             * Renders only unselected Rprims with the default material tag
     ///                         - RenderRprimsMaskedUnselected
+    ///                             * Renders only unselected Rprims with the masked material tag
     ///                         - RenderEnvMap
     ///                         - RenderRprimsAdditive
+    ///                             * Renders all Rprims with additive material tag
     ///                         - RenderRprimsTranslucent
+    ///                             * Renders all Rprims with translucent material tag
     ///                         - SetupSelectionDepth
+    ///                             * Binds the selection depth buffer without any render targets
     ///                         - RenderRprimsAdditiveSelected
+    ///                             * Renders only selected Rprims with the additive material tag (depth only)
     ///                         - RenderRprimsTranslucentSelected
+    ///                             * Renders only selected Rprims with the translucent material tag (depth only)
     ///                         - ReadRprimId
     ///                         - PostProcess
+    ///
+    ///     | Task                            |  Selected Rprims | Unselected Rprims | Color  |  Mesh ID  |  Selection Detph | Main Depth |
+    ///     |---------------------------------|------------------|-------------------|--------|-----------|------------------|------------|
+    ///     | SetupRendering                  |                  |                   |  bind  |   bind    |      bind        |            |
+    ///     | RenderRprimsDefaultSelected     |       V          |                   |   V    |     V     |        V         |            |
+    ///     | RenderRprimsMaskedSelected      |       V          |                   |   V    |     V     |        V         |            |
+    ///     | CopySelectionDepth              |                  |                   |  bind  |   bind    |        V---copy--|---->V bind |
+    ///     | RenderRprimsDefaultUnselected   |                  |         V         |   V    |     V     |                  |     V      |
+    ///     | RenderRprimsMaskedUnselected    |                  |         V         |   V    |     V     |                  |     V      |
+    ///     | RenderEnvMap                    |                  |                   |   V    |           |                  |            |
+    ///     | RenderRprimsAdditive            |       V          |         V         |   V    |     V     |                  |     V      |
+    ///     | RenderRprimsTranslucent         |       V          |         V         |   V    |     V     |                  |     V      |
+    ///     | SetupSelectionDepth             |                  |                   |        |           |       bind       |            |
+    ///     | RenderRprimsAdditiveSelected    |       V          |                   |        |           |        V         |            |
+    ///     | RenderRprimsTranslucentSelected |       V          |                   |        |           |        V         |            |
+    ///     | ReadRprimId                     |                  |                   |        |           |                  |            |
+    ///     | PostProcess                     |                  |                   |        |           |                  |            |
+    ///
     /// \return The list of tasks that can be passed to pxr::HdEngine::Execute.
     ///
     /// \remarks Only enabled tasks are returned.

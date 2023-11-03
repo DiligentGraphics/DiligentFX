@@ -82,14 +82,6 @@ struct HnPostProcessTaskParams
 /// - Tone mapping
 /// - Selection outline
 /// - Converts output to sRGB, if needed
-///
-/// \remarks The task uses MeshId buffer to determine which pixels belong to selected objects.
-///          The index of the selected objects is negative.
-///
-///          The task gets offscreen color and mesh id Bprim buffer ids from the task context.
-///          It then retrieves the buffers from the render index.
-///          The final color buffer is also retrieved from the render index using the FinalColorTargetId
-///          extracted from the context.
 class HnPostProcessTask final : public HnTask
 {
 public:

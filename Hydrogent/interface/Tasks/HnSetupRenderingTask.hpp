@@ -111,9 +111,9 @@ struct HnSetupRenderingTaskParams
 ///   - (Re)creates the render targets if necessary
 ///   - Inserts them into the render index as Bprims
 ///   - Passes Bprim Id to subsequent tasks via the task context
-/// - Updates render pass state
+/// - Updates the render pass state
 /// - Updates task context with the render pass state so that subsequent tasks can use it
-/// - Binds and clears render targets and depth buffer
+/// - Binds and clears render targets and the depth buffer
 class HnSetupRenderingTask final : public HnTask
 {
 public:
