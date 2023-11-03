@@ -135,9 +135,6 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
         if (pRPrim == nullptr)
             continue;
 
-        if (!pRPrim->IsVisible())
-            continue;
-
         const auto&         MaterialId = pRPrim->GetMaterialId();
         const pxr::HdSprim* pMaterial  = pRenderIndex->GetSprim(pxr::HdPrimTypeTokens->material, MaterialId);
         if (pMaterial == nullptr)
