@@ -126,7 +126,7 @@ public:
                       pxr::HdDirtyBits*     DirtyBits) override final;
 
     virtual void Prepare(pxr::HdTaskContext* TaskCtx,
-                         pxr::HdRenderIndex* PostProcessIndex) override final;
+                         pxr::HdRenderIndex* RenderIndex) override final;
 
 
     virtual void Execute(pxr::HdTaskContext* TaskCtx) override final;
