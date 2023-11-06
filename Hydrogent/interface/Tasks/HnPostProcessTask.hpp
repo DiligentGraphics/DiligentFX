@@ -100,7 +100,7 @@ public:
 
 private:
     void PreparePSO(TEXTURE_FORMAT RTVFormat);
-    void PrepareSRB(const HnRenderPassState& RPState);
+    void PrepareSRB(const HnRenderPassState& RPState, ITextureView* ClosestSelectedLocationSRV);
 
 private:
     pxr::HdRenderIndex* m_RenderIndex = nullptr;
@@ -118,13 +118,14 @@ private:
     RefCntAutoPtr<IShaderResourceBinding> m_SRB;
     struct ShaderVariables
     {
-        IShaderResourceVariable* Color          = nullptr;
-        IShaderResourceVariable* Depth          = nullptr;
-        IShaderResourceVariable* SelectionDepth = nullptr;
+        IShaderResourceVariable* Color                   = nullptr;
+        IShaderResourceVariable* Depth                   = nullptr;
+        IShaderResourceVariable* SelectionDepth          = nullptr;
+        IShaderResourceVariable* ClosestSelectedLocation = nullptr;
 
         constexpr operator bool() const
         {
-            return Color != nullptr && Depth != nullptr && SelectionDepth != nullptr;
+            return Color != nullptr && Depth != nullptr && SelectionDepth != nullptr && ClosestSelectedLocation;
         }
     };
     ShaderVariables m_ShaderVars;

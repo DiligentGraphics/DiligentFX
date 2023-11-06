@@ -1,5 +1,6 @@
 #include "ToneMapping.fxh"
 #include "HnPostProcessStructures.fxh"
+#include "HnClosestSelectedLocation.fxh"
 
 struct PSInput
 {
@@ -14,6 +15,7 @@ cbuffer cbPostProcessAttribs
 Texture2D g_ColorBuffer;
 Texture2D g_SelectionDepth;
 Texture2D g_Depth;
+Texture2D g_ClosestSelectedLocation;
 
 void main(in PSInput PSIn,
           out float4 Color : SV_Target0)
@@ -24,29 +26,25 @@ void main(in PSInput PSIn,
     Color.rgb = ToneMap(Color.rgb, g_Attribs.ToneMapping, g_Attribs.AverageLogLum);
 #endif
 
-    float SelectionDepth = g_SelectionDepth.Load(int3(PSIn.Pos.xy + float2(0.0, 0.0), 0)).r;
-    float Depth          = g_Depth.Load(int3(PSIn.Pos.xy + float2(0.0, 0.0), 0)).r;
-    
-    float IsSelected0 = g_SelectionDepth.Load(int3(PSIn.Pos.xy + float2(-1.0, -1.0), 0)).r != g_Attribs.ClearDepth ? 1.0 : 0.0;
-    float IsSelected1 = g_SelectionDepth.Load(int3(PSIn.Pos.xy + float2( 0.0, -1.0), 0)).r != g_Attribs.ClearDepth ? 1.0 : 0.0;
-    float IsSelected2 = g_SelectionDepth.Load(int3(PSIn.Pos.xy + float2(+1.0, -1.0), 0)).r != g_Attribs.ClearDepth ? 1.0 : 0.0;
+    float SelectionDepth = g_SelectionDepth.Load(int3(PSIn.Pos.xy, 0)).r;
+    float Depth          = g_Depth.Load(int3(PSIn.Pos.xy, 0)).r;
+    bool  IsSelected     = Depth != g_Attribs.ClearDepth && SelectionDepth == Depth;
 
-    float IsSelected3 = g_SelectionDepth.Load(int3(PSIn.Pos.xy + float2(-1.0, 0.0), 0)).r != g_Attribs.ClearDepth ? 1.0 : 0.0;
-    float IsSelected4 = SelectionDepth                                                    != g_Attribs.ClearDepth ? 1.0 : 0.0;
-    float IsSelected5 = g_SelectionDepth.Load(int3(PSIn.Pos.xy + float2(+1.0, 0.0), 0)).r != g_Attribs.ClearDepth ? 1.0 : 0.0;
+    float2 ClosestSelectedLocation;
+    bool   IsClosestLocationValid = false;
+    DecodeClosestSelectedLocation(g_ClosestSelectedLocation.Load(int3(PSIn.Pos.xy, 0)).xy, ClosestSelectedLocation, IsClosestLocationValid);    
+    float Outline = 0.0;
+    if (IsClosestLocationValid)
+    {
+        float Width, Height;
+        g_ColorBuffer.GetDimensions(Width, Height);
+        float Dist = length(ClosestSelectedLocation * float2(Width, Height) - PSIn.Pos.xy);
+        float SelectionOutlineWidth = 4.0;
+        Outline = saturate(1.0 - Dist / SelectionOutlineWidth) * (SelectionDepth != g_Attribs.ClearDepth ? 0.0 : 1.0);
+    }
 
-    float IsSelected6 = g_SelectionDepth.Load(int3(PSIn.Pos.xy + float2(-1.0, +1.0), 0)).r != g_Attribs.ClearDepth ? 1.0 : 0.0;
-    float IsSelected7 = g_SelectionDepth.Load(int3(PSIn.Pos.xy + float2( 0.0, +1.0), 0)).r != g_Attribs.ClearDepth ? 1.0 : 0.0;
-    float IsSelected8 = g_SelectionDepth.Load(int3(PSIn.Pos.xy + float2(+1.0, +1.0), 0)).r != g_Attribs.ClearDepth ? 1.0 : 0.0;
-
-    float Outline = IsSelected0 + IsSelected1 + IsSelected2 + IsSelected3 + IsSelected4 + IsSelected5 + IsSelected6 + IsSelected7 + IsSelected8;
-    Outline = (Outline > 4.0 && Outline < 9.0) ? 1.0 : 0.0;
-
-    float DesatFactor = saturate(1.0 - IsSelected4);
-    if (SelectionDepth != Depth)
-        DesatFactor = 1.0;
-    DesatFactor *= g_Attribs.NonselectionDesaturationFactor;
-    
+    // Desaturate all unselected pixels
+    float DesatFactor = IsSelected ? 0.0 : g_Attribs.NonselectionDesaturationFactor;
     float Luminance = dot(Color.rgb, float3(0.2126, 0.7152, 0.0722));
     Color.rgb = lerp(Color.rgb, float3(Luminance, Luminance, Luminance), DesatFactor);
 

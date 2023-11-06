@@ -1,6 +1,14 @@
 static const MemoryShaderSourceFileInfo g_Shaders[] =
 {
     {
+        "HnClosestSelectedLocation.fxh",
+        #include "HnClosestSelectedLocation.fxh.h"
+    },
+    {
+        "HnInitClosestSelectedLocation.psh",
+        #include "HnInitClosestSelectedLocation.psh.h"
+    },
+    {
         "HnPostProcess.psh",
         #include "HnPostProcess.psh.h"
     },
@@ -11,5 +19,9 @@ static const MemoryShaderSourceFileInfo g_Shaders[] =
     {
         "HnPostProcessStructures.fxh",
         #include "HnPostProcessStructures.fxh.h"
+    },
+    {
+        "HnUpdateClosestSelectedLocation.psh",
+        #include "HnUpdateClosestSelectedLocation.psh.h"
     },
 };

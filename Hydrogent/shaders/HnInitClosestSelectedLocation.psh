@@ -1,0 +1,23 @@
+#include "HnClosestSelectedLocation.fxh"
+
+struct PSInput
+{
+    float4 Pos : SV_POSITION;
+};
+
+cbuffer cbConstants
+{
+    ClosestSelectedLocationConstants g_Constants;
+}
+
+Texture2D g_SelectionDepth;
+
+void main(in  PSInput PSIn,
+          out float2  Location : SV_Target0)
+{
+    bool IsSelected = g_SelectionDepth.Load(int3(PSIn.Pos.xy, 0)).r != g_Constants.ClearDepth;
+    float Width;
+    float Height;
+    g_SelectionDepth.GetDimensions(Width, Height);
+    Location = EncodeClosestSelectedLocation(PSIn.Pos.xy / float2(Width, Height), IsSelected);
+}

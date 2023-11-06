@@ -1,0 +1,60 @@
+#include "HnClosestSelectedLocation.fxh"
+
+struct PSInput
+{
+    float4 Pos : SV_POSITION;
+};
+
+cbuffer cbConstants
+{
+    ClosestSelectedLocationConstants g_Constants;
+}
+
+Texture2D g_SrcClosestLocation;
+
+void UpdateClosestLocation(in    float2 CurrentLocation,
+                           in    float2 Offset,
+                           inout float2 ClosestLocation, 
+                           inout bool   IsLocationValid,
+                           inout float  ClosestDistance)
+{
+    float2 TestSelectedLocation;
+    bool   TestLocationValid = false;
+    DecodeClosestSelectedLocation(g_SrcClosestLocation.Load(int3(CurrentLocation + Offset * g_Constants.SampleRange, 0)).xy, TestSelectedLocation, TestLocationValid);
+    if (!TestLocationValid)
+        return;
+    
+    float Width;
+    float Height;
+    g_SrcClosestLocation.GetDimensions(Width, Height);
+    float2 Dir = TestSelectedLocation * float2(Width, Height) - CurrentLocation;
+    float DistSqr = dot(Dir, Dir);
+    if (DistSqr < ClosestDistance)
+    {
+        ClosestDistance = DistSqr;
+        ClosestLocation = TestSelectedLocation;
+        IsLocationValid = true;
+    }
+}
+
+void main(in  PSInput PSIn,
+          out float2  Location : SV_Target0)
+{
+    float2 ClosestLocation = float2(0.0, 0.0);
+    bool   IsLocationValid = false;
+    float  ClosestDistance = 1e+10;
+    
+    UpdateClosestLocation(PSIn.Pos.xy, float2(-1.0, -1.0), ClosestLocation, IsLocationValid, ClosestDistance);
+    UpdateClosestLocation(PSIn.Pos.xy, float2( 0.0, -1.0), ClosestLocation, IsLocationValid, ClosestDistance);
+    UpdateClosestLocation(PSIn.Pos.xy, float2(+1.0, -1.0), ClosestLocation, IsLocationValid, ClosestDistance);
+
+    UpdateClosestLocation(PSIn.Pos.xy, float2(-1.0,  0.0), ClosestLocation, IsLocationValid, ClosestDistance);
+    UpdateClosestLocation(PSIn.Pos.xy, float2( 0.0,  0.0), ClosestLocation, IsLocationValid, ClosestDistance);
+    UpdateClosestLocation(PSIn.Pos.xy, float2(+1.0,  0.0), ClosestLocation, IsLocationValid, ClosestDistance);
+    
+    UpdateClosestLocation(PSIn.Pos.xy, float2(-1.0, +1.0), ClosestLocation, IsLocationValid, ClosestDistance);
+    UpdateClosestLocation(PSIn.Pos.xy, float2( 0.0, +1.0), ClosestLocation, IsLocationValid, ClosestDistance);
+    UpdateClosestLocation(PSIn.Pos.xy, float2(+1.0, +1.0), ClosestLocation, IsLocationValid, ClosestDistance);
+    
+    Location = EncodeClosestSelectedLocation(ClosestLocation, IsLocationValid);
+}

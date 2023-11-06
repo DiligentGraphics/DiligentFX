@@ -105,14 +105,19 @@ public:
         ITextureView* SelectionDepthDSV = nullptr;
         ITextureView* DepthDSV          = nullptr;
 
+        ITextureView* ClosestSelectedLocation0RTV = nullptr;
+        ITextureView* ClosestSelectedLocation1RTV = nullptr;
+
         constexpr explicit operator bool() const
         {
             // clang-format off
-            return FinalColorRTV     != nullptr &&
-                   OffscreenColorRTV != nullptr &&
-                   MeshIdRTV         != nullptr &&
-                   SelectionDepthDSV != nullptr &&
-                   DepthDSV          != nullptr;
+            return FinalColorRTV               != nullptr &&
+                   OffscreenColorRTV           != nullptr &&
+                   MeshIdRTV                   != nullptr &&
+                   SelectionDepthDSV           != nullptr &&
+                   DepthDSV                    != nullptr &&
+                   ClosestSelectedLocation0RTV != nullptr &&
+                   ClosestSelectedLocation1RTV != nullptr;
             // clang-format on
         }
     };

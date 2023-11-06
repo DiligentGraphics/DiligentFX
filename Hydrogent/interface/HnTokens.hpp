@@ -100,13 +100,16 @@ namespace USD
     (nearestMipmapLinear)  \
     (nearestMipmapNearest)
 
-#define HN_RENDER_RESOURCE_TOKENS \
-    (cameraAttribsBuffer)         \
-    (lightAttribsBuffer)          \
-    (offscreenColorTarget)        \
-    (finalColorTarget)            \
-    (meshIdTarget)                \
-    (selectionDepthBuffer)        \
+#define HN_RENDER_RESOURCE_TOKENS        \
+    (cameraAttribsBuffer)                \
+    (lightAttribsBuffer)                 \
+    (offscreenColorTarget)               \
+    (finalColorTarget)                   \
+    (meshIdTarget)                       \
+    (selectionDepthBuffer)               \
+    (closestSelectedLocation0Target)     \
+    (closestSelectedLocation1Target)     \
+    (closestSelectedLocationFinalTarget) \
     (depthBuffer)
 
 // clang-format on

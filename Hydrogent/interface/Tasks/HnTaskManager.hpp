@@ -60,6 +60,7 @@ public:
     static constexpr TaskUID TaskUID_RenderRprimsTranslucentSelected = 0x50a786394d834b4f;
     static constexpr TaskUID TaskUID_RenderEnvMap                    = 0xf646122e1dc74bab;
     static constexpr TaskUID TaskUID_ReadRprimId                     = 0x199572fe7ff144ef;
+    static constexpr TaskUID TaskUID_ProcessSelection                = 0x87ef181ec6d4cf8;
     static constexpr TaskUID TaskUID_PostProcess                     = 0x1f5367e65d034500;
 
     HnTaskManager(pxr::HdRenderIndex& RenderIndex,
@@ -101,6 +102,8 @@ public:
     ///                         - RenderRprimsTranslucentSelected
     ///                             * Renders only selected Rprims with the translucent material tag (depth only)
     ///                         - ReadRprimId
+    ///                         - ProcessSelection
+    ///                             * Generates the closest selected location texture using the Jump-Flood algorithm
     ///                         - PostProcess
     ///
     ///     | Task                            |  Selected Rprims | Unselected Rprims | Color  |  Mesh ID  |  Selection Detph | Main Depth |
@@ -118,6 +121,7 @@ public:
     ///     | RenderRprimsAdditiveSelected    |       V          |                   |        |           |        V         |            |
     ///     | RenderRprimsTranslucentSelected |       V          |                   |        |           |        V         |            |
     ///     | ReadRprimId                     |                  |                   |        |           |                  |            |
+    ///     | ProcessSelection                |                  |                   |        |           |                  |            |
     ///     | PostProcess                     |                  |                   |        |           |                  |            |
     ///
     /// \return The list of tasks that can be passed to pxr::HdEngine::Execute.
@@ -197,6 +201,7 @@ private:
     void CreateReadRprimIdTask();
     void CreateCopySelectionDepthTask();
     void CreateSetupSelectionDepthTask();
+    void CreateProcessSelectionTask();
     void CreatePostProcessTask();
 
 private:

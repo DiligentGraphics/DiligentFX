@@ -76,9 +76,10 @@ struct HnSetupRenderingTaskParams
         return !(*this == rhs);
     }
 
-    TEXTURE_FORMAT ColorFormat  = TEX_FORMAT_RGBA16_FLOAT;
-    TEXTURE_FORMAT MeshIdFormat = TEX_FORMAT_R32_FLOAT;
-    TEXTURE_FORMAT DepthFormat  = TEX_FORMAT_D32_FLOAT;
+    TEXTURE_FORMAT ColorFormat                   = TEX_FORMAT_RGBA16_FLOAT;
+    TEXTURE_FORMAT MeshIdFormat                  = TEX_FORMAT_R32_FLOAT;
+    TEXTURE_FORMAT DepthFormat                   = TEX_FORMAT_D32_FLOAT;
+    TEXTURE_FORMAT ClosestSelectedLocationFormat = TEX_FORMAT_RG16_UNORM;
 
     bool FrontFaceCCW = false;
 
@@ -142,6 +143,10 @@ private:
     pxr::SdfPath m_MeshIdTargetId;
     pxr::SdfPath m_SelectionDepthBufferId;
     pxr::SdfPath m_DepthBufferId;
+    pxr::SdfPath m_ClosestSelLocn0TargetId;
+    pxr::SdfPath m_ClosestSelLocn1TargetId;
+
+    TEXTURE_FORMAT m_ClosestSelectedLocationFormat = TEX_FORMAT_UNKNOWN;
 
     pxr::HdRenderIndex* m_RenderIndex = nullptr;
 };

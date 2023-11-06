@@ -36,6 +36,7 @@
 #include "Tasks/HnRenderEnvMapTask.hpp"
 #include "Tasks/HnReadRprimIdTask.hpp"
 #include "Tasks/HnPostProcessTask.hpp"
+#include "Tasks/HnProcessSelectionTask.hpp"
 #include "HnTokens.hpp"
 #include "HashUtils.hpp"
 #include "HnRenderDelegate.hpp"
@@ -59,6 +60,7 @@ TF_DEFINE_PRIVATE_TOKENS(
     (renderEnvMapTask)
     (setupSelectionDepth)
     (readRprimIdTask)
+    (processSelectionTask)
     (postProcessTask)
 
     (renderBufferDescriptor)
@@ -191,6 +193,7 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                                USD_Renderer::USD_PSO_FLAG_NONE,
                            });
     CreateReadRprimIdTask();
+    CreateProcessSelectionTask();
     CreatePostProcessTask();
 }
 
@@ -309,6 +312,12 @@ void HnTaskManager::CreateSetupSelectionDepthTask()
 {
     HnSetupSelectionDepthTaskParams TaskParams;
     CreateTask<HnSetupSelectionDepthTask>(HnTaskManagerTokens->setupSelectionDepth, TaskUID_SetupSelectionDepth, TaskParams);
+}
+
+void HnTaskManager::CreateProcessSelectionTask()
+{
+    HnProcessSelectionTaskParams TaskParams;
+    CreateTask<HnProcessSelectionTask>(HnTaskManagerTokens->processSelectionTask, TaskUID_ProcessSelection, TaskParams);
 }
 
 void HnTaskManager::CreateRenderEnvMapTask()

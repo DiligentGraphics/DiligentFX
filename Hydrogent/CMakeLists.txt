@@ -23,6 +23,7 @@ set(SOURCE
     src/Tasks/HnRenderEnvMapTask.cpp
     src/Tasks/HnPostProcessTask.cpp
     src/Tasks/HnSetupSelectionDepthTask.cpp
+    src/Tasks/HnProcessSelectionTask.cpp
     src/Tasks/HnReadRprimIdTask.cpp
     src/Tasks/HnTaskManager.cpp
 )
@@ -53,6 +54,7 @@ set(INTERFACE
     interface/Tasks/HnRenderEnvMapTask.hpp
     interface/Tasks/HnPostProcessTask.hpp
     interface/Tasks/HnSetupSelectionDepthTask.hpp
+    interface/Tasks/HnProcessSelectionTask.hpp
     interface/Tasks/HnReadRprimIdTask.hpp
     interface/Tasks/HnTaskManager.hpp
 )

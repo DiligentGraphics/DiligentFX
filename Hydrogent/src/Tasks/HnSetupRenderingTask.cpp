@@ -43,6 +43,11 @@ HnSetupRenderingTask::HnSetupRenderingTask(pxr::HdSceneDelegate* ParamsDelegate,
     HnTask{Id},
     m_RenderPassState{std::make_shared<HnRenderPassState>()}
 {
+    if (ParamsDelegate == nullptr)
+    {
+        UNEXPECTED("ParamsDelegate is null");
+        return;
+    }
     pxr::HdRenderIndex& RenderIndex = ParamsDelegate->GetRenderIndex();
 
     // Insert empty Bprims for offscreen render targets into the render index.
@@ -53,10 +58,12 @@ HnSetupRenderingTask::HnSetupRenderingTask(pxr::HdSceneDelegate* ParamsDelegate,
         RenderIndex.InsertBprim(pxr::HdPrimTypeTokens->renderBuffer, ParamsDelegate, Id);
         return Id;
     };
-    m_OffscreenColorTargetId = InitBrim(HnRenderResourceTokens->offscreenColorTarget);
-    m_MeshIdTargetId         = InitBrim(HnRenderResourceTokens->meshIdTarget);
-    m_SelectionDepthBufferId = InitBrim(HnRenderResourceTokens->selectionDepthBuffer);
-    m_DepthBufferId          = InitBrim(HnRenderResourceTokens->depthBuffer);
+    m_OffscreenColorTargetId  = InitBrim(HnRenderResourceTokens->offscreenColorTarget);
+    m_MeshIdTargetId          = InitBrim(HnRenderResourceTokens->meshIdTarget);
+    m_SelectionDepthBufferId  = InitBrim(HnRenderResourceTokens->selectionDepthBuffer);
+    m_DepthBufferId           = InitBrim(HnRenderResourceTokens->depthBuffer);
+    m_ClosestSelLocn0TargetId = InitBrim(HnRenderResourceTokens->closestSelectedLocation0Target);
+    m_ClosestSelLocn1TargetId = InitBrim(HnRenderResourceTokens->closestSelectedLocation1Target);
 }
 
 HnSetupRenderingTask::~HnSetupRenderingTask()
@@ -96,7 +103,8 @@ void HnSetupRenderingTask::Sync(pxr::HdSceneDelegate* Delegate,
         HnSetupRenderingTaskParams Params;
         if (GetTaskParams(Delegate, Params))
         {
-            m_FinalColorTargetId = Params.FinalColorTargetId;
+            m_FinalColorTargetId            = Params.FinalColorTargetId;
+            m_ClosestSelectedLocationFormat = Params.ClosestSelectedLocationFormat;
             UpdateRenderPassState(Params);
         }
     }
@@ -165,23 +173,28 @@ void HnSetupRenderingTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
     };
 
     HnRenderPassState::FramebufferTargets FBTargets;
-    FBTargets.FinalColorRTV     = pFinalColorRTV;
-    FBTargets.OffscreenColorRTV = UpdateBrim(m_OffscreenColorTargetId, m_RenderPassState->GetRenderTargetFormat(0), "Offscreen color target");
-    FBTargets.MeshIdRTV         = UpdateBrim(m_MeshIdTargetId, m_RenderPassState->GetRenderTargetFormat(1), "Mesh Id target");
-    FBTargets.SelectionDepthDSV = UpdateBrim(m_SelectionDepthBufferId, m_RenderPassState->GetDepthStencilFormat(), "Selection depth buffer");
-    FBTargets.DepthDSV          = UpdateBrim(m_DepthBufferId, m_RenderPassState->GetDepthStencilFormat(), "Depth buffer");
+    FBTargets.FinalColorRTV               = pFinalColorRTV;
+    FBTargets.OffscreenColorRTV           = UpdateBrim(m_OffscreenColorTargetId, m_RenderPassState->GetRenderTargetFormat(0), "Offscreen color target");
+    FBTargets.MeshIdRTV                   = UpdateBrim(m_MeshIdTargetId, m_RenderPassState->GetRenderTargetFormat(1), "Mesh Id target");
+    FBTargets.SelectionDepthDSV           = UpdateBrim(m_SelectionDepthBufferId, m_RenderPassState->GetDepthStencilFormat(), "Selection depth buffer");
+    FBTargets.DepthDSV                    = UpdateBrim(m_DepthBufferId, m_RenderPassState->GetDepthStencilFormat(), "Depth buffer");
+    FBTargets.ClosestSelectedLocation0RTV = UpdateBrim(m_ClosestSelLocn0TargetId, m_ClosestSelectedLocationFormat, "Closest selected location 0");
+    FBTargets.ClosestSelectedLocation1RTV = UpdateBrim(m_ClosestSelLocn1TargetId, m_ClosestSelectedLocationFormat, "Closest selected location 1");
     m_RenderPassState->SetFramebufferTargets(FBTargets);
 }
 
 void HnSetupRenderingTask::Prepare(pxr::HdTaskContext* TaskCtx,
                                    pxr::HdRenderIndex* RenderIndex)
 {
-    (*TaskCtx)[HnTokens->renderPassState]                    = pxr::VtValue{m_RenderPassState};
-    (*TaskCtx)[HnRenderResourceTokens->finalColorTarget]     = pxr::VtValue{m_FinalColorTargetId};
-    (*TaskCtx)[HnRenderResourceTokens->offscreenColorTarget] = pxr::VtValue{m_OffscreenColorTargetId};
-    (*TaskCtx)[HnRenderResourceTokens->meshIdTarget]         = pxr::VtValue{m_MeshIdTargetId};
-    (*TaskCtx)[HnRenderResourceTokens->depthBuffer]          = pxr::VtValue{m_DepthBufferId};
-    (*TaskCtx)[HnRenderResourceTokens->selectionDepthBuffer] = pxr::VtValue{m_SelectionDepthBufferId};
+    (*TaskCtx)[HnTokens->renderPassState]                              = pxr::VtValue{m_RenderPassState};
+    (*TaskCtx)[HnRenderResourceTokens->finalColorTarget]               = pxr::VtValue{m_FinalColorTargetId};
+    (*TaskCtx)[HnRenderResourceTokens->offscreenColorTarget]           = pxr::VtValue{m_OffscreenColorTargetId};
+    (*TaskCtx)[HnRenderResourceTokens->meshIdTarget]                   = pxr::VtValue{m_MeshIdTargetId};
+    (*TaskCtx)[HnRenderResourceTokens->depthBuffer]                    = pxr::VtValue{m_DepthBufferId};
+    (*TaskCtx)[HnRenderResourceTokens->selectionDepthBuffer]           = pxr::VtValue{m_SelectionDepthBufferId};
+    (*TaskCtx)[HnRenderResourceTokens->closestSelectedLocation0Target] = pxr::VtValue{m_ClosestSelLocn0TargetId};
+    (*TaskCtx)[HnRenderResourceTokens->closestSelectedLocation1Target] = pxr::VtValue{m_ClosestSelLocn1TargetId};
+
 
     if (ITextureView* pFinalColorRTV = GetRenderBufferTarget(*RenderIndex, m_FinalColorTargetId))
     {

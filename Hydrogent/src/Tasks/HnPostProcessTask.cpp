@@ -80,6 +80,7 @@ void HnPostProcessTask::PreparePSO(TEXTURE_FORMAT RTVFormat)
     {
         HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
 
+        // RenderDeviceWithCache_E throws exceptions in case of errors
         RenderDeviceWithCache_E Device{RenderDelegate->GetDevice(), RenderDelegate->GetRenderStateCache()};
 
         ShaderCreateInfo ShaderCI;
@@ -184,6 +185,21 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
         return;
     }
 
+    ITextureView* ClosestSelectedLocationSRV = nullptr;
+    if (auto* ClosestSelectedLocationRTV = GetRenderBufferTarget(*RenderIndex, TaskCtx, HnRenderResourceTokens->closestSelectedLocationFinalTarget))
+    {
+        ClosestSelectedLocationSRV = ClosestSelectedLocationRTV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        if (ClosestSelectedLocationSRV == nullptr)
+        {
+            UNEXPECTED("Closest selected location SRV is null");
+            return;
+        }
+    }
+    else
+    {
+        UNEXPECTED("Closest selected location target RTV is not set in the task context");
+    }
+
     if (!m_PostProcessAttribsCB)
     {
         HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
@@ -195,7 +211,7 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
     if (std::shared_ptr<HnRenderPassState> RenderPassState = GetRenderPassState(TaskCtx))
     {
         m_ClearDepth = RenderPassState->GetClearDepth();
-        PrepareSRB(*RenderPassState);
+        PrepareSRB(*RenderPassState, ClosestSelectedLocationSRV);
     }
     else
     {
@@ -203,7 +219,7 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
     }
 }
 
-void HnPostProcessTask::PrepareSRB(const HnRenderPassState& RPState)
+void HnPostProcessTask::PrepareSRB(const HnRenderPassState& RPState, ITextureView* pClosestSelectedLocationSRV)
 {
     if (!m_PSO)
     {
@@ -241,7 +257,8 @@ void HnPostProcessTask::PrepareSRB(const HnRenderPassState& RPState)
     {
         if (m_ShaderVars.Color->Get() != pOffscreenColorSRV ||
             m_ShaderVars.Depth->Get() != pDepthSRV ||
-            m_ShaderVars.SelectionDepth->Get() != pSelectionDepthSRV)
+            m_ShaderVars.SelectionDepth->Get() != pSelectionDepthSRV ||
+            m_ShaderVars.ClosestSelectedLocation->Get() != pClosestSelectedLocationSRV)
         {
             m_SRB.Release();
             m_ShaderVars = {};
@@ -252,9 +269,10 @@ void HnPostProcessTask::PrepareSRB(const HnRenderPassState& RPState)
     {
         m_PSO->CreateShaderResourceBinding(&m_SRB, true);
         VERIFY_EXPR(m_SRB);
-        m_ShaderVars.Color          = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_ColorBuffer");
-        m_ShaderVars.Depth          = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_Depth");
-        m_ShaderVars.SelectionDepth = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_SelectionDepth");
+        m_ShaderVars.Color                   = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_ColorBuffer");
+        m_ShaderVars.Depth                   = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_Depth");
+        m_ShaderVars.SelectionDepth          = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_SelectionDepth");
+        m_ShaderVars.ClosestSelectedLocation = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_ClosestSelectedLocation");
         VERIFY_EXPR(m_ShaderVars);
 
         if (m_ShaderVars.Color != nullptr)
@@ -263,6 +281,8 @@ void HnPostProcessTask::PrepareSRB(const HnRenderPassState& RPState)
             m_ShaderVars.Depth->Set(pDepthSRV);
         if (m_ShaderVars.SelectionDepth != nullptr)
             m_ShaderVars.SelectionDepth->Set(pSelectionDepthSRV);
+        if (m_ShaderVars.ClosestSelectedLocation != nullptr)
+            m_ShaderVars.ClosestSelectedLocation->Set(pClosestSelectedLocationSRV);
     }
 }
 
