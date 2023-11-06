@@ -70,94 +70,82 @@ HnPostProcessTask::~HnPostProcessTask()
 
 void HnPostProcessTask::PreparePSO(TEXTURE_FORMAT RTVFormat)
 {
-    if (m_PSO)
-    {
-        if (m_PsoIsDirty || m_PSO->GetGraphicsPipelineDesc().RTVFormats[0] != RTVFormat)
-        {
-            m_PSO.Release();
-            m_SRB.Release();
-        }
-    }
+    if (m_PsoIsDirty || (m_PSO && m_PSO->GetGraphicsPipelineDesc().RTVFormats[0] != RTVFormat))
+        m_PSO.Release();
 
     if (m_PSO)
         return;
 
-    HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
-
-    RenderDeviceWithCache_N Device{RenderDelegate->GetDevice(), RenderDelegate->GetRenderStateCache()};
-
-    ShaderCreateInfo ShaderCI;
-    ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL;
-
-    IShaderSourceInputStreamFactory* ppShaderSourceFactories[] =
-        {
-            &HnShaderSourceFactory::GetInstance(),
-            &DiligentFXShaderSourceStreamFactory::GetInstance(),
-        };
-    CompoundShaderSourceFactoryCreateInfo          CompoundSourceFactoryCI{ppShaderSourceFactories, _countof(ppShaderSourceFactories)};
-    RefCntAutoPtr<IShaderSourceInputStreamFactory> pCompoundSourceFactory;
-    CreateCompoundShaderSourceFactory(CompoundSourceFactoryCI, &pCompoundSourceFactory);
-    ShaderCI.pShaderSourceStreamFactory = pCompoundSourceFactory;
-
-    ShaderMacroHelper Macros;
-    Macros.Add("CONVERT_OUTPUT_TO_SRGB", m_Params.ConvertOutputToSRGB);
-    Macros.Add("TONE_MAPPING_MODE", m_Params.ToneMappingMode);
-    ShaderCI.Macros = Macros;
-
-    RefCntAutoPtr<IShader> pVS;
+    try
     {
-        ShaderCI.Desc       = {"Post process VS", SHADER_TYPE_VERTEX, true};
-        ShaderCI.EntryPoint = "main";
-        ShaderCI.FilePath   = "HnPostProcess.vsh";
+        HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
 
-        pVS = Device.CreateShader(ShaderCI);
-        if (!pVS)
+        RenderDeviceWithCache_E Device{RenderDelegate->GetDevice(), RenderDelegate->GetRenderStateCache()};
+
+        ShaderCreateInfo ShaderCI;
+        ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL;
+
+        IShaderSourceInputStreamFactory* ppShaderSourceFactories[] =
+            {
+                &HnShaderSourceFactory::GetInstance(),
+                &DiligentFXShaderSourceStreamFactory::GetInstance(),
+            };
+        CompoundShaderSourceFactoryCreateInfo          CompoundSourceFactoryCI{ppShaderSourceFactories, _countof(ppShaderSourceFactories)};
+        RefCntAutoPtr<IShaderSourceInputStreamFactory> pCompoundSourceFactory;
+        CreateCompoundShaderSourceFactory(CompoundSourceFactoryCI, &pCompoundSourceFactory);
+        ShaderCI.pShaderSourceStreamFactory = pCompoundSourceFactory;
+
+        ShaderMacroHelper Macros;
+        Macros.Add("CONVERT_OUTPUT_TO_SRGB", m_Params.ConvertOutputToSRGB);
+        Macros.Add("TONE_MAPPING_MODE", m_Params.ToneMappingMode);
+        ShaderCI.Macros = Macros;
+
+        RefCntAutoPtr<IShader> pVS;
         {
-            UNEXPECTED("Failed to create post process VS");
-            return;
+            ShaderCI.Desc       = {"Post process VS", SHADER_TYPE_VERTEX, true};
+            ShaderCI.EntryPoint = "main";
+            ShaderCI.FilePath   = "HnPostProcess.vsh";
+
+            pVS = Device.CreateShader(ShaderCI); // Throws exception in case of error
         }
-    }
 
-    RefCntAutoPtr<IShader> pPS;
-    {
-        ShaderCI.Desc       = {"Post process PS", SHADER_TYPE_PIXEL, true};
-        ShaderCI.EntryPoint = "main";
-        ShaderCI.FilePath   = "HnPostProcess.psh";
-
-        pPS = Device.CreateShader(ShaderCI);
-        if (!pPS)
+        RefCntAutoPtr<IShader> pPS;
         {
-            UNEXPECTED("Failed to create post process PS");
-            return;
+            ShaderCI.Desc       = {"Post process PS", SHADER_TYPE_PIXEL, true};
+            ShaderCI.EntryPoint = "main";
+            ShaderCI.FilePath   = "HnPostProcess.psh";
+
+            pPS = Device.CreateShader(ShaderCI); // Throws exception in case of error
         }
+
+        PipelineResourceLayoutDescX ResourceLauout;
+        ResourceLauout
+            .SetDefaultVariableType(SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
+            .AddVariable(SHADER_TYPE_PIXEL, "cbPostProcessAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
+
+        GraphicsPipelineStateCreateInfoX PsoCI{"Post process"};
+        PsoCI
+            .AddRenderTarget(RTVFormat)
+            .AddShader(pVS)
+            .AddShader(pPS)
+            .SetDepthStencilDesc(DSS_DisableDepth)
+            .SetRasterizerDesc(RS_SolidFillNoCull)
+            .SetResourceLayout(ResourceLauout)
+            .SetPrimitiveTopology(PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+
+        m_PSO = Device.CreateGraphicsPipelineState(PsoCI); // Throws exception in case of error
+        m_PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbPostProcessAttribs")->Set(m_PostProcessAttribsCB);
+
+        m_PsoIsDirty = false;
     }
-
-    PipelineResourceLayoutDescX ResourceLauout;
-    ResourceLauout
-        .SetDefaultVariableType(SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
-        .AddVariable(SHADER_TYPE_PIXEL, "cbPostProcessAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
-
-    GraphicsPipelineStateCreateInfoX PsoCI{"Post process"};
-    PsoCI
-        .AddRenderTarget(RTVFormat)
-        .AddShader(pVS)
-        .AddShader(pPS)
-        .SetDepthStencilDesc(DSS_DisableDepth)
-        .SetRasterizerDesc(RS_SolidFillNoCull)
-        .SetResourceLayout(ResourceLauout)
-        .SetPrimitiveTopology(PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-
-    m_PSO = Device.CreateGraphicsPipelineState(PsoCI);
-    if (!m_PSO)
+    catch (const std::runtime_error& err)
     {
-        UNEXPECTED("Failed to create post process PSO");
-        return;
+        LOG_ERROR_MESSAGE("Failed to create post process PSO: ", err.what());
     }
-    m_PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbPostProcessAttribs")->Set(m_PostProcessAttribsCB);
-
-    m_SRB.Release();
-
-    m_PsoIsDirty = false;
+    catch (...)
+    {
+        LOG_ERROR_MESSAGE("Failed to create post process PSO");
+    }
 }
 
 void HnPostProcessTask::Sync(pxr::HdSceneDelegate* Delegate,
@@ -267,7 +255,7 @@ void HnPostProcessTask::PrepareSRB(const HnRenderPassState& RPState)
         m_ShaderVars.Color          = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_ColorBuffer");
         m_ShaderVars.Depth          = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_Depth");
         m_ShaderVars.SelectionDepth = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_SelectionDepth");
-        VERIFY_EXPR(m_ShaderVars.Color != nullptr && m_ShaderVars.Depth != nullptr && m_ShaderVars.SelectionDepth != nullptr);
+        VERIFY_EXPR(m_ShaderVars);
 
         if (m_ShaderVars.Color != nullptr)
             m_ShaderVars.Color->Set(pOffscreenColorSRV);
