@@ -39,8 +39,11 @@ namespace Diligent
 namespace USD
 {
 
+struct HnSetupRenderingTaskParams;
 struct HnRenderRprimsTaskParams;
+struct HnPostProcessTaskParams;
 struct HnRenderPassParams;
+struct HnReadRprimIdTaskParams;
 
 /// Task manager implementation in Hydrogent.
 class HnTaskManager
@@ -171,7 +174,10 @@ public:
     bool SetTaskParams(const pxr::SdfPath& Id,
                        TaskParamsType&&    Params);
 
+    void SetupRendering(const HnSetupRenderingTaskParams& Params);
     void SetRenderRprimParams(const HnRenderRprimsTaskParams& Params);
+    void SetPostProcessParams(const HnPostProcessTaskParams& Params);
+    void SetReadRprimIdParams(const HnReadRprimIdTaskParams& Params);
 
     void EnableTask(TaskUID UID, bool Enable);
     bool IsTaskEnabled(TaskUID UID) const;
@@ -191,8 +197,6 @@ public:
 
     /// Returns true if the tasks associated with the specified material tag are enabled.
     bool IsMaterialEnabled(const pxr::TfToken& MaterialTag) const;
-
-    void SetSelectionOutlineWidth(float Width);
 
 private:
     pxr::SdfPath GetRenderRprimsTaskId(const pxr::TfToken& MaterialTag, const HnRenderPassParams& RenderPassParams) const;

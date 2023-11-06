@@ -288,6 +288,11 @@ void HnTaskManager::CreateRenderRprimsTask(const pxr::TfToken& MaterialTag, Task
     m_RenderTaskIds.emplace_back(RenderRprimsTaskId);
 }
 
+void HnTaskManager::SetupRendering(const HnSetupRenderingTaskParams& Params)
+{
+    SetTaskParams(TaskUID_SetupRendering, Params);
+}
+
 void HnTaskManager::SetRenderRprimParams(const HnRenderRprimsTaskParams& Params)
 {
     for (const auto& TaskId : m_RenderTaskIds)
@@ -477,26 +482,22 @@ bool HnTaskManager::IsMaterialEnabled(const pxr::TfToken& MaterialTag) const
     }
 }
 
-void HnTaskManager::SetSelectionOutlineWidth(float Width)
+void HnTaskManager::SetReadRprimIdParams(const HnReadRprimIdTaskParams& Params)
 {
-    auto post_process_task_it = m_TaskInfo.find(TaskUID_PostProcess);
-    if (post_process_task_it != m_TaskInfo.end())
-    {
-        HnPostProcessTaskParams PostProcessParams = m_ParamsDelegate.GetParameter<HnPostProcessTaskParams>(post_process_task_it->second.Id, pxr::HdTokens->params);
-        if (PostProcessParams.SelectionOutlineWidth != Width)
-        {
-            PostProcessParams.SelectionOutlineWidth = Width;
-            SetTaskParams(TaskUID_PostProcess, PostProcessParams);
-        }
-    }
+    SetTaskParams(TaskUID_ReadRprimId, Params);
+}
+
+void HnTaskManager::SetPostProcessParams(const HnPostProcessTaskParams& Params)
+{
+    SetTaskParams(TaskUID_PostProcess, Params);
 
     auto process_selection_task_it = m_TaskInfo.find(TaskUID_ProcessSelection);
     if (process_selection_task_it != m_TaskInfo.end())
     {
         HnProcessSelectionTaskParams ProcessSelectionParams = m_ParamsDelegate.GetParameter<HnProcessSelectionTaskParams>(process_selection_task_it->second.Id, pxr::HdTokens->params);
-        if (ProcessSelectionParams.MaximumDistance != Width)
+        if (ProcessSelectionParams.MaximumDistance != Params.SelectionOutlineWidth)
         {
-            ProcessSelectionParams.MaximumDistance = Width;
+            ProcessSelectionParams.MaximumDistance = Params.SelectionOutlineWidth;
             SetTaskParams(TaskUID_ProcessSelection, ProcessSelectionParams);
         }
     }
