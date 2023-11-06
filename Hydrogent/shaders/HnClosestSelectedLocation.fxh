@@ -23,20 +23,19 @@ float2 EncodeClosestSelectedLocation(float2 Location, bool IsValid)
     }
 }
 
-void DecodeClosestSelectedLocation(in  float2 EncodedLocation, 
-                                   out float2 Location,
-                                   out bool   IsValid)
+bool DecodeClosestSelectedLocation(in  float2 EncodedLocation, 
+                                   out float2 Location)
 {
     if (EncodedLocation.y <= 0.25)
     {
-        IsValid  = false;
         Location = float2(0.0, 0.0);
+        return false;
     }
     else
     {
-        Location   = EncodedLocation;
-        Location.y = Location.y * 2.0 - 1.0;
-        IsValid    = true;
+        Location.x = EncodedLocation.x;
+        Location.y = EncodedLocation.y * 2.0 - 1.0;
+        return true;
     }
 }
 #endif

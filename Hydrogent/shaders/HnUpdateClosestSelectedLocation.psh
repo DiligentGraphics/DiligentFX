@@ -19,11 +19,9 @@ void UpdateClosestLocation(in    float2 CurrentLocation,
                            inout float  ClosestDistance)
 {
     float2 TestSelectedLocation;
-    bool   TestLocationValid = false;
-    DecodeClosestSelectedLocation(g_SrcClosestLocation.Load(int3(CurrentLocation + Offset * g_Constants.SampleRange, 0)).xy, TestSelectedLocation, TestLocationValid);
-    if (!TestLocationValid)
+    if (!DecodeClosestSelectedLocation(g_SrcClosestLocation.Load(int3(CurrentLocation + Offset * g_Constants.SampleRange, 0)).xy, TestSelectedLocation))
         return;
-    
+
     float Width;
     float Height;
     g_SrcClosestLocation.GetDimensions(Width, Height);
@@ -43,7 +41,7 @@ void main(in  PSInput PSIn,
     float2 ClosestLocation = float2(0.0, 0.0);
     bool   IsLocationValid = false;
     float  ClosestDistance = 1e+10;
-    
+
     UpdateClosestLocation(PSIn.Pos.xy, float2(-1.0, -1.0), ClosestLocation, IsLocationValid, ClosestDistance);
     UpdateClosestLocation(PSIn.Pos.xy, float2( 0.0, -1.0), ClosestLocation, IsLocationValid, ClosestDistance);
     UpdateClosestLocation(PSIn.Pos.xy, float2(+1.0, -1.0), ClosestLocation, IsLocationValid, ClosestDistance);
@@ -51,10 +49,10 @@ void main(in  PSInput PSIn,
     UpdateClosestLocation(PSIn.Pos.xy, float2(-1.0,  0.0), ClosestLocation, IsLocationValid, ClosestDistance);
     UpdateClosestLocation(PSIn.Pos.xy, float2( 0.0,  0.0), ClosestLocation, IsLocationValid, ClosestDistance);
     UpdateClosestLocation(PSIn.Pos.xy, float2(+1.0,  0.0), ClosestLocation, IsLocationValid, ClosestDistance);
-    
+
     UpdateClosestLocation(PSIn.Pos.xy, float2(-1.0, +1.0), ClosestLocation, IsLocationValid, ClosestDistance);
     UpdateClosestLocation(PSIn.Pos.xy, float2( 0.0, +1.0), ClosestLocation, IsLocationValid, ClosestDistance);
     UpdateClosestLocation(PSIn.Pos.xy, float2(+1.0, +1.0), ClosestLocation, IsLocationValid, ClosestDistance);
-    
+
     Location = EncodeClosestSelectedLocation(ClosestLocation, IsLocationValid);
 }

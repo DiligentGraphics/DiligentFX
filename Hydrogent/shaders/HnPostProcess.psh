@@ -30,11 +30,9 @@ void main(in PSInput PSIn,
     float Depth          = g_Depth.Load(int3(PSIn.Pos.xy, 0)).r;
     bool  IsSelected     = Depth != g_Attribs.ClearDepth && SelectionDepth == Depth;
 
+    float  Outline = 0.0;
     float2 ClosestSelectedLocation;
-    bool   IsClosestLocationValid = false;
-    DecodeClosestSelectedLocation(g_ClosestSelectedLocation.Load(int3(PSIn.Pos.xy, 0)).xy, ClosestSelectedLocation, IsClosestLocationValid);    
-    float Outline = 0.0;
-    if (IsClosestLocationValid)
+    if (DecodeClosestSelectedLocation(g_ClosestSelectedLocation.Load(int3(PSIn.Pos.xy, 0)).xy, ClosestSelectedLocation))
     {
         float Width, Height;
         g_ColorBuffer.GetDimensions(Width, Height);
