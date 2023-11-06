@@ -192,6 +192,8 @@ public:
     /// Returns true if the tasks associated with the specified material tag are enabled.
     bool IsMaterialEnabled(const pxr::TfToken& MaterialTag) const;
 
+    void SetSelectionOutlineWidth(float Width);
+
 private:
     pxr::SdfPath GetRenderRprimsTaskId(const pxr::TfToken& MaterialTag, const HnRenderPassParams& RenderPassParams) const;
 

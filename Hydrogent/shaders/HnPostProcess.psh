@@ -37,8 +37,7 @@ void main(in PSInput PSIn,
         float Width, Height;
         g_ColorBuffer.GetDimensions(Width, Height);
         float Dist = length(ClosestSelectedLocation * float2(Width, Height) - PSIn.Pos.xy);
-        float SelectionOutlineWidth = 4.0;
-        Outline = saturate(1.0 - Dist / SelectionOutlineWidth) * (SelectionDepth != g_Attribs.ClearDepth ? 0.0 : 1.0);
+        Outline = saturate(1.0 - Dist / g_Attribs.SelectionOutlineWidth) * (SelectionDepth != g_Attribs.ClearDepth ? 0.0 : 1.0);
     }
 
     // Desaturate all unselected pixels

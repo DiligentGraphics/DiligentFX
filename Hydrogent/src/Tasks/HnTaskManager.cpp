@@ -317,6 +317,7 @@ void HnTaskManager::CreateSetupSelectionDepthTask()
 void HnTaskManager::CreateProcessSelectionTask()
 {
     HnProcessSelectionTaskParams TaskParams;
+    TaskParams.MaximumDistance = HnPostProcessTaskParams{}.SelectionOutlineWidth;
     CreateTask<HnProcessSelectionTask>(HnTaskManagerTokens->processSelectionTask, TaskUID_ProcessSelection, TaskParams);
 }
 
@@ -473,6 +474,31 @@ bool HnTaskManager::IsMaterialEnabled(const pxr::TfToken& MaterialTag) const
     {
         UNEXPECTED("Unknown material tag ", MaterialTag);
         return false;
+    }
+}
+
+void HnTaskManager::SetSelectionOutlineWidth(float Width)
+{
+    auto post_process_task_it = m_TaskInfo.find(TaskUID_PostProcess);
+    if (post_process_task_it != m_TaskInfo.end())
+    {
+        HnPostProcessTaskParams PostProcessParams = m_ParamsDelegate.GetParameter<HnPostProcessTaskParams>(post_process_task_it->second.Id, pxr::HdTokens->params);
+        if (PostProcessParams.SelectionOutlineWidth != Width)
+        {
+            PostProcessParams.SelectionOutlineWidth = Width;
+            SetTaskParams(TaskUID_PostProcess, PostProcessParams);
+        }
+    }
+
+    auto process_selection_task_it = m_TaskInfo.find(TaskUID_ProcessSelection);
+    if (process_selection_task_it != m_TaskInfo.end())
+    {
+        HnProcessSelectionTaskParams ProcessSelectionParams = m_ParamsDelegate.GetParameter<HnProcessSelectionTaskParams>(process_selection_task_it->second.Id, pxr::HdTokens->params);
+        if (ProcessSelectionParams.MaximumDistance != Width)
+        {
+            ProcessSelectionParams.MaximumDistance = Width;
+            SetTaskParams(TaskUID_ProcessSelection, ProcessSelectionParams);
+        }
     }
 }
 
