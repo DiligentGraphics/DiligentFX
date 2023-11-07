@@ -63,9 +63,9 @@ public:
     static constexpr TaskUID TaskUID_RenderRprimsAdditiveSelected    = 0x2cb8a35254ec46da;
     static constexpr TaskUID TaskUID_RenderRprimsTranslucentSelected = 0x50a786394d834b4f;
     static constexpr TaskUID TaskUID_RenderEnvMap                    = 0xf646122e1dc74bab;
-    static constexpr TaskUID TaskUID_RenderAxes                      = 0x4cbc5eb258b407b;
+    static constexpr TaskUID TaskUID_RenderAxes                      = 0x4cbc5eb258b407b8;
     static constexpr TaskUID TaskUID_ReadRprimId                     = 0x199572fe7ff144ef;
-    static constexpr TaskUID TaskUID_ProcessSelection                = 0x87ef181ec6d4cf8;
+    static constexpr TaskUID TaskUID_ProcessSelection                = 0x87ef181ec6d4cf83;
     static constexpr TaskUID TaskUID_PostProcess                     = 0x1f5367e65d034500;
 
     HnTaskManager(pxr::HdRenderIndex& RenderIndex,

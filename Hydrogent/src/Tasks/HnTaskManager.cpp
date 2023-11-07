@@ -505,7 +505,7 @@ void HnTaskManager::SetPostProcessParams(const HnPostProcessTaskParams& Params)
 {
     SetTaskParams(TaskUID_PostProcess, Params);
 
-    auto process_selection_task_it = m_TaskInfo.find(TaskUID_ProcessSelection);
+    auto process_selection_task_it = m_TaskInfo.find(TaskUID{TaskUID_ProcessSelection});
     if (process_selection_task_it != m_TaskInfo.end())
     {
         HnProcessSelectionTaskParams ProcessSelectionParams = m_ParamsDelegate.GetParameter<HnProcessSelectionTaskParams>(process_selection_task_it->second.Id, pxr::HdTokens->params);
