@@ -96,6 +96,6 @@
 "\n"
 "#ifdef USE_GL_POINT_SIZE\n"
 "    // If gl_PointSize is not defined, points are not rendered in GLES\n"
-"    gl_PointSize = 1.0;\n"
+"    gl_PointSize = g_PBRAttribs.Renderer.PointSize;\n"
 "#endif\n"
 "}\n"

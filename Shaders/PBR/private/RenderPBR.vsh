@@ -96,6 +96,6 @@ void main(in  VSInput  VSIn,
 
 #ifdef USE_GL_POINT_SIZE
     // If gl_PointSize is not defined, points are not rendered in GLES
-    gl_PointSize = 1.0;
+    gl_PointSize = g_PBRAttribs.Renderer.PointSize;
 #endif
 }

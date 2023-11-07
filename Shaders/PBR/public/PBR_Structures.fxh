@@ -64,6 +64,11 @@ struct PBRRendererShaderParameters
     float4 HighlightColor;
 
     float4 CustomData;
+
+    float PointSize; // OpenGL only
+    float Padding0;
+    float Padding1;
+    float Padding2;
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
 	CHECK_STRUCT_ALIGNMENT(PBRRendererShaderParameters);

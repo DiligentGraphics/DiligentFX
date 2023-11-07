@@ -503,6 +503,7 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
                 RendererParams.HighlightColor           = m_RenderParams.HighlightColor;
                 RendererParams.UnshadedColor            = m_RenderParams.WireframeColor;
                 RendererParams.PrefilteredCubeMipLevels = m_Settings.EnableIBL ? static_cast<float>(m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels) : 0.f;
+                RendererParams.PointSize                = 1;
             }
 
             if (primitive.HasIndices())
