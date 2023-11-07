@@ -200,8 +200,20 @@ public:
     /// Enables or disables the tasks associated with the specified material tag.
     void EnableMaterial(const pxr::TfToken& MaterialTag, bool Enable);
 
+    /// Enables or disables environment map rendering.
+    void EnableEnvironmentMap(bool Enable);
+
+    /// Returns true if environment map rendering is enabled.
+    bool IsEnvironmentMapEnabled() const;
+
+    /// Enables or disables axes rendering.
+    void EnableAxes(bool Enable);
+
     /// Returns true if the tasks associated with the specified material tag are enabled.
     bool IsMaterialEnabled(const pxr::TfToken& MaterialTag) const;
+
+    /// Returns true if axes rendering is enabled.
+    bool AreAxesEnabled() const;
 
 private:
     pxr::SdfPath GetRenderRprimsTaskId(const pxr::TfToken& MaterialTag, const HnRenderPassParams& RenderPassParams) const;

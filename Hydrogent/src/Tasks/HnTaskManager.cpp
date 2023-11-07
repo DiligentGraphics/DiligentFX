@@ -517,6 +517,26 @@ void HnTaskManager::SetPostProcessParams(const HnPostProcessTaskParams& Params)
     }
 }
 
+void HnTaskManager::EnableEnvironmentMap(bool Enable)
+{
+    EnableTask(TaskUID_RenderEnvMap, Enable);
+}
+
+bool HnTaskManager::IsEnvironmentMapEnabled() const
+{
+    return IsTaskEnabled(TaskUID_RenderEnvMap);
+}
+
+void HnTaskManager::EnableAxes(bool Enable)
+{
+    EnableTask(TaskUID_RenderAxes, Enable);
+}
+
+bool HnTaskManager::AreAxesEnabled() const
+{
+    return IsTaskEnabled(TaskUID_RenderAxes);
+}
+
 } // namespace USD
 
 } // namespace Diligent
