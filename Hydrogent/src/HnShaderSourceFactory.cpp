@@ -27,7 +27,13 @@
 #include "HnShaderSourceFactory.hpp"
 #include "ShaderSourceFactoryUtils.h"
 
+#include "../../../Utilities/include/DiligentFXShaderSourceStreamFactory.hpp"
+#include "ShaderSourceFactoryUtils.h"
+
 namespace Diligent
+{
+
+namespace USD
 {
 
 #include "../shaders_inc/shaders_list.h"
@@ -44,5 +50,20 @@ IShaderSourceInputStreamFactory& HnShaderSourceFactory::GetInstance()
     static HnShaderSourceFactory TheFactory;
     return *TheFactory.m_pFactory;
 }
+
+RefCntAutoPtr<IShaderSourceInputStreamFactory> HnShaderSourceFactory::CreateHnFxCompoundFactory()
+{
+    IShaderSourceInputStreamFactory* ppShaderSourceFactories[] =
+        {
+            &HnShaderSourceFactory::GetInstance(),
+            &DiligentFXShaderSourceStreamFactory::GetInstance(),
+        };
+    CompoundShaderSourceFactoryCreateInfo          CompoundSourceFactoryCI{ppShaderSourceFactories, _countof(ppShaderSourceFactories)};
+    RefCntAutoPtr<IShaderSourceInputStreamFactory> pHnFxCompoundSourceFactory;
+    CreateCompoundShaderSourceFactory(CompoundSourceFactoryCI, &pHnFxCompoundSourceFactory);
+    return pHnFxCompoundSourceFactory;
+}
+
+} // namespace USD
 
 } // namespace Diligent

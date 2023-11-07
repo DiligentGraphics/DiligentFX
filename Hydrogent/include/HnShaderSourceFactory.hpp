@@ -32,15 +32,22 @@
 namespace Diligent
 {
 
+namespace USD
+{
+
 class HnShaderSourceFactory final
 {
 public:
     static IShaderSourceInputStreamFactory& GetInstance();
+
+    static RefCntAutoPtr<IShaderSourceInputStreamFactory> CreateHnFxCompoundFactory();
 
 private:
     HnShaderSourceFactory();
 
     RefCntAutoPtr<IShaderSourceInputStreamFactory> m_pFactory;
 };
+
+} // namespace USD
 
 } // namespace Diligent

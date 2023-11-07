@@ -44,6 +44,7 @@ struct HnRenderRprimsTaskParams;
 struct HnPostProcessTaskParams;
 struct HnRenderPassParams;
 struct HnReadRprimIdTaskParams;
+struct HnRenderAxesTaskParams;
 
 /// Task manager implementation in Hydrogent.
 class HnTaskManager
@@ -62,6 +63,7 @@ public:
     static constexpr TaskUID TaskUID_RenderRprimsAdditiveSelected    = 0x2cb8a35254ec46da;
     static constexpr TaskUID TaskUID_RenderRprimsTranslucentSelected = 0x50a786394d834b4f;
     static constexpr TaskUID TaskUID_RenderEnvMap                    = 0xf646122e1dc74bab;
+    static constexpr TaskUID TaskUID_RenderAxes                      = 0x4cbc5eb258b407b;
     static constexpr TaskUID TaskUID_ReadRprimId                     = 0x199572fe7ff144ef;
     static constexpr TaskUID TaskUID_ProcessSelection                = 0x87ef181ec6d4cf8;
     static constexpr TaskUID TaskUID_PostProcess                     = 0x1f5367e65d034500;
@@ -94,6 +96,7 @@ public:
     ///                         - RenderRprimsMaskedUnselected
     ///                             * Renders only unselected Rprims with the masked material tag
     ///                         - RenderEnvMap
+    ///                         - RenderAxes
     ///                         - RenderRprimsAdditive
     ///                             * Renders all Rprims with additive material tag
     ///                         - RenderRprimsTranslucent
@@ -118,6 +121,7 @@ public:
     ///     | RenderRprimsDefaultUnselected   |                  |         V         |   V    |     V     |                  |     V      |
     ///     | RenderRprimsMaskedUnselected    |                  |         V         |   V    |     V     |                  |     V      |
     ///     | RenderEnvMap                    |                  |                   |   V    |           |                  |            |
+    ///     | RenderAxes                      |                  |                   |   V    |           |                  |            |
     ///     | RenderRprimsAdditive            |       V          |         V         |   V    |     V     |                  |     V      |
     ///     | RenderRprimsTranslucent         |       V          |         V         |   V    |     V     |                  |     V      |
     ///     | SetupSelectionDepth             |                  |                   |        |           |       bind       |            |
@@ -178,6 +182,7 @@ public:
     void SetRenderRprimParams(const HnRenderRprimsTaskParams& Params);
     void SetPostProcessParams(const HnPostProcessTaskParams& Params);
     void SetReadRprimIdParams(const HnReadRprimIdTaskParams& Params);
+    void SetRenderAxesParams(const HnRenderAxesTaskParams& Params);
 
     void EnableTask(TaskUID UID, bool Enable);
     bool IsTaskEnabled(TaskUID UID) const;
@@ -204,6 +209,7 @@ private:
     void CreateSetupRenderingTask();
     void CreateRenderRprimsTask(const pxr::TfToken& MaterialTag, TaskUID UID, const HnRenderPassParams& RenderPassParams);
     void CreateRenderEnvMapTask();
+    void CreateRenderAxesTask();
     void CreateReadRprimIdTask();
     void CreateCopySelectionDepthTask();
     void CreateSetupSelectionDepthTask();

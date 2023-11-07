@@ -34,6 +34,7 @@
 #include "Tasks/HnCopySelectionDepthTask.hpp"
 #include "Tasks/HnSetupSelectionDepthTask.hpp"
 #include "Tasks/HnRenderEnvMapTask.hpp"
+#include "Tasks/HnRenderAxesTask.hpp"
 #include "Tasks/HnReadRprimIdTask.hpp"
 #include "Tasks/HnPostProcessTask.hpp"
 #include "Tasks/HnProcessSelectionTask.hpp"
@@ -58,6 +59,7 @@ TF_DEFINE_PRIVATE_TOKENS(
     (setupRendering)
     (copySelectionDepth)
     (renderEnvMapTask)
+    (renderAxesTask)
     (setupSelectionDepth)
     (readRprimIdTask)
     (processSelectionTask)
@@ -167,6 +169,7 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                                USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_AND_MESH_ID_OUTPUTS,
                            });
     CreateRenderEnvMapTask();
+    CreateRenderAxesTask();
     CreateRenderRprimsTask(HnMaterialTagTokens->additive,
                            TaskUID_RenderRprimsAdditive,
                            {
@@ -332,6 +335,12 @@ void HnTaskManager::CreateRenderEnvMapTask()
     CreateTask<HnRenderEnvMapTask>(HnTaskManagerTokens->renderEnvMapTask, TaskUID_RenderEnvMap, TaskParams);
 }
 
+void HnTaskManager::CreateRenderAxesTask()
+{
+    HnRenderAxesTaskParams TaskParams;
+    CreateTask<HnRenderAxesTask>(HnTaskManagerTokens->renderAxesTask, TaskUID_RenderAxes, TaskParams);
+}
+
 void HnTaskManager::CreateReadRprimIdTask()
 {
     HnReadRprimIdTaskParams TaskParams;
@@ -485,6 +494,11 @@ bool HnTaskManager::IsMaterialEnabled(const pxr::TfToken& MaterialTag) const
 void HnTaskManager::SetReadRprimIdParams(const HnReadRprimIdTaskParams& Params)
 {
     SetTaskParams(TaskUID_ReadRprimId, Params);
+}
+
+void HnTaskManager::SetRenderAxesParams(const HnRenderAxesTaskParams& Params)
+{
+    SetTaskParams(TaskUID_RenderAxes, Params);
 }
 
 void HnTaskManager::SetPostProcessParams(const HnPostProcessTaskParams& Params)

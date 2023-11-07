@@ -38,8 +38,6 @@
 #include "CommonlyUsedStates.h"
 #include "GraphicsUtilities.h"
 #include "MapHelper.hpp"
-#include "../../../Utilities/include/DiligentFXShaderSourceStreamFactory.hpp"
-#include "ShaderSourceFactoryUtils.h"
 
 namespace Diligent
 {
@@ -86,15 +84,8 @@ void HnPostProcessTask::PreparePSO(TEXTURE_FORMAT RTVFormat)
         ShaderCreateInfo ShaderCI;
         ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL;
 
-        IShaderSourceInputStreamFactory* ppShaderSourceFactories[] =
-            {
-                &HnShaderSourceFactory::GetInstance(),
-                &DiligentFXShaderSourceStreamFactory::GetInstance(),
-            };
-        CompoundShaderSourceFactoryCreateInfo          CompoundSourceFactoryCI{ppShaderSourceFactories, _countof(ppShaderSourceFactories)};
-        RefCntAutoPtr<IShaderSourceInputStreamFactory> pCompoundSourceFactory;
-        CreateCompoundShaderSourceFactory(CompoundSourceFactoryCI, &pCompoundSourceFactory);
-        ShaderCI.pShaderSourceStreamFactory = pCompoundSourceFactory;
+        auto pHnFxCompoundSourceFactory     = HnShaderSourceFactory::CreateHnFxCompoundFactory();
+        ShaderCI.pShaderSourceStreamFactory = pHnFxCompoundSourceFactory;
 
         ShaderMacroHelper Macros;
         Macros.Add("CONVERT_OUTPUT_TO_SRGB", m_Params.ConvertOutputToSRGB);
