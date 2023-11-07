@@ -61,8 +61,7 @@ struct HnRenderPass::RenderState
 
     const PBR_Renderer::ALPHA_MODE AlphaMode;
 
-    USD_Renderer::PsoCacheAccessor PbrPSOCache;
-    USD_Renderer::PsoCacheAccessor WireframePSOCache;
+    USD_Renderer::PsoCacheAccessor PSOCache;
 
     IPipelineState* pPSO = nullptr;
 };
@@ -106,24 +105,22 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
         GraphicsDesc.NumRenderTargets = 0;
     }
 
-    if (m_RenderParams.RenderMode == HN_RENDER_MODE_SOLID)
+    switch (m_RenderParams.RenderMode)
     {
-        GraphicsDesc.PrimitiveTopology = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-        State.PbrPSOCache              = USDRenderer->GetPsoCacheAccessor(GraphicsDesc);
-        VERIFY_EXPR(State.PbrPSOCache);
+        case HN_RENDER_MODE_SOLID:
+            GraphicsDesc.PrimitiveTopology = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+            break;
+        case HN_RENDER_MODE_MESH_EDGES:
+            GraphicsDesc.PrimitiveTopology = PRIMITIVE_TOPOLOGY_LINE_LIST;
+            break;
+        case HN_RENDER_MODE_POINTS:
+            GraphicsDesc.PrimitiveTopology = PRIMITIVE_TOPOLOGY_POINT_LIST;
+            break;
+        default:
+            UNEXPECTED("Unexpected render mode (", m_RenderParams.RenderMode, ")");
+            return;
     }
-    else if (m_RenderParams.RenderMode == HN_RENDER_MODE_MESH_EDGES ||
-             m_RenderParams.RenderMode == HN_RENDER_MODE_POINTS)
-    {
-        GraphicsDesc.PrimitiveTopology = m_RenderParams.RenderMode == HN_RENDER_MODE_MESH_EDGES ? PRIMITIVE_TOPOLOGY_LINE_LIST : PRIMITIVE_TOPOLOGY_POINT_LIST;
-        State.WireframePSOCache        = USDRenderer->GetPsoCacheAccessor(GraphicsDesc);
-        VERIFY_EXPR(State.WireframePSOCache);
-    }
-    else
-    {
-        UNEXPECTED("Unexpected render mode");
-        return;
-    }
+    State.PSOCache = USDRenderer->GetPsoCacheAccessor(GraphicsDesc);
 
     for (const pxr::HdDrawItem* pDrawItem : m_DrawItems)
     {
@@ -317,13 +314,13 @@ void HnRenderPass::RenderMesh(RenderState&      State,
         VERIFY(ShaderAttribs.AlphaMode == State.AlphaMode,
                "Alpha mode derived from the material tag is not consistent with the alpha mode in the shader attributes. "
                "This may indicate an issue in how alpha mode is determined in the material, or (less likely) an issue in Rprim sorting by Hydra.");
-        pPSO = State.PbrPSOCache.Get({PSOFlags, static_cast<PBR_Renderer::ALPHA_MODE>(State.AlphaMode), /*DoubleSided = */ false}, true);
+        pPSO = State.PSOCache.Get({PSOFlags, static_cast<PBR_Renderer::ALPHA_MODE>(State.AlphaMode), /*DoubleSided = */ false}, true);
     }
     else if (m_RenderParams.RenderMode == HN_RENDER_MODE_MESH_EDGES ||
              m_RenderParams.RenderMode == HN_RENDER_MODE_POINTS)
     {
         PSOFlags |= PBR_Renderer::PSO_FLAG_UNSHADED;
-        pPSO = State.WireframePSOCache.Get({PSOFlags, /*DoubleSided = */ false}, true);
+        pPSO = State.PSOCache.Get({PSOFlags, /*DoubleSided = */ false}, true);
     }
     else
     {
