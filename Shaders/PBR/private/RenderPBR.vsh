@@ -93,4 +93,9 @@ void main(in  VSInput  VSIn,
 #if USE_TEXCOORD1
     VSOut.UV1      = VSIn.UV1;
 #endif
+
+#ifdef USE_GL_POINT_SIZE
+    // If gl_PointSize is not defined, points are not rendered in GLES
+    gl_PointSize = 1.0;
+#endif
 }

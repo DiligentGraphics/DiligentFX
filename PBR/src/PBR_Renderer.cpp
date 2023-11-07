@@ -866,8 +866,13 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
     ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
     ShaderCI.pShaderSourceStreamFactory = pCompoundSourceFactory;
 
-    const auto Macros = DefineMacros(PSOFlags);
-    ShaderCI.Macros   = Macros;
+    auto Macros = DefineMacros(PSOFlags);
+    if (GraphicsDesc.PrimitiveTopology == PRIMITIVE_TOPOLOGY_POINT_LIST && m_Device.GetDeviceInfo().IsGLDevice())
+    {
+        // If gl_PointSize is not defined, points are not rendered in GLES
+        Macros.Add("USE_GL_POINT_SIZE", "1");
+    }
+    ShaderCI.Macros = Macros;
 
     RefCntAutoPtr<IShader> pVS;
     {
