@@ -227,8 +227,9 @@ public:
         PSO_FLAG_CONVERT_OUTPUT_TO_SRGB    = 1u << 15u,
         PSO_FLAG_ENABLE_CUSTOM_DATA_OUTPUT = 1u << 16u,
         PSO_FLAG_ENABLE_TONE_MAPPING       = 1u << 17u,
+        PSO_FLAG_UNSHADED                  = 1u << 18u,
 
-        PSO_FLAG_LAST = PSO_FLAG_ENABLE_TONE_MAPPING,
+        PSO_FLAG_LAST = PSO_FLAG_UNSHADED,
 
         PSO_FLAG_FIRST_USER_DEFINED = PSO_FLAG_LAST << 1u,
 
@@ -254,73 +255,45 @@ public:
         PSO_FLAG_ALL_USER_DEFINED = ~(PSO_FLAG_FIRST_USER_DEFINED - 1u)
     };
 
-    struct PSOKey
+    class PSOKey
     {
-        PSO_FLAGS Flags       = PSO_FLAG_NONE;
-        bool      DoubleSided = false;
-
+    public:
         constexpr PSOKey() noexcept {};
-        constexpr PSOKey(PSO_FLAGS _Flags, bool _DoubleSided) noexcept :
-            Flags{_Flags}, DoubleSided{_DoubleSided}
+        PSOKey(PSO_FLAGS _Flags, ALPHA_MODE _AlphaMode, bool _DoubleSided) noexcept;
+        PSOKey(PSO_FLAGS _Flags, bool _DoubleSided) noexcept :
+            PSOKey{_Flags, ALPHA_MODE_OPAQUE, _DoubleSided}
         {}
 
         constexpr bool operator==(const PSOKey& rhs) const noexcept
         {
-            return Flags == rhs.Flags && DoubleSided == rhs.DoubleSided;
+            return Hash == rhs.Hash && Flags == rhs.Flags && DoubleSided == rhs.DoubleSided && AlphaMode == rhs.AlphaMode;
         }
         constexpr bool operator!=(const PSOKey& rhs) const noexcept
         {
-            return Flags != rhs.Flags || DoubleSided != rhs.DoubleSided;
+            return !(*this == rhs);
         }
 
         struct Hasher
         {
             size_t operator()(const PSOKey& Key) const noexcept
             {
-                return ComputeHash(Key.Flags, Key.DoubleSided);
+                return Key.Hash;
             }
         };
+
+        constexpr PSO_FLAGS  GetFlags() const noexcept { return Flags; }
+        constexpr bool       IsDoubleSided() const noexcept { return DoubleSided; }
+        constexpr ALPHA_MODE GetAlphaMode() const noexcept { return AlphaMode; }
+
+    private:
+        PSO_FLAGS  Flags       = PSO_FLAG_NONE;
+        ALPHA_MODE AlphaMode   = ALPHA_MODE_OPAQUE;
+        bool       DoubleSided = false;
+        size_t     Hash        = 0;
     };
 
-    struct PbrPSOKey : PSOKey
-    {
-        static const PSO_FLAGS SupportedFlags;
+    using PsoHashMapType = std::unordered_map<PSOKey, RefCntAutoPtr<IPipelineState>, PSOKey::Hasher>;
 
-        ALPHA_MODE AlphaMode = ALPHA_MODE_OPAQUE;
-
-        PbrPSOKey() noexcept {};
-        PbrPSOKey(PSO_FLAGS _Flags, ALPHA_MODE _AlphaMode, bool _DoubleSided) noexcept;
-
-        bool operator==(const PbrPSOKey& rhs) const noexcept
-        {
-            return PSOKey::operator==(rhs) && AlphaMode == rhs.AlphaMode;
-        }
-        bool operator!=(const PbrPSOKey& rhs) const noexcept
-        {
-            return PSOKey::operator!=(rhs) || AlphaMode != rhs.AlphaMode;
-        }
-
-        struct Hasher
-        {
-            size_t operator()(const PbrPSOKey& Key) const noexcept
-            {
-                size_t Hash = PSOKey::Hasher{}(Key);
-                HashCombine(Hash, Key.AlphaMode);
-                return Hash;
-            }
-        };
-    };
-
-
-    struct WireframePSOKey : PSOKey
-    {
-        static const PSO_FLAGS SupportedFlags;
-
-        WireframePSOKey() noexcept {};
-        WireframePSOKey(PSO_FLAGS _Flags, bool _DoubleSided) noexcept;
-    };
-
-    template <typename PsoHashMapType, typename PsoKeyType>
     class PsoCacheAccessor
     {
     public:
@@ -337,7 +310,7 @@ public:
             return m_pRenderer != nullptr && m_pPsoHashMap != nullptr && m_pGraphicsDesc != nullptr;
         }
 
-        IPipelineState* Get(const PsoKeyType& Key, bool CreateIfNull) const
+        IPipelineState* Get(const PSOKey& Key, bool CreateIfNull) const
         {
             if (!*this)
             {
@@ -363,14 +336,7 @@ public:
         const GraphicsPipelineDesc* m_pGraphicsDesc = nullptr;
     };
 
-    using PbrPsoHashMapType       = std::unordered_map<PbrPSOKey, RefCntAutoPtr<IPipelineState>, PbrPSOKey::Hasher>;
-    using WireframePsoHashMapType = std::unordered_map<WireframePSOKey, RefCntAutoPtr<IPipelineState>, WireframePSOKey::Hasher>;
-
-    using PbrPsoCacheAccessor       = PsoCacheAccessor<PbrPsoHashMapType, PbrPSOKey>;
-    using WireframePsoCacheAccessor = PsoCacheAccessor<WireframePsoHashMapType, WireframePSOKey>;
-
-    PbrPsoCacheAccessor       GetPbrPsoCacheAccessor(const GraphicsPipelineDesc& GraphicsDesc);
-    WireframePsoCacheAccessor GetWireframePsoCacheAccessor(const GraphicsPipelineDesc& GraphicsDesc);
+    PsoCacheAccessor GetPsoCacheAccessor(const GraphicsPipelineDesc& GraphicsDesc);
 
     void InitCommonSRBVars(IShaderResourceBinding* pSRB,
                            IBuffer*                pCameraAttribs,
@@ -381,33 +347,19 @@ protected:
 
     void GetVSInputStructAndLayout(PSO_FLAGS PSOFlags, std::string& VSInputStruct, InputLayoutDescX& InputLayout) const;
 
-    template <typename KeyType>
-    struct GetPSOHelper;
-
-    template <typename KeyType>
-    IPipelineState* GetPSO(std::unordered_map<KeyType, RefCntAutoPtr<IPipelineState>, typename KeyType::Hasher>& PSOCache,
-                           const GraphicsPipelineDesc&                                                           GraphicsDesc,
-                           KeyType                                                                               Key,
-                           bool                                                                                  CreateIfNull);
+    IPipelineState* GetPSO(PsoHashMapType&             PsoHashMap,
+                           const GraphicsPipelineDesc& GraphicsDesc,
+                           const PSOKey&               Key,
+                           bool                        CreateIfNull);
 
     static std::string GetVSOutputStruct(PSO_FLAGS PSOFlags);
     static std::string GetPSOutputStruct(PSO_FLAGS PSOFlags);
-
-    void CreateShaders(PSO_FLAGS               PSOFlags,
-                       const char*             VSPath,
-                       const char*             VSName,
-                       const char*             PSPath,
-                       const char*             PSName,
-                       RefCntAutoPtr<IShader>& pVS,
-                       RefCntAutoPtr<IShader>& pPS,
-                       InputLayoutDescX&       InputLayout);
 
 private:
     void PrecomputeBRDF(IDeviceContext* pCtx,
                         Uint32          NumBRDFSamples = 512);
 
-    void CreatePbrPSO(PbrPsoHashMapType& PbrPSOs, const GraphicsPipelineDesc& GraphicsDesc, const PbrPSOKey& Key);
-    void CreateWireframePSO(WireframePsoHashMapType& WireframePSOs, const GraphicsPipelineDesc& GraphicsDesc, const WireframePSOKey& Key);
+    void CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineDesc& GraphicsDesc, const PSOKey& Key);
     void CreateSignature();
 
 protected:
@@ -442,81 +394,9 @@ protected:
 
     RefCntAutoPtr<IPipelineResourceSignature> m_ResourceSignature;
 
-    std::unordered_map<GraphicsPipelineDesc, PbrPsoHashMapType>       m_PbrPSOs;
-    std::unordered_map<GraphicsPipelineDesc, WireframePsoHashMapType> m_WireframePSOs;
+    std::unordered_map<GraphicsPipelineDesc, PsoHashMapType> m_PSOs;
 };
 
 DEFINE_FLAG_ENUM_OPERATORS(PBR_Renderer::PSO_FLAGS)
-
-inline PBR_Renderer::PbrPSOKey::PbrPSOKey(PSO_FLAGS  _Flags,
-                                          ALPHA_MODE _AlphaMode,
-                                          bool       _DoubleSided) noexcept :
-    PSOKey{_Flags & SupportedFlags, _DoubleSided},
-    AlphaMode{_AlphaMode}
-{}
-
-inline PBR_Renderer::WireframePSOKey::WireframePSOKey(PSO_FLAGS _Flags,
-                                                      bool      _DoubleSided) noexcept :
-    PSOKey{_Flags & SupportedFlags, _DoubleSided}
-{}
-
-template <>
-struct PBR_Renderer::GetPSOHelper<PBR_Renderer::PbrPSOKey>
-{
-    static constexpr decltype(&PBR_Renderer::CreatePbrPSO) CreatePSO = &PBR_Renderer::CreatePbrPSO;
-};
-
-template <>
-struct PBR_Renderer::GetPSOHelper<PBR_Renderer::WireframePSOKey>
-{
-    static constexpr decltype(&PBR_Renderer::CreateWireframePSO) CreatePSO = &PBR_Renderer::CreateWireframePSO;
-};
-
-template <typename KeyType>
-IPipelineState* PBR_Renderer::GetPSO(std::unordered_map<KeyType, RefCntAutoPtr<IPipelineState>, typename KeyType::Hasher>& PSOCache,
-                                     const GraphicsPipelineDesc&                                                           GraphicsDesc,
-                                     KeyType                                                                               Key,
-                                     bool                                                                                  CreateIfNull)
-{
-    Key.Flags &= KeyType::SupportedFlags;
-
-    if (!m_Settings.EnableIBL)
-    {
-        Key.Flags &= ~PSO_FLAG_USE_IBL;
-    }
-    if (!m_Settings.EnableAO)
-    {
-        Key.Flags &= ~PSO_FLAG_USE_AO_MAP;
-    }
-    if (!m_Settings.EnableEmissive)
-    {
-        Key.Flags &= ~PSO_FLAG_USE_EMISSIVE_MAP;
-    }
-    if (m_Settings.MaxJointCount == 0)
-    {
-        Key.Flags &= ~PSO_FLAG_USE_JOINTS;
-    }
-    if (m_Settings.UseSeparateMetallicRoughnessTextures)
-    {
-        DEV_CHECK_ERR((Key.Flags & PSO_FLAG_USE_PHYS_DESC_MAP) == 0, "Physical descriptor map is not enabled");
-    }
-    else
-    {
-        DEV_CHECK_ERR((Key.Flags & (PSO_FLAG_USE_METALLIC_MAP | PSO_FLAG_USE_ROUGHNESS_MAP)) == 0, "Separate metallic and roughness maps are not enaled");
-    }
-
-    auto it = PSOCache.find(Key);
-    if (it == PSOCache.end())
-    {
-        if (CreateIfNull)
-        {
-            (this->*GetPSOHelper<KeyType>::CreatePSO)(PSOCache, GraphicsDesc, Key);
-            it = PSOCache.find(Key);
-            VERIFY_EXPR(it != PSOCache.end());
-        }
-    }
-
-    return it != PSOCache.end() ? it->second.RawPtr() : nullptr;
-}
 
 } // namespace Diligent

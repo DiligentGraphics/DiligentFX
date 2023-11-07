@@ -120,11 +120,11 @@ GLTF_PBR_Renderer::GLTF_PBR_Renderer(IRenderDevice*     pDevice,
         GraphicsDesc.PrimitiveTopology                    = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
         GraphicsDesc.RasterizerDesc.FrontCounterClockwise = CI.FrontCounterClockwise;
 
-        m_PbrPSOCache = GetPbrPsoCacheAccessor(GraphicsDesc);
+        m_PbrPSOCache = GetPsoCacheAccessor(GraphicsDesc);
 
         GraphicsDesc.RasterizerDesc.FillMode = FILL_MODE_WIREFRAME;
 
-        m_WireframePSOCache = GetWireframePsoCacheAccessor(GraphicsDesc);
+        m_WireframePSOCache = GetPsoCacheAccessor(GraphicsDesc);
     }
 }
 
@@ -367,6 +367,8 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
     }
 
     auto PSOFlags = RenderParams.Flags & m_SupportedPSOFlags & (VertexAttribFlags | ~PSO_FLAG_VERTEX_ATTRIBS);
+    if (RenderParams.Wireframe)
+        PSOFlags |= PSO_FLAG_UNSHADED;
 
     for (auto& List : m_RenderLists)
         List.clear();
@@ -403,8 +405,7 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
 
     IPipelineState*         pCurrPSO = nullptr;
     IShaderResourceBinding* pCurrSRB = nullptr;
-    PbrPSOKey               CurrPbrPsoKey;
-    WireframePSOKey         CurrWireframePsoKey;
+    PSOKey                  CurrPsoKey;
 
     for (auto AlphaMode : AlphaModes)
     {
@@ -416,35 +417,22 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
             const auto& material         = GLTFModel.Materials[primitive.MaterialId];
             const auto& NodeGlobalMatrix = Transforms.NodeGlobalMatrices[Node.Index];
 
-            auto UpdatePSO = [pCtx, &pCurrPSO](const auto& NewKey, auto& CurrKey, auto& PSOCache) {
-                if (NewKey != CurrKey)
-                {
-                    CurrKey  = NewKey;
-                    pCurrPSO = nullptr;
-                }
-
-                if (pCurrPSO == nullptr)
-                {
-                    pCurrPSO = PSOCache.Get(NewKey, true);
-                    VERIFY_EXPR(pCurrPSO != nullptr);
-                    pCtx->SetPipelineState(pCurrPSO);
-                }
-                else
-                {
-                    VERIFY_EXPR(pCurrPSO == PSOCache.Get(NewKey, false));
-                }
-            };
-            if (RenderParams.Wireframe)
+            const PSOKey NewKey{PSOFlags, GltfAlphaModeToAlphaMode(AlphaMode), material.DoubleSided};
+            if (NewKey != CurrPsoKey)
             {
-                UpdatePSO(WireframePSOKey{PSOFlags, material.DoubleSided},
-                          CurrWireframePsoKey,
-                          m_WireframePSOCache);
+                CurrPsoKey = NewKey;
+                pCurrPSO   = nullptr;
+            }
+
+            if (pCurrPSO == nullptr)
+            {
+                pCurrPSO = (RenderParams.Wireframe ? m_WireframePSOCache : m_PbrPSOCache).Get(NewKey, true);
+                VERIFY_EXPR(pCurrPSO != nullptr);
+                pCtx->SetPipelineState(pCurrPSO);
             }
             else
             {
-                UpdatePSO(PbrPSOKey{PSOFlags, GltfAlphaModeToAlphaMode(AlphaMode), material.DoubleSided},
-                          CurrPbrPsoKey,
-                          m_PbrPSOCache);
+                VERIFY_EXPR(pCurrPSO == (RenderParams.Wireframe ? m_WireframePSOCache : m_PbrPSOCache).Get(NewKey, false));
             }
 
             if (pModelBindings != nullptr)
@@ -513,7 +501,7 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
                 RendererParams.WhitePoint               = m_RenderParams.WhitePoint;
                 RendererParams.IBLScale                 = m_RenderParams.IBLScale;
                 RendererParams.HighlightColor           = m_RenderParams.HighlightColor;
-                RendererParams.WireframeColor           = m_RenderParams.WireframeColor;
+                RendererParams.UnshadedColor            = m_RenderParams.WireframeColor;
                 RendererParams.PrefilteredCubeMipLevels = m_Settings.EnableIBL ? static_cast<float>(m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels) : 0.f;
             }
 

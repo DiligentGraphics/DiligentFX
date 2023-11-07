@@ -60,7 +60,7 @@ struct PBRRendererShaderParameters
     float OcclusionStrength;
     float EmissionScale;
 
-    float4 WireframeColor;
+    float4 UnshadedColor;
     float4 HighlightColor;
 
     float4 CustomData;

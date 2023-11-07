@@ -69,8 +69,8 @@ static const MemoryShaderSourceFileInfo g_Shaders[] =
         #include "RenderPBR.vsh.h"
     },
     {
-        "RenderWireframe.psh",
-        #include "RenderWireframe.psh.h"
+        "RenderUnshaded.psh",
+        #include "RenderUnshaded.psh.h"
     },
     {
         "PBR_Shading.fxh",

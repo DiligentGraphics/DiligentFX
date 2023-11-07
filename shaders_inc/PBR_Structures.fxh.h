@@ -60,7 +60,7 @@
 "    float OcclusionStrength;\n"
 "    float EmissionScale;\n"
 "\n"
-"    float4 WireframeColor;\n"
+"    float4 UnshadedColor;\n"
 "    float4 HighlightColor;\n"
 "\n"
 "    float4 CustomData;\n"

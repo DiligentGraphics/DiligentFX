@@ -59,17 +59,28 @@ void main(in VSOutput VSOut,
     }
     ss << R"()
 {
-    float4 Color = ComputePbrSurfaceColor(VSOut, IsFrontFace);
+#if UNSHADED
+    float4 Color  = g_PBRAttribs.Renderer.UnshadedColor + g_PBRAttribs.Renderer.HighlightColor;
+    float  MeshId = 0.0;
+#else
+    // Call ComputePbrSurfaceColor even if color output is disabled since it may discard the pixel
+    float4 Color  = ComputePbrSurfaceColor(VSOut, IsFrontFace);
+    float  MeshId = g_PBRAttribs.Renderer.CustomData.x;
+#endif
 )";
 
     if (PSOFlags & USD_PSO_FLAG_ENABLE_ALL_OUTPUTS)
     {
         if (PSOFlags & USD_PSO_FLAG_ENABLE_COLOR_OUTPUT)
+        {
             ss << "    PSOut.Color = Color;" << std::endl;
+        }
 
         // It is important to set alpha to 1.0 as all targets are rendered with the same blend mode
         if (PSOFlags & USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT)
-            ss << "    PSOut.MeshID     = float4(g_PBRAttribs.Renderer.CustomData.x, 0.0, 0.0, 1.0);" << std::endl;
+        {
+            ss << "    PSOut.MeshID = float4(MeshId, 0.0, 0.0, 1.0);" << std::endl;
+        }
     }
 
     ss << "}" << std::endl;

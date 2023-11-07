@@ -61,8 +61,8 @@ struct HnRenderPass::RenderState
 
     const PBR_Renderer::ALPHA_MODE AlphaMode;
 
-    USD_Renderer::PbrPsoCacheAccessor       PbrPSOCache;
-    USD_Renderer::WireframePsoCacheAccessor WireframePSOCache;
+    USD_Renderer::PsoCacheAccessor PbrPSOCache;
+    USD_Renderer::PsoCacheAccessor WireframePSOCache;
 
     IPipelineState* pPSO = nullptr;
 };
@@ -109,14 +109,14 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
     if (m_RenderParams.RenderMode == HN_RENDER_MODE_SOLID)
     {
         GraphicsDesc.PrimitiveTopology = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-        State.PbrPSOCache              = USDRenderer->GetPbrPsoCacheAccessor(GraphicsDesc);
+        State.PbrPSOCache              = USDRenderer->GetPsoCacheAccessor(GraphicsDesc);
         VERIFY_EXPR(State.PbrPSOCache);
     }
     else if (m_RenderParams.RenderMode == HN_RENDER_MODE_MESH_EDGES ||
              m_RenderParams.RenderMode == HN_RENDER_MODE_POINTS)
     {
         GraphicsDesc.PrimitiveTopology = m_RenderParams.RenderMode == HN_RENDER_MODE_MESH_EDGES ? PRIMITIVE_TOPOLOGY_LINE_LIST : PRIMITIVE_TOPOLOGY_POINT_LIST;
-        State.WireframePSOCache        = USDRenderer->GetWireframePsoCacheAccessor(GraphicsDesc);
+        State.WireframePSOCache        = USDRenderer->GetPsoCacheAccessor(GraphicsDesc);
         VERIFY_EXPR(State.WireframePSOCache);
     }
     else
@@ -322,6 +322,7 @@ void HnRenderPass::RenderMesh(RenderState&      State,
     else if (m_RenderParams.RenderMode == HN_RENDER_MODE_MESH_EDGES ||
              m_RenderParams.RenderMode == HN_RENDER_MODE_POINTS)
     {
+        PSOFlags |= PBR_Renderer::PSO_FLAG_UNSHADED;
         pPSO = State.WireframePSOCache.Get({PSOFlags, /*DoubleSided = */ false}, true);
     }
     else
@@ -361,7 +362,7 @@ void HnRenderPass::RenderMesh(RenderState&      State,
         RendererParams.IBLScale          = m_RenderParams.IBLScale;
 
         RendererParams.PrefilteredCubeMipLevels = 5; //m_Settings.UseIBL ? static_cast<float>(m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels) : 0.f;
-        RendererParams.WireframeColor           = m_RenderParams.RenderMode == HN_RENDER_MODE_POINTS ? m_RenderParams.PointColor : m_RenderParams.WireframeColor;
+        RendererParams.UnshadedColor            = m_RenderParams.RenderMode == HN_RENDER_MODE_POINTS ? m_RenderParams.PointColor : m_RenderParams.WireframeColor;
         RendererParams.HighlightColor           = float4{0, 0, 0, 0};
 
         // Tone mapping is performed in the post-processing pass

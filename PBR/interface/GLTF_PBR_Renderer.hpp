@@ -255,8 +255,8 @@ private:
     };
     std::array<std::vector<PrimitiveRenderInfo>, GLTF::Material::ALPHA_MODE_NUM_MODES> m_RenderLists;
 
-    PbrPsoCacheAccessor       m_PbrPSOCache;
-    WireframePsoCacheAccessor m_WireframePSOCache;
+    PsoCacheAccessor m_PbrPSOCache;
+    PsoCacheAccessor m_WireframePSOCache;
 };
 
 DEFINE_FLAG_ENUM_OPERATORS(GLTF_PBR_Renderer::RenderInfo::ALPHA_MODE_FLAGS)
