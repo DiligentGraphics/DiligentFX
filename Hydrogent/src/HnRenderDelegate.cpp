@@ -201,7 +201,16 @@ pxr::HdSprim* HnRenderDelegate::CreateSprim(const pxr::TfToken& TypeId,
 
 pxr::HdSprim* HnRenderDelegate::CreateFallbackSprim(const pxr::TfToken& TypeId)
 {
-    return nullptr;
+    pxr::HdSprim* SPrim = nullptr;
+    if (TypeId == pxr::HdPrimTypeTokens->material)
+    {
+        SPrim = CreateSprim(TypeId, pxr::SdfPath{});
+    }
+    else
+    {
+        UNEXPECTED("Unexpected Sprim Type: ", TypeId.GetText());
+    }
+    return SPrim;
 }
 
 void HnRenderDelegate::DestroySprim(pxr::HdSprim* SPrim)

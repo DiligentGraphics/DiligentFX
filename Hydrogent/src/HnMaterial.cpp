@@ -48,6 +48,9 @@ HnMaterial* HnMaterial::Create(const pxr::SdfPath& id)
 HnMaterial::HnMaterial(const pxr::SdfPath& id) :
     pxr::HdMaterial{id}
 {
+    m_ShaderAttribs.BaseColorFactor = float4{1, 1, 1, 1};
+    m_ShaderAttribs.RoughnessFactor = 1;
+    m_ShaderAttribs.OcclusionFactor = 1;
 }
 
 HnMaterial::~HnMaterial()
