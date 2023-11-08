@@ -747,7 +747,7 @@ void PBR_Renderer::GetVSInputStructAndLayout(PSO_FLAGS         PSOFlags,
     VSInputStruct = ss.str();
 }
 
-std::string PBR_Renderer::GetVSOutputStruct(PSO_FLAGS PSOFlags)
+std::string PBR_Renderer::GetVSOutputStruct(PSO_FLAGS PSOFlags, bool UseVkPointSize)
 {
     // struct VSOutput
     // {
@@ -779,6 +779,10 @@ std::string PBR_Renderer::GetVSOutputStruct(PSO_FLAGS PSOFlags)
     if (PSOFlags & PSO_FLAG_USE_TEXCOORD1)
     {
         ss << "    float2 UV1      : UV1;" << std::endl;
+    }
+    if (UseVkPointSize)
+    {
+        ss << "    [[vk::builtin(\"PointSize\")]] float PointSize : PSIZE;" << std::endl;
     }
     ss << "};" << std::endl;
     return ss.str();
@@ -836,7 +840,8 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
     std::string      VSInputStruct;
     GetVSInputStructAndLayout(PSOFlags, VSInputStruct, InputLayout);
 
-    const auto VSOutputStruct = GetVSOutputStruct(PSOFlags);
+    const bool UseVkPointSize = GraphicsDesc.PrimitiveTopology == PRIMITIVE_TOPOLOGY_POINT_LIST && m_Device.GetDeviceInfo().IsVulkanDevice();
+    const auto VSOutputStruct = GetVSOutputStruct(PSOFlags, UseVkPointSize);
 
     std::string PSMainSource;
     if (m_Settings.GetPSMainSource)
@@ -867,9 +872,9 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
     ShaderCI.pShaderSourceStreamFactory = pCompoundSourceFactory;
 
     auto Macros = DefineMacros(PSOFlags);
-    if (GraphicsDesc.PrimitiveTopology == PRIMITIVE_TOPOLOGY_POINT_LIST && m_Device.GetDeviceInfo().IsGLDevice())
+    if (GraphicsDesc.PrimitiveTopology == PRIMITIVE_TOPOLOGY_POINT_LIST && (m_Device.GetDeviceInfo().IsGLDevice() || m_Device.GetDeviceInfo().IsVulkanDevice()))
     {
-        // If gl_PointSize is not defined, points are not rendered in GLES
+        // If gl_PointSize is not defined, points are not rendered in GLES.
         Macros.Add("USE_GL_POINT_SIZE", "1");
     }
     ShaderCI.Macros = Macros;

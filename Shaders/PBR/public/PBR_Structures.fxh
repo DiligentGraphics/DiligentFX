@@ -65,7 +65,7 @@ struct PBRRendererShaderParameters
 
     float4 CustomData;
 
-    float PointSize; // OpenGL only
+    float PointSize; // OpenGL and Vulkan
     float Padding0;
     float Padding1;
     float Padding2;

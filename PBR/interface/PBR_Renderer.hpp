@@ -352,7 +352,7 @@ protected:
                            const PSOKey&               Key,
                            bool                        CreateIfNull);
 
-    static std::string GetVSOutputStruct(PSO_FLAGS PSOFlags);
+    static std::string GetVSOutputStruct(PSO_FLAGS PSOFlags, bool UseVkPointSize);
     static std::string GetPSOutputStruct(PSO_FLAGS PSOFlags);
 
 private:

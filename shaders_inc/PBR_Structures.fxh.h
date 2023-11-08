@@ -65,7 +65,7 @@
 "\n"
 "    float4 CustomData;\n"
 "\n"
-"    float PointSize; // OpenGL only\n"
+"    float PointSize; // OpenGL and Vulkan\n"
 "    float Padding0;\n"
 "    float Padding1;\n"
 "    float Padding2;\n"

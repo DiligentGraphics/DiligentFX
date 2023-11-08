@@ -95,7 +95,11 @@ void main(in  VSInput  VSIn,
 #endif
 
 #ifdef USE_GL_POINT_SIZE
-    // If gl_PointSize is not defined, points are not rendered in GLES
-    gl_PointSize = g_PBRAttribs.Renderer.PointSize;
+#   ifdef VULKAN
+        VSOut.PointSize = g_PBRAttribs.Renderer.PointSize;
+#   else
+        // If gl_PointSize is not defined, points are not rendered in GLES
+        gl_PointSize = g_PBRAttribs.Renderer.PointSize;
+#   endif
 #endif
 }
