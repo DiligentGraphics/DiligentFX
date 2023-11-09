@@ -252,6 +252,8 @@ void HnRenderPass::RenderMesh(RenderState&      State,
     if (pPosVB == nullptr || pSRB == nullptr)
         return;
 
+    bool IsFallbackMaterial = Material.GetId().IsEmpty();
+
     // Our shader currently supports two texture coordinate sets.
     // Gather vertex buffers for both sets.
     const auto& TexCoordSets    = Material.GetTextureCoordinateSets();
@@ -296,7 +298,7 @@ void HnRenderPass::RenderMesh(RenderState&      State,
                 PBR_Renderer::PSO_FLAG_USE_IBL |
                 PBR_Renderer::PSO_FLAG_ENABLE_DEBUG_VIEW;
         }
-        VERIFY(ShaderAttribs.AlphaMode == State.AlphaMode,
+        VERIFY(ShaderAttribs.AlphaMode == State.AlphaMode || IsFallbackMaterial,
                "Alpha mode derived from the material tag is not consistent with the alpha mode in the shader attributes. "
                "This may indicate an issue in how alpha mode is determined in the material, or (less likely) an issue in Rprim sorting by Hydra.");
         pPSO = State.PSOCache.Get({PSOFlags, static_cast<PBR_Renderer::ALPHA_MODE>(State.AlphaMode), /*DoubleSided = */ false}, true);
