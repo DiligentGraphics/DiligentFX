@@ -334,6 +334,11 @@ void HnRenderPass::RenderMesh(RenderState&      State,
         static_assert(sizeof(pDstShaderAttribs->Material) == sizeof(ShaderAttribs), "The sizeof(PBRMaterialShaderInfo) is inconsistent with sizeof(ShaderAttribs)");
         memcpy(&pDstShaderAttribs->Material, &ShaderAttribs, sizeof(ShaderAttribs));
 
+        if (IsFallbackMaterial)
+        {
+            pDstShaderAttribs->Material.BaseColorFactor = Mesh.GetDisplayColor();
+        }
+
         auto& RendererParams = pDstShaderAttribs->Renderer;
 
         RendererParams.DebugViewType     = m_RenderParams.DebugView;

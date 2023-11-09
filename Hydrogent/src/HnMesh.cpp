@@ -237,6 +237,7 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
                 m_IndexData->TrianglesFaceIndices.clear();
             }
         }
+        UpdateConstantPrimvars(SceneDelegate, RenderParam, DirtyBits, ReprToken);
         DirtyBits &= ~pxr::HdChangeTracker::DirtyPrimvar;
     }
 
@@ -411,6 +412,59 @@ void HnMesh::UpdateFaceVaryingPrimvars(pxr::HdSceneDelegate& SceneDelegate,
             if (auto BufferSource = CreateBufferSource(PrimDesc.name, TriangulatedPrimValue, size_t{m_NumFaceTriangles} * 3))
             {
                 m_VertexData->FaceSources.emplace(PrimDesc.name, std::move(BufferSource));
+            }
+        }
+    }
+}
+
+void HnMesh::UpdateConstantPrimvars(pxr::HdSceneDelegate& SceneDelegate,
+                                    pxr::HdRenderParam*   RenderParam,
+                                    pxr::HdDirtyBits&     DirtyBits,
+                                    const pxr::TfToken&   ReprToken)
+{
+    VERIFY_EXPR(m_VertexData);
+    const pxr::SdfPath& Id = GetId();
+
+    pxr::HdPrimvarDescriptorVector ConstantPrims = GetPrimvarDescriptors(&SceneDelegate, pxr::HdInterpolationConstant);
+    for (const pxr::HdPrimvarDescriptor& PrimDesc : ConstantPrims)
+    {
+        if (!pxr::HdChangeTracker::IsPrimvarDirty(DirtyBits, Id, PrimDesc.name))
+            continue;
+
+        pxr::VtValue PrimValue = GetPrimvar(&SceneDelegate, PrimDesc.name);
+        if (PrimValue.IsEmpty())
+            continue;
+
+        auto Source = std::make_shared<pxr::HdVtBufferSource>(
+            PrimDesc.name,
+            PrimValue,
+            1,    // values per element
+            false // whether doubles are supported or must be converted to floats
+        );
+        if (Source->GetNumElements() == 0)
+            continue;
+
+        const pxr::HdType ElementType = Source->GetTupleType().type;
+        if (PrimDesc.name == pxr::HdTokens->displayColor)
+        {
+            if (ElementType == pxr::HdTypeFloatVec3)
+            {
+                memcpy(m_DisplayColor.Data(), Source->GetData(), sizeof(float3));
+            }
+            else
+            {
+                LOG_WARNING_MESSAGE("Unexpected type of ", PrimDesc.name, " primvar: ", ElementType);
+            }
+        }
+        else if (PrimDesc.name == pxr::HdTokens->displayOpacity)
+        {
+            if (ElementType == pxr::HdTypeFloat)
+            {
+                memcpy(&m_DisplayColor.w, Source->GetData(), sizeof(float));
+            }
+            else
+            {
+                LOG_WARNING_MESSAGE("Unexpected type of ", PrimDesc.name, " primvar: ", ElementType);
             }
         }
     }

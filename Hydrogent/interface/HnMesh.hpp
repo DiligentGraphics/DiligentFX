@@ -103,6 +103,7 @@ public:
     Uint32 GetNumPoints() const { return m_Topology.GetNumPoints(); }
 
     const float4x4& GetTransform() const { return m_Transform; }
+    const float4&   GetDisplayColor() const { return m_DisplayColor; }
 
     const pxr::SdfPath& GetMaterialId() const { return m_MaterialId; }
 
@@ -144,6 +145,11 @@ private:
                                    pxr::HdDirtyBits&     DirtyBits,
                                    const pxr::TfToken&   ReprToken);
 
+    void UpdateConstantPrimvars(pxr::HdSceneDelegate& SceneDelegate,
+                                pxr::HdRenderParam*   RenderParam,
+                                pxr::HdDirtyBits&     DirtyBits,
+                                const pxr::TfToken&   ReprToken);
+
     // Converts vertex primvar sources into face-varying primvar sources.
     void ConvertVertexPrimvarSources();
 
@@ -182,7 +188,8 @@ private:
     Uint32 m_NumFaceTriangles = 0;
     Uint32 m_NumEdges         = 0;
 
-    float4x4 m_Transform = float4x4::Identity();
+    float4x4 m_Transform    = float4x4::Identity();
+    float4   m_DisplayColor = {1, 1, 1, 1};
 
     pxr::SdfPath m_MaterialId;
 
