@@ -153,6 +153,11 @@ endif()
 
 target_link_libraries(USD-Libraries INTERFACE ${USD_LIBS})
 
+if(MSVC)
+    # USD requires RTTI
+    target_compile_options(USD-Libraries INTERFACE /GR)
+endif()
+
 target_include_directories(Diligent-Hydrogent
 PUBLIC
     interface
@@ -171,14 +176,6 @@ PRIVATE
     Diligent-Common
     DiligentFX
 )
-
-if(MSVC)
-    # USD requires RTTI
-    add_library(EnableRTTI INTERFACE)
-    target_compile_options(EnableRTTI INTERFACE /GR)
-    target_link_libraries(Diligent-Hydrogent PRIVATE EnableRTTI)
-endif()
-
 
 set_target_properties(Diligent-Hydrogent PROPERTIES
     FOLDER DiligentFX
