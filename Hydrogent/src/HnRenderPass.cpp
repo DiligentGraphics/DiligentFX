@@ -245,8 +245,8 @@ void HnRenderPass::RenderMesh(RenderState&      State,
                               const HnMaterial& Material)
 {
     auto* const pSRB          = Material.GetSRB();
-    auto* const pPosVB        = Mesh.GetVertexBuffer(pxr::HdTokens->points);
-    auto* const pNormalsVB    = Mesh.GetVertexBuffer(pxr::HdTokens->normals);
+    auto* const pPosVB        = m_RenderParams.RenderMode == HN_RENDER_MODE_SOLID ? Mesh.GetFaceVertexBuffer(pxr::HdTokens->points) : Mesh.GetPointsVertexBuffer();
+    auto* const pNormalsVB    = m_RenderParams.RenderMode == HN_RENDER_MODE_SOLID ? Mesh.GetFaceVertexBuffer(pxr::HdTokens->normals) : nullptr;
     const auto& ShaderAttribs = Material.GetShaderAttribs();
 
     if (pPosVB == nullptr || pSRB == nullptr)
@@ -256,43 +256,21 @@ void HnRenderPass::RenderMesh(RenderState&      State,
     // Gather vertex buffers for both sets.
     const auto& TexCoordSets    = Material.GetTextureCoordinateSets();
     IBuffer*    pTexCoordVBs[2] = {};
-    for (size_t i = 0; i < TexCoordSets.size(); ++i)
+    if (m_RenderParams.RenderMode == HN_RENDER_MODE_SOLID)
     {
-        const auto& TexCoordSet = TexCoordSets[i];
-        if (!TexCoordSet.PrimVarName.IsEmpty())
+        for (size_t i = 0; i < TexCoordSets.size(); ++i)
         {
-            pTexCoordVBs[i] = Mesh.GetVertexBuffer(TexCoordSet.PrimVarName);
-            if (!pTexCoordVBs[i])
+            const auto& TexCoordSet = TexCoordSets[i];
+            if (!TexCoordSet.PrimVarName.IsEmpty())
             {
-                LOG_ERROR_MESSAGE("Failed to find texture coordinates vertex buffer '", TexCoordSet.PrimVarName.GetText(), "' in mesh '", Mesh.GetId().GetText(), "'");
+                pTexCoordVBs[i] = Mesh.GetFaceVertexBuffer(TexCoordSet.PrimVarName);
+                if (!pTexCoordVBs[i])
+                {
+                    LOG_ERROR_MESSAGE("Failed to find texture coordinates vertex buffer '", TexCoordSet.PrimVarName.GetText(), "' in mesh '", Mesh.GetId().GetText(), "'");
+                }
             }
         }
     }
-
-    IBuffer* pIB = nullptr;
-    switch (m_RenderParams.RenderMode)
-    {
-        case HN_RENDER_MODE_SOLID:
-            pIB = Mesh.GetTriangleIndexBuffer();
-            if (pIB == nullptr)
-                return;
-            break;
-
-        case HN_RENDER_MODE_MESH_EDGES:
-            pIB = Mesh.GetEdgeIndexBuffer();
-            if (pIB == nullptr)
-                return;
-            break;
-
-        case HN_RENDER_MODE_POINTS:
-            pIB = nullptr;
-            break;
-
-        default:
-            UNEXPECTED("Unexpected render mode");
-            return;
-    }
-    static_assert(HN_RENDER_MODE_COUNT == 3, "Please handle the new render mode in the switch above");
 
     auto PSOFlags = static_cast<PBR_Renderer::PSO_FLAGS>(m_Params.UsdPsoFlags);
 
@@ -344,10 +322,6 @@ void HnRenderPass::RenderMesh(RenderState&      State,
     // Bind vertex and index buffers
     IBuffer* pBuffs[] = {pPosVB, pNormalsVB, pTexCoordVBs[0], pTexCoordVBs[1]};
     State.pCtx->SetVertexBuffers(0, _countof(pBuffs), pBuffs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    if (pIB != nullptr)
-    {
-        State.pCtx->SetIndexBuffer(pIB, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    }
 
     {
         MapHelper<HLSL::PBRShaderAttribs> pDstShaderAttribs{State.pCtx, State.pPBRAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
@@ -385,20 +359,41 @@ void HnRenderPass::RenderMesh(RenderState&      State,
 
     State.pCtx->CommitShaderResources(pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
-    if (pIB != nullptr)
+    switch (m_RenderParams.RenderMode)
     {
-        VERIFY_EXPR(m_RenderParams.RenderMode == HN_RENDER_MODE_SOLID || m_RenderParams.RenderMode == HN_RENDER_MODE_MESH_EDGES);
-        DrawIndexedAttribs DrawAttrs = (m_RenderParams.RenderMode == HN_RENDER_MODE_MESH_EDGES) ?
-            DrawIndexedAttribs{Mesh.GetNumEdges() * 2, VT_UINT32, DRAW_FLAG_VERIFY_ALL} :
-            DrawIndexedAttribs{Mesh.GetNumTriangles() * 3, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
-        State.pCtx->DrawIndexed(DrawAttrs);
+        case HN_RENDER_MODE_SOLID:
+            if (IBuffer* pIB = Mesh.GetFaceIndexBuffer())
+            {
+                State.pCtx->SetIndexBuffer(pIB, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+                State.pCtx->DrawIndexed({Mesh.GetNumFaceTriangles() * 3, VT_UINT32, DRAW_FLAG_VERIFY_ALL});
+            }
+            else
+            {
+                State.pCtx->Draw({Mesh.GetNumFaceTriangles() * 3, DRAW_FLAG_VERIFY_ALL});
+            }
+            break;
+
+        case HN_RENDER_MODE_MESH_EDGES:
+            if (IBuffer* pIB = Mesh.GetEdgeIndexBuffer())
+            {
+                State.pCtx->SetIndexBuffer(pIB, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+                State.pCtx->DrawIndexed({Mesh.GetNumEdges() * 2, VT_UINT32, DRAW_FLAG_VERIFY_ALL});
+            }
+            else
+            {
+                UNEXPECTED("Edge index buffer is not initialized");
+            }
+            break;
+
+        case HN_RENDER_MODE_POINTS:
+            State.pCtx->Draw({Mesh.GetNumPoints(), DRAW_FLAG_VERIFY_ALL});
+            break;
+
+        default:
+            UNEXPECTED("Unexpected render mode");
+            return;
     }
-    else
-    {
-        VERIFY_EXPR(m_RenderParams.RenderMode == HN_RENDER_MODE_POINTS);
-        DrawAttribs DrawAttrs{Mesh.GetNumPoints(), DRAW_FLAG_VERIFY_ALL};
-        State.pCtx->Draw(DrawAttrs);
-    }
+    static_assert(HN_RENDER_MODE_COUNT == 3, "Please handle the new render mode in the switch above");
 }
 
 } // namespace USD

@@ -72,14 +72,33 @@ public:
 
     void CommitGPUResources(IRenderDevice* pDevice);
 
-    /// Returns vertex buffer for the given primvar name (e.g. "points", "normals", etc.).
+    /// Returns face vertex buffer for the given primvar name (e.g. "points", "normals", etc.).
     /// If the buffer doesn't exist, returns nullptr.
-    IBuffer* GetVertexBuffer(const pxr::TfToken& Name) const;
+    ///
+    /// \remarks    This buffer may be indexed or non-indexed.
+    IBuffer* GetFaceVertexBuffer(const pxr::TfToken& Name) const;
 
-    IBuffer* GetTriangleIndexBuffer() const { return m_pTriangleIndexBuffer; }
+    /// Returns the points vertex buffer.
+    ///
+    /// \remarks    This buffer should be used to render points
+    ///             or mesh edges.
+    IBuffer* GetPointsVertexBuffer() const { return m_pPointsVertexBuffer; }
+
+    /// Returns the face index buffer.
+    ///
+    /// \remarks    If not null, this buffer should be used to index
+    ///             the face vertex buffers returned by GetFaceVertexBuffer().
+    ///             If null, the face vertex buffers are not indexed.
+    IBuffer* GetFaceIndexBuffer() const { return m_pFaceIndexBuffer; }
+
+    /// Returns the edge index buffer.
+    ///
+    /// \remarks    This buffer should be used to render mesh edges.
+    ///             It indexes the buffer returned by GetPointsVertexBuffer().
     IBuffer* GetEdgeIndexBuffer() const { return m_pEdgeIndexBuffer; }
 
-    Uint32 GetNumTriangles() const { return m_NumTriangles; }
+
+    Uint32 GetNumFaceTriangles() const { return m_NumFaceTriangles; }
     Uint32 GetNumEdges() const { return m_NumEdges; }
     Uint32 GetNumPoints() const { return m_Topology.GetNumPoints(); }
 
@@ -115,10 +134,18 @@ private:
                     pxr::HdDirtyBits&     DirtyBits,
                     const pxr::TfToken&   ReprToken);
 
-    void UpdateVertexPrims(pxr::HdSceneDelegate& SceneDelegate,
-                           pxr::HdRenderParam*   RenderParam,
-                           pxr::HdDirtyBits&     DirtyBits,
-                           const pxr::TfToken&   ReprToken);
+    bool UpdateVertexPrimvars(pxr::HdSceneDelegate& SceneDelegate,
+                              pxr::HdRenderParam*   RenderParam,
+                              pxr::HdDirtyBits&     DirtyBits,
+                              const pxr::TfToken&   ReprToken);
+
+    void UpdateFaceVaryingPrimvars(pxr::HdSceneDelegate& SceneDelegate,
+                                   pxr::HdRenderParam*   RenderParam,
+                                   pxr::HdDirtyBits&     DirtyBits,
+                                   const pxr::TfToken&   ReprToken);
+
+    // Converts vertex primvar sources into face-varying primvar sources.
+    void ConvertVertexPrimvarSources();
 
     void UpdateTopology(pxr::HdSceneDelegate& SceneDelegate,
                         pxr::HdRenderParam*   RenderParam,
@@ -139,24 +166,31 @@ private:
     struct IndexData
     {
         pxr::VtVec3iArray         TrianglesFaceIndices;
-        pxr::VtIntArray           PrimitiveParam;
         std::vector<pxr::GfVec2i> MeshEdgeIndices;
     };
     std::unique_ptr<IndexData> m_IndexData;
 
-    std::unordered_map<pxr::TfToken, std::shared_ptr<pxr::HdBufferSource>, pxr::TfToken::HashFunctor> m_BufferSources;
+    struct VertexData
+    {
+        using BufferSourceMapType = std::unordered_map<pxr::TfToken, std::shared_ptr<pxr::HdBufferSource>, pxr::TfToken::HashFunctor>;
+        BufferSourceMapType VertexSources;
+        BufferSourceMapType FaceSources;
+    };
+    std::unique_ptr<VertexData> m_VertexData;
 
-    Uint32 m_NumTriangles = 0;
-    Uint32 m_NumEdges     = 0;
+
+    Uint32 m_NumFaceTriangles = 0;
+    Uint32 m_NumEdges         = 0;
 
     float4x4 m_Transform = float4x4::Identity();
 
     pxr::SdfPath m_MaterialId;
 
-    RefCntAutoPtr<IBuffer> m_pTriangleIndexBuffer;
+    RefCntAutoPtr<IBuffer> m_pFaceIndexBuffer;
     RefCntAutoPtr<IBuffer> m_pEdgeIndexBuffer;
+    RefCntAutoPtr<IBuffer> m_pPointsVertexBuffer;
 
-    std::unordered_map<pxr::TfToken, RefCntAutoPtr<IBuffer>, pxr::TfToken::HashFunctor> m_VertexBuffers;
+    std::unordered_map<pxr::TfToken, RefCntAutoPtr<IBuffer>, pxr::TfToken::HashFunctor> m_FaceVertexBuffers;
 };
 
 } // namespace USD
