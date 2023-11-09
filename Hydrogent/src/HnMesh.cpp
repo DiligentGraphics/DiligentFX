@@ -35,6 +35,8 @@
 #include "pxr/base/gf/vec2f.h"
 #include "pxr/imaging/hd/meshUtil.h"
 #include "pxr/imaging/hd/vtBufferSource.h"
+#include "pxr/imaging/hd/vertexAdjacency.h"
+#include "pxr/imaging/hd/smoothNormals.h"
 
 namespace Diligent
 {
@@ -230,6 +232,13 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
         if (UpdateVertexPrimvars(SceneDelegate, RenderParam, DirtyBits, ReprToken))
         {
             UpdateFaceVaryingPrimvars(SceneDelegate, RenderParam, DirtyBits, ReprToken);
+
+            if (m_VertexData->VertexSources.find(pxr::HdTokens->normals) == m_VertexData->VertexSources.end() &&
+                m_VertexData->FaceSources.find(pxr::HdTokens->normals) == m_VertexData->FaceSources.end())
+            {
+                GenerateSmoothNormals();
+            }
+
             if (!m_VertexData->FaceSources.empty())
             {
                 ConvertVertexPrimvarSources();
@@ -253,7 +262,6 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
 
     DirtyBits &= ~pxr::HdChangeTracker::NewRepr;
 }
-
 
 void HnMesh::UpdateDrawItemsForGeometrySubsets(pxr::HdSceneDelegate& SceneDelegate,
                                                pxr::HdRenderParam*   RenderParam)
@@ -467,6 +475,43 @@ void HnMesh::UpdateConstantPrimvars(pxr::HdSceneDelegate& SceneDelegate,
                 LOG_WARNING_MESSAGE("Unexpected type of ", PrimDesc.name, " primvar: ", ElementType);
             }
         }
+    }
+}
+
+void HnMesh::GenerateSmoothNormals()
+{
+    pxr::Hd_VertexAdjacency Adjacency;
+    Adjacency.BuildAdjacencyTable(&m_Topology);
+    if (Adjacency.GetNumPoints() == 0)
+    {
+        LOG_WARNING_MESSAGE("Skipping smooth normal generation for ", GetId(), " because its adjacency information is empty.");
+        return;
+    }
+
+    auto points_it = m_VertexData->VertexSources.find(pxr::HdTokens->points);
+    if (points_it == m_VertexData->VertexSources.end())
+    {
+        LOG_ERROR_MESSAGE("Skipping smooth normal generation for ", GetId(), " because its points data is missing.");
+        return;
+    }
+
+    const pxr::HdBufferSource& PointsSource = *points_it->second;
+    if (PointsSource.GetTupleType().type != pxr::HdTypeFloatVec3)
+    {
+        LOG_ERROR_MESSAGE("Skipping smooth normal generation for ", GetId(), " because its points data is not float3.");
+        return;
+    }
+
+    pxr::VtVec3fArray Normals = pxr::Hd_SmoothNormals::ComputeSmoothNormals(&Adjacency, static_cast<int>(PointsSource.GetNumElements()), static_cast<const pxr::GfVec3f*>(PointsSource.GetData()));
+    if (Normals.size() != PointsSource.GetNumElements())
+    {
+        LOG_ERROR_MESSAGE("Failed to generate smooth normals for ", GetId(), ". Expected ", PointsSource.GetNumElements(), " normals, got ", Normals.size(), ".");
+        return;
+    }
+
+    if (auto BufferSource = CreateBufferSource(pxr::HdTokens->normals, pxr::VtValue{Normals}, PointsSource.GetNumElements()))
+    {
+        m_VertexData->VertexSources.emplace(pxr::HdTokens->normals, std::move(BufferSource));
     }
 }
 

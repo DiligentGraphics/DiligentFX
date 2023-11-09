@@ -150,6 +150,8 @@ private:
                                 pxr::HdDirtyBits&     DirtyBits,
                                 const pxr::TfToken&   ReprToken);
 
+    void GenerateSmoothNormals();
+
     // Converts vertex primvar sources into face-varying primvar sources.
     void ConvertVertexPrimvarSources();
 
