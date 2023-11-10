@@ -31,6 +31,7 @@
 #include "HnLight.hpp"
 #include "HnRenderPass.hpp"
 #include "DebugUtilities.hpp"
+#include "GraphicsUtilities.h"
 #include "HnRenderBuffer.hpp"
 
 #include "pxr/imaging/hd/material.h"
@@ -40,6 +41,17 @@ namespace Diligent
 
 namespace USD
 {
+
+
+namespace HLSL
+{
+
+namespace
+{
+#include "Shaders/Common/public/BasicStructures.fxh"
+} // namespace
+
+} // namespace HLSL
 
 std::unique_ptr<HnRenderDelegate> HnRenderDelegate::Create(const CreateInfo& CI)
 {
@@ -71,7 +83,18 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
     m_pDevice{CI.pDevice},
     m_pContext{CI.pContext},
     m_pRenderStateCache{CI.pRenderStateCache},
-    m_CameraAttribsCB{CI.pCameraAttribs},
+    m_CameraAttribsCB{
+        [](IRenderDevice* pDevice) {
+            RefCntAutoPtr<IBuffer> CameraAttribsCB;
+            CreateUniformBuffer(
+                pDevice,
+                sizeof(HLSL::CameraAttribs),
+                "Camera Attribs CB",
+                &CameraAttribsCB,
+                USAGE_DEFAULT);
+            return CameraAttribsCB;
+        }(CI.pDevice),
+    },
     m_LightAttribsCB{CI.pLightAttribs},
     m_USDRenderer{
         std::make_shared<USD_Renderer>(

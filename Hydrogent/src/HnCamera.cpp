@@ -26,6 +26,8 @@
 
 #include "HnCamera.hpp"
 
+#include "pxr/imaging/hd/changeTracker.h"
+
 namespace Diligent
 {
 
@@ -44,6 +46,44 @@ HnCamera::HnCamera(const pxr::SdfPath& Id) :
 
 HnCamera::~HnCamera()
 {
+}
+
+void HnCamera::Sync(pxr::HdSceneDelegate* SceneDelegate,
+                    pxr::HdRenderParam*   RenderParam,
+                    pxr::HdDirtyBits*     DirtyBits)
+{
+    pxr::HdDirtyBits OrigDirtyBits = *DirtyBits;
+    pxr::HdCamera::Sync(SceneDelegate, RenderParam, DirtyBits);
+
+    if (OrigDirtyBits & pxr::HdChangeTracker::DirtyTransform)
+    {
+        for (int r = 0; r < 4; ++r)
+        {
+            for (int c = 0; c < 4; ++c)
+            {
+                m_WorldMatrix[r][c] = static_cast<float>(_transform[r][c]);
+            }
+        }
+        m_ViewMatrix = m_WorldMatrix.Inverse();
+    }
+}
+
+void HnCamera::SetViewMatrix(const float4x4& ViewMatrix)
+{
+    m_ViewMatrix  = ViewMatrix;
+    m_WorldMatrix = m_ViewMatrix.Inverse();
+    for (int r = 0; r < 4; ++r)
+    {
+        for (int c = 0; c < 4; ++c)
+        {
+            _transform[r][c] = m_WorldMatrix[r][c];
+        }
+    }
+}
+
+void HnCamera::SetProjectionMatrix(const float4x4& ProjectionMatrix)
+{
+    m_ProjectionMatrix = ProjectionMatrix;
 }
 
 } // namespace USD

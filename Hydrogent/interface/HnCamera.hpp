@@ -28,6 +28,8 @@
 
 #include "pxr/imaging/hd/camera.h"
 
+#include "../../../../DiligentCore/Common/interface/BasicMath.hpp"
+
 namespace Diligent
 {
 
@@ -42,8 +44,24 @@ public:
 
     ~HnCamera();
 
+    void Sync(pxr::HdSceneDelegate* SceneDelegate,
+              pxr::HdRenderParam*   RenderParam,
+              pxr::HdDirtyBits*     DirtyBits) override final;
+
+    void SetViewMatrix(const float4x4& ViewMatrix);
+    void SetProjectionMatrix(const float4x4& ProjectionMatrix);
+
+    const float4x4& GetViewMatrix() const { return m_ViewMatrix; }
+    const float4x4& GetWorldMatrix() const { return m_WorldMatrix; }
+    const float4x4& GetProjectionMatrix() const { return m_ProjectionMatrix; }
+
 private:
     HnCamera(const pxr::SdfPath& Id);
+
+private:
+    float4x4 m_ViewMatrix;
+    float4x4 m_WorldMatrix;
+    float4x4 m_ProjectionMatrix;
 };
 
 } // namespace USD

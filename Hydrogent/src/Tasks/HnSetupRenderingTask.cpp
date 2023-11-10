@@ -29,15 +29,27 @@
 #include "HnRenderPassState.hpp"
 #include "HnTokens.hpp"
 #include "HnRenderBuffer.hpp"
+#include "HnCamera.hpp"
 
 #include "DebugUtilities.hpp"
 #include "GraphicsAccessories.hpp"
+#include "MapHelper.hpp"
 
 namespace Diligent
 {
 
 namespace USD
 {
+
+namespace HLSL
+{
+
+namespace
+{
+#include "Shaders/Common/public/BasicStructures.fxh"
+} // namespace
+
+} // namespace HLSL
 
 HnSetupRenderingTask::HnSetupRenderingTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id) :
     HnTask{Id},
@@ -105,6 +117,7 @@ void HnSetupRenderingTask::Sync(pxr::HdSceneDelegate* Delegate,
         {
             m_FinalColorTargetId            = Params.FinalColorTargetId;
             m_ClosestSelectedLocationFormat = Params.ClosestSelectedLocationFormat;
+            m_CameraId                      = Params.CameraId;
             UpdateRenderPassState(Params);
         }
     }
@@ -223,9 +236,49 @@ void HnSetupRenderingTask::Execute(pxr::HdTaskContext* TaskCtx)
         return;
     }
 
-    ITextureView* pRTVs[] = {Targets.OffscreenColorRTV, Targets.MeshIdRTV};
+    HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+    IDeviceContext*   pCtx           = RenderDelegate->GetDeviceContext();
 
-    auto* pCtx = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate())->GetDeviceContext();
+    IBuffer* pCameraAttribsCB = RenderDelegate->GetCameraAttribsCB();
+    VERIFY_EXPR(pCameraAttribsCB);
+    if (!m_CameraId.IsEmpty())
+    {
+        if (const HnCamera* pCamera = static_cast<const HnCamera*>(m_RenderIndex->GetSprim(pxr::HdPrimTypeTokens->camera, m_CameraId)))
+        {
+            HLSL::CameraAttribs CamAttribs;
+
+            const float4x4& ProjMatrix  = pCamera->GetProjectionMatrix();
+            const float4x4& ViewMatrix  = pCamera->GetViewMatrix();
+            const float4x4& WorldMatrix = pCamera->GetWorldMatrix();
+            const float4x4  ViewProj    = ViewMatrix * ProjMatrix;
+
+            CamAttribs.mViewT        = ViewMatrix.Transpose();
+            CamAttribs.mProjT        = ProjMatrix.Transpose();
+            CamAttribs.mViewProjT    = ViewProj.Transpose();
+            CamAttribs.mViewInvT     = WorldMatrix.Transpose();
+            CamAttribs.mViewProjInvT = ViewProj.Inverse().Transpose();
+            CamAttribs.f4Position    = float3::MakeVector(WorldMatrix[3]);
+
+            pCtx->UpdateBuffer(pCameraAttribsCB, 0, sizeof(CamAttribs), &CamAttribs, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        }
+        else
+        {
+            LOG_ERROR_MESSAGE("Camera is not set at Id ", m_CameraId);
+        }
+    }
+    else
+    {
+        LOG_ERROR_MESSAGE("Camera Id is empty");
+    }
+
+    StateTransitionDesc Barriers[] =
+        {
+            {pCameraAttribsCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE},
+        };
+    pCtx->TransitionResourceStates(_countof(Barriers), Barriers);
+
+
+    ITextureView* pRTVs[] = {Targets.OffscreenColorRTV, Targets.MeshIdRTV};
 
     // We first render selected objects using the selection depth buffer.
     // Selection depth buffer is copied to the main depth buffer by the HnCopySelectionDepthTask.

@@ -60,7 +60,6 @@ public:
         IRenderDevice*     pDevice           = nullptr;
         IDeviceContext*    pContext          = nullptr;
         IRenderStateCache* pRenderStateCache = nullptr;
-        IBuffer*           pCameraAttribs    = nullptr;
         IBuffer*           pLightAttribs     = nullptr;
     };
     static std::unique_ptr<HnRenderDelegate> Create(const CreateInfo& CI);

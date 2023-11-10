@@ -68,7 +68,8 @@ struct HnSetupRenderingTaskParams
                StencilZFailOp       == rhs.StencilZFailOp &&
                StencilZPassOp       == rhs.StencilZPassOp &&
                StencilEnabled       == rhs.StencilEnabled &&
-               FinalColorTargetId   == rhs.FinalColorTargetId;
+               FinalColorTargetId   == rhs.FinalColorTargetId &&
+               CameraId             == rhs.CameraId;
         // clang-format on
     }
     constexpr bool operator!=(const HnSetupRenderingTaskParams& rhs) const
@@ -104,6 +105,7 @@ struct HnSetupRenderingTaskParams
     bool                   StencilEnabled = false;
 
     pxr::SdfPath FinalColorTargetId;
+    pxr::SdfPath CameraId;
 };
 
 /// Sets up rendering state for subsequent tasks:
@@ -145,6 +147,7 @@ private:
     pxr::SdfPath m_DepthBufferId;
     pxr::SdfPath m_ClosestSelLocn0TargetId;
     pxr::SdfPath m_ClosestSelLocn1TargetId;
+    pxr::SdfPath m_CameraId;
 
     TEXTURE_FORMAT m_ClosestSelectedLocationFormat = TEX_FORMAT_UNKNOWN;
 
