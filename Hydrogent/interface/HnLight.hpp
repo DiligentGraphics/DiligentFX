@@ -28,6 +28,8 @@
 
 #include "pxr/imaging/hd/light.h"
 
+#include "../../../../DiligentCore/Common/interface/BasicMath.hpp"
+
 namespace Diligent
 {
 
@@ -51,8 +53,18 @@ public:
     // change tracker for use in the first sync of this prim.
     virtual pxr::HdDirtyBits GetInitialDirtyBitsMask() const override final;
 
+    const float3& GetDirection() const { return m_Direction; }
+    const float4& GetIntensity() const { return m_Intensity; }
+
+    void SetDirection(const float3& Direction) { m_Direction = Direction; }
+    void SetIntensity(const float4& Intensity) { m_Intensity = Intensity; }
+
 private:
     HnLight(const pxr::SdfPath& Id);
+
+private:
+    float3 m_Direction;
+    float4 m_Intensity;
 };
 
 } // namespace USD

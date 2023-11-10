@@ -30,6 +30,7 @@
 #include "HnTokens.hpp"
 #include "HnRenderBuffer.hpp"
 #include "HnCamera.hpp"
+#include "HnLight.hpp"
 
 #include "DebugUtilities.hpp"
 #include "GraphicsAccessories.hpp"
@@ -271,9 +272,26 @@ void HnSetupRenderingTask::Execute(pxr::HdTaskContext* TaskCtx)
         LOG_ERROR_MESSAGE("Camera Id is empty");
     }
 
+    // For now, use the first light that is initialized.
+    IBuffer* pLightAttribsCB = RenderDelegate->GetLightAttribsCB();
+    VERIFY_EXPR(pCameraAttribsCB);
+    for (HnLight* Light : RenderDelegate->GetLights())
+    {
+        if (Light->GetDirection() != float3{})
+        {
+            HLSL::LightAttribs LightAttribs;
+            LightAttribs.f4Direction = Light->GetDirection();
+            LightAttribs.f4Intensity = Light->GetIntensity();
+
+            pCtx->UpdateBuffer(pLightAttribsCB, 0, sizeof(LightAttribs), &LightAttribs, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+            break;
+        }
+    }
+
     StateTransitionDesc Barriers[] =
         {
             {pCameraAttribsCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE},
+            {pLightAttribsCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE},
         };
     pCtx->TransitionResourceStates(_countof(Barriers), Barriers);
 

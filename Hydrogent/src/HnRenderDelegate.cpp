@@ -95,7 +95,18 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
             return CameraAttribsCB;
         }(CI.pDevice),
     },
-    m_LightAttribsCB{CI.pLightAttribs},
+    m_LightAttribsCB{
+        [](IRenderDevice* pDevice) {
+            RefCntAutoPtr<IBuffer> LightAttribsCB;
+            CreateUniformBuffer(
+                pDevice,
+                sizeof(HLSL::LightAttribs),
+                "Light Attribs CB",
+                &LightAttribsCB,
+                USAGE_DEFAULT);
+            return LightAttribsCB;
+        }(CI.pDevice),
+    },
     m_USDRenderer{
         std::make_shared<USD_Renderer>(
             CI.pDevice,
@@ -225,7 +236,12 @@ pxr::HdSprim* HnRenderDelegate::CreateSprim(const pxr::TfToken& TypeId,
     }
     else if (TypeId == pxr::HdPrimTypeTokens->light)
     {
-        SPrim = HnLight::Create(SPrimId);
+        HnLight* Light = HnLight::Create(SPrimId);
+        {
+            std::lock_guard<std::mutex> Guard{m_LightsMtx};
+            m_Lights.emplace(Light);
+        }
+        SPrim = Light;
     }
     else
     {
@@ -255,10 +271,17 @@ pxr::HdSprim* HnRenderDelegate::CreateFallbackSprim(const pxr::TfToken& TypeId)
 
 void HnRenderDelegate::DestroySprim(pxr::HdSprim* SPrim)
 {
+    if (dynamic_cast<HnMaterial*>(SPrim) != nullptr)
     {
         std::lock_guard<std::mutex> Guard{m_MaterialsMtx};
         m_Materials.erase(static_cast<HnMaterial*>(SPrim));
     }
+    else if (dynamic_cast<HnLight*>(SPrim) != nullptr)
+    {
+        std::lock_guard<std::mutex> Guard{m_LightsMtx};
+        m_Lights.erase(static_cast<HnLight*>(SPrim));
+    }
+
     delete SPrim;
 }
 

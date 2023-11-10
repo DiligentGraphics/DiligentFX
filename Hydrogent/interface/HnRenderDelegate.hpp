@@ -50,6 +50,7 @@ namespace USD
 
 class HnMaterial;
 class HnMesh;
+class HnLight;
 
 /// USD render delegate implementation in Hydrogent.
 class HnRenderDelegate final : public pxr::HdRenderDelegate
@@ -60,7 +61,6 @@ public:
         IRenderDevice*     pDevice           = nullptr;
         IDeviceContext*    pContext          = nullptr;
         IRenderStateCache* pRenderStateCache = nullptr;
-        IBuffer*           pLightAttribs     = nullptr;
     };
     static std::unique_ptr<HnRenderDelegate> Create(const CreateInfo& CI);
 
@@ -193,6 +193,8 @@ public:
     IBuffer*           GetCameraAttribsCB() const { return m_CameraAttribsCB; }
     IBuffer*           GetLightAttribsCB() const { return m_LightAttribsCB; }
 
+    const auto& GetLights() const { return m_Lights; }
+
 private:
     static const pxr::TfTokenVector SupportedRPrimTypes;
     static const pxr::TfTokenVector SupportedSPrimTypes;
@@ -217,6 +219,9 @@ private:
 
     std::mutex                      m_MaterialsMtx;
     std::unordered_set<HnMaterial*> m_Materials;
+
+    std::mutex                   m_LightsMtx;
+    std::unordered_set<HnLight*> m_Lights;
 };
 
 } // namespace USD
