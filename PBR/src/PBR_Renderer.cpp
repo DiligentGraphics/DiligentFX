@@ -495,7 +495,26 @@ void PBR_Renderer::InitCommonSRBVars(IShaderResourceBinding* pSRB,
                                      IBuffer*                pCameraAttribs,
                                      IBuffer*                pLightAttribs)
 {
-    VERIFY_EXPR(pSRB != nullptr);
+    if (pSRB == nullptr)
+    {
+        UNEXPECTED("SRB must not be null");
+        return;
+    }
+
+    if (auto* pVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbPBRAttribs"))
+    {
+        if (pVar->Get() == nullptr)
+            pVar->Set(m_PBRAttribsCB);
+    }
+
+    if (m_Settings.MaxJointCount > 0)
+    {
+        if (auto* pVar = pSRB->GetVariableByName(SHADER_TYPE_VERTEX, "cbJointTransforms"))
+        {
+            if (pVar->Get() == nullptr)
+                pVar->Set(m_JointsBuffer);
+        }
+    }
 
     if (pCameraAttribs != nullptr)
     {
@@ -524,12 +543,12 @@ void PBR_Renderer::CreateSignature()
     PipelineResourceSignatureDescX SignatureDesc{"PBR Renderer Resource Signature"};
     SignatureDesc
         .SetUseCombinedTextureSamplers(true)
-        .AddResource(SHADER_TYPE_VS_PS, "cbPBRAttribs", SHADER_RESOURCE_TYPE_CONSTANT_BUFFER, SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+        .AddResource(SHADER_TYPE_VS_PS, "cbPBRAttribs", SHADER_RESOURCE_TYPE_CONSTANT_BUFFER, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
         .AddResource(SHADER_TYPE_VS_PS, "cbCameraAttribs", SHADER_RESOURCE_TYPE_CONSTANT_BUFFER, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
         .AddResource(SHADER_TYPE_VS_PS, "cbLightAttribs", SHADER_RESOURCE_TYPE_CONSTANT_BUFFER, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
 
     if (m_Settings.MaxJointCount > 0)
-        SignatureDesc.AddResource(SHADER_TYPE_VERTEX, "cbJointTransforms", SHADER_RESOURCE_TYPE_CONSTANT_BUFFER, SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
+        SignatureDesc.AddResource(SHADER_TYPE_VERTEX, "cbJointTransforms", SHADER_RESOURCE_TYPE_CONSTANT_BUFFER, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
 
     auto AddTextureAndSampler = [&](const char* Name, const SamplerDesc& Desc) //
     {
@@ -584,11 +603,6 @@ void PBR_Renderer::CreateSignature()
     if (m_Settings.EnableIBL)
     {
         m_ResourceSignature->GetStaticVariableByName(SHADER_TYPE_PIXEL, "g_BRDF_LUT")->Set(m_pBRDF_LUT_SRV);
-    }
-    m_ResourceSignature->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbPBRAttribs")->Set(m_PBRAttribsCB);
-    if (m_Settings.MaxJointCount > 0)
-    {
-        m_ResourceSignature->GetStaticVariableByName(SHADER_TYPE_VERTEX, "cbJointTransforms")->Set(m_JointsBuffer);
     }
 }
 
