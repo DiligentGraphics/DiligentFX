@@ -53,6 +53,10 @@ static const MemoryShaderSourceFileInfo g_Shaders[] =
         #include "PBR_PrecomputeCommon.fxh.h"
     },
     {
+        "PBR_Textures.fxh",
+        #include "PBR_Textures.fxh.h"
+    },
+    {
         "PrecomputeBRDF.psh",
         #include "PrecomputeBRDF.psh.h"
     },
