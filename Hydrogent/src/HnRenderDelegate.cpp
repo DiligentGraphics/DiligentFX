@@ -27,6 +27,8 @@
 #include "HnRenderDelegate.hpp"
 #include "HnMesh.hpp"
 #include "HnMaterial.hpp"
+#include "HnCamera.hpp"
+#include "HnLight.hpp"
 #include "HnRenderPass.hpp"
 #include "DebugUtilities.hpp"
 #include "HnRenderBuffer.hpp"
@@ -54,6 +56,8 @@ const pxr::TfTokenVector HnRenderDelegate::SupportedRPrimTypes =
 const pxr::TfTokenVector HnRenderDelegate::SupportedSPrimTypes =
 {
     pxr::HdPrimTypeTokens->material,
+    pxr::HdPrimTypeTokens->light,
+    pxr::HdPrimTypeTokens->camera,
 };
 
 const pxr::TfTokenVector HnRenderDelegate::SupportedBPrimTypes =
@@ -192,6 +196,14 @@ pxr::HdSprim* HnRenderDelegate::CreateSprim(const pxr::TfToken& TypeId,
         }
         SPrim = Mat;
     }
+    else if (TypeId == pxr::HdPrimTypeTokens->camera)
+    {
+        SPrim = HnCamera::Create(SPrimId);
+    }
+    else if (TypeId == pxr::HdPrimTypeTokens->light)
+    {
+        SPrim = HnLight::Create(SPrimId);
+    }
     else
     {
         UNEXPECTED("Unexpected Sprim Type: ", TypeId.GetText());
@@ -205,6 +217,11 @@ pxr::HdSprim* HnRenderDelegate::CreateFallbackSprim(const pxr::TfToken& TypeId)
     if (TypeId == pxr::HdPrimTypeTokens->material)
     {
         SPrim = CreateSprim(TypeId, pxr::SdfPath{});
+    }
+    else if (TypeId == pxr::HdPrimTypeTokens->camera ||
+             TypeId == pxr::HdPrimTypeTokens->light)
+    {
+        SPrim = nullptr;
     }
     else
     {

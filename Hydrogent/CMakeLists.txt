@@ -7,6 +7,8 @@ set(SOURCE
     src/HnMaterialNetwork.cpp
     src/HnMesh.cpp
     src/HnBuffer.cpp
+    src/HnCamera.cpp
+    src/HnLight.cpp
     src/HnRenderBuffer.cpp
     src/HnRenderDelegate.cpp
     src/HnRenderPass.cpp
@@ -40,6 +42,8 @@ set(INTERFACE
     interface/HnMaterialNetwork.hpp
     interface/HnMesh.hpp
     interface/HnBuffer.hpp
+    interface/HnCamera.hpp
+    interface/HnLight.hpp
     interface/HnRenderBuffer.hpp
     interface/HnRenderDelegate.hpp
     interface/HnRenderPass.hpp
