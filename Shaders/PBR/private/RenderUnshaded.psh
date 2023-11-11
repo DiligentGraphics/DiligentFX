@@ -1,14 +1,22 @@
+#include "BasicStructures.fxh"
 #include "PBR_Structures.fxh"
+#include "RenderPBR_Structures.fxh"
+
 #include "VSOutputStruct.generated"
 
-cbuffer cbPBRAttribs
+cbuffer cbFrameAttribs 
 {
-    PBRShaderAttribs g_PBRAttribs;
+    PBRFrameAttribs g_Frame;
+}
+
+cbuffer cbPrimitiveAttribs
+{
+    PBRPrimitiveAttribs g_Primitive;
 }
 
 #include "PSMainGenerated.generated"
 //void main(in  VSOutput VSOut,
 //          out float4   OutColor : SV_Target)
 //{
-//    OutColor = g_PBRAttribs.Renderer.WireframeColor;
+//    OutColor = g_Frame.Renderer.WireframeColor;
 //}

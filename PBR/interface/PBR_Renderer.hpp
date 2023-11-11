@@ -185,13 +185,13 @@ public:
     ~PBR_Renderer();
 
     // clang-format off
-    ITextureView* GetIrradianceCubeSRV() const    { return m_pIrradianceCubeSRV; }
-    ITextureView* GetPrefilteredEnvMapSRV() const { return m_pPrefilteredEnvMapSRV; }
-    ITextureView* GetBRDFLUTSRV() const           { return m_pBRDF_LUT_SRV; }
-    ITextureView* GetWhiteTexSRV() const          { return m_pWhiteTexSRV; }
-    ITextureView* GetBlackTexSRV() const          { return m_pBlackTexSRV; }
-    ITextureView* GetDefaultNormalMapSRV() const  { return m_pDefaultNormalMapSRV; }
-    IBuffer*      GetPBRAttribsCB() const         {return m_PBRAttribsCB;}
+    ITextureView* GetIrradianceCubeSRV() const     { return m_pIrradianceCubeSRV; }
+    ITextureView* GetPrefilteredEnvMapSRV() const  { return m_pPrefilteredEnvMapSRV; }
+    ITextureView* GetBRDFLUTSRV() const            { return m_pBRDF_LUT_SRV; }
+    ITextureView* GetWhiteTexSRV() const           { return m_pWhiteTexSRV; }
+    ITextureView* GetBlackTexSRV() const           { return m_pBlackTexSRV; }
+    ITextureView* GetDefaultNormalMapSRV() const   { return m_pDefaultNormalMapSRV; }
+    IBuffer*      GetPBRPrimitiveAttribsCB() const {return m_PBRPrimitiveAttribsCB;}
     // clang-format on
 
     /// Precompute cubemaps used by IBL.
@@ -300,10 +300,12 @@ public:
         PsoCacheAccessor() noexcept
         {}
 
-        PsoCacheAccessor(const PsoCacheAccessor&) = default;
-        PsoCacheAccessor(PsoCacheAccessor&&)      = default;
+        // clang-format off
+        PsoCacheAccessor(const PsoCacheAccessor&)            = default;
+        PsoCacheAccessor(PsoCacheAccessor&&)                 = default;
         PsoCacheAccessor& operator=(const PsoCacheAccessor&) = default;
-        PsoCacheAccessor& operator=(PsoCacheAccessor&&) = default;
+        PsoCacheAccessor& operator=(PsoCacheAccessor&&)      = default;
+        // clang-format on
 
         explicit operator bool() const noexcept
         {
@@ -338,9 +340,7 @@ public:
 
     PsoCacheAccessor GetPsoCacheAccessor(const GraphicsPipelineDesc& GraphicsDesc);
 
-    void InitCommonSRBVars(IShaderResourceBinding* pSRB,
-                           IBuffer*                pCameraAttribs,
-                           IBuffer*                pLightAttribs);
+    void InitCommonSRBVars(IShaderResourceBinding* pSRB, IBuffer* pFrameAttribs);
 
 protected:
     ShaderMacroHelper DefineMacros(PSO_FLAGS PSOFlags) const;
@@ -388,7 +388,7 @@ protected:
     RefCntAutoPtr<IShaderResourceBinding> m_pPrecomputeIrradianceCubeSRB;
     RefCntAutoPtr<IShaderResourceBinding> m_pPrefilterEnvMapSRB;
 
-    RefCntAutoPtr<IBuffer> m_PBRAttribsCB;
+    RefCntAutoPtr<IBuffer> m_PBRPrimitiveAttribsCB;
     RefCntAutoPtr<IBuffer> m_PrecomputeEnvMapAttribsCB;
     RefCntAutoPtr<IBuffer> m_JointsBuffer;
 

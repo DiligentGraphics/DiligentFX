@@ -115,16 +115,15 @@ struct PBRMaterialShaderInfo
 	CHECK_STRUCT_ALIGNMENT(PBRMaterialShaderInfo);
 #endif
 
-
-struct PBRShaderAttribs
+struct PBRLightAttribs
 {
-    GLTFNodeShaderTransforms    Transforms;
-    PBRMaterialShaderInfo       Material;
-    PBRRendererShaderParameters Renderer;
+    float4 Direction;
+    float4 Intensity;
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
-	CHECK_STRUCT_ALIGNMENT(PBRShaderAttribs);
+	CHECK_STRUCT_ALIGNMENT(PBRLightAttribs);
 #endif
+
 
 
 #ifndef BaseColorTextureUVSelector

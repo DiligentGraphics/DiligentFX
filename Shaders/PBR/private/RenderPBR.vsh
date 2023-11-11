@@ -1,6 +1,7 @@
 #include "BasicStructures.fxh"
 #include "VertexProcessing.fxh"
 #include "PBR_Structures.fxh"
+#include "RenderPBR_Structures.fxh"
 
 #include "VSInputStruct.generated"
 //struct VSInput
@@ -29,14 +30,14 @@
 #   define MAX_JOINT_COUNT 64
 #endif
 
-cbuffer cbCameraAttribs 
+cbuffer cbFrameAttribs 
 {
-    CameraAttribs g_CameraAttribs;
+    PBRFrameAttribs g_Frame;
 }
 
-cbuffer cbPBRAttribs
+cbuffer cbPrimitiveAttribs
 {
-    PBRShaderAttribs g_PBRAttribs;
+    PBRPrimitiveAttribs g_Primitive;
 }
 
 #if MAX_JOINT_COUNT > 0 && USE_JOINTS
@@ -52,10 +53,10 @@ void main(in  VSInput  VSIn,
     // Warning: moving this block into GLTF_TransformVertex() function causes huge
     // performance degradation on Vulkan because glslang/SPIRV-Tools are apparently not able
     // to eliminate the copy of g_Transforms structure.
-    float4x4 Transform = g_PBRAttribs.Transforms.NodeMatrix;
+    float4x4 Transform = g_Primitive.Transforms.NodeMatrix;
 
 #if MAX_JOINT_COUNT > 0 && USE_JOINTS
-    if (g_PBRAttribs.Transforms.JointCount > 0)
+    if (g_Primitive.Transforms.JointCount > 0)
     {
         // Mesh is skinned
         float4x4 SkinMat = 
@@ -75,7 +76,7 @@ void main(in  VSInput  VSIn,
 
     GLTF_TransformedVertex TransformedVert = GLTF_TransformVertex(VSIn.Pos, Normal, Transform);
 
-    VSOut.ClipPos  = mul(float4(TransformedVert.WorldPos, 1.0), g_CameraAttribs.mViewProj);
+    VSOut.ClipPos  = mul(float4(TransformedVert.WorldPos, 1.0), g_Frame.Camera.mViewProj);
     VSOut.WorldPos = TransformedVert.WorldPos;
 
 #if USE_VERTEX_COLORS
@@ -96,10 +97,10 @@ void main(in  VSInput  VSIn,
 
 #ifdef USE_GL_POINT_SIZE
 #   ifdef VULKAN
-        VSOut.PointSize = g_PBRAttribs.Renderer.PointSize;
+        VSOut.PointSize = g_Frame.Renderer.PointSize;
 #   else
         // If gl_PointSize is not defined, points are not rendered in GLES
-        gl_PointSize = g_PBRAttribs.Renderer.PointSize;
+        gl_PointSize = g_Frame.Renderer.PointSize;
 #   endif
 #endif
 }

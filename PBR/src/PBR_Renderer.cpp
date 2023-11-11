@@ -49,9 +49,11 @@ namespace
 namespace HLSL
 {
 
+#include "Shaders/Common/public/BasicStructures.fxh"
 #include "Shaders/PBR/public/PBR_Structures.fxh"
+#include "Shaders/PBR/private/RenderPBR_Structures.fxh"
 
-}
+} // namespace HLSL
 
 } // namespace
 
@@ -168,13 +170,13 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
     }
 
     {
-        CreateUniformBuffer(pDevice, sizeof(HLSL::PBRShaderAttribs), "PBR attribs CB", &m_PBRAttribsCB);
+        CreateUniformBuffer(pDevice, sizeof(HLSL::PBRPrimitiveAttribs), "PBR primitive attribs CB", &m_PBRPrimitiveAttribsCB);
         if (m_Settings.MaxJointCount > 0)
         {
             CreateUniformBuffer(pDevice, static_cast<Uint32>(sizeof(float4x4) * m_Settings.MaxJointCount), "PBR joint transforms", &m_JointsBuffer);
         }
         std::vector<StateTransitionDesc> Barriers;
-        Barriers.emplace_back(m_PBRAttribsCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE);
+        Barriers.emplace_back(m_PBRPrimitiveAttribsCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE);
         if (m_JointsBuffer)
             Barriers.emplace_back(m_JointsBuffer, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE);
         pCtx->TransitionResourceStates(static_cast<Uint32>(Barriers.size()), Barriers.data());
@@ -491,9 +493,7 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
 }
 
 
-void PBR_Renderer::InitCommonSRBVars(IShaderResourceBinding* pSRB,
-                                     IBuffer*                pCameraAttribs,
-                                     IBuffer*                pLightAttribs)
+void PBR_Renderer::InitCommonSRBVars(IShaderResourceBinding* pSRB, IBuffer* pFrameAttribs)
 {
     if (pSRB == nullptr)
     {
@@ -501,10 +501,10 @@ void PBR_Renderer::InitCommonSRBVars(IShaderResourceBinding* pSRB,
         return;
     }
 
-    if (auto* pVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbPBRAttribs"))
+    if (auto* pVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbPrimitiveAttribs"))
     {
         if (pVar->Get() == nullptr)
-            pVar->Set(m_PBRAttribsCB);
+            pVar->Set(m_PBRPrimitiveAttribsCB);
     }
 
     if (m_Settings.MaxJointCount > 0)
@@ -516,16 +516,10 @@ void PBR_Renderer::InitCommonSRBVars(IShaderResourceBinding* pSRB,
         }
     }
 
-    if (pCameraAttribs != nullptr)
+    if (pFrameAttribs != nullptr)
     {
-        if (auto* pCameraAttribsVSVar = pSRB->GetVariableByName(SHADER_TYPE_VERTEX, "cbCameraAttribs"))
-            pCameraAttribsVSVar->Set(pCameraAttribs);
-    }
-
-    if (pLightAttribs != nullptr)
-    {
-        if (auto* pLightAttribsPSVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbLightAttribs"))
-            pLightAttribsPSVar->Set(pLightAttribs);
+        if (auto* pVar = pSRB->GetVariableByName(SHADER_TYPE_VERTEX, "cbFrameAttribs"))
+            pVar->Set(pFrameAttribs);
     }
 
     if (m_Settings.EnableIBL)
@@ -543,9 +537,8 @@ void PBR_Renderer::CreateSignature()
     PipelineResourceSignatureDescX SignatureDesc{"PBR Renderer Resource Signature"};
     SignatureDesc
         .SetUseCombinedTextureSamplers(true)
-        .AddResource(SHADER_TYPE_VS_PS, "cbPBRAttribs", SHADER_RESOURCE_TYPE_CONSTANT_BUFFER, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
-        .AddResource(SHADER_TYPE_VS_PS, "cbCameraAttribs", SHADER_RESOURCE_TYPE_CONSTANT_BUFFER, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
-        .AddResource(SHADER_TYPE_VS_PS, "cbLightAttribs", SHADER_RESOURCE_TYPE_CONSTANT_BUFFER, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
+        .AddResource(SHADER_TYPE_VS_PS, "cbFrameAttribs", SHADER_RESOURCE_TYPE_CONSTANT_BUFFER, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
+        .AddResource(SHADER_TYPE_VS_PS, "cbPrimitiveAttribs", SHADER_RESOURCE_TYPE_CONSTANT_BUFFER, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
 
     if (m_Settings.MaxJointCount > 0)
         SignatureDesc.AddResource(SHADER_TYPE_VERTEX, "cbJointTransforms", SHADER_RESOURCE_TYPE_CONSTANT_BUFFER, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
@@ -828,14 +821,14 @@ void main(in VSOutput VSOut,
         out PSOutput PSOut)
 {
 #if UNSHADED
-    PSOut.Color = g_PBRAttribs.Renderer.UnshadedColor + g_PBRAttribs.Renderer.HighlightColor;
+    PSOut.Color = g_Frame.Renderer.UnshadedColor + g_Frame.Renderer.HighlightColor;
 #else
     PSOut.Color = ComputePbrSurfaceColor(VSOut, IsFrontFace);
 #endif
  
 #if ENABLE_CUSTOM_DATA_OUTPUT
     {
-        PSOut.CustomData = g_PBRAttribs.Renderer.CustomData;
+        PSOut.CustomData = g_Frame.Renderer.CustomData;
     }
 #endif
 }

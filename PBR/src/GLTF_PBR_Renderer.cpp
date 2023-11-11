@@ -52,7 +52,9 @@ namespace
 namespace HLSL
 {
 
+#include "Shaders/Common/public/BasicStructures.fxh"
 #include "Shaders/PBR/public/PBR_Structures.fxh"
+#include "Shaders/PBR/private/RenderPBR_Structures.fxh"
 
 } // namespace HLSL
 
@@ -130,8 +132,7 @@ GLTF_PBR_Renderer::GLTF_PBR_Renderer(IRenderDevice*     pDevice,
 
 void GLTF_PBR_Renderer::InitMaterialSRB(GLTF::Model&            Model,
                                         GLTF::Material&         Material,
-                                        IBuffer*                pCameraAttribs,
-                                        IBuffer*                pLightAttribs,
+                                        IBuffer*                pFrameAttribs,
                                         IShaderResourceBinding* pMaterialSRB)
 {
     if (pMaterialSRB == nullptr)
@@ -140,7 +141,7 @@ void GLTF_PBR_Renderer::InitMaterialSRB(GLTF::Model&            Model,
         return;
     }
 
-    InitCommonSRBVars(pMaterialSRB, pCameraAttribs, pLightAttribs);
+    InitCommonSRBVars(pMaterialSRB, pFrameAttribs);
 
     auto SetTexture = [&](Uint32 TexAttribId, ITextureView* pDefaultTexSRV, const char* VarName) //
     {
@@ -194,8 +195,7 @@ void GLTF_PBR_Renderer::InitMaterialSRB(GLTF::Model&            Model,
 void GLTF_PBR_Renderer::CreateResourceCacheSRB(IRenderDevice*           pDevice,
                                                IDeviceContext*          pCtx,
                                                ResourceCacheUseInfo&    CacheUseInfo,
-                                               IBuffer*                 pCameraAttribs,
-                                               IBuffer*                 pLightAttribs,
+                                               IBuffer*                 pFrameAttribs,
                                                IShaderResourceBinding** ppCacheSRB)
 {
     DEV_CHECK_ERR(CacheUseInfo.pResourceMgr != nullptr, "Resource manager must not be null");
@@ -208,7 +208,7 @@ void GLTF_PBR_Renderer::CreateResourceCacheSRB(IRenderDevice*           pDevice,
         return;
     }
 
-    InitCommonSRBVars(pSRB, pCameraAttribs, pLightAttribs);
+    InitCommonSRBVars(pSRB, pFrameAttribs);
 
     auto SetTexture = [&](TEXTURE_FORMAT Fmt, const char* VarName) //
     {
@@ -236,8 +236,7 @@ void GLTF_PBR_Renderer::CreateResourceCacheSRB(IRenderDevice*           pDevice,
 
 GLTF_PBR_Renderer::ModelResourceBindings GLTF_PBR_Renderer::CreateResourceBindings(
     GLTF::Model& GLTFModel,
-    IBuffer*     pCameraAttribs,
-    IBuffer*     pLightAttribs)
+    IBuffer*     pFrameAttribs)
 {
     ModelResourceBindings ResourceBindings;
     ResourceBindings.MaterialSRB.resize(GLTFModel.Materials.size());
@@ -245,7 +244,7 @@ GLTF_PBR_Renderer::ModelResourceBindings GLTF_PBR_Renderer::CreateResourceBindin
     {
         auto& pMatSRB = ResourceBindings.MaterialSRB[mat];
         CreateResourceBinding(&pMatSRB);
-        InitMaterialSRB(GLTFModel, GLTFModel.Materials[mat], pCameraAttribs, pLightAttribs, pMatSRB);
+        InitMaterialSRB(GLTFModel, GLTFModel.Materials[mat], pFrameAttribs, pMatSRB);
     }
     return ResourceBindings;
 }
@@ -263,8 +262,7 @@ void GLTF_PBR_Renderer::Begin(IRenderDevice*         pDevice,
                               IDeviceContext*        pCtx,
                               ResourceCacheUseInfo&  CacheUseInfo,
                               ResourceCacheBindings& Bindings,
-                              IBuffer*               pCameraAttribs,
-                              IBuffer*               pLightAttribs)
+                              IBuffer*               pFrameAttribs)
 {
     VERIFY(CacheUseInfo.pResourceMgr != nullptr, "Resource manager must not be null.");
     VERIFY(CacheUseInfo.VtxLayoutKey != GLTF::ResourceManager::VertexLayoutKey{}, "Vertex layout key must not be null.");
@@ -275,7 +273,7 @@ void GLTF_PBR_Renderer::Begin(IRenderDevice*         pDevice,
     if (!Bindings.pSRB || Bindings.Version != TextureVersion)
     {
         Bindings.pSRB.Release();
-        CreateResourceCacheSRB(pDevice, pCtx, CacheUseInfo, pCameraAttribs, pLightAttribs, &Bindings.pSRB);
+        CreateResourceCacheSRB(pDevice, pCtx, CacheUseInfo, pFrameAttribs, &Bindings.pSRB);
         if (!Bindings.pSRB)
         {
             LOG_ERROR_MESSAGE("Failed to create an SRB for GLTF resource cache");
@@ -479,7 +477,7 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
             }
 
             {
-                MapHelper<HLSL::PBRShaderAttribs> pAttribs{pCtx, m_PBRAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
+                MapHelper<HLSL::PBRPrimitiveAttribs> pAttribs{pCtx, m_PBRPrimitiveAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
 
                 pAttribs->Transforms.NodeMatrix = NodeGlobalMatrix * RenderParams.ModelTransform;
                 pAttribs->Transforms.JointCount = static_cast<int>(JointCount);
@@ -490,20 +488,6 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
                 memcpy(&pAttribs->Material, &material.Attribs, sizeof(material.Attribs));
                 static_assert(static_cast<PBR_WORKFLOW>(GLTF::Material::PBR_WORKFLOW_METALL_ROUGH) == PBR_WORKFLOW_METALL_ROUGH, "GLTF::Material::PBR_WORKFLOW_METALL_ROUGH != PBR_WORKFLOW_METALL_ROUGH");
                 static_assert(static_cast<PBR_WORKFLOW>(GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS) == PBR_WORKFLOW_SPEC_GLOSS, "GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS != PBR_WORKFLOW_SPEC_GLOSS");
-
-                auto& RendererParams = pAttribs->Renderer;
-
-                RendererParams.DebugViewType            = static_cast<int>(m_RenderParams.DebugView);
-                RendererParams.OcclusionStrength        = m_RenderParams.OcclusionStrength;
-                RendererParams.EmissionScale            = m_RenderParams.EmissionScale;
-                RendererParams.AverageLogLum            = m_RenderParams.AverageLogLum;
-                RendererParams.MiddleGray               = m_RenderParams.MiddleGray;
-                RendererParams.WhitePoint               = m_RenderParams.WhitePoint;
-                RendererParams.IBLScale                 = m_RenderParams.IBLScale;
-                RendererParams.HighlightColor           = m_RenderParams.HighlightColor;
-                RendererParams.UnshadedColor            = m_RenderParams.WireframeColor;
-                RendererParams.PrefilteredCubeMipLevels = m_Settings.EnableIBL ? static_cast<float>(m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels) : 0.f;
-                RendererParams.PointSize                = 1;
             }
 
             if (primitive.HasIndices())

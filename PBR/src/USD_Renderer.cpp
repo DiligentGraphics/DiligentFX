@@ -60,12 +60,12 @@ void main(in VSOutput VSOut,
     ss << R"()
 {
 #if UNSHADED
-    float4 Color  = g_PBRAttribs.Renderer.UnshadedColor + g_PBRAttribs.Renderer.HighlightColor;
+    float4 Color  = g_Frame.Renderer.UnshadedColor + g_Frame.Renderer.HighlightColor;
     float  MeshId = 0.0;
 #else
     // Call ComputePbrSurfaceColor even if color output is disabled since it may discard the pixel
     float4 Color  = ComputePbrSurfaceColor(VSOut, IsFrontFace);
-    float  MeshId = g_PBRAttribs.Renderer.CustomData.x;
+    float  MeshId = g_Frame.Renderer.CustomData.x;
 #endif
 )";
 

@@ -90,29 +90,6 @@ public:
 
         DebugViewType DebugView = DebugViewType::None;
 
-        /// Ambient occlusion strength
-        float OcclusionStrength = 1;
-
-        /// Emission scale
-        float EmissionScale = 1;
-
-        /// IBL scale
-        float IBLScale = 1;
-
-        /// Average log luminance used by tone mapping
-        float AverageLogLum = 0.3f;
-
-        /// Middle gray value used by tone mapping
-        float MiddleGray = 0.18f;
-
-        /// White point value used by tone mapping
-        float WhitePoint = 3.f;
-
-        /// Highlight color that is applied to the mesh after tone mapping
-        float4 HighlightColor = float4{0, 0, 0, 0};
-
-        float4 WireframeColor = float4{0.8f, 0.7f, 0.5f, 1.0f};
-
         PSO_FLAGS Flags = PSO_FLAG_DEFAULT;
 
         bool Wireframe = false;
@@ -156,21 +133,18 @@ public:
 
     /// Creates resource bindings for a given GLTF model
     ModelResourceBindings CreateResourceBindings(GLTF::Model& GLTFModel,
-                                                 IBuffer*     pCameraAttribs,
-                                                 IBuffer*     pLightAttribs);
+                                                 IBuffer*     pFrameAttribs);
 
 
     /// Initializes a shader resource binding for the given material.
 
-    /// \param [in] Model          - GLTF model that keeps material textures.
-    /// \param [in] Material       - GLTF material to create SRB for.
-    /// \param [in] pCameraAttribs - Camera attributes constant buffer to set in the SRB.
-    /// \param [in] pLightAttribs  - Light attributes constant buffer to set in the SRB.
-    /// \param [in] pMaterialSRB   - A pointer to the SRB object to initialize.
+    /// \param [in] Model         - GLTF model that keeps material textures.
+    /// \param [in] Material      - GLTF material to create SRB for.
+    /// \param [in] pFrameAttribs - Frame attributes constant buffer to set in the SRB.
+    /// \param [in] pMaterialSRB  - A pointer to the SRB object to initialize.
     void InitMaterialSRB(GLTF::Model&            Model,
                          GLTF::Material&         Material,
-                         IBuffer*                pCameraAttribs,
-                         IBuffer*                pLightAttribs,
+                         IBuffer*                pFrameAttribs,
                          IShaderResourceBinding* pMaterialSRB);
 
     /// GLTF resource cache use information.
@@ -203,20 +177,18 @@ public:
 
     /// Creates a shader resource binding for a GTLF resource cache.
 
-    /// \param [in] pDevice        - Render device that may be needed by the resource cache to create
-    ///                              internal objects.
-    /// \param [in] pCtx           - Device context that may be needed by the resource cache to initialize
-    ///                              internal objects.
-    /// \param [in] CacheUseInfo   - GLTF resource cache usage information.
-    /// \param [in] pCameraAttribs - Camera attributes constant buffer to set in the SRB.
-    /// \param [in] pLightAttribs  - Light attributes constant buffer to set in the SRB.
-    /// \param [out] ppCacheSRB    - Pointer to memory location where the pointer to the SRB object
-    ///                              will be written.
+    /// \param [in] pDevice       - Render device that may be needed by the resource cache to create
+    ///                             internal objects.
+    /// \param [in] pCtx          - Device context that may be needed by the resource cache to initialize
+    ///                             internal objects.
+    /// \param [in] CacheUseInfo  - GLTF resource cache usage information.
+    /// \param [in] pFrameAttribs - Frame attributes constant buffer to set in the SRB.
+    /// \param [out] ppCacheSRB   - Pointer to memory location where the pointer to the SRB object
+    ///                             will be written.
     void CreateResourceCacheSRB(IRenderDevice*           pDevice,
                                 IDeviceContext*          pCtx,
                                 ResourceCacheUseInfo&    CacheUseInfo,
-                                IBuffer*                 pCameraAttribs,
-                                IBuffer*                 pLightAttribs,
+                                IBuffer*                 pFrameAttribs,
                                 IShaderResourceBinding** ppCacheSRB);
 
     /// Prepares the renderer for rendering objects.
@@ -231,8 +203,7 @@ public:
                IDeviceContext*        pCtx,
                ResourceCacheUseInfo&  CacheUseInfo,
                ResourceCacheBindings& Bindings,
-               IBuffer*               pCameraAttribs,
-               IBuffer*               pLightAttribs);
+               IBuffer*               pFrameAttribs);
 
 private:
     static ALPHA_MODE GltfAlphaModeToAlphaMode(GLTF::Material::ALPHA_MODE GltfAlphaMode);

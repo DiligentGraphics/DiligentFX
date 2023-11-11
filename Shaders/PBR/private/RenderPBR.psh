@@ -4,6 +4,7 @@
 
 #include "BasicStructures.fxh"
 #include "PBR_Shading.fxh"
+#include "RenderPBR_Structures.fxh"
 
 #if ENABLE_TONE_MAPPING
 #   include "ToneMapping.fxh"
@@ -30,29 +31,22 @@
 
 #include "PBR_Textures.fxh"
 
-
-cbuffer cbCameraAttribs
+cbuffer cbFrameAttribs 
 {
-    CameraAttribs g_CameraAttribs;
+    PBRFrameAttribs g_Frame;
 }
 
-cbuffer cbLightAttribs
+cbuffer cbPrimitiveAttribs
 {
-    LightAttribs g_LightAttribs;
+    PBRPrimitiveAttribs g_Primitive;
 }
 
-cbuffer cbPBRAttribs
+float4 ComputePbrSurfaceColor(in VSOutput VSOut,
+                              in bool     IsFrontFace)
 {
-    PBRShaderAttribs g_PBRAttribs;
-}
+    float4 BaseColor = GetBaseColor(VSOut, g_Primitive.Material);
 
-
-float4 ComputePbrSurfaceColor(in  VSOutput VSOut,
-                              in  bool     IsFrontFace)
-{
-    float4 BaseColor = GetBaseColor(VSOut, g_PBRAttribs.Material);
-
-    float2 NormalMapUV  = SelectUV(VSOut, g_PBRAttribs.Material.NormalTextureUVSelector);
+    float2 NormalMapUV  = SelectUV(VSOut, g_Primitive.Material.NormalTextureUVSelector);
 
     // We have to compute gradients in uniform flow control to avoid issues with perturbed normal
     float3 dWorldPos_dx = ddx(VSOut.WorldPos);
@@ -62,38 +56,38 @@ float4 ComputePbrSurfaceColor(in  VSOutput VSOut,
 #if USE_TEXTURE_ATLAS
     {
         NormalMapUV = frac(NormalMapUV);
-        NormalMapUV = NormalMapUV * g_PBRAttribs.Material.NormalMapUVScaleBias.xy + g_PBRAttribs.Material.NormalMapUVScaleBias.zw;
-        dNormalMapUV_dx *= g_PBRAttribs.Material.NormalMapUVScaleBias.xy;
-        dNormalMapUV_dy *= g_PBRAttribs.Material.NormalMapUVScaleBias.xy;
+        NormalMapUV = NormalMapUV * g_Primitive.Material.NormalMapUVScaleBias.xy + g_Primitive.Material.NormalMapUVScaleBias.zw;
+        dNormalMapUV_dx *= g_Primitive.Material.NormalMapUVScaleBias.xy;
+        dNormalMapUV_dy *= g_Primitive.Material.NormalMapUVScaleBias.xy;
     }
 #endif
 
-    if (g_PBRAttribs.Material.AlphaMode == PBR_ALPHA_MODE_MASK && BaseColor.a < g_PBRAttribs.Material.AlphaMaskCutoff)
+    if (g_Primitive.Material.AlphaMode == PBR_ALPHA_MODE_MASK && BaseColor.a < g_Primitive.Material.AlphaMaskCutoff)
     {
         discard;
     }
 
-    float3 TSNormal     = GetMicroNormal(VSOut, g_PBRAttribs.Material, NormalMapUV, dNormalMapUV_dx, dNormalMapUV_dy);
-    float  Occlusion    = GetOcclusion(VSOut, g_PBRAttribs.Material);
-    float3 Emissive     = GetEmissive(VSOut, g_PBRAttribs.Material);
-    float4 PhysicalDesc = GetPhysicalDesc(VSOut, g_PBRAttribs.Material);
+    float3 TSNormal     = GetMicroNormal(VSOut, g_Primitive.Material, NormalMapUV, dNormalMapUV_dx, dNormalMapUV_dy);
+    float  Occlusion    = GetOcclusion(VSOut, g_Primitive.Material);
+    float3 Emissive     = GetEmissive(VSOut, g_Primitive.Material);
+    float4 PhysicalDesc = GetPhysicalDesc(VSOut, g_Primitive.Material);
 
-     if (g_PBRAttribs.Material.Workflow == PBR_WORKFLOW_SPECULAR_GLOSINESS)
+     if (g_Primitive.Material.Workflow == PBR_WORKFLOW_SPECULAR_GLOSINESS)
     {
-        PhysicalDesc.rgb = TO_LINEAR(PhysicalDesc.rgb) * g_PBRAttribs.Material.SpecularFactor.rgb;
+        PhysicalDesc.rgb = TO_LINEAR(PhysicalDesc.rgb) * g_Primitive.Material.SpecularFactor.rgb;
         const float u_GlossinessFactor = 1.0;
         PhysicalDesc.a *= u_GlossinessFactor;
     }
-    else if (g_PBRAttribs.Material.Workflow == PBR_WORKFLOW_METALLIC_ROUGHNESS)
+    else if (g_Primitive.Material.Workflow == PBR_WORKFLOW_METALLIC_ROUGHNESS)
     {
         // PhysicalDesc should already be in linear space
-        PhysicalDesc.g = saturate(PhysicalDesc.g * g_PBRAttribs.Material.RoughnessFactor);
-        PhysicalDesc.b = saturate(PhysicalDesc.b * g_PBRAttribs.Material.MetallicFactor);
+        PhysicalDesc.g = saturate(PhysicalDesc.g * g_Primitive.Material.RoughnessFactor);
+        PhysicalDesc.b = saturate(PhysicalDesc.b * g_Primitive.Material.MetallicFactor);
     }
     float metallic = 0.0;
-    SurfaceReflectanceInfo SrfInfo = GetSurfaceReflectance(g_PBRAttribs.Material.Workflow, BaseColor, PhysicalDesc, metallic);
+    SurfaceReflectanceInfo SrfInfo = GetSurfaceReflectance(g_Primitive.Material.Workflow, BaseColor, PhysicalDesc, metallic);
 
-    float3 view = normalize(g_CameraAttribs.f4Position.xyz - VSOut.WorldPos.xyz); // Direction from surface point to camera
+    float3 view = normalize(g_Frame.Camera.f4Position.xyz - VSOut.WorldPos.xyz); // Direction from surface point to camera
 
 #if USE_VERTEX_NORMALS
     float3 MeshNormal = VSOut.Normal;
@@ -109,10 +103,10 @@ float4 ComputePbrSurfaceColor(in  VSOutput VSOut,
                                            dNormalMapUV_dy,
                                            MeshNormal,
                                            TSNormal,
-                                           g_PBRAttribs.Material.NormalTextureUVSelector >= 0.0,
+                                           g_Primitive.Material.NormalTextureUVSelector >= 0.0,
                                            IsFrontFace);
 
-    float3 DirectLighting = ApplyDirectionalLight(g_LightAttribs.f4Direction.xyz, g_LightAttribs.f4Intensity.rgb, SrfInfo, perturbedNormal, view);
+    float3 DirectLighting = ApplyDirectionalLight(g_Frame.Light.Direction.xyz, g_Frame.Light.Intensity.rgb, SrfInfo, perturbedNormal, view);
     float3 color = DirectLighting;
 
     //#ifdef USE_PUNCTUAL
@@ -142,23 +136,23 @@ float4 ComputePbrSurfaceColor(in  VSOutput VSOut,
 #   if USE_IBL
     {
         IBLContrib =
-            GetIBLContribution(SrfInfo, perturbedNormal, view, float(g_PBRAttribs.Renderer.PrefilteredCubeMipLevels),
+            GetIBLContribution(SrfInfo, perturbedNormal, view, float(g_Frame.Renderer.PrefilteredCubeMipLevels),
                                 g_BRDF_LUT,          g_BRDF_LUT_sampler,
                                 g_IrradianceMap,     g_IrradianceMap_sampler,
                                 g_PrefilteredEnvMap, g_PrefilteredEnvMap_sampler);
-        color += (IBLContrib.f3Diffuse + IBLContrib.f3Specular) * g_PBRAttribs.Renderer.IBLScale;
+        color += (IBLContrib.f3Diffuse + IBLContrib.f3Specular) * g_Frame.Renderer.IBLScale;
     }
 #   endif
 
 #   if USE_AO_MAP
     {
-        color = lerp(color, color * Occlusion, g_PBRAttribs.Renderer.OcclusionStrength);
+        color = lerp(color, color * Occlusion, g_Frame.Renderer.OcclusionStrength);
     }
 #endif
 
 #   if USE_EMISSIVE_MAP
     {
-        color += Emissive.rgb * g_PBRAttribs.Renderer.EmissionScale;
+        color += Emissive.rgb * g_Frame.Renderer.EmissionScale;
     }
 #   endif
 
@@ -168,24 +162,24 @@ float4 ComputePbrSurfaceColor(in  VSOutput VSOut,
         ToneMappingAttribs TMAttribs;
         TMAttribs.iToneMappingMode     = TONE_MAPPING_MODE;
         TMAttribs.bAutoExposure        = false;
-        TMAttribs.fMiddleGray          = g_PBRAttribs.Renderer.MiddleGray;
+        TMAttribs.fMiddleGray          = g_Frame.Renderer.MiddleGray;
         TMAttribs.bLightAdaptation     = false;
-        TMAttribs.fWhitePoint          = g_PBRAttribs.Renderer.WhitePoint;
+        TMAttribs.fWhitePoint          = g_Frame.Renderer.WhitePoint;
         TMAttribs.fLuminanceSaturation = 1.0;
-        color = ToneMap(color, TMAttribs, g_PBRAttribs.Renderer.AverageLogLum);
+        color = ToneMap(color, TMAttribs, g_Frame.Renderer.AverageLogLum);
     }
 #endif
 
     // Add highlight color
-    color = lerp(color, g_PBRAttribs.Renderer.HighlightColor.rgb, g_PBRAttribs.Renderer.HighlightColor.a);
+    color = lerp(color, g_Frame.Renderer.HighlightColor.rgb, g_Frame.Renderer.HighlightColor.a);
 
     float4 OutColor = float4(color, BaseColor.a);
 
 #   if ENABLE_DEBUG_VIEW
     // Shader inputs debug visualization
-    if (g_PBRAttribs.Renderer.DebugViewType != 0)
+    if (g_Frame.Renderer.DebugViewType != 0)
     {
-        switch (g_PBRAttribs.Renderer.DebugViewType)
+        switch (g_Frame.Renderer.DebugViewType)
         {
             case DEBUG_VIEW_BASE_COLOR:       OutColor.rgba = BaseColor;                                            break;
 #   if USE_TEXCOORD0
@@ -237,7 +231,7 @@ float4 ComputePbrSurfaceColor(in  VSOutput VSOut,
 // 
 // #if ENABLE_CUSTOM_DATA_OUTPUT
 //     {
-//         PSOut.CustomData = g_PBRAttribs.Renderer.CustomData;
+//         PSOut.CustomData = g_Frame.Renderer.CustomData;
 //     }
 // #endif
 // }
