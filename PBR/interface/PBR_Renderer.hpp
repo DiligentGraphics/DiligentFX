@@ -41,6 +41,11 @@
 namespace Diligent
 {
 
+namespace HLSL
+{
+struct PBRRendererShaderParameters;
+}
+
 class PBR_Renderer
 {
 public:
@@ -341,6 +346,12 @@ public:
     PsoCacheAccessor GetPsoCacheAccessor(const GraphicsPipelineDesc& GraphicsDesc);
 
     void InitCommonSRBVars(IShaderResourceBinding* pSRB, IBuffer* pFrameAttribs);
+
+    /// Initializes internal renderer parameters.
+    ///
+    /// \remarks    The function initializes the following parameters:
+    ///             - PrefilteredCubeMipLevels
+    void SetInternalShaderParameters(HLSL::PBRRendererShaderParameters& Renderer);
 
 protected:
     ShaderMacroHelper DefineMacros(PSO_FLAGS PSOFlags) const;

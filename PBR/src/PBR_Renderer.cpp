@@ -43,9 +43,6 @@ namespace Diligent
 
 const SamplerDesc PBR_Renderer::CreateInfo::DefaultSampler = Sam_LinearWrap;
 
-namespace
-{
-
 namespace HLSL
 {
 
@@ -54,8 +51,6 @@ namespace HLSL
 #include "Shaders/PBR/private/RenderPBR_Structures.fxh"
 
 } // namespace HLSL
-
-} // namespace
 
 PBR_Renderer::PSOKey::PSOKey(PSO_FLAGS  _Flags,
                              ALPHA_MODE _AlphaMode,
@@ -1015,6 +1010,11 @@ IPipelineState* PBR_Renderer::GetPSO(PsoHashMapType&             PsoHashMap,
     }
 
     return it != PsoHashMap.end() ? it->second.RawPtr() : nullptr;
+}
+
+void PBR_Renderer::SetInternalShaderParameters(HLSL::PBRRendererShaderParameters& Renderer)
+{
+    Renderer.PrefilteredCubeMipLevels = m_Settings.EnableIBL ? static_cast<float>(m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels) : 0.f;
 }
 
 } // namespace Diligent

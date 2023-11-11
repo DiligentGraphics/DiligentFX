@@ -46,9 +46,6 @@ GLTF_PBR_Renderer::ALPHA_MODE GLTF_PBR_Renderer::GltfAlphaModeToAlphaMode(GLTF::
     return static_cast<ALPHA_MODE>(GltfAlphaMode);
 }
 
-namespace
-{
-
 namespace HLSL
 {
 
@@ -57,8 +54,6 @@ namespace HLSL
 #include "Shaders/PBR/private/RenderPBR_Structures.fxh"
 
 } // namespace HLSL
-
-} // namespace
 
 namespace
 {
