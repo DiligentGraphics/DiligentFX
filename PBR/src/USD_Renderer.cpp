@@ -65,7 +65,7 @@ void main(in VSOutput VSOut,
 #else
     // Call ComputePbrSurfaceColor even if color output is disabled since it may discard the pixel
     float4 Color  = ComputePbrSurfaceColor(VSOut, IsFrontFace);
-    float  MeshId = g_Frame.Renderer.CustomData.x;
+    float  MeshId = g_Primitive.CustomData.x;
 #endif
 )";
 

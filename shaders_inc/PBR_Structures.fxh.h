@@ -63,8 +63,6 @@
 "    float4 UnshadedColor;\n"
 "    float4 HighlightColor;\n"
 "\n"
-"    float4 CustomData;\n"
-"\n"
 "    float PointSize; // OpenGL and Vulkan\n"
 "    float Padding0;\n"
 "    float Padding1;\n"

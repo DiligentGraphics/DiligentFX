@@ -231,7 +231,7 @@
 "//\n"
 "// #if ENABLE_CUSTOM_DATA_OUTPUT\n"
 "//     {\n"
-"//         PSOut.CustomData = g_Frame.Renderer.CustomData;\n"
+"//         PSOut.CustomData = g_Primitive.CustomData;\n"
 "//     }\n"
 "// #endif\n"
 "// }\n"

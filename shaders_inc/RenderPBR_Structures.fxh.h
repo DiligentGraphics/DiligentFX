@@ -20,6 +20,8 @@
 "{\n"
 "    GLTFNodeShaderTransforms Transforms;\n"
 "    PBRMaterialShaderInfo    Material;\n"
+"\n"
+"    float4 CustomData;\n"
 "};\n"
 "#ifdef CHECK_STRUCT_ALIGNMENT\n"
 "	CHECK_STRUCT_ALIGNMENT(PBRPrimitiveAttribs);\n"

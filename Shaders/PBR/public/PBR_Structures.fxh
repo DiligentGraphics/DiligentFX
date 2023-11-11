@@ -63,8 +63,6 @@ struct PBRRendererShaderParameters
     float4 UnshadedColor;
     float4 HighlightColor;
 
-    float4 CustomData;
-
     float PointSize; // OpenGL and Vulkan
     float Padding0;
     float Padding1;

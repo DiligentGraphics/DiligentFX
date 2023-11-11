@@ -823,7 +823,7 @@ void main(in VSOutput VSOut,
  
 #if ENABLE_CUSTOM_DATA_OUTPUT
     {
-        PSOut.CustomData = g_Frame.Renderer.CustomData;
+        PSOut.CustomData = g_Primitive.CustomData;
     }
 #endif
 }

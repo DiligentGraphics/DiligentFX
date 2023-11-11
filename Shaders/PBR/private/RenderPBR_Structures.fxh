@@ -20,6 +20,8 @@ struct PBRPrimitiveAttribs
 {
     GLTFNodeShaderTransforms Transforms;
     PBRMaterialShaderInfo    Material;
+
+    float4 CustomData;
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
 	CHECK_STRUCT_ALIGNMENT(PBRPrimitiveAttribs);
