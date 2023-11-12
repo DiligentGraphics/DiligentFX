@@ -52,12 +52,14 @@ namespace HLSL
 
 } // namespace HLSL
 
-PBR_Renderer::PSOKey::PSOKey(PSO_FLAGS  _Flags,
-                             ALPHA_MODE _AlphaMode,
-                             bool       _DoubleSided) noexcept :
+PBR_Renderer::PSOKey::PSOKey(PSO_FLAGS     _Flags,
+                             ALPHA_MODE    _AlphaMode,
+                             bool          _DoubleSided,
+                             DebugViewType _DebugView) noexcept :
     Flags{_Flags},
     AlphaMode{_AlphaMode},
-    DoubleSided{_DoubleSided}
+    DoubleSided{_DoubleSided},
+    DebugView{_DebugView}
 {
     if (Flags & PSO_FLAG_UNSHADED)
     {
@@ -65,9 +67,11 @@ PBR_Renderer::PSOKey::PSOKey(PSO_FLAGS  _Flags,
 
         constexpr auto SupportedUnshadedFlags = PSO_FLAG_USE_JOINTS | PSO_FLAG_ALL_USER_DEFINED | PSO_FLAG_UNSHADED;
         Flags &= SupportedUnshadedFlags;
+
+        DebugView = DebugViewType::None;
     }
 
-    Hash = ComputeHash(Flags, AlphaMode, DoubleSided);
+    Hash = ComputeHash(Flags, AlphaMode, DoubleSided, static_cast<Uint32>(DebugView));
 }
 
 
@@ -594,7 +598,8 @@ void PBR_Renderer::CreateSignature()
     }
 }
 
-ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS PSOFlags) const
+ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS     PSOFlags,
+                                             DebugViewType DebugView) const
 {
     ShaderMacroHelper Macros;
     Macros.Add("MAX_JOINT_COUNT", static_cast<int>(m_Settings.MaxJointCount));
@@ -608,10 +613,12 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS PSOFlags) const
     Macros.Add("USE_HDR_IBL_CUBEMAPS", true);
     Macros.Add("USE_SEPARATE_METALLIC_ROUGHNESS_TEXTURES", m_Settings.UseSeparateMetallicRoughnessTextures);
 
-    static_assert(static_cast<int>(DebugViewType::NumDebugViews) == 18, "Did you add debug view? You may need to handle it here.");
+    static_assert(static_cast<int>(DebugViewType::NumDebugViews) == 19, "Did you add debug view? You may need to handle it here.");
     // clang-format off
+    Macros.Add("DEBUG_VIEW",                  static_cast<int>(DebugView));
     Macros.Add("DEBUG_VIEW_NONE",             static_cast<int>(DebugViewType::None));
     Macros.Add("DEBUG_VIEW_TEXCOORD0",        static_cast<int>(DebugViewType::Texcoord0));
+    Macros.Add("DEBUG_VIEW_TEXCOORD1",        static_cast<int>(DebugViewType::Texcoord1));
     Macros.Add("DEBUG_VIEW_BASE_COLOR",       static_cast<int>(DebugViewType::BaseColor));
     Macros.Add("DEBUG_VIEW_TRANSPARENCY",     static_cast<int>(DebugViewType::Transparency));
     Macros.Add("DEBUG_VIEW_NORMAL_MAP",       static_cast<int>(DebugViewType::NormalMap));
@@ -630,7 +637,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS PSOFlags) const
     Macros.Add("DEBUG_VIEW_SPECULAR_IBL",     static_cast<int>(DebugViewType::SpecularIBL));
     // clang-format on
 
-    static_assert(PSO_FLAG_LAST == 1u << 18u, "Did you add new PSO Flag? You may need to handle it here.");
+    static_assert(PSO_FLAG_LAST == 1u << 17u, "Did you add new PSO Flag? You may need to handle it here.");
 #define ADD_PSO_FLAG_MACRO(Flag) Macros.Add(#Flag, (PSOFlags & PSO_FLAG_##Flag) != PSO_FLAG_NONE)
     ADD_PSO_FLAG_MACRO(USE_VERTEX_COLORS);
     ADD_PSO_FLAG_MACRO(USE_VERTEX_NORMALS);
@@ -648,7 +655,6 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS PSOFlags) const
     ADD_PSO_FLAG_MACRO(USE_IBL);
 
     //ADD_PSO_FLAG_MACRO(FRONT_CCW);
-    ADD_PSO_FLAG_MACRO(ENABLE_DEBUG_VIEW);
     ADD_PSO_FLAG_MACRO(USE_TEXTURE_ATLAS);
     ADD_PSO_FLAG_MACRO(CONVERT_OUTPUT_TO_SRGB);
     ADD_PSO_FLAG_MACRO(ENABLE_CUSTOM_DATA_OUTPUT);
@@ -873,7 +879,7 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
     ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
     ShaderCI.pShaderSourceStreamFactory = pCompoundSourceFactory;
 
-    auto Macros = DefineMacros(PSOFlags);
+    auto Macros = DefineMacros(PSOFlags, Key.GetDebugView());
     if (GraphicsDesc.PrimitiveTopology == PRIMITIVE_TOPOLOGY_POINT_LIST && (m_Device.GetDeviceInfo().IsGLDevice() || m_Device.GetDeviceInfo().IsVulkanDevice()))
     {
         // If gl_PointSize is not defined, points are not rendered in GLES.
@@ -937,14 +943,15 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
             PSOName += (CullMode == CULL_MODE_BACK ? " - backface culling" : " - no culling");
             PSODesc.Name = PSOName.c_str();
 
-            GraphicsPipeline.RasterizerDesc.CullMode       = CullMode;
-            const auto DoubleSided                         = CullMode == CULL_MODE_NONE;
-            auto       PSO                                 = m_Device.CreateGraphicsPipelineState(PSOCreateInfo);
-            PsoHashMap[{PSOFlags, AlphaMode, DoubleSided}] = PSO;
+            GraphicsPipeline.RasterizerDesc.CullMode = CullMode;
+            const auto DoubleSided                   = CullMode == CULL_MODE_NONE;
+            auto       PSO                           = m_Device.CreateGraphicsPipelineState(PSOCreateInfo);
+
+            PsoHashMap[{PSOFlags, AlphaMode, DoubleSided, Key.GetDebugView()}] = PSO;
             if (AlphaMode == ALPHA_MODE_BLEND)
             {
                 // Mask and blend use the same PSO
-                PsoHashMap[{PSOFlags, ALPHA_MODE_MASK, DoubleSided}] = PSO;
+                PsoHashMap[{PSOFlags, ALPHA_MODE_MASK, DoubleSided, Key.GetDebugView()}] = PSO;
             }
         }
     }
@@ -996,7 +1003,7 @@ IPipelineState* PBR_Renderer::GetPSO(PsoHashMapType&             PsoHashMap,
         DEV_CHECK_ERR((Flags & (PSO_FLAG_USE_METALLIC_MAP | PSO_FLAG_USE_ROUGHNESS_MAP)) == 0, "Separate metallic and roughness maps are not enaled");
     }
 
-    const PSOKey UpdatedKey{Flags, Key.GetAlphaMode(), Key.IsDoubleSided()};
+    const PSOKey UpdatedKey{Flags, Key.GetAlphaMode(), Key.IsDoubleSided(), Key.GetDebugView()};
 
     auto it = PsoHashMap.find(UpdatedKey);
     if (it == PsoHashMap.end())

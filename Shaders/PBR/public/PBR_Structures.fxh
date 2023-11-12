@@ -56,17 +56,12 @@ struct PBRRendererShaderParameters
 	float PrefilteredCubeMipLevels;
 
 	float IBLScale;
-	int   DebugViewType;
     float OcclusionStrength;
     float EmissionScale;
+    float PointSize; // OpenGL and Vulkan
 
     float4 UnshadedColor;
     float4 HighlightColor;
-
-    float PointSize; // OpenGL and Vulkan
-    float Padding0;
-    float Padding1;
-    float Padding2;
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
 	CHECK_STRUCT_ALIGNMENT(PBRRendererShaderParameters);

@@ -104,7 +104,6 @@ GLTF_PBR_Renderer::GLTF_PBR_Renderer(IRenderDevice*     pDevice,
         m_SupportedPSOFlags |= PSO_FLAG_USE_IBL;
 
     m_SupportedPSOFlags |=
-        PSO_FLAG_ENABLE_DEBUG_VIEW |
         PSO_FLAG_USE_TEXTURE_ATLAS |
         PSO_FLAG_CONVERT_OUTPUT_TO_SRGB |
         PSO_FLAG_ENABLE_TONE_MAPPING;
@@ -410,7 +409,7 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
             const auto& material         = GLTFModel.Materials[primitive.MaterialId];
             const auto& NodeGlobalMatrix = Transforms.NodeGlobalMatrices[Node.Index];
 
-            const PSOKey NewKey{PSOFlags, GltfAlphaModeToAlphaMode(AlphaMode), material.DoubleSided};
+            const PSOKey NewKey{PSOFlags, GltfAlphaModeToAlphaMode(AlphaMode), material.DoubleSided, RenderParams.DebugView};
             if (NewKey != CurrPsoKey)
             {
                 CurrPsoKey = NewKey;

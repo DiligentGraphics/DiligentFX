@@ -158,10 +158,11 @@ public:
     };
 
     /// Debug view type
-    enum class DebugViewType : int
+    enum class DebugViewType : Uint8
     {
         None,
         Texcoord0,
+        Texcoord1,
         BaseColor,
         Transparency,
         NormalMap,
@@ -227,12 +228,11 @@ public:
         PSO_FLAG_USE_EMISSIVE_MAP  = 1u << 11u,
         PSO_FLAG_USE_IBL           = 1u << 12u,
 
-        PSO_FLAG_ENABLE_DEBUG_VIEW         = 1u << 13u,
-        PSO_FLAG_USE_TEXTURE_ATLAS         = 1u << 14u,
-        PSO_FLAG_CONVERT_OUTPUT_TO_SRGB    = 1u << 15u,
-        PSO_FLAG_ENABLE_CUSTOM_DATA_OUTPUT = 1u << 16u,
-        PSO_FLAG_ENABLE_TONE_MAPPING       = 1u << 17u,
-        PSO_FLAG_UNSHADED                  = 1u << 18u,
+        PSO_FLAG_USE_TEXTURE_ATLAS         = 1u << 13u,
+        PSO_FLAG_CONVERT_OUTPUT_TO_SRGB    = 1u << 14u,
+        PSO_FLAG_ENABLE_CUSTOM_DATA_OUTPUT = 1u << 15u,
+        PSO_FLAG_ENABLE_TONE_MAPPING       = 1u << 16u,
+        PSO_FLAG_UNSHADED                  = 1u << 17u,
 
         PSO_FLAG_LAST = PSO_FLAG_UNSHADED,
 
@@ -264,14 +264,20 @@ public:
     {
     public:
         constexpr PSOKey() noexcept {};
-        PSOKey(PSO_FLAGS _Flags, ALPHA_MODE _AlphaMode, bool _DoubleSided) noexcept;
-        PSOKey(PSO_FLAGS _Flags, bool _DoubleSided) noexcept :
-            PSOKey{_Flags, ALPHA_MODE_OPAQUE, _DoubleSided}
+        PSOKey(PSO_FLAGS _Flags, ALPHA_MODE _AlphaMode, bool _DoubleSided, DebugViewType DebugView) noexcept;
+        PSOKey(PSO_FLAGS _Flags, bool _DoubleSided, DebugViewType DebugView) noexcept :
+            PSOKey{_Flags, ALPHA_MODE_OPAQUE, _DoubleSided, DebugView}
         {}
 
         constexpr bool operator==(const PSOKey& rhs) const noexcept
         {
-            return Hash == rhs.Hash && Flags == rhs.Flags && DoubleSided == rhs.DoubleSided && AlphaMode == rhs.AlphaMode;
+            // clang-format off
+            return Hash        == rhs.Hash        &&
+                   Flags       == rhs.Flags       &&
+                   DoubleSided == rhs.DoubleSided &&
+                   AlphaMode   == rhs.AlphaMode   &&
+                   DebugView   == rhs.DebugView;
+            // clang-format on
         }
         constexpr bool operator!=(const PSOKey& rhs) const noexcept
         {
@@ -286,15 +292,17 @@ public:
             }
         };
 
-        constexpr PSO_FLAGS  GetFlags() const noexcept { return Flags; }
-        constexpr bool       IsDoubleSided() const noexcept { return DoubleSided; }
-        constexpr ALPHA_MODE GetAlphaMode() const noexcept { return AlphaMode; }
+        constexpr PSO_FLAGS     GetFlags() const noexcept { return Flags; }
+        constexpr bool          IsDoubleSided() const noexcept { return DoubleSided; }
+        constexpr ALPHA_MODE    GetAlphaMode() const noexcept { return AlphaMode; }
+        constexpr DebugViewType GetDebugView() const noexcept { return DebugView; }
 
     private:
-        PSO_FLAGS  Flags       = PSO_FLAG_NONE;
-        ALPHA_MODE AlphaMode   = ALPHA_MODE_OPAQUE;
-        bool       DoubleSided = false;
-        size_t     Hash        = 0;
+        PSO_FLAGS     Flags       = PSO_FLAG_NONE;
+        ALPHA_MODE    AlphaMode   = ALPHA_MODE_OPAQUE;
+        bool          DoubleSided = false;
+        DebugViewType DebugView   = DebugViewType::None;
+        size_t        Hash        = 0;
     };
 
     using PsoHashMapType = std::unordered_map<PSOKey, RefCntAutoPtr<IPipelineState>, PSOKey::Hasher>;
@@ -354,7 +362,7 @@ public:
     void SetInternalShaderParameters(HLSL::PBRRendererShaderParameters& Renderer);
 
 protected:
-    ShaderMacroHelper DefineMacros(PSO_FLAGS PSOFlags) const;
+    ShaderMacroHelper DefineMacros(PSO_FLAGS PSOFlags, DebugViewType DebugView) const;
 
     void GetVSInputStructAndLayout(PSO_FLAGS PSOFlags, std::string& VSInputStruct, InputLayoutDescX& InputLayout) const;
 
