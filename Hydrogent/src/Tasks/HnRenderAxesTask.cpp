@@ -38,18 +38,16 @@
 namespace Diligent
 {
 
-namespace USD
-{
-
 namespace HLSL
 {
 
-namespace
-{
 #include "../shaders/HnAxesStructures.fxh"
-} // namespace
 
 } // namespace HLSL
+
+
+namespace USD
+{
 
 HnRenderAxesTask::HnRenderAxesTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id) :
     HnTask{Id}
@@ -109,7 +107,7 @@ void HnRenderAxesTask::PreparePSO(const HnRenderPassState& RPState)
             PsoCI.AddRenderTarget(RPState.GetRenderTargetFormat(i));
 
         m_PSO = Device.CreateGraphicsPipelineState(PsoCI); // Throws exception in case of error
-        m_PSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "cbCameraAttribs")->Set(RenderDelegate->GetCameraAttribsCB());
+        m_PSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "cbCameraAttribs")->Set(RenderDelegate->GetFrameAttribsCB());
         m_PSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "cbConstants")->Set(m_ConstantsCB);
         m_PSO->CreateShaderResourceBinding(&m_SRB, true);
         VERIFY_EXPR(m_SRB);

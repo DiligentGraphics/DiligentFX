@@ -190,8 +190,7 @@ public:
     IRenderDevice*     GetDevice() const { return m_pDevice; }
     IDeviceContext*    GetDeviceContext() const { return m_pContext; }
     IRenderStateCache* GetRenderStateCache() const { return m_pRenderStateCache; }
-    IBuffer*           GetCameraAttribsCB() const { return m_CameraAttribsCB; }
-    IBuffer*           GetLightAttribsCB() const { return m_LightAttribsCB; }
+    IBuffer*           GetFrameAttribsCB() const { return m_FrameAttribsCB; }
 
     const auto& GetLights() const { return m_Lights; }
 
@@ -204,8 +203,7 @@ private:
     RefCntAutoPtr<IDeviceContext>    m_pContext;
     RefCntAutoPtr<IRenderStateCache> m_pRenderStateCache;
 
-    RefCntAutoPtr<IBuffer>        m_CameraAttribsCB;
-    RefCntAutoPtr<IBuffer>        m_LightAttribsCB;
+    RefCntAutoPtr<IBuffer>        m_FrameAttribsCB;
     std::shared_ptr<USD_Renderer> m_USDRenderer;
 
     HnTextureRegistry m_TextureRegistry;

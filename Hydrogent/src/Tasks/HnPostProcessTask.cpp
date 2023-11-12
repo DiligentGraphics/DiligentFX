@@ -42,20 +42,17 @@
 namespace Diligent
 {
 
-namespace USD
-{
-
 namespace HLSL
 {
 
-namespace
-{
 #include "Shaders/PostProcess/ToneMapping/public/ToneMappingStructures.fxh"
 #include "Shaders/PBR/public/PBR_Structures.fxh"
 #include "../shaders/HnPostProcessStructures.fxh"
-} // namespace
 
 } // namespace HLSL
+
+namespace USD
+{
 
 HnPostProcessTask::HnPostProcessTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id) :
     HnTask{Id}

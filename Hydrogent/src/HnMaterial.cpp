@@ -207,15 +207,14 @@ pxr::HdDirtyBits HnMaterial::GetInitialDirtyBitsMask() const
 
 void HnMaterial::UpdateSRB(IRenderDevice* pDevice,
                            PBR_Renderer&  PbrRenderer,
-                           IBuffer*       pCameraAttribs,
-                           IBuffer*       pLightAttribs)
+                           IBuffer*       pFrameAttribs)
 {
     if (m_SRB)
         return;
 
     PbrRenderer.CreateResourceBinding(&m_SRB);
 
-    PbrRenderer.InitCommonSRBVars(m_SRB, pCameraAttribs, pLightAttribs);
+    PbrRenderer.InitCommonSRBVars(m_SRB, pFrameAttribs);
 
     auto SetTexture = [&](const pxr::TfToken& Name, ITextureView* pDefaultTexSRV, const char* VarName) //
     {

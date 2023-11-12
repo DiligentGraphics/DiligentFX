@@ -90,7 +90,7 @@ void HnRenderEnvMapTask::Prepare(pxr::HdTaskContext* TaskCtx,
 
             EnvMapRenderer::CreateInfo EnvMapRndrCI;
             EnvMapRndrCI.pDevice          = pRenderDelegate->GetDevice();
-            EnvMapRndrCI.pCameraAttribsCB = pRenderDelegate->GetCameraAttribsCB();
+            EnvMapRndrCI.pCameraAttribsCB = pRenderDelegate->GetFrameAttribsCB();
             EnvMapRndrCI.NumRenderTargets = RenderPassState->GetNumRenderTargets();
             for (Uint32 rt = 0; rt < EnvMapRndrCI.NumRenderTargets; ++rt)
                 EnvMapRndrCI.RTVFormats[rt] = RenderPassState->GetRenderTargetFormat(rt);

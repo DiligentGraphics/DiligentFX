@@ -29,7 +29,7 @@
 #include <atomic>
 #include <array>
 
-#include "Tasks/HnSetupRenderingTask.hpp"
+#include "Tasks/HnBeginFrameTask.hpp"
 #include "Tasks/HnRenderRprimsTask.hpp"
 #include "Tasks/HnCopySelectionDepthTask.hpp"
 #include "Tasks/HnSetupSelectionDepthTask.hpp"
@@ -56,7 +56,7 @@ namespace
 TF_DEFINE_PRIVATE_TOKENS(
     HnTaskManagerTokens,
 
-    (setupRendering)
+    (beginFrame)
     (copySelectionDepth)
     (renderEnvMapTask)
     (renderAxesTask)
@@ -142,7 +142,7 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
     m_ParamsDelegate{RenderIndex, ManagerId}
 {
     // Task creation order defines the default task order
-    CreateSetupRenderingTask();
+    CreateBeginFrameTask();
     CreateRenderRprimsTask(HnMaterialTagTokens->defaultTag,
                            TaskUID_RenderRprimsDefaultSelected,
                            {
@@ -233,10 +233,10 @@ void HnTaskManager::SetParameter(const pxr::SdfPath& TaskId, const TfToken& Valu
     m_ParamsDelegate.SetParameter(TaskId, ValueKey, std::move(Value));
 }
 
-void HnTaskManager::CreateSetupRenderingTask()
+void HnTaskManager::CreateBeginFrameTask()
 {
-    HnSetupRenderingTaskParams TaskParams;
-    CreateTask<HnSetupRenderingTask>(HnTaskManagerTokens->setupRendering, TaskUID_SetupRendering, TaskParams);
+    HnBeginFrameTaskParams TaskParams;
+    CreateTask<HnBeginFrameTask>(HnTaskManagerTokens->beginFrame, TaskUID_BeginFrame, TaskParams);
 }
 
 pxr::SdfPath HnTaskManager::GetRenderRprimsTaskId(const pxr::TfToken& MaterialTag, const HnRenderPassParams& RenderPassParams) const
@@ -291,9 +291,9 @@ void HnTaskManager::CreateRenderRprimsTask(const pxr::TfToken& MaterialTag, Task
     m_RenderTaskIds.emplace_back(RenderRprimsTaskId);
 }
 
-void HnTaskManager::SetupRendering(const HnSetupRenderingTaskParams& Params)
+void HnTaskManager::SetFrameParams(const HnBeginFrameTaskParams& Params)
 {
-    SetTaskParams(TaskUID_SetupRendering, Params);
+    SetTaskParams(TaskUID_BeginFrame, Params);
 }
 
 void HnTaskManager::SetRenderRprimParams(const HnRenderRprimsTaskParams& Params)

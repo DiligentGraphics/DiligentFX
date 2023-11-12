@@ -55,16 +55,9 @@ void HnRenderRprimsTask::UpdateRenderPassParams(const HnRenderRprimsTaskParams& 
         return;
 
     HnMeshRenderParams RenderPassParams;
-    RenderPassParams.RenderMode        = Params.RenderMode;
-    RenderPassParams.DebugView         = Params.DebugView;
-    RenderPassParams.OcclusionStrength = Params.OcclusionStrength;
-    RenderPassParams.EmissionScale     = Params.EmissionScale;
-    RenderPassParams.IBLScale          = Params.IBLScale;
-    RenderPassParams.WireframeColor    = Params.WireframeColor;
-    RenderPassParams.PointColor        = Params.PointColor;
-    RenderPassParams.PointSize         = Params.PointSize;
-    RenderPassParams.Transform         = Params.Transform;
-    RenderPassParams.SelectedPrimId    = Params.SelectedPrimId;
+    RenderPassParams.RenderMode     = Params.RenderMode;
+    RenderPassParams.Transform      = Params.Transform;
+    RenderPassParams.SelectedPrimId = Params.SelectedPrimId;
     static_cast<HnRenderPass*>(m_RenderPass.get())->SetMeshRenderParams(RenderPassParams);
 }
 

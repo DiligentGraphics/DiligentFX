@@ -43,32 +43,17 @@ struct HnRenderRprimsTaskParams
 {
     HN_RENDER_MODE RenderMode = HN_RENDER_MODE_SOLID;
 
-    int   DebugView         = 0;
-    float OcclusionStrength = 1;
-    float EmissionScale     = 1;
-    float IBLScale          = 1;
-
-    float4 WireframeColor = {1, 1, 1, 1};
-    float4 PointColor     = {1, 1, 1, 1};
-    float  PointSize      = 1;
-
     float4x4 Transform = float4x4::Identity();
 
     /// Selected prim id.
-    /// Selected rprim is rendered with negative index.
     pxr::SdfPath SelectedPrimId;
 
     constexpr bool operator==(const HnRenderRprimsTaskParams& rhs) const
     {
         // clang-format off
-        return RenderMode        == rhs.RenderMode &&
-               DebugView         == rhs.DebugView &&
-               OcclusionStrength == rhs.OcclusionStrength &&
-               EmissionScale     == rhs.EmissionScale &&
-               IBLScale          == rhs.IBLScale &&
-               WireframeColor    == rhs.WireframeColor &&
-               Transform         == rhs.Transform &&
-               SelectedPrimId    == rhs.SelectedPrimId;
+        return RenderMode     == rhs.RenderMode &&
+               Transform      == rhs.Transform &&
+               SelectedPrimId == rhs.SelectedPrimId;
         // clang-format on
     }
 

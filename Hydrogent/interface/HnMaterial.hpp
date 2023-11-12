@@ -45,15 +45,13 @@ namespace Diligent
 
 class PBR_Renderer;
 
-namespace USD
-{
-
 namespace HLSL
 {
-
 #include "Shaders/PBR/public/PBR_Structures.fxh"
-
 }
+
+namespace USD
+{
 
 /// Hydra material implementation in Hydrogent.
 class HnMaterial final : public pxr::HdMaterial
@@ -76,8 +74,7 @@ public:
 
     void UpdateSRB(IRenderDevice* pDevice,
                    PBR_Renderer&  PbrRenderer,
-                   IBuffer*       pCameraAttribs,
-                   IBuffer*       pLightAttribs);
+                   IBuffer*       pFrameAttribs);
 
     IShaderResourceBinding* GetSRB() const { return m_SRB; }
 

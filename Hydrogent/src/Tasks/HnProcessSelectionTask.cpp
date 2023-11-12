@@ -38,18 +38,15 @@
 namespace Diligent
 {
 
-namespace USD
-{
-
 namespace HLSL
 {
 
-namespace
-{
 #include "../shaders/HnClosestSelectedLocation.fxh"
-} // namespace
 
 } // namespace HLSL
+
+namespace USD
+{
 
 HnProcessSelectionTask::HnProcessSelectionTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id) :
     HnTask{Id}

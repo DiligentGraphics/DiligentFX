@@ -39,7 +39,7 @@ namespace Diligent
 namespace USD
 {
 
-struct HnSetupRenderingTaskParams;
+struct HnBeginFrameTaskParams;
 struct HnRenderRprimsTaskParams;
 struct HnPostProcessTaskParams;
 struct HnRenderPassParams;
@@ -51,7 +51,7 @@ class HnTaskManager
 {
 public:
     using TaskUID                                                    = uint64_t;
-    static constexpr TaskUID TaskUID_SetupRendering                  = 0x8362faac57354542;
+    static constexpr TaskUID TaskUID_BeginFrame                      = 0x8362faac57354542;
     static constexpr TaskUID TaskUID_RenderRprimsDefaultSelected     = 0x1cdf84fa9ab5423e;
     static constexpr TaskUID TaskUID_RenderRprimsMaskedSelected      = 0xe926da1de43d4f47;
     static constexpr TaskUID TaskUID_CopySelectionDepth              = 0xf3026cea7404c64a;
@@ -81,7 +81,7 @@ public:
     /// Returns the list of tasks that can be passed to the Hydra engine for execution.
     ///
     /// \param [in] TaskOrder - Optional task order. If not specified, the following default order is used:
-    ///                         - SetupRendering
+    ///                         - BeginFrame
     ///                             * Prepares render targets
     ///                             * Binds the Color and Mesh Id render targes and the the selection depth buffer
     ///                         - RenderRprimsDefaultSelected
@@ -114,7 +114,7 @@ public:
     ///
     ///     | Task                            |  Selected Rprims | Unselected Rprims | Color  |  Mesh ID  |  Selection Detph | Main Depth |
     ///     |---------------------------------|------------------|-------------------|--------|-----------|------------------|------------|
-    ///     | SetupRendering                  |                  |                   |  bind  |   bind    |      bind        |            |
+    ///     | BeginFrame                  |                  |                   |  bind  |   bind    |      bind        |            |
     ///     | RenderRprimsDefaultSelected     |       V          |                   |   V    |     V     |        V         |            |
     ///     | RenderRprimsMaskedSelected      |       V          |                   |   V    |     V     |        V         |            |
     ///     | CopySelectionDepth              |                  |                   |  bind  |   bind    |        V---copy--|---->V bind |
@@ -178,7 +178,7 @@ public:
     bool SetTaskParams(const pxr::SdfPath& Id,
                        TaskParamsType&&    Params);
 
-    void SetupRendering(const HnSetupRenderingTaskParams& Params);
+    void SetFrameParams(const HnBeginFrameTaskParams& Params);
     void SetRenderRprimParams(const HnRenderRprimsTaskParams& Params);
     void SetPostProcessParams(const HnPostProcessTaskParams& Params);
     void SetReadRprimIdParams(const HnReadRprimIdTaskParams& Params);
@@ -218,7 +218,7 @@ public:
 private:
     pxr::SdfPath GetRenderRprimsTaskId(const pxr::TfToken& MaterialTag, const HnRenderPassParams& RenderPassParams) const;
 
-    void CreateSetupRenderingTask();
+    void CreateBeginFrameTask();
     void CreateRenderRprimsTask(const pxr::TfToken& MaterialTag, TaskUID UID, const HnRenderPassParams& RenderPassParams);
     void CreateRenderEnvMapTask();
     void CreateRenderAxesTask();

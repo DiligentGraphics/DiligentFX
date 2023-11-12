@@ -39,6 +39,15 @@
 namespace Diligent
 {
 
+namespace HLSL
+{
+
+#include "Shaders/Common/public/BasicStructures.fxh"
+#include "Shaders/PBR/public/PBR_Structures.fxh"
+#include "Shaders/PBR/private/RenderPBR_Structures.fxh"
+
+} // namespace HLSL
+
 namespace USD
 {
 
@@ -57,7 +66,7 @@ HnRenderPass::HnRenderPass(pxr::HdRenderIndex*           pIndex,
 struct HnRenderPass::RenderState
 {
     IDeviceContext* const pCtx;
-    IBuffer* const        pPBRAttribsCB;
+    IBuffer* const        pPrimitiveAttribsCB;
 
     const PBR_Renderer::ALPHA_MODE AlphaMode;
 
@@ -93,7 +102,7 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
 
     RenderState State{
         pRenderDelegate->GetDeviceContext(),
-        USDRenderer->GetPBRAttribsCB(),
+        USDRenderer->GetPBRPrimitiveAttribsCB(),
         MaterialTagToPbrAlphaMode(m_MaterialTag),
     };
 
@@ -296,6 +305,7 @@ void HnRenderPass::RenderMesh(RenderState&      State,
                 PBR_Renderer::PSO_FLAG_USE_AO_MAP |
                 PBR_Renderer::PSO_FLAG_USE_EMISSIVE_MAP |
                 PBR_Renderer::PSO_FLAG_USE_IBL |
+                // TODO: enable debug view only when needed
                 PBR_Renderer::PSO_FLAG_ENABLE_DEBUG_VIEW;
         }
         VERIFY(ShaderAttribs.AlphaMode == State.AlphaMode || IsFallbackMaterial,
@@ -326,7 +336,7 @@ void HnRenderPass::RenderMesh(RenderState&      State,
     State.pCtx->SetVertexBuffers(0, _countof(pBuffs), pBuffs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
     {
-        MapHelper<HLSL::PBRShaderAttribs> pDstShaderAttribs{State.pCtx, State.pPBRAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
+        MapHelper<HLSL::PBRPrimitiveAttribs> pDstShaderAttribs{State.pCtx, State.pPrimitiveAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
 
         pDstShaderAttribs->Transforms.NodeMatrix = Mesh.GetTransform() * m_RenderParams.Transform;
         pDstShaderAttribs->Transforms.JointCount = 0;
@@ -339,24 +349,7 @@ void HnRenderPass::RenderMesh(RenderState&      State,
             pDstShaderAttribs->Material.BaseColorFactor = Mesh.GetDisplayColor();
         }
 
-        auto& RendererParams = pDstShaderAttribs->Renderer;
-
-        RendererParams.DebugViewType     = m_RenderParams.DebugView;
-        RendererParams.OcclusionStrength = m_RenderParams.OcclusionStrength;
-        RendererParams.EmissionScale     = m_RenderParams.EmissionScale;
-        RendererParams.IBLScale          = m_RenderParams.IBLScale;
-
-        RendererParams.PrefilteredCubeMipLevels = 5; //m_Settings.UseIBL ? static_cast<float>(m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels) : 0.f;
-        RendererParams.UnshadedColor            = m_RenderParams.RenderMode == HN_RENDER_MODE_POINTS ? m_RenderParams.PointColor : m_RenderParams.WireframeColor;
-        RendererParams.HighlightColor           = float4{0, 0, 0, 0};
-        RendererParams.PointSize                = m_RenderParams.PointSize;
-
-        // Tone mapping is performed in the post-processing pass
-        RendererParams.AverageLogLum = 0.3f;
-        RendererParams.MiddleGray    = 0.18f;
-        RendererParams.WhitePoint    = 3.0f;
-
-        RendererParams.CustomData = float4{
+        pDstShaderAttribs->CustomData = float4{
             static_cast<float>(Mesh.GetUID()),
             Mesh.GetId().HasPrefix(m_RenderParams.SelectedPrimId) ? 1.f : 0.f,
             0,

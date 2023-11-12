@@ -24,7 +24,7 @@
  *  of the possibility of such damages.
  */
 
-#include "Tasks/HnSetupRenderingTask.hpp"
+#include "Tasks/HnBeginFrameTask.hpp"
 #include "HnRenderDelegate.hpp"
 #include "HnRenderPassState.hpp"
 #include "HnTokens.hpp"
@@ -39,20 +39,19 @@
 namespace Diligent
 {
 
-namespace USD
-{
-
 namespace HLSL
 {
 
-namespace
-{
 #include "Shaders/Common/public/BasicStructures.fxh"
-} // namespace
+#include "Shaders/PBR/public/PBR_Structures.fxh"
+#include "Shaders/PBR/private/RenderPBR_Structures.fxh"
 
 } // namespace HLSL
 
-HnSetupRenderingTask::HnSetupRenderingTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id) :
+namespace USD
+{
+
+HnBeginFrameTask::HnBeginFrameTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id) :
     HnTask{Id},
     m_RenderPassState{std::make_shared<HnRenderPassState>()}
 {
@@ -79,46 +78,47 @@ HnSetupRenderingTask::HnSetupRenderingTask(pxr::HdSceneDelegate* ParamsDelegate,
     m_ClosestSelLocn1TargetId = InitBrim(HnRenderResourceTokens->closestSelectedLocation1Target);
 }
 
-HnSetupRenderingTask::~HnSetupRenderingTask()
+HnBeginFrameTask::~HnBeginFrameTask()
 {
 }
 
-void HnSetupRenderingTask::UpdateRenderPassState(const HnSetupRenderingTaskParams& Params)
+void HnBeginFrameTask::UpdateRenderPassState(const HnBeginFrameTaskParams& Params)
 {
-    VERIFY_EXPR(Params.ColorFormat != TEX_FORMAT_UNKNOWN);
+    VERIFY_EXPR(Params.Formats.Color != TEX_FORMAT_UNKNOWN);
     m_RenderPassState->SetNumRenderTargets(2);
-    m_RenderPassState->SetRenderTargetFormat(0, Params.ColorFormat);
-    m_RenderPassState->SetRenderTargetFormat(1, Params.MeshIdFormat);
-    m_RenderPassState->SetDepthStencilFormat(Params.DepthFormat);
+    m_RenderPassState->SetRenderTargetFormat(0, Params.Formats.Color);
+    m_RenderPassState->SetRenderTargetFormat(1, Params.Formats.MeshId);
+    m_RenderPassState->SetDepthStencilFormat(Params.Formats.Depth);
 
-    m_RenderPassState->SetDepthBias(Params.DepthBias, Params.SlopeScaledDepthBias);
-    m_RenderPassState->SetDepthFunc(Params.DepthFunc);
-    m_RenderPassState->SetDepthBiasEnabled(Params.DepthBiasEnabled);
-    m_RenderPassState->SetEnableDepthTest(Params.DepthTestEnabled);
-    m_RenderPassState->SetEnableDepthClamp(Params.DepthClampEnabled);
+    m_RenderPassState->SetDepthBias(Params.State.DepthBias, Params.State.SlopeScaledDepthBias);
+    m_RenderPassState->SetDepthFunc(Params.State.DepthFunc);
+    m_RenderPassState->SetDepthBiasEnabled(Params.State.DepthBiasEnabled);
+    m_RenderPassState->SetEnableDepthTest(Params.State.DepthTestEnabled);
+    m_RenderPassState->SetEnableDepthClamp(Params.State.DepthClampEnabled);
 
-    m_RenderPassState->SetCullStyle(Params.CullStyle);
+    m_RenderPassState->SetCullStyle(Params.State.CullStyle);
 
-    m_RenderPassState->SetStencil(Params.StencilFunc, Params.StencilRef, Params.StencilMask,
-                                  Params.StencilFailOp, Params.StencilZFailOp, Params.StencilZPassOp);
+    m_RenderPassState->SetStencil(Params.State.StencilFunc, Params.State.StencilRef, Params.State.StencilMask,
+                                  Params.State.StencilFailOp, Params.State.StencilZFailOp, Params.State.StencilZPassOp);
 
-    m_RenderPassState->SetFrontFaceCCW(Params.FrontFaceCCW);
+    m_RenderPassState->SetFrontFaceCCW(Params.State.FrontFaceCCW);
     m_RenderPassState->SetClearColor(Params.ClearColor);
     m_RenderPassState->SetClearDepth(Params.ClearDepth);
 }
 
-void HnSetupRenderingTask::Sync(pxr::HdSceneDelegate* Delegate,
-                                pxr::HdTaskContext*   TaskCtx,
-                                pxr::HdDirtyBits*     DirtyBits)
+void HnBeginFrameTask::Sync(pxr::HdSceneDelegate* Delegate,
+                            pxr::HdTaskContext*   TaskCtx,
+                            pxr::HdDirtyBits*     DirtyBits)
 {
     if (*DirtyBits & pxr::HdChangeTracker::DirtyParams)
     {
-        HnSetupRenderingTaskParams Params;
+        HnBeginFrameTaskParams Params;
         if (GetTaskParams(Delegate, Params))
         {
             m_FinalColorTargetId            = Params.FinalColorTargetId;
-            m_ClosestSelectedLocationFormat = Params.ClosestSelectedLocationFormat;
+            m_ClosestSelectedLocationFormat = Params.Formats.ClosestSelectedLocation;
             m_CameraId                      = Params.CameraId;
+            m_RendererParams                = Params.Renderer;
             UpdateRenderPassState(Params);
         }
     }
@@ -126,9 +126,9 @@ void HnSetupRenderingTask::Sync(pxr::HdSceneDelegate* Delegate,
     *DirtyBits = pxr::HdChangeTracker::Clean;
 }
 
-void HnSetupRenderingTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
-                                                pxr::HdTaskContext* TaskCtx,
-                                                ITextureView*       pFinalColorRTV)
+void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
+                                            pxr::HdTaskContext* TaskCtx,
+                                            ITextureView*       pFinalColorRTV)
 {
     if (pFinalColorRTV == nullptr)
     {
@@ -176,7 +176,7 @@ void HnSetupRenderingTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
             UNEXPECTED("Failed to create ", Name, " texture");
             return nullptr;
         }
-        LOG_INFO_MESSAGE("HnSetupRenderingTask: created ", TargetDesc.GetWidth(), "x", TargetDesc.GetHeight(), " ", Name, " texture");
+        LOG_INFO_MESSAGE("HnBeginFrameTask: created ", TargetDesc.GetWidth(), "x", TargetDesc.GetHeight(), " ", Name, " texture");
 
         auto* const pView = pTarget->GetDefaultView(IsDepth ? TEXTURE_VIEW_DEPTH_STENCIL : TEXTURE_VIEW_RENDER_TARGET);
         VERIFY(pView != nullptr, "Failed to get texture view for target ", Name);
@@ -197,8 +197,8 @@ void HnSetupRenderingTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
     m_RenderPassState->SetFramebufferTargets(FBTargets);
 }
 
-void HnSetupRenderingTask::Prepare(pxr::HdTaskContext* TaskCtx,
-                                   pxr::HdRenderIndex* RenderIndex)
+void HnBeginFrameTask::Prepare(pxr::HdTaskContext* TaskCtx,
+                               pxr::HdRenderIndex* RenderIndex)
 {
     (*TaskCtx)[HnTokens->renderPassState]                              = pxr::VtValue{m_RenderPassState};
     (*TaskCtx)[HnRenderResourceTokens->finalColorTarget]               = pxr::VtValue{m_FinalColorTargetId};
@@ -222,7 +222,80 @@ void HnSetupRenderingTask::Prepare(pxr::HdTaskContext* TaskCtx,
     m_RenderIndex = RenderIndex;
 }
 
-void HnSetupRenderingTask::Execute(pxr::HdTaskContext* TaskCtx)
+void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx, IBuffer* pFrameAttrbisCB)
+{
+    HLSL::PBRFrameAttribs FrameAttribs;
+    if (!m_CameraId.IsEmpty())
+    {
+        if (const HnCamera* pCamera = static_cast<const HnCamera*>(m_RenderIndex->GetSprim(pxr::HdPrimTypeTokens->camera, m_CameraId)))
+        {
+            HLSL::CameraAttribs& CamAttribs = FrameAttribs.Camera;
+
+            const float4x4& ProjMatrix  = pCamera->GetProjectionMatrix();
+            const float4x4& ViewMatrix  = pCamera->GetViewMatrix();
+            const float4x4& WorldMatrix = pCamera->GetWorldMatrix();
+            const float4x4  ViewProj    = ViewMatrix * ProjMatrix;
+
+            CamAttribs.mViewT        = ViewMatrix.Transpose();
+            CamAttribs.mProjT        = ProjMatrix.Transpose();
+            CamAttribs.mViewProjT    = ViewProj.Transpose();
+            CamAttribs.mViewInvT     = WorldMatrix.Transpose();
+            CamAttribs.mViewProjInvT = ViewProj.Inverse().Transpose();
+            CamAttribs.f4Position    = float3::MakeVector(WorldMatrix[3]);
+        }
+        else
+        {
+            LOG_ERROR_MESSAGE("Camera is not set at Id ", m_CameraId);
+        }
+    }
+    else
+    {
+        LOG_ERROR_MESSAGE("Camera Id is empty");
+    }
+
+    // For now, use the first light that is initialized.
+    HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+    for (HnLight* Light : RenderDelegate->GetLights())
+    {
+        if (Light->GetDirection() != float3{})
+        {
+            HLSL::PBRLightAttribs& LightAttribs = FrameAttribs.Light;
+
+            LightAttribs.Direction = Light->GetDirection();
+            LightAttribs.Intensity = Light->GetIntensity();
+
+            break;
+        }
+    }
+
+    {
+        HLSL::PBRRendererShaderParameters& RendererParams = FrameAttribs.Renderer;
+        RenderDelegate->GetUSDRenderer()->SetInternalShaderParameters(RendererParams);
+
+        RendererParams.DebugViewType     = m_RendererParams.DebugView;
+        RendererParams.OcclusionStrength = m_RendererParams.OcclusionStrength;
+        RendererParams.EmissionScale     = m_RendererParams.EmissionScale;
+        RendererParams.IBLScale          = m_RendererParams.IBLScale;
+
+        RendererParams.UnshadedColor  = m_RendererParams.UnshadedColor;
+        RendererParams.HighlightColor = float4{0, 0, 0, 0};
+        RendererParams.PointSize      = m_RendererParams.PointSize;
+
+        // Tone mapping is performed in the post-processing pass
+        RendererParams.AverageLogLum = 0.3f;
+        RendererParams.MiddleGray    = 0.18f;
+        RendererParams.WhitePoint    = 3.0f;
+    }
+
+    pCtx->UpdateBuffer(pFrameAttrbisCB, 0, sizeof(FrameAttribs), &FrameAttribs, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    StateTransitionDesc Barriers[] =
+        {
+            {pFrameAttrbisCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE},
+        };
+    pCtx->TransitionResourceStates(_countof(Barriers), Barriers);
+}
+
+void HnBeginFrameTask::Execute(pxr::HdTaskContext* TaskCtx)
 {
     if (m_RenderIndex == nullptr)
     {
@@ -240,61 +313,14 @@ void HnSetupRenderingTask::Execute(pxr::HdTaskContext* TaskCtx)
     HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
     IDeviceContext*   pCtx           = RenderDelegate->GetDeviceContext();
 
-    IBuffer* pCameraAttribsCB = RenderDelegate->GetCameraAttribsCB();
-    VERIFY_EXPR(pCameraAttribsCB);
-    if (!m_CameraId.IsEmpty())
+    if (IBuffer* pFrameAttribsCB = RenderDelegate->GetFrameAttribsCB())
     {
-        if (const HnCamera* pCamera = static_cast<const HnCamera*>(m_RenderIndex->GetSprim(pxr::HdPrimTypeTokens->camera, m_CameraId)))
-        {
-            HLSL::CameraAttribs CamAttribs;
-
-            const float4x4& ProjMatrix  = pCamera->GetProjectionMatrix();
-            const float4x4& ViewMatrix  = pCamera->GetViewMatrix();
-            const float4x4& WorldMatrix = pCamera->GetWorldMatrix();
-            const float4x4  ViewProj    = ViewMatrix * ProjMatrix;
-
-            CamAttribs.mViewT        = ViewMatrix.Transpose();
-            CamAttribs.mProjT        = ProjMatrix.Transpose();
-            CamAttribs.mViewProjT    = ViewProj.Transpose();
-            CamAttribs.mViewInvT     = WorldMatrix.Transpose();
-            CamAttribs.mViewProjInvT = ViewProj.Inverse().Transpose();
-            CamAttribs.f4Position    = float3::MakeVector(WorldMatrix[3]);
-
-            pCtx->UpdateBuffer(pCameraAttribsCB, 0, sizeof(CamAttribs), &CamAttribs, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-        }
-        else
-        {
-            LOG_ERROR_MESSAGE("Camera is not set at Id ", m_CameraId);
-        }
+        UpdateFrameConstants(pCtx, pFrameAttribsCB);
     }
     else
     {
-        LOG_ERROR_MESSAGE("Camera Id is empty");
+        UNEXPECTED("Frame attribs constant buffer is null");
     }
-
-    // For now, use the first light that is initialized.
-    IBuffer* pLightAttribsCB = RenderDelegate->GetLightAttribsCB();
-    VERIFY_EXPR(pCameraAttribsCB);
-    for (HnLight* Light : RenderDelegate->GetLights())
-    {
-        if (Light->GetDirection() != float3{})
-        {
-            HLSL::LightAttribs LightAttribs;
-            LightAttribs.f4Direction = Light->GetDirection();
-            LightAttribs.f4Intensity = Light->GetIntensity();
-
-            pCtx->UpdateBuffer(pLightAttribsCB, 0, sizeof(LightAttribs), &LightAttribs, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-            break;
-        }
-    }
-
-    StateTransitionDesc Barriers[] =
-        {
-            {pCameraAttribsCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE},
-            {pLightAttribsCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE},
-        };
-    pCtx->TransitionResourceStates(_countof(Barriers), Barriers);
-
 
     ITextureView* pRTVs[] = {Targets.OffscreenColorRTV, Targets.MeshIdRTV};
 

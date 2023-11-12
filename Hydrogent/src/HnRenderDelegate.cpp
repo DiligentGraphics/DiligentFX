@@ -39,19 +39,17 @@
 namespace Diligent
 {
 
-namespace USD
-{
-
-
 namespace HLSL
 {
 
-namespace
-{
 #include "Shaders/Common/public/BasicStructures.fxh"
-} // namespace
+#include "Shaders/PBR/public/PBR_Structures.fxh"
+#include "Shaders/PBR/private/RenderPBR_Structures.fxh"
 
 } // namespace HLSL
+
+namespace USD
+{
 
 std::unique_ptr<HnRenderDelegate> HnRenderDelegate::Create(const CreateInfo& CI)
 {
@@ -83,28 +81,16 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
     m_pDevice{CI.pDevice},
     m_pContext{CI.pContext},
     m_pRenderStateCache{CI.pRenderStateCache},
-    m_CameraAttribsCB{
+    m_FrameAttribsCB{
         [](IRenderDevice* pDevice) {
             RefCntAutoPtr<IBuffer> CameraAttribsCB;
             CreateUniformBuffer(
                 pDevice,
-                sizeof(HLSL::CameraAttribs),
-                "Camera Attribs CB",
+                sizeof(HLSL::PBRFrameAttribs),
+                "PBR frame attribs CB",
                 &CameraAttribsCB,
                 USAGE_DEFAULT);
             return CameraAttribsCB;
-        }(CI.pDevice),
-    },
-    m_LightAttribsCB{
-        [](IRenderDevice* pDevice) {
-            RefCntAutoPtr<IBuffer> LightAttribsCB;
-            CreateUniformBuffer(
-                pDevice,
-                sizeof(HLSL::LightAttribs),
-                "Light Attribs CB",
-                &LightAttribsCB,
-                USAGE_DEFAULT);
-            return LightAttribsCB;
         }(CI.pDevice),
     },
     m_USDRenderer{
@@ -318,7 +304,7 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
         std::lock_guard<std::mutex> Guard{m_MaterialsMtx};
         for (auto* pMat : m_Materials)
         {
-            pMat->UpdateSRB(m_pDevice, *m_USDRenderer, m_CameraAttribsCB, m_LightAttribsCB);
+            pMat->UpdateSRB(m_pDevice, *m_USDRenderer, m_FrameAttribsCB);
         }
     }
 
