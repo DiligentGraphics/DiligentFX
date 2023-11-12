@@ -48,12 +48,15 @@ struct HnRenderRprimsTaskParams
     /// Selected prim id.
     pxr::SdfPath SelectedPrimId;
 
+    int DebugViewMode = 0;
+
     constexpr bool operator==(const HnRenderRprimsTaskParams& rhs) const
     {
         // clang-format off
-        return RenderMode     == rhs.RenderMode &&
-               Transform      == rhs.Transform &&
-               SelectedPrimId == rhs.SelectedPrimId;
+        return RenderMode     == rhs.RenderMode     &&
+               Transform      == rhs.Transform      &&
+               SelectedPrimId == rhs.SelectedPrimId &&
+               DebugViewMode  == rhs.DebugViewMode;
         // clang-format on
     }
 

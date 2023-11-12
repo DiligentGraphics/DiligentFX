@@ -304,20 +304,18 @@ void HnRenderPass::RenderMesh(RenderState&      State,
                 PBR_Renderer::PSO_FLAG_USE_ROUGHNESS_MAP |
                 PBR_Renderer::PSO_FLAG_USE_AO_MAP |
                 PBR_Renderer::PSO_FLAG_USE_EMISSIVE_MAP |
-                PBR_Renderer::PSO_FLAG_USE_IBL |
-                // TODO: enable debug view only when needed
-                PBR_Renderer::PSO_FLAG_ENABLE_DEBUG_VIEW;
+                PBR_Renderer::PSO_FLAG_USE_IBL;
         }
         VERIFY(ShaderAttribs.AlphaMode == State.AlphaMode || IsFallbackMaterial,
                "Alpha mode derived from the material tag is not consistent with the alpha mode in the shader attributes. "
                "This may indicate an issue in how alpha mode is determined in the material, or (less likely) an issue in Rprim sorting by Hydra.");
-        pPSO = State.PSOCache.Get({PSOFlags, static_cast<PBR_Renderer::ALPHA_MODE>(State.AlphaMode), /*DoubleSided = */ false}, true);
+        pPSO = State.PSOCache.Get({PSOFlags, static_cast<PBR_Renderer::ALPHA_MODE>(State.AlphaMode), /*DoubleSided = */ false, static_cast<PBR_Renderer::DebugViewType>(m_RenderParams.DebugViewMode)}, true);
     }
     else if (m_RenderParams.RenderMode == HN_RENDER_MODE_MESH_EDGES ||
              m_RenderParams.RenderMode == HN_RENDER_MODE_POINTS)
     {
         PSOFlags |= PBR_Renderer::PSO_FLAG_UNSHADED;
-        pPSO = State.PSOCache.Get({PSOFlags, /*DoubleSided = */ false}, true);
+        pPSO = State.PSOCache.Get({PSOFlags, /*DoubleSided = */ false, static_cast<PBR_Renderer::DebugViewType>(m_RenderParams.DebugViewMode)}, true);
     }
     else
     {

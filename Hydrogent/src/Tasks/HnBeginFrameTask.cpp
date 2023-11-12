@@ -272,7 +272,6 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx, IBuffer* pFram
         HLSL::PBRRendererShaderParameters& RendererParams = FrameAttribs.Renderer;
         RenderDelegate->GetUSDRenderer()->SetInternalShaderParameters(RendererParams);
 
-        RendererParams.DebugViewType     = m_RendererParams.DebugView;
         RendererParams.OcclusionStrength = m_RendererParams.OcclusionStrength;
         RendererParams.EmissionScale     = m_RendererParams.EmissionScale;
         RendererParams.IBLScale          = m_RendererParams.IBLScale;

@@ -58,6 +58,7 @@ void HnRenderRprimsTask::UpdateRenderPassParams(const HnRenderRprimsTaskParams& 
     RenderPassParams.RenderMode     = Params.RenderMode;
     RenderPassParams.Transform      = Params.Transform;
     RenderPassParams.SelectedPrimId = Params.SelectedPrimId;
+    RenderPassParams.DebugViewMode  = Params.DebugViewMode;
     static_cast<HnRenderPass*>(m_RenderPass.get())->SetMeshRenderParams(RenderPassParams);
 }
 

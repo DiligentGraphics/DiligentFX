@@ -46,14 +46,7 @@ struct HnMeshRenderParams
 {
     HN_RENDER_MODE RenderMode = HN_RENDER_MODE_SOLID;
 
-    int   DebugView         = 0;
-    float OcclusionStrength = 1;
-    float EmissionScale     = 1;
-    float IBLScale          = 1;
-
-    float4 WireframeColor = float4{1, 1, 1, 1};
-    float4 PointColor     = float4{1, 1, 1, 1};
-    float  PointSize      = 1;
+    int DebugViewMode = 0;
 
     float4x4 Transform = float4x4::Identity();
 

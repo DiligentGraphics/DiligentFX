@@ -116,7 +116,6 @@ struct HnBeginFrameTaskParams
 
     struct RendererParams
     {
-        int   DebugView         = 0;
         float OcclusionStrength = 1;
         float EmissionScale     = 1;
         float IBLScale          = 1;
@@ -127,8 +126,7 @@ struct HnBeginFrameTaskParams
         constexpr bool operator==(const RendererParams& rhs) const
         {
             // clang-format off
-            return DebugView         == rhs.DebugView &&
-                   OcclusionStrength == rhs.OcclusionStrength &&
+            return OcclusionStrength == rhs.OcclusionStrength &&
                    EmissionScale     == rhs.EmissionScale &&
                    IBLScale          == rhs.IBLScale &&
                    UnshadedColor     == rhs.UnshadedColor &&
