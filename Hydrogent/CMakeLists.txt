@@ -7,6 +7,7 @@ set(SOURCE
     src/HnMaterialNetwork.cpp
     src/HnMesh.cpp
     src/HnBuffer.cpp
+    src/HnDrawItem.cpp
     src/HnCamera.cpp
     src/HnLight.cpp
     src/HnRenderBuffer.cpp
@@ -32,6 +33,7 @@ set(SOURCE
 )
 
 set(INCLUDE
+    include/HnDrawItem.hpp
     include/HnShaderSourceFactory.hpp
     include/HnTypeConversions.hpp
     include/HnTextureUtils.hpp

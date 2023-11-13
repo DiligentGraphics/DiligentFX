@@ -41,6 +41,8 @@ namespace USD
 
 class HnMesh;
 class HnMaterial;
+class HnDrawItem;
+class HnRenderPassState;
 
 struct HnMeshRenderParams
 {
@@ -94,21 +96,22 @@ protected:
 
 private:
     void UpdateDrawItems(const pxr::TfTokenVector& RenderTags);
+    void UpdateDrawItemsGPUResources(const HnRenderPassState& RPState);
 
     struct RenderState;
-    void RenderMesh(RenderState&      State,
-                    const HnMesh&     Mesh,
-                    const HnMaterial& Material);
+    void RenderDrawItem(RenderState&      State,
+                        const HnDrawItem& DrawItem);
 
 private:
     HnRenderPassParams m_Params;
     HnMeshRenderParams m_RenderParams;
 
-    pxr::HdRenderIndex::HdDrawItemPtrVector m_DrawItems;
+    std::vector<HnDrawItem> m_DrawItems;
 
-    unsigned int m_CollectionVersion     = ~0u;
-    unsigned int m_RprimRenderTagVersion = ~0u;
-    unsigned int m_TaskRenderTagsVersion = ~0u;
+    unsigned int m_CollectionVersion          = ~0u;
+    unsigned int m_RprimRenderTagVersion      = ~0u;
+    unsigned int m_TaskRenderTagsVersion      = ~0u;
+    bool         m_DrawItemsGPUResourcesDirty = true;
 
     pxr::TfTokenVector m_RenderTags;
     pxr::TfToken       m_MaterialTag;
