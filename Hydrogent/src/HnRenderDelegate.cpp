@@ -33,6 +33,7 @@
 #include "DebugUtilities.hpp"
 #include "GraphicsUtilities.h"
 #include "HnRenderBuffer.hpp"
+#include "Align.hpp"
 
 #include "pxr/imaging/hd/material.h"
 
@@ -83,14 +84,27 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
     m_pRenderStateCache{CI.pRenderStateCache},
     m_FrameAttribsCB{
         [](IRenderDevice* pDevice) {
-            RefCntAutoPtr<IBuffer> CameraAttribsCB;
+            RefCntAutoPtr<IBuffer> FrameAttribsCB;
             CreateUniformBuffer(
                 pDevice,
                 sizeof(HLSL::PBRFrameAttribs),
                 "PBR frame attribs CB",
-                &CameraAttribsCB,
+                &FrameAttribsCB,
                 USAGE_DEFAULT);
-            return CameraAttribsCB;
+            return FrameAttribsCB;
+        }(CI.pDevice),
+    },
+    m_PrimitiveAttribsCB{
+        [](IRenderDevice* pDevice) {
+            // Allocate a large buffer to batch primitive draw calls
+            RefCntAutoPtr<IBuffer> PrimitiveAttribsCB;
+            CreateUniformBuffer(
+                pDevice,
+                65536,
+                "PBR frame attribs CB",
+                &PrimitiveAttribsCB,
+                USAGE_DYNAMIC);
+            return PrimitiveAttribsCB;
         }(CI.pDevice),
     },
     m_USDRenderer{
@@ -98,7 +112,7 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
             CI.pDevice,
             CI.pRenderStateCache,
             CI.pContext,
-            []() {
+            [](IBuffer* pPrimitiveAttribsCB) {
                 USD_Renderer::CreateInfo USDRendererCI;
 
                 // Use samplers from texture views
@@ -119,9 +133,12 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
                 USDRendererCI.InputLayout.LayoutElements = Inputs;
                 USDRendererCI.InputLayout.NumElements    = _countof(Inputs);
 
+                USDRendererCI.pPrimitiveAttribsCB = pPrimitiveAttribsCB;
+
                 return USDRendererCI;
-            }()),
+            }(m_PrimitiveAttribsCB)),
     },
+    m_PrimitiveAttribsAlignedOffset{AlignUp(Uint32{sizeof(HLSL::PBRPrimitiveAttribs)}, CI.pDevice->GetAdapterInfo().Buffer.ConstantBufferOffsetAlignment)},
     m_TextureRegistry{CI.pDevice}
 {
 }

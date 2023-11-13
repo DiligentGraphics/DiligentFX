@@ -37,6 +37,15 @@
 namespace Diligent
 {
 
+namespace HLSL
+{
+
+#include "Shaders/Common/public/BasicStructures.fxh"
+#include "Shaders/PBR/public/PBR_Structures.fxh"
+#include "Shaders/PBR/private/RenderPBR_Structures.fxh"
+
+} // namespace HLSL
+
 namespace USD
 {
 
@@ -213,6 +222,18 @@ void HnMaterial::UpdateSRB(IRenderDevice* pDevice,
         return;
 
     PbrRenderer.CreateResourceBinding(&m_SRB);
+
+    if (IShaderResourceVariable* pVar = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbPrimitiveAttribs"))
+    {
+        // Primitive attribs buffer is a large buffer that fits multiple primitives.
+        // In the render loop, we write multiple primitive attribs into this buffer
+        // and use the SetBufferOffset function to select the attribs for the current primitive.
+        pVar->SetBufferRange(PbrRenderer.GetPBRPrimitiveAttribsCB(), 0, sizeof(HLSL::PBRPrimitiveAttribs));
+    }
+    else
+    {
+        UNEXPECTED("Failed to find 'cbPrimitiveAttribs' variable in the shader resource binding");
+    }
 
     PbrRenderer.InitCommonSRBVars(m_SRB, pFrameAttribs);
 

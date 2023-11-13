@@ -141,6 +141,10 @@ public:
         /// shader's main function source code for the specified PSO flags. If null, the renderer
         /// will use the default implementation.
         std::function<std::string(PSO_FLAGS PsoFlags)> GetPSMainSource = nullptr;
+
+        /// A pointer to the user-provided primitive attribs buffer.
+        /// If null, the renderer will allocate the buffer.
+        IBuffer* pPrimitiveAttribsCB = nullptr;
     };
 
     enum ALPHA_MODE

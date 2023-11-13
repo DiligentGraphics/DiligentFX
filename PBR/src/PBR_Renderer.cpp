@@ -85,7 +85,8 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
             CI.InputLayout = InputLayout;
             return CI;
         }(CI, m_InputLayout)},
-    m_Device{pDevice, pStateCache}
+    m_Device{pDevice, pStateCache},
+    m_PBRPrimitiveAttribsCB{CI.pPrimitiveAttribsCB}
 {
     DEV_CHECK_ERR(m_Settings.InputLayout.NumElements != 0, "Input layout must not be empty");
 
@@ -169,7 +170,10 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
     }
 
     {
-        CreateUniformBuffer(pDevice, sizeof(HLSL::PBRPrimitiveAttribs), "PBR primitive attribs CB", &m_PBRPrimitiveAttribsCB);
+        if (!m_PBRPrimitiveAttribsCB)
+        {
+            CreateUniformBuffer(pDevice, sizeof(HLSL::PBRPrimitiveAttribs), "PBR primitive attribs CB", &m_PBRPrimitiveAttribsCB);
+        }
         if (m_Settings.MaxJointCount > 0)
         {
             CreateUniformBuffer(pDevice, static_cast<Uint32>(sizeof(float4x4) * m_Settings.MaxJointCount), "PBR joint transforms", &m_JointsBuffer);

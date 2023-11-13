@@ -69,6 +69,8 @@ struct HnRenderPass::RenderState
     IDeviceContext* const pCtx;
     IBuffer* const        pPrimitiveAttribsCB;
 
+    const Uint32 PrimitiveAttribsAlignedOffset;
+
     IPipelineState*         pPSO = nullptr;
     IShaderResourceBinding* pSRB = nullptr;
 };
@@ -103,17 +105,73 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
 
     RenderState State{
         pRenderDelegate->GetDeviceContext(),
-        USDRenderer->GetPBRPrimitiveAttribsCB(),
+        pRenderDelegate->GetPrimitiveAttribsCB(),
+        pRenderDelegate->GetPrimitiveAttribsAlignedOffset(),
     };
-    for (const HnDrawItem& DrawItem : m_DrawItems)
+
+    const auto& Desc                 = State.pPrimitiveAttribsCB->GetDesc();
+    const auto  MaxDrawItemsInBuffer = Desc.Size / State.PrimitiveAttribsAlignedOffset;
+    const auto  NumDrawItems         = m_DrawItems.size();
+
+    m_PendingDrawItems.clear();
+    HLSL::PBRPrimitiveAttribs* pCurrPrimitive = nullptr;
+    for (size_t DrawItemIdx = 0; DrawItemIdx < NumDrawItems; ++DrawItemIdx)
     {
-        if (!DrawItem.GetHdDrawItem().GetVisible())
+        const auto& DrawItem = m_DrawItems[DrawItemIdx];
+        if (!DrawItem.IsValid() || !DrawItem.GetHdDrawItem().GetVisible())
             continue;
 
-        if (!DrawItem.IsValid())
-            continue;
+        if (m_PendingDrawItems.size() == MaxDrawItemsInBuffer)
+        {
+            // The buffer is full, render the items and start filling the buffer from the beginning.
+            State.pCtx->UnmapBuffer(State.pPrimitiveAttribsCB, MAP_WRITE);
+            pCurrPrimitive = nullptr;
+            RenderPendingDrawItems(State);
+            VERIFY_EXPR(m_PendingDrawItems.empty());
+        }
 
-        RenderDrawItem(State, DrawItem);
+        if (pCurrPrimitive == nullptr)
+        {
+            State.pCtx->MapBuffer(State.pPrimitiveAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD, reinterpret_cast<PVoid&>(pCurrPrimitive));
+            if (pCurrPrimitive == nullptr)
+            {
+                UNEXPECTED("Failed to map the primitive attributes buffer");
+                return;
+            }
+        }
+
+        // Write current primitive attributes
+
+        const auto& Geo = DrawItem.GetGeometryData();
+
+        pCurrPrimitive->Transforms.NodeMatrix = Geo.pMesh->GetTransform() * m_RenderParams.Transform;
+        pCurrPrimitive->Transforms.JointCount = 0;
+
+        const HLSL::PBRMaterialShaderInfo& ShaderAttribs = Geo.pMaterial->GetShaderAttribs();
+        static_assert(sizeof(pCurrPrimitive->Material) == sizeof(ShaderAttribs), "The sizeof(PBRMaterialShaderInfo) is inconsistent with sizeof(ShaderAttribs)");
+        memcpy(&pCurrPrimitive->Material, &ShaderAttribs, sizeof(ShaderAttribs));
+
+        if (Geo.IsFallbackMaterial)
+        {
+            pCurrPrimitive->Material.BaseColorFactor = Geo.pMesh->GetDisplayColor();
+        }
+
+        pCurrPrimitive->CustomData = float4{
+            static_cast<float>(Geo.pMesh->GetUID()),
+            Geo.pMesh->GetId().HasPrefix(m_RenderParams.SelectedPrimId) ? 1.f : 0.f,
+            0,
+            0,
+        };
+
+        pCurrPrimitive = reinterpret_cast<HLSL::PBRPrimitiveAttribs*>(reinterpret_cast<Uint8*>(pCurrPrimitive) + State.PrimitiveAttribsAlignedOffset);
+        m_PendingDrawItems.push_back(&DrawItem);
+    }
+
+    if (pCurrPrimitive != nullptr)
+    {
+        // Render the remaining items.
+        State.pCtx->UnmapBuffer(State.pPrimitiveAttribsCB, MAP_WRITE);
+        RenderPendingDrawItems(State);
     }
 }
 
@@ -376,95 +434,78 @@ void HnRenderPass::UpdateDrawItemsGPUResources(const HnRenderPassState& RPState)
 }
 
 
-void HnRenderPass::RenderDrawItem(RenderState&      State,
-                                  const HnDrawItem& DrawItem)
+void HnRenderPass::RenderPendingDrawItems(RenderState& State)
 {
-    IPipelineState* pPSO = DrawItem.GetPSO();
-    if (State.pPSO != pPSO)
+    for (size_t i = 0; i < m_PendingDrawItems.size(); ++i)
     {
-        State.pCtx->SetPipelineState(pPSO);
-        State.pPSO = pPSO;
-    }
+        const HnDrawItem& DrawItem = *m_PendingDrawItems[i];
 
-    IShaderResourceBinding* pSRB = DrawItem.GetSRB();
-    if (State.pSRB != pSRB)
-    {
-        State.pCtx->CommitShaderResources(pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-        State.pSRB = pSRB;
-    }
-
-    const auto& Geo = DrawItem.GetGeometryData();
-
-    {
-        MapHelper<HLSL::PBRPrimitiveAttribs> pDstShaderAttribs{State.pCtx, State.pPrimitiveAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
-
-        pDstShaderAttribs->Transforms.NodeMatrix = Geo.pMesh->GetTransform() * m_RenderParams.Transform;
-        pDstShaderAttribs->Transforms.JointCount = 0;
-
-        const HLSL::PBRMaterialShaderInfo& ShaderAttribs = Geo.pMaterial->GetShaderAttribs();
-        static_assert(sizeof(pDstShaderAttribs->Material) == sizeof(ShaderAttribs), "The sizeof(PBRMaterialShaderInfo) is inconsistent with sizeof(ShaderAttribs)");
-        memcpy(&pDstShaderAttribs->Material, &ShaderAttribs, sizeof(ShaderAttribs));
-
-        if (Geo.IsFallbackMaterial)
+        IPipelineState* pPSO = DrawItem.GetPSO();
+        if (State.pPSO != pPSO)
         {
-            pDstShaderAttribs->Material.BaseColorFactor = Geo.pMesh->GetDisplayColor();
+            State.pCtx->SetPipelineState(pPSO);
+            State.pPSO = pPSO;
         }
 
-        pDstShaderAttribs->CustomData = float4{
-            static_cast<float>(Geo.pMesh->GetUID()),
-            Geo.pMesh->GetId().HasPrefix(m_RenderParams.SelectedPrimId) ? 1.f : 0.f,
-            0,
-            0,
-        };
-    }
+        DrawItem.GetPrimitiveAttribsVar()->SetBufferOffset(static_cast<Uint32>(i * State.PrimitiveAttribsAlignedOffset));
 
-    State.pCtx->CommitShaderResources(pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-
-    switch (m_RenderParams.RenderMode)
-    {
-        case HN_RENDER_MODE_SOLID:
+        IShaderResourceBinding* pSRB = DrawItem.GetSRB();
+        if (State.pSRB != pSRB)
         {
-            IBuffer* pBuffs[] = {Geo.FaceVerts, Geo.Normals, Geo.TexCoords[0], Geo.TexCoords[1]};
-            State.pCtx->SetVertexBuffers(0, _countof(pBuffs), pBuffs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-            if (IBuffer* pIB = Geo.FaceIndices)
-            {
-                State.pCtx->SetIndexBuffer(Geo.FaceIndices, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-                State.pCtx->DrawIndexed({Geo.NumFaceVertices, VT_UINT32, DRAW_FLAG_VERIFY_ALL});
-            }
-            else
-            {
-                State.pCtx->Draw({Geo.NumFaceVertices, DRAW_FLAG_VERIFY_ALL});
-            }
+            State.pCtx->CommitShaderResources(pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+            State.pSRB = pSRB;
         }
-        break;
 
-        case HN_RENDER_MODE_MESH_EDGES:
-            if (IBuffer* pIB = Geo.EdgeIndices)
+        const auto& Geo = DrawItem.GetGeometryData();
+
+        switch (m_RenderParams.RenderMode)
+        {
+            case HN_RENDER_MODE_SOLID:
             {
-                IBuffer* pBuffs[] = {Geo.Points};
+                IBuffer* pBuffs[] = {Geo.FaceVerts, Geo.Normals, Geo.TexCoords[0], Geo.TexCoords[1]};
                 State.pCtx->SetVertexBuffers(0, _countof(pBuffs), pBuffs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-                State.pCtx->SetIndexBuffer(pIB, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-                State.pCtx->DrawIndexed({Geo.NumEdgeVertices, VT_UINT32, DRAW_FLAG_VERIFY_ALL});
-            }
-            else
-            {
-                UNEXPECTED("Edge index buffer is not initialized");
+                if (IBuffer* pIB = Geo.FaceIndices)
+                {
+                    State.pCtx->SetIndexBuffer(Geo.FaceIndices, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+                    State.pCtx->DrawIndexed({Geo.NumFaceVertices, VT_UINT32, DRAW_FLAG_VERIFY_ALL});
+                }
+                else
+                {
+                    State.pCtx->Draw({Geo.NumFaceVertices, DRAW_FLAG_VERIFY_ALL});
+                }
             }
             break;
 
-        case HN_RENDER_MODE_POINTS:
-        {
-            IBuffer* pBuffs[] = {Geo.Points};
-            State.pCtx->SetVertexBuffers(0, _countof(pBuffs), pBuffs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-            State.pCtx->Draw({Geo.NumPoints, DRAW_FLAG_VERIFY_ALL});
-        }
-        break;
+            case HN_RENDER_MODE_MESH_EDGES:
+                if (IBuffer* pIB = Geo.EdgeIndices)
+                {
+                    IBuffer* pBuffs[] = {Geo.Points};
+                    State.pCtx->SetVertexBuffers(0, _countof(pBuffs), pBuffs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+                    State.pCtx->SetIndexBuffer(pIB, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+                    State.pCtx->DrawIndexed({Geo.NumEdgeVertices, VT_UINT32, DRAW_FLAG_VERIFY_ALL});
+                }
+                else
+                {
+                    UNEXPECTED("Edge index buffer is not initialized");
+                }
+                break;
 
-        default:
-            UNEXPECTED("Unexpected render mode");
-            return;
+            case HN_RENDER_MODE_POINTS:
+            {
+                IBuffer* pBuffs[] = {Geo.Points};
+                State.pCtx->SetVertexBuffers(0, _countof(pBuffs), pBuffs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+                State.pCtx->Draw({Geo.NumPoints, DRAW_FLAG_VERIFY_ALL});
+            }
+            break;
+
+            default:
+                UNEXPECTED("Unexpected render mode");
+                return;
+        }
+        static_assert(HN_RENDER_MODE_COUNT == 3, "Please handle the new render mode in the switch above");
     }
-    static_assert(HN_RENDER_MODE_COUNT == 3, "Please handle the new render mode in the switch above");
+
+    m_PendingDrawItems.clear();
 }
 
 } // namespace USD

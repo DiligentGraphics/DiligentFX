@@ -99,14 +99,14 @@ private:
     void UpdateDrawItemsGPUResources(const HnRenderPassState& RPState);
 
     struct RenderState;
-    void RenderDrawItem(RenderState&      State,
-                        const HnDrawItem& DrawItem);
+    void RenderPendingDrawItems(RenderState& State);
 
 private:
     HnRenderPassParams m_Params;
     HnMeshRenderParams m_RenderParams;
 
-    std::vector<HnDrawItem> m_DrawItems;
+    std::vector<HnDrawItem>        m_DrawItems;
+    std::vector<const HnDrawItem*> m_PendingDrawItems;
 
     unsigned int m_CollectionVersion          = ~0u;
     unsigned int m_RprimRenderTagVersion      = ~0u;
