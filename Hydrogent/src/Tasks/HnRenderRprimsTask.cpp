@@ -138,10 +138,10 @@ void HnRenderRprimsTask::Execute(pxr::HdTaskContext* TaskCtx)
 {
     if (m_RenderPass)
     {
-        // Render pass state is initialized by the setup rendering task.
+        // Render pass state is initialized by HnBeginFrameTask.
         // It is shared between all instances of the render rprims task.
         std::shared_ptr<HnRenderPassState> RenderPassState = GetRenderPassState(TaskCtx);
-        VERIFY(RenderPassState, "Render pass state is null. This likely indicates that setup rendering task has not been created or executed.");
+        VERIFY(RenderPassState, "Render pass state is null. This likely indicates that HnBeginFrameTask was not been created or executed.");
         m_RenderPass->Execute(RenderPassState, GetRenderTags());
     }
 }

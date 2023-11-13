@@ -39,8 +39,6 @@ namespace Diligent
 namespace USD
 {
 
-class HnMesh;
-class HnMaterial;
 class HnDrawItem;
 class HnRenderPassState;
 

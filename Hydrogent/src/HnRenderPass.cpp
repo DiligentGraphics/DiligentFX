@@ -67,7 +67,6 @@ HnRenderPass::HnRenderPass(pxr::HdRenderIndex*           pIndex,
 struct HnRenderPass::RenderState
 {
     IDeviceContext* const pCtx;
-    IBuffer* const        pPrimitiveAttribsCB;
 
     const Uint32 PrimitiveAttribsAlignedOffset;
 
@@ -82,7 +81,7 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
     if (m_DrawItems.empty())
         return;
 
-    // Render pass state is initialized by the setup rendering task, and
+    // Render pass state is initialized by HnBeginFrameTask, and
     // passed from the render Rprims task.
     if (!RPState)
     {
@@ -96,20 +95,15 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
     pxr::HdRenderIndex* pRenderIndex    = GetRenderIndex();
     HnRenderDelegate*   pRenderDelegate = static_cast<HnRenderDelegate*>(pRenderIndex->GetRenderDelegate());
 
-    auto USDRenderer = pRenderDelegate->GetUSDRenderer();
-    if (!USDRenderer)
-    {
-        UNEXPECTED("USD renderer is not initialized");
-        return;
-    }
-
     RenderState State{
         pRenderDelegate->GetDeviceContext(),
-        pRenderDelegate->GetPrimitiveAttribsCB(),
         pRenderDelegate->GetPrimitiveAttribsAlignedOffset(),
     };
 
-    const auto& Desc                 = State.pPrimitiveAttribsCB->GetDesc();
+    IBuffer* const pPrimitiveAttribsCB = pRenderDelegate->GetPrimitiveAttribsCB();
+    VERIFY_EXPR(pPrimitiveAttribsCB != nullptr);
+
+    const auto& Desc                 = pPrimitiveAttribsCB->GetDesc();
     const auto  MaxDrawItemsInBuffer = Desc.Size / State.PrimitiveAttribsAlignedOffset;
     const auto  NumDrawItems         = m_DrawItems.size();
 
@@ -121,22 +115,13 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
         if (!DrawItem.IsValid() || !DrawItem.GetHdDrawItem().GetVisible())
             continue;
 
-        if (m_PendingDrawItems.size() == MaxDrawItemsInBuffer)
-        {
-            // The buffer is full, render the items and start filling the buffer from the beginning.
-            State.pCtx->UnmapBuffer(State.pPrimitiveAttribsCB, MAP_WRITE);
-            pCurrPrimitive = nullptr;
-            RenderPendingDrawItems(State);
-            VERIFY_EXPR(m_PendingDrawItems.empty());
-        }
-
         if (pCurrPrimitive == nullptr)
         {
-            State.pCtx->MapBuffer(State.pPrimitiveAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD, reinterpret_cast<PVoid&>(pCurrPrimitive));
+            State.pCtx->MapBuffer(pPrimitiveAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD, reinterpret_cast<PVoid&>(pCurrPrimitive));
             if (pCurrPrimitive == nullptr)
             {
                 UNEXPECTED("Failed to map the primitive attributes buffer");
-                return;
+                break;
             }
         }
 
@@ -165,14 +150,18 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
 
         pCurrPrimitive = reinterpret_cast<HLSL::PBRPrimitiveAttribs*>(reinterpret_cast<Uint8*>(pCurrPrimitive) + State.PrimitiveAttribsAlignedOffset);
         m_PendingDrawItems.push_back(&DrawItem);
-    }
 
-    if (pCurrPrimitive != nullptr)
-    {
-        // Render the remaining items.
-        State.pCtx->UnmapBuffer(State.pPrimitiveAttribsCB, MAP_WRITE);
-        RenderPendingDrawItems(State);
+        if (m_PendingDrawItems.size() == MaxDrawItemsInBuffer || DrawItemIdx == NumDrawItems - 1)
+        {
+            // Either the buffer is full or this is the last item. Render the pending items and start
+            // filling the buffer from the beginning.
+            State.pCtx->UnmapBuffer(pPrimitiveAttribsCB, MAP_WRITE);
+            pCurrPrimitive = nullptr;
+            RenderPendingDrawItems(State);
+            VERIFY_EXPR(m_PendingDrawItems.empty());
+        }
     }
+    VERIFY_EXPR(pCurrPrimitive == nullptr);
 }
 
 void HnRenderPass::_MarkCollectionDirty()
@@ -279,7 +268,6 @@ void HnRenderPass::UpdateDrawItemsGPUResources(const HnRenderPassState& RPState)
 
     pxr::HdRenderIndex* pRenderIndex    = GetRenderIndex();
     HnRenderDelegate*   pRenderDelegate = static_cast<HnRenderDelegate*>(pRenderIndex->GetRenderDelegate());
-    IDeviceContext*     pCtx            = pRenderDelegate->GetDeviceContext();
 
     auto USDRenderer = pRenderDelegate->GetUSDRenderer();
 
@@ -420,7 +408,6 @@ void HnRenderPass::UpdateDrawItemsGPUResources(const HnRenderPassState& RPState)
             }
 
             VERIFY_EXPR(pPSO != nullptr);
-
             DrawItem.SetPSO(pPSO);
         }
 
