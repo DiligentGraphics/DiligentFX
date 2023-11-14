@@ -15,6 +15,7 @@ set(SOURCE
     src/HnRenderPass.cpp
     src/HnShaderSourceFactory.cpp
     src/HnRenderPassState.cpp
+    src/HnRenderParam.cpp
     src/HnTokens.cpp
     src/HnTextureRegistry.cpp
     src/HnTextureUtils.cpp
@@ -34,6 +35,7 @@ set(SOURCE
 
 set(INCLUDE
     include/HnDrawItem.hpp
+    include/HnRenderParam.hpp
     include/HnShaderSourceFactory.hpp
     include/HnTypeConversions.hpp
     include/HnTextureUtils.hpp

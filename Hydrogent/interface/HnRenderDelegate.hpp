@@ -51,6 +51,7 @@ namespace USD
 class HnMaterial;
 class HnMesh;
 class HnLight;
+class HnRenderParam;
 
 /// USD render delegate implementation in Hydrogent.
 class HnRenderDelegate final : public pxr::HdRenderDelegate
@@ -67,6 +68,12 @@ public:
     HnRenderDelegate(const CreateInfo& CI);
 
     virtual ~HnRenderDelegate() override final;
+
+    // Returns an opaque handle to a render param, that in turn is
+    // passed to each prim created by the render delegate during sync
+    // processing.  This avoids the need to store a global state pointer
+    // in each prim.
+    virtual pxr::HdRenderParam* GetRenderParam() const override final;
 
     // Returns a list of typeId's of all supported Rprims by this render
     // delegate.
@@ -211,7 +218,8 @@ private:
 
     const Uint32 m_PrimitiveAttribsAlignedOffset;
 
-    HnTextureRegistry m_TextureRegistry;
+    HnTextureRegistry              m_TextureRegistry;
+    std::unique_ptr<HnRenderParam> m_RenderParam;
 
     std::atomic<Uint32>                      m_RPrimNextUID{1};
     mutable std::mutex                       m_RPrimUIDToSdfPathMtx;

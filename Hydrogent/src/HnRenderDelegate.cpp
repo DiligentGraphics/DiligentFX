@@ -30,6 +30,7 @@
 #include "HnCamera.hpp"
 #include "HnLight.hpp"
 #include "HnRenderPass.hpp"
+#include "HnRenderParam.hpp"
 #include "DebugUtilities.hpp"
 #include "GraphicsUtilities.h"
 #include "HnRenderBuffer.hpp"
@@ -139,12 +140,18 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
             }(m_PrimitiveAttribsCB)),
     },
     m_PrimitiveAttribsAlignedOffset{AlignUp(Uint32{sizeof(HLSL::PBRPrimitiveAttribs)}, CI.pDevice->GetAdapterInfo().Buffer.ConstantBufferOffsetAlignment)},
-    m_TextureRegistry{CI.pDevice}
+    m_TextureRegistry{CI.pDevice},
+    m_RenderParam{std::make_unique<HnRenderParam>()}
 {
 }
 
 HnRenderDelegate::~HnRenderDelegate()
 {
+}
+
+pxr::HdRenderParam* HnRenderDelegate::GetRenderParam() const
+{
+    return m_RenderParam.get();
 }
 
 const pxr::TfTokenVector& HnRenderDelegate::GetSupportedRprimTypes() const
