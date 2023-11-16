@@ -121,7 +121,7 @@ endif()
 
 if(MSVC)
     target_compile_definitions(USD-Libraries INTERFACE NOMINMAX)
-    target_compile_options(USD-Libraries INTERFACE /wd4244 /wd4305 /wd4127 /wd4267)
+    target_compile_options(USD-Libraries INTERFACE /wd4244 /wd4305 /wd4127 /wd4267 /wd4003)
     target_compile_options(Diligent-Hydrogent PRIVATE /permissive-)
 else()
     target_compile_options(USD-Libraries INTERFACE -Wno-deprecated-builtins -Wno-deprecated-declarations)
