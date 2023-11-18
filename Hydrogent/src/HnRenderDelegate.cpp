@@ -137,13 +137,11 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(IRenderDevice*     pDevic
 
 static RefCntAutoPtr<GLTF::ResourceManager> CreateResourceManager(IRenderDevice* pDevice)
 {
-#ifdef DILIGENT_DEBUG
+    // Initial vertex and index counts are not important as the
+    // real number of vertices and indices will be determined after
+    // all meshes are synced for the first time.
     static constexpr Uint32 InitialVertexCount = 1024;
-    static constexpr Uint32 InitialIndexCount  = 4096;
-#else
-    static constexpr Uint32 InitialVertexCount = 64 << 10;
-    static constexpr Uint32 InitialIndexCount  = 256 << 10;
-#endif
+    static constexpr Uint32 InitialIndexCount  = 1024;
 
     GLTF::ResourceManager::CreateInfo ResMgrCI;
 

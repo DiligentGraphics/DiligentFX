@@ -28,6 +28,7 @@
 
 #include <memory>
 #include <unordered_map>
+#include <map>
 
 #include "pxr/imaging/hd/types.h"
 #include "pxr/imaging/hd/mesh.h"
@@ -106,18 +107,6 @@ public:
     Uint32 GetNumEdges() const { return m_NumEdges; }
     Uint32 GetNumPoints() const { return m_Topology.GetNumPoints(); }
 
-    /// Returns the start vertex of the face data in the vertex buffers.
-    ///
-    /// \remarks    This value should be used as the base vertex for
-    ///             draw commands.
-    Uint32 GetFaceStartVertex() const { return m_FaceStartVertex; }
-
-    /// Returns the start vertex of the points data.
-    ///
-    /// \remarks    This value should be used as the base vertex for
-    ///             draw commands.
-    Uint32 GetPointsStartVertex() const { return m_PointsStartVertex; }
-
     /// Returns the start index of the face data in the index buffer.
     ///
     /// \remarks    This value should be used as the start index location
@@ -149,6 +138,8 @@ protected:
 
     void UpdateVertexBuffers(HnRenderDelegate& RenderDelegate);
     void UpdateIndexBuffer(HnRenderDelegate& RenderDelegate);
+    void AllocatePooledResources(pxr::HdSceneDelegate& SceneDelegate,
+                                 pxr::HdRenderParam*   RenderParam);
 
     void UpdateReprMaterialTags(pxr::HdSceneDelegate* SceneDelegate,
                                 pxr::HdRenderParam*   RenderParam);
@@ -210,18 +201,19 @@ private:
 
     struct VertexData
     {
-        using BufferSourceMapType = std::unordered_map<pxr::TfToken, std::shared_ptr<pxr::HdBufferSource>, pxr::TfToken::HashFunctor>;
+        // Use map to keep buffer sources sorted by name
+        using BufferSourceMapType = std::map<pxr::TfToken, std::shared_ptr<pxr::HdBufferSource>>;
         BufferSourceMapType VertexSources;
         BufferSourceMapType FaceSources;
+
+        std::unordered_map<pxr::TfToken, Uint32, pxr::TfToken::HashFunctor> NameToPoolIndex;
     };
     std::unique_ptr<VertexData> m_VertexData;
 
-    Uint32 m_NumFaceTriangles  = 0;
-    Uint32 m_NumEdges          = 0;
-    Uint32 m_FaceStartVertex   = 0;
-    Uint32 m_PointsStartVertex = 0;
-    Uint32 m_FaceStartIndex    = 0;
-    Uint32 m_EdgeStartIndex    = 0;
+    Uint32 m_NumFaceTriangles = 0;
+    Uint32 m_NumEdges         = 0;
+    Uint32 m_FaceStartIndex   = 0;
+    Uint32 m_EdgeStartIndex   = 0;
 
     float4x4 m_Transform    = float4x4::Identity();
     float4   m_DisplayColor = {1, 1, 1, 1};

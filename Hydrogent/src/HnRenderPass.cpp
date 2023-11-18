@@ -32,6 +32,8 @@
 #include "HnDrawItem.hpp"
 #include "HnTypeConversions.hpp"
 
+#include <array>
+
 #include "pxr/imaging/hd/renderIndex.h"
 
 #include "USD_Renderer.hpp"
@@ -70,9 +72,30 @@ struct HnRenderPass::RenderState
 
     const Uint32 PrimitiveAttribsAlignedOffset;
 
-    IBuffer*                pIndexBuffer = nullptr;
-    IPipelineState*         pPSO         = nullptr;
-    IShaderResourceBinding* pSRB         = nullptr;
+    IPipelineState*         pPSO = nullptr;
+    IShaderResourceBinding* pSRB = nullptr;
+
+    IBuffer*                pIndexBuffer    = nullptr;
+    std::array<IBuffer*, 4> ppVertexBuffers = {};
+
+    void SetPipelineState(IPipelineState* pNewPSO)
+    {
+        VERIFY_EXPR(pNewPSO != nullptr);
+        if (pNewPSO == nullptr || pNewPSO == pPSO)
+            return;
+
+        pCtx->SetPipelineState(pNewPSO);
+        pPSO = pNewPSO;
+    }
+
+    void CommitShaderResources(IShaderResourceBinding* pNewSRB)
+    {
+        if (pNewSRB == nullptr || pNewSRB == this->pSRB)
+            return;
+
+        pCtx->CommitShaderResources(pNewSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        pSRB = pNewSRB;
+    }
 
     void SetIndexBuffer(IBuffer* pNewIndexBuffer)
     {
@@ -81,6 +104,25 @@ struct HnRenderPass::RenderState
 
         pIndexBuffer = pNewIndexBuffer;
         pCtx->SetIndexBuffer(pIndexBuffer, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    }
+
+    void SetVertexBuffers(IBuffer** ppBuffers, Uint32 NumBuffers)
+    {
+        VERIFY_EXPR(NumBuffers < 4);
+        bool SetBuffers = false;
+        for (Uint32 i = 0; i < NumBuffers; ++i)
+        {
+            if (ppBuffers[i] != nullptr && ppBuffers[i] != ppVertexBuffers[i])
+            {
+                SetBuffers         = true;
+                ppVertexBuffers[i] = ppBuffers[i];
+            }
+        }
+
+        if (SetBuffers)
+        {
+            pCtx->SetVertexBuffers(0, NumBuffers, ppBuffers, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION, SET_VERTEX_BUFFERS_FLAG_RESET);
+        }
     }
 };
 
@@ -439,21 +481,10 @@ void HnRenderPass::RenderPendingDrawItems(RenderState& State)
     {
         const HnDrawItem& DrawItem = *m_PendingDrawItems[i];
 
-        IPipelineState* pPSO = DrawItem.GetPSO();
-        if (State.pPSO != pPSO)
-        {
-            State.pCtx->SetPipelineState(pPSO);
-            State.pPSO = pPSO;
-        }
+        State.SetPipelineState(DrawItem.GetPSO());
 
         DrawItem.GetPrimitiveAttribsVar()->SetBufferOffset(static_cast<Uint32>(i * State.PrimitiveAttribsAlignedOffset));
-
-        IShaderResourceBinding* pSRB = DrawItem.GetSRB();
-        if (State.pSRB != pSRB)
-        {
-            State.pCtx->CommitShaderResources(pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-            State.pSRB = pSRB;
-        }
+        State.CommitShaderResources(DrawItem.GetSRB());
 
         const auto& Geo = DrawItem.GetGeometryData();
 
@@ -473,6 +504,7 @@ void HnRenderPass::RenderPendingDrawItems(RenderState& State)
 
             case HN_RENDER_MODE_POINTS:
                 IndexBuffer = nullptr;
+                break;
 
             default:
                 UNEXPECTED("Unexpected render mode");
@@ -486,7 +518,7 @@ void HnRenderPass::RenderPendingDrawItems(RenderState& State)
             case HN_RENDER_MODE_SOLID:
             {
                 IBuffer* pBuffs[] = {Geo.FaceVerts, Geo.Normals, Geo.TexCoords[0], Geo.TexCoords[1]};
-                State.pCtx->SetVertexBuffers(0, _countof(pBuffs), pBuffs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+                State.SetVertexBuffers(pBuffs, _countof(pBuffs));
                 if (IndexBuffer != nullptr)
                 {
                     DrawIndexedAttribs DrawAttrs{Geo.NumFaceVertices, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
@@ -504,7 +536,7 @@ void HnRenderPass::RenderPendingDrawItems(RenderState& State)
                 if (IndexBuffer != nullptr)
                 {
                     IBuffer* pBuffs[] = {Geo.Points};
-                    State.pCtx->SetVertexBuffers(0, _countof(pBuffs), pBuffs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+                    State.SetVertexBuffers(pBuffs, _countof(pBuffs));
                     DrawIndexedAttribs DrawAttrs{Geo.NumEdgeVertices, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
                     DrawAttrs.FirstIndexLocation = StartIndex;
                     State.pCtx->DrawIndexed(DrawAttrs);
@@ -518,7 +550,7 @@ void HnRenderPass::RenderPendingDrawItems(RenderState& State)
             case HN_RENDER_MODE_POINTS:
             {
                 IBuffer* pBuffs[] = {Geo.Points};
-                State.pCtx->SetVertexBuffers(0, _countof(pBuffs), pBuffs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+                State.SetVertexBuffers(pBuffs, _countof(pBuffs));
                 State.pCtx->Draw({Geo.NumPoints, DRAW_FLAG_VERIFY_ALL});
             }
             break;
