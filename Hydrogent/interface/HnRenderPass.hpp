@@ -26,6 +26,8 @@
 
 #pragma once
 
+#include <unordered_set>
+
 #include "pxr/imaging/hd/types.h"
 #include "pxr/imaging/hd/renderPass.h"
 
@@ -41,6 +43,7 @@ namespace USD
 
 class HnDrawItem;
 class HnRenderPassState;
+class HnMaterial;
 
 struct HnMeshRenderParams
 {
@@ -83,6 +86,9 @@ public:
 
     void SetParams(const HnRenderPassParams& Params);
     void SetMeshRenderParams(const HnMeshRenderParams& Params);
+
+    using SupportedVertexInputsSetType = std::unordered_set<pxr::TfToken, pxr::TfToken::HashFunctor>;
+    static SupportedVertexInputsSetType GetSupportedVertexInputs(const HnMaterial* Material);
 
 protected:
     // Virtual API: Execute the buckets corresponding to renderTags;

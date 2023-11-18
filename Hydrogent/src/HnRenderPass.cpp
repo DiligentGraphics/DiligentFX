@@ -314,6 +314,22 @@ void HnRenderPass::UpdateDrawItems(const pxr::TfTokenVector& RenderTags)
     m_MaterialTag           = MaterialTag;
 }
 
+HnRenderPass::SupportedVertexInputsSetType HnRenderPass::GetSupportedVertexInputs(const HnMaterial* Material)
+{
+    SupportedVertexInputsSetType SupportedInputs{{pxr::HdTokens->points, pxr::HdTokens->normals}};
+    if (Material != nullptr)
+    {
+        const auto& TexCoordSets = Material->GetTextureCoordinateSets();
+        for (const auto& TexCoordSet : TexCoordSets)
+        {
+            if (!TexCoordSet.PrimVarName.IsEmpty())
+                SupportedInputs.emplace(TexCoordSet.PrimVarName);
+        }
+    }
+
+    return SupportedInputs;
+}
+
 void HnRenderPass::UpdateDrawItemsGPUResources(const HnRenderPassState& RPState)
 {
     VERIFY_EXPR(m_DrawItemsGPUResourcesDirty);

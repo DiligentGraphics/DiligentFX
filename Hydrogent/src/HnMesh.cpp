@@ -30,6 +30,7 @@
 #include "HnMaterial.hpp"
 #include "HnRenderDelegate.hpp"
 #include "HnRenderParam.hpp"
+#include "HnRenderPass.hpp"
 
 #include "DebugUtilities.hpp"
 #include "GraphicsTypesX.hpp"
@@ -152,11 +153,6 @@ void HnMesh::Sync(pxr::HdSceneDelegate* Delegate,
     if (Delegate != nullptr && DirtyBits != nullptr)
     {
         UpdateRepr(*Delegate, RenderParam, *DirtyBits, ReprToken);
-    }
-
-    if (*DirtyBits & pxr::HdChangeTracker::DirtyMaterialId)
-    {
-        m_MaterialId = Delegate->GetMaterialId(Id);
     }
 
     if (UpdateMaterialTags)
@@ -369,10 +365,17 @@ bool HnMesh::UpdateVertexPrimvars(pxr::HdSceneDelegate& SceneDelegate,
 
     const int NumPoints = m_Topology.GetNumPoints();
 
+    const auto* Material          = static_cast<const HnMaterial*>(SceneDelegate.GetRenderIndex().GetSprim(pxr::HdPrimTypeTokens->material, GetMaterialId()));
+    const auto  SupportedPrimvars = HnRenderPass::GetSupportedVertexInputs(Material);
+
     pxr::HdPrimvarDescriptorVector VertexPrims = GetPrimvarDescriptors(&SceneDelegate, pxr::HdInterpolationVertex);
     for (const pxr::HdPrimvarDescriptor& PrimDesc : VertexPrims)
     {
         if (!pxr::HdChangeTracker::IsPrimvarDirty(DirtyBits, Id, PrimDesc.name))
+            continue;
+
+        // Skip unsupported primvars
+        if (SupportedPrimvars.find(PrimDesc.name) == SupportedPrimvars.end())
             continue;
 
         pxr::VtValue PrimValue = GetPrimvar(&SceneDelegate, PrimDesc.name);
@@ -401,10 +404,17 @@ void HnMesh::UpdateFaceVaryingPrimvars(pxr::HdSceneDelegate& SceneDelegate,
     VERIFY_EXPR(m_VertexData);
     const pxr::SdfPath& Id = GetId();
 
+    const auto* Material          = static_cast<const HnMaterial*>(SceneDelegate.GetRenderIndex().GetSprim(pxr::HdPrimTypeTokens->material, GetMaterialId()));
+    const auto  SupportedPrimvars = HnRenderPass::GetSupportedVertexInputs(Material);
+
     pxr::HdPrimvarDescriptorVector FaceVaryingPrims = GetPrimvarDescriptors(&SceneDelegate, pxr::HdInterpolationFaceVarying);
     for (const pxr::HdPrimvarDescriptor& PrimDesc : FaceVaryingPrims)
     {
         if (!pxr::HdChangeTracker::IsPrimvarDirty(DirtyBits, Id, PrimDesc.name))
+            continue;
+
+        // Skip unsupported primvars
+        if (SupportedPrimvars.find(PrimDesc.name) == SupportedPrimvars.end())
             continue;
 
         pxr::VtValue PrimValue = GetPrimvar(&SceneDelegate, PrimDesc.name);

@@ -123,8 +123,6 @@ public:
     const float4x4& GetTransform() const { return m_Transform; }
     const float4&   GetDisplayColor() const { return m_DisplayColor; }
 
-    const pxr::SdfPath& GetMaterialId() const { return m_MaterialId; }
-
     Uint32 GetUID() const { return m_UID; }
 
 protected:
@@ -190,8 +188,6 @@ private:
 
 private:
     const Uint32 m_UID;
-
-    pxr::SdfPath m_MaterialId;
 
     pxr::HdMeshTopology m_Topology;
 
