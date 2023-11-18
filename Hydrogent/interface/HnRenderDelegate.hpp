@@ -45,6 +45,11 @@
 namespace Diligent
 {
 
+namespace GLTF
+{
+class ResourceManager;
+}
+
 namespace USD
 {
 
@@ -62,6 +67,9 @@ public:
         IRenderDevice*     pDevice           = nullptr;
         IDeviceContext*    pContext          = nullptr;
         IRenderStateCache* pRenderStateCache = nullptr;
+
+        bool UseVertexPool = false;
+        bool UseIndexPool  = false;
     };
     static std::unique_ptr<HnRenderDelegate> Create(const CreateInfo& CI);
 
@@ -194,6 +202,8 @@ public:
 
     std::shared_ptr<USD_Renderer> GetUSDRenderer() { return m_USDRenderer; }
 
+    GLTF::ResourceManager& GetResourceManager() { return *m_ResourceMgr; }
+
     IRenderDevice*     GetDevice() const { return m_pDevice; }
     IDeviceContext*    GetDeviceContext() const { return m_pContext; }
     IRenderStateCache* GetRenderStateCache() const { return m_pRenderStateCache; }
@@ -212,9 +222,10 @@ private:
     RefCntAutoPtr<IDeviceContext>    m_pContext;
     RefCntAutoPtr<IRenderStateCache> m_pRenderStateCache;
 
-    RefCntAutoPtr<IBuffer>        m_FrameAttribsCB;
-    RefCntAutoPtr<IBuffer>        m_PrimitiveAttribsCB;
-    std::shared_ptr<USD_Renderer> m_USDRenderer;
+    RefCntAutoPtr<GLTF::ResourceManager> m_ResourceMgr;
+    RefCntAutoPtr<IBuffer>               m_FrameAttribsCB;
+    RefCntAutoPtr<IBuffer>               m_PrimitiveAttribsCB;
+    std::shared_ptr<USD_Renderer>        m_USDRenderer;
 
     const Uint32 m_PrimitiveAttribsAlignedOffset;
 

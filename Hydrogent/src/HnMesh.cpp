@@ -28,9 +28,12 @@
 #include "HnMesh.hpp"
 #include "HnTokens.hpp"
 #include "HnMaterial.hpp"
+#include "HnRenderDelegate.hpp"
+#include "HnRenderParam.hpp"
 
 #include "DebugUtilities.hpp"
 #include "GraphicsTypesX.hpp"
+#include "GLTFResourceManager.hpp"
 
 #include "pxr/base/gf/vec2f.h"
 #include "pxr/imaging/hd/meshUtil.h"
@@ -311,6 +314,17 @@ void HnMesh::UpdateTopology(pxr::HdSceneDelegate& SceneDelegate,
     MeshUtil.EnumerateEdges(&m_IndexData->MeshEdgeIndices);
     m_NumFaceTriangles = static_cast<Uint32>(m_IndexData->TrianglesFaceIndices.size());
     m_NumEdges         = static_cast<Uint32>(m_IndexData->MeshEdgeIndices.size());
+
+    if (static_cast<const HnRenderParam*>(RenderParam)->GetUseIndexPool())
+    {
+        HnRenderDelegate*      RenderDelegate = static_cast<HnRenderDelegate*>(SceneDelegate.GetRenderIndex().GetRenderDelegate());
+        GLTF::ResourceManager& ResMgr         = RenderDelegate->GetResourceManager();
+
+        m_FaceIndexAllocation = ResMgr.AllocateIndices(sizeof(Uint32) * m_NumFaceTriangles * 3);
+        m_EdgeIndexAllocation = ResMgr.AllocateIndices(sizeof(Uint32) * m_NumEdges * 2);
+        m_FaceStartIndex      = m_FaceIndexAllocation->GetOffset() / sizeof(Uint32);
+        m_EdgeStartIndex      = m_EdgeIndexAllocation->GetOffset() / sizeof(Uint32);
+    }
 
     DirtyBits &= ~pxr::HdChangeTracker::DirtyTopology;
 }
@@ -632,8 +646,10 @@ void HnMesh::ConvertVertexPrimvarSources()
     }
 }
 
-void HnMesh::UpdateVertexBuffers(const RenderDeviceX_N& Device)
+void HnMesh::UpdateVertexBuffers(HnRenderDelegate& RenderDelegate)
 {
+    const RenderDeviceX_N& Device{RenderDelegate.GetDevice()};
+
     if (!m_VertexData)
     {
         UNEXPECTED("Vertex data is null");
@@ -693,58 +709,71 @@ void HnMesh::UpdateVertexBuffers(const RenderDeviceX_N& Device)
     m_VertexData.reset();
 }
 
-void HnMesh::UpdateIndexBuffer(const RenderDeviceX_N& Device)
+void HnMesh::UpdateIndexBuffer(HnRenderDelegate& RenderDelegate)
 {
     VERIFY_EXPR(m_IndexData);
 
+    auto PrepareIndexBuffer = [&](const char*           BufferName,
+                                  const void*           pData,
+                                  size_t                DataSize,
+                                  IBufferSuballocation* pSuballocation) {
+        const std::string Name = GetId().GetString() + " - " + BufferName;
+
+        if (pSuballocation == nullptr)
+        {
+            BufferDesc Desc{
+                Name.c_str(),
+                DataSize,
+                BIND_INDEX_BUFFER,
+                USAGE_IMMUTABLE,
+            };
+            BufferData InitData{pData, Desc.Size};
+
+            const RenderDeviceX_N& Device{RenderDelegate.GetDevice()};
+            return Device.CreateBuffer(Desc, &InitData);
+        }
+        else
+        {
+            RefCntAutoPtr<IBuffer> pBuffer{pSuballocation->GetBuffer()};
+            IDeviceContext*        pCtx = RenderDelegate.GetDeviceContext();
+            VERIFY_EXPR(pSuballocation->GetSize() == DataSize);
+            pCtx->UpdateBuffer(pBuffer, pSuballocation->GetOffset(), DataSize, pData, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+            return pBuffer;
+        }
+    };
+
     if (!m_IndexData->TrianglesFaceIndices.empty())
     {
-        const auto Name = GetId().GetString() + " - Triangle Index Buffer";
-
         VERIFY_EXPR(m_NumFaceTriangles == static_cast<size_t>(m_IndexData->TrianglesFaceIndices.size()));
         static_assert(sizeof(m_IndexData->TrianglesFaceIndices[0]) == sizeof(Uint32) * 3, "Unexpected triangle data size");
-
-        BufferDesc Desc{
-            Name.c_str(),
-            m_NumFaceTriangles * sizeof(Uint32) * 3,
-            BIND_INDEX_BUFFER,
-            USAGE_IMMUTABLE,
-        };
-
-        BufferData InitData{m_IndexData->TrianglesFaceIndices.data(), Desc.Size};
-        m_pFaceIndexBuffer = Device.CreateBuffer(Desc, &InitData);
+        m_pFaceIndexBuffer = PrepareIndexBuffer("Triangle Index Buffer",
+                                                m_IndexData->TrianglesFaceIndices.data(),
+                                                m_NumFaceTriangles * sizeof(Uint32) * 3,
+                                                m_FaceIndexAllocation);
     }
 
     if (!m_IndexData->MeshEdgeIndices.empty())
     {
-        const auto Name = GetId().GetString() + " - Edge Index Buffer";
-
         VERIFY_EXPR(m_NumEdges == static_cast<Uint32>(m_IndexData->MeshEdgeIndices.size()));
-
-        BufferDesc Desc{
-            Name.c_str(),
-            m_NumEdges * sizeof(Uint32) * 2,
-            BIND_INDEX_BUFFER,
-            USAGE_IMMUTABLE,
-        };
-
-        BufferData InitData{m_IndexData->MeshEdgeIndices.data(), Desc.Size};
-        m_pEdgeIndexBuffer = Device.CreateBuffer(Desc, &InitData);
+        m_pEdgeIndexBuffer = PrepareIndexBuffer("Edge Index Buffer",
+                                                m_IndexData->MeshEdgeIndices.data(),
+                                                m_NumEdges * sizeof(Uint32) * 2,
+                                                m_EdgeIndexAllocation);
     }
 
     m_IndexData.reset();
 }
 
-void HnMesh::CommitGPUResources(IRenderDevice* pDevice)
+void HnMesh::CommitGPUResources(HnRenderDelegate& RenderDelegate)
 {
     if (m_IndexData)
     {
-        UpdateIndexBuffer(pDevice);
+        UpdateIndexBuffer(RenderDelegate);
     }
 
     if (m_VertexData)
     {
-        UpdateVertexBuffers(pDevice);
+        UpdateVertexBuffers(RenderDelegate);
     }
 }
 

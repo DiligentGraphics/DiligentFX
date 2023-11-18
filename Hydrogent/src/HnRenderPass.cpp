@@ -70,8 +70,18 @@ struct HnRenderPass::RenderState
 
     const Uint32 PrimitiveAttribsAlignedOffset;
 
-    IPipelineState*         pPSO = nullptr;
-    IShaderResourceBinding* pSRB = nullptr;
+    IBuffer*                pIndexBuffer = nullptr;
+    IPipelineState*         pPSO         = nullptr;
+    IShaderResourceBinding* pSRB         = nullptr;
+
+    void SetIndexBuffer(IBuffer* pNewIndexBuffer)
+    {
+        if (pNewIndexBuffer == nullptr || pNewIndexBuffer == pIndexBuffer)
+            return;
+
+        pIndexBuffer = pNewIndexBuffer;
+        pCtx->SetIndexBuffer(pIndexBuffer, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    }
 };
 
 void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
@@ -360,6 +370,8 @@ void HnRenderPass::UpdateDrawItemsGPUResources(const HnRenderPassState& RPState)
             Geo.NumFaceVertices = Mesh.GetNumFaceTriangles() * 3;
             Geo.NumEdgeVertices = Mesh.GetNumEdges() * 2;
             Geo.NumPoints       = Mesh.GetNumPoints();
+            Geo.FaceStartIndex  = Mesh.GetFaceStartIndex();
+            Geo.EdgeStartIndex  = Mesh.GetEdgeStartIndex();
 
             DrawItem.SetGeometryData(std::move(Geo));
         }
@@ -445,16 +457,41 @@ void HnRenderPass::RenderPendingDrawItems(RenderState& State)
 
         const auto& Geo = DrawItem.GetGeometryData();
 
+        IBuffer* IndexBuffer = nullptr;
+        Uint32   StartIndex  = 0;
+        switch (m_RenderParams.RenderMode)
+        {
+            case HN_RENDER_MODE_SOLID:
+                IndexBuffer = Geo.FaceIndices;
+                StartIndex  = Geo.FaceStartIndex;
+                break;
+
+            case HN_RENDER_MODE_MESH_EDGES:
+                IndexBuffer = Geo.EdgeIndices;
+                StartIndex  = Geo.EdgeStartIndex;
+                break;
+
+            case HN_RENDER_MODE_POINTS:
+                IndexBuffer = nullptr;
+
+            default:
+                UNEXPECTED("Unexpected render mode");
+                return;
+        }
+        static_assert(HN_RENDER_MODE_COUNT == 3, "Please handle the new render mode in the switch above");
+        State.SetIndexBuffer(IndexBuffer);
+
         switch (m_RenderParams.RenderMode)
         {
             case HN_RENDER_MODE_SOLID:
             {
                 IBuffer* pBuffs[] = {Geo.FaceVerts, Geo.Normals, Geo.TexCoords[0], Geo.TexCoords[1]};
                 State.pCtx->SetVertexBuffers(0, _countof(pBuffs), pBuffs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-                if (IBuffer* pIB = Geo.FaceIndices)
+                if (IndexBuffer != nullptr)
                 {
-                    State.pCtx->SetIndexBuffer(Geo.FaceIndices, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-                    State.pCtx->DrawIndexed({Geo.NumFaceVertices, VT_UINT32, DRAW_FLAG_VERIFY_ALL});
+                    DrawIndexedAttribs DrawAttrs{Geo.NumFaceVertices, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
+                    DrawAttrs.FirstIndexLocation = StartIndex;
+                    State.pCtx->DrawIndexed(DrawAttrs);
                 }
                 else
                 {
@@ -464,12 +501,13 @@ void HnRenderPass::RenderPendingDrawItems(RenderState& State)
             break;
 
             case HN_RENDER_MODE_MESH_EDGES:
-                if (IBuffer* pIB = Geo.EdgeIndices)
+                if (IndexBuffer != nullptr)
                 {
                     IBuffer* pBuffs[] = {Geo.Points};
                     State.pCtx->SetVertexBuffers(0, _countof(pBuffs), pBuffs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-                    State.pCtx->SetIndexBuffer(pIB, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-                    State.pCtx->DrawIndexed({Geo.NumEdgeVertices, VT_UINT32, DRAW_FLAG_VERIFY_ALL});
+                    DrawIndexedAttribs DrawAttrs{Geo.NumEdgeVertices, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
+                    DrawAttrs.FirstIndexLocation = StartIndex;
+                    State.pCtx->DrawIndexed(DrawAttrs);
                 }
                 else
                 {

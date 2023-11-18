@@ -35,6 +35,7 @@
 #include "GraphicsUtilities.h"
 #include "HnRenderBuffer.hpp"
 #include "Align.hpp"
+#include "GLTFResourceManager.hpp"
 
 #include "pxr/imaging/hd/material.h"
 
@@ -79,69 +80,93 @@ const pxr::TfTokenVector HnRenderDelegate::SupportedBPrimTypes =
 // clang-format on
 
 
+static RefCntAutoPtr<IBuffer> CreateFrameAttribsCB(IRenderDevice* pDevice)
+{
+    RefCntAutoPtr<IBuffer> FrameAttribsCB;
+    CreateUniformBuffer(
+        pDevice,
+        sizeof(HLSL::PBRFrameAttribs),
+        "PBR frame attribs CB",
+        &FrameAttribsCB,
+        USAGE_DEFAULT);
+    return FrameAttribsCB;
+}
+
+static RefCntAutoPtr<IBuffer> CreatePrimitiveAttribsCB(IRenderDevice* pDevice)
+{
+    // Allocate a large buffer to batch primitive draw calls
+    RefCntAutoPtr<IBuffer> PrimitiveAttribsCB;
+    CreateUniformBuffer(
+        pDevice,
+        65536,
+        "PBR frame attribs CB",
+        &PrimitiveAttribsCB,
+        USAGE_DYNAMIC);
+    return PrimitiveAttribsCB;
+}
+
+static std::shared_ptr<USD_Renderer> CreateUSDRenderer(IRenderDevice*     pDevice,
+                                                       IRenderStateCache* pRenderStateCache,
+                                                       IDeviceContext*    pContext,
+                                                       IBuffer*           pPrimitiveAttribsCB)
+{
+    USD_Renderer::CreateInfo USDRendererCI;
+
+    // Use samplers from texture views
+    USDRendererCI.UseImmutableSamplers = false;
+    // Disable animation
+    USDRendererCI.MaxJointCount = 0;
+    // Use separate textures for metallic and roughness
+    USDRendererCI.UseSeparateMetallicRoughnessTextures = true;
+
+    static constexpr LayoutElement Inputs[] =
+        {
+            {0, 0, 3, VT_FLOAT32}, //float3 Pos     : ATTRIB0;
+            {1, 1, 3, VT_FLOAT32}, //float3 Normal  : ATTRIB1;
+            {2, 2, 2, VT_FLOAT32}, //float2 UV0     : ATTRIB2;
+            {3, 3, 2, VT_FLOAT32}, //float2 UV1     : ATTRIB3;
+        };
+
+    USDRendererCI.InputLayout.LayoutElements = Inputs;
+    USDRendererCI.InputLayout.NumElements    = _countof(Inputs);
+
+    USDRendererCI.pPrimitiveAttribsCB = pPrimitiveAttribsCB;
+
+    return std::make_shared<USD_Renderer>(pDevice, pRenderStateCache, pContext, USDRendererCI);
+}
+
+static RefCntAutoPtr<GLTF::ResourceManager> CreateResourceManager(IRenderDevice* pDevice)
+{
+#ifdef DILIGENT_DEBUG
+    static constexpr Uint32 InitialVertexCount = 1024;
+    static constexpr Uint32 InitialIndexCount  = 4096;
+#else
+    static constexpr Uint32 InitialVertexCount = 64 << 10;
+    static constexpr Uint32 InitialIndexCount  = 256 << 10;
+#endif
+
+    GLTF::ResourceManager::CreateInfo ResMgrCI;
+
+    ResMgrCI.IndexAllocatorCI.Desc        = {"Index pool", sizeof(Uint32) * InitialIndexCount, BIND_INDEX_BUFFER, USAGE_DEFAULT};
+    ResMgrCI.IndexAllocatorCI.VirtualSize = Uint64{1024} << Uint64{20};
+
+    ResMgrCI.DefaultPoolDesc.VertexCount = InitialVertexCount;
+    ResMgrCI.DefaultPoolDesc.Usage       = USAGE_DEFAULT;
+
+    return GLTF::ResourceManager::Create(pDevice, ResMgrCI);
+}
+
 HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
     m_pDevice{CI.pDevice},
     m_pContext{CI.pContext},
     m_pRenderStateCache{CI.pRenderStateCache},
-    m_FrameAttribsCB{
-        [](IRenderDevice* pDevice) {
-            RefCntAutoPtr<IBuffer> FrameAttribsCB;
-            CreateUniformBuffer(
-                pDevice,
-                sizeof(HLSL::PBRFrameAttribs),
-                "PBR frame attribs CB",
-                &FrameAttribsCB,
-                USAGE_DEFAULT);
-            return FrameAttribsCB;
-        }(CI.pDevice),
-    },
-    m_PrimitiveAttribsCB{
-        [](IRenderDevice* pDevice) {
-            // Allocate a large buffer to batch primitive draw calls
-            RefCntAutoPtr<IBuffer> PrimitiveAttribsCB;
-            CreateUniformBuffer(
-                pDevice,
-                65536,
-                "PBR frame attribs CB",
-                &PrimitiveAttribsCB,
-                USAGE_DYNAMIC);
-            return PrimitiveAttribsCB;
-        }(CI.pDevice),
-    },
-    m_USDRenderer{
-        std::make_shared<USD_Renderer>(
-            CI.pDevice,
-            CI.pRenderStateCache,
-            CI.pContext,
-            [](IBuffer* pPrimitiveAttribsCB) {
-                USD_Renderer::CreateInfo USDRendererCI;
-
-                // Use samplers from texture views
-                USDRendererCI.UseImmutableSamplers = false;
-                // Disable animation
-                USDRendererCI.MaxJointCount = 0;
-                // Use separate textures for metallic and roughness
-                USDRendererCI.UseSeparateMetallicRoughnessTextures = true;
-
-                static constexpr LayoutElement Inputs[] =
-                    {
-                        {0, 0, 3, VT_FLOAT32}, //float3 Pos     : ATTRIB0;
-                        {1, 1, 3, VT_FLOAT32}, //float3 Normal  : ATTRIB1;
-                        {2, 2, 2, VT_FLOAT32}, //float2 UV0     : ATTRIB2;
-                        {3, 3, 2, VT_FLOAT32}, //float2 UV1     : ATTRIB3;
-                    };
-
-                USDRendererCI.InputLayout.LayoutElements = Inputs;
-                USDRendererCI.InputLayout.NumElements    = _countof(Inputs);
-
-                USDRendererCI.pPrimitiveAttribsCB = pPrimitiveAttribsCB;
-
-                return USDRendererCI;
-            }(m_PrimitiveAttribsCB)),
-    },
+    m_ResourceMgr{CreateResourceManager(CI.pDevice)},
+    m_FrameAttribsCB{CreateFrameAttribsCB(CI.pDevice)},
+    m_PrimitiveAttribsCB{CreatePrimitiveAttribsCB(CI.pDevice)},
+    m_USDRenderer{CreateUSDRenderer(CI.pDevice, CI.pRenderStateCache, CI.pContext, m_PrimitiveAttribsCB)},
     m_PrimitiveAttribsAlignedOffset{AlignUp(Uint32{sizeof(HLSL::PBRPrimitiveAttribs)}, CI.pDevice->GetAdapterInfo().Buffer.ConstantBufferOffsetAlignment)},
     m_TextureRegistry{CI.pDevice},
-    m_RenderParam{std::make_unique<HnRenderParam>()}
+    m_RenderParam{std::make_unique<HnRenderParam>(CI.UseVertexPool, CI.UseIndexPool)}
 {
 }
 
@@ -322,6 +347,8 @@ void HnRenderDelegate::DestroyBprim(pxr::HdBprim* BPrim)
 
 void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
 {
+    m_ResourceMgr->UpdateAllResources(m_pDevice, m_pContext);
+
     m_TextureRegistry.Commit(m_pContext);
 
     {
@@ -336,7 +363,7 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
         std::lock_guard<std::mutex> Guard{m_MeshesMtx};
         for (auto* pMesh : m_Meshes)
         {
-            pMesh->CommitGPUResources(m_pDevice);
+            pMesh->CommitGPUResources(*this);
         }
     }
 }

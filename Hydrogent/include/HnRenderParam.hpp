@@ -38,8 +38,16 @@ namespace USD
 class HnRenderParam final : public pxr::HdRenderParam
 {
 public:
-    HnRenderParam() noexcept;
+    HnRenderParam(bool UseVertexPool,
+                  bool UseIndexPool) noexcept;
     ~HnRenderParam();
+
+    bool GetUseVertexPool() const { return m_UseVertexPool; }
+    bool GetUseIndexPool() const { return m_UseIndexPool; }
+
+private:
+    const bool m_UseVertexPool;
+    const bool m_UseIndexPool;
 };
 
 } // namespace USD

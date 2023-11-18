@@ -42,8 +42,13 @@
 namespace Diligent
 {
 
+struct IVertexPoolAllocation;
+struct IBufferSuballocation;
+
 namespace USD
 {
+
+class HnRenderDelegate;
 
 /// Hydra mesh implementation in Hydrogent.
 class HnMesh final : public pxr::HdMesh
@@ -70,7 +75,7 @@ public:
     // are part of the core geometric schema for this prim.
     virtual const pxr::TfTokenVector& GetBuiltinPrimvarNames() const override final;
 
-    void CommitGPUResources(IRenderDevice* pDevice);
+    void CommitGPUResources(HnRenderDelegate& RenderDelegate);
 
     /// Returns face vertex buffer for the given primvar name (e.g. "points", "normals", etc.).
     /// If the buffer doesn't exist, returns nullptr.
@@ -97,10 +102,33 @@ public:
     ///             It indexes the buffer returned by GetPointsVertexBuffer().
     IBuffer* GetEdgeIndexBuffer() const { return m_pEdgeIndexBuffer; }
 
-
     Uint32 GetNumFaceTriangles() const { return m_NumFaceTriangles; }
     Uint32 GetNumEdges() const { return m_NumEdges; }
     Uint32 GetNumPoints() const { return m_Topology.GetNumPoints(); }
+
+    /// Returns the start vertex of the face data in the vertex buffers.
+    ///
+    /// \remarks    This value should be used as the base vertex for
+    ///             draw commands.
+    Uint32 GetFaceStartVertex() const { return m_FaceStartVertex; }
+
+    /// Returns the start vertex of the points data.
+    ///
+    /// \remarks    This value should be used as the base vertex for
+    ///             draw commands.
+    Uint32 GetPointsStartVertex() const { return m_PointsStartVertex; }
+
+    /// Returns the start index of the face data in the index buffer.
+    ///
+    /// \remarks    This value should be used as the start index location
+    ///             for draw commands.
+    Uint32 GetFaceStartIndex() const { return m_FaceStartIndex; }
+
+    /// Returns the start index of the edges data in the index buffer.
+    ///
+    /// \remarks    This value should be used as the start index location
+    ///             for draw commands.
+    Uint32 GetEdgeStartIndex() const { return m_EdgeStartIndex; }
 
     const float4x4& GetTransform() const { return m_Transform; }
     const float4&   GetDisplayColor() const { return m_DisplayColor; }
@@ -119,8 +147,8 @@ protected:
     // is used.
     virtual void _InitRepr(const pxr::TfToken& reprToken, pxr::HdDirtyBits* dirtyBits) override final;
 
-    void UpdateVertexBuffers(const RenderDeviceX_N& Device);
-    void UpdateIndexBuffer(const RenderDeviceX_N& Device);
+    void UpdateVertexBuffers(HnRenderDelegate& RenderDelegate);
+    void UpdateIndexBuffer(HnRenderDelegate& RenderDelegate);
 
     void UpdateReprMaterialTags(pxr::HdSceneDelegate* SceneDelegate,
                                 pxr::HdRenderParam*   RenderParam);
@@ -169,6 +197,8 @@ private:
 private:
     const Uint32 m_UID;
 
+    pxr::SdfPath m_MaterialId;
+
     pxr::HdMeshTopology m_Topology;
 
     struct IndexData
@@ -186,18 +216,24 @@ private:
     };
     std::unique_ptr<VertexData> m_VertexData;
 
-
-    Uint32 m_NumFaceTriangles = 0;
-    Uint32 m_NumEdges         = 0;
+    Uint32 m_NumFaceTriangles  = 0;
+    Uint32 m_NumEdges          = 0;
+    Uint32 m_FaceStartVertex   = 0;
+    Uint32 m_PointsStartVertex = 0;
+    Uint32 m_FaceStartIndex    = 0;
+    Uint32 m_EdgeStartIndex    = 0;
 
     float4x4 m_Transform    = float4x4::Identity();
     float4   m_DisplayColor = {1, 1, 1, 1};
 
-    pxr::SdfPath m_MaterialId;
-
     RefCntAutoPtr<IBuffer> m_pFaceIndexBuffer;
     RefCntAutoPtr<IBuffer> m_pEdgeIndexBuffer;
     RefCntAutoPtr<IBuffer> m_pPointsVertexBuffer;
+
+    RefCntAutoPtr<IVertexPoolAllocation> m_FaceVertsAllocation;
+    RefCntAutoPtr<IVertexPoolAllocation> m_PointsAllocation;
+    RefCntAutoPtr<IBufferSuballocation>  m_FaceIndexAllocation;
+    RefCntAutoPtr<IBufferSuballocation>  m_EdgeIndexAllocation;
 
     std::unordered_map<pxr::TfToken, RefCntAutoPtr<IBuffer>, pxr::TfToken::HashFunctor> m_FaceVertexBuffers;
 };
