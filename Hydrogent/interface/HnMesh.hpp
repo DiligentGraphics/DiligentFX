@@ -29,6 +29,7 @@
 #include <memory>
 #include <unordered_map>
 #include <map>
+#include <vector>
 
 #include "pxr/imaging/hd/types.h"
 #include "pxr/imaging/hd/mesh.h"
@@ -65,8 +66,8 @@ public:
     // added to the change tracker for this prim, when this prim is inserted.
     virtual pxr::HdDirtyBits GetInitialDirtyBitsMask() const override final;
 
-    /// Pull invalidated scene data and prepare/update the renderable
-    /// representation.
+    // Pulls invalidated scene data and prepares/updates the renderable
+    // representation.
     virtual void Sync(pxr::HdSceneDelegate* Delegate,
                       pxr::HdRenderParam*   RenderParam,
                       pxr::HdDirtyBits*     DirtyBits,
@@ -78,30 +79,24 @@ public:
 
     void CommitGPUResources(HnRenderDelegate& RenderDelegate);
 
-    /// Returns face vertex buffer for the given primvar name (e.g. "points", "normals", etc.).
+    /// Returns the vertex buffer for the given primvar name (e.g. "points", "normals", etc.).
     /// If the buffer doesn't exist, returns nullptr.
-    ///
-    /// \remarks    This buffer may be indexed or non-indexed.
-    IBuffer* GetFaceVertexBuffer(const pxr::TfToken& Name) const;
-
-    /// Returns the points vertex buffer.
-    ///
-    /// \remarks    This buffer should be used to render points
-    ///             or mesh edges.
-    IBuffer* GetPointsVertexBuffer() const { return m_pPointsVertexBuffer; }
+    IBuffer* GetVertexBuffer(const pxr::TfToken& Name) const;
 
     /// Returns the face index buffer.
     ///
-    /// \remarks    If not null, this buffer should be used to index
-    ///             the face vertex buffers returned by GetFaceVertexBuffer().
-    ///             If null, the face vertex buffers are not indexed.
+    /// \remarks    The index buffer contains the triangle list.
     IBuffer* GetFaceIndexBuffer() const { return m_pFaceIndexBuffer; }
 
-    /// Returns the edge index buffer.
+    /// Returns the edges index buffer.
     ///
-    /// \remarks    This buffer should be used to render mesh edges.
-    ///             It indexes the buffer returned by GetPointsVertexBuffer().
+    /// \remarks    The index buffer contains the line list.
     IBuffer* GetEdgeIndexBuffer() const { return m_pEdgeIndexBuffer; }
+
+    /// Returns the points index buffer.
+    ///
+    /// \remarks    The index buffer contains the point list.
+    IBuffer* GetPointsIndexBuffer() const { return m_pPointsIndexBuffer; }
 
     Uint32 GetNumFaceTriangles() const { return m_NumFaceTriangles; }
     Uint32 GetNumEdges() const { return m_NumEdges; }
@@ -110,14 +105,20 @@ public:
     /// Returns the start index of the face data in the index buffer.
     ///
     /// \remarks    This value should be used as the start index location
-    ///             for draw commands.
+    ///             for the face drawing commands.
     Uint32 GetFaceStartIndex() const { return m_FaceStartIndex; }
 
     /// Returns the start index of the edges data in the index buffer.
     ///
     /// \remarks    This value should be used as the start index location
-    ///             for draw commands.
+    ///             for the mesh edges drawing commands.
     Uint32 GetEdgeStartIndex() const { return m_EdgeStartIndex; }
+
+    /// Returns the start index of the points data in the index buffer.
+    ///
+    /// \remarks    This value should be used as the start index location
+    ///             for the points drawing commands.
+    Uint32 GetPointsStartIndex() const { return m_PointsStartIndex; }
 
     const float4x4& GetTransform() const { return m_Transform; }
     const float4&   GetDisplayColor() const { return m_DisplayColor; }
@@ -131,7 +132,7 @@ protected:
     // additional dirty bits based on those already set.
     virtual pxr::HdDirtyBits _PropagateDirtyBits(pxr::HdDirtyBits bits) const override final;
 
-    // Initialize the given representation of this Rprim.
+    // Initializes the given representation of this Rprim.
     // This is called prior to syncing the prim, the first time the repr
     // is used.
     virtual void _InitRepr(const pxr::TfToken& reprToken, pxr::HdDirtyBits* dirtyBits) override final;
@@ -159,10 +160,12 @@ private:
                               pxr::HdDirtyBits&     DirtyBits,
                               const pxr::TfToken&   ReprToken);
 
+    using FaceSourcesMapType = std::unordered_map<pxr::TfToken, std::shared_ptr<pxr::HdBufferSource>, pxr::TfToken::HashFunctor>;
     void UpdateFaceVaryingPrimvars(pxr::HdSceneDelegate& SceneDelegate,
                                    pxr::HdRenderParam*   RenderParam,
                                    pxr::HdDirtyBits&     DirtyBits,
-                                   const pxr::TfToken&   ReprToken);
+                                   const pxr::TfToken&   ReprToken,
+                                   FaceSourcesMapType&   FaceSources);
 
     void UpdateConstantPrimvars(pxr::HdSceneDelegate& SceneDelegate,
                                 pxr::HdRenderParam*   RenderParam,
@@ -172,7 +175,7 @@ private:
     void GenerateSmoothNormals();
 
     // Converts vertex primvar sources into face-varying primvar sources.
-    void ConvertVertexPrimvarSources();
+    void ConvertVertexPrimvarSources(FaceSourcesMapType&& FaceSources);
 
     void UpdateTopology(pxr::HdSceneDelegate& SceneDelegate,
                         pxr::HdRenderParam*   RenderParam,
@@ -196,16 +199,16 @@ private:
     {
         pxr::VtVec3iArray         TrianglesFaceIndices;
         std::vector<pxr::GfVec2i> MeshEdgeIndices;
+        std::vector<Uint32>       PointIndices;
     };
     std::unique_ptr<IndexData> m_IndexData;
 
     struct VertexData
     {
         // Use map to keep buffer sources sorted by name
-        using BufferSourceMapType = std::map<pxr::TfToken, std::shared_ptr<pxr::HdBufferSource>>;
-        BufferSourceMapType VertexSources;
-        BufferSourceMapType FaceSources;
+        std::map<pxr::TfToken, std::shared_ptr<pxr::HdBufferSource>> Sources;
 
+        // Buffer source name to vertex pool element index (e.g. "normals" -> 0, "points" -> 1, etc.)
         std::unordered_map<pxr::TfToken, Uint32, pxr::TfToken::HashFunctor> NameToPoolIndex;
     };
     std::unique_ptr<VertexData> m_VertexData;
@@ -214,20 +217,21 @@ private:
     Uint32 m_NumEdges         = 0;
     Uint32 m_FaceStartIndex   = 0;
     Uint32 m_EdgeStartIndex   = 0;
+    Uint32 m_PointsStartIndex = 0;
 
     float4x4 m_Transform    = float4x4::Identity();
     float4   m_DisplayColor = {1, 1, 1, 1};
 
     RefCntAutoPtr<IBuffer> m_pFaceIndexBuffer;
     RefCntAutoPtr<IBuffer> m_pEdgeIndexBuffer;
-    RefCntAutoPtr<IBuffer> m_pPointsVertexBuffer;
+    RefCntAutoPtr<IBuffer> m_pPointsIndexBuffer;
 
-    RefCntAutoPtr<IVertexPoolAllocation> m_FaceVertsAllocation;
-    RefCntAutoPtr<IVertexPoolAllocation> m_PointsAllocation;
+    RefCntAutoPtr<IVertexPoolAllocation> m_VertexAllocation;
     RefCntAutoPtr<IBufferSuballocation>  m_FaceIndexAllocation;
     RefCntAutoPtr<IBufferSuballocation>  m_EdgeIndexAllocation;
+    RefCntAutoPtr<IBufferSuballocation>  m_PointsIndexAllocation;
 
-    std::unordered_map<pxr::TfToken, RefCntAutoPtr<IBuffer>, pxr::TfToken::HashFunctor> m_FaceVertexBuffers;
+    std::unordered_map<pxr::TfToken, RefCntAutoPtr<IBuffer>, pxr::TfToken::HashFunctor> m_VertexBuffers;
 };
 
 } // namespace USD

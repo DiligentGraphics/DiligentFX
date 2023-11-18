@@ -35,7 +35,7 @@ namespace USD
 HnRenderParam::HnRenderParam(bool UseVertexPool,
                              bool UseIndexPool) noexcept :
     m_UseVertexPool{UseVertexPool},
-    m_UseIndexPool{UseVertexPool}
+    m_UseIndexPool{UseIndexPool}
 {
 }
 
