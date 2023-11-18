@@ -36,8 +36,13 @@ void main(in PSInput PSIn,
     {
         float Width, Height;
         g_ColorBuffer.GetDimensions(Width, Height);
-        float Dist = length(ClosestSelectedLocation * float2(Width, Height) - PSIn.Pos.xy);
-        Outline = saturate(1.0 - Dist / g_Attribs.SelectionOutlineWidth) * (SelectionDepth != g_Attribs.ClearDepth ? 0.0 : 1.0);
+        ClosestSelectedLocation *= float2(Width, Height);
+        // Get distance in pixels from the current pixel to the closest selected pixel
+        float Dist = length(ClosestSelectedLocation - PSIn.Pos.xy);
+        // Make outline fade out with distance from the closest selected pixel
+        Outline = saturate(1.0 - Dist / g_Attribs.SelectionOutlineWidth);
+        // Do not highlight the selected object itself
+        Outline *= SelectionDepth != g_Attribs.ClearDepth ? 0.0 : 1.0;
     }
 
     // Desaturate all unselected pixels
