@@ -719,27 +719,6 @@ void HnMesh::AllocatePooledResources(pxr::HdSceneDelegate& SceneDelegate,
     HnRenderDelegate*      RenderDelegate = static_cast<HnRenderDelegate*>(SceneDelegate.GetRenderIndex().GetRenderDelegate());
     GLTF::ResourceManager& ResMgr         = RenderDelegate->GetResourceManager();
 
-    if (m_IndexData && static_cast<const HnRenderParam*>(RenderParam)->GetUseIndexPool())
-    {
-        if (!m_IndexData->TrianglesFaceIndices.empty())
-        {
-            m_FaceIndexAllocation = ResMgr.AllocateIndices(sizeof(Uint32) * GetNumFaceTriangles() * 3);
-            m_FaceStartIndex      = m_FaceIndexAllocation->GetOffset() / sizeof(Uint32);
-        }
-
-        if (!m_IndexData->MeshEdgeIndices.empty())
-        {
-            m_EdgeIndexAllocation = ResMgr.AllocateIndices(sizeof(Uint32) * GetNumEdges() * 2);
-            m_EdgeStartIndex      = m_EdgeIndexAllocation->GetOffset() / sizeof(Uint32);
-        }
-
-        if (!m_IndexData->PointIndices.empty())
-        {
-            m_PointsIndexAllocation = ResMgr.AllocateIndices(sizeof(Uint32) * GetNumPoints());
-            m_PointsStartIndex      = m_PointsIndexAllocation->GetOffset() / sizeof(Uint32);
-        }
-    }
-
     if (m_VertexData && !m_VertexData->Sources.empty() && static_cast<const HnRenderParam*>(RenderParam)->GetUseVertexPool())
     {
         // Allocate vertex buffers for face data
@@ -801,6 +780,27 @@ void HnMesh::AllocatePooledResources(pxr::HdSceneDelegate& SceneDelegate,
                     m_IndexData->PointIndices[i] = StartVertex + i;
                 }
             }
+        }
+    }
+
+    if (m_IndexData && static_cast<const HnRenderParam*>(RenderParam)->GetUseIndexPool())
+    {
+        if (!m_IndexData->TrianglesFaceIndices.empty())
+        {
+            m_FaceIndexAllocation = ResMgr.AllocateIndices(sizeof(Uint32) * GetNumFaceTriangles() * 3);
+            m_FaceStartIndex      = m_FaceIndexAllocation->GetOffset() / sizeof(Uint32);
+        }
+
+        if (!m_IndexData->MeshEdgeIndices.empty())
+        {
+            m_EdgeIndexAllocation = ResMgr.AllocateIndices(sizeof(Uint32) * GetNumEdges() * 2);
+            m_EdgeStartIndex      = m_EdgeIndexAllocation->GetOffset() / sizeof(Uint32);
+        }
+
+        if (!m_IndexData->PointIndices.empty())
+        {
+            m_PointsIndexAllocation = ResMgr.AllocateIndices(sizeof(Uint32) * GetNumPoints());
+            m_PointsStartIndex      = m_PointsIndexAllocation->GetOffset() / sizeof(Uint32);
         }
     }
 }
