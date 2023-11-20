@@ -58,6 +58,43 @@ class HnMesh;
 class HnLight;
 class HnRenderParam;
 
+/// Memory usage statistics of the render delegate.
+struct HnRenderDelegateMemoryStats
+{
+    /// Index pool usage statistics.
+    struct IndexPoolUsage
+    {
+        /// The total committed memory size, in bytes.
+        Uint64 CommittedSize = 0;
+
+        /// The total memory size used by all allocations, in bytes.
+        Uint64 UsedSize = 0;
+
+        /// The number of allcations.
+        Uint32 AllocationCount = 0;
+    };
+    /// Index pool usage statistics.
+    IndexPoolUsage IndexPool;
+
+    /// Vertex pool usage statistics.
+    struct VertexPoolUsage
+    {
+        /// The total committed memory size, in bytes.
+        Uint64 CommittedSize = 0;
+
+        /// The total memory size used by all allocations, in bytes.
+        Uint64 UsedSize = 0;
+
+        /// The number of allcations.
+        Uint32 AllocationCount = 0;
+
+        /// The number of vertices allocated from the pool.
+        Uint64 AllocatedVertexCount = 0;
+    };
+    /// Vertex pool usage statistics.
+    VertexPoolUsage VertexPool;
+};
+
 /// USD render delegate implementation in Hydrogent.
 class HnRenderDelegate final : public pxr::HdRenderDelegate
 {
@@ -212,6 +249,8 @@ public:
     Uint32             GetPrimitiveAttribsAlignedOffset() const { return m_PrimitiveAttribsAlignedOffset; }
 
     const auto& GetLights() const { return m_Lights; }
+
+    HnRenderDelegateMemoryStats GetMemoryStats() const;
 
 private:
     static const pxr::TfTokenVector SupportedRPrimTypes;

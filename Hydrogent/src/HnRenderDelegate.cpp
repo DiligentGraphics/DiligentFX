@@ -374,6 +374,25 @@ const pxr::SdfPath* HnRenderDelegate::GetRPrimId(Uint32 UID) const
     return it != m_RPrimUIDToSdfPath.end() ? &it->second : nullptr;
 }
 
+HnRenderDelegateMemoryStats HnRenderDelegate::GetMemoryStats() const
+{
+    HnRenderDelegateMemoryStats MemoryStats;
+
+    const BufferSuballocatorUsageStats IndexUsage  = m_ResourceMgr->GetIndexBufferUsageStats();
+    const VertexPoolUsageStats         VertexUsage = m_ResourceMgr->GetVertexPoolUsageStats();
+
+    MemoryStats.IndexPool.CommittedSize   = IndexUsage.CommittedSize;
+    MemoryStats.IndexPool.UsedSize        = IndexUsage.UsedSize;
+    MemoryStats.IndexPool.AllocationCount = IndexUsage.AllocationCount;
+
+    MemoryStats.VertexPool.CommittedSize        = VertexUsage.CommittedMemorySize;
+    MemoryStats.VertexPool.UsedSize             = VertexUsage.UsedMemorySize;
+    MemoryStats.VertexPool.AllocationCount      = VertexUsage.AllocationCount;
+    MemoryStats.VertexPool.AllocatedVertexCount = VertexUsage.AllocatedVertexCount;
+
+    return MemoryStats;
+}
+
 } // namespace USD
 
 } // namespace Diligent
