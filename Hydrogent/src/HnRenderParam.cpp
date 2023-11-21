@@ -33,9 +33,11 @@ namespace USD
 {
 
 HnRenderParam::HnRenderParam(bool UseVertexPool,
-                             bool UseIndexPool) noexcept :
+                             bool UseIndexPool,
+                             bool UseTextureAtlas) noexcept :
     m_UseVertexPool{UseVertexPool},
-    m_UseIndexPool{UseIndexPool}
+    m_UseIndexPool{UseIndexPool},
+    m_UseTextureAtlas{UseTextureAtlas}
 {
 }
 

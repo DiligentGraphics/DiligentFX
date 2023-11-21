@@ -31,6 +31,7 @@
 #include "HnMaterial.hpp"
 #include "HnDrawItem.hpp"
 #include "HnTypeConversions.hpp"
+#include "HnRenderParam.hpp"
 
 #include <array>
 
@@ -340,7 +341,7 @@ void HnRenderPass::UpdateDrawItemsGPUResources(const HnRenderPassState& RPState)
     auto USDRenderer = pRenderDelegate->GetUSDRenderer();
 
     GraphicsPipelineDesc GraphicsDesc = RPState.GetGraphicsPipelineDesc();
-    if (m_Params.UsdPsoFlags == USD_Renderer::USD_PSO_FLAG_NONE)
+    if ((m_Params.UsdPsoFlags & USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS) == 0)
     {
         for (Uint32 i = 0; i < GraphicsDesc.NumRenderTargets; ++i)
             GraphicsDesc.RTVFormats[i] = TEX_FORMAT_UNKNOWN;
@@ -450,6 +451,10 @@ void HnRenderPass::UpdateDrawItemsGPUResources(const HnRenderPassState& RPState)
                         PBR_Renderer::PSO_FLAG_USE_EMISSIVE_MAP |
                         PBR_Renderer::PSO_FLAG_USE_IBL;
                 }
+
+                if (static_cast<const HnRenderParam*>(pRenderDelegate->GetRenderParam())->GetUseTextureAtlas())
+                    PSOFlags |= PBR_Renderer::PSO_FLAG_USE_TEXTURE_ATLAS;
+
                 VERIFY(Material.GetShaderAttribs().AlphaMode == AlphaMode || IsFallbackMaterial,
                        "Alpha mode derived from the material tag is not consistent with the alpha mode in the shader attributes. "
                        "This may indicate an issue in how alpha mode is determined in the material, or (less likely) an issue in Rprim sorting by Hydra.");

@@ -28,6 +28,7 @@
 #include "HnRenderDelegate.hpp"
 #include "HnTokens.hpp"
 #include "HnTypeConversions.hpp"
+#include "DynamicTextureAtlas.h"
 
 #include "pxr/imaging/hd/sceneDelegate.h"
 
@@ -141,14 +142,32 @@ void HnMaterial::Sync(pxr::HdSceneDelegate* SceneDelegate,
         m_ShaderAttribs.UVSelector1 = static_cast<float>(TexNameToCoordSetMap[HnTokens->metallic]);
         if (TexNameToCoordSetMap[HnTokens->metallic] != TexNameToCoordSetMap[HnTokens->roughness])
             LOG_ERROR_MESSAGE("Metallic and roughness textures must use the same texture coordinates");
-        m_ShaderAttribs.UVSelector2   = static_cast<float>(TexNameToCoordSetMap[HnTokens->normal]);
-        m_ShaderAttribs.UVSelector3   = static_cast<float>(TexNameToCoordSetMap[HnTokens->occlusion]);
-        m_ShaderAttribs.UVSelector4   = static_cast<float>(TexNameToCoordSetMap[HnTokens->emissiveColor]);
-        m_ShaderAttribs.TextureSlice0 = 0;
-        m_ShaderAttribs.TextureSlice1 = 0;
-        m_ShaderAttribs.TextureSlice2 = 0;
-        m_ShaderAttribs.TextureSlice3 = 0;
-        m_ShaderAttribs.TextureSlice4 = 0;
+        m_ShaderAttribs.UVSelector2 = static_cast<float>(TexNameToCoordSetMap[HnTokens->normal]);
+        m_ShaderAttribs.UVSelector3 = static_cast<float>(TexNameToCoordSetMap[HnTokens->occlusion]);
+        m_ShaderAttribs.UVSelector4 = static_cast<float>(TexNameToCoordSetMap[HnTokens->emissiveColor]);
+
+        auto SetAtlasParams = [&](const pxr::TfToken& Name, Uint32 Idx) {
+            auto tex_it = m_Textures.find(Name);
+            if (tex_it == m_Textures.end())
+                return;
+
+            ITextureAtlasSuballocation* pAtlasSuballocation = tex_it->second->pAtlasSuballocation;
+            if (pAtlasSuballocation != nullptr)
+            {
+                (&m_ShaderAttribs.TextureSlice0)[Idx] = static_cast<float>(pAtlasSuballocation->GetSlice());
+                (&m_ShaderAttribs.UVScaleBias0)[Idx]  = pAtlasSuballocation->GetUVScaleBias();
+            }
+            else
+            {
+                (&m_ShaderAttribs.TextureSlice0)[Idx] = 0;
+                (&m_ShaderAttribs.UVScaleBias0)[Idx]  = float4{1, 1, 0, 0};
+            }
+        };
+        SetAtlasParams(HnTokens->diffuseColor, 0);
+        SetAtlasParams(HnTokens->metallic, 1);
+        SetAtlasParams(HnTokens->normal, 2);
+        SetAtlasParams(HnTokens->occlusion, 3);
+        SetAtlasParams(HnTokens->emissiveColor, 4);
 
         m_ShaderAttribs.AlphaMode = MaterialTagToPbrAlphaMode(m_Network.GetTag());
 
@@ -264,6 +283,10 @@ void HnMaterial::UpdateSRB(IRenderDevice* pDevice,
                 {
                     pTexSRV = pTexHandle->pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
                 }
+            }
+            else if (pTexHandle->pAtlasSuballocation)
+            {
+                pTexSRV = pTexHandle->pAtlasSuballocation->GetAtlas()->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
             }
         }
 

@@ -39,15 +39,18 @@ class HnRenderParam final : public pxr::HdRenderParam
 {
 public:
     HnRenderParam(bool UseVertexPool,
-                  bool UseIndexPool) noexcept;
+                  bool UseIndexPool,
+                  bool UseTextureAtlas) noexcept;
     ~HnRenderParam();
 
     bool GetUseVertexPool() const { return m_UseVertexPool; }
     bool GetUseIndexPool() const { return m_UseIndexPool; }
+    bool GetUseTextureAtlas() const { return m_UseTextureAtlas; }
 
 private:
     const bool m_UseVertexPool;
     const bool m_UseIndexPool;
+    const bool m_UseTextureAtlas;
 };
 
 } // namespace USD

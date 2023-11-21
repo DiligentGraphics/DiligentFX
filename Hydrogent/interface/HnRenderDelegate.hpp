@@ -105,8 +105,9 @@ public:
         IDeviceContext*    pContext          = nullptr;
         IRenderStateCache* pRenderStateCache = nullptr;
 
-        bool UseVertexPool = false;
-        bool UseIndexPool  = false;
+        bool UseVertexPool   = false;
+        bool UseIndexPool    = false;
+        bool UseTextureAtlas = false;
     };
     static std::unique_ptr<HnRenderDelegate> Create(const CreateInfo& CI);
 

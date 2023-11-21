@@ -27,6 +27,8 @@
 #include "HnTextureRegistry.hpp"
 #include "HnTextureUtils.hpp"
 #include "HnTypeConversions.hpp"
+#include "GLTFResourceManager.hpp"
+#include "USD_Renderer.hpp"
 
 #include <mutex>
 
@@ -36,8 +38,10 @@ namespace Diligent
 namespace USD
 {
 
-HnTextureRegistry::HnTextureRegistry(IRenderDevice* pDevice) :
-    m_pDevice{pDevice}
+HnTextureRegistry::HnTextureRegistry(IRenderDevice*         pDevice,
+                                     GLTF::ResourceManager* pResourceManager) :
+    m_pDevice{pDevice},
+    m_pResourceManager{pResourceManager}
 {
 }
 
@@ -45,29 +49,68 @@ HnTextureRegistry::~HnTextureRegistry()
 {
 }
 
-static void InitializeHandle(IRenderDevice* pDevice, ITextureLoader* pLoader, const SamplerDesc& SamDesc, HnTextureRegistry::TextureHandle& Handle)
+void HnTextureRegistry::InitializeHandle(IRenderDevice*     pDevice,
+                                         IDeviceContext*    pContext,
+                                         ITextureLoader*    pLoader,
+                                         const SamplerDesc& SamDesc,
+                                         TextureHandle&     Handle)
 {
-    VERIFY_EXPR(!Handle.pTexture);
-    if (pLoader->GetTextureDesc().Type == RESOURCE_DIM_TEX_2D)
+    if (m_pResourceManager != nullptr)
     {
-        auto TexDesc = pLoader->GetTextureDesc();
-        // PBR Renderer expects 2D textures to be 2D array textures
-        TexDesc.Type      = RESOURCE_DIM_TEX_2D_ARRAY;
-        TexDesc.ArraySize = 1;
+        VERIFY_EXPR(pContext != nullptr);
+        if (!Handle.pAtlasSuballocation)
+        {
+            UNEXPECTED("Atlas suballocation must not be null");
+            return;
+        }
 
-        TextureData InitData = pLoader->GetTextureData();
-        pDevice->CreateTexture(TexDesc, &InitData, &Handle.pTexture);
+        IDynamicTextureAtlas* pAtlas      = Handle.pAtlasSuballocation->GetAtlas();
+        ITexture*             pDstTex     = pAtlas->GetTexture();
+        const TextureDesc&    AtlasDesc   = pAtlas->GetAtlasDesc();
+        const TextureData     UploadData  = pLoader->GetTextureData();
+        const TextureDesc&    SrcDataDesc = pLoader->GetTextureDesc();
+        const uint2&          Origin      = Handle.pAtlasSuballocation->GetOrigin();
+        const Uint32          Slice       = Handle.pAtlasSuballocation->GetSlice();
+
+        const Uint32 MipsToUpload = std::min(UploadData.NumSubresources, AtlasDesc.MipLevels);
+        for (Uint32 mip = 0; mip < MipsToUpload; ++mip)
+        {
+            const TextureSubResData& LevelData = UploadData.pSubResources[mip];
+            const MipLevelProperties MipProps  = GetMipLevelProperties(SrcDataDesc, mip);
+
+            Box UpdateBox;
+            UpdateBox.MinX = Origin.x >> mip;
+            UpdateBox.MaxX = UpdateBox.MinX + MipProps.LogicalWidth;
+            UpdateBox.MinY = Origin.y >> mip;
+            UpdateBox.MaxY = UpdateBox.MinY + MipProps.LogicalHeight;
+            // TODO: align texture data to the atlas allocation alignment
+            pContext->UpdateTexture(pDstTex, mip, Slice, UpdateBox, LevelData, RESOURCE_STATE_TRANSITION_MODE_NONE, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        }
     }
     else
     {
-        pLoader->CreateTexture(pDevice, &Handle.pTexture);
-    }
-    if (!Handle.pTexture)
-        return;
+        VERIFY_EXPR(!Handle);
+        if (pLoader->GetTextureDesc().Type == RESOURCE_DIM_TEX_2D)
+        {
+            auto TexDesc = pLoader->GetTextureDesc();
+            // PBR Renderer expects 2D textures to be 2D array textures
+            TexDesc.Type      = RESOURCE_DIM_TEX_2D_ARRAY;
+            TexDesc.ArraySize = 1;
 
-    pDevice->CreateSampler(SamDesc, &Handle.pSampler);
-    VERIFY_EXPR(Handle.pSampler);
-    Handle.pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE)->SetSampler(Handle.pSampler);
+            TextureData InitData = pLoader->GetTextureData();
+            pDevice->CreateTexture(TexDesc, &InitData, &Handle.pTexture);
+        }
+        else
+        {
+            pLoader->CreateTexture(pDevice, &Handle.pTexture);
+        }
+        if (!Handle.pTexture)
+            return;
+
+        pDevice->CreateSampler(SamDesc, &Handle.pSampler);
+        VERIFY_EXPR(Handle.pSampler);
+        Handle.pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE)->SetSampler(Handle.pSampler);
+    }
 }
 
 void HnTextureRegistry::Commit(IDeviceContext* pContext)
@@ -75,7 +118,7 @@ void HnTextureRegistry::Commit(IDeviceContext* pContext)
     std::lock_guard<std::mutex> Lock{m_PendingTexturesMtx};
     for (auto tex_it : m_PendingTextures)
     {
-        InitializeHandle(m_pDevice, tex_it.second.pLoader, tex_it.second.SamDesc, *tex_it.second.Handle);
+        InitializeHandle(m_pDevice, pContext, tex_it.second.pLoader, tex_it.second.SamDesc, *tex_it.second.Handle);
     }
     m_PendingTextures.clear();
 }
@@ -104,11 +147,26 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const HnTe
             }
 
             auto SamDesc = HdSamplerParametersToSamplerDesc(SamplerParams);
-            if (m_pDevice->GetDeviceInfo().Features.MultithreadedResourceCreation)
+            if (m_pResourceManager != nullptr)
             {
-                InitializeHandle(m_pDevice, pLoader, SamDesc, *TexHandle);
+                const auto& TexDesc = pLoader->GetTextureDesc();
+                // TODO: handle textures larger than atlas size
+                TexHandle->pAtlasSuballocation = m_pResourceManager->AllocateTextureSpace(TexDesc.Format, TexDesc.Width, TexDesc.Height);
+                if (!TexHandle->pAtlasSuballocation)
+                {
+                    LOG_ERROR_MESSAGE("Failed to allocate atlas region for texture ", TexId.FilePath);
+                    return TextureHandleSharedPtr{};
+                }
             }
             else
+            {
+                if (m_pDevice->GetDeviceInfo().Features.MultithreadedResourceCreation)
+                {
+                    InitializeHandle(m_pDevice, nullptr, pLoader, SamDesc, *TexHandle);
+                }
+            }
+
+            if (TexHandle)
             {
                 std::lock_guard<std::mutex> Lock{m_PendingTexturesMtx};
                 m_PendingTextures.emplace(TexId.FilePath, PendingTextureInfo{std::move(pLoader), SamDesc, TexHandle});

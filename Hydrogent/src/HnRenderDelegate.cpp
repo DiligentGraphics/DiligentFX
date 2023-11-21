@@ -108,12 +108,13 @@ static RefCntAutoPtr<IBuffer> CreatePrimitiveAttribsCB(IRenderDevice* pDevice)
 static std::shared_ptr<USD_Renderer> CreateUSDRenderer(IRenderDevice*     pDevice,
                                                        IRenderStateCache* pRenderStateCache,
                                                        IDeviceContext*    pContext,
-                                                       IBuffer*           pPrimitiveAttribsCB)
+                                                       IBuffer*           pPrimitiveAttribsCB,
+                                                       bool               UseImmutableSamplers)
 {
     USD_Renderer::CreateInfo USDRendererCI;
 
     // Use samplers from texture views
-    USDRendererCI.UseImmutableSamplers = false;
+    USDRendererCI.UseImmutableSamplers = UseImmutableSamplers;
     // Disable animation
     USDRendererCI.MaxJointCount = 0;
     // Use separate textures for metallic and roughness
@@ -145,11 +146,21 @@ static RefCntAutoPtr<GLTF::ResourceManager> CreateResourceManager(IRenderDevice*
 
     GLTF::ResourceManager::CreateInfo ResMgrCI;
 
-    ResMgrCI.IndexAllocatorCI.Desc        = {"Index pool", sizeof(Uint32) * InitialIndexCount, BIND_INDEX_BUFFER, USAGE_DEFAULT};
+    ResMgrCI.IndexAllocatorCI.Desc        = {"Hydrogent index pool", sizeof(Uint32) * InitialIndexCount, BIND_INDEX_BUFFER, USAGE_DEFAULT};
     ResMgrCI.IndexAllocatorCI.VirtualSize = Uint64{1024} << Uint64{20};
 
     ResMgrCI.DefaultPoolDesc.VertexCount = InitialVertexCount;
     ResMgrCI.DefaultPoolDesc.Usage       = USAGE_DEFAULT;
+
+    ResMgrCI.DefaultAtlasDesc.Desc.Name      = "Hydrogent texture atlas";
+    ResMgrCI.DefaultAtlasDesc.Desc.Type      = RESOURCE_DIM_TEX_2D_ARRAY;
+    ResMgrCI.DefaultAtlasDesc.Desc.Usage     = USAGE_DEFAULT;
+    ResMgrCI.DefaultAtlasDesc.Desc.BindFlags = BIND_SHADER_RESOURCE;
+    ResMgrCI.DefaultAtlasDesc.Desc.Width     = 4096;
+    ResMgrCI.DefaultAtlasDesc.Desc.Height    = 4096;
+    ResMgrCI.DefaultAtlasDesc.Desc.MipLevels = 6;
+    // Double the number of slices when resizing the atlas
+    ResMgrCI.DefaultAtlasDesc.ExtraSliceCount = 0;
 
     return GLTF::ResourceManager::Create(pDevice, ResMgrCI);
 }
@@ -161,10 +172,10 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
     m_ResourceMgr{CreateResourceManager(CI.pDevice)},
     m_FrameAttribsCB{CreateFrameAttribsCB(CI.pDevice)},
     m_PrimitiveAttribsCB{CreatePrimitiveAttribsCB(CI.pDevice)},
-    m_USDRenderer{CreateUSDRenderer(CI.pDevice, CI.pRenderStateCache, CI.pContext, m_PrimitiveAttribsCB)},
+    m_USDRenderer{CreateUSDRenderer(CI.pDevice, CI.pRenderStateCache, CI.pContext, m_PrimitiveAttribsCB, CI.UseTextureAtlas)},
     m_PrimitiveAttribsAlignedOffset{AlignUp(Uint32{sizeof(HLSL::PBRPrimitiveAttribs)}, CI.pDevice->GetAdapterInfo().Buffer.ConstantBufferOffsetAlignment)},
-    m_TextureRegistry{CI.pDevice},
-    m_RenderParam{std::make_unique<HnRenderParam>(CI.UseVertexPool, CI.UseIndexPool)}
+    m_TextureRegistry{CI.pDevice, CI.UseTextureAtlas ? m_ResourceMgr : nullptr},
+    m_RenderParam{std::make_unique<HnRenderParam>(CI.UseVertexPool, CI.UseIndexPool, CI.UseTextureAtlas)}
 {
 }
 

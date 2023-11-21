@@ -34,16 +34,23 @@
 #include "pxr/base/tf/token.h"
 #include "pxr/imaging/hd/types.h"
 
-#include "RenderDevice.h"
-#include "DeviceContext.h"
-#include "RefCntAutoPtr.hpp"
-#include "TextureLoader.h"
-#include "ObjectsRegistry.hpp"
+#include "../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
+#include "../../../DiligentCore/Graphics/GraphicsEngine/interface/DeviceContext.h"
+#include "../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
+#include "../../../DiligentCore/Common/interface/ObjectsRegistry.hpp"
+#include "../../../DiligentTools/TextureLoader/interface/TextureLoader.h"
 
 #include "HnTextureIdentifier.hpp"
 
 namespace Diligent
 {
+
+struct ITextureAtlasSuballocation;
+
+namespace GLTF
+{
+class ResourceManager;
+}
 
 namespace USD
 {
@@ -51,7 +58,8 @@ namespace USD
 class HnTextureRegistry final
 {
 public:
-    HnTextureRegistry(IRenderDevice* pDevice);
+    HnTextureRegistry(IRenderDevice*         pDevice,
+                      GLTF::ResourceManager* pResourceManager);
     ~HnTextureRegistry();
 
     void Commit(IDeviceContext* pContext);
@@ -60,6 +68,13 @@ public:
     {
         RefCntAutoPtr<ITexture> pTexture;
         RefCntAutoPtr<ISampler> pSampler;
+
+        RefCntAutoPtr<ITextureAtlasSuballocation> pAtlasSuballocation;
+
+        explicit operator bool() const
+        {
+            return pTexture != nullptr || pAtlasSuballocation != nullptr;
+        }
     };
 
     using TextureHandleSharedPtr = std::shared_ptr<TextureHandle>;
@@ -67,8 +82,22 @@ public:
     TextureHandleSharedPtr Allocate(const HnTextureIdentifier&      TexId,
                                     const pxr::HdSamplerParameters& SamplerParams);
 
+
+    TextureHandleSharedPtr GetWhiteTex() const { return m_pWhiteTex; }
+    TextureHandleSharedPtr GetBlackTex() const { return m_pBlackTex; }
+    TextureHandleSharedPtr GetDefaultNormalMap() const { return m_pDefaultNormalMap; }
+
+private:
+    void InitializeHandle(IRenderDevice*     pDevice,
+                          IDeviceContext*    pContext,
+                          ITextureLoader*    pLoader,
+                          const SamplerDesc& SamDesc,
+                          TextureHandle&     Handle);
+
 private:
     RefCntAutoPtr<IRenderDevice> m_pDevice;
+
+    GLTF::ResourceManager* const m_pResourceManager;
 
     ObjectsRegistry<pxr::TfToken, TextureHandleSharedPtr, pxr::TfToken::HashFunctor> m_Cache;
 
@@ -81,6 +110,10 @@ private:
 
     std::mutex                                                                      m_PendingTexturesMtx;
     std::unordered_map<pxr::TfToken, PendingTextureInfo, pxr::TfToken::HashFunctor> m_PendingTextures;
+
+    TextureHandleSharedPtr m_pWhiteTex;
+    TextureHandleSharedPtr m_pBlackTex;
+    TextureHandleSharedPtr m_pDefaultNormalMap;
 };
 
 } // namespace USD
