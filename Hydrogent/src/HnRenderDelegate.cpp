@@ -35,6 +35,7 @@
 #include "GraphicsUtilities.h"
 #include "HnRenderBuffer.hpp"
 #include "Align.hpp"
+#include "PlatformMisc.hpp"
 #include "GLTFResourceManager.hpp"
 
 #include "pxr/imaging/hd/material.h"
@@ -136,7 +137,7 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(IRenderDevice*     pDevic
     return std::make_shared<USD_Renderer>(pDevice, pRenderStateCache, pContext, USDRendererCI);
 }
 
-static RefCntAutoPtr<GLTF::ResourceManager> CreateResourceManager(IRenderDevice* pDevice)
+static RefCntAutoPtr<GLTF::ResourceManager> CreateResourceManager(IRenderDevice* pDevice, Uint32 TextureAtlasDim)
 {
     // Initial vertex and index counts are not important as the
     // real number of vertices and indices will be determined after
@@ -152,15 +153,40 @@ static RefCntAutoPtr<GLTF::ResourceManager> CreateResourceManager(IRenderDevice*
     ResMgrCI.DefaultPoolDesc.VertexCount = InitialVertexCount;
     ResMgrCI.DefaultPoolDesc.Usage       = USAGE_DEFAULT;
 
-    ResMgrCI.DefaultAtlasDesc.Desc.Name      = "Hydrogent texture atlas";
-    ResMgrCI.DefaultAtlasDesc.Desc.Type      = RESOURCE_DIM_TEX_2D_ARRAY;
-    ResMgrCI.DefaultAtlasDesc.Desc.Usage     = USAGE_DEFAULT;
-    ResMgrCI.DefaultAtlasDesc.Desc.BindFlags = BIND_SHADER_RESOURCE;
-    ResMgrCI.DefaultAtlasDesc.Desc.Width     = 4096;
-    ResMgrCI.DefaultAtlasDesc.Desc.Height    = 4096;
-    ResMgrCI.DefaultAtlasDesc.Desc.MipLevels = 6;
-    // Double the number of slices when resizing the atlas
-    ResMgrCI.DefaultAtlasDesc.ExtraSliceCount = 0;
+    if (TextureAtlasDim != 0)
+    {
+        constexpr Uint32 MinAtlasDim = 512;
+        constexpr Uint32 MaxAtlasDim = 16384;
+        if (TextureAtlasDim < MinAtlasDim)
+        {
+            LOG_ERROR_MESSAGE("Texture atlas dimension (", TextureAtlasDim, ") must be at least ", MinAtlasDim);
+            TextureAtlasDim = MinAtlasDim;
+        }
+        else if (TextureAtlasDim > MaxAtlasDim)
+        {
+            LOG_ERROR_MESSAGE("Texture atlas dimension (", TextureAtlasDim, ") must be at most ", MaxAtlasDim);
+            TextureAtlasDim = MaxAtlasDim;
+        }
+        if (!IsPowerOfTwo(TextureAtlasDim))
+        {
+            LOG_ERROR_MESSAGE("Texture atlas dimension (", TextureAtlasDim, ") must be a power of two");
+            const auto MSB  = PlatformMisc::GetMSB(TextureAtlasDim);
+            TextureAtlasDim = (MSB >= 13) ? 16384 : (1 << (MSB + 1));
+        }
+
+        ResMgrCI.DefaultAtlasDesc.Desc.Name      = "Hydrogent texture atlas";
+        ResMgrCI.DefaultAtlasDesc.Desc.Type      = RESOURCE_DIM_TEX_2D_ARRAY;
+        ResMgrCI.DefaultAtlasDesc.Desc.Usage     = USAGE_DEFAULT;
+        ResMgrCI.DefaultAtlasDesc.Desc.BindFlags = BIND_SHADER_RESOURCE;
+        ResMgrCI.DefaultAtlasDesc.Desc.Width     = TextureAtlasDim;
+        ResMgrCI.DefaultAtlasDesc.Desc.Height    = TextureAtlasDim;
+        ResMgrCI.DefaultAtlasDesc.Desc.MipLevels = 6;
+        // Since texture atlas is resized only once, we can add one
+        // slice at a time to avoid wasting memory.
+        ResMgrCI.DefaultAtlasDesc.ExtraSliceCount = 1;
+
+        ResMgrCI.DefaultAtlasDesc.MinAlignment = 64;
+    }
 
     return GLTF::ResourceManager::Create(pDevice, ResMgrCI);
 }
@@ -169,13 +195,13 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
     m_pDevice{CI.pDevice},
     m_pContext{CI.pContext},
     m_pRenderStateCache{CI.pRenderStateCache},
-    m_ResourceMgr{CreateResourceManager(CI.pDevice)},
+    m_ResourceMgr{CreateResourceManager(CI.pDevice, CI.TextureAtlasDim)},
     m_FrameAttribsCB{CreateFrameAttribsCB(CI.pDevice)},
     m_PrimitiveAttribsCB{CreatePrimitiveAttribsCB(CI.pDevice)},
-    m_USDRenderer{CreateUSDRenderer(CI.pDevice, CI.pRenderStateCache, CI.pContext, m_PrimitiveAttribsCB, CI.UseTextureAtlas)},
+    m_USDRenderer{CreateUSDRenderer(CI.pDevice, CI.pRenderStateCache, CI.pContext, m_PrimitiveAttribsCB, /*UseImmutableSamplers = */ CI.TextureAtlasDim != 0)},
     m_PrimitiveAttribsAlignedOffset{AlignUp(Uint32{sizeof(HLSL::PBRPrimitiveAttribs)}, CI.pDevice->GetAdapterInfo().Buffer.ConstantBufferOffsetAlignment)},
-    m_TextureRegistry{CI.pDevice, CI.UseTextureAtlas ? m_ResourceMgr : nullptr},
-    m_RenderParam{std::make_unique<HnRenderParam>(CI.UseVertexPool, CI.UseIndexPool, CI.UseTextureAtlas)}
+    m_TextureRegistry{CI.pDevice, CI.TextureAtlasDim != 0 ? m_ResourceMgr : nullptr},
+    m_RenderParam{std::make_unique<HnRenderParam>(CI.UseVertexPool, CI.UseIndexPool, CI.TextureAtlasDim != 0)}
 {
 }
 

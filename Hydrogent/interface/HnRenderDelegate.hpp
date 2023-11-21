@@ -122,9 +122,13 @@ public:
         IDeviceContext*    pContext          = nullptr;
         IRenderStateCache* pRenderStateCache = nullptr;
 
-        bool UseVertexPool   = false;
-        bool UseIndexPool    = false;
-        bool UseTextureAtlas = false;
+        bool UseVertexPool = false;
+        bool UseIndexPool  = false;
+
+        /// Texture atlas dimension.
+        /// If zero, texture atlas will not be used.
+        /// Must be a power of two between 512 and 16384.
+        Uint32 TextureAtlasDim = 0;
     };
     static std::unique_ptr<HnRenderDelegate> Create(const CreateInfo& CI);
 
