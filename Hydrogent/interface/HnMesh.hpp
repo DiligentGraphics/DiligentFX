@@ -125,6 +125,8 @@ public:
 
     Uint32 GetUID() const { return m_UID; }
 
+    Uint32 GetVersion() const { return m_Version; }
+
 protected:
     // This callback from Rprim gives the prim an opportunity to set
     // additional dirty bits based on those already set.
@@ -228,6 +230,8 @@ private:
     RefCntAutoPtr<IBufferSuballocation>  m_PointsIndexAllocation;
 
     std::unordered_map<pxr::TfToken, RefCntAutoPtr<IBuffer>, pxr::TfToken::HashFunctor> m_VertexBuffers;
+
+    Uint32 m_Version = 0;
 };
 
 } // namespace USD

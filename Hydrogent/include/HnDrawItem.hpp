@@ -57,9 +57,10 @@ public:
     struct GeometryData
     {
         GeometryData() noexcept {}
-        GeometryData(const HnMaterial& _Material, bool _IsFallbackMaterial) noexcept :
+        GeometryData(const HnMaterial& _Material, bool _IsFallbackMaterial, Uint32 _Version) noexcept :
             pMaterial{&_Material},
-            IsFallbackMaterial{_IsFallbackMaterial}
+            IsFallbackMaterial{_IsFallbackMaterial},
+            Version{_Version}
         {}
 
         constexpr explicit operator bool() const
@@ -69,6 +70,7 @@ public:
 
         const HnMaterial* pMaterial          = nullptr;
         bool              IsFallbackMaterial = false;
+        Uint32            Version            = 0;
 
         RefCntAutoPtr<IBuffer> Positions;
         RefCntAutoPtr<IBuffer> Normals;

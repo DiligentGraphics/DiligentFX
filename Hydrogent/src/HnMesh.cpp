@@ -160,6 +160,8 @@ void HnMesh::Sync(pxr::HdSceneDelegate* Delegate,
         UpdateReprMaterialTags(Delegate, RenderParam);
     }
 
+    ++m_Version;
+
     *DirtyBits &= ~pxr::HdChangeTracker::AllSceneDirtyBits;
 }
 

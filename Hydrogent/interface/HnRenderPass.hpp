@@ -111,7 +111,7 @@ private:
     struct RenderState;
 
     void UpdateDrawItems(const pxr::TfTokenVector& RenderTags);
-    void UpdateDrawItemGPUResources(HnDrawItem& DrawItem, RenderState& State);
+    void UpdateDrawItemGPUResources(HnDrawItem& DrawItem, RenderState& State, DRAW_ITEM_GPU_RES_DIRTY_FLAGS DirtyFlags);
 
     void RenderPendingDrawItems(RenderState& State);
 

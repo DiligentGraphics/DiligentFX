@@ -223,11 +223,20 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
     for (size_t DrawItemIdx = 0; DrawItemIdx < NumDrawItems; ++DrawItemIdx)
     {
         auto& DrawItem = m_DrawItems[DrawItemIdx];
-        if (m_DrawItemsGPUResDirtyFlags != DRAW_ITEM_GPU_RES_DIRTY_FLAG_NONE)
+
+        const auto&   Geo  = DrawItem.GetGeometryData();
+        const HnMesh& Mesh = DrawItem.GetMesh();
+
+        auto DrawItemGPUResDirtyFlags = m_DrawItemsGPUResDirtyFlags;
+        if (Geo.Version != Mesh.GetVersion())
+            DrawItemGPUResDirtyFlags |= DRAW_ITEM_GPU_RES_DIRTY_FLAG_GEOMETRY;
+        if (DrawItemGPUResDirtyFlags != DRAW_ITEM_GPU_RES_DIRTY_FLAG_NONE)
         {
-            UpdateDrawItemGPUResources(DrawItem, State);
+            UpdateDrawItemGPUResources(DrawItem, State, DrawItemGPUResDirtyFlags);
         }
 
+        // Make sure we update all items before skipping any since we will clear the
+        // m_DrawItemsGPUResDirtyFlags at the end of the function.
         if (!DrawItem.IsValid() || !DrawItem.GetHdDrawItem().GetVisible())
             continue;
 
@@ -242,9 +251,6 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
         }
 
         // Write current primitive attributes
-
-        const auto&   Geo  = DrawItem.GetGeometryData();
-        const HnMesh& Mesh = DrawItem.GetMesh();
 
         pCurrPrimitive->Transforms.NodeMatrix = Mesh.GetTransform() * m_RenderParams.Transform;
         pCurrPrimitive->Transforms.JointCount = 0;
@@ -402,10 +408,10 @@ HnRenderPass::SupportedVertexInputsSetType HnRenderPass::GetSupportedVertexInput
     return SupportedInputs;
 }
 
-void HnRenderPass::UpdateDrawItemGPUResources(HnDrawItem& DrawItem, RenderState& State)
+void HnRenderPass::UpdateDrawItemGPUResources(HnDrawItem& DrawItem, RenderState& State, DRAW_ITEM_GPU_RES_DIRTY_FLAGS DirtyFlags)
 {
-    bool UpdateGeometry = !DrawItem.GetGeometryData() || (m_DrawItemsGPUResDirtyFlags & DRAW_ITEM_GPU_RES_DIRTY_FLAG_GEOMETRY) != 0;
-    bool UpdatePSO      = DrawItem.GetPSO() == nullptr || (m_DrawItemsGPUResDirtyFlags & DRAW_ITEM_GPU_RES_DIRTY_FLAG_PSO) != 0;
+    bool UpdateGeometry = !DrawItem.GetGeometryData() || (DirtyFlags & DRAW_ITEM_GPU_RES_DIRTY_FLAG_GEOMETRY) != 0;
+    bool UpdatePSO      = DrawItem.GetPSO() == nullptr || (DirtyFlags & DRAW_ITEM_GPU_RES_DIRTY_FLAG_PSO) != 0;
     if (UpdateGeometry)
     {
         const HnMesh& Mesh = DrawItem.GetMesh();
@@ -427,7 +433,7 @@ void HnRenderPass::UpdateDrawItemGPUResources(HnDrawItem& DrawItem, RenderState&
 
         const HnMaterial& Material = *static_cast<const HnMaterial*>(pSPrim);
 
-        HnDrawItem::GeometryData Geo{Material, IsFallbackMaterial};
+        HnDrawItem::GeometryData Geo{Material, IsFallbackMaterial, Mesh.GetVersion()};
 
         // Get vertex buffers
         Geo.Positions = Mesh.GetVertexBuffer(pxr::HdTokens->points);
