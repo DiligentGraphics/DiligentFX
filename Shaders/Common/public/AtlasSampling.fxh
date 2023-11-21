@@ -46,6 +46,12 @@ struct SampleTextureAtlasAttribs
 
     /// Indicates if the texture data is non-filterable (e.g. material indices).
     bool IsNonFilterable;
+    
+    /// Maximum anisotropy.
+    ///
+    /// \remarks    This value is only used on GLES where textureQueryLod is not
+    ///             supported and we have to manually compute the LOD.
+    float fMaxAnisotropy;
 };
 
 
@@ -67,13 +73,32 @@ float4 SampleTextureAtlas(Texture2DArray            Atlas,
     float2 f2dUV_dx = Attribs.f2dSmoothUV_dx;
     float2 f2dUV_dy = Attribs.f2dSmoothUV_dy;
 
-    // Calculate the texture LOD using smooth coordinates
-    float LOD = Atlas.CalculateLevelOfDetail(Atlas_sampler, Attribs.f2SmoothUV);
-
-    // Make sure that texture filtering does not use samples outside of the texture region.
     float2 f2AtlasDim;
     float  fElements;
     Atlas.GetDimensions(f2AtlasDim.x, f2AtlasDim.y, fElements);
+    
+    // Compute gradient lengths in pixels
+    float fGradX   = length(f2dUV_dx * f2AtlasDim.xy);
+    float fGradY   = length(f2dUV_dy * f2AtlasDim.xy);
+    float fMaxGrad = max(fGradX, fGradY);
+    
+    float LOD;
+#ifndef GL_ES
+    {
+        // Calculate the texture LOD using smooth coordinates
+        LOD = Atlas.CalculateLevelOfDetail(Atlas_sampler, Attribs.f2SmoothUV);
+    }
+#else
+    {
+        // textureQueryLod is not supported even in GLES3.2.
+        // Follow Section 8.14 (Texture Minification) from OpenGL4.6 spec.
+        float fMinGrad = min(fGradX, fGradY);
+        float Aniso    = min(fMaxGrad / fMinGrad, Attribs.fMaxAnisotropy);
+        LOD = max(log2(fMaxGrad / Aniso), 0.0);
+    }
+#endif
+
+    // Make sure that texture filtering does not use samples outside of the texture region.
     // The margin must be no less than half the pixel size in the selected LOD.
     float2 f2LodMargin = 0.5 / f2AtlasDim * exp2(ceil(LOD));
 
@@ -100,11 +125,6 @@ float4 SampleTextureAtlas(Texture2DArray            Atlas,
     float2 f2UV = clamp(Attribs.f2UV,
                         f4UVRegion.zw + f2Margin,
                         f4UVRegion.zw + f4UVRegion.xy - f2Margin);
-
-    // Compute the maximum gradient length in pixels
-    float2 f2dIJ_dx = f2dUV_dx * f2AtlasDim.xy;
-    float2 f2dIJ_dy = f2dUV_dy * f2AtlasDim.xy;
-    float  fMaxGrad = max(length(f2dIJ_dx), length(f2dIJ_dy));
 
     // Note that dynamic texture atlas aligns allocations using the minimum dimension.
     // This guarantees that filtering will not sample from the neighboring regions in all levels

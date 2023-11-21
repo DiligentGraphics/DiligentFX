@@ -93,6 +93,7 @@ float4 SampleTexture(Texture2DArray Tex,
                 SampleAttribs.f4UVRegion             = ScaleBias;
                 SampleAttribs.fSmallestValidLevelDim = 4.0;
                 SampleAttribs.IsNonFilterable        = false;
+                SampleAttribs.fMaxAnisotropy         = 4.0; // Only used on GLES
                 return SampleTextureAtlas(Tex, Tex_sampler, SampleAttribs);
             }
         }
@@ -158,6 +159,7 @@ float3 GetMicroNormal(VSOutput              VSOut,
                 SampleAttribs.f4UVRegion             = Material.NormalMapUVScaleBias;
                 SampleAttribs.fSmallestValidLevelDim = 4.0;
                 SampleAttribs.IsNonFilterable        = false;
+                SampleAttribs.fMaxAnisotropy         = 4.0; // Only used on GLES
                 MicroNormal = SampleTextureAtlas(g_NormalMap, g_NormalMap_sampler, SampleAttribs).xyz;
             }
         }
