@@ -40,8 +40,6 @@
 #include "../../../DiligentCore/Common/interface/ObjectsRegistry.hpp"
 #include "../../../DiligentTools/TextureLoader/interface/TextureLoader.h"
 
-#include "HnTextureIdentifier.hpp"
-
 namespace Diligent
 {
 
@@ -54,6 +52,8 @@ class ResourceManager;
 
 namespace USD
 {
+
+struct HnTextureIdentifier;
 
 class HnTextureRegistry final
 {

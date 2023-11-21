@@ -29,6 +29,7 @@
 #include "HnTypeConversions.hpp"
 #include "GLTFResourceManager.hpp"
 #include "USD_Renderer.hpp"
+#include "HnTextureIdentifier.hpp"
 
 #include <mutex>
 

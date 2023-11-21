@@ -39,6 +39,7 @@ set(INCLUDE
     include/HnShaderSourceFactory.hpp
     include/HnTypeConversions.hpp
     include/HnTextureUtils.hpp
+    include/HnTextureIdentifier.hpp
 )
 
 set(INTERFACE
@@ -54,7 +55,6 @@ set(INTERFACE
     interface/HnRenderPassState.hpp
     interface/HnTokens.hpp
     interface/HnTypes.hpp
-    interface/HnTextureIdentifier.hpp
     interface/HnTextureRegistry.hpp
     interface/Tasks/HnTask.hpp
     interface/Tasks/HnCopySelectionDepthTask.hpp
