@@ -259,9 +259,9 @@ public:
 
     const pxr::SdfPath* GetRPrimId(Uint32 UID) const;
 
-    std::shared_ptr<USD_Renderer> GetUSDRenderer() { return m_USDRenderer; }
+    std::shared_ptr<USD_Renderer> GetUSDRenderer() const { return m_USDRenderer; }
 
-    GLTF::ResourceManager& GetResourceManager() { return *m_ResourceMgr; }
+    GLTF::ResourceManager& GetResourceManager() const { return *m_ResourceMgr; }
 
     IRenderDevice*     GetDevice() const { return m_pDevice; }
     IDeviceContext*    GetDeviceContext() const { return m_pContext; }

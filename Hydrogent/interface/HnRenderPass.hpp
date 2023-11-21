@@ -108,11 +108,14 @@ protected:
     virtual void _MarkCollectionDirty() override final;
 
 private:
-    void UpdateDrawItems(const pxr::TfTokenVector& RenderTags);
-    void UpdateDrawItemsGPUResources(const HnRenderPassState& RPState);
-
     struct RenderState;
+
+    void UpdateDrawItems(const pxr::TfTokenVector& RenderTags);
+    void UpdateDrawItemGPUResources(HnDrawItem& DrawItem, RenderState& State);
+
     void RenderPendingDrawItems(RenderState& State);
+
+    GraphicsPipelineDesc GetGraphicsDesc(const HnRenderPassState& RPState) const;
 
 private:
     HnRenderPassParams m_Params;
