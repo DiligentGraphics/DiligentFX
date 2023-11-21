@@ -45,6 +45,11 @@ namespace Diligent
 
 class PBR_Renderer;
 
+namespace GLTF
+{
+class ResourceManager;
+}
+
 namespace HLSL
 {
 #include "Shaders/PBR/public/PBR_Structures.fxh"
@@ -74,7 +79,8 @@ public:
 
     void UpdateSRB(IRenderDevice* pDevice,
                    PBR_Renderer&  PbrRenderer,
-                   IBuffer*       pFrameAttribs);
+                   IBuffer*       pFrameAttribs,
+                   Uint32         AtlasVersion);
 
     IShaderResourceBinding* GetSRB() const { return m_SRB; }
 
@@ -106,6 +112,12 @@ private:
     HLSL::PBRMaterialShaderInfo m_ShaderAttribs{};
 
     std::vector<TextureCoordinateSetInfo> m_TexCoords;
+
+    // True if there is at least one texture suballocated from the atlas
+    bool m_UsesAtlas = false;
+
+    // Current atlas version
+    Uint32 m_AtlasVersion = 0;
 };
 
 } // namespace USD

@@ -29,6 +29,7 @@
 #include "HnTokens.hpp"
 #include "HnTypeConversions.hpp"
 #include "DynamicTextureAtlas.h"
+#include "GLTFResourceManager.hpp"
 
 #include "pxr/imaging/hd/sceneDelegate.h"
 
@@ -156,6 +157,8 @@ void HnMaterial::Sync(pxr::HdSceneDelegate* SceneDelegate,
             {
                 (&m_ShaderAttribs.TextureSlice0)[Idx] = static_cast<float>(pAtlasSuballocation->GetSlice());
                 (&m_ShaderAttribs.UVScaleBias0)[Idx]  = pAtlasSuballocation->GetUVScaleBias();
+
+                m_UsesAtlas = true;
             }
             else
             {
@@ -235,8 +238,12 @@ pxr::HdDirtyBits HnMaterial::GetInitialDirtyBitsMask() const
 
 void HnMaterial::UpdateSRB(IRenderDevice* pDevice,
                            PBR_Renderer&  PbrRenderer,
-                           IBuffer*       pFrameAttribs)
+                           IBuffer*       pFrameAttribs,
+                           Uint32         AtlasVersion)
 {
+    if (m_UsesAtlas && AtlasVersion != m_AtlasVersion)
+        m_SRB.Release();
+
     if (m_SRB)
         return;
 
@@ -303,6 +310,8 @@ void HnMaterial::UpdateSRB(IRenderDevice* pDevice,
     SetTexture(HnTokens->normal, PbrRenderer.GetDefaultNormalMapSRV(), "g_NormalMap");
     SetTexture(HnTokens->occlusion, PbrRenderer.GetWhiteTexSRV(), "g_AOMap");
     SetTexture(HnTokens->emissiveColor, PbrRenderer.GetBlackTexSRV(), "g_EmissiveMap");
+
+    m_AtlasVersion = AtlasVersion;
 }
 
 } // namespace USD

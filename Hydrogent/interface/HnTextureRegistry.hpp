@@ -87,6 +87,8 @@ public:
     TextureHandleSharedPtr GetBlackTex() const { return m_pBlackTex; }
     TextureHandleSharedPtr GetDefaultNormalMap() const { return m_pDefaultNormalMap; }
 
+    Uint32 GetAtlasVersion() const;
+
 private:
     void InitializeHandle(IRenderDevice*     pDevice,
                           IDeviceContext*    pContext,

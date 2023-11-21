@@ -383,14 +383,14 @@ void HnRenderDelegate::DestroyBprim(pxr::HdBprim* BPrim)
 void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
 {
     m_ResourceMgr->UpdateAllResources(m_pDevice, m_pContext);
-
     m_TextureRegistry.Commit(m_pContext);
+    Uint32 AtlasVersion = m_TextureRegistry.GetAtlasVersion();
 
     {
         std::lock_guard<std::mutex> Guard{m_MaterialsMtx};
         for (auto* pMat : m_Materials)
         {
-            pMat->UpdateSRB(m_pDevice, *m_USDRenderer, m_FrameAttribsCB);
+            pMat->UpdateSRB(m_pDevice, *m_USDRenderer, m_FrameAttribsCB, AtlasVersion);
         }
     }
 

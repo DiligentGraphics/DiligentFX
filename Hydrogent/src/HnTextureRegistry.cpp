@@ -176,6 +176,11 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const HnTe
         });
 }
 
+Uint32 HnTextureRegistry::GetAtlasVersion() const
+{
+    return m_pResourceManager != nullptr ? m_pResourceManager->GetTextureVersion() : 0;
+}
+
 } // namespace USD
 
 } // namespace Diligent
