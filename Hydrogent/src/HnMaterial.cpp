@@ -248,6 +248,9 @@ void HnMaterial::UpdateSRB(IRenderDevice* pDevice,
         return;
 
     PbrRenderer.CreateResourceBinding(&m_SRB);
+    VERIFY_EXPR(m_SRB);
+    m_PrimitiveAttribsVar = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbPrimitiveAttribs");
+    VERIFY_EXPR(m_PrimitiveAttribsVar != nullptr);
 
     if (IShaderResourceVariable* pVar = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbPrimitiveAttribs"))
     {

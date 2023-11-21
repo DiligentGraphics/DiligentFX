@@ -74,22 +74,17 @@ public:
 
     void SetGeometryData(GeometryData&& Data) { m_GeometryData = std::move(Data); }
     void SetPSO(IPipelineState* pPSO) { m_PSO = pPSO; }
-    void SetSRB(IShaderResourceBinding* pSRB);
 
-    const GeometryData&      GetGeometryData() const { return m_GeometryData; }
-    IPipelineState*          GetPSO() const { return m_PSO; }
-    IShaderResourceBinding*  GetSRB() const { return m_SRB; }
-    IShaderResourceVariable* GetPrimitiveAttribsVar() const { return m_PrimitiveAttribsVar; }
+    const GeometryData& GetGeometryData() const { return m_GeometryData; }
+    IPipelineState*     GetPSO() const { return m_PSO; }
 
-    bool IsValid() const { return m_PSO && m_SRB; }
+    bool IsValid() const { return m_PSO; }
 
 private:
     const pxr::HdDrawItem& m_HdDrawItem;
 
-    GeometryData                          m_GeometryData;
-    RefCntAutoPtr<IPipelineState>         m_PSO;
-    RefCntAutoPtr<IShaderResourceBinding> m_SRB;
-    IShaderResourceVariable*              m_PrimitiveAttribsVar = nullptr; // cbPrimitiveAttribs
+    GeometryData                  m_GeometryData;
+    RefCntAutoPtr<IPipelineState> m_PSO;
 };
 
 } // namespace USD

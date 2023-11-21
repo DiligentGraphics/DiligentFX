@@ -475,11 +475,6 @@ void HnRenderPass::UpdateDrawItemsGPUResources(const HnRenderPassState& RPState)
             VERIFY_EXPR(pPSO != nullptr);
             DrawItem.SetPSO(pPSO);
         }
-
-        if (IShaderResourceBinding* pSRB = Material.GetSRB())
-        {
-            DrawItem.SetSRB(pSRB);
-        }
     }
 
     m_DrawItemsGPUResourcesDirty = false;
@@ -493,10 +488,9 @@ void HnRenderPass::RenderPendingDrawItems(RenderState& State)
 
         State.SetPipelineState(DrawItem.GetPSO());
 
-        DrawItem.GetPrimitiveAttribsVar()->SetBufferOffset(static_cast<Uint32>(i * State.PrimitiveAttribsAlignedOffset));
-        State.CommitShaderResources(DrawItem.GetSRB());
-
         const auto& Geo = DrawItem.GetGeometryData();
+
+        State.CommitShaderResources(Geo.pMaterial->GetSRB(static_cast<Uint32>(i * State.PrimitiveAttribsAlignedOffset)));
 
         IBuffer*                IndexBuffer      = nullptr;
         Uint32                  StartIndex       = 0;

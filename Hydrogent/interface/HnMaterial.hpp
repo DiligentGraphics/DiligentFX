@@ -83,6 +83,12 @@ public:
                    Uint32         AtlasVersion);
 
     IShaderResourceBinding* GetSRB() const { return m_SRB; }
+    IShaderResourceBinding* GetSRB(Uint32 PrimitiveAttribsOffset) const
+    {
+        if (m_PrimitiveAttribsVar != nullptr)
+            m_PrimitiveAttribsVar->SetBufferOffset(PrimitiveAttribsOffset);
+        return m_SRB;
+    }
 
     const HLSL::PBRMaterialShaderInfo& GetShaderAttribs() const { return m_ShaderAttribs; }
 
@@ -108,6 +114,7 @@ private:
     std::unordered_map<pxr::TfToken, HnTextureRegistry::TextureHandleSharedPtr, pxr::TfToken::HashFunctor> m_Textures;
 
     RefCntAutoPtr<IShaderResourceBinding> m_SRB;
+    IShaderResourceVariable*              m_PrimitiveAttribsVar = nullptr; // cbPrimitiveAttribs
 
     HLSL::PBRMaterialShaderInfo m_ShaderAttribs{};
 

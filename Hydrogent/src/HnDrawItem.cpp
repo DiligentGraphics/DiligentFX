@@ -41,16 +41,6 @@ HnDrawItem::~HnDrawItem()
 {
 }
 
-void HnDrawItem::SetSRB(IShaderResourceBinding* pSRB)
-{
-    VERIFY_EXPR(pSRB != nullptr);
-    m_SRB = pSRB;
-
-    m_PrimitiveAttribsVar = m_SRB ?
-        m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbPrimitiveAttribs") :
-        nullptr;
-}
-
 } // namespace USD
 
 } // namespace Diligent
