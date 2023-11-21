@@ -389,8 +389,9 @@ HnRenderDelegateMemoryStats HnRenderDelegate::GetMemoryStats() const
 {
     HnRenderDelegateMemoryStats MemoryStats;
 
-    const BufferSuballocatorUsageStats IndexUsage  = m_ResourceMgr->GetIndexBufferUsageStats();
-    const VertexPoolUsageStats         VertexUsage = m_ResourceMgr->GetVertexPoolUsageStats();
+    const BufferSuballocatorUsageStats  IndexUsage  = m_ResourceMgr->GetIndexBufferUsageStats();
+    const VertexPoolUsageStats          VertexUsage = m_ResourceMgr->GetVertexPoolUsageStats();
+    const DynamicTextureAtlasUsageStats AtlasUsage  = m_ResourceMgr->GetAtlasUsageStats();
 
     MemoryStats.IndexPool.CommittedSize   = IndexUsage.CommittedSize;
     MemoryStats.IndexPool.UsedSize        = IndexUsage.UsedSize;
@@ -400,6 +401,11 @@ HnRenderDelegateMemoryStats HnRenderDelegate::GetMemoryStats() const
     MemoryStats.VertexPool.UsedSize             = VertexUsage.UsedMemorySize;
     MemoryStats.VertexPool.AllocationCount      = VertexUsage.AllocationCount;
     MemoryStats.VertexPool.AllocatedVertexCount = VertexUsage.AllocatedVertexCount;
+
+    MemoryStats.Atlas.CommittedSize   = AtlasUsage.CommittedSize;
+    MemoryStats.Atlas.AllocationCount = AtlasUsage.AllocationCount;
+    MemoryStats.Atlas.TotalTexels     = AtlasUsage.TotalArea;
+    MemoryStats.Atlas.AllocatedTexels = AtlasUsage.AllocatedArea;
 
     return MemoryStats;
 }

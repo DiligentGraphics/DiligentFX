@@ -93,6 +93,23 @@ struct HnRenderDelegateMemoryStats
     };
     /// Vertex pool usage statistics.
     VertexPoolUsage VertexPool;
+
+    /// Texture atlas usage statistics.
+    struct TextureAtlasUsage
+    {
+        /// The total committed memory size, in bytes.
+        Uint64 CommittedSize = 0;
+
+        /// The number of allcations.
+        Uint32 AllocationCount = 0;
+
+        /// The total number of texels in the atlas.
+        Uint64 TotalTexels = 0;
+
+        /// The total number of texels in all allocations.
+        Uint64 AllocatedTexels = 0;
+    };
+    TextureAtlasUsage Atlas;
 };
 
 /// USD render delegate implementation in Hydrogent.
