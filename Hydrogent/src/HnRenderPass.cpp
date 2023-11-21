@@ -197,7 +197,7 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
 
         pCurrPrimitive->CustomData = float4{
             static_cast<float>(Mesh.GetUID()),
-            Mesh.GetId().HasPrefix(m_RenderParams.SelectedPrimId) ? 1.f : 0.f,
+            m_Params.Selection == HnRenderPassParams::SelectionType::Selected ? 1.f : 0.f,
             0,
             0,
         };
