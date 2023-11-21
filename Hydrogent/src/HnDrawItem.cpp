@@ -32,8 +32,9 @@ namespace Diligent
 namespace USD
 {
 
-HnDrawItem::HnDrawItem(const pxr::HdDrawItem& HdDrawItem) noexcept :
-    m_HdDrawItem{HdDrawItem}
+HnDrawItem::HnDrawItem(const pxr::HdDrawItem& HdDrawItem, const HnMesh& Mesh) noexcept :
+    m_HdDrawItem{HdDrawItem},
+    m_Mesh{Mesh}
 {
 }
 

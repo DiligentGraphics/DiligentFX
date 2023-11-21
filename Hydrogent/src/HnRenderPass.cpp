@@ -142,7 +142,7 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
         return;
     }
 
-    if (m_DrawItemsGPUResourcesDirty)
+    if (m_DrawItemsGPUResDirtyFlags != DRAW_ITEM_GPU_RES_DIRTY_FLAG_NONE)
         UpdateDrawItemsGPUResources(*static_cast<const HnRenderPassState*>(RPState.get()));
 
     pxr::HdRenderIndex* pRenderIndex    = GetRenderIndex();
@@ -180,9 +180,10 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
 
         // Write current primitive attributes
 
-        const auto& Geo = DrawItem.GetGeometryData();
+        const auto&   Geo  = DrawItem.GetGeometryData();
+        const HnMesh& Mesh = DrawItem.GetMesh();
 
-        pCurrPrimitive->Transforms.NodeMatrix = Geo.pMesh->GetTransform() * m_RenderParams.Transform;
+        pCurrPrimitive->Transforms.NodeMatrix = Mesh.GetTransform() * m_RenderParams.Transform;
         pCurrPrimitive->Transforms.JointCount = 0;
 
         const HLSL::PBRMaterialShaderInfo& ShaderAttribs = Geo.pMaterial->GetShaderAttribs();
@@ -191,12 +192,12 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
 
         if (Geo.IsFallbackMaterial)
         {
-            pCurrPrimitive->Material.BaseColorFactor = Geo.pMesh->GetDisplayColor();
+            pCurrPrimitive->Material.BaseColorFactor = Mesh.GetDisplayColor();
         }
 
         pCurrPrimitive->CustomData = float4{
-            static_cast<float>(Geo.pMesh->GetUID()),
-            Geo.pMesh->GetId().HasPrefix(m_RenderParams.SelectedPrimId) ? 1.f : 0.f,
+            static_cast<float>(Mesh.GetUID()),
+            Mesh.GetId().HasPrefix(m_RenderParams.SelectedPrimId) ? 1.f : 0.f,
             0,
             0,
         };
@@ -230,7 +231,7 @@ void HnRenderPass::SetMeshRenderParams(const HnMeshRenderParams& Params)
 
     if (m_RenderParams.RenderMode != Params.RenderMode ||
         m_RenderParams.DebugViewMode != Params.DebugViewMode)
-        m_DrawItemsGPUResourcesDirty = true;
+        m_DrawItemsGPUResDirtyFlags |= DRAW_ITEM_GPU_RES_DIRTY_FLAG_PSO;
 
     m_RenderParams = Params;
 }
@@ -238,7 +239,7 @@ void HnRenderPass::SetMeshRenderParams(const HnMeshRenderParams& Params)
 void HnRenderPass::SetParams(const HnRenderPassParams& Params)
 {
     if (m_Params.UsdPsoFlags != Params.UsdPsoFlags)
-        m_DrawItemsGPUResourcesDirty = true;
+        m_DrawItemsGPUResDirtyFlags |= DRAW_ITEM_GPU_RES_DIRTY_FLAG_PSO;
 
     m_Params = Params;
 }
@@ -292,16 +293,21 @@ void HnRenderPass::UpdateDrawItems(const pxr::TfTokenVector& RenderTags)
                 if (pDrawItem == nullptr)
                     continue;
 
-                const bool IsSelected = pDrawItem->GetRprimID().HasPrefix(m_RenderParams.SelectedPrimId);
+                const pxr::SdfPath& RPrimID = pDrawItem->GetRprimID();
+                const pxr::HdRprim* pRPrim  = pRenderIndex->GetRprim(RPrimID);
+                if (pRPrim == nullptr)
+                    continue;
+
+                const bool IsSelected = RPrimID.HasPrefix(m_RenderParams.SelectedPrimId);
                 if ((m_Params.Selection == HnRenderPassParams::SelectionType::All) ||
                     (m_Params.Selection == HnRenderPassParams::SelectionType::Selected && IsSelected) ||
                     (m_Params.Selection == HnRenderPassParams::SelectionType::Unselected && !IsSelected))
                 {
-                    m_DrawItems.push_back(HnDrawItem{*pDrawItem});
+                    m_DrawItems.push_back(HnDrawItem{*pDrawItem, *static_cast<const HnMesh*>(pRPrim)});
                 }
             }
 
-            m_DrawItemsGPUResourcesDirty = true;
+            m_DrawItemsGPUResDirtyFlags = DRAW_ITEM_GPU_RES_DIRTY_FLAG_ALL;
         }
         //else
         //{
@@ -333,7 +339,7 @@ HnRenderPass::SupportedVertexInputsSetType HnRenderPass::GetSupportedVertexInput
 
 void HnRenderPass::UpdateDrawItemsGPUResources(const HnRenderPassState& RPState)
 {
-    VERIFY_EXPR(m_DrawItemsGPUResourcesDirty);
+    VERIFY_EXPR(m_DrawItemsGPUResDirtyFlags != DRAW_ITEM_GPU_RES_DIRTY_FLAG_NONE);
 
     pxr::HdRenderIndex* pRenderIndex    = GetRenderIndex();
     HnRenderDelegate*   pRenderDelegate = static_cast<HnRenderDelegate*>(pRenderIndex->GetRenderDelegate());
@@ -374,31 +380,30 @@ void HnRenderPass::UpdateDrawItemsGPUResources(const HnRenderPassState& RPState)
     const USD_Renderer::ALPHA_MODE AlphaMode = MaterialTagToPbrAlphaMode(m_MaterialTag);
     for (HnDrawItem& DrawItem : m_DrawItems)
     {
-        const pxr::SdfPath& RPrimID = DrawItem.GetHdDrawItem().GetRprimID();
-        const pxr::HdRprim* pRPrim  = pRenderIndex->GetRprim(RPrimID);
-        if (pRPrim == nullptr)
-            continue;
-
-        bool IsFallbackMaterial = false;
-
-        const pxr::SdfPath& MaterialId = pRPrim->GetMaterialId();
-        const pxr::HdSprim* pSPrim     = pRenderIndex->GetSprim(pxr::HdPrimTypeTokens->material, MaterialId);
-        if (pSPrim == nullptr)
+        bool UpdateGeometry = (m_DrawItemsGPUResDirtyFlags & DRAW_ITEM_GPU_RES_DIRTY_FLAG_GEOMETRY) != 0;
+        bool UpdatePSO      = (m_DrawItemsGPUResDirtyFlags & DRAW_ITEM_GPU_RES_DIRTY_FLAG_PSO) != 0;
+        if (!DrawItem.GetGeometryData() || UpdateGeometry)
         {
-            pSPrim = pRenderIndex->GetFallbackSprim(pxr::HdPrimTypeTokens->material);
+            const HnMesh& Mesh = DrawItem.GetMesh();
+
+            bool IsFallbackMaterial = false;
+
+            const pxr::SdfPath& MaterialId = Mesh.GetMaterialId();
+            const pxr::HdSprim* pSPrim     = pRenderIndex->GetSprim(pxr::HdPrimTypeTokens->material, MaterialId);
             if (pSPrim == nullptr)
             {
-                UNEXPECTED("Unable to get fallback sprim. This is unexpected as default material is initialized in the render delegate.");
-                continue;
+                pSPrim = pRenderIndex->GetFallbackSprim(pxr::HdPrimTypeTokens->material);
+                if (pSPrim == nullptr)
+                {
+                    UNEXPECTED("Unable to get fallback sprim. This is unexpected as default material is initialized in the render delegate.");
+                    continue;
+                }
+                IsFallbackMaterial = true;
             }
-            IsFallbackMaterial = true;
-        }
 
-        const HnMesh&     Mesh     = *static_cast<const HnMesh*>(pRPrim);
-        const HnMaterial& Material = *static_cast<const HnMaterial*>(pSPrim);
+            const HnMaterial& Material = *static_cast<const HnMaterial*>(pSPrim);
 
-        {
-            HnDrawItem::GeometryData Geo{Mesh, Material, IsFallbackMaterial};
+            HnDrawItem::GeometryData Geo{Material, IsFallbackMaterial};
 
             // Get vertex buffers
             Geo.Positions = Mesh.GetVertexBuffer(pxr::HdTokens->points);
@@ -423,16 +428,20 @@ void HnRenderPass::UpdateDrawItemsGPUResources(const HnRenderPassState& RPState)
             }
 
             DrawItem.SetGeometryData(std::move(Geo));
+
+            // We need to update PSO as PSO flags depend on what vertex buffers are available
+            UpdatePSO = true;
         }
 
+        if (DrawItem.GetPSO() == nullptr || UpdatePSO)
         {
             auto PSOFlags = static_cast<PBR_Renderer::PSO_FLAGS>(m_Params.UsdPsoFlags);
+
+            const auto& Geo = DrawItem.GetGeometryData();
 
             IPipelineState* pPSO = nullptr;
             if (m_RenderParams.RenderMode == HN_RENDER_MODE_SOLID)
             {
-                const auto& Geo = DrawItem.GetGeometryData();
-
                 if (Geo.Normals != nullptr && (m_Params.UsdPsoFlags & USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_OUTPUT) != 0)
                     PSOFlags |= PBR_Renderer::PSO_FLAG_USE_VERTEX_NORMALS;
                 if (Geo.TexCoords[0] != nullptr)
@@ -455,7 +464,7 @@ void HnRenderPass::UpdateDrawItemsGPUResources(const HnRenderPassState& RPState)
                 if (static_cast<const HnRenderParam*>(pRenderDelegate->GetRenderParam())->GetUseTextureAtlas())
                     PSOFlags |= PBR_Renderer::PSO_FLAG_USE_TEXTURE_ATLAS;
 
-                VERIFY(Material.GetShaderAttribs().AlphaMode == AlphaMode || IsFallbackMaterial,
+                VERIFY(Geo.pMaterial->GetShaderAttribs().AlphaMode == AlphaMode || Geo.IsFallbackMaterial,
                        "Alpha mode derived from the material tag is not consistent with the alpha mode in the shader attributes. "
                        "This may indicate an issue in how alpha mode is determined in the material, or (less likely) an issue in Rprim sorting by Hydra.");
                 pPSO = PsoCache.Get({PSOFlags, static_cast<PBR_Renderer::ALPHA_MODE>(AlphaMode), /*DoubleSided = */ false, static_cast<PBR_Renderer::DebugViewType>(m_RenderParams.DebugViewMode)}, true);
@@ -477,7 +486,7 @@ void HnRenderPass::UpdateDrawItemsGPUResources(const HnRenderPassState& RPState)
         }
     }
 
-    m_DrawItemsGPUResourcesDirty = false;
+    m_DrawItemsGPUResDirtyFlags = DRAW_ITEM_GPU_RES_DIRTY_FLAG_NONE;
 }
 
 void HnRenderPass::RenderPendingDrawItems(RenderState& State)
@@ -488,7 +497,8 @@ void HnRenderPass::RenderPendingDrawItems(RenderState& State)
 
         State.SetPipelineState(DrawItem.GetPSO());
 
-        const auto& Geo = DrawItem.GetGeometryData();
+        const auto&   Geo  = DrawItem.GetGeometryData();
+        const HnMesh& Mesh = DrawItem.GetMesh();
 
         State.CommitShaderResources(Geo.pMaterial->GetSRB(static_cast<Uint32>(i * State.PrimitiveAttribsAlignedOffset)));
 
@@ -500,23 +510,23 @@ void HnRenderPass::RenderPendingDrawItems(RenderState& State)
         switch (m_RenderParams.RenderMode)
         {
             case HN_RENDER_MODE_SOLID:
-                IndexBuffer      = Geo.pMesh->GetFaceIndexBuffer();
-                StartIndex       = Geo.pMesh->GetFaceStartIndex();
-                NumVertices      = Geo.pMesh->GetNumFaceTriangles() * 3;
+                IndexBuffer      = Mesh.GetFaceIndexBuffer();
+                StartIndex       = Mesh.GetFaceStartIndex();
+                NumVertices      = Mesh.GetNumFaceTriangles() * 3;
                 NumVertexBuffers = 4;
                 break;
 
             case HN_RENDER_MODE_MESH_EDGES:
-                IndexBuffer      = Geo.pMesh->GetEdgeIndexBuffer();
-                StartIndex       = Geo.pMesh->GetEdgeStartIndex();
-                NumVertices      = Geo.pMesh->GetNumEdges() * 2;
+                IndexBuffer      = Mesh.GetEdgeIndexBuffer();
+                StartIndex       = Mesh.GetEdgeStartIndex();
+                NumVertices      = Mesh.GetNumEdges() * 2;
                 NumVertexBuffers = 1; // Only positions are used
                 break;
 
             case HN_RENDER_MODE_POINTS:
-                IndexBuffer      = Geo.pMesh->GetPointsIndexBuffer();
-                StartIndex       = Geo.pMesh->GetPointsStartIndex();
-                NumVertices      = Geo.pMesh->GetNumPoints();
+                IndexBuffer      = Mesh.GetPointsIndexBuffer();
+                StartIndex       = Mesh.GetPointsStartIndex();
+                NumVertices      = Mesh.GetNumPoints();
                 NumVertexBuffers = 1; // Only positions are used
                 break;
 

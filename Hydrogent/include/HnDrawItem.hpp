@@ -48,21 +48,25 @@ class HnMaterial;
 class HnDrawItem final
 {
 public:
-    explicit HnDrawItem(const pxr::HdDrawItem&) noexcept;
+    explicit HnDrawItem(const pxr::HdDrawItem& HdDrawItem, const HnMesh& Mesh) noexcept;
     ~HnDrawItem();
 
     const pxr::HdDrawItem& GetHdDrawItem() const { return m_HdDrawItem; }
+    const HnMesh&          GetMesh() const { return m_Mesh; }
 
     struct GeometryData
     {
         GeometryData() noexcept {}
-        GeometryData(const HnMesh& _Mesh, const HnMaterial& _Material, bool _IsFallbackMaterial) noexcept :
-            pMesh{&_Mesh},
+        GeometryData(const HnMaterial& _Material, bool _IsFallbackMaterial) noexcept :
             pMaterial{&_Material},
             IsFallbackMaterial{_IsFallbackMaterial}
         {}
 
-        const HnMesh*     pMesh              = nullptr;
+        constexpr explicit operator bool() const
+        {
+            return pMaterial != nullptr;
+        }
+
         const HnMaterial* pMaterial          = nullptr;
         bool              IsFallbackMaterial = false;
 
@@ -82,6 +86,7 @@ public:
 
 private:
     const pxr::HdDrawItem& m_HdDrawItem;
+    const HnMesh&          m_Mesh;
 
     GeometryData                  m_GeometryData;
     RefCntAutoPtr<IPipelineState> m_PSO;

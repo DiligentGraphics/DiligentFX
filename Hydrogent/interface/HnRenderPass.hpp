@@ -90,6 +90,15 @@ public:
     using SupportedVertexInputsSetType = std::unordered_set<pxr::TfToken, pxr::TfToken::HashFunctor>;
     static SupportedVertexInputsSetType GetSupportedVertexInputs(const HnMaterial* Material);
 
+    enum DRAW_ITEM_GPU_RES_DIRTY_FLAGS : Uint32
+    {
+        DRAW_ITEM_GPU_RES_DIRTY_FLAG_NONE     = 0u,
+        DRAW_ITEM_GPU_RES_DIRTY_FLAG_GEOMETRY = 1 << 0u,
+        DRAW_ITEM_GPU_RES_DIRTY_FLAG_PSO      = 1 << 1u,
+        DRAW_ITEM_GPU_RES_DIRTY_FLAG_LAST     = DRAW_ITEM_GPU_RES_DIRTY_FLAG_PSO,
+        DRAW_ITEM_GPU_RES_DIRTY_FLAG_ALL      = DRAW_ITEM_GPU_RES_DIRTY_FLAG_LAST * 2 - 1
+    };
+
 protected:
     // Virtual API: Execute the buckets corresponding to renderTags;
     // renderTags.empty() implies execute everything.
@@ -112,14 +121,16 @@ private:
     std::vector<HnDrawItem>        m_DrawItems;
     std::vector<const HnDrawItem*> m_PendingDrawItems;
 
-    unsigned int m_CollectionVersion          = ~0u;
-    unsigned int m_RprimRenderTagVersion      = ~0u;
-    unsigned int m_TaskRenderTagsVersion      = ~0u;
-    bool         m_DrawItemsGPUResourcesDirty = true;
+    unsigned int m_CollectionVersion     = ~0u;
+    unsigned int m_RprimRenderTagVersion = ~0u;
+    unsigned int m_TaskRenderTagsVersion = ~0u;
+
+    DRAW_ITEM_GPU_RES_DIRTY_FLAGS m_DrawItemsGPUResDirtyFlags = DRAW_ITEM_GPU_RES_DIRTY_FLAG_ALL;
 
     pxr::TfTokenVector m_RenderTags;
     pxr::TfToken       m_MaterialTag;
 };
+DEFINE_FLAG_ENUM_OPERATORS(HnRenderPass::DRAW_ITEM_GPU_RES_DIRTY_FLAGS)
 
 } // namespace USD
 
