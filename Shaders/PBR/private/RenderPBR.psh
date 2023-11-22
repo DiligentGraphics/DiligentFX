@@ -46,7 +46,9 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
 {
     float4 BaseColor = GetBaseColor(VSOut, g_Primitive.Material);
 
-    float2 NormalMapUV  = SelectUV(VSOut, g_Primitive.Material.NormalTextureUVSelector);
+    PBRMaterialTextureAttribs NormalTexAttribs = g_Primitive.Material.Textures[NormalTextureAttribId];
+
+    float2 NormalMapUV  = SelectUV(VSOut, NormalTexAttribs.UVSelector);
 
     // We have to compute gradients in uniform flow control to avoid issues with perturbed normal
     float3 dWorldPos_dx = ddx(VSOut.WorldPos);
@@ -56,13 +58,14 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
 #if USE_TEXTURE_ATLAS
     {
         NormalMapUV = frac(NormalMapUV);
-        NormalMapUV = NormalMapUV * g_Primitive.Material.NormalMapUVScaleBias.xy + g_Primitive.Material.NormalMapUVScaleBias.zw;
-        dNormalMapUV_dx *= g_Primitive.Material.NormalMapUVScaleBias.xy;
-        dNormalMapUV_dy *= g_Primitive.Material.NormalMapUVScaleBias.xy;
+        NormalMapUV = NormalMapUV * NormalTexAttribs.UVScaleBias.xy + NormalTexAttribs.UVScaleBias.zw;
+        dNormalMapUV_dx *= NormalTexAttribs.UVScaleBias.xy;
+        dNormalMapUV_dy *= NormalTexAttribs.UVScaleBias.xy;
     }
 #endif
 
-    if (g_Primitive.Material.AlphaMode == PBR_ALPHA_MODE_MASK && BaseColor.a < g_Primitive.Material.AlphaMaskCutoff)
+    PBRMaterialBasicAttribs BasicAttribs = g_Primitive.Material.Basic;
+    if (BasicAttribs.AlphaMode == PBR_ALPHA_MODE_MASK && BaseColor.a < BasicAttribs.AlphaMaskCutoff)
     {
         discard;
     }
@@ -72,20 +75,20 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
     float3 Emissive     = GetEmissive(VSOut, g_Primitive.Material);
     float4 PhysicalDesc = GetPhysicalDesc(VSOut, g_Primitive.Material);
 
-     if (g_Primitive.Material.Workflow == PBR_WORKFLOW_SPECULAR_GLOSINESS)
+     if (BasicAttribs.Workflow == PBR_WORKFLOW_SPECULAR_GLOSINESS)
     {
-        PhysicalDesc.rgb = TO_LINEAR(PhysicalDesc.rgb) * g_Primitive.Material.SpecularFactor.rgb;
+        PhysicalDesc.rgb = TO_LINEAR(PhysicalDesc.rgb) * BasicAttribs.SpecularFactor.rgb;
         const float u_GlossinessFactor = 1.0;
         PhysicalDesc.a *= u_GlossinessFactor;
     }
-    else if (g_Primitive.Material.Workflow == PBR_WORKFLOW_METALLIC_ROUGHNESS)
+    else if (BasicAttribs.Workflow == PBR_WORKFLOW_METALLIC_ROUGHNESS)
     {
         // PhysicalDesc should already be in linear space
-        PhysicalDesc.g = saturate(PhysicalDesc.g * g_Primitive.Material.RoughnessFactor);
-        PhysicalDesc.b = saturate(PhysicalDesc.b * g_Primitive.Material.MetallicFactor);
+        PhysicalDesc.g = saturate(PhysicalDesc.g * BasicAttribs.RoughnessFactor);
+        PhysicalDesc.b = saturate(PhysicalDesc.b * BasicAttribs.MetallicFactor);
     }
     float metallic = 0.0;
-    SurfaceReflectanceInfo SrfInfo = GetSurfaceReflectance(g_Primitive.Material.Workflow, BaseColor, PhysicalDesc, metallic);
+    SurfaceReflectanceInfo SrfInfo = GetSurfaceReflectance(BasicAttribs.Workflow, BaseColor, PhysicalDesc, metallic);
 
     float3 view = normalize(g_Frame.Camera.f4Position.xyz - VSOut.WorldPos.xyz); // Direction from surface point to camera
 
@@ -103,7 +106,7 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
                                            dNormalMapUV_dy,
                                            MeshNormal,
                                            TSNormal,
-                                           g_Primitive.Material.NormalTextureUVSelector >= 0.0,
+                                           NormalTexAttribs.UVSelector >= 0.0,
                                            IsFrontFace);
 
     float3 DirectLighting = ApplyDirectionalLight(g_Frame.Light.Direction.xyz, g_Frame.Light.Intensity.rgb, SrfInfo, perturbedNormal, view);

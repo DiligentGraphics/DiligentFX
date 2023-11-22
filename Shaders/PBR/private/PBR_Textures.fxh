@@ -5,6 +5,26 @@
 #   include "AtlasSampling.fxh"
 #endif
 
+#ifndef BaseColorTextureAttribId
+#   define BaseColorTextureAttribId 0
+#endif
+
+#ifndef PhysicalDescriptorTextureAttribId
+#   define PhysicalDescriptorTextureAttribId 1
+#endif
+
+#ifndef NormalTextureAttribId
+#   define NormalTextureAttribId 2
+#endif
+
+#ifndef OcclusionTextureAttribId
+#   define OcclusionTextureAttribId 3
+#endif
+
+#ifndef EmissiveTextureAttribId
+#   define EmissiveTextureAttribId 4
+#endif
+
 #if USE_IBL
     TextureCube  g_IrradianceMap;
     SamplerState g_IrradianceMap_sampler;
@@ -65,32 +85,30 @@ float2 SelectUV(VSOutput VSOut, float Selector)
 #endif
 }
 
-float4 SampleTexture(Texture2DArray Tex,
-                     SamplerState   Tex_sampler,
-                     VSOutput       VSOut,
-                     float          Selector, 
-                     float4         ScaleBias,
-                     float          Slice,
-                     float4         DefaultValue)
+float4 SampleTexture(Texture2DArray            Tex,
+                     SamplerState              Tex_sampler,
+                     VSOutput                  VSOut,
+                     PBRMaterialTextureAttribs TexAttribs,
+                     float4                    DefaultValue)
 {
 #   if USE_TEXCOORD0 || USE_TEXCOORD1
     {
-        float2 UV = SelectUV(VSOut, Selector);
+        float2 UV = SelectUV(VSOut, TexAttribs.UVSelector);
 #       if USE_TEXTURE_ATLAS
         {
-            if (Selector < 0.0)
+            if (TexAttribs.UVSelector < 0.0)
             {
                 return DefaultValue;
             }
             else
             {
                 SampleTextureAtlasAttribs SampleAttribs;
-                SampleAttribs.f2UV                   = frac(UV) * ScaleBias.xy + ScaleBias.zw;
-                SampleAttribs.f2SmoothUV             = UV * ScaleBias.xy;
-                SampleAttribs.f2dSmoothUV_dx         = ddx(UV) * ScaleBias.xy;
-                SampleAttribs.f2dSmoothUV_dy         = ddy(UV) * ScaleBias.xy;
-                SampleAttribs.fSlice                 = Slice;
-                SampleAttribs.f4UVRegion             = ScaleBias;
+                SampleAttribs.f2UV                   = frac(UV) * TexAttribs.UVScaleBias.xy + TexAttribs.UVScaleBias.zw;
+                SampleAttribs.f2SmoothUV             = UV * TexAttribs.UVScaleBias.xy;
+                SampleAttribs.f2dSmoothUV_dx         = ddx(UV) * TexAttribs.UVScaleBias.xy;
+                SampleAttribs.f2dSmoothUV_dy         = ddy(UV) * TexAttribs.UVScaleBias.xy;
+                SampleAttribs.fSlice                 = TexAttribs.TextureSlice;
+                SampleAttribs.f4UVRegion             = TexAttribs.UVScaleBias;
                 SampleAttribs.fSmallestValidLevelDim = 4.0;
                 SampleAttribs.IsNonFilterable        = false;
                 SampleAttribs.fMaxAnisotropy         = 1.0; // Only used on GLES
@@ -99,7 +117,7 @@ float4 SampleTexture(Texture2DArray Tex,
         }
 #       else
         {
-            return Tex.Sample(Tex_sampler, float3(UV, Slice));
+            return Tex.Sample(Tex_sampler, float3(UV, TexAttribs.TextureSlice));
         }
 #       endif
     }
@@ -120,9 +138,7 @@ float4 GetBaseColor(VSOutput              VSOut,
         BaseColor = SampleTexture(g_ColorMap,
                                   g_ColorMap_sampler,
                                   VSOut,
-                                  Material.BaseColorTextureUVSelector,
-                                  Material.BaseColorUVScaleBias,
-                                  Material.BaseColorSlice,
+                                  Material.Textures[BaseColorTextureAttribId],
                                   float4(1.0, 1.0, 1.0, 1.0));
         BaseColor = float4(TO_LINEAR(BaseColor.rgb), BaseColor.a);
     }
@@ -133,7 +149,7 @@ float4 GetBaseColor(VSOutput              VSOut,
         BaseColor *= VSOut.Color;
     }
 #   endif
-    return BaseColor * Material.BaseColorFactor;
+    return BaseColor * Material.Basic.BaseColorFactor;
 }
 
 float3 GetMicroNormal(VSOutput              VSOut,
@@ -144,19 +160,20 @@ float3 GetMicroNormal(VSOutput              VSOut,
 {
     float3 MicroNormal = float3(0.5, 0.5, 1.0);
 
+    PBRMaterialTextureAttribs TexAttribs = Material.Textures[NormalTextureAttribId];
 #   if USE_NORMAL_MAP && (USE_TEXCOORD0 || USE_TEXCOORD1)
     {
 #       if USE_TEXTURE_ATLAS
         {
-            if (Material.NormalTextureUVSelector >= 0.0)
+            if (TexAttribs.UVSelector >= 0.0)
             {
                 SampleTextureAtlasAttribs SampleAttribs;
                 SampleAttribs.f2UV                   = NormalMapUV;
-                SampleAttribs.f2SmoothUV             = SelectUV(VSOut, Material.NormalTextureUVSelector) * Material.NormalMapUVScaleBias.xy;
+                SampleAttribs.f2SmoothUV             = SelectUV(VSOut, TexAttribs.UVSelector) * TexAttribs.UVScaleBias.xy;
                 SampleAttribs.f2dSmoothUV_dx         = dNormalMapUV_dx;
                 SampleAttribs.f2dSmoothUV_dy         = dNormalMapUV_dy;
-                SampleAttribs.fSlice                 = Material.NormalSlice;
-                SampleAttribs.f4UVRegion             = Material.NormalMapUVScaleBias;
+                SampleAttribs.fSlice                 = TexAttribs.TextureSlice;
+                SampleAttribs.f4UVRegion             = TexAttribs.UVScaleBias;
                 SampleAttribs.fSmallestValidLevelDim = 4.0;
                 SampleAttribs.IsNonFilterable        = false;
                 SampleAttribs.fMaxAnisotropy         = 1.0; // Only used on GLES
@@ -165,7 +182,7 @@ float3 GetMicroNormal(VSOutput              VSOut,
         }
 #       else
         {
-            MicroNormal = g_NormalMap.Sample(g_NormalMap_sampler, float3(NormalMapUV, Material.NormalSlice)).xyz;
+            MicroNormal = g_NormalMap.Sample(g_NormalMap_sampler, float3(NormalMapUV, TexAttribs.TextureSlice)).xyz;
         }
 #       endif
     }
@@ -183,13 +200,11 @@ float GetOcclusion(VSOutput              VSOut,
         Occlusion = SampleTexture(g_AOMap,
                                   g_AOMap_sampler,
                                   VSOut,
-                                  Material.OcclusionTextureUVSelector,
-                                  Material.OcclusionUVScaleBias,
-                                  Material.OcclusionSlice,
+                                  Material.Textures[OcclusionTextureAttribId],
                                   float4(1.0, 1.0, 1.0, 1.0)).r;
     }
 #   endif
-    return Occlusion * Material.OcclusionFactor;
+    return Occlusion * Material.Basic.OcclusionFactor;
 }
 
 float3 GetEmissive(VSOutput              VSOut,
@@ -202,14 +217,12 @@ float3 GetEmissive(VSOutput              VSOut,
         Emissive = SampleTexture(g_EmissiveMap,
                                  g_EmissiveMap_sampler,
                                  VSOut,
-                                 Material.EmissiveTextureUVSelector,
-                                 Material.EmissiveUVScaleBias,
-                                 Material.EmissiveSlice,
+                                 Material.Textures[EmissiveTextureAttribId],
                                  float4(0.0, 0.0, 0.0, 0.0)).rgb;
         Emissive = TO_LINEAR(Emissive);
     }
 #   endif
-    return Emissive * Material.EmissiveFactor.rgb;
+    return Emissive * Material.Basic.EmissiveFactor.rgb;
 }
 
 float4 GetPhysicalDesc(VSOutput              VSOut,
@@ -223,9 +236,7 @@ float4 GetPhysicalDesc(VSOutput              VSOut,
         PhysicalDesc = SampleTexture(g_PhysicalDescriptorMap,
                                      g_PhysicalDescriptorMap_sampler,
                                      VSOut,
-                                     Material.PhysicalDescriptorTextureUVSelector,
-                                     Material.PhysicalDescriptorUVScaleBias,
-                                     Material.PhysicalDescriptorSlice,
+                                     Material.Textures[PhysicalDescriptorTextureAttribId],
                                      float4(1.0, 1.0, 1.0, 1.0));
     }
 #   else
@@ -235,9 +246,7 @@ float4 GetPhysicalDesc(VSOutput              VSOut,
             PhysicalDesc.b = SampleTexture(g_MetallicMap,
                                            g_MetallicMap_sampler,
                                            VSOut,
-                                           Material.PhysicalDescriptorTextureUVSelector,
-                                           Material.PhysicalDescriptorUVScaleBias,
-                                           Material.PhysicalDescriptorSlice,
+                                           Material.Textures[PhysicalDescriptorTextureAttribId],
                                            float4(1.0, 1.0, 1.0, 1.0)).r;
         }
 #       endif
@@ -247,9 +256,7 @@ float4 GetPhysicalDesc(VSOutput              VSOut,
             PhysicalDesc.g = SampleTexture(g_RoughnessMap,
                                            g_RoughnessMap_sampler,
                                            VSOut,
-                                           Material.PhysicalDescriptorTextureUVSelector,
-                                           Material.PhysicalDescriptorUVScaleBias,
-                                           Material.PhysicalDescriptorSlice,
+                                           Material.Textures[PhysicalDescriptorTextureAttribId],
                                            float4(1.0, 1.0, 1.0, 1.0)).r;
 
         }

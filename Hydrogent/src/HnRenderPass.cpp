@@ -261,7 +261,7 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
 
         if (Geo.IsFallbackMaterial)
         {
-            pCurrPrimitive->Material.BaseColorFactor = Mesh.GetDisplayColor();
+            pCurrPrimitive->Material.Basic.BaseColorFactor = Mesh.GetDisplayColor();
         }
 
         pCurrPrimitive->CustomData = float4{
@@ -497,7 +497,7 @@ void HnRenderPass::UpdateDrawItemGPUResources(HnDrawItem& DrawItem, RenderState&
             if (static_cast<const HnRenderParam*>(State.RenderDelegate.GetRenderParam())->GetUseTextureAtlas())
                 PSOFlags |= PBR_Renderer::PSO_FLAG_USE_TEXTURE_ATLAS;
 
-            VERIFY(Geo.pMaterial->GetShaderAttribs().AlphaMode == State.AlphaMode || Geo.IsFallbackMaterial,
+            VERIFY(Geo.pMaterial->GetShaderAttribs().Basic.AlphaMode == State.AlphaMode || Geo.IsFallbackMaterial,
                    "Alpha mode derived from the material tag is not consistent with the alpha mode in the shader attributes. "
                    "This may indicate an issue in how alpha mode is determined in the material, or (less likely) an issue in Rprim sorting by Hydra.");
             pPSO = PsoCache.Get({PSOFlags, static_cast<PBR_Renderer::ALPHA_MODE>(State.AlphaMode), /*DoubleSided = */ false, static_cast<PBR_Renderer::DebugViewType>(m_RenderParams.DebugViewMode)}, true);

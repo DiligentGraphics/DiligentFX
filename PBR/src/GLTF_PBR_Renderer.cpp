@@ -141,7 +141,7 @@ void GLTF_PBR_Renderer::InitMaterialSRB(GLTF::Model&            Model,
     {
         RefCntAutoPtr<ITextureView> pTexSRV;
 
-        auto TexIdx = Material.TextureIds[TexAttribId];
+        auto TexIdx = Material.GetTextureId(TexAttribId);
         if (TexIdx >= 0)
         {
             if (auto* pTexture = Model.GetTexture(TexIdx))
@@ -476,10 +476,15 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
                 pAttribs->Transforms.NodeMatrix = NodeGlobalMatrix * RenderParams.ModelTransform;
                 pAttribs->Transforms.JointCount = static_cast<int>(JointCount);
 
+                static_assert(sizeof(pAttribs->Material.Basic) == sizeof(material.Attribs),
+                              "The sizeof(PBRMaterialBasicAttribs) is inconsistent with sizeof(GLTF::Material::ShaderAttribs)");
+                memcpy(&pAttribs->Material.Basic, &material.Attribs, sizeof(material.Attribs));
 
-                static_assert(sizeof(pAttribs->Material) == sizeof(material.Attribs),
-                              "The sizeof(PBRMaterialShaderInfo) is inconsistent with sizeof(GLTF::Material::ShaderAttribs)");
-                memcpy(&pAttribs->Material, &material.Attribs, sizeof(material.Attribs));
+                VERIFY_EXPR(material.GetNumTextureAttribs() <= PBR_NUM_TEXTURE_ATTRIBUTES);
+                static_assert(sizeof(pAttribs->Material.Textures[0]) == sizeof(GLTF::Material::TextureShaderAttribs),
+                              "The sizeof(PBRMaterialTextureAttribs) is inconsistent with sizeof(GLTF::Material::TextureShaderAttribs)");
+                memcpy(&pAttribs->Material.Textures, &material.GetTextureAttrib(0), sizeof(GLTF::Material::TextureShaderAttribs) * material.GetNumTextureAttribs());
+
                 static_assert(static_cast<PBR_WORKFLOW>(GLTF::Material::PBR_WORKFLOW_METALL_ROUGH) == PBR_WORKFLOW_METALL_ROUGH, "GLTF::Material::PBR_WORKFLOW_METALL_ROUGH != PBR_WORKFLOW_METALL_ROUGH");
                 static_assert(static_cast<PBR_WORKFLOW>(GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS) == PBR_WORKFLOW_SPEC_GLOSS, "GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS != PBR_WORKFLOW_SPEC_GLOSS");
             }

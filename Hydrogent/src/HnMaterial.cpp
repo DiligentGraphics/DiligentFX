@@ -59,9 +59,9 @@ HnMaterial* HnMaterial::Create(const pxr::SdfPath& id)
 HnMaterial::HnMaterial(const pxr::SdfPath& id) :
     pxr::HdMaterial{id}
 {
-    m_ShaderAttribs.BaseColorFactor = float4{1, 1, 1, 1};
-    m_ShaderAttribs.RoughnessFactor = 1;
-    m_ShaderAttribs.OcclusionFactor = 1;
+    m_ShaderAttribs.Basic.BaseColorFactor = float4{1, 1, 1, 1};
+    m_ShaderAttribs.Basic.RoughnessFactor = 1;
+    m_ShaderAttribs.Basic.OcclusionFactor = 1;
 }
 
 HnMaterial::~HnMaterial()
@@ -102,12 +102,12 @@ void HnMaterial::Sync(pxr::HdSceneDelegate* SceneDelegate,
         TexNameToCoordSetMapType TexNameToCoordSetMap;
         AllocateTextures(TexRegistry, TexNameToCoordSetMap);
 
-        m_ShaderAttribs.BaseColorFactor = float4{1, 1, 1, 1};
-        m_ShaderAttribs.EmissiveFactor  = float4{1, 1, 1, 1};
-        m_ShaderAttribs.SpecularFactor  = float4{1, 1, 1, 1};
-        m_ShaderAttribs.MetallicFactor  = 1;
-        m_ShaderAttribs.RoughnessFactor = 1;
-        m_ShaderAttribs.OcclusionFactor = 1;
+        m_ShaderAttribs.Basic.BaseColorFactor = float4{1, 1, 1, 1};
+        m_ShaderAttribs.Basic.EmissiveFactor  = float4{1, 1, 1, 1};
+        m_ShaderAttribs.Basic.SpecularFactor  = float4{1, 1, 1, 1};
+        m_ShaderAttribs.Basic.MetallicFactor  = 1;
+        m_ShaderAttribs.Basic.RoughnessFactor = 1;
+        m_ShaderAttribs.Basic.OcclusionFactor = 1;
 
         const auto& MaterialParams = m_Network.GetParameters();
 
@@ -126,26 +126,26 @@ void HnMaterial::Sync(pxr::HdSceneDelegate* SceneDelegate,
         };
 
         SetFallbackValue(HnTokens->diffuseColor, [this](const pxr::VtValue& Val) {
-            m_ShaderAttribs.BaseColorFactor = float4{float3::MakeVector(Val.Get<pxr::GfVec3f>().data()), 1};
+            m_ShaderAttribs.Basic.BaseColorFactor = float4{float3::MakeVector(Val.Get<pxr::GfVec3f>().data()), 1};
         });
         SetFallbackValue(HnTokens->metallic, [this](const pxr::VtValue& Val) {
-            m_ShaderAttribs.MetallicFactor = Val.Get<float>();
+            m_ShaderAttribs.Basic.MetallicFactor = Val.Get<float>();
         });
         SetFallbackValue(HnTokens->roughness, [this](const pxr::VtValue& Val) {
-            m_ShaderAttribs.RoughnessFactor = Val.Get<float>();
+            m_ShaderAttribs.Basic.RoughnessFactor = Val.Get<float>();
         });
         SetFallbackValue(HnTokens->occlusion, [this](const pxr::VtValue& Val) {
-            m_ShaderAttribs.OcclusionFactor = Val.Get<float>();
+            m_ShaderAttribs.Basic.OcclusionFactor = Val.Get<float>();
         });
 
-        m_ShaderAttribs.Workflow    = PBR_Renderer::PBR_WORKFLOW_METALL_ROUGH;
-        m_ShaderAttribs.UVSelector0 = static_cast<float>(TexNameToCoordSetMap[HnTokens->diffuseColor]);
-        m_ShaderAttribs.UVSelector1 = static_cast<float>(TexNameToCoordSetMap[HnTokens->metallic]);
+        m_ShaderAttribs.Basic.Workflow         = PBR_Renderer::PBR_WORKFLOW_METALL_ROUGH;
+        m_ShaderAttribs.Textures[0].UVSelector = static_cast<float>(TexNameToCoordSetMap[HnTokens->diffuseColor]);
+        m_ShaderAttribs.Textures[1].UVSelector = static_cast<float>(TexNameToCoordSetMap[HnTokens->metallic]);
         if (TexNameToCoordSetMap[HnTokens->metallic] != TexNameToCoordSetMap[HnTokens->roughness])
             LOG_ERROR_MESSAGE("Metallic and roughness textures must use the same texture coordinates");
-        m_ShaderAttribs.UVSelector2 = static_cast<float>(TexNameToCoordSetMap[HnTokens->normal]);
-        m_ShaderAttribs.UVSelector3 = static_cast<float>(TexNameToCoordSetMap[HnTokens->occlusion]);
-        m_ShaderAttribs.UVSelector4 = static_cast<float>(TexNameToCoordSetMap[HnTokens->emissiveColor]);
+        m_ShaderAttribs.Textures[2].UVSelector = static_cast<float>(TexNameToCoordSetMap[HnTokens->normal]);
+        m_ShaderAttribs.Textures[3].UVSelector = static_cast<float>(TexNameToCoordSetMap[HnTokens->occlusion]);
+        m_ShaderAttribs.Textures[4].UVSelector = static_cast<float>(TexNameToCoordSetMap[HnTokens->emissiveColor]);
 
         auto SetAtlasParams = [&](const pxr::TfToken& Name, Uint32 Idx) {
             auto tex_it = m_Textures.find(Name);
@@ -155,15 +155,15 @@ void HnMaterial::Sync(pxr::HdSceneDelegate* SceneDelegate,
             ITextureAtlasSuballocation* pAtlasSuballocation = tex_it->second->pAtlasSuballocation;
             if (pAtlasSuballocation != nullptr)
             {
-                (&m_ShaderAttribs.TextureSlice0)[Idx] = static_cast<float>(pAtlasSuballocation->GetSlice());
-                (&m_ShaderAttribs.UVScaleBias0)[Idx]  = pAtlasSuballocation->GetUVScaleBias();
+                m_ShaderAttribs.Textures[Idx].TextureSlice = static_cast<float>(pAtlasSuballocation->GetSlice());
+                m_ShaderAttribs.Textures[Idx].UVScaleBias  = pAtlasSuballocation->GetUVScaleBias();
 
                 m_UsesAtlas = true;
             }
             else
             {
-                (&m_ShaderAttribs.TextureSlice0)[Idx] = 0;
-                (&m_ShaderAttribs.UVScaleBias0)[Idx]  = float4{1, 1, 0, 0};
+                m_ShaderAttribs.Textures[Idx].TextureSlice = 0;
+                m_ShaderAttribs.Textures[Idx].UVScaleBias  = float4{1, 1, 0, 0};
             }
         };
         SetAtlasParams(HnTokens->diffuseColor, 0);
@@ -172,10 +172,10 @@ void HnMaterial::Sync(pxr::HdSceneDelegate* SceneDelegate,
         SetAtlasParams(HnTokens->occlusion, 3);
         SetAtlasParams(HnTokens->emissiveColor, 4);
 
-        m_ShaderAttribs.AlphaMode = MaterialTagToPbrAlphaMode(m_Network.GetTag());
+        m_ShaderAttribs.Basic.AlphaMode = MaterialTagToPbrAlphaMode(m_Network.GetTag());
 
-        m_ShaderAttribs.AlphaMaskCutoff   = m_Network.GetOpacityThreshold();
-        m_ShaderAttribs.BaseColorFactor.a = m_Network.GetOpacity();
+        m_ShaderAttribs.Basic.AlphaMaskCutoff   = m_Network.GetOpacityThreshold();
+        m_ShaderAttribs.Basic.BaseColorFactor.a = m_Network.GetOpacity();
     }
 
     *DirtyBits = HdMaterial::Clean;
