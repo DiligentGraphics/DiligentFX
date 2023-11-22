@@ -952,9 +952,9 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
             auto       PSO                           = m_Device.CreateGraphicsPipelineState(PSOCreateInfo);
 
             PsoHashMap[{PSOFlags, AlphaMode, DoubleSided, Key.GetDebugView()}] = PSO;
-            if (AlphaMode == ALPHA_MODE_BLEND)
+            if (AlphaMode == ALPHA_MODE_OPAQUE)
             {
-                // Mask and blend use the same PSO
+                // Mask and opaque use the same PSO
                 PsoHashMap[{PSOFlags, ALPHA_MODE_MASK, DoubleSided, Key.GetDebugView()}] = PSO;
             }
         }
