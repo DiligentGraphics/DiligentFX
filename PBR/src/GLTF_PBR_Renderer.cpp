@@ -79,10 +79,10 @@ struct PBRRendererCreateInfoWrapper
             CI.InputLayout = InputLayout;
         }
 
-        if (CI.NumShaderTextureAttribs == 0)
+        if (CI.NumShaderTextureAttribIndices == 0)
         {
-            CI.pShaderTextureAttribIndices = DefaultShaderTextureAttribIndices.data();
-            CI.NumShaderTextureAttribs     = static_cast<Uint32>(DefaultShaderTextureAttribIndices.size());
+            CI.pShaderTextureAttribIndices   = DefaultShaderTextureAttribIndices.data();
+            CI.NumShaderTextureAttribIndices = static_cast<Uint32>(DefaultShaderTextureAttribIndices.size());
         }
     }
 

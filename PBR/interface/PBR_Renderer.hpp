@@ -155,18 +155,13 @@ public:
             const char* Name = nullptr;
 
             /// Texture attribute index value.
-            Uint32 Idx = 0;
+            Uint32 Index = 0;
         };
-        /// An array of texture attribute index info.
-        ///
-        /// \remarks    If not null, this array must contain NumShaderTextureAttribs elements.
+        /// An array of NumShaderTextureAttribIndices texture attribute index info.
         const ShaderTextureAttribIndex* pShaderTextureAttribIndices = nullptr;
 
-        /// The number of texture attributes used by the materials in the shader.
-        ///
-        /// \remarks    This defines the value of the PBR_NUM_TEXTURE_ATTRIBUTES macro,
-        ///             and the number of elements in PBRMaterialShaderInfo.Textures array.
-        Uint32 NumShaderTextureAttribs = 0;
+        /// The number of texture attributes in pShaderTextureAttribIndices array.
+        Uint32 NumShaderTextureAttribIndices = 0;
     };
 
     enum ALPHA_MODE
@@ -422,6 +417,14 @@ protected:
     const std::vector<CreateInfo::ShaderTextureAttribIndex> m_ShaderTextureAttribIndices;
 
     const CreateInfo m_Settings;
+
+    // The number of texture attributes in PBRMaterialShaderInfo.Textures array
+    // (aka PBR_NUM_TEXTURE_ATTRIBUTES).
+    //
+    // \remarks    This value is equal to the maximum index in m_ShaderTextureAttribIndices array.
+    //             Typically, it will be the same as m_Settings.NumShaderTextureAttribIndices,
+    //             but it may be greater if texture attribute indices are not consecutive.
+    const Uint32 m_NumShaderTextureAttribs;
 
     RenderDeviceWithCache_N m_Device;
 
