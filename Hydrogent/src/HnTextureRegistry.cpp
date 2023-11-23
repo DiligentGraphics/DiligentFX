@@ -167,7 +167,7 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const HnTe
                 }
             }
 
-            if (TexHandle)
+            if (!TexHandle->pTexture)
             {
                 std::lock_guard<std::mutex> Lock{m_PendingTexturesMtx};
                 m_PendingTextures.emplace(TexId.FilePath, PendingTextureInfo{std::move(pLoader), SamDesc, TexHandle});
