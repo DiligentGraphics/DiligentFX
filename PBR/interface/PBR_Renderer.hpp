@@ -145,6 +145,26 @@ public:
         /// A pointer to the user-provided primitive attribs buffer.
         /// If null, the renderer will allocate the buffer.
         IBuffer* pPrimitiveAttribsCB = nullptr;
+
+        /// Texture attribute index info.
+        struct ShaderTextureAttribIndex
+        {
+            /// Texture attribute index name (e.g. "BaseColorTextureAttribId").
+            const char* Name = nullptr;
+
+            /// Texture attribute index value.
+            Uint32 Idx = 0;
+        };
+        /// An array of texture attribute index info.
+        ///
+        /// \remarks    If not null, this array must contain NumShaderTextureAttribs elements.
+        const ShaderTextureAttribIndex* pShaderTextureAttribIndices = nullptr;
+
+        /// The number of texture attributes used by the materials in the shader.
+        ///
+        /// \remarks    This defines the value of the PBR_NUM_TEXTURE_ATTRIBUTES macro,
+        ///             and the number of elements in PBRMaterialShaderInfo.Textures array.
+        Uint32 NumShaderTextureAttribs = 0;
     };
 
     enum ALPHA_MODE
@@ -387,7 +407,11 @@ private:
 
 protected:
     const InputLayoutDescX m_InputLayout;
-    const CreateInfo       m_Settings;
+
+    const std::vector<std::string>                          m_ShaderTextureAttribIndexNames;
+    const std::vector<CreateInfo::ShaderTextureAttribIndex> m_ShaderTextureAttribIndices;
+
+    const CreateInfo m_Settings;
 
     RenderDeviceWithCache_N m_Device;
 

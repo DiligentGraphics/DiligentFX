@@ -46,9 +46,7 @@ const SamplerDesc PBR_Renderer::CreateInfo::DefaultSampler = Sam_LinearWrap;
 namespace HLSL
 {
 
-#include "Shaders/Common/public/BasicStructures.fxh"
 #include "Shaders/PBR/public/PBR_Structures.fxh"
-#include "Shaders/PBR/private/RenderPBR_Structures.fxh"
 
 } // namespace HLSL
 
@@ -74,21 +72,58 @@ PBR_Renderer::PSOKey::PSOKey(PSO_FLAGS     _Flags,
     Hash = ComputeHash(Flags, AlphaMode, DoubleSided, static_cast<Uint32>(DebugView));
 }
 
+static std::vector<std::string> CopyShaderTextureAttribIndexNames(const PBR_Renderer::CreateInfo& CI)
+{
+    std::vector<std::string> Names;
+    if (CI.pShaderTextureAttribIndices != nullptr)
+    {
+        Names.resize(CI.NumShaderTextureAttribs);
+        for (Uint32 i = 0; i < CI.NumShaderTextureAttribs; ++i)
+        {
+            const char* SrcName = CI.pShaderTextureAttribIndices[i].Name;
+            if (SrcName == nullptr || *SrcName == '\0')
+            {
+                DEV_ERROR("Shader texture attribute name must not be null or empty");
+                continue;
+            }
+            Names[i] = SrcName;
+        }
+    }
+    return Names;
+}
+
+static std::vector<PBR_Renderer::CreateInfo::ShaderTextureAttribIndex> CopyShaderTextureAttribIndices(const PBR_Renderer::CreateInfo& CI,
+                                                                                                      const std::vector<std::string>& Names)
+{
+    std::vector<PBR_Renderer::CreateInfo::ShaderTextureAttribIndex> Indices{CI.pShaderTextureAttribIndices, CI.pShaderTextureAttribIndices + CI.NumShaderTextureAttribs};
+    for (size_t i = 0; i < Indices.size(); ++i)
+    {
+        Indices[i].Name = Names[i].c_str();
+    }
+    return Indices;
+}
 
 PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
                            IRenderStateCache* pStateCache,
                            IDeviceContext*    pCtx,
                            const CreateInfo&  CI) :
     m_InputLayout{CI.InputLayout},
+    m_ShaderTextureAttribIndexNames{CopyShaderTextureAttribIndexNames(CI)},
+    m_ShaderTextureAttribIndices{CopyShaderTextureAttribIndices(CI, m_ShaderTextureAttribIndexNames)},
     m_Settings{
-        [](CreateInfo CI, const InputLayoutDesc& InputLayout) {
-            CI.InputLayout = InputLayout;
+        [this](CreateInfo CI) {
+            CI.InputLayout = m_InputLayout;
+            if (CI.pShaderTextureAttribIndices != nullptr)
+            {
+                CI.pShaderTextureAttribIndices = m_ShaderTextureAttribIndices.data();
+            }
             return CI;
-        }(CI, m_InputLayout)},
+        }(CI)},
     m_Device{pDevice, pStateCache},
     m_PBRPrimitiveAttribsCB{CI.pPrimitiveAttribsCB}
 {
     DEV_CHECK_ERR(m_Settings.InputLayout.NumElements != 0, "Input layout must not be empty");
+    DEV_CHECK_ERR(m_Settings.NumShaderTextureAttribs > 0, "Number of shader texture attributes must be greater than 0");
 
     if (m_Settings.EnableIBL)
     {
@@ -172,7 +207,23 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
     {
         if (!m_PBRPrimitiveAttribsCB)
         {
-            CreateUniformBuffer(pDevice, sizeof(HLSL::PBRPrimitiveAttribs), "PBR primitive attribs CB", &m_PBRPrimitiveAttribsCB);
+            //struct PBRPrimitiveAttribs
+            //{
+            //    GLTFNodeShaderTransforms Transforms;
+            //    struct PBRMaterialShaderInfo
+            //    {
+            //        PBRMaterialBasicAttribs   Basic;
+            //        PBRMaterialTextureAttribs Textures[PBR_NUM_TEXTURE_ATTRIBUTES];
+            //    } Material;
+            //    float4 CustomData;
+            //};
+            Uint32 PBRPrimitiveAttribsSize =
+                sizeof(HLSL::GLTFNodeShaderTransforms) +
+                sizeof(HLSL::PBRMaterialBasicAttribs) +
+                sizeof(HLSL::PBRMaterialTextureAttribs) * m_Settings.NumShaderTextureAttribs +
+                sizeof(float4);
+
+            CreateUniformBuffer(pDevice, PBRPrimitiveAttribsSize, "PBR primitive attribs CB", &m_PBRPrimitiveAttribsCB);
         }
         if (m_Settings.MaxJointCount > 0)
         {
@@ -669,6 +720,13 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS     PSOFlags,
     Macros.Add("TEX_COLOR_CONVERSION_MODE_NONE", CreateInfo::TEX_COLOR_CONVERSION_MODE_NONE);
     Macros.Add("TEX_COLOR_CONVERSION_MODE_SRGB_TO_LINEAR", CreateInfo::TEX_COLOR_CONVERSION_MODE_SRGB_TO_LINEAR);
     Macros.Add("TEX_COLOR_CONVERSION_MODE", m_Settings.TexColorConversionMode);
+
+    Macros.Add("PBR_NUM_TEXTURE_ATTRIBUTES", static_cast<int>(m_Settings.NumShaderTextureAttribs));
+    for (const auto& AttribIdx : m_ShaderTextureAttribIndices)
+    {
+        if (*AttribIdx.Name != '\0')
+            Macros.Add(AttribIdx.Name, static_cast<int>(AttribIdx.Idx));
+    }
 
     return Macros;
 }
