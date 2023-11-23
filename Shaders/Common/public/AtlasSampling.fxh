@@ -94,9 +94,11 @@ float4 SampleTextureAtlas(Texture2DArray            Atlas,
         // Follow Section 8.14 (Texture Minification) from OpenGL4.6 spec.
         float fMinGrad = min(fGradX, fGradY);
         float Aniso    = min(fMaxGrad / fMinGrad, Attribs.fMaxAnisotropy);
-        LOD = max(log2(fMaxGrad / Aniso), 0.0);
+        LOD = log2(fMaxGrad / Aniso);
     }
 #endif
+    // NB: textureQueryLod may return negative values, so we need to clamp the LOD
+    LOD = max(LOD, 0.0);
 
     // Make sure that texture filtering does not use samples outside of the texture region.
     // The margin must be no less than half the pixel size in the selected LOD.
