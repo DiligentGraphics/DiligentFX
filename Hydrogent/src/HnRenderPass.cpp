@@ -73,6 +73,7 @@ struct HnRenderPass::RenderState
     const HnRenderPassState&  RPState;
     const pxr::HdRenderIndex& RenderIndex;
     const HnRenderDelegate&   RenderDelegate;
+    USD_Renderer&             USDRenderer;
 
     IDeviceContext* const pCtx;
 
@@ -86,6 +87,7 @@ struct HnRenderPass::RenderState
         RPState{_RPState},
         RenderIndex{*RenderPass.GetRenderIndex()},
         RenderDelegate{*static_cast<HnRenderDelegate*>(RenderIndex.GetRenderDelegate())},
+        USDRenderer{*RenderDelegate.GetUSDRenderer()},
         pCtx{RenderDelegate.GetDeviceContext()},
         AlphaMode{MaterialTagToPbrAlphaMode(RenderPass.m_MaterialTag)},
         PrimitiveAttribsAlignedOffset{RenderDelegate.GetPrimitiveAttribsAlignedOffset()}
@@ -145,7 +147,7 @@ struct HnRenderPass::RenderState
         {
             GraphicsPipelineDesc GraphicsDesc = RenderPass.GetGraphicsDesc(RPState);
 
-            PsoCache = RenderDelegate.GetUSDRenderer()->GetPsoCacheAccessor(GraphicsDesc);
+            PsoCache = USDRenderer.GetPsoCacheAccessor(GraphicsDesc);
             VERIFY_EXPR(PsoCache);
         }
 
@@ -251,25 +253,26 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
         }
 
         // Write current primitive attributes
-
-        pCurrPrimitive->Transforms.NodeMatrix = Mesh.GetTransform() * m_RenderParams.Transform;
-        pCurrPrimitive->Transforms.JointCount = 0;
-
-        const HLSL::PBRMaterialShaderInfo& ShaderAttribs = Geo.pMaterial->GetShaderAttribs();
-        static_assert(sizeof(pCurrPrimitive->Material) == sizeof(ShaderAttribs), "The sizeof(PBRMaterialShaderInfo) is inconsistent with sizeof(ShaderAttribs)");
-        memcpy(&pCurrPrimitive->Material, &ShaderAttribs, sizeof(ShaderAttribs));
-
-        if (Geo.IsFallbackMaterial)
-        {
-            pCurrPrimitive->Material.Basic.BaseColorFactor = Mesh.GetDisplayColor();
-        }
-
-        pCurrPrimitive->CustomData = float4{
+        float4 CustomData{
             static_cast<float>(Mesh.GetUID()),
             m_Params.Selection == HnRenderPassParams::SelectionType::Selected ? 1.f : 0.f,
             0,
             0,
         };
+
+        State.USDRenderer.WritePBRPrimitiveShaderAttribs(
+            pCurrPrimitive,
+            Mesh.GetTransform() * m_RenderParams.Transform,
+            0,
+            Geo.pMaterial->GetBasicShaderAttribs(),
+            Geo.pMaterial->GetShaderTextureAttribs(),
+            Geo.pMaterial->GetNumShaderTextureAttribs(),
+            &CustomData);
+
+        if (Geo.IsFallbackMaterial)
+        {
+            pCurrPrimitive->Material.Basic.BaseColorFactor = Mesh.GetDisplayColor();
+        }
 
         pCurrPrimitive = reinterpret_cast<HLSL::PBRPrimitiveAttribs*>(reinterpret_cast<Uint8*>(pCurrPrimitive) + State.PrimitiveAttribsAlignedOffset);
         m_PendingDrawItems.push_back(&DrawItem);
@@ -497,7 +500,7 @@ void HnRenderPass::UpdateDrawItemGPUResources(HnDrawItem& DrawItem, RenderState&
             if (static_cast<const HnRenderParam*>(State.RenderDelegate.GetRenderParam())->GetUseTextureAtlas())
                 PSOFlags |= PBR_Renderer::PSO_FLAG_USE_TEXTURE_ATLAS;
 
-            VERIFY(Geo.pMaterial->GetShaderAttribs().Basic.AlphaMode == State.AlphaMode || Geo.IsFallbackMaterial,
+            VERIFY(Geo.pMaterial->GetBasicShaderAttribs().AlphaMode == State.AlphaMode || Geo.IsFallbackMaterial,
                    "Alpha mode derived from the material tag is not consistent with the alpha mode in the shader attributes. "
                    "This may indicate an issue in how alpha mode is determined in the material, or (less likely) an issue in Rprim sorting by Hydra.");
             pPSO = PsoCache.Get({PSOFlags, static_cast<PBR_Renderer::ALPHA_MODE>(State.AlphaMode), /*DoubleSided = */ false, static_cast<PBR_Renderer::DebugViewType>(m_RenderParams.DebugViewMode)}, true);

@@ -246,7 +246,7 @@ float4 GetPhysicalDesc(VSOutput              VSOut,
             PhysicalDesc.b = SampleTexture(g_MetallicMap,
                                            g_MetallicMap_sampler,
                                            VSOut,
-                                           Material.Textures[PhysicalDescriptorTextureAttribId],
+                                           Material.Textures[MetallicTextureAttribId],
                                            float4(1.0, 1.0, 1.0, 1.0)).r;
         }
 #       endif
@@ -256,7 +256,7 @@ float4 GetPhysicalDesc(VSOutput              VSOut,
             PhysicalDesc.g = SampleTexture(g_RoughnessMap,
                                            g_RoughnessMap_sampler,
                                            VSOut,
-                                           Material.Textures[PhysicalDescriptorTextureAttribId],
+                                           Material.Textures[RoughnessTextureAttribId],
                                            float4(1.0, 1.0, 1.0, 1.0)).r;
 
         }

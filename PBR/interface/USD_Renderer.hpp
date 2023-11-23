@@ -35,10 +35,22 @@ namespace Diligent
 class USD_Renderer : public PBR_Renderer
 {
 public:
+    struct ShaderTextureAttributeIndices
+    {
+        Uint32 BaseColor = 0;
+        Uint32 Normal    = 1;
+        Uint32 Metallic  = 2;
+        Uint32 Roughness = 3;
+        Uint32 Occlusion = 4;
+        Uint32 Emissive  = 5;
+    };
+
     struct CreateInfo : PBR_Renderer::CreateInfo
     {
         Uint32 ColorTargetIndex  = 0;
         Uint32 MeshIdTargetIndex = 1;
+
+        ShaderTextureAttributeIndices TextureAttribIndices;
     };
     /// Initializes the renderer
     USD_Renderer(IRenderDevice*     pDevice,
@@ -54,12 +66,17 @@ public:
         USD_PSO_FLAG_ENABLE_ALL_OUTPUTS               = USD_PSO_FLAG_ENABLE_COLOR_AND_MESH_ID_OUTPUTS
     };
 
+    const ShaderTextureAttributeIndices& GetShaderTextureAttributeIndices() const { return m_ShaderTextureAttribIndices; }
+
 private:
-    std::string GetUsdPbrPSMainSource(USD_Renderer::PSO_FLAGS PSOFlags);
+    std::string GetUsdPbrPSMainSource(USD_Renderer::PSO_FLAGS PSOFlags) const;
+    struct USDRendererCreateInfoWrapper;
 
 private:
     const Uint32 m_ColorTargetIndex;
     const Uint32 m_MeshIdTargetIndex;
+
+    const ShaderTextureAttributeIndices m_ShaderTextureAttribIndices;
 };
 DEFINE_FLAG_ENUM_OPERATORS(USD_Renderer::USD_PSO_FLAGS)
 

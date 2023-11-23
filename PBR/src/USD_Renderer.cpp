@@ -26,6 +26,8 @@
 
 #include "USD_Renderer.hpp"
 
+#include <array>
+
 #include "RenderStateCache.hpp"
 #include "../../Utilities/include/DiligentFXShaderSourceStreamFactory.hpp"
 #include "ShaderSourceFactoryUtils.h"
@@ -33,7 +35,7 @@
 namespace Diligent
 {
 
-std::string USD_Renderer::GetUsdPbrPSMainSource(USD_Renderer::PSO_FLAGS PSOFlags)
+std::string USD_Renderer::GetUsdPbrPSMainSource(USD_Renderer::PSO_FLAGS PSOFlags) const
 {
     std::stringstream ss;
     if (PSOFlags & USD_PSO_FLAG_ENABLE_ALL_OUTPUTS)
@@ -88,6 +90,41 @@ void main(in VSOutput VSOut,
     return ss.str();
 }
 
+struct USD_Renderer::USDRendererCreateInfoWrapper
+{
+    USDRendererCreateInfoWrapper(const USD_Renderer::CreateInfo& _CI, const USD_Renderer& Renderer) :
+        CI{_CI},
+        ShaderTextureAttribIndices{
+            PBR_Renderer::CreateInfo::ShaderTextureAttribIndex{"BaseColorTextureAttribId", CI.TextureAttribIndices.BaseColor},
+            PBR_Renderer::CreateInfo::ShaderTextureAttribIndex{"NormalTextureAttribId", CI.TextureAttribIndices.Normal},
+            PBR_Renderer::CreateInfo::ShaderTextureAttribIndex{"MetallicTextureAttribId", CI.TextureAttribIndices.Metallic},
+            PBR_Renderer::CreateInfo::ShaderTextureAttribIndex{"RoughnessTextureAttribId", CI.TextureAttribIndices.Roughness},
+            PBR_Renderer::CreateInfo::ShaderTextureAttribIndex{"OcclusionTextureAttribId", CI.TextureAttribIndices.Occlusion},
+            PBR_Renderer::CreateInfo::ShaderTextureAttribIndex{"EmissiveTextureAttribId", CI.TextureAttribIndices.Emissive},
+        }
+    {
+        if (CI.GetPSMainSource == nullptr)
+        {
+            CI.GetPSMainSource = std::bind(&USD_Renderer::GetUsdPbrPSMainSource, &Renderer, std::placeholders::_1);
+        }
+
+        if (CI.pShaderTextureAttribIndices == nullptr)
+        {
+            CI.pShaderTextureAttribIndices   = ShaderTextureAttribIndices.data();
+            CI.NumShaderTextureAttribIndices = static_cast<Uint32>(ShaderTextureAttribIndices.size());
+        }
+    }
+
+    operator const PBR_Renderer::CreateInfo &() const
+    {
+        return CI;
+    }
+
+    USD_Renderer::CreateInfo CI;
+
+    std::array<USD_Renderer::CreateInfo::ShaderTextureAttribIndex, 6> ShaderTextureAttribIndices;
+};
+
 USD_Renderer::USD_Renderer(IRenderDevice*     pDevice,
                            IRenderStateCache* pStateCache,
                            IDeviceContext*    pCtx,
@@ -96,16 +133,11 @@ USD_Renderer::USD_Renderer(IRenderDevice*     pDevice,
         pDevice,
         pStateCache,
         pCtx,
-        [this](CreateInfo CI) {
-            if (CI.GetPSMainSource == nullptr)
-                CI.GetPSMainSource = [this](USD_Renderer::PSO_FLAGS PSOFlags) {
-                    return GetUsdPbrPSMainSource(PSOFlags);
-                };
-            return CI;
-        }(CI),
+        USDRendererCreateInfoWrapper{CI, *this},
     },
     m_ColorTargetIndex{CI.ColorTargetIndex},
-    m_MeshIdTargetIndex{CI.MeshIdTargetIndex}
+    m_MeshIdTargetIndex{CI.MeshIdTargetIndex},
+    m_ShaderTextureAttribIndices{CI.TextureAttribIndices}
 {
 }
 

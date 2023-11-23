@@ -90,7 +90,9 @@ public:
         return m_SRB;
     }
 
-    const HLSL::PBRMaterialShaderInfo& GetShaderAttribs() const { return m_ShaderAttribs; }
+    const HLSL::PBRMaterialBasicAttribs&   GetBasicShaderAttribs() const { return m_BasicShaderAttribs; }
+    const HLSL::PBRMaterialTextureAttribs* GetShaderTextureAttribs() const { return m_ShaderTextureAttribs.get(); }
+    Uint32                                 GetNumShaderTextureAttribs() const { return m_NumShaderTextureAttribs; }
 
     /// Texture coordinate set info
     struct TextureCoordinateSetInfo
@@ -116,7 +118,9 @@ private:
     RefCntAutoPtr<IShaderResourceBinding> m_SRB;
     IShaderResourceVariable*              m_PrimitiveAttribsVar = nullptr; // cbPrimitiveAttribs
 
-    HLSL::PBRMaterialShaderInfo m_ShaderAttribs{};
+    HLSL::PBRMaterialBasicAttribs                      m_BasicShaderAttribs{};
+    std::unique_ptr<HLSL::PBRMaterialTextureAttribs[]> m_ShaderTextureAttribs;
+    Uint32                                             m_NumShaderTextureAttribs = 0;
 
     std::vector<TextureCoordinateSetInfo> m_TexCoords;
 

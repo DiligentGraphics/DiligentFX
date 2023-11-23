@@ -199,7 +199,7 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
     m_FrameAttribsCB{CreateFrameAttribsCB(CI.pDevice)},
     m_PrimitiveAttribsCB{CreatePrimitiveAttribsCB(CI.pDevice)},
     m_USDRenderer{CreateUSDRenderer(CI.pDevice, CI.pRenderStateCache, CI.pContext, m_PrimitiveAttribsCB, /*UseImmutableSamplers = */ CI.TextureAtlasDim != 0)},
-    m_PrimitiveAttribsAlignedOffset{AlignUp(Uint32{sizeof(HLSL::PBRPrimitiveAttribs)}, CI.pDevice->GetAdapterInfo().Buffer.ConstantBufferOffsetAlignment)},
+    m_PrimitiveAttribsAlignedOffset{AlignUp(m_USDRenderer->GetPBRPrimitiveAttribsSize(), CI.pDevice->GetAdapterInfo().Buffer.ConstantBufferOffsetAlignment)},
     m_TextureRegistry{CI.pDevice, CI.TextureAtlasDim != 0 ? m_ResourceMgr : nullptr},
     m_RenderParam{std::make_unique<HnRenderParam>(CI.UseVertexPool, CI.UseIndexPool, CI.TextureAtlasDim != 0)}
 {

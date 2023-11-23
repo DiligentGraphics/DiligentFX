@@ -94,10 +94,11 @@ static std::vector<std::string> CopyShaderTextureAttribIndexNames(const PBR_Rend
 static std::vector<PBR_Renderer::CreateInfo::ShaderTextureAttribIndex> CopyShaderTextureAttribIndices(const PBR_Renderer::CreateInfo& CI,
                                                                                                       const std::vector<std::string>& Names)
 {
-    std::vector<PBR_Renderer::CreateInfo::ShaderTextureAttribIndex> Indices(CI.NumShaderTextureAttribIndices);
-    VERIFY_EXPR(Indices.size() == Names.size());
+    std::vector<PBR_Renderer::CreateInfo::ShaderTextureAttribIndex> Indices;
     if (CI.pShaderTextureAttribIndices != nullptr)
     {
+        Indices = {CI.pShaderTextureAttribIndices, CI.pShaderTextureAttribIndices + CI.NumShaderTextureAttribIndices};
+        VERIFY_EXPR(Indices.size() == Names.size());
         for (size_t i = 0; i < Indices.size(); ++i)
         {
             Indices[i].Name = Names[i].c_str();
@@ -224,23 +225,7 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
     {
         if (!m_PBRPrimitiveAttribsCB)
         {
-            //struct PBRPrimitiveAttribs
-            //{
-            //    GLTFNodeShaderTransforms Transforms;
-            //    struct PBRMaterialShaderInfo
-            //    {
-            //        PBRMaterialBasicAttribs   Basic;
-            //        PBRMaterialTextureAttribs Textures[PBR_NUM_TEXTURE_ATTRIBUTES];
-            //    } Material;
-            //    float4 CustomData;
-            //};
-            Uint32 PBRPrimitiveAttribsSize =
-                sizeof(HLSL::GLTFNodeShaderTransforms) +
-                sizeof(HLSL::PBRMaterialBasicAttribs) +
-                sizeof(HLSL::PBRMaterialTextureAttribs) * m_NumShaderTextureAttribs +
-                sizeof(float4);
-
-            CreateUniformBuffer(pDevice, PBRPrimitiveAttribsSize, "PBR primitive attribs CB", &m_PBRPrimitiveAttribsCB);
+            CreateUniformBuffer(pDevice, GetPBRPrimitiveAttribsSize(), "PBR primitive attribs CB", &m_PBRPrimitiveAttribsCB);
         }
         if (m_Settings.MaxJointCount > 0)
         {
@@ -1101,6 +1086,24 @@ IPipelineState* PBR_Renderer::GetPSO(PsoHashMapType&             PsoHashMap,
 void PBR_Renderer::SetInternalShaderParameters(HLSL::PBRRendererShaderParameters& Renderer)
 {
     Renderer.PrefilteredCubeMipLevels = m_Settings.EnableIBL ? static_cast<float>(m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels) : 0.f;
+}
+
+Uint32 PBR_Renderer::GetPBRPrimitiveAttribsSize() const
+{
+    //struct PBRPrimitiveAttribs
+    //{
+    //    GLTFNodeShaderTransforms Transforms;
+    //    struct PBRMaterialShaderInfo
+    //    {
+    //        PBRMaterialBasicAttribs   Basic;
+    //        PBRMaterialTextureAttribs Textures[PBR_NUM_TEXTURE_ATTRIBUTES];
+    //    } Material;
+    //    float4 CustomData;
+    //};
+    return (sizeof(HLSL::GLTFNodeShaderTransforms) +
+            sizeof(HLSL::PBRMaterialBasicAttribs) +
+            sizeof(HLSL::PBRMaterialTextureAttribs) * m_NumShaderTextureAttribs +
+            sizeof(float4));
 }
 
 void* PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                                  pDstShaderAttribs,

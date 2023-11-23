@@ -390,6 +390,10 @@ public:
                                          Uint32                                 NumTextureAttribs,
                                          const float4*                          CustomData = nullptr);
 
+    Uint32 GetNumShaderTextureAttribs() const { return m_NumShaderTextureAttribs; }
+
+    Uint32 GetPBRPrimitiveAttribsSize() const;
+
 protected:
     ShaderMacroHelper DefineMacros(PSO_FLAGS PSOFlags, DebugViewType DebugView) const;
 
