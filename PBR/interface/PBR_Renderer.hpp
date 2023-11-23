@@ -44,7 +44,9 @@ namespace Diligent
 namespace HLSL
 {
 struct PBRRendererShaderParameters;
-}
+struct PBRMaterialBasicAttribs;
+struct PBRMaterialTextureAttribs;
+} // namespace HLSL
 
 class PBR_Renderer
 {
@@ -384,6 +386,14 @@ public:
     /// \remarks    The function initializes the following parameters:
     ///             - PrefilteredCubeMipLevels
     void SetInternalShaderParameters(HLSL::PBRRendererShaderParameters& Renderer);
+
+    void* WritePBRPrimitiveShaderAttribs(void*                                  pDstShaderAttribs,
+                                         const float4x4&                        NodeMatrix,
+                                         Uint32                                 JointCount,
+                                         const HLSL::PBRMaterialBasicAttribs&   BasicAttribs,
+                                         const HLSL::PBRMaterialTextureAttribs* TextureAttribs,
+                                         Uint32                                 NumTextureAttribs,
+                                         const float4*                          CustomData = nullptr);
 
 protected:
     ShaderMacroHelper DefineMacros(PSO_FLAGS PSOFlags, DebugViewType DebugView) const;

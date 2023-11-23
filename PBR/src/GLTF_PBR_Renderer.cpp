@@ -487,45 +487,24 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
             }
 
             {
-                uint8_t* pAttribsData = nullptr;
-                pCtx->MapBuffer(m_PBRPrimitiveAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD, reinterpret_cast<PVoid&>(pAttribsData));
+                void* pAttribsData = nullptr;
+                pCtx->MapBuffer(m_PBRPrimitiveAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD, pAttribsData);
                 if (pAttribsData != nullptr)
                 {
-                    //struct PBRPrimitiveAttribs
-                    //{
-                    //    GLTFNodeShaderTransforms Transforms;
-                    //    struct PBRMaterialShaderInfo
-                    //    {
-                    //        PBRMaterialBasicAttribs   Basic;
-                    //        PBRMaterialTextureAttribs Textures[PBR_NUM_TEXTURE_ATTRIBUTES];
-                    //    } Material;
-                    //    float4 CustomData;
-                    //};
-
-                    HLSL::GLTFNodeShaderTransforms* pTransforms = reinterpret_cast<HLSL::GLTFNodeShaderTransforms*>(pAttribsData);
-                    static_assert(sizeof(HLSL::GLTFNodeShaderTransforms) % 16 == 0, "Size of HLSL::GLTFNodeShaderTransforms must be multiple of 16");
-                    pTransforms->NodeMatrix = NodeGlobalMatrix * RenderParams.ModelTransform;
-                    pTransforms->JointCount = static_cast<int>(JointCount);
-
-                    HLSL::PBRMaterialBasicAttribs* pBasicAttribs = reinterpret_cast<HLSL::PBRMaterialBasicAttribs*>(pTransforms + 1);
-                    static_assert(sizeof(HLSL::PBRMaterialBasicAttribs) % 16 == 0, "Size of HLSL::PBRMaterialBasicAttribs must be multiple of 16");
-                    static_assert(sizeof(*pBasicAttribs) == sizeof(material.Attribs),
-                                  "The sizeof(PBRMaterialBasicAttribs) is inconsistent with sizeof(GLTF::Material::ShaderAttribs)");
-                    memcpy(pBasicAttribs, &material.Attribs, sizeof(material.Attribs));
-
-                    HLSL::PBRMaterialTextureAttribs* pTextures = reinterpret_cast<HLSL::PBRMaterialTextureAttribs*>(pBasicAttribs + 1);
-                    static_assert(sizeof(HLSL::PBRMaterialTextureAttribs) % 16 == 0, "Size of HLSL::PBRMaterialTextureAttribs must be multiple of 16");
-
-                    VERIFY(material.GetNumTextureAttribs() <= m_Settings.NumShaderTextureAttribs,
-                           "Material data contains ", material.GetNumTextureAttribs(), " texture attributes, while the shader only supports ", m_Settings.NumShaderTextureAttribs);
-                    static_assert(sizeof(*pTextures) == sizeof(GLTF::Material::TextureShaderAttribs),
-                                  "The sizeof(PBRMaterialTextureAttribs) is inconsistent with sizeof(GLTF::Material::TextureShaderAttribs)");
-                    memcpy(pTextures, &material.GetTextureAttrib(0), sizeof(GLTF::Material::TextureShaderAttribs) * std::min(material.GetNumTextureAttribs(), m_Settings.NumShaderTextureAttribs));
-
                     static_assert(static_cast<PBR_WORKFLOW>(GLTF::Material::PBR_WORKFLOW_METALL_ROUGH) == PBR_WORKFLOW_METALL_ROUGH, "GLTF::Material::PBR_WORKFLOW_METALL_ROUGH != PBR_WORKFLOW_METALL_ROUGH");
                     static_assert(static_cast<PBR_WORKFLOW>(GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS) == PBR_WORKFLOW_SPEC_GLOSS, "GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS != PBR_WORKFLOW_SPEC_GLOSS");
 
-                    VERIFY(reinterpret_cast<uint8_t*>(pTextures + m_Settings.NumShaderTextureAttribs) <= pAttribsData + m_PBRPrimitiveAttribsCB->GetDesc().Size,
+                    static_assert(sizeof(HLSL::PBRMaterialBasicAttribs) == sizeof(material.Attribs),
+                                  "The sizeof(HLSL::PBRMaterialBasicAttribs) is inconsistent with sizeof(GLTF::Material::ShaderAttribs)");
+                    static_assert(sizeof(HLSL::PBRMaterialTextureAttribs) == sizeof(GLTF::Material::TextureShaderAttribs),
+                                  "The sizeof(HLSL::PBRMaterialTextureAttribs) is inconsistent with sizeof(GLTF::Material::TextureShaderAttribs)");
+
+                    auto* pEndPtr = WritePBRPrimitiveShaderAttribs(pAttribsData, NodeGlobalMatrix * RenderParams.ModelTransform, static_cast<Uint32>(JointCount),
+                                                                   reinterpret_cast<const HLSL::PBRMaterialBasicAttribs&>(material.Attribs),
+                                                                   reinterpret_cast<const HLSL::PBRMaterialTextureAttribs*>(&material.GetTextureAttrib(0)),
+                                                                   material.GetNumTextureAttribs());
+
+                    VERIFY(reinterpret_cast<uint8_t*>(pEndPtr) <= static_cast<uint8_t*>(pAttribsData) + m_PBRPrimitiveAttribsCB->GetDesc().Size,
                            "Not enough space in the buffer to store primitive attributes");
 
                     pCtx->UnmapBuffer(m_PBRPrimitiveAttribsCB, MAP_WRITE);

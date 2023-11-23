@@ -95,10 +95,14 @@ static std::vector<std::string> CopyShaderTextureAttribIndexNames(const PBR_Rend
 static std::vector<PBR_Renderer::CreateInfo::ShaderTextureAttribIndex> CopyShaderTextureAttribIndices(const PBR_Renderer::CreateInfo& CI,
                                                                                                       const std::vector<std::string>& Names)
 {
-    std::vector<PBR_Renderer::CreateInfo::ShaderTextureAttribIndex> Indices{CI.pShaderTextureAttribIndices, CI.pShaderTextureAttribIndices + CI.NumShaderTextureAttribs};
-    for (size_t i = 0; i < Indices.size(); ++i)
+    std::vector<PBR_Renderer::CreateInfo::ShaderTextureAttribIndex> Indices;
+    if (CI.pShaderTextureAttribIndices != nullptr)
     {
-        Indices[i].Name = Names[i].c_str();
+        Indices.resize(CI.NumShaderTextureAttribs);
+        for (size_t i = 0; i < Indices.size(); ++i)
+        {
+            Indices[i].Name = Names[i].c_str();
+        }
     }
     return Indices;
 }
@@ -1084,6 +1088,49 @@ IPipelineState* PBR_Renderer::GetPSO(PsoHashMapType&             PsoHashMap,
 void PBR_Renderer::SetInternalShaderParameters(HLSL::PBRRendererShaderParameters& Renderer)
 {
     Renderer.PrefilteredCubeMipLevels = m_Settings.EnableIBL ? static_cast<float>(m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels) : 0.f;
+}
+
+void* PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                                  pDstShaderAttribs,
+                                                   const float4x4&                        NodeMatrix,
+                                                   Uint32                                 JointCount,
+                                                   const HLSL::PBRMaterialBasicAttribs&   BasicAttribs,
+                                                   const HLSL::PBRMaterialTextureAttribs* TextureAttribs,
+                                                   Uint32                                 NumTextureAttribs,
+                                                   const float4*                          CustomData)
+{
+    //struct PBRPrimitiveAttribs
+    //{
+    //    GLTFNodeShaderTransforms Transforms;
+    //    struct PBRMaterialShaderInfo
+    //    {
+    //        PBRMaterialBasicAttribs   Basic;
+    //        PBRMaterialTextureAttribs Textures[PBR_NUM_TEXTURE_ATTRIBUTES];
+    //    } Material;
+    //    float4 CustomData;
+    //};
+
+    HLSL::GLTFNodeShaderTransforms* pDstTransforms = reinterpret_cast<HLSL::GLTFNodeShaderTransforms*>(pDstShaderAttribs);
+    static_assert(sizeof(HLSL::GLTFNodeShaderTransforms) % 16 == 0, "Size of HLSL::GLTFNodeShaderTransforms must be a multiple of 16");
+    pDstTransforms->NodeMatrix = NodeMatrix;
+    pDstTransforms->JointCount = static_cast<int>(JointCount);
+
+    HLSL::PBRMaterialBasicAttribs* pDstBasicAttribs = reinterpret_cast<HLSL::PBRMaterialBasicAttribs*>(pDstTransforms + 1);
+    static_assert(sizeof(HLSL::PBRMaterialBasicAttribs) % 16 == 0, "Size of HLSL::PBRMaterialBasicAttribs must be a multiple of 16");
+    memcpy(pDstBasicAttribs, &BasicAttribs, sizeof(BasicAttribs));
+
+    HLSL::PBRMaterialTextureAttribs* pDstTextures = reinterpret_cast<HLSL::PBRMaterialTextureAttribs*>(pDstBasicAttribs + 1);
+    static_assert(sizeof(HLSL::PBRMaterialTextureAttribs) % 16 == 0, "Size of HLSL::PBRMaterialTextureAttribs must be a multiple of 16");
+
+    VERIFY(NumTextureAttribs <= m_Settings.NumShaderTextureAttribs,
+           "Material data contains ", NumTextureAttribs, " texture attributes, while the shader only supports ", m_Settings.NumShaderTextureAttribs);
+    memcpy(pDstTextures, TextureAttribs, sizeof(HLSL::PBRMaterialTextureAttribs) * std::min(NumTextureAttribs, m_Settings.NumShaderTextureAttribs));
+
+    float4* pDstCustomData = reinterpret_cast<float4*>(pDstTextures + m_Settings.NumShaderTextureAttribs);
+    if (CustomData != nullptr)
+    {
+        *pDstCustomData = *CustomData;
+    }
+    return pDstCustomData + 1;
 }
 
 } // namespace Diligent
