@@ -170,6 +170,7 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
         m_pPrefilteredEnvMapSRV   = PrefilteredEnvMapTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
     }
 
+    if (m_Settings.CreateDefaultTextures)
     {
         static constexpr Uint32 TexDim = 8;
 

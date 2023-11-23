@@ -76,6 +76,15 @@ public:
         /// instead of a combined physical description texture.
         bool UseSeparateMetallicRoughnessTextures = false;
 
+        /// Whether to create default textures.
+        ///
+        /// \remarks If set to true, the following textures will be created:
+        ///             - White texture
+        ///             - Black texture
+        ///             - Default normal map
+        ///             - Default physical description map
+        bool CreateDefaultTextures = true;
+
         static const SamplerDesc DefaultSampler;
 
         /// Immutable sampler for color map texture.
