@@ -201,6 +201,7 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
     m_FrameAttribsCB{CreateFrameAttribsCB(CI.pDevice)},
     m_PrimitiveAttribsCB{CreatePrimitiveAttribsCB(CI.pDevice)},
     m_USDRenderer{CreateUSDRenderer(CI.pDevice, CI.pRenderStateCache, CI.pContext, m_PrimitiveAttribsCB, /*UseImmutableSamplers = */ CI.TextureAtlasDim != 0)},
+    m_MaterialSRBCache{HnMaterial::CreateSRBCache()},
     m_PrimitiveAttribsAlignedOffset{AlignUp(m_USDRenderer->GetPBRPrimitiveAttribsSize(), CI.pDevice->GetAdapterInfo().Buffer.ConstantBufferOffsetAlignment)},
     m_TextureRegistry{CI.pDevice, CI.TextureAtlasDim != 0 ? m_ResourceMgr : nullptr},
     m_RenderParam{std::make_unique<HnRenderParam>(CI.UseVertexPool, CI.UseIndexPool, CI.TextureAtlasDim != 0)}
@@ -399,7 +400,7 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
         std::lock_guard<std::mutex> Guard{m_MaterialsMtx};
         for (auto* pMat : m_Materials)
         {
-            pMat->UpdateSRB(m_pDevice, *m_USDRenderer, m_FrameAttribsCB, AtlasVersion);
+            pMat->UpdateSRB(m_MaterialSRBCache, *m_USDRenderer, m_FrameAttribsCB, AtlasVersion);
         }
     }
 

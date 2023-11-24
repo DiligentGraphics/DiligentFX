@@ -79,10 +79,12 @@ public:
     // change tracker for use in the first sync of this prim.
     virtual pxr::HdDirtyBits GetInitialDirtyBitsMask() const override final;
 
-    void UpdateSRB(IRenderDevice* pDevice,
-                   PBR_Renderer&  PbrRenderer,
-                   IBuffer*       pFrameAttribs,
-                   Uint32         AtlasVersion);
+    static RefCntAutoPtr<IObject> CreateSRBCache();
+
+    void UpdateSRB(IObject*      pSRBCache,
+                   PBR_Renderer& PbrRenderer,
+                   IBuffer*      pFrameAttribs,
+                   Uint32        AtlasVersion);
 
     IShaderResourceBinding* GetSRB() const { return m_SRB; }
     IShaderResourceBinding* GetSRB(Uint32 PrimitiveAttribsOffset) const
@@ -116,7 +118,7 @@ private:
     //  	        so we have to use this special constructor.
     HnMaterial(HnTextureRegistry& TexRegistry, const USD_Renderer& UsdRenderer);
 
-    const HnTextureRegistry::TextureHandleSharedPtr& GetTexture(const pxr::TfToken& Name) const;
+    RefCntAutoPtr<ITexture> GetTexture(const pxr::TfToken& Name) const;
 
     using TexNameToCoordSetMapType = std::unordered_map<pxr::TfToken, size_t, pxr::TfToken::HashFunctor>;
     void AllocateTextures(HnTextureRegistry& TexRegistry, TexNameToCoordSetMapType& TexNameToCoordSetMap);

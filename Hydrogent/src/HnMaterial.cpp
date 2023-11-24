@@ -340,12 +340,33 @@ void HnMaterial::AllocateTextures(HnTextureRegistry& TexRegistry, TexNameToCoord
     }
 }
 
-const HnTextureRegistry::TextureHandleSharedPtr& HnMaterial::GetTexture(const pxr::TfToken& Name) const
+RefCntAutoPtr<ITexture> HnMaterial::GetTexture(const pxr::TfToken& Name) const
 {
-    static const HnTextureRegistry::TextureHandleSharedPtr NullHandle;
-
     auto tex_it = m_Textures.find(Name);
-    return tex_it != m_Textures.end() ? tex_it->second : NullHandle;
+    if (tex_it != m_Textures.end())
+    {
+        const HnTextureRegistry::TextureHandleSharedPtr& pTexHandle = tex_it->second;
+        if (pTexHandle->pTexture)
+        {
+            const auto& TexDesc = pTexHandle->pTexture->GetDesc();
+            VERIFY(TexDesc.Type == RESOURCE_DIM_TEX_2D_ARRAY, "2D textures should be loaded as single-slice 2D array textures");
+            return pTexHandle->pTexture;
+        }
+        else if (pTexHandle->pAtlasSuballocation)
+        {
+            return RefCntAutoPtr<ITexture>{pTexHandle->pAtlasSuballocation->GetAtlas()->GetTexture()};
+        }
+        else
+        {
+            UNEXPECTED("Texture '", Name, "' is not initialized. This likely indicates that HnRenderDelegate::CommitResources() was not called.");
+            return {};
+        }
+    }
+    else
+    {
+        UNEXPECTED("Texture '", Name, "' is not found. This is unexpected as at least the default texture must always be set.");
+        return {};
+    }
 }
 
 pxr::HdDirtyBits HnMaterial::GetInitialDirtyBitsMask() const
@@ -353,89 +374,135 @@ pxr::HdDirtyBits HnMaterial::GetInitialDirtyBitsMask() const
     return pxr::HdMaterial::AllDirty;
 }
 
-void HnMaterial::UpdateSRB(IRenderDevice* pDevice,
-                           PBR_Renderer&  PbrRenderer,
-                           IBuffer*       pFrameAttribs,
-                           Uint32         AtlasVersion)
+class HnMaterialSRBCache : public ObjectBase<IObject>
 {
+public:
+    HnMaterialSRBCache(IReferenceCounters* pRefCounters) :
+        ObjectBase<IObject>{pRefCounters}
+    {}
+
+    static RefCntAutoPtr<IObject> Create()
+    {
+        return RefCntAutoPtr<IObject>{MakeNewRCObj<HnMaterialSRBCache>()()};
+    }
+
+    // {AFEC3E3E-021D-4BA6-9464-CB7E356DE15D}
+    static constexpr INTERFACE_ID IID_HnMaterialSRBCache =
+        {0xafec3e3e, 0x21d, 0x4ba6, {0x94, 0x64, 0xcb, 0x7e, 0x35, 0x6d, 0xe1, 0x5d}};
+
+    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_HnMaterialSRBCache, ObjectBase<IObject>)
+
+    struct ResourceKey
+    {
+        std::vector<Int32> UniqueIDs;
+
+        bool operator==(const ResourceKey& rhs) const
+        {
+            return UniqueIDs == rhs.UniqueIDs;
+        }
+
+        struct Hasher
+        {
+            size_t operator()(const ResourceKey& Key) const
+            {
+                return ComputeHashRaw(Key.UniqueIDs.data(), Key.UniqueIDs.size() * sizeof(Key.UniqueIDs[0]));
+            }
+        };
+    };
+
+    template <class CreateSRBFuncType>
+    RefCntAutoPtr<IShaderResourceBinding> GetSRB(const ResourceKey& Key, CreateSRBFuncType&& CreateSRB)
+    {
+        return m_Cache.Get(Key, CreateSRB);
+    }
+
+private:
+    ObjectsRegistry<ResourceKey, RefCntAutoPtr<IShaderResourceBinding>, ResourceKey::Hasher> m_Cache;
+};
+
+RefCntAutoPtr<IObject> HnMaterial::CreateSRBCache()
+{
+    return HnMaterialSRBCache::Create();
+}
+
+void HnMaterial::UpdateSRB(IObject*      pSRBCache,
+                           PBR_Renderer& PbrRenderer,
+                           IBuffer*      pFrameAttribs,
+                           Uint32        AtlasVersion)
+{
+    RefCntAutoPtr<HnMaterialSRBCache> Cache{pSRBCache, HnMaterialSRBCache::IID_HnMaterialSRBCache};
+    VERIFY_EXPR(Cache);
+
     if (m_UsesAtlas && AtlasVersion != m_AtlasVersion)
         m_SRB.Release();
 
     if (m_SRB)
         return;
 
-    PbrRenderer.CreateResourceBinding(&m_SRB);
-    VERIFY_EXPR(m_SRB);
-    m_PrimitiveAttribsVar = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbPrimitiveAttribs");
-    VERIFY_EXPR(m_PrimitiveAttribsVar != nullptr);
+    RefCntAutoPtr<ITexture> pDiffuseMap   = GetTexture(HnTokens->diffuseColor);
+    RefCntAutoPtr<ITexture> pNormalMap    = GetTexture(HnTokens->normal);
+    RefCntAutoPtr<ITexture> pMetallicMap  = GetTexture(HnTokens->metallic);
+    RefCntAutoPtr<ITexture> pRoughnessMap = GetTexture(HnTokens->roughness);
+    RefCntAutoPtr<ITexture> pOcclusionMap = GetTexture(HnTokens->occlusion);
+    RefCntAutoPtr<ITexture> pEmissiveMap  = GetTexture(HnTokens->emissiveColor);
 
-    if (IShaderResourceVariable* pVar = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbPrimitiveAttribs"))
-    {
-        // Primitive attribs buffer is a large buffer that fits multiple primitives.
-        // In the render loop, we write multiple primitive attribs into this buffer
-        // and use the SetBufferOffset function to select the attribs for the current primitive.
-        pVar->SetBufferRange(PbrRenderer.GetPBRPrimitiveAttribsCB(), 0, PbrRenderer.GetPBRPrimitiveAttribsSize());
-    }
-    else
-    {
-        UNEXPECTED("Failed to find 'cbPrimitiveAttribs' variable in the shader resource binding");
-    }
+    HnMaterialSRBCache::ResourceKey Key{{
+        pDiffuseMap ? pDiffuseMap->GetUniqueID() : 0,
+        pNormalMap ? pNormalMap->GetUniqueID() : 0,
+        pMetallicMap ? pMetallicMap->GetUniqueID() : 0,
+        pRoughnessMap ? pRoughnessMap->GetUniqueID() : 0,
+        pOcclusionMap ? pOcclusionMap->GetUniqueID() : 0,
+        pEmissiveMap ? pEmissiveMap->GetUniqueID() : 0,
+    }};
 
-    PbrRenderer.InitCommonSRBVars(m_SRB, pFrameAttribs);
+    m_SRB = Cache->GetSRB(Key, [&]() {
+        RefCntAutoPtr<IShaderResourceBinding> pSRB;
 
-    auto SetTexture = [&](const pxr::TfToken& Name, const char* VarName) //
-    {
-        const HnTextureRegistry::TextureHandleSharedPtr& pTexHandle = GetTexture(Name);
-        if (!pTexHandle)
+        PbrRenderer.CreateResourceBinding(&pSRB);
+        VERIFY_EXPR(pSRB);
+
+        if (IShaderResourceVariable* pVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbPrimitiveAttribs"))
         {
-            UNEXPECTED("Texture '", Name, "' is not initialized. This is unexpected as at least the default texture must always be set.");
-            return;
-        }
-
-        RefCntAutoPtr<ITextureView> pTexSRV;
-        if (pTexHandle->pTexture)
-        {
-            const auto& TexDesc = pTexHandle->pTexture->GetDesc();
-            if (TexDesc.Type == RESOURCE_DIM_TEX_2D)
-            {
-                UNEXPECTED("2D textures should be loaded as single-slice 2D array textures");
-
-                const auto Name = std::string{"Tex2DArray view of texture '"} + TexDesc.Name + "'";
-
-                TextureViewDesc SRVDesc;
-                SRVDesc.Name       = Name.c_str();
-                SRVDesc.ViewType   = TEXTURE_VIEW_SHADER_RESOURCE;
-                SRVDesc.TextureDim = RESOURCE_DIM_TEX_2D_ARRAY;
-                pTexHandle->pTexture->CreateView(SRVDesc, &pTexSRV);
-
-                pTexSRV->SetSampler(pTexHandle->pSampler);
-            }
-            else
-            {
-                pTexSRV = pTexHandle->pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-            }
-        }
-        else if (pTexHandle->pAtlasSuballocation)
-        {
-            pTexSRV = pTexHandle->pAtlasSuballocation->GetAtlas()->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+            // Primitive attribs buffer is a large buffer that fits multiple primitives.
+            // In the render loop, we write multiple primitive attribs into this buffer
+            // and use the SetBufferOffset function to select the attribs for the current primitive.
+            pVar->SetBufferRange(PbrRenderer.GetPBRPrimitiveAttribsCB(), 0, PbrRenderer.GetPBRPrimitiveAttribsSize());
         }
         else
         {
-            UNEXPECTED("Texture '", Name, "' is not loaded");
+            UNEXPECTED("Failed to find 'cbPrimitiveAttribs' variable in the shader resource binding");
         }
 
-        if (auto* pVar = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, VarName))
-            pVar->Set(pTexSRV);
-    };
+        PbrRenderer.InitCommonSRBVars(pSRB, pFrameAttribs);
 
-    // clang-format off
-    SetTexture(HnTokens->diffuseColor,  "g_ColorMap");
-    SetTexture(HnTokens->metallic,      "g_MetallicMap");
-    SetTexture(HnTokens->roughness,     "g_RoughnessMap");
-    SetTexture(HnTokens->normal,        "g_NormalMap");
-    SetTexture(HnTokens->occlusion,     "g_AOMap");
-    SetTexture(HnTokens->emissiveColor, "g_EmissiveMap");
-    // clang-format on
+        auto SetTexture = [&](const char* VarName, ITexture* pTex) //
+        {
+            if (pTex == nullptr)
+                return;
+
+            if (auto* pVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, VarName))
+                pVar->Set(pTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+        };
+
+        // clang-format off
+        SetTexture("g_ColorMap",     pDiffuseMap);
+        SetTexture("g_MetallicMap",  pMetallicMap);
+        SetTexture("g_RoughnessMap", pRoughnessMap);
+        SetTexture("g_NormalMap",    pNormalMap);
+        SetTexture("g_AOMap",        pOcclusionMap);
+        SetTexture("g_EmissiveMap",  pEmissiveMap);
+        // clang-format on
+
+        return pSRB;
+    });
+
+    if (!m_SRB)
+    {
+        UNEXPECTED("Failed to create shader resource binding for material ", GetId());
+    }
+
+    m_PrimitiveAttribsVar = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbPrimitiveAttribs");
+    VERIFY_EXPR(m_PrimitiveAttribsVar != nullptr);
 
     m_AtlasVersion = AtlasVersion;
 }

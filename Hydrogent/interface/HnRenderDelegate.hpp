@@ -287,6 +287,7 @@ private:
     RefCntAutoPtr<IBuffer>               m_FrameAttribsCB;
     RefCntAutoPtr<IBuffer>               m_PrimitiveAttribsCB;
     std::shared_ptr<USD_Renderer>        m_USDRenderer;
+    RefCntAutoPtr<IObject>               m_MaterialSRBCache;
 
     const Uint32 m_PrimitiveAttribsAlignedOffset;
 
