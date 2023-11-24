@@ -82,10 +82,14 @@ public:
     TextureHandleSharedPtr Allocate(const HnTextureIdentifier&      TexId,
                                     const pxr::HdSamplerParameters& SamplerParams);
 
+    TextureHandleSharedPtr Allocate(const pxr::TfToken&             FilePath,
+                                    const pxr::HdSamplerParameters& SamplerParams,
+                                    std::function<RefCntAutoPtr<ITextureLoader>()>);
 
-    TextureHandleSharedPtr GetWhiteTex() const { return m_pWhiteTex; }
-    TextureHandleSharedPtr GetBlackTex() const { return m_pBlackTex; }
-    TextureHandleSharedPtr GetDefaultNormalMap() const { return m_pDefaultNormalMap; }
+    TextureHandleSharedPtr Get(const pxr::TfToken& Path)
+    {
+        return m_Cache.Get(Path);
+    }
 
     Uint32 GetAtlasVersion() const;
 
@@ -112,10 +116,6 @@ private:
 
     std::mutex                                                                      m_PendingTexturesMtx;
     std::unordered_map<pxr::TfToken, PendingTextureInfo, pxr::TfToken::HashFunctor> m_PendingTextures;
-
-    TextureHandleSharedPtr m_pWhiteTex;
-    TextureHandleSharedPtr m_pBlackTex;
-    TextureHandleSharedPtr m_pDefaultNormalMap;
 };
 
 } // namespace USD

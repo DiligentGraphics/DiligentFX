@@ -30,11 +30,13 @@
 #include "HnTypeConversions.hpp"
 #include "DynamicTextureAtlas.h"
 #include "GLTFResourceManager.hpp"
+#include "DataBlobImpl.hpp"
 
 #include "pxr/imaging/hd/sceneDelegate.h"
 
-#include "PBR_Renderer.hpp"
+#include "USD_Renderer.hpp"
 #include "DebugUtilities.hpp"
+#include "Image.h"
 
 namespace Diligent
 {
@@ -47,12 +49,30 @@ HnMaterial* HnMaterial::Create(const pxr::SdfPath& id)
     return new HnMaterial{id};
 }
 
+HnMaterial* HnMaterial::CreateFallback(HnTextureRegistry& TexRegistry, const USD_Renderer& UsdRenderer)
+{
+    return new HnMaterial{TexRegistry, UsdRenderer};
+}
+
 HnMaterial::HnMaterial(const pxr::SdfPath& id) :
     pxr::HdMaterial{id}
 {
     m_BasicShaderAttribs.BaseColorFactor = float4{1, 1, 1, 1};
+    m_BasicShaderAttribs.SpecularFactor  = float4{1, 1, 1, 1};
+    m_BasicShaderAttribs.MetallicFactor  = 1;
     m_BasicShaderAttribs.RoughnessFactor = 1;
     m_BasicShaderAttribs.OcclusionFactor = 1;
+
+    m_BasicShaderAttribs.Workflow = PBR_Renderer::PBR_WORKFLOW_METALL_ROUGH;
+}
+
+HnMaterial::HnMaterial(HnTextureRegistry& TexRegistry, const USD_Renderer& UsdRenderer) :
+    HnMaterial{pxr::SdfPath{}}
+{
+    m_NumShaderTextureAttribs = UsdRenderer.GetNumShaderTextureAttribs();
+    m_ShaderTextureAttribs    = std::make_unique<HLSL::PBRMaterialTextureAttribs[]>(m_NumShaderTextureAttribs);
+
+    InitTextureAttribs(TexRegistry, UsdRenderer, {});
 }
 
 HnMaterial::~HnMaterial()
@@ -65,6 +85,15 @@ void HnMaterial::Sync(pxr::HdSceneDelegate* SceneDelegate,
 {
     if (*DirtyBits == pxr::HdMaterial::Clean)
         return;
+
+    HnRenderDelegate*   RenderDelegate = static_cast<HnRenderDelegate*>(SceneDelegate->GetRenderIndex().GetRenderDelegate());
+    HnTextureRegistry&  TexRegistry    = RenderDelegate->GetTextureRegistry();
+    const USD_Renderer& UsdRenderer    = *RenderDelegate->GetUSDRenderer();
+
+    m_NumShaderTextureAttribs = UsdRenderer.GetNumShaderTextureAttribs();
+    m_ShaderTextureAttribs    = std::make_unique<HLSL::PBRMaterialTextureAttribs[]>(m_NumShaderTextureAttribs);
+
+    TexNameToCoordSetMapType TexNameToCoordSetMap;
 
     pxr::VtValue vtMat = SceneDelegate->GetMaterialResource(GetId());
     if (vtMat.IsHolding<pxr::HdMaterialNetworkMap>())
@@ -88,22 +117,9 @@ void HnMaterial::Sync(pxr::HdSceneDelegate* SceneDelegate,
             }
         }
 
-        HnRenderDelegate*   RenderDelegate = static_cast<HnRenderDelegate*>(SceneDelegate->GetRenderIndex().GetRenderDelegate());
-        HnTextureRegistry&  TexRegistry    = RenderDelegate->GetTextureRegistry();
-        const USD_Renderer& UsdRenderer    = *RenderDelegate->GetUSDRenderer();
-
-        m_NumShaderTextureAttribs = UsdRenderer.GetNumShaderTextureAttribs();
-        m_ShaderTextureAttribs    = std::make_unique<HLSL::PBRMaterialTextureAttribs[]>(m_NumShaderTextureAttribs);
-
-        TexNameToCoordSetMapType TexNameToCoordSetMap;
         AllocateTextures(TexRegistry, TexNameToCoordSetMap);
 
-        m_BasicShaderAttribs.BaseColorFactor = float4{1, 1, 1, 1};
-        m_BasicShaderAttribs.EmissiveFactor  = float4{1, 1, 1, 1};
-        m_BasicShaderAttribs.SpecularFactor  = float4{1, 1, 1, 1};
-        m_BasicShaderAttribs.MetallicFactor  = 1;
-        m_BasicShaderAttribs.RoughnessFactor = 1;
-        m_BasicShaderAttribs.OcclusionFactor = 1;
+        m_BasicShaderAttribs.EmissiveFactor = float4{1, 1, 1, 1};
 
         const auto& MaterialParams = m_Network.GetParameters();
 
@@ -111,7 +127,7 @@ void HnMaterial::Sync(pxr::HdSceneDelegate* SceneDelegate,
             if (m_Textures.find(Name) != m_Textures.end())
                 return;
 
-            for (const auto Param : MaterialParams)
+            for (const auto& Param : MaterialParams)
             {
                 if (Param.Type == HnMaterialParameter::ParamType::Fallback && Param.Name == Name)
                 {
@@ -134,51 +150,150 @@ void HnMaterial::Sync(pxr::HdSceneDelegate* SceneDelegate,
             m_BasicShaderAttribs.OcclusionFactor = Val.Get<float>();
         });
 
-        m_BasicShaderAttribs.Workflow = PBR_Renderer::PBR_WORKFLOW_METALL_ROUGH;
-
-        auto SetTextureParams = [&](const pxr::TfToken& Name, Uint32 Idx) {
-            if (Idx >= m_NumShaderTextureAttribs)
-            {
-                UNEXPECTED("Texture attribute index (", Idx, ") exceeds the number of texture attributes (", m_NumShaderTextureAttribs, ")");
-                return;
-            }
-
-            m_ShaderTextureAttribs[Idx].UVSelector = static_cast<float>(TexNameToCoordSetMap[Name]);
-
-            auto tex_it = m_Textures.find(Name);
-            if (tex_it == m_Textures.end())
-                return;
-
-            ITextureAtlasSuballocation* pAtlasSuballocation = tex_it->second->pAtlasSuballocation;
-            if (pAtlasSuballocation != nullptr)
-            {
-                m_ShaderTextureAttribs[Idx].TextureSlice = static_cast<float>(pAtlasSuballocation->GetSlice());
-                m_ShaderTextureAttribs[Idx].UVScaleBias  = pAtlasSuballocation->GetUVScaleBias();
-
-                m_UsesAtlas = true;
-            }
-            else
-            {
-                m_ShaderTextureAttribs[Idx].TextureSlice = 0;
-                m_ShaderTextureAttribs[Idx].UVScaleBias  = float4{1, 1, 0, 0};
-            }
-        };
-        const auto& TexAttribIndices = UsdRenderer.GetShaderTextureAttributeIndices();
-
-        SetTextureParams(HnTokens->diffuseColor, TexAttribIndices.BaseColor);
-        SetTextureParams(HnTokens->normal, TexAttribIndices.Normal);
-        SetTextureParams(HnTokens->metallic, TexAttribIndices.Metallic);
-        SetTextureParams(HnTokens->roughness, TexAttribIndices.Roughness);
-        SetTextureParams(HnTokens->occlusion, TexAttribIndices.Occlusion);
-        SetTextureParams(HnTokens->emissiveColor, TexAttribIndices.Emissive);
-
         m_BasicShaderAttribs.AlphaMode = MaterialTagToPbrAlphaMode(m_Network.GetTag());
 
         m_BasicShaderAttribs.AlphaMaskCutoff   = m_Network.GetOpacityThreshold();
         m_BasicShaderAttribs.BaseColorFactor.a = m_Network.GetOpacity();
     }
 
+    InitTextureAttribs(TexRegistry, UsdRenderer, TexNameToCoordSetMap);
+
     *DirtyBits = HdMaterial::Clean;
+}
+
+void HnMaterial::InitTextureAttribs(HnTextureRegistry& TexRegistry, const USD_Renderer& UsdRenderer, const TexNameToCoordSetMapType& TexNameToCoordSetMap)
+{
+    auto SetTextureParams = [&](const pxr::TfToken& Name, Uint32 Idx) {
+        if (Idx >= m_NumShaderTextureAttribs)
+        {
+            UNEXPECTED("Texture attribute index (", Idx, ") exceeds the number of texture attributes (", m_NumShaderTextureAttribs, ")");
+            return;
+        }
+
+        auto coord_it                          = TexNameToCoordSetMap.find(Name);
+        m_ShaderTextureAttribs[Idx].UVSelector = coord_it != TexNameToCoordSetMap.end() ?
+            static_cast<float>(coord_it->second) :
+            0;
+
+        auto tex_it = m_Textures.find(Name);
+        if (tex_it == m_Textures.end())
+        {
+            tex_it = m_Textures.emplace(Name, GetDefaultTexture(TexRegistry, Name)).first;
+        }
+
+        ITextureAtlasSuballocation* pAtlasSuballocation = tex_it->second->pAtlasSuballocation;
+        if (pAtlasSuballocation != nullptr)
+        {
+            m_ShaderTextureAttribs[Idx].TextureSlice = static_cast<float>(pAtlasSuballocation->GetSlice());
+            m_ShaderTextureAttribs[Idx].UVScaleBias  = pAtlasSuballocation->GetUVScaleBias();
+
+            m_UsesAtlas = true;
+        }
+        else
+        {
+            m_ShaderTextureAttribs[Idx].TextureSlice = 0;
+            m_ShaderTextureAttribs[Idx].UVScaleBias  = float4{1, 1, 0, 0};
+        }
+    };
+
+    const auto& TexAttribIndices = UsdRenderer.GetShaderTextureAttributeIndices();
+    // clang-format off
+    SetTextureParams(HnTokens->diffuseColor,  TexAttribIndices.BaseColor);
+    SetTextureParams(HnTokens->normal,        TexAttribIndices.Normal);
+    SetTextureParams(HnTokens->metallic,      TexAttribIndices.Metallic);
+    SetTextureParams(HnTokens->roughness,     TexAttribIndices.Roughness);
+    SetTextureParams(HnTokens->occlusion,     TexAttribIndices.Occlusion);
+    SetTextureParams(HnTokens->emissiveColor, TexAttribIndices.Emissive);
+    // clang-format on
+}
+
+static RefCntAutoPtr<Image> CreateDefaultImage(const pxr::TfToken& Name)
+{
+    ImageDesc ImgDesc;
+    ImgDesc.Width         = 64;
+    ImgDesc.Height        = 64;
+    ImgDesc.ComponentType = VT_UINT8;
+    RefCntAutoPtr<IDataBlob> pData;
+
+    auto InitData = [&](Uint32 NumComponents, int Value) {
+        ImgDesc.NumComponents = NumComponents;
+        ImgDesc.RowStride     = ImgDesc.Width * ImgDesc.NumComponents;
+        pData                 = DataBlobImpl::Create(size_t{ImgDesc.RowStride} * size_t{ImgDesc.Height});
+        if (Value >= 0)
+        {
+            memset(pData->GetDataPtr(), Value, pData->GetSize());
+        }
+    };
+    if (Name == HnTokens->diffuseColor)
+    {
+        InitData(4, 255);
+    }
+    else if (Name == HnTokens->metallic)
+    {
+        InitData(1, 255);
+    }
+    else if (Name == HnTokens->roughness)
+    {
+        InitData(1, 255);
+    }
+    else if (Name == HnTokens->normal)
+    {
+        InitData(4, -1);
+
+        Uint8* pDst = reinterpret_cast<Uint8*>(pData->GetDataPtr());
+        for (size_t i = 0; i < pData->GetSize(); i += 4)
+        {
+            pDst[i + 0] = 128;
+            pDst[i + 1] = 128;
+            pDst[i + 2] = 255;
+            pDst[i + 3] = 0;
+        }
+    }
+    else if (Name == HnTokens->occlusion)
+    {
+        InitData(4, 255);
+    }
+    else if (Name == HnTokens->emissiveColor)
+    {
+        InitData(4, 0);
+    }
+    else
+    {
+        UNEXPECTED("Unknown texture name '", Name, "'");
+        InitData(4, 0);
+    }
+
+    RefCntAutoPtr<Image> pImage;
+    Image::CreateFromMemory(ImgDesc, pData, &pImage);
+    VERIFY_EXPR(pImage);
+    return pImage;
+}
+
+static pxr::TfToken GetDefaultTexturePath(const pxr::TfToken& Name)
+{
+    return pxr::TfToken{std::string{"$Default "} + Name.GetString()};
+}
+
+HnTextureRegistry::TextureHandleSharedPtr HnMaterial::GetDefaultTexture(HnTextureRegistry& TexRegistry, const pxr::TfToken& Name)
+{
+    const pxr::TfToken DefaultTexPath = GetDefaultTexturePath(Name);
+
+    pxr::HdSamplerParameters SamplerParams;
+    SamplerParams.wrapS     = pxr::HdWrapRepeat;
+    SamplerParams.wrapT     = pxr::HdWrapRepeat;
+    SamplerParams.wrapR     = pxr::HdWrapRepeat;
+    SamplerParams.minFilter = pxr::HdMinFilterLinearMipmapLinear;
+    SamplerParams.magFilter = pxr::HdMagFilterLinear;
+    return TexRegistry.Allocate(DefaultTexPath, SamplerParams,
+                                [&]() {
+                                    RefCntAutoPtr<Image> pImage = CreateDefaultImage(Name);
+
+                                    TextureLoadInfo               LoadInfo{Name.GetText()};
+                                    RefCntAutoPtr<ITextureLoader> pLoader;
+                                    CreateTextureLoaderFromImage(pImage, LoadInfo, &pLoader);
+                                    VERIFY_EXPR(pLoader);
+                                    return pLoader;
+                                });
 }
 
 void HnMaterial::AllocateTextures(HnTextureRegistry& TexRegistry, TexNameToCoordSetMapType& TexNameToCoordSetMap)
@@ -225,10 +340,12 @@ void HnMaterial::AllocateTextures(HnTextureRegistry& TexRegistry, TexNameToCoord
     }
 }
 
-const HnTextureRegistry::TextureHandle* HnMaterial::GetTexture(const pxr::TfToken& Name) const
+const HnTextureRegistry::TextureHandleSharedPtr& HnMaterial::GetTexture(const pxr::TfToken& Name) const
 {
+    static const HnTextureRegistry::TextureHandleSharedPtr NullHandle;
+
     auto tex_it = m_Textures.find(Name);
-    return tex_it != m_Textures.end() ? tex_it->second.get() : nullptr;
+    return tex_it != m_Textures.end() ? tex_it->second : NullHandle;
 }
 
 pxr::HdDirtyBits HnMaterial::GetInitialDirtyBitsMask() const
@@ -266,53 +383,59 @@ void HnMaterial::UpdateSRB(IRenderDevice* pDevice,
 
     PbrRenderer.InitCommonSRBVars(m_SRB, pFrameAttribs);
 
-    auto SetTexture = [&](const pxr::TfToken& Name, ITextureView* pDefaultTexSRV, const char* VarName) //
+    auto SetTexture = [&](const pxr::TfToken& Name, const char* VarName) //
     {
-        RefCntAutoPtr<ITextureView> pTexSRV;
-
-        if (auto* pTexHandle = GetTexture(Name))
+        const HnTextureRegistry::TextureHandleSharedPtr& pTexHandle = GetTexture(Name);
+        if (!pTexHandle)
         {
-            if (pTexHandle->pTexture)
-            {
-                const auto& TexDesc = pTexHandle->pTexture->GetDesc();
-                if (TexDesc.Type == RESOURCE_DIM_TEX_2D)
-                {
-                    UNEXPECTED("2D textures should be loaded as single-slice 2D array textures");
-
-                    const auto Name = std::string{"Tex2DArray view of texture '"} + TexDesc.Name + "'";
-
-                    TextureViewDesc SRVDesc;
-                    SRVDesc.Name       = Name.c_str();
-                    SRVDesc.ViewType   = TEXTURE_VIEW_SHADER_RESOURCE;
-                    SRVDesc.TextureDim = RESOURCE_DIM_TEX_2D_ARRAY;
-                    pTexHandle->pTexture->CreateView(SRVDesc, &pTexSRV);
-
-                    pTexSRV->SetSampler(pTexHandle->pSampler);
-                }
-                else
-                {
-                    pTexSRV = pTexHandle->pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-                }
-            }
-            else if (pTexHandle->pAtlasSuballocation)
-            {
-                pTexSRV = pTexHandle->pAtlasSuballocation->GetAtlas()->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-            }
+            UNEXPECTED("Texture '", Name, "' is not initialized. This is unexpected as at least the default texture must always be set.");
+            return;
         }
 
-        if (pTexSRV == nullptr)
-            pTexSRV = pDefaultTexSRV;
+        RefCntAutoPtr<ITextureView> pTexSRV;
+        if (pTexHandle->pTexture)
+        {
+            const auto& TexDesc = pTexHandle->pTexture->GetDesc();
+            if (TexDesc.Type == RESOURCE_DIM_TEX_2D)
+            {
+                UNEXPECTED("2D textures should be loaded as single-slice 2D array textures");
+
+                const auto Name = std::string{"Tex2DArray view of texture '"} + TexDesc.Name + "'";
+
+                TextureViewDesc SRVDesc;
+                SRVDesc.Name       = Name.c_str();
+                SRVDesc.ViewType   = TEXTURE_VIEW_SHADER_RESOURCE;
+                SRVDesc.TextureDim = RESOURCE_DIM_TEX_2D_ARRAY;
+                pTexHandle->pTexture->CreateView(SRVDesc, &pTexSRV);
+
+                pTexSRV->SetSampler(pTexHandle->pSampler);
+            }
+            else
+            {
+                pTexSRV = pTexHandle->pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+            }
+        }
+        else if (pTexHandle->pAtlasSuballocation)
+        {
+            pTexSRV = pTexHandle->pAtlasSuballocation->GetAtlas()->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        }
+        else
+        {
+            UNEXPECTED("Texture '", Name, "' is not loaded");
+        }
 
         if (auto* pVar = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, VarName))
             pVar->Set(pTexSRV);
     };
 
-    SetTexture(HnTokens->diffuseColor, PbrRenderer.GetWhiteTexSRV(), "g_ColorMap");
-    SetTexture(HnTokens->metallic, PbrRenderer.GetWhiteTexSRV(), "g_MetallicMap");
-    SetTexture(HnTokens->roughness, PbrRenderer.GetWhiteTexSRV(), "g_RoughnessMap");
-    SetTexture(HnTokens->normal, PbrRenderer.GetDefaultNormalMapSRV(), "g_NormalMap");
-    SetTexture(HnTokens->occlusion, PbrRenderer.GetWhiteTexSRV(), "g_AOMap");
-    SetTexture(HnTokens->emissiveColor, PbrRenderer.GetBlackTexSRV(), "g_EmissiveMap");
+    // clang-format off
+    SetTexture(HnTokens->diffuseColor,  "g_ColorMap");
+    SetTexture(HnTokens->metallic,      "g_MetallicMap");
+    SetTexture(HnTokens->roughness,     "g_RoughnessMap");
+    SetTexture(HnTokens->normal,        "g_NormalMap");
+    SetTexture(HnTokens->occlusion,     "g_AOMap");
+    SetTexture(HnTokens->emissiveColor, "g_EmissiveMap");
+    // clang-format on
 
     m_AtlasVersion = AtlasVersion;
 }

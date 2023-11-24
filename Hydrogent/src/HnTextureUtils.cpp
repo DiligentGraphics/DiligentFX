@@ -50,7 +50,7 @@ RefCntAutoPtr<ITextureLoader> CreateTextureLoaderFromSdfPath(const char*        
         return {};
 
     RefCntAutoPtr<ITextureLoader> pLoader;
-    CreateTextureLoaderFromMemory(Buffer.get(), Asset->GetSize(), IMAGE_FILE_FORMAT_UNKNOWN, true, LoadInfo, &pLoader);
+    CreateTextureLoaderFromMemory(Buffer.get(), Asset->GetSize(), true, LoadInfo, &pLoader);
 
     return pLoader;
 }

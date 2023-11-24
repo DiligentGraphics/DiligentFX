@@ -120,6 +120,8 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(IRenderDevice*     pDevic
     USDRendererCI.MaxJointCount = 0;
     // Use separate textures for metallic and roughness
     USDRendererCI.UseSeparateMetallicRoughnessTextures = true;
+    // Default textures will be provided by the texture registry
+    USDRendererCI.CreateDefaultTextures = false;
 
     static constexpr LayoutElement Inputs[] =
         {
@@ -325,7 +327,7 @@ pxr::HdSprim* HnRenderDelegate::CreateFallbackSprim(const pxr::TfToken& TypeId)
     pxr::HdSprim* SPrim = nullptr;
     if (TypeId == pxr::HdPrimTypeTokens->material)
     {
-        SPrim = CreateSprim(TypeId, pxr::SdfPath{});
+        SPrim = HnMaterial::CreateFallback(m_TextureRegistry, *m_USDRenderer);
     }
     else if (TypeId == pxr::HdPrimTypeTokens->camera ||
              TypeId == pxr::HdPrimTypeTokens->light)
@@ -382,7 +384,9 @@ void HnRenderDelegate::DestroyBprim(pxr::HdBprim* BPrim)
 
 void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
 {
-    m_ResourceMgr->UpdateAllResources(m_pDevice, m_pContext);
+    m_ResourceMgr->UpdateVertexBuffers(m_pDevice, m_pContext);
+    m_ResourceMgr->UpdateIndexBuffer(m_pDevice, m_pContext);
+
     m_TextureRegistry.Commit(m_pContext);
     Uint32 AtlasVersion = m_TextureRegistry.GetAtlasVersion();
 

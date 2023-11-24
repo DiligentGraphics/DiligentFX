@@ -44,6 +44,7 @@ namespace Diligent
 {
 
 class PBR_Renderer;
+class USD_Renderer;
 
 namespace GLTF
 {
@@ -58,11 +59,14 @@ namespace HLSL
 namespace USD
 {
 
+class HnTextureRegistry;
+
 /// Hydra material implementation in Hydrogent.
 class HnMaterial final : public pxr::HdMaterial
 {
 public:
     static HnMaterial* Create(const pxr::SdfPath& id);
+    static HnMaterial* CreateFallback(HnTextureRegistry& TexRegistry, const USD_Renderer& UsdRenderer);
 
     ~HnMaterial();
 
@@ -74,8 +78,6 @@ public:
     // Returns the minimal set of dirty bits to place in the
     // change tracker for use in the first sync of this prim.
     virtual pxr::HdDirtyBits GetInitialDirtyBitsMask() const override final;
-
-    const HnTextureRegistry::TextureHandle* GetTexture(const pxr::TfToken& Name) const;
 
     void UpdateSRB(IRenderDevice* pDevice,
                    PBR_Renderer&  PbrRenderer,
@@ -107,8 +109,21 @@ public:
 private:
     HnMaterial(pxr::SdfPath const& id);
 
+    // Special constructor for fallback material.
+    //
+    // \remarks     Sync() is not called on fallback material,
+    //  	        but we need to initialize default textures,
+    //  	        so we have to use this special constructor.
+    HnMaterial(HnTextureRegistry& TexRegistry, const USD_Renderer& UsdRenderer);
+
+    const HnTextureRegistry::TextureHandleSharedPtr& GetTexture(const pxr::TfToken& Name) const;
+
     using TexNameToCoordSetMapType = std::unordered_map<pxr::TfToken, size_t, pxr::TfToken::HashFunctor>;
     void AllocateTextures(HnTextureRegistry& TexRegistry, TexNameToCoordSetMapType& TexNameToCoordSetMap);
+
+    HnTextureRegistry::TextureHandleSharedPtr GetDefaultTexture(HnTextureRegistry& TexRegistry, const pxr::TfToken& Name);
+
+    void InitTextureAttribs(HnTextureRegistry& TexRegistry, const USD_Renderer& UsdRenderer, const TexNameToCoordSetMapType& TexNameToCoordSetMap);
 
 private:
     HnMaterialNetwork m_Network;

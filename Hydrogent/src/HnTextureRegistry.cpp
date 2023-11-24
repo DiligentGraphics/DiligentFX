@@ -84,7 +84,6 @@ void HnTextureRegistry::InitializeHandle(IRenderDevice*     pDevice,
             UpdateBox.MaxX = UpdateBox.MinX + MipProps.LogicalWidth;
             UpdateBox.MinY = Origin.y >> mip;
             UpdateBox.MaxY = UpdateBox.MinY + MipProps.LogicalHeight;
-            // TODO: align texture data to the atlas allocation alignment
             pContext->UpdateTexture(pDstTex, mip, Slice, UpdateBox, LevelData, RESOURCE_STATE_TRANSITION_MODE_NONE, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         }
     }
@@ -116,6 +115,10 @@ void HnTextureRegistry::InitializeHandle(IRenderDevice*     pDevice,
 
 void HnTextureRegistry::Commit(IDeviceContext* pContext)
 {
+    if (m_pResourceManager)
+    {
+        m_pResourceManager->UpdateTextures(m_pDevice, pContext);
+    }
     std::lock_guard<std::mutex> Lock{m_PendingTexturesMtx};
     for (auto tex_it : m_PendingTextures)
     {
@@ -124,30 +127,22 @@ void HnTextureRegistry::Commit(IDeviceContext* pContext)
     m_PendingTextures.clear();
 }
 
-HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const HnTextureIdentifier&      TexId,
-                                                                      const pxr::HdSamplerParameters& SamplerParams)
+HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const pxr::TfToken&                            FilePath,
+                                                                      const pxr::HdSamplerParameters&                SamplerParams,
+                                                                      std::function<RefCntAutoPtr<ITextureLoader>()> CreateLoader)
 {
     return m_Cache.Get(
-        TexId.FilePath,
+        FilePath,
         [&]() {
-            auto TexHandle = std::make_shared<TextureHandle>();
-
-            TextureLoadInfo LoadInfo;
-            LoadInfo.Name = TexId.FilePath.GetText();
-
-            // TODO: why do textures need to be flipped vertically?
-            LoadInfo.FlipVertically   = !TexId.SubtextureId.FlipVertically;
-            LoadInfo.IsSRGB           = TexId.SubtextureId.IsSRGB;
-            LoadInfo.PermultiplyAlpha = TexId.SubtextureId.PremultiplyAlpha;
-
-            auto pLoader = CreateTextureLoaderFromSdfPath(TexId.FilePath.GetText(), LoadInfo);
+            RefCntAutoPtr<ITextureLoader> pLoader = CreateLoader();
             if (!pLoader)
             {
-                LOG_ERROR_MESSAGE("Failed to create texture loader for texture ", TexId.FilePath);
+                LOG_ERROR_MESSAGE("Failed to create texture loader for texture ", FilePath);
                 return TextureHandleSharedPtr{};
             }
 
-            auto SamDesc = HdSamplerParametersToSamplerDesc(SamplerParams);
+            auto TexHandle = std::make_shared<TextureHandle>();
+            auto SamDesc   = HdSamplerParametersToSamplerDesc(SamplerParams);
             if (m_pResourceManager != nullptr)
             {
                 const auto& TexDesc = pLoader->GetTextureDesc();
@@ -155,7 +150,7 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const HnTe
                 TexHandle->pAtlasSuballocation = m_pResourceManager->AllocateTextureSpace(TexDesc.Format, TexDesc.Width, TexDesc.Height);
                 if (!TexHandle->pAtlasSuballocation)
                 {
-                    LOG_ERROR_MESSAGE("Failed to allocate atlas region for texture ", TexId.FilePath);
+                    LOG_ERROR_MESSAGE("Failed to allocate atlas region for texture ", FilePath);
                     return TextureHandleSharedPtr{};
                 }
             }
@@ -170,11 +165,29 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const HnTe
             if (!TexHandle->pTexture)
             {
                 std::lock_guard<std::mutex> Lock{m_PendingTexturesMtx};
-                m_PendingTextures.emplace(TexId.FilePath, PendingTextureInfo{std::move(pLoader), SamDesc, TexHandle});
+                m_PendingTextures.emplace(FilePath, PendingTextureInfo{std::move(pLoader), SamDesc, TexHandle});
             }
 
             return TexHandle;
         });
+}
+
+HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const HnTextureIdentifier&      TexId,
+                                                                      const pxr::HdSamplerParameters& SamplerParams)
+{
+    VERIFY(!TexId.FilePath.IsEmpty(), "File path must not be empty");
+    return Allocate(TexId.FilePath, SamplerParams,
+                    [&TexId]() {
+                        TextureLoadInfo LoadInfo;
+                        LoadInfo.Name = TexId.FilePath.GetText();
+
+                        // TODO: why do textures need to be flipped vertically?
+                        LoadInfo.FlipVertically   = !TexId.SubtextureId.FlipVertically;
+                        LoadInfo.IsSRGB           = TexId.SubtextureId.IsSRGB;
+                        LoadInfo.PermultiplyAlpha = TexId.SubtextureId.PremultiplyAlpha;
+
+                        return CreateTextureLoaderFromSdfPath(TexId.FilePath.GetText(), LoadInfo);
+                    });
 }
 
 Uint32 HnTextureRegistry::GetAtlasVersion() const

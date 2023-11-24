@@ -39,7 +39,6 @@ namespace USD
 struct HnSubTextureIdentifier
 {
     pxr::HdTextureType Type;
-    pxr::TfToken       FilePath;
 
     bool IsSRGB           = false;
     bool FlipVertically   = false;
