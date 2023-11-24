@@ -106,6 +106,7 @@ struct HnRenderPass::RenderState
 
     void CommitShaderResources(IShaderResourceBinding* pNewSRB)
     {
+        VERIFY_EXPR(pNewSRB != nullptr);
         if (pNewSRB == nullptr || pNewSRB == this->pSRB)
             return;
 
@@ -532,7 +533,9 @@ void HnRenderPass::RenderPendingDrawItems(RenderState& State)
         const auto&   Geo  = DrawItem.GetGeometryData();
         const HnMesh& Mesh = DrawItem.GetMesh();
 
-        State.CommitShaderResources(Geo.pMaterial->GetSRB(static_cast<Uint32>(i * State.PrimitiveAttribsAlignedOffset)));
+        IShaderResourceBinding* pSRB = Geo.pMaterial->GetSRB(static_cast<Uint32>(i * State.PrimitiveAttribsAlignedOffset));
+        VERIFY(pSRB != nullptr, "Material SRB is null. This may happen if UpdateSRB was not called for this material.");
+        State.CommitShaderResources(pSRB);
 
         IBuffer*                IndexBuffer      = nullptr;
         Uint32                  StartIndex       = 0;

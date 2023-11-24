@@ -327,7 +327,12 @@ pxr::HdSprim* HnRenderDelegate::CreateFallbackSprim(const pxr::TfToken& TypeId)
     pxr::HdSprim* SPrim = nullptr;
     if (TypeId == pxr::HdPrimTypeTokens->material)
     {
-        SPrim = HnMaterial::CreateFallback(m_TextureRegistry, *m_USDRenderer);
+        HnMaterial* Mat = HnMaterial::CreateFallback(m_TextureRegistry, *m_USDRenderer);
+        {
+            std::lock_guard<std::mutex> Guard{m_MaterialsMtx};
+            m_Materials.emplace(Mat);
+        }
+        SPrim = Mat;
     }
     else if (TypeId == pxr::HdPrimTypeTokens->camera ||
              TypeId == pxr::HdPrimTypeTokens->light)
