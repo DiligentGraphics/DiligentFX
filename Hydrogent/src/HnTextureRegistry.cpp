@@ -56,14 +56,9 @@ void HnTextureRegistry::InitializeHandle(IRenderDevice*     pDevice,
                                          const SamplerDesc& SamDesc,
                                          TextureHandle&     Handle)
 {
-    if (m_pResourceManager != nullptr)
+    if (Handle.pAtlasSuballocation != nullptr)
     {
         VERIFY_EXPR(pContext != nullptr);
-        if (!Handle.pAtlasSuballocation)
-        {
-            UNEXPECTED("Atlas suballocation must not be null");
-            return;
-        }
 
         IDynamicTextureAtlas* pAtlas      = Handle.pAtlasSuballocation->GetAtlas();
         ITexture*             pDstTex     = pAtlas->GetTexture();
@@ -145,16 +140,23 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const pxr:
             auto SamDesc   = HdSamplerParametersToSamplerDesc(SamplerParams);
             if (m_pResourceManager != nullptr)
             {
-                const auto& TexDesc = pLoader->GetTextureDesc();
-                // TODO: handle textures larger than atlas size
-                TexHandle->pAtlasSuballocation = m_pResourceManager->AllocateTextureSpace(TexDesc.Format, TexDesc.Width, TexDesc.Height);
-                if (!TexHandle->pAtlasSuballocation)
+                const auto& TexDesc   = pLoader->GetTextureDesc();
+                const auto& AtlasDesc = m_pResourceManager->GetAtlasDesc(TexDesc.Format);
+                if (TexDesc.Width <= AtlasDesc.Width && TexDesc.Height <= AtlasDesc.Height)
                 {
-                    LOG_ERROR_MESSAGE("Failed to allocate atlas region for texture ", FilePath);
-                    return TextureHandleSharedPtr{};
+                    TexHandle->pAtlasSuballocation = m_pResourceManager->AllocateTextureSpace(TexDesc.Format, TexDesc.Width, TexDesc.Height);
+                    if (!TexHandle->pAtlasSuballocation)
+                    {
+                        LOG_ERROR_MESSAGE("Failed to allocate atlas region for texture ", FilePath);
+                    }
+                }
+                else
+                {
+                    LOG_WARNING_MESSAGE("Texture ", FilePath, " is too large to fit into atlas (", TexDesc.Width, "x", TexDesc.Height, " vs ", AtlasDesc.Width, "x", AtlasDesc.Height, ")");
                 }
             }
-            else
+
+            if (!TexHandle->pAtlasSuballocation)
             {
                 if (m_pDevice->GetDeviceInfo().Features.MultithreadedResourceCreation)
                 {
