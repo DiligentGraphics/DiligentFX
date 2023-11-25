@@ -138,6 +138,7 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const pxr:
 
             auto TexHandle = std::make_shared<TextureHandle>();
             auto SamDesc   = HdSamplerParametersToSamplerDesc(SamplerParams);
+            // Try to allocate texture in the atlas first
             if (m_pResourceManager != nullptr)
             {
                 const auto& TexDesc   = pLoader->GetTextureDesc();
@@ -156,6 +157,8 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const pxr:
                 }
             }
 
+            // If texture was not allocated in the atlas (because atlas is disabled or because it does not fit),
+            // try to create it as a standalone texture.
             if (!TexHandle->pAtlasSuballocation)
             {
                 if (m_pDevice->GetDeviceInfo().Features.MultithreadedResourceCreation)
@@ -164,6 +167,8 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const pxr:
                 }
             }
 
+            // If there is no texture (which means it was allocated in the atlas or it
+            // can't be created in the worker thread), handle it in the main thread.
             if (!TexHandle->pTexture)
             {
                 std::lock_guard<std::mutex> Lock{m_PendingTexturesMtx};

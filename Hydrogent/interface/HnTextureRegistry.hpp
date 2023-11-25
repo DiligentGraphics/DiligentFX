@@ -82,9 +82,11 @@ public:
     TextureHandleSharedPtr Allocate(const HnTextureIdentifier&      TexId,
                                     const pxr::HdSamplerParameters& SamplerParams);
 
-    TextureHandleSharedPtr Allocate(const pxr::TfToken&             FilePath,
-                                    const pxr::HdSamplerParameters& SamplerParams,
-                                    std::function<RefCntAutoPtr<ITextureLoader>()>);
+    // Allocates texture handle for the specified texture file path.
+    // If the texture is not loaded, calls CreateLoader() to create the texture loader.
+    TextureHandleSharedPtr Allocate(const pxr::TfToken&                            FilePath,
+                                    const pxr::HdSamplerParameters&                SamplerParams,
+                                    std::function<RefCntAutoPtr<ITextureLoader>()> CreateLoader);
 
     TextureHandleSharedPtr Get(const pxr::TfToken& Path)
     {
