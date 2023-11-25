@@ -66,12 +66,13 @@ HnMaterial::HnMaterial(const pxr::SdfPath& id) :
     m_BasicShaderAttribs.Workflow = PBR_Renderer::PBR_WORKFLOW_METALL_ROUGH;
 }
 
+// Default material
 HnMaterial::HnMaterial(HnTextureRegistry& TexRegistry, const USD_Renderer& UsdRenderer) :
     HnMaterial{pxr::SdfPath{}}
 {
+    // Sync() is never called for the default material, so we need to initialize texture attributes now.
     m_NumShaderTextureAttribs = UsdRenderer.GetNumShaderTextureAttribs();
     m_ShaderTextureAttribs    = std::make_unique<HLSL::PBRMaterialTextureAttribs[]>(m_NumShaderTextureAttribs);
-
     InitTextureAttribs(TexRegistry, UsdRenderer, {});
 }
 
@@ -93,6 +94,7 @@ void HnMaterial::Sync(pxr::HdSceneDelegate* SceneDelegate,
     m_NumShaderTextureAttribs = UsdRenderer.GetNumShaderTextureAttribs();
     m_ShaderTextureAttribs    = std::make_unique<HLSL::PBRMaterialTextureAttribs[]>(m_NumShaderTextureAttribs);
 
+    // A mapping from the texture name to the texture coordinate set index (e.g. "diffuseColor" -> 0)
     TexNameToCoordSetMapType TexNameToCoordSetMap;
 
     pxr::VtValue vtMat = SceneDelegate->GetMaterialResource(GetId());
@@ -103,7 +105,10 @@ void HnMaterial::Sync(pxr::HdSceneDelegate* SceneDelegate,
         {
             try
             {
-                m_Network = HnMaterialNetwork{GetId(), hdNetworkMap};
+                m_Network = HnMaterialNetwork{GetId(), hdNetworkMap}; // May throw
+
+                TexNameToCoordSetMap = AllocateTextures(TexRegistry);
+                ProcessMaterialNetwork();
             }
             catch (const std::runtime_error& err)
             {
@@ -116,53 +121,56 @@ void HnMaterial::Sync(pxr::HdSceneDelegate* SceneDelegate,
                 m_Network = {};
             }
         }
-
-        AllocateTextures(TexRegistry, TexNameToCoordSetMap);
-
-        m_BasicShaderAttribs.EmissiveFactor = float4{1, 1, 1, 1};
-
-        const auto& MaterialParams = m_Network.GetParameters();
-
-        auto SetFallbackValue = [&](const pxr::TfToken& Name, auto SetValue) {
-            if (m_Textures.find(Name) != m_Textures.end())
-                return;
-
-            for (const auto& Param : MaterialParams)
-            {
-                if (Param.Type == HnMaterialParameter::ParamType::Fallback && Param.Name == Name)
-                {
-                    SetValue(Param.FallbackValue);
-                    break;
-                }
-            }
-        };
-
-        SetFallbackValue(HnTokens->diffuseColor, [this](const pxr::VtValue& Val) {
-            m_BasicShaderAttribs.BaseColorFactor = float4{float3::MakeVector(Val.Get<pxr::GfVec3f>().data()), 1};
-        });
-        SetFallbackValue(HnTokens->metallic, [this](const pxr::VtValue& Val) {
-            m_BasicShaderAttribs.MetallicFactor = Val.Get<float>();
-        });
-        SetFallbackValue(HnTokens->roughness, [this](const pxr::VtValue& Val) {
-            m_BasicShaderAttribs.RoughnessFactor = Val.Get<float>();
-        });
-        SetFallbackValue(HnTokens->occlusion, [this](const pxr::VtValue& Val) {
-            m_BasicShaderAttribs.OcclusionFactor = Val.Get<float>();
-        });
-
-        m_BasicShaderAttribs.AlphaMode = MaterialTagToPbrAlphaMode(m_Network.GetTag());
-
-        m_BasicShaderAttribs.AlphaMaskCutoff   = m_Network.GetOpacityThreshold();
-        m_BasicShaderAttribs.BaseColorFactor.a = m_Network.GetOpacity();
     }
 
+    // It is important to initialize texture attributes with default values even if there is no material network.
     InitTextureAttribs(TexRegistry, UsdRenderer, TexNameToCoordSetMap);
 
     *DirtyBits = HdMaterial::Clean;
 }
 
+void HnMaterial::ProcessMaterialNetwork()
+{
+    m_BasicShaderAttribs.EmissiveFactor = float4{1, 1, 1, 1};
+
+    auto SetFallbackValue = [this](const pxr::TfToken& Name, auto SetValue) {
+        if (m_Textures.find(Name) != m_Textures.end())
+            return;
+
+        const auto& MaterialParams = m_Network.GetParameters();
+        for (const HnMaterialParameter& Param : MaterialParams)
+        {
+            if (Param.Type == HnMaterialParameter::ParamType::Fallback && Param.Name == Name)
+            {
+                SetValue(Param.FallbackValue);
+                break;
+            }
+        }
+    };
+
+    SetFallbackValue(HnTokens->diffuseColor, [this](const pxr::VtValue& Val) {
+        m_BasicShaderAttribs.BaseColorFactor = float4{float3::MakeVector(Val.Get<pxr::GfVec3f>().data()), 1};
+    });
+    SetFallbackValue(HnTokens->metallic, [this](const pxr::VtValue& Val) {
+        m_BasicShaderAttribs.MetallicFactor = Val.Get<float>();
+    });
+    SetFallbackValue(HnTokens->roughness, [this](const pxr::VtValue& Val) {
+        m_BasicShaderAttribs.RoughnessFactor = Val.Get<float>();
+    });
+    SetFallbackValue(HnTokens->occlusion, [this](const pxr::VtValue& Val) {
+        m_BasicShaderAttribs.OcclusionFactor = Val.Get<float>();
+    });
+
+    m_BasicShaderAttribs.AlphaMode = MaterialTagToPbrAlphaMode(m_Network.GetTag());
+
+    m_BasicShaderAttribs.AlphaMaskCutoff   = m_Network.GetOpacityThreshold();
+    m_BasicShaderAttribs.BaseColorFactor.a = m_Network.GetOpacity();
+}
+
 void HnMaterial::InitTextureAttribs(HnTextureRegistry& TexRegistry, const USD_Renderer& UsdRenderer, const TexNameToCoordSetMapType& TexNameToCoordSetMap)
 {
+    VERIFY_EXPR(m_NumShaderTextureAttribs > 0 && m_ShaderTextureAttribs != nullptr);
+
     auto SetTextureParams = [&](const pxr::TfToken& Name, Uint32 Idx) {
         if (Idx >= m_NumShaderTextureAttribs)
         {
@@ -181,8 +189,7 @@ void HnMaterial::InitTextureAttribs(HnTextureRegistry& TexRegistry, const USD_Re
             tex_it = m_Textures.emplace(Name, GetDefaultTexture(TexRegistry, Name)).first;
         }
 
-        ITextureAtlasSuballocation* pAtlasSuballocation = tex_it->second->pAtlasSuballocation;
-        if (pAtlasSuballocation != nullptr)
+        if (ITextureAtlasSuballocation* pAtlasSuballocation = tex_it->second->pAtlasSuballocation)
         {
             m_ShaderTextureAttribs[Idx].TextureSlice = static_cast<float>(pAtlasSuballocation->GetSlice());
             m_ShaderTextureAttribs[Idx].UVScaleBias  = pAtlasSuballocation->GetUVScaleBias();
@@ -207,11 +214,18 @@ void HnMaterial::InitTextureAttribs(HnTextureRegistry& TexRegistry, const USD_Re
     // clang-format on
 }
 
-static RefCntAutoPtr<Image> CreateDefaultImage(const pxr::TfToken& Name)
+// Creates default image for the given texture:
+// - diffuseColor: RGBA8 white texture
+// - metallic:     R8 white texture
+// - roughness:    R8 white texture
+// - normal:       RGBA8 normal map filled with (128, 128, 255, 0)
+// - occlusion:    RGBA8 white texture
+// - emissiveColor RGBA8 black texture
+static RefCntAutoPtr<Image> CreateDefaultImage(const pxr::TfToken& Name, Uint32 Dimension = 64)
 {
     ImageDesc ImgDesc;
-    ImgDesc.Width         = 64;
-    ImgDesc.Height        = 64;
+    ImgDesc.Width         = Dimension;
+    ImgDesc.Height        = Dimension;
     ImgDesc.ComponentType = VT_UINT8;
     RefCntAutoPtr<IDataBlob> pData;
 
@@ -224,6 +238,7 @@ static RefCntAutoPtr<Image> CreateDefaultImage(const pxr::TfToken& Name)
             memset(pData->GetDataPtr(), Value, pData->GetSize());
         }
     };
+
     if (Name == HnTokens->diffuseColor)
     {
         InitData(4, 255);
@@ -296,9 +311,13 @@ HnTextureRegistry::TextureHandleSharedPtr HnMaterial::GetDefaultTexture(HnTextur
                                 });
 }
 
-void HnMaterial::AllocateTextures(HnTextureRegistry& TexRegistry, TexNameToCoordSetMapType& TexNameToCoordSetMap)
+HnMaterial::TexNameToCoordSetMapType HnMaterial::AllocateTextures(HnTextureRegistry& TexRegistry)
 {
-    std::unordered_map<pxr::TfToken, size_t, pxr::TfToken::HashFunctor> TexCoordMapping;
+    // Texture name to texture coordinate set index (e.g. "diffuseColor" -> 0)
+    TexNameToCoordSetMapType TexNameToCoordSetMap;
+
+    // Texture coordinate primvar name to texture coordinate set index (e.g. "st" -> 0)
+    std::unordered_map<pxr::TfToken, size_t, pxr::TfToken::HashFunctor> TexCoordPrimvarMapping;
     for (const HnMaterialNetwork::TextureDescriptor& TexDescriptor : m_Network.GetTextures())
     {
         if (auto pTex = TexRegistry.Allocate(TexDescriptor.TextureId, TexDescriptor.SamplerParams))
@@ -316,13 +335,18 @@ void HnMaterial::AllocateTextures(HnTextureRegistry& TexRegistry, TexNameToCoord
                             LOG_WARNING_MESSAGE("Texture '", TexDescriptor.Name, "' has ", Param.SamplerCoords.size(), " texture coordinates. Only the first set will be used");
                         const pxr::TfToken& TexCoordName = Param.SamplerCoords[0];
 
-                        auto it_inserted = TexCoordMapping.emplace(TexCoordName, TexCoordMapping.size());
+                        // Check if the texture coordinate set primvar (e.g. "st0") has already been allocated
+                        auto it_inserted = TexCoordPrimvarMapping.emplace(TexCoordName, m_TexCoords.size());
                         TexCoordIdx      = it_inserted.first->second;
                         if (it_inserted.second)
                         {
+                            // Add new texture coordinate set
+                            VERIFY_EXPR(TexCoordIdx == m_TexCoords.size());
                             m_TexCoords.resize(TexCoordIdx + 1);
                             m_TexCoords[TexCoordIdx] = {TexCoordName};
                         }
+
+                        TexNameToCoordSetMap[TexDescriptor.Name] = TexCoordIdx;
                     }
                     else
                     {
@@ -338,6 +362,8 @@ void HnMaterial::AllocateTextures(HnTextureRegistry& TexRegistry, TexNameToCoord
             }
         }
     }
+
+    return TexNameToCoordSetMap;
 }
 
 RefCntAutoPtr<ITexture> HnMaterial::GetTexture(const pxr::TfToken& Name) const
@@ -426,7 +452,7 @@ RefCntAutoPtr<IObject> HnMaterial::CreateSRBCache()
 }
 
 void HnMaterial::UpdateSRB(IObject*      pSRBCache,
-                           PBR_Renderer& PbrRenderer,
+                           USD_Renderer& UsdRenderer,
                            IBuffer*      pFrameAttribs,
                            Uint32        AtlasVersion)
 {
@@ -434,7 +460,10 @@ void HnMaterial::UpdateSRB(IObject*      pSRBCache,
     VERIFY_EXPR(Cache);
 
     if (m_UsesAtlas && AtlasVersion != m_AtlasVersion)
+    {
         m_SRB.Release();
+        m_PrimitiveAttribsVar = nullptr;
+    }
 
     if (m_SRB)
         return;
@@ -458,7 +487,7 @@ void HnMaterial::UpdateSRB(IObject*      pSRBCache,
     m_SRB = Cache->GetSRB(Key, [&]() {
         RefCntAutoPtr<IShaderResourceBinding> pSRB;
 
-        PbrRenderer.CreateResourceBinding(&pSRB);
+        UsdRenderer.CreateResourceBinding(&pSRB);
         VERIFY_EXPR(pSRB);
 
         if (IShaderResourceVariable* pVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbPrimitiveAttribs"))
@@ -466,14 +495,14 @@ void HnMaterial::UpdateSRB(IObject*      pSRBCache,
             // Primitive attribs buffer is a large buffer that fits multiple primitives.
             // In the render loop, we write multiple primitive attribs into this buffer
             // and use the SetBufferOffset function to select the attribs for the current primitive.
-            pVar->SetBufferRange(PbrRenderer.GetPBRPrimitiveAttribsCB(), 0, PbrRenderer.GetPBRPrimitiveAttribsSize());
+            pVar->SetBufferRange(UsdRenderer.GetPBRPrimitiveAttribsCB(), 0, UsdRenderer.GetPBRPrimitiveAttribsSize());
         }
         else
         {
             UNEXPECTED("Failed to find 'cbPrimitiveAttribs' variable in the shader resource binding");
         }
 
-        PbrRenderer.InitCommonSRBVars(pSRB, pFrameAttribs);
+        UsdRenderer.InitCommonSRBVars(pSRB, pFrameAttribs);
 
         auto SetTexture = [&](const char* VarName, ITexture* pTex) //
         {
@@ -496,13 +525,15 @@ void HnMaterial::UpdateSRB(IObject*      pSRBCache,
         return pSRB;
     });
 
-    if (!m_SRB)
+    if (m_SRB)
+    {
+        m_PrimitiveAttribsVar = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbPrimitiveAttribs");
+        VERIFY_EXPR(m_PrimitiveAttribsVar != nullptr);
+    }
+    else
     {
         UNEXPECTED("Failed to create shader resource binding for material ", GetId());
     }
-
-    m_PrimitiveAttribsVar = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbPrimitiveAttribs");
-    VERIFY_EXPR(m_PrimitiveAttribsVar != nullptr);
 
     m_AtlasVersion = AtlasVersion;
 }

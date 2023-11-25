@@ -43,7 +43,6 @@
 namespace Diligent
 {
 
-class PBR_Renderer;
 class USD_Renderer;
 
 namespace GLTF
@@ -58,8 +57,6 @@ namespace HLSL
 
 namespace USD
 {
-
-class HnTextureRegistry;
 
 /// Hydra material implementation in Hydrogent.
 class HnMaterial final : public pxr::HdMaterial
@@ -79,10 +76,11 @@ public:
     // change tracker for use in the first sync of this prim.
     virtual pxr::HdDirtyBits GetInitialDirtyBitsMask() const override final;
 
+    /// Creates an SRB cache that should be passed to UpdateSRB().
     static RefCntAutoPtr<IObject> CreateSRBCache();
 
     void UpdateSRB(IObject*      pSRBCache,
-                   PBR_Renderer& PbrRenderer,
+                   USD_Renderer& UsdRenderer,
                    IBuffer*      pFrameAttribs,
                    Uint32        AtlasVersion);
 
@@ -104,6 +102,8 @@ public:
         /// Texture coordinate set primvar name (e.g. "st")
         pxr::TfToken PrimVarName;
     };
+    // Returns an array of unique texture coordinate sets used by this material, for example:
+    // { { "st0" }, { "st1" } }
     const auto& GetTextureCoordinateSets() const { return m_TexCoords; }
 
     const pxr::TfToken& GetTag() const { return m_Network.GetTag(); }
@@ -111,7 +111,7 @@ public:
 private:
     HnMaterial(pxr::SdfPath const& id);
 
-    // Special constructor for fallback material.
+    // Special constructor for the fallback material.
     //
     // \remarks     Sync() is not called on fallback material,
     //  	        but we need to initialize default textures,
@@ -120,11 +120,15 @@ private:
 
     RefCntAutoPtr<ITexture> GetTexture(const pxr::TfToken& Name) const;
 
+    // A mapping from the texture name to the texture coordinate set index in m_TexCoords array (e.g. "diffuseColor" -> 0)
+    // The same index is set in m_ShaderTextureAttribs[].UVSelector for the corresponding texture.
+    // The name of the primvar that contains the texture coordinates is given by m_TexCoords[index].PrimVarName (e.g. "st0").
     using TexNameToCoordSetMapType = std::unordered_map<pxr::TfToken, size_t, pxr::TfToken::HashFunctor>;
-    void AllocateTextures(HnTextureRegistry& TexRegistry, TexNameToCoordSetMapType& TexNameToCoordSetMap);
+    TexNameToCoordSetMapType AllocateTextures(HnTextureRegistry& TexRegistry);
 
     HnTextureRegistry::TextureHandleSharedPtr GetDefaultTexture(HnTextureRegistry& TexRegistry, const pxr::TfToken& Name);
 
+    void ProcessMaterialNetwork();
     void InitTextureAttribs(HnTextureRegistry& TexRegistry, const USD_Renderer& UsdRenderer, const TexNameToCoordSetMapType& TexNameToCoordSetMap);
 
 private:
@@ -136,9 +140,11 @@ private:
     IShaderResourceVariable*              m_PrimitiveAttribsVar = nullptr; // cbPrimitiveAttribs
 
     HLSL::PBRMaterialBasicAttribs                      m_BasicShaderAttribs{};
-    std::unique_ptr<HLSL::PBRMaterialTextureAttribs[]> m_ShaderTextureAttribs;
+    std::unique_ptr<HLSL::PBRMaterialTextureAttribs[]> m_ShaderTextureAttribs; // [m_NumShaderTextureAttribs]
     Uint32                                             m_NumShaderTextureAttribs = 0;
 
+    // The names of the primvars that contain unique texture coordinate sets for this material (e.g. "st0", "st1").
+    // The index in this array for texture N is given by m_ShaderTextureAttribs[N].UVSelector.
     std::vector<TextureCoordinateSetInfo> m_TexCoords;
 
     // True if there is at least one texture suballocated from the atlas
