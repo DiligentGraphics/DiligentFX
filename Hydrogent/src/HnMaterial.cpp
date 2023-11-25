@@ -400,6 +400,10 @@ pxr::HdDirtyBits HnMaterial::GetInitialDirtyBitsMask() const
     return pxr::HdMaterial::AllDirty;
 }
 
+// {AFEC3E3E-021D-4BA6-9464-CB7E356DE15D}
+static const INTERFACE_ID IID_HnMaterialSRBCache =
+    {0xafec3e3e, 0x21d, 0x4ba6, {0x94, 0x64, 0xcb, 0x7e, 0x35, 0x6d, 0xe1, 0x5d}};
+
 class HnMaterialSRBCache : public ObjectBase<IObject>
 {
 public:
@@ -411,10 +415,6 @@ public:
     {
         return RefCntAutoPtr<IObject>{MakeNewRCObj<HnMaterialSRBCache>()()};
     }
-
-    // {AFEC3E3E-021D-4BA6-9464-CB7E356DE15D}
-    static constexpr INTERFACE_ID IID_HnMaterialSRBCache =
-        {0xafec3e3e, 0x21d, 0x4ba6, {0x94, 0x64, 0xcb, 0x7e, 0x35, 0x6d, 0xe1, 0x5d}};
 
     IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_HnMaterialSRBCache, ObjectBase<IObject>)
 
@@ -456,7 +456,7 @@ void HnMaterial::UpdateSRB(IObject*      pSRBCache,
                            IBuffer*      pFrameAttribs,
                            Uint32        AtlasVersion)
 {
-    RefCntAutoPtr<HnMaterialSRBCache> Cache{pSRBCache, HnMaterialSRBCache::IID_HnMaterialSRBCache};
+    RefCntAutoPtr<HnMaterialSRBCache> Cache{pSRBCache, IID_HnMaterialSRBCache};
     VERIFY_EXPR(Cache);
 
     if (m_UsesAtlas && AtlasVersion != m_AtlasVersion)
