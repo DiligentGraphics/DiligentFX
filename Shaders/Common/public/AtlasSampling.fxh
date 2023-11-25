@@ -78,8 +78,8 @@ float4 SampleTextureAtlas(Texture2DArray            Atlas,
     Atlas.GetDimensions(f2AtlasDim.x, f2AtlasDim.y, fElements);
     
     // Compute gradient lengths in pixels
-    float fGradX   = length(f2dUV_dx * f2AtlasDim.xy);
-    float fGradY   = length(f2dUV_dy * f2AtlasDim.xy);
+    float fGradX   = max(length(f2dUV_dx * f2AtlasDim.xy), 1e-5);
+    float fGradY   = max(length(f2dUV_dy * f2AtlasDim.xy), 1e-5);
     float fMaxGrad = max(fGradX, fGradY);
     
     float LOD;
