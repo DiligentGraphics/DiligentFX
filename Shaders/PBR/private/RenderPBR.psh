@@ -57,10 +57,9 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
     float2 dNormalMapUV_dy = ddy(NormalMapUV);
 #if USE_TEXTURE_ATLAS
     {
-        NormalMapUV = frac(NormalMapUV);
-        NormalMapUV = NormalMapUV * NormalTexAttribs.UVScaleBias.xy + NormalTexAttribs.UVScaleBias.zw;
-        dNormalMapUV_dx *= NormalTexAttribs.UVScaleBias.xy;
-        dNormalMapUV_dy *= NormalTexAttribs.UVScaleBias.xy;
+        NormalMapUV     = TransformUV(frac(NormalMapUV), NormalTexAttribs);
+        dNormalMapUV_dx = ScaleAndRotateUV(dNormalMapUV_dx, NormalTexAttribs);
+        dNormalMapUV_dy = ScaleAndRotateUV(dNormalMapUV_dy, NormalTexAttribs);
     }
 #endif
 
