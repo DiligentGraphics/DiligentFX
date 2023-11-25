@@ -99,10 +99,10 @@ struct PBRMaterialTextureAttribs
 {
     float UVSelector;
     float TextureSlice;
-    float Padding0;
-    float Padding1;
+    float UBias;
+    float VBias;
 
-    float4 UVScaleBias;
+    float4 UVScaleAndRotation;
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
 	CHECK_STRUCT_ALIGNMENT(PBRMaterialTextureAttribs);

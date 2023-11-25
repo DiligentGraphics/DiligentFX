@@ -87,17 +87,17 @@ float2 SelectUV(VSOutput VSOut, float Selector)
 
 float2 ScaleAndRotateUV(float2 UV, PBRMaterialTextureAttribs TexAttribs)
 {
-    return UV * TexAttribs.UVScaleBias.xy;
+    return mul(UV, float2x2(TexAttribs.UVScaleAndRotation.xy, TexAttribs.UVScaleAndRotation.zw));
 }
 
 float2 TransformUV(float2 UV, PBRMaterialTextureAttribs TexAttribs)
 {
-    return ScaleAndRotateUV(UV, TexAttribs) + TexAttribs.UVScaleBias.zw;
+    return ScaleAndRotateUV(UV, TexAttribs) + float2(TexAttribs.UBias, TexAttribs.VBias);
 }
 
 float4 GetAtlasUVRegion(PBRMaterialTextureAttribs TexAttribs)
 {
-    return TexAttribs.UVScaleBias;
+    return float4(TexAttribs.UVScaleAndRotation.x, TexAttribs.UVScaleAndRotation.w, TexAttribs.UBias, TexAttribs.VBias);
 }
 
 float4 SampleTexture(Texture2DArray            Tex,

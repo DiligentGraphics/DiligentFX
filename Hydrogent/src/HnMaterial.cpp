@@ -189,17 +189,24 @@ void HnMaterial::InitTextureAttribs(HnTextureRegistry& TexRegistry, const USD_Re
             tex_it = m_Textures.emplace(Name, GetDefaultTexture(TexRegistry, Name)).first;
         }
 
+        HLSL::PBRMaterialTextureAttribs& TexAttribs{m_ShaderTextureAttribs[Idx]};
         if (ITextureAtlasSuballocation* pAtlasSuballocation = tex_it->second->pAtlasSuballocation)
         {
-            m_ShaderTextureAttribs[Idx].TextureSlice = static_cast<float>(pAtlasSuballocation->GetSlice());
-            m_ShaderTextureAttribs[Idx].UVScaleBias  = pAtlasSuballocation->GetUVScaleBias();
+            TexAttribs.TextureSlice = static_cast<float>(pAtlasSuballocation->GetSlice());
+
+            const float4& UVScaleBias{pAtlasSuballocation->GetUVScaleBias()};
+            TexAttribs.UVScaleAndRotation = float4{UVScaleBias.x, 0, 0, UVScaleBias.y};
+            TexAttribs.UBias              = UVScaleBias.z;
+            TexAttribs.VBias              = UVScaleBias.w;
 
             m_UsesAtlas = true;
         }
         else
         {
-            m_ShaderTextureAttribs[Idx].TextureSlice = 0;
-            m_ShaderTextureAttribs[Idx].UVScaleBias  = float4{1, 1, 0, 0};
+            TexAttribs.TextureSlice       = 0;
+            TexAttribs.UVScaleAndRotation = float4{1, 0, 0, 1};
+            TexAttribs.UBias              = 0;
+            TexAttribs.VBias              = 0;
         }
     };
 
