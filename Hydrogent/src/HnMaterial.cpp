@@ -357,7 +357,7 @@ HnMaterial::TexNameToCoordSetMapType HnMaterial::AllocateTextures(HnTextureRegis
                     }
                     else
                     {
-                        LOG_ERROR_MESSAGE("Texture '", TexDescriptor.Name, "' has no texture coordinates");
+                        LOG_ERROR_MESSAGE("Texture '", TexDescriptor.Name, "' in material '", GetId(), "' has no texture coordinates");
                     }
                     break;
                 }
@@ -365,7 +365,7 @@ HnMaterial::TexNameToCoordSetMapType HnMaterial::AllocateTextures(HnTextureRegis
 
             if (TexCoordIdx == ~size_t{0})
             {
-                LOG_ERROR_MESSAGE("Failed to find texture coordinates for texture '", TexDescriptor.Name, "'");
+                LOG_ERROR_MESSAGE("Failed to find texture coordinates for texture '", TexDescriptor.Name, "' in material '", GetId(), "'");
             }
         }
     }

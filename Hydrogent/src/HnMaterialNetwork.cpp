@@ -642,6 +642,67 @@ HnMaterialParameter GetPrimvarReaderParam(const pxr::HdMaterialNetwork2& Network
     return Param;
 }
 
+static std::vector<HnMaterialParameter> GetTransform2dParams(
+    const pxr::HdMaterialNetwork2& Network,
+    const pxr::HdMaterialNode2&    Node,
+    const pxr::SdfPath&            NodePath,
+    const pxr::TfToken&            ParamName)
+{
+    HnMaterialParameter Tr2dParam;
+    Tr2dParam.Type          = HnMaterialParameter::ParamType::Transform2d;
+    Tr2dParam.Name          = ParamName;
+    Tr2dParam.FallbackValue = GetParamFallbackValue(Network, Node, HnMaterialPrivateTokens->in);
+
+    // Find the input connection to the transform2d node
+    auto in_it = Node.inputConnections.find(HnMaterialPrivateTokens->in);
+    if (in_it != Node.inputConnections.end())
+    {
+        if (!in_it->second.empty())
+        {
+            const pxr::HdMaterialConnection2& Conn = in_it->second.front();
+
+            const auto                  pn_it       = Network.nodes.find(Conn.upstreamNode);
+            const pxr::HdMaterialNode2& PrimvarNode = pn_it->second;
+            pxr::SdrRegistry&           ShaderReg   = pxr::SdrRegistry::GetInstance();
+            if (pxr::SdrShaderNodeConstPtr PrimvarSdr = ShaderReg.GetShaderNodeByIdentifierAndType(PrimvarNode.nodeTypeId, pxr::HioGlslfxTokens->glslfx))
+            {
+                auto PrimvarParam       = GetPrimvarReaderParam(Network, PrimvarNode, Conn.upstreamNode, in_it->first);
+                Tr2dParam.SamplerCoords = std::move(PrimvarParam.SamplerCoords);
+            }
+        }
+    }
+    else
+    {
+        // See if input value was directly authored as value.
+        auto it = Node.parameters.find(HnMaterialPrivateTokens->in);
+        if (it != Node.parameters.end())
+        {
+            if (it->second.IsHolding<pxr::TfToken>())
+            {
+                const pxr::TfToken& SamplerCoord = it->second.UncheckedGet<pxr::TfToken>();
+                Tr2dParam.SamplerCoords.push_back(SamplerCoord);
+            }
+        }
+    }
+
+    // "transform" param is expected to be first.
+    std::vector<HnMaterialParameter> Params{{Tr2dParam}};
+
+    // Make materials params for each component of transform2d
+    auto AddFallbackParameter = [&](const pxr::TfToken& Name) {
+        HnMaterialParameter Param;
+        Param.Type          = HnMaterialParameter::ParamType::Fallback;
+        Param.Name          = TfToken{ParamName.GetString() + "_" + Name.GetString()};
+        Param.FallbackValue = GetParamFallbackValue(Network, Node, Name);
+        Params.push_back(std::move(Param));
+    };
+    AddFallbackParameter(HnTokens->rotation);
+    AddFallbackParameter(HnTokens->scale);
+    AddFallbackParameter(HnTokens->translation);
+
+    return Params;
+}
+
 } // namespace
 
 HnMaterialNetwork::HnMaterialNetwork(const pxr::SdfPath&              SdfPath,
@@ -1024,43 +1085,33 @@ void HnMaterialNetwork::AddTextureParam(const pxr::HdMaterialNetwork2& Network,
                     // Extract the referenced primvar(s) for use in the texture
                     // sampler coords.
                     TexParam.SamplerCoords = PrimvarParam.SamplerCoords;
-
-                    // For any referenced primvars, add them as "additional primvars"
-                    // to make sure they pass primvar filtering.
-                    for (const auto& PrimvarName : TexParam.SamplerCoords)
-                    {
-                        AddAdditionalPrimvarParameter(PrimvarName);
-                    }
                 }
                 else if (SdrRole == pxr::SdrNodeRole->Math)
                 {
-                    LOG_ERROR_MESSAGE("Transform2D is not currently supported");
-#if 0
-                    HdSt_MaterialParamVector transform2dParams;
+                    std::vector<HnMaterialParameter> Transform2dParams =
+                        GetTransform2dParams(Network, UpstreamNode, UpstreamNodePath, pxr::TfToken{ParamName.GetString() + "_" + st_it->first.GetString() + "_transform2d"});
 
-                    _MakeMaterialParamsForTransform2d(
-                        network,
-                        upstreamNode,
-                        upstreamNodePath,
-                        TfToken(paramName.GetString() + "_" +
-                                st_it->first.GetString() + "_transform2d"),
-                        visitedNodes,
-                        &transform2dParams);
-
-                    if (!transform2dParams.empty())
+                    if (!Transform2dParams.empty())
                     {
-                        HdSt_MaterialParam const& transform2dParam =
-                            transform2dParams.front();
-                        // The texure's sampler coords should come from the
-                        // output of the transform2d
-                        texParam.samplerCoords.push_back(transform2dParam.name);
+                        const HnMaterialParameter& Tr2DParam = Transform2dParams[0];
+                        VERIFY_EXPR(Tr2DParam.Type == HnMaterialParameter::ParamType::Transform2d);
+                        // The texure's sampler coords should come from the output of the transform2d
+                        TexParam.SamplerCoords = Tr2DParam.SamplerCoords;
+                    }
+                    else
+                    {
+                        UNEXPECTED("Transform2dParams should not be empty");
                     }
 
                     // Copy params created for tranform2d node to param list
-                    params->insert(params->end(),
-                                   transform2dParams.begin(),
-                                   transform2dParams.end());
-#endif
+                    m_Parameters.insert(m_Parameters.end(), Transform2dParams.begin(), Transform2dParams.end());
+                }
+
+                // For any referenced primvars, add them as "additional primvars"
+                // to make sure they pass primvar filtering.
+                for (const auto& PrimvarName : TexParam.SamplerCoords)
+                {
+                    AddAdditionalPrimvarParameter(PrimvarName);
                 }
             }
         }
@@ -1185,7 +1236,9 @@ void HnMaterialNetwork::AddTransform2dParam(const pxr::HdMaterialNetwork2& Netwo
                                             const pxr::TfToken&            ParamName,
                                             pxr::SdfPathSet&               VisitedNodes)
 {
-    UNSUPPORTED("Transform2d parameter is not currently supported");
+    std::vector<HnMaterialParameter> Transform2dParams =
+        GetTransform2dParams(Network, Node, NodePath, pxr::TfToken{ParamName.GetString() + "_transform2d"});
+    m_Parameters.insert(m_Parameters.end(), Transform2dParams.begin(), Transform2dParams.end());
 }
 
 } // namespace USD
