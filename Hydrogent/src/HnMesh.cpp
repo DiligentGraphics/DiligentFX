@@ -388,9 +388,9 @@ bool HnMesh::UpdateVertexPrimvars(pxr::HdSceneDelegate& SceneDelegate,
         {
             m_VertexData->Sources.emplace(PrimDesc.name, std::move(BufferSource));
         }
-        else if (BufferSource->GetName() == pxr::HdTokens->points)
+        else if (PrimDesc.name == pxr::HdTokens->points)
         {
-            LOG_WARNING_MESSAGE("Skipping prim ", Id, " because its points data is insufficient.");
+            LOG_WARNING_MESSAGE("Skipping prim ", Id, " because its points data is missing.");
             return false;
         }
     }
