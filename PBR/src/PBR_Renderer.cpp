@@ -695,7 +695,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS     PSOFlags,
     Macros.Add("DEBUG_VIEW_SPECULAR_IBL",     static_cast<int>(DebugViewType::SpecularIBL));
     // clang-format on
 
-    static_assert(PSO_FLAG_LAST == 1u << 17u, "Did you add new PSO Flag? You may need to handle it here.");
+    static_assert(PSO_FLAG_LAST == 1u << 18u, "Did you add new PSO Flag? You may need to handle it here.");
 #define ADD_PSO_FLAG_MACRO(Flag) Macros.Add(#Flag, (PSOFlags & PSO_FLAG_##Flag) != PSO_FLAG_NONE)
     ADD_PSO_FLAG_MACRO(USE_VERTEX_COLORS);
     ADD_PSO_FLAG_MACRO(USE_VERTEX_NORMALS);
@@ -714,6 +714,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS     PSOFlags,
 
     //ADD_PSO_FLAG_MACRO(FRONT_CCW);
     ADD_PSO_FLAG_MACRO(USE_TEXTURE_ATLAS);
+    ADD_PSO_FLAG_MACRO(ENABLE_TEXCOORD_TRANSFORM);
     ADD_PSO_FLAG_MACRO(CONVERT_OUTPUT_TO_SRGB);
     ADD_PSO_FLAG_MACRO(ENABLE_CUSTOM_DATA_OUTPUT);
     ADD_PSO_FLAG_MACRO(ENABLE_TONE_MAPPING);

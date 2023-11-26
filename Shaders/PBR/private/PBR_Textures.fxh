@@ -97,7 +97,20 @@ float2 TransformUV(float2 UV, PBRMaterialTextureAttribs TexAttribs)
 
 float4 GetAtlasUVRegion(PBRMaterialTextureAttribs TexAttribs)
 {
+#if ENABLE_TEXCOORD_TRANSFORM
+    // Note: if rotation is not a multiple of 90 degrees, the UV region will not be tight.
+    //       To handle this case precisely, we will need to store texture transform and atlas
+    //       scale and bias separately, which will require additional 16 bytes per texture.
+    float2 UV00 = ScaleAndRotateUV(float2(0.0, 0.0), TexAttribs);
+    float2 UV10 = ScaleAndRotateUV(float2(1.0, 0.0), TexAttribs);
+    float2 UV01 = ScaleAndRotateUV(float2(0.0, 1.0), TexAttribs);
+    float2 UV11 = ScaleAndRotateUV(float2(1.0, 1.0), TexAttribs);
+    float2 UVMin = min(min(UV00, UV10), min(UV01, UV11));
+    float2 UVMax = max(max(UV00, UV10), max(UV01, UV11));
+    return float4(UVMax - UVMin, TexAttribs.UBias + UVMin.x, TexAttribs.VBias + UVMin.y);
+#else
     return float4(TexAttribs.UVScaleAndRotation.x, TexAttribs.UVScaleAndRotation.w, TexAttribs.UBias, TexAttribs.VBias);
+#endif
 }
 
 float4 SampleTexture(Texture2DArray            Tex,
@@ -132,6 +145,11 @@ float4 SampleTexture(Texture2DArray            Tex,
         }
 #       else
         {
+#           if ENABLE_TEXCOORD_TRANSFORM
+            {
+                UV = TransformUV(UV, TexAttribs);
+            }
+#           endif
             return Tex.Sample(Tex_sampler, float3(UV, TexAttribs.TextureSlice));
         }
 #       endif

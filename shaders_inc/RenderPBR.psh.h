@@ -55,7 +55,7 @@
 "    float3 dWorldPos_dy = ddy(VSOut.WorldPos);\n"
 "    float2 dNormalMapUV_dx = ddx(NormalMapUV);\n"
 "    float2 dNormalMapUV_dy = ddy(NormalMapUV);\n"
-"#if USE_TEXTURE_ATLAS\n"
+"#if USE_TEXTURE_ATLAS || ENABLE_TEXCOORD_TRANSFORM\n"
 "    {\n"
 "        NormalMapUV     = TransformUV(frac(NormalMapUV), NormalTexAttribs);\n"
 "        dNormalMapUV_dx = ScaleAndRotateUV(dNormalMapUV_dx, NormalTexAttribs);\n"

@@ -259,10 +259,11 @@ public:
         PSO_FLAG_USE_IBL           = 1u << 12u,
 
         PSO_FLAG_USE_TEXTURE_ATLAS         = 1u << 13u,
-        PSO_FLAG_CONVERT_OUTPUT_TO_SRGB    = 1u << 14u,
-        PSO_FLAG_ENABLE_CUSTOM_DATA_OUTPUT = 1u << 15u,
-        PSO_FLAG_ENABLE_TONE_MAPPING       = 1u << 16u,
-        PSO_FLAG_UNSHADED                  = 1u << 17u,
+        PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM = 1u << 14u,
+        PSO_FLAG_CONVERT_OUTPUT_TO_SRGB    = 1u << 15u,
+        PSO_FLAG_ENABLE_CUSTOM_DATA_OUTPUT = 1u << 16u,
+        PSO_FLAG_ENABLE_TONE_MAPPING       = 1u << 17u,
+        PSO_FLAG_UNSHADED                  = 1u << 18u,
 
         PSO_FLAG_LAST = PSO_FLAG_UNSHADED,
 

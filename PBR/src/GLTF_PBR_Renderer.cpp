@@ -121,6 +121,7 @@ GLTF_PBR_Renderer::GLTF_PBR_Renderer(IRenderDevice*     pDevice,
 
     m_SupportedPSOFlags |=
         PSO_FLAG_USE_TEXTURE_ATLAS |
+        PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM |
         PSO_FLAG_CONVERT_OUTPUT_TO_SRGB |
         PSO_FLAG_ENABLE_TONE_MAPPING;
 

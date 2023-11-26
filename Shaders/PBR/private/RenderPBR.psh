@@ -55,7 +55,7 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
     float3 dWorldPos_dy = ddy(VSOut.WorldPos);
     float2 dNormalMapUV_dx = ddx(NormalMapUV);
     float2 dNormalMapUV_dy = ddy(NormalMapUV);
-#if USE_TEXTURE_ATLAS
+#if USE_TEXTURE_ATLAS || ENABLE_TEXCOORD_TRANSFORM
     {
         NormalMapUV     = TransformUV(frac(NormalMapUV), NormalTexAttribs);
         dNormalMapUV_dx = ScaleAndRotateUV(dNormalMapUV_dx, NormalTexAttribs);
