@@ -137,14 +137,9 @@ void HnMaterial::ProcessMaterialNetwork()
         if (m_Textures.find(Name) != m_Textures.end())
             return;
 
-        const auto& MaterialParams = m_Network.GetParameters();
-        for (const HnMaterialParameter& Param : MaterialParams)
+        if (const HnMaterialParameter* Param = m_Network.GetParameter(HnMaterialParameter::ParamType::Fallback, Name))
         {
-            if (Param.Type == HnMaterialParameter::ParamType::Fallback && Param.Name == Name)
-            {
-                SetValue(Param.FallbackValue);
-                break;
-            }
+            SetValue(Param->FallbackValue);
         }
     };
 
@@ -189,7 +184,7 @@ void HnMaterial::InitTextureAttribs(HnTextureRegistry& TexRegistry, const USD_Re
         auto tex_it = m_Textures.find(Name);
         if (tex_it != m_Textures.end())
         {
-            if (const HnMaterialParameter* Param = m_Network.GetParameter(HnMaterialParameter::ParamType::Texture, Name))
+            if (const HnMaterialParameter* Param = m_Network.GetParameter(HnMaterialParameter::ParamType::Transform2d, Name))
             {
                 UVScaleAndRotation = float2x2::Scale(Param->Transform2d.Scale[0], Param->Transform2d.Scale[1]);
                 float Rotation     = Param->Transform2d.Rotation;
