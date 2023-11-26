@@ -103,6 +103,7 @@
 "    float VBias;\n"
 "\n"
 "    float4 UVScaleAndRotation;\n"
+"    float4 AtlasUVScaleAndBias;\n"
 "};\n"
 "#ifdef CHECK_STRUCT_ALIGNMENT\n"
 "	CHECK_STRUCT_ALIGNMENT(PBRMaterialTextureAttribs);\n"

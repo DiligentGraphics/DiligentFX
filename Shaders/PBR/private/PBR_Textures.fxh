@@ -85,32 +85,9 @@ float2 SelectUV(VSOutput VSOut, float Selector)
 #endif
 }
 
-float2 ScaleAndRotateUV(float2 UV, PBRMaterialTextureAttribs TexAttribs)
-{
-    return mul(UV, float2x2(TexAttribs.UVScaleAndRotation.xy, TexAttribs.UVScaleAndRotation.zw));
-}
-
 float2 TransformUV(float2 UV, PBRMaterialTextureAttribs TexAttribs)
 {
-    return ScaleAndRotateUV(UV, TexAttribs) + float2(TexAttribs.UBias, TexAttribs.VBias);
-}
-
-float4 GetAtlasUVRegion(PBRMaterialTextureAttribs TexAttribs)
-{
-#if ENABLE_TEXCOORD_TRANSFORM
-    // Note: if rotation is not a multiple of 90 degrees, the UV region will not be tight.
-    //       To handle this case precisely, we will need to store texture transform and atlas
-    //       scale and bias separately, which will require additional 16 bytes per texture.
-    float2 UV00 = ScaleAndRotateUV(float2(0.0, 0.0), TexAttribs);
-    float2 UV10 = ScaleAndRotateUV(float2(1.0, 0.0), TexAttribs);
-    float2 UV01 = ScaleAndRotateUV(float2(0.0, 1.0), TexAttribs);
-    float2 UV11 = ScaleAndRotateUV(float2(1.0, 1.0), TexAttribs);
-    float2 UVMin = min(min(UV00, UV10), min(UV01, UV11));
-    float2 UVMax = max(max(UV00, UV10), max(UV01, UV11));
-    return float4(UVMax - UVMin, TexAttribs.UBias + UVMin.x, TexAttribs.VBias + UVMin.y);
-#else
-    return float4(TexAttribs.UVScaleAndRotation.x, TexAttribs.UVScaleAndRotation.w, TexAttribs.UBias, TexAttribs.VBias);
-#endif
+    return mul(UV, float2x2(TexAttribs.UVScaleAndRotation.xy, TexAttribs.UVScaleAndRotation.zw)) + float2(TexAttribs.UBias, TexAttribs.VBias);
 }
 
 float4 SampleTexture(Texture2DArray            Tex,
@@ -122,6 +99,12 @@ float4 SampleTexture(Texture2DArray            Tex,
 #   if USE_TEXCOORD0 || USE_TEXCOORD1
     {
         float2 UV = SelectUV(VSOut, TexAttribs.UVSelector);
+#       if ENABLE_TEXCOORD_TRANSFORM
+        {
+            UV = TransformUV(UV, TexAttribs);
+        }
+#       endif
+
 #       if USE_TEXTURE_ATLAS
         {
             if (TexAttribs.UVSelector < 0.0)
@@ -131,12 +114,12 @@ float4 SampleTexture(Texture2DArray            Tex,
             else
             {
                 SampleTextureAtlasAttribs SampleAttribs;
-                SampleAttribs.f2UV                   = TransformUV(frac(UV), TexAttribs);
-                SampleAttribs.f2SmoothUV             = ScaleAndRotateUV(UV, TexAttribs);
-                SampleAttribs.f2dSmoothUV_dx         = ScaleAndRotateUV(ddx(UV), TexAttribs);
-                SampleAttribs.f2dSmoothUV_dy         = ScaleAndRotateUV(ddy(UV), TexAttribs);
+                SampleAttribs.f2UV                   = frac(UV) * TexAttribs.AtlasUVScaleAndBias.xy + TexAttribs.AtlasUVScaleAndBias.zw;
+                SampleAttribs.f2SmoothUV             = UV      * TexAttribs.AtlasUVScaleAndBias.xy;
+                SampleAttribs.f2dSmoothUV_dx         = ddx(UV) * TexAttribs.AtlasUVScaleAndBias.xy;
+                SampleAttribs.f2dSmoothUV_dy         = ddy(UV) * TexAttribs.AtlasUVScaleAndBias.xy;
                 SampleAttribs.fSlice                 = TexAttribs.TextureSlice;
-                SampleAttribs.f4UVRegion             = GetAtlasUVRegion(TexAttribs);
+                SampleAttribs.f4UVRegion             = TexAttribs.AtlasUVScaleAndBias;
                 SampleAttribs.fSmallestValidLevelDim = 4.0;
                 SampleAttribs.IsNonFilterable        = false;
                 SampleAttribs.fMaxAnisotropy         = 1.0; // Only used on GLES
@@ -145,11 +128,6 @@ float4 SampleTexture(Texture2DArray            Tex,
         }
 #       else
         {
-#           if ENABLE_TEXCOORD_TRANSFORM
-            {
-                UV = TransformUV(UV, TexAttribs);
-            }
-#           endif
             return Tex.Sample(Tex_sampler, float3(UV, TexAttribs.TextureSlice));
         }
 #       endif
@@ -185,9 +163,9 @@ float4 GetBaseColor(VSOutput              VSOut,
     return BaseColor * Material.Basic.BaseColorFactor;
 }
 
-float3 GetMicroNormal(VSOutput              VSOut,
-                      PBRMaterialShaderInfo Material,
+float3 GetMicroNormal(PBRMaterialShaderInfo Material,
                       float2                NormalMapUV,
+                      float2                SmoothNormalMapUV,
                       float2                dNormalMapUV_dx,
                       float2                dNormalMapUV_dy)
 {
@@ -202,11 +180,11 @@ float3 GetMicroNormal(VSOutput              VSOut,
             {
                 SampleTextureAtlasAttribs SampleAttribs;
                 SampleAttribs.f2UV                   = NormalMapUV;
-                SampleAttribs.f2SmoothUV             = ScaleAndRotateUV(SelectUV(VSOut, TexAttribs.UVSelector), TexAttribs);
+                SampleAttribs.f2SmoothUV             = SmoothNormalMapUV;
                 SampleAttribs.f2dSmoothUV_dx         = dNormalMapUV_dx;
                 SampleAttribs.f2dSmoothUV_dy         = dNormalMapUV_dy;
                 SampleAttribs.fSlice                 = TexAttribs.TextureSlice;
-                SampleAttribs.f4UVRegion             = GetAtlasUVRegion(TexAttribs);
+                SampleAttribs.f4UVRegion             = TexAttribs.AtlasUVScaleAndBias;
                 SampleAttribs.fSmallestValidLevelDim = 4.0;
                 SampleAttribs.IsNonFilterable        = false;
                 SampleAttribs.fMaxAnisotropy         = 1.0; // Only used on GLES

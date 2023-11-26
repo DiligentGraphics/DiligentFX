@@ -103,6 +103,7 @@ struct PBRMaterialTextureAttribs
     float VBias;
 
     float4 UVScaleAndRotation;
+    float4 AtlasUVScaleAndBias;
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
 	CHECK_STRUCT_ALIGNMENT(PBRMaterialTextureAttribs);

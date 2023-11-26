@@ -48,18 +48,23 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
 
     PBRMaterialTextureAttribs NormalTexAttribs = g_Primitive.Material.Textures[NormalTextureAttribId];
 
-    float2 NormalMapUV  = SelectUV(VSOut, NormalTexAttribs.UVSelector);
+    float2 NormalMapUV = SelectUV(VSOut, NormalTexAttribs.UVSelector);
 
     // We have to compute gradients in uniform flow control to avoid issues with perturbed normal
     float3 dWorldPos_dx = ddx(VSOut.WorldPos);
     float3 dWorldPos_dy = ddy(VSOut.WorldPos);
+#if ENABLE_TEXCOORD_TRANSFORM
+    NormalMapUV = TransformUV(NormalMapUV, NormalTexAttribs);
+#endif
+    float2 SmoothNormalMapUV = NormalMapUV;
     float2 dNormalMapUV_dx = ddx(NormalMapUV);
     float2 dNormalMapUV_dy = ddy(NormalMapUV);
-#if USE_TEXTURE_ATLAS || ENABLE_TEXCOORD_TRANSFORM
+#if USE_TEXTURE_ATLAS
     {
-        NormalMapUV     = TransformUV(frac(NormalMapUV), NormalTexAttribs);
-        dNormalMapUV_dx = ScaleAndRotateUV(dNormalMapUV_dx, NormalTexAttribs);
-        dNormalMapUV_dy = ScaleAndRotateUV(dNormalMapUV_dy, NormalTexAttribs);
+        NormalMapUV = frac(NormalMapUV) * NormalTexAttribs.AtlasUVScaleAndBias.xy + NormalTexAttribs.AtlasUVScaleAndBias.zw;
+        SmoothNormalMapUV *= NormalTexAttribs.AtlasUVScaleAndBias.xy;
+        dNormalMapUV_dx   *= NormalTexAttribs.AtlasUVScaleAndBias.xy;
+        dNormalMapUV_dy   *= NormalTexAttribs.AtlasUVScaleAndBias.xy;
     }
 #endif
 
@@ -69,7 +74,7 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
         discard;
     }
 
-    float3 TSNormal     = GetMicroNormal(VSOut, g_Primitive.Material, NormalMapUV, dNormalMapUV_dx, dNormalMapUV_dy);
+    float3 TSNormal     = GetMicroNormal(g_Primitive.Material, NormalMapUV, SmoothNormalMapUV, dNormalMapUV_dx, dNormalMapUV_dy);
     float  Occlusion    = GetOcclusion(VSOut, g_Primitive.Material);
     float3 Emissive     = GetEmissive(VSOut, g_Primitive.Material);
     float4 PhysicalDesc = GetPhysicalDesc(VSOut, g_Primitive.Material);

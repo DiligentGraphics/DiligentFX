@@ -131,30 +131,26 @@ void HnMaterial::Sync(pxr::HdSceneDelegate* SceneDelegate,
 
 void HnMaterial::ProcessMaterialNetwork()
 {
-    m_BasicShaderAttribs.EmissiveFactor = float4{1, 1, 1, 1};
-
-    auto SetFallbackValue = [this](const pxr::TfToken& Name, auto SetValue) {
-        if (m_Textures.find(Name) != m_Textures.end())
-            return;
-
-        if (const HnMaterialParameter* Param = m_Network.GetParameter(HnMaterialParameter::ParamType::Fallback, Name))
-        {
-            SetValue(Param->FallbackValue);
-        }
-    };
-
-    SetFallbackValue(HnTokens->diffuseColor, [this](const pxr::VtValue& Val) {
-        m_BasicShaderAttribs.BaseColorFactor = float4{float3::MakeVector(Val.Get<pxr::GfVec3f>().data()), 1};
-    });
-    SetFallbackValue(HnTokens->metallic, [this](const pxr::VtValue& Val) {
-        m_BasicShaderAttribs.MetallicFactor = Val.Get<float>();
-    });
-    SetFallbackValue(HnTokens->roughness, [this](const pxr::VtValue& Val) {
-        m_BasicShaderAttribs.RoughnessFactor = Val.Get<float>();
-    });
-    SetFallbackValue(HnTokens->occlusion, [this](const pxr::VtValue& Val) {
-        m_BasicShaderAttribs.OcclusionFactor = Val.Get<float>();
-    });
+    if (const HnMaterialParameter* Param = m_Network.GetParameter(HnMaterialParameter::ParamType::Fallback, HnTokens->diffuseColor))
+    {
+        m_BasicShaderAttribs.BaseColorFactor = float4{float3::MakeVector(Param->FallbackValue.Get<pxr::GfVec3f>().data()), 1};
+    }
+    if (const HnMaterialParameter* Param = m_Network.GetParameter(HnMaterialParameter::ParamType::Fallback, HnTokens->metallic))
+    {
+        m_BasicShaderAttribs.MetallicFactor = Param->FallbackValue.Get<float>();
+    }
+    if (const HnMaterialParameter* Param = m_Network.GetParameter(HnMaterialParameter::ParamType::Fallback, HnTokens->roughness))
+    {
+        m_BasicShaderAttribs.RoughnessFactor = Param->FallbackValue.Get<float>();
+    }
+    if (const HnMaterialParameter* Param = m_Network.GetParameter(HnMaterialParameter::ParamType::Fallback, HnTokens->occlusion))
+    {
+        m_BasicShaderAttribs.OcclusionFactor = Param->FallbackValue.Get<float>();
+    }
+    if (const HnMaterialParameter* Param = m_Network.GetParameter(HnMaterialParameter::ParamType::Fallback, HnTokens->emissiveColor))
+    {
+        m_BasicShaderAttribs.EmissiveFactor = float4{float3::MakeVector(Param->FallbackValue.Get<pxr::GfVec3f>().data()), 1};
+    }
 
     m_BasicShaderAttribs.AlphaMode = MaterialTagToPbrAlphaMode(m_Network.GetTag());
 
@@ -178,16 +174,15 @@ void HnMaterial::InitTextureAttribs(HnTextureRegistry& TexRegistry, const USD_Re
             static_cast<float>(coord_it->second) :
             0;
 
-        float2x2 UVScaleAndRotation = float2x2::Identity();
-        float2   UVOffset           = float2{0, 0};
+        HLSL::PBRMaterialTextureAttribs& TexAttribs{m_ShaderTextureAttribs[Idx]};
 
         auto tex_it = m_Textures.find(Name);
         if (tex_it != m_Textures.end())
         {
             if (const HnMaterialParameter* Param = m_Network.GetParameter(HnMaterialParameter::ParamType::Transform2d, Name))
             {
-                UVScaleAndRotation = float2x2::Scale(Param->Transform2d.Scale[0], Param->Transform2d.Scale[1]);
-                float Rotation     = Param->Transform2d.Rotation;
+                float2x2 UVScaleAndRotation = float2x2::Scale(Param->Transform2d.Scale[0], Param->Transform2d.Scale[1]);
+                float    Rotation           = Param->Transform2d.Rotation;
                 if (Rotation != 0)
                 {
                     if (UsdRenderer.GetDevice()->GetDeviceInfo().IsGLDevice())
@@ -196,7 +191,10 @@ void HnMaterial::InitTextureAttribs(HnTextureRegistry& TexRegistry, const USD_Re
                     UVScaleAndRotation *= float2x2::Rotation(-Rotation);
                 }
 
-                UVOffset = {Param->Transform2d.Translation[0], Param->Transform2d.Translation[1]};
+                TexAttribs.UBias = Param->Transform2d.Translation[0];
+                TexAttribs.VBias = Param->Transform2d.Translation[1];
+
+                TexAttribs.UVScaleAndRotation = UVScaleAndRotation.ToVec4<>();
             }
         }
         else
@@ -204,25 +202,18 @@ void HnMaterial::InitTextureAttribs(HnTextureRegistry& TexRegistry, const USD_Re
             tex_it = m_Textures.emplace(Name, GetDefaultTexture(TexRegistry, Name)).first;
         }
 
-        HLSL::PBRMaterialTextureAttribs& TexAttribs{m_ShaderTextureAttribs[Idx]};
         if (ITextureAtlasSuballocation* pAtlasSuballocation = tex_it->second->pAtlasSuballocation)
         {
-            TexAttribs.TextureSlice = static_cast<float>(pAtlasSuballocation->GetSlice());
-
-            const float4& UVScaleBias{pAtlasSuballocation->GetUVScaleBias()};
-            UVScaleAndRotation *= float2x2::Scale(UVScaleBias.x, UVScaleBias.y);
-            UVOffset.x = UVOffset.x * UVScaleBias.x + UVScaleBias.z;
-            UVOffset.y = UVOffset.y * UVScaleBias.y + UVScaleBias.w;
+            TexAttribs.TextureSlice        = static_cast<float>(pAtlasSuballocation->GetSlice());
+            TexAttribs.AtlasUVScaleAndBias = pAtlasSuballocation->GetUVScaleBias();
 
             m_UsesAtlas = true;
         }
         else
         {
-            TexAttribs.TextureSlice = 0;
+            TexAttribs.TextureSlice        = 0;
+            TexAttribs.AtlasUVScaleAndBias = float4{1, 1, 0, 0};
         }
-        TexAttribs.UVScaleAndRotation = UVScaleAndRotation.ToVec4<>();
-        TexAttribs.UBias              = UVOffset.x;
-        TexAttribs.VBias              = UVOffset.y;
     };
 
     const auto& TexAttribIndices = UsdRenderer.GetShaderTextureAttributeIndices();
