@@ -44,6 +44,16 @@ namespace Diligent
 namespace USD
 {
 
+// clang-format off
+TF_DEFINE_PRIVATE_TOKENS(
+    HnMaterialPrivateTokens,
+    (whiteRgba8)
+    (blackRgba8)
+    (whiteR8)
+);
+// clang-format on
+
+
 HnMaterial* HnMaterial::Create(const pxr::SdfPath& id)
 {
     return new HnMaterial{id};
@@ -227,13 +237,6 @@ void HnMaterial::InitTextureAttribs(HnTextureRegistry& TexRegistry, const USD_Re
     // clang-format on
 }
 
-// Creates default image for the given texture:
-// - diffuseColor: RGBA8 white texture
-// - metallic:     R8 white texture
-// - roughness:    R8 white texture
-// - normal:       RGBA8 normal map filled with (128, 128, 255, 0)
-// - occlusion:    RGBA8 white texture
-// - emissiveColor RGBA8 black texture
 static RefCntAutoPtr<Image> CreateDefaultImage(const pxr::TfToken& Name, Uint32 Dimension = 64)
 {
     ImageDesc ImgDesc;
@@ -252,15 +255,15 @@ static RefCntAutoPtr<Image> CreateDefaultImage(const pxr::TfToken& Name, Uint32 
         }
     };
 
-    if (Name == HnTokens->diffuseColor)
+    if (Name == HnMaterialPrivateTokens->whiteRgba8)
     {
         InitData(4, 255);
     }
-    else if (Name == HnTokens->metallic)
+    else if (Name == HnMaterialPrivateTokens->blackRgba8)
     {
-        InitData(1, 255);
+        InitData(4, 0);
     }
-    else if (Name == HnTokens->roughness)
+    else if (Name == HnMaterialPrivateTokens->whiteR8)
     {
         InitData(1, 255);
     }
@@ -277,14 +280,6 @@ static RefCntAutoPtr<Image> CreateDefaultImage(const pxr::TfToken& Name, Uint32 
             pDst[i + 3] = 0;
         }
     }
-    else if (Name == HnTokens->occlusion)
-    {
-        InitData(4, 255);
-    }
-    else if (Name == HnTokens->emissiveColor)
-    {
-        InitData(4, 0);
-    }
     else
     {
         UNEXPECTED("Unknown texture name '", Name, "'");
@@ -299,12 +294,34 @@ static RefCntAutoPtr<Image> CreateDefaultImage(const pxr::TfToken& Name, Uint32 
 
 static pxr::TfToken GetDefaultTexturePath(const pxr::TfToken& Name)
 {
-    return pxr::TfToken{std::string{"$Default "} + Name.GetString()};
+    return pxr::TfToken{std::string{"$Default-"} + Name.GetString()};
 }
 
 HnTextureRegistry::TextureHandleSharedPtr HnMaterial::GetDefaultTexture(HnTextureRegistry& TexRegistry, const pxr::TfToken& Name)
 {
-    const pxr::TfToken DefaultTexPath = GetDefaultTexturePath(Name);
+    pxr::TfToken DefaultTexName;
+    if (Name == HnTokens->diffuseColor ||
+        Name == HnTokens->occlusion ||
+        Name == HnTokens->emissiveColor)
+    {
+        DefaultTexName = HnMaterialPrivateTokens->whiteRgba8;
+    }
+    else if (Name == HnTokens->normal)
+    {
+        DefaultTexName = HnTokens->normal;
+    }
+    else if (Name == HnTokens->metallic ||
+             Name == HnTokens->roughness)
+    {
+        DefaultTexName = HnMaterialPrivateTokens->whiteR8;
+    }
+    else
+    {
+        UNEXPECTED("Unknown texture name '", Name, "'");
+        DefaultTexName = HnMaterialPrivateTokens->blackRgba8;
+    }
+
+    const pxr::TfToken DefaultTexPath = GetDefaultTexturePath(DefaultTexName);
 
     pxr::HdSamplerParameters SamplerParams;
     SamplerParams.wrapS     = pxr::HdWrapRepeat;
@@ -314,7 +331,7 @@ HnTextureRegistry::TextureHandleSharedPtr HnMaterial::GetDefaultTexture(HnTextur
     SamplerParams.magFilter = pxr::HdMagFilterLinear;
     return TexRegistry.Allocate(DefaultTexPath, SamplerParams,
                                 [&]() {
-                                    RefCntAutoPtr<Image> pImage = CreateDefaultImage(Name);
+                                    RefCntAutoPtr<Image> pImage = CreateDefaultImage(DefaultTexName);
 
                                     TextureLoadInfo               LoadInfo{Name.GetText()};
                                     RefCntAutoPtr<ITextureLoader> pLoader;
