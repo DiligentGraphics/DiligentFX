@@ -1068,6 +1068,10 @@ IPipelineState* PBR_Renderer::GetPSO(PsoHashMapType&             PsoHashMap,
     {
         DEV_CHECK_ERR((Flags & (PSO_FLAG_USE_METALLIC_MAP | PSO_FLAG_USE_ROUGHNESS_MAP)) == 0, "Separate metallic and roughness maps are not enaled");
     }
+    if ((Flags & (PSO_FLAG_USE_TEXCOORD0 | PSO_FLAG_USE_TEXCOORD1)) == 0)
+    {
+        Flags &= ~PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM;
+    }
 
     const PSOKey UpdatedKey{Flags, Key.GetAlphaMode(), Key.IsDoubleSided(), Key.GetDebugView()};
 

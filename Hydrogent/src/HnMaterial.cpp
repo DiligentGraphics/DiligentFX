@@ -183,8 +183,28 @@ void HnMaterial::InitTextureAttribs(HnTextureRegistry& TexRegistry, const USD_Re
             static_cast<float>(coord_it->second) :
             0;
 
+        float2x2 UVScaleAndRotation = float2x2::Identity();
+        float2   UVOffset           = float2{0, 0};
+
         auto tex_it = m_Textures.find(Name);
-        if (tex_it == m_Textures.end())
+        if (tex_it != m_Textures.end())
+        {
+            if (const HnMaterialParameter* Param = m_Network.GetParameter(HnMaterialParameter::ParamType::Texture, Name))
+            {
+                UVScaleAndRotation = float2x2::Scale(Param->Transform2d.Scale[0], Param->Transform2d.Scale[1]);
+                float Rotation     = Param->Transform2d.Rotation;
+                if (Rotation != 0)
+                {
+                    if (UsdRenderer.GetDevice()->GetDeviceInfo().IsGLDevice())
+                        Rotation = -Rotation;
+
+                    UVScaleAndRotation *= float2x2::Rotation(-Rotation);
+                }
+
+                UVOffset = {Param->Transform2d.Translation[0], Param->Transform2d.Translation[1]};
+            }
+        }
+        else
         {
             tex_it = m_Textures.emplace(Name, GetDefaultTexture(TexRegistry, Name)).first;
         }
@@ -195,19 +215,19 @@ void HnMaterial::InitTextureAttribs(HnTextureRegistry& TexRegistry, const USD_Re
             TexAttribs.TextureSlice = static_cast<float>(pAtlasSuballocation->GetSlice());
 
             const float4& UVScaleBias{pAtlasSuballocation->GetUVScaleBias()};
-            TexAttribs.UVScaleAndRotation = float4{UVScaleBias.x, 0, 0, UVScaleBias.y};
-            TexAttribs.UBias              = UVScaleBias.z;
-            TexAttribs.VBias              = UVScaleBias.w;
+            UVScaleAndRotation *= float2x2::Scale(UVScaleBias.x, UVScaleBias.y);
+            UVOffset.x = UVOffset.x * UVScaleBias.x + UVScaleBias.z;
+            UVOffset.y = UVOffset.y * UVScaleBias.y + UVScaleBias.w;
 
             m_UsesAtlas = true;
         }
         else
         {
-            TexAttribs.TextureSlice       = 0;
-            TexAttribs.UVScaleAndRotation = float4{1, 0, 0, 1};
-            TexAttribs.UBias              = 0;
-            TexAttribs.VBias              = 0;
+            TexAttribs.TextureSlice = 0;
         }
+        TexAttribs.UVScaleAndRotation = UVScaleAndRotation.ToVec4<>();
+        TexAttribs.UBias              = UVOffset.x;
+        TexAttribs.VBias              = UVOffset.y;
     };
 
     const auto& TexAttribIndices = UsdRenderer.GetShaderTextureAttributeIndices();
@@ -332,34 +352,30 @@ HnMaterial::TexNameToCoordSetMapType HnMaterial::AllocateTextures(HnTextureRegis
             m_Textures[TexDescriptor.Name] = pTex;
             // Find texture coordinate
             size_t TexCoordIdx = ~size_t{0};
-            for (const HnMaterialParameter& Param : m_Network.GetParameters())
+            if (const HnMaterialParameter* Param = m_Network.GetParameter(HnMaterialParameter::ParamType::Texture, TexDescriptor.Name))
             {
-                if (Param.Type == HnMaterialParameter::ParamType::Texture && Param.Name == TexDescriptor.Name)
+                if (!Param->SamplerCoords.empty())
                 {
-                    if (!Param.SamplerCoords.empty())
-                    {
-                        if (Param.SamplerCoords.size() > 1)
-                            LOG_WARNING_MESSAGE("Texture '", TexDescriptor.Name, "' has ", Param.SamplerCoords.size(), " texture coordinates. Only the first set will be used");
-                        const pxr::TfToken& TexCoordName = Param.SamplerCoords[0];
+                    if (Param->SamplerCoords.size() > 1)
+                        LOG_WARNING_MESSAGE("Texture '", TexDescriptor.Name, "' has ", Param->SamplerCoords.size(), " texture coordinates. Only the first set will be used");
+                    const pxr::TfToken& TexCoordName = Param->SamplerCoords[0];
 
-                        // Check if the texture coordinate set primvar (e.g. "st0") has already been allocated
-                        auto it_inserted = TexCoordPrimvarMapping.emplace(TexCoordName, m_TexCoords.size());
-                        TexCoordIdx      = it_inserted.first->second;
-                        if (it_inserted.second)
-                        {
-                            // Add new texture coordinate set
-                            VERIFY_EXPR(TexCoordIdx == m_TexCoords.size());
-                            m_TexCoords.resize(TexCoordIdx + 1);
-                            m_TexCoords[TexCoordIdx] = {TexCoordName};
-                        }
-
-                        TexNameToCoordSetMap[TexDescriptor.Name] = TexCoordIdx;
-                    }
-                    else
+                    // Check if the texture coordinate set primvar (e.g. "st0") has already been allocated
+                    auto it_inserted = TexCoordPrimvarMapping.emplace(TexCoordName, m_TexCoords.size());
+                    TexCoordIdx      = it_inserted.first->second;
+                    if (it_inserted.second)
                     {
-                        LOG_ERROR_MESSAGE("Texture '", TexDescriptor.Name, "' in material '", GetId(), "' has no texture coordinates");
+                        // Add new texture coordinate set
+                        VERIFY_EXPR(TexCoordIdx == m_TexCoords.size());
+                        m_TexCoords.resize(TexCoordIdx + 1);
+                        m_TexCoords[TexCoordIdx] = {TexCoordName};
                     }
-                    break;
+
+                    TexNameToCoordSetMap[TexDescriptor.Name] = TexCoordIdx;
+                }
+                else
+                {
+                    LOG_ERROR_MESSAGE("Texture '", TexDescriptor.Name, "' in material '", GetId(), "' has no texture coordinates");
                 }
             }
 

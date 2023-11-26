@@ -221,6 +221,7 @@ public:
     ~PBR_Renderer();
 
     // clang-format off
+    IRenderDevice* GetDevice() const               { return m_Device; }
     ITextureView* GetIrradianceCubeSRV() const     { return m_pIrradianceCubeSRV; }
     ITextureView* GetPrefilteredEnvMapSRV() const  { return m_pPrefilteredEnvMapSRV; }
     ITextureView* GetBRDFLUTSRV() const            { return m_pBRDF_LUT_SRV; }

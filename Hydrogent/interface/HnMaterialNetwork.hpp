@@ -27,6 +27,7 @@
 #pragma once
 
 #include "pxr/base/vt/dictionary.h"
+#include "pxr/base/gf/vec2f.h"
 #include "pxr/usd/sdf/path.h"
 #include "pxr/imaging/hd/material.h"
 
@@ -121,6 +122,14 @@ struct HnMaterialParameter final
     std::string        Swizzle;
     bool               IsPremultiplied = false;
 
+    struct TextureTransform2d
+    {
+        pxr::GfVec2f Scale{1, 1};
+        pxr::GfVec2f Translation{0, 0};
+        float        Rotation{0};
+    };
+    TextureTransform2d Transform2d;
+
     // If paramType is ParamTypeTexture, this indicates both if the textures
     // should be bound as an array of textures and the size of the array. If
     // arrayOfTexturesSize is 0, then do not bind as an array of textures, but
@@ -174,6 +183,8 @@ public:
     const pxr::VtDictionary& GetMetadata() const { return m_Metadata; }
     const auto&              GetParameters() const { return m_Parameters; }
     const auto&              GetTextures() const { return m_Textures; }
+
+    const HnMaterialParameter* GetParameter(HnMaterialParameter::ParamType Type, const pxr::TfToken& Name) const;
 
     float GetOpacity() const { return m_Opacity; }
     float GetOpacityThreshold() const { return m_OpacityThreshold; }

@@ -695,10 +695,25 @@ static std::vector<HnMaterialParameter> GetTransform2dParams(
         Param.Name          = TfToken{ParamName.GetString() + "_" + Name.GetString()};
         Param.FallbackValue = GetParamFallbackValue(Network, Node, Name);
         Params.push_back(std::move(Param));
+        return Param.FallbackValue;
     };
-    AddFallbackParameter(HnTokens->rotation);
-    AddFallbackParameter(HnTokens->scale);
-    AddFallbackParameter(HnTokens->translation);
+    pxr::VtValue RotationVal = AddFallbackParameter(HnTokens->rotation);
+    if (RotationVal.IsHolding<float>())
+    {
+        Params[0].Transform2d.Rotation = RotationVal.UncheckedGet<float>();
+    }
+
+    pxr::VtValue ScaleVal = AddFallbackParameter(HnTokens->scale);
+    if (ScaleVal.IsHolding<pxr::GfVec2f>())
+    {
+        Params[0].Transform2d.Scale = ScaleVal.UncheckedGet<pxr::GfVec2f>();
+    }
+
+    pxr::VtValue TranslationVal = AddFallbackParameter(HnTokens->translation);
+    if (TranslationVal.IsHolding<pxr::GfVec2f>())
+    {
+        Params[0].Transform2d.Translation = TranslationVal.UncheckedGet<pxr::GfVec2f>();
+    }
 
     return Params;
 }
@@ -1097,6 +1112,7 @@ void HnMaterialNetwork::AddTextureParam(const pxr::HdMaterialNetwork2& Network,
                         VERIFY_EXPR(Tr2DParam.Type == HnMaterialParameter::ParamType::Transform2d);
                         // The texure's sampler coords should come from the output of the transform2d
                         TexParam.SamplerCoords = Tr2DParam.SamplerCoords;
+                        TexParam.Transform2d   = Tr2DParam.Transform2d;
                     }
                     else
                     {
@@ -1239,6 +1255,19 @@ void HnMaterialNetwork::AddTransform2dParam(const pxr::HdMaterialNetwork2& Netwo
     std::vector<HnMaterialParameter> Transform2dParams =
         GetTransform2dParams(Network, Node, NodePath, pxr::TfToken{ParamName.GetString() + "_transform2d"});
     m_Parameters.insert(m_Parameters.end(), Transform2dParams.begin(), Transform2dParams.end());
+}
+
+const HnMaterialParameter* HnMaterialNetwork::GetParameter(HnMaterialParameter::ParamType Type, const pxr::TfToken& Name) const
+{
+    for (const auto& Param : m_Parameters)
+    {
+        if (Param.Type == Type && Param.Name == Name)
+        {
+            return &Param;
+        }
+    }
+
+    return nullptr;
 }
 
 } // namespace USD
