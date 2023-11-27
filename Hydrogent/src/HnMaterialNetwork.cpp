@@ -1128,24 +1128,22 @@ void HnMaterialNetwork::AddTextureParam(const pxr::HdMaterialNetwork2& Network,
     }
 
 
-    // Texture scale
+    // Input scale (e.g., for a normal map, this can be (2, 2, 2, 2))
     {
         HnMaterialParameter TexScaleParam;
         TexScaleParam.Type          = HnMaterialParameter::ParamType::Fallback;
         TexScaleParam.Name          = TfToken{ParamName.GetString() + "_" + HnTokens->scale.GetString()};
         TexScaleParam.FallbackValue = pxr::VtValue{ResolveParameter(Node, SdrNode, HnTokens->scale, pxr::GfVec4f{1.0f})};
-        TexParam.Transform2d.Scale.Set(TexScaleParam.FallbackValue.Get<pxr::GfVec4f>().data());
         m_Parameters.push_back(std::move(TexScaleParam));
     }
 
 
-    // Texture bias
+    // Input bias (e.g., for a normal map, this can be (-1, -1, -1, -1))
     {
         HnMaterialParameter TexBiasParam;
         TexBiasParam.Type          = HnMaterialParameter::ParamType::Fallback;
         TexBiasParam.Name          = TfToken{ParamName.GetString() + "_" + HnTokens->bias.GetString()};
         TexBiasParam.FallbackValue = pxr::VtValue{ResolveParameter(Node, SdrNode, HnTokens->bias, pxr::GfVec4f{0.0f})};
-        TexParam.Transform2d.Translation.Set(TexBiasParam.FallbackValue.Get<pxr::GfVec4f>().data());
         m_Parameters.push_back(std::move(TexBiasParam));
     }
 

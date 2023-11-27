@@ -186,23 +186,19 @@ void HnMaterial::InitTextureAttribs(HnTextureRegistry& TexRegistry, const USD_Re
 
         HLSL::PBRMaterialTextureAttribs& TexAttribs{m_ShaderTextureAttribs[Idx]};
 
+        TexAttribs.UBias              = 0;
+        TexAttribs.VBias              = 0;
+        TexAttribs.UVScaleAndRotation = float2x2::Identity().ToVec4<>();
+
         auto tex_it = m_Textures.find(Name);
         if (tex_it != m_Textures.end())
         {
-            // First check if there is Transform2d parameter
-            const HnMaterialParameter* Param = m_Network.GetParameter(HnMaterialParameter::ParamType::Transform2d, Name);
-            // If there is no Transform2d parameter, use Texture parameter
-            if (Param == nullptr)
-                Param = m_Network.GetParameter(HnMaterialParameter::ParamType::Texture, Name);
-            if (Param != nullptr)
+            if (const HnMaterialParameter* Param = m_Network.GetParameter(HnMaterialParameter::ParamType::Transform2d, Name))
             {
                 float2x2 UVScaleAndRotation = float2x2::Scale(Param->Transform2d.Scale[0], Param->Transform2d.Scale[1]);
                 float    Rotation           = Param->Transform2d.Rotation;
                 if (Rotation != 0)
                 {
-                    if (UsdRenderer.GetDevice()->GetDeviceInfo().IsGLDevice())
-                        Rotation = -Rotation;
-
                     UVScaleAndRotation *= float2x2::Rotation(-Rotation);
                 }
 

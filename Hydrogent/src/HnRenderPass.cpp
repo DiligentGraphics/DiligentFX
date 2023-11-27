@@ -482,9 +482,9 @@ void HnRenderPass::UpdateDrawItemGPUResources(HnDrawItem& DrawItem, RenderState&
             if (Geo.Normals != nullptr && (m_Params.UsdPsoFlags & USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_OUTPUT) != 0)
                 PSOFlags |= PBR_Renderer::PSO_FLAG_USE_VERTEX_NORMALS;
             if (Geo.TexCoords[0] != nullptr)
-                PSOFlags |= PBR_Renderer::PSO_FLAG_USE_TEXCOORD0;
+                PSOFlags |= PBR_Renderer::PSO_FLAG_USE_TEXCOORD0 | PBR_Renderer::PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM;
             if (Geo.TexCoords[1] != nullptr)
-                PSOFlags |= PBR_Renderer::PSO_FLAG_USE_TEXCOORD1;
+                PSOFlags |= PBR_Renderer::PSO_FLAG_USE_TEXCOORD1 | PBR_Renderer::PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM;
 
             PSOFlags |= PBR_Renderer::PSO_FLAG_USE_COLOR_MAP;
             if (m_Params.UsdPsoFlags & USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_OUTPUT)
