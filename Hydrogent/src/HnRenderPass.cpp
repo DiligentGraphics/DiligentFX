@@ -416,27 +416,25 @@ void HnRenderPass::UpdateDrawItemGPUResources(HnDrawItem& DrawItem, RenderState&
 {
     bool UpdateGeometry = !DrawItem.GetGeometryData() || (DirtyFlags & DRAW_ITEM_GPU_RES_DIRTY_FLAG_GEOMETRY) != 0;
     bool UpdatePSO      = DrawItem.GetPSO() == nullptr || (DirtyFlags & DRAW_ITEM_GPU_RES_DIRTY_FLAG_PSO) != 0;
-    if (UpdateGeometry)
+
+    const HnMesh&       Mesh               = DrawItem.GetMesh();
+    const pxr::SdfPath& MaterialId         = Mesh.GetMaterialId();
+    const pxr::HdSprim* pSPrim             = State.RenderIndex.GetSprim(pxr::HdPrimTypeTokens->material, MaterialId);
+    const bool          IsFallbackMaterial = pSPrim == nullptr;
+    if (IsFallbackMaterial)
     {
-        const HnMesh& Mesh = DrawItem.GetMesh();
-
-        bool IsFallbackMaterial = false;
-
-        const pxr::SdfPath& MaterialId = Mesh.GetMaterialId();
-        const pxr::HdSprim* pSPrim     = State.RenderIndex.GetSprim(pxr::HdPrimTypeTokens->material, MaterialId);
+        pSPrim = State.RenderIndex.GetFallbackSprim(pxr::HdPrimTypeTokens->material);
         if (pSPrim == nullptr)
         {
-            pSPrim = State.RenderIndex.GetFallbackSprim(pxr::HdPrimTypeTokens->material);
-            if (pSPrim == nullptr)
-            {
-                UNEXPECTED("Unable to get fallback sprim. This is unexpected as default material is initialized in the render delegate.");
-                return;
-            }
-            IsFallbackMaterial = true;
+            UNEXPECTED("Unable to get fallback sprim. This is unexpected as default material is initialized in the render delegate.");
+            return;
         }
+    }
 
-        const HnMaterial& Material = *static_cast<const HnMaterial*>(pSPrim);
+    const HnMaterial& Material = *static_cast<const HnMaterial*>(pSPrim);
 
+    if (UpdateGeometry)
+    {
         HnDrawItem::GeometryData Geo{Material, IsFallbackMaterial, Mesh.GetVersion()};
 
         // Get vertex buffers
@@ -482,9 +480,21 @@ void HnRenderPass::UpdateDrawItemGPUResources(HnDrawItem& DrawItem, RenderState&
             if (Geo.Normals != nullptr && (m_Params.UsdPsoFlags & USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_OUTPUT) != 0)
                 PSOFlags |= PBR_Renderer::PSO_FLAG_USE_VERTEX_NORMALS;
             if (Geo.TexCoords[0] != nullptr)
-                PSOFlags |= PBR_Renderer::PSO_FLAG_USE_TEXCOORD0 | PBR_Renderer::PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM;
+                PSOFlags |= PBR_Renderer::PSO_FLAG_USE_TEXCOORD0;
             if (Geo.TexCoords[1] != nullptr)
-                PSOFlags |= PBR_Renderer::PSO_FLAG_USE_TEXCOORD1 | PBR_Renderer::PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM;
+                PSOFlags |= PBR_Renderer::PSO_FLAG_USE_TEXCOORD1;
+
+            for (Uint32 i = 0; i < Material.GetNumShaderTextureAttribs(); ++i)
+            {
+                const auto& TexAttrib = Material.GetShaderTextureAttrib(i);
+                if (TexAttrib.UVScaleAndRotation != float4{1, 0, 0, 1} ||
+                    TexAttrib.UBias != 0 ||
+                    TexAttrib.VBias != 0)
+                {
+                    PSOFlags |= PBR_Renderer::PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM;
+                    break;
+                }
+            }
 
             PSOFlags |= PBR_Renderer::PSO_FLAG_USE_COLOR_MAP;
             if (m_Params.UsdPsoFlags & USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_OUTPUT)

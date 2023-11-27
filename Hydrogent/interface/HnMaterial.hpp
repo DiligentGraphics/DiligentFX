@@ -94,7 +94,12 @@ public:
 
     const HLSL::PBRMaterialBasicAttribs&   GetBasicShaderAttribs() const { return m_BasicShaderAttribs; }
     const HLSL::PBRMaterialTextureAttribs* GetShaderTextureAttribs() const { return m_ShaderTextureAttribs.get(); }
-    Uint32                                 GetNumShaderTextureAttribs() const { return m_NumShaderTextureAttribs; }
+    const HLSL::PBRMaterialTextureAttribs& GetShaderTextureAttrib(Uint32 Idx) const
+    {
+        VERIFY_EXPR(Idx < m_NumShaderTextureAttribs);
+        return m_ShaderTextureAttribs[Idx];
+    }
+    Uint32 GetNumShaderTextureAttribs() const { return m_NumShaderTextureAttribs; }
 
     /// Texture coordinate set info
     struct TextureCoordinateSetInfo
