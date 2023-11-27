@@ -87,7 +87,7 @@
 "\n"
 "float2 TransformUV(float2 UV, PBRMaterialTextureAttribs TexAttribs)\n"
 "{\n"
-"    return mul(UV, float2x2(TexAttribs.UVScaleAndRotation.xy, TexAttribs.UVScaleAndRotation.zw)) + float2(TexAttribs.UBias, TexAttribs.VBias);\n"
+"    return mul(UV, MatrixFromRows(TexAttribs.UVScaleAndRotation.xy, TexAttribs.UVScaleAndRotation.zw)) + float2(TexAttribs.UBias, TexAttribs.VBias);\n"
 "}\n"
 "\n"
 "float4 SampleTexture(Texture2DArray            Tex,\n"

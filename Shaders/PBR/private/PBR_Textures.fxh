@@ -87,7 +87,7 @@ float2 SelectUV(VSOutput VSOut, float Selector)
 
 float2 TransformUV(float2 UV, PBRMaterialTextureAttribs TexAttribs)
 {
-    return mul(UV, float2x2(TexAttribs.UVScaleAndRotation.xy, TexAttribs.UVScaleAndRotation.zw)) + float2(TexAttribs.UBias, TexAttribs.VBias);
+    return mul(UV, MatrixFromRows(TexAttribs.UVScaleAndRotation.xy, TexAttribs.UVScaleAndRotation.zw)) + float2(TexAttribs.UBias, TexAttribs.VBias);
 }
 
 float4 SampleTexture(Texture2DArray            Tex,
