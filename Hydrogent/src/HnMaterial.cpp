@@ -145,21 +145,29 @@ void HnMaterial::ProcessMaterialNetwork()
     {
         m_BasicShaderAttribs.BaseColorFactor = float4{float3::MakeVector(Param->FallbackValue.Get<pxr::GfVec3f>().data()), 1};
     }
+
     if (const HnMaterialParameter* Param = m_Network.GetParameter(HnMaterialParameter::ParamType::Fallback, HnTokens->metallic))
     {
         m_BasicShaderAttribs.MetallicFactor = Param->FallbackValue.Get<float>();
     }
+
     if (const HnMaterialParameter* Param = m_Network.GetParameter(HnMaterialParameter::ParamType::Fallback, HnTokens->roughness))
     {
         m_BasicShaderAttribs.RoughnessFactor = Param->FallbackValue.Get<float>();
     }
+
     if (const HnMaterialParameter* Param = m_Network.GetParameter(HnMaterialParameter::ParamType::Fallback, HnTokens->occlusion))
     {
         m_BasicShaderAttribs.OcclusionFactor = Param->FallbackValue.Get<float>();
     }
+
     if (const HnMaterialParameter* Param = m_Network.GetParameter(HnMaterialParameter::ParamType::Fallback, HnTokens->emissiveColor))
     {
         m_BasicShaderAttribs.EmissiveFactor = float4{float3::MakeVector(Param->FallbackValue.Get<pxr::GfVec3f>().data()), 1};
+    }
+    else
+    {
+        m_BasicShaderAttribs.EmissiveFactor = m_Textures.find(HnTokens->emissiveColor) != m_Textures.end() ? float4{1} : float4{0};
     }
 
     m_BasicShaderAttribs.AlphaMode = MaterialTagToPbrAlphaMode(m_Network.GetTag());
