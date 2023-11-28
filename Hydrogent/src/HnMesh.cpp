@@ -31,6 +31,7 @@
 #include "HnRenderDelegate.hpp"
 #include "HnRenderParam.hpp"
 #include "HnRenderPass.hpp"
+#include "HnDrawItem.hpp"
 
 #include "DebugUtilities.hpp"
 #include "GraphicsTypesX.hpp"
@@ -73,23 +74,27 @@ pxr::HdDirtyBits HnMesh::GetInitialDirtyBitsMask() const
     return pxr::HdChangeTracker::AllSceneDirtyBits & ~pxr::HdChangeTracker::Varying;
 }
 
-static pxr::TfToken ComputeMaterialTag(pxr::HdSceneDelegate* Delegate,
-                                       const pxr::SdfPath&   MaterialId)
+static void SetDrawItemMaterial(const pxr::HdRenderIndex& RenderIndex, HnDrawItem& DrawItem, const pxr::SdfPath& MaterialId)
 {
-    if (const HnMaterial* Material = static_cast<const HnMaterial*>(Delegate->GetRenderIndex().GetSprim(pxr::HdPrimTypeTokens->material, MaterialId)))
+    const pxr::HdSprim* pMaterial = RenderIndex.GetSprim(pxr::HdPrimTypeTokens->material, MaterialId);
+    if (pMaterial == nullptr)
     {
-        return Material->GetTag();
+        pMaterial = RenderIndex.GetFallbackSprim(pxr::HdPrimTypeTokens->material);
+        VERIFY(pMaterial != nullptr, "Unable to get fallback material. This is unexpected as default material is initialized in the render delegate.");
     }
-
-    return HnMaterialTagTokens->defaultTag;
+    if (pMaterial != nullptr)
+    {
+        DrawItem.SetMaterial(*static_cast<const HnMaterial*>(pMaterial));
+    }
 }
 
-void HnMesh::UpdateReprMaterialTags(pxr::HdSceneDelegate* SceneDelegate,
-                                    pxr::HdRenderParam*   RenderParam)
+void HnMesh::UpdateReprMaterials(pxr::HdSceneDelegate* SceneDelegate,
+                                 pxr::HdRenderParam*   RenderParam)
 {
-    const pxr::TfToken        MeshMaterialTag = ComputeMaterialTag(SceneDelegate, GetMaterialId());
-    const pxr::HdGeomSubsets& GeomSubsets     = m_Topology.GetGeomSubsets();
-    const size_t              NumGeomSubsets  = GeomSubsets.size();
+    const pxr::HdRenderIndex& RenderIndex = SceneDelegate->GetRenderIndex();
+
+    const pxr::HdGeomSubsets& GeomSubsets    = m_Topology.GetGeomSubsets();
+    const size_t              NumGeomSubsets = GeomSubsets.size();
     for (auto const& token_repr : _reprs)
     {
         const pxr::TfToken&        Token = token_repr.first;
@@ -105,7 +110,7 @@ void HnMesh::UpdateReprMaterialTags(pxr::HdSceneDelegate* SceneDelegate,
 
             {
                 pxr::HdDrawItem* Item = Repr->GetDrawItem(DrawItemIdx++);
-                Item->SetMaterialTag(MeshMaterialTag);
+                SetDrawItemMaterial(RenderIndex, static_cast<HnDrawItem&>(*Item), GetMaterialId());
             }
 
             // Update geom subset draw items if they exist
@@ -115,8 +120,8 @@ void HnMesh::UpdateReprMaterialTags(pxr::HdSceneDelegate* SceneDelegate,
                 {
                     if (pxr::HdDrawItem* Item = Repr->GetDrawItemForGeomSubset(GeomSubsetDescIdx, NumGeomSubsets, i))
                     {
-                        const pxr::SdfPath& MaterialId = GeomSubsets[i].materialId;
-                        Item->SetMaterialTag(ComputeMaterialTag(SceneDelegate, MaterialId));
+                        const pxr::SdfPath& SubsetMaterialId = GeomSubsets[i].materialId;
+                        SetDrawItemMaterial(RenderIndex, static_cast<HnDrawItem&>(*Item), SubsetMaterialId);
                     }
                 }
                 ++GeomSubsetDescIdx;
@@ -134,7 +139,7 @@ void HnMesh::Sync(pxr::HdSceneDelegate* Delegate,
     if (*DirtyBits == pxr::HdChangeTracker::Clean)
         return;
 
-    bool UpdateMaterialTags = false;
+    bool UpdateMaterials = false;
     if (*DirtyBits & pxr::HdChangeTracker::DirtyMaterialId)
     {
         const pxr::SdfPath& MaterialId = Delegate->GetMaterialId(GetId());
@@ -142,11 +147,11 @@ void HnMesh::Sync(pxr::HdSceneDelegate* Delegate,
         {
             SetMaterialId(MaterialId);
         }
-        UpdateMaterialTags = true;
+        UpdateMaterials = true;
     }
     if (*DirtyBits & (pxr::HdChangeTracker::DirtyDisplayStyle | pxr::HdChangeTracker::NewRepr))
     {
-        UpdateMaterialTags = true;
+        UpdateMaterials = true;
     }
 
     const pxr::SdfPath& Id = GetId();
@@ -155,9 +160,9 @@ void HnMesh::Sync(pxr::HdSceneDelegate* Delegate,
         UpdateRepr(*Delegate, RenderParam, *DirtyBits, ReprToken);
     }
 
-    if (UpdateMaterialTags)
+    if (UpdateMaterials)
     {
-        UpdateReprMaterialTags(Delegate, RenderParam);
+        UpdateReprMaterials(Delegate, RenderParam);
     }
 
     ++m_Version;
@@ -176,14 +181,15 @@ pxr::HdDirtyBits HnMesh::_PropagateDirtyBits(pxr::HdDirtyBits bits) const
     return bits;
 }
 
-void HnMesh::AddGeometrySubsetDrawItems(const pxr::HdMeshReprDesc& ReprDesc, size_t NumGeomSubsets, pxr::HdRepr& Repr)
+void HnMesh::AddGeometrySubsetDrawItems(const pxr::HdMeshReprDesc& ReprDesc, pxr::HdRepr& Repr)
 {
     if (ReprDesc.geomStyle == pxr::HdMeshGeomStylePoints)
         return;
 
+    const size_t NumGeomSubsets = m_Topology.GetGeomSubsets().size();
     for (size_t i = 0; i < NumGeomSubsets; ++i)
     {
-        pxr::HdRepr::DrawItemUniquePtr Item = std::make_unique<pxr::HdDrawItem>(&_sharedData);
+        pxr::HdRepr::DrawItemUniquePtr Item = std::make_unique<HnDrawItem>(_sharedData, *this);
         Repr.AddGeomSubsetDrawItem(std::move(Item));
     }
 }
@@ -200,15 +206,14 @@ void HnMesh::_InitRepr(const pxr::TfToken& ReprToken, pxr::HdDirtyBits* DirtyBit
     // set dirty bit to say we need to sync a new repr
     *DirtyBits |= pxr::HdChangeTracker::NewRepr;
 
-    _MeshReprConfig::DescArray ReprDescs      = _GetReprDesc(ReprToken);
-    const size_t               NumGeomSubsets = m_Topology.GetGeomSubsets().size();
+    _MeshReprConfig::DescArray ReprDescs = _GetReprDesc(ReprToken);
     for (const pxr::HdMeshReprDesc& Desc : ReprDescs)
     {
         if (Desc.geomStyle == pxr::HdMeshGeomStyleInvalid)
             continue;
 
-        Repr.AddDrawItem(std::make_unique<pxr::HdDrawItem>(&_sharedData));
-        AddGeometrySubsetDrawItems(Desc, NumGeomSubsets, Repr);
+        Repr.AddDrawItem(std::make_unique<HnDrawItem>(_sharedData, *this));
+        AddGeometrySubsetDrawItems(Desc, Repr);
     }
 }
 
@@ -275,7 +280,6 @@ void HnMesh::UpdateDrawItemsForGeometrySubsets(pxr::HdSceneDelegate& SceneDelega
                                                pxr::HdRenderParam*   RenderParam)
 {
     // (Re)create geom subset draw items
-    const size_t NumGeomSubsets = m_Topology.GetGeomSubsets().size();
     for (auto const& token_repr : _reprs)
     {
         const pxr::TfToken&        Token = token_repr.first;
@@ -289,7 +293,7 @@ void HnMesh::UpdateDrawItemsForGeometrySubsets(pxr::HdSceneDelegate& SceneDelega
             if (Desc.geomStyle == pxr::HdMeshGeomStyleInvalid)
                 continue;
 
-            AddGeometrySubsetDrawItems(Desc, NumGeomSubsets, *Repr);
+            AddGeometrySubsetDrawItems(Desc, *Repr);
         }
     }
 }
@@ -933,6 +937,44 @@ void HnMesh::UpdateIndexBuffer(HnRenderDelegate& RenderDelegate)
     m_IndexData.reset();
 }
 
+void HnMesh::UpdateDrawItemGeometry(HnRenderDelegate& RenderDelegate)
+{
+    for (auto& it : _reprs)
+    {
+        pxr::HdRepr& Repr          = *it.second;
+        const size_t DrawItemCount = Repr.GetDrawItems().size();
+        for (size_t i = 0; i < DrawItemCount; ++i)
+        {
+            HnDrawItem& DrawItem = *static_cast<HnDrawItem*>(Repr.GetDrawItem(i));
+
+            HnDrawItem::GeometryData Geo;
+            Geo.Positions = GetVertexBuffer(pxr::HdTokens->points);
+            Geo.Normals   = GetVertexBuffer(pxr::HdTokens->normals);
+
+            // Our shader currently supports two texture coordinate sets.
+            // Gather vertex buffers for both sets.
+            if (const HnMaterial* pMaterial = DrawItem.GetMaterial())
+            {
+                const auto& TexCoordSets = pMaterial->GetTextureCoordinateSets();
+                for (size_t i = 0; i < TexCoordSets.size(); ++i)
+                {
+                    const auto& TexCoordSet = TexCoordSets[i];
+                    if (!TexCoordSet.PrimVarName.IsEmpty())
+                    {
+                        Geo.TexCoords[i] = GetVertexBuffer(TexCoordSet.PrimVarName);
+                        if (!Geo.TexCoords[i])
+                        {
+                            LOG_ERROR_MESSAGE("Failed to find texture coordinates vertex buffer '", TexCoordSet.PrimVarName.GetText(), "' in mesh '", GetId().GetText(), "'");
+                        }
+                    }
+                }
+            }
+
+            DrawItem.SetGeometryData(std::move(Geo));
+        }
+    }
+}
+
 void HnMesh::CommitGPUResources(HnRenderDelegate& RenderDelegate)
 {
     if (m_IndexData)
@@ -943,6 +985,7 @@ void HnMesh::CommitGPUResources(HnRenderDelegate& RenderDelegate)
     if (m_VertexData)
     {
         UpdateVertexBuffers(RenderDelegate);
+        UpdateDrawItemGeometry(RenderDelegate);
     }
 }
 

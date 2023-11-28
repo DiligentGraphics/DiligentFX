@@ -25,6 +25,8 @@
  */
 
 #include "HnDrawItem.hpp"
+#include "HnMaterial.hpp"
+#include "HnTokens.hpp"
 
 namespace Diligent
 {
@@ -32,14 +34,22 @@ namespace Diligent
 namespace USD
 {
 
-HnDrawItem::HnDrawItem(const pxr::HdDrawItem& HdDrawItem, const HnMesh& Mesh) noexcept :
-    m_HdDrawItem{HdDrawItem},
+HnDrawItem::HnDrawItem(const pxr::HdRprimSharedData& SharedData,
+                       const HnMesh&                 Mesh) noexcept :
+    pxr::HdDrawItem{&SharedData},
     m_Mesh{Mesh}
 {
 }
 
 HnDrawItem::~HnDrawItem()
 {
+}
+
+void HnDrawItem::SetMaterial(const HnMaterial& Material)
+{
+    m_pMaterial          = &Material;
+    m_IsFallbackMaterial = Material.GetId().IsEmpty();
+    SetMaterialTag(!m_IsFallbackMaterial ? Material.GetTag() : HnMaterialTagTokens->defaultTag);
 }
 
 } // namespace USD

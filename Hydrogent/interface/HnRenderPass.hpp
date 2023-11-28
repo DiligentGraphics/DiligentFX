@@ -90,13 +90,12 @@ public:
     using SupportedVertexInputsSetType = std::unordered_set<pxr::TfToken, pxr::TfToken::HashFunctor>;
     static SupportedVertexInputsSetType GetSupportedVertexInputs(const HnMaterial* Material);
 
-    enum DRAW_ITEM_GPU_RES_DIRTY_FLAGS : Uint32
+    enum DRAW_LIST_ITEM_DIRTY_FLAGS : Uint32
     {
-        DRAW_ITEM_GPU_RES_DIRTY_FLAG_NONE     = 0u,
-        DRAW_ITEM_GPU_RES_DIRTY_FLAG_GEOMETRY = 1 << 0u,
-        DRAW_ITEM_GPU_RES_DIRTY_FLAG_PSO      = 1 << 1u,
-        DRAW_ITEM_GPU_RES_DIRTY_FLAG_LAST     = DRAW_ITEM_GPU_RES_DIRTY_FLAG_PSO,
-        DRAW_ITEM_GPU_RES_DIRTY_FLAG_ALL      = DRAW_ITEM_GPU_RES_DIRTY_FLAG_LAST * 2 - 1
+        DRAW_LIST_ITEM_DIRTY_FLAG_NONE = 0u,
+        DRAW_LIST_ITEM_DIRTY_FLAG_PSO  = 1 << 0u,
+        DRAW_LIST_ITEM_DIRTY_FLAG_LAST = DRAW_LIST_ITEM_DIRTY_FLAG_PSO,
+        DRAW_LIST_ITEM_DIRTY_FLAG_ALL  = DRAW_LIST_ITEM_DIRTY_FLAG_LAST * 2 - 1
     };
 
 protected:
@@ -110,8 +109,17 @@ protected:
 private:
     struct RenderState;
 
-    void UpdateDrawItems(const pxr::TfTokenVector& RenderTags);
-    void UpdateDrawItemGPUResources(HnDrawItem& DrawItem, RenderState& State, DRAW_ITEM_GPU_RES_DIRTY_FLAGS DirtyFlags);
+    struct DrawListItem
+    {
+        const HnDrawItem& DrawItem;
+        IPipelineState*   pPSO    = nullptr;
+        Uint32            Version = 0;
+
+        constexpr explicit operator bool() const { return pPSO != nullptr; }
+    };
+
+    void UpdateDrawList(const pxr::TfTokenVector& RenderTags);
+    void UpdateDrawListItemGPUResources(DrawListItem& ListItem, RenderState& State, DRAW_LIST_ITEM_DIRTY_FLAGS DirtyFlags);
 
     void RenderPendingDrawItems(RenderState& State);
 
@@ -121,19 +129,19 @@ private:
     HnRenderPassParams m_Params;
     HnMeshRenderParams m_RenderParams;
 
-    std::vector<HnDrawItem>        m_DrawItems;
-    std::vector<const HnDrawItem*> m_PendingDrawItems;
+    std::vector<DrawListItem>        m_DrawList;
+    std::vector<const DrawListItem*> m_PendingDrawItems;
 
     unsigned int m_CollectionVersion     = ~0u;
     unsigned int m_RprimRenderTagVersion = ~0u;
     unsigned int m_TaskRenderTagsVersion = ~0u;
 
-    DRAW_ITEM_GPU_RES_DIRTY_FLAGS m_DrawItemsGPUResDirtyFlags = DRAW_ITEM_GPU_RES_DIRTY_FLAG_ALL;
+    DRAW_LIST_ITEM_DIRTY_FLAGS m_DrawListItemsDirtyFlags = DRAW_LIST_ITEM_DIRTY_FLAG_ALL;
 
     pxr::TfTokenVector m_RenderTags;
     pxr::TfToken       m_MaterialTag;
 };
-DEFINE_FLAG_ENUM_OPERATORS(HnRenderPass::DRAW_ITEM_GPU_RES_DIRTY_FLAGS)
+DEFINE_FLAG_ENUM_OPERATORS(HnRenderPass::DRAW_LIST_ITEM_DIRTY_FLAGS)
 
 } // namespace USD
 

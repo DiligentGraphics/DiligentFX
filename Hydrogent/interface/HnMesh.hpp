@@ -142,8 +142,8 @@ protected:
     void AllocatePooledResources(pxr::HdSceneDelegate& SceneDelegate,
                                  pxr::HdRenderParam*   RenderParam);
 
-    void UpdateReprMaterialTags(pxr::HdSceneDelegate* SceneDelegate,
-                                pxr::HdRenderParam*   RenderParam);
+    void UpdateReprMaterials(pxr::HdSceneDelegate* SceneDelegate,
+                             pxr::HdRenderParam*   RenderParam);
 
 private:
     HnMesh(const pxr::TfToken& typeId,
@@ -183,10 +183,11 @@ private:
                         const pxr::TfToken&   ReprToken);
 
     void AddGeometrySubsetDrawItems(const pxr::HdMeshReprDesc& ReprDesc,
-                                    size_t                     NumGeomSubsets,
                                     pxr::HdRepr&               Repr);
     void UpdateDrawItemsForGeometrySubsets(pxr::HdSceneDelegate& SceneDelegate,
                                            pxr::HdRenderParam*   RenderParam);
+
+    void UpdateDrawItemGeometry(HnRenderDelegate& RenderDelegate);
 
 private:
     const Uint32 m_UID;

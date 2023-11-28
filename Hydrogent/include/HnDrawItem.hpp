@@ -30,6 +30,7 @@
 
 #include "pxr/imaging/hd/types.h"
 #include "pxr/imaging/hd/drawItem.h"
+#include "pxr/imaging/hd/rprimSharedData.h"
 
 #include "Buffer.h"
 #include "PipelineState.h"
@@ -45,33 +46,22 @@ namespace USD
 class HnMesh;
 class HnMaterial;
 
-class HnDrawItem final
+class HnDrawItem final : public pxr::HdDrawItem
 {
 public:
-    explicit HnDrawItem(const pxr::HdDrawItem& HdDrawItem, const HnMesh& Mesh) noexcept;
+    explicit HnDrawItem(const pxr::HdRprimSharedData& SharedData,
+                        const HnMesh&                 Mesh) noexcept;
     ~HnDrawItem();
 
-    const pxr::HdDrawItem& GetHdDrawItem() const { return m_HdDrawItem; }
-    const HnMesh&          GetMesh() const { return m_Mesh; }
+    const HnMesh& GetMesh() const { return m_Mesh; }
+
+    void SetMaterial(const HnMaterial& Material);
+
+    const HnMaterial* GetMaterial() const { return m_pMaterial; }
+    bool              GetIsFallbackMaterial() const { return m_IsFallbackMaterial; }
 
     struct GeometryData
     {
-        GeometryData() noexcept {}
-        GeometryData(const HnMaterial& _Material, bool _IsFallbackMaterial, Uint32 _Version) noexcept :
-            pMaterial{&_Material},
-            IsFallbackMaterial{_IsFallbackMaterial},
-            Version{_Version}
-        {}
-
-        constexpr explicit operator bool() const
-        {
-            return pMaterial != nullptr;
-        }
-
-        const HnMaterial* pMaterial          = nullptr;
-        bool              IsFallbackMaterial = false;
-        Uint32            Version            = 0;
-
         RefCntAutoPtr<IBuffer> Positions;
         RefCntAutoPtr<IBuffer> Normals;
 
@@ -79,19 +69,14 @@ public:
     };
 
     void SetGeometryData(GeometryData&& Data) { m_GeometryData = std::move(Data); }
-    void SetPSO(IPipelineState* pPSO) { m_PSO = pPSO; }
 
     const GeometryData& GetGeometryData() const { return m_GeometryData; }
-    IPipelineState*     GetPSO() const { return m_PSO; }
-
-    bool IsValid() const { return m_PSO; }
 
 private:
-    const pxr::HdDrawItem& m_HdDrawItem;
-    const HnMesh&          m_Mesh;
-
-    GeometryData                  m_GeometryData;
-    RefCntAutoPtr<IPipelineState> m_PSO;
+    const HnMesh&     m_Mesh;
+    const HnMaterial* m_pMaterial          = nullptr;
+    bool              m_IsFallbackMaterial = false;
+    GeometryData      m_GeometryData;
 };
 
 } // namespace USD

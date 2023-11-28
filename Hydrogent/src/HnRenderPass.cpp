@@ -200,8 +200,8 @@ GraphicsPipelineDesc HnRenderPass::GetGraphicsDesc(const HnRenderPassState& RPSt
 void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
                             const pxr::TfTokenVector&              Tags)
 {
-    UpdateDrawItems(Tags);
-    if (m_DrawItems.empty())
+    UpdateDrawList(Tags);
+    if (m_DrawList.empty())
         return;
 
     // Render pass state is initialized by HnBeginFrameTask, and
@@ -219,28 +219,32 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
 
     const auto& Desc                 = pPrimitiveAttribsCB->GetDesc();
     const auto  MaxDrawItemsInBuffer = Desc.Size / State.PrimitiveAttribsAlignedOffset;
-    const auto  NumDrawItems         = m_DrawItems.size();
+    const auto  NumDrawItems         = m_DrawList.size();
 
     m_PendingDrawItems.clear();
     HLSL::PBRPrimitiveAttribs* pCurrPrimitive = nullptr;
     for (size_t DrawItemIdx = 0; DrawItemIdx < NumDrawItems; ++DrawItemIdx)
     {
-        auto& DrawItem = m_DrawItems[DrawItemIdx];
+        DrawListItem&     ListItem = m_DrawList[DrawItemIdx];
+        const HnDrawItem& DrawItem = ListItem.DrawItem;
 
-        const auto&   Geo  = DrawItem.GetGeometryData();
-        const HnMesh& Mesh = DrawItem.GetMesh();
+        const auto&       Geo       = DrawItem.GetGeometryData();
+        const HnMesh&     Mesh      = DrawItem.GetMesh();
+        const HnMaterial* pMaterial = DrawItem.GetMaterial();
+        if (pMaterial == nullptr)
+            continue;
 
-        auto DrawItemGPUResDirtyFlags = m_DrawItemsGPUResDirtyFlags;
-        if (Geo.Version != Mesh.GetVersion())
-            DrawItemGPUResDirtyFlags |= DRAW_ITEM_GPU_RES_DIRTY_FLAG_GEOMETRY;
-        if (DrawItemGPUResDirtyFlags != DRAW_ITEM_GPU_RES_DIRTY_FLAG_NONE)
+        auto DrawItemGPUResDirtyFlags = m_DrawListItemsDirtyFlags;
+        if (ListItem.Version != Mesh.GetVersion())
+            DrawItemGPUResDirtyFlags |= DRAW_LIST_ITEM_DIRTY_FLAG_PSO;
+        if (DrawItemGPUResDirtyFlags != DRAW_LIST_ITEM_DIRTY_FLAG_NONE)
         {
-            UpdateDrawItemGPUResources(DrawItem, State, DrawItemGPUResDirtyFlags);
+            UpdateDrawListItemGPUResources(ListItem, State, DrawItemGPUResDirtyFlags);
         }
 
         // Make sure we update all items before skipping any since we will clear the
-        // m_DrawItemsGPUResDirtyFlags at the end of the function.
-        if (!DrawItem.IsValid() || !DrawItem.GetHdDrawItem().GetVisible())
+        // m_DrawListItemsDirtyFlags at the end of the function.
+        if (!ListItem || !DrawItem.GetVisible())
             continue;
 
         if (pCurrPrimitive == nullptr)
@@ -265,18 +269,18 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
             pCurrPrimitive,
             Mesh.GetTransform() * m_RenderParams.Transform,
             0,
-            Geo.pMaterial->GetBasicShaderAttribs(),
-            Geo.pMaterial->GetShaderTextureAttribs(),
-            Geo.pMaterial->GetNumShaderTextureAttribs(),
+            pMaterial->GetBasicShaderAttribs(),
+            pMaterial->GetShaderTextureAttribs(),
+            pMaterial->GetNumShaderTextureAttribs(),
             &CustomData);
 
-        if (Geo.IsFallbackMaterial)
+        if (DrawItem.GetIsFallbackMaterial())
         {
             pCurrPrimitive->Material.Basic.BaseColorFactor = Mesh.GetDisplayColor();
         }
 
         pCurrPrimitive = reinterpret_cast<HLSL::PBRPrimitiveAttribs*>(reinterpret_cast<Uint8*>(pCurrPrimitive) + State.PrimitiveAttribsAlignedOffset);
-        m_PendingDrawItems.push_back(&DrawItem);
+        m_PendingDrawItems.push_back(&ListItem);
 
         if (m_PendingDrawItems.size() == MaxDrawItemsInBuffer || DrawItemIdx == NumDrawItems - 1)
         {
@@ -290,7 +294,7 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
     }
     VERIFY_EXPR(pCurrPrimitive == nullptr);
 
-    m_DrawItemsGPUResDirtyFlags = DRAW_ITEM_GPU_RES_DIRTY_FLAG_NONE;
+    m_DrawListItemsDirtyFlags = DRAW_LIST_ITEM_DIRTY_FLAG_NONE;
 }
 
 void HnRenderPass::_MarkCollectionDirty()
@@ -306,7 +310,7 @@ void HnRenderPass::SetMeshRenderParams(const HnMeshRenderParams& Params)
 
     if (m_RenderParams.RenderMode != Params.RenderMode ||
         m_RenderParams.DebugViewMode != Params.DebugViewMode)
-        m_DrawItemsGPUResDirtyFlags |= DRAW_ITEM_GPU_RES_DIRTY_FLAG_PSO;
+        m_DrawListItemsDirtyFlags |= DRAW_LIST_ITEM_DIRTY_FLAG_PSO;
 
     m_RenderParams = Params;
 }
@@ -314,12 +318,12 @@ void HnRenderPass::SetMeshRenderParams(const HnMeshRenderParams& Params)
 void HnRenderPass::SetParams(const HnRenderPassParams& Params)
 {
     if (m_Params.UsdPsoFlags != Params.UsdPsoFlags)
-        m_DrawItemsGPUResDirtyFlags |= DRAW_ITEM_GPU_RES_DIRTY_FLAG_PSO;
+        m_DrawListItemsDirtyFlags |= DRAW_LIST_ITEM_DIRTY_FLAG_PSO;
 
     m_Params = Params;
 }
 
-void HnRenderPass::UpdateDrawItems(const pxr::TfTokenVector& RenderTags)
+void HnRenderPass::UpdateDrawList(const pxr::TfTokenVector& RenderTags)
 {
     pxr::HdRenderIndex* pRenderIndex = GetRenderIndex();
     //HnRenderDelegate*   pRenderDelegate = static_cast<HnRenderDelegate*>(pRenderIndex->GetRenderDelegate());
@@ -355,7 +359,7 @@ void HnRenderPass::UpdateDrawItems(const pxr::TfTokenVector& RenderTags)
         //GeomSubsetDrawItemsChanged ||
         TaskRenderTagsChanged)
     {
-        m_DrawItems.clear();
+        m_DrawList.clear();
         //const HnRenderParam* const RenderParam = static_cast<HnRenderParam*>(pRenderIndex->GetRenderDelegate()->GetRenderParam());
         //if (RenderParam->HasMaterialTag(Collection.GetMaterialTag()))
         {
@@ -378,11 +382,11 @@ void HnRenderPass::UpdateDrawItems(const pxr::TfTokenVector& RenderTags)
                     (m_Params.Selection == HnRenderPassParams::SelectionType::Selected && IsSelected) ||
                     (m_Params.Selection == HnRenderPassParams::SelectionType::Unselected && !IsSelected))
                 {
-                    m_DrawItems.push_back(HnDrawItem{*pDrawItem, *static_cast<const HnMesh*>(pRPrim)});
+                    m_DrawList.push_back(DrawListItem{*static_cast<const HnDrawItem*>(pDrawItem)});
                 }
             }
 
-            m_DrawItemsGPUResDirtyFlags = DRAW_ITEM_GPU_RES_DIRTY_FLAG_ALL;
+            m_DrawListItemsDirtyFlags = DRAW_LIST_ITEM_DIRTY_FLAG_ALL;
         }
         //else
         //{
@@ -412,61 +416,13 @@ HnRenderPass::SupportedVertexInputsSetType HnRenderPass::GetSupportedVertexInput
     return SupportedInputs;
 }
 
-void HnRenderPass::UpdateDrawItemGPUResources(HnDrawItem& DrawItem, RenderState& State, DRAW_ITEM_GPU_RES_DIRTY_FLAGS DirtyFlags)
+void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, RenderState& State, DRAW_LIST_ITEM_DIRTY_FLAGS DirtyFlags)
 {
-    bool UpdateGeometry = !DrawItem.GetGeometryData() || (DirtyFlags & DRAW_ITEM_GPU_RES_DIRTY_FLAG_GEOMETRY) != 0;
-    bool UpdatePSO      = DrawItem.GetPSO() == nullptr || (DirtyFlags & DRAW_ITEM_GPU_RES_DIRTY_FLAG_PSO) != 0;
-
-    const HnMesh&       Mesh               = DrawItem.GetMesh();
-    const pxr::SdfPath& MaterialId         = Mesh.GetMaterialId();
-    const pxr::HdSprim* pSPrim             = State.RenderIndex.GetSprim(pxr::HdPrimTypeTokens->material, MaterialId);
-    const bool          IsFallbackMaterial = pSPrim == nullptr;
-    if (IsFallbackMaterial)
+    const HnDrawItem& DrawItem = ListItem.DrawItem;
+    if (DirtyFlags & DRAW_LIST_ITEM_DIRTY_FLAG_PSO)
     {
-        pSPrim = State.RenderIndex.GetFallbackSprim(pxr::HdPrimTypeTokens->material);
-        if (pSPrim == nullptr)
-        {
-            UNEXPECTED("Unable to get fallback sprim. This is unexpected as default material is initialized in the render delegate.");
-            return;
-        }
-    }
+        ListItem.pPSO = nullptr;
 
-    const HnMaterial& Material = *static_cast<const HnMaterial*>(pSPrim);
-
-    if (UpdateGeometry)
-    {
-        HnDrawItem::GeometryData Geo{Material, IsFallbackMaterial, Mesh.GetVersion()};
-
-        // Get vertex buffers
-        Geo.Positions = Mesh.GetVertexBuffer(pxr::HdTokens->points);
-        Geo.Normals   = Mesh.GetVertexBuffer(pxr::HdTokens->normals);
-
-        // Our shader currently supports two texture coordinate sets.
-        // Gather vertex buffers for both sets.
-        {
-            const auto& TexCoordSets = Material.GetTextureCoordinateSets();
-            for (size_t i = 0; i < TexCoordSets.size(); ++i)
-            {
-                const auto& TexCoordSet = TexCoordSets[i];
-                if (!TexCoordSet.PrimVarName.IsEmpty())
-                {
-                    Geo.TexCoords[i] = Mesh.GetVertexBuffer(TexCoordSet.PrimVarName);
-                    if (!Geo.TexCoords[i])
-                    {
-                        LOG_ERROR_MESSAGE("Failed to find texture coordinates vertex buffer '", TexCoordSet.PrimVarName.GetText(), "' in mesh '", Mesh.GetId().GetText(), "'");
-                    }
-                }
-            }
-        }
-
-        DrawItem.SetGeometryData(std::move(Geo));
-
-        // We need to update PSO as PSO flags depend on what vertex buffers are available
-        UpdatePSO = true;
-    }
-
-    if (UpdatePSO)
-    {
         auto& PsoCache = State.GePsoCache();
         VERIFY_EXPR(PsoCache);
 
@@ -474,7 +430,6 @@ void HnRenderPass::UpdateDrawItemGPUResources(HnDrawItem& DrawItem, RenderState&
 
         const auto& Geo = DrawItem.GetGeometryData();
 
-        IPipelineState* pPSO = nullptr;
         if (m_RenderParams.RenderMode == HN_RENDER_MODE_SOLID)
         {
             if (Geo.Normals != nullptr && (m_Params.UsdPsoFlags & USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_OUTPUT) != 0)
@@ -484,15 +439,19 @@ void HnRenderPass::UpdateDrawItemGPUResources(HnDrawItem& DrawItem, RenderState&
             if (Geo.TexCoords[1] != nullptr)
                 PSOFlags |= PBR_Renderer::PSO_FLAG_USE_TEXCOORD1;
 
-            for (Uint32 i = 0; i < Material.GetNumShaderTextureAttribs(); ++i)
+            const HnMaterial* pMaterial = DrawItem.GetMaterial();
+            if (pMaterial != nullptr)
             {
-                const auto& TexAttrib = Material.GetShaderTextureAttrib(i);
-                if (TexAttrib.UVScaleAndRotation != float4{1, 0, 0, 1} ||
-                    TexAttrib.UBias != 0 ||
-                    TexAttrib.VBias != 0)
+                for (Uint32 i = 0; i < pMaterial->GetNumShaderTextureAttribs(); ++i)
                 {
-                    PSOFlags |= PBR_Renderer::PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM;
-                    break;
+                    const auto& TexAttrib = pMaterial->GetShaderTextureAttrib(i);
+                    if (TexAttrib.UVScaleAndRotation != float4{1, 0, 0, 1} ||
+                        TexAttrib.UBias != 0 ||
+                        TexAttrib.VBias != 0)
+                    {
+                        PSOFlags |= PBR_Renderer::PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM;
+                        break;
+                    }
                 }
             }
 
@@ -511,39 +470,41 @@ void HnRenderPass::UpdateDrawItemGPUResources(HnDrawItem& DrawItem, RenderState&
             if (static_cast<const HnRenderParam*>(State.RenderDelegate.GetRenderParam())->GetUseTextureAtlas())
                 PSOFlags |= PBR_Renderer::PSO_FLAG_USE_TEXTURE_ATLAS;
 
-            VERIFY(Geo.pMaterial->GetBasicShaderAttribs().AlphaMode == State.AlphaMode || Geo.IsFallbackMaterial,
+            VERIFY(pMaterial->GetBasicShaderAttribs().AlphaMode == State.AlphaMode || DrawItem.GetIsFallbackMaterial(),
                    "Alpha mode derived from the material tag is not consistent with the alpha mode in the shader attributes. "
                    "This may indicate an issue in how alpha mode is determined in the material, or (less likely) an issue in Rprim sorting by Hydra.");
-            pPSO = PsoCache.Get({PSOFlags, static_cast<PBR_Renderer::ALPHA_MODE>(State.AlphaMode), /*DoubleSided = */ false, static_cast<PBR_Renderer::DebugViewType>(m_RenderParams.DebugViewMode)}, true);
+            ListItem.pPSO = PsoCache.Get({PSOFlags, static_cast<PBR_Renderer::ALPHA_MODE>(State.AlphaMode), /*DoubleSided = */ false, static_cast<PBR_Renderer::DebugViewType>(m_RenderParams.DebugViewMode)}, true);
         }
         else if (m_RenderParams.RenderMode == HN_RENDER_MODE_MESH_EDGES ||
                  m_RenderParams.RenderMode == HN_RENDER_MODE_POINTS)
         {
             PSOFlags |= PBR_Renderer::PSO_FLAG_UNSHADED;
-            pPSO = PsoCache.Get({PSOFlags, /*DoubleSided = */ false, static_cast<PBR_Renderer::DebugViewType>(m_RenderParams.DebugViewMode)}, true);
+            ListItem.pPSO = PsoCache.Get({PSOFlags, /*DoubleSided = */ false, static_cast<PBR_Renderer::DebugViewType>(m_RenderParams.DebugViewMode)}, true);
         }
         else
         {
             UNEXPECTED("Unexpected render mode");
         }
 
-        VERIFY_EXPR(pPSO != nullptr);
-        DrawItem.SetPSO(pPSO);
+        VERIFY_EXPR(ListItem.pPSO != nullptr);
     }
+
+    ListItem.Version = DrawItem.GetMesh().GetVersion();
 }
 
 void HnRenderPass::RenderPendingDrawItems(RenderState& State)
 {
     for (size_t i = 0; i < m_PendingDrawItems.size(); ++i)
     {
-        const HnDrawItem& DrawItem = *m_PendingDrawItems[i];
+        const DrawListItem& ListItem = *m_PendingDrawItems[i];
+        const HnDrawItem&   DrawItem = ListItem.DrawItem;
 
-        State.SetPipelineState(DrawItem.GetPSO());
+        State.SetPipelineState(ListItem.pPSO);
 
         const auto&   Geo  = DrawItem.GetGeometryData();
         const HnMesh& Mesh = DrawItem.GetMesh();
 
-        IShaderResourceBinding* pSRB = Geo.pMaterial->GetSRB(static_cast<Uint32>(i * State.PrimitiveAttribsAlignedOffset));
+        IShaderResourceBinding* pSRB = DrawItem.GetMaterial()->GetSRB(static_cast<Uint32>(i * State.PrimitiveAttribsAlignedOffset));
         VERIFY(pSRB != nullptr, "Material SRB is null. This may happen if UpdateSRB was not called for this material.");
         State.CommitShaderResources(pSRB);
 
