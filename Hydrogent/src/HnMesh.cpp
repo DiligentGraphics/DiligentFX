@@ -103,7 +103,7 @@ void HnMesh::UpdateReprMaterials(pxr::HdSceneDelegate* SceneDelegate,
 
         size_t DrawItemIdx       = 0;
         size_t GeomSubsetDescIdx = 0;
-        for (const auto& Desc : Descs)
+        for (const pxr::HdMeshReprDesc& Desc : Descs)
         {
             if (Desc.geomStyle == pxr::HdMeshGeomStyleInvalid)
                 continue;
@@ -183,7 +183,8 @@ pxr::HdDirtyBits HnMesh::_PropagateDirtyBits(pxr::HdDirtyBits bits) const
 
 void HnMesh::AddGeometrySubsetDrawItems(const pxr::HdMeshReprDesc& ReprDesc, pxr::HdRepr& Repr)
 {
-    if (ReprDesc.geomStyle == pxr::HdMeshGeomStylePoints)
+    if (ReprDesc.geomStyle == pxr::HdMeshGeomStyleInvalid ||
+        ReprDesc.geomStyle == pxr::HdMeshGeomStylePoints)
         return;
 
     const size_t NumGeomSubsets = m_Topology.GetGeomSubsets().size();
@@ -207,12 +208,17 @@ void HnMesh::_InitRepr(const pxr::TfToken& ReprToken, pxr::HdDirtyBits* DirtyBit
     *DirtyBits |= pxr::HdChangeTracker::NewRepr;
 
     _MeshReprConfig::DescArray ReprDescs = _GetReprDesc(ReprToken);
+    // All main draw items must be added before any geometry subset draw item.
     for (const pxr::HdMeshReprDesc& Desc : ReprDescs)
     {
         if (Desc.geomStyle == pxr::HdMeshGeomStyleInvalid)
             continue;
-
         Repr.AddDrawItem(std::make_unique<HnDrawItem>(_sharedData, *this));
+    }
+
+    // Note that geometry susbset items may change later.
+    for (const pxr::HdMeshReprDesc& Desc : ReprDescs)
+    {
         AddGeometrySubsetDrawItems(Desc, Repr);
     }
 }
@@ -290,9 +296,6 @@ void HnMesh::UpdateDrawItemsForGeometrySubsets(pxr::HdSceneDelegate& SceneDelega
         Repr->ClearGeomSubsetDrawItems();
         for (const pxr::HdMeshReprDesc& Desc : Descs)
         {
-            if (Desc.geomStyle == pxr::HdMeshGeomStyleInvalid)
-                continue;
-
             AddGeometrySubsetDrawItems(Desc, *Repr);
         }
     }
