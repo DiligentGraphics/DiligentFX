@@ -68,15 +68,35 @@ public:
         std::array<RefCntAutoPtr<IBuffer>, 2> TexCoords;
     };
 
-    void SetGeometryData(GeometryData&& Data) { m_GeometryData = std::move(Data); }
-
+    void                SetGeometryData(GeometryData&& Data) { m_GeometryData = std::move(Data); }
     const GeometryData& GetGeometryData() const { return m_GeometryData; }
+
+    struct TopologyData
+    {
+        IBuffer* IndexBuffer = nullptr;
+        Uint32   StartIndex  = 0;
+        Uint32   NumVertices = 0;
+
+        operator bool() const { return NumVertices > 0; }
+    };
+
+    void SetFaces(const TopologyData& Faces) { m_Faces = Faces; }
+    void SetEdges(const TopologyData& Edges) { m_Edges = Edges; }
+    void SetPoints(const TopologyData& Points) { m_Points = Points; }
+
+    const TopologyData& GetFaces() const { return m_Faces; }
+    const TopologyData& GetEdges() const { return m_Edges; }
+    const TopologyData& GetPoints() const { return m_Points; }
 
 private:
     const HnMesh&     m_Mesh;
     const HnMaterial* m_pMaterial          = nullptr;
     bool              m_IsFallbackMaterial = false;
     GeometryData      m_GeometryData;
+
+    TopologyData m_Faces;
+    TopologyData m_Edges;
+    TopologyData m_Points;
 };
 
 } // namespace USD

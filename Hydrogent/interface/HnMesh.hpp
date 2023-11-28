@@ -187,7 +187,12 @@ private:
     void UpdateDrawItemsForGeometrySubsets(pxr::HdSceneDelegate& SceneDelegate,
                                            pxr::HdRenderParam*   RenderParam);
 
-    void UpdateDrawItemGeometry(HnRenderDelegate& RenderDelegate);
+    void UpdateDrawItemGpuGeometry(HnRenderDelegate& RenderDelegate);
+    void UpdateDrawItemGpuTopology();
+
+    template <typename HandleDrawItemFuncType, typename HandleGeomSubsetDrawItemFuncType>
+    void ProcessDrawItems(HandleDrawItemFuncType&&           HandleDrawItem,
+                          HandleGeomSubsetDrawItemFuncType&& HandleGeomSubsetDrawItem);
 
 private:
     const Uint32 m_UID;

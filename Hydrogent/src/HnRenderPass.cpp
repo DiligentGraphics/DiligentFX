@@ -123,7 +123,7 @@ struct HnRenderPass::RenderState
         pCtx->SetIndexBuffer(pIndexBuffer, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     }
 
-    void SetVertexBuffers(IBuffer** ppBuffers, Uint32 NumBuffers)
+    void SetVertexBuffers(IBuffer* const* ppBuffers, Uint32 NumBuffers)
     {
         VERIFY_EXPR(NumBuffers <= 4);
         bool SetBuffers = false;
@@ -228,7 +228,6 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
         DrawListItem&     ListItem = m_DrawList[DrawItemIdx];
         const HnDrawItem& DrawItem = ListItem.DrawItem;
 
-        const auto&       Geo       = DrawItem.GetGeometryData();
         const HnMesh&     Mesh      = DrawItem.GetMesh();
         const HnMaterial* pMaterial = DrawItem.GetMaterial();
         if (pMaterial == nullptr)
@@ -236,7 +235,7 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
 
         auto DrawItemGPUResDirtyFlags = m_DrawListItemsDirtyFlags;
         if (ListItem.Version != Mesh.GetVersion())
-            DrawItemGPUResDirtyFlags |= DRAW_LIST_ITEM_DIRTY_FLAG_PSO;
+            DrawItemGPUResDirtyFlags |= DRAW_LIST_ITEM_DIRTY_FLAG_PSO | DRAW_LIST_ITEM_DIRTY_FLAG_MESH_DATA;
         if (DrawItemGPUResDirtyFlags != DRAW_LIST_ITEM_DIRTY_FLAG_NONE)
         {
             UpdateDrawListItemGPUResources(ListItem, State, DrawItemGPUResDirtyFlags);
@@ -282,9 +281,9 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
         pCurrPrimitive = reinterpret_cast<HLSL::PBRPrimitiveAttribs*>(reinterpret_cast<Uint8*>(pCurrPrimitive) + State.PrimitiveAttribsAlignedOffset);
         m_PendingDrawItems.push_back(&ListItem);
 
-        if (m_PendingDrawItems.size() == MaxDrawItemsInBuffer || DrawItemIdx == NumDrawItems - 1)
+        if (m_PendingDrawItems.size() == MaxDrawItemsInBuffer)
         {
-            // Either the buffer is full or this is the last item. Render the pending items and start
+            // Either the buffer is full. Render the pending items and start
             // filling the buffer from the beginning.
             State.pCtx->UnmapBuffer(pPrimitiveAttribsCB, MAP_WRITE);
             pCurrPrimitive = nullptr;
@@ -292,7 +291,11 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
             VERIFY_EXPR(m_PendingDrawItems.empty());
         }
     }
-    VERIFY_EXPR(pCurrPrimitive == nullptr);
+    if (pCurrPrimitive != nullptr)
+    {
+        State.pCtx->UnmapBuffer(pPrimitiveAttribsCB, MAP_WRITE);
+        RenderPendingDrawItems(State);
+    }
 
     m_DrawListItemsDirtyFlags = DRAW_LIST_ITEM_DIRTY_FLAG_NONE;
 }
@@ -308,8 +311,10 @@ void HnRenderPass::SetMeshRenderParams(const HnMeshRenderParams& Params)
     if (m_RenderParams.SelectedPrimId != Params.SelectedPrimId)
         _MarkCollectionDirty();
 
-    if (m_RenderParams.RenderMode != Params.RenderMode ||
-        m_RenderParams.DebugViewMode != Params.DebugViewMode)
+    if (m_RenderParams.RenderMode != Params.RenderMode)
+        m_DrawListItemsDirtyFlags |= DRAW_LIST_ITEM_DIRTY_FLAG_PSO | DRAW_LIST_ITEM_DIRTY_FLAG_MESH_DATA;
+
+    if (m_RenderParams.DebugViewMode != Params.DebugViewMode)
         m_DrawListItemsDirtyFlags |= DRAW_LIST_ITEM_DIRTY_FLAG_PSO;
 
     m_RenderParams = Params;
@@ -489,6 +494,48 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
         VERIFY_EXPR(ListItem.pPSO != nullptr);
     }
 
+    if (DirtyFlags & DRAW_LIST_ITEM_DIRTY_FLAG_MESH_DATA)
+    {
+        const HnDrawItem::GeometryData& Geo = DrawItem.GetGeometryData();
+
+        ListItem.VertexBuffers = {Geo.Positions, Geo.Normals, Geo.TexCoords[0], Geo.TexCoords[1]};
+
+        const HnDrawItem::TopologyData* Topology = nullptr;
+        switch (m_RenderParams.RenderMode)
+        {
+            case HN_RENDER_MODE_SOLID:
+                Topology                  = &DrawItem.GetFaces();
+                ListItem.NumVertexBuffers = 4;
+                break;
+
+            case HN_RENDER_MODE_MESH_EDGES:
+                Topology                  = &DrawItem.GetEdges();
+                ListItem.NumVertexBuffers = 1; // Only positions are used
+                break;
+
+            case HN_RENDER_MODE_POINTS:
+                Topology                  = &DrawItem.GetPoints();
+                ListItem.NumVertexBuffers = 1; // Only positions are used
+                break;
+
+            default:
+                UNEXPECTED("Unexpected render mode");
+        }
+
+        if (Topology != nullptr)
+        {
+            ListItem.IndexBuffer = Topology->IndexBuffer;
+            ListItem.StartIndex  = Topology->StartIndex;
+            ListItem.NumVertices = Topology->NumVertices;
+        }
+        else
+        {
+            ListItem.IndexBuffer = nullptr;
+            ListItem.StartIndex  = 0;
+            ListItem.NumVertices = 0;
+        }
+    }
+
     ListItem.Version = DrawItem.GetMesh().GetVersion();
 }
 
@@ -501,58 +548,23 @@ void HnRenderPass::RenderPendingDrawItems(RenderState& State)
 
         State.SetPipelineState(ListItem.pPSO);
 
-        const auto&   Geo  = DrawItem.GetGeometryData();
-        const HnMesh& Mesh = DrawItem.GetMesh();
+        const HnDrawItem::GeometryData& Geo = DrawItem.GetGeometryData();
 
         IShaderResourceBinding* pSRB = DrawItem.GetMaterial()->GetSRB(static_cast<Uint32>(i * State.PrimitiveAttribsAlignedOffset));
         VERIFY(pSRB != nullptr, "Material SRB is null. This may happen if UpdateSRB was not called for this material.");
         State.CommitShaderResources(pSRB);
 
-        IBuffer*                IndexBuffer      = nullptr;
-        Uint32                  StartIndex       = 0;
-        std::array<IBuffer*, 4> VertexBuffers    = {Geo.Positions, Geo.Normals, Geo.TexCoords[0], Geo.TexCoords[1]};
-        Uint32                  NumVertexBuffers = 0;
-        Uint32                  NumVertices      = 0;
-        switch (m_RenderParams.RenderMode)
-        {
-            case HN_RENDER_MODE_SOLID:
-                IndexBuffer      = Mesh.GetFaceIndexBuffer();
-                StartIndex       = Mesh.GetFaceStartIndex();
-                NumVertices      = Mesh.GetNumFaceTriangles() * 3;
-                NumVertexBuffers = 4;
-                break;
+        State.SetIndexBuffer(ListItem.IndexBuffer);
+        State.SetVertexBuffers(ListItem.VertexBuffers.data(), ListItem.NumVertexBuffers);
 
-            case HN_RENDER_MODE_MESH_EDGES:
-                IndexBuffer      = Mesh.GetEdgeIndexBuffer();
-                StartIndex       = Mesh.GetEdgeStartIndex();
-                NumVertices      = Mesh.GetNumEdges() * 2;
-                NumVertexBuffers = 1; // Only positions are used
-                break;
-
-            case HN_RENDER_MODE_POINTS:
-                IndexBuffer      = Mesh.GetPointsIndexBuffer();
-                StartIndex       = Mesh.GetPointsStartIndex();
-                NumVertices      = Mesh.GetNumPoints();
-                NumVertexBuffers = 1; // Only positions are used
-                break;
-
-            default:
-                UNEXPECTED("Unexpected render mode");
-                return;
-        }
-        static_assert(HN_RENDER_MODE_COUNT == 3, "Please handle the new render mode in the switch above");
-
-        State.SetIndexBuffer(IndexBuffer);
-        State.SetVertexBuffers(VertexBuffers.data(), NumVertexBuffers);
-
-        if (IndexBuffer != nullptr)
+        if (ListItem.IndexBuffer != nullptr)
         {
             constexpr Uint32 NumInstances = 1;
-            State.pCtx->DrawIndexed({NumVertices, VT_UINT32, DRAW_FLAG_VERIFY_ALL, NumInstances, StartIndex});
+            State.pCtx->DrawIndexed({ListItem.NumVertices, VT_UINT32, DRAW_FLAG_VERIFY_ALL, NumInstances, ListItem.StartIndex});
         }
         else
         {
-            State.pCtx->Draw({NumVertices, DRAW_FLAG_VERIFY_ALL});
+            State.pCtx->Draw({ListItem.NumVertices, DRAW_FLAG_VERIFY_ALL});
         }
     }
 

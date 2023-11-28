@@ -88,11 +88,11 @@ static void SetDrawItemMaterial(const pxr::HdRenderIndex& RenderIndex, HnDrawIte
     }
 }
 
-void HnMesh::UpdateReprMaterials(pxr::HdSceneDelegate* SceneDelegate,
-                                 pxr::HdRenderParam*   RenderParam)
-{
-    const pxr::HdRenderIndex& RenderIndex = SceneDelegate->GetRenderIndex();
 
+template <typename HandleDrawItemFuncType, typename HandleGeomSubsetDrawItemFuncType>
+void HnMesh::ProcessDrawItems(HandleDrawItemFuncType&&           HandleDrawItem,
+                              HandleGeomSubsetDrawItemFuncType&& HandleGeomSubsetDrawItem)
+{
     const pxr::HdGeomSubsets& GeomSubsets    = m_Topology.GetGeomSubsets();
     const size_t              NumGeomSubsets = GeomSubsets.size();
     for (auto const& token_repr : _reprs)
@@ -110,7 +110,7 @@ void HnMesh::UpdateReprMaterials(pxr::HdSceneDelegate* SceneDelegate,
 
             {
                 pxr::HdDrawItem* Item = Repr->GetDrawItem(DrawItemIdx++);
-                SetDrawItemMaterial(RenderIndex, static_cast<HnDrawItem&>(*Item), GetMaterialId());
+                HandleDrawItem(static_cast<HnDrawItem&>(*Item));
             }
 
             // Update geom subset draw items if they exist
@@ -120,14 +120,27 @@ void HnMesh::UpdateReprMaterials(pxr::HdSceneDelegate* SceneDelegate,
                 {
                     if (pxr::HdDrawItem* Item = Repr->GetDrawItemForGeomSubset(GeomSubsetDescIdx, NumGeomSubsets, i))
                     {
-                        const pxr::SdfPath& SubsetMaterialId = GeomSubsets[i].materialId;
-                        SetDrawItemMaterial(RenderIndex, static_cast<HnDrawItem&>(*Item), SubsetMaterialId);
+                        HandleGeomSubsetDrawItem(GeomSubsets[i], static_cast<HnDrawItem&>(*Item));
                     }
                 }
                 ++GeomSubsetDescIdx;
             }
         }
     }
+}
+
+void HnMesh::UpdateReprMaterials(pxr::HdSceneDelegate* SceneDelegate,
+                                 pxr::HdRenderParam*   RenderParam)
+{
+    const pxr::HdRenderIndex& RenderIndex = SceneDelegate->GetRenderIndex();
+
+    ProcessDrawItems(
+        [&](HnDrawItem& DrawItem) {
+            SetDrawItemMaterial(RenderIndex, DrawItem, GetMaterialId());
+        },
+        [&](const pxr::HdGeomSubset& Subset, HnDrawItem& DrawItem) {
+            SetDrawItemMaterial(RenderIndex, DrawItem, Subset.materialId);
+        });
 }
 
 
@@ -940,7 +953,7 @@ void HnMesh::UpdateIndexBuffer(HnRenderDelegate& RenderDelegate)
     m_IndexData.reset();
 }
 
-void HnMesh::UpdateDrawItemGeometry(HnRenderDelegate& RenderDelegate)
+void HnMesh::UpdateDrawItemGpuGeometry(HnRenderDelegate& RenderDelegate)
 {
     for (auto& it : _reprs)
     {
@@ -978,17 +991,60 @@ void HnMesh::UpdateDrawItemGeometry(HnRenderDelegate& RenderDelegate)
     }
 }
 
+void HnMesh::UpdateDrawItemGpuTopology()
+{
+    HnDrawItem::TopologyData FaceTopology{
+        GetFaceIndexBuffer(),
+        GetFaceStartIndex(),
+        GetNumFaceTriangles() * 3,
+    };
+    HnDrawItem::TopologyData EdgeTopology{
+        GetEdgeIndexBuffer(),
+        GetEdgeStartIndex(),
+        GetNumEdges() * 2,
+    };
+    HnDrawItem::TopologyData PointsTopology{
+        GetPointsIndexBuffer(),
+        GetPointsStartIndex(),
+        GetNumPoints(),
+    };
+
+    ProcessDrawItems(
+        [&](HnDrawItem& DrawItem) {
+            if (m_Topology.GetGeomSubsets().empty())
+            {
+                DrawItem.SetFaces(FaceTopology);
+                DrawItem.SetEdges(EdgeTopology);
+                DrawItem.SetPoints(PointsTopology);
+            }
+            else
+            {
+                // Do not set topology if there are geometry subsets, so
+                // that the render pass skips this draw item.
+                DrawItem.SetFaces({});
+                DrawItem.SetEdges({});
+                DrawItem.SetPoints({});
+            }
+        },
+        [&](const pxr::HdGeomSubset& Subset, HnDrawItem& DrawItem) {
+            DrawItem.SetFaces(FaceTopology);
+            DrawItem.SetEdges(EdgeTopology);
+            DrawItem.SetPoints(PointsTopology);
+        });
+}
+
 void HnMesh::CommitGPUResources(HnRenderDelegate& RenderDelegate)
 {
     if (m_IndexData)
     {
         UpdateIndexBuffer(RenderDelegate);
+        UpdateDrawItemGpuTopology();
     }
 
     if (m_VertexData)
     {
         UpdateVertexBuffers(RenderDelegate);
-        UpdateDrawItemGeometry(RenderDelegate);
+        UpdateDrawItemGpuGeometry(RenderDelegate);
     }
 }
 

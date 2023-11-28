@@ -92,10 +92,11 @@ public:
 
     enum DRAW_LIST_ITEM_DIRTY_FLAGS : Uint32
     {
-        DRAW_LIST_ITEM_DIRTY_FLAG_NONE = 0u,
-        DRAW_LIST_ITEM_DIRTY_FLAG_PSO  = 1 << 0u,
-        DRAW_LIST_ITEM_DIRTY_FLAG_LAST = DRAW_LIST_ITEM_DIRTY_FLAG_PSO,
-        DRAW_LIST_ITEM_DIRTY_FLAG_ALL  = DRAW_LIST_ITEM_DIRTY_FLAG_LAST * 2 - 1
+        DRAW_LIST_ITEM_DIRTY_FLAG_NONE      = 0u,
+        DRAW_LIST_ITEM_DIRTY_FLAG_PSO       = 1 << 0u,
+        DRAW_LIST_ITEM_DIRTY_FLAG_MESH_DATA = 1 << 0u,
+        DRAW_LIST_ITEM_DIRTY_FLAG_LAST      = DRAW_LIST_ITEM_DIRTY_FLAG_MESH_DATA,
+        DRAW_LIST_ITEM_DIRTY_FLAG_ALL       = DRAW_LIST_ITEM_DIRTY_FLAG_LAST * 2 - 1
     };
 
 protected:
@@ -112,10 +113,22 @@ private:
     struct DrawListItem
     {
         const HnDrawItem& DrawItem;
-        IPipelineState*   pPSO    = nullptr;
-        Uint32            Version = 0;
 
-        constexpr explicit operator bool() const { return pPSO != nullptr; }
+        IPipelineState* pPSO = nullptr;
+
+        IBuffer* IndexBuffer = nullptr;
+        Uint32   StartIndex  = 0;
+        Uint32   NumVertices = 0;
+
+        std::array<IBuffer*, 4> VertexBuffers    = {};
+        Uint32                  NumVertexBuffers = 0;
+
+        Uint32 Version = 0;
+
+        operator bool() const
+        {
+            return pPSO != nullptr && NumVertices > 0;
+        }
     };
 
     void UpdateDrawList(const pxr::TfTokenVector& RenderTags);
