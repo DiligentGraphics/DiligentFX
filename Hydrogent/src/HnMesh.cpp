@@ -377,6 +377,27 @@ static std::shared_ptr<pxr::HdBufferSource> CreateBufferSource(const pxr::TfToke
     return BufferSource;
 }
 
+static HnRenderPass::SupportedVertexInputsSetType GetSupportedPrimvars(
+    const pxr::HdRenderIndex&  RenderIndex,
+    const pxr::SdfPath&        MaterialId,
+    const pxr::HdMeshTopology& Topology)
+{
+    HnRenderPass::SupportedVertexInputsSetType SupportedPrimvars =
+        HnRenderPass::GetSupportedVertexInputs(static_cast<const HnMaterial*>(RenderIndex.GetSprim(pxr::HdPrimTypeTokens->material, MaterialId)));
+
+    {
+        const pxr::HdGeomSubsets GeomSubsets = Topology.GetGeomSubsets();
+        for (const pxr::HdGeomSubset& Subset : GeomSubsets)
+        {
+            HnRenderPass::SupportedVertexInputsSetType SubsetPrimvars =
+                HnRenderPass::GetSupportedVertexInputs(static_cast<const HnMaterial*>(RenderIndex.GetSprim(pxr::HdPrimTypeTokens->material, Subset.materialId)));
+            SupportedPrimvars.insert(SubsetPrimvars.begin(), SubsetPrimvars.end());
+        }
+    }
+
+    return SupportedPrimvars;
+}
+
 bool HnMesh::UpdateVertexPrimvars(pxr::HdSceneDelegate& SceneDelegate,
                                   pxr::HdRenderParam*   RenderParam,
                                   pxr::HdDirtyBits&     DirtyBits,
@@ -387,8 +408,7 @@ bool HnMesh::UpdateVertexPrimvars(pxr::HdSceneDelegate& SceneDelegate,
 
     const int NumPoints = m_Topology.GetNumPoints();
 
-    const auto* Material          = static_cast<const HnMaterial*>(SceneDelegate.GetRenderIndex().GetSprim(pxr::HdPrimTypeTokens->material, GetMaterialId()));
-    const auto  SupportedPrimvars = HnRenderPass::GetSupportedVertexInputs(Material);
+    const HnRenderPass::SupportedVertexInputsSetType SupportedPrimvars = GetSupportedPrimvars(SceneDelegate.GetRenderIndex(), GetMaterialId(), m_Topology);
 
     pxr::HdPrimvarDescriptorVector VertexPrims = GetPrimvarDescriptors(&SceneDelegate, pxr::HdInterpolationVertex);
     for (const pxr::HdPrimvarDescriptor& PrimDesc : VertexPrims)
@@ -426,8 +446,7 @@ void HnMesh::UpdateFaceVaryingPrimvars(pxr::HdSceneDelegate& SceneDelegate,
     VERIFY_EXPR(m_VertexData);
     const pxr::SdfPath& Id = GetId();
 
-    const auto* Material          = static_cast<const HnMaterial*>(SceneDelegate.GetRenderIndex().GetSprim(pxr::HdPrimTypeTokens->material, GetMaterialId()));
-    const auto  SupportedPrimvars = HnRenderPass::GetSupportedVertexInputs(Material);
+    const HnRenderPass::SupportedVertexInputsSetType SupportedPrimvars = GetSupportedPrimvars(SceneDelegate.GetRenderIndex(), GetMaterialId(), m_Topology);
 
     pxr::HdPrimvarDescriptorVector FaceVaryingPrims = GetPrimvarDescriptors(&SceneDelegate, pxr::HdInterpolationFaceVarying);
     for (const pxr::HdPrimvarDescriptor& PrimDesc : FaceVaryingPrims)
