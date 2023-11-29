@@ -207,7 +207,7 @@ void HnMaterial::InitTextureAttribs(HnTextureRegistry& TexRegistry, const USD_Re
                 float    Rotation           = Param->Transform2d.Rotation;
                 if (Rotation != 0)
                 {
-                    UVScaleAndRotation *= float2x2::Rotation(-Rotation);
+                    UVScaleAndRotation *= float2x2::Rotation(DegToRad(Rotation));
                 }
 
                 TexAttribs.UBias = Param->Transform2d.Translation[0];
