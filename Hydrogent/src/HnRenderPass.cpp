@@ -387,7 +387,9 @@ void HnRenderPass::UpdateDrawList(const pxr::TfTokenVector& RenderTags)
                     (m_Params.Selection == HnRenderPassParams::SelectionType::Selected && IsSelected) ||
                     (m_Params.Selection == HnRenderPassParams::SelectionType::Unselected && !IsSelected))
                 {
-                    m_DrawList.push_back(DrawListItem{*static_cast<const HnDrawItem*>(pDrawItem)});
+                    const HnDrawItem& DrawItem = static_cast<const HnDrawItem&>(*pDrawItem);
+                    if (DrawItem.IsValid())
+                        m_DrawList.push_back(DrawListItem{DrawItem});
                 }
             }
 

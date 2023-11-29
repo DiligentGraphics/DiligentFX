@@ -66,6 +66,8 @@ public:
         RefCntAutoPtr<IBuffer> Normals;
 
         std::array<RefCntAutoPtr<IBuffer>, 2> TexCoords;
+
+        operator bool() const { return Positions; }
     };
 
     void                SetGeometryData(GeometryData&& Data) { m_GeometryData = std::move(Data); }
@@ -87,6 +89,11 @@ public:
     const TopologyData& GetFaces() const { return m_Faces; }
     const TopologyData& GetEdges() const { return m_Edges; }
     const TopologyData& GetPoints() const { return m_Points; }
+
+    bool IsValid() const
+    {
+        return m_GeometryData && (m_Faces || m_Edges || m_Points);
+    }
 
 private:
     const HnMesh&     m_Mesh;

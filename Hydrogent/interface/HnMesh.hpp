@@ -86,39 +86,39 @@ public:
     /// Returns the face index buffer.
     ///
     /// \remarks    The index buffer contains the triangle list.
-    IBuffer* GetFaceIndexBuffer() const { return m_pFaceIndexBuffer; }
+    IBuffer* GetFaceIndexBuffer() const { return m_IndexData.Faces; }
 
     /// Returns the edges index buffer.
     ///
     /// \remarks    The index buffer contains the line list.
-    IBuffer* GetEdgeIndexBuffer() const { return m_pEdgeIndexBuffer; }
+    IBuffer* GetEdgeIndexBuffer() const { return m_IndexData.Edges; }
 
     /// Returns the points index buffer.
     ///
     /// \remarks    The index buffer contains the point list.
-    IBuffer* GetPointsIndexBuffer() const { return m_pPointsIndexBuffer; }
+    IBuffer* GetPointsIndexBuffer() const { return m_IndexData.Points; }
 
-    Uint32 GetNumFaceTriangles() const { return m_NumFaceTriangles; }
-    Uint32 GetNumEdges() const { return m_NumEdges; }
+    Uint32 GetNumFaceTriangles() const { return m_IndexData.NumFaceTriangles; }
+    Uint32 GetNumEdges() const { return m_IndexData.NumEdges; }
     Uint32 GetNumPoints() const { return m_Topology.GetNumPoints(); }
 
     /// Returns the start index of the face data in the index buffer.
     ///
     /// \remarks    This value should be used as the start index location
     ///             for the face drawing commands.
-    Uint32 GetFaceStartIndex() const { return m_FaceStartIndex; }
+    Uint32 GetFaceStartIndex() const { return m_IndexData.FaceStartIndex; }
 
     /// Returns the start index of the edges data in the index buffer.
     ///
     /// \remarks    This value should be used as the start index location
     ///             for the mesh edges drawing commands.
-    Uint32 GetEdgeStartIndex() const { return m_EdgeStartIndex; }
+    Uint32 GetEdgeStartIndex() const { return m_IndexData.EdgeStartIndex; }
 
     /// Returns the start index of the points data in the index buffer.
     ///
     /// \remarks    This value should be used as the start index location
     ///             for the points drawing commands.
-    Uint32 GetPointsStartIndex() const { return m_PointsStartIndex; }
+    Uint32 GetPointsStartIndex() const { return m_IndexData.PointsStartIndex; }
 
     const float4x4& GetTransform() const { return m_Transform; }
     const float4&   GetDisplayColor() const { return m_DisplayColor; }
@@ -155,7 +155,7 @@ private:
                     pxr::HdDirtyBits&     DirtyBits,
                     const pxr::TfToken&   ReprToken);
 
-    bool UpdateVertexPrimvars(pxr::HdSceneDelegate& SceneDelegate,
+    void UpdateVertexPrimvars(pxr::HdSceneDelegate& SceneDelegate,
                               pxr::HdRenderParam*   RenderParam,
                               pxr::HdDirtyBits&     DirtyBits,
                               const pxr::TfToken&   ReprToken);
@@ -194,20 +194,22 @@ private:
     void ProcessDrawItems(HandleDrawItemFuncType&&           HandleDrawItem,
                           HandleGeomSubsetDrawItemFuncType&& HandleGeomSubsetDrawItem);
 
+    void Invalidate();
+
 private:
     const Uint32 m_UID;
 
     pxr::HdMeshTopology m_Topology;
 
-    struct IndexData
+    struct StagingIndexData
     {
         pxr::VtVec3iArray         TrianglesFaceIndices;
         std::vector<pxr::GfVec2i> MeshEdgeIndices;
         std::vector<Uint32>       PointIndices;
     };
-    std::unique_ptr<IndexData> m_IndexData;
+    std::unique_ptr<StagingIndexData> m_StagingIndexData;
 
-    struct VertexData
+    struct StagingVertexData
     {
         // Use map to keep buffer sources sorted by name
         std::map<pxr::TfToken, std::shared_ptr<pxr::HdBufferSource>> Sources;
@@ -215,27 +217,36 @@ private:
         // Buffer source name to vertex pool element index (e.g. "normals" -> 0, "points" -> 1, etc.)
         std::unordered_map<pxr::TfToken, Uint32, pxr::TfToken::HashFunctor> NameToPoolIndex;
     };
-    std::unique_ptr<VertexData> m_VertexData;
-
-    Uint32 m_NumFaceTriangles = 0;
-    Uint32 m_NumEdges         = 0;
-    Uint32 m_FaceStartIndex   = 0;
-    Uint32 m_EdgeStartIndex   = 0;
-    Uint32 m_PointsStartIndex = 0;
+    std::unique_ptr<StagingVertexData> m_StagingVertexData;
 
     float4x4 m_Transform    = float4x4::Identity();
     float4   m_DisplayColor = {1, 1, 1, 1};
 
-    RefCntAutoPtr<IBuffer> m_pFaceIndexBuffer;
-    RefCntAutoPtr<IBuffer> m_pEdgeIndexBuffer;
-    RefCntAutoPtr<IBuffer> m_pPointsIndexBuffer;
+    struct IndexData
+    {
+        Uint32 NumFaceTriangles = 0;
+        Uint32 NumEdges         = 0;
+        Uint32 FaceStartIndex   = 0;
+        Uint32 EdgeStartIndex   = 0;
+        Uint32 PointsStartIndex = 0;
 
-    RefCntAutoPtr<IVertexPoolAllocation> m_VertexAllocation;
-    RefCntAutoPtr<IBufferSuballocation>  m_FaceIndexAllocation;
-    RefCntAutoPtr<IBufferSuballocation>  m_EdgeIndexAllocation;
-    RefCntAutoPtr<IBufferSuballocation>  m_PointsIndexAllocation;
+        RefCntAutoPtr<IBuffer> Faces;
+        RefCntAutoPtr<IBuffer> Edges;
+        RefCntAutoPtr<IBuffer> Points;
 
-    std::unordered_map<pxr::TfToken, RefCntAutoPtr<IBuffer>, pxr::TfToken::HashFunctor> m_VertexBuffers;
+        RefCntAutoPtr<IBufferSuballocation> FaceAllocation;
+        RefCntAutoPtr<IBufferSuballocation> EdgeAllocation;
+        RefCntAutoPtr<IBufferSuballocation> PointsAllocation;
+    };
+    IndexData m_IndexData;
+
+    struct VertexData
+    {
+        RefCntAutoPtr<IVertexPoolAllocation> PoolAllocation;
+
+        std::unordered_map<pxr::TfToken, RefCntAutoPtr<IBuffer>, pxr::TfToken::HashFunctor> Buffers;
+    };
+    VertexData m_VertexData;
 
     Uint32 m_Version = 0;
 };

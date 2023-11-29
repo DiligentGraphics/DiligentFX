@@ -236,6 +236,15 @@ void HnMesh::_InitRepr(const pxr::TfToken& ReprToken, pxr::HdDirtyBits* DirtyBit
     }
 }
 
+void HnMesh::Invalidate()
+{
+    m_StagingVertexData.reset();
+    m_StagingIndexData.reset();
+    m_Topology   = {};
+    m_VertexData = {};
+    m_IndexData  = {};
+}
+
 void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
                         pxr::HdRenderParam*   RenderParam,
                         pxr::HdDirtyBits&     DirtyBits,
@@ -251,17 +260,20 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
     {
         UpdateTopology(SceneDelegate, RenderParam, DirtyBits, ReprToken);
     }
+
     if (pxr::HdChangeTracker::IsAnyPrimvarDirty(DirtyBits, Id))
     {
-        m_VertexData = std::make_unique<VertexData>();
-        if (UpdateVertexPrimvars(SceneDelegate, RenderParam, DirtyBits, ReprToken))
+        m_StagingVertexData = std::make_unique<StagingVertexData>();
+        UpdateVertexPrimvars(SceneDelegate, RenderParam, DirtyBits, ReprToken);
+
+        if (m_StagingVertexData->Sources.find(pxr::HdTokens->points) != m_StagingVertexData->Sources.end())
         {
             // Collect face-varying primvar sources
             FaceSourcesMapType FaceSources;
             UpdateFaceVaryingPrimvars(SceneDelegate, RenderParam, DirtyBits, ReprToken, FaceSources);
 
             // If there are neither vertex nor face-varying normals, generate smooth normals
-            if (m_VertexData->Sources.find(pxr::HdTokens->normals) == m_VertexData->Sources.end() &&
+            if (m_StagingVertexData->Sources.find(pxr::HdTokens->normals) == m_StagingVertexData->Sources.end() &&
                 FaceSources.find(pxr::HdTokens->normals) == FaceSources.end())
             {
                 GenerateSmoothNormals();
@@ -272,12 +284,19 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
             {
                 ConvertVertexPrimvarSources(std::move(FaceSources));
             }
-        }
-        UpdateConstantPrimvars(SceneDelegate, RenderParam, DirtyBits, ReprToken);
 
-        // Allocate space for vertex and index buffers.
-        // Note that this only reserves space, but does not create any buffers.
-        AllocatePooledResources(SceneDelegate, RenderParam);
+            UpdateConstantPrimvars(SceneDelegate, RenderParam, DirtyBits, ReprToken);
+
+            // Allocate space for vertex and index buffers.
+            // Note that this only reserves space, but does not create any buffers.
+            AllocatePooledResources(SceneDelegate, RenderParam);
+        }
+        else
+        {
+            LOG_WARNING_MESSAGE("Unable to find required primvar 'points' for rprim ", Id, ".");
+
+            Invalidate();
+        }
 
         DirtyBits &= ~pxr::HdChangeTracker::DirtyPrimvar;
     }
@@ -287,6 +306,7 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
         pxr::GfMatrix4d Transform = SceneDelegate.GetTransform(Id);
         m_Transform               = float4x4::MakeMatrix(Transform.data());
     }
+
     if (pxr::HdChangeTracker::IsVisibilityDirty(DirtyBits, Id))
     {
         _sharedData.visible = SceneDelegate.GetVisible(Id);
@@ -331,19 +351,19 @@ void HnMesh::UpdateTopology(pxr::HdSceneDelegate& SceneDelegate,
         UpdateDrawItemsForGeometrySubsets(SceneDelegate, RenderParam);
     }
 
-    m_IndexData = std::make_unique<IndexData>();
+    m_StagingIndexData = std::make_unique<StagingIndexData>();
 
     pxr::HdMeshUtil MeshUtil{&m_Topology, Id};
     pxr::VtIntArray PrimitiveParams;
-    MeshUtil.ComputeTriangleIndices(&m_IndexData->TrianglesFaceIndices, &PrimitiveParams, nullptr);
-    MeshUtil.EnumerateEdges(&m_IndexData->MeshEdgeIndices);
-    m_NumFaceTriangles = static_cast<Uint32>(m_IndexData->TrianglesFaceIndices.size());
-    m_NumEdges         = static_cast<Uint32>(m_IndexData->MeshEdgeIndices.size());
+    MeshUtil.ComputeTriangleIndices(&m_StagingIndexData->TrianglesFaceIndices, &PrimitiveParams, nullptr);
+    MeshUtil.EnumerateEdges(&m_StagingIndexData->MeshEdgeIndices);
+    m_IndexData.NumFaceTriangles = static_cast<Uint32>(m_StagingIndexData->TrianglesFaceIndices.size());
+    m_IndexData.NumEdges         = static_cast<Uint32>(m_StagingIndexData->MeshEdgeIndices.size());
 
     DirtyBits &= ~pxr::HdChangeTracker::DirtyTopology;
 }
 
-static std::shared_ptr<pxr::HdBufferSource> CreateBufferSource(const pxr::TfToken& Name, const pxr::VtValue& Data, size_t ExpectedNumElements)
+static std::shared_ptr<pxr::HdBufferSource> CreateBufferSource(const pxr::TfToken& Name, const pxr::VtValue& Data, size_t ExpectedNumElements, const pxr::SdfPath& MeshId)
 {
     auto BufferSource = std::make_shared<pxr::HdVtBufferSource>(
         Name,
@@ -358,7 +378,7 @@ static std::shared_ptr<pxr::HdBufferSource> CreateBufferSource(const pxr::TfToke
     // Verify primvar length - it is alright to have more data than we index into.
     if (BufferSource->GetNumElements() < ExpectedNumElements)
     {
-        LOG_WARNING_MESSAGE("Primvar ", Name, " has only ", BufferSource->GetNumElements(),
+        LOG_WARNING_MESSAGE("Primvar '", Name, "' in mesh ", MeshId, " has only ", BufferSource->GetNumElements(),
                             " elements, while its topology expects at least ", ExpectedNumElements,
                             " elements. Skipping primvar.");
         return nullptr;
@@ -368,7 +388,7 @@ static std::shared_ptr<pxr::HdBufferSource> CreateBufferSource(const pxr::TfToke
         // If the primvar has more data than needed, we issue a warning,
         // but don't skip the primvar update. Truncate the buffer to
         // the expected length.
-        LOG_WARNING_MESSAGE("Primvar ", Name, " has only ", BufferSource->GetNumElements(),
+        LOG_WARNING_MESSAGE("Primvar '", Name, "' in mesh ", MeshId, " has ", BufferSource->GetNumElements(),
                             " elements, while its topology expects ", ExpectedNumElements,
                             " elements. Truncating.");
         BufferSource->Truncate(ExpectedNumElements);
@@ -398,12 +418,12 @@ static HnRenderPass::SupportedVertexInputsSetType GetSupportedPrimvars(
     return SupportedPrimvars;
 }
 
-bool HnMesh::UpdateVertexPrimvars(pxr::HdSceneDelegate& SceneDelegate,
+void HnMesh::UpdateVertexPrimvars(pxr::HdSceneDelegate& SceneDelegate,
                                   pxr::HdRenderParam*   RenderParam,
                                   pxr::HdDirtyBits&     DirtyBits,
                                   const pxr::TfToken&   ReprToken)
 {
-    VERIFY_EXPR(m_VertexData);
+    VERIFY_EXPR(m_StagingVertexData);
     const pxr::SdfPath& Id = GetId();
 
     const int NumPoints = m_Topology.GetNumPoints();
@@ -424,17 +444,11 @@ bool HnMesh::UpdateVertexPrimvars(pxr::HdSceneDelegate& SceneDelegate,
         if (PrimValue.IsEmpty())
             continue;
 
-        if (auto BufferSource = CreateBufferSource(PrimDesc.name, PrimValue, NumPoints))
+        if (auto BufferSource = CreateBufferSource(PrimDesc.name, PrimValue, NumPoints, Id))
         {
-            m_VertexData->Sources.emplace(PrimDesc.name, std::move(BufferSource));
-        }
-        else if (PrimDesc.name == pxr::HdTokens->points)
-        {
-            LOG_WARNING_MESSAGE("Skipping prim ", Id, " because its points data is missing.");
-            return false;
+            m_StagingVertexData->Sources.emplace(PrimDesc.name, std::move(BufferSource));
         }
     }
-    return true;
 }
 
 void HnMesh::UpdateFaceVaryingPrimvars(pxr::HdSceneDelegate& SceneDelegate,
@@ -443,7 +457,7 @@ void HnMesh::UpdateFaceVaryingPrimvars(pxr::HdSceneDelegate& SceneDelegate,
                                        const pxr::TfToken&   ReprToken,
                                        FaceSourcesMapType&   FaceSources)
 {
-    VERIFY_EXPR(m_VertexData);
+    VERIFY_EXPR(m_StagingVertexData);
     const pxr::SdfPath& Id = GetId();
 
     const HnRenderPass::SupportedVertexInputsSetType SupportedPrimvars = GetSupportedPrimvars(SceneDelegate.GetRenderIndex(), GetMaterialId(), m_Topology);
@@ -479,7 +493,7 @@ void HnMesh::UpdateFaceVaryingPrimvars(pxr::HdSceneDelegate& SceneDelegate,
                                                            PrimVarSource->GetTupleType().type,
                                                            &TriangulatedPrimValue))
         {
-            if (auto BufferSource = CreateBufferSource(PrimDesc.name, TriangulatedPrimValue, size_t{m_NumFaceTriangles} * 3))
+            if (auto BufferSource = CreateBufferSource(PrimDesc.name, TriangulatedPrimValue, size_t{m_IndexData.NumFaceTriangles} * 3, Id))
             {
                 FaceSources.emplace(PrimDesc.name, std::move(BufferSource));
             }
@@ -492,7 +506,7 @@ void HnMesh::UpdateConstantPrimvars(pxr::HdSceneDelegate& SceneDelegate,
                                     pxr::HdDirtyBits&     DirtyBits,
                                     const pxr::TfToken&   ReprToken)
 {
-    VERIFY_EXPR(m_VertexData);
+    VERIFY_EXPR(m_StagingVertexData);
     const pxr::SdfPath& Id = GetId();
 
     pxr::HdPrimvarDescriptorVector ConstantPrims = GetPrimvarDescriptors(&SceneDelegate, pxr::HdInterpolationConstant);
@@ -550,8 +564,8 @@ void HnMesh::GenerateSmoothNormals()
         return;
     }
 
-    auto points_it = m_VertexData->Sources.find(pxr::HdTokens->points);
-    if (points_it == m_VertexData->Sources.end())
+    auto points_it = m_StagingVertexData->Sources.find(pxr::HdTokens->points);
+    if (points_it == m_StagingVertexData->Sources.end())
     {
         LOG_ERROR_MESSAGE("Skipping smooth normal generation for ", GetId(), " because its points data is missing.");
         return;
@@ -571,9 +585,9 @@ void HnMesh::GenerateSmoothNormals()
         return;
     }
 
-    if (auto BufferSource = CreateBufferSource(pxr::HdTokens->normals, pxr::VtValue{Normals}, PointsSource.GetNumElements()))
+    if (auto BufferSource = CreateBufferSource(pxr::HdTokens->normals, pxr::VtValue{Normals}, PointsSource.GetNumElements(), GetId()))
     {
-        m_VertexData->Sources.emplace(pxr::HdTokens->normals, std::move(BufferSource));
+        m_StagingVertexData->Sources.emplace(pxr::HdTokens->normals, std::move(BufferSource));
     }
 }
 
@@ -651,7 +665,7 @@ private:
 void HnMesh::ConvertVertexPrimvarSources(FaceSourcesMapType&& FaceSources)
 {
     pxr::VtVec3iArray TrianglesFaceIndices;
-    if (!m_IndexData || m_IndexData->TrianglesFaceIndices.empty())
+    if (!m_StagingIndexData || m_StagingIndexData->TrianglesFaceIndices.empty())
     {
         // Need to regenerate triangle indices
         pxr::HdMeshUtil MeshUtil{&m_Topology, GetId()};
@@ -660,13 +674,13 @@ void HnMesh::ConvertVertexPrimvarSources(FaceSourcesMapType&& FaceSources)
         if (TrianglesFaceIndices.empty())
             return;
     }
-    const pxr::VtVec3iArray& Indices = !TrianglesFaceIndices.empty() ? TrianglesFaceIndices : m_IndexData->TrianglesFaceIndices;
-    VERIFY(Indices.size() == m_NumFaceTriangles,
+    const pxr::VtVec3iArray& Indices = !TrianglesFaceIndices.empty() ? TrianglesFaceIndices : m_StagingIndexData->TrianglesFaceIndices;
+    VERIFY(Indices.size() == m_IndexData.NumFaceTriangles,
            "The number of indices is not consistent with the previously computed value. "
            "This may indicate that the topology was not updated during the last sync.");
 
     // Unpack vertex sources by unfolding triangle indices into linear list of vertices
-    for (auto& source_it : m_VertexData->Sources)
+    for (auto& source_it : m_StagingVertexData->Sources)
     {
         auto& pSource = source_it.second;
         if (pSource == nullptr)
@@ -697,7 +711,7 @@ void HnMesh::ConvertVertexPrimvarSources(FaceSourcesMapType&& FaceSources)
     // Add face-varying sources
     for (auto& face_source_it : FaceSources)
     {
-        auto inserted = m_VertexData->Sources.emplace(face_source_it.first, std::move(face_source_it.second)).second;
+        auto inserted = m_StagingVertexData->Sources.emplace(face_source_it.first, std::move(face_source_it.second)).second;
         if (!inserted)
         {
             LOG_ERROR_MESSAGE("Failed to add face-varying source ", face_source_it.first, " to ", GetId(), " as vertex source with the same name already exists.");
@@ -719,17 +733,17 @@ void HnMesh::ConvertVertexPrimvarSources(FaceSourcesMapType&& FaceSources)
     }
 
     // Replace original triangle indices with the list of unfolded face indices
-    m_IndexData->TrianglesFaceIndices.resize(GetNumFaceTriangles());
-    for (Uint32 i = 0; i < m_IndexData->TrianglesFaceIndices.size(); ++i)
+    m_StagingIndexData->TrianglesFaceIndices.resize(GetNumFaceTriangles());
+    for (Uint32 i = 0; i < m_StagingIndexData->TrianglesFaceIndices.size(); ++i)
     {
-        pxr::GfVec3i& Tri{m_IndexData->TrianglesFaceIndices[i]};
+        pxr::GfVec3i& Tri{m_StagingIndexData->TrianglesFaceIndices[i]};
         Tri[0] = i * 3 + 0;
         Tri[1] = i * 3 + 1;
         Tri[2] = i * 3 + 2;
     }
 
     // Update edge indices
-    for (pxr::GfVec2i& Edge : m_IndexData->MeshEdgeIndices)
+    for (pxr::GfVec2i& Edge : m_StagingIndexData->MeshEdgeIndices)
     {
         auto v0_it = ReverseVertexMapping.find(Edge[0]);
         auto v1_it = ReverseVertexMapping.find(Edge[1]);
@@ -746,11 +760,11 @@ void HnMesh::ConvertVertexPrimvarSources(FaceSourcesMapType&& FaceSources)
     }
 
     // Create point indices
-    m_IndexData->PointIndices.resize(GetNumPoints());
-    for (size_t i = 0; i < m_IndexData->PointIndices.size(); ++i)
+    m_StagingIndexData->PointIndices.resize(GetNumPoints());
+    for (size_t i = 0; i < m_StagingIndexData->PointIndices.size(); ++i)
     {
-        auto v_it                    = ReverseVertexMapping.find(i);
-        m_IndexData->PointIndices[i] = v_it != ReverseVertexMapping.end() ? static_cast<Uint32>(v_it->second) : 0;
+        auto v_it                           = ReverseVertexMapping.find(i);
+        m_StagingIndexData->PointIndices[i] = v_it != ReverseVertexMapping.end() ? static_cast<Uint32>(v_it->second) : 0;
     }
 }
 
@@ -760,35 +774,35 @@ void HnMesh::AllocatePooledResources(pxr::HdSceneDelegate& SceneDelegate,
     HnRenderDelegate*      RenderDelegate = static_cast<HnRenderDelegate*>(SceneDelegate.GetRenderIndex().GetRenderDelegate());
     GLTF::ResourceManager& ResMgr         = RenderDelegate->GetResourceManager();
 
-    if (m_VertexData && !m_VertexData->Sources.empty() && static_cast<const HnRenderParam*>(RenderParam)->GetUseVertexPool())
+    if (m_StagingVertexData && !m_StagingVertexData->Sources.empty() && static_cast<const HnRenderParam*>(RenderParam)->GetUseVertexPool())
     {
         // Allocate vertex buffers for face data
         Uint32 StartVertex = 0;
         {
             GLTF::ResourceManager::VertexLayoutKey VtxKey;
-            VtxKey.Elements.reserve(m_VertexData->Sources.size());
-            const auto NumVerts = m_VertexData->Sources.begin()->second->GetNumElements();
-            for (auto& source_it : m_VertexData->Sources)
+            VtxKey.Elements.reserve(m_StagingVertexData->Sources.size());
+            const auto NumVerts = m_StagingVertexData->Sources.begin()->second->GetNumElements();
+            for (auto& source_it : m_StagingVertexData->Sources)
             {
                 VERIFY(NumVerts == source_it.second->GetNumElements(), "Inconsistent number of elements in vertex data sources");
                 const auto ElementType = source_it.second->GetTupleType().type;
                 const auto ElementSize = HdDataSizeOfType(ElementType);
 
-                m_VertexData->NameToPoolIndex[source_it.first] = static_cast<Uint32>(VtxKey.Elements.size());
+                m_StagingVertexData->NameToPoolIndex[source_it.first] = static_cast<Uint32>(VtxKey.Elements.size());
                 VtxKey.Elements.emplace_back(static_cast<Uint32>(ElementSize), BIND_VERTEX_BUFFER);
             }
 
-            m_VertexAllocation = ResMgr.AllocateVertices(VtxKey, static_cast<Uint32>(NumVerts));
-            VERIFY_EXPR(m_VertexAllocation);
-            StartVertex = m_VertexAllocation->GetStartVertex();
+            m_VertexData.PoolAllocation = ResMgr.AllocateVertices(VtxKey, static_cast<Uint32>(NumVerts));
+            VERIFY_EXPR(m_VertexData.PoolAllocation);
+            StartVertex = m_VertexData.PoolAllocation->GetStartVertex();
         }
 
         // WebGL/GLES do not support base vertex, so we need to adjust indices.
         if (StartVertex != 0)
         {
-            if (!m_IndexData->TrianglesFaceIndices.empty())
+            if (!m_StagingIndexData->TrianglesFaceIndices.empty())
             {
-                for (pxr::GfVec3i& Tri : m_IndexData->TrianglesFaceIndices)
+                for (pxr::GfVec3i& Tri : m_StagingIndexData->TrianglesFaceIndices)
                 {
                     Tri[0] += StartVertex;
                     Tri[1] += StartVertex;
@@ -796,18 +810,18 @@ void HnMesh::AllocatePooledResources(pxr::HdSceneDelegate& SceneDelegate,
                 }
             }
 
-            if (!m_IndexData->MeshEdgeIndices.empty())
+            if (!m_StagingIndexData->MeshEdgeIndices.empty())
             {
-                for (pxr::GfVec2i& Edge : m_IndexData->MeshEdgeIndices)
+                for (pxr::GfVec2i& Edge : m_StagingIndexData->MeshEdgeIndices)
                 {
                     Edge[0] += StartVertex;
                     Edge[1] += StartVertex;
                 }
             }
 
-            if (!m_IndexData->PointIndices.empty())
+            if (!m_StagingIndexData->PointIndices.empty())
             {
-                for (Uint32& Point : m_IndexData->PointIndices)
+                for (Uint32& Point : m_StagingIndexData->PointIndices)
                 {
                     Point += StartVertex;
                 }
@@ -815,33 +829,33 @@ void HnMesh::AllocatePooledResources(pxr::HdSceneDelegate& SceneDelegate,
             else
             {
                 // If there are no point indices, we need to create them
-                m_IndexData->PointIndices.resize(GetNumPoints());
-                for (Uint32 i = 0; i < m_IndexData->PointIndices.size(); ++i)
+                m_StagingIndexData->PointIndices.resize(GetNumPoints());
+                for (Uint32 i = 0; i < m_StagingIndexData->PointIndices.size(); ++i)
                 {
-                    m_IndexData->PointIndices[i] = StartVertex + i;
+                    m_StagingIndexData->PointIndices[i] = StartVertex + i;
                 }
             }
         }
     }
 
-    if (m_IndexData && static_cast<const HnRenderParam*>(RenderParam)->GetUseIndexPool())
+    if (m_StagingIndexData && static_cast<const HnRenderParam*>(RenderParam)->GetUseIndexPool())
     {
-        if (!m_IndexData->TrianglesFaceIndices.empty())
+        if (!m_StagingIndexData->TrianglesFaceIndices.empty())
         {
-            m_FaceIndexAllocation = ResMgr.AllocateIndices(sizeof(Uint32) * GetNumFaceTriangles() * 3);
-            m_FaceStartIndex      = m_FaceIndexAllocation->GetOffset() / sizeof(Uint32);
+            m_IndexData.FaceAllocation = ResMgr.AllocateIndices(sizeof(Uint32) * GetNumFaceTriangles() * 3);
+            m_IndexData.FaceStartIndex = m_IndexData.FaceAllocation->GetOffset() / sizeof(Uint32);
         }
 
-        if (!m_IndexData->MeshEdgeIndices.empty())
+        if (!m_StagingIndexData->MeshEdgeIndices.empty())
         {
-            m_EdgeIndexAllocation = ResMgr.AllocateIndices(sizeof(Uint32) * GetNumEdges() * 2);
-            m_EdgeStartIndex      = m_EdgeIndexAllocation->GetOffset() / sizeof(Uint32);
+            m_IndexData.EdgeAllocation = ResMgr.AllocateIndices(sizeof(Uint32) * GetNumEdges() * 2);
+            m_IndexData.EdgeStartIndex = m_IndexData.EdgeAllocation->GetOffset() / sizeof(Uint32);
         }
 
-        if (!m_IndexData->PointIndices.empty())
+        if (!m_StagingIndexData->PointIndices.empty())
         {
-            m_PointsIndexAllocation = ResMgr.AllocateIndices(sizeof(Uint32) * GetNumPoints());
-            m_PointsStartIndex      = m_PointsIndexAllocation->GetOffset() / sizeof(Uint32);
+            m_IndexData.PointsAllocation = ResMgr.AllocateIndices(sizeof(Uint32) * GetNumPoints());
+            m_IndexData.PointsStartIndex = m_IndexData.PointsAllocation->GetOffset() / sizeof(Uint32);
         }
     }
 }
@@ -850,13 +864,13 @@ void HnMesh::UpdateVertexBuffers(HnRenderDelegate& RenderDelegate)
 {
     const RenderDeviceX_N& Device{RenderDelegate.GetDevice()};
 
-    if (!m_VertexData)
+    if (!m_StagingVertexData)
     {
         UNEXPECTED("Vertex data is null");
         return;
     }
 
-    for (auto source_it : m_VertexData->Sources)
+    for (auto source_it : m_StagingVertexData->Sources)
     {
         const pxr::HdBufferSource* pSource = source_it.second.get();
         if (pSource == nullptr)
@@ -872,7 +886,7 @@ void HnMesh::UpdateVertexBuffers(HnRenderDelegate& RenderDelegate)
             VERIFY(ElementType == pxr::HdTypeFloatVec3, "Unexpected normal size");
 
         RefCntAutoPtr<IBuffer> pBuffer;
-        if (!m_VertexAllocation)
+        if (!m_VertexData.PoolAllocation)
         {
             const auto BufferName = GetId().GetString() + " - " + PrimName.GetString();
             BufferDesc Desc{
@@ -887,14 +901,14 @@ void HnMesh::UpdateVertexBuffers(HnRenderDelegate& RenderDelegate)
         }
         else
         {
-            auto idx_it = m_VertexData->NameToPoolIndex.find(PrimName);
-            if (idx_it != m_VertexData->NameToPoolIndex.end())
+            auto idx_it = m_StagingVertexData->NameToPoolIndex.find(PrimName);
+            if (idx_it != m_StagingVertexData->NameToPoolIndex.end())
             {
-                pBuffer = m_VertexAllocation->GetBuffer(idx_it->second);
+                pBuffer = m_VertexData.PoolAllocation->GetBuffer(idx_it->second);
 
                 IDeviceContext* pCtx = RenderDelegate.GetDeviceContext();
-                VERIFY_EXPR(m_VertexAllocation->GetVertexCount() == NumElements);
-                pCtx->UpdateBuffer(pBuffer, m_VertexAllocation->GetStartVertex() * ElementSize, NumElements * ElementSize, pSource->GetData(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+                VERIFY_EXPR(m_VertexData.PoolAllocation->GetVertexCount() == NumElements);
+                pCtx->UpdateBuffer(pBuffer, m_VertexData.PoolAllocation->GetStartVertex() * ElementSize, NumElements * ElementSize, pSource->GetData(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
             }
             else
             {
@@ -902,15 +916,15 @@ void HnMesh::UpdateVertexBuffers(HnRenderDelegate& RenderDelegate)
             }
         }
 
-        m_VertexBuffers[source_it.first] = pBuffer;
+        m_VertexData.Buffers[source_it.first] = pBuffer;
     }
 
-    m_VertexData.reset();
+    m_StagingVertexData.reset();
 }
 
 void HnMesh::UpdateIndexBuffer(HnRenderDelegate& RenderDelegate)
 {
-    VERIFY_EXPR(m_IndexData);
+    VERIFY_EXPR(m_StagingIndexData);
 
     auto PrepareIndexBuffer = [&](const char*           BufferName,
                                   const void*           pData,
@@ -941,35 +955,35 @@ void HnMesh::UpdateIndexBuffer(HnRenderDelegate& RenderDelegate)
         }
     };
 
-    if (!m_IndexData->TrianglesFaceIndices.empty())
+    if (!m_StagingIndexData->TrianglesFaceIndices.empty())
     {
-        VERIFY_EXPR(GetNumFaceTriangles() == static_cast<size_t>(m_IndexData->TrianglesFaceIndices.size()));
-        static_assert(sizeof(m_IndexData->TrianglesFaceIndices[0]) == sizeof(Uint32) * 3, "Unexpected triangle data size");
-        m_pFaceIndexBuffer = PrepareIndexBuffer("Triangle Index Buffer",
-                                                m_IndexData->TrianglesFaceIndices.data(),
-                                                GetNumFaceTriangles() * sizeof(Uint32) * 3,
-                                                m_FaceIndexAllocation);
+        VERIFY_EXPR(GetNumFaceTriangles() == static_cast<size_t>(m_StagingIndexData->TrianglesFaceIndices.size()));
+        static_assert(sizeof(m_StagingIndexData->TrianglesFaceIndices[0]) == sizeof(Uint32) * 3, "Unexpected triangle data size");
+        m_IndexData.Faces = PrepareIndexBuffer("Triangle Index Buffer",
+                                               m_StagingIndexData->TrianglesFaceIndices.data(),
+                                               GetNumFaceTriangles() * sizeof(Uint32) * 3,
+                                               m_IndexData.FaceAllocation);
     }
 
-    if (!m_IndexData->MeshEdgeIndices.empty())
+    if (!m_StagingIndexData->MeshEdgeIndices.empty())
     {
-        VERIFY_EXPR(GetNumEdges() == static_cast<Uint32>(m_IndexData->MeshEdgeIndices.size()));
-        m_pEdgeIndexBuffer = PrepareIndexBuffer("Edge Index Buffer",
-                                                m_IndexData->MeshEdgeIndices.data(),
-                                                GetNumEdges() * sizeof(Uint32) * 2,
-                                                m_EdgeIndexAllocation);
+        VERIFY_EXPR(GetNumEdges() == static_cast<Uint32>(m_StagingIndexData->MeshEdgeIndices.size()));
+        m_IndexData.Edges = PrepareIndexBuffer("Edge Index Buffer",
+                                               m_StagingIndexData->MeshEdgeIndices.data(),
+                                               GetNumEdges() * sizeof(Uint32) * 2,
+                                               m_IndexData.EdgeAllocation);
     }
 
-    if (!m_IndexData->PointIndices.empty())
+    if (!m_StagingIndexData->PointIndices.empty())
     {
-        VERIFY_EXPR(GetNumPoints() == static_cast<Uint32>(m_IndexData->PointIndices.size()));
-        m_pPointsIndexBuffer = PrepareIndexBuffer("Points Index Buffer",
-                                                  m_IndexData->PointIndices.data(),
-                                                  GetNumPoints() * sizeof(Uint32),
-                                                  m_PointsIndexAllocation);
+        VERIFY_EXPR(GetNumPoints() == static_cast<Uint32>(m_StagingIndexData->PointIndices.size()));
+        m_IndexData.Points = PrepareIndexBuffer("Points Index Buffer",
+                                                m_StagingIndexData->PointIndices.data(),
+                                                GetNumPoints() * sizeof(Uint32),
+                                                m_IndexData.PointsAllocation);
     }
 
-    m_IndexData.reset();
+    m_StagingIndexData.reset();
 }
 
 void HnMesh::UpdateDrawItemGpuGeometry(HnRenderDelegate& RenderDelegate)
@@ -1054,13 +1068,13 @@ void HnMesh::UpdateDrawItemGpuTopology()
 
 void HnMesh::CommitGPUResources(HnRenderDelegate& RenderDelegate)
 {
-    if (m_IndexData)
+    if (m_StagingIndexData)
     {
         UpdateIndexBuffer(RenderDelegate);
         UpdateDrawItemGpuTopology();
     }
 
-    if (m_VertexData)
+    if (m_StagingVertexData)
     {
         UpdateVertexBuffers(RenderDelegate);
         UpdateDrawItemGpuGeometry(RenderDelegate);
@@ -1069,8 +1083,8 @@ void HnMesh::CommitGPUResources(HnRenderDelegate& RenderDelegate)
 
 IBuffer* HnMesh::GetVertexBuffer(const pxr::TfToken& Name) const
 {
-    auto it = m_VertexBuffers.find(Name);
-    return it != m_VertexBuffers.end() ? it->second.RawPtr() : nullptr;
+    auto it = m_VertexData.Buffers.find(Name);
+    return it != m_VertexData.Buffers.end() ? it->second.RawPtr() : nullptr;
 }
 
 } // namespace USD
