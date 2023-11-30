@@ -271,7 +271,8 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
             pMaterial->GetBasicShaderAttribs(),
             pMaterial->GetShaderTextureAttribs(),
             pMaterial->GetNumShaderTextureAttribs(),
-            &CustomData);
+            &CustomData,
+            sizeof(CustomData));
 
         if (DrawItem.GetIsFallbackMaterial())
         {

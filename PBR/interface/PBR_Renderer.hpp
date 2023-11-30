@@ -399,7 +399,8 @@ public:
                                          const HLSL::PBRMaterialBasicAttribs&   BasicAttribs,
                                          const HLSL::PBRMaterialTextureAttribs* TextureAttribs,
                                          Uint32                                 NumTextureAttribs,
-                                         const float4*                          CustomData = nullptr);
+                                         const void*                            CustomData     = nullptr,
+                                         size_t                                 CustomDataSize = 0);
 
     Uint32 GetNumShaderTextureAttribs() const { return m_NumShaderTextureAttribs; }
 

@@ -1118,7 +1118,8 @@ void* PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                        
                                                    const HLSL::PBRMaterialBasicAttribs&   BasicAttribs,
                                                    const HLSL::PBRMaterialTextureAttribs* TextureAttribs,
                                                    Uint32                                 NumTextureAttribs,
-                                                   const float4*                          CustomData)
+                                                   const void*                            CustomData,
+                                                   size_t                                 CustomDataSize)
 {
     //struct PBRPrimitiveAttribs
     //{
@@ -1147,12 +1148,13 @@ void* PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                        
            "Material data contains ", NumTextureAttribs, " texture attributes, while the shader only supports ", m_NumShaderTextureAttribs);
     memcpy(pDstTextures, TextureAttribs, sizeof(HLSL::PBRMaterialTextureAttribs) * std::min(NumTextureAttribs, m_NumShaderTextureAttribs));
 
-    float4* pDstCustomData = reinterpret_cast<float4*>(pDstTextures + m_NumShaderTextureAttribs);
+    Uint8* pDstCustomData = reinterpret_cast<Uint8*>(pDstTextures + m_NumShaderTextureAttribs);
     if (CustomData != nullptr)
     {
-        *pDstCustomData = *CustomData;
+        VERIFY_EXPR(CustomDataSize > 0);
+        memcpy(pDstCustomData, CustomData, CustomDataSize);
     }
-    return pDstCustomData + 1;
+    return pDstCustomData + CustomDataSize;
 }
 
 } // namespace Diligent
