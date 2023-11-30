@@ -112,7 +112,10 @@ struct PBRMaterialTextureAttribs
 struct PBRMaterialShaderInfo
 {
     PBRMaterialBasicAttribs   Basic;
+    
+#if PBR_NUM_TEXTURE_ATTRIBUTES > 0
     PBRMaterialTextureAttribs Textures[PBR_NUM_TEXTURE_ATTRIBUTES];
+#endif
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
 	CHECK_STRUCT_ALIGNMENT(PBRMaterialShaderInfo);
