@@ -26,6 +26,8 @@
 
 #pragma once
 
+#include <atomic>
+
 #include "pxr/imaging/hd/renderDelegate.h"
 
 namespace Diligent
@@ -47,10 +49,15 @@ public:
     bool GetUseIndexPool() const { return m_UseIndexPool; }
     bool GetUseTextureAtlas() const { return m_UseTextureAtlas; }
 
+    uint32_t GetGeometrySubsetVersion() const { return m_GeometrySubsetVersion.load(); }
+    void     MakeGeometrySubsetDirty() { m_GeometrySubsetVersion.fetch_add(1); }
+
 private:
     const bool m_UseVertexPool;
     const bool m_UseIndexPool;
     const bool m_UseTextureAtlas;
+
+    std::atomic<uint32_t> m_GeometrySubsetVersion{0};
 };
 
 } // namespace USD

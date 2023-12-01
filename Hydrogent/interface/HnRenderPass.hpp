@@ -145,9 +145,10 @@ private:
     std::vector<DrawListItem>        m_DrawList;
     std::vector<const DrawListItem*> m_PendingDrawItems;
 
-    unsigned int m_CollectionVersion     = ~0u;
-    unsigned int m_RprimRenderTagVersion = ~0u;
-    unsigned int m_TaskRenderTagsVersion = ~0u;
+    unsigned int m_CollectionVersion          = ~0u;
+    unsigned int m_RprimRenderTagVersion      = ~0u;
+    unsigned int m_TaskRenderTagsVersion      = ~0u;
+    unsigned int m_GeomSubsetDrawItemsVersion = ~0u;
 
     DRAW_LIST_ITEM_DIRTY_FLAGS m_DrawListItemsDirtyFlags = DRAW_LIST_ITEM_DIRTY_FLAG_ALL;
 

@@ -331,22 +331,23 @@ void HnRenderPass::SetParams(const HnRenderPassParams& Params)
 
 void HnRenderPass::UpdateDrawList(const pxr::TfTokenVector& RenderTags)
 {
-    pxr::HdRenderIndex* pRenderIndex = GetRenderIndex();
-    //HnRenderDelegate*   pRenderDelegate = static_cast<HnRenderDelegate*>(pRenderIndex->GetRenderDelegate());
+    pxr::HdRenderIndex*     pRenderIndex    = GetRenderIndex();
+    const HnRenderDelegate* pRenderDelegate = static_cast<HnRenderDelegate*>(pRenderIndex->GetRenderDelegate());
+    const HnRenderParam*    pRenderParam    = static_cast<const HnRenderParam*>(pRenderDelegate->GetRenderParam());
 
     const pxr::HdRprimCollection& Collection  = GetRprimCollection();
     const pxr::HdChangeTracker&   Tracker     = pRenderIndex->GetChangeTracker();
     const pxr::TfToken&           MaterialTag = Collection.GetMaterialTag();
 
-    const unsigned int CollectionVersion     = Tracker.GetCollectionVersion(Collection.GetName());
-    const unsigned int RprimRenderTagVersion = Tracker.GetRenderTagVersion();
-    const unsigned int TaskRenderTagsVersion = Tracker.GetTaskRenderTagsVersion();
-    //const unsigned int GeomSubsetDrawItemsVersion = GetGeomSubsetDrawItemsVersion(pRenderIndex);
+    const unsigned int CollectionVersion          = Tracker.GetCollectionVersion(Collection.GetName());
+    const unsigned int RprimRenderTagVersion      = Tracker.GetRenderTagVersion();
+    const unsigned int TaskRenderTagsVersion      = Tracker.GetTaskRenderTagsVersion();
+    const unsigned int GeomSubsetDrawItemsVersion = pRenderParam->GetGeometrySubsetVersion();
 
-    const bool CollectionChanged     = (m_CollectionVersion != CollectionVersion);
-    const bool RprimRenderTagChanged = (m_RprimRenderTagVersion != RprimRenderTagVersion);
-    const bool MaterialTagChanged    = (m_MaterialTag != MaterialTag);
-    //const bool GeomSubsetDrawItemsChanged = (m_GeomSubsetDrawItemsVersion != GeomSubsetDrawItemsVersion);
+    const bool CollectionChanged          = (m_CollectionVersion != CollectionVersion);
+    const bool RprimRenderTagChanged      = (m_RprimRenderTagVersion != RprimRenderTagVersion);
+    const bool MaterialTagChanged         = (m_MaterialTag != MaterialTag);
+    const bool GeomSubsetDrawItemsChanged = (m_GeomSubsetDrawItemsVersion != GeomSubsetDrawItemsVersion);
 
     bool TaskRenderTagsChanged = false;
     if (m_TaskRenderTagsVersion != TaskRenderTagsVersion)
@@ -362,7 +363,7 @@ void HnRenderPass::UpdateDrawList(const pxr::TfTokenVector& RenderTags)
     if (CollectionChanged ||
         RprimRenderTagChanged ||
         MaterialTagChanged ||
-        //GeomSubsetDrawItemsChanged ||
+        GeomSubsetDrawItemsChanged ||
         TaskRenderTagsChanged)
     {
         m_DrawList.clear();

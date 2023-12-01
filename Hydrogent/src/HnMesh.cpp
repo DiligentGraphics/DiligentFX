@@ -349,6 +349,10 @@ void HnMesh::UpdateTopology(pxr::HdSceneDelegate& SceneDelegate,
     if (GeomSubsetsChanged)
     {
         UpdateDrawItemsForGeometrySubsets(SceneDelegate, RenderParam);
+        if (RenderParam != nullptr)
+        {
+            static_cast<HnRenderParam*>(RenderParam)->MakeGeometrySubsetDirty();
+        }
     }
 
     m_StagingIndexData = std::make_unique<StagingIndexData>();
