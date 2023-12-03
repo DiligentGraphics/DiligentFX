@@ -185,6 +185,46 @@ Matrix4x4<T> ToMatrix4x4(const pxr::GfMatrix4d& m)
     // clang-format on
 }
 
+inline float2 ToFloat2(const pxr::GfVec2f& v)
+{
+    return ToVector2<float>(v);
+}
+
+inline float2 ToFloat2(const pxr::GfVec2d& v)
+{
+    return ToVector2<float>(v);
+}
+
+inline float3 ToFloat3(const pxr::GfVec3f& v)
+{
+    return ToVector3<float>(v);
+}
+
+inline float3 ToFloat3(const pxr::GfVec3d& v)
+{
+    return ToVector3<float>(v);
+}
+
+inline float4 ToFloat4(const pxr::GfVec4f& v)
+{
+    return ToVector4<float>(v);
+}
+
+inline float4 ToFloat4(const pxr::GfVec4d& v)
+{
+    return ToVector4<float>(v);
+}
+
+inline float4x4 ToFloat4x4(const pxr::GfMatrix4d& m)
+{
+    return ToMatrix4x4<float>(m);
+}
+
+inline float4x4 ToFloat4x4(const pxr::GfMatrix4f& m)
+{
+    return ToMatrix4x4<float>(m);
+}
+
 } // namespace USD
 
 } // namespace Diligent

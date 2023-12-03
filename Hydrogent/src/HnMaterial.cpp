@@ -28,6 +28,7 @@
 #include "HnRenderDelegate.hpp"
 #include "HnTokens.hpp"
 #include "HnTypeConversions.hpp"
+#include "GfTypeConversions.hpp"
 #include "DynamicTextureAtlas.h"
 #include "GLTFResourceManager.hpp"
 #include "DataBlobImpl.hpp"
@@ -143,7 +144,7 @@ void HnMaterial::ProcessMaterialNetwork()
 {
     if (const HnMaterialParameter* Param = m_Network.GetParameter(HnMaterialParameter::ParamType::Fallback, HnTokens->diffuseColor))
     {
-        m_BasicShaderAttribs.BaseColorFactor = float4{float3::MakeVector(Param->FallbackValue.Get<pxr::GfVec3f>().data()), 1};
+        m_BasicShaderAttribs.BaseColorFactor = float4{ToFloat3(Param->FallbackValue.Get<pxr::GfVec3f>()), 1};
     }
 
     if (const HnMaterialParameter* Param = m_Network.GetParameter(HnMaterialParameter::ParamType::Fallback, HnTokens->metallic))
@@ -163,7 +164,7 @@ void HnMaterial::ProcessMaterialNetwork()
 
     if (const HnMaterialParameter* Param = m_Network.GetParameter(HnMaterialParameter::ParamType::Fallback, HnTokens->emissiveColor))
     {
-        m_BasicShaderAttribs.EmissiveFactor = float4{float3::MakeVector(Param->FallbackValue.Get<pxr::GfVec3f>().data()), 1};
+        m_BasicShaderAttribs.EmissiveFactor = float4{ToFloat3(Param->FallbackValue.Get<pxr::GfVec3f>()), 1};
     }
     else
     {

@@ -32,6 +32,7 @@
 #include "HnRenderParam.hpp"
 #include "HnRenderPass.hpp"
 #include "HnDrawItem.hpp"
+#include "GfTypeConversions.hpp"
 
 #include "DebugUtilities.hpp"
 #include "GraphicsTypesX.hpp"
@@ -303,8 +304,7 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
 
     if (pxr::HdChangeTracker::IsTransformDirty(DirtyBits, Id))
     {
-        pxr::GfMatrix4d Transform = SceneDelegate.GetTransform(Id);
-        m_Transform               = float4x4::MakeMatrix(Transform.data());
+        m_Transform = ToFloat4x4(SceneDelegate.GetTransform(Id));
     }
 
     if (pxr::HdChangeTracker::IsVisibilityDirty(DirtyBits, Id))
