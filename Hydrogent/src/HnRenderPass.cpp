@@ -217,9 +217,10 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
     IBuffer* const pPrimitiveAttribsCB = State.RenderDelegate.GetPrimitiveAttribsCB();
     VERIFY_EXPR(pPrimitiveAttribsCB != nullptr);
 
-    const auto& Desc                 = pPrimitiveAttribsCB->GetDesc();
-    const auto  MaxDrawItemsInBuffer = Desc.Size / State.PrimitiveAttribsAlignedOffset;
-    const auto  NumDrawItems         = m_DrawList.size();
+    const BufferDesc& Desc                 = pPrimitiveAttribsCB->GetDesc();
+    const Uint64      MaxDrawItemsInBuffer = Desc.Size / State.PrimitiveAttribsAlignedOffset;
+    const size_t      NumDrawItems         = m_DrawList.size();
+    const bool        ApplyTransform       = m_RenderParams.Transform != float4x4::Identity();
 
     m_PendingDrawItems.clear();
     HLSL::PBRPrimitiveAttribs* pCurrPrimitive = nullptr;
@@ -266,7 +267,7 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
 
         State.USDRenderer.WritePBRPrimitiveShaderAttribs(
             pCurrPrimitive,
-            Mesh.GetTransform() * m_RenderParams.Transform,
+            ApplyTransform ? (Mesh.GetTransform() * m_RenderParams.Transform) : Mesh.GetTransform(),
             0,
             pMaterial->GetBasicShaderAttribs(),
             pMaterial->GetShaderTextureAttribs(),
@@ -404,9 +405,10 @@ void HnRenderPass::UpdateDrawList(const pxr::TfTokenVector& RenderTags)
         //}
     }
 
-    m_CollectionVersion     = CollectionVersion;
-    m_RprimRenderTagVersion = RprimRenderTagVersion;
-    m_MaterialTag           = MaterialTag;
+    m_CollectionVersion          = CollectionVersion;
+    m_RprimRenderTagVersion      = RprimRenderTagVersion;
+    m_MaterialTag                = MaterialTag;
+    m_GeomSubsetDrawItemsVersion = GeomSubsetDrawItemsVersion;
 }
 
 HnRenderPass::SupportedVertexInputsSetType HnRenderPass::GetSupportedVertexInputs(const HnMaterial* Material)
