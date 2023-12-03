@@ -43,6 +43,7 @@ set(INCLUDE
 )
 
 set(INTERFACE
+    interface/GfTypeConversions.hpp
     interface/HnMaterial.hpp
     interface/HnMaterialNetwork.hpp
     interface/HnMesh.hpp
