@@ -265,7 +265,7 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
     if (pxr::HdChangeTracker::IsAnyPrimvarDirty(DirtyBits, Id))
     {
         m_StagingVertexData = std::make_unique<StagingVertexData>();
-        UpdateVertexPrimvars(SceneDelegate, RenderParam, DirtyBits, ReprToken);
+        UpdateVertexAndVaryingPrimvars(SceneDelegate, RenderParam, DirtyBits, ReprToken);
 
         if (m_StagingVertexData->Sources.find(pxr::HdTokens->points) != m_StagingVertexData->Sources.end())
         {
@@ -422,10 +422,10 @@ static HnRenderPass::SupportedVertexInputsSetType GetSupportedPrimvars(
     return SupportedPrimvars;
 }
 
-void HnMesh::UpdateVertexPrimvars(pxr::HdSceneDelegate& SceneDelegate,
-                                  pxr::HdRenderParam*   RenderParam,
-                                  pxr::HdDirtyBits&     DirtyBits,
-                                  const pxr::TfToken&   ReprToken)
+void HnMesh::UpdateVertexAndVaryingPrimvars(pxr::HdSceneDelegate& SceneDelegate,
+                                            pxr::HdRenderParam*   RenderParam,
+                                            pxr::HdDirtyBits&     DirtyBits,
+                                            const pxr::TfToken&   ReprToken)
 {
     VERIFY_EXPR(m_StagingVertexData);
     const pxr::SdfPath& Id = GetId();
@@ -434,23 +434,26 @@ void HnMesh::UpdateVertexPrimvars(pxr::HdSceneDelegate& SceneDelegate,
 
     const HnRenderPass::SupportedVertexInputsSetType SupportedPrimvars = GetSupportedPrimvars(SceneDelegate.GetRenderIndex(), GetMaterialId(), m_Topology);
 
-    pxr::HdPrimvarDescriptorVector VertexPrims = GetPrimvarDescriptors(&SceneDelegate, pxr::HdInterpolationVertex);
-    for (const pxr::HdPrimvarDescriptor& PrimDesc : VertexPrims)
+    for (pxr::HdInterpolation Interpolation : {pxr::HdInterpolationVertex, pxr::HdInterpolationVarying})
     {
-        if (!pxr::HdChangeTracker::IsPrimvarDirty(DirtyBits, Id, PrimDesc.name))
-            continue;
-
-        // Skip unsupported primvars
-        if (SupportedPrimvars.find(PrimDesc.name) == SupportedPrimvars.end())
-            continue;
-
-        pxr::VtValue PrimValue = GetPrimvar(&SceneDelegate, PrimDesc.name);
-        if (PrimValue.IsEmpty())
-            continue;
-
-        if (auto BufferSource = CreateBufferSource(PrimDesc.name, PrimValue, NumPoints, Id))
+        pxr::HdPrimvarDescriptorVector VertexPrims = GetPrimvarDescriptors(&SceneDelegate, Interpolation);
+        for (const pxr::HdPrimvarDescriptor& PrimDesc : VertexPrims)
         {
-            m_StagingVertexData->Sources.emplace(PrimDesc.name, std::move(BufferSource));
+            if (!pxr::HdChangeTracker::IsPrimvarDirty(DirtyBits, Id, PrimDesc.name))
+                continue;
+
+            // Skip unsupported primvars
+            if (SupportedPrimvars.find(PrimDesc.name) == SupportedPrimvars.end())
+                continue;
+
+            pxr::VtValue PrimValue = GetPrimvar(&SceneDelegate, PrimDesc.name);
+            if (PrimValue.IsEmpty())
+                continue;
+
+            if (auto BufferSource = CreateBufferSource(PrimDesc.name, PrimValue, NumPoints, Id))
+            {
+                m_StagingVertexData->Sources.emplace(PrimDesc.name, std::move(BufferSource));
+            }
         }
     }
 }

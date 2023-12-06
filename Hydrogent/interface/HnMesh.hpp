@@ -155,10 +155,10 @@ private:
                     pxr::HdDirtyBits&     DirtyBits,
                     const pxr::TfToken&   ReprToken);
 
-    void UpdateVertexPrimvars(pxr::HdSceneDelegate& SceneDelegate,
-                              pxr::HdRenderParam*   RenderParam,
-                              pxr::HdDirtyBits&     DirtyBits,
-                              const pxr::TfToken&   ReprToken);
+    void UpdateVertexAndVaryingPrimvars(pxr::HdSceneDelegate& SceneDelegate,
+                                        pxr::HdRenderParam*   RenderParam,
+                                        pxr::HdDirtyBits&     DirtyBits,
+                                        const pxr::TfToken&   ReprToken);
 
     using FaceSourcesMapType = std::unordered_map<pxr::TfToken, std::shared_ptr<pxr::HdBufferSource>, pxr::TfToken::HashFunctor>;
     void UpdateFaceVaryingPrimvars(pxr::HdSceneDelegate& SceneDelegate,
