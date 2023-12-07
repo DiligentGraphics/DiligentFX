@@ -311,7 +311,6 @@ HnTextureRegistry::TextureHandleSharedPtr HnMaterial::GetDefaultTexture(HnTextur
 {
     pxr::TfToken DefaultTexName;
     if (Name == HnTokens->diffuseColor ||
-        Name == HnTokens->occlusion ||
         Name == HnTokens->emissiveColor)
     {
         DefaultTexName = HnMaterialPrivateTokens->whiteRgba8;
@@ -321,7 +320,8 @@ HnTextureRegistry::TextureHandleSharedPtr HnMaterial::GetDefaultTexture(HnTextur
         DefaultTexName = HnTokens->normal;
     }
     else if (Name == HnTokens->metallic ||
-             Name == HnTokens->roughness)
+             Name == HnTokens->roughness ||
+             Name == HnTokens->occlusion)
     {
         DefaultTexName = HnMaterialPrivateTokens->whiteR8;
     }
