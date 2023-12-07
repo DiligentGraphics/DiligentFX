@@ -68,6 +68,7 @@ namespace USD
     (roughness)                \
     (normal)                   \
     (occlusion)                \
+    (opacity)                  \
     (emissiveColor)            \
     (renderPassState) 	       \
     (renderPassParams) 	       

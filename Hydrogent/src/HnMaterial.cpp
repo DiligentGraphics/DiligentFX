@@ -361,7 +361,8 @@ static TEXTURE_FORMAT GetMaterialTextureFormat(const pxr::TfToken& Name)
     }
     else if (Name == HnTokens->metallic ||
              Name == HnTokens->roughness ||
-             Name == HnTokens->occlusion)
+             Name == HnTokens->occlusion ||
+             Name == HnTokens->opacity)
     {
         return TEX_FORMAT_R8_UNORM;
     }
