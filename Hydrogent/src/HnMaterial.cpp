@@ -351,6 +351,27 @@ HnTextureRegistry::TextureHandleSharedPtr HnMaterial::GetDefaultTexture(HnTextur
                                 });
 }
 
+static TEXTURE_FORMAT GetMaterialTextureFormat(const pxr::TfToken& Name)
+{
+    if (Name == HnTokens->diffuseColor ||
+        Name == HnTokens->emissiveColor ||
+        Name == HnTokens->normal)
+    {
+        return TEX_FORMAT_RGBA8_UNORM;
+    }
+    else if (Name == HnTokens->metallic ||
+             Name == HnTokens->roughness ||
+             Name == HnTokens->occlusion)
+    {
+        return TEX_FORMAT_R8_UNORM;
+    }
+    else
+    {
+        LOG_ERROR("Unknown texture name '", Name, "'");
+        return TEX_FORMAT_UNKNOWN;
+    }
+}
+
 HnMaterial::TexNameToCoordSetMapType HnMaterial::AllocateTextures(HnTextureRegistry& TexRegistry)
 {
     // Texture name to texture coordinate set index (e.g. "diffuseColor" -> 0)
@@ -360,7 +381,7 @@ HnMaterial::TexNameToCoordSetMapType HnMaterial::AllocateTextures(HnTextureRegis
     std::unordered_map<pxr::TfToken, size_t, pxr::TfToken::HashFunctor> TexCoordPrimvarMapping;
     for (const HnMaterialNetwork::TextureDescriptor& TexDescriptor : m_Network.GetTextures())
     {
-        if (auto pTex = TexRegistry.Allocate(TexDescriptor.TextureId, TexDescriptor.SamplerParams))
+        if (auto pTex = TexRegistry.Allocate(TexDescriptor.TextureId, GetMaterialTextureFormat(TexDescriptor.Name), TexDescriptor.SamplerParams))
         {
             m_Textures[TexDescriptor.Name] = pTex;
             // Find texture coordinate

@@ -183,13 +183,15 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const pxr:
 }
 
 HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const HnTextureIdentifier&      TexId,
+                                                                      TEXTURE_FORMAT                  Format,
                                                                       const pxr::HdSamplerParameters& SamplerParams)
 {
     VERIFY(!TexId.FilePath.IsEmpty(), "File path must not be empty");
     return Allocate(TexId.FilePath, TexId.SubtextureId.Swizzle, SamplerParams,
-                    [&TexId]() {
+                    [&TexId, Format]() {
                         TextureLoadInfo LoadInfo;
-                        LoadInfo.Name = TexId.FilePath.GetText();
+                        LoadInfo.Name   = TexId.FilePath.GetText();
+                        LoadInfo.Format = Format;
 
                         // TODO: why do textures need to be flipped vertically?
                         LoadInfo.FlipVertically   = !TexId.SubtextureId.FlipVertically;

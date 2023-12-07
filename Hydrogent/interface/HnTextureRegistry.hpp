@@ -80,6 +80,7 @@ public:
     using TextureHandleSharedPtr = std::shared_ptr<TextureHandle>;
 
     TextureHandleSharedPtr Allocate(const HnTextureIdentifier&      TexId,
+                                    TEXTURE_FORMAT                  Format,
                                     const pxr::HdSamplerParameters& SamplerParams);
 
     // Allocates texture handle for the specified texture file path.
