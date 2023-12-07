@@ -47,9 +47,9 @@ HnDrawItem::~HnDrawItem()
 
 void HnDrawItem::SetMaterial(const HnMaterial& Material)
 {
-    m_pMaterial          = &Material;
-    m_IsFallbackMaterial = Material.GetId().IsEmpty();
-    SetMaterialTag(!m_IsFallbackMaterial ? Material.GetTag() : HnMaterialTagTokens->defaultTag);
+    m_pMaterial             = &Material;
+    bool IsFallbackMaterial = Material.GetId().IsEmpty();
+    SetMaterialTag(!IsFallbackMaterial ? Material.GetTag() : HnMaterialTagTokens->defaultTag);
 }
 
 } // namespace USD

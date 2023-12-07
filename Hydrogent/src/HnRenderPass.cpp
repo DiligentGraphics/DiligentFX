@@ -478,7 +478,7 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
             if (static_cast<const HnRenderParam*>(State.RenderDelegate.GetRenderParam())->GetUseTextureAtlas())
                 PSOFlags |= PBR_Renderer::PSO_FLAG_USE_TEXTURE_ATLAS;
 
-            VERIFY(pMaterial->GetBasicShaderAttribs().AlphaMode == State.AlphaMode || DrawItem.GetIsFallbackMaterial(),
+            VERIFY(pMaterial->GetBasicShaderAttribs().AlphaMode == State.AlphaMode || pMaterial->GetId().IsEmpty(),
                    "Alpha mode derived from the material tag is not consistent with the alpha mode in the shader attributes. "
                    "This may indicate an issue in how alpha mode is determined in the material, or (less likely) an issue in Rprim sorting by Hydra.");
             ListItem.pPSO = PsoCache.Get({PSOFlags, static_cast<PBR_Renderer::ALPHA_MODE>(State.AlphaMode), /*DoubleSided = */ false, static_cast<PBR_Renderer::DebugViewType>(m_RenderParams.DebugViewMode)}, true);

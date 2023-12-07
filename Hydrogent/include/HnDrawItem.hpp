@@ -58,7 +58,6 @@ public:
     void SetMaterial(const HnMaterial& Material);
 
     const HnMaterial* GetMaterial() const { return m_pMaterial; }
-    bool              GetIsFallbackMaterial() const { return m_IsFallbackMaterial; }
 
     struct GeometryData
     {
@@ -97,8 +96,7 @@ public:
 
 private:
     const HnMesh&     m_Mesh;
-    const HnMaterial* m_pMaterial          = nullptr;
-    bool              m_IsFallbackMaterial = false;
+    const HnMaterial* m_pMaterial = nullptr;
     GeometryData      m_GeometryData;
 
     TopologyData m_Faces;
