@@ -76,14 +76,14 @@ struct HnMaterialParameter final
     HnMaterialParameter();
     ~HnMaterialParameter();
 
-    HnMaterialParameter(ParamType                 _Type,
-                        const pxr::TfToken&       _Name,
-                        const pxr::VtValue&       _FallbackValue       = pxr::VtValue{},
-                        const pxr::TfTokenVector& _SamplerCoords       = pxr::TfTokenVector{},
-                        pxr::HdTextureType        _TextureType         = pxr::HdTextureType::Uv,
-                        const std::string&        _Swizzle             = std::string{},
-                        bool                      _IsPremultiplied     = false,
-                        size_t                    _ArrayOfTexturesSize = 0);
+    HnMaterialParameter(ParamType                      _Type,
+                        const pxr::TfToken&            _Name,
+                        const pxr::VtValue&            _FallbackValue       = pxr::VtValue{},
+                        const pxr::TfTokenVector&      _SamplerCoords       = pxr::TfTokenVector{},
+                        pxr::HdTextureType             _TextureType         = pxr::HdTextureType::Uv,
+                        const TextureComponentMapping& _Swizzle             = TextureComponentMapping::Identity(),
+                        bool                           _IsPremultiplied     = false,
+                        size_t                         _ArrayOfTexturesSize = 0);
 
     bool IsTexture() const
     {
@@ -114,13 +114,13 @@ struct HnMaterialParameter final
         return IsTexture() && ArrayOfTexturesSize > 0;
     }
 
-    ParamType          Type = ParamType::Unknown;
-    pxr::TfToken       Name;
-    pxr::VtValue       FallbackValue;
-    pxr::TfTokenVector SamplerCoords;
-    pxr::HdTextureType TextureType = pxr::HdTextureType::Uv;
-    std::string        Swizzle;
-    bool               IsPremultiplied = false;
+    ParamType               Type = ParamType::Unknown;
+    pxr::TfToken            Name;
+    pxr::VtValue            FallbackValue;
+    pxr::TfTokenVector      SamplerCoords;
+    pxr::HdTextureType      TextureType = pxr::HdTextureType::Uv;
+    TextureComponentMapping Swizzle;
+    bool                    IsPremultiplied = false;
 
     struct TextureTransform2d
     {

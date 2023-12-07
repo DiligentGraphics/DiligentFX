@@ -30,6 +30,7 @@
 #include "GLTFResourceManager.hpp"
 #include "USD_Renderer.hpp"
 #include "HnTextureIdentifier.hpp"
+#include "GraphicsAccessories.hpp"
 
 #include <mutex>
 
@@ -123,11 +124,13 @@ void HnTextureRegistry::Commit(IDeviceContext* pContext)
 }
 
 HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const pxr::TfToken&                            FilePath,
+                                                                      const TextureComponentMapping&                 Swizzle,
                                                                       const pxr::HdSamplerParameters&                SamplerParams,
                                                                       std::function<RefCntAutoPtr<ITextureLoader>()> CreateLoader)
 {
+    const pxr::TfToken Key{FilePath.GetString() + '.' + GetTextureComponentMappingString(Swizzle)};
     return m_Cache.Get(
-        FilePath,
+        Key,
         [&]() {
             RefCntAutoPtr<ITextureLoader> pLoader = CreateLoader();
             if (!pLoader)
@@ -172,7 +175,7 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const pxr:
             if (!TexHandle->pTexture)
             {
                 std::lock_guard<std::mutex> Lock{m_PendingTexturesMtx};
-                m_PendingTextures.emplace(FilePath, PendingTextureInfo{std::move(pLoader), SamDesc, TexHandle});
+                m_PendingTextures.emplace(Key, PendingTextureInfo{std::move(pLoader), SamDesc, TexHandle});
             }
 
             return TexHandle;
@@ -183,7 +186,7 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const HnTe
                                                                       const pxr::HdSamplerParameters& SamplerParams)
 {
     VERIFY(!TexId.FilePath.IsEmpty(), "File path must not be empty");
-    return Allocate(TexId.FilePath, SamplerParams,
+    return Allocate(TexId.FilePath, TexId.SubtextureId.Swizzle, SamplerParams,
                     [&TexId]() {
                         TextureLoadInfo LoadInfo;
                         LoadInfo.Name = TexId.FilePath.GetText();
@@ -192,6 +195,7 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const HnTe
                         LoadInfo.FlipVertically   = !TexId.SubtextureId.FlipVertically;
                         LoadInfo.IsSRGB           = TexId.SubtextureId.IsSRGB;
                         LoadInfo.PermultiplyAlpha = TexId.SubtextureId.PremultiplyAlpha;
+                        LoadInfo.Swizzle          = TexId.SubtextureId.Swizzle;
 
                         return CreateTextureLoaderFromSdfPath(TexId.FilePath.GetText(), LoadInfo);
                     });

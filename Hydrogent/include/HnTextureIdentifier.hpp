@@ -30,6 +30,9 @@
 #include "pxr/base/tf/token.h"
 #include "pxr/imaging/hd/enums.h"
 
+#include "../../../DiligentCore/Graphics/GraphicsEngine/interface/TextureView.h"
+
+
 namespace Diligent
 {
 
@@ -43,6 +46,8 @@ struct HnSubTextureIdentifier
     bool IsSRGB           = false;
     bool FlipVertically   = false;
     bool PremultiplyAlpha = false;
+
+    TextureComponentMapping Swizzle = TextureComponentMapping::Identity();
 };
 
 struct HnTextureIdentifier

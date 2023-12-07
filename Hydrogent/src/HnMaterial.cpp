@@ -339,7 +339,7 @@ HnTextureRegistry::TextureHandleSharedPtr HnMaterial::GetDefaultTexture(HnTextur
     SamplerParams.wrapR     = pxr::HdWrapRepeat;
     SamplerParams.minFilter = pxr::HdMinFilterLinearMipmapLinear;
     SamplerParams.magFilter = pxr::HdMagFilterLinear;
-    return TexRegistry.Allocate(DefaultTexPath, SamplerParams,
+    return TexRegistry.Allocate(DefaultTexPath, TextureComponentMapping::Identity(), SamplerParams,
                                 [&]() {
                                     RefCntAutoPtr<Image> pImage = CreateDefaultImage(DefaultTexName);
 

@@ -85,6 +85,7 @@ public:
     // Allocates texture handle for the specified texture file path.
     // If the texture is not loaded, calls CreateLoader() to create the texture loader.
     TextureHandleSharedPtr Allocate(const pxr::TfToken&                            FilePath,
+                                    const TextureComponentMapping&                 Swizzle,
                                     const pxr::HdSamplerParameters&                SamplerParams,
                                     std::function<RefCntAutoPtr<ITextureLoader>()> CreateLoader);
 

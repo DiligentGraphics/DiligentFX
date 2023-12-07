@@ -28,6 +28,8 @@
 #include "HnTokens.hpp"
 
 #include "DebugUtilities.hpp"
+#include "StringTools.hpp"
+#include "GraphicsAccessories.hpp"
 
 #include "pxr/base/gf/vec3f.h"
 #include "pxr/base/gf/vec4f.h"
@@ -52,14 +54,14 @@ HnMaterialParameter::~HnMaterialParameter()
 }
 
 HnMaterialParameter::HnMaterialParameter(
-    ParamType                 _Type,
-    const pxr::TfToken&       _Name,
-    const pxr::VtValue&       _FallbackValue,
-    const pxr::TfTokenVector& _SamplerCoords,
-    pxr::HdTextureType        _TextureType,
-    const std::string&        _Swizzle,
-    bool                      _IsPremultiplied,
-    size_t                    _ArrayOfTexturesSize) :
+    ParamType                      _Type,
+    const pxr::TfToken&            _Name,
+    const pxr::VtValue&            _FallbackValue,
+    const pxr::TfTokenVector&      _SamplerCoords,
+    pxr::HdTextureType             _TextureType,
+    const TextureComponentMapping& _Swizzle,
+    bool                           _IsPremultiplied,
+    size_t                         _ArrayOfTexturesSize) :
     // clang-format off
     Type               {_Type},
     Name               {_Name},
@@ -590,11 +592,12 @@ pxr::HdSamplerParameters GetSamplerParameters(const pxr::SdfPath&               
     };
 }
 
-HnSubTextureIdentifier GetSubtextureIdentifier(const pxr::TfToken&       ParamName,
-                                               const pxr::HdTextureType& TextureType,
-                                               const pxr::TfToken&       NodeType,
-                                               bool                      PremultiplyAlpha,
-                                               const pxr::TfToken&       SourceColorSpace)
+HnSubTextureIdentifier GetSubtextureIdentifier(const pxr::TfToken&            ParamName,
+                                               const pxr::HdTextureType&      TextureType,
+                                               const pxr::TfToken&            NodeType,
+                                               bool                           PremultiplyAlpha,
+                                               const pxr::TfToken&            SourceColorSpace,
+                                               const TextureComponentMapping& Swizzle)
 {
     HnSubTextureIdentifier TextureId;
     TextureId.Type             = TextureType;
@@ -613,6 +616,8 @@ HnSubTextureIdentifier GetSubtextureIdentifier(const pxr::TfToken&       ParamNa
     {
         TextureId.FlipVertically = NodeType == HnMaterialPrivateTokens->HwUvTexture_1;
     }
+
+    TextureId.Swizzle = Swizzle;
 
     return TextureId;
 }
@@ -904,6 +909,26 @@ void HnMaterialNetwork::ProcessInputParameter(const pxr::HdMaterialNetwork2& Net
     AddUnconnectedParam(ParamName);
 }
 
+static TextureComponentMapping SwizzleStringToComponentMapping(std::string SwizzleStr)
+{
+    for (auto& c : SwizzleStr)
+    {
+        if (c == 'x' || c == 'X' || c == 'r' || c == 'R')
+            c = 'r';
+        else if (c == 'y' || c == 'Y' || c == 'g' || c == 'G')
+            c = 'g';
+        else if (c == 'z' || c == 'Z' || c == 'b' || c == 'B')
+            c = 'b';
+        else if (c == 'w' || c == 'W' || c == 'a' || c == 'A')
+            c = 'a';
+        else
+            LOG_WARNING_MESSAGE("Unknown texture swizzle component: ", c);
+    }
+    TextureComponentMapping Mapping;
+    TextureComponentMappingFromString(SwizzleStr, Mapping);
+    return Mapping;
+}
+
 void HnMaterialNetwork::AddTextureParam(const pxr::HdMaterialNetwork2& Network,
                                         const pxr::HdMaterialNode2&    Node,
                                         const pxr::HdMaterialNode2&    DownstreamNode, // needed to determine def value
@@ -929,7 +954,7 @@ void HnMaterialNetwork::AddTextureParam(const pxr::HdMaterialNetwork2& Network,
         const auto& it = PropMetadata.find(HnSdrMetadataTokens->swizzle);
         if (it != PropMetadata.end())
         {
-            TexParam.Swizzle = it->second;
+            TexParam.Swizzle = SwizzleStringToComponentMapping(it->second);
         }
     }
 
@@ -1036,7 +1061,8 @@ void HnMaterialNetwork::AddTextureParam(const pxr::HdMaterialNetwork2& Network,
                         TexParam.TextureType,
                         Node.nodeTypeId,
                         TexParam.IsPremultiplied,
-                        SourceColorSpace),
+                        SourceColorSpace,
+                        TexParam.Swizzle),
                 };
 
                 // If the file attribute is an SdfPath, interpret it as path
