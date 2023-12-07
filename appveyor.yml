@@ -24,7 +24,7 @@ install:
   # clone submodules
   - git clone https://github.com/DiligentGraphics/DiligentCore.git ../DiligentCore --recursive
   - git clone https://github.com/DiligentGraphics/DiligentTools.git ../DiligentTools --recursive
-  - ..\DiligentCore\BuildTools\Scripts\appveyor\install.bat
+  - ps: ..\DiligentCore\BuildTools\Scripts\appveyor\install.ps1
 
 before_build:
   - cd c:\projects\DiligentFX\BuildTools\FormatValidation
