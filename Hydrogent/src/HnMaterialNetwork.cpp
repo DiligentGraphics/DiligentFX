@@ -937,7 +937,9 @@ void HnMaterialNetwork::AddTextureParam(const pxr::HdMaterialNetwork2& Network,
                                         const pxr::TfToken&            ParamName,
                                         pxr::SdfPathSet&               VisitedNodes)
 {
-    if (!VisitedNodes.emplace(NodePath).second)
+    // Make sure to add output name as the same texture may be used multiple times
+    // with different swizzles. For example, Metallic-Roughness.g, Metallic-Roughness.b.
+    if (!VisitedNodes.emplace(NodePath.AppendProperty(OutputName)).second)
         return;
 
     pxr::SdrRegistry&          ShaderReg = pxr::SdrRegistry::GetInstance();
