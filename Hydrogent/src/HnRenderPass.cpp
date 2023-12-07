@@ -275,10 +275,7 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
             &CustomData,
             sizeof(CustomData));
 
-        if (DrawItem.GetIsFallbackMaterial())
-        {
-            pCurrPrimitive->Material.Basic.BaseColorFactor = Mesh.GetDisplayColor();
-        }
+        pCurrPrimitive->Material.Basic.BaseColorFactor = pMaterial->GetBasicShaderAttribs().BaseColorFactor * Mesh.GetDisplayColor();
 
         pCurrPrimitive = reinterpret_cast<HLSL::PBRPrimitiveAttribs*>(reinterpret_cast<Uint8*>(pCurrPrimitive) + State.PrimitiveAttribsAlignedOffset);
         m_PendingDrawItems.push_back(&ListItem);
