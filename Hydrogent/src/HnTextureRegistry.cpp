@@ -186,7 +186,12 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const HnTe
                                                                       TEXTURE_FORMAT                  Format,
                                                                       const pxr::HdSamplerParameters& SamplerParams)
 {
-    VERIFY(!TexId.FilePath.IsEmpty(), "File path must not be empty");
+    if (TexId.FilePath.IsEmpty())
+    {
+        UNEXPECTED("File path must not be empty");
+        return {};
+    }
+
     return Allocate(TexId.FilePath, TexId.SubtextureId.Swizzle, SamplerParams,
                     [&TexId, Format]() {
                         TextureLoadInfo LoadInfo;

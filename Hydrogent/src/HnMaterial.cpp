@@ -382,6 +382,12 @@ HnMaterial::TexNameToCoordSetMapType HnMaterial::AllocateTextures(HnTextureRegis
     std::unordered_map<pxr::TfToken, size_t, pxr::TfToken::HashFunctor> TexCoordPrimvarMapping;
     for (const HnMaterialNetwork::TextureDescriptor& TexDescriptor : m_Network.GetTextures())
     {
+        if (TexDescriptor.TextureId.FilePath.IsEmpty())
+        {
+            LOG_ERROR_MESSAGE("Texture '", TexDescriptor.Name, "' in material '", GetId(), "' has no file path");
+            continue;
+        }
+
         if (auto pTex = TexRegistry.Allocate(TexDescriptor.TextureId, GetMaterialTextureFormat(TexDescriptor.Name), TexDescriptor.SamplerParams))
         {
             m_Textures[TexDescriptor.Name] = pTex;
