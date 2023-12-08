@@ -361,14 +361,12 @@ static TEXTURE_FORMAT GetMaterialTextureFormat(const pxr::TfToken& Name)
     }
     else if (Name == HnTokens->metallic ||
              Name == HnTokens->roughness ||
-             Name == HnTokens->occlusion ||
-             Name == HnTokens->opacity)
+             Name == HnTokens->occlusion)
     {
         return TEX_FORMAT_R8_UNORM;
     }
     else
     {
-        LOG_ERROR("Unknown texture name '", Name, "'");
         return TEX_FORMAT_UNKNOWN;
     }
 }
@@ -382,13 +380,20 @@ HnMaterial::TexNameToCoordSetMapType HnMaterial::AllocateTextures(HnTextureRegis
     std::unordered_map<pxr::TfToken, size_t, pxr::TfToken::HashFunctor> TexCoordPrimvarMapping;
     for (const HnMaterialNetwork::TextureDescriptor& TexDescriptor : m_Network.GetTextures())
     {
+        TEXTURE_FORMAT Format = GetMaterialTextureFormat(TexDescriptor.Name);
+        if (Format == TEX_FORMAT_UNKNOWN)
+        {
+            LOG_INFO_MESSAGE("Skipping unknown texture '", TexDescriptor.Name, "' in material '", GetId(), "'");
+            continue;
+        }
+
         if (TexDescriptor.TextureId.FilePath.IsEmpty())
         {
             LOG_ERROR_MESSAGE("Texture '", TexDescriptor.Name, "' in material '", GetId(), "' has no file path");
             continue;
         }
 
-        if (auto pTex = TexRegistry.Allocate(TexDescriptor.TextureId, GetMaterialTextureFormat(TexDescriptor.Name), TexDescriptor.SamplerParams))
+        if (auto pTex = TexRegistry.Allocate(TexDescriptor.TextureId, Format, TexDescriptor.SamplerParams))
         {
             m_Textures[TexDescriptor.Name] = pTex;
             // Find texture coordinate
