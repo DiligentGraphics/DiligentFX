@@ -265,15 +265,18 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
             0,
         };
 
-        State.USDRenderer.WritePBRPrimitiveShaderAttribs(
-            pCurrPrimitive,
-            ApplyTransform ? (Mesh.GetTransform() * m_RenderParams.Transform) : Mesh.GetTransform(),
+        const float4x4& Transform = ApplyTransform ? (Mesh.GetTransform() * m_RenderParams.Transform) : Mesh.GetTransform();
+
+        PBR_Renderer::PBRPrimitiveShaderAttribsData AttribsData{
+            &Transform,
             0,
-            pMaterial->GetBasicShaderAttribs(),
+            &pMaterial->GetBasicShaderAttribs(),
             pMaterial->GetShaderTextureAttribs(),
             pMaterial->GetNumShaderTextureAttribs(),
             &CustomData,
-            sizeof(CustomData));
+            sizeof(CustomData),
+        };
+        State.USDRenderer.WritePBRPrimitiveShaderAttribs(pCurrPrimitive, AttribsData);
 
         pCurrPrimitive->Material.Basic.BaseColorFactor = pMaterial->GetBasicShaderAttribs().BaseColorFactor * Mesh.GetDisplayColor();
 

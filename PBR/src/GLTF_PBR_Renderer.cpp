@@ -500,10 +500,15 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
                     static_assert(sizeof(HLSL::PBRMaterialTextureAttribs) == sizeof(GLTF::Material::TextureShaderAttribs),
                                   "The sizeof(HLSL::PBRMaterialTextureAttribs) is inconsistent with sizeof(GLTF::Material::TextureShaderAttribs)");
 
-                    auto* pEndPtr = WritePBRPrimitiveShaderAttribs(pAttribsData, NodeGlobalMatrix * RenderParams.ModelTransform, static_cast<Uint32>(JointCount),
-                                                                   reinterpret_cast<const HLSL::PBRMaterialBasicAttribs&>(material.Attribs),
-                                                                   reinterpret_cast<const HLSL::PBRMaterialTextureAttribs*>(&material.GetTextureAttrib(0)),
-                                                                   material.GetNumTextureAttribs());
+                    const float4x4                NodeTransform = NodeGlobalMatrix * RenderParams.ModelTransform;
+                    PBRPrimitiveShaderAttribsData AttribsData{
+                        &NodeTransform,
+                        static_cast<Uint32>(JointCount),
+                        reinterpret_cast<const HLSL::PBRMaterialBasicAttribs*>(&material.Attribs),
+                        reinterpret_cast<const HLSL::PBRMaterialTextureAttribs*>(&material.GetTextureAttrib(0)),
+                        material.GetNumTextureAttribs(),
+                    };
+                    auto* pEndPtr = WritePBRPrimitiveShaderAttribs(pAttribsData, AttribsData);
 
                     VERIFY(reinterpret_cast<uint8_t*>(pEndPtr) <= static_cast<uint8_t*>(pAttribsData) + m_PBRPrimitiveAttribsCB->GetDesc().Size,
                            "Not enough space in the buffer to store primitive attributes");

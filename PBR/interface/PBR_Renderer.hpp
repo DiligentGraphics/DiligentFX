@@ -393,14 +393,18 @@ public:
     ///             - PrefilteredCubeMipLevels
     void SetInternalShaderParameters(HLSL::PBRRendererShaderParameters& Renderer);
 
-    void* WritePBRPrimitiveShaderAttribs(void*                                  pDstShaderAttribs,
-                                         const float4x4&                        NodeMatrix,
-                                         Uint32                                 JointCount,
-                                         const HLSL::PBRMaterialBasicAttribs&   BasicAttribs,
-                                         const HLSL::PBRMaterialTextureAttribs* TextureAttribs,
-                                         Uint32                                 NumTextureAttribs,
-                                         const void*                            CustomData     = nullptr,
-                                         size_t                                 CustomDataSize = 0);
+    struct PBRPrimitiveShaderAttribsData
+    {
+        const float4x4*                        NodeMatrix        = nullptr;
+        const Uint32                           JointCount        = 0;
+        const HLSL::PBRMaterialBasicAttribs*   BasicAttribs      = nullptr;
+        const HLSL::PBRMaterialTextureAttribs* TextureAttribs    = nullptr;
+        Uint32                                 NumTextureAttribs = 0;
+        const void*                            CustomData        = nullptr;
+        size_t                                 CustomDataSize    = 0;
+    };
+
+    void* WritePBRPrimitiveShaderAttribs(void* pDstShaderAttribs, const PBRPrimitiveShaderAttribsData& AttribsData);
 
     Uint32 GetNumShaderTextureAttribs() const { return m_NumShaderTextureAttribs; }
 

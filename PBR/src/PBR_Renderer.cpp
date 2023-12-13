@@ -1112,14 +1112,7 @@ Uint32 PBR_Renderer::GetPBRPrimitiveAttribsSize() const
             sizeof(float4));
 }
 
-void* PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                                  pDstShaderAttribs,
-                                                   const float4x4&                        NodeMatrix,
-                                                   Uint32                                 JointCount,
-                                                   const HLSL::PBRMaterialBasicAttribs&   BasicAttribs,
-                                                   const HLSL::PBRMaterialTextureAttribs* TextureAttribs,
-                                                   Uint32                                 NumTextureAttribs,
-                                                   const void*                            CustomData,
-                                                   size_t                                 CustomDataSize)
+void* PBR_Renderer::WritePBRPrimitiveShaderAttribs(void* pDstShaderAttribs, const PBRPrimitiveShaderAttribsData& AttribsData)
 {
     //struct PBRPrimitiveAttribs
     //{
@@ -1134,27 +1127,29 @@ void* PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                        
 
     HLSL::GLTFNodeShaderTransforms* pDstTransforms = reinterpret_cast<HLSL::GLTFNodeShaderTransforms*>(pDstShaderAttribs);
     static_assert(sizeof(HLSL::GLTFNodeShaderTransforms) % 16 == 0, "Size of HLSL::GLTFNodeShaderTransforms must be a multiple of 16");
-    pDstTransforms->NodeMatrix = NodeMatrix;
-    pDstTransforms->JointCount = static_cast<int>(JointCount);
+    VERIFY(AttribsData.NodeMatrix != nullptr, "Node matrix must not be null");
+    memcpy(&pDstTransforms->NodeMatrix, AttribsData.NodeMatrix, sizeof(float4x4));
+    pDstTransforms->JointCount = static_cast<int>(AttribsData.JointCount);
 
     HLSL::PBRMaterialBasicAttribs* pDstBasicAttribs = reinterpret_cast<HLSL::PBRMaterialBasicAttribs*>(pDstTransforms + 1);
     static_assert(sizeof(HLSL::PBRMaterialBasicAttribs) % 16 == 0, "Size of HLSL::PBRMaterialBasicAttribs must be a multiple of 16");
-    memcpy(pDstBasicAttribs, &BasicAttribs, sizeof(BasicAttribs));
+    VERIFY(AttribsData.BasicAttribs != nullptr, "Basic attribs must not be null");
+    memcpy(pDstBasicAttribs, AttribsData.BasicAttribs, sizeof(HLSL::PBRMaterialBasicAttribs));
 
     HLSL::PBRMaterialTextureAttribs* pDstTextures = reinterpret_cast<HLSL::PBRMaterialTextureAttribs*>(pDstBasicAttribs + 1);
     static_assert(sizeof(HLSL::PBRMaterialTextureAttribs) % 16 == 0, "Size of HLSL::PBRMaterialTextureAttribs must be a multiple of 16");
 
-    VERIFY(NumTextureAttribs <= m_NumShaderTextureAttribs,
-           "Material data contains ", NumTextureAttribs, " texture attributes, while the shader only supports ", m_NumShaderTextureAttribs);
-    memcpy(pDstTextures, TextureAttribs, sizeof(HLSL::PBRMaterialTextureAttribs) * std::min(NumTextureAttribs, m_NumShaderTextureAttribs));
+    VERIFY(AttribsData.NumTextureAttribs <= m_NumShaderTextureAttribs,
+           "Material data contains ", AttribsData.NumTextureAttribs, " texture attributes, while the shader only supports ", m_NumShaderTextureAttribs);
+    memcpy(pDstTextures, AttribsData.TextureAttribs, sizeof(HLSL::PBRMaterialTextureAttribs) * std::min(AttribsData.NumTextureAttribs, m_NumShaderTextureAttribs));
 
     Uint8* pDstCustomData = reinterpret_cast<Uint8*>(pDstTextures + m_NumShaderTextureAttribs);
-    if (CustomData != nullptr)
+    if (AttribsData.CustomData != nullptr)
     {
-        VERIFY_EXPR(CustomDataSize > 0);
-        memcpy(pDstCustomData, CustomData, CustomDataSize);
+        VERIFY_EXPR(AttribsData.CustomDataSize > 0);
+        memcpy(pDstCustomData, AttribsData.CustomData, AttribsData.CustomDataSize);
     }
-    return pDstCustomData + CustomDataSize;
+    return pDstCustomData + AttribsData.CustomDataSize;
 }
 
 } // namespace Diligent
