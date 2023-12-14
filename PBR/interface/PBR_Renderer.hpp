@@ -404,7 +404,7 @@ public:
 
     void* WritePBRPrimitiveShaderAttribs(void* pDstShaderAttribs, const PBRPrimitiveShaderAttribsData& AttribsData);
 
-    Uint32 GetNumShaderTextureAttribs() const { return m_NumShaderTextureAttribs; }
+    Uint32 GetMaxShaderTextureAttribs() const { return m_MaxShaderTextureAttribs; }
 
     Uint32 GetPBRPrimitiveAttribsSize() const;
 
@@ -434,13 +434,9 @@ protected:
     const InputLayoutDescX m_InputLayout;
     const CreateInfo       m_Settings;
 
-    // The number of texture attributes in PBRMaterialShaderInfo.Textures array
+    // The maximum number of texture attributes in PBRMaterialShaderInfo.Textures array
     // (aka PBR_NUM_TEXTURE_ATTRIBUTES).
-    //
-    // \remarks    This value is equal to the maximum index in m_ShaderTextureAttribIndices array.
-    //             Typically, it will be the same as m_Settings.NumShaderTextureAttribIndices,
-    //             but it may be greater if texture attribute indices are not consecutive.
-    const Uint32 m_NumShaderTextureAttribs;
+    const Uint32 m_MaxShaderTextureAttribs;
 
     RenderDeviceWithCache_N m_Device;
 

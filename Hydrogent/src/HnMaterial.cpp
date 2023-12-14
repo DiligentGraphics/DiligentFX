@@ -82,7 +82,7 @@ HnMaterial::HnMaterial(HnTextureRegistry& TexRegistry, const USD_Renderer& UsdRe
     HnMaterial{pxr::SdfPath{}}
 {
     // Sync() is never called for the default material, so we need to initialize texture attributes now.
-    m_NumShaderTextureAttribs = UsdRenderer.GetNumShaderTextureAttribs();
+    m_NumShaderTextureAttribs = UsdRenderer.GetMaxShaderTextureAttribs();
     m_ShaderTextureAttribs    = std::make_unique<HLSL::PBRMaterialTextureAttribs[]>(m_NumShaderTextureAttribs);
     InitTextureAttribs(TexRegistry, UsdRenderer, {});
 }
@@ -102,7 +102,7 @@ void HnMaterial::Sync(pxr::HdSceneDelegate* SceneDelegate,
     HnTextureRegistry&  TexRegistry    = RenderDelegate->GetTextureRegistry();
     const USD_Renderer& UsdRenderer    = *RenderDelegate->GetUSDRenderer();
 
-    m_NumShaderTextureAttribs = UsdRenderer.GetNumShaderTextureAttribs();
+    m_NumShaderTextureAttribs = UsdRenderer.GetMaxShaderTextureAttribs();
     m_ShaderTextureAttribs    = std::make_unique<HLSL::PBRMaterialTextureAttribs[]>(m_NumShaderTextureAttribs);
 
     // A mapping from the texture name to the texture coordinate set index (e.g. "diffuseColor" -> 0)
