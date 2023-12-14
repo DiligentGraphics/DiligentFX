@@ -236,7 +236,7 @@ void HnMaterial::InitTextureAttribs(HnTextureRegistry& TexRegistry, const USD_Re
         }
     };
 
-    const int* TexAttribIndices = UsdRenderer.GetSettings().TextureAttribIndices;
+    const auto& TexAttribIndices = UsdRenderer.GetSettings().TextureAttribIndices;
     // clang-format off
     SetTextureParams(HnTokens->diffuseColor,  TexAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR]);
     SetTextureParams(HnTokens->normal,        TexAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL]);

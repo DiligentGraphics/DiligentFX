@@ -75,12 +75,26 @@ PBR_Renderer::PSOKey::PSOKey(PSO_FLAGS     _Flags,
 static Uint32 ComputeMaxShaderTextureAttribs(const PBR_Renderer::CreateInfo& CI)
 {
     int MaxIndex = -1;
-    for (size_t i = 0; i < _countof(CI.TextureAttribIndices); ++i)
+    for (auto Index : CI.TextureAttribIndices)
     {
-        MaxIndex = std::max(MaxIndex, static_cast<int>(CI.TextureAttribIndices[i]));
+        MaxIndex = std::max(MaxIndex, Index);
     }
     return MaxIndex >= 0 ? static_cast<Uint32>(MaxIndex + 1) : 0;
 }
+
+static const std::array<PBR_Renderer::PSO_FLAGS, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT> kTextureAttribIndexFlags = []() {
+    std::array<PBR_Renderer::PSO_FLAGS, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT> TextureAttribIndexFlags{};
+    TextureAttribIndexFlags[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR] = PBR_Renderer::PSO_FLAG_USE_COLOR_MAP;
+    TextureAttribIndexFlags[PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL]     = PBR_Renderer::PSO_FLAG_USE_NORMAL_MAP;
+    TextureAttribIndexFlags[PBR_Renderer::TEXTURE_ATTRIB_ID_PHYS_DESC]  = PBR_Renderer::PSO_FLAG_USE_PHYS_DESC_MAP;
+    TextureAttribIndexFlags[PBR_Renderer::TEXTURE_ATTRIB_ID_METALLIC]   = PBR_Renderer::PSO_FLAG_USE_METALLIC_MAP;
+    TextureAttribIndexFlags[PBR_Renderer::TEXTURE_ATTRIB_ID_ROUGHNESS]  = PBR_Renderer::PSO_FLAG_USE_ROUGHNESS_MAP;
+    TextureAttribIndexFlags[PBR_Renderer::TEXTURE_ATTRIB_ID_OCCLUSION]  = PBR_Renderer::PSO_FLAG_USE_AO_MAP;
+    TextureAttribIndexFlags[PBR_Renderer::TEXTURE_ATTRIB_ID_EMISSIVE]   = PBR_Renderer::PSO_FLAG_USE_EMISSIVE_MAP;
+    static_assert(PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT == 7, "Not all texture attribs are initialized");
+
+    return TextureAttribIndexFlags;
+}();
 
 PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
                            IRenderStateCache* pStateCache,
@@ -682,19 +696,19 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS     PSOFlags,
 
     Macros.Add("PBR_NUM_TEXTURE_ATTRIBUTES", static_cast<int>(m_MaxShaderTextureAttribs));
 
-    std::array<std::pair<const char*, PSO_FLAGS>, TEXTURE_ATTRIB_ID_COUNT> TextureAttribNames{};
-    TextureAttribNames[TEXTURE_ATTRIB_ID_BASE_COLOR] = {"BaseColorTextureAttribId", PSO_FLAG_USE_COLOR_MAP};
-    TextureAttribNames[TEXTURE_ATTRIB_ID_NORMAL]     = {"NormalTextureAttribId", PSO_FLAG_USE_NORMAL_MAP};
-    TextureAttribNames[TEXTURE_ATTRIB_ID_PHYS_DESC]  = {"PhysicalDescriptorTextureAttribId", PSO_FLAG_USE_PHYS_DESC_MAP};
-    TextureAttribNames[TEXTURE_ATTRIB_ID_METALLIC]   = {"MetallicTextureAttribId", PSO_FLAG_USE_METALLIC_MAP};
-    TextureAttribNames[TEXTURE_ATTRIB_ID_ROUGHNESS]  = {"RoughnessTextureAttribId", PSO_FLAG_USE_ROUGHNESS_MAP};
-    TextureAttribNames[TEXTURE_ATTRIB_ID_OCCLUSION]  = {"OcclusionTextureAttribId", PSO_FLAG_USE_AO_MAP};
-    TextureAttribNames[TEXTURE_ATTRIB_ID_EMISSIVE]   = {"EmissiveTextureAttribId", PSO_FLAG_USE_EMISSIVE_MAP};
+    std::array<const char*, TEXTURE_ATTRIB_ID_COUNT> TextureAttribNames{};
+    TextureAttribNames[TEXTURE_ATTRIB_ID_BASE_COLOR] = "BaseColorTextureAttribId";
+    TextureAttribNames[TEXTURE_ATTRIB_ID_NORMAL]     = "NormalTextureAttribId";
+    TextureAttribNames[TEXTURE_ATTRIB_ID_PHYS_DESC]  = "PhysicalDescriptorTextureAttribId";
+    TextureAttribNames[TEXTURE_ATTRIB_ID_METALLIC]   = "MetallicTextureAttribId";
+    TextureAttribNames[TEXTURE_ATTRIB_ID_ROUGHNESS]  = "RoughnessTextureAttribId";
+    TextureAttribNames[TEXTURE_ATTRIB_ID_OCCLUSION]  = "OcclusionTextureAttribId";
+    TextureAttribNames[TEXTURE_ATTRIB_ID_EMISSIVE]   = "EmissiveTextureAttribId";
     static_assert(TEXTURE_ATTRIB_ID_COUNT == 7, "Did you add new texture attribute? You may need to handle it here.");
     for (size_t i = 0; i < TEXTURE_ATTRIB_ID_COUNT; ++i)
     {
-        const auto& AttribName = TextureAttribNames[i].first;
-        const auto  Flag       = TextureAttribNames[i].second;
+        const auto& AttribName = TextureAttribNames[i];
+        const auto  Flag       = kTextureAttribIndexFlags[i];
         if (m_Settings.TextureAttribIndices[i] >= 0)
         {
             Macros.Add(AttribName, m_Settings.TextureAttribIndices[i]);

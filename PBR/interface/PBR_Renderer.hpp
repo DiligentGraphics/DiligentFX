@@ -28,6 +28,7 @@
 
 #include <unordered_map>
 #include <functional>
+#include <array>
 
 #include "../../../DiligentCore/Platforms/Basic/interface/DebugUtilities.hpp"
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/DeviceContext.h"
@@ -170,7 +171,7 @@ public:
         IBuffer* pPrimitiveAttribsCB = nullptr;
 
         /// Texture attribute index info
-        int TextureAttribIndices[TEXTURE_ATTRIB_ID_COUNT] = {-1, -1, -1, -1, -1, -1, -1};
+        std::array<int, TEXTURE_ATTRIB_ID_COUNT> TextureAttribIndices = {-1, -1, -1, -1, -1, -1, -1};
     };
 
     enum ALPHA_MODE
