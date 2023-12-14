@@ -77,12 +77,22 @@ HnMaterial::HnMaterial(const pxr::SdfPath& id) :
     m_BasicShaderAttribs.Workflow = PBR_Renderer::PBR_WORKFLOW_METALL_ROUGH;
 }
 
+static Uint32 ComputeMaxShaderTextureAttribs(const PBR_Renderer::CreateInfo& CI)
+{
+    int MaxIndex = -1;
+    for (auto Index : CI.TextureAttribIndices)
+    {
+        MaxIndex = std::max(MaxIndex, Index);
+    }
+    return MaxIndex >= 0 ? static_cast<Uint32>(MaxIndex + 1) : 0;
+}
+
 // Default material
 HnMaterial::HnMaterial(HnTextureRegistry& TexRegistry, const USD_Renderer& UsdRenderer) :
     HnMaterial{pxr::SdfPath{}}
 {
     // Sync() is never called for the default material, so we need to initialize texture attributes now.
-    m_NumShaderTextureAttribs = UsdRenderer.GetMaxShaderTextureAttribs();
+    m_NumShaderTextureAttribs = ComputeMaxShaderTextureAttribs(UsdRenderer.GetSettings());
     m_ShaderTextureAttribs    = std::make_unique<HLSL::PBRMaterialTextureAttribs[]>(m_NumShaderTextureAttribs);
     InitTextureAttribs(TexRegistry, UsdRenderer, {});
 }
@@ -102,7 +112,7 @@ void HnMaterial::Sync(pxr::HdSceneDelegate* SceneDelegate,
     HnTextureRegistry&  TexRegistry    = RenderDelegate->GetTextureRegistry();
     const USD_Renderer& UsdRenderer    = *RenderDelegate->GetUSDRenderer();
 
-    m_NumShaderTextureAttribs = UsdRenderer.GetMaxShaderTextureAttribs();
+    m_NumShaderTextureAttribs = ComputeMaxShaderTextureAttribs(UsdRenderer.GetSettings());
     m_ShaderTextureAttribs    = std::make_unique<HLSL::PBRMaterialTextureAttribs[]>(m_NumShaderTextureAttribs);
 
     // A mapping from the texture name to the texture coordinate set index (e.g. "diffuseColor" -> 0)
@@ -564,7 +574,7 @@ void HnMaterial::UpdateSRB(IObject*      pSRBCache,
             // Primitive attribs buffer is a large buffer that fits multiple primitives.
             // In the render loop, we write multiple primitive attribs into this buffer
             // and use the SetBufferOffset function to select the attribs for the current primitive.
-            pVar->SetBufferRange(UsdRenderer.GetPBRPrimitiveAttribsCB(), 0, UsdRenderer.GetPBRPrimitiveAttribsSize());
+            pVar->SetBufferRange(UsdRenderer.GetPBRPrimitiveAttribsCB(), 0, UsdRenderer.GetPBRPrimitiveAttribsSize(PBR_Renderer::PSO_FLAG_ALL));
         }
         else
         {

@@ -114,6 +114,8 @@ private:
     {
         const HnDrawItem& DrawItem;
 
+        PBR_Renderer::PSO_FLAGS PSOFlags = PBR_Renderer::PSO_FLAG_NONE;
+
         IPipelineState* pPSO = nullptr;
 
         IBuffer* IndexBuffer = nullptr;

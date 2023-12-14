@@ -268,6 +268,7 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
         const float4x4& Transform = ApplyTransform ? (Mesh.GetTransform() * m_RenderParams.Transform) : Mesh.GetTransform();
 
         PBR_Renderer::PBRPrimitiveShaderAttribsData AttribsData{
+            ListItem.PSOFlags,
             &Transform,
             0,
             &pMaterial->GetBasicShaderAttribs(),
@@ -437,7 +438,8 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
         auto& PsoCache = State.GePsoCache();
         VERIFY_EXPR(PsoCache);
 
-        auto PSOFlags = static_cast<PBR_Renderer::PSO_FLAGS>(m_Params.UsdPsoFlags);
+        auto& PSOFlags = ListItem.PSOFlags;
+        PSOFlags       = static_cast<PBR_Renderer::PSO_FLAGS>(m_Params.UsdPsoFlags);
 
         const auto& Geo = DrawItem.GetGeometryData();
 
