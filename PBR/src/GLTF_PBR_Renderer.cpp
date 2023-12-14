@@ -57,17 +57,6 @@ namespace HLSL
 namespace
 {
 
-// clang-format off
-static constexpr std::array<PBR_Renderer::CreateInfo::ShaderTextureAttribIndex, 5> DefaultShaderTextureAttribIndices =
-{
-    PBR_Renderer::CreateInfo::ShaderTextureAttribIndex{"BaseColorTextureAttribId",          GLTF::DefaultBaseColorTextureAttribId},
-    PBR_Renderer::CreateInfo::ShaderTextureAttribIndex{"PhysicalDescriptorTextureAttribId", GLTF::DefaultMetallicRoughnessTextureAttribId},
-    PBR_Renderer::CreateInfo::ShaderTextureAttribIndex{"NormalTextureAttribId",             GLTF::DefaultNormalTextureAttribId},
-    PBR_Renderer::CreateInfo::ShaderTextureAttribIndex{"OcclusionTextureAttribId",          GLTF::DefaultOcclusionTextureAttribId},
-    PBR_Renderer::CreateInfo::ShaderTextureAttribIndex{"EmissiveTextureAttribId",           GLTF::DefaultEmissiveTextureAttribId}
-};
-// clang-format on
-
 struct PBRRendererCreateInfoWrapper
 {
     PBRRendererCreateInfoWrapper(const PBR_Renderer::CreateInfo& _CI) :
@@ -79,11 +68,11 @@ struct PBRRendererCreateInfoWrapper
             CI.InputLayout = InputLayout;
         }
 
-        if (CI.NumShaderTextureAttribIndices == 0)
-        {
-            CI.pShaderTextureAttribIndices   = DefaultShaderTextureAttribIndices.data();
-            CI.NumShaderTextureAttribIndices = static_cast<Uint32>(DefaultShaderTextureAttribIndices.size());
-        }
+        CI.TextureAttribIndinces.BaseColor = GLTF::DefaultBaseColorTextureAttribId;
+        CI.TextureAttribIndinces.PhysDesc  = GLTF::DefaultMetallicRoughnessTextureAttribId;
+        CI.TextureAttribIndinces.Normal    = GLTF::DefaultNormalTextureAttribId;
+        CI.TextureAttribIndinces.Occlusion = GLTF::DefaultOcclusionTextureAttribId;
+        CI.TextureAttribIndinces.Emissive  = GLTF::DefaultEmissiveTextureAttribId;
     }
 
     operator const PBR_Renderer::CreateInfo &() const

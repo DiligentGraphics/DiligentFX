@@ -93,25 +93,18 @@ void main(in VSOutput VSOut,
 struct USD_Renderer::USDRendererCreateInfoWrapper
 {
     USDRendererCreateInfoWrapper(const USD_Renderer::CreateInfo& _CI, const USD_Renderer& Renderer) :
-        CI{_CI},
-        ShaderTextureAttribIndices{
-            PBR_Renderer::CreateInfo::ShaderTextureAttribIndex{"BaseColorTextureAttribId", CI.TextureAttribIndices.BaseColor},
-            PBR_Renderer::CreateInfo::ShaderTextureAttribIndex{"NormalTextureAttribId", CI.TextureAttribIndices.Normal},
-            PBR_Renderer::CreateInfo::ShaderTextureAttribIndex{"MetallicTextureAttribId", CI.TextureAttribIndices.Metallic},
-            PBR_Renderer::CreateInfo::ShaderTextureAttribIndex{"RoughnessTextureAttribId", CI.TextureAttribIndices.Roughness},
-            PBR_Renderer::CreateInfo::ShaderTextureAttribIndex{"OcclusionTextureAttribId", CI.TextureAttribIndices.Occlusion},
-            PBR_Renderer::CreateInfo::ShaderTextureAttribIndex{"EmissiveTextureAttribId", CI.TextureAttribIndices.Emissive},
-        }
+        CI{_CI}
     {
+        CI.TextureAttribIndinces.BaseColor = 0;
+        CI.TextureAttribIndinces.Normal    = 1;
+        CI.TextureAttribIndinces.Metallic  = 2;
+        CI.TextureAttribIndinces.Roughness = 3;
+        CI.TextureAttribIndinces.Occlusion = 4;
+        CI.TextureAttribIndinces.Emissive  = 5;
+
         if (CI.GetPSMainSource == nullptr)
         {
             CI.GetPSMainSource = std::bind(&USD_Renderer::GetUsdPbrPSMainSource, &Renderer, std::placeholders::_1);
-        }
-
-        if (CI.pShaderTextureAttribIndices == nullptr)
-        {
-            CI.pShaderTextureAttribIndices   = ShaderTextureAttribIndices.data();
-            CI.NumShaderTextureAttribIndices = static_cast<Uint32>(ShaderTextureAttribIndices.size());
         }
     }
 
@@ -121,8 +114,6 @@ struct USD_Renderer::USDRendererCreateInfoWrapper
     }
 
     USD_Renderer::CreateInfo CI;
-
-    std::array<USD_Renderer::CreateInfo::ShaderTextureAttribIndex, 6> ShaderTextureAttribIndices;
 };
 
 USD_Renderer::USD_Renderer(IRenderDevice*     pDevice,
@@ -136,8 +127,7 @@ USD_Renderer::USD_Renderer(IRenderDevice*     pDevice,
         USDRendererCreateInfoWrapper{CI, *this},
     },
     m_ColorTargetIndex{CI.ColorTargetIndex},
-    m_MeshIdTargetIndex{CI.MeshIdTargetIndex},
-    m_ShaderTextureAttribIndices{CI.TextureAttribIndices}
+    m_MeshIdTargetIndex{CI.MeshIdTargetIndex}
 {
 }
 

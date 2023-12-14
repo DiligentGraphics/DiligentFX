@@ -158,19 +158,17 @@ public:
         IBuffer* pPrimitiveAttribsCB = nullptr;
 
         /// Texture attribute index info.
-        struct ShaderTextureAttribIndex
+        struct ShaderTextureAttribIndinces
         {
-            /// Texture attribute index name (e.g. "BaseColorTextureAttribId").
-            const char* Name = nullptr;
-
-            /// Texture attribute index value.
-            Uint32 Index = 0;
+            int BaseColor = -1;
+            int Normal    = -1;
+            int PhysDesc  = -1;
+            int Metallic  = -1;
+            int Roughness = -1;
+            int Occlusion = -1;
+            int Emissive  = -1;
         };
-        /// An array of NumShaderTextureAttribIndices texture attribute index info.
-        const ShaderTextureAttribIndex* pShaderTextureAttribIndices = nullptr;
-
-        /// The number of texture attributes in pShaderTextureAttribIndices array.
-        Uint32 NumShaderTextureAttribIndices = 0;
+        ShaderTextureAttribIndinces TextureAttribIndinces;
     };
 
     enum ALPHA_MODE
@@ -410,6 +408,8 @@ public:
 
     Uint32 GetPBRPrimitiveAttribsSize() const;
 
+    const CreateInfo& GetSettings() const { return m_Settings; }
+
 protected:
     ShaderMacroHelper DefineMacros(PSO_FLAGS PSOFlags, DebugViewType DebugView) const;
 
@@ -432,11 +432,7 @@ private:
 
 protected:
     const InputLayoutDescX m_InputLayout;
-
-    const std::vector<std::string>                          m_ShaderTextureAttribIndexNames;
-    const std::vector<CreateInfo::ShaderTextureAttribIndex> m_ShaderTextureAttribIndices;
-
-    const CreateInfo m_Settings;
+    const CreateInfo       m_Settings;
 
     // The number of texture attributes in PBRMaterialShaderInfo.Textures array
     // (aka PBR_NUM_TEXTURE_ATTRIBUTES).

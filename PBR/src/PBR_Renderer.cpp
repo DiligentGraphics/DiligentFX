@@ -72,52 +72,19 @@ PBR_Renderer::PSOKey::PSOKey(PSO_FLAGS     _Flags,
     Hash = ComputeHash(Flags, AlphaMode, DoubleSided, static_cast<Uint32>(DebugView));
 }
 
-static std::vector<std::string> CopyShaderTextureAttribIndexNames(const PBR_Renderer::CreateInfo& CI)
+static Uint32 ComputeNumShaderTextureAttribs(const PBR_Renderer::CreateInfo::ShaderTextureAttribIndinces& TextureAttribIndinces)
 {
-    std::vector<std::string> Names(CI.NumShaderTextureAttribIndices);
-    if (CI.pShaderTextureAttribIndices != nullptr)
-    {
-        for (Uint32 i = 0; i < CI.NumShaderTextureAttribIndices; ++i)
-        {
-            const char* SrcName = CI.pShaderTextureAttribIndices[i].Name;
-            if (SrcName == nullptr || *SrcName == '\0')
-            {
-                DEV_ERROR("Shader texture attribute name must not be null or empty");
-                continue;
-            }
-            Names[i] = SrcName;
-        }
-    }
-    return Names;
-}
+    int MaxIndex = -1;
+    MaxIndex     = std::max(MaxIndex, TextureAttribIndinces.BaseColor);
+    MaxIndex     = std::max(MaxIndex, TextureAttribIndinces.Normal);
+    MaxIndex     = std::max(MaxIndex, TextureAttribIndinces.PhysDesc);
+    MaxIndex     = std::max(MaxIndex, TextureAttribIndinces.Metallic);
+    MaxIndex     = std::max(MaxIndex, TextureAttribIndinces.Roughness);
+    MaxIndex     = std::max(MaxIndex, TextureAttribIndinces.Occlusion);
+    MaxIndex     = std::max(MaxIndex, TextureAttribIndinces.Emissive);
+    static_assert(sizeof(TextureAttribIndinces) == sizeof(Uint32) * 7, "Did you add new index to TextureAttribIndinces? Please handle it here.");
 
-static std::vector<PBR_Renderer::CreateInfo::ShaderTextureAttribIndex> CopyShaderTextureAttribIndices(const PBR_Renderer::CreateInfo& CI,
-                                                                                                      const std::vector<std::string>& Names)
-{
-    std::vector<PBR_Renderer::CreateInfo::ShaderTextureAttribIndex> Indices;
-    if (CI.pShaderTextureAttribIndices != nullptr)
-    {
-        Indices = {CI.pShaderTextureAttribIndices, CI.pShaderTextureAttribIndices + CI.NumShaderTextureAttribIndices};
-        VERIFY_EXPR(Indices.size() == Names.size());
-        for (size_t i = 0; i < Indices.size(); ++i)
-        {
-            Indices[i].Name = Names[i].c_str();
-        }
-    }
-    return Indices;
-}
-
-static Uint32 GetMaxShaderTextureAttribIndex(const PBR_Renderer::CreateInfo& CI)
-{
-    Uint32 MaxIndex = 0;
-    if (CI.pShaderTextureAttribIndices != nullptr)
-    {
-        for (Uint32 i = 0; i < CI.NumShaderTextureAttribIndices; ++i)
-        {
-            MaxIndex = std::max(MaxIndex, CI.pShaderTextureAttribIndices[i].Index);
-        }
-    }
-    return MaxIndex;
+    return MaxIndex >= 0 ? static_cast<Uint32>(MaxIndex + 1) : 0;
 }
 
 PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
@@ -125,23 +92,16 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
                            IDeviceContext*    pCtx,
                            const CreateInfo&  CI) :
     m_InputLayout{CI.InputLayout},
-    m_ShaderTextureAttribIndexNames{CopyShaderTextureAttribIndexNames(CI)},
-    m_ShaderTextureAttribIndices{CopyShaderTextureAttribIndices(CI, m_ShaderTextureAttribIndexNames)},
     m_Settings{
         [this](CreateInfo CI) {
             CI.InputLayout = m_InputLayout;
-            if (CI.pShaderTextureAttribIndices != nullptr)
-            {
-                CI.pShaderTextureAttribIndices = m_ShaderTextureAttribIndices.data();
-            }
             return CI;
         }(CI)},
-    m_NumShaderTextureAttribs{GetMaxShaderTextureAttribIndex(CI) + 1},
+    m_NumShaderTextureAttribs{ComputeNumShaderTextureAttribs(CI.TextureAttribIndinces)},
     m_Device{pDevice, pStateCache},
     m_PBRPrimitiveAttribsCB{CI.pPrimitiveAttribsCB}
 {
     DEV_CHECK_ERR(m_Settings.InputLayout.NumElements != 0, "Input layout must not be empty");
-    DEV_CHECK_ERR(m_Settings.NumShaderTextureAttribIndices > 0, "The number of shader texture attribute indices must be greater than 0");
 
     if (m_Settings.EnableIBL)
     {
@@ -726,11 +686,24 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS     PSOFlags,
     Macros.Add("TEX_COLOR_CONVERSION_MODE", m_Settings.TexColorConversionMode);
 
     Macros.Add("PBR_NUM_TEXTURE_ATTRIBUTES", static_cast<int>(m_NumShaderTextureAttribs));
-    for (const auto& AttribIdx : m_ShaderTextureAttribIndices)
-    {
-        if (*AttribIdx.Name != '\0')
-            Macros.Add(AttribIdx.Name, static_cast<int>(AttribIdx.Index));
-    }
+
+    auto DefineTextureAttribIndex = [&](const char* Name, int Index, PSO_FLAGS Flag) {
+        if (Index >= 0)
+        {
+            Macros.Add(Name, Index);
+        }
+        else
+        {
+            DEV_CHECK_ERR((PSOFlags & Flag) == 0, "Shader expects ", Name, ", but it is not provided.");
+        }
+    };
+    DefineTextureAttribIndex("BaseColorTextureAttribId", m_Settings.TextureAttribIndinces.BaseColor, PSO_FLAG_USE_COLOR_MAP);
+    DefineTextureAttribIndex("NormalTextureAttribId", m_Settings.TextureAttribIndinces.Normal, PSO_FLAG_USE_NORMAL_MAP);
+    DefineTextureAttribIndex("PhysicalDescriptorTextureAttribId", m_Settings.TextureAttribIndinces.PhysDesc, PSO_FLAG_USE_PHYS_DESC_MAP);
+    DefineTextureAttribIndex("MetallicTextureAttribId", m_Settings.TextureAttribIndinces.Metallic, PSO_FLAG_USE_METALLIC_MAP);
+    DefineTextureAttribIndex("RoughnessTextureAttribId", m_Settings.TextureAttribIndinces.Roughness, PSO_FLAG_USE_ROUGHNESS_MAP);
+    DefineTextureAttribIndex("OcclusionTextureAttribId", m_Settings.TextureAttribIndinces.Occlusion, PSO_FLAG_USE_AO_MAP);
+    DefineTextureAttribIndex("EmissiveTextureAttribId", m_Settings.TextureAttribIndinces.Emissive, PSO_FLAG_USE_EMISSIVE_MAP);
 
     return Macros;
 }
