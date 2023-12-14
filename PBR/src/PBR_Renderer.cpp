@@ -72,18 +72,13 @@ PBR_Renderer::PSOKey::PSOKey(PSO_FLAGS     _Flags,
     Hash = ComputeHash(Flags, AlphaMode, DoubleSided, static_cast<Uint32>(DebugView));
 }
 
-static Uint32 ComputeMaxShaderTextureAttribs(const PBR_Renderer::CreateInfo::ShaderTextureAttribIndinces& TextureAttribIndinces)
+static Uint32 ComputeMaxShaderTextureAttribs(const PBR_Renderer::CreateInfo& CI)
 {
     int MaxIndex = -1;
-    MaxIndex     = std::max(MaxIndex, TextureAttribIndinces.BaseColor);
-    MaxIndex     = std::max(MaxIndex, TextureAttribIndinces.Normal);
-    MaxIndex     = std::max(MaxIndex, TextureAttribIndinces.PhysDesc);
-    MaxIndex     = std::max(MaxIndex, TextureAttribIndinces.Metallic);
-    MaxIndex     = std::max(MaxIndex, TextureAttribIndinces.Roughness);
-    MaxIndex     = std::max(MaxIndex, TextureAttribIndinces.Occlusion);
-    MaxIndex     = std::max(MaxIndex, TextureAttribIndinces.Emissive);
-    static_assert(sizeof(TextureAttribIndinces) == sizeof(int) * 7, "Did you add new index to TextureAttribIndinces? Please handle it here.");
-
+    for (size_t i = 0; i < _countof(CI.TextureAttribIndices); ++i)
+    {
+        MaxIndex = std::max(MaxIndex, static_cast<int>(CI.TextureAttribIndices[i]));
+    }
     return MaxIndex >= 0 ? static_cast<Uint32>(MaxIndex + 1) : 0;
 }
 
@@ -97,7 +92,7 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
             CI.InputLayout = m_InputLayout;
             return CI;
         }(CI)},
-    m_MaxShaderTextureAttribs{ComputeMaxShaderTextureAttribs(CI.TextureAttribIndinces)},
+    m_MaxShaderTextureAttribs{ComputeMaxShaderTextureAttribs(CI)},
     m_Device{pDevice, pStateCache},
     m_PBRPrimitiveAttribsCB{CI.pPrimitiveAttribsCB}
 {
@@ -687,24 +682,28 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS     PSOFlags,
 
     Macros.Add("PBR_NUM_TEXTURE_ATTRIBUTES", static_cast<int>(m_MaxShaderTextureAttribs));
 
-    auto DefineTextureAttribIndex = [&](const char* Name, int Index, PSO_FLAGS Flag) {
-        if (Index >= 0)
+    std::array<std::pair<const char*, PSO_FLAGS>, TEXTURE_ATTRIB_ID_COUNT> TextureAttribNames{};
+    TextureAttribNames[TEXTURE_ATTRIB_ID_BASE_COLOR] = {"BaseColorTextureAttribId", PSO_FLAG_USE_COLOR_MAP};
+    TextureAttribNames[TEXTURE_ATTRIB_ID_NORMAL]     = {"NormalTextureAttribId", PSO_FLAG_USE_NORMAL_MAP};
+    TextureAttribNames[TEXTURE_ATTRIB_ID_PHYS_DESC]  = {"PhysicalDescriptorTextureAttribId", PSO_FLAG_USE_PHYS_DESC_MAP};
+    TextureAttribNames[TEXTURE_ATTRIB_ID_METALLIC]   = {"MetallicTextureAttribId", PSO_FLAG_USE_METALLIC_MAP};
+    TextureAttribNames[TEXTURE_ATTRIB_ID_ROUGHNESS]  = {"RoughnessTextureAttribId", PSO_FLAG_USE_ROUGHNESS_MAP};
+    TextureAttribNames[TEXTURE_ATTRIB_ID_OCCLUSION]  = {"OcclusionTextureAttribId", PSO_FLAG_USE_AO_MAP};
+    TextureAttribNames[TEXTURE_ATTRIB_ID_EMISSIVE]   = {"EmissiveTextureAttribId", PSO_FLAG_USE_EMISSIVE_MAP};
+    static_assert(TEXTURE_ATTRIB_ID_COUNT == 7, "Did you add new texture attribute? You may need to handle it here.");
+    for (size_t i = 0; i < TEXTURE_ATTRIB_ID_COUNT; ++i)
+    {
+        const auto& AttribName = TextureAttribNames[i].first;
+        const auto  Flag       = TextureAttribNames[i].second;
+        if (m_Settings.TextureAttribIndices[i] >= 0)
         {
-            Macros.Add(Name, Index);
+            Macros.Add(AttribName, m_Settings.TextureAttribIndices[i]);
         }
         else
         {
-            DEV_CHECK_ERR((PSOFlags & Flag) == 0, "Shader expects ", Name, ", but it is not provided.");
+            DEV_CHECK_ERR((PSOFlags & Flag) == 0, "Shader expects ", AttribName, ", but it is not provided.");
         }
-    };
-    DefineTextureAttribIndex("BaseColorTextureAttribId", m_Settings.TextureAttribIndinces.BaseColor, PSO_FLAG_USE_COLOR_MAP);
-    DefineTextureAttribIndex("NormalTextureAttribId", m_Settings.TextureAttribIndinces.Normal, PSO_FLAG_USE_NORMAL_MAP);
-    DefineTextureAttribIndex("PhysicalDescriptorTextureAttribId", m_Settings.TextureAttribIndinces.PhysDesc, PSO_FLAG_USE_PHYS_DESC_MAP);
-    DefineTextureAttribIndex("MetallicTextureAttribId", m_Settings.TextureAttribIndinces.Metallic, PSO_FLAG_USE_METALLIC_MAP);
-    DefineTextureAttribIndex("RoughnessTextureAttribId", m_Settings.TextureAttribIndinces.Roughness, PSO_FLAG_USE_ROUGHNESS_MAP);
-    DefineTextureAttribIndex("OcclusionTextureAttribId", m_Settings.TextureAttribIndinces.Occlusion, PSO_FLAG_USE_AO_MAP);
-    DefineTextureAttribIndex("EmissiveTextureAttribId", m_Settings.TextureAttribIndinces.Emissive, PSO_FLAG_USE_EMISSIVE_MAP);
-    static_assert(sizeof(m_Settings.TextureAttribIndinces) == 7 * sizeof(int), "Did you add new texture attribute? You may need to handle it here.");
+    }
 
     return Macros;
 }

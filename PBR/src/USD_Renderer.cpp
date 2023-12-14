@@ -95,12 +95,12 @@ struct USD_Renderer::USDRendererCreateInfoWrapper
     USDRendererCreateInfoWrapper(const USD_Renderer::CreateInfo& _CI, const USD_Renderer& Renderer) :
         CI{_CI}
     {
-        CI.TextureAttribIndinces.BaseColor = 0;
-        CI.TextureAttribIndinces.Normal    = 1;
-        CI.TextureAttribIndinces.Metallic  = 2;
-        CI.TextureAttribIndinces.Roughness = 3;
-        CI.TextureAttribIndinces.Occlusion = 4;
-        CI.TextureAttribIndinces.Emissive  = 5;
+        CI.TextureAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR] = 0;
+        CI.TextureAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL]     = 1;
+        CI.TextureAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_METALLIC]   = 2;
+        CI.TextureAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_ROUGHNESS]  = 3;
+        CI.TextureAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_OCCLUSION]  = 4;
+        CI.TextureAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_EMISSIVE]   = 5;
 
         if (CI.GetPSMainSource == nullptr)
         {

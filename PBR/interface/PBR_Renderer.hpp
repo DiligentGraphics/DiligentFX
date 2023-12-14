@@ -53,6 +53,18 @@ class PBR_Renderer
 public:
     enum PSO_FLAGS : Uint32;
 
+    enum TEXTURE_ATTRIB_ID
+    {
+        TEXTURE_ATTRIB_ID_BASE_COLOR = 0,
+        TEXTURE_ATTRIB_ID_NORMAL,
+        TEXTURE_ATTRIB_ID_PHYS_DESC,
+        TEXTURE_ATTRIB_ID_METALLIC,
+        TEXTURE_ATTRIB_ID_ROUGHNESS,
+        TEXTURE_ATTRIB_ID_OCCLUSION,
+        TEXTURE_ATTRIB_ID_EMISSIVE,
+        TEXTURE_ATTRIB_ID_COUNT
+    };
+
     /// Renderer create info
     struct CreateInfo
     {
@@ -157,18 +169,8 @@ public:
         /// If null, the renderer will allocate the buffer.
         IBuffer* pPrimitiveAttribsCB = nullptr;
 
-        /// Texture attribute index info.
-        struct ShaderTextureAttribIndinces
-        {
-            int BaseColor = -1;
-            int Normal    = -1;
-            int PhysDesc  = -1;
-            int Metallic  = -1;
-            int Roughness = -1;
-            int Occlusion = -1;
-            int Emissive  = -1;
-        };
-        ShaderTextureAttribIndinces TextureAttribIndinces;
+        /// Texture attribute index info
+        int TextureAttribIndices[TEXTURE_ATTRIB_ID_COUNT] = {-1, -1, -1, -1, -1, -1, -1};
     };
 
     enum ALPHA_MODE

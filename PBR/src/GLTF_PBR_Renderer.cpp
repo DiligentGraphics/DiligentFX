@@ -68,11 +68,11 @@ struct PBRRendererCreateInfoWrapper
             CI.InputLayout = InputLayout;
         }
 
-        CI.TextureAttribIndinces.BaseColor = GLTF::DefaultBaseColorTextureAttribId;
-        CI.TextureAttribIndinces.PhysDesc  = GLTF::DefaultMetallicRoughnessTextureAttribId;
-        CI.TextureAttribIndinces.Normal    = GLTF::DefaultNormalTextureAttribId;
-        CI.TextureAttribIndinces.Occlusion = GLTF::DefaultOcclusionTextureAttribId;
-        CI.TextureAttribIndinces.Emissive  = GLTF::DefaultEmissiveTextureAttribId;
+        CI.TextureAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR] = GLTF::DefaultBaseColorTextureAttribId;
+        CI.TextureAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_PHYS_DESC]  = GLTF::DefaultMetallicRoughnessTextureAttribId;
+        CI.TextureAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL]     = GLTF::DefaultNormalTextureAttribId;
+        CI.TextureAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_OCCLUSION]  = GLTF::DefaultOcclusionTextureAttribId;
+        CI.TextureAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_EMISSIVE]   = GLTF::DefaultEmissiveTextureAttribId;
     }
 
     operator const PBR_Renderer::CreateInfo &() const

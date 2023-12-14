@@ -236,14 +236,14 @@ void HnMaterial::InitTextureAttribs(HnTextureRegistry& TexRegistry, const USD_Re
         }
     };
 
-    const auto& TexAttribIndices = UsdRenderer.GetSettings().TextureAttribIndinces;
+    const int* TexAttribIndices = UsdRenderer.GetSettings().TextureAttribIndices;
     // clang-format off
-    SetTextureParams(HnTokens->diffuseColor,  TexAttribIndices.BaseColor);
-    SetTextureParams(HnTokens->normal,        TexAttribIndices.Normal);
-    SetTextureParams(HnTokens->metallic,      TexAttribIndices.Metallic);
-    SetTextureParams(HnTokens->roughness,     TexAttribIndices.Roughness);
-    SetTextureParams(HnTokens->occlusion,     TexAttribIndices.Occlusion);
-    SetTextureParams(HnTokens->emissiveColor, TexAttribIndices.Emissive);
+    SetTextureParams(HnTokens->diffuseColor,  TexAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR]);
+    SetTextureParams(HnTokens->normal,        TexAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL]);
+    SetTextureParams(HnTokens->metallic,      TexAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_METALLIC]);
+    SetTextureParams(HnTokens->roughness,     TexAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_ROUGHNESS]);
+    SetTextureParams(HnTokens->occlusion,     TexAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_OCCLUSION]);
+    SetTextureParams(HnTokens->emissiveColor, TexAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_EMISSIVE]);
     // clang-format on
 }
 
