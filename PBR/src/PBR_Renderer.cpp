@@ -35,6 +35,7 @@
 #include "BasicMath.hpp"
 #include "MapHelper.hpp"
 #include "GraphicsAccessories.hpp"
+#include "PlatformMisc.hpp"
 #include "../../Utilities/include/DiligentFXShaderSourceStreamFactory.hpp"
 #include "ShaderSourceFactoryUtils.h"
 
@@ -72,16 +73,6 @@ PBR_Renderer::PSOKey::PSOKey(PSO_FLAGS     _Flags,
     Hash = ComputeHash(Flags, AlphaMode, DoubleSided, static_cast<Uint32>(DebugView));
 }
 
-static Uint32 ComputeMaxShaderTextureAttribs(const PBR_Renderer::CreateInfo& CI)
-{
-    int MaxIndex = -1;
-    for (auto Index : CI.TextureAttribIndices)
-    {
-        MaxIndex = std::max(MaxIndex, Index);
-    }
-    return MaxIndex >= 0 ? static_cast<Uint32>(MaxIndex + 1) : 0;
-}
-
 PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
                            IRenderStateCache* pStateCache,
                            IDeviceContext*    pCtx,
@@ -92,7 +83,6 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
             CI.InputLayout = m_InputLayout;
             return CI;
         }(CI)},
-    m_MaxShaderTextureAttribs{ComputeMaxShaderTextureAttribs(CI)},
     m_Device{pDevice, pStateCache},
     m_PBRPrimitiveAttribsCB{CI.pPrimitiveAttribsCB}
 {
@@ -181,7 +171,7 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
     {
         if (!m_PBRPrimitiveAttribsCB)
         {
-            CreateUniformBuffer(pDevice, GetPBRPrimitiveAttribsSize(), "PBR primitive attribs CB", &m_PBRPrimitiveAttribsCB);
+            CreateUniformBuffer(pDevice, GetPBRPrimitiveAttribsSize(PSO_FLAG_ALL), "PBR primitive attribs CB", &m_PBRPrimitiveAttribsCB);
         }
         if (m_Settings.MaxJointCount > 0)
         {
@@ -627,6 +617,19 @@ static constexpr PBR_Renderer::PSO_FLAGS GetTextureAttribPSOFlag(PBR_Renderer::T
     return static_cast<PBR_Renderer::PSO_FLAGS>(1u << AttribId);
 }
 
+template <typename HandlerType>
+void ProcessTexturAttribs(PBR_Renderer::PSO_FLAGS PSOFlags, HandlerType&& Handler)
+{
+    PSOFlags &= PBR_Renderer::PSO_FLAG_ALL_TEXTURES;
+    int AttribIndex = 0;
+    while (PSOFlags != 0)
+    {
+        const auto AttribId = static_cast<PBR_Renderer::TEXTURE_ATTRIB_ID>(PlatformMisc::GetLSB(PSOFlags));
+        Handler(AttribIndex++, AttribId);
+        PSOFlags &= ~GetTextureAttribPSOFlag(AttribId);
+    }
+}
+
 ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS     PSOFlags,
                                              DebugViewType DebugView) const
 {
@@ -696,8 +699,6 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS     PSOFlags,
     Macros.Add("TEX_COLOR_CONVERSION_MODE_SRGB_TO_LINEAR", CreateInfo::TEX_COLOR_CONVERSION_MODE_SRGB_TO_LINEAR);
     Macros.Add("TEX_COLOR_CONVERSION_MODE", m_Settings.TexColorConversionMode);
 
-    Macros.Add("PBR_NUM_TEXTURE_ATTRIBUTES", static_cast<int>(m_MaxShaderTextureAttribs));
-
     std::array<const char*, TEXTURE_ATTRIB_ID_COUNT> TextureAttribNames{};
     TextureAttribNames[TEXTURE_ATTRIB_ID_BASE_COLOR] = "BaseColorTextureAttribId";
     TextureAttribNames[TEXTURE_ATTRIB_ID_NORMAL]     = "NormalTextureAttribId";
@@ -707,19 +708,24 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS     PSOFlags,
     TextureAttribNames[TEXTURE_ATTRIB_ID_OCCLUSION]  = "OcclusionTextureAttribId";
     TextureAttribNames[TEXTURE_ATTRIB_ID_EMISSIVE]   = "EmissiveTextureAttribId";
     static_assert(TEXTURE_ATTRIB_ID_COUNT == 7, "Did you add new texture attribute? You may need to handle it here.");
-    for (size_t i = 0; i < TEXTURE_ATTRIB_ID_COUNT; ++i)
-    {
-        const auto& AttribName = TextureAttribNames[i];
-        const auto  Flag       = GetTextureAttribPSOFlag(static_cast<TEXTURE_ATTRIB_ID>(i));
-        if (m_Settings.TextureAttribIndices[i] >= 0)
-        {
-            Macros.Add(AttribName, m_Settings.TextureAttribIndices[i]);
-        }
-        else
-        {
-            DEV_CHECK_ERR((PSOFlags & Flag) == 0, "Shader expects ", AttribName, ", but it is not provided.");
-        }
-    }
+
+    // Tightly pack these attributes that are used by the shader
+    int MaxIndex = -1;
+    ProcessTexturAttribs(PSOFlags, [&](int CurrIndex, PBR_Renderer::TEXTURE_ATTRIB_ID AttribId) //
+                         {
+                             const auto& AttribName = TextureAttribNames[AttribId];
+                             if (m_Settings.TextureAttribIndices[AttribId] >= 0)
+                             {
+                                 Macros.Add(AttribName, CurrIndex);
+                             }
+                             else
+                             {
+                                 DEV_ERROR("Shader expects ", AttribName, ", but it is not provided.");
+                             }
+                             VERIFY_EXPR(CurrIndex == MaxIndex + 1);
+                             MaxIndex = std::max(MaxIndex, CurrIndex);
+                         });
+    Macros.Add("PBR_NUM_TEXTURE_ATTRIBUTES", MaxIndex + 1);
 
     return Macros;
 }
@@ -1083,7 +1089,7 @@ void PBR_Renderer::SetInternalShaderParameters(HLSL::PBRRendererShaderParameters
     Renderer.PrefilteredCubeMipLevels = m_Settings.EnableIBL ? static_cast<float>(m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels) : 0.f;
 }
 
-Uint32 PBR_Renderer::GetPBRPrimitiveAttribsSize() const
+Uint32 PBR_Renderer::GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags) const
 {
     //struct PBRPrimitiveAttribs
     //{
@@ -1095,9 +1101,20 @@ Uint32 PBR_Renderer::GetPBRPrimitiveAttribsSize() const
     //    } Material;
     //    float4 CustomData;
     //};
+
+    Uint32 NumTextureAttribs = 0;
+    ProcessTexturAttribs(Flags, [&](int CurrIndex, PBR_Renderer::TEXTURE_ATTRIB_ID AttribId) //
+                         {
+                             const int SrcAttribIndex = m_Settings.TextureAttribIndices[AttribId];
+                             if (SrcAttribIndex >= 0)
+                             {
+                                 ++NumTextureAttribs;
+                             }
+                         });
+
     return (sizeof(HLSL::GLTFNodeShaderTransforms) +
             sizeof(HLSL::PBRMaterialBasicAttribs) +
-            sizeof(HLSL::PBRMaterialTextureAttribs) * m_MaxShaderTextureAttribs +
+            sizeof(HLSL::PBRMaterialTextureAttribs) * NumTextureAttribs +
             sizeof(float4));
 }
 
@@ -1128,11 +1145,24 @@ void* PBR_Renderer::WritePBRPrimitiveShaderAttribs(void* pDstShaderAttribs, cons
     HLSL::PBRMaterialTextureAttribs* pDstTextures = reinterpret_cast<HLSL::PBRMaterialTextureAttribs*>(pDstBasicAttribs + 1);
     static_assert(sizeof(HLSL::PBRMaterialTextureAttribs) % 16 == 0, "Size of HLSL::PBRMaterialTextureAttribs must be a multiple of 16");
 
-    VERIFY(AttribsData.NumTextureAttribs <= m_MaxShaderTextureAttribs,
-           "Material data contains ", AttribsData.NumTextureAttribs, " texture attributes, while the shader only supports ", m_MaxShaderTextureAttribs);
-    memcpy(pDstTextures, AttribsData.TextureAttribs, sizeof(HLSL::PBRMaterialTextureAttribs) * std::min(AttribsData.NumTextureAttribs, m_MaxShaderTextureAttribs));
+    Uint32 NumTextureAttribs = 0;
+    ProcessTexturAttribs(AttribsData.PSOFlags, [&](int CurrIndex, PBR_Renderer::TEXTURE_ATTRIB_ID AttribId) //
+                         {
+                             const int SrcAttribIndex = m_Settings.TextureAttribIndices[AttribId];
+                             if (SrcAttribIndex < 0)
+                             {
+                                 UNEXPECTED("Shader attribute ", Uint32{AttribId}, " is not initialized");
+                                 return;
+                             }
 
-    Uint8* pDstCustomData = reinterpret_cast<Uint8*>(pDstTextures + m_MaxShaderTextureAttribs);
+                             memcpy(pDstTextures + CurrIndex,
+                                    AttribsData.TextureAttribs + SrcAttribIndex,
+                                    sizeof(HLSL::PBRMaterialTextureAttribs));
+
+                             ++NumTextureAttribs;
+                         });
+
+    Uint8* pDstCustomData = reinterpret_cast<Uint8*>(pDstTextures + NumTextureAttribs);
     if (AttribsData.CustomData != nullptr)
     {
         VERIFY_EXPR(AttribsData.CustomDataSize > 0);

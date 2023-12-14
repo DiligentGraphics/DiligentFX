@@ -400,6 +400,7 @@ public:
 
     struct PBRPrimitiveShaderAttribsData
     {
+        PSO_FLAGS                              PSOFlags          = PSO_FLAG_NONE;
         const float4x4*                        NodeMatrix        = nullptr;
         const Uint32                           JointCount        = 0;
         const HLSL::PBRMaterialBasicAttribs*   BasicAttribs      = nullptr;
@@ -411,9 +412,7 @@ public:
 
     void* WritePBRPrimitiveShaderAttribs(void* pDstShaderAttribs, const PBRPrimitiveShaderAttribsData& AttribsData);
 
-    Uint32 GetMaxShaderTextureAttribs() const { return m_MaxShaderTextureAttribs; }
-
-    Uint32 GetPBRPrimitiveAttribsSize() const;
+    Uint32 GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags) const;
 
     const CreateInfo& GetSettings() const { return m_Settings; }
 
@@ -440,10 +439,6 @@ private:
 protected:
     const InputLayoutDescX m_InputLayout;
     const CreateInfo       m_Settings;
-
-    // The maximum number of texture attributes in PBRMaterialShaderInfo.Textures array
-    // (aka PBR_NUM_TEXTURE_ATTRIBUTES).
-    const Uint32 m_MaxShaderTextureAttribs;
 
     RenderDeviceWithCache_N m_Device;
 

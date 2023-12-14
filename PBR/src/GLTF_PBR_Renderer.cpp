@@ -491,6 +491,7 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
 
                     const float4x4                NodeTransform = NodeGlobalMatrix * RenderParams.ModelTransform;
                     PBRPrimitiveShaderAttribsData AttribsData{
+                        PSOFlags,
                         &NodeTransform,
                         static_cast<Uint32>(JointCount),
                         reinterpret_cast<const HLSL::PBRMaterialBasicAttribs*>(&material.Attribs),
