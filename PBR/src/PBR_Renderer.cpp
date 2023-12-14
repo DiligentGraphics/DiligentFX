@@ -82,20 +82,6 @@ static Uint32 ComputeMaxShaderTextureAttribs(const PBR_Renderer::CreateInfo& CI)
     return MaxIndex >= 0 ? static_cast<Uint32>(MaxIndex + 1) : 0;
 }
 
-static const std::array<PBR_Renderer::PSO_FLAGS, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT> kTextureAttribIndexFlags = []() {
-    std::array<PBR_Renderer::PSO_FLAGS, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT> TextureAttribIndexFlags{};
-    TextureAttribIndexFlags[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR] = PBR_Renderer::PSO_FLAG_USE_COLOR_MAP;
-    TextureAttribIndexFlags[PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL]     = PBR_Renderer::PSO_FLAG_USE_NORMAL_MAP;
-    TextureAttribIndexFlags[PBR_Renderer::TEXTURE_ATTRIB_ID_PHYS_DESC]  = PBR_Renderer::PSO_FLAG_USE_PHYS_DESC_MAP;
-    TextureAttribIndexFlags[PBR_Renderer::TEXTURE_ATTRIB_ID_METALLIC]   = PBR_Renderer::PSO_FLAG_USE_METALLIC_MAP;
-    TextureAttribIndexFlags[PBR_Renderer::TEXTURE_ATTRIB_ID_ROUGHNESS]  = PBR_Renderer::PSO_FLAG_USE_ROUGHNESS_MAP;
-    TextureAttribIndexFlags[PBR_Renderer::TEXTURE_ATTRIB_ID_OCCLUSION]  = PBR_Renderer::PSO_FLAG_USE_AO_MAP;
-    TextureAttribIndexFlags[PBR_Renderer::TEXTURE_ATTRIB_ID_EMISSIVE]   = PBR_Renderer::PSO_FLAG_USE_EMISSIVE_MAP;
-    static_assert(PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT == 7, "Not all texture attribs are initialized");
-
-    return TextureAttribIndexFlags;
-}();
-
 PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
                            IRenderStateCache* pStateCache,
                            IDeviceContext*    pCtx,
@@ -625,6 +611,22 @@ void PBR_Renderer::CreateSignature()
     }
 }
 
+static constexpr PBR_Renderer::PSO_FLAGS GetTextureAttribPSOFlag(PBR_Renderer::TEXTURE_ATTRIB_ID AttribId)
+{
+    // clang-format off
+    static_assert(PBR_Renderer::PSO_FLAG_USE_COLOR_MAP     == 1u << PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR, "PSO_FLAG_USE_COLOR_MAP must be 1 << TEXTURE_ATTRIB_ID_BASE_COLOR");
+    static_assert(PBR_Renderer::PSO_FLAG_USE_NORMAL_MAP    == 1u << PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL,     "PSO_FLAG_USE_NORMAL_MAP must be 1 << TEXTURE_ATTRIB_ID_NORMAL");
+    static_assert(PBR_Renderer::PSO_FLAG_USE_PHYS_DESC_MAP == 1u << PBR_Renderer::TEXTURE_ATTRIB_ID_PHYS_DESC,  "PSO_FLAG_USE_PHYS_DESC_MAP must be 1 << TEXTURE_ATTRIB_ID_PHYS_DESC");
+    static_assert(PBR_Renderer::PSO_FLAG_USE_METALLIC_MAP  == 1u << PBR_Renderer::TEXTURE_ATTRIB_ID_METALLIC,   "PSO_FLAG_USE_METALLIC_MAP must be 1 << TEXTURE_ATTRIB_ID_METALLIC");
+    static_assert(PBR_Renderer::PSO_FLAG_USE_ROUGHNESS_MAP == 1u << PBR_Renderer::TEXTURE_ATTRIB_ID_ROUGHNESS,  "PSO_FLAG_USE_ROUGHNESS_MAP must be 1 << TEXTURE_ATTRIB_ID_ROUGHNESS");
+    static_assert(PBR_Renderer::PSO_FLAG_USE_AO_MAP        == 1u << PBR_Renderer::TEXTURE_ATTRIB_ID_OCCLUSION,  "PSO_FLAG_USE_AO_MAP must be 1 << TEXTURE_ATTRIB_ID_OCCLUSION");
+    static_assert(PBR_Renderer::PSO_FLAG_USE_EMISSIVE_MAP  == 1u << PBR_Renderer::TEXTURE_ATTRIB_ID_EMISSIVE,   "PSO_FLAG_USE_EMISSIVE_MAP must be 1 << TEXTURE_ATTRIB_ID_EMISSIVE");
+    // clang-format on
+    static_assert(PBR_Renderer::PSO_FLAG_LAST_TEXTURE == 1u << 6u, "Did you add new texture flag? You may need to handle it here.");
+
+    return static_cast<PBR_Renderer::PSO_FLAGS>(1u << AttribId);
+}
+
 ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS     PSOFlags,
                                              DebugViewType DebugView) const
 {
@@ -708,7 +710,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS     PSOFlags,
     for (size_t i = 0; i < TEXTURE_ATTRIB_ID_COUNT; ++i)
     {
         const auto& AttribName = TextureAttribNames[i];
-        const auto  Flag       = kTextureAttribIndexFlags[i];
+        const auto  Flag       = GetTextureAttribPSOFlag(static_cast<TEXTURE_ATTRIB_ID>(i));
         if (m_Settings.TextureAttribIndices[i] >= 0)
         {
             Macros.Add(AttribName, m_Settings.TextureAttribIndices[i]);

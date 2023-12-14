@@ -54,7 +54,7 @@ class PBR_Renderer
 public:
     enum PSO_FLAGS : Uint32;
 
-    enum TEXTURE_ATTRIB_ID
+    enum TEXTURE_ATTRIB_ID : Uint32
     {
         TEXTURE_ATTRIB_ID_BASE_COLOR = 0,
         TEXTURE_ATTRIB_ID_NORMAL,
@@ -245,20 +245,24 @@ public:
     {
         PSO_FLAG_NONE = 0u,
 
-        PSO_FLAG_USE_VERTEX_COLORS  = 1u << 0u,
-        PSO_FLAG_USE_VERTEX_NORMALS = 1u << 1u,
-        PSO_FLAG_USE_TEXCOORD0      = 1u << 2u,
-        PSO_FLAG_USE_TEXCOORD1      = 1u << 3u,
-        PSO_FLAG_USE_JOINTS         = 1u << 4u,
+        PSO_FLAG_USE_COLOR_MAP     = 1u << 0u,
+        PSO_FLAG_USE_NORMAL_MAP    = 1u << 1u,
+        PSO_FLAG_USE_PHYS_DESC_MAP = 1u << 2u,
+        PSO_FLAG_USE_METALLIC_MAP  = 1u << 3u,
+        PSO_FLAG_USE_ROUGHNESS_MAP = 1u << 4u,
+        PSO_FLAG_USE_AO_MAP        = 1u << 5u,
+        PSO_FLAG_USE_EMISSIVE_MAP  = 1u << 6u,
 
-        PSO_FLAG_USE_COLOR_MAP     = 1u << 5u,
-        PSO_FLAG_USE_NORMAL_MAP    = 1u << 6u,
-        PSO_FLAG_USE_METALLIC_MAP  = 1u << 7u,
-        PSO_FLAG_USE_ROUGHNESS_MAP = 1u << 8u,
-        PSO_FLAG_USE_PHYS_DESC_MAP = 1u << 9u,
-        PSO_FLAG_USE_AO_MAP        = 1u << 10u,
-        PSO_FLAG_USE_EMISSIVE_MAP  = 1u << 11u,
-        PSO_FLAG_USE_IBL           = 1u << 12u,
+        PSO_FLAG_LAST_TEXTURE = PSO_FLAG_USE_EMISSIVE_MAP,
+        PSO_FLAG_ALL_TEXTURES = PSO_FLAG_LAST_TEXTURE * 2u - 1u,
+
+        PSO_FLAG_USE_VERTEX_COLORS  = 1u << 7u,
+        PSO_FLAG_USE_VERTEX_NORMALS = 1u << 8u,
+        PSO_FLAG_USE_TEXCOORD0      = 1u << 9u,
+        PSO_FLAG_USE_TEXCOORD1      = 1u << 10u,
+        PSO_FLAG_USE_JOINTS         = 1u << 11u,
+
+        PSO_FLAG_USE_IBL = 1u << 12u,
 
         PSO_FLAG_USE_TEXTURE_ATLAS         = 1u << 13u,
         PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM = 1u << 14u,
