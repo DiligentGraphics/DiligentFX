@@ -39,6 +39,7 @@
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/ShaderResourceBinding.h"
 #include "../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
 #include "../../../DiligentCore/Common/interface/BasicMath.hpp"
+#include "../../../DiligentTools/AssetLoader/interface/GLTFLoader.hpp"
 
 namespace Diligent
 {
@@ -48,11 +49,6 @@ class USD_Renderer;
 namespace GLTF
 {
 class ResourceManager;
-}
-
-namespace HLSL
-{
-#include "Shaders/PBR/public/PBR_Structures.fxh"
 }
 
 namespace USD
@@ -92,14 +88,7 @@ public:
         return m_SRB;
     }
 
-    const HLSL::PBRMaterialBasicAttribs&   GetBasicShaderAttribs() const { return m_BasicShaderAttribs; }
-    const HLSL::PBRMaterialTextureAttribs* GetShaderTextureAttribs() const { return m_ShaderTextureAttribs.get(); }
-    const HLSL::PBRMaterialTextureAttribs& GetShaderTextureAttrib(Uint32 Idx) const
-    {
-        VERIFY_EXPR(Idx < m_NumShaderTextureAttribs);
-        return m_ShaderTextureAttribs[Idx];
-    }
-    Uint32 GetNumShaderTextureAttribs() const { return m_NumShaderTextureAttribs; }
+    const GLTF::Material& GetMaterialData() const { return m_MaterialData; }
 
     /// Texture coordinate set info
     struct TextureCoordinateSetInfo
@@ -144,9 +133,7 @@ private:
     RefCntAutoPtr<IShaderResourceBinding> m_SRB;
     IShaderResourceVariable*              m_PrimitiveAttribsVar = nullptr; // cbPrimitiveAttribs
 
-    HLSL::PBRMaterialBasicAttribs                      m_BasicShaderAttribs{};
-    std::unique_ptr<HLSL::PBRMaterialTextureAttribs[]> m_ShaderTextureAttribs; // [m_NumShaderTextureAttribs]
-    Uint32                                             m_NumShaderTextureAttribs = 0;
+    GLTF::Material m_MaterialData;
 
     // The names of the primvars that contain unique texture coordinate sets for this material (e.g. "st0", "st1").
     // The index in this array for texture N is given by m_ShaderTextureAttribs[N].UVSelector.

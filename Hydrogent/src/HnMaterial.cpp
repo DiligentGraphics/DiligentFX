@@ -35,6 +35,7 @@
 #include "GfTypeConversions.hpp"
 #include "DynamicTextureAtlas.h"
 #include "GLTFResourceManager.hpp"
+#include "GLTFBuilder.hpp"
 #include "DataBlobImpl.hpp"
 
 #include "pxr/imaging/hd/sceneDelegate.h"
@@ -72,13 +73,13 @@ HnMaterial* HnMaterial::CreateFallback(HnTextureRegistry& TexRegistry, const USD
 HnMaterial::HnMaterial(const pxr::SdfPath& id) :
     pxr::HdMaterial{id}
 {
-    m_BasicShaderAttribs.BaseColorFactor = float4{1, 1, 1, 1};
-    m_BasicShaderAttribs.SpecularFactor  = float4{1, 1, 1, 1};
-    m_BasicShaderAttribs.MetallicFactor  = 1;
-    m_BasicShaderAttribs.RoughnessFactor = 1;
-    m_BasicShaderAttribs.OcclusionFactor = 1;
+    m_MaterialData.Attribs.BaseColorFactor = float4{1, 1, 1, 1};
+    m_MaterialData.Attribs.SpecularFactor  = float4{1, 1, 1, 1};
+    m_MaterialData.Attribs.MetallicFactor  = 1;
+    m_MaterialData.Attribs.RoughnessFactor = 1;
+    m_MaterialData.Attribs.OcclusionFactor = 1;
 
-    m_BasicShaderAttribs.Workflow = PBR_Renderer::PBR_WORKFLOW_METALL_ROUGH;
+    m_MaterialData.Attribs.Workflow = PBR_Renderer::PBR_WORKFLOW_METALL_ROUGH;
 }
 
 
@@ -144,51 +145,45 @@ void HnMaterial::ProcessMaterialNetwork()
 {
     if (const HnMaterialParameter* Param = m_Network.GetParameter(HnMaterialParameter::ParamType::Fallback, HnTokens->diffuseColor))
     {
-        m_BasicShaderAttribs.BaseColorFactor = float4{ToFloat3(Param->FallbackValue.Get<pxr::GfVec3f>()), 1};
+        m_MaterialData.Attribs.BaseColorFactor = float4{ToFloat3(Param->FallbackValue.Get<pxr::GfVec3f>()), 1};
     }
 
     if (const HnMaterialParameter* Param = m_Network.GetParameter(HnMaterialParameter::ParamType::Fallback, HnTokens->metallic))
     {
-        m_BasicShaderAttribs.MetallicFactor = Param->FallbackValue.Get<float>();
+        m_MaterialData.Attribs.MetallicFactor = Param->FallbackValue.Get<float>();
     }
 
     if (const HnMaterialParameter* Param = m_Network.GetParameter(HnMaterialParameter::ParamType::Fallback, HnTokens->roughness))
     {
-        m_BasicShaderAttribs.RoughnessFactor = Param->FallbackValue.Get<float>();
+        m_MaterialData.Attribs.RoughnessFactor = Param->FallbackValue.Get<float>();
     }
 
     if (const HnMaterialParameter* Param = m_Network.GetParameter(HnMaterialParameter::ParamType::Fallback, HnTokens->occlusion))
     {
-        m_BasicShaderAttribs.OcclusionFactor = Param->FallbackValue.Get<float>();
+        m_MaterialData.Attribs.OcclusionFactor = Param->FallbackValue.Get<float>();
     }
 
     if (const HnMaterialParameter* Param = m_Network.GetParameter(HnMaterialParameter::ParamType::Fallback, HnTokens->emissiveColor))
     {
-        m_BasicShaderAttribs.EmissiveFactor = float4{ToFloat3(Param->FallbackValue.Get<pxr::GfVec3f>()), 1};
+        m_MaterialData.Attribs.EmissiveFactor = float4{ToFloat3(Param->FallbackValue.Get<pxr::GfVec3f>()), 1};
     }
     else
     {
-        m_BasicShaderAttribs.EmissiveFactor = m_Textures.find(HnTokens->emissiveColor) != m_Textures.end() ? float4{1} : float4{0};
+        m_MaterialData.Attribs.EmissiveFactor = m_Textures.find(HnTokens->emissiveColor) != m_Textures.end() ? float4{1} : float4{0};
     }
 
-    m_BasicShaderAttribs.AlphaMode = MaterialTagToPbrAlphaMode(m_Network.GetTag());
+    m_MaterialData.Attribs.AlphaMode = MaterialTagToPbrAlphaMode(m_Network.GetTag());
 
-    m_BasicShaderAttribs.AlphaMaskCutoff   = m_Network.GetOpacityThreshold();
-    m_BasicShaderAttribs.BaseColorFactor.a = m_Network.GetOpacity();
+    m_MaterialData.Attribs.AlphaCutoff       = m_Network.GetOpacityThreshold();
+    m_MaterialData.Attribs.BaseColorFactor.a = m_Network.GetOpacity();
 }
 
 void HnMaterial::InitTextureAttribs(HnTextureRegistry& TexRegistry, const USD_Renderer& UsdRenderer, const TexNameToCoordSetMapType& TexNameToCoordSetMap)
 {
-    VERIFY(m_NumShaderTextureAttribs == 0 && !m_ShaderTextureAttribs, "Texture attributes have already been initialized");
-
-    std::vector<HLSL::PBRMaterialTextureAttribs> ShaderTextureAttribs;
+    GLTF::MaterialBuilder MatBuilder{m_MaterialData};
 
     auto SetTextureParams = [&](const pxr::TfToken& Name, Uint32 Idx) {
-        if (Idx >= ShaderTextureAttribs.size())
-        {
-            ShaderTextureAttribs.resize(Idx + 1);
-        }
-        HLSL::PBRMaterialTextureAttribs& TexAttribs{ShaderTextureAttribs[Idx]};
+        GLTF::Material::TextureShaderAttribs& TexAttribs = MatBuilder.GetTextureAttrib(Idx);
 
         auto coord_it         = TexNameToCoordSetMap.find(Name);
         TexAttribs.UVSelector = coord_it != TexNameToCoordSetMap.end() ?
@@ -197,7 +192,7 @@ void HnMaterial::InitTextureAttribs(HnTextureRegistry& TexRegistry, const USD_Re
 
         TexAttribs.UBias              = 0;
         TexAttribs.VBias              = 0;
-        TexAttribs.UVScaleAndRotation = float2x2::Identity().ToVec4<>();
+        TexAttribs.UVScaleAndRotation = float2x2::Identity();
 
         auto tex_it = m_Textures.find(Name);
         if (tex_it != m_Textures.end())
@@ -214,7 +209,7 @@ void HnMaterial::InitTextureAttribs(HnTextureRegistry& TexRegistry, const USD_Re
                 TexAttribs.UBias = Param->Transform2d.Translation[0];
                 TexAttribs.VBias = Param->Transform2d.Translation[1];
 
-                TexAttribs.UVScaleAndRotation = UVScaleAndRotation.ToVec4<>();
+                TexAttribs.UVScaleAndRotation = UVScaleAndRotation;
             }
         }
         else
@@ -246,12 +241,7 @@ void HnMaterial::InitTextureAttribs(HnTextureRegistry& TexRegistry, const USD_Re
     SetTextureParams(HnTokens->emissiveColor, TexAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_EMISSIVE]);
     // clang-format on
 
-    m_NumShaderTextureAttribs = static_cast<Uint32>(ShaderTextureAttribs.size());
-    if (m_NumShaderTextureAttribs > 0)
-    {
-        m_ShaderTextureAttribs = std::make_unique<HLSL::PBRMaterialTextureAttribs[]>(m_NumShaderTextureAttribs);
-        memcpy(m_ShaderTextureAttribs.get(), ShaderTextureAttribs.data(), ShaderTextureAttribs.size() * sizeof(HLSL::PBRMaterialTextureAttribs));
-    }
+    MatBuilder.Finalize();
 }
 
 static RefCntAutoPtr<Image> CreateDefaultImage(const pxr::TfToken& Name, Uint32 Dimension = 64)

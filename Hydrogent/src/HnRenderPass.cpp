@@ -276,21 +276,22 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
             0,
         };
 
-        const float4x4& Transform = ApplyTransform ? (Mesh.GetTransform() * m_RenderParams.Transform) : Mesh.GetTransform();
+        const float4x4&       Transform    = ApplyTransform ? (Mesh.GetTransform() * m_RenderParams.Transform) : Mesh.GetTransform();
+        const GLTF::Material& MaterialData = pMaterial->GetMaterialData();
 
         PBR_Renderer::PBRPrimitiveShaderAttribsData AttribsData{
             ListItem.PSOFlags,
             &Transform,
             0,
-            &pMaterial->GetBasicShaderAttribs(),
-            pMaterial->GetShaderTextureAttribs(),
-            pMaterial->GetNumShaderTextureAttribs(),
+            reinterpret_cast<const HLSL::PBRMaterialBasicAttribs*>(&MaterialData.Attribs),
+            reinterpret_cast<const HLSL::PBRMaterialTextureAttribs*>(MaterialData.GetTextureAttribs()),
+            MaterialData.GetNumTextureAttribs(),
             &CustomData,
             sizeof(CustomData),
         };
         State.USDRenderer.WritePBRPrimitiveShaderAttribs(pCurrPrimitive, AttribsData);
 
-        pCurrPrimitive->Material.Basic.BaseColorFactor = pMaterial->GetBasicShaderAttribs().BaseColorFactor * Mesh.GetDisplayColor();
+        pCurrPrimitive->Material.Basic.BaseColorFactor = MaterialData.Attribs.BaseColorFactor * Mesh.GetDisplayColor();
 
         m_PendingDrawItems.push_back(&ListItem);
     }
@@ -461,13 +462,14 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
             if (Geo.TexCoords[1] != nullptr)
                 PSOFlags |= PBR_Renderer::PSO_FLAG_USE_TEXCOORD1;
 
-            const HnMaterial* pMaterial = DrawItem.GetMaterial();
+            const HnMaterial*     pMaterial    = DrawItem.GetMaterial();
+            const GLTF::Material& MaterialData = pMaterial->GetMaterialData();
             if (pMaterial != nullptr)
             {
-                for (Uint32 i = 0; i < pMaterial->GetNumShaderTextureAttribs(); ++i)
+                for (Uint32 i = 0; i < MaterialData.GetNumTextureAttribs(); ++i)
                 {
-                    const auto& TexAttrib = pMaterial->GetShaderTextureAttrib(i);
-                    if (TexAttrib.UVScaleAndRotation != float4{1, 0, 0, 1} ||
+                    const auto& TexAttrib = MaterialData.GetTextureAttrib(i);
+                    if (TexAttrib.UVScaleAndRotation != float2x2::Identity() ||
                         TexAttrib.UBias != 0 ||
                         TexAttrib.VBias != 0)
                     {
@@ -487,7 +489,7 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
             if (static_cast<const HnRenderParam*>(State.RenderDelegate.GetRenderParam())->GetUseTextureAtlas())
                 PSOFlags |= PBR_Renderer::PSO_FLAG_USE_TEXTURE_ATLAS;
 
-            VERIFY(pMaterial->GetBasicShaderAttribs().AlphaMode == State.AlphaMode || pMaterial->GetId().IsEmpty(),
+            VERIFY(MaterialData.Attribs.AlphaMode == State.AlphaMode || pMaterial->GetId().IsEmpty(),
                    "Alpha mode derived from the material tag is not consistent with the alpha mode in the shader attributes. "
                    "This may indicate an issue in how alpha mode is determined in the material, or (less likely) an issue in Rprim sorting by Hydra.");
             ListItem.pPSO = PsoCache.Get({PSOFlags, static_cast<PBR_Renderer::ALPHA_MODE>(State.AlphaMode), /*DoubleSided = */ false, static_cast<PBR_Renderer::DebugViewType>(m_RenderParams.DebugViewMode)}, true);
