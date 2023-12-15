@@ -1155,10 +1155,18 @@ void* PBR_Renderer::WritePBRPrimitiveShaderAttribs(void* pDstShaderAttribs, cons
                                  return;
                              }
 
+                             static constexpr HLSL::PBRMaterialTextureAttribs DefaultTextureAttribs =
+                                 {
+                                     -1,                 // UVSelector
+                                     0,                  // TextureSlice
+                                     0,                  // UBias
+                                     0,                  // VBias
+                                     float4{1, 0, 0, 1}, // UVScaleAndRotation
+                                     float4{0, 0, 0, 0}, // AtlasUVScaleAndBias
+                                 };
                              memcpy(pDstTextures + CurrIndex,
-                                    AttribsData.TextureAttribs + SrcAttribIndex,
+                                    SrcAttribIndex < static_cast<int>(AttribsData.NumTextureAttribs) ? AttribsData.TextureAttribs + SrcAttribIndex : &DefaultTextureAttribs,
                                     sizeof(HLSL::PBRMaterialTextureAttribs));
-
                              ++NumTextureAttribs;
                          });
 
