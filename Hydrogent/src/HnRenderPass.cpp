@@ -79,7 +79,7 @@ struct HnRenderPass::RenderState
 
     const USD_Renderer::ALPHA_MODE AlphaMode;
 
-    const Uint32 PrimitiveAttribsAlignedOffset;
+    const Uint32 ConstantBufferOffsetAlignment;
 
     RenderState(const HnRenderPass&      _RenderPass,
                 const HnRenderPassState& _RPState) :
@@ -90,7 +90,7 @@ struct HnRenderPass::RenderState
         USDRenderer{*RenderDelegate.GetUSDRenderer()},
         pCtx{RenderDelegate.GetDeviceContext()},
         AlphaMode{MaterialTagToPbrAlphaMode(RenderPass.m_MaterialTag)},
-        PrimitiveAttribsAlignedOffset{RenderDelegate.GetPrimitiveAttribsAlignedOffset()}
+        ConstantBufferOffsetAlignment{RenderDelegate.GetDevice()->GetAdapterInfo().Buffer.ConstantBufferOffsetAlignment}
     {
     }
 
@@ -217,16 +217,18 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
     IBuffer* const pPrimitiveAttribsCB = State.RenderDelegate.GetPrimitiveAttribsCB();
     VERIFY_EXPR(pPrimitiveAttribsCB != nullptr);
 
-    const BufferDesc& Desc                 = pPrimitiveAttribsCB->GetDesc();
-    const Uint64      MaxDrawItemsInBuffer = Desc.Size / State.PrimitiveAttribsAlignedOffset;
-    const size_t      NumDrawItems         = m_DrawList.size();
-    const bool        ApplyTransform       = m_RenderParams.Transform != float4x4::Identity();
+    const BufferDesc& AttribsBuffDesc = pPrimitiveAttribsCB->GetDesc();
+    const bool        ApplyTransform  = m_RenderParams.Transform != float4x4::Identity();
+
+    // Get the maximum possible shader attributes data size.
+    // The HnMaterial sets this size when binding the buffer to the SRB.
+    const Uint32 MaxShaderAttribsDataSize = State.USDRenderer.GetPBRPrimitiveAttribsSize(PBR_Renderer::PSO_FLAG_ALL);
 
     m_PendingDrawItems.clear();
-    HLSL::PBRPrimitiveAttribs* pCurrPrimitive = nullptr;
-    for (size_t DrawItemIdx = 0; DrawItemIdx < NumDrawItems; ++DrawItemIdx)
+    void*  pMappedBufferData = nullptr;
+    Uint32 CurrOffset        = 0;
+    for (DrawListItem& ListItem : m_DrawList)
     {
-        DrawListItem&     ListItem = m_DrawList[DrawItemIdx];
         const HnDrawItem& DrawItem = ListItem.DrawItem;
 
         const HnMesh&     Mesh      = DrawItem.GetMesh();
@@ -247,15 +249,28 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
         if (!ListItem || !DrawItem.GetVisible())
             continue;
 
-        if (pCurrPrimitive == nullptr)
+        if (CurrOffset + MaxShaderAttribsDataSize > AttribsBuffDesc.Size)
         {
-            State.pCtx->MapBuffer(pPrimitiveAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD, reinterpret_cast<PVoid&>(pCurrPrimitive));
-            if (pCurrPrimitive == nullptr)
+            // The buffer is full. Render the pending items and start filling the buffer from the beginning.
+            State.pCtx->UnmapBuffer(pPrimitiveAttribsCB, MAP_WRITE);
+            pMappedBufferData = nullptr;
+            CurrOffset        = 0;
+            RenderPendingDrawItems(State);
+            VERIFY_EXPR(m_PendingDrawItems.empty());
+        }
+
+        if (pMappedBufferData == nullptr)
+        {
+            State.pCtx->MapBuffer(pPrimitiveAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD, pMappedBufferData);
+            if (pMappedBufferData == nullptr)
             {
                 UNEXPECTED("Failed to map the primitive attributes buffer");
                 break;
             }
         }
+
+        HLSL::PBRPrimitiveAttribs* pCurrPrimitive = reinterpret_cast<HLSL::PBRPrimitiveAttribs*>(reinterpret_cast<Uint8*>(pMappedBufferData) + CurrOffset);
+        CurrOffset += ListItem.ShaderAttribsDataAlignedSize;
 
         // Write current primitive attributes
         float4 CustomData{
@@ -281,20 +296,9 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
 
         pCurrPrimitive->Material.Basic.BaseColorFactor = pMaterial->GetBasicShaderAttribs().BaseColorFactor * Mesh.GetDisplayColor();
 
-        pCurrPrimitive = reinterpret_cast<HLSL::PBRPrimitiveAttribs*>(reinterpret_cast<Uint8*>(pCurrPrimitive) + State.PrimitiveAttribsAlignedOffset);
         m_PendingDrawItems.push_back(&ListItem);
-
-        if (m_PendingDrawItems.size() == MaxDrawItemsInBuffer)
-        {
-            // Either the buffer is full. Render the pending items and start
-            // filling the buffer from the beginning.
-            State.pCtx->UnmapBuffer(pPrimitiveAttribsCB, MAP_WRITE);
-            pCurrPrimitive = nullptr;
-            RenderPendingDrawItems(State);
-            VERIFY_EXPR(m_PendingDrawItems.empty());
-        }
     }
-    if (pCurrPrimitive != nullptr)
+    if (pMappedBufferData != nullptr)
     {
         State.pCtx->UnmapBuffer(pPrimitiveAttribsCB, MAP_WRITE);
         RenderPendingDrawItems(State);
@@ -499,6 +503,8 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
             UNEXPECTED("Unexpected render mode");
         }
 
+        ListItem.ShaderAttribsDataAlignedSize = AlignUp(State.USDRenderer.GetPBRPrimitiveAttribsSize(PSOFlags), State.ConstantBufferOffsetAlignment);
+
         VERIFY_EXPR(ListItem.pPSO != nullptr);
     }
 
@@ -549,6 +555,7 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
 
 void HnRenderPass::RenderPendingDrawItems(RenderState& State)
 {
+    Uint32 BufferOffset = 0;
     for (size_t i = 0; i < m_PendingDrawItems.size(); ++i)
     {
         const DrawListItem& ListItem = *m_PendingDrawItems[i];
@@ -558,7 +565,7 @@ void HnRenderPass::RenderPendingDrawItems(RenderState& State)
 
         const HnDrawItem::GeometryData& Geo = DrawItem.GetGeometryData();
 
-        IShaderResourceBinding* pSRB = DrawItem.GetMaterial()->GetSRB(static_cast<Uint32>(i * State.PrimitiveAttribsAlignedOffset));
+        IShaderResourceBinding* pSRB = DrawItem.GetMaterial()->GetSRB(BufferOffset);
         VERIFY(pSRB != nullptr, "Material SRB is null. This may happen if UpdateSRB was not called for this material.");
         State.CommitShaderResources(pSRB);
 
@@ -574,6 +581,8 @@ void HnRenderPass::RenderPendingDrawItems(RenderState& State)
         {
             State.pCtx->Draw({ListItem.NumVertices, DRAW_FLAG_VERIFY_ALL});
         }
+
+        BufferOffset += ListItem.ShaderAttribsDataAlignedSize;
     }
 
     m_PendingDrawItems.clear();

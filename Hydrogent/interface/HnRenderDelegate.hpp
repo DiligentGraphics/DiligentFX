@@ -268,7 +268,6 @@ public:
     IRenderStateCache* GetRenderStateCache() const { return m_pRenderStateCache; }
     IBuffer*           GetFrameAttribsCB() const { return m_FrameAttribsCB; }
     IBuffer*           GetPrimitiveAttribsCB() const { return m_PrimitiveAttribsCB; }
-    Uint32             GetPrimitiveAttribsAlignedOffset() const { return m_PrimitiveAttribsAlignedOffset; }
 
     const auto& GetLights() const { return m_Lights; }
 
@@ -288,8 +287,6 @@ private:
     RefCntAutoPtr<IBuffer>               m_PrimitiveAttribsCB;
     std::shared_ptr<USD_Renderer>        m_USDRenderer;
     RefCntAutoPtr<IObject>               m_MaterialSRBCache;
-
-    const Uint32 m_PrimitiveAttribsAlignedOffset;
 
     HnTextureRegistry              m_TextureRegistry;
     std::unique_ptr<HnRenderParam> m_RenderParam;

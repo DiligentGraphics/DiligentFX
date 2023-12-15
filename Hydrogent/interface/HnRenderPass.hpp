@@ -114,8 +114,6 @@ private:
     {
         const HnDrawItem& DrawItem;
 
-        PBR_Renderer::PSO_FLAGS PSOFlags = PBR_Renderer::PSO_FLAG_NONE;
-
         IPipelineState* pPSO = nullptr;
 
         IBuffer* IndexBuffer = nullptr;
@@ -124,6 +122,11 @@ private:
 
         std::array<IBuffer*, 4> VertexBuffers    = {};
         Uint32                  NumVertexBuffers = 0;
+
+        PBR_Renderer::PSO_FLAGS PSOFlags = PBR_Renderer::PSO_FLAG_NONE;
+
+        // Primitive attributes shader data size aligned to the required constant buffer offset alignment
+        Uint32 ShaderAttribsDataAlignedSize = 0;
 
         Uint32 Version = 0;
 
