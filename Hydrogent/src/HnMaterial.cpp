@@ -25,6 +25,9 @@
  */
 
 #include "HnMaterial.hpp"
+
+#include <vector>
+
 #include "HnRenderDelegate.hpp"
 #include "HnTokens.hpp"
 #include "HnTypeConversions.hpp"
@@ -78,23 +81,12 @@ HnMaterial::HnMaterial(const pxr::SdfPath& id) :
     m_BasicShaderAttribs.Workflow = PBR_Renderer::PBR_WORKFLOW_METALL_ROUGH;
 }
 
-static Uint32 ComputeMaxShaderTextureAttribs(const PBR_Renderer::CreateInfo& CI)
-{
-    int MaxIndex = -1;
-    for (auto Index : CI.TextureAttribIndices)
-    {
-        MaxIndex = std::max(MaxIndex, Index);
-    }
-    return MaxIndex >= 0 ? static_cast<Uint32>(MaxIndex + 1) : 0;
-}
 
 // Default material
 HnMaterial::HnMaterial(HnTextureRegistry& TexRegistry, const USD_Renderer& UsdRenderer) :
     HnMaterial{pxr::SdfPath{}}
 {
     // Sync() is never called for the default material, so we need to initialize texture attributes now.
-    m_NumShaderTextureAttribs = ComputeMaxShaderTextureAttribs(UsdRenderer.GetSettings());
-    m_ShaderTextureAttribs    = std::make_unique<HLSL::PBRMaterialTextureAttribs[]>(m_NumShaderTextureAttribs);
     InitTextureAttribs(TexRegistry, UsdRenderer, {});
 }
 
@@ -112,9 +104,6 @@ void HnMaterial::Sync(pxr::HdSceneDelegate* SceneDelegate,
     HnRenderDelegate*   RenderDelegate = static_cast<HnRenderDelegate*>(SceneDelegate->GetRenderIndex().GetRenderDelegate());
     HnTextureRegistry&  TexRegistry    = RenderDelegate->GetTextureRegistry();
     const USD_Renderer& UsdRenderer    = *RenderDelegate->GetUSDRenderer();
-
-    m_NumShaderTextureAttribs = ComputeMaxShaderTextureAttribs(UsdRenderer.GetSettings());
-    m_ShaderTextureAttribs    = std::make_unique<HLSL::PBRMaterialTextureAttribs[]>(m_NumShaderTextureAttribs);
 
     // A mapping from the texture name to the texture coordinate set index (e.g. "diffuseColor" -> 0)
     TexNameToCoordSetMapType TexNameToCoordSetMap;
@@ -190,21 +179,21 @@ void HnMaterial::ProcessMaterialNetwork()
 
 void HnMaterial::InitTextureAttribs(HnTextureRegistry& TexRegistry, const USD_Renderer& UsdRenderer, const TexNameToCoordSetMapType& TexNameToCoordSetMap)
 {
-    VERIFY_EXPR(m_NumShaderTextureAttribs > 0 && m_ShaderTextureAttribs != nullptr);
+    VERIFY(m_NumShaderTextureAttribs == 0 && !m_ShaderTextureAttribs, "Texture attributes have already been initialized");
+
+    std::vector<HLSL::PBRMaterialTextureAttribs> ShaderTextureAttribs;
 
     auto SetTextureParams = [&](const pxr::TfToken& Name, Uint32 Idx) {
-        if (Idx >= m_NumShaderTextureAttribs)
+        if (Idx >= ShaderTextureAttribs.size())
         {
-            UNEXPECTED("Texture attribute index (", Idx, ") exceeds the number of texture attributes (", m_NumShaderTextureAttribs, ")");
-            return;
+            ShaderTextureAttribs.resize(Idx + 1);
         }
+        HLSL::PBRMaterialTextureAttribs& TexAttribs{ShaderTextureAttribs[Idx]};
 
-        auto coord_it                          = TexNameToCoordSetMap.find(Name);
-        m_ShaderTextureAttribs[Idx].UVSelector = coord_it != TexNameToCoordSetMap.end() ?
+        auto coord_it         = TexNameToCoordSetMap.find(Name);
+        TexAttribs.UVSelector = coord_it != TexNameToCoordSetMap.end() ?
             static_cast<float>(coord_it->second) :
             0;
-
-        HLSL::PBRMaterialTextureAttribs& TexAttribs{m_ShaderTextureAttribs[Idx]};
 
         TexAttribs.UBias              = 0;
         TexAttribs.VBias              = 0;
@@ -256,6 +245,13 @@ void HnMaterial::InitTextureAttribs(HnTextureRegistry& TexRegistry, const USD_Re
     SetTextureParams(HnTokens->occlusion,     TexAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_OCCLUSION]);
     SetTextureParams(HnTokens->emissiveColor, TexAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_EMISSIVE]);
     // clang-format on
+
+    m_NumShaderTextureAttribs = static_cast<Uint32>(ShaderTextureAttribs.size());
+    if (m_NumShaderTextureAttribs > 0)
+    {
+        m_ShaderTextureAttribs = std::make_unique<HLSL::PBRMaterialTextureAttribs[]>(m_NumShaderTextureAttribs);
+        memcpy(m_ShaderTextureAttribs.get(), ShaderTextureAttribs.data(), ShaderTextureAttribs.size() * sizeof(HLSL::PBRMaterialTextureAttribs));
+    }
 }
 
 static RefCntAutoPtr<Image> CreateDefaultImage(const pxr::TfToken& Name, Uint32 Dimension = 64)
