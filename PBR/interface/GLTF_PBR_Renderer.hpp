@@ -205,6 +205,20 @@ public:
                ResourceCacheBindings& Bindings,
                IBuffer*               pFrameAttribs);
 
+    struct PBRPrimitiveShaderAttribsData
+    {
+        PSO_FLAGS       PSOFlags       = PSO_FLAG_NONE;
+        const float4x4* NodeMatrix     = nullptr;
+        const Uint32    JointCount     = 0;
+        const void*     CustomData     = nullptr;
+        size_t          CustomDataSize = 0;
+    };
+    static void* WritePBRPrimitiveShaderAttribs(void*                                           pDstShaderAttribs,
+                                                const PBRPrimitiveShaderAttribsData&            AttribsData,
+                                                const std::array<int, TEXTURE_ATTRIB_ID_COUNT>& TextureAttribIndices,
+                                                const GLTF::Material&                           Material);
+
+
 private:
     static ALPHA_MODE GltfAlphaModeToAlphaMode(GLTF::Material::ALPHA_MODE GltfAlphaMode);
 

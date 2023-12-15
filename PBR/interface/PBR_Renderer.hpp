@@ -45,8 +45,6 @@ namespace Diligent
 namespace HLSL
 {
 struct PBRRendererShaderParameters;
-struct PBRMaterialBasicAttribs;
-struct PBRMaterialTextureAttribs;
 } // namespace HLSL
 
 class PBR_Renderer
@@ -398,23 +396,14 @@ public:
     ///             - PrefilteredCubeMipLevels
     void SetInternalShaderParameters(HLSL::PBRRendererShaderParameters& Renderer);
 
-    struct PBRPrimitiveShaderAttribsData
-    {
-        PSO_FLAGS                              PSOFlags          = PSO_FLAG_NONE;
-        const float4x4*                        NodeMatrix        = nullptr;
-        const Uint32                           JointCount        = 0;
-        const HLSL::PBRMaterialBasicAttribs*   BasicAttribs      = nullptr;
-        const HLSL::PBRMaterialTextureAttribs* TextureAttribs    = nullptr;
-        Uint32                                 NumTextureAttribs = 0;
-        const void*                            CustomData        = nullptr;
-        size_t                                 CustomDataSize    = 0;
-    };
-
-    void* WritePBRPrimitiveShaderAttribs(void* pDstShaderAttribs, const PBRPrimitiveShaderAttribsData& AttribsData);
-
     Uint32 GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags) const;
 
     const CreateInfo& GetSettings() const { return m_Settings; }
+
+    inline static constexpr PBR_Renderer::PSO_FLAGS GetTextureAttribPSOFlag(PBR_Renderer::TEXTURE_ATTRIB_ID AttribId);
+
+    template <typename HandlerType>
+    inline static void ProcessTexturAttribs(PBR_Renderer::PSO_FLAGS PSOFlags, HandlerType&& Handler);
 
 protected:
     ShaderMacroHelper DefineMacros(PSO_FLAGS PSOFlags, DebugViewType DebugView) const;
@@ -472,5 +461,35 @@ protected:
 };
 
 DEFINE_FLAG_ENUM_OPERATORS(PBR_Renderer::PSO_FLAGS)
+
+
+inline constexpr PBR_Renderer::PSO_FLAGS PBR_Renderer::GetTextureAttribPSOFlag(PBR_Renderer::TEXTURE_ATTRIB_ID AttribId)
+{
+    // clang-format off
+    static_assert(PBR_Renderer::PSO_FLAG_USE_COLOR_MAP     == 1u << PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR, "PSO_FLAG_USE_COLOR_MAP must be 1 << TEXTURE_ATTRIB_ID_BASE_COLOR");
+    static_assert(PBR_Renderer::PSO_FLAG_USE_NORMAL_MAP    == 1u << PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL,     "PSO_FLAG_USE_NORMAL_MAP must be 1 << TEXTURE_ATTRIB_ID_NORMAL");
+    static_assert(PBR_Renderer::PSO_FLAG_USE_PHYS_DESC_MAP == 1u << PBR_Renderer::TEXTURE_ATTRIB_ID_PHYS_DESC,  "PSO_FLAG_USE_PHYS_DESC_MAP must be 1 << TEXTURE_ATTRIB_ID_PHYS_DESC");
+    static_assert(PBR_Renderer::PSO_FLAG_USE_METALLIC_MAP  == 1u << PBR_Renderer::TEXTURE_ATTRIB_ID_METALLIC,   "PSO_FLAG_USE_METALLIC_MAP must be 1 << TEXTURE_ATTRIB_ID_METALLIC");
+    static_assert(PBR_Renderer::PSO_FLAG_USE_ROUGHNESS_MAP == 1u << PBR_Renderer::TEXTURE_ATTRIB_ID_ROUGHNESS,  "PSO_FLAG_USE_ROUGHNESS_MAP must be 1 << TEXTURE_ATTRIB_ID_ROUGHNESS");
+    static_assert(PBR_Renderer::PSO_FLAG_USE_AO_MAP        == 1u << PBR_Renderer::TEXTURE_ATTRIB_ID_OCCLUSION,  "PSO_FLAG_USE_AO_MAP must be 1 << TEXTURE_ATTRIB_ID_OCCLUSION");
+    static_assert(PBR_Renderer::PSO_FLAG_USE_EMISSIVE_MAP  == 1u << PBR_Renderer::TEXTURE_ATTRIB_ID_EMISSIVE,   "PSO_FLAG_USE_EMISSIVE_MAP must be 1 << TEXTURE_ATTRIB_ID_EMISSIVE");
+    // clang-format on
+    static_assert(PBR_Renderer::PSO_FLAG_LAST_TEXTURE == 1u << 6u, "Did you add new texture flag? You may need to handle it here.");
+
+    return static_cast<PBR_Renderer::PSO_FLAGS>(1u << AttribId);
+}
+
+template <typename HandlerType>
+inline void PBR_Renderer::ProcessTexturAttribs(PBR_Renderer::PSO_FLAGS PSOFlags, HandlerType&& Handler)
+{
+    PSOFlags &= PBR_Renderer::PSO_FLAG_ALL_TEXTURES;
+    int AttribIndex = 0;
+    while (PSOFlags != 0)
+    {
+        const auto AttribId = static_cast<PBR_Renderer::TEXTURE_ATTRIB_ID>(PlatformMisc::GetLSB(PSOFlags));
+        Handler(AttribIndex++, AttribId);
+        PSOFlags &= ~GetTextureAttribPSOFlag(AttribId);
+    }
+}
 
 } // namespace Diligent

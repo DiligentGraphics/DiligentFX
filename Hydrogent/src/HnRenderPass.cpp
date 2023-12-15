@@ -38,6 +38,7 @@
 #include "pxr/imaging/hd/renderIndex.h"
 
 #include "USD_Renderer.hpp"
+#include "GLTF_PBR_Renderer.hpp"
 #include "MapHelper.hpp"
 
 namespace Diligent
@@ -279,17 +280,14 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
         const float4x4&       Transform    = ApplyTransform ? (Mesh.GetTransform() * m_RenderParams.Transform) : Mesh.GetTransform();
         const GLTF::Material& MaterialData = pMaterial->GetMaterialData();
 
-        PBR_Renderer::PBRPrimitiveShaderAttribsData AttribsData{
+        GLTF_PBR_Renderer::PBRPrimitiveShaderAttribsData AttribsData{
             ListItem.PSOFlags,
             &Transform,
             0,
-            reinterpret_cast<const HLSL::PBRMaterialBasicAttribs*>(&MaterialData.Attribs),
-            reinterpret_cast<const HLSL::PBRMaterialTextureAttribs*>(MaterialData.GetTextureAttribs()),
-            MaterialData.GetNumTextureAttribs(),
             &CustomData,
             sizeof(CustomData),
         };
-        State.USDRenderer.WritePBRPrimitiveShaderAttribs(pCurrPrimitive, AttribsData);
+        GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(pCurrPrimitive, AttribsData, State.USDRenderer.GetSettings().TextureAttribIndices, pMaterial->GetMaterialData());
 
         pCurrPrimitive->Material.Basic.BaseColorFactor = MaterialData.Attribs.BaseColorFactor * Mesh.GetDisplayColor();
 
