@@ -220,10 +220,6 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
     const BufferDesc& AttribsBuffDesc = pPrimitiveAttribsCB->GetDesc();
     const bool        ApplyTransform  = m_RenderParams.Transform != float4x4::Identity();
 
-    // Get the maximum possible shader attributes data size.
-    // The HnMaterial sets this size when binding the buffer to the SRB.
-    const Uint32 MaxShaderAttribsDataSize = State.USDRenderer.GetPBRPrimitiveAttribsSize(PBR_Renderer::PSO_FLAG_ALL);
-
     m_PendingDrawItems.clear();
     void*  pMappedBufferData = nullptr;
     Uint32 CurrOffset        = 0;
@@ -249,7 +245,7 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
         if (!ListItem || !DrawItem.GetVisible())
             continue;
 
-        if (CurrOffset + MaxShaderAttribsDataSize > AttribsBuffDesc.Size)
+        if (CurrOffset + ListItem.ShaderAttribsDataAlignedSize > AttribsBuffDesc.Size)
         {
             // The buffer is full. Render the pending items and start filling the buffer from the beginning.
             State.pCtx->UnmapBuffer(pPrimitiveAttribsCB, MAP_WRITE);
@@ -432,6 +428,15 @@ HnRenderPass::SupportedVertexInputsSetType HnRenderPass::GetSupportedVertexInput
     return SupportedInputs;
 }
 
+PBR_Renderer::PSO_FLAGS HnRenderPass::GetTexturePSOFlags(const HnMaterial& Material)
+{
+    return PBR_Renderer::PSO_FLAG_USE_NORMAL_MAP |
+        PBR_Renderer::PSO_FLAG_USE_METALLIC_MAP |
+        PBR_Renderer::PSO_FLAG_USE_ROUGHNESS_MAP |
+        PBR_Renderer::PSO_FLAG_USE_AO_MAP |
+        PBR_Renderer::PSO_FLAG_USE_EMISSIVE_MAP;
+}
+
 void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, RenderState& State, DRAW_LIST_ITEM_DIRTY_FLAGS DirtyFlags)
 {
     const HnDrawItem& DrawItem = ListItem.DrawItem;
@@ -475,13 +480,8 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
             PSOFlags |= PBR_Renderer::PSO_FLAG_USE_COLOR_MAP;
             if (m_Params.UsdPsoFlags & USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_OUTPUT)
             {
-                PSOFlags |=
-                    PBR_Renderer::PSO_FLAG_USE_NORMAL_MAP |
-                    PBR_Renderer::PSO_FLAG_USE_METALLIC_MAP |
-                    PBR_Renderer::PSO_FLAG_USE_ROUGHNESS_MAP |
-                    PBR_Renderer::PSO_FLAG_USE_AO_MAP |
-                    PBR_Renderer::PSO_FLAG_USE_EMISSIVE_MAP |
-                    PBR_Renderer::PSO_FLAG_USE_IBL;
+                PSOFlags |= GetTexturePSOFlags(*pMaterial);
+                PSOFlags |= PBR_Renderer::PSO_FLAG_USE_IBL;
             }
 
             if (static_cast<const HnRenderParam*>(State.RenderDelegate.GetRenderParam())->GetUseTextureAtlas())

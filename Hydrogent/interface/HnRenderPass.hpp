@@ -89,6 +89,7 @@ public:
 
     using SupportedVertexInputsSetType = std::unordered_set<pxr::TfToken, pxr::TfToken::HashFunctor>;
     static SupportedVertexInputsSetType GetSupportedVertexInputs(const HnMaterial* Material);
+    static PBR_Renderer::PSO_FLAGS      GetTexturePSOFlags(const HnMaterial& Material);
 
     enum DRAW_LIST_ITEM_DIRTY_FLAGS : Uint32
     {
