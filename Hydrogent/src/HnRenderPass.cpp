@@ -464,17 +464,18 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
             const GLTF::Material& MaterialData = pMaterial->GetMaterialData();
             if (pMaterial != nullptr)
             {
-                for (Uint32 i = 0; i < MaterialData.GetNumTextureAttribs(); ++i)
-                {
-                    const auto& TexAttrib = MaterialData.GetTextureAttrib(i);
-                    if (TexAttrib.UVScaleAndRotation != float2x2::Identity() ||
-                        TexAttrib.UBias != 0 ||
-                        TexAttrib.VBias != 0)
+                MaterialData.ProcessActiveTextureAttibs(
+                    [&PSOFlags](Uint32, const GLTF::Material::TextureShaderAttribs& TexAttrib, int) //
                     {
-                        PSOFlags |= PBR_Renderer::PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM;
-                        break;
-                    }
-                }
+                        if (TexAttrib.UVScaleAndRotation != float2x2::Identity() ||
+                            TexAttrib.UBias != 0 ||
+                            TexAttrib.VBias != 0)
+                        {
+                            PSOFlags |= PBR_Renderer::PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM;
+                            return false;
+                        }
+                        return true;
+                    });
             }
 
             PSOFlags |= PBR_Renderer::PSO_FLAG_USE_COLOR_MAP;
