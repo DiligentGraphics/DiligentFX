@@ -607,11 +607,15 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS     PSOFlags,
     ShaderMacroHelper Macros;
     Macros.Add("MAX_JOINT_COUNT", static_cast<int>(m_Settings.MaxJointCount));
     Macros.Add("TONE_MAPPING_MODE", "TONE_MAPPING_MODE_UNCHARTED2");
+
     Macros.Add("PBR_WORKFLOW_METALLIC_ROUGHNESS", PBR_WORKFLOW_METALL_ROUGH);
     Macros.Add("PBR_WORKFLOW_SPECULAR_GLOSINESS", PBR_WORKFLOW_SPEC_GLOSS);
+    Macros.Add("PBR_WORKFLOW_UNLIT", PBR_WORKFLOW_UNLIT);
+
     Macros.Add("PBR_ALPHA_MODE_OPAQUE", ALPHA_MODE_OPAQUE);
     Macros.Add("PBR_ALPHA_MODE_MASK", ALPHA_MODE_MASK);
     Macros.Add("PBR_ALPHA_MODE_BLEND", ALPHA_MODE_BLEND);
+
     Macros.Add("USE_IBL_ENV_MAP_LOD", true);
     Macros.Add("USE_HDR_IBL_CUBEMAPS", true);
     Macros.Add("USE_SEPARATE_METALLIC_ROUGHNESS_TEXTURES", m_Settings.UseSeparateMetallicRoughnessTextures);

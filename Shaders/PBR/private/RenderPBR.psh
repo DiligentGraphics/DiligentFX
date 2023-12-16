@@ -79,7 +79,7 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
     float3 Emissive     = GetEmissive(VSOut, g_Primitive.Material);
     float4 PhysicalDesc = GetPhysicalDesc(VSOut, g_Primitive.Material);
 
-     if (BasicAttribs.Workflow == PBR_WORKFLOW_SPECULAR_GLOSINESS)
+    if (BasicAttribs.Workflow == PBR_WORKFLOW_SPECULAR_GLOSINESS)
     {
         PhysicalDesc.rgb = TO_LINEAR(PhysicalDesc.rgb) * BasicAttribs.SpecularFactor.rgb;
         const float u_GlossinessFactor = 1.0;
@@ -103,53 +103,66 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
     float3 MeshNormal = float3(0.0, 0.0, 0.0);
 #endif
 
-    // LIGHTING
-    float3 perturbedNormal = PerturbNormal(dWorldPos_dx,
-                                           dWorldPos_dy,
-                                           dNormalMapUV_dx,
-                                           dNormalMapUV_dy,
-                                           MeshNormal,
-                                           TSNormal,
-                                           NormalTexAttribs.UVSelector >= 0.0,
-                                           IsFrontFace);
-
-    float3 DirectLighting = ApplyDirectionalLight(g_Frame.Light.Direction.xyz, g_Frame.Light.Intensity.rgb, SrfInfo, perturbedNormal, view);
-    float3 color = DirectLighting;
-
-    //#ifdef USE_PUNCTUAL
-    //    for (int i = 0; i < LIGHT_COUNT; ++i)
-    //    {
-    //        Light light = u_Lights[i];
-    //        if (light.type == LightType_Directional)
-    //        {
-    //            color += applyDirectionalLight(light, materialInfo, normal, view);
-    //        }
-    //        else if (light.type == LightType_Point)
-    //        {
-    //            color += applyPointLight(light, materialInfo, normal, view);
-    //        }
-    //        else if (light.type == LightType_Spot)
-    //        {
-    //            color += applySpotLight(light, materialInfo, normal, view);
-    //        }
-    //    }
-    //#endif
-    //
-
-    // Calculate lighting contribution from image based lighting source (IBL)
+    float3 perturbedNormal;
+    float3 DirectLighting;
+    float3 color;
+    
     IBL_Contribution IBLContrib;
     IBLContrib.f3Diffuse  = float3(0.0, 0.0, 0.0);
     IBLContrib.f3Specular = float3(0.0, 0.0, 0.0);
-#   if USE_IBL
+
+    if (BasicAttribs.Workflow != PBR_WORKFLOW_UNLIT)
     {
-        IBLContrib =
-            GetIBLContribution(SrfInfo, perturbedNormal, view, float(g_Frame.Renderer.PrefilteredCubeMipLevels),
-                                g_BRDF_LUT,          g_BRDF_LUT_sampler,
-                                g_IrradianceMap,     g_IrradianceMap_sampler,
-                                g_PrefilteredEnvMap, g_PrefilteredEnvMap_sampler);
-        color += (IBLContrib.f3Diffuse + IBLContrib.f3Specular) * g_Frame.Renderer.IBLScale;
+        perturbedNormal = PerturbNormal(dWorldPos_dx,
+                                        dWorldPos_dy,
+                                        dNormalMapUV_dx,
+                                        dNormalMapUV_dy,
+                                        MeshNormal,
+                                        TSNormal,
+                                        NormalTexAttribs.UVSelector >= 0.0,
+                                        IsFrontFace);
+
+        DirectLighting = ApplyDirectionalLight(g_Frame.Light.Direction.xyz, g_Frame.Light.Intensity.rgb, SrfInfo, perturbedNormal, view);
+        color = DirectLighting;
+
+        //#ifdef USE_PUNCTUAL
+        //    for (int i = 0; i < LIGHT_COUNT; ++i)
+        //    {
+        //        Light light = u_Lights[i];
+        //        if (light.type == LightType_Directional)
+        //        {
+        //            color += applyDirectionalLight(light, materialInfo, normal, view);
+        //        }
+        //        else if (light.type == LightType_Point)
+        //        {
+        //            color += applyPointLight(light, materialInfo, normal, view);
+        //        }
+        //        else if (light.type == LightType_Spot)
+        //        {
+        //            color += applySpotLight(light, materialInfo, normal, view);
+        //        }
+        //    }
+        //#endif
+        //
+
+        // Calculate lighting contribution from image based lighting source (IBL)
+#       if USE_IBL
+        {
+            IBLContrib =
+                GetIBLContribution(SrfInfo, perturbedNormal, view, float(g_Frame.Renderer.PrefilteredCubeMipLevels),
+                                   g_BRDF_LUT,          g_BRDF_LUT_sampler,
+                                   g_IrradianceMap,     g_IrradianceMap_sampler,
+                                   g_PrefilteredEnvMap, g_PrefilteredEnvMap_sampler);
+            color += (IBLContrib.f3Diffuse + IBLContrib.f3Specular) * g_Frame.Renderer.IBLScale;
+        }
+#       endif
     }
-#   endif
+    else
+    {
+        perturbedNormal = float3(0.0, 0.0, 0.0);
+        DirectLighting  = float3(0.0, 0.0, 0.0);
+        color           = BaseColor.rgb;
+    }
 
 #   if USE_AO_MAP
     {

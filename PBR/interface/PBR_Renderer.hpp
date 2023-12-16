@@ -183,7 +183,8 @@ public:
     enum PBR_WORKFLOW
     {
         PBR_WORKFLOW_METALL_ROUGH = 0,
-        PBR_WORKFLOW_SPEC_GLOSS
+        PBR_WORKFLOW_SPEC_GLOSS,
+        PBR_WORKFLOW_UNLIT
     };
 
     /// Debug view type
