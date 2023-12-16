@@ -608,13 +608,13 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS     PSOFlags,
     Macros.Add("MAX_JOINT_COUNT", static_cast<int>(m_Settings.MaxJointCount));
     Macros.Add("TONE_MAPPING_MODE", "TONE_MAPPING_MODE_UNCHARTED2");
 
-    Macros.Add("PBR_WORKFLOW_METALLIC_ROUGHNESS", PBR_WORKFLOW_METALL_ROUGH);
-    Macros.Add("PBR_WORKFLOW_SPECULAR_GLOSINESS", PBR_WORKFLOW_SPEC_GLOSS);
-    Macros.Add("PBR_WORKFLOW_UNLIT", PBR_WORKFLOW_UNLIT);
+    Macros.Add("PBR_WORKFLOW_METALLIC_ROUGHNESS", static_cast<int>(PBR_WORKFLOW_METALL_ROUGH));
+    Macros.Add("PBR_WORKFLOW_SPECULAR_GLOSINESS", static_cast<int>(PBR_WORKFLOW_SPEC_GLOSS));
+    Macros.Add("PBR_WORKFLOW_UNLIT", static_cast<int>(PBR_WORKFLOW_UNLIT));
 
-    Macros.Add("PBR_ALPHA_MODE_OPAQUE", ALPHA_MODE_OPAQUE);
-    Macros.Add("PBR_ALPHA_MODE_MASK", ALPHA_MODE_MASK);
-    Macros.Add("PBR_ALPHA_MODE_BLEND", ALPHA_MODE_BLEND);
+    Macros.Add("PBR_ALPHA_MODE_OPAQUE", static_cast<int>(ALPHA_MODE_OPAQUE));
+    Macros.Add("PBR_ALPHA_MODE_MASK", static_cast<int>(ALPHA_MODE_MASK));
+    Macros.Add("PBR_ALPHA_MODE_BLEND", static_cast<int>(ALPHA_MODE_BLEND));
 
     Macros.Add("USE_IBL_ENV_MAP_LOD", true);
     Macros.Add("USE_HDR_IBL_CUBEMAPS", true);
@@ -644,14 +644,8 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS     PSOFlags,
     Macros.Add("DEBUG_VIEW_SPECULAR_IBL",     static_cast<int>(DebugViewType::SpecularIBL));
     // clang-format on
 
-    static_assert(PSO_FLAG_LAST == 1u << 18u, "Did you add new PSO Flag? You may need to handle it here.");
+    static_assert(PSO_FLAG_LAST == PSO_FLAG_BIT(33), "Did you add new PSO Flag? You may need to handle it here.");
 #define ADD_PSO_FLAG_MACRO(Flag) Macros.Add(#Flag, (PSOFlags & PSO_FLAG_##Flag) != PSO_FLAG_NONE)
-    ADD_PSO_FLAG_MACRO(USE_VERTEX_COLORS);
-    ADD_PSO_FLAG_MACRO(USE_VERTEX_NORMALS);
-    ADD_PSO_FLAG_MACRO(USE_TEXCOORD0);
-    ADD_PSO_FLAG_MACRO(USE_TEXCOORD1);
-    ADD_PSO_FLAG_MACRO(USE_JOINTS);
-
     ADD_PSO_FLAG_MACRO(USE_COLOR_MAP);
     ADD_PSO_FLAG_MACRO(USE_NORMAL_MAP);
     ADD_PSO_FLAG_MACRO(USE_METALLIC_MAP);
@@ -659,6 +653,28 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS     PSOFlags,
     ADD_PSO_FLAG_MACRO(USE_PHYS_DESC_MAP);
     ADD_PSO_FLAG_MACRO(USE_AO_MAP);
     ADD_PSO_FLAG_MACRO(USE_EMISSIVE_MAP);
+    ADD_PSO_FLAG_MACRO(USE_CLEAR_COAT_MAP);
+    ADD_PSO_FLAG_MACRO(USE_CLEAR_COAT_ROUGHNESS_MAP);
+    ADD_PSO_FLAG_MACRO(USE_CLEAR_COAT_NORMAL_MAP);
+    ADD_PSO_FLAG_MACRO(USE_SHEEN_COLOR_MAP);
+    ADD_PSO_FLAG_MACRO(USE_SHEEN_ROUGHNESS_MAP);
+    ADD_PSO_FLAG_MACRO(USE_ANISOTROPY_MAP);
+    ADD_PSO_FLAG_MACRO(USE_IRIDESCENCE_MAP);
+    ADD_PSO_FLAG_MACRO(USE_IRIDESCENCE_THICKNESS_MAP);
+    ADD_PSO_FLAG_MACRO(USE_TRANSMISSION_MAP);
+    ADD_PSO_FLAG_MACRO(USE_THICKNESS_MAP);
+
+    ADD_PSO_FLAG_MACRO(USE_VERTEX_COLORS);
+    ADD_PSO_FLAG_MACRO(USE_VERTEX_NORMALS);
+    ADD_PSO_FLAG_MACRO(USE_TEXCOORD0);
+    ADD_PSO_FLAG_MACRO(USE_TEXCOORD1);
+    ADD_PSO_FLAG_MACRO(USE_JOINTS);
+    ADD_PSO_FLAG_MACRO(ENABLE_CLEAR_COAT);
+    ADD_PSO_FLAG_MACRO(ENABLE_SHEEN);
+    ADD_PSO_FLAG_MACRO(ENABLE_ANISOTROPY);
+    ADD_PSO_FLAG_MACRO(ENABLE_IRIDESCENCE);
+    ADD_PSO_FLAG_MACRO(ENABLE_TRANSMISSION);
+
     ADD_PSO_FLAG_MACRO(USE_IBL);
 
     //ADD_PSO_FLAG_MACRO(FRONT_CCW);
@@ -675,14 +691,24 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS     PSOFlags,
     Macros.Add("TEX_COLOR_CONVERSION_MODE", m_Settings.TexColorConversionMode);
 
     std::array<const char*, TEXTURE_ATTRIB_ID_COUNT> TextureAttribNames{};
-    TextureAttribNames[TEXTURE_ATTRIB_ID_BASE_COLOR] = "BaseColorTextureAttribId";
-    TextureAttribNames[TEXTURE_ATTRIB_ID_NORMAL]     = "NormalTextureAttribId";
-    TextureAttribNames[TEXTURE_ATTRIB_ID_PHYS_DESC]  = "PhysicalDescriptorTextureAttribId";
-    TextureAttribNames[TEXTURE_ATTRIB_ID_METALLIC]   = "MetallicTextureAttribId";
-    TextureAttribNames[TEXTURE_ATTRIB_ID_ROUGHNESS]  = "RoughnessTextureAttribId";
-    TextureAttribNames[TEXTURE_ATTRIB_ID_OCCLUSION]  = "OcclusionTextureAttribId";
-    TextureAttribNames[TEXTURE_ATTRIB_ID_EMISSIVE]   = "EmissiveTextureAttribId";
-    static_assert(TEXTURE_ATTRIB_ID_COUNT == 7, "Did you add new texture attribute? You may need to handle it here.");
+    TextureAttribNames[TEXTURE_ATTRIB_ID_BASE_COLOR]            = "BaseColorTextureAttribId";
+    TextureAttribNames[TEXTURE_ATTRIB_ID_NORMAL]                = "NormalTextureAttribId";
+    TextureAttribNames[TEXTURE_ATTRIB_ID_PHYS_DESC]             = "PhysicalDescriptorTextureAttribId";
+    TextureAttribNames[TEXTURE_ATTRIB_ID_METALLIC]              = "MetallicTextureAttribId";
+    TextureAttribNames[TEXTURE_ATTRIB_ID_ROUGHNESS]             = "RoughnessTextureAttribId";
+    TextureAttribNames[TEXTURE_ATTRIB_ID_OCCLUSION]             = "OcclusionTextureAttribId";
+    TextureAttribNames[TEXTURE_ATTRIB_ID_EMISSIVE]              = "EmissiveTextureAttribId";
+    TextureAttribNames[TEXTURE_ATTRIB_ID_CLEAR_COAT]            = "ClearCoatTextureAttribId";
+    TextureAttribNames[TEXTURE_ATTRIB_ID_CLEAR_COAT_ROUGHNESS]  = "ClearCoatRoughnessTextureAttribId";
+    TextureAttribNames[TEXTURE_ATTRIB_ID_CLEAR_COAT_NORMAL]     = "ClearCoatNormalTextureAttribId";
+    TextureAttribNames[TEXTURE_ATTRIB_ID_SHEEN_COLOR]           = "SheenColorTextureAttribId";
+    TextureAttribNames[TEXTURE_ATTRIB_ID_SHEEN_ROUGHNESS]       = "SheenRoughnessTextureAttribId";
+    TextureAttribNames[TEXTURE_ATTRIB_ID_ANISOTROPY]            = "AnisotropyTextureAttribId";
+    TextureAttribNames[TEXTURE_ATTRIB_ID_IRIDESCENCE]           = "IridescenceTextureAttribId";
+    TextureAttribNames[TEXTURE_ATTRIB_ID_IRIDESCENCE_THICKNESS] = "IridescenceThicknessTextureAttribId";
+    TextureAttribNames[TEXTURE_ATTRIB_ID_TRANSMISSION]          = "TransmissionTextureAttribId";
+    TextureAttribNames[TEXTURE_ATTRIB_ID_THICKNESS]             = "ThicknessTextureAttribId";
+    static_assert(TEXTURE_ATTRIB_ID_COUNT == 17, "Did you add new texture attribute? You may need to handle it here.");
 
     // Tightly pack these attributes that are used by the shader
     int MaxIndex = -1;
@@ -1026,6 +1052,27 @@ IPipelineState* PBR_Renderer::GetPSO(PsoHashMapType&             PsoHashMap,
     {
         Flags &= ~PSO_FLAG_USE_EMISSIVE_MAP;
     }
+    if (!m_Settings.EnableClearCoat)
+    {
+        Flags &= ~PSO_FLAG_ENABLE_CLEAR_COAT;
+    }
+    if (!m_Settings.EnableSheen)
+    {
+        Flags &= ~PSO_FLAG_ENABLE_SHEEN;
+    }
+    if (!m_Settings.EnableAnisotropy)
+    {
+        Flags &= ~PSO_FLAG_ENABLE_ANISOTROPY;
+    }
+    if (!m_Settings.EnableIridescence)
+    {
+        Flags &= ~PSO_FLAG_ENABLE_IRIDESCENCE;
+    }
+    if (!m_Settings.EnableTransmission)
+    {
+        Flags &= ~PSO_FLAG_ENABLE_TRANSMISSION;
+    }
+
     if (m_Settings.MaxJointCount == 0)
     {
         Flags &= ~PSO_FLAG_USE_JOINTS;
@@ -1041,6 +1088,22 @@ IPipelineState* PBR_Renderer::GetPSO(PsoHashMapType&             PsoHashMap,
     if ((Flags & (PSO_FLAG_USE_TEXCOORD0 | PSO_FLAG_USE_TEXCOORD1)) == 0)
     {
         Flags &= ~PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM;
+    }
+    if ((Flags & PSO_FLAG_ENABLE_SHEEN) == 0)
+    {
+        Flags &= ~(PSO_FLAG_USE_SHEEN_COLOR_MAP | PSO_FLAG_USE_SHEEN_ROUGHNESS_MAP);
+    }
+    if ((Flags & PSO_FLAG_ENABLE_ANISOTROPY) == 0)
+    {
+        Flags &= ~PSO_FLAG_USE_ANISOTROPY_MAP;
+    }
+    if ((Flags & PSO_FLAG_ENABLE_IRIDESCENCE) == 0)
+    {
+        Flags &= ~(PSO_FLAG_USE_IRIDESCENCE_MAP | PSO_FLAG_USE_IRIDESCENCE_THICKNESS_MAP);
+    }
+    if ((Flags & PSO_FLAG_ENABLE_TRANSMISSION) == 0)
+    {
+        Flags &= ~PSO_FLAG_USE_TRANSMISSION_MAP;
     }
 
     const PSOKey UpdatedKey{Flags, Key.GetAlphaMode(), Key.IsDoubleSided(), Key.GetDebugView()};

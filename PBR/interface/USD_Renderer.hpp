@@ -45,11 +45,11 @@ public:
                  IRenderStateCache* pStateCache,
                  IDeviceContext*    pCtx,
                  const CreateInfo&  CI);
-    enum USD_PSO_FLAGS
+    enum USD_PSO_FLAGS : Uint64
     {
         USD_PSO_FLAG_NONE                             = 0,
-        USD_PSO_FLAG_ENABLE_COLOR_OUTPUT              = PSO_FLAG_FIRST_USER_DEFINED << 0u,
-        USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT            = PSO_FLAG_FIRST_USER_DEFINED << 1u,
+        USD_PSO_FLAG_ENABLE_COLOR_OUTPUT              = PSO_FLAG_FIRST_USER_DEFINED << 0ull,
+        USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT            = PSO_FLAG_FIRST_USER_DEFINED << 1ull,
         USD_PSO_FLAG_ENABLE_COLOR_AND_MESH_ID_OUTPUTS = USD_PSO_FLAG_ENABLE_COLOR_OUTPUT | USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT,
         USD_PSO_FLAG_ENABLE_ALL_OUTPUTS               = USD_PSO_FLAG_ENABLE_COLOR_AND_MESH_ID_OUTPUTS
     };
