@@ -95,6 +95,50 @@ struct PBRMaterialBasicAttribs
 	CHECK_STRUCT_ALIGNMENT(PBRMaterialBasicAttribs);
 #endif
 
+struct PBRMaterialSheenAttribs
+{
+    float ColorFactorR;
+    float ColorFactorG;
+    float ColorFactorB;
+    float RoughnessFactor;
+};
+#ifdef CHECK_STRUCT_ALIGNMENT
+	CHECK_STRUCT_ALIGNMENT(PBRMaterialSheenAttribs);
+#endif
+
+struct PBRMaterialAnisotropyAttribs
+{
+    float Strength;
+    float Rotation;
+    float Padding0;
+    float Padding1;
+};
+#ifdef CHECK_STRUCT_ALIGNMENT
+	CHECK_STRUCT_ALIGNMENT(PBRMaterialAnisotropyAttribs);
+#endif
+
+struct PBRMaterialIridescenceAttribs
+{
+    float Factor;
+    float IOR;
+    float ThicknessMinimum;
+    float ThicknessMaximum;
+};
+#ifdef CHECK_STRUCT_ALIGNMENT
+	CHECK_STRUCT_ALIGNMENT(PBRMaterialIridescenceAttribs);
+#endif
+
+struct PBRMaterialTransmissionAttribs
+{
+    float Factor;
+    float Padding0;
+    float Padding1;
+    float Padding2;
+};
+#ifdef CHECK_STRUCT_ALIGNMENT
+	CHECK_STRUCT_ALIGNMENT(PBRMaterialTransmissionAttribs);
+#endif
+
 struct PBRMaterialTextureAttribs
 {
     float UVSelector;
@@ -111,7 +155,23 @@ struct PBRMaterialTextureAttribs
 
 struct PBRMaterialShaderInfo
 {
-    PBRMaterialBasicAttribs   Basic;
+    PBRMaterialBasicAttribs Basic;
+    
+#if ENABLE_SHEEN
+    PBRMaterialSheenAttribs Sheen
+#endif
+    
+#if ENABLE_ANISOTROPY
+    PBRMaterialAnisotropyAttribs Anisotropy;
+#endif
+    
+#if ENABLE_IRIDESCENCE
+    PBRMaterialIridescenceAttribs Iridescence;
+#endif
+    
+#if ENABLE_TRANSMISSION
+    PBRMaterialTransmissionAttribs Transmission;
+#endif
     
 #if PBR_NUM_TEXTURE_ATTRIBUTES > 0
     PBRMaterialTextureAttribs Textures[PBR_NUM_TEXTURE_ATTRIBUTES];

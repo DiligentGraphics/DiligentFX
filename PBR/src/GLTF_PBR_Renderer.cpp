@@ -521,6 +521,24 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
     }
 }
 
+template <typename ShaderStructType, typename HostStructType>
+Uint8* WriteShaderAttribs(Uint8* pDstPtr, HostStructType* pSrc, const char* DebugName)
+{
+    static_assert(sizeof(ShaderStructType) == sizeof(HostStructType), "Size of HLSL and C++ structures must be the same");
+    if (pSrc != nullptr)
+    {
+        memcpy(pDstPtr, pSrc, sizeof(ShaderStructType));
+    }
+    else
+    {
+        UNEXPECTED("Shader attribute ", DebugName, " is not initialized in the material");
+        memset(pDstPtr, 0, sizeof(ShaderStructType));
+    }
+    static_assert(sizeof(ShaderStructType) % 16 == 0, "Size structure must be a multiple of 16");
+    return pDstPtr + sizeof(ShaderStructType);
+}
+
+
 void* GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                                           pDstShaderAttribs,
                                                         const PBRPrimitiveShaderAttribsData&            AttribsData,
                                                         const std::array<int, TEXTURE_ATTRIB_ID_COUNT>& TextureAttribIndices,
@@ -531,50 +549,83 @@ void* GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                   
     //    GLTFNodeShaderTransforms Transforms;
     //    struct PBRMaterialShaderInfo
     //    {
-    //        PBRMaterialBasicAttribs   Basic;
+    //        PBRMaterialBasicAttribs        Basic;
+    //        PBRMaterialSheenAttribs        Sheen;        // #if ENABLE_SHEEN
+    //        PBRMaterialAnisotropyAttribs   Anisotropy;   // #if ENABLE_ANISOTROPY
+    //        PBRMaterialIridescenceAttribs  Iridescence;  // #if ENABLE_IRIDESCENCE
+    //        PBRMaterialTransmissionAttribs Transmission; // #if ENABLE_TRANSMISSION
     //        PBRMaterialTextureAttribs Textures[PBR_NUM_TEXTURE_ATTRIBUTES];
     //    } Material;
     //    float4 CustomData;
     //};
 
-    HLSL::GLTFNodeShaderTransforms* pDstTransforms = reinterpret_cast<HLSL::GLTFNodeShaderTransforms*>(pDstShaderAttribs);
-    static_assert(sizeof(HLSL::GLTFNodeShaderTransforms) % 16 == 0, "Size of HLSL::GLTFNodeShaderTransforms must be a multiple of 16");
-    VERIFY(AttribsData.NodeMatrix != nullptr, "Node matrix must not be null");
-    memcpy(&pDstTransforms->NodeMatrix, AttribsData.NodeMatrix, sizeof(float4x4));
-    pDstTransforms->JointCount = static_cast<int>(AttribsData.JointCount);
+    Uint8* pDstPtr = reinterpret_cast<Uint8*>(pDstShaderAttribs);
 
-    HLSL::PBRMaterialBasicAttribs* pDstBasicAttribs = reinterpret_cast<HLSL::PBRMaterialBasicAttribs*>(pDstTransforms + 1);
-    static_assert(sizeof(HLSL::PBRMaterialBasicAttribs) % 16 == 0, "Size of HLSL::PBRMaterialBasicAttribs must be a multiple of 16");
-    static_assert(sizeof(HLSL::PBRMaterialBasicAttribs) == sizeof(Material.Attribs),
-                  "The sizeof(HLSL::PBRMaterialBasicAttribs) is inconsistent with sizeof(GLTF::Material::ShaderAttribs)");
-    memcpy(pDstBasicAttribs, &Material.Attribs, sizeof(HLSL::PBRMaterialBasicAttribs));
-
-    HLSL::PBRMaterialTextureAttribs* pDstTextures = reinterpret_cast<HLSL::PBRMaterialTextureAttribs*>(pDstBasicAttribs + 1);
-    static_assert(sizeof(HLSL::PBRMaterialTextureAttribs) % 16 == 0, "Size of HLSL::PBRMaterialTextureAttribs must be a multiple of 16");
-
-    Uint32 NumTextureAttribs = 0;
-    ProcessTexturAttribs(AttribsData.PSOFlags, [&](int CurrIndex, PBR_Renderer::TEXTURE_ATTRIB_ID AttribId) //
-                         {
-                             const int SrcAttribIndex = TextureAttribIndices[AttribId];
-                             if (SrcAttribIndex < 0)
-                             {
-                                 UNEXPECTED("Shader attribute ", Uint32{AttribId}, " is not initialized");
-                                 return;
-                             }
-
-                             static_assert(sizeof(HLSL::PBRMaterialTextureAttribs) == sizeof(GLTF::Material::TextureShaderAttribs),
-                                           "The sizeof(HLSL::PBRMaterialTextureAttribs) is inconsistent with sizeof(GLTF::Material::TextureShaderAttribs)");
-                             memcpy(pDstTextures + CurrIndex, &Material.GetTextureAttrib(SrcAttribIndex), sizeof(HLSL::PBRMaterialTextureAttribs));
-                             ++NumTextureAttribs;
-                         });
-
-    Uint8* pDstCustomData = reinterpret_cast<Uint8*>(pDstTextures + NumTextureAttribs);
-    if (AttribsData.CustomData != nullptr)
     {
-        VERIFY_EXPR(AttribsData.CustomDataSize > 0);
-        memcpy(pDstCustomData, AttribsData.CustomData, AttribsData.CustomDataSize);
+        HLSL::GLTFNodeShaderTransforms* pDstTransforms = reinterpret_cast<HLSL::GLTFNodeShaderTransforms*>(pDstPtr);
+        VERIFY(AttribsData.NodeMatrix != nullptr, "Node matrix must not be null");
+        memcpy(&pDstTransforms->NodeMatrix, AttribsData.NodeMatrix, sizeof(float4x4));
+        pDstTransforms->JointCount = static_cast<int>(AttribsData.JointCount);
+
+        static_assert(sizeof(HLSL::GLTFNodeShaderTransforms) % 16 == 0, "Size of HLSL::GLTFNodeShaderTransforms must be a multiple of 16");
+        pDstPtr += sizeof(HLSL::GLTFNodeShaderTransforms);
     }
-    return pDstCustomData + AttribsData.CustomDataSize;
+
+    pDstPtr = WriteShaderAttribs<HLSL::PBRMaterialBasicAttribs>(pDstPtr, &Material.Attribs, "Basic Attribs");
+
+    if (AttribsData.PSOFlags & PSO_FLAG_ENABLE_SHEEN)
+    {
+        pDstPtr = WriteShaderAttribs<HLSL::PBRMaterialSheenAttribs>(pDstPtr, Material.Sheen.get(), "Sheen Attribs");
+    }
+
+    if (AttribsData.PSOFlags & PSO_FLAG_ENABLE_ANISOTROPY)
+    {
+        pDstPtr = WriteShaderAttribs<HLSL::PBRMaterialAnisotropyAttribs>(pDstPtr, Material.Anisotropy.get(), "Anisotropy Attribs");
+    }
+
+    if (AttribsData.PSOFlags & PSO_FLAG_ENABLE_IRIDESCENCE)
+    {
+        pDstPtr = WriteShaderAttribs<HLSL::PBRMaterialIridescenceAttribs>(pDstPtr, Material.Iridescence.get(), "Iridescence Attribs");
+    }
+
+    if (AttribsData.PSOFlags & PSO_FLAG_ENABLE_TRANSMISSION)
+    {
+        pDstPtr = WriteShaderAttribs<HLSL::PBRMaterialTransmissionAttribs>(pDstPtr, Material.Transmission.get(), "Transmission Attribs");
+    }
+
+    {
+        HLSL::PBRMaterialTextureAttribs* pDstTextures = reinterpret_cast<HLSL::PBRMaterialTextureAttribs*>(pDstPtr);
+        static_assert(sizeof(HLSL::PBRMaterialTextureAttribs) % 16 == 0, "Size of HLSL::PBRMaterialTextureAttribs must be a multiple of 16");
+
+        Uint32 NumTextureAttribs = 0;
+        ProcessTexturAttribs(AttribsData.PSOFlags, [&](int CurrIndex, PBR_Renderer::TEXTURE_ATTRIB_ID AttribId) //
+                             {
+                                 const int SrcAttribIndex = TextureAttribIndices[AttribId];
+                                 if (SrcAttribIndex < 0)
+                                 {
+                                     UNEXPECTED("Shader attribute ", Uint32{AttribId}, " is not initialized");
+                                     return;
+                                 }
+
+                                 static_assert(sizeof(HLSL::PBRMaterialTextureAttribs) == sizeof(GLTF::Material::TextureShaderAttribs),
+                                               "The sizeof(HLSL::PBRMaterialTextureAttribs) is inconsistent with sizeof(GLTF::Material::TextureShaderAttribs)");
+                                 memcpy(pDstTextures + CurrIndex, &Material.GetTextureAttrib(SrcAttribIndex), sizeof(HLSL::PBRMaterialTextureAttribs));
+                                 ++NumTextureAttribs;
+                             });
+
+        pDstPtr = reinterpret_cast<Uint8*>(pDstTextures + NumTextureAttribs);
+    }
+
+    {
+        if (AttribsData.CustomData != nullptr)
+        {
+            VERIFY_EXPR(AttribsData.CustomDataSize > 0);
+            memcpy(pDstPtr, AttribsData.CustomData, AttribsData.CustomDataSize);
+        }
+        pDstPtr += AttribsData.CustomDataSize;
+    }
+
+    return pDstPtr;
 }
 
 } // namespace Diligent

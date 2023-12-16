@@ -1134,7 +1134,11 @@ Uint32 PBR_Renderer::GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags) const
     //    GLTFNodeShaderTransforms Transforms;
     //    struct PBRMaterialShaderInfo
     //    {
-    //        PBRMaterialBasicAttribs   Basic;
+    //        PBRMaterialBasicAttribs        Basic;
+    //        PBRMaterialSheenAttribs        Sheen;        // #if ENABLE_SHEEN
+    //        PBRMaterialAnisotropyAttribs   Anisotropy;   // #if ENABLE_ANISOTROPY
+    //        PBRMaterialIridescenceAttribs  Iridescence;  // #if ENABLE_IRIDESCENCE
+    //        PBRMaterialTransmissionAttribs Transmission; // #if ENABLE_TRANSMISSION
     //        PBRMaterialTextureAttribs Textures[PBR_NUM_TEXTURE_ATTRIBUTES];
     //    } Material;
     //    float4 CustomData;
@@ -1152,6 +1156,10 @@ Uint32 PBR_Renderer::GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags) const
 
     return (sizeof(HLSL::GLTFNodeShaderTransforms) +
             sizeof(HLSL::PBRMaterialBasicAttribs) +
+            ((Flags & PSO_FLAG_ENABLE_SHEEN) ? sizeof(HLSL::PBRMaterialSheenAttribs) : 0) +
+            ((Flags & PSO_FLAG_ENABLE_ANISOTROPY) ? sizeof(HLSL::PBRMaterialAnisotropyAttribs) : 0) +
+            ((Flags & PSO_FLAG_ENABLE_IRIDESCENCE) ? sizeof(HLSL::PBRMaterialIridescenceAttribs) : 0) +
+            ((Flags & PSO_FLAG_ENABLE_TRANSMISSION) ? sizeof(HLSL::PBRMaterialTransmissionAttribs) : 0) +
             sizeof(HLSL::PBRMaterialTextureAttribs) * NumTextureAttribs +
             sizeof(float4));
 }
