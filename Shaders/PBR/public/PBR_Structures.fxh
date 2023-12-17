@@ -85,8 +85,8 @@ struct PBRMaterialBasicAttribs
 
     float RoughnessFactor;
     float OcclusionFactor;
-    float Padding0;
-    float Padding1;
+    float ClearcoatFactor;
+    float ClearcoatRoughnessFactor;
 
     // Any user-specific data
     float4 CustomData;
@@ -139,6 +139,22 @@ struct PBRMaterialTransmissionAttribs
 	CHECK_STRUCT_ALIGNMENT(PBRMaterialTransmissionAttribs);
 #endif
 
+struct PBRMaterialVolumeAttribs
+{
+    float AttenuationColorR;
+    float AttenuationColorG;
+    float AttenuationColorB;
+    float ThicknessFactor;
+
+    float AttenuationDistance;
+    float Padding0;
+    float Padding1;
+    float Padding2;
+};
+#ifdef CHECK_STRUCT_ALIGNMENT
+	CHECK_STRUCT_ALIGNMENT(PBRMaterialVolumeAttribs);
+#endif
+
 struct PBRMaterialTextureAttribs
 {
     float UVSelector;
@@ -171,6 +187,10 @@ struct PBRMaterialShaderInfo
     
 #if ENABLE_TRANSMISSION
     PBRMaterialTransmissionAttribs Transmission;
+#endif
+    
+#if ENABLE_VOLUME
+    PBRMaterialVolumeAttribs Volume;
 #endif
     
 #if PBR_NUM_TEXTURE_ATTRIBUTES > 0

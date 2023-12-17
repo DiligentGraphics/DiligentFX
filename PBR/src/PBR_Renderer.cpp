@@ -580,6 +580,41 @@ void PBR_Renderer::CreateSignature()
         AddTextureAndSampler("g_EmissiveMap", m_Settings.EmissiveMapImmutableSampler);
     }
 
+    if (m_Settings.EnableClearCoat)
+    {
+        AddTextureAndSampler("g_ClearCoatMap", m_Settings.ClearCoatMapImmutableSampler);
+        AddTextureAndSampler("g_ClearCoatRoughnessMap", m_Settings.ClearCoatMapImmutableSampler);
+        AddTextureAndSampler("g_ClearCoatNormalMap", m_Settings.ClearCoatMapImmutableSampler);
+    }
+
+    if (m_Settings.EnableSheen)
+    {
+        AddTextureAndSampler("g_SheenColorMap", m_Settings.SheenMapImmutableSampler);
+        AddTextureAndSampler("g_SheenRoughnessMap", m_Settings.SheenMapImmutableSampler);
+    }
+
+    if (m_Settings.EnableAnisotropy)
+    {
+        AddTextureAndSampler("g_AnisotropyMap", m_Settings.AnisotropyMapImmutableSampler);
+    }
+
+    if (m_Settings.EnableIridescence)
+    {
+        AddTextureAndSampler("g_IridescenceMap", m_Settings.IridescenceMapImmutableSampler);
+        AddTextureAndSampler("g_IridescenceThicknessMap", m_Settings.IridescenceMapImmutableSampler);
+    }
+
+    if (m_Settings.EnableTransmission)
+    {
+        AddTextureAndSampler("g_TransmissionMap", m_Settings.TransmissionMapImmutableSampler);
+    }
+
+    if (m_Settings.EnableVolume)
+    {
+        AddTextureAndSampler("g_ThicknessMap", m_Settings.ThicknessMapImmutableSampler);
+    }
+
+
     if (m_Settings.EnableIBL)
     {
         SignatureDesc
@@ -644,7 +679,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS     PSOFlags,
     Macros.Add("DEBUG_VIEW_SPECULAR_IBL",     static_cast<int>(DebugViewType::SpecularIBL));
     // clang-format on
 
-    static_assert(PSO_FLAG_LAST == PSO_FLAG_BIT(33), "Did you add new PSO Flag? You may need to handle it here.");
+    static_assert(PSO_FLAG_LAST == PSO_FLAG_BIT(34), "Did you add new PSO Flag? You may need to handle it here.");
 #define ADD_PSO_FLAG_MACRO(Flag) Macros.Add(#Flag, (PSOFlags & PSO_FLAG_##Flag) != PSO_FLAG_NONE)
     ADD_PSO_FLAG_MACRO(USE_COLOR_MAP);
     ADD_PSO_FLAG_MACRO(USE_NORMAL_MAP);
@@ -674,6 +709,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS     PSOFlags,
     ADD_PSO_FLAG_MACRO(ENABLE_ANISOTROPY);
     ADD_PSO_FLAG_MACRO(ENABLE_IRIDESCENCE);
     ADD_PSO_FLAG_MACRO(ENABLE_TRANSMISSION);
+    ADD_PSO_FLAG_MACRO(ENABLE_VOLUME);
 
     ADD_PSO_FLAG_MACRO(USE_IBL);
 
@@ -1072,6 +1108,10 @@ IPipelineState* PBR_Renderer::GetPSO(PsoHashMapType&             PsoHashMap,
     {
         Flags &= ~PSO_FLAG_ENABLE_TRANSMISSION;
     }
+    if (!m_Settings.EnableVolume)
+    {
+        Flags &= ~PSO_FLAG_ENABLE_VOLUME;
+    }
 
     if (m_Settings.MaxJointCount == 0)
     {
@@ -1104,6 +1144,10 @@ IPipelineState* PBR_Renderer::GetPSO(PsoHashMapType&             PsoHashMap,
     if ((Flags & PSO_FLAG_ENABLE_TRANSMISSION) == 0)
     {
         Flags &= ~PSO_FLAG_USE_TRANSMISSION_MAP;
+    }
+    if ((Flags & PSO_FLAG_ENABLE_VOLUME) == 0)
+    {
+        Flags &= ~PSO_FLAG_USE_THICKNESS_MAP;
     }
 
     const PSOKey UpdatedKey{Flags, Key.GetAlphaMode(), Key.IsDoubleSided(), Key.GetDebugView()};
@@ -1139,6 +1183,7 @@ Uint32 PBR_Renderer::GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags) const
     //        PBRMaterialAnisotropyAttribs   Anisotropy;   // #if ENABLE_ANISOTROPY
     //        PBRMaterialIridescenceAttribs  Iridescence;  // #if ENABLE_IRIDESCENCE
     //        PBRMaterialTransmissionAttribs Transmission; // #if ENABLE_TRANSMISSION
+    //        PBRMaterialVolumeAttribs       Volume;       // #if ENABLE_VOLUME
     //        PBRMaterialTextureAttribs Textures[PBR_NUM_TEXTURE_ATTRIBUTES];
     //    } Material;
     //    float4 CustomData;
@@ -1160,6 +1205,7 @@ Uint32 PBR_Renderer::GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags) const
             ((Flags & PSO_FLAG_ENABLE_ANISOTROPY) ? sizeof(HLSL::PBRMaterialAnisotropyAttribs) : 0) +
             ((Flags & PSO_FLAG_ENABLE_IRIDESCENCE) ? sizeof(HLSL::PBRMaterialIridescenceAttribs) : 0) +
             ((Flags & PSO_FLAG_ENABLE_TRANSMISSION) ? sizeof(HLSL::PBRMaterialTransmissionAttribs) : 0) +
+            ((Flags & PSO_FLAG_ENABLE_VOLUME) ? sizeof(HLSL::PBRMaterialVolumeAttribs) : 0) +
             sizeof(HLSL::PBRMaterialTextureAttribs) * NumTextureAttribs +
             sizeof(float4));
 }

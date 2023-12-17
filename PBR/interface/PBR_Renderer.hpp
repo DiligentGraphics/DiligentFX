@@ -109,6 +109,10 @@ public:
         /// A pipeline state can use transmission only if this flag is set to true.
         bool EnableTransmission = false;
 
+        /// Whether to enable volume.
+        /// A pipeline state can use volume only if this flag is set to true.
+        bool EnableVolume = false;
+
         /// When set to true, pipeline state will be compiled with immutable samplers.
         /// When set to false, samplers from the texture views will be used.
         bool UseImmutableSamplers = true;
@@ -157,6 +161,9 @@ public:
 
         /// Immutable sampler for transmission texture.
         SamplerDesc TransmissionMapImmutableSampler = DefaultSampler;
+
+        /// Immutable sampler for thickness texture.
+        SamplerDesc ThicknessMapImmutableSampler = DefaultSampler;
 
         /// The maximum number of joints.
         ///
@@ -322,15 +329,16 @@ public:
         PSO_FLAG_ENABLE_ANISOTROPY   = PSO_FLAG_BIT(24),
         PSO_FLAG_ENABLE_IRIDESCENCE  = PSO_FLAG_BIT(25),
         PSO_FLAG_ENABLE_TRANSMISSION = PSO_FLAG_BIT(26),
+        PSO_FLAG_ENABLE_VOLUME       = PSO_FLAG_BIT(27),
 
-        PSO_FLAG_USE_IBL = PSO_FLAG_BIT(27),
+        PSO_FLAG_USE_IBL = PSO_FLAG_BIT(28),
 
-        PSO_FLAG_USE_TEXTURE_ATLAS         = PSO_FLAG_BIT(28),
-        PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM = PSO_FLAG_BIT(29),
-        PSO_FLAG_CONVERT_OUTPUT_TO_SRGB    = PSO_FLAG_BIT(30),
-        PSO_FLAG_ENABLE_CUSTOM_DATA_OUTPUT = PSO_FLAG_BIT(31),
-        PSO_FLAG_ENABLE_TONE_MAPPING       = PSO_FLAG_BIT(32),
-        PSO_FLAG_UNSHADED                  = PSO_FLAG_BIT(33),
+        PSO_FLAG_USE_TEXTURE_ATLAS         = PSO_FLAG_BIT(29),
+        PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM = PSO_FLAG_BIT(30),
+        PSO_FLAG_CONVERT_OUTPUT_TO_SRGB    = PSO_FLAG_BIT(31),
+        PSO_FLAG_ENABLE_CUSTOM_DATA_OUTPUT = PSO_FLAG_BIT(32),
+        PSO_FLAG_ENABLE_TONE_MAPPING       = PSO_FLAG_BIT(33),
+        PSO_FLAG_UNSHADED                  = PSO_FLAG_BIT(34),
 
         PSO_FLAG_LAST = PSO_FLAG_UNSHADED,
 

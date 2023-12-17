@@ -554,6 +554,7 @@ void* GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                   
     //        PBRMaterialAnisotropyAttribs   Anisotropy;   // #if ENABLE_ANISOTROPY
     //        PBRMaterialIridescenceAttribs  Iridescence;  // #if ENABLE_IRIDESCENCE
     //        PBRMaterialTransmissionAttribs Transmission; // #if ENABLE_TRANSMISSION
+    //        PBRMaterialVolumeAttribs       Volume;       // #if ENABLE_VOLUME
     //        PBRMaterialTextureAttribs Textures[PBR_NUM_TEXTURE_ATTRIBUTES];
     //    } Material;
     //    float4 CustomData;
@@ -591,6 +592,11 @@ void* GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                   
     if (AttribsData.PSOFlags & PSO_FLAG_ENABLE_TRANSMISSION)
     {
         pDstPtr = WriteShaderAttribs<HLSL::PBRMaterialTransmissionAttribs>(pDstPtr, Material.Transmission.get(), "Transmission Attribs");
+    }
+
+    if (AttribsData.PSOFlags & PSO_FLAG_ENABLE_VOLUME)
+    {
+        pDstPtr = WriteShaderAttribs<HLSL::PBRMaterialVolumeAttribs>(pDstPtr, Material.Volume.get(), "Volume Attribs");
     }
 
     {
