@@ -25,6 +25,59 @@
 #   define EmissiveTextureAttribId 4
 #endif
 
+#if !defined(USE_TEXCOORD0) && !defined(USE_TEXCOORD1)
+#   undef USE_COLOR_MAP
+#   define USE_COLOR_MAP 0
+
+#   undef USE_METALLIC_MAP
+#   define USE_METALLIC_MAP 0
+
+#   undef USE_ROUGHNESS_MAP
+#   define USE_ROUGHNESS_MAP 0
+
+#   undef USE_PHYS_DESC_MAP
+#   define USE_PHYS_DESC_MAP 0
+
+#   undef USE_NORMAL_MAP
+#   define USE_NORMAL_MAP 0
+
+#   undef USE_AO_MAP
+#   define USE_AO_MAP 0
+
+#   undef USE_EMISSIVE_MAP
+#   define USE_EMISSIVE_MAP 0
+
+#   undef USE_CLEAR_COAT_MAP
+#   define USE_CLEAR_COAT_MAP 0
+
+#   undef USE_CLEAR_COAT_ROUGHNESS_MAP
+#   define USE_CLEAR_COAT_ROUGHNESS_MAP 0
+
+#   undef USE_CLEAR_COAT_NORMAL_MAP
+#   define USE_CLEAR_COAT_NORMAL_MAP 0
+
+#   undef USE_SHEEN_COLOR_MAP
+#   define USE_SHEEN_COLOR_MAP 0
+
+#   undef USE_SHEEN_ROUGHNESS_MAP
+#   define USE_SHEEN_ROUGHNESS_MAP 0
+
+#   undef USE_ANISOTROPY_MAP
+#   define USE_ANISOTROPY_MAP 0
+
+#   undef USE_IRIDESCENCE_MAP
+#   define USE_IRIDESCENCE_MAP 0
+
+#   undef USE_IRIDESCENCE_THICKNESS_MAP
+#   define USE_IRIDESCENCE_THICKNESS_MAP 0
+
+#   undef USE_TRANSMISSION_MAP
+#   define USE_TRANSMISSION_MAP 0
+
+#   undef USE_THICKNESS_MAP
+#   define USE_THICKNESS_MAP 0
+#endif
+
 #if USE_IBL
     TextureCube  g_IrradianceMap;
     SamplerState g_IrradianceMap_sampler;
@@ -71,6 +124,55 @@
     SamplerState   g_EmissiveMap_sampler;
 #endif
 
+#if USE_CLEAR_COAT_MAP
+    Texture2DArray g_ClearCoatMap;
+    SamplerState   g_ClearCoatMap_sampler;
+#endif
+
+#if USE_CLEAR_COAT_ROUGHNESS_MAP
+    Texture2DArray g_ClearCoatRoughnessMap;
+    SamplerState   g_ClearCoatRoughnessMap_sampler;
+#endif
+
+#if USE_CLEAR_COAT_NORMAL_MAP
+    Texture2DArray g_ClearCoatNormalMap;
+    SamplerState   g_ClearCoatNormalMap_sampler;
+#endif
+
+#if USE_SHEEN_COLOR_MAP
+    Texture2DArray g_SheenColorMap;
+    SamplerState   g_SheenColorMap_sampler;
+#endif
+
+#if USE_SHEEN_ROUGHNESS_MAP
+    Texture2DArray g_SheenRoughnessMap;
+    SamplerState   g_SheenRoughnessMap_sampler;
+#endif
+
+#if USE_ANISOTROPY_MAP
+    Texture2DArray g_AnisotropyMap;
+    SamplerState   g_AnisotropyMap_sampler;
+#endif
+
+#if USE_IRIDESCENCE_MAP
+    Texture2DArray g_IridescenceMap;
+    SamplerState   g_IridescenceMap_sampler;
+#endif
+
+#if USE_IRIDESCENCE_THICKNESS_MAP
+    Texture2DArray g_IridescenceThicknessMap;
+    SamplerState   g_IridescenceThicknessMap_sampler;
+#endif
+
+#if USE_TRANSMISSION_MAP
+    Texture2DArray g_TransmissionMap;
+    SamplerState   g_TransmissionMap_sampler;
+#endif
+
+#if USE_THICKNESS_MAP
+    Texture2DArray g_ThicknessMap;
+    SamplerState   g_ThicknessMap_sampler;
+#endif
 
 float2 SelectUV(VSOutput VSOut, float Selector)
 {
@@ -171,9 +273,9 @@ float3 GetMicroNormal(PBRMaterialShaderInfo Material,
 {
     float3 MicroNormal = float3(0.5, 0.5, 1.0);
 
-    PBRMaterialTextureAttribs TexAttribs = Material.Textures[NormalTextureAttribId];
 #   if USE_NORMAL_MAP && (USE_TEXCOORD0 || USE_TEXCOORD1)
     {
+        PBRMaterialTextureAttribs TexAttribs = Material.Textures[NormalTextureAttribId];
 #       if USE_TEXTURE_ATLAS
         {
             if (TexAttribs.UVSelector >= 0.0)
@@ -276,6 +378,273 @@ float4 GetPhysicalDesc(VSOutput              VSOut,
 #endif 
 
     return PhysicalDesc;
+}
+
+float GetClearcoat(VSOutput              VSOut,
+                   PBRMaterialShaderInfo Material)
+{
+#   if ENABLE_CLEAR_COAT
+    {
+        float Cearcoat = 1.0;
+#       if USE_CLEAR_COAT_MAP
+        {
+            Cearcoat = SampleTexture(g_ClearCoatMap,
+                                     g_ClearCoatMap_sampler,
+                                     VSOut,
+                                     Material.Textures[ClearCoatTextureAttribId],
+                                     float4(1.0, 1.0, 1.0, 1.0)).r;
+        }
+#       endif
+        return Cearcoat * Material.Basic.ClearcoatFactor;
+    }
+#   else
+    {
+        return 0.0;
+    }
+#   endif
+}
+
+float GetClearcoatRoughness(VSOutput              VSOut,
+                            PBRMaterialShaderInfo Material)
+{
+#   if ENABLE_CLEAR_COAT
+    {
+        float CearcoatRoughness = 1.0
+#       if USE_CLEAR_COAT_ROUGHNESS_MAP
+        {
+            CearcoatRoughness = SampleTexture(g_ClearCoatRoughnessMap,
+                                              g_ClearCoatRoughnessMap_sampler,
+                                              VSOut,
+                                              Material.Textures[ClearCoatRoughnessTextureAttribId],
+                                              float4(1.0, 1.0, 1.0, 1.0)).g;
+        }
+#       endif
+        return CearcoatRoughness * Material.Basic.ClearcoatRoughnessFactor;
+    }
+#   else
+    {
+        return 0.0;
+    }
+#   endif
+}
+
+float3 GetClearcoatNormal(PBRMaterialShaderInfo Material,
+                          float2                NormalMapUV,
+                          float2                SmoothNormalMapUV,
+                          float2                dNormalMapUV_dx,
+                          float2                dNormalMapUV_dy)
+{
+#   if ENABLE_CLEAR_COAT
+    {
+        float3 ClearcoatNormal = float3(0.5, 0.5, 1.0);
+#       if USE_CLEAR_COAT_NORMAL_MAP
+        {
+            PBRMaterialTextureAttribs TexAttribs = Material.Textures[ClearCoatNormalTextureAttribId];
+#           if USE_TEXTURE_ATLAS
+            {
+                if (TexAttribs.UVSelector >= 0.0)
+                {
+                    SampleTextureAtlasAttribs SampleAttribs;
+                    SampleAttribs.f2UV                   = NormalMapUV;
+                    SampleAttribs.f2SmoothUV             = SmoothNormalMapUV;
+                    SampleAttribs.f2dSmoothUV_dx         = dNormalMapUV_dx;
+                    SampleAttribs.f2dSmoothUV_dy         = dNormalMapUV_dy;
+                    SampleAttribs.fSlice                 = TexAttribs.TextureSlice;
+                    SampleAttribs.f4UVRegion             = TexAttribs.AtlasUVScaleAndBias;
+                    SampleAttribs.fSmallestValidLevelDim = 4.0;
+                    SampleAttribs.IsNonFilterable        = false;
+                    SampleAttribs.fMaxAnisotropy         = 1.0; // Only used on GLES
+                    ClearcoatNormal = SampleTextureAtlas(g_ClearCoatNormalMap, g_ClearCoatNormalMap_sampler, SampleAttribs).xyz;
+                }
+            }
+#           else
+            {
+                ClearcoatNormal = g_ClearCoatNormalMap.Sample(g_ClearCoatNormalMap_sampler, float3(NormalMapUV, TexAttribs.TextureSlice)).xyz;
+            }
+#           endif
+        }
+#       endif
+        return ClearcoatNormal * float3(2.0, 2.0, 2.0) - float3(1.0, 1.0, 1.0);
+    }
+#   else
+    {
+        return float3(0.0, 0.0, 1.0);
+    }
+#endif
+}
+
+float3 GetSheenColor(VSOutput              VSOut,
+                     PBRMaterialShaderInfo Material)
+{
+#   if ENABLE_SHEEN
+    {
+        float3 SheenColor = float3(1.0, 1.0, 1.0);
+#       if USE_SHEEN_COLOR_MAP
+        {
+            SheenColor = SampleTexture(g_SheenColorMap,
+                                       g_SheenColorMap_sampler,
+                                       VSOut,
+                                       Material.Textures[SheenColorTextureAttribId],
+                                       float4(1.0, 1.0, 1.0, 1.0)).rgb;
+            SheenColor = TO_LINEAR(SheenColor);
+        }
+#       endif
+        return SheenColor * float3(Material.Sheen.ColorFactorR, Material.Sheen.ColorFactorG, Material.Sheen.ColorFactorB);
+    }
+#   else
+    {
+        return float3(0.0, 0.0, 0.0);
+    }
+#endif
+}
+
+float GetSheenRoughness(VSOutput              VSOut,
+                        PBRMaterialShaderInfo Material)
+{
+#   if ENABLE_SHEEN
+    {
+        float SheenRoughness = 1.0
+#       if USE_SHEEN_ROUGHNESS_MAP
+        {
+            SheenRoughness = SampleTexture(g_SheenRoughnessMap,
+                                           g_SheenRoughnessMap_sampler,
+                                           VSOut,
+                                           Material.Textures[SheenRoughnessTextureAttribId],
+                                           float4(1.0, 1.0, 1.0, 1.0)).a;
+        }
+#       endif
+        return SheenRoughness * Material.Sheen.RoughnessFactor;
+    }
+#   else
+    {
+        return 0.0;
+    }
+#   endif
+}
+
+
+float3 GetAnisotropy(VSOutput              VSOut,
+                     PBRMaterialShaderInfo Material)
+{
+#   if ENABLE_ANISOTROPY
+    {
+        float3 Anisotropy = float3(0.5, 0.5, 1.0);
+#       if USE_ANISOTROPY_MAP
+        {
+            Anisotropy = SampleTexture(g_AnisotropyMap,
+                                       g_AnisotropyMap_sampler,
+                                       VSOut,
+                                       Material.Textures[AnisotropyTextureAttribId],
+                                       float4(1.0, 1.0, 1.0, 1.0)).rgb;
+        }
+#       endif
+        Anisotropy.xy = Anisotropy.xy * 2.0 - 1.0;
+        Anisotropy.z *= Material.Anisotropy.Strength;
+        return Anisotropy;
+    }
+#   else
+    {
+        return float3(0.0, 0.0, 0.0);
+    }
+#endif
+}
+
+float GetIridescence(VSOutput              VSOut,
+                     PBRMaterialShaderInfo Material)
+{
+#   if ENABLE_IRIDESCENCE
+    {
+        float Iridescence = 1.0
+#       if USE_IRIDESCENCE_MAP
+        {
+            Iridescence = SampleTexture(g_IridescenceMap,
+                                        g_IridescenceMap_sampler,
+                                        VSOut,
+                                        Material.Textures[IridescenceTextureAttribId],
+                                        float4(1.0, 1.0, 1.0, 1.0)).r;
+        }
+#       endif
+        return Iridescence * Material.Iridescence.Factor;
+    }
+#   else
+    {
+        return 0.0;
+    }
+#   endif
+}
+
+
+float GetIridescenceThickness(VSOutput              VSOut,
+                              PBRMaterialShaderInfo Material)
+{
+#   if ENABLE_IRIDESCENCE
+    {
+        float Thickness = 0.0;
+#       if USE_IRIDESCENCE_THICKNESS_MAP
+        {
+            Thickness = SampleTexture(g_IridescenceThicknessMap,
+                                      g_IridescenceThicknessMap_sampler,
+                                      VSOut,
+                                      Material.Textures[IridescenceThicknessTextureAttribId],
+                                      float4(1.0, 1.0, 1.0, 1.0)).g;
+        }
+#       endif
+        return lerp(Material.Iridescence.ThicknessMinimum, Material.Iridescence.ThicknessMaximum, Thickness);
+    }
+#   else
+    {
+        return 0.0;
+    }
+#   endif
+}
+
+
+float GetTransmission(VSOutput              VSOut,
+                      PBRMaterialShaderInfo Material)
+{
+#   if ENABLE_TRANSMISSION
+    {
+        float Transmission = 1.0;
+#       if USE_TRANSMISSION_MAP
+        {
+            Transmission = SampleTexture(g_TransmissionMap,
+                                         g_TransmissionMap_sampler,
+                                         VSOut,
+                                         Material.Textures[TransmissionTextureAttribId],
+                                         float4(1.0, 1.0, 1.0, 1.0)).r;
+        }
+#       endif
+        return Transmission * Material.Transmission.Factor;
+    }
+#   else
+    {
+        return 0.0;
+    }
+#   endif
+}
+
+float GetVolumeThickness(VSOutput              VSOut,
+                         PBRMaterialShaderInfo Material)
+{
+#   if ENABLE_VOLUME
+    {
+        float Thickness = 1.0;
+#       if USE_THICKNESS_MAP
+        {
+            Thickness = SampleTexture(g_ThicknessMap,
+                                      g_ThicknessMap_sampler,
+                                      VSOut,
+                                      Material.Textures[ThicknessTextureAttribId],
+                                      float4(1.0, 1.0, 1.0, 1.0)).g;
+        }
+#       endif
+        return Thickness * Material.Volume.ThicknessFactor;
+    }
+#   else
+    {
+        return 0.0;
+    }
+#   endif
 }
 
 #endif // _PBR_TEXTURES_FXH_
