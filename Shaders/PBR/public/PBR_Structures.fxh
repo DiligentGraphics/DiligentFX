@@ -174,7 +174,7 @@ struct PBRMaterialShaderInfo
     PBRMaterialBasicAttribs Basic;
     
 #if ENABLE_SHEEN
-    PBRMaterialSheenAttribs Sheen
+    PBRMaterialSheenAttribs Sheen;
 #endif
     
 #if ENABLE_ANISOTROPY

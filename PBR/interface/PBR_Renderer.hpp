@@ -252,6 +252,17 @@ public:
         Emissive,
         Metallic,
         Roughness,
+        ClearCoat,
+        ClearCoatFactor,
+        ClearCoatRoughness,
+        ClearCoatNormal,
+        SheenColor,
+        SheenRoughness,
+        Anisotropy,
+        Iridescence,
+        IridescenceThickness,
+        Transmission,
+        Thickness,
         DiffuseColor,
         SpecularColor,
         Reflectance90,
@@ -315,7 +326,6 @@ public:
         PSO_FLAG_USE_TRANSMISSION_MAP          = PSO_FLAG_BIT(15),
         PSO_FLAG_USE_THICKNESS_MAP             = PSO_FLAG_BIT(16),
 
-
         PSO_FLAG_LAST_TEXTURE = PSO_FLAG_USE_THICKNESS_MAP,
         PSO_FLAG_ALL_TEXTURES = PSO_FLAG_LAST_TEXTURE * 2ull - 1ull,
 
@@ -351,13 +361,16 @@ public:
             PSO_FLAG_USE_TEXCOORD1 |
             PSO_FLAG_USE_JOINTS,
 
-        PSO_FLAG_DEFAULT =
-            PSO_FLAG_VERTEX_ATTRIBS |
+        PSO_FLAG_DEFAULT_TEXTURES =
             PSO_FLAG_USE_COLOR_MAP |
             PSO_FLAG_USE_NORMAL_MAP |
             PSO_FLAG_USE_PHYS_DESC_MAP |
             PSO_FLAG_USE_AO_MAP |
-            PSO_FLAG_USE_EMISSIVE_MAP |
+            PSO_FLAG_USE_EMISSIVE_MAP,
+
+        PSO_FLAG_DEFAULT =
+            PSO_FLAG_VERTEX_ATTRIBS |
+            PSO_FLAG_DEFAULT_TEXTURES |
             PSO_FLAG_USE_IBL |
             PSO_FLAG_ENABLE_TONE_MAPPING,
 

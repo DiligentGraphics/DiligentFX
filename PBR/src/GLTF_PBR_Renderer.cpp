@@ -91,29 +91,6 @@ GLTF_PBR_Renderer::GLTF_PBR_Renderer(IRenderDevice*     pDevice,
                                      const CreateInfo&  CI) :
     PBR_Renderer{pDevice, pStateCache, pCtx, PBRRendererCreateInfoWrapper{CI}}
 {
-    m_SupportedPSOFlags |=
-        PSO_FLAG_USE_VERTEX_COLORS |
-        PSO_FLAG_USE_VERTEX_NORMALS |
-        PSO_FLAG_USE_TEXCOORD0 |
-        PSO_FLAG_USE_TEXCOORD1 |
-        PSO_FLAG_USE_JOINTS |
-        PSO_FLAG_USE_COLOR_MAP |
-        PSO_FLAG_USE_NORMAL_MAP |
-        PSO_FLAG_USE_PHYS_DESC_MAP;
-
-    if (CI.EnableAO)
-        m_SupportedPSOFlags |= PSO_FLAG_USE_AO_MAP;
-    if (CI.EnableEmissive)
-        m_SupportedPSOFlags |= PSO_FLAG_USE_EMISSIVE_MAP;
-    if (CI.EnableIBL)
-        m_SupportedPSOFlags |= PSO_FLAG_USE_IBL;
-
-    m_SupportedPSOFlags |=
-        PSO_FLAG_USE_TEXTURE_ATLAS |
-        PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM |
-        PSO_FLAG_CONVERT_OUTPUT_TO_SRGB |
-        PSO_FLAG_ENABLE_TONE_MAPPING;
-
     {
         GraphicsPipelineDesc GraphicsDesc;
         GraphicsDesc.NumRenderTargets                     = 1;
@@ -174,21 +151,67 @@ void GLTF_PBR_Renderer::InitMaterialSRB(GLTF::Model&            Model,
     VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::BaseColorTextureName) == GLTF::DefaultBaseColorTextureAttribId);
     VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::MetallicRoughnessTextureName) == GLTF::DefaultMetallicRoughnessTextureAttribId);
     VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::NormalTextureName) == GLTF::DefaultNormalTextureAttribId);
-    VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::OcclusionTextureName) == GLTF::DefaultOcclusionTextureAttribId);
-    VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::EmissiveTextureName) == GLTF::DefaultEmissiveTextureAttribId);
     VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::DiffuseTextureName) == GLTF::DefaultDiffuseTextureAttribId);
     VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::SpecularGlossinessTextureName) == GLTF::DefaultSpecularGlossinessTextureAttibId);
 
     SetTexture(GLTF::DefaultBaseColorTextureAttribId, m_pWhiteTexSRV, "g_ColorMap");
     SetTexture(GLTF::DefaultMetallicRoughnessTextureAttribId, m_pDefaultPhysDescSRV, "g_PhysicalDescriptorMap");
     SetTexture(GLTF::DefaultNormalTextureAttribId, m_pDefaultNormalMapSRV, "g_NormalMap");
+
     if (m_Settings.EnableAO)
     {
+        VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::OcclusionTextureName) == GLTF::DefaultOcclusionTextureAttribId);
         SetTexture(GLTF::DefaultOcclusionTextureAttribId, m_pWhiteTexSRV, "g_AOMap");
     }
+
     if (m_Settings.EnableEmissive)
     {
+        VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::EmissiveTextureName) == GLTF::DefaultEmissiveTextureAttribId);
         SetTexture(GLTF::DefaultEmissiveTextureAttribId, m_pWhiteTexSRV, "g_EmissiveMap");
+    }
+
+    if (m_Settings.EnableClearCoat)
+    {
+        VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::ClearcoatTextureName) == GLTF::DefaultClearcoatTextureAttribId);
+        VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::ClearcoatRoughnessTextureName) == GLTF::DefaultClearcoatRoughnessTextureAttribId);
+        VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::ClearcoatNormalTextureName) == GLTF::DefaultClearcoatNormalTextureAttribId);
+        SetTexture(GLTF::DefaultClearcoatTextureAttribId, m_pWhiteTexSRV, "g_ClearCoatMap");
+        SetTexture(GLTF::DefaultClearcoatRoughnessTextureAttribId, m_pWhiteTexSRV, "g_ClearCoatRoughnessMap");
+        SetTexture(GLTF::DefaultClearcoatNormalTextureAttribId, m_pWhiteTexSRV, "g_ClearCoatNormalMap");
+    }
+
+    if (m_Settings.EnableSheen)
+    {
+        VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::SheenColorTextureName) == GLTF::DefaultSheenColorTextureAttribId);
+        VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::SheenRoughnessTextureName) == GLTF::DefaultSheenRoughnessTextureAttribId);
+        SetTexture(GLTF::DefaultSheenColorTextureAttribId, m_pWhiteTexSRV, "g_SheenColorMap");
+        SetTexture(GLTF::DefaultSheenRoughnessTextureAttribId, m_pWhiteTexSRV, "g_SheenRoughnessMap");
+    }
+
+    if (m_Settings.EnableAnisotropy)
+    {
+        VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::AnisotropyTextureName) == GLTF::DefaultAnisotropyTextureAttribId);
+        SetTexture(GLTF::DefaultAnisotropyTextureAttribId, m_pWhiteTexSRV, "g_AnisotropyMap");
+    }
+
+    if (m_Settings.EnableIridescence)
+    {
+        VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::IridescenceTextureName) == GLTF::DefaultIridescenceTextureAttribId);
+        VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::IridescenceThicknessTextureName) == GLTF::DefaultIridescenceThicknessTextureAttribId);
+        SetTexture(GLTF::DefaultIridescenceTextureAttribId, m_pWhiteTexSRV, "g_IridescenceMap");
+        SetTexture(GLTF::DefaultIridescenceThicknessTextureAttribId, m_pWhiteTexSRV, "g_IridescenceThicknessMap");
+    }
+
+    if (m_Settings.EnableTransmission)
+    {
+        VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::TransmissionTextureName) == GLTF::DefaultTransmissionTextureAttribId);
+        SetTexture(GLTF::DefaultTransmissionTextureAttribId, m_pWhiteTexSRV, "g_TransmissionMap");
+    }
+
+    if (m_Settings.EnableVolume)
+    {
+        VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::ThicknessTextureName) == GLTF::DefaultThicknessTextureAttribId);
+        SetTexture(GLTF::DefaultThicknessTextureAttribId, m_pWhiteTexSRV, "g_ThicknessMap");
     }
 }
 
@@ -231,6 +254,40 @@ void GLTF_PBR_Renderer::CreateResourceCacheSRB(IRenderDevice*           pDevice,
     if (m_Settings.EnableEmissive)
     {
         SetTexture(CacheUseInfo.EmissiveFormat, "g_EmissiveMap");
+    }
+
+    if (m_Settings.EnableClearCoat)
+    {
+        SetTexture(CacheUseInfo.ClearCoatFormat, "g_ClearCoatMap");
+        SetTexture(CacheUseInfo.ClearCoatRoughnessFormat, "g_ClearCoatRoughnessMap");
+        SetTexture(CacheUseInfo.ClearCoatNormalFormat, "g_ClearCoatNormalMap");
+    }
+
+    if (m_Settings.EnableSheen)
+    {
+        SetTexture(CacheUseInfo.SheenColorFormat, "g_SheenColorMap");
+        SetTexture(CacheUseInfo.SheenRoughnessFormat, "g_SheenRoughnessMap");
+    }
+
+    if (m_Settings.EnableAnisotropy)
+    {
+        SetTexture(CacheUseInfo.AnisotropyFormat, "g_AnisotropyMap");
+    }
+
+    if (m_Settings.EnableIridescence)
+    {
+        SetTexture(CacheUseInfo.IridescenceFormat, "g_IridescenceMap");
+        SetTexture(CacheUseInfo.IridescenceThicknessFormat, "g_IridescenceThicknessMap");
+    }
+
+    if (m_Settings.EnableTransmission)
+    {
+        SetTexture(CacheUseInfo.TransmissionFormat, "g_TransmissionMap");
+    }
+
+    if (m_Settings.EnableVolume)
+    {
+        SetTexture(CacheUseInfo.ThicknessFormat, "g_ThicknessMap");
     }
 }
 
@@ -303,6 +360,79 @@ void GLTF_PBR_Renderer::Begin(IRenderDevice*         pDevice,
     pCtx->SetIndexBuffer(pIndexBuffer, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 }
 
+GLTF_PBR_Renderer::PSO_FLAGS GLTF_PBR_Renderer::GetMaterialPSOFlags(const GLTF::Material& Mat) const
+{
+    // Color, normal and physical descriptor maps are always enabled
+    PSO_FLAGS PSOFlags =
+        PSO_FLAG_USE_COLOR_MAP |
+        PSO_FLAG_USE_NORMAL_MAP |
+        PSO_FLAG_USE_PHYS_DESC_MAP;
+
+    if (m_Settings.EnableAO)
+    {
+        PSOFlags |= PSO_FLAG_USE_AO_MAP;
+    }
+
+    if (m_Settings.EnableEmissive)
+    {
+        PSOFlags |= PSO_FLAG_USE_EMISSIVE_MAP;
+    }
+
+    if (m_Settings.EnableClearCoat && Mat.HasClearcoat)
+    {
+        PSOFlags |=
+            PSO_FLAG_ENABLE_CLEAR_COAT |
+            PSO_FLAG_USE_CLEAR_COAT_MAP |
+            PSO_FLAG_USE_CLEAR_COAT_ROUGHNESS_MAP |
+            PSO_FLAG_USE_CLEAR_COAT_NORMAL_MAP;
+    }
+
+    if (m_Settings.EnableSheen && Mat.Sheen)
+    {
+        PSOFlags |=
+            PSO_FLAG_ENABLE_SHEEN |
+            PSO_FLAG_USE_SHEEN_COLOR_MAP |
+            PSO_FLAG_USE_SHEEN_ROUGHNESS_MAP;
+    }
+
+    if (m_Settings.EnableAnisotropy && Mat.Anisotropy)
+    {
+        PSOFlags |=
+            PSO_FLAG_ENABLE_ANISOTROPY |
+            PSO_FLAG_USE_ANISOTROPY_MAP;
+    }
+
+    if (m_Settings.EnableIridescence && Mat.Iridescence)
+    {
+        PSOFlags |=
+            PSO_FLAG_ENABLE_IRIDESCENCE |
+            PSO_FLAG_USE_IRIDESCENCE_MAP |
+            PSO_FLAG_USE_IRIDESCENCE_THICKNESS_MAP;
+    }
+
+    if (m_Settings.EnableTransmission && Mat.Transmission)
+    {
+        PSOFlags |=
+            PSO_FLAG_ENABLE_TRANSMISSION |
+            PSO_FLAG_USE_TRANSMISSION_MAP;
+    }
+
+    if (m_Settings.EnableVolume && Mat.Volume)
+    {
+        PSOFlags |=
+            PSO_FLAG_ENABLE_VOLUME |
+            PSO_FLAG_USE_THICKNESS_MAP;
+    }
+
+    if (m_Settings.EnableIBL)
+    {
+        PSOFlags |= PSO_FLAG_USE_IBL;
+    }
+
+    return PSOFlags;
+}
+
+
 void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
                                const GLTF::Model&           GLTFModel,
                                const GLTF::ModelTransforms& Transforms,
@@ -364,10 +494,6 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
             VertexAttribFlags |= PSO_FLAG_USE_VERTEX_COLORS;
     }
 
-    auto PSOFlags = RenderParams.Flags & m_SupportedPSOFlags & (VertexAttribFlags | ~PSO_FLAG_VERTEX_ATTRIBS);
-    if (RenderParams.Wireframe)
-        PSOFlags |= PSO_FLAG_UNSHADED;
-
     for (auto& List : m_RenderLists)
         List.clear();
 
@@ -414,6 +540,19 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
             const auto& primitive        = PrimRI.Primitive;
             const auto& material         = GLTFModel.Materials[primitive.MaterialId];
             const auto& NodeGlobalMatrix = Transforms.NodeGlobalMatrices[Node.Index];
+
+            auto PSOFlags = VertexAttribFlags | GetMaterialPSOFlags(material);
+
+            // These flags will be filtered out by RenderParams.Flags
+            PSOFlags |= PSO_FLAG_USE_TEXTURE_ATLAS |
+                PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM |
+                PSO_FLAG_CONVERT_OUTPUT_TO_SRGB |
+                PSO_FLAG_ENABLE_TONE_MAPPING;
+
+            PSOFlags &= RenderParams.Flags;
+
+            if (RenderParams.Wireframe)
+                PSOFlags |= PSO_FLAG_UNSHADED;
 
             const PSOKey NewKey{PSOFlags, GltfAlphaModeToAlphaMode(AlphaMode), material.DoubleSided, RenderParams.DebugView};
             if (NewKey != CurrPsoKey)
@@ -487,7 +626,7 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
 
                     const float4x4                NodeTransform = NodeGlobalMatrix * RenderParams.ModelTransform;
                     PBRPrimitiveShaderAttribsData AttribsData{
-                        PSOFlags,
+                        CurrPsoKey.GetFlags(),
                         &NodeTransform,
                         static_cast<Uint32>(JointCount),
                     };

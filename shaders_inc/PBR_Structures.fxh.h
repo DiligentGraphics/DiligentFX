@@ -174,7 +174,7 @@
 "    PBRMaterialBasicAttribs Basic;\n"
 "\n"
 "#if ENABLE_SHEEN\n"
-"    PBRMaterialSheenAttribs Sheen\n"
+"    PBRMaterialSheenAttribs Sheen;\n"
 "#endif\n"
 "\n"
 "#if ENABLE_ANISOTROPY\n"

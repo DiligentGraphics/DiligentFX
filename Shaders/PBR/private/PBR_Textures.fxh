@@ -380,8 +380,8 @@ float4 GetPhysicalDesc(VSOutput              VSOut,
     return PhysicalDesc;
 }
 
-float GetClearcoat(VSOutput              VSOut,
-                   PBRMaterialShaderInfo Material)
+float GetClearcoatFactor(VSOutput              VSOut,
+                         PBRMaterialShaderInfo Material)
 {
 #   if ENABLE_CLEAR_COAT
     {
@@ -409,7 +409,7 @@ float GetClearcoatRoughness(VSOutput              VSOut,
 {
 #   if ENABLE_CLEAR_COAT
     {
-        float CearcoatRoughness = 1.0
+        float CearcoatRoughness = 1.0;
 #       if USE_CLEAR_COAT_ROUGHNESS_MAP
         {
             CearcoatRoughness = SampleTexture(g_ClearCoatRoughnessMap,
@@ -428,40 +428,19 @@ float GetClearcoatRoughness(VSOutput              VSOut,
 #   endif
 }
 
-float3 GetClearcoatNormal(PBRMaterialShaderInfo Material,
-                          float2                NormalMapUV,
-                          float2                SmoothNormalMapUV,
-                          float2                dNormalMapUV_dx,
-                          float2                dNormalMapUV_dy)
+float3 GetClearcoatNormal(VSOutput              VSOut,
+                          PBRMaterialShaderInfo Material)
 {
 #   if ENABLE_CLEAR_COAT
     {
         float3 ClearcoatNormal = float3(0.5, 0.5, 1.0);
 #       if USE_CLEAR_COAT_NORMAL_MAP
         {
-            PBRMaterialTextureAttribs TexAttribs = Material.Textures[ClearCoatNormalTextureAttribId];
-#           if USE_TEXTURE_ATLAS
-            {
-                if (TexAttribs.UVSelector >= 0.0)
-                {
-                    SampleTextureAtlasAttribs SampleAttribs;
-                    SampleAttribs.f2UV                   = NormalMapUV;
-                    SampleAttribs.f2SmoothUV             = SmoothNormalMapUV;
-                    SampleAttribs.f2dSmoothUV_dx         = dNormalMapUV_dx;
-                    SampleAttribs.f2dSmoothUV_dy         = dNormalMapUV_dy;
-                    SampleAttribs.fSlice                 = TexAttribs.TextureSlice;
-                    SampleAttribs.f4UVRegion             = TexAttribs.AtlasUVScaleAndBias;
-                    SampleAttribs.fSmallestValidLevelDim = 4.0;
-                    SampleAttribs.IsNonFilterable        = false;
-                    SampleAttribs.fMaxAnisotropy         = 1.0; // Only used on GLES
-                    ClearcoatNormal = SampleTextureAtlas(g_ClearCoatNormalMap, g_ClearCoatNormalMap_sampler, SampleAttribs).xyz;
-                }
-            }
-#           else
-            {
-                ClearcoatNormal = g_ClearCoatNormalMap.Sample(g_ClearCoatNormalMap_sampler, float3(NormalMapUV, TexAttribs.TextureSlice)).xyz;
-            }
-#           endif
+            ClearcoatNormal = SampleTexture(g_ClearCoatNormalMap, 
+                                            g_ClearCoatNormalMap_sampler,
+                                            VSOut,
+                                            Material.Textures[ClearCoatNormalTextureAttribId],
+                                            float4(0.5, 0.5, 1.0, 1.0)).rgb;
         }
 #       endif
         return ClearcoatNormal * float3(2.0, 2.0, 2.0) - float3(1.0, 1.0, 1.0);
@@ -503,7 +482,7 @@ float GetSheenRoughness(VSOutput              VSOut,
 {
 #   if ENABLE_SHEEN
     {
-        float SheenRoughness = 1.0
+        float SheenRoughness = 1.0;
 #       if USE_SHEEN_ROUGHNESS_MAP
         {
             SheenRoughness = SampleTexture(g_SheenRoughnessMap,
@@ -554,7 +533,7 @@ float GetIridescence(VSOutput              VSOut,
 {
 #   if ENABLE_IRIDESCENCE
     {
-        float Iridescence = 1.0
+        float Iridescence = 1.0;
 #       if USE_IRIDESCENCE_MAP
         {
             Iridescence = SampleTexture(g_IridescenceMap,

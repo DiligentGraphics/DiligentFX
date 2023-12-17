@@ -173,6 +173,36 @@ public:
 
         /// Emissive texture format.
         TEXTURE_FORMAT EmissiveFormat = TEX_FORMAT_RGBA8_UNORM;
+
+        /// Clear coat texture format.
+        TEXTURE_FORMAT ClearCoatFormat = TEX_FORMAT_R8_UNORM;
+
+        /// Clear coat roughness texture format.
+        TEXTURE_FORMAT ClearCoatRoughnessFormat = TEX_FORMAT_RGBA8_UNORM;
+
+        /// Clear coat normal texture format.
+        TEXTURE_FORMAT ClearCoatNormalFormat = TEX_FORMAT_RGBA8_UNORM;
+
+        /// Sheen color texture format.
+        TEXTURE_FORMAT SheenColorFormat = TEX_FORMAT_RGBA8_UNORM;
+
+        /// Sheen roughness texture format.
+        TEXTURE_FORMAT SheenRoughnessFormat = TEX_FORMAT_RGBA8_UNORM;
+
+        /// Anisotropy texture format.
+        TEXTURE_FORMAT AnisotropyFormat = TEX_FORMAT_RGBA8_UNORM;
+
+        /// Iridescence texture format.
+        TEXTURE_FORMAT IridescenceFormat = TEX_FORMAT_R8_UNORM;
+
+        /// Iridescence thickness texture format.
+        TEXTURE_FORMAT IridescenceThicknessFormat = TEX_FORMAT_RGBA8_UNORM;
+
+        /// Transmission texture format.
+        TEXTURE_FORMAT TransmissionFormat = TEX_FORMAT_R8_UNORM;
+
+        /// Thickness texture format.
+        TEXTURE_FORMAT ThicknessFormat = TEX_FORMAT_RGBA8_UNORM;
     };
 
     /// Creates a shader resource binding for a GTLF resource cache.
@@ -218,14 +248,13 @@ public:
                                                 const std::array<int, TEXTURE_ATTRIB_ID_COUNT>& TextureAttribIndices,
                                                 const GLTF::Material&                           Material);
 
+    PSO_FLAGS GetMaterialPSOFlags(const GLTF::Material& Mat) const;
 
 private:
     static ALPHA_MODE GltfAlphaModeToAlphaMode(GLTF::Material::ALPHA_MODE GltfAlphaMode);
 
 private:
     RenderInfo m_RenderParams;
-
-    PSO_FLAGS m_SupportedPSOFlags = PSO_FLAG_NONE;
 
     struct PrimitiveRenderInfo
     {

@@ -78,7 +78,22 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
     float  Occlusion    = GetOcclusion(VSOut, g_Primitive.Material);
     float3 Emissive     = GetEmissive(VSOut, g_Primitive.Material);
     float4 PhysicalDesc = GetPhysicalDesc(VSOut, g_Primitive.Material);
+    
+    float  ClearCoatFactor    = GetClearcoatFactor(VSOut, g_Primitive.Material);
+    float  ClearCoatRoughness = GetClearcoatRoughness(VSOut, g_Primitive.Material);
+    float3 ClearCoatNormal    = GetClearcoatNormal(VSOut, g_Primitive.Material);
 
+    float3 SheenColor     = GetSheenColor(VSOut, g_Primitive.Material);
+    float  SheenRoughness = GetSheenRoughness(VSOut, g_Primitive.Material);
+    
+    float3 Anisotropy = GetAnisotropy(VSOut, g_Primitive.Material);
+    
+    float Iridescence          = GetIridescence(VSOut, g_Primitive.Material);
+    float IridescenceThickness = GetIridescenceThickness(VSOut, g_Primitive.Material);
+    
+    float Transmission    = GetTransmission(VSOut, g_Primitive.Material);
+    float VolumeThickness = GetVolumeThickness(VSOut, g_Primitive.Material);
+    
     if (BasicAttribs.Workflow == PBR_WORKFLOW_SPECULAR_GLOSINESS)
     {
         PhysicalDesc.rgb = TO_LINEAR(PhysicalDesc.rgb) * BasicAttribs.SpecularFactor.rgb;
@@ -231,6 +246,49 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
 #elif (DEBUG_VIEW == DEBUG_VIEW_ROUGHNESS)
     {
         OutColor.rgb  = SrfInfo.PerceptualRoughness * float3(1.0, 1.0, 1.0);
+    }
+#elif (DEBUG_VIEW == DEBUG_VIEW_CLEAR_COAT)
+    {
+    }
+#elif (DEBUG_VIEW == DEBUG_VIEW_CLEAR_COAT_FACTOR)
+    {
+        OutColor.rgb  = ClearCoatFactor * float3(1.0, 1.0, 1.0);
+    }
+#elif (DEBUG_VIEW == DEBUG_VIEW_CLEAR_COAT_ROUGHNESS)
+    {
+        OutColor.rgb = ClearCoatRoughness * float3(1.0, 1.0, 1.0);
+    }
+#elif (DEBUG_VIEW == DEBUG_VIEW_CLEAR_COAT_NORMAL)
+    {
+        OutColor.rgb = ClearCoatNormal.xyz * float3(0.5, 0.5, 0.5) + float3(0.5, 0.5, 0.5);
+    }
+#elif (DEBUG_VIEW == DEBUG_VIEW_SHEEN_COLOR)
+    {
+        OutColor.rgb = SheenColor.rgb;
+    }
+#elif (DEBUG_VIEW == DEBUG_VIEW_SHEEN_ROUGHNESS)
+    {
+        OutColor.rgb = SheenRoughness * float3(1.0, 1.0, 1.0);
+    }
+#elif (DEBUG_VIEW == DEBUG_VIEW_ANISOTROPY)
+    {
+        OutColor.rgb = Anisotropy.xyz;
+    }
+#elif (DEBUG_VIEW == DEBUG_VIEW_IRIDESCENCE)
+    {        
+        OutColor.rgb = Iridescence * float3(1.0, 1.0, 1.0);
+    }
+#elif (DEBUG_VIEW == DEBUG_VIEW_IRIDESCENCE_THICKNESS)
+    {
+        OutColor.rgb = (IridescenceThickness - Material.Iridescence.ThicknessMinimum) / max(Material.Iridescence.ThicknessMaximum - Material.Iridescence.ThicknessMinimum, 1.0);
+    }
+#elif (DEBUG_VIEW == DEBUG_VIEW_TRANSMISSION)
+    {
+        OutColor.rgb = Transmission * float3(1.0, 1.0, 1.0);
+    }
+#elif (DEBUG_VIEW == DEBUG_VIEW_THICKNESS)
+    {
+        OutColor.rgb = VolumeThickness * float3(1.0, 1.0, 1.0);
     }
 #elif (DEBUG_VIEW == DEBUG_VIEW_DIFFUSE_COLOR)
     {
