@@ -188,7 +188,7 @@ void GLTF_PBR_Renderer::InitMaterialSRB(GLTF::Model&            Model,
     }
     if (m_Settings.EnableEmissive)
     {
-        SetTexture(GLTF::DefaultEmissiveTextureAttribId, m_pBlackTexSRV, "g_EmissiveMap");
+        SetTexture(GLTF::DefaultEmissiveTextureAttribId, m_pWhiteTexSRV, "g_EmissiveMap");
     }
 }
 

@@ -221,7 +221,7 @@ float GetOcclusion(VSOutput              VSOut,
 float3 GetEmissive(VSOutput              VSOut,
                    PBRMaterialShaderInfo Material)
 {
-    float3 Emissive = float3(0.0, 0.0, 0.0);
+    float3 Emissive = float3(1.0, 1.0, 1.0);
 
 #   if USE_EMISSIVE_MAP
     {
@@ -229,7 +229,7 @@ float3 GetEmissive(VSOutput              VSOut,
                                  g_EmissiveMap_sampler,
                                  VSOut,
                                  Material.Textures[EmissiveTextureAttribId],
-                                 float4(0.0, 0.0, 0.0, 0.0)).rgb;
+                                 float4(1.0, 1.0, 1.0, 1.0)).rgb;
         Emissive = TO_LINEAR(Emissive);
     }
 #   endif
