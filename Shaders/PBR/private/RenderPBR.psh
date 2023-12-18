@@ -70,13 +70,20 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
 {
     float4 BaseColor = GetBaseColor(VSOut, g_Primitive.Material);
 
+#if USE_VERTEX_NORMALS
+    float3 MeshNormal = VSOut.Normal;
+#else
+    // PerturbNormal can handle zero-length mesh normals.
+    float3 MeshNormal = float3(0.0, 0.0, 0.0);
+#endif
+    
     PBRMaterialTextureAttribs NormalTexAttribs = g_Primitive.Material.Textures[NormalTextureAttribId];
 
     float2 NormalMapUV = SelectUV(VSOut, NormalTexAttribs.UVSelector);
 
     // We have to compute gradients in uniform flow control to avoid issues with perturbed normal
-    float3 dWorldPos_dx = ddx(VSOut.WorldPos);
-    float3 dWorldPos_dy = ddy(VSOut.WorldPos);
+    PerturbNormalInfo NormalInfo = GetPerturbNormalInfo(VSOut.WorldPos, MeshNormal);
+
 #if ENABLE_TEXCOORD_TRANSFORM
     NormalMapUV = TransformUV(NormalMapUV, NormalTexAttribs);
 #endif
@@ -135,13 +142,6 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
 
     float3 view = normalize(g_Frame.Camera.f4Position.xyz - VSOut.WorldPos.xyz); // Direction from surface point to camera
 
-#if USE_VERTEX_NORMALS
-    float3 MeshNormal = VSOut.Normal;
-#else
-    // PerturbNormal can handle zero-length mesh normals.
-    float3 MeshNormal = float3(0.0, 0.0, 0.0);
-#endif
-
     float3 perturbedNormal;
     float3 DirectLighting;
     float3 color;
@@ -152,11 +152,9 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
 
     if (BasicAttribs.Workflow != PBR_WORKFLOW_UNLIT)
     {
-        perturbedNormal = PerturbNormal(dWorldPos_dx,
-                                        dWorldPos_dy,
+        perturbedNormal = PerturbNormal(NormalInfo,
                                         dNormalMapUV_dx,
                                         dNormalMapUV_dy,
-                                        MeshNormal,
                                         TSNormal,
                                         NormalTexAttribs.UVSelector >= 0.0,
                                         IsFrontFace);
