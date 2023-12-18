@@ -118,6 +118,40 @@ struct IBL_Contribution
 // Calculation of the lighting contribution from an optional Image Based Light source.
 // Precomputed Environment Maps are required uniform inputs and are computed as outlined in [1].
 // See our README.md on Environment Maps [3] for additional discussion.
+float3 GetIBLRadianceGGX(in SurfaceReflectanceInfo SrfInfo,
+                         in float3                 n,
+                         in float3                 v,
+                         in float                  PrefilteredCubeMipLevels,
+                         in Texture2D              BRDF_LUT,
+                         in SamplerState           BRDF_LUT_sampler,
+                         in TextureCube            PrefilteredEnvMap,
+                         in SamplerState           PrefilteredEnvMap_sampler)
+{
+    float NdotV = clamp(dot(n, v), 0.0, 1.0);
+
+    float  lod        = clamp(SrfInfo.PerceptualRoughness * PrefilteredCubeMipLevels, 0.0, PrefilteredCubeMipLevels);
+    float3 reflection = normalize(reflect(-v, n));
+
+    float2 brdfSamplePoint = clamp(float2(NdotV, SrfInfo.PerceptualRoughness), float2(0.0, 0.0), float2(1.0, 1.0));
+    // retrieve a scale and bias to F0. See [1], Figure 3
+    float2 brdf = BRDF_LUT.Sample(BRDF_LUT_sampler, brdfSamplePoint).rg;
+
+#if USE_IBL_ENV_MAP_LOD
+    float3 SpecularSample = PrefilteredEnvMap.SampleLevel(PrefilteredEnvMap_sampler, reflection, lod).rgb;
+#else
+    float3 SpecularSample = PrefilteredEnvMap.Sample(PrefilteredEnvMap_sampler, reflection).rgb;
+#endif
+
+#if USE_HDR_IBL_CUBEMAPS
+    // Already linear.
+    float3 SpecularLight = SpecularSample.rgb;
+#else
+    float3 SpecularLight = TO_LINEAR(SpecularSample.rgb);
+#endif
+
+    return SpecularLight * (SrfInfo.Reflectance0 * brdf.x + SrfInfo.Reflectance90 * brdf.y);
+}
+
 IBL_Contribution GetIBLContribution(in SurfaceReflectanceInfo SrfInfo,
                                     in float3                 n,
                                     in float3                 v,
@@ -128,36 +162,23 @@ IBL_Contribution GetIBLContribution(in SurfaceReflectanceInfo SrfInfo,
                                     in SamplerState           IrradianceMap_sampler,
                                     in TextureCube            PrefilteredEnvMap,
                                     in SamplerState           PrefilteredEnvMap_sampler)
-{
-    float NdotV = clamp(dot(n, v), 0.0, 1.0);
-
-    float lod = clamp(SrfInfo.PerceptualRoughness * PrefilteredCubeMipLevels, 0.0, PrefilteredCubeMipLevels);
-    float3 reflection = normalize(reflect(-v, n));
-
-    float2 brdfSamplePoint = clamp(float2(NdotV, SrfInfo.PerceptualRoughness), float2(0.0, 0.0), float2(1.0, 1.0));
-    // retrieve a scale and bias to F0. See [1], Figure 3
-    float2 brdf = BRDF_LUT.Sample(BRDF_LUT_sampler, brdfSamplePoint).rg;
-
-    float4 diffuseSample = IrradianceMap.Sample(IrradianceMap_sampler, n);
-
-#if USE_IBL_ENV_MAP_LOD
-    float4 specularSample = PrefilteredEnvMap.SampleLevel(PrefilteredEnvMap_sampler, reflection, lod);
-#else
-    float4 specularSample = PrefilteredEnvMap.Sample(PrefilteredEnvMap_sampler, reflection);
-#endif
-
+{    
+    IBL_Contribution IBLContrib;
+    IBLContrib.f3Specular = GetIBLRadianceGGX(SrfInfo, n, v, PrefilteredCubeMipLevels,
+                                              BRDF_LUT,
+                                              BRDF_LUT_sampler,
+                                              PrefilteredEnvMap,
+                                              PrefilteredEnvMap_sampler);
+    
+    float3 DiffuseSample = IrradianceMap.Sample(IrradianceMap_sampler, n).rgb;
 #if USE_HDR_IBL_CUBEMAPS
     // Already linear.
-    float3 diffuseLight  = diffuseSample.rgb;
-    float3 specularLight = specularSample.rgb;
+    float3 DiffuseLight  = DiffuseSample.rgb;
 #else
-    float3 diffuseLight  = TO_LINEAR(diffuseSample.rgb);
-    float3 specularLight = TO_LINEAR(specularSample.rgb);
+    float3 DiffuseLight  = TO_LINEAR(DiffuseSample.rgb);
 #endif
-
-    IBL_Contribution IBLContrib;
-    IBLContrib.f3Diffuse  = diffuseLight * SrfInfo.DiffuseColor;
-    IBLContrib.f3Specular = specularLight * (SrfInfo.Reflectance0 * brdf.x + SrfInfo.Reflectance90 * brdf.y);
+    IBLContrib.f3Diffuse  = DiffuseLight * SrfInfo.DiffuseColor;
+    
     return IBLContrib;
 }
 
@@ -252,4 +273,21 @@ SurfaceReflectanceInfo GetSurfaceReflectanceMR(float3 BaseColor,
     return SrfInfo;
 }
 
+/// Gets surface reflectance for the clear coat layer
+SurfaceReflectanceInfo GetSurfaceReflectanceClearCoat(float Roughness, float  IOR)
+{
+    SurfaceReflectanceInfo SrfInfo;
+
+    float f0 = (IOR - 1.0) / (IOR + 1.0);
+    f0 *= f0;
+
+    SrfInfo.PerceptualRoughness = Roughness;
+    SrfInfo.DiffuseColor        = float3(0.0, 0.0, 0.0);
+
+    float R90 = 1.0;
+    SrfInfo.Reflectance0  = float3(f0, f0, f0);
+    SrfInfo.Reflectance90 = float3(R90, R90, R90);
+
+    return SrfInfo;
+}
 #endif // _PBR_SHADING_FXH_

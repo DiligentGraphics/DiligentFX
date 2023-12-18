@@ -41,6 +41,30 @@ cbuffer cbPrimitiveAttribs
     PBRPrimitiveAttribs g_Primitive;
 }
 
+float3 ApplyLights(SurfaceReflectanceInfo SrfInfo, float3 Normal, float3 View)
+{
+    //#ifdef USE_PUNCTUAL
+    //    for (int i = 0; i < LIGHT_COUNT; ++i)
+    //    {
+    //        Light light = u_Lights[i];
+    //        if (light.type == LightType_Directional)
+    //        {
+    //            color += applyDirectionalLight(light, materialInfo, normal, view);
+    //        }
+    //        else if (light.type == LightType_Point)
+    //        {
+    //            color += applyPointLight(light, materialInfo, normal, view);
+    //        }
+    //        else if (light.type == LightType_Spot)
+    //        {
+    //            color += applySpotLight(light, materialInfo, normal, view);
+    //        }
+    //    }
+    //#endif
+    
+    return ApplyDirectionalLight(g_Frame.Light.Direction.xyz, g_Frame.Light.Intensity.rgb, SrfInfo, Normal, View);
+}
+
 float4 ComputePbrSurfaceColor(in VSOutput VSOut,
                               in bool     IsFrontFace)
 {
@@ -137,28 +161,8 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
                                         NormalTexAttribs.UVSelector >= 0.0,
                                         IsFrontFace);
 
-        DirectLighting = ApplyDirectionalLight(g_Frame.Light.Direction.xyz, g_Frame.Light.Intensity.rgb, SrfInfo, perturbedNormal, view);
+        DirectLighting = ApplyLights(SrfInfo, perturbedNormal, view);
         color = DirectLighting;
-
-        //#ifdef USE_PUNCTUAL
-        //    for (int i = 0; i < LIGHT_COUNT; ++i)
-        //    {
-        //        Light light = u_Lights[i];
-        //        if (light.type == LightType_Directional)
-        //        {
-        //            color += applyDirectionalLight(light, materialInfo, normal, view);
-        //        }
-        //        else if (light.type == LightType_Point)
-        //        {
-        //            color += applyPointLight(light, materialInfo, normal, view);
-        //        }
-        //        else if (light.type == LightType_Spot)
-        //        {
-        //            color += applySpotLight(light, materialInfo, normal, view);
-        //        }
-        //    }
-        //#endif
-        //
 
         // Calculate lighting contribution from image based lighting source (IBL)
 #       if USE_IBL
@@ -183,7 +187,7 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
     {
         color = lerp(color, color * Occlusion, g_Frame.Renderer.OcclusionStrength);
     }
-#endif
+#   endif
 
 #   if USE_EMISSIVE_MAP
     {
@@ -191,6 +195,38 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
     }
 #   endif
 
+    float3 ClearCoatColor           = float3(0.0, 0.0, 0.0);
+    float3 ClearCoatPerturbedNormal = MeshNormal;
+#   if ENABLE_CLEAR_COAT
+    {
+        // Clear coat layer is applied on top of everything
+        float IOR = 1.5;
+        SurfaceReflectanceInfo ClearCoatSrfInfo = GetSurfaceReflectanceClearCoat(ClearCoatRoughness, IOR);
+    
+        ClearCoatColor += ApplyLights(ClearCoatSrfInfo, ClearCoatPerturbedNormal, view);
+
+#       if USE_IBL
+        {
+            float3 ClearCoatIBL =
+                GetIBLRadianceGGX(ClearCoatSrfInfo, ClearCoatPerturbedNormal, view, float(g_Frame.Renderer.PrefilteredCubeMipLevels),
+                                  g_BRDF_LUT,          g_BRDF_LUT_sampler,
+                                  g_PrefilteredEnvMap, g_PrefilteredEnvMap_sampler) * g_Frame.Renderer.IBLScale;
+#           if USE_AO_MAP
+            {
+                ClearCoatIBL = lerp(ClearCoatIBL, ClearCoatIBL * Occlusion, g_Frame.Renderer.OcclusionStrength);
+            }
+#           endif
+    
+            ClearCoatColor += ClearCoatIBL;
+    
+            float ClearcoatFresnel = SchlickReflection(saturate(dot(ClearCoatPerturbedNormal, view)), ClearCoatSrfInfo.Reflectance0.x, ClearCoatSrfInfo.Reflectance90.x);
+            ClearCoatColor *= ClearCoatFactor;
+            color = color * (1.0 - ClearCoatFactor * ClearcoatFresnel) + ClearCoatColor;
+        }
+#       endif
+    }
+#   endif
+    
 #if ENABLE_TONE_MAPPING
     {
         // Perform tone mapping
@@ -233,26 +269,27 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
     }
 #elif (DEBUG_VIEW == DEBUG_VIEW_OCCLUSION)
     {
-        OutColor.rgb  = Occlusion * float3(1.0, 1.0, 1.0);
+        OutColor.rgb = Occlusion * float3(1.0, 1.0, 1.0);
     }
 #elif (DEBUG_VIEW == DEBUG_VIEW_EMISSIVE)
     {
-        OutColor.rgb  = Emissive.rgb;
+        OutColor.rgb = Emissive.rgb;
     }
 #elif (DEBUG_VIEW == DEBUG_VIEW_METALLIC)
     {
-        OutColor.rgb  = metallic * float3(1.0, 1.0, 1.0);
+        OutColor.rgb = metallic * float3(1.0, 1.0, 1.0);
     }
 #elif (DEBUG_VIEW == DEBUG_VIEW_ROUGHNESS)
     {
-        OutColor.rgb  = SrfInfo.PerceptualRoughness * float3(1.0, 1.0, 1.0);
+        OutColor.rgb = SrfInfo.PerceptualRoughness * float3(1.0, 1.0, 1.0);
     }
 #elif (DEBUG_VIEW == DEBUG_VIEW_CLEAR_COAT)
     {
+        OutColor.rgb = ClearCoatColor.rgb;
     }
 #elif (DEBUG_VIEW == DEBUG_VIEW_CLEAR_COAT_FACTOR)
     {
-        OutColor.rgb  = ClearCoatFactor * float3(1.0, 1.0, 1.0);
+        OutColor.rgb = ClearCoatFactor * float3(1.0, 1.0, 1.0);
     }
 #elif (DEBUG_VIEW == DEBUG_VIEW_CLEAR_COAT_ROUGHNESS)
     {

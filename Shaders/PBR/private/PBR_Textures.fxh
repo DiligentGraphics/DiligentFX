@@ -380,6 +380,12 @@ float4 GetPhysicalDesc(VSOutput              VSOut,
     return PhysicalDesc;
 }
 
+
+// Extensions
+
+// Clear coat
+// https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_clearcoat
+
 float GetClearcoatFactor(VSOutput              VSOut,
                          PBRMaterialShaderInfo Material)
 {
@@ -452,6 +458,10 @@ float3 GetClearcoatNormal(VSOutput              VSOut,
 #endif
 }
 
+
+// Sheen
+// https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_sheen
+
 float3 GetSheenColor(VSOutput              VSOut,
                      PBRMaterialShaderInfo Material)
 {
@@ -502,6 +512,9 @@ float GetSheenRoughness(VSOutput              VSOut,
 }
 
 
+// Anisotropy
+// https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_anisotropy
+
 float3 GetAnisotropy(VSOutput              VSOut,
                      PBRMaterialShaderInfo Material)
 {
@@ -527,6 +540,10 @@ float3 GetAnisotropy(VSOutput              VSOut,
     }
 #endif
 }
+
+
+// Iridescence
+// https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_iridescence
 
 float GetIridescence(VSOutput              VSOut,
                      PBRMaterialShaderInfo Material)
@@ -578,6 +595,9 @@ float GetIridescenceThickness(VSOutput              VSOut,
 }
 
 
+// Transmission
+// https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_transmission
+
 float GetTransmission(VSOutput              VSOut,
                       PBRMaterialShaderInfo Material)
 {
@@ -601,6 +621,10 @@ float GetTransmission(VSOutput              VSOut,
     }
 #   endif
 }
+
+
+// Volume
+// https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_volume
 
 float GetVolumeThickness(VSOutput              VSOut,
                          PBRMaterialShaderInfo Material)
