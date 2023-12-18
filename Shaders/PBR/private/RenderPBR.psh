@@ -65,6 +65,39 @@ float3 ApplyLights(SurfaceReflectanceInfo SrfInfo, float3 Normal, float3 View)
     return ApplyDirectionalLight(g_Frame.Light.Direction.xyz, g_Frame.Light.Intensity.rgb, SrfInfo, Normal, View);
 }
 
+struct NormalMapUVInfo
+{
+    float2 UV;
+    float2 SmoothUV;
+    float2 dUV_dx;
+    float2 dUV_dy;
+};
+
+NormalMapUVInfo GetNormalMapUVInfo(in VSOutput VSOut, in PBRMaterialTextureAttribs TexAttribs)
+{
+    NormalMapUVInfo UVInfo;
+    
+    UVInfo.UV = SelectUV(VSOut, TexAttribs.UVSelector);
+
+#if ENABLE_TEXCOORD_TRANSFORM
+    UVInfo.UV = TransformUV(UVInfo.UV, TexAttribs);
+#endif
+    
+    UVInfo.SmoothUV = UVInfo.UV;
+    UVInfo.dUV_dx   = ddx(UVInfo.UV);
+    UVInfo.dUV_dy   = ddy(UVInfo.UV);
+#if USE_TEXTURE_ATLAS
+    {
+        UVInfo.UV = frac(UVInfo.UV) * TexAttribs.AtlasUVScaleAndBias.xy + TexAttribs.AtlasUVScaleAndBias.zw;
+        UVInfo.SmoothUV *= TexAttribs.AtlasUVScaleAndBias.xy;
+        UVInfo.dUV_dx   *= TexAttribs.AtlasUVScaleAndBias.xy;
+        UVInfo.dUV_dy   *= TexAttribs.AtlasUVScaleAndBias.xy;
+    }
+#endif
+    
+    return UVInfo;
+}
+
 float4 ComputePbrSurfaceColor(in VSOutput VSOut,
                               in bool     IsFrontFace)
 {
@@ -76,27 +109,16 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
     // PerturbNormal can handle zero-length mesh normals.
     float3 MeshNormal = float3(0.0, 0.0, 0.0);
 #endif
-    
-    PBRMaterialTextureAttribs NormalTexAttribs = g_Primitive.Material.Textures[NormalTextureAttribId];
-
-    float2 NormalMapUV = SelectUV(VSOut, NormalTexAttribs.UVSelector);
-
     // We have to compute gradients in uniform flow control to avoid issues with perturbed normal
     PerturbNormalInfo NormalInfo = GetPerturbNormalInfo(VSOut.WorldPos, MeshNormal);
-
-#if ENABLE_TEXCOORD_TRANSFORM
-    NormalMapUV = TransformUV(NormalMapUV, NormalTexAttribs);
-#endif
-    float2 SmoothNormalMapUV = NormalMapUV;
-    float2 dNormalMapUV_dx = ddx(NormalMapUV);
-    float2 dNormalMapUV_dy = ddy(NormalMapUV);
-#if USE_TEXTURE_ATLAS
-    {
-        NormalMapUV = frac(NormalMapUV) * NormalTexAttribs.AtlasUVScaleAndBias.xy + NormalTexAttribs.AtlasUVScaleAndBias.zw;
-        SmoothNormalMapUV *= NormalTexAttribs.AtlasUVScaleAndBias.xy;
-        dNormalMapUV_dx   *= NormalTexAttribs.AtlasUVScaleAndBias.xy;
-        dNormalMapUV_dy   *= NormalTexAttribs.AtlasUVScaleAndBias.xy;
-    }
+    
+    PBRMaterialTextureAttribs NormalTexAttribs = g_Primitive.Material.Textures[NormalTextureAttribId];
+    NormalMapUVInfo NMUVInfo = GetNormalMapUVInfo(VSOut, NormalTexAttribs);
+    
+    NormalMapUVInfo ClearCoatNMUVInfo;
+#if USE_CLEAR_COAT_NORMAL_MAP
+    PBRMaterialTextureAttribs ClearCoatNormalTexAttribs = g_Primitive.Material.Textures[ClearCoatNormalTextureAttribId];
+    ClearCoatNMUVInfo = GetNormalMapUVInfo(VSOut, ClearCoatNormalTexAttribs);
 #endif
 
     PBRMaterialBasicAttribs BasicAttribs = g_Primitive.Material.Basic;
@@ -105,14 +127,14 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
         discard;
     }
 
-    float3 TSNormal     = GetMicroNormal(g_Primitive.Material, NormalMapUV, SmoothNormalMapUV, dNormalMapUV_dx, dNormalMapUV_dy);
+    float3 TSNormal     = GetMicroNormal(g_Primitive.Material, NMUVInfo.UV, NMUVInfo.SmoothUV, NMUVInfo.dUV_dx, NMUVInfo.dUV_dy);
     float  Occlusion    = GetOcclusion(VSOut, g_Primitive.Material);
     float3 Emissive     = GetEmissive(VSOut, g_Primitive.Material);
     float4 PhysicalDesc = GetPhysicalDesc(VSOut, g_Primitive.Material);
     
     float  ClearCoatFactor    = GetClearcoatFactor(VSOut, g_Primitive.Material);
     float  ClearCoatRoughness = GetClearcoatRoughness(VSOut, g_Primitive.Material);
-    float3 ClearCoatNormal    = GetClearcoatNormal(VSOut, g_Primitive.Material);
+    float3 ClearCoatNormal    = GetClearcoatNormal(g_Primitive.Material, ClearCoatNMUVInfo.UV, ClearCoatNMUVInfo.SmoothUV, ClearCoatNMUVInfo.dUV_dx, ClearCoatNMUVInfo.dUV_dy);
 
     float3 SheenColor     = GetSheenColor(VSOut, g_Primitive.Material);
     float  SheenRoughness = GetSheenRoughness(VSOut, g_Primitive.Material);
@@ -153,8 +175,8 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
     if (BasicAttribs.Workflow != PBR_WORKFLOW_UNLIT)
     {
         perturbedNormal = PerturbNormal(NormalInfo,
-                                        dNormalMapUV_dx,
-                                        dNormalMapUV_dy,
+                                        NMUVInfo.dUV_dx,
+                                        NMUVInfo.dUV_dy,
                                         TSNormal,
                                         NormalTexAttribs.UVSelector >= 0.0,
                                         IsFrontFace);
@@ -194,9 +216,27 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
 #   endif
 
     float3 ClearCoatColor           = float3(0.0, 0.0, 0.0);
-    float3 ClearCoatPerturbedNormal = MeshNormal;
+    float3 ClearCoatPerturbedNormal = float3(0.0, 0.0, 0.0);
 #   if ENABLE_CLEAR_COAT
     {
+        ClearCoatPerturbedNormal = MeshNormal;
+
+#       if USE_CLEAR_COAT_NORMAL_MAP
+        {
+            // If clearcoatNormalTexture is not given, no normal mapping is applied to the clear coat layer,
+            // even if normal mapping is applied to the base material.
+            if (ClearCoatNormalTexAttribs.UVSelector >= 0)
+            {
+                ClearCoatPerturbedNormal = PerturbNormal(NormalInfo,
+                                                         ClearCoatNMUVInfo.dUV_dx,
+                                                         ClearCoatNMUVInfo.dUV_dy,
+                                                         ClearCoatNormal,
+                                                         true,
+                                                         IsFrontFace);
+            }
+        }
+#       endif
+
         // Clear coat layer is applied on top of everything
         float IOR = 1.5;
         SurfaceReflectanceInfo ClearCoatSrfInfo = GetSurfaceReflectanceClearCoat(ClearCoatRoughness, IOR);
@@ -295,7 +335,7 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
     }
 #elif (DEBUG_VIEW == DEBUG_VIEW_CLEAR_COAT_NORMAL)
     {
-        OutColor.rgb = ClearCoatNormal.xyz * float3(0.5, 0.5, 0.5) + float3(0.5, 0.5, 0.5);
+        OutColor.rgb = abs(ClearCoatPerturbedNormal.xyz);
     }
 #elif (DEBUG_VIEW == DEBUG_VIEW_SHEEN_COLOR)
     {

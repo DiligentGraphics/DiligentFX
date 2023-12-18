@@ -265,6 +265,40 @@ float4 GetBaseColor(VSOutput              VSOut,
     return BaseColor * Material.Basic.BaseColorFactor;
 }
 
+float3 SampleNormalTexture(PBRMaterialTextureAttribs TexAttribs,
+                           Texture2DArray            NormalMap,
+                           SamplerState              NormalMap_sampler,
+                           float2                    NormalMapUV,
+                           float2                    SmoothNormalMapUV,
+                           float2                    dNormalMapUV_dx,
+                           float2                    dNormalMapUV_dy)
+{
+#   if USE_TEXTURE_ATLAS
+    {
+        if (TexAttribs.UVSelector >= 0.0)
+        {
+            SampleTextureAtlasAttribs SampleAttribs;
+            SampleAttribs.f2UV                   = NormalMapUV;
+            SampleAttribs.f2SmoothUV             = SmoothNormalMapUV;
+            SampleAttribs.f2dSmoothUV_dx         = dNormalMapUV_dx;
+            SampleAttribs.f2dSmoothUV_dy         = dNormalMapUV_dy;
+            SampleAttribs.fSlice                 = TexAttribs.TextureSlice;
+            SampleAttribs.f4UVRegion             = TexAttribs.AtlasUVScaleAndBias;
+            SampleAttribs.fSmallestValidLevelDim = 4.0;
+            SampleAttribs.IsNonFilterable        = false;
+            SampleAttribs.fMaxAnisotropy         = 1.0; // Only used on GLES
+            return SampleTextureAtlas(NormalMap, NormalMap_sampler, SampleAttribs).xyz;
+        }
+    }
+#   else
+    {
+        return NormalMap.Sample(NormalMap_sampler, float3(NormalMapUV, TexAttribs.TextureSlice)).xyz;
+    }
+#   endif
+    
+    return float3(0.5, 0.5, 1.0);
+}
+
 float3 GetMicroNormal(PBRMaterialShaderInfo Material,
                       float2                NormalMapUV,
                       float2                SmoothNormalMapUV,
@@ -275,29 +309,13 @@ float3 GetMicroNormal(PBRMaterialShaderInfo Material,
 
 #   if USE_NORMAL_MAP && (USE_TEXCOORD0 || USE_TEXCOORD1)
     {
-        PBRMaterialTextureAttribs TexAttribs = Material.Textures[NormalTextureAttribId];
-#       if USE_TEXTURE_ATLAS
-        {
-            if (TexAttribs.UVSelector >= 0.0)
-            {
-                SampleTextureAtlasAttribs SampleAttribs;
-                SampleAttribs.f2UV                   = NormalMapUV;
-                SampleAttribs.f2SmoothUV             = SmoothNormalMapUV;
-                SampleAttribs.f2dSmoothUV_dx         = dNormalMapUV_dx;
-                SampleAttribs.f2dSmoothUV_dy         = dNormalMapUV_dy;
-                SampleAttribs.fSlice                 = TexAttribs.TextureSlice;
-                SampleAttribs.f4UVRegion             = TexAttribs.AtlasUVScaleAndBias;
-                SampleAttribs.fSmallestValidLevelDim = 4.0;
-                SampleAttribs.IsNonFilterable        = false;
-                SampleAttribs.fMaxAnisotropy         = 1.0; // Only used on GLES
-                MicroNormal = SampleTextureAtlas(g_NormalMap, g_NormalMap_sampler, SampleAttribs).xyz;
-            }
-        }
-#       else
-        {
-            MicroNormal = g_NormalMap.Sample(g_NormalMap_sampler, float3(NormalMapUV, TexAttribs.TextureSlice)).xyz;
-        }
-#       endif
+        MicroNormal = SampleNormalTexture(Material.Textures[NormalTextureAttribId],
+                                          g_NormalMap,
+                                          g_NormalMap_sampler,
+                                          NormalMapUV,
+                                          SmoothNormalMapUV,
+                                          dNormalMapUV_dx,
+                                          dNormalMapUV_dy);
     }
 #endif
 
@@ -434,28 +452,30 @@ float GetClearcoatRoughness(VSOutput              VSOut,
 #   endif
 }
 
-float3 GetClearcoatNormal(VSOutput              VSOut,
-                          PBRMaterialShaderInfo Material)
+float3 GetClearcoatNormal(PBRMaterialShaderInfo Material,
+                          float2                NormalMapUV,
+                          float2                SmoothNormalMapUV,
+                          float2                dNormalMapUV_dx,
+                          float2                dNormalMapUV_dy)
 {
+    float3 ClearcoatNormal = float3(0.5, 0.5, 1.0);
 #   if ENABLE_CLEAR_COAT
     {
-        float3 ClearcoatNormal = float3(0.5, 0.5, 1.0);
 #       if USE_CLEAR_COAT_NORMAL_MAP
         {
-            ClearcoatNormal = SampleTexture(g_ClearCoatNormalMap, 
-                                            g_ClearCoatNormalMap_sampler,
-                                            VSOut,
-                                            Material.Textures[ClearCoatNormalTextureAttribId],
-                                            float4(0.5, 0.5, 1.0, 1.0)).rgb;
+            ClearcoatNormal =
+                SampleNormalTexture(Material.Textures[ClearCoatNormalTextureAttribId],
+                                    g_ClearCoatNormalMap, 
+                                    g_ClearCoatNormalMap_sampler,
+                                    NormalMapUV,
+                                    SmoothNormalMapUV,
+                                    dNormalMapUV_dx,
+                                    dNormalMapUV_dy);
         }
 #       endif
-        return ClearcoatNormal * float3(2.0, 2.0, 2.0) - float3(1.0, 1.0, 1.0);
-    }
-#   else
-    {
-        return float3(0.0, 0.0, 1.0);
     }
 #endif
+    return ClearcoatNormal * float3(2.0, 2.0, 2.0) - float3(1.0, 1.0, 1.0);
 }
 
 

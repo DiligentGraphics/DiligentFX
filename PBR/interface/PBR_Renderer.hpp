@@ -221,7 +221,12 @@ public:
         IBuffer* pPrimitiveAttribsCB = nullptr;
 
         /// Texture attribute index info
-        std::array<int, TEXTURE_ATTRIB_ID_COUNT> TextureAttribIndices = {-1, -1, -1, -1, -1, -1, -1};
+        std::array<int, TEXTURE_ATTRIB_ID_COUNT> TextureAttribIndices{};
+
+        CreateInfo() noexcept
+        {
+            TextureAttribIndices.fill(-1);
+        }
     };
 
     enum ALPHA_MODE : Uint8
