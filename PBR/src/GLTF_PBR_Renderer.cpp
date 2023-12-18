@@ -131,8 +131,13 @@ void GLTF_PBR_Renderer::InitMaterialSRB(GLTF::Model&            Model,
 
     InitCommonSRBVars(pMaterialSRB, pFrameAttribs);
 
-    auto SetTexture = [&](Uint32 TexAttribId, ITextureView* pDefaultTexSRV, const char* VarName) //
+    auto SetTexture = [&](int TexAttribId, ITextureView* pDefaultTexSRV, const char* VarName) //
     {
+        if (TexAttribId < 0)
+        {
+            UNEXPECTED("Texture attribute is not initialized");
+            return;
+        }
         RefCntAutoPtr<ITextureView> pTexSRV;
 
         auto TexIdx = Material.GetTextureId(TexAttribId);
@@ -159,70 +164,52 @@ void GLTF_PBR_Renderer::InitMaterialSRB(GLTF::Model&            Model,
             pVar->Set(pTexSRV);
     };
 
-    VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::BaseColorTextureName) == GLTF::DefaultBaseColorTextureAttribId);
-    VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::MetallicRoughnessTextureName) == GLTF::DefaultMetallicRoughnessTextureAttribId);
-    VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::NormalTextureName) == GLTF::DefaultNormalTextureAttribId);
-    VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::DiffuseTextureName) == GLTF::DefaultDiffuseTextureAttribId);
-    VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::SpecularGlossinessTextureName) == GLTF::DefaultSpecularGlossinessTextureAttibId);
-
-    SetTexture(GLTF::DefaultBaseColorTextureAttribId, m_pWhiteTexSRV, "g_ColorMap");
-    SetTexture(GLTF::DefaultMetallicRoughnessTextureAttribId, m_pDefaultPhysDescSRV, "g_PhysicalDescriptorMap");
-    SetTexture(GLTF::DefaultNormalTextureAttribId, m_pDefaultNormalMapSRV, "g_NormalMap");
+    SetTexture(m_Settings.TextureAttribIndices[TEXTURE_ATTRIB_ID_BASE_COLOR], m_pWhiteTexSRV, "g_ColorMap");
+    SetTexture(m_Settings.TextureAttribIndices[TEXTURE_ATTRIB_ID_PHYS_DESC], m_pDefaultPhysDescSRV, "g_PhysicalDescriptorMap");
+    SetTexture(m_Settings.TextureAttribIndices[TEXTURE_ATTRIB_ID_NORMAL], m_pDefaultNormalMapSRV, "g_NormalMap");
 
     if (m_Settings.EnableAO)
     {
-        VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::OcclusionTextureName) == GLTF::DefaultOcclusionTextureAttribId);
-        SetTexture(GLTF::DefaultOcclusionTextureAttribId, m_pWhiteTexSRV, "g_AOMap");
+        SetTexture(m_Settings.TextureAttribIndices[TEXTURE_ATTRIB_ID_OCCLUSION], m_pWhiteTexSRV, "g_AOMap");
     }
 
     if (m_Settings.EnableEmissive)
     {
-        VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::EmissiveTextureName) == GLTF::DefaultEmissiveTextureAttribId);
-        SetTexture(GLTF::DefaultEmissiveTextureAttribId, m_pWhiteTexSRV, "g_EmissiveMap");
+        SetTexture(m_Settings.TextureAttribIndices[TEXTURE_ATTRIB_ID_EMISSIVE], m_pWhiteTexSRV, "g_EmissiveMap");
     }
 
     if (m_Settings.EnableClearCoat)
     {
-        VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::ClearcoatTextureName) == GLTF::DefaultClearcoatTextureAttribId);
-        VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::ClearcoatRoughnessTextureName) == GLTF::DefaultClearcoatRoughnessTextureAttribId);
-        VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::ClearcoatNormalTextureName) == GLTF::DefaultClearcoatNormalTextureAttribId);
-        SetTexture(GLTF::DefaultClearcoatTextureAttribId, m_pWhiteTexSRV, "g_ClearCoatMap");
-        SetTexture(GLTF::DefaultClearcoatRoughnessTextureAttribId, m_pWhiteTexSRV, "g_ClearCoatRoughnessMap");
-        SetTexture(GLTF::DefaultClearcoatNormalTextureAttribId, m_pWhiteTexSRV, "g_ClearCoatNormalMap");
+        SetTexture(m_Settings.TextureAttribIndices[TEXTURE_ATTRIB_ID_CLEAR_COAT], m_pWhiteTexSRV, "g_ClearCoatMap");
+        SetTexture(m_Settings.TextureAttribIndices[TEXTURE_ATTRIB_ID_CLEAR_COAT_ROUGHNESS], m_pWhiteTexSRV, "g_ClearCoatRoughnessMap");
+        SetTexture(m_Settings.TextureAttribIndices[TEXTURE_ATTRIB_ID_CLEAR_COAT_NORMAL], m_pWhiteTexSRV, "g_ClearCoatNormalMap");
     }
 
     if (m_Settings.EnableSheen)
     {
-        VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::SheenColorTextureName) == GLTF::DefaultSheenColorTextureAttribId);
-        VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::SheenRoughnessTextureName) == GLTF::DefaultSheenRoughnessTextureAttribId);
-        SetTexture(GLTF::DefaultSheenColorTextureAttribId, m_pWhiteTexSRV, "g_SheenColorMap");
-        SetTexture(GLTF::DefaultSheenRoughnessTextureAttribId, m_pWhiteTexSRV, "g_SheenRoughnessMap");
+        SetTexture(m_Settings.TextureAttribIndices[TEXTURE_ATTRIB_ID_SHEEN_COLOR], m_pWhiteTexSRV, "g_SheenColorMap");
+        SetTexture(m_Settings.TextureAttribIndices[TEXTURE_ATTRIB_ID_SHEEN_ROUGHNESS], m_pWhiteTexSRV, "g_SheenRoughnessMap");
     }
 
     if (m_Settings.EnableAnisotropy)
     {
-        VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::AnisotropyTextureName) == GLTF::DefaultAnisotropyTextureAttribId);
-        SetTexture(GLTF::DefaultAnisotropyTextureAttribId, m_pWhiteTexSRV, "g_AnisotropyMap");
+        SetTexture(m_Settings.TextureAttribIndices[TEXTURE_ATTRIB_ID_ANISOTROPY], m_pWhiteTexSRV, "g_AnisotropyMap");
     }
 
     if (m_Settings.EnableIridescence)
     {
-        VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::IridescenceTextureName) == GLTF::DefaultIridescenceTextureAttribId);
-        VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::IridescenceThicknessTextureName) == GLTF::DefaultIridescenceThicknessTextureAttribId);
-        SetTexture(GLTF::DefaultIridescenceTextureAttribId, m_pWhiteTexSRV, "g_IridescenceMap");
-        SetTexture(GLTF::DefaultIridescenceThicknessTextureAttribId, m_pWhiteTexSRV, "g_IridescenceThicknessMap");
+        SetTexture(m_Settings.TextureAttribIndices[TEXTURE_ATTRIB_ID_IRIDESCENCE], m_pWhiteTexSRV, "g_IridescenceMap");
+        SetTexture(m_Settings.TextureAttribIndices[TEXTURE_ATTRIB_ID_IRIDESCENCE_THICKNESS], m_pWhiteTexSRV, "g_IridescenceThicknessMap");
     }
 
     if (m_Settings.EnableTransmission)
     {
-        VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::TransmissionTextureName) == GLTF::DefaultTransmissionTextureAttribId);
-        SetTexture(GLTF::DefaultTransmissionTextureAttribId, m_pWhiteTexSRV, "g_TransmissionMap");
+        SetTexture(m_Settings.TextureAttribIndices[TEXTURE_ATTRIB_ID_TRANSMISSION], m_pWhiteTexSRV, "g_TransmissionMap");
     }
 
     if (m_Settings.EnableVolume)
     {
-        VERIFY_EXPR(Model.GetTextureAttributeIndex(GLTF::ThicknessTextureName) == GLTF::DefaultThicknessTextureAttribId);
-        SetTexture(GLTF::DefaultThicknessTextureAttribId, m_pWhiteTexSRV, "g_ThicknessMap");
+        SetTexture(m_Settings.TextureAttribIndices[TEXTURE_ATTRIB_ID_THICKNESS], m_pWhiteTexSRV, "g_ThicknessMap");
     }
 }
 
