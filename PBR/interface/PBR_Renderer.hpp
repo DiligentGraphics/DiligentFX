@@ -295,7 +295,7 @@ public:
     IRenderDevice* GetDevice() const               { return m_Device; }
     ITextureView* GetIrradianceCubeSRV() const     { return m_pIrradianceCubeSRV; }
     ITextureView* GetPrefilteredEnvMapSRV() const  { return m_pPrefilteredEnvMapSRV; }
-    ITextureView* GetBRDFLUTSRV() const            { return m_pBRDF_LUT_SRV; }
+    ITextureView* GetPreintegratedGGX_SRV() const  { return m_pPreintegratedGGX_SRV; }
     ITextureView* GetWhiteTexSRV() const           { return m_pWhiteTexSRV; }
     ITextureView* GetBlackTexSRV() const           { return m_pBlackTexSRV; }
     ITextureView* GetDefaultNormalMapSRV() const   { return m_pDefaultNormalMapSRV; }
@@ -524,7 +524,7 @@ protected:
     RenderDeviceWithCache_N m_Device;
 
     static constexpr Uint32     BRDF_LUT_Dim = 512;
-    RefCntAutoPtr<ITextureView> m_pBRDF_LUT_SRV;
+    RefCntAutoPtr<ITextureView> m_pPreintegratedGGX_SRV;
     RefCntAutoPtr<ITextureView> m_pSheenAlbedoScaling_LUT_SRV;
 
     RefCntAutoPtr<ITextureView> m_pWhiteTexSRV;

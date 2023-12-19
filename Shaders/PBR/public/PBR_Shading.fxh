@@ -141,14 +141,14 @@ struct IBL_Contribution
 // Calculation of the lighting contribution from an optional Image Based Light source.
 // Precomputed Environment Maps are required uniform inputs and are computed as outlined in [1].
 // See our README.md on Environment Maps [3] for additional discussion.
-float3 GetIBLRadianceGGX(in SurfaceReflectanceInfo SrfInfo,
-                         in float3                 n,
-                         in float3                 v,
-                         in float                  PrefilteredCubeMipLevels,
-                         in Texture2D              BRDF_LUT,
-                         in SamplerState           BRDF_LUT_sampler,
-                         in TextureCube            PrefilteredEnvMap,
-                         in SamplerState           PrefilteredEnvMap_sampler)
+float3 GetIBLRadiance(in SurfaceReflectanceInfo SrfInfo,
+                      in float3                 n,
+                      in float3                 v,
+                      in float                  PrefilteredCubeMipLevels,
+                      in Texture2D              PreintegratedBRDF,
+                      in SamplerState           PreintegratedBRDF_sampler,
+                      in TextureCube            PrefilteredEnvMap,
+                      in SamplerState           PrefilteredEnvMap_sampler)
 {
     float NdotV = clamp(dot(n, v), 0.0, 1.0);
 
@@ -157,7 +157,7 @@ float3 GetIBLRadianceGGX(in SurfaceReflectanceInfo SrfInfo,
 
     float2 brdfSamplePoint = clamp(float2(NdotV, SrfInfo.PerceptualRoughness), float2(0.0, 0.0), float2(1.0, 1.0));
     // retrieve a scale and bias to F0. See [1], Figure 3
-    float2 brdf = BRDF_LUT.Sample(BRDF_LUT_sampler, brdfSamplePoint).rg;
+    float2 brdf = PreintegratedBRDF.Sample(PreintegratedBRDF_sampler, brdfSamplePoint).rg;
 
 #if USE_IBL_ENV_MAP_LOD
     float3 SpecularSample = PrefilteredEnvMap.SampleLevel(PrefilteredEnvMap_sampler, reflection, lod).rgb;
@@ -179,19 +179,19 @@ IBL_Contribution GetIBLContribution(in SurfaceReflectanceInfo SrfInfo,
                                     in float3                 n,
                                     in float3                 v,
                                     in float                  PrefilteredCubeMipLevels,
-                                    in Texture2D              BRDF_LUT,
-                                    in SamplerState           BRDF_LUT_sampler,
+                                    in Texture2D              PreintegratedBRDF,
+                                    in SamplerState           PreintegratedBRDF_sampler,
                                     in TextureCube            IrradianceMap,
                                     in SamplerState           IrradianceMap_sampler,
                                     in TextureCube            PrefilteredEnvMap,
                                     in SamplerState           PrefilteredEnvMap_sampler)
 {    
     IBL_Contribution IBLContrib;
-    IBLContrib.f3Specular = GetIBLRadianceGGX(SrfInfo, n, v, PrefilteredCubeMipLevels,
-                                              BRDF_LUT,
-                                              BRDF_LUT_sampler,
-                                              PrefilteredEnvMap,
-                                              PrefilteredEnvMap_sampler);
+    IBLContrib.f3Specular = GetIBLRadiance(SrfInfo, n, v, PrefilteredCubeMipLevels,
+                                           PreintegratedBRDF,
+                                           PreintegratedBRDF_sampler,
+                                           PrefilteredEnvMap,
+                                           PrefilteredEnvMap_sampler);
     
     float3 DiffuseSample = IrradianceMap.Sample(IrradianceMap_sampler, n).rgb;
 #if USE_HDR_IBL_CUBEMAPS
@@ -491,8 +491,8 @@ void ApplyPunctualLights(in    SurfaceShadingInfo  Shading,
 #if USE_IBL
 void ApplyIBL(in SurfaceShadingInfo     Shading,
               in float                  PrefilteredCubeMipLevels,
-              in Texture2D              BRDF_LUT,
-              in SamplerState           BRDF_LUT_sampler,
+              in Texture2D              PreintegratedGGX,
+              in SamplerState           PreintegratedGGX_sampler,
               in TextureCube            IrradianceMap,
               in SamplerState           IrradianceMap_sampler,
               in TextureCube            PrefilteredEnvMap,
@@ -501,15 +501,18 @@ void ApplyIBL(in SurfaceShadingInfo     Shading,
 {
     SrfLighting.Base.IBL =
         GetIBLContribution(Shading.BaseLayer.Srf, Shading.BaseLayer.Normal, Shading.View, PrefilteredCubeMipLevels,
-                           BRDF_LUT,          BRDF_LUT_sampler,
+                           PreintegratedGGX,  PreintegratedGGX_sampler,
                            IrradianceMap,     IrradianceMap_sampler,
                            PrefilteredEnvMap, PrefilteredEnvMap_sampler);
+#if ENABLE_SHEEN
+    
+#endif
 
 #if ENABLE_CLEAR_COAT
     SrfLighting.Clearcoat.IBL.f3Specular =
-        GetIBLRadianceGGX(Shading.Clearcoat.Srf, Shading.Clearcoat.Normal, Shading.View, PrefilteredCubeMipLevels,
-                          BRDF_LUT,          BRDF_LUT_sampler,
-                          PrefilteredEnvMap, PrefilteredEnvMap_sampler);
+        GetIBLRadiance(Shading.Clearcoat.Srf, Shading.Clearcoat.Normal, Shading.View, PrefilteredCubeMipLevels,
+                       PreintegratedGGX,  PreintegratedGGX_sampler,
+                       PrefilteredEnvMap, PrefilteredEnvMap_sampler);
 #endif
 }
 #endif

@@ -258,7 +258,7 @@
 "#       if USE_IBL\n"
 "        {\n"
 "            ApplyIBL(Shading, float(g_Frame.Renderer.PrefilteredCubeMipLevels),\n"
-"                     g_BRDF_LUT,          g_BRDF_LUT_sampler,\n"
+"                     g_PreintegratedGGX,  g_PreintegratedGGX_sampler,\n"
 "                     g_IrradianceMap,     g_IrradianceMap_sampler,\n"
 "                     g_PrefilteredEnvMap, g_PrefilteredEnvMap_sampler,\n"
 "                     SrfLighting);\n"

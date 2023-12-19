@@ -222,16 +222,16 @@ void PBR_Renderer::PrecomputeBRDF(IDeviceContext* pCtx,
                                   Uint32          NumBRDFSamples)
 {
     TextureDesc TexDesc;
-    TexDesc.Name      = "BRDF Look-up texture";
-    TexDesc.Type      = RESOURCE_DIM_TEX_2D;
-    TexDesc.Usage     = USAGE_DEFAULT;
-    TexDesc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
-    TexDesc.Width     = BRDF_LUT_Dim;
-    TexDesc.Height    = BRDF_LUT_Dim;
-    TexDesc.Format    = TEX_FORMAT_RG16_FLOAT;
-    TexDesc.MipLevels = 1;
-    auto pBRDF_LUT    = m_Device.CreateTexture(TexDesc);
-    m_pBRDF_LUT_SRV   = pBRDF_LUT->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+    TexDesc.Name            = "BRDF Look-up texture";
+    TexDesc.Type            = RESOURCE_DIM_TEX_2D;
+    TexDesc.Usage           = USAGE_DEFAULT;
+    TexDesc.BindFlags       = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
+    TexDesc.Width           = BRDF_LUT_Dim;
+    TexDesc.Height          = BRDF_LUT_Dim;
+    TexDesc.Format          = TEX_FORMAT_RG16_FLOAT;
+    TexDesc.MipLevels       = 1;
+    auto pPreintegratedGGX  = m_Device.CreateTexture(TexDesc);
+    m_pPreintegratedGGX_SRV = pPreintegratedGGX->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
 
     RefCntAutoPtr<IPipelineState> PrecomputeBRDF_PSO;
     {
@@ -282,7 +282,7 @@ void PBR_Renderer::PrecomputeBRDF(IDeviceContext* pCtx,
     }
     pCtx->SetPipelineState(PrecomputeBRDF_PSO);
 
-    ITextureView* pRTVs[] = {pBRDF_LUT->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET)};
+    ITextureView* pRTVs[] = {pPreintegratedGGX->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET)};
     pCtx->SetRenderTargets(1, pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     DrawAttribs attrs(3, DRAW_FLAG_VERIFY_ALL);
     pCtx->Draw(attrs);
@@ -290,7 +290,7 @@ void PBR_Renderer::PrecomputeBRDF(IDeviceContext* pCtx,
     // clang-format off
     StateTransitionDesc Barriers[] =
     {
-        {pBRDF_LUT, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE}
+        {pPreintegratedGGX, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE}
     };
     // clang-format on
     pCtx->TransitionResourceStates(_countof(Barriers), Barriers);
@@ -645,12 +645,12 @@ void PBR_Renderer::CreateSignature()
     if (m_Settings.EnableIBL)
     {
         SignatureDesc
-            .AddResource(SHADER_TYPE_PIXEL, "g_BRDF_LUT", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+            .AddResource(SHADER_TYPE_PIXEL, "g_PreintegratedGGX", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
             .AddResource(SHADER_TYPE_PIXEL, "g_IrradianceMap", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
             .AddResource(SHADER_TYPE_PIXEL, "g_PrefilteredEnvMap", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
 
         SignatureDesc
-            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_BRDF_LUT", Sam_LinearClamp)
+            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_PreintegratedGGX", Sam_LinearClamp)
             .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_IrradianceMap", Sam_LinearClamp);
         if (m_Device.GetDeviceInfo().IsGLDevice())
         {
@@ -671,7 +671,7 @@ void PBR_Renderer::CreateSignature()
 
     if (m_Settings.EnableIBL)
     {
-        m_ResourceSignature->GetStaticVariableByName(SHADER_TYPE_PIXEL, "g_BRDF_LUT")->Set(m_pBRDF_LUT_SRV);
+        m_ResourceSignature->GetStaticVariableByName(SHADER_TYPE_PIXEL, "g_PreintegratedGGX")->Set(m_pPreintegratedGGX_SRV);
     }
 
     if (m_Settings.EnableSheen)

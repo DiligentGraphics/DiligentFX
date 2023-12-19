@@ -258,7 +258,7 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
 #       if USE_IBL
         {
             ApplyIBL(Shading, float(g_Frame.Renderer.PrefilteredCubeMipLevels),
-                     g_BRDF_LUT,          g_BRDF_LUT_sampler,
+                     g_PreintegratedGGX,  g_PreintegratedGGX_sampler,
                      g_IrradianceMap,     g_IrradianceMap_sampler,
                      g_PrefilteredEnvMap, g_PrefilteredEnvMap_sampler,
                      SrfLighting);

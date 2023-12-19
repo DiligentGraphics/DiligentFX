@@ -86,8 +86,8 @@
     // Use g_IrradianceMap_sampler as we are running out of sampers on D3D11
 #   define       g_PrefilteredEnvMap_sampler g_IrradianceMap_sampler
 
-    Texture2D     g_BRDF_LUT;
-    SamplerState  g_BRDF_LUT_sampler;
+    Texture2D    g_PreintegratedGGX;
+    SamplerState g_PreintegratedGGX_sampler;
 #endif
 
 #if ENABLE_SHEEN
