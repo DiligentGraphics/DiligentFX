@@ -173,6 +173,9 @@ public:
         /// The number of samples for BRDF LUT creation
         Uint32 NumBRDFSamples = 512;
 
+        /// If Sheen is enabled, this parameter specified the path to the sheen look-up table.
+        const char* SheenAlbedoScalingLUTPath = nullptr;
+
         /// Input layout description.
         ///
         /// \remarks    The renderer uses the following input layout:
@@ -522,6 +525,7 @@ protected:
 
     static constexpr Uint32     BRDF_LUT_Dim = 512;
     RefCntAutoPtr<ITextureView> m_pBRDF_LUT_SRV;
+    RefCntAutoPtr<ITextureView> m_pSheenAlbedoScaling_LUT_SRV;
 
     RefCntAutoPtr<ITextureView> m_pWhiteTexSRV;
     RefCntAutoPtr<ITextureView> m_pBlackTexSRV;

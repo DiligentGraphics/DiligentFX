@@ -83,10 +83,16 @@
     SamplerState g_IrradianceMap_sampler;
 
     TextureCube  g_PrefilteredEnvMap;
-    SamplerState g_PrefilteredEnvMap_sampler;
+    // Use g_IrradianceMap_sampler as we are running out of sampers on D3D11
+#   define       g_PrefilteredEnvMap_sampler g_IrradianceMap_sampler
 
     Texture2D     g_BRDF_LUT;
     SamplerState  g_BRDF_LUT_sampler;
+#endif
+
+#if ENABLE_SHEEN
+    Texture2D     g_SheenAlbedoScalingLUT;
+    SamplerState  g_SheenAlbedoScalingLUT_sampler;    
 #endif
 
 #if USE_COLOR_MAP

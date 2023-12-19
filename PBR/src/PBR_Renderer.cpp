@@ -36,6 +36,7 @@
 #include "MapHelper.hpp"
 #include "GraphicsAccessories.hpp"
 #include "PlatformMisc.hpp"
+#include "TextureUtilities.h"
 #include "../../Utilities/include/DiligentFXShaderSourceStreamFactory.hpp"
 #include "ShaderSourceFactoryUtils.h"
 
@@ -80,7 +81,8 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
     m_InputLayout{CI.InputLayout},
     m_Settings{
         [this](CreateInfo CI) {
-            CI.InputLayout = m_InputLayout;
+            CI.InputLayout               = m_InputLayout;
+            CI.SheenAlbedoScalingLUTPath = nullptr;
             return CI;
         }(CI)},
     m_Device{pDevice, pStateCache},
@@ -166,6 +168,31 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
         m_pBlackTexSRV->SetSampler(pDefaultSampler);
         m_pDefaultNormalMapSRV->SetSampler(pDefaultSampler);
         m_pDefaultPhysDescSRV->SetSampler(pDefaultSampler);
+    }
+
+    if (m_Settings.EnableSheen)
+    {
+        if (CI.SheenAlbedoScalingLUTPath != nullptr)
+        {
+            TextureLoadInfo LoadInfo{"Sheen Albedo Scaling"};
+            LoadInfo.Format = TEX_FORMAT_R8_UNORM;
+            RefCntAutoPtr<ITexture> SheenAlbedoScalingLUT;
+            CreateTextureFromFile(CI.SheenAlbedoScalingLUTPath, LoadInfo, m_Device, &SheenAlbedoScalingLUT);
+            if (SheenAlbedoScalingLUT)
+            {
+                m_pSheenAlbedoScaling_LUT_SRV = SheenAlbedoScalingLUT->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+                StateTransitionDesc Barriers{SheenAlbedoScalingLUT, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE};
+                pCtx->TransitionResourceStates(1, &Barriers);
+            }
+            else
+            {
+                LOG_ERROR_MESSAGE("Failed to load sheen albedo scaling look-up table from file ", CI.SheenAlbedoScalingLUTPath);
+            }
+        }
+        else
+        {
+            UNEXPECTED("Sheen albedo scaling look-up table path is not specified");
+        }
     }
 
     {
@@ -624,8 +651,20 @@ void PBR_Renderer::CreateSignature()
 
         SignatureDesc
             .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_BRDF_LUT", Sam_LinearClamp)
-            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_IrradianceMap", Sam_LinearClamp)
-            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_PrefilteredEnvMap", Sam_LinearClamp);
+            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_IrradianceMap", Sam_LinearClamp);
+        if (m_Device.GetDeviceInfo().IsGLDevice())
+        {
+            // In the shader, we use g_IrradianceMap_sampler to sample g_PrefilteredEnvMap, but
+            // on OpenGL we have to explicitly define immutable sampler.
+            SignatureDesc.AddImmutableSampler(SHADER_TYPE_PIXEL, "g_PrefilteredEnvMap", Sam_LinearClamp);
+        }
+    }
+
+    if (m_Settings.EnableSheen)
+    {
+        SignatureDesc
+            .AddResource(SHADER_TYPE_PIXEL, "g_SheenAlbedoScalingLUT", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_SheenAlbedoScalingLUT", Sam_LinearClamp);
     }
 
     m_ResourceSignature = m_Device.CreatePipelineResourceSignature(SignatureDesc);
@@ -633,6 +672,11 @@ void PBR_Renderer::CreateSignature()
     if (m_Settings.EnableIBL)
     {
         m_ResourceSignature->GetStaticVariableByName(SHADER_TYPE_PIXEL, "g_BRDF_LUT")->Set(m_pBRDF_LUT_SRV);
+    }
+
+    if (m_Settings.EnableSheen)
+    {
+        m_ResourceSignature->GetStaticVariableByName(SHADER_TYPE_PIXEL, "g_SheenAlbedoScalingLUT")->Set(m_pSheenAlbedoScaling_LUT_SRV);
     }
 }
 

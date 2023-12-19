@@ -25,6 +25,7 @@ PUBLIC
     Diligent-GraphicsEngine
     Diligent-GraphicsTools
     Diligent-AssetLoader
+    Diligent-TextureLoader
 )
 set_common_target_properties(DiligentFX)
 

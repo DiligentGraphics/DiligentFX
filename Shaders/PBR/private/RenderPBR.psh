@@ -80,6 +80,7 @@ BaseLayerShadingInfo ReadBaseLayerProperties(in VSOutput          VSOut,
                                              in float4            BaseColor,
                                              in PerturbNormalInfo NormalInfo,
                                              in NormalMapUVInfo   NMUVInfo,
+                                             in float3            View, 
                                              in bool              IsFrontFace)
 {
     BaseLayerShadingInfo Base;
@@ -109,6 +110,8 @@ BaseLayerShadingInfo ReadBaseLayerProperties(in VSOutput          VSOut,
                                 TSNormal,
                                 NMUVInfo.Selector >= 0.0,
                                 IsFrontFace);
+    
+    Base.NdotV = saturate(dot(Base.Normal, View));
     
     return Base;
 }
@@ -150,6 +153,18 @@ ClearcoatShadingInfo ReadClearcoatLayerProperties(in VSOutput          VSOut,
 }
 #endif
 
+#if ENABLE_SHEEN
+SheenShadingInfo ReadSheenLayerProperties(in VSOutput VSOut)
+{
+    SheenShadingInfo Sheen;
+    
+    Sheen.Color     = GetSheenColor(VSOut, g_Primitive.Material);
+    Sheen.Roughness = GetSheenRoughness(VSOut, g_Primitive.Material);
+
+    return Sheen;
+}
+#endif
+
 float4 ComputePbrSurfaceColor(in VSOutput VSOut,
                               in bool     IsFrontFace)
 {
@@ -180,7 +195,7 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
 
     SurfaceShadingInfo Shading;
     Shading.View      = normalize(g_Frame.Camera.f4Position.xyz - VSOut.WorldPos.xyz); // Direction from surface point to camera
-    Shading.BaseLayer = ReadBaseLayerProperties(VSOut, BaseColor, NormalInfo, NMUVInfo, IsFrontFace);
+    Shading.BaseLayer = ReadBaseLayerProperties(VSOut, BaseColor, NormalInfo, NMUVInfo, Shading.View, IsFrontFace);
     Shading.Occlusion = GetOcclusion(VSOut, g_Primitive.Material);
     Shading.Emissive  = GetEmissive(VSOut, g_Primitive.Material);
     
@@ -196,8 +211,7 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
     
 #if ENABLE_SHEEN
     {    
-        Shading.SheenColor     = GetSheenColor(VSOut, g_Primitive.Material);
-        Shading.SheenRoughness = GetSheenRoughness(VSOut, g_Primitive.Material);
+        Shading.Sheen = ReadSheenLayerProperties(VSOut);
     }
 #   endif
     
@@ -209,10 +223,10 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
     
 #   if ENABLE_IRIDESCENCE
     {
-        Shading.Iridescence                 = GetIridescence(VSOut, g_Primitive.Material);
-        Shading.IridescenceThickness        = GetIridescenceThickness(VSOut, g_Primitive.Material);
-        Shading.IridescenceThicknessMinimum = g_Primitive.Material.Iridescence.ThicknessMinimum;
-        Shading.IridescenceThicknessMaximum = g_Primitive.Material.Iridescence.ThicknessMaximum;
+        Shading.Iridescence.Factor           = GetIridescence(VSOut, g_Primitive.Material);
+        Shading.Iridescence.Thickness        = GetIridescenceThickness(VSOut, g_Primitive.Material);
+        Shading.Iridescence.ThicknessMinimum = g_Primitive.Material.Iridescence.ThicknessMinimum;
+        Shading.Iridescence.ThicknessMaximum = g_Primitive.Material.Iridescence.ThicknessMaximum;
     }
 #   endif
     
@@ -232,7 +246,14 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
 
     if (BasicAttribs.Workflow != PBR_WORKFLOW_UNLIT)
     {
-        ApplyPunctualLights(Shading, g_Frame.Light, SrfLighting);
+        ApplyPunctualLights(
+            Shading,
+            g_Frame.Light,
+#if     ENABLE_SHEEN
+            g_SheenAlbedoScalingLUT,
+            g_SheenAlbedoScalingLUT_sampler,
+#endif
+            SrfLighting);
 
 #       if USE_IBL
         {

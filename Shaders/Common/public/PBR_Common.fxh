@@ -282,9 +282,8 @@ void SmithGGX_BRDF(in float3                 PointToLight,
 }
 
 
-// Sheen
+// Sheen (Production Friendly Microfacet Sheen BRDF, Estevez and Kulla 2017)
 
-// Production Friendly Microfacet Sheen BRDF, Estevez and Kulla 2017
 float NormalDistribution_Charlie(float NdotH, float SheenRoughness)
 {
     SheenRoughness = max(SheenRoughness, 1e-6); //clamp (0,1]

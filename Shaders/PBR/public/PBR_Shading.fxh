@@ -323,6 +323,8 @@ struct BaseLayerShadingInfo
     
     // Shading normal in world space
     float3 Normal;
+    
+    float NdotV;
 };
 
 struct ClearcoatShadingInfo
@@ -333,6 +335,20 @@ struct ClearcoatShadingInfo
     float3 Normal;
     
     float Factor;
+};
+
+struct SheenShadingInfo
+{
+    float3 Color;
+    float  Roughness;
+};
+
+struct IridescenceShadingInfo
+{
+    float Factor;
+    float Thickness;
+    float ThicknessMinimum;
+    float ThicknessMaximum;
 };
 
 struct SurfaceShadingInfo
@@ -350,8 +366,7 @@ struct SurfaceShadingInfo
 #endif
     
 #if ENABLE_SHEEN
-    float3 SheenColor;
-    float  SheenRoughness;
+    SheenShadingInfo Sheen;
 #endif
 
 #if ENABLE_ANISOTROPY
@@ -359,10 +374,7 @@ struct SurfaceShadingInfo
 #endif
     
 #if ENABLE_IRIDESCENCE
-    float Iridescence;
-    float IridescenceThickness;
-    float IridescenceThicknessMinimum;
-    float IridescenceThicknessMaximum;
+    IridescenceShadingInfo Iridescence;
 #endif
 
 #if ENABLE_TRANSMISSION
@@ -425,6 +437,10 @@ SurfaceLightingInfo GetDefaultSurfaceLightingInfo()
 
 void ApplyPunctualLights(in    SurfaceShadingInfo  Shading,
                          in    PBRLightAttribs     Light,
+#if ENABLE_SHEEN
+                         in    Texture2D           AlbedoScalingLUT,
+                         in    SamplerState        AlbedoScalingLUT_sampler,
+#endif
                          inout SurfaceLightingInfo SrfLighting)
 {
     //#ifdef USE_PUNCTUAL
@@ -446,16 +462,30 @@ void ApplyPunctualLights(in    SurfaceShadingInfo  Shading,
     //    }
     //#endif
     
-    SrfLighting.Base.Punctual = ApplyDirectionalLightGGX(Light.Direction.xyz, Light.Intensity.rgb, Shading.BaseLayer.Srf, Shading.BaseLayer.Normal, Shading.View);
+    float NdotV = Shading.BaseLayer.NdotV;
+    float NdotL = saturate(dot(Shading.BaseLayer.Normal, -Light.Direction.xyz));
+    
+    float3 BasePunctual = ApplyDirectionalLightGGX(Light.Direction.xyz, Light.Intensity.rgb, Shading.BaseLayer.Srf, Shading.BaseLayer.Normal, Shading.View);
 
 #if ENABLE_SHEEN
-    SrfLighting.Sheen.Punctual = ApplyDirectionalLightSheen(Light.Direction.xyz, Light.Intensity.rgb, Shading.SheenColor, Shading.SheenRoughness, Shading.BaseLayer.Normal, Shading.View);
+    {
+        SrfLighting.Sheen.Punctual += ApplyDirectionalLightSheen(Light.Direction.xyz, Light.Intensity.rgb, Shading.Sheen.Color, Shading.Sheen.Roughness, Shading.BaseLayer.Normal, Shading.View);
+    
+        float MaxFactor = max(max(Shading.Sheen.Color.r, Shading.Sheen.Color.g), Shading.Sheen.Color.b);
+        float AlbedoScaling =
+            min(1.0 - MaxFactor * AlbedoScalingLUT.Sample(AlbedoScalingLUT_sampler, float2(NdotV, Shading.Sheen.Roughness)).r,
+                1.0 - MaxFactor * AlbedoScalingLUT.Sample(AlbedoScalingLUT_sampler, float2(NdotL, Shading.Sheen.Roughness)).r);
+        BasePunctual *= AlbedoScaling;
+    }
 #endif
     
-#if ENABLE_CLEAR_COAT 
-    SrfLighting.Clearcoat.Punctual = ApplyDirectionalLightGGX(Light.Direction.xyz, Light.Intensity.rgb, Shading.Clearcoat.Srf, Shading.Clearcoat.Normal, Shading.View);
-#endif
+    SrfLighting.Base.Punctual += BasePunctual;
 
+#if ENABLE_CLEAR_COAT
+    {
+        SrfLighting.Clearcoat.Punctual += ApplyDirectionalLightGGX(Light.Direction.xyz, Light.Intensity.rgb, Shading.Clearcoat.Srf, Shading.Clearcoat.Normal, Shading.View);
+    }
+#endif
 }
 
 #if USE_IBL
@@ -525,7 +555,9 @@ float3 ResolveLighting(in SurfaceShadingInfo  Shading,
         Shading.Emissive * Shading.EmissionScale;
 
 #if ENABLE_SHEEN
-    Color += GetSheenLighting(Shading, SrfLighting);
+    {
+        Color += GetSheenLighting(Shading, SrfLighting);
+    }
 #endif
 
 #if ENABLE_CLEAR_COAT
@@ -579,7 +611,7 @@ float3 GetDebugColor(in SurfaceShadingInfo  Shading,
     }
 #elif (DEBUG_VIEW == DEBUG_VIEW_NDOTV)
     {
-        return dot(Shading.BaseLayer.Normal, Shading.View) * float3(1.0, 1.0, 1.0);
+        return Shading.BaseLayer.NdotV * float3(1.0, 1.0, 1.0);
     }
 #elif (DEBUG_VIEW == DEBUG_VIEW_PUNCTUAL_LIGHTING)
     {
@@ -615,11 +647,11 @@ float3 GetDebugColor(in SurfaceShadingInfo  Shading,
     }
 #elif (DEBUG_VIEW == DEBUG_VIEW_SHEEN_COLOR && ENABLE_SHEEN)
     {
-        return Shading.SheenColor.rgb;
+        return Shading.Sheen.Color.rgb;
     }
 #elif (DEBUG_VIEW == DEBUG_VIEW_SHEEN_ROUGHNESS && ENABLE_SHEEN)
     {
-        return Shading.SheenRoughness * float3(1.0, 1.0, 1.0);
+        return Shading.Sheen.Roughness * float3(1.0, 1.0, 1.0);
     }
 #elif (DEBUG_VIEW == DEBUG_VIEW_ANISOTROPY && ENABLE_ANISOTROPY)
     {
@@ -627,11 +659,11 @@ float3 GetDebugColor(in SurfaceShadingInfo  Shading,
     }
 #elif (DEBUG_VIEW == DEBUG_VIEW_IRIDESCENCE && ENABLE_IRIDESCENCE)
     {        
-        return Shading.Iridescence * float3(1.0, 1.0, 1.0);
+        return Shading.Iridescence.Factor * float3(1.0, 1.0, 1.0);
     }
 #elif (DEBUG_VIEW == DEBUG_VIEW_IRIDESCENCE_THICKNESS && ENABLE_IRIDESCENCE)
     {
-        return (Shading.IridescenceThickness - Shading.IridescenceThicknessMinimum) / max(Shading.IridescenceThicknessMaximum - Shading.IridescenceThicknessMinimum, 1.0);
+        return (Shading.Iridescence.Thickness - Shading.Iridescence.ThicknessMinimum) / max(Shading.Iridescence.ThicknessMaximum - Shading.Iridescence.ThicknessMinimum, 1.0);
     }
 #elif (DEBUG_VIEW == DEBUG_VIEW_TRANSMISSION && ENABLE_TRANSMISSION)
     {
