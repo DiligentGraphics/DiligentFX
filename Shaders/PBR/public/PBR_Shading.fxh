@@ -59,15 +59,26 @@ float SolveMetallic(float3 diffuse,
     return clamp((-b + sqrt(D)) / (2.0 * a), 0.0, 1.0);
 }
 
-float3 ApplyDirectionalLight(float3 lightDir, float3 lightColor, SurfaceReflectanceInfo srfInfo, float3 normal, float3 view)
+float3 ApplyDirectionalLightGGX(float3 lightDir, float3 lightColor, SurfaceReflectanceInfo srfInfo, float3 N, float3 V)
 {
-    float3 pointToLight = -lightDir;
+    float3 L = -lightDir;
     float3 diffuseContrib, specContrib;
     float  NdotL;
-    SmithGGX_BRDF(pointToLight, normal, view, srfInfo, diffuseContrib, specContrib, NdotL);
+    SmithGGX_BRDF(L, N, V, srfInfo, diffuseContrib, specContrib, NdotL);
     // Obtain final intensity as reflectance (BRDF) scaled by the energy of the light (cosine law)
     float3 shade = (diffuseContrib + specContrib) * NdotL;
     return lightColor * shade;
+}
+
+float3 ApplyDirectionalLightSheen(float3 lightDir, float3 lightColor, float3 SheenColor, float SheenRoughness, float3 N, float3 V)
+{
+    float3 L = -lightDir;
+    float3 H = normalize(V + L);
+    float NdotL = saturate(dot(N, L));
+    float NdotV = saturate(dot(N, V));
+    float NdotH = saturate(dot(N, H));
+
+    return lightColor * NdotL * SheenSpecularBRDF(SheenColor, SheenRoughness, NdotL, NdotV, NdotH);
 }
 
 struct PerturbNormalInfo
@@ -377,6 +388,10 @@ struct LayerLightingInfo
 struct SurfaceLightingInfo
 {
     LayerLightingInfo Base;
+
+#if ENABLE_SHEEN
+    LayerLightingInfo Sheen;
+#endif
     
 #if ENABLE_CLEAR_COAT
     LayerLightingInfo Clearcoat;
@@ -396,9 +411,15 @@ SurfaceLightingInfo GetDefaultSurfaceLightingInfo()
 {
     SurfaceLightingInfo Lighting;
     Lighting.Base = GetDefaultLayerLightingInfo();
+
+#if ENABLE_SHEEN
+    Lighting.Sheen = GetDefaultLayerLightingInfo();
+#endif
+
 #if ENABLE_CLEAR_COAT
     Lighting.Clearcoat = GetDefaultLayerLightingInfo();
 #endif
+
     return Lighting;
 }
 
@@ -425,10 +446,16 @@ void ApplyPunctualLights(in    SurfaceShadingInfo  Shading,
     //    }
     //#endif
     
-    SrfLighting.Base.Punctual = ApplyDirectionalLight(Light.Direction.xyz, Light.Intensity.rgb, Shading.BaseLayer.Srf, Shading.BaseLayer.Normal, Shading.View);
-#if ENABLE_CLEAR_COAT 
-    SrfLighting.Clearcoat.Punctual = ApplyDirectionalLight(Light.Direction.xyz, Light.Intensity.rgb, Shading.Clearcoat.Srf, Shading.Clearcoat.Normal, Shading.View);
+    SrfLighting.Base.Punctual = ApplyDirectionalLightGGX(Light.Direction.xyz, Light.Intensity.rgb, Shading.BaseLayer.Srf, Shading.BaseLayer.Normal, Shading.View);
+
+#if ENABLE_SHEEN
+    SrfLighting.Sheen.Punctual = ApplyDirectionalLightSheen(Light.Direction.xyz, Light.Intensity.rgb, Shading.SheenColor, Shading.SheenRoughness, Shading.BaseLayer.Normal, Shading.View);
 #endif
+    
+#if ENABLE_CLEAR_COAT 
+    SrfLighting.Clearcoat.Punctual = ApplyDirectionalLightGGX(Light.Direction.xyz, Light.Intensity.rgb, Shading.Clearcoat.Srf, Shading.Clearcoat.Normal, Shading.View);
+#endif
+
 }
 
 #if USE_IBL
@@ -466,6 +493,17 @@ float3 GetBaseLayerLighting(in SurfaceShadingInfo  Shading,
            (SrfLighting.Base.IBL.f3Diffuse + SrfLighting.Base.IBL.f3Specular) * Shading.IBLScale * Occlusion;
 }
 
+#if ENABLE_SHEEN
+float3 GetSheenLighting(in SurfaceShadingInfo  Shading,
+                        in SurfaceLightingInfo SrfLighting)
+{
+    float Occlusion = lerp(1.0, Shading.Occlusion, Shading.OcclusionStrength);
+
+    return SrfLighting.Sheen.Punctual +
+           SrfLighting.Sheen.IBL.f3Specular * Shading.IBLScale * Occlusion;
+}
+#endif
+
 #if ENABLE_CLEAR_COAT
 float3 GetClearcoatLighting(in SurfaceShadingInfo  Shading,
                             in SurfaceLightingInfo SrfLighting)
@@ -485,6 +523,10 @@ float3 ResolveLighting(in SurfaceShadingInfo  Shading,
     float3 Color =
         GetBaseLayerLighting(Shading, SrfLighting) +
         Shading.Emissive * Shading.EmissionScale;
+
+#if ENABLE_SHEEN
+    Color += GetSheenLighting(Shading, SrfLighting);
+#endif
 
 #if ENABLE_CLEAR_COAT
     {
@@ -519,50 +561,6 @@ float3 GetDebugColor(in SurfaceShadingInfo  Shading,
     {
         return Shading.BaseLayer.Srf.PerceptualRoughness * float3(1.0, 1.0, 1.0);
     }
-#elif (DEBUG_VIEW == DEBUG_VIEW_CLEAR_COAT && ENABLE_CLEAR_COAT)
-    {
-        return GetClearcoatLighting(Shading, SrfLighting);
-    }
-#elif (DEBUG_VIEW == DEBUG_VIEW_CLEAR_COAT_FACTOR && ENABLE_CLEAR_COAT)
-    {
-        return Shading.Clearcoat.Factor * float3(1.0, 1.0, 1.0);
-    }
-#elif (DEBUG_VIEW == DEBUG_VIEW_CLEAR_COAT_ROUGHNESS && ENABLE_CLEAR_COAT)
-    {
-        return Shading.Clearcoat.Srf.PerceptualRoughness * float3(1.0, 1.0, 1.0);
-    }
-#elif (DEBUG_VIEW == DEBUG_VIEW_CLEAR_COAT_NORMAL && ENABLE_CLEAR_COAT)
-    {
-        return Shading.Clearcoat.Normal * float3(0.5, 0.5, 0.5) + float3(0.5, 0.5, 0.5);
-    }
-#elif (DEBUG_VIEW == DEBUG_VIEW_SHEEN_COLOR && ENABLE_SHEEN)
-    {
-        return Shading.SheenColor.rgb;
-    }
-#elif (DEBUG_VIEW == DEBUG_VIEW_SHEEN_ROUGHNESS && ENABLE_SHEEN)
-    {
-        return Shading.SheenRoughness * float3(1.0, 1.0, 1.0);
-    }
-#elif (DEBUG_VIEW == DEBUG_VIEW_ANISOTROPY && ENABLE_ANISOTROPY)
-    {
-        return Shading.Anisotropy.xyz;
-    }
-#elif (DEBUG_VIEW == DEBUG_VIEW_IRIDESCENCE && ENABLE_IRIDESCENCE)
-    {        
-        return Shading.Iridescence * float3(1.0, 1.0, 1.0);
-    }
-#elif (DEBUG_VIEW == DEBUG_VIEW_IRIDESCENCE_THICKNESS && ENABLE_IRIDESCENCE)
-    {
-        return (Shading.IridescenceThickness - Shading.IridescenceThicknessMinimum) / max(Shading.IridescenceThicknessMaximum - Shading.IridescenceThicknessMinimum, 1.0);
-    }
-#elif (DEBUG_VIEW == DEBUG_VIEW_TRANSMISSION && ENABLE_TRANSMISSION)
-    {
-        return Shading.Transmission * float3(1.0, 1.0, 1.0);
-    }
-#elif (DEBUG_VIEW == DEBUG_VIEW_THICKNESS && ENABLE_VOLUME)
-    {
-        return Shading.VolumeThickness * float3(1.0, 1.0, 1.0);
-    }
 #elif (DEBUG_VIEW == DEBUG_VIEW_DIFFUSE_COLOR)
     {
         return Shading.BaseLayer.Srf.DiffuseColor;
@@ -594,6 +592,54 @@ float3 GetDebugColor(in SurfaceShadingInfo  Shading,
 #elif (DEBUG_VIEW == DEBUG_VIEW_SPECULAR_IBL && USE_IBL)
     {
         return SrfLighting.Base.IBL.f3Specular;
+    }
+#elif (DEBUG_VIEW == DEBUG_VIEW_CLEAR_COAT && ENABLE_CLEAR_COAT)
+    {
+        return GetClearcoatLighting(Shading, SrfLighting);
+    }
+#elif (DEBUG_VIEW == DEBUG_VIEW_CLEAR_COAT_FACTOR && ENABLE_CLEAR_COAT)
+    {
+        return Shading.Clearcoat.Factor * float3(1.0, 1.0, 1.0);
+    }
+#elif (DEBUG_VIEW == DEBUG_VIEW_CLEAR_COAT_ROUGHNESS && ENABLE_CLEAR_COAT)
+    {
+        return Shading.Clearcoat.Srf.PerceptualRoughness * float3(1.0, 1.0, 1.0);
+    }
+#elif (DEBUG_VIEW == DEBUG_VIEW_CLEAR_COAT_NORMAL && ENABLE_CLEAR_COAT)
+    {
+        return Shading.Clearcoat.Normal * float3(0.5, 0.5, 0.5) + float3(0.5, 0.5, 0.5);
+    }
+#elif (DEBUG_VIEW == DEBUG_VIEW_SHEEN && ENABLE_SHEEN)
+    {
+        return GetSheenLighting(Shading, SrfLighting);
+    }
+#elif (DEBUG_VIEW == DEBUG_VIEW_SHEEN_COLOR && ENABLE_SHEEN)
+    {
+        return Shading.SheenColor.rgb;
+    }
+#elif (DEBUG_VIEW == DEBUG_VIEW_SHEEN_ROUGHNESS && ENABLE_SHEEN)
+    {
+        return Shading.SheenRoughness * float3(1.0, 1.0, 1.0);
+    }
+#elif (DEBUG_VIEW == DEBUG_VIEW_ANISOTROPY && ENABLE_ANISOTROPY)
+    {
+        return Shading.Anisotropy.xyz;
+    }
+#elif (DEBUG_VIEW == DEBUG_VIEW_IRIDESCENCE && ENABLE_IRIDESCENCE)
+    {        
+        return Shading.Iridescence * float3(1.0, 1.0, 1.0);
+    }
+#elif (DEBUG_VIEW == DEBUG_VIEW_IRIDESCENCE_THICKNESS && ENABLE_IRIDESCENCE)
+    {
+        return (Shading.IridescenceThickness - Shading.IridescenceThicknessMinimum) / max(Shading.IridescenceThicknessMaximum - Shading.IridescenceThicknessMinimum, 1.0);
+    }
+#elif (DEBUG_VIEW == DEBUG_VIEW_TRANSMISSION && ENABLE_TRANSMISSION)
+    {
+        return Shading.Transmission * float3(1.0, 1.0, 1.0);
+    }
+#elif (DEBUG_VIEW == DEBUG_VIEW_THICKNESS && ENABLE_VOLUME)
+    {
+        return Shading.VolumeThickness * float3(1.0, 1.0, 1.0);
     }
 #endif
     

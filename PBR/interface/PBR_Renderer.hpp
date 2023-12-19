@@ -269,6 +269,7 @@ public:
         ClearCoatFactor,
         ClearCoatRoughness,
         ClearCoatNormal,
+        Sheen,
         SheenColor,
         SheenRoughness,
         Anisotropy,

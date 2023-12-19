@@ -281,4 +281,59 @@ void SmithGGX_BRDF(in float3                 PointToLight,
     }
 }
 
+
+// Sheen
+
+// Production Friendly Microfacet Sheen BRDF, Estevez and Kulla 2017
+float NormalDistribution_Charlie(float NdotH, float SheenRoughness)
+{
+    SheenRoughness = max(SheenRoughness, 1e-6); //clamp (0,1]
+    float AlphaG = SheenRoughness * SheenRoughness;
+    float InvR = 1.0 / AlphaG;
+    float Cos2h = NdotH * NdotH;
+    float Sin2h = 1.0 - Cos2h;
+    return (2.0 + InvR) * pow(Sin2h, InvR * 0.5) / (2.0 * PI);
+}
+
+float LambdaSheenNumericHelper(float x, float AlphaG)
+{
+    float OneMinusAlphaSq = (1.0 - AlphaG) * (1.0 - AlphaG);
+    float a = lerp( 21.5473, 25.32450, OneMinusAlphaSq);
+    float b = lerp( 3.82987,  3.32435, OneMinusAlphaSq);
+    float c = lerp( 0.19823,  0.16801, OneMinusAlphaSq);
+    float d = lerp(-1.97760, -1.27393, OneMinusAlphaSq);
+    float e = lerp(-4.32054, -4.85967, OneMinusAlphaSq);
+    return a / (1.0 + b * pow(x, c)) + d * x + e;
+}
+
+float LambdaSheen(float CosTheta, float AlphaG)
+{
+    if (abs(CosTheta) < 0.5)
+    {
+        return exp(LambdaSheenNumericHelper(CosTheta, AlphaG));
+    }
+    else
+    {
+        return exp(2.0 * LambdaSheenNumericHelper(0.5, AlphaG) - LambdaSheenNumericHelper(1.0 - CosTheta, AlphaG));
+    }
+}
+
+float SheenVisibility(float NdotL, float NdotV, float SheenRoughness)
+{
+    SheenRoughness = max(SheenRoughness, 1e-6); //clamp (0,1]
+    float AlphaG = SheenRoughness * SheenRoughness;
+    // NOTE: this value is tweaked to work well for grazing angles.
+    //       Larger values (e.g. 1e-7) produce dark spots, while
+    //       smaller values (e.g. 1e-8) result in bright spots.
+    float Epsilon = 5e-8;
+    return saturate(1.0 / ((1.0 + LambdaSheen(NdotV, AlphaG) + LambdaSheen(NdotL, AlphaG)) * max(4.0 * NdotV * NdotL, Epsilon)));
+}
+
+float3 SheenSpecularBRDF(float3 SheenColor, float SheenRoughness, float NdotL, float NdotV, float NdotH)
+{
+    float D   = NormalDistribution_Charlie(NdotH, SheenRoughness);
+    float Vis = SheenVisibility(NdotL, NdotV, SheenRoughness);
+    return SheenColor * D * Vis;
+}
+
 #endif // _PBR_COMMON_FXH_
