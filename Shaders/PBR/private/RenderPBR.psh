@@ -41,32 +41,9 @@ cbuffer cbPrimitiveAttribs
     PBRPrimitiveAttribs g_Primitive;
 }
 
-float3 ApplyLights(SurfaceReflectanceInfo SrfInfo, float3 Normal, float3 View)
-{
-    //#ifdef USE_PUNCTUAL
-    //    for (int i = 0; i < LIGHT_COUNT; ++i)
-    //    {
-    //        Light light = u_Lights[i];
-    //        if (light.type == LightType_Directional)
-    //        {
-    //            color += applyDirectionalLight(light, materialInfo, normal, view);
-    //        }
-    //        else if (light.type == LightType_Point)
-    //        {
-    //            color += applyPointLight(light, materialInfo, normal, view);
-    //        }
-    //        else if (light.type == LightType_Spot)
-    //        {
-    //            color += applySpotLight(light, materialInfo, normal, view);
-    //        }
-    //    }
-    //#endif
-    
-    return ApplyDirectionalLight(g_Frame.Light.Direction.xyz, g_Frame.Light.Intensity.rgb, SrfInfo, Normal, View);
-}
-
 struct NormalMapUVInfo
 {
+    float  Selector;
     float2 UV;
     float2 SmoothUV;
     float2 dUV_dx;
@@ -77,7 +54,8 @@ NormalMapUVInfo GetNormalMapUVInfo(in VSOutput VSOut, in PBRMaterialTextureAttri
 {
     NormalMapUVInfo UVInfo;
     
-    UVInfo.UV = SelectUV(VSOut, TexAttribs.UVSelector);
+    UVInfo.Selector = TexAttribs.UVSelector;
+    UVInfo.UV       = SelectUV(VSOut, TexAttribs.UVSelector);
 
 #if ENABLE_TEXCOORD_TRANSFORM
     UVInfo.UV = TransformUV(UVInfo.UV, TexAttribs);
@@ -98,6 +76,80 @@ NormalMapUVInfo GetNormalMapUVInfo(in VSOutput VSOut, in PBRMaterialTextureAttri
     return UVInfo;
 }
 
+BaseLayerShadingInfo ReadBaseLayerProperties(in VSOutput          VSOut,
+                                             in float4            BaseColor,
+                                             in PerturbNormalInfo NormalInfo,
+                                             in NormalMapUVInfo   NMUVInfo,
+                                             in bool              IsFrontFace)
+{
+    BaseLayerShadingInfo Base;
+    
+    float3 TSNormal     = GetMicroNormal(g_Primitive.Material, NMUVInfo.UV, NMUVInfo.SmoothUV, NMUVInfo.dUV_dx, NMUVInfo.dUV_dy);
+    float4 PhysicalDesc = GetPhysicalDesc(VSOut, g_Primitive.Material);
+    
+    PBRMaterialBasicAttribs BasicAttribs = g_Primitive.Material.Basic;
+    if (BasicAttribs.Workflow == PBR_WORKFLOW_SPECULAR_GLOSINESS)
+    {
+        PhysicalDesc.rgb = TO_LINEAR(PhysicalDesc.rgb) * BasicAttribs.SpecularFactor.rgb;
+        const float u_GlossinessFactor = 1.0;
+        PhysicalDesc.a *= u_GlossinessFactor;
+    }
+    else if (BasicAttribs.Workflow == PBR_WORKFLOW_METALLIC_ROUGHNESS)
+    {
+        // PhysicalDesc should already be in linear space
+        PhysicalDesc.g = saturate(PhysicalDesc.g * BasicAttribs.RoughnessFactor);
+        PhysicalDesc.b = saturate(PhysicalDesc.b * BasicAttribs.MetallicFactor);
+    }
+    Base.Metallic = 0.0;
+    Base.Srf = GetSurfaceReflectance(BasicAttribs.Workflow, BaseColor, PhysicalDesc, Base.Metallic);
+    
+    Base.Normal = PerturbNormal(NormalInfo,
+                                NMUVInfo.dUV_dx,
+                                NMUVInfo.dUV_dy,
+                                TSNormal,
+                                NMUVInfo.Selector >= 0.0,
+                                IsFrontFace);
+    
+    return Base;
+}
+
+#if ENABLE_CLEAR_COAT
+ClearcoatShadingInfo ReadClearcoatLayerProperties(in VSOutput          VSOut,
+                                                  in PerturbNormalInfo NormalInfo,
+                                                  in NormalMapUVInfo   NMUVInfo,
+                                                  in bool              IsFrontFace)
+{
+    ClearcoatShadingInfo Clearcoat;
+
+    Clearcoat.Factor  = GetClearcoatFactor(VSOut, g_Primitive.Material);
+
+    float  ClearCoatRoughness = GetClearcoatRoughness(VSOut, g_Primitive.Material);
+    float3 ClearCoatNormal    = GetClearcoatNormal(g_Primitive.Material, NMUVInfo.UV, NMUVInfo.SmoothUV, NMUVInfo.dUV_dx, NMUVInfo.dUV_dy);
+    
+    float IOR = 1.5;
+    Clearcoat.Srf = GetSurfaceReflectanceClearCoat(ClearCoatRoughness, IOR);
+
+    Clearcoat.Normal = NormalInfo.Normal;
+#   if USE_CLEAR_COAT_NORMAL_MAP
+    {
+        // If clearcoatNormalTexture is not given, no normal mapping is applied to the clear coat layer,
+        // even if normal mapping is applied to the base material.
+        if (NMUVInfo.Selector >= 0)
+        {
+            Clearcoat.Normal = PerturbNormal(NormalInfo,
+                                             NMUVInfo.dUV_dx,
+                                             NMUVInfo.dUV_dy,
+                                             ClearCoatNormal,
+                                             true,
+                                             IsFrontFace);
+        }
+    }
+#   endif
+
+    return Clearcoat;
+}
+#endif
+
 float4 ComputePbrSurfaceColor(in VSOutput VSOut,
                               in bool     IsFrontFace)
 {
@@ -113,12 +165,11 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
     PerturbNormalInfo NormalInfo = GetPerturbNormalInfo(VSOut.WorldPos, MeshNormal);
     
     PBRMaterialTextureAttribs NormalTexAttribs = g_Primitive.Material.Textures[NormalTextureAttribId];
-    NormalMapUVInfo NMUVInfo = GetNormalMapUVInfo(VSOut, NormalTexAttribs);
+    NormalMapUVInfo           NMUVInfo         = GetNormalMapUVInfo(VSOut, NormalTexAttribs);
     
-    NormalMapUVInfo ClearCoatNMUVInfo;
 #if USE_CLEAR_COAT_NORMAL_MAP
     PBRMaterialTextureAttribs ClearCoatNormalTexAttribs = g_Primitive.Material.Textures[ClearCoatNormalTextureAttribId];
-    ClearCoatNMUVInfo = GetNormalMapUVInfo(VSOut, ClearCoatNormalTexAttribs);
+    NormalMapUVInfo           ClearCoatNMUVInfo         = GetNormalMapUVInfo(VSOut, ClearCoatNormalTexAttribs);
 #endif
 
     PBRMaterialBasicAttribs BasicAttribs = g_Primitive.Material.Basic;
@@ -127,144 +178,77 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
         discard;
     }
 
-    float3 TSNormal     = GetMicroNormal(g_Primitive.Material, NMUVInfo.UV, NMUVInfo.SmoothUV, NMUVInfo.dUV_dx, NMUVInfo.dUV_dy);
-    float  Occlusion    = GetOcclusion(VSOut, g_Primitive.Material);
-    float3 Emissive     = GetEmissive(VSOut, g_Primitive.Material);
-    float4 PhysicalDesc = GetPhysicalDesc(VSOut, g_Primitive.Material);
+    SurfaceShadingInfo Shading;
+    Shading.View      = normalize(g_Frame.Camera.f4Position.xyz - VSOut.WorldPos.xyz); // Direction from surface point to camera
+    Shading.BaseLayer = ReadBaseLayerProperties(VSOut, BaseColor, NormalInfo, NMUVInfo, IsFrontFace);
+    Shading.Occlusion = GetOcclusion(VSOut, g_Primitive.Material);
+    Shading.Emissive  = GetEmissive(VSOut, g_Primitive.Material);
     
-    float  ClearCoatFactor    = GetClearcoatFactor(VSOut, g_Primitive.Material);
-    float  ClearCoatRoughness = GetClearcoatRoughness(VSOut, g_Primitive.Material);
-    float3 ClearCoatNormal    = GetClearcoatNormal(g_Primitive.Material, ClearCoatNMUVInfo.UV, ClearCoatNMUVInfo.SmoothUV, ClearCoatNMUVInfo.dUV_dx, ClearCoatNMUVInfo.dUV_dy);
+    Shading.IBLScale          = g_Frame.Renderer.IBLScale;
+    Shading.OcclusionStrength = g_Frame.Renderer.OcclusionStrength;
+    Shading.EmissionScale     = g_Frame.Renderer.EmissionScale;
 
-    float3 SheenColor     = GetSheenColor(VSOut, g_Primitive.Material);
-    float  SheenRoughness = GetSheenRoughness(VSOut, g_Primitive.Material);
-    
-    float3 Anisotropy = GetAnisotropy(VSOut, g_Primitive.Material);
-    
-    float Iridescence          = GetIridescence(VSOut, g_Primitive.Material);
-    float IridescenceThickness = GetIridescenceThickness(VSOut, g_Primitive.Material);
-    
-    float Transmission    = GetTransmission(VSOut, g_Primitive.Material);
-    float VolumeThickness = GetVolumeThickness(VSOut, g_Primitive.Material);
-    
-    if (BasicAttribs.Workflow == PBR_WORKFLOW_SPECULAR_GLOSINESS)
+#   if ENABLE_CLEAR_COAT
     {
-        PhysicalDesc.rgb = TO_LINEAR(PhysicalDesc.rgb) * BasicAttribs.SpecularFactor.rgb;
-        const float u_GlossinessFactor = 1.0;
-        PhysicalDesc.a *= u_GlossinessFactor;
+        Shading.Clearcoat = ReadClearcoatLayerProperties(VSOut, NormalInfo, ClearCoatNMUVInfo, IsFrontFace); 
     }
-    else if (BasicAttribs.Workflow == PBR_WORKFLOW_METALLIC_ROUGHNESS)
-    {
-        // PhysicalDesc should already be in linear space
-        PhysicalDesc.g = saturate(PhysicalDesc.g * BasicAttribs.RoughnessFactor);
-        PhysicalDesc.b = saturate(PhysicalDesc.b * BasicAttribs.MetallicFactor);
-    }
-    float metallic = 0.0;
-    SurfaceReflectanceInfo SrfInfo = GetSurfaceReflectance(BasicAttribs.Workflow, BaseColor, PhysicalDesc, metallic);
-
-    float3 view = normalize(g_Frame.Camera.f4Position.xyz - VSOut.WorldPos.xyz); // Direction from surface point to camera
-
-    float3 perturbedNormal;
-    float3 DirectLighting;
-    float3 color;
+#   endif
     
-    IBL_Contribution IBLContrib;
-    IBLContrib.f3Diffuse  = float3(0.0, 0.0, 0.0);
-    IBLContrib.f3Specular = float3(0.0, 0.0, 0.0);
+#if ENABLE_SHEEN
+    {    
+        Shading.SheenColor     = GetSheenColor(VSOut, g_Primitive.Material);
+        Shading.SheenRoughness = GetSheenRoughness(VSOut, g_Primitive.Material);
+    }
+#   endif
+    
+#if ENABLE_ANISOTROPY
+    {
+        Shading.Anisotropy = GetAnisotropy(VSOut, g_Primitive.Material);
+    }
+#   endif
+    
+#   if ENABLE_IRIDESCENCE
+    {
+        Shading.Iridescence                 = GetIridescence(VSOut, g_Primitive.Material);
+        Shading.IridescenceThickness        = GetIridescenceThickness(VSOut, g_Primitive.Material);
+        Shading.IridescenceThicknessMinimum = g_Primitive.Material.Iridescence.ThicknessMinimum;
+        Shading.IridescenceThicknessMaximum = g_Primitive.Material.Iridescence.ThicknessMaximum;
+    }
+#   endif
+    
+#   if ENABLE_TRANSMISSION
+    {
+        Shading.Transmission = GetTransmission(VSOut, g_Primitive.Material);
+    }
+#   endif
+    
+#if ENABLE_VOLUME
+    {
+        Shading.VolumeThickness = GetVolumeThickness(VSOut, g_Primitive.Material);
+    }
+#endif
+            
+    SurfaceLightingInfo SrfLighting = GetDefaultSurfaceLightingInfo();
 
     if (BasicAttribs.Workflow != PBR_WORKFLOW_UNLIT)
     {
-        perturbedNormal = PerturbNormal(NormalInfo,
-                                        NMUVInfo.dUV_dx,
-                                        NMUVInfo.dUV_dy,
-                                        TSNormal,
-                                        NormalTexAttribs.UVSelector >= 0.0,
-                                        IsFrontFace);
-
-        DirectLighting = ApplyLights(SrfInfo, perturbedNormal, view);
-        color = DirectLighting;
-
-        // Calculate lighting contribution from image based lighting source (IBL)
-#       if USE_IBL
-        {
-            IBLContrib =
-                GetIBLContribution(SrfInfo, perturbedNormal, view, float(g_Frame.Renderer.PrefilteredCubeMipLevels),
-                                   g_BRDF_LUT,          g_BRDF_LUT_sampler,
-                                   g_IrradianceMap,     g_IrradianceMap_sampler,
-                                   g_PrefilteredEnvMap, g_PrefilteredEnvMap_sampler);
-            color += (IBLContrib.f3Diffuse + IBLContrib.f3Specular) * g_Frame.Renderer.IBLScale;
-        }
-#       endif
-    }
-    else
-    {
-        perturbedNormal = float3(0.0, 0.0, 0.0);
-        DirectLighting  = float3(0.0, 0.0, 0.0);
-        color           = BaseColor.rgb;
-    }
-
-#   if USE_AO_MAP
-    {
-        color = lerp(color, color * Occlusion, g_Frame.Renderer.OcclusionStrength);
-    }
-#   endif
-
-#   if USE_EMISSIVE_MAP
-    {
-        color += Emissive.rgb * g_Frame.Renderer.EmissionScale;
-    }
-#   endif
-
-    float3 ClearCoatColor           = float3(0.0, 0.0, 0.0);
-    float3 ClearCoatPerturbedNormal = float3(0.0, 0.0, 0.0);
-#   if ENABLE_CLEAR_COAT
-    {
-        ClearCoatPerturbedNormal = MeshNormal;
-
-#       if USE_CLEAR_COAT_NORMAL_MAP
-        {
-            // If clearcoatNormalTexture is not given, no normal mapping is applied to the clear coat layer,
-            // even if normal mapping is applied to the base material.
-            if (ClearCoatNormalTexAttribs.UVSelector >= 0)
-            {
-                ClearCoatPerturbedNormal = PerturbNormal(NormalInfo,
-                                                         ClearCoatNMUVInfo.dUV_dx,
-                                                         ClearCoatNMUVInfo.dUV_dy,
-                                                         ClearCoatNormal,
-                                                         true,
-                                                         IsFrontFace);
-            }
-        }
-#       endif
-
-        // Clear coat layer is applied on top of everything
-        float IOR = 1.5;
-        SurfaceReflectanceInfo ClearCoatSrfInfo = GetSurfaceReflectanceClearCoat(ClearCoatRoughness, IOR);
-    
-        ClearCoatColor += ApplyLights(ClearCoatSrfInfo, ClearCoatPerturbedNormal, view);
+        ApplyPunctualLights(Shading, g_Frame.Light, SrfLighting);
 
 #       if USE_IBL
         {
-            float3 ClearCoatIBL =
-                GetIBLRadianceGGX(ClearCoatSrfInfo, ClearCoatPerturbedNormal, view, float(g_Frame.Renderer.PrefilteredCubeMipLevels),
-                                  g_BRDF_LUT,          g_BRDF_LUT_sampler,
-                                  g_PrefilteredEnvMap, g_PrefilteredEnvMap_sampler) * g_Frame.Renderer.IBLScale;
-#           if USE_AO_MAP
-            {
-                ClearCoatIBL = lerp(ClearCoatIBL, ClearCoatIBL * Occlusion, g_Frame.Renderer.OcclusionStrength);
-            }
-#           endif
-    
-            ClearCoatColor += ClearCoatIBL;
-    
-            float ClearcoatFresnel = SchlickReflection(saturate(dot(ClearCoatPerturbedNormal, view)), ClearCoatSrfInfo.Reflectance0.x, ClearCoatSrfInfo.Reflectance90.x);
-            ClearCoatColor *= ClearCoatFactor;
-            color = color * (1.0 - ClearCoatFactor * ClearcoatFresnel) + ClearCoatColor;
+            ApplyIBL(Shading, float(g_Frame.Renderer.PrefilteredCubeMipLevels),
+                     g_BRDF_LUT,          g_BRDF_LUT_sampler,
+                     g_IrradianceMap,     g_IrradianceMap_sampler,
+                     g_PrefilteredEnvMap, g_PrefilteredEnvMap_sampler,
+                     SrfLighting);
         }
 #       endif
     }
-#   endif
     
+    float4 OutColor;
+    OutColor.rgb = ResolveLighting(Shading, SrfLighting);
+    OutColor.a   = BaseColor.a;
+        
 #if ENABLE_TONE_MAPPING
     {
         // Perform tone mapping
@@ -275,15 +259,14 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
         TMAttribs.bLightAdaptation     = false;
         TMAttribs.fWhitePoint          = g_Frame.Renderer.WhitePoint;
         TMAttribs.fLuminanceSaturation = 1.0;
-        color = ToneMap(color, TMAttribs, g_Frame.Renderer.AverageLogLum);
+        OutColor.rgb = ToneMap(OutColor.rgb, TMAttribs, g_Frame.Renderer.AverageLogLum);
     }
 #endif
 
     // Add highlight color
-    color = lerp(color, g_Frame.Renderer.HighlightColor.rgb, g_Frame.Renderer.HighlightColor.a);
+    OutColor.rgb = lerp(OutColor.rgb, g_Frame.Renderer.HighlightColor.rgb, g_Frame.Renderer.HighlightColor.a);
 
-    float4 OutColor = float4(color, BaseColor.a);
-
+    
     // Shader inputs debug visualization
 #if (DEBUG_VIEW == DEBUG_VIEW_BASE_COLOR)
     {
@@ -303,106 +286,18 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
     }
 #elif (DEBUG_VIEW == DEBUG_VIEW_NORMAL_MAP)
     {
-        OutColor.rgb = TSNormal.xyz;
-    }
-#elif (DEBUG_VIEW == DEBUG_VIEW_OCCLUSION)
-    {
-        OutColor.rgb = Occlusion * float3(1.0, 1.0, 1.0);
-    }
-#elif (DEBUG_VIEW == DEBUG_VIEW_EMISSIVE)
-    {
-        OutColor.rgb = Emissive.rgb;
-    }
-#elif (DEBUG_VIEW == DEBUG_VIEW_METALLIC)
-    {
-        OutColor.rgb = metallic * float3(1.0, 1.0, 1.0);
-    }
-#elif (DEBUG_VIEW == DEBUG_VIEW_ROUGHNESS)
-    {
-        OutColor.rgb = SrfInfo.PerceptualRoughness * float3(1.0, 1.0, 1.0);
-    }
-#elif (DEBUG_VIEW == DEBUG_VIEW_CLEAR_COAT)
-    {
-        OutColor.rgb = ClearCoatColor.rgb;
-    }
-#elif (DEBUG_VIEW == DEBUG_VIEW_CLEAR_COAT_FACTOR)
-    {
-        OutColor.rgb = ClearCoatFactor * float3(1.0, 1.0, 1.0);
-    }
-#elif (DEBUG_VIEW == DEBUG_VIEW_CLEAR_COAT_ROUGHNESS)
-    {
-        OutColor.rgb = ClearCoatRoughness * float3(1.0, 1.0, 1.0);
-    }
-#elif (DEBUG_VIEW == DEBUG_VIEW_CLEAR_COAT_NORMAL)
-    {
-        OutColor.rgb = abs(ClearCoatPerturbedNormal.xyz);
-    }
-#elif (DEBUG_VIEW == DEBUG_VIEW_SHEEN_COLOR)
-    {
-        OutColor.rgb = SheenColor.rgb;
-    }
-#elif (DEBUG_VIEW == DEBUG_VIEW_SHEEN_ROUGHNESS)
-    {
-        OutColor.rgb = SheenRoughness * float3(1.0, 1.0, 1.0);
-    }
-#elif (DEBUG_VIEW == DEBUG_VIEW_ANISOTROPY)
-    {
-        OutColor.rgb = Anisotropy.xyz;
-    }
-#elif (DEBUG_VIEW == DEBUG_VIEW_IRIDESCENCE)
-    {        
-        OutColor.rgb = Iridescence * float3(1.0, 1.0, 1.0);
-    }
-#elif (DEBUG_VIEW == DEBUG_VIEW_IRIDESCENCE_THICKNESS)
-    {
-        OutColor.rgb = (IridescenceThickness - Material.Iridescence.ThicknessMinimum) / max(Material.Iridescence.ThicknessMaximum - Material.Iridescence.ThicknessMinimum, 1.0);
-    }
-#elif (DEBUG_VIEW == DEBUG_VIEW_TRANSMISSION)
-    {
-        OutColor.rgb = Transmission * float3(1.0, 1.0, 1.0);
-    }
-#elif (DEBUG_VIEW == DEBUG_VIEW_THICKNESS)
-    {
-        OutColor.rgb = VolumeThickness * float3(1.0, 1.0, 1.0);
-    }
-#elif (DEBUG_VIEW == DEBUG_VIEW_DIFFUSE_COLOR)
-    {
-        OutColor.rgb  = SrfInfo.DiffuseColor;
-    }
-#elif (DEBUG_VIEW == DEBUG_VIEW_SPECULAR_COLOR)
-    {
-        OutColor.rgb  = SrfInfo.Reflectance0;
-    }
-#elif (DEBUG_VIEW == DEBUG_VIEW_REFLECTANCE90)
-    {
-        OutColor.rgb  = SrfInfo.Reflectance90;
+        //OutColor.rgb = TSNormal.xyz;
     }
 #elif (DEBUG_VIEW == DEBUG_VIEW_MESH_NORMAL)
     {
-        OutColor.rgb  = abs(MeshNormal/ max(length(MeshNormal), 1e-3));
+        OutColor.rgb  = MeshNormal * float3(0.5, 0.5, 0.5) + float3(0.5, 0.5, 0.5);
     }
-#elif (DEBUG_VIEW == DEBUG_VIEW_PERTURBED_NORMAL)
+#elif (DEBUG_VIEW != DEBUG_VIEW_NONE)
     {
-        OutColor.rgb  = abs(perturbedNormal);
-    }
-#elif (DEBUG_VIEW == DEBUG_VIEW_NDOTV)
-    {
-        OutColor.rgb  = dot(perturbedNormal, view) * float3(1.0, 1.0, 1.0);
-    }
-#elif (DEBUG_VIEW == DEBUG_VIEW_DIRECT_LIGHTING)
-    {
-        OutColor.rgb  = DirectLighting;
-    }
-#elif (DEBUG_VIEW == DEBUG_VIEW_DIFFUSE_IBL && USE_IBL)
-    {
-        OutColor.rgb  = IBLContrib.f3Diffuse;
-    }
-#elif (DEBUG_VIEW == DEBUG_VIEW_SPECULAR_IBL && USE_IBL)
-    {
-        OutColor.rgb  = IBLContrib.f3Specular;
+        OutColor.rgb = GetDebugColor(Shading, SrfLighting);
     }
 #endif
-
+    
 
 #if CONVERT_OUTPUT_TO_SRGB
     {
