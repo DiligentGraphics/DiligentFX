@@ -575,7 +575,7 @@ float3 GetDebugColor(in SurfaceShadingInfo  Shading,
     {
         return Shading.BaseLayer.Srf.Reflectance90;
     }
-#elif (DEBUG_VIEW == DEBUG_VIEW_PERTURBED_NORMAL)
+#elif (DEBUG_VIEW == DEBUG_VIEW_SHADING_NORMAL)
     {
         return Shading.BaseLayer.Normal * float3(0.5, 0.5, 0.5) + float3(0.5, 0.5, 0.5);
     }
@@ -583,7 +583,7 @@ float3 GetDebugColor(in SurfaceShadingInfo  Shading,
     {
         return dot(Shading.BaseLayer.Normal, Shading.View) * float3(1.0, 1.0, 1.0);
     }
-#elif (DEBUG_VIEW == DEBUG_VIEW_DIRECT_LIGHTING)
+#elif (DEBUG_VIEW == DEBUG_VIEW_PUNCTUAL_LIGHTING)
     {
         return SrfLighting.Base.Punctual;
     }
