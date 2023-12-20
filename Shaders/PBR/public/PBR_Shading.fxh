@@ -489,14 +489,18 @@ void ApplyPunctualLights(in    SurfaceShadingInfo  Shading,
 }
 
 #if USE_IBL
-void ApplyIBL(in SurfaceShadingInfo     Shading,
-              in float                  PrefilteredCubeMipLevels,
-              in Texture2D              PreintegratedGGX,
-              in SamplerState           PreintegratedGGX_sampler,
-              in TextureCube            IrradianceMap,
-              in SamplerState           IrradianceMap_sampler,
-              in TextureCube            PrefilteredEnvMap,
-              in SamplerState           PrefilteredEnvMap_sampler,
+void ApplyIBL(in SurfaceShadingInfo Shading,
+              in float              PrefilteredCubeMipLevels,
+              in Texture2D          PreintegratedGGX,
+              in SamplerState       PreintegratedGGX_sampler,
+              in TextureCube        IrradianceMap,
+              in SamplerState       IrradianceMap_sampler,
+              in TextureCube        PrefilteredEnvMap,
+              in SamplerState       PrefilteredEnvMap_sampler,
+#   if ENABLE_SHEEN
+              in Texture2D    PreintegratedCharlie,
+              in SamplerState PreintegratedCharlie_sampler,
+#   endif
               inout SurfaceLightingInfo SrfLighting)
 {
     SrfLighting.Base.IBL =
@@ -504,16 +508,29 @@ void ApplyIBL(in SurfaceShadingInfo     Shading,
                            PreintegratedGGX,  PreintegratedGGX_sampler,
                            IrradianceMap,     IrradianceMap_sampler,
                            PrefilteredEnvMap, PrefilteredEnvMap_sampler);
-#if ENABLE_SHEEN
-    
-#endif
+#   if ENABLE_SHEEN
+    {
+        SurfaceReflectanceInfo SheenSrf;
+        SheenSrf.PerceptualRoughness = Shading.Sheen.Roughness;
+        SheenSrf.Reflectance0        = Shading.Sheen.Color;
+        SheenSrf.Reflectance90       = float3(0.0, 0.0, 0.0);
 
-#if ENABLE_CLEAR_COAT
-    SrfLighting.Clearcoat.IBL.f3Specular =
-        GetIBLRadiance(Shading.Clearcoat.Srf, Shading.Clearcoat.Normal, Shading.View, PrefilteredCubeMipLevels,
-                       PreintegratedGGX,  PreintegratedGGX_sampler,
-                       PrefilteredEnvMap, PrefilteredEnvMap_sampler);
-#endif
+        // NOTE: to be accurate, we need to use another environment map here prefiltered with the Charlie BRDF.
+        SrfLighting.Sheen.IBL.f3Specular =
+             GetIBLRadiance(SheenSrf, Shading.BaseLayer.Normal, Shading.View, PrefilteredCubeMipLevels,
+                            PreintegratedCharlie, PreintegratedCharlie_sampler,
+                            PrefilteredEnvMap,    PrefilteredEnvMap_sampler);
+    }
+#   endif
+
+#   if ENABLE_CLEAR_COAT
+    {
+        SrfLighting.Clearcoat.IBL.f3Specular =
+            GetIBLRadiance(Shading.Clearcoat.Srf, Shading.Clearcoat.Normal, Shading.View, PrefilteredCubeMipLevels,
+                           PreintegratedGGX,  PreintegratedGGX_sampler,
+                           PrefilteredEnvMap, PrefilteredEnvMap_sampler);
+    }
+#   endif
 }
 #endif
 

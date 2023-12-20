@@ -193,6 +193,32 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
         {
             UNEXPECTED("Sheen albedo scaling look-up table path is not specified");
         }
+
+        if (m_Settings.EnableIBL)
+        {
+            if (CI.PreintegratedCharlieBRDFPath != nullptr)
+            {
+                TextureLoadInfo LoadInfo{"Preintegrated Charlie BRDF"};
+                LoadInfo.Format    = TEX_FORMAT_R8_UNORM;
+                LoadInfo.Swizzle.R = TEXTURE_COMPONENT_SWIZZLE_B;
+                RefCntAutoPtr<ITexture> PreintegratedCharlieBRDF;
+                CreateTextureFromFile(CI.PreintegratedCharlieBRDFPath, LoadInfo, m_Device, &PreintegratedCharlieBRDF);
+                if (PreintegratedCharlieBRDF)
+                {
+                    m_pPreintegratedCharlie_SRV = PreintegratedCharlieBRDF->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+                    StateTransitionDesc Barriers{PreintegratedCharlieBRDF, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE};
+                    pCtx->TransitionResourceStates(1, &Barriers);
+                }
+                else
+                {
+                    LOG_ERROR_MESSAGE("Failed to load preintegrated Charlie BRDF look-up table from file ", CI.PreintegratedCharlieBRDFPath);
+                }
+            }
+            else
+            {
+                UNEXPECTED("Preintegrated Charlie BRDF look-up table path is not specified");
+            }
+        }
     }
 
     {
@@ -222,7 +248,7 @@ void PBR_Renderer::PrecomputeBRDF(IDeviceContext* pCtx,
                                   Uint32          NumBRDFSamples)
 {
     TextureDesc TexDesc;
-    TexDesc.Name            = "BRDF Look-up texture";
+    TexDesc.Name            = "Preintegrated GGX";
     TexDesc.Type            = RESOURCE_DIM_TEX_2D;
     TexDesc.Usage           = USAGE_DEFAULT;
     TexDesc.BindFlags       = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
@@ -649,6 +675,11 @@ void PBR_Renderer::CreateSignature()
             .AddResource(SHADER_TYPE_PIXEL, "g_IrradianceMap", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
             .AddResource(SHADER_TYPE_PIXEL, "g_PrefilteredEnvMap", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
 
+        if (m_Settings.EnableSheen)
+        {
+            SignatureDesc.AddResource(SHADER_TYPE_PIXEL, "g_PreintegratedCharlie", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
+        }
+
         SignatureDesc
             .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_PreintegratedGGX", Sam_LinearClamp)
             .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_IrradianceMap", Sam_LinearClamp);
@@ -657,6 +688,10 @@ void PBR_Renderer::CreateSignature()
             // In the shader, we use g_IrradianceMap_sampler to sample g_PrefilteredEnvMap, but
             // on OpenGL we have to explicitly define immutable sampler.
             SignatureDesc.AddImmutableSampler(SHADER_TYPE_PIXEL, "g_PrefilteredEnvMap", Sam_LinearClamp);
+            if (m_Settings.EnableSheen)
+            {
+                SignatureDesc.AddImmutableSampler(SHADER_TYPE_PIXEL, "g_PreintegratedCharlie", Sam_LinearClamp);
+            }
         }
     }
 
@@ -672,6 +707,10 @@ void PBR_Renderer::CreateSignature()
     if (m_Settings.EnableIBL)
     {
         m_ResourceSignature->GetStaticVariableByName(SHADER_TYPE_PIXEL, "g_PreintegratedGGX")->Set(m_pPreintegratedGGX_SRV);
+        if (m_Settings.EnableSheen)
+        {
+            m_ResourceSignature->GetStaticVariableByName(SHADER_TYPE_PIXEL, "g_PreintegratedCharlie")->Set(m_pPreintegratedCharlie_SRV);
+        }
     }
 
     if (m_Settings.EnableSheen)

@@ -176,6 +176,10 @@ public:
         /// If Sheen is enabled, this parameter specified the path to the sheen look-up table.
         const char* SheenAlbedoScalingLUTPath = nullptr;
 
+        /// If IBL and Sheen are enabled, this parameter specified the path to the
+        /// preintegrated Charlies BRDF look-up table.
+        const char* PreintegratedCharlieBRDFPath = nullptr;
+
         /// Input layout description.
         ///
         /// \remarks    The renderer uses the following input layout:
@@ -525,6 +529,7 @@ protected:
 
     static constexpr Uint32     BRDF_LUT_Dim = 512;
     RefCntAutoPtr<ITextureView> m_pPreintegratedGGX_SRV;
+    RefCntAutoPtr<ITextureView> m_pPreintegratedCharlie_SRV;
     RefCntAutoPtr<ITextureView> m_pSheenAlbedoScaling_LUT_SRV;
 
     RefCntAutoPtr<ITextureView> m_pWhiteTexSRV;

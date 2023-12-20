@@ -282,16 +282,16 @@ void SmithGGX_BRDF(in float3                 PointToLight,
 }
 
 
-// Sheen (Production Friendly Microfacet Sheen BRDF, Estevez and Kulla 2017)
+// Sheen ("Production Friendly Microfacet Sheen BRDF", Estevez and Kulla 2017)
 
 float NormalDistribution_Charlie(float NdotH, float SheenRoughness)
 {
     SheenRoughness = max(SheenRoughness, 1e-6); //clamp (0,1]
-    float AlphaG = SheenRoughness * SheenRoughness;
-    float InvR = 1.0 / AlphaG;
+    float Alpha = SheenRoughness * SheenRoughness;
+    float InvA  = 1.0 / Alpha;
     float Cos2h = NdotH * NdotH;
-    float Sin2h = 1.0 - Cos2h;
-    return (2.0 + InvR) * pow(Sin2h, InvR * 0.5) / (2.0 * PI);
+    float Sin2h = max(1.0 - Cos2h, 0.0078125); // 2^(-14/2), so Sin2h^2 > 0 in fp16
+    return (2.0 + InvA) * pow(Sin2h, InvA * 0.5) / (2.0 * PI);
 }
 
 float LambdaSheenNumericHelper(float x, float AlphaG)

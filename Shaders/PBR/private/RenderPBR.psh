@@ -261,6 +261,9 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
                      g_PreintegratedGGX,  g_PreintegratedGGX_sampler,
                      g_IrradianceMap,     g_IrradianceMap_sampler,
                      g_PrefilteredEnvMap, g_PrefilteredEnvMap_sampler,
+#                    if ENABLE_SHEEN
+                         g_PreintegratedCharlie, g_PreintegratedCharlie_sampler,
+#                    endif
                      SrfLighting);
         }
 #       endif

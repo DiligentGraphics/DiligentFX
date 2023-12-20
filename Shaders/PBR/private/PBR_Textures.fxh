@@ -88,6 +88,11 @@
 
     Texture2D    g_PreintegratedGGX;
     SamplerState g_PreintegratedGGX_sampler;
+
+#   if ENABLE_SHEEN
+        Texture2D g_PreintegratedCharlie;
+#       define    g_PreintegratedCharlie_sampler g_PreintegratedGGX_sampler
+#   endif
 #endif
 
 #if ENABLE_SHEEN
