@@ -221,6 +221,42 @@ static const MemoryShaderSourceFileInfo g_Shaders[] =
         #include "EpipolarLightScatteringStructures.fxh.h"
     },
     {
+        "ComputeBilateralCleanup.fx",
+        #include "ComputeBilateralCleanup.fx.h"
+    },
+    {
+        "ComputeBlueNoiseTexture.fx",
+        #include "ComputeBlueNoiseTexture.fx.h"
+    },
+    {
+        "ComputeHierarchicalDepthBuffer.fx",
+        #include "ComputeHierarchicalDepthBuffer.fx.h"
+    },
+    {
+        "ComputeIntersection.fx",
+        #include "ComputeIntersection.fx.h"
+    },
+    {
+        "ComputeSpatialReconstruction.fx",
+        #include "ComputeSpatialReconstruction.fx.h"
+    },
+    {
+        "ComputeStencilMaskAndExtractRoughness.fx",
+        #include "ComputeStencilMaskAndExtractRoughness.fx.h"
+    },
+    {
+        "ComputeTemporalAccumulation.fx",
+        #include "ComputeTemporalAccumulation.fx.h"
+    },
+    {
+        "SSR_Common.fxh",
+        #include "SSR_Common.fxh.h"
+    },
+    {
+        "ScreenSpaceReflectionStructures.fxh",
+        #include "ScreenSpaceReflectionStructures.fxh.h"
+    },
+    {
         "ToneMapping.fxh",
         #include "ToneMapping.fxh.h"
     },

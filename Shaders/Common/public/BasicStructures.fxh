@@ -129,6 +129,13 @@ struct CameraAttribs
     float4x4 mViewInvT;
     float4x4 mProjInvT;
     float4x4 mViewProjInvT;
+
+    float4x4 mPrevViewT;
+    float4x4 mPrevProjT;
+    float4x4 mPrevViewProjT;
+    float4x4 mPrevViewInvT;
+    float4x4 mPrevProjInvT;
+    float4x4 mPrevViewProjInvT;
 #else
     matrix mView;
     matrix mProj;
@@ -136,6 +143,13 @@ struct CameraAttribs
     matrix mViewInv;
     matrix mProjInv;
     matrix mViewProjInv;
+
+    matrix mPrevView;
+    matrix mPrevProj;
+    matrix mPrevViewProj;
+    matrix mPrevViewInv;
+    matrix mPrevProjInv;
+    matrix mPrevViewProjInv;
 #endif
 
     float4 f4ExtraData[5]; // Any appliation-specific data
