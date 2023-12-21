@@ -32,6 +32,10 @@
 #   define USE_HDR_IBL_CUBEMAPS 1
 #endif
 
+#ifndef USE_IBL_MULTIPLE_SCATTERING
+#   define USE_IBL_MULTIPLE_SCATTERING 1
+#endif
+
 float GetPerceivedBrightness(float3 rgb)
 {
     return sqrt(0.299 * rgb.r * rgb.r + 0.587 * rgb.g * rgb.g + 0.114 * rgb.b * rgb.b);
@@ -131,52 +135,131 @@ float3 PerturbNormal(PerturbNormalInfo NormalInfo,
     }
 }
 
-// Specular component of the image-based light (IBL) using the split-sum approximation.
-float3 GetSpecularIBL(in SurfaceReflectanceInfo SrfInfo,
-                      in float3                 n,
-                      in float3                 v,
-                      in float                  PrefilteredCubeMipLevels,
-                      in Texture2D              PreintegratedBRDF,
-                      in SamplerState           PreintegratedBRDF_sampler,
-                      in TextureCube            PrefilteredEnvMap,
-                      in SamplerState           PrefilteredEnvMap_sampler)
+float3 SamplePrefilteredEnvMap(in TextureCube  PrefilteredEnvMap,
+                               in SamplerState PrefilteredEnvMap_sampler,
+                               in float3       Dir,
+                               in float        LOD)
 {
-    float NdotV = clamp(dot(n, v), 0.0, 1.0);
-
-    float  lod        = clamp(SrfInfo.PerceptualRoughness * PrefilteredCubeMipLevels, 0.0, PrefilteredCubeMipLevels);
-    float3 reflection = normalize(reflect(-v, n));
-
-    float2 brdfSamplePoint = clamp(float2(NdotV, SrfInfo.PerceptualRoughness), float2(0.0, 0.0), float2(1.0, 1.0));
-    // retrieve a scale and bias to F0. See [1], Figure 3
-    float2 brdf = PreintegratedBRDF.Sample(PreintegratedBRDF_sampler, brdfSamplePoint).rg;
-
 #if USE_IBL_ENV_MAP_LOD
-    float3 SpecularSample = PrefilteredEnvMap.SampleLevel(PrefilteredEnvMap_sampler, reflection, lod).rgb;
+    float3 Sample = PrefilteredEnvMap.SampleLevel(PrefilteredEnvMap_sampler, Dir, LOD).rgb;
 #else
-    float3 SpecularSample = PrefilteredEnvMap.Sample(PrefilteredEnvMap_sampler, reflection).rgb;
+    float3 Sample = PrefilteredEnvMap.Sample(PrefilteredEnvMap_sampler, Dir).rgb;
 #endif
 
 #if USE_HDR_IBL_CUBEMAPS
     // Already linear.
-    float3 SpecularLight = SpecularSample.rgb;
+    return Sample;
 #else
-    float3 SpecularLight = TO_LINEAR(SpecularSample.rgb);
+    return TO_LINEAR(Sample);
 #endif
+}
 
-    return SpecularLight * (SrfInfo.Reflectance0 * brdf.x + SrfInfo.Reflectance90 * brdf.y);
+struct IBLSamplingInfo
+{
+    float3 N;
+    float3 V;
+    float3 L;
+    float  NdotV;
+    float2 PreIntBRDF;
+#if USE_IBL_MULTIPLE_SCATTERING
+    float3 k_S;
+#endif
+};
+
+IBLSamplingInfo GetIBLSamplingInfo(in SurfaceReflectanceInfo SrfInfo,
+                                   in Texture2D    PreintegratedBRDF,
+                                   in SamplerState PreintegratedBRDF_sampler,
+                                   in float3       N,
+                                   in float3       V)
+{
+    IBLSamplingInfo Info;
+
+    Info.N = N;
+    Info.V = V;
+    Info.L = normalize(reflect(-V, N));
+    
+    Info.NdotV = saturate(dot(N, V));
+    
+    Info.PreIntBRDF = PreintegratedBRDF.Sample(PreintegratedBRDF_sampler, saturate(float2(Info.NdotV, SrfInfo.PerceptualRoughness))).rg;
+
+#   if USE_IBL_MULTIPLE_SCATTERING
+    {
+        // https://bruop.github.io/ibl/#single_scattering_results
+        // Roughness-dependent fresnel, from Fdez-Aguera
+        float OneMinusRoughness = 1.0 - SrfInfo.PerceptualRoughness;
+        float3 Reflectance90 = max(float3(OneMinusRoughness, OneMinusRoughness, OneMinusRoughness), SrfInfo.Reflectance0);
+        Info.k_S = SchlickReflection(Info.NdotV, SrfInfo.Reflectance0, Reflectance90);
+    }
+#   endif
+    return Info;
+}
+
+// Specular component of the image-based light (IBL) using the split-sum approximation.
+float3 GetSpecularIBL_GGX(in SurfaceReflectanceInfo SrfInfo,
+                          in IBLSamplingInfo        IBLInfo,
+                          in TextureCube            PrefilteredEnvMap,
+                          in SamplerState           PrefilteredEnvMap_sampler,
+                          in float                  PrefilteredEnvMapMipLevels)
+{
+    float  lod = saturate(SrfInfo.PerceptualRoughness) * PrefilteredEnvMapMipLevels;
+    float3 SpecularLight = SamplePrefilteredEnvMap(PrefilteredEnvMap, PrefilteredEnvMap_sampler, IBLInfo.L, lod);
+    
+#if USE_IBL_MULTIPLE_SCATTERING
+    // https://bruop.github.io/ibl/#single_scattering_results
+    return SpecularLight * (IBLInfo.k_S * IBLInfo.PreIntBRDF.x + IBLInfo.PreIntBRDF.y);
+#else
+    return SpecularLight * (SrfInfo.Reflectance0 * IBLInfo.PreIntBRDF.x + SrfInfo.Reflectance90 * IBLInfo.PreIntBRDF.y);
+#endif
 }
 
 float3 GetLambertianIBL(in SurfaceReflectanceInfo SrfInfo,
-                        in float3                 n,
+                        in IBLSamplingInfo        IBLInfo,
                         in TextureCube            IrradianceMap,
                         in SamplerState           IrradianceMap_sampler)
 {    
-    float3 DiffuseSample = IrradianceMap.Sample(IrradianceMap_sampler, n).rgb;
+    float3 Irradiance = IrradianceMap.Sample(IrradianceMap_sampler, IBLInfo.N).rgb;
 #if !USE_HDR_IBL_CUBEMAPS
-    DiffuseSample  = TO_LINEAR(DiffuseSample.rgb);
+    Irradiance = TO_LINEAR(Irradiance);
 #endif
-    return DiffuseSample * SrfInfo.DiffuseColor;
+
+#if USE_IBL_MULTIPLE_SCATTERING
+     // GGX / specular light contribution
+    float3 FssEss = IBLInfo.k_S * IBLInfo.PreIntBRDF.x + IBLInfo.PreIntBRDF.y;
+
+    // Multiple scattering, from Fdez-Aguera
+    float  Ems    = 1.0 - (IBLInfo.PreIntBRDF.x + IBLInfo.PreIntBRDF.y);
+    float3 F_avg  = SrfInfo.Reflectance0 + (float3(1.0, 1.0, 1.0) - SrfInfo.Reflectance0) / 21.0;
+    float3 FmsEms = Ems * FssEss * F_avg / (float3(1.0, 1.0, 1.0) - F_avg * Ems);
+    float3 k_D    = SrfInfo.DiffuseColor * (float3(1.0, 1.0, 1.0) - FssEss + FmsEms); // we use +FmsEms as indicated by the formula in the blog post (might be a typo in the implementation)
+
+    return (FmsEms + k_D) * Irradiance;
+#else
+    return Irradiance * SrfInfo.DiffuseColor;
+#endif
 }
+
+float3 GetSpecularIBL_Charlie(in float3       SheenColor,
+                              in float        SheenRoughness,
+                              in float3       n,
+                              in float3       v,
+                              in float        PrefilteredCubeMipLevels,
+                              in Texture2D    PreintegratedCharlie,
+                              in SamplerState PreintegratedCharlie_sampler,
+                              in TextureCube  PrefilteredEnvMap,
+                              in SamplerState PrefilteredEnvMap_sampler)
+{
+    float NdotV = clamp(dot(n, v), 0.0, 1.0);
+
+    float  lod        = clamp(SheenRoughness * PrefilteredCubeMipLevels, 0.0, PrefilteredCubeMipLevels);
+    float3 reflection = normalize(reflect(-v, n));
+
+    float2 brdfSamplePoint = clamp(float2(NdotV, SheenRoughness), float2(0.0, 0.0), float2(1.0, 1.0));
+    float  brdf = PreintegratedCharlie.Sample(PreintegratedCharlie_sampler, brdfSamplePoint).r;
+
+    float3 SpecularLight = SamplePrefilteredEnvMap(PrefilteredEnvMap, PrefilteredEnvMap_sampler, reflection, lod);
+    return SpecularLight * SheenColor * brdf.x;
+}
+
 
 /// Calculates surface reflectance info
 
@@ -476,23 +559,20 @@ void ApplyIBL(in SurfaceShadingInfo Shading,
 #   endif
               inout SurfaceLightingInfo SrfLighting)
 {
-    SrfLighting.Base.DiffuseIBL =
-        GetLambertianIBL(Shading.BaseLayer.Srf, Shading.BaseLayer.Normal, IrradianceMap, IrradianceMap_sampler);
+    {
+        IBLSamplingInfo IBLInfo = GetIBLSamplingInfo(Shading.BaseLayer.Srf, PreintegratedGGX,  PreintegratedGGX_sampler, Shading.BaseLayer.Normal, Shading.View);
+        
+        SrfLighting.Base.DiffuseIBL =
+            GetLambertianIBL(Shading.BaseLayer.Srf, IBLInfo, IrradianceMap, IrradianceMap_sampler);
 
-    SrfLighting.Base.SpecularIBL =
-        GetSpecularIBL(Shading.BaseLayer.Srf, Shading.BaseLayer.Normal, Shading.View, PrefilteredCubeMipLevels,
-                       PreintegratedGGX,  PreintegratedGGX_sampler,
-                       PrefilteredEnvMap, PrefilteredEnvMap_sampler);
+        SrfLighting.Base.SpecularIBL =
+            GetSpecularIBL_GGX(Shading.BaseLayer.Srf, IBLInfo, PrefilteredEnvMap, PrefilteredEnvMap_sampler, PrefilteredCubeMipLevels);
+    }
 #   if ENABLE_SHEEN
     {
-        SurfaceReflectanceInfo SheenSrf;
-        SheenSrf.PerceptualRoughness = Shading.Sheen.Roughness;
-        SheenSrf.Reflectance0        = Shading.Sheen.Color;
-        SheenSrf.Reflectance90       = float3(0.0, 0.0, 0.0);
-
         // NOTE: to be accurate, we need to use another environment map here prefiltered with the Charlie BRDF.
         SrfLighting.Sheen.SpecularIBL =
-             GetSpecularIBL(SheenSrf, Shading.BaseLayer.Normal, Shading.View, PrefilteredCubeMipLevels,
+             GetSpecularIBL_Charlie(Shading.Sheen.Color, Shading.Sheen.Roughness, Shading.BaseLayer.Normal, Shading.View, PrefilteredCubeMipLevels,
                             PreintegratedCharlie, PreintegratedCharlie_sampler,
                             PrefilteredEnvMap,    PrefilteredEnvMap_sampler);
     }
@@ -500,10 +580,10 @@ void ApplyIBL(in SurfaceShadingInfo Shading,
 
 #   if ENABLE_CLEAR_COAT
     {
+        IBLSamplingInfo IBLInfo = GetIBLSamplingInfo(Shading.Clearcoat.Srf, PreintegratedGGX,  PreintegratedGGX_sampler, Shading.Clearcoat.Normal, Shading.View);
+
         SrfLighting.Clearcoat.SpecularIBL =
-            GetSpecularIBL(Shading.Clearcoat.Srf, Shading.Clearcoat.Normal, Shading.View, PrefilteredCubeMipLevels,
-                           PreintegratedGGX,  PreintegratedGGX_sampler,
-                           PrefilteredEnvMap, PrefilteredEnvMap_sampler);
+            GetSpecularIBL_GGX(Shading.Clearcoat.Srf, IBLInfo, PrefilteredEnvMap, PrefilteredEnvMap_sampler, PrefilteredCubeMipLevels);
     }
 #   endif
 }
