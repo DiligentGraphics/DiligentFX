@@ -49,6 +49,10 @@ static const MemoryShaderSourceFileInfo g_Shaders[] =
         #include "CubemapFace.vsh.h"
     },
     {
+        "Iridescence.fxh",
+        #include "Iridescence.fxh.h"
+    },
+    {
         "PBR_PrecomputeCommon.fxh",
         #include "PBR_PrecomputeCommon.fxh.h"
     },

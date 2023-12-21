@@ -604,7 +604,7 @@
 "{\n"
 "#   if ENABLE_IRIDESCENCE\n"
 "    {\n"
-"        float Thickness = 0.0;\n"
+"        float Thickness = 1.0;\n"
 "#       if USE_IRIDESCENCE_THICKNESS_MAP\n"
 "        {\n"
 "            Thickness = SampleTexture(g_IridescenceThicknessMap,\n"

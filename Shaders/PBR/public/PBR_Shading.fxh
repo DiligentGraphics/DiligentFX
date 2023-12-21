@@ -401,10 +401,10 @@ struct SheenShadingInfo
 
 struct IridescenceShadingInfo
 {
-    float Factor;
-    float Thickness;
-    float ThicknessMinimum;
-    float ThicknessMaximum;
+    float  Factor;
+    float  Thickness;
+    float3 Fresnel;
+    float3 F0;
 };
 
 struct SurfaceShadingInfo
@@ -734,11 +734,15 @@ float3 GetDebugColor(in SurfaceShadingInfo  Shading,
     }
 #elif (DEBUG_VIEW == DEBUG_VIEW_IRIDESCENCE && ENABLE_IRIDESCENCE)
     {        
+        return Shading.Iridescence.Fresnel;
+    }
+#elif (DEBUG_VIEW == DEBUG_VIEW_IRIDESCENCE_FACTOR && ENABLE_IRIDESCENCE)
+    {        
         return Shading.Iridescence.Factor * float3(1.0, 1.0, 1.0);
     }
 #elif (DEBUG_VIEW == DEBUG_VIEW_IRIDESCENCE_THICKNESS && ENABLE_IRIDESCENCE)
     {
-        return (Shading.Iridescence.Thickness - Shading.Iridescence.ThicknessMinimum) / max(Shading.Iridescence.ThicknessMaximum - Shading.Iridescence.ThicknessMinimum, 1.0);
+        return Shading.Iridescence.Thickness * float3(1.0, 1.0, 1.0) / 1200.0;
     }
 #elif (DEBUG_VIEW == DEBUG_VIEW_TRANSMISSION && ENABLE_TRANSMISSION)
     {

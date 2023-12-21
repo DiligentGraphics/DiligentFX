@@ -10,6 +10,10 @@
 #   include "ToneMapping.fxh"
 #endif
 
+#if ENABLE_IRIDESCENCE
+#   include "Iridescence.fxh"
+#endif
+
 #include "VSOutputStruct.generated"
 // struct VSOutput
 // {
@@ -165,6 +169,24 @@ SheenShadingInfo ReadSheenLayerProperties(in VSOutput VSOut)
 }
 #endif
 
+#if ENABLE_IRIDESCENCE
+IridescenceShadingInfo ReadIridescenceProperties(in VSOutput VSOut, BaseLayerShadingInfo BaseLayer)
+{
+    IridescenceShadingInfo Iridescence;
+    
+    Iridescence.Factor    = GetIridescence(VSOut, g_Primitive.Material);
+    Iridescence.Thickness = GetIridescenceThickness(VSOut, g_Primitive.Material);
+
+    Iridescence.Fresnel = EvalIridescence(1.0, g_Primitive.Material.Iridescence.IOR, BaseLayer.NdotV, Iridescence.Thickness, BaseLayer.Srf.Reflectance0);
+    Iridescence.F0      = SchlickToF0(BaseLayer.NdotV, Iridescence.Fresnel, float3(1.0, 1.0, 1.0));
+
+    if (Iridescence.Thickness == 0.0)
+        Iridescence.Factor = 0.0;
+
+    return Iridescence;
+}
+#endif
+
 float4 ComputePbrSurfaceColor(in VSOutput VSOut,
                               in bool     IsFrontFace)
 {
@@ -223,10 +245,7 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
     
 #   if ENABLE_IRIDESCENCE
     {
-        Shading.Iridescence.Factor           = GetIridescence(VSOut, g_Primitive.Material);
-        Shading.Iridescence.Thickness        = GetIridescenceThickness(VSOut, g_Primitive.Material);
-        Shading.Iridescence.ThicknessMinimum = g_Primitive.Material.Iridescence.ThicknessMinimum;
-        Shading.Iridescence.ThicknessMaximum = g_Primitive.Material.Iridescence.ThicknessMaximum;
+        Shading.Iridescence = ReadIridescenceProperties(VSOut, Shading.BaseLayer);
     }
 #   endif
     
@@ -245,7 +264,15 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
     SurfaceLightingInfo SrfLighting = GetDefaultSurfaceLightingInfo();
 
     if (BasicAttribs.Workflow != PBR_WORKFLOW_UNLIT)
-    {
+    {  
+#       if ENABLE_IRIDESCENCE
+        {
+            Shading.BaseLayer.Srf.Reflectance0 = lerp(Shading.BaseLayer.Srf.Reflectance0,
+                                                      Shading.Iridescence.F0,
+                                                      float3(Shading.Iridescence.Factor, Shading.Iridescence.Factor, Shading.Iridescence.Factor));
+        }
+#       endif
+        
         ApplyPunctualLights(
             Shading,
             g_Frame.Light,

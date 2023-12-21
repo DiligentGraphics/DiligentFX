@@ -604,7 +604,7 @@ float GetIridescenceThickness(VSOutput              VSOut,
 {
 #   if ENABLE_IRIDESCENCE
     {
-        float Thickness = 0.0;
+        float Thickness = 1.0;
 #       if USE_IRIDESCENCE_THICKNESS_MAP
         {
             Thickness = SampleTexture(g_IridescenceThicknessMap,

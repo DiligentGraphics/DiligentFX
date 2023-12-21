@@ -281,6 +281,7 @@ public:
         SheenRoughness,
         Anisotropy,
         Iridescence,
+        IridescenceFactor,
         IridescenceThickness,
         Transmission,
         Thickness,

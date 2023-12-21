@@ -56,6 +56,20 @@ float3 SchlickReflection(float VdotH, float3 Reflectance0, float3 Reflectance90)
     return SCHLICK_REFLECTION(VdotH, Reflectance0, Reflectance90);
 }
 
+float SchlickToF0(float VdotH, float f, float f90)
+{
+    float x  = clamp(1.0 - VdotH, 0.0, 1.0);
+    float x5 = clamp(pow5(x), 0.0, 0.9999);
+    return (f - f90 * x5) / (1.0 - x5);
+}
+
+float3 SchlickToF0(float VdotH, float3 f, float3 f90)
+{
+    float x  = clamp(1.0 - VdotH, 0.0, 1.0);
+    float x5 = clamp(pow5(x), 0.0, 0.9999);
+    return (f - f90 * x5) / (1.0 - x5);
+}
+
 // Visibility = G2(v,l,a) / (4 * (n,v) * (n,l))
 // see https://google.github.io/filament/Filament.md.html#materialsystem/specularbrdf
 float SmithGGXVisibilityCorrelated(float NdotL, float NdotV, float AlphaRoughness)
