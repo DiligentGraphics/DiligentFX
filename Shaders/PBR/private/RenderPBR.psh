@@ -246,6 +246,10 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
 #   if ENABLE_IRIDESCENCE
     {
         Shading.Iridescence = ReadIridescenceProperties(VSOut, Shading.BaseLayer);
+    
+        Shading.BaseLayer.Srf.Reflectance0 = lerp(Shading.BaseLayer.Srf.Reflectance0,
+                                                  Shading.Iridescence.F0,
+                                                  float3(Shading.Iridescence.Factor, Shading.Iridescence.Factor, Shading.Iridescence.Factor));
     }
 #   endif
     
@@ -265,14 +269,6 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
 
     if (BasicAttribs.Workflow != PBR_WORKFLOW_UNLIT)
     {  
-#       if ENABLE_IRIDESCENCE
-        {
-            Shading.BaseLayer.Srf.Reflectance0 = lerp(Shading.BaseLayer.Srf.Reflectance0,
-                                                      Shading.Iridescence.F0,
-                                                      float3(Shading.Iridescence.Factor, Shading.Iridescence.Factor, Shading.Iridescence.Factor));
-        }
-#       endif
-        
         ApplyPunctualLights(
             Shading,
             g_Frame.Light,

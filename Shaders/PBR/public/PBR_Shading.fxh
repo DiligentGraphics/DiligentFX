@@ -169,6 +169,10 @@ struct IBLSamplingInfo
 IBLSamplingInfo GetIBLSamplingInfo(in SurfaceReflectanceInfo SrfInfo,
                                    in Texture2D    PreintegratedBRDF,
                                    in SamplerState PreintegratedBRDF_sampler,
+#if ENABLE_IRIDESCENCE
+                                   in float3       IridescenceFresnel,
+                                   in float        IridescenceFactor,
+#endif
                                    in float3       N,
                                    in float3       V)
 {
@@ -189,8 +193,14 @@ IBLSamplingInfo GetIBLSamplingInfo(in SurfaceReflectanceInfo SrfInfo,
         float OneMinusRoughness = 1.0 - SrfInfo.PerceptualRoughness;
         float3 Reflectance90 = max(float3(OneMinusRoughness, OneMinusRoughness, OneMinusRoughness), SrfInfo.Reflectance0);
         Info.k_S = SchlickReflection(Info.NdotV, SrfInfo.Reflectance0, Reflectance90);
+#       if ENABLE_IRIDESCENCE
+        {
+            Info.k_S = lerp(Info.k_S, IridescenceFresnel, IridescenceFactor);
+        }
+#       endif
     }
 #   endif
+
     return Info;
 }
 
@@ -560,8 +570,13 @@ void ApplyIBL(in SurfaceShadingInfo Shading,
               inout SurfaceLightingInfo SrfLighting)
 {
     {
-        IBLSamplingInfo IBLInfo = GetIBLSamplingInfo(Shading.BaseLayer.Srf, PreintegratedGGX,  PreintegratedGGX_sampler, Shading.BaseLayer.Normal, Shading.View);
-        
+        IBLSamplingInfo IBLInfo = GetIBLSamplingInfo(
+            Shading.BaseLayer.Srf, PreintegratedGGX, PreintegratedGGX_sampler,
+#           if ENABLE_IRIDESCENCE
+                Shading.Iridescence.Fresnel, Shading.Iridescence.Factor,
+#           endif
+            Shading.BaseLayer.Normal, Shading.View);
+
         SrfLighting.Base.DiffuseIBL =
             GetLambertianIBL(Shading.BaseLayer.Srf, IBLInfo, IrradianceMap, IrradianceMap_sampler);
 
@@ -580,7 +595,12 @@ void ApplyIBL(in SurfaceShadingInfo Shading,
 
 #   if ENABLE_CLEAR_COAT
     {
-        IBLSamplingInfo IBLInfo = GetIBLSamplingInfo(Shading.Clearcoat.Srf, PreintegratedGGX,  PreintegratedGGX_sampler, Shading.Clearcoat.Normal, Shading.View);
+        IBLSamplingInfo IBLInfo = GetIBLSamplingInfo(
+            Shading.Clearcoat.Srf, PreintegratedGGX, PreintegratedGGX_sampler,
+#           if ENABLE_IRIDESCENCE
+                float3(1.0, 1.0, 1.0), 0.0,
+#           endif
+            Shading.Clearcoat.Normal, Shading.View);
 
         SrfLighting.Clearcoat.SpecularIBL =
             GetSpecularIBL_GGX(Shading.Clearcoat.Srf, IBLInfo, PrefilteredEnvMap, PrefilteredEnvMap_sampler, PrefilteredCubeMipLevels);
