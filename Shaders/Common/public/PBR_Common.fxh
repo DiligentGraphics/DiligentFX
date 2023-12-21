@@ -12,6 +12,18 @@ float3 LambertianDiffuse(float3 DiffuseColor)
     return DiffuseColor / PI;
 }
 
+float pow5(float x)
+{
+    float x2 = x * x;
+    return x2 * x2 * x;
+}
+
+float3 pow5(float3 x)
+{
+    float3 x2 = x * x;
+    return x2 * x2 * x;
+}
+
 // The following equation models the Fresnel reflectance term of the spec equation (aka F())
 // Implementation of fresnel term from "An Inexpensive BRDF Model for Physically based Rendering" by Christophe Schlick
 // https://en.wikipedia.org/wiki/Schlick%27s_approximation
@@ -34,7 +46,7 @@ float3 LambertianDiffuse(float3 DiffuseColor)
 //
 //      Rf(Theta) = 0.5 * (sin^2(Theta - Phi) / sin^2(Theta + Phi) + tan^2(Theta - Phi) / tan^2(Theta + Phi))
 //
-#define SCHLICK_REFLECTION(VdotH, Reflectance0, Reflectance90) ((Reflectance0) + ((Reflectance90) - (Reflectance0)) * pow(clamp(1.0 - (VdotH), 0.0, 1.0), 5.0))
+#define SCHLICK_REFLECTION(VdotH, Reflectance0, Reflectance90) ((Reflectance0) + ((Reflectance90) - (Reflectance0)) * pow5(clamp(1.0 - (VdotH), 0.0, 1.0)))
 float SchlickReflection(float VdotH, float Reflectance0, float Reflectance90)
 {
     return SCHLICK_REFLECTION(VdotH, Reflectance0, Reflectance90);
