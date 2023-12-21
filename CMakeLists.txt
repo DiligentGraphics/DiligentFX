@@ -88,6 +88,9 @@ if(DILIGENT_INSTALL_FX)
     install(DIRECTORY    PostProcess/EpipolarLightScattering/interface
             DESTINATION  "${CMAKE_INSTALL_INCLUDEDIR}/${DILIGENT_FX_DIR}/PostProcess/EpipolarLightScattering"
     )
+    install(DIRECTORY    PostProcess/ScreenSpaceReflection/interface
+            DESTINATION  "${CMAKE_INSTALL_INCLUDEDIR}/${DILIGENT_FX_DIR}/PostProcess/ScreenSpaceReflection"
+    )
     install(DIRECTORY    Components/interface
             DESTINATION  "${CMAKE_INSTALL_INCLUDEDIR}/${DILIGENT_FX_DIR}/Components"
     )
