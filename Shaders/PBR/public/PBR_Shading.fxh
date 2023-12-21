@@ -131,17 +131,8 @@ float3 PerturbNormal(PerturbNormalInfo NormalInfo,
     }
 }
 
-
-struct IBL_Contribution
-{
-    float3 f3Diffuse;
-    float3 f3Specular;
-};
-
-// Calculation of the lighting contribution from an optional Image Based Light source.
-// Precomputed Environment Maps are required uniform inputs and are computed as outlined in [1].
-// See our README.md on Environment Maps [3] for additional discussion.
-float3 GetIBLRadiance(in SurfaceReflectanceInfo SrfInfo,
+// Specular component of the image-based light (IBL) using the split-sum approximation.
+float3 GetSpecularIBL(in SurfaceReflectanceInfo SrfInfo,
                       in float3                 n,
                       in float3                 v,
                       in float                  PrefilteredCubeMipLevels,
@@ -175,34 +166,16 @@ float3 GetIBLRadiance(in SurfaceReflectanceInfo SrfInfo,
     return SpecularLight * (SrfInfo.Reflectance0 * brdf.x + SrfInfo.Reflectance90 * brdf.y);
 }
 
-IBL_Contribution GetIBLContribution(in SurfaceReflectanceInfo SrfInfo,
-                                    in float3                 n,
-                                    in float3                 v,
-                                    in float                  PrefilteredCubeMipLevels,
-                                    in Texture2D              PreintegratedBRDF,
-                                    in SamplerState           PreintegratedBRDF_sampler,
-                                    in TextureCube            IrradianceMap,
-                                    in SamplerState           IrradianceMap_sampler,
-                                    in TextureCube            PrefilteredEnvMap,
-                                    in SamplerState           PrefilteredEnvMap_sampler)
+float3 GetLambertianIBL(in SurfaceReflectanceInfo SrfInfo,
+                        in float3                 n,
+                        in TextureCube            IrradianceMap,
+                        in SamplerState           IrradianceMap_sampler)
 {    
-    IBL_Contribution IBLContrib;
-    IBLContrib.f3Specular = GetIBLRadiance(SrfInfo, n, v, PrefilteredCubeMipLevels,
-                                           PreintegratedBRDF,
-                                           PreintegratedBRDF_sampler,
-                                           PrefilteredEnvMap,
-                                           PrefilteredEnvMap_sampler);
-    
     float3 DiffuseSample = IrradianceMap.Sample(IrradianceMap_sampler, n).rgb;
-#if USE_HDR_IBL_CUBEMAPS
-    // Already linear.
-    float3 DiffuseLight  = DiffuseSample.rgb;
-#else
-    float3 DiffuseLight  = TO_LINEAR(DiffuseSample.rgb);
+#if !USE_HDR_IBL_CUBEMAPS
+    DiffuseSample  = TO_LINEAR(DiffuseSample.rgb);
 #endif
-    IBLContrib.f3Diffuse  = DiffuseLight * SrfInfo.DiffuseColor;
-    
-    return IBLContrib;
+    return DiffuseSample * SrfInfo.DiffuseColor;
 }
 
 /// Calculates surface reflectance info
@@ -393,8 +366,8 @@ struct SurfaceShadingInfo
 struct LayerLightingInfo
 {
     float3 Punctual;
-    
-    IBL_Contribution IBL;
+    float3 DiffuseIBL;
+    float3 SpecularIBL;
 };
 
 struct SurfaceLightingInfo
@@ -413,9 +386,9 @@ struct SurfaceLightingInfo
 LayerLightingInfo GetDefaultLayerLightingInfo()
 {
     LayerLightingInfo Lighting;
-    Lighting.Punctual       = float3(0.0, 0.0, 0.0);
-    Lighting.IBL.f3Diffuse  = float3(0.0, 0.0, 0.0);
-    Lighting.IBL.f3Specular = float3(0.0, 0.0, 0.0);
+    Lighting.Punctual    = float3(0.0, 0.0, 0.0);
+    Lighting.DiffuseIBL  = float3(0.0, 0.0, 0.0);
+    Lighting.SpecularIBL = float3(0.0, 0.0, 0.0);
     return Lighting;
 }
 
@@ -503,11 +476,13 @@ void ApplyIBL(in SurfaceShadingInfo Shading,
 #   endif
               inout SurfaceLightingInfo SrfLighting)
 {
-    SrfLighting.Base.IBL =
-        GetIBLContribution(Shading.BaseLayer.Srf, Shading.BaseLayer.Normal, Shading.View, PrefilteredCubeMipLevels,
-                           PreintegratedGGX,  PreintegratedGGX_sampler,
-                           IrradianceMap,     IrradianceMap_sampler,
-                           PrefilteredEnvMap, PrefilteredEnvMap_sampler);
+    SrfLighting.Base.DiffuseIBL =
+        GetLambertianIBL(Shading.BaseLayer.Srf, Shading.BaseLayer.Normal, IrradianceMap, IrradianceMap_sampler);
+
+    SrfLighting.Base.SpecularIBL =
+        GetSpecularIBL(Shading.BaseLayer.Srf, Shading.BaseLayer.Normal, Shading.View, PrefilteredCubeMipLevels,
+                       PreintegratedGGX,  PreintegratedGGX_sampler,
+                       PrefilteredEnvMap, PrefilteredEnvMap_sampler);
 #   if ENABLE_SHEEN
     {
         SurfaceReflectanceInfo SheenSrf;
@@ -516,8 +491,8 @@ void ApplyIBL(in SurfaceShadingInfo Shading,
         SheenSrf.Reflectance90       = float3(0.0, 0.0, 0.0);
 
         // NOTE: to be accurate, we need to use another environment map here prefiltered with the Charlie BRDF.
-        SrfLighting.Sheen.IBL.f3Specular =
-             GetIBLRadiance(SheenSrf, Shading.BaseLayer.Normal, Shading.View, PrefilteredCubeMipLevels,
+        SrfLighting.Sheen.SpecularIBL =
+             GetSpecularIBL(SheenSrf, Shading.BaseLayer.Normal, Shading.View, PrefilteredCubeMipLevels,
                             PreintegratedCharlie, PreintegratedCharlie_sampler,
                             PrefilteredEnvMap,    PrefilteredEnvMap_sampler);
     }
@@ -525,8 +500,8 @@ void ApplyIBL(in SurfaceShadingInfo Shading,
 
 #   if ENABLE_CLEAR_COAT
     {
-        SrfLighting.Clearcoat.IBL.f3Specular =
-            GetIBLRadiance(Shading.Clearcoat.Srf, Shading.Clearcoat.Normal, Shading.View, PrefilteredCubeMipLevels,
+        SrfLighting.Clearcoat.SpecularIBL =
+            GetSpecularIBL(Shading.Clearcoat.Srf, Shading.Clearcoat.Normal, Shading.View, PrefilteredCubeMipLevels,
                            PreintegratedGGX,  PreintegratedGGX_sampler,
                            PrefilteredEnvMap, PrefilteredEnvMap_sampler);
     }
@@ -540,7 +515,7 @@ float3 GetBaseLayerLighting(in SurfaceShadingInfo  Shading,
     float Occlusion = lerp(1.0, Shading.Occlusion, Shading.OcclusionStrength);
         
     return SrfLighting.Base.Punctual +
-           (SrfLighting.Base.IBL.f3Diffuse + SrfLighting.Base.IBL.f3Specular) * Shading.IBLScale * Occlusion;
+           (SrfLighting.Base.DiffuseIBL + SrfLighting.Base.SpecularIBL) * Shading.IBLScale * Occlusion;
 }
 
 #if ENABLE_SHEEN
@@ -550,7 +525,7 @@ float3 GetSheenLighting(in SurfaceShadingInfo  Shading,
     float Occlusion = lerp(1.0, Shading.Occlusion, Shading.OcclusionStrength);
 
     return SrfLighting.Sheen.Punctual +
-           SrfLighting.Sheen.IBL.f3Specular * Shading.IBLScale * Occlusion;
+           SrfLighting.Sheen.SpecularIBL * Shading.IBLScale * Occlusion;
 }
 #endif
 
@@ -561,7 +536,7 @@ float3 GetClearcoatLighting(in SurfaceShadingInfo  Shading,
     float Occlusion = lerp(1.0, Shading.Occlusion, Shading.OcclusionStrength);
 
     return SrfLighting.Clearcoat.Punctual +
-           SrfLighting.Clearcoat.IBL.f3Specular * Shading.IBLScale * Occlusion;
+           SrfLighting.Clearcoat.SpecularIBL * Shading.IBLScale * Occlusion;
 }
 #endif
 
@@ -639,11 +614,11 @@ float3 GetDebugColor(in SurfaceShadingInfo  Shading,
     }
 #elif (DEBUG_VIEW == DEBUG_VIEW_DIFFUSE_IBL && USE_IBL)
     {
-        return SrfLighting.Base.IBL.f3Diffuse;
+        return SrfLighting.Base.DiffuseIBL;
     }
 #elif (DEBUG_VIEW == DEBUG_VIEW_SPECULAR_IBL && USE_IBL)
     {
-        return SrfLighting.Base.IBL.f3Specular;
+        return SrfLighting.Base.SpecularIBL;
     }
 #elif (DEBUG_VIEW == DEBUG_VIEW_CLEAR_COAT && ENABLE_CLEAR_COAT)
     {
