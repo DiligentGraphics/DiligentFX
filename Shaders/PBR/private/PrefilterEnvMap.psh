@@ -39,12 +39,12 @@ float3 PrefilterEnvMap( float Roughness, float3 R )
             float NoH = clamp(dot(N, H), 0.0, 1.0);
 
             // Probability Distribution Function
-            float pdf = max(NormalDistribution_GGX(NoH, Roughness) * NoH / (4.0 * VoH), 0.0001);
-            // Slid angle of current smple
+            float pdf = max(SmithGGXSampleDirectionPDF(V, N, L, Roughness), 0.0001);
+            // Solid angle of current smple
             float OmegaS = 1.0 / (float(g_NumSamples) * pdf);
             // Solid angle of 1 pixel across all cube faces
             float OmegaP = 4.0 * PI / (6.0 * g_EnvMapDim * g_EnvMapDim);
-            // Do not apply mip bias as this produces result that are not consistent with the reference
+            // Do not apply mip bias as this produces results that are not consistent with the reference
             float MipLevel = (Roughness == 0.0) ? 0.0 : max(0.5 * log2(OmegaS / OmegaP), 0.0);
 #else
             float MipLevel = 0.0;
