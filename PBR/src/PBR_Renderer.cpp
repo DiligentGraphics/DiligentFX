@@ -1121,7 +1121,7 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
 
             auto& RT0          = GraphicsPipeline.BlendDesc.RenderTargets[0];
             RT0.BlendEnable    = true;
-            RT0.SrcBlend       = BLEND_FACTOR_SRC_ALPHA;
+            RT0.SrcBlend       = BLEND_FACTOR_ONE;
             RT0.DestBlend      = BLEND_FACTOR_INV_SRC_ALPHA;
             RT0.BlendOp        = BLEND_OPERATION_ADD;
             RT0.SrcBlendAlpha  = BLEND_FACTOR_ONE;

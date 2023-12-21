@@ -295,7 +295,7 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
     float4 OutColor;
     OutColor.rgb = ResolveLighting(Shading, SrfLighting);
     OutColor.a   = BaseColor.a;
-        
+
 #if ENABLE_TONE_MAPPING
     {
         // Perform tone mapping
@@ -310,9 +310,13 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
     }
 #endif
 
+    if (BasicAttribs.AlphaMode == PBR_ALPHA_MODE_BLEND)
+    {
+        OutColor.rgb *= BaseColor.a;        
+    }
+    
     // Add highlight color
     OutColor.rgb = lerp(OutColor.rgb, g_Frame.Renderer.HighlightColor.rgb, g_Frame.Renderer.HighlightColor.a);
-
     
     // Shader inputs debug visualization
 #if (DEBUG_VIEW == DEBUG_VIEW_BASE_COLOR)
