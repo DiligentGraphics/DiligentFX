@@ -774,7 +774,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS     PSOFlags,
     Macros.Add("DEBUG_VIEW_THICKNESS",             static_cast<int>(DebugViewType::Thickness));
     // clang-format on
 
-    static_assert(PSO_FLAG_LAST == PSO_FLAG_BIT(34), "Did you add new PSO Flag? You may need to handle it here.");
+    static_assert(PSO_FLAG_LAST == PSO_FLAG_BIT(35), "Did you add new PSO Flag? You may need to handle it here.");
 #define ADD_PSO_FLAG_MACRO(Flag) Macros.Add(#Flag, (PSOFlags & PSO_FLAG_##Flag) != PSO_FLAG_NONE)
     ADD_PSO_FLAG_MACRO(USE_COLOR_MAP);
     ADD_PSO_FLAG_MACRO(USE_NORMAL_MAP);
@@ -796,6 +796,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS     PSOFlags,
 
     ADD_PSO_FLAG_MACRO(USE_VERTEX_COLORS);
     ADD_PSO_FLAG_MACRO(USE_VERTEX_NORMALS);
+    ADD_PSO_FLAG_MACRO(USE_VERTEX_TANGENTS);
     ADD_PSO_FLAG_MACRO(USE_TEXCOORD0);
     ADD_PSO_FLAG_MACRO(USE_TEXCOORD1);
     ADD_PSO_FLAG_MACRO(USE_JOINTS);
@@ -875,6 +876,7 @@ void PBR_Renderer::GetVSInputStructAndLayout(PSO_FLAGS         PSOFlags,
     //    float4 Joint0  : ATTRIB4;
     //    float4 Weight0 : ATTRIB5;
     //    float4 Color   : ATTRIB6;
+    //    float3 Tangent : ATTRIB7;
     //};
     struct VSAttribInfo
     {
@@ -884,7 +886,7 @@ void PBR_Renderer::GetVSInputStructAndLayout(PSO_FLAGS         PSOFlags,
         const Uint32      NumComponents;
         const PSO_FLAGS   Flag;
     };
-    static constexpr std::array<VSAttribInfo, 7> VSAttribs = //
+    static constexpr std::array<VSAttribInfo, 8> VSAttribs = //
         {
             // clang-format off
             VSAttribInfo{0, "Pos",     VT_FLOAT32, 3, PSO_FLAG_NONE},
@@ -893,7 +895,8 @@ void PBR_Renderer::GetVSInputStructAndLayout(PSO_FLAGS         PSOFlags,
             VSAttribInfo{3, "UV1",     VT_FLOAT32, 2, PSO_FLAG_USE_TEXCOORD1},
             VSAttribInfo{4, "Joint0",  VT_FLOAT32, 4, PSO_FLAG_USE_JOINTS},
             VSAttribInfo{5, "Weight0", VT_FLOAT32, 4, PSO_FLAG_USE_JOINTS},
-            VSAttribInfo{6, "Color",   VT_FLOAT32, 4, PSO_FLAG_USE_VERTEX_COLORS}
+            VSAttribInfo{6, "Color",   VT_FLOAT32, 4, PSO_FLAG_USE_VERTEX_COLORS},
+            VSAttribInfo{7, "Tangent", VT_FLOAT32, 3, PSO_FLAG_USE_VERTEX_TANGENTS}
             // clang-format on
         };
 
@@ -980,6 +983,10 @@ std::string PBR_Renderer::GetVSOutputStruct(PSO_FLAGS PSOFlags, bool UseVkPointS
     if (PSOFlags & PSO_FLAG_USE_TEXCOORD1)
     {
         ss << "    float2 UV1      : UV1;" << std::endl;
+    }
+    if (PSOFlags & PSO_FLAG_USE_VERTEX_TANGENTS)
+    {
+        ss << "    float3 Tangent  : TANGENT;" << std::endl;
     }
     if (UseVkPointSize)
     {

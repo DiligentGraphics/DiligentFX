@@ -490,6 +490,8 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
             VertexAttribFlags |= PSO_FLAG_USE_JOINTS;
         else if (strcmp(Attrib.Name, GLTF::VertexColorAttributeName) == 0)
             VertexAttribFlags |= PSO_FLAG_USE_VERTEX_COLORS;
+        else if (strcmp(Attrib.Name, GLTF::TangentAttributeName) == 0)
+            VertexAttribFlags |= PSO_FLAG_USE_VERTEX_TANGENTS;
     }
 
     for (auto& List : m_RenderLists)

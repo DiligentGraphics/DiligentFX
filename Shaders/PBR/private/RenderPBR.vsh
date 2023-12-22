@@ -13,6 +13,7 @@
 //    float4 Joint0  : ATTRIB4;
 //    float4 Weight0 : ATTRIB5;
 //    float4 Color   : ATTRIB6;
+//    float3 Tangent : ATTRIB7;
 //};
 
 #include "VSOutputStruct.generated"
@@ -24,6 +25,7 @@
 //     float3 Normal   : NORMAL;
 //     float2 UV0      : UV0;
 //     float2 UV1      : UV1;
+//     float3 Tangent  : TANGENT;
 // };
 
 #ifndef MAX_JOINT_COUNT
@@ -93,6 +95,10 @@ void main(in  VSInput  VSIn,
 
 #if USE_TEXCOORD1
     VSOut.UV1      = VSIn.UV1;
+#endif
+    
+#if USE_VERTEX_TANGENTS
+    VSOut.Tangent  = normalize(mul(float3x3(Transform[0].xyz, Transform[1].xyz, Transform[2].xyz), VSIn.Tangent));
 #endif
 
 #ifdef USE_GL_POINT_SIZE
