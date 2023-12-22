@@ -807,9 +807,13 @@ float3 GetDebugColor(in SurfaceShadingInfo  Shading,
     {
         return Shading.Sheen.Roughness * float3(1.0, 1.0, 1.0);
     }
-#elif (DEBUG_VIEW == DEBUG_VIEW_ANISOTROPY && ENABLE_ANISOTROPY)
+#elif (DEBUG_VIEW == DEBUG_VIEW_ANISOTROPY_STRENGTH && ENABLE_ANISOTROPY)
     {
-        return float3(Shading.Anisotropy.Direction, Shading.Anisotropy.Strength);
+        return Shading.Anisotropy.Strength * float3(1.0, 1.0, 1.0);
+    }
+#elif (DEBUG_VIEW == DEBUG_VIEW_ANISOTROPY_DIRECTION && ENABLE_ANISOTROPY)
+    {
+        return float3(Shading.Anisotropy.Direction * 0.5 + 0.5, 0.0);
     }
 #elif (DEBUG_VIEW == DEBUG_VIEW_IRIDESCENCE && ENABLE_IRIDESCENCE)
     {        

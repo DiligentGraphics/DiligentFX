@@ -738,7 +738,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS     PSOFlags,
     Macros.Add("USE_HDR_IBL_CUBEMAPS", true);
     Macros.Add("USE_SEPARATE_METALLIC_ROUGHNESS_TEXTURES", m_Settings.UseSeparateMetallicRoughnessTextures);
 
-    static_assert(static_cast<int>(DebugViewType::NumDebugViews) == 31, "Did you add debug view? You may need to handle it here.");
+    static_assert(static_cast<int>(DebugViewType::NumDebugViews) == 32, "Did you add debug view? You may need to handle it here.");
     // clang-format off
     Macros.Add("DEBUG_VIEW",                       static_cast<int>(DebugView));
     Macros.Add("DEBUG_VIEW_NONE",                  static_cast<int>(DebugViewType::None));
@@ -766,7 +766,8 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS     PSOFlags,
     Macros.Add("DEBUG_VIEW_SHEEN",                 static_cast<int>(DebugViewType::Sheen));
     Macros.Add("DEBUG_VIEW_SHEEN_COLOR",           static_cast<int>(DebugViewType::SheenColor));
     Macros.Add("DEBUG_VIEW_SHEEN_ROUGHNESS",       static_cast<int>(DebugViewType::SheenRoughness));
-    Macros.Add("DEBUG_VIEW_ANISOTROPY",            static_cast<int>(DebugViewType::Anisotropy));
+    Macros.Add("DEBUG_VIEW_ANISOTROPY_STRENGTH",   static_cast<int>(DebugViewType::AnisotropyStrength));
+    Macros.Add("DEBUG_VIEW_ANISOTROPY_DIRECTION",  static_cast<int>(DebugViewType::AnisotropyDirection));
     Macros.Add("DEBUG_VIEW_IRIDESCENCE",           static_cast<int>(DebugViewType::Iridescence));
     Macros.Add("DEBUG_VIEW_IRIDESCENCE_FACTOR",    static_cast<int>(DebugViewType::IridescenceFactor));
     Macros.Add("DEBUG_VIEW_IRIDESCENCE_THICKNESS", static_cast<int>(DebugViewType::IridescenceThickness));
