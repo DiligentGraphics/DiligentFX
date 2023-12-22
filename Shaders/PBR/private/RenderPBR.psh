@@ -187,6 +187,46 @@ IridescenceShadingInfo ReadIridescenceProperties(in VSOutput VSOut, BaseLayerSha
 }
 #endif
 
+#if ENABLE_ANISOTROPY
+AnisotropyShadingInfo ReadAnisotropyProperties(in VSOutput VSOut, BaseLayerShadingInfo BaseLayer)
+{
+    float3 PackedAnisotropy = GetAnisotropy(VSOut, g_Primitive.Material);
+
+    float2 RotationCS = float2(cos(g_Primitive.Material.Anisotropy.Rotation), sin(g_Primitive.Material.Anisotropy.Rotation));
+
+    float2 Direction = float2(
+        PackedAnisotropy.x * RotationCS.x - PackedAnisotropy.y * RotationCS.y,
+        PackedAnisotropy.x * RotationCS.y + PackedAnisotropy.y * RotationCS.x);
+
+    AnisotropyShadingInfo Anisotropy;
+
+    Anisotropy.Direction = Direction;
+    Anisotropy.Strength  = PackedAnisotropy.z;
+    
+    float3 Tangent = float3(1.0, 0.0, 0.0);
+#   if USE_VERTEX_TANGENTS
+    {
+        Tangent = VSOut.Tangent;
+    }
+#   else
+    {
+        // Using anisotropy without vertex tangents is incorrect
+        // as screen-space tangents may be discontinuous.
+    }
+#   endif
+    float3 Bitangent = cross(Tangent, BaseLayer.Normal);
+    
+    Anisotropy.Tangent   = normalize(mul(float3(Direction, 0.0), MatrixFromRows(Tangent, Bitangent, BaseLayer.Normal)));
+    Anisotropy.Bitangent = cross(BaseLayer.Normal, Anisotropy.Tangent);
+
+    // Roughness along the anisotropy bitangent is the material roughness, while the tangent roughness increases with anisotropy.
+    Anisotropy.AlphaRoughnessT = lerp(BaseLayer.Srf.PerceptualRoughness * BaseLayer.Srf.PerceptualRoughness, 1.0, Anisotropy.Strength * Anisotropy.Strength);
+    Anisotropy.AlphaRoughnessB = BaseLayer.Srf.PerceptualRoughness * BaseLayer.Srf.PerceptualRoughness;
+
+    return Anisotropy;
+}
+#endif
+
 float4 ComputePbrSurfaceColor(in VSOutput VSOut,
                               in bool     IsFrontFace)
 {
@@ -239,7 +279,7 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
     
 #if ENABLE_ANISOTROPY
     {
-        Shading.Anisotropy = GetAnisotropy(VSOut, g_Primitive.Material);
+        Shading.Anisotropy = ReadAnisotropyProperties(VSOut, Shading.BaseLayer);
     }
 #   endif
     
@@ -329,7 +369,7 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
     // Shader inputs debug visualization
 #if (DEBUG_VIEW == DEBUG_VIEW_BASE_COLOR)
     {
-        OutColor.rgba = BaseColor;
+        OutColor.rgb = Shading.Anisotropy.Tangent * 0.5 + 0.5;
     }
 #elif (DEBUG_VIEW == DEBUG_VIEW_TEXCOORD0 && USE_TEXCOORD0)
     {
@@ -342,10 +382,6 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
 #elif (DEBUG_VIEW == DEBUG_VIEW_TRANSPARENCY)
     {
         OutColor.rgba = float4(BaseColor.a, BaseColor.a, BaseColor.a, 1.0);
-    }
-#elif (DEBUG_VIEW == DEBUG_VIEW_NORMAL_MAP)
-    {
-        //OutColor.rgb = TSNormal.xyz;
     }
 #elif (DEBUG_VIEW == DEBUG_VIEW_MESH_NORMAL)
     {

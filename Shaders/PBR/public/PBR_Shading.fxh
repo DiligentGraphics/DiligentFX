@@ -417,6 +417,16 @@ struct IridescenceShadingInfo
     float3 F0;
 };
 
+struct AnisotropyShadingInfo
+{
+    float2 Direction;
+    float  Strength;
+    float3 Tangent;
+    float3 Bitangent;
+    float  AlphaRoughnessT;
+    float  AlphaRoughnessB;
+};
+
 struct SurfaceShadingInfo
 {
     // Camera view direction in world space
@@ -436,7 +446,7 @@ struct SurfaceShadingInfo
 #endif
 
 #if ENABLE_ANISOTROPY
-    float3 Anisotropy;
+    AnisotropyShadingInfo Anisotropy;
 #endif
     
 #if ENABLE_IRIDESCENCE
@@ -535,7 +545,26 @@ void ApplyPunctualLights(in    SurfaceShadingInfo  Shading,
     {
         float3 BasePunctualDiffuse;
         float3 BasePunctualSpecular;
-        SmithGGX_BRDF(-Light.Direction.xyz, Shading.BaseLayer.Normal, Shading.View, Shading.BaseLayer.Srf, BasePunctualDiffuse, BasePunctualSpecular, NdotL);
+#       if ENABLE_ANISOTROPY
+        {
+            SmithGGX_BRDF_Anisotropic(-Light.Direction.xyz,
+                                      Shading.BaseLayer.Normal,
+                                      Shading.View,
+                                      Shading.Anisotropy.Tangent,
+                                      Shading.Anisotropy.Bitangent,
+                                      Shading.BaseLayer.Srf,
+                                      Shading.Anisotropy.AlphaRoughnessT,
+                                      Shading.Anisotropy.AlphaRoughnessB,
+                                      BasePunctualDiffuse,
+                                      BasePunctualSpecular,
+                                      NdotL);
+        }
+#       else
+        {
+            SmithGGX_BRDF(-Light.Direction.xyz, Shading.BaseLayer.Normal, Shading.View, Shading.BaseLayer.Srf, BasePunctualDiffuse, BasePunctualSpecular, NdotL);
+        }
+#       endif
+
 #if ENABLE_TRANSMISSION
         {
             BasePunctualDiffuse *= 1.0 - Shading.Transmission;
@@ -766,7 +795,7 @@ float3 GetDebugColor(in SurfaceShadingInfo  Shading,
     }
 #elif (DEBUG_VIEW == DEBUG_VIEW_ANISOTROPY && ENABLE_ANISOTROPY)
     {
-        return Shading.Anisotropy.xyz;
+        return float3(Shading.Anisotropy.Direction, Shading.Anisotropy.Strength);
     }
 #elif (DEBUG_VIEW == DEBUG_VIEW_IRIDESCENCE && ENABLE_IRIDESCENCE)
     {        
