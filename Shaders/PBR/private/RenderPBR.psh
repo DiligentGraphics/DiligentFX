@@ -307,6 +307,7 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
             
     SurfaceLightingInfo SrfLighting = GetDefaultSurfaceLightingInfo();
 
+    float4 OutColor;
     if (BasicAttribs.Workflow != PBR_WORKFLOW_UNLIT)
     {  
         ApplyPunctualLights(
@@ -330,19 +331,22 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
                      SrfLighting);
         }
 #       endif
+        
+        OutColor.rgb = ResolveLighting(Shading, SrfLighting);
+#       if ENABLE_TRANSMISSION
+        {
+            OutColor.a = 1.0 - Shading.Transmission;
+        }
+#       else
+        {
+            OutColor.a = BaseColor.a;
+        }
+#       endif
     }
-    
-    float4 OutColor;
-    OutColor.rgb = ResolveLighting(Shading, SrfLighting);
-#   if ENABLE_TRANSMISSION
+    else
     {
-        OutColor.a = 1.0 - Shading.Transmission;
+        OutColor = BaseColor;
     }
-#   else
-    {
-        OutColor.a = BaseColor.a;
-    }
-#   endif
 
 #if ENABLE_TONE_MAPPING
     {
