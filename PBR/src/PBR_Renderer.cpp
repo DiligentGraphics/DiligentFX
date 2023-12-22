@@ -591,22 +591,37 @@ void PBR_Renderer::CreateSignature()
 {
     PipelineResourceSignatureDescX SignatureDesc{"PBR Renderer Resource Signature"};
     SignatureDesc
-        .SetUseCombinedTextureSamplers(true)
+        .SetUseCombinedTextureSamplers(m_Device.GetDeviceInfo().IsGLDevice())
         .AddResource(SHADER_TYPE_VS_PS, "cbFrameAttribs", SHADER_RESOURCE_TYPE_CONSTANT_BUFFER, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
         .AddResource(SHADER_TYPE_VS_PS, "cbPrimitiveAttribs", SHADER_RESOURCE_TYPE_CONSTANT_BUFFER, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
 
     if (m_Settings.MaxJointCount > 0)
         SignatureDesc.AddResource(SHADER_TYPE_VERTEX, "cbJointTransforms", SHADER_RESOURCE_TYPE_CONSTANT_BUFFER, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
 
-    auto AddTextureAndSampler = [&](const char* Name, const SamplerDesc& Desc) //
+    std::unordered_set<std::string> Samplers;
+    if (!m_Device.GetDeviceInfo().IsGLDevice())
     {
-        SignatureDesc.AddResource(SHADER_TYPE_PIXEL, Name, SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
-        if (m_Settings.UseImmutableSamplers)
-            SignatureDesc.AddImmutableSampler(SHADER_TYPE_PIXEL, Name, Desc);
+        SignatureDesc.AddImmutableSampler(SHADER_TYPE_PIXEL, "g_LinearClampSampler", Sam_LinearClamp);
+        Samplers.emplace("g_LinearClampSampler");
+    }
+
+    auto AddTextureAndSampler = [&](const char*                   Name,
+                                    const SamplerDesc&            SamDesc,
+                                    const char*                   _SamplerName = nullptr,
+                                    SHADER_RESOURCE_VARIABLE_TYPE VarType      = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE) //
+    {
+        SignatureDesc.AddResource(SHADER_TYPE_PIXEL, Name, SHADER_RESOURCE_TYPE_TEXTURE_SRV, VarType);
+
+        std::string SamplerName;
+        if (m_Device.GetDeviceInfo().IsGLDevice())
+            SamplerName = Name;
+        else if (_SamplerName != nullptr)
+            SamplerName = _SamplerName;
         else
+            SamplerName = std::string{Name} + "_sampler";
+        if (Samplers.emplace(SamplerName).second)
         {
-            const auto SamplerName = std::string{Name} + "_sampler";
-            SignatureDesc.AddResource(SHADER_TYPE_PIXEL, SamplerName.c_str(), SHADER_RESOURCE_TYPE_SAMPLER, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
+            SignatureDesc.AddImmutableSampler(SHADER_TYPE_PIXEL, SamplerName.c_str(), SamDesc);
         }
     };
 
@@ -635,15 +650,15 @@ void PBR_Renderer::CreateSignature()
 
     if (m_Settings.EnableClearCoat)
     {
-        AddTextureAndSampler("g_ClearCoatMap", m_Settings.ClearCoatMapImmutableSampler);
-        AddTextureAndSampler("g_ClearCoatRoughnessMap", m_Settings.ClearCoatMapImmutableSampler);
-        AddTextureAndSampler("g_ClearCoatNormalMap", m_Settings.ClearCoatMapImmutableSampler);
+        AddTextureAndSampler("g_ClearCoatMap", m_Settings.ClearCoatMapImmutableSampler, "g_ClearCoat_sampler");
+        AddTextureAndSampler("g_ClearCoatRoughnessMap", m_Settings.ClearCoatMapImmutableSampler, "g_ClearCoat_sampler");
+        AddTextureAndSampler("g_ClearCoatNormalMap", m_Settings.ClearCoatMapImmutableSampler, "g_ClearCoat_sampler");
     }
 
     if (m_Settings.EnableSheen)
     {
-        AddTextureAndSampler("g_SheenColorMap", m_Settings.SheenMapImmutableSampler);
-        AddTextureAndSampler("g_SheenRoughnessMap", m_Settings.SheenMapImmutableSampler);
+        AddTextureAndSampler("g_SheenColorMap", m_Settings.SheenMapImmutableSampler, "g_Sheen_sampler");
+        AddTextureAndSampler("g_SheenRoughnessMap", m_Settings.SheenMapImmutableSampler, "g_Sheen_sampler");
     }
 
     if (m_Settings.EnableAnisotropy)
@@ -653,8 +668,8 @@ void PBR_Renderer::CreateSignature()
 
     if (m_Settings.EnableIridescence)
     {
-        AddTextureAndSampler("g_IridescenceMap", m_Settings.IridescenceMapImmutableSampler);
-        AddTextureAndSampler("g_IridescenceThicknessMap", m_Settings.IridescenceMapImmutableSampler);
+        AddTextureAndSampler("g_IridescenceMap", m_Settings.IridescenceMapImmutableSampler, "g_Iridescence_sampler");
+        AddTextureAndSampler("g_IridescenceThicknessMap", m_Settings.IridescenceMapImmutableSampler, "g_Iridescence_sampler");
     }
 
     if (m_Settings.EnableTransmission)
@@ -667,39 +682,21 @@ void PBR_Renderer::CreateSignature()
         AddTextureAndSampler("g_ThicknessMap", m_Settings.ThicknessMapImmutableSampler);
     }
 
-
     if (m_Settings.EnableIBL)
     {
-        SignatureDesc
-            .AddResource(SHADER_TYPE_PIXEL, "g_PreintegratedGGX", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
-            .AddResource(SHADER_TYPE_PIXEL, "g_IrradianceMap", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
-            .AddResource(SHADER_TYPE_PIXEL, "g_PrefilteredEnvMap", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
+        AddTextureAndSampler("g_PreintegratedGGX", Sam_LinearClamp, "g_LinearClampSampler", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
+        AddTextureAndSampler("g_IrradianceMap", Sam_LinearClamp, "g_LinearClampSampler");
+        AddTextureAndSampler("g_PrefilteredEnvMap", Sam_LinearClamp, "g_LinearClampSampler");
 
         if (m_Settings.EnableSheen)
         {
-            SignatureDesc.AddResource(SHADER_TYPE_PIXEL, "g_PreintegratedCharlie", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
-        }
-
-        SignatureDesc
-            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_PreintegratedGGX", Sam_LinearClamp)
-            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_IrradianceMap", Sam_LinearClamp);
-        if (m_Device.GetDeviceInfo().IsGLDevice())
-        {
-            // In the shader, we use g_IrradianceMap_sampler to sample g_PrefilteredEnvMap, but
-            // on OpenGL we have to explicitly define immutable sampler.
-            SignatureDesc.AddImmutableSampler(SHADER_TYPE_PIXEL, "g_PrefilteredEnvMap", Sam_LinearClamp);
-            if (m_Settings.EnableSheen)
-            {
-                SignatureDesc.AddImmutableSampler(SHADER_TYPE_PIXEL, "g_PreintegratedCharlie", Sam_LinearClamp);
-            }
+            AddTextureAndSampler("g_PreintegratedCharlie", Sam_LinearClamp, "g_LinearClampSampler", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
         }
     }
 
     if (m_Settings.EnableSheen)
     {
-        SignatureDesc
-            .AddResource(SHADER_TYPE_PIXEL, "g_SheenAlbedoScalingLUT", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
-            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_SheenAlbedoScalingLUT", Sam_LinearClamp);
+        AddTextureAndSampler("g_SheenAlbedoScalingLUT", Sam_LinearClamp, "g_LinearClampSampler", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
     }
 
     m_ResourceSignature = m_Device.CreatePipelineResourceSignature(SignatureDesc);
@@ -1088,9 +1085,11 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
     }
     ShaderCI.Macros = Macros;
 
+    const bool UseCombinedSamplers = m_Device.GetDeviceInfo().IsGLDevice();
+
     RefCntAutoPtr<IShader> pVS;
     {
-        ShaderCI.Desc       = {"PBR VS", SHADER_TYPE_VERTEX, true};
+        ShaderCI.Desc       = {"PBR VS", SHADER_TYPE_VERTEX, UseCombinedSamplers};
         ShaderCI.EntryPoint = "main";
         ShaderCI.FilePath   = "RenderPBR.vsh";
 
@@ -1099,7 +1098,7 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
 
     RefCntAutoPtr<IShader> pPS;
     {
-        ShaderCI.Desc       = {!IsUnshaded ? "PBR PS" : "Unshaded PS", SHADER_TYPE_PIXEL, true};
+        ShaderCI.Desc       = {!IsUnshaded ? "PBR PS" : "Unshaded PS", SHADER_TYPE_PIXEL, UseCombinedSamplers};
         ShaderCI.EntryPoint = "main";
         ShaderCI.FilePath   = !IsUnshaded ? "RenderPBR.psh" : "RenderUnshaded.psh";
 

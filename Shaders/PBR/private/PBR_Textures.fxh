@@ -78,26 +78,27 @@
 #   define USE_THICKNESS_MAP 0
 #endif
 
+SamplerState g_LinearClampSampler;
+
 #if USE_IBL
     TextureCube  g_IrradianceMap;
-    SamplerState g_IrradianceMap_sampler;
+#   define       g_IrradianceMap_sampler g_LinearClampSampler
 
     TextureCube  g_PrefilteredEnvMap;
-    // Use g_IrradianceMap_sampler as we are running out of sampers on D3D11
-#   define       g_PrefilteredEnvMap_sampler g_IrradianceMap_sampler
+#   define       g_PrefilteredEnvMap_sampler g_LinearClampSampler
 
     Texture2D    g_PreintegratedGGX;
-    SamplerState g_PreintegratedGGX_sampler;
+#   define       g_PreintegratedGGX_sampler g_LinearClampSampler
 
 #   if ENABLE_SHEEN
         Texture2D g_PreintegratedCharlie;
-#       define    g_PreintegratedCharlie_sampler g_PreintegratedGGX_sampler
+#       define    g_PreintegratedCharlie_sampler g_LinearClampSampler
 #   endif
 #endif
 
 #if ENABLE_SHEEN
     Texture2D     g_SheenAlbedoScalingLUT;
-    SamplerState  g_SheenAlbedoScalingLUT_sampler;    
+#       define    g_SheenAlbedoScalingLUT_sampler g_LinearClampSampler
 #endif
 
 #if USE_COLOR_MAP
@@ -135,29 +136,39 @@
     SamplerState   g_EmissiveMap_sampler;
 #endif
 
+
+#if USE_CLEAR_COAT_MAP || USE_CLEAR_COAT_ROUGHNESS_MAP || USE_CLEAR_COAT_NORMAL_MAP
+    SamplerState   g_ClearCoat_sampler;
+#endif
+
 #if USE_CLEAR_COAT_MAP
     Texture2DArray g_ClearCoatMap;
-    SamplerState   g_ClearCoatMap_sampler;
+#   define         g_ClearCoatMap_sampler g_ClearCoat_sampler
 #endif
 
 #if USE_CLEAR_COAT_ROUGHNESS_MAP
     Texture2DArray g_ClearCoatRoughnessMap;
-    SamplerState   g_ClearCoatRoughnessMap_sampler;
+#   define         g_ClearCoatRoughnessMap_sampler g_ClearCoat_sampler
 #endif
 
 #if USE_CLEAR_COAT_NORMAL_MAP
     Texture2DArray g_ClearCoatNormalMap;
-    SamplerState   g_ClearCoatNormalMap_sampler;
+#   define         g_ClearCoatNormalMap_sampler g_ClearCoat_sampler
+#endif
+
+
+#if USE_SHEEN_COLOR_MAP || USE_SHEEN_ROUGHNESS_MAP
+    SamplerState   g_Sheen_sampler;
 #endif
 
 #if USE_SHEEN_COLOR_MAP
     Texture2DArray g_SheenColorMap;
-    SamplerState   g_SheenColorMap_sampler;
+#   define         g_SheenColorMap_sampler g_Sheen_sampler
 #endif
 
 #if USE_SHEEN_ROUGHNESS_MAP
     Texture2DArray g_SheenRoughnessMap;
-    SamplerState   g_SheenRoughnessMap_sampler;
+#   define         g_SheenRoughnessMap_sampler g_Sheen_sampler
 #endif
 
 #if USE_ANISOTROPY_MAP
@@ -165,14 +176,18 @@
     SamplerState   g_AnisotropyMap_sampler;
 #endif
 
+#if USE_IRIDESCENCE_MAP || USE_IRIDESCENCE_THICKNESS_MAP
+    SamplerState   g_Iridescence_sampler;
+#endif
+
 #if USE_IRIDESCENCE_MAP
     Texture2DArray g_IridescenceMap;
-    SamplerState   g_IridescenceMap_sampler;
+#   define         g_IridescenceMap_sampler g_Iridescence_sampler
 #endif
 
 #if USE_IRIDESCENCE_THICKNESS_MAP
     Texture2DArray g_IridescenceThicknessMap;
-    SamplerState   g_IridescenceThicknessMap_sampler;
+#   define         g_IridescenceThicknessMap_sampler g_Iridescence_sampler
 #endif
 
 #if USE_TRANSMISSION_MAP

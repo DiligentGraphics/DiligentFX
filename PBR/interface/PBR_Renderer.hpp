@@ -113,10 +113,6 @@ public:
         /// A pipeline state can use volume only if this flag is set to true.
         bool EnableVolume = false;
 
-        /// When set to true, pipeline state will be compiled with immutable samplers.
-        /// When set to false, samplers from the texture views will be used.
-        bool UseImmutableSamplers = true;
-
         /// Whether to use separate textures for metallic and roughness
         /// instead of a combined physical description texture.
         bool UseSeparateMetallicRoughnessTextures = false;
