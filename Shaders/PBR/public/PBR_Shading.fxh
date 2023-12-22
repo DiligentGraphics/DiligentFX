@@ -625,6 +625,20 @@ void ApplyIBL(in SurfaceShadingInfo Shading,
         }
 #       endif
 
+#       if ENABLE_ANISOTROPY
+        {
+            float  TangentRoughness   = lerp(Shading.BaseLayer.Srf.PerceptualRoughness, 1.0, Shading.Anisotropy.Strength * Shading.Anisotropy.Strength);
+            float3 AnisotropicTangent = cross(Shading.Anisotropy.Bitangent, Shading.View);
+            float3 AnisotropicNormal  = cross(AnisotropicTangent, Shading.Anisotropy.Bitangent);
+            float  BendFactor         = 1.0 - Shading.Anisotropy.Strength * (1.0 - Shading.BaseLayer.Srf.PerceptualRoughness);
+            float  BendFactorPow4     = BendFactor * BendFactor * BendFactor * BendFactor;
+            float3 BentNormal         = normalize(lerp(AnisotropicNormal, Shading.BaseLayer.Normal, float3(BendFactorPow4, BendFactorPow4, BendFactorPow4)));
+
+            IBLInfo.N = BentNormal;
+            IBLInfo.L = normalize(reflect(-IBLInfo.V, IBLInfo.N));
+        }
+#       endif
+
         SrfLighting.Base.SpecularIBL =
             GetSpecularIBL_GGX(Shading.BaseLayer.Srf, IBLInfo, PrefilteredEnvMap, PrefilteredEnvMap_sampler, PrefilteredCubeMipLevels);
     }
