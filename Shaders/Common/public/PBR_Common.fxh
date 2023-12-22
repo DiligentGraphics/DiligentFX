@@ -100,8 +100,8 @@ float SmithGGXVisibilityCorrelated_Anisotropic(float NdotL,
                                                float AlphaRoughnessT,
                                                float AlphaRoughnessB)
 {
-    float LambdaV = NdotL * length(float3(AlphaRoughnessT * TdotV, AlphaRoughnessB * BdotV, NdotV));
-    float LambdaL = NdotV * length(float3(AlphaRoughnessT * TdotL, AlphaRoughnessB * BdotL, NdotL));
+    float LambdaV = NdotL * max(length(float3(AlphaRoughnessT * TdotV, AlphaRoughnessB * BdotV, NdotV)), 1e-3);
+    float LambdaL = NdotV * max(length(float3(AlphaRoughnessT * TdotL, AlphaRoughnessB * BdotL, NdotL)), 1e-3);
     return 0.5 / (LambdaV + LambdaL);
 }
 
@@ -171,7 +171,7 @@ float NormalDistribution_GGX_Anisotropic(float  NdotH,
     float  a2 = AlphaRoughnessT * AlphaRoughnessB;
     float3 v  = float3(AlphaRoughnessB * TdotH, AlphaRoughnessT * BdotH, a2 * NdotH);
     float  v2 = dot(v, v);
-    float  w2 = a2 / v2;
+    float  w2 = a2 / max(v2, 1e-6);
     return a2 * w2 * w2 * (1.0 / PI);
 }
 
