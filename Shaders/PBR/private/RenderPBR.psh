@@ -294,7 +294,15 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
     
     float4 OutColor;
     OutColor.rgb = ResolveLighting(Shading, SrfLighting);
-    OutColor.a   = BaseColor.a;
+#   if ENABLE_TRANSMISSION
+    {
+        OutColor.a = 1.0 - Shading.Transmission;
+    }
+#   else
+    {
+        OutColor.a = BaseColor.a;
+    }
+#   endif
 
 #if ENABLE_TONE_MAPPING
     {
@@ -312,7 +320,7 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
 
     if (BasicAttribs.AlphaMode == PBR_ALPHA_MODE_BLEND)
     {
-        OutColor.rgb *= BaseColor.a;        
+        OutColor.rgb *= BaseColor.a;
     }
     
     // Add highlight color

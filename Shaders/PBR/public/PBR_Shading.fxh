@@ -531,7 +531,18 @@ void ApplyPunctualLights(in    SurfaceShadingInfo  Shading,
     float NdotV = Shading.BaseLayer.NdotV;
     float NdotL = saturate(dot(Shading.BaseLayer.Normal, -Light.Direction.xyz));
     
-    float3 BasePunctual = ApplyDirectionalLightGGX(Light.Direction.xyz, Light.Intensity.rgb, Shading.BaseLayer.Srf, Shading.BaseLayer.Normal, Shading.View);
+    float3 BasePunctual;
+    {
+        float3 BasePunctualDiffuse;
+        float3 BasePunctualSpecular;
+        SmithGGX_BRDF(-Light.Direction.xyz, Shading.BaseLayer.Normal, Shading.View, Shading.BaseLayer.Srf, BasePunctualDiffuse, BasePunctualSpecular, NdotL);
+#if ENABLE_TRANSMISSION
+        {
+            BasePunctualDiffuse *= 1.0 - Shading.Transmission;
+        }
+#endif
+        BasePunctual = (BasePunctualDiffuse + BasePunctualSpecular) * Light.Intensity.rgb * NdotL;
+    }
 
 #if ENABLE_SHEEN
     {
@@ -579,6 +590,11 @@ void ApplyIBL(in SurfaceShadingInfo Shading,
 
         SrfLighting.Base.DiffuseIBL =
             GetLambertianIBL(Shading.BaseLayer.Srf, IBLInfo, IrradianceMap, IrradianceMap_sampler);
+#       if ENABLE_TRANSMISSION
+        {
+            SrfLighting.Base.DiffuseIBL *= 1.0 - Shading.Transmission;
+        }
+#       endif
 
         SrfLighting.Base.SpecularIBL =
             GetSpecularIBL_GGX(Shading.BaseLayer.Srf, IBLInfo, PrefilteredEnvMap, PrefilteredEnvMap_sampler, PrefilteredCubeMipLevels);
