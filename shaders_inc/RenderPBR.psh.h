@@ -115,7 +115,7 @@
 "                                NMUVInfo.Selector >= 0.0,\n"
 "                                IsFrontFace);\n"
 "\n"
-"    Base.NdotV = saturate(dot(Base.Normal, View));\n"
+"    Base.NdotV = dot_sat(Base.Normal, View);\n"
 "\n"
 "    return Base;\n"
 "}\n"

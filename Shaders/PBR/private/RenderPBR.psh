@@ -115,7 +115,7 @@ BaseLayerShadingInfo ReadBaseLayerProperties(in VSOutput          VSOut,
                                 NMUVInfo.Selector >= 0.0,
                                 IsFrontFace);
     
-    Base.NdotV = saturate(dot(Base.Normal, View));
+    Base.NdotV = dot_sat(Base.Normal, View);
     
     return Base;
 }

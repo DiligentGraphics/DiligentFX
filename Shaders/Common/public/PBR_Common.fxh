@@ -5,11 +5,9 @@
 #    define PI 3.141592653589793
 #endif
 
-// Lambertian diffuse
-// see https://seblagarde.wordpress.com/2012/01/08/pi-or-not-to-pi-in-game-lighting-equation/
-float3 LambertianDiffuse(float3 DiffuseColor)
+float dot_sat(float3 a, float3 b)
 {
-    return DiffuseColor / PI;
+    return saturate(dot(a, b));
 }
 
 float pow5(float x)
@@ -22,6 +20,13 @@ float3 pow5(float3 x)
 {
     float3 x2 = x * x;
     return x2 * x2 * x;
+}
+
+// Lambertian diffuse
+// see https://seblagarde.wordpress.com/2012/01/08/pi-or-not-to-pi-in-game-lighting-equation/
+float3 LambertianDiffuse(float3 DiffuseColor)
+{
+    return DiffuseColor / PI;
 }
 
 // The following equation models the Fresnel reflectance term of the spec equation (aka F())
@@ -292,11 +297,11 @@ AngularInfo GetAngularInfo(float3 PointToLight, float3 Normal, float3 View)
     info.L = l;
     info.H = h;
 
-    info.NdotL = clamp(dot(n, l), 0.0, 1.0);
-    info.NdotV = clamp(dot(n, v), 0.0, 1.0);
-    info.NdotH = clamp(dot(n, h), 0.0, 1.0);
-    info.LdotH = clamp(dot(l, h), 0.0, 1.0);
-    info.VdotH = clamp(dot(v, h), 0.0, 1.0);
+    info.NdotL = dot_sat(n, l);
+    info.NdotV = dot_sat(n, v);
+    info.NdotH = dot_sat(n, h);
+    info.LdotH = dot_sat(l, h);
+    info.VdotH = dot_sat(v, h);
 
     return info;
 }

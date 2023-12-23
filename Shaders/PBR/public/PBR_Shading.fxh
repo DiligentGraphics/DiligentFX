@@ -78,9 +78,9 @@ float3 ApplyDirectionalLightSheen(float3 lightDir, float3 lightColor, float3 She
 {
     float3 L = -lightDir;
     float3 H = normalize(V + L);
-    float NdotL = saturate(dot(N, L));
-    float NdotV = saturate(dot(N, V));
-    float NdotH = saturate(dot(N, H));
+    float NdotL = dot_sat(N, L);
+    float NdotV = dot_sat(N, V);
+    float NdotH = dot_sat(N, H);
 
     return lightColor * NdotL * SheenSpecularBRDF(SheenColor, SheenRoughness, NdotL, NdotV, NdotH);
 }
@@ -182,9 +182,9 @@ IBLSamplingInfo GetIBLSamplingInfo(in SurfaceReflectanceInfo SrfInfo,
     Info.V = V;
     Info.L = normalize(reflect(-V, N));
     
-    Info.NdotV = saturate(dot(N, V));
+    Info.NdotV = dot_sat(N, V);
     
-    Info.PreIntBRDF = PreintegratedBRDF.Sample(PreintegratedBRDF_sampler, saturate(float2(Info.NdotV, SrfInfo.PerceptualRoughness))).rg;
+    Info.PreIntBRDF = PreintegratedBRDF.Sample(PreintegratedBRDF_sampler, float2(Info.NdotV, SrfInfo.PerceptualRoughness)).rg;
 
 #   if USE_IBL_MULTIPLE_SCATTERING
     {
@@ -211,7 +211,7 @@ float3 GetSpecularIBL_GGX(in SurfaceReflectanceInfo SrfInfo,
                           in SamplerState           PrefilteredEnvMap_sampler,
                           in float                  PrefilteredEnvMapMipLevels)
 {
-    float  lod = saturate(SrfInfo.PerceptualRoughness) * PrefilteredEnvMapMipLevels;
+    float  lod = SrfInfo.PerceptualRoughness * PrefilteredEnvMapMipLevels;
     float3 SpecularLight = SamplePrefilteredEnvMap(PrefilteredEnvMap, PrefilteredEnvMap_sampler, IBLInfo.L, lod);
     
 #if USE_IBL_MULTIPLE_SCATTERING
@@ -262,13 +262,12 @@ float3 GetSpecularIBL_Charlie(in float3       SheenColor,
                               in TextureCube  PrefilteredEnvMap,
                               in SamplerState PrefilteredEnvMap_sampler)
 {
-    float NdotV = clamp(dot(n, v), 0.0, 1.0);
+    float NdotV = dot_sat(n, v);
 
     float  lod        = clamp(SheenRoughness * PrefilteredCubeMipLevels, 0.0, PrefilteredCubeMipLevels);
     float3 reflection = normalize(reflect(-v, n));
 
-    float2 brdfSamplePoint = clamp(float2(NdotV, SheenRoughness), float2(0.0, 0.0), float2(1.0, 1.0));
-    float  brdf = PreintegratedCharlie.Sample(PreintegratedCharlie_sampler, brdfSamplePoint).r;
+    float  brdf = PreintegratedCharlie.Sample(PreintegratedCharlie_sampler, float2(NdotV, SheenRoughness)).r;
 
     float3 SpecularLight = SamplePrefilteredEnvMap(PrefilteredEnvMap, PrefilteredEnvMap_sampler, reflection, lod);
     return SpecularLight * SheenColor * brdf.x;
@@ -543,7 +542,7 @@ void ApplyPunctualLights(in    SurfaceShadingInfo  Shading,
     //#endif
     
     float NdotV = Shading.BaseLayer.NdotV;
-    float NdotL = saturate(dot(Shading.BaseLayer.Normal, -Light.Direction.xyz));
+    float NdotL = dot_sat(Shading.BaseLayer.Normal, -Light.Direction.xyz);
     
     float3 BasePunctual;
     {
@@ -723,7 +722,7 @@ float3 ResolveLighting(in SurfaceShadingInfo  Shading,
     {
         // Clear coat layer is applied on top of everything
     
-        float ClearcoatFresnel = SchlickReflection(saturate(dot(Shading.Clearcoat.Normal, Shading.View)), Shading.Clearcoat.Srf.Reflectance0.x, Shading.Clearcoat.Srf.Reflectance90.x);
+        float ClearcoatFresnel = SchlickReflection(dot_sat(Shading.Clearcoat.Normal, Shading.View), Shading.Clearcoat.Srf.Reflectance0.x, Shading.Clearcoat.Srf.Reflectance90.x);
         Color =
             Color * (1.0 - Shading.Clearcoat.Factor * ClearcoatFresnel) +
             GetClearcoatLighting(Shading, SrfLighting);
