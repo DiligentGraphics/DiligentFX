@@ -564,6 +564,7 @@ float3 GetAnisotropy(VSOutput              VSOut,
 {
 #   if ENABLE_ANISOTROPY
     {
+        // Default anisotropy direction is (1, 0) and default strength is 1.0.
         float3 Anisotropy = float3(1.0, 0.5, 1.0);
 #       if USE_ANISOTROPY_MAP
         {
@@ -571,7 +572,7 @@ float3 GetAnisotropy(VSOutput              VSOut,
                                        g_AnisotropyMap_sampler,
                                        VSOut,
                                        Material.Textures[AnisotropyTextureAttribId],
-                                       float4(1.0, 0.5, 1.0, 1.0)).rgb;
+                                       float4(Anisotropy, 1.0)).rgb;
         }
 #       endif
         Anisotropy.xy = Anisotropy.xy * 2.0 - 1.0;

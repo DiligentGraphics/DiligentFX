@@ -233,16 +233,20 @@ float3 GetLambertianIBL(in SurfaceReflectanceInfo SrfInfo,
 #endif
 
 #if USE_IBL_MULTIPLE_SCATTERING
-     // GGX / specular light contribution
+    // A Multiple-Scattering Microfacet Model for Real-Time Image-based Lighting by Fdez-Aguera.
+    // https://www.jcgt.org/published/0008/01/03/paper.pdf
+    // Also: https://bruop.github.io/ibl/
+        
     float3 FssEss = IBLInfo.k_S * IBLInfo.PreIntBRDF.x + IBLInfo.PreIntBRDF.y;
+    float  Ess    = IBLInfo.PreIntBRDF.x + IBLInfo.PreIntBRDF.y;
+    float  Ems    = 1.0 - Ess;
+    float3 Favg   = SrfInfo.Reflectance0 + (float3(1.0, 1.0, 1.0) - SrfInfo.Reflectance0) / 21.0;
+    float3 Fms    = FssEss * Favg / (float3(1.0, 1.0, 1.0) - Ems * Favg);
+    
+    float3 Edss = float3(1.0, 1.0, 1.0) - (FssEss + Fms * Ems);
+    float3 kD   = SrfInfo.DiffuseColor * Edss;
 
-    // Multiple scattering, from Fdez-Aguera
-    float  Ems    = 1.0 - (IBLInfo.PreIntBRDF.x + IBLInfo.PreIntBRDF.y);
-    float3 F_avg  = SrfInfo.Reflectance0 + (float3(1.0, 1.0, 1.0) - SrfInfo.Reflectance0) / 21.0;
-    float3 FmsEms = Ems * FssEss * F_avg / (float3(1.0, 1.0, 1.0) - F_avg * Ems);
-    float3 k_D    = SrfInfo.DiffuseColor * (float3(1.0, 1.0, 1.0) - FssEss + FmsEms); // we use +FmsEms as indicated by the formula in the blog post (might be a typo in the implementation)
-
-    return (FmsEms + k_D) * Irradiance;
+    return (Fms * Ems + kD) * Irradiance;
 #else
     return Irradiance * SrfInfo.DiffuseColor;
 #endif
@@ -627,6 +631,7 @@ void ApplyIBL(in SurfaceShadingInfo Shading,
 
 #       if ENABLE_ANISOTROPY
         {
+            // https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_anisotropy#image-based-lighting
             float  TangentRoughness   = lerp(Shading.BaseLayer.Srf.PerceptualRoughness, 1.0, Shading.Anisotropy.Strength * Shading.Anisotropy.Strength);
             float3 AnisotropicTangent = cross(Shading.Anisotropy.Bitangent, Shading.View);
             float3 AnisotropicNormal  = cross(AnisotropicTangent, Shading.Anisotropy.Bitangent);

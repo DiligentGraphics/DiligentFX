@@ -210,8 +210,10 @@ AnisotropyShadingInfo ReadAnisotropyProperties(in VSOutput VSOut, BaseLayerShadi
     }
 #   else
     {
-        // Using anisotropy without vertex tangents is incorrect
-        // as screen-space tangents may be discontinuous.
+        // GLTF spec states that SamplerName all meshes with materials that use anisotropy SHOULD supply TANGENT vectors as a mesh attribute.
+        // https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_anisotropy#anisotropy
+        // If tangent attribute is not supplied, tangents should be computed from screen-space derivatives.
+        // However, such tangents may be discontinuous (normals are always continuous), so we don't use them.
     }
 #   endif
     float3 Bitangent = cross(Tangent, BaseLayer.Normal);
