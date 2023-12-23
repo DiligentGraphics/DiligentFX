@@ -246,10 +246,16 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
     PBRMaterialTextureAttribs NormalTexAttribs = g_Primitive.Material.Textures[NormalTextureAttribId];
     NormalMapUVInfo           NMUVInfo         = GetNormalMapUVInfo(VSOut, NormalTexAttribs);
     
-#if USE_CLEAR_COAT_NORMAL_MAP
-    PBRMaterialTextureAttribs ClearCoatNormalTexAttribs = g_Primitive.Material.Textures[ClearCoatNormalTextureAttribId];
-    NormalMapUVInfo           ClearCoatNMUVInfo         = GetNormalMapUVInfo(VSOut, ClearCoatNormalTexAttribs);
-#endif
+    NormalMapUVInfo ClearCoatNMUVInfo;
+#   if USE_CLEAR_COAT_NORMAL_MAP
+    {
+        ClearCoatNMUVInfo = GetNormalMapUVInfo(VSOut, g_Primitive.Material.Textures[ClearCoatNormalTextureAttribId]);
+    }
+#   else
+    {
+        ClearCoatNMUVInfo = NMUVInfo;
+    }
+#   endif
 
     PBRMaterialBasicAttribs BasicAttribs = g_Primitive.Material.Basic;
     if (BasicAttribs.AlphaMode == PBR_ALPHA_MODE_MASK && BaseColor.a < BasicAttribs.AlphaMaskCutoff)
