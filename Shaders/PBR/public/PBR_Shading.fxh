@@ -717,8 +717,8 @@ float3 GetClearcoatLighting(in SurfaceShadingInfo  Shading,
 {
     float Occlusion = lerp(1.0, Shading.Occlusion, Shading.OcclusionStrength);
 
-    return SrfLighting.Clearcoat.Punctual +
-           SrfLighting.Clearcoat.SpecularIBL * Shading.IBLScale * Occlusion;
+    return (SrfLighting.Clearcoat.Punctual +
+            SrfLighting.Clearcoat.SpecularIBL * Shading.IBLScale * Occlusion) * Shading.Clearcoat.Factor;
 }
 #endif
 
