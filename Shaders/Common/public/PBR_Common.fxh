@@ -22,6 +22,33 @@ float3 pow5(float3 x)
     return x2 * x2 * x;
 }
 
+// Returns a random cosine-weighted direction on the hemisphere around z = 1.
+void SampleDirectionCosineHemisphere(in  float2 UV,  // Normal random variables
+                                     out float3 Dir, // Direction
+                                     out float  Prob // Probability of the generated direction
+                                     )
+{
+    Dir.x = cos(2.0 * PI * UV.x) * sqrt(1.0 - UV.y);
+    Dir.y = sin(2.0 * PI * UV.x) * sqrt(1.0 - UV.y);
+    Dir.z = sqrt(UV.y);
+
+    // Avoid zero probability
+    Prob = max(Dir.z, 1e-6) / PI;
+}
+
+// Returns a random cosine-weighted direction on the hemisphere around N.
+void SampleDirectionCosineHemisphere(in  float3 N,   // Normal
+                                     in  float2 UV,  // Normal random variables
+                                     out float3 Dir, // Direction
+                                     out float  Prob // Probability of the generated direction
+                                     )
+{
+    float3 T = normalize(cross(N, abs(N.y) > 0.5 ? float3(1.0, 0.0, 0.0) : float3(0.0, 1.0, 0.0)));
+    float3 B = cross(T, N);
+    SampleDirectionCosineHemisphere(UV, Dir, Prob);
+    Dir = normalize(Dir.x * T + Dir.y * B + Dir.z * N);
+}
+
 // Lambertian diffuse
 // see https://seblagarde.wordpress.com/2012/01/08/pi-or-not-to-pi-in-game-lighting-equation/
 float3 LambertianDiffuse(float3 DiffuseColor)
