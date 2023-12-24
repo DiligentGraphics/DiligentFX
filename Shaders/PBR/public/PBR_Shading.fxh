@@ -292,7 +292,7 @@ float3 GetSpecularIBL_Charlie(in float3       SheenColor,
     float  brdf = PreintegratedCharlie.Sample(PreintegratedCharlie_sampler, float2(NdotV, SheenRoughness)).r;
 
     float3 SpecularLight = SamplePrefilteredEnvMap(PrefilteredEnvMap, PrefilteredEnvMap_sampler, reflection, lod);
-    return SpecularLight * SheenColor * brdf.x;
+    return SpecularLight * SheenColor * brdf;
 }
 
 

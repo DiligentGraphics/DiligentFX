@@ -292,7 +292,7 @@
 "    float  brdf = PreintegratedCharlie.Sample(PreintegratedCharlie_sampler, float2(NdotV, SheenRoughness)).r;\n"
 "\n"
 "    float3 SpecularLight = SamplePrefilteredEnvMap(PrefilteredEnvMap, PrefilteredEnvMap_sampler, reflection, lod);\n"
-"    return SpecularLight * SheenColor * brdf.x;\n"
+"    return SpecularLight * SheenColor * brdf;\n"
 "}\n"
 "\n"
 "\n"

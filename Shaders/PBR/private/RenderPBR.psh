@@ -141,7 +141,7 @@ ClearcoatShadingInfo ReadClearcoatLayerProperties(in VSOutput          VSOut,
     {
         // If clearcoatNormalTexture is not given, no normal mapping is applied to the clear coat layer,
         // even if normal mapping is applied to the base material.
-        if (NMUVInfo.Selector >= 0)
+        if (NMUVInfo.Selector >= 0.0)
         {
             Clearcoat.Normal = PerturbNormal(NormalInfo,
                                              NMUVInfo.dUV_dx,

@@ -141,7 +141,7 @@
 "    {\n"
 "        // If clearcoatNormalTexture is not given, no normal mapping is applied to the clear coat layer,\n"
 "        // even if normal mapping is applied to the base material.\n"
-"        if (NMUVInfo.Selector >= 0)\n"
+"        if (NMUVInfo.Selector >= 0.0)\n"
 "        {\n"
 "            Clearcoat.Normal = PerturbNormal(NormalInfo,\n"
 "                                             NMUVInfo.dUV_dx,\n"
