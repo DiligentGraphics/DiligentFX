@@ -175,7 +175,7 @@ public:
         TEXTURE_FORMAT EmissiveFormat = TEX_FORMAT_RGBA8_UNORM;
 
         /// Clear coat texture format.
-        TEXTURE_FORMAT ClearCoatFormat = TEX_FORMAT_R8_UNORM;
+        TEXTURE_FORMAT ClearCoatFormat = TEX_FORMAT_RGBA8_UNORM;
 
         /// Clear coat roughness texture format.
         TEXTURE_FORMAT ClearCoatRoughnessFormat = TEX_FORMAT_RGBA8_UNORM;
@@ -193,13 +193,13 @@ public:
         TEXTURE_FORMAT AnisotropyFormat = TEX_FORMAT_RGBA8_UNORM;
 
         /// Iridescence texture format.
-        TEXTURE_FORMAT IridescenceFormat = TEX_FORMAT_R8_UNORM;
+        TEXTURE_FORMAT IridescenceFormat = TEX_FORMAT_RGBA8_UNORM;
 
         /// Iridescence thickness texture format.
         TEXTURE_FORMAT IridescenceThicknessFormat = TEX_FORMAT_RGBA8_UNORM;
 
         /// Transmission texture format.
-        TEXTURE_FORMAT TransmissionFormat = TEX_FORMAT_R8_UNORM;
+        TEXTURE_FORMAT TransmissionFormat = TEX_FORMAT_RGBA8_UNORM;
 
         /// Thickness texture format.
         TEXTURE_FORMAT ThicknessFormat = TEX_FORMAT_RGBA8_UNORM;
