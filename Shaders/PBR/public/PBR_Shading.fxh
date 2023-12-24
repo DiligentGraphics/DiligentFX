@@ -204,6 +204,28 @@ IBLSamplingInfo GetIBLSamplingInfo(in SurfaceReflectanceInfo SrfInfo,
     return Info;
 }
 
+IBLSamplingInfo GetClearcoatIBLSamplingInfo(in SurfaceReflectanceInfo SrfInfo,
+                                            in Texture2D              PreintegratedBRDF,
+                                            in SamplerState           PreintegratedBRDF_sampler,
+                                            in float3                 N,
+                                            in float3                 V)
+{
+    IBLSamplingInfo Info;
+
+    Info.N = N;
+    Info.V = V;
+    Info.L = normalize(reflect(-V, N));
+
+    // Do not allow clear coat normal to face away from the view direction as this
+    // produces artifacts (see https://github.com/DiligentGraphics/DiligentFX/issues/27).
+    Info.NdotV = max(dot(N, V), 0.1);
+    
+    Info.PreIntBRDF = PreintegratedBRDF.Sample(PreintegratedBRDF_sampler, float2(Info.NdotV, SrfInfo.PerceptualRoughness)).rg;    
+    Info.k_S        = SrfInfo.Reflectance0;
+
+    return Info;
+}
+
 // Specular component of the image-based light (IBL) using the split-sum approximation.
 float3 GetSpecularIBL_GGX(in SurfaceReflectanceInfo SrfInfo,
                           in IBLSamplingInfo        IBLInfo,
@@ -658,11 +680,8 @@ void ApplyIBL(in SurfaceShadingInfo Shading,
 
 #   if ENABLE_CLEAR_COAT
     {
-        IBLSamplingInfo IBLInfo = GetIBLSamplingInfo(
+        IBLSamplingInfo IBLInfo = GetClearcoatIBLSamplingInfo(
             Shading.Clearcoat.Srf, PreintegratedGGX, PreintegratedGGX_sampler,
-#           if ENABLE_IRIDESCENCE
-                float3(1.0, 1.0, 1.0), 0.0,
-#           endif
             Shading.Clearcoat.Normal, Shading.View);
 
         SrfLighting.Clearcoat.SpecularIBL =
@@ -722,7 +741,13 @@ float3 ResolveLighting(in SurfaceShadingInfo  Shading,
     {
         // Clear coat layer is applied on top of everything
     
-        float ClearcoatFresnel = SchlickReflection(dot_sat(Shading.Clearcoat.Normal, Shading.View), Shading.Clearcoat.Srf.Reflectance0.x, Shading.Clearcoat.Srf.Reflectance90.x);
+        float ccNdotV = dot(Shading.Clearcoat.Normal, Shading.View);
+    
+        // Do not allow clear coat normal to face away from the view direction as this
+        // produces artifacts (see https://github.com/DiligentGraphics/DiligentFX/issues/27).
+        ccNdotV = max(ccNdotV, 0.1);
+    
+        float ClearcoatFresnel = SchlickReflection(ccNdotV, Shading.Clearcoat.Srf.Reflectance0.x, Shading.Clearcoat.Srf.Reflectance90.x);
         Color =
             Color * (1.0 - Shading.Clearcoat.Factor * ClearcoatFresnel) +
             GetClearcoatLighting(Shading, SrfLighting);
