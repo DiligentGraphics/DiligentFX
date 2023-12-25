@@ -381,7 +381,7 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
     // Shader inputs debug visualization
 #if (DEBUG_VIEW == DEBUG_VIEW_BASE_COLOR)
     {
-        OutColor.rgb = Shading.Anisotropy.Tangent * 0.5 + 0.5;
+        OutColor.rgba = BaseColor;
     }
 #elif (DEBUG_VIEW == DEBUG_VIEW_TEXCOORD0 && USE_TEXCOORD0)
     {

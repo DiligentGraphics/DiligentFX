@@ -381,7 +381,7 @@
 "    // Shader inputs debug visualization\n"
 "#if (DEBUG_VIEW == DEBUG_VIEW_BASE_COLOR)\n"
 "    {\n"
-"        OutColor.rgb = Shading.Anisotropy.Tangent * 0.5 + 0.5;\n"
+"        OutColor.rgba = BaseColor;\n"
 "    }\n"
 "#elif (DEBUG_VIEW == DEBUG_VIEW_TEXCOORD0 && USE_TEXCOORD0)\n"
 "    {\n"
