@@ -109,13 +109,10 @@ static RefCntAutoPtr<IBuffer> CreatePrimitiveAttribsCB(IRenderDevice* pDevice)
 static std::shared_ptr<USD_Renderer> CreateUSDRenderer(IRenderDevice*     pDevice,
                                                        IRenderStateCache* pRenderStateCache,
                                                        IDeviceContext*    pContext,
-                                                       IBuffer*           pPrimitiveAttribsCB,
-                                                       bool               UseImmutableSamplers)
+                                                       IBuffer*           pPrimitiveAttribsCB)
 {
     USD_Renderer::CreateInfo USDRendererCI;
 
-    // Use samplers from texture views
-    USDRendererCI.UseImmutableSamplers = UseImmutableSamplers;
     // Disable animation
     USDRendererCI.MaxJointCount = 0;
     // Use separate textures for metallic and roughness
@@ -200,7 +197,7 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
     m_ResourceMgr{CreateResourceManager(CI.pDevice, CI.TextureAtlasDim)},
     m_FrameAttribsCB{CreateFrameAttribsCB(CI.pDevice)},
     m_PrimitiveAttribsCB{CreatePrimitiveAttribsCB(CI.pDevice)},
-    m_USDRenderer{CreateUSDRenderer(CI.pDevice, CI.pRenderStateCache, CI.pContext, m_PrimitiveAttribsCB, /*UseImmutableSamplers = */ CI.TextureAtlasDim != 0)},
+    m_USDRenderer{CreateUSDRenderer(CI.pDevice, CI.pRenderStateCache, CI.pContext, m_PrimitiveAttribsCB)},
     m_MaterialSRBCache{HnMaterial::CreateSRBCache()},
     m_TextureRegistry{CI.pDevice, CI.TextureAtlasDim != 0 ? m_ResourceMgr : nullptr},
     m_RenderParam{std::make_unique<HnRenderParam>(CI.UseVertexPool, CI.UseIndexPool, CI.TextureAtlasDim != 0)}
