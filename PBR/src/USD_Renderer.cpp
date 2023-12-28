@@ -35,11 +35,14 @@
 namespace Diligent
 {
 
-std::string USD_Renderer::GetUsdPbrPSMainSource(USD_Renderer::PSO_FLAGS PSOFlags) const
+USD_Renderer::CreateInfo::PSMainSourceInfo USD_Renderer::GetUsdPbrPSMainSource(USD_Renderer::PSO_FLAGS PSOFlags) const
 {
-    std::stringstream ss;
+    USD_Renderer::CreateInfo::PSMainSourceInfo PSMainInfo;
+
     if (PSOFlags & USD_PSO_FLAG_ENABLE_ALL_OUTPUTS)
     {
+        std::stringstream ss;
+
         ss << "struct PSOutput" << std::endl
            << '{' << std::endl;
         if (PSOFlags & USD_PSO_FLAG_ENABLE_COLOR_OUTPUT)
@@ -49,24 +52,25 @@ std::string USD_Renderer::GetUsdPbrPSMainSource(USD_Renderer::PSO_FLAGS PSOFlags
             ss << "    float4 MeshID     : SV_Target" << m_MeshIdTargetIndex << ';' << std::endl;
 
         ss << "};" << std::endl;
+
+        PSMainInfo.OutputStruct = ss.str();
+    }
+    else
+    {
+        PSMainInfo.OutputStruct = "#define PSOutput void\n";
     }
 
-    ss << R"(
-void main(in VSOutput VSOut,
-          in bool IsFrontFace : SV_IsFrontFace)";
+    std::stringstream ss;
+
     if (PSOFlags & USD_PSO_FLAG_ENABLE_ALL_OUTPUTS)
-    {
-        ss << "," << std::endl
-           << "    out PSOutput PSOut";
-    }
-    ss << R"()
-{
+        ss << "    PSOutput PSOut;";
+
+    ss << R"(
 #if UNSHADED
     float4 Color  = g_Frame.Renderer.UnshadedColor + g_Frame.Renderer.HighlightColor;
     float  MeshId = 0.0;
 #else
-    // Call ComputePbrSurfaceColor even if color output is disabled since it may discard the pixel
-    float4 Color  = ComputePbrSurfaceColor(VSOut, IsFrontFace);
+    float4 Color  = OutColor;
     float  MeshId = g_Primitive.CustomData.x;
 #endif
 )";
@@ -85,9 +89,12 @@ void main(in VSOutput VSOut,
         }
     }
 
-    ss << "}" << std::endl;
+    if (PSOFlags & USD_PSO_FLAG_ENABLE_ALL_OUTPUTS)
+        ss << "    return PSOut;" << std::endl;
 
-    return ss.str();
+    PSMainInfo.Footer = ss.str();
+
+    return PSMainInfo;
 }
 
 struct USD_Renderer::USDRendererCreateInfoWrapper

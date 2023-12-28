@@ -214,10 +214,15 @@ public:
         };
         TEX_COLOR_CONVERSION_MODE TexColorConversionMode = TEX_COLOR_CONVERSION_MODE_SRGB_TO_LINEAR;
 
+        struct PSMainSourceInfo
+        {
+            std::string OutputStruct;
+            std::string Footer;
+        };
         /// An optional user-provided callback function that is used to generate the pixel
         /// shader's main function source code for the specified PSO flags. If null, the renderer
         /// will use the default implementation.
-        std::function<std::string(PSO_FLAGS PsoFlags)> GetPSMainSource = nullptr;
+        std::function<PSMainSourceInfo(PSO_FLAGS PsoFlags)> GetPSMainSource = nullptr;
 
         /// A pointer to the user-provided primitive attribs buffer.
         /// If null, the renderer will allocate the buffer.

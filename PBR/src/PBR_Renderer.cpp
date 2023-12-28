@@ -1014,15 +1014,12 @@ std::string PBR_Renderer::GetPSOutputStruct(PSO_FLAGS PSOFlags)
     return ss.str();
 }
 
-static constexpr char DefaultPSMainSource[] = R"(
-void main(in VSOutput VSOut,
-        in bool IsFrontFace : SV_IsFrontFace,
-        out PSOutput PSOut)
-{
+static constexpr char DefaultPSMainFooter[] = R"(
+    PSOutput PSOut;
 #if UNSHADED
     PSOut.Color = g_Frame.Renderer.UnshadedColor + g_Frame.Renderer.HighlightColor;
 #else
-    PSOut.Color = ComputePbrSurfaceColor(VSOut, IsFrontFace);
+    PSOut.Color = OutColor;
 #endif
  
 #if ENABLE_CUSTOM_DATA_OUTPUT
@@ -1030,7 +1027,8 @@ void main(in VSOutput VSOut,
         PSOut.CustomData = g_Primitive.CustomData;
     }
 #endif
-}
+
+    return PSOut;
 )";
 
 void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineDesc& GraphicsDesc, const PSOKey& Key)
@@ -1049,20 +1047,22 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
     const bool UseVkPointSize = GraphicsDesc.PrimitiveTopology == PRIMITIVE_TOPOLOGY_POINT_LIST && m_Device.GetDeviceInfo().IsVulkanDevice();
     const auto VSOutputStruct = GetVSOutputStruct(PSOFlags, UseVkPointSize);
 
-    std::string PSMainSource;
+    CreateInfo::PSMainSourceInfo PSMainSource;
     if (m_Settings.GetPSMainSource)
     {
         PSMainSource = m_Settings.GetPSMainSource(PSOFlags);
     }
     else
     {
-        PSMainSource = GetPSOutputStruct(PSOFlags) + DefaultPSMainSource;
+        PSMainSource.OutputStruct = GetPSOutputStruct(PSOFlags);
+        PSMainSource.Footer       = DefaultPSMainFooter;
     }
     MemoryShaderSourceFileInfo GeneratedSources[] =
         {
             MemoryShaderSourceFileInfo{"VSInputStruct.generated", VSInputStruct},
             MemoryShaderSourceFileInfo{"VSOutputStruct.generated", VSOutputStruct},
-            MemoryShaderSourceFileInfo{"PSMainGenerated.generated", PSMainSource},
+            MemoryShaderSourceFileInfo{"PSOutputStruct.generated", PSMainSource.OutputStruct},
+            MemoryShaderSourceFileInfo{"PSMainFooter.generated", PSMainSource.Footer},
         };
     MemoryShaderSourceFactoryCreateInfo            MemorySourceFactoryCI{GeneratedSources, _countof(GeneratedSources)};
     RefCntAutoPtr<IShaderSourceInputStreamFactory> pMemorySourceFactory;

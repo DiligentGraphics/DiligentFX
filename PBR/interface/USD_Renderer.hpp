@@ -55,7 +55,7 @@ public:
     };
 
 private:
-    std::string GetUsdPbrPSMainSource(USD_Renderer::PSO_FLAGS PSOFlags) const;
+    USD_Renderer::CreateInfo::PSMainSourceInfo GetUsdPbrPSMainSource(USD_Renderer::PSO_FLAGS PSOFlags) const;
     struct USDRendererCreateInfoWrapper;
 
 private:

@@ -25,6 +25,13 @@
 //     float2 UV1      : UV1;
 // };
 
+#include "PSOutputStruct.generated"
+// struct PSOutput
+// {
+//     float4 Color      : SV_Target0;
+//     float4 CustomData : SV_Target1;
+// };
+
 #ifndef USE_TEXTURE_ATLAS
 #   define USE_TEXTURE_ATLAS 0
 #endif
@@ -43,6 +50,20 @@ cbuffer cbFrameAttribs
 cbuffer cbPrimitiveAttribs
 {
     PBRPrimitiveAttribs g_Primitive;
+}
+
+PBRMaterialTextureAttribs GetDefaultTextureAttribs()
+{
+    PBRMaterialTextureAttribs Attribs;
+    Attribs.UVSelector   = -1.0;
+    Attribs.TextureSlice = 0.0;
+    Attribs.UBias        = 0.0;
+    Attribs.VBias        = 0.0;
+
+    Attribs.UVScaleAndRotation  = float4(1.0, 0.0, 0.0, 1.0);
+    Attribs.AtlasUVScaleAndBias = float4(1.0, 1.0, 0.0, 0.0);
+    
+    return Attribs;
 }
 
 struct NormalMapUVInfo
@@ -290,8 +311,8 @@ SurfaceShadingInfo GetSurfaceShadingInfo(in VSOutput          VSOut,
     return Shading;
 }
 
-float4 ComputePbrSurfaceColor(in VSOutput VSOut,
-                              in bool     IsFrontFace)
+PSOutput main(in VSOutput VSOut,
+              in bool     IsFrontFace : SV_IsFrontFace)
 {
     float4 BaseColor = GetBaseColor(VSOut, g_Primitive.Material);
 
@@ -304,8 +325,18 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
     // We have to compute gradients in uniform flow control to avoid issues with perturbed normal
     PerturbNormalInfo NormalInfo = GetPerturbNormalInfo(VSOut.WorldPos, MeshNormal);
     
-    PBRMaterialTextureAttribs NormalTexAttribs = g_Primitive.Material.Textures[NormalTextureAttribId];
-    NormalMapUVInfo           NMUVInfo         = GetNormalMapUVInfo(VSOut, NormalTexAttribs);
+    PBRMaterialTextureAttribs NormalTexAttribs;
+#   if USE_NORMAL_MAP
+    {
+        NormalTexAttribs = g_Primitive.Material.Textures[NormalTextureAttribId];
+    }
+#   else
+    {
+        NormalTexAttribs = GetDefaultTextureAttribs();
+    
+    }
+#   endif
+    NormalMapUVInfo NMUVInfo = GetNormalMapUVInfo(VSOut, NormalTexAttribs);
     
     NormalMapUVInfo ClearCoatNMUVInfo;
 #   if USE_CLEAR_COAT_NORMAL_MAP
@@ -424,26 +455,14 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
     }
 #endif
 
-    return OutColor;
-}
-
-
-#include "PSMainGenerated.generated"
-// struct PSOutput
-// {
-//     float4 Color      : SV_Target0;
-//     float4 CustomData : SV_Target1;
-// };
-//
-// void main(in VSOutput VSOut,
-//           in bool IsFrontFace : SV_IsFrontFace,
-//           out PSOutput PSOut)
-// {
-//     PSOut.Color = ComputePbrSurfaceColor(VSOut, IsFrontFace);
+#include "PSMainFooter.generated"
+//     PSOut.Color = OutColor;
 // 
 // #if ENABLE_CUSTOM_DATA_OUTPUT
 //     {
 //         PSOut.CustomData = g_Primitive.CustomData;
 //     }
 // #endif
-// }
+//
+//     return PSOut;
+}
