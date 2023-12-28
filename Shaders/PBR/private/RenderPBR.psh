@@ -229,41 +229,15 @@ AnisotropyShadingInfo ReadAnisotropyProperties(in VSOutput VSOut, BaseLayerShadi
 }
 #endif
 
-float4 ComputePbrSurfaceColor(in VSOutput VSOut,
-                              in bool     IsFrontFace)
+SurfaceShadingInfo GetSurfaceShadingInfo(in VSOutput          VSOut,
+                                         in bool              IsFrontFace,
+                                         in float4            BaseColor,
+                                         in PerturbNormalInfo NormalInfo,
+                                         in NormalMapUVInfo   NMUVInfo,
+                                         in NormalMapUVInfo   ClearCoatNMUVInfo)
 {
-    float4 BaseColor = GetBaseColor(VSOut, g_Primitive.Material);
-
-#if USE_VERTEX_NORMALS
-    float3 MeshNormal = VSOut.Normal;
-#else
-    // PerturbNormal can handle zero-length mesh normals.
-    float3 MeshNormal = float3(0.0, 0.0, 0.0);
-#endif
-    // We have to compute gradients in uniform flow control to avoid issues with perturbed normal
-    PerturbNormalInfo NormalInfo = GetPerturbNormalInfo(VSOut.WorldPos, MeshNormal);
-    
-    PBRMaterialTextureAttribs NormalTexAttribs = g_Primitive.Material.Textures[NormalTextureAttribId];
-    NormalMapUVInfo           NMUVInfo         = GetNormalMapUVInfo(VSOut, NormalTexAttribs);
-    
-    NormalMapUVInfo ClearCoatNMUVInfo;
-#   if USE_CLEAR_COAT_NORMAL_MAP
-    {
-        ClearCoatNMUVInfo = GetNormalMapUVInfo(VSOut, g_Primitive.Material.Textures[ClearCoatNormalTextureAttribId]);
-    }
-#   else
-    {
-        ClearCoatNMUVInfo = NMUVInfo;
-    }
-#   endif
-
-    PBRMaterialBasicAttribs BasicAttribs = g_Primitive.Material.Basic;
-    if (BasicAttribs.AlphaMode == PBR_ALPHA_MODE_MASK && BaseColor.a < BasicAttribs.AlphaMaskCutoff)
-    {
-        discard;
-    }
-
     SurfaceShadingInfo Shading;
+    
     Shading.View      = normalize(g_Frame.Camera.f4Position.xyz - VSOut.WorldPos.xyz); // Direction from surface point to camera
     Shading.BaseLayer = ReadBaseLayerProperties(VSOut, BaseColor, NormalInfo, NMUVInfo, Shading.View, IsFrontFace);
     Shading.Occlusion = GetOcclusion(VSOut, g_Primitive.Material);
@@ -312,7 +286,45 @@ float4 ComputePbrSurfaceColor(in VSOutput VSOut,
         Shading.VolumeThickness = GetVolumeThickness(VSOut, g_Primitive.Material);
     }
 #endif
-            
+    
+    return Shading;
+}
+
+float4 ComputePbrSurfaceColor(in VSOutput VSOut,
+                              in bool     IsFrontFace)
+{
+    float4 BaseColor = GetBaseColor(VSOut, g_Primitive.Material);
+
+#if USE_VERTEX_NORMALS
+    float3 MeshNormal = VSOut.Normal;
+#else
+    // PerturbNormal can handle zero-length mesh normals.
+    float3 MeshNormal = float3(0.0, 0.0, 0.0);
+#endif
+    // We have to compute gradients in uniform flow control to avoid issues with perturbed normal
+    PerturbNormalInfo NormalInfo = GetPerturbNormalInfo(VSOut.WorldPos, MeshNormal);
+    
+    PBRMaterialTextureAttribs NormalTexAttribs = g_Primitive.Material.Textures[NormalTextureAttribId];
+    NormalMapUVInfo           NMUVInfo         = GetNormalMapUVInfo(VSOut, NormalTexAttribs);
+    
+    NormalMapUVInfo ClearCoatNMUVInfo;
+#   if USE_CLEAR_COAT_NORMAL_MAP
+    {
+        ClearCoatNMUVInfo = GetNormalMapUVInfo(VSOut, g_Primitive.Material.Textures[ClearCoatNormalTextureAttribId]);
+    }
+#   else
+    {
+        ClearCoatNMUVInfo = NMUVInfo;
+    }
+#   endif
+
+    PBRMaterialBasicAttribs BasicAttribs = g_Primitive.Material.Basic;
+    if (BasicAttribs.AlphaMode == PBR_ALPHA_MODE_MASK && BaseColor.a < BasicAttribs.AlphaMaskCutoff)
+    {
+        discard;
+    }
+
+    SurfaceShadingInfo  Shading     = GetSurfaceShadingInfo(VSOut, IsFrontFace, BaseColor, NormalInfo, NMUVInfo, ClearCoatNMUVInfo);
     SurfaceLightingInfo SrfLighting = GetDefaultSurfaceLightingInfo();
 
     float4 OutColor;
