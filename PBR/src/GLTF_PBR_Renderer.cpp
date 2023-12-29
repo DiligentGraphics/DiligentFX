@@ -104,9 +104,11 @@ GLTF_PBR_Renderer::GLTF_PBR_Renderer(IRenderDevice*     pDevice,
 {
     {
         GraphicsPipelineDesc GraphicsDesc;
-        GraphicsDesc.NumRenderTargets                     = 1;
-        GraphicsDesc.RTVFormats[0]                        = CI.RTVFmt;
-        GraphicsDesc.DSVFormat                            = CI.DSVFmt;
+        GraphicsDesc.NumRenderTargets = CI.NumRenderTargets;
+        for (Uint32 i = 0; i < CI.NumRenderTargets; ++i)
+            GraphicsDesc.RTVFormats[i] = CI.RTVFormats[i];
+        GraphicsDesc.DSVFormat = CI.DSVFormat;
+
         GraphicsDesc.PrimitiveTopology                    = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
         GraphicsDesc.RasterizerDesc.FrontCounterClockwise = CI.FrontCounterClockwise;
 

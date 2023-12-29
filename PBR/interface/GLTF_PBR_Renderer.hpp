@@ -43,11 +43,14 @@ class GLTF_PBR_Renderer : public PBR_Renderer
 public:
     struct CreateInfo : public PBR_Renderer::CreateInfo
     {
-        /// Render target format.
-        TEXTURE_FORMAT RTVFmt = TEX_FORMAT_UNKNOWN;
+        /// The number of render targets.
+        Uint8 NumRenderTargets = 0;
 
-        /// Depth-buffer format.
-        TEXTURE_FORMAT DSVFmt = TEX_FORMAT_UNKNOWN;
+        /// Render target formats.
+        TEXTURE_FORMAT RTVFormats[8] = {};
+
+        /// Depth-stencil format.
+        TEXTURE_FORMAT DSVFormat = TEX_FORMAT_UNKNOWN;
 
         bool FrontCounterClockwise = false;
     };
