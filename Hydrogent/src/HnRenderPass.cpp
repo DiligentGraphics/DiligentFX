@@ -429,7 +429,8 @@ HnRenderPass::SupportedVertexInputsSetType HnRenderPass::GetSupportedVertexInput
 
 PBR_Renderer::PSO_FLAGS HnRenderPass::GetTexturePSOFlags(const HnMaterial& Material)
 {
-    return PBR_Renderer::PSO_FLAG_USE_NORMAL_MAP |
+    return PBR_Renderer::PSO_FLAG_USE_COLOR_MAP |
+        PBR_Renderer::PSO_FLAG_USE_NORMAL_MAP |
         PBR_Renderer::PSO_FLAG_USE_METALLIC_MAP |
         PBR_Renderer::PSO_FLAG_USE_ROUGHNESS_MAP |
         PBR_Renderer::PSO_FLAG_USE_AO_MAP |
@@ -449,7 +450,9 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
         auto& PSOFlags = ListItem.PSOFlags;
         PSOFlags       = static_cast<PBR_Renderer::PSO_FLAGS>(m_Params.UsdPsoFlags);
 
-        const auto& Geo = DrawItem.GetGeometryData();
+        const HnDrawItem::GeometryData& Geo       = DrawItem.GetGeometryData();
+        const HnMaterial*               pMaterial = DrawItem.GetMaterial();
+        VERIFY(pMaterial != nullptr, "Material is null");
 
         if (m_RenderParams.RenderMode == HN_RENDER_MODE_SOLID)
         {
@@ -460,7 +463,6 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
             if (Geo.TexCoords[1] != nullptr)
                 PSOFlags |= PBR_Renderer::PSO_FLAG_USE_TEXCOORD1;
 
-            const HnMaterial*     pMaterial    = DrawItem.GetMaterial();
             const GLTF::Material& MaterialData = pMaterial->GetMaterialData();
             if (pMaterial != nullptr)
             {
@@ -504,7 +506,9 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
             UNEXPECTED("Unexpected render mode");
         }
 
-        ListItem.ShaderAttribsDataAlignedSize = AlignUp(State.USDRenderer.GetPBRPrimitiveAttribsSize(PSOFlags), State.ConstantBufferOffsetAlignment);
+        const Uint32 AttribsDataSize = State.USDRenderer.GetPBRPrimitiveAttribsSize(PSOFlags);
+        VERIFY_EXPR(AttribsDataSize <= State.USDRenderer.GetPBRPrimitiveAttribsSize(GetTexturePSOFlags(*pMaterial)));
+        ListItem.ShaderAttribsDataAlignedSize = AlignUp(AttribsDataSize, State.ConstantBufferOffsetAlignment);
 
         VERIFY_EXPR(ListItem.pPSO != nullptr);
     }
