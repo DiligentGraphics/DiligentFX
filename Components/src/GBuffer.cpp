@@ -141,7 +141,7 @@ void GBuffer::Bind(IDeviceContext* pContext, Uint32 BuffersMask, ITextureView* p
 
     pContext->SetRenderTargets(NumRTs, pRTVs, pDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
-    ClearMask &= BuffersMask;
+    ClearMask &= (1u << GetBufferCount()) - 1;
     while (ClearMask != 0)
     {
         Uint32 i = PlatformMisc::GetLSB(ClearMask);
