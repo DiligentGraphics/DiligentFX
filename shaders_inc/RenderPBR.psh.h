@@ -456,6 +456,7 @@
 "#endif\n"
 "\n"
 "#include \"PSMainFooter.generated\"\n"
+"//     PSOutput PSOut;\n"
 "//     PSOut.Color = OutColor;\n"
 "//\n"
 "// #if ENABLE_CUSTOM_DATA_OUTPUT\n"

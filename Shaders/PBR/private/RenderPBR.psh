@@ -456,6 +456,7 @@ PSOutput main(in VSOutput VSOut,
 #endif
 
 #include "PSMainFooter.generated"
+//     PSOutput PSOut;
 //     PSOut.Color = OutColor;
 // 
 // #if ENABLE_CUSTOM_DATA_OUTPUT

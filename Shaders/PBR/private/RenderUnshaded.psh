@@ -14,9 +14,17 @@ cbuffer cbPrimitiveAttribs
     PBRPrimitiveAttribs g_Primitive;
 }
 
-#include "PSMainGenerated.generated"
-//void main(in  VSOutput VSOut,
-//          out float4   OutColor : SV_Target)
-//{
-//    OutColor = g_Frame.Renderer.WireframeColor;
-//}
+#include "PSOutputStruct.generated"
+// struct PSOutput
+// {
+//     float4 Color : SV_Target0;
+// };
+
+PSOutput main(in VSOutput VSOut,
+              in bool     IsFrontFace : SV_IsFrontFace)
+{
+#include "PSMainFooter.generated"
+    //PSOutput PSOut;
+    //PSOut.Color = g_Frame.Renderer.UnshadedColor + g_Frame.Renderer.HighlightColor;
+    //return PSOut;
+}
