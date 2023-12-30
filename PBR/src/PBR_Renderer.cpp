@@ -735,7 +735,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS     PSOFlags,
     Macros.Add("USE_HDR_IBL_CUBEMAPS", true);
     Macros.Add("USE_SEPARATE_METALLIC_ROUGHNESS_TEXTURES", m_Settings.UseSeparateMetallicRoughnessTextures);
 
-    static_assert(static_cast<int>(DebugViewType::NumDebugViews) == 32, "Did you add debug view? You may need to handle it here.");
+    static_assert(static_cast<int>(DebugViewType::NumDebugViews) == 33, "Did you add debug view? You may need to handle it here.");
     // clang-format off
     Macros.Add("DEBUG_VIEW",                       static_cast<int>(DebugView));
     Macros.Add("DEBUG_VIEW_NONE",                  static_cast<int>(DebugViewType::None));
@@ -752,6 +752,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS     PSOFlags,
     Macros.Add("DEBUG_VIEW_REFLECTANCE90",         static_cast<int>(DebugViewType::Reflectance90));
     Macros.Add("DEBUG_VIEW_MESH_NORMAL",           static_cast<int>(DebugViewType::MeshNormal));
     Macros.Add("DEBUG_VIEW_SHADING_NORMAL",        static_cast<int>(DebugViewType::ShadingNormal));
+    Macros.Add("DEBUG_VIEW_MOTION_VECTORS",        static_cast<int>(DebugViewType::MotionVectors));
     Macros.Add("DEBUG_VIEW_NDOTV",                 static_cast<int>(DebugViewType::NdotV));
     Macros.Add("DEBUG_VIEW_PUNCTUAL_LIGHTING",     static_cast<int>(DebugViewType::PunctualLighting));
     Macros.Add("DEBUG_VIEW_DIFFUSE_IBL",           static_cast<int>(DebugViewType::DiffuseIBL));
@@ -772,7 +773,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS     PSOFlags,
     Macros.Add("DEBUG_VIEW_THICKNESS",             static_cast<int>(DebugViewType::Thickness));
     // clang-format on
 
-    static_assert(PSO_FLAG_LAST == PSO_FLAG_BIT(35), "Did you add new PSO Flag? You may need to handle it here.");
+    static_assert(PSO_FLAG_LAST == PSO_FLAG_BIT(36), "Did you add new PSO Flag? You may need to handle it here.");
 #define ADD_PSO_FLAG_MACRO(Flag) Macros.Add(#Flag, (PSOFlags & PSO_FLAG_##Flag) != PSO_FLAG_NONE)
     ADD_PSO_FLAG_MACRO(USE_COLOR_MAP);
     ADD_PSO_FLAG_MACRO(USE_NORMAL_MAP);
@@ -814,6 +815,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS     PSOFlags,
     ADD_PSO_FLAG_MACRO(ENABLE_CUSTOM_DATA_OUTPUT);
     ADD_PSO_FLAG_MACRO(ENABLE_TONE_MAPPING);
     ADD_PSO_FLAG_MACRO(UNSHADED);
+    ADD_PSO_FLAG_MACRO(COMPUTE_MOTION_VECTORS);
 #undef ADD_PSO_FLAG_MACRO
 
     Macros.Add("TEX_COLOR_CONVERSION_MODE_NONE", CreateInfo::TEX_COLOR_CONVERSION_MODE_NONE);
@@ -953,12 +955,14 @@ std::string PBR_Renderer::GetVSOutputStruct(PSO_FLAGS PSOFlags, bool UseVkPointS
 {
     // struct VSOutput
     // {
-    //     float4 ClipPos  : SV_Position;
-    //     float3 WorldPos : WORLD_POS;
-    //     float4 Color    : COLOR;
-    //     float3 Normal   : NORMAL;
-    //     float2 UV0      : UV0;
-    //     float2 UV1      : UV1;
+    //     float4 ClipPos     : SV_Position;
+    //     float3 WorldPos    : WORLD_POS;
+    //     float4 Color       : COLOR;
+    //     float3 Normal      : NORMAL;
+    //     float2 UV0         : UV0;
+    //     float2 UV1         : UV1;
+    //     float3 Tangent     : TANGENT;
+    //     float4 PrevClipPos : PREV_CLIP_POS;
     // };
 
     std::stringstream ss;
@@ -985,6 +989,10 @@ std::string PBR_Renderer::GetVSOutputStruct(PSO_FLAGS PSOFlags, bool UseVkPointS
     if (PSOFlags & PSO_FLAG_USE_VERTEX_TANGENTS)
     {
         ss << "    float3 Tangent  : TANGENT;" << std::endl;
+    }
+    if (PSOFlags & PSO_FLAG_COMPUTE_MOTION_VECTORS)
+    {
+        ss << "    float4 PrevClipPos : PREV_CLIP_POS;" << std::endl;
     }
     if (UseVkPointSize)
     {
@@ -1278,6 +1286,7 @@ Uint32 PBR_Renderer::GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags) const
     //struct PBRPrimitiveAttribs
     //{
     //    GLTFNodeShaderTransforms Transforms;
+    //    float4x4                 PrevNodeMatrix; // #if ENABLE_MOTION_VECTORS
     //    struct PBRMaterialShaderInfo
     //    {
     //        PBRMaterialBasicAttribs        Basic;
@@ -1302,6 +1311,7 @@ Uint32 PBR_Renderer::GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags) const
                          });
 
     return (sizeof(HLSL::GLTFNodeShaderTransforms) +
+            ((Flags & PSO_FLAG_COMPUTE_MOTION_VECTORS) ? sizeof(float4x4) : 0) +
             sizeof(HLSL::PBRMaterialBasicAttribs) +
             ((Flags & PSO_FLAG_ENABLE_SHEEN) ? sizeof(HLSL::PBRMaterialSheenAttribs) : 0) +
             ((Flags & PSO_FLAG_ENABLE_ANISOTROPY) ? sizeof(HLSL::PBRMaterialAnisotropyAttribs) : 0) +

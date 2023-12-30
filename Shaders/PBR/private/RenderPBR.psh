@@ -360,7 +360,7 @@ PSOutput main(in VSOutput VSOut,
 
     float4 OutColor;
     if (BasicAttribs.Workflow != PBR_WORKFLOW_UNLIT)
-    {  
+    {
         ApplyPunctualLights(
             Shading,
             g_Frame.Light,
@@ -421,6 +421,20 @@ PSOutput main(in VSOutput VSOut,
     // Add highlight color
     OutColor.rgb = lerp(OutColor.rgb, g_Frame.Renderer.HighlightColor.rgb, g_Frame.Renderer.HighlightColor.a);
     
+    float2 MotionVector = float2(0.0, 0.0);
+#   if COMPUTE_MOTION_VECTORS
+    {
+        float2 ClipPos = float2(VSOut.ClipPos.xy) * g_Frame.Camera.f4ViewportSize.zw * float2(2.0, 2.0) - float2(1.0, 1.0);
+#       if !defined(DESKTOP_GL) && !defined(GL_ES)
+        {
+            ClipPos.y = -ClipPos.y;
+        }
+#       endif
+        float2 PrevClipPos = VSOut.PrevClipPos.xy / VSOut.PrevClipPos.w;
+        MotionVector = ClipPos - PrevClipPos;
+    }
+#   endif
+    
     // Shader inputs debug visualization
 #if (DEBUG_VIEW == DEBUG_VIEW_BASE_COLOR)
     {
@@ -441,6 +455,10 @@ PSOutput main(in VSOutput VSOut,
 #elif (DEBUG_VIEW == DEBUG_VIEW_MESH_NORMAL)
     {
         OutColor.rgb  = MeshNormal * float3(0.5, 0.5, 0.5) + float3(0.5, 0.5, 0.5);
+    }
+#elif (DEBUG_VIEW == DEBUG_VIEW_MOTION_VECTORS)
+    {
+        OutColor.rgb  = float3(sqrt(abs(MotionVector)) * 5.0, 0.0);
     }
 #elif (DEBUG_VIEW != DEBUG_VIEW_NONE)
     {

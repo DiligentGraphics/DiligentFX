@@ -123,6 +123,9 @@ public:
     /// \param [in] pCtx           - Device context to record rendering commands to.
     /// \param [in] GLTFModel      - GLTF model to render.
     /// \param [in] Transforms     - The model transforms.
+    /// \param [in] PrevTransforms - The model transforms from the previous frame.
+    ///                              This parameter should not be null if motion vectors
+    ///                              are enabled.
     /// \param [in] RenderParams   - Render parameters.
     /// \param [in] pModelBindings - The model's shader resource binding information.
     /// \param [in] pCacheBindings - Shader resource cache binding information, if the
@@ -130,6 +133,7 @@ public:
     void Render(IDeviceContext*              pCtx,
                 const GLTF::Model&           GLTFModel,
                 const GLTF::ModelTransforms& Transforms,
+                const GLTF::ModelTransforms* PrevTransforms,
                 const RenderInfo&            RenderParams,
                 ModelResourceBindings*       pModelBindings,
                 ResourceCacheBindings*       pCacheBindings = nullptr);
@@ -242,6 +246,7 @@ public:
     {
         PSO_FLAGS       PSOFlags       = PSO_FLAG_NONE;
         const float4x4* NodeMatrix     = nullptr;
+        const float4x4* PrevNodeMatrix = nullptr;
         const Uint32    JointCount     = 0;
         const void*     CustomData     = nullptr;
         size_t          CustomDataSize = 0;

@@ -436,6 +436,7 @@ GLTF_PBR_Renderer::PSO_FLAGS GLTF_PBR_Renderer::GetMaterialPSOFlags(const GLTF::
 void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
                                const GLTF::Model&           GLTFModel,
                                const GLTF::ModelTransforms& Transforms,
+                               const GLTF::ModelTransforms* PrevTransforms,
                                const RenderInfo&            RenderParams,
                                ModelResourceBindings*       pModelBindings,
                                ResourceCacheBindings*       pCacheBindings)
@@ -538,10 +539,11 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
         const auto& RenderList = m_RenderLists[AlphaMode];
         for (const auto& PrimRI : RenderList)
         {
-            const auto& Node             = PrimRI.Node;
-            const auto& primitive        = PrimRI.Primitive;
-            const auto& material         = GLTFModel.Materials[primitive.MaterialId];
-            const auto& NodeGlobalMatrix = Transforms.NodeGlobalMatrices[Node.Index];
+            const auto& Node                 = PrimRI.Node;
+            const auto& primitive            = PrimRI.Primitive;
+            const auto& material             = GLTFModel.Materials[primitive.MaterialId];
+            const auto& NodeGlobalMatrix     = Transforms.NodeGlobalMatrices[Node.Index];
+            const auto& PrevNodeGlobalMatrix = PrevTransforms != nullptr ? PrevTransforms->NodeGlobalMatrices[Node.Index] : NodeGlobalMatrix;
 
             auto PSOFlags = VertexAttribFlags | GetMaterialPSOFlags(material);
 
@@ -549,7 +551,8 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
             PSOFlags |= PSO_FLAG_USE_TEXTURE_ATLAS |
                 PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM |
                 PSO_FLAG_CONVERT_OUTPUT_TO_SRGB |
-                PSO_FLAG_ENABLE_TONE_MAPPING;
+                PSO_FLAG_ENABLE_TONE_MAPPING |
+                PSO_FLAG_COMPUTE_MOTION_VECTORS;
 
             PSOFlags &= RenderParams.Flags;
 
@@ -626,10 +629,15 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
                     static_assert(static_cast<PBR_WORKFLOW>(GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS) == PBR_WORKFLOW_SPEC_GLOSS, "GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS != PBR_WORKFLOW_SPEC_GLOSS");
                     static_assert(static_cast<PBR_WORKFLOW>(GLTF::Material::PBR_WORKFLOW_UNLIT) == PBR_WORKFLOW_UNLIT, "GLTF::Material::PBR_WORKFLOW_UNLIT != PBR_WORKFLOW_UNLIT");
 
-                    const float4x4                NodeTransform = NodeGlobalMatrix * RenderParams.ModelTransform;
+                    const float4x4  NodeTransform     = NodeGlobalMatrix * RenderParams.ModelTransform;
+                    const float4x4& PrevNodeTransform = (CurrPsoKey.GetFlags() & PSO_FLAG_COMPUTE_MOTION_VECTORS) != 0 ?
+                        PrevNodeGlobalMatrix * RenderParams.ModelTransform :
+                        NodeTransform;
+
                     PBRPrimitiveShaderAttribsData AttribsData{
                         CurrPsoKey.GetFlags(),
                         &NodeTransform,
+                        &PrevNodeTransform,
                         static_cast<Uint32>(JointCount),
                     };
                     auto* pEndPtr = WritePBRPrimitiveShaderAttribs(pAttribsData, AttribsData, m_Settings.TextureAttribIndices, material);
@@ -685,9 +693,12 @@ void* GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                   
                                                         const std::array<int, TEXTURE_ATTRIB_ID_COUNT>& TextureAttribIndices,
                                                         const GLTF::Material&                           Material)
 {
+    // When adding new members, don't forget to update PBR_Renderer::GetPBRPrimitiveAttribsSize!
+
     //struct PBRPrimitiveAttribs
     //{
     //    GLTFNodeShaderTransforms Transforms;
+    //    float4x4                 PrevNodeMatrix; // #if ENABLE_MOTION_VECTORS
     //    struct PBRMaterialShaderInfo
     //    {
     //        PBRMaterialBasicAttribs        Basic;
@@ -705,12 +716,31 @@ void* GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                   
 
     {
         HLSL::GLTFNodeShaderTransforms* pDstTransforms = reinterpret_cast<HLSL::GLTFNodeShaderTransforms*>(pDstPtr);
-        VERIFY(AttribsData.NodeMatrix != nullptr, "Node matrix must not be null");
-        memcpy(&pDstTransforms->NodeMatrix, AttribsData.NodeMatrix, sizeof(float4x4));
+        if (AttribsData.NodeMatrix != nullptr)
+        {
+            memcpy(&pDstTransforms->NodeMatrix, AttribsData.NodeMatrix, sizeof(float4x4));
+        }
+        else
+        {
+            UNEXPECTED("Node matrix must not be null");
+        }
         pDstTransforms->JointCount = static_cast<int>(AttribsData.JointCount);
 
         static_assert(sizeof(HLSL::GLTFNodeShaderTransforms) % 16 == 0, "Size of HLSL::GLTFNodeShaderTransforms must be a multiple of 16");
         pDstPtr += sizeof(HLSL::GLTFNodeShaderTransforms);
+    }
+
+    if (AttribsData.PSOFlags & PSO_FLAG_COMPUTE_MOTION_VECTORS)
+    {
+        if (AttribsData.PrevNodeMatrix != nullptr)
+        {
+            memcpy(pDstPtr, AttribsData.PrevNodeMatrix, sizeof(float4x4));
+        }
+        else
+        {
+            UNEXPECTED("Prev node matrix must not be null when motion vectors are enabled");
+        }
+        pDstPtr += sizeof(float4x4);
     }
 
     pDstPtr = WriteShaderAttribs<HLSL::PBRMaterialBasicAttribs>(pDstPtr, &Material.Attribs, "Basic Attribs");

@@ -19,13 +19,14 @@
 #include "VSOutputStruct.generated"
 // struct VSOutput
 // {
-//     float4 ClipPos  : SV_Position;
-//     float3 WorldPos : WORLD_POS;
-//     float4 Color    : COLOR;
-//     float3 Normal   : NORMAL;
-//     float2 UV0      : UV0;
-//     float2 UV1      : UV1;
-//     float3 Tangent  : TANGENT;
+//     float4 ClipPos     : SV_Position;
+//     float3 WorldPos    : WORLD_POS;
+//     float4 Color       : COLOR;
+//     float3 Normal      : NORMAL;
+//     float2 UV0         : UV0;
+//     float2 UV1         : UV1;
+//     float3 Tangent     : TANGENT;
+//     float4 PrevClipPos : PREV_CLIP_POS;
 // };
 
 #ifndef MAX_JOINT_COUNT
@@ -57,6 +58,10 @@ void main(in  VSInput  VSIn,
     // to eliminate the copy of g_Transforms structure.
     float4x4 Transform = g_Primitive.Transforms.NodeMatrix;
 
+#if COMPUTE_MOTION_VECTORS
+    float4x4 PrevTransform = g_Primitive.PrevNodeMatrix;
+#endif
+    
 #if MAX_JOINT_COUNT > 0 && USE_JOINTS
     if (g_Primitive.Transforms.JointCount > 0)
     {
@@ -67,6 +72,9 @@ void main(in  VSInput  VSIn,
             VSIn.Weight0.z * g_Joints[int(VSIn.Joint0.z)] +
             VSIn.Weight0.w * g_Joints[int(VSIn.Joint0.w)];
         Transform = mul(Transform, SkinMat);
+#   if COMPUTE_MOTION_VECTORS
+        PrevTransform = mul(PrevTransform, SkinMat);
+#   endif
     }
 #endif
 
@@ -76,9 +84,14 @@ void main(in  VSInput  VSIn,
     float3 Normal = float3(0.0, 0.0, 1.0);
 #endif
 
-    GLTF_TransformedVertex TransformedVert = GLTF_TransformVertex(VSIn.Pos, Normal, Transform);
+    GLTF_TransformedVertex TransformedVert = GLTF_TransformVertex(VSIn.Pos, Normal, Transform);    
+    VSOut.ClipPos = mul(float4(TransformedVert.WorldPos, 1.0), g_Frame.Camera.mViewProj);
 
-    VSOut.ClipPos  = mul(float4(TransformedVert.WorldPos, 1.0), g_Frame.Camera.mViewProj);
+#if COMPUTE_MOTION_VECTORS
+    GLTF_TransformedVertex PrevTransformedVert = GLTF_TransformVertex(VSIn.Pos, Normal, PrevTransform);
+    VSOut.PrevClipPos  = mul(float4(PrevTransformedVert.WorldPos, 1.0), g_Frame.PrevCamera.mViewProj);
+#endif  
+    
     VSOut.WorldPos = TransformedVert.WorldPos;
 
 #if USE_VERTEX_COLORS

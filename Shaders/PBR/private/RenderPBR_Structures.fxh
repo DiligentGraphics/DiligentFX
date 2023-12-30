@@ -4,10 +4,14 @@
 // #include "BasicStructures.fxh"
 // #include "PBR_Structures.fxh"
 
+#ifndef COMPUTE_MOTION_VECTORS
+#   define COMPUTE_MOTION_VECTORS 0
+#endif
 
 struct PBRFrameAttribs
 {
     CameraAttribs               Camera;
+    CameraAttribs               PrevCamera; // Previous frame camera used to compute motion vectors
     PBRRendererShaderParameters Renderer;
     PBRLightAttribs             Light;
 };
@@ -19,6 +23,9 @@ struct PBRFrameAttribs
 struct PBRPrimitiveAttribs
 {
     GLTFNodeShaderTransforms Transforms;
+#if COMPUTE_MOTION_VECTORS
+    float4x4                 PrevNodeMatrix;
+#endif
     PBRMaterialShaderInfo    Material;
 
     float4 CustomData;

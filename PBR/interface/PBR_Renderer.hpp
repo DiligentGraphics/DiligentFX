@@ -269,6 +269,7 @@ public:
         Reflectance90,
         MeshNormal,
         ShadingNormal,
+        MotionVectors,
         NdotV,
         PunctualLighting,
         DiffuseIBL,
@@ -357,16 +358,16 @@ public:
         PSO_FLAG_ENABLE_TRANSMISSION = PSO_FLAG_BIT(27),
         PSO_FLAG_ENABLE_VOLUME       = PSO_FLAG_BIT(28),
 
-        PSO_FLAG_USE_IBL = PSO_FLAG_BIT(29),
-
+        PSO_FLAG_USE_IBL                   = PSO_FLAG_BIT(29),
         PSO_FLAG_USE_TEXTURE_ATLAS         = PSO_FLAG_BIT(30),
         PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM = PSO_FLAG_BIT(31),
         PSO_FLAG_CONVERT_OUTPUT_TO_SRGB    = PSO_FLAG_BIT(32),
         PSO_FLAG_ENABLE_CUSTOM_DATA_OUTPUT = PSO_FLAG_BIT(33),
         PSO_FLAG_ENABLE_TONE_MAPPING       = PSO_FLAG_BIT(34),
         PSO_FLAG_UNSHADED                  = PSO_FLAG_BIT(35),
+        PSO_FLAG_COMPUTE_MOTION_VECTORS    = PSO_FLAG_BIT(36),
 
-        PSO_FLAG_LAST = PSO_FLAG_UNSHADED,
+        PSO_FLAG_LAST = PSO_FLAG_COMPUTE_MOTION_VECTORS,
 
         PSO_FLAG_FIRST_USER_DEFINED = PSO_FLAG_LAST << 1ull,
 
