@@ -33,7 +33,26 @@
 #   define PBR_ALPHA_MODE_BLEND 2
 #endif
 
-
+#ifndef ENABLE_SHEEN
+#   define ENABLE_SHEEN 0
+#endif
+    
+#ifndef ENABLE_ANISOTROPY
+#   define ENABLE_ANISOTROPY 0
+#endif
+    
+#ifndef ENABLE_IRIDESCENCE
+#   define ENABLE_IRIDESCENCE 0
+#endif
+    
+#ifndef ENABLE_TRANSMISSION
+#   define ENABLE_TRANSMISSION 0
+#endif
+    
+#ifndef ENABLE_VOLUME
+#   define ENABLE_VOLUME 0
+#endif
+    
 #ifndef PBR_NUM_TEXTURE_ATTRIBUTES
 #   define PBR_NUM_TEXTURE_ATTRIBUTES 5
 #endif
