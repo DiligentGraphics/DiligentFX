@@ -49,7 +49,7 @@ public:
 
         /// Clear value.
         /// This value is used to clear the textures by the GBuffer::Clear() method.
-        OptimizedClearValue ClearValue;
+        OptimizedClearValue ClearValue = {};
     };
 
     /// Initializes the G-buffer object.
