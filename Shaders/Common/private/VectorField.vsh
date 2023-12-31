@@ -31,22 +31,12 @@ void main(in  uint   VertexId : SV_VertexID,
     
     float2 MotionVec = g_tex2DVectorField.SampleLevel(g_tex2DVectorField_sampler, UV, 0.0).xy;
     MotionVec = (MotionVec + g_Attribs.ScaleAndBias.zw) * g_Attribs.ScaleAndBias.xy;
-#   if !defined(DESKTOP_GL) && !defined(GL_ES)
-    {
-        MotionVec.y = -MotionVec.y;
-    }
-#   endif
     
-    float2 PosXY = UV * float2(2.0, 2.0) - float2(1.0, 1.0);    
+    float2 PosXY = TexUVToNormalizedDeviceXY(UV);    
     if ((VertexId & 0x01u) != 0u)
     {
         PosXY += MotionVec;
     }
-#   if !defined(DESKTOP_GL) && !defined(GL_ES)
-    {
-        PosXY.y = -PosXY.y;
-    }
-#   endif
     
     Pos   = float4(PosXY, 0.0, 1.0);
     Color = g_Attribs.Colors[VertexId & 0x01u].rgb;

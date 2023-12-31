@@ -424,12 +424,7 @@ PSOutput main(in VSOutput VSOut,
     float2 MotionVector = float2(0.0, 0.0);
 #   if COMPUTE_MOTION_VECTORS
     {
-        float2 ClipPos = float2(VSOut.ClipPos.xy) * g_Frame.Camera.f4ViewportSize.zw * float2(2.0, 2.0) - float2(1.0, 1.0);
-#       if !defined(DESKTOP_GL) && !defined(GL_ES)
-        {
-            ClipPos.y = -ClipPos.y;
-        }
-#       endif
+        float2 ClipPos     = TexUVToNormalizedDeviceXY(VSOut.ClipPos.xy * g_Frame.Camera.f4ViewportSize.zw);
         float2 PrevClipPos = VSOut.PrevClipPos.xy / VSOut.PrevClipPos.w;
         MotionVector = ClipPos - PrevClipPos;
     }
