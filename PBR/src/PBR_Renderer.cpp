@@ -86,7 +86,8 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
             return CI;
         }(CI)},
     m_Device{pDevice, pStateCache},
-    m_PBRPrimitiveAttribsCB{CI.pPrimitiveAttribsCB}
+    m_PBRPrimitiveAttribsCB{CI.pPrimitiveAttribsCB},
+    m_JointsBuffer{CI.pJointsBuffer}
 {
     DEV_CHECK_ERR(m_Settings.InputLayout.NumElements != 0, "Input layout must not be empty");
 
@@ -229,7 +230,14 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
         if (m_Settings.MaxJointCount > 0)
         {
             const size_t JointsBufferSize = sizeof(float4x4) * m_Settings.MaxJointCount * 2; // Current and previous transforms
-            CreateUniformBuffer(pDevice, static_cast<Uint32>(JointsBufferSize), "PBR joint transforms", &m_JointsBuffer);
+            if (!m_JointsBuffer)
+            {
+                CreateUniformBuffer(pDevice, static_cast<Uint32>(JointsBufferSize), "PBR joint transforms", &m_JointsBuffer);
+            }
+            else
+            {
+                DEV_CHECK_ERR(m_JointsBuffer->GetDesc().Size >= JointsBufferSize, "PBR joint transforms buffer is too small to hold ", m_Settings.MaxJointCount, " joints.");
+            }
         }
         std::vector<StateTransitionDesc> Barriers;
         Barriers.emplace_back(m_PBRPrimitiveAttribsCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE);

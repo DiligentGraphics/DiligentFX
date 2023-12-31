@@ -228,6 +228,10 @@ public:
         /// If null, the renderer will allocate the buffer.
         IBuffer* pPrimitiveAttribsCB = nullptr;
 
+        /// A pointer to the user-provided joints buffer.
+        /// If null, the renderer will allocate the buffer.
+        IBuffer* pJointsBuffer = nullptr;
+
         /// Texture attribute index info
         std::array<int, TEXTURE_ATTRIB_ID_COUNT> TextureAttribIndices{};
 
@@ -308,6 +312,7 @@ public:
     ITextureView* GetBlackTexSRV() const           { return m_pBlackTexSRV; }
     ITextureView* GetDefaultNormalMapSRV() const   { return m_pDefaultNormalMapSRV; }
     IBuffer*      GetPBRPrimitiveAttribsCB() const {return m_PBRPrimitiveAttribsCB;}
+    IBuffer*      GetJointsBuffer() const          {return m_JointsBuffer;}
     // clang-format on
 
     /// Precompute cubemaps used by IBL.
