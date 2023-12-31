@@ -24,7 +24,7 @@
  *  of the possibility of such damages.
  */
 
-#include "EnvMapRenderer.hpp"
+#include "VectorFieldRenderer.hpp"
 
 #include "../../Utilities/include/DiligentFXShaderSourceStreamFactory.hpp"
 #include "ShaderMacroHelper.hpp"
@@ -43,46 +43,47 @@ namespace HLSL
 namespace
 {
 
-struct EnvMapRenderAttribs
+struct VectorFieldRenderAttribs
 {
-    ToneMappingAttribs ToneMapping;
+    float4 ScaleAndBias;
 
-    float AverageLogLum;
-    float MipLevel;
-    float Unusued1;
-    float Unusued2;
+    float2 f2GridSize;
+    uint2  u2GridSize;
+
+    float4 StartColor;
+    float4 EndColor;
 };
 
 } // namespace
 
 } // namespace HLSL
 
-EnvMapRenderer::EnvMapRenderer(const CreateInfo& CI) :
+VectorFieldRenderer::VectorFieldRenderer(const CreateInfo& CI) :
     m_pDevice{CI.pDevice},
     m_pStateCache{CI.pStateCache},
-    m_pCameraAttribsCB{CI.pCameraAttribsCB},
     m_RTVFormats{CI.RTVFormats, CI.RTVFormats + CI.NumRenderTargets},
     m_DSVFormat{CI.DSVFormat},
     m_PSMainSource{CI.PSMainSource != nullptr ? CI.PSMainSource : ""}
 {
     DEV_CHECK_ERR(m_pDevice != nullptr, "Device must not be null");
-    DEV_CHECK_ERR(m_pCameraAttribsCB != nullptr, "Camera Attribs CB must not be null");
 
-    CreateUniformBuffer(m_pDevice, sizeof(HLSL::EnvMapRenderAttribs), "EnvMap Render Attribs CB", &m_RenderAttribsCB);
+    CreateUniformBuffer(m_pDevice, sizeof(HLSL::VectorFieldRenderAttribs), "Vector Field Render Attribs CB", &m_RenderAttribsCB);
     VERIFY_EXPR(m_RenderAttribsCB != nullptr);
 }
 
 static constexpr char DefaultPSMain[] = R"(
-void main(in  float4 Pos     : SV_Position,
-          in  float4 ClipPos : CLIP_POS,
-          out float4 Color   : SV_Target)
+void main(in  float4 Pos      : SV_Position,
+          in  float3 Color    : COLOR,
+          out float4 OutColor : SV_Target)
 {
-    Color.rgb = SampleEnvMap(ClipPos);
-    Color.a = 1.0;
+    OutColor = float4(Color, 1.0);
+#if CONVERT_OUTPUT_TO_SRGB
+    OutColor.rgb = pow(OutColor.rgb, float3(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2));
+#endif
 }
 )";
 
-IPipelineState* EnvMapRenderer::GetPSO(const PSOKey& Key)
+IPipelineState* VectorFieldRenderer::GetPSO(const PSOKey& Key)
 {
     auto it = m_PSOs.find(Key);
     if (it != m_PSOs.end())
@@ -112,21 +113,19 @@ IPipelineState* EnvMapRenderer::GetPSO(const PSOKey& Key)
     ShaderCI.pShaderSourceStreamFactory = pCompoundSourceFactory;
 
     ShaderMacroHelper Macros;
-    Macros
-        .Add("CONVERT_OUTPUT_TO_SRGB", Key.ConvertOutputToSRGB)
-        .Add("TONE_MAPPING_MODE", Key.ToneMappingMode);
+    Macros.Add("CONVERT_OUTPUT_TO_SRGB", Key.ConvertOutputToSRGB);
     ShaderCI.Macros = Macros;
 
     RefCntAutoPtr<IShader> pVS;
     {
-        ShaderCI.Desc       = {"Environment Map VS", SHADER_TYPE_VERTEX, true};
+        ShaderCI.Desc       = {"Vector Field VS", SHADER_TYPE_VERTEX, true};
         ShaderCI.EntryPoint = "main";
-        ShaderCI.FilePath   = "EnvMap.vsh";
+        ShaderCI.FilePath   = "VectorField.vsh";
 
         pVS = Device.CreateShader(ShaderCI);
         if (!pVS)
         {
-            UNEXPECTED("Failed to create environment map vertex shader");
+            UNEXPECTED("Failed to create vector field vertex shader");
             return nullptr;
         }
     }
@@ -134,56 +133,55 @@ IPipelineState* EnvMapRenderer::GetPSO(const PSOKey& Key)
     // Create pixel shader
     RefCntAutoPtr<IShader> pPS;
     {
-        ShaderCI.Desc       = {"Environment Map PS", SHADER_TYPE_PIXEL, true};
+        ShaderCI.Desc       = {"Vector Field PS", SHADER_TYPE_PIXEL, true};
         ShaderCI.EntryPoint = "main";
-        ShaderCI.FilePath   = "EnvMap.psh";
+        ShaderCI.FilePath   = "PSMainGenerated.generated";
 
         pPS = Device.CreateShader(ShaderCI);
         if (!pPS)
         {
-            UNEXPECTED("Failed to create environment map pixel shader");
+            UNEXPECTED("Failed to create vector field pixel shader");
             return nullptr;
         }
     }
 
     PipelineResourceLayoutDescX ResourceLauout;
     ResourceLauout
-        .AddVariable(SHADER_TYPE_PIXEL, "EnvMap", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-        .AddImmutableSampler(SHADER_TYPE_PIXEL, "EnvMap", Sam_LinearClamp);
+        .SetDefaultVariableType(SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+        .AddVariable(SHADER_TYPE_VERTEX, "g_tex2DVectorField", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+        .AddImmutableSampler(SHADER_TYPE_VERTEX, "g_tex2DVectorField", Sam_LinearClamp);
 
-    GraphicsPipelineStateCreateInfoX PsoCI{"Environment Map PSO"};
+    GraphicsPipelineStateCreateInfoX PsoCI{"Vector Field PSO"};
     PsoCI
         .SetResourceLayout(ResourceLauout)
         .AddShader(pVS)
         .AddShader(pPS)
-        .SetPrimitiveTopology(PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
-        .SetDepthFormat(m_DSVFormat);
+        .SetPrimitiveTopology(PRIMITIVE_TOPOLOGY_LINE_LIST)
+        .SetDepthFormat(m_DSVFormat)
+        .SetDepthStencilDesc(DSS_DisableDepth);
     for (auto RTVFormat : m_RTVFormats)
         PsoCI.AddRenderTarget(RTVFormat);
-
-    PsoCI.GraphicsPipeline.DepthStencilDesc.DepthFunc = COMPARISON_FUNC_LESS_EQUAL;
 
     auto PSO = Device.CreateGraphicsPipelineState(PsoCI);
     if (!PSO)
     {
-        UNEXPECTED("Failed to create environment map PSO");
+        UNEXPECTED("Failed to create vector field PSO");
         return nullptr;
     }
-    PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbCameraAttribs")->Set(m_pCameraAttribsCB);
-    PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbEnvMapRenderAttribs")->Set(m_RenderAttribsCB);
+    PSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "cbAttribs")->Set(m_RenderAttribsCB);
 
     if (!m_SRB)
     {
         PSO->CreateShaderResourceBinding(&m_SRB, true);
-        m_pEnvMapVar = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "EnvMap");
-        VERIFY_EXPR(m_pEnvMapVar != nullptr);
+        m_pVectorFieldVar = m_SRB->GetVariableByName(SHADER_TYPE_VERTEX, "g_tex2DVectorField");
+        VERIFY_EXPR(m_pVectorFieldVar != nullptr);
     }
 
     m_PSOs.emplace(Key, PSO);
     return PSO;
 }
 
-void EnvMapRenderer::Render(const RenderAttribs& Attribs, const HLSL::ToneMappingAttribs& ToneMapping)
+void VectorFieldRenderer::Render(const RenderAttribs& Attribs)
 {
     if (Attribs.pContext == nullptr)
     {
@@ -191,31 +189,36 @@ void EnvMapRenderer::Render(const RenderAttribs& Attribs, const HLSL::ToneMappin
         return;
     }
 
-    if (Attribs.pEnvMap == nullptr)
+    if (Attribs.GridSize.x == 0 || Attribs.GridSize.y == 0)
+        return;
+
+    if (Attribs.pVectorField == nullptr)
     {
-        UNEXPECTED("Environment map must not be null");
+        UNEXPECTED("Vector field must not be null");
         return;
     }
 
-    auto* pPSO = GetPSO({ToneMapping.iToneMappingMode, Attribs.ConvertOutputToSRGB});
+    auto* pPSO = GetPSO({Attribs.ConvertOutputToSRGB});
     if (pPSO == nullptr)
     {
         UNEXPECTED("Failed to get PSO");
         return;
     }
 
-    m_pEnvMapVar->Set(Attribs.pEnvMap);
+    m_pVectorFieldVar->Set(Attribs.pVectorField);
 
     {
-        MapHelper<HLSL::EnvMapRenderAttribs> EnvMapAttribs{Attribs.pContext, m_RenderAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
-        EnvMapAttribs->ToneMapping   = ToneMapping;
-        EnvMapAttribs->AverageLogLum = Attribs.AverageLogLum;
-        EnvMapAttribs->MipLevel      = Attribs.MipLevel;
+        MapHelper<HLSL::VectorFieldRenderAttribs> AttribsData{Attribs.pContext, m_RenderAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
+        AttribsData->ScaleAndBias = {Attribs.Scale, Attribs.Bias};
+        AttribsData->f2GridSize   = {static_cast<float>(Attribs.GridSize.x), static_cast<float>(Attribs.GridSize.y)};
+        AttribsData->u2GridSize   = {Attribs.GridSize.x, Attribs.GridSize.y};
+        AttribsData->StartColor   = Attribs.StartColor;
+        AttribsData->EndColor     = Attribs.EndColor;
     }
 
     Attribs.pContext->SetPipelineState(pPSO);
     Attribs.pContext->CommitShaderResources(m_SRB, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
-    DrawAttribs drawAttribs{3, DRAW_FLAG_VERIFY_ALL};
+    DrawAttribs drawAttribs{Attribs.GridSize.x * Attribs.GridSize.y * 2, DRAW_FLAG_VERIFY_ALL};
     Attribs.pContext->Draw(drawAttribs);
 }
 

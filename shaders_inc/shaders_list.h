@@ -17,6 +17,10 @@ static const MemoryShaderSourceFileInfo g_Shaders[] =
         #include "FullScreenTriangleVSOutput.fxh.h"
     },
     {
+        "VectorField.vsh",
+        #include "VectorField.vsh.h"
+    },
+    {
         "AtlasSampling.fxh",
         #include "AtlasSampling.fxh.h"
     },
