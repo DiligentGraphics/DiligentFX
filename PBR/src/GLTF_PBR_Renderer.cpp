@@ -534,6 +534,9 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
     IShaderResourceBinding* pCurrSRB = nullptr;
     PSOKey                  CurrPsoKey;
 
+    if (PrevTransforms == nullptr)
+        PrevTransforms = &Transforms;
+
     for (auto AlphaMode : AlphaModes)
     {
         const auto& RenderList = m_RenderLists[AlphaMode];
@@ -543,7 +546,7 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
             const auto& primitive            = PrimRI.Primitive;
             const auto& material             = GLTFModel.Materials[primitive.MaterialId];
             const auto& NodeGlobalMatrix     = Transforms.NodeGlobalMatrices[Node.Index];
-            const auto& PrevNodeGlobalMatrix = PrevTransforms != nullptr ? PrevTransforms->NodeGlobalMatrices[Node.Index] : NodeGlobalMatrix;
+            const auto& PrevNodeGlobalMatrix = PrevTransforms->NodeGlobalMatrices[Node.Index];
 
             auto PSOFlags = VertexAttribFlags | GetMaterialPSOFlags(material);
 
@@ -617,6 +620,11 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
                 {
                     MapHelper<float4x4> pJoints{pCtx, m_JointsBuffer, MAP_WRITE, MAP_FLAG_DISCARD};
                     memcpy(pJoints, JointMatrices.data(), JointCount * sizeof(float4x4));
+                    if ((CurrPsoKey.GetFlags() & PSO_FLAG_COMPUTE_MOTION_VECTORS) != 0)
+                    {
+                        const auto& PrevJointMatrices = PrevTransforms->Skins[Node.SkinTransformsIndex].JointMatrices;
+                        memcpy(pJoints + m_Settings.MaxJointCount, PrevJointMatrices.data(), JointCount * sizeof(float4x4));
+                    }
                 }
             }
 

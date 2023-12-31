@@ -228,7 +228,8 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
         }
         if (m_Settings.MaxJointCount > 0)
         {
-            CreateUniformBuffer(pDevice, static_cast<Uint32>(sizeof(float4x4) * m_Settings.MaxJointCount), "PBR joint transforms", &m_JointsBuffer);
+            const size_t JointsBufferSize = sizeof(float4x4) * m_Settings.MaxJointCount * 2; // Current and previous transforms
+            CreateUniformBuffer(pDevice, static_cast<Uint32>(JointsBufferSize), "PBR joint transforms", &m_JointsBuffer);
         }
         std::vector<StateTransitionDesc> Barriers;
         Barriers.emplace_back(m_PBRPrimitiveAttribsCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE);

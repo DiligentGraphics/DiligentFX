@@ -47,6 +47,9 @@ cbuffer cbPrimitiveAttribs
 cbuffer cbJointTransforms
 {
     float4x4 g_Joints[MAX_JOINT_COUNT];
+#if COMPUTE_MOTION_VECTORS
+    float4x4 g_PrevJoints[MAX_JOINT_COUNT];
+#endif
 }
 #endif
 
@@ -72,9 +75,17 @@ void main(in  VSInput  VSIn,
             VSIn.Weight0.z * g_Joints[int(VSIn.Joint0.z)] +
             VSIn.Weight0.w * g_Joints[int(VSIn.Joint0.w)];
         Transform = mul(Transform, SkinMat);
-#   if COMPUTE_MOTION_VECTORS
-        PrevTransform = mul(PrevTransform, SkinMat);
-#   endif
+
+#       if COMPUTE_MOTION_VECTORS
+        {
+            float4x4 PrevSkinMat = 
+                VSIn.Weight0.y * g_PrevJoints[int(VSIn.Joint0.y)] +
+                VSIn.Weight0.x * g_PrevJoints[int(VSIn.Joint0.x)] +
+                VSIn.Weight0.z * g_PrevJoints[int(VSIn.Joint0.z)] +
+                VSIn.Weight0.w * g_PrevJoints[int(VSIn.Joint0.w)];
+            PrevTransform = mul(PrevTransform, PrevSkinMat);
+        }
+#       endif
     }
 #endif
 
