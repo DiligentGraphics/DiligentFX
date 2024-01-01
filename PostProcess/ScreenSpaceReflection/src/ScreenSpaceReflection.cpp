@@ -167,6 +167,8 @@ bool ScreenSpaceReflection::RenderTechnique::IsInitialized() const
 
 ScreenSpaceReflection::ScreenSpaceReflection(IRenderDevice* pDevice)
 {
+    RenderDeviceWithCache_N Device{pDevice};
+
     {
         RefCntAutoPtr<IBuffer> pBuffer;
         CreateUniformBuffer(pDevice, sizeof(ScreenSpaceReflectionAttribs), "ScreenSpaceReflection::ConstantBuffer", &pBuffer);
@@ -192,9 +194,7 @@ ScreenSpaceReflection::ScreenSpaceReflection(IRenderDevice* pDevice)
         Data.NumSubresources = 1;
         Data.pSubResources   = &SubResData;
 
-        RefCntAutoPtr<ITexture> pTexture;
-        pDevice->CreateTexture(Desc, &Data, &pTexture);
-        m_Resources[RESOURCE_IDENTIFIER_SOBOL_BUFFER] = pTexture;
+        m_Resources[RESOURCE_IDENTIFIER_SOBOL_BUFFER] = Device.CreateTexture(Desc, &Data);
     }
 
     {
@@ -216,9 +216,7 @@ ScreenSpaceReflection::ScreenSpaceReflection(IRenderDevice* pDevice)
         Data.NumSubresources = 1;
         Data.pSubResources   = &SubResData;
 
-        RefCntAutoPtr<ITexture> pTexture;
-        pDevice->CreateTexture(Desc, &Data, &pTexture);
-        m_Resources[RESOURCE_IDENTIFIER_SCRAMBLING_TILE_BUFFER] = pTexture;
+        m_Resources[RESOURCE_IDENTIFIER_SCRAMBLING_TILE_BUFFER] = Device.CreateTexture(Desc, &Data);
     }
 
     {
@@ -231,9 +229,7 @@ ScreenSpaceReflection::ScreenSpaceReflection(IRenderDevice* pDevice)
         Desc.MipLevels = 1;
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
 
-        RefCntAutoPtr<ITexture> pTexture;
-        pDevice->CreateTexture(Desc, nullptr, &pTexture);
-        m_Resources[RESOURCE_IDENTIFIER_BLUE_NOISE_TEXTURE] = pTexture;
+        m_Resources[RESOURCE_IDENTIFIER_BLUE_NOISE_TEXTURE] = Device.CreateTexture(Desc);
     }
 
     m_IsSupportTransitionSubresources = pDevice->GetDeviceInfo().Type == RENDER_DEVICE_TYPE_D3D12 || pDevice->GetDeviceInfo().Type == RENDER_DEVICE_TYPE_VULKAN;
@@ -249,14 +245,13 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
     m_BackBufferWidth  = BackBufferWidth;
     m_BackBufferHeight = BackBufferHeight;
 
+    RenderDeviceWithCache_N Device{pDevice};
+
     constexpr Uint32 HistoryTexturesArraySize = 2;
     constexpr Uint32 DepthHierarchyMipCount   = SSR_DEPTH_HIERARCHY_MAX_MIP + 1;
     {
         m_HierarchicalDepthMipMapDSV.clear();
         m_HierarchicalDepthMipMapSRV.clear();
-
-        if (m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY])
-            m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY].Release();
 
         TextureDesc Desc;
         Desc.Name      = "ScreenSpaceReflection::DepthHierarchy";
@@ -267,8 +262,7 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
         Desc.MipLevels = std::min(ComputeMipLevelsCount(BackBufferWidth, BackBufferHeight), DepthHierarchyMipCount);
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_DEPTH_STENCIL;
 
-        RefCntAutoPtr<ITexture> pTexture;
-        pDevice->CreateTexture(Desc, nullptr, &pTexture);
+        RefCntAutoPtr<ITexture> pTexture = Device.CreateTexture(Desc);
 
         m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY] = pTexture;
         m_HierarchicalDepthMipMapSRV.resize(Desc.MipLevels);
@@ -295,28 +289,19 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
     }
 
     {
-        if (m_Resources[RESOURCE_IDENTIFIER_ROUGHNESS])
-            m_Resources[RESOURCE_IDENTIFIER_ROUGHNESS].Release();
-
         TextureDesc Desc;
         Desc.Name      = "ScreenSpaceReflection::Roughness";
         Desc.Type      = RESOURCE_DIM_TEX_2D;
         Desc.Width     = BackBufferWidth;
         Desc.Height    = BackBufferHeight;
-        Desc.Format    = TEX_FORMAT_R8_UNORM;
+        Desc.Format    = TEX_FORMAT_R16_UNORM; // R8_UNORM is not enough to store alpha roughness
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
 
-        RefCntAutoPtr<ITexture> pTexture;
-        pDevice->CreateTexture(Desc, nullptr, &pTexture);
-        m_Resources[RESOURCE_IDENTIFIER_ROUGHNESS] = pTexture;
+        m_Resources[RESOURCE_IDENTIFIER_ROUGHNESS] = Device.CreateTexture(Desc);
     }
 
     {
-        if (m_DepthStencilMaskDSVReadOnly)
-            m_DepthStencilMaskDSVReadOnly.Release();
-
-        if (m_Resources[RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK])
-            m_Resources[RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK].Release();
+        m_DepthStencilMaskDSVReadOnly.Release();
 
         TEXTURE_FORMAT DepthStencilFormat = TEX_FORMAT_D32_FLOAT_S8X24_UINT;
 
@@ -332,8 +317,8 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
         Desc.Format    = DepthStencilFormat;
         Desc.BindFlags = BIND_DEPTH_STENCIL | BIND_SHADER_RESOURCE;
 
-        RefCntAutoPtr<ITexture> pTexture;
-        pDevice->CreateTexture(Desc, nullptr, &pTexture);
+        RefCntAutoPtr<ITexture> pTexture = Device.CreateTexture(Desc);
+
         m_Resources[RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK] = pTexture;
 
         TextureViewDesc ViewDesc;
@@ -342,9 +327,6 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
     }
 
     {
-        if (m_Resources[RESOURCE_IDENTIFIER_RADIANCE])
-            m_Resources[RESOURCE_IDENTIFIER_RADIANCE].Release();
-
         TextureDesc Desc;
         Desc.Name      = "ScreenSpaceReflection::Radiance";
         Desc.Type      = RESOURCE_DIM_TEX_2D;
@@ -353,15 +335,10 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
         Desc.Format    = TEX_FORMAT_RGBA16_FLOAT;
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
 
-        RefCntAutoPtr<ITexture> pTexture;
-        pDevice->CreateTexture(Desc, nullptr, &pTexture);
-        m_Resources[RESOURCE_IDENTIFIER_RADIANCE] = pTexture;
+        m_Resources[RESOURCE_IDENTIFIER_RADIANCE] = Device.CreateTexture(Desc);
     }
 
     {
-        if (m_Resources[RESOURCE_IDENTIFIER_RAY_DIRECTION_PDF])
-            m_Resources[RESOURCE_IDENTIFIER_RAY_DIRECTION_PDF].Release();
-
         TextureDesc Desc;
         Desc.Name      = "ScreenSpaceReflection::RayDirectionPDF";
         Desc.Type      = RESOURCE_DIM_TEX_2D;
@@ -370,15 +347,10 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
         Desc.Format    = TEX_FORMAT_RGBA16_FLOAT;
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
 
-        RefCntAutoPtr<ITexture> pTexture;
-        pDevice->CreateTexture(Desc, nullptr, &pTexture);
-        m_Resources[RESOURCE_IDENTIFIER_RAY_DIRECTION_PDF] = pTexture;
+        m_Resources[RESOURCE_IDENTIFIER_RAY_DIRECTION_PDF] = Device.CreateTexture(Desc);
     }
 
     {
-        if (m_Resources[RESOURCE_IDENTIFIER_RESOLVED_RADIANCE])
-            m_Resources[RESOURCE_IDENTIFIER_RESOLVED_RADIANCE].Release();
-
         TextureDesc Desc;
         Desc.Name      = "ScreenSpaceReflection::ResolvedRadiance";
         Desc.Type      = RESOURCE_DIM_TEX_2D;
@@ -387,15 +359,10 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
         Desc.Format    = TEX_FORMAT_RGBA16_FLOAT;
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
 
-        RefCntAutoPtr<ITexture> pTexture;
-        pDevice->CreateTexture(Desc, nullptr, &pTexture);
-        m_Resources[RESOURCE_IDENTIFIER_RESOLVED_RADIANCE] = pTexture;
+        m_Resources[RESOURCE_IDENTIFIER_RESOLVED_RADIANCE] = Device.CreateTexture(Desc);
     }
 
     {
-        if (m_Resources[RESOURCE_IDENTIFIER_RESOLVED_VARIANCE])
-            m_Resources[RESOURCE_IDENTIFIER_RESOLVED_VARIANCE].Release();
-
         TextureDesc Desc;
         Desc.Name      = "ScreenSpaceReflection::ResolvedVariance";
         Desc.Type      = RESOURCE_DIM_TEX_2D;
@@ -404,15 +371,10 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
         Desc.Format    = TEX_FORMAT_R16_FLOAT;
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
 
-        RefCntAutoPtr<ITexture> pTexture;
-        pDevice->CreateTexture(Desc, nullptr, &pTexture);
-        m_Resources[RESOURCE_IDENTIFIER_RESOLVED_VARIANCE] = pTexture;
+        m_Resources[RESOURCE_IDENTIFIER_RESOLVED_VARIANCE] = Device.CreateTexture(Desc);
     }
 
     {
-        if (m_Resources[RESOURCE_IDENTIFIER_RESOLVED_DEPTH])
-            m_Resources[RESOURCE_IDENTIFIER_RESOLVED_DEPTH].Release();
-
         TextureDesc Desc;
         Desc.Name      = "ScreenSpaceReflection::ResolvedDepth";
         Desc.Type      = RESOURCE_DIM_TEX_2D;
@@ -421,9 +383,7 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
         Desc.Format    = TEX_FORMAT_R16_FLOAT;
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
 
-        RefCntAutoPtr<ITexture> pTexture;
-        pDevice->CreateTexture(Desc, nullptr, &pTexture);
-        m_Resources[RESOURCE_IDENTIFIER_RESOLVED_DEPTH] = pTexture;
+        m_Resources[RESOURCE_IDENTIFIER_RESOLVED_DEPTH] = Device.CreateTexture(Desc);
     }
 
     {
@@ -432,9 +392,6 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
             m_RadianceHistorySRV[ArraySlice].Release();
             m_RadianceHistoryRTV[ArraySlice].Release();
         }
-
-        if (m_Resources[RESOURCE_IDENTIFIER_RADIANCE_HISTORY])
-            m_Resources[RESOURCE_IDENTIFIER_RADIANCE_HISTORY].Release();
 
         TextureDesc Desc;
         Desc.Name      = "ScreenSpaceReflection::RadianceHistory";
@@ -446,8 +403,8 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
         Desc.ArraySize = HistoryTexturesArraySize;
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
 
-        RefCntAutoPtr<ITexture> pTexture;
-        pDevice->CreateTexture(Desc, nullptr, &pTexture);
+        RefCntAutoPtr<ITexture> pTexture = Device.CreateTexture(Desc);
+
         m_Resources[RESOURCE_IDENTIFIER_RADIANCE_HISTORY] = pTexture;
 
         for (Uint32 ArraySlice = 0; ArraySlice < HistoryTexturesArraySize; ArraySlice++)
@@ -483,9 +440,6 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
             m_VarianceHistoryRTV[ArraySlice].Release();
         }
 
-        if (m_Resources[RESOURCE_IDENTIFIER_VARIANCE_HISTORY])
-            m_Resources[RESOURCE_IDENTIFIER_VARIANCE_HISTORY].Release();
-
         TextureDesc Desc;
         Desc.Name      = "ScreenSpaceReflection::VarianceHistory";
         Desc.Type      = RESOURCE_DIM_TEX_2D_ARRAY;
@@ -496,8 +450,8 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
         Desc.ArraySize = HistoryTexturesArraySize;
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
 
-        RefCntAutoPtr<ITexture> pTexture;
-        pDevice->CreateTexture(Desc, nullptr, &pTexture);
+        RefCntAutoPtr<ITexture> pTexture = Device.CreateTexture(Desc);
+
         m_Resources[RESOURCE_IDENTIFIER_VARIANCE_HISTORY] = pTexture;
 
         for (Uint32 ArraySlice = 0; ArraySlice < Desc.ArraySizeOrDepth(); ArraySlice++)
@@ -527,9 +481,6 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
     }
 
     {
-        if (m_Resources[RESOURCE_IDENTIFIER_DEPTH_HISTORY])
-            m_Resources[RESOURCE_IDENTIFIER_DEPTH_HISTORY].Release();
-
         TextureDesc Desc;
         Desc.Name      = "ScreenSpaceReflection::DepthHistory";
         Desc.Type      = RESOURCE_DIM_TEX_2D;
@@ -538,15 +489,10 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
         Desc.Format    = TEX_FORMAT_D32_FLOAT;
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_DEPTH_STENCIL; // We need to set stencil flag for Vulkan
 
-        RefCntAutoPtr<ITexture> pTexture;
-        pDevice->CreateTexture(Desc, nullptr, &pTexture);
-        m_Resources[RESOURCE_IDENTIFIER_DEPTH_HISTORY] = pTexture;
+        m_Resources[RESOURCE_IDENTIFIER_DEPTH_HISTORY] = Device.CreateTexture(Desc);
     }
 
     {
-        if (m_Resources[RESOURCE_IDENTIFIER_OUTPUT])
-            m_Resources[RESOURCE_IDENTIFIER_OUTPUT].Release();
-
         TextureDesc Desc;
         Desc.Name      = "ScreenSpaceReflection::Output";
         Desc.Type      = RESOURCE_DIM_TEX_2D;
@@ -555,9 +501,7 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
         Desc.Format    = TEX_FORMAT_RGBA16_FLOAT;
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
 
-        RefCntAutoPtr<ITexture> pTexture;
-        pDevice->CreateTexture(Desc, nullptr, &pTexture);
-        m_Resources[RESOURCE_IDENTIFIER_OUTPUT] = pTexture;
+        m_Resources[RESOURCE_IDENTIFIER_OUTPUT] = Device.CreateTexture(Desc);
     }
 
     StateTransitionDesc TranslationTextures[] = {
@@ -583,7 +527,7 @@ void ScreenSpaceReflection::Execute(const RenderAttributes& RenderAttribs)
 
     ScopedDebugGroup DebugGroupGlobal{RenderAttribs.pDeviceContext, "ScreenSpaceReflection"};
     {
-        MapHelper<ScreenSpaceReflectionAttribs> SSRAttibs(RenderAttribs.pDeviceContext, reinterpret_cast<IBuffer*>(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER].RawPtr()), MAP_WRITE, MAP_FLAG_DISCARD);
+        MapHelper<ScreenSpaceReflectionAttribs> SSRAttibs{RenderAttribs.pDeviceContext, m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER].RawPtr<IBuffer>(), MAP_WRITE, MAP_FLAG_DISCARD};
         *SSRAttibs = RenderAttribs.SSRAttribs;
     }
 

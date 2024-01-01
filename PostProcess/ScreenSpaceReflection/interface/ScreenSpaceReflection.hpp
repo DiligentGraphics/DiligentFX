@@ -160,8 +160,8 @@ private:
         RESOURCE_IDENTIFIER_COUNT
     };
 
-    RenderTechnique  m_RenderTech[RENDER_TECH_COUNT]{};
-    ResourceInternal m_Resources[RESOURCE_IDENTIFIER_COUNT]{};
+    std::array<RenderTechnique, RENDER_TECH_COUNT>          m_RenderTech{};
+    std::array<ResourceInternal, RESOURCE_IDENTIFIER_COUNT> m_Resources{};
 
     std::vector<RefCntAutoPtr<ITextureView>> m_HierarchicalDepthMipMapDSV;
     std::vector<RefCntAutoPtr<ITextureView>> m_HierarchicalDepthMipMapSRV;

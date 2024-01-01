@@ -9,12 +9,6 @@
 #define FLT_MAX                   3.402823466e+38
 #define FLT_MIN                   1.175494351e-38
 
-#ifdef SSR_OPTION_INVERTED_DEPTH
-    #define MipConvFunc max
-#else
-    #define MipConvFunc min
-#endif // SSR_OPTION_INVERTED_DEPTH
-
 #if !defined(DESKTOP_GL) && !defined(GL_ES)
     #define SSR_ATTRIBUTE_EARLY_DEPTH_STENCIL [earlydepthstencil]
 #else

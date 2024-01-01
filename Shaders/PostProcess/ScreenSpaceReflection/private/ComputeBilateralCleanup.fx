@@ -31,7 +31,7 @@ float3 SampleNormalWS(uint2 PixelCoord)
 
 float4 SampleRadiance(uint2 PixelCoord)
 {
-    return g_TextureRadiance.Load(uint4(PixelCoord, 0, 0));
+    return g_TextureRadiance.Load(int4(PixelCoord, 0, 0));
 }
 
 float SampleVariance(uint2 PixelCoord)
@@ -47,11 +47,11 @@ bool IsReflectionSample(float Roughness, float Depth)
 SSR_ATTRIBUTE_EARLY_DEPTH_STENCIL
 float4 ComputeBilateralCleanupPS(in float4 Position : SV_Position) : SV_Target0
 {
-    const float Roughness = SampleRoughness(uint2(Position.xy));
-    const float Variance = SampleVariance(uint2(Position.xy));
-    const float3 NormalWS = SampleNormalWS(uint2(Position.xy));
-    const float LinearDepth = DepthToCameraZ(SampleDepth(uint2(Position.xy)), g_SSRAttribs.ProjMatrix);
-    const float2 GradDepth = float2(ddx(LinearDepth), ddy(LinearDepth));
+    const float  Roughness   = SampleRoughness(uint2(Position.xy));
+    const float  Variance    = SampleVariance(uint2(Position.xy));
+    const float3 NormalWS    = SampleNormalWS(uint2(Position.xy));
+    const float  LinearDepth = DepthToCameraZ(SampleDepth(uint2(Position.xy)), g_SSRAttribs.ProjMatrix);
+    const float2 GradDepth   = float2(ddx(LinearDepth), ddy(LinearDepth));
 
     const float Radius = lerp(0.0, Variance > SSS_BILATERAL_VARIANCE_ESTIMATE_THRESHOLD ? 2.0 : 0, saturate(SSR_BILATERAL_ROUGHNESS_FACTOR * sqrt(Roughness)));
     const float Sigma = g_SSRAttribs.BilateralCleanupSpatialSigmaFactor;
@@ -69,10 +69,10 @@ float4 ComputeBilateralCleanupPS(in float4 Position : SV_Position) : SV_Target0
                 const int2 Location = int2(Position.xy) + int2(x, y);
                 if (IsInsideScreen(Location,g_SSRAttribs.RenderSize))
                 {
-                    const float SampledDepth = SampleDepth(Location);
-                    const float SampledRoughness = SampleRoughness(Location);
-                    const float4 SampledRadiance = SampleRadiance(Location);
-                    const float3 SampledNormalWS = SampleNormalWS(Location);
+                    const float  SampledDepth     = SampleDepth(Location);
+                    const float  SampledRoughness = SampleRoughness(Location);
+                    const float4 SampledRadiance  = SampleRadiance(Location);
+                    const float3 SampledNormalWS  = SampleNormalWS(Location);
 
                     if (IsReflectionSample(SampledRoughness, SampledDepth))
                     {
@@ -89,7 +89,7 @@ float4 ComputeBilateralCleanupPS(in float4 Position : SV_Position) : SV_Target0
             }
         }
 
-        RadianceResult = ColorSum / max(WeightSum, 1.0e-6f);;
+        RadianceResult = ColorSum / max(WeightSum, 1.0e-6f);
     }
 
     return RadianceResult;

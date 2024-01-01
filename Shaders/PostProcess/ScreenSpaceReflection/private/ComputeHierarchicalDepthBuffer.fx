@@ -1,5 +1,11 @@
 #include "SSR_Common.fxh"
 
+#ifdef SSR_OPTION_INVERTED_DEPTH
+    #define MipConvFunc max
+#else
+    #define MipConvFunc min
+#endif // SSR_OPTION_INVERTED_DEPTH
+
 Texture2D<float> g_TextureLastMip;
 
 float SampleDepth(uint2 Location, uint2 Offset, uint2 Dimension)

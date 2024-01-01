@@ -33,8 +33,8 @@ float SampleRandomNumber(uint2 PixelCoord, uint SampleIndex, uint SampleDimensio
 float2 SampleRandomVector2D(uint2 PixelCoord)
 {
     return float2(
-        fmod(SampleRandomNumber(PixelCoord, 0, 0u) + (g_SSRAttribs.FrameIndex & 0xFFu) * M_GOLDEN_RATIO, 1.0f),
-        fmod(SampleRandomNumber(PixelCoord, 0, 1u) + (g_SSRAttribs.FrameIndex & 0xFFu) * M_GOLDEN_RATIO, 1.0f));
+        fmod(SampleRandomNumber(PixelCoord, 0, 0u) + (g_SSRAttribs.FrameIndex & 0xFFu) * M_GOLDEN_RATIO, 1.0),
+        fmod(SampleRandomNumber(PixelCoord, 0, 1u) + (g_SSRAttribs.FrameIndex & 0xFFu) * M_GOLDEN_RATIO, 1.0));
 }
 
 float2 ComputeBlueNoiseTexturePS(in float4 Position : SV_Position) : SV_Target
