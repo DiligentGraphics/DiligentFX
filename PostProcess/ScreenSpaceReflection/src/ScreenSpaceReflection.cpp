@@ -241,8 +241,14 @@ ScreenSpaceReflection::ScreenSpaceReflection(IRenderDevice* pDevice)
 
 ScreenSpaceReflection::~ScreenSpaceReflection() = default;
 
-void ScreenSpaceReflection::OnWindowResize(IRenderDevice* pDevice, IDeviceContext* pDeviceContext, Uint32 BackBufferWidth, Uint32 BackBufferHeight)
+void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceContext* pDeviceContext, Uint32 BackBufferWidth, Uint32 BackBufferHeight)
 {
+    if (m_BackBufferWidth == BackBufferWidth && m_BackBufferHeight == BackBufferHeight)
+        return;
+
+    m_BackBufferWidth  = BackBufferWidth;
+    m_BackBufferHeight = BackBufferHeight;
+
     constexpr Uint32 HistoryTexturesArraySize = 2;
     constexpr Uint32 DepthHierarchyMipCount   = SSR_DEPTH_HIERARCHY_MAX_MIP + 1;
     {

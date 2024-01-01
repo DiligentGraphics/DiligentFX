@@ -46,7 +46,7 @@ struct PSOutput
 
 float2 SampleMotion(uint2 PixelCoord)
 {
-    return g_TextureMotion.Load(int3(PixelCoord, 0));
+    return g_TextureMotion.Load(int3(PixelCoord, 0)) * F3NDC_XYZ_TO_UVD_SCALE.xy;
 }
 
 float SampleCurrDepth(uint2 PixelCoord)
@@ -228,7 +228,7 @@ PSOutput ComputeTemporalAccumulationPS(in float4 Position : SV_Position)
     const float2 Motion = SampleMotion(uint2(Position.xy));
     const float Roughness = SampleRoughness(uint2(Position.xy));
 
-    const float2 PrevIncidentPoint = Position.xy + Motion * g_SSRAttribs.RenderSize;
+    const float2 PrevIncidentPoint = Position.xy - Motion * g_SSRAttribs.RenderSize;
     const float2 PrevReflectionHit = ComputeReflectionHitPosition(uint2(Position.xy), HitDepth);
 
     const float4 PrevColorIncidentPoint = SamplePrevRadianceLinear(PrevIncidentPoint); 

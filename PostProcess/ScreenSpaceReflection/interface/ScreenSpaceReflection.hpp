@@ -77,7 +77,7 @@ public:
 
     ~ScreenSpaceReflection();
 
-    void OnWindowResize(IRenderDevice* pDevice, IDeviceContext* pDeviceContext, Uint32 BackBufferWidth, Uint32 BackBufferHeight);
+    void SetBackBufferSize(IRenderDevice* pDevice, IDeviceContext* pDeviceContext, Uint32 BackBufferWidth, Uint32 BackBufferHeight);
 
     void Execute(const RenderAttributes& RenderAttribs);
 
@@ -175,6 +175,9 @@ private:
     RefCntAutoPtr<ITextureView> m_DepthStencilMaskDSVReadOnly;
 
     bool m_IsSupportTransitionSubresources = false;
+
+    Uint32 m_BackBufferWidth  = 0;
+    Uint32 m_BackBufferHeight = 0;
 };
 
 } // namespace Diligent

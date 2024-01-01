@@ -1,13 +1,13 @@
 #ifndef _SSR_COMMON_FXH_
 #define _SSR_COMMON_FXH_
 
-#define M_PI                      3.14159265358979f
+#define M_PI                      3.14159265358979
 #define M_EPSILON                 1e-3
-#define M_GOLDEN_RATIO            1.61803398875f
+#define M_GOLDEN_RATIO            1.61803398875
 
-#define FLT_EPS                   5.960464478e-8f
-#define FLT_MAX                   3.402823466e+38f
-#define FLT_MIN                   1.175494351e-38f
+#define FLT_EPS                   5.960464478e-8
+#define FLT_MAX                   3.402823466e+38
+#define FLT_MIN                   1.175494351e-38
 
 #ifdef SSR_OPTION_INVERTED_DEPTH
     #define MipConvFunc max
@@ -33,7 +33,7 @@ float VanDerCorputSequenceBase2(uint SampleIdx)
 
 float2 GoldenRatioSequence(int SampleIdx, uint N)
 {
-    return frac(float2((0.5 / N) + float(SampleIdx) / float(N), 0.5 + rcp(M_GOLDEN_RATIO) * SampleIdx));
+    return frac(float2((0.5 / float(N)) + float(SampleIdx) / float(N), 0.5 + rcp(M_GOLDEN_RATIO) * float(SampleIdx)));
 }
 
 float2 HammersleySequence(uint SampleIdx, uint N)
@@ -43,8 +43,8 @@ float2 HammersleySequence(uint SampleIdx, uint N)
 
 float2 VogelDiskSample(uint SampleIdx, uint N, float Phi)
 {
-    const float GoldenAngle = 2.4f;
-    const float R = sqrt(SampleIdx + 0.5f) / sqrt(N);
+    const float GoldenAngle = 2.4;
+    const float R = sqrt(SampleIdx + 0.5) / sqrt(N);
     const float Theta = SampleIdx * GoldenAngle + Phi;
 
     float Sine, Cosine;
