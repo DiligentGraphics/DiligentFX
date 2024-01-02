@@ -229,19 +229,26 @@ IBLSamplingInfo GetClearcoatIBLSamplingInfo(in SurfaceReflectanceInfo SrfInfo,
 // Specular component of the image-based light (IBL) using the split-sum approximation.
 float3 GetSpecularIBL_GGX(in SurfaceReflectanceInfo SrfInfo,
                           in IBLSamplingInfo        IBLInfo,
-                          in TextureCube            PrefilteredEnvMap,
-                          in SamplerState           PrefilteredEnvMap_sampler,
-                          in float                  PrefilteredEnvMapMipLevels)
-{
-    float  lod = SrfInfo.PerceptualRoughness * PrefilteredEnvMapMipLevels;
-    float3 SpecularLight = SamplePrefilteredEnvMap(PrefilteredEnvMap, PrefilteredEnvMap_sampler, IBLInfo.L, lod);
-    
+                          in float3                 SpecularLight)
+{    
 #if USE_IBL_MULTIPLE_SCATTERING
     // https://bruop.github.io/ibl/#single_scattering_results
     return SpecularLight * (IBLInfo.k_S * IBLInfo.PreIntBRDF.x + IBLInfo.PreIntBRDF.y);
 #else
     return SpecularLight * (SrfInfo.Reflectance0 * IBLInfo.PreIntBRDF.x + SrfInfo.Reflectance90 * IBLInfo.PreIntBRDF.y);
 #endif
+}
+
+// Specular component of the image-based light (IBL) using the split-sum approximation.
+float3 GetSpecularIBL_GGX(in SurfaceReflectanceInfo SrfInfo,
+                          in IBLSamplingInfo        IBLInfo,
+                          in TextureCube            PrefilteredEnvMap,
+                          in SamplerState           PrefilteredEnvMap_sampler,
+                          in float                  PrefilteredEnvMapMipLevels)
+{
+    float  lod = SrfInfo.PerceptualRoughness * PrefilteredEnvMapMipLevels;
+    float3 SpecularLight = SamplePrefilteredEnvMap(PrefilteredEnvMap, PrefilteredEnvMap_sampler, IBLInfo.L, lod);
+    return GetSpecularIBL_GGX(SrfInfo, IBLInfo, SpecularLight);
 }
 
 float3 GetLambertianIBL(in SurfaceReflectanceInfo SrfInfo,
