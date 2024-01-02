@@ -696,28 +696,43 @@ void ApplyIBL(in SurfaceShadingInfo Shading,
 }
 #endif
 
+float3 GetBaseLayerIBL(in SurfaceShadingInfo  Shading,
+                       in SurfaceLightingInfo SrfLighting)
+{
+    return (SrfLighting.Base.DiffuseIBL + SrfLighting.Base.SpecularIBL) * Shading.IBLScale * Shading.Occlusion;
+}
+
 float3 GetBaseLayerLighting(in SurfaceShadingInfo  Shading,
                             in SurfaceLightingInfo SrfLighting)
 {
-    return SrfLighting.Base.Punctual +
-           (SrfLighting.Base.DiffuseIBL + SrfLighting.Base.SpecularIBL) * Shading.IBLScale * Shading.Occlusion;
+    return SrfLighting.Base.Punctual + GetBaseLayerIBL(Shading, SrfLighting);
 }
 
 #if ENABLE_SHEEN
+float3 GetSheenIBL(in SurfaceShadingInfo  Shading,
+                   in SurfaceLightingInfo SrfLighting)
+{
+    return SrfLighting.Sheen.SpecularIBL * Shading.IBLScale * Shading.Occlusion;
+}
+
 float3 GetSheenLighting(in SurfaceShadingInfo  Shading,
                         in SurfaceLightingInfo SrfLighting)
 {
-    return SrfLighting.Sheen.Punctual +
-           SrfLighting.Sheen.SpecularIBL * Shading.IBLScale * Shading.Occlusion;
+    return SrfLighting.Sheen.Punctual + GetSheenIBL(Shading, SrfLighting);
 }
 #endif
 
 #if ENABLE_CLEAR_COAT
+float3 GetClearcoatIBL(in SurfaceShadingInfo  Shading,
+                       in SurfaceLightingInfo SrfLighting)
+{
+    return SrfLighting.Clearcoat.SpecularIBL * Shading.IBLScale * Shading.Occlusion * Shading.Clearcoat.Factor;
+}
+
 float3 GetClearcoatLighting(in SurfaceShadingInfo  Shading,
                             in SurfaceLightingInfo SrfLighting)
 {
-    return (SrfLighting.Clearcoat.Punctual +
-            SrfLighting.Clearcoat.SpecularIBL * Shading.IBLScale * Shading.Occlusion) * Shading.Clearcoat.Factor;
+    return SrfLighting.Clearcoat.Punctual * Shading.Clearcoat.Factor + GetClearcoatIBL(Shading, SrfLighting);
 }
 #endif
 
