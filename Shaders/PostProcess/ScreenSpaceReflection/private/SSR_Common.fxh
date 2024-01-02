@@ -81,8 +81,7 @@ float3 ProjectPosition(float3 Origin, float4x4 Transform)
 {
     float4 Projected = mul(float4(Origin, 1.0), Transform);
     Projected.xyz /= Projected.w;
-    Projected.xy = 0.5 * Projected.xy + 0.5;
-    Projected.y = (1 - Projected.y);
+    Projected.xy = NormalizedDeviceXYToTexUV(Projected.xy);
     return Projected.xyz;
 }
 
@@ -93,8 +92,7 @@ float3 ProjectDirection(float3 Origin, float3 Direction, float3 OriginSS, float4
 
 float3 InvProjectPosition(float3 Coord, float4x4 Transform)
 {
-    Coord.y = (1 - Coord.y);
-    Coord.xy = 2 * Coord.xy - 1;
+    Coord.xy = TexUVToNormalizedDeviceXY(Coord.xy);
     float4 Projected = mul(float4(Coord, 1.0), Transform);
     return Projected.xyz /= Projected.w;
 }
