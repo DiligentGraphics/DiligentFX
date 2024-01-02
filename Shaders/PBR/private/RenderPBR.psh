@@ -263,10 +263,10 @@ SurfaceShadingInfo GetSurfaceShadingInfo(in VSOutput          VSOut,
     Shading.BaseLayer = ReadBaseLayerProperties(VSOut, BaseColor, NormalInfo, NMUVInfo, Shading.View, IsFrontFace);
     Shading.Occlusion = GetOcclusion(VSOut, g_Primitive.Material);
     Shading.Emissive  = GetEmissive(VSOut, g_Primitive.Material);
-    
-    Shading.IBLScale          = g_Frame.Renderer.IBLScale;
-    Shading.OcclusionStrength = g_Frame.Renderer.OcclusionStrength;
-    Shading.EmissionScale     = g_Frame.Renderer.EmissionScale;
+
+    Shading.IBLScale  = g_Frame.Renderer.IBLScale;
+    Shading.Occlusion = lerp(1.0, Shading.Occlusion, g_Frame.Renderer.OcclusionStrength);
+    Shading.Emissive *= g_Frame.Renderer.EmissionScale;
 
 #   if ENABLE_CLEAR_COAT
     {

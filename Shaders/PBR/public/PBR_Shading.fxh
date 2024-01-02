@@ -494,8 +494,6 @@ struct SurfaceShadingInfo
 #endif
     
     float IBLScale;
-    float OcclusionStrength;
-    float EmissionScale;
 };
 
 struct LayerLightingInfo
@@ -701,20 +699,16 @@ void ApplyIBL(in SurfaceShadingInfo Shading,
 float3 GetBaseLayerLighting(in SurfaceShadingInfo  Shading,
                             in SurfaceLightingInfo SrfLighting)
 {
-    float Occlusion = lerp(1.0, Shading.Occlusion, Shading.OcclusionStrength);
-        
     return SrfLighting.Base.Punctual +
-           (SrfLighting.Base.DiffuseIBL + SrfLighting.Base.SpecularIBL) * Shading.IBLScale * Occlusion;
+           (SrfLighting.Base.DiffuseIBL + SrfLighting.Base.SpecularIBL) * Shading.IBLScale * Shading.Occlusion;
 }
 
 #if ENABLE_SHEEN
 float3 GetSheenLighting(in SurfaceShadingInfo  Shading,
                         in SurfaceLightingInfo SrfLighting)
 {
-    float Occlusion = lerp(1.0, Shading.Occlusion, Shading.OcclusionStrength);
-
     return SrfLighting.Sheen.Punctual +
-           SrfLighting.Sheen.SpecularIBL * Shading.IBLScale * Occlusion;
+           SrfLighting.Sheen.SpecularIBL * Shading.IBLScale * Shading.Occlusion;
 }
 #endif
 
@@ -722,21 +716,15 @@ float3 GetSheenLighting(in SurfaceShadingInfo  Shading,
 float3 GetClearcoatLighting(in SurfaceShadingInfo  Shading,
                             in SurfaceLightingInfo SrfLighting)
 {
-    float Occlusion = lerp(1.0, Shading.Occlusion, Shading.OcclusionStrength);
-
     return (SrfLighting.Clearcoat.Punctual +
-            SrfLighting.Clearcoat.SpecularIBL * Shading.IBLScale * Occlusion) * Shading.Clearcoat.Factor;
+            SrfLighting.Clearcoat.SpecularIBL * Shading.IBLScale * Shading.Occlusion) * Shading.Clearcoat.Factor;
 }
 #endif
 
 float3 ResolveLighting(in SurfaceShadingInfo  Shading,
                        in SurfaceLightingInfo SrfLighting)
 {
-    float Occlusion = lerp(1.0, Shading.Occlusion, Shading.OcclusionStrength);
-    
-    float3 Color =
-        GetBaseLayerLighting(Shading, SrfLighting) +
-        Shading.Emissive * Shading.EmissionScale;
+    float3 Color = GetBaseLayerLighting(Shading, SrfLighting) + Shading.Emissive;
 
 #if ENABLE_SHEEN
     {
