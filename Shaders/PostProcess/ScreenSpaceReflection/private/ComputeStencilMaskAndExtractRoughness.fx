@@ -24,8 +24,8 @@ float SampleDepth(uint2 PixelCoord)
 
 float ComputeStencilMaskAndExtractRoughnessPS(in float4 Position : SV_Position) : SV_Target0
 {
-    const float Roughness = SampleRoughness(uint2(Position.xy));
-    const float Depth = SampleDepth(uint2(Position.xy));
+    float Roughness = SampleRoughness(uint2(Position.xy));
+    float Depth = SampleDepth(uint2(Position.xy));
     
     if (!IsGlossyReflection(Roughness, g_SSRAttribs.RoughnessThreshold, g_SSRAttribs.IsRoughnessPerceptual) || IsBackground(Depth))
         discard;

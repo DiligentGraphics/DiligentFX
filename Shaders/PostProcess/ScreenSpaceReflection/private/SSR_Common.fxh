@@ -22,10 +22,10 @@ struct CRNG
 
 float VanDerCorputSequenceBase2(uint SampleIdx)
 {
-    return reversebits(SampleIdx) / exp2(32);
+    return float(reversebits(SampleIdx)) / exp2(32.0);
 }
 
-float2 GoldenRatioSequence(int SampleIdx, uint N)
+float2 GoldenRatioSequence(uint SampleIdx, uint N)
 {
     return frac(float2((0.5 / float(N)) + float(SampleIdx) / float(N), 0.5 + rcp(M_GOLDEN_RATIO) * float(SampleIdx)));
 }
@@ -37,9 +37,9 @@ float2 HammersleySequence(uint SampleIdx, uint N)
 
 float2 VogelDiskSample(uint SampleIdx, uint N, float Phi)
 {
-    const float GoldenAngle = 2.4;
-    const float R = sqrt(SampleIdx + 0.5) / sqrt(N);
-    const float Theta = SampleIdx * GoldenAngle + Phi;
+    float GoldenAngle = 2.4;
+    float R = sqrt(float(SampleIdx) + 0.5) / sqrt(float(N));
+    float Theta = float(SampleIdx) * GoldenAngle + Phi;
 
     float Sine, Cosine;
     sincos(Theta, Sine, Cosine);
@@ -48,8 +48,8 @@ float2 VogelDiskSample(uint SampleIdx, uint N, float Phi)
 
 float2 MapSquareToDisk(float2 Point)
 {
-    const float Lam = sqrt(Point.x);
-    const float Phi = 2 * M_PI * Point.y;
+    float Lam = sqrt(Point.x);
+    float Phi = 2.0 * M_PI * Point.y;
     return float2(cos(Phi) * Lam, sin(Phi) * Lam);
 }
 
@@ -62,7 +62,8 @@ uint PCGHash(uint Seed)
 
 CRNG InitCRND(uint2 id, uint FrameIndex)
 {
-    CRNG Rng = { FrameIndex + PCGHash((id.x << 16) | id.y) };
+    CRNG Rng;
+    Rng.Seed = FrameIndex + PCGHash((id.x << 16u) | id.y);
     return Rng;
 }
 
@@ -145,6 +146,5 @@ bool IsInsideScreen(int2 PixelCoord, int2 Dimension)
            PixelCoord.x < Dimension.x &&
            PixelCoord.y < Dimension.y;
 }
-
 
 #endif // _SSR_COMMON_FXH_

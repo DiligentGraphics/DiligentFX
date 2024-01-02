@@ -16,9 +16,9 @@ Texture2D<float>  g_TextureCurrDepth;
 Texture2D<float4> g_TextureCurrRadiance;
 Texture2D<float>  g_TextureCurrVariance;
 
-Texture2D<float>       g_TexturePrevDepth;
-Texture2DArray<float4> g_TexturePrevRadiance;
-Texture2DArray<float>  g_TexturePrevVariance;
+Texture2D<float>  g_TexturePrevDepth;
+Texture2D<float4> g_TexturePrevRadiance;
+Texture2D<float>  g_TexturePrevVariance;
 
 SamplerState g_TexturePrevDepth_sampler;
 SamplerState g_TexturePrevRadiance_sampler;
@@ -41,91 +41,91 @@ struct PixelStatistic
 struct PSOutput
 {
     float4 Radiance : SV_Target0;
-    float Variance  : SV_Target1;
+    float  Variance : SV_Target1;
 };
 
-float2 SampleMotion(uint2 PixelCoord)
+float2 SampleMotion(int2 PixelCoord)
 {
     return g_TextureMotion.Load(int3(PixelCoord, 0)) * F3NDC_XYZ_TO_UVD_SCALE.xy;
 }
 
-float SampleCurrDepth(uint2 PixelCoord)
+float SampleCurrDepth(int2 PixelCoord)
 {
     return g_TextureCurrDepth.Load(int3(PixelCoord, 0));
 }
 
-float SamplePrevDepth(uint2 PixelCoord)
+float SamplePrevDepth(int2 PixelCoord)
 {
     return g_TexturePrevDepth.Load(int3(PixelCoord, 0));
 }
 
-float SampleHitDepth(uint2 PixelCoord)
+float SampleHitDepth(int2 PixelCoord)
 {
     return g_TextureHitDepth.Load(int3(PixelCoord, 0));
 }
 
-float SampleRoughness(uint2 PixelCoord)
+float SampleRoughness(int2 PixelCoord)
 {
     return g_TextureRoughness.Load(int3(PixelCoord, 0));;
 }
 
-float4 SampleCurrRadiance(uint2 PixelCoord)
+float4 SampleCurrRadiance(int2 PixelCoord)
 {
     return g_TextureCurrRadiance.Load(int3(PixelCoord, 0));
 }
 
-float SampleCurrVariance(uint2 PixelCoord)
+float SampleCurrVariance(int2 PixelCoord)
 {
     return g_TextureCurrVariance.Load(int3(PixelCoord, 0));
 }
 
-float4 SamplePrevRadiance(uint2 PixelCoord)
+float4 SamplePrevRadiance(int2 PixelCoord)
 {
-    return g_TexturePrevRadiance.Load(uint4(PixelCoord, 0, 0));
+    return g_TexturePrevRadiance.Load(int3(PixelCoord, 0));
 }
 
-float SamplePrevVariance(uint2 PixelCoord)
+float SamplePrevVariance(int2 PixelCoord)
 {
-    return g_TexturePrevVariance.Load(uint4(PixelCoord, 0, 0));
+    return g_TexturePrevVariance.Load(int3(PixelCoord, 0));
 }
 
 float SamplePrevDepthLinear(float2 PixelCoord)
 {
-    const float2 Texcoord = PixelCoord * g_SSRAttribs.InverseRenderSize;
-    return g_TexturePrevDepth.SampleLevel(g_TexturePrevDepth_sampler, float2(Texcoord), 0);
+    float2 Texcoord = PixelCoord * g_SSRAttribs.InverseRenderSize;
+    return g_TexturePrevDepth.SampleLevel(g_TexturePrevDepth_sampler, Texcoord, 0);
 }
 
 float4 SamplePrevRadianceLinear(float2 PixelCoord)
 {
-    const float2 Texcoord = PixelCoord * g_SSRAttribs.InverseRenderSize;
-    return g_TexturePrevRadiance.SampleLevel(g_TexturePrevRadiance_sampler, float3(Texcoord, 0), 0);
+    float2 Texcoord = PixelCoord * g_SSRAttribs.InverseRenderSize;
+    return g_TexturePrevRadiance.SampleLevel(g_TexturePrevRadiance_sampler, Texcoord, 0);
 }
 
 float SamplePrevVarianceLinear(float2 PixelCoord)
 {
-    const float2 Texcoord = PixelCoord * g_SSRAttribs.InverseRenderSize;
-    return g_TexturePrevVariance.SampleLevel(g_TexturePrevVariance_sampler, float3(Texcoord, 0), 0);
+    float2 Texcoord = PixelCoord * g_SSRAttribs.InverseRenderSize;
+    return g_TexturePrevVariance.SampleLevel(g_TexturePrevVariance_sampler, Texcoord, 0);
 }
 
-float2 ComputeReflectionHitPosition(uint2 PixelCoord, float Depth)
+float2 ComputeReflectionHitPosition(int2 PixelCoord, float Depth)
 {
-    const float2 UV = (float2(PixelCoord) + 0.5) * g_SSRAttribs.InverseRenderSize;
-    const float3 PositionWS = InvProjectPosition(float3(UV, Depth), g_SSRAttribs.InvViewProjMatrix);
-    const float3 PrevCoordUV = ProjectPosition(PositionWS, g_SSRAttribs.PrevViewProjMatrix);
-    return PrevCoordUV.xy * g_SSRAttribs.RenderSize;
+    float2 UV = (float2(PixelCoord) + 0.5) * g_SSRAttribs.InverseRenderSize;
+    float3 PositionWS = InvProjectPosition(float3(UV, Depth), g_SSRAttribs.InvViewProjMatrix);
+    float3 PrevCoordUV = ProjectPosition(PositionWS, g_SSRAttribs.PrevViewProjMatrix);
+    return PrevCoordUV.xy * float2(g_SSRAttribs.RenderSize);
 }
 
 // TODO: Use normals to compute disocclusion
 float ComputeDisocclusion(float CurrDepth, float PrevDepth)
 {
-    const float LinearDepthCurr = DepthToCameraZ(CurrDepth, g_SSRAttribs.ProjMatrix);
-    const float LinearDepthPrev = DepthToCameraZ(PrevDepth, g_SSRAttribs.ProjMatrix);
+    float LinearDepthCurr = DepthToCameraZ(CurrDepth, g_SSRAttribs.ProjMatrix);
+    float LinearDepthPrev = DepthToCameraZ(PrevDepth, g_SSRAttribs.ProjMatrix);
     return exp(-abs(LinearDepthPrev - LinearDepthCurr) / LinearDepthCurr * SSR_DISOCCLUSION_DEPTH_WEIGHT);
 }
 
 // Welford's online algorithm:
 //  https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance
-PixelStatistic ComputePixelStatistic(uint2 PixelCoord)
+PixelStatistic ComputePixelStatistic(int2 PixelCoord)
 {
     PixelStatistic Desc;
     float4 M1 = float4(0.0, 0.0, 0.0, 0.0);
@@ -134,9 +134,9 @@ PixelStatistic ComputePixelStatistic(uint2 PixelCoord)
     {
         for (int y = -1; y <= 1; y++)
         {
-            const int2 Offset = int2(x, y);
-            const int2 Coord = int2(PixelCoord) + Offset;
-            const float4 SampleColor = g_TextureCurrRadiance.Load(int3(Coord, 0));
+            int2 Offset = int2(x, y);
+            int2 Coord = int2(PixelCoord) + Offset;
+            float4 SampleColor = g_TextureCurrRadiance.Load(int3(Coord, 0));
 
             M1 += SampleColor;
             M2 += SampleColor * SampleColor;
@@ -164,9 +164,9 @@ ProjectionDesc ComputeReprojection(float2 PrevPos, float CurrDepth)
         {
             for (int x = -SearchRadius; x <= SearchRadius; x++)
             {
-                const float2 Location = PrevPos + int2(x, y);
-                const float PrevDepth = SamplePrevDepthLinear(Location);
-                const float Weight = ComputeDisocclusion(CurrDepth, PrevDepth);
+                float2 Location = PrevPos + float2(x, y);
+                float PrevDepth = SamplePrevDepthLinear(Location);
+                float Weight = ComputeDisocclusion(CurrDepth, PrevDepth);
                 if (Weight > Disocclusion)
                 {
                     Disocclusion = Weight;
@@ -181,26 +181,31 @@ ProjectionDesc ComputeReprojection(float2 PrevPos, float CurrDepth)
 
     if (!Desc.IsSuccess)
     {
-        const int2 Offset[4] = { int2(0, 0), int2(1, 0), int2(0, 1), int2(1, 1) };
-        const int2 PrevPosi = int2(Desc.PrevCoord - 0.5);
-        const float x = frac(Desc.PrevCoord.x + 0.5);
-        const float y = frac(Desc.PrevCoord.y + 0.5);
-        float Weight[4] = { (1 - x) * (1 - y), x * (1 - y), (1 - x) * y, x * y };
-        for (uint SampleIdx = 0; SampleIdx < 4; SampleIdx++)
+        int2 PrevPosi = int2(Desc.PrevCoord - 0.5);
+        float x = frac(Desc.PrevCoord.x + 0.5);
+        float y = frac(Desc.PrevCoord.y + 0.5);
+
+        float Weight[4];
+        Weight[0] = (1.0 - x) * (1.0 - y);
+        Weight[1] = x * (1.0 - y);
+        Weight[2] = (1.0 - x) * y;
+        Weight[3] = x * y;
+
+        for (int SampleIdx = 0; SampleIdx < 4; ++SampleIdx)
         {
-            const int2 Location = PrevPosi + Offset[SampleIdx];
-            const float PrevDepth = SamplePrevDepth(Location);
-            const bool IsValidSample = ComputeDisocclusion(CurrDepth, PrevDepth) > (SSR_DISOCCLUSION_THRESHOLD / 2);
+            int2 Location = PrevPosi + int2(SampleIdx & 0x01, SampleIdx >> 1);
+            float PrevDepth = SamplePrevDepth(Location);
+            bool IsValidSample = ComputeDisocclusion(CurrDepth, PrevDepth) > (SSR_DISOCCLUSION_THRESHOLD / 2.0);
             Weight[SampleIdx] *= float(IsValidSample);
         }
 
-        float WeightSum = 0;
+        float WeightSum = 0.0;
         float DepthSum = 0.0;
         float4 ColorSum = float4(0.0, 0.0, 0.0, 0.0);
 
-        for (uint SampleIdx = 0; SampleIdx < 4; SampleIdx++)
+        for (int SampleIdx = 0; SampleIdx < 4; ++SampleIdx)
         {
-            const int2 Location = PrevPosi + Offset[SampleIdx];
+            int2 Location = PrevPosi + int2(SampleIdx & 0x01, SampleIdx >> 1);
             ColorSum  += Weight[SampleIdx] * SamplePrevRadiance(Location);
             DepthSum  += Weight[SampleIdx] * SamplePrevDepth(Location);
             WeightSum += Weight[SampleIdx];
@@ -222,38 +227,38 @@ PSOutput ComputeTemporalAccumulationPS(in float4 Position : SV_Position)
     // Secondary reprojection based on ray lengths:
     // https://www.ea.com/seed/news/seed-dd18-presentation-slides-raytracing (Slide 45)
 
-    const PixelStatistic PixelStat = ComputePixelStatistic(uint2(Position.xy));
-    const float Depth = SampleCurrDepth(uint2(Position.xy));
-    const float HitDepth = SampleHitDepth(uint2(Position.xy));
-    const float2 Motion = SampleMotion(uint2(Position.xy));
-    const float Roughness = SampleRoughness(uint2(Position.xy));
+    PixelStatistic PixelStat = ComputePixelStatistic(int2(Position.xy));
+    float Depth = SampleCurrDepth(int2(Position.xy));
+    float HitDepth = SampleHitDepth(int2(Position.xy));
+    float Roughness = SampleRoughness(int2(Position.xy));
+    float2 Motion = SampleMotion(int2(Position.xy));
 
-    const float2 PrevIncidentPoint = Position.xy - Motion * g_SSRAttribs.RenderSize;
-    const float2 PrevReflectionHit = ComputeReflectionHitPosition(uint2(Position.xy), HitDepth);
+    float2 PrevIncidentPoint = Position.xy - Motion * float2(g_SSRAttribs.RenderSize);
+    float2 PrevReflectionHit = ComputeReflectionHitPosition(int2(Position.xy), HitDepth);
 
-    const float4 PrevColorIncidentPoint = SamplePrevRadianceLinear(PrevIncidentPoint); 
-    const float4 PrevColorReflectionHit = SamplePrevRadianceLinear(PrevReflectionHit);
+    float4 PrevColorIncidentPoint = SamplePrevRadianceLinear(PrevIncidentPoint); 
+    float4 PrevColorReflectionHit = SamplePrevRadianceLinear(PrevReflectionHit);
 
-    const float PrevDistanceIncidentPoint = abs(Luminance(PrevColorIncidentPoint.rgb) - Luminance(PixelStat.Mean.rgb));
-    const float PrevDistanceReflectionHit = abs(Luminance(PrevColorReflectionHit.rgb) - Luminance(PixelStat.Mean.rgb));
+    float PrevDistanceIncidentPoint = abs(Luminance(PrevColorIncidentPoint.rgb) - Luminance(PixelStat.Mean.rgb));
+    float PrevDistanceReflectionHit = abs(Luminance(PrevColorReflectionHit.rgb) - Luminance(PixelStat.Mean.rgb));
 
-    const float2 PrevCoord = PrevDistanceIncidentPoint < PrevDistanceReflectionHit ? PrevIncidentPoint : PrevReflectionHit;
-    const ProjectionDesc Reprojection = ComputeReprojection(PrevCoord, Depth);
+    float2 PrevCoord = PrevDistanceIncidentPoint < PrevDistanceReflectionHit ? PrevIncidentPoint : PrevReflectionHit;
+    ProjectionDesc Reprojection = ComputeReprojection(PrevCoord, Depth);
 
     PSOutput Output;
     if (Reprojection.IsSuccess)
     {
-        const float Alpha = IsMirrorReflection(Roughness) ? 0.95 : 1.0;
-        const float4 ColorMin = PixelStat.Mean - SSR_TEMPORAL_STANDARD_DEVIATION_SCALE * PixelStat.StdDev;
-        const float4 ColorMax = PixelStat.Mean + SSR_TEMPORAL_STANDARD_DEVIATION_SCALE * PixelStat.StdDev;
-        const float4 PrevRadiance = clamp(Reprojection.Color, ColorMin, ColorMax);
-        const float  PrevVariance = SamplePrevVarianceLinear(Reprojection.PrevCoord);
-        Output.Radiance = lerp(SampleCurrRadiance(uint2(Position.xy)), PrevRadiance, Alpha * g_SSRAttribs.TemporalRadianceStabilityFactor);
-        Output.Variance = lerp(SampleCurrVariance(uint2(Position.xy)), PrevVariance, Alpha * g_SSRAttribs.TemporalVarianceStabilityFactor);
+        float Alpha = IsMirrorReflection(Roughness) ? 0.95 : 1.0;
+        float4 ColorMin = PixelStat.Mean - SSR_TEMPORAL_STANDARD_DEVIATION_SCALE * PixelStat.StdDev;
+        float4 ColorMax = PixelStat.Mean + SSR_TEMPORAL_STANDARD_DEVIATION_SCALE * PixelStat.StdDev;
+        float4 PrevRadiance = clamp(Reprojection.Color, ColorMin, ColorMax);
+        float  PrevVariance = SamplePrevVarianceLinear(Reprojection.PrevCoord);
+        Output.Radiance = lerp(SampleCurrRadiance(int2(Position.xy)), PrevRadiance, Alpha * g_SSRAttribs.TemporalRadianceStabilityFactor);
+        Output.Variance = lerp(SampleCurrVariance(int2(Position.xy)), PrevVariance, Alpha * g_SSRAttribs.TemporalVarianceStabilityFactor);
     }
     else
     {
-        Output.Radiance = SampleCurrRadiance(uint2(Position.xy));
+        Output.Radiance = SampleCurrRadiance(int2(Position.xy));
         Output.Variance = 1.0f;
     }
     return Output;

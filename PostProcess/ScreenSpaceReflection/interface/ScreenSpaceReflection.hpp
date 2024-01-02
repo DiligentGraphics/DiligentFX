@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -141,6 +141,7 @@ private:
         RESOURCE_IDENTIFIER_INPUT_MATERIAL_PARAMETERS,
         RESOURCE_IDENTIFIER_INPUT_MOTION_VECTORS,
         RESOURCE_IDENTIFIER_CONSTANT_BUFFER,
+        RESOURCE_IDENTIFIER_CONSTANT_BUFFER_INTERMEDIATE,
         RESOURCE_IDENTIFIER_DEPTH_HIERARCHY,
         RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK,
         RESOURCE_IDENTIFIER_ROUGHNESS,
@@ -153,8 +154,10 @@ private:
         RESOURCE_IDENTIFIER_RESOLVED_RADIANCE,
         RESOURCE_IDENTIFIER_RESOLVED_VARIANCE,
         RESOURCE_IDENTIFIER_RESOLVED_DEPTH,
-        RESOURCE_IDENTIFIER_RADIANCE_HISTORY,
-        RESOURCE_IDENTIFIER_VARIANCE_HISTORY,
+        RESOURCE_IDENTIFIER_RADIANCE_HISTORY0,
+        RESOURCE_IDENTIFIER_RADIANCE_HISTORY1,
+        RESOURCE_IDENTIFIER_VARIANCE_HISTORY0,
+        RESOURCE_IDENTIFIER_VARIANCE_HISTORY1,
         RESOURCE_IDENTIFIER_DEPTH_HISTORY,
         RESOURCE_IDENTIFIER_OUTPUT,
         RESOURCE_IDENTIFIER_COUNT
@@ -165,16 +168,10 @@ private:
 
     std::vector<RefCntAutoPtr<ITextureView>> m_HierarchicalDepthMipMapDSV;
     std::vector<RefCntAutoPtr<ITextureView>> m_HierarchicalDepthMipMapSRV;
+    RefCntAutoPtr<ITextureView>              m_DepthStencilMaskDSVReadOnly;
 
-    std::array<RefCntAutoPtr<ITextureView>, 2> m_RadianceHistoryRTV{};
-    std::array<RefCntAutoPtr<ITextureView>, 2> m_RadianceHistorySRV{};
-
-    std::array<RefCntAutoPtr<ITextureView>, 2> m_VarianceHistoryRTV{};
-    std::array<RefCntAutoPtr<ITextureView>, 2> m_VarianceHistorySRV{};
-
-    RefCntAutoPtr<ITextureView> m_DepthStencilMaskDSVReadOnly;
-
-    bool m_IsSupportTransitionSubresources = false;
+    bool m_IsSupportTransitionSubresources  = false;
+    bool m_IsSupportedShaderSubresourceView = true;
 
     Uint32 m_BackBufferWidth  = 0;
     Uint32 m_BackBufferHeight = 0;

@@ -45,23 +45,23 @@ float SampleDepth(uint2 PixelCoord)
 
 float2 ComputeWeightRayLength(int2 PixelCoord, float3 V, float3 N, float Roughness, float NdotV)
 {
-    const float4 RayDirectionPDF = g_TextureRayDirectionPDF.Load(uint3(PixelCoord, 0));
-    precise const float InvRayLength = rsqrt(dot(RayDirectionPDF.xyz, RayDirectionPDF.xyz));
+    float4 RayDirectionPDF = g_TextureRayDirectionPDF.Load(uint3(PixelCoord, 0));
+    float InvRayLength = rsqrt(dot(RayDirectionPDF.xyz, RayDirectionPDF.xyz));
     if (isnan(InvRayLength))
         return float2(1.0e-6f, 1.0e-6f);
 
-    const float3 RayDirection = RayDirectionPDF.xyz * InvRayLength;
-    const float PDF = RayDirectionPDF.w;
+    float3 RayDirection = RayDirectionPDF.xyz * InvRayLength;
+    float PDF = RayDirectionPDF.w;
 
-    const float3 L = RayDirection;
-    const float3 H = normalize(L + V);
+    float3 L = RayDirection;
+    float3 H = normalize(L + V);
 
-    const float NdotH = saturate(dot(N, H));
-    const float NdotL = saturate(dot(N, L));
+    float NdotH = saturate(dot(N, H));
+    float NdotL = saturate(dot(N, L));
 
-    const float Vis = SmithGGXVisibilityCorrelated(NdotL, NdotV, Roughness);
-    const float D = NormalDistribution_GGX(NdotH, Roughness);
-    const float LocalBRDF = Vis * D * NdotL;
+    float Vis = SmithGGXVisibilityCorrelated(NdotL, NdotV, Roughness);
+    float D = NormalDistribution_GGX(NdotH, Roughness);
+    float LocalBRDF = Vis * D * NdotL;
     return float2(max(LocalBRDF / max(PDF, 1.0e-5f), 1e-6), rcp(InvRayLength));
 }
 
@@ -72,8 +72,8 @@ void ComputeWeightedVariance(inout PixelAreaStatistic Stat, float4 SampleColor, 
     Stat.ColorSum += Weight * SampleColor;
     Stat.WeightSum += Weight;
 
-    const float Value = Luminance(SampleColor.rgb);
-    const float PrevMean = Stat.Mean;
+    float Value = Luminance(SampleColor.rgb);
+    float PrevMean = Stat.Mean;
 
     Stat.Mean += Weight * rcp(Stat.WeightSum) * (Value - PrevMean);
     Stat.Variance += Weight * (Value - PrevMean) * (Value - Stat.Mean);
@@ -81,7 +81,7 @@ void ComputeWeightedVariance(inout PixelAreaStatistic Stat, float4 SampleColor, 
 
 float ComputeResolvedDepth(float3 PositionWS, float SurfaceHitDistance)
 {
-    const float CameraSurfaceDistance = distance(g_SSRAttribs.CameraPosition.xyz, PositionWS);
+    float CameraSurfaceDistance = distance(g_SSRAttribs.CameraPosition.xyz, PositionWS);
     return CameraZToDepth(CameraSurfaceDistance + SurfaceHitDistance, g_SSRAttribs.ProjMatrix);
 }
 
@@ -93,19 +93,19 @@ float3 ScreenSpaceToWorldSpace(float3 ScreenCoordUV)
 SSR_ATTRIBUTE_EARLY_DEPTH_STENCIL
 PSOutput ComputeSpatialReconstructionPS(in float4 Position : SV_Position)
 {
-    CRNG Rng = InitCRND(uint2(Position.xy), 0);
+    CRNG Rng = InitCRND(uint2(Position.xy), 0u);
 
-    const float2 ScreenCoordUV = Position.xy * g_SSRAttribs.InverseRenderSize;
-    const float3 PositionWS = ScreenSpaceToWorldSpace(float3(ScreenCoordUV, SampleDepth(uint2(Position.xy))));
-    const float3 NormalWS = SampleNormalWS(uint2(Position.xy));
-    const float3 ViewWS = normalize(g_SSRAttribs.CameraPosition.xyz - PositionWS);
-    const float NdotV = saturate(dot(NormalWS, ViewWS));
+    float2 ScreenCoordUV = Position.xy * g_SSRAttribs.InverseRenderSize;
+    float3 PositionWS = ScreenSpaceToWorldSpace(float3(ScreenCoordUV, SampleDepth(uint2(Position.xy))));
+    float3 NormalWS = SampleNormalWS(uint2(Position.xy));
+    float3 ViewWS = normalize(g_SSRAttribs.CameraPosition.xyz - PositionWS);
+    float NdotV = saturate(dot(NormalWS, ViewWS));
 
-    const float Roughness = SampleRoughness(uint2(Position.xy));
-    const float RoughnessFactor = saturate(SSR_SPATIAL_RECONSTRUCTION_ROUGHNESS_FACTOR * sqrt(Roughness));
-    const float Radius = lerp(0, g_SSRAttribs.SpatialReconstructionRadius, RoughnessFactor);
-    const int SampleCount = int(lerp(1.0, float(SSR_SPATIAL_RECONSTRUCTION_SAMPLES), Radius / g_SSRAttribs.SpatialReconstructionRadius));
-    const float2 RandomOffset = float2(Rand(Rng), Rand(Rng));
+    float Roughness = SampleRoughness(uint2(Position.xy));
+    float RoughnessFactor = saturate(float(SSR_SPATIAL_RECONSTRUCTION_ROUGHNESS_FACTOR) * sqrt(Roughness));
+    float Radius = lerp(0.0, g_SSRAttribs.SpatialReconstructionRadius, RoughnessFactor);
+    uint SampleCount = uint(lerp(1.0, float(SSR_SPATIAL_RECONSTRUCTION_SAMPLES), Radius / g_SSRAttribs.SpatialReconstructionRadius));
+    float2 RandomOffset = float2(Rand(Rng), Rand(Rng));
   
     PixelAreaStatistic PixelAreaStat;
     PixelAreaStat.ColorSum = float4(0.0, 0.0, 0.0, 0.0);
@@ -116,14 +116,14 @@ PSOutput ComputeSpatialReconstructionPS(in float4 Position : SV_Position)
     float NearestSurfaceHitDistance = FLT_MAX;
 
     // TODO: Try to implement sampling from https://youtu.be/MyTOGHqyquU?t=1043
-    for (int SampleIdx = 0; SampleIdx < SampleCount; SampleIdx++)
+    for (uint SampleIdx = 0u; SampleIdx < SampleCount; SampleIdx++)
     {
-        const float2 Xi = 2.0 * frac(HammersleySequence(SampleIdx, SampleCount) + RandomOffset) - 1.0;
-        const int2 SampleCoord = int2(Position.xy + Radius * Xi);
+        float2 Xi = 2.0 * frac(HammersleySequence(SampleIdx, SampleCount) + RandomOffset) - 1.0;
+        int2 SampleCoord = int2(Position.xy + Radius * Xi);
         if (IsInsideScreen(SampleCoord, g_SSRAttribs.RenderSize))
         {
-            const float2 WeightLength = ComputeWeightRayLength(SampleCoord, ViewWS, NormalWS, Roughness, NdotV);
-            const float4 SampleColor = g_TextureIntersectSpecular.Load(uint3(SampleCoord, 0));
+            float2 WeightLength = ComputeWeightRayLength(SampleCoord, ViewWS, NormalWS, Roughness, NdotV);
+            float4 SampleColor = g_TextureIntersectSpecular.Load(uint3(SampleCoord, 0));
             ComputeWeightedVariance(PixelAreaStat, SampleColor, WeightLength.x);
 
             if (WeightLength.x > 1.0e-6)

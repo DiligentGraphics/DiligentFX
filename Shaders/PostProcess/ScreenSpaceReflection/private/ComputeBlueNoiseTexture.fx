@@ -18,23 +18,23 @@ float SampleRandomNumber(uint2 PixelCoord, uint SampleIndex, uint SampleDimensio
     SampleDimension = SampleDimension & 255u;
 
     // xor index based on optimized ranking
-    const uint RankedSampleIndex = SampleIndex;
+    uint RankedSampleIndex = SampleIndex;
 
     // Fetch value in sequence
     uint Value = g_SobolBuffer.Load(uint3(SampleDimension, RankedSampleIndex * 256u, 0));
 
     // If the dimension is optimized, xor sequence value based on optimized scrambling
     uint OriginalIndex = (SampleDimension % 8u) + (PixelCoord.x + PixelCoord.y * 128u) * 8u;
-    Value = Value ^ g_ScramblingTileBuffer.Load(uint3(OriginalIndex % 512u, OriginalIndex / 512u, 0));
+    Value = Value ^ g_ScramblingTileBuffer.Load(uint3(OriginalIndex % 512u, OriginalIndex / 512u, 0)); // TODO: AMD doesn't support integer division
 
-    return (Value + 0.5f) / 256.0f;
+    return (float(Value) + 0.5f) / 256.0f;
 }
 
 float2 SampleRandomVector2D(uint2 PixelCoord)
 {
     return float2(
-        fmod(SampleRandomNumber(PixelCoord, 0, 0u) + (g_SSRAttribs.FrameIndex & 0xFFu) * M_GOLDEN_RATIO, 1.0),
-        fmod(SampleRandomNumber(PixelCoord, 0, 1u) + (g_SSRAttribs.FrameIndex & 0xFFu) * M_GOLDEN_RATIO, 1.0));
+        fmod(SampleRandomNumber(PixelCoord, 0u, 0u) + float(g_SSRAttribs.FrameIndex & 0xFFu) * M_GOLDEN_RATIO, 1.0),
+        fmod(SampleRandomNumber(PixelCoord, 0u, 1u) + float(g_SSRAttribs.FrameIndex & 0xFFu) * M_GOLDEN_RATIO, 1.0));
 }
 
 float2 ComputeBlueNoiseTexturePS(in float4 Position : SV_Position) : SV_Target
