@@ -161,7 +161,8 @@ IPipelineState* EnvMapRenderer::GetPSO(const PSOKey& Key)
     for (auto RTVFormat : m_RTVFormats)
         PsoCI.AddRenderTarget(RTVFormat);
 
-    PsoCI.GraphicsPipeline.DepthStencilDesc.DepthFunc = COMPARISON_FUNC_LESS_EQUAL;
+    PsoCI.GraphicsPipeline.DepthStencilDesc.DepthFunc        = COMPARISON_FUNC_LESS_EQUAL;
+    PsoCI.GraphicsPipeline.DepthStencilDesc.DepthWriteEnable = false;
 
     auto PSO = Device.CreateGraphicsPipelineState(PsoCI);
     if (!PSO)
