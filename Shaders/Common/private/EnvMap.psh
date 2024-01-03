@@ -12,14 +12,14 @@ cbuffer cbEnvMapRenderAttribs
 
     float AverageLogLum;
     float MipLevel;
-    float Unusued1;
+    float Alpha;
     float Unusued2;
 }
 
 TextureCube  EnvMap;
 SamplerState EnvMap_sampler;
 
-float3 SampleEnvMap(in float4 ClipPos)
+float4 SampleEnvMap(in float4 ClipPos)
 {
     float4 WorldPos  = mul(ClipPos, g_CameraAttribs.mViewProjInv);
     float3 Direction = WorldPos.xyz / WorldPos.w - g_CameraAttribs.f4Position.xyz;
@@ -33,7 +33,7 @@ float3 SampleEnvMap(in float4 ClipPos)
     Color.rgb = pow(Color.rgb, float3(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2));
 #endif
 
-    return Color;
+    return float4(Color.rgb, Alpha);
 }
 
 #include "PSMainGenerated.generated"
@@ -41,6 +41,5 @@ float3 SampleEnvMap(in float4 ClipPos)
 //           in  float4 ClipPos : CLIP_POS,
 //           out float4 Color   : SV_Target)
 // {
-//     Color.rgb = SampleEnvMap(ClipPos);
-//     Color.a = 1.0;
+//     Color = SampleEnvMap(ClipPos);
 // }

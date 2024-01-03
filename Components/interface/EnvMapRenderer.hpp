@@ -67,6 +67,7 @@ public:
 
         float AverageLogLum = 1;
         float MipLevel      = 0;
+        float Alpha         = 1;
 
         /// Manually convert shader output to sRGB color space.
         bool ConvertOutputToSRGB = false;

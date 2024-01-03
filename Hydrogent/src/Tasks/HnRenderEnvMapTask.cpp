@@ -70,8 +70,7 @@ void main(in  float4 Pos     : SV_Position,
           out float4 Color   : SV_Target0,
           out float4 MeshId  : SV_Target1)
 {
-    Color.rgb = SampleEnvMap(ClipPos);
-    Color.a = 1.0;
+    Color  = SampleEnvMap(ClipPos);
     MeshId = float4(0.0, 0.0, 0.0, 1.0);
 }
 )";

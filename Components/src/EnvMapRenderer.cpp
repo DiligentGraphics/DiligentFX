@@ -49,8 +49,8 @@ struct EnvMapRenderAttribs
 
     float AverageLogLum;
     float MipLevel;
-    float Unusued1;
-    float Unusued2;
+    float Alpha;
+    float Padding;
 };
 
 } // namespace
@@ -77,8 +77,7 @@ void main(in  float4 Pos     : SV_Position,
           in  float4 ClipPos : CLIP_POS,
           out float4 Color   : SV_Target)
 {
-    Color.rgb = SampleEnvMap(ClipPos);
-    Color.a = 1.0;
+    Color = SampleEnvMap(ClipPos);
 }
 )";
 
@@ -212,6 +211,7 @@ void EnvMapRenderer::Render(const RenderAttribs& Attribs, const HLSL::ToneMappin
         EnvMapAttribs->ToneMapping   = ToneMapping;
         EnvMapAttribs->AverageLogLum = Attribs.AverageLogLum;
         EnvMapAttribs->MipLevel      = Attribs.MipLevel;
+        EnvMapAttribs->Alpha         = Attribs.Alpha;
     }
 
     Attribs.pContext->SetPipelineState(pPSO);
