@@ -20,7 +20,7 @@ SamplerState g_tex2DVectorField_sampler;
 
 void main(in  uint   VertexId : SV_VertexID,
           out float4 Pos      : SV_Position,
-          out float3 Color    : COLOR)
+          out float4 Color    : COLOR)
 {
     uint Col = (VertexId / 2u) % g_Attribs.uGridWidth;
     uint Row = (VertexId / 2u) / g_Attribs.uGridWidth;
@@ -39,5 +39,5 @@ void main(in  uint   VertexId : SV_VertexID,
     }
     
     Pos   = float4(PosXY, 0.0, 1.0);
-    Color = g_Attribs.Colors[VertexId & 0x01u].rgb;
+    Color = g_Attribs.Colors[VertexId & 0x01u];
 }

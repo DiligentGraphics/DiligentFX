@@ -73,10 +73,10 @@ VectorFieldRenderer::VectorFieldRenderer(const CreateInfo& CI) :
 
 static constexpr char DefaultPSMain[] = R"(
 void main(in  float4 Pos      : SV_Position,
-          in  float3 Color    : COLOR,
+          in  float4 Color    : COLOR,
           out float4 OutColor : SV_Target)
 {
-    OutColor = float4(Color, 1.0);
+    OutColor = Color;
 #if CONVERT_OUTPUT_TO_SRGB
     OutColor.rgb = pow(OutColor.rgb, float3(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2));
 #endif
