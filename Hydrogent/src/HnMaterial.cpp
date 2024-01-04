@@ -172,6 +172,21 @@ void HnMaterial::ProcessMaterialNetwork()
         m_MaterialData.Attribs.EmissiveFactor = m_Textures.find(HnTokens->emissiveColor) != m_Textures.end() ? float4{1} : float4{0};
     }
 
+    if (const HnMaterialParameter* Param = m_Network.GetParameter(HnMaterialParameter::ParamType::Fallback, HnTokens->clearcoat))
+    {
+        m_MaterialData.Attribs.ClearcoatFactor = Param->FallbackValue.Get<float>();
+        if (m_MaterialData.Attribs.ClearcoatFactor > 0)
+        {
+            m_MaterialData.HasClearcoat = true;
+
+            if (const HnMaterialParameter* RoughnessParam = m_Network.GetParameter(HnMaterialParameter::ParamType::Fallback, HnTokens->clearcoatRoughness))
+            {
+                m_MaterialData.Attribs.ClearcoatRoughnessFactor = RoughnessParam->FallbackValue.Get<float>();
+            }
+        }
+    }
+
+
     m_MaterialData.Attribs.AlphaMode = MaterialTagToPbrAlphaMode(m_Network.GetTag());
 
     m_MaterialData.Attribs.AlphaCutoff       = m_Network.GetOpacityThreshold();

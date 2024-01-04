@@ -70,6 +70,8 @@ namespace USD
     (occlusion)                \
     (opacity)                  \
     (emissiveColor)            \
+    (clearcoat)                \
+    (clearcoatRoughness)       \
     (renderPassState) 	       \
     (renderPassParams) 	       
 

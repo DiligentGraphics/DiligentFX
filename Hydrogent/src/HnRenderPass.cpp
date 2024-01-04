@@ -486,6 +486,10 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
             {
                 PSOFlags |= GetTexturePSOFlags(*pMaterial);
                 PSOFlags |= PBR_Renderer::PSO_FLAG_USE_IBL;
+                if (MaterialData.HasClearcoat)
+                {
+                    PSOFlags |= PBR_Renderer::PSO_FLAG_ENABLE_CLEAR_COAT;
+                }
             }
 
             if (static_cast<const HnRenderParam*>(State.RenderDelegate.GetRenderParam())->GetUseTextureAtlas())

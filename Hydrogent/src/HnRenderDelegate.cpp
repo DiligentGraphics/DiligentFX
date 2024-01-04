@@ -119,6 +119,8 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(IRenderDevice*     pDevic
     USDRendererCI.UseSeparateMetallicRoughnessTextures = true;
     // Default textures will be provided by the texture registry
     USDRendererCI.CreateDefaultTextures = false;
+    // Enable clear coat support
+    USDRendererCI.EnableClearCoat = true;
 
     static constexpr LayoutElement Inputs[] =
         {
