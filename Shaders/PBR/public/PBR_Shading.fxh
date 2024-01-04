@@ -36,6 +36,35 @@
 #   define USE_IBL_MULTIPLE_SCATTERING 1
 #endif
 
+
+#ifndef ENABLE_CLEAR_COAT
+#   define ENABLE_CLEAR_COAT 0
+#endif
+    
+#ifndef ENABLE_SHEEN
+#   define ENABLE_SHEEN 0
+#endif
+
+#ifndef ENABLE_ANISOTROPY
+#   define ENABLE_ANISOTROPY 0
+#endif
+    
+#ifndef ENABLE_IRIDESCENCE
+#   define ENABLE_IRIDESCENCE 0
+#endif
+
+#ifndef ENABLE_TRANSMISSION
+#   define ENABLE_TRANSMISSION 0
+#endif
+    
+#ifndef ENABLE_VOLUME
+#   define ENABLE_VOLUME 0
+#endif
+
+#ifndef USE_IBL
+#   define USE_IBL 1
+#endif
+
 float GetPerceivedBrightness(float3 rgb)
 {
     return sqrt(0.299 * rgb.r * rgb.r + 0.587 * rgb.g * rgb.g + 0.114 * rgb.b * rgb.b);
@@ -767,6 +796,7 @@ float3 ResolveLighting(in SurfaceShadingInfo  Shading,
     return Color;
 }
 
+#ifdef DEBUG_VIEW
 float3 GetDebugColor(in SurfaceShadingInfo  Shading,
                      in SurfaceLightingInfo SrfLighting)
 {
@@ -878,5 +908,6 @@ float3 GetDebugColor(in SurfaceShadingInfo  Shading,
     
     return float3(0.0, 0.0, 0.0);
 }
+#endif // DEBUG_VIEW
 
 #endif // _PBR_SHADING_FXH_
