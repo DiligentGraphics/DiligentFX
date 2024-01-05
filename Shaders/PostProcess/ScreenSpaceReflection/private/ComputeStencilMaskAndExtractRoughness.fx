@@ -9,7 +9,7 @@ cbuffer cbScreenSpaceReflectionAttribs
 Texture2D<float4> g_TextureMaterialParameters;
 Texture2D<float>  g_TextureDepth;
 
-float SampleRoughness(uint2 PixelCoord)
+float SampleRoughness(int2 PixelCoord)
 {
     float Roughness = g_TextureMaterialParameters.Load(int3(PixelCoord, 0))[g_SSRAttribs.RoughnessChannel];
     if (g_SSRAttribs.IsRoughnessPerceptual)
@@ -17,15 +17,15 @@ float SampleRoughness(uint2 PixelCoord)
     return Roughness;
 }
 
-float SampleDepth(uint2 PixelCoord)
+float SampleDepth(int2 PixelCoord)
 {
     return g_TextureDepth.Load(int3(PixelCoord, 0));
 }
 
 float ComputeStencilMaskAndExtractRoughnessPS(in float4 Position : SV_Position) : SV_Target0
 {
-    float Roughness = SampleRoughness(uint2(Position.xy));
-    float Depth = SampleDepth(uint2(Position.xy));
+    float Roughness = SampleRoughness(int2(Position.xy));
+    float Depth = SampleDepth(int2(Position.xy));
     
     if (!IsGlossyReflection(Roughness, g_SSRAttribs.RoughnessThreshold, g_SSRAttribs.IsRoughnessPerceptual) || IsBackground(Depth))
         discard;

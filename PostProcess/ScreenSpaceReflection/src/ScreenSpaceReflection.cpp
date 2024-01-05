@@ -41,12 +41,6 @@ namespace NoiseBuffers
 #include "SamplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_1spp.cpp"
 }
 
-static DILIGENT_CONSTEXPR DepthStencilStateDesc DSS_DepthWriteComparisonAlways{
-    True,                  // DepthEnable
-    True,                  // DepthWriteEnable
-    COMPARISON_FUNC_ALWAYS // DepthFunc
-};
-
 static DILIGENT_CONSTEXPR DepthStencilStateDesc DSS_StencilWrite{
     False,                // DepthEnable
     False,                // DepthWriteEnable
@@ -80,12 +74,12 @@ static DILIGENT_CONSTEXPR DepthStencilStateDesc DSS_StencilReadComparisonEqual{
 namespace
 {
 
-RefCntAutoPtr<IShader> CreateShader(IRenderDevice*          pDevice,
-                                    IRenderStateCache*      pStateCache,
-                                    const Char*             FileName,
-                                    const Char*             EntryPoint,
-                                    SHADER_TYPE             Type,
-                                    const ShaderMacroArray& Macros = {})
+RefCntAutoPtr<IShader> CreateShaderFromFile(IRenderDevice*          pDevice,
+                                            IRenderStateCache*      pStateCache,
+                                            const Char*             FileName,
+                                            const Char*             EntryPoint,
+                                            SHADER_TYPE             Type,
+                                            const ShaderMacroArray& Macros = {})
 {
     ShaderCreateInfo ShaderCI;
     ShaderCI.EntryPoint                      = EntryPoint;
@@ -99,24 +93,43 @@ RefCntAutoPtr<IShader> CreateShader(IRenderDevice*          pDevice,
     return RenderDeviceWithCache<false>{pDevice, pStateCache}.CreateShader(ShaderCI);
 }
 
+RefCntAutoPtr<IShader> CreateShaderFromSource(IRenderDevice*          pDevice,
+                                              IRenderStateCache*      pStateCache,
+                                              const Char*             Source,
+                                              const Char*             EntryPoint,
+                                              SHADER_TYPE             Type,
+                                              const ShaderMacroArray& Macros = {})
+{
+    ShaderCreateInfo ShaderCI;
+    ShaderCI.EntryPoint                      = EntryPoint;
+    ShaderCI.Source                          = Source;
+    ShaderCI.Macros                          = Macros;
+    ShaderCI.SourceLanguage                  = SHADER_SOURCE_LANGUAGE_HLSL;
+    ShaderCI.Desc.ShaderType                 = Type;
+    ShaderCI.Desc.Name                       = EntryPoint;
+    ShaderCI.pShaderSourceStreamFactory      = &DiligentFXShaderSourceStreamFactory::GetInstance();
+    ShaderCI.Desc.UseCombinedTextureSamplers = true;
+    return RenderDeviceWithCache<false>{pDevice, pStateCache}.CreateShader(ShaderCI);
+}
+
 ITextureView* GetInternalResourceSRV(const RefCntAutoPtr<IDeviceObject>& pDeviceObject)
 {
-    return pDeviceObject.RawPtr<ITexture>()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+    return StaticCast<ITexture*>(pDeviceObject)->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
 };
 
 ITextureView* GetInternalResourceRTV(const RefCntAutoPtr<IDeviceObject>& pDeviceObject)
 {
-    return pDeviceObject.RawPtr<ITexture>()->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET);
+    return StaticCast<ITexture*>(pDeviceObject)->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET);
 };
 
 ITextureView* GetInternalResourceDSV(const RefCntAutoPtr<IDeviceObject>& pDeviceObject)
 {
-    return pDeviceObject.RawPtr<ITexture>()->GetDefaultView(TEXTURE_VIEW_DEPTH_STENCIL);
+    return StaticCast<ITexture*>(pDeviceObject)->GetDefaultView(TEXTURE_VIEW_DEPTH_STENCIL);
 };
 
 TEXTURE_FORMAT GetInternalResourceFormat(const RefCntAutoPtr<IDeviceObject>& pDeviceObject)
 {
-    return pDeviceObject.RawPtr<ITexture>()->GetDesc().Format;
+    return StaticCast<ITexture*>(pDeviceObject)->GetDesc().Format;
 };
 
 } // namespace
@@ -170,6 +183,7 @@ ScreenSpaceReflection::ScreenSpaceReflection(IRenderDevice* pDevice)
 {
     m_IsSupportTransitionSubresources  = pDevice->GetDeviceInfo().Type == RENDER_DEVICE_TYPE_D3D12 || pDevice->GetDeviceInfo().Type == RENDER_DEVICE_TYPE_VULKAN;
     m_IsSupportedShaderSubresourceView = pDevice->GetDeviceInfo().Type != RENDER_DEVICE_TYPE_GLES;
+    m_IsSupportCopyDepthToColor        = pDevice->GetDeviceInfo().Type == RENDER_DEVICE_TYPE_D3D12 || pDevice->GetDeviceInfo().Type == RENDER_DEVICE_TYPE_D3D11;
 
     RenderDeviceWithCache_N Device{pDevice};
     {
@@ -257,7 +271,7 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
 
     constexpr Uint32 DepthHierarchyMipCount = SSR_DEPTH_HIERARCHY_MAX_MIP + 1;
     {
-        m_HierarchicalDepthMipMapDSV.clear();
+        m_HierarchicalDepthMipMapRTV.clear();
         m_HierarchicalDepthMipMapSRV.clear();
 
         TextureDesc Desc;
@@ -265,24 +279,24 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
         Desc.Type      = RESOURCE_DIM_TEX_2D;
         Desc.Width     = BackBufferWidth;
         Desc.Height    = BackBufferHeight;
-        Desc.Format    = TEX_FORMAT_D32_FLOAT;
+        Desc.Format    = TEX_FORMAT_R32_FLOAT;
         Desc.MipLevels = std::min(ComputeMipLevelsCount(BackBufferWidth, BackBufferHeight), DepthHierarchyMipCount);
-        Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_DEPTH_STENCIL;
+        Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
 
         RefCntAutoPtr<ITexture> pTexture = Device.CreateTexture(Desc);
 
         m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY] = pTexture;
         m_HierarchicalDepthMipMapSRV.resize(Desc.MipLevels);
-        m_HierarchicalDepthMipMapDSV.resize(Desc.MipLevels);
+        m_HierarchicalDepthMipMapRTV.resize(Desc.MipLevels);
 
         for (Uint32 MipLevel = 0; MipLevel < Desc.MipLevels; MipLevel++)
         {
             {
                 TextureViewDesc ViewDesc;
-                ViewDesc.ViewType        = TEXTURE_VIEW_DEPTH_STENCIL;
+                ViewDesc.ViewType        = TEXTURE_VIEW_RENDER_TARGET;
                 ViewDesc.MostDetailedMip = MipLevel;
                 ViewDesc.NumMipLevels    = 1;
-                pTexture->CreateView(ViewDesc, &m_HierarchicalDepthMipMapDSV[MipLevel]);
+                pTexture->CreateView(ViewDesc, &m_HierarchicalDepthMipMapRTV[MipLevel]);
             }
 
             if (m_IsSupportedShaderSubresourceView)
@@ -296,13 +310,27 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
         }
     }
 
+    if (!m_IsSupportedShaderSubresourceView)
+    {
+        TextureDesc Desc;
+        Desc.Name      = "ScreenSpaceReflection::DepthHierarchyIntermediate";
+        Desc.Type      = RESOURCE_DIM_TEX_2D;
+        Desc.Width     = BackBufferWidth;
+        Desc.Height    = BackBufferHeight;
+        Desc.Format    = TEX_FORMAT_R32_FLOAT;
+        Desc.MipLevels = std::min(ComputeMipLevelsCount(BackBufferWidth, BackBufferHeight), DepthHierarchyMipCount);
+        Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
+
+        m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY_INTERMEDIATE] = Device.CreateTexture(Desc);
+    }
+
     {
         TextureDesc Desc;
         Desc.Name      = "ScreenSpaceReflection::Roughness";
         Desc.Type      = RESOURCE_DIM_TEX_2D;
         Desc.Width     = BackBufferWidth;
         Desc.Height    = BackBufferHeight;
-        Desc.Format    = TEX_FORMAT_R16_UNORM; // R8_UNORM is not enough to store alpha roughness
+        Desc.Format    = TEX_FORMAT_R16_FLOAT; // R8_UNORM is not enough to store alpha roughness
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
 
         m_Resources[RESOURCE_IDENTIFIER_ROUGHNESS] = Device.CreateTexture(Desc);
@@ -426,8 +454,8 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
         Desc.Type      = RESOURCE_DIM_TEX_2D;
         Desc.Width     = BackBufferWidth;
         Desc.Height    = BackBufferHeight;
-        Desc.Format    = TEX_FORMAT_D32_FLOAT;
-        Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_DEPTH_STENCIL; // We need to set stencil flag for Vulkan
+        Desc.Format    = TEX_FORMAT_R32_FLOAT;
+        Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
 
         m_Resources[RESOURCE_IDENTIFIER_DEPTH_HISTORY] = Device.CreateTexture(Desc);
     }
@@ -455,7 +483,7 @@ void ScreenSpaceReflection::Execute(const RenderAttributes& RenderAttribs)
 
     ScopedDebugGroup DebugGroupGlobal{RenderAttribs.pDeviceContext, "ScreenSpaceReflection"};
     {
-        MapHelper<ScreenSpaceReflectionAttribs> SSRAttibs{RenderAttribs.pDeviceContext, m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER].RawPtr<IBuffer>(), MAP_WRITE, MAP_FLAG_DISCARD};
+        MapHelper<ScreenSpaceReflectionAttribs> SSRAttibs{RenderAttribs.pDeviceContext, StaticCast<IBuffer*>(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]), MAP_WRITE, MAP_FLAG_DISCARD};
         *SSRAttibs = RenderAttribs.SSRAttribs;
     }
 
@@ -470,8 +498,55 @@ void ScreenSpaceReflection::Execute(const RenderAttributes& RenderAttribs)
 
 ITextureView* ScreenSpaceReflection::GetSSRRadianceSRV() const
 {
-    return m_Resources[RESOURCE_IDENTIFIER_OUTPUT].RawPtr<ITexture>()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+    return StaticCast<ITexture*>(m_Resources[RESOURCE_IDENTIFIER_OUTPUT])->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
 }
+
+void ScreenSpaceReflection::CopyTextureDepth(const RenderAttributes& RenderAttribs, ITextureView* pSRV, ITextureView* pRTV)
+{
+    auto& RenderTech = m_RenderTech[RENDER_TECH_COPY_DEPTH];
+    if (!RenderTech.IsInitialized())
+    {
+        DILIGENT_CONSTEXPR const char* CopyDepthMip0PS = R"(
+            Texture2D<float> g_TextureDepth;
+            
+            float CopyDepthPS(float4 Position : SV_Position) : SV_Target0
+            {
+                return g_TextureDepth.Load(int3(Position.xy, 0));
+            }
+        )";
+
+        const auto VS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVSExt", SHADER_TYPE_VERTEX);
+        const auto PS = CreateShaderFromSource(RenderAttribs.pDevice, RenderAttribs.pStateCache, CopyDepthMip0PS, "CopyDepthPS", SHADER_TYPE_PIXEL);
+
+        ShaderResourceVariableDesc VariableDescs[] = {
+            ShaderResourceVariableDesc{SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+        };
+
+        PipelineResourceLayoutDesc ResourceLayout;
+        ResourceLayout.Variables    = VariableDescs;
+        ResourceLayout.NumVariables = _countof(VariableDescs);
+
+        RenderTech.InitializePSO(RenderAttribs.pDevice,
+                                 nullptr, "ScreenSpaceReflection::CopyDepth",
+                                 VS, PS, ResourceLayout,
+                                 {
+                                     pRTV->GetTexture()->GetDesc().Format,
+                                 },
+                                 TEX_FORMAT_UNKNOWN,
+                                 DSS_DisableDepth, BS_Default, false);
+
+        RenderTech.PSO->CreateShaderResourceBinding(&RenderTech.SRB);
+    }
+
+    RenderTech.SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_TextureDepth")->Set(pSRV);
+
+    RenderAttribs.pDeviceContext->SetRenderTargets(1, &pRTV, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    RenderAttribs.pDeviceContext->SetPipelineState(RenderTech.PSO);
+    RenderAttribs.pDeviceContext->CommitShaderResources(RenderTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    RenderAttribs.pDeviceContext->Draw({3, DRAW_FLAG_VERIFY_ALL, 1});
+    RenderAttribs.pDeviceContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
+}
+
 
 void ScreenSpaceReflection::ComputeHierarchicalDepthBuffer(const RenderAttributes& RenderAttribs)
 {
@@ -481,8 +556,8 @@ void ScreenSpaceReflection::ComputeHierarchicalDepthBuffer(const RenderAttribute
         ShaderMacroHelper Macros;
         Macros.Add("SUPPORTED_SHADER_SRV", static_cast<Int32>(m_IsSupportedShaderSubresourceView));
 
-        const auto VS = CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeHierarchicalDepthBuffer.fx", "ComputeHierarchicalDepthBufferPS", SHADER_TYPE_PIXEL, Macros);
+        const auto VS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVSExt", SHADER_TYPE_VERTEX);
+        const auto PS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeHierarchicalDepthBuffer.fx", "ComputeHierarchicalDepthBufferPS", SHADER_TYPE_PIXEL, Macros);
 
         std::vector<ShaderResourceVariableDesc> VariableDescs;
         if (m_IsSupportedShaderSubresourceView)
@@ -499,45 +574,81 @@ void ScreenSpaceReflection::ComputeHierarchicalDepthBuffer(const RenderAttribute
         ResourceLayout.Variables    = VariableDescs.data();
         ResourceLayout.NumVariables = static_cast<Uint32>(VariableDescs.size());
 
-        BlendStateDesc NoWriteColor;
-        NoWriteColor.RenderTargets[0].RenderTargetWriteMask = COLOR_MASK_NONE;
+        // Immutable samplers are required for WebGL to work properly
+        ImmutableSamplerDesc SamplerDescs[] = {
+            ImmutableSamplerDesc{SHADER_TYPE_PIXEL, "g_TextureMips", Sam_PointWrap},
+        };
+
+        if (!m_IsSupportedShaderSubresourceView)
+        {
+            ResourceLayout.ImmutableSamplers    = SamplerDescs;
+            ResourceLayout.NumImmutableSamplers = _countof(SamplerDescs);
+        }
 
         RenderTech.InitializePSO(RenderAttribs.pDevice,
                                  RenderAttribs.pStateCache, "ScreenSpaceReflection::ComputeHierarchicalDepthBuffer",
                                  VS, PS, ResourceLayout,
-                                 {}, GetInternalResourceFormat(m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY]),
-                                 DSS_DepthWriteComparisonAlways, NoWriteColor, false);
+                                 {
+                                     GetInternalResourceFormat(m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY]),
+                                 },
+                                 TEX_FORMAT_UNKNOWN,
+                                 DSS_DisableDepth, BS_Default, false);
 
         RenderTech.PSO->CreateShaderResourceBinding(&RenderTech.SRB);
     }
 
     ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "ComputeHierarchicalDepthBuffer"};
 
-    CopyTextureAttribs CopyAttribs;
-    CopyAttribs.pSrcTexture              = m_Resources[RESOURCE_IDENTIFIER_INPUT_DEPTH].RawPtr<ITexture>();
-    CopyAttribs.pDstTexture              = m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY].RawPtr<ITexture>();
-    CopyAttribs.SrcMipLevel              = 0;
-    CopyAttribs.DstMipLevel              = 0;
-    CopyAttribs.SrcSlice                 = 0;
-    CopyAttribs.DstSlice                 = 0;
-    CopyAttribs.SrcTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
-    CopyAttribs.DstTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
-    RenderAttribs.pDeviceContext->CopyTexture(CopyAttribs);
+
+    if (m_IsSupportCopyDepthToColor)
+    {
+        CopyTextureAttribs CopyAttribs;
+        CopyAttribs.pSrcTexture              = StaticCast<ITexture*>(m_Resources[RESOURCE_IDENTIFIER_INPUT_DEPTH]);
+        CopyAttribs.pDstTexture              = StaticCast<ITexture*>(m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY]);
+        CopyAttribs.SrcMipLevel              = 0;
+        CopyAttribs.DstMipLevel              = 0;
+        CopyAttribs.SrcSlice                 = 0;
+        CopyAttribs.DstSlice                 = 0;
+        CopyAttribs.SrcTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
+        CopyAttribs.DstTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
+        RenderAttribs.pDeviceContext->CopyTexture(CopyAttribs);
+    }
+    else
+    {
+        CopyTextureDepth(RenderAttribs,
+                         StaticCast<ITexture*>(m_Resources[RESOURCE_IDENTIFIER_INPUT_DEPTH])->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE),
+                         m_HierarchicalDepthMipMapRTV[0]);
+
+        if (!m_IsSupportedShaderSubresourceView)
+        {
+            CopyTextureAttribs CopyMipAttribs;
+            CopyMipAttribs.pSrcTexture              = StaticCast<ITexture*>(m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY]);
+            CopyMipAttribs.pDstTexture              = StaticCast<ITexture*>(m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY_INTERMEDIATE]);
+            CopyMipAttribs.SrcMipLevel              = 0;
+            CopyMipAttribs.DstMipLevel              = 0;
+            CopyMipAttribs.SrcSlice                 = 0;
+            CopyMipAttribs.DstSlice                 = 0;
+            CopyMipAttribs.SrcTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
+            CopyMipAttribs.DstTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
+            RenderAttribs.pDeviceContext->CopyTexture(CopyMipAttribs);
+        }
+    }
+
 
     if (m_IsSupportTransitionSubresources)
     {
         StateTransitionDesc TransitionDescW2W[] = {
-            StateTransitionDesc{m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY].RawPtr<ITexture>(),
-                                RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_DEPTH_WRITE,
+            StateTransitionDesc{StaticCast<ITexture*>(m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY]),
+                                RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_RENDER_TARGET,
                                 STATE_TRANSITION_FLAG_UPDATE_STATE},
         };
         RenderAttribs.pDeviceContext->TransitionResourceStates(_countof(TransitionDescW2W), TransitionDescW2W);
 
-        for (Uint32 MipLevel = 1; MipLevel < m_HierarchicalDepthMipMapDSV.size(); MipLevel++)
+        for (Uint32 MipLevel = 1; MipLevel < m_HierarchicalDepthMipMapRTV.size(); MipLevel++)
         {
             StateTransitionDesc TranslationW2R[] = {
-                StateTransitionDesc{m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY].RawPtr<ITexture>(),
-                                    RESOURCE_STATE_DEPTH_WRITE, RESOURCE_STATE_DEPTH_READ,
+                StateTransitionDesc{StaticCast<ITexture*>(m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY]),
+                                    RESOURCE_STATE_RENDER_TARGET, RESOURCE_STATE_SHADER_RESOURCE,
                                     MipLevel - 1, 1, 0, REMAINING_ARRAY_SLICES,
                                     STATE_TRANSITION_TYPE_IMMEDIATE, STATE_TRANSITION_FLAG_NONE},
             };
@@ -545,16 +656,21 @@ void ScreenSpaceReflection::ComputeHierarchicalDepthBuffer(const RenderAttribute
             RenderAttribs.pDeviceContext->TransitionResourceStates(_countof(TranslationW2R), TranslationW2R);
 
             RenderTech.SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_TextureLastMip")->Set(m_HierarchicalDepthMipMapSRV[MipLevel - 1]);
-            RenderAttribs.pDeviceContext->SetRenderTargets(0, nullptr, m_HierarchicalDepthMipMapDSV[MipLevel], RESOURCE_STATE_TRANSITION_MODE_NONE);
+
+            ITextureView* pRTVs[] = {
+                m_HierarchicalDepthMipMapRTV[MipLevel],
+            };
+
+            RenderAttribs.pDeviceContext->SetRenderTargets(_countof(pRTVs), pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
             RenderAttribs.pDeviceContext->SetPipelineState(RenderTech.PSO);
             RenderAttribs.pDeviceContext->CommitShaderResources(RenderTech.SRB, RESOURCE_STATE_TRANSITION_MODE_NONE);
             RenderAttribs.pDeviceContext->Draw({3, DRAW_FLAG_VERIFY_ALL, 1});
         }
 
         StateTransitionDesc TransitionDescW2R[] = {
-            StateTransitionDesc{m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY].RawPtr<ITexture>(),
-                                RESOURCE_STATE_DEPTH_WRITE, RESOURCE_STATE_DEPTH_READ,
-                                static_cast<Uint32>(m_HierarchicalDepthMipMapDSV.size() - 1), 1, 0, REMAINING_ARRAY_SLICES,
+            StateTransitionDesc{StaticCast<ITexture*>(m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY]),
+                                RESOURCE_STATE_RENDER_TARGET, RESOURCE_STATE_SHADER_RESOURCE,
+                                static_cast<Uint32>(m_HierarchicalDepthMipMapRTV.size() - 1), 1, 0, REMAINING_ARRAY_SLICES,
                                 STATE_TRANSITION_TYPE_IMMEDIATE, STATE_TRANSITION_FLAG_UPDATE_STATE},
         };
         RenderAttribs.pDeviceContext->TransitionResourceStates(_countof(TransitionDescW2R), TransitionDescW2R);
@@ -563,10 +679,15 @@ void ScreenSpaceReflection::ComputeHierarchicalDepthBuffer(const RenderAttribute
     {
         if (m_IsSupportedShaderSubresourceView)
         {
-            for (Uint32 MipLevel = 1; MipLevel < m_HierarchicalDepthMipMapDSV.size(); MipLevel++)
+            for (Uint32 MipLevel = 1; MipLevel < m_HierarchicalDepthMipMapRTV.size(); MipLevel++)
             {
                 RenderTech.SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_TextureLastMip")->Set(m_HierarchicalDepthMipMapSRV[MipLevel - 1]);
-                RenderAttribs.pDeviceContext->SetRenderTargets(0, nullptr, m_HierarchicalDepthMipMapDSV[MipLevel], RESOURCE_STATE_TRANSITION_MODE_NONE);
+
+                ITextureView* pRTVs[] = {
+                    m_HierarchicalDepthMipMapRTV[MipLevel],
+                };
+
+                RenderAttribs.pDeviceContext->SetRenderTargets(_countof(pRTVs), pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
                 RenderAttribs.pDeviceContext->SetPipelineState(RenderTech.PSO);
                 RenderAttribs.pDeviceContext->CommitShaderResources(RenderTech.SRB, RESOURCE_STATE_TRANSITION_MODE_NONE);
                 RenderAttribs.pDeviceContext->Draw({3, DRAW_FLAG_VERIFY_ALL, 1});
@@ -574,20 +695,36 @@ void ScreenSpaceReflection::ComputeHierarchicalDepthBuffer(const RenderAttribute
         }
         else
         {
-            for (Uint32 MipLevel = 1; MipLevel < m_HierarchicalDepthMipMapDSV.size(); MipLevel++)
+            RenderTech.SRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbTextureMipAtrrib")->Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER_INTERMEDIATE]);
+            RenderTech.SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_TextureMips")->Set(GetInternalResourceSRV(m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY_INTERMEDIATE]));
+
+            for (Uint32 MipLevel = 1; MipLevel < m_HierarchicalDepthMipMapRTV.size(); MipLevel++)
             {
                 {
-                    MapHelper<Uint32> TextureMipAttribs{RenderAttribs.pDeviceContext, m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER_INTERMEDIATE].RawPtr<IBuffer>(), MAP_WRITE, MAP_FLAG_DISCARD};
+                    MapHelper<Uint32> TextureMipAttribs{RenderAttribs.pDeviceContext, StaticCast<IBuffer*>(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER_INTERMEDIATE]), MAP_WRITE, MAP_FLAG_DISCARD};
                     *TextureMipAttribs = MipLevel - 1;
                 }
 
-                RenderTech.SRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbTextureMipAtrrib")->Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER_INTERMEDIATE]);
-                RenderTech.SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_TextureMips")->Set(GetInternalResourceSRV(m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY]));
+                ITextureView* pRTVs[] = {
+                    m_HierarchicalDepthMipMapRTV[MipLevel],
+                };
 
-                RenderAttribs.pDeviceContext->SetRenderTargets(0, nullptr, m_HierarchicalDepthMipMapDSV[MipLevel], RESOURCE_STATE_TRANSITION_MODE_NONE);
+                RenderAttribs.pDeviceContext->SetRenderTargets(_countof(pRTVs), pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
                 RenderAttribs.pDeviceContext->SetPipelineState(RenderTech.PSO);
-                RenderAttribs.pDeviceContext->CommitShaderResources(RenderTech.SRB, RESOURCE_STATE_TRANSITION_MODE_NONE);
+                RenderAttribs.pDeviceContext->CommitShaderResources(RenderTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
                 RenderAttribs.pDeviceContext->Draw({3, DRAW_FLAG_VERIFY_ALL, 1});
+                RenderAttribs.pDeviceContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+                CopyTextureAttribs CopyMipAttribs;
+                CopyMipAttribs.pSrcTexture              = StaticCast<ITexture*>(m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY]);
+                CopyMipAttribs.pDstTexture              = StaticCast<ITexture*>(m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY_INTERMEDIATE]);
+                CopyMipAttribs.SrcMipLevel              = MipLevel;
+                CopyMipAttribs.DstMipLevel              = MipLevel;
+                CopyMipAttribs.SrcSlice                 = 0;
+                CopyMipAttribs.DstSlice                 = 0;
+                CopyMipAttribs.SrcTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
+                CopyMipAttribs.DstTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
+                RenderAttribs.pDeviceContext->CopyTexture(CopyMipAttribs);
             }
         }
     }
@@ -609,8 +746,8 @@ void ScreenSpaceReflection::ComputeBlueNoiseTexture(const RenderAttributes& Rend
         ResourceLayout.Variables    = VariableDescs;
         ResourceLayout.NumVariables = _countof(VariableDescs);
 
-        const auto VS = CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeBlueNoiseTexture.fx", "ComputeBlueNoiseTexturePS", SHADER_TYPE_PIXEL);
+        const auto VS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVSExt", SHADER_TYPE_VERTEX);
+        const auto PS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeBlueNoiseTexture.fx", "ComputeBlueNoiseTexturePS", SHADER_TYPE_PIXEL);
 
         RenderTech.InitializePSO(RenderAttribs.pDevice,
                                  RenderAttribs.pStateCache, "ScreenSpaceReflection::ComputeBlueNoiseTexture",
@@ -654,8 +791,8 @@ void ScreenSpaceReflection::ComputeStencilMaskAndExtractRoughness(const RenderAt
         ResourceLayout.Variables    = VariableDescs;
         ResourceLayout.NumVariables = _countof(VariableDescs);
 
-        const auto VS = CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeStencilMaskAndExtractRoughness.fx", "ComputeStencilMaskAndExtractRoughnessPS", SHADER_TYPE_PIXEL);
+        const auto VS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVSExt", SHADER_TYPE_VERTEX);
+        const auto PS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeStencilMaskAndExtractRoughness.fx", "ComputeStencilMaskAndExtractRoughnessPS", SHADER_TYPE_PIXEL);
 
         RenderTech.InitializePSO(RenderAttribs.pDevice,
                                  RenderAttribs.pStateCache, "ScreenSpaceReflection::ComputeStencilMaskAndExtractRoughness",
@@ -707,8 +844,19 @@ void ScreenSpaceReflection::ComputeIntersection(const RenderAttributes& RenderAt
         ResourceLayout.Variables    = VariableDescs;
         ResourceLayout.NumVariables = _countof(VariableDescs);
 
-        const auto VS = CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeIntersection.fx", "ComputeIntersectionPS", SHADER_TYPE_PIXEL);
+        // Immutable samplers are required for WebGL to work properly
+        ImmutableSamplerDesc SamplerDescs[] = {
+            ImmutableSamplerDesc{SHADER_TYPE_PIXEL, "g_TextureDepthHierarchy", Sam_PointClamp},
+        };
+
+        if (!m_IsSupportedShaderSubresourceView)
+        {
+            ResourceLayout.ImmutableSamplers    = SamplerDescs;
+            ResourceLayout.NumImmutableSamplers = _countof(SamplerDescs);
+        }
+
+        const auto VS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVSExt", SHADER_TYPE_VERTEX);
+        const auto PS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeIntersection.fx", "ComputeIntersectionPS", SHADER_TYPE_PIXEL);
 
         RenderTech.InitializePSO(RenderAttribs.pDevice,
                                  RenderAttribs.pStateCache, "ScreenSpaceReflection::ComputeIntersection",
@@ -767,8 +915,8 @@ void ScreenSpaceReflection::ComputeSpatialReconstruction(const RenderAttributes&
         ResourceLayout.Variables    = VariableDescs;
         ResourceLayout.NumVariables = _countof(VariableDescs);
 
-        const auto VS = CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeSpatialReconstruction.fx", "ComputeSpatialReconstructionPS", SHADER_TYPE_PIXEL);
+        const auto VS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVSExt", SHADER_TYPE_VERTEX);
+        const auto PS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeSpatialReconstruction.fx", "ComputeSpatialReconstructionPS", SHADER_TYPE_PIXEL);
 
         RenderTech.InitializePSO(RenderAttribs.pDevice,
                                  RenderAttribs.pStateCache, "ScreenSpaceReflection::ComputeSpatialReconstruction",
@@ -836,8 +984,8 @@ void ScreenSpaceReflection::ComputeTemporalAccumulation(const RenderAttributes& 
         ResourceLayout.ImmutableSamplers    = SamplerDescs;
         ResourceLayout.NumImmutableSamplers = _countof(SamplerDescs);
 
-        const auto VS = CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeTemporalAccumulation.fx", "ComputeTemporalAccumulationPS", SHADER_TYPE_PIXEL);
+        const auto VS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVSExt", SHADER_TYPE_VERTEX);
+        const auto PS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeTemporalAccumulation.fx", "ComputeTemporalAccumulationPS", SHADER_TYPE_PIXEL);
 
         RenderTech.InitializePSO(RenderAttribs.pDevice,
                                  RenderAttribs.pStateCache, "ScreenSpaceReflection::ComputeTemporalAccumulation",
@@ -879,16 +1027,25 @@ void ScreenSpaceReflection::ComputeTemporalAccumulation(const RenderAttributes& 
     RenderAttribs.pDeviceContext->Draw({3, DRAW_FLAG_VERIFY_ALL, 1});
     RenderAttribs.pDeviceContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
 
-    CopyTextureAttribs CopyAttribs;
-    CopyAttribs.pSrcTexture              = m_Resources[RESOURCE_IDENTIFIER_INPUT_DEPTH].RawPtr<ITexture>();
-    CopyAttribs.pDstTexture              = m_Resources[RESOURCE_IDENTIFIER_DEPTH_HISTORY].RawPtr<ITexture>();
-    CopyAttribs.SrcMipLevel              = 0;
-    CopyAttribs.DstMipLevel              = 0;
-    CopyAttribs.SrcSlice                 = 0;
-    CopyAttribs.DstSlice                 = 0;
-    CopyAttribs.SrcTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
-    CopyAttribs.DstTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
-    RenderAttribs.pDeviceContext->CopyTexture(CopyAttribs);
+    if (m_IsSupportCopyDepthToColor)
+    {
+        CopyTextureAttribs CopyAttribs;
+        CopyAttribs.pSrcTexture              = StaticCast<ITexture*>(m_Resources[RESOURCE_IDENTIFIER_INPUT_DEPTH]);
+        CopyAttribs.pDstTexture              = StaticCast<ITexture*>(m_Resources[RESOURCE_IDENTIFIER_DEPTH_HISTORY]);
+        CopyAttribs.SrcMipLevel              = 0;
+        CopyAttribs.DstMipLevel              = 0;
+        CopyAttribs.SrcSlice                 = 0;
+        CopyAttribs.DstSlice                 = 0;
+        CopyAttribs.SrcTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
+        CopyAttribs.DstTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
+        RenderAttribs.pDeviceContext->CopyTexture(CopyAttribs);
+    }
+    else
+    {
+        CopyTextureDepth(RenderAttribs,
+                         StaticCast<ITexture*>(m_Resources[RESOURCE_IDENTIFIER_INPUT_DEPTH])->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE),
+                         StaticCast<ITexture*>(m_Resources[RESOURCE_IDENTIFIER_DEPTH_HISTORY])->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET));
+    }
 }
 
 void ScreenSpaceReflection::ComputeBilateralCleanup(const RenderAttributes& RenderAttribs)
@@ -910,8 +1067,8 @@ void ScreenSpaceReflection::ComputeBilateralCleanup(const RenderAttributes& Rend
         ResourceLayout.Variables    = VariableDescs;
         ResourceLayout.NumVariables = _countof(VariableDescs);
 
-        const auto VS = CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeBilateralCleanup.fx", "ComputeBilateralCleanupPS", SHADER_TYPE_PIXEL);
+        const auto VS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVSExt", SHADER_TYPE_VERTEX);
+        const auto PS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeBilateralCleanup.fx", "ComputeBilateralCleanupPS", SHADER_TYPE_PIXEL);
 
         RenderTech.InitializePSO(RenderAttribs.pDevice,
                                  RenderAttribs.pStateCache, "ScreenSpaceReflection::ComputeBilateralCleanup",

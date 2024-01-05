@@ -28,24 +28,24 @@ struct PixelAreaStatistic
     float4 ColorSum;
 };
 
-float SampleRoughness(uint2 PixelCoord)
+float SampleRoughness(int2 PixelCoord)
 {
     return g_TextureRoughness.Load(int3(PixelCoord, 0));
 }
 
-float3 SampleNormalWS(uint2 PixelCoord)
+float3 SampleNormalWS(int2 PixelCoord)
 {
     return g_TextureNormal.Load(int3(PixelCoord, 0));
 }
 
-float SampleDepth(uint2 PixelCoord)
+float SampleDepth(int2 PixelCoord)
 {
     return g_TextureDepth.Load(int3(PixelCoord, 0));
 }
 
 float2 ComputeWeightRayLength(int2 PixelCoord, float3 V, float3 N, float Roughness, float NdotV)
 {
-    float4 RayDirectionPDF = g_TextureRayDirectionPDF.Load(uint3(PixelCoord, 0));
+    float4 RayDirectionPDF = g_TextureRayDirectionPDF.Load(int3(PixelCoord, 0));
     float InvRayLength = rsqrt(dot(RayDirectionPDF.xyz, RayDirectionPDF.xyz));
     if (isnan(InvRayLength))
         return float2(1.0e-6f, 1.0e-6f);
@@ -96,12 +96,12 @@ PSOutput ComputeSpatialReconstructionPS(in float4 Position : SV_Position)
     CRNG Rng = InitCRND(uint2(Position.xy), 0u);
 
     float2 ScreenCoordUV = Position.xy * g_SSRAttribs.InverseRenderSize;
-    float3 PositionWS = ScreenSpaceToWorldSpace(float3(ScreenCoordUV, SampleDepth(uint2(Position.xy))));
-    float3 NormalWS = SampleNormalWS(uint2(Position.xy));
+    float3 PositionWS = ScreenSpaceToWorldSpace(float3(ScreenCoordUV, SampleDepth(int2(Position.xy))));
+    float3 NormalWS = SampleNormalWS(int2(Position.xy));
     float3 ViewWS = normalize(g_SSRAttribs.CameraPosition.xyz - PositionWS);
     float NdotV = saturate(dot(NormalWS, ViewWS));
 
-    float Roughness = SampleRoughness(uint2(Position.xy));
+    float Roughness = SampleRoughness(int2(Position.xy));
     float RoughnessFactor = saturate(float(SSR_SPATIAL_RECONSTRUCTION_ROUGHNESS_FACTOR) * sqrt(Roughness));
     float Radius = lerp(0.0, g_SSRAttribs.SpatialReconstructionRadius, RoughnessFactor);
     uint SampleCount = uint(lerp(1.0, float(SSR_SPATIAL_RECONSTRUCTION_SAMPLES), Radius / g_SSRAttribs.SpatialReconstructionRadius));
@@ -113,7 +113,7 @@ PSOutput ComputeSpatialReconstructionPS(in float4 Position : SV_Position)
     PixelAreaStat.Variance = 0.0;
     PixelAreaStat.Mean = 0.0;
 
-    float NearestSurfaceHitDistance = FLT_MAX;
+    float NearestSurfaceHitDistance = 0.0;
 
     // TODO: Try to implement sampling from https://youtu.be/MyTOGHqyquU?t=1043
     for (uint SampleIdx = 0u; SampleIdx < SampleCount; SampleIdx++)
@@ -123,11 +123,11 @@ PSOutput ComputeSpatialReconstructionPS(in float4 Position : SV_Position)
         if (IsInsideScreen(SampleCoord, g_SSRAttribs.RenderSize))
         {
             float2 WeightLength = ComputeWeightRayLength(SampleCoord, ViewWS, NormalWS, Roughness, NdotV);
-            float4 SampleColor = g_TextureIntersectSpecular.Load(uint3(SampleCoord, 0));
+            float4 SampleColor = g_TextureIntersectSpecular.Load(int3(SampleCoord, 0));
             ComputeWeightedVariance(PixelAreaStat, SampleColor, WeightLength.x);
 
             if (WeightLength.x > 1.0e-6)
-                NearestSurfaceHitDistance = min(WeightLength.y, NearestSurfaceHitDistance);
+                NearestSurfaceHitDistance = max(WeightLength.y, NearestSurfaceHitDistance);
         }
     }
 
