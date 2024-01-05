@@ -84,6 +84,8 @@ public:
     ITextureView* GetSSRRadianceSRV() const;
 
 private:
+    void CopyTextureDepth(const RenderAttributes& RenderAttribs, ITextureView* pSRV, ITextureView* pRTV);
+
     void ComputeHierarchicalDepthBuffer(const RenderAttributes& RenderAttribs);
 
     void ComputeBlueNoiseTexture(const RenderAttributes& RenderAttribs);
@@ -130,6 +132,7 @@ private:
         RENDER_TECH_COMPUTE_SPATIAL_RECONSTRUCTION,
         RENDER_TECH_COMPUTE_TEMPORAL_ACCUMULATION,
         RENDER_TECH_COMPUTE_BILATERAL_CLEANUP,
+        RENDER_TECH_COPY_DEPTH,
         RENDER_TECH_COUNT
     };
 
@@ -143,6 +146,7 @@ private:
         RESOURCE_IDENTIFIER_CONSTANT_BUFFER,
         RESOURCE_IDENTIFIER_CONSTANT_BUFFER_INTERMEDIATE,
         RESOURCE_IDENTIFIER_DEPTH_HIERARCHY,
+        RESOURCE_IDENTIFIER_DEPTH_HIERARCHY_INTERMEDIATE,
         RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK,
         RESOURCE_IDENTIFIER_ROUGHNESS,
         RESOURCE_IDENTIFIER_SOBOL_BUFFER,
@@ -166,12 +170,13 @@ private:
     std::array<RenderTechnique, RENDER_TECH_COUNT>          m_RenderTech{};
     std::array<ResourceInternal, RESOURCE_IDENTIFIER_COUNT> m_Resources{};
 
-    std::vector<RefCntAutoPtr<ITextureView>> m_HierarchicalDepthMipMapDSV;
+    std::vector<RefCntAutoPtr<ITextureView>> m_HierarchicalDepthMipMapRTV;
     std::vector<RefCntAutoPtr<ITextureView>> m_HierarchicalDepthMipMapSRV;
     RefCntAutoPtr<ITextureView>              m_DepthStencilMaskDSVReadOnly;
 
     bool m_IsSupportTransitionSubresources  = false;
     bool m_IsSupportedShaderSubresourceView = true;
+    bool m_IsSupportCopyDepthToColor        = false;
 
     Uint32 m_BackBufferWidth  = 0;
     Uint32 m_BackBufferHeight = 0;

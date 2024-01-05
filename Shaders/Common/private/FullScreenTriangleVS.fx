@@ -19,3 +19,9 @@ void FullScreenTriangleVS(in uint VertexId : SV_VertexID,
     float z = NDC_MIN_Z;
     VSOut.f4PixelPos = float4(f2XY, z, 1.0);
 }
+
+float4 FullScreenTriangleVSExt(in uint VertexId : SV_VertexID) : SV_Position
+{
+    float2 Texcoord = float2((VertexId << 1u) & 2u, VertexId & 2u);
+    return float4(Texcoord * float2(2.0, -2.0) + float2(-1.0, 1.0), NDC_MIN_Z, 1.0);
+}

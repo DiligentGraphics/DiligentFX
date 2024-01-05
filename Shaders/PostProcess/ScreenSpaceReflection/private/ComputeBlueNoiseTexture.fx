@@ -37,6 +37,7 @@ float2 SampleRandomVector2D(uint2 PixelCoord)
         fmod(SampleRandomNumber(PixelCoord, 0u, 1u) + float(g_SSRAttribs.FrameIndex & 0xFFu) * M_GOLDEN_RATIO, 1.0));
 }
 
+
 float2 ComputeBlueNoiseTexturePS(in float4 Position : SV_Position) : SV_Target
 {
     return SampleRandomVector2D(uint2(Position.xy));

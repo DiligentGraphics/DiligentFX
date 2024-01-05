@@ -77,7 +77,7 @@
 "                    if (IsReflectionSample(SampledRoughness, SampledDepth))\n"
 "                    {\n"
 "                        float SampledLinearDepth = DepthToCameraZ(SampledDepth, g_SSRAttribs.ProjMatrix);\n"
-"                        float WeightS = exp(-0.5 * (dot(float2(x, y), float2(x, y))) / (Sigma * Sigma));\n"
+"                        float WeightS = exp(-0.5 * dot(float2(x, y), float2(x, y)) / (Sigma * Sigma));\n"
 "                        float WeightZ = exp(-abs(LinearDepth - SampledLinearDepth) / (SSR_BILATERAL_SIGMA_DEPTH * abs(dot(float2(x, y), GradDepth) + 1.e-6)));\n"
 "                        float WeightN = pow(max(0.0, dot(NormalWS, SampledNormalWS)), SSR_BILATERAL_SIGMA_NORMAL);\n"
 "                        float Weight = WeightS * WeightN * WeightZ;\n"

@@ -11,6 +11,7 @@ Texture2D<float> g_TextureLastMip;
 #else
 cbuffer cbTextureMipAtrrib { int g_TextureMipIdx; }
 Texture2D<float> g_TextureMips;
+SamplerState     g_TextureMipsSampler;
 #endif
 
 #if SUPPORTED_SHADER_SRV
@@ -31,14 +32,17 @@ float SampleDepth(uint2 Location, uint2 Offset, uint2 Dimension)
 }
 #endif
 
-float ComputeHierarchicalDepthBufferPS(in float4 Position : SV_Position) : SV_Depth
+float ComputeHierarchicalDepthBufferPS(in float4 Position : SV_Position) : SV_Target0
 {
     uint2 LastMipDimension;
 #if SUPPORTED_SHADER_SRV
     g_TextureLastMip.GetDimensions(LastMipDimension.x, LastMipDimension.y);
 #else
     uint Dummy;
-    g_TextureMips.GetDimensions(g_TextureMipIdx, LastMipDimension.x, LastMipDimension.y, Dummy);
+    g_TextureMips.GetDimensions(0, LastMipDimension.x, LastMipDimension.y, Dummy);
+    LastMipDimension.x = uint(floor(float(LastMipDimension.x) / exp2(float(g_TextureMipIdx))));
+    LastMipDimension.y = uint(floor(float(LastMipDimension.y) / exp2(float(g_TextureMipIdx))));
+
 #endif
 
     uint2 RemappedPosition = uint2(2.0 * floor(Position.xy)); 

@@ -77,7 +77,7 @@ float4 ComputeBilateralCleanupPS(in float4 Position : SV_Position) : SV_Target0
                     if (IsReflectionSample(SampledRoughness, SampledDepth))
                     {
                         float SampledLinearDepth = DepthToCameraZ(SampledDepth, g_SSRAttribs.ProjMatrix);
-                        float WeightS = exp(-0.5 * (dot(float2(x, y), float2(x, y))) / (Sigma * Sigma));
+                        float WeightS = exp(-0.5 * dot(float2(x, y), float2(x, y)) / (Sigma * Sigma));
                         float WeightZ = exp(-abs(LinearDepth - SampledLinearDepth) / (SSR_BILATERAL_SIGMA_DEPTH * abs(dot(float2(x, y), GradDepth) + 1.e-6)));
                         float WeightN = pow(max(0.0, dot(NormalWS, SampledNormalWS)), SSR_BILATERAL_SIGMA_NORMAL);
                         float Weight = WeightS * WeightN * WeightZ;
