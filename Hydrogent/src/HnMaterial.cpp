@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -141,36 +141,62 @@ void HnMaterial::Sync(pxr::HdSceneDelegate* SceneDelegate,
     *DirtyBits = HdMaterial::Clean;
 }
 
+static bool ReadFallbackValue(const HnMaterialNetwork& Network, const pxr::TfToken& Name, float4& Value)
+{
+    if (const HnMaterialParameter* Param = Network.GetParameter(HnMaterialParameter::ParamType::Fallback, Name))
+    {
+        Value = float4{ToFloat3(Param->FallbackValue.Get<pxr::GfVec3f>()), 1};
+        return true;
+    }
+
+    return false;
+}
+
+static bool ReadFallbackValue(const HnMaterialNetwork& Network, const pxr::TfToken& Name, float& Value)
+{
+    if (const HnMaterialParameter* Param = Network.GetParameter(HnMaterialParameter::ParamType::Fallback, Name))
+    {
+        Value = Param->FallbackValue.Get<float>();
+        return true;
+    }
+
+    return false;
+}
+
+template <typename T>
+static void ApplyTextureInputScale(const HnMaterialNetwork& Network, const pxr::TfToken& Name, T& Value)
+{
+    if (const HnMaterialParameter* TexParam = Network.GetParameter(HnMaterialParameter::ParamType::Texture, Name))
+    {
+        for (size_t i = 0; i < Value.GetComponentCount(); ++i)
+            Value[i] *= TexParam->InputScale[i];
+    }
+}
+
+static void ApplyTextureInputScale(const HnMaterialNetwork& Network, const pxr::TfToken& Name, float& Value)
+{
+    if (const HnMaterialParameter* TexParam = Network.GetParameter(HnMaterialParameter::ParamType::Texture, Name))
+    {
+        Value *= TexParam->InputScale[0];
+    }
+}
+
 void HnMaterial::ProcessMaterialNetwork()
 {
-    if (const HnMaterialParameter* Param = m_Network.GetParameter(HnMaterialParameter::ParamType::Fallback, HnTokens->diffuseColor))
-    {
-        m_MaterialData.Attribs.BaseColorFactor = float4{ToFloat3(Param->FallbackValue.Get<pxr::GfVec3f>()), 1};
-    }
-
-    if (const HnMaterialParameter* Param = m_Network.GetParameter(HnMaterialParameter::ParamType::Fallback, HnTokens->metallic))
-    {
-        m_MaterialData.Attribs.MetallicFactor = Param->FallbackValue.Get<float>();
-    }
-
-    if (const HnMaterialParameter* Param = m_Network.GetParameter(HnMaterialParameter::ParamType::Fallback, HnTokens->roughness))
-    {
-        m_MaterialData.Attribs.RoughnessFactor = Param->FallbackValue.Get<float>();
-    }
-
-    if (const HnMaterialParameter* Param = m_Network.GetParameter(HnMaterialParameter::ParamType::Fallback, HnTokens->occlusion))
-    {
-        m_MaterialData.Attribs.OcclusionFactor = Param->FallbackValue.Get<float>();
-    }
-
-    if (const HnMaterialParameter* Param = m_Network.GetParameter(HnMaterialParameter::ParamType::Fallback, HnTokens->emissiveColor))
-    {
-        m_MaterialData.Attribs.EmissiveFactor = float4{ToFloat3(Param->FallbackValue.Get<pxr::GfVec3f>()), 1};
-    }
-    else
+    ReadFallbackValue(m_Network, HnTokens->diffuseColor, m_MaterialData.Attribs.BaseColorFactor);
+    ReadFallbackValue(m_Network, HnTokens->metallic, m_MaterialData.Attribs.MetallicFactor);
+    ReadFallbackValue(m_Network, HnTokens->roughness, m_MaterialData.Attribs.RoughnessFactor);
+    ReadFallbackValue(m_Network, HnTokens->occlusion, m_MaterialData.Attribs.OcclusionFactor);
+    if (!ReadFallbackValue(m_Network, HnTokens->emissiveColor, m_MaterialData.Attribs.EmissiveFactor))
     {
         m_MaterialData.Attribs.EmissiveFactor = m_Textures.find(HnTokens->emissiveColor) != m_Textures.end() ? float4{1} : float4{0};
     }
+
+    ApplyTextureInputScale(m_Network, HnTokens->diffuseColor, m_MaterialData.Attribs.BaseColorFactor);
+    ApplyTextureInputScale(m_Network, HnTokens->metallic, m_MaterialData.Attribs.MetallicFactor);
+    ApplyTextureInputScale(m_Network, HnTokens->roughness, m_MaterialData.Attribs.RoughnessFactor);
+    ApplyTextureInputScale(m_Network, HnTokens->occlusion, m_MaterialData.Attribs.OcclusionFactor);
+    ApplyTextureInputScale(m_Network, HnTokens->emissiveColor, m_MaterialData.Attribs.EmissiveFactor);
 
     if (const HnMaterialParameter* Param = m_Network.GetParameter(HnMaterialParameter::ParamType::Fallback, HnTokens->clearcoat))
     {

@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@
 
 #include "pxr/base/vt/dictionary.h"
 #include "pxr/base/gf/vec2f.h"
+#include "pxr/base/gf/vec4f.h"
 #include "pxr/usd/sdf/path.h"
 #include "pxr/imaging/hd/material.h"
 
@@ -121,6 +122,10 @@ struct HnMaterialParameter final
     pxr::HdTextureType      TextureType = pxr::HdTextureType::Uv;
     TextureComponentMapping Swizzle;
     bool                    IsPremultiplied = false;
+
+    // Scale and bias that are applied to the input values
+    pxr::GfVec4f InputScale{1.f};
+    pxr::GfVec4f InputBias{0.f};
 
     struct TextureTransform2d
     {

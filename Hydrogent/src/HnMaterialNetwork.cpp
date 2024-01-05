@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -1155,25 +1155,11 @@ void HnMaterialNetwork::AddTextureParam(const pxr::HdMaterialNetwork2& Network,
         }
     }
 
-
     // Input scale (e.g., for a normal map, this can be (2, 2, 2, 2))
-    {
-        HnMaterialParameter TexScaleParam;
-        TexScaleParam.Type          = HnMaterialParameter::ParamType::Fallback;
-        TexScaleParam.Name          = TfToken{ParamName.GetString() + "_" + HnTokens->scale.GetString()};
-        TexScaleParam.FallbackValue = pxr::VtValue{ResolveParameter(Node, SdrNode, HnTokens->scale, pxr::GfVec4f{1.0f})};
-        m_Parameters.push_back(std::move(TexScaleParam));
-    }
-
+    TexParam.InputScale = ResolveParameter(Node, SdrNode, HnTokens->scale, pxr::GfVec4f{1.0f});
 
     // Input bias (e.g., for a normal map, this can be (-1, -1, -1, -1))
-    {
-        HnMaterialParameter TexBiasParam;
-        TexBiasParam.Type          = HnMaterialParameter::ParamType::Fallback;
-        TexBiasParam.Name          = TfToken{ParamName.GetString() + "_" + HnTokens->bias.GetString()};
-        TexBiasParam.FallbackValue = pxr::VtValue{ResolveParameter(Node, SdrNode, HnTokens->bias, pxr::GfVec4f{0.0f})};
-        m_Parameters.push_back(std::move(TexBiasParam));
-    }
+    TexParam.InputBias = ResolveParameter(Node, SdrNode, HnTokens->bias, pxr::GfVec4f{0.0f});
 
     // Attribute is in Mebibytes, convert to bytes.
     const size_t memoryRequest = 1048576 * ResolveParameter<float>(Node, SdrNode, HnMaterialPrivateTokens->textureMemory, 0.0f);
