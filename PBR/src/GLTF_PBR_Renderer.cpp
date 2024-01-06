@@ -1,5 +1,5 @@
 /*
- *  Copyright 2019-2023 Diligent Graphics LLC
+ *  Copyright 2019-2024 Diligent Graphics LLC
  *  Copyright 2015-2019 Egor Yusov
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -751,6 +751,8 @@ void* GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                   
         pDstPtr += sizeof(float4x4);
     }
 
+    if (AttribsData.pMaterialBasicAttribsDstPtr != nullptr)
+        *AttribsData.pMaterialBasicAttribsDstPtr = reinterpret_cast<HLSL::PBRMaterialBasicAttribs*>(pDstPtr);
     pDstPtr = WriteShaderAttribs<HLSL::PBRMaterialBasicAttribs>(pDstPtr, &Material.Attribs, "Basic Attribs");
 
     if (AttribsData.PSOFlags & PSO_FLAG_ENABLE_SHEEN)

@@ -1,5 +1,5 @@
 /*
- *  Copyright 2019-2023 Diligent Graphics LLC
+ *  Copyright 2019-2024 Diligent Graphics LLC
  *  Copyright 2015-2019 Egor Yusov
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -36,6 +36,11 @@
 
 namespace Diligent
 {
+
+namespace HLSL
+{
+struct PBRMaterialBasicAttribs;
+}
 
 /// Implementation of a GLTF PBR renderer
 class GLTF_PBR_Renderer : public PBR_Renderer
@@ -250,6 +255,8 @@ public:
         const Uint32    JointCount     = 0;
         const void*     CustomData     = nullptr;
         size_t          CustomDataSize = 0;
+
+        HLSL::PBRMaterialBasicAttribs** pMaterialBasicAttribsDstPtr = nullptr;
     };
     static void* WritePBRPrimitiveShaderAttribs(void*                                           pDstShaderAttribs,
                                                 const PBRPrimitiveShaderAttribsData&            AttribsData,
