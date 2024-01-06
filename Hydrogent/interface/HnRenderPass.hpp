@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -89,7 +89,7 @@ public:
 
     using SupportedVertexInputsSetType = std::unordered_set<pxr::TfToken, pxr::TfToken::HashFunctor>;
     static SupportedVertexInputsSetType GetSupportedVertexInputs(const HnMaterial* Material);
-    static PBR_Renderer::PSO_FLAGS      GetTexturePSOFlags(const HnMaterial& Material);
+    static PBR_Renderer::PSO_FLAGS      GetMaterialPSOFlags(const HnMaterial& Material);
 
     enum DRAW_LIST_ITEM_DIRTY_FLAGS : Uint32
     {

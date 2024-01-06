@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -428,14 +428,37 @@ HnRenderPass::SupportedVertexInputsSetType HnRenderPass::GetSupportedVertexInput
     return SupportedInputs;
 }
 
-PBR_Renderer::PSO_FLAGS HnRenderPass::GetTexturePSOFlags(const HnMaterial& Material)
+PBR_Renderer::PSO_FLAGS HnRenderPass::GetMaterialPSOFlags(const HnMaterial& Material)
 {
-    return PBR_Renderer::PSO_FLAG_USE_COLOR_MAP |
+    const GLTF::Material& MaterialData = Material.GetMaterialData();
+
+    PBR_Renderer::PSO_FLAGS PSOFlags =
+        PBR_Renderer::PSO_FLAG_USE_COLOR_MAP |
         PBR_Renderer::PSO_FLAG_USE_NORMAL_MAP |
         PBR_Renderer::PSO_FLAG_USE_METALLIC_MAP |
         PBR_Renderer::PSO_FLAG_USE_ROUGHNESS_MAP |
         PBR_Renderer::PSO_FLAG_USE_AO_MAP |
         PBR_Renderer::PSO_FLAG_USE_EMISSIVE_MAP;
+
+    MaterialData.ProcessActiveTextureAttibs(
+        [&PSOFlags](Uint32, const GLTF::Material::TextureShaderAttribs& TexAttrib, int) //
+        {
+            if (TexAttrib.UVScaleAndRotation != float2x2::Identity() ||
+                TexAttrib.UBias != 0 ||
+                TexAttrib.VBias != 0)
+            {
+                PSOFlags |= PBR_Renderer::PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM;
+                return false;
+            }
+            return true;
+        });
+
+    if (MaterialData.HasClearcoat)
+    {
+        PSOFlags |= PBR_Renderer::PSO_FLAG_ENABLE_CLEAR_COAT;
+    }
+
+    return PSOFlags;
 }
 
 void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, RenderState& State, DRAW_LIST_ITEM_DIRTY_FLAGS DirtyFlags)
@@ -464,40 +487,27 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
             if (Geo.TexCoords[1] != nullptr)
                 PSOFlags |= PBR_Renderer::PSO_FLAG_USE_TEXCOORD1;
 
-            const GLTF::Material& MaterialData = pMaterial->GetMaterialData();
             if (pMaterial != nullptr)
             {
-                MaterialData.ProcessActiveTextureAttibs(
-                    [&PSOFlags](Uint32, const GLTF::Material::TextureShaderAttribs& TexAttrib, int) //
-                    {
-                        if (TexAttrib.UVScaleAndRotation != float2x2::Identity() ||
-                            TexAttrib.UBias != 0 ||
-                            TexAttrib.VBias != 0)
-                        {
-                            PSOFlags |= PBR_Renderer::PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM;
-                            return false;
-                        }
-                        return true;
-                    });
-            }
-
-            PSOFlags |= PBR_Renderer::PSO_FLAG_USE_COLOR_MAP;
-            if (m_Params.UsdPsoFlags & USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_OUTPUT)
-            {
-                PSOFlags |= GetTexturePSOFlags(*pMaterial);
-                PSOFlags |= PBR_Renderer::PSO_FLAG_USE_IBL;
-                if (MaterialData.HasClearcoat)
+                const PBR_Renderer::PSO_FLAGS MaterialPSOFlags = GetMaterialPSOFlags(*pMaterial);
+                if (m_Params.UsdPsoFlags & USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_OUTPUT)
                 {
-                    PSOFlags |= PBR_Renderer::PSO_FLAG_ENABLE_CLEAR_COAT;
+                    PSOFlags |= MaterialPSOFlags | PBR_Renderer::PSO_FLAG_USE_IBL;
                 }
+                else
+                {
+                    // Color map is needed for alpha-masked materials
+                    PSOFlags |= (MaterialPSOFlags & (PBR_Renderer::PSO_FLAG_USE_COLOR_MAP & PBR_Renderer::PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM));
+                }
+
+                VERIFY(pMaterial->GetMaterialData().Attribs.AlphaMode == State.AlphaMode || pMaterial->GetId().IsEmpty(),
+                       "Alpha mode derived from the material tag is not consistent with the alpha mode in the shader attributes. "
+                       "This may indicate an issue in how alpha mode is determined in the material, or (less likely) an issue in Rprim sorting by Hydra.");
             }
 
             if (static_cast<const HnRenderParam*>(State.RenderDelegate.GetRenderParam())->GetUseTextureAtlas())
                 PSOFlags |= PBR_Renderer::PSO_FLAG_USE_TEXTURE_ATLAS;
 
-            VERIFY(MaterialData.Attribs.AlphaMode == State.AlphaMode || pMaterial->GetId().IsEmpty(),
-                   "Alpha mode derived from the material tag is not consistent with the alpha mode in the shader attributes. "
-                   "This may indicate an issue in how alpha mode is determined in the material, or (less likely) an issue in Rprim sorting by Hydra.");
             ListItem.pPSO = PsoCache.Get({PSOFlags, static_cast<PBR_Renderer::ALPHA_MODE>(State.AlphaMode), /*DoubleSided = */ false, static_cast<PBR_Renderer::DebugViewType>(m_RenderParams.DebugViewMode)}, true);
         }
         else if (m_RenderParams.RenderMode == HN_RENDER_MODE_MESH_EDGES ||
@@ -512,7 +522,7 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
         }
 
         const Uint32 AttribsDataSize = State.USDRenderer.GetPBRPrimitiveAttribsSize(PSOFlags);
-        VERIFY_EXPR(AttribsDataSize <= State.USDRenderer.GetPBRPrimitiveAttribsSize(GetTexturePSOFlags(*pMaterial)));
+        VERIFY_EXPR(AttribsDataSize <= State.USDRenderer.GetPBRPrimitiveAttribsSize(GetMaterialPSOFlags(*pMaterial)));
         ListItem.ShaderAttribsDataAlignedSize = AlignUp(AttribsDataSize, State.ConstantBufferOffsetAlignment);
 
         VERIFY_EXPR(ListItem.pPSO != nullptr);

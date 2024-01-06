@@ -602,7 +602,7 @@ void HnMaterial::UpdateSRB(IObject*      pSRBCache,
             // Primitive attribs buffer is a large buffer that fits multiple primitives.
             // In the render loop, we write multiple primitive attribs into this buffer
             // and use the SetBufferOffset function to select the attribs for the current primitive.
-            pVar->SetBufferRange(UsdRenderer.GetPBRPrimitiveAttribsCB(), 0, UsdRenderer.GetPBRPrimitiveAttribsSize(HnRenderPass::GetTexturePSOFlags(*this)));
+            pVar->SetBufferRange(UsdRenderer.GetPBRPrimitiveAttribsCB(), 0, UsdRenderer.GetPBRPrimitiveAttribsSize(HnRenderPass::GetMaterialPSOFlags(*this)));
         }
         else
         {
