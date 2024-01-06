@@ -126,8 +126,16 @@ private:
 
         PBR_Renderer::PSO_FLAGS PSOFlags = PBR_Renderer::PSO_FLAG_NONE;
 
-        // Primitive attributes shader data size aligned to the required constant buffer offset alignment
+        // Primitive attributes shader data size computed from the used PSO flags, aligned by the required
+        // constant buffer offset alignment.
+        // Note: unshaded (aka wireframe/point) rendering modes don't use any textures, so the shader data
+        //       is smaller than that for the shaded mode.
         Uint32 ShaderAttribsDataAlignedSize = 0;
+
+        // Primitive attributes buffer range computed from all material PSO flags, aligned by the required
+        // constant buffer offset alignment.
+        // Note: it is always greater than or equal to ShaderAttribsDataAlignedSize.
+        Uint32 ShaderAttribsBufferAlignedRange = 0;
 
         Uint32 Version = 0;
 

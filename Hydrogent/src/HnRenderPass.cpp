@@ -246,7 +246,9 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
         if (!ListItem || !DrawItem.GetVisible())
             continue;
 
-        if (CurrOffset + ListItem.ShaderAttribsDataAlignedSize > AttribsBuffDesc.Size)
+        // Note that the actual attribs size may be smaller than the range, but we need
+        // to check for the entire range to avoid errors.
+        if (CurrOffset + ListItem.ShaderAttribsBufferAlignedRange > AttribsBuffDesc.Size)
         {
             // The buffer is full. Render the pending items and start filling the buffer from the beginning.
             State.pCtx->UnmapBuffer(pPrimitiveAttribsCB, MAP_WRITE);
@@ -521,9 +523,13 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
             UNEXPECTED("Unexpected render mode");
         }
 
-        const Uint32 AttribsDataSize = State.USDRenderer.GetPBRPrimitiveAttribsSize(PSOFlags);
-        VERIFY_EXPR(AttribsDataSize <= State.USDRenderer.GetPBRPrimitiveAttribsSize(GetMaterialPSOFlags(*pMaterial)));
-        ListItem.ShaderAttribsDataAlignedSize = AlignUp(AttribsDataSize, State.ConstantBufferOffsetAlignment);
+        const Uint32 AttribsDataSize    = State.USDRenderer.GetPBRPrimitiveAttribsSize(PSOFlags);
+        const Uint32 AttribsBufferRange = State.USDRenderer.GetPBRPrimitiveAttribsSize(GetMaterialPSOFlags(*pMaterial));
+        VERIFY_EXPR(AttribsDataSize <= AttribsBufferRange,
+                    "Attribs data size (", AttribsDataSize, ") computed from the PSO flags exceeds the attribs buffer range (", AttribsBufferRange,
+                    ") computed from material PSO flags. The latter is used by HnMaterial to set the buffer range.");
+        ListItem.ShaderAttribsDataAlignedSize    = AlignUp(AttribsDataSize, State.ConstantBufferOffsetAlignment);
+        ListItem.ShaderAttribsBufferAlignedRange = AlignUp(AttribsBufferRange, State.ConstantBufferOffsetAlignment);
 
         VERIFY_EXPR(ListItem.pPSO != nullptr);
     }
