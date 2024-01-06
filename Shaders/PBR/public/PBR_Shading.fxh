@@ -725,6 +725,18 @@ void ApplyIBL(in SurfaceShadingInfo Shading,
 }
 #endif
 
+float3 GetBaseLayerDiffuseIBL(in SurfaceShadingInfo  Shading,
+                              in SurfaceLightingInfo SrfLighting)
+{
+    return SrfLighting.Base.DiffuseIBL * Shading.IBLScale * Shading.Occlusion;
+}
+
+float3 GetBaseLayerSpecularIBL(in SurfaceShadingInfo  Shading,
+                               in SurfaceLightingInfo SrfLighting)
+{
+    return SrfLighting.Base.SpecularIBL * Shading.IBLScale * Shading.Occlusion;
+}
+
 float3 GetBaseLayerIBL(in SurfaceShadingInfo  Shading,
                        in SurfaceLightingInfo SrfLighting)
 {
