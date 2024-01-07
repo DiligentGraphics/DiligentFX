@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -37,8 +37,13 @@ class USD_Renderer : public PBR_Renderer
 public:
     struct CreateInfo : PBR_Renderer::CreateInfo
     {
-        Uint32 ColorTargetIndex  = 0;
-        Uint32 MeshIdTargetIndex = 1;
+        Uint32 ColorTargetIndex        = 0;
+        Uint32 MeshIdTargetIndex       = 1;
+        Uint32 MotionVectorTargetIndex = 2;
+        Uint32 NormalTargetIndex       = 3;
+        Uint32 BaseColorTargetIndex    = 4;
+        Uint32 MaterialDataTargetIndex = 5;
+        Uint32 IBLTargetIndex          = 6;
     };
     /// Initializes the renderer
     USD_Renderer(IRenderDevice*     pDevice,
@@ -47,11 +52,25 @@ public:
                  const CreateInfo&  CI);
     enum USD_PSO_FLAGS : Uint64
     {
-        USD_PSO_FLAG_NONE                             = 0,
-        USD_PSO_FLAG_ENABLE_COLOR_OUTPUT              = PSO_FLAG_FIRST_USER_DEFINED << 0ull,
-        USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT            = PSO_FLAG_FIRST_USER_DEFINED << 1ull,
-        USD_PSO_FLAG_ENABLE_COLOR_AND_MESH_ID_OUTPUTS = USD_PSO_FLAG_ENABLE_COLOR_OUTPUT | USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT,
-        USD_PSO_FLAG_ENABLE_ALL_OUTPUTS               = USD_PSO_FLAG_ENABLE_COLOR_AND_MESH_ID_OUTPUTS
+        USD_PSO_FLAG_NONE                         = 0,
+        USD_PSO_FLAG_ENABLE_MOTION_VECTORS_OUTPUT = PSO_FLAG_COMPUTE_MOTION_VECTORS,
+        USD_PSO_FLAG_ENABLE_COLOR_OUTPUT          = PSO_FLAG_FIRST_USER_DEFINED << 0ull,
+        USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT        = PSO_FLAG_FIRST_USER_DEFINED << 1ull,
+        USD_PSO_FLAG_ENABLE_NORMAL_OUTPUT         = PSO_FLAG_FIRST_USER_DEFINED << 2ull,
+        USD_PSO_FLAG_ENABLE_BASE_COLOR_OUTPUT     = PSO_FLAG_FIRST_USER_DEFINED << 3ull,
+        USD_PSO_FLAG_ENABLE_MATERIAL_DATA_OUTPUT  = PSO_FLAG_FIRST_USER_DEFINED << 4ull,
+        USD_PSO_FLAG_ENABLE_IBL_OUTPUT            = PSO_FLAG_FIRST_USER_DEFINED << 5ull,
+
+        USD_PSO_FLAG_LAST = USD_PSO_FLAG_ENABLE_IBL_OUTPUT,
+
+        USD_PSO_FLAG_ENABLE_ALL_OUTPUTS =
+            USD_PSO_FLAG_ENABLE_MOTION_VECTORS_OUTPUT |
+            USD_PSO_FLAG_ENABLE_COLOR_OUTPUT |
+            USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT |
+            USD_PSO_FLAG_ENABLE_NORMAL_OUTPUT |
+            USD_PSO_FLAG_ENABLE_BASE_COLOR_OUTPUT |
+            USD_PSO_FLAG_ENABLE_MATERIAL_DATA_OUTPUT |
+            USD_PSO_FLAG_ENABLE_IBL_OUTPUT
     };
 
 private:
@@ -61,6 +80,11 @@ private:
 private:
     const Uint32 m_ColorTargetIndex;
     const Uint32 m_MeshIdTargetIndex;
+    const Uint32 m_MotionVectorTargetIndex;
+    const Uint32 m_NormalTargetIndex;
+    const Uint32 m_BaseColorTargetIndex;
+    const Uint32 m_MaterialDataTargetIndex;
+    const Uint32 m_IBLTargetIndex;
 };
 DEFINE_FLAG_ENUM_OPERATORS(USD_Renderer::USD_PSO_FLAGS)
 

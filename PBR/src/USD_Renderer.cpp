@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 #include "USD_Renderer.hpp"
 
 #include <array>
+#include <unordered_set>
 
 #include "RenderStateCache.hpp"
 #include "../../Utilities/include/DiligentFXShaderSourceStreamFactory.hpp"
@@ -51,6 +52,21 @@ USD_Renderer::CreateInfo::PSMainSourceInfo USD_Renderer::GetUsdPbrPSMainSource(U
         if (PSOFlags & USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT)
             ss << "    float4 MeshID     : SV_Target" << m_MeshIdTargetIndex << ';' << std::endl;
 
+        if (PSOFlags & USD_PSO_FLAG_ENABLE_MOTION_VECTORS_OUTPUT)
+            ss << "    float4 MotionVec  : SV_Target" << m_MotionVectorTargetIndex << ';' << std::endl;
+
+        if (PSOFlags & USD_PSO_FLAG_ENABLE_NORMAL_OUTPUT)
+            ss << "    float4 Normal     : SV_Target" << m_NormalTargetIndex << ';' << std::endl;
+
+        if (PSOFlags & USD_PSO_FLAG_ENABLE_BASE_COLOR_OUTPUT)
+            ss << "    float4 BaseColor  : SV_Target" << m_BaseColorTargetIndex << ';' << std::endl;
+
+        if (PSOFlags & USD_PSO_FLAG_ENABLE_MATERIAL_DATA_OUTPUT)
+            ss << "    float4 Material   : SV_Target" << m_MaterialDataTargetIndex << ';' << std::endl;
+
+        if (PSOFlags & USD_PSO_FLAG_ENABLE_IBL_OUTPUT)
+            ss << "    float4 IBL        : SV_Target" << m_IBLTargetIndex << ';' << std::endl;
+
         ss << "};" << std::endl;
 
         PSMainInfo.OutputStruct = ss.str();
@@ -66,26 +82,81 @@ USD_Renderer::CreateInfo::PSMainSourceInfo USD_Renderer::GetUsdPbrPSMainSource(U
         ss << "    PSOutput PSOut;";
 
     ss << R"(
+    float  MeshId       = 0.0;
+    float3 Normal       = float3(0.0, 0.0, 0.0);
+    float2 MaterialData = float2(0.0, 0.0);
+    float3 IBL          = float3(0.0, 0.0, 0.0);
+
 #if UNSHADED
-    float4 Color  = g_Frame.Renderer.UnshadedColor + g_Frame.Renderer.HighlightColor;
-    float  MeshId = 0.0;
+    float4 OutColor  = g_Frame.Renderer.UnshadedColor + g_Frame.Renderer.HighlightColor;
+    float4 BaseColor = float4(0.0, 0.0, 0.0, 0.0);
 #else
-    float4 Color  = OutColor;
-    float  MeshId = g_Primitive.CustomData.x;
+    MeshId       = g_Primitive.CustomData.x;
+    Normal       = Shading.BaseLayer.Normal.xyz;
+    MaterialData = float2(Shading.BaseLayer.Srf.PerceptualRoughness, Shading.BaseLayer.Metallic);
+    IBL          = GetBaseLayerSpecularIBL(Shading, SrfLighting);
+
+#   if ENABLE_CLEAR_COAT
+    {
+        // We clearly can't do SSR for both base layer and clear coat, so we
+        // blend the base layer properties with the clearcoat using the clearcoat factor.
+        // This way when the factor is 0.0, we get the base layer, when it is 1.0,
+        // we get the clear coat, and something in between otherwise.
+
+        Normal        = lerp(Normal, Shading.Clearcoat.Normal, Shading.Clearcoat.Factor);
+        MaterialData  = lerp(MaterialData, float2(Shading.Clearcoat.Srf.PerceptualRoughness, 0.0), Shading.Clearcoat.Factor);
+        BaseColor.rgb = lerp(BaseColor.rgb, float3(1.0, 1.0, 1.0), Shading.Clearcoat.Factor);
+
+        // Note that the base layer IBL is weighted by (1.0 - Shading.Clearcoat.Factor * ClearcoatFresnel).
+        // Here we are weighting it by (1.0 - Shading.Clearcoat.Factor), which is always smaller,
+        // so when we subtract the IBL, it can never be negative.
+        IBL = lerp(IBL, GetClearcoatIBL(Shading, SrfLighting), Shading.Clearcoat.Factor);
+    }
+#   endif
 #endif
+    
 )";
 
     if (PSOFlags & USD_PSO_FLAG_ENABLE_ALL_OUTPUTS)
     {
         if (PSOFlags & USD_PSO_FLAG_ENABLE_COLOR_OUTPUT)
         {
-            ss << "    PSOut.Color = Color;" << std::endl;
+            ss << "    PSOut.Color = OutColor;" << std::endl;
         }
 
         // It is important to set alpha to 1.0 as all targets are rendered with the same blend mode
         if (PSOFlags & USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT)
         {
             ss << "    PSOut.MeshID = float4(MeshId, 0.0, 0.0, 1.0);" << std::endl;
+        }
+
+        if (PSOFlags & USD_PSO_FLAG_ENABLE_MOTION_VECTORS_OUTPUT)
+        {
+            // Do not blend motion vectors as it does not make sense
+            ss << "    PSOut.MotionVec = float4(MotionVector, 0.0, 1.0);" << std::endl;
+        }
+
+        if (PSOFlags & USD_PSO_FLAG_ENABLE_NORMAL_OUTPUT)
+        {
+            // Do not blend normal - we want normal of the top layer
+            ss << "    PSOut.Normal = float4(Normal, 1.0);" << std::endl;
+        }
+
+        // Blend base color, material data and IBL with background
+
+        if (PSOFlags & USD_PSO_FLAG_ENABLE_BASE_COLOR_OUTPUT)
+        {
+            ss << "    PSOut.BaseColor = float4(BaseColor.rgb * BaseColor.a, BaseColor.a);" << std::endl;
+        }
+
+        if (PSOFlags & USD_PSO_FLAG_ENABLE_MATERIAL_DATA_OUTPUT)
+        {
+            ss << "    PSOut.Material = float4(MaterialData * BaseColor.a, 0.0, BaseColor.a);" << std::endl;
+        }
+
+        if (PSOFlags & USD_PSO_FLAG_ENABLE_IBL_OUTPUT)
+        {
+            ss << "    PSOut.IBL = float4(IBL * BaseColor.a, BaseColor.a);" << std::endl;
         }
     }
 
@@ -134,8 +205,31 @@ USD_Renderer::USD_Renderer(IRenderDevice*     pDevice,
         USDRendererCreateInfoWrapper{CI, *this},
     },
     m_ColorTargetIndex{CI.ColorTargetIndex},
-    m_MeshIdTargetIndex{CI.MeshIdTargetIndex}
+    m_MeshIdTargetIndex{CI.MeshIdTargetIndex},
+    m_MotionVectorTargetIndex{CI.MotionVectorTargetIndex},
+    m_NormalTargetIndex{CI.NormalTargetIndex},
+    m_BaseColorTargetIndex{CI.BaseColorTargetIndex},
+    m_MaterialDataTargetIndex{CI.MaterialDataTargetIndex},
+    m_IBLTargetIndex{CI.IBLTargetIndex}
 {
+#ifdef DILIGENT_DEVELOPMENT
+    {
+        std::unordered_set<Uint32> TargetIndices;
+        for (Uint32 Idx : {m_ColorTargetIndex,
+                           m_MeshIdTargetIndex,
+                           m_MotionVectorTargetIndex,
+                           m_NormalTargetIndex,
+                           m_BaseColorTargetIndex,
+                           m_MaterialDataTargetIndex,
+                           m_IBLTargetIndex})
+        {
+            if (Idx != ~0u)
+            {
+                DEV_CHECK_ERR(TargetIndices.insert(Idx).second, "Target index ", Idx, " is specified more than once");
+            }
+        }
+    }
+#endif
 }
 
 } // namespace Diligent
