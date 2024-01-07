@@ -1,5 +1,6 @@
 #include "ScreenSpaceReflectionStructures.fxh"
 #include "SSR_Common.fxh"
+#include "FullScreenTriangleVSOutput.fxh"
 
 cbuffer cbScreenSpaceReflectionAttribs
 {
@@ -38,7 +39,7 @@ float2 SampleRandomVector2D(uint2 PixelCoord)
 }
 
 
-float2 ComputeBlueNoiseTexturePS(in float4 Position : SV_Position) : SV_Target
+float2 ComputeBlueNoiseTexturePS(in FullScreenTriangleVSOutput VSOut) : SV_Target
 {
-    return SampleRandomVector2D(uint2(Position.xy));
+    return SampleRandomVector2D(uint2(VSOut.f4PixelPos.xy));
 }

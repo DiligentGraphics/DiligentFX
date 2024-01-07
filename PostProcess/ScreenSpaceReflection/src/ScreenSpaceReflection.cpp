@@ -507,15 +507,22 @@ void ScreenSpaceReflection::CopyTextureDepth(const RenderAttributes& RenderAttri
     if (!RenderTech.IsInitialized())
     {
         DILIGENT_CONSTEXPR const char* CopyDepthMip0PS = R"(
+            struct FullScreenTriangleVSOutput
+            {
+                float4 f4PixelPos     : SV_Position;
+                float2 f2NormalizedXY : NORMALIZED_XY;
+                float  fInstID        : INSTANCE_ID;
+            };
+
             Texture2D<float> g_TextureDepth;
             
-            float CopyDepthPS(float4 Position : SV_Position) : SV_Target0
+            float CopyDepthPS(FullScreenTriangleVSOutput VSOut) : SV_Target0
             {
-                return g_TextureDepth.Load(int3(Position.xy, 0));
+                return g_TextureDepth.Load(int3(VSOut.f4PixelPos.xy, 0));
             }
         )";
 
-        const auto VS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVSExt", SHADER_TYPE_VERTEX);
+        const auto VS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
         const auto PS = CreateShaderFromSource(RenderAttribs.pDevice, RenderAttribs.pStateCache, CopyDepthMip0PS, "CopyDepthPS", SHADER_TYPE_PIXEL);
 
         ShaderResourceVariableDesc VariableDescs[] = {
@@ -556,7 +563,7 @@ void ScreenSpaceReflection::ComputeHierarchicalDepthBuffer(const RenderAttribute
         ShaderMacroHelper Macros;
         Macros.Add("SUPPORTED_SHADER_SRV", static_cast<Int32>(m_IsSupportedShaderSubresourceView));
 
-        const auto VS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVSExt", SHADER_TYPE_VERTEX);
+        const auto VS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
         const auto PS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeHierarchicalDepthBuffer.fx", "ComputeHierarchicalDepthBufferPS", SHADER_TYPE_PIXEL, Macros);
 
         std::vector<ShaderResourceVariableDesc> VariableDescs;
@@ -746,7 +753,7 @@ void ScreenSpaceReflection::ComputeBlueNoiseTexture(const RenderAttributes& Rend
         ResourceLayout.Variables    = VariableDescs;
         ResourceLayout.NumVariables = _countof(VariableDescs);
 
-        const auto VS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVSExt", SHADER_TYPE_VERTEX);
+        const auto VS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
         const auto PS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeBlueNoiseTexture.fx", "ComputeBlueNoiseTexturePS", SHADER_TYPE_PIXEL);
 
         RenderTech.InitializePSO(RenderAttribs.pDevice,
@@ -791,7 +798,7 @@ void ScreenSpaceReflection::ComputeStencilMaskAndExtractRoughness(const RenderAt
         ResourceLayout.Variables    = VariableDescs;
         ResourceLayout.NumVariables = _countof(VariableDescs);
 
-        const auto VS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVSExt", SHADER_TYPE_VERTEX);
+        const auto VS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
         const auto PS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeStencilMaskAndExtractRoughness.fx", "ComputeStencilMaskAndExtractRoughnessPS", SHADER_TYPE_PIXEL);
 
         RenderTech.InitializePSO(RenderAttribs.pDevice,
@@ -855,7 +862,7 @@ void ScreenSpaceReflection::ComputeIntersection(const RenderAttributes& RenderAt
             ResourceLayout.NumImmutableSamplers = _countof(SamplerDescs);
         }
 
-        const auto VS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVSExt", SHADER_TYPE_VERTEX);
+        const auto VS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
         const auto PS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeIntersection.fx", "ComputeIntersectionPS", SHADER_TYPE_PIXEL);
 
         RenderTech.InitializePSO(RenderAttribs.pDevice,
@@ -915,7 +922,7 @@ void ScreenSpaceReflection::ComputeSpatialReconstruction(const RenderAttributes&
         ResourceLayout.Variables    = VariableDescs;
         ResourceLayout.NumVariables = _countof(VariableDescs);
 
-        const auto VS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVSExt", SHADER_TYPE_VERTEX);
+        const auto VS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
         const auto PS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeSpatialReconstruction.fx", "ComputeSpatialReconstructionPS", SHADER_TYPE_PIXEL);
 
         RenderTech.InitializePSO(RenderAttribs.pDevice,
@@ -984,7 +991,7 @@ void ScreenSpaceReflection::ComputeTemporalAccumulation(const RenderAttributes& 
         ResourceLayout.ImmutableSamplers    = SamplerDescs;
         ResourceLayout.NumImmutableSamplers = _countof(SamplerDescs);
 
-        const auto VS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVSExt", SHADER_TYPE_VERTEX);
+        const auto VS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
         const auto PS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeTemporalAccumulation.fx", "ComputeTemporalAccumulationPS", SHADER_TYPE_PIXEL);
 
         RenderTech.InitializePSO(RenderAttribs.pDevice,
@@ -1067,7 +1074,7 @@ void ScreenSpaceReflection::ComputeBilateralCleanup(const RenderAttributes& Rend
         ResourceLayout.Variables    = VariableDescs;
         ResourceLayout.NumVariables = _countof(VariableDescs);
 
-        const auto VS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVSExt", SHADER_TYPE_VERTEX);
+        const auto VS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
         const auto PS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeBilateralCleanup.fx", "ComputeBilateralCleanupPS", SHADER_TYPE_PIXEL);
 
         RenderTech.InitializePSO(RenderAttribs.pDevice,

@@ -1,4 +1,5 @@
 #include "SSR_Common.fxh"
+#include "FullScreenTriangleVSOutput.fxh"
 
 #ifdef SSR_OPTION_INVERTED_DEPTH
     #define MipConvFunc max
@@ -32,7 +33,7 @@ float SampleDepth(uint2 Location, uint2 Offset, uint2 Dimension)
 }
 #endif
 
-float ComputeHierarchicalDepthBufferPS(in float4 Position : SV_Position) : SV_Target0
+float ComputeHierarchicalDepthBufferPS(in FullScreenTriangleVSOutput VSOut) : SV_Target0
 {
     uint2 LastMipDimension;
 #if SUPPORTED_SHADER_SRV
@@ -45,7 +46,7 @@ float ComputeHierarchicalDepthBufferPS(in float4 Position : SV_Position) : SV_Ta
 
 #endif
 
-    uint2 RemappedPosition = uint2(2.0 * floor(Position.xy)); 
+    uint2 RemappedPosition = uint2(2.0 * floor(VSOut.f4PixelPos.xy)); 
 
     float4 SampledPixels;
     SampledPixels.x = SampleDepth(RemappedPosition, uint2(0, 0), LastMipDimension);

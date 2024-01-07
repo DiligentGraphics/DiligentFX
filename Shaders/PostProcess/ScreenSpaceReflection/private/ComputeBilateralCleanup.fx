@@ -1,5 +1,6 @@
 #include "ScreenSpaceReflectionStructures.fxh"
 #include "SSR_Common.fxh"
+#include "FullScreenTriangleVSOutput.fxh"
 
 cbuffer cbScreenSpaceReflectionAttribs
 {
@@ -44,8 +45,10 @@ bool IsReflectionSample(float Roughness, float Depth)
 }
 
 SSR_ATTRIBUTE_EARLY_DEPTH_STENCIL
-float4 ComputeBilateralCleanupPS(in float4 Position : SV_Position) : SV_Target0
+float4 ComputeBilateralCleanupPS(in FullScreenTriangleVSOutput VSOut) : SV_Target0
 {
+    float4 Position = VSOut.f4PixelPos;
+
     float  Roughness   = SampleRoughness(int2(Position.xy));
     float  Variance    = SampleVariance(int2(Position.xy));
     float3 NormalWS    = SampleNormalWS(int2(Position.xy));

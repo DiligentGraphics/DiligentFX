@@ -1,6 +1,7 @@
 #include "ScreenSpaceReflectionStructures.fxh"
 #include "PBR_Common.fxh"
 #include "SSR_Common.fxh"
+#include "FullScreenTriangleVSOutput.fxh"
 
 cbuffer cbScreenSpaceReflectionAttribs
 {
@@ -249,11 +250,11 @@ float4 SampleReflectionVector(float3 View, float3 Normal, float AlphaRoughness, 
 }
 
 SSR_ATTRIBUTE_EARLY_DEPTH_STENCIL
-PSOutput ComputeIntersectionPS(in float4 Position : SV_Position)
+PSOutput ComputeIntersectionPS(in FullScreenTriangleVSOutput VSOut)
 {
-    float2 ScreenCoordUV = Position.xy * g_SSRAttribs.InverseRenderSize;
-    float3 NormalWS = SampleNormalWS(int2(Position.xy));
-    float Roughness = SampleRoughness(int2(Position.xy));
+    float2 ScreenCoordUV = VSOut.f4PixelPos.xy * g_SSRAttribs.InverseRenderSize;
+    float3 NormalWS = SampleNormalWS(int2(VSOut.f4PixelPos.xy));
+    float Roughness = SampleRoughness(int2(VSOut.f4PixelPos.xy));
 
     bool IsMirror = IsMirrorReflection(Roughness);
     int MostDetailedMip = IsMirror ? 0 : int(g_SSRAttribs.MostDetailedMip);
@@ -263,7 +264,7 @@ PSOutput ComputeIntersectionPS(in float4 Position : SV_Position)
     float3 RayOriginVS = ScreenSpaceToViewSpace(RayOriginSS);
     float3 NormalVS = mul(float4(NormalWS, 0), g_SSRAttribs.ViewMatrix).xyz;
 
-    float4 RayDirectionVS = SampleReflectionVector(-normalize(RayOriginVS), NormalVS, Roughness, int2(Position.xy));
+    float4 RayDirectionVS = SampleReflectionVector(-normalize(RayOriginVS), NormalVS, Roughness, int2(VSOut.f4PixelPos.xy));
     float3 RayDirectionSS = ProjectDirection(RayOriginVS, RayDirectionVS.xyz, RayOriginSS, g_SSRAttribs.ProjMatrix);
 
     bool ValidHit = false;

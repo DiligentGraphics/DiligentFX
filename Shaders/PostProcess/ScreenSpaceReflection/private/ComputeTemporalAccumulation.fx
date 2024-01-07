@@ -1,5 +1,6 @@
 #include "ScreenSpaceReflectionStructures.fxh"
 #include "SSR_Common.fxh"
+#include "FullScreenTriangleVSOutput.fxh"
 
 #pragma warning(disable : 3078)
 
@@ -222,8 +223,10 @@ ProjectionDesc ComputeReprojection(float2 PrevPos, float CurrDepth)
 }
 
 SSR_ATTRIBUTE_EARLY_DEPTH_STENCIL
-PSOutput ComputeTemporalAccumulationPS(in float4 Position : SV_Position)
+PSOutput ComputeTemporalAccumulationPS(in FullScreenTriangleVSOutput VSOut)
 {
+    float4 Position = VSOut.f4PixelPos;
+
     // Secondary reprojection based on ray lengths:
     // https://www.ea.com/seed/news/seed-dd18-presentation-slides-raytracing (Slide 45)
 

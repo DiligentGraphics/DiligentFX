@@ -1,5 +1,6 @@
 #include "ScreenSpaceReflectionStructures.fxh"
 #include "SSR_Common.fxh"
+#include "FullScreenTriangleVSOutput.fxh"
 
 cbuffer cbScreenSpaceReflectionAttribs
 {
@@ -22,10 +23,10 @@ float SampleDepth(int2 PixelCoord)
     return g_TextureDepth.Load(int3(PixelCoord, 0));
 }
 
-float ComputeStencilMaskAndExtractRoughnessPS(in float4 Position : SV_Position) : SV_Target0
+float ComputeStencilMaskAndExtractRoughnessPS(in FullScreenTriangleVSOutput VSOut) : SV_Target0
 {
-    float Roughness = SampleRoughness(int2(Position.xy));
-    float Depth = SampleDepth(int2(Position.xy));
+    float Roughness = SampleRoughness(int2(VSOut.f4PixelPos.xy));
+    float Depth = SampleDepth(int2(VSOut.f4PixelPos.xy));
     
     if (!IsGlossyReflection(Roughness, g_SSRAttribs.RoughnessThreshold, g_SSRAttribs.IsRoughnessPerceptual) || IsBackground(Depth))
         discard;

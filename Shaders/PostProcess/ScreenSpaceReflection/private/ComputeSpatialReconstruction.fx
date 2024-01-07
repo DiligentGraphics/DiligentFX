@@ -1,6 +1,7 @@
 #include "ScreenSpaceReflectionStructures.fxh"
 #include "PBR_Common.fxh"
 #include "SSR_Common.fxh"
+#include "FullScreenTriangleVSOutput.fxh"
 
 cbuffer cbScreenSpaceReflectionAttribs
 {
@@ -91,8 +92,10 @@ float3 ScreenSpaceToWorldSpace(float3 ScreenCoordUV)
 }
 
 SSR_ATTRIBUTE_EARLY_DEPTH_STENCIL
-PSOutput ComputeSpatialReconstructionPS(in float4 Position : SV_Position)
+PSOutput ComputeSpatialReconstructionPS(in FullScreenTriangleVSOutput VSOut)
 {
+    float4 Position = VSOut.f4PixelPos;
+    
     CRNG Rng = InitCRND(uint2(Position.xy), 0u);
 
     float2 ScreenCoordUV = Position.xy * g_SSRAttribs.InverseRenderSize;
