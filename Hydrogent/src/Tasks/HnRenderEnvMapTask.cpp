@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -65,13 +65,24 @@ void HnRenderEnvMapTask::Sync(pxr::HdSceneDelegate* Delegate,
 }
 
 static constexpr char EnvMapPSMain[] = R"(
-void main(in  float4 Pos     : SV_Position,
-          in  float4 ClipPos : CLIP_POS,
-          out float4 Color   : SV_Target0,
-          out float4 MeshId  : SV_Target1)
+void main(in  float4 Pos       : SV_Position,
+          in  float4 ClipPos   : CLIP_POS,
+          out float4 Color     : SV_Target0,
+          out float4 MeshId    : SV_Target1,
+          out float4 MotionVec : SV_Target2,
+          out float4 Normal    : SV_Target3,
+          out float4 BaseColor : SV_Target4,
+          out float4 Material  : SV_Target5,
+          out float4 IBL       : SV_Target6)
 {
-    Color  = SampleEnvMap(ClipPos);
-    MeshId = float4(0.0, 0.0, 0.0, 1.0);
+    Color = SampleEnvMap(ClipPos);
+
+    MeshId    = float4(0.0, 0.0, 0.0, 1.0);
+    MotionVec = float4(0.0, 0.0, 0.0, 0.0);
+    Normal    = float4(0.0, 0.0, 0.0, 0.0);
+    BaseColor = float4(0.0, 0.0, 0.0, 0.0);
+    Material  = float4(0.0, 0.0, 0.0, 0.0);
+    IBL       = float4(0.0, 0.0, 0.0, 0.0);
 }
 )";
 
@@ -97,7 +108,7 @@ void HnRenderEnvMapTask::Prepare(pxr::HdTaskContext* TaskCtx,
 
             if (EnvMapRndrCI.pDevice->GetDeviceInfo().IsGLDevice())
             {
-                // Normally, environment map shader does not need to write to MeshID target.
+                // Normally, environment map shader does not need to write to anything but color target.
                 // However, in OpenGL this somehow results in color output also being
                 // written to the MeshID target. To work around this issue, we use a
                 // custom shader that writes 0.

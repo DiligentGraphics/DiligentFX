@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -57,6 +57,18 @@ public:
 
     void Begin(IDeviceContext* pContext);
 
+    enum GBUFFER_TARGET : Uint32
+    {
+        GBUFFER_TARGET_SCENE_COLOR,
+        GBUFFER_TARGET_MESH_ID,
+        GBUFFER_TARGET_NOTION_VECTOR,
+        GBUFFER_TARGET_NORMAL,
+        GBUFFER_TARGET_BASE_COLOR,
+        GBUFFER_TARGET_MATERIAL,
+        GBUFFER_TARGET_IBL,
+        GBUFFER_TARGET_COUNT
+    };
+
     void SetRenderTargetFormat(Uint32 rt, TEXTURE_FORMAT Fmt)
     {
         m_RTVFormats[rt] = Fmt;
@@ -99,21 +111,26 @@ public:
 
     struct FramebufferTargets
     {
-        ITextureView* FinalColorRTV     = nullptr;
-        ITextureView* OffscreenColorRTV = nullptr;
-        ITextureView* MeshIdRTV         = nullptr;
+        ITextureView* FinalColorRTV = nullptr;
+
+        std::array<ITextureView*, GBUFFER_TARGET_COUNT> GBufferRTVs = {};
+
         ITextureView* SelectionDepthDSV = nullptr;
         ITextureView* DepthDSV          = nullptr;
 
         ITextureView* ClosestSelectedLocation0RTV = nullptr;
         ITextureView* ClosestSelectedLocation1RTV = nullptr;
 
-        constexpr explicit operator bool() const
+        explicit operator bool() const
         {
+            for (ITextureView* RTV : GBufferRTVs)
+            {
+                if (RTV == nullptr)
+                    return false;
+            }
+
             // clang-format off
             return FinalColorRTV               != nullptr &&
-                   OffscreenColorRTV           != nullptr &&
-                   MeshIdRTV                   != nullptr &&
                    SelectionDepthDSV           != nullptr &&
                    DepthDSV                    != nullptr &&
                    ClosestSelectedLocation0RTV != nullptr &&

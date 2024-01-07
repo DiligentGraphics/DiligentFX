@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -147,26 +147,26 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                            TaskUID_RenderRprimsDefaultSelected,
                            {
                                HnRenderPassParams::SelectionType::Selected,
-                               USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_AND_MESH_ID_OUTPUTS,
+                               USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS,
                            });
     CreateRenderRprimsTask(HnMaterialTagTokens->masked,
                            TaskUID_RenderRprimsMaskedSelected,
                            {
                                HnRenderPassParams::SelectionType::Selected,
-                               USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_AND_MESH_ID_OUTPUTS,
+                               USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS,
                            });
     CreateCopySelectionDepthTask();
     CreateRenderRprimsTask(HnMaterialTagTokens->defaultTag,
                            TaskUID_RenderRprimsDefaultUnselected,
                            {
                                HnRenderPassParams::SelectionType::Unselected,
-                               USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_AND_MESH_ID_OUTPUTS,
+                               USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS,
                            });
     CreateRenderRprimsTask(HnMaterialTagTokens->masked,
                            TaskUID_RenderRprimsMaskedUnselected,
                            {
                                HnRenderPassParams::SelectionType::Unselected,
-                               USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_AND_MESH_ID_OUTPUTS,
+                               USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS,
                            });
     CreateRenderEnvMapTask();
     CreateRenderAxesTask();
@@ -174,13 +174,13 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                            TaskUID_RenderRprimsAdditive,
                            {
                                HnRenderPassParams::SelectionType::All,
-                               USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_AND_MESH_ID_OUTPUTS,
+                               USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS,
                            });
     CreateRenderRprimsTask(HnMaterialTagTokens->translucent,
                            TaskUID_RenderRprimsTranslucent,
                            {
                                HnRenderPassParams::SelectionType::All,
-                               USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_AND_MESH_ID_OUTPUTS,
+                               USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS,
                            });
     CreateSetupSelectionDepthTask();
     CreateRenderRprimsTask(HnMaterialTagTokens->additive,

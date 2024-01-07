@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -112,24 +112,24 @@ public:
     ///                             * Generates the closest selected location texture using the Jump-Flood algorithm
     ///                         - PostProcess
     ///
-    ///     | Task                            |  Selected Rprims | Unselected Rprims | Color  |  Mesh ID  |  Selection Detph | Main Depth |
-    ///     |---------------------------------|------------------|-------------------|--------|-----------|------------------|------------|
-    ///     | BeginFrame                  |                  |                   |  bind  |   bind    |      bind        |            |
-    ///     | RenderRprimsDefaultSelected     |       V          |                   |   V    |     V     |        V         |            |
-    ///     | RenderRprimsMaskedSelected      |       V          |                   |   V    |     V     |        V         |            |
-    ///     | CopySelectionDepth              |                  |                   |  bind  |   bind    |        V---copy--|---->V bind |
-    ///     | RenderRprimsDefaultUnselected   |                  |         V         |   V    |     V     |                  |     V      |
-    ///     | RenderRprimsMaskedUnselected    |                  |         V         |   V    |     V     |                  |     V      |
-    ///     | RenderEnvMap                    |                  |                   |   V    |           |                  |            |
-    ///     | RenderAxes                      |                  |                   |   V    |           |                  |            |
-    ///     | RenderRprimsAdditive            |       V          |         V         |   V    |     V     |                  |     V      |
-    ///     | RenderRprimsTranslucent         |       V          |         V         |   V    |     V     |                  |     V      |
-    ///     | SetupSelectionDepth             |                  |                   |        |           |       bind       |            |
-    ///     | RenderRprimsAdditiveSelected    |       V          |                   |        |           |        V         |            |
-    ///     | RenderRprimsTranslucentSelected |       V          |                   |        |           |        V         |            |
-    ///     | ReadRprimId                     |                  |                   |        |           |                  |            |
-    ///     | ProcessSelection                |                  |                   |        |           |                  |            |
-    ///     | PostProcess                     |                  |                   |        |           |                  |            |
+    ///     | Task                            |  Selected Rprims | Unselected Rprims | Color  |  Mesh ID  | G-Buffer |  Selection Detph | Main Depth |
+    ///     |---------------------------------|------------------|-------------------|--------|-----------|----------|------------------|------------|
+    ///     | BeginFrame                      |                  |                   |  bind  |   bind    |   bind   |      bind        |            |
+    ///     | RenderRprimsDefaultSelected     |       V          |                   |   V    |     V     |    V     |        V         |            |
+    ///     | RenderRprimsMaskedSelected      |       V          |                   |   V    |     V     |    V     |        V         |            |
+    ///     | CopySelectionDepth              |                  |                   |  bind  |   bind    |   bind   |        V---copy--|---->V bind |
+    ///     | RenderRprimsDefaultUnselected   |                  |         V         |   V    |     V     |    V     |                  |     V      |
+    ///     | RenderRprimsMaskedUnselected    |                  |         V         |   V    |     V     |    V     |                  |     V      |
+    ///     | RenderEnvMap                    |                  |                   |   V    |           |          |                  |            |
+    ///     | RenderAxes                      |                  |                   |   V    |           |          |                  |            |
+    ///     | RenderRprimsAdditive            |       V          |         V         |   V    |     V     |    V     |                  |     V      |
+    ///     | RenderRprimsTranslucent         |       V          |         V         |   V    |     V     |    V     |                  |     V      |
+    ///     | SetupSelectionDepth             |                  |                   |        |           |          |       bind       |            |
+    ///     | RenderRprimsAdditiveSelected    |       V          |                   |        |           |          |        V         |            |
+    ///     | RenderRprimsTranslucentSelected |       V          |                   |        |           |          |        V         |            |
+    ///     | ReadRprimId                     |                  |                   |        |           |          |                  |            |
+    ///     | ProcessSelection                |                  |                   |        |           |          |                  |            |
+    ///     | PostProcess                     |                  |                   |        |           |          |                  |            |
     ///
     /// \return The list of tasks that can be passed to pxr::HdEngine::Execute.
     ///

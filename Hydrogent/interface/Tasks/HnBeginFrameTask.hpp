@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -27,8 +27,10 @@
 #pragma once
 
 #include <memory>
+#include <array>
 
 #include "HnTask.hpp"
+#include "../interface/HnRenderPassState.hpp"
 #include "../interface/HnTypes.hpp"
 
 #include "../../../../DiligentCore/Common/interface/BasicMath.hpp"
@@ -37,6 +39,11 @@ namespace Diligent
 {
 
 struct ITextureView;
+
+namespace HLSL
+{
+struct PBRFrameAttribs;
+}
 
 namespace USD
 {
@@ -47,20 +54,21 @@ struct HnBeginFrameTaskParams
 {
     struct RenderTargetFormats
     {
-        TEXTURE_FORMAT Color                   = TEX_FORMAT_RGBA16_FLOAT;
-        TEXTURE_FORMAT MeshId                  = TEX_FORMAT_R32_FLOAT;
+        std::array<TEXTURE_FORMAT, HnRenderPassState::GBUFFER_TARGET_COUNT> GBuffer = {};
+
         TEXTURE_FORMAT Depth                   = TEX_FORMAT_D32_FLOAT;
         TEXTURE_FORMAT ClosestSelectedLocation = TEX_FORMAT_RG16_UNORM;
 
-        constexpr bool operator==(const RenderTargetFormats& rhs) const
+        bool operator==(const RenderTargetFormats& rhs) const
         {
             // clang-format off
-            return Color                   == rhs.Color &&
-                   MeshId                  == rhs.MeshId &&
+            return GBuffer                 == rhs.GBuffer &&
                    Depth                   == rhs.Depth &&
                    ClosestSelectedLocation == rhs.ClosestSelectedLocation;
             // clang-format on
         }
+
+        RenderTargetFormats() noexcept;
     };
     RenderTargetFormats Formats;
 
@@ -136,7 +144,7 @@ struct HnBeginFrameTaskParams
     };
     RendererParams Renderer;
 
-    constexpr bool operator==(const HnBeginFrameTaskParams& rhs) const
+    bool operator==(const HnBeginFrameTaskParams& rhs) const
     {
         // clang-format off
         return Formats              == rhs.Formats &&
@@ -148,7 +156,7 @@ struct HnBeginFrameTaskParams
                Renderer             == rhs.Renderer;
         // clang-format on
     }
-    constexpr bool operator!=(const HnBeginFrameTaskParams& rhs) const
+    bool operator!=(const HnBeginFrameTaskParams& rhs) const
     {
         return !(*this == rhs);
     }
@@ -188,8 +196,9 @@ private:
     std::shared_ptr<HnRenderPassState> m_RenderPassState;
 
     pxr::SdfPath m_FinalColorTargetId;
-    pxr::SdfPath m_OffscreenColorTargetId;
-    pxr::SdfPath m_MeshIdTargetId;
+
+    std::array<pxr::SdfPath, HnRenderPassState::GBUFFER_TARGET_COUNT> m_GBufferTargetIds;
+
     pxr::SdfPath m_SelectionDepthBufferId;
     pxr::SdfPath m_DepthBufferId;
     pxr::SdfPath m_ClosestSelLocn0TargetId;
@@ -201,6 +210,11 @@ private:
     pxr::HdRenderIndex* m_RenderIndex = nullptr;
 
     HnBeginFrameTaskParams::RendererParams m_RendererParams;
+
+    std::unique_ptr<HLSL::PBRFrameAttribs> m_FrameAttribs;
+
+    Uint32 m_FrameBufferWidth  = 0;
+    Uint32 m_FrameBufferHeight = 0;
 };
 
 } // namespace USD

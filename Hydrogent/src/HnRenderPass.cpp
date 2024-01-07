@@ -268,7 +268,7 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
             }
         }
 
-        HLSL::PBRPrimitiveAttribs* pCurrPrimitive = reinterpret_cast<HLSL::PBRPrimitiveAttribs*>(reinterpret_cast<Uint8*>(pMappedBufferData) + CurrOffset);
+        void* pCurrPrimitive = reinterpret_cast<Uint8*>(pMappedBufferData) + CurrOffset;
         CurrOffset += ListItem.ShaderAttribsDataAlignedSize;
 
         // Write current primitive attributes
@@ -282,6 +282,8 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
         const float4x4&       Transform    = ApplyTransform ? (Mesh.GetTransform() * m_RenderParams.Transform) : Mesh.GetTransform();
         const GLTF::Material& MaterialData = pMaterial->GetMaterialData();
 
+        HLSL::PBRMaterialBasicAttribs* pDstMaterialBasicAttribs = nullptr;
+
         GLTF_PBR_Renderer::PBRPrimitiveShaderAttribsData AttribsData{
             ListItem.PSOFlags,
             &Transform,
@@ -289,10 +291,11 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
             0,
             &CustomData,
             sizeof(CustomData),
+            &pDstMaterialBasicAttribs,
         };
         GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(pCurrPrimitive, AttribsData, State.USDRenderer.GetSettings().TextureAttribIndices, pMaterial->GetMaterialData());
 
-        pCurrPrimitive->Material.Basic.BaseColorFactor = MaterialData.Attribs.BaseColorFactor * Mesh.GetDisplayColor();
+        pDstMaterialBasicAttribs->BaseColorFactor = MaterialData.Attribs.BaseColorFactor * Mesh.GetDisplayColor();
 
         m_PendingDrawItems.push_back(&ListItem);
     }
@@ -442,6 +445,8 @@ PBR_Renderer::PSO_FLAGS HnRenderPass::GetMaterialPSOFlags(const HnMaterial& Mate
         PBR_Renderer::PSO_FLAG_USE_AO_MAP |
         PBR_Renderer::PSO_FLAG_USE_EMISSIVE_MAP;
 
+    PSOFlags |= PBR_Renderer::PSO_FLAG_COMPUTE_MOTION_VECTORS;
+
     MaterialData.ProcessActiveTextureAttibs(
         [&PSOFlags](Uint32, const GLTF::Material::TextureShaderAttribs& TexAttrib, int) //
         {
@@ -525,9 +530,9 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
 
         const Uint32 AttribsDataSize    = State.USDRenderer.GetPBRPrimitiveAttribsSize(PSOFlags);
         const Uint32 AttribsBufferRange = State.USDRenderer.GetPBRPrimitiveAttribsSize(GetMaterialPSOFlags(*pMaterial));
-        VERIFY_EXPR(AttribsDataSize <= AttribsBufferRange,
-                    "Attribs data size (", AttribsDataSize, ") computed from the PSO flags exceeds the attribs buffer range (", AttribsBufferRange,
-                    ") computed from material PSO flags. The latter is used by HnMaterial to set the buffer range.");
+        VERIFY(AttribsDataSize <= AttribsBufferRange,
+               "Attribs data size (", AttribsDataSize, ") computed from the PSO flags exceeds the attribs buffer range (", AttribsBufferRange,
+               ") computed from material PSO flags. The latter is used by HnMaterial to set the buffer range.");
         ListItem.ShaderAttribsDataAlignedSize    = AlignUp(AttribsDataSize, State.ConstantBufferOffsetAlignment);
         ListItem.ShaderAttribsBufferAlignedRange = AlignUp(AttribsBufferRange, State.ConstantBufferOffsetAlignment);
 

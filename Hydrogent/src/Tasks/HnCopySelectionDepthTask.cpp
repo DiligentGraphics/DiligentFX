@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -93,8 +93,8 @@ void HnCopySelectionDepthTask::Execute(pxr::HdTaskContext* TaskCtx)
     };
     pCtx->CopyTexture(CopyAttribs);
 
-    ITextureView* pRTVs[] = {Targets.OffscreenColorRTV, Targets.MeshIdRTV};
-    pCtx->SetRenderTargets(_countof(pRTVs), pRTVs, Targets.DepthDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    auto pRTVs = Targets.GBufferRTVs;
+    pCtx->SetRenderTargets(HnRenderPassState::GBUFFER_TARGET_COUNT, pRTVs.data(), Targets.DepthDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 }
 
 } // namespace USD

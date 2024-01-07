@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@
 #include "HnLight.hpp"
 #include "HnRenderPass.hpp"
 #include "HnRenderParam.hpp"
+#include "HnRenderPassState.hpp"
 #include "DebugUtilities.hpp"
 #include "GraphicsUtilities.h"
 #include "HnRenderBuffer.hpp"
@@ -121,6 +122,15 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(IRenderDevice*     pDevic
     USDRendererCI.CreateDefaultTextures = false;
     // Enable clear coat support
     USDRendererCI.EnableClearCoat = true;
+
+    USDRendererCI.ColorTargetIndex        = HnRenderPassState::GBUFFER_TARGET_SCENE_COLOR;
+    USDRendererCI.MeshIdTargetIndex       = HnRenderPassState::GBUFFER_TARGET_MESH_ID;
+    USDRendererCI.MotionVectorTargetIndex = HnRenderPassState::GBUFFER_TARGET_NOTION_VECTOR;
+    USDRendererCI.NormalTargetIndex       = HnRenderPassState::GBUFFER_TARGET_NORMAL;
+    USDRendererCI.BaseColorTargetIndex    = HnRenderPassState::GBUFFER_TARGET_BASE_COLOR;
+    USDRendererCI.MaterialDataTargetIndex = HnRenderPassState::GBUFFER_TARGET_MATERIAL;
+    USDRendererCI.IBLTargetIndex          = HnRenderPassState::GBUFFER_TARGET_IBL;
+    static_assert(HnRenderPassState::GBUFFER_TARGET_COUNT == 7, "Unexpected number of G-buffer targets");
 
     static constexpr LayoutElement Inputs[] =
         {

@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -51,9 +51,22 @@ namespace HLSL
 namespace USD
 {
 
+HnBeginFrameTaskParams::RenderTargetFormats::RenderTargetFormats() noexcept
+{
+    GBuffer[HnRenderPassState::GBUFFER_TARGET_SCENE_COLOR]   = TEX_FORMAT_RGBA16_FLOAT;
+    GBuffer[HnRenderPassState::GBUFFER_TARGET_MESH_ID]       = TEX_FORMAT_R32_FLOAT;
+    GBuffer[HnRenderPassState::GBUFFER_TARGET_NOTION_VECTOR] = TEX_FORMAT_RG16_FLOAT;
+    GBuffer[HnRenderPassState::GBUFFER_TARGET_NORMAL]        = TEX_FORMAT_RGBA16_FLOAT;
+    GBuffer[HnRenderPassState::GBUFFER_TARGET_BASE_COLOR]    = TEX_FORMAT_RGBA8_UNORM;
+    GBuffer[HnRenderPassState::GBUFFER_TARGET_MATERIAL]      = TEX_FORMAT_RG8_UNORM;
+    GBuffer[HnRenderPassState::GBUFFER_TARGET_IBL]           = TEX_FORMAT_RGBA16_FLOAT;
+    static_assert(HnRenderPassState::GBUFFER_TARGET_COUNT == 7, "Please initialize default render target formats.");
+}
+
 HnBeginFrameTask::HnBeginFrameTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id) :
     HnTask{Id},
-    m_RenderPassState{std::make_shared<HnRenderPassState>()}
+    m_RenderPassState{std::make_shared<HnRenderPassState>()},
+    m_FrameAttribs{std::make_unique<HLSL::PBRFrameAttribs>()}
 {
     if (ParamsDelegate == nullptr)
     {
@@ -70,8 +83,16 @@ HnBeginFrameTask::HnBeginFrameTask(pxr::HdSceneDelegate* ParamsDelegate, const p
         RenderIndex.InsertBprim(pxr::HdPrimTypeTokens->renderBuffer, ParamsDelegate, Id);
         return Id;
     };
-    m_OffscreenColorTargetId  = InitBrim(HnRenderResourceTokens->offscreenColorTarget);
-    m_MeshIdTargetId          = InitBrim(HnRenderResourceTokens->meshIdTarget);
+
+    m_GBufferTargetIds[HnRenderPassState::GBUFFER_TARGET_SCENE_COLOR]   = InitBrim(HnRenderResourceTokens->offscreenColorTarget);
+    m_GBufferTargetIds[HnRenderPassState::GBUFFER_TARGET_MESH_ID]       = InitBrim(HnRenderResourceTokens->meshIdTarget);
+    m_GBufferTargetIds[HnRenderPassState::GBUFFER_TARGET_NOTION_VECTOR] = InitBrim(HnRenderResourceTokens->motionVectorsTarget);
+    m_GBufferTargetIds[HnRenderPassState::GBUFFER_TARGET_NORMAL]        = InitBrim(HnRenderResourceTokens->normalTarget);
+    m_GBufferTargetIds[HnRenderPassState::GBUFFER_TARGET_BASE_COLOR]    = InitBrim(HnRenderResourceTokens->baseColorTarget);
+    m_GBufferTargetIds[HnRenderPassState::GBUFFER_TARGET_MATERIAL]      = InitBrim(HnRenderResourceTokens->materialDataTarget);
+    m_GBufferTargetIds[HnRenderPassState::GBUFFER_TARGET_IBL]           = InitBrim(HnRenderResourceTokens->iblTarget);
+    static_assert(HnRenderPassState::GBUFFER_TARGET_COUNT == 7, "Please initialize GBuffer BPrims.");
+
     m_SelectionDepthBufferId  = InitBrim(HnRenderResourceTokens->selectionDepthBuffer);
     m_DepthBufferId           = InitBrim(HnRenderResourceTokens->depthBuffer);
     m_ClosestSelLocn0TargetId = InitBrim(HnRenderResourceTokens->closestSelectedLocation0Target);
@@ -84,10 +105,9 @@ HnBeginFrameTask::~HnBeginFrameTask()
 
 void HnBeginFrameTask::UpdateRenderPassState(const HnBeginFrameTaskParams& Params)
 {
-    VERIFY_EXPR(Params.Formats.Color != TEX_FORMAT_UNKNOWN);
-    m_RenderPassState->SetNumRenderTargets(2);
-    m_RenderPassState->SetRenderTargetFormat(0, Params.Formats.Color);
-    m_RenderPassState->SetRenderTargetFormat(1, Params.Formats.MeshId);
+    m_RenderPassState->SetNumRenderTargets(HnRenderPassState::GBUFFER_TARGET_COUNT);
+    for (Uint32 i = 0; i < HnRenderPassState::GBUFFER_TARGET_COUNT; ++i)
+        m_RenderPassState->SetRenderTargetFormat(i, Params.Formats.GBuffer[i]);
     m_RenderPassState->SetDepthStencilFormat(Params.Formats.Depth);
 
     m_RenderPassState->SetDepthBias(Params.State.DepthBias, Params.State.SlopeScaledDepthBias);
@@ -138,7 +158,10 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
     const auto& FinalRTVDesc    = pFinalColorRTV->GetDesc();
     const auto& FinalTargetDesc = pFinalColorRTV->GetTexture()->GetDesc();
 
-    auto UpdateBrim = [&](const pxr::SdfPath& Id, TEXTURE_FORMAT Format, const char* Name) -> ITextureView* {
+    m_FrameBufferWidth  = FinalTargetDesc.Width;
+    m_FrameBufferHeight = FinalTargetDesc.Height;
+
+    auto UpdateBrim = [&](const pxr::SdfPath& Id, TEXTURE_FORMAT Format, const std::string& Name) -> ITextureView* {
         if (Format == TEX_FORMAT_UNKNOWN)
             return nullptr;
 
@@ -165,7 +188,7 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
         auto* const pDevice = static_cast<HnRenderDelegate*>(RenderIndex->GetRenderDelegate())->GetDevice();
 
         auto TargetDesc      = FinalTargetDesc;
-        TargetDesc.Name      = Name;
+        TargetDesc.Name      = Name.c_str();
         TargetDesc.Format    = Format;
         TargetDesc.BindFlags = (IsDepth ? BIND_DEPTH_STENCIL : BIND_RENDER_TARGET) | BIND_SHADER_RESOURCE;
 
@@ -187,9 +210,13 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
     };
 
     HnRenderPassState::FramebufferTargets FBTargets;
-    FBTargets.FinalColorRTV               = pFinalColorRTV;
-    FBTargets.OffscreenColorRTV           = UpdateBrim(m_OffscreenColorTargetId, m_RenderPassState->GetRenderTargetFormat(0), "Offscreen color target");
-    FBTargets.MeshIdRTV                   = UpdateBrim(m_MeshIdTargetId, m_RenderPassState->GetRenderTargetFormat(1), "Mesh Id target");
+    FBTargets.FinalColorRTV = pFinalColorRTV;
+
+    for (Uint32 i = 0; i < HnRenderPassState::GBUFFER_TARGET_COUNT; ++i)
+    {
+        const std::string Name   = std::string{"GBuffer target "} + std::to_string(i);
+        FBTargets.GBufferRTVs[i] = UpdateBrim(m_GBufferTargetIds[i], m_RenderPassState->GetRenderTargetFormat(i), Name);
+    }
     FBTargets.SelectionDepthDSV           = UpdateBrim(m_SelectionDepthBufferId, m_RenderPassState->GetDepthStencilFormat(), "Selection depth buffer");
     FBTargets.DepthDSV                    = UpdateBrim(m_DepthBufferId, m_RenderPassState->GetDepthStencilFormat(), "Depth buffer");
     FBTargets.ClosestSelectedLocation0RTV = UpdateBrim(m_ClosestSelLocn0TargetId, m_ClosestSelectedLocationFormat, "Closest selected location 0");
@@ -200,15 +227,22 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
 void HnBeginFrameTask::Prepare(pxr::HdTaskContext* TaskCtx,
                                pxr::HdRenderIndex* RenderIndex)
 {
-    (*TaskCtx)[HnTokens->renderPassState]                              = pxr::VtValue{m_RenderPassState};
-    (*TaskCtx)[HnRenderResourceTokens->finalColorTarget]               = pxr::VtValue{m_FinalColorTargetId};
-    (*TaskCtx)[HnRenderResourceTokens->offscreenColorTarget]           = pxr::VtValue{m_OffscreenColorTargetId};
-    (*TaskCtx)[HnRenderResourceTokens->meshIdTarget]                   = pxr::VtValue{m_MeshIdTargetId};
+    (*TaskCtx)[HnTokens->renderPassState]                = pxr::VtValue{m_RenderPassState};
+    (*TaskCtx)[HnRenderResourceTokens->finalColorTarget] = pxr::VtValue{m_FinalColorTargetId};
+
+    (*TaskCtx)[HnRenderResourceTokens->offscreenColorTarget] = pxr::VtValue{m_GBufferTargetIds[HnRenderPassState::GBUFFER_TARGET_SCENE_COLOR]};
+    (*TaskCtx)[HnRenderResourceTokens->meshIdTarget]         = pxr::VtValue{m_GBufferTargetIds[HnRenderPassState::GBUFFER_TARGET_MESH_ID]};
+    (*TaskCtx)[HnRenderResourceTokens->normalTarget]         = pxr::VtValue{m_GBufferTargetIds[HnRenderPassState::GBUFFER_TARGET_NORMAL]};
+    (*TaskCtx)[HnRenderResourceTokens->motionVectorsTarget]  = pxr::VtValue{m_GBufferTargetIds[HnRenderPassState::GBUFFER_TARGET_NOTION_VECTOR]};
+    (*TaskCtx)[HnRenderResourceTokens->baseColorTarget]      = pxr::VtValue{m_GBufferTargetIds[HnRenderPassState::GBUFFER_TARGET_BASE_COLOR]};
+    (*TaskCtx)[HnRenderResourceTokens->materialDataTarget]   = pxr::VtValue{m_GBufferTargetIds[HnRenderPassState::GBUFFER_TARGET_MATERIAL]};
+    (*TaskCtx)[HnRenderResourceTokens->iblTarget]            = pxr::VtValue{m_GBufferTargetIds[HnRenderPassState::GBUFFER_TARGET_IBL]};
+    static_assert(HnRenderPassState::GBUFFER_TARGET_COUNT == 7, "Please initialize all GBuffer targets.");
+
     (*TaskCtx)[HnRenderResourceTokens->depthBuffer]                    = pxr::VtValue{m_DepthBufferId};
     (*TaskCtx)[HnRenderResourceTokens->selectionDepthBuffer]           = pxr::VtValue{m_SelectionDepthBufferId};
     (*TaskCtx)[HnRenderResourceTokens->closestSelectedLocation0Target] = pxr::VtValue{m_ClosestSelLocn0TargetId};
     (*TaskCtx)[HnRenderResourceTokens->closestSelectedLocation1Target] = pxr::VtValue{m_ClosestSelLocn1TargetId};
-
 
     if (ITextureView* pFinalColorRTV = GetRenderBufferTarget(*RenderIndex, m_FinalColorTargetId))
     {
@@ -224,7 +258,9 @@ void HnBeginFrameTask::Prepare(pxr::HdTaskContext* TaskCtx,
 
 void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx, IBuffer* pFrameAttrbisCB)
 {
-    HLSL::PBRFrameAttribs FrameAttribs;
+    HLSL::PBRFrameAttribs& FrameAttribs = *m_FrameAttribs;
+
+    FrameAttribs.PrevCamera = FrameAttribs.Camera;
     if (!m_CameraId.IsEmpty())
     {
         if (const HnCamera* pCamera = static_cast<const HnCamera*>(m_RenderIndex->GetSprim(pxr::HdPrimTypeTokens->camera, m_CameraId)))
@@ -236,12 +272,27 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx, IBuffer* pFram
             const float4x4& WorldMatrix = pCamera->GetWorldMatrix();
             const float4x4  ViewProj    = ViewMatrix * ProjMatrix;
 
+            VERIFY_EXPR(m_FrameBufferWidth > 0 && m_FrameBufferHeight > 0);
+            CamAttribs.f4ViewportSize = float4{
+                static_cast<float>(m_FrameBufferWidth),
+                static_cast<float>(m_FrameBufferHeight),
+                1.f / static_cast<float>(m_FrameBufferWidth),
+                1.f / static_cast<float>(m_FrameBufferHeight),
+            };
+
             CamAttribs.mViewT        = ViewMatrix.Transpose();
             CamAttribs.mProjT        = ProjMatrix.Transpose();
             CamAttribs.mViewProjT    = ViewProj.Transpose();
             CamAttribs.mViewInvT     = WorldMatrix.Transpose();
+            CamAttribs.mProjInvT     = ProjMatrix.Inverse().Transpose();
             CamAttribs.mViewProjInvT = ViewProj.Inverse().Transpose();
-            CamAttribs.f4Position    = float3::MakeVector(WorldMatrix[3]);
+            CamAttribs.f4Position    = float4{float3::MakeVector(WorldMatrix[3]), 1};
+
+            if (FrameAttribs.PrevCamera.f4ViewportSize.x == 0)
+            {
+                // First frame
+                FrameAttribs.PrevCamera = CamAttribs;
+            }
         }
         else
         {
@@ -321,14 +372,17 @@ void HnBeginFrameTask::Execute(pxr::HdTaskContext* TaskCtx)
         UNEXPECTED("Frame attribs constant buffer is null");
     }
 
-    ITextureView* pRTVs[] = {Targets.OffscreenColorRTV, Targets.MeshIdRTV};
+    auto pRTVs = Targets.GBufferRTVs;
 
     // We first render selected objects using the selection depth buffer.
     // Selection depth buffer is copied to the main depth buffer by the HnCopySelectionDepthTask.
-    pCtx->SetRenderTargets(_countof(pRTVs), pRTVs, Targets.SelectionDepthDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    pCtx->ClearRenderTarget(Targets.OffscreenColorRTV, m_RenderPassState->GetClearColor().Data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    constexpr float Zero[] = {0, 0, 0, 0};
-    pCtx->ClearRenderTarget(Targets.MeshIdRTV, Zero, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    pCtx->SetRenderTargets(HnRenderPassState::GBUFFER_TARGET_COUNT, pRTVs.data(), Targets.SelectionDepthDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    for (Uint32 i = 0; i < HnRenderPassState::GBUFFER_TARGET_COUNT; ++i)
+    {
+        constexpr float Zero[]     = {0, 0, 0, 0};
+        const float*    ClearColor = (i == HnRenderPassState::GBUFFER_TARGET_SCENE_COLOR) ? m_RenderPassState->GetClearColor().Data() : Zero;
+        pCtx->ClearRenderTarget(pRTVs[i], ClearColor, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    }
     pCtx->ClearDepthStencil(Targets.SelectionDepthDSV, CLEAR_DEPTH_FLAG, m_RenderPassState->GetClearDepth(), 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     pCtx->SetStencilRef(m_RenderPassState->GetStencilRef());
 }
