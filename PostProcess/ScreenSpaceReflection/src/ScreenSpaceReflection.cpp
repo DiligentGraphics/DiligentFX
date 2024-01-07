@@ -32,6 +32,7 @@
 #include "ScopedDebugGroup.hpp"
 #include "ShaderMacroHelper.hpp"
 #include "Utilities/include/DiligentFXShaderSourceStreamFactory.hpp"
+#include "GraphicsTypesX.hpp"
 
 namespace Diligent
 {
@@ -525,13 +526,8 @@ void ScreenSpaceReflection::CopyTextureDepth(const RenderAttributes& RenderAttri
         const auto VS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
         const auto PS = CreateShaderFromSource(RenderAttribs.pDevice, RenderAttribs.pStateCache, CopyDepthMip0PS, "CopyDepthPS", SHADER_TYPE_PIXEL);
 
-        ShaderResourceVariableDesc VariableDescs[] = {
-            ShaderResourceVariableDesc{SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-        };
-
-        PipelineResourceLayoutDesc ResourceLayout;
-        ResourceLayout.Variables    = VariableDescs;
-        ResourceLayout.NumVariables = _countof(VariableDescs);
+        PipelineResourceLayoutDescX ResourceLayout;
+        ResourceLayout.AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
 
         RenderTech.InitializePSO(RenderAttribs.pDevice,
                                  nullptr, "ScreenSpaceReflection::CopyDepth",
@@ -566,30 +562,18 @@ void ScreenSpaceReflection::ComputeHierarchicalDepthBuffer(const RenderAttribute
         const auto VS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
         const auto PS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeHierarchicalDepthBuffer.fx", "ComputeHierarchicalDepthBufferPS", SHADER_TYPE_PIXEL, Macros);
 
-        std::vector<ShaderResourceVariableDesc> VariableDescs;
+        PipelineResourceLayoutDescX ResourceLayout;
         if (m_IsSupportedShaderSubresourceView)
         {
-            VariableDescs.emplace_back(SHADER_TYPE_PIXEL, "g_TextureLastMip", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
+            ResourceLayout.AddVariable(SHADER_TYPE_PIXEL, "g_TextureLastMip", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
         }
         else
         {
-            VariableDescs.emplace_back(SHADER_TYPE_PIXEL, "cbTextureMipAtrrib", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
-            VariableDescs.emplace_back(SHADER_TYPE_PIXEL, "g_TextureMips", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
-        }
-
-        PipelineResourceLayoutDesc ResourceLayout;
-        ResourceLayout.Variables    = VariableDescs.data();
-        ResourceLayout.NumVariables = static_cast<Uint32>(VariableDescs.size());
-
-        // Immutable samplers are required for WebGL to work properly
-        ImmutableSamplerDesc SamplerDescs[] = {
-            ImmutableSamplerDesc{SHADER_TYPE_PIXEL, "g_TextureMips", Sam_PointWrap},
-        };
-
-        if (!m_IsSupportedShaderSubresourceView)
-        {
-            ResourceLayout.ImmutableSamplers    = SamplerDescs;
-            ResourceLayout.NumImmutableSamplers = _countof(SamplerDescs);
+            ResourceLayout
+                .AddVariable(SHADER_TYPE_PIXEL, "cbTextureMipAtrrib", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureMips", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                // Immutable samplers are required for WebGL to work properly
+                .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureMips", Sam_PointWrap);
         }
 
         RenderTech.InitializePSO(RenderAttribs.pDevice,
@@ -743,15 +727,11 @@ void ScreenSpaceReflection::ComputeBlueNoiseTexture(const RenderAttributes& Rend
     auto& RenderTech = m_RenderTech[RENDER_TECH_COMPUTE_BLUE_NOISE_TEXTURE];
     if (!RenderTech.IsInitialized())
     {
-        ShaderResourceVariableDesc VariableDescs[] = {
-            ShaderResourceVariableDesc{SHADER_TYPE_PIXEL, "cbScreenSpaceReflectionAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC},
-            ShaderResourceVariableDesc{SHADER_TYPE_PIXEL, "g_SobolBuffer", SHADER_RESOURCE_VARIABLE_TYPE_STATIC},
-            ShaderResourceVariableDesc{SHADER_TYPE_PIXEL, "g_ScramblingTileBuffer", SHADER_RESOURCE_VARIABLE_TYPE_STATIC},
-        };
-
-        PipelineResourceLayoutDesc ResourceLayout;
-        ResourceLayout.Variables    = VariableDescs;
-        ResourceLayout.NumVariables = _countof(VariableDescs);
+        PipelineResourceLayoutDescX ResourceLayout;
+        ResourceLayout
+            .AddVariable(SHADER_TYPE_PIXEL, "cbScreenSpaceReflectionAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+            .AddVariable(SHADER_TYPE_PIXEL, "g_SobolBuffer", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+            .AddVariable(SHADER_TYPE_PIXEL, "g_ScramblingTileBuffer", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
 
         const auto VS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
         const auto PS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeBlueNoiseTexture.fx", "ComputeBlueNoiseTexturePS", SHADER_TYPE_PIXEL);
@@ -788,15 +768,11 @@ void ScreenSpaceReflection::ComputeStencilMaskAndExtractRoughness(const RenderAt
     auto& RenderTech = m_RenderTech[RENDER_TECH_COMPUTE_STENCIL_MASK_AND_EXTRACT_ROUGHNESS];
     if (!RenderTech.IsInitialized())
     {
-        ShaderResourceVariableDesc VariableDescs[] = {
-            ShaderResourceVariableDesc{SHADER_TYPE_PIXEL, "cbScreenSpaceReflectionAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC},
-            ShaderResourceVariableDesc{SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-            ShaderResourceVariableDesc{SHADER_TYPE_PIXEL, "g_TextureMaterialParameters", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-        };
-
-        PipelineResourceLayoutDesc ResourceLayout;
-        ResourceLayout.Variables    = VariableDescs;
-        ResourceLayout.NumVariables = _countof(VariableDescs);
+        PipelineResourceLayoutDescX ResourceLayout;
+        ResourceLayout
+            .AddVariable(SHADER_TYPE_PIXEL, "cbScreenSpaceReflectionAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureMaterialParameters", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
 
         const auto VS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
         const auto PS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeStencilMaskAndExtractRoughness.fx", "ComputeStencilMaskAndExtractRoughnessPS", SHADER_TYPE_PIXEL);
@@ -838,28 +814,19 @@ void ScreenSpaceReflection::ComputeIntersection(const RenderAttributes& RenderAt
     auto& RenderTech = m_RenderTech[RENDER_TECH_COMPUTE_INTERSECTION];
     if (!RenderTech.IsInitialized())
     {
-        ShaderResourceVariableDesc VariableDescs[] = {
-            ShaderResourceVariableDesc{SHADER_TYPE_PIXEL, "cbScreenSpaceReflectionAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC},
-            ShaderResourceVariableDesc{SHADER_TYPE_PIXEL, "g_TextureRadiance", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-            ShaderResourceVariableDesc{SHADER_TYPE_PIXEL, "g_TextureNormal", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-            ShaderResourceVariableDesc{SHADER_TYPE_PIXEL, "g_TextureRoughness", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-            ShaderResourceVariableDesc{SHADER_TYPE_PIXEL, "g_TextureBlueNoise", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-            ShaderResourceVariableDesc{SHADER_TYPE_PIXEL, "g_TextureDepthHierarchy", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-        };
-
-        PipelineResourceLayoutDesc ResourceLayout;
-        ResourceLayout.Variables    = VariableDescs;
-        ResourceLayout.NumVariables = _countof(VariableDescs);
-
-        // Immutable samplers are required for WebGL to work properly
-        ImmutableSamplerDesc SamplerDescs[] = {
-            ImmutableSamplerDesc{SHADER_TYPE_PIXEL, "g_TextureDepthHierarchy", Sam_PointClamp},
-        };
+        PipelineResourceLayoutDescX ResourceLayout;
+        ResourceLayout
+            .AddVariable(SHADER_TYPE_PIXEL, "cbScreenSpaceReflectionAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureRadiance", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureNormal", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureRoughness", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureBlueNoise", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepthHierarchy", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
 
         if (!m_IsSupportedShaderSubresourceView)
         {
-            ResourceLayout.ImmutableSamplers    = SamplerDescs;
-            ResourceLayout.NumImmutableSamplers = _countof(SamplerDescs);
+            // Immutable sampler is required for WebGL to work properly
+            ResourceLayout.AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureDepthHierarchy", Sam_PointClamp);
         }
 
         const auto VS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
@@ -908,19 +875,15 @@ void ScreenSpaceReflection::ComputeSpatialReconstruction(const RenderAttributes&
     auto& RenderTech = m_RenderTech[RENDER_TECH_COMPUTE_SPATIAL_RECONSTRUCTION];
     if (!RenderTech.IsInitialized())
     {
-        ShaderResourceVariableDesc VariableDescs[] = {
-            ShaderResourceVariableDesc{SHADER_TYPE_PIXEL, "cbScreenSpaceReflectionAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC},
-            ShaderResourceVariableDesc{SHADER_TYPE_PIXEL, "g_TextureRoughness", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-            ShaderResourceVariableDesc{SHADER_TYPE_PIXEL, "g_TextureNormal", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-            ShaderResourceVariableDesc{SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-            ShaderResourceVariableDesc{SHADER_TYPE_PIXEL, "g_TextureRayDirectionPDF", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-            ShaderResourceVariableDesc{SHADER_TYPE_PIXEL, "g_TextureIntersectSpecular", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-            ShaderResourceVariableDesc{SHADER_TYPE_PIXEL, "g_TextureRayLength", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-        };
-
-        PipelineResourceLayoutDesc ResourceLayout;
-        ResourceLayout.Variables    = VariableDescs;
-        ResourceLayout.NumVariables = _countof(VariableDescs);
+        PipelineResourceLayoutDescX ResourceLayout;
+        ResourceLayout
+            .AddVariable(SHADER_TYPE_PIXEL, "cbScreenSpaceReflectionAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureRoughness", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureNormal", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureRayDirectionPDF", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureIntersectSpecular", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureRayLength", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
 
         const auto VS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
         const auto PS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeSpatialReconstruction.fx", "ComputeSpatialReconstructionPS", SHADER_TYPE_PIXEL);
@@ -966,30 +929,21 @@ void ScreenSpaceReflection::ComputeTemporalAccumulation(const RenderAttributes& 
     auto& RenderTech = m_RenderTech[RENDER_TECH_COMPUTE_TEMPORAL_ACCUMULATION];
     if (!RenderTech.IsInitialized())
     {
-        ShaderResourceVariableDesc VariableDescs[] = {
-            ShaderResourceVariableDesc{SHADER_TYPE_PIXEL, "cbScreenSpaceReflectionAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC},
-            ShaderResourceVariableDesc{SHADER_TYPE_PIXEL, "g_TextureMotion", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-            ShaderResourceVariableDesc{SHADER_TYPE_PIXEL, "g_TextureRoughness", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-            ShaderResourceVariableDesc{SHADER_TYPE_PIXEL, "g_TextureCurrRadiance", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-            ShaderResourceVariableDesc{SHADER_TYPE_PIXEL, "g_TextureCurrDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-            ShaderResourceVariableDesc{SHADER_TYPE_PIXEL, "g_TextureCurrVariance", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-            ShaderResourceVariableDesc{SHADER_TYPE_PIXEL, "g_TexturePrevRadiance", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-            ShaderResourceVariableDesc{SHADER_TYPE_PIXEL, "g_TexturePrevDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-            ShaderResourceVariableDesc{SHADER_TYPE_PIXEL, "g_TexturePrevVariance", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-            ShaderResourceVariableDesc{SHADER_TYPE_PIXEL, "g_TextureHitDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-        };
-
-        ImmutableSamplerDesc SamplerDescs[] = {
-            ImmutableSamplerDesc{SHADER_TYPE_PIXEL, "g_TexturePrevDepth", Sam_LinearClamp},
-            ImmutableSamplerDesc{SHADER_TYPE_PIXEL, "g_TexturePrevRadiance", Sam_LinearClamp},
-            ImmutableSamplerDesc{SHADER_TYPE_PIXEL, "g_TexturePrevVariance", Sam_LinearClamp},
-        };
-
-        PipelineResourceLayoutDesc ResourceLayout;
-        ResourceLayout.Variables            = VariableDescs;
-        ResourceLayout.NumVariables         = _countof(VariableDescs);
-        ResourceLayout.ImmutableSamplers    = SamplerDescs;
-        ResourceLayout.NumImmutableSamplers = _countof(SamplerDescs);
+        PipelineResourceLayoutDescX ResourceLayout;
+        ResourceLayout
+            .AddVariable(SHADER_TYPE_PIXEL, "cbScreenSpaceReflectionAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureMotion", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureRoughness", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureCurrRadiance", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureCurrDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureCurrVariance", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+            .AddVariable(SHADER_TYPE_PIXEL, "g_TexturePrevRadiance", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+            .AddVariable(SHADER_TYPE_PIXEL, "g_TexturePrevDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+            .AddVariable(SHADER_TYPE_PIXEL, "g_TexturePrevVariance", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureHitDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TexturePrevDepth", Sam_LinearClamp)
+            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TexturePrevRadiance", Sam_LinearClamp)
+            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TexturePrevVariance", Sam_LinearClamp);
 
         const auto VS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
         const auto PS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeTemporalAccumulation.fx", "ComputeTemporalAccumulationPS", SHADER_TYPE_PIXEL);
@@ -1061,18 +1015,14 @@ void ScreenSpaceReflection::ComputeBilateralCleanup(const RenderAttributes& Rend
 
     if (!RenderTech.IsInitialized())
     {
-        ShaderResourceVariableDesc VariableDescs[] = {
-            ShaderResourceVariableDesc{SHADER_TYPE_PIXEL, "cbScreenSpaceReflectionAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC},
-            ShaderResourceVariableDesc{SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-            ShaderResourceVariableDesc{SHADER_TYPE_PIXEL, "g_TextureNormal", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-            ShaderResourceVariableDesc{SHADER_TYPE_PIXEL, "g_TextureRoughness", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-            ShaderResourceVariableDesc{SHADER_TYPE_PIXEL, "g_TextureRadiance", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-            ShaderResourceVariableDesc{SHADER_TYPE_PIXEL, "g_TextureVariance", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-        };
-
-        PipelineResourceLayoutDesc ResourceLayout;
-        ResourceLayout.Variables    = VariableDescs;
-        ResourceLayout.NumVariables = _countof(VariableDescs);
+        PipelineResourceLayoutDescX ResourceLayout;
+        ResourceLayout
+            .AddVariable(SHADER_TYPE_PIXEL, "cbScreenSpaceReflectionAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureNormal", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureRoughness", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureRadiance", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureVariance", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
 
         const auto VS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
         const auto PS = CreateShaderFromFile(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeBilateralCleanup.fx", "ComputeBilateralCleanupPS", SHADER_TYPE_PIXEL);
