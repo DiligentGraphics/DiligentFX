@@ -57,6 +57,12 @@ public:
 
     void SetDebugView(PBR_Renderer::DebugViewType DebugView) { m_DebugView = DebugView; }
 
+    double GetFrameTime() const { return m_FrameTime; }
+    void   SetFrameTime(double FrameTime) { m_FrameTime = FrameTime; }
+
+    float GetElapsedTime() const { return m_ElapsedTime; }
+    void  SetElapsedTime(float ElapsedTime) { m_ElapsedTime = ElapsedTime; }
+
 private:
     const bool m_UseVertexPool;
     const bool m_UseIndexPool;
@@ -65,6 +71,9 @@ private:
     std::atomic<uint32_t> m_GeometrySubsetVersion{0};
 
     PBR_Renderer::DebugViewType m_DebugView = PBR_Renderer::DebugViewType::None;
+
+    double m_FrameTime   = 0.0;
+    float  m_ElapsedTime = 0.0;
 };
 
 } // namespace USD

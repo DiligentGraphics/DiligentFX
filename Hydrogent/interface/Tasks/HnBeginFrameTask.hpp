@@ -34,6 +34,7 @@
 #include "../interface/HnTypes.hpp"
 
 #include "../../../../DiligentCore/Common/interface/BasicMath.hpp"
+#include "../../../../DiligentCore/Common/interface/Timer.hpp"
 
 namespace Diligent
 {
@@ -213,6 +214,9 @@ private:
 
     Uint32 m_FrameBufferWidth  = 0;
     Uint32 m_FrameBufferHeight = 0;
+
+    double m_LastFrameTime = 0;
+    Timer  m_FrameTimer;
 };
 
 } // namespace USD

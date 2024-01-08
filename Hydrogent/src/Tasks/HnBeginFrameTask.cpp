@@ -31,6 +31,7 @@
 #include "HnRenderBuffer.hpp"
 #include "HnCamera.hpp"
 #include "HnLight.hpp"
+#include "HnRenderParam.hpp"
 
 #include "DebugUtilities.hpp"
 #include "GraphicsAccessories.hpp"
@@ -371,6 +372,14 @@ void HnBeginFrameTask::Execute(pxr::HdTaskContext* TaskCtx)
 
     HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
     IDeviceContext*   pCtx           = RenderDelegate->GetDeviceContext();
+
+    if (HnRenderParam* pRenderParam = static_cast<HnRenderParam*>(RenderDelegate->GetRenderParam()))
+    {
+        double CurrFrameTime = m_FrameTimer.GetElapsedTime();
+        pRenderParam->SetFrameTime(CurrFrameTime);
+        pRenderParam->SetElapsedTime(static_cast<float>(CurrFrameTime - m_LastFrameTime));
+        m_LastFrameTime = CurrFrameTime;
+    }
 
     if (IBuffer* pFrameAttribsCB = RenderDelegate->GetFrameAttribsCB())
     {
