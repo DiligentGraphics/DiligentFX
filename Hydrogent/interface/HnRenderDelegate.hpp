@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -272,6 +272,8 @@ public:
     const auto& GetLights() const { return m_Lights; }
 
     HnRenderDelegateMemoryStats GetMemoryStats() const;
+
+    void SetDebugView(PBR_Renderer::DebugViewType DebugView);
 
 private:
     static const pxr::TfTokenVector SupportedRPrimTypes;

@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 #include <atomic>
 
 #include "pxr/imaging/hd/renderDelegate.h"
+#include "../../PBR/interface/PBR_Renderer.hpp"
 
 namespace Diligent
 {
@@ -52,12 +53,18 @@ public:
     uint32_t GetGeometrySubsetVersion() const { return m_GeometrySubsetVersion.load(); }
     void     MakeGeometrySubsetDirty() { m_GeometrySubsetVersion.fetch_add(1); }
 
+    PBR_Renderer::DebugViewType GetDebugView() const { return m_DebugView; }
+
+    void SetDebugView(PBR_Renderer::DebugViewType DebugView) { m_DebugView = DebugView; }
+
 private:
     const bool m_UseVertexPool;
     const bool m_UseIndexPool;
     const bool m_UseTextureAtlas;
 
     std::atomic<uint32_t> m_GeometrySubsetVersion{0};
+
+    PBR_Renderer::DebugViewType m_DebugView = PBR_Renderer::DebugViewType::None;
 };
 
 } // namespace USD

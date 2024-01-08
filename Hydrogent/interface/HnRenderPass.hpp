@@ -49,8 +49,6 @@ struct HnMeshRenderParams
 {
     HN_RENDER_MODE RenderMode = HN_RENDER_MODE_SOLID;
 
-    int DebugViewMode = 0;
-
     float4x4 Transform = float4x4::Identity();
 
     pxr::SdfPath SelectedPrimId;
@@ -155,6 +153,8 @@ private:
 private:
     HnRenderPassParams m_Params;
     HnMeshRenderParams m_RenderParams;
+
+    PBR_Renderer::DebugViewType m_DebugView = PBR_Renderer::DebugViewType::None;
 
     std::vector<DrawListItem>        m_DrawList;
     std::vector<const DrawListItem*> m_PendingDrawItems;

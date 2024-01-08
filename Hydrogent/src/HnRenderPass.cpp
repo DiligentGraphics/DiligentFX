@@ -215,6 +215,16 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
 
     RenderState State{*this, *static_cast<const HnRenderPassState*>(RPState.get())};
 
+    if (const HnRenderParam* pRenderParam = static_cast<const HnRenderParam*>(State.RenderDelegate.GetRenderParam()))
+    {
+        PBR_Renderer::DebugViewType DebugView = pRenderParam->GetDebugView();
+        if (m_DebugView != DebugView)
+        {
+            m_DrawListItemsDirtyFlags |= DRAW_LIST_ITEM_DIRTY_FLAG_PSO;
+            m_DebugView = DebugView;
+        }
+    }
+
     IBuffer* const pPrimitiveAttribsCB = State.RenderDelegate.GetPrimitiveAttribsCB();
     VERIFY_EXPR(pPrimitiveAttribsCB != nullptr);
 
@@ -321,9 +331,6 @@ void HnRenderPass::SetMeshRenderParams(const HnMeshRenderParams& Params)
 
     if (m_RenderParams.RenderMode != Params.RenderMode)
         m_DrawListItemsDirtyFlags |= DRAW_LIST_ITEM_DIRTY_FLAG_PSO | DRAW_LIST_ITEM_DIRTY_FLAG_MESH_DATA;
-
-    if (m_RenderParams.DebugViewMode != Params.DebugViewMode)
-        m_DrawListItemsDirtyFlags |= DRAW_LIST_ITEM_DIRTY_FLAG_PSO;
 
     m_RenderParams = Params;
 }
@@ -515,13 +522,13 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
             if (static_cast<const HnRenderParam*>(State.RenderDelegate.GetRenderParam())->GetUseTextureAtlas())
                 PSOFlags |= PBR_Renderer::PSO_FLAG_USE_TEXTURE_ATLAS;
 
-            ListItem.pPSO = PsoCache.Get({PSOFlags, static_cast<PBR_Renderer::ALPHA_MODE>(State.AlphaMode), /*DoubleSided = */ false, static_cast<PBR_Renderer::DebugViewType>(m_RenderParams.DebugViewMode)}, true);
+            ListItem.pPSO = PsoCache.Get({PSOFlags, static_cast<PBR_Renderer::ALPHA_MODE>(State.AlphaMode), /*DoubleSided = */ false, m_DebugView}, true);
         }
         else if (m_RenderParams.RenderMode == HN_RENDER_MODE_MESH_EDGES ||
                  m_RenderParams.RenderMode == HN_RENDER_MODE_POINTS)
         {
             PSOFlags |= PBR_Renderer::PSO_FLAG_UNSHADED;
-            ListItem.pPSO = PsoCache.Get({PSOFlags, /*DoubleSided = */ false, static_cast<PBR_Renderer::DebugViewType>(m_RenderParams.DebugViewMode)}, true);
+            ListItem.pPSO = PsoCache.Get({PSOFlags, /*DoubleSided = */ false, m_DebugView}, true);
         }
         else
         {

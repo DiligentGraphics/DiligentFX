@@ -454,6 +454,11 @@ HnRenderDelegateMemoryStats HnRenderDelegate::GetMemoryStats() const
     return MemoryStats;
 }
 
+void HnRenderDelegate::SetDebugView(PBR_Renderer::DebugViewType DebugView)
+{
+    m_RenderParam->SetDebugView(DebugView);
+}
+
 } // namespace USD
 
 } // namespace Diligent
