@@ -103,7 +103,7 @@ USD_Renderer::CreateInfo::PSMainSourceInfo USD_Renderer::GetUsdPbrPSMainSource(U
         // This way when the factor is 0.0, we get the base layer, when it is 1.0,
         // we get the clear coat, and something in between otherwise.
 
-        Normal        = lerp(Normal, Shading.Clearcoat.Normal, Shading.Clearcoat.Factor);
+        Normal        = normalize(lerp(Normal, Shading.Clearcoat.Normal, Shading.Clearcoat.Factor));
         MaterialData  = lerp(MaterialData, float2(Shading.Clearcoat.Srf.PerceptualRoughness, 0.0), Shading.Clearcoat.Factor);
         BaseColor.rgb = lerp(BaseColor.rgb, float3(1.0, 1.0, 1.0), Shading.Clearcoat.Factor);
 
