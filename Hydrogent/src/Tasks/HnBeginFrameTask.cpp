@@ -376,9 +376,9 @@ void HnBeginFrameTask::Execute(pxr::HdTaskContext* TaskCtx)
     if (HnRenderParam* pRenderParam = static_cast<HnRenderParam*>(RenderDelegate->GetRenderParam()))
     {
         double CurrFrameTime = m_FrameTimer.GetElapsedTime();
+        pRenderParam->SetElapsedTime(static_cast<float>(CurrFrameTime - pRenderParam->GetFrameTime()));
         pRenderParam->SetFrameTime(CurrFrameTime);
-        pRenderParam->SetElapsedTime(static_cast<float>(CurrFrameTime - m_LastFrameTime));
-        m_LastFrameTime = CurrFrameTime;
+        pRenderParam->SetFrameNumber(pRenderParam->GetFrameNumber() + 1);
     }
 
     if (IBuffer* pFrameAttribsCB = RenderDelegate->GetFrameAttribsCB())

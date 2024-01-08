@@ -63,6 +63,9 @@ public:
     float GetElapsedTime() const { return m_ElapsedTime; }
     void  SetElapsedTime(float ElapsedTime) { m_ElapsedTime = ElapsedTime; }
 
+    Uint32 GetFrameNumber() const { return m_FrameNumber; }
+    void   SetFrameNumber(Uint32 FrameNumber) { m_FrameNumber = FrameNumber; }
+
 private:
     const bool m_UseVertexPool;
     const bool m_UseIndexPool;
@@ -72,8 +75,9 @@ private:
 
     PBR_Renderer::DebugViewType m_DebugView = PBR_Renderer::DebugViewType::None;
 
-    double m_FrameTime   = 0.0;
-    float  m_ElapsedTime = 0.0;
+    double   m_FrameTime   = 0.0;
+    float    m_ElapsedTime = 0.0;
+    uint32_t m_FrameNumber = 0;
 };
 
 } // namespace USD

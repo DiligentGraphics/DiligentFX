@@ -215,8 +215,7 @@ private:
     Uint32 m_FrameBufferWidth  = 0;
     Uint32 m_FrameBufferHeight = 0;
 
-    double m_LastFrameTime = 0;
-    Timer  m_FrameTimer;
+    Timer m_FrameTimer;
 };
 
 } // namespace USD
