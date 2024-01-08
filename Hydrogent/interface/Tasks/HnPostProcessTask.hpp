@@ -138,6 +138,7 @@ private:
         IShaderResourceVariable* SelectionDepth          = nullptr;
         IShaderResourceVariable* ClosestSelectedLocation = nullptr;
         IShaderResourceVariable* SSR                     = nullptr;
+        IShaderResourceVariable* SpecularIBL             = nullptr;
 
         constexpr operator bool() const
         {

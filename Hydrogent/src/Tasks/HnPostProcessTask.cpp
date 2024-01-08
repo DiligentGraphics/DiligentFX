@@ -275,13 +275,23 @@ void HnPostProcessTask::PrepareSRB(const HnRenderPassState& RPState, ITextureVie
     }
 
     ITextureView* pSSR = m_SSR->GetSSRRadianceSRV();
+    VERIFY_EXPR(pSSR != nullptr);
+
+    ITextureView* pSpecularIblSRV = FBTargets.GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_IBL];
+    if (pSpecularIblSRV == nullptr)
+    {
+        UNEXPECTED("IBL SRV is null");
+        return;
+    }
+
     if (m_SRB && m_ShaderVars)
     {
         if ((m_ShaderVars.Color != nullptr && m_ShaderVars.Color->Get() != pOffscreenColorSRV) ||
             (m_ShaderVars.Depth != nullptr && m_ShaderVars.Depth->Get() != pDepthSRV) ||
             (m_ShaderVars.SelectionDepth != nullptr && m_ShaderVars.SelectionDepth->Get() != pSelectionDepthSRV) ||
             (m_ShaderVars.ClosestSelectedLocation != nullptr && m_ShaderVars.ClosestSelectedLocation->Get() != pClosestSelectedLocationSRV) ||
-            (m_ShaderVars.SSR != nullptr && m_ShaderVars.SSR->Get() != pSSR))
+            (m_ShaderVars.SSR != nullptr && m_ShaderVars.SSR->Get() != pSSR) ||
+            (m_ShaderVars.SpecularIBL != nullptr && m_ShaderVars.SpecularIBL->Get() != pSpecularIblSRV))
         {
             m_SRB.Release();
             m_ShaderVars = {};
@@ -297,6 +307,7 @@ void HnPostProcessTask::PrepareSRB(const HnRenderPassState& RPState, ITextureVie
         m_ShaderVars.SelectionDepth          = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_SelectionDepth");
         m_ShaderVars.ClosestSelectedLocation = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_ClosestSelectedLocation");
         m_ShaderVars.SSR                     = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_SSR");
+        m_ShaderVars.SpecularIBL             = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_SpecularIBL");
         VERIFY_EXPR(m_ShaderVars);
 
         if (m_ShaderVars.Color != nullptr)
@@ -309,6 +320,8 @@ void HnPostProcessTask::PrepareSRB(const HnRenderPassState& RPState, ITextureVie
             m_ShaderVars.ClosestSelectedLocation->Set(pClosestSelectedLocationSRV);
         if (m_ShaderVars.SSR != nullptr)
             m_ShaderVars.SSR->Set(pSSR);
+        if (m_ShaderVars.SpecularIBL != nullptr)
+            m_ShaderVars.SpecularIBL->Set(pSpecularIblSRV);
     }
 }
 
@@ -396,6 +409,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         SSRRenderAttribs.SSRAttribs.FrameIndex            = pRenderParam->GetFrameNumber();
         SSRRenderAttribs.SSRAttribs.IBLFactor             = 1.0;
         SSRRenderAttribs.SSRAttribs.RoughnessChannel      = 0;
+        SSRRenderAttribs.SSRAttribs.DepthBufferThickness  = 0.015f * 10.0f;
         SSRRenderAttribs.SSRAttribs.IsRoughnessPerceptual = true;
 
         m_SSR->Execute(SSRRenderAttribs);
