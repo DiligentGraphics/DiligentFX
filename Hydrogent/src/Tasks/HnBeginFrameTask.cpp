@@ -384,6 +384,7 @@ void HnBeginFrameTask::Execute(pxr::HdTaskContext* TaskCtx)
     if (IBuffer* pFrameAttribsCB = RenderDelegate->GetFrameAttribsCB())
     {
         UpdateFrameConstants(pCtx, pFrameAttribsCB);
+        (*TaskCtx)[HnRenderResourceTokens->frameShaderAttribs] = pxr::VtValue{static_cast<const HLSL::PBRFrameAttribs*>(m_FrameAttribs.get())};
     }
     else
     {

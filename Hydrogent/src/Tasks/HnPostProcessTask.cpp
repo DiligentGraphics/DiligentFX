@@ -40,6 +40,7 @@
 #include "GraphicsUtilities.h"
 #include "MapHelper.hpp"
 #include "VectorFieldRenderer.hpp"
+#include "ScreenSpaceReflection.hpp"
 
 namespace Diligent
 {
@@ -48,8 +49,10 @@ namespace HLSL
 {
 
 #include "Shaders/PostProcess/ToneMapping/public/ToneMappingStructures.fxh"
+#include "Shaders/Common/public/BasicStructures.fxh"
 #include "Shaders/PBR/public/PBR_Structures.fxh"
 #include "../shaders/HnPostProcessStructures.fxh"
+#include "Shaders/PBR/private/RenderPBR_Structures.fxh"
 
 } // namespace HLSL
 
@@ -203,12 +206,21 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
         UNEXPECTED("Closest selected location target RTV is not set in the task context");
     }
 
+    HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+    IRenderDevice*    pDevice        = RenderDelegate->GetDevice();
+    IDeviceContext*   pCtx           = RenderDelegate->GetDeviceContext();
     if (!m_PostProcessAttribsCB)
     {
-        HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
-        CreateUniformBuffer(RenderDelegate->GetDevice(), sizeof(HLSL::PostProcessAttribs), "Post process attribs CB", &m_PostProcessAttribsCB);
+        CreateUniformBuffer(pDevice, sizeof(HLSL::PostProcessAttribs), "Post process attribs CB", &m_PostProcessAttribsCB);
         VERIFY(m_PostProcessAttribsCB, "Failed to create post process attribs CB");
     }
+
+    if (!m_SSR)
+    {
+        m_SSR = std::make_unique<ScreenSpaceReflection>(pDevice);
+    }
+    const TextureDesc& FinalColorDesc = m_FinalColorRTV->GetTexture()->GetDesc();
+    m_SSR->SetBackBufferSize(pDevice, pCtx, FinalColorDesc.Width, FinalColorDesc.Height);
 
     PreparePSO(m_FinalColorRTV->GetDesc().Format);
     if (std::shared_ptr<HnRenderPassState> RenderPassState = GetRenderPassState(TaskCtx))
@@ -262,12 +274,14 @@ void HnPostProcessTask::PrepareSRB(const HnRenderPassState& RPState, ITextureVie
         return;
     }
 
+    ITextureView* pSSR = m_SSR->GetSSRRadianceSRV();
     if (m_SRB && m_ShaderVars)
     {
-        if (m_ShaderVars.Color->Get() != pOffscreenColorSRV ||
-            m_ShaderVars.Depth->Get() != pDepthSRV ||
-            m_ShaderVars.SelectionDepth->Get() != pSelectionDepthSRV ||
-            m_ShaderVars.ClosestSelectedLocation->Get() != pClosestSelectedLocationSRV)
+        if ((m_ShaderVars.Color != nullptr && m_ShaderVars.Color->Get() != pOffscreenColorSRV) ||
+            (m_ShaderVars.Depth != nullptr && m_ShaderVars.Depth->Get() != pDepthSRV) ||
+            (m_ShaderVars.SelectionDepth != nullptr && m_ShaderVars.SelectionDepth->Get() != pSelectionDepthSRV) ||
+            (m_ShaderVars.ClosestSelectedLocation != nullptr && m_ShaderVars.ClosestSelectedLocation->Get() != pClosestSelectedLocationSRV) ||
+            (m_ShaderVars.SSR != nullptr && m_ShaderVars.SSR->Get() != pSSR))
         {
             m_SRB.Release();
             m_ShaderVars = {};
@@ -282,6 +296,7 @@ void HnPostProcessTask::PrepareSRB(const HnRenderPassState& RPState, ITextureVie
         m_ShaderVars.Depth                   = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_Depth");
         m_ShaderVars.SelectionDepth          = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_SelectionDepth");
         m_ShaderVars.ClosestSelectedLocation = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_ClosestSelectedLocation");
+        m_ShaderVars.SSR                     = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_SSR");
         VERIFY_EXPR(m_ShaderVars);
 
         if (m_ShaderVars.Color != nullptr)
@@ -292,6 +307,8 @@ void HnPostProcessTask::PrepareSRB(const HnRenderPassState& RPState, ITextureVie
             m_ShaderVars.SelectionDepth->Set(pSelectionDepthSRV);
         if (m_ShaderVars.ClosestSelectedLocation != nullptr)
             m_ShaderVars.ClosestSelectedLocation->Set(pClosestSelectedLocationSRV);
+        if (m_ShaderVars.SSR != nullptr)
+            m_ShaderVars.SSR->Set(pSSR);
     }
 }
 
@@ -321,11 +338,11 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         return;
     }
 
-    HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
-    IDeviceContext*   pCtx           = RenderDelegate->GetDeviceContext();
-
-    ITextureView* pRTVs[] = {m_FinalColorRTV};
-    pCtx->SetRenderTargets(_countof(pRTVs), pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    HnRenderDelegate*    RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+    IRenderDevice*       pDevice        = RenderDelegate->GetDevice();
+    IDeviceContext*      pCtx           = RenderDelegate->GetDeviceContext();
+    const HnRenderParam* pRenderParam   = static_cast<const HnRenderParam*>(RenderDelegate->GetRenderParam());
+    VERIFY_EXPR(pRenderParam != nullptr);
 
     {
         std::array<StateTransitionDesc, HnFramebufferTargets::GBUFFER_TARGET_COUNT> Barriers{};
@@ -333,8 +350,59 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         {
             Barriers[i] = {m_FBTargets->GBufferSRVs[i]->GetTexture(), RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE};
         }
+        pCtx->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         pCtx->TransitionResourceStates(static_cast<Uint32>(Barriers.size()), Barriers.data());
     }
+
+    const TextureDesc& FinalColorDesc = m_FinalColorRTV->GetTexture()->GetDesc();
+
+    {
+        ScreenSpaceReflection::RenderAttributes SSRRenderAttribs{};
+        SSRRenderAttribs.pDevice            = pDevice;
+        SSRRenderAttribs.pDeviceContext     = pCtx;
+        SSRRenderAttribs.pColorBufferSRV    = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_SCENE_COLOR];
+        SSRRenderAttribs.pDepthBufferSRV    = m_FBTargets->DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        SSRRenderAttribs.pNormalBufferSRV   = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_NORMAL];
+        SSRRenderAttribs.pMaterialBufferSRV = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_MATERIAL];
+        SSRRenderAttribs.pMotionVectorsSRV  = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_NOTION_VECTOR];
+
+        pxr::VtValue PBRFrameAttribsVal = (*TaskCtx)[HnRenderResourceTokens->frameShaderAttribs];
+        if (PBRFrameAttribsVal.IsHolding<const HLSL::PBRFrameAttribs*>())
+        {
+            const HLSL::PBRFrameAttribs* PBRFrameAttribs = PBRFrameAttribsVal.UncheckedGet<const HLSL::PBRFrameAttribs*>();
+
+            const auto& CurrCamAttribs = PBRFrameAttribs->Camera;
+            const auto& PrevCamAttribs = PBRFrameAttribs->PrevCamera;
+
+            SSRRenderAttribs.SSRAttribs.ProjMatrix            = CurrCamAttribs.mProjT;
+            SSRRenderAttribs.SSRAttribs.ViewMatrix            = CurrCamAttribs.mViewT;
+            SSRRenderAttribs.SSRAttribs.ViewProjMatrix        = CurrCamAttribs.mViewProjT;
+            SSRRenderAttribs.SSRAttribs.InvProjMatrix         = CurrCamAttribs.mProjInvT;
+            SSRRenderAttribs.SSRAttribs.InvViewMatrix         = CurrCamAttribs.mViewInvT;
+            SSRRenderAttribs.SSRAttribs.InvViewProjMatrix     = CurrCamAttribs.mViewProjInvT;
+            SSRRenderAttribs.SSRAttribs.PrevViewProjMatrix    = PrevCamAttribs.mViewProjT;
+            SSRRenderAttribs.SSRAttribs.InvPrevViewProjMatrix = PrevCamAttribs.mViewProjInvT;
+            SSRRenderAttribs.SSRAttribs.CameraPosition        = CurrCamAttribs.f4Position;
+        }
+        else
+        {
+            UNEXPECTED("PBR frame attribs are not set in the task context");
+        }
+
+        SSRRenderAttribs.SSRAttribs.RenderSize.x          = FinalColorDesc.Width;
+        SSRRenderAttribs.SSRAttribs.RenderSize.y          = FinalColorDesc.Height;
+        SSRRenderAttribs.SSRAttribs.InverseRenderSize.x   = 1.0f / static_cast<float>(FinalColorDesc.Width);
+        SSRRenderAttribs.SSRAttribs.InverseRenderSize.y   = 1.0f / static_cast<float>(FinalColorDesc.Height);
+        SSRRenderAttribs.SSRAttribs.FrameIndex            = pRenderParam->GetFrameNumber();
+        SSRRenderAttribs.SSRAttribs.IBLFactor             = 1.0;
+        SSRRenderAttribs.SSRAttribs.RoughnessChannel      = 0;
+        SSRRenderAttribs.SSRAttribs.IsRoughnessPerceptual = true;
+
+        m_SSR->Execute(SSRRenderAttribs);
+    }
+
+    ITextureView* pRTVs[] = {m_FinalColorRTV};
+    pCtx->SetRenderTargets(_countof(pRTVs), pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
     {
         MapHelper<HLSL::PostProcessAttribs> pDstShaderAttribs{pCtx, m_PostProcessAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
@@ -355,11 +423,8 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
     pCtx->CommitShaderResources(m_SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     pCtx->Draw({3, DRAW_FLAG_VERIFY_ALL});
 
-    const HnRenderParam* pRenderParam = static_cast<const HnRenderParam*>(RenderDelegate->GetRenderParam());
-    if (m_VectorFieldRenderer && pRenderParam != nullptr && pRenderParam->GetDebugView() == PBR_Renderer::DebugViewType::MotionVectors)
+    if (m_VectorFieldRenderer && pRenderParam->GetDebugView() == PBR_Renderer::DebugViewType::MotionVectors)
     {
-        const TextureDesc& FinalColorDesc = m_FinalColorRTV->GetTexture()->GetDesc();
-
         VectorFieldRenderer::RenderAttribs Attribs;
         Attribs.pContext = pCtx;
         Attribs.GridSize = {FinalColorDesc.Width / 20, FinalColorDesc.Height / 20};

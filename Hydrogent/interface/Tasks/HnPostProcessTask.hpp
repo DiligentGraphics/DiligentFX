@@ -40,6 +40,7 @@ namespace Diligent
 {
 
 class VectorFieldRenderer;
+class ScreenSpaceReflection;
 
 namespace USD
 {
@@ -121,7 +122,9 @@ private:
     RefCntAutoPtr<IPipelineState> m_PSO;
     RefCntAutoPtr<IBuffer>        m_PostProcessAttribsCB;
 
-    std::unique_ptr<VectorFieldRenderer> m_VectorFieldRenderer;
+    std::unique_ptr<VectorFieldRenderer>   m_VectorFieldRenderer;
+    std::unique_ptr<ScreenSpaceReflection> m_SSR;
+
 
     ITextureView*               m_FinalColorRTV = nullptr; // Set in Prepare()
     const HnFramebufferTargets* m_FBTargets     = nullptr; // Set in Prepare()
@@ -134,6 +137,7 @@ private:
         IShaderResourceVariable* Depth                   = nullptr;
         IShaderResourceVariable* SelectionDepth          = nullptr;
         IShaderResourceVariable* ClosestSelectedLocation = nullptr;
+        IShaderResourceVariable* SSR                     = nullptr;
 
         constexpr operator bool() const
         {

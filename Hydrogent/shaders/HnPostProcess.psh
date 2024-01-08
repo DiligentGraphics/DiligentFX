@@ -16,11 +16,15 @@ Texture2D g_ColorBuffer;
 Texture2D g_SelectionDepth;
 Texture2D g_Depth;
 Texture2D g_ClosestSelectedLocation;
+Texture2D g_SSR;
 
 void main(in PSInput PSIn,
           out float4 Color : SV_Target0)
 {
     Color = g_ColorBuffer.Load(int3(PSIn.Pos.xy, 0));
+    
+    float4 SSR = g_SSR.Load(int3(PSIn.Pos.xy, 0));
+    Color.rgb += SSR.rgb * SSR.w * Color.a;
 
 #if TONE_MAPPING_MODE > TONE_MAPPING_MODE_NONE
     Color.rgb = ToneMap(Color.rgb, g_Attribs.ToneMapping, g_Attribs.AverageLogLum);

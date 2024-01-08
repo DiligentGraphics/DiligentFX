@@ -118,7 +118,8 @@ namespace USD
     (closestSelectedLocation0Target)     \
     (closestSelectedLocation1Target)     \
     (closestSelectedLocationFinalTarget) \
-    (depthBuffer)
+    (depthBuffer)                        \
+    (frameShaderAttribs)
 
 // clang-format on
 
