@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -163,7 +163,7 @@ void HnProcessSelectionTask::PrepareTechniques(TEXTURE_FORMAT RTVFormat)
 
 void HnProcessSelectionTask::PrepareSRBs(const HnRenderPassState& RPState)
 {
-    const auto& Targets = RPState.GetFramebufferTargets();
+    const HnFramebufferTargets& Targets = RPState.GetFramebufferTargets();
     if (Targets.ClosestSelectedLocation0RTV == nullptr || Targets.ClosestSelectedLocation1RTV == nullptr || Targets.SelectionDepthDSV == nullptr)
     {
         UNEXPECTED("Closest selected location render targets are not initialized");
@@ -252,7 +252,7 @@ void HnProcessSelectionTask::Prepare(pxr::HdTaskContext* TaskCtx,
 
     if (std::shared_ptr<HnRenderPassState> RenderPassState = GetRenderPassState(TaskCtx))
     {
-        if (const auto& Targets = RenderPassState->GetFramebufferTargets())
+        if (const HnFramebufferTargets& Targets = RenderPassState->GetFramebufferTargets())
         {
             PrepareTechniques(Targets.ClosestSelectedLocation0RTV->GetDesc().Format);
             PrepareSRBs(*RenderPassState);
@@ -288,7 +288,7 @@ void HnProcessSelectionTask::Execute(pxr::HdTaskContext* TaskCtx)
         UNEXPECTED("Render pass state is not set in the task context");
         return;
     }
-    const auto& Targets = RenderPassState->GetFramebufferTargets();
+    const HnFramebufferTargets& Targets = RenderPassState->GetFramebufferTargets();
     if (!Targets)
     {
         UNEXPECTED("Frame buffer targets are not initialized");

@@ -36,7 +36,7 @@
 #include "../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
 #include "../../../DiligentCore/Common/interface/BasicMath.hpp"
 
-#include "../interface/HnTypes.hpp"
+#include "HnTypes.hpp"
 
 #include "pxr/imaging/hd/types.h"
 #include "pxr/imaging/hd/renderPassState.h"
@@ -47,16 +47,8 @@ namespace Diligent
 namespace USD
 {
 
-/// Hydra render pass state implementation in Hydrogent.
-class HnRenderPassState final : public pxr::HdRenderPassState
+struct HnFramebufferTargets
 {
-public:
-    static pxr::HdRenderPassStateSharedPtr Create();
-
-    HnRenderPassState();
-
-    void Begin(IDeviceContext* pContext);
-
     enum GBUFFER_TARGET : Uint32
     {
         GBUFFER_TARGET_SCENE_COLOR,
@@ -68,6 +60,45 @@ public:
         GBUFFER_TARGET_IBL,
         GBUFFER_TARGET_COUNT
     };
+
+    ITextureView* FinalColorRTV = nullptr;
+
+    std::array<ITextureView*, GBUFFER_TARGET_COUNT> GBufferRTVs = {};
+    std::array<ITextureView*, GBUFFER_TARGET_COUNT> GBufferSRVs = {};
+
+    ITextureView* SelectionDepthDSV = nullptr;
+    ITextureView* DepthDSV          = nullptr;
+
+    ITextureView* ClosestSelectedLocation0RTV = nullptr;
+    ITextureView* ClosestSelectedLocation1RTV = nullptr;
+
+    explicit operator bool() const
+    {
+        for (ITextureView* RTV : GBufferRTVs)
+        {
+            if (RTV == nullptr)
+                return false;
+        }
+
+        // clang-format off
+        return FinalColorRTV               != nullptr &&
+               SelectionDepthDSV           != nullptr &&
+               DepthDSV                    != nullptr &&
+               ClosestSelectedLocation0RTV != nullptr &&
+               ClosestSelectedLocation1RTV != nullptr;
+        // clang-format on
+    }
+};
+
+/// Hydra render pass state implementation in Hydrogent.
+class HnRenderPassState final : public pxr::HdRenderPassState
+{
+public:
+    static pxr::HdRenderPassStateSharedPtr Create();
+
+    HnRenderPassState();
+
+    void Begin(IDeviceContext* pContext);
 
     void SetRenderTargetFormat(Uint32 rt, TEXTURE_FORMAT Fmt)
     {
@@ -109,40 +140,11 @@ public:
     BlendStateDesc        GetBlendState() const;
     GraphicsPipelineDesc  GetGraphicsPipelineDesc() const;
 
-    struct FramebufferTargets
-    {
-        ITextureView* FinalColorRTV = nullptr;
-
-        std::array<ITextureView*, GBUFFER_TARGET_COUNT> GBufferRTVs = {};
-
-        ITextureView* SelectionDepthDSV = nullptr;
-        ITextureView* DepthDSV          = nullptr;
-
-        ITextureView* ClosestSelectedLocation0RTV = nullptr;
-        ITextureView* ClosestSelectedLocation1RTV = nullptr;
-
-        explicit operator bool() const
-        {
-            for (ITextureView* RTV : GBufferRTVs)
-            {
-                if (RTV == nullptr)
-                    return false;
-            }
-
-            // clang-format off
-            return FinalColorRTV               != nullptr &&
-                   SelectionDepthDSV           != nullptr &&
-                   DepthDSV                    != nullptr &&
-                   ClosestSelectedLocation0RTV != nullptr &&
-                   ClosestSelectedLocation1RTV != nullptr;
-            // clang-format on
-        }
-    };
-    void SetFramebufferTargets(const FramebufferTargets& Targets)
+    void SetFramebufferTargets(const HnFramebufferTargets& Targets)
     {
         m_FramebufferTargets = Targets;
     }
-    const FramebufferTargets& GetFramebufferTargets() const
+    const HnFramebufferTargets& GetFramebufferTargets() const
     {
         return m_FramebufferTargets;
     }
@@ -172,7 +174,7 @@ private:
 
     bool m_FrontFaceCCW = false;
 
-    FramebufferTargets m_FramebufferTargets;
+    HnFramebufferTargets m_FramebufferTargets;
 
     float4 m_ClearColor = {0, 0, 0, 0};
     float  m_ClearDepth = 1.f;

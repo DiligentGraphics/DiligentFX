@@ -48,13 +48,11 @@ struct PBRFrameAttribs;
 namespace USD
 {
 
-class HnRenderPassState;
-
 struct HnBeginFrameTaskParams
 {
     struct RenderTargetFormats
     {
-        std::array<TEXTURE_FORMAT, HnRenderPassState::GBUFFER_TARGET_COUNT> GBuffer = {};
+        std::array<TEXTURE_FORMAT, HnFramebufferTargets::GBUFFER_TARGET_COUNT> GBuffer = {};
 
         TEXTURE_FORMAT Depth                   = TEX_FORMAT_D32_FLOAT;
         TEXTURE_FORMAT ClosestSelectedLocation = TEX_FORMAT_RG16_UNORM;
@@ -197,7 +195,7 @@ private:
 
     pxr::SdfPath m_FinalColorTargetId;
 
-    std::array<pxr::SdfPath, HnRenderPassState::GBUFFER_TARGET_COUNT> m_GBufferTargetIds;
+    std::array<pxr::SdfPath, HnFramebufferTargets::GBUFFER_TARGET_COUNT> m_GBufferTargetIds;
 
     pxr::SdfPath m_SelectionDepthBufferId;
     pxr::SdfPath m_DepthBufferId;

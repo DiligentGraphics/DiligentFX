@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -72,7 +72,7 @@ void HnSetupSelectionDepthTask::Execute(pxr::HdTaskContext* TaskCtx)
         UNEXPECTED("Render pass state is not set in the task context");
         return;
     }
-    const auto& Targets = RenderPassState->GetFramebufferTargets();
+    const HnFramebufferTargets& Targets = RenderPassState->GetFramebufferTargets();
     if (Targets.SelectionDepthDSV == nullptr)
     {
         UNEXPECTED("Selection depth buffer is not set in the render pass state");

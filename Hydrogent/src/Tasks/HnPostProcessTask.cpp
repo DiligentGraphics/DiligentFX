@@ -30,6 +30,7 @@
 #include "HnShaderSourceFactory.hpp"
 #include "HnRenderDelegate.hpp"
 #include "HnRenderPassState.hpp"
+#include "HnRenderParam.hpp"
 
 #include "DebugUtilities.hpp"
 #include "TextureView.h"
@@ -38,6 +39,7 @@
 #include "CommonlyUsedStates.h"
 #include "GraphicsUtilities.h"
 #include "MapHelper.hpp"
+#include "VectorFieldRenderer.hpp"
 
 namespace Diligent
 {
@@ -137,6 +139,19 @@ void HnPostProcessTask::PreparePSO(TEXTURE_FORMAT RTVFormat)
     }
 }
 
+void HnPostProcessTask::CreateVectorFieldRenderer(TEXTURE_FORMAT RTVFormat)
+{
+    HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+
+    VectorFieldRenderer::CreateInfo CI;
+    CI.pDevice          = RenderDelegate->GetDevice();
+    CI.pStateCache      = RenderDelegate->GetRenderStateCache();
+    CI.NumRenderTargets = 1;
+    CI.RTVFormats[0]    = RTVFormat;
+
+    m_VectorFieldRenderer = std::make_unique<VectorFieldRenderer>(CI);
+}
+
 void HnPostProcessTask::Sync(pxr::HdSceneDelegate* Delegate,
                              pxr::HdTaskContext*   TaskCtx,
                              pxr::HdDirtyBits*     DirtyBits)
@@ -205,6 +220,11 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
     {
         UNEXPECTED("Render pass state is not set in the task context");
     }
+
+    if (!m_VectorFieldRenderer)
+    {
+        CreateVectorFieldRenderer(m_FinalColorRTV->GetDesc().Format);
+    }
 }
 
 void HnPostProcessTask::PrepareSRB(const HnRenderPassState& RPState, ITextureView* pClosestSelectedLocationSRV)
@@ -215,14 +235,15 @@ void HnPostProcessTask::PrepareSRB(const HnRenderPassState& RPState, ITextureVie
         return;
     }
 
-    const auto& FBTargets = RPState.GetFramebufferTargets();
+    const HnFramebufferTargets& FBTargets = RPState.GetFramebufferTargets();
     if (!FBTargets)
     {
         UNEXPECTED("Framebuffer targets are null");
         return;
     }
+    m_FBTargets = &FBTargets;
 
-    ITextureView* pOffscreenColorSRV = FBTargets.GBufferRTVs[HnRenderPassState::GBUFFER_TARGET_SCENE_COLOR]->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+    ITextureView* pOffscreenColorSRV = FBTargets.GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_SCENE_COLOR];
     if (pOffscreenColorSRV == nullptr)
     {
         UNEXPECTED("Offscreen color SRV is null");
@@ -294,11 +315,26 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         return;
     }
 
+    if (m_FBTargets == nullptr)
+    {
+        UNEXPECTED("Framebuffer targets are null. This likely indicates that Prepare() has not been called.");
+        return;
+    }
+
     HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
     IDeviceContext*   pCtx           = RenderDelegate->GetDeviceContext();
 
     ITextureView* pRTVs[] = {m_FinalColorRTV};
     pCtx->SetRenderTargets(_countof(pRTVs), pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+    {
+        std::array<StateTransitionDesc, HnFramebufferTargets::GBUFFER_TARGET_COUNT> Barriers{};
+        for (Uint32 i = 0; i < HnFramebufferTargets::GBUFFER_TARGET_COUNT; ++i)
+        {
+            Barriers[i] = {m_FBTargets->GBufferSRVs[i]->GetTexture(), RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE};
+        }
+        pCtx->TransitionResourceStates(static_cast<Uint32>(Barriers.size()), Barriers.data());
+    }
 
     {
         MapHelper<HLSL::PostProcessAttribs> pDstShaderAttribs{pCtx, m_PostProcessAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
@@ -318,6 +354,24 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
     pCtx->SetPipelineState(m_PSO);
     pCtx->CommitShaderResources(m_SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     pCtx->Draw({3, DRAW_FLAG_VERIFY_ALL});
+
+    const HnRenderParam* pRenderParam = static_cast<const HnRenderParam*>(RenderDelegate->GetRenderParam());
+    if (m_VectorFieldRenderer && pRenderParam != nullptr && pRenderParam->GetDebugView() == PBR_Renderer::DebugViewType::MotionVectors)
+    {
+        const TextureDesc& FinalColorDesc = m_FinalColorRTV->GetTexture()->GetDesc();
+
+        VectorFieldRenderer::RenderAttribs Attribs;
+        Attribs.pContext = pCtx;
+        Attribs.GridSize = {FinalColorDesc.Width / 20, FinalColorDesc.Height / 20};
+        // Render motion vectors in the opposite direction
+        Attribs.Scale               = float2{-0.05f} / 0.016f; //std::max(m_ElapsedTime, 0.001f);
+        Attribs.StartColor          = float4{1};
+        Attribs.EndColor            = float4{0.5, 0.5, 0.5, 1.0};
+        Attribs.ConvertOutputToSRGB = m_Params.ConvertOutputToSRGB;
+
+        Attribs.pVectorField = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_NOTION_VECTOR];
+        m_VectorFieldRenderer->Render(Attribs);
+    }
 }
 
 } // namespace USD

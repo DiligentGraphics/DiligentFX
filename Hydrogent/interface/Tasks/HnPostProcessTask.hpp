@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -26,6 +26,8 @@
 
 #pragma once
 
+#include <memory>
+
 #include "HnTask.hpp"
 
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/PipelineState.h"
@@ -37,10 +39,13 @@
 namespace Diligent
 {
 
+class VectorFieldRenderer;
+
 namespace USD
 {
 
 class HnRenderPassState;
+struct HnFramebufferTargets;
 
 struct HnPostProcessTaskParams
 {
@@ -104,6 +109,7 @@ public:
 private:
     void PreparePSO(TEXTURE_FORMAT RTVFormat);
     void PrepareSRB(const HnRenderPassState& RPState, ITextureView* ClosestSelectedLocationSRV);
+    void CreateVectorFieldRenderer(TEXTURE_FORMAT RTVFormat);
 
 private:
     pxr::HdRenderIndex* m_RenderIndex = nullptr;
@@ -115,8 +121,11 @@ private:
     RefCntAutoPtr<IPipelineState> m_PSO;
     RefCntAutoPtr<IBuffer>        m_PostProcessAttribsCB;
 
-    ITextureView* m_FinalColorRTV = nullptr; // Set in Prepare()
-    float         m_ClearDepth    = 1.f;     // Set in Prepare()
+    std::unique_ptr<VectorFieldRenderer> m_VectorFieldRenderer;
+
+    ITextureView*               m_FinalColorRTV = nullptr; // Set in Prepare()
+    const HnFramebufferTargets* m_FBTargets     = nullptr; // Set in Prepare()
+    float                       m_ClearDepth    = 1.f;     // Set in Prepare()
 
     RefCntAutoPtr<IShaderResourceBinding> m_SRB;
     struct ShaderVariables

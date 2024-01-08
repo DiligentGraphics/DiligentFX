@@ -72,7 +72,7 @@ void HnCopySelectionDepthTask::Execute(pxr::HdTaskContext* TaskCtx)
         UNEXPECTED("Render pass state is not set in the task context");
         return;
     }
-    const auto& Targets = RenderPassState->GetFramebufferTargets();
+    const HnFramebufferTargets& Targets = RenderPassState->GetFramebufferTargets();
     if (Targets.DepthDSV == nullptr || Targets.SelectionDepthDSV == nullptr)
     {
         UNEXPECTED("Depth buffers are not set in the render pass state");
@@ -94,7 +94,7 @@ void HnCopySelectionDepthTask::Execute(pxr::HdTaskContext* TaskCtx)
     pCtx->CopyTexture(CopyAttribs);
 
     auto pRTVs = Targets.GBufferRTVs;
-    pCtx->SetRenderTargets(HnRenderPassState::GBUFFER_TARGET_COUNT, pRTVs.data(), Targets.DepthDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    pCtx->SetRenderTargets(HnFramebufferTargets::GBUFFER_TARGET_COUNT, pRTVs.data(), Targets.DepthDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 }
 
 } // namespace USD
