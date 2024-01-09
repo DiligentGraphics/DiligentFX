@@ -68,7 +68,7 @@ HnPostProcessTask::~HnPostProcessTask()
 {
 }
 
-void HnPostProcessTask::PreparePSO(TEXTURE_FORMAT RTVFormat)
+void HnPostProcessTask::PreparePSO(TEXTURE_FORMAT RTVFormat, pxr::HdTaskContext* TaskCtx)
 {
     if (m_PsoIsDirty || (m_PSO && m_PSO->GetGraphicsPipelineDesc().RTVFormats[0] != RTVFormat))
         m_PSO.Release();
@@ -79,6 +79,7 @@ void HnPostProcessTask::PreparePSO(TEXTURE_FORMAT RTVFormat)
     try
     {
         HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+        USD_Renderer&     USDRender      = *RenderDelegate->GetUSDRenderer();
 
         // RenderDeviceWithCache_E throws exceptions in case of errors
         RenderDeviceWithCache_E Device{RenderDelegate->GetDevice(), RenderDelegate->GetRenderStateCache()};
@@ -115,7 +116,10 @@ void HnPostProcessTask::PreparePSO(TEXTURE_FORMAT RTVFormat)
         PipelineResourceLayoutDescX ResourceLauout;
         ResourceLauout
             .SetDefaultVariableType(SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
-            .AddVariable(SHADER_TYPE_PIXEL, "cbPostProcessAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
+            .AddVariable(SHADER_TYPE_PIXEL, "cbPostProcessAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+            .AddVariable(SHADER_TYPE_PIXEL, "g_PreintegratedGGX", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_PreintegratedGGX", Sam_LinearClamp)
+            .AddVariable(SHADER_TYPE_PIXEL, "cbFrameAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
 
         GraphicsPipelineStateCreateInfoX PsoCI{"Post process"};
         PsoCI
@@ -128,7 +132,9 @@ void HnPostProcessTask::PreparePSO(TEXTURE_FORMAT RTVFormat)
             .SetPrimitiveTopology(PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 
         m_PSO = Device.CreateGraphicsPipelineState(PsoCI); // Throws exception in case of error
-        m_PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbPostProcessAttribs")->Set(m_PostProcessAttribsCB);
+        ShaderResourceVariableX{m_PSO, SHADER_TYPE_PIXEL, "cbPostProcessAttribs"}.Set(m_PostProcessAttribsCB);
+        ShaderResourceVariableX{m_PSO, SHADER_TYPE_PIXEL, "g_PreintegratedGGX"}.Set(USDRender.GetPreintegratedGGX_SRV());
+        ShaderResourceVariableX{m_PSO, SHADER_TYPE_PIXEL, "cbFrameAttribs"}.Set(RenderDelegate->GetFrameAttribsCB());
 
         m_PsoIsDirty = false;
     }
@@ -222,7 +228,7 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
     const TextureDesc& FinalColorDesc = m_FinalColorRTV->GetTexture()->GetDesc();
     m_SSR->SetBackBufferSize(pDevice, pCtx, FinalColorDesc.Width, FinalColorDesc.Height);
 
-    PreparePSO(m_FinalColorRTV->GetDesc().Format);
+    PreparePSO(m_FinalColorRTV->GetDesc().Format, TaskCtx);
     if (std::shared_ptr<HnRenderPassState> RenderPassState = GetRenderPassState(TaskCtx))
     {
         m_ClearDepth = RenderPassState->GetClearDepth();
@@ -255,12 +261,15 @@ void HnPostProcessTask::PrepareSRB(const HnRenderPassState& RPState, ITextureVie
     }
     m_FBTargets = &FBTargets;
 
-    ITextureView* pOffscreenColorSRV = FBTargets.GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_SCENE_COLOR];
-    if (pOffscreenColorSRV == nullptr)
+    for (Uint32 i = 0; i < HnFramebufferTargets::GBUFFER_TARGET_COUNT; ++i)
     {
-        UNEXPECTED("Offscreen color SRV is null");
-        return;
+        if (FBTargets.GBufferSRVs[i] == nullptr)
+        {
+            UNEXPECTED("G-buffer SRV ", i, " is null");
+            return;
+        }
     }
+
     ITextureView* pDepthSRV = FBTargets.DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
     if (pDepthSRV == nullptr)
     {
@@ -277,21 +286,22 @@ void HnPostProcessTask::PrepareSRB(const HnRenderPassState& RPState, ITextureVie
     ITextureView* pSSR = m_SSR->GetSSRRadianceSRV();
     VERIFY_EXPR(pSSR != nullptr);
 
-    ITextureView* pSpecularIblSRV = FBTargets.GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_IBL];
-    if (pSpecularIblSRV == nullptr)
-    {
-        UNEXPECTED("IBL SRV is null");
-        return;
-    }
-
+    ITextureView* pOffscreenColorSRV = FBTargets.GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_SCENE_COLOR];
+    ITextureView* pSpecularIblSRV    = FBTargets.GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_IBL];
+    ITextureView* pNormalSRV         = FBTargets.GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_NORMAL];
+    ITextureView* pMaterialSRV       = FBTargets.GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_MATERIAL];
+    ITextureView* pBaseColorSRV      = FBTargets.GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_BASE_COLOR];
     if (m_SRB && m_ShaderVars)
     {
-        if ((m_ShaderVars.Color != nullptr && m_ShaderVars.Color->Get() != pOffscreenColorSRV) ||
-            (m_ShaderVars.Depth != nullptr && m_ShaderVars.Depth->Get() != pDepthSRV) ||
-            (m_ShaderVars.SelectionDepth != nullptr && m_ShaderVars.SelectionDepth->Get() != pSelectionDepthSRV) ||
-            (m_ShaderVars.ClosestSelectedLocation != nullptr && m_ShaderVars.ClosestSelectedLocation->Get() != pClosestSelectedLocationSRV) ||
-            (m_ShaderVars.SSR != nullptr && m_ShaderVars.SSR->Get() != pSSR) ||
-            (m_ShaderVars.SpecularIBL != nullptr && m_ShaderVars.SpecularIBL->Get() != pSpecularIblSRV))
+        if ((m_ShaderVars.Color && m_ShaderVars.Color.Get() != pOffscreenColorSRV) ||
+            (m_ShaderVars.Depth && m_ShaderVars.Depth.Get() != pDepthSRV) ||
+            (m_ShaderVars.SelectionDepth && m_ShaderVars.SelectionDepth.Get() != pSelectionDepthSRV) ||
+            (m_ShaderVars.ClosestSelectedLocation && m_ShaderVars.ClosestSelectedLocation.Get() != pClosestSelectedLocationSRV) ||
+            (m_ShaderVars.SSR && m_ShaderVars.SSR.Get() != pSSR) ||
+            (m_ShaderVars.SpecularIBL && m_ShaderVars.SpecularIBL.Get() != pSpecularIblSRV) ||
+            (m_ShaderVars.Normal && m_ShaderVars.Normal.Get() != pNormalSRV) ||
+            (m_ShaderVars.Material && m_ShaderVars.Material.Get() != pMaterialSRV) ||
+            (m_ShaderVars.BaseColor && m_ShaderVars.BaseColor.Get() != pBaseColorSRV))
         {
             m_SRB.Release();
             m_ShaderVars = {};
@@ -302,26 +312,27 @@ void HnPostProcessTask::PrepareSRB(const HnRenderPassState& RPState, ITextureVie
     {
         m_PSO->CreateShaderResourceBinding(&m_SRB, true);
         VERIFY_EXPR(m_SRB);
-        m_ShaderVars.Color                   = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_ColorBuffer");
-        m_ShaderVars.Depth                   = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_Depth");
-        m_ShaderVars.SelectionDepth          = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_SelectionDepth");
-        m_ShaderVars.ClosestSelectedLocation = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_ClosestSelectedLocation");
-        m_ShaderVars.SSR                     = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_SSR");
-        m_ShaderVars.SpecularIBL             = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_SpecularIBL");
+        m_ShaderVars.Color                   = ShaderResourceVariableX{m_SRB, SHADER_TYPE_PIXEL, "g_ColorBuffer"};
+        m_ShaderVars.Depth                   = ShaderResourceVariableX{m_SRB, SHADER_TYPE_PIXEL, "g_Depth"};
+        m_ShaderVars.SelectionDepth          = ShaderResourceVariableX{m_SRB, SHADER_TYPE_PIXEL, "g_SelectionDepth"};
+        m_ShaderVars.ClosestSelectedLocation = ShaderResourceVariableX{m_SRB, SHADER_TYPE_PIXEL, "g_ClosestSelectedLocation"};
+        m_ShaderVars.SSR                     = ShaderResourceVariableX{m_SRB, SHADER_TYPE_PIXEL, "g_SSR"};
+        m_ShaderVars.SpecularIBL             = ShaderResourceVariableX{m_SRB, SHADER_TYPE_PIXEL, "g_SpecularIBL"};
+        m_ShaderVars.Normal                  = ShaderResourceVariableX{m_SRB, SHADER_TYPE_PIXEL, "g_Normal"};
+        m_ShaderVars.Material                = ShaderResourceVariableX{m_SRB, SHADER_TYPE_PIXEL, "g_MaterialData"};
+        m_ShaderVars.BaseColor               = ShaderResourceVariableX{m_SRB, SHADER_TYPE_PIXEL, "g_BaseColor"};
+
         VERIFY_EXPR(m_ShaderVars);
 
-        if (m_ShaderVars.Color != nullptr)
-            m_ShaderVars.Color->Set(pOffscreenColorSRV);
-        if (m_ShaderVars.Depth != nullptr)
-            m_ShaderVars.Depth->Set(pDepthSRV);
-        if (m_ShaderVars.SelectionDepth != nullptr)
-            m_ShaderVars.SelectionDepth->Set(pSelectionDepthSRV);
-        if (m_ShaderVars.ClosestSelectedLocation != nullptr)
-            m_ShaderVars.ClosestSelectedLocation->Set(pClosestSelectedLocationSRV);
-        if (m_ShaderVars.SSR != nullptr)
-            m_ShaderVars.SSR->Set(pSSR);
-        if (m_ShaderVars.SpecularIBL != nullptr)
-            m_ShaderVars.SpecularIBL->Set(pSpecularIblSRV);
+        m_ShaderVars.Color.Set(pOffscreenColorSRV);
+        m_ShaderVars.Depth.Set(pDepthSRV);
+        m_ShaderVars.SelectionDepth.Set(pSelectionDepthSRV);
+        m_ShaderVars.ClosestSelectedLocation.Set(pClosestSelectedLocationSRV);
+        m_ShaderVars.SSR.Set(pSSR);
+        m_ShaderVars.SpecularIBL.Set(pSpecularIblSRV);
+        m_ShaderVars.Normal.Set(pNormalSRV);
+        m_ShaderVars.Material.Set(pMaterialSRV);
+        m_ShaderVars.BaseColor.Set(pBaseColorSRV);
     }
 }
 

@@ -1,6 +1,10 @@
 #include "ToneMapping.fxh"
 #include "HnPostProcessStructures.fxh"
 #include "HnClosestSelectedLocation.fxh"
+#include "BasicStructures.fxh"
+#include "PBR_Structures.fxh"
+#include "RenderPBR_Structures.fxh"
+#include "PBR_Shading.fxh"
 #include "FullScreenTriangleVSOutput.fxh"
 
 cbuffer cbPostProcessAttribs
@@ -8,24 +12,53 @@ cbuffer cbPostProcessAttribs
     PostProcessAttribs g_Attribs;
 }
 
+cbuffer cbFrameAttribs
+{
+    PBRFrameAttribs g_Frame;
+}
+
 Texture2D g_ColorBuffer;
 Texture2D g_SelectionDepth;
 Texture2D g_Depth;
 Texture2D g_ClosestSelectedLocation;
 Texture2D g_SSR;
+Texture2D g_Normal;
 Texture2D g_SpecularIBL;
+Texture2D g_MaterialData;
+Texture2D g_BaseColor;
+
+Texture2D    g_PreintegratedGGX;
+SamplerState g_PreintegratedGGX_sampler;
 
 void main(in  FullScreenTriangleVSOutput VSOut,
           out float4                     Color : SV_Target0)
 {
     float4 Pos = VSOut.f4PixelPos;
-    
+
     Color = g_ColorBuffer.Load(int3(Pos.xy, 0));
     
     float4 SpecularIBL = g_SpecularIBL.Load(int3(Pos.xy, 0));
     float4 SSRRadiance = g_SSR.Load(int3(Pos.xy, 0));
+    float3 Normal      = g_Normal.Load(int3(VSOut.f4PixelPos.xy, 0)).xyz;
+    float4 BaseColor   = g_BaseColor.Load(int3(Pos.xy, 0));
+    float4 Material    = g_MaterialData.Load(int3(Pos.xy, 0));
     
-    Color.rgb += (SSRRadiance.rgb - SpecularIBL.rgb) * SSRRadiance.w * Color.a;
+    float Roughness = Material.x;
+    float Metallic  = Material.y;
+    SurfaceReflectanceInfo SrfInfo = GetSurfaceReflectanceMR(BaseColor.rgb, Metallic, Roughness);
+
+    float4 WorldPos = mul(float4(VSOut.f2NormalizedXY, DepthToNormalizedDeviceZ(0.5), 1.0), g_Frame.Camera.mViewProjInv);
+    float3 ViewDir = normalize(g_Frame.Camera.f4Position.xyz - WorldPos.xyz / WorldPos.w);
+    
+    IBLSamplingInfo IBLInfo = GetIBLSamplingInfo(SrfInfo,
+                                                 g_PreintegratedGGX,
+                                                 g_PreintegratedGGX_sampler,
+                                                 Normal,
+                                                 ViewDir);
+    
+    float3 SSR = GetSpecularIBL_GGX(SrfInfo, IBLInfo, SSRRadiance.rgb);
+    
+    Color.rgb += (SSR.rgb - SpecularIBL.rgb) * SSRRadiance.w * Color.a;
 
 #if TONE_MAPPING_MODE > TONE_MAPPING_MODE_NONE
     Color.rgb = ToneMap(Color.rgb, g_Attribs.ToneMapping, g_Attribs.AverageLogLum);

@@ -35,6 +35,7 @@
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/Buffer.h"
 #include "../../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
 #include "../../../../DiligentCore/Common/interface/BasicMath.hpp"
+#include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/GraphicsTypesX.hpp"
 
 namespace Diligent
 {
@@ -108,7 +109,7 @@ public:
     virtual void Execute(pxr::HdTaskContext* TaskCtx) override final;
 
 private:
-    void PreparePSO(TEXTURE_FORMAT RTVFormat);
+    void PreparePSO(TEXTURE_FORMAT RTVFormat, pxr::HdTaskContext* TaskCtx);
     void PrepareSRB(const HnRenderPassState& RPState, ITextureView* ClosestSelectedLocationSRV);
     void CreateVectorFieldRenderer(TEXTURE_FORMAT RTVFormat);
 
@@ -133,16 +134,19 @@ private:
     RefCntAutoPtr<IShaderResourceBinding> m_SRB;
     struct ShaderVariables
     {
-        IShaderResourceVariable* Color                   = nullptr;
-        IShaderResourceVariable* Depth                   = nullptr;
-        IShaderResourceVariable* SelectionDepth          = nullptr;
-        IShaderResourceVariable* ClosestSelectedLocation = nullptr;
-        IShaderResourceVariable* SSR                     = nullptr;
-        IShaderResourceVariable* SpecularIBL             = nullptr;
+        ShaderResourceVariableX Color;
+        ShaderResourceVariableX Depth;
+        ShaderResourceVariableX SelectionDepth;
+        ShaderResourceVariableX ClosestSelectedLocation;
+        ShaderResourceVariableX SSR;
+        ShaderResourceVariableX SpecularIBL;
+        ShaderResourceVariableX Normal;
+        ShaderResourceVariableX BaseColor;
+        ShaderResourceVariableX Material;
 
-        constexpr operator bool() const
+        operator bool() const
         {
-            return Color != nullptr && Depth != nullptr && SelectionDepth != nullptr && ClosestSelectedLocation;
+            return Color && Depth && SelectionDepth && ClosestSelectedLocation;
         }
     };
     ShaderVariables m_ShaderVars;
