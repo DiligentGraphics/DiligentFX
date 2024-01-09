@@ -100,6 +100,7 @@ void HnRenderAxesTask::PreparePSO(const HnRenderPassState& RPState)
             .AddShader(pPS)
             .SetDepthFormat(RPState.GetDepthStencilFormat())
             .SetRasterizerDesc(RS_SolidFillNoCull)
+            .SetDepthStencilDesc(DSS_EnableDepthNoWrites)
             .SetBlendDesc(BS_AlphaBlend)
             .SetPrimitiveTopology(PRIMITIVE_TOPOLOGY_LINE_LIST);
         PsoCI.PSODesc.ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_STATIC;
