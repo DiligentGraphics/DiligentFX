@@ -110,8 +110,8 @@ float SamplePrevVarianceLinear(float2 PixelCoord)
 
 float2 ComputeReflectionHitPosition(int2 PixelCoord, float Depth)
 {
-    float2 UV = (float2(PixelCoord) + 0.5) * g_SSRAttribs.InverseRenderSize;
-    float3 PositionWS = InvProjectPosition(float3(UV, Depth), g_SSRAttribs.InvViewProjMatrix);
+    float2 Texcoord = (float2(PixelCoord) + 0.5) * g_SSRAttribs.InverseRenderSize;
+    float3 PositionWS = InvProjectPosition(float3(Texcoord, DepthToNormalizedDeviceZ(Depth)), g_SSRAttribs.InvViewProjMatrix);
     float3 PrevCoordUV = ProjectPosition(PositionWS, g_SSRAttribs.PrevViewProjMatrix);
     return PrevCoordUV.xy * float2(g_SSRAttribs.RenderSize);
 }
