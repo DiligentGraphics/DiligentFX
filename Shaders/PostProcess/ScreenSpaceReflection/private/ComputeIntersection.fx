@@ -55,7 +55,7 @@ float3 SampleNormalWS(int2 PixelCoord)
 
 float SampleDepthHierarchy(int2 PixelCoord, int MipLevel)
 {
-    return g_TextureDepthHierarchy.Load(int3(PixelCoord, MipLevel));
+    return DepthToNormalizedDeviceZ(g_TextureDepthHierarchy.Load(int3(PixelCoord, MipLevel)));
 }
 
 float3 SampleRadiance(int2 PixelCoord)
