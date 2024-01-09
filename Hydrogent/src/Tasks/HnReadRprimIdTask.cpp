@@ -107,6 +107,7 @@ void HnReadRprimIdTask::Execute(pxr::HdTaskContext* TaskCtx)
     }
 
     HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+    IRenderDevice*    pDevice        = RenderDelegate->GetDevice();
     IDeviceContext*   pCtx           = RenderDelegate->GetDeviceContext();
 
     ScopedDebugGroup DebugGroup{pCtx, "Read RPrim Id"};
@@ -114,18 +115,25 @@ void HnReadRprimIdTask::Execute(pxr::HdTaskContext* TaskCtx)
     while (auto pStagingTex = m_MeshIdReadBackQueue->GetFirstCompleted())
     {
         {
+            // We waited for the fence, so the texture data should be available.
+            // However, mapping the texture on AMD with the MAP_FLAG_DO_NOT_WAIT flag
+            // still returns null.
+            MAP_FLAGS MapFlags = pDevice->GetDeviceInfo().Type == RENDER_DEVICE_TYPE_D3D11 ?
+                MAP_FLAG_NONE :
+                MAP_FLAG_DO_NOT_WAIT;
+
             MappedTextureSubresource MappedData;
-            pCtx->MapTextureSubresource(pStagingTex, 0, 0, MAP_READ, MAP_FLAG_DO_NOT_WAIT, nullptr, MappedData);
+            pCtx->MapTextureSubresource(pStagingTex, 0, 0, MAP_READ, MapFlags, nullptr, MappedData);
             if (MappedData.pData != nullptr)
             {
                 float fMeshIndex = *static_cast<const float*>(MappedData.pData);
                 m_MeshIndex      = fMeshIndex >= 0.f ? static_cast<Uint32>(fMeshIndex) : 0u;
+                pCtx->UnmapTextureSubresource(pStagingTex, 0, 0);
             }
             else
             {
                 UNEXPECTED("Mapped data pointer is null");
             }
-            pCtx->UnmapTextureSubresource(pStagingTex, 0, 0);
         }
         m_MeshIdReadBackQueue->Recycle(std::move(pStagingTex));
     }
@@ -144,7 +152,6 @@ void HnReadRprimIdTask::Execute(pxr::HdTaskContext* TaskCtx)
         StagingTexDesc.MipLevels      = 1;
         StagingTexDesc.CPUAccessFlags = CPU_ACCESS_READ;
 
-        IRenderDevice* pDevice = RenderDelegate->GetDevice();
         pDevice->CreateTexture(StagingTexDesc, nullptr, &pStagingTex);
         VERIFY_EXPR(pStagingTex);
     }
