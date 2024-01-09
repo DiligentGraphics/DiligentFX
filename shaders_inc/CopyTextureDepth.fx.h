@@ -1,0 +1,8 @@
+"#include \"FullScreenTriangleVSOutput.fxh\"\n"
+"\n"
+"Texture2D<float> g_TextureDepth;\n"
+"\n"
+"float CopyDepthPS(FullScreenTriangleVSOutput VSOut) : SV_Target0\n"
+"{\n"
+"    return g_TextureDepth.Load(int3(VSOut.f4PixelPos.xy, 0));\n"
+"}\n"

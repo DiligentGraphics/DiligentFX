@@ -1,11 +1,16 @@
-#include "ScreenSpaceReflectionStructures.fxh"
-#include "SSR_Common.fxh"
+#include "BasicStructures.fxh"
 #include "FullScreenTriangleVSOutput.fxh"
 
-cbuffer cbScreenSpaceReflectionAttribs
+cbuffer cbBlueNoiseAttribs
 {
-    ScreenSpaceReflectionAttribs g_SSRAttribs;
+    uint g_FrameIndex;
 }
+
+struct PSOutput
+{
+    float2 BlueNoiseXY : SV_Target0;
+    float2 BlueNoiseZW : SV_Target1;
+};
 
 Texture2D<uint> g_SobolBuffer;
 Texture2D<uint> g_ScramblingTileBuffer;
@@ -31,15 +36,24 @@ float SampleRandomNumber(uint2 PixelCoord, uint SampleIndex, uint SampleDimensio
     return (float(Value) + 0.5f) / 256.0f;
 }
 
-float2 SampleRandomVector2D(uint2 PixelCoord)
+// Roberts R1 sequence see - https://extremelearning.com.au/unreasonable-effectiveness-of-quasirandom-sequences/
+float4 SampleRandomVector2D2D(uint2 PixelCoord)
 {
-    return float2(
-        fmod(SampleRandomNumber(PixelCoord, 0u, 0u) + float(g_SSRAttribs.FrameIndex & 0xFFu) * M_GOLDEN_RATIO, 1.0),
-        fmod(SampleRandomNumber(PixelCoord, 0u, 1u) + float(g_SSRAttribs.FrameIndex & 0xFFu) * M_GOLDEN_RATIO, 1.0));
+    float G = 1.61803398875f; 
+    float Alpha = 0.5 + rcp(G) * float(g_FrameIndex & 0xFFu);
+    return float4(
+        frac(SampleRandomNumber(PixelCoord, 0u, 0u) + Alpha),
+        frac(SampleRandomNumber(PixelCoord, 0u, 1u) + Alpha),
+        frac(SampleRandomNumber(PixelCoord, 0u, 2u) + Alpha),
+        frac(SampleRandomNumber(PixelCoord, 0u, 3u) + Alpha)
+    );
 }
 
-
-float2 ComputeBlueNoiseTexturePS(in FullScreenTriangleVSOutput VSOut) : SV_Target
+PSOutput ComputeBlueNoiseTexturePS(in FullScreenTriangleVSOutput VSOut)
 {
-    return SampleRandomVector2D(uint2(VSOut.f4PixelPos.xy));
+    PSOutput Output;
+    float4 BlueNoise = SampleRandomVector2D2D(uint2(VSOut.f4PixelPos.xy));
+    Output.BlueNoiseXY = BlueNoise.xy;
+    Output.BlueNoiseZW = BlueNoise.zw;
+    return Output;
 }

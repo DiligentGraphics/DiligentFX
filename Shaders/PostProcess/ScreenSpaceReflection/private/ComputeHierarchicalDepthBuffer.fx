@@ -1,12 +1,6 @@
 #include "SSR_Common.fxh"
 #include "FullScreenTriangleVSOutput.fxh"
 
-#ifdef SSR_OPTION_INVERTED_DEPTH
-    #define MipConvFunc max
-#else
-    #define MipConvFunc min
-#endif // SSR_OPTION_INVERTED_DEPTH
-
 #if SUPPORTED_SHADER_SRV
 Texture2D<float> g_TextureLastMip;
 #else
@@ -43,7 +37,6 @@ float ComputeHierarchicalDepthBufferPS(in FullScreenTriangleVSOutput VSOut) : SV
     g_TextureMips.GetDimensions(0, LastMipDimension.x, LastMipDimension.y, Dummy);
     LastMipDimension.x = uint(floor(float(LastMipDimension.x) / exp2(float(g_TextureMipIdx))));
     LastMipDimension.y = uint(floor(float(LastMipDimension.y) / exp2(float(g_TextureMipIdx))));
-
 #endif
 
     uint2 RemappedPosition = uint2(2.0 * floor(VSOut.f4PixelPos.xy)); 

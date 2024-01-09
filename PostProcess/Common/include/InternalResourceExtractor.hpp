@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2024 Diligent Graphics LLC
+ *  Copyright 2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -24,4 +24,32 @@
  *  of the possibility of such damages.
  */
 
-#include "PostProcess/ScreenSpaceReflection/interface/ScreenSpaceReflection.hpp"
+#pragma once
+
+#include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
+#include "../../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
+
+namespace Diligent
+{
+
+inline ITextureView* GetInternalResourceSRV(const RefCntAutoPtr<IDeviceObject>& pDeviceObject)
+{
+    return StaticCast<ITexture*>(pDeviceObject)->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+}
+
+inline ITextureView* GetInternalResourceRTV(const RefCntAutoPtr<IDeviceObject>& pDeviceObject)
+{
+    return StaticCast<ITexture*>(pDeviceObject)->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET);
+}
+
+inline ITextureView* GetInternalResourceDSV(const RefCntAutoPtr<IDeviceObject>& pDeviceObject)
+{
+    return StaticCast<ITexture*>(pDeviceObject)->GetDefaultView(TEXTURE_VIEW_DEPTH_STENCIL);
+}
+
+inline TEXTURE_FORMAT GetInternalResourceFormat(const RefCntAutoPtr<IDeviceObject>& pDeviceObject)
+{
+    return StaticCast<ITexture*>(pDeviceObject)->GetDesc().Format;
+}
+
+} // namespace Diligent
