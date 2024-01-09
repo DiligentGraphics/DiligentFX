@@ -91,14 +91,16 @@ void HnProcessSelectionTask::PrepareTechniques(TEXTURE_FORMAT RTVFormat)
         RenderDeviceWithCache_E Device{RenderDelegate->GetDevice(), RenderDelegate->GetRenderStateCache()};
 
         ShaderCreateInfo ShaderCI;
-        ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
-        ShaderCI.pShaderSourceStreamFactory = &HnShaderSourceFactory::GetInstance();
+        ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL;
+
+        auto pHnFxCompoundSourceFactory     = HnShaderSourceFactory::CreateHnFxCompoundFactory();
+        ShaderCI.pShaderSourceStreamFactory = pHnFxCompoundSourceFactory;
 
         RefCntAutoPtr<IShader> pVS;
         {
-            ShaderCI.Desc       = {"Post process VS", SHADER_TYPE_VERTEX, true};
-            ShaderCI.EntryPoint = "main";
-            ShaderCI.FilePath   = "HnPostProcess.vsh";
+            ShaderCI.Desc       = {"Full-screen Triangle VS", SHADER_TYPE_VERTEX, true};
+            ShaderCI.EntryPoint = "FullScreenTriangleVS";
+            ShaderCI.FilePath   = "FullScreenTriangleVS.fx";
 
             pVS = Device.CreateShader(ShaderCI); // Throws an exception in case of error
         }

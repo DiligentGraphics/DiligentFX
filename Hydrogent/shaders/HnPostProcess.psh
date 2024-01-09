@@ -1,11 +1,7 @@
 #include "ToneMapping.fxh"
 #include "HnPostProcessStructures.fxh"
 #include "HnClosestSelectedLocation.fxh"
-
-struct PSInput
-{
-    float4 Pos : SV_POSITION;
-};
+#include "FullScreenTriangleVSOutput.fxh"
 
 cbuffer cbPostProcessAttribs
 {
@@ -19,13 +15,15 @@ Texture2D g_ClosestSelectedLocation;
 Texture2D g_SSR;
 Texture2D g_SpecularIBL;
 
-void main(in PSInput PSIn,
-          out float4 Color : SV_Target0)
+void main(in  FullScreenTriangleVSOutput VSOut,
+          out float4                     Color : SV_Target0)
 {
-    Color = g_ColorBuffer.Load(int3(PSIn.Pos.xy, 0));
+    float4 Pos = VSOut.f4PixelPos;
     
-    float4 SpecularIBL = g_SpecularIBL.Load(int3(PSIn.Pos.xy, 0));
-    float4 SSRRadiance = g_SSR.Load(int3(PSIn.Pos.xy, 0));
+    Color = g_ColorBuffer.Load(int3(Pos.xy, 0));
+    
+    float4 SpecularIBL = g_SpecularIBL.Load(int3(Pos.xy, 0));
+    float4 SSRRadiance = g_SSR.Load(int3(Pos.xy, 0));
     
     Color.rgb += (SSRRadiance.rgb - SpecularIBL.rgb) * SSRRadiance.w * Color.a;
 
@@ -33,19 +31,19 @@ void main(in PSInput PSIn,
     Color.rgb = ToneMap(Color.rgb, g_Attribs.ToneMapping, g_Attribs.AverageLogLum);
 #endif
 
-    float SelectionDepth = g_SelectionDepth.Load(int3(PSIn.Pos.xy, 0)).r;
-    float Depth          = g_Depth.Load(int3(PSIn.Pos.xy, 0)).r;
+    float SelectionDepth = g_SelectionDepth.Load(int3(Pos.xy, 0)).r;
+    float Depth          = g_Depth.Load(int3(Pos.xy, 0)).r;
     bool  IsSelected     = Depth != g_Attribs.ClearDepth && SelectionDepth == Depth;
 
     float  Outline = 0.0;
     float2 ClosestSelectedLocation;
-    if (DecodeClosestSelectedLocation(g_ClosestSelectedLocation.Load(int3(PSIn.Pos.xy, 0)).xy, ClosestSelectedLocation))
+    if (DecodeClosestSelectedLocation(g_ClosestSelectedLocation.Load(int3(Pos.xy, 0)).xy, ClosestSelectedLocation))
     {
         float Width, Height;
         g_ColorBuffer.GetDimensions(Width, Height);
         ClosestSelectedLocation *= float2(Width, Height);
         // Get distance in pixels from the current pixel to the closest selected pixel
-        float Dist = length(ClosestSelectedLocation - PSIn.Pos.xy);
+        float Dist = length(ClosestSelectedLocation - Pos.xy);
         // Make outline fade out with distance from the closest selected pixel
         Outline = saturate(1.0 - Dist / g_Attribs.SelectionOutlineWidth);
         // Do not highlight the selected object itself

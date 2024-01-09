@@ -96,9 +96,9 @@ void HnPostProcessTask::PreparePSO(TEXTURE_FORMAT RTVFormat)
 
         RefCntAutoPtr<IShader> pVS;
         {
-            ShaderCI.Desc       = {"Post process VS", SHADER_TYPE_VERTEX, true};
-            ShaderCI.EntryPoint = "main";
-            ShaderCI.FilePath   = "HnPostProcess.vsh";
+            ShaderCI.Desc       = {"Full-screen Triangle VS", SHADER_TYPE_VERTEX, true};
+            ShaderCI.EntryPoint = "FullScreenTriangleVS";
+            ShaderCI.FilePath   = "FullScreenTriangleVS.fx";
 
             pVS = Device.CreateShader(ShaderCI); // Throws exception in case of error
         }

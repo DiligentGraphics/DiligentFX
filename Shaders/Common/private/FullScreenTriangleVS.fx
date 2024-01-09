@@ -1,7 +1,7 @@
 #include "FullScreenTriangleVSOutput.fxh"
 
-void FullScreenTriangleVS(in uint VertexId : SV_VertexID,
-                          in uint InstID   : SV_InstanceID,
+void FullScreenTriangleVS(in  uint                       VertexId : SV_VertexID,
+                          in  uint                       InstID   : SV_InstanceID,
                           out FullScreenTriangleVSOutput VSOut)
 {
     float2 PosXY[3];
