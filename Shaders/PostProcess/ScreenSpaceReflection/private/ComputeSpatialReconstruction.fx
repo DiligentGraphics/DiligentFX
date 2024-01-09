@@ -1,7 +1,13 @@
 #include "ScreenSpaceReflectionStructures.fxh"
+#include "BasicStructures.fxh"
 #include "PBR_Common.fxh"
 #include "SSR_Common.fxh"
 #include "FullScreenTriangleVSOutput.fxh"
+
+cbuffer cbCameraAttribs
+{
+    CameraAttribs g_Camera;
+}
 
 cbuffer cbScreenSpaceReflectionAttribs
 {
@@ -82,13 +88,13 @@ void ComputeWeightedVariance(inout PixelAreaStatistic Stat, float4 SampleColor, 
 
 float ComputeResolvedDepth(float3 PositionWS, float SurfaceHitDistance)
 {
-    float CameraSurfaceDistance = distance(g_SSRAttribs.CameraPosition.xyz, PositionWS);
-    return CameraZToDepth(CameraSurfaceDistance + SurfaceHitDistance, g_SSRAttribs.ProjMatrix);
+    float CameraSurfaceDistance = distance(g_Camera.f4Position.xyz, PositionWS);
+    return CameraZToDepth(CameraSurfaceDistance + SurfaceHitDistance, g_Camera.mProj);
 }
 
 float3 ScreenSpaceToWorldSpace(float3 ScreenCoordUV)
 {
-    return InvProjectPosition(ScreenCoordUV, g_SSRAttribs.InvViewProjMatrix);
+    return InvProjectPosition(ScreenCoordUV, g_Camera.mViewProjInv);
 }
 
 SSR_ATTRIBUTE_EARLY_DEPTH_STENCIL
@@ -98,10 +104,10 @@ PSOutput ComputeSpatialReconstructionPS(in FullScreenTriangleVSOutput VSOut)
     
     CRNG Rng = InitCRND(uint2(Position.xy), 0u);
 
-    float2 ScreenCoordUV = Position.xy * g_SSRAttribs.InverseRenderSize;
+    float2 ScreenCoordUV = Position.xy * g_Camera.f4ViewportSize.zw;
     float3 PositionWS = ScreenSpaceToWorldSpace(float3(ScreenCoordUV, SampleDepth(int2(Position.xy))));
     float3 NormalWS = SampleNormalWS(int2(Position.xy));
-    float3 ViewWS = normalize(g_SSRAttribs.CameraPosition.xyz - PositionWS);
+    float3 ViewWS = normalize(g_Camera.f4Position.xyz - PositionWS);
     float NdotV = saturate(dot(NormalWS, ViewWS));
 
     float Roughness = SampleRoughness(int2(Position.xy));
@@ -109,7 +115,7 @@ PSOutput ComputeSpatialReconstructionPS(in FullScreenTriangleVSOutput VSOut)
     float Radius = lerp(0.0, g_SSRAttribs.SpatialReconstructionRadius, RoughnessFactor);
     uint SampleCount = uint(lerp(1.0, float(SSR_SPATIAL_RECONSTRUCTION_SAMPLES), Radius / g_SSRAttribs.SpatialReconstructionRadius));
     float2 RandomOffset = float2(Rand(Rng), Rand(Rng));
-  
+
     PixelAreaStatistic PixelAreaStat;
     PixelAreaStat.ColorSum = float4(0.0, 0.0, 0.0, 0.0);
     PixelAreaStat.WeightSum = 0.0;
@@ -123,7 +129,7 @@ PSOutput ComputeSpatialReconstructionPS(in FullScreenTriangleVSOutput VSOut)
     {
         float2 Xi = 2.0 * frac(HammersleySequence(SampleIdx, SampleCount) + RandomOffset) - 1.0;
         int2 SampleCoord = int2(Position.xy + Radius * Xi);
-        if (IsInsideScreen(SampleCoord, g_SSRAttribs.RenderSize))
+        if (IsInsideScreen(SampleCoord, int2(g_Camera.f4ViewportSize.xy)))
         {
             float2 WeightLength = ComputeWeightRayLength(SampleCoord, ViewWS, NormalWS, Roughness, NdotV);
             float4 SampleColor = g_TextureIntersectSpecular.Load(int3(SampleCoord, 0));

@@ -137,7 +137,6 @@
 "    matrix mProjInv;\n"
 "    matrix mViewProjInv;\n"
 "#endif\n"
-"\n"
 "    float4 f4ExtraData[5]; // Any appliation-specific data\n"
 "    // Sizeof(CameraAttribs) == 256*2\n"
 "};\n"

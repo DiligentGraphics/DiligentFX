@@ -23,6 +23,7 @@
  *  all other commercial damages or losses), even if such Contributor has been advised
  *  of the possibility of such damages.
  */
+
 #pragma once
 
 #include <vector>
@@ -33,10 +34,17 @@
 #include "../../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
 #include "../../../../DiligentCore/Common/interface/BasicMath.hpp"
 
+#include "PostProcess/Common/interface/PostFXContext.hpp"
+#include "PostProcess/Common/interface/PostFXRenderTechnique.hpp"
+
 namespace Diligent
 {
 
-#include "Shaders/PostProcess/ScreenSpaceReflection/public/ScreenSpaceReflectionStructures.fxh"
+namespace HLSL
+{
+struct ScreenSpaceReflectionAttribs;
+}
+
 
 // TODO: Implement SPD for depth buffer
 
@@ -54,6 +62,9 @@ public:
         /// Device context that will record the rendering commands.
         IDeviceContext* pDeviceContext = nullptr;
 
+        /// PostFX context
+        PostFXContext* pPostFXContext = nullptr;
+
         /// Shader resource view of the source color
         ITextureView* pColorBufferSRV = nullptr;
 
@@ -69,7 +80,8 @@ public:
         /// Shader resource view of the motion vectors
         ITextureView* pMotionVectorsSRV = nullptr;
 
-        ScreenSpaceReflectionAttribs SSRAttribs = {};
+        /// SSR settings
+        const HLSL::ScreenSpaceReflectionAttribs* pSSRAttribs = nullptr;
     };
 
 public:
@@ -88,8 +100,6 @@ private:
 
     void ComputeHierarchicalDepthBuffer(const RenderAttributes& RenderAttribs);
 
-    void ComputeBlueNoiseTexture(const RenderAttributes& RenderAttribs);
-
     void ComputeStencilMaskAndExtractRoughness(const RenderAttributes& RenderAttribs);
 
     void ComputeIntersection(const RenderAttributes& RenderAttribs);
@@ -101,32 +111,12 @@ private:
     void ComputeBilateralCleanup(const RenderAttributes& RenderAttribs);
 
 private:
-    struct RenderTechnique
-    {
-        void InitializePSO(IRenderDevice*                    pDevice,
-                           IRenderStateCache*                pStateCache,
-                           const char*                       PSOName,
-                           IShader*                          VertexShader,
-                           IShader*                          PixelShader,
-                           const PipelineResourceLayoutDesc& ResourceLayout,
-                           std::vector<TEXTURE_FORMAT>       RTVFmts,
-                           TEXTURE_FORMAT                    DSVFmt,
-                           const DepthStencilStateDesc&      DSSDesc,
-                           const BlendStateDesc&             BSDesc,
-                           bool                              IsDSVReadOnly = true);
-
-        bool IsInitialized() const;
-
-        RefCntAutoPtr<IPipelineState>         PSO;
-        RefCntAutoPtr<IShaderResourceBinding> SRB;
-    };
-
+    using RenderTechnique  = PostFXRenderTechnique;
     using ResourceInternal = RefCntAutoPtr<IDeviceObject>;
 
     enum RENDER_TECH : Uint32
     {
         RENDER_TECH_COMPUTE_HIERARCHICAL_DEPTH_BUFFER = 0,
-        RENDER_TECH_COMPUTE_BLUE_NOISE_TEXTURE,
         RENDER_TECH_COMPUTE_STENCIL_MASK_AND_EXTRACT_ROUGHNESS,
         RENDER_TECH_COMPUTE_INTERSECTION,
         RENDER_TECH_COMPUTE_SPATIAL_RECONSTRUCTION,
@@ -149,10 +139,6 @@ private:
         RESOURCE_IDENTIFIER_DEPTH_HIERARCHY_INTERMEDIATE,
         RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK,
         RESOURCE_IDENTIFIER_ROUGHNESS,
-        RESOURCE_IDENTIFIER_SOBOL_BUFFER,
-        RESOURCE_IDENTIFIER_RANKING_TILE_BUFFER,
-        RESOURCE_IDENTIFIER_SCRAMBLING_TILE_BUFFER,
-        RESOURCE_IDENTIFIER_BLUE_NOISE_TEXTURE,
         RESOURCE_IDENTIFIER_RADIANCE,
         RESOURCE_IDENTIFIER_RAY_DIRECTION_PDF,
         RESOURCE_IDENTIFIER_RESOLVED_RADIANCE,

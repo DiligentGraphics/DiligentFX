@@ -91,6 +91,9 @@ if(DILIGENT_INSTALL_FX)
     install(DIRECTORY    PostProcess/ScreenSpaceReflection/interface
             DESTINATION  "${CMAKE_INSTALL_INCLUDEDIR}/${DILIGENT_FX_DIR}/PostProcess/ScreenSpaceReflection"
     )
+    install(DIRECTORY   PostProcess/ScreenSpaceAmbientOcclusion/interface
+            DESTINATION  "${CMAKE_INSTALL_INCLUDEDIR}/${DILIGENT_FX_DIR}/PostProcess/ScreenSpaceAmbientOcclusion"
+    )
     install(DIRECTORY    Components/interface
             DESTINATION  "${CMAKE_INSTALL_INCLUDEDIR}/${DILIGENT_FX_DIR}/Components"
     )

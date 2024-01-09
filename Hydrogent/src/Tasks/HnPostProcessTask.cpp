@@ -53,6 +53,7 @@ namespace HLSL
 #include "Shaders/PBR/public/PBR_Structures.fxh"
 #include "../shaders/HnPostProcessStructures.fxh"
 #include "Shaders/PBR/private/RenderPBR_Structures.fxh"
+#include "Shaders/PostProcess/ScreenSpaceReflection/public/ScreenSpaceReflectionStructures.fxh"
 
 } // namespace HLSL
 
@@ -221,10 +222,17 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
         VERIFY(m_PostProcessAttribsCB, "Failed to create post process attribs CB");
     }
 
+
+    if (!m_PostFXContext)
+    {
+        m_PostFXContext = std::make_unique<PostFXContext>(pDevice);
+    }
+
     if (!m_SSR)
     {
         m_SSR = std::make_unique<ScreenSpaceReflection>(pDevice);
     }
+
     const TextureDesc& FinalColorDesc = m_FinalColorRTV->GetTexture()->GetDesc();
     m_SSR->SetBackBufferSize(pDevice, pCtx, FinalColorDesc.Width, FinalColorDesc.Height);
 
@@ -381,48 +389,40 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
     const TextureDesc& FinalColorDesc = m_FinalColorRTV->GetTexture()->GetDesc();
 
     {
-        ScreenSpaceReflection::RenderAttributes SSRRenderAttribs{};
-        SSRRenderAttribs.pDevice            = pDevice;
-        SSRRenderAttribs.pDeviceContext     = pCtx;
-        SSRRenderAttribs.pColorBufferSRV    = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_SCENE_COLOR];
-        SSRRenderAttribs.pDepthBufferSRV    = m_FBTargets->DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-        SSRRenderAttribs.pNormalBufferSRV   = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_NORMAL];
-        SSRRenderAttribs.pMaterialBufferSRV = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_MATERIAL];
-        SSRRenderAttribs.pMotionVectorsSRV  = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_NOTION_VECTOR];
+        PostFXContext::RenderAttributes PostFXAttribs{};
+        PostFXAttribs.pDevice        = pDevice;
+        PostFXAttribs.pDeviceContext = pCtx;
+        PostFXAttribs.FrameIndex     = pRenderParam->GetFrameNumber();
 
         pxr::VtValue PBRFrameAttribsVal = (*TaskCtx)[HnRenderResourceTokens->frameShaderAttribs];
         if (PBRFrameAttribsVal.IsHolding<const HLSL::PBRFrameAttribs*>())
         {
-            const HLSL::PBRFrameAttribs* PBRFrameAttribs = PBRFrameAttribsVal.UncheckedGet<const HLSL::PBRFrameAttribs*>();
-
-            const auto& CurrCamAttribs = PBRFrameAttribs->Camera;
-            const auto& PrevCamAttribs = PBRFrameAttribs->PrevCamera;
-
-            SSRRenderAttribs.SSRAttribs.ProjMatrix            = CurrCamAttribs.mProjT;
-            SSRRenderAttribs.SSRAttribs.ViewMatrix            = CurrCamAttribs.mViewT;
-            SSRRenderAttribs.SSRAttribs.ViewProjMatrix        = CurrCamAttribs.mViewProjT;
-            SSRRenderAttribs.SSRAttribs.InvProjMatrix         = CurrCamAttribs.mProjInvT;
-            SSRRenderAttribs.SSRAttribs.InvViewMatrix         = CurrCamAttribs.mViewInvT;
-            SSRRenderAttribs.SSRAttribs.InvViewProjMatrix     = CurrCamAttribs.mViewProjInvT;
-            SSRRenderAttribs.SSRAttribs.PrevViewProjMatrix    = PrevCamAttribs.mViewProjT;
-            SSRRenderAttribs.SSRAttribs.InvPrevViewProjMatrix = PrevCamAttribs.mViewProjInvT;
-            SSRRenderAttribs.SSRAttribs.CameraPosition        = CurrCamAttribs.f4Position;
+            const HLSL::PBRFrameAttribs* pPBRFrameAttibs = PBRFrameAttribsVal.UncheckedGet<const HLSL::PBRFrameAttribs*>();
+            PostFXAttribs.pCurrCameraAttribs             = &pPBRFrameAttibs->Camera;
+            PostFXAttribs.pPrevCameraAttribs             = &pPBRFrameAttibs->PrevCamera;
         }
         else
         {
             UNEXPECTED("PBR frame attribs are not set in the task context");
         }
+        m_PostFXContext->PrepareResources(PostFXAttribs);
 
-        SSRRenderAttribs.SSRAttribs.RenderSize.x          = FinalColorDesc.Width;
-        SSRRenderAttribs.SSRAttribs.RenderSize.y          = FinalColorDesc.Height;
-        SSRRenderAttribs.SSRAttribs.InverseRenderSize.x   = 1.0f / static_cast<float>(FinalColorDesc.Width);
-        SSRRenderAttribs.SSRAttribs.InverseRenderSize.y   = 1.0f / static_cast<float>(FinalColorDesc.Height);
-        SSRRenderAttribs.SSRAttribs.FrameIndex            = pRenderParam->GetFrameNumber();
-        SSRRenderAttribs.SSRAttribs.IBLFactor             = 1.0;
-        SSRRenderAttribs.SSRAttribs.RoughnessChannel      = 0;
-        SSRRenderAttribs.SSRAttribs.DepthBufferThickness  = 0.015f * 10.0f;
-        SSRRenderAttribs.SSRAttribs.IsRoughnessPerceptual = true;
+        HLSL::ScreenSpaceReflectionAttribs SSRAttribs{};
+        SSRAttribs.IBLFactor             = 1.0;
+        SSRAttribs.RoughnessChannel      = 0;
+        SSRAttribs.DepthBufferThickness  = 0.015f * 10.0f;
+        SSRAttribs.IsRoughnessPerceptual = true;
 
+        ScreenSpaceReflection::RenderAttributes SSRRenderAttribs{};
+        SSRRenderAttribs.pDevice            = pDevice;
+        SSRRenderAttribs.pDeviceContext     = pCtx;
+        SSRRenderAttribs.pPostFXContext     = m_PostFXContext.get();
+        SSRRenderAttribs.pColorBufferSRV    = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_SCENE_COLOR];
+        SSRRenderAttribs.pDepthBufferSRV    = m_FBTargets->DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        SSRRenderAttribs.pNormalBufferSRV   = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_NORMAL];
+        SSRRenderAttribs.pMaterialBufferSRV = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_MATERIAL];
+        SSRRenderAttribs.pMotionVectorsSRV  = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_NOTION_VECTOR];
+        SSRRenderAttribs.pSSRAttribs        = &SSRAttribs;
         m_SSR->Execute(SSRRenderAttribs);
     }
 

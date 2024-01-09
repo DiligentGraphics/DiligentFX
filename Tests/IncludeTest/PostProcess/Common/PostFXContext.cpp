@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2024 Diligent Graphics LLC
+ *  Copyright 2019-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -24,4 +24,4 @@
  *  of the possibility of such damages.
  */
 
-#include "PostProcess/ScreenSpaceReflection/interface/ScreenSpaceReflection.hpp"
+#include "PostProcess/Common/interface/PostFXContext.hpp"

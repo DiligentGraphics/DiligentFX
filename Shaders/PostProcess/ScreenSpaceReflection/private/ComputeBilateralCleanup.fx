@@ -1,6 +1,12 @@
 #include "ScreenSpaceReflectionStructures.fxh"
+#include "BasicStructures.fxh"
 #include "SSR_Common.fxh"
 #include "FullScreenTriangleVSOutput.fxh"
+
+cbuffer cbCameraAttribs
+{
+    CameraAttribs g_Camera;
+}
 
 cbuffer cbScreenSpaceReflectionAttribs
 {
@@ -52,7 +58,7 @@ float4 ComputeBilateralCleanupPS(in FullScreenTriangleVSOutput VSOut) : SV_Targe
     float  Roughness   = SampleRoughness(int2(Position.xy));
     float  Variance    = SampleVariance(int2(Position.xy));
     float3 NormalWS    = SampleNormalWS(int2(Position.xy));
-    float  LinearDepth = DepthToCameraZ(SampleDepth(int2(Position.xy)), g_SSRAttribs.ProjMatrix);
+    float  LinearDepth = DepthToCameraZ(SampleDepth(int2(Position.xy)), g_Camera.mProj);
     float2 GradDepth   = float2(ddx(LinearDepth), ddy(LinearDepth));
 
     float RoughnessTarget = saturate(float(SSR_BILATERAL_ROUGHNESS_FACTOR) * sqrt(Roughness));
@@ -70,7 +76,7 @@ float4 ComputeBilateralCleanupPS(in FullScreenTriangleVSOutput VSOut) : SV_Targe
             for (int y = -EffectiveRadius; y <= EffectiveRadius; y++)
             {
                 int2 Location = int2(Position.xy) + int2(x, y);
-                if (IsInsideScreen(Location,g_SSRAttribs.RenderSize))
+                if (IsInsideScreen(Location, int2(g_Camera.f4ViewportSize.xy)))
                 {
                     float  SampledDepth     = SampleDepth(Location);
                     float  SampledRoughness = SampleRoughness(Location);
@@ -79,12 +85,12 @@ float4 ComputeBilateralCleanupPS(in FullScreenTriangleVSOutput VSOut) : SV_Targe
 
                     if (IsReflectionSample(SampledRoughness, SampledDepth))
                     {
-                        float SampledLinearDepth = DepthToCameraZ(SampledDepth, g_SSRAttribs.ProjMatrix);
+                        float SampledLinearDepth = DepthToCameraZ(SampledDepth, g_Camera.mProj);
                         float WeightS = exp(-0.5 * dot(float2(x, y), float2(x, y)) / (Sigma * Sigma));
                         float WeightZ = exp(-abs(LinearDepth - SampledLinearDepth) / (SSR_BILATERAL_SIGMA_DEPTH * abs(dot(float2(x, y), GradDepth) + 1.e-6)));
                         float WeightN = pow(max(0.0, dot(NormalWS, SampledNormalWS)), SSR_BILATERAL_SIGMA_NORMAL);
                         float Weight = WeightS * WeightN * WeightZ;
-                    
+
                         WeightSum += Weight;
                         ColorSum  += Weight * SampledRadiance;
                     }

@@ -1,6 +1,14 @@
 static const MemoryShaderSourceFileInfo g_Shaders[] =
 {
     {
+        "ComputeBlueNoiseTexture.fx",
+        #include "ComputeBlueNoiseTexture.fx.h"
+    },
+    {
+        "CopyTextureDepth.fx",
+        #include "CopyTextureDepth.fx.h"
+    },
+    {
         "EnvMap.psh",
         #include "EnvMap.psh.h"
     },
@@ -31,6 +39,10 @@ static const MemoryShaderSourceFileInfo g_Shaders[] =
     {
         "PBR_Common.fxh",
         #include "PBR_Common.fxh.h"
+    },
+    {
+        "PostFX_Common.fxh",
+        #include "PostFX_Common.fxh.h"
     },
     {
         "SRGBUtilities.fxh",
@@ -227,10 +239,6 @@ static const MemoryShaderSourceFileInfo g_Shaders[] =
     {
         "ComputeBilateralCleanup.fx",
         #include "ComputeBilateralCleanup.fx.h"
-    },
-    {
-        "ComputeBlueNoiseTexture.fx",
-        #include "ComputeBlueNoiseTexture.fx.h"
     },
     {
         "ComputeHierarchicalDepthBuffer.fx",

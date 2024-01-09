@@ -1,8 +1,15 @@
 #include "ScreenSpaceReflectionStructures.fxh"
 #include "SSR_Common.fxh"
+#include "BasicStructures.fxh"
 #include "FullScreenTriangleVSOutput.fxh"
 
 #pragma warning(disable : 3078)
+
+cbuffer cbCameraAttribs
+{
+    CameraAttribs g_CurrCamera;
+    CameraAttribs g_PrevCamera;
+}
 
 cbuffer cbScreenSpaceReflectionAttribs
 {
@@ -92,35 +99,35 @@ float SamplePrevVariance(int2 PixelCoord)
 
 float SamplePrevDepthLinear(float2 PixelCoord)
 {
-    float2 Texcoord = PixelCoord * g_SSRAttribs.InverseRenderSize;
+    float2 Texcoord = PixelCoord * g_CurrCamera.f4ViewportSize.zw;
     return g_TexturePrevDepth.SampleLevel(g_TexturePrevDepth_sampler, Texcoord, 0);
 }
 
 float4 SamplePrevRadianceLinear(float2 PixelCoord)
 {
-    float2 Texcoord = PixelCoord * g_SSRAttribs.InverseRenderSize;
+    float2 Texcoord = PixelCoord * g_CurrCamera.f4ViewportSize.zw;
     return g_TexturePrevRadiance.SampleLevel(g_TexturePrevRadiance_sampler, Texcoord, 0);
 }
 
 float SamplePrevVarianceLinear(float2 PixelCoord)
 {
-    float2 Texcoord = PixelCoord * g_SSRAttribs.InverseRenderSize;
+    float2 Texcoord = PixelCoord * g_CurrCamera.f4ViewportSize.zw;
     return g_TexturePrevVariance.SampleLevel(g_TexturePrevVariance_sampler, Texcoord, 0);
 }
 
 float2 ComputeReflectionHitPosition(int2 PixelCoord, float Depth)
 {
-    float2 Texcoord = (float2(PixelCoord) + 0.5) * g_SSRAttribs.InverseRenderSize;
-    float3 PositionWS = InvProjectPosition(float3(Texcoord, DepthToNormalizedDeviceZ(Depth)), g_SSRAttribs.InvViewProjMatrix);
-    float3 PrevCoordUV = ProjectPosition(PositionWS, g_SSRAttribs.PrevViewProjMatrix);
-    return PrevCoordUV.xy * float2(g_SSRAttribs.RenderSize);
+    float2 Texcoord = (float2(PixelCoord) + 0.5) * g_CurrCamera.f4ViewportSize.zw;
+    float3 PositionWS = InvProjectPosition(float3(Texcoord, DepthToNormalizedDeviceZ(Depth)), g_CurrCamera.mViewProjInv);
+    float3 PrevCoordUV = ProjectPosition(PositionWS, g_PrevCamera.mViewProj);
+    return PrevCoordUV.xy * g_CurrCamera.f4ViewportSize.xy;
 }
 
 // TODO: Use normals to compute disocclusion
 float ComputeDisocclusion(float CurrDepth, float PrevDepth)
 {
-    float LinearDepthCurr = DepthToCameraZ(CurrDepth, g_SSRAttribs.ProjMatrix);
-    float LinearDepthPrev = DepthToCameraZ(PrevDepth, g_SSRAttribs.ProjMatrix);
+    float LinearDepthCurr = DepthToCameraZ(CurrDepth, g_CurrCamera.mProj);
+    float LinearDepthPrev = DepthToCameraZ(PrevDepth, g_CurrCamera.mProj);
     return exp(-abs(LinearDepthPrev - LinearDepthCurr) / LinearDepthCurr * SSR_DISOCCLUSION_DEPTH_WEIGHT);
 }
 
@@ -216,9 +223,9 @@ ProjectionDesc ComputeReprojection(float2 PrevPos, float CurrDepth)
 
         Desc.IsSuccess = ComputeDisocclusion(CurrDepth, DepthSum) > SSR_DISOCCLUSION_THRESHOLD;
         Desc.Color = ColorSum;
-    }
+    } 
 
-    Desc.IsSuccess = Desc.IsSuccess && IsInsideScreen(int2(Desc.PrevCoord), g_SSRAttribs.RenderSize);
+    Desc.IsSuccess = Desc.IsSuccess && IsInsideScreen(int2(Desc.PrevCoord), int2(g_CurrCamera.f4ViewportSize.xy));
     return Desc;
 }
 
@@ -229,14 +236,13 @@ PSOutput ComputeTemporalAccumulationPS(in FullScreenTriangleVSOutput VSOut)
 
     // Secondary reprojection based on ray lengths:
     // https://www.ea.com/seed/news/seed-dd18-presentation-slides-raytracing (Slide 45)
-
     PixelStatistic PixelStat = ComputePixelStatistic(int2(Position.xy));
     float Depth = SampleCurrDepth(int2(Position.xy));
     float HitDepth = SampleHitDepth(int2(Position.xy));
     float Roughness = SampleRoughness(int2(Position.xy));
     float2 Motion = SampleMotion(int2(Position.xy));
 
-    float2 PrevIncidentPoint = Position.xy - Motion * float2(g_SSRAttribs.RenderSize);
+    float2 PrevIncidentPoint = Position.xy - Motion * float2(g_CurrCamera.f4ViewportSize.xy);
     float2 PrevReflectionHit = ComputeReflectionHitPosition(int2(Position.xy), HitDepth);
 
     float4 PrevColorIncidentPoint = SamplePrevRadianceLinear(PrevIncidentPoint); 

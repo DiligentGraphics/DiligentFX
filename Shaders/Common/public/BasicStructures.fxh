@@ -137,7 +137,6 @@ struct CameraAttribs
     matrix mProjInv;
     matrix mViewProjInv;
 #endif
-
     float4 f4ExtraData[5]; // Any appliation-specific data
     // Sizeof(CameraAttribs) == 256*2
 };
