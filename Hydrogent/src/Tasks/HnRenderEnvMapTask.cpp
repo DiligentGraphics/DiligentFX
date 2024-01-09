@@ -155,6 +155,8 @@ void HnRenderEnvMapTask::Execute(pxr::HdTaskContext* TaskCtx)
     EnvMapAttribs.pEnvMap       = pEnvMapSRV;
     EnvMapAttribs.AverageLogLum = 0.3f;
     EnvMapAttribs.MipLevel      = 1;
+    // We should write zero alpha to get correct alpha in the final image
+    EnvMapAttribs.Alpha = 0;
 
     m_EnvMapRenderer->Render(EnvMapAttribs, TMAttribs);
 }

@@ -149,11 +149,11 @@ public:
         return m_FramebufferTargets;
     }
 
-    void SetClearColor(const float4& ClearColor)
+    void SetClearColor(const float3& ClearColor)
     {
         m_ClearColor = ClearColor;
     }
-    const float4& GetClearColor() const
+    const float3& GetClearColor() const
     {
         return m_ClearColor;
     }
@@ -176,7 +176,7 @@ private:
 
     HnFramebufferTargets m_FramebufferTargets;
 
-    float4 m_ClearColor = {0, 0, 0, 0};
+    float3 m_ClearColor = {0, 0, 0};
     float  m_ClearDepth = 1.f;
 };
 

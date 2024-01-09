@@ -398,9 +398,9 @@ void HnBeginFrameTask::Execute(pxr::HdTaskContext* TaskCtx)
     pCtx->SetRenderTargets(HnFramebufferTargets::GBUFFER_TARGET_COUNT, pRTVs.data(), Targets.SelectionDepthDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     for (Uint32 i = 0; i < HnFramebufferTargets::GBUFFER_TARGET_COUNT; ++i)
     {
-        constexpr float Zero[]     = {0, 0, 0, 0};
-        const float*    ClearColor = (i == HnFramebufferTargets::GBUFFER_TARGET_SCENE_COLOR) ? m_RenderPassState->GetClearColor().Data() : Zero;
-        pCtx->ClearRenderTarget(pRTVs[i], ClearColor, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        // We should clear alpha to zero to get correct alpha in the final image
+        const float4 ClearColor = (i == HnFramebufferTargets::GBUFFER_TARGET_SCENE_COLOR) ? float4{m_RenderPassState->GetClearColor(), 0} : float4{0};
+        pCtx->ClearRenderTarget(pRTVs[i], ClearColor.Data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     }
     pCtx->ClearDepthStencil(Targets.SelectionDepthDSV, CLEAR_DEPTH_FLAG, m_RenderPassState->GetClearDepth(), 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     pCtx->SetStencilRef(m_RenderPassState->GetStencilRef());
