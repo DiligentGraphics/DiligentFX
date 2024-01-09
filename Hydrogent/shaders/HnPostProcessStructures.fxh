@@ -9,6 +9,11 @@ struct PostProcessAttribs
     float AverageLogLum;
     float ClearDepth;
     float SelectionOutlineWidth;
+    
+    float SSRScale;
+    float Padding0;
+    float Padding1;
+    float Padding2;
 
     ToneMappingAttribs ToneMapping;
 };
