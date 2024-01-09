@@ -36,6 +36,7 @@
 #include "DebugUtilities.hpp"
 #include "GraphicsAccessories.hpp"
 #include "MapHelper.hpp"
+#include "ScopedDebugGroup.hpp"
 
 namespace Diligent
 {
@@ -372,6 +373,8 @@ void HnBeginFrameTask::Execute(pxr::HdTaskContext* TaskCtx)
 
     HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
     IDeviceContext*   pCtx           = RenderDelegate->GetDeviceContext();
+
+    ScopedDebugGroup DebugGroup{pCtx, "Begin Frame"};
 
     if (HnRenderParam* pRenderParam = static_cast<HnRenderParam*>(RenderDelegate->GetRenderParam()))
     {

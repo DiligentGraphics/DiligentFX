@@ -27,6 +27,7 @@
 #include "Tasks/HnSetupSelectionDepthTask.hpp"
 #include "HnRenderDelegate.hpp"
 #include "HnRenderPassState.hpp"
+#include "ScopedDebugGroup.hpp"
 
 #include "DebugUtilities.hpp"
 
@@ -81,6 +82,8 @@ void HnSetupSelectionDepthTask::Execute(pxr::HdTaskContext* TaskCtx)
 
     HnRenderDelegate* pRenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
     IDeviceContext*   pCtx            = pRenderDelegate->GetDeviceContext();
+
+    ScopedDebugGroup DebugGroup{pCtx, "Set up Selection Depth"};
 
     pCtx->SetRenderTargets(0, nullptr, Targets.SelectionDepthDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 }

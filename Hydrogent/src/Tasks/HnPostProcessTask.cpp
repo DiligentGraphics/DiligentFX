@@ -41,6 +41,7 @@
 #include "MapHelper.hpp"
 #include "VectorFieldRenderer.hpp"
 #include "ScreenSpaceReflection.hpp"
+#include "ScopedDebugGroup.hpp"
 
 namespace Diligent
 {
@@ -426,31 +427,37 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         m_SSR->Execute(SSRRenderAttribs);
     }
 
-    ITextureView* pRTVs[] = {m_FinalColorRTV};
-    pCtx->SetRenderTargets(_countof(pRTVs), pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-
     {
-        MapHelper<HLSL::PostProcessAttribs> pDstShaderAttribs{pCtx, m_PostProcessAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
-        pDstShaderAttribs->SelectionOutlineColor          = m_Params.SelectionColor;
-        pDstShaderAttribs->NonselectionDesaturationFactor = m_Params.NonselectionDesaturationFactor;
+        ScopedDebugGroup DebugGroup{pCtx, "Post Processing"};
 
-        pDstShaderAttribs->ToneMapping.iToneMappingMode     = m_Params.ToneMappingMode;
-        pDstShaderAttribs->ToneMapping.bAutoExposure        = 0;
-        pDstShaderAttribs->ToneMapping.fMiddleGray          = m_Params.MiddleGray;
-        pDstShaderAttribs->ToneMapping.bLightAdaptation     = 0;
-        pDstShaderAttribs->ToneMapping.fWhitePoint          = m_Params.WhitePoint;
-        pDstShaderAttribs->ToneMapping.fLuminanceSaturation = m_Params.LuminanceSaturation;
-        pDstShaderAttribs->AverageLogLum                    = m_Params.AverageLogLum;
-        pDstShaderAttribs->ClearDepth                       = m_ClearDepth;
-        pDstShaderAttribs->SelectionOutlineWidth            = m_Params.SelectionOutlineWidth;
-        pDstShaderAttribs->SSRScale                         = pRenderParam->GetDebugView() == PBR_Renderer::DebugViewType::None ? 1 : 0;
+        ITextureView* pRTVs[] = {m_FinalColorRTV};
+        pCtx->SetRenderTargets(_countof(pRTVs), pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+        {
+            MapHelper<HLSL::PostProcessAttribs> pDstShaderAttribs{pCtx, m_PostProcessAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
+            pDstShaderAttribs->SelectionOutlineColor          = m_Params.SelectionColor;
+            pDstShaderAttribs->NonselectionDesaturationFactor = m_Params.NonselectionDesaturationFactor;
+
+            pDstShaderAttribs->ToneMapping.iToneMappingMode     = m_Params.ToneMappingMode;
+            pDstShaderAttribs->ToneMapping.bAutoExposure        = 0;
+            pDstShaderAttribs->ToneMapping.fMiddleGray          = m_Params.MiddleGray;
+            pDstShaderAttribs->ToneMapping.bLightAdaptation     = 0;
+            pDstShaderAttribs->ToneMapping.fWhitePoint          = m_Params.WhitePoint;
+            pDstShaderAttribs->ToneMapping.fLuminanceSaturation = m_Params.LuminanceSaturation;
+            pDstShaderAttribs->AverageLogLum                    = m_Params.AverageLogLum;
+            pDstShaderAttribs->ClearDepth                       = m_ClearDepth;
+            pDstShaderAttribs->SelectionOutlineWidth            = m_Params.SelectionOutlineWidth;
+            pDstShaderAttribs->SSRScale                         = pRenderParam->GetDebugView() == PBR_Renderer::DebugViewType::None ? 1 : 0;
+        }
+        pCtx->SetPipelineState(m_PSO);
+        pCtx->CommitShaderResources(m_SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        pCtx->Draw({3, DRAW_FLAG_VERIFY_ALL});
     }
-    pCtx->SetPipelineState(m_PSO);
-    pCtx->CommitShaderResources(m_SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    pCtx->Draw({3, DRAW_FLAG_VERIFY_ALL});
 
     if (m_VectorFieldRenderer && pRenderParam->GetDebugView() == PBR_Renderer::DebugViewType::MotionVectors)
     {
+        ScopedDebugGroup DebugGroup{pCtx, "Motion Vector Field"};
+
         VectorFieldRenderer::RenderAttribs Attribs;
         Attribs.pContext = pCtx;
         Attribs.GridSize = {FinalColorDesc.Width / 20, FinalColorDesc.Height / 20};

@@ -70,6 +70,8 @@ struct HnRenderPassParams
     {
         return Selection == rhs.Selection && UsdPsoFlags == rhs.UsdPsoFlags;
     }
+
+    static const char* GetSelectionTypeString(SelectionType Type);
 };
 
 /// Hydra render pass implementation in Hydrogent.

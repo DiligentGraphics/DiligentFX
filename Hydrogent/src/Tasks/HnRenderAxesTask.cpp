@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@
 #include "RenderStateCache.hpp"
 #include "CommonlyUsedStates.h"
 #include "GraphicsUtilities.h"
+#include "ScopedDebugGroup.hpp"
 
 namespace Diligent
 {
@@ -197,6 +198,8 @@ void HnRenderAxesTask::Execute(pxr::HdTaskContext* TaskCtx)
 
     HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
     IDeviceContext*   pCtx           = RenderDelegate->GetDeviceContext();
+
+    ScopedDebugGroup DebugGroup{pCtx, "Render Axes"};
 
     pCtx->SetPipelineState(m_PSO);
     pCtx->CommitShaderResources(m_SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);

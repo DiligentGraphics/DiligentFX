@@ -33,6 +33,7 @@
 #include "USD_Renderer.hpp"
 
 #include "DebugUtilities.hpp"
+#include "ScopedDebugGroup.hpp"
 
 namespace Diligent
 {
@@ -157,6 +158,8 @@ void HnRenderEnvMapTask::Execute(pxr::HdTaskContext* TaskCtx)
     EnvMapAttribs.MipLevel      = 1;
     // We should write zero alpha to get correct alpha in the final image
     EnvMapAttribs.Alpha = 0;
+
+    ScopedDebugGroup DebugGroup{EnvMapAttribs.pContext, "Render Environment Map"};
 
     m_EnvMapRenderer->Render(EnvMapAttribs, TMAttribs);
 }

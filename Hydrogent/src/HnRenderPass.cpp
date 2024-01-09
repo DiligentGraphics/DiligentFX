@@ -40,6 +40,7 @@
 #include "USD_Renderer.hpp"
 #include "GLTF_PBR_Renderer.hpp"
 #include "MapHelper.hpp"
+#include "ScopedDebugGroup.hpp"
 
 namespace Diligent
 {
@@ -55,6 +56,22 @@ namespace HLSL
 
 namespace USD
 {
+
+const char* HnRenderPassParams::GetSelectionTypeString(SelectionType Type)
+{
+    switch (Type)
+    {
+        case SelectionType::All:
+            return "All";
+        case SelectionType::Unselected:
+            return "Unselected";
+        case SelectionType::Selected:
+            return "Selected";
+        default:
+            UNEXPECTED("Unexpected selection type");
+            return "Unknown";
+    }
+}
 
 pxr::HdRenderPassSharedPtr HnRenderPass::Create(pxr::HdRenderIndex*           pIndex,
                                                 const pxr::HdRprimCollection& Collection)
@@ -214,6 +231,9 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
     }
 
     RenderState State{*this, *static_cast<const HnRenderPassState*>(RPState.get())};
+
+    const std::string DebugGroupName = std::string{"Render Pass - "} + m_MaterialTag.GetString() + " - " + HnRenderPassParams::GetSelectionTypeString(m_Params.Selection);
+    ScopedDebugGroup  DebugGroup{State.pCtx, DebugGroupName.c_str()};
 
     if (const HnRenderParam* pRenderParam = static_cast<const HnRenderParam*>(State.RenderDelegate.GetRenderParam()))
     {

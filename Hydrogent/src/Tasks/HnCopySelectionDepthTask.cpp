@@ -29,6 +29,7 @@
 #include "HnRenderPassState.hpp"
 
 #include "DebugUtilities.hpp"
+#include "ScopedDebugGroup.hpp"
 
 namespace Diligent
 {
@@ -81,6 +82,8 @@ void HnCopySelectionDepthTask::Execute(pxr::HdTaskContext* TaskCtx)
 
     HnRenderDelegate* pRenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
     IDeviceContext*   pCtx            = pRenderDelegate->GetDeviceContext();
+
+    ScopedDebugGroup DebugGroup{pCtx, "Copy Selection Depth"};
 
     // Unbind render targets before copying depth since they will be unbound by the copy operation anyway,
     // and Diligent will emit a warning.

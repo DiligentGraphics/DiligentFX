@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@
 #include "HnTokens.hpp"
 
 #include "DebugUtilities.hpp"
+#include "ScopedDebugGroup.hpp"
 
 namespace Diligent
 {
@@ -107,6 +108,8 @@ void HnReadRprimIdTask::Execute(pxr::HdTaskContext* TaskCtx)
 
     HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
     IDeviceContext*   pCtx           = RenderDelegate->GetDeviceContext();
+
+    ScopedDebugGroup DebugGroup{pCtx, "Read RPrim Id"};
 
     while (auto pStagingTex = m_MeshIdReadBackQueue->GetFirstCompleted())
     {

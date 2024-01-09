@@ -34,6 +34,7 @@
 #include "CommonlyUsedStates.h"
 #include "GraphicsUtilities.h"
 #include "MapHelper.hpp"
+#include "ScopedDebugGroup.hpp"
 
 namespace Diligent
 {
@@ -306,6 +307,8 @@ void HnProcessSelectionTask::Execute(pxr::HdTaskContext* TaskCtx)
     HnRenderDelegate* pRenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
     IDeviceContext*   pCtx            = pRenderDelegate->GetDeviceContext();
 
+    ScopedDebugGroup DebugGroup{pCtx, "Process Selection"};
+
     {
         MapHelper<HLSL::ClosestSelectedLocationConstants> Constants{pCtx, m_ConstantsCB, MAP_WRITE, MAP_FLAG_DISCARD};
         Constants->ClearDepth = RenderPassState->GetClearDepth();
@@ -316,7 +319,6 @@ void HnProcessSelectionTask::Execute(pxr::HdTaskContext* TaskCtx)
     pCtx->SetPipelineState(m_InitTech.PSO);
     pCtx->CommitShaderResources(m_InitTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     pCtx->Draw({3, DRAW_FLAG_VERIFY_ALL});
-
 
     for (Uint32 i = 0; i < m_NumJFIterations; ++i)
     {
