@@ -54,7 +54,7 @@
 "#endif\n"
 "\n"
 "#ifndef PBR_NUM_TEXTURE_ATTRIBUTES\n"
-"#   define PBR_NUM_TEXTURE_ATTRIBUTES 5\n"
+"#   define PBR_NUM_TEXTURE_ATTRIBUTES 0\n"
 "#endif\n"
 "\n"
 "\n"

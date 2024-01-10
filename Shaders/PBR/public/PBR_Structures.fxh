@@ -54,7 +54,7 @@
 #endif
     
 #ifndef PBR_NUM_TEXTURE_ATTRIBUTES
-#   define PBR_NUM_TEXTURE_ATTRIBUTES 5
+#   define PBR_NUM_TEXTURE_ATTRIBUTES 0
 #endif
 
 
