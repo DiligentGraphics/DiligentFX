@@ -67,6 +67,10 @@ struct HnPostProcessTaskParams
     float LuminanceSaturation = 1.0;   // Luminance saturation factor
     float AverageLogLum       = 0.3f;  // Average log luminance of the scene
 
+    // Screen-space reflection scale.
+    // 0 - disable SSR.
+    float SSRScale = 1.f;
+
     constexpr bool operator==(const HnPostProcessTaskParams& rhs) const
     {
         // clang-format off

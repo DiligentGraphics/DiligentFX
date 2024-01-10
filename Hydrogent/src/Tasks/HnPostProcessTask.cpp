@@ -381,6 +381,8 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
 
     const TextureDesc& FinalColorDesc = m_FinalColorRTV->GetTexture()->GetDesc();
 
+    const float SSRScale = pRenderParam->GetDebugView() == PBR_Renderer::DebugViewType::None ? m_Params.SSRScale : 0;
+    if (SSRScale > 0)
     {
         ScreenSpaceReflection::RenderAttributes SSRRenderAttribs{};
         SSRRenderAttribs.pDevice            = pDevice;
@@ -447,7 +449,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
             pDstShaderAttribs->AverageLogLum                    = m_Params.AverageLogLum;
             pDstShaderAttribs->ClearDepth                       = m_ClearDepth;
             pDstShaderAttribs->SelectionOutlineWidth            = m_Params.SelectionOutlineWidth;
-            pDstShaderAttribs->SSRScale                         = pRenderParam->GetDebugView() == PBR_Renderer::DebugViewType::None ? 1 : 0;
+            pDstShaderAttribs->SSRScale                         = SSRScale;
         }
         pCtx->SetPipelineState(m_PSO);
         pCtx->CommitShaderResources(m_SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
