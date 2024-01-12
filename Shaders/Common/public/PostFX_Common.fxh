@@ -87,4 +87,12 @@ bool IsInsideScreen(int2 PixelCoord, int2 Dimension)
            PixelCoord.y < Dimension.y;
 }
 
+bool IsInsideScreen(float2 PixelCoord, float2 Dimension)
+{
+    return PixelCoord.x >= 0.0 &&
+           PixelCoord.y >= 0.0 &&
+           PixelCoord.x < Dimension.x &&
+           PixelCoord.y < Dimension.y;
+}
+
 #endif // _SSAO_COMMON_FXH_

@@ -225,7 +225,7 @@
 "        Desc.Color = ColorSum;\n"
 "    }\n"
 "\n"
-"    Desc.IsSuccess = Desc.IsSuccess && IsInsideScreen(int2(Desc.PrevCoord), int2(g_CurrCamera.f4ViewportSize.xy));\n"
+"    Desc.IsSuccess = Desc.IsSuccess && IsInsideScreen(Desc.PrevCoord, g_CurrCamera.f4ViewportSize.xy);\n"
 "    return Desc;\n"
 "}\n"
 "\n"

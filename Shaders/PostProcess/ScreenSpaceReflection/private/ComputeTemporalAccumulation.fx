@@ -225,7 +225,7 @@ ProjectionDesc ComputeReprojection(float2 PrevPos, float CurrDepth)
         Desc.Color = ColorSum;
     } 
 
-    Desc.IsSuccess = Desc.IsSuccess && IsInsideScreen(int2(Desc.PrevCoord), int2(g_CurrCamera.f4ViewportSize.xy));
+    Desc.IsSuccess = Desc.IsSuccess && IsInsideScreen(Desc.PrevCoord, g_CurrCamera.f4ViewportSize.xy);
     return Desc;
 }
 
