@@ -52,16 +52,14 @@ bool IsBackground(float Depth)
 #endif // SSR_OPTION_INVERTED_DEPTH
 }
 
-bool IsGlossyReflection(float Roughness, float RoughnessThreshold, bool IsRoughnessPerceptual)
+bool IsReflectionSample(float Roughness, float Depth, float RoughnessThreshold)
 {
-    if (IsRoughnessPerceptual)
-        RoughnessThreshold *= RoughnessThreshold;
-    return Roughness < RoughnessThreshold;
+    return Roughness < RoughnessThreshold && !IsBackground(Depth);
 }
 
 bool IsMirrorReflection(float Roughness)
 {
-    return Roughness < 0.0001;
+    return Roughness < 0.01;
 }
 
 #endif // _SSR_COMMON_FXH_

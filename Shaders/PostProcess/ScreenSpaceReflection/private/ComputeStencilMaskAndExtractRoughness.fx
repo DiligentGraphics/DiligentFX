@@ -13,8 +13,8 @@ Texture2D<float>  g_TextureDepth;
 float SampleRoughness(int2 PixelCoord)
 {
     float Roughness = g_TextureMaterialParameters.Load(int3(PixelCoord, 0))[g_SSRAttribs.RoughnessChannel];
-    if (g_SSRAttribs.IsRoughnessPerceptual)
-        Roughness *= Roughness;
+    if (!g_SSRAttribs.IsRoughnessPerceptual)
+        Roughness = sqrt(Roughness);
     return Roughness;
 }
 
@@ -27,8 +27,7 @@ float ComputeStencilMaskAndExtractRoughnessPS(in FullScreenTriangleVSOutput VSOu
 {
     float Roughness = SampleRoughness(int2(VSOut.f4PixelPos.xy));
     float Depth = SampleDepth(int2(VSOut.f4PixelPos.xy));
-    
-    if (!IsGlossyReflection(Roughness, g_SSRAttribs.RoughnessThreshold, g_SSRAttribs.IsRoughnessPerceptual) || IsBackground(Depth))
+    if (!IsReflectionSample(Roughness, Depth, g_SSRAttribs.RoughnessThreshold))
         discard;
 
     return Roughness;

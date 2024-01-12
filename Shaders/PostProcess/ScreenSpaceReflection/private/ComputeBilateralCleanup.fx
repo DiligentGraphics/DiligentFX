@@ -45,11 +45,6 @@ float SampleVariance(int2 PixelCoord)
     return g_TextureVariance.Load(int3(PixelCoord, 0));
 }
 
-bool IsReflectionSample(float Roughness, float Depth)
-{
-    return Roughness < g_SSRAttribs.RoughnessThreshold && !IsBackground(Depth);
-}
-
 SSR_ATTRIBUTE_EARLY_DEPTH_STENCIL
 float4 ComputeBilateralCleanupPS(in FullScreenTriangleVSOutput VSOut) : SV_Target0
 {
@@ -61,7 +56,7 @@ float4 ComputeBilateralCleanupPS(in FullScreenTriangleVSOutput VSOut) : SV_Targe
     float  LinearDepth = DepthToCameraZ(SampleDepth(int2(Position.xy)), g_Camera.mProj);
     float2 GradDepth   = float2(ddx(LinearDepth), ddy(LinearDepth));
 
-    float RoughnessTarget = saturate(float(SSR_BILATERAL_ROUGHNESS_FACTOR) * sqrt(Roughness));
+    float RoughnessTarget = saturate(float(SSR_BILATERAL_ROUGHNESS_FACTOR) * Roughness);
     float Radius = lerp(0.0, Variance > SSS_BILATERAL_VARIANCE_ESTIMATE_THRESHOLD ? 2.0 : 0.0, RoughnessTarget);
     float Sigma = g_SSRAttribs.BilateralCleanupSpatialSigmaFactor;
     int EffectiveRadius = int(min(2.0 * Sigma, Radius));
@@ -83,7 +78,7 @@ float4 ComputeBilateralCleanupPS(in FullScreenTriangleVSOutput VSOut) : SV_Targe
                     float4 SampledRadiance  = SampleRadiance(Location);
                     float3 SampledNormalWS  = SampleNormalWS(Location);
 
-                    if (IsReflectionSample(SampledRoughness, SampledDepth))
+                    if (IsReflectionSample(SampledRoughness, SampledDepth, g_SSRAttribs.RoughnessThreshold))
                     {
                         float SampledLinearDepth = DepthToCameraZ(SampledDepth, g_Camera.mProj);
                         float WeightS = exp(-0.5 * dot(float2(x, y), float2(x, y)) / (Sigma * Sigma));

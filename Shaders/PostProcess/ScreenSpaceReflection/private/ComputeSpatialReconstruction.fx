@@ -59,6 +59,7 @@ float2 ComputeWeightRayLength(int2 PixelCoord, float3 V, float3 N, float Roughne
 
     float3 RayDirection = RayDirectionPDF.xyz * InvRayLength;
     float PDF = RayDirectionPDF.w;
+    float AlphaRoughness = Roughness * Roughness;
 
     float3 L = RayDirection;
     float3 H = normalize(L + V);
@@ -66,8 +67,8 @@ float2 ComputeWeightRayLength(int2 PixelCoord, float3 V, float3 N, float Roughne
     float NdotH = saturate(dot(N, H));
     float NdotL = saturate(dot(N, L));
 
-    float Vis = SmithGGXVisibilityCorrelated(NdotL, NdotV, Roughness);
-    float D = NormalDistribution_GGX(NdotH, Roughness);
+    float Vis = SmithGGXVisibilityCorrelated(NdotL, NdotV, AlphaRoughness);
+    float D = NormalDistribution_GGX(NdotH, AlphaRoughness);
     float LocalBRDF = Vis * D * NdotL;
     return float2(max(LocalBRDF / max(PDF, 1.0e-5f), 1e-6), rcp(InvRayLength));
 }
@@ -111,7 +112,7 @@ PSOutput ComputeSpatialReconstructionPS(in FullScreenTriangleVSOutput VSOut)
     float NdotV = saturate(dot(NormalWS, ViewWS));
 
     float Roughness = SampleRoughness(int2(Position.xy));
-    float RoughnessFactor = saturate(float(SSR_SPATIAL_RECONSTRUCTION_ROUGHNESS_FACTOR) * sqrt(Roughness));
+    float RoughnessFactor = saturate(float(SSR_SPATIAL_RECONSTRUCTION_ROUGHNESS_FACTOR) * Roughness);
     float Radius = lerp(0.0, g_SSRAttribs.SpatialReconstructionRadius, RoughnessFactor);
     uint SampleCount = uint(lerp(1.0, float(SSR_SPATIAL_RECONSTRUCTION_SAMPLES), Radius / g_SSRAttribs.SpatialReconstructionRadius));
     float2 RandomOffset = float2(Rand(Rng), Rand(Rng));

@@ -172,7 +172,7 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
         Desc.Type      = RESOURCE_DIM_TEX_2D;
         Desc.Width     = BackBufferWidth;
         Desc.Height    = BackBufferHeight;
-        Desc.Format    = TEX_FORMAT_R16_FLOAT; // R8_UNORM is not enough to store alpha roughness
+        Desc.Format    = TEX_FORMAT_R8_UNORM;
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
 
         m_Resources[RESOURCE_IDENTIFIER_ROUGHNESS] = Device.CreateTexture(Desc);

@@ -229,8 +229,9 @@ float3 SmithGGXSampleVisibleNormalHemisphere(float3 View, float Alpha, float2 Xi
     return SmithGGXSampleVisibleNormal(View, Alpha, Alpha, Xi.x, Xi.y);
 }
 
-float4 SampleReflectionVector(float3 View, float3 Normal, float AlphaRoughness, int2 PixelCoord)
+float4 SampleReflectionVector(float3 View, float3 Normal, float Roughness, int2 PixelCoord)
 {
+    float AlphaRoughness = Roughness * Roughness;
     float3 N = Normal;
     float3 T = normalize(cross(N, abs(N.y) > 0.5 ? float3(1.0, 0.0, 0.0) : float3(0.0, 1.0, 0.0)));
     float3 B = cross(T, N);
