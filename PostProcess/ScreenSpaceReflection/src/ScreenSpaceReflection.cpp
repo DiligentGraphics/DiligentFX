@@ -76,9 +76,11 @@ ScreenSpaceReflection::ScreenSpaceReflection(IRenderDevice* pDevice)
 {
     DEV_CHECK_ERR(pDevice != nullptr, "pDevice must not be null");
 
-    m_IsSupportTransitionSubresources  = pDevice->GetDeviceInfo().Type == RENDER_DEVICE_TYPE_D3D12 || pDevice->GetDeviceInfo().Type == RENDER_DEVICE_TYPE_VULKAN;
-    m_IsSupportedShaderSubresourceView = pDevice->GetDeviceInfo().Type != RENDER_DEVICE_TYPE_GLES;
-    m_IsSupportCopyDepthToColor        = pDevice->GetDeviceInfo().Type == RENDER_DEVICE_TYPE_D3D12 || pDevice->GetDeviceInfo().Type == RENDER_DEVICE_TYPE_D3D11;
+    const auto& DeviceInfo = pDevice->GetDeviceInfo();
+
+    m_SupportedFeatures.TransitionSubresources  = DeviceInfo.Type == RENDER_DEVICE_TYPE_D3D12 || DeviceInfo.Type == RENDER_DEVICE_TYPE_VULKAN;
+    m_SupportedFeatures.TextureSubresourceViews = DeviceInfo.Features.TextureSubresourceViews;
+    m_SupportedFeatures.CopyDepthToColor        = DeviceInfo.Type == RENDER_DEVICE_TYPE_D3D12 || DeviceInfo.Type == RENDER_DEVICE_TYPE_D3D11;
 
     {
         RefCntAutoPtr<IBuffer> pBuffer;
@@ -86,7 +88,7 @@ ScreenSpaceReflection::ScreenSpaceReflection(IRenderDevice* pDevice)
         m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER] = pBuffer;
     }
 
-    if (!m_IsSupportedShaderSubresourceView)
+    if (!m_SupportedFeatures.TextureSubresourceViews)
     {
         RefCntAutoPtr<IBuffer> pBuffer;
         CreateUniformBuffer(pDevice, sizeof(Uint32), "ScreenSpaceReflection::IntermediateConstantBuffer", &pBuffer);
@@ -139,7 +141,7 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
                 pTexture->CreateView(ViewDesc, &m_HierarchicalDepthMipMapRTV[MipLevel]);
             }
 
-            if (m_IsSupportedShaderSubresourceView)
+            if (m_SupportedFeatures.TextureSubresourceViews)
             {
                 TextureViewDesc ViewDesc;
                 ViewDesc.ViewType        = TEXTURE_VIEW_SHADER_RESOURCE;
@@ -150,7 +152,7 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
         }
     }
 
-    if (!m_IsSupportedShaderSubresourceView)
+    if (!m_SupportedFeatures.TextureSubresourceViews)
     {
         TextureDesc Desc;
         Desc.Name      = "ScreenSpaceReflection::DepthHierarchyIntermediate";
@@ -389,13 +391,13 @@ void ScreenSpaceReflection::ComputeHierarchicalDepthBuffer(const RenderAttribute
     if (!RenderTech.IsInitialized())
     {
         ShaderMacroHelper Macros;
-        Macros.Add("SUPPORTED_SHADER_SRV", static_cast<Int32>(m_IsSupportedShaderSubresourceView));
+        Macros.Add("SUPPORTED_SHADER_SRV", m_SupportedFeatures.TextureSubresourceViews ? 1 : 0);
 
         const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
         const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeHierarchicalDepthBuffer.fx", "ComputeHierarchicalDepthBufferPS", SHADER_TYPE_PIXEL, Macros);
 
         PipelineResourceLayoutDescX ResourceLayout;
-        if (m_IsSupportedShaderSubresourceView)
+        if (m_SupportedFeatures.TextureSubresourceViews)
         {
             ResourceLayout.AddVariable(SHADER_TYPE_PIXEL, "g_TextureLastMip", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
         }
@@ -421,7 +423,7 @@ void ScreenSpaceReflection::ComputeHierarchicalDepthBuffer(const RenderAttribute
 
     ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "ComputeHierarchicalDepthBuffer"};
 
-    if (m_IsSupportCopyDepthToColor)
+    if (m_SupportedFeatures.CopyDepthToColor)
     {
         CopyTextureAttribs CopyAttribs;
         CopyAttribs.pSrcTexture              = StaticCast<ITexture*>(m_Resources[RESOURCE_IDENTIFIER_INPUT_DEPTH]);
@@ -440,7 +442,7 @@ void ScreenSpaceReflection::ComputeHierarchicalDepthBuffer(const RenderAttribute
                          StaticCast<ITexture*>(m_Resources[RESOURCE_IDENTIFIER_INPUT_DEPTH])->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE),
                          m_HierarchicalDepthMipMapRTV[0]);
 
-        if (!m_IsSupportedShaderSubresourceView)
+        if (!m_SupportedFeatures.TextureSubresourceViews)
         {
             CopyTextureAttribs CopyMipAttribs;
             CopyMipAttribs.pSrcTexture              = StaticCast<ITexture*>(m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY]);
@@ -456,7 +458,7 @@ void ScreenSpaceReflection::ComputeHierarchicalDepthBuffer(const RenderAttribute
     }
 
 
-    if (m_IsSupportTransitionSubresources)
+    if (m_SupportedFeatures.TransitionSubresources)
     {
         StateTransitionDesc TransitionDescW2W[] = {
             StateTransitionDesc{StaticCast<ITexture*>(m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY]),
@@ -493,7 +495,7 @@ void ScreenSpaceReflection::ComputeHierarchicalDepthBuffer(const RenderAttribute
     }
     else
     {
-        if (m_IsSupportedShaderSubresourceView)
+        if (m_SupportedFeatures.TextureSubresourceViews)
         {
             ShaderResourceVariableX TextureLastMipSV{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureLastMip"};
             for (Uint32 MipLevel = 1; MipLevel < m_HierarchicalDepthMipMapRTV.size(); MipLevel++)
@@ -601,7 +603,7 @@ void ScreenSpaceReflection::ComputeIntersection(const RenderAttributes& RenderAt
             .AddVariable(SHADER_TYPE_PIXEL, "g_TextureBlueNoise", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
             .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepthHierarchy", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
 
-        if (!m_IsSupportedShaderSubresourceView)
+        if (!m_SupportedFeatures.TextureSubresourceViews)
         {
             // Immutable sampler is required for WebGL to work properly
             ResourceLayout.AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureDepthHierarchy", Sam_PointClamp);
@@ -772,7 +774,7 @@ void ScreenSpaceReflection::ComputeTemporalAccumulation(const RenderAttributes& 
     RenderAttribs.pDeviceContext->Draw({3, DRAW_FLAG_VERIFY_ALL, 1});
     RenderAttribs.pDeviceContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
 
-    if (m_IsSupportCopyDepthToColor)
+    if (m_SupportedFeatures.CopyDepthToColor)
     {
         CopyTextureAttribs CopyAttribs;
         CopyAttribs.pSrcTexture              = StaticCast<ITexture*>(m_Resources[RESOURCE_IDENTIFIER_INPUT_DEPTH]);

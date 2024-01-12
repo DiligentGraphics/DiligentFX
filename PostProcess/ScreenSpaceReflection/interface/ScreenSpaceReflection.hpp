@@ -160,9 +160,12 @@ private:
     std::vector<RefCntAutoPtr<ITextureView>> m_HierarchicalDepthMipMapSRV;
     RefCntAutoPtr<ITextureView>              m_DepthStencilMaskDSVReadOnly;
 
-    bool m_IsSupportTransitionSubresources  = false;
-    bool m_IsSupportedShaderSubresourceView = true;
-    bool m_IsSupportCopyDepthToColor        = false;
+    struct SupportedDeviceFeatures
+    {
+        bool TransitionSubresources  = false;
+        bool TextureSubresourceViews = false;
+        bool CopyDepthToColor        = false;
+    } m_SupportedFeatures;
 
     Uint32 m_BackBufferWidth  = 0;
     Uint32 m_BackBufferHeight = 0;
