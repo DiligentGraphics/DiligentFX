@@ -398,9 +398,9 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         PostFXAttribs.FrameIndex     = pRenderParam->GetFrameNumber();
 
         pxr::VtValue PBRFrameAttribsVal = (*TaskCtx)[HnRenderResourceTokens->frameShaderAttribs];
-        if (PBRFrameAttribsVal.IsHolding<const HLSL::PBRFrameAttribs*>())
+        if (PBRFrameAttribsVal.IsHolding<HLSL::PBRFrameAttribs*>())
         {
-            const HLSL::PBRFrameAttribs* pPBRFrameAttibs = PBRFrameAttribsVal.UncheckedGet<const HLSL::PBRFrameAttribs*>();
+            const HLSL::PBRFrameAttribs* pPBRFrameAttibs = PBRFrameAttribsVal.UncheckedGet<HLSL::PBRFrameAttribs*>();
 
             PostFXAttribs.pCurrCamera = &pPBRFrameAttibs->Camera;
             PostFXAttribs.pPrevCamera = &pPBRFrameAttibs->PrevCamera;
