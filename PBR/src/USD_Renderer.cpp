@@ -88,8 +88,9 @@ USD_Renderer::CreateInfo::PSMainSourceInfo USD_Renderer::GetUsdPbrPSMainSource(U
     float3 IBL          = float3(0.0, 0.0, 0.0);
 
 #if UNSHADED
-    float4 OutColor  = g_Frame.Renderer.UnshadedColor + g_Frame.Renderer.HighlightColor;
-    float4 BaseColor = float4(0.0, 0.0, 0.0, 0.0);
+    float4 OutColor     = g_Frame.Renderer.UnshadedColor + g_Frame.Renderer.HighlightColor;
+    float4 BaseColor    = float4(0.0, 0.0, 0.0, 0.0);
+    float2 MotionVector = float2(0.0, 0.0);
 #else
     MeshId       = g_Primitive.CustomData.x;
     Normal       = Shading.BaseLayer.Normal.xyz;

@@ -563,7 +563,7 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
                  m_RenderMode == HN_RENDER_MODE_POINTS)
         {
             PSOFlags |= PBR_Renderer::PSO_FLAG_UNSHADED;
-            ListItem.pPSO = PsoCache.Get({PSOFlags, /*DoubleSided = */ false, m_DebugView}, true);
+            ListItem.pPSO = PsoCache.Get({PSOFlags, /*DoubleSided = */ false}, true);
         }
         else
         {

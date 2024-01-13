@@ -406,9 +406,16 @@ public:
     {
     public:
         constexpr PSOKey() noexcept {};
-        PSOKey(PSO_FLAGS _Flags, ALPHA_MODE _AlphaMode, bool _DoubleSided, DebugViewType DebugView) noexcept;
-        PSOKey(PSO_FLAGS _Flags, bool _DoubleSided, DebugViewType DebugView) noexcept :
-            PSOKey{_Flags, ALPHA_MODE_OPAQUE, _DoubleSided, DebugView}
+
+        PSOKey(PSO_FLAGS     _Flags,
+               ALPHA_MODE    _AlphaMode,
+               bool          _DoubleSided,
+               DebugViewType _DebugView = DebugViewType::None) noexcept;
+
+        PSOKey(PSO_FLAGS     _Flags,
+               bool          _DoubleSided,
+               DebugViewType _DebugView = DebugViewType::None) noexcept :
+            PSOKey{_Flags, ALPHA_MODE_OPAQUE, _DoubleSided, _DebugView}
         {}
 
         constexpr bool operator==(const PSOKey& rhs) const noexcept
