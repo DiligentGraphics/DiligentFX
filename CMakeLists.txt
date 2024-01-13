@@ -63,8 +63,11 @@ foreach(FILE ${SOURCE})
 endforeach()
 
 # Convert shaders to headers and generate master header with the list of all files
-set(SHADER_OUTPUT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shaders_inc)
-set(SHADERS_LIST_FILE shaders_inc/shaders_list.h)
+set(SHADER_OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/shaders_inc)
+file(MAKE_DIRECTORY ${SHADER_OUTPUT_DIR})
+target_include_directories(DiligentFX PRIVATE ${SHADER_OUTPUT_DIR})
+
+set(SHADERS_LIST_FILE ${SHADER_OUTPUT_DIR}/shaders_list.h)
 convert_shaders_to_headers("${SHADERS}" ${SHADER_OUTPUT_DIR} ${SHADERS_LIST_FILE} SHADERS_INC_LIST)
 
 target_sources(DiligentFX PRIVATE

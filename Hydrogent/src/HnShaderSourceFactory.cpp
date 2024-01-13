@@ -36,7 +36,7 @@ namespace Diligent
 namespace USD
 {
 
-#include "../shaders_inc/shaders_list.h"
+#include "shaders_list.h"
 
 HnShaderSourceFactory::HnShaderSourceFactory()
 {

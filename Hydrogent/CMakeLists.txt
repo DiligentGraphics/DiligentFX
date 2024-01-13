@@ -73,12 +73,13 @@ set(INTERFACE
 file(GLOB_RECURSE SHADERS LIST_DIRECTORIES false shaders/*.*)
 
 # Convert shaders to headers and generate master header with the list of all files
-set(SHADER_OUTPUT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shaders_inc)
+set(SHADER_OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/shaders_inc)
+file(MAKE_DIRECTORY ${SHADER_OUTPUT_DIR})
 set(SHADERS_LIST_FILE ${SHADER_OUTPUT_DIR}/shaders_list.h)
 convert_shaders_to_headers("${SHADERS}" ${SHADER_OUTPUT_DIR} ${SHADERS_LIST_FILE} SHADERS_INC_LIST)
 
-set(HYDROGENT_SOURCE ${SOURCE} ${INCLUDE} ${INTERFACE} ${SHADERS} ${SHADERS_LIST_FILE} ${SHADERS_INC_LIST} readme.md)
-add_library(Diligent-Hydrogent STATIC ${HYDROGENT_SOURCE})
+set(HYDROGENT_SOURCE ${SOURCE} ${INCLUDE} ${INTERFACE} ${SHADERS} readme.md)
+add_library(Diligent-Hydrogent STATIC ${HYDROGENT_SOURCE} ${SHADERS_LIST_FILE} ${SHADERS_INC_LIST})
 
 set_common_target_properties(Diligent-Hydrogent)
 
@@ -172,6 +173,7 @@ PUBLIC
     interface
 PRIVATE
     include
+    ${SHADER_OUTPUT_DIR}
 )
 
 target_link_libraries(Diligent-Hydrogent
@@ -191,3 +193,7 @@ set_target_properties(Diligent-Hydrogent PROPERTIES
 )
 
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${HYDROGENT_SOURCE})
+source_group("generated" FILES
+    ${SHADERS_LIST_FILE}
+    ${SHADERS_INC_LIST}
+)
