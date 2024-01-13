@@ -83,7 +83,8 @@ struct HnPostProcessTaskParams
                MiddleGray          == rhs.MiddleGray &&
                WhitePoint          == rhs.WhitePoint &&
                LuminanceSaturation == rhs.LuminanceSaturation &&
-               AverageLogLum       == rhs.AverageLogLum;
+               AverageLogLum       == rhs.AverageLogLum &&
+               SSRScale            == rhs.SSRScale;
         // clang-format on
     }
 
