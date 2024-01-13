@@ -41,6 +41,7 @@
 #include "../../PBR/interface/USD_Renderer.hpp"
 
 #include "HnTextureRegistry.hpp"
+#include "HnTypes.hpp"
 
 namespace Diligent
 {
@@ -274,6 +275,8 @@ public:
     HnRenderDelegateMemoryStats GetMemoryStats() const;
 
     void SetDebugView(PBR_Renderer::DebugViewType DebugView);
+    void SetRenderMode(HN_RENDER_MODE RenderMode);
+    void SetSelectedRPrimId(const pxr::SdfPath& RPrimID);
 
 private:
     static const pxr::TfTokenVector SupportedRPrimTypes;

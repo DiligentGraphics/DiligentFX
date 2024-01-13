@@ -28,6 +28,8 @@
 
 #include <atomic>
 
+#include "HnTypes.hpp"
+
 #include "pxr/imaging/hd/renderDelegate.h"
 #include "../../PBR/interface/PBR_Renderer.hpp"
 
@@ -50,6 +52,12 @@ public:
     bool GetUseIndexPool() const { return m_UseIndexPool; }
     bool GetUseTextureAtlas() const { return m_UseTextureAtlas; }
 
+    HN_RENDER_MODE GetRenderMode() const { return m_RenderMode; }
+    void           SetRenderMode(HN_RENDER_MODE Mode) { m_RenderMode = Mode; }
+
+    const pxr::SdfPath& GetSelectedPrimId() const { return m_SelectedPrimId; }
+    void                SetSelectedPrimId(const pxr::SdfPath& PrimId) { m_SelectedPrimId = PrimId; }
+
     uint32_t GetGeometrySubsetVersion() const { return m_GeometrySubsetVersion.load(); }
     void     MakeGeometrySubsetDirty() { m_GeometrySubsetVersion.fetch_add(1); }
 
@@ -70,6 +78,10 @@ private:
     const bool m_UseVertexPool;
     const bool m_UseIndexPool;
     const bool m_UseTextureAtlas;
+
+    HN_RENDER_MODE m_RenderMode = HN_RENDER_MODE_SOLID;
+
+    pxr::SdfPath m_SelectedPrimId;
 
     std::atomic<uint32_t> m_GeometrySubsetVersion{0};
 

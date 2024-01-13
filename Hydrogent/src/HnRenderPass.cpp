@@ -91,6 +91,7 @@ struct HnRenderPass::RenderState
     const HnRenderPassState&  RPState;
     const pxr::HdRenderIndex& RenderIndex;
     const HnRenderDelegate&   RenderDelegate;
+    const HnRenderParam&      RenderParam;
     USD_Renderer&             USDRenderer;
 
     IDeviceContext* const pCtx;
@@ -105,6 +106,7 @@ struct HnRenderPass::RenderState
         RPState{_RPState},
         RenderIndex{*RenderPass.GetRenderIndex()},
         RenderDelegate{*static_cast<HnRenderDelegate*>(RenderIndex.GetRenderDelegate())},
+        RenderParam{*static_cast<const HnRenderParam*>(RenderDelegate.GetRenderParam())},
         USDRenderer{*RenderDelegate.GetUSDRenderer()},
         pCtx{RenderDelegate.GetDeviceContext()},
         AlphaMode{MaterialTagToPbrAlphaMode(RenderPass.m_MaterialTag)},
@@ -193,7 +195,7 @@ GraphicsPipelineDesc HnRenderPass::GetGraphicsDesc(const HnRenderPassState& RPSt
         GraphicsDesc.NumRenderTargets = 0;
     }
 
-    switch (m_RenderParams.RenderMode)
+    switch (m_RenderMode)
     {
         case HN_RENDER_MODE_SOLID:
             GraphicsDesc.PrimitiveTopology = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
@@ -235,13 +237,21 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
     const std::string DebugGroupName = std::string{"Render Pass - "} + m_MaterialTag.GetString() + " - " + HnRenderPassParams::GetSelectionTypeString(m_Params.Selection);
     ScopedDebugGroup  DebugGroup{State.pCtx, DebugGroupName.c_str()};
 
-    if (const HnRenderParam* pRenderParam = static_cast<const HnRenderParam*>(State.RenderDelegate.GetRenderParam()))
     {
-        PBR_Renderer::DebugViewType DebugView = pRenderParam->GetDebugView();
+        PBR_Renderer::DebugViewType DebugView = State.RenderParam.GetDebugView();
         if (m_DebugView != DebugView)
         {
             m_DrawListItemsDirtyFlags |= DRAW_LIST_ITEM_DIRTY_FLAG_PSO;
             m_DebugView = DebugView;
+        }
+    }
+
+    {
+        HN_RENDER_MODE RenderMode = State.RenderParam.GetRenderMode();
+        if (m_RenderMode != RenderMode)
+        {
+            m_RenderMode = RenderMode;
+            m_DrawListItemsDirtyFlags |= DRAW_LIST_ITEM_DIRTY_FLAG_PSO | DRAW_LIST_ITEM_DIRTY_FLAG_MESH_DATA;
         }
     }
 
@@ -346,12 +356,6 @@ void HnRenderPass::_MarkCollectionDirty()
 
 void HnRenderPass::SetMeshRenderParams(const HnMeshRenderParams& Params)
 {
-    if (m_RenderParams.SelectedPrimId != Params.SelectedPrimId)
-        _MarkCollectionDirty();
-
-    if (m_RenderParams.RenderMode != Params.RenderMode)
-        m_DrawListItemsDirtyFlags |= DRAW_LIST_ITEM_DIRTY_FLAG_PSO | DRAW_LIST_ITEM_DIRTY_FLAG_MESH_DATA;
-
     m_RenderParams = Params;
 }
 
@@ -368,6 +372,17 @@ void HnRenderPass::UpdateDrawList(const pxr::TfTokenVector& RenderTags)
     pxr::HdRenderIndex*     pRenderIndex    = GetRenderIndex();
     const HnRenderDelegate* pRenderDelegate = static_cast<HnRenderDelegate*>(pRenderIndex->GetRenderDelegate());
     const HnRenderParam*    pRenderParam    = static_cast<const HnRenderParam*>(pRenderDelegate->GetRenderParam());
+    if (pRenderParam == nullptr)
+    {
+        UNEXPECTED("Render param is null");
+        return;
+    }
+
+    if (pRenderParam->GetSelectedPrimId() != m_SelectedPrimId)
+    {
+        m_SelectedPrimId = pRenderParam->GetSelectedPrimId();
+        _MarkCollectionDirty();
+    }
 
     const pxr::HdRprimCollection& Collection  = GetRprimCollection();
     const pxr::HdChangeTracker&   Tracker     = pRenderIndex->GetChangeTracker();
@@ -418,7 +433,7 @@ void HnRenderPass::UpdateDrawList(const pxr::TfTokenVector& RenderTags)
                 if (pRPrim == nullptr)
                     continue;
 
-                const bool IsSelected = RPrimID.HasPrefix(m_RenderParams.SelectedPrimId);
+                const bool IsSelected = RPrimID.HasPrefix(m_SelectedPrimId);
                 if ((m_Params.Selection == HnRenderPassParams::SelectionType::All) ||
                     (m_Params.Selection == HnRenderPassParams::SelectionType::Selected && IsSelected) ||
                     (m_Params.Selection == HnRenderPassParams::SelectionType::Unselected && !IsSelected))
@@ -512,7 +527,7 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
         const HnMaterial*               pMaterial = DrawItem.GetMaterial();
         VERIFY(pMaterial != nullptr, "Material is null");
 
-        if (m_RenderParams.RenderMode == HN_RENDER_MODE_SOLID)
+        if (m_RenderMode == HN_RENDER_MODE_SOLID)
         {
             if (Geo.Normals != nullptr && (m_Params.UsdPsoFlags & USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_OUTPUT) != 0)
                 PSOFlags |= PBR_Renderer::PSO_FLAG_USE_VERTEX_NORMALS;
@@ -539,13 +554,13 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
                        "This may indicate an issue in how alpha mode is determined in the material, or (less likely) an issue in Rprim sorting by Hydra.");
             }
 
-            if (static_cast<const HnRenderParam*>(State.RenderDelegate.GetRenderParam())->GetUseTextureAtlas())
+            if (State.RenderParam.GetUseTextureAtlas())
                 PSOFlags |= PBR_Renderer::PSO_FLAG_USE_TEXTURE_ATLAS;
 
             ListItem.pPSO = PsoCache.Get({PSOFlags, static_cast<PBR_Renderer::ALPHA_MODE>(State.AlphaMode), /*DoubleSided = */ false, m_DebugView}, true);
         }
-        else if (m_RenderParams.RenderMode == HN_RENDER_MODE_MESH_EDGES ||
-                 m_RenderParams.RenderMode == HN_RENDER_MODE_POINTS)
+        else if (m_RenderMode == HN_RENDER_MODE_MESH_EDGES ||
+                 m_RenderMode == HN_RENDER_MODE_POINTS)
         {
             PSOFlags |= PBR_Renderer::PSO_FLAG_UNSHADED;
             ListItem.pPSO = PsoCache.Get({PSOFlags, /*DoubleSided = */ false, m_DebugView}, true);
@@ -573,7 +588,7 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
         ListItem.VertexBuffers = {Geo.Positions, Geo.Normals, Geo.TexCoords[0], Geo.TexCoords[1]};
 
         const HnDrawItem::TopologyData* Topology = nullptr;
-        switch (m_RenderParams.RenderMode)
+        switch (m_RenderMode)
         {
             case HN_RENDER_MODE_SOLID:
                 Topology                  = &DrawItem.GetFaces();

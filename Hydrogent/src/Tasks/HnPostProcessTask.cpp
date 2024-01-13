@@ -389,7 +389,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
 
     const TextureDesc& FinalColorDesc = m_FinalColorRTV->GetTexture()->GetDesc();
 
-    const float SSRScale = pRenderParam->GetDebugView() == PBR_Renderer::DebugViewType::None ? m_Params.SSRScale : 0;
+    const float SSRScale = (pRenderParam->GetDebugView() == PBR_Renderer::DebugViewType::None && pRenderParam->GetRenderMode() == HN_RENDER_MODE_SOLID) ? m_Params.SSRScale : 0;
     if (SSRScale > 0)
     {
         PostFXContext::RenderAttributes PostFXAttribs{};

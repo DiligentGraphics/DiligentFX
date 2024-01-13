@@ -41,20 +41,11 @@ namespace USD
 
 struct HnRenderRprimsTaskParams
 {
-    HN_RENDER_MODE RenderMode = HN_RENDER_MODE_SOLID;
-
     float4x4 Transform = float4x4::Identity();
-
-    /// Selected prim id.
-    pxr::SdfPath SelectedPrimId;
 
     constexpr bool operator==(const HnRenderRprimsTaskParams& rhs) const
     {
-        // clang-format off
-        return RenderMode     == rhs.RenderMode     &&
-               Transform      == rhs.Transform      &&
-               SelectedPrimId == rhs.SelectedPrimId;
-        // clang-format on
+        return Transform == rhs.Transform;
     }
 
     constexpr bool operator!=(const HnRenderRprimsTaskParams& rhs) const

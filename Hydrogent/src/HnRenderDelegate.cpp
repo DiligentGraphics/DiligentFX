@@ -459,6 +459,16 @@ void HnRenderDelegate::SetDebugView(PBR_Renderer::DebugViewType DebugView)
     m_RenderParam->SetDebugView(DebugView);
 }
 
+void HnRenderDelegate::SetRenderMode(HN_RENDER_MODE RenderMode)
+{
+    m_RenderParam->SetRenderMode(RenderMode);
+}
+
+void HnRenderDelegate::SetSelectedRPrimId(const pxr::SdfPath& RPrimID)
+{
+    m_RenderParam->SetSelectedPrimId(RPrimID);
+}
+
 } // namespace USD
 
 } // namespace Diligent

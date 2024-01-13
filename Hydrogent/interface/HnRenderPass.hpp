@@ -47,11 +47,7 @@ class HnMaterial;
 
 struct HnMeshRenderParams
 {
-    HN_RENDER_MODE RenderMode = HN_RENDER_MODE_SOLID;
-
     float4x4 Transform = float4x4::Identity();
-
-    pxr::SdfPath SelectedPrimId;
 };
 
 struct HnRenderPassParams
@@ -156,11 +152,13 @@ private:
     HnRenderPassParams m_Params;
     HnMeshRenderParams m_RenderParams;
 
-    PBR_Renderer::DebugViewType m_DebugView = PBR_Renderer::DebugViewType::None;
+    HN_RENDER_MODE              m_RenderMode = HN_RENDER_MODE_SOLID;
+    PBR_Renderer::DebugViewType m_DebugView  = PBR_Renderer::DebugViewType::None;
 
     std::vector<DrawListItem>        m_DrawList;
     std::vector<const DrawListItem*> m_PendingDrawItems;
 
+    pxr::SdfPath m_SelectedPrimId             = {};
     unsigned int m_CollectionVersion          = ~0u;
     unsigned int m_RprimRenderTagVersion      = ~0u;
     unsigned int m_TaskRenderTagsVersion      = ~0u;
