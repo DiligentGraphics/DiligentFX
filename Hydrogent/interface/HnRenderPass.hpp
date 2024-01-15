@@ -158,6 +158,8 @@ private:
     std::vector<DrawListItem>        m_DrawList;
     std::vector<const DrawListItem*> m_PendingDrawItems;
 
+    std::vector<Uint8> m_PrimitiveAttribsData;
+
     pxr::SdfPath m_SelectedPrimId             = {};
     unsigned int m_CollectionVersion          = ~0u;
     unsigned int m_RprimRenderTagVersion      = ~0u;

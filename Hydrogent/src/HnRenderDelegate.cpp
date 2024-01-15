@@ -96,14 +96,20 @@ static RefCntAutoPtr<IBuffer> CreateFrameAttribsCB(IRenderDevice* pDevice)
 
 static RefCntAutoPtr<IBuffer> CreatePrimitiveAttribsCB(IRenderDevice* pDevice)
 {
+    Uint64 Size  = 65536;
+    USAGE  Usage = USAGE_DYNAMIC;
+    if (pDevice->GetDeviceInfo().IsGLDevice())
+    {
+        // On OpenGL, use large USAGE_DEFAULT buffer and update it
+        // with UpdateBuffer() method.
+#ifndef DILIGENT_DEBUG
+        Size = Uint64{512} << 10u;
+#endif
+        Usage = USAGE_DEFAULT;
+    }
     // Allocate a large buffer to batch primitive draw calls
     RefCntAutoPtr<IBuffer> PrimitiveAttribsCB;
-    CreateUniformBuffer(
-        pDevice,
-        65536,
-        "PBR frame attribs CB",
-        &PrimitiveAttribsCB,
-        USAGE_DYNAMIC);
+    CreateUniformBuffer(pDevice, Size, "PBR frame attribs CB", &PrimitiveAttribsCB, Usage);
     return PrimitiveAttribsCB;
 }
 

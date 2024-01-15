@@ -264,6 +264,25 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
     m_PendingDrawItems.clear();
     void*  pMappedBufferData = nullptr;
     Uint32 CurrOffset        = 0;
+
+    auto FlushPendingDraws = [&]() {
+        VERIFY_EXPR(CurrOffset > 0);
+        if (AttribsBuffDesc.Usage == USAGE_DYNAMIC)
+        {
+            VERIFY_EXPR(pMappedBufferData != nullptr);
+            State.pCtx->UnmapBuffer(pPrimitiveAttribsCB, MAP_WRITE);
+            pMappedBufferData = nullptr;
+        }
+        else
+        {
+            VERIFY_EXPR(m_PrimitiveAttribsData.size() >= CurrOffset);
+            State.pCtx->UpdateBuffer(pPrimitiveAttribsCB, 0, CurrOffset, m_PrimitiveAttribsData.data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        }
+        RenderPendingDrawItems(State);
+        VERIFY_EXPR(m_PendingDrawItems.empty());
+        CurrOffset = 0;
+    };
+
     for (DrawListItem& ListItem : m_DrawList)
     {
         const HnDrawItem& DrawItem = ListItem.DrawItem;
@@ -291,24 +310,30 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
         if (CurrOffset + ListItem.ShaderAttribsBufferAlignedRange > AttribsBuffDesc.Size)
         {
             // The buffer is full. Render the pending items and start filling the buffer from the beginning.
-            State.pCtx->UnmapBuffer(pPrimitiveAttribsCB, MAP_WRITE);
-            pMappedBufferData = nullptr;
-            CurrOffset        = 0;
-            RenderPendingDrawItems(State);
-            VERIFY_EXPR(m_PendingDrawItems.empty());
+            FlushPendingDraws();
         }
 
-        if (pMappedBufferData == nullptr)
+        void* pCurrPrimitive = nullptr;
+        if (AttribsBuffDesc.Usage == USAGE_DYNAMIC)
         {
-            State.pCtx->MapBuffer(pPrimitiveAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD, pMappedBufferData);
             if (pMappedBufferData == nullptr)
             {
-                UNEXPECTED("Failed to map the primitive attributes buffer");
-                break;
+                State.pCtx->MapBuffer(pPrimitiveAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD, pMappedBufferData);
+                if (pMappedBufferData == nullptr)
+                {
+                    UNEXPECTED("Failed to map the primitive attributes buffer");
+                    break;
+                }
             }
+            pCurrPrimitive = reinterpret_cast<Uint8*>(pMappedBufferData) + CurrOffset;
+        }
+        else
+        {
+            if (CurrOffset + ListItem.ShaderAttribsBufferAlignedRange > m_PrimitiveAttribsData.size())
+                m_PrimitiveAttribsData.resize(CurrOffset + ListItem.ShaderAttribsBufferAlignedRange);
+            pCurrPrimitive = &m_PrimitiveAttribsData[CurrOffset];
         }
 
-        void* pCurrPrimitive = reinterpret_cast<Uint8*>(pMappedBufferData) + CurrOffset;
         CurrOffset += ListItem.ShaderAttribsDataAlignedSize;
 
         // Write current primitive attributes
@@ -339,10 +364,9 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
 
         m_PendingDrawItems.push_back(&ListItem);
     }
-    if (pMappedBufferData != nullptr)
+    if (CurrOffset != 0)
     {
-        State.pCtx->UnmapBuffer(pPrimitiveAttribsCB, MAP_WRITE);
-        RenderPendingDrawItems(State);
+        FlushPendingDraws();
     }
 
     m_DrawListItemsDirtyFlags = DRAW_LIST_ITEM_DIRTY_FLAG_NONE;
