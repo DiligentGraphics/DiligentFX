@@ -31,6 +31,7 @@
 
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
 #include "../../../../DiligentCore/Graphics/GraphicsTools/interface/RenderStateCache.h"
+#include "../../.././/DiligentCore/Graphics/GraphicsTools/interface/ResourceRegistry.hpp"
 #include "../../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
 #include "../../../../DiligentCore/Common/interface/BasicMath.hpp"
 
@@ -153,8 +154,9 @@ private:
         RESOURCE_IDENTIFIER_COUNT
     };
 
-    std::array<RenderTechnique, RENDER_TECH_COUNT>          m_RenderTech{};
-    std::array<ResourceInternal, RESOURCE_IDENTIFIER_COUNT> m_Resources{};
+    std::array<RenderTechnique, RENDER_TECH_COUNT> m_RenderTech{};
+
+    ResourceRegistry m_Resources{RESOURCE_IDENTIFIER_COUNT};
 
     std::vector<RefCntAutoPtr<ITextureView>> m_HierarchicalDepthMipMapRTV;
     std::vector<RefCntAutoPtr<ITextureView>> m_HierarchicalDepthMipMapSRV;

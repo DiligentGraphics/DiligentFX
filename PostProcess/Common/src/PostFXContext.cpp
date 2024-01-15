@@ -32,7 +32,6 @@
 #include "MapHelper.hpp"
 #include "RenderStateCache.hpp"
 #include "ScopedDebugGroup.hpp"
-#include "InternalResourceExtractor.hpp"
 
 namespace Diligent
 {
@@ -74,8 +73,7 @@ PostFXContext::PostFXContext(IRenderDevice* pDevice)
         Data.pContext        = nullptr;
         Data.NumSubresources = 1;
         Data.pSubResources   = &SubResData;
-
-        m_Resources[RESOURCE_IDENTIFIER_SOBOL_BUFFER] = Device.CreateTexture(Desc, &Data);
+        m_Resources.Insert(RESOURCE_IDENTIFIER_SOBOL_BUFFER, Device.CreateTexture(Desc, &Data));
     }
 
     {
@@ -96,8 +94,7 @@ PostFXContext::PostFXContext(IRenderDevice* pDevice)
         Data.pContext        = nullptr;
         Data.NumSubresources = 1;
         Data.pSubResources   = &SubResData;
-
-        m_Resources[RESOURCE_IDENTIFIER_SCRAMBLING_TILE_BUFFER] = Device.CreateTexture(Desc, &Data);
+        m_Resources.Insert(RESOURCE_IDENTIFIER_SCRAMBLING_TILE_BUFFER, Device.CreateTexture(Desc, &Data));
     }
 
     for (Uint32 TextureIdx = RESOURCE_IDENTIFIER_BLUE_NOISE_TEXTURE_XY; TextureIdx <= RESOURCE_IDENTIFIER_BLUE_NOISE_TEXTURE_ZW; TextureIdx++)
@@ -111,12 +108,12 @@ PostFXContext::PostFXContext(IRenderDevice* pDevice)
         Desc.MipLevels = 1;
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
 
-        m_Resources[TextureIdx] = Device.CreateTexture(Desc, nullptr);
+        m_Resources.Insert(TextureIdx, Device.CreateTexture(Desc, nullptr));
     }
 
     RefCntAutoPtr<IBuffer> pBuffer;
     CreateUniformBuffer(pDevice, 2 * sizeof(HLSL::CameraAttribs), "PostFXContext::IntermediateConstantBuffer", &pBuffer);
-    m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER_INTERMEDIATE] = pBuffer;
+    m_Resources.Insert(RESOURCE_IDENTIFIER_CONSTANT_BUFFER_INTERMEDIATE, pBuffer);
 }
 
 PostFXContext::~PostFXContext() = default;
@@ -133,24 +130,24 @@ void PostFXContext::PrepareResources(const RenderAttributes& RenderAttribs)
         DEV_CHECK_ERR(RenderAttribs.pCurrCamera != nullptr, "RenderAttribs.pCurrCamera must not be null");
         DEV_CHECK_ERR(RenderAttribs.pPrevCamera != nullptr, "RenderAttribs.pPrevCamera must not be null");
 
-        if (!m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER])
+        if (!m_Resources.IsInitialized(RESOURCE_IDENTIFIER_CONSTANT_BUFFER))
         {
             RefCntAutoPtr<IBuffer> pBuffer;
             CreateUniformBuffer(RenderAttribs.pDevice, 2 * sizeof(HLSL::CameraAttribs), "PostFXContext::CameraAttibsConstantBuffer", &pBuffer);
-            m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER] = pBuffer;
+            m_Resources.Insert(RESOURCE_IDENTIFIER_CONSTANT_BUFFER, pBuffer);
         }
 
-        MapHelper<HLSL::CameraAttribs> CameraAttibs(RenderAttribs.pDeviceContext, reinterpret_cast<IBuffer*>(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER].RawPtr()), MAP_WRITE, MAP_FLAG_DISCARD);
+        MapHelper<HLSL::CameraAttribs> CameraAttibs(RenderAttribs.pDeviceContext, m_Resources.GetBuffer(RESOURCE_IDENTIFIER_CONSTANT_BUFFER), MAP_WRITE, MAP_FLAG_DISCARD);
         CameraAttibs[0] = *RenderAttribs.pCurrCamera;
         CameraAttibs[1] = *RenderAttribs.pPrevCamera;
     }
     else
     {
-        m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER] = RenderAttribs.pCameraAttribsCB;
+        m_Resources.Insert(RESOURCE_IDENTIFIER_CONSTANT_BUFFER, RenderAttribs.pCameraAttribsCB);
     }
 
     {
-        MapHelper<Uint32> FrameAttibs(RenderAttribs.pDeviceContext, reinterpret_cast<IBuffer*>(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER_INTERMEDIATE].RawPtr()), MAP_WRITE, MAP_FLAG_DISCARD);
+        MapHelper<Uint32> FrameAttibs(RenderAttribs.pDeviceContext, m_Resources.GetBuffer(RESOURCE_IDENTIFIER_CONSTANT_BUFFER_INTERMEDIATE), MAP_WRITE, MAP_FLAG_DISCARD);
         *FrameAttibs        = RenderAttribs.FrameIndex;
         m_CurrentFrameIndex = RenderAttribs.FrameIndex;
     }
@@ -171,23 +168,23 @@ void PostFXContext::PrepareResources(const RenderAttributes& RenderAttribs)
                                  RenderAttribs.pStateCache, "PreparePostFX::ComputeBlueNoiseTexture",
                                  VS, PS, ResourceLayout,
                                  {
-                                     GetInternalResourceFormat(m_Resources[RESOURCE_IDENTIFIER_BLUE_NOISE_TEXTURE_XY]),
-                                     GetInternalResourceFormat(m_Resources[RESOURCE_IDENTIFIER_BLUE_NOISE_TEXTURE_ZW]),
+                                     m_Resources.GetTexture(RESOURCE_IDENTIFIER_BLUE_NOISE_TEXTURE_XY)->GetDesc().Format,
+                                     m_Resources.GetTexture(RESOURCE_IDENTIFIER_BLUE_NOISE_TEXTURE_ZW)->GetDesc().Format,
                                  },
                                  TEX_FORMAT_UNKNOWN,
                                  DSS_DisableDepth, BS_Default, false);
 
-        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbBlueNoiseAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER_INTERMEDIATE]);
-        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "g_SobolBuffer"}.Set(GetInternalResourceSRV(m_Resources[RESOURCE_IDENTIFIER_SOBOL_BUFFER]));
-        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "g_ScramblingTileBuffer"}.Set(GetInternalResourceSRV(m_Resources[RESOURCE_IDENTIFIER_SCRAMBLING_TILE_BUFFER]));
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbBlueNoiseAttribs"}.Set(m_Resources.GetBuffer(RESOURCE_IDENTIFIER_CONSTANT_BUFFER_INTERMEDIATE));
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "g_SobolBuffer"}.Set(m_Resources.GetTextureSRV(RESOURCE_IDENTIFIER_SOBOL_BUFFER));
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "g_ScramblingTileBuffer"}.Set(m_Resources.GetTextureSRV(RESOURCE_IDENTIFIER_SCRAMBLING_TILE_BUFFER));
         RenderTech.InitializeSRB(true);
     }
 
     ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "ComputeBlueNoiseTexture"};
 
     ITextureView* pRTVs[] = {
-        GetInternalResourceRTV(m_Resources[RESOURCE_IDENTIFIER_BLUE_NOISE_TEXTURE_XY]),
-        GetInternalResourceRTV(m_Resources[RESOURCE_IDENTIFIER_BLUE_NOISE_TEXTURE_ZW]),
+        m_Resources.GetTextureRTV(RESOURCE_IDENTIFIER_BLUE_NOISE_TEXTURE_XY),
+        m_Resources.GetTextureRTV(RESOURCE_IDENTIFIER_BLUE_NOISE_TEXTURE_ZW),
     };
 
     RenderAttribs.pDeviceContext->SetRenderTargets(_countof(pRTVs), pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
@@ -199,12 +196,12 @@ void PostFXContext::PrepareResources(const RenderAttributes& RenderAttribs)
 
 ITextureView* PostFXContext::Get2DBlueNoiseSRV(BLUE_NOISE_DIMENSION Dimension) const
 {
-    return StaticCast<ITexture*>(m_Resources[RESOURCE_IDENTIFIER_BLUE_NOISE_TEXTURE_XY + Dimension])->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+    return m_Resources.GetTextureSRV(RESOURCE_IDENTIFIER_BLUE_NOISE_TEXTURE_XY + Dimension);
 }
 
 IBuffer* PostFXContext::GetCameraAttribsCB() const
 {
-    return StaticCast<IBuffer*>(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
+    return m_Resources.GetBuffer(RESOURCE_IDENTIFIER_CONSTANT_BUFFER);
 }
 
 Uint32 PostFXContext::GetFrameIndex() const

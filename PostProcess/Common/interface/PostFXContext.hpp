@@ -26,12 +26,15 @@
 
 #pragma once
 
+#include <array>
+
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
 #include "../../../../DiligentCore/Graphics/GraphicsTools/interface/RenderStateCache.h"
 #include "../../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
 #include "../../../../DiligentCore/Common/interface/BasicMath.hpp"
 
 #include "PostFXRenderTechnique.hpp"
+#include "ResourceRegistry.hpp"
 
 namespace Diligent
 {
@@ -108,8 +111,9 @@ private:
         RESOURCE_IDENTIFIER_COUNT
     };
 
-    RenderTechnique  m_RenderTech[RENDER_TECH_COUNT]{};
-    ResourceInternal m_Resources[RESOURCE_IDENTIFIER_COUNT]{};
+    std::array<RenderTechnique, RENDER_TECH_COUNT> m_RenderTech{};
+
+    ResourceRegistry m_Resources{RESOURCE_IDENTIFIER_COUNT};
 
     Uint32 m_CurrentFrameIndex = 0;
 };
