@@ -43,9 +43,7 @@ if(DILIGENT_USD_PATH)
     add_subdirectory(Hydrogent)
 endif()
 
-if(DILIGENT_BUILD_TESTS)
-    add_subdirectory(Tests)
-endif()
+add_subdirectory(Tests)
 
 get_target_property(SOURCE DiligentFX SOURCES)
 

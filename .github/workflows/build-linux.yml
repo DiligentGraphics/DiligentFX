@@ -42,7 +42,7 @@ jobs:
         name:       ["GCC", "Clang"]
         build_type: ["Debug", "Release"]
         # Do not build GLSLang and friends to save time as it is built by Core and Engine CI.
-        cmake_args: ["-DDILIGENT_NO_GLSLANG=ON -DDILIGENT_NO_HLSL=ON"]
+        cmake_args: ["-DDILIGENT_NO_GLSLANG=ON -DDILIGENT_NO_HLSL=ON -DDILIGENT_BUILD_FX_INCLUDE_TEST=ON"]
         include:
           - name:            "GCC"
             cmake_generator: "Unix Makefiles"
