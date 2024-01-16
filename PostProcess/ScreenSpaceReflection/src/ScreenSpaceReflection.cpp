@@ -135,7 +135,7 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
                 ViewDesc.ViewType        = TEXTURE_VIEW_RENDER_TARGET;
                 ViewDesc.MostDetailedMip = MipLevel;
                 ViewDesc.NumMipLevels    = 1;
-                m_Resources.GetTexture(RESOURCE_IDENTIFIER_DEPTH_HIERARCHY)->CreateView(ViewDesc, &m_HierarchicalDepthMipMapRTV[MipLevel]);
+                m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY].AsTexture()->CreateView(ViewDesc, &m_HierarchicalDepthMipMapRTV[MipLevel]);
             }
 
             if (m_SupportedFeatures.TextureSubresourceViews)
@@ -144,7 +144,7 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
                 ViewDesc.ViewType        = TEXTURE_VIEW_SHADER_RESOURCE;
                 ViewDesc.MostDetailedMip = MipLevel;
                 ViewDesc.NumMipLevels    = 1;
-                m_Resources.GetTexture(RESOURCE_IDENTIFIER_DEPTH_HIERARCHY)->CreateView(ViewDesc, &m_HierarchicalDepthMipMapSRV[MipLevel]);
+                m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY].AsTexture()->CreateView(ViewDesc, &m_HierarchicalDepthMipMapSRV[MipLevel]);
             }
         }
     }
@@ -193,7 +193,7 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
 
         TextureViewDesc ViewDesc;
         ViewDesc.ViewType = TEXTURE_VIEW_READ_ONLY_DEPTH_STENCIL;
-        m_Resources.GetTexture(RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK)->CreateView(ViewDesc, &m_DepthStencilMaskDSVReadOnly);
+        m_Resources[RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK].AsTexture()->CreateView(ViewDesc, &m_DepthStencilMaskDSVReadOnly);
     }
 
     {
@@ -319,7 +319,7 @@ void ScreenSpaceReflection::Execute(const RenderAttributes& RenderAttribs)
 
     ScopedDebugGroup DebugGroupGlobal{RenderAttribs.pDeviceContext, "ScreenSpaceReflection"};
     {
-        MapHelper<HLSL::ScreenSpaceReflectionAttribs> SSRAttibs{RenderAttribs.pDeviceContext, m_Resources.GetBuffer(RESOURCE_IDENTIFIER_CONSTANT_BUFFER), MAP_WRITE, MAP_FLAG_DISCARD};
+        MapHelper<HLSL::ScreenSpaceReflectionAttribs> SSRAttibs{RenderAttribs.pDeviceContext, m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER], MAP_WRITE, MAP_FLAG_DISCARD};
         *SSRAttibs = *RenderAttribs.pSSRAttribs;
     }
 
@@ -333,7 +333,7 @@ void ScreenSpaceReflection::Execute(const RenderAttributes& RenderAttribs)
 
 ITextureView* ScreenSpaceReflection::GetSSRRadianceSRV() const
 {
-    return m_Resources.GetTextureSRV(RESOURCE_IDENTIFIER_OUTPUT);
+    return m_Resources[RESOURCE_IDENTIFIER_OUTPUT].GetTextureSRV();
 }
 
 void ScreenSpaceReflection::CopyTextureDepth(const RenderAttributes& RenderAttribs, ITextureView* pSRV, ITextureView* pRTV)
@@ -397,7 +397,7 @@ void ScreenSpaceReflection::ComputeHierarchicalDepthBuffer(const RenderAttribute
                                  RenderAttribs.pStateCache, "ScreenSpaceReflection::ComputeHierarchicalDepthBuffer",
                                  VS, PS, ResourceLayout,
                                  {
-                                     m_Resources.GetTexture(RESOURCE_IDENTIFIER_DEPTH_HIERARCHY)->GetDesc().Format,
+                                     m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY].AsTexture()->GetDesc().Format,
                                  },
                                  TEX_FORMAT_UNKNOWN,
                                  DSS_DisableDepth, BS_Default, false);
@@ -409,8 +409,8 @@ void ScreenSpaceReflection::ComputeHierarchicalDepthBuffer(const RenderAttribute
     if (m_SupportedFeatures.CopyDepthToColor)
     {
         CopyTextureAttribs CopyAttribs;
-        CopyAttribs.pSrcTexture              = m_Resources.GetTexture(RESOURCE_IDENTIFIER_INPUT_DEPTH);
-        CopyAttribs.pDstTexture              = m_Resources.GetTexture(RESOURCE_IDENTIFIER_DEPTH_HIERARCHY);
+        CopyAttribs.pSrcTexture              = m_Resources[RESOURCE_IDENTIFIER_INPUT_DEPTH];
+        CopyAttribs.pDstTexture              = m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY];
         CopyAttribs.SrcMipLevel              = 0;
         CopyAttribs.DstMipLevel              = 0;
         CopyAttribs.SrcSlice                 = 0;
@@ -421,13 +421,13 @@ void ScreenSpaceReflection::ComputeHierarchicalDepthBuffer(const RenderAttribute
     }
     else
     {
-        CopyTextureDepth(RenderAttribs, m_Resources.GetTextureSRV(RESOURCE_IDENTIFIER_INPUT_DEPTH), m_HierarchicalDepthMipMapRTV[0]);
+        CopyTextureDepth(RenderAttribs, m_Resources[RESOURCE_IDENTIFIER_INPUT_DEPTH].GetTextureSRV(), m_HierarchicalDepthMipMapRTV[0]);
 
         if (!m_SupportedFeatures.TextureSubresourceViews)
         {
             CopyTextureAttribs CopyMipAttribs;
-            CopyMipAttribs.pSrcTexture              = m_Resources.GetTexture(RESOURCE_IDENTIFIER_DEPTH_HIERARCHY);
-            CopyMipAttribs.pDstTexture              = m_Resources.GetTexture(RESOURCE_IDENTIFIER_DEPTH_HIERARCHY_INTERMEDIATE);
+            CopyMipAttribs.pSrcTexture              = m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY];
+            CopyMipAttribs.pDstTexture              = m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY_INTERMEDIATE];
             CopyMipAttribs.SrcMipLevel              = 0;
             CopyMipAttribs.DstMipLevel              = 0;
             CopyMipAttribs.SrcSlice                 = 0;
@@ -442,7 +442,7 @@ void ScreenSpaceReflection::ComputeHierarchicalDepthBuffer(const RenderAttribute
     if (m_SupportedFeatures.TransitionSubresources)
     {
         StateTransitionDesc TransitionDescW2W[] = {
-            StateTransitionDesc{m_Resources.GetTexture(RESOURCE_IDENTIFIER_DEPTH_HIERARCHY),
+            StateTransitionDesc{m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY].AsTexture(),
                                 RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_RENDER_TARGET,
                                 STATE_TRANSITION_FLAG_UPDATE_STATE},
         };
@@ -452,7 +452,7 @@ void ScreenSpaceReflection::ComputeHierarchicalDepthBuffer(const RenderAttribute
         for (Uint32 MipLevel = 1; MipLevel < m_HierarchicalDepthMipMapRTV.size(); MipLevel++)
         {
             StateTransitionDesc TranslationW2R[] = {
-                StateTransitionDesc{m_Resources.GetTexture(RESOURCE_IDENTIFIER_DEPTH_HIERARCHY),
+                StateTransitionDesc{m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY].AsTexture(),
                                     RESOURCE_STATE_RENDER_TARGET, RESOURCE_STATE_SHADER_RESOURCE,
                                     MipLevel - 1, 1, 0, REMAINING_ARRAY_SLICES,
                                     STATE_TRANSITION_TYPE_IMMEDIATE, STATE_TRANSITION_FLAG_NONE},
@@ -467,7 +467,7 @@ void ScreenSpaceReflection::ComputeHierarchicalDepthBuffer(const RenderAttribute
         }
 
         StateTransitionDesc TransitionDescW2R[] = {
-            StateTransitionDesc{m_Resources.GetTexture(RESOURCE_IDENTIFIER_DEPTH_HIERARCHY),
+            StateTransitionDesc{m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY].AsTexture(),
                                 RESOURCE_STATE_RENDER_TARGET, RESOURCE_STATE_SHADER_RESOURCE,
                                 static_cast<Uint32>(m_HierarchicalDepthMipMapRTV.size() - 1), 1, 0, REMAINING_ARRAY_SLICES,
                                 STATE_TRANSITION_TYPE_IMMEDIATE, STATE_TRANSITION_FLAG_UPDATE_STATE},
@@ -490,13 +490,13 @@ void ScreenSpaceReflection::ComputeHierarchicalDepthBuffer(const RenderAttribute
         }
         else
         {
-            ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "cbTextureMipAtrrib"}.Set(m_Resources.GetBuffer(RESOURCE_IDENTIFIER_CONSTANT_BUFFER_INTERMEDIATE));
-            ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureMips"}.Set(m_Resources.GetTextureSRV(RESOURCE_IDENTIFIER_DEPTH_HIERARCHY_INTERMEDIATE));
+            ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "cbTextureMipAtrrib"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER_INTERMEDIATE]);
+            ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureMips"}.Set(m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY_INTERMEDIATE]);
 
             for (Uint32 MipLevel = 1; MipLevel < m_HierarchicalDepthMipMapRTV.size(); MipLevel++)
             {
                 {
-                    MapHelper<Uint32> TextureMipAttribs{RenderAttribs.pDeviceContext, m_Resources.GetBuffer(RESOURCE_IDENTIFIER_CONSTANT_BUFFER_INTERMEDIATE), MAP_WRITE, MAP_FLAG_DISCARD};
+                    MapHelper<Uint32> TextureMipAttribs{RenderAttribs.pDeviceContext, m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER_INTERMEDIATE], MAP_WRITE, MAP_FLAG_DISCARD};
                     *TextureMipAttribs = MipLevel - 1;
                 }
 
@@ -507,8 +507,8 @@ void ScreenSpaceReflection::ComputeHierarchicalDepthBuffer(const RenderAttribute
                 RenderAttribs.pDeviceContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
                 CopyTextureAttribs CopyMipAttribs;
-                CopyMipAttribs.pSrcTexture              = m_Resources.GetTexture(RESOURCE_IDENTIFIER_DEPTH_HIERARCHY);
-                CopyMipAttribs.pDstTexture              = m_Resources.GetTexture(RESOURCE_IDENTIFIER_DEPTH_HIERARCHY_INTERMEDIATE);
+                CopyMipAttribs.pSrcTexture              = m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY];
+                CopyMipAttribs.pDstTexture              = m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY_INTERMEDIATE];
                 CopyMipAttribs.SrcMipLevel              = MipLevel;
                 CopyMipAttribs.DstMipLevel              = MipLevel;
                 CopyMipAttribs.SrcSlice                 = 0;
@@ -540,25 +540,25 @@ void ScreenSpaceReflection::ComputeStencilMaskAndExtractRoughness(const RenderAt
                                  RenderAttribs.pStateCache, "ScreenSpaceReflection::ComputeStencilMaskAndExtractRoughness",
                                  VS, PS, ResourceLayout,
                                  {
-                                     m_Resources.GetTexture(RESOURCE_IDENTIFIER_ROUGHNESS)->GetDesc().Format,
+                                     m_Resources[RESOURCE_IDENTIFIER_ROUGHNESS].AsTexture()->GetDesc().Format,
                                  },
-                                 m_Resources.GetTexture(RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK)->GetDesc().Format,
+                                 m_Resources[RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK].AsTexture()->GetDesc().Format,
                                  DSS_StencilWrite, BS_Default, false);
 
-        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbScreenSpaceReflectionAttribs"}.Set(m_Resources.GetBuffer(RESOURCE_IDENTIFIER_CONSTANT_BUFFER));
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbScreenSpaceReflectionAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
         RenderTech.InitializeSRB(true);
     }
 
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureDepth"}.Set(m_Resources.GetTextureSRV(RESOURCE_IDENTIFIER_INPUT_DEPTH));
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureMaterialParameters"}.Set(m_Resources.GetTextureSRV(RESOURCE_IDENTIFIER_INPUT_MATERIAL_PARAMETERS));
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureDepth"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_DEPTH].GetTextureSRV());
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureMaterialParameters"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_MATERIAL_PARAMETERS].GetTextureSRV());
 
     ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "ComputeStencilMaskAndExtractRoughness"};
 
     ITextureView* pRTVs[] = {
-        m_Resources.GetTextureRTV(RESOURCE_IDENTIFIER_ROUGHNESS),
+        m_Resources[RESOURCE_IDENTIFIER_ROUGHNESS].GetTextureRTV(),
     };
 
-    ITextureView* pDSV = m_Resources.GetTextureDSV(RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK);
+    ITextureView* pDSV = m_Resources[RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK].GetTextureDSV();
 
     RenderAttribs.pDeviceContext->SetRenderTargets(_countof(pRTVs), pRTVs, pDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     RenderAttribs.pDeviceContext->ClearDepthStencil(pDSV, CLEAR_STENCIL_FLAG, 1.0, 0x00, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
@@ -597,27 +597,27 @@ void ScreenSpaceReflection::ComputeIntersection(const RenderAttributes& RenderAt
                                  RenderAttribs.pStateCache, "ScreenSpaceReflection::ComputeIntersection",
                                  VS, PS, ResourceLayout,
                                  {
-                                     m_Resources.GetTexture(RESOURCE_IDENTIFIER_RADIANCE)->GetDesc().Format,
-                                     m_Resources.GetTexture(RESOURCE_IDENTIFIER_RAY_DIRECTION_PDF)->GetDesc().Format,
+                                     m_Resources[RESOURCE_IDENTIFIER_RADIANCE].AsTexture()->GetDesc().Format,
+                                     m_Resources[RESOURCE_IDENTIFIER_RAY_DIRECTION_PDF].AsTexture()->GetDesc().Format,
                                  },
-                                 m_Resources.GetTexture(RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK)->GetDesc().Format,
+                                 m_Resources[RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK].AsTexture()->GetDesc().Format,
                                  DSS_StencilReadComparisonEqual, BS_Default, true);
         ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
-        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbScreenSpaceReflectionAttribs"}.Set(m_Resources.GetBuffer(RESOURCE_IDENTIFIER_CONSTANT_BUFFER));
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbScreenSpaceReflectionAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
         RenderTech.InitializeSRB(true);
     }
 
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureRadiance"}.Set(m_Resources.GetTextureSRV(RESOURCE_IDENTIFIER_INPUT_COLOR));
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureNormal"}.Set(m_Resources.GetTextureSRV(RESOURCE_IDENTIFIER_INPUT_NORMAL));
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureRoughness"}.Set(m_Resources.GetTextureSRV(RESOURCE_IDENTIFIER_ROUGHNESS));
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureRadiance"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_COLOR].GetTextureSRV());
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureNormal"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_NORMAL].GetTextureSRV());
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureRoughness"}.Set(m_Resources[RESOURCE_IDENTIFIER_ROUGHNESS].GetTextureSRV());
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureBlueNoise"}.Set(RenderAttribs.pPostFXContext->Get2DBlueNoiseSRV(PostFXContext::BLUE_NOISE_DIMENSION_XY));
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureDepthHierarchy"}.Set(m_Resources.GetTextureSRV(RESOURCE_IDENTIFIER_DEPTH_HIERARCHY));
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureDepthHierarchy"}.Set(m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY].GetTextureSRV());
 
     ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "ComputeIntersection"};
 
     ITextureView* pRTVs[] = {
-        m_Resources.GetTextureRTV(RESOURCE_IDENTIFIER_RADIANCE),
-        m_Resources.GetTextureRTV(RESOURCE_IDENTIFIER_RAY_DIRECTION_PDF),
+        m_Resources[RESOURCE_IDENTIFIER_RADIANCE].GetTextureRTV(),
+        m_Resources[RESOURCE_IDENTIFIER_RAY_DIRECTION_PDF].GetTextureRTV(),
     };
 
     constexpr float4 RTVClearColor = float4(0.0, 0.0, 0.0, 0.0);
@@ -655,30 +655,30 @@ void ScreenSpaceReflection::ComputeSpatialReconstruction(const RenderAttributes&
                                  RenderAttribs.pStateCache, "ScreenSpaceReflection::ComputeSpatialReconstruction",
                                  VS, PS, ResourceLayout,
                                  {
-                                     m_Resources.GetTexture(RESOURCE_IDENTIFIER_RESOLVED_RADIANCE)->GetDesc().Format,
-                                     m_Resources.GetTexture(RESOURCE_IDENTIFIER_RESOLVED_VARIANCE)->GetDesc().Format,
-                                     m_Resources.GetTexture(RESOURCE_IDENTIFIER_RESOLVED_DEPTH)->GetDesc().Format,
+                                     m_Resources[RESOURCE_IDENTIFIER_RESOLVED_RADIANCE].AsTexture()->GetDesc().Format,
+                                     m_Resources[RESOURCE_IDENTIFIER_RESOLVED_VARIANCE].AsTexture()->GetDesc().Format,
+                                     m_Resources[RESOURCE_IDENTIFIER_RESOLVED_DEPTH].AsTexture()->GetDesc().Format,
                                  },
-                                 m_Resources.GetTexture(RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK)->GetDesc().Format,
+                                 m_Resources[RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK].AsTexture()->GetDesc().Format,
                                  DSS_StencilReadComparisonEqual, BS_Default, true);
 
         ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
-        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbScreenSpaceReflectionAttribs"}.Set(m_Resources.GetBuffer(RESOURCE_IDENTIFIER_CONSTANT_BUFFER));
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbScreenSpaceReflectionAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
         RenderTech.InitializeSRB(true);
     }
 
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureRoughness"}.Set(m_Resources.GetTextureSRV(RESOURCE_IDENTIFIER_ROUGHNESS));
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureNormal"}.Set(m_Resources.GetTextureSRV(RESOURCE_IDENTIFIER_INPUT_NORMAL));
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureDepth"}.Set(m_Resources.GetTextureSRV(RESOURCE_IDENTIFIER_INPUT_DEPTH));
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureRayDirectionPDF"}.Set(m_Resources.GetTextureSRV(RESOURCE_IDENTIFIER_RAY_DIRECTION_PDF));
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureIntersectSpecular"}.Set(m_Resources.GetTextureSRV(RESOURCE_IDENTIFIER_RADIANCE));
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureRoughness"}.Set(m_Resources[RESOURCE_IDENTIFIER_ROUGHNESS].GetTextureSRV());
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureNormal"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_NORMAL].GetTextureSRV());
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureDepth"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_DEPTH].GetTextureSRV());
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureRayDirectionPDF"}.Set(m_Resources[RESOURCE_IDENTIFIER_RAY_DIRECTION_PDF].GetTextureSRV());
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureIntersectSpecular"}.Set(m_Resources[RESOURCE_IDENTIFIER_RADIANCE].GetTextureSRV());
 
     ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "SpatialReconstruction"};
 
     ITextureView* pRTVs[] = {
-        m_Resources.GetTextureRTV(RESOURCE_IDENTIFIER_RESOLVED_RADIANCE),
-        m_Resources.GetTextureRTV(RESOURCE_IDENTIFIER_RESOLVED_VARIANCE),
-        m_Resources.GetTextureRTV(RESOURCE_IDENTIFIER_RESOLVED_DEPTH),
+        m_Resources[RESOURCE_IDENTIFIER_RESOLVED_RADIANCE].GetTextureRTV(),
+        m_Resources[RESOURCE_IDENTIFIER_RESOLVED_VARIANCE].GetTextureRTV(),
+        m_Resources[RESOURCE_IDENTIFIER_RESOLVED_DEPTH].GetTextureRTV(),
     };
 
     RenderAttribs.pDeviceContext->SetRenderTargets(_countof(pRTVs), pRTVs, m_DepthStencilMaskDSVReadOnly, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
@@ -718,34 +718,34 @@ void ScreenSpaceReflection::ComputeTemporalAccumulation(const RenderAttributes& 
                                  RenderAttribs.pStateCache, "ScreenSpaceReflection::ComputeTemporalAccumulation",
                                  VS, PS, ResourceLayout,
                                  {
-                                     m_Resources.GetTexture(RESOURCE_IDENTIFIER_RADIANCE_HISTORY0)->GetDesc().Format,
-                                     m_Resources.GetTexture(RESOURCE_IDENTIFIER_VARIANCE_HISTORY0)->GetDesc().Format,
+                                     m_Resources[RESOURCE_IDENTIFIER_RADIANCE_HISTORY0].AsTexture()->GetDesc().Format,
+                                     m_Resources[RESOURCE_IDENTIFIER_VARIANCE_HISTORY0].AsTexture()->GetDesc().Format,
                                  },
-                                 m_Resources.GetTexture(RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK)->GetDesc().Format,
+                                 m_Resources[RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK].AsTexture()->GetDesc().Format,
                                  DSS_StencilReadComparisonEqual, BS_Default, true);
         ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
-        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbScreenSpaceReflectionAttribs"}.Set(m_Resources.GetBuffer(RESOURCE_IDENTIFIER_CONSTANT_BUFFER));
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbScreenSpaceReflectionAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
         RenderTech.InitializeSRB(true);
     }
 
     const Uint32 CurrFrameIdx = RenderAttribs.pPostFXContext->GetFrameIndex() & 1;
     const Uint32 PrevFrameIdx = (RenderAttribs.pPostFXContext->GetFrameIndex() - 1) & 1;
 
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureMotion"}.Set(m_Resources.GetTextureSRV(RESOURCE_IDENTIFIER_INPUT_MOTION_VECTORS));
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureRoughness"}.Set(m_Resources.GetTextureSRV(RESOURCE_IDENTIFIER_ROUGHNESS));
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureHitDepth"}.Set(m_Resources.GetTextureSRV(RESOURCE_IDENTIFIER_RESOLVED_DEPTH));
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureCurrDepth"}.Set(m_Resources.GetTextureSRV(RESOURCE_IDENTIFIER_INPUT_DEPTH));
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureCurrRadiance"}.Set(m_Resources.GetTextureSRV(RESOURCE_IDENTIFIER_RESOLVED_RADIANCE));
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureCurrVariance"}.Set(m_Resources.GetTextureSRV(RESOURCE_IDENTIFIER_RESOLVED_VARIANCE));
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TexturePrevDepth"}.Set(m_Resources.GetTextureSRV(RESOURCE_IDENTIFIER_DEPTH_HISTORY));
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TexturePrevRadiance"}.Set(m_Resources.GetTextureSRV(RESOURCE_IDENTIFIER_RADIANCE_HISTORY0 + PrevFrameIdx));
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TexturePrevVariance"}.Set(m_Resources.GetTextureSRV(RESOURCE_IDENTIFIER_VARIANCE_HISTORY0 + PrevFrameIdx));
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureMotion"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_MOTION_VECTORS].GetTextureSRV());
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureRoughness"}.Set(m_Resources[RESOURCE_IDENTIFIER_ROUGHNESS].GetTextureSRV());
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureHitDepth"}.Set(m_Resources[RESOURCE_IDENTIFIER_RESOLVED_DEPTH].GetTextureSRV());
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureCurrDepth"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_DEPTH].GetTextureSRV());
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureCurrRadiance"}.Set(m_Resources[RESOURCE_IDENTIFIER_RESOLVED_RADIANCE].GetTextureSRV());
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureCurrVariance"}.Set(m_Resources[RESOURCE_IDENTIFIER_RESOLVED_VARIANCE].GetTextureSRV());
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TexturePrevDepth"}.Set(m_Resources[RESOURCE_IDENTIFIER_DEPTH_HISTORY].GetTextureSRV());
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TexturePrevRadiance"}.Set(m_Resources[RESOURCE_IDENTIFIER_RADIANCE_HISTORY0 + PrevFrameIdx].GetTextureSRV());
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TexturePrevVariance"}.Set(m_Resources[RESOURCE_IDENTIFIER_VARIANCE_HISTORY0 + PrevFrameIdx].GetTextureSRV());
 
     ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "ComputeTemporalAccumulation"};
 
     ITextureView* pRTVs[] = {
-        m_Resources.GetTextureRTV(RESOURCE_IDENTIFIER_RADIANCE_HISTORY0 + CurrFrameIdx),
-        m_Resources.GetTextureRTV(RESOURCE_IDENTIFIER_VARIANCE_HISTORY0 + CurrFrameIdx),
+        m_Resources[RESOURCE_IDENTIFIER_RADIANCE_HISTORY0 + CurrFrameIdx].GetTextureRTV(),
+        m_Resources[RESOURCE_IDENTIFIER_VARIANCE_HISTORY0 + CurrFrameIdx].GetTextureRTV(),
     };
 
     RenderAttribs.pDeviceContext->CommitShaderResources(RenderTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
@@ -758,8 +758,8 @@ void ScreenSpaceReflection::ComputeTemporalAccumulation(const RenderAttributes& 
     if (m_SupportedFeatures.CopyDepthToColor)
     {
         CopyTextureAttribs CopyAttribs;
-        CopyAttribs.pSrcTexture              = m_Resources.GetTexture(RESOURCE_IDENTIFIER_INPUT_DEPTH);
-        CopyAttribs.pDstTexture              = m_Resources.GetTexture(RESOURCE_IDENTIFIER_DEPTH_HISTORY);
+        CopyAttribs.pSrcTexture              = m_Resources[RESOURCE_IDENTIFIER_INPUT_DEPTH];
+        CopyAttribs.pDstTexture              = m_Resources[RESOURCE_IDENTIFIER_DEPTH_HISTORY];
         CopyAttribs.SrcMipLevel              = 0;
         CopyAttribs.DstMipLevel              = 0;
         CopyAttribs.SrcSlice                 = 0;
@@ -770,7 +770,7 @@ void ScreenSpaceReflection::ComputeTemporalAccumulation(const RenderAttributes& 
     }
     else
     {
-        CopyTextureDepth(RenderAttribs, m_Resources.GetTextureSRV(RESOURCE_IDENTIFIER_INPUT_DEPTH), m_Resources.GetTextureRTV(RESOURCE_IDENTIFIER_DEPTH_HISTORY));
+        CopyTextureDepth(RenderAttribs, m_Resources[RESOURCE_IDENTIFIER_INPUT_DEPTH].GetTextureSRV(), m_Resources[RESOURCE_IDENTIFIER_DEPTH_HISTORY].GetTextureRTV());
     }
 }
 
@@ -797,27 +797,27 @@ void ScreenSpaceReflection::ComputeBilateralCleanup(const RenderAttributes& Rend
                                  RenderAttribs.pStateCache, "ScreenSpaceReflection::ComputeBilateralCleanup",
                                  VS, PS, ResourceLayout,
                                  {
-                                     m_Resources.GetTexture(RESOURCE_IDENTIFIER_OUTPUT)->GetDesc().Format,
+                                     m_Resources[RESOURCE_IDENTIFIER_OUTPUT].AsTexture()->GetDesc().Format,
                                  },
-                                 m_Resources.GetTexture(RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK)->GetDesc().Format,
+                                 m_Resources[RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK].AsTexture()->GetDesc().Format,
                                  DSS_StencilReadComparisonEqual, BS_Default, true);
         ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
-        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbScreenSpaceReflectionAttribs"}.Set(m_Resources.GetBuffer(RESOURCE_IDENTIFIER_CONSTANT_BUFFER));
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbScreenSpaceReflectionAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
         RenderTech.InitializeSRB(true);
     }
 
     const Uint32 CurrFrameIdx = RenderAttribs.pPostFXContext->GetFrameIndex() & 1;
 
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureRadiance"}.Set(m_Resources.GetTextureSRV(RESOURCE_IDENTIFIER_RADIANCE_HISTORY0 + CurrFrameIdx));
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureVariance"}.Set(m_Resources.GetTextureSRV(RESOURCE_IDENTIFIER_VARIANCE_HISTORY0 + CurrFrameIdx));
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureRoughness"}.Set(m_Resources.GetTextureSRV(RESOURCE_IDENTIFIER_ROUGHNESS));
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureNormal"}.Set(m_Resources.GetTextureSRV(RESOURCE_IDENTIFIER_INPUT_NORMAL));
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureDepth"}.Set(m_Resources.GetTextureSRV(RESOURCE_IDENTIFIER_INPUT_DEPTH));
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureRadiance"}.Set(m_Resources[RESOURCE_IDENTIFIER_RADIANCE_HISTORY0 + CurrFrameIdx].GetTextureSRV());
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureVariance"}.Set(m_Resources[RESOURCE_IDENTIFIER_VARIANCE_HISTORY0 + CurrFrameIdx].GetTextureSRV());
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureRoughness"}.Set(m_Resources[RESOURCE_IDENTIFIER_ROUGHNESS].GetTextureSRV());
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureNormal"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_NORMAL].GetTextureSRV());
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureDepth"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_DEPTH].GetTextureSRV());
 
     ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "ComputeBilateralCleanup"};
 
     ITextureView* pRTVs[] = {
-        m_Resources.GetTextureRTV(RESOURCE_IDENTIFIER_OUTPUT),
+        m_Resources[RESOURCE_IDENTIFIER_OUTPUT].GetTextureRTV(),
     };
 
     constexpr float4 RTVClearColor = float4(0.0, 0.0, 0.0, 0.0);
