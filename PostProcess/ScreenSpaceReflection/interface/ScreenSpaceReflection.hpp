@@ -31,7 +31,7 @@
 
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
 #include "../../../../DiligentCore/Graphics/GraphicsTools/interface/RenderStateCache.h"
-#include "../../.././/DiligentCore/Graphics/GraphicsTools/interface/ResourceRegistry.hpp"
+#include "../../../../DiligentCore/Graphics/GraphicsTools/interface/ResourceRegistry.hpp"
 #include "../../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
 #include "../../../../DiligentCore/Common/interface/BasicMath.hpp"
 
