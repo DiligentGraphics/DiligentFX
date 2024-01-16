@@ -681,7 +681,7 @@ void RayMarchPS(in FullScreenTriangleVSOutput VSOut,
     }
     f4Inscattering = float4(1.0, 1.0, 1.0, 1.0);
 #if ENABLE_LIGHT_SHAFTS
-    float fCascade = g_MiscParams.fCascadeInd + VSOut.fInstID;
+    float fCascade = g_MiscParams.fCascadeInd + float(VSOut.uInstID);
     f4Inscattering.rgb = 
         ComputeShadowedInscattering(f2SampleLocation, 
                                     fRayEndCamSpaceZ,
@@ -705,7 +705,7 @@ void RayMarchPS(in FullScreenTriangleVSOutput VSOut,
 //    if( g_PPAttribs.bShowDepthBreaks )
 //        return float3(0,1,0);
 //
-//    float fCascade = g_MiscParams.fCascadeInd + VSOut.fInstID;
+//    float fCascade = g_MiscParams.fCascadeInd + float(VSOut.uInstID);
 //    float fRayEndCamSpaceZ = g_tex2DCamSpaceZ.SampleLevel( samLinearClamp, ProjToUV(VSOut.f2NormalizedXY.xy), 0 );
 //
 //#if ENABLE_LIGHT_SHAFTS
@@ -745,7 +745,7 @@ void FixAndApplyInscatteredRadiancePS(FullScreenTriangleVSOutput VSOut,
         f3BackgroundColor *= f3Extinction.rgb;
     }
     
-    float fCascade = g_MiscParams.fCascadeInd + VSOut.fInstID;
+    float fCascade = g_MiscParams.fCascadeInd + float(VSOut.uInstID);
 
 #if ENABLE_LIGHT_SHAFTS
     float3 f3InsctrColor = 

@@ -9,9 +9,11 @@ void FullScreenTriangleVS(in  uint                       VertexId : SV_VertexID,
     PosXY[1] = float2(-1.0, +3.0);
     PosXY[2] = float2(+3.0, -1.0);
 
-    float2 f2XY = PosXY[VertexId];
+    float2 f2XY = PosXY[VertexId % 3u];
     VSOut.f2NormalizedXY = f2XY;
-    VSOut.fInstID = float( InstID );
+
+    // We use VertexId trick on old hardware that does not support BaseInstance.
+    VSOut.uInstID = InstID != 0u ? InstID : VertexId / 3u;
 
     // Write 0 to the depth buffer
     // NDC_MIN_Z ==  0 in DX

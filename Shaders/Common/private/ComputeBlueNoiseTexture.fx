@@ -1,11 +1,6 @@
 #include "BasicStructures.fxh"
 #include "FullScreenTriangleVSOutput.fxh"
 
-cbuffer cbBlueNoiseAttribs
-{
-    uint g_FrameIndex;
-}
-
 struct PSOutput
 {
     float2 BlueNoiseXY : SV_Target0;
@@ -37,10 +32,10 @@ float SampleRandomNumber(uint2 PixelCoord, uint SampleIndex, uint SampleDimensio
 }
 
 // Roberts R1 sequence see - https://extremelearning.com.au/unreasonable-effectiveness-of-quasirandom-sequences/
-float4 SampleRandomVector2D2D(uint2 PixelCoord)
+float4 SampleRandomVector2D2D(uint2 PixelCoord, uint FrameIndex)
 {
     float G = 1.61803398875f; 
-    float Alpha = 0.5 + rcp(G) * float(g_FrameIndex & 0xFFu);
+    float Alpha = 0.5 + rcp(G) * float(FrameIndex & 0xFFu);
     return float4(
         frac(SampleRandomNumber(PixelCoord, 0u, 0u) + Alpha),
         frac(SampleRandomNumber(PixelCoord, 0u, 1u) + Alpha),
@@ -51,8 +46,10 @@ float4 SampleRandomVector2D2D(uint2 PixelCoord)
 
 PSOutput ComputeBlueNoiseTexturePS(in FullScreenTriangleVSOutput VSOut)
 {
+    uint FrameIndex = VSOut.uInstID;
+
     PSOutput Output;
-    float4 BlueNoise = SampleRandomVector2D2D(uint2(VSOut.f4PixelPos.xy));
+    float4 BlueNoise = SampleRandomVector2D2D(uint2(VSOut.f4PixelPos.xy), FrameIndex);
     Output.BlueNoiseXY = BlueNoise.xy;
     Output.BlueNoiseZW = BlueNoise.zw;
     return Output;

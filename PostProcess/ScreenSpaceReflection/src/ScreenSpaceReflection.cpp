@@ -75,38 +75,23 @@ ScreenSpaceReflection::ScreenSpaceReflection(IRenderDevice* pDevice)
 {
     DEV_CHECK_ERR(pDevice != nullptr, "pDevice must not be null");
 
-    const auto& DeviceInfo = pDevice->GetDeviceInfo();
-
-    m_SupportedFeatures.TransitionSubresources  = DeviceInfo.Type == RENDER_DEVICE_TYPE_D3D12 || DeviceInfo.Type == RENDER_DEVICE_TYPE_VULKAN;
-    m_SupportedFeatures.TextureSubresourceViews = DeviceInfo.Features.TextureSubresourceViews;
-    m_SupportedFeatures.CopyDepthToColor        = DeviceInfo.Type == RENDER_DEVICE_TYPE_D3D12 || DeviceInfo.Type == RENDER_DEVICE_TYPE_D3D11;
-
-    {
-        RefCntAutoPtr<IBuffer> pBuffer;
-        CreateUniformBuffer(pDevice, sizeof(HLSL::ScreenSpaceReflectionAttribs), "ScreenSpaceReflection::ConstantBuffer", &pBuffer);
-        m_Resources.Insert(RESOURCE_IDENTIFIER_CONSTANT_BUFFER, pBuffer);
-    }
-
-    if (!m_SupportedFeatures.TextureSubresourceViews)
-    {
-        RefCntAutoPtr<IBuffer> pBuffer;
-        CreateUniformBuffer(pDevice, sizeof(Uint32), "ScreenSpaceReflection::IntermediateConstantBuffer", &pBuffer);
-        m_Resources.Insert(RESOURCE_IDENTIFIER_CONSTANT_BUFFER_INTERMEDIATE, pBuffer);
-    }
+    RefCntAutoPtr<IBuffer> pBuffer;
+    CreateUniformBuffer(pDevice, sizeof(HLSL::ScreenSpaceReflectionAttribs), "ScreenSpaceReflection::ConstantBuffer", &pBuffer);
+    m_Resources.Insert(RESOURCE_IDENTIFIER_CONSTANT_BUFFER, pBuffer);
 }
 
 ScreenSpaceReflection::~ScreenSpaceReflection() = default;
 
-void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceContext* pDeviceContext, Uint32 BackBufferWidth, Uint32 BackBufferHeight)
+void ScreenSpaceReflection::PrepareResources(IRenderDevice* pDevice, PostFXContext* pPostFXContext)
 {
-    DEV_CHECK_ERR(pDevice != nullptr, "RenderAttribs.pDevice must not be null");
-    DEV_CHECK_ERR(pDeviceContext != nullptr, "RenderAttribs.pDeviceContext must not be null");
+    const auto& FrameDesc         = pPostFXContext->GetFrameDesc();
+    const auto& SupportedFeatures = pPostFXContext->GetSupportedFeatures();
 
-    if (m_BackBufferWidth == BackBufferWidth && m_BackBufferHeight == BackBufferHeight)
+    if (m_BackBufferWidth == FrameDesc.Width && m_BackBufferHeight == FrameDesc.Height)
         return;
 
-    m_BackBufferWidth  = BackBufferWidth;
-    m_BackBufferHeight = BackBufferHeight;
+    m_BackBufferWidth  = FrameDesc.Width;
+    m_BackBufferHeight = FrameDesc.Height;
 
     RenderDeviceWithCache_N Device{pDevice};
 
@@ -118,10 +103,10 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
         TextureDesc Desc;
         Desc.Name      = "ScreenSpaceReflection::DepthHierarchy";
         Desc.Type      = RESOURCE_DIM_TEX_2D;
-        Desc.Width     = BackBufferWidth;
-        Desc.Height    = BackBufferHeight;
+        Desc.Width     = m_BackBufferWidth;
+        Desc.Height    = m_BackBufferHeight;
         Desc.Format    = TEX_FORMAT_R32_FLOAT;
-        Desc.MipLevels = std::min(ComputeMipLevelsCount(BackBufferWidth, BackBufferHeight), DepthHierarchyMipCount);
+        Desc.MipLevels = std::min(ComputeMipLevelsCount(m_BackBufferWidth, m_BackBufferHeight), DepthHierarchyMipCount);
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
         m_Resources.Insert(RESOURCE_IDENTIFIER_DEPTH_HIERARCHY, Device.CreateTexture(Desc));
 
@@ -138,7 +123,7 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
                 m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY].AsTexture()->CreateView(ViewDesc, &m_HierarchicalDepthMipMapRTV[MipLevel]);
             }
 
-            if (m_SupportedFeatures.TextureSubresourceViews)
+            if (SupportedFeatures.TextureSubresourceViews)
             {
                 TextureViewDesc ViewDesc;
                 ViewDesc.ViewType        = TEXTURE_VIEW_SHADER_RESOURCE;
@@ -149,15 +134,15 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
         }
     }
 
-    if (!m_SupportedFeatures.TextureSubresourceViews)
+    if (!SupportedFeatures.TextureSubresourceViews)
     {
         TextureDesc Desc;
         Desc.Name      = "ScreenSpaceReflection::DepthHierarchyIntermediate";
         Desc.Type      = RESOURCE_DIM_TEX_2D;
-        Desc.Width     = BackBufferWidth;
-        Desc.Height    = BackBufferHeight;
+        Desc.Width     = m_BackBufferWidth;
+        Desc.Height    = m_BackBufferHeight;
         Desc.Format    = TEX_FORMAT_R32_FLOAT;
-        Desc.MipLevels = std::min(ComputeMipLevelsCount(BackBufferWidth, BackBufferHeight), DepthHierarchyMipCount);
+        Desc.MipLevels = std::min(ComputeMipLevelsCount(m_BackBufferWidth, m_BackBufferHeight), DepthHierarchyMipCount);
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
         m_Resources.Insert(RESOURCE_IDENTIFIER_DEPTH_HIERARCHY_INTERMEDIATE, Device.CreateTexture(Desc));
     }
@@ -166,8 +151,8 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
         TextureDesc Desc;
         Desc.Name      = "ScreenSpaceReflection::Roughness";
         Desc.Type      = RESOURCE_DIM_TEX_2D;
-        Desc.Width     = BackBufferWidth;
-        Desc.Height    = BackBufferHeight;
+        Desc.Width     = m_BackBufferWidth;
+        Desc.Height    = m_BackBufferHeight;
         Desc.Format    = TEX_FORMAT_R8_UNORM;
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
         m_Resources.Insert(RESOURCE_IDENTIFIER_ROUGHNESS, Device.CreateTexture(Desc));
@@ -178,15 +163,15 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
 
         TEXTURE_FORMAT DepthStencilFormat = TEX_FORMAT_D32_FLOAT_S8X24_UINT;
 
-        TextureFormatInfoExt FormatInfo = pDevice->GetTextureFormatInfoExt(TEX_FORMAT_D24_UNORM_S8_UINT);
+        TextureFormatInfoExt FormatInfo = Device.GetTextureFormatInfoExt(TEX_FORMAT_D24_UNORM_S8_UINT);
         if (FormatInfo.Supported && FormatInfo.BindFlags & BIND_DEPTH_STENCIL)
             DepthStencilFormat = TEX_FORMAT_D24_UNORM_S8_UINT;
 
         TextureDesc Desc;
         Desc.Name      = "ScreenSpaceReflection::DepthStencilMask";
         Desc.Type      = RESOURCE_DIM_TEX_2D;
-        Desc.Width     = BackBufferWidth;
-        Desc.Height    = BackBufferHeight;
+        Desc.Width     = m_BackBufferWidth;
+        Desc.Height    = m_BackBufferHeight;
         Desc.Format    = DepthStencilFormat;
         Desc.BindFlags = BIND_DEPTH_STENCIL | BIND_SHADER_RESOURCE;
         m_Resources.Insert(RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK, Device.CreateTexture(Desc));
@@ -200,8 +185,8 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
         TextureDesc Desc;
         Desc.Name      = "ScreenSpaceReflection::Radiance";
         Desc.Type      = RESOURCE_DIM_TEX_2D;
-        Desc.Width     = BackBufferWidth;
-        Desc.Height    = BackBufferHeight;
+        Desc.Width     = m_BackBufferWidth;
+        Desc.Height    = m_BackBufferHeight;
         Desc.Format    = TEX_FORMAT_RGBA16_FLOAT;
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
         m_Resources.Insert(RESOURCE_IDENTIFIER_RADIANCE, Device.CreateTexture(Desc));
@@ -211,8 +196,8 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
         TextureDesc Desc;
         Desc.Name      = "ScreenSpaceReflection::RayDirectionPDF";
         Desc.Type      = RESOURCE_DIM_TEX_2D;
-        Desc.Width     = BackBufferWidth;
-        Desc.Height    = BackBufferHeight;
+        Desc.Width     = m_BackBufferWidth;
+        Desc.Height    = m_BackBufferHeight;
         Desc.Format    = TEX_FORMAT_RGBA16_FLOAT;
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
         m_Resources.Insert(RESOURCE_IDENTIFIER_RAY_DIRECTION_PDF, Device.CreateTexture(Desc));
@@ -222,8 +207,8 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
         TextureDesc Desc;
         Desc.Name      = "ScreenSpaceReflection::ResolvedRadiance";
         Desc.Type      = RESOURCE_DIM_TEX_2D;
-        Desc.Width     = BackBufferWidth;
-        Desc.Height    = BackBufferHeight;
+        Desc.Width     = m_BackBufferWidth;
+        Desc.Height    = m_BackBufferHeight;
         Desc.Format    = TEX_FORMAT_RGBA16_FLOAT;
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
         m_Resources.Insert(RESOURCE_IDENTIFIER_RESOLVED_RADIANCE, Device.CreateTexture(Desc));
@@ -233,8 +218,8 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
         TextureDesc Desc;
         Desc.Name      = "ScreenSpaceReflection::ResolvedVariance";
         Desc.Type      = RESOURCE_DIM_TEX_2D;
-        Desc.Width     = BackBufferWidth;
-        Desc.Height    = BackBufferHeight;
+        Desc.Width     = m_BackBufferWidth;
+        Desc.Height    = m_BackBufferHeight;
         Desc.Format    = TEX_FORMAT_R16_FLOAT;
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
         m_Resources.Insert(RESOURCE_IDENTIFIER_RESOLVED_VARIANCE, Device.CreateTexture(Desc));
@@ -244,8 +229,8 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
         TextureDesc Desc;
         Desc.Name      = "ScreenSpaceReflection::ResolvedDepth";
         Desc.Type      = RESOURCE_DIM_TEX_2D;
-        Desc.Width     = BackBufferWidth;
-        Desc.Height    = BackBufferHeight;
+        Desc.Width     = m_BackBufferWidth;
+        Desc.Height    = m_BackBufferHeight;
         Desc.Format    = TEX_FORMAT_R16_FLOAT;
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
         m_Resources.Insert(RESOURCE_IDENTIFIER_RESOLVED_DEPTH, Device.CreateTexture(Desc));
@@ -256,8 +241,8 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
         TextureDesc Desc;
         Desc.Name      = "ScreenSpaceReflection::RadianceHistory";
         Desc.Type      = RESOURCE_DIM_TEX_2D;
-        Desc.Width     = BackBufferWidth;
-        Desc.Height    = BackBufferHeight;
+        Desc.Width     = m_BackBufferWidth;
+        Desc.Height    = m_BackBufferHeight;
         Desc.Format    = TEX_FORMAT_RGBA16_FLOAT;
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
         m_Resources.Insert(TextureIdx, Device.CreateTexture(Desc));
@@ -268,8 +253,8 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
         TextureDesc Desc;
         Desc.Name      = "ScreenSpaceReflection::VarianceHistory";
         Desc.Type      = RESOURCE_DIM_TEX_2D;
-        Desc.Width     = BackBufferWidth;
-        Desc.Height    = BackBufferHeight;
+        Desc.Width     = m_BackBufferWidth;
+        Desc.Height    = m_BackBufferHeight;
         Desc.Format    = TEX_FORMAT_R16_FLOAT;
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
         m_Resources.Insert(TextureIdx, Device.CreateTexture(Desc));
@@ -279,8 +264,8 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
         TextureDesc Desc;
         Desc.Name      = "ScreenSpaceReflection::DepthHistory";
         Desc.Type      = RESOURCE_DIM_TEX_2D;
-        Desc.Width     = BackBufferWidth;
-        Desc.Height    = BackBufferHeight;
+        Desc.Width     = m_BackBufferWidth;
+        Desc.Height    = m_BackBufferHeight;
         Desc.Format    = TEX_FORMAT_R32_FLOAT;
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
         m_Resources.Insert(RESOURCE_IDENTIFIER_DEPTH_HISTORY, Device.CreateTexture(Desc));
@@ -290,8 +275,8 @@ void ScreenSpaceReflection::SetBackBufferSize(IRenderDevice* pDevice, IDeviceCon
         TextureDesc Desc;
         Desc.Name      = "ScreenSpaceReflection::Output";
         Desc.Type      = RESOURCE_DIM_TEX_2D;
-        Desc.Width     = BackBufferWidth;
-        Desc.Height    = BackBufferHeight;
+        Desc.Width     = m_BackBufferWidth;
+        Desc.Height    = m_BackBufferHeight;
         Desc.Format    = TEX_FORMAT_RGBA16_FLOAT;
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
         m_Resources.Insert(RESOURCE_IDENTIFIER_OUTPUT, Device.CreateTexture(Desc));
@@ -370,24 +355,24 @@ void ScreenSpaceReflection::CopyTextureDepth(const RenderAttributes& RenderAttri
 
 void ScreenSpaceReflection::ComputeHierarchicalDepthBuffer(const RenderAttributes& RenderAttribs)
 {
-    auto& RenderTech = m_RenderTech[RENDER_TECH_COMPUTE_HIERARCHICAL_DEPTH_BUFFER];
+    auto&       RenderTech        = m_RenderTech[RENDER_TECH_COMPUTE_HIERARCHICAL_DEPTH_BUFFER];
+    const auto& SupportedFeatures = RenderAttribs.pPostFXContext->GetSupportedFeatures();
     if (!RenderTech.IsInitialized())
     {
         ShaderMacroHelper Macros;
-        Macros.Add("SUPPORTED_SHADER_SRV", m_SupportedFeatures.TextureSubresourceViews ? 1 : 0);
+        Macros.Add("SUPPORTED_SHADER_SRV", SupportedFeatures.TextureSubresourceViews ? 1 : 0);
 
         const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
         const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeHierarchicalDepthBuffer.fx", "ComputeHierarchicalDepthBufferPS", SHADER_TYPE_PIXEL, Macros);
 
         PipelineResourceLayoutDescX ResourceLayout;
-        if (m_SupportedFeatures.TextureSubresourceViews)
+        if (SupportedFeatures.TextureSubresourceViews)
         {
             ResourceLayout.AddVariable(SHADER_TYPE_PIXEL, "g_TextureLastMip", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
         }
         else
         {
             ResourceLayout
-                .AddVariable(SHADER_TYPE_PIXEL, "cbTextureMipAtrrib", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
                 .AddVariable(SHADER_TYPE_PIXEL, "g_TextureMips", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
                 // Immutable samplers are required for WebGL to work properly
                 .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureMips", Sam_PointWrap);
@@ -406,7 +391,7 @@ void ScreenSpaceReflection::ComputeHierarchicalDepthBuffer(const RenderAttribute
 
     ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "ComputeHierarchicalDepthBuffer"};
 
-    if (m_SupportedFeatures.CopyDepthToColor)
+    if (SupportedFeatures.CopyDepthToColor)
     {
         CopyTextureAttribs CopyAttribs;
         CopyAttribs.pSrcTexture              = m_Resources[RESOURCE_IDENTIFIER_INPUT_DEPTH];
@@ -422,24 +407,24 @@ void ScreenSpaceReflection::ComputeHierarchicalDepthBuffer(const RenderAttribute
     else
     {
         CopyTextureDepth(RenderAttribs, m_Resources[RESOURCE_IDENTIFIER_INPUT_DEPTH].GetTextureSRV(), m_HierarchicalDepthMipMapRTV[0]);
+    }
 
-        if (!m_SupportedFeatures.TextureSubresourceViews)
-        {
-            CopyTextureAttribs CopyMipAttribs;
-            CopyMipAttribs.pSrcTexture              = m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY];
-            CopyMipAttribs.pDstTexture              = m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY_INTERMEDIATE];
-            CopyMipAttribs.SrcMipLevel              = 0;
-            CopyMipAttribs.DstMipLevel              = 0;
-            CopyMipAttribs.SrcSlice                 = 0;
-            CopyMipAttribs.DstSlice                 = 0;
-            CopyMipAttribs.SrcTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
-            CopyMipAttribs.DstTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
-            RenderAttribs.pDeviceContext->CopyTexture(CopyMipAttribs);
-        }
+    if (!SupportedFeatures.TextureSubresourceViews)
+    {
+        CopyTextureAttribs CopyMipAttribs;
+        CopyMipAttribs.pSrcTexture              = m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY];
+        CopyMipAttribs.pDstTexture              = m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY_INTERMEDIATE];
+        CopyMipAttribs.SrcMipLevel              = 0;
+        CopyMipAttribs.DstMipLevel              = 0;
+        CopyMipAttribs.SrcSlice                 = 0;
+        CopyMipAttribs.DstSlice                 = 0;
+        CopyMipAttribs.SrcTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
+        CopyMipAttribs.DstTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
+        RenderAttribs.pDeviceContext->CopyTexture(CopyMipAttribs);
     }
 
 
-    if (m_SupportedFeatures.TransitionSubresources)
+    if (SupportedFeatures.TransitionSubresources)
     {
         StateTransitionDesc TransitionDescW2W[] = {
             StateTransitionDesc{m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY].AsTexture(),
@@ -476,7 +461,7 @@ void ScreenSpaceReflection::ComputeHierarchicalDepthBuffer(const RenderAttribute
     }
     else
     {
-        if (m_SupportedFeatures.TextureSubresourceViews)
+        if (SupportedFeatures.TextureSubresourceViews)
         {
             ShaderResourceVariableX TextureLastMipSV{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureLastMip"};
             for (Uint32 MipLevel = 1; MipLevel < m_HierarchicalDepthMipMapRTV.size(); MipLevel++)
@@ -490,20 +475,17 @@ void ScreenSpaceReflection::ComputeHierarchicalDepthBuffer(const RenderAttribute
         }
         else
         {
-            ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "cbTextureMipAtrrib"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER_INTERMEDIATE]);
-            ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureMips"}.Set(m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY_INTERMEDIATE]);
+            ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureMips"}.Set(m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY_INTERMEDIATE].GetTextureSRV());
 
             for (Uint32 MipLevel = 1; MipLevel < m_HierarchicalDepthMipMapRTV.size(); MipLevel++)
             {
-                {
-                    MapHelper<Uint32> TextureMipAttribs{RenderAttribs.pDeviceContext, m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER_INTERMEDIATE], MAP_WRITE, MAP_FLAG_DISCARD};
-                    *TextureMipAttribs = MipLevel - 1;
-                }
-
+                // We use StartVertexLocation to pass the mipmap level of the depth texture for convolution
+                VERIFY_EXPR(SupportedFeatures.ShaderBaseVertexOffset);
+                const Uint32 VertexOffset = 3u * (MipLevel - 1);
                 RenderAttribs.pDeviceContext->SetRenderTargets(1, &m_HierarchicalDepthMipMapRTV[MipLevel], nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
                 RenderAttribs.pDeviceContext->SetPipelineState(RenderTech.PSO);
                 RenderAttribs.pDeviceContext->CommitShaderResources(RenderTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-                RenderAttribs.pDeviceContext->Draw({3, DRAW_FLAG_VERIFY_ALL, 1});
+                RenderAttribs.pDeviceContext->Draw({3, DRAW_FLAG_VERIFY_ALL, 1, VertexOffset});
                 RenderAttribs.pDeviceContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
                 CopyTextureAttribs CopyMipAttribs;
@@ -519,6 +501,7 @@ void ScreenSpaceReflection::ComputeHierarchicalDepthBuffer(const RenderAttribute
             }
         }
     }
+
     RenderAttribs.pDeviceContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
 }
 
@@ -571,7 +554,8 @@ void ScreenSpaceReflection::ComputeStencilMaskAndExtractRoughness(const RenderAt
 
 void ScreenSpaceReflection::ComputeIntersection(const RenderAttributes& RenderAttribs)
 {
-    auto& RenderTech = m_RenderTech[RENDER_TECH_COMPUTE_INTERSECTION];
+    auto&       RenderTech        = m_RenderTech[RENDER_TECH_COMPUTE_INTERSECTION];
+    const auto& SupportedFeatures = RenderAttribs.pPostFXContext->GetSupportedFeatures();
     if (!RenderTech.IsInitialized())
     {
         PipelineResourceLayoutDescX ResourceLayout;
@@ -584,7 +568,7 @@ void ScreenSpaceReflection::ComputeIntersection(const RenderAttributes& RenderAt
             .AddVariable(SHADER_TYPE_PIXEL, "g_TextureBlueNoise", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
             .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepthHierarchy", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
 
-        if (!m_SupportedFeatures.TextureSubresourceViews)
+        if (!SupportedFeatures.TextureSubresourceViews)
         {
             // Immutable sampler is required for WebGL to work properly
             ResourceLayout.AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureDepthHierarchy", Sam_PointClamp);
@@ -691,7 +675,8 @@ void ScreenSpaceReflection::ComputeSpatialReconstruction(const RenderAttributes&
 
 void ScreenSpaceReflection::ComputeTemporalAccumulation(const RenderAttributes& RenderAttribs)
 {
-    auto& RenderTech = m_RenderTech[RENDER_TECH_COMPUTE_TEMPORAL_ACCUMULATION];
+    auto&       RenderTech        = m_RenderTech[RENDER_TECH_COMPUTE_TEMPORAL_ACCUMULATION];
+    const auto& SupportedFeatures = RenderAttribs.pPostFXContext->GetSupportedFeatures();
     if (!RenderTech.IsInitialized())
     {
         PipelineResourceLayoutDescX ResourceLayout;
@@ -728,8 +713,9 @@ void ScreenSpaceReflection::ComputeTemporalAccumulation(const RenderAttributes& 
         RenderTech.InitializeSRB(true);
     }
 
-    const Uint32 CurrFrameIdx = RenderAttribs.pPostFXContext->GetFrameIndex() & 1;
-    const Uint32 PrevFrameIdx = (RenderAttribs.pPostFXContext->GetFrameIndex() - 1) & 1;
+    const Uint32 FrameIndex   = RenderAttribs.pPostFXContext->GetFrameDesc().Index;
+    const Uint32 CurrFrameIdx = FrameIndex & 0x01;
+    const Uint32 PrevFrameIdx = (FrameIndex + 1) & 0x01;
 
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureMotion"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_MOTION_VECTORS].GetTextureSRV());
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureRoughness"}.Set(m_Resources[RESOURCE_IDENTIFIER_ROUGHNESS].GetTextureSRV());
@@ -755,7 +741,7 @@ void ScreenSpaceReflection::ComputeTemporalAccumulation(const RenderAttributes& 
     RenderAttribs.pDeviceContext->Draw({3, DRAW_FLAG_VERIFY_ALL, 1});
     RenderAttribs.pDeviceContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
 
-    if (m_SupportedFeatures.CopyDepthToColor)
+    if (SupportedFeatures.CopyDepthToColor)
     {
         CopyTextureAttribs CopyAttribs;
         CopyAttribs.pSrcTexture              = m_Resources[RESOURCE_IDENTIFIER_INPUT_DEPTH];
@@ -806,7 +792,7 @@ void ScreenSpaceReflection::ComputeBilateralCleanup(const RenderAttributes& Rend
         RenderTech.InitializeSRB(true);
     }
 
-    const Uint32 CurrFrameIdx = RenderAttribs.pPostFXContext->GetFrameIndex() & 1;
+    const Uint32 CurrFrameIdx = RenderAttribs.pPostFXContext->GetFrameDesc().Index & 0x1u;
 
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureRadiance"}.Set(m_Resources[RESOURCE_IDENTIFIER_RADIANCE_HISTORY0 + CurrFrameIdx].GetTextureSRV());
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureVariance"}.Set(m_Resources[RESOURCE_IDENTIFIER_VARIANCE_HISTORY0 + CurrFrameIdx].GetTextureSRV());

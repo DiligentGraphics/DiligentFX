@@ -47,6 +47,13 @@ struct CameraAttribs;
 class PostFXContext
 {
 public:
+    struct FrameDesc
+    {
+        Uint32 Index  = 0;
+        Uint32 Width  = 0;
+        Uint32 Height = 0;
+    };
+
     struct RenderAttributes
     {
         /// Render device that may be used to create new objects needed for this frame, if any.
@@ -66,8 +73,6 @@ public:
 
         /// If this parameter is null, the effect will use its own buffer.
         IBuffer* pCameraAttribsCB = nullptr;
-
-        Uint32 FrameIndex = {};
     };
 
     enum BLUE_NOISE_DIMENSION : Uint32
@@ -77,18 +82,38 @@ public:
         BLUE_NOISE_DIMENSION_COUNT
     };
 
+    struct SupportedDeviceFeatures
+    {
+        bool TransitionSubresources  = false;
+        bool TextureSubresourceViews = false;
+        bool CopyDepthToColor        = false;
+
+        /// Indicates whether the Base Vertex is added to the VertexID
+        /// in the vertex shader.
+        bool ShaderBaseVertexOffset = false;
+    };
+
 public:
     PostFXContext(IRenderDevice* pDevice);
 
     ~PostFXContext();
 
-    void PrepareResources(const RenderAttributes& RenderAttribs);
+    void PrepareResources(const FrameDesc& Desc);
+    void Execute(const RenderAttributes& RenderAttribs);
 
     ITextureView* Get2DBlueNoiseSRV(BLUE_NOISE_DIMENSION Dimension) const;
 
     IBuffer* GetCameraAttribsCB() const;
 
-    Uint32 GetFrameIndex() const;
+    const SupportedDeviceFeatures& GetSupportedFeatures() const
+    {
+        return m_SupportedFeatures;
+    }
+
+    const FrameDesc& GetFrameDesc() const
+    {
+        return m_FrameDesc;
+    }
 
 private:
     using RenderTechnique  = PostFXRenderTechnique;
@@ -103,7 +128,7 @@ private:
     enum RESOURCE_IDENTIFIER : Uint32
     {
         RESOURCE_IDENTIFIER_CONSTANT_BUFFER = 0,
-        RESOURCE_IDENTIFIER_CONSTANT_BUFFER_INTERMEDIATE,
+        RESOURCE_IDENTIFIER_INDEX_BUFFER_INTERMEDIATE,
         RESOURCE_IDENTIFIER_SOBOL_BUFFER,
         RESOURCE_IDENTIFIER_SCRAMBLING_TILE_BUFFER,
         RESOURCE_IDENTIFIER_BLUE_NOISE_TEXTURE_XY,
@@ -115,7 +140,8 @@ private:
 
     ResourceRegistry m_Resources{RESOURCE_IDENTIFIER_COUNT};
 
-    Uint32 m_CurrentFrameIndex = 0;
+    FrameDesc               m_FrameDesc         = {};
+    SupportedDeviceFeatures m_SupportedFeatures = {};
 };
 
 } // namespace Diligent

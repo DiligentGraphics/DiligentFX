@@ -53,6 +53,12 @@ namespace NoiseBuffers
 PostFXContext::PostFXContext(IRenderDevice* pDevice)
 {
     DEV_CHECK_ERR(pDevice != nullptr, "pDevice must not be null");
+    const auto& DeviceInfo = pDevice->GetDeviceInfo();
+
+    m_SupportedFeatures.TransitionSubresources  = DeviceInfo.Type == RENDER_DEVICE_TYPE_D3D12 || DeviceInfo.Type == RENDER_DEVICE_TYPE_VULKAN;
+    m_SupportedFeatures.TextureSubresourceViews = DeviceInfo.Features.TextureSubresourceViews;
+    m_SupportedFeatures.CopyDepthToColor        = DeviceInfo.IsD3DDevice();
+    m_SupportedFeatures.ShaderBaseVertexOffset  = !DeviceInfo.IsD3DDevice();
 
     RenderDeviceWithCache_N Device{pDevice};
     {
@@ -111,14 +117,26 @@ PostFXContext::PostFXContext(IRenderDevice* pDevice)
         m_Resources.Insert(TextureIdx, Device.CreateTexture(Desc, nullptr));
     }
 
-    RefCntAutoPtr<IBuffer> pBuffer;
-    CreateUniformBuffer(pDevice, 2 * sizeof(HLSL::CameraAttribs), "PostFXContext::IntermediateConstantBuffer", &pBuffer);
-    m_Resources.Insert(RESOURCE_IDENTIFIER_CONSTANT_BUFFER_INTERMEDIATE, pBuffer);
+    if (!m_SupportedFeatures.ShaderBaseVertexOffset)
+    {
+        BufferDesc Desc;
+        Desc.Name           = "PostFXContext::IndexBufferIntermediate";
+        Desc.BindFlags      = BIND_INDEX_BUFFER;
+        Desc.Size           = 3 * sizeof(Uint32);
+        Desc.CPUAccessFlags = CPU_ACCESS_WRITE;
+        Desc.Usage          = USAGE_DYNAMIC;
+        m_Resources.Insert(RESOURCE_IDENTIFIER_INDEX_BUFFER_INTERMEDIATE, Device.CreateBuffer(Desc, nullptr));
+    }
 }
 
 PostFXContext::~PostFXContext() = default;
 
-void PostFXContext::PrepareResources(const RenderAttributes& RenderAttribs)
+void PostFXContext::PrepareResources(const FrameDesc& Desc)
+{
+    m_FrameDesc = Desc;
+}
+
+void PostFXContext::Execute(const RenderAttributes& RenderAttribs)
 {
     DEV_CHECK_ERR(RenderAttribs.pDevice != nullptr, "RenderAttribs.pDevice must not be null");
     DEV_CHECK_ERR(RenderAttribs.pDeviceContext != nullptr, "RenderAttribs.pDeviceContext must not be null");
@@ -146,18 +164,11 @@ void PostFXContext::PrepareResources(const RenderAttributes& RenderAttribs)
         m_Resources.Insert(RESOURCE_IDENTIFIER_CONSTANT_BUFFER, RenderAttribs.pCameraAttribsCB);
     }
 
-    {
-        MapHelper<Uint32> FrameAttibs{RenderAttribs.pDeviceContext, m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER_INTERMEDIATE], MAP_WRITE, MAP_FLAG_DISCARD};
-        *FrameAttibs        = RenderAttribs.FrameIndex;
-        m_CurrentFrameIndex = RenderAttribs.FrameIndex;
-    }
-
     auto& RenderTech = m_RenderTech[RENDER_TECH_COMPUTE_BLUE_NOISE_TEXTURE];
     if (!RenderTech.IsInitialized())
     {
         PipelineResourceLayoutDescX ResourceLayout;
         ResourceLayout
-            .AddVariable(SHADER_TYPE_PIXEL, "cbBlueNoiseAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
             .AddVariable(SHADER_TYPE_PIXEL, "g_SobolBuffer", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
             .AddVariable(SHADER_TYPE_PIXEL, "g_ScramblingTileBuffer", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
 
@@ -174,7 +185,6 @@ void PostFXContext::PrepareResources(const RenderAttributes& RenderAttribs)
                                  TEX_FORMAT_UNKNOWN,
                                  DSS_DisableDepth, BS_Default, false);
 
-        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbBlueNoiseAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER_INTERMEDIATE].AsBuffer());
         ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "g_SobolBuffer"}.Set(m_Resources[RESOURCE_IDENTIFIER_SOBOL_BUFFER].GetTextureSRV());
         ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "g_ScramblingTileBuffer"}.Set(m_Resources[RESOURCE_IDENTIFIER_SCRAMBLING_TILE_BUFFER].GetTextureSRV());
         RenderTech.InitializeSRB(true);
@@ -190,7 +200,27 @@ void PostFXContext::PrepareResources(const RenderAttributes& RenderAttribs)
     RenderAttribs.pDeviceContext->SetRenderTargets(_countof(pRTVs), pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     RenderAttribs.pDeviceContext->SetPipelineState(RenderTech.PSO);
     RenderAttribs.pDeviceContext->CommitShaderResources(RenderTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    RenderAttribs.pDeviceContext->Draw({3, DRAW_FLAG_VERIFY_ALL, 1});
+
+    // We pass the frame number to the shader through StartVertexLocation in Vulkan and OpenGL (we do not use a separate
+    // constant buffer because in WebGL, the glMapBuffer function has a significant impact on CPU-side performance).
+    // For D3D11 and D3D12, we pass the frame number using a index buffer. Unfortunately, in DXIL / DXBC, the indexing of
+    // SV_VertexID always starts from zero regardless of StartVertexLocation, unlike SPIRV / GLSL.
+    const Uint32 StartVertexLocation = m_SupportedFeatures.ShaderBaseVertexOffset ? 3u * m_FrameDesc.Index : 0u;
+    if (m_SupportedFeatures.ShaderBaseVertexOffset)
+    {
+        RenderAttribs.pDeviceContext->Draw({3, DRAW_FLAG_VERIFY_ALL, 1, StartVertexLocation});
+    }
+    else
+    {
+        {
+            MapHelper<Uint32> IndexBuffer{RenderAttribs.pDeviceContext, m_Resources[RESOURCE_IDENTIFIER_INDEX_BUFFER_INTERMEDIATE], MAP_WRITE, MAP_FLAG_DISCARD};
+            IndexBuffer[0] = 3 * m_FrameDesc.Index + 0;
+            IndexBuffer[1] = 3 * m_FrameDesc.Index + 1;
+            IndexBuffer[2] = 3 * m_FrameDesc.Index + 2;
+        }
+        RenderAttribs.pDeviceContext->SetIndexBuffer(m_Resources[RESOURCE_IDENTIFIER_INDEX_BUFFER_INTERMEDIATE].AsBuffer(), 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        RenderAttribs.pDeviceContext->DrawIndexed({3, VT_UINT32, DRAW_FLAG_VERIFY_ALL, 1});
+    }
     RenderAttribs.pDeviceContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
 }
 
@@ -202,11 +232,6 @@ ITextureView* PostFXContext::Get2DBlueNoiseSRV(BLUE_NOISE_DIMENSION Dimension) c
 IBuffer* PostFXContext::GetCameraAttribsCB() const
 {
     return m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER];
-}
-
-Uint32 PostFXContext::GetFrameIndex() const
-{
-    return m_CurrentFrameIndex;
 }
 
 } // namespace Diligent

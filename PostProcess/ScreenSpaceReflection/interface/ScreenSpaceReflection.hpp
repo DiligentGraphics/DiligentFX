@@ -90,7 +90,7 @@ public:
 
     ~ScreenSpaceReflection();
 
-    void SetBackBufferSize(IRenderDevice* pDevice, IDeviceContext* pDeviceContext, Uint32 BackBufferWidth, Uint32 BackBufferHeight);
+    void PrepareResources(IRenderDevice* pDevice, PostFXContext* pPostFXContext);
 
     void Execute(const RenderAttributes& RenderAttribs);
 
@@ -135,7 +135,6 @@ private:
         RESOURCE_IDENTIFIER_INPUT_MATERIAL_PARAMETERS,
         RESOURCE_IDENTIFIER_INPUT_MOTION_VECTORS,
         RESOURCE_IDENTIFIER_CONSTANT_BUFFER,
-        RESOURCE_IDENTIFIER_CONSTANT_BUFFER_INTERMEDIATE,
         RESOURCE_IDENTIFIER_DEPTH_HIERARCHY,
         RESOURCE_IDENTIFIER_DEPTH_HIERARCHY_INTERMEDIATE,
         RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK,
@@ -161,13 +160,6 @@ private:
     std::vector<RefCntAutoPtr<ITextureView>> m_HierarchicalDepthMipMapRTV;
     std::vector<RefCntAutoPtr<ITextureView>> m_HierarchicalDepthMipMapSRV;
     RefCntAutoPtr<ITextureView>              m_DepthStencilMaskDSVReadOnly;
-
-    struct SupportedDeviceFeatures
-    {
-        bool TransitionSubresources  = false;
-        bool TextureSubresourceViews = false;
-        bool CopyDepthToColor        = false;
-    } m_SupportedFeatures;
 
     Uint32 m_BackBufferWidth  = 0;
     Uint32 m_BackBufferHeight = 0;

@@ -223,7 +223,6 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
         VERIFY(m_PostProcessAttribsCB, "Failed to create post process attribs CB");
     }
 
-
     if (!m_PostFXContext)
     {
         m_PostFXContext = std::make_unique<PostFXContext>(pDevice);
@@ -234,8 +233,11 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
         m_SSR = std::make_unique<ScreenSpaceReflection>(pDevice);
     }
 
-    const TextureDesc& FinalColorDesc = m_FinalColorRTV->GetTexture()->GetDesc();
-    m_SSR->SetBackBufferSize(pDevice, pCtx, FinalColorDesc.Width, FinalColorDesc.Height);
+    const HnRenderParam* pRenderParam   = static_cast<const HnRenderParam*>(RenderDelegate->GetRenderParam());
+    const TextureDesc&   FinalColorDesc = m_FinalColorRTV->GetTexture()->GetDesc();
+
+    m_PostFXContext->PrepareResources({pRenderParam->GetFrameNumber(), FinalColorDesc.Width, FinalColorDesc.Height});
+    m_SSR->PrepareResources(pDevice, m_PostFXContext.get());
 
     PreparePSO(m_FinalColorRTV->GetDesc().Format, TaskCtx);
     if (std::shared_ptr<HnRenderPassState> RenderPassState = GetRenderPassState(TaskCtx))
@@ -395,7 +397,6 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         PostFXContext::RenderAttributes PostFXAttribs{};
         PostFXAttribs.pDevice        = pDevice;
         PostFXAttribs.pDeviceContext = pCtx;
-        PostFXAttribs.FrameIndex     = pRenderParam->GetFrameNumber();
 
         pxr::VtValue PBRFrameAttribsVal = (*TaskCtx)[HnRenderResourceTokens->frameShaderAttribs];
         if (PBRFrameAttribsVal.IsHolding<HLSL::PBRFrameAttribs*>())
@@ -409,7 +410,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         {
             UNEXPECTED("PBR frame attribs are not set in the task context");
         }
-        m_PostFXContext->PrepareResources(PostFXAttribs);
+        m_PostFXContext->Execute(PostFXAttribs);
 
         HLSL::ScreenSpaceReflectionAttribs SSRAttribs{};
         SSRAttribs.IBLFactor             = 1.0;
