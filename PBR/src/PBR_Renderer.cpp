@@ -1,5 +1,5 @@
 /*
- *  Copyright 2019-2023 Diligent Graphics LLC
+ *  Copyright 2019-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@
 #include "PlatformMisc.hpp"
 #include "TextureUtilities.h"
 #include "Utilities/interface/DiligentFXShaderSourceStreamFactory.hpp"
-#include "ShaderSourceFactoryUtils.h"
+#include "ShaderSourceFactoryUtils.hpp"
 
 namespace Diligent
 {
@@ -1074,25 +1074,20 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
         PSMainSource.OutputStruct = GetPSOutputStruct(PSOFlags);
         PSMainSource.Footer       = DefaultPSMainFooter;
     }
-    MemoryShaderSourceFileInfo GeneratedSources[] =
-        {
+
+    RefCntAutoPtr<IShaderSourceInputStreamFactory> pMemorySourceFactory =
+        CreateMemoryShaderSourceFactory({
             MemoryShaderSourceFileInfo{"VSInputStruct.generated", VSInputStruct},
             MemoryShaderSourceFileInfo{"VSOutputStruct.generated", VSOutputStruct},
             MemoryShaderSourceFileInfo{"PSOutputStruct.generated", PSMainSource.OutputStruct},
             MemoryShaderSourceFileInfo{"PSMainFooter.generated", PSMainSource.Footer},
-        };
-    MemoryShaderSourceFactoryCreateInfo            MemorySourceFactoryCI{GeneratedSources, _countof(GeneratedSources)};
-    RefCntAutoPtr<IShaderSourceInputStreamFactory> pMemorySourceFactory;
-    CreateMemoryShaderSourceFactory(MemorySourceFactoryCI, &pMemorySourceFactory);
-
-    IShaderSourceInputStreamFactory*               ppShaderSourceFactories[] = {&DiligentFXShaderSourceStreamFactory::GetInstance(), pMemorySourceFactory};
-    CompoundShaderSourceFactoryCreateInfo          CompoundSourceFactoryCI{ppShaderSourceFactories, _countof(ppShaderSourceFactories)};
-    RefCntAutoPtr<IShaderSourceInputStreamFactory> pCompoundSourceFactory;
-    CreateCompoundShaderSourceFactory(CompoundSourceFactoryCI, &pCompoundSourceFactory);
+        });
+    RefCntAutoPtr<IShaderSourceInputStreamFactory> pShaderSourceFactory =
+        CreateCompoundShaderSourceFactory({&DiligentFXShaderSourceStreamFactory::GetInstance(), pMemorySourceFactory});
 
     ShaderCreateInfo ShaderCI;
     ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
-    ShaderCI.pShaderSourceStreamFactory = pCompoundSourceFactory;
+    ShaderCI.pShaderSourceStreamFactory = pShaderSourceFactory;
 
     auto Macros = DefineMacros(PSOFlags, Key.GetDebugView());
     if (GraphicsDesc.PrimitiveTopology == PRIMITIVE_TOPOLOGY_POINT_LIST && (m_Device.GetDeviceInfo().IsGLDevice() || m_Device.GetDeviceInfo().IsVulkanDevice()))
