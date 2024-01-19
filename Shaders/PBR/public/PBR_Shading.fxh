@@ -119,13 +119,16 @@ struct PerturbNormalInfo
     float3 dPos_dx;
     float3 dPos_dy;
     float3 Normal;
+    bool   IsFrontFace;
 };
 
-PerturbNormalInfo GetPerturbNormalInfo(in float3 Pos, in float3 Normal)
+PerturbNormalInfo GetPerturbNormalInfo(in float3 Pos, in float3 Normal, in bool IsFrontFace)
 {
     PerturbNormalInfo Info;
     Info.dPos_dx = ddx(Pos);
     Info.dPos_dy = ddy(Pos);
+    
+    Info.IsFrontFace = IsFrontFace;
     
     float NormalLen = length(Normal);
     if (NormalLen > 1e-5)
@@ -151,16 +154,15 @@ float3 PerturbNormal(PerturbNormalInfo NormalInfo,
                      in float2 dUV_dx,
                      in float2 dUV_dy,
                      in float3 TSNormal,
-                     bool      HasUV,
-                     bool      IsFrontFace)
+                     bool      HasUV)
 {
     if (HasUV)
     {
-        return TransformTangentSpaceNormalGrad(NormalInfo.dPos_dx, NormalInfo.dPos_dy, dUV_dx, dUV_dy, NormalInfo.Normal, TSNormal * (IsFrontFace ? +1.0 : -1.0));
+        return TransformTangentSpaceNormalGrad(NormalInfo.dPos_dx, NormalInfo.dPos_dy, dUV_dx, dUV_dy, NormalInfo.Normal, TSNormal * (NormalInfo.IsFrontFace ? +1.0 : -1.0));
     }
     else
     {
-        return NormalInfo.Normal * (IsFrontFace ? +1.0 : -1.0);
+        return NormalInfo.Normal * (NormalInfo.IsFrontFace ? +1.0 : -1.0);
     }
 }
 

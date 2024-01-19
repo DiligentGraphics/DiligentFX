@@ -105,8 +105,7 @@ BaseLayerShadingInfo ReadBaseLayerProperties(in VSOutput          VSOut,
                                              in float4            BaseColor,
                                              in PerturbNormalInfo NormalInfo,
                                              in NormalMapUVInfo   NMUVInfo,
-                                             in float3            View, 
-                                             in bool              IsFrontFace)
+                                             in float3            View)
 {
     BaseLayerShadingInfo Base;
     
@@ -133,8 +132,7 @@ BaseLayerShadingInfo ReadBaseLayerProperties(in VSOutput          VSOut,
                                 NMUVInfo.dUV_dx,
                                 NMUVInfo.dUV_dy,
                                 TSNormal,
-                                NMUVInfo.Selector >= 0.0,
-                                IsFrontFace);
+                                NMUVInfo.Selector >= 0.0);
     
     Base.NdotV = dot_sat(Base.Normal, View);
     
@@ -144,8 +142,7 @@ BaseLayerShadingInfo ReadBaseLayerProperties(in VSOutput          VSOut,
 #if ENABLE_CLEAR_COAT
 ClearcoatShadingInfo ReadClearcoatLayerProperties(in VSOutput          VSOut,
                                                   in PerturbNormalInfo NormalInfo,
-                                                  in NormalMapUVInfo   NMUVInfo,
-                                                  in bool              IsFrontFace)
+                                                  in NormalMapUVInfo   NMUVInfo)
 {
     ClearcoatShadingInfo Clearcoat;
 
@@ -168,8 +165,7 @@ ClearcoatShadingInfo ReadClearcoatLayerProperties(in VSOutput          VSOut,
                                              NMUVInfo.dUV_dx,
                                              NMUVInfo.dUV_dy,
                                              ClearCoatNormal,
-                                             true,
-                                             IsFrontFace);
+                                             true);
         }
     }
 #   endif
@@ -251,7 +247,6 @@ AnisotropyShadingInfo ReadAnisotropyProperties(in VSOutput VSOut, BaseLayerShadi
 #endif
 
 SurfaceShadingInfo GetSurfaceShadingInfo(in VSOutput          VSOut,
-                                         in bool              IsFrontFace,
                                          in float4            BaseColor,
                                          in PerturbNormalInfo NormalInfo,
                                          in NormalMapUVInfo   NMUVInfo,
@@ -260,7 +255,7 @@ SurfaceShadingInfo GetSurfaceShadingInfo(in VSOutput          VSOut,
     SurfaceShadingInfo Shading;
     
     Shading.View      = normalize(g_Frame.Camera.f4Position.xyz - VSOut.WorldPos.xyz); // Direction from surface point to camera
-    Shading.BaseLayer = ReadBaseLayerProperties(VSOut, BaseColor, NormalInfo, NMUVInfo, Shading.View, IsFrontFace);
+    Shading.BaseLayer = ReadBaseLayerProperties(VSOut, BaseColor, NormalInfo, NMUVInfo, Shading.View);
     Shading.Occlusion = GetOcclusion(VSOut, g_Primitive.Material);
     Shading.Emissive  = GetEmissive(VSOut, g_Primitive.Material);
 
@@ -270,7 +265,7 @@ SurfaceShadingInfo GetSurfaceShadingInfo(in VSOutput          VSOut,
 
 #   if ENABLE_CLEAR_COAT
     {
-        Shading.Clearcoat = ReadClearcoatLayerProperties(VSOut, NormalInfo, ClearCoatNMUVInfo, IsFrontFace); 
+        Shading.Clearcoat = ReadClearcoatLayerProperties(VSOut, NormalInfo, ClearCoatNMUVInfo); 
     }
 #   endif
     
@@ -323,7 +318,7 @@ PSOutput main(in VSOutput VSOut,
     float3 MeshNormal = float3(0.0, 0.0, 0.0);
 #endif
     // We have to compute gradients in uniform flow control to avoid issues with perturbed normal
-    PerturbNormalInfo NormalInfo = GetPerturbNormalInfo(VSOut.WorldPos, MeshNormal);
+    PerturbNormalInfo NormalInfo = GetPerturbNormalInfo(VSOut.WorldPos, MeshNormal, IsFrontFace);
     
     PBRMaterialTextureAttribs NormalTexAttribs;
 #   if USE_NORMAL_MAP
@@ -355,7 +350,7 @@ PSOutput main(in VSOutput VSOut,
         discard;
     }
 
-    SurfaceShadingInfo  Shading     = GetSurfaceShadingInfo(VSOut, IsFrontFace, BaseColor, NormalInfo, NMUVInfo, ClearCoatNMUVInfo);
+    SurfaceShadingInfo  Shading     = GetSurfaceShadingInfo(VSOut, BaseColor, NormalInfo, NMUVInfo, ClearCoatNMUVInfo);
     SurfaceLightingInfo SrfLighting = GetDefaultSurfaceLightingInfo();
 
     float4 OutColor;
