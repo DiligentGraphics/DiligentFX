@@ -119,26 +119,28 @@ struct PerturbNormalInfo
     float3 dPos_dx;
     float3 dPos_dy;
     float3 Normal;
-    bool   IsFrontFace;
+    float  Face; // +1.0 if front face, -1.0 if back face
 };
 
-PerturbNormalInfo GetPerturbNormalInfo(in float3 Pos, in float3 Normal, in bool IsFrontFace)
+PerturbNormalInfo GetPerturbNormalInfo(in float3 Pos,           // World position
+                                       in float3 Normal,        // Mesh normal
+                                       in bool   IsFrontFace,   // True if front face
+                                       in float  CameraHandness // 1.0 if right-handed, -1.0 if left-handed
+                                      )
 {
     PerturbNormalInfo Info;
     Info.dPos_dx = ddx(Pos);
     Info.dPos_dy = ddy(Pos);
- 
-    Info.IsFrontFace = IsFrontFace;
+    Info.Face    = IsFrontFace ? +1.0 : -1.0;
 
     float NormalLen = length(Normal);
     if (NormalLen > 1e-5)
     {
-        NormalLen *= IsFrontFace ? +1.0 : -1.0;
-        Info.Normal = Normal / NormalLen;
+        Info.Normal = Normal / (NormalLen * Info.Face);
     }
     else
     {
-        Info.Normal = normalize(cross(Info.dPos_dx, Info.dPos_dy));
+        Info.Normal = normalize(cross(Info.dPos_dx, Info.dPos_dy)) * CameraHandness;
 #if (defined(GLSL) || defined(GL_ES)) && !defined(VULKAN)
         // In OpenGL, the screen is upside-down, so we have to invert the vector
         Info.Normal *= -1.0;
@@ -153,14 +155,14 @@ PerturbNormalInfo GetPerturbNormalInfo(in float3 Pos, in float3 Normal, in bool 
 // Find the normal for this fragment, pulling either from a predefined normal map
 // or from the interpolated mesh normal and tangent attributes.
 float3 PerturbNormal(PerturbNormalInfo NormalInfo,
-                     in float2 dUV_dx,
-                     in float2 dUV_dy,
-                     in float3 TSNormal,
-                     bool      HasUV)
+                     in float2         dUV_dx,
+                     in float2         dUV_dy,
+                     in float3         TSNormal,
+                     bool              HasUV)
 {
     if (HasUV)
     {
-        TSNormal.xy *= NormalInfo.IsFrontFace ? +1.0 : -1.0;
+        TSNormal.xy *= NormalInfo.Face;
         return TransformTangentSpaceNormalGrad(NormalInfo.dPos_dx, NormalInfo.dPos_dy, dUV_dx, dUV_dy, NormalInfo.Normal, TSNormal);
     }
     else

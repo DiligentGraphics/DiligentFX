@@ -290,6 +290,7 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx, IBuffer* pFram
                 1.f / static_cast<float>(m_FrameBufferWidth),
                 1.f / static_cast<float>(m_FrameBufferHeight),
             };
+            CamAttribs.fHandness = ViewMatrix.Determinant() > 0 ? 1.f : -1.f;
 
             CamAttribs.mViewT        = ViewMatrix.Transpose();
             CamAttribs.mProjT        = ProjMatrix.Transpose();

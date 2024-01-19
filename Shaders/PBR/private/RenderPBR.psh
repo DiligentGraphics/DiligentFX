@@ -318,7 +318,7 @@ PSOutput main(in VSOutput VSOut,
     float3 MeshNormal = float3(0.0, 0.0, 0.0);
 #endif
     // We have to compute gradients in uniform flow control to avoid issues with perturbed normal
-    PerturbNormalInfo NormalInfo = GetPerturbNormalInfo(VSOut.WorldPos, MeshNormal, IsFrontFace);
+    PerturbNormalInfo NormalInfo = GetPerturbNormalInfo(VSOut.WorldPos, MeshNormal, IsFrontFace, g_Frame.Camera.fHandness);
     
     PBRMaterialTextureAttribs NormalTexAttribs;
 #   if USE_NORMAL_MAP

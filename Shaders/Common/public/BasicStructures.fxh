@@ -118,10 +118,11 @@ struct CameraAttribs
     float4 f4Position;     // Camera world position
     float4 f4ViewportSize; // (width, height, 1/width, 1/height)
 
-    float2 f2ViewportOrigin; // (min x, min y)
     float fNearPlaneZ; 
-    float fFarPlaneZ; // fNearPlaneZ < fFarPlaneZ
-
+    float fFarPlaneZ;  // fNearPlaneZ < fFarPlaneZ
+    float fHandness;   // +1.0 for right-handed coordinate system, -1.0 for left-handed
+    float Padding;
+    
 #ifdef __cplusplus
     float4x4 mViewT;
     float4x4 mProjT;
