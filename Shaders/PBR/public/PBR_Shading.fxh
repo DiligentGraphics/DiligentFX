@@ -127,12 +127,13 @@ PerturbNormalInfo GetPerturbNormalInfo(in float3 Pos, in float3 Normal, in bool 
     PerturbNormalInfo Info;
     Info.dPos_dx = ddx(Pos);
     Info.dPos_dy = ddy(Pos);
-    
+ 
     Info.IsFrontFace = IsFrontFace;
-    
+
     float NormalLen = length(Normal);
     if (NormalLen > 1e-5)
     {
+        NormalLen *= IsFrontFace ? +1.0 : -1.0;
         Info.Normal = Normal / NormalLen;
     }
     else
@@ -142,6 +143,7 @@ PerturbNormalInfo GetPerturbNormalInfo(in float3 Pos, in float3 Normal, in bool 
         // In OpenGL, the screen is upside-down, so we have to invert the vector
         Info.Normal *= -1.0;
 #endif
+        // The normal computed from gradients is always facing the viewer
     }
     
     return Info;
@@ -158,11 +160,12 @@ float3 PerturbNormal(PerturbNormalInfo NormalInfo,
 {
     if (HasUV)
     {
-        return TransformTangentSpaceNormalGrad(NormalInfo.dPos_dx, NormalInfo.dPos_dy, dUV_dx, dUV_dy, NormalInfo.Normal, TSNormal * (NormalInfo.IsFrontFace ? +1.0 : -1.0));
+        TSNormal.xy *= NormalInfo.IsFrontFace ? +1.0 : -1.0;
+        return TransformTangentSpaceNormalGrad(NormalInfo.dPos_dx, NormalInfo.dPos_dy, dUV_dx, dUV_dy, NormalInfo.Normal, TSNormal);
     }
     else
     {
-        return NormalInfo.Normal * (NormalInfo.IsFrontFace ? +1.0 : -1.0);
+        return NormalInfo.Normal;
     }
 }
 
