@@ -37,7 +37,7 @@
 #include "GraphicsAccessories.hpp"
 #include "PlatformMisc.hpp"
 #include "TextureUtilities.h"
-#include "../../Utilities/include/DiligentFXShaderSourceStreamFactory.hpp"
+#include "Utilities/interface/DiligentFXShaderSourceStreamFactory.hpp"
 #include "ShaderSourceFactoryUtils.h"
 
 namespace Diligent

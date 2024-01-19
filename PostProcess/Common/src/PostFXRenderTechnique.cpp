@@ -26,7 +26,7 @@
 
 #include "PostFXRenderTechnique.hpp"
 #include "RenderStateCache.hpp"
-#include "Utilities/include/DiligentFXShaderSourceStreamFactory.hpp"
+#include "Utilities/interface/DiligentFXShaderSourceStreamFactory.hpp"
 
 namespace Diligent
 {

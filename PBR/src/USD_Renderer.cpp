@@ -30,7 +30,7 @@
 #include <unordered_set>
 
 #include "RenderStateCache.hpp"
-#include "../../Utilities/include/DiligentFXShaderSourceStreamFactory.hpp"
+#include "Utilities/interface/DiligentFXShaderSourceStreamFactory.hpp"
 #include "ShaderSourceFactoryUtils.h"
 
 namespace Diligent
