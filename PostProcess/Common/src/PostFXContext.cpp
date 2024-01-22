@@ -64,16 +64,16 @@ PostFXContext::PostFXContext(IRenderDevice* pDevice)
     {
         TextureDesc Desc;
         Desc.Name      = "PostFXContext::SobolBuffer";
-        Desc.Type      = RESOURCE_DIM_TEX_2D;
+        Desc.Type      = RESOURCE_DIM_TEX_2D; // We use RESOURCE_DIM_TEX_2D, because WebGL doesn't support glTexStorage1D()
         Desc.Width     = 256;
-        Desc.Height    = 256;
-        Desc.Format    = TEX_FORMAT_R32_UINT;
+        Desc.Height    = 1;
+        Desc.Format    = TEX_FORMAT_R8_UINT;
         Desc.MipLevels = 1;
         Desc.BindFlags = BIND_SHADER_RESOURCE;
 
         TextureSubResData SubResData;
-        SubResData.pData  = NoiseBuffers::Sobol_256spp_256d;
-        SubResData.Stride = 4ull * Desc.Width;
+        SubResData.pData  = NoiseBuffers::Sobol_256d;
+        SubResData.Stride = Desc.Width;
 
         TextureData Data;
         Data.pContext        = nullptr;
@@ -88,13 +88,13 @@ PostFXContext::PostFXContext(IRenderDevice* pDevice)
         Desc.Type      = RESOURCE_DIM_TEX_2D;
         Desc.Width     = 128 * 4;
         Desc.Height    = 128 * 2;
-        Desc.Format    = TEX_FORMAT_R32_UINT;
+        Desc.Format    = TEX_FORMAT_R8_UINT;
         Desc.MipLevels = 1;
         Desc.BindFlags = BIND_SHADER_RESOURCE;
 
         TextureSubResData SubResData;
         SubResData.pData  = NoiseBuffers::ScramblingTile;
-        SubResData.Stride = 4ull * Desc.Width;
+        SubResData.Stride = Desc.Width;
 
         TextureData Data;
         Data.pContext        = nullptr;

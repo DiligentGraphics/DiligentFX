@@ -11,18 +11,14 @@ Texture2D<uint> g_SobolBuffer;
 Texture2D<uint> g_ScramblingTileBuffer;
 
 // Blue Noise Sampler by Eric Heitz. Returns a value in the range [0, 1].
-float SampleRandomNumber(uint2 PixelCoord, uint SampleIndex, uint SampleDimension)
+float SampleRandomNumber(uint2 PixelCoord, uint SampleDimension)
 {
     // Wrap arguments
     PixelCoord = PixelCoord & 127u;
-    SampleIndex = SampleIndex & 255u;
     SampleDimension = SampleDimension & 255u;
 
-    // xor index based on optimized ranking
-    uint RankedSampleIndex = SampleIndex;
-
     // Fetch value in sequence
-    uint Value = g_SobolBuffer.Load(uint3(SampleDimension, RankedSampleIndex * 256u, 0));
+    uint Value = g_SobolBuffer.Load(uint3(SampleDimension, 0, 0));
 
     // If the dimension is optimized, xor sequence value based on optimized scrambling
     uint OriginalIndex = (SampleDimension % 8u) + (PixelCoord.x + PixelCoord.y * 128u) * 8u;
@@ -37,10 +33,10 @@ float4 SampleRandomVector2D2D(uint2 PixelCoord, uint FrameIndex)
     float G = 1.61803398875f; 
     float Alpha = 0.5 + rcp(G) * float(FrameIndex & 0xFFu);
     return float4(
-        frac(SampleRandomNumber(PixelCoord, 0u, 0u) + Alpha),
-        frac(SampleRandomNumber(PixelCoord, 0u, 1u) + Alpha),
-        frac(SampleRandomNumber(PixelCoord, 0u, 2u) + Alpha),
-        frac(SampleRandomNumber(PixelCoord, 0u, 3u) + Alpha)
+        frac(SampleRandomNumber(PixelCoord, 0u) + Alpha),
+        frac(SampleRandomNumber(PixelCoord, 1u) + Alpha),
+        frac(SampleRandomNumber(PixelCoord, 2u) + Alpha),
+        frac(SampleRandomNumber(PixelCoord, 3u) + Alpha)
     );
 }
 
