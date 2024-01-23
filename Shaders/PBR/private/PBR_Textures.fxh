@@ -101,36 +101,74 @@ SamplerState g_LinearClampSampler;
 #       define    g_SheenAlbedoScalingLUT_sampler g_LinearClampSampler
 #endif
 
+#ifndef USE_MATERIAL_TEXTURES_ARRAY
+#   define USE_MATERIAL_TEXTURES_ARRAY 0
+#endif
 
-#if defined(PBR_NUM_MATERIAL_TEXTURES) && PBR_NUM_MATERIAL_TEXTURES > 0
+#if USE_MATERIAL_TEXTURES_ARRAY && defined(PBR_NUM_MATERIAL_TEXTURES) && PBR_NUM_MATERIAL_TEXTURES > 0
     Texture2DArray g_MaterialTextures[PBR_NUM_MATERIAL_TEXTURES];
 #endif
 
 #if USE_COLOR_MAP
+#   if USE_MATERIAL_TEXTURES_ARRAY
+#       define g_ColorMap g_MaterialTextures[BaseColorTextureId]
+#   else
+        Texture2DArray g_ColorMap;
+#   endif
     SamplerState g_ColorMap_sampler;
 #endif
 
 #if USE_METALLIC_MAP
+#   if USE_MATERIAL_TEXTURES_ARRAY
+#       define g_MetallicMap g_MaterialTextures[MetallicTextureId]
+#   else
+        Texture2DArray g_MetallicMap;
+#   endif
     SamplerState g_MetallicMap_sampler;
 #endif
 
 #if USE_ROUGHNESS_MAP
+#   if USE_MATERIAL_TEXTURES_ARRAY
+#       define g_RoughnessMap g_MaterialTextures[RoughnessTextureId]
+#   else
+        Texture2DArray g_RoughnessMap;
+#   endif
     SamplerState g_RoughnessMap_sampler;
 #endif
 
 #if USE_PHYS_DESC_MAP
+#   if USE_MATERIAL_TEXTURES_ARRAY
+#       define g_PhysicalDescriptorMap g_MaterialTextures[PhysicalDescriptorTextureId]
+#   else
+        Texture2DArray g_PhysicalDescriptorMap;
+#   endif
     SamplerState g_PhysicalDescriptorMap_sampler;
 #endif
 
 #if USE_NORMAL_MAP
+#   if USE_MATERIAL_TEXTURES_ARRAY
+#       define g_NormalMap g_MaterialTextures[NormalTextureId]
+#   else
+        Texture2DArray g_NormalMap;
+#   endif
     SamplerState g_NormalMap_sampler;
 #endif
 
 #if USE_AO_MAP
+#   if USE_MATERIAL_TEXTURES_ARRAY
+#       define g_AOMap g_MaterialTextures[OcclusionTextureId]
+#   else
+        Texture2DArray g_AOMap;
+#   endif
     SamplerState g_AOMap_sampler;
 #endif
 
 #if USE_EMISSIVE_MAP
+#   if USE_MATERIAL_TEXTURES_ARRAY
+#       define g_EmissiveMap g_MaterialTextures[EmissiveTextureId]
+#   else
+        Texture2DArray g_EmissiveMap;
+#   endif
     SamplerState g_EmissiveMap_sampler;
 #endif
 
@@ -140,14 +178,29 @@ SamplerState g_LinearClampSampler;
 #endif
 
 #if USE_CLEAR_COAT_MAP
+#   if USE_MATERIAL_TEXTURES_ARRAY
+#       define g_ClearCoatMap g_MaterialTextures[ClearCoatTextureId]
+#   else
+        Texture2DArray g_ClearCoatMap;
+#   endif
 #   define g_ClearCoatMap_sampler g_ClearCoat_sampler
 #endif
 
 #if USE_CLEAR_COAT_ROUGHNESS_MAP
+#   if USE_MATERIAL_TEXTURES_ARRAY
+#       define g_ClearCoatRoughnessMap g_MaterialTextures[ClearCoatRoughnessTextureId]
+#   else
+        Texture2DArray g_ClearCoatRoughnessMap;
+#   endif
 #   define g_ClearCoatRoughnessMap_sampler g_ClearCoat_sampler
 #endif
 
 #if USE_CLEAR_COAT_NORMAL_MAP
+#   if USE_MATERIAL_TEXTURES_ARRAY
+#       define g_ClearCoatNormalMap g_MaterialTextures[ClearCoatNormalTextureId]
+#   else
+        Texture2DArray g_ClearCoatNormalMap;
+#   endif
 #   define g_ClearCoatNormalMap_sampler g_ClearCoat_sampler
 #endif
 
@@ -157,14 +210,29 @@ SamplerState g_LinearClampSampler;
 #endif
 
 #if USE_SHEEN_COLOR_MAP
+#   if USE_MATERIAL_TEXTURES_ARRAY
+#       define g_SheenColorMap g_MaterialTextures[SheenColorTextureId]
+#   else
+        Texture2DArray g_SheenColorMap;
+#   endif
 #   define g_SheenColorMap_sampler g_Sheen_sampler
 #endif
 
 #if USE_SHEEN_ROUGHNESS_MAP
+#   if USE_MATERIAL_TEXTURES_ARRAY
+#       define g_SheenRoughnessMap g_MaterialTextures[SheenRoughnessTextureId]
+#   else
+        Texture2DArray g_SheenRoughnessMap;
+#   endif
 #   define g_SheenRoughnessMap_sampler g_Sheen_sampler
 #endif
 
 #if USE_ANISOTROPY_MAP
+#   if USE_MATERIAL_TEXTURES_ARRAY
+#       define g_AnisotropyMap g_MaterialTextures[AnisotropyTextureId]
+#   else
+        Texture2DArray g_AnisotropyMap;
+#   endif
     SamplerState g_AnisotropyMap_sampler;
 #endif
 
@@ -173,18 +241,38 @@ SamplerState g_LinearClampSampler;
 #endif
 
 #if USE_IRIDESCENCE_MAP
+#   if USE_MATERIAL_TEXTURES_ARRAY
+#       define g_IridescenceMap g_MaterialTextures[IridescenceTextureId]
+#   else
+        Texture2DArray g_IridescenceMap;
+#   endif
 #   define g_IridescenceMap_sampler g_Iridescence_sampler
 #endif
 
 #if USE_IRIDESCENCE_THICKNESS_MAP
+#   if USE_MATERIAL_TEXTURES_ARRAY
+#       define g_IridescenceThicknessMap g_MaterialTextures[IridescenceThicknessTextureId]
+#   else
+        Texture2DArray g_IridescenceThicknessMap;
+#   endif
 #   define g_IridescenceThicknessMap_sampler g_Iridescence_sampler
 #endif
 
 #if USE_TRANSMISSION_MAP
+#   if USE_MATERIAL_TEXTURES_ARRAY
+#       define g_TransmissionMap g_MaterialTextures[TransmissionTextureId]
+#   else
+        Texture2DArray g_TransmissionMap;
+#   endif
     SamplerState g_TransmissionMap_sampler;
 #endif
 
 #if USE_THICKNESS_MAP
+#   if USE_MATERIAL_TEXTURES_ARRAY
+#       define g_ThicknessMap g_MaterialTextures[ThicknessTextureId]
+#   else
+        Texture2DArray g_ThicknessMap;
+#   endif
     SamplerState g_ThicknessMap_sampler;
 #endif
 
@@ -260,7 +348,7 @@ float4 GetBaseColor(VSOutput              VSOut,
 
 #   if USE_COLOR_MAP
     {
-        BaseColor = SampleTexture(g_MaterialTextures[BaseColorTextureId],
+        BaseColor = SampleTexture(g_ColorMap,
                                   g_ColorMap_sampler,
                                   VSOut,
                                   Material.Textures[BaseColorTextureAttribId],
@@ -323,7 +411,7 @@ float3 GetMicroNormal(PBRMaterialShaderInfo Material,
 #   if USE_NORMAL_MAP && (USE_TEXCOORD0 || USE_TEXCOORD1)
     {
         MicroNormal = SampleNormalTexture(Material.Textures[NormalTextureAttribId],
-                                          g_MaterialTextures[NormalTextureId],
+                                          g_NormalMap,
                                           g_NormalMap_sampler,
                                           NormalMapUV,
                                           SmoothNormalMapUV,
@@ -341,7 +429,7 @@ float GetOcclusion(VSOutput              VSOut,
     float Occlusion = 1.0;
 #   if USE_AO_MAP
     {
-        Occlusion = SampleTexture(g_MaterialTextures[OcclusionTextureId],
+        Occlusion = SampleTexture(g_AOMap,
                                   g_AOMap_sampler,
                                   VSOut,
                                   Material.Textures[OcclusionTextureAttribId],
@@ -357,7 +445,7 @@ float3 GetEmissive(VSOutput              VSOut,
     float3 Emissive = float3(1.0, 1.0, 1.0);
 #   if USE_EMISSIVE_MAP
     {
-        Emissive = SampleTexture(g_MaterialTextures[EmissiveTextureId],
+        Emissive = SampleTexture(g_EmissiveMap,
                                  g_EmissiveMap_sampler,
                                  VSOut,
                                  Material.Textures[EmissiveTextureAttribId],
@@ -376,7 +464,7 @@ float4 GetPhysicalDesc(VSOutput              VSOut,
     float4 PhysicalDesc = float4(1.0, 1.0, 1.0, 1.0);
 #   if USE_PHYS_DESC_MAP
     {
-        PhysicalDesc = SampleTexture(g_MaterialTextures[PhysicalDescriptorTextureId],
+        PhysicalDesc = SampleTexture(g_PhysicalDescriptorMap,
                                      g_PhysicalDescriptorMap_sampler,
                                      VSOut,
                                      Material.Textures[PhysicalDescriptorTextureAttribId],
@@ -386,7 +474,7 @@ float4 GetPhysicalDesc(VSOutput              VSOut,
     {
 #       if USE_METALLIC_MAP
         {
-            PhysicalDesc.b = SampleTexture(g_MaterialTextures[MetallicTextureId],
+            PhysicalDesc.b = SampleTexture(g_MetallicMap,
                                            g_MetallicMap_sampler,
                                            VSOut,
                                            Material.Textures[MetallicTextureAttribId],
@@ -396,7 +484,7 @@ float4 GetPhysicalDesc(VSOutput              VSOut,
 
 #       if USE_ROUGHNESS_MAP
         {
-            PhysicalDesc.g = SampleTexture(g_MaterialTextures[RoughnessTextureId],
+            PhysicalDesc.g = SampleTexture(g_RoughnessMap,
                                            g_RoughnessMap_sampler,
                                            VSOut,
                                            Material.Textures[RoughnessTextureAttribId],
@@ -424,7 +512,7 @@ float GetClearcoatFactor(VSOutput              VSOut,
         float Cearcoat = 1.0;
 #       if USE_CLEAR_COAT_MAP
         {
-            Cearcoat = SampleTexture(g_MaterialTextures[ClearCoatTextureId],
+            Cearcoat = SampleTexture(g_ClearCoatMap,
                                      g_ClearCoatMap_sampler,
                                      VSOut,
                                      Material.Textures[ClearCoatTextureAttribId],
@@ -448,7 +536,7 @@ float GetClearcoatRoughness(VSOutput              VSOut,
         float CearcoatRoughness = 1.0;
 #       if USE_CLEAR_COAT_ROUGHNESS_MAP
         {
-            CearcoatRoughness = SampleTexture(g_MaterialTextures[ClearCoatRoughnessTextureId],
+            CearcoatRoughness = SampleTexture(g_ClearCoatRoughnessMap,
                                               g_ClearCoatRoughnessMap_sampler,
                                               VSOut,
                                               Material.Textures[ClearCoatRoughnessTextureAttribId],
@@ -477,7 +565,7 @@ float3 GetClearcoatNormal(PBRMaterialShaderInfo Material,
         {
             ClearcoatNormal =
                 SampleNormalTexture(Material.Textures[ClearCoatNormalTextureAttribId],
-                                    g_MaterialTextures[ClearCoatNormalTextureId], 
+                                    g_ClearCoatNormalMap,
                                     g_ClearCoatNormalMap_sampler,
                                     NormalMapUV,
                                     SmoothNormalMapUV,
@@ -502,7 +590,7 @@ float3 GetSheenColor(VSOutput              VSOut,
         float3 SheenColor = float3(1.0, 1.0, 1.0);
 #       if USE_SHEEN_COLOR_MAP
         {
-            SheenColor = SampleTexture(g_MaterialTextures[SheenColorTextureId],
+            SheenColor = SampleTexture(g_SheenColorMap,
                                        g_SheenColorMap_sampler,
                                        VSOut,
                                        Material.Textures[SheenColorTextureAttribId],
@@ -527,7 +615,7 @@ float GetSheenRoughness(VSOutput              VSOut,
         float SheenRoughness = 1.0;
 #       if USE_SHEEN_ROUGHNESS_MAP
         {
-            SheenRoughness = SampleTexture(g_MaterialTextures[SheenRoughnessTextureId],
+            SheenRoughness = SampleTexture(g_SheenRoughnessMap,
                                            g_SheenRoughnessMap_sampler,
                                            VSOut,
                                            Material.Textures[SheenRoughnessTextureAttribId],
@@ -556,7 +644,7 @@ float3 GetAnisotropy(VSOutput              VSOut,
         float3 Anisotropy = float3(1.0, 0.5, 1.0);
 #       if USE_ANISOTROPY_MAP
         {
-            Anisotropy = SampleTexture(g_MaterialTextures[AnisotropyTextureId],
+            Anisotropy = SampleTexture(g_AnisotropyMap,
                                        g_AnisotropyMap_sampler,
                                        VSOut,
                                        Material.Textures[AnisotropyTextureAttribId],
@@ -586,7 +674,7 @@ float GetIridescence(VSOutput              VSOut,
         float Iridescence = 1.0;
 #       if USE_IRIDESCENCE_MAP
         {
-            Iridescence = SampleTexture(g_MaterialTextures[IridescenceTextureId],
+            Iridescence = SampleTexture(g_IridescenceMap,
                                         g_IridescenceMap_sampler,
                                         VSOut,
                                         Material.Textures[IridescenceTextureAttribId],
@@ -611,7 +699,7 @@ float GetIridescenceThickness(VSOutput              VSOut,
         float Thickness = 1.0;
 #       if USE_IRIDESCENCE_THICKNESS_MAP
         {
-            Thickness = SampleTexture(g_MaterialTextures[IridescenceThicknessTextureId],
+            Thickness = SampleTexture(g_IridescenceThicknessMap,
                                       g_IridescenceThicknessMap_sampler,
                                       VSOut,
                                       Material.Textures[IridescenceThicknessTextureAttribId],
@@ -639,7 +727,7 @@ float GetTransmission(VSOutput              VSOut,
         float Transmission = 1.0;
 #       if USE_TRANSMISSION_MAP
         {
-            Transmission = SampleTexture(g_MaterialTextures[TransmissionTextureId],
+            Transmission = SampleTexture(g_TransmissionMap,
                                          g_TransmissionMap_sampler,
                                          VSOut,
                                          Material.Textures[TransmissionTextureAttribId],
@@ -667,7 +755,7 @@ float GetVolumeThickness(VSOutput              VSOut,
         float Thickness = 1.0;
 #       if USE_THICKNESS_MAP
         {
-            Thickness = SampleTexture(g_MaterialTextures[ThicknessTextureId],
+            Thickness = SampleTexture(g_ThicknessMap,
                                       g_ThicknessMap_sampler,
                                       VSOut,
                                       Material.Textures[ThicknessTextureAttribId],

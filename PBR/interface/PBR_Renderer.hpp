@@ -126,6 +126,12 @@ public:
         ///             - Default physical description map
         bool CreateDefaultTextures = true;
 
+        /// Whether to use single material texture array instead of separate textures.
+        ///
+        /// \remarks    When set to true, textures will be accessed in the shader using
+        ///             index rather than name. This enables bindless mode.
+        bool UseMaterialTexturesArray = false;
+
         static const SamplerDesc DefaultSampler;
 
         /// Immutable sampler for color map texture.
@@ -519,6 +525,8 @@ public:
 
     template <typename HandlerType>
     inline static void ProcessTexturAttribs(PSO_FLAGS PSOFlags, HandlerType&& Handler);
+
+    static const char* GetTextureShaderName(TEXTURE_ATTRIB_ID Id);
 
 protected:
     ShaderMacroHelper DefineMacros(PSO_FLAGS PSOFlags, DebugViewType DebugView) const;

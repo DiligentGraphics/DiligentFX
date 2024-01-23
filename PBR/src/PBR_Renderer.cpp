@@ -74,6 +74,34 @@ PBR_Renderer::PSOKey::PSOKey(PSO_FLAGS     _Flags,
     Hash = ComputeHash(Flags, AlphaMode, DoubleSided, static_cast<Uint32>(DebugView));
 }
 
+const char* PBR_Renderer::GetTextureShaderName(TEXTURE_ATTRIB_ID Id)
+{
+    static const std::array<const char*, TEXTURE_ATTRIB_ID_COUNT> TextureNames =
+        []() {
+            std::array<const char*, TEXTURE_ATTRIB_ID_COUNT> Names{};
+            Names[TEXTURE_ATTRIB_ID_BASE_COLOR]            = "g_ColorMap";
+            Names[TEXTURE_ATTRIB_ID_NORMAL]                = "g_NormalMap";
+            Names[TEXTURE_ATTRIB_ID_PHYS_DESC]             = "g_PhysicalDescriptorMap";
+            Names[TEXTURE_ATTRIB_ID_METALLIC]              = "g_MetallicMap";
+            Names[TEXTURE_ATTRIB_ID_ROUGHNESS]             = "g_RoughnessMap";
+            Names[TEXTURE_ATTRIB_ID_OCCLUSION]             = "g_AOMap";
+            Names[TEXTURE_ATTRIB_ID_EMISSIVE]              = "g_EmissiveMap";
+            Names[TEXTURE_ATTRIB_ID_CLEAR_COAT]            = "g_ClearCoatMap";
+            Names[TEXTURE_ATTRIB_ID_CLEAR_COAT_ROUGHNESS]  = "g_ClearCoatRoughnessMap";
+            Names[TEXTURE_ATTRIB_ID_CLEAR_COAT_NORMAL]     = "g_ClearCoatNormalMap";
+            Names[TEXTURE_ATTRIB_ID_SHEEN_COLOR]           = "g_SheenColorMap";
+            Names[TEXTURE_ATTRIB_ID_SHEEN_ROUGHNESS]       = "g_SheenRoughnessMap";
+            Names[TEXTURE_ATTRIB_ID_ANISOTROPY]            = "g_AnisotropyMap";
+            Names[TEXTURE_ATTRIB_ID_IRIDESCENCE]           = "g_IridescenceMap";
+            Names[TEXTURE_ATTRIB_ID_IRIDESCENCE_THICKNESS] = "g_IridescenceThicknessMap";
+            Names[TEXTURE_ATTRIB_ID_TRANSMISSION]          = "g_TransmissionMap";
+            Names[TEXTURE_ATTRIB_ID_THICKNESS]             = "g_ThicknessMap";
+            static_assert(TEXTURE_ATTRIB_ID_COUNT == 17, "Not all texture names are initialized");
+            return Names;
+        }();
+    return TextureNames[Id];
+}
+
 PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
                            IRenderStateCache* pStateCache,
                            IDeviceContext*    pCtx,
@@ -598,19 +626,29 @@ void PBR_Renderer::InitCommonSRBVars(IShaderResourceBinding* pSRB, IBuffer* pFra
 
 void PBR_Renderer::SetMaterialTexture(IShaderResourceBinding* pSRB, ITextureView* pTexSRV, TEXTURE_ATTRIB_ID TextureId) const
 {
-    const auto TextureIdx = m_MaterialTextureIds[TextureId];
-    if (TextureIdx == InvalidMaterialTextureId)
+    if (m_Settings.UseMaterialTexturesArray)
     {
-        UNEXPECTED("Texture is not initialized");
-        return;
+        const auto TextureIdx = m_MaterialTextureIds[TextureId];
+        if (TextureIdx == InvalidMaterialTextureId)
+        {
+            UNEXPECTED("Texture is not initialized");
+            return;
+        }
+
+        if (IShaderResourceVariable* pMatTexturesVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_MaterialTextures"))
+        {
+            IDeviceObject* pObj[] = {pTexSRV};
+            pMatTexturesVar->SetArray(pObj, TextureIdx, 1);
+        }
     }
-
-    IShaderResourceVariable* pMatTexturesVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_MaterialTextures");
-    if (pMatTexturesVar == nullptr)
-        return;
-
-    IDeviceObject* pObj[] = {pTexSRV};
-    pMatTexturesVar->SetArray(pObj, TextureIdx, 1);
+    else
+    {
+        const char* TextureName = GetTextureShaderName(TextureId);
+        if (IShaderResourceVariable* pTexVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, TextureName))
+        {
+            pTexVar->Set(pTexSRV);
+        }
+    }
 }
 
 void PBR_Renderer::CreateSignature()
@@ -640,17 +678,30 @@ void PBR_Renderer::CreateSignature()
                                             const char*        SamplerName,
                                             const SamplerDesc& SamDesc) {
         VERIFY(m_MaterialTextureIds[TexId] == InvalidMaterialTextureId, "Material texture has already been added");
-        if (m_Device.GetDeviceInfo().IsGLDevice())
+
+        if (m_Settings.UseMaterialTexturesArray)
         {
-            // Use the same immutable sampler for all textures as immutable sampler arrays are not supported.
-            SamplerName = "g_MaterialTextures";
+            m_MaterialTextureIds[TexId] = static_cast<Uint16>(m_NumMaterialTextures++);
+            if (m_Device.GetDeviceInfo().IsGLDevice())
+            {
+                // Use the same immutable sampler for all textures as immutable sampler arrays are not supported.
+                SamplerName = "g_MaterialTextures";
+            }
+        }
+        else
+        {
+            const char* TextureName = GetTextureShaderName(TexId);
+            SignatureDesc.AddResource(SHADER_TYPE_PIXEL, TextureName, SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
+            if (m_Device.GetDeviceInfo().IsGLDevice())
+            {
+                SamplerName = TextureName;
+            }
         }
 
         if (Samplers.emplace(SamplerName).second)
         {
             SignatureDesc.AddImmutableSampler(SHADER_TYPE_PIXEL, SamplerName, SamDesc);
         }
-        m_MaterialTextureIds[TexId] = static_cast<Uint16>(m_NumMaterialTextures++);
     };
 
     AddMaterialTextureAndSampler(TEXTURE_ATTRIB_ID_BASE_COLOR, "g_ColorMap_sampler", m_Settings.ColorMapImmutableSampler);
@@ -907,19 +958,23 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS     PSOFlags,
                              VERIFY_EXPR(CurrIndex == MaxIndex + 1);
                              MaxIndex = std::max(MaxIndex, CurrIndex);
 
-                             if (m_MaterialTextureIds[AttribId] != InvalidMaterialTextureId)
+                             if (m_Settings.UseMaterialTexturesArray)
                              {
-                                 const std::string TextureIdName = std::string{TextureName} + "TextureId";
-                                 Macros.Add(TextureIdName.c_str(), static_cast<int>(m_MaterialTextureIds[AttribId]));
-                             }
-                             else
-                             {
-                                 DEV_ERROR("Shader uses texture ", TextureName, ", but its index is not provided.");
+                                 if (m_MaterialTextureIds[AttribId] != InvalidMaterialTextureId)
+                                 {
+                                     const std::string TextureIdName = std::string{TextureName} + "TextureId";
+                                     Macros.Add(TextureIdName.c_str(), static_cast<int>(m_MaterialTextureIds[AttribId]));
+                                 }
+                                 else
+                                 {
+                                     DEV_ERROR("Shader uses texture ", TextureName, ", but its index is not provided.");
+                                 }
                              }
                          });
     Macros
         .Add("PBR_NUM_TEXTURE_ATTRIBUTES", MaxIndex + 1)
-        .Add("PBR_NUM_MATERIAL_TEXTURES", static_cast<int>(m_NumMaterialTextures));
+        .Add("PBR_NUM_MATERIAL_TEXTURES", static_cast<int>(m_NumMaterialTextures))
+        .Add("USE_MATERIAL_TEXTURES_ARRAY", m_Settings.UseMaterialTexturesArray);
 
     return Macros;
 }
