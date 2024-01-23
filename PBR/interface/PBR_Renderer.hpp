@@ -1,5 +1,5 @@
 /*
- *  Copyright 2019-2023 Diligent Graphics LLC
+ *  Copyright 2019-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -502,7 +502,8 @@ public:
 
     PsoCacheAccessor GetPsoCacheAccessor(const GraphicsPipelineDesc& GraphicsDesc);
 
-    void InitCommonSRBVars(IShaderResourceBinding* pSRB, IBuffer* pFrameAttribs);
+    void InitCommonSRBVars(IShaderResourceBinding* pSRB, IBuffer* pFrameAttribs) const;
+    void SetMaterialTexture(IShaderResourceBinding* pSRB, ITextureView* pTexSRV, TEXTURE_ATTRIB_ID TextureId) const;
 
     /// Initializes internal renderer parameters.
     ///
@@ -514,10 +515,10 @@ public:
 
     const CreateInfo& GetSettings() const { return m_Settings; }
 
-    inline static constexpr PBR_Renderer::PSO_FLAGS GetTextureAttribPSOFlag(PBR_Renderer::TEXTURE_ATTRIB_ID AttribId);
+    inline static constexpr PSO_FLAGS GetTextureAttribPSOFlag(TEXTURE_ATTRIB_ID AttribId);
 
     template <typename HandlerType>
-    inline static void ProcessTexturAttribs(PBR_Renderer::PSO_FLAGS PSOFlags, HandlerType&& Handler);
+    inline static void ProcessTexturAttribs(PSO_FLAGS PSOFlags, HandlerType&& Handler);
 
 protected:
     ShaderMacroHelper DefineMacros(PSO_FLAGS PSOFlags, DebugViewType DebugView) const;
@@ -574,6 +575,15 @@ protected:
     RefCntAutoPtr<IPipelineResourceSignature> m_ResourceSignature;
 
     std::unordered_map<GraphicsPipelineDesc, PsoHashMapType> m_PSOs;
+
+    static constexpr Uint16                     InvalidMaterialTextureId = 0xFFFFu;
+    std::array<Uint16, TEXTURE_ATTRIB_ID_COUNT> m_MaterialTextureIds     = {
+        []() {
+            std::array<Uint16, TEXTURE_ATTRIB_ID_COUNT> TextureIds;
+            TextureIds.fill(InvalidMaterialTextureId);
+            return TextureIds;
+        }()};
+    Uint32 m_NumMaterialTextures = 0;
 };
 
 DEFINE_FLAG_ENUM_OPERATORS(PBR_Renderer::PSO_FLAGS)

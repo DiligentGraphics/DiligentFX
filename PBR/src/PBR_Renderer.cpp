@@ -557,7 +557,7 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
 }
 
 
-void PBR_Renderer::InitCommonSRBVars(IShaderResourceBinding* pSRB, IBuffer* pFrameAttribs)
+void PBR_Renderer::InitCommonSRBVars(IShaderResourceBinding* pSRB, IBuffer* pFrameAttribs) const
 {
     if (pSRB == nullptr)
     {
@@ -596,8 +596,27 @@ void PBR_Renderer::InitCommonSRBVars(IShaderResourceBinding* pSRB, IBuffer* pFra
     }
 }
 
+void PBR_Renderer::SetMaterialTexture(IShaderResourceBinding* pSRB, ITextureView* pTexSRV, TEXTURE_ATTRIB_ID TextureId) const
+{
+    const auto TextureIdx = m_MaterialTextureIds[TextureId];
+    if (TextureIdx == InvalidMaterialTextureId)
+    {
+        UNEXPECTED("Texture is not initialized");
+        return;
+    }
+
+    IShaderResourceVariable* pMatTexturesVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_MaterialTextures");
+    if (pMatTexturesVar == nullptr)
+        return;
+
+    IDeviceObject* pObj[] = {pTexSRV};
+    pMatTexturesVar->SetArray(pObj, TextureIdx, 1);
+}
+
 void PBR_Renderer::CreateSignature()
 {
+    VERIFY(!m_ResourceSignature, "Resource signature has already been created");
+
     PipelineResourceSignatureDescX SignatureDesc{"PBR Renderer Resource Signature"};
     SignatureDesc
         .SetUseCombinedTextureSamplers(m_Device.GetDeviceInfo().IsGLDevice())
@@ -614,82 +633,101 @@ void PBR_Renderer::CreateSignature()
         Samplers.emplace("g_LinearClampSampler");
     }
 
-    auto AddTextureAndSampler = [&](const char*                   Name,
-                                    const SamplerDesc&            SamDesc,
-                                    const char*                   _SamplerName = nullptr,
-                                    SHADER_RESOURCE_VARIABLE_TYPE VarType      = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE) //
-    {
-        SignatureDesc.AddResource(SHADER_TYPE_PIXEL, Name, SHADER_RESOURCE_TYPE_TEXTURE_SRV, VarType);
+    VERIFY_EXPR(m_NumMaterialTextures == 0);
+    m_NumMaterialTextures = 0;
 
-        std::string SamplerName;
+    auto AddMaterialTextureAndSampler = [&](TEXTURE_ATTRIB_ID  TexId,
+                                            const char*        SamplerName,
+                                            const SamplerDesc& SamDesc) {
+        VERIFY(m_MaterialTextureIds[TexId] == InvalidMaterialTextureId, "Material texture has already been added");
         if (m_Device.GetDeviceInfo().IsGLDevice())
-            SamplerName = Name;
-        else if (_SamplerName != nullptr)
-            SamplerName = _SamplerName;
-        else
-            SamplerName = std::string{Name} + "_sampler";
+        {
+            // Use the same immutable sampler for all textures as immutable sampler arrays are not supported.
+            SamplerName = "g_MaterialTextures";
+        }
+
         if (Samplers.emplace(SamplerName).second)
         {
-            SignatureDesc.AddImmutableSampler(SHADER_TYPE_PIXEL, SamplerName.c_str(), SamDesc);
+            SignatureDesc.AddImmutableSampler(SHADER_TYPE_PIXEL, SamplerName, SamDesc);
         }
+        m_MaterialTextureIds[TexId] = static_cast<Uint16>(m_NumMaterialTextures++);
     };
 
-    AddTextureAndSampler("g_ColorMap", m_Settings.ColorMapImmutableSampler);
-    AddTextureAndSampler("g_NormalMap", m_Settings.NormalMapImmutableSampler);
+    AddMaterialTextureAndSampler(TEXTURE_ATTRIB_ID_BASE_COLOR, "g_ColorMap_sampler", m_Settings.ColorMapImmutableSampler);
+    AddMaterialTextureAndSampler(TEXTURE_ATTRIB_ID_NORMAL, "g_NormalMap_sampler", m_Settings.NormalMapImmutableSampler);
 
     if (m_Settings.UseSeparateMetallicRoughnessTextures)
     {
-        AddTextureAndSampler("g_MetallicMap", m_Settings.PhysDescMapImmutableSampler);
-        AddTextureAndSampler("g_RoughnessMap", m_Settings.PhysDescMapImmutableSampler);
+        AddMaterialTextureAndSampler(TEXTURE_ATTRIB_ID_METALLIC, "g_MetallicMap_sampler", m_Settings.PhysDescMapImmutableSampler);
+        AddMaterialTextureAndSampler(TEXTURE_ATTRIB_ID_ROUGHNESS, "g_RoughnessMap_sampler", m_Settings.PhysDescMapImmutableSampler);
     }
     else
     {
-        AddTextureAndSampler("g_PhysicalDescriptorMap", m_Settings.PhysDescMapImmutableSampler);
+        AddMaterialTextureAndSampler(TEXTURE_ATTRIB_ID_PHYS_DESC, "g_PhysicalDescriptorMap_sampler", m_Settings.PhysDescMapImmutableSampler);
     }
 
     if (m_Settings.EnableAO)
     {
-        AddTextureAndSampler("g_AOMap", m_Settings.AOMapImmutableSampler);
+        AddMaterialTextureAndSampler(TEXTURE_ATTRIB_ID_OCCLUSION, "g_AOMap_sampler", m_Settings.AOMapImmutableSampler);
     }
 
     if (m_Settings.EnableEmissive)
     {
-        AddTextureAndSampler("g_EmissiveMap", m_Settings.EmissiveMapImmutableSampler);
+        AddMaterialTextureAndSampler(TEXTURE_ATTRIB_ID_EMISSIVE, "g_EmissiveMap_sampler", m_Settings.EmissiveMapImmutableSampler);
     }
 
     if (m_Settings.EnableClearCoat)
     {
-        AddTextureAndSampler("g_ClearCoatMap", m_Settings.ClearCoatMapImmutableSampler, "g_ClearCoat_sampler");
-        AddTextureAndSampler("g_ClearCoatRoughnessMap", m_Settings.ClearCoatMapImmutableSampler, "g_ClearCoat_sampler");
-        AddTextureAndSampler("g_ClearCoatNormalMap", m_Settings.ClearCoatMapImmutableSampler, "g_ClearCoat_sampler");
+        AddMaterialTextureAndSampler(TEXTURE_ATTRIB_ID_CLEAR_COAT, "g_ClearCoat_sampler", m_Settings.ClearCoatMapImmutableSampler);
+        AddMaterialTextureAndSampler(TEXTURE_ATTRIB_ID_CLEAR_COAT_ROUGHNESS, "g_ClearCoat_sampler", m_Settings.ClearCoatMapImmutableSampler);
+        AddMaterialTextureAndSampler(TEXTURE_ATTRIB_ID_CLEAR_COAT_NORMAL, "g_ClearCoat_sampler", m_Settings.ClearCoatMapImmutableSampler);
     }
 
     if (m_Settings.EnableSheen)
     {
-        AddTextureAndSampler("g_SheenColorMap", m_Settings.SheenMapImmutableSampler, "g_Sheen_sampler");
-        AddTextureAndSampler("g_SheenRoughnessMap", m_Settings.SheenMapImmutableSampler, "g_Sheen_sampler");
+        AddMaterialTextureAndSampler(TEXTURE_ATTRIB_ID_SHEEN_COLOR, "g_Sheen_sampler", m_Settings.SheenMapImmutableSampler);
+        AddMaterialTextureAndSampler(TEXTURE_ATTRIB_ID_SHEEN_ROUGHNESS, "g_Sheen_sampler", m_Settings.SheenMapImmutableSampler);
     }
 
     if (m_Settings.EnableAnisotropy)
     {
-        AddTextureAndSampler("g_AnisotropyMap", m_Settings.AnisotropyMapImmutableSampler);
+        AddMaterialTextureAndSampler(TEXTURE_ATTRIB_ID_ANISOTROPY, "g_AnisotropyMap_sampler", m_Settings.AnisotropyMapImmutableSampler);
     }
 
     if (m_Settings.EnableIridescence)
     {
-        AddTextureAndSampler("g_IridescenceMap", m_Settings.IridescenceMapImmutableSampler, "g_Iridescence_sampler");
-        AddTextureAndSampler("g_IridescenceThicknessMap", m_Settings.IridescenceMapImmutableSampler, "g_Iridescence_sampler");
+        AddMaterialTextureAndSampler(TEXTURE_ATTRIB_ID_IRIDESCENCE, "g_Iridescence_sampler", m_Settings.IridescenceMapImmutableSampler);
+        AddMaterialTextureAndSampler(TEXTURE_ATTRIB_ID_IRIDESCENCE_THICKNESS, "g_Iridescence_sampler", m_Settings.IridescenceMapImmutableSampler);
     }
 
     if (m_Settings.EnableTransmission)
     {
-        AddTextureAndSampler("g_TransmissionMap", m_Settings.TransmissionMapImmutableSampler);
+        AddMaterialTextureAndSampler(TEXTURE_ATTRIB_ID_TRANSMISSION, "g_TransmissionMap_sampler", m_Settings.TransmissionMapImmutableSampler);
     }
 
     if (m_Settings.EnableVolume)
     {
-        AddTextureAndSampler("g_ThicknessMap", m_Settings.ThicknessMapImmutableSampler);
+        AddMaterialTextureAndSampler(TEXTURE_ATTRIB_ID_THICKNESS, "g_ThicknessMap_sampler", m_Settings.ThicknessMapImmutableSampler);
     }
+
+    if (m_NumMaterialTextures > 0)
+    {
+        SignatureDesc.AddResource(SHADER_TYPE_PIXEL, "g_MaterialTextures", m_NumMaterialTextures, SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
+    }
+
+    auto AddTextureAndSampler = [&](const char*                   TextureName,
+                                    const SamplerDesc&            SamDesc,
+                                    const char*                   SeparateSamplerName,
+                                    SHADER_RESOURCE_VARIABLE_TYPE VarType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE) //
+    {
+        SignatureDesc.AddResource(SHADER_TYPE_PIXEL, TextureName, SHADER_RESOURCE_TYPE_TEXTURE_SRV, VarType);
+
+        const char* SamplerName = m_Device.GetDeviceInfo().IsGLDevice() ? TextureName : SeparateSamplerName;
+        if (Samplers.emplace(SamplerName).second)
+        {
+            SignatureDesc.AddImmutableSampler(SHADER_TYPE_PIXEL, SamplerName, SamDesc);
+        }
+    };
 
     if (m_Settings.EnableIBL)
     {
@@ -831,43 +869,57 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS     PSOFlags,
     Macros.Add("TEX_COLOR_CONVERSION_MODE_SRGB_TO_LINEAR", CreateInfo::TEX_COLOR_CONVERSION_MODE_SRGB_TO_LINEAR);
     Macros.Add("TEX_COLOR_CONVERSION_MODE", m_Settings.TexColorConversionMode);
 
-    std::array<const char*, TEXTURE_ATTRIB_ID_COUNT> TextureAttribNames{};
-    TextureAttribNames[TEXTURE_ATTRIB_ID_BASE_COLOR]            = "BaseColorTextureAttribId";
-    TextureAttribNames[TEXTURE_ATTRIB_ID_NORMAL]                = "NormalTextureAttribId";
-    TextureAttribNames[TEXTURE_ATTRIB_ID_PHYS_DESC]             = "PhysicalDescriptorTextureAttribId";
-    TextureAttribNames[TEXTURE_ATTRIB_ID_METALLIC]              = "MetallicTextureAttribId";
-    TextureAttribNames[TEXTURE_ATTRIB_ID_ROUGHNESS]             = "RoughnessTextureAttribId";
-    TextureAttribNames[TEXTURE_ATTRIB_ID_OCCLUSION]             = "OcclusionTextureAttribId";
-    TextureAttribNames[TEXTURE_ATTRIB_ID_EMISSIVE]              = "EmissiveTextureAttribId";
-    TextureAttribNames[TEXTURE_ATTRIB_ID_CLEAR_COAT]            = "ClearCoatTextureAttribId";
-    TextureAttribNames[TEXTURE_ATTRIB_ID_CLEAR_COAT_ROUGHNESS]  = "ClearCoatRoughnessTextureAttribId";
-    TextureAttribNames[TEXTURE_ATTRIB_ID_CLEAR_COAT_NORMAL]     = "ClearCoatNormalTextureAttribId";
-    TextureAttribNames[TEXTURE_ATTRIB_ID_SHEEN_COLOR]           = "SheenColorTextureAttribId";
-    TextureAttribNames[TEXTURE_ATTRIB_ID_SHEEN_ROUGHNESS]       = "SheenRoughnessTextureAttribId";
-    TextureAttribNames[TEXTURE_ATTRIB_ID_ANISOTROPY]            = "AnisotropyTextureAttribId";
-    TextureAttribNames[TEXTURE_ATTRIB_ID_IRIDESCENCE]           = "IridescenceTextureAttribId";
-    TextureAttribNames[TEXTURE_ATTRIB_ID_IRIDESCENCE_THICKNESS] = "IridescenceThicknessTextureAttribId";
-    TextureAttribNames[TEXTURE_ATTRIB_ID_TRANSMISSION]          = "TransmissionTextureAttribId";
-    TextureAttribNames[TEXTURE_ATTRIB_ID_THICKNESS]             = "ThicknessTextureAttribId";
+    std::array<const char*, TEXTURE_ATTRIB_ID_COUNT> TextureNames{};
+    TextureNames[TEXTURE_ATTRIB_ID_BASE_COLOR]            = "BaseColor";
+    TextureNames[TEXTURE_ATTRIB_ID_NORMAL]                = "Normal";
+    TextureNames[TEXTURE_ATTRIB_ID_PHYS_DESC]             = "PhysicalDescriptor";
+    TextureNames[TEXTURE_ATTRIB_ID_METALLIC]              = "Metallic";
+    TextureNames[TEXTURE_ATTRIB_ID_ROUGHNESS]             = "Roughness";
+    TextureNames[TEXTURE_ATTRIB_ID_OCCLUSION]             = "Occlusion";
+    TextureNames[TEXTURE_ATTRIB_ID_EMISSIVE]              = "Emissive";
+    TextureNames[TEXTURE_ATTRIB_ID_CLEAR_COAT]            = "ClearCoat";
+    TextureNames[TEXTURE_ATTRIB_ID_CLEAR_COAT_ROUGHNESS]  = "ClearCoatRoughness";
+    TextureNames[TEXTURE_ATTRIB_ID_CLEAR_COAT_NORMAL]     = "ClearCoatNormal";
+    TextureNames[TEXTURE_ATTRIB_ID_SHEEN_COLOR]           = "SheenColor";
+    TextureNames[TEXTURE_ATTRIB_ID_SHEEN_ROUGHNESS]       = "SheenRoughness";
+    TextureNames[TEXTURE_ATTRIB_ID_ANISOTROPY]            = "Anisotropy";
+    TextureNames[TEXTURE_ATTRIB_ID_IRIDESCENCE]           = "Iridescence";
+    TextureNames[TEXTURE_ATTRIB_ID_IRIDESCENCE_THICKNESS] = "IridescenceThickness";
+    TextureNames[TEXTURE_ATTRIB_ID_TRANSMISSION]          = "Transmission";
+    TextureNames[TEXTURE_ATTRIB_ID_THICKNESS]             = "Thickness";
     static_assert(TEXTURE_ATTRIB_ID_COUNT == 17, "Did you add new texture attribute? You may need to handle it here.");
 
     // Tightly pack these attributes that are used by the shader
     int MaxIndex = -1;
     ProcessTexturAttribs(PSOFlags, [&](int CurrIndex, PBR_Renderer::TEXTURE_ATTRIB_ID AttribId) //
                          {
-                             const auto& AttribName = TextureAttribNames[AttribId];
+                             const char* TextureName = TextureNames[AttribId];
+
                              if (m_Settings.TextureAttribIndices[AttribId] >= 0)
                              {
-                                 Macros.Add(AttribName, CurrIndex);
+                                 const std::string AttribIdName = std::string{TextureName} + "TextureAttribId";
+                                 Macros.Add(AttribIdName.c_str(), CurrIndex);
                              }
                              else
                              {
-                                 DEV_ERROR("Shader expects ", AttribName, ", but it is not provided.");
+                                 DEV_ERROR("Shader uses texture ", TextureName, ", but its attribute index is not provided.");
                              }
                              VERIFY_EXPR(CurrIndex == MaxIndex + 1);
                              MaxIndex = std::max(MaxIndex, CurrIndex);
+
+                             if (m_MaterialTextureIds[AttribId] != InvalidMaterialTextureId)
+                             {
+                                 const std::string TextureIdName = std::string{TextureName} + "TextureId";
+                                 Macros.Add(TextureIdName.c_str(), static_cast<int>(m_MaterialTextureIds[AttribId]));
+                             }
+                             else
+                             {
+                                 DEV_ERROR("Shader uses texture ", TextureName, ", but its index is not provided.");
+                             }
                          });
-    Macros.Add("PBR_NUM_TEXTURE_ATTRIBUTES", MaxIndex + 1);
+    Macros
+        .Add("PBR_NUM_TEXTURE_ATTRIBUTES", MaxIndex + 1)
+        .Add("PBR_NUM_MATERIAL_TEXTURES", static_cast<int>(m_NumMaterialTextures));
 
     return Macros;
 }

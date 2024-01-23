@@ -611,22 +611,21 @@ void HnMaterial::UpdateSRB(IObject*      pSRBCache,
 
         UsdRenderer.InitCommonSRBVars(pSRB, pFrameAttribs);
 
-        auto SetTexture = [&](const char* VarName, ITexture* pTex) //
+        auto SetTexture = [&](PBR_Renderer::TEXTURE_ATTRIB_ID ID, ITexture* pTex) //
         {
             if (pTex == nullptr)
                 return;
 
-            if (auto* pVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, VarName))
-                pVar->Set(pTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+            UsdRenderer.SetMaterialTexture(pSRB, pTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE), ID);
         };
 
         // clang-format off
-        SetTexture("g_ColorMap",     pDiffuseMap);
-        SetTexture("g_MetallicMap",  pMetallicMap);
-        SetTexture("g_RoughnessMap", pRoughnessMap);
-        SetTexture("g_NormalMap",    pNormalMap);
-        SetTexture("g_AOMap",        pOcclusionMap);
-        SetTexture("g_EmissiveMap",  pEmissiveMap);
+        SetTexture(PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR, pDiffuseMap);
+        SetTexture(PBR_Renderer::TEXTURE_ATTRIB_ID_METALLIC,   pMetallicMap);
+        SetTexture(PBR_Renderer::TEXTURE_ATTRIB_ID_ROUGHNESS,  pRoughnessMap);
+        SetTexture(PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL,     pNormalMap);
+        SetTexture(PBR_Renderer::TEXTURE_ATTRIB_ID_OCCLUSION,  pOcclusionMap);
+        SetTexture(PBR_Renderer::TEXTURE_ATTRIB_ID_EMISSIVE,   pEmissiveMap);
         // clang-format on
 
         return pSRB;

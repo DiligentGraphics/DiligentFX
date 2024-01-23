@@ -133,13 +133,15 @@ void GLTF_PBR_Renderer::InitMaterialSRB(GLTF::Model&            Model,
 
     InitCommonSRBVars(pMaterialSRB, pFrameAttribs);
 
-    auto SetTexture = [&](int TexAttribId, ITextureView* pDefaultTexSRV, const char* VarName) //
+    auto SetTexture = [&](TEXTURE_ATTRIB_ID ID, ITextureView* pDefaultTexSRV) //
     {
+        const int TexAttribId = m_Settings.TextureAttribIndices[ID];
         if (TexAttribId < 0)
         {
             UNEXPECTED("Texture attribute is not initialized");
             return;
         }
+
         RefCntAutoPtr<ITextureView> pTexSRV;
 
         auto TexIdx = Material.GetTextureId(TexAttribId);
@@ -162,56 +164,55 @@ void GLTF_PBR_Renderer::InitMaterialSRB(GLTF::Model&            Model,
         if (pTexSRV == nullptr)
             pTexSRV = pDefaultTexSRV;
 
-        if (auto* pVar = pMaterialSRB->GetVariableByName(SHADER_TYPE_PIXEL, VarName))
-            pVar->Set(pTexSRV);
+        this->SetMaterialTexture(pMaterialSRB, pTexSRV, ID);
     };
 
-    SetTexture(m_Settings.TextureAttribIndices[TEXTURE_ATTRIB_ID_BASE_COLOR], m_pWhiteTexSRV, "g_ColorMap");
-    SetTexture(m_Settings.TextureAttribIndices[TEXTURE_ATTRIB_ID_PHYS_DESC], m_pDefaultPhysDescSRV, "g_PhysicalDescriptorMap");
-    SetTexture(m_Settings.TextureAttribIndices[TEXTURE_ATTRIB_ID_NORMAL], m_pDefaultNormalMapSRV, "g_NormalMap");
+    SetTexture(TEXTURE_ATTRIB_ID_BASE_COLOR, m_pWhiteTexSRV);
+    SetTexture(TEXTURE_ATTRIB_ID_PHYS_DESC, m_pDefaultPhysDescSRV);
+    SetTexture(TEXTURE_ATTRIB_ID_NORMAL, m_pDefaultNormalMapSRV);
 
     if (m_Settings.EnableAO)
     {
-        SetTexture(m_Settings.TextureAttribIndices[TEXTURE_ATTRIB_ID_OCCLUSION], m_pWhiteTexSRV, "g_AOMap");
+        SetTexture(TEXTURE_ATTRIB_ID_OCCLUSION, m_pWhiteTexSRV);
     }
 
     if (m_Settings.EnableEmissive)
     {
-        SetTexture(m_Settings.TextureAttribIndices[TEXTURE_ATTRIB_ID_EMISSIVE], m_pWhiteTexSRV, "g_EmissiveMap");
+        SetTexture(TEXTURE_ATTRIB_ID_EMISSIVE, m_pWhiteTexSRV);
     }
 
     if (m_Settings.EnableClearCoat)
     {
-        SetTexture(m_Settings.TextureAttribIndices[TEXTURE_ATTRIB_ID_CLEAR_COAT], m_pWhiteTexSRV, "g_ClearCoatMap");
-        SetTexture(m_Settings.TextureAttribIndices[TEXTURE_ATTRIB_ID_CLEAR_COAT_ROUGHNESS], m_pWhiteTexSRV, "g_ClearCoatRoughnessMap");
-        SetTexture(m_Settings.TextureAttribIndices[TEXTURE_ATTRIB_ID_CLEAR_COAT_NORMAL], m_pWhiteTexSRV, "g_ClearCoatNormalMap");
+        SetTexture(TEXTURE_ATTRIB_ID_CLEAR_COAT, m_pWhiteTexSRV);
+        SetTexture(TEXTURE_ATTRIB_ID_CLEAR_COAT_ROUGHNESS, m_pWhiteTexSRV);
+        SetTexture(TEXTURE_ATTRIB_ID_CLEAR_COAT_NORMAL, m_pWhiteTexSRV);
     }
 
     if (m_Settings.EnableSheen)
     {
-        SetTexture(m_Settings.TextureAttribIndices[TEXTURE_ATTRIB_ID_SHEEN_COLOR], m_pWhiteTexSRV, "g_SheenColorMap");
-        SetTexture(m_Settings.TextureAttribIndices[TEXTURE_ATTRIB_ID_SHEEN_ROUGHNESS], m_pWhiteTexSRV, "g_SheenRoughnessMap");
+        SetTexture(TEXTURE_ATTRIB_ID_SHEEN_COLOR, m_pWhiteTexSRV);
+        SetTexture(TEXTURE_ATTRIB_ID_SHEEN_ROUGHNESS, m_pWhiteTexSRV);
     }
 
     if (m_Settings.EnableAnisotropy)
     {
-        SetTexture(m_Settings.TextureAttribIndices[TEXTURE_ATTRIB_ID_ANISOTROPY], m_pWhiteTexSRV, "g_AnisotropyMap");
+        SetTexture(TEXTURE_ATTRIB_ID_ANISOTROPY, m_pWhiteTexSRV);
     }
 
     if (m_Settings.EnableIridescence)
     {
-        SetTexture(m_Settings.TextureAttribIndices[TEXTURE_ATTRIB_ID_IRIDESCENCE], m_pWhiteTexSRV, "g_IridescenceMap");
-        SetTexture(m_Settings.TextureAttribIndices[TEXTURE_ATTRIB_ID_IRIDESCENCE_THICKNESS], m_pWhiteTexSRV, "g_IridescenceThicknessMap");
+        SetTexture(TEXTURE_ATTRIB_ID_IRIDESCENCE, m_pWhiteTexSRV);
+        SetTexture(TEXTURE_ATTRIB_ID_IRIDESCENCE_THICKNESS, m_pWhiteTexSRV);
     }
 
     if (m_Settings.EnableTransmission)
     {
-        SetTexture(m_Settings.TextureAttribIndices[TEXTURE_ATTRIB_ID_TRANSMISSION], m_pWhiteTexSRV, "g_TransmissionMap");
+        SetTexture(TEXTURE_ATTRIB_ID_TRANSMISSION, m_pWhiteTexSRV);
     }
 
     if (m_Settings.EnableVolume)
     {
-        SetTexture(m_Settings.TextureAttribIndices[TEXTURE_ATTRIB_ID_THICKNESS], m_pWhiteTexSRV, "g_ThicknessMap");
+        SetTexture(TEXTURE_ATTRIB_ID_THICKNESS, m_pWhiteTexSRV);
     }
 }
 
@@ -233,61 +234,58 @@ void GLTF_PBR_Renderer::CreateResourceCacheSRB(IRenderDevice*           pDevice,
 
     InitCommonSRBVars(pSRB, pFrameAttribs);
 
-    auto SetTexture = [&](TEXTURE_FORMAT Fmt, const char* VarName) //
+    auto SetTexture = [&](TEXTURE_FORMAT Fmt, TEXTURE_ATTRIB_ID ID) //
     {
-        if (auto* pVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, VarName))
+        if (auto* pTexture = CacheUseInfo.pResourceMgr->UpdateTexture(Fmt, pDevice, pCtx))
         {
-            if (auto* pTexture = CacheUseInfo.pResourceMgr->UpdateTexture(Fmt, pDevice, pCtx))
-            {
-                pVar->Set(pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
-            }
+            this->SetMaterialTexture(pSRB, pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE), ID);
         }
     };
 
-    SetTexture(CacheUseInfo.BaseColorFormat, "g_ColorMap");
-    SetTexture(CacheUseInfo.PhysicalDescFormat, "g_PhysicalDescriptorMap");
-    SetTexture(CacheUseInfo.NormalFormat, "g_NormalMap");
+    SetTexture(CacheUseInfo.BaseColorFormat, TEXTURE_ATTRIB_ID_BASE_COLOR);
+    SetTexture(CacheUseInfo.PhysicalDescFormat, TEXTURE_ATTRIB_ID_PHYS_DESC);
+    SetTexture(CacheUseInfo.NormalFormat, TEXTURE_ATTRIB_ID_NORMAL);
     if (m_Settings.EnableAO)
     {
-        SetTexture(CacheUseInfo.OcclusionFormat, "g_AOMap");
+        SetTexture(CacheUseInfo.OcclusionFormat, TEXTURE_ATTRIB_ID_OCCLUSION);
     }
     if (m_Settings.EnableEmissive)
     {
-        SetTexture(CacheUseInfo.EmissiveFormat, "g_EmissiveMap");
+        SetTexture(CacheUseInfo.EmissiveFormat, TEXTURE_ATTRIB_ID_EMISSIVE);
     }
 
     if (m_Settings.EnableClearCoat)
     {
-        SetTexture(CacheUseInfo.ClearCoatFormat, "g_ClearCoatMap");
-        SetTexture(CacheUseInfo.ClearCoatRoughnessFormat, "g_ClearCoatRoughnessMap");
-        SetTexture(CacheUseInfo.ClearCoatNormalFormat, "g_ClearCoatNormalMap");
+        SetTexture(CacheUseInfo.ClearCoatFormat, TEXTURE_ATTRIB_ID_CLEAR_COAT);
+        SetTexture(CacheUseInfo.ClearCoatRoughnessFormat, TEXTURE_ATTRIB_ID_CLEAR_COAT_ROUGHNESS);
+        SetTexture(CacheUseInfo.ClearCoatNormalFormat, TEXTURE_ATTRIB_ID_CLEAR_COAT_NORMAL);
     }
 
     if (m_Settings.EnableSheen)
     {
-        SetTexture(CacheUseInfo.SheenColorFormat, "g_SheenColorMap");
-        SetTexture(CacheUseInfo.SheenRoughnessFormat, "g_SheenRoughnessMap");
+        SetTexture(CacheUseInfo.SheenColorFormat, TEXTURE_ATTRIB_ID_SHEEN_COLOR);
+        SetTexture(CacheUseInfo.SheenRoughnessFormat, TEXTURE_ATTRIB_ID_SHEEN_ROUGHNESS);
     }
 
     if (m_Settings.EnableAnisotropy)
     {
-        SetTexture(CacheUseInfo.AnisotropyFormat, "g_AnisotropyMap");
+        SetTexture(CacheUseInfo.AnisotropyFormat, TEXTURE_ATTRIB_ID_ANISOTROPY);
     }
 
     if (m_Settings.EnableIridescence)
     {
-        SetTexture(CacheUseInfo.IridescenceFormat, "g_IridescenceMap");
-        SetTexture(CacheUseInfo.IridescenceThicknessFormat, "g_IridescenceThicknessMap");
+        SetTexture(CacheUseInfo.IridescenceFormat, TEXTURE_ATTRIB_ID_IRIDESCENCE);
+        SetTexture(CacheUseInfo.IridescenceThicknessFormat, TEXTURE_ATTRIB_ID_IRIDESCENCE_THICKNESS);
     }
 
     if (m_Settings.EnableTransmission)
     {
-        SetTexture(CacheUseInfo.TransmissionFormat, "g_TransmissionMap");
+        SetTexture(CacheUseInfo.TransmissionFormat, TEXTURE_ATTRIB_ID_TRANSMISSION);
     }
 
     if (m_Settings.EnableVolume)
     {
-        SetTexture(CacheUseInfo.ThicknessFormat, "g_ThicknessMap");
+        SetTexture(CacheUseInfo.ThicknessFormat, TEXTURE_ATTRIB_ID_THICKNESS);
     }
 }
 
