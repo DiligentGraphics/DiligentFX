@@ -55,11 +55,13 @@ namespace HLSL
 PBR_Renderer::PSOKey::PSOKey(PSO_FLAGS     _Flags,
                              ALPHA_MODE    _AlphaMode,
                              bool          _DoubleSided,
-                             DebugViewType _DebugView) noexcept :
+                             DebugViewType _DebugView,
+                             Uint64        _UserValue) noexcept :
     Flags{_Flags},
     AlphaMode{_AlphaMode},
     DoubleSided{_DoubleSided},
-    DebugView{_DebugView}
+    DebugView{_DebugView},
+    UserValue{_UserValue}
 {
     if (Flags & PSO_FLAG_UNSHADED)
     {
@@ -71,7 +73,7 @@ PBR_Renderer::PSOKey::PSOKey(PSO_FLAGS     _Flags,
         DebugView = DebugViewType::None;
     }
 
-    Hash = ComputeHash(Flags, AlphaMode, DoubleSided, static_cast<Uint32>(DebugView));
+    Hash = ComputeHash(Flags, AlphaMode, DoubleSided, static_cast<Uint32>(DebugView), UserValue);
 }
 
 const char* PBR_Renderer::GetTextureShaderName(TEXTURE_ATTRIB_ID Id)
@@ -628,17 +630,25 @@ void PBR_Renderer::SetMaterialTexture(IShaderResourceBinding* pSRB, ITextureView
 {
     if (m_Settings.UseMaterialTexturesArray)
     {
-        const auto TextureIdx = m_MaterialTextureIds[TextureId];
-        if (TextureIdx == InvalidMaterialTextureId)
+        if (m_StaticShaderTextureIds)
         {
-            UNEXPECTED("Texture is not initialized");
-            return;
-        }
+            const auto TextureIdx = (*m_StaticShaderTextureIds)[TextureId];
+            if (TextureIdx == InvalidMaterialTextureId)
+            {
+                UNEXPECTED("Texture is not initialized");
+                return;
+            }
 
-        if (IShaderResourceVariable* pMatTexturesVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_MaterialTextures"))
+            if (IShaderResourceVariable* pMatTexturesVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_MaterialTextures"))
+            {
+                IDeviceObject* pObj[] = {pTexSRV};
+                pMatTexturesVar->SetArray(pObj, TextureIdx, 1);
+            }
+        }
+        else
         {
-            IDeviceObject* pObj[] = {pTexSRV};
-            pMatTexturesVar->SetArray(pObj, TextureIdx, 1);
+            UNEXPECTED("Static material texture indices are not initialized, which indicates that the client uses a custom GetStaticShaderTextureIds function. "
+                       "In this case it is expected that the client binds the textures.");
         }
     }
     else
@@ -671,17 +681,24 @@ void PBR_Renderer::CreateSignature()
         Samplers.emplace("g_LinearClampSampler");
     }
 
-    VERIFY_EXPR(m_NumMaterialTextures == 0);
-    m_NumMaterialTextures = 0;
+    auto& MaterialTexturesArraySize = m_Settings.MaterialTexturesArraySize;
+    if (m_Settings.GetStaticShaderTextureIds == nullptr)
+    {
+        MaterialTexturesArraySize = 0;
+        m_StaticShaderTextureIds  = std::make_unique<StaticShaderTextureIdsArrayType>();
+        m_StaticShaderTextureIds->fill(InvalidMaterialTextureId);
+    }
 
     auto AddMaterialTextureAndSampler = [&](TEXTURE_ATTRIB_ID  TexId,
                                             const char*        SamplerName,
                                             const SamplerDesc& SamDesc) {
-        VERIFY(m_MaterialTextureIds[TexId] == InvalidMaterialTextureId, "Material texture has already been added");
-
         if (m_Settings.UseMaterialTexturesArray)
         {
-            m_MaterialTextureIds[TexId] = static_cast<Uint16>(m_NumMaterialTextures++);
+            if (m_StaticShaderTextureIds)
+            {
+                VERIFY((*m_StaticShaderTextureIds)[TexId] == InvalidMaterialTextureId, "Material texture has already been added");
+                (*m_StaticShaderTextureIds)[TexId] = static_cast<Uint16>(MaterialTexturesArraySize++);
+            }
             if (m_Device.GetDeviceInfo().IsGLDevice())
             {
                 // Use the same immutable sampler for all textures as immutable sampler arrays are not supported.
@@ -761,9 +778,9 @@ void PBR_Renderer::CreateSignature()
         AddMaterialTextureAndSampler(TEXTURE_ATTRIB_ID_THICKNESS, "g_ThicknessMap_sampler", m_Settings.ThicknessMapImmutableSampler);
     }
 
-    if (m_NumMaterialTextures > 0)
+    if (MaterialTexturesArraySize > 0)
     {
-        SignatureDesc.AddResource(SHADER_TYPE_PIXEL, "g_MaterialTextures", m_NumMaterialTextures, SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
+        SignatureDesc.AddResource(SHADER_TYPE_PIXEL, "g_MaterialTextures", MaterialTexturesArraySize, SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
     }
 
     auto AddTextureAndSampler = [&](const char*                   TextureName,
@@ -814,8 +831,7 @@ void PBR_Renderer::CreateSignature()
     }
 }
 
-ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS     PSOFlags,
-                                             DebugViewType DebugView) const
+ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
 {
     ShaderMacroHelper Macros;
     Macros.Add("MAX_JOINT_COUNT", static_cast<int>(m_Settings.MaxJointCount));
@@ -835,7 +851,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS     PSOFlags,
 
     static_assert(static_cast<int>(DebugViewType::NumDebugViews) == 33, "Did you add debug view? You may need to handle it here.");
     // clang-format off
-    Macros.Add("DEBUG_VIEW",                       static_cast<int>(DebugView));
+    Macros.Add("DEBUG_VIEW",                       static_cast<int>(Key.GetDebugView()));
     Macros.Add("DEBUG_VIEW_NONE",                  static_cast<int>(DebugViewType::None));
     Macros.Add("DEBUG_VIEW_TEXCOORD0",             static_cast<int>(DebugViewType::Texcoord0));
     Macros.Add("DEBUG_VIEW_TEXCOORD1",             static_cast<int>(DebugViewType::Texcoord1));
@@ -870,6 +886,8 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS     PSOFlags,
     Macros.Add("DEBUG_VIEW_TRANSMISSION",          static_cast<int>(DebugViewType::Transmission));
     Macros.Add("DEBUG_VIEW_THICKNESS",             static_cast<int>(DebugViewType::Thickness));
     // clang-format on
+
+    const PSO_FLAGS PSOFlags = Key.GetFlags();
 
     static_assert(PSO_FLAG_LAST == PSO_FLAG_BIT(36), "Did you add new PSO Flag? You may need to handle it here.");
 #define ADD_PSO_FLAG_MACRO(Flag) Macros.Add(#Flag, (PSOFlags & PSO_FLAG_##Flag) != PSO_FLAG_NONE)
@@ -940,6 +958,10 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS     PSOFlags,
     TextureNames[TEXTURE_ATTRIB_ID_THICKNESS]             = "Thickness";
     static_assert(TEXTURE_ATTRIB_ID_COUNT == 17, "Did you add new texture attribute? You may need to handle it here.");
 
+    const StaticShaderTextureIdsArrayType& MaterialTextureIds = m_Settings.GetStaticShaderTextureIds ?
+        m_Settings.GetStaticShaderTextureIds(Key) :
+        *m_StaticShaderTextureIds;
+
     // Tightly pack these attributes that are used by the shader
     int MaxIndex = -1;
     ProcessTexturAttribs(PSOFlags, [&](int CurrIndex, PBR_Renderer::TEXTURE_ATTRIB_ID AttribId) //
@@ -960,10 +982,10 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS     PSOFlags,
 
                              if (m_Settings.UseMaterialTexturesArray)
                              {
-                                 if (m_MaterialTextureIds[AttribId] != InvalidMaterialTextureId)
+                                 if (MaterialTextureIds[AttribId] != InvalidMaterialTextureId)
                                  {
                                      const std::string TextureIdName = std::string{TextureName} + "TextureId";
-                                     Macros.Add(TextureIdName.c_str(), static_cast<int>(m_MaterialTextureIds[AttribId]));
+                                     Macros.Add(TextureIdName.c_str(), static_cast<int>(MaterialTextureIds[AttribId]));
                                  }
                                  else
                                  {
@@ -973,7 +995,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(PSO_FLAGS     PSOFlags,
                          });
     Macros
         .Add("PBR_NUM_TEXTURE_ATTRIBUTES", MaxIndex + 1)
-        .Add("PBR_NUM_MATERIAL_TEXTURES", static_cast<int>(m_NumMaterialTextures))
+        .Add("PBR_NUM_MATERIAL_TEXTURES", static_cast<int>(m_Settings.MaterialTexturesArraySize))
         .Add("USE_MATERIAL_TEXTURES_ARRAY", m_Settings.UseMaterialTexturesArray);
 
     return Macros;
@@ -1196,7 +1218,7 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
     ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
     ShaderCI.pShaderSourceStreamFactory = pShaderSourceFactory;
 
-    auto Macros = DefineMacros(PSOFlags, Key.GetDebugView());
+    auto Macros = DefineMacros(Key);
     if (GraphicsDesc.PrimitiveTopology == PRIMITIVE_TOPOLOGY_POINT_LIST && (m_Device.GetDeviceInfo().IsGLDevice() || m_Device.GetDeviceInfo().IsVulkanDevice()))
     {
         // If gl_PointSize is not defined, points are not rendered in GLES.
@@ -1266,11 +1288,11 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
             const auto DoubleSided                   = CullMode == CULL_MODE_NONE;
             auto       PSO                           = m_Device.CreateGraphicsPipelineState(PSOCreateInfo);
 
-            PsoHashMap[{PSOFlags, AlphaMode, DoubleSided, Key.GetDebugView()}] = PSO;
+            PsoHashMap[{PSOFlags, AlphaMode, DoubleSided, Key}] = PSO;
             if (AlphaMode == ALPHA_MODE_OPAQUE)
             {
                 // Mask and opaque use the same PSO
-                PsoHashMap[{PSOFlags, ALPHA_MODE_MASK, DoubleSided, Key.GetDebugView()}] = PSO;
+                PsoHashMap[{PSOFlags, ALPHA_MODE_MASK, DoubleSided, Key}] = PSO;
             }
         }
     }
@@ -1371,7 +1393,7 @@ IPipelineState* PBR_Renderer::GetPSO(PsoHashMapType&             PsoHashMap,
         Flags &= ~PSO_FLAG_USE_THICKNESS_MAP;
     }
 
-    const PSOKey UpdatedKey{Flags, Key.GetAlphaMode(), Key.IsDoubleSided(), Key.GetDebugView()};
+    const PSOKey UpdatedKey{Flags, Key};
 
     auto it = PsoHashMap.find(UpdatedKey);
     if (it == PsoHashMap.end())

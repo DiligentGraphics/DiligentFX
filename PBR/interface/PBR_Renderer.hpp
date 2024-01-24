@@ -74,6 +74,14 @@ public:
         TEXTURE_ATTRIB_ID_COUNT
     };
 
+    static constexpr Uint16 InvalidMaterialTextureId = 0xFFFFu;
+
+    /// Static indices assigned to each material texture at shader compile time
+    /// (e.g. BaseColorTextureId, NormalTextureId, etc.).
+    using StaticShaderTextureIdsArrayType = std::array<Uint16, TEXTURE_ATTRIB_ID_COUNT>;
+
+    class PSOKey;
+
     /// Renderer create info
     struct CreateInfo
     {
@@ -131,6 +139,14 @@ public:
         /// \remarks    When set to true, textures will be accessed in the shader using
         ///             index rather than name. This enables bindless mode.
         bool UseMaterialTexturesArray = false;
+
+        /// User-provided material textures array size.
+        ///
+        /// \remarks    This parameter is ignored if UseMaterialTexturesArray is set to false.
+        ///             If this parameter is set to 0, the renderer will define the array size.
+        ///             If it is not zero, the client should provide the GetStaticShaderTextureIds
+        ///             callback function to define texture indices.
+        Uint32 MaterialTexturesArraySize = 0;
 
         static const SamplerDesc DefaultSampler;
 
@@ -229,6 +245,16 @@ public:
         /// shader's main function source code for the specified PSO flags. If null, the renderer
         /// will use the default implementation.
         std::function<PSMainSourceInfo(PSO_FLAGS PsoFlags)> GetPSMainSource = nullptr;
+
+        /// An optional user-provided callback function that returns static material texture indices
+        /// for the specified PSO key. If null, the renderer will assign the indices automatically.
+        ///
+        /// \remarks    This function is called only if UseMaterialTexturesArray is set to true.
+        ///
+        ///             The main usage scenario for this function is to implement "static" bindless
+        ///             mode, where texture indices are assigned at shader compile time and hard-coded
+        ///             into PSO. The client can use the Key.UserValue to identify the shader indices.
+        std::function<StaticShaderTextureIdsArrayType(const PSOKey& Key)> GetStaticShaderTextureIds = nullptr;
 
         /// A pointer to the user-provided primitive attribs buffer.
         /// If null, the renderer will allocate the buffer.
@@ -416,12 +442,26 @@ public:
         PSOKey(PSO_FLAGS     _Flags,
                ALPHA_MODE    _AlphaMode,
                bool          _DoubleSided,
-               DebugViewType _DebugView = DebugViewType::None) noexcept;
+               DebugViewType _DebugView = DebugViewType::None,
+               Uint64        _UserValue = 0) noexcept;
 
         PSOKey(PSO_FLAGS     _Flags,
                bool          _DoubleSided,
-               DebugViewType _DebugView = DebugViewType::None) noexcept :
-            PSOKey{_Flags, ALPHA_MODE_OPAQUE, _DoubleSided, _DebugView}
+               DebugViewType _DebugView = DebugViewType::None,
+               Uint64        _UserValue = 0) noexcept :
+            PSOKey{_Flags, ALPHA_MODE_OPAQUE, _DoubleSided, _DebugView, _UserValue}
+        {}
+
+        PSOKey(PSO_FLAGS     _Flags,
+               ALPHA_MODE    _AlphaMode,
+               bool          _DoubleSided,
+               const PSOKey& Other) noexcept :
+            PSOKey{_Flags, _AlphaMode, _DoubleSided, Other.GetDebugView(), Other.GetUserValue()}
+        {}
+
+        PSOKey(PSO_FLAGS     _Flags,
+               const PSOKey& Other) noexcept :
+            PSOKey{_Flags, Other.GetAlphaMode(), Other.IsDoubleSided(), Other}
         {}
 
         constexpr bool operator==(const PSOKey& rhs) const noexcept
@@ -431,7 +471,8 @@ public:
                    Flags       == rhs.Flags       &&
                    DoubleSided == rhs.DoubleSided &&
                    AlphaMode   == rhs.AlphaMode   &&
-                   DebugView   == rhs.DebugView;
+                   DebugView   == rhs.DebugView   &&
+                   UserValue   == rhs.UserValue;
             // clang-format on
         }
         constexpr bool operator!=(const PSOKey& rhs) const noexcept
@@ -451,12 +492,14 @@ public:
         constexpr bool          IsDoubleSided() const noexcept { return DoubleSided; }
         constexpr ALPHA_MODE    GetAlphaMode() const noexcept { return AlphaMode; }
         constexpr DebugViewType GetDebugView() const noexcept { return DebugView; }
+        constexpr Uint64        GetUserValue() const noexcept { return UserValue; }
 
     private:
         PSO_FLAGS     Flags       = PSO_FLAG_NONE;
         ALPHA_MODE    AlphaMode   = ALPHA_MODE_OPAQUE;
         bool          DoubleSided = false;
         DebugViewType DebugView   = DebugViewType::None;
+        Uint64        UserValue   = 0;
         size_t        Hash        = 0;
     };
 
@@ -529,7 +572,7 @@ public:
     static const char* GetTextureShaderName(TEXTURE_ATTRIB_ID Id);
 
 protected:
-    ShaderMacroHelper DefineMacros(PSO_FLAGS PSOFlags, DebugViewType DebugView) const;
+    ShaderMacroHelper DefineMacros(const PSOKey& Key) const;
 
     void GetVSInputStructAndLayout(PSO_FLAGS PSOFlags, std::string& VSInputStruct, InputLayoutDescX& InputLayout) const;
 
@@ -550,7 +593,8 @@ private:
 
 protected:
     const InputLayoutDescX m_InputLayout;
-    const CreateInfo       m_Settings;
+
+    CreateInfo m_Settings;
 
     RenderDeviceWithCache_N m_Device;
 
@@ -584,14 +628,7 @@ protected:
 
     std::unordered_map<GraphicsPipelineDesc, PsoHashMapType> m_PSOs;
 
-    static constexpr Uint16                     InvalidMaterialTextureId = 0xFFFFu;
-    std::array<Uint16, TEXTURE_ATTRIB_ID_COUNT> m_MaterialTextureIds     = {
-        []() {
-            std::array<Uint16, TEXTURE_ATTRIB_ID_COUNT> TextureIds;
-            TextureIds.fill(InvalidMaterialTextureId);
-            return TextureIds;
-        }()};
-    Uint32 m_NumMaterialTextures = 0;
+    std::unique_ptr<StaticShaderTextureIdsArrayType> m_StaticShaderTextureIds;
 };
 
 DEFINE_FLAG_ENUM_OPERATORS(PBR_Renderer::PSO_FLAGS)
