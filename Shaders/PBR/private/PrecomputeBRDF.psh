@@ -40,7 +40,7 @@ void PrecomputeBRDF_PS(FullScreenTriangleVSOutput VSOut,
                        out float2 f2BRDF_LUT : SV_Target)
 {
     float2 UV = NormalizedDeviceXYToTexUV(VSOut.f2NormalizedXY);
-    float NdotV           = UV.x;
-    float linearRoughness = UV.y;
-    f2BRDF_LUT = IntegrateBRDF(linearRoughness, NdotV, NUM_SAMPLES);
+    float NdotV               = UV.x;
+    float PerceptualRoughness = UV.y;
+    f2BRDF_LUT = IntegrateBRDF(PerceptualRoughness, NdotV, NUM_SAMPLES);
 }
