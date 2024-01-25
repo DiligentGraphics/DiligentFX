@@ -130,6 +130,11 @@ public:
         /// If zero, texture atlas will not be used.
         /// Must be a power of two between 512 and 16384.
         Uint32 TextureAtlasDim = 0;
+
+        /// When using texture atlas, the maximum number of atlases that
+        /// can be used. This corresponds to the maximum number of different
+        /// material texture formats that can be used by the render delegate.
+        Uint32 MaxTextureAtlases = 8;
     };
     static std::unique_ptr<HnRenderDelegate> Create(const CreateInfo& CI);
 
@@ -278,6 +283,8 @@ public:
     void SetRenderMode(HN_RENDER_MODE RenderMode);
     void SetSelectedRPrimId(const pxr::SdfPath& RPrimID);
 
+    IObject* GetMaterialSRBCache() const { return m_MaterialSRBCache; }
+
 private:
     static const pxr::TfTokenVector SupportedRPrimTypes;
     static const pxr::TfTokenVector SupportedSPrimTypes;
@@ -290,8 +297,8 @@ private:
     RefCntAutoPtr<GLTF::ResourceManager> m_ResourceMgr;
     RefCntAutoPtr<IBuffer>               m_FrameAttribsCB;
     RefCntAutoPtr<IBuffer>               m_PrimitiveAttribsCB;
-    std::shared_ptr<USD_Renderer>        m_USDRenderer;
     RefCntAutoPtr<IObject>               m_MaterialSRBCache;
+    std::shared_ptr<USD_Renderer>        m_USDRenderer;
 
     HnTextureRegistry              m_TextureRegistry;
     std::unique_ptr<HnRenderParam> m_RenderParam;

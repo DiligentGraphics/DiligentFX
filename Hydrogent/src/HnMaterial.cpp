@@ -473,34 +473,6 @@ HnMaterial::TexNameToCoordSetMapType HnMaterial::AllocateTextures(HnTextureRegis
     return TexNameToCoordSetMap;
 }
 
-RefCntAutoPtr<ITexture> HnMaterial::GetTexture(const pxr::TfToken& Name) const
-{
-    auto tex_it = m_Textures.find(Name);
-    if (tex_it != m_Textures.end())
-    {
-        const HnTextureRegistry::TextureHandleSharedPtr& pTexHandle = tex_it->second;
-        if (pTexHandle->pTexture)
-        {
-            const auto& TexDesc = pTexHandle->pTexture->GetDesc();
-            VERIFY(TexDesc.Type == RESOURCE_DIM_TEX_2D_ARRAY, "2D textures should be loaded as single-slice 2D array textures");
-            return pTexHandle->pTexture;
-        }
-        else if (pTexHandle->pAtlasSuballocation)
-        {
-            return RefCntAutoPtr<ITexture>{pTexHandle->pAtlasSuballocation->GetAtlas()->GetTexture()};
-        }
-        else
-        {
-            UNEXPECTED("Texture '", Name, "' is not initialized. This likely indicates that HnRenderDelegate::CommitResources() was not called.");
-            return {};
-        }
-    }
-    else
-    {
-        UNEXPECTED("Texture '", Name, "' is not found. This is unexpected as at least the default texture must always be set.");
-        return {};
-    }
-}
 
 pxr::HdDirtyBits HnMaterial::GetInitialDirtyBitsMask() const
 {
@@ -514,6 +486,9 @@ static const INTERFACE_ID IID_HnMaterialSRBCache =
 class HnMaterialSRBCache : public ObjectBase<IObject>
 {
 public:
+    using StaticShaderTextureIdsArrayType = PBR_Renderer::StaticShaderTextureIdsArrayType;
+    using ShaderTextureIndexingIdType     = HnMaterial::ShaderTextureIndexingIdType;
+
     HnMaterialSRBCache(IReferenceCounters* pRefCounters) :
         ObjectBase<IObject>{pRefCounters}
     {}
@@ -525,6 +500,9 @@ public:
 
     IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_HnMaterialSRBCache, ObjectBase<IObject>)
 
+    /// SRB cache key
+    ///
+    /// The key is the combination of unique IDs of the texture objects used by the SRB.
     struct ResourceKey
     {
         std::vector<Int32> UniqueIDs;
@@ -549,23 +527,76 @@ public:
         return m_Cache.Get(Key, CreateSRB);
     }
 
+    /// Adds shader texture indexing to the cache and returns its identifier, for example:
+    ///     {0, 0, 0, 1, 1, 2} -> 0
+    ///     {0, 1, 0, 1, 2, 2} -> 1
+    ShaderTextureIndexingIdType AddShaderTextureIndexing(const StaticShaderTextureIdsArrayType& TextureIds)
+    {
+        std::lock_guard<std::mutex> Lock{m_ShaderTextureIndexingCacheMtx};
+
+        auto it = m_ShaderTextureIndexingCache.find(TextureIds);
+        if (it != m_ShaderTextureIndexingCache.end())
+            return it->second;
+
+        auto Id = static_cast<ShaderTextureIndexingIdType>(m_ShaderTextureIndexingCache.size());
+        it      = m_ShaderTextureIndexingCache.emplace(TextureIds, Id).first;
+
+        m_IdToIndexing.emplace(Id, it->first);
+
+        return Id;
+    }
+
+    /// Returns the shader texture indexing by its identifier, for example:
+    ///     0 -> {0, 0, 0, 1, 1, 2}
+    ///     1 -> {0, 1, 0, 1, 2, 2}
+    const StaticShaderTextureIdsArrayType& GetShaderTextureIndexing(Uint32 Id) const
+    {
+        auto it = m_IdToIndexing.find(Id);
+        VERIFY_EXPR(it != m_IdToIndexing.end());
+        return it->second;
+    }
+
 private:
     ObjectsRegistry<ResourceKey, RefCntAutoPtr<IShaderResourceBinding>, ResourceKey::Hasher> m_Cache;
+
+    struct ShaderTextureIndexingTypeHasher
+    {
+        size_t operator()(const PBR_Renderer::StaticShaderTextureIdsArrayType& TexIds) const
+        {
+            size_t Hash = 0;
+            for (const auto& Idx : TexIds)
+            {
+                HashCombine(Hash, Idx);
+            }
+            return Hash;
+        }
+    };
+
+    std::mutex m_ShaderTextureIndexingCacheMtx;
+    std::unordered_map<StaticShaderTextureIdsArrayType,
+                       ShaderTextureIndexingIdType,
+                       ShaderTextureIndexingTypeHasher>
+        m_ShaderTextureIndexingCache;
+
+    std::unordered_map<ShaderTextureIndexingIdType, const StaticShaderTextureIdsArrayType&> m_IdToIndexing;
 };
+
+const PBR_Renderer::StaticShaderTextureIdsArrayType& HnMaterial::GetStaticShaderTextureIds(IObject* SRBCache, ShaderTextureIndexingIdType Id)
+{
+    return ClassPtrCast<HnMaterialSRBCache>(SRBCache)->GetShaderTextureIndexing(Id);
+}
 
 RefCntAutoPtr<IObject> HnMaterial::CreateSRBCache()
 {
     return HnMaterialSRBCache::Create();
 }
 
-void HnMaterial::UpdateSRB(IObject*      pSRBCache,
-                           USD_Renderer& UsdRenderer,
-                           IBuffer*      pFrameAttribs,
-                           Uint32        AtlasVersion)
+void HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
 {
-    RefCntAutoPtr<HnMaterialSRBCache> Cache{pSRBCache, IID_HnMaterialSRBCache};
-    VERIFY_EXPR(Cache);
+    RefCntAutoPtr<HnMaterialSRBCache> SRBCache{RendererDelegate.GetMaterialSRBCache(), IID_HnMaterialSRBCache};
+    VERIFY_EXPR(SRBCache);
 
+    const Uint32 AtlasVersion = RendererDelegate.GetTextureRegistry().GetAtlasVersion();
     if (m_UsesAtlas && AtlasVersion != m_AtlasVersion)
     {
         m_SRB.Release();
@@ -575,23 +606,137 @@ void HnMaterial::UpdateSRB(IObject*      pSRBCache,
     if (m_SRB)
         return;
 
-    RefCntAutoPtr<ITexture> pDiffuseMap   = GetTexture(HnTokens->diffuseColor);
-    RefCntAutoPtr<ITexture> pNormalMap    = GetTexture(HnTokens->normal);
-    RefCntAutoPtr<ITexture> pMetallicMap  = GetTexture(HnTokens->metallic);
-    RefCntAutoPtr<ITexture> pRoughnessMap = GetTexture(HnTokens->roughness);
-    RefCntAutoPtr<ITexture> pOcclusionMap = GetTexture(HnTokens->occlusion);
-    RefCntAutoPtr<ITexture> pEmissiveMap  = GetTexture(HnTokens->emissiveColor);
+    USD_Renderer& UsdRenderer       = *RendererDelegate.GetUSDRenderer();
+    const Uint32  TexturesArraySize = UsdRenderer.GetSettings().MaterialTexturesArraySize;
 
-    HnMaterialSRBCache::ResourceKey Key{{
-        pDiffuseMap ? pDiffuseMap->GetUniqueID() : 0,
-        pNormalMap ? pNormalMap->GetUniqueID() : 0,
-        pMetallicMap ? pMetallicMap->GetUniqueID() : 0,
-        pRoughnessMap ? pRoughnessMap->GetUniqueID() : 0,
-        pOcclusionMap ? pOcclusionMap->GetUniqueID() : 0,
-        pEmissiveMap ? pEmissiveMap->GetUniqueID() : 0,
-    }};
+    // Texture atlas format to atlas id, for example:
+    //     RGBA8_UNORM      -> 0
+    //     R8_UNORM         -> 1
+    //     RGBA8_UNORM_SRGB -> 2
+    std::unordered_map<TEXTURE_FORMAT, Uint32> AtlasFormatIds;
+    if (m_UsesAtlas)
+    {
+        for (TEXTURE_FORMAT AtlasFmt : RendererDelegate.GetResourceManager().GetAllocatedAtlasFormats())
+        {
+            AtlasFormatIds.emplace(AtlasFmt, static_cast<Uint32>(AtlasFormatIds.size()));
+        }
+    }
 
-    m_SRB = Cache->GetSRB(Key, [&]() {
+    HnMaterialSRBCache::ResourceKey SRBKey;
+
+    bool                   AllTexturesInAtlases = true;
+    std::vector<ITexture*> Textures(TexturesArraySize);
+
+    // Texture name to texture object mapping, for example:
+    //     "diffuseColor" -> pDiffuseColorTex
+    //     "normal"       -> pNormalTex
+    std::unordered_map<pxr::TfToken, ITexture*, pxr::TfToken::HashFunctor> TexNameToTexture;
+
+    PBR_Renderer::StaticShaderTextureIdsArrayType StaticShaderTexIds;
+    StaticShaderTexIds.fill(PBR_Renderer::InvalidMaterialTextureId);
+
+    for (Uint32 id = 0; id < PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT; ++id)
+    {
+        const pxr::TfToken& TexName = PBRTextureAttribIdToPxrName(static_cast<PBR_Renderer::TEXTURE_ATTRIB_ID>(id));
+        if (TexName.IsEmpty())
+            continue;
+
+        auto tex_it = m_Textures.find(TexName);
+        if (tex_it == m_Textures.end())
+        {
+            UNEXPECTED("Texture '", TexName, "' is not found. This is unexpected as at least the default texture must always be set.");
+            continue;
+        }
+
+        ITexture* pTexture = nullptr;
+
+        const HnTextureRegistry::TextureHandleSharedPtr& pTexHandle = tex_it->second;
+        if (pTexHandle->pTexture)
+        {
+            const auto& TexDesc = pTexHandle->pTexture->GetDesc();
+            VERIFY(TexDesc.Type == RESOURCE_DIM_TEX_2D_ARRAY, "2D textures should be loaded as single-slice 2D array textures");
+            pTexture = pTexHandle->pTexture;
+
+            AllTexturesInAtlases = false;
+        }
+        else if (pTexHandle->pAtlasSuballocation)
+        {
+            pTexture = pTexHandle->pAtlasSuballocation->GetAtlas()->GetTexture();
+
+            const TEXTURE_FORMAT AtlasFmt = pTexture->GetDesc().Format;
+
+            auto it = AtlasFormatIds.find(AtlasFmt);
+            if (it != AtlasFormatIds.end())
+            {
+                // StaticShaderTexIds[TEXTURE_ATTRIB_ID_BASE_COLOR] -> Atlas 0
+                // StaticShaderTexIds[TEXTURE_ATTRIB_ID_METALLIC]   -> Atlas 1
+                StaticShaderTexIds[id] = it->second;
+            }
+            else
+            {
+                UNEXPECTED("Texture atlas '", TexName, "' was not found in AtlasFormatIds. This looks to be a bug.");
+            }
+        }
+        else
+        {
+            UNEXPECTED("Texture '", TexName, "' is not initialized. This likely indicates that HnRenderDelegate::CommitResources() was not called.");
+            continue;
+        }
+
+        TexNameToTexture.emplace(TexName, pTexture);
+
+        if (!m_UsesAtlas)
+        {
+            SRBKey.UniqueIDs.push_back(pTexture ? pTexture->GetUniqueID() : 0);
+        }
+    }
+
+    HnTextureRegistry::TextureHandleSharedPtr WhiteTex;
+    if (m_UsesAtlas)
+    {
+        if (AllTexturesInAtlases)
+        {
+            // Set texture atlases according to their indices in AtlasFormatIds, for example
+            // Textures[0] -> Atlas 0 (RGBA8_UNORM)
+            // Textures[1] -> Atlas 1 (R8_UNORM)
+            // Textures[2] -> Atlas 2 (RGBA8_UNORM_SRGB)
+            for (auto it : AtlasFormatIds)
+            {
+                auto* pTexture = RendererDelegate.GetResourceManager().GetTexture(it.first);
+                VERIFY_EXPR(pTexture != nullptr);
+                Textures[it.second] = pTexture;
+            }
+
+            // Set unused textures to white texture
+            for (auto& Tex : Textures)
+            {
+                if (!Tex)
+                {
+                    if (!WhiteTex)
+                    {
+                        WhiteTex = GetDefaultTexture(RendererDelegate.GetTextureRegistry(), HnTokens->diffuseColor);
+                        VERIFY_EXPR(WhiteTex->pAtlasSuballocation);
+                    }
+                    Tex = WhiteTex->pAtlasSuballocation->GetAtlas()->GetTexture();
+                }
+            }
+        }
+        else
+        {
+            UNEXPECTED("TODO");
+        }
+
+        // Construct SRB key from texture atlas object ids
+        for (auto& Tex : Textures)
+        {
+            VERIFY_EXPR(Tex);
+            SRBKey.UniqueIDs.push_back(Tex ? Tex->GetUniqueID() : 0);
+        }
+
+        m_ShaderTextureIndexingId = SRBCache->AddShaderTextureIndexing(StaticShaderTexIds);
+    }
+
+    m_SRB = SRBCache->GetSRB(SRBKey, [&]() {
         RefCntAutoPtr<IShaderResourceBinding> pSRB;
 
         UsdRenderer.CreateResourceBinding(&pSRB);
@@ -609,24 +754,41 @@ void HnMaterial::UpdateSRB(IObject*      pSRBCache,
             UNEXPECTED("Failed to find 'cbPrimitiveAttribs' variable in the shader resource binding");
         }
 
-        UsdRenderer.InitCommonSRBVars(pSRB, pFrameAttribs);
+        UsdRenderer.InitCommonSRBVars(pSRB, RendererDelegate.GetFrameAttribsCB());
 
-        auto SetTexture = [&](PBR_Renderer::TEXTURE_ATTRIB_ID ID, ITexture* pTex) //
+        if (m_UsesAtlas)
         {
-            if (pTex == nullptr)
-                return;
+            if (IShaderResourceVariable* pVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_MaterialTextures"))
+            {
+                std::vector<IDeviceObject*> TextureViews(TexturesArraySize);
+                for (Uint32 i = 0; i < TexturesArraySize; ++i)
+                {
+                    VERIFY_EXPR(Textures[i]);
+                    TextureViews[i] = Textures[i] ? Textures[i]->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE) : nullptr;
+                }
+                pVar->SetArray(TextureViews.data(), 0, TexturesArraySize);
+            }
+        }
+        else
+        {
+            for (Uint32 id = 0; id < PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT; ++id)
+            {
+                const PBR_Renderer::TEXTURE_ATTRIB_ID ID = static_cast<PBR_Renderer::TEXTURE_ATTRIB_ID>(id);
 
-            UsdRenderer.SetMaterialTexture(pSRB, pTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE), ID);
-        };
+                const pxr::TfToken& TexName = PBRTextureAttribIdToPxrName(ID);
+                if (TexName.IsEmpty())
+                    continue;
 
-        // clang-format off
-        SetTexture(PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR, pDiffuseMap);
-        SetTexture(PBR_Renderer::TEXTURE_ATTRIB_ID_METALLIC,   pMetallicMap);
-        SetTexture(PBR_Renderer::TEXTURE_ATTRIB_ID_ROUGHNESS,  pRoughnessMap);
-        SetTexture(PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL,     pNormalMap);
-        SetTexture(PBR_Renderer::TEXTURE_ATTRIB_ID_OCCLUSION,  pOcclusionMap);
-        SetTexture(PBR_Renderer::TEXTURE_ATTRIB_ID_EMISSIVE,   pEmissiveMap);
-        // clang-format on
+                auto tex_it = TexNameToTexture.find(TexName);
+                if (tex_it == TexNameToTexture.end())
+                {
+                    UNEXPECTED("Texture '", TexName, "' is not found. This is unexpected as at least the default texture must always be set.");
+                    continue;
+                }
+                VERIFY_EXPR(tex_it->second);
+                UsdRenderer.SetMaterialTexture(pSRB, tex_it->second->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE), ID);
+            }
+        }
 
         return pSRB;
     });

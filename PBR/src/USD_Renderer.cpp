@@ -28,6 +28,7 @@
 
 #include <array>
 #include <unordered_set>
+#include <functional>
 
 #include "RenderStateCache.hpp"
 #include "Utilities/interface/DiligentFXShaderSourceStreamFactory.hpp"

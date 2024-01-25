@@ -113,10 +113,9 @@ static RefCntAutoPtr<IBuffer> CreatePrimitiveAttribsCB(IRenderDevice* pDevice)
     return PrimitiveAttribsCB;
 }
 
-static std::shared_ptr<USD_Renderer> CreateUSDRenderer(IRenderDevice*     pDevice,
-                                                       IRenderStateCache* pRenderStateCache,
-                                                       IDeviceContext*    pContext,
-                                                       IBuffer*           pPrimitiveAttribsCB)
+static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::CreateInfo& RenderDelegateCI,
+                                                       IBuffer*                            pPrimitiveAttribsCB,
+                                                       IObject*                            MaterialSRBCache)
 {
     USD_Renderer::CreateInfo USDRendererCI;
 
@@ -138,6 +137,19 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(IRenderDevice*     pDevic
     USDRendererCI.IBLTargetIndex          = HnFramebufferTargets::GBUFFER_TARGET_IBL;
     static_assert(HnFramebufferTargets::GBUFFER_TARGET_COUNT == 7, "Unexpected number of G-buffer targets");
 
+    if (RenderDelegateCI.TextureAtlasDim != 0)
+    {
+        USDRendererCI.UseMaterialTexturesArray = true;
+        VERIFY(RenderDelegateCI.MaxTextureAtlases > 0, "MaxTextureAtlases must be greater than 0");
+        USDRendererCI.MaterialTexturesArraySize = RenderDelegateCI.MaxTextureAtlases;
+        VERIFY_EXPR(MaterialSRBCache != nullptr);
+        USDRendererCI.GetStaticShaderTextureIds = [MaterialSRBCache](const USD_Renderer::PSOKey& Key) {
+            // User value in the PSO key is the shader indexing ID that identifies the static texture
+            // indexing in the SRB cache.
+            return HnMaterial::GetStaticShaderTextureIds(MaterialSRBCache, Key.GetUserValue());
+        };
+    }
+
     static constexpr LayoutElement Inputs[] =
         {
             {0, 0, 3, VT_FLOAT32}, //float3 Pos     : ATTRIB0;
@@ -151,7 +163,7 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(IRenderDevice*     pDevic
 
     USDRendererCI.pPrimitiveAttribsCB = pPrimitiveAttribsCB;
 
-    return std::make_shared<USD_Renderer>(pDevice, pRenderStateCache, pContext, USDRendererCI);
+    return std::make_shared<USD_Renderer>(RenderDelegateCI.pDevice, RenderDelegateCI.pRenderStateCache, RenderDelegateCI.pContext, USDRendererCI);
 }
 
 static RefCntAutoPtr<GLTF::ResourceManager> CreateResourceManager(IRenderDevice* pDevice, Uint32 TextureAtlasDim)
@@ -215,8 +227,8 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
     m_ResourceMgr{CreateResourceManager(CI.pDevice, CI.TextureAtlasDim)},
     m_FrameAttribsCB{CreateFrameAttribsCB(CI.pDevice)},
     m_PrimitiveAttribsCB{CreatePrimitiveAttribsCB(CI.pDevice)},
-    m_USDRenderer{CreateUSDRenderer(CI.pDevice, CI.pRenderStateCache, CI.pContext, m_PrimitiveAttribsCB)},
     m_MaterialSRBCache{HnMaterial::CreateSRBCache()},
+    m_USDRenderer{CreateUSDRenderer(CI, m_PrimitiveAttribsCB, m_MaterialSRBCache)},
     m_TextureRegistry{CI.pDevice, CI.TextureAtlasDim != 0 ? m_ResourceMgr : nullptr},
     m_RenderParam{std::make_unique<HnRenderParam>(CI.UseVertexPool, CI.UseIndexPool, CI.TextureAtlasDim != 0)}
 {
@@ -408,13 +420,12 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
     m_ResourceMgr->UpdateIndexBuffer(m_pDevice, m_pContext);
 
     m_TextureRegistry.Commit(m_pContext);
-    Uint32 AtlasVersion = m_TextureRegistry.GetAtlasVersion();
 
     {
         std::lock_guard<std::mutex> Guard{m_MaterialsMtx};
         for (auto* pMat : m_Materials)
         {
-            pMat->UpdateSRB(m_MaterialSRBCache, *m_USDRenderer, m_FrameAttribsCB, AtlasVersion);
+            pMat->UpdateSRB(*this);
         }
     }
 

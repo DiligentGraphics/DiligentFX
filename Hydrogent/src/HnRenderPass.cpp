@@ -551,6 +551,10 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
         const HnMaterial*               pMaterial = DrawItem.GetMaterial();
         VERIFY(pMaterial != nullptr, "Material is null");
 
+        // Use the material's texture indexing ID as the user value in the PSO key.
+        // The USD renderer will use this ID to return the indexing.
+        const auto ShaderTextureIndexingId = pMaterial->GetStaticShaderTextureIndexingId();
+
         if (m_RenderMode == HN_RENDER_MODE_SOLID)
         {
             if (Geo.Normals != nullptr && (m_Params.UsdPsoFlags & USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_OUTPUT) != 0)
@@ -581,13 +585,13 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
             if (State.RenderParam.GetUseTextureAtlas())
                 PSOFlags |= PBR_Renderer::PSO_FLAG_USE_TEXTURE_ATLAS;
 
-            ListItem.pPSO = PsoCache.Get({PSOFlags, static_cast<PBR_Renderer::ALPHA_MODE>(State.AlphaMode), /*DoubleSided = */ false, m_DebugView}, true);
+            ListItem.pPSO = PsoCache.Get({PSOFlags, static_cast<PBR_Renderer::ALPHA_MODE>(State.AlphaMode), /*DoubleSided = */ false, m_DebugView, ShaderTextureIndexingId}, true);
         }
         else if (m_RenderMode == HN_RENDER_MODE_MESH_EDGES ||
                  m_RenderMode == HN_RENDER_MODE_POINTS)
         {
             PSOFlags |= PBR_Renderer::PSO_FLAG_UNSHADED;
-            ListItem.pPSO = PsoCache.Get({PSOFlags, /*DoubleSided = */ false}, true);
+            ListItem.pPSO = PsoCache.Get({PSOFlags, /*DoubleSided = */ false, PBR_Renderer::DebugViewType::None, ShaderTextureIndexingId}, true);
         }
         else
         {

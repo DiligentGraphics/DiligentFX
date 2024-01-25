@@ -40,6 +40,7 @@
 #include "../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
 #include "../../../DiligentCore/Common/interface/BasicMath.hpp"
 #include "../../../DiligentTools/AssetLoader/interface/GLTFLoader.hpp"
+#include "../../../DiligentFX/PBR/interface/PBR_Renderer.hpp"
 
 namespace Diligent
 {
@@ -53,6 +54,8 @@ class ResourceManager;
 
 namespace USD
 {
+
+class HnRenderDelegate;
 
 /// Hydra material implementation in Hydrogent.
 class HnMaterial final : public pxr::HdMaterial
@@ -75,10 +78,7 @@ public:
     /// Creates an SRB cache that should be passed to UpdateSRB().
     static RefCntAutoPtr<IObject> CreateSRBCache();
 
-    void UpdateSRB(IObject*      pSRBCache,
-                   USD_Renderer& UsdRenderer,
-                   IBuffer*      pFrameAttribs,
-                   Uint32        AtlasVersion);
+    void UpdateSRB(HnRenderDelegate& RendererDelegate);
 
     IShaderResourceBinding* GetSRB() const { return m_SRB; }
     IShaderResourceBinding* GetSRB(Uint32 PrimitiveAttribsOffset) const
@@ -102,6 +102,20 @@ public:
 
     const pxr::TfToken& GetTag() const { return m_Network.GetTag(); }
 
+    /// Static shader texture indexing identifier, for example:
+    ///    0 -> {0, 0, 0, 1, 1, 2}
+    ///    1 -> {0, 1, 0, 1, 2, 2}
+    using ShaderTextureIndexingIdType = Uint32;
+    /// Returns the static shader texture indexing for the given identifier.
+    static const PBR_Renderer::StaticShaderTextureIdsArrayType& GetStaticShaderTextureIds(IObject* SRBCache, ShaderTextureIndexingIdType Id);
+
+    /// Returns the static shader texture indexing identifier that can be passed to
+    /// GetStaticShaderTextureIds() to get the shader texture indices for this material.
+    ShaderTextureIndexingIdType GetStaticShaderTextureIndexingId() const
+    {
+        return m_ShaderTextureIndexingId;
+    }
+
 private:
     HnMaterial(pxr::SdfPath const& id);
 
@@ -111,8 +125,6 @@ private:
     //  	        but we need to initialize default textures,
     //  	        so we have to use this special constructor.
     HnMaterial(HnTextureRegistry& TexRegistry, const USD_Renderer& UsdRenderer);
-
-    RefCntAutoPtr<ITexture> GetTexture(const pxr::TfToken& Name) const;
 
     // A mapping from the texture name to the texture coordinate set index in m_TexCoords array (e.g. "diffuseColor" -> 0)
     // The same index is set in m_ShaderTextureAttribs[].UVSelector for the corresponding texture.
@@ -144,6 +156,8 @@ private:
 
     // Current atlas version
     Uint32 m_AtlasVersion = 0;
+
+    ShaderTextureIndexingIdType m_ShaderTextureIndexingId = 0;
 };
 
 } // namespace USD
