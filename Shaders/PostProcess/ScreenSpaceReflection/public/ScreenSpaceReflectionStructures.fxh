@@ -62,10 +62,10 @@
 
 struct ScreenSpaceReflectionAttribs
 {
-    float IBLFactor                          DEFAULT_VALUE(1.0f);
     float DepthBufferThickness               DEFAULT_VALUE(0.015f);
     float RoughnessThreshold                 DEFAULT_VALUE(0.2f);
     uint  MostDetailedMip                    DEFAULT_VALUE(0);
+    uint  Padding0                           DEFAULT_VALUE(0);
 
     BOOL  IsRoughnessPerceptual              DEFAULT_VALUE(TRUE);
     uint  RoughnessChannel                   DEFAULT_VALUE(0);
