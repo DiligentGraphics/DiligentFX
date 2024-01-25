@@ -413,7 +413,6 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         m_PostFXContext->Execute(PostFXAttribs);
 
         HLSL::ScreenSpaceReflectionAttribs SSRAttribs{};
-        SSRAttribs.IBLFactor             = 1.0;
         SSRAttribs.RoughnessChannel      = 0;
         SSRAttribs.DepthBufferThickness  = 0.015f * 10.0f;
         SSRAttribs.IsRoughnessPerceptual = true;
