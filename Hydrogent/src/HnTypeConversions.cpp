@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -26,6 +26,8 @@
 
 #include "HnTypeConversions.hpp"
 #include "HnTokens.hpp"
+
+#include <array>
 
 #include "DebugUtilities.hpp"
 
@@ -322,6 +324,24 @@ pxr::HdFormat TextureFormatToHdFormat(TEXTURE_FORMAT TexFmt)
             UNSUPPORTED("This format is not supported in Hydra");
             return pxr::HdFormatInvalid;
     }
+}
+
+const pxr::TfToken& PBRTextureAttribIdToPxrName(PBR_Renderer::TEXTURE_ATTRIB_ID Id)
+{
+    static const std::array<pxr::TfToken, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT> TexAttribIdToName = []() {
+        std::array<pxr::TfToken, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT> PxrNames;
+
+        PxrNames[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR] = HnTokens->diffuseColor;
+        PxrNames[PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL]     = HnTokens->normal;
+        PxrNames[PBR_Renderer::TEXTURE_ATTRIB_ID_METALLIC]   = HnTokens->metallic;
+        PxrNames[PBR_Renderer::TEXTURE_ATTRIB_ID_ROUGHNESS]  = HnTokens->roughness;
+        PxrNames[PBR_Renderer::TEXTURE_ATTRIB_ID_OCCLUSION]  = HnTokens->occlusion;
+        PxrNames[PBR_Renderer::TEXTURE_ATTRIB_ID_EMISSIVE]   = HnTokens->emissiveColor;
+
+        return PxrNames;
+    }();
+
+    return TexAttribIdToName[Id];
 }
 
 } // namespace USD

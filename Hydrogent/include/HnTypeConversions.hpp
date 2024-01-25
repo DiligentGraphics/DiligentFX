@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -58,6 +58,12 @@ PBR_Renderer::ALPHA_MODE MaterialTagToPbrAlphaMode(const pxr::TfToken& MaterialT
 
 TEXTURE_FORMAT HdFormatToTextureFormat(pxr::HdFormat hdFormat);
 pxr::HdFormat  TextureFormatToHdFormat(TEXTURE_FORMAT TexFmt);
+
+/// Converts PBR texture attrib ID to Pxr name, for example:
+///		TEXTURE_ATTRIB_ID_BASE_COLOR -> "diffuseColor"
+///		TEXTURE_ATTRIB_ID_NORMAL     -> "normal"
+///		TEXTURE_ATTRIB_ID_METALLIC	 -> "metallic"
+const pxr::TfToken& PBRTextureAttribIdToPxrName(PBR_Renderer::TEXTURE_ATTRIB_ID Id);
 
 } // namespace USD
 
