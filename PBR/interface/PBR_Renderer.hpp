@@ -569,8 +569,6 @@ public:
     template <typename HandlerType>
     inline static void ProcessTexturAttribs(PSO_FLAGS PSOFlags, HandlerType&& Handler);
 
-    static const char* GetTextureShaderName(TEXTURE_ATTRIB_ID Id);
-
 protected:
     ShaderMacroHelper DefineMacros(const PSOKey& Key) const;
 

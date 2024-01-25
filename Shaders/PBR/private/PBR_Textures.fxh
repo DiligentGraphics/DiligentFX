@@ -111,11 +111,11 @@ SamplerState g_LinearClampSampler;
 
 #if USE_COLOR_MAP
 #   if USE_MATERIAL_TEXTURES_ARRAY
-#       define g_ColorMap g_MaterialTextures[BaseColorTextureId]
+#       define g_BaseColorMap g_MaterialTextures[BaseColorTextureId]
 #   else
-        Texture2DArray g_ColorMap;
+        Texture2DArray g_BaseColorMap;
 #   endif
-    SamplerState g_ColorMap_sampler;
+    SamplerState g_BaseColorMap_sampler;
 #endif
 
 #if USE_METALLIC_MAP
@@ -156,11 +156,11 @@ SamplerState g_LinearClampSampler;
 
 #if USE_AO_MAP
 #   if USE_MATERIAL_TEXTURES_ARRAY
-#       define g_AOMap g_MaterialTextures[OcclusionTextureId]
+#       define g_OcclusionMap g_MaterialTextures[OcclusionTextureId]
 #   else
-        Texture2DArray g_AOMap;
+        Texture2DArray g_OcclusionMap;
 #   endif
-    SamplerState g_AOMap_sampler;
+    SamplerState g_OcclusionMap_sampler;
 #endif
 
 #if USE_EMISSIVE_MAP
@@ -348,8 +348,8 @@ float4 GetBaseColor(VSOutput              VSOut,
 
 #   if USE_COLOR_MAP
     {
-        BaseColor = SampleTexture(g_ColorMap,
-                                  g_ColorMap_sampler,
+        BaseColor = SampleTexture(g_BaseColorMap,
+                                  g_BaseColorMap_sampler,
                                   VSOut,
                                   Material.Textures[BaseColorTextureAttribId],
                                   float4(1.0, 1.0, 1.0, 1.0));
@@ -429,8 +429,8 @@ float GetOcclusion(VSOutput              VSOut,
     float Occlusion = 1.0;
 #   if USE_AO_MAP
     {
-        Occlusion = SampleTexture(g_AOMap,
-                                  g_AOMap_sampler,
+        Occlusion = SampleTexture(g_OcclusionMap,
+                                  g_OcclusionMap_sampler,
                                   VSOut,
                                   Material.Textures[OcclusionTextureAttribId],
                                   float4(1.0, 1.0, 1.0, 1.0)).r;
