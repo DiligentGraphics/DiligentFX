@@ -283,10 +283,10 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
         CurrOffset = 0;
     };
 
+    bool DrawListDirty = false;
     for (DrawListItem& ListItem : m_DrawList)
     {
-        const HnDrawItem& DrawItem = ListItem.DrawItem;
-
+        const HnDrawItem& DrawItem  = ListItem.DrawItem;
         const HnMesh&     Mesh      = DrawItem.GetMesh();
         const HnMaterial* pMaterial = DrawItem.GetMaterial();
         if (pMaterial == nullptr)
@@ -298,7 +298,32 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
         if (DrawItemGPUResDirtyFlags != DRAW_LIST_ITEM_DIRTY_FLAG_NONE)
         {
             UpdateDrawListItemGPUResources(ListItem, State, DrawItemGPUResDirtyFlags);
+            DrawListDirty = true;
         }
+    }
+
+    if (DrawListDirty)
+    {
+        if (m_RenderOrder.size() != m_DrawList.size())
+        {
+            m_RenderOrder.resize(m_DrawList.size());
+            for (Uint32 i = 0; i < m_RenderOrder.size(); ++i)
+                m_RenderOrder[i] = i;
+        }
+        std::sort(m_RenderOrder.begin(), m_RenderOrder.end(),
+                  [this](Uint32 i0, Uint32 i1) {
+                      return m_DrawList[i0].pPSO < m_DrawList[i1].pPSO;
+                  });
+    }
+
+    for (Uint32 ListItemId : m_RenderOrder)
+    {
+        const DrawListItem& ListItem  = m_DrawList[ListItemId];
+        const HnDrawItem&   DrawItem  = ListItem.DrawItem;
+        const HnMesh&       Mesh      = DrawItem.GetMesh();
+        const HnMaterial*   pMaterial = DrawItem.GetMaterial();
+        if (pMaterial == nullptr)
+            continue;
 
         // Make sure we update all items before skipping any since we will clear the
         // m_DrawListItemsDirtyFlags at the end of the function.

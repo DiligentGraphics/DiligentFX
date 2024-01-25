@@ -157,6 +157,7 @@ private:
 
     std::vector<DrawListItem>        m_DrawList;
     std::vector<const DrawListItem*> m_PendingDrawItems;
+    std::vector<Uint32>              m_RenderOrder;
 
     std::vector<Uint8> m_PrimitiveAttribsData;
 
