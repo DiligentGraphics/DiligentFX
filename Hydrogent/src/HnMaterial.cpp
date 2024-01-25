@@ -27,6 +27,7 @@
 #include "HnMaterial.hpp"
 
 #include <vector>
+#include <set>
 
 #include "HnRenderDelegate.hpp"
 #include "HnTokens.hpp"
@@ -609,6 +610,10 @@ void HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
     USD_Renderer& UsdRenderer       = *RendererDelegate.GetUSDRenderer();
     const Uint32  TexturesArraySize = UsdRenderer.GetSettings().MaterialTexturesArraySize;
 
+    // Allocated texture atlas formats, for example:
+    //     {RGBA8_UNORM, R8_UNORM, RGBA8_UNORM_SRGB}
+    std::vector<TEXTURE_FORMAT> AtlasFormats;
+
     // Texture atlas format to atlas id, for example:
     //     RGBA8_UNORM      -> 0
     //     R8_UNORM         -> 1
@@ -616,28 +621,29 @@ void HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
     std::unordered_map<TEXTURE_FORMAT, Uint32> AtlasFormatIds;
     if (m_UsesAtlas)
     {
-        for (TEXTURE_FORMAT AtlasFmt : RendererDelegate.GetResourceManager().GetAllocatedAtlasFormats())
+        AtlasFormats = RendererDelegate.GetResourceManager().GetAllocatedAtlasFormats();
+        for (Uint32 i = 0; i < AtlasFormats.size(); ++i)
         {
-            AtlasFormatIds.emplace(AtlasFmt, static_cast<Uint32>(AtlasFormatIds.size()));
+            AtlasFormatIds.emplace(AtlasFormats[i], i);
         }
     }
 
     HnMaterialSRBCache::ResourceKey SRBKey;
 
-    bool                   AllTexturesInAtlases = true;
-    std::vector<ITexture*> Textures(TexturesArraySize);
+    // Texture array to bind to "g_MaterialTextures"
+    std::vector<ITexture*> TexArray(TexturesArraySize);
 
-    // Texture name to texture object mapping, for example:
-    //     "diffuseColor" -> pDiffuseColorTex
-    //     "normal"       -> pNormalTex
-    std::unordered_map<pxr::TfToken, ITexture*, pxr::TfToken::HashFunctor> TexNameToTexture;
+    // Standalone textures not allocated in the atlas.
+    std::unordered_map<PBR_Renderer::TEXTURE_ATTRIB_ID, ITexture*> StandaloneTextures;
 
     PBR_Renderer::StaticShaderTextureIdsArrayType StaticShaderTexIds;
     StaticShaderTexIds.fill(PBR_Renderer::InvalidMaterialTextureId);
 
     for (Uint32 id = 0; id < PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT; ++id)
     {
-        const pxr::TfToken& TexName = PBRTextureAttribIdToPxrName(static_cast<PBR_Renderer::TEXTURE_ATTRIB_ID>(id));
+        const PBR_Renderer::TEXTURE_ATTRIB_ID ID = static_cast<PBR_Renderer::TEXTURE_ATTRIB_ID>(id);
+
+        const pxr::TfToken& TexName = PBRTextureAttribIdToPxrName(ID);
         if (TexName.IsEmpty())
             continue;
 
@@ -657,10 +663,11 @@ void HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
             VERIFY(TexDesc.Type == RESOURCE_DIM_TEX_2D_ARRAY, "2D textures should be loaded as single-slice 2D array textures");
             pTexture = pTexHandle->pTexture;
 
-            AllTexturesInAtlases = false;
+            StandaloneTextures.emplace(ID, pTexture);
         }
         else if (pTexHandle->pAtlasSuballocation)
         {
+            VERIFY_EXPR(m_UsesAtlas);
             pTexture = pTexHandle->pAtlasSuballocation->GetAtlas()->GetTexture();
 
             const TEXTURE_FORMAT AtlasFmt = pTexture->GetDesc().Format;
@@ -683,51 +690,89 @@ void HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
             continue;
         }
 
-        TexNameToTexture.emplace(TexName, pTexture);
-
         if (!m_UsesAtlas)
         {
             SRBKey.UniqueIDs.push_back(pTexture ? pTexture->GetUniqueID() : 0);
         }
     }
 
-    HnTextureRegistry::TextureHandleSharedPtr WhiteTex;
     if (m_UsesAtlas)
     {
-        if (AllTexturesInAtlases)
+        if (StandaloneTextures.empty())
         {
             // Set texture atlases according to their indices in AtlasFormatIds, for example
-            // Textures[0] -> Atlas 0 (RGBA8_UNORM)
-            // Textures[1] -> Atlas 1 (R8_UNORM)
-            // Textures[2] -> Atlas 2 (RGBA8_UNORM_SRGB)
-            for (auto it : AtlasFormatIds)
+            // TexArray[0] -> Atlas 0 (RGBA8_UNORM)
+            // TexArray[1] -> Atlas 1 (R8_UNORM)
+            // TexArray[2] -> Atlas 2 (RGBA8_UNORM_SRGB)
+            for (size_t i = 0; i < AtlasFormats.size(); ++i)
             {
-                auto* pTexture = RendererDelegate.GetResourceManager().GetTexture(it.first);
-                VERIFY_EXPR(pTexture != nullptr);
-                Textures[it.second] = pTexture;
-            }
-
-            // Set unused textures to white texture
-            for (auto& Tex : Textures)
-            {
-                if (!Tex)
-                {
-                    if (!WhiteTex)
-                    {
-                        WhiteTex = GetDefaultTexture(RendererDelegate.GetTextureRegistry(), HnTokens->diffuseColor);
-                        VERIFY_EXPR(WhiteTex->pAtlasSuballocation);
-                    }
-                    Tex = WhiteTex->pAtlasSuballocation->GetAtlas()->GetTexture();
-                }
+                TEXTURE_FORMAT AtlasFmt      = AtlasFormats[i];
+                ITexture*      pAtlasTexture = RendererDelegate.GetResourceManager().GetTexture(AtlasFmt);
+                VERIFY_EXPR(pAtlasTexture != nullptr);
+                TexArray[i] = pAtlasTexture;
             }
         }
         else
         {
-            UNEXPECTED("TODO");
+            // Track free slots in the texture array
+            std::set<Uint32> FreeSlots;
+            for (Uint32 i = 0; i < TexturesArraySize; ++i)
+                FreeSlots.insert(i);
+
+            // Process slots uses by texture atlases
+            for (Uint32 AtlasId : StaticShaderTexIds)
+            {
+                if (AtlasId == PBR_Renderer::InvalidMaterialTextureId)
+                    continue;
+
+                FreeSlots.erase(AtlasId);
+                if (TexArray[AtlasId] == nullptr)
+                {
+                    TEXTURE_FORMAT AtlasFmt = AtlasFormats[AtlasId];
+                    VERIFY_EXPR(AtlasFormatIds.find(AtlasFmt)->second == AtlasId);
+                    auto* pAtlasTexture = RendererDelegate.GetResourceManager().GetTexture(AtlasFmt);
+                    VERIFY_EXPR(pAtlasTexture != nullptr);
+                    TexArray[AtlasId] = pAtlasTexture;
+                }
+            }
+
+            // Allocate slots for standalone textures
+            for (auto& it : StandaloneTextures)
+            {
+                if (FreeSlots.empty())
+                {
+                    LOG_ERROR_MESSAGE("Not enough texture array slots to allocate standalone texture '", it.first, "' in material '", GetId(), "'.");
+                    break;
+                }
+
+                const PBR_Renderer::TEXTURE_ATTRIB_ID ID       = it.first;
+                ITexture*                             pTexture = it.second;
+
+                Uint32 Slot = *FreeSlots.begin();
+                FreeSlots.erase(FreeSlots.begin());
+                TexArray[Slot] = pTexture;
+
+                StaticShaderTexIds[ID] = Slot;
+            }
+        }
+
+        // Set unused textures to white texture
+        HnTextureRegistry::TextureHandleSharedPtr WhiteTex;
+        for (auto& Tex : TexArray)
+        {
+            if (!Tex)
+            {
+                if (!WhiteTex)
+                {
+                    WhiteTex = GetDefaultTexture(RendererDelegate.GetTextureRegistry(), HnTokens->diffuseColor);
+                    VERIFY_EXPR(WhiteTex->pAtlasSuballocation);
+                }
+                Tex = WhiteTex->pAtlasSuballocation->GetAtlas()->GetTexture();
+            }
         }
 
         // Construct SRB key from texture atlas object ids
-        for (auto& Tex : Textures)
+        for (auto& Tex : TexArray)
         {
             VERIFY_EXPR(Tex);
             SRBKey.UniqueIDs.push_back(Tex ? Tex->GetUniqueID() : 0);
@@ -763,8 +808,8 @@ void HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
                 std::vector<IDeviceObject*> TextureViews(TexturesArraySize);
                 for (Uint32 i = 0; i < TexturesArraySize; ++i)
                 {
-                    VERIFY_EXPR(Textures[i]);
-                    TextureViews[i] = Textures[i] ? Textures[i]->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE) : nullptr;
+                    VERIFY_EXPR(TexArray[i]);
+                    TextureViews[i] = TexArray[i] ? TexArray[i]->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE) : nullptr;
                 }
                 pVar->SetArray(TextureViews.data(), 0, TexturesArraySize);
             }
@@ -775,14 +820,10 @@ void HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
             {
                 const PBR_Renderer::TEXTURE_ATTRIB_ID ID = static_cast<PBR_Renderer::TEXTURE_ATTRIB_ID>(id);
 
-                const pxr::TfToken& TexName = PBRTextureAttribIdToPxrName(ID);
-                if (TexName.IsEmpty())
-                    continue;
-
-                auto tex_it = TexNameToTexture.find(TexName);
-                if (tex_it == TexNameToTexture.end())
+                auto tex_it = StandaloneTextures.find(ID);
+                if (tex_it == StandaloneTextures.end())
                 {
-                    UNEXPECTED("Texture '", TexName, "' is not found. This is unexpected as at least the default texture must always be set.");
+                    UNEXPECTED("Texture '", PBRTextureAttribIdToPxrName(ID), "' is not found. This is unexpected as at least the default texture must always be set.");
                     continue;
                 }
                 VERIFY_EXPR(tex_it->second);
