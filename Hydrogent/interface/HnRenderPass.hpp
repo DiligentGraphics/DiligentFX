@@ -155,9 +155,14 @@ private:
     HN_RENDER_MODE              m_RenderMode = HN_RENDER_MODE_SOLID;
     PBR_Renderer::DebugViewType m_DebugView  = PBR_Renderer::DebugViewType::None;
 
-    std::vector<DrawListItem>        m_DrawList;
+    // All draw items in the collection returned by the render index.
+    pxr::HdRenderIndex::HdDrawItemPtrVector m_DrawItems;
+    // Only selected/unselected draw items in the collection.
+    std::vector<DrawListItem> m_DrawList;
+    // Draw list items to be rendered in the current batch.
     std::vector<const DrawListItem*> m_PendingDrawItems;
-    std::vector<Uint32>              m_RenderOrder;
+    // Rendering order of the draw list items sorted by the PSO.
+    std::vector<Uint32> m_RenderOrder;
 
     std::vector<Uint8> m_PrimitiveAttribsData;
 

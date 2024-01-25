@@ -427,10 +427,11 @@ void HnRenderPass::UpdateDrawList(const pxr::TfTokenVector& RenderTags)
         return;
     }
 
+    bool UpdateDrawList = false;
     if (pRenderParam->GetSelectedPrimId() != m_SelectedPrimId)
     {
         m_SelectedPrimId = pRenderParam->GetSelectedPrimId();
-        _MarkCollectionDirty();
+        UpdateDrawList   = true;
     }
 
     const pxr::HdRprimCollection& Collection  = GetRprimCollection();
@@ -458,48 +459,54 @@ void HnRenderPass::UpdateDrawList(const pxr::TfTokenVector& RenderTags)
         }
     }
 
+    // Do not update draw items list when selection changes as GetDrawItems() is an expensive call.
     if (CollectionChanged ||
         RprimRenderTagChanged ||
         MaterialTagChanged ||
         GeomSubsetDrawItemsChanged ||
         TaskRenderTagsChanged)
     {
-        m_DrawList.clear();
+        m_DrawItems.clear();
         //const HnRenderParam* const RenderParam = static_cast<HnRenderParam*>(pRenderIndex->GetRenderDelegate()->GetRenderParam());
         //if (RenderParam->HasMaterialTag(Collection.GetMaterialTag()))
         {
-            pxr::HdRenderIndex::HdDrawItemPtrVector DrawItems = GetRenderIndex()->GetDrawItems(Collection, RenderTags);
+            m_DrawItems = GetRenderIndex()->GetDrawItems(Collection, RenderTags);
             // GetDrawItems() uses multithreading, so the order of draw items is not deterministic.
-            std::sort(DrawItems.begin(), DrawItems.end());
-
-            for (const pxr::HdDrawItem* pDrawItem : DrawItems)
-            {
-                if (pDrawItem == nullptr)
-                    continue;
-
-                const pxr::SdfPath& RPrimID = pDrawItem->GetRprimID();
-                const pxr::HdRprim* pRPrim  = pRenderIndex->GetRprim(RPrimID);
-                if (pRPrim == nullptr)
-                    continue;
-
-                const bool IsSelected = RPrimID.HasPrefix(m_SelectedPrimId);
-                if ((m_Params.Selection == HnRenderPassParams::SelectionType::All) ||
-                    (m_Params.Selection == HnRenderPassParams::SelectionType::Selected && IsSelected) ||
-                    (m_Params.Selection == HnRenderPassParams::SelectionType::Unselected && !IsSelected))
-                {
-                    const HnDrawItem& DrawItem = static_cast<const HnDrawItem&>(*pDrawItem);
-                    if (DrawItem.IsValid())
-                        m_DrawList.push_back(DrawListItem{DrawItem});
-                }
-            }
-
-            m_DrawListItemsDirtyFlags = DRAW_LIST_ITEM_DIRTY_FLAG_ALL;
+            std::sort(m_DrawItems.begin(), m_DrawItems.end());
         }
         //else
         //{
         //    // There is no prim with the desired material tag.
         //    m_DrawItems.clear()
         //}
+        UpdateDrawList = true;
+    }
+
+    if (UpdateDrawList)
+    {
+        m_DrawList.clear();
+        for (const pxr::HdDrawItem* pDrawItem : m_DrawItems)
+        {
+            if (pDrawItem == nullptr)
+                continue;
+
+            const pxr::SdfPath& RPrimID = pDrawItem->GetRprimID();
+            const pxr::HdRprim* pRPrim  = pRenderIndex->GetRprim(RPrimID);
+            if (pRPrim == nullptr)
+                continue;
+
+            const bool IsSelected = RPrimID.HasPrefix(m_SelectedPrimId);
+            if ((m_Params.Selection == HnRenderPassParams::SelectionType::All) ||
+                (m_Params.Selection == HnRenderPassParams::SelectionType::Selected && IsSelected) ||
+                (m_Params.Selection == HnRenderPassParams::SelectionType::Unselected && !IsSelected))
+            {
+                const HnDrawItem& DrawItem = static_cast<const HnDrawItem&>(*pDrawItem);
+                if (DrawItem.IsValid())
+                    m_DrawList.push_back(DrawListItem{DrawItem});
+            }
+        }
+
+        m_DrawListItemsDirtyFlags = DRAW_LIST_ITEM_DIRTY_FLAG_ALL;
     }
 
     m_CollectionVersion          = CollectionVersion;
