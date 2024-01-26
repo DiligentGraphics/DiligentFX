@@ -161,7 +161,7 @@ public:
 
         /// User-provided material textures array size.
         ///
-        /// \remarks    This parameter is ignored if UseMaterialTexturesArray is set to false.
+        /// \remarks    This parameter is ignored if ShaderTexturesArrayMode is SHADER_TEXTURE_ARRAY_MODE_NONE.
         ///             If this parameter is set to 0, the renderer will define the array size.
         ///             If it is not zero, the client should provide the GetStaticShaderTextureIds
         ///             callback function to define texture indices.
@@ -230,6 +230,7 @@ public:
         ///                     float4 Joint0  : ATTRIB4; // If PSO_FLAG_USE_JOINTS is set
         ///                     float4 Weight0 : ATTRIB5; // If PSO_FLAG_USE_JOINTS is set
         ///                     float4 Color   : ATTRIB6; // If PSO_FLAG_USE_VERTEX_COLORS is set
+        ///                     float3 Tangent : ATTRIB7; // If PSO_FLAG_USE_VERTEX_TANGENTS is set
         ///                 };
         InputLayoutDesc InputLayout;
 
@@ -268,7 +269,7 @@ public:
         /// An optional user-provided callback function that returns static material texture indices
         /// for the specified PSO key. If null, the renderer will assign the indices automatically.
         ///
-        /// \remarks    This function is called only if UseMaterialTexturesArray is set to true.
+        /// \remarks    This function is called only if ShaderTexturesArrayMode is set SHADER_TEXTURE_ARRAY_MODE_STATIC.
         ///
         ///             The main usage scenario for this function is to implement "static" bindless
         ///             mode, where texture indices are assigned at shader compile time and hard-coded
@@ -380,23 +381,23 @@ public:
     {
         PSO_FLAG_NONE = 0u,
 
-        PSO_FLAG_USE_COLOR_MAP                 = PSO_FLAG_BIT(0),
-        PSO_FLAG_USE_NORMAL_MAP                = PSO_FLAG_BIT(1),
-        PSO_FLAG_USE_PHYS_DESC_MAP             = PSO_FLAG_BIT(2),
-        PSO_FLAG_USE_METALLIC_MAP              = PSO_FLAG_BIT(3),
-        PSO_FLAG_USE_ROUGHNESS_MAP             = PSO_FLAG_BIT(4),
-        PSO_FLAG_USE_AO_MAP                    = PSO_FLAG_BIT(5),
-        PSO_FLAG_USE_EMISSIVE_MAP              = PSO_FLAG_BIT(6),
-        PSO_FLAG_USE_CLEAR_COAT_MAP            = PSO_FLAG_BIT(7),
-        PSO_FLAG_USE_CLEAR_COAT_ROUGHNESS_MAP  = PSO_FLAG_BIT(8),
-        PSO_FLAG_USE_CLEAR_COAT_NORMAL_MAP     = PSO_FLAG_BIT(9),
-        PSO_FLAG_USE_SHEEN_COLOR_MAP           = PSO_FLAG_BIT(10),
-        PSO_FLAG_USE_SHEEN_ROUGHNESS_MAP       = PSO_FLAG_BIT(11),
-        PSO_FLAG_USE_ANISOTROPY_MAP            = PSO_FLAG_BIT(12),
-        PSO_FLAG_USE_IRIDESCENCE_MAP           = PSO_FLAG_BIT(13),
-        PSO_FLAG_USE_IRIDESCENCE_THICKNESS_MAP = PSO_FLAG_BIT(14),
-        PSO_FLAG_USE_TRANSMISSION_MAP          = PSO_FLAG_BIT(15),
-        PSO_FLAG_USE_THICKNESS_MAP             = PSO_FLAG_BIT(16),
+        PSO_FLAG_USE_COLOR_MAP                 = PSO_FLAG_BIT(TEXTURE_ATTRIB_ID_BASE_COLOR),
+        PSO_FLAG_USE_NORMAL_MAP                = PSO_FLAG_BIT(TEXTURE_ATTRIB_ID_NORMAL),
+        PSO_FLAG_USE_PHYS_DESC_MAP             = PSO_FLAG_BIT(TEXTURE_ATTRIB_ID_PHYS_DESC),
+        PSO_FLAG_USE_METALLIC_MAP              = PSO_FLAG_BIT(TEXTURE_ATTRIB_ID_METALLIC),
+        PSO_FLAG_USE_ROUGHNESS_MAP             = PSO_FLAG_BIT(TEXTURE_ATTRIB_ID_ROUGHNESS),
+        PSO_FLAG_USE_AO_MAP                    = PSO_FLAG_BIT(TEXTURE_ATTRIB_ID_OCCLUSION),
+        PSO_FLAG_USE_EMISSIVE_MAP              = PSO_FLAG_BIT(TEXTURE_ATTRIB_ID_EMISSIVE),
+        PSO_FLAG_USE_CLEAR_COAT_MAP            = PSO_FLAG_BIT(TEXTURE_ATTRIB_ID_CLEAR_COAT),
+        PSO_FLAG_USE_CLEAR_COAT_ROUGHNESS_MAP  = PSO_FLAG_BIT(TEXTURE_ATTRIB_ID_CLEAR_COAT_ROUGHNESS),
+        PSO_FLAG_USE_CLEAR_COAT_NORMAL_MAP     = PSO_FLAG_BIT(TEXTURE_ATTRIB_ID_CLEAR_COAT_NORMAL),
+        PSO_FLAG_USE_SHEEN_COLOR_MAP           = PSO_FLAG_BIT(TEXTURE_ATTRIB_ID_SHEEN_COLOR),
+        PSO_FLAG_USE_SHEEN_ROUGHNESS_MAP       = PSO_FLAG_BIT(TEXTURE_ATTRIB_ID_SHEEN_ROUGHNESS),
+        PSO_FLAG_USE_ANISOTROPY_MAP            = PSO_FLAG_BIT(TEXTURE_ATTRIB_ID_ANISOTROPY),
+        PSO_FLAG_USE_IRIDESCENCE_MAP           = PSO_FLAG_BIT(TEXTURE_ATTRIB_ID_IRIDESCENCE),
+        PSO_FLAG_USE_IRIDESCENCE_THICKNESS_MAP = PSO_FLAG_BIT(TEXTURE_ATTRIB_ID_IRIDESCENCE_THICKNESS),
+        PSO_FLAG_USE_TRANSMISSION_MAP          = PSO_FLAG_BIT(TEXTURE_ATTRIB_ID_TRANSMISSION),
+        PSO_FLAG_USE_THICKNESS_MAP             = PSO_FLAG_BIT(TEXTURE_ATTRIB_ID_THICKNESS),
 
         PSO_FLAG_LAST_TEXTURE = PSO_FLAG_USE_THICKNESS_MAP,
         PSO_FLAG_ALL_TEXTURES = PSO_FLAG_LAST_TEXTURE * 2ull - 1ull,
@@ -579,12 +580,14 @@ public:
     ///             - PrefilteredCubeMipLevels
     void SetInternalShaderParameters(HLSL::PBRRendererShaderParameters& Renderer);
 
+    /// Returns the PBR primitive attributes shader data size for the given PSO flags.
     Uint32 GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags) const;
 
     const CreateInfo& GetSettings() const { return m_Settings; }
 
     inline static constexpr PSO_FLAGS GetTextureAttribPSOFlag(TEXTURE_ATTRIB_ID AttribId);
 
+    /// Processes enabled texture attributes with the given handler.
     template <typename HandlerType>
     inline static void ProcessTexturAttribs(PSO_FLAGS PSOFlags, HandlerType&& Handler);
 
@@ -674,7 +677,7 @@ inline constexpr PBR_Renderer::PSO_FLAGS PBR_Renderer::GetTextureAttribPSOFlag(P
     // clang-format on
     static_assert(PBR_Renderer::PSO_FLAG_LAST_TEXTURE == 1u << 16u, "Did you add new texture flag? You may need to handle it here.");
 
-    return static_cast<PBR_Renderer::PSO_FLAGS>(1u << AttribId);
+    return static_cast<PBR_Renderer::PSO_FLAGS>(Uint64{1} << AttribId);
 }
 
 template <typename HandlerType>
