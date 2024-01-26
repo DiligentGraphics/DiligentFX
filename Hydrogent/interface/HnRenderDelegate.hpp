@@ -126,15 +126,25 @@ public:
         bool UseVertexPool = false;
         bool UseIndexPool  = false;
 
-        /// Texture atlas dimension.
-        /// If zero, texture atlas will not be used.
+        HN_MATERIAL_TEXTURES_BINDING_MODE TextureBindingMode = HN_MATERIAL_TEXTURES_BINDING_MODE_LEGACY;
+
+        /// When TextureBindingMode is HN_MATERIAL_TEXTURES_BINDING_MODE_ATLAS,
+        /// the texture atlas dimension.
         /// Must be a power of two between 512 and 16384.
+        ///
+        /// If zero, the renderer will automatically determine the atlas dimension.
         Uint32 TextureAtlasDim = 0;
 
-        /// When using texture atlas, the maximum number of atlases that
-        /// can be used. This corresponds to the maximum number of different
-        /// material texture formats that can be used by the render delegate.
-        Uint32 MaxTextureAtlases = 8;
+        /// When TextureBindingMode is HN_MATERIAL_TEXTURES_BINDING_MODE_ATLAS,
+        /// the maximum number of atlases that can be used. This corresponds to
+        /// the maximum number of different material texture formats that can be
+        /// used by the render delegate.
+        ///
+        /// When TextureBindingMode is HN_MATERIAL_TEXTURES_BINDING_MODE_DYNAMIC,
+        /// the maximum number of material textures.
+        ///
+        /// If zero, the renderer will automatically determine the array size.
+        Uint32 TexturesArraySize = 0;
     };
     static std::unique_ptr<HnRenderDelegate> Create(const CreateInfo& CI);
 

@@ -137,17 +137,42 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
     USDRendererCI.IBLTargetIndex          = HnFramebufferTargets::GBUFFER_TARGET_IBL;
     static_assert(HnFramebufferTargets::GBUFFER_TARGET_COUNT == 7, "Unexpected number of G-buffer targets");
 
-    if (RenderDelegateCI.TextureAtlasDim != 0)
+    HN_MATERIAL_TEXTURES_BINDING_MODE TextureBindingMode = RenderDelegateCI.TextureBindingMode;
+    Uint32                            TexturesArraySize  = RenderDelegateCI.TexturesArraySize;
+    if (TextureBindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_DYNAMIC &&
+        !RenderDelegateCI.pDevice->GetDeviceInfo().Features.BindlessResources)
     {
-        USDRendererCI.UseMaterialTexturesArray = true;
-        VERIFY(RenderDelegateCI.MaxTextureAtlases > 0, "MaxTextureAtlases must be greater than 0");
-        USDRendererCI.MaterialTexturesArraySize = RenderDelegateCI.MaxTextureAtlases;
+        LOG_WARNING_MESSAGE("This device does not support bindless resources. Switching to texture atlas mode");
+        TextureBindingMode = HN_MATERIAL_TEXTURES_BINDING_MODE_ATLAS;
+        TexturesArraySize  = 0;
+    }
+
+    if (TextureBindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_DYNAMIC)
+    {
+        if (TexturesArraySize == 0)
+            TexturesArraySize = 256;
+
+        USDRendererCI.ShaderTexturesArrayMode   = USD_Renderer::SHADER_TEXTURE_ARRAY_MODE_DYNAMIC;
+        USDRendererCI.MaterialTexturesArraySize = TexturesArraySize;
+    }
+    else if (TextureBindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_ATLAS)
+    {
+        if (TexturesArraySize == 0)
+            TexturesArraySize = 8;
+
+        USDRendererCI.ShaderTexturesArrayMode   = USD_Renderer::SHADER_TEXTURE_ARRAY_MODE_STATIC;
+        USDRendererCI.MaterialTexturesArraySize = TexturesArraySize;
         VERIFY_EXPR(MaterialSRBCache != nullptr);
         USDRendererCI.GetStaticShaderTextureIds = [MaterialSRBCache](const USD_Renderer::PSOKey& Key) {
             // User value in the PSO key is the shader indexing ID that identifies the static texture
             // indexing in the SRB cache.
             return HnMaterial::GetStaticShaderTextureIds(MaterialSRBCache, Key.GetUserValue());
         };
+    }
+    else
+    {
+        VERIFY(RenderDelegateCI.TextureBindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_LEGACY);
+        USDRendererCI.ShaderTexturesArrayMode = USD_Renderer::SHADER_TEXTURE_ARRAY_MODE_NONE;
     }
 
     static constexpr LayoutElement Inputs[] =
@@ -166,7 +191,7 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
     return std::make_shared<USD_Renderer>(RenderDelegateCI.pDevice, RenderDelegateCI.pRenderStateCache, RenderDelegateCI.pContext, USDRendererCI);
 }
 
-static RefCntAutoPtr<GLTF::ResourceManager> CreateResourceManager(IRenderDevice* pDevice, Uint32 TextureAtlasDim)
+static RefCntAutoPtr<GLTF::ResourceManager> CreateResourceManager(const HnRenderDelegate::CreateInfo& CI)
 {
     // Initial vertex and index counts are not important as the
     // real number of vertices and indices will be determined after
@@ -182,25 +207,34 @@ static RefCntAutoPtr<GLTF::ResourceManager> CreateResourceManager(IRenderDevice*
     ResMgrCI.DefaultPoolDesc.VertexCount = InitialVertexCount;
     ResMgrCI.DefaultPoolDesc.Usage       = USAGE_DEFAULT;
 
-    if (TextureAtlasDim != 0)
+    if (CI.TextureBindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_ATLAS)
     {
-        constexpr Uint32 MinAtlasDim = 512;
-        constexpr Uint32 MaxAtlasDim = 16384;
-        if (TextureAtlasDim < MinAtlasDim)
+        Uint32 TextureAtlasDim = CI.TextureAtlasDim;
+
+        if (TextureAtlasDim != 0)
         {
-            LOG_ERROR_MESSAGE("Texture atlas dimension (", TextureAtlasDim, ") must be at least ", MinAtlasDim);
-            TextureAtlasDim = MinAtlasDim;
+            constexpr Uint32 MinAtlasDim = 512;
+            constexpr Uint32 MaxAtlasDim = 16384;
+            if (TextureAtlasDim < MinAtlasDim)
+            {
+                LOG_ERROR_MESSAGE("Texture atlas dimension (", TextureAtlasDim, ") must be at least ", MinAtlasDim);
+                TextureAtlasDim = MinAtlasDim;
+            }
+            else if (TextureAtlasDim > MaxAtlasDim)
+            {
+                LOG_ERROR_MESSAGE("Texture atlas dimension (", TextureAtlasDim, ") must be at most ", MaxAtlasDim);
+                TextureAtlasDim = MaxAtlasDim;
+            }
+            if (!IsPowerOfTwo(TextureAtlasDim))
+            {
+                LOG_ERROR_MESSAGE("Texture atlas dimension (", TextureAtlasDim, ") must be a power of two");
+                const auto MSB  = PlatformMisc::GetMSB(TextureAtlasDim);
+                TextureAtlasDim = (MSB >= 13) ? 16384 : (1 << (MSB + 1));
+            }
         }
-        else if (TextureAtlasDim > MaxAtlasDim)
+        else
         {
-            LOG_ERROR_MESSAGE("Texture atlas dimension (", TextureAtlasDim, ") must be at most ", MaxAtlasDim);
-            TextureAtlasDim = MaxAtlasDim;
-        }
-        if (!IsPowerOfTwo(TextureAtlasDim))
-        {
-            LOG_ERROR_MESSAGE("Texture atlas dimension (", TextureAtlasDim, ") must be a power of two");
-            const auto MSB  = PlatformMisc::GetMSB(TextureAtlasDim);
-            TextureAtlasDim = (MSB >= 13) ? 16384 : (1 << (MSB + 1));
+            TextureAtlasDim = 2048;
         }
 
         ResMgrCI.DefaultAtlasDesc.Desc.Name      = "Hydrogent texture atlas";
@@ -217,20 +251,20 @@ static RefCntAutoPtr<GLTF::ResourceManager> CreateResourceManager(IRenderDevice*
         ResMgrCI.DefaultAtlasDesc.MinAlignment = 64;
     }
 
-    return GLTF::ResourceManager::Create(pDevice, ResMgrCI);
+    return GLTF::ResourceManager::Create(CI.pDevice, ResMgrCI);
 }
 
 HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
     m_pDevice{CI.pDevice},
     m_pContext{CI.pContext},
     m_pRenderStateCache{CI.pRenderStateCache},
-    m_ResourceMgr{CreateResourceManager(CI.pDevice, CI.TextureAtlasDim)},
+    m_ResourceMgr{CreateResourceManager(CI)},
     m_FrameAttribsCB{CreateFrameAttribsCB(CI.pDevice)},
     m_PrimitiveAttribsCB{CreatePrimitiveAttribsCB(CI.pDevice)},
     m_MaterialSRBCache{HnMaterial::CreateSRBCache()},
     m_USDRenderer{CreateUSDRenderer(CI, m_PrimitiveAttribsCB, m_MaterialSRBCache)},
     m_TextureRegistry{CI.pDevice, CI.TextureAtlasDim != 0 ? m_ResourceMgr : nullptr},
-    m_RenderParam{std::make_unique<HnRenderParam>(CI.UseVertexPool, CI.UseIndexPool, CI.TextureAtlasDim != 0)}
+    m_RenderParam{std::make_unique<HnRenderParam>(CI.UseVertexPool, CI.UseIndexPool, CI.TextureBindingMode)}
 {
 }
 

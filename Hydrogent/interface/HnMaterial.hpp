@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -150,9 +150,6 @@ private:
     // The names of the primvars that contain unique texture coordinate sets for this material (e.g. "st0", "st1").
     // The index in this array for texture N is given by m_ShaderTextureAttribs[N].UVSelector.
     std::vector<TextureCoordinateSetInfo> m_TexCoords;
-
-    // True if there is at least one texture suballocated from the atlas
-    bool m_UsesAtlas = false;
 
     // Current atlas version
     Uint32 m_AtlasVersion = 0;

@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 #include <memory>
 #include <mutex>
 #include <unordered_map>
+#include <atomic>
 
 #include "pxr/pxr.h"
 #include "pxr/base/tf/token.h"
@@ -71,7 +72,9 @@ public:
 
         RefCntAutoPtr<ITextureAtlasSuballocation> pAtlasSuballocation;
 
-        explicit operator bool() const
+        Uint32 TextureId = ~0u;
+
+        explicit operator bool() const noexcept
         {
             return pTexture != nullptr || pAtlasSuballocation != nullptr;
         }
@@ -97,6 +100,12 @@ public:
 
     Uint32 GetAtlasVersion() const;
 
+    template <typename HandlerType>
+    void ProcessTextures(HandlerType&& Handler)
+    {
+        m_Cache.ProcessElements(Handler);
+    }
+
 private:
     void InitializeHandle(IRenderDevice*     pDevice,
                           IDeviceContext*    pContext,
@@ -120,6 +129,8 @@ private:
 
     std::mutex                                                                      m_PendingTexturesMtx;
     std::unordered_map<pxr::TfToken, PendingTextureInfo, pxr::TfToken::HashFunctor> m_PendingTextures;
+
+    std::atomic<Uint32> m_NextTextureId{0};
 };
 
 } // namespace USD

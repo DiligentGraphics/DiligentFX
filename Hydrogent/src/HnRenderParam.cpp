@@ -32,12 +32,12 @@ namespace Diligent
 namespace USD
 {
 
-HnRenderParam::HnRenderParam(bool UseVertexPool,
-                             bool UseIndexPool,
-                             bool UseTextureAtlas) noexcept :
+HnRenderParam::HnRenderParam(bool                              UseVertexPool,
+                             bool                              UseIndexPool,
+                             HN_MATERIAL_TEXTURES_BINDING_MODE TextureBindingMode) noexcept :
     m_UseVertexPool{UseVertexPool},
     m_UseIndexPool{UseIndexPool},
-    m_UseTextureAtlas{UseTextureAtlas}
+    m_TextureBindingMode{TextureBindingMode}
 {
 }
 

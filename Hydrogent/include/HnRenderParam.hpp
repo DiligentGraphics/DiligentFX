@@ -43,14 +43,14 @@ namespace USD
 class HnRenderParam final : public pxr::HdRenderParam
 {
 public:
-    HnRenderParam(bool UseVertexPool,
-                  bool UseIndexPool,
-                  bool UseTextureAtlas) noexcept;
+    HnRenderParam(bool                              UseVertexPool,
+                  bool                              UseIndexPool,
+                  HN_MATERIAL_TEXTURES_BINDING_MODE TextureBindingMode) noexcept;
     ~HnRenderParam();
 
-    bool GetUseVertexPool() const { return m_UseVertexPool; }
-    bool GetUseIndexPool() const { return m_UseIndexPool; }
-    bool GetUseTextureAtlas() const { return m_UseTextureAtlas; }
+    bool                              GetUseVertexPool() const { return m_UseVertexPool; }
+    bool                              GetUseIndexPool() const { return m_UseIndexPool; }
+    HN_MATERIAL_TEXTURES_BINDING_MODE GetTextureBindingMode() const { return m_TextureBindingMode; }
 
     HN_RENDER_MODE GetRenderMode() const { return m_RenderMode; }
     void           SetRenderMode(HN_RENDER_MODE Mode) { m_RenderMode = Mode; }
@@ -77,7 +77,8 @@ public:
 private:
     const bool m_UseVertexPool;
     const bool m_UseIndexPool;
-    const bool m_UseTextureAtlas;
+
+    const HN_MATERIAL_TEXTURES_BINDING_MODE m_TextureBindingMode;
 
     HN_RENDER_MODE m_RenderMode = HN_RENDER_MODE_SOLID;
 

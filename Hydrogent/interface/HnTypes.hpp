@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -49,6 +49,24 @@ enum HN_RENDER_MODE
     HN_RENDER_MODE_POINTS,
 
     HN_RENDER_MODE_COUNT
+};
+
+/// Material texture binding mode.
+enum HN_MATERIAL_TEXTURES_BINDING_MODE : Uint8
+{
+    /// Legacy mode: each material uses its own SRB.
+    HN_MATERIAL_TEXTURES_BINDING_MODE_LEGACY,
+
+    /// Texture atlas mode: material textures are stored in texture atlases,
+    /// which are generally referenced by a single SRB (with the exception
+    /// of materials that use textures not fitting into the atlas).
+    HN_MATERIAL_TEXTURES_BINDING_MODE_ATLAS,
+
+    /// Dynamic (aka bindless) mode: each texture is a separate resource,
+    /// and all textures are referenced by a single SRB.
+    ///
+    /// \note   This mode requires bindless support from the device.
+    HN_MATERIAL_TEXTURES_BINDING_MODE_DYNAMIC
 };
 
 } // namespace USD

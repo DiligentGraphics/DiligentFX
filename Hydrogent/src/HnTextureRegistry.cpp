@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -139,8 +139,10 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const pxr:
                 return TextureHandleSharedPtr{};
             }
 
-            auto TexHandle = std::make_shared<TextureHandle>();
-            auto SamDesc   = HdSamplerParametersToSamplerDesc(SamplerParams);
+            auto TexHandle       = std::make_shared<TextureHandle>();
+            TexHandle->TextureId = m_NextTextureId.fetch_add(1);
+
+            auto SamDesc = HdSamplerParametersToSamplerDesc(SamplerParams);
             // Try to allocate texture in the atlas first
             if (m_pResourceManager != nullptr)
             {
