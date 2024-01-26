@@ -710,7 +710,7 @@ void PBR_Renderer::CreateSignature()
     {
         MaterialTexturesArraySize = 0;
         m_StaticShaderTextureIds  = std::make_unique<StaticShaderTextureIdsArrayType>();
-        m_StaticShaderTextureIds->fill(InvalidMaterialTextureId);
+        m_StaticShaderTextureIds->fill(decltype(PBR_Renderer::InvalidMaterialTextureId){InvalidMaterialTextureId});
     }
 
     auto AddMaterialTextureAndSampler = [&](TEXTURE_ATTRIB_ID  TexId,
@@ -970,7 +970,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
     Macros.Add("TEX_COLOR_CONVERSION_MODE", m_Settings.TexColorConversionMode);
 
     StaticShaderTextureIdsArrayType MaterialTextureIds;
-    MaterialTextureIds.fill(InvalidMaterialTextureId);
+    MaterialTextureIds.fill(decltype(PBR_Renderer::InvalidMaterialTextureId){InvalidMaterialTextureId});
     if (m_Settings.ShaderTexturesArrayMode == SHADER_TEXTURE_ARRAY_MODE_STATIC)
     {
         MaterialTextureIds = m_Settings.GetStaticShaderTextureIds ?

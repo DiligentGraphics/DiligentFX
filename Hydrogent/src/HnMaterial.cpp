@@ -639,7 +639,7 @@ void HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
         TexArray.resize(TexturesArraySize);
 
         PBR_Renderer::StaticShaderTextureIdsArrayType StaticShaderTexIds;
-        StaticShaderTexIds.fill(PBR_Renderer::InvalidMaterialTextureId);
+        StaticShaderTexIds.fill(decltype(PBR_Renderer::InvalidMaterialTextureId){PBR_Renderer::InvalidMaterialTextureId});
 
         for (Uint32 id = 0; id < PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT; ++id)
         {
