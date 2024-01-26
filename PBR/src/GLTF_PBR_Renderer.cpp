@@ -84,6 +84,12 @@ struct PBRRendererCreateInfoWrapper
         CI.TextureAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_TRANSMISSION]          = GLTF::DefaultTransmissionTextureAttribId;
         CI.TextureAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_THICKNESS]             = GLTF::DefaultThicknessTextureAttribId;
         static_assert(PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT == 17, "Please update the initializer list above");
+
+        if (_CI.ShaderTexturesArrayMode == PBR_Renderer::SHADER_TEXTURE_ARRAY_MODE_DYNAMIC)
+        {
+            UNEXPECTED("Dynamic shader texture arrays are not supported in GLTF renderer");
+            CI.ShaderTexturesArrayMode = PBR_Renderer::SHADER_TEXTURE_ARRAY_MODE_NONE;
+        }
     }
 
     operator const PBR_Renderer::CreateInfo &() const

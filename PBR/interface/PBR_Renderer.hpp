@@ -82,6 +82,28 @@ public:
 
     class PSOKey;
 
+    /// Material texture array indexing mode.
+    enum SHADER_TEXTURE_ARRAY_MODE : Uint8
+    {
+        /// Shader texture array is not used and textures are accessed by name:
+        ///     - g_BaseColorMap
+        ///     - g_PhysicalDescriptorMap
+        ///     - g_NormalMap
+        ///     - ...
+        SHADER_TEXTURE_ARRAY_MODE_NONE = 0,
+
+        /// Shader textures array is used and the indices are defined at shader compile time.
+        ///     - g_MaterialTextures[BaseColorTextureId]
+        ///     - g_MaterialTextures[PhysicalDescriptorTextureId]
+        ///     - g_MaterialTextures[NormalTextureId]
+        ///     - ...
+        SHADER_TEXTURE_ARRAY_MODE_STATIC,
+
+        /// Shader textures array is used and the indices are provided dynamically at run time
+        /// through the TextureSlice field of the corresponding texture attribute.
+        SHADER_TEXTURE_ARRAY_MODE_DYNAMIC
+    };
+
     /// Renderer create info
     struct CreateInfo
     {
@@ -134,11 +156,8 @@ public:
         ///             - Default physical description map
         bool CreateDefaultTextures = true;
 
-        /// Whether to use single material texture array instead of separate textures.
-        ///
-        /// \remarks    When set to true, textures will be accessed in the shader using
-        ///             index rather than name. This enables bindless mode.
-        bool UseMaterialTexturesArray = false;
+        /// Shader textures array access mode, see SHADER_TEXTURE_ARRAY_MODE.
+        SHADER_TEXTURE_ARRAY_MODE ShaderTexturesArrayMode = SHADER_TEXTURE_ARRAY_MODE_NONE;
 
         /// User-provided material textures array size.
         ///

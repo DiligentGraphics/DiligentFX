@@ -643,7 +643,15 @@ void PBR_Renderer::InitCommonSRBVars(IShaderResourceBinding* pSRB, IBuffer* pFra
 
 void PBR_Renderer::SetMaterialTexture(IShaderResourceBinding* pSRB, ITextureView* pTexSRV, TEXTURE_ATTRIB_ID TextureId) const
 {
-    if (m_Settings.UseMaterialTexturesArray)
+    if (m_Settings.ShaderTexturesArrayMode == SHADER_TEXTURE_ARRAY_MODE_NONE)
+    {
+        const std::string TextureName = GetTextureShaderName(TextureId);
+        if (IShaderResourceVariable* pTexVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, TextureName.c_str()))
+        {
+            pTexVar->Set(pTexSRV);
+        }
+    }
+    else if (m_Settings.ShaderTexturesArrayMode == SHADER_TEXTURE_ARRAY_MODE_STATIC)
     {
         if (m_StaticShaderTextureIds)
         {
@@ -666,13 +674,13 @@ void PBR_Renderer::SetMaterialTexture(IShaderResourceBinding* pSRB, ITextureView
                        "In this case it is expected that the client binds the textures.");
         }
     }
+    else if (m_Settings.ShaderTexturesArrayMode == SHADER_TEXTURE_ARRAY_MODE_DYNAMIC)
+    {
+        UNEXPECTED("This method should not be called when shader textures array mode is dynamic.");
+    }
     else
     {
-        const std::string TextureName = GetTextureShaderName(TextureId);
-        if (IShaderResourceVariable* pTexVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, TextureName.c_str()))
-        {
-            pTexVar->Set(pTexSRV);
-        }
+        UNEXPECTED("Unexpected shader textures array mode");
     }
 }
 
@@ -697,7 +705,8 @@ void PBR_Renderer::CreateSignature()
     }
 
     auto& MaterialTexturesArraySize = m_Settings.MaterialTexturesArraySize;
-    if (m_Settings.GetStaticShaderTextureIds == nullptr)
+    if (m_Settings.ShaderTexturesArrayMode == SHADER_TEXTURE_ARRAY_MODE_STATIC &&
+        m_Settings.GetStaticShaderTextureIds == nullptr)
     {
         MaterialTexturesArraySize = 0;
         m_StaticShaderTextureIds  = std::make_unique<StaticShaderTextureIdsArrayType>();
@@ -708,10 +717,12 @@ void PBR_Renderer::CreateSignature()
                                             const char*        SamplerName,
                                             const SamplerDesc& SamDesc) {
         std::string TextureName;
-        if (m_Settings.UseMaterialTexturesArray)
+        if (m_Settings.ShaderTexturesArrayMode == SHADER_TEXTURE_ARRAY_MODE_STATIC ||
+            m_Settings.ShaderTexturesArrayMode == SHADER_TEXTURE_ARRAY_MODE_DYNAMIC)
         {
             if (m_StaticShaderTextureIds)
             {
+                VERIFY_EXPR(m_Settings.ShaderTexturesArrayMode == SHADER_TEXTURE_ARRAY_MODE_STATIC);
                 VERIFY((*m_StaticShaderTextureIds)[TexId] == InvalidMaterialTextureId, "Material texture has already been added");
                 (*m_StaticShaderTextureIds)[TexId] = static_cast<Uint16>(MaterialTexturesArraySize++);
             }
@@ -721,7 +732,7 @@ void PBR_Renderer::CreateSignature()
                 SamplerName = "g_MaterialTextures";
             }
         }
-        else
+        else if (m_Settings.ShaderTexturesArrayMode == SHADER_TEXTURE_ARRAY_MODE_NONE)
         {
             TextureName = GetTextureShaderName(TexId);
             SignatureDesc.AddResource(SHADER_TYPE_PIXEL, TextureName.c_str(), SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
@@ -729,6 +740,10 @@ void PBR_Renderer::CreateSignature()
             {
                 SamplerName = TextureName.c_str();
             }
+        }
+        else
+        {
+            UNEXPECTED("Unexpected shader textures array mode");
         }
 
         if (Samplers.emplace(SamplerName).second)
@@ -954,9 +969,14 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
     Macros.Add("TEX_COLOR_CONVERSION_MODE_SRGB_TO_LINEAR", CreateInfo::TEX_COLOR_CONVERSION_MODE_SRGB_TO_LINEAR);
     Macros.Add("TEX_COLOR_CONVERSION_MODE", m_Settings.TexColorConversionMode);
 
-    const StaticShaderTextureIdsArrayType& MaterialTextureIds = m_Settings.GetStaticShaderTextureIds ?
-        m_Settings.GetStaticShaderTextureIds(Key) :
-        *m_StaticShaderTextureIds;
+    StaticShaderTextureIdsArrayType MaterialTextureIds;
+    MaterialTextureIds.fill(InvalidMaterialTextureId);
+    if (m_Settings.ShaderTexturesArrayMode == SHADER_TEXTURE_ARRAY_MODE_STATIC)
+    {
+        MaterialTextureIds = m_Settings.GetStaticShaderTextureIds ?
+            m_Settings.GetStaticShaderTextureIds(Key) :
+            *m_StaticShaderTextureIds;
+    }
 
     // Tightly pack these attributes that are used by the shader
     int MaxIndex = -1;
@@ -974,7 +994,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
                              VERIFY_EXPR(CurrIndex == MaxIndex + 1);
                              MaxIndex = std::max(MaxIndex, CurrIndex);
 
-                             if (m_Settings.UseMaterialTexturesArray)
+                             if (m_Settings.ShaderTexturesArrayMode == SHADER_TEXTURE_ARRAY_MODE_STATIC)
                              {
                                  if (MaterialTextureIds[AttribId] != InvalidMaterialTextureId)
                                  {
@@ -989,8 +1009,13 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
                          });
     Macros
         .Add("PBR_NUM_TEXTURE_ATTRIBUTES", MaxIndex + 1)
-        .Add("PBR_NUM_MATERIAL_TEXTURES", static_cast<int>(m_Settings.MaterialTexturesArraySize))
-        .Add("USE_MATERIAL_TEXTURES_ARRAY", m_Settings.UseMaterialTexturesArray);
+        .Add("PBR_NUM_MATERIAL_TEXTURES", static_cast<int>(m_Settings.MaterialTexturesArraySize));
+
+    Macros
+        .Add("PBR_TEXTURE_ARRAY_INDEXING_MODE_NONE", static_cast<int>(SHADER_TEXTURE_ARRAY_MODE_NONE))
+        .Add("PBR_TEXTURE_ARRAY_INDEXING_MODE_STATIC", static_cast<int>(SHADER_TEXTURE_ARRAY_MODE_STATIC))
+        .Add("PBR_TEXTURE_ARRAY_INDEXING_MODE_DYNAMIC", static_cast<int>(SHADER_TEXTURE_ARRAY_MODE_DYNAMIC))
+        .Add("PBR_TEXTURE_ARRAY_INDEXING_MODE", static_cast<int>(m_Settings.ShaderTexturesArrayMode));
 
     return Macros;
 }

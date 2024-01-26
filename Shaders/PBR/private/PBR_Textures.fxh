@@ -101,12 +101,63 @@ SamplerState g_LinearClampSampler;
 #       define    g_SheenAlbedoScalingLUT_sampler g_LinearClampSampler
 #endif
 
-#ifndef USE_MATERIAL_TEXTURES_ARRAY
-#   define USE_MATERIAL_TEXTURES_ARRAY 0
+// Access textures by name:
+//  - g_BaseColorMap
+//  - g_PhysicalDescriptorMap
+//  - g_NormalMap
+//  - ...
+#ifndef PBR_TEXTURE_ARRAY_INDEXING_MODE_NONE
+#   define PBR_TEXTURE_ARRAY_INDEXING_MODE_NONE 0
 #endif
+
+// Access textures using the compile-time static indices:
+//  - g_MaterialTextures[BaseColorTextureId]
+//  - g_MaterialTextures[PhysicalDescriptorTextureId]
+//  - g_MaterialTextures[NormalTextureId]
+//  - ...
+#ifndef PBR_TEXTURE_ARRAY_INDEXING_MODE_STATIC
+#   define PBR_TEXTURE_ARRAY_INDEXING_MODE_STATIC 1
+#endif
+
+// Access textures using the run-time dynamic indices
+#ifndef PBR_TEXTURE_ARRAY_INDEXING_MODE_DYNAMIC
+#   define PBR_TEXTURE_ARRAY_INDEXING_MODE_DYNAMIC 2
+#endif
+
+#ifndef PBR_TEXTURE_ARRAY_INDEXING_MODE
+#   define PBR_TEXTURE_ARRAY_INDEXING_MODE PBR_TEXTURE_ARRAY_INDEXING_MODE_NONE
+#endif
+
+#if PBR_TEXTURE_ARRAY_INDEXING_MODE == PBR_TEXTURE_ARRAY_INDEXING_MODE_NONE
+#   define USE_MATERIAL_TEXTURES_ARRAY 0
+#else
+#   define USE_MATERIAL_TEXTURES_ARRAY 1
+#endif
+
 
 #if USE_MATERIAL_TEXTURES_ARRAY && defined(PBR_NUM_MATERIAL_TEXTURES) && PBR_NUM_MATERIAL_TEXTURES > 0
     Texture2DArray g_MaterialTextures[PBR_NUM_MATERIAL_TEXTURES];
+#endif
+
+#if PBR_TEXTURE_ARRAY_INDEXING_MODE == PBR_TEXTURE_ARRAY_INDEXING_MODE_DYNAMIC
+// Use TextureSlice as the index into the texture array.
+#   define BaseColorTextureId            Material.Textures[BaseColorTextureAttribId].TextureSlice
+#   define MetallicTextureId             Material.Textures[MetallicTextureAttribId].TextureSlice
+#   define RoughnessTextureId            Material.Textures[RoughnessTextureAttribId].TextureSlice
+#   define PhysicalDescriptorTextureId   Material.Textures[PhysicalDescriptorTextureAttribId].TextureSlice
+#   define NormalTextureId               Material.Textures[NormalTextureAttribId].TextureSlice
+#   define OcclusionTextureId            Material.Textures[OcclusionTextureAttribId].TextureSlice
+#   define EmissiveTextureId             Material.Textures[EmissiveTextureAttribId].TextureSlice
+#   define ClearCoatTextureId            Material.Textures[ClearCoatTextureAttribId].TextureSlice
+#   define ClearCoatRoughnessTextureId   Material.Textures[ClearCoatRoughnessTextureAttribId].TextureSlice
+#   define ClearCoatNormalTextureId      Material.Textures[ClearCoatNormalTextureAttribId].TextureSlice
+#   define SheenColorTextureId           Material.Textures[SheenColorTextureAttribId].TextureSlice
+#   define SheenRoughnessTextureId       Material.Textures[SheenRoughnessTextureAttribId].TextureSlice
+#   define AnisotropyTextureId           Material.Textures[AnisotropyTextureAttribId].TextureSlice
+#   define IridescenceTextureId          Material.Textures[IridescenceTextureAttribId].TextureSlice
+#   define IridescenceThicknessTextureId Material.Textures[IridescenceThicknessTextureAttribId].TextureSlice
+#   define TransmissionTextureId         Material.Textures[TransmissionTextureAttribId].TextureSlice
+#   define ThicknessTextureId            Material.Textures[ThicknessTextureAttribId].TextureSlice
 #endif
 
 #if USE_COLOR_MAP
