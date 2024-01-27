@@ -28,6 +28,7 @@
 
 #include <vector>
 #include <array>
+#include <unordered_map>
 
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
 #include "../../../../DiligentCore/Graphics/GraphicsTools/interface/RenderStateCache.h"
@@ -52,6 +53,14 @@ struct ScreenSpaceReflectionAttribs;
 class ScreenSpaceReflection
 {
 public:
+    enum FEATURE_FLAGS
+    {
+        FEATURE_FLAG_NONE           = 1 << 0,
+        FEATURE_FLAG_RESERVED_DEPTH = 1 << 1, // Not implemented
+        FEATURE_FLAG_PACKED_NORMAL  = 1 << 2, // Nor implemented
+        FEATURE_FLAG_PREVIOUS_FRAME = 1 << 3,
+    };
+
     struct RenderAttributes
     {
         /// Render device that may be used to create new objects needed for this frame, if any.
@@ -81,6 +90,9 @@ public:
         /// Shader resource view of the motion vectors
         ITextureView* pMotionVectorsSRV = nullptr;
 
+        /// Render features
+        FEATURE_FLAGS FeatureFlag = FEATURE_FLAG_NONE;
+
         /// SSR settings
         const HLSL::ScreenSpaceReflectionAttribs* pSSRAttribs = nullptr;
     };
@@ -95,21 +107,6 @@ public:
     void Execute(const RenderAttributes& RenderAttribs);
 
     ITextureView* GetSSRRadianceSRV() const;
-
-private:
-    void CopyTextureDepth(const RenderAttributes& RenderAttribs, ITextureView* pSRV, ITextureView* pRTV);
-
-    void ComputeHierarchicalDepthBuffer(const RenderAttributes& RenderAttribs);
-
-    void ComputeStencilMaskAndExtractRoughness(const RenderAttributes& RenderAttribs);
-
-    void ComputeIntersection(const RenderAttributes& RenderAttribs);
-
-    void ComputeSpatialReconstruction(const RenderAttributes& RenderAttribs);
-
-    void ComputeTemporalAccumulation(const RenderAttributes& RenderAttribs);
-
-    void ComputeBilateralCleanup(const RenderAttributes& RenderAttribs);
 
 private:
     using RenderTechnique  = PostFXRenderTechnique;
@@ -153,7 +150,49 @@ private:
         RESOURCE_IDENTIFIER_COUNT
     };
 
-    std::array<RenderTechnique, RENDER_TECH_COUNT> m_RenderTech{};
+    void CopyTextureDepth(const RenderAttributes& RenderAttribs, ITextureView* pSRV, ITextureView* pRTV);
+
+    void ComputeHierarchicalDepthBuffer(const RenderAttributes& RenderAttribs);
+
+    void ComputeStencilMaskAndExtractRoughness(const RenderAttributes& RenderAttribs);
+
+    void ComputeIntersection(const RenderAttributes& RenderAttribs);
+
+    void ComputeSpatialReconstruction(const RenderAttributes& RenderAttribs);
+
+    void ComputeTemporalAccumulation(const RenderAttributes& RenderAttribs);
+
+    void ComputeBilateralCleanup(const RenderAttributes& RenderAttribs);
+
+    RenderTechnique& GetRenderTechnique(RENDER_TECH RenderTech, FEATURE_FLAGS FeatureFlags);
+
+private:
+    struct RenderTechniqueKey
+    {
+        const RENDER_TECH   RenderTech;
+        const FEATURE_FLAGS FeatureFlags;
+
+        RenderTechniqueKey(RENDER_TECH _RenderTech, FEATURE_FLAGS _FeatureFlags) :
+            RenderTech{_RenderTech},
+            FeatureFlags{_FeatureFlags}
+        {}
+
+        constexpr bool operator==(const RenderTechniqueKey& RHS) const
+        {
+            return RenderTech == RHS.RenderTech &&
+                FeatureFlags == RHS.FeatureFlags;
+        }
+
+        struct Hasher
+        {
+            size_t operator()(const RenderTechniqueKey& Key) const
+            {
+                return ComputeHash(Key.FeatureFlags, Key.FeatureFlags);
+            }
+        };
+    };
+
+    std::unordered_map<RenderTechniqueKey, RenderTechnique, RenderTechniqueKey::Hasher> m_RenderTech;
 
     ResourceRegistry m_Resources{RESOURCE_IDENTIFIER_COUNT};
 

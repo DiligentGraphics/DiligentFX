@@ -23,6 +23,7 @@ struct PSOutput
 Texture2D<float3> g_TextureRadiance;
 Texture2D<float3> g_TextureNormal;
 Texture2D<float>  g_TextureRoughness;
+Texture2D<float2> g_TextureMotion;
 
 Texture2D<float2> g_TextureBlueNoise;
 Texture2D<float>  g_TextureDepthHierarchy;
@@ -62,6 +63,11 @@ float3 SampleNormalWS(int2 PixelCoord)
 float SampleDepthHierarchy(int2 PixelCoord, int MipLevel)
 {
     return DepthToNormalizedDeviceZ(g_TextureDepthHierarchy.Load(int3(PixelCoord, MipLevel)));
+}
+
+float2 SampleMotion(int2 PixelCoord)
+{
+    return g_TextureMotion.Load(int3(PixelCoord, 0)) * F3NDC_XYZ_TO_UVD_SCALE.xy;
 }
 
 float3 SampleRadiance(int2 PixelCoord)
@@ -174,7 +180,18 @@ float3 HierarchicalRaymarch(float3 Origin, float3 Direction, float2 ScreenSize, 
     return Position;
 }
 
+float CalculateEdgeVignette(float2 Hit, float2 ScreenSize)
+{
+    float2 FOV = 0.05 * float2(ScreenSize.y / ScreenSize.x, 1.0);
+    float2 Border = smoothstep(float2(0.0f, 0.0f), FOV, Hit.xy) * (1.0 - smoothstep(float2(1.0f, 1.0f) - FOV, float2(1.0f, 1.0f), Hit.xy));
+    return Border.x * Border.y;
+}
+
+#if SSR_OPTION_PREVIOUS_FRAME
+float ValidateHit(float3 Hit,float2 HitPrev, float2 ScreenCoordUV, float3 RayDirectionWS,float2 ScreenSize, float DepthBufferThickness)
+#else
 float ValidateHit(float3 Hit, float2 ScreenCoordUV, float3 RayDirectionWS, float2 ScreenSize, float DepthBufferThickness)
+#endif
 {
     // Reject hits outside the view frustum
     if (Hit.x < 0.0f || Hit.y < 0.0f || Hit.x > 1.0f || Hit.y > 1.0f)
@@ -207,9 +224,11 @@ float ValidateHit(float3 Hit, float2 ScreenCoordUV, float3 RayDirectionWS, float
     float Distance = length(SurfaceVS - HitVS);
 
     // Fade out hits near the screen borders
-    float2 FOV = 0.05 * float2(ScreenSize.y / ScreenSize.x, 1.0);
-    float2 Border = smoothstep(float2(0.0f, 0.0f), FOV, Hit.xy) * (1.0 - smoothstep(float2(1.0f, 1.0f) - FOV, float2(1.0f, 1.0f), Hit.xy));
-    float Vignette = Border.x * Border.y;
+#if SSR_OPTION_PREVIOUS_FRAME
+    float Vignette = min(CalculateEdgeVignette(HitPrev.xy, ScreenSize), CalculateEdgeVignette(Hit.xy, ScreenSize));
+#else
+    float Vignette = CalculateEdgeVignette(Hit.xy, ScreenSize);
+#endif
 
     // We accept all hits that are within a reasonable minimum distance below the surface.
     // Add constant in linear space to avoid growing of the reflections toward the reflected objects.
@@ -281,8 +300,15 @@ PSOutput ComputeIntersectionPS(in FullScreenTriangleVSOutput VSOut)
     float3 SurfaceHitWS = ScreenSpaceToWorldSpace(SurfaceHitSS);
     float3 RayDirectionWS = SurfaceHitWS - RayOriginWS.xyz;
 
+#if SSR_OPTION_PREVIOUS_FRAME
+    float2 Motion = SampleMotion(int2(g_Camera.f4ViewportSize.xy * SurfaceHitSS.xy));
+    float2 SurfaceHitSSPrev = SurfaceHitSS.xy - Motion;
+    float Confidence = ValidHit ? ValidateHit(SurfaceHitSS, SurfaceHitSSPrev, ScreenCoordUV, RayDirectionWS, g_Camera.f4ViewportSize.xy, g_SSRAttribs.DepthBufferThickness) : 0.0;
+    float3 ReflectionRadiance = Confidence > 0.0f ? SampleRadiance(int2(g_Camera.f4ViewportSize.xy * SurfaceHitSSPrev)) : float3(0.0, 0.0, 0.0);
+#else
     float Confidence = ValidHit ? ValidateHit(SurfaceHitSS, ScreenCoordUV, RayDirectionWS, g_Camera.f4ViewportSize.xy, g_SSRAttribs.DepthBufferThickness) : 0.0;
     float3 ReflectionRadiance = Confidence > 0.0f ? SampleRadiance(int2(g_Camera.f4ViewportSize.xy * SurfaceHitSS.xy)) : float3(0.0, 0.0, 0.0);
+#endif
 
     //TODO: Try to store inverse RayDirectionWS for more accuracy.
     PSOutput Output;
