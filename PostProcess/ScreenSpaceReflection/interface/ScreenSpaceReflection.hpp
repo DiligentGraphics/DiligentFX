@@ -59,9 +59,8 @@ public:
         FEATURE_FLAG_RESERVED_DEPTH = 1 << 1, // Not implemented
         FEATURE_FLAG_PACKED_NORMAL  = 1 << 2, // Nor implemented
 
-        /// Enables multi-bounce reflections.
-        /// When this flag is set, the application should provide previous frame's color and depth buffers.
-        FEATURE_FLAG_MULTI_BOUNCE = 1 << 3,
+        // Use previous frame's color and depth buffers.
+        FEATURE_FLAG_PREVIOUS_FRAME = 1 << 3,
     };
 
     struct RenderAttributes

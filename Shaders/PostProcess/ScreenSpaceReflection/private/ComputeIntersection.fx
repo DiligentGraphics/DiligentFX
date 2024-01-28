@@ -187,7 +187,7 @@ float CalculateEdgeVignette(float2 Hit, float2 ScreenSize)
     return Border.x * Border.y;
 }
 
-#if SSR_OPTION_MULTI_BOUNCE
+#if SSR_OPTION_PREVIOUS_FRAME
 float ValidateHit(float3 Hit,float2 HitPrev, float2 ScreenCoordUV, float3 RayDirectionWS,float2 ScreenSize, float DepthBufferThickness)
 #else
 float ValidateHit(float3 Hit, float2 ScreenCoordUV, float3 RayDirectionWS, float2 ScreenSize, float DepthBufferThickness)
@@ -224,7 +224,7 @@ float ValidateHit(float3 Hit, float2 ScreenCoordUV, float3 RayDirectionWS, float
     float Distance = length(SurfaceVS - HitVS);
 
     // Fade out hits near the screen borders
-#if SSR_OPTION_MULTI_BOUNCE
+#if SSR_OPTION_PREVIOUS_FRAME
     float Vignette = min(CalculateEdgeVignette(HitPrev.xy, ScreenSize), CalculateEdgeVignette(Hit.xy, ScreenSize));
 #else
     float Vignette = CalculateEdgeVignette(Hit.xy, ScreenSize);
@@ -300,7 +300,7 @@ PSOutput ComputeIntersectionPS(in FullScreenTriangleVSOutput VSOut)
     float3 SurfaceHitWS = ScreenSpaceToWorldSpace(SurfaceHitSS);
     float3 RayDirectionWS = SurfaceHitWS - RayOriginWS.xyz;
 
-#if SSR_OPTION_MULTI_BOUNCE
+#if SSR_OPTION_PREVIOUS_FRAME
     float2 Motion = SampleMotion(int2(g_Camera.f4ViewportSize.xy * SurfaceHitSS.xy));
     float2 SurfaceHitSSPrev = SurfaceHitSS.xy - Motion;
     float Confidence = ValidHit ? ValidateHit(SurfaceHitSS, SurfaceHitSSPrev, ScreenCoordUV, RayDirectionWS, g_Camera.f4ViewportSize.xy, g_SSRAttribs.DepthBufferThickness) : 0.0;

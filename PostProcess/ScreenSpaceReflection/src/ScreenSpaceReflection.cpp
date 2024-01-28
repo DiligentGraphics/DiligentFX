@@ -24,7 +24,6 @@
  *  of the possibility of such damages.
  */
 
-#include "imgui.h"
 #include "ScreenSpaceReflection.hpp"
 #include "RenderStateCache.hpp"
 #include "CommonlyUsedStates.h"
@@ -33,6 +32,8 @@
 #include "ScopedDebugGroup.hpp"
 #include "ShaderMacroHelper.hpp"
 #include "GraphicsTypesX.hpp"
+
+#include "imgui.h"
 
 namespace Diligent
 {
@@ -634,7 +635,7 @@ void ScreenSpaceReflection::ComputeIntersection(const RenderAttributes& RenderAt
             .AddVariable(SHADER_TYPE_PIXEL, "g_TextureBlueNoise", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
             .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepthHierarchy", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
 
-        if (RenderAttribs.FeatureFlag & FEATURE_FLAG_MULTI_BOUNCE)
+        if (RenderAttribs.FeatureFlag & FEATURE_FLAG_PREVIOUS_FRAME)
             ResourceLayout.AddVariable(SHADER_TYPE_PIXEL, "g_TextureMotion", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
 
         if (!SupportedFeatures.TextureSubresourceViews)
@@ -644,7 +645,7 @@ void ScreenSpaceReflection::ComputeIntersection(const RenderAttributes& RenderAt
         }
 
         ShaderMacroHelper Macros;
-        Macros.Add("SSR_OPTION_MULTI_BOUNCE", RenderAttribs.FeatureFlag & FEATURE_FLAG_MULTI_BOUNCE);
+        Macros.Add("SSR_OPTION_PREVIOUS_FRAME", RenderAttribs.FeatureFlag & FEATURE_FLAG_PREVIOUS_FRAME);
 
         const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
         const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeIntersection.fx", "ComputeIntersectionPS", SHADER_TYPE_PIXEL, Macros);
@@ -668,7 +669,7 @@ void ScreenSpaceReflection::ComputeIntersection(const RenderAttributes& RenderAt
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureRoughness"}.Set(m_Resources[RESOURCE_IDENTIFIER_ROUGHNESS].GetTextureSRV());
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureBlueNoise"}.Set(RenderAttribs.pPostFXContext->Get2DBlueNoiseSRV(PostFXContext::BLUE_NOISE_DIMENSION_XY));
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureDepthHierarchy"}.Set(m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY].GetTextureSRV());
-    if (RenderAttribs.FeatureFlag & FEATURE_FLAG_MULTI_BOUNCE)
+    if (RenderAttribs.FeatureFlag & FEATURE_FLAG_PREVIOUS_FRAME)
         ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureMotion"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_MOTION_VECTORS].GetTextureSRV());
     ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "ComputeIntersection"};
 
