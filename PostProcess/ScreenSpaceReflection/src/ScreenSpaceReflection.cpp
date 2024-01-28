@@ -24,6 +24,7 @@
  *  of the possibility of such damages.
  */
 
+#include "imgui.h"
 #include "ScreenSpaceReflection.hpp"
 #include "RenderStateCache.hpp"
 #include "CommonlyUsedStates.h"
@@ -314,6 +315,71 @@ void ScreenSpaceReflection::Execute(const RenderAttributes& RenderAttribs)
     ComputeSpatialReconstruction(RenderAttribs);
     ComputeTemporalAccumulation(RenderAttribs);
     ComputeBilateralCleanup(RenderAttribs);
+}
+
+void ScreenSpaceReflection::UpdateUI(HLSL::ScreenSpaceReflectionAttribs& SSRAttribs)
+{
+    const char* RenderMode[] = {
+        "Standard",
+        "Advanced",
+    };
+
+    if (ImGui::BeginCombo("DisplayMode", RenderMode[m_ImGuiDisplayMode]))
+    {
+        for (Uint32 RenderModeIdx = 0; RenderModeIdx < _countof(RenderMode); RenderModeIdx++)
+        {
+            const bool IsSelected = (m_ImGuiDisplayMode == RenderModeIdx);
+            if (ImGui::Selectable(RenderMode[RenderModeIdx], IsSelected))
+                m_ImGuiDisplayMode = RenderModeIdx;
+
+            if (IsSelected)
+                ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+    }
+
+    if (m_ImGuiDisplayMode == 0)
+    {
+        ImGui::SliderFloat("Roughness Threshold", &SSRAttribs.RoughnessThreshold, 0.0f, 1.0f);
+        ImGui::SliderFloat("Depth Buffer Thickness", &SSRAttribs.DepthBufferThickness, 0.0f, 1.0f);
+        ImGui::SliderFloat("Temporal Stability Radiance Factor", &SSRAttribs.TemporalRadianceStabilityFactor, 0.0f, 1.0f);
+        ImGui::SliderInt("Max Traversal Iterations", reinterpret_cast<Int32*>(&SSRAttribs.MaxTraversalIntersections), 0, 256);
+    }
+    else if (m_ImGuiDisplayMode == 1)
+    {
+        if (ImGui::TreeNode("Ray Marching"))
+        {
+            ImGui::SliderFloat("Depth Buffer Thickness", &SSRAttribs.DepthBufferThickness, 0.0f, 1.0f);
+            ImGui::SliderFloat("Roughness Threshold", &SSRAttribs.RoughnessThreshold, 0.0f, 1.0f);
+            ImGui::SliderInt("Max Traversal Iterations", reinterpret_cast<Int32*>(&SSRAttribs.MaxTraversalIntersections), 0, 256);
+            ImGui::SliderInt("Most Detailed Mip", reinterpret_cast<Int32*>(&SSRAttribs.MostDetailedMip), 0, SSR_DEPTH_HIERARCHY_MAX_MIP);
+            ImGui::SliderFloat("GGX Importance Sample Bias", &SSRAttribs.GGXImportanceSampleBias, 0.0f, 1.0f);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNode("Spatial Reconstruction"))
+        {
+            ImGui::SliderFloat("Spatial Reconstruction Radius", &SSRAttribs.SpatialReconstructionRadius, 2.0f, 8.0f);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNode("Temporal Accumulation"))
+        {
+            ImGui::SliderFloat("Temporal Stability Radiance Factor", &SSRAttribs.TemporalRadianceStabilityFactor, 0.0f, 1.0f);
+            ImGui::SliderFloat("Temporal Stability Variance Factor", &SSRAttribs.TemporalVarianceStabilityFactor, 0.0f, 1.0f);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNode("Bilateral Cleanup"))
+        {
+            ImGui::SliderFloat("Bilateral Cleanup Spatial Sigma Factor", &SSRAttribs.BilateralCleanupSpatialSigmaFactor, 0.0f, 4.0f);
+            ImGui::TreePop();
+        }
+    }
+    else
+    {
+        DEV_ERROR("Unexpected RenderMode");
+    }
 }
 
 ITextureView* ScreenSpaceReflection::GetSSRRadianceSRV() const

@@ -109,6 +109,8 @@ public:
 
     void Execute(const RenderAttributes& RenderAttribs);
 
+    void UpdateUI(HLSL::ScreenSpaceReflectionAttribs& SSRAttribs);
+
     ITextureView* GetSSRRadianceSRV() const;
 
 private:
@@ -205,6 +207,7 @@ private:
 
     Uint32 m_BackBufferWidth  = 0;
     Uint32 m_BackBufferHeight = 0;
+    Uint32 m_ImGuiDisplayMode = 0;
 };
 
 } // namespace Diligent
