@@ -59,7 +59,9 @@ public:
         FEATURE_FLAG_RESERVED_DEPTH = 1 << 1, // Not implemented
         FEATURE_FLAG_PACKED_NORMAL  = 1 << 2, // Nor implemented
 
-        // Use previous frame's color and depth buffers.
+        // When using this flag, you only need to pass the color buffer of the previous frame.
+        // We find the intersection using the depth buffer of the current frame, and when an intersection is found,
+        // we make the corresponding offset by the velocity vector at the intersection point, for sampling from the color buffer.
         FEATURE_FLAG_PREVIOUS_FRAME = 1 << 3,
     };
 
