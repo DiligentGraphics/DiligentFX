@@ -217,7 +217,7 @@ area depths (mip 0 corresponds to the screen-sized, original depth buffer). It w
 other techniques, like GPU occlusion culling.
 
 Depth mip chain                      |
-:-----------------------------------:|             
+:-----------------------------------:|
 ![](media/ssr-hierachical-depth.jpg) |
 
 We recommend reading this article [**[Mike Turitzin, Hi-Z]**](https://miketuritzin.com/post/hierarchical-depth-buffers/), as computing a
@@ -249,7 +249,7 @@ we write the value `0xFF` to the stencil buffer; otherwise, the stencil buffer r
 for reading with the `COMPARISON_FUNC_EQUAL` function for the value `0xFF`. While writing to the stencil buffer, we also write the roughness to a separate
 render target. The separate texture allows us to simplify the code for roughness sampling in subsequent steps of the algorithm and improves performance.
 
-Stencil Mask for SSR         |  Final renderend image with SSR
+Stencil mask for SSR         |  Final renderend image with SSR
 :---------------------------:|:-------------------------:
 ![](media/ssr-stencil-0.jpg) | ![](media/ssr-stencil-1.jpg)
 
@@ -366,37 +366,79 @@ Hierarchical depth buffer traversal       |
 :----------------------------------------:|
 ![](media/ssr-hierarchical-traversal.gif) |
 
+After finding the intersection point of the ray with the scene, we accordingly calculate the screen coordinate and sample incoming radiance from `ColorBuffer` and write it as result for current pixel(The original implementation samples from the Environment Map if no intersection occurs; in our implementation, this is not the case). Also, we record the length of the ray, which will be needed during denoising stages. You can view the code implementing this step here: [**ComputeIntersection.fx**](https://github.com/DiligentGraphics/DiligentFX/blob/master/Shaders/PostProcess/ScreenSpaceReflection/private/ComputeIntersection.fx)
 
+Key differences from the AMD implementation of the ray tracing step:
+* Since scene may contain multiple environment maps, each of which may interact with a different pixel we decided not to pass the environment map to the SSR stage(Although this means we lose grazing specular reflections in areas where ray does not intersect with scene). Instead, we write a confidence value(Roughly speaking, `1` if an intersection occurred, `0` if not) in the alpha channel of the resulting texture. This value will later be used by the user to interpolate between the value from the SSR and the Environment Map.
+* Since we do not use AMD's denoiser but our own, we needed to record the result $p$ - PDF of the generated half vector $\mathbf{h}$ and light vector $\mathbf{l}$. Read section [spatial reconstruction](#spatial-reconstruction)
+* We added GGX Bias parameter that allows us to reduce the variance a bit. I recommend you to watch this video to understand how it works
+[**[EA-SSRR]**](https://youtu.be/AzXEao-WKRc?t=1122)
+
+Computed specular radiance during ray tracing step   | Computed confidence during ray tracing step
+:---------------------------------------------------:|:-------------------------:
+![](media/ssr-intersection.jpg)                      | ![](media/ssr-confidence.jpg)
 
 ### Denoising
-
-At this stage, we try to denoise images formed by ray tracing step
+As we can see, the image obtained from the ray tracing step is quite noisy. Accordingly, at this stage of the algorithm, we attempt to reduce the amount of noise in the resulting image
 
 #### Spatial reconstruction
 
-(#TODO)
-[**ComputeSpatialReconstruction.fx**](https://github.com/DiligentGraphics/DiligentFX/blob/master/Shaders/PostProcess/ScreenSpaceReflection/private/ComputeSpatialReconstruction.fx)
+At this step of the denoising algorithm, we make the assumption that closely located surface points have the same visibility, and accordingly, we attempt to accumulate the incoming radiance of each point from its nearby points.
+Same visibility under the red zone   |
+:-----------------------------------:|
+![](media/ssr-visibility.jpg)        |
 
-$$
+This assumption introduces bias into the final image, but despite this drawback, it significantly reduces noise on surfaces with high roughness. For accumulating samples, we use an approach from [**[EA-SSRR]**](https://youtu.be/AzXEao-WKRc?t=746).They suggest using this formula for accumulating samples:
+```math
 \Large L_{o, s}(\mathbf{v}) \approx \frac{\sum_{n=1}^{N} \frac{L_i(\mathbf{l}) f_r(\mathbf{v}, \mathbf{l}) \langle \mathbf{n} \cdot \mathbf{l} \rangle}{p_n}}{\sum_{n=1}^{N} \frac{f_r( \mathbf{v}, \mathbf{l}) \langle \mathbf{n} \cdot \mathbf{l} \rangle}{p_n}} T_2
-$$
+```
+As can be noted, to calculate the expression in front the $T_2$ sum, we already have all the necessary components $L_i$, $l$, $p$, as we have mentioned in the ray tracing step. You can view the source code for the computation of this stage: [**ComputeSpatialReconstruction.fx**](https://github.com/DiligentGraphics/DiligentFX/blob/master/Shaders/PostProcess/ScreenSpaceReflection/private/ComputeSpatialReconstruction.fx)
+It can be noted that we accumulate samples in screen space, and we also use a variable radius and a variable number of samples depending on the surface roughness when computing this expression. Also, during the sum accumulation, we calculate the variance and search for the maximum ray length (From ray tracing stage, we pass not a normalized ray with length (`SurfaceHitWS` - `RayOriginWS`)), and then we record the results into separate textures. The variance will be needed for cross-bilateral filtering pass. The ray length will be required during temporal accumulation stage for parallax correction.
+
+Specular radiance after spatial reconstruction  | Computed variance during spatial reconstruction step 
+:----------------------------------------:|:-------------------------:
+![](media/ssr-spatial-reconstruction.jpg) | ![](media/ssr-variance.jpg)
 
 
 #### Temporal accumulation
 
-(#TODO)
-[**ComputeTemporalAccumulation.fx**](https://github.com/DiligentGraphics/DiligentFX/blob/master/Shaders/PostProcess/ScreenSpaceReflection/private/ComputeTemporalAccumulation.fx)
+At this step, we accumulate the image obtained after spatial reconstruction with the image obtained at this step but from a previous moment in time. We rely on the temporal coherence of frames, as the information between frames does not change significantly. An advanced reader might wonder why we don't simply use the TAA (Temporal Anti-Aliasing) algorithm. A typical reprojection method, commonly employed in TAA, is not adequately effective for reflections. This is because the objects reflected move according to their own depth, rather than the depth of the surfaces reflecting them, which is what's recorded in the depth buffer. Therefore, we need to ascertain the previous frame's location of these reflected objects. Overall, our implementation of temporal accumulation is similar to the implementation by AMD [Reproject](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/blob/main/sdk/include/FidelityFX/gpu/denoiser/ffx_denoiser_reflections_reproject.h)
+
+We use the approach from this presentation [**[EA-HYRTR]**](https://www.ea.com/seed/news/seed-dd18-presentation-slides-raytracing), slide 45. 
+At a high level, we can divide the current stage into 4 parts:
+1) Calculate the statistics of the current pixel (mean, standard deviation, variance) based on color buffer
+2) Compute intensity from the previous frame for two screen space points relative to the current pixel's position. The first position is formed by subtracting the motion vector from the current pixel's position, while the second position is calculated based on the ray length, which we computed during the ray tracing stage and modified during the spatial reprojection stage.
+3) Based on the statistics of the current pixel and the intensity values for two points, we select the point on which we will base the reprojection
+4) If the reprojection is successful, we interpolate the values between the intensity from the selected point (which we calculated in the previous step) and the intensity value for the current pixel. If the reprojection is not successful, we record the intensity value from the current pixel.
+
+For diving into the implementation details, I recommend looking at the source code: [**ComputeTemporalAccumulation.fx**](https://github.com/DiligentGraphics/DiligentFX/blob/master/Shaders/PostProcess/ScreenSpaceReflection/private/ComputeTemporalAccumulation.fx)
+
+Specular radiance after temporal accumulation|  
+:-------------------------------------------:|
+![](media/ssr-temporal-accumulation.jpg)     |
 
 
 #### Cross-bilateral filtering
 
-(#TODO)
-[**ComputeBilateralCleanup.fx**](https://github.com/DiligentGraphics/DiligentFX/blob/master/Shaders/PostProcess/ScreenSpaceReflection/private/ComputeBilateralCleanup.fx)
+This is probably one of the least interesting parts of the algorithm since the bilateral filter has long been widely used in image processing [**[Wiki, Bilateral filter]**]( https://en.wikipedia.org/wiki/Bilateral_filter). There are only a few modifications that we have made:
+* We use variance calculated during the spatial reconstruction stage to determine the $\sigma$ for the spatial kernel $G_s$ of the bilateral filter.
+* Since the image being processed is quite noisy, instead of using the pixel intensity of the processed image to create the range kernel $G_r$, we use the depth buffer and the normals buffer to form the kernel. We took the functions for generate the range kernel $G_r$ from the SVGF algorithm [**[Christoph Schied, SVGF]**](https://cg.ivd.kit.edu/publications/2017/svgf/svgf_preprint.pdf), expressions $(3)$ and $(4)$
 
+If you are interested in viewing the implementation, you can see it here: [**ComputeBilateralCleanup.fx**](https://github.com/DiligentGraphics/DiligentFX/blob/master/Shaders/PostProcess/ScreenSpaceReflection/private/ComputeBilateralCleanup.fx)
+
+
+Specular radiance after bilater filtering |  
+:----------------------------------------:|
+![](media/ssr-bilateral-filter.jpg)       |
+
+The final frame after lighting calculation and SSR application can be seen in the screenshot below
+Final image after calculating lighting and tone mapping |  
+:----------------------------------------:|
+![](media/ssr-result.jpg)                 |
 
 ## Possible improvements
 
-* Add support for reserved depth buffer
+* Add support for reversed depth buffer
 * Add support for compressed normal map
 * Add dynamic resolution for the raytracing stage, which will increase performance on weaker GPU
 * [Spatial reconstruction step](#spatial-reconsturction) uses screen space to accumulate samples. Try to perform accumulation in world coords, this should reduce bias
@@ -420,3 +462,5 @@ https://www.mathematik.uni-marburg.de/~thormae/lectures/graphics1/graphics_10_2_
 - **[Brian Karis, PBR]** Brian Karis: Real Shading in Unreal Engine 4, SIGGRAPH 2013 Course: Physically Based Shading in Theory and Practice -
 https://cdn2.unrealengine.com/Resources/files/2013SiggraphPresentationsNotes-26915738.pdf
 - **[Mike Turitzin, Hi-Z]** Hierarchical Depth Buffers - https://miketuritzin.com/post/hierarchical-depth-buffers/
+- **[Christoph Schied, SVGF]** Spatiotemporal Variance-Guided Filtering - https://cg.ivd.kit.edu/publications/2017/svgf/svgf_preprint.pdf
+- **[Wiki, Bilateral filter]** - Bilateral filter https://en.wikipedia.org/wiki/Bilateral_filter
