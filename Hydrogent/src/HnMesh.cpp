@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -179,6 +179,11 @@ void HnMesh::Sync(pxr::HdSceneDelegate* Delegate,
         UpdateReprMaterials(Delegate, RenderParam);
     }
 
+    if (*DirtyBits & pxr::HdChangeTracker::DirtyDoubleSided)
+    {
+        m_Attribs.IsDoubleSided = Delegate->GetDoubleSided(Id);
+    }
+
     ++m_Version;
 
     *DirtyBits &= ~pxr::HdChangeTracker::AllSceneDirtyBits;
@@ -304,7 +309,7 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
 
     if (pxr::HdChangeTracker::IsTransformDirty(DirtyBits, Id))
     {
-        m_Transform = ToFloat4x4(SceneDelegate.GetTransform(Id));
+        m_Attribs.Transform = ToFloat4x4(SceneDelegate.GetTransform(Id));
     }
 
     if (pxr::HdChangeTracker::IsVisibilityDirty(DirtyBits, Id))
@@ -550,7 +555,7 @@ void HnMesh::UpdateConstantPrimvars(pxr::HdSceneDelegate& SceneDelegate,
         {
             if (ElementType == pxr::HdTypeFloatVec3)
             {
-                memcpy(m_DisplayColor.Data(), Source->GetData(), sizeof(float3));
+                memcpy(m_Attribs.DisplayColor.Data(), Source->GetData(), sizeof(float3));
             }
             else
             {
@@ -561,7 +566,7 @@ void HnMesh::UpdateConstantPrimvars(pxr::HdSceneDelegate& SceneDelegate,
         {
             if (ElementType == pxr::HdTypeFloat)
             {
-                memcpy(&m_DisplayColor.w, Source->GetData(), sizeof(float));
+                memcpy(&m_Attribs.DisplayColor.w, Source->GetData(), sizeof(float));
             }
             else
             {

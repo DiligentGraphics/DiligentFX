@@ -369,8 +369,9 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
             0,
         };
 
-        const float4x4&       Transform    = ApplyTransform ? (Mesh.GetTransform() * m_RenderParams.Transform) : Mesh.GetTransform();
-        const GLTF::Material& MaterialData = pMaterial->GetMaterialData();
+        const HnMesh::Attributes& MeshAttribs  = Mesh.GetAttributes();
+        const float4x4&           Transform    = ApplyTransform ? (MeshAttribs.Transform * m_RenderParams.Transform) : MeshAttribs.Transform;
+        const GLTF::Material&     MaterialData = pMaterial->GetMaterialData();
 
         HLSL::PBRMaterialBasicAttribs* pDstMaterialBasicAttribs = nullptr;
 
@@ -385,7 +386,7 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
         };
         GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(pCurrPrimitive, AttribsData, State.USDRenderer.GetSettings().TextureAttribIndices, pMaterial->GetMaterialData());
 
-        pDstMaterialBasicAttribs->BaseColorFactor = MaterialData.Attribs.BaseColorFactor * Mesh.GetDisplayColor();
+        pDstMaterialBasicAttribs->BaseColorFactor = MaterialData.Attribs.BaseColorFactor * MeshAttribs.DisplayColor;
 
         m_PendingDrawItems.push_back(&ListItem);
     }
@@ -583,6 +584,9 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
         const HnMaterial*               pMaterial = DrawItem.GetMaterial();
         VERIFY(pMaterial != nullptr, "Material is null");
 
+        const HnMesh& Mesh          = DrawItem.GetMesh();
+        const bool    IsDoubleSided = Mesh.GetAttributes().IsDoubleSided;
+
         // Use the material's texture indexing ID as the user value in the PSO key.
         // The USD renderer will use this ID to return the indexing.
         const auto ShaderTextureIndexingId = pMaterial->GetStaticShaderTextureIndexingId();
@@ -617,13 +621,13 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
             if (State.RenderParam.GetTextureBindingMode() == HN_MATERIAL_TEXTURES_BINDING_MODE_ATLAS)
                 PSOFlags |= PBR_Renderer::PSO_FLAG_USE_TEXTURE_ATLAS;
 
-            ListItem.pPSO = PsoCache.Get({PSOFlags, static_cast<PBR_Renderer::ALPHA_MODE>(State.AlphaMode), /*DoubleSided = */ false, m_DebugView, ShaderTextureIndexingId}, true);
+            ListItem.pPSO = PsoCache.Get({PSOFlags, static_cast<PBR_Renderer::ALPHA_MODE>(State.AlphaMode), IsDoubleSided, m_DebugView, ShaderTextureIndexingId}, true);
         }
         else if (m_RenderMode == HN_RENDER_MODE_MESH_EDGES ||
                  m_RenderMode == HN_RENDER_MODE_POINTS)
         {
             PSOFlags |= PBR_Renderer::PSO_FLAG_UNSHADED;
-            ListItem.pPSO = PsoCache.Get({PSOFlags, /*DoubleSided = */ false, PBR_Renderer::DebugViewType::None, ShaderTextureIndexingId}, true);
+            ListItem.pPSO = PsoCache.Get({PSOFlags, IsDoubleSided, PBR_Renderer::DebugViewType::None, ShaderTextureIndexingId}, true);
         }
         else
         {

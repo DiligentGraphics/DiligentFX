@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -120,8 +120,13 @@ public:
     ///             for the points drawing commands.
     Uint32 GetPointsStartIndex() const { return m_IndexData.PointsStartIndex; }
 
-    const float4x4& GetTransform() const { return m_Transform; }
-    const float4&   GetDisplayColor() const { return m_DisplayColor; }
+    struct Attributes
+    {
+        float4x4 Transform     = float4x4::Identity();
+        float4   DisplayColor  = {1, 1, 1, 1};
+        bool     IsDoubleSided = false;
+    };
+    const Attributes& GetAttributes() const { return m_Attribs; }
 
     Uint32 GetUID() const { return m_UID; }
 
@@ -219,8 +224,7 @@ private:
     };
     std::unique_ptr<StagingVertexData> m_StagingVertexData;
 
-    float4x4 m_Transform    = float4x4::Identity();
-    float4   m_DisplayColor = {1, 1, 1, 1};
+    Attributes m_Attribs;
 
     struct IndexData
     {
