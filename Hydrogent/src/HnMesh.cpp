@@ -434,26 +434,36 @@ void HnMesh::UpdateVertexAndVaryingPrimvars(pxr::HdSceneDelegate& SceneDelegate,
 
     const HnRenderPass::SupportedVertexInputsSetType SupportedPrimvars = GetSupportedPrimvars(SceneDelegate.GetRenderIndex(), GetMaterialId(), m_Topology);
 
+    auto AddPrimvarSource = [&](const pxr::HdPrimvarDescriptor& PrimDesc) {
+        if (!pxr::HdChangeTracker::IsPrimvarDirty(DirtyBits, Id, PrimDesc.name))
+            return;
+
+        // Skip unsupported primvars
+        if (SupportedPrimvars.find(PrimDesc.name) == SupportedPrimvars.end())
+            return;
+
+        pxr::VtValue PrimValue = GetPrimvar(&SceneDelegate, PrimDesc.name);
+        if (PrimValue.IsEmpty())
+            return;
+
+        if (auto BufferSource = CreateBufferSource(PrimDesc.name, PrimValue, NumPoints, Id))
+        {
+            m_StagingVertexData->Sources.emplace(PrimDesc.name, std::move(BufferSource));
+        }
+    };
+
     for (pxr::HdInterpolation Interpolation : {pxr::HdInterpolationVertex, pxr::HdInterpolationVarying})
     {
-        pxr::HdPrimvarDescriptorVector VertexPrims = GetPrimvarDescriptors(&SceneDelegate, Interpolation);
-        for (const pxr::HdPrimvarDescriptor& PrimDesc : VertexPrims)
+        pxr::HdPrimvarDescriptorVector PrimVarDescs = GetPrimvarDescriptors(&SceneDelegate, Interpolation);
+        for (const pxr::HdPrimvarDescriptor& PrimDesc : PrimVarDescs)
         {
-            if (!pxr::HdChangeTracker::IsPrimvarDirty(DirtyBits, Id, PrimDesc.name))
-                continue;
+            AddPrimvarSource(PrimDesc);
+        }
 
-            // Skip unsupported primvars
-            if (SupportedPrimvars.find(PrimDesc.name) == SupportedPrimvars.end())
-                continue;
-
-            pxr::VtValue PrimValue = GetPrimvar(&SceneDelegate, PrimDesc.name);
-            if (PrimValue.IsEmpty())
-                continue;
-
-            if (auto BufferSource = CreateBufferSource(PrimDesc.name, PrimValue, NumPoints, Id))
-            {
-                m_StagingVertexData->Sources.emplace(PrimDesc.name, std::move(BufferSource));
-            }
+        pxr::HdExtComputationPrimvarDescriptorVector CompPrimvarsDescs = SceneDelegate.GetExtComputationPrimvarDescriptors(Id, Interpolation);
+        for (const pxr::HdExtComputationPrimvarDescriptor& ExtCompPrimDesc : CompPrimvarsDescs)
+        {
+            AddPrimvarSource(ExtCompPrimDesc);
         }
     }
 }
