@@ -80,7 +80,6 @@ source_group("generated" FILES
     ${SHADERS_INC_LIST}
 )
 
-
 if(DILIGENT_INSTALL_FX)
     install(TARGETS				 DiligentFX
             ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}/${DILIGENT_FX_DIR}/$<CONFIG>"
@@ -92,6 +91,9 @@ if(DILIGENT_INSTALL_FX)
     )
     install(DIRECTORY    PostProcess/ScreenSpaceReflection/interface
             DESTINATION  "${CMAKE_INSTALL_INCLUDEDIR}/${DILIGENT_FX_DIR}/PostProcess/ScreenSpaceReflection"
+    )
+    install(DIRECTORY    PostProcess/TemporalAntiAliasing/interface
+            DESTINATION  "${CMAKE_INSTALL_INCLUDEDIR}/${DILIGENT_FX_DIR}/PostProcess/TemporalAntiAliasing"
     )
     install(DIRECTORY    Components/interface
             DESTINATION  "${CMAKE_INSTALL_INCLUDEDIR}/${DILIGENT_FX_DIR}/Components"

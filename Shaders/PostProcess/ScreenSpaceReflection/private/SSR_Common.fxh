@@ -12,7 +12,7 @@
 #if !defined(DESKTOP_GL) && !defined(GL_ES)
     #define SSR_ATTRIBUTE_EARLY_DEPTH_STENCIL [earlydepthstencil]
 #else
-    #define SSR_ATTRIBUTE_EARLY_DEPTH_STENCIL 
+    #define SSR_ATTRIBUTE_EARLY_DEPTH_STENCIL //[earlydepthstencil]
 #endif
 
 float VanDerCorputSequenceBase2(uint SampleIdx)
