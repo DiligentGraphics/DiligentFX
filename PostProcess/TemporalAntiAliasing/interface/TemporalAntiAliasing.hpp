@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2024 Diligent Graphics LLC
+ *  Copyright 2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@
 
 #pragma once
 
-#include <vector>
 #include <unordered_map>
 
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
@@ -41,27 +40,12 @@
 namespace Diligent
 {
 
-namespace HLSL
-{
-struct ScreenSpaceReflectionAttribs;
-}
-
-
-// TODO: Implement SPD for depth buffer
-
-class ScreenSpaceReflection
+class TemporalAntiAliasing
 {
 public:
     enum FEATURE_FLAGS
     {
-        FEATURE_FLAG_NONE           = 1 << 0,
-        FEATURE_FLAG_RESERVED_DEPTH = 1 << 1, // Not implemented
-        FEATURE_FLAG_PACKED_NORMAL  = 1 << 2, // Nor implemented
-
-        // When using this flag, you only need to pass the color buffer of the previous frame.
-        // We find the intersection using the depth buffer of the current frame, and when an intersection is found,
-        // we make the corresponding offset by the velocity vector at the intersection point, for sampling from the color buffer.
-        FEATURE_FLAG_PREVIOUS_FRAME = 1 << 3,
+        FEATURE_FLAG_NONE = 0,
     };
 
     struct RenderAttributes
@@ -81,37 +65,28 @@ public:
         /// Shader resource view of the source color
         ITextureView* pColorBufferSRV = nullptr;
 
-        /// Shader resource view of the source depth.
+        /// Shader resource view of the source depth
         ITextureView* pDepthBufferSRV = nullptr;
-
-        /// Shader resource view of the source normal buffer
-        ITextureView* pNormalBufferSRV = nullptr;
-
-        /// Shader resource view of the source roughness buffer
-        ITextureView* pMaterialBufferSRV = nullptr;
 
         /// Shader resource view of the motion vectors
         ITextureView* pMotionVectorsSRV = nullptr;
 
         /// Render features
         FEATURE_FLAGS FeatureFlag = FEATURE_FLAG_NONE;
-
-        /// SSR settings
-        const HLSL::ScreenSpaceReflectionAttribs* pSSRAttribs = nullptr;
     };
 
 public:
-    ScreenSpaceReflection(IRenderDevice* pDevice);
+    TemporalAntiAliasing(IRenderDevice* pDevice);
 
-    ~ScreenSpaceReflection();
+    ~TemporalAntiAliasing();
+
+    float2 GetJitterOffset() const;
 
     void PrepareResources(IRenderDevice* pDevice, PostFXContext* pPostFXContext);
 
     void Execute(const RenderAttributes& RenderAttribs);
 
-    void UpdateUI(HLSL::ScreenSpaceReflectionAttribs& SSRAttribs);
-
-    ITextureView* GetSSRRadianceSRV() const;
+    ITextureView* GetAccumulatedFrameSRV() const;
 
 private:
     using RenderTechnique  = PostFXRenderTechnique;
@@ -119,13 +94,7 @@ private:
 
     enum RENDER_TECH : Uint32
     {
-        RENDER_TECH_COMPUTE_HIERARCHICAL_DEPTH_BUFFER = 0,
-        RENDER_TECH_COMPUTE_STENCIL_MASK_AND_EXTRACT_ROUGHNESS,
-        RENDER_TECH_COMPUTE_INTERSECTION,
-        RENDER_TECH_COMPUTE_SPATIAL_RECONSTRUCTION,
-        RENDER_TECH_COMPUTE_TEMPORAL_ACCUMULATION,
-        RENDER_TECH_COMPUTE_BILATERAL_CLEANUP,
-        RENDER_TECH_COPY_DEPTH,
+        RENDER_TECH_COMPUTE_TEMPORAL_ACCUMULATION = 0,
         RENDER_TECH_COUNT
     };
 
@@ -133,41 +102,13 @@ private:
     {
         RESOURCE_IDENTIFIER_INPUT_COLOR = 0,
         RESOURCE_IDENTIFIER_INPUT_DEPTH,
-        RESOURCE_IDENTIFIER_INPUT_NORMAL,
-        RESOURCE_IDENTIFIER_INPUT_MATERIAL_PARAMETERS,
         RESOURCE_IDENTIFIER_INPUT_MOTION_VECTORS,
-        RESOURCE_IDENTIFIER_CONSTANT_BUFFER,
-        RESOURCE_IDENTIFIER_DEPTH_HIERARCHY,
-        RESOURCE_IDENTIFIER_DEPTH_HIERARCHY_INTERMEDIATE,
-        RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK,
-        RESOURCE_IDENTIFIER_ROUGHNESS,
-        RESOURCE_IDENTIFIER_RADIANCE,
-        RESOURCE_IDENTIFIER_RAY_DIRECTION_PDF,
-        RESOURCE_IDENTIFIER_RESOLVED_RADIANCE,
-        RESOURCE_IDENTIFIER_RESOLVED_VARIANCE,
-        RESOURCE_IDENTIFIER_RESOLVED_DEPTH,
-        RESOURCE_IDENTIFIER_RADIANCE_HISTORY0,
-        RESOURCE_IDENTIFIER_RADIANCE_HISTORY1,
-        RESOURCE_IDENTIFIER_VARIANCE_HISTORY0,
-        RESOURCE_IDENTIFIER_VARIANCE_HISTORY1,
-        RESOURCE_IDENTIFIER_DEPTH_HISTORY,
-        RESOURCE_IDENTIFIER_OUTPUT,
+        RESOURCE_IDENTIFIER_ACCUMULATED_BUFFER0,
+        RESOURCE_IDENTIFIER_ACCUMULATED_BUFFER1,
         RESOURCE_IDENTIFIER_COUNT
     };
 
-    void CopyTextureDepth(const RenderAttributes& RenderAttribs, ITextureView* pSRV, ITextureView* pRTV);
-
-    void ComputeHierarchicalDepthBuffer(const RenderAttributes& RenderAttribs);
-
-    void ComputeStencilMaskAndExtractRoughness(const RenderAttributes& RenderAttribs);
-
-    void ComputeIntersection(const RenderAttributes& RenderAttribs);
-
-    void ComputeSpatialReconstruction(const RenderAttributes& RenderAttribs);
-
     void ComputeTemporalAccumulation(const RenderAttributes& RenderAttribs);
-
-    void ComputeBilateralCleanup(const RenderAttributes& RenderAttribs);
 
     RenderTechnique& GetRenderTechnique(RENDER_TECH RenderTech, FEATURE_FLAGS FeatureFlags);
 
@@ -201,13 +142,10 @@ private:
 
     ResourceRegistry m_Resources{RESOURCE_IDENTIFIER_COUNT};
 
-    std::vector<RefCntAutoPtr<ITextureView>> m_HierarchicalDepthMipMapRTV;
-    std::vector<RefCntAutoPtr<ITextureView>> m_HierarchicalDepthMipMapSRV;
-    RefCntAutoPtr<ITextureView>              m_DepthStencilMaskDSVReadOnly;
-
     Uint32 m_BackBufferWidth  = 0;
     Uint32 m_BackBufferHeight = 0;
-    Uint32 m_ImGuiDisplayMode = 0;
+    Uint32 m_CurrentFrameIdx  = 0;
 };
+
 
 } // namespace Diligent

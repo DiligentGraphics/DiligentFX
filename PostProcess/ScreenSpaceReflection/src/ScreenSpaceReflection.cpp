@@ -788,7 +788,7 @@ void ScreenSpaceReflection::ComputeTemporalAccumulation(const RenderAttributes& 
     }
 
     const Uint32 FrameIndex   = RenderAttribs.pPostFXContext->GetFrameDesc().Index;
-    const Uint32 CurrFrameIdx = FrameIndex & 0x01;
+    const Uint32 CurrFrameIdx = (FrameIndex + 0) & 0x01;
     const Uint32 PrevFrameIdx = (FrameIndex + 1) & 0x01;
 
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureMotion"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_MOTION_VECTORS].GetTextureSRV());
