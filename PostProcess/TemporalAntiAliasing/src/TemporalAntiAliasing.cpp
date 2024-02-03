@@ -55,7 +55,7 @@ TemporalAntiAliasing::~TemporalAntiAliasing() = default;
 
 float2 TemporalAntiAliasing::GetJitterOffset() const
 {
-    if (!m_BackBufferWidth || !m_BackBufferHeight)
+    if (m_BackBufferWidth == 0 || m_BackBufferHeight == 0 || m_LastFrameIdx == ~0u)
         return float2{0.0f, 0.0f};
 
     const float JitterX = (HaltonSequenc(2u, m_CurrentFrameIdx % 32u + 1) - 0.5f) / (0.5f * static_cast<float>(m_BackBufferWidth));
@@ -122,6 +122,11 @@ ITextureView* TemporalAntiAliasing::GetAccumulatedFrameSRV() const
 {
     const Uint32 CurrFrameIdx = (m_CurrentFrameIdx + 0) & 0x01;
     return m_Resources[RESOURCE_IDENTIFIER_ACCUMULATED_BUFFER0 + CurrFrameIdx].GetTextureSRV();
+}
+
+void TemporalAntiAliasing::ResetAccumulation()
+{
+    m_LastFrameIdx = ~0u;
 }
 
 void TemporalAntiAliasing::ComputeTemporalAccumulation(const RenderAttributes& RenderAttribs)

@@ -88,6 +88,8 @@ public:
 
     ITextureView* GetAccumulatedFrameSRV() const;
 
+    void ResetAccumulation();
+
 private:
     using RenderTechnique  = PostFXRenderTechnique;
     using ResourceInternal = RefCntAutoPtr<IDeviceObject>;
