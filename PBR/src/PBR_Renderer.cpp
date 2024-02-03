@@ -134,8 +134,6 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
     m_PBRPrimitiveAttribsCB{CI.pPrimitiveAttribsCB},
     m_JointsBuffer{CI.pJointsBuffer}
 {
-    DEV_CHECK_ERR(m_Settings.InputLayout.NumElements != 0, "Input layout must not be empty");
-
     if (m_Settings.EnableIBL)
     {
         PrecomputeBRDF(pCtx, m_Settings.NumBRDFSamples);
