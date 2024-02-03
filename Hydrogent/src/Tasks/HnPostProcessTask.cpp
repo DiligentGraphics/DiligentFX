@@ -281,7 +281,11 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
     m_SSR->PrepareResources(pDevice, m_PostFXContext.get());
     m_TAA->PrepareResources(pDevice, m_PostFXContext.get(), m_FinalColorRTV->GetDesc().Format);
 
-    m_PostProcessTech.PreparePSO(*this, RenderDelegate, (m_Params.EnableTAA ? m_FBTargets->JitteredFinalColorRTV : m_FinalColorRTV)->GetDesc().Format);
+    m_UseTAA = m_Params.EnableTAA &&
+        pRenderParam->GetDebugView() == PBR_Renderer::DebugViewType::None &&
+        pRenderParam->GetRenderMode() == HN_RENDER_MODE_SOLID;
+
+    m_PostProcessTech.PreparePSO(*this, RenderDelegate, (m_UseTAA ? m_FBTargets->JitteredFinalColorRTV : m_FinalColorRTV)->GetDesc().Format);
 
     PrepareSRB(ClosestSelectedLocationSRV);
 
@@ -291,7 +295,7 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
     }
 
     // The jitter will be used by HnBeginFrameTask::Execute() to set projection matrix.
-    (*TaskCtx)[HnRenderResourceTokens->taaJitter] = pxr::VtValue{m_Params.EnableTAA ? m_TAA->GetJitterOffset() : float2{0, 0}};
+    (*TaskCtx)[HnRenderResourceTokens->taaJitter] = pxr::VtValue{m_UseTAA ? m_TAA->GetJitterOffset() : float2{0, 0}};
 }
 
 void HnPostProcessTask::PrepareSRB(ITextureView* pClosestSelectedLocationSRV)
@@ -453,7 +457,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
     {
         ScopedDebugGroup DebugGroup{pCtx, "Post Processing"};
 
-        ITextureView* pRTVs[] = {m_Params.EnableTAA ? m_FBTargets->JitteredFinalColorRTV : m_FinalColorRTV};
+        ITextureView* pRTVs[] = {m_UseTAA ? m_FBTargets->JitteredFinalColorRTV : m_FinalColorRTV};
         pCtx->SetRenderTargets(_countof(pRTVs), pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
         {
@@ -477,7 +481,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         pCtx->Draw({3, DRAW_FLAG_VERIFY_ALL});
     }
 
-    if (m_Params.EnableTAA)
+    if (m_UseTAA)
     {
         TemporalAntiAliasing::RenderAttributes TAARenderAttribs{};
         TAARenderAttribs.pDevice           = pDevice;

@@ -140,6 +140,7 @@ private:
     ITextureView*               m_FinalColorRTV = nullptr; // Set in Prepare()
     const HnFramebufferTargets* m_FBTargets     = nullptr; // Set in Prepare()
     float                       m_ClearDepth    = 1.f;     // Set in Prepare()
+    bool                        m_UseTAA        = false;   // Set in Prepare()
 
     struct PostProcessingTechnique
     {
