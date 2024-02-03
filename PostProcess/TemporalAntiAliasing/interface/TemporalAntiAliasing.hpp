@@ -145,6 +145,11 @@ private:
     Uint32 m_BackBufferWidth  = 0;
     Uint32 m_BackBufferHeight = 0;
     Uint32 m_CurrentFrameIdx  = 0;
+    Uint32 m_LastFrameIdx     = ~0u;
+
+    // This index buffer is necessary to pass base vertex to the vertex shader
+    // on DirectD11 and DirectD12.
+    RefCntAutoPtr<IBuffer> m_IndexBuffer;
 };
 
 

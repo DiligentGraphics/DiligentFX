@@ -74,6 +74,7 @@ void TemporalAntiAliasing::PrepareResources(IRenderDevice* pDevice, PostFXContex
 
     m_BackBufferWidth  = FrameDesc.Width;
     m_BackBufferHeight = FrameDesc.Height;
+    m_LastFrameIdx     = ~0u;
 
     RenderDeviceWithCache_N Device{pDevice};
 
@@ -87,6 +88,16 @@ void TemporalAntiAliasing::PrepareResources(IRenderDevice* pDevice, PostFXContex
         Desc.Format    = AccumulatedBufferFormat;
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
         m_Resources.Insert(TextureIdx, Device.CreateTexture(Desc));
+    }
+
+    const auto& SupportedFeatures = pPostFXContext->GetSupportedFeatures();
+    if (!SupportedFeatures.ShaderBaseVertexOffset && !m_IndexBuffer)
+    {
+        static constexpr Uint32 Indices[] = {0, 1, 2, 3, 4, 5};
+
+        BufferDesc Desc{"TemporalAntiAliasing::IndexBuffer", sizeof(Indices), BIND_INDEX_BUFFER, USAGE_IMMUTABLE};
+
+        m_IndexBuffer = Device.CreateBuffer(Desc, BufferData{Indices, sizeof(Indices)});
     }
 }
 
@@ -142,9 +153,11 @@ void TemporalAntiAliasing::ComputeTemporalAccumulation(const RenderAttributes& R
         RenderTech.InitializeSRB(true);
     }
 
-    const Uint32 FrameIndex   = RenderAttribs.pPostFXContext->GetFrameDesc().Index;
-    const Uint32 CurrFrameIdx = (FrameIndex + 0) & 0x01;
-    const Uint32 PrevFrameIdx = (FrameIndex + 1) & 0x01;
+    const Uint32 FrameIndex        = RenderAttribs.pPostFXContext->GetFrameDesc().Index;
+    const Uint32 CurrFrameIdx      = (FrameIndex + 0) & 0x01;
+    const Uint32 PrevFrameIdx      = (FrameIndex + 1) & 0x01;
+    const bool   ResetAccumulation = m_LastFrameIdx == ~0u || m_LastFrameIdx + 1 != FrameIndex;
+    m_LastFrameIdx                 = FrameIndex;
 
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureCurrColor"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_COLOR].GetTextureSRV());
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TexturePrevColor"}.Set(m_Resources[RESOURCE_IDENTIFIER_ACCUMULATED_BUFFER0 + PrevFrameIdx].GetTextureSRV());
@@ -156,11 +169,19 @@ void TemporalAntiAliasing::ComputeTemporalAccumulation(const RenderAttributes& R
     ITextureView* pRTVs[] = {
         m_Resources[RESOURCE_IDENTIFIER_ACCUMULATED_BUFFER0 + CurrFrameIdx].GetTextureRTV(),
     };
-
     RenderAttribs.pDeviceContext->SetRenderTargets(_countof(pRTVs), pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     RenderAttribs.pDeviceContext->SetPipelineState(RenderTech.PSO);
     RenderAttribs.pDeviceContext->CommitShaderResources(RenderTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    RenderAttribs.pDeviceContext->Draw({3, DRAW_FLAG_VERIFY_ALL, 1});
+
+    if (ResetAccumulation && m_IndexBuffer)
+    {
+        RenderAttribs.pDeviceContext->SetIndexBuffer(m_IndexBuffer, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        RenderAttribs.pDeviceContext->DrawIndexed({3, VT_UINT32, DRAW_FLAG_VERIFY_ALL, 1, ResetAccumulation ? 3u : 0u});
+    }
+    else
+    {
+        RenderAttribs.pDeviceContext->Draw({3, DRAW_FLAG_VERIFY_ALL, 1, ResetAccumulation ? 3u : 0u});
+    }
     RenderAttribs.pDeviceContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
 }
 

@@ -62,7 +62,8 @@ float4 ComputeTemporalAccumulationPS(in FullScreenTriangleVSOutput VSOut) : SV_T
 
     float BackgroundWeight  = float(Depth >= 1.0 - FLT_EPS) * 0.5;
     float TransparentWeight = 1.0 - CurrColor.a;
-    float CurrFrameWeight = clamp(MotionWeight + BackgroundWeight + TransparentWeight, 0.1, 1.0);
+    float ResetWeight       = float(VSOut.uInstID);
+    float CurrFrameWeight = clamp(MotionWeight + BackgroundWeight + TransparentWeight + ResetWeight, 0.1, 1.0);
 
     return float4(lerp(PrevColor.rgb, CurrColor.rgb, CurrFrameWeight), CurrColor.a);
 }
