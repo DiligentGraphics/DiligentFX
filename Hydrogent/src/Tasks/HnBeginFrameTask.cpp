@@ -95,10 +95,11 @@ HnBeginFrameTask::HnBeginFrameTask(pxr::HdSceneDelegate* ParamsDelegate, const p
     m_GBufferTargetIds[HnFramebufferTargets::GBUFFER_TARGET_IBL]           = InitBrim(HnRenderResourceTokens->iblTarget);
     static_assert(HnFramebufferTargets::GBUFFER_TARGET_COUNT == 7, "Please initialize GBuffer BPrims.");
 
-    m_SelectionDepthBufferId  = InitBrim(HnRenderResourceTokens->selectionDepthBuffer);
-    m_DepthBufferId           = InitBrim(HnRenderResourceTokens->depthBuffer);
-    m_ClosestSelLocn0TargetId = InitBrim(HnRenderResourceTokens->closestSelectedLocation0Target);
-    m_ClosestSelLocn1TargetId = InitBrim(HnRenderResourceTokens->closestSelectedLocation1Target);
+    m_SelectionDepthBufferId     = InitBrim(HnRenderResourceTokens->selectionDepthBuffer);
+    m_DepthBufferId              = InitBrim(HnRenderResourceTokens->depthBuffer);
+    m_ClosestSelLocn0TargetId    = InitBrim(HnRenderResourceTokens->closestSelectedLocation0Target);
+    m_ClosestSelLocn1TargetId    = InitBrim(HnRenderResourceTokens->closestSelectedLocation1Target);
+    m_JitteredFinalColorTargetId = InitBrim(HnRenderResourceTokens->jitteredFinalColorTarget);
 }
 
 HnBeginFrameTask::~HnBeginFrameTask()
@@ -232,6 +233,7 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
     FBTargets.DepthDSV                    = UpdateBrim(m_DepthBufferId, m_RenderPassState->GetDepthStencilFormat(), "Depth buffer");
     FBTargets.ClosestSelectedLocation0RTV = UpdateBrim(m_ClosestSelLocn0TargetId, m_ClosestSelectedLocationFormat, "Closest selected location 0");
     FBTargets.ClosestSelectedLocation1RTV = UpdateBrim(m_ClosestSelLocn1TargetId, m_ClosestSelectedLocationFormat, "Closest selected location 1");
+    FBTargets.JitteredFinalColorRTV       = UpdateBrim(m_JitteredFinalColorTargetId, FinalRTVDesc.Format, "Jittered final color");
     m_RenderPassState->SetFramebufferTargets(FBTargets);
 }
 
@@ -254,6 +256,7 @@ void HnBeginFrameTask::Prepare(pxr::HdTaskContext* TaskCtx,
     (*TaskCtx)[HnRenderResourceTokens->selectionDepthBuffer]           = pxr::VtValue{m_SelectionDepthBufferId};
     (*TaskCtx)[HnRenderResourceTokens->closestSelectedLocation0Target] = pxr::VtValue{m_ClosestSelLocn0TargetId};
     (*TaskCtx)[HnRenderResourceTokens->closestSelectedLocation1Target] = pxr::VtValue{m_ClosestSelLocn1TargetId};
+    (*TaskCtx)[HnRenderResourceTokens->jitteredFinalColorTarget]       = pxr::VtValue{m_JitteredFinalColorTargetId};
 
     if (ITextureView* pFinalColorRTV = GetRenderBufferTarget(*RenderIndex, m_FinalColorTargetId))
     {
@@ -267,7 +270,7 @@ void HnBeginFrameTask::Prepare(pxr::HdTaskContext* TaskCtx,
     m_RenderIndex = RenderIndex;
 }
 
-void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx, IBuffer* pFrameAttrbisCB)
+void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx, IBuffer* pFrameAttrbisCB, const float2& Jitter)
 {
     HLSL::PBRFrameAttribs& FrameAttribs = *m_FrameAttribs;
 
@@ -278,7 +281,10 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx, IBuffer* pFram
         {
             HLSL::CameraAttribs& CamAttribs = FrameAttribs.Camera;
 
-            const float4x4& ProjMatrix  = pCamera->GetProjectionMatrix();
+            float4x4 ProjMatrix = pCamera->GetProjectionMatrix();
+            ProjMatrix[2][0]    = Jitter.x;
+            ProjMatrix[2][1]    = Jitter.y;
+
             const float4x4& ViewMatrix  = pCamera->GetViewMatrix();
             const float4x4& WorldMatrix = pCamera->GetWorldMatrix();
             const float4x4  ViewProj    = ViewMatrix * ProjMatrix;
@@ -299,6 +305,7 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx, IBuffer* pFram
             CamAttribs.mProjInvT     = ProjMatrix.Inverse().Transpose();
             CamAttribs.mViewProjInvT = ViewProj.Inverse().Transpose();
             CamAttribs.f4Position    = float4{float3::MakeVector(WorldMatrix[3]), 1};
+            CamAttribs.f2Jitter      = Jitter;
 
             if (FrameAttribs.PrevCamera.f4ViewportSize.x == 0)
             {
@@ -377,7 +384,9 @@ void HnBeginFrameTask::Execute(pxr::HdTaskContext* TaskCtx)
 
     ScopedDebugGroup DebugGroup{pCtx, "Begin Frame"};
 
-    if (HnRenderParam* pRenderParam = static_cast<HnRenderParam*>(RenderDelegate->GetRenderParam()))
+    HnRenderParam* pRenderParam = static_cast<HnRenderParam*>(RenderDelegate->GetRenderParam());
+    VERIFY_EXPR(pRenderParam != nullptr);
+    if (pRenderParam != nullptr)
     {
         double CurrFrameTime = m_FrameTimer.GetElapsedTime();
         pRenderParam->SetElapsedTime(static_cast<float>(CurrFrameTime - pRenderParam->GetFrameTime()));
@@ -387,7 +396,27 @@ void HnBeginFrameTask::Execute(pxr::HdTaskContext* TaskCtx)
 
     if (IBuffer* pFrameAttribsCB = RenderDelegate->GetFrameAttribsCB())
     {
-        UpdateFrameConstants(pCtx, pFrameAttribsCB);
+        float2 Jitter{0, 0};
+        {
+            auto jitter_it = TaskCtx->find(HnRenderResourceTokens->taaJitter);
+            if (jitter_it != TaskCtx->end())
+            {
+                if (jitter_it->second.IsHolding<float2>())
+                {
+                    Jitter = jitter_it->second.Get<float2>();
+                }
+                else
+                {
+                    UNEXPECTED("TAA jitter is not a float2");
+                }
+            }
+            else
+            {
+                UNEXPECTED("TAA jitter is expected to be set by HnPostProcessTask::Prepare().");
+            }
+        }
+
+        UpdateFrameConstants(pCtx, pFrameAttribsCB, Jitter);
         (*TaskCtx)[HnRenderResourceTokens->frameShaderAttribs] = pxr::VtValue{m_FrameAttribs.get()};
     }
     else

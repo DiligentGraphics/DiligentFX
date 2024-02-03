@@ -43,12 +43,14 @@ namespace Diligent
 class PostFXContext;
 class VectorFieldRenderer;
 class ScreenSpaceReflection;
+class TemporalAntiAliasing;
 
 namespace USD
 {
 
 class HnRenderPassState;
 struct HnFramebufferTargets;
+class HnRenderDelegate;
 
 struct HnPostProcessTaskParams
 {
@@ -72,6 +74,9 @@ struct HnPostProcessTaskParams
     // 0 - disable SSR.
     float SSRScale = 1.f;
 
+    // Enable temporal anti-aliasing
+    bool EnableTAA = false;
+
     constexpr bool operator==(const HnPostProcessTaskParams& rhs) const
     {
         // clang-format off
@@ -84,7 +89,8 @@ struct HnPostProcessTaskParams
                WhitePoint          == rhs.WhitePoint &&
                LuminanceSaturation == rhs.LuminanceSaturation &&
                AverageLogLum       == rhs.AverageLogLum &&
-               SSRScale            == rhs.SSRScale;
+               SSRScale            == rhs.SSRScale &&
+               EnableTAA           == rhs.EnableTAA;
         // clang-format on
     }
 
@@ -115,8 +121,7 @@ public:
     virtual void Execute(pxr::HdTaskContext* TaskCtx) override final;
 
 private:
-    void PreparePSO(TEXTURE_FORMAT RTVFormat, pxr::HdTaskContext* TaskCtx);
-    void PrepareSRB(const HnRenderPassState& RPState, ITextureView* ClosestSelectedLocationSRV);
+    void PrepareSRB(ITextureView* ClosestSelectedLocationSRV);
     void CreateVectorFieldRenderer(TEXTURE_FORMAT RTVFormat);
 
 private:
@@ -124,39 +129,47 @@ private:
 
     HnPostProcessTaskParams m_Params;
 
-    bool m_PsoIsDirty = true;
-
-    RefCntAutoPtr<IPipelineState> m_PSO;
-    RefCntAutoPtr<IBuffer>        m_PostProcessAttribsCB;
+    RefCntAutoPtr<IBuffer> m_PostProcessAttribsCB;
 
     std::unique_ptr<PostFXContext>         m_PostFXContext;
     std::unique_ptr<VectorFieldRenderer>   m_VectorFieldRenderer;
     std::unique_ptr<ScreenSpaceReflection> m_SSR;
+    std::unique_ptr<TemporalAntiAliasing>  m_TAA;
 
 
     ITextureView*               m_FinalColorRTV = nullptr; // Set in Prepare()
     const HnFramebufferTargets* m_FBTargets     = nullptr; // Set in Prepare()
     float                       m_ClearDepth    = 1.f;     // Set in Prepare()
 
-    RefCntAutoPtr<IShaderResourceBinding> m_SRB;
-    struct ShaderVariables
+    struct PostProcessingTechnique
     {
-        ShaderResourceVariableX Color;
-        ShaderResourceVariableX Depth;
-        ShaderResourceVariableX SelectionDepth;
-        ShaderResourceVariableX ClosestSelectedLocation;
-        ShaderResourceVariableX SSR;
-        ShaderResourceVariableX SpecularIBL;
-        ShaderResourceVariableX Normal;
-        ShaderResourceVariableX BaseColor;
-        ShaderResourceVariableX Material;
+        bool PSOIsDirty = true;
 
-        operator bool() const
+        RefCntAutoPtr<IPipelineState>         PSO;
+        RefCntAutoPtr<IShaderResourceBinding> SRB;
+        struct ShaderVariables
         {
-            return Color && Depth && SelectionDepth && ClosestSelectedLocation;
-        }
-    };
-    ShaderVariables m_ShaderVars;
+            ShaderResourceVariableX Color;
+            ShaderResourceVariableX Depth;
+            ShaderResourceVariableX SelectionDepth;
+            ShaderResourceVariableX ClosestSelectedLocation;
+            ShaderResourceVariableX SSR;
+            ShaderResourceVariableX SpecularIBL;
+            ShaderResourceVariableX Normal;
+            ShaderResourceVariableX BaseColor;
+            ShaderResourceVariableX Material;
+
+            operator bool() const
+            {
+                return Color && Depth && SelectionDepth && ClosestSelectedLocation;
+            }
+        };
+        ShaderVariables ShaderVars;
+
+        void PreparePSO(const HnPostProcessTask& PPTask, HnRenderDelegate* RenderDelegate, TEXTURE_FORMAT RTVFormat);
+        void CreateSRB();
+
+    } m_PostProcessTech;
 };
 
 } // namespace USD

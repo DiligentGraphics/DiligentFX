@@ -56,14 +56,14 @@ TemporalAntiAliasing::~TemporalAntiAliasing() = default;
 float2 TemporalAntiAliasing::GetJitterOffset() const
 {
     if (!m_BackBufferWidth || !m_BackBufferHeight)
-        return float2(0.0f, 0.0f);
+        return float2{0.0f, 0.0f};
 
     const float JitterX = (HaltonSequenc(2u, m_CurrentFrameIdx % 32u + 1) - 0.5f) / (0.5f * static_cast<float>(m_BackBufferWidth));
     const float JitterY = (HaltonSequenc(3u, m_CurrentFrameIdx % 32u + 1) - 0.5f) / (0.5f * static_cast<float>(m_BackBufferHeight));
-    return float2(JitterX, JitterY);
+    return float2{JitterX, JitterY};
 }
 
-void TemporalAntiAliasing::PrepareResources(IRenderDevice* pDevice, PostFXContext* pPostFXContext)
+void TemporalAntiAliasing::PrepareResources(IRenderDevice* pDevice, PostFXContext* pPostFXContext, TEXTURE_FORMAT AccumulatedBufferFormat)
 {
     const auto& FrameDesc = pPostFXContext->GetFrameDesc();
 
@@ -84,7 +84,7 @@ void TemporalAntiAliasing::PrepareResources(IRenderDevice* pDevice, PostFXContex
         Desc.Type      = RESOURCE_DIM_TEX_2D;
         Desc.Width     = m_BackBufferWidth;
         Desc.Height    = m_BackBufferHeight;
-        Desc.Format    = TEX_FORMAT_RGBA16_FLOAT;
+        Desc.Format    = AccumulatedBufferFormat;
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
         m_Resources.Insert(TextureIdx, Device.CreateTexture(Desc));
     }

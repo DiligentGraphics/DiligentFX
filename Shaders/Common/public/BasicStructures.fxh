@@ -121,7 +121,10 @@ struct CameraAttribs
     float fNearPlaneZ; 
     float fFarPlaneZ;  // fNearPlaneZ < fFarPlaneZ
     float fHandness;   // +1.0 for right-handed coordinate system, -1.0 for left-handed
-    float Padding;
+    float fPadding0;
+    
+    float2 f2Jitter;   // TAA jitter
+    float2 f2Padding1;
     
 #ifdef __cplusplus
     float4x4 mViewT;

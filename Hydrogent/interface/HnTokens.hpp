@@ -107,6 +107,7 @@ namespace USD
     (cameraAttribsBuffer)                \
     (lightAttribsBuffer)                 \
     (offscreenColorTarget)               \
+    (jitteredFinalColorTarget)           \
     (finalColorTarget)                   \
     (normalTarget)                       \
     (baseColorTarget)                    \
@@ -119,7 +120,8 @@ namespace USD
     (closestSelectedLocation1Target)     \
     (closestSelectedLocationFinalTarget) \
     (depthBuffer)                        \
-    (frameShaderAttribs)
+    (frameShaderAttribs)				 \
+	(taaJitter)
 
 // clang-format on
 

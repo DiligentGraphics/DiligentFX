@@ -41,6 +41,7 @@
 #include "MapHelper.hpp"
 #include "VectorFieldRenderer.hpp"
 #include "ScreenSpaceReflection.hpp"
+#include "TemporalAntiAliasing.hpp"
 #include "ScopedDebugGroup.hpp"
 
 namespace Diligent
@@ -70,18 +71,20 @@ HnPostProcessTask::~HnPostProcessTask()
 {
 }
 
-void HnPostProcessTask::PreparePSO(TEXTURE_FORMAT RTVFormat, pxr::HdTaskContext* TaskCtx)
+void HnPostProcessTask::PostProcessingTechnique::PreparePSO(const HnPostProcessTask& PPTask, HnRenderDelegate* RenderDelegate, TEXTURE_FORMAT RTVFormat)
 {
-    if (m_PsoIsDirty || (m_PSO && m_PSO->GetGraphicsPipelineDesc().RTVFormats[0] != RTVFormat))
-        m_PSO.Release();
+    if (PSO && PSO->GetGraphicsPipelineDesc().RTVFormats[0] != RTVFormat)
+        PSOIsDirty = true;
 
-    if (m_PSO)
+    if (PSOIsDirty)
+        PSO.Release();
+
+    if (PSO)
         return;
 
     try
     {
-        HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
-        USD_Renderer&     USDRender      = *RenderDelegate->GetUSDRenderer();
+        USD_Renderer& USDRender = *RenderDelegate->GetUSDRenderer();
 
         // RenderDeviceWithCache_E throws exceptions in case of errors
         RenderDeviceWithCache_E Device{RenderDelegate->GetDevice(), RenderDelegate->GetRenderStateCache()};
@@ -93,8 +96,8 @@ void HnPostProcessTask::PreparePSO(TEXTURE_FORMAT RTVFormat, pxr::HdTaskContext*
         ShaderCI.pShaderSourceStreamFactory = pHnFxCompoundSourceFactory;
 
         ShaderMacroHelper Macros;
-        Macros.Add("CONVERT_OUTPUT_TO_SRGB", m_Params.ConvertOutputToSRGB);
-        Macros.Add("TONE_MAPPING_MODE", m_Params.ToneMappingMode);
+        Macros.Add("CONVERT_OUTPUT_TO_SRGB", PPTask.m_Params.ConvertOutputToSRGB);
+        Macros.Add("TONE_MAPPING_MODE", PPTask.m_Params.ToneMappingMode);
         ShaderCI.Macros = Macros;
 
         RefCntAutoPtr<IShader> pVS;
@@ -133,12 +136,12 @@ void HnPostProcessTask::PreparePSO(TEXTURE_FORMAT RTVFormat, pxr::HdTaskContext*
             .SetResourceLayout(ResourceLauout)
             .SetPrimitiveTopology(PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 
-        m_PSO = Device.CreateGraphicsPipelineState(PsoCI); // Throws exception in case of error
-        ShaderResourceVariableX{m_PSO, SHADER_TYPE_PIXEL, "cbPostProcessAttribs"}.Set(m_PostProcessAttribsCB);
-        ShaderResourceVariableX{m_PSO, SHADER_TYPE_PIXEL, "g_PreintegratedGGX"}.Set(USDRender.GetPreintegratedGGX_SRV());
-        ShaderResourceVariableX{m_PSO, SHADER_TYPE_PIXEL, "cbFrameAttribs"}.Set(RenderDelegate->GetFrameAttribsCB());
+        PSO = Device.CreateGraphicsPipelineState(PsoCI); // Throws exception in case of error
+        ShaderResourceVariableX{PSO, SHADER_TYPE_PIXEL, "cbPostProcessAttribs"}.Set(PPTask.m_PostProcessAttribsCB);
+        ShaderResourceVariableX{PSO, SHADER_TYPE_PIXEL, "g_PreintegratedGGX"}.Set(USDRender.GetPreintegratedGGX_SRV());
+        ShaderResourceVariableX{PSO, SHADER_TYPE_PIXEL, "cbFrameAttribs"}.Set(RenderDelegate->GetFrameAttribsCB());
 
-        m_PsoIsDirty = false;
+        PSOIsDirty = false;
     }
     catch (const std::runtime_error& err)
     {
@@ -148,6 +151,22 @@ void HnPostProcessTask::PreparePSO(TEXTURE_FORMAT RTVFormat, pxr::HdTaskContext*
     {
         LOG_ERROR_MESSAGE("Failed to create post process PSO");
     }
+}
+
+void HnPostProcessTask::PostProcessingTechnique::CreateSRB()
+{
+    SRB.Release();
+    PSO->CreateShaderResourceBinding(&SRB, true);
+    VERIFY_EXPR(SRB);
+    ShaderVars.Color                   = ShaderResourceVariableX{SRB, SHADER_TYPE_PIXEL, "g_ColorBuffer"};
+    ShaderVars.Depth                   = ShaderResourceVariableX{SRB, SHADER_TYPE_PIXEL, "g_Depth"};
+    ShaderVars.SelectionDepth          = ShaderResourceVariableX{SRB, SHADER_TYPE_PIXEL, "g_SelectionDepth"};
+    ShaderVars.ClosestSelectedLocation = ShaderResourceVariableX{SRB, SHADER_TYPE_PIXEL, "g_ClosestSelectedLocation"};
+    ShaderVars.SSR                     = ShaderResourceVariableX{SRB, SHADER_TYPE_PIXEL, "g_SSR"};
+    ShaderVars.SpecularIBL             = ShaderResourceVariableX{SRB, SHADER_TYPE_PIXEL, "g_SpecularIBL"};
+    ShaderVars.Normal                  = ShaderResourceVariableX{SRB, SHADER_TYPE_PIXEL, "g_Normal"};
+    ShaderVars.Material                = ShaderResourceVariableX{SRB, SHADER_TYPE_PIXEL, "g_MaterialData"};
+    ShaderVars.BaseColor               = ShaderResourceVariableX{SRB, SHADER_TYPE_PIXEL, "g_BaseColor"};
 }
 
 void HnPostProcessTask::CreateVectorFieldRenderer(TEXTURE_FORMAT RTVFormat)
@@ -173,10 +192,11 @@ void HnPostProcessTask::Sync(pxr::HdSceneDelegate* Delegate,
         if (GetTaskParams(Delegate, Params))
         {
             if (m_Params.ConvertOutputToSRGB != Params.ConvertOutputToSRGB ||
-                m_Params.ToneMappingMode != Params.ToneMappingMode)
+                m_Params.ToneMappingMode != Params.ToneMappingMode ||
+                m_Params.EnableTAA != Params.EnableTAA)
             {
                 // In OpenGL we can't release PSO in Worker thread
-                m_PsoIsDirty = true;
+                m_PostProcessTech.PSOIsDirty = true;
             }
 
             m_Params = Params;
@@ -214,6 +234,22 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
         UNEXPECTED("Closest selected location target RTV is not set in the task context");
     }
 
+    std::shared_ptr<HnRenderPassState> RPState = GetRenderPassState(TaskCtx);
+    if (RPState == nullptr)
+    {
+        UNEXPECTED("Render pass state is not set in the task context");
+        return;
+    }
+    m_ClearDepth = RPState->GetClearDepth();
+
+    const HnFramebufferTargets& FBTargets = RPState->GetFramebufferTargets();
+    if (!FBTargets)
+    {
+        UNEXPECTED("Framebuffer targets are null");
+        return;
+    }
+    m_FBTargets = &FBTargets;
+
     HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
     IRenderDevice*    pDevice        = RenderDelegate->GetDevice();
     IDeviceContext*   pCtx           = RenderDelegate->GetDeviceContext();
@@ -233,61 +269,55 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
         m_SSR = std::make_unique<ScreenSpaceReflection>(pDevice);
     }
 
+    if (!m_TAA)
+    {
+        m_TAA = std::make_unique<TemporalAntiAliasing>(pDevice);
+    }
+
     const HnRenderParam* pRenderParam   = static_cast<const HnRenderParam*>(RenderDelegate->GetRenderParam());
     const TextureDesc&   FinalColorDesc = m_FinalColorRTV->GetTexture()->GetDesc();
 
     m_PostFXContext->PrepareResources({pRenderParam->GetFrameNumber(), FinalColorDesc.Width, FinalColorDesc.Height});
     m_SSR->PrepareResources(pDevice, m_PostFXContext.get());
+    m_TAA->PrepareResources(pDevice, m_PostFXContext.get(), m_FinalColorRTV->GetDesc().Format);
 
-    PreparePSO(m_FinalColorRTV->GetDesc().Format, TaskCtx);
-    if (std::shared_ptr<HnRenderPassState> RenderPassState = GetRenderPassState(TaskCtx))
-    {
-        m_ClearDepth = RenderPassState->GetClearDepth();
-        PrepareSRB(*RenderPassState, ClosestSelectedLocationSRV);
-    }
-    else
-    {
-        UNEXPECTED("Render pass state is not set in the task context");
-    }
+    m_PostProcessTech.PreparePSO(*this, RenderDelegate, (m_Params.EnableTAA ? m_FBTargets->JitteredFinalColorRTV : m_FinalColorRTV)->GetDesc().Format);
+
+    PrepareSRB(ClosestSelectedLocationSRV);
 
     if (!m_VectorFieldRenderer)
     {
         CreateVectorFieldRenderer(m_FinalColorRTV->GetDesc().Format);
     }
+
+    // The jitter will be used by HnBeginFrameTask::Execute() to set projection matrix.
+    (*TaskCtx)[HnRenderResourceTokens->taaJitter] = pxr::VtValue{m_Params.EnableTAA ? m_TAA->GetJitterOffset() : float2{0, 0}};
 }
 
-void HnPostProcessTask::PrepareSRB(const HnRenderPassState& RPState, ITextureView* pClosestSelectedLocationSRV)
+void HnPostProcessTask::PrepareSRB(ITextureView* pClosestSelectedLocationSRV)
 {
-    if (!m_PSO)
+    if (!m_PostProcessTech.PSO)
     {
         UNEXPECTED("PSO is null");
         return;
     }
 
-    const HnFramebufferTargets& FBTargets = RPState.GetFramebufferTargets();
-    if (!FBTargets)
-    {
-        UNEXPECTED("Framebuffer targets are null");
-        return;
-    }
-    m_FBTargets = &FBTargets;
-
     for (Uint32 i = 0; i < HnFramebufferTargets::GBUFFER_TARGET_COUNT; ++i)
     {
-        if (FBTargets.GBufferSRVs[i] == nullptr)
+        if (m_FBTargets->GBufferSRVs[i] == nullptr)
         {
             UNEXPECTED("G-buffer SRV ", i, " is null");
             return;
         }
     }
 
-    ITextureView* pDepthSRV = FBTargets.DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+    ITextureView* pDepthSRV = m_FBTargets->DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
     if (pDepthSRV == nullptr)
     {
         UNEXPECTED("Depth SRV is null");
         return;
     }
-    ITextureView* pSelectionDepthSRV = FBTargets.SelectionDepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+    ITextureView* pSelectionDepthSRV = m_FBTargets->SelectionDepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
     if (pSelectionDepthSRV == nullptr)
     {
         UNEXPECTED("Selection depth SRV is null");
@@ -297,53 +327,43 @@ void HnPostProcessTask::PrepareSRB(const HnRenderPassState& RPState, ITextureVie
     ITextureView* pSSR = m_SSR->GetSSRRadianceSRV();
     VERIFY_EXPR(pSSR != nullptr);
 
-    ITextureView* pOffscreenColorSRV = FBTargets.GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_SCENE_COLOR];
-    ITextureView* pSpecularIblSRV    = FBTargets.GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_IBL];
-    ITextureView* pNormalSRV         = FBTargets.GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_NORMAL];
-    ITextureView* pMaterialSRV       = FBTargets.GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_MATERIAL];
-    ITextureView* pBaseColorSRV      = FBTargets.GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_BASE_COLOR];
-    if (m_SRB && m_ShaderVars)
+    ITextureView* pOffscreenColorSRV = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_SCENE_COLOR];
+    ITextureView* pSpecularIblSRV    = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_IBL];
+    ITextureView* pNormalSRV         = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_NORMAL];
+    ITextureView* pMaterialSRV       = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_MATERIAL];
+    ITextureView* pBaseColorSRV      = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_BASE_COLOR];
+    if (m_PostProcessTech.SRB && m_PostProcessTech.ShaderVars)
     {
-        if ((m_ShaderVars.Color && m_ShaderVars.Color.Get() != pOffscreenColorSRV) ||
-            (m_ShaderVars.Depth && m_ShaderVars.Depth.Get() != pDepthSRV) ||
-            (m_ShaderVars.SelectionDepth && m_ShaderVars.SelectionDepth.Get() != pSelectionDepthSRV) ||
-            (m_ShaderVars.ClosestSelectedLocation && m_ShaderVars.ClosestSelectedLocation.Get() != pClosestSelectedLocationSRV) ||
-            (m_ShaderVars.SSR && m_ShaderVars.SSR.Get() != pSSR) ||
-            (m_ShaderVars.SpecularIBL && m_ShaderVars.SpecularIBL.Get() != pSpecularIblSRV) ||
-            (m_ShaderVars.Normal && m_ShaderVars.Normal.Get() != pNormalSRV) ||
-            (m_ShaderVars.Material && m_ShaderVars.Material.Get() != pMaterialSRV) ||
-            (m_ShaderVars.BaseColor && m_ShaderVars.BaseColor.Get() != pBaseColorSRV))
+        if ((m_PostProcessTech.ShaderVars.Color && m_PostProcessTech.ShaderVars.Color.Get() != pOffscreenColorSRV) ||
+            (m_PostProcessTech.ShaderVars.Depth && m_PostProcessTech.ShaderVars.Depth.Get() != pDepthSRV) ||
+            (m_PostProcessTech.ShaderVars.SelectionDepth && m_PostProcessTech.ShaderVars.SelectionDepth.Get() != pSelectionDepthSRV) ||
+            (m_PostProcessTech.ShaderVars.ClosestSelectedLocation && m_PostProcessTech.ShaderVars.ClosestSelectedLocation.Get() != pClosestSelectedLocationSRV) ||
+            (m_PostProcessTech.ShaderVars.SSR && m_PostProcessTech.ShaderVars.SSR.Get() != pSSR) ||
+            (m_PostProcessTech.ShaderVars.SpecularIBL && m_PostProcessTech.ShaderVars.SpecularIBL.Get() != pSpecularIblSRV) ||
+            (m_PostProcessTech.ShaderVars.Normal && m_PostProcessTech.ShaderVars.Normal.Get() != pNormalSRV) ||
+            (m_PostProcessTech.ShaderVars.Material && m_PostProcessTech.ShaderVars.Material.Get() != pMaterialSRV) ||
+            (m_PostProcessTech.ShaderVars.BaseColor && m_PostProcessTech.ShaderVars.BaseColor.Get() != pBaseColorSRV))
         {
-            m_SRB.Release();
-            m_ShaderVars = {};
+            m_PostProcessTech.SRB.Release();
+            m_PostProcessTech.ShaderVars = {};
         }
     }
 
-    if (!m_SRB)
+    if (!m_PostProcessTech.SRB)
     {
-        m_PSO->CreateShaderResourceBinding(&m_SRB, true);
-        VERIFY_EXPR(m_SRB);
-        m_ShaderVars.Color                   = ShaderResourceVariableX{m_SRB, SHADER_TYPE_PIXEL, "g_ColorBuffer"};
-        m_ShaderVars.Depth                   = ShaderResourceVariableX{m_SRB, SHADER_TYPE_PIXEL, "g_Depth"};
-        m_ShaderVars.SelectionDepth          = ShaderResourceVariableX{m_SRB, SHADER_TYPE_PIXEL, "g_SelectionDepth"};
-        m_ShaderVars.ClosestSelectedLocation = ShaderResourceVariableX{m_SRB, SHADER_TYPE_PIXEL, "g_ClosestSelectedLocation"};
-        m_ShaderVars.SSR                     = ShaderResourceVariableX{m_SRB, SHADER_TYPE_PIXEL, "g_SSR"};
-        m_ShaderVars.SpecularIBL             = ShaderResourceVariableX{m_SRB, SHADER_TYPE_PIXEL, "g_SpecularIBL"};
-        m_ShaderVars.Normal                  = ShaderResourceVariableX{m_SRB, SHADER_TYPE_PIXEL, "g_Normal"};
-        m_ShaderVars.Material                = ShaderResourceVariableX{m_SRB, SHADER_TYPE_PIXEL, "g_MaterialData"};
-        m_ShaderVars.BaseColor               = ShaderResourceVariableX{m_SRB, SHADER_TYPE_PIXEL, "g_BaseColor"};
+        m_PostProcessTech.CreateSRB();
 
-        VERIFY_EXPR(m_ShaderVars);
+        VERIFY_EXPR(m_PostProcessTech.ShaderVars);
 
-        m_ShaderVars.Color.Set(pOffscreenColorSRV);
-        m_ShaderVars.Depth.Set(pDepthSRV);
-        m_ShaderVars.SelectionDepth.Set(pSelectionDepthSRV);
-        m_ShaderVars.ClosestSelectedLocation.Set(pClosestSelectedLocationSRV);
-        m_ShaderVars.SSR.Set(pSSR);
-        m_ShaderVars.SpecularIBL.Set(pSpecularIblSRV);
-        m_ShaderVars.Normal.Set(pNormalSRV);
-        m_ShaderVars.Material.Set(pMaterialSRV);
-        m_ShaderVars.BaseColor.Set(pBaseColorSRV);
+        m_PostProcessTech.ShaderVars.Color.Set(pOffscreenColorSRV);
+        m_PostProcessTech.ShaderVars.Depth.Set(pDepthSRV);
+        m_PostProcessTech.ShaderVars.SelectionDepth.Set(pSelectionDepthSRV);
+        m_PostProcessTech.ShaderVars.ClosestSelectedLocation.Set(pClosestSelectedLocationSRV);
+        m_PostProcessTech.ShaderVars.SSR.Set(pSSR);
+        m_PostProcessTech.ShaderVars.SpecularIBL.Set(pSpecularIblSRV);
+        m_PostProcessTech.ShaderVars.Normal.Set(pNormalSRV);
+        m_PostProcessTech.ShaderVars.Material.Set(pMaterialSRV);
+        m_PostProcessTech.ShaderVars.BaseColor.Set(pBaseColorSRV);
     }
 }
 
@@ -355,7 +375,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         return;
     }
 
-    if (!m_PSO || !m_SRB)
+    if (!m_PostProcessTech.PSO || !m_PostProcessTech.SRB)
     {
         UNEXPECTED("Render technique is not initialized");
         return;
@@ -433,7 +453,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
     {
         ScopedDebugGroup DebugGroup{pCtx, "Post Processing"};
 
-        ITextureView* pRTVs[] = {m_FinalColorRTV};
+        ITextureView* pRTVs[] = {m_Params.EnableTAA ? m_FBTargets->JitteredFinalColorRTV : m_FinalColorRTV};
         pCtx->SetRenderTargets(_countof(pRTVs), pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
         {
@@ -452,9 +472,31 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
             pDstShaderAttribs->SelectionOutlineWidth            = m_Params.SelectionOutlineWidth;
             pDstShaderAttribs->SSRScale                         = SSRScale;
         }
-        pCtx->SetPipelineState(m_PSO);
-        pCtx->CommitShaderResources(m_SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        pCtx->SetPipelineState(m_PostProcessTech.PSO);
+        pCtx->CommitShaderResources(m_PostProcessTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         pCtx->Draw({3, DRAW_FLAG_VERIFY_ALL});
+    }
+
+    if (m_Params.EnableTAA)
+    {
+        TemporalAntiAliasing::RenderAttributes TAARenderAttribs{};
+        TAARenderAttribs.pDevice           = pDevice;
+        TAARenderAttribs.pDeviceContext    = pCtx;
+        TAARenderAttribs.pPostFXContext    = m_PostFXContext.get();
+        TAARenderAttribs.pColorBufferSRV   = m_FBTargets->JitteredFinalColorRTV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        TAARenderAttribs.pDepthBufferSRV   = m_FBTargets->DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        TAARenderAttribs.pMotionVectorsSRV = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_NOTION_VECTOR];
+        m_TAA->Execute(TAARenderAttribs);
+
+        ScopedDebugGroup DebugGroup{pCtx, "Copy accumulated buffer"};
+        pCtx->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
+        CopyTextureAttribs CopyAttribs{
+            m_TAA->GetAccumulatedFrameSRV()->GetTexture(),
+            RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
+            m_FinalColorRTV->GetTexture(),
+            RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
+        };
+        pCtx->CopyTexture(CopyAttribs);
     }
 
     if (m_VectorFieldRenderer && pRenderParam->GetDebugView() == PBR_Renderer::DebugViewType::MotionVectors)

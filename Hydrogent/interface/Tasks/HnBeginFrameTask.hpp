@@ -189,12 +189,13 @@ public:
 private:
     void UpdateRenderPassState(const HnBeginFrameTaskParams& Params);
     void PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex, pxr::HdTaskContext* TaskCtx, ITextureView* pFinalColorRTV);
-    void UpdateFrameConstants(IDeviceContext* pCtx, IBuffer* pFrameAttrbisCB);
+    void UpdateFrameConstants(IDeviceContext* pCtx, IBuffer* pFrameAttrbisCB, const float2& Jitter);
 
 private:
     std::shared_ptr<HnRenderPassState> m_RenderPassState;
 
     pxr::SdfPath m_FinalColorTargetId;
+    pxr::SdfPath m_JitteredFinalColorTargetId;
 
     std::array<pxr::SdfPath, HnFramebufferTargets::GBUFFER_TARGET_COUNT> m_GBufferTargetIds;
 

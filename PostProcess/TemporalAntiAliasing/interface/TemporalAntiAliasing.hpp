@@ -82,7 +82,7 @@ public:
 
     float2 GetJitterOffset() const;
 
-    void PrepareResources(IRenderDevice* pDevice, PostFXContext* pPostFXContext);
+    void PrepareResources(IRenderDevice* pDevice, PostFXContext* pPostFXContext, TEXTURE_FORMAT AccumulatedBufferFormat);
 
     void Execute(const RenderAttributes& RenderAttribs);
 
