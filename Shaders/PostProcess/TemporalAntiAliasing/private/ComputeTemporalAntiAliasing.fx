@@ -18,14 +18,14 @@ Texture2D<float2> g_TextureMotion;
 Texture2D<float>  g_TextureDepth;
 
 
-float3 SampleCurrColor(int2 PixelCoord)
+float4 SampleCurrColor(int2 PixelCoord)
 {
-    return g_TextureCurrColor.Load(int3(PixelCoord, 0)).xyz;
+    return g_TextureCurrColor.Load(int3(PixelCoord, 0));
 }
 
-float3 SamplePrevColor(int2 PixelCoord)
+float4 SamplePrevColor(int2 PixelCoord)
 {
-    return g_TexturePrevColor.Load(int3(PixelCoord, 0)).xyz;
+    return g_TexturePrevColor.Load(int3(PixelCoord, 0));
 }
 
 float2 SampleMotion(int2 PixelCoord)
@@ -47,13 +47,22 @@ float4 ComputeTemporalAccumulationPS(in FullScreenTriangleVSOutput VSOut) : SV_T
     
     float2 PrevLocation = Position.xy - Motion * float2(g_CurrCamera.f4ViewportSize.xy);
 
-    float3 CurrColor = SampleCurrColor(int2(Position.xy));
-    float3 PrevColor = SamplePrevColor(int2(PrevLocation));
+    float4 CurrColor = SampleCurrColor(int2(Position.xy));
+    float4 PrevColor = SamplePrevColor(int2(PrevLocation));
 
-    float IsBackground = float(Depth >= 1.0 - FLT_EPS);
-    float Alpha = max(abs(Motion.x) * g_CurrCamera.f4ViewportSize.x, abs(Motion.y) * g_CurrCamera.f4ViewportSize.y) + 0.5 * IsBackground;
-    float CurrentWeight = clamp(Alpha, 0.1, 0.9);
-    float PreviousWeight = 1.0 - CurrentWeight;
+    float IsBackground  = float(Depth >= 1.0 - FLT_EPS);
+    float IsTransparent = float(CurrColor.a < 0.5);
 
-    return float4(CurrColor.rgb * CurrentWeight + PrevColor.rgb * PreviousWeight, 1.0);
+    Motion = abs(Motion * g_CurrCamera.f4ViewportSize.xy);
+
+    float MotionThreshold = 2.0;
+    float StaticThreshold = 1.0;
+    // If motion is within 1 pixel, the pixel is considered to be static
+    float MotionWeight = saturate((max(Motion.x, Motion.y) - StaticThreshold) / (MotionThreshold - StaticThreshold));
+
+    float BackgroundWeight  = float(Depth >= 1.0 - FLT_EPS) * 0.5;
+    float TransparentWeight = 1.0 - CurrColor.a;
+    float CurrFrameWeight = clamp(MotionWeight + BackgroundWeight + TransparentWeight, 0.1, 1.0);
+
+    return float4(lerp(PrevColor.rgb, CurrColor.rgb, CurrFrameWeight), CurrColor.a);
 }
