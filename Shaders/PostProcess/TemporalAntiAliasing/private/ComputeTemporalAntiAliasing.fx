@@ -50,9 +50,6 @@ float4 ComputeTemporalAccumulationPS(in FullScreenTriangleVSOutput VSOut) : SV_T
     float4 CurrColor = SampleCurrColor(int2(Position.xy));
     float4 PrevColor = SamplePrevColor(int2(PrevLocation));
 
-    float IsBackground  = float(Depth >= 1.0 - FLT_EPS);
-    float IsTransparent = float(CurrColor.a < 0.5);
-
     Motion = abs(Motion * g_CurrCamera.f4ViewportSize.xy);
 
     float MotionThreshold = 2.0;
@@ -60,10 +57,10 @@ float4 ComputeTemporalAccumulationPS(in FullScreenTriangleVSOutput VSOut) : SV_T
     // If motion is within 1 pixel, the pixel is considered to be static
     float MotionWeight = saturate((max(Motion.x, Motion.y) - StaticThreshold) / (MotionThreshold - StaticThreshold));
 
-    float BackgroundWeight  = float(Depth >= 1.0 - FLT_EPS) * 0.5;
-    float TransparentWeight = 1.0 - CurrColor.a;
+    float BackgroundWeight  = float(Depth >= 1.0 - FLT_EPS);
+    float TransparentWeight = (1.0 - CurrColor.a) * (1.0 - BackgroundWeight);
     float ResetWeight       = float(VSOut.uInstID);
-    float CurrFrameWeight = clamp(MotionWeight + BackgroundWeight + TransparentWeight + ResetWeight, 0.1, 1.0);
+    float CurrFrameWeight = clamp(MotionWeight + BackgroundWeight * 0.5 + TransparentWeight + ResetWeight, 0.1, 1.0);
 
     return float4(lerp(PrevColor.rgb, CurrColor.rgb, CurrFrameWeight), CurrColor.a);
 }

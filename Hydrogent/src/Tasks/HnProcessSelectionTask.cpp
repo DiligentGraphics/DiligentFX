@@ -28,6 +28,7 @@
 #include "HnRenderDelegate.hpp"
 #include "HnRenderPassState.hpp"
 #include "HnTokens.hpp"
+#include "HnRenderParam.hpp"
 #include "HnShaderSourceFactory.hpp"
 
 #include "DebugUtilities.hpp"
@@ -246,9 +247,9 @@ void HnProcessSelectionTask::Prepare(pxr::HdTaskContext* TaskCtx,
 {
     m_RenderIndex = RenderIndex;
 
+    HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
     if (!m_ConstantsCB)
     {
-        HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
         CreateUniformBuffer(RenderDelegate->GetDevice(), sizeof(HLSL::ClosestSelectedLocationConstants), "Closest selected location constants", &m_ConstantsCB);
         VERIFY(m_ConstantsCB, "Failed to create constants CB");
     }
@@ -274,6 +275,16 @@ void HnProcessSelectionTask::Prepare(pxr::HdTaskContext* TaskCtx,
     else
     {
         UNEXPECTED("Render pass state is not set in the task context");
+    }
+
+    if (HnRenderParam* pRenderParam = static_cast<HnRenderParam*>(RenderDelegate->GetRenderParam()))
+    {
+        if (pRenderParam->GetSelectedPrimId() != m_SelectedPrimId)
+        {
+            m_SelectedPrimId = pRenderParam->GetSelectedPrimId();
+            // For now, reset TAA when selection changes
+            (*TaskCtx)[HnRenderResourceTokens->taaReset] = pxr::VtValue{true};
+        }
     }
 }
 

@@ -96,6 +96,4 @@ void main(in  FullScreenTriangleVSOutput VSOut,
 #if CONVERT_OUTPUT_TO_SRGB
     Color.rgb = pow(Color.rgb, float3(1.0/2.2, 1.0/2.2, 1.0/2.2));
 #endif
-
-    Color.a = 1.0;
 }

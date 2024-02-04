@@ -121,7 +121,8 @@ namespace USD
     (closestSelectedLocationFinalTarget) \
     (depthBuffer)                        \
     (frameShaderAttribs)				 \
-	(taaJitter)
+	(taaJitterOffsets)					 \
+	(taaReset)
 
 // clang-format on
 

@@ -537,6 +537,19 @@ bool HnTaskManager::AreAxesEnabled() const
     return IsTaskEnabled(TaskUID_RenderAxes);
 }
 
+void HnTaskManager::ResetTAA()
+{
+    auto it = m_TaskInfo.find(TaskUID{TaskUID_PostProcess});
+    if (it == m_TaskInfo.end())
+        return;
+
+    pxr::HdTaskSharedPtr PPTask = m_RenderIndex.GetTask(it->second.Id);
+    if (!PPTask)
+        return;
+
+    static_cast<HnPostProcessTask&>(*PPTask).ResetTAA();
+}
+
 } // namespace USD
 
 } // namespace Diligent

@@ -120,6 +120,8 @@ public:
 
     virtual void Execute(pxr::HdTaskContext* TaskCtx) override final;
 
+    void ResetTAA() { m_ResetTAA = true; }
+
 private:
     void PrepareSRB(ITextureView* ClosestSelectedLocationSRV);
     void CreateVectorFieldRenderer(TEXTURE_FORMAT RTVFormat);
@@ -141,6 +143,8 @@ private:
     const HnFramebufferTargets* m_FBTargets     = nullptr; // Set in Prepare()
     float                       m_ClearDepth    = 1.f;     // Set in Prepare()
     bool                        m_UseTAA        = false;   // Set in Prepare()
+
+    bool m_ResetTAA = true;
 
     struct PostProcessingTechnique
     {

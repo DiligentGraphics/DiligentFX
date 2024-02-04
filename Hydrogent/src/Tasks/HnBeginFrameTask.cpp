@@ -268,50 +268,15 @@ void HnBeginFrameTask::Prepare(pxr::HdTaskContext* TaskCtx,
     }
 
     m_RenderIndex = RenderIndex;
-}
 
-void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx, IBuffer* pFrameAttrbisCB, const float2& Jitter)
-{
-    HLSL::PBRFrameAttribs& FrameAttribs = *m_FrameAttribs;
-
-    FrameAttribs.PrevCamera = FrameAttribs.Camera;
+    bool ResetTAA = false;
     if (!m_CameraId.IsEmpty())
     {
-        if (const HnCamera* pCamera = static_cast<const HnCamera*>(m_RenderIndex->GetSprim(pxr::HdPrimTypeTokens->camera, m_CameraId)))
+        m_pCamera = static_cast<const HnCamera*>(m_RenderIndex->GetSprim(pxr::HdPrimTypeTokens->camera, m_CameraId));
+        if (m_pCamera != nullptr)
         {
-            HLSL::CameraAttribs& CamAttribs = FrameAttribs.Camera;
-
-            float4x4 ProjMatrix = pCamera->GetProjectionMatrix();
-            ProjMatrix[2][0]    = Jitter.x;
-            ProjMatrix[2][1]    = Jitter.y;
-
-            const float4x4& ViewMatrix  = pCamera->GetViewMatrix();
-            const float4x4& WorldMatrix = pCamera->GetWorldMatrix();
-            const float4x4  ViewProj    = ViewMatrix * ProjMatrix;
-
-            VERIFY_EXPR(m_FrameBufferWidth > 0 && m_FrameBufferHeight > 0);
-            CamAttribs.f4ViewportSize = float4{
-                static_cast<float>(m_FrameBufferWidth),
-                static_cast<float>(m_FrameBufferHeight),
-                1.f / static_cast<float>(m_FrameBufferWidth),
-                1.f / static_cast<float>(m_FrameBufferHeight),
-            };
-            CamAttribs.fHandness = ViewMatrix.Determinant() > 0 ? 1.f : -1.f;
-
-            CamAttribs.mViewT        = ViewMatrix.Transpose();
-            CamAttribs.mProjT        = ProjMatrix.Transpose();
-            CamAttribs.mViewProjT    = ViewProj.Transpose();
-            CamAttribs.mViewInvT     = WorldMatrix.Transpose();
-            CamAttribs.mProjInvT     = ProjMatrix.Inverse().Transpose();
-            CamAttribs.mViewProjInvT = ViewProj.Inverse().Transpose();
-            CamAttribs.f4Position    = float4{float3::MakeVector(WorldMatrix[3]), 1};
-            CamAttribs.f2Jitter      = Jitter;
-
-            if (FrameAttribs.PrevCamera.f4ViewportSize.x == 0)
-            {
-                // First frame
-                FrameAttribs.PrevCamera = CamAttribs;
-            }
+            // For now, reset TAA when camera moves
+            ResetTAA = m_FrameAttribs->PrevCamera.mViewT != m_pCamera->GetViewMatrix().Transpose();
         }
         else
         {
@@ -321,6 +286,55 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx, IBuffer* pFram
     else
     {
         LOG_ERROR_MESSAGE("Camera Id is empty");
+    }
+
+    (*TaskCtx)[HnRenderResourceTokens->taaReset] = pxr::VtValue{ResetTAA};
+}
+
+void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx, IBuffer* pFrameAttrbisCB, const float2& Jitter)
+{
+    HLSL::PBRFrameAttribs& FrameAttribs = *m_FrameAttribs;
+
+    FrameAttribs.PrevCamera = FrameAttribs.Camera;
+    if (m_pCamera != nullptr)
+    {
+        HLSL::CameraAttribs& CamAttribs = FrameAttribs.Camera;
+
+        float4x4 ProjMatrix = m_pCamera->GetProjectionMatrix();
+        ProjMatrix[2][0]    = Jitter.x;
+        ProjMatrix[2][1]    = Jitter.y;
+
+        const float4x4& ViewMatrix  = m_pCamera->GetViewMatrix();
+        const float4x4& WorldMatrix = m_pCamera->GetWorldMatrix();
+        const float4x4  ViewProj    = ViewMatrix * ProjMatrix;
+
+        VERIFY_EXPR(m_FrameBufferWidth > 0 && m_FrameBufferHeight > 0);
+        CamAttribs.f4ViewportSize = float4{
+            static_cast<float>(m_FrameBufferWidth),
+            static_cast<float>(m_FrameBufferHeight),
+            1.f / static_cast<float>(m_FrameBufferWidth),
+            1.f / static_cast<float>(m_FrameBufferHeight),
+        };
+        CamAttribs.fHandness = ViewMatrix.Determinant() > 0 ? 1.f : -1.f;
+
+        CamAttribs.mViewT        = ViewMatrix.Transpose();
+        CamAttribs.mProjT        = ProjMatrix.Transpose();
+        CamAttribs.mViewProjT    = ViewProj.Transpose();
+        CamAttribs.mViewInvT     = WorldMatrix.Transpose();
+        CamAttribs.mProjInvT     = ProjMatrix.Inverse().Transpose();
+        CamAttribs.mViewProjInvT = ViewProj.Inverse().Transpose();
+        CamAttribs.f4Position    = float4{float3::MakeVector(WorldMatrix[3]), 1};
+        CamAttribs.f2Jitter      = Jitter;
+
+        if (FrameAttribs.PrevCamera.f4ViewportSize.x == 0)
+        {
+            // First frame
+            FrameAttribs.PrevCamera = CamAttribs;
+        }
+    }
+    else
+    {
+        UNEXPECTED("Camera is null. It should've been set in Prepare()");
     }
 
     // For now, use the first light that is initialized.
@@ -396,27 +410,9 @@ void HnBeginFrameTask::Execute(pxr::HdTaskContext* TaskCtx)
 
     if (IBuffer* pFrameAttribsCB = RenderDelegate->GetFrameAttribsCB())
     {
-        float2 Jitter{0, 0};
-        {
-            auto jitter_it = TaskCtx->find(HnRenderResourceTokens->taaJitter);
-            if (jitter_it != TaskCtx->end())
-            {
-                if (jitter_it->second.IsHolding<float2>())
-                {
-                    Jitter = jitter_it->second.Get<float2>();
-                }
-                else
-                {
-                    UNEXPECTED("TAA jitter is not a float2");
-                }
-            }
-            else
-            {
-                UNEXPECTED("TAA jitter is expected to be set by HnPostProcessTask::Prepare().");
-            }
-        }
-
-        UpdateFrameConstants(pCtx, pFrameAttribsCB, Jitter);
+        float2 JitterOffsets{0, 0};
+        GetTaskContextData(TaskCtx, HnRenderResourceTokens->taaJitterOffsets, JitterOffsets);
+        UpdateFrameConstants(pCtx, pFrameAttribsCB, JitterOffsets);
         (*TaskCtx)[HnRenderResourceTokens->frameShaderAttribs] = pxr::VtValue{m_FrameAttribs.get()};
     }
     else

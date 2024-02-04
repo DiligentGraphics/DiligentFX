@@ -134,6 +134,8 @@ private:
 
         bool IsDirty = true;
     } m_UpdateTech;
+
+    pxr::SdfPath m_SelectedPrimId;
 };
 
 } // namespace USD

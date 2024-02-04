@@ -294,8 +294,22 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
         CreateVectorFieldRenderer(m_FinalColorRTV->GetDesc().Format);
     }
 
+    // Check if one of the previous tasks forced TAA reset:
+    // - HnBeginFrameTask::Execute() forces TAA reset if the camera has been moved.
+    // - HnPostProcessTask::Execute() forces TAA reset if the selected prim has changed.
+    // - m_ResetTAA can be set manually by the application to force TAA reset.
+    if (!m_ResetTAA)
+    {
+        GetTaskContextData(TaskCtx, HnRenderResourceTokens->taaReset, m_ResetTAA);
+    }
+    if (m_ResetTAA)
+    {
+        m_TAA->ResetAccumulation();
+        m_ResetTAA = false;
+    }
+
     // The jitter will be used by HnBeginFrameTask::Execute() to set projection matrix.
-    (*TaskCtx)[HnRenderResourceTokens->taaJitter] = pxr::VtValue{m_UseTAA ? m_TAA->GetJitterOffset() : float2{0, 0}};
+    (*TaskCtx)[HnRenderResourceTokens->taaJitterOffsets] = pxr::VtValue{m_UseTAA ? m_TAA->GetJitterOffset() : float2{0, 0}};
 }
 
 void HnPostProcessTask::PrepareSRB(ITextureView* pClosestSelectedLocationSRV)

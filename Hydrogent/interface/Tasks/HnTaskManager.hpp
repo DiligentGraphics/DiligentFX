@@ -215,6 +215,9 @@ public:
     /// Returns true if axes rendering is enabled.
     bool AreAxesEnabled() const;
 
+    /// Resets temporal anti-aliasing.
+    void ResetTAA();
+
 private:
     pxr::SdfPath GetRenderRprimsTaskId(const pxr::TfToken& MaterialTag, const HnRenderPassParams& RenderPassParams) const;
 

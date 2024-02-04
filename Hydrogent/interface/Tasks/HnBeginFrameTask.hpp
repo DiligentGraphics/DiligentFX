@@ -49,6 +49,8 @@ struct PBRFrameAttribs;
 namespace USD
 {
 
+class HnCamera;
+
 struct HnBeginFrameTaskParams
 {
     struct RenderTargetFormats
@@ -207,6 +209,7 @@ private:
 
     TEXTURE_FORMAT m_ClosestSelectedLocationFormat = TEX_FORMAT_UNKNOWN;
 
+    const HnCamera*     m_pCamera     = nullptr;
     pxr::HdRenderIndex* m_RenderIndex = nullptr;
 
     HnBeginFrameTaskParams::RendererParams m_RendererParams;
