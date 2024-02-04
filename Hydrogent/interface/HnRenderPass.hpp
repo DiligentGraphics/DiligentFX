@@ -135,7 +135,11 @@ private:
 
         Uint32 Version = 0;
 
-        operator bool() const
+        float4x4 PrevTransform = float4x4::Identity();
+
+        explicit DrawListItem(const HnDrawItem& Item) noexcept;
+
+        operator bool() const noexcept
         {
             return pPSO != nullptr && NumVertices > 0;
         }

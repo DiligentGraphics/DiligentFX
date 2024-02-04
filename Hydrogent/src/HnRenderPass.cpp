@@ -79,6 +79,11 @@ pxr::HdRenderPassSharedPtr HnRenderPass::Create(pxr::HdRenderIndex*           pI
     return pxr::HdRenderPassSharedPtr{new HnRenderPass{pIndex, Collection}};
 }
 
+HnRenderPass::DrawListItem::DrawListItem(const HnDrawItem& Item) noexcept :
+    DrawItem{Item},
+    PrevTransform{Item.GetMesh().GetAttributes().Transform}
+{}
+
 HnRenderPass::HnRenderPass(pxr::HdRenderIndex*           pIndex,
                            const pxr::HdRprimCollection& Collection) :
     pxr::HdRenderPass{pIndex, Collection}
@@ -318,10 +323,10 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
 
     for (Uint32 ListItemId : m_RenderOrder)
     {
-        const DrawListItem& ListItem  = m_DrawList[ListItemId];
-        const HnDrawItem&   DrawItem  = ListItem.DrawItem;
-        const HnMesh&       Mesh      = DrawItem.GetMesh();
-        const HnMaterial*   pMaterial = DrawItem.GetMaterial();
+        DrawListItem&     ListItem  = m_DrawList[ListItemId];
+        const HnDrawItem& DrawItem  = ListItem.DrawItem;
+        const HnMesh&     Mesh      = DrawItem.GetMesh();
+        const HnMaterial* pMaterial = DrawItem.GetMaterial();
         if (pMaterial == nullptr)
             continue;
 
@@ -369,16 +374,17 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
             0,
         };
 
-        const HnMesh::Attributes& MeshAttribs  = Mesh.GetAttributes();
-        const float4x4&           Transform    = ApplyTransform ? (MeshAttribs.Transform * m_RenderParams.Transform) : MeshAttribs.Transform;
-        const GLTF::Material&     MaterialData = pMaterial->GetMaterialData();
+        const HnMesh::Attributes& MeshAttribs   = Mesh.GetAttributes();
+        const float4x4&           Transform     = ApplyTransform ? (MeshAttribs.Transform * m_RenderParams.Transform) : MeshAttribs.Transform;
+        const float4x4&           PrevTransform = ApplyTransform ? (ListItem.PrevTransform * m_RenderParams.Transform) : ListItem.PrevTransform;
+        const GLTF::Material&     MaterialData  = pMaterial->GetMaterialData();
 
         HLSL::PBRMaterialBasicAttribs* pDstMaterialBasicAttribs = nullptr;
 
         GLTF_PBR_Renderer::PBRPrimitiveShaderAttribsData AttribsData{
             ListItem.PSOFlags,
             &Transform,
-            &Transform,
+            &PrevTransform,
             0,
             &CustomData,
             sizeof(CustomData),
@@ -387,6 +393,8 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
         GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(pCurrPrimitive, AttribsData, State.USDRenderer.GetSettings().TextureAttribIndices, pMaterial->GetMaterialData());
 
         pDstMaterialBasicAttribs->BaseColorFactor = MaterialData.Attribs.BaseColorFactor * MeshAttribs.DisplayColor;
+
+        ListItem.PrevTransform = MeshAttribs.Transform;
 
         m_PendingDrawItems.push_back(&ListItem);
     }
