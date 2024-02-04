@@ -38,7 +38,6 @@
 #include "ShaderMacroHelper.hpp"
 #include "CommonlyUsedStates.h"
 #include "GraphicsUtilities.h"
-#include "MapHelper.hpp"
 #include "VectorFieldRenderer.hpp"
 #include "ScreenSpaceReflection.hpp"
 #include "TemporalAntiAliasing.hpp"
@@ -199,7 +198,8 @@ void HnPostProcessTask::Sync(pxr::HdSceneDelegate* Delegate,
                 m_PostProcessTech.PSOIsDirty = true;
             }
 
-            m_Params = Params;
+            m_Params         = Params;
+            m_AttribsCBDirty = true;
         }
     }
 
@@ -240,7 +240,12 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
         UNEXPECTED("Render pass state is not set in the task context");
         return;
     }
-    m_ClearDepth = RPState->GetClearDepth();
+
+    if (m_ClearDepth != RPState->GetClearDepth())
+    {
+        m_ClearDepth     = RPState->GetClearDepth();
+        m_AttribsCBDirty = true;
+    }
 
     const HnFramebufferTargets& FBTargets = RPState->GetFramebufferTargets();
     if (!FBTargets)
@@ -255,7 +260,7 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
     IDeviceContext*   pCtx           = RenderDelegate->GetDeviceContext();
     if (!m_PostProcessAttribsCB)
     {
-        CreateUniformBuffer(pDevice, sizeof(HLSL::PostProcessAttribs), "Post process attribs CB", &m_PostProcessAttribsCB);
+        CreateUniformBuffer(pDevice, sizeof(HLSL::PostProcessAttribs), "Post process attribs CB", &m_PostProcessAttribsCB, USAGE_DEFAULT);
         VERIFY(m_PostProcessAttribsCB, "Failed to create post process attribs CB");
     }
 
@@ -276,6 +281,16 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
 
     const HnRenderParam* pRenderParam   = static_cast<const HnRenderParam*>(RenderDelegate->GetRenderParam());
     const TextureDesc&   FinalColorDesc = m_FinalColorRTV->GetTexture()->GetDesc();
+
+    const float SSRScale =
+        (pRenderParam->GetDebugView() == PBR_Renderer::DebugViewType::None && pRenderParam->GetRenderMode() == HN_RENDER_MODE_SOLID) ?
+        m_Params.SSRScale :
+        0;
+    if (SSRScale != m_SSRScale)
+    {
+        m_SSRScale       = SSRScale;
+        m_AttribsCBDirty = true;
+    }
 
     m_PostFXContext->PrepareResources({pRenderParam->GetFrameNumber(), FinalColorDesc.Width, FinalColorDesc.Height});
     m_SSR->PrepareResources(pDevice, m_PostFXContext.get());
@@ -429,8 +444,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
 
     const TextureDesc& FinalColorDesc = m_FinalColorRTV->GetTexture()->GetDesc();
 
-    const float SSRScale = (pRenderParam->GetDebugView() == PBR_Renderer::DebugViewType::None && pRenderParam->GetRenderMode() == HN_RENDER_MODE_SOLID) ? m_Params.SSRScale : 0;
-    if (SSRScale > 0)
+    if (m_SSRScale > 0)
     {
         PostFXContext::RenderAttributes PostFXAttribs{};
         PostFXAttribs.pDevice        = pDevice;
@@ -474,21 +488,23 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         ITextureView* pRTVs[] = {m_UseTAA ? m_FBTargets->JitteredFinalColorRTV : m_FinalColorRTV};
         pCtx->SetRenderTargets(_countof(pRTVs), pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
+        if (m_AttribsCBDirty)
         {
-            MapHelper<HLSL::PostProcessAttribs> pDstShaderAttribs{pCtx, m_PostProcessAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
-            pDstShaderAttribs->SelectionOutlineColor          = m_Params.SelectionColor;
-            pDstShaderAttribs->NonselectionDesaturationFactor = m_Params.NonselectionDesaturationFactor;
-
-            pDstShaderAttribs->ToneMapping.iToneMappingMode     = m_Params.ToneMappingMode;
-            pDstShaderAttribs->ToneMapping.bAutoExposure        = 0;
-            pDstShaderAttribs->ToneMapping.fMiddleGray          = m_Params.MiddleGray;
-            pDstShaderAttribs->ToneMapping.bLightAdaptation     = 0;
-            pDstShaderAttribs->ToneMapping.fWhitePoint          = m_Params.WhitePoint;
-            pDstShaderAttribs->ToneMapping.fLuminanceSaturation = m_Params.LuminanceSaturation;
-            pDstShaderAttribs->AverageLogLum                    = m_Params.AverageLogLum;
-            pDstShaderAttribs->ClearDepth                       = m_ClearDepth;
-            pDstShaderAttribs->SelectionOutlineWidth            = m_Params.SelectionOutlineWidth;
-            pDstShaderAttribs->SSRScale                         = SSRScale;
+            HLSL::PostProcessAttribs ShaderAttribs;
+            ShaderAttribs.SelectionOutlineColor            = m_Params.SelectionColor;
+            ShaderAttribs.NonselectionDesaturationFactor   = m_Params.NonselectionDesaturationFactor;
+            ShaderAttribs.ToneMapping.iToneMappingMode     = m_Params.ToneMappingMode;
+            ShaderAttribs.ToneMapping.bAutoExposure        = 0;
+            ShaderAttribs.ToneMapping.fMiddleGray          = m_Params.MiddleGray;
+            ShaderAttribs.ToneMapping.bLightAdaptation     = 0;
+            ShaderAttribs.ToneMapping.fWhitePoint          = m_Params.WhitePoint;
+            ShaderAttribs.ToneMapping.fLuminanceSaturation = m_Params.LuminanceSaturation;
+            ShaderAttribs.AverageLogLum                    = m_Params.AverageLogLum;
+            ShaderAttribs.ClearDepth                       = m_ClearDepth;
+            ShaderAttribs.SelectionOutlineWidth            = m_Params.SelectionOutlineWidth;
+            ShaderAttribs.SSRScale                         = m_SSRScale;
+            pCtx->UpdateBuffer(m_PostProcessAttribsCB, 0, sizeof(HLSL::PostProcessAttribs), &ShaderAttribs, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+            m_AttribsCBDirty = false;
         }
         pCtx->SetPipelineState(m_PostProcessTech.PSO);
         pCtx->CommitShaderResources(m_PostProcessTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
