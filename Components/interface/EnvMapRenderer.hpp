@@ -71,6 +71,8 @@ public:
 
         /// Manually convert shader output to sRGB color space.
         bool ConvertOutputToSRGB = false;
+
+        bool ComputeMotionVectors = false;
     };
     void Render(const RenderAttribs& Attribs, const HLSL::ToneMappingAttribs& ToneMapping);
 
@@ -79,23 +81,26 @@ public:
     {
         const int  ToneMappingMode;
         const bool ConvertOutputToSRGB;
+        const bool ComputeMotionVectors;
 
-        PSOKey(int _ToneMappingMode, bool _ConvertOutputToSRGB) :
+        PSOKey(int _ToneMappingMode, bool _ConvertOutputToSRGB, bool _ComputeMotionVectors) :
             ToneMappingMode{_ToneMappingMode},
-            ConvertOutputToSRGB{_ConvertOutputToSRGB}
+            ConvertOutputToSRGB{_ConvertOutputToSRGB},
+            ComputeMotionVectors{_ComputeMotionVectors}
         {}
 
         constexpr bool operator==(const PSOKey& rhs) const
         {
             return (ToneMappingMode == rhs.ToneMappingMode &&
-                    ConvertOutputToSRGB == rhs.ConvertOutputToSRGB);
+                    ConvertOutputToSRGB == rhs.ConvertOutputToSRGB &&
+                    ComputeMotionVectors == rhs.ComputeMotionVectors);
         }
 
         struct Hasher
         {
             size_t operator()(const PSOKey& Key) const
             {
-                return ComputeHash(Key.ToneMappingMode, Key.ConvertOutputToSRGB);
+                return ComputeHash(Key.ToneMappingMode, Key.ConvertOutputToSRGB, Key.ComputeMotionVectors);
             }
         };
     };

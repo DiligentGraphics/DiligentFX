@@ -69,6 +69,19 @@ static constexpr char EnvMapPSMain[] = R"(
 void main(in  float4 Pos       : SV_Position,
           in  float4 ClipPos   : CLIP_POS,
           out float4 Color     : SV_Target0,
+          out float4 MotionVec : SV_Target2)
+{
+    SampleEnvMapOutput EnvMap = SampleEnvMap(ClipPos);
+
+    Color     = EnvMap.Color;
+    MotionVec = float4(EnvMap.MotionVector, 0.0, 1.0);
+}
+)";
+
+static constexpr char EnvMapPSMainGL[] = R"(
+void main(in  float4 Pos       : SV_Position,
+          in  float4 ClipPos   : CLIP_POS,
+          out float4 Color     : SV_Target0,
           out float4 MeshId    : SV_Target1,
           out float4 MotionVec : SV_Target2,
           out float4 Normal    : SV_Target3,
@@ -76,10 +89,11 @@ void main(in  float4 Pos       : SV_Position,
           out float4 Material  : SV_Target5,
           out float4 IBL       : SV_Target6)
 {
-    Color = SampleEnvMap(ClipPos);
+    SampleEnvMapOutput EnvMap = SampleEnvMap(ClipPos);
 
+    Color     = EnvMap.Color;
     MeshId    = float4(0.0, 0.0, 0.0, 1.0);
-    MotionVec = float4(0.0, 0.0, 0.0, 0.0);
+    MotionVec = float4(EnvMap.MotionVector, 0.0, 1.0);
     Normal    = float4(0.0, 0.0, 0.0, 0.0);
     BaseColor = float4(0.0, 0.0, 0.0, 0.0);
     Material  = float4(0.0, 0.0, 0.0, 0.0);
@@ -109,10 +123,15 @@ void HnRenderEnvMapTask::Prepare(pxr::HdTaskContext* TaskCtx,
 
             if (EnvMapRndrCI.pDevice->GetDeviceInfo().IsGLDevice())
             {
-                // Normally, environment map shader does not need to write to anything but color target.
+                // Normally, environment map shader does not need to write to anything but
+                // color and motion vector targets.
                 // However, in OpenGL this somehow results in color output also being
                 // written to the MeshID target. To work around this issue, we use a
                 // custom shader that writes 0.
+                EnvMapRndrCI.PSMainSource = EnvMapPSMainGL;
+            }
+            else
+            {
                 EnvMapRndrCI.PSMainSource = EnvMapPSMain;
             }
             m_EnvMapRenderer = std::make_unique<EnvMapRenderer>(EnvMapRndrCI);
@@ -157,7 +176,8 @@ void HnRenderEnvMapTask::Execute(pxr::HdTaskContext* TaskCtx)
     EnvMapAttribs.AverageLogLum = 0.3f;
     EnvMapAttribs.MipLevel      = 1;
     // We should write zero alpha to get correct alpha in the final image
-    EnvMapAttribs.Alpha = 0;
+    EnvMapAttribs.Alpha                = 0;
+    EnvMapAttribs.ComputeMotionVectors = true;
 
     ScopedDebugGroup DebugGroup{EnvMapAttribs.pContext, "Render Environment Map"};
 

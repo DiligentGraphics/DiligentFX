@@ -421,7 +421,7 @@ PSOutput main(in VSOutput VSOut,
     {
         float2 ClipPos     = TexUVToNormalizedDeviceXY(VSOut.ClipPos.xy * g_Frame.Camera.f4ViewportSize.zw);
         float2 PrevClipPos = VSOut.PrevClipPos.xy / VSOut.PrevClipPos.w;
-        MotionVector = (ClipPos - g_Frame.Camera.f2Jitter) - (PrevClipPos - g_Frame.PrevCamera.f2Jitter);
+        MotionVector = GetMotionVector(ClipPos, PrevClipPos, g_Frame.Camera.f2Jitter, g_Frame.PrevCamera.f2Jitter);
     }
 #   endif
     

@@ -1,9 +1,11 @@
 #include "BasicStructures.fxh"
 #include "ToneMapping.fxh"
+#include "ShaderUtilities.fxh"
 
 cbuffer cbCameraAttribs
 {
-    CameraAttribs g_CameraAttribs;
+    CameraAttribs g_Camera;
+    CameraAttribs g_PrevCamera;
 }
 
 cbuffer cbEnvMapRenderAttribs
@@ -19,10 +21,16 @@ cbuffer cbEnvMapRenderAttribs
 TextureCube  EnvMap;
 SamplerState EnvMap_sampler;
 
-float4 SampleEnvMap(in float4 ClipPos)
+struct SampleEnvMapOutput
 {
-    float4 WorldPos  = mul(ClipPos, g_CameraAttribs.mViewProjInv);
-    float3 Direction = WorldPos.xyz / WorldPos.w - g_CameraAttribs.f4Position.xyz;
+    float4 Color;
+    float2 MotionVector;
+};
+
+SampleEnvMapOutput SampleEnvMap(in float4 ClipPos)
+{
+    float4 WorldPos  = mul(ClipPos, g_Camera.mViewProjInv);
+    float3 Direction = WorldPos.xyz / WorldPos.w - g_Camera.f4Position.xyz;
     float3 Color     = EnvMap.SampleLevel(EnvMap_sampler, Direction, MipLevel).rgb;
 
 #if TONE_MAPPING_MODE > TONE_MAPPING_MODE_NONE    
@@ -33,7 +41,17 @@ float4 SampleEnvMap(in float4 ClipPos)
     Color.rgb = pow(Color.rgb, float3(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2));
 #endif
 
-    return float4(Color.rgb, Alpha);
+    float2 MotionVector = float2(0.0, 0.0);
+#if COMPUTE_MOTION_VECTORS
+    float4 PrevClipPos = mul(float4(Direction, 0.0), g_PrevCamera.mViewProj);
+    PrevClipPos.xy /= PrevClipPos.w;
+    MotionVector = GetMotionVector(ClipPos.xy, PrevClipPos.xy, g_Camera.f2Jitter, g_PrevCamera.f2Jitter);
+#endif
+
+    SampleEnvMapOutput Output;
+    Output.Color        = float4(Color.rgb, Alpha);
+    Output.MotionVector = MotionVector;
+    return Output;
 }
 
 #include "PSMainGenerated.generated"
@@ -41,5 +59,5 @@ float4 SampleEnvMap(in float4 ClipPos)
 //           in  float4 ClipPos : CLIP_POS,
 //           out float4 Color   : SV_Target)
 // {
-//     Color = SampleEnvMap(ClipPos);
+//     Color = SampleEnvMap(ClipPos).Color;
 // }

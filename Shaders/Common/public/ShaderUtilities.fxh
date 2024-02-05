@@ -53,4 +53,14 @@ float3 TransformTangentSpaceNormal(in float3 Position,    // Vertex position in 
     return TransformTangentSpaceNormalGrad(dPos_dx, dPos_dy, dUV_dx, dUV_dy, MacroNormal, TSNormal);
 }
 
+float2 GetMotionVector(float2 ClipPos, float2 PrevClipPos, float2 Jitter, float2 PrevJitter)
+{
+    return (ClipPos - Jitter) - (PrevClipPos - PrevJitter);
+}
+
+float2 GetMotionVector(float2 ClipPos, float2 PrevClipPos)
+{
+    return ClipPos - PrevClipPos;
+}
+
 #endif //_SHADER_UTILITIES_FXH_

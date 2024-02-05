@@ -541,7 +541,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         Attribs.pContext = pCtx;
         Attribs.GridSize = {FinalColorDesc.Width / 20, FinalColorDesc.Height / 20};
         // Render motion vectors in the opposite direction
-        Attribs.Scale               = float2{-0.05f} / std::max(static_cast<float>(pRenderParam->GetElapsedTime()), 0.001f);
+        Attribs.Scale               = float2{-0.02f} / std::max(static_cast<float>(pRenderParam->GetElapsedTime()), 0.001f);
         Attribs.StartColor          = float4{1};
         Attribs.EndColor            = float4{0.5, 0.5, 0.5, 1.0};
         Attribs.ConvertOutputToSRGB = m_Params.ConvertOutputToSRGB;

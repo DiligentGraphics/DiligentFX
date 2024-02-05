@@ -77,7 +77,7 @@ void main(in  float4 Pos     : SV_Position,
           in  float4 ClipPos : CLIP_POS,
           out float4 Color   : SV_Target)
 {
-    Color = SampleEnvMap(ClipPos);
+    Color = SampleEnvMap(ClipPos).Color;
 }
 )";
 
@@ -105,7 +105,8 @@ IPipelineState* EnvMapRenderer::GetPSO(const PSOKey& Key)
     ShaderMacroHelper Macros;
     Macros
         .Add("CONVERT_OUTPUT_TO_SRGB", Key.ConvertOutputToSRGB)
-        .Add("TONE_MAPPING_MODE", Key.ToneMappingMode);
+        .Add("TONE_MAPPING_MODE", Key.ToneMappingMode)
+        .Add("COMPUTE_MOTION_VECTORS", Key.ComputeMotionVectors);
     ShaderCI.Macros = Macros;
 
     RefCntAutoPtr<IShader> pVS;
@@ -189,7 +190,7 @@ void EnvMapRenderer::Render(const RenderAttribs& Attribs, const HLSL::ToneMappin
         return;
     }
 
-    auto* pPSO = GetPSO({ToneMapping.iToneMappingMode, Attribs.ConvertOutputToSRGB});
+    auto* pPSO = GetPSO({ToneMapping.iToneMappingMode, Attribs.ConvertOutputToSRGB, Attribs.ComputeMotionVectors});
     if (pPSO == nullptr)
     {
         UNEXPECTED("Failed to get PSO");
