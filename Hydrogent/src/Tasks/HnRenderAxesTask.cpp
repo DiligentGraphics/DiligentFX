@@ -104,7 +104,8 @@ void HnRenderAxesTask::PreparePSO(const HnRenderPassState& RPState)
             .SetDepthStencilDesc(DSS_EnableDepthNoWrites)
             .SetBlendDesc(BS_AlphaBlend)
             .SetPrimitiveTopology(PRIMITIVE_TOPOLOGY_LINE_LIST);
-        PsoCI.PSODesc.ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_STATIC;
+        PsoCI.PSODesc.ResourceLayout.DefaultVariableType        = SHADER_RESOURCE_VARIABLE_TYPE_STATIC;
+        PsoCI.PSODesc.ResourceLayout.DefaultVariableMergeStages = SHADER_TYPE_VS_PS;
         for (Uint32 i = 0; i < RPState.GetNumRenderTargets(); ++i)
             PsoCI.AddRenderTarget(RPState.GetRenderTargetFormat(i));
 
