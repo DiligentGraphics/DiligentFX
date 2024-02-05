@@ -280,9 +280,9 @@ float3 GetSpecularIBL_GGX(in SurfaceReflectanceInfo SrfInfo,
                           in IBLSamplingInfo        IBLInfo,
                           in TextureCube            PrefilteredEnvMap,
                           in SamplerState           PrefilteredEnvMap_sampler,
-                          in float                  PrefilteredEnvMapMipLevels)
+                          in float                  PrefilteredEnvMapLastMip)
 {
-    float  lod = SrfInfo.PerceptualRoughness * PrefilteredEnvMapMipLevels;
+    float  lod = SrfInfo.PerceptualRoughness * PrefilteredEnvMapLastMip;
     float3 SpecularLight = SamplePrefilteredEnvMap(PrefilteredEnvMap, PrefilteredEnvMap_sampler, IBLInfo.L, lod);
     return GetSpecularIBL_GGX(SrfInfo, IBLInfo, SpecularLight);
 }
@@ -321,7 +321,7 @@ float3 GetSpecularIBL_Charlie(in float3       SheenColor,
                               in float        SheenRoughness,
                               in float3       n,
                               in float3       v,
-                              in float        PrefilteredCubeMipLevels,
+                              in float        PrefilteredCubeLastMip,
                               in Texture2D    PreintegratedCharlie,
                               in SamplerState PreintegratedCharlie_sampler,
                               in TextureCube  PrefilteredEnvMap,
@@ -329,7 +329,7 @@ float3 GetSpecularIBL_Charlie(in float3       SheenColor,
 {
     float NdotV = dot_sat(n, v);
 
-    float  lod        = clamp(SheenRoughness * PrefilteredCubeMipLevels, 0.0, PrefilteredCubeMipLevels);
+    float  lod        = SheenRoughness * PrefilteredCubeLastMip;
     float3 reflection = normalize(reflect(-v, n));
 
     float  brdf = PreintegratedCharlie.Sample(PreintegratedCharlie_sampler, float2(NdotV, SheenRoughness)).r;
@@ -662,7 +662,7 @@ void ApplyPunctualLights(in    SurfaceShadingInfo  Shading,
 
 #if USE_IBL
 void ApplyIBL(in SurfaceShadingInfo Shading,
-              in float              PrefilteredCubeMipLevels,
+              in float              PrefilteredCubeLastMip,
               in Texture2D          PreintegratedGGX,
               in SamplerState       PreintegratedGGX_sampler,
               in TextureCube        IrradianceMap,
@@ -707,13 +707,13 @@ void ApplyIBL(in SurfaceShadingInfo Shading,
 #       endif
 
         SrfLighting.Base.SpecularIBL =
-            GetSpecularIBL_GGX(Shading.BaseLayer.Srf, IBLInfo, PrefilteredEnvMap, PrefilteredEnvMap_sampler, PrefilteredCubeMipLevels);
+            GetSpecularIBL_GGX(Shading.BaseLayer.Srf, IBLInfo, PrefilteredEnvMap, PrefilteredEnvMap_sampler, PrefilteredCubeLastMip);
     }
 #   if ENABLE_SHEEN
     {
         // NOTE: to be accurate, we need to use another environment map here prefiltered with the Charlie BRDF.
         SrfLighting.Sheen.SpecularIBL =
-             GetSpecularIBL_Charlie(Shading.Sheen.Color, Shading.Sheen.Roughness, Shading.BaseLayer.Normal, Shading.View, PrefilteredCubeMipLevels,
+             GetSpecularIBL_Charlie(Shading.Sheen.Color, Shading.Sheen.Roughness, Shading.BaseLayer.Normal, Shading.View, PrefilteredCubeLastMip,
                             PreintegratedCharlie, PreintegratedCharlie_sampler,
                             PrefilteredEnvMap,    PrefilteredEnvMap_sampler);
     }
@@ -726,7 +726,7 @@ void ApplyIBL(in SurfaceShadingInfo Shading,
             Shading.Clearcoat.Normal, Shading.View);
 
         SrfLighting.Clearcoat.SpecularIBL =
-            GetSpecularIBL_GGX(Shading.Clearcoat.Srf, IBLInfo, PrefilteredEnvMap, PrefilteredEnvMap_sampler, PrefilteredCubeMipLevels);
+            GetSpecularIBL_GGX(Shading.Clearcoat.Srf, IBLInfo, PrefilteredEnvMap, PrefilteredEnvMap_sampler, PrefilteredCubeLastMip);
     }
 #   endif
 }

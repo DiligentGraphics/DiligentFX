@@ -77,7 +77,7 @@ struct PBRRendererShaderParameters
 	float AverageLogLum;
 	float MiddleGray;
     float WhitePoint;
-	float PrefilteredCubeMipLevels;
+	float PrefilteredCubeLastMip; // Prefiltered cube map last mip level
 
 	float IBLScale;
     float OcclusionStrength;

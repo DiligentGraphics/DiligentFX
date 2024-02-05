@@ -577,7 +577,7 @@ public:
     /// Initializes internal renderer parameters.
     ///
     /// \remarks    The function initializes the following parameters:
-    ///             - PrefilteredCubeMipLevels
+    ///             - PrefilteredCubeLastMip
     void SetInternalShaderParameters(HLSL::PBRRendererShaderParameters& Renderer);
 
     /// Returns the PBR primitive attributes shader data size for the given PSO flags.

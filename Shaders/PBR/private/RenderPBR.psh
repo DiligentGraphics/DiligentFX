@@ -367,7 +367,7 @@ PSOutput main(in VSOutput VSOut,
 
 #       if USE_IBL
         {
-            ApplyIBL(Shading, float(g_Frame.Renderer.PrefilteredCubeMipLevels),
+            ApplyIBL(Shading, float(g_Frame.Renderer.PrefilteredCubeLastMip),
                      g_PreintegratedGGX,  g_PreintegratedGGX_sampler,
                      g_IrradianceMap,     g_IrradianceMap_sampler,
                      g_PrefilteredEnvMap, g_PrefilteredEnvMap_sampler,
