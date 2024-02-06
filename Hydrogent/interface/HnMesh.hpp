@@ -218,9 +218,6 @@ private:
     {
         // Use map to keep buffer sources sorted by name
         std::map<pxr::TfToken, std::shared_ptr<pxr::HdBufferSource>> Sources;
-
-        // Buffer source name to vertex pool element index (e.g. "normals" -> 0, "points" -> 1, etc.)
-        std::unordered_map<pxr::TfToken, Uint32, pxr::TfToken::HashFunctor> NameToPoolIndex;
     };
     std::unique_ptr<StagingVertexData> m_StagingVertexData;
 
@@ -248,6 +245,10 @@ private:
     {
         RefCntAutoPtr<IVertexPoolAllocation> PoolAllocation;
 
+        // Buffer name to vertex pool element index (e.g. "normals" -> 0, "points" -> 1, etc.)
+        std::unordered_map<pxr::TfToken, Uint32, pxr::TfToken::HashFunctor> NameToPoolIndex;
+
+        // Buffer name to buffer
         std::unordered_map<pxr::TfToken, RefCntAutoPtr<IBuffer>, pxr::TfToken::HashFunctor> Buffers;
     };
     VertexData m_VertexData;

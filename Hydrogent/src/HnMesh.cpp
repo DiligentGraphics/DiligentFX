@@ -798,29 +798,52 @@ void HnMesh::AllocatePooledResources(pxr::HdSceneDelegate& SceneDelegate,
 
     if (m_StagingVertexData && !m_StagingVertexData->Sources.empty() && static_cast<const HnRenderParam*>(RenderParam)->GetUseVertexPool())
     {
+        if (m_StagingIndexData)
+        {
+            // The topology has changed: release the existing allocation
+            m_VertexData.PoolAllocation.Release();
+            m_VertexData.NameToPoolIndex.clear();
+        }
+
         // Allocate vertex buffers for face data
-        Uint32 StartVertex = 0;
+        const size_t NumVerts = m_StagingVertexData->Sources.begin()->second->GetNumElements();
+        if (!m_VertexData.PoolAllocation)
         {
             GLTF::ResourceManager::VertexLayoutKey VtxKey;
             VtxKey.Elements.reserve(m_StagingVertexData->Sources.size());
-            const auto NumVerts = m_StagingVertexData->Sources.begin()->second->GetNumElements();
-            for (auto& source_it : m_StagingVertexData->Sources)
+            for (const auto& source_it : m_StagingVertexData->Sources)
             {
-                VERIFY(NumVerts == source_it.second->GetNumElements(), "Inconsistent number of elements in vertex data sources");
-                const auto ElementType = source_it.second->GetTupleType().type;
+                const pxr::TfToken&                         Name   = source_it.first;
+                const std::shared_ptr<pxr::HdBufferSource>& Source = source_it.second;
+                VERIFY(NumVerts == Source->GetNumElements(), "Inconsistent number of elements in vertex data sources");
+                const auto ElementType = Source->GetTupleType().type;
                 const auto ElementSize = HdDataSizeOfType(ElementType);
 
-                m_StagingVertexData->NameToPoolIndex[source_it.first] = static_cast<Uint32>(VtxKey.Elements.size());
+                m_VertexData.NameToPoolIndex[Name] = static_cast<Uint32>(VtxKey.Elements.size());
                 VtxKey.Elements.emplace_back(static_cast<Uint32>(ElementSize), BIND_VERTEX_BUFFER);
             }
 
             m_VertexData.PoolAllocation = ResMgr.AllocateVertices(VtxKey, static_cast<Uint32>(NumVerts));
             VERIFY_EXPR(m_VertexData.PoolAllocation);
-            StartVertex = m_VertexData.PoolAllocation->GetStartVertex();
+        }
+        else
+        {
+#ifdef DILIGENT_DEBUG
+            VERIFY_EXPR(!m_StagingIndexData);
+            VERIFY(m_VertexData.PoolAllocation->GetVertexCount() == NumVerts,
+                   "The number of vertices has changed, but staging index data is null indicating that the topology has not changed. This is unexpected.");
+            for (const auto& source_it : m_StagingVertexData->Sources)
+            {
+                const pxr::TfToken& Name = source_it.first;
+                VERIFY(m_VertexData.NameToPoolIndex.find(Name) != m_VertexData.NameToPoolIndex.end(), "Failed to find vertex buffer index for ", Name,
+                       ". This is unexpected as when a new buffer is added, the topology is expected to change.");
+            }
+#endif
         }
 
         // WebGL/GLES do not support base vertex, so we need to adjust indices.
-        if (StartVertex != 0)
+        const Uint32 StartVertex = m_VertexData.PoolAllocation->GetStartVertex();
+        if (m_StagingIndexData && StartVertex != 0)
         {
             if (!m_StagingIndexData->TrianglesFaceIndices.empty())
             {
@@ -923,8 +946,8 @@ void HnMesh::UpdateVertexBuffers(HnRenderDelegate& RenderDelegate)
         }
         else
         {
-            auto idx_it = m_StagingVertexData->NameToPoolIndex.find(PrimName);
-            if (idx_it != m_StagingVertexData->NameToPoolIndex.end())
+            auto idx_it = m_VertexData.NameToPoolIndex.find(PrimName);
+            if (idx_it != m_VertexData.NameToPoolIndex.end())
             {
                 pBuffer = m_VertexData.PoolAllocation->GetBuffer(idx_it->second);
 
