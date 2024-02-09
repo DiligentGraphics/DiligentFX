@@ -17,7 +17,6 @@ cbuffer cbScreenSpaceReflectionAttribs
 }
 
 Texture2D<float2> g_TextureMotion;
-Texture2D<float>  g_TextureRoughness;
 Texture2D<float>  g_TextureHitDepth;
 
 Texture2D<float>  g_TextureCurrDepth;
@@ -72,11 +71,6 @@ float SampleHitDepth(int2 PixelCoord)
     return g_TextureHitDepth.Load(int3(PixelCoord, 0));
 }
 
-float SampleRoughness(int2 PixelCoord)
-{
-    return g_TextureRoughness.Load(int3(PixelCoord, 0));;
-}
-
 float4 SampleCurrRadiance(int2 PixelCoord)
 {
     return g_TextureCurrRadiance.Load(int3(PixelCoord, 0));
@@ -117,10 +111,10 @@ float SamplePrevVarianceLinear(float2 PixelCoord)
 
 float2 ComputeReflectionHitPosition(int2 PixelCoord, float Depth)
 {
-    float2 Texcoord = (float2(PixelCoord) + 0.5) * g_CurrCamera.f4ViewportSize.zw;
+    float2 Texcoord = (float2(PixelCoord) + 0.5) * g_CurrCamera.f4ViewportSize.zw + F3NDC_XYZ_TO_UVD_SCALE.xy * g_CurrCamera.f2Jitter;
     float3 PositionWS = InvProjectPosition(float3(Texcoord, DepthToNormalizedDeviceZ(Depth)), g_CurrCamera.mViewProjInv);
     float3 PrevCoordUV = ProjectPosition(PositionWS, g_PrevCamera.mViewProj);
-    return PrevCoordUV.xy * g_CurrCamera.f4ViewportSize.xy;
+    return (PrevCoordUV.xy - F3NDC_XYZ_TO_UVD_SCALE.xy * g_PrevCamera.f2Jitter) * g_CurrCamera.f4ViewportSize.xy;
 }
 
 // TODO: Use normals to compute disocclusion
@@ -239,7 +233,6 @@ PSOutput ComputeTemporalAccumulationPS(in FullScreenTriangleVSOutput VSOut)
     PixelStatistic PixelStat = ComputePixelStatistic(int2(Position.xy));
     float Depth = SampleCurrDepth(int2(Position.xy));
     float HitDepth = SampleHitDepth(int2(Position.xy));
-    float Roughness = SampleRoughness(int2(Position.xy));
     float2 Motion = SampleMotion(int2(Position.xy));
 
     float2 PrevIncidentPoint = Position.xy - Motion * float2(g_CurrCamera.f4ViewportSize.xy);
@@ -257,13 +250,12 @@ PSOutput ComputeTemporalAccumulationPS(in FullScreenTriangleVSOutput VSOut)
     PSOutput Output;
     if (Reprojection.IsSuccess)
     {
-        float Alpha = IsMirrorReflection(Roughness) ? 0.95 : 1.0;
         float4 ColorMin = PixelStat.Mean - SSR_TEMPORAL_STANDARD_DEVIATION_SCALE * PixelStat.StdDev;
         float4 ColorMax = PixelStat.Mean + SSR_TEMPORAL_STANDARD_DEVIATION_SCALE * PixelStat.StdDev;
         float4 PrevRadiance = clamp(Reprojection.Color, ColorMin, ColorMax);
         float  PrevVariance = SamplePrevVarianceLinear(Reprojection.PrevCoord);
-        Output.Radiance = lerp(SampleCurrRadiance(int2(Position.xy)), PrevRadiance, Alpha * g_SSRAttribs.TemporalRadianceStabilityFactor);
-        Output.Variance = lerp(SampleCurrVariance(int2(Position.xy)), PrevVariance, Alpha * g_SSRAttribs.TemporalVarianceStabilityFactor);
+        Output.Radiance = lerp(SampleCurrRadiance(int2(Position.xy)), PrevRadiance, g_SSRAttribs.TemporalRadianceStabilityFactor);
+        Output.Variance = lerp(SampleCurrVariance(int2(Position.xy)), PrevVariance, g_SSRAttribs.TemporalVarianceStabilityFactor);
     }
     else
     {
