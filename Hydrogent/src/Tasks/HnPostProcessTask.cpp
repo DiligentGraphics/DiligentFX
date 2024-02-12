@@ -55,6 +55,7 @@ namespace HLSL
 #include "../shaders/HnPostProcessStructures.fxh"
 #include "Shaders/PBR/private/RenderPBR_Structures.fxh"
 #include "Shaders/PostProcess/ScreenSpaceReflection/public/ScreenSpaceReflectionStructures.fxh"
+#include "Shaders/PostProcess/TemporalAntiAliasing/public/TemporalAntiAliasingStructures.fxh"
 
 } // namespace HLSL
 
@@ -294,7 +295,7 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
 
     m_PostFXContext->PrepareResources({pRenderParam->GetFrameNumber(), FinalColorDesc.Width, FinalColorDesc.Height});
     m_SSR->PrepareResources(pDevice, m_PostFXContext.get());
-    m_TAA->PrepareResources(pDevice, m_PostFXContext.get(), m_FinalColorRTV->GetDesc().Format);
+    m_TAA->PrepareResources(pDevice, m_PostFXContext.get(), {m_FinalColorRTV->GetDesc().Format});
 
     m_UseTAA = m_Params.EnableTAA &&
         pRenderParam->GetDebugView() == PBR_Renderer::DebugViewType::None &&
@@ -317,14 +318,9 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
     {
         GetTaskContextData(TaskCtx, HnRenderResourceTokens->taaReset, m_ResetTAA);
     }
-    if (m_ResetTAA)
-    {
-        m_TAA->ResetAccumulation();
-        m_ResetTAA = false;
-    }
 
     // The jitter will be used by HnBeginFrameTask::Execute() to set projection matrix.
-    (*TaskCtx)[HnRenderResourceTokens->taaJitterOffsets] = pxr::VtValue{m_UseTAA ? m_TAA->GetJitterOffset() : float2{0, 0}};
+    (*TaskCtx)[HnRenderResourceTokens->taaJitterOffsets] = pxr::VtValue{m_UseTAA && !m_ResetTAA ? m_TAA->GetJitterOffset() : float2{0, 0}};
 }
 
 void HnPostProcessTask::PrepareSRB(ITextureView* pClosestSelectedLocationSRV)
@@ -513,6 +509,14 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
 
     if (m_UseTAA)
     {
+        HLSL::TemporalAntiAliasingAttribs TAASettings{};
+
+        if (m_ResetTAA)
+        {
+            TAASettings.ResetAccumulation = m_ResetTAA;
+            m_ResetTAA                    = false;
+        }
+
         TemporalAntiAliasing::RenderAttributes TAARenderAttribs{};
         TAARenderAttribs.pDevice           = pDevice;
         TAARenderAttribs.pDeviceContext    = pCtx;
@@ -520,6 +524,8 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         TAARenderAttribs.pColorBufferSRV   = m_FBTargets->JitteredFinalColorRTV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
         TAARenderAttribs.pDepthBufferSRV   = m_FBTargets->DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
         TAARenderAttribs.pMotionVectorsSRV = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_NOTION_VECTOR];
+        TAARenderAttribs.FeatureFlag       = TemporalAntiAliasing::FEATURE_FLAG_BICUBIC_FILTER;
+        TAARenderAttribs.pTAAAttribs       = &TAASettings;
         m_TAA->Execute(TAARenderAttribs);
 
         ScopedDebugGroup DebugGroup{pCtx, "Copy accumulated buffer"};

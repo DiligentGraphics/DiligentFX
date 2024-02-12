@@ -40,12 +40,40 @@
 namespace Diligent
 {
 
+
+namespace HLSL
+{
+struct TemporalAntiAliasingAttribs;
+}
+
 class TemporalAntiAliasing
 {
 public:
-    enum FEATURE_FLAGS
+    enum FEATURE_FLAGS : Uint32
     {
         FEATURE_FLAG_NONE = 0,
+
+        // When this flag is set, it is assumed that you are using a reverse depth buffer
+        FEATURE_FLAG_REVERSED_DEPTH = 1u << 0u,
+
+        // When this flag is set, the variance clipping step will use Gaussian weighting
+        FEATURE_FLAG_GAUSSIAN_WEIGHTING = 1u << 1u,
+
+        // When this flag is set, Catmull-Rom filter is used to sample from the history buffer
+        FEATURE_FLAG_BICUBIC_FILTER = 1u << 2u,
+
+        // When this flag is set, depth buffer from previous frame is used to calculate disocclusion,
+        // You need to pass the corresponding texture through RenderAttributes::pPrevDepthBufferSRV
+        FEATURE_FLAG_DEPTH_DISOCCLUSION = 1u << 3u,
+
+        // When this flag is set, motion buffer from previous frame is used to calculate disocclusion,
+        // You need to pass the corresponding texture RenderAttributes::pPrevMotionVectorsSRV
+        FEATURE_FLAG_MOTION_DISOCCLUSION = 1u << 4u
+    };
+
+    struct ResourceAttribs
+    {
+        TEXTURE_FORMAT AccumulatedBufferFormat = TEX_FORMAT_UNKNOWN;
     };
 
     struct RenderAttributes
@@ -71,8 +99,17 @@ public:
         /// Shader resource view of the motion vectors
         ITextureView* pMotionVectorsSRV = nullptr;
 
+        /// Shader resource view of the source depth from previous frame
+        ITextureView* pPrevDepthBufferSRV = nullptr;
+
+        /// Shader resource view of the motion vectors from previous frame
+        ITextureView* pPrevMotionVectorsSRV = nullptr;
+
         /// Render features
         FEATURE_FLAGS FeatureFlag = FEATURE_FLAG_NONE;
+
+        /// TAA settings
+        const HLSL::TemporalAntiAliasingAttribs* pTAAAttribs = nullptr;
     };
 
 public:
@@ -82,13 +119,13 @@ public:
 
     float2 GetJitterOffset() const;
 
-    void PrepareResources(IRenderDevice* pDevice, PostFXContext* pPostFXContext, TEXTURE_FORMAT AccumulatedBufferFormat);
+    void PrepareResources(IRenderDevice* pDevice, PostFXContext* pPostFXContext, const ResourceAttribs& Attribs);
 
     void Execute(const RenderAttributes& RenderAttribs);
 
-    ITextureView* GetAccumulatedFrameSRV() const;
+    void UpdateUI(HLSL::TemporalAntiAliasingAttribs& TAAAttribs);
 
-    void ResetAccumulation();
+    ITextureView* GetAccumulatedFrameSRV() const;
 
 private:
     using RenderTechnique  = PostFXRenderTechnique;
@@ -105,6 +142,9 @@ private:
         RESOURCE_IDENTIFIER_INPUT_COLOR = 0,
         RESOURCE_IDENTIFIER_INPUT_DEPTH,
         RESOURCE_IDENTIFIER_INPUT_MOTION_VECTORS,
+        RESOURCE_IDENTIFIER_INPUT_PREV_DEPTH,
+        RESOURCE_IDENTIFIER_INPUT_PREV_MOTION_VECTORS,
+        RESOURCE_IDENTIFIER_CONSTANT_BUFFER,
         RESOURCE_IDENTIFIER_ACCUMULATED_BUFFER0,
         RESOURCE_IDENTIFIER_ACCUMULATED_BUFFER1,
         RESOURCE_IDENTIFIER_COUNT
@@ -127,8 +167,7 @@ private:
 
         constexpr bool operator==(const RenderTechniqueKey& RHS) const
         {
-            return RenderTech == RHS.RenderTech &&
-                FeatureFlags == RHS.FeatureFlags;
+            return RenderTech == RHS.RenderTech && FeatureFlags == RHS.FeatureFlags;
         }
 
         struct Hasher
@@ -147,12 +186,8 @@ private:
     Uint32 m_BackBufferWidth  = 0;
     Uint32 m_BackBufferHeight = 0;
     Uint32 m_CurrentFrameIdx  = 0;
-    Uint32 m_LastFrameIdx     = ~0u;
-
-    // This index buffer is necessary to pass base vertex to the vertex shader
-    // on DirectD11 and DirectD12.
-    RefCntAutoPtr<IBuffer> m_IndexBuffer;
 };
 
+DEFINE_FLAG_ENUM_OPERATORS(TemporalAntiAliasing::FEATURE_FLAGS)
 
 } // namespace Diligent

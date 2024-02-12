@@ -101,7 +101,7 @@ bool AdvanceRay(float3 Origin, float3 Direction, float3 InvDirection, float2 Cur
     float3 T = BoundaryPlanes * InvDirection - Origin * InvDirection;
 
     // Prevent using z plane when shooting out of the depth buffer.
-#ifdef SSR_OPTION_INVERTED_DEPTH
+#if SSR_OPTION_INVERTED_DEPTH
     T.z = Direction.z < 0.0 ? T.z : FLT_MAX;
 #else
     T.z = Direction.z > 0.0 ? T.z : FLT_MAX;
@@ -110,7 +110,7 @@ bool AdvanceRay(float3 Origin, float3 Direction, float3 InvDirection, float2 Cur
     // Choose nearest intersection with a boundary.
     float TMin = min(min(T.x, T.y), T.z);
 
-#ifdef SSR_OPTION_INVERTED_DEPTH
+#if SSR_OPTION_INVERTED_DEPTH
     // Larger z means closer to the camera.
     bool AboveSurface = SurfaceZ < Position.z;
 #else

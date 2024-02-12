@@ -121,7 +121,7 @@ float2 ComputeReflectionHitPosition(int2 PixelCoord, float Depth)
 float ComputeDisocclusion(float CurrDepth, float PrevDepth)
 {
     float LinearDepthCurr = DepthToCameraZ(CurrDepth, g_CurrCamera.mProj);
-    float LinearDepthPrev = DepthToCameraZ(PrevDepth, g_CurrCamera.mProj);
+    float LinearDepthPrev = DepthToCameraZ(PrevDepth, g_PrevCamera.mProj);
     return exp(-abs(LinearDepthPrev - LinearDepthCurr) / LinearDepthCurr * SSR_DISOCCLUSION_DEPTH_WEIGHT);
 }
 
@@ -132,9 +132,11 @@ PixelStatistic ComputePixelStatistic(int2 PixelCoord)
     PixelStatistic Desc;
     float4 M1 = float4(0.0, 0.0, 0.0, 0.0);
     float4 M2 = float4(0.0, 0.0, 0.0, 0.0);
-    for (int x = -1; x <= 1; x++)
+
+    const int StatisticRadius = 1;
+    for (int x = -StatisticRadius; x <= StatisticRadius; x++)
     {
-        for (int y = -1; y <= 1; y++)
+        for (int y = -StatisticRadius; y <= StatisticRadius; y++)
         {
             int2 Offset = int2(x, y);
             int2 Coord = int2(PixelCoord) + Offset;

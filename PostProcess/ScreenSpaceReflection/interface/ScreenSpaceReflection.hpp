@@ -52,16 +52,16 @@ struct ScreenSpaceReflectionAttribs;
 class ScreenSpaceReflection
 {
 public:
-    enum FEATURE_FLAGS
+    enum FEATURE_FLAGS : Uint32
     {
-        FEATURE_FLAG_NONE           = 1 << 0,
-        FEATURE_FLAG_RESERVED_DEPTH = 1 << 1, // Not implemented
-        FEATURE_FLAG_PACKED_NORMAL  = 1 << 2, // Nor implemented
+        FEATURE_FLAG_NONE           = 0,
+        FEATURE_FLAG_REVERSED_DEPTH = 1 << 0, // Not implemented
+        FEATURE_FLAG_PACKED_NORMAL  = 1 << 1, // Nor implemented
 
         // When using this flag, you only need to pass the color buffer of the previous frame.
         // We find the intersection using the depth buffer of the current frame, and when an intersection is found,
         // we make the corresponding offset by the velocity vector at the intersection point, for sampling from the color buffer.
-        FEATURE_FLAG_PREVIOUS_FRAME = 1 << 3,
+        FEATURE_FLAG_PREVIOUS_FRAME = 1 << 2,
     };
 
     struct RenderAttributes
@@ -209,5 +209,7 @@ private:
     Uint32 m_BackBufferHeight = 0;
     Uint32 m_ImGuiDisplayMode = 0;
 };
+
+DEFINE_FLAG_ENUM_OPERATORS(ScreenSpaceReflection::FEATURE_FLAGS)
 
 } // namespace Diligent
