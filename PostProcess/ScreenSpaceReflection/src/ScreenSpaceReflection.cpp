@@ -316,6 +316,12 @@ void ScreenSpaceReflection::Execute(const RenderAttributes& RenderAttribs)
     ComputeSpatialReconstruction(RenderAttribs);
     ComputeTemporalAccumulation(RenderAttribs);
     ComputeBilateralCleanup(RenderAttribs);
+
+    // Release references to input resources
+    for (Uint32 id = 0; id <= RESOURCE_IDENTIFIER_INPUT_LAST; ++id)
+    {
+        m_Resources[id].Release();
+    }
 }
 
 void ScreenSpaceReflection::UpdateUI(HLSL::ScreenSpaceReflectionAttribs& SSRAttribs)
