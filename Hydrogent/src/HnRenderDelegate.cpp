@@ -201,8 +201,8 @@ static RefCntAutoPtr<GLTF::ResourceManager> CreateResourceManager(const HnRender
 
     GLTF::ResourceManager::CreateInfo ResMgrCI;
 
-    ResMgrCI.IndexAllocatorCI.Desc        = {"Hydrogent index pool", sizeof(Uint32) * InitialIndexCount, BIND_INDEX_BUFFER, USAGE_DEFAULT};
-    ResMgrCI.IndexAllocatorCI.VirtualSize = Uint64{1024} << Uint64{20};
+    ResMgrCI.IndexAllocatorCI.Desc    = {"Hydrogent index pool", sizeof(Uint32) * InitialIndexCount, BIND_INDEX_BUFFER, USAGE_DEFAULT};
+    ResMgrCI.IndexAllocatorCI.MaxSize = Uint64{1024} << Uint64{20};
 
     ResMgrCI.DefaultPoolDesc.VertexCount = InitialVertexCount;
     ResMgrCI.DefaultPoolDesc.Usage       = USAGE_DEFAULT;
