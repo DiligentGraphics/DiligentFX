@@ -53,21 +53,21 @@ public:
     {
         FEATURE_FLAG_NONE = 0,
 
-        // When this flag is set, it is assumed that you are using a reverse depth buffer
+        // Indicates that the application uses a reversed depth buffer.
         FEATURE_FLAG_REVERSED_DEPTH = 1u << 0u,
 
-        // When this flag is set, the variance clipping step will use Gaussian weighting
+        // Use Gaussian weighting in the variance clipping step.
         FEATURE_FLAG_GAUSSIAN_WEIGHTING = 1u << 1u,
 
-        // When this flag is set, Catmull-Rom filter is used to sample from the history buffer
+        // Use Catmull-Rom filter to sample the history buffer.
         FEATURE_FLAG_BICUBIC_FILTER = 1u << 2u,
 
-        // When this flag is set, depth buffer from previous frame is used to calculate disocclusion,
-        // You need to pass the corresponding texture through RenderAttributes::pPrevDepthBufferSRV
+        // Use depth buffer from the previous frame to calculate disocclusion.
+        // The corresponding texture should be provided through RenderAttributes::pPrevDepthBufferSRV.
         FEATURE_FLAG_DEPTH_DISOCCLUSION = 1u << 3u,
 
-        // When this flag is set, motion buffer from previous frame is used to calculate disocclusion,
-        // You need to pass the corresponding texture RenderAttributes::pPrevMotionVectorsSRV
+        // Use motion buffer from the previous frame to calculate disocclusion,
+        // The corresponding texture should be provided through RenderAttributes::pPrevMotionVectorsSRV.
         FEATURE_FLAG_MOTION_DISOCCLUSION = 1u << 4u
     };
 
@@ -87,28 +87,28 @@ public:
         /// Device context that will record the rendering commands.
         IDeviceContext* pDeviceContext = nullptr;
 
-        /// PostFX context
+        /// PostFX context.
         PostFXContext* pPostFXContext = nullptr;
 
-        /// Shader resource view of the source color
+        /// Shader resource view of the source color.
         ITextureView* pColorBufferSRV = nullptr;
 
-        /// Shader resource view of the source depth
+        /// Shader resource view of the source depth.
         ITextureView* pDepthBufferSRV = nullptr;
 
-        /// Shader resource view of the motion vectors
+        /// Shader resource view of the motion vectors.
         ITextureView* pMotionVectorsSRV = nullptr;
 
-        /// Shader resource view of the source depth from previous frame
+        /// Shader resource view of the source depth from previous frame.
         ITextureView* pPrevDepthBufferSRV = nullptr;
 
-        /// Shader resource view of the motion vectors from previous frame
+        /// Shader resource view of the motion vectors from previous frame.
         ITextureView* pPrevMotionVectorsSRV = nullptr;
 
-        /// Render features
+        /// Render features.
         FEATURE_FLAGS FeatureFlag = FEATURE_FLAG_NONE;
 
-        /// TAA settings
+        /// TAA settings.
         const HLSL::TemporalAntiAliasingAttribs* pTAAAttribs = nullptr;
     };
 
@@ -144,6 +144,8 @@ private:
         RESOURCE_IDENTIFIER_INPUT_MOTION_VECTORS,
         RESOURCE_IDENTIFIER_INPUT_PREV_DEPTH,
         RESOURCE_IDENTIFIER_INPUT_PREV_MOTION_VECTORS,
+        RESOURCE_IDENTIFIER_INPUT_LAST = RESOURCE_IDENTIFIER_INPUT_PREV_MOTION_VECTORS,
+
         RESOURCE_IDENTIFIER_CONSTANT_BUFFER,
         RESOURCE_IDENTIFIER_ACCUMULATED_BUFFER0,
         RESOURCE_IDENTIFIER_ACCUMULATED_BUFFER1,

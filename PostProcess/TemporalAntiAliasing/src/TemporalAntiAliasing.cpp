@@ -75,8 +75,8 @@ float2 TemporalAntiAliasing::GetJitterOffset() const
         return float2{0.0f, 0.0f};
 
     constexpr Uint32 SampleCount = 16u;
-    const float      JitterX     = (HaltonSequenc(2u, m_CurrentFrameIdx % SampleCount + 1) - 0.5f) / (0.5f * static_cast<float>(m_BackBufferWidth));
-    const float      JitterY     = (HaltonSequenc(3u, m_CurrentFrameIdx % SampleCount + 1) - 0.5f) / (0.5f * static_cast<float>(m_BackBufferHeight));
+    const float      JitterX     = (HaltonSequenc(2u, (m_CurrentFrameIdx % SampleCount) + 1) - 0.5f) / (0.5f * static_cast<float>(m_BackBufferWidth));
+    const float      JitterY     = (HaltonSequenc(3u, (m_CurrentFrameIdx % SampleCount) + 1) - 0.5f) / (0.5f * static_cast<float>(m_BackBufferHeight));
     return float2{JitterX, JitterY};
 }
 
@@ -138,6 +138,12 @@ void TemporalAntiAliasing::Execute(const RenderAttributes& RenderAttribs)
     ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "TemporalAccumulation"};
     RenderAttribs.pDeviceContext->UpdateBuffer(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER].AsBuffer(), 0, sizeof(HLSL::TemporalAntiAliasingAttribs), RenderAttribs.pTAAAttribs, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     ComputeTemporalAccumulation(RenderAttribs);
+
+    // Release references to input resources
+    for (Uint32 id = 0; id <= RESOURCE_IDENTIFIER_INPUT_LAST; ++id)
+    {
+        m_Resources[id].Release();
+    }
 }
 
 void TemporalAntiAliasing::UpdateUI(HLSL::TemporalAntiAliasingAttribs& TAAAttribs)
