@@ -27,6 +27,7 @@
 #pragma once
 
 #include <unordered_map>
+#include <memory>
 
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
 #include "../../../../DiligentCore/Graphics/GraphicsTools/interface/RenderStateCache.h"
@@ -188,6 +189,9 @@ private:
     Uint32 m_BackBufferWidth  = 0;
     Uint32 m_BackBufferHeight = 0;
     Uint32 m_CurrentFrameIdx  = 0;
+    Uint32 m_LasFrameIdx      = ~0u;
+
+    std::unique_ptr<HLSL::TemporalAntiAliasingAttribs> m_ShaderAttribs;
 };
 
 DEFINE_FLAG_ENUM_OPERATORS(TemporalAntiAliasing::FEATURE_FLAGS)

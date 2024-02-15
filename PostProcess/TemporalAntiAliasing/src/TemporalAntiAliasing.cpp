@@ -58,12 +58,13 @@ namespace HLSL
 }
 
 
-TemporalAntiAliasing::TemporalAntiAliasing(IRenderDevice* pDevice)
+TemporalAntiAliasing::TemporalAntiAliasing(IRenderDevice* pDevice) :
+    m_ShaderAttribs{std::make_unique<HLSL::TemporalAntiAliasingAttribs>()}
 {
     DEV_CHECK_ERR(pDevice != nullptr, "pDevice must not be null");
 
     RefCntAutoPtr<IBuffer> pBuffer;
-    CreateUniformBuffer(pDevice, sizeof(HLSL::TemporalAntiAliasingAttribs), "TemporalAntiAliasing::ConstantBuffer", &pBuffer, USAGE_DEFAULT, BIND_UNIFORM_BUFFER, CPU_ACCESS_NONE);
+    CreateUniformBuffer(pDevice, sizeof(HLSL::TemporalAntiAliasingAttribs), "TemporalAntiAliasing::ConstantBuffer", &pBuffer, USAGE_DEFAULT, BIND_UNIFORM_BUFFER, CPU_ACCESS_NONE, m_ShaderAttribs.get());
     m_Resources.Insert(RESOURCE_IDENTIFIER_CONSTANT_BUFFER, pBuffer);
 }
 
@@ -136,7 +137,29 @@ void TemporalAntiAliasing::Execute(const RenderAttributes& RenderAttribs)
         m_Resources.Insert(RESOURCE_IDENTIFIER_INPUT_PREV_MOTION_VECTORS, RenderAttribs.pPrevMotionVectorsSRV->GetTexture());
 
     ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "TemporalAccumulation"};
-    RenderAttribs.pDeviceContext->UpdateBuffer(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER].AsBuffer(), 0, sizeof(HLSL::TemporalAntiAliasingAttribs), RenderAttribs.pTAAAttribs, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+    bool ResetAccumulation =
+        m_LasFrameIdx == ~0u ||                            // No history on the first frame
+        m_CurrentFrameIdx != m_LasFrameIdx + 1 ||          // Reset history if frames were skipped
+        RenderAttribs.pTAAAttribs->ResetAccumulation != 0; // Reset history if requested
+
+    bool UpdateConstantBuffer = false;
+    if (memcmp(m_ShaderAttribs.get(), RenderAttribs.pTAAAttribs, sizeof(HLSL::TemporalAntiAliasingAttribs)) != 0)
+    {
+        UpdateConstantBuffer = true;
+        memcpy(m_ShaderAttribs.get(), RenderAttribs.pTAAAttribs, sizeof(HLSL::TemporalAntiAliasingAttribs));
+    }
+    if (ResetAccumulation && (m_ShaderAttribs->ResetAccumulation != 0) != ResetAccumulation)
+    {
+        m_ShaderAttribs->ResetAccumulation = 1;
+        UpdateConstantBuffer               = true;
+    }
+    if (UpdateConstantBuffer)
+    {
+        RenderAttribs.pDeviceContext->UpdateBuffer(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER].AsBuffer(), 0, sizeof(HLSL::TemporalAntiAliasingAttribs),
+                                                   m_ShaderAttribs.get(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    }
+
     ComputeTemporalAccumulation(RenderAttribs);
 
     // Release references to input resources
@@ -144,6 +167,8 @@ void TemporalAntiAliasing::Execute(const RenderAttributes& RenderAttribs)
     {
         m_Resources[id].Release();
     }
+
+    m_LasFrameIdx = m_CurrentFrameIdx;
 }
 
 void TemporalAntiAliasing::UpdateUI(HLSL::TemporalAntiAliasingAttribs& TAAAttribs)
