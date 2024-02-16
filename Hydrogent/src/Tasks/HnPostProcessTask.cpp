@@ -473,7 +473,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         SSRRenderAttribs.pDepthBufferSRV    = m_FBTargets->DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
         SSRRenderAttribs.pNormalBufferSRV   = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_NORMAL];
         SSRRenderAttribs.pMaterialBufferSRV = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_MATERIAL];
-        SSRRenderAttribs.pMotionVectorsSRV  = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_NOTION_VECTOR];
+        SSRRenderAttribs.pMotionVectorsSRV  = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_MOTION_VECTOR];
         SSRRenderAttribs.pSSRAttribs        = &SSRAttribs;
         m_SSR->Execute(SSRRenderAttribs);
     }
@@ -518,15 +518,19 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         }
 
         TemporalAntiAliasing::RenderAttributes TAARenderAttribs{};
-        TAARenderAttribs.pDevice             = pDevice;
-        TAARenderAttribs.pDeviceContext      = pCtx;
-        TAARenderAttribs.pPostFXContext      = m_PostFXContext.get();
-        TAARenderAttribs.pColorBufferSRV     = m_FBTargets->JitteredFinalColorRTV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-        TAARenderAttribs.pDepthBufferSRV     = m_FBTargets->DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-        TAARenderAttribs.pPrevDepthBufferSRV = m_FBTargets->PrevDepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-        TAARenderAttribs.pMotionVectorsSRV   = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_NOTION_VECTOR];
-        TAARenderAttribs.FeatureFlag         = TemporalAntiAliasing::FEATURE_FLAG_BICUBIC_FILTER | TemporalAntiAliasing::FEATURE_FLAG_DEPTH_DISOCCLUSION;
-        TAARenderAttribs.pTAAAttribs         = &TAASettings;
+        TAARenderAttribs.pDevice               = pDevice;
+        TAARenderAttribs.pDeviceContext        = pCtx;
+        TAARenderAttribs.pPostFXContext        = m_PostFXContext.get();
+        TAARenderAttribs.pColorBufferSRV       = m_FBTargets->JitteredFinalColorRTV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        TAARenderAttribs.pDepthBufferSRV       = m_FBTargets->DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        TAARenderAttribs.pPrevDepthBufferSRV   = m_FBTargets->PrevDepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        TAARenderAttribs.pMotionVectorsSRV     = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_MOTION_VECTOR];
+        TAARenderAttribs.pPrevMotionVectorsSRV = m_FBTargets->PrevMotionRTV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        TAARenderAttribs.FeatureFlag =
+            TemporalAntiAliasing::FEATURE_FLAG_BICUBIC_FILTER |
+            TemporalAntiAliasing::FEATURE_FLAG_DEPTH_DISOCCLUSION |
+            TemporalAntiAliasing::FEATURE_FLAG_MOTION_DISOCCLUSION;
+        TAARenderAttribs.pTAAAttribs = &TAASettings;
         m_TAA->Execute(TAARenderAttribs);
 
         ScopedDebugGroup DebugGroup{pCtx, "Copy accumulated buffer"};
@@ -553,7 +557,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         Attribs.EndColor            = float4{0.5, 0.5, 0.5, 1.0};
         Attribs.ConvertOutputToSRGB = m_Params.ConvertOutputToSRGB;
 
-        Attribs.pVectorField = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_NOTION_VECTOR];
+        Attribs.pVectorField = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_MOTION_VECTOR];
         m_VectorFieldRenderer->Render(Attribs);
     }
 }

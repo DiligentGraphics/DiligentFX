@@ -53,7 +53,7 @@ struct HnFramebufferTargets
     {
         GBUFFER_TARGET_SCENE_COLOR,
         GBUFFER_TARGET_MESH_ID,
-        GBUFFER_TARGET_NOTION_VECTOR,
+        GBUFFER_TARGET_MOTION_VECTOR,
         GBUFFER_TARGET_NORMAL,
         GBUFFER_TARGET_BASE_COLOR,
         GBUFFER_TARGET_MATERIAL,
@@ -69,6 +69,7 @@ struct HnFramebufferTargets
     ITextureView* SelectionDepthDSV = nullptr;
     ITextureView* DepthDSV          = nullptr;
     ITextureView* PrevDepthDSV      = nullptr;
+    ITextureView* PrevMotionRTV     = nullptr;
 
     std::array<ITextureView*, 2> ClosestSelectedLocationRTV = {};
 
@@ -86,11 +87,15 @@ struct HnFramebufferTargets
         return FinalColorRTV                 != nullptr &&
                SelectionDepthDSV             != nullptr &&
                DepthDSV                      != nullptr &&
+               PrevDepthDSV                  != nullptr &&
                ClosestSelectedLocationRTV[0] != nullptr &&
                ClosestSelectedLocationRTV[1] != nullptr &&
-               JitteredFinalColorRTV         != nullptr;
+               JitteredFinalColorRTV         != nullptr &&
+               PrevMotionRTV                 != nullptr;
         // clang-format on
     }
+
+    static const char* GetTargetName(GBUFFER_TARGET Id);
 };
 
 /// Hydra render pass state implementation in Hydrogent.

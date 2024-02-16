@@ -190,7 +190,7 @@ public:
 
 private:
     void UpdateRenderPassState(const HnBeginFrameTaskParams& Params);
-    void PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex, pxr::HdTaskContext* TaskCtx, ITextureView* pFinalColorRTV, Uint32 FrameNumber);
+    void PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex, pxr::HdTaskContext* TaskCtx, ITextureView* pFinalColorRTV);
     void UpdateFrameConstants(IDeviceContext* pCtx, IBuffer* pFrameAttrbisCB, const float2& Jitter);
 
 private:
@@ -201,6 +201,7 @@ private:
 
     std::array<pxr::SdfPath, HnFramebufferTargets::GBUFFER_TARGET_COUNT> m_GBufferTargetIds;
 
+    pxr::SdfPath m_PrevMotionTargetId;
     pxr::SdfPath m_SelectionDepthBufferId;
 
     // Ping-pong buffers for the last two frames

@@ -130,7 +130,7 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
 
     USDRendererCI.ColorTargetIndex        = HnFramebufferTargets::GBUFFER_TARGET_SCENE_COLOR;
     USDRendererCI.MeshIdTargetIndex       = HnFramebufferTargets::GBUFFER_TARGET_MESH_ID;
-    USDRendererCI.MotionVectorTargetIndex = HnFramebufferTargets::GBUFFER_TARGET_NOTION_VECTOR;
+    USDRendererCI.MotionVectorTargetIndex = HnFramebufferTargets::GBUFFER_TARGET_MOTION_VECTOR;
     USDRendererCI.NormalTargetIndex       = HnFramebufferTargets::GBUFFER_TARGET_NORMAL;
     USDRendererCI.BaseColorTargetIndex    = HnFramebufferTargets::GBUFFER_TARGET_BASE_COLOR;
     USDRendererCI.MaterialDataTargetIndex = HnFramebufferTargets::GBUFFER_TARGET_MATERIAL;
