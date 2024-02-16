@@ -120,6 +120,8 @@ namespace USD
     (closestSelectedLocation1Target)     \
     (closestSelectedLocationFinalTarget) \
     (depthBuffer)                        \
+    (depthBuffer0)                       \
+    (depthBuffer1)                       \
     (frameShaderAttribs)				 \
 	(taaJitterOffsets)					 \
 	(taaReset)

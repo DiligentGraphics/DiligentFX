@@ -68,10 +68,11 @@ struct HnFramebufferTargets
 
     ITextureView* SelectionDepthDSV = nullptr;
     ITextureView* DepthDSV          = nullptr;
+    ITextureView* PrevDepthDSV      = nullptr;
 
-    ITextureView* ClosestSelectedLocation0RTV = nullptr;
-    ITextureView* ClosestSelectedLocation1RTV = nullptr;
-    ITextureView* JitteredFinalColorRTV       = nullptr;
+    std::array<ITextureView*, 2> ClosestSelectedLocationRTV = {};
+
+    ITextureView* JitteredFinalColorRTV = nullptr;
 
     explicit operator bool() const
     {
@@ -82,12 +83,12 @@ struct HnFramebufferTargets
         }
 
         // clang-format off
-        return FinalColorRTV               != nullptr &&
-               SelectionDepthDSV           != nullptr &&
-               DepthDSV                    != nullptr &&
-               ClosestSelectedLocation0RTV != nullptr &&
-               ClosestSelectedLocation1RTV != nullptr &&
-               JitteredFinalColorRTV       != nullptr;
+        return FinalColorRTV                 != nullptr &&
+               SelectionDepthDSV             != nullptr &&
+               DepthDSV                      != nullptr &&
+               ClosestSelectedLocationRTV[0] != nullptr &&
+               ClosestSelectedLocationRTV[1] != nullptr &&
+               JitteredFinalColorRTV         != nullptr;
         // clang-format on
     }
 };

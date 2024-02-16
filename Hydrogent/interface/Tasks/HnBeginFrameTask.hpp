@@ -190,7 +190,7 @@ public:
 
 private:
     void UpdateRenderPassState(const HnBeginFrameTaskParams& Params);
-    void PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex, pxr::HdTaskContext* TaskCtx, ITextureView* pFinalColorRTV);
+    void PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex, pxr::HdTaskContext* TaskCtx, ITextureView* pFinalColorRTV, Uint32 FrameNumber);
     void UpdateFrameConstants(IDeviceContext* pCtx, IBuffer* pFrameAttrbisCB, const float2& Jitter);
 
 private:
@@ -202,9 +202,13 @@ private:
     std::array<pxr::SdfPath, HnFramebufferTargets::GBUFFER_TARGET_COUNT> m_GBufferTargetIds;
 
     pxr::SdfPath m_SelectionDepthBufferId;
-    pxr::SdfPath m_DepthBufferId;
-    pxr::SdfPath m_ClosestSelLocn0TargetId;
-    pxr::SdfPath m_ClosestSelLocn1TargetId;
+
+    // Ping-pong buffers for the last two frames
+    std::array<pxr::SdfPath, 2> m_DepthBufferId;
+
+    // Ping-pong buffers for jump-flood algorithm
+    std::array<pxr::SdfPath, 2> m_ClosestSelLocnTargetId;
+
     pxr::SdfPath m_CameraId;
 
     TEXTURE_FORMAT m_ClosestSelectedLocationFormat = TEX_FORMAT_UNKNOWN;

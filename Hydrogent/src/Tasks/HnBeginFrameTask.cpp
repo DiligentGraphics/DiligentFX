@@ -96,9 +96,10 @@ HnBeginFrameTask::HnBeginFrameTask(pxr::HdSceneDelegate* ParamsDelegate, const p
     static_assert(HnFramebufferTargets::GBUFFER_TARGET_COUNT == 7, "Please initialize GBuffer BPrims.");
 
     m_SelectionDepthBufferId     = InitBrim(HnRenderResourceTokens->selectionDepthBuffer);
-    m_DepthBufferId              = InitBrim(HnRenderResourceTokens->depthBuffer);
-    m_ClosestSelLocn0TargetId    = InitBrim(HnRenderResourceTokens->closestSelectedLocation0Target);
-    m_ClosestSelLocn1TargetId    = InitBrim(HnRenderResourceTokens->closestSelectedLocation1Target);
+    m_DepthBufferId[0]           = InitBrim(HnRenderResourceTokens->depthBuffer0);
+    m_DepthBufferId[1]           = InitBrim(HnRenderResourceTokens->depthBuffer1);
+    m_ClosestSelLocnTargetId[0]  = InitBrim(HnRenderResourceTokens->closestSelectedLocation0Target);
+    m_ClosestSelLocnTargetId[1]  = InitBrim(HnRenderResourceTokens->closestSelectedLocation1Target);
     m_JitteredFinalColorTargetId = InitBrim(HnRenderResourceTokens->jitteredFinalColorTarget);
 }
 
@@ -151,7 +152,8 @@ void HnBeginFrameTask::Sync(pxr::HdSceneDelegate* Delegate,
 
 void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
                                             pxr::HdTaskContext* TaskCtx,
-                                            ITextureView*       pFinalColorRTV)
+                                            ITextureView*       pFinalColorRTV,
+                                            Uint32              FrameNumber)
 {
     if (pFinalColorRTV == nullptr)
     {
@@ -229,17 +231,36 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
             UNEXPECTED("Unable to get GBuffer target from Bprim ", m_GBufferTargetIds[i]);
         }
     }
-    FBTargets.SelectionDepthDSV           = UpdateBrim(m_SelectionDepthBufferId, m_RenderPassState->GetDepthStencilFormat(), "Selection depth buffer");
-    FBTargets.DepthDSV                    = UpdateBrim(m_DepthBufferId, m_RenderPassState->GetDepthStencilFormat(), "Depth buffer");
-    FBTargets.ClosestSelectedLocation0RTV = UpdateBrim(m_ClosestSelLocn0TargetId, m_ClosestSelectedLocationFormat, "Closest selected location 0");
-    FBTargets.ClosestSelectedLocation1RTV = UpdateBrim(m_ClosestSelLocn1TargetId, m_ClosestSelectedLocationFormat, "Closest selected location 1");
-    FBTargets.JitteredFinalColorRTV       = UpdateBrim(m_JitteredFinalColorTargetId, FinalRTVDesc.Format, "Jittered final color");
+    FBTargets.SelectionDepthDSV             = UpdateBrim(m_SelectionDepthBufferId, m_RenderPassState->GetDepthStencilFormat(), "Selection depth buffer");
+    FBTargets.DepthDSV                      = UpdateBrim(m_DepthBufferId[(FrameNumber + 0) & 0x1], m_RenderPassState->GetDepthStencilFormat(), "Depth buffer 1");
+    FBTargets.PrevDepthDSV                  = UpdateBrim(m_DepthBufferId[(FrameNumber + 1) & 0x1], m_RenderPassState->GetDepthStencilFormat(), "Depth buffer 0");
+    FBTargets.ClosestSelectedLocationRTV[0] = UpdateBrim(m_ClosestSelLocnTargetId[0], m_ClosestSelectedLocationFormat, "Closest selected location 0");
+    FBTargets.ClosestSelectedLocationRTV[1] = UpdateBrim(m_ClosestSelLocnTargetId[1], m_ClosestSelectedLocationFormat, "Closest selected location 1");
+    FBTargets.JitteredFinalColorRTV         = UpdateBrim(m_JitteredFinalColorTargetId, FinalRTVDesc.Format, "Jittered final color");
     m_RenderPassState->SetFramebufferTargets(FBTargets);
 }
 
 void HnBeginFrameTask::Prepare(pxr::HdTaskContext* TaskCtx,
                                pxr::HdRenderIndex* RenderIndex)
 {
+    m_RenderIndex = RenderIndex;
+
+    HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(RenderIndex->GetRenderDelegate());
+
+    Uint32 FrameNumber = 0;
+    if (HnRenderParam* pRenderParam = static_cast<HnRenderParam*>(RenderDelegate->GetRenderParam()))
+    {
+        double CurrFrameTime = m_FrameTimer.GetElapsedTime();
+        pRenderParam->SetElapsedTime(static_cast<float>(CurrFrameTime - pRenderParam->GetFrameTime()));
+        pRenderParam->SetFrameTime(CurrFrameTime);
+        pRenderParam->SetFrameNumber(pRenderParam->GetFrameNumber() + 1);
+        FrameNumber = pRenderParam->GetFrameNumber();
+    }
+    else
+    {
+        UNEXPECTED("Render param is null");
+    }
+
     (*TaskCtx)[HnTokens->renderPassState]                = pxr::VtValue{m_RenderPassState};
     (*TaskCtx)[HnRenderResourceTokens->finalColorTarget] = pxr::VtValue{m_FinalColorTargetId};
 
@@ -252,33 +273,26 @@ void HnBeginFrameTask::Prepare(pxr::HdTaskContext* TaskCtx,
     (*TaskCtx)[HnRenderResourceTokens->iblTarget]            = pxr::VtValue{m_GBufferTargetIds[HnFramebufferTargets::GBUFFER_TARGET_IBL]};
     static_assert(HnFramebufferTargets::GBUFFER_TARGET_COUNT == 7, "Please initialize all GBuffer targets.");
 
-    (*TaskCtx)[HnRenderResourceTokens->depthBuffer]                    = pxr::VtValue{m_DepthBufferId};
+    (*TaskCtx)[HnRenderResourceTokens->depthBuffer]                    = pxr::VtValue{m_DepthBufferId[FrameNumber & 0x1]};
     (*TaskCtx)[HnRenderResourceTokens->selectionDepthBuffer]           = pxr::VtValue{m_SelectionDepthBufferId};
-    (*TaskCtx)[HnRenderResourceTokens->closestSelectedLocation0Target] = pxr::VtValue{m_ClosestSelLocn0TargetId};
-    (*TaskCtx)[HnRenderResourceTokens->closestSelectedLocation1Target] = pxr::VtValue{m_ClosestSelLocn1TargetId};
+    (*TaskCtx)[HnRenderResourceTokens->closestSelectedLocation0Target] = pxr::VtValue{m_ClosestSelLocnTargetId[0]};
+    (*TaskCtx)[HnRenderResourceTokens->closestSelectedLocation1Target] = pxr::VtValue{m_ClosestSelLocnTargetId[1]};
     (*TaskCtx)[HnRenderResourceTokens->jitteredFinalColorTarget]       = pxr::VtValue{m_JitteredFinalColorTargetId};
 
     if (ITextureView* pFinalColorRTV = GetRenderBufferTarget(*RenderIndex, m_FinalColorTargetId))
     {
-        PrepareRenderTargets(RenderIndex, TaskCtx, pFinalColorRTV);
+        PrepareRenderTargets(RenderIndex, TaskCtx, pFinalColorRTV, FrameNumber);
     }
     else
     {
         UNEXPECTED("Unable to get final color target from Bprim ", m_FinalColorTargetId);
     }
 
-    m_RenderIndex = RenderIndex;
-
     bool ResetTAA = false;
     if (!m_CameraId.IsEmpty())
     {
         m_pCamera = static_cast<const HnCamera*>(m_RenderIndex->GetSprim(pxr::HdPrimTypeTokens->camera, m_CameraId));
-        if (m_pCamera != nullptr)
-        {
-            // For now, reset TAA when camera moves
-            ResetTAA = m_FrameAttribs->PrevCamera.mViewT != m_pCamera->GetViewMatrix().Transpose();
-        }
-        else
+        if (m_pCamera == nullptr)
         {
             LOG_ERROR_MESSAGE("Camera is not set at Id ", m_CameraId);
         }
@@ -397,16 +411,6 @@ void HnBeginFrameTask::Execute(pxr::HdTaskContext* TaskCtx)
     IDeviceContext*   pCtx           = RenderDelegate->GetDeviceContext();
 
     ScopedDebugGroup DebugGroup{pCtx, "Begin Frame"};
-
-    HnRenderParam* pRenderParam = static_cast<HnRenderParam*>(RenderDelegate->GetRenderParam());
-    VERIFY_EXPR(pRenderParam != nullptr);
-    if (pRenderParam != nullptr)
-    {
-        double CurrFrameTime = m_FrameTimer.GetElapsedTime();
-        pRenderParam->SetElapsedTime(static_cast<float>(CurrFrameTime - pRenderParam->GetFrameTime()));
-        pRenderParam->SetFrameTime(CurrFrameTime);
-        pRenderParam->SetFrameNumber(pRenderParam->GetFrameNumber() + 1);
-    }
 
     if (IBuffer* pFrameAttribsCB = RenderDelegate->GetFrameAttribsCB())
     {

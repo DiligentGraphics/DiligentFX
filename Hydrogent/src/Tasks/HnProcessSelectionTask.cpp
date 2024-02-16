@@ -168,7 +168,7 @@ void HnProcessSelectionTask::PrepareTechniques(TEXTURE_FORMAT RTVFormat)
 void HnProcessSelectionTask::PrepareSRBs(const HnRenderPassState& RPState)
 {
     const HnFramebufferTargets& Targets = RPState.GetFramebufferTargets();
-    if (Targets.ClosestSelectedLocation0RTV == nullptr || Targets.ClosestSelectedLocation1RTV == nullptr || Targets.SelectionDepthDSV == nullptr)
+    if (Targets.ClosestSelectedLocationRTV[0] == nullptr || Targets.ClosestSelectedLocationRTV[1] == nullptr || Targets.SelectionDepthDSV == nullptr)
     {
         UNEXPECTED("Closest selected location render targets are not initialized");
         return;
@@ -182,8 +182,8 @@ void HnProcessSelectionTask::PrepareSRBs(const HnRenderPassState& RPState)
 
     std::array<ITextureView*, 2> ClosestSelectedLocationSRVs =
         {
-            Targets.ClosestSelectedLocation0RTV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE),
-            Targets.ClosestSelectedLocation1RTV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE),
+            Targets.ClosestSelectedLocationRTV[0]->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE),
+            Targets.ClosestSelectedLocationRTV[1]->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE),
         };
     if (ClosestSelectedLocationSRVs[0] == nullptr || ClosestSelectedLocationSRVs[1] == nullptr)
     {
@@ -258,7 +258,7 @@ void HnProcessSelectionTask::Prepare(pxr::HdTaskContext* TaskCtx,
     {
         if (const HnFramebufferTargets& Targets = RenderPassState->GetFramebufferTargets())
         {
-            PrepareTechniques(Targets.ClosestSelectedLocation0RTV->GetDesc().Format);
+            PrepareTechniques(Targets.ClosestSelectedLocationRTV[0]->GetDesc().Format);
             PrepareSRBs(*RenderPassState);
 
             const pxr::TfToken& FinalTarget = (m_NumJFIterations % 2 == 0) ?
@@ -325,7 +325,7 @@ void HnProcessSelectionTask::Execute(pxr::HdTaskContext* TaskCtx)
         Constants->ClearDepth = RenderPassState->GetClearDepth();
     }
 
-    ITextureView* ClosestSelectedLocationRTVs[] = {Targets.ClosestSelectedLocation0RTV, Targets.ClosestSelectedLocation1RTV};
+    ITextureView* ClosestSelectedLocationRTVs[] = {Targets.ClosestSelectedLocationRTV[0], Targets.ClosestSelectedLocationRTV[1]};
     pCtx->SetRenderTargets(1, ClosestSelectedLocationRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     pCtx->SetPipelineState(m_InitTech.PSO);
     pCtx->CommitShaderResources(m_InitTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);

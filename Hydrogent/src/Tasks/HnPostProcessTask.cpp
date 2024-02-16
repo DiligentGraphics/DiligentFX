@@ -518,14 +518,15 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         }
 
         TemporalAntiAliasing::RenderAttributes TAARenderAttribs{};
-        TAARenderAttribs.pDevice           = pDevice;
-        TAARenderAttribs.pDeviceContext    = pCtx;
-        TAARenderAttribs.pPostFXContext    = m_PostFXContext.get();
-        TAARenderAttribs.pColorBufferSRV   = m_FBTargets->JitteredFinalColorRTV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-        TAARenderAttribs.pDepthBufferSRV   = m_FBTargets->DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-        TAARenderAttribs.pMotionVectorsSRV = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_NOTION_VECTOR];
-        TAARenderAttribs.FeatureFlag       = TemporalAntiAliasing::FEATURE_FLAG_BICUBIC_FILTER;
-        TAARenderAttribs.pTAAAttribs       = &TAASettings;
+        TAARenderAttribs.pDevice             = pDevice;
+        TAARenderAttribs.pDeviceContext      = pCtx;
+        TAARenderAttribs.pPostFXContext      = m_PostFXContext.get();
+        TAARenderAttribs.pColorBufferSRV     = m_FBTargets->JitteredFinalColorRTV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        TAARenderAttribs.pDepthBufferSRV     = m_FBTargets->DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        TAARenderAttribs.pPrevDepthBufferSRV = m_FBTargets->PrevDepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        TAARenderAttribs.pMotionVectorsSRV   = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_NOTION_VECTOR];
+        TAARenderAttribs.FeatureFlag         = TemporalAntiAliasing::FEATURE_FLAG_BICUBIC_FILTER | TemporalAntiAliasing::FEATURE_FLAG_DEPTH_DISOCCLUSION;
+        TAARenderAttribs.pTAAAttribs         = &TAASettings;
         m_TAA->Execute(TAARenderAttribs);
 
         ScopedDebugGroup DebugGroup{pCtx, "Copy accumulated buffer"};
