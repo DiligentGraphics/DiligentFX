@@ -28,7 +28,6 @@
 #include "RenderStateCache.hpp"
 #include "CommonlyUsedStates.h"
 #include "GraphicsUtilities.h"
-#include "MapHelper.hpp"
 #include "ScopedDebugGroup.hpp"
 #include "ShaderMacroHelper.hpp"
 #include "GraphicsTypesX.hpp"
@@ -73,12 +72,14 @@ static DILIGENT_CONSTEXPR DepthStencilStateDesc DSS_StencilReadComparisonEqual{
     },
 };
 
-ScreenSpaceReflection::ScreenSpaceReflection(IRenderDevice* pDevice)
+ScreenSpaceReflection::ScreenSpaceReflection(IRenderDevice* pDevice) :
+    m_SSRAttribs{std::make_unique<HLSL::ScreenSpaceReflectionAttribs>()}
 {
     DEV_CHECK_ERR(pDevice != nullptr, "pDevice must not be null");
 
     RefCntAutoPtr<IBuffer> pBuffer;
-    CreateUniformBuffer(pDevice, sizeof(HLSL::ScreenSpaceReflectionAttribs), "ScreenSpaceReflection::ConstantBuffer", &pBuffer);
+    CreateUniformBuffer(pDevice, sizeof(HLSL::ScreenSpaceReflectionAttribs), "ScreenSpaceReflection::ConstantBuffer", &pBuffer,
+                        USAGE_DEFAULT, BIND_UNIFORM_BUFFER, CPU_ACCESS_NONE, m_SSRAttribs.get());
     m_Resources.Insert(RESOURCE_IDENTIFIER_CONSTANT_BUFFER, pBuffer);
 }
 
@@ -305,9 +306,12 @@ void ScreenSpaceReflection::Execute(const RenderAttributes& RenderAttribs)
     m_Resources.Insert(RESOURCE_IDENTIFIER_INPUT_MOTION_VECTORS, RenderAttribs.pMotionVectorsSRV->GetTexture());
 
     ScopedDebugGroup DebugGroupGlobal{RenderAttribs.pDeviceContext, "ScreenSpaceReflection"};
+
+    if (memcmp(RenderAttribs.pSSRAttribs, m_SSRAttribs.get(), sizeof(HLSL::ScreenSpaceReflectionAttribs)) != 0)
     {
-        MapHelper<HLSL::ScreenSpaceReflectionAttribs> SSRAttibs{RenderAttribs.pDeviceContext, m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER], MAP_WRITE, MAP_FLAG_DISCARD};
-        *SSRAttibs = *RenderAttribs.pSSRAttribs;
+        memcpy(m_SSRAttribs.get(), RenderAttribs.pSSRAttribs, sizeof(HLSL::ScreenSpaceReflectionAttribs));
+        RenderAttribs.pDeviceContext->UpdateBuffer(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER], 0, sizeof(HLSL::ScreenSpaceReflectionAttribs),
+                                                   m_SSRAttribs.get(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     }
 
     ComputeHierarchicalDepthBuffer(RenderAttribs);

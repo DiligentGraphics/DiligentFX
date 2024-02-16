@@ -156,7 +156,7 @@ void TemporalAntiAliasing::Execute(const RenderAttributes& RenderAttribs)
     }
     if (UpdateConstantBuffer)
     {
-        RenderAttribs.pDeviceContext->UpdateBuffer(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER].AsBuffer(), 0, sizeof(HLSL::TemporalAntiAliasingAttribs),
+        RenderAttribs.pDeviceContext->UpdateBuffer(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER], 0, sizeof(HLSL::TemporalAntiAliasingAttribs),
                                                    m_ShaderAttribs.get(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     }
 
