@@ -349,6 +349,7 @@ float4 SampleTexture(Texture2DArray            Tex,
                      SamplerState              Tex_sampler,
                      VSOutput                  VSOut,
                      PBRMaterialTextureAttribs TexAttribs,
+                     float                     MipBias,
                      float4                    DefaultValue)
 {
     if (TexAttribs.UVSelector < 0.0)
@@ -367,11 +368,13 @@ float4 SampleTexture(Texture2DArray            Tex,
 
 #       if USE_TEXTURE_ATLAS
         {
+            float GradientScale = exp2(MipBias);
+
             SampleTextureAtlasAttribs SampleAttribs;
             SampleAttribs.f2UV                   = frac(UV) * TexAttribs.AtlasUVScaleAndBias.xy + TexAttribs.AtlasUVScaleAndBias.zw;
-            SampleAttribs.f2SmoothUV             = UV      * TexAttribs.AtlasUVScaleAndBias.xy;
-            SampleAttribs.f2dSmoothUV_dx         = ddx(UV) * TexAttribs.AtlasUVScaleAndBias.xy;
-            SampleAttribs.f2dSmoothUV_dy         = ddy(UV) * TexAttribs.AtlasUVScaleAndBias.xy;
+            SampleAttribs.f2SmoothUV             = UV      * TexAttribs.AtlasUVScaleAndBias.xy * GradientScale;
+            SampleAttribs.f2dSmoothUV_dx         = ddx(UV) * TexAttribs.AtlasUVScaleAndBias.xy * GradientScale;
+            SampleAttribs.f2dSmoothUV_dy         = ddy(UV) * TexAttribs.AtlasUVScaleAndBias.xy * GradientScale;
             SampleAttribs.fSlice                 = TexAttribs.TextureSlice;
             SampleAttribs.f4UVRegion             = TexAttribs.AtlasUVScaleAndBias;
             SampleAttribs.fSmallestValidLevelDim = 4.0;
@@ -381,7 +384,7 @@ float4 SampleTexture(Texture2DArray            Tex,
         }
 #       else
         {
-            return Tex.Sample(Tex_sampler, float3(UV, TexAttribs.TextureSlice));
+            return Tex.SampleBias(Tex_sampler, float3(UV, TexAttribs.TextureSlice), MipBias);
         }
 #       endif
     }
@@ -393,7 +396,8 @@ float4 SampleTexture(Texture2DArray            Tex,
 }
 
 float4 GetBaseColor(VSOutput              VSOut,
-                    PBRMaterialShaderInfo Material)
+                    PBRMaterialShaderInfo Material,
+                    float                 MipBias)
 {
     float4 BaseColor = float4(1.0, 1.0, 1.0, 1.0);
 
@@ -403,6 +407,7 @@ float4 GetBaseColor(VSOutput              VSOut,
                                   g_BaseColorMap_sampler,
                                   VSOut,
                                   Material.Textures[BaseColorTextureAttribId],
+                                  MipBias,
                                   float4(1.0, 1.0, 1.0, 1.0));
         BaseColor = float4(TO_LINEAR(BaseColor.rgb), BaseColor.a);
     }
@@ -423,7 +428,8 @@ float3 SampleNormalTexture(PBRMaterialTextureAttribs TexAttribs,
                            float2                    NormalMapUV,
                            float2                    SmoothNormalMapUV,
                            float2                    dNormalMapUV_dx,
-                           float2                    dNormalMapUV_dy)
+                           float2                    dNormalMapUV_dy,
+                           float                     MipBias)
 {
     if (TexAttribs.UVSelector < 0.0)
     {
@@ -432,11 +438,13 @@ float3 SampleNormalTexture(PBRMaterialTextureAttribs TexAttribs,
 
 #   if USE_TEXTURE_ATLAS
     {
+        float GradientScale = exp2(MipBias);
+    
         SampleTextureAtlasAttribs SampleAttribs;
         SampleAttribs.f2UV                   = NormalMapUV;
-        SampleAttribs.f2SmoothUV             = SmoothNormalMapUV;
-        SampleAttribs.f2dSmoothUV_dx         = dNormalMapUV_dx;
-        SampleAttribs.f2dSmoothUV_dy         = dNormalMapUV_dy;
+        SampleAttribs.f2SmoothUV             = SmoothNormalMapUV * GradientScale;
+        SampleAttribs.f2dSmoothUV_dx         = dNormalMapUV_dx   * GradientScale;
+        SampleAttribs.f2dSmoothUV_dy         = dNormalMapUV_dy   * GradientScale;
         SampleAttribs.fSlice                 = TexAttribs.TextureSlice;
         SampleAttribs.f4UVRegion             = TexAttribs.AtlasUVScaleAndBias;
         SampleAttribs.fSmallestValidLevelDim = 4.0;
@@ -446,7 +454,7 @@ float3 SampleNormalTexture(PBRMaterialTextureAttribs TexAttribs,
     }
 #   else
     {
-        return NormalMap.Sample(NormalMap_sampler, float3(NormalMapUV, TexAttribs.TextureSlice)).xyz;
+        return NormalMap.SampleBias(NormalMap_sampler, float3(NormalMapUV, TexAttribs.TextureSlice), MipBias).xyz;
     }
 #   endif
 }
@@ -455,7 +463,8 @@ float3 GetMicroNormal(PBRMaterialShaderInfo Material,
                       float2                NormalMapUV,
                       float2                SmoothNormalMapUV,
                       float2                dNormalMapUV_dx,
-                      float2                dNormalMapUV_dy)
+                      float2                dNormalMapUV_dy,
+                      float                 MipBias)
 {
     float3 MicroNormal = float3(0.5, 0.5, 1.0);
 
@@ -467,7 +476,8 @@ float3 GetMicroNormal(PBRMaterialShaderInfo Material,
                                           NormalMapUV,
                                           SmoothNormalMapUV,
                                           dNormalMapUV_dx,
-                                          dNormalMapUV_dy);
+                                          dNormalMapUV_dy,
+                                          MipBias);
     }
 #endif
 
@@ -475,7 +485,8 @@ float3 GetMicroNormal(PBRMaterialShaderInfo Material,
 }
 
 float GetOcclusion(VSOutput              VSOut,
-                   PBRMaterialShaderInfo Material)
+                   PBRMaterialShaderInfo Material,
+                   float                 MipBias)
 {
     float Occlusion = 1.0;
 #   if USE_AO_MAP
@@ -484,6 +495,7 @@ float GetOcclusion(VSOutput              VSOut,
                                   g_OcclusionMap_sampler,
                                   VSOut,
                                   Material.Textures[OcclusionTextureAttribId],
+                                  MipBias,
                                   float4(1.0, 1.0, 1.0, 1.0)).r;
     }
 #   endif
@@ -491,7 +503,8 @@ float GetOcclusion(VSOutput              VSOut,
 }
 
 float3 GetEmissive(VSOutput              VSOut,
-                   PBRMaterialShaderInfo Material)
+                   PBRMaterialShaderInfo Material,
+                   float                 MipBias)
 {
     float3 Emissive = float3(1.0, 1.0, 1.0);
 #   if USE_EMISSIVE_MAP
@@ -500,6 +513,7 @@ float3 GetEmissive(VSOutput              VSOut,
                                  g_EmissiveMap_sampler,
                                  VSOut,
                                  Material.Textures[EmissiveTextureAttribId],
+                                 MipBias,
                                  float4(1.0, 1.0, 1.0, 1.0)).rgb;
         Emissive = TO_LINEAR(Emissive);
     }
@@ -508,7 +522,8 @@ float3 GetEmissive(VSOutput              VSOut,
 }
 
 float4 GetPhysicalDesc(VSOutput              VSOut,
-                       PBRMaterialShaderInfo Material)
+                       PBRMaterialShaderInfo Material,
+                       float                 MipBias)
 {
     // Set defaults to 1 so that if the textures are not available, the values
     // are controlled by the metallic/roughness scale factors.
@@ -519,6 +534,7 @@ float4 GetPhysicalDesc(VSOutput              VSOut,
                                      g_PhysicalDescriptorMap_sampler,
                                      VSOut,
                                      Material.Textures[PhysicalDescriptorTextureAttribId],
+                                     MipBias,
                                      float4(1.0, 1.0, 1.0, 1.0));
     }
 #   else
@@ -529,6 +545,7 @@ float4 GetPhysicalDesc(VSOutput              VSOut,
                                            g_MetallicMap_sampler,
                                            VSOut,
                                            Material.Textures[MetallicTextureAttribId],
+                                           MipBias,
                                            float4(1.0, 1.0, 1.0, 1.0)).r;
         }
 #       endif
@@ -539,6 +556,7 @@ float4 GetPhysicalDesc(VSOutput              VSOut,
                                            g_RoughnessMap_sampler,
                                            VSOut,
                                            Material.Textures[RoughnessTextureAttribId],
+                                           MipBias,
                                            float4(1.0, 1.0, 1.0, 1.0)).r;
 
         }
@@ -556,7 +574,8 @@ float4 GetPhysicalDesc(VSOutput              VSOut,
 // https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_clearcoat
 
 float GetClearcoatFactor(VSOutput              VSOut,
-                         PBRMaterialShaderInfo Material)
+                         PBRMaterialShaderInfo Material,
+                         float                 MipBias)
 {
 #   if ENABLE_CLEAR_COAT
     {
@@ -567,6 +586,7 @@ float GetClearcoatFactor(VSOutput              VSOut,
                                      g_ClearCoatMap_sampler,
                                      VSOut,
                                      Material.Textures[ClearCoatTextureAttribId],
+                                     MipBias,
                                      float4(1.0, 1.0, 1.0, 1.0)).r;
         }
 #       endif
@@ -580,7 +600,8 @@ float GetClearcoatFactor(VSOutput              VSOut,
 }
 
 float GetClearcoatRoughness(VSOutput              VSOut,
-                            PBRMaterialShaderInfo Material)
+                            PBRMaterialShaderInfo Material,
+                            float                 MipBias)
 {
 #   if ENABLE_CLEAR_COAT
     {
@@ -591,6 +612,7 @@ float GetClearcoatRoughness(VSOutput              VSOut,
                                               g_ClearCoatRoughnessMap_sampler,
                                               VSOut,
                                               Material.Textures[ClearCoatRoughnessTextureAttribId],
+                                              MipBias,
                                               float4(1.0, 1.0, 1.0, 1.0)).g;
         }
 #       endif
@@ -607,7 +629,8 @@ float3 GetClearcoatNormal(PBRMaterialShaderInfo Material,
                           float2                NormalMapUV,
                           float2                SmoothNormalMapUV,
                           float2                dNormalMapUV_dx,
-                          float2                dNormalMapUV_dy)
+                          float2                dNormalMapUV_dy,
+                          float                 MipBias)
 {
     float3 ClearcoatNormal = float3(0.5, 0.5, 1.0);
 #   if ENABLE_CLEAR_COAT
@@ -621,7 +644,8 @@ float3 GetClearcoatNormal(PBRMaterialShaderInfo Material,
                                     NormalMapUV,
                                     SmoothNormalMapUV,
                                     dNormalMapUV_dx,
-                                    dNormalMapUV_dy);
+                                    dNormalMapUV_dy,
+                                    MipBias);
         }
 #       endif
     }
@@ -634,7 +658,8 @@ float3 GetClearcoatNormal(PBRMaterialShaderInfo Material,
 // https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_sheen
 
 float3 GetSheenColor(VSOutput              VSOut,
-                     PBRMaterialShaderInfo Material)
+                     PBRMaterialShaderInfo Material,
+                     float                 MipBias)
 {
 #   if ENABLE_SHEEN
     {
@@ -645,6 +670,7 @@ float3 GetSheenColor(VSOutput              VSOut,
                                        g_SheenColorMap_sampler,
                                        VSOut,
                                        Material.Textures[SheenColorTextureAttribId],
+                                       MipBias,
                                        float4(1.0, 1.0, 1.0, 1.0)).rgb;
             SheenColor = TO_LINEAR(SheenColor);
         }
@@ -659,7 +685,8 @@ float3 GetSheenColor(VSOutput              VSOut,
 }
 
 float GetSheenRoughness(VSOutput              VSOut,
-                        PBRMaterialShaderInfo Material)
+                        PBRMaterialShaderInfo Material,
+                        float                 MipBias)
 {
 #   if ENABLE_SHEEN
     {
@@ -670,6 +697,7 @@ float GetSheenRoughness(VSOutput              VSOut,
                                            g_SheenRoughnessMap_sampler,
                                            VSOut,
                                            Material.Textures[SheenRoughnessTextureAttribId],
+                                           MipBias,
                                            float4(1.0, 1.0, 1.0, 1.0)).a;
         }
 #       endif
@@ -687,7 +715,8 @@ float GetSheenRoughness(VSOutput              VSOut,
 // https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_anisotropy
 
 float3 GetAnisotropy(VSOutput              VSOut,
-                     PBRMaterialShaderInfo Material)
+                     PBRMaterialShaderInfo Material,
+                     float                 MipBias)
 {
 #   if ENABLE_ANISOTROPY
     {
@@ -699,6 +728,7 @@ float3 GetAnisotropy(VSOutput              VSOut,
                                        g_AnisotropyMap_sampler,
                                        VSOut,
                                        Material.Textures[AnisotropyTextureAttribId],
+                                       MipBias,
                                        float4(Anisotropy, 1.0)).rgb;
         }
 #       endif
@@ -718,7 +748,8 @@ float3 GetAnisotropy(VSOutput              VSOut,
 // https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_iridescence
 
 float GetIridescence(VSOutput              VSOut,
-                     PBRMaterialShaderInfo Material)
+                     PBRMaterialShaderInfo Material,
+                     float                 MipBias)
 {
 #   if ENABLE_IRIDESCENCE
     {
@@ -729,6 +760,7 @@ float GetIridescence(VSOutput              VSOut,
                                         g_IridescenceMap_sampler,
                                         VSOut,
                                         Material.Textures[IridescenceTextureAttribId],
+                                        MipBias,
                                         float4(1.0, 1.0, 1.0, 1.0)).r;
         }
 #       endif
@@ -743,7 +775,8 @@ float GetIridescence(VSOutput              VSOut,
 
 
 float GetIridescenceThickness(VSOutput              VSOut,
-                              PBRMaterialShaderInfo Material)
+                              PBRMaterialShaderInfo Material,
+                              float                 MipBias)
 {
 #   if ENABLE_IRIDESCENCE
     {
@@ -754,6 +787,7 @@ float GetIridescenceThickness(VSOutput              VSOut,
                                       g_IridescenceThicknessMap_sampler,
                                       VSOut,
                                       Material.Textures[IridescenceThicknessTextureAttribId],
+                                      MipBias,
                                       float4(1.0, 1.0, 1.0, 1.0)).g;
         }
 #       endif
@@ -771,7 +805,8 @@ float GetIridescenceThickness(VSOutput              VSOut,
 // https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_transmission
 
 float GetTransmission(VSOutput              VSOut,
-                      PBRMaterialShaderInfo Material)
+                      PBRMaterialShaderInfo Material,
+                      float                 MipBias)
 {
 #   if ENABLE_TRANSMISSION
     {
@@ -782,6 +817,7 @@ float GetTransmission(VSOutput              VSOut,
                                          g_TransmissionMap_sampler,
                                          VSOut,
                                          Material.Textures[TransmissionTextureAttribId],
+                                         MipBias,
                                          float4(1.0, 1.0, 1.0, 1.0)).r;
         }
 #       endif
@@ -799,7 +835,8 @@ float GetTransmission(VSOutput              VSOut,
 // https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_volume
 
 float GetVolumeThickness(VSOutput              VSOut,
-                         PBRMaterialShaderInfo Material)
+                         PBRMaterialShaderInfo Material,
+                         float                 MipBias)
 {
 #   if ENABLE_VOLUME
     {
@@ -810,6 +847,7 @@ float GetVolumeThickness(VSOutput              VSOut,
                                       g_ThicknessMap_sampler,
                                       VSOut,
                                       Material.Textures[ThicknessTextureAttribId],
+                                      MipBias,
                                       float4(1.0, 1.0, 1.0, 1.0)).g;
         }
 #       endif

@@ -84,6 +84,11 @@ struct PBRRendererShaderParameters
     float EmissionScale;
     float PointSize; // OpenGL and Vulkan
 
+    float MipBias;
+    float Padding0;
+    float Padding1;
+    float Padding2;
+    
     float4 UnshadedColor;
     float4 HighlightColor;
 };

@@ -109,8 +109,8 @@ BaseLayerShadingInfo ReadBaseLayerProperties(in VSOutput          VSOut,
 {
     BaseLayerShadingInfo Base;
     
-    float3 TSNormal     = GetMicroNormal(g_Primitive.Material, NMUVInfo.UV, NMUVInfo.SmoothUV, NMUVInfo.dUV_dx, NMUVInfo.dUV_dy);
-    float4 PhysicalDesc = GetPhysicalDesc(VSOut, g_Primitive.Material);
+    float3 TSNormal     = GetMicroNormal(g_Primitive.Material, NMUVInfo.UV, NMUVInfo.SmoothUV, NMUVInfo.dUV_dx, NMUVInfo.dUV_dy, g_Frame.Renderer.MipBias);
+    float4 PhysicalDesc = GetPhysicalDesc(VSOut, g_Primitive.Material, g_Frame.Renderer.MipBias);
     
     PBRMaterialBasicAttribs BasicAttribs = g_Primitive.Material.Basic;
     if (BasicAttribs.Workflow == PBR_WORKFLOW_SPECULAR_GLOSINESS)
@@ -146,10 +146,10 @@ ClearcoatShadingInfo ReadClearcoatLayerProperties(in VSOutput          VSOut,
 {
     ClearcoatShadingInfo Clearcoat;
 
-    Clearcoat.Factor  = GetClearcoatFactor(VSOut, g_Primitive.Material);
+    Clearcoat.Factor  = GetClearcoatFactor(VSOut, g_Primitive.Material, g_Frame.Renderer.MipBias);
 
-    float  ClearCoatRoughness = GetClearcoatRoughness(VSOut, g_Primitive.Material);
-    float3 ClearCoatNormal    = GetClearcoatNormal(g_Primitive.Material, NMUVInfo.UV, NMUVInfo.SmoothUV, NMUVInfo.dUV_dx, NMUVInfo.dUV_dy);
+    float  ClearCoatRoughness = GetClearcoatRoughness(VSOut, g_Primitive.Material, g_Frame.Renderer.MipBias);
+    float3 ClearCoatNormal    = GetClearcoatNormal(g_Primitive.Material, NMUVInfo.UV, NMUVInfo.SmoothUV, NMUVInfo.dUV_dx, NMUVInfo.dUV_dy, g_Frame.Renderer.MipBias);
     
     float IOR = 1.5;
     Clearcoat.Srf = GetSurfaceReflectanceClearCoat(ClearCoatRoughness, IOR);
@@ -179,8 +179,8 @@ SheenShadingInfo ReadSheenLayerProperties(in VSOutput VSOut)
 {
     SheenShadingInfo Sheen;
     
-    Sheen.Color     = GetSheenColor(VSOut, g_Primitive.Material);
-    Sheen.Roughness = GetSheenRoughness(VSOut, g_Primitive.Material);
+    Sheen.Color     = GetSheenColor(VSOut, g_Primitive.Material, g_Frame.Renderer.MipBias);
+    Sheen.Roughness = GetSheenRoughness(VSOut, g_Primitive.Material, g_Frame.Renderer.MipBias);
 
     return Sheen;
 }
@@ -191,8 +191,8 @@ IridescenceShadingInfo ReadIridescenceProperties(in VSOutput VSOut, BaseLayerSha
 {
     IridescenceShadingInfo Iridescence;
     
-    Iridescence.Factor    = GetIridescence(VSOut, g_Primitive.Material);
-    Iridescence.Thickness = GetIridescenceThickness(VSOut, g_Primitive.Material);
+    Iridescence.Factor    = GetIridescence(VSOut, g_Primitive.Material, g_Frame.Renderer.MipBias);
+    Iridescence.Thickness = GetIridescenceThickness(VSOut, g_Primitive.Material, g_Frame.Renderer.MipBias);
 
     Iridescence.Fresnel = EvalIridescence(1.0, g_Primitive.Material.Iridescence.IOR, BaseLayer.NdotV, Iridescence.Thickness, BaseLayer.Srf.Reflectance0);
     Iridescence.F0      = SchlickToF0(BaseLayer.NdotV, Iridescence.Fresnel, float3(1.0, 1.0, 1.0));
@@ -207,7 +207,7 @@ IridescenceShadingInfo ReadIridescenceProperties(in VSOutput VSOut, BaseLayerSha
 #if ENABLE_ANISOTROPY
 AnisotropyShadingInfo ReadAnisotropyProperties(in VSOutput VSOut, BaseLayerShadingInfo BaseLayer)
 {
-    float3 PackedAnisotropy = GetAnisotropy(VSOut, g_Primitive.Material);
+    float3 PackedAnisotropy = GetAnisotropy(VSOut, g_Primitive.Material, g_Frame.Renderer.MipBias);
 
     float2 RotationCS = float2(cos(g_Primitive.Material.Anisotropy.Rotation), sin(g_Primitive.Material.Anisotropy.Rotation));
 
@@ -256,8 +256,8 @@ SurfaceShadingInfo GetSurfaceShadingInfo(in VSOutput          VSOut,
     
     Shading.View      = normalize(g_Frame.Camera.f4Position.xyz - VSOut.WorldPos.xyz); // Direction from surface point to camera
     Shading.BaseLayer = ReadBaseLayerProperties(VSOut, BaseColor, NormalInfo, NMUVInfo, Shading.View);
-    Shading.Occlusion = GetOcclusion(VSOut, g_Primitive.Material);
-    Shading.Emissive  = GetEmissive(VSOut, g_Primitive.Material);
+    Shading.Occlusion = GetOcclusion(VSOut, g_Primitive.Material, g_Frame.Renderer.MipBias);
+    Shading.Emissive  = GetEmissive(VSOut, g_Primitive.Material, g_Frame.Renderer.MipBias);
 
     Shading.IBLScale  = g_Frame.Renderer.IBLScale;
     Shading.Occlusion = lerp(1.0, Shading.Occlusion, g_Frame.Renderer.OcclusionStrength);
@@ -293,13 +293,13 @@ SurfaceShadingInfo GetSurfaceShadingInfo(in VSOutput          VSOut,
     
 #   if ENABLE_TRANSMISSION
     {
-        Shading.Transmission = GetTransmission(VSOut, g_Primitive.Material);
+        Shading.Transmission = GetTransmission(VSOut, g_Primitive.Material, g_Frame.Renderer.MipBias);
     }
 #   endif
     
 #if ENABLE_VOLUME
     {
-        Shading.VolumeThickness = GetVolumeThickness(VSOut, g_Primitive.Material);
+        Shading.VolumeThickness = GetVolumeThickness(VSOut, g_Primitive.Material, g_Frame.Renderer.MipBias);
     }
 #endif
     
@@ -309,7 +309,7 @@ SurfaceShadingInfo GetSurfaceShadingInfo(in VSOutput          VSOut,
 PSOutput main(in VSOutput VSOut,
               in bool     IsFrontFace : SV_IsFrontFace)
 {
-    float4 BaseColor = GetBaseColor(VSOut, g_Primitive.Material);
+    float4 BaseColor = GetBaseColor(VSOut, g_Primitive.Material, g_Frame.Renderer.MipBias);
 
 #if USE_VERTEX_NORMALS
     float3 MeshNormal = VSOut.Normal;

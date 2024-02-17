@@ -385,6 +385,8 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx, IBuffer* pFram
         RendererParams.HighlightColor = float4{0, 0, 0, 0};
         RendererParams.PointSize      = m_RendererParams.PointSize;
 
+        RendererParams.MipBias = 0;
+
         // Tone mapping is performed in the post-processing pass
         RendererParams.AverageLogLum = 0.3f;
         RendererParams.MiddleGray    = 0.18f;
