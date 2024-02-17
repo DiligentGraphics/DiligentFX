@@ -461,9 +461,9 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         m_PostFXContext->Execute(PostFXAttribs);
 
         HLSL::ScreenSpaceReflectionAttribs SSRAttribs{};
-        SSRAttribs.RoughnessChannel      = 0;
-        SSRAttribs.DepthBufferThickness  = 0.015f * 10.0f;
-        SSRAttribs.IsRoughnessPerceptual = true;
+        SSRAttribs.MaxTraversalIntersections = 64;
+        SSRAttribs.RoughnessChannel          = 0;
+        SSRAttribs.IsRoughnessPerceptual     = true;
 
         ScreenSpaceReflection::RenderAttributes SSRRenderAttribs{};
         SSRRenderAttribs.pDevice            = pDevice;

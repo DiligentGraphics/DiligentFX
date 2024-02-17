@@ -230,9 +230,9 @@ float ValidateHit(float3 Hit, float2 ScreenCoordUV, float3 RayDirectionWS, float
     float Vignette = CalculateEdgeVignette(Hit.xy, ScreenSize);
 #endif
 
-    // We accept all hits that are within a reasonable minimum distance below the surface.
-    // Add constant in linear space to avoid growing of the reflections toward the reflected objects.
-    float Confidence = 1.0f - smoothstep(0.0f, DepthBufferThickness, Distance);
+    // We accept all hits that are within a reasonable minimum screen-space distance below the surface.
+    // Add constant in linear space to avoid growing of the reflections towards the reflected objects.
+    float Confidence = 1.0f - smoothstep(0.0f, DepthBufferThickness, Distance / (SurfaceVS.z + FLT_EPS));
     Confidence *= Confidence;
 
     return Vignette * Confidence;

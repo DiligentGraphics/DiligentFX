@@ -62,7 +62,7 @@
 
 struct ScreenSpaceReflectionAttribs
 {
-    float DepthBufferThickness               DEFAULT_VALUE(0.015f);
+    float DepthBufferThickness               DEFAULT_VALUE(0.025f);
     float RoughnessThreshold                 DEFAULT_VALUE(0.2f);
     uint  MostDetailedMip                    DEFAULT_VALUE(0);
     uint  Padding0                           DEFAULT_VALUE(0);

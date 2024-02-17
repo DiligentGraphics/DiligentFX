@@ -352,7 +352,7 @@ void ScreenSpaceReflection::UpdateUI(HLSL::ScreenSpaceReflectionAttribs& SSRAttr
     if (m_ImGuiDisplayMode == 0)
     {
         ImGui::SliderFloat("Roughness Threshold", &SSRAttribs.RoughnessThreshold, 0.0f, 1.0f);
-        ImGui::SliderFloat("Depth Buffer Thickness", &SSRAttribs.DepthBufferThickness, 0.0f, 1.0f);
+        ImGui::SliderFloat("Depth Buffer Thickness", &SSRAttribs.DepthBufferThickness, 0.0f, 1.0f, "%.3f", ImGuiSliderFlags_Logarithmic);
         ImGui::SliderFloat("Temporal Stability Radiance Factor", &SSRAttribs.TemporalRadianceStabilityFactor, 0.0f, 1.0f);
         ImGui::SliderInt("Max Traversal Iterations", reinterpret_cast<Int32*>(&SSRAttribs.MaxTraversalIntersections), 0, 256);
     }
