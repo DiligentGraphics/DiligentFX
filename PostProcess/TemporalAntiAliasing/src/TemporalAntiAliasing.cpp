@@ -39,7 +39,7 @@ namespace Diligent
 {
 
 // https://en.wikipedia.org/wiki/Halton_sequence#Implementation_in_pseudocode
-static float HaltonSequenc(Uint32 Base, Uint32 Index)
+static float HaltonSequence(Uint32 Base, Uint32 Index)
 {
     float Result = 0.0;
     float F      = 1.0;
@@ -76,8 +76,8 @@ float2 TemporalAntiAliasing::GetJitterOffset() const
         return float2{0.0f, 0.0f};
 
     constexpr Uint32 SampleCount = 16u;
-    const float      JitterX     = (HaltonSequenc(2u, (m_CurrentFrameIdx % SampleCount) + 1) - 0.5f) / (0.5f * static_cast<float>(m_BackBufferWidth));
-    const float      JitterY     = (HaltonSequenc(3u, (m_CurrentFrameIdx % SampleCount) + 1) - 0.5f) / (0.5f * static_cast<float>(m_BackBufferHeight));
+    const float      JitterX     = (HaltonSequence(2u, (m_CurrentFrameIdx % SampleCount) + 1) - 0.5f) / (0.5f * static_cast<float>(m_BackBufferWidth));
+    const float      JitterY     = (HaltonSequence(3u, (m_CurrentFrameIdx % SampleCount) + 1) - 0.5f) / (0.5f * static_cast<float>(m_BackBufferHeight));
     return float2{JitterX, JitterY};
 }
 
