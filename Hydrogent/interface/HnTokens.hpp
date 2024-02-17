@@ -125,6 +125,7 @@ namespace USD
     (depthBuffer0)                       \
     (depthBuffer1)                       \
     (frameShaderAttribs)				 \
+    (useTaa)							 \
 	(taaJitterOffsets)					 \
 	(taaReset)
 

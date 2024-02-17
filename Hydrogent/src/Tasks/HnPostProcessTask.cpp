@@ -319,7 +319,9 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
         GetTaskContextData(TaskCtx, HnRenderResourceTokens->taaReset, m_ResetTAA);
     }
 
-    // The jitter will be used by HnBeginFrameTask::Execute() to set projection matrix.
+    // These parameters will be used by HnBeginFrameTask::Execute() to set
+    // projection matrix and mip bias.
+    (*TaskCtx)[HnRenderResourceTokens->useTaa]           = pxr::VtValue{m_UseTAA};
     (*TaskCtx)[HnRenderResourceTokens->taaJitterOffsets] = pxr::VtValue{m_UseTAA && !m_ResetTAA ? m_TAA->GetJitterOffset() : float2{0, 0}};
 }
 

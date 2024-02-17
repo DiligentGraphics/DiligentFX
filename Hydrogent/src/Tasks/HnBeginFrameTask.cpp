@@ -312,7 +312,7 @@ void HnBeginFrameTask::Prepare(pxr::HdTaskContext* TaskCtx,
     (*TaskCtx)[HnRenderResourceTokens->taaReset] = pxr::VtValue{ResetTAA};
 }
 
-void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx, IBuffer* pFrameAttrbisCB, const float2& Jitter)
+void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx, IBuffer* pFrameAttrbisCB, const float2& Jitter, bool UseTAA)
 {
     HLSL::PBRFrameAttribs& FrameAttribs = *m_FrameAttribs;
 
@@ -385,7 +385,7 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx, IBuffer* pFram
         RendererParams.HighlightColor = float4{0, 0, 0, 0};
         RendererParams.PointSize      = m_RendererParams.PointSize;
 
-        RendererParams.MipBias = 0;
+        RendererParams.MipBias = UseTAA ? -0.5 : 0.0;
 
         // Tone mapping is performed in the post-processing pass
         RendererParams.AverageLogLum = 0.3f;
@@ -424,8 +424,12 @@ void HnBeginFrameTask::Execute(pxr::HdTaskContext* TaskCtx)
     if (IBuffer* pFrameAttribsCB = RenderDelegate->GetFrameAttribsCB())
     {
         float2 JitterOffsets{0, 0};
+        bool   UseTAA = false;
+        // Set by HnPostProcessTask::Prepare()
         GetTaskContextData(TaskCtx, HnRenderResourceTokens->taaJitterOffsets, JitterOffsets);
-        UpdateFrameConstants(pCtx, pFrameAttribsCB, JitterOffsets);
+        GetTaskContextData(TaskCtx, HnRenderResourceTokens->useTaa, UseTAA);
+
+        UpdateFrameConstants(pCtx, pFrameAttribsCB, JitterOffsets, UseTAA);
         (*TaskCtx)[HnRenderResourceTokens->frameShaderAttribs] = pxr::VtValue{m_FrameAttribs.get()};
     }
     else
