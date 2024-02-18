@@ -123,8 +123,8 @@ void TemporalAntiAliasing::Execute(const RenderAttributes& RenderAttribs)
     DEV_CHECK_ERR(RenderAttribs.pMotionVectorsSRV != nullptr, "RenderAttribs.pMotionVectorsSRV must not be null");
     DEV_CHECK_ERR(RenderAttribs.pTAAAttribs != nullptr, "RenderAttribs.pTAAAttribs must not be null");
 
-    DEV_CHECK_ERR(static_cast<bool>(RenderAttribs.FeatureFlag & FEATURE_FLAG_DEPTH_DISOCCLUSION) == (RenderAttribs.pPrevDepthBufferSRV != nullptr), "RenderAttribs.pPrevDepthBufferSRV must not be null");
-    DEV_CHECK_ERR(static_cast<bool>(RenderAttribs.FeatureFlag & FEATURE_FLAG_MOTION_DISOCCLUSION) == (RenderAttribs.pPrevMotionVectorsSRV != nullptr), "RenderAttribs.pPrevMotionVectorsSRV must not be null");
+    DEV_CHECK_ERR(((RenderAttribs.FeatureFlag & FEATURE_FLAG_DEPTH_DISOCCLUSION) != 0) == (RenderAttribs.pPrevDepthBufferSRV != nullptr), "RenderAttribs.pPrevDepthBufferSRV must not be null");
+    DEV_CHECK_ERR(((RenderAttribs.FeatureFlag & FEATURE_FLAG_MOTION_DISOCCLUSION) != 0) == (RenderAttribs.pPrevMotionVectorsSRV != nullptr), "RenderAttribs.pPrevMotionVectorsSRV must not be null");
 
     m_Resources.Insert(RESOURCE_IDENTIFIER_INPUT_COLOR, RenderAttribs.pColorBufferSRV->GetTexture());
     m_Resources.Insert(RESOURCE_IDENTIFIER_INPUT_DEPTH, RenderAttribs.pDepthBufferSRV->GetTexture());
@@ -149,11 +149,13 @@ void TemporalAntiAliasing::Execute(const RenderAttributes& RenderAttribs)
         UpdateConstantBuffer = true;
         memcpy(m_ShaderAttribs.get(), RenderAttribs.pTAAAttribs, sizeof(HLSL::TemporalAntiAliasingAttribs));
     }
+
     if (ResetAccumulation && (m_ShaderAttribs->ResetAccumulation != 0) != ResetAccumulation)
     {
         m_ShaderAttribs->ResetAccumulation = 1;
         UpdateConstantBuffer               = true;
     }
+
     if (UpdateConstantBuffer)
     {
         RenderAttribs.pDeviceContext->UpdateBuffer(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER], 0, sizeof(HLSL::TemporalAntiAliasingAttribs),
@@ -163,10 +165,8 @@ void TemporalAntiAliasing::Execute(const RenderAttributes& RenderAttribs)
     ComputeTemporalAccumulation(RenderAttribs);
 
     // Release references to input resources
-    for (Uint32 id = 0; id <= RESOURCE_IDENTIFIER_INPUT_LAST; ++id)
-    {
-        m_Resources[id].Release();
-    }
+    for (Uint32 ResourceIdx = 0; ResourceIdx <= RESOURCE_IDENTIFIER_INPUT_LAST; ++ResourceIdx)
+        m_Resources[ResourceIdx].Release();
 
     m_LasFrameIdx = m_CurrentFrameIdx;
 }

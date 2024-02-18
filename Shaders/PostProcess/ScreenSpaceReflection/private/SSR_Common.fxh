@@ -5,8 +5,10 @@
 
 #if SSR_OPTION_INVERTED_DEPTH
     #define MipConvFunc max
+    #define DepthFarPlane 0.0
 #else
     #define MipConvFunc min
+    #define DepthFarPlane 1.0
 #endif // SSR_OPTION_INVERTED_DEPTH
 
 #if !defined(DESKTOP_GL) && !defined(GL_ES)
@@ -54,7 +56,7 @@ bool IsBackground(float Depth)
 
 bool IsReflectionSample(float Roughness, float Depth, float RoughnessThreshold)
 {
-    return Roughness < RoughnessThreshold && !IsBackground(Depth);
+    return Roughness <= RoughnessThreshold && !IsBackground(Depth);
 }
 
 bool IsMirrorReflection(float Roughness)

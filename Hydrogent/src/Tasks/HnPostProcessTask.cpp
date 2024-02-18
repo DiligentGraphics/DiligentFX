@@ -294,7 +294,7 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
     }
 
     m_PostFXContext->PrepareResources({pRenderParam->GetFrameNumber(), FinalColorDesc.Width, FinalColorDesc.Height});
-    m_SSR->PrepareResources(pDevice, m_PostFXContext.get());
+    m_SSR->PrepareResources(pDevice, m_PostFXContext.get(), ScreenSpaceReflection::FEATURE_FLAG_NONE);
     m_TAA->PrepareResources(pDevice, m_PostFXContext.get(), {m_FinalColorRTV->GetDesc().Format});
 
     m_UseTAA = m_Params.EnableTAA &&
