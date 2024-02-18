@@ -125,7 +125,6 @@ public:
     void ResetTAA() { m_ResetTAA = true; }
 
 private:
-    void PrepareSRB(ITextureView* ClosestSelectedLocationSRV);
     void CreateVectorFieldRenderer(TEXTURE_FORMAT RTVFormat);
 
 private:
@@ -152,11 +151,13 @@ private:
 
     struct PostProcessingTechnique
     {
+        const HnPostProcessTask& PPTask;
+
         bool IsDirty = true;
 
-        RefCntAutoPtr<IPipelineState>             PSO;
-        RefCntAutoPtr<IPipelineResourceSignature> PRS;
-        RefCntAutoPtr<IShaderResourceBinding>     SRB;
+        RefCntAutoPtr<IPipelineState>             PSO{};
+        RefCntAutoPtr<IPipelineResourceSignature> PRS{};
+        RefCntAutoPtr<IShaderResourceBinding>     SRB{};
 
         struct ShaderVariables
         {
@@ -169,17 +170,12 @@ private:
             ShaderResourceVariableX Normal;
             ShaderResourceVariableX BaseColor;
             ShaderResourceVariableX Material;
-
-            operator bool() const
-            {
-                return Color && Depth && SelectionDepth && ClosestSelectedLocation;
-            }
         };
-        ShaderVariables ShaderVars;
+        ShaderVariables ShaderVars{};
 
-        void PreparePSO(const HnPostProcessTask& PPTask, HnRenderDelegate* RenderDelegate, TEXTURE_FORMAT RTVFormat);
-        void CreatePRS(const HnPostProcessTask& PPTask);
-        void CreateSRB();
+        void CreatePRS();
+        void PreparePSO(TEXTURE_FORMAT RTVFormat);
+        void PrepareSRB(ITextureView* pClosestSelectedLocationSRV);
 
     } m_PostProcessTech;
 };
