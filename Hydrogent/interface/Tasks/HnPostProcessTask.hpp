@@ -31,8 +31,10 @@
 #include "HnTask.hpp"
 
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/PipelineState.h"
+#include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/PipelineResourceSignature.h"
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/ShaderResourceBinding.h"
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/Buffer.h"
+#include "../../../../DiligentCore/Graphics/GraphicsTools/interface/RenderStateCache.h"
 #include "../../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
 #include "../../../../DiligentCore/Common/interface/BasicMath.hpp"
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/GraphicsTypesX.hpp"
@@ -150,10 +152,12 @@ private:
 
     struct PostProcessingTechnique
     {
-        bool PSOIsDirty = true;
+        bool IsDirty = true;
 
-        RefCntAutoPtr<IPipelineState>         PSO;
-        RefCntAutoPtr<IShaderResourceBinding> SRB;
+        RefCntAutoPtr<IPipelineState>             PSO;
+        RefCntAutoPtr<IPipelineResourceSignature> PRS;
+        RefCntAutoPtr<IShaderResourceBinding>     SRB;
+
         struct ShaderVariables
         {
             ShaderResourceVariableX Color;
@@ -174,6 +178,7 @@ private:
         ShaderVariables ShaderVars;
 
         void PreparePSO(const HnPostProcessTask& PPTask, HnRenderDelegate* RenderDelegate, TEXTURE_FORMAT RTVFormat);
+        void CreatePRS(const HnPostProcessTask& PPTask);
         void CreateSRB();
 
     } m_PostProcessTech;

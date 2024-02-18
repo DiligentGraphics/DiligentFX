@@ -74,9 +74,9 @@ HnPostProcessTask::~HnPostProcessTask()
 void HnPostProcessTask::PostProcessingTechnique::PreparePSO(const HnPostProcessTask& PPTask, HnRenderDelegate* RenderDelegate, TEXTURE_FORMAT RTVFormat)
 {
     if (PSO && PSO->GetGraphicsPipelineDesc().RTVFormats[0] != RTVFormat)
-        PSOIsDirty = true;
+        IsDirty = true;
 
-    if (PSOIsDirty)
+    if (IsDirty)
         PSO.Release();
 
     if (PSO)
@@ -84,8 +84,6 @@ void HnPostProcessTask::PostProcessingTechnique::PreparePSO(const HnPostProcessT
 
     try
     {
-        USD_Renderer& USDRender = *RenderDelegate->GetUSDRenderer();
-
         // RenderDeviceWithCache_E throws exceptions in case of errors
         RenderDeviceWithCache_E Device{RenderDelegate->GetDevice(), RenderDelegate->GetRenderStateCache()};
 
@@ -118,14 +116,6 @@ void HnPostProcessTask::PostProcessingTechnique::PreparePSO(const HnPostProcessT
             pPS = Device.CreateShader(ShaderCI); // Throws exception in case of error
         }
 
-        PipelineResourceLayoutDescX ResourceLauout;
-        ResourceLauout
-            .SetDefaultVariableType(SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
-            .AddVariable(SHADER_TYPE_PIXEL, "cbPostProcessAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_PreintegratedGGX", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
-            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_PreintegratedGGX", Sam_LinearClamp)
-            .AddVariable(SHADER_TYPE_PIXEL, "cbFrameAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
-
         GraphicsPipelineStateCreateInfoX PsoCI{"Post process"};
         PsoCI
             .AddRenderTarget(RTVFormat)
@@ -133,15 +123,12 @@ void HnPostProcessTask::PostProcessingTechnique::PreparePSO(const HnPostProcessT
             .AddShader(pPS)
             .SetDepthStencilDesc(DSS_DisableDepth)
             .SetRasterizerDesc(RS_SolidFillNoCull)
-            .SetResourceLayout(ResourceLauout)
+            .AddSignature(PRS)
             .SetPrimitiveTopology(PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 
         PSO = Device.CreateGraphicsPipelineState(PsoCI); // Throws exception in case of error
-        ShaderResourceVariableX{PSO, SHADER_TYPE_PIXEL, "cbPostProcessAttribs"}.Set(PPTask.m_PostProcessAttribsCB);
-        ShaderResourceVariableX{PSO, SHADER_TYPE_PIXEL, "g_PreintegratedGGX"}.Set(USDRender.GetPreintegratedGGX_SRV());
-        ShaderResourceVariableX{PSO, SHADER_TYPE_PIXEL, "cbFrameAttribs"}.Set(RenderDelegate->GetFrameAttribsCB());
 
-        PSOIsDirty = false;
+        IsDirty = false;
     }
     catch (const std::runtime_error& err)
     {
@@ -156,7 +143,7 @@ void HnPostProcessTask::PostProcessingTechnique::PreparePSO(const HnPostProcessT
 void HnPostProcessTask::PostProcessingTechnique::CreateSRB()
 {
     SRB.Release();
-    PSO->CreateShaderResourceBinding(&SRB, true);
+    PRS->CreateShaderResourceBinding(&SRB, true);
     VERIFY_EXPR(SRB);
     ShaderVars.Color                   = ShaderResourceVariableX{SRB, SHADER_TYPE_PIXEL, "g_ColorBuffer"};
     ShaderVars.Depth                   = ShaderResourceVariableX{SRB, SHADER_TYPE_PIXEL, "g_Depth"};
@@ -196,7 +183,7 @@ void HnPostProcessTask::Sync(pxr::HdSceneDelegate* Delegate,
                 m_Params.EnableTAA != Params.EnableTAA)
             {
                 // In OpenGL we can't release PSO in Worker thread
-                m_PostProcessTech.PSOIsDirty = true;
+                m_PostProcessTech.IsDirty = true;
             }
 
             m_Params         = Params;
@@ -205,6 +192,48 @@ void HnPostProcessTask::Sync(pxr::HdSceneDelegate* Delegate,
     }
 
     *DirtyBits = pxr::HdChangeTracker::Clean;
+}
+
+void HnPostProcessTask::PostProcessingTechnique::CreatePRS(const HnPostProcessTask& PPTask)
+{
+    VERIFY_EXPR(!PRS);
+
+    HnRenderDelegate*  RenderDelegate = static_cast<HnRenderDelegate*>(PPTask.m_RenderIndex->GetRenderDelegate());
+    IRenderDevice*     pDevice        = RenderDelegate->GetDevice();
+    IRenderStateCache* pStateCache    = RenderDelegate->GetRenderStateCache();
+
+    PipelineResourceSignatureDescX PRSDesc{"HnPostProcessTask: PRS"};
+    PRSDesc
+        .SetUseCombinedTextureSamplers(true)
+        .AddResource(SHADER_TYPE_PIXEL, "cbPostProcessAttribs", SHADER_RESOURCE_TYPE_CONSTANT_BUFFER, SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+        .AddResource(SHADER_TYPE_PIXEL, "cbFrameAttribs", SHADER_RESOURCE_TYPE_CONSTANT_BUFFER, SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+        .AddResource(SHADER_TYPE_PIXEL, "g_PreintegratedGGX", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+        .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_PreintegratedGGX", Sam_LinearClamp);
+
+    PRSDesc
+        .AddResource(SHADER_TYPE_PIXEL, "g_ColorBuffer", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
+        .AddResource(SHADER_TYPE_PIXEL, "g_Depth", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
+        .AddResource(SHADER_TYPE_PIXEL, "g_SelectionDepth", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
+        .AddResource(SHADER_TYPE_PIXEL, "g_ClosestSelectedLocation", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
+        .AddResource(SHADER_TYPE_PIXEL, "g_SSR", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
+        .AddResource(SHADER_TYPE_PIXEL, "g_SpecularIBL", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
+        .AddResource(SHADER_TYPE_PIXEL, "g_Normal", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
+        .AddResource(SHADER_TYPE_PIXEL, "g_MaterialData", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
+        .AddResource(SHADER_TYPE_PIXEL, "g_BaseColor", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
+
+    PRS = RenderDeviceWithCache_N{pDevice, pStateCache}.CreatePipelineResourceSignature(PRSDesc);
+    VERIFY_EXPR(PRS);
+
+    USD_Renderer& USDRender = *RenderDelegate->GetUSDRenderer();
+
+    VERIFY_EXPR(PPTask.m_PostProcessAttribsCB);
+    ShaderResourceVariableX{PRS, SHADER_TYPE_PIXEL, "cbPostProcessAttribs"}.Set(PPTask.m_PostProcessAttribsCB);
+
+    VERIFY_EXPR(USDRender.GetPreintegratedGGX_SRV());
+    ShaderResourceVariableX{PRS, SHADER_TYPE_PIXEL, "g_PreintegratedGGX"}.Set(USDRender.GetPreintegratedGGX_SRV());
+
+    VERIFY_EXPR(RenderDelegate->GetFrameAttribsCB());
+    ShaderResourceVariableX{PRS, SHADER_TYPE_PIXEL, "cbFrameAttribs"}.Set(RenderDelegate->GetFrameAttribsCB());
 }
 
 void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
@@ -256,9 +285,10 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
     }
     m_FBTargets = &FBTargets;
 
-    HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
-    IRenderDevice*    pDevice        = RenderDelegate->GetDevice();
-    IDeviceContext*   pCtx           = RenderDelegate->GetDeviceContext();
+    HnRenderDelegate*  RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+    IRenderDevice*     pDevice        = RenderDelegate->GetDevice();
+    IDeviceContext*    pCtx           = RenderDelegate->GetDeviceContext();
+    IRenderStateCache* pStateCache    = RenderDelegate->GetRenderStateCache();
     if (!m_PostProcessAttribsCB)
     {
         CreateUniformBuffer(pDevice, sizeof(HLSL::PostProcessAttribs), "Post process attribs CB", &m_PostProcessAttribsCB, USAGE_DEFAULT);
@@ -300,6 +330,11 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
     m_UseTAA = m_Params.EnableTAA &&
         pRenderParam->GetDebugView() == PBR_Renderer::DebugViewType::None &&
         pRenderParam->GetRenderMode() == HN_RENDER_MODE_SOLID;
+
+    if (!m_PostProcessTech.PRS)
+    {
+        m_PostProcessTech.CreatePRS(*this);
+    }
 
     m_PostProcessTech.PreparePSO(*this, RenderDelegate, (m_UseTAA ? m_FBTargets->JitteredFinalColorRTV : m_FinalColorRTV)->GetDesc().Format);
 
@@ -427,6 +462,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
     HnRenderDelegate*    RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
     IRenderDevice*       pDevice        = RenderDelegate->GetDevice();
     IDeviceContext*      pCtx           = RenderDelegate->GetDeviceContext();
+    IRenderStateCache*   pStateCache    = RenderDelegate->GetRenderStateCache();
     const HnRenderParam* pRenderParam   = static_cast<const HnRenderParam*>(RenderDelegate->GetRenderParam());
     VERIFY_EXPR(pRenderParam != nullptr);
 
@@ -444,9 +480,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
 
     if (m_SSRScale > 0)
     {
-        PostFXContext::RenderAttributes PostFXAttribs{};
-        PostFXAttribs.pDevice        = pDevice;
-        PostFXAttribs.pDeviceContext = pCtx;
+        PostFXContext::RenderAttributes PostFXAttribs{pDevice, pStateCache, pCtx};
 
         pxr::VtValue PBRFrameAttribsVal = (*TaskCtx)[HnRenderResourceTokens->frameShaderAttribs];
         if (PBRFrameAttribsVal.IsHolding<HLSL::PBRFrameAttribs*>())
@@ -467,9 +501,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         SSRAttribs.RoughnessChannel          = 0;
         SSRAttribs.IsRoughnessPerceptual     = true;
 
-        ScreenSpaceReflection::RenderAttributes SSRRenderAttribs{};
-        SSRRenderAttribs.pDevice            = pDevice;
-        SSRRenderAttribs.pDeviceContext     = pCtx;
+        ScreenSpaceReflection::RenderAttributes SSRRenderAttribs{pDevice, pStateCache, pCtx};
         SSRRenderAttribs.pPostFXContext     = m_PostFXContext.get();
         SSRRenderAttribs.pColorBufferSRV    = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_SCENE_COLOR];
         SSRRenderAttribs.pDepthBufferSRV    = m_FBTargets->DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
@@ -519,9 +551,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
             m_ResetTAA                    = false;
         }
 
-        TemporalAntiAliasing::RenderAttributes TAARenderAttribs{};
-        TAARenderAttribs.pDevice               = pDevice;
-        TAARenderAttribs.pDeviceContext        = pCtx;
+        TemporalAntiAliasing::RenderAttributes TAARenderAttribs{pDevice, pStateCache, pCtx};
         TAARenderAttribs.pPostFXContext        = m_PostFXContext.get();
         TAARenderAttribs.pColorBufferSRV       = m_FBTargets->JitteredFinalColorRTV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
         TAARenderAttribs.pDepthBufferSRV       = m_FBTargets->DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
