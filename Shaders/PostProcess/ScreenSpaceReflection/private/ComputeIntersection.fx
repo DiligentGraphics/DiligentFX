@@ -47,7 +47,7 @@ float2 GetMipResolution(float2 ScreenDimensions, int MipLevel)
 
 float2 SampleRandomVector2D(int2 PixelCoord)
 {
-    return g_TextureBlueNoise.Load(int3(PixelCoord % 128, 0));
+    return g_TextureBlueNoise.Load(int3(PixelCoord & 127, 0));
 }
 
 float SampleRoughness(int2 PixelCoord)
@@ -279,7 +279,14 @@ SSR_ATTRIBUTE_EARLY_DEPTH_STENCIL
 PSOutput ComputeIntersectionPS(in FullScreenTriangleVSOutput VSOut)
 {
 #if SSR_OPTION_HALF_RESOLUTION
-    float2 Position = 2.0 * floor(VSOut.f4PixelPos.xy) + 0.5;
+    int4x4 MatrixOffset = int4x4(
+        0, 1, 2, 3,
+        3, 2, 1, 0,
+        1, 0, 3, 2,
+        2, 3, 0, 1
+    );
+    int SampleIdx = MatrixOffset[int(VSOut.f4PixelPos.x) & 0x3][int(VSOut.f4PixelPos.y) & 0x3];
+    float2 Position = 2.0 * floor(VSOut.f4PixelPos.xy) + float2(SampleIdx & 0x01, SampleIdx >> 1) + 0.5;
 #else
     float2 Position = VSOut.f4PixelPos.xy;
 #endif

@@ -129,9 +129,8 @@ PSOutput ComputeSpatialReconstructionPS(in FullScreenTriangleVSOutput VSOut)
     for (uint SampleIdx = 0u; SampleIdx < SampleCount; SampleIdx++)
     {
         float2 Xi = 2.0 * frac(HammersleySequence(SampleIdx, SampleCount) + RandomOffset) - 1.0;
-
 #if SSR_OPTION_HALF_RESOLUTION
-        int2 SampleCoord = int2(0.5 * floor(Position.xy) + float2(0.5, 0.5) + Radius * Xi);
+        int2 SampleCoord = int2(floor(0.5 * (Position.xy + Radius * Xi)) + float2(0.5, 0.5));
         if (IsInsideScreen(SampleCoord, int2(0.5 * g_Camera.f4ViewportSize.xy)))
 #else
         int2 SampleCoord = int2(Position.xy + Radius * Xi);
