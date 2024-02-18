@@ -278,9 +278,15 @@ float4 SampleReflectionVector(float3 View, float3 Normal, float Roughness, int2 
 SSR_ATTRIBUTE_EARLY_DEPTH_STENCIL
 PSOutput ComputeIntersectionPS(in FullScreenTriangleVSOutput VSOut)
 {
-    float2 ScreenCoordUV = VSOut.f4PixelPos.xy * g_Camera.f4ViewportSize.zw;
-    float3 NormalWS = SampleNormalWS(int2(VSOut.f4PixelPos.xy));
-    float Roughness = SampleRoughness(int2(VSOut.f4PixelPos.xy));
+#if SSR_OPTION_HALF_RESOLUTION
+    float2 Position = 2.0 * floor(VSOut.f4PixelPos.xy) + 0.5;
+#else
+    float2 Position = VSOut.f4PixelPos.xy;
+#endif
+
+    float2 ScreenCoordUV = Position * g_Camera.f4ViewportSize.zw;
+    float3 NormalWS = SampleNormalWS(int2(Position));
+    float Roughness = SampleRoughness(int2(Position));
 
     bool IsMirror = IsMirrorReflection(Roughness);
     int MostDetailedMip = IsMirror ? 0 : int(g_SSRAttribs.MostDetailedMip);

@@ -63,6 +63,10 @@ public:
         // We find the intersection using the depth buffer of the current frame, and when an intersection is found,
         // we make the corresponding offset by the velocity vector at the intersection point, for sampling from the color buffer.
         FEATURE_FLAG_PREVIOUS_FRAME = 1 << 2,
+
+        // When this flag is used, ray tracing step is executed at half resolution
+        FEATURE_FLAG_HALF_RESOLUTION = 1 << 3,
+
     };
 
     struct RenderAttributes
@@ -94,9 +98,6 @@ public:
         /// Shader resource view of the motion vectors
         ITextureView* pMotionVectorsSRV = nullptr;
 
-        /// Render features
-        FEATURE_FLAGS FeatureFlag = FEATURE_FLAG_NONE;
-
         /// SSR settings
         const HLSL::ScreenSpaceReflectionAttribs* pSSRAttribs = nullptr;
     };
@@ -106,7 +107,7 @@ public:
 
     ~ScreenSpaceReflection();
 
-    void PrepareResources(IRenderDevice* pDevice, PostFXContext* pPostFXContext);
+    void PrepareResources(IRenderDevice* pDevice, PostFXContext* pPostFXContext, FEATURE_FLAGS FeatureFlags);
 
     void Execute(const RenderAttributes& RenderAttribs);
 
@@ -122,6 +123,7 @@ private:
     {
         RENDER_TECH_COMPUTE_HIERARCHICAL_DEPTH_BUFFER = 0,
         RENDER_TECH_COMPUTE_STENCIL_MASK_AND_EXTRACT_ROUGHNESS,
+        RENDER_TECH_COMPUTE_DOWNSAMPLED_STENCIL_MASK,
         RENDER_TECH_COMPUTE_INTERSECTION,
         RENDER_TECH_COMPUTE_SPATIAL_RECONSTRUCTION,
         RENDER_TECH_COMPUTE_TEMPORAL_ACCUMULATION,
@@ -143,6 +145,7 @@ private:
         RESOURCE_IDENTIFIER_DEPTH_HIERARCHY,
         RESOURCE_IDENTIFIER_DEPTH_HIERARCHY_INTERMEDIATE,
         RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK,
+        RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK_HALF_RES,
         RESOURCE_IDENTIFIER_ROUGHNESS,
         RESOURCE_IDENTIFIER_RADIANCE,
         RESOURCE_IDENTIFIER_RAY_DIRECTION_PDF,
@@ -163,6 +166,8 @@ private:
     void ComputeHierarchicalDepthBuffer(const RenderAttributes& RenderAttribs);
 
     void ComputeStencilMaskAndExtractRoughness(const RenderAttributes& RenderAttribs);
+
+    void ComputeDownsampledStencilMask(const RenderAttributes& RenderAttribs);
 
     void ComputeIntersection(const RenderAttributes& RenderAttribs);
 
@@ -209,10 +214,13 @@ private:
     std::vector<RefCntAutoPtr<ITextureView>> m_HierarchicalDepthMipMapRTV;
     std::vector<RefCntAutoPtr<ITextureView>> m_HierarchicalDepthMipMapSRV;
     RefCntAutoPtr<ITextureView>              m_DepthStencilMaskDSVReadOnly;
+    RefCntAutoPtr<ITextureView>              m_DepthStencilMaskDSVReadOnlyHalfRes;
 
     Uint32 m_BackBufferWidth  = 0;
     Uint32 m_BackBufferHeight = 0;
     Uint32 m_ImGuiDisplayMode = 0;
+
+    FEATURE_FLAGS m_FeatureFlags = FEATURE_FLAG_NONE;
 };
 
 DEFINE_FLAG_ENUM_OPERATORS(ScreenSpaceReflection::FEATURE_FLAGS)

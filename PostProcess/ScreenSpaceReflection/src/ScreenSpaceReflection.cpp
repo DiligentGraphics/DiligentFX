@@ -85,16 +85,17 @@ ScreenSpaceReflection::ScreenSpaceReflection(IRenderDevice* pDevice) :
 
 ScreenSpaceReflection::~ScreenSpaceReflection() = default;
 
-void ScreenSpaceReflection::PrepareResources(IRenderDevice* pDevice, PostFXContext* pPostFXContext)
+void ScreenSpaceReflection::PrepareResources(IRenderDevice* pDevice, PostFXContext* pPostFXContext, FEATURE_FLAGS FeatureFlags)
 {
     const auto& FrameDesc         = pPostFXContext->GetFrameDesc();
     const auto& SupportedFeatures = pPostFXContext->GetSupportedFeatures();
 
-    if (m_BackBufferWidth == FrameDesc.Width && m_BackBufferHeight == FrameDesc.Height)
+    if (m_BackBufferWidth == FrameDesc.Width && m_BackBufferHeight == FrameDesc.Height && m_FeatureFlags == FeatureFlags)
         return;
 
     m_BackBufferWidth  = FrameDesc.Width;
     m_BackBufferHeight = FrameDesc.Height;
+    m_FeatureFlags     = FeatureFlags;
 
     RenderDeviceWithCache_N Device{pDevice};
 
@@ -161,14 +162,14 @@ void ScreenSpaceReflection::PrepareResources(IRenderDevice* pDevice, PostFXConte
         m_Resources.Insert(RESOURCE_IDENTIFIER_ROUGHNESS, Device.CreateTexture(Desc));
     }
 
+    TEXTURE_FORMAT DepthStencilFormat = TEX_FORMAT_D32_FLOAT_S8X24_UINT;
+
+    TextureFormatInfoExt FormatInfo = Device.GetTextureFormatInfoExt(TEX_FORMAT_D24_UNORM_S8_UINT);
+    if (FormatInfo.Supported && FormatInfo.BindFlags & BIND_DEPTH_STENCIL)
+        DepthStencilFormat = TEX_FORMAT_D24_UNORM_S8_UINT;
+
     {
         m_DepthStencilMaskDSVReadOnly.Release();
-
-        TEXTURE_FORMAT DepthStencilFormat = TEX_FORMAT_D32_FLOAT_S8X24_UINT;
-
-        TextureFormatInfoExt FormatInfo = Device.GetTextureFormatInfoExt(TEX_FORMAT_D24_UNORM_S8_UINT);
-        if (FormatInfo.Supported && FormatInfo.BindFlags & BIND_DEPTH_STENCIL)
-            DepthStencilFormat = TEX_FORMAT_D24_UNORM_S8_UINT;
 
         TextureDesc Desc;
         Desc.Name      = "ScreenSpaceReflection::DepthStencilMask";
@@ -184,12 +185,30 @@ void ScreenSpaceReflection::PrepareResources(IRenderDevice* pDevice, PostFXConte
         m_Resources[RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK].AsTexture()->CreateView(ViewDesc, &m_DepthStencilMaskDSVReadOnly);
     }
 
+    if (FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION)
+    {
+        m_DepthStencilMaskDSVReadOnlyHalfRes.Release();
+
+        TextureDesc Desc;
+        Desc.Name      = "ScreenSpaceReflection::DepthStencilMaskHalfRes";
+        Desc.Type      = RESOURCE_DIM_TEX_2D;
+        Desc.Width     = m_BackBufferWidth / 2;
+        Desc.Height    = m_BackBufferHeight / 2;
+        Desc.Format    = DepthStencilFormat;
+        Desc.BindFlags = BIND_DEPTH_STENCIL | BIND_SHADER_RESOURCE;
+        m_Resources.Insert(RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK_HALF_RES, Device.CreateTexture(Desc));
+
+        TextureViewDesc ViewDesc;
+        ViewDesc.ViewType = TEXTURE_VIEW_READ_ONLY_DEPTH_STENCIL;
+        m_Resources[RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK_HALF_RES].AsTexture()->CreateView(ViewDesc, &m_DepthStencilMaskDSVReadOnlyHalfRes);
+    }
+
     {
         TextureDesc Desc;
         Desc.Name      = "ScreenSpaceReflection::Radiance";
         Desc.Type      = RESOURCE_DIM_TEX_2D;
-        Desc.Width     = m_BackBufferWidth;
-        Desc.Height    = m_BackBufferHeight;
+        Desc.Width     = (FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION) ? m_BackBufferWidth / 2 : m_BackBufferWidth;
+        Desc.Height    = (FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION) ? m_BackBufferHeight / 2 : m_BackBufferHeight;
         Desc.Format    = TEX_FORMAT_RGBA16_FLOAT;
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
         m_Resources.Insert(RESOURCE_IDENTIFIER_RADIANCE, Device.CreateTexture(Desc));
@@ -199,8 +218,8 @@ void ScreenSpaceReflection::PrepareResources(IRenderDevice* pDevice, PostFXConte
         TextureDesc Desc;
         Desc.Name      = "ScreenSpaceReflection::RayDirectionPDF";
         Desc.Type      = RESOURCE_DIM_TEX_2D;
-        Desc.Width     = m_BackBufferWidth;
-        Desc.Height    = m_BackBufferHeight;
+        Desc.Width     = (FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION) ? m_BackBufferWidth / 2 : m_BackBufferWidth;
+        Desc.Height    = (FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION) ? m_BackBufferHeight / 2 : m_BackBufferHeight;
         Desc.Format    = TEX_FORMAT_RGBA16_FLOAT;
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
         m_Resources.Insert(RESOURCE_IDENTIFIER_RAY_DIRECTION_PDF, Device.CreateTexture(Desc));
@@ -316,16 +335,15 @@ void ScreenSpaceReflection::Execute(const RenderAttributes& RenderAttribs)
 
     ComputeHierarchicalDepthBuffer(RenderAttribs);
     ComputeStencilMaskAndExtractRoughness(RenderAttribs);
+    ComputeDownsampledStencilMask(RenderAttribs);
     ComputeIntersection(RenderAttribs);
     ComputeSpatialReconstruction(RenderAttribs);
     ComputeTemporalAccumulation(RenderAttribs);
     ComputeBilateralCleanup(RenderAttribs);
 
     // Release references to input resources
-    for (Uint32 id = 0; id <= RESOURCE_IDENTIFIER_INPUT_LAST; ++id)
-    {
-        m_Resources[id].Release();
-    }
+    for (Uint32 ResourceIdx = 0; ResourceIdx <= RESOURCE_IDENTIFIER_INPUT_LAST; ++ResourceIdx)
+        m_Resources[ResourceIdx].Release();
 }
 
 void ScreenSpaceReflection::UpdateUI(HLSL::ScreenSpaceReflectionAttribs& SSRAttribs)
@@ -432,13 +450,13 @@ void ScreenSpaceReflection::CopyTextureDepth(const RenderAttributes& RenderAttri
 
 void ScreenSpaceReflection::ComputeHierarchicalDepthBuffer(const RenderAttributes& RenderAttribs)
 {
-    auto&       RenderTech        = GetRenderTechnique(RENDER_TECH_COMPUTE_HIERARCHICAL_DEPTH_BUFFER, RenderAttribs.FeatureFlag);
+    auto&       RenderTech        = GetRenderTechnique(RENDER_TECH_COMPUTE_HIERARCHICAL_DEPTH_BUFFER, m_FeatureFlags);
     const auto& SupportedFeatures = RenderAttribs.pPostFXContext->GetSupportedFeatures();
     if (!RenderTech.IsInitialized())
     {
         ShaderMacroHelper Macros;
         Macros.Add("SUPPORTED_SHADER_SRV", SupportedFeatures.TextureSubresourceViews);
-        Macros.Add("SSR_OPTION_INVERTED_DEPTH", static_cast<bool>(RenderAttribs.FeatureFlag & FEATURE_FLAG_REVERSED_DEPTH));
+        Macros.Add("SSR_OPTION_INVERTED_DEPTH", (m_FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
 
         const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
         const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeHierarchicalDepthBuffer.fx", "ComputeHierarchicalDepthBufferPS", SHADER_TYPE_PIXEL, Macros);
@@ -585,7 +603,7 @@ void ScreenSpaceReflection::ComputeHierarchicalDepthBuffer(const RenderAttribute
 
 void ScreenSpaceReflection::ComputeStencilMaskAndExtractRoughness(const RenderAttributes& RenderAttribs)
 {
-    auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_STENCIL_MASK_AND_EXTRACT_ROUGHNESS, RenderAttribs.FeatureFlag);
+    auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_STENCIL_MASK_AND_EXTRACT_ROUGHNESS, m_FeatureFlags);
     if (!RenderTech.IsInitialized())
     {
         PipelineResourceLayoutDescX ResourceLayout;
@@ -596,7 +614,7 @@ void ScreenSpaceReflection::ComputeStencilMaskAndExtractRoughness(const RenderAt
 
 
         ShaderMacroHelper Macros;
-        Macros.Add("SSR_OPTION_INVERTED_DEPTH", static_cast<bool>(RenderAttribs.FeatureFlag & FEATURE_FLAG_REVERSED_DEPTH));
+        Macros.Add("SSR_OPTION_INVERTED_DEPTH", (m_FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
 
         const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
         const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeStencilMaskAndExtractRoughness.fx", "ComputeStencilMaskAndExtractRoughnessPS", SHADER_TYPE_PIXEL, Macros);
@@ -634,9 +652,56 @@ void ScreenSpaceReflection::ComputeStencilMaskAndExtractRoughness(const RenderAt
     RenderAttribs.pDeviceContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
 }
 
+void ScreenSpaceReflection::ComputeDownsampledStencilMask(const RenderAttributes& RenderAttribs)
+{
+    if (!(m_FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION))
+        return;
+
+    auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_DOWNSAMPLED_STENCIL_MASK, m_FeatureFlags);
+    if (!RenderTech.IsInitialized())
+    {
+        PipelineResourceLayoutDescX ResourceLayout;
+        ResourceLayout
+            .AddVariable(SHADER_TYPE_PIXEL, "cbScreenSpaceReflectionAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureRoughness", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
+
+        ShaderMacroHelper Macros;
+        Macros.Add("SSR_OPTION_INVERTED_DEPTH", (m_FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
+
+        const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
+        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeDownsampledStencilMask.fx", "ComputeDownsampledStencilMaskPS", SHADER_TYPE_PIXEL, Macros);
+
+        RenderTech.InitializePSO(RenderAttribs.pDevice,
+                                 RenderAttribs.pStateCache, "ScreenSpaceReflection::ComputeDownsampledStencilMask",
+                                 VS, PS, ResourceLayout,
+                                 {},
+                                 m_Resources[RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK].AsTexture()->GetDesc().Format,
+                                 DSS_StencilWrite, BS_Default, false);
+
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbScreenSpaceReflectionAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
+        RenderTech.InitializeSRB(true);
+    }
+
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureRoughness"}.Set(m_Resources[RESOURCE_IDENTIFIER_ROUGHNESS].GetTextureSRV());
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureDepth"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_DEPTH].GetTextureSRV());
+
+    ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "ComputeDownsampledStencilMask"};
+
+    ITextureView* pDSV = m_Resources[RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK_HALF_RES].GetTextureDSV();
+
+    RenderAttribs.pDeviceContext->SetRenderTargets(0, nullptr, pDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    RenderAttribs.pDeviceContext->ClearDepthStencil(pDSV, CLEAR_STENCIL_FLAG, 1.0, 0x00, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    RenderAttribs.pDeviceContext->SetStencilRef(0xFF);
+    RenderAttribs.pDeviceContext->SetPipelineState(RenderTech.PSO);
+    RenderAttribs.pDeviceContext->CommitShaderResources(RenderTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    RenderAttribs.pDeviceContext->Draw({3, DRAW_FLAG_VERIFY_ALL, 1});
+    RenderAttribs.pDeviceContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
+}
+
 void ScreenSpaceReflection::ComputeIntersection(const RenderAttributes& RenderAttribs)
 {
-    auto&       RenderTech        = GetRenderTechnique(RENDER_TECH_COMPUTE_INTERSECTION, RenderAttribs.FeatureFlag);
+    auto&       RenderTech        = GetRenderTechnique(RENDER_TECH_COMPUTE_INTERSECTION, m_FeatureFlags);
     const auto& SupportedFeatures = RenderAttribs.pPostFXContext->GetSupportedFeatures();
     if (!RenderTech.IsInitialized())
     {
@@ -650,7 +715,7 @@ void ScreenSpaceReflection::ComputeIntersection(const RenderAttributes& RenderAt
             .AddVariable(SHADER_TYPE_PIXEL, "g_TextureBlueNoise", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
             .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepthHierarchy", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
 
-        if (RenderAttribs.FeatureFlag & FEATURE_FLAG_PREVIOUS_FRAME)
+        if (m_FeatureFlags & FEATURE_FLAG_PREVIOUS_FRAME)
             ResourceLayout.AddVariable(SHADER_TYPE_PIXEL, "g_TextureMotion", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
 
         if (!SupportedFeatures.TextureSubresourceViews)
@@ -660,8 +725,9 @@ void ScreenSpaceReflection::ComputeIntersection(const RenderAttributes& RenderAt
         }
 
         ShaderMacroHelper Macros;
-        Macros.Add("SSR_OPTION_PREVIOUS_FRAME", (RenderAttribs.FeatureFlag & FEATURE_FLAG_PREVIOUS_FRAME) != 0);
-        Macros.Add("SSR_OPTION_INVERTED_DEPTH", (RenderAttribs.FeatureFlag & FEATURE_FLAG_REVERSED_DEPTH) != 0);
+        Macros.Add("SSR_OPTION_PREVIOUS_FRAME", (m_FeatureFlags & FEATURE_FLAG_PREVIOUS_FRAME) != 0);
+        Macros.Add("SSR_OPTION_INVERTED_DEPTH", (m_FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
+        Macros.Add("SSR_OPTION_HALF_RESOLUTION", (m_FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION) != 0);
 
         const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
         const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeIntersection.fx", "ComputeIntersectionPS", SHADER_TYPE_PIXEL, Macros);
@@ -685,8 +751,8 @@ void ScreenSpaceReflection::ComputeIntersection(const RenderAttributes& RenderAt
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureRoughness"}.Set(m_Resources[RESOURCE_IDENTIFIER_ROUGHNESS].GetTextureSRV());
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureBlueNoise"}.Set(RenderAttribs.pPostFXContext->Get2DBlueNoiseSRV(PostFXContext::BLUE_NOISE_DIMENSION_XY));
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureDepthHierarchy"}.Set(m_Resources[RESOURCE_IDENTIFIER_DEPTH_HIERARCHY].GetTextureSRV());
-    if (RenderAttribs.FeatureFlag & FEATURE_FLAG_PREVIOUS_FRAME)
-        ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureMotion"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_MOTION_VECTORS].GetTextureSRV());
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureMotion"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_MOTION_VECTORS].GetTextureSRV());
+
     ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "ComputeIntersection"};
 
     ITextureView* pRTVs[] = {
@@ -694,9 +760,11 @@ void ScreenSpaceReflection::ComputeIntersection(const RenderAttributes& RenderAt
         m_Resources[RESOURCE_IDENTIFIER_RAY_DIRECTION_PDF].GetTextureRTV(),
     };
 
+    ITextureView* pDSV = m_FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION ? m_DepthStencilMaskDSVReadOnlyHalfRes : m_DepthStencilMaskDSVReadOnly;
+
     constexpr float4 RTVClearColor = float4(0.0, 0.0, 0.0, 0.0);
 
-    RenderAttribs.pDeviceContext->SetRenderTargets(_countof(pRTVs), pRTVs, m_DepthStencilMaskDSVReadOnly, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    RenderAttribs.pDeviceContext->SetRenderTargets(_countof(pRTVs), pRTVs, pDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     RenderAttribs.pDeviceContext->ClearRenderTarget(pRTVs[0], RTVClearColor.Data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     RenderAttribs.pDeviceContext->ClearRenderTarget(pRTVs[1], RTVClearColor.Data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     RenderAttribs.pDeviceContext->SetStencilRef(0xFF);
@@ -708,7 +776,7 @@ void ScreenSpaceReflection::ComputeIntersection(const RenderAttributes& RenderAt
 
 void ScreenSpaceReflection::ComputeSpatialReconstruction(const RenderAttributes& RenderAttribs)
 {
-    auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_SPATIAL_RECONSTRUCTION, RenderAttribs.FeatureFlag);
+    auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_SPATIAL_RECONSTRUCTION, m_FeatureFlags);
     if (!RenderTech.IsInitialized())
     {
         PipelineResourceLayoutDescX ResourceLayout;
@@ -723,7 +791,8 @@ void ScreenSpaceReflection::ComputeSpatialReconstruction(const RenderAttributes&
             .AddVariable(SHADER_TYPE_PIXEL, "g_TextureRayLength", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
 
         ShaderMacroHelper Macros;
-        Macros.Add("SSR_OPTION_INVERTED_DEPTH", (RenderAttribs.FeatureFlag & FEATURE_FLAG_REVERSED_DEPTH) != 0);
+        Macros.Add("SSR_OPTION_INVERTED_DEPTH", (m_FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
+        Macros.Add("SSR_OPTION_HALF_RESOLUTION", (m_FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION) != 0);
 
         const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
         const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeSpatialReconstruction.fx", "ComputeSpatialReconstructionPS", SHADER_TYPE_PIXEL, Macros);
@@ -768,7 +837,7 @@ void ScreenSpaceReflection::ComputeSpatialReconstruction(const RenderAttributes&
 
 void ScreenSpaceReflection::ComputeTemporalAccumulation(const RenderAttributes& RenderAttribs)
 {
-    auto&       RenderTech        = GetRenderTechnique(RENDER_TECH_COMPUTE_TEMPORAL_ACCUMULATION, RenderAttribs.FeatureFlag);
+    auto&       RenderTech        = GetRenderTechnique(RENDER_TECH_COMPUTE_TEMPORAL_ACCUMULATION, m_FeatureFlags);
     const auto& SupportedFeatures = RenderAttribs.pPostFXContext->GetSupportedFeatures();
     if (!RenderTech.IsInitialized())
     {
@@ -789,7 +858,7 @@ void ScreenSpaceReflection::ComputeTemporalAccumulation(const RenderAttributes& 
             .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TexturePrevVariance", Sam_LinearClamp);
 
         ShaderMacroHelper Macros;
-        Macros.Add("SSR_OPTION_INVERTED_DEPTH", (RenderAttribs.FeatureFlag & FEATURE_FLAG_REVERSED_DEPTH) != 0);
+        Macros.Add("SSR_OPTION_INVERTED_DEPTH", (m_FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
 
         const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
         const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeTemporalAccumulation.fx", "ComputeTemporalAccumulationPS", SHADER_TYPE_PIXEL, Macros);
@@ -856,7 +925,7 @@ void ScreenSpaceReflection::ComputeTemporalAccumulation(const RenderAttributes& 
 
 void ScreenSpaceReflection::ComputeBilateralCleanup(const RenderAttributes& RenderAttribs)
 {
-    auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_BILATERAL_CLEANUP, RenderAttribs.FeatureFlag);
+    auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_BILATERAL_CLEANUP, m_FeatureFlags);
 
     if (!RenderTech.IsInitialized())
     {
@@ -871,7 +940,7 @@ void ScreenSpaceReflection::ComputeBilateralCleanup(const RenderAttributes& Rend
             .AddVariable(SHADER_TYPE_PIXEL, "g_TextureVariance", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
 
         ShaderMacroHelper Macros;
-        Macros.Add("SSR_OPTION_INVERTED_DEPTH", (RenderAttribs.FeatureFlag & FEATURE_FLAG_REVERSED_DEPTH) != 0);
+        Macros.Add("SSR_OPTION_INVERTED_DEPTH", (m_FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
 
         const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
         const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeBilateralCleanup.fx", "ComputeBilateralCleanupPS", SHADER_TYPE_PIXEL, Macros);
