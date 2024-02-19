@@ -119,6 +119,40 @@ void HnPostProcessTask::PostProcessingTechnique::PreparePRS()
     ShaderResourceVariableX{PRS, SHADER_TYPE_PIXEL, "cbFrameAttribs"}.Set(RenderDelegate->GetFrameAttribsCB());
 }
 
+static GraphicsPipelineStateCreateInfoX& CreateShaders(RenderDeviceWithCache_E&          Device,
+                                                       const char*                       PSFilePath,
+                                                       const char*                       PSName,
+                                                       const ShaderMacroArray&           Macros,
+                                                       GraphicsPipelineStateCreateInfoX& PsoCI)
+{
+    ShaderCreateInfo ShaderCI;
+    ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL;
+    ShaderCI.Macros         = Macros;
+
+    auto pHnFxCompoundSourceFactory     = HnShaderSourceFactory::CreateHnFxCompoundFactory();
+    ShaderCI.pShaderSourceStreamFactory = pHnFxCompoundSourceFactory;
+
+    {
+        ShaderCI.Desc       = {"Full-screen Triangle VS", SHADER_TYPE_VERTEX, true};
+        ShaderCI.EntryPoint = "FullScreenTriangleVS";
+        ShaderCI.FilePath   = "FullScreenTriangleVS.fx";
+
+        auto pVS = Device.CreateShader(ShaderCI); // Throws exception in case of error
+        PsoCI.AddShader(pVS);
+    }
+
+    {
+        ShaderCI.Desc       = {PSName, SHADER_TYPE_PIXEL, true};
+        ShaderCI.EntryPoint = "main";
+        ShaderCI.FilePath   = PSFilePath;
+
+        auto pPS = Device.CreateShader(ShaderCI); // Throws exception in case of error
+        PsoCI.AddShader(pPS);
+    }
+
+    return PsoCI;
+}
+
 void HnPostProcessTask::PostProcessingTechnique::PreparePSO(TEXTURE_FORMAT RTVFormat)
 {
     if (PSO && PSO->GetGraphicsPipelineDesc().RTVFormats[0] != RTVFormat)
@@ -137,40 +171,13 @@ void HnPostProcessTask::PostProcessingTechnique::PreparePSO(TEXTURE_FORMAT RTVFo
         // RenderDeviceWithCache_E throws exceptions in case of errors
         RenderDeviceWithCache_E Device{RenderDelegate->GetDevice(), RenderDelegate->GetRenderStateCache()};
 
-        ShaderCreateInfo ShaderCI;
-        ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL;
-
-        auto pHnFxCompoundSourceFactory     = HnShaderSourceFactory::CreateHnFxCompoundFactory();
-        ShaderCI.pShaderSourceStreamFactory = pHnFxCompoundSourceFactory;
-
         ShaderMacroHelper Macros;
         Macros.Add("CONVERT_OUTPUT_TO_SRGB", !PPTask.m_UseTAA ? PPTask.m_Params.ConvertOutputToSRGB : false);
         Macros.Add("TONE_MAPPING_MODE", PPTask.m_Params.ToneMappingMode);
-        ShaderCI.Macros = Macros;
-
-        RefCntAutoPtr<IShader> pVS;
-        {
-            ShaderCI.Desc       = {"Full-screen Triangle VS", SHADER_TYPE_VERTEX, true};
-            ShaderCI.EntryPoint = "FullScreenTriangleVS";
-            ShaderCI.FilePath   = "FullScreenTriangleVS.fx";
-
-            pVS = Device.CreateShader(ShaderCI); // Throws exception in case of error
-        }
-
-        RefCntAutoPtr<IShader> pPS;
-        {
-            ShaderCI.Desc       = {"Post process PS", SHADER_TYPE_PIXEL, true};
-            ShaderCI.EntryPoint = "main";
-            ShaderCI.FilePath   = "HnPostProcess.psh";
-
-            pPS = Device.CreateShader(ShaderCI); // Throws exception in case of error
-        }
 
         GraphicsPipelineStateCreateInfoX PsoCI{"Post process"};
-        PsoCI
+        CreateShaders(Device, "HnPostProcess.psh", "Post-process PS", Macros, PsoCI)
             .AddRenderTarget(RTVFormat)
-            .AddShader(pVS)
-            .AddShader(pPS)
             .SetDepthStencilDesc(DSS_DisableDepth)
             .SetRasterizerDesc(RS_SolidFillNoCull)
             .AddSignature(PRS)
@@ -318,39 +325,12 @@ void HnPostProcessTask::CopyFrameTechnique::PreparePSO(TEXTURE_FORMAT RTVFormat)
         // RenderDeviceWithCache_E throws exceptions in case of errors
         RenderDeviceWithCache_E Device{RenderDelegate->GetDevice(), RenderDelegate->GetRenderStateCache()};
 
-        ShaderCreateInfo ShaderCI;
-        ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL;
-
-        auto pHnFxCompoundSourceFactory     = HnShaderSourceFactory::CreateHnFxCompoundFactory();
-        ShaderCI.pShaderSourceStreamFactory = pHnFxCompoundSourceFactory;
-
         ShaderMacroHelper Macros;
         Macros.Add("CONVERT_OUTPUT_TO_SRGB", PPTask.m_Params.ConvertOutputToSRGB);
-        ShaderCI.Macros = Macros;
-
-        RefCntAutoPtr<IShader> pVS;
-        {
-            ShaderCI.Desc       = {"Full-screen Triangle VS", SHADER_TYPE_VERTEX, true};
-            ShaderCI.EntryPoint = "FullScreenTriangleVS";
-            ShaderCI.FilePath   = "FullScreenTriangleVS.fx";
-
-            pVS = Device.CreateShader(ShaderCI); // Throws exception in case of error
-        }
-
-        RefCntAutoPtr<IShader> pPS;
-        {
-            ShaderCI.Desc       = {"Copy Frame PS", SHADER_TYPE_PIXEL, true};
-            ShaderCI.EntryPoint = "main";
-            ShaderCI.FilePath   = "HnCopyFrame.psh";
-
-            pPS = Device.CreateShader(ShaderCI); // Throws exception in case of error
-        }
 
         GraphicsPipelineStateCreateInfoX PsoCI{"Copy Frame"};
-        PsoCI
+        CreateShaders(Device, "HnCopyFrame.psh", "PostCopy Frame PS", Macros, PsoCI)
             .AddRenderTarget(RTVFormat)
-            .AddShader(pVS)
-            .AddShader(pPS)
             .SetDepthStencilDesc(DSS_DisableDepth)
             .SetRasterizerDesc(RS_SolidFillNoCull)
             .AddSignature(PRS)
