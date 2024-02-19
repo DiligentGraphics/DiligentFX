@@ -58,7 +58,7 @@ struct TemporalAntiAliasingAttribs
     // If this parameter is set to true,
     // the current frame will be written to the current history buffer without interpolation with the previous history buffer
     BOOL  ResetAccumulation          DEFAULT_VALUE(FALSE);
-    float Padding0                   DEFAULT_VALUE(0.0);
+    BOOL  SkipRejection              DEFAULT_VALUE(FALSE);
     float Padding1                   DEFAULT_VALUE(0.0);
 };
 

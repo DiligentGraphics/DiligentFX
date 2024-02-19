@@ -316,6 +316,9 @@ float4 ComputeTemporalAccumulationPS(in FullScreenTriangleVSOutput VSOut) : SV_T
     float3 RGBHDRCurrColor = SampleCurrColor(int2(Position.xy));
     float3 RGBHDRPrevColor = SamplePrevColor(PrevLocation);
 
+    if (g_TAAAttribs.SkipRejection)
+        return float4(lerp(RGBHDRCurrColor, RGBHDRPrevColor, g_TAAAttribs.TemporalStabilityFactor), 1.0);
+
     float3 YCoCgSDRCurrColor = RGBToYCoCg(HDRToSDR(RGBHDRCurrColor));
     float3 YCoCgSDRPrevColor = RGBToYCoCg(HDRToSDR(RGBHDRPrevColor));
 
