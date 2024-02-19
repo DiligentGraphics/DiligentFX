@@ -157,21 +157,30 @@ private:
 
         RefCntAutoPtr<IPipelineState>             PSO{};
         RefCntAutoPtr<IPipelineResourceSignature> PRS{};
-        RefCntAutoPtr<IShaderResourceBinding>     SRB{};
 
-        struct ShaderVariables
+        IShaderResourceBinding* CurrSRB = nullptr;
+
+        struct ShaderResources
         {
-            ShaderResourceVariableX Color;
-            ShaderResourceVariableX Depth;
-            ShaderResourceVariableX SelectionDepth;
-            ShaderResourceVariableX ClosestSelectedLocation;
-            ShaderResourceVariableX SSR;
-            ShaderResourceVariableX SpecularIBL;
-            ShaderResourceVariableX Normal;
-            ShaderResourceVariableX BaseColor;
-            ShaderResourceVariableX Material;
+            RefCntAutoPtr<IShaderResourceBinding> SRB;
+
+            struct ShaderVariables
+            {
+                ShaderResourceVariableX Color;
+                ShaderResourceVariableX Depth;
+                ShaderResourceVariableX SelectionDepth;
+                ShaderResourceVariableX ClosestSelectedLocation;
+                ShaderResourceVariableX SSR;
+                ShaderResourceVariableX SpecularIBL;
+                ShaderResourceVariableX Normal;
+                ShaderResourceVariableX BaseColor;
+                ShaderResourceVariableX Material;
+            };
+            ShaderVariables Vars{};
         };
-        ShaderVariables ShaderVars{};
+
+        // Two set of resources for each of the two depth buffers
+        std::array<ShaderResources, 2> Resources{};
 
         void CreatePRS();
         void PreparePSO(TEXTURE_FORMAT RTVFormat);

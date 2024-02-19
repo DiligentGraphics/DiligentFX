@@ -173,6 +173,12 @@ void HnPostProcessTask::PostProcessingTechnique::PrepareSRB(ITextureView* pClose
     ITextureView* pSSR = PPTask.m_SSR->GetSSRRadianceSRV();
     VERIFY_EXPR(pSSR != nullptr);
 
+    const HnRenderParam* pRenderParam = static_cast<const HnRenderParam*>(PPTask.m_RenderIndex->GetRenderDelegate()->GetRenderParam());
+    VERIFY_EXPR(pRenderParam != nullptr);
+    size_t ResIdx     = pRenderParam != nullptr ? pRenderParam->GetFrameNumber() % Resources.size() : 0;
+    auto&  SRB        = Resources[ResIdx].SRB;
+    auto&  ShaderVars = Resources[ResIdx].Vars;
+
     ITextureView* pOffscreenColorSRV = FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_SCENE_COLOR];
     ITextureView* pSpecularIblSRV    = FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_IBL];
     ITextureView* pNormalSRV         = FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_NORMAL];
@@ -194,8 +200,8 @@ void HnPostProcessTask::PostProcessingTechnique::PrepareSRB(ITextureView* pClose
             VarValueChanged(ShaderVars.Material, pMaterialSRV) ||
             VarValueChanged(ShaderVars.BaseColor, pBaseColorSRV))
         {
-            SRB.Release();
-            ShaderVars = {};
+            Resources = {};
+            CurrSRB   = nullptr;
         }
     }
 
@@ -204,7 +210,7 @@ void HnPostProcessTask::PostProcessingTechnique::PrepareSRB(ITextureView* pClose
         PRS->CreateShaderResourceBinding(&SRB, true);
         VERIFY_EXPR(SRB);
 
-        auto SetVar = [this](ShaderResourceVariableX& Var, const char* Name, IDeviceObject* pValue) {
+        auto SetVar = [&SRB](ShaderResourceVariableX& Var, const char* Name, IDeviceObject* pValue) {
             Var = ShaderResourceVariableX{SRB, SHADER_TYPE_PIXEL, Name};
             Var.Set(pValue);
         };
@@ -221,6 +227,8 @@ void HnPostProcessTask::PostProcessingTechnique::PrepareSRB(ITextureView* pClose
         SetVar(ShaderVars.BaseColor,               "g_BaseColor",               pBaseColorSRV);
         // clang-format on
     }
+
+    CurrSRB = SRB;
 }
 
 
@@ -435,7 +443,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         return;
     }
 
-    if (!m_PostProcessTech.PSO || !m_PostProcessTech.SRB)
+    if (m_PostProcessTech.PSO == nullptr || m_PostProcessTech.CurrSRB == nullptr)
     {
         UNEXPECTED("Render technique is not initialized");
         return;
@@ -531,7 +539,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
             m_AttribsCBDirty = false;
         }
         pCtx->SetPipelineState(m_PostProcessTech.PSO);
-        pCtx->CommitShaderResources(m_PostProcessTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        pCtx->CommitShaderResources(m_PostProcessTech.CurrSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         pCtx->Draw({3, DRAW_FLAG_VERIFY_ALL});
     }
 
