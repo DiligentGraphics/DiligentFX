@@ -145,6 +145,7 @@ private:
     float                       m_ClearDepth    = 1.f;     // Set in Prepare()
     float                       m_SSRScale      = 0;       // Set in Prepare()
     bool                        m_UseTAA        = false;   // Set in Prepare()
+    bool                        m_UseSSR        = false;   // Set in Prepare()
 
     bool m_ResetTAA       = true;
     bool m_AttribsCBDirty = true;
@@ -182,11 +183,33 @@ private:
         // Two set of resources for each of the two depth buffers
         std::array<ShaderResources, 2> Resources{};
 
-        void CreatePRS();
+        void PreparePRS();
         void PreparePSO(TEXTURE_FORMAT RTVFormat);
         void PrepareSRB(ITextureView* pClosestSelectedLocationSRV);
 
     } m_PostProcessTech;
+
+    struct CopyFrameTechnique
+    {
+        const HnPostProcessTask& PPTask;
+
+        bool IsDirty = true;
+
+        RefCntAutoPtr<IPipelineState>             PSO{};
+        RefCntAutoPtr<IPipelineResourceSignature> PRS{};
+        RefCntAutoPtr<IShaderResourceBinding>     SRB{};
+
+        struct ShaderVariables
+        {
+            ShaderResourceVariableX Color;
+        };
+        ShaderVariables ShaderVars{};
+
+        void PreparePRS();
+        void PreparePSO(TEXTURE_FORMAT RTVFormat);
+        void PrepareSRB();
+
+    } m_CopyFrameTech;
 };
 
 } // namespace USD

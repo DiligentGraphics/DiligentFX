@@ -1,0 +1,16 @@
+#include "FullScreenTriangleVSOutput.fxh"
+#include "SRGBUtilities.fxh"
+
+Texture2D g_ColorBuffer;
+
+void main(in  FullScreenTriangleVSOutput VSOut,
+          out float4                     Color : SV_Target0)
+{
+    float4 Pos = VSOut.f4PixelPos;
+
+    Color = g_ColorBuffer.Load(int3(Pos.xy, 0));
+
+#if CONVERT_OUTPUT_TO_SRGB
+    Color.rgb = LinearToSRGB(Color.rgb);
+#endif
+}

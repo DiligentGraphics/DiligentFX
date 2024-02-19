@@ -142,6 +142,7 @@ void HnBeginFrameTask::Sync(pxr::HdSceneDelegate* Delegate,
         {
             m_FinalColorTargetId            = Params.FinalColorTargetId;
             m_ClosestSelectedLocationFormat = Params.Formats.ClosestSelectedLocation;
+            m_JitteredColorFormat           = Params.Formats.JitteredColor;
             m_CameraId                      = Params.CameraId;
             m_RendererParams                = Params.Renderer;
             UpdateRenderPassState(Params);
@@ -237,7 +238,7 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
     FBTargets.PrevMotionRTV                 = UpdateBrim(m_PrevMotionTargetId, m_RenderPassState->GetRenderTargetFormat(HnFramebufferTargets::GBUFFER_TARGET_MOTION_VECTOR), "Motion vectors 1");
     FBTargets.ClosestSelectedLocationRTV[0] = UpdateBrim(m_ClosestSelLocnTargetId[0], m_ClosestSelectedLocationFormat, "Closest selected location 0");
     FBTargets.ClosestSelectedLocationRTV[1] = UpdateBrim(m_ClosestSelLocnTargetId[1], m_ClosestSelectedLocationFormat, "Closest selected location 1");
-    FBTargets.JitteredFinalColorRTV         = UpdateBrim(m_JitteredFinalColorTargetId, FinalRTVDesc.Format, "Jittered final color");
+    FBTargets.JitteredFinalColorRTV         = UpdateBrim(m_JitteredFinalColorTargetId, m_JitteredColorFormat, "Jittered final color");
     m_RenderPassState->SetFramebufferTargets(FBTargets);
 }
 

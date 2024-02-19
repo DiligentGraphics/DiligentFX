@@ -64,12 +64,59 @@ namespace USD
 
 HnPostProcessTask::HnPostProcessTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id) :
     HnTask{Id},
-    m_PostProcessTech{*this}
+    m_PostProcessTech{*this},
+    m_CopyFrameTech{*this}
 {
 }
 
 HnPostProcessTask::~HnPostProcessTask()
 {
+}
+
+
+void HnPostProcessTask::PostProcessingTechnique::PreparePRS()
+{
+    if (PRS)
+    {
+        return;
+    }
+
+    HnRenderDelegate*  RenderDelegate = static_cast<HnRenderDelegate*>(PPTask.m_RenderIndex->GetRenderDelegate());
+    IRenderDevice*     pDevice        = RenderDelegate->GetDevice();
+    IRenderStateCache* pStateCache    = RenderDelegate->GetRenderStateCache();
+
+    PipelineResourceSignatureDescX PRSDesc{"HnPostProcessTask: Post-processing PRS"};
+    PRSDesc
+        .SetUseCombinedTextureSamplers(true)
+        .AddResource(SHADER_TYPE_PIXEL, "cbPostProcessAttribs", SHADER_RESOURCE_TYPE_CONSTANT_BUFFER, SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+        .AddResource(SHADER_TYPE_PIXEL, "cbFrameAttribs", SHADER_RESOURCE_TYPE_CONSTANT_BUFFER, SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+        .AddResource(SHADER_TYPE_PIXEL, "g_PreintegratedGGX", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+        .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_PreintegratedGGX", Sam_LinearClamp);
+
+    PRSDesc
+        .AddResource(SHADER_TYPE_PIXEL, "g_ColorBuffer", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
+        .AddResource(SHADER_TYPE_PIXEL, "g_Depth", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
+        .AddResource(SHADER_TYPE_PIXEL, "g_SelectionDepth", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
+        .AddResource(SHADER_TYPE_PIXEL, "g_ClosestSelectedLocation", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
+        .AddResource(SHADER_TYPE_PIXEL, "g_SSR", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
+        .AddResource(SHADER_TYPE_PIXEL, "g_SpecularIBL", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
+        .AddResource(SHADER_TYPE_PIXEL, "g_Normal", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
+        .AddResource(SHADER_TYPE_PIXEL, "g_MaterialData", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
+        .AddResource(SHADER_TYPE_PIXEL, "g_BaseColor", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
+
+    PRS = RenderDeviceWithCache_N{pDevice, pStateCache}.CreatePipelineResourceSignature(PRSDesc);
+    VERIFY_EXPR(PRS);
+
+    USD_Renderer& USDRender = *RenderDelegate->GetUSDRenderer();
+
+    VERIFY_EXPR(PPTask.m_PostProcessAttribsCB);
+    ShaderResourceVariableX{PRS, SHADER_TYPE_PIXEL, "cbPostProcessAttribs"}.Set(PPTask.m_PostProcessAttribsCB);
+
+    VERIFY_EXPR(USDRender.GetPreintegratedGGX_SRV());
+    ShaderResourceVariableX{PRS, SHADER_TYPE_PIXEL, "g_PreintegratedGGX"}.Set(USDRender.GetPreintegratedGGX_SRV());
+
+    VERIFY_EXPR(RenderDelegate->GetFrameAttribsCB());
+    ShaderResourceVariableX{PRS, SHADER_TYPE_PIXEL, "cbFrameAttribs"}.Set(RenderDelegate->GetFrameAttribsCB());
 }
 
 void HnPostProcessTask::PostProcessingTechnique::PreparePSO(TEXTURE_FORMAT RTVFormat)
@@ -97,7 +144,7 @@ void HnPostProcessTask::PostProcessingTechnique::PreparePSO(TEXTURE_FORMAT RTVFo
         ShaderCI.pShaderSourceStreamFactory = pHnFxCompoundSourceFactory;
 
         ShaderMacroHelper Macros;
-        Macros.Add("CONVERT_OUTPUT_TO_SRGB", PPTask.m_Params.ConvertOutputToSRGB);
+        Macros.Add("CONVERT_OUTPUT_TO_SRGB", !PPTask.m_UseTAA ? PPTask.m_Params.ConvertOutputToSRGB : false);
         Macros.Add("TONE_MAPPING_MODE", PPTask.m_Params.ToneMappingMode);
         ShaderCI.Macros = Macros;
 
@@ -232,6 +279,128 @@ void HnPostProcessTask::PostProcessingTechnique::PrepareSRB(ITextureView* pClose
 }
 
 
+
+void HnPostProcessTask::CopyFrameTechnique::PreparePRS()
+{
+    if (PRS)
+    {
+        return;
+    }
+
+    HnRenderDelegate*  RenderDelegate = static_cast<HnRenderDelegate*>(PPTask.m_RenderIndex->GetRenderDelegate());
+    IRenderDevice*     pDevice        = RenderDelegate->GetDevice();
+    IRenderStateCache* pStateCache    = RenderDelegate->GetRenderStateCache();
+
+    PipelineResourceSignatureDescX PRSDesc{"HnPostProcessTask: Tone mapping PRS"};
+    PRSDesc
+        .SetUseCombinedTextureSamplers(true)
+        .AddResource(SHADER_TYPE_PIXEL, "g_ColorBuffer", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
+
+    PRS = RenderDeviceWithCache_N{pDevice, pStateCache}.CreatePipelineResourceSignature(PRSDesc);
+    VERIFY_EXPR(PRS);
+}
+
+void HnPostProcessTask::CopyFrameTechnique::PreparePSO(TEXTURE_FORMAT RTVFormat)
+{
+    if (PSO && PSO->GetGraphicsPipelineDesc().RTVFormats[0] != RTVFormat)
+        IsDirty = true;
+
+    if (IsDirty)
+        PSO.Release();
+
+    if (PSO)
+        return;
+
+    try
+    {
+        HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(PPTask.m_RenderIndex->GetRenderDelegate());
+
+        // RenderDeviceWithCache_E throws exceptions in case of errors
+        RenderDeviceWithCache_E Device{RenderDelegate->GetDevice(), RenderDelegate->GetRenderStateCache()};
+
+        ShaderCreateInfo ShaderCI;
+        ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL;
+
+        auto pHnFxCompoundSourceFactory     = HnShaderSourceFactory::CreateHnFxCompoundFactory();
+        ShaderCI.pShaderSourceStreamFactory = pHnFxCompoundSourceFactory;
+
+        ShaderMacroHelper Macros;
+        Macros.Add("CONVERT_OUTPUT_TO_SRGB", PPTask.m_Params.ConvertOutputToSRGB);
+        ShaderCI.Macros = Macros;
+
+        RefCntAutoPtr<IShader> pVS;
+        {
+            ShaderCI.Desc       = {"Full-screen Triangle VS", SHADER_TYPE_VERTEX, true};
+            ShaderCI.EntryPoint = "FullScreenTriangleVS";
+            ShaderCI.FilePath   = "FullScreenTriangleVS.fx";
+
+            pVS = Device.CreateShader(ShaderCI); // Throws exception in case of error
+        }
+
+        RefCntAutoPtr<IShader> pPS;
+        {
+            ShaderCI.Desc       = {"Copy Frame PS", SHADER_TYPE_PIXEL, true};
+            ShaderCI.EntryPoint = "main";
+            ShaderCI.FilePath   = "HnCopyFrame.psh";
+
+            pPS = Device.CreateShader(ShaderCI); // Throws exception in case of error
+        }
+
+        GraphicsPipelineStateCreateInfoX PsoCI{"Copy Frame"};
+        PsoCI
+            .AddRenderTarget(RTVFormat)
+            .AddShader(pVS)
+            .AddShader(pPS)
+            .SetDepthStencilDesc(DSS_DisableDepth)
+            .SetRasterizerDesc(RS_SolidFillNoCull)
+            .AddSignature(PRS)
+            .SetPrimitiveTopology(PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+
+        PSO = Device.CreateGraphicsPipelineState(PsoCI); // Throws exception in case of error
+
+        IsDirty = false;
+    }
+    catch (const std::runtime_error& err)
+    {
+        LOG_ERROR_MESSAGE("Failed to create tone mapping PSO: ", err.what());
+    }
+    catch (...)
+    {
+        LOG_ERROR_MESSAGE("Failed to create tone mapping PSO");
+    }
+}
+
+void HnPostProcessTask::CopyFrameTechnique::PrepareSRB()
+{
+    VERIFY_EXPR(PPTask.m_TAA);
+    ITexture* pAccumulatedFrame = PPTask.m_TAA->GetAccumulatedFrameSRV()->GetTexture();
+    if (pAccumulatedFrame == nullptr)
+    {
+        UNEXPECTED("Accumulated frame is null");
+        return;
+    }
+
+    ITextureView* pAccumulatedFrameSRV = pAccumulatedFrame->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+    if (SRB)
+    {
+        if (ShaderVars.Color && ShaderVars.Color.Get() != pAccumulatedFrameSRV)
+        {
+            SRB.Release();
+            ShaderVars = {};
+        }
+    }
+
+    if (!SRB)
+    {
+        PRS->CreateShaderResourceBinding(&SRB, true);
+        VERIFY_EXPR(SRB);
+
+        ShaderVars.Color = ShaderResourceVariableX{SRB, SHADER_TYPE_PIXEL, "g_ColorBuffer"};
+        ShaderVars.Color.Set(pAccumulatedFrameSRV);
+    }
+}
+
+
 void HnPostProcessTask::CreateVectorFieldRenderer(TEXTURE_FORMAT RTVFormat)
 {
     HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
@@ -262,54 +431,18 @@ void HnPostProcessTask::Sync(pxr::HdSceneDelegate* Delegate,
                 m_PostProcessTech.IsDirty = true;
             }
 
+            if (m_Params.ConvertOutputToSRGB != Params.ConvertOutputToSRGB ||
+                m_Params.ToneMappingMode != Params.ToneMappingMode)
+            {
+                m_CopyFrameTech.IsDirty = true;
+            }
+
             m_Params         = Params;
             m_AttribsCBDirty = true;
         }
     }
 
     *DirtyBits = pxr::HdChangeTracker::Clean;
-}
-
-void HnPostProcessTask::PostProcessingTechnique::CreatePRS()
-{
-    VERIFY_EXPR(!PRS);
-
-    HnRenderDelegate*  RenderDelegate = static_cast<HnRenderDelegate*>(PPTask.m_RenderIndex->GetRenderDelegate());
-    IRenderDevice*     pDevice        = RenderDelegate->GetDevice();
-    IRenderStateCache* pStateCache    = RenderDelegate->GetRenderStateCache();
-
-    PipelineResourceSignatureDescX PRSDesc{"HnPostProcessTask: PRS"};
-    PRSDesc
-        .SetUseCombinedTextureSamplers(true)
-        .AddResource(SHADER_TYPE_PIXEL, "cbPostProcessAttribs", SHADER_RESOURCE_TYPE_CONSTANT_BUFFER, SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
-        .AddResource(SHADER_TYPE_PIXEL, "cbFrameAttribs", SHADER_RESOURCE_TYPE_CONSTANT_BUFFER, SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
-        .AddResource(SHADER_TYPE_PIXEL, "g_PreintegratedGGX", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
-        .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_PreintegratedGGX", Sam_LinearClamp);
-
-    PRSDesc
-        .AddResource(SHADER_TYPE_PIXEL, "g_ColorBuffer", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
-        .AddResource(SHADER_TYPE_PIXEL, "g_Depth", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
-        .AddResource(SHADER_TYPE_PIXEL, "g_SelectionDepth", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
-        .AddResource(SHADER_TYPE_PIXEL, "g_ClosestSelectedLocation", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
-        .AddResource(SHADER_TYPE_PIXEL, "g_SSR", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
-        .AddResource(SHADER_TYPE_PIXEL, "g_SpecularIBL", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
-        .AddResource(SHADER_TYPE_PIXEL, "g_Normal", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
-        .AddResource(SHADER_TYPE_PIXEL, "g_MaterialData", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
-        .AddResource(SHADER_TYPE_PIXEL, "g_BaseColor", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
-
-    PRS = RenderDeviceWithCache_N{pDevice, pStateCache}.CreatePipelineResourceSignature(PRSDesc);
-    VERIFY_EXPR(PRS);
-
-    USD_Renderer& USDRender = *RenderDelegate->GetUSDRenderer();
-
-    VERIFY_EXPR(PPTask.m_PostProcessAttribsCB);
-    ShaderResourceVariableX{PRS, SHADER_TYPE_PIXEL, "cbPostProcessAttribs"}.Set(PPTask.m_PostProcessAttribsCB);
-
-    VERIFY_EXPR(USDRender.GetPreintegratedGGX_SRV());
-    ShaderResourceVariableX{PRS, SHADER_TYPE_PIXEL, "g_PreintegratedGGX"}.Set(USDRender.GetPreintegratedGGX_SRV());
-
-    VERIFY_EXPR(RenderDelegate->GetFrameAttribsCB());
-    ShaderResourceVariableX{PRS, SHADER_TYPE_PIXEL, "cbFrameAttribs"}.Set(RenderDelegate->GetFrameAttribsCB());
 }
 
 void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
@@ -398,22 +531,32 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
         m_SSRScale       = SSRScale;
         m_AttribsCBDirty = true;
     }
-
-    m_PostFXContext->PrepareResources({pRenderParam->GetFrameNumber(), FinalColorDesc.Width, FinalColorDesc.Height});
-    m_SSR->PrepareResources(pDevice, m_PostFXContext.get(), ScreenSpaceReflection::FEATURE_FLAG_NONE);
-    m_TAA->PrepareResources(pDevice, m_PostFXContext.get(), {m_FinalColorRTV->GetDesc().Format});
+    m_UseSSR = m_SSRScale > 0;
 
     m_UseTAA = m_Params.EnableTAA &&
         pRenderParam->GetDebugView() == PBR_Renderer::DebugViewType::None &&
         pRenderParam->GetRenderMode() == HN_RENDER_MODE_SOLID;
 
-    if (!m_PostProcessTech.PRS)
+    m_PostFXContext->PrepareResources({pRenderParam->GetFrameNumber(), FinalColorDesc.Width, FinalColorDesc.Height});
+    if (m_UseSSR)
     {
-        m_PostProcessTech.CreatePRS();
+        m_SSR->PrepareResources(pDevice, m_PostFXContext.get(), ScreenSpaceReflection::FEATURE_FLAG_NONE);
+    }
+    if (m_UseTAA)
+    {
+        m_TAA->PrepareResources(pDevice, m_PostFXContext.get(), {m_FinalColorRTV->GetDesc().Format});
     }
 
+    m_PostProcessTech.PreparePRS();
     m_PostProcessTech.PreparePSO((m_UseTAA ? m_FBTargets->JitteredFinalColorRTV : m_FinalColorRTV)->GetDesc().Format);
     m_PostProcessTech.PrepareSRB(ClosestSelectedLocationSRV);
+
+    if (m_UseTAA)
+    {
+        m_CopyFrameTech.PreparePRS();
+        m_CopyFrameTech.PreparePSO(m_FinalColorRTV->GetDesc().Format);
+        m_CopyFrameTech.PrepareSRB();
+    }
 
     if (!m_VectorFieldRenderer)
     {
@@ -480,7 +623,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
 
     const TextureDesc& FinalColorDesc = m_FinalColorRTV->GetTexture()->GetDesc();
 
-    if (m_SSRScale > 0)
+    if (m_UseSSR)
     {
         PostFXContext::RenderAttributes PostFXAttribs{pDevice, pStateCache, pCtx};
 
@@ -567,15 +710,13 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         TAARenderAttribs.pTAAAttribs = &TAASettings;
         m_TAA->Execute(TAARenderAttribs);
 
-        ScopedDebugGroup DebugGroup{pCtx, "Copy accumulated buffer"};
-        pCtx->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
-        CopyTextureAttribs CopyAttribs{
-            m_TAA->GetAccumulatedFrameSRV()->GetTexture(),
-            RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
-            m_FinalColorRTV->GetTexture(),
-            RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
-        };
-        pCtx->CopyTexture(CopyAttribs);
+
+        ScopedDebugGroup DebugGroup{pCtx, "Copy frame"};
+        ITextureView*    pRTVs[] = {m_FinalColorRTV};
+        pCtx->SetRenderTargets(_countof(pRTVs), pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        pCtx->SetPipelineState(m_CopyFrameTech.PSO);
+        pCtx->CommitShaderResources(m_CopyFrameTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        pCtx->Draw({3, DRAW_FLAG_VERIFY_ALL});
     }
 
     if (m_VectorFieldRenderer && pRenderParam->GetDebugView() == PBR_Renderer::DebugViewType::MotionVectors)

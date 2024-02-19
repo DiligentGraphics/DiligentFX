@@ -59,13 +59,15 @@ struct HnBeginFrameTaskParams
 
         TEXTURE_FORMAT Depth                   = TEX_FORMAT_D32_FLOAT;
         TEXTURE_FORMAT ClosestSelectedLocation = TEX_FORMAT_RG16_UNORM;
+        TEXTURE_FORMAT JitteredColor           = TEX_FORMAT_RGBA16_FLOAT;
 
         bool operator==(const RenderTargetFormats& rhs) const
         {
             // clang-format off
             return GBuffer                 == rhs.GBuffer &&
                    Depth                   == rhs.Depth &&
-                   ClosestSelectedLocation == rhs.ClosestSelectedLocation;
+                   ClosestSelectedLocation == rhs.ClosestSelectedLocation &&
+                   JitteredColor           == rhs.JitteredColor;
             // clang-format on
         }
 
@@ -213,6 +215,7 @@ private:
     pxr::SdfPath m_CameraId;
 
     TEXTURE_FORMAT m_ClosestSelectedLocationFormat = TEX_FORMAT_UNKNOWN;
+    TEXTURE_FORMAT m_JitteredColorFormat           = TEX_FORMAT_UNKNOWN;
 
     const HnCamera*     m_pCamera     = nullptr;
     pxr::HdRenderIndex* m_RenderIndex = nullptr;

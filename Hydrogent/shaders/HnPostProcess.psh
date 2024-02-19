@@ -6,6 +6,7 @@
 #include "RenderPBR_Structures.fxh"
 #include "PBR_Shading.fxh"
 #include "FullScreenTriangleVSOutput.fxh"
+#include "SRGBUtilities.fxh"
 
 cbuffer cbPostProcessAttribs
 {
@@ -94,6 +95,6 @@ void main(in  FullScreenTriangleVSOutput VSOut,
     Color.rgb = lerp(Color.rgb, g_Attribs.SelectionOutlineColor.rgb, Outline);
 
 #if CONVERT_OUTPUT_TO_SRGB
-    Color.rgb = pow(Color.rgb, float3(1.0/2.2, 1.0/2.2, 1.0/2.2));
+    Color.rgb = LinearToSRGB(Color.rgb);
 #endif
 }
