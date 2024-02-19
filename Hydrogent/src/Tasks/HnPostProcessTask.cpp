@@ -545,10 +545,7 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
         CreateVectorFieldRenderer(m_FinalColorRTV->GetDesc().Format);
     }
 
-    // Check if one of the previous tasks forced TAA reset:
-    // - HnBeginFrameTask::Execute() forces TAA reset if the camera has been moved.
-    // - HnPostProcessTask::Execute() forces TAA reset if the selected prim has changed.
-    // - m_ResetTAA can be set manually by the application to force TAA reset.
+    // Check if one of the previous tasks forced TAA reset.
     if (!m_ResetTAA)
     {
         GetTaskContextData(TaskCtx, HnRenderResourceTokens->taaReset, m_ResetTAA);
@@ -661,7 +658,6 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
             ShaderAttribs.SelectionOutlineWidth            = m_Params.SelectionOutlineWidth;
             ShaderAttribs.SSRScale                         = m_SSRScale;
             pCtx->UpdateBuffer(m_PostProcessAttribsCB, 0, sizeof(HLSL::PostProcessAttribs), &ShaderAttribs, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-            m_AttribsCBDirty = false;
         }
         pCtx->SetPipelineState(m_PostProcessTech.PSO);
         pCtx->CommitShaderResources(m_PostProcessTech.CurrSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
@@ -681,16 +677,16 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         bool CameraTransformDirty = false;
         GetTaskContextData(TaskCtx, HnRenderResourceTokens->cameraTransformDirty, CameraTransformDirty);
 
-        auto GeometryTransformVersion = pRenderParam->GetGeometryTransformVersion();
-        auto GeometrySubsetVersion    = pRenderParam->GetGeometrySubsetVersion();
+        SuperSamplingFactors CurrSSFactors{
+            pRenderParam->GetGeometryTransformVersion(),
+            pRenderParam->GetGeometrySubsetVersion(),
+            m_UseSSR,
+        };
+
         // Skip rejection if no geometry has changed and the camera transform is not dirty.
         // This will effectively result in full temporal supersampling for static scenes.
-        TAASettings.SkipRejection =
-            (m_LastGeometryTransformVersion == GeometryTransformVersion) &&
-            (m_LastGeometrySubsetVersion == GeometrySubsetVersion) &&
-            !CameraTransformDirty;
-        m_LastGeometryTransformVersion = GeometryTransformVersion;
-        m_LastGeometrySubsetVersion    = GeometrySubsetVersion;
+        TAASettings.SkipRejection  = (CurrSSFactors == m_LastSuperSamplingFactors) && !CameraTransformDirty && !m_AttribsCBDirty;
+        m_LastSuperSamplingFactors = CurrSSFactors;
 
         TemporalAntiAliasing::RenderAttributes TAARenderAttribs{pDevice, pStateCache, pCtx};
         TAARenderAttribs.pPostFXContext        = m_PostFXContext.get();
@@ -731,6 +727,9 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         Attribs.pVectorField = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_MOTION_VECTOR];
         m_VectorFieldRenderer->Render(Attribs);
     }
+
+    // Checked to set TAASettings.SkipRejection
+    m_AttribsCBDirty = false;
 }
 
 } // namespace USD

@@ -150,8 +150,20 @@ private:
     bool m_ResetTAA       = true;
     bool m_AttribsCBDirty = true;
 
-    Uint32 m_LastGeometryTransformVersion = ~0u;
-    Uint32 m_LastGeometrySubsetVersion    = ~0u;
+    struct SuperSamplingFactors
+    {
+        Uint32 GeometryTransformVersion = ~0u;
+        Uint32 GeometrySubsetVersion    = ~0u;
+        bool   UseSSR                   = false;
+
+        constexpr bool operator==(const SuperSamplingFactors& rhs) const
+        {
+            return (GeometryTransformVersion == rhs.GeometryTransformVersion &&
+                    GeometrySubsetVersion == rhs.GeometrySubsetVersion &&
+                    UseSSR == rhs.UseSSR);
+        }
+    };
+    SuperSamplingFactors m_LastSuperSamplingFactors;
 
     struct PostProcessingTechnique
     {
