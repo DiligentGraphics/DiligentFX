@@ -154,8 +154,6 @@ private:
     {
         const HnPostProcessTask& PPTask;
 
-        bool IsDirty = true;
-
         RefCntAutoPtr<IPipelineState>             PSO{};
         RefCntAutoPtr<IPipelineResourceSignature> PRS{};
 
@@ -183,17 +181,21 @@ private:
         // Two set of resources for each of the two depth buffers
         std::array<ShaderResources, 2> Resources{};
 
+        PostProcessingTechnique(const HnPostProcessTask& _PPTask) :
+            PPTask{_PPTask}
+        {}
         void PreparePRS();
         void PreparePSO(TEXTURE_FORMAT RTVFormat);
         void PrepareSRB(ITextureView* pClosestSelectedLocationSRV);
 
+    private:
+        bool ConvertOutputToSRGB = false;
+        int  ToneMappingMode     = 0;
     } m_PostProcessTech;
 
     struct CopyFrameTechnique
     {
         const HnPostProcessTask& PPTask;
-
-        bool IsDirty = true;
 
         RefCntAutoPtr<IPipelineState>             PSO{};
         RefCntAutoPtr<IPipelineResourceSignature> PRS{};
@@ -205,10 +207,15 @@ private:
         };
         ShaderVariables ShaderVars{};
 
+        CopyFrameTechnique(const HnPostProcessTask& _PPTask) :
+            PPTask{_PPTask}
+        {}
         void PreparePRS();
         void PreparePSO(TEXTURE_FORMAT RTVFormat);
         void PrepareSRB();
 
+    private:
+        bool ConvertOutputToSRGB = false;
     } m_CopyFrameTech;
 };
 

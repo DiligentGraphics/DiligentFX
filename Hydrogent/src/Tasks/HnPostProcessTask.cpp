@@ -155,8 +155,19 @@ static GraphicsPipelineStateCreateInfoX& CreateShaders(RenderDeviceWithCache_E& 
 
 void HnPostProcessTask::PostProcessingTechnique::PreparePSO(TEXTURE_FORMAT RTVFormat)
 {
-    if (PSO && PSO->GetGraphicsPipelineDesc().RTVFormats[0] != RTVFormat)
-        IsDirty = true;
+    bool IsDirty = PSO && PSO->GetGraphicsPipelineDesc().RTVFormats[0] != RTVFormat;
+
+    if (ConvertOutputToSRGB != (!PPTask.m_UseTAA && PPTask.m_Params.ConvertOutputToSRGB))
+    {
+        ConvertOutputToSRGB = !PPTask.m_UseTAA && PPTask.m_Params.ConvertOutputToSRGB;
+        IsDirty             = true;
+    }
+
+    if (ToneMappingMode != PPTask.m_Params.ToneMappingMode)
+    {
+        ToneMappingMode = PPTask.m_Params.ToneMappingMode;
+        IsDirty         = true;
+    }
 
     if (IsDirty)
         PSO.Release();
@@ -172,8 +183,8 @@ void HnPostProcessTask::PostProcessingTechnique::PreparePSO(TEXTURE_FORMAT RTVFo
         RenderDeviceWithCache_E Device{RenderDelegate->GetDevice(), RenderDelegate->GetRenderStateCache()};
 
         ShaderMacroHelper Macros;
-        Macros.Add("CONVERT_OUTPUT_TO_SRGB", !PPTask.m_UseTAA ? PPTask.m_Params.ConvertOutputToSRGB : false);
-        Macros.Add("TONE_MAPPING_MODE", PPTask.m_Params.ToneMappingMode);
+        Macros.Add("CONVERT_OUTPUT_TO_SRGB", ConvertOutputToSRGB);
+        Macros.Add("TONE_MAPPING_MODE", ToneMappingMode);
 
         GraphicsPipelineStateCreateInfoX PsoCI{"Post process"};
         CreateShaders(Device, "HnPostProcess.psh", "Post-process PS", Macros, PsoCI)
@@ -309,8 +320,13 @@ void HnPostProcessTask::CopyFrameTechnique::PreparePRS()
 
 void HnPostProcessTask::CopyFrameTechnique::PreparePSO(TEXTURE_FORMAT RTVFormat)
 {
-    if (PSO && PSO->GetGraphicsPipelineDesc().RTVFormats[0] != RTVFormat)
-        IsDirty = true;
+    bool IsDirty = PSO && PSO->GetGraphicsPipelineDesc().RTVFormats[0] != RTVFormat;
+
+    if (ConvertOutputToSRGB != PPTask.m_Params.ConvertOutputToSRGB)
+    {
+        ConvertOutputToSRGB = PPTask.m_Params.ConvertOutputToSRGB;
+        IsDirty             = true;
+    }
 
     if (IsDirty)
         PSO.Release();
@@ -326,7 +342,7 @@ void HnPostProcessTask::CopyFrameTechnique::PreparePSO(TEXTURE_FORMAT RTVFormat)
         RenderDeviceWithCache_E Device{RenderDelegate->GetDevice(), RenderDelegate->GetRenderStateCache()};
 
         ShaderMacroHelper Macros;
-        Macros.Add("CONVERT_OUTPUT_TO_SRGB", PPTask.m_Params.ConvertOutputToSRGB);
+        Macros.Add("CONVERT_OUTPUT_TO_SRGB", ConvertOutputToSRGB);
 
         GraphicsPipelineStateCreateInfoX PsoCI{"Copy Frame"};
         CreateShaders(Device, "HnCopyFrame.psh", "PostCopy Frame PS", Macros, PsoCI)
@@ -403,20 +419,6 @@ void HnPostProcessTask::Sync(pxr::HdSceneDelegate* Delegate,
         HnPostProcessTaskParams Params;
         if (GetTaskParams(Delegate, Params))
         {
-            if (m_Params.ConvertOutputToSRGB != Params.ConvertOutputToSRGB ||
-                m_Params.ToneMappingMode != Params.ToneMappingMode ||
-                m_Params.EnableTAA != Params.EnableTAA)
-            {
-                // In OpenGL we can't release PSO in Worker thread
-                m_PostProcessTech.IsDirty = true;
-            }
-
-            if (m_Params.ConvertOutputToSRGB != Params.ConvertOutputToSRGB ||
-                m_Params.ToneMappingMode != Params.ToneMappingMode)
-            {
-                m_CopyFrameTech.IsDirty = true;
-            }
-
             m_Params         = Params;
             m_AttribsCBDirty = true;
         }
