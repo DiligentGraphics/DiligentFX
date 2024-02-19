@@ -310,6 +310,10 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
     if (pxr::HdChangeTracker::IsTransformDirty(DirtyBits, Id))
     {
         m_Attribs.Transform = ToFloat4x4(SceneDelegate.GetTransform(Id));
+        if (RenderParam != nullptr)
+        {
+            static_cast<HnRenderParam*>(RenderParam)->MakeGeometryTransformDirty();
+        }
     }
 
     if (pxr::HdChangeTracker::IsVisibilityDirty(DirtyBits, Id))

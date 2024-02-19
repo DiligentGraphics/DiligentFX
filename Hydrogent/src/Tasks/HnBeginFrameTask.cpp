@@ -313,15 +313,19 @@ void HnBeginFrameTask::Prepare(pxr::HdTaskContext* TaskCtx,
     (*TaskCtx)[HnRenderResourceTokens->taaReset] = pxr::VtValue{ResetTAA};
 }
 
-void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx, IBuffer* pFrameAttrbisCB, const float2& Jitter, bool UseTAA)
+void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
+                                            IBuffer*        pFrameAttrbisCB,
+                                            bool            UseTAA,
+                                            const float2&   Jitter,
+                                            bool&           CameraTransformDirty)
 {
     HLSL::PBRFrameAttribs& FrameAttribs = *m_FrameAttribs;
+    HLSL::CameraAttribs&   PrevCamera   = FrameAttribs.PrevCamera;
+    HLSL::CameraAttribs&   CamAttribs   = FrameAttribs.Camera;
 
-    FrameAttribs.PrevCamera = FrameAttribs.Camera;
+    PrevCamera = CamAttribs;
     if (m_pCamera != nullptr)
     {
-        HLSL::CameraAttribs& CamAttribs = FrameAttribs.Camera;
-
         float4x4 ProjMatrix = m_pCamera->GetProjectionMatrix();
         ProjMatrix[2][0]    = Jitter.x;
         ProjMatrix[2][1]    = Jitter.y;
@@ -348,10 +352,26 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx, IBuffer* pFram
         CamAttribs.f4Position    = float4{float3::MakeVector(WorldMatrix[3]), 1};
         CamAttribs.f2Jitter      = Jitter;
 
+        if (CamAttribs.mViewT != PrevCamera.mViewT)
+        {
+            CameraTransformDirty = true;
+        }
+        else
+        {
+            float4x4 PrevProjT = PrevCamera.mProjT;
+            PrevProjT[0][2]    = Jitter.x;
+            PrevProjT[1][2]    = Jitter.y;
+            if (PrevProjT != CamAttribs.mProjT)
+            {
+                CameraTransformDirty = true;
+            }
+        }
+
         if (FrameAttribs.PrevCamera.f4ViewportSize.x == 0)
         {
             // First frame
             FrameAttribs.PrevCamera = CamAttribs;
+            CameraTransformDirty    = true;
         }
     }
     else
@@ -430,8 +450,11 @@ void HnBeginFrameTask::Execute(pxr::HdTaskContext* TaskCtx)
         GetTaskContextData(TaskCtx, HnRenderResourceTokens->taaJitterOffsets, JitterOffsets);
         GetTaskContextData(TaskCtx, HnRenderResourceTokens->useTaa, UseTAA);
 
-        UpdateFrameConstants(pCtx, pFrameAttribsCB, JitterOffsets, UseTAA);
+        bool CameraTransformDirty = false;
+        UpdateFrameConstants(pCtx, pFrameAttribsCB, UseTAA, JitterOffsets, CameraTransformDirty);
         (*TaskCtx)[HnRenderResourceTokens->frameShaderAttribs] = pxr::VtValue{m_FrameAttribs.get()};
+        // Will be used by HnPostProcessTask::Execute()
+        (*TaskCtx)[HnRenderResourceTokens->cameraTransformDirty] = pxr::VtValue{CameraTransformDirty};
     }
     else
     {

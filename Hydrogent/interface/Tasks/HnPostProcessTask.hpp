@@ -150,6 +150,9 @@ private:
     bool m_ResetTAA       = true;
     bool m_AttribsCBDirty = true;
 
+    Uint32 m_LastGeometryTransformVersion = ~0u;
+    Uint32 m_LastGeometrySubsetVersion    = ~0u;
+
     struct PostProcessingTechnique
     {
         const HnPostProcessTask& PPTask;

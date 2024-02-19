@@ -193,7 +193,7 @@ public:
 private:
     void UpdateRenderPassState(const HnBeginFrameTaskParams& Params);
     void PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex, pxr::HdTaskContext* TaskCtx, ITextureView* pFinalColorRTV);
-    void UpdateFrameConstants(IDeviceContext* pCtx, IBuffer* pFrameAttrbisCB, const float2& Jitter, bool UseTAA);
+    void UpdateFrameConstants(IDeviceContext* pCtx, IBuffer* pFrameAttrbisCB, bool UseTAA, const float2& Jitter, bool& CameraTransformDirty);
 
 private:
     std::shared_ptr<HnRenderPassState> m_RenderPassState;

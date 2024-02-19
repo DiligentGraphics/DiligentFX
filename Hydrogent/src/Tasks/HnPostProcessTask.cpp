@@ -678,6 +678,20 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
             m_ResetTAA                    = false;
         }
 
+        bool CameraTransformDirty = false;
+        GetTaskContextData(TaskCtx, HnRenderResourceTokens->cameraTransformDirty, CameraTransformDirty);
+
+        auto GeometryTransformVersion = pRenderParam->GetGeometryTransformVersion();
+        auto GeometrySubsetVersion    = pRenderParam->GetGeometrySubsetVersion();
+        // Skip rejection if no geometry has changed and the camera transform is not dirty.
+        // This will effectively result in full temporal supersampling for static scenes.
+        TAASettings.SkipRejection =
+            (m_LastGeometryTransformVersion == GeometryTransformVersion) &&
+            (m_LastGeometrySubsetVersion == GeometrySubsetVersion) &&
+            !CameraTransformDirty;
+        m_LastGeometryTransformVersion = GeometryTransformVersion;
+        m_LastGeometrySubsetVersion    = GeometrySubsetVersion;
+
         TemporalAntiAliasing::RenderAttributes TAARenderAttribs{pDevice, pStateCache, pCtx};
         TAARenderAttribs.pPostFXContext        = m_PostFXContext.get();
         TAARenderAttribs.pColorBufferSRV       = m_FBTargets->JitteredFinalColorRTV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);

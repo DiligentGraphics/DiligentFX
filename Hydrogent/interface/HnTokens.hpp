@@ -127,7 +127,8 @@ namespace USD
     (frameShaderAttribs)				 \
     (useTaa)							 \
 	(taaJitterOffsets)					 \
-	(taaReset)
+	(taaReset)							 \
+    (cameraTransformDirty)
 
 // clang-format on
 
