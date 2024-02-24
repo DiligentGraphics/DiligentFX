@@ -263,7 +263,7 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
     m_PrimitiveAttribsCB{CreatePrimitiveAttribsCB(CI.pDevice)},
     m_MaterialSRBCache{HnMaterial::CreateSRBCache()},
     m_USDRenderer{CreateUSDRenderer(CI, m_PrimitiveAttribsCB, m_MaterialSRBCache)},
-    m_TextureRegistry{CI.pDevice, CI.TextureAtlasDim != 0 ? m_ResourceMgr : nullptr},
+    m_TextureRegistry{CI.pDevice, CI.TextureAtlasDim != 0 ? m_ResourceMgr : RefCntAutoPtr<GLTF::ResourceManager>{}},
     m_RenderParam{std::make_unique<HnRenderParam>(CI.UseVertexPool, CI.UseIndexPool, CI.TextureBindingMode)}
 {
 }
