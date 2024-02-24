@@ -2,6 +2,13 @@ cmake_minimum_required (VERSION 3.13)
 
 project(Diligent-Hydrogent CXX)
 
+# We need to bring in the OpenUSD package explicitly so that USDViewer can
+# link with the right version of python and boost::python
+if(PLATFORM_LINUX)
+    set(pxr_DIR ${DILIGENT_USD_PATH})
+    find_package(pxr)
+endif()
+
 set(SOURCE
     src/HnMaterial.cpp
     src/HnMaterialNetwork.cpp
