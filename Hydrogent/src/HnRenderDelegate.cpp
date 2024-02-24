@@ -171,7 +171,7 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
     }
     else
     {
-        VERIFY(RenderDelegateCI.TextureBindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_LEGACY);
+        VERIFY_EXPR(RenderDelegateCI.TextureBindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_LEGACY);
         USDRendererCI.ShaderTexturesArrayMode = USD_Renderer::SHADER_TEXTURE_ARRAY_MODE_NONE;
     }
 
@@ -263,7 +263,7 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
     m_PrimitiveAttribsCB{CreatePrimitiveAttribsCB(CI.pDevice)},
     m_MaterialSRBCache{HnMaterial::CreateSRBCache()},
     m_USDRenderer{CreateUSDRenderer(CI, m_PrimitiveAttribsCB, m_MaterialSRBCache)},
-    m_TextureRegistry{CI.pDevice, CI.TextureAtlasDim != 0 ? m_ResourceMgr : nullptr},
+    m_TextureRegistry{CI.pDevice, CI.TextureAtlasDim != 0 ? m_ResourceMgr : RefCntAutoPtr<GLTF::ResourceManager>{}},
     m_RenderParam{std::make_unique<HnRenderParam>(CI.UseVertexPool, CI.UseIndexPool, CI.TextureBindingMode)}
 {
 }
