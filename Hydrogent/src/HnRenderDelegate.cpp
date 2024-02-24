@@ -171,7 +171,7 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
     }
     else
     {
-        VERIFY(RenderDelegateCI.TextureBindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_LEGACY);
+        VERIFY_EXPR(RenderDelegateCI.TextureBindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_LEGACY);
         USDRendererCI.ShaderTexturesArrayMode = USD_Renderer::SHADER_TEXTURE_ARRAY_MODE_NONE;
     }
 
