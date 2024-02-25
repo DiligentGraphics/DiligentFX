@@ -40,8 +40,26 @@ cbuffer cbFrameAttribs
 
 cbuffer cbPrimitiveAttribs
 {
+#if PRIMITIVE_ARRAY_SIZE > 0
+    PBRPrimitiveAttribs g_Primitive[PRIMITIVE_ARRAY_SIZE];
+#else
     PBRPrimitiveAttribs g_Primitive;
+#endif
 }
+
+#ifdef PLATFORM_EMSCRIPTEN
+#   define DRAW_ID gl_DrawID
+#else
+#   define DRAW_ID gl_DrawIDARB
+#endif
+
+#if PRIMITIVE_ARRAY_SIZE > 0
+#   define PRIMITIVE_ID DRAW_ID
+#   define PRIMITIVE    g_Primitive[PRIMITIVE_ID]
+#else
+#   define PRIMITIVE    g_Primitive
+#endif
+
 
 #if MAX_JOINT_COUNT > 0 && USE_JOINTS
 cbuffer cbJointTransforms
@@ -59,14 +77,14 @@ void main(in  VSInput  VSIn,
     // Warning: moving this block into GLTF_TransformVertex() function causes huge
     // performance degradation on Vulkan because glslang/SPIRV-Tools are apparently not able
     // to eliminate the copy of g_Transforms structure.
-    float4x4 Transform = g_Primitive.Transforms.NodeMatrix;
+    float4x4 Transform = PRIMITIVE.Transforms.NodeMatrix;
 
 #if COMPUTE_MOTION_VECTORS
-    float4x4 PrevTransform = g_Primitive.PrevNodeMatrix;
+    float4x4 PrevTransform = PRIMITIVE.PrevNodeMatrix;
 #endif
     
 #if MAX_JOINT_COUNT > 0 && USE_JOINTS
-    if (g_Primitive.Transforms.JointCount > 0)
+    if (PRIMITIVE.Transforms.JointCount > 0)
     {
         // Mesh is skinned
         float4x4 SkinMat = 
@@ -132,5 +150,9 @@ void main(in  VSInput  VSIn,
         // If gl_PointSize is not defined, points are not rendered in GLES
         gl_PointSize = g_Frame.Renderer.PointSize;
 #   endif
+#endif
+    
+#if PRIMITIVE_ARRAY_SIZE > 0
+    VSOut.PrimitiveID = PRIMITIVE_ID;
 #endif
 }

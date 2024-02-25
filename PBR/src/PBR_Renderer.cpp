@@ -45,6 +45,12 @@ namespace Diligent
 
 const SamplerDesc PBR_Renderer::CreateInfo::DefaultSampler = Sam_LinearWrap;
 
+#if PLATFORM_EMSCRIPTEN
+static constexpr char MultiDrawGLSLExtension[] = "#extension GL_ANGLE_multi_draw : enable";
+#else
+static constexpr char MultiDrawGLSLExtension[] = "#extension GL_ARB_shader_draw_parameters : enable";
+#endif
+
 namespace HLSL
 {
 
@@ -864,6 +870,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
 {
     ShaderMacroHelper Macros;
     Macros.Add("MAX_JOINT_COUNT", static_cast<int>(m_Settings.MaxJointCount));
+    Macros.Add("PRIMITIVE_ARRAY_SIZE", static_cast<int>(m_Settings.PrimitiveArraySize));
     Macros.Add("TONE_MAPPING_MODE", "TONE_MAPPING_MODE_UNCHARTED2");
 
     Macros.Add("PBR_WORKFLOW_METALLIC_ROUGHNESS", static_cast<int>(PBR_WORKFLOW_METALL_ROUGH));
@@ -1106,7 +1113,7 @@ void PBR_Renderer::GetVSInputStructAndLayout(PSO_FLAGS         PSOFlags,
     VSInputStruct = ss.str();
 }
 
-std::string PBR_Renderer::GetVSOutputStruct(PSO_FLAGS PSOFlags, bool UseVkPointSize)
+std::string PBR_Renderer::GetVSOutputStruct(PSO_FLAGS PSOFlags, bool UseVkPointSize, bool UsePrimitiveId)
 {
     // struct VSOutput
     // {
@@ -1152,6 +1159,10 @@ std::string PBR_Renderer::GetVSOutputStruct(PSO_FLAGS PSOFlags, bool UseVkPointS
     if (UseVkPointSize)
     {
         ss << "    [[vk::builtin(\"PointSize\")]] float PointSize : PSIZE;" << std::endl;
+    }
+    if (UsePrimitiveId)
+    {
+        ss << "    int PrimitiveID : PRIMITIVE_ID;" << std::endl;
     }
     ss << "};" << std::endl;
     return ss.str();
@@ -1208,7 +1219,7 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
     GetVSInputStructAndLayout(PSOFlags, VSInputStruct, InputLayout);
 
     const bool UseVkPointSize = GraphicsDesc.PrimitiveTopology == PRIMITIVE_TOPOLOGY_POINT_LIST && m_Device.GetDeviceInfo().IsVulkanDevice();
-    const auto VSOutputStruct = GetVSOutputStruct(PSOFlags, UseVkPointSize);
+    const auto VSOutputStruct = GetVSOutputStruct(PSOFlags, UseVkPointSize, m_Settings.PrimitiveArraySize > 0);
 
     CreateInfo::PSMainSourceInfo PSMainSource;
     if (m_Settings.GetPSMainSource)
@@ -1250,15 +1261,18 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
         ShaderCI.Desc       = {"PBR VS", SHADER_TYPE_VERTEX, UseCombinedSamplers};
         ShaderCI.EntryPoint = "main";
         ShaderCI.FilePath   = "RenderPBR.vsh";
+        if (m_Settings.PrimitiveArraySize > 0 && m_Device.GetDeviceInfo().IsGLDevice())
+            ShaderCI.GLSLExtensions = MultiDrawGLSLExtension;
 
         pVS = m_Device.CreateShader(ShaderCI);
     }
 
     RefCntAutoPtr<IShader> pPS;
     {
-        ShaderCI.Desc       = {!IsUnshaded ? "PBR PS" : "Unshaded PS", SHADER_TYPE_PIXEL, UseCombinedSamplers};
-        ShaderCI.EntryPoint = "main";
-        ShaderCI.FilePath   = !IsUnshaded ? "RenderPBR.psh" : "RenderUnshaded.psh";
+        ShaderCI.Desc           = {!IsUnshaded ? "PBR PS" : "Unshaded PS", SHADER_TYPE_PIXEL, UseCombinedSamplers};
+        ShaderCI.EntryPoint     = "main";
+        ShaderCI.FilePath       = !IsUnshaded ? "RenderPBR.psh" : "RenderUnshaded.psh";
+        ShaderCI.GLSLExtensions = nullptr;
 
         pPS = m_Device.CreateShader(ShaderCI);
     }

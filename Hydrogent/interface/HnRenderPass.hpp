@@ -122,16 +122,14 @@ private:
 
         PBR_Renderer::PSO_FLAGS PSOFlags = PBR_Renderer::PSO_FLAG_NONE;
 
-        // Primitive attributes shader data size computed from the used PSO flags, aligned by the required
-        // constant buffer offset alignment.
+        // Primitive attributes shader data size computed from the used PSO flags.
         // Note: unshaded (aka wireframe/point) rendering modes don't use any textures, so the shader data
         //       is smaller than that for the shaded mode.
-        Uint32 ShaderAttribsDataAlignedSize = 0;
+        Uint32 ShaderAttribsDataSize = 0;
 
-        // Primitive attributes buffer range computed from all material PSO flags, aligned by the required
-        // constant buffer offset alignment.
+        // Primitive attributes buffer range computed from all material PSO flags.
         // Note: it is always greater than or equal to ShaderAttribsDataAlignedSize.
-        Uint32 ShaderAttribsBufferAlignedRange = 0;
+        Uint32 ShaderAttribsBufferRange = 0;
 
         Uint32 Version = 0;
 
@@ -163,12 +161,21 @@ private:
     pxr::HdRenderIndex::HdDrawItemPtrVector m_DrawItems;
     // Only selected/unselected draw items in the collection.
     std::vector<DrawListItem> m_DrawList;
+
+    struct PendingDrawItem
+    {
+        const DrawListItem& ListItem;
+        const Uint32        BufferOffset;
+        Uint32              DrawCount = 1;
+    };
+
     // Draw list items to be rendered in the current batch.
-    std::vector<const DrawListItem*> m_PendingDrawItems;
+    std::vector<PendingDrawItem> m_PendingDrawItems;
     // Rendering order of the draw list items sorted by the PSO.
     std::vector<Uint32> m_RenderOrder;
 
     std::vector<Uint8> m_PrimitiveAttribsData;
+    std::vector<Uint8> m_ScratchSpace;
 
     pxr::SdfPath m_SelectedPrimId             = {};
     unsigned int m_CollectionVersion          = ~0u;

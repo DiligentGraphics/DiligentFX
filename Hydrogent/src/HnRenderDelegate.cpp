@@ -183,6 +183,10 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
             {3, 3, 2, VT_FLOAT32}, //float2 UV1     : ATTRIB3;
         };
 
+    const auto& DeviceInfo = RenderDelegateCI.pDevice->GetDeviceInfo();
+    if (DeviceInfo.IsGLDevice() && DeviceInfo.Features.NativeMultiDraw)
+        USDRendererCI.PrimitiveArraySize = 16;
+
     USDRendererCI.InputLayout.LayoutElements = Inputs;
     USDRendererCI.InputLayout.NumElements    = _countof(Inputs);
 

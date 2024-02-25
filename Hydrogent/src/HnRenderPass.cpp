@@ -267,8 +267,11 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
     const bool        ApplyTransform  = m_RenderParams.Transform != float4x4::Identity();
 
     m_PendingDrawItems.clear();
+    m_PendingDrawItems.reserve(m_DrawList.size());
     void*  pMappedBufferData = nullptr;
     Uint32 CurrOffset        = 0;
+
+    m_ScratchSpace.resize(sizeof(MultiDrawIndexedItem) * State.USDRenderer.GetSettings().PrimitiveArraySize);
 
     auto FlushPendingDraws = [&]() {
         VERIFY_EXPR(CurrOffset > 0);
@@ -280,8 +283,7 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
         }
         else
         {
-            VERIFY_EXPR(m_PrimitiveAttribsData.size() >= CurrOffset);
-            State.pCtx->UpdateBuffer(pPrimitiveAttribsCB, 0, CurrOffset, m_PrimitiveAttribsData.data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+            State.pCtx->UpdateBuffer(pPrimitiveAttribsCB, 0, m_PrimitiveAttribsData.size(), m_PrimitiveAttribsData.data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         }
         RenderPendingDrawItems(State);
         VERIFY_EXPR(m_PendingDrawItems.empty());
@@ -321,6 +323,9 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
                   });
     }
 
+    const Uint32 PrimitiveArraySize = std::max(State.USDRenderer.GetSettings().PrimitiveArraySize, 1u);
+
+    Uint32 MultiDrawCount = 0;
     for (Uint32 ListItemId : m_RenderOrder)
     {
         DrawListItem&     ListItem  = m_DrawList[ListItemId];
@@ -335,12 +340,42 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
         if (!ListItem || !DrawItem.GetVisible())
             continue;
 
-        // Note that the actual attribs size may be smaller than the range, but we need
-        // to check for the entire range to avoid errors.
-        if (CurrOffset + ListItem.ShaderAttribsBufferAlignedRange > AttribsBuffDesc.Size)
+        if (MultiDrawCount == PrimitiveArraySize)
+            MultiDrawCount = 0;
+
+        if (MultiDrawCount > 0)
         {
-            // The buffer is full. Render the pending items and start filling the buffer from the beginning.
-            FlushPendingDraws();
+            // Check if the current item can be batched with the previous ones
+            auto& FirstMultiDrawItem = m_PendingDrawItems[m_PendingDrawItems.size() - MultiDrawCount];
+            VERIFY_EXPR(FirstMultiDrawItem.DrawCount == MultiDrawCount);
+
+            // If any of the state changes, multi-draw is not possible
+            if (FirstMultiDrawItem.ListItem.pPSO == ListItem.pPSO &&
+                FirstMultiDrawItem.ListItem.IndexBuffer == ListItem.IndexBuffer &&
+                FirstMultiDrawItem.ListItem.NumVertexBuffers == ListItem.NumVertexBuffers &&
+                FirstMultiDrawItem.ListItem.VertexBuffers == ListItem.VertexBuffers &&
+                FirstMultiDrawItem.ListItem.DrawItem.GetMaterial()->GetSRB() == ListItem.DrawItem.GetMaterial()->GetSRB())
+            {
+                ++FirstMultiDrawItem.DrawCount;
+            }
+            else
+            {
+                MultiDrawCount = 0;
+            }
+        }
+
+        if (MultiDrawCount == 0)
+        {
+            // Align the offset to the constant buffer offset alignment
+            CurrOffset = AlignUp(CurrOffset, State.ConstantBufferOffsetAlignment);
+
+            // Note that the actual attribs size may be smaller than the range, but we need
+            // to check for the entire range to avoid errors.
+            if (CurrOffset + ListItem.ShaderAttribsBufferRange * PrimitiveArraySize > AttribsBuffDesc.Size)
+            {
+                // The buffer is full. Render the pending items and start filling the buffer from the beginning.
+                FlushPendingDraws();
+            }
         }
 
         void* pCurrPrimitive = nullptr;
@@ -359,12 +394,10 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
         }
         else
         {
-            if (CurrOffset + ListItem.ShaderAttribsBufferAlignedRange > m_PrimitiveAttribsData.size())
-                m_PrimitiveAttribsData.resize(CurrOffset + ListItem.ShaderAttribsBufferAlignedRange);
+            if (CurrOffset + ListItem.ShaderAttribsDataSize > m_PrimitiveAttribsData.size())
+                m_PrimitiveAttribsData.resize(CurrOffset + ListItem.ShaderAttribsDataSize);
             pCurrPrimitive = &m_PrimitiveAttribsData[CurrOffset];
         }
-
-        CurrOffset += ListItem.ShaderAttribsDataAlignedSize;
 
         // Write current primitive attributes
         float4 CustomData{
@@ -396,7 +429,10 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
 
         ListItem.PrevTransform = MeshAttribs.Transform;
 
-        m_PendingDrawItems.push_back(&ListItem);
+        m_PendingDrawItems.push_back(PendingDrawItem{ListItem, CurrOffset});
+
+        CurrOffset += ListItem.ShaderAttribsDataSize;
+        ++MultiDrawCount;
     }
     if (CurrOffset != 0)
     {
@@ -642,13 +678,11 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
             UNEXPECTED("Unexpected render mode");
         }
 
-        const Uint32 AttribsDataSize    = State.USDRenderer.GetPBRPrimitiveAttribsSize(PSOFlags);
-        const Uint32 AttribsBufferRange = State.USDRenderer.GetPBRPrimitiveAttribsSize(GetMaterialPSOFlags(*pMaterial));
-        VERIFY(AttribsDataSize <= AttribsBufferRange,
-               "Attribs data size (", AttribsDataSize, ") computed from the PSO flags exceeds the attribs buffer range (", AttribsBufferRange,
-               ") computed from material PSO flags. The latter is used by HnMaterial to set the buffer range.");
-        ListItem.ShaderAttribsDataAlignedSize    = AlignUp(AttribsDataSize, State.ConstantBufferOffsetAlignment);
-        ListItem.ShaderAttribsBufferAlignedRange = AlignUp(AttribsBufferRange, State.ConstantBufferOffsetAlignment);
+        ListItem.ShaderAttribsDataSize    = State.USDRenderer.GetPBRPrimitiveAttribsSize(PSOFlags);
+        ListItem.ShaderAttribsBufferRange = State.USDRenderer.GetPBRPrimitiveAttribsSize(GetMaterialPSOFlags(*pMaterial));
+        VERIFY(ListItem.ShaderAttribsDataSize <= ListItem.ShaderAttribsBufferRange,
+               "Attribs data size (", ListItem.ShaderAttribsDataSize, ") computed from the PSO flags exceeds the attribs buffer range (",
+               ListItem.ShaderAttribsBufferRange, ") computed from material PSO flags. The latter is used by HnMaterial to set the buffer range.");
 
         VERIFY_EXPR(ListItem.pPSO != nullptr);
     }
@@ -700,34 +734,75 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
 
 void HnRenderPass::RenderPendingDrawItems(RenderState& State)
 {
-    Uint32 BufferOffset = 0;
-    for (size_t i = 0; i < m_PendingDrawItems.size(); ++i)
+    size_t item_idx = 0;
+    while (item_idx < m_PendingDrawItems.size())
     {
-        const DrawListItem& ListItem = *m_PendingDrawItems[i];
-        const HnDrawItem&   DrawItem = ListItem.DrawItem;
+        const PendingDrawItem& PendingItem = m_PendingDrawItems[item_idx];
+        const DrawListItem&    ListItem    = PendingItem.ListItem;
+        const HnDrawItem&      DrawItem    = ListItem.DrawItem;
 
         State.SetPipelineState(ListItem.pPSO);
 
         const HnDrawItem::GeometryData& Geo = DrawItem.GetGeometryData();
 
-        IShaderResourceBinding* pSRB = DrawItem.GetMaterial()->GetSRB(BufferOffset);
+        IShaderResourceBinding* pSRB = DrawItem.GetMaterial()->GetSRB(PendingItem.BufferOffset);
         VERIFY(pSRB != nullptr, "Material SRB is null. This may happen if UpdateSRB was not called for this material.");
         State.CommitShaderResources(pSRB);
 
         State.SetIndexBuffer(ListItem.IndexBuffer);
         State.SetVertexBuffers(ListItem.VertexBuffers.data(), ListItem.NumVertexBuffers);
 
-        if (ListItem.IndexBuffer != nullptr)
+        if (PendingItem.DrawCount > 1)
         {
-            constexpr Uint32 NumInstances = 1;
-            State.pCtx->DrawIndexed({ListItem.NumVertices, VT_UINT32, DRAW_FLAG_VERIFY_ALL, NumInstances, ListItem.StartIndex});
+#ifdef DILIGENT_DEBUG
+            for (size_t i = 1; i < PendingItem.DrawCount; ++i)
+            {
+                const auto& BatchItem = m_PendingDrawItems[item_idx + i].ListItem;
+                VERIFY_EXPR(BatchItem.pPSO == ListItem.pPSO &&
+                            BatchItem.IndexBuffer == ListItem.IndexBuffer &&
+                            BatchItem.NumVertexBuffers == ListItem.NumVertexBuffers &&
+                            BatchItem.VertexBuffers == ListItem.VertexBuffers &&
+                            BatchItem.DrawItem.GetMaterial()->GetSRB() == ListItem.DrawItem.GetMaterial()->GetSRB());
+            }
+#endif
+            VERIFY_EXPR(m_ScratchSpace.size() >= PendingItem.DrawCount * (ListItem.IndexBuffer != nullptr ? sizeof(MultiDrawIndexedItem) : sizeof(MultiDrawItem)));
+            VERIFY_EXPR(item_idx + PendingItem.DrawCount <= m_PendingDrawItems.size());
+
+            if (ListItem.IndexBuffer != nullptr)
+            {
+                MultiDrawIndexedItem* pMultiDrawItems = reinterpret_cast<MultiDrawIndexedItem*>(m_ScratchSpace.data());
+                for (size_t i = 0; i < PendingItem.DrawCount; ++i)
+                {
+                    const auto& BatchItem = m_PendingDrawItems[item_idx + i].ListItem;
+                    pMultiDrawItems[i]    = {BatchItem.NumVertices, BatchItem.StartIndex, 0};
+                }
+                State.pCtx->MultiDrawIndexed({PendingItem.DrawCount, pMultiDrawItems, VT_UINT32, DRAW_FLAG_VERIFY_ALL});
+            }
+            else
+            {
+                MultiDrawItem* pMultiDrawItems = reinterpret_cast<MultiDrawItem*>(m_ScratchSpace.data());
+                for (size_t i = 0; i < PendingItem.DrawCount; ++i)
+                {
+                    const auto& BatchItem = m_PendingDrawItems[item_idx + i].ListItem;
+                    pMultiDrawItems[i]    = {BatchItem.NumVertices, 0};
+                }
+                State.pCtx->MultiDraw({PendingItem.DrawCount, pMultiDrawItems, DRAW_FLAG_VERIFY_ALL});
+            }
         }
         else
         {
-            State.pCtx->Draw({ListItem.NumVertices, DRAW_FLAG_VERIFY_ALL});
+            if (ListItem.IndexBuffer != nullptr)
+            {
+                constexpr Uint32 NumInstances = 1;
+                State.pCtx->DrawIndexed({ListItem.NumVertices, VT_UINT32, DRAW_FLAG_VERIFY_ALL, NumInstances, ListItem.StartIndex});
+            }
+            else
+            {
+                State.pCtx->Draw({ListItem.NumVertices, DRAW_FLAG_VERIFY_ALL});
+            }
         }
 
-        BufferOffset += ListItem.ShaderAttribsDataAlignedSize;
+        item_idx += PendingItem.DrawCount;
     }
 
     m_PendingDrawItems.clear();

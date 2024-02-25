@@ -49,8 +49,19 @@ cbuffer cbFrameAttribs
 
 cbuffer cbPrimitiveAttribs
 {
+#if PRIMITIVE_ARRAY_SIZE > 0
+    PBRPrimitiveAttribs g_Primitive[PRIMITIVE_ARRAY_SIZE];
+#else
     PBRPrimitiveAttribs g_Primitive;
+#endif
 }
+
+#if PRIMITIVE_ARRAY_SIZE > 0
+#   define PRIMITIVE g_Primitive[VSOut.PrimitiveID]
+#else
+#   define PRIMITIVE g_Primitive
+#endif
+
 
 PBRMaterialTextureAttribs GetDefaultTextureAttribs()
 {
@@ -317,7 +328,7 @@ SurfaceShadingInfo GetSurfaceShadingInfo(in VSOutput              VSOut,
 PSOutput main(in VSOutput VSOut,
               in bool     IsFrontFace : SV_IsFrontFace)
 {
-    float4 BaseColor = GetBaseColor(VSOut, g_Primitive.Material, g_Frame.Renderer.MipBias);
+    float4 BaseColor = GetBaseColor(VSOut, PRIMITIVE.Material, g_Frame.Renderer.MipBias);
 
 #if USE_VERTEX_NORMALS
     float3 MeshNormal = VSOut.Normal;
@@ -331,7 +342,7 @@ PSOutput main(in VSOutput VSOut,
     PBRMaterialTextureAttribs NormalTexAttribs;
 #   if USE_NORMAL_MAP
     {
-        NormalTexAttribs = g_Primitive.Material.Textures[NormalTextureAttribId];
+        NormalTexAttribs = PRIMITIVE.Material.Textures[NormalTextureAttribId];
     }
 #   else
     {
@@ -344,7 +355,7 @@ PSOutput main(in VSOutput VSOut,
     NormalMapUVInfo ClearCoatNMUVInfo;
 #   if USE_CLEAR_COAT_NORMAL_MAP
     {
-        ClearCoatNMUVInfo = GetNormalMapUVInfo(VSOut, g_Primitive.Material.Textures[ClearCoatNormalTextureAttribId]);
+        ClearCoatNMUVInfo = GetNormalMapUVInfo(VSOut, PRIMITIVE.Material.Textures[ClearCoatNormalTextureAttribId]);
     }
 #   else
     {
@@ -352,13 +363,13 @@ PSOutput main(in VSOutput VSOut,
     }
 #   endif
 
-    PBRMaterialBasicAttribs BasicAttribs = g_Primitive.Material.Basic;
+    PBRMaterialBasicAttribs BasicAttribs = PRIMITIVE.Material.Basic;
     if (BasicAttribs.AlphaMode == PBR_ALPHA_MODE_MASK && BaseColor.a < BasicAttribs.AlphaMaskCutoff)
     {
         discard;
     }
 
-    SurfaceShadingInfo  Shading     = GetSurfaceShadingInfo(VSOut, g_Primitive.Material, BaseColor, NormalInfo, NMUVInfo, ClearCoatNMUVInfo);
+    SurfaceShadingInfo  Shading     = GetSurfaceShadingInfo(VSOut, PRIMITIVE.Material, BaseColor, NormalInfo, NMUVInfo, ClearCoatNMUVInfo);
     SurfaceLightingInfo SrfLighting = GetDefaultSurfaceLightingInfo();
 
     float4 OutColor;
@@ -477,7 +488,7 @@ PSOutput main(in VSOutput VSOut,
 // 
 // #if ENABLE_CUSTOM_DATA_OUTPUT
 //     {
-//         PSOut.CustomData = g_Primitive.CustomData;
+//         PSOut.CustomData = PRIMITIVE.CustomData;
 //     }
 // #endif
 //

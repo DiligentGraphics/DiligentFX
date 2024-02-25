@@ -167,6 +167,10 @@ public:
         ///             callback function to define texture indices.
         Uint32 MaterialTexturesArraySize = 0;
 
+        /// The size of the shader primitive array.
+        /// When 0, single primitive will be used.
+        Uint32 PrimitiveArraySize = 0;
+
         static const SamplerDesc DefaultSampler;
 
         /// Immutable sampler for color map texture.
@@ -207,14 +211,14 @@ public:
         /// If set to 0, the animation will be disabled.
         Uint32 MaxJointCount = 64;
 
-        /// The number of samples for BRDF LUT creation
+        /// The number of samples for BRDF LUT creation.
         Uint32 NumBRDFSamples = 512;
 
-        /// If Sheen is enabled, this parameter specified the path to the sheen look-up table.
+        /// If Sheen is enabled, this parameter specifies the path to the sheen look-up table.
         const char* SheenAlbedoScalingLUTPath = nullptr;
 
-        /// If IBL and Sheen are enabled, this parameter specified the path to the
-        /// preintegrated Charlies BRDF look-up table.
+        /// If IBL and Sheen are enabled, this parameter specifies the path to the
+        /// preintegrated Charlie BRDF look-up table.
         const char* PreintegratedCharlieBRDFPath = nullptr;
 
         /// Input layout description.
@@ -601,7 +605,7 @@ protected:
                            const PSOKey&               Key,
                            bool                        CreateIfNull);
 
-    static std::string GetVSOutputStruct(PSO_FLAGS PSOFlags, bool UseVkPointSize);
+    static std::string GetVSOutputStruct(PSO_FLAGS PSOFlags, bool UseVkPointSize, bool UsePrimitiveId);
     static std::string GetPSOutputStruct(PSO_FLAGS PSOFlags);
 
 private:
