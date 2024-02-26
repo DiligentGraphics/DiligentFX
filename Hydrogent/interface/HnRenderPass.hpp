@@ -144,6 +144,7 @@ private:
     };
 
     void UpdateDrawList(const pxr::TfTokenVector& RenderTags);
+    void UpdateDrawListGPUResources(RenderState& State);
     void UpdateDrawListItemGPUResources(DrawListItem& ListItem, RenderState& State, DRAW_LIST_ITEM_DIRTY_FLAGS DirtyFlags);
 
     void RenderPendingDrawItems(RenderState& State);
@@ -182,6 +183,7 @@ private:
     unsigned int m_RprimRenderTagVersion      = ~0u;
     unsigned int m_TaskRenderTagsVersion      = ~0u;
     unsigned int m_GeomSubsetDrawItemsVersion = ~0u;
+    unsigned int m_MeshVersion                = ~0u;
 
     DRAW_LIST_ITEM_DIRTY_FLAGS m_DrawListItemsDirtyFlags = DRAW_LIST_ITEM_DIRTY_FLAG_ALL;
 

@@ -185,6 +185,10 @@ void HnMesh::Sync(pxr::HdSceneDelegate* Delegate,
     }
 
     ++m_Version;
+    if (RenderParam != nullptr)
+    {
+        static_cast<HnRenderParam*>(RenderParam)->MakeMeshDirty();
+    }
 
     *DirtyBits &= ~pxr::HdChangeTracker::AllSceneDirtyBits;
 }

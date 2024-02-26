@@ -260,6 +260,15 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
         }
     }
 
+    {
+        const Uint32 MeshVersion = State.RenderParam.GetMeshVersion();
+        if (MeshVersion != m_MeshVersion || m_DrawListItemsDirtyFlags != DRAW_LIST_ITEM_DIRTY_FLAG_NONE)
+        {
+            UpdateDrawListGPUResources(State);
+            m_MeshVersion = MeshVersion;
+        }
+    }
+
     IBuffer* const pPrimitiveAttribsCB = State.RenderDelegate.GetPrimitiveAttribsCB();
     VERIFY_EXPR(pPrimitiveAttribsCB != nullptr);
 
@@ -270,8 +279,6 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
     m_PendingDrawItems.reserve(m_DrawList.size());
     void*  pMappedBufferData = nullptr;
     Uint32 CurrOffset        = 0;
-
-    m_ScratchSpace.resize(sizeof(MultiDrawIndexedItem) * State.USDRenderer.GetSettings().PrimitiveArraySize);
 
     auto FlushPendingDraws = [&]() {
         VERIFY_EXPR(CurrOffset > 0);
@@ -290,40 +297,8 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
         CurrOffset = 0;
     };
 
-    bool DrawListDirty = false;
-    for (DrawListItem& ListItem : m_DrawList)
-    {
-        const HnDrawItem& DrawItem  = ListItem.DrawItem;
-        const HnMesh&     Mesh      = DrawItem.GetMesh();
-        const HnMaterial* pMaterial = DrawItem.GetMaterial();
-        if (pMaterial == nullptr)
-            continue;
-
-        auto DrawItemGPUResDirtyFlags = m_DrawListItemsDirtyFlags;
-        if (ListItem.Version != Mesh.GetVersion())
-            DrawItemGPUResDirtyFlags |= DRAW_LIST_ITEM_DIRTY_FLAG_PSO | DRAW_LIST_ITEM_DIRTY_FLAG_MESH_DATA;
-        if (DrawItemGPUResDirtyFlags != DRAW_LIST_ITEM_DIRTY_FLAG_NONE)
-        {
-            UpdateDrawListItemGPUResources(ListItem, State, DrawItemGPUResDirtyFlags);
-            DrawListDirty = true;
-        }
-    }
-
-    if (DrawListDirty)
-    {
-        if (m_RenderOrder.size() != m_DrawList.size())
-        {
-            m_RenderOrder.resize(m_DrawList.size());
-            for (Uint32 i = 0; i < m_RenderOrder.size(); ++i)
-                m_RenderOrder[i] = i;
-        }
-        std::sort(m_RenderOrder.begin(), m_RenderOrder.end(),
-                  [this](Uint32 i0, Uint32 i1) {
-                      return m_DrawList[i0].pPSO < m_DrawList[i1].pPSO;
-                  });
-    }
-
     const Uint32 PrimitiveArraySize = std::max(State.USDRenderer.GetSettings().PrimitiveArraySize, 1u);
+    m_ScratchSpace.resize(sizeof(MultiDrawIndexedItem) * State.USDRenderer.GetSettings().PrimitiveArraySize);
 
     Uint32 MultiDrawCount = 0;
     for (Uint32 ListItemId : m_RenderOrder)
@@ -558,6 +533,42 @@ void HnRenderPass::UpdateDrawList(const pxr::TfTokenVector& RenderTags)
     m_RprimRenderTagVersion      = RprimRenderTagVersion;
     m_MaterialTag                = MaterialTag;
     m_GeomSubsetDrawItemsVersion = GeomSubsetDrawItemsVersion;
+}
+
+void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
+{
+    bool DrawListDirty = false;
+    for (DrawListItem& ListItem : m_DrawList)
+    {
+        const HnDrawItem& DrawItem  = ListItem.DrawItem;
+        const HnMesh&     Mesh      = DrawItem.GetMesh();
+        const HnMaterial* pMaterial = DrawItem.GetMaterial();
+        if (pMaterial == nullptr)
+            continue;
+
+        auto DrawItemGPUResDirtyFlags = m_DrawListItemsDirtyFlags;
+        if (ListItem.Version != Mesh.GetVersion())
+            DrawItemGPUResDirtyFlags |= DRAW_LIST_ITEM_DIRTY_FLAG_PSO | DRAW_LIST_ITEM_DIRTY_FLAG_MESH_DATA;
+        if (DrawItemGPUResDirtyFlags != DRAW_LIST_ITEM_DIRTY_FLAG_NONE)
+        {
+            UpdateDrawListItemGPUResources(ListItem, State, DrawItemGPUResDirtyFlags);
+            DrawListDirty = true;
+        }
+    }
+
+    if (DrawListDirty)
+    {
+        if (m_RenderOrder.size() != m_DrawList.size())
+        {
+            m_RenderOrder.resize(m_DrawList.size());
+            for (Uint32 i = 0; i < m_RenderOrder.size(); ++i)
+                m_RenderOrder[i] = i;
+        }
+        std::sort(m_RenderOrder.begin(), m_RenderOrder.end(),
+                  [this](Uint32 i0, Uint32 i1) {
+                      return m_DrawList[i0].pPSO < m_DrawList[i1].pPSO;
+                  });
+    }
 }
 
 HnRenderPass::SupportedVertexInputsSetType HnRenderPass::GetSupportedVertexInputs(const HnMaterial* Material)
