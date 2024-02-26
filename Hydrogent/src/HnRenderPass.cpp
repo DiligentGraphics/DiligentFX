@@ -85,7 +85,10 @@ HnRenderPass::DrawListItem::DrawListItem(const HnDrawItem& Item) noexcept :
     DrawItem{Item},
     Mesh{Item.GetMesh()},
     Material{*Item.GetMaterial()},
-    PrevTransform{Item.GetMesh().GetAttributes().Transform}
+    MeshUID{static_cast<float>(Mesh.GetUID())},
+    PrevTransform{Item.GetMesh().GetAttributes().Transform},
+    RenderStateID{0},
+    Visible{1}
 {}
 
 HnRenderPass::HnRenderPass(pxr::HdRenderIndex*           pIndex,
@@ -391,7 +394,7 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
 
         // Write current primitive attributes
         float4 CustomData{
-            static_cast<float>(Mesh.GetUID()),
+            ListItem.MeshUID,
             m_Params.Selection == HnRenderPassParams::SelectionType::Selected ? 1.f : 0.f,
             0,
             0,
