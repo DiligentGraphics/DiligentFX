@@ -116,6 +116,11 @@ private:
 
         IPipelineState* pPSO = nullptr;
 
+        // Unique ID that identifies the combination of render states used to render the draw item
+        // (PSO, SRB, vertex and index buffers)
+        // NB: this member should go after the pPSO member for better cache locality.
+        Uint32 RenderStateID = 0;
+
         IBuffer* IndexBuffer = nullptr;
         Uint32   StartIndex  = 0;
         Uint32   NumVertices = 0;

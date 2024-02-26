@@ -34,6 +34,7 @@
 #include "HnRenderParam.hpp"
 
 #include <array>
+#include <unordered_map>
 
 #include "pxr/imaging/hd/renderIndex.h"
 
@@ -41,6 +42,7 @@
 #include "GLTF_PBR_Renderer.hpp"
 #include "MapHelper.hpp"
 #include "ScopedDebugGroup.hpp"
+#include "HashUtils.hpp"
 
 namespace Diligent
 {
@@ -324,12 +326,13 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
             VERIFY_EXPR(FirstMultiDrawItem.DrawCount == MultiDrawCount);
 
             // If any of the state changes, multi-draw is not possible
-            if (FirstMultiDrawItem.ListItem.pPSO == ListItem.pPSO &&
-                FirstMultiDrawItem.ListItem.IndexBuffer == ListItem.IndexBuffer &&
-                FirstMultiDrawItem.ListItem.NumVertexBuffers == ListItem.NumVertexBuffers &&
-                FirstMultiDrawItem.ListItem.VertexBuffers == ListItem.VertexBuffers &&
-                FirstMultiDrawItem.ListItem.Material.GetSRB() == ListItem.Material.GetSRB())
+            if (FirstMultiDrawItem.ListItem.RenderStateID == ListItem.RenderStateID)
             {
+                VERIFY_EXPR(FirstMultiDrawItem.ListItem.pPSO == ListItem.pPSO &&
+                            FirstMultiDrawItem.ListItem.IndexBuffer == ListItem.IndexBuffer &&
+                            FirstMultiDrawItem.ListItem.NumVertexBuffers == ListItem.NumVertexBuffers &&
+                            FirstMultiDrawItem.ListItem.VertexBuffers == ListItem.VertexBuffers &&
+                            FirstMultiDrawItem.ListItem.Material.GetSRB() == ListItem.Material.GetSRB());
                 ++FirstMultiDrawItem.DrawCount;
             }
             else
@@ -536,6 +539,41 @@ void HnRenderPass::UpdateDrawList(const pxr::TfTokenVector& RenderTags)
 
 void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
 {
+    struct DrawListItemRenderState
+    {
+        const DrawListItem& Item;
+        mutable size_t      Hash = 0;
+
+        struct Hasher
+        {
+            size_t operator()(const DrawListItemRenderState& State) const
+            {
+                if (State.Hash == 0)
+                {
+                    State.Hash = ComputeHash(State.Item.pPSO,
+                                             State.Item.IndexBuffer,
+                                             State.Item.NumVertexBuffers,
+                                             State.Item.Material.GetSRB());
+                    for (Uint32 i = 0; i < State.Item.NumVertexBuffers; ++i)
+                    {
+                        HashCombine(State.Hash, State.Item.VertexBuffers[i]);
+                    }
+                }
+                return State.Hash;
+            }
+        };
+
+        bool operator==(const DrawListItemRenderState& rhs) const
+        {
+            return (Item.pPSO == rhs.Item.pPSO &&
+                    Item.IndexBuffer == rhs.Item.IndexBuffer &&
+                    Item.NumVertexBuffers == rhs.Item.NumVertexBuffers &&
+                    Item.Material.GetSRB() == rhs.Item.Material.GetSRB() &&
+                    Item.VertexBuffers == rhs.Item.VertexBuffers);
+        }
+    };
+    std::unordered_map<DrawListItemRenderState, Uint32, DrawListItemRenderState::Hasher> DrawListItemRenderStateIDs;
+
     bool DrawListDirty = false;
     for (DrawListItem& ListItem : m_DrawList)
     {
@@ -547,6 +585,10 @@ void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
             UpdateDrawListItemGPUResources(ListItem, State, DrawItemGPUResDirtyFlags);
             DrawListDirty = true;
         }
+
+        // Assign a unique ID to the combination of render states used to render the draw item.
+        // We have to do this after we update the draw item GPU resources.
+        ListItem.RenderStateID = DrawListItemRenderStateIDs.emplace(DrawListItemRenderState{ListItem}, static_cast<Uint32>(DrawListItemRenderStateIDs.size())).first->second;
     }
 
     if (DrawListDirty)
