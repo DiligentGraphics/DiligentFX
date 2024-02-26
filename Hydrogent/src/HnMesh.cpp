@@ -313,16 +313,28 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
 
     if (pxr::HdChangeTracker::IsTransformDirty(DirtyBits, Id))
     {
-        m_Attribs.Transform = ToFloat4x4(SceneDelegate.GetTransform(Id));
-        if (RenderParam != nullptr)
+        auto Transform = ToFloat4x4(SceneDelegate.GetTransform(Id));
+        if (m_Attribs.Transform != Transform)
         {
-            static_cast<HnRenderParam*>(RenderParam)->MakeGeometryTransformDirty();
+            m_Attribs.Transform = Transform;
+            if (RenderParam != nullptr)
+            {
+                static_cast<HnRenderParam*>(RenderParam)->MakeGeometryTransformDirty();
+            }
         }
     }
 
     if (pxr::HdChangeTracker::IsVisibilityDirty(DirtyBits, Id))
     {
-        _sharedData.visible = SceneDelegate.GetVisible(Id);
+        auto Visible = SceneDelegate.GetVisible(Id);
+        if (_sharedData.visible != Visible)
+        {
+            _sharedData.visible = SceneDelegate.GetVisible(Id);
+            if (RenderParam != nullptr)
+            {
+                static_cast<HnRenderParam*>(RenderParam)->MakeMeshVisibilityDirty();
+            }
+        }
     }
 
     DirtyBits &= ~pxr::HdChangeTracker::NewRepr;

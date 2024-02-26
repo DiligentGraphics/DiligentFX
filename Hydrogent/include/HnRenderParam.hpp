@@ -67,6 +67,9 @@ public:
     uint32_t GetMeshVersion() const { return m_MeshVersion.load(); }
     void     MakeMeshDirty() { m_MeshVersion.fetch_add(1); }
 
+    uint32_t GetMeshVisibilityVersion() const { return m_MeshVisibilityVersion.load(); }
+    void     MakeMeshVisibilityDirty() { m_MeshVisibilityVersion.fetch_add(1); }
+
     PBR_Renderer::DebugViewType GetDebugView() const { return m_DebugView; }
 
     void SetDebugView(PBR_Renderer::DebugViewType DebugView) { m_DebugView = DebugView; }
@@ -93,6 +96,7 @@ private:
     std::atomic<uint32_t> m_GeometrySubsetVersion{0};
     std::atomic<uint32_t> m_GeometryTransformVersion{0};
     std::atomic<uint32_t> m_MeshVersion{0};
+    std::atomic<uint32_t> m_MeshVisibilityVersion{0};
 
     PBR_Renderer::DebugViewType m_DebugView = PBR_Renderer::DebugViewType::None;
 

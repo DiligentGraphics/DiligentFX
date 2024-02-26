@@ -307,11 +307,21 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
     float4x4 MeshTransform;
     float4x4 PrevMeshTransform;
 
+    const bool VisibiltyDirty = State.RenderParam.GetMeshVisibilityVersion() != m_MeshVisibilityVersion;
+    m_MeshVisibilityVersion   = State.RenderParam.GetMeshVisibilityVersion();
+
     Uint32 MultiDrawCount = 0;
     for (Uint32 ListItemId : m_RenderOrder)
     {
         DrawListItem& ListItem = m_DrawList[ListItemId];
-        if (!ListItem || !ListItem.DrawItem.GetVisible())
+        if (VisibiltyDirty)
+        {
+            // Calling ListItem.DrawItem.GetVisible() every time is expensive due to multiple hoops
+            // that need to be jumped through to get the visibility state. So, we cache the result
+            // and only update it when the visibility version changes.
+            ListItem.Visible = ListItem.DrawItem.GetVisible();
+        }
+        if (!ListItem || !ListItem.Visible)
             continue;
 
         // Note: if material changes in the mesh, the mesh version as well as the

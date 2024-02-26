@@ -116,6 +116,8 @@ private:
 
         IPipelineState* pPSO = nullptr;
 
+        bool Visible = true;
+
         // Unique ID that identifies the combination of render states used to render the draw item
         // (PSO, SRB, vertex and index buffers)
         // NB: this member should go after the pPSO member for better cache locality.
@@ -192,6 +194,7 @@ private:
     unsigned int m_TaskRenderTagsVersion      = ~0u;
     unsigned int m_GeomSubsetDrawItemsVersion = ~0u;
     unsigned int m_MeshVersion                = ~0u;
+    unsigned int m_MeshVisibilityVersion      = ~0u;
 
     DRAW_LIST_ITEM_DIRTY_FLAGS m_DrawListItemsDirtyFlags = DRAW_LIST_ITEM_DIRTY_FLAG_ALL;
 
