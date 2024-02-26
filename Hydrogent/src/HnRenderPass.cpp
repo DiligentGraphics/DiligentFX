@@ -287,6 +287,11 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
     void*  pMappedBufferData = nullptr;
     Uint32 CurrOffset        = 0;
 
+    if (AttribsBuffDesc.Usage != USAGE_DYNAMIC)
+    {
+        m_PrimitiveAttribsData.resize(static_cast<size_t>(AttribsBuffDesc.Size));
+    }
+
     auto FlushPendingDraws = [&]() {
         VERIFY_EXPR(CurrOffset > 0);
         if (AttribsBuffDesc.Usage == USAGE_DYNAMIC)
@@ -389,8 +394,7 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
         }
         else
         {
-            if (CurrOffset + ListItem.ShaderAttribsDataSize > m_PrimitiveAttribsData.size())
-                m_PrimitiveAttribsData.resize(CurrOffset + ListItem.ShaderAttribsDataSize);
+            VERIFY_EXPR(CurrOffset + ListItem.ShaderAttribsDataSize <= m_PrimitiveAttribsData.size());
             pCurrPrimitive = &m_PrimitiveAttribsData[CurrOffset];
         }
 
