@@ -110,6 +110,9 @@ private:
 
     struct DrawListItem
     {
+        // NB: the order of members is optimized to match the order in which they
+        //     are accessed in the _Execute method for better cache locality.
+
         const HnDrawItem& DrawItem;
         const HnMesh&     Mesh;
         const HnMaterial& Material;
@@ -120,18 +123,15 @@ private:
 
         // Unique ID that identifies the combination of render states used to render the draw item
         // (PSO, SRB, vertex and index buffers)
-        // NB: this member should go after the pPSO member for better cache locality.
         Uint32 RenderStateID : 31;
         Uint32 Visible : 1;
 
-        IBuffer* IndexBuffer = nullptr;
-        Uint32   StartIndex  = 0;
-        Uint32   NumVertices = 0;
-
-        std::array<IBuffer*, 4> VertexBuffers    = {};
-        Uint32                  NumVertexBuffers = 0;
+        Uint32 NumVertices = 0;
+        Uint32 StartIndex  = 0;
 
         PBR_Renderer::PSO_FLAGS PSOFlags = PBR_Renderer::PSO_FLAG_NONE;
+
+        float4x4 PrevTransform = float4x4::Identity();
 
         // Primitive attributes shader data size computed from the used PSO flags.
         // Note: unshaded (aka wireframe/point) rendering modes don't use any textures, so the shader data
@@ -142,9 +142,12 @@ private:
         // Note: it is always greater than or equal to ShaderAttribsDataAlignedSize.
         Uint32 ShaderAttribsBufferRange = 0;
 
-        Uint32 Version = 0;
+        IBuffer* IndexBuffer = nullptr;
 
-        float4x4 PrevTransform = float4x4::Identity();
+        std::array<IBuffer*, 4> VertexBuffers    = {};
+        Uint32                  NumVertexBuffers = 0;
+
+        Uint32 Version = 0;
 
         explicit DrawListItem(const HnDrawItem& Item) noexcept;
 
