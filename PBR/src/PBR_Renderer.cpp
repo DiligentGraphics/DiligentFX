@@ -870,8 +870,27 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
 {
     ShaderMacroHelper Macros;
     Macros.Add("MAX_JOINT_COUNT", static_cast<int>(m_Settings.MaxJointCount));
-    Macros.Add("PRIMITIVE_ARRAY_SIZE", static_cast<int>(m_Settings.PrimitiveArraySize));
     Macros.Add("TONE_MAPPING_MODE", "TONE_MAPPING_MODE_UNCHARTED2");
+
+    Macros.Add("PRIMITIVE_ARRAY_SIZE", static_cast<int>(m_Settings.PrimitiveArraySize));
+    if (m_Settings.PrimitiveArraySize > 0)
+    {
+        const char* PrimitiveID = nullptr;
+        if (m_Device.GetDeviceInfo().IsGLDevice())
+        {
+#if PLATFORM_EMSCRIPTEN
+            PrimitiveID = "gl_DrawID";
+#else
+            PrimitiveID = "gl_DrawIDARB";
+#endif
+        }
+        else
+        {
+            UNSUPPORTED("Primitive ID is only supported in GL");
+            PrimitiveID = "0";
+        }
+        Macros.Add("PRIMITIVE_ID", PrimitiveID);
+    }
 
     Macros.Add("PBR_WORKFLOW_METALLIC_ROUGHNESS", static_cast<int>(PBR_WORKFLOW_METALL_ROUGH));
     Macros.Add("PBR_WORKFLOW_SPECULAR_GLOSINESS", static_cast<int>(PBR_WORKFLOW_SPEC_GLOSS));

@@ -47,17 +47,12 @@ cbuffer cbPrimitiveAttribs
 #endif
 }
 
-#ifdef PLATFORM_EMSCRIPTEN
-#   define DRAW_ID gl_DrawID
-#else
-#   define DRAW_ID gl_DrawIDARB
-#endif
 
 #if PRIMITIVE_ARRAY_SIZE > 0
-#   define PRIMITIVE_ID DRAW_ID
-#   define PRIMITIVE    g_Primitive[PRIMITIVE_ID]
+// PRIMITIVE_ID is defined by the host as gl_DrawID or gl_DrawIDARB
+#   define PRIMITIVE g_Primitive[PRIMITIVE_ID]
 #else
-#   define PRIMITIVE    g_Primitive
+#   define PRIMITIVE g_Primitive
 #endif
 
 
