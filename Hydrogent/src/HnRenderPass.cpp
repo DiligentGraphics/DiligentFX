@@ -304,6 +304,9 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
     const Uint32 PrimitiveArraySize = std::max(State.USDRenderer.GetSettings().PrimitiveArraySize, 1u);
     m_ScratchSpace.resize(sizeof(MultiDrawIndexedItem) * State.USDRenderer.GetSettings().PrimitiveArraySize);
 
+    float4x4 MeshTransform;
+    float4x4 PrevMeshTransform;
+
     Uint32 MultiDrawCount = 0;
     for (Uint32 ListItemId : m_RenderOrder)
     {
@@ -384,23 +387,26 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
             0,
         };
 
-        const HnMesh::Attributes& MeshAttribs   = Mesh.GetAttributes();
-        const float4x4&           Transform     = ApplyTransform ? (MeshAttribs.Transform * m_RenderParams.Transform) : MeshAttribs.Transform;
-        const float4x4&           PrevTransform = ApplyTransform ? (ListItem.PrevTransform * m_RenderParams.Transform) : ListItem.PrevTransform;
-        const GLTF::Material&     MaterialData  = Material.GetMaterialData();
+        const HnMesh::Attributes& MeshAttribs = Mesh.GetAttributes();
+        if (ApplyTransform)
+        {
+            MeshTransform     = MeshAttribs.Transform * m_RenderParams.Transform;
+            PrevMeshTransform = ListItem.PrevTransform * m_RenderParams.Transform;
+        }
 
         HLSL::PBRMaterialBasicAttribs* pDstMaterialBasicAttribs = nullptr;
 
         GLTF_PBR_Renderer::PBRPrimitiveShaderAttribsData AttribsData{
             ListItem.PSOFlags,
-            &Transform,
-            &PrevTransform,
+            ApplyTransform ? &MeshTransform : &MeshAttribs.Transform,
+            ApplyTransform ? &PrevMeshTransform : &ListItem.PrevTransform,
             0,
             &CustomData,
             sizeof(CustomData),
             &pDstMaterialBasicAttribs,
         };
-        GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(pCurrPrimitive, AttribsData, State.USDRenderer.GetSettings().TextureAttribIndices, Material.GetMaterialData());
+        const GLTF::Material& MaterialData = Material.GetMaterialData();
+        GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(pCurrPrimitive, AttribsData, State.USDRenderer.GetSettings().TextureAttribIndices, MaterialData);
 
         pDstMaterialBasicAttribs->BaseColorFactor = MaterialData.Attribs.BaseColorFactor * MeshAttribs.DisplayColor;
 
