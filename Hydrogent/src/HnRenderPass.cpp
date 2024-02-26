@@ -86,9 +86,9 @@ HnRenderPass::DrawListItem::DrawListItem(const HnDrawItem& Item) noexcept :
     Mesh{Item.GetMesh()},
     Material{*Item.GetMaterial()},
     MeshUID{static_cast<float>(Mesh.GetUID())},
-    PrevTransform{Item.GetMesh().GetAttributes().Transform},
+    PrevTransform{Mesh.GetAttributes().Transform},
     RenderStateID{0},
-    Visible{1}
+    Visible{Mesh.IsVisible()}
 {}
 
 HnRenderPass::HnRenderPass(pxr::HdRenderIndex*           pIndex,
