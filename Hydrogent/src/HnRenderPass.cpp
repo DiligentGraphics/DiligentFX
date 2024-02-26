@@ -81,6 +81,8 @@ pxr::HdRenderPassSharedPtr HnRenderPass::Create(pxr::HdRenderIndex*           pI
 
 HnRenderPass::DrawListItem::DrawListItem(const HnDrawItem& Item) noexcept :
     DrawItem{Item},
+    Mesh{Item.GetMesh()},
+    Material{*Item.GetMaterial()},
     PrevTransform{Item.GetMesh().GetAttributes().Transform}
 {}
 
@@ -303,17 +305,14 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
     Uint32 MultiDrawCount = 0;
     for (Uint32 ListItemId : m_RenderOrder)
     {
-        DrawListItem&     ListItem  = m_DrawList[ListItemId];
-        const HnDrawItem& DrawItem  = ListItem.DrawItem;
-        const HnMesh&     Mesh      = DrawItem.GetMesh();
-        const HnMaterial* pMaterial = DrawItem.GetMaterial();
-        if (pMaterial == nullptr)
+        DrawListItem& ListItem = m_DrawList[ListItemId];
+        if (!ListItem || !ListItem.DrawItem.GetVisible())
             continue;
 
-        // Make sure we update all items before skipping any since we will clear the
-        // m_DrawListItemsDirtyFlags at the end of the function.
-        if (!ListItem || !DrawItem.GetVisible())
-            continue;
+        // Note: if material changes in the mesh, the mesh version as well as the
+        //       global mesh version will be updated, and the draw list will be rebuilt.
+        const HnMesh&     Mesh     = ListItem.Mesh;
+        const HnMaterial& Material = ListItem.Material;
 
         if (MultiDrawCount == PrimitiveArraySize)
             MultiDrawCount = 0;
@@ -329,7 +328,7 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
                 FirstMultiDrawItem.ListItem.IndexBuffer == ListItem.IndexBuffer &&
                 FirstMultiDrawItem.ListItem.NumVertexBuffers == ListItem.NumVertexBuffers &&
                 FirstMultiDrawItem.ListItem.VertexBuffers == ListItem.VertexBuffers &&
-                FirstMultiDrawItem.ListItem.DrawItem.GetMaterial()->GetSRB() == ListItem.DrawItem.GetMaterial()->GetSRB())
+                FirstMultiDrawItem.ListItem.Material.GetSRB() == ListItem.Material.GetSRB())
             {
                 ++FirstMultiDrawItem.DrawCount;
             }
@@ -385,7 +384,7 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
         const HnMesh::Attributes& MeshAttribs   = Mesh.GetAttributes();
         const float4x4&           Transform     = ApplyTransform ? (MeshAttribs.Transform * m_RenderParams.Transform) : MeshAttribs.Transform;
         const float4x4&           PrevTransform = ApplyTransform ? (ListItem.PrevTransform * m_RenderParams.Transform) : ListItem.PrevTransform;
-        const GLTF::Material&     MaterialData  = pMaterial->GetMaterialData();
+        const GLTF::Material&     MaterialData  = Material.GetMaterialData();
 
         HLSL::PBRMaterialBasicAttribs* pDstMaterialBasicAttribs = nullptr;
 
@@ -398,7 +397,7 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
             sizeof(CustomData),
             &pDstMaterialBasicAttribs,
         };
-        GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(pCurrPrimitive, AttribsData, State.USDRenderer.GetSettings().TextureAttribIndices, pMaterial->GetMaterialData());
+        GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(pCurrPrimitive, AttribsData, State.USDRenderer.GetSettings().TextureAttribIndices, Material.GetMaterialData());
 
         pDstMaterialBasicAttribs->BaseColorFactor = MaterialData.Attribs.BaseColorFactor * MeshAttribs.DisplayColor;
 
@@ -540,14 +539,8 @@ void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
     bool DrawListDirty = false;
     for (DrawListItem& ListItem : m_DrawList)
     {
-        const HnDrawItem& DrawItem  = ListItem.DrawItem;
-        const HnMesh&     Mesh      = DrawItem.GetMesh();
-        const HnMaterial* pMaterial = DrawItem.GetMaterial();
-        if (pMaterial == nullptr)
-            continue;
-
         auto DrawItemGPUResDirtyFlags = m_DrawListItemsDirtyFlags;
-        if (ListItem.Version != Mesh.GetVersion())
+        if (ListItem.Version != ListItem.Mesh.GetVersion())
             DrawItemGPUResDirtyFlags |= DRAW_LIST_ITEM_DIRTY_FLAG_PSO | DRAW_LIST_ITEM_DIRTY_FLAG_MESH_DATA;
         if (DrawItemGPUResDirtyFlags != DRAW_LIST_ITEM_DIRTY_FLAG_NONE)
         {

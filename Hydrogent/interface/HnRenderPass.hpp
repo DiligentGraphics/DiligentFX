@@ -43,6 +43,7 @@ namespace USD
 
 class HnDrawItem;
 class HnRenderPassState;
+class HnMesh;
 class HnMaterial;
 
 struct HnMeshRenderParams
@@ -110,6 +111,8 @@ private:
     struct DrawListItem
     {
         const HnDrawItem& DrawItem;
+        const HnMesh&     Mesh;
+        const HnMaterial& Material;
 
         IPipelineState* pPSO = nullptr;
 
