@@ -9,11 +9,6 @@ cbuffer cbFrameAttribs
     PBRFrameAttribs g_Frame;
 }
 
-cbuffer cbPrimitiveAttribs
-{
-    PBRPrimitiveAttribs g_Primitive;
-}
-
 #include "PSOutputStruct.generated"
 // struct PSOutput
 // {
