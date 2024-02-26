@@ -806,13 +806,12 @@ void HnRenderPass::RenderPendingDrawItems(RenderState& State)
     {
         const PendingDrawItem& PendingItem = m_PendingDrawItems[item_idx];
         const DrawListItem&    ListItem    = PendingItem.ListItem;
-        const HnDrawItem&      DrawItem    = ListItem.DrawItem;
 
         State.SetPipelineState(ListItem.pPSO);
 
-        const HnDrawItem::GeometryData& Geo = DrawItem.GetGeometryData();
+        const HnDrawItem::GeometryData& Geo = ListItem.DrawItem.GetGeometryData();
 
-        IShaderResourceBinding* pSRB = DrawItem.GetMaterial()->GetSRB(PendingItem.BufferOffset);
+        IShaderResourceBinding* pSRB = ListItem.Material.GetSRB(PendingItem.BufferOffset);
         VERIFY(pSRB != nullptr, "Material SRB is null. This may happen if UpdateSRB was not called for this material.");
         State.CommitShaderResources(pSRB);
 
