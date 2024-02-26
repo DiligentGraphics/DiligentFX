@@ -28,6 +28,12 @@ PUBLIC
     Diligent-TextureLoader
     Diligent-Imgui
 )
+
+if (TARGET Diligent-HLSL2GLSLConverterLib)
+    target_link_libraries(DiligentFX PRIVATE Diligent-HLSL2GLSLConverterLib)
+    target_compile_definitions(DiligentFX PRIVATE HLSL2GLSL_CONVERTER_SUPPORTED=1)
+endif()
+
 set_common_target_properties(DiligentFX)
 
 target_include_directories(DiligentFX

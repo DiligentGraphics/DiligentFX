@@ -349,6 +349,8 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
                             FirstMultiDrawItem.ListItem.NumVertexBuffers == ListItem.NumVertexBuffers &&
                             FirstMultiDrawItem.ListItem.VertexBuffers == ListItem.VertexBuffers &&
                             FirstMultiDrawItem.ListItem.Material.GetSRB() == ListItem.Material.GetSRB());
+                VERIFY_EXPR(CurrOffset + ListItem.ShaderAttribsDataSize <= AttribsBuffDesc.Size);
+
                 ++FirstMultiDrawItem.DrawCount;
             }
             else

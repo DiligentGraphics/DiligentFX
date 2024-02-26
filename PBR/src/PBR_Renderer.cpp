@@ -40,6 +40,10 @@
 #include "Utilities/interface/DiligentFXShaderSourceStreamFactory.hpp"
 #include "ShaderSourceFactoryUtils.hpp"
 
+#if HLSL2GLSL_CONVERTER_SUPPORTED
+#    include "../include/HLSL2GLSLConverterImpl.hpp"
+#endif
+
 namespace Diligent
 {
 
@@ -884,9 +888,18 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
             PrimitiveID = "gl_DrawIDARB";
 #endif
         }
+        else if (m_Device.GetDeviceInfo().IsVulkanDevice())
+        {
+#ifdef HLSL2GLSL_CONVERTER_SUPPORTED
+            PrimitiveID = "gl_DrawID";
+#else
+            UNSUPPORTED("Primitive ID on Vulkan requires HLSL2GLSL converter");
+            PrimitiveID = "0";
+#endif
+        }
         else
         {
-            UNSUPPORTED("Primitive ID is only supported in GL");
+            UNSUPPORTED("Primitive ID is only supported in GL and Vulkan");
             PrimitiveID = "0";
         }
         Macros.Add("PRIMITIVE_ID", PrimitiveID);
@@ -1261,38 +1274,78 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
     RefCntAutoPtr<IShaderSourceInputStreamFactory> pShaderSourceFactory =
         CreateCompoundShaderSourceFactory({&DiligentFXShaderSourceStreamFactory::GetInstance(), pMemorySourceFactory});
 
-    ShaderCreateInfo ShaderCI;
-    ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
-    ShaderCI.pShaderSourceStreamFactory = pShaderSourceFactory;
-
     auto Macros = DefineMacros(Key);
     if (GraphicsDesc.PrimitiveTopology == PRIMITIVE_TOPOLOGY_POINT_LIST && (m_Device.GetDeviceInfo().IsGLDevice() || m_Device.GetDeviceInfo().IsVulkanDevice()))
     {
         // If gl_PointSize is not defined, points are not rendered in GLES.
         Macros.Add("USE_GL_POINT_SIZE", "1");
     }
-    ShaderCI.Macros = Macros;
 
     const bool UseCombinedSamplers = m_Device.GetDeviceInfo().IsGLDevice();
 
     RefCntAutoPtr<IShader> pVS;
     {
-        ShaderCI.Desc       = {"PBR VS", SHADER_TYPE_VERTEX, UseCombinedSamplers};
-        ShaderCI.EntryPoint = "main";
-        ShaderCI.FilePath   = "RenderPBR.vsh";
-        if (m_Settings.PrimitiveArraySize > 0 && m_Device.GetDeviceInfo().IsGLDevice())
-            ShaderCI.GLSLExtensions = MultiDrawGLSLExtension;
+        ShaderCreateInfo ShaderCI{
+            "RenderPBR.vsh",
+            pShaderSourceFactory,
+            "main",
+            Macros,
+            SHADER_SOURCE_LANGUAGE_HLSL,
+            {"PBR VS", SHADER_TYPE_VERTEX, UseCombinedSamplers},
+        };
+
+        std::string GLSLSource;
+        if (m_Settings.PrimitiveArraySize > 0)
+        {
+            if (m_Device.GetDeviceInfo().IsGLDevice())
+            {
+                ShaderCI.GLSLExtensions = MultiDrawGLSLExtension;
+            }
+            else if (m_Device.GetDeviceInfo().IsVulkanDevice())
+            {
+#ifdef HLSL2GLSL_CONVERTER_SUPPORTED
+                // Since we use gl_DrawID in HLSL, we need to manually convert the shader to GLSL
+                HLSL2GLSLConverterImpl::ConversionAttribs Attribs;
+                Attribs.pSourceStreamFactory       = ShaderCI.pShaderSourceStreamFactory;
+                Attribs.EntryPoint                 = ShaderCI.EntryPoint;
+                Attribs.ShaderType                 = ShaderCI.Desc.ShaderType;
+                Attribs.InputFileName              = ShaderCI.FilePath;
+                Attribs.SamplerSuffix              = UseCombinedSamplers ? ShaderCI.Desc.CombinedSamplerSuffix : ShaderDesc{}.CombinedSamplerSuffix;
+                Attribs.UseInOutLocationQualifiers = true;
+                Attribs.IncludeDefinitions         = true;
+
+                GLSLSource = HLSL2GLSLConverterImpl::GetInstance().Convert(Attribs);
+                if (GLSLSource.empty())
+                {
+                    UNEXPECTED("Failed to convert HLSL source to GLSL");
+                }
+                ShaderCI.FilePath       = nullptr;
+                ShaderCI.Source         = GLSLSource.c_str();
+                ShaderCI.SourceLength   = GLSLSource.length();
+                ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_GLSL;
+#else
+                UNSUPPORTED("Primitive array on Vulkan requires HLSL2GLSL converter");
+#endif
+            }
+            else
+            {
+                UNSUPPORTED("Primitive array is only supported in GL and Vulkan");
+            }
+        }
 
         pVS = m_Device.CreateShader(ShaderCI);
     }
 
     RefCntAutoPtr<IShader> pPS;
     {
-        ShaderCI.Desc           = {!IsUnshaded ? "PBR PS" : "Unshaded PS", SHADER_TYPE_PIXEL, UseCombinedSamplers};
-        ShaderCI.EntryPoint     = "main";
-        ShaderCI.FilePath       = !IsUnshaded ? "RenderPBR.psh" : "RenderUnshaded.psh";
-        ShaderCI.GLSLExtensions = nullptr;
-
+        ShaderCreateInfo ShaderCI{
+            !IsUnshaded ? "RenderPBR.psh" : "RenderUnshaded.psh",
+            pShaderSourceFactory,
+            "main",
+            Macros,
+            SHADER_SOURCE_LANGUAGE_HLSL,
+            {!IsUnshaded ? "PBR PS" : "Unshaded PS", SHADER_TYPE_PIXEL, UseCombinedSamplers},
+        };
         pPS = m_Device.CreateShader(ShaderCI);
     }
 
