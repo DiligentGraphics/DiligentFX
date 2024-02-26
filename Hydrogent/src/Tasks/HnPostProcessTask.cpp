@@ -680,6 +680,8 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         SuperSamplingFactors CurrSSFactors{
             pRenderParam->GetGeometryTransformVersion(),
             pRenderParam->GetGeometrySubsetVersion(),
+            pRenderParam->GetMeshVersion(),
+            pRenderParam->GetMeshVisibilityVersion(),
             m_UseSSR,
         };
 

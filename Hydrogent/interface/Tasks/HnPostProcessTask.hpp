@@ -154,12 +154,16 @@ private:
     {
         Uint32 GeometryTransformVersion = ~0u;
         Uint32 GeometrySubsetVersion    = ~0u;
+        Uint32 MeshVersion              = ~0u;
+        Uint32 MeshVisibilityVersion    = ~0u;
         bool   UseSSR                   = false;
 
         constexpr bool operator==(const SuperSamplingFactors& rhs) const
         {
             return (GeometryTransformVersion == rhs.GeometryTransformVersion &&
                     GeometrySubsetVersion == rhs.GeometrySubsetVersion &&
+                    MeshVersion == rhs.MeshVersion &&
+                    MeshVisibilityVersion == rhs.MeshVisibilityVersion &&
                     UseSSR == rhs.UseSSR);
         }
     };
