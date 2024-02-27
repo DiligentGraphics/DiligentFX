@@ -65,6 +65,7 @@ public:
         Mesh,
         MeshTransform,
         MeshVisibility,
+        Material,
         Count
     };
     uint32_t GetAttribVersion(GlobalAttrib Attrib) const { return m_GlobalAttribVersions[static_cast<size_t>(Attrib)].load(); }

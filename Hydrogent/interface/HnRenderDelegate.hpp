@@ -325,6 +325,9 @@ private:
 
     std::mutex                   m_LightsMtx;
     std::unordered_set<HnLight*> m_Lights;
+
+    Uint32 m_MeshResourcesVersion     = ~0u;
+    Uint32 m_MaterialResourcesVersion = ~0u;
 };
 
 } // namespace USD

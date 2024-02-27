@@ -460,22 +460,33 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
     m_TextureRegistry.Commit(m_pContext);
 
     {
-        std::lock_guard<std::mutex> Guard{m_MaterialsMtx};
-        for (auto* pMat : m_Materials)
+        const auto MaterialVersion = m_RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::Material);
+        if (m_MaterialResourcesVersion != MaterialVersion)
         {
-            pMat->UpdateSRB(*this);
-        }
-        for (auto* pMat : m_Materials)
-        {
-            pMat->BindPrimitiveAttribsBuffer(*this);
+            std::lock_guard<std::mutex> Guard{m_MaterialsMtx};
+            for (auto* pMat : m_Materials)
+            {
+                pMat->UpdateSRB(*this);
+            }
+            for (auto* pMat : m_Materials)
+            {
+                pMat->BindPrimitiveAttribsBuffer(*this);
+            }
+
+            m_MaterialResourcesVersion = MaterialVersion;
         }
     }
 
     {
-        std::lock_guard<std::mutex> Guard{m_MeshesMtx};
-        for (auto* pMesh : m_Meshes)
+        const auto MeshVersion = m_RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::Mesh);
+        if (m_MeshResourcesVersion != MeshVersion)
         {
-            pMesh->CommitGPUResources(*this);
+            std::lock_guard<std::mutex> Guard{m_MeshesMtx};
+            for (auto* pMesh : m_Meshes)
+            {
+                pMesh->CommitGPUResources(*this);
+            }
+            m_MeshResourcesVersion = MeshVersion;
         }
     }
 }

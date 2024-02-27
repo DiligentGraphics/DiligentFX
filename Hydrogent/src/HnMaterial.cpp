@@ -140,6 +140,11 @@ void HnMaterial::Sync(pxr::HdSceneDelegate* SceneDelegate,
     // It is important to initialize texture attributes with default values even if there is no material network.
     InitTextureAttribs(TexRegistry, UsdRenderer, TexNameToCoordSetMap);
 
+    if (RenderParam)
+    {
+        static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::Material);
+    }
+
     *DirtyBits = HdMaterial::Clean;
 }
 
