@@ -1,5 +1,9 @@
 #include "BasicStructures.fxh"
 #include "FullScreenTriangleVSOutput.fxh"
+#include "PostFX_Common.fxh"
+
+#define HILBERT_LEVEL 7u
+#define HILBERT_WIDTH (1u << HILBERT_LEVEL)
 
 struct PSOutput
 {
@@ -27,17 +31,51 @@ float SampleRandomNumber(uint2 PixelCoord, uint SampleDimension)
     return (float(Value) + 0.5f) / 256.0f;
 }
 
+uint HilbertIndex(uint2 PixelCoord)
+{
+    PixelCoord = PixelCoord & (HILBERT_WIDTH - 1u);
+    uint Index = 0u;
+    for (uint CurLevel = HILBERT_WIDTH / 2u; CurLevel > 0u; CurLevel /= 2u)
+    {
+        uint RegionX = uint((PixelCoord.x & CurLevel) > 0u);
+        uint RegionY = uint((PixelCoord.y & CurLevel) > 0u);
+        Index += CurLevel * CurLevel * ((3u * RegionX) ^ RegionY);
+        if (RegionY == 0u)
+        {
+            if (RegionX == 1u)
+            {
+                PixelCoord.x = uint((HILBERT_WIDTH - 1u)) - PixelCoord.x;
+                PixelCoord.y = uint((HILBERT_WIDTH - 1u)) - PixelCoord.y;
+            }
+
+            uint Temp = PixelCoord.x;
+            PixelCoord.x = PixelCoord.y;
+            PixelCoord.y = Temp;
+        }
+    }
+    return Index;
+}
+
 // Roberts R1 sequence see - https://extremelearning.com.au/unreasonable-effectiveness-of-quasirandom-sequences/
-float4 SampleRandomVector2D2D(uint2 PixelCoord, uint FrameIndex)
+float2 SampleRandomVector2D(uint2 PixelCoord, uint FrameIndex)
 {
     float G = 1.61803398875f; 
     float Alpha = 0.5 + rcp(G) * float(FrameIndex & 0xFFu);
-    return float4(
+    return float2(
         frac(SampleRandomNumber(PixelCoord, 0u) + Alpha),
-        frac(SampleRandomNumber(PixelCoord, 1u) + Alpha),
-        frac(SampleRandomNumber(PixelCoord, 2u) + Alpha),
-        frac(SampleRandomNumber(PixelCoord, 3u) + Alpha)
+        frac(SampleRandomNumber(PixelCoord, 1u) + Alpha)
     );
+}
+
+ // R2 sequence - see http://extremelearning.com.au/unreasonable-effectiveness-of-quasirandom-sequences/
+float2 SampleRandomVector1D1D(uint2 PixelCoord, uint FrameIndex)
+{
+    uint Index = HilbertIndex(PixelCoord);
+    Index += 288u * (FrameIndex & (HILBERT_WIDTH - 1u));
+
+    float G = 1.32471795724474602596;
+    float2 Alpha = float2(rcp(G), rcp(G * G));
+    return frac(float2(0.5, 0.5) + float(Index) * Alpha);
 }
 
 PSOutput ComputeBlueNoiseTexturePS(in FullScreenTriangleVSOutput VSOut)
@@ -45,8 +83,7 @@ PSOutput ComputeBlueNoiseTexturePS(in FullScreenTriangleVSOutput VSOut)
     uint FrameIndex = VSOut.uInstID;
 
     PSOutput Output;
-    float4 BlueNoise = SampleRandomVector2D2D(uint2(VSOut.f4PixelPos.xy), FrameIndex);
-    Output.BlueNoiseXY = BlueNoise.xy;
-    Output.BlueNoiseZW = BlueNoise.zw;
+    Output.BlueNoiseXY = SampleRandomVector2D(uint2(VSOut.f4PixelPos.xy), FrameIndex);
+    Output.BlueNoiseZW = SampleRandomVector1D1D(uint2(VSOut.f4PixelPos.xy), FrameIndex);
     return Output;
 }

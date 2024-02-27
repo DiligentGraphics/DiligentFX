@@ -138,9 +138,8 @@ PixelStatistic ComputePixelStatistic(int2 PixelCoord)
     {
         for (int y = -StatisticRadius; y <= StatisticRadius; y++)
         {
-            int2 Offset = int2(x, y);
-            int2 Coord = int2(PixelCoord) + Offset;
-            float4 SampleColor = g_TextureCurrRadiance.Load(int3(Coord, 0));
+            int2 Location = ClampScreenCoord(PixelCoord + int2(x, y), int2(g_CurrCamera.f4ViewportSize.xy));
+            float4 SampleColor = g_TextureCurrRadiance.Load(int3(Location, 0));
 
             M1 += SampleColor;
             M2 += SampleColor * SampleColor;

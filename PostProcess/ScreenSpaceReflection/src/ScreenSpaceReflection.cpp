@@ -447,7 +447,6 @@ void ScreenSpaceReflection::CopyTextureDepth(const RenderAttributes& RenderAttri
     RenderAttribs.pDeviceContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
 }
 
-
 void ScreenSpaceReflection::ComputeHierarchicalDepthBuffer(const RenderAttributes& RenderAttribs)
 {
     auto&       RenderTech        = GetRenderTechnique(RENDER_TECH_COMPUTE_HIERARCHICAL_DEPTH_BUFFER, m_FeatureFlags);
@@ -518,7 +517,6 @@ void ScreenSpaceReflection::ComputeHierarchicalDepthBuffer(const RenderAttribute
         CopyMipAttribs.DstTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
         RenderAttribs.pDeviceContext->CopyTexture(CopyMipAttribs);
     }
-
 
     if (SupportedFeatures.TransitionSubresources)
     {

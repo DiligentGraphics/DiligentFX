@@ -3,6 +3,7 @@
 #include "PBR_Common.fxh"
 #include "SSR_Common.fxh"
 #include "FullScreenTriangleVSOutput.fxh"
+#include "PostFX_Common.fxh"
 
 cbuffer cbCameraAttribs
 {
@@ -130,20 +131,16 @@ PSOutput ComputeSpatialReconstructionPS(in FullScreenTriangleVSOutput VSOut)
     {
         float2 Xi = 2.0 * frac(HammersleySequence(SampleIdx, SampleCount) + RandomOffset) - 1.0;
 #if SSR_OPTION_HALF_RESOLUTION
-        int2 SampleCoord = int2(floor(0.5 * (Position.xy + Radius * Xi)) + float2(0.5, 0.5));
-        if (IsInsideScreen(SampleCoord, int2(0.5 * g_Camera.f4ViewportSize.xy)))
+        int2 SampleCoord = ClampScreenCoord(int2(floor(0.5 * (Position.xy + Radius * Xi)) + float2(0.5, 0.5)), int2(0.5 * g_Camera.f4ViewportSize.xy));
 #else
-        int2 SampleCoord = int2(Position.xy + Radius * Xi);
-        if (IsInsideScreen(SampleCoord, int2(g_Camera.f4ViewportSize.xy)))
+        int2 SampleCoord = ClampScreenCoord(int2(Position.xy + Radius * Xi), int2(g_Camera.f4ViewportSize.xy));
 #endif
-        {
-            float2 WeightLength = ComputeWeightRayLength(SampleCoord, ViewWS, NormalWS, Roughness, NdotV);
-            float4 SampleColor = g_TextureIntersectSpecular.Load(int3(SampleCoord, 0));
-            ComputeWeightedVariance(PixelAreaStat, SampleColor, WeightLength.x);
+        float2 WeightLength = ComputeWeightRayLength(SampleCoord, ViewWS, NormalWS, Roughness, NdotV);
+        float4 SampleColor = g_TextureIntersectSpecular.Load(int3(SampleCoord, 0));
+        ComputeWeightedVariance(PixelAreaStat, SampleColor, WeightLength.x);
 
-            if (WeightLength.x > 1.0e-6)
-                NearestSurfaceHitDistance = max(WeightLength.y, NearestSurfaceHitDistance);
-        }
+        if (WeightLength.x > 1.0e-6)
+            NearestSurfaceHitDistance = max(WeightLength.y, NearestSurfaceHitDistance);
     }
 
     PSOutput Output;

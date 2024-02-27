@@ -277,10 +277,9 @@ PixelStatistic ComputePixelStatisticYCoCgSDR(int2 PixelCoord)
     {
         for (int y = -StatisticRadius; y <= StatisticRadius; y++)
         {
-            int2 Offset = int2(x, y);
-            int2 Coord = int2(PixelCoord) + Offset;
 
-            float3 HDRColor = SampleCurrColor(Coord);
+            int2 Location = ClampScreenCoord(PixelCoord + int2(x, y), int2(g_CurrCamera.f4ViewportSize.xy));
+            float3 HDRColor = SampleCurrColor(Location);
             float3 SDRColor = RGBToYCoCg(HDRColor * rcp(1.0 + HDRColor));
 #if TAA_OPTION_GAUSSIAN_WEIGHTING
             float Weight = exp(-3.0 * float(x * x + y * y) / ((float(StatisticRadius) + 1.0) * (float(StatisticRadius) + 1.0)));

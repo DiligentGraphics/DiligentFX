@@ -139,8 +139,8 @@ void TemporalAntiAliasing::Execute(const RenderAttributes& RenderAttribs)
     ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "TemporalAccumulation"};
 
     bool ResetAccumulation =
-        m_LasFrameIdx == ~0u ||                            // No history on the first frame
-        m_CurrentFrameIdx != m_LasFrameIdx + 1 ||          // Reset history if frames were skipped
+        m_LastFrameIdx == ~0u ||                           // No history on the first frame
+        m_CurrentFrameIdx != m_LastFrameIdx + 1 ||         // Reset history if frames were skipped
         RenderAttribs.pTAAAttribs->ResetAccumulation != 0; // Reset history if requested
 
     bool UpdateConstantBuffer = false;
@@ -168,7 +168,7 @@ void TemporalAntiAliasing::Execute(const RenderAttributes& RenderAttribs)
     for (Uint32 ResourceIdx = 0; ResourceIdx <= RESOURCE_IDENTIFIER_INPUT_LAST; ++ResourceIdx)
         m_Resources[ResourceIdx].Release();
 
-    m_LasFrameIdx = m_CurrentFrameIdx;
+    m_LastFrameIdx = m_CurrentFrameIdx;
 }
 
 void TemporalAntiAliasing::UpdateUI(HLSL::TemporalAntiAliasingAttribs& TAAAttribs)
@@ -220,7 +220,7 @@ void TemporalAntiAliasing::ComputeTemporalAccumulation(const RenderAttributes& R
                                      m_Resources[RESOURCE_IDENTIFIER_ACCUMULATED_BUFFER0].AsTexture()->GetDesc().Format,
                                  },
                                  TEX_FORMAT_UNKNOWN,
-                                 DSS_DisableDepth, BS_Default, true);
+                                 DSS_DisableDepth, BS_Default, false);
 
         ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
         ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbTemporalAntiAliasingAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER].AsBuffer());

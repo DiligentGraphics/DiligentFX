@@ -70,26 +70,24 @@ float4 ComputeBilateralCleanupPS(in FullScreenTriangleVSOutput VSOut) : SV_Targe
         {
             for (int y = -EffectiveRadius; y <= EffectiveRadius; y++)
             {
-                int2 Location = int2(Position.xy) + int2(x, y);
-                if (IsInsideScreen(Location, int2(g_Camera.f4ViewportSize.xy)))
+                int2 Location = ClampScreenCoord(int2(Position.xy) + int2(x, y), int2(g_Camera.f4ViewportSize.xy));
+                float  SampledDepth     = SampleDepth(Location);
+                float  SampledRoughness = SampleRoughness(Location);
+                float4 SampledRadiance  = SampleRadiance(Location);
+                float3 SampledNormalWS  = SampleNormalWS(Location);
+
+                if (IsReflectionSample(SampledRoughness, SampledDepth, g_SSRAttribs.RoughnessThreshold))
                 {
-                    float  SampledDepth     = SampleDepth(Location);
-                    float  SampledRoughness = SampleRoughness(Location);
-                    float4 SampledRadiance  = SampleRadiance(Location);
-                    float3 SampledNormalWS  = SampleNormalWS(Location);
+                    float SampledLinearDepth = DepthToCameraZ(SampledDepth, g_Camera.mProj);
+                    float WeightS = exp(-0.5 * dot(float2(x, y), float2(x, y)) / (Sigma * Sigma));
+                    float WeightZ = exp(-abs(LinearDepth - SampledLinearDepth) / (SSR_BILATERAL_SIGMA_DEPTH * abs(dot(float2(x, y), GradDepth)+1.e-6)));
+                    float WeightN = pow(max(0.0, dot(NormalWS, SampledNormalWS)), SSR_BILATERAL_SIGMA_NORMAL);
+                    float Weight = WeightS * WeightN * WeightZ;
 
-                    if (IsReflectionSample(SampledRoughness, SampledDepth, g_SSRAttribs.RoughnessThreshold))
-                    {
-                        float SampledLinearDepth = DepthToCameraZ(SampledDepth, g_Camera.mProj);
-                        float WeightS = exp(-0.5 * dot(float2(x, y), float2(x, y)) / (Sigma * Sigma));
-                        float WeightZ = exp(-abs(LinearDepth - SampledLinearDepth) / (SSR_BILATERAL_SIGMA_DEPTH * abs(dot(float2(x, y), GradDepth) + 1.e-6)));
-                        float WeightN = pow(max(0.0, dot(NormalWS, SampledNormalWS)), SSR_BILATERAL_SIGMA_NORMAL);
-                        float Weight = WeightS * WeightN * WeightZ;
-
-                        WeightSum += Weight;
-                        ColorSum  += Weight * SampledRadiance;
-                    }
+                    WeightSum += Weight;
+                    ColorSum  += Weight * SampledRadiance;
                 }
+                
             }
         }
 

@@ -23,58 +23,38 @@
  *  all other commercial damages or losses), even if such Contributor has been advised
  *  of the possibility of such damages.
  */
-
 #pragma once
 
 #include <unordered_map>
-#include <memory>
+#include <vector>
 
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
 #include "../../../../DiligentCore/Graphics/GraphicsTools/interface/RenderStateCache.h"
-#include "../../../../DiligentCore/Graphics/GraphicsTools/interface/ResourceRegistry.hpp"
 #include "../../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
 #include "../../../../DiligentCore/Common/interface/BasicMath.hpp"
 
-#include "PostProcess/Common/interface/PostFXContext.hpp"
 #include "PostProcess/Common/interface/PostFXRenderTechnique.hpp"
+#include "PostProcess/Common/interface/PostFXContext.hpp"
 
 namespace Diligent
 {
 
-
 namespace HLSL
 {
-struct TemporalAntiAliasingAttribs;
+struct ScreenSpaceAmbientOcclusionAttribs;
 }
 
-class TemporalAntiAliasing
+class ScreenSpaceAmbientOcclusion
 {
 public:
     enum FEATURE_FLAGS : Uint32
     {
-        FEATURE_FLAG_NONE = 0,
-
-        // Indicates that the application uses a reversed depth buffer.
-        FEATURE_FLAG_REVERSED_DEPTH = 1u << 0u,
-
-        // Use Gaussian weighting in the variance clipping step.
-        FEATURE_FLAG_GAUSSIAN_WEIGHTING = 1u << 1u,
-
-        // Use Catmull-Rom filter to sample the history buffer.
-        FEATURE_FLAG_BICUBIC_FILTER = 1u << 2u,
-
-        // Use depth buffer from the previous frame to calculate disocclusion.
-        // The corresponding texture should be provided through RenderAttributes::pPrevDepthBufferSRV.
-        FEATURE_FLAG_DEPTH_DISOCCLUSION = 1u << 3u,
-
-        // Use motion buffer from the previous frame to calculate disocclusion,
-        // The corresponding texture should be provided through RenderAttributes::pPrevMotionVectorsSRV.
-        FEATURE_FLAG_MOTION_DISOCCLUSION = 1u << 4u
-    };
-
-    struct ResourceAttribs
-    {
-        TEXTURE_FORMAT AccumulatedBufferFormat = TEX_FORMAT_UNKNOWN;
+        FEATURE_FLAG_NONE                 = 0,
+        FEATURE_FLAG_REVERSED_DEPTH       = 1 << 0, // Not implemented
+        FEATURE_FLAG_PACKED_NORMAL        = 1 << 1, // Nor implemented
+        FEATURE_FLAG_HALF_PRECISION_DEPTH = 1 << 2,
+        FEATURE_FLAG_UNIFORM_WEIGHTING    = 1 << 3,
+        FEATURE_FLAG_GUIDED_FILTER        = 1 << 4,
     };
 
     struct RenderAttributes
@@ -88,45 +68,37 @@ public:
         /// Device context that will record the rendering commands.
         IDeviceContext* pDeviceContext = nullptr;
 
-        /// PostFX context.
+        /// PostFX context
         PostFXContext* pPostFXContext = nullptr;
 
-        /// Shader resource view of the source color.
-        ITextureView* pColorBufferSRV = nullptr;
+        /// Shader resource view of the source depth.
+        ITextureView* pCurrDepthBufferSRV = nullptr;
 
         /// Shader resource view of the source depth.
-        ITextureView* pDepthBufferSRV = nullptr;
+        ITextureView* pPrevDepthBufferSRV = nullptr;
+
+        /// Shader resource view of the source normal buffer
+        ITextureView* pNormalBufferSRV = nullptr;
 
         /// Shader resource view of the motion vectors.
         ITextureView* pMotionVectorsSRV = nullptr;
 
-        /// Shader resource view of the source depth from previous frame.
-        ITextureView* pPrevDepthBufferSRV = nullptr;
-
-        /// Shader resource view of the motion vectors from previous frame.
-        ITextureView* pPrevMotionVectorsSRV = nullptr;
-
-        /// Render features.
-        FEATURE_FLAGS FeatureFlag = FEATURE_FLAG_NONE;
-
-        /// TAA settings.
-        const HLSL::TemporalAntiAliasingAttribs* pTAAAttribs = nullptr;
+        /// SSAO settings
+        const HLSL::ScreenSpaceAmbientOcclusionAttribs* pSSAOAttribs = nullptr;
     };
 
 public:
-    TemporalAntiAliasing(IRenderDevice* pDevice);
+    ScreenSpaceAmbientOcclusion(IRenderDevice* pDevice);
 
-    ~TemporalAntiAliasing();
+    ~ScreenSpaceAmbientOcclusion();
 
-    float2 GetJitterOffset() const;
-
-    void PrepareResources(IRenderDevice* pDevice, PostFXContext* pPostFXContext, const ResourceAttribs& Attribs);
+    void PrepareResources(IRenderDevice* pDevice, PostFXContext* pPostFXContext, FEATURE_FLAGS FeatureFlags);
 
     void Execute(const RenderAttributes& RenderAttribs);
 
-    void UpdateUI(HLSL::TemporalAntiAliasingAttribs& TAAAttribs);
+    void UpdateUI(HLSL::ScreenSpaceAmbientOcclusionAttribs& SSRAttribs);
 
-    ITextureView* GetAccumulatedFrameSRV() const;
+    ITextureView* GetAmbientOcclusionSRV() const;
 
 private:
     using RenderTechnique  = PostFXRenderTechnique;
@@ -134,24 +106,38 @@ private:
 
     enum RENDER_TECH : Uint32
     {
-        RENDER_TECH_COMPUTE_TEMPORAL_ACCUMULATION = 0,
+        RENDER_TECH_COMPUTE_PREFILTERED_DEPTH_BUFFER = 0,
+        RENDER_TECH_COMPUTE_AMBIENT_OCCLUSION,
+        RENDER_TECH_COMPUTE_SPATIAL_RECONSTRUCTION,
+        RENDER_TECH_COMPUTE_TEMPORAL_ACCUMULATION,
+        RENDER_TECH_COPY_DEPTH,
         RENDER_TECH_COUNT
     };
 
     enum RESOURCE_IDENTIFIER : Uint32
     {
-        RESOURCE_IDENTIFIER_INPUT_COLOR = 0,
-        RESOURCE_IDENTIFIER_INPUT_DEPTH,
-        RESOURCE_IDENTIFIER_INPUT_MOTION_VECTORS,
+        RESOURCE_IDENTIFIER_INPUT_CURR_DEPTH = 0,
         RESOURCE_IDENTIFIER_INPUT_PREV_DEPTH,
-        RESOURCE_IDENTIFIER_INPUT_PREV_MOTION_VECTORS,
-        RESOURCE_IDENTIFIER_INPUT_LAST = RESOURCE_IDENTIFIER_INPUT_PREV_MOTION_VECTORS,
-
+        RESOURCE_IDENTIFIER_INPUT_NORMAL,
+        RESOURCE_IDENTIFIER_INPUT_MOTION_VECTORS,
+        RESOURCE_IDENTIFIER_INPUT_LAST = RESOURCE_IDENTIFIER_INPUT_MOTION_VECTORS,
         RESOURCE_IDENTIFIER_CONSTANT_BUFFER,
-        RESOURCE_IDENTIFIER_ACCUMULATED_BUFFER0,
-        RESOURCE_IDENTIFIER_ACCUMULATED_BUFFER1,
+        RESOURCE_IDENTIFIER_DEPTH_PREFILTERED,
+        RESOURCE_IDENTIFIER_DEPTH_PREFILTERED_INTERMEDIATE,
+        RESOURCE_IDENTIFIER_OCCLUSION,
+        RESOURCE_IDENTIFIER_OCCLUSION_RESOLVED,
+        RESOURCE_IDENTIFIER_OCCLUSION_HISTORY0,
+        RESOURCE_IDENTIFIER_OCCLUSION_HISTORY1,
         RESOURCE_IDENTIFIER_COUNT
     };
+
+    void CopyTextureDepth(const RenderAttributes& RenderAttribs, ITextureView* pSRV, ITextureView* pRTV);
+
+    void ComputePrefilteredDepth(const RenderAttributes& RenderAttribs);
+
+    void ComputeAmbientOcclusion(const RenderAttributes& RenderAttribs);
+
+    void ComputeSpatialReconstruction(const RenderAttributes& RenderAttribs);
 
     void ComputeTemporalAccumulation(const RenderAttributes& RenderAttribs);
 
@@ -170,7 +156,8 @@ private:
 
         constexpr bool operator==(const RenderTechniqueKey& RHS) const
         {
-            return RenderTech == RHS.RenderTech && FeatureFlags == RHS.FeatureFlags;
+            return RenderTech == RHS.RenderTech &&
+                FeatureFlags == RHS.FeatureFlags;
         }
 
         struct Hasher
@@ -186,14 +173,16 @@ private:
 
     ResourceRegistry m_Resources{RESOURCE_IDENTIFIER_COUNT};
 
+    std::vector<RefCntAutoPtr<ITextureView>> m_PrefilteredDepthMipMapRTV;
+    std::vector<RefCntAutoPtr<ITextureView>> m_PrefilteredDepthMipMapSRV;
+
     Uint32 m_BackBufferWidth  = 0;
     Uint32 m_BackBufferHeight = 0;
     Uint32 m_CurrentFrameIdx  = 0;
-    Uint32 m_LastFrameIdx     = ~0u;
 
-    std::unique_ptr<HLSL::TemporalAntiAliasingAttribs> m_ShaderAttribs;
+    FEATURE_FLAGS m_FeatureFlags = FEATURE_FLAG_NONE;
 };
 
-DEFINE_FLAG_ENUM_OPERATORS(TemporalAntiAliasing::FEATURE_FLAGS)
+DEFINE_FLAG_ENUM_OPERATORS(ScreenSpaceAmbientOcclusion::FEATURE_FLAGS)
 
 } // namespace Diligent

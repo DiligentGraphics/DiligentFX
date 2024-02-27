@@ -2,6 +2,7 @@
 #define _POST_FX_COMMON_FXH_
 
 #define M_PI                      3.14159265358979
+#define M_HALF_PI                 1.57079632679490
 #define M_EPSILON                 1e-3
 #define M_GOLDEN_RATIO            1.61803398875
 
@@ -95,4 +96,9 @@ bool IsInsideScreen(float2 PixelCoord, float2 Dimension)
            PixelCoord.y < Dimension.y;
 }
 
-#endif // _SSAO_COMMON_FXH_
+int2 ClampScreenCoord(int2 PixelCoord, int2 Dimension)
+{
+    return clamp(PixelCoord, int2(0, 0), Dimension - int2(1, 1));
+}
+
+#endif // _POST_FX_COMMON_FXH_

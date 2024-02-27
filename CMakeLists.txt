@@ -95,11 +95,14 @@ if(DILIGENT_INSTALL_FX)
     install(DIRECTORY    PostProcess/EpipolarLightScattering/interface
             DESTINATION  "${CMAKE_INSTALL_INCLUDEDIR}/${DILIGENT_FX_DIR}/PostProcess/EpipolarLightScattering"
     )
+    install(DIRECTORY    PostProcess/TemporalAntiAliasing/interface
+            DESTINATION  "${CMAKE_INSTALL_INCLUDEDIR}/${DILIGENT_FX_DIR}/PostProcess/TemporalAntiAliasing"
+    )
     install(DIRECTORY    PostProcess/ScreenSpaceReflection/interface
             DESTINATION  "${CMAKE_INSTALL_INCLUDEDIR}/${DILIGENT_FX_DIR}/PostProcess/ScreenSpaceReflection"
     )
-    install(DIRECTORY    PostProcess/TemporalAntiAliasing/interface
-            DESTINATION  "${CMAKE_INSTALL_INCLUDEDIR}/${DILIGENT_FX_DIR}/PostProcess/TemporalAntiAliasing"
+    install(DIRECTORY   PostProcess/ScreenSpaceAmbientOcclusion/interface
+            DESTINATION  "${CMAKE_INSTALL_INCLUDEDIR}/${DILIGENT_FX_DIR}/PostProcess/ScreenSpaceAmbientOcclusion"
     )
     install(DIRECTORY    Components/interface
             DESTINATION  "${CMAKE_INSTALL_INCLUDEDIR}/${DILIGENT_FX_DIR}/Components"
@@ -120,3 +123,4 @@ set_target_properties(DiligentFX PROPERTIES
 
 # Create a custom target to run source code formatting validation command
 add_format_validation_target(DiligentFX "${CMAKE_CURRENT_SOURCE_DIR}" DiligentFX)
+
