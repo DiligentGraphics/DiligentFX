@@ -465,6 +465,10 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
         {
             pMat->UpdateSRB(*this);
         }
+        for (auto* pMat : m_Materials)
+        {
+            pMat->BindPrimitiveAttribsBuffer(*this);
+        }
     }
 
     {

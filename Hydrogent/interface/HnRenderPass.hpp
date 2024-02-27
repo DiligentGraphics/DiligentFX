@@ -124,6 +124,7 @@ private:
         // Unique ID that identifies the combination of render states used to render the draw item
         // (PSO, SRB, vertex and index buffers)
         Uint32 RenderStateID : 31;
+        // Cached value of DrawItem.GetVisible()
         Uint32 Visible : 1;
 
         Uint32 NumVertices = 0;
@@ -133,13 +134,13 @@ private:
 
         float4x4 PrevTransform = float4x4::Identity();
 
-        // Primitive attributes shader data size computed from the used PSO flags.
+        // Primitive attributes shader data size computed from the value of PSOFlags.
         // Note: unshaded (aka wireframe/point) rendering modes don't use any textures, so the shader data
         //       is smaller than that for the shaded mode.
         Uint32 ShaderAttribsDataSize = 0;
 
-        // Primitive attributes buffer range computed from all material PSO flags.
-        // Note: it is always greater than or equal to ShaderAttribsDataAlignedSize.
+        // Primitive attributes buffer range used to set the cbPrimitiveAttribs buffer
+        // for the material's SRB.
         Uint32 ShaderAttribsBufferRange = 0;
 
         IBuffer* IndexBuffer = nullptr;

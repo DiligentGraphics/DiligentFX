@@ -79,6 +79,7 @@ public:
     static RefCntAutoPtr<IObject> CreateSRBCache();
 
     void UpdateSRB(HnRenderDelegate& RendererDelegate);
+    void BindPrimitiveAttribsBuffer(HnRenderDelegate& RendererDelegate);
 
     IShaderResourceBinding* GetSRB() const { return m_SRB; }
     IShaderResourceBinding* GetSRB(Uint32 PrimitiveAttribsOffset) const
@@ -116,6 +117,8 @@ public:
         return m_ShaderTextureIndexingId;
     }
 
+    Uint32 GetPBRPrimitiveAttribsBufferRange() const { return m_PBRPrimitiveAttribsBufferRange; }
+
 private:
     HnMaterial(pxr::SdfPath const& id);
 
@@ -150,6 +153,9 @@ private:
     // The names of the primvars that contain unique texture coordinate sets for this material (e.g. "st0", "st1").
     // The index in this array for texture N is given by m_ShaderTextureAttribs[N].UVSelector.
     std::vector<TextureCoordinateSetInfo> m_TexCoords;
+
+    // The range that is used to bind the cbPrimitiveAttribs buffer.
+    Uint32 m_PBRPrimitiveAttribsBufferRange = 0;
 
     // Current atlas version
     Uint32 m_AtlasVersion = 0;

@@ -88,7 +88,7 @@ HnRenderPass::DrawListItem::DrawListItem(const HnDrawItem& Item) noexcept :
     MeshUID{static_cast<float>(Mesh.GetUID())},
     PrevTransform{Mesh.GetAttributes().Transform},
     RenderStateID{0},
-    Visible{Mesh.IsVisible()}
+    Visible{DrawItem.GetVisible()}
 {}
 
 HnRenderPass::HnRenderPass(pxr::HdRenderIndex*           pIndex,
@@ -370,8 +370,9 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
             CurrOffset = AlignUp(CurrOffset, State.ConstantBufferOffsetAlignment);
 
             // Note that the actual attribs size may be smaller than the range, but we need
-            // to check for the entire range to avoid errors.
-            if (CurrOffset + ListItem.ShaderAttribsBufferRange * PrimitiveArraySize > AttribsBuffDesc.Size)
+            // to check for the entire range to avoid errors because this range is set in
+            // the shader variable.
+            if (CurrOffset + ListItem.ShaderAttribsBufferRange > AttribsBuffDesc.Size)
             {
                 // The buffer is full. Render the pending items and start filling the buffer from the beginning.
                 FlushPendingDraws();
@@ -750,7 +751,7 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
         }
 
         ListItem.ShaderAttribsDataSize    = State.USDRenderer.GetPBRPrimitiveAttribsSize(PSOFlags);
-        ListItem.ShaderAttribsBufferRange = State.USDRenderer.GetPBRPrimitiveAttribsSize(GetMaterialPSOFlags(*pMaterial));
+        ListItem.ShaderAttribsBufferRange = pMaterial->GetPBRPrimitiveAttribsBufferRange();
         VERIFY(ListItem.ShaderAttribsDataSize <= ListItem.ShaderAttribsBufferRange,
                "Attribs data size (", ListItem.ShaderAttribsDataSize, ") computed from the PSO flags exceeds the attribs buffer range (",
                ListItem.ShaderAttribsBufferRange, ") computed from material PSO flags. The latter is used by HnMaterial to set the buffer range.");

@@ -556,6 +556,23 @@ public:
         return it->second;
     }
 
+    void UpdatePrimitiveAttribsBufferRange(const IShaderResourceBinding* pSRB, Uint32 Range)
+    {
+        std::lock_guard<std::mutex> Lock{m_PrimitiveAttribsBufferRangeMtx};
+
+        auto& SRBRange = m_PrimitiveAttribsBufferRange[pSRB];
+        SRBRange       = std::max(SRBRange, Range);
+    }
+
+    Uint32 GetPrimitiveAttribsBufferRange(const IShaderResourceBinding* pSRB) const
+    {
+        std::lock_guard<std::mutex> Lock{m_PrimitiveAttribsBufferRangeMtx};
+
+        auto it = m_PrimitiveAttribsBufferRange.find(pSRB);
+        VERIFY(it != m_PrimitiveAttribsBufferRange.end(), "SRB is not found in the cache");
+        return it != m_PrimitiveAttribsBufferRange.end() ? it->second : 0;
+    }
+
 private:
     ObjectsRegistry<ResourceKey, RefCntAutoPtr<IShaderResourceBinding>, ResourceKey::Hasher> m_Cache;
 
@@ -574,6 +591,10 @@ private:
         m_ShaderTextureIndexingCache;
 
     std::unordered_map<ShaderTextureIndexingIdType, const StaticShaderTextureIdsArrayType&> m_IdToIndexing;
+
+    // A mapping from the SRB to the maximum buffer range required by a material that uses the SRB.
+    mutable std::mutex                                        m_PrimitiveAttribsBufferRangeMtx;
+    std::unordered_map<const IShaderResourceBinding*, Uint32> m_PrimitiveAttribsBufferRange;
 };
 
 const PBR_Renderer::StaticShaderTextureIdsArrayType& HnMaterial::GetStaticShaderTextureIds(IObject* SRBCache, ShaderTextureIndexingIdType Id)
@@ -597,8 +618,9 @@ void HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
     if (BindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_ATLAS && AtlasVersion != m_AtlasVersion)
     {
         m_SRB.Release();
-        m_PrimitiveAttribsVar = nullptr;
-        m_AtlasVersion        = AtlasVersion;
+        m_PrimitiveAttribsVar            = nullptr;
+        m_PBRPrimitiveAttribsBufferRange = 0;
+        m_AtlasVersion                   = AtlasVersion;
     }
 
     if (m_SRB)
@@ -775,21 +797,11 @@ void HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
         UsdRenderer.CreateResourceBinding(&pSRB);
         VERIFY_EXPR(pSRB);
 
-        if (IShaderResourceVariable* pVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbPrimitiveAttribs"))
-        {
-            // Primitive attribs buffer is a large buffer that fits multiple primitives.
-            // In the render loop, we write multiple primitive attribs into this buffer
-            // and use the SetBufferOffset function to select the attribs for the current primitive.
-            const Uint32 PBRPrimitiveAttribsSize = UsdRenderer.GetPBRPrimitiveAttribsSize(HnRenderPass::GetMaterialPSOFlags(*this));
-            const Uint32 PrimitiveArraySize      = std::max(UsdRenderer.GetSettings().PrimitiveArraySize, 1u);
-            pVar->SetBufferRange(UsdRenderer.GetPBRPrimitiveAttribsCB(), 0, PBRPrimitiveAttribsSize * PrimitiveArraySize);
-        }
-        else
-        {
-            UNEXPECTED("Failed to find 'cbPrimitiveAttribs' variable in the shader resource binding");
-        }
-
-        UsdRenderer.InitCommonSRBVars(pSRB, RendererDelegate.GetFrameAttribsCB());
+        // NOTE: We cannot set the cbPrimitiveAttribs buffer here because different materials that use the same SRB
+        //       may require different buffer ranges. We first compute the maximum buffer range for each SRB
+        //       and then set the buffer in BindPrimitiveAttribsBuffer().
+        constexpr bool BindPrimitiveAttribsBuffer = false;
+        UsdRenderer.InitCommonSRBVars(pSRB, RendererDelegate.GetFrameAttribsCB(), BindPrimitiveAttribsBuffer);
 
         if (BindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_ATLAS ||
             BindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_DYNAMIC)
@@ -878,13 +890,44 @@ void HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
 
     if (m_SRB)
     {
-        m_PrimitiveAttribsVar = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbPrimitiveAttribs");
-        VERIFY_EXPR(m_PrimitiveAttribsVar != nullptr);
+        const auto   PSOFlags                = HnRenderPass::GetMaterialPSOFlags(*this);
+        const Uint32 PBRPrimitiveAttribsSize = UsdRenderer.GetPBRPrimitiveAttribsSize(PSOFlags);
+        const Uint32 PrimitiveArraySize      = std::max(UsdRenderer.GetSettings().PrimitiveArraySize, 1u);
+        SRBCache->UpdatePrimitiveAttribsBufferRange(m_SRB, PBRPrimitiveAttribsSize * PrimitiveArraySize);
     }
     else
     {
         UNEXPECTED("Failed to create shader resource binding for material ", GetId());
     }
+}
+
+void HnMaterial::BindPrimitiveAttribsBuffer(HnRenderDelegate& RendererDelegate)
+{
+    if (m_PrimitiveAttribsVar != nullptr)
+        return;
+
+    m_PrimitiveAttribsVar = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbPrimitiveAttribs");
+    if (m_PrimitiveAttribsVar == nullptr)
+    {
+        UNEXPECTED("Failed to find 'cbPrimitiveAttribs' variable in the shader resource binding.");
+        return;
+    }
+
+    RefCntAutoPtr<HnMaterialSRBCache> SRBCache{RendererDelegate.GetMaterialSRBCache(), IID_HnMaterialSRBCache};
+    VERIFY_EXPR(SRBCache);
+
+    m_PBRPrimitiveAttribsBufferRange = SRBCache->GetPrimitiveAttribsBufferRange(m_SRB);
+    VERIFY(m_PBRPrimitiveAttribsBufferRange != 0,
+           "PBRRimitiveAttribsBufferRange is zero, which indicates the SRB was not found in the cache. This appears to be a bug.");
+
+    if (m_PrimitiveAttribsVar->Get() != nullptr)
+    {
+        // The buffer has already been set by another material that uses the same SRB
+        return;
+    }
+
+    USD_Renderer& UsdRenderer = *RendererDelegate.GetUSDRenderer();
+    m_PrimitiveAttribsVar->SetBufferRange(UsdRenderer.GetPBRPrimitiveAttribsCB(), 0, m_PBRPrimitiveAttribsBufferRange);
 }
 
 } // namespace USD

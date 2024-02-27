@@ -610,7 +610,9 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
 }
 
 
-void PBR_Renderer::InitCommonSRBVars(IShaderResourceBinding* pSRB, IBuffer* pFrameAttribs) const
+void PBR_Renderer::InitCommonSRBVars(IShaderResourceBinding* pSRB,
+                                     IBuffer*                pFrameAttribs,
+                                     bool                    BindPrimitiveAttribsBuffer) const
 {
     if (pSRB == nullptr)
     {
@@ -618,10 +620,13 @@ void PBR_Renderer::InitCommonSRBVars(IShaderResourceBinding* pSRB, IBuffer* pFra
         return;
     }
 
-    if (auto* pVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbPrimitiveAttribs"))
+    if (BindPrimitiveAttribsBuffer)
     {
-        if (pVar->Get() == nullptr)
-            pVar->Set(m_PBRPrimitiveAttribsCB);
+        if (auto* pVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbPrimitiveAttribs"))
+        {
+            if (pVar->Get() == nullptr)
+                pVar->Set(m_PBRPrimitiveAttribsCB);
+        }
     }
 
     if (m_Settings.MaxJointCount > 0)

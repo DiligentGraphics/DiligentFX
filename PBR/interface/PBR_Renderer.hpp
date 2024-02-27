@@ -575,7 +575,7 @@ public:
 
     PsoCacheAccessor GetPsoCacheAccessor(const GraphicsPipelineDesc& GraphicsDesc);
 
-    void InitCommonSRBVars(IShaderResourceBinding* pSRB, IBuffer* pFrameAttribs) const;
+    void InitCommonSRBVars(IShaderResourceBinding* pSRB, IBuffer* pFrameAttribs, bool BindPrimitiveAttribsBuffer = true) const;
     void SetMaterialTexture(IShaderResourceBinding* pSRB, ITextureView* pTexSRV, TEXTURE_ATTRIB_ID TextureId) const;
 
     /// Initializes internal renderer parameters.
