@@ -268,7 +268,7 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
     }
 
     {
-        const Uint32 MeshVersion = State.RenderParam.GetMeshVersion();
+        const Uint32 MeshVersion = State.RenderParam.GetAttribVersion(HnRenderParam::GlobalAttrib::Mesh);
         if (MeshVersion != m_MeshVersion || m_DrawListItemsDirtyFlags != DRAW_LIST_ITEM_DIRTY_FLAG_NONE)
         {
             UpdateDrawListGPUResources(State);
@@ -315,8 +315,9 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
     float4x4 MeshTransform;
     float4x4 PrevMeshTransform;
 
-    const bool VisibiltyDirty = State.RenderParam.GetMeshVisibilityVersion() != m_MeshVisibilityVersion;
-    m_MeshVisibilityVersion   = State.RenderParam.GetMeshVisibilityVersion();
+    const auto MeshVisibilityVersion = State.RenderParam.GetAttribVersion(HnRenderParam::GlobalAttrib::MeshVisibility);
+    const bool VisibiltyDirty        = MeshVisibilityVersion != m_MeshVisibilityVersion;
+    m_MeshVisibilityVersion          = MeshVisibilityVersion;
 
     Uint32 MultiDrawCount = 0;
     for (Uint32 ListItemId : m_RenderOrder)
@@ -489,7 +490,7 @@ void HnRenderPass::UpdateDrawList(const pxr::TfTokenVector& RenderTags)
     const unsigned int CollectionVersion          = Tracker.GetCollectionVersion(Collection.GetName());
     const unsigned int RprimRenderTagVersion      = Tracker.GetRenderTagVersion();
     const unsigned int TaskRenderTagsVersion      = Tracker.GetTaskRenderTagsVersion();
-    const unsigned int GeomSubsetDrawItemsVersion = pRenderParam->GetGeometrySubsetVersion();
+    const unsigned int GeomSubsetDrawItemsVersion = pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::GeometrSubset);
 
     const bool CollectionChanged          = (m_CollectionVersion != CollectionVersion);
     const bool RprimRenderTagChanged      = (m_RprimRenderTagVersion != RprimRenderTagVersion);

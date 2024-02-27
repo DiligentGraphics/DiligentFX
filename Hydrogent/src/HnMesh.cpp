@@ -187,7 +187,7 @@ void HnMesh::Sync(pxr::HdSceneDelegate* Delegate,
     ++m_Version;
     if (RenderParam != nullptr)
     {
-        static_cast<HnRenderParam*>(RenderParam)->MakeMeshDirty();
+        static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::Mesh);
     }
 
     *DirtyBits &= ~pxr::HdChangeTracker::AllSceneDirtyBits;
@@ -319,7 +319,7 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
             m_Attribs.Transform = Transform;
             if (RenderParam != nullptr)
             {
-                static_cast<HnRenderParam*>(RenderParam)->MakeGeometryTransformDirty();
+                static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::MeshTransform);
             }
         }
     }
@@ -332,7 +332,7 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
             _sharedData.visible = SceneDelegate.GetVisible(Id);
             if (RenderParam != nullptr)
             {
-                static_cast<HnRenderParam*>(RenderParam)->MakeMeshVisibilityDirty();
+                static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::MeshVisibility);
             }
         }
     }
@@ -376,7 +376,7 @@ void HnMesh::UpdateTopology(pxr::HdSceneDelegate& SceneDelegate,
         UpdateDrawItemsForGeometrySubsets(SceneDelegate, RenderParam);
         if (RenderParam != nullptr)
         {
-            static_cast<HnRenderParam*>(RenderParam)->MakeGeometrySubsetDirty();
+            static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::GeometrSubset);
         }
     }
 

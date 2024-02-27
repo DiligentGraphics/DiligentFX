@@ -39,6 +39,8 @@ HnRenderParam::HnRenderParam(bool                              UseVertexPool,
     m_UseIndexPool{UseIndexPool},
     m_TextureBindingMode{TextureBindingMode}
 {
+    for (auto& Version : m_GlobalAttribVersions)
+        Version.store(0);
 }
 
 HnRenderParam::~HnRenderParam()

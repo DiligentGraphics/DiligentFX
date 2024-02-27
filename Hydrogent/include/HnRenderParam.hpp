@@ -27,6 +27,7 @@
 #pragma once
 
 #include <atomic>
+#include <array>
 
 #include "HnTypes.hpp"
 
@@ -58,17 +59,16 @@ public:
     const pxr::SdfPath& GetSelectedPrimId() const { return m_SelectedPrimId; }
     void                SetSelectedPrimId(const pxr::SdfPath& PrimId) { m_SelectedPrimId = PrimId; }
 
-    uint32_t GetGeometrySubsetVersion() const { return m_GeometrySubsetVersion.load(); }
-    void     MakeGeometrySubsetDirty() { m_GeometrySubsetVersion.fetch_add(1); }
-
-    uint32_t GetGeometryTransformVersion() const { return m_GeometryTransformVersion.load(); }
-    void     MakeGeometryTransformDirty() { m_GeometryTransformVersion.fetch_add(1); }
-
-    uint32_t GetMeshVersion() const { return m_MeshVersion.load(); }
-    void     MakeMeshDirty() { m_MeshVersion.fetch_add(1); }
-
-    uint32_t GetMeshVisibilityVersion() const { return m_MeshVisibilityVersion.load(); }
-    void     MakeMeshVisibilityDirty() { m_MeshVisibilityVersion.fetch_add(1); }
+    enum class GlobalAttrib
+    {
+        GeometrSubset,
+        Mesh,
+        MeshTransform,
+        MeshVisibility,
+        Count
+    };
+    uint32_t GetAttribVersion(GlobalAttrib Attrib) const { return m_GlobalAttribVersions[static_cast<size_t>(Attrib)].load(); }
+    void     MakeAttribDirty(GlobalAttrib Attrib) { m_GlobalAttribVersions[static_cast<size_t>(Attrib)].fetch_add(1); }
 
     PBR_Renderer::DebugViewType GetDebugView() const { return m_DebugView; }
 
@@ -93,10 +93,7 @@ private:
 
     pxr::SdfPath m_SelectedPrimId;
 
-    std::atomic<uint32_t> m_GeometrySubsetVersion{0};
-    std::atomic<uint32_t> m_GeometryTransformVersion{0};
-    std::atomic<uint32_t> m_MeshVersion{0};
-    std::atomic<uint32_t> m_MeshVisibilityVersion{0};
+    std::array<std::atomic<uint32_t>, static_cast<size_t>(GlobalAttrib::Count)> m_GlobalAttribVersions{};
 
     PBR_Renderer::DebugViewType m_DebugView = PBR_Renderer::DebugViewType::None;
 

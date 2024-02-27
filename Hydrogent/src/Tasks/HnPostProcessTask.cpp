@@ -678,10 +678,9 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         GetTaskContextData(TaskCtx, HnRenderResourceTokens->cameraTransformDirty, CameraTransformDirty);
 
         SuperSamplingFactors CurrSSFactors{
-            pRenderParam->GetGeometryTransformVersion(),
-            pRenderParam->GetGeometrySubsetVersion(),
-            pRenderParam->GetMeshVersion(),
-            pRenderParam->GetMeshVisibilityVersion(),
+            (pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::GeometrSubset) +
+             pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::Mesh) +
+             pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::MeshVisibility)),
             m_UseSSR,
         };
 
