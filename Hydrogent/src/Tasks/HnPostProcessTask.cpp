@@ -549,7 +549,7 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
     }
     if (m_UseTAA)
     {
-        m_TAA->PrepareResources(pDevice, m_PostFXContext.get(), {m_FinalColorRTV->GetDesc().Format});
+        m_TAA->PrepareResources(pDevice, m_PostFXContext.get(), {TEX_FORMAT_RGBA16_FLOAT});
     }
     if (m_UseSSAO)
     {
