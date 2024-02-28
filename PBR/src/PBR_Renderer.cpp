@@ -1255,7 +1255,10 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
     std::string      VSInputStruct;
     GetVSInputStructAndLayout(PSOFlags, VSInputStruct, InputLayout);
 
-    const bool UseVkPointSize = GraphicsDesc.PrimitiveTopology == PRIMITIVE_TOPOLOGY_POINT_LIST && m_Device.GetDeviceInfo().IsVulkanDevice();
+    const bool UseVkPointSize =
+        GraphicsDesc.PrimitiveTopology == PRIMITIVE_TOPOLOGY_POINT_LIST &&
+        m_Device.GetDeviceInfo().IsVulkanDevice() &&
+        m_Settings.PrimitiveArraySize == 0; // When PrimitiveArraySize > 0, we convert HLSL to GLSL
     const auto VSOutputStruct = GetVSOutputStruct(PSOFlags, UseVkPointSize, m_Settings.PrimitiveArraySize > 0);
 
     CreateInfo::PSMainSourceInfo PSMainSource;
