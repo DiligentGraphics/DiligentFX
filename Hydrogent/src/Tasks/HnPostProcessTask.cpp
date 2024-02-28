@@ -657,6 +657,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         SSRAttribs.MaxTraversalIntersections = 64;
         SSRAttribs.RoughnessChannel          = 0;
         SSRAttribs.IsRoughnessPerceptual     = true;
+        SSRAttribs.RoughnessThreshold        = 0.4f;
 
         ScreenSpaceReflection::RenderAttributes SSRRenderAttribs{pDevice, pStateCache, pCtx};
         SSRRenderAttribs.pPostFXContext     = m_PostFXContext.get();
@@ -671,8 +672,8 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
 
     if (m_UseSSAO)
     {
-        HLSL::ScreenSpaceAmbientOcclusionAttribs SSAOSettings = {};
-        SSAOSettings.EffectRadius                             = 20.f;
+        HLSL::ScreenSpaceAmbientOcclusionAttribs SSAOSettings{};
+        SSAOSettings.EffectRadius = m_Params.SSAORadius;
 
         ScreenSpaceAmbientOcclusion::RenderAttributes SSAORenderAttribs{};
         SSAORenderAttribs.pDevice             = pDevice;

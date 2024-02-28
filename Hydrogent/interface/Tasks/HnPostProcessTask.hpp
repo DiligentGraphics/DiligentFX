@@ -81,6 +81,9 @@ struct HnPostProcessTaskParams
     // 0 - disable SSAO.
     float SSAOScale = 1.f;
 
+    // SSAO radius in world space
+    float SSAORadius = 10;
+
     // Enable temporal anti-aliasing
     bool EnableTAA = false;
 
@@ -98,6 +101,7 @@ struct HnPostProcessTaskParams
                AverageLogLum       == rhs.AverageLogLum &&
                SSRScale            == rhs.SSRScale &&
                SSAOScale           == rhs.SSAOScale &&
+               SSAORadius		   == rhs.SSAORadius &&
                EnableTAA           == rhs.EnableTAA;
         // clang-format on
     }
