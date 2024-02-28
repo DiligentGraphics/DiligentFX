@@ -268,19 +268,28 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
     }
 
     {
-        const Uint32 MeshMaterialVersion = State.RenderParam.GetAttribVersion(HnRenderParam::GlobalAttrib::MeshMaterial);
-        const Uint32 MaterialVersion     = State.RenderParam.GetAttribVersion(HnRenderParam::GlobalAttrib::Material);
-        if (m_GlobalAttribVersions.Material != MaterialVersion ||
-            m_GlobalAttribVersions.MeshMaterial != MeshMaterialVersion)
+        const Uint32 MaterialVersion = State.RenderParam.GetAttribVersion(HnRenderParam::GlobalAttrib::Material);
+        if (m_GlobalAttribVersions.Material != MaterialVersion)
         {
+            // Attributes of some material have changed. We don't know which meshes may be affected,
+            // so we need to process the entire draw list.
             m_DrawListItemsDirtyFlags |= DRAW_LIST_ITEM_DIRTY_FLAG_PSO;
-            m_GlobalAttribVersions.Material     = MaterialVersion;
-            m_GlobalAttribVersions.MeshMaterial = MeshMaterialVersion;
+            m_GlobalAttribVersions.Material = MaterialVersion;
         }
 
-        if (m_DrawListItemsDirtyFlags != DRAW_LIST_ITEM_DIRTY_FLAG_NONE)
+        // If either mesh material or mesh geometry changes, call UpdateDrawListGPUResources(), but
+        // don't set the dirty flags in the m_DrawListItemsDirtyFlags. The UpdateDrawListGPUResources()
+        // method will check the version of each individual mesh and only update those that have changed.
+        const Uint32 MeshMaterialVersion = State.RenderParam.GetAttribVersion(HnRenderParam::GlobalAttrib::MeshMaterial);
+        const Uint32 MeshGeometryVersion = State.RenderParam.GetAttribVersion(HnRenderParam::GlobalAttrib::MeshGeometry);
+        if (m_DrawListItemsDirtyFlags != DRAW_LIST_ITEM_DIRTY_FLAG_NONE ||
+            m_GlobalAttribVersions.MeshGeometry != MeshGeometryVersion ||
+            m_GlobalAttribVersions.MeshMaterial != MeshMaterialVersion)
         {
             UpdateDrawListGPUResources(State);
+
+            m_GlobalAttribVersions.MeshGeometry = MeshGeometryVersion;
+            m_GlobalAttribVersions.MeshMaterial = MeshMaterialVersion;
         }
     }
 
@@ -341,8 +350,8 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
         if (!ListItem || !ListItem.Visible)
             continue;
 
-        // Note: if material changes in the mesh, the mesh version as well as the
-        //       global mesh version will be updated, and the draw list will be rebuilt.
+        // Note: if the material changes in the mesh, the mesh material version and/or
+        //       global material version will be updated, and the draw list will be rebuilt.
         const HnMesh&     Mesh     = ListItem.Mesh;
         const HnMaterial& Material = ListItem.Material;
 
@@ -375,12 +384,12 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
 
         if (MultiDrawCount == 0)
         {
-            // Align the offset to the constant buffer offset alignment
+            // Align the offset by the constant buffer offset alignment
             CurrOffset = AlignUp(CurrOffset, State.ConstantBufferOffsetAlignment);
 
             // Note that the actual attribs size may be smaller than the range, but we need
             // to check for the entire range to avoid errors because this range is set in
-            // the shader variable.
+            // the shader variable in the SRB.
             if (CurrOffset + ListItem.ShaderAttribsBufferRange > AttribsBuffDesc.Size)
             {
                 // The buffer is full. Render the pending items and start filling the buffer from the beginning.
@@ -527,7 +536,7 @@ void HnRenderPass::UpdateDrawList(const pxr::TfTokenVector& RenderTags)
         //const HnRenderParam* const RenderParam = static_cast<HnRenderParam*>(pRenderIndex->GetRenderDelegate()->GetRenderParam());
         //if (RenderParam->HasMaterialTag(Collection.GetMaterialTag()))
         {
-            m_DrawItems = GetRenderIndex()->GetDrawItems(Collection, RenderTags);
+            m_DrawItems = pRenderIndex->GetDrawItems(Collection, RenderTags);
             // GetDrawItems() uses multithreading, so the order of draw items is not deterministic.
             std::sort(m_DrawItems.begin(), m_DrawItems.end());
         }
@@ -838,18 +847,19 @@ void HnRenderPass::RenderPendingDrawItems(RenderState& State)
         if (PendingItem.DrawCount > 1)
         {
 #ifdef DILIGENT_DEBUG
+            VERIFY_EXPR(item_idx + PendingItem.DrawCount <= m_PendingDrawItems.size());
             for (size_t i = 1; i < PendingItem.DrawCount; ++i)
             {
                 const auto& BatchItem = m_PendingDrawItems[item_idx + i].ListItem;
-                VERIFY_EXPR(BatchItem.pPSO == ListItem.pPSO &&
+                VERIFY_EXPR(BatchItem.RenderStateID == ListItem.RenderStateID &&
+                            BatchItem.pPSO == ListItem.pPSO &&
                             BatchItem.IndexBuffer == ListItem.IndexBuffer &&
                             BatchItem.NumVertexBuffers == ListItem.NumVertexBuffers &&
                             BatchItem.VertexBuffers == ListItem.VertexBuffers &&
                             BatchItem.DrawItem.GetMaterial()->GetSRB() == ListItem.DrawItem.GetMaterial()->GetSRB());
             }
-#endif
             VERIFY_EXPR(m_ScratchSpace.size() >= PendingItem.DrawCount * (ListItem.IndexBuffer != nullptr ? sizeof(MultiDrawIndexedItem) : sizeof(MultiDrawItem)));
-            VERIFY_EXPR(item_idx + PendingItem.DrawCount <= m_PendingDrawItems.size());
+#endif
 
             if (ListItem.IndexBuffer != nullptr)
             {

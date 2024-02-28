@@ -124,7 +124,7 @@ private:
         const float MeshUID;
 
         // Unique ID that identifies the combination of render states used to render the draw item
-        // (PSO, SRB, vertex and index buffers)
+        // (PSO, SRB, vertex and index buffers). It is used to batch draw calls into a multi-draw command.
         Uint32 RenderStateID : 31;
         // Cached value of DrawItem.GetVisible()
         Uint32 Visible : 1;
@@ -142,7 +142,7 @@ private:
         Uint32 ShaderAttribsDataSize = 0;
 
         // Primitive attributes buffer range used to set the cbPrimitiveAttribs buffer
-        // for the material's SRB.
+        // in the material's SRB.
         Uint32 ShaderAttribsBufferRange = 0;
 
         IBuffer* IndexBuffer = nullptr;
@@ -150,7 +150,7 @@ private:
         std::array<IBuffer*, 4> VertexBuffers    = {};
         Uint32                  NumVertexBuffers = 0;
 
-        // Combined Geometry and Mesh material version
+        // Mesh Geometry + Mesh Material version
         Uint32 Version = 0;
 
         explicit DrawListItem(const HnDrawItem& Item) noexcept;
@@ -178,6 +178,7 @@ private:
 
     // All draw items in the collection returned by the render index.
     pxr::HdRenderIndex::HdDrawItemPtrVector m_DrawItems;
+
     // Only selected/unselected draw items in the collection.
     std::vector<DrawListItem> m_DrawList;
 
