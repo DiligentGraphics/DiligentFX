@@ -11,9 +11,9 @@ struct PostProcessAttribs
     float SelectionOutlineWidth;
     
     float SSRScale;
+    float SSAOScale;
     float Padding0;
     float Padding1;
-    float Padding2;
 
     ToneMappingAttribs ToneMapping;
 };

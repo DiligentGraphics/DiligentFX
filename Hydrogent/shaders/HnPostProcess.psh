@@ -23,6 +23,7 @@ Texture2D g_SelectionDepth;
 Texture2D g_Depth;
 Texture2D g_ClosestSelectedLocation;
 Texture2D g_SSR;
+Texture2D g_SSAO;
 Texture2D g_Normal;
 Texture2D g_SpecularIBL;
 Texture2D g_MaterialData;
@@ -64,6 +65,12 @@ void main(in  FullScreenTriangleVSOutput VSOut,
         Color.rgb += (SSR.rgb - SpecularIBL.rgb) * SSRRadiance.w * Color.a * g_Attribs.SSRScale;
     }
 
+    if (g_Attribs.SSAOScale > 0.0)
+    {
+        float Occlusion = lerp(1.0, g_SSAO.Load(int3(Pos.xy, 0)).x, g_Attribs.SSAOScale);
+        Color.rgb *= Occlusion;
+    }
+    
 #if TONE_MAPPING_MODE > TONE_MAPPING_MODE_NONE
     Color.rgb = ToneMap(Color.rgb, g_Attribs.ToneMapping, g_Attribs.AverageLogLum);
 #endif

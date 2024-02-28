@@ -46,6 +46,7 @@ class PostFXContext;
 class VectorFieldRenderer;
 class ScreenSpaceReflection;
 class TemporalAntiAliasing;
+class ScreenSpaceAmbientOcclusion;
 
 namespace USD
 {
@@ -76,6 +77,10 @@ struct HnPostProcessTaskParams
     // 0 - disable SSR.
     float SSRScale = 1.f;
 
+    // Screen-space ambient occlusion scale.
+    // 0 - disable SSAO.
+    float SSAOScale = 1.f;
+
     // Enable temporal anti-aliasing
     bool EnableTAA = false;
 
@@ -92,6 +97,7 @@ struct HnPostProcessTaskParams
                LuminanceSaturation == rhs.LuminanceSaturation &&
                AverageLogLum       == rhs.AverageLogLum &&
                SSRScale            == rhs.SSRScale &&
+               SSAOScale           == rhs.SSAOScale &&
                EnableTAA           == rhs.EnableTAA;
         // clang-format on
     }
@@ -134,18 +140,21 @@ private:
 
     RefCntAutoPtr<IBuffer> m_PostProcessAttribsCB;
 
-    std::unique_ptr<PostFXContext>         m_PostFXContext;
-    std::unique_ptr<VectorFieldRenderer>   m_VectorFieldRenderer;
-    std::unique_ptr<ScreenSpaceReflection> m_SSR;
-    std::unique_ptr<TemporalAntiAliasing>  m_TAA;
+    std::unique_ptr<PostFXContext>               m_PostFXContext;
+    std::unique_ptr<VectorFieldRenderer>         m_VectorFieldRenderer;
+    std::unique_ptr<ScreenSpaceReflection>       m_SSR;
+    std::unique_ptr<ScreenSpaceAmbientOcclusion> m_SSAO;
+    std::unique_ptr<TemporalAntiAliasing>        m_TAA;
 
 
     ITextureView*               m_FinalColorRTV = nullptr; // Set in Prepare()
     const HnFramebufferTargets* m_FBTargets     = nullptr; // Set in Prepare()
     float                       m_ClearDepth    = 1.f;     // Set in Prepare()
     float                       m_SSRScale      = 0;       // Set in Prepare()
+    float                       m_SSAOScale     = 0;       // Set in Prepare()
     bool                        m_UseTAA        = false;   // Set in Prepare()
     bool                        m_UseSSR        = false;   // Set in Prepare()
+    bool                        m_UseSSAO       = false;   // Set in Prepare()
 
     bool m_ResetTAA       = true;
     bool m_AttribsCBDirty = true;
@@ -154,10 +163,11 @@ private:
     {
         Uint32 Version = ~0u;
         bool   UseSSR  = false;
+        bool   UseSSAO = false;
 
         constexpr bool operator==(const SuperSamplingFactors& rhs) const
         {
-            return Version == rhs.Version && UseSSR == rhs.UseSSR;
+            return Version == rhs.Version && UseSSR == rhs.UseSSR && UseSSAO == rhs.UseSSAO;
         }
     };
     SuperSamplingFactors m_LastSuperSamplingFactors;
@@ -182,6 +192,7 @@ private:
                 ShaderResourceVariableX SelectionDepth;
                 ShaderResourceVariableX ClosestSelectedLocation;
                 ShaderResourceVariableX SSR;
+                ShaderResourceVariableX SSAO;
                 ShaderResourceVariableX SpecularIBL;
                 ShaderResourceVariableX Normal;
                 ShaderResourceVariableX BaseColor;

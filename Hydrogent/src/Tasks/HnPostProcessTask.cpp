@@ -40,6 +40,7 @@
 #include "GraphicsUtilities.h"
 #include "VectorFieldRenderer.hpp"
 #include "ScreenSpaceReflection.hpp"
+#include "ScreenSpaceAmbientOcclusion.hpp"
 #include "TemporalAntiAliasing.hpp"
 #include "ScopedDebugGroup.hpp"
 
@@ -56,6 +57,7 @@ namespace HLSL
 #include "Shaders/PBR/private/RenderPBR_Structures.fxh"
 #include "Shaders/PostProcess/ScreenSpaceReflection/public/ScreenSpaceReflectionStructures.fxh"
 #include "Shaders/PostProcess/TemporalAntiAliasing/public/TemporalAntiAliasingStructures.fxh"
+#include "Shaders/PostProcess/ScreenSpaceAmbientOcclusion/public/ScreenSpaceAmbientOcclusionStructures.fxh"
 
 } // namespace HLSL
 
@@ -99,6 +101,7 @@ void HnPostProcessTask::PostProcessingTechnique::PreparePRS()
         .AddResource(SHADER_TYPE_PIXEL, "g_SelectionDepth", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
         .AddResource(SHADER_TYPE_PIXEL, "g_ClosestSelectedLocation", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
         .AddResource(SHADER_TYPE_PIXEL, "g_SSR", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
+        .AddResource(SHADER_TYPE_PIXEL, "g_SSAO", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
         .AddResource(SHADER_TYPE_PIXEL, "g_SpecularIBL", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
         .AddResource(SHADER_TYPE_PIXEL, "g_Normal", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
         .AddResource(SHADER_TYPE_PIXEL, "g_MaterialData", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
@@ -238,6 +241,9 @@ void HnPostProcessTask::PostProcessingTechnique::PrepareSRB(ITextureView* pClose
     ITextureView* pSSR = PPTask.m_SSR->GetSSRRadianceSRV();
     VERIFY_EXPR(pSSR != nullptr);
 
+    ITextureView* pSSAO = PPTask.m_SSAO->GetAmbientOcclusionSRV();
+    VERIFY_EXPR(pSSAO != nullptr);
+
     const HnRenderParam* pRenderParam = static_cast<const HnRenderParam*>(PPTask.m_RenderIndex->GetRenderDelegate()->GetRenderParam());
     VERIFY_EXPR(pRenderParam != nullptr);
     size_t ResIdx     = pRenderParam != nullptr ? pRenderParam->GetFrameNumber() % Resources.size() : 0;
@@ -260,6 +266,7 @@ void HnPostProcessTask::PostProcessingTechnique::PrepareSRB(ITextureView* pClose
             VarValueChanged(ShaderVars.SelectionDepth, pSelectionDepthSRV) ||
             VarValueChanged(ShaderVars.ClosestSelectedLocation, pClosestSelectedLocationSRV) ||
             VarValueChanged(ShaderVars.SSR, pSSR) ||
+            VarValueChanged(ShaderVars.SSAO, pSSAO) ||
             VarValueChanged(ShaderVars.SpecularIBL, pSpecularIblSRV) ||
             VarValueChanged(ShaderVars.Normal, pNormalSRV) ||
             VarValueChanged(ShaderVars.Material, pMaterialSRV) ||
@@ -286,6 +293,7 @@ void HnPostProcessTask::PostProcessingTechnique::PrepareSRB(ITextureView* pClose
         SetVar(ShaderVars.SelectionDepth,          "g_SelectionDepth",          pSelectionDepthSRV);
         SetVar(ShaderVars.ClosestSelectedLocation, "g_ClosestSelectedLocation", pClosestSelectedLocationSRV);
         SetVar(ShaderVars.SSR,                     "g_SSR",                     pSSR);
+        SetVar(ShaderVars.SSAO,                    "g_SSAO",                    pSSAO);
         SetVar(ShaderVars.SpecularIBL,             "g_SpecularIBL",             pSpecularIblSRV);
         SetVar(ShaderVars.Normal,                  "g_Normal",                  pNormalSRV);
         SetVar(ShaderVars.Material,                "g_MaterialData",            pMaterialSRV);
@@ -496,6 +504,11 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
         m_SSR = std::make_unique<ScreenSpaceReflection>(pDevice);
     }
 
+    if (!m_SSAO)
+    {
+        m_SSAO = std::make_unique<ScreenSpaceAmbientOcclusion>(pDevice);
+    }
+
     if (!m_TAA)
     {
         m_TAA = std::make_unique<TemporalAntiAliasing>(pDevice);
@@ -504,16 +517,26 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
     const HnRenderParam* pRenderParam   = static_cast<const HnRenderParam*>(RenderDelegate->GetRenderParam());
     const TextureDesc&   FinalColorDesc = m_FinalColorRTV->GetTexture()->GetDesc();
 
-    const float SSRScale =
-        (pRenderParam->GetDebugView() == PBR_Renderer::DebugViewType::None && pRenderParam->GetRenderMode() == HN_RENDER_MODE_SOLID) ?
-        m_Params.SSRScale :
-        0;
+    float SSRScale  = 0;
+    float SSAOScale = 0;
+    if (pRenderParam->GetDebugView() == PBR_Renderer::DebugViewType::None && pRenderParam->GetRenderMode() == HN_RENDER_MODE_SOLID)
+    {
+        SSRScale  = m_Params.SSRScale;
+        SSAOScale = m_Params.SSAOScale;
+    }
     if (SSRScale != m_SSRScale)
     {
         m_SSRScale       = SSRScale;
         m_AttribsCBDirty = true;
     }
     m_UseSSR = m_SSRScale > 0;
+
+    if (SSAOScale != m_SSAOScale)
+    {
+        m_SSAOScale      = SSAOScale;
+        m_AttribsCBDirty = true;
+    }
+    m_UseSSAO = m_SSAOScale > 0;
 
     m_UseTAA = m_Params.EnableTAA &&
         pRenderParam->GetDebugView() == PBR_Renderer::DebugViewType::None &&
@@ -527,6 +550,10 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
     if (m_UseTAA)
     {
         m_TAA->PrepareResources(pDevice, m_PostFXContext.get(), {m_FinalColorRTV->GetDesc().Format});
+    }
+    if (m_UseSSAO)
+    {
+        m_SSAO->PrepareResources(pDevice, m_PostFXContext.get(), ScreenSpaceAmbientOcclusion::FEATURE_FLAG_NONE);
     }
 
     m_PostProcessTech.PreparePRS();
@@ -602,7 +629,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
 
     const TextureDesc& FinalColorDesc = m_FinalColorRTV->GetTexture()->GetDesc();
 
-    if (m_UseSSR)
+    if (m_UseSSR || m_UseSSAO)
     {
         PostFXContext::RenderAttributes PostFXAttribs{pDevice, pStateCache, pCtx};
 
@@ -619,7 +646,10 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
             UNEXPECTED("PBR frame attribs are not set in the task context");
         }
         m_PostFXContext->Execute(PostFXAttribs);
+    }
 
+    if (m_UseSSR)
+    {
         HLSL::ScreenSpaceReflectionAttribs SSRAttribs{};
         SSRAttribs.MaxTraversalIntersections = 64;
         SSRAttribs.RoughnessChannel          = 0;
@@ -634,6 +664,36 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         SSRRenderAttribs.pMotionVectorsSRV  = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_MOTION_VECTOR];
         SSRRenderAttribs.pSSRAttribs        = &SSRAttribs;
         m_SSR->Execute(SSRRenderAttribs);
+    }
+
+    if (m_UseSSAO)
+    {
+        HLSL::ScreenSpaceAmbientOcclusionAttribs SSAOSettings = {};
+        SSAOSettings.EffectRadius                             = 50.f;
+
+        auto FeatureFlags = ScreenSpaceAmbientOcclusion::FEATURE_FLAG_NONE;
+
+        //if (m_ShaderSettings->SSAOFeatureHalfPrecisionDepth)
+        //    FeatureFlags |= ScreenSpaceAmbientOcclusion::FEATURE_FLAG_HALF_PRECISION_DEPTH;
+
+        //if (m_ShaderSettings->SSAOAlgorithmType)
+        //    FeatureFlags |= ScreenSpaceAmbientOcclusion::FEATURE_FLAG_UNIFORM_WEIGHTING;
+
+        //if (m_ShaderSettings->SSAOReconstructionFilterType)
+        //    FeatureFlags |= ScreenSpaceAmbientOcclusion::FEATURE_FLAG_GUIDED_FILTER;
+
+        m_SSAO->PrepareResources(pDevice, m_PostFXContext.get(), FeatureFlags);
+
+        ScreenSpaceAmbientOcclusion::RenderAttributes SSAORenderAttribs{};
+        SSAORenderAttribs.pDevice             = pDevice;
+        SSAORenderAttribs.pDeviceContext      = pCtx;
+        SSAORenderAttribs.pPostFXContext      = m_PostFXContext.get();
+        SSAORenderAttribs.pCurrDepthBufferSRV = m_FBTargets->DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        SSAORenderAttribs.pPrevDepthBufferSRV = m_FBTargets->PrevDepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        SSAORenderAttribs.pNormalBufferSRV    = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_NORMAL];
+        SSAORenderAttribs.pMotionVectorsSRV   = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_MOTION_VECTOR];
+        SSAORenderAttribs.pSSAOAttribs        = &SSAOSettings;
+        m_SSAO->Execute(SSAORenderAttribs);
     }
 
     {
@@ -657,6 +717,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
             ShaderAttribs.ClearDepth                       = m_ClearDepth;
             ShaderAttribs.SelectionOutlineWidth            = m_Params.SelectionOutlineWidth;
             ShaderAttribs.SSRScale                         = m_SSRScale;
+            ShaderAttribs.SSAOScale                        = m_SSAOScale;
             pCtx->UpdateBuffer(m_PostProcessAttribsCB, 0, sizeof(HLSL::PostProcessAttribs), &ShaderAttribs, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         }
         pCtx->SetPipelineState(m_PostProcessTech.PSO);
@@ -684,6 +745,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
              pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::MeshVisibility) +
              pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::Material)),
             m_UseSSR,
+            m_UseSSAO,
         };
 
         // Skip rejection if no geometry has changed and the camera transform is not dirty.
