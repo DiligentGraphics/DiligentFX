@@ -111,7 +111,7 @@ public:
 
     void Execute(const RenderAttributes& RenderAttribs);
 
-    void UpdateUI(HLSL::ScreenSpaceReflectionAttribs& SSRAttribs);
+    bool UpdateUI(HLSL::ScreenSpaceReflectionAttribs& SSRAttribs);
 
     ITextureView* GetSSRRadianceSRV() const;
 

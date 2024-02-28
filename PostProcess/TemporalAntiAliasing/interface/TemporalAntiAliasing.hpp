@@ -124,7 +124,7 @@ public:
 
     void Execute(const RenderAttributes& RenderAttribs);
 
-    void UpdateUI(HLSL::TemporalAntiAliasingAttribs& TAAAttribs);
+    bool UpdateUI(HLSL::TemporalAntiAliasingAttribs& TAAAttribs);
 
     ITextureView* GetAccumulatedFrameSRV() const;
 

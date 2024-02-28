@@ -191,13 +191,22 @@ void ScreenSpaceAmbientOcclusion::Execute(const RenderAttributes& RenderAttribs)
         m_Resources[ResourceIdx].Release();
 }
 
-void ScreenSpaceAmbientOcclusion::UpdateUI(HLSL::ScreenSpaceAmbientOcclusionAttribs& SSRAttribs)
+bool ScreenSpaceAmbientOcclusion::UpdateUI(HLSL::ScreenSpaceAmbientOcclusionAttribs& SSRAttribs)
 {
-    ImGui::SliderFloat("Effect Radius", &SSRAttribs.EffectRadius, 0.0f, 10.0f);
-    ImGui::SliderFloat("Effect Falloff Range", &SSRAttribs.EffectFalloffRange, 0.0f, 1.0f);
-    ImGui::SliderFloat("Radius Multiplier", &SSRAttribs.RadiusMultiplier, 0.3f, 3.0f);
-    ImGui::SliderFloat("Depth MIP Sampling Offset", &SSRAttribs.DepthMIPSamplingOffset, 2.0, 6.0);
-    ImGui::SliderFloat("Temporal Stability Factor", &SSRAttribs.TemporalStabilityFactor, 0.0, 1.0);
+    bool AttribsChanged = true;
+
+    if (ImGui::SliderFloat("Effect Radius", &SSRAttribs.EffectRadius, 0.0f, 10.0f))
+        AttribsChanged = true;
+    if (ImGui::SliderFloat("Effect Falloff Range", &SSRAttribs.EffectFalloffRange, 0.0f, 1.0f))
+        AttribsChanged = true;
+    if (ImGui::SliderFloat("Radius Multiplier", &SSRAttribs.RadiusMultiplier, 0.3f, 3.0f))
+        AttribsChanged = true;
+    if (ImGui::SliderFloat("Depth MIP Sampling Offset", &SSRAttribs.DepthMIPSamplingOffset, 2.0, 6.0))
+        AttribsChanged = true;
+    if (ImGui::SliderFloat("Temporal Stability Factor", &SSRAttribs.TemporalStabilityFactor, 0.0, 1.0))
+        AttribsChanged = true;
+
+    return AttribsChanged;
 }
 
 ITextureView* ScreenSpaceAmbientOcclusion::GetAmbientOcclusionSRV() const

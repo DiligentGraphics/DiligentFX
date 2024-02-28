@@ -171,9 +171,9 @@ void TemporalAntiAliasing::Execute(const RenderAttributes& RenderAttribs)
     m_LastFrameIdx = m_CurrentFrameIdx;
 }
 
-void TemporalAntiAliasing::UpdateUI(HLSL::TemporalAntiAliasingAttribs& TAAAttribs)
+bool TemporalAntiAliasing::UpdateUI(HLSL::TemporalAntiAliasingAttribs& TAAAttribs)
 {
-    ImGui::SliderFloat("Temporal Stability Factor", &TAAAttribs.TemporalStabilityFactor, 0.0f, 1.0f);
+    return ImGui::SliderFloat("Temporal Stability Factor", &TAAAttribs.TemporalStabilityFactor, 0.0f, 1.0f);
 }
 
 ITextureView* TemporalAntiAliasing::GetAccumulatedFrameSRV() const
