@@ -179,15 +179,15 @@ void HnMesh::Sync(pxr::HdSceneDelegate* Delegate,
         UpdateReprMaterials(Delegate, RenderParam);
     }
 
-    if (*DirtyBits & pxr::HdChangeTracker::DirtyDoubleSided)
+    const bool DirtyDoubleSided = (*DirtyBits & pxr::HdChangeTracker::DirtyDoubleSided) != 0;
+    if (DirtyDoubleSided)
     {
         m_Attribs.IsDoubleSided = Delegate->GetDoubleSided(Id);
     }
 
-    ++m_Version;
-    if (RenderParam != nullptr)
+    if ((DirtyDoubleSided || UpdateMaterials) && RenderParam != nullptr)
     {
-        static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::Mesh);
+        static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::MeshMaterial);
     }
 
     *DirtyBits &= ~pxr::HdChangeTracker::AllSceneDirtyBits;
@@ -266,12 +266,15 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
 
     const pxr::SdfPath& Id = GetId();
 
-    if (pxr::HdChangeTracker::IsTopologyDirty(DirtyBits, Id))
+    const bool TopologyDirty = pxr::HdChangeTracker::IsTopologyDirty(DirtyBits, Id);
+    if (TopologyDirty)
     {
         UpdateTopology(SceneDelegate, RenderParam, DirtyBits, ReprToken);
+        DirtyBits &= ~pxr::HdChangeTracker::DirtyTopology;
     }
 
-    if (pxr::HdChangeTracker::IsAnyPrimvarDirty(DirtyBits, Id))
+    const bool AnyPrimvarDirty = pxr::HdChangeTracker::IsAnyPrimvarDirty(DirtyBits, Id);
+    if (AnyPrimvarDirty)
     {
         m_StagingVertexData = std::make_unique<StagingVertexData>();
         UpdateVertexAndVaryingPrimvars(SceneDelegate, RenderParam, DirtyBits, ReprToken);
@@ -311,6 +314,11 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
         DirtyBits &= ~pxr::HdChangeTracker::DirtyPrimvar;
     }
 
+    if ((TopologyDirty || AnyPrimvarDirty) && RenderParam != nullptr)
+    {
+        static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::MeshGeometry);
+    }
+
     if (pxr::HdChangeTracker::IsTransformDirty(DirtyBits, Id))
     {
         auto Transform = ToFloat4x4(SceneDelegate.GetTransform(Id));
@@ -322,6 +330,8 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
                 static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::MeshTransform);
             }
         }
+
+        DirtyBits &= ~pxr::HdChangeTracker::DirtyTransform;
     }
 
     if (pxr::HdChangeTracker::IsVisibilityDirty(DirtyBits, Id))
@@ -335,6 +345,8 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
                 static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::MeshVisibility);
             }
         }
+
+        DirtyBits &= ~pxr::HdChangeTracker::DirtyVisibility;
     }
 
     DirtyBits &= ~pxr::HdChangeTracker::NewRepr;
@@ -376,7 +388,7 @@ void HnMesh::UpdateTopology(pxr::HdSceneDelegate& SceneDelegate,
         UpdateDrawItemsForGeometrySubsets(SceneDelegate, RenderParam);
         if (RenderParam != nullptr)
         {
-            static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::GeometrSubset);
+            static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::GeometrySubsetDrawItems);
         }
     }
 

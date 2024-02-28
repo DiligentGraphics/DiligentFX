@@ -61,11 +61,29 @@ public:
 
     enum class GlobalAttrib
     {
-        GeometrSubset,
-        Mesh,
+        // Indicates changes to geometry subset draw items.
+        GeometrySubsetDrawItems,
+
+        // Indicates changes to mesh geometry:
+        //   - Mesh topology (index buffers and geometry subsets)
+        //   - Any primvars (vertex buffers)
+        MeshGeometry,
+
+        // Indicates changes to mesh transforms.
         MeshTransform,
+
+        // Indicates changes to mesh visibility.
         MeshVisibility,
+
+        // Indicates changes to mesh materials:
+        //   - Material assignment
+        //   - Display style
+        //   - Double-sided
+        MeshMaterial,
+
+        // Indicates changes to material properties.
         Material,
+
         Count
     };
     uint32_t GetAttribVersion(GlobalAttrib Attrib) const { return m_GlobalAttribVersions[static_cast<size_t>(Attrib)].load(); }

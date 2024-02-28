@@ -478,7 +478,7 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
     }
 
     {
-        const auto MeshVersion = m_RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::Mesh);
+        const auto MeshVersion = m_RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::MeshGeometry);
         if (m_MeshResourcesVersion != MeshVersion)
         {
             std::lock_guard<std::mutex> Guard{m_MeshesMtx};

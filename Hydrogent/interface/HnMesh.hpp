@@ -130,7 +130,8 @@ public:
 
     Uint32 GetUID() const { return m_UID; }
 
-    Uint32 GetVersion() const { return m_Version; }
+    Uint32 GetGeometryVersion() const { return m_GeometryVersion; }
+    Uint32 GetMaterialVersion() const { return m_MaterialVersion; }
 
 protected:
     // This callback from Rprim gives the prim an opportunity to set
@@ -253,7 +254,8 @@ private:
     };
     VertexData m_VertexData;
 
-    Uint32 m_Version = 0;
+    std::atomic<Uint32> m_GeometryVersion{0};
+    std::atomic<Uint32> m_MaterialVersion{0};
 };
 
 } // namespace USD

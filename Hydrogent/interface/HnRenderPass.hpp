@@ -27,6 +27,8 @@
 #pragma once
 
 #include <unordered_set>
+#include <vector>
+#include <array>
 
 #include "pxr/imaging/hd/types.h"
 #include "pxr/imaging/hd/renderPass.h"
@@ -148,6 +150,7 @@ private:
         std::array<IBuffer*, 4> VertexBuffers    = {};
         Uint32                  NumVertexBuffers = 0;
 
+        // Combined Geometry and Mesh material version
         Uint32 Version = 0;
 
         explicit DrawListItem(const HnDrawItem& Item) noexcept;
@@ -193,13 +196,18 @@ private:
     std::vector<Uint8> m_PrimitiveAttribsData;
     std::vector<Uint8> m_ScratchSpace;
 
-    pxr::SdfPath m_SelectedPrimId             = {};
-    unsigned int m_CollectionVersion          = ~0u;
-    unsigned int m_RprimRenderTagVersion      = ~0u;
-    unsigned int m_TaskRenderTagsVersion      = ~0u;
-    unsigned int m_GeomSubsetDrawItemsVersion = ~0u;
-    unsigned int m_MeshVersion                = ~0u;
-    unsigned int m_MeshVisibilityVersion      = ~0u;
+    pxr::SdfPath m_SelectedPrimId = {};
+    struct GlobalAttribVersions
+    {
+        uint32_t Collection          = ~0u;
+        uint32_t RprimRenderTag      = ~0u;
+        uint32_t TaskRenderTags      = ~0u;
+        uint32_t GeomSubsetDrawItems = ~0u;
+        uint32_t MeshGeometry        = ~0u;
+        uint32_t MeshMaterial        = ~0u;
+        uint32_t MeshVisibility      = ~0u;
+        uint32_t Material            = ~0u;
+    } m_GlobalAttribVersions;
 
     DRAW_LIST_ITEM_DIRTY_FLAGS m_DrawListItemsDirtyFlags = DRAW_LIST_ITEM_DIRTY_FLAG_ALL;
 

@@ -268,11 +268,19 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
     }
 
     {
-        const Uint32 MeshVersion = State.RenderParam.GetAttribVersion(HnRenderParam::GlobalAttrib::Mesh);
-        if (MeshVersion != m_MeshVersion || m_DrawListItemsDirtyFlags != DRAW_LIST_ITEM_DIRTY_FLAG_NONE)
+        const Uint32 MeshMaterialVersion = State.RenderParam.GetAttribVersion(HnRenderParam::GlobalAttrib::MeshMaterial);
+        const Uint32 MaterialVersion     = State.RenderParam.GetAttribVersion(HnRenderParam::GlobalAttrib::Material);
+        if (m_GlobalAttribVersions.Material != MaterialVersion ||
+            m_GlobalAttribVersions.MeshMaterial != MeshMaterialVersion)
+        {
+            m_DrawListItemsDirtyFlags |= DRAW_LIST_ITEM_DIRTY_FLAG_PSO;
+            m_GlobalAttribVersions.Material     = MaterialVersion;
+            m_GlobalAttribVersions.MeshMaterial = MeshMaterialVersion;
+        }
+
+        if (m_DrawListItemsDirtyFlags != DRAW_LIST_ITEM_DIRTY_FLAG_NONE)
         {
             UpdateDrawListGPUResources(State);
-            m_MeshVersion = MeshVersion;
         }
     }
 
@@ -315,9 +323,9 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
     float4x4 MeshTransform;
     float4x4 PrevMeshTransform;
 
-    const auto MeshVisibilityVersion = State.RenderParam.GetAttribVersion(HnRenderParam::GlobalAttrib::MeshVisibility);
-    const bool VisibiltyDirty        = MeshVisibilityVersion != m_MeshVisibilityVersion;
-    m_MeshVisibilityVersion          = MeshVisibilityVersion;
+    const auto MeshVisibilityVersion      = State.RenderParam.GetAttribVersion(HnRenderParam::GlobalAttrib::MeshVisibility);
+    const bool VisibiltyDirty             = MeshVisibilityVersion != m_GlobalAttribVersions.MeshVisibility;
+    m_GlobalAttribVersions.MeshVisibility = MeshVisibilityVersion;
 
     Uint32 MultiDrawCount = 0;
     for (Uint32 ListItemId : m_RenderOrder)
@@ -449,7 +457,7 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
 void HnRenderPass::_MarkCollectionDirty()
 {
     // Force any cached data based on collection to be refreshed.
-    m_CollectionVersion = ~0u;
+    m_GlobalAttribVersions.Collection = ~0u;
 }
 
 void HnRenderPass::SetMeshRenderParams(const HnMeshRenderParams& Params)
@@ -490,17 +498,17 @@ void HnRenderPass::UpdateDrawList(const pxr::TfTokenVector& RenderTags)
     const unsigned int CollectionVersion          = Tracker.GetCollectionVersion(Collection.GetName());
     const unsigned int RprimRenderTagVersion      = Tracker.GetRenderTagVersion();
     const unsigned int TaskRenderTagsVersion      = Tracker.GetTaskRenderTagsVersion();
-    const unsigned int GeomSubsetDrawItemsVersion = pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::GeometrSubset);
+    const unsigned int GeomSubsetDrawItemsVersion = pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::GeometrySubsetDrawItems);
 
-    const bool CollectionChanged          = (m_CollectionVersion != CollectionVersion);
-    const bool RprimRenderTagChanged      = (m_RprimRenderTagVersion != RprimRenderTagVersion);
+    const bool CollectionChanged          = (m_GlobalAttribVersions.Collection != CollectionVersion);
+    const bool RprimRenderTagChanged      = (m_GlobalAttribVersions.RprimRenderTag != RprimRenderTagVersion);
     const bool MaterialTagChanged         = (m_MaterialTag != MaterialTag);
-    const bool GeomSubsetDrawItemsChanged = (m_GeomSubsetDrawItemsVersion != GeomSubsetDrawItemsVersion);
+    const bool GeomSubsetDrawItemsChanged = (m_GlobalAttribVersions.GeomSubsetDrawItems != GeomSubsetDrawItemsVersion);
 
     bool TaskRenderTagsChanged = false;
-    if (m_TaskRenderTagsVersion != TaskRenderTagsVersion)
+    if (m_GlobalAttribVersions.TaskRenderTags != TaskRenderTagsVersion)
     {
-        m_TaskRenderTagsVersion = TaskRenderTagsVersion;
+        m_GlobalAttribVersions.TaskRenderTags = TaskRenderTagsVersion;
         if (m_RenderTags != RenderTags)
         {
             m_RenderTags          = RenderTags;
@@ -558,10 +566,10 @@ void HnRenderPass::UpdateDrawList(const pxr::TfTokenVector& RenderTags)
         m_DrawListItemsDirtyFlags = DRAW_LIST_ITEM_DIRTY_FLAG_ALL;
     }
 
-    m_CollectionVersion          = CollectionVersion;
-    m_RprimRenderTagVersion      = RprimRenderTagVersion;
-    m_MaterialTag                = MaterialTag;
-    m_GeomSubsetDrawItemsVersion = GeomSubsetDrawItemsVersion;
+    m_GlobalAttribVersions.Collection          = CollectionVersion;
+    m_GlobalAttribVersions.RprimRenderTag      = RprimRenderTagVersion;
+    m_MaterialTag                              = MaterialTag;
+    m_GlobalAttribVersions.GeomSubsetDrawItems = GeomSubsetDrawItemsVersion;
 }
 
 void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
@@ -605,8 +613,13 @@ void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
     for (DrawListItem& ListItem : m_DrawList)
     {
         auto DrawItemGPUResDirtyFlags = m_DrawListItemsDirtyFlags;
-        if (ListItem.Version != ListItem.Mesh.GetVersion())
+
+        const auto Version = ListItem.Mesh.GetGeometryVersion() + ListItem.Mesh.GetMaterialVersion();
+        if (ListItem.Version != Version)
+        {
             DrawItemGPUResDirtyFlags |= DRAW_LIST_ITEM_DIRTY_FLAG_PSO | DRAW_LIST_ITEM_DIRTY_FLAG_MESH_DATA;
+            ListItem.Version = Version;
+        }
         if (DrawItemGPUResDirtyFlags != DRAW_LIST_ITEM_DIRTY_FLAG_NONE)
         {
             UpdateDrawListItemGPUResources(ListItem, State, DrawItemGPUResDirtyFlags);
@@ -801,8 +814,6 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
             ListItem.NumVertices = 0;
         }
     }
-
-    ListItem.Version = DrawItem.GetMesh().GetVersion();
 }
 
 void HnRenderPass::RenderPendingDrawItems(RenderState& State)
