@@ -553,7 +553,10 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
     }
     if (m_UseSSAO)
     {
-        m_SSAO->PrepareResources(pDevice, m_PostFXContext.get(), ScreenSpaceAmbientOcclusion::FEATURE_FLAG_NONE);
+        auto FeatureFlags =
+            ScreenSpaceAmbientOcclusion::FEATURE_FLAG_GUIDED_FILTER |
+            ScreenSpaceAmbientOcclusion::FEATURE_FLAG_HALF_PRECISION_DEPTH;
+        m_SSAO->PrepareResources(pDevice, m_PostFXContext.get(), FeatureFlags);
     }
 
     m_PostProcessTech.PreparePRS();
@@ -669,20 +672,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
     if (m_UseSSAO)
     {
         HLSL::ScreenSpaceAmbientOcclusionAttribs SSAOSettings = {};
-        SSAOSettings.EffectRadius                             = 50.f;
-
-        auto FeatureFlags = ScreenSpaceAmbientOcclusion::FEATURE_FLAG_NONE;
-
-        //if (m_ShaderSettings->SSAOFeatureHalfPrecisionDepth)
-        //    FeatureFlags |= ScreenSpaceAmbientOcclusion::FEATURE_FLAG_HALF_PRECISION_DEPTH;
-
-        //if (m_ShaderSettings->SSAOAlgorithmType)
-        //    FeatureFlags |= ScreenSpaceAmbientOcclusion::FEATURE_FLAG_UNIFORM_WEIGHTING;
-
-        //if (m_ShaderSettings->SSAOReconstructionFilterType)
-        //    FeatureFlags |= ScreenSpaceAmbientOcclusion::FEATURE_FLAG_GUIDED_FILTER;
-
-        m_SSAO->PrepareResources(pDevice, m_PostFXContext.get(), FeatureFlags);
+        SSAOSettings.EffectRadius                             = 20.f;
 
         ScreenSpaceAmbientOcclusion::RenderAttributes SSAORenderAttribs{};
         SSAORenderAttribs.pDevice             = pDevice;
