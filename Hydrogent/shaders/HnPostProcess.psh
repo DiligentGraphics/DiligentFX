@@ -67,7 +67,9 @@ void main(in  FullScreenTriangleVSOutput VSOut,
 
     if (g_Attribs.SSAOScale > 0.0)
     {
-        float Occlusion = lerp(1.0, g_SSAO.Load(int3(Pos.xy, 0)).x, g_Attribs.SSAOScale);
+        // Since Color.rgb may be blended with background, we need to attenuate the occlusion
+        // factor by transparency or there will be artifacts.
+        float Occlusion = lerp(1.0, g_SSAO.Load(int3(Pos.xy, 0)).x, g_Attribs.SSAOScale * Color.a);
         Color.rgb *= Occlusion;
     }
     
