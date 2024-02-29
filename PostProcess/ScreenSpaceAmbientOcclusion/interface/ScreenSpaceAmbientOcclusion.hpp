@@ -27,6 +27,7 @@
 
 #include <unordered_map>
 #include <vector>
+#include <memory>
 
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
 #include "../../../../DiligentCore/Graphics/GraphicsTools/interface/RenderStateCache.h"
@@ -172,6 +173,8 @@ private:
     std::unordered_map<RenderTechniqueKey, RenderTechnique, RenderTechniqueKey::Hasher> m_RenderTech;
 
     ResourceRegistry m_Resources{RESOURCE_IDENTIFIER_COUNT};
+
+    std::unique_ptr<HLSL::ScreenSpaceAmbientOcclusionAttribs> m_SSAOAttribs;
 
     std::vector<RefCntAutoPtr<ITextureView>> m_PrefilteredDepthMipMapRTV;
     std::vector<RefCntAutoPtr<ITextureView>> m_PrefilteredDepthMipMapSRV;

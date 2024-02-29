@@ -45,12 +45,13 @@ namespace HLSL
 }
 
 
-ScreenSpaceAmbientOcclusion::ScreenSpaceAmbientOcclusion(IRenderDevice* pDevice)
+ScreenSpaceAmbientOcclusion::ScreenSpaceAmbientOcclusion(IRenderDevice* pDevice) :
+    m_SSAOAttribs{std::make_unique<HLSL::ScreenSpaceAmbientOcclusionAttribs>()}
 {
     DEV_CHECK_ERR(pDevice != nullptr, "pDevice must not be null");
 
     RefCntAutoPtr<IBuffer> pBuffer;
-    CreateUniformBuffer(pDevice, sizeof(HLSL::ScreenSpaceAmbientOcclusionAttribs), "ScreenSpaceAmbientOcclusion::ConstantBuffer", &pBuffer, USAGE_DEFAULT, BIND_UNIFORM_BUFFER, CPU_ACCESS_NONE);
+    CreateUniformBuffer(pDevice, sizeof(HLSL::ScreenSpaceAmbientOcclusionAttribs), "ScreenSpaceAmbientOcclusion::ConstantBuffer", &pBuffer, USAGE_DEFAULT, BIND_UNIFORM_BUFFER, CPU_ACCESS_NONE, m_SSAOAttribs.get());
     m_Resources.Insert(RESOURCE_IDENTIFIER_CONSTANT_BUFFER, pBuffer);
 }
 
@@ -180,7 +181,11 @@ void ScreenSpaceAmbientOcclusion::Execute(const RenderAttributes& RenderAttribs)
     m_Resources.Insert(RESOURCE_IDENTIFIER_INPUT_MOTION_VECTORS, RenderAttribs.pMotionVectorsSRV->GetTexture());
 
     ScopedDebugGroup DebugGroupGlobal{RenderAttribs.pDeviceContext, "ScreenSpaceAmbientOcclusion"};
-    RenderAttribs.pDeviceContext->UpdateBuffer(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER].AsBuffer(), 0, sizeof(HLSL::ScreenSpaceAmbientOcclusionAttribs), RenderAttribs.pSSAOAttribs, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    if (memcmp(RenderAttribs.pSSAOAttribs, m_SSAOAttribs.get(), sizeof(HLSL::ScreenSpaceAmbientOcclusionAttribs)) != 0)
+    {
+        memcpy(m_SSAOAttribs.get(), RenderAttribs.pSSAOAttribs, sizeof(HLSL::ScreenSpaceAmbientOcclusionAttribs));
+        RenderAttribs.pDeviceContext->UpdateBuffer(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER].AsBuffer(), 0, sizeof(HLSL::ScreenSpaceAmbientOcclusionAttribs), RenderAttribs.pSSAOAttribs, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    }
     ComputePrefilteredDepth(RenderAttribs);
     ComputeAmbientOcclusion(RenderAttribs);
     ComputeSpatialReconstruction(RenderAttribs);
