@@ -117,6 +117,7 @@ float ComputeAmbientOcclusionPS(in FullScreenTriangleVSOutput VSOut) : SV_Target
         MaxCosHorizons.y = MinCosHorizons.y;
 
         float2 SampleDirection = float2(Omega.x, Omega.y) * F3NDC_XYZ_TO_UVD_SCALE.xy * SampleRadius;
+        SampleDirection.x *= g_Camera.f4ViewportSize.y * g_Camera.f4ViewportSize.z; // Aspect ratio correction
 
         for (int SampleIdx = 0; SampleIdx < SSAO_SAMPLES_PER_SLICE; SampleIdx++)
         {
