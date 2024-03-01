@@ -145,6 +145,18 @@ public:
         ///
         /// If zero, the renderer will automatically determine the array size.
         Uint32 TexturesArraySize = 0;
+
+        /// The size of the multi-draw batch. If zero, multi-draw batching is disabled.
+        ///
+        /// \remarks    Multi-draw batching requires the NativeMultiDraw device feature.
+        ///             If the feature is not supported, the value is ignored.
+        ///
+        ///             The multi-draw batch size defines the size of the primitive
+        ///             attributes array size in the shader.
+        ///             Default value (16) is a good trade-off between the number of
+        ///             draw calls that can be batched and the overhead associated with
+        ///             the size of the primitive attributes array.
+        Uint32 MultiDrawBatchSize = 16;
     };
     static std::unique_ptr<HnRenderDelegate> Create(const CreateInfo& CI);
 

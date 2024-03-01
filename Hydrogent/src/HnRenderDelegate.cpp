@@ -185,7 +185,7 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
 
     const auto& DeviceInfo = RenderDelegateCI.pDevice->GetDeviceInfo();
     if (DeviceInfo.Features.NativeMultiDraw && (DeviceInfo.IsVulkanDevice() || DeviceInfo.IsGLDevice()))
-        USDRendererCI.PrimitiveArraySize = 16;
+        USDRendererCI.PrimitiveArraySize = RenderDelegateCI.MultiDrawBatchSize;
 
     USDRendererCI.InputLayout.LayoutElements = Inputs;
     USDRendererCI.InputLayout.NumElements    = _countof(Inputs);
