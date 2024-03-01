@@ -543,21 +543,13 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
         pRenderParam->GetRenderMode() == HN_RENDER_MODE_SOLID;
 
     m_PostFXContext->PrepareResources({pRenderParam->GetFrameNumber(), FinalColorDesc.Width, FinalColorDesc.Height});
-    if (m_UseSSR)
-    {
-        m_SSR->PrepareResources(pDevice, m_PostFXContext.get(), ScreenSpaceReflection::FEATURE_FLAG_NONE);
-    }
-    if (m_UseTAA)
-    {
-        m_TAA->PrepareResources(pDevice, m_PostFXContext.get(), {TEX_FORMAT_RGBA16_FLOAT});
-    }
-    if (m_UseSSAO)
-    {
-        auto FeatureFlags =
-            ScreenSpaceAmbientOcclusion::FEATURE_FLAG_GUIDED_FILTER |
-            ScreenSpaceAmbientOcclusion::FEATURE_FLAG_HALF_PRECISION_DEPTH;
-        m_SSAO->PrepareResources(pDevice, m_PostFXContext.get(), FeatureFlags);
-    }
+    m_SSR->PrepareResources(pDevice, m_PostFXContext.get(), ScreenSpaceReflection::FEATURE_FLAG_NONE);
+    m_TAA->PrepareResources(pDevice, m_PostFXContext.get(), {TEX_FORMAT_RGBA16_FLOAT});
+
+    constexpr auto SSAOFeatureFlags =
+        ScreenSpaceAmbientOcclusion::FEATURE_FLAG_GUIDED_FILTER |
+        ScreenSpaceAmbientOcclusion::FEATURE_FLAG_HALF_PRECISION_DEPTH;
+    m_SSAO->PrepareResources(pDevice, m_PostFXContext.get(), SSAOFeatureFlags);
 
     m_PostProcessTech.PreparePRS();
     m_PostProcessTech.PreparePSO((m_UseTAA ? m_FBTargets->JitteredFinalColorRTV : m_FinalColorRTV)->GetDesc().Format);
