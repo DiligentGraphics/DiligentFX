@@ -157,8 +157,13 @@ struct HnRenderPass::RenderState
 
     void SetVertexBuffers(IBuffer* const* ppBuffers, Uint32 NumBuffers)
     {
-        VERIFY_EXPR(NumBuffers <= 4);
+        VERIFY_EXPR(NumBuffers <= ppVertexBuffers.size());
         bool SetBuffers = false;
+        if (NumVertexBuffers != NumBuffers)
+        {
+            SetBuffers       = true;
+            NumVertexBuffers = NumBuffers;
+        }
         for (Uint32 i = 0; i < NumBuffers; ++i)
         {
             if (ppBuffers[i] != nullptr && ppBuffers[i] != ppVertexBuffers[i])
@@ -191,8 +196,10 @@ private:
     IPipelineState*         pPSO = nullptr;
     IShaderResourceBinding* pSRB = nullptr;
 
-    IBuffer*                pIndexBuffer    = nullptr;
-    std::array<IBuffer*, 4> ppVertexBuffers = {};
+    IBuffer* pIndexBuffer = nullptr;
+
+    Uint32                  NumVertexBuffers = 0;
+    std::array<IBuffer*, 4> ppVertexBuffers  = {};
 
     USD_Renderer::PsoCacheAccessor PsoCache;
 };
@@ -351,7 +358,8 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
             continue;
 
         // Note: if the material changes in the mesh, the mesh material version and/or
-        //       global material version will be updated, and the draw list will be rebuilt.
+        //       global material version will be updated, and the draw list item GPU
+        //       resources will be updated.
         const HnMesh&     Mesh     = ListItem.Mesh;
         const HnMaterial& Material = ListItem.Material;
 
@@ -493,11 +501,12 @@ void HnRenderPass::UpdateDrawList(const pxr::TfTokenVector& RenderTags)
         return;
     }
 
-    bool UpdateDrawList = false;
+    bool DrawListDirty = false;
     if (pRenderParam->GetSelectedPrimId() != m_SelectedPrimId)
     {
         m_SelectedPrimId = pRenderParam->GetSelectedPrimId();
-        UpdateDrawList   = true;
+        // Only update draw list, but not the draw items list
+        DrawListDirty = true;
     }
 
     const pxr::HdRprimCollection& Collection  = GetRprimCollection();
@@ -545,10 +554,10 @@ void HnRenderPass::UpdateDrawList(const pxr::TfTokenVector& RenderTags)
         //    // There is no prim with the desired material tag.
         //    m_DrawItems.clear()
         //}
-        UpdateDrawList = true;
+        DrawListDirty = true;
     }
 
-    if (UpdateDrawList)
+    if (DrawListDirty)
     {
         m_DrawList.clear();
         for (const pxr::HdDrawItem* pDrawItem : m_DrawItems)
@@ -650,7 +659,13 @@ void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
         }
         std::sort(m_RenderOrder.begin(), m_RenderOrder.end(),
                   [this](Uint32 i0, Uint32 i1) {
-                      return m_DrawList[i0].pPSO < m_DrawList[i1].pPSO;
+                      // Sort by PSO first, then by material SRB
+                      if (m_DrawList[i0].pPSO < m_DrawList[i1].pPSO)
+                          return true;
+                      else if (m_DrawList[i0].pPSO > m_DrawList[i1].pPSO)
+                          return false;
+                      else
+                          return m_DrawList[i0].Material.GetSRB() < m_DrawList[i1].Material.GetSRB();
                   });
     }
 }

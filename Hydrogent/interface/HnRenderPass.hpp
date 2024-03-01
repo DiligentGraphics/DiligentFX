@@ -93,8 +93,8 @@ public:
     enum DRAW_LIST_ITEM_DIRTY_FLAGS : Uint32
     {
         DRAW_LIST_ITEM_DIRTY_FLAG_NONE      = 0u,
-        DRAW_LIST_ITEM_DIRTY_FLAG_PSO       = 1 << 0u,
-        DRAW_LIST_ITEM_DIRTY_FLAG_MESH_DATA = 1 << 0u,
+        DRAW_LIST_ITEM_DIRTY_FLAG_PSO       = 1u << 0u,
+        DRAW_LIST_ITEM_DIRTY_FLAG_MESH_DATA = 1u << 1u,
         DRAW_LIST_ITEM_DIRTY_FLAG_LAST      = DRAW_LIST_ITEM_DIRTY_FLAG_MESH_DATA,
         DRAW_LIST_ITEM_DIRTY_FLAG_ALL       = DRAW_LIST_ITEM_DIRTY_FLAG_LAST * 2 - 1
     };
@@ -176,10 +176,10 @@ private:
     HN_RENDER_MODE              m_RenderMode = HN_RENDER_MODE_SOLID;
     PBR_Renderer::DebugViewType m_DebugView  = PBR_Renderer::DebugViewType::None;
 
-    // All draw items in the collection returned by the render index.
+    // All draw items in the collection returned by pRenderIndex->GetDrawItems().
     pxr::HdRenderIndex::HdDrawItemPtrVector m_DrawItems;
 
-    // Only selected/unselected draw items in the collection.
+    // Only selected/unselected items from m_DrawItems.
     std::vector<DrawListItem> m_DrawList;
 
     struct PendingDrawItem
@@ -194,7 +194,10 @@ private:
     // Rendering order of the draw list items sorted by the PSO.
     std::vector<Uint32> m_RenderOrder;
 
+    // Scratch space prepare data for the primitive attributes buffer.
     std::vector<Uint8> m_PrimitiveAttribsData;
+
+    // Scratch space for the MultiDraw/MultiDrawIndexed command items.
     std::vector<Uint8> m_ScratchSpace;
 
     pxr::SdfPath m_SelectedPrimId = {};

@@ -188,6 +188,7 @@ void HnMesh::Sync(pxr::HdSceneDelegate* Delegate,
     if ((DirtyDoubleSided || UpdateMaterials) && RenderParam != nullptr)
     {
         static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::MeshMaterial);
+        ++m_MaterialVersion;
     }
 
     *DirtyBits &= ~pxr::HdChangeTracker::AllSceneDirtyBits;
@@ -317,6 +318,7 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
     if ((TopologyDirty || AnyPrimvarDirty) && RenderParam != nullptr)
     {
         static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::MeshGeometry);
+        ++m_GeometryVersion;
     }
 
     if (pxr::HdChangeTracker::IsTransformDirty(DirtyBits, Id))
