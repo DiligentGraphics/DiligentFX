@@ -268,7 +268,8 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
     m_MaterialSRBCache{HnMaterial::CreateSRBCache()},
     m_USDRenderer{CreateUSDRenderer(CI, m_PrimitiveAttribsCB, m_MaterialSRBCache)},
     m_TextureRegistry{CI.pDevice, CI.TextureAtlasDim != 0 ? m_ResourceMgr : RefCntAutoPtr<GLTF::ResourceManager>{}},
-    m_RenderParam{std::make_unique<HnRenderParam>(CI.UseVertexPool, CI.UseIndexPool, CI.TextureBindingMode)}
+    m_RenderParam{std::make_unique<HnRenderParam>(CI.UseVertexPool, CI.UseIndexPool, CI.TextureBindingMode)},
+    m_MeshAttribsAllocator{GetRawAllocator(), sizeof(HnMesh::Attributes), 64}
 {
 }
 
@@ -326,7 +327,7 @@ pxr::HdRprim* HnRenderDelegate::CreateRprim(const pxr::TfToken& TypeId,
     const Uint32  RPrimUID = m_RPrimNextUID.fetch_add(1);
     if (TypeId == pxr::HdPrimTypeTokens->mesh)
     {
-        HnMesh* Mesh = HnMesh::Create(TypeId, RPrimId, RPrimUID);
+        HnMesh* Mesh = HnMesh::Create(TypeId, RPrimId, *this, RPrimUID);
         {
             std::lock_guard<std::mutex> Guard{m_RPrimUIDToSdfPathMtx};
             m_RPrimUIDToSdfPath[RPrimUID] = RPrimId;

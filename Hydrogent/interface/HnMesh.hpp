@@ -40,6 +40,7 @@
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/GraphicsTypesX.hpp"
 #include "../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
 #include "../../../DiligentCore/Common/interface/BasicMath.hpp"
+#include "../../../DiligentCore/Common/interface/STDAllocator.hpp"
 
 namespace Diligent
 {
@@ -58,6 +59,7 @@ class HnMesh final : public pxr::HdMesh
 public:
     static HnMesh* Create(const pxr::TfToken& typeId,
                           const pxr::SdfPath& id,
+                          HnRenderDelegate&   RenderDelegate,
                           Uint32              UID);
 
     ~HnMesh();
@@ -122,11 +124,12 @@ public:
 
     struct Attributes
     {
-        float4x4 Transform     = float4x4::Identity();
-        float4   DisplayColor  = {1, 1, 1, 1};
-        bool     IsDoubleSided = false;
+        float4x4 Transform    = float4x4::Identity();
+        float4   DisplayColor = {1, 1, 1, 1};
     };
-    const Attributes& GetAttributes() const { return m_Attribs; }
+    const Attributes& GetAttributes() const { return *m_Attribs; }
+
+    bool GetIsDoubleSided() const { return m_IsDoubleSided; }
 
     Uint32 GetUID() const { return m_UID; }
 
@@ -154,6 +157,7 @@ protected:
 private:
     HnMesh(const pxr::TfToken& typeId,
            const pxr::SdfPath& id,
+           HnRenderDelegate&   RenderDelegate,
            Uint32              UID);
 
     void UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
@@ -222,7 +226,7 @@ private:
     };
     std::unique_ptr<StagingVertexData> m_StagingVertexData;
 
-    Attributes m_Attribs;
+    std::unique_ptr<Attributes, STDDeleter<Attributes, IMemoryAllocator>> m_Attribs;
 
     struct IndexData
     {
@@ -253,6 +257,8 @@ private:
         std::unordered_map<pxr::TfToken, RefCntAutoPtr<IBuffer>, pxr::TfToken::HashFunctor> Buffers;
     };
     VertexData m_VertexData;
+
+    bool m_IsDoubleSided = false;
 
     std::atomic<Uint32> m_GeometryVersion{0};
     std::atomic<Uint32> m_MaterialVersion{0};

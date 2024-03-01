@@ -38,6 +38,7 @@
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
 #include "../../../DiligentCore/Graphics/GraphicsTools/interface/RenderStateCache.h"
 #include "../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
+#include "../../../DiligentCore/Common/interface/FixedBlockMemoryAllocator.hpp"
 #include "../../PBR/interface/USD_Renderer.hpp"
 
 #include "HnTextureRegistry.hpp"
@@ -285,6 +286,8 @@ public:
 
     HnTextureRegistry& GetTextureRegistry() { return m_TextureRegistry; }
 
+    FixedBlockMemoryAllocator& GetMeshAttribsAllocator() { return m_MeshAttribsAllocator; }
+
     const pxr::SdfPath* GetRPrimId(Uint32 UID) const;
 
     std::shared_ptr<USD_Renderer> GetUSDRenderer() const { return m_USDRenderer; }
@@ -324,6 +327,8 @@ private:
 
     HnTextureRegistry              m_TextureRegistry;
     std::unique_ptr<HnRenderParam> m_RenderParam;
+
+    FixedBlockMemoryAllocator m_MeshAttribsAllocator;
 
     std::atomic<Uint32>                      m_RPrimNextUID{1};
     mutable std::mutex                       m_RPrimUIDToSdfPathMtx;

@@ -37,6 +37,7 @@
 #include "DebugUtilities.hpp"
 #include "GraphicsTypesX.hpp"
 #include "GLTFResourceManager.hpp"
+#include "EngineMemory.h"
 
 #include "pxr/base/gf/vec2f.h"
 #include "pxr/imaging/hd/meshUtil.h"
@@ -52,17 +53,26 @@ namespace USD
 
 HnMesh* HnMesh::Create(pxr::TfToken const& typeId,
                        pxr::SdfPath const& id,
+                       HnRenderDelegate&   RenderDelegate,
                        Uint32              UID)
 {
-    return new HnMesh{typeId, id, UID};
+    return new HnMesh{typeId, id, RenderDelegate, UID};
 }
 
 HnMesh::HnMesh(pxr::TfToken const& typeId,
                pxr::SdfPath const& id,
+               HnRenderDelegate&   RenderDelegate,
                Uint32              UID) :
     m_UID{UID},
     pxr::HdMesh{id}
 {
+    // Allocate mesh attributes using the block allocator to improve cache locality.
+    auto& MeshAttribsAllocator = RenderDelegate.GetMeshAttribsAllocator();
+
+    m_Attribs = decltype(m_Attribs){
+        new (ALLOCATE(MeshAttribsAllocator, "HnMesh Attributes", Attributes, 1)) Attributes{},
+        STDDeleter<Attributes, IMemoryAllocator>{MeshAttribsAllocator},
+    };
 }
 
 HnMesh::~HnMesh()
@@ -182,7 +192,7 @@ void HnMesh::Sync(pxr::HdSceneDelegate* Delegate,
     const bool DirtyDoubleSided = (*DirtyBits & pxr::HdChangeTracker::DirtyDoubleSided) != 0;
     if (DirtyDoubleSided)
     {
-        m_Attribs.IsDoubleSided = Delegate->GetDoubleSided(Id);
+        m_IsDoubleSided = Delegate->GetDoubleSided(Id);
     }
 
     if ((DirtyDoubleSided || UpdateMaterials) && RenderParam != nullptr)
@@ -324,9 +334,9 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
     if (pxr::HdChangeTracker::IsTransformDirty(DirtyBits, Id))
     {
         auto Transform = ToFloat4x4(SceneDelegate.GetTransform(Id));
-        if (m_Attribs.Transform != Transform)
+        if (m_Attribs->Transform != Transform)
         {
-            m_Attribs.Transform = Transform;
+            m_Attribs->Transform = Transform;
             if (RenderParam != nullptr)
             {
                 static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::MeshTransform);
@@ -589,7 +599,7 @@ void HnMesh::UpdateConstantPrimvars(pxr::HdSceneDelegate& SceneDelegate,
         {
             if (ElementType == pxr::HdTypeFloatVec3)
             {
-                memcpy(m_Attribs.DisplayColor.Data(), Source->GetData(), sizeof(float3));
+                memcpy(m_Attribs->DisplayColor.Data(), Source->GetData(), sizeof(float3));
             }
             else
             {
@@ -600,7 +610,7 @@ void HnMesh::UpdateConstantPrimvars(pxr::HdSceneDelegate& SceneDelegate,
         {
             if (ElementType == pxr::HdTypeFloat)
             {
-                memcpy(&m_Attribs.DisplayColor.w, Source->GetData(), sizeof(float));
+                memcpy(&m_Attribs->DisplayColor.w, Source->GetData(), sizeof(float));
             }
             else
             {

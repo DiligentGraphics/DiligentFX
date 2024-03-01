@@ -86,6 +86,7 @@ HnRenderPass::DrawListItem::DrawListItem(const HnDrawItem& Item) noexcept :
     Mesh{Item.GetMesh()},
     Material{*Item.GetMaterial()},
     MeshUID{static_cast<float>(Mesh.GetUID())},
+    MeshAttribs{Mesh.GetAttributes()},
     PrevTransform{Mesh.GetAttributes().Transform},
     RenderStateID{0},
     Visible{DrawItem.GetVisible()}
@@ -433,7 +434,7 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
             0,
         };
 
-        const HnMesh::Attributes& MeshAttribs = Mesh.GetAttributes();
+        const HnMesh::Attributes& MeshAttribs = ListItem.MeshAttribs;
         if (ApplyTransform)
         {
             MeshTransform     = MeshAttribs.Transform * m_RenderParams.Transform;
@@ -738,8 +739,7 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
         const HnMaterial*               pMaterial = DrawItem.GetMaterial();
         VERIFY(pMaterial != nullptr, "Material is null");
 
-        const HnMesh& Mesh          = DrawItem.GetMesh();
-        const bool    IsDoubleSided = Mesh.GetAttributes().IsDoubleSided;
+        const bool IsDoubleSided = ListItem.Mesh.GetIsDoubleSided();
 
         // Use the material's texture indexing ID as the user value in the PSO key.
         // The USD renderer will use this ID to return the indexing.

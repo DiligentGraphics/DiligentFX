@@ -36,6 +36,7 @@
 #include "../../PBR/interface/USD_Renderer.hpp"
 
 #include "HnTypes.hpp"
+#include "HnMesh.hpp"
 
 namespace Diligent
 {
@@ -45,7 +46,6 @@ namespace USD
 
 class HnDrawItem;
 class HnRenderPassState;
-class HnMesh;
 class HnMaterial;
 
 struct HnMeshRenderParams
@@ -133,6 +133,8 @@ private:
         Uint32 StartIndex  = 0;
 
         PBR_Renderer::PSO_FLAGS PSOFlags = PBR_Renderer::PSO_FLAG_NONE;
+
+        const HnMesh::Attributes& MeshAttribs;
 
         float4x4 PrevTransform = float4x4::Identity();
 
