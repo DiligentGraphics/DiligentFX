@@ -26,10 +26,9 @@ cbuffer cbTemporalAntiAliasingAttribs
 }
 
 Texture2D<float3> g_TextureCurrColor;
-Texture2D<float3> g_TexturePrevColor;
+Texture2D<float4> g_TexturePrevColor;
 Texture2D<float2> g_TextureMotion;
-Texture2D<float>  g_TextureDepth;
-Texture2D<float2> g_TexturePrevMotion;
+Texture2D<float>  g_TextureCurrDepth;
 Texture2D<float>  g_TexturePrevDepth;
 
 SamplerState g_TexturePrevColor_sampler;
@@ -72,14 +71,14 @@ float3 SampleCurrColor(int2 PixelCoord)
     return g_TextureCurrColor.Load(int3(PixelCoord, 0));
 }
 
-float3 SamplePrevColor(int2 PixelCoord)
+float4 SamplePrevColor(int2 PixelCoord)
 {
     return g_TexturePrevColor.Load(int3(PixelCoord, 0));
 }
 
-float SampleDepth(int2 PixelCoord)
+float SampleCurrDepth(int2 PixelCoord)
 {
-    return g_TextureDepth.Load(int3(PixelCoord, 0));
+    return g_TextureCurrDepth.Load(int3(PixelCoord, 0));
 }
 
 float SamplePrevDepth(int2 PixelCoord)
@@ -98,7 +97,7 @@ float2 SampleClosestMotion(int2 PixelCoord)
         for (int y = -SearchRadius; y <= SearchRadius; y++)
         {
             int2 Coord = int2(PixelCoord) + int2(x, y);
-            float NeighborDepth = SampleDepth(Coord);
+            float NeighborDepth = SampleCurrDepth(Coord);
 #if TAA_OPTION_INVERTED_DEPTH
             if (NeighborDepth > ClosestDepth)
 #else
@@ -114,27 +113,14 @@ float2 SampleClosestMotion(int2 PixelCoord)
     return g_TextureMotion.Load(int3(PixelCoord + ClosestOffset, 0)) * F3NDC_XYZ_TO_UVD_SCALE.xy;
 }
 
-float3 ClipToAABB(float3 AABBMin, float3 AABBMax, float3 P, float3 Q)
+float3 ClipToAABB(float3 ColorPrev, float3 ColorCurr, float3 AABBCentre, float3 AABBExtents)
 {
-    float3 R = Q - P;
-    float3 TMin = (AABBMin - P.xyz);
-    float3 TMax = (AABBMax - P.xyz);
-
-    if (R.x > TMax.x + FLT_EPS)
-        R *= (TMax.x / R.x);
-    if (R.y > TMax.y + FLT_EPS)
-        R *= (TMax.y / R.y);
-    if (R.z > TMax.z + FLT_EPS)
-        R *= (TMax.z / R.z);
-
-    if (R.x < TMin.x - FLT_EPS)
-        R *= (TMin.x / R.x);
-    if (R.y < TMin.y - FLT_EPS)
-        R *= (TMin.y / R.y);
-    if (R.z < TMin.z - FLT_EPS)
-        R *= (TMin.z / R.z);
-
-    return P + R;
+    float MaxT = TAA_VARIANCE_INTERSECTION_MAX_T;
+    float3 Direction = ColorCurr - ColorPrev;
+    float3 Intersection = ((AABBCentre - sign(Direction) * AABBExtents) - ColorPrev) / Direction;
+    float3 PossibleT = lerp(float3(MaxT + 1.0, MaxT + 1.0, MaxT + 1.0), Intersection, GreaterEqual(Intersection, float3(0.0, 0.0, 0.0)));
+    float T = min(MaxT, min(PossibleT.x, min(PossibleT.y, PossibleT.z)));
+    return lerp(ColorPrev, ColorPrev + Direction * T, Less(float3(T, T, T), float3(MaxT, MaxT, MaxT)));
 }
 
 float ComputeDepthDisocclusionWeight(float CurrDepth, float PrevDepth)
@@ -144,20 +130,10 @@ float ComputeDepthDisocclusionWeight(float CurrDepth, float PrevDepth)
     return exp(-abs(LinearDepthPrev - LinearDepthCurr) / LinearDepthCurr);
 }
 
-float ComputeMotionDisocclusion(float2 Position)
+float ComputeDepthDisocclusion(float2 Position, float2 Motion)
 {
-    float2 CurrMotion = g_TextureMotion.Load(int3(Position, 0)) * F3NDC_XYZ_TO_UVD_SCALE.xy;
-    float2 PrevLocation = Position.xy - CurrMotion * g_CurrCamera.f4ViewportSize.xy;
-    float2 PrevMotion = g_TexturePrevMotion.Load(int3(PrevLocation, 0)) * F3NDC_XYZ_TO_UVD_SCALE.xy;
-    float Disocclusion = length((PrevMotion - CurrMotion) * g_CurrCamera.f4ViewportSize.xy) - TAA_MOTION_VECTOR_DELTA_ERROR;
-    return saturate(Disocclusion * TAA_MOTION_DISOCCLUSION_FACTOR);
-}
-
-float ComputeDepthDisocclusion(float2 Position)
-{
-    float2 Motion = g_TextureMotion.Load(int3(Position, 0)) * F3NDC_XYZ_TO_UVD_SCALE.xy;
     int2 PrevLocation = int2(Position.xy - Motion * g_CurrCamera.f4ViewportSize.xy);
-    float CurrDepth = SampleDepth(int2(Position));
+    float CurrDepth = SampleCurrDepth(int2(Position));
     float Disocclusion = 0.0;
 
     const int SearchRadius = 1;
@@ -172,30 +148,10 @@ float ComputeDepthDisocclusion(float2 Position)
         }
     }
 
-    return Disocclusion > TAA_DEPTH_DISOCCLUSION_THRESHOLD ? 0.0 : 1.0;
+    return Disocclusion > TAA_DEPTH_DISOCCLUSION_THRESHOLD ? 1.0 : 0.0;
 }
 
-float ComputeDisocclusion(float2 Position)
-{
-    float Disocclusion = 0.0;
-#if TAA_OPTION_MOTION_DISOCCLUSION
-    Disocclusion += ComputeMotionDisocclusion(Position);
-#endif
-
-#if TAA_OPTION_DEPTH_DISOCCLUSION
-    Disocclusion += ComputeDepthDisocclusion(Position);
-#endif
-    return saturate(Disocclusion);
-}
-
-float ComputeAlpha(float2 Position, float LuminanceInput, float LuminanceHistory)
-{
-    float Alpha = saturate((1.0 - g_TAAAttribs.TemporalStabilityFactor) + ComputeDisocclusion(Position.xy));
-    float Delta = 1.0 - abs(LuminanceInput - LuminanceHistory) / max(LuminanceInput, max(LuminanceHistory, 1.0));
-    return lerp(0.0, Alpha, Delta * Delta);
-}
-
-float3 SamplePrevColorCatmullRom(float2 Position)
+float4 SamplePrevColorCatmullRom(float2 Position)
 {
     // Source: https://gist.github.com/TheRealMJP/c83b8c0f46b63f3a88a5986f4fa982b1
     // License: https://gist.github.com/TheRealMJP/bc503b0b87b643d3505d41eab8b332ae
@@ -232,29 +188,29 @@ float3 SamplePrevColorCatmullRom(float2 Position)
     TexPos3  *= TexelSize;
     TexPos12 *= TexelSize;
 
-    float3 Result = float3(0.0, 0.0, 0.0);
+    float4 Result = float4(0.0, 0.0, 0.0, 0.0);
 
-    Result += g_TexturePrevColor.SampleLevel(g_TexturePrevColor_sampler, float2(TexPos0.x, TexPos0.y),  0.0).xyz * W0.x * W0.y;
-    Result += g_TexturePrevColor.SampleLevel(g_TexturePrevColor_sampler, float2(TexPos12.x, TexPos0.y), 0.0).xyz * W12.x * W0.y;
-    Result += g_TexturePrevColor.SampleLevel(g_TexturePrevColor_sampler, float2(TexPos3.x, TexPos0.y),  0.0).xyz * W3.x * W0.y;
+    Result += g_TexturePrevColor.SampleLevel(g_TexturePrevColor_sampler, float2(TexPos0.x, TexPos0.y),  0.0) * W0.x * W0.y;
+    Result += g_TexturePrevColor.SampleLevel(g_TexturePrevColor_sampler, float2(TexPos12.x, TexPos0.y), 0.0) * W12.x * W0.y;
+    Result += g_TexturePrevColor.SampleLevel(g_TexturePrevColor_sampler, float2(TexPos3.x, TexPos0.y),  0.0) * W3.x * W0.y;
 
-    Result += g_TexturePrevColor.SampleLevel(g_TexturePrevColor_sampler, float2(TexPos0.x, TexPos12.y),  0.0).xyz * W0.x * W12.y;
-    Result += g_TexturePrevColor.SampleLevel(g_TexturePrevColor_sampler, float2(TexPos12.x, TexPos12.y), 0.0).xyz * W12.x * W12.y;
-    Result += g_TexturePrevColor.SampleLevel(g_TexturePrevColor_sampler, float2(TexPos3.x, TexPos12.y),  0.0).xyz * W3.x * W12.y;
+    Result += g_TexturePrevColor.SampleLevel(g_TexturePrevColor_sampler, float2(TexPos0.x, TexPos12.y),  0.0) * W0.x * W12.y;
+    Result += g_TexturePrevColor.SampleLevel(g_TexturePrevColor_sampler, float2(TexPos12.x, TexPos12.y), 0.0) * W12.x * W12.y;
+    Result += g_TexturePrevColor.SampleLevel(g_TexturePrevColor_sampler, float2(TexPos3.x, TexPos12.y),  0.0) * W3.x * W12.y;
 
-    Result += g_TexturePrevColor.SampleLevel(g_TexturePrevColor_sampler, float2(TexPos0.x,  TexPos3.y), 0.0).xyz * W0.x * W3.y;
-    Result += g_TexturePrevColor.SampleLevel(g_TexturePrevColor_sampler, float2(TexPos12.x, TexPos3.y), 0.0).xyz * W12.x * W3.y;
-    Result += g_TexturePrevColor.SampleLevel(g_TexturePrevColor_sampler, float2(TexPos3.x,  TexPos3.y), 0.0).xyz * W3.x * W3.y;
+    Result += g_TexturePrevColor.SampleLevel(g_TexturePrevColor_sampler, float2(TexPos0.x,  TexPos3.y), 0.0) * W0.x * W3.y;
+    Result += g_TexturePrevColor.SampleLevel(g_TexturePrevColor_sampler, float2(TexPos12.x, TexPos3.y), 0.0) * W12.x * W3.y;
+    Result += g_TexturePrevColor.SampleLevel(g_TexturePrevColor_sampler, float2(TexPos3.x,  TexPos3.y), 0.0) * W3.x * W3.y;
 
     return max(Result, 0.0);
 }
 
-float3 SamplePrevColorBilinear(float2 Position)
+float4 SamplePrevColorBilinear(float2 Position)
 {
     return g_TexturePrevColor.SampleLevel(g_TexturePrevColor_sampler, Position * g_CurrCamera.f4ViewportSize.zw, 0.0);
 }
 
-float3 SamplePrevColor(float2 Position)
+float4 SamplePrevColor(float2 Position)
 {
 #if TAA_OPTION_BICUBIC_FILTER
     return SamplePrevColorCatmullRom(Position);
@@ -277,7 +233,6 @@ PixelStatistic ComputePixelStatisticYCoCgSDR(int2 PixelCoord)
     {
         for (int y = -StatisticRadius; y <= StatisticRadius; y++)
         {
-
             int2 Location = ClampScreenCoord(PixelCoord + int2(x, y), int2(g_CurrCamera.f4ViewportSize.xy));
             float3 HDRColor = SampleCurrColor(Location);
             float3 SDRColor = RGBToYCoCg(HDRColor * rcp(1.0 + HDRColor));
@@ -307,27 +262,25 @@ float4 ComputeTemporalAccumulationPS(in FullScreenTriangleVSOutput VSOut) : SV_T
     float2 PrevLocation = Position.xy - Motion * g_CurrCamera.f4ViewportSize.xy;
 
     if (!IsInsideScreen(PrevLocation, g_CurrCamera.f4ViewportSize.xy) || g_TAAAttribs.ResetAccumulation)
-        return float4(SampleCurrColor(int2(Position.xy)), 1.0);
+        return float4(SampleCurrColor(int2(Position.xy)), 0.5);
 
-    float Magnitude = max(0.0, length(Motion * g_CurrCamera.f4ViewportSize.xy) - TAA_MOTION_VECTOR_DELTA_ERROR);
-    float MotionWeight = TAA_MAGNITUDE_MOTION_FACTOR * Magnitude;
+    float MotionFactor = saturate(1.0 - length(Motion * g_CurrCamera.f4ViewportSize.xy) / TAA_MOTION_VECTOR_PIXEL_DIFF);
+    float DepthFactor = ComputeDepthDisocclusion(Position.xy, Motion);
 
     float3 RGBHDRCurrColor = SampleCurrColor(int2(Position.xy));
-    float3 RGBHDRPrevColor = SamplePrevColor(PrevLocation);
+    float4 RGBHDRPrevColor = SamplePrevColor(PrevLocation);
 
     if (g_TAAAttribs.SkipRejection)
-        return float4(lerp(RGBHDRCurrColor, RGBHDRPrevColor, g_TAAAttribs.TemporalStabilityFactor), 1.0);
+        return float4(lerp(RGBHDRCurrColor.xyz, RGBHDRPrevColor.xyz, RGBHDRPrevColor.a), saturate(1.0 / (2.0 - RGBHDRPrevColor.a)));
 
-    float3 YCoCgSDRCurrColor = RGBToYCoCg(HDRToSDR(RGBHDRCurrColor));
-    float3 YCoCgSDRPrevColor = RGBToYCoCg(HDRToSDR(RGBHDRPrevColor));
+    float3 YCoCgSDRCurrColor = RGBToYCoCg(HDRToSDR(RGBHDRCurrColor.xyz));
+    float3 YCoCgSDRPrevColor = RGBToYCoCg(HDRToSDR(RGBHDRPrevColor.xyz));
 
-    float VarianceGamma = lerp(TAA_MIN_VARIANCE_GAMMA, TAA_MAX_VARIANCE_GAMMA, exp(-MotionWeight));
+    float VarianceGamma = lerp(TAA_MIN_VARIANCE_GAMMA, TAA_MAX_VARIANCE_GAMMA, MotionFactor * MotionFactor);
     PixelStatistic PixelStat = ComputePixelStatisticYCoCgSDR(int2(Position.xy));
-    float3 YCoCgColorMin = PixelStat.Mean - VarianceGamma * PixelStat.StdDev;
-    float3 YCoCgColorMax = PixelStat.Mean + VarianceGamma * PixelStat.StdDev;
-    float3 YCoCgSDRClampedColor = ClipToAABB(YCoCgColorMin, YCoCgColorMax, clamp(PixelStat.Mean, YCoCgColorMin, YCoCgColorMax), YCoCgSDRPrevColor);
+    float3 YCoCgSDRClampedColor = ClipToAABB(YCoCgSDRPrevColor, YCoCgSDRCurrColor, PixelStat.Mean, VarianceGamma * PixelStat.StdDev);
 
-    float Alpha = ComputeAlpha(Position.xy, YCoCgSDRCurrColor.r, YCoCgSDRClampedColor.r);
-    float3 RGBHDROutput = SDRToHDR(YCoCgToRGB(lerp(YCoCgSDRClampedColor, YCoCgSDRCurrColor, Alpha)));
-    return float4(RGBHDROutput, 1.0);
+    float Alpha = RGBHDRPrevColor.a * MotionFactor * DepthFactor;
+    float3 RGBHDROutput = SDRToHDR(YCoCgToRGB(lerp(YCoCgSDRCurrColor, YCoCgSDRClampedColor, Alpha)));
+    return float4(RGBHDROutput, saturate(1.0 / (2.0 - Alpha)));
 }

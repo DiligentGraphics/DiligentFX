@@ -207,9 +207,9 @@ private:
 
     std::unordered_map<RenderTechniqueKey, RenderTechnique, RenderTechniqueKey::Hasher> m_RenderTech;
 
-    ResourceRegistry m_Resources{RESOURCE_IDENTIFIER_COUNT};
-
     std::unique_ptr<HLSL::ScreenSpaceReflectionAttribs> m_SSRAttribs;
+
+    ResourceRegistry m_Resources{RESOURCE_IDENTIFIER_COUNT};
 
     std::vector<RefCntAutoPtr<ITextureView>> m_HierarchicalDepthMipMapRTV;
     std::vector<RefCntAutoPtr<ITextureView>> m_HierarchicalDepthMipMapSRV;

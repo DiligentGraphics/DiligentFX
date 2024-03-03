@@ -543,13 +543,20 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
         pRenderParam->GetRenderMode() == HN_RENDER_MODE_SOLID;
 
     m_PostFXContext->PrepareResources({pRenderParam->GetFrameNumber(), FinalColorDesc.Width, FinalColorDesc.Height});
-    m_SSR->PrepareResources(pDevice, m_PostFXContext.get(), ScreenSpaceReflection::FEATURE_FLAG_NONE);
-    m_TAA->PrepareResources(pDevice, m_PostFXContext.get(), {TEX_FORMAT_RGBA16_FLOAT});
 
     constexpr auto SSAOFeatureFlags =
         ScreenSpaceAmbientOcclusion::FEATURE_FLAG_GUIDED_FILTER |
         ScreenSpaceAmbientOcclusion::FEATURE_FLAG_HALF_PRECISION_DEPTH;
     m_SSAO->PrepareResources(pDevice, m_PostFXContext.get(), SSAOFeatureFlags);
+
+    constexpr auto SSRFeatureFlags =
+        ScreenSpaceReflection::FEATURE_FLAGS::FEATURE_FLAG_NONE;
+    m_SSR->PrepareResources(pDevice, m_PostFXContext.get(), SSRFeatureFlags);
+
+    constexpr auto TAAFeatureFlag =
+        TemporalAntiAliasing::FEATURE_FLAG_BICUBIC_FILTER |
+        TemporalAntiAliasing::FEATURE_FLAG_GAUSSIAN_WEIGHTING;
+    m_TAA->PrepareResources(pDevice, m_PostFXContext.get(), TAAFeatureFlag);
 
     m_PostProcessTech.PreparePRS();
     m_PostProcessTech.PreparePSO((m_UseTAA ? m_FBTargets->JitteredFinalColorRTV : m_FinalColorRTV)->GetDesc().Format);
@@ -737,17 +744,12 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         m_LastSuperSamplingFactors = CurrSSFactors;
 
         TemporalAntiAliasing::RenderAttributes TAARenderAttribs{pDevice, pStateCache, pCtx};
-        TAARenderAttribs.pPostFXContext        = m_PostFXContext.get();
-        TAARenderAttribs.pColorBufferSRV       = m_FBTargets->JitteredFinalColorRTV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-        TAARenderAttribs.pDepthBufferSRV       = m_FBTargets->DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-        TAARenderAttribs.pPrevDepthBufferSRV   = m_FBTargets->PrevDepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-        TAARenderAttribs.pMotionVectorsSRV     = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_MOTION_VECTOR];
-        TAARenderAttribs.pPrevMotionVectorsSRV = m_FBTargets->PrevMotionRTV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-        TAARenderAttribs.FeatureFlag =
-            TemporalAntiAliasing::FEATURE_FLAG_BICUBIC_FILTER |
-            TemporalAntiAliasing::FEATURE_FLAG_DEPTH_DISOCCLUSION |
-            TemporalAntiAliasing::FEATURE_FLAG_MOTION_DISOCCLUSION;
-        TAARenderAttribs.pTAAAttribs = &TAASettings;
+        TAARenderAttribs.pPostFXContext      = m_PostFXContext.get();
+        TAARenderAttribs.pColorBufferSRV     = m_FBTargets->JitteredFinalColorRTV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        TAARenderAttribs.pCurrDepthBufferSRV = m_FBTargets->DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        TAARenderAttribs.pPrevDepthBufferSRV = m_FBTargets->PrevDepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        TAARenderAttribs.pMotionVectorsSRV   = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_MOTION_VECTOR];
+        TAARenderAttribs.pTAAAttribs         = &TAASettings;
         m_TAA->Execute(TAARenderAttribs);
 
 

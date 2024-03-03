@@ -61,20 +61,7 @@ public:
         FEATURE_FLAG_GAUSSIAN_WEIGHTING = 1u << 1u,
 
         // Use Catmull-Rom filter to sample the history buffer.
-        FEATURE_FLAG_BICUBIC_FILTER = 1u << 2u,
-
-        // Use depth buffer from the previous frame to calculate disocclusion.
-        // The corresponding texture should be provided through RenderAttributes::pPrevDepthBufferSRV.
-        FEATURE_FLAG_DEPTH_DISOCCLUSION = 1u << 3u,
-
-        // Use motion buffer from the previous frame to calculate disocclusion,
-        // The corresponding texture should be provided through RenderAttributes::pPrevMotionVectorsSRV.
-        FEATURE_FLAG_MOTION_DISOCCLUSION = 1u << 4u
-    };
-
-    struct ResourceAttribs
-    {
-        TEXTURE_FORMAT AccumulatedBufferFormat = TEX_FORMAT_UNKNOWN;
+        FEATURE_FLAG_BICUBIC_FILTER = 1u << 2u
     };
 
     struct RenderAttributes
@@ -95,19 +82,13 @@ public:
         ITextureView* pColorBufferSRV = nullptr;
 
         /// Shader resource view of the source depth.
-        ITextureView* pDepthBufferSRV = nullptr;
-
-        /// Shader resource view of the motion vectors.
-        ITextureView* pMotionVectorsSRV = nullptr;
+        ITextureView* pCurrDepthBufferSRV = nullptr;
 
         /// Shader resource view of the source depth from previous frame.
         ITextureView* pPrevDepthBufferSRV = nullptr;
 
-        /// Shader resource view of the motion vectors from previous frame.
-        ITextureView* pPrevMotionVectorsSRV = nullptr;
-
-        /// Render features.
-        FEATURE_FLAGS FeatureFlag = FEATURE_FLAG_NONE;
+        /// Shader resource view of the motion vectors.
+        ITextureView* pMotionVectorsSRV = nullptr;
 
         /// TAA settings.
         const HLSL::TemporalAntiAliasingAttribs* pTAAAttribs = nullptr;
@@ -120,13 +101,13 @@ public:
 
     float2 GetJitterOffset() const;
 
-    void PrepareResources(IRenderDevice* pDevice, PostFXContext* pPostFXContext, const ResourceAttribs& Attribs);
+    void PrepareResources(IRenderDevice* pDevice, PostFXContext* pPostFXContext, FEATURE_FLAGS FeatureFlag);
 
     void Execute(const RenderAttributes& RenderAttribs);
 
     bool UpdateUI(HLSL::TemporalAntiAliasingAttribs& TAAAttribs);
 
-    ITextureView* GetAccumulatedFrameSRV() const;
+    ITextureView* GetAccumulatedFrameSRV(bool IsPrevFrame = false) const;
 
 private:
     using RenderTechnique  = PostFXRenderTechnique;
@@ -141,11 +122,10 @@ private:
     enum RESOURCE_IDENTIFIER : Uint32
     {
         RESOURCE_IDENTIFIER_INPUT_COLOR = 0,
-        RESOURCE_IDENTIFIER_INPUT_DEPTH,
-        RESOURCE_IDENTIFIER_INPUT_MOTION_VECTORS,
+        RESOURCE_IDENTIFIER_INPUT_CURR_DEPTH,
         RESOURCE_IDENTIFIER_INPUT_PREV_DEPTH,
-        RESOURCE_IDENTIFIER_INPUT_PREV_MOTION_VECTORS,
-        RESOURCE_IDENTIFIER_INPUT_LAST = RESOURCE_IDENTIFIER_INPUT_PREV_MOTION_VECTORS,
+        RESOURCE_IDENTIFIER_INPUT_MOTION_VECTORS,
+        RESOURCE_IDENTIFIER_INPUT_LAST = RESOURCE_IDENTIFIER_INPUT_MOTION_VECTORS,
 
         RESOURCE_IDENTIFIER_CONSTANT_BUFFER,
         RESOURCE_IDENTIFIER_ACCUMULATED_BUFFER0,
@@ -184,6 +164,8 @@ private:
 
     std::unordered_map<RenderTechniqueKey, RenderTechnique, RenderTechniqueKey::Hasher> m_RenderTech;
 
+    std::unique_ptr<HLSL::TemporalAntiAliasingAttribs> m_ShaderAttribs;
+
     ResourceRegistry m_Resources{RESOURCE_IDENTIFIER_COUNT};
 
     Uint32 m_BackBufferWidth  = 0;
@@ -191,7 +173,7 @@ private:
     Uint32 m_CurrentFrameIdx  = 0;
     Uint32 m_LastFrameIdx     = ~0u;
 
-    std::unique_ptr<HLSL::TemporalAntiAliasingAttribs> m_ShaderAttribs;
+    FEATURE_FLAGS m_FeatureFlags = FEATURE_FLAG_NONE;
 };
 
 DEFINE_FLAG_ENUM_OPERATORS(TemporalAntiAliasing::FEATURE_FLAGS)
