@@ -128,7 +128,7 @@ float ComputeAmbientOcclusionPS(in FullScreenTriangleVSOutput VSOut) : SV_Target
             float2 SamplePositionSS0 = PositionSS.xy + SampleOffset;
             float2 SamplePositionSS1 = PositionSS.xy - SampleOffset;
 
-            float MipLevel = clamp(log2(length(SampleOffset)) - g_SSAOAttribs.DepthMIPSamplingOffset, 0.0, float(SSAO_DEPTH_PREFILTERED_MAX_MIP));
+            float MipLevel = clamp(log2(length(SampleOffset * g_Camera.f4ViewportSize.xy)) - g_SSAOAttribs.DepthMIPSamplingOffset, 0.0, float(SSAO_DEPTH_PREFILTERED_MAX_MIP));
             float3 SamplePositionVS0 = FastReconstructPosition(float3(SamplePositionSS0, SamplePrefilteredDepth(SamplePositionSS0, MipLevel)), g_Camera.mProj);
             float3 SamplePositionVS1 = FastReconstructPosition(float3(SamplePositionSS0, SamplePrefilteredDepth(SamplePositionSS1, MipLevel)), g_Camera.mProj);
 
