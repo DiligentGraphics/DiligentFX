@@ -8,22 +8,15 @@
 #   define COMPUTE_MOTION_VECTORS 0
 #endif
 
-#ifndef PBR_MAX_LIGHTS
-#   define PBR_MAX_LIGHTS 4
-#endif
-
 struct PBRFrameAttribs
 {
     CameraAttribs               Camera;
     CameraAttribs               PrevCamera; // Previous frame camera used to compute motion vectors
     PBRRendererShaderParameters Renderer;
-    
-    int LightCount;
-    int Padding0;
-    int Padding1;
-    int Padding2;
-    
+       
+#if defined(PBR_MAX_LIGHTS) && PBR_MAX_LIGHTS > 0    
     PBRLightAttribs Lights[PBR_MAX_LIGHTS];
+#endif
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
 	CHECK_STRUCT_ALIGNMENT(PBRFrameAttribs);

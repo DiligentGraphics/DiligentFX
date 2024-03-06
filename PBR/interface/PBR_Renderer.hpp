@@ -171,6 +171,9 @@ public:
         /// When 0, single primitive will be used.
         Uint32 PrimitiveArraySize = 0;
 
+        /// The maximum number of lights.
+        Uint32 MaxLightCount = 16;
+
         static const SamplerDesc DefaultSampler;
 
         /// Immutable sampler for color map texture.

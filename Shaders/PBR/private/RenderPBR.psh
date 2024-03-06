@@ -376,18 +376,22 @@ PSOutput main(in VSOutput VSOut,
     float4 OutColor;
     if (BasicAttribs.Workflow != PBR_WORKFLOW_UNLIT)
     {
-        int LightCount = min(g_Frame.LightCount, PBR_MAX_LIGHTS);
-        for (int i = 0; i < LightCount; ++i)
+#       if defined(PBR_MAX_LIGHTS) && PBR_MAX_LIGHTS > 0
         {
-            ApplyPunctualLight(
-                Shading,
-                g_Frame.Lights[i],
-#if     ENABLE_SHEEN
-                g_SheenAlbedoScalingLUT,
-                g_SheenAlbedoScalingLUT_sampler,
-#endif
-                SrfLighting);
+            int LightCount = min(g_Frame.Renderer.LightCount, PBR_MAX_LIGHTS);
+            for (int i = 0; i < LightCount; ++i)
+            {
+                ApplyPunctualLight(
+                    Shading,
+                    g_Frame.Lights[i],
+#                   if ENABLE_SHEEN
+                        g_SheenAlbedoScalingLUT,
+                        g_SheenAlbedoScalingLUT_sampler,
+#                   endif
+                    SrfLighting);
+            }
         }
+#       endif
         
 #       if USE_IBL
         {
