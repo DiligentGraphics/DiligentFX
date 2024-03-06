@@ -273,6 +273,7 @@ SurfaceShadingInfo GetSurfaceShadingInfo(in VSOutput              VSOut,
 {
     SurfaceShadingInfo Shading;
     
+    Shading.Pos       = VSOut.WorldPos.xyz;
     Shading.View      = normalize(g_Frame.Camera.f4Position.xyz - VSOut.WorldPos.xyz); // Direction from surface point to camera
     Shading.BaseLayer = ReadBaseLayerProperties(VSOut, Material, BaseColor, NormalInfo, NMUVInfo, Shading.View);
     Shading.Occlusion = GetOcclusion(VSOut, Material, g_Frame.Renderer.MipBias);
@@ -375,15 +376,19 @@ PSOutput main(in VSOutput VSOut,
     float4 OutColor;
     if (BasicAttribs.Workflow != PBR_WORKFLOW_UNLIT)
     {
-        ApplyPunctualLights(
-            Shading,
-            g_Frame.Light,
+        int LightCount = min(g_Frame.LightCount, PBR_MAX_LIGHTS);
+        for (int i = 0; i < LightCount; ++i)
+        {
+            ApplyPunctualLight(
+                Shading,
+                g_Frame.Lights[i],
 #if     ENABLE_SHEEN
-            g_SheenAlbedoScalingLUT,
-            g_SheenAlbedoScalingLUT_sampler,
+                g_SheenAlbedoScalingLUT,
+                g_SheenAlbedoScalingLUT_sampler,
 #endif
-            SrfLighting);
-
+                SrfLighting);
+        }
+        
 #       if USE_IBL
         {
             ApplyIBL(Shading, float(g_Frame.Renderer.PrefilteredCubeLastMip),

@@ -312,6 +312,14 @@ public:
         PBR_WORKFLOW_UNLIT
     };
 
+    enum LIGHT_TYPE : Uint8
+    {
+        LIGHT_TYPE_UNKNOWN = 0,
+        LIGHT_TYPE_DIRECTIONAL,
+        LIGHT_TYPE_POINT,
+        LIGHT_TYPE_SPOT
+    };
+
     /// Debug view type
     enum class DebugViewType : Uint8
     {

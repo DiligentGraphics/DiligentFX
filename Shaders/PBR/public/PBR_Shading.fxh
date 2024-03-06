@@ -65,6 +65,20 @@
 #   define USE_IBL 1
 #endif
 
+
+#ifndef PBR_LIGHT_TYPE_DIRECTIONAL
+#   define PBR_LIGHT_TYPE_DIRECTIONAL 1
+#endif
+
+#ifndef PBR_LIGHT_TYPE_POINT
+#   define PBR_LIGHT_TYPE_POINT 2
+#endif
+
+#ifndef PBR_LIGHT_TYPE_SPOT
+#   define PBR_LIGHT_TYPE_SPOT 3
+#endif
+
+
 float GetPerceivedBrightness(float3 rgb)
 {
     return sqrt(0.299 * rgb.r * rgb.r + 0.587 * rgb.g * rgb.g + 0.114 * rgb.b * rgb.b);
@@ -497,6 +511,9 @@ struct AnisotropyShadingInfo
 
 struct SurfaceShadingInfo
 {
+    // World space position
+    float3 Pos;
+    
     // Camera view direction in world space
     float3 View;
     
@@ -577,35 +594,52 @@ SurfaceLightingInfo GetDefaultSurfaceLightingInfo()
     return Lighting;
 }
 
-void ApplyPunctualLights(in    SurfaceShadingInfo  Shading,
-                         in    PBRLightAttribs     Light,
+void ApplyPunctualLight(in    SurfaceShadingInfo  Shading,
+                        in    PBRLightAttribs     Light,
 #if ENABLE_SHEEN
-                         in    Texture2D           AlbedoScalingLUT,
-                         in    SamplerState        AlbedoScalingLUT_sampler,
+                        in    Texture2D           AlbedoScalingLUT,
+                        in    SamplerState        AlbedoScalingLUT_sampler,
 #endif
-                         inout SurfaceLightingInfo SrfLighting)
+                        inout SurfaceLightingInfo SrfLighting)
 {
-    //#ifdef USE_PUNCTUAL
-    //    for (int i = 0; i < LIGHT_COUNT; ++i)
-    //    {
-    //        Light light = u_Lights[i];
-    //        if (light.type == LightType_Directional)
-    //        {
-    //            color += applyDirectionalLight(light, materialInfo, normal, view);
-    //        }
-    //        else if (light.type == LightType_Point)
-    //        {
-    //            color += applyPointLight(light, materialInfo, normal, view);
-    //        }
-    //        else if (light.type == LightType_Spot)
-    //        {
-    //            color += applySpotLight(light, materialInfo, normal, view);
-    //        }
-    //    }
-    //#endif
+    float3 LightDirection = Light.Direction.xyz;
+
+    float Attenuation = 1.0;
+    if (Light.Type != PBR_LIGHT_TYPE_DIRECTIONAL)
+    {
+        float3 LightToPoint = Shading.Pos - float3(Light.PosX, Light.PosY, Light.PosZ);
+        float  Distance2    = dot(LightToPoint, LightToPoint);
+        LightToPoint /= sqrt(Distance2);
+        float RangeAttenuation = 1.0 / Distance2;
+        if (Light.Range > 0.0)
+        {
+            // Attenuation = clamp(1.0 - (Distance / Range)^4, 0, 1) / Distance^2
+            float Range2 = Light.Range * Light.Range;
+            RangeAttenuation *= saturate(1.0 - (Distance2 * Distance2) / (Range2 * Range2));
+        }
+        
+        if (Light.Type == PBR_LIGHT_TYPE_POINT)
+        {
+            LightDirection = LightToPoint;
+        }
+
+        float AngularAttenuation  = 1.0;        
+        if (Light.Type == PBR_LIGHT_TYPE_SPOT)
+        {
+            float CosAngle     = dot(LightToPoint, LightDirection);
+            AngularAttenuation = saturate(CosAngle * Light.SpotAngleScale + Light.SpotAngleOffset);
+        }
+
+        Attenuation = RangeAttenuation * AngularAttenuation; 
+    }
     
+    if (Attenuation <= 0.0)
+        return;
+    
+    float3 LightIntensity = Light.Intensity.rgb * Attenuation;
+        
     float NdotV = Shading.BaseLayer.NdotV;
-    float NdotL = dot_sat(Shading.BaseLayer.Normal, -Light.Direction.xyz);
+    float NdotL = dot_sat(Shading.BaseLayer.Normal, -LightDirection);
     
     float3 BasePunctual;
     {
@@ -613,7 +647,7 @@ void ApplyPunctualLights(in    SurfaceShadingInfo  Shading,
         float3 BasePunctualSpecular;
 #       if ENABLE_ANISOTROPY
         {
-            SmithGGX_BRDF_Anisotropic(-Light.Direction.xyz,
+            SmithGGX_BRDF_Anisotropic(-LightDirection,
                                       Shading.BaseLayer.Normal,
                                       Shading.View,
                                       Shading.Anisotropy.Tangent,
@@ -627,7 +661,7 @@ void ApplyPunctualLights(in    SurfaceShadingInfo  Shading,
         }
 #       else
         {
-            SmithGGX_BRDF(-Light.Direction.xyz, Shading.BaseLayer.Normal, Shading.View, Shading.BaseLayer.Srf, BasePunctualDiffuse, BasePunctualSpecular, NdotL);
+            SmithGGX_BRDF(-LightDirection, Shading.BaseLayer.Normal, Shading.View, Shading.BaseLayer.Srf, BasePunctualDiffuse, BasePunctualSpecular, NdotL);
         }
 #       endif
 
@@ -636,12 +670,12 @@ void ApplyPunctualLights(in    SurfaceShadingInfo  Shading,
             BasePunctualDiffuse *= 1.0 - Shading.Transmission;
         }
 #endif
-        BasePunctual = (BasePunctualDiffuse + BasePunctualSpecular) * Light.Intensity.rgb * NdotL;
+        BasePunctual = (BasePunctualDiffuse + BasePunctualSpecular) * LightIntensity * NdotL;
     }
 
 #if ENABLE_SHEEN
     {
-        SrfLighting.Sheen.Punctual += ApplyDirectionalLightSheen(Light.Direction.xyz, Light.Intensity.rgb, Shading.Sheen.Color, Shading.Sheen.Roughness, Shading.BaseLayer.Normal, Shading.View);
+        SrfLighting.Sheen.Punctual += ApplyDirectionalLightSheen(LightDirection, LightIntensity, Shading.Sheen.Color, Shading.Sheen.Roughness, Shading.BaseLayer.Normal, Shading.View);
     
         float MaxFactor = max(max(Shading.Sheen.Color.r, Shading.Sheen.Color.g), Shading.Sheen.Color.b);
         float AlbedoScaling =
@@ -655,7 +689,7 @@ void ApplyPunctualLights(in    SurfaceShadingInfo  Shading,
 
 #if ENABLE_CLEAR_COAT
     {
-        SrfLighting.Clearcoat.Punctual += ApplyDirectionalLightGGX(Light.Direction.xyz, Light.Intensity.rgb, Shading.Clearcoat.Srf, Shading.Clearcoat.Normal, Shading.View);
+        SrfLighting.Clearcoat.Punctual += ApplyDirectionalLightGGX(LightDirection, LightIntensity, Shading.Clearcoat.Srf, Shading.Clearcoat.Normal, Shading.View);
     }
 #endif
 }

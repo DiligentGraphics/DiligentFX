@@ -445,6 +445,10 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
                                ModelResourceBindings*       pModelBindings,
                                ResourceCacheBindings*       pCacheBindings)
 {
+    static_assert(static_cast<LIGHT_TYPE>(GLTF::Light::TYPE::DIRECTIONAL) == LIGHT_TYPE_DIRECTIONAL, "GLTF::Light::TYPE::DIRECTIONAL != LIGHT_TYPE_DIRECTIONAL");
+    static_assert(static_cast<LIGHT_TYPE>(GLTF::Light::TYPE::POINT) == LIGHT_TYPE_POINT, "GLTF::Light::TYPE::POINT != LIGHT_TYPE_POINT");
+    static_assert(static_cast<LIGHT_TYPE>(GLTF::Light::TYPE::SPOT) == LIGHT_TYPE_SPOT, "GLTF::Light::TYPE::SPOT != LIGHT_TYPE_SPOT");
+
     DEV_CHECK_ERR((pModelBindings != nullptr) ^ (pCacheBindings != nullptr), "Either model bindings or cache bindings must not be null");
     DEV_CHECK_ERR(pModelBindings == nullptr || pModelBindings->MaterialSRB.size() == GLTFModel.Materials.size(),
                   "The number of material shader resource bindings is not consistent with the number of materials");

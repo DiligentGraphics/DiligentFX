@@ -227,8 +227,18 @@ struct PBRMaterialShaderInfo
 
 struct PBRLightAttribs
 {
-    float4 Direction;
-    float4 Intensity;
+    int   Type; // 1 - directional, 2 - point, 3 - spot
+    float PosX; // Point or spot light
+    float PosY; // position; unused for
+    float PosZ; // directional light.
+    
+    float4 Direction; // Directional and spot lights, w is unused.
+    float4 Intensity; // a is unused
+    
+    float Range;          // Point and spot light range
+    float SpotAngleScale; // 1.0 / (cos(InnerConeAngle) - cos(OuterConeAngle))
+    float SpotAngleOffset;// -cos(OuterConeAngle) * SpotAngleScale;
+    float Padding;
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
 	CHECK_STRUCT_ALIGNMENT(PBRLightAttribs);
