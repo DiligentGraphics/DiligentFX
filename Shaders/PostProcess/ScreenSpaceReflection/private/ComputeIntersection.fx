@@ -275,18 +275,29 @@ float4 SampleReflectionVector(float3 View, float3 Normal, float Roughness, int2 
     return float4(normalize(mul(SampleDirTS, TangentToWorld)), PDF);
 }
 
+uint ComputeOffset(uint2 PixelCoord)
+{
+    // This is the packed matrix:
+    //  0 1 2 3
+    //  3 2 1 0
+    //  1 0 3 2
+    //  2 3 0 1
+    uint PackedOffsets =
+        (0u << 0u)  | (1u << 2u)  | (2u << 4u)  | (3u << 6u)  |
+        (3u << 8u)  | (2u << 10u) | (1u << 12u) | (0u << 14u) |
+        (1u << 16u) | (0u << 18u) | (3u << 20u) | (2u << 22u) |
+        (2u << 24u) | (3u << 26u) | (0u << 28u) | (1u << 30u);
+
+    uint Idx = ((PixelCoord.x & 0x3u) << 3u) + ((PixelCoord.y & 0x3u) << 1u);
+    return (PackedOffsets >> Idx) & 0x3u;
+}
+
 SSR_ATTRIBUTE_EARLY_DEPTH_STENCIL
 PSOutput ComputeIntersectionPS(in FullScreenTriangleVSOutput VSOut)
 {
 #if SSR_OPTION_HALF_RESOLUTION
-    int4x4 MatrixOffset = int4x4(
-        0, 1, 2, 3,
-        3, 2, 1, 0,
-        1, 0, 3, 2,
-        2, 3, 0, 1
-    );
-    int SampleIdx = MatrixOffset[int(VSOut.f4PixelPos.x) & 0x3][int(VSOut.f4PixelPos.y) & 0x3];
-    float2 Position = 2.0 * floor(VSOut.f4PixelPos.xy) + float2(SampleIdx & 0x01, SampleIdx >> 1) + 0.5;
+    uint SampleIdx = ComputeOffset(uint2(VSOut.f4PixelPos.xy));
+    float2 Position = 2.0 * floor(VSOut.f4PixelPos.xy) + float2(SampleIdx & 0x01u, SampleIdx >> 1u) + 0.5;
 #else
     float2 Position = VSOut.f4PixelPos.xy;
 #endif
