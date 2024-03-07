@@ -29,6 +29,8 @@
 
 #include <array>
 #include <functional>
+#include <algorithm>
+#include <cmath>
 
 #include "BasicMath.hpp"
 #include "MapHelper.hpp"
@@ -821,6 +823,43 @@ void* GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                   
     }
 
     return pDstPtr;
+}
+
+void GLTF_PBR_Renderer::WritePBRLightShaderAttribs(const PBRLightShaderAttribsData& AttribsData,
+                                                   HLSL::PBRLightAttribs*           pShaderAttribs)
+{
+    VERIFY_EXPR(pShaderAttribs != nullptr);
+    VERIFY_EXPR(AttribsData.Light != nullptr);
+    const auto& Light = *AttribsData.Light;
+
+    pShaderAttribs->Type = static_cast<int>(Light.Type);
+
+    if (AttribsData.Position != nullptr)
+    {
+        pShaderAttribs->PosX = AttribsData.Position->x;
+        pShaderAttribs->PosY = AttribsData.Position->y;
+        pShaderAttribs->PosZ = AttribsData.Position->z;
+    }
+
+    if (AttribsData.Direction != nullptr)
+    {
+        pShaderAttribs->Direction = float4{*AttribsData.Direction, 0};
+    }
+
+    auto Intensity = Light.Intensity;
+    if (pShaderAttribs->Type != LIGHT_TYPE_DIRECTIONAL)
+    {
+        Intensity *= AttribsData.DistanceScale * AttribsData.DistanceScale;
+    }
+    pShaderAttribs->Intensity = float4{Light.Color * Intensity, 0.0};
+
+    pShaderAttribs->Range = Light.Range * AttribsData.DistanceScale;
+
+    float SpotAngleScale  = 1.f / std::max(0.001f, std::cos(Light.InnerConeAngle) - std::cos(Light.OuterConeAngle));
+    float SpotAngleOffset = -std::cos(Light.OuterConeAngle) * SpotAngleScale;
+
+    pShaderAttribs->SpotAngleOffset = SpotAngleOffset;
+    pShaderAttribs->SpotAngleScale  = SpotAngleScale;
 }
 
 } // namespace Diligent

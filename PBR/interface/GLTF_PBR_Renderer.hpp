@@ -40,7 +40,8 @@ namespace Diligent
 namespace HLSL
 {
 struct PBRMaterialBasicAttribs;
-}
+struct PBRLightAttribs;
+} // namespace HLSL
 
 /// Implementation of a GLTF PBR renderer
 class GLTF_PBR_Renderer : public PBR_Renderer
@@ -262,6 +263,18 @@ public:
                                                 const PBRPrimitiveShaderAttribsData&            AttribsData,
                                                 const std::array<int, TEXTURE_ATTRIB_ID_COUNT>& TextureAttribIndices,
                                                 const GLTF::Material&                           Material);
+
+    struct PBRLightShaderAttribsData
+    {
+        const GLTF::Light* Light     = nullptr;
+        const float3*      Position  = nullptr;
+        const float3*      Direction = nullptr;
+        // Distance scaling factor.
+        // This value is used to scale the point and spot light's range (by s) and intensity (by s^2).
+        float DistanceScale = 1.f;
+    };
+    static void WritePBRLightShaderAttribs(const PBRLightShaderAttribsData& AttribsData,
+                                           HLSL::PBRLightAttribs*           pShaderAttribs);
 
     PSO_FLAGS GetMaterialPSOFlags(const GLTF::Material& Mat) const;
 
