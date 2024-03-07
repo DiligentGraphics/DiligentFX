@@ -611,11 +611,10 @@ void ApplyPunctualLight(in    SurfaceShadingInfo  Shading,
         float  Distance2    = dot(LightToPoint, LightToPoint);
         LightToPoint /= sqrt(Distance2);
         float RangeAttenuation = 1.0 / Distance2;
-        if (Light.Range > 0.0)
+        if (Light.Range4 > 0.0)
         {
             // Attenuation = clamp(1.0 - (Distance / Range)^4, 0, 1) / Distance^2
-            float Range2 = Light.Range * Light.Range;
-            RangeAttenuation *= saturate(1.0 - (Distance2 * Distance2) / (Range2 * Range2));
+            RangeAttenuation *= saturate(1.0 - (Distance2 * Distance2) / Light.Range4);
         }
         
         if (Light.Type == PBR_LIGHT_TYPE_POINT)

@@ -853,7 +853,9 @@ void GLTF_PBR_Renderer::WritePBRLightShaderAttribs(const PBRLightShaderAttribsDa
     }
     pShaderAttribs->Intensity = float4{Light.Color * Intensity, 0.0};
 
-    pShaderAttribs->Range = Light.Range * AttribsData.DistanceScale;
+    float Range            = Light.Range * AttribsData.DistanceScale;
+    float Range2           = Range * Range;
+    pShaderAttribs->Range4 = Range2 * Range2;
 
     float SpotAngleScale  = 1.f / std::max(0.001f, std::cos(Light.InnerConeAngle) - std::cos(Light.OuterConeAngle));
     float SpotAngleOffset = -std::cos(Light.OuterConeAngle) * SpotAngleScale;

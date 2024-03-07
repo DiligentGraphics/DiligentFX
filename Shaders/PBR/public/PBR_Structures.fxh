@@ -235,7 +235,7 @@ struct PBRLightAttribs
     float4 Direction; // Directional and spot lights, w is unused.
     float4 Intensity; // a is unused
     
-    float Range;          // Point and spot light range
+    float Range4;         // Point and spot light range to the power of 4
     float SpotAngleScale; // 1.0 / (cos(InnerConeAngle) - cos(OuterConeAngle))
     float SpotAngleOffset;// -cos(OuterConeAngle) * SpotAngleScale;
     float Padding;
