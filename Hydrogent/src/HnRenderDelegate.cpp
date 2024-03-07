@@ -49,7 +49,6 @@ namespace HLSL
 
 #include "Shaders/Common/public/BasicStructures.fxh"
 #include "Shaders/PBR/public/PBR_Structures.fxh"
-#include "Shaders/PBR/private/RenderPBR_Structures.fxh"
 
 } // namespace HLSL
 
@@ -82,12 +81,12 @@ const pxr::TfTokenVector HnRenderDelegate::SupportedBPrimTypes =
 // clang-format on
 
 
-static RefCntAutoPtr<IBuffer> CreateFrameAttribsCB(IRenderDevice* pDevice)
+static RefCntAutoPtr<IBuffer> CreateFrameAttribsCB(IRenderDevice* pDevice, Uint32 Size)
 {
     RefCntAutoPtr<IBuffer> FrameAttribsCB;
     CreateUniformBuffer(
         pDevice,
-        sizeof(HLSL::PBRFrameAttribs),
+        Size,
         "PBR frame attribs CB",
         &FrameAttribsCB,
         USAGE_DEFAULT);
@@ -127,6 +126,8 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
     USDRendererCI.CreateDefaultTextures = false;
     // Enable clear coat support
     USDRendererCI.EnableClearCoat = true;
+
+    USDRendererCI.MaxLightCount = RenderDelegateCI.MaxLightCount;
 
     USDRendererCI.ColorTargetIndex        = HnFramebufferTargets::GBUFFER_TARGET_SCENE_COLOR;
     USDRendererCI.MeshIdTargetIndex       = HnFramebufferTargets::GBUFFER_TARGET_MESH_ID;
@@ -263,10 +264,10 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
     m_pContext{CI.pContext},
     m_pRenderStateCache{CI.pRenderStateCache},
     m_ResourceMgr{CreateResourceManager(CI)},
-    m_FrameAttribsCB{CreateFrameAttribsCB(CI.pDevice)},
     m_PrimitiveAttribsCB{CreatePrimitiveAttribsCB(CI.pDevice)},
     m_MaterialSRBCache{HnMaterial::CreateSRBCache()},
     m_USDRenderer{CreateUSDRenderer(CI, m_PrimitiveAttribsCB, m_MaterialSRBCache)},
+    m_FrameAttribsCB{CreateFrameAttribsCB(CI.pDevice, m_USDRenderer->GetPRBFrameAttribsSize())},
     m_TextureRegistry{CI.pDevice, CI.TextureAtlasDim != 0 ? m_ResourceMgr : RefCntAutoPtr<GLTF::ResourceManager>{}},
     m_RenderParam{std::make_unique<HnRenderParam>(CI.UseVertexPool, CI.UseIndexPool, CI.TextureBindingMode)},
     m_MeshAttribsAllocator{GetRawAllocator(), sizeof(HnMesh::Attributes), 64}

@@ -158,6 +158,9 @@ public:
         ///             draw calls that can be batched and the overhead associated with
         ///             the size of the primitive attributes array.
         Uint32 MultiDrawBatchSize = 16;
+
+        /// The maximum number of lights that can be used by the render delegate.
+        Uint32 MaxLightCount = 16;
     };
     static std::unique_ptr<HnRenderDelegate> Create(const CreateInfo& CI);
 
@@ -320,10 +323,10 @@ private:
     RefCntAutoPtr<IRenderStateCache> m_pRenderStateCache;
 
     RefCntAutoPtr<GLTF::ResourceManager> m_ResourceMgr;
-    RefCntAutoPtr<IBuffer>               m_FrameAttribsCB;
     RefCntAutoPtr<IBuffer>               m_PrimitiveAttribsCB;
     RefCntAutoPtr<IObject>               m_MaterialSRBCache;
     std::shared_ptr<USD_Renderer>        m_USDRenderer;
+    RefCntAutoPtr<IBuffer>               m_FrameAttribsCB;
 
     HnTextureRegistry              m_TextureRegistry;
     std::unique_ptr<HnRenderParam> m_RenderParam;

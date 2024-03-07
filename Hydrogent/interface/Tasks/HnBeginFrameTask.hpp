@@ -28,6 +28,7 @@
 
 #include <memory>
 #include <array>
+#include <vector>
 
 #include "HnTask.hpp"
 #include "../interface/HnRenderPassState.hpp"
@@ -40,11 +41,6 @@ namespace Diligent
 {
 
 struct ITextureView;
-
-namespace HLSL
-{
-struct PBRFrameAttribs;
-}
 
 namespace USD
 {
@@ -222,7 +218,7 @@ private:
 
     HnBeginFrameTaskParams::RendererParams m_RendererParams;
 
-    std::unique_ptr<HLSL::PBRFrameAttribs> m_FrameAttribs;
+    std::vector<Uint8> m_FrameAttribsData;
 
     Uint32 m_FrameBufferWidth  = 0;
     Uint32 m_FrameBufferHeight = 0;

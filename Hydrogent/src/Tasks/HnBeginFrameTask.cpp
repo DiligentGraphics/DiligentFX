@@ -67,8 +67,7 @@ HnBeginFrameTaskParams::RenderTargetFormats::RenderTargetFormats() noexcept
 
 HnBeginFrameTask::HnBeginFrameTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id) :
     HnTask{Id},
-    m_RenderPassState{std::make_shared<HnRenderPassState>()},
-    m_FrameAttribs{std::make_unique<HLSL::PBRFrameAttribs>()}
+    m_RenderPassState{std::make_shared<HnRenderPassState>()}
 {
     if (ParamsDelegate == nullptr)
     {
@@ -319,9 +318,14 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
                                             const float2&   Jitter,
                                             bool&           CameraTransformDirty)
 {
-    HLSL::PBRFrameAttribs& FrameAttribs = *m_FrameAttribs;
-    HLSL::CameraAttribs&   PrevCamera   = FrameAttribs.PrevCamera;
-    HLSL::CameraAttribs&   CamAttribs   = FrameAttribs.Camera;
+    HnRenderDelegate*   RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+    const USD_Renderer& Renderer       = *RenderDelegate->GetUSDRenderer();
+
+    m_FrameAttribsData.resize(Renderer.GetPRBFrameAttribsSize());
+    HLSL::PBRFrameAttribs* FrameAttribs = reinterpret_cast<HLSL::PBRFrameAttribs*>(m_FrameAttribsData.data());
+    HLSL::CameraAttribs&   PrevCamera   = FrameAttribs->PrevCamera;
+    HLSL::CameraAttribs&   CamAttribs   = FrameAttribs->Camera;
+    HLSL::PBRLightAttribs* Lights       = reinterpret_cast<HLSL::PBRLightAttribs*>(FrameAttribs + 1);
 
     PrevCamera = CamAttribs;
     if (m_pCamera != nullptr)
@@ -367,11 +371,11 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
             }
         }
 
-        if (FrameAttribs.PrevCamera.f4ViewportSize.x == 0)
+        if (PrevCamera.f4ViewportSize.x == 0)
         {
             // First frame
-            FrameAttribs.PrevCamera = CamAttribs;
-            CameraTransformDirty    = true;
+            PrevCamera           = CamAttribs;
+            CameraTransformDirty = true;
         }
     }
     else
@@ -379,24 +383,31 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
         UNEXPECTED("Camera is null. It should've been set in Prepare()");
     }
 
-    // For now, use the first light that is initialized.
-    HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+    const int MaxLightCount = Renderer.GetSettings().MaxLightCount;
+
+    int LightCount = 0;
     for (HnLight* Light : RenderDelegate->GetLights())
     {
         if (Light->GetDirection() != float3{})
         {
-            HLSL::PBRLightAttribs& LightAttribs = FrameAttribs.Light;
+            HLSL::PBRLightAttribs& LightAttribs = Lights[LightCount++];
 
+            LightAttribs.Type      = USD_Renderer::LIGHT_TYPE_DIRECTIONAL;
             LightAttribs.Direction = Light->GetDirection();
             LightAttribs.Intensity = Light->GetIntensity();
 
-            break;
+            if (LightCount >= MaxLightCount)
+            {
+                break;
+            }
         }
     }
 
     {
-        HLSL::PBRRendererShaderParameters& RendererParams = FrameAttribs.Renderer;
+        HLSL::PBRRendererShaderParameters& RendererParams = FrameAttribs->Renderer;
         RenderDelegate->GetUSDRenderer()->SetInternalShaderParameters(RendererParams);
+
+        RendererParams.LightCount = LightCount;
 
         RendererParams.OcclusionStrength = m_RendererParams.OcclusionStrength;
         RendererParams.EmissionScale     = m_RendererParams.EmissionScale;
@@ -414,7 +425,7 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
         RendererParams.WhitePoint    = 3.0f;
     }
 
-    pCtx->UpdateBuffer(pFrameAttrbisCB, 0, sizeof(FrameAttribs), &FrameAttribs, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    pCtx->UpdateBuffer(pFrameAttrbisCB, 0, m_FrameAttribsData.size(), m_FrameAttribsData.data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     StateTransitionDesc Barriers[] =
         {
             {pFrameAttrbisCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE},
@@ -452,7 +463,7 @@ void HnBeginFrameTask::Execute(pxr::HdTaskContext* TaskCtx)
 
         bool CameraTransformDirty = false;
         UpdateFrameConstants(pCtx, pFrameAttribsCB, UseTAA, JitterOffsets, CameraTransformDirty);
-        (*TaskCtx)[HnRenderResourceTokens->frameShaderAttribs] = pxr::VtValue{m_FrameAttribs.get()};
+        (*TaskCtx)[HnRenderResourceTokens->frameShaderAttribs] = pxr::VtValue{reinterpret_cast<HLSL::PBRFrameAttribs*>(m_FrameAttribsData.data())};
         // Will be used by HnPostProcessTask::Execute()
         (*TaskCtx)[HnRenderResourceTokens->cameraTransformDirty] = pxr::VtValue{CameraTransformDirty};
     }
