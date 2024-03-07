@@ -58,6 +58,7 @@ static constexpr char MultiDrawGLSLExtension[] = "#extension GL_ARB_shader_draw_
 namespace HLSL
 {
 
+#include "Shaders/Common/public/BasicStructures.fxh"
 #include "Shaders/PBR/public/PBR_Structures.fxh"
 
 } // namespace HLSL
@@ -1570,5 +1571,18 @@ Uint32 PBR_Renderer::GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags) const
             sizeof(HLSL::PBRMaterialTextureAttribs) * NumTextureAttribs +
             sizeof(float4));
 }
+
+Uint32 PBR_Renderer::GetPRBFrameAttribsSize(Uint32 LightCount)
+{
+    return (sizeof(HLSL::CameraAttribs) * 2 +
+            sizeof(HLSL::PBRRendererShaderParameters) +
+            sizeof(HLSL::PBRLightAttribs) * LightCount);
+}
+
+Uint32 PBR_Renderer::GetPRBFrameAttribsSize() const
+{
+    return GetPRBFrameAttribsSize(m_Settings.MaxLightCount);
+}
+
 
 } // namespace Diligent

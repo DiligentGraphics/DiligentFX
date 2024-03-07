@@ -598,6 +598,12 @@ public:
     /// Returns the PBR primitive attributes shader data size for the given PSO flags.
     Uint32 GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags) const;
 
+    /// Returns the PBR Frame attributes shader data size for the given light count.
+    static Uint32 GetPRBFrameAttribsSize(Uint32 LightCount);
+
+    /// Returns the PBR Frame attributes shader data size.
+    Uint32 GetPRBFrameAttribsSize() const;
+
     const CreateInfo& GetSettings() const { return m_Settings; }
 
     inline static constexpr PSO_FLAGS GetTextureAttribPSOFlag(TEXTURE_ATTRIB_ID AttribId);
