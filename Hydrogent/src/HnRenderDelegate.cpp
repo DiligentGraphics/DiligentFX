@@ -70,8 +70,9 @@ const pxr::TfTokenVector HnRenderDelegate::SupportedRPrimTypes =
 const pxr::TfTokenVector HnRenderDelegate::SupportedSPrimTypes =
 {
     pxr::HdPrimTypeTokens->material,
-    pxr::HdPrimTypeTokens->light,
     pxr::HdPrimTypeTokens->camera,
+    pxr::HdPrimTypeTokens->distantLight,
+    pxr::HdPrimTypeTokens->sphereLight,
 };
 
 const pxr::TfTokenVector HnRenderDelegate::SupportedBPrimTypes =
@@ -373,9 +374,10 @@ pxr::HdSprim* HnRenderDelegate::CreateSprim(const pxr::TfToken& TypeId,
     {
         SPrim = HnCamera::Create(SPrimId);
     }
-    else if (TypeId == pxr::HdPrimTypeTokens->light)
+    else if (TypeId == pxr::HdPrimTypeTokens->distantLight ||
+             TypeId == pxr::HdPrimTypeTokens->sphereLight)
     {
-        HnLight* Light = HnLight::Create(SPrimId);
+        HnLight* Light = HnLight::Create(SPrimId, TypeId);
         {
             std::lock_guard<std::mutex> Guard{m_LightsMtx};
             m_Lights.emplace(Light);
@@ -402,7 +404,8 @@ pxr::HdSprim* HnRenderDelegate::CreateFallbackSprim(const pxr::TfToken& TypeId)
         SPrim = Mat;
     }
     else if (TypeId == pxr::HdPrimTypeTokens->camera ||
-             TypeId == pxr::HdPrimTypeTokens->light)
+             TypeId == pxr::HdPrimTypeTokens->distantLight ||
+             TypeId == pxr::HdPrimTypeTokens->sphereLight)
     {
         SPrim = nullptr;
     }

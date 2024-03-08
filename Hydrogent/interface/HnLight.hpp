@@ -41,7 +41,7 @@ namespace USD
 class HnLight final : public pxr::HdLight
 {
 public:
-    static HnLight* Create(const pxr::SdfPath& Id);
+    static HnLight* Create(const pxr::SdfPath& Id, const pxr::TfToken& TypeId);
 
     ~HnLight();
 
@@ -60,9 +60,11 @@ public:
     bool               IsVisible() const { return m_IsVisible; }
 
 private:
-    HnLight(const pxr::SdfPath& Id);
+    HnLight(const pxr::SdfPath& Id, const pxr::TfToken& TypeId);
 
 private:
+    const pxr::TfToken m_TypeId;
+
     float3      m_Position;
     float3      m_Direction;
     GLTF::Light m_Params;

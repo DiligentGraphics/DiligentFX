@@ -37,13 +37,14 @@ namespace Diligent
 namespace USD
 {
 
-HnLight* HnLight::Create(const pxr::SdfPath& Id)
+HnLight* HnLight::Create(const pxr::SdfPath& Id, const pxr::TfToken& TypeId)
 {
-    return new HnLight{Id};
+    return new HnLight{Id, TypeId};
 }
 
-HnLight::HnLight(const pxr::SdfPath& Id) :
-    pxr::HdLight{Id}
+HnLight::HnLight(const pxr::SdfPath& Id, const pxr::TfToken& TypeId) :
+    pxr::HdLight{Id},
+    m_TypeId{TypeId}
 {
 }
 
@@ -115,13 +116,15 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
             LightDirty     = true;
         }
 
-        auto LightType = GLTF::Light::TYPE::DIRECTIONAL;
-        if (!SceneDelegate->GetLightParamValue(Id, pxr::HdLightTokens->radius).IsEmpty())
+        auto LightType = GLTF::Light::TYPE::UNKNOWN;
+        if (m_TypeId == pxr::HdPrimTypeTokens->distantLight)
+        {
+            LightType = GLTF::Light::TYPE::DIRECTIONAL;
+        }
+        else if (m_TypeId == pxr::HdPrimTypeTokens->sphereLight)
         {
             LightType = GLTF::Light::TYPE::POINT;
-        }
-        else
-        {
+
             const pxr::VtValue ShapingConeVal = SceneDelegate->GetLightParamValue(Id, pxr::HdLightTokens->shapingConeAngle);
             if (!ShapingConeVal.IsEmpty())
             {
@@ -135,6 +138,10 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
                     LightDirty              = true;
                 }
             }
+        }
+        else
+        {
+            LOG_ERROR_MESSAGE("Unsupported light type: ", m_TypeId);
         }
 
         //m_Params.Range;
