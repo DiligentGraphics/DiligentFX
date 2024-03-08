@@ -733,7 +733,8 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
              pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::MeshMaterial) +
              pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::MeshTransform) +
              pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::MeshVisibility) +
-             pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::Material)),
+             pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::Material) +
+             pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::Light)),
             m_UseSSR,
             m_UseSSAO,
         };

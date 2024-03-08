@@ -84,6 +84,9 @@ public:
         // Indicates changes to material properties.
         Material,
 
+        // Indicates changes to light properties.
+        Light,
+
         Count
     };
     uint32_t GetAttribVersion(GlobalAttrib Attrib) const { return m_GlobalAttribVersions[static_cast<size_t>(Attrib)].load(); }

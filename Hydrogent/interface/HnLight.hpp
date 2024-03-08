@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -28,7 +28,8 @@
 
 #include "pxr/imaging/hd/light.h"
 
-#include "../../../../DiligentCore/Common/interface/BasicMath.hpp"
+#include "../../../DiligentCore/Common/interface/BasicMath.hpp"
+#include "../../../DiligentTools/AssetLoader/interface/GLTFLoader.hpp"
 
 namespace Diligent
 {
@@ -53,18 +54,19 @@ public:
     // change tracker for use in the first sync of this prim.
     virtual pxr::HdDirtyBits GetInitialDirtyBitsMask() const override final;
 
-    const float3& GetDirection() const { return m_Direction; }
-    const float4& GetIntensity() const { return m_Intensity; }
-
-    void SetDirection(const float3& Direction) { m_Direction = Direction; }
-    void SetIntensity(const float4& Intensity) { m_Intensity = Intensity; }
+    const float3&      GetPosition() const { return m_Position; }
+    const float3&      GetDirection() const { return m_Direction; }
+    const GLTF::Light& GetParams() const { return m_Params; }
+    bool               IsVisible() const { return m_IsVisible; }
 
 private:
     HnLight(const pxr::SdfPath& Id);
 
 private:
-    float3 m_Direction;
-    float4 m_Intensity;
+    float3      m_Position;
+    float3      m_Direction;
+    GLTF::Light m_Params;
+    bool        m_IsVisible = true;
 };
 
 } // namespace USD

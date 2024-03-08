@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -25,6 +25,11 @@
  */
 
 #include "HnLight.hpp"
+#include "HnRenderParam.hpp"
+
+#include "pxr/imaging/hd/sceneDelegate.h"
+
+#include "GfTypeConversions.hpp"
 
 namespace Diligent
 {
@@ -57,6 +62,96 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
 {
     if (*DirtyBits == pxr::HdLight::Clean)
         return;
+
+    const pxr::SdfPath& Id = GetId();
+
+    bool LightDirty = false;
+
+    {
+        bool IsVisible = SceneDelegate->GetVisible(Id);
+        if (IsVisible != m_IsVisible)
+        {
+            m_IsVisible = IsVisible;
+            LightDirty  = true;
+        }
+    }
+
+    if (*DirtyBits & DirtyTransform)
+    {
+        const pxr::GfMatrix4d Transform = SceneDelegate->GetTransform(Id);
+
+        const float3 Position = ToFloat3(Transform.ExtractTranslation());
+        if (Position != m_Position)
+        {
+            m_Position = Position;
+            LightDirty = true;
+        }
+
+        // Convention is to emit light along -Z
+        const pxr::GfVec4d zDir      = Transform.GetRow(2);
+        const float3       Direction = -ToFloat3(pxr::GfVec3d{zDir[0], zDir[1], zDir[2]});
+        if (Direction != m_Direction)
+        {
+            m_Direction = Direction;
+            LightDirty  = true;
+        }
+
+        *DirtyBits &= ~DirtyTransform;
+    }
+
+    if (*DirtyBits & DirtyParams)
+    {
+        const float Intensity = SceneDelegate->GetLightParamValue(Id, pxr::HdLightTokens->intensity).Get<float>();
+        if (Intensity != m_Params.Intensity)
+        {
+            m_Params.Intensity = Intensity;
+            LightDirty         = true;
+        }
+
+        const float3 Color = ToFloat3(SceneDelegate->GetLightParamValue(Id, pxr::HdLightTokens->color).Get<pxr::GfVec3f>());
+        if (Color != m_Params.Color)
+        {
+            m_Params.Color = Color;
+            LightDirty     = true;
+        }
+
+        auto LightType = GLTF::Light::TYPE::DIRECTIONAL;
+        if (!SceneDelegate->GetLightParamValue(Id, pxr::HdLightTokens->radius).IsEmpty())
+        {
+            LightType = GLTF::Light::TYPE::POINT;
+        }
+        else
+        {
+            const pxr::VtValue ShapingConeVal = SceneDelegate->GetLightParamValue(Id, pxr::HdLightTokens->shapingConeAngle);
+            if (!ShapingConeVal.IsEmpty())
+            {
+                LightType = GLTF::Light::TYPE::SPOT;
+
+                const float ShapingConeAngle = DegToRad(ShapingConeVal.Get<float>());
+                if (ShapingConeAngle != m_Params.OuterConeAngle)
+                {
+                    m_Params.InnerConeAngle = 0;
+                    m_Params.OuterConeAngle = ShapingConeAngle;
+                    LightDirty              = true;
+                }
+            }
+        }
+
+        //m_Params.Range;
+
+        if (LightType != m_Params.Type)
+        {
+            m_Params.Type = LightType;
+            LightDirty    = true;
+        }
+
+        *DirtyBits &= ~DirtyParams;
+    }
+
+    if (LightDirty && RenderParam != nullptr)
+    {
+        static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::Light);
+    }
 
     *DirtyBits = HdLight::Clean;
 }

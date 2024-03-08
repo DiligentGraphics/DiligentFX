@@ -37,6 +37,7 @@
 #include "GraphicsAccessories.hpp"
 #include "MapHelper.hpp"
 #include "ScopedDebugGroup.hpp"
+#include "GLTF_PBR_Renderer.hpp"
 
 namespace Diligent
 {
@@ -388,18 +389,15 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
     int LightCount = 0;
     for (HnLight* Light : RenderDelegate->GetLights())
     {
-        if (Light->GetDirection() != float3{})
+        if (!Light->IsVisible() || Light->GetParams().Type == GLTF::Light::TYPE::UNKNOWN)
+            continue;
+
+        GLTF_PBR_Renderer::WritePBRLightShaderAttribs({&Light->GetParams(), &Light->GetPosition(), &Light->GetDirection()}, Lights + LightCount);
+
+        ++LightCount;
+        if (LightCount >= MaxLightCount)
         {
-            HLSL::PBRLightAttribs& LightAttribs = Lights[LightCount++];
-
-            LightAttribs.Type      = USD_Renderer::LIGHT_TYPE_DIRECTIONAL;
-            LightAttribs.Direction = Light->GetDirection();
-            LightAttribs.Intensity = Light->GetIntensity();
-
-            if (LightCount >= MaxLightCount)
-            {
-                break;
-            }
+            break;
         }
     }
 
