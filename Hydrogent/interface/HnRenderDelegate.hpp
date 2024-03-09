@@ -161,6 +161,9 @@ public:
 
         /// The maximum number of lights that can be used by the render delegate.
         Uint32 MaxLightCount = 16;
+
+        /// Meters per logical unit.
+        float MetersPerUnit = 1.0f;
     };
     static std::unique_ptr<HnRenderDelegate> Create(const CreateInfo& CI);
 

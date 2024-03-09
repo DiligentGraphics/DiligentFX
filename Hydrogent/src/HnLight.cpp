@@ -27,6 +27,8 @@
 #include "HnLight.hpp"
 #include "HnRenderParam.hpp"
 
+#include <array>
+
 #include "pxr/imaging/hd/sceneDelegate.h"
 
 #include "GfTypeConversions.hpp"
@@ -55,6 +57,280 @@ HnLight::~HnLight()
 pxr::HdDirtyBits HnLight::GetInitialDirtyBitsMask() const
 {
     return pxr::HdLight::AllDirty;
+}
+
+//  Lookup table from:
+//  Colour Rendering of Spectra
+//  by John Walker
+//  https://www.fourmilab.ch/documents/specrend/specrend.c
+//
+//  Covers range from 1000k to 10000k in 500k steps
+//  assuming Rec709 / sRGB colorspace chromaticity.
+//
+// NOTE: 6500K doesn't give a pure white because the D65
+//       illuminant used by Rec. 709 doesn't lie on the
+//       Planckian Locus. We would need to compute the
+//       Correlated Colour Temperature (CCT) using Ohno's
+//       method to get pure white. Maybe one day.
+//
+// Note that the beginning and ending knots are repeated to simplify
+// boundary behavior.  The last 4 knots represent the segment starting
+// at 1.0.
+//
+static constexpr float kMinBlackbodyTemp = 1000.0f;
+static constexpr float kMaxBlackbodyTemp = 10000.0f;
+
+static constexpr std::array<float3, 22> kBblackbodyRGB = {
+    float3{1.000000f, 0.027490f, 0.000000f}, //  1000 K (Approximation)
+    float3{1.000000f, 0.027490f, 0.000000f}, //  1000 K (Approximation)
+    float3{1.000000f, 0.149664f, 0.000000f}, //  1500 K (Approximation)
+    float3{1.000000f, 0.256644f, 0.008095f}, //  2000 K
+    float3{1.000000f, 0.372033f, 0.067450f}, //  2500 K
+    float3{1.000000f, 0.476725f, 0.153601f}, //  3000 K
+    float3{1.000000f, 0.570376f, 0.259196f}, //  3500 K
+    float3{1.000000f, 0.653480f, 0.377155f}, //  4000 K
+    float3{1.000000f, 0.726878f, 0.501606f}, //  4500 K
+    float3{1.000000f, 0.791543f, 0.628050f}, //  5000 K
+    float3{1.000000f, 0.848462f, 0.753228f}, //  5500 K
+    float3{1.000000f, 0.898581f, 0.874905f}, //  6000 K
+    float3{1.000000f, 0.942771f, 0.991642f}, //  6500 K
+    float3{0.906947f, 0.890456f, 1.000000f}, //  7000 K
+    float3{0.828247f, 0.841838f, 1.000000f}, //  7500 K
+    float3{0.765791f, 0.801896f, 1.000000f}, //  8000 K
+    float3{0.715255f, 0.768579f, 1.000000f}, //  8500 K
+    float3{0.673683f, 0.740423f, 1.000000f}, //  9000 K
+    float3{0.638992f, 0.716359f, 1.000000f}, //  9500 K
+    float3{0.609681f, 0.695588f, 1.000000f}, // 10000 K
+    float3{0.609681f, 0.695588f, 1.000000f}, // 10000 K
+    float3{0.609681f, 0.695588f, 1.000000f}, // 10000 K
+};
+
+// Catmull-Rom basis
+static constexpr float kCRBasis[4][4] = {
+    {-0.5f, 1.5f, -1.5f, 0.5f},
+    {1.0f, -2.5f, 2.0f, -0.5f},
+    {-0.5f, 0.0f, 0.5f, 0.0f},
+    {0.0f, 1.0f, 0.0f, 0.0f},
+};
+
+static inline float Rec709RgbToLuma(const float3& rgb)
+{
+    return dot(rgb, float3{0.2126f, 0.7152f, 0.0722f});
+}
+
+
+static float3 BlackbodyTemperatureAsRgb(float temp)
+{
+    // Catmull-Rom interpolation of kBblackbodyRGB
+    constexpr int numKnots = kBblackbodyRGB.size();
+
+    // Parametric distance along spline
+    const float u_spline = clamp((temp - kMinBlackbodyTemp) / (kMaxBlackbodyTemp - kMinBlackbodyTemp), 0.0f, 1.0f);
+
+    // Last 4 knots represent a trailing segment starting at u_spline==1.0,
+    // to simplify boundary behavior
+    constexpr int numSegs = (numKnots - 4);
+    const float   x       = u_spline * numSegs;
+    const int     seg     = static_cast<int>(std::floor(x));
+    const float   u_seg   = x - seg; // Parameter within segment
+
+    // Knot values for this segment
+    float3 k0 = kBblackbodyRGB[seg + 0];
+    float3 k1 = kBblackbodyRGB[seg + 1];
+    float3 k2 = kBblackbodyRGB[seg + 2];
+    float3 k3 = kBblackbodyRGB[seg + 3];
+
+    // Compute cubic coefficients.
+    float3 a = kCRBasis[0][0] * k0 + kCRBasis[0][1] * k1 + kCRBasis[0][2] * k2 + kCRBasis[0][3] * k3;
+    float3 b = kCRBasis[1][0] * k0 + kCRBasis[1][1] * k1 + kCRBasis[1][2] * k2 + kCRBasis[1][3] * k3;
+    float3 c = kCRBasis[2][0] * k0 + kCRBasis[2][1] * k1 + kCRBasis[2][2] * k2 + kCRBasis[2][3] * k3;
+    float3 d = kCRBasis[3][0] * k0 + kCRBasis[3][1] * k1 + kCRBasis[3][2] * k2 + kCRBasis[3][3] * k3;
+
+    // Eval cubic polynomial.
+    float3 rgb = ((a * u_seg + b) * u_seg + c) * u_seg + d;
+
+    // Clamp at zero, since the spline can produce small negative values,
+    // e.g. in the blue component at 1300k.
+    rgb = std::max(rgb, float3{0, 0, 0});
+
+    // Normalize to the same luminance as (1, 1, 1)
+    rgb /= Rec709RgbToLuma(rgb);
+
+    return rgb;
+}
+
+static float3 GetLightColor(pxr::HdSceneDelegate& SceneDelegate, const pxr::SdfPath& Id)
+{
+    float3 Color{1, 1, 1};
+
+    {
+        const pxr::VtValue ColorVal = SceneDelegate.GetLightParamValue(Id, pxr::HdLightTokens->color);
+        if (ColorVal.IsHolding<pxr::GfVec3f>())
+        {
+            Color = ToFloat3(ColorVal.Get<pxr::GfVec3f>());
+        }
+    }
+
+    {
+        const pxr::VtValue EnableColorTempVal = SceneDelegate.GetLightParamValue(Id, pxr::HdLightTokens->enableColorTemperature);
+        if (EnableColorTempVal.GetWithDefault<bool>(false))
+        {
+            pxr::VtValue ColorTempVal = SceneDelegate.GetLightParamValue(Id, pxr::HdLightTokens->colorTemperature);
+            if (ColorTempVal.IsHolding<float>())
+            {
+                float  ColorTemp      = ColorTempVal.Get<float>();
+                float3 BlackbodyColor = BlackbodyTemperatureAsRgb(ColorTemp);
+                Color *= BlackbodyColor;
+            }
+        }
+    }
+
+    return Color;
+}
+
+static float GetLightIntensity(pxr::HdSceneDelegate& SceneDelegate, const pxr::SdfPath& Id)
+{
+    float Intensity = 1;
+
+    const pxr::VtValue IntensityVal = SceneDelegate.GetLightParamValue(Id, pxr::HdLightTokens->intensity);
+    if (IntensityVal.IsHolding<float>())
+    {
+        Intensity = IntensityVal.Get<float>();
+    }
+
+    return Intensity;
+}
+
+static float GetLightExposedPower(pxr::HdSceneDelegate& SceneDelegate, const pxr::SdfPath& Id)
+{
+    float ExposedPower = 1;
+
+    const pxr::VtValue ExposureVal = SceneDelegate.GetLightParamValue(Id, pxr::HdLightTokens->exposure);
+    if (ExposureVal.IsHolding<float>())
+    {
+        float Exposure = ExposureVal.Get<float>();
+        ExposedPower   = std::pow(2.0f, clamp(Exposure, -50.0f, 50.0f));
+    }
+
+    return ExposedPower;
+}
+
+// Returns the area of the maximum possible facing profile.
+static float GetLightArea(pxr::HdSceneDelegate& SceneDelegate, const pxr::SdfPath& Id, const pxr::TfToken LightType, float MetersPerUnit)
+{
+    if (LightType == pxr::HdPrimTypeTokens->diskLight ||
+        LightType == pxr::HdPrimTypeTokens->sphereLight)
+    {
+        pxr::VtValue RadiusVal = SceneDelegate.GetLightParamValue(Id, pxr::HdLightTokens->radius);
+        if (RadiusVal.IsHolding<float>())
+        {
+            float radius = RadiusVal.Get<float>() * MetersPerUnit;
+            // Return area of the facing disk, not the sphere surface area
+            return radius * radius * PI_F;
+        }
+    }
+    else if (LightType == pxr::HdPrimTypeTokens->rectLight)
+    {
+        pxr::VtValue WidthVal  = SceneDelegate.GetLightParamValue(Id, pxr::HdLightTokens->width);
+        pxr::VtValue HeightVal = SceneDelegate.GetLightParamValue(Id, pxr::HdLightTokens->height);
+        if (WidthVal.IsHolding<float>() && HeightVal.IsHolding<float>())
+        {
+            float Width  = WidthVal.Get<float>() * MetersPerUnit;
+            float Height = HeightVal.Get<float>() * MetersPerUnit;
+            return Width * Height;
+        }
+    }
+    else if (LightType == pxr::HdPrimTypeTokens->cylinderLight)
+    {
+        pxr::VtValue LengthVal = SceneDelegate.GetLightParamValue(Id, pxr::HdLightTokens->length);
+        pxr::VtValue RadiusVal = SceneDelegate.GetLightParamValue(Id, pxr::HdLightTokens->radius);
+        if (LengthVal.IsHolding<float>() && RadiusVal.IsHolding<float>())
+        {
+            float length = LengthVal.Get<float>() * MetersPerUnit;
+            float radius = RadiusVal.Get<float>() * MetersPerUnit;
+            // Return area of the facing rectangle, not the cylinder surface area
+            return length * radius;
+        }
+    }
+    else if (LightType == pxr::HdPrimTypeTokens->distantLight)
+    {
+        pxr::VtValue AngleDegVal = SceneDelegate.GetLightParamValue(Id, pxr::HdLightTokens->angle);
+        if (AngleDegVal.IsHolding<float>())
+        {
+            // Convert from cone apex angle to solid angle
+            float AngleGrad            = AngleDegVal.Get<float>();
+            float AngleRadians         = DegToRad(AngleGrad);
+            float SolidAngleSteradians = 2.f * PI_F * (1.f - std::cos(AngleRadians / 2.0));
+            return SolidAngleSteradians;
+        }
+    }
+
+    return 1.0;
+}
+
+static float GetShapingConeAngle(pxr::HdSceneDelegate& SceneDelegate, const pxr::SdfPath& Id)
+{
+    float ShapingConeAngle = 0;
+
+    pxr::VtValue ShapingConeVal = SceneDelegate.GetLightParamValue(Id, pxr::HdLightTokens->shapingConeAngle);
+    if (ShapingConeVal.IsHolding<float>())
+    {
+        ShapingConeAngle = DegToRad(ShapingConeVal.Get<float>());
+    }
+
+    return ShapingConeAngle;
+}
+
+
+bool HnLight::ApproximateAreaLight(pxr::HdSceneDelegate& SceneDelegate, float MetersPerUnit)
+{
+    bool ParamsDirty = false;
+
+    const pxr::SdfPath& Id = GetId();
+
+    // Light color
+    {
+        const float3 Color = GetLightColor(SceneDelegate, Id);
+        if (Color != m_Params.Color)
+        {
+            m_Params.Color = Color;
+            ParamsDirty    = true;
+        }
+    }
+
+    // Light intensity
+    {
+        float Intensity    = GetLightIntensity(SceneDelegate, Id);
+        float ExposedPower = GetLightExposedPower(SceneDelegate, Id);
+        Intensity *= ExposedPower;
+
+        pxr::VtValue NormalizeVal = SceneDelegate.GetLightParamValue(Id, pxr::HdLightTokens->normalize);
+        if (!NormalizeVal.GetWithDefault<bool>(false))
+        {
+            float LightArea = GetLightArea(SceneDelegate, Id, m_TypeId, MetersPerUnit);
+            Intensity *= LightArea;
+        }
+
+        if (Intensity != m_Params.Intensity)
+        {
+            m_Params.Intensity = Intensity;
+            ParamsDirty        = true;
+        }
+    }
+
+    if (m_TypeId == pxr::HdPrimTypeTokens->rectLight ||
+        m_TypeId == pxr::HdPrimTypeTokens->diskLight)
+    {
+        float ShapingConeAngle = GetShapingConeAngle(SceneDelegate, Id);
+        if (ShapingConeAngle != m_Params.OuterConeAngle)
+        {
+            m_Params.InnerConeAngle = 0;
+            m_Params.OuterConeAngle = ShapingConeAngle;
+            ParamsDirty             = true;
+        }
+    }
+
+    return ParamsDirty;
 }
 
 void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
@@ -102,54 +378,46 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
 
     if (*DirtyBits & DirtyParams)
     {
-        const float Intensity = SceneDelegate->GetLightParamValue(Id, pxr::HdLightTokens->intensity).Get<float>();
-        if (Intensity != m_Params.Intensity)
-        {
-            m_Params.Intensity = Intensity;
-            LightDirty         = true;
-        }
-
-        const float3 Color = ToFloat3(SceneDelegate->GetLightParamValue(Id, pxr::HdLightTokens->color).Get<pxr::GfVec3f>());
-        if (Color != m_Params.Color)
-        {
-            m_Params.Color = Color;
-            LightDirty     = true;
-        }
-
         auto LightType = GLTF::Light::TYPE::UNKNOWN;
         if (m_TypeId == pxr::HdPrimTypeTokens->distantLight)
         {
             LightType = GLTF::Light::TYPE::DIRECTIONAL;
         }
-        else if (m_TypeId == pxr::HdPrimTypeTokens->sphereLight)
+        else if (m_TypeId == pxr::HdPrimTypeTokens->cylinderLight ||
+                 m_TypeId == pxr::HdPrimTypeTokens->diskLight ||
+                 m_TypeId == pxr::HdPrimTypeTokens->rectLight ||
+                 m_TypeId == pxr::HdPrimTypeTokens->sphereLight)
         {
-            LightType = GLTF::Light::TYPE::POINT;
-
-            const pxr::VtValue ShapingConeVal = SceneDelegate->GetLightParamValue(Id, pxr::HdLightTokens->shapingConeAngle);
-            if (!ShapingConeVal.IsEmpty())
-            {
-                LightType = GLTF::Light::TYPE::SPOT;
-
-                const float ShapingConeAngle = DegToRad(ShapingConeVal.Get<float>());
-                if (ShapingConeAngle != m_Params.OuterConeAngle)
-                {
-                    m_Params.InnerConeAngle = 0;
-                    m_Params.OuterConeAngle = ShapingConeAngle;
-                    LightDirty              = true;
-                }
-            }
+            LightType = m_Params.OuterConeAngle > 0 ?
+                GLTF::Light::TYPE::SPOT :
+                GLTF::Light::TYPE::POINT;
         }
-        else
-        {
-            LOG_ERROR_MESSAGE("Unsupported light type: ", m_TypeId);
-        }
-
-        //m_Params.Range;
 
         if (LightType != m_Params.Type)
         {
             m_Params.Type = LightType;
             LightDirty    = true;
+        }
+
+        if (m_TypeId == pxr::HdPrimTypeTokens->cylinderLight ||
+            m_TypeId == pxr::HdPrimTypeTokens->diskLight ||
+            m_TypeId == pxr::HdPrimTypeTokens->distantLight ||
+            m_TypeId == pxr::HdPrimTypeTokens->rectLight ||
+            m_TypeId == pxr::HdPrimTypeTokens->sphereLight)
+        {
+            float MetersPerUnit = 1;
+            if (RenderParam != nullptr)
+            {
+                MetersPerUnit = static_cast<const HnRenderParam*>(RenderParam)->GetMetersPerUnit();
+            }
+            if (ApproximateAreaLight(*SceneDelegate, MetersPerUnit))
+            {
+                LightDirty = true;
+            }
+        }
+        else
+        {
+            LOG_ERROR_MESSAGE("Unsupported light type: ", m_TypeId);
         }
 
         *DirtyBits &= ~DirtyParams;

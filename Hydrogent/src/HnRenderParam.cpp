@@ -34,10 +34,12 @@ namespace USD
 
 HnRenderParam::HnRenderParam(bool                              UseVertexPool,
                              bool                              UseIndexPool,
-                             HN_MATERIAL_TEXTURES_BINDING_MODE TextureBindingMode) noexcept :
+                             HN_MATERIAL_TEXTURES_BINDING_MODE TextureBindingMode,
+                             float                             MetersPerUnit) noexcept :
     m_UseVertexPool{UseVertexPool},
     m_UseIndexPool{UseIndexPool},
-    m_TextureBindingMode{TextureBindingMode}
+    m_TextureBindingMode{TextureBindingMode},
+    m_MetersPerUnit{MetersPerUnit}
 {
     for (auto& Version : m_GlobalAttribVersions)
         Version.store(0);

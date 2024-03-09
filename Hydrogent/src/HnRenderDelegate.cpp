@@ -60,26 +60,25 @@ std::unique_ptr<HnRenderDelegate> HnRenderDelegate::Create(const CreateInfo& CI)
     return std::make_unique<HnRenderDelegate>(CI);
 }
 
-// clang-format off
-const pxr::TfTokenVector HnRenderDelegate::SupportedRPrimTypes =
-{
+const pxr::TfTokenVector HnRenderDelegate::SupportedRPrimTypes = {
     pxr::HdPrimTypeTokens->mesh,
     pxr::HdPrimTypeTokens->points,
 };
 
-const pxr::TfTokenVector HnRenderDelegate::SupportedSPrimTypes =
-{
+const pxr::TfTokenVector HnRenderDelegate::SupportedSPrimTypes = {
     pxr::HdPrimTypeTokens->material,
     pxr::HdPrimTypeTokens->camera,
+    //pxr::HdPrimTypeTokens->simpleLight,
+    pxr::HdPrimTypeTokens->cylinderLight,
+    pxr::HdPrimTypeTokens->diskLight,
     pxr::HdPrimTypeTokens->distantLight,
+    pxr::HdPrimTypeTokens->rectLight,
     pxr::HdPrimTypeTokens->sphereLight,
 };
 
-const pxr::TfTokenVector HnRenderDelegate::SupportedBPrimTypes =
-{
-    pxr::HdPrimTypeTokens->renderBuffer
+const pxr::TfTokenVector HnRenderDelegate::SupportedBPrimTypes = {
+    pxr::HdPrimTypeTokens->renderBuffer,
 };
-// clang-format on
 
 
 static RefCntAutoPtr<IBuffer> CreateFrameAttribsCB(IRenderDevice* pDevice, Uint32 Size)
@@ -270,7 +269,7 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
     m_USDRenderer{CreateUSDRenderer(CI, m_PrimitiveAttribsCB, m_MaterialSRBCache)},
     m_FrameAttribsCB{CreateFrameAttribsCB(CI.pDevice, m_USDRenderer->GetPRBFrameAttribsSize())},
     m_TextureRegistry{CI.pDevice, CI.TextureAtlasDim != 0 ? m_ResourceMgr : RefCntAutoPtr<GLTF::ResourceManager>{}},
-    m_RenderParam{std::make_unique<HnRenderParam>(CI.UseVertexPool, CI.UseIndexPool, CI.TextureBindingMode)},
+    m_RenderParam{std::make_unique<HnRenderParam>(CI.UseVertexPool, CI.UseIndexPool, CI.TextureBindingMode, CI.MetersPerUnit)},
     m_MeshAttribsAllocator{GetRawAllocator(), sizeof(HnMesh::Attributes), 64}
 {
 }
@@ -374,7 +373,11 @@ pxr::HdSprim* HnRenderDelegate::CreateSprim(const pxr::TfToken& TypeId,
     {
         SPrim = HnCamera::Create(SPrimId);
     }
-    else if (TypeId == pxr::HdPrimTypeTokens->distantLight ||
+    else if (TypeId == pxr::HdPrimTypeTokens->simpleLight ||
+             TypeId == pxr::HdPrimTypeTokens->cylinderLight ||
+             TypeId == pxr::HdPrimTypeTokens->diskLight ||
+             TypeId == pxr::HdPrimTypeTokens->distantLight ||
+             TypeId == pxr::HdPrimTypeTokens->rectLight ||
              TypeId == pxr::HdPrimTypeTokens->sphereLight)
     {
         HnLight* Light = HnLight::Create(SPrimId, TypeId);
@@ -404,7 +407,11 @@ pxr::HdSprim* HnRenderDelegate::CreateFallbackSprim(const pxr::TfToken& TypeId)
         SPrim = Mat;
     }
     else if (TypeId == pxr::HdPrimTypeTokens->camera ||
+             TypeId == pxr::HdPrimTypeTokens->simpleLight ||
+             TypeId == pxr::HdPrimTypeTokens->cylinderLight ||
+             TypeId == pxr::HdPrimTypeTokens->diskLight ||
              TypeId == pxr::HdPrimTypeTokens->distantLight ||
+             TypeId == pxr::HdPrimTypeTokens->rectLight ||
              TypeId == pxr::HdPrimTypeTokens->sphereLight)
     {
         SPrim = nullptr;

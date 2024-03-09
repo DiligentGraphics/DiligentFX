@@ -82,7 +82,7 @@ struct HnPostProcessTaskParams
     float SSAOScale = 1.f;
 
     // SSAO radius in world space
-    float SSAORadius = 10;
+    float SSAORadius = 1;
 
     // Enable temporal anti-aliasing
     bool EnableTAA = false;

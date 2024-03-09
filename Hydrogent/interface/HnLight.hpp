@@ -62,6 +62,8 @@ public:
 private:
     HnLight(const pxr::SdfPath& Id, const pxr::TfToken& TypeId);
 
+    bool ApproximateAreaLight(pxr::HdSceneDelegate& SceneDelegate, float MetersPerUnit);
+
 private:
     const pxr::TfToken m_TypeId;
 
