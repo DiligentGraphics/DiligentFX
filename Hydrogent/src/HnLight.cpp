@@ -423,6 +423,17 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
         *DirtyBits &= ~DirtyParams;
     }
 
+    if (*DirtyBits & DirtyShadowParams)
+    {
+        bool CastShadows = SceneDelegate->GetLightParamValue(Id, pxr::HdLightTokens->shadowEnable).GetWithDefault<bool>(false);
+        if (CastShadows != m_CastShadows)
+        {
+            m_CastShadows = CastShadows;
+            LightDirty    = true;
+        }
+        *DirtyBits &= ~DirtyShadowParams;
+    }
+
     if (LightDirty && RenderParam != nullptr)
     {
         static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::Light);
