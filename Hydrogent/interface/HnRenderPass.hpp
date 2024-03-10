@@ -55,6 +55,8 @@ struct HnMeshRenderParams
 
 struct HnRenderPassParams
 {
+    pxr::TfToken RenderPassId;
+
     enum class SelectionType
     {
         All,

@@ -188,7 +188,6 @@ public:
     virtual void Execute(pxr::HdTaskContext* TaskCtx) override final;
 
 private:
-    void UpdateRenderPassState(const HnBeginFrameTaskParams& Params);
     void PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex, pxr::HdTaskContext* TaskCtx, ITextureView* pFinalColorRTV);
     void UpdateFrameConstants(IDeviceContext* pCtx, IBuffer* pFrameAttrbisCB, bool UseTAA, const float2& Jitter, bool& CameraTransformDirty);
 
@@ -196,7 +195,6 @@ private:
     std::shared_ptr<HnRenderPassState> m_RenderPassState;
     HnFrameRenderTargets               m_FrameRenderTargets;
 
-    pxr::SdfPath m_FinalColorTargetId;
     pxr::SdfPath m_JitteredFinalColorTargetId;
 
     std::array<pxr::SdfPath, HnFrameRenderTargets::GBUFFER_TARGET_COUNT> m_GBufferTargetIds;
@@ -210,15 +208,10 @@ private:
     // Ping-pong buffers for jump-flood algorithm
     std::array<pxr::SdfPath, 2> m_ClosestSelLocnTargetId;
 
-    pxr::SdfPath m_CameraId;
-
-    TEXTURE_FORMAT m_ClosestSelectedLocationFormat = TEX_FORMAT_UNKNOWN;
-    TEXTURE_FORMAT m_JitteredColorFormat           = TEX_FORMAT_UNKNOWN;
-
     const HnCamera*     m_pCamera     = nullptr;
     pxr::HdRenderIndex* m_RenderIndex = nullptr;
 
-    HnBeginFrameTaskParams::RendererParams m_RendererParams;
+    HnBeginFrameTaskParams m_Params;
 
     std::vector<Uint8> m_FrameAttribsData;
 

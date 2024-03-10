@@ -129,7 +129,10 @@ namespace USD
     (useTaa)							 \
 	(taaJitterOffsets)					 \
 	(taaReset)							 \
-    (cameraTransformDirty)
+    (cameraTransformDirty)               \
+    (renderPass_OpaqueSelected)		     \
+    (renderPass_TransparentSelected)	 \
+    (renderPass_OpaqueUnselected_TransparentAll)
 
 // clang-format on
 

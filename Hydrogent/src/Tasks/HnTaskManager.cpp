@@ -146,12 +146,14 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
     CreateRenderRprimsTask(HnMaterialTagTokens->defaultTag,
                            TaskUID_RenderRprimsDefaultSelected,
                            {
+                               HnRenderResourceTokens->renderPass_OpaqueSelected,
                                HnRenderPassParams::SelectionType::Selected,
                                USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS,
                            });
     CreateRenderRprimsTask(HnMaterialTagTokens->masked,
                            TaskUID_RenderRprimsMaskedSelected,
                            {
+                               HnRenderResourceTokens->renderPass_OpaqueSelected,
                                HnRenderPassParams::SelectionType::Selected,
                                USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS,
                            });
@@ -159,12 +161,14 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
     CreateRenderRprimsTask(HnMaterialTagTokens->defaultTag,
                            TaskUID_RenderRprimsDefaultUnselected,
                            {
+                               HnRenderResourceTokens->renderPass_OpaqueUnselected_TransparentAll,
                                HnRenderPassParams::SelectionType::Unselected,
                                USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS,
                            });
     CreateRenderRprimsTask(HnMaterialTagTokens->masked,
                            TaskUID_RenderRprimsMaskedUnselected,
                            {
+                               HnRenderResourceTokens->renderPass_OpaqueUnselected_TransparentAll,
                                HnRenderPassParams::SelectionType::Unselected,
                                USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS,
                            });
@@ -173,12 +177,14 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
     CreateRenderRprimsTask(HnMaterialTagTokens->additive,
                            TaskUID_RenderRprimsAdditive,
                            {
+                               HnRenderResourceTokens->renderPass_OpaqueUnselected_TransparentAll,
                                HnRenderPassParams::SelectionType::All,
                                USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS,
                            });
     CreateRenderRprimsTask(HnMaterialTagTokens->translucent,
                            TaskUID_RenderRprimsTranslucent,
                            {
+                               HnRenderResourceTokens->renderPass_OpaqueUnselected_TransparentAll,
                                HnRenderPassParams::SelectionType::All,
                                USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS,
                            });
@@ -186,12 +192,14 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
     CreateRenderRprimsTask(HnMaterialTagTokens->additive,
                            TaskUID_RenderRprimsAdditiveSelected,
                            {
+                               HnRenderResourceTokens->renderPass_TransparentSelected,
                                HnRenderPassParams::SelectionType::Selected,
                                USD_Renderer::USD_PSO_FLAG_NONE,
                            });
     CreateRenderRprimsTask(HnMaterialTagTokens->translucent,
                            TaskUID_RenderRprimsTranslucentSelected,
                            {
+                               HnRenderResourceTokens->renderPass_TransparentSelected,
                                HnRenderPassParams::SelectionType::Selected,
                                USD_Renderer::USD_PSO_FLAG_NONE,
                            });

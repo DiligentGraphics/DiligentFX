@@ -109,27 +109,27 @@ HnBeginFrameTask::~HnBeginFrameTask()
 {
 }
 
-void HnBeginFrameTask::UpdateRenderPassState(const HnBeginFrameTaskParams& Params)
+static void UpdateRenderPassState(const HnBeginFrameTaskParams& Params, HnRenderPassState& RPState)
 {
-    m_RenderPassState->SetNumRenderTargets(HnFrameRenderTargets::GBUFFER_TARGET_COUNT);
+    RPState.SetNumRenderTargets(HnFrameRenderTargets::GBUFFER_TARGET_COUNT);
     for (Uint32 i = 0; i < HnFrameRenderTargets::GBUFFER_TARGET_COUNT; ++i)
-        m_RenderPassState->SetRenderTargetFormat(i, Params.Formats.GBuffer[i]);
-    m_RenderPassState->SetDepthStencilFormat(Params.Formats.Depth);
+        RPState.SetRenderTargetFormat(i, Params.Formats.GBuffer[i]);
+    RPState.SetDepthStencilFormat(Params.Formats.Depth);
 
-    m_RenderPassState->SetDepthBias(Params.State.DepthBias, Params.State.SlopeScaledDepthBias);
-    m_RenderPassState->SetDepthFunc(Params.State.DepthFunc);
-    m_RenderPassState->SetDepthBiasEnabled(Params.State.DepthBiasEnabled);
-    m_RenderPassState->SetEnableDepthTest(Params.State.DepthTestEnabled);
-    m_RenderPassState->SetEnableDepthClamp(Params.State.DepthClampEnabled);
+    RPState.SetDepthBias(Params.State.DepthBias, Params.State.SlopeScaledDepthBias);
+    RPState.SetDepthFunc(Params.State.DepthFunc);
+    RPState.SetDepthBiasEnabled(Params.State.DepthBiasEnabled);
+    RPState.SetEnableDepthTest(Params.State.DepthTestEnabled);
+    RPState.SetEnableDepthClamp(Params.State.DepthClampEnabled);
 
-    m_RenderPassState->SetCullStyle(Params.State.CullStyle);
+    RPState.SetCullStyle(Params.State.CullStyle);
 
-    m_RenderPassState->SetStencil(Params.State.StencilFunc, Params.State.StencilRef, Params.State.StencilMask,
-                                  Params.State.StencilFailOp, Params.State.StencilZFailOp, Params.State.StencilZPassOp);
+    RPState.SetStencil(Params.State.StencilFunc, Params.State.StencilRef, Params.State.StencilMask,
+                       Params.State.StencilFailOp, Params.State.StencilZFailOp, Params.State.StencilZPassOp);
 
-    m_RenderPassState->SetFrontFaceCCW(Params.State.FrontFaceCCW);
-    m_RenderPassState->SetClearColor(Params.ClearColor);
-    m_RenderPassState->SetClearDepth(Params.ClearDepth);
+    RPState.SetFrontFaceCCW(Params.State.FrontFaceCCW);
+    RPState.SetClearColor(Params.ClearColor);
+    RPState.SetClearDepth(Params.ClearDepth);
 }
 
 void HnBeginFrameTask::Sync(pxr::HdSceneDelegate* Delegate,
@@ -138,15 +138,9 @@ void HnBeginFrameTask::Sync(pxr::HdSceneDelegate* Delegate,
 {
     if (*DirtyBits & pxr::HdChangeTracker::DirtyParams)
     {
-        HnBeginFrameTaskParams Params;
-        if (GetTaskParams(Delegate, Params))
+        if (GetTaskParams(Delegate, m_Params))
         {
-            m_FinalColorTargetId            = Params.FinalColorTargetId;
-            m_ClosestSelectedLocationFormat = Params.Formats.ClosestSelectedLocation;
-            m_JitteredColorFormat           = Params.Formats.JitteredColor;
-            m_CameraId                      = Params.CameraId;
-            m_RendererParams                = Params.Renderer;
-            UpdateRenderPassState(Params);
+            UpdateRenderPassState(m_Params, *m_RenderPassState);
         }
     }
 
@@ -221,7 +215,7 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
     for (Uint32 i = 0; i < HnFrameRenderTargets::GBUFFER_TARGET_COUNT; ++i)
     {
         const char* Name                    = HnFrameRenderTargets::GetGBufferTargetName(static_cast<HnFrameRenderTargets::GBUFFER_TARGET>(i));
-        m_FrameRenderTargets.GBufferRTVs[i] = UpdateBrim(m_GBufferTargetIds[i], m_RenderPassState->GetRenderTargetFormat(i), Name);
+        m_FrameRenderTargets.GBufferRTVs[i] = UpdateBrim(m_GBufferTargetIds[i], m_Params.Formats.GBuffer[i], Name);
         if (m_FrameRenderTargets.GBufferRTVs[i])
         {
             m_FrameRenderTargets.GBufferSRVs[i] = m_FrameRenderTargets.GBufferRTVs[i]->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
@@ -232,13 +226,14 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
             UNEXPECTED("Unable to get GBuffer target from Bprim ", m_GBufferTargetIds[i]);
         }
     }
-    m_FrameRenderTargets.SelectionDepthDSV             = UpdateBrim(m_SelectionDepthBufferId, m_RenderPassState->GetDepthStencilFormat(), "Selection depth buffer");
-    m_FrameRenderTargets.DepthDSV                      = UpdateBrim(m_DepthBufferId[0], m_RenderPassState->GetDepthStencilFormat(), "Depth buffer 0");
-    m_FrameRenderTargets.PrevDepthDSV                  = UpdateBrim(m_DepthBufferId[1], m_RenderPassState->GetDepthStencilFormat(), "Depth buffer 1");
-    m_FrameRenderTargets.PrevMotionRTV                 = UpdateBrim(m_PrevMotionTargetId, m_RenderPassState->GetRenderTargetFormat(HnFrameRenderTargets::GBUFFER_TARGET_MOTION_VECTOR), "Motion vectors 1");
-    m_FrameRenderTargets.ClosestSelectedLocationRTV[0] = UpdateBrim(m_ClosestSelLocnTargetId[0], m_ClosestSelectedLocationFormat, "Closest selected location 0");
-    m_FrameRenderTargets.ClosestSelectedLocationRTV[1] = UpdateBrim(m_ClosestSelLocnTargetId[1], m_ClosestSelectedLocationFormat, "Closest selected location 1");
-    m_FrameRenderTargets.JitteredFinalColorRTV         = UpdateBrim(m_JitteredFinalColorTargetId, m_JitteredColorFormat, "Jittered final color");
+
+    m_FrameRenderTargets.SelectionDepthDSV             = UpdateBrim(m_SelectionDepthBufferId, m_Params.Formats.Depth, "Selection depth buffer");
+    m_FrameRenderTargets.DepthDSV                      = UpdateBrim(m_DepthBufferId[0], m_Params.Formats.Depth, "Depth buffer 0");
+    m_FrameRenderTargets.PrevDepthDSV                  = UpdateBrim(m_DepthBufferId[1], m_Params.Formats.Depth, "Depth buffer 1");
+    m_FrameRenderTargets.PrevMotionRTV                 = UpdateBrim(m_PrevMotionTargetId, m_Params.Formats.GBuffer[HnFrameRenderTargets::GBUFFER_TARGET_MOTION_VECTOR], "Motion vectors 1");
+    m_FrameRenderTargets.ClosestSelectedLocationRTV[0] = UpdateBrim(m_ClosestSelLocnTargetId[0], m_Params.Formats.ClosestSelectedLocation, "Closest selected location 0");
+    m_FrameRenderTargets.ClosestSelectedLocationRTV[1] = UpdateBrim(m_ClosestSelLocnTargetId[1], m_Params.Formats.ClosestSelectedLocation, "Closest selected location 1");
+    m_FrameRenderTargets.JitteredFinalColorRTV         = UpdateBrim(m_JitteredFinalColorTargetId, m_Params.Formats.JitteredColor, "Jittered final color");
 
     (*TaskCtx)[HnRenderResourceTokens->frameRenderTargets] = pxr::VtValue{&m_FrameRenderTargets};
 }
@@ -271,7 +266,7 @@ void HnBeginFrameTask::Prepare(pxr::HdTaskContext* TaskCtx,
     }
 
     (*TaskCtx)[HnTokens->renderPassState]                = pxr::VtValue{m_RenderPassState};
-    (*TaskCtx)[HnRenderResourceTokens->finalColorTarget] = pxr::VtValue{m_FinalColorTargetId};
+    (*TaskCtx)[HnRenderResourceTokens->finalColorTarget] = pxr::VtValue{m_Params.FinalColorTargetId};
 
     (*TaskCtx)[HnRenderResourceTokens->offscreenColorTarget] = pxr::VtValue{m_GBufferTargetIds[HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR]};
     (*TaskCtx)[HnRenderResourceTokens->meshIdTarget]         = pxr::VtValue{m_GBufferTargetIds[HnFrameRenderTargets::GBUFFER_TARGET_MESH_ID]};
@@ -288,22 +283,22 @@ void HnBeginFrameTask::Prepare(pxr::HdTaskContext* TaskCtx,
     (*TaskCtx)[HnRenderResourceTokens->closestSelectedLocation1Target] = pxr::VtValue{m_ClosestSelLocnTargetId[1]};
     (*TaskCtx)[HnRenderResourceTokens->jitteredFinalColorTarget]       = pxr::VtValue{m_JitteredFinalColorTargetId};
 
-    if (ITextureView* pFinalColorRTV = GetRenderBufferTarget(*RenderIndex, m_FinalColorTargetId))
+    if (ITextureView* pFinalColorRTV = GetRenderBufferTarget(*RenderIndex, m_Params.FinalColorTargetId))
     {
         PrepareRenderTargets(RenderIndex, TaskCtx, pFinalColorRTV);
     }
     else
     {
-        UNEXPECTED("Unable to get final color target from Bprim ", m_FinalColorTargetId);
+        UNEXPECTED("Unable to get final color target from Bprim ", m_Params.FinalColorTargetId);
     }
 
     bool ResetTAA = false;
-    if (!m_CameraId.IsEmpty())
+    if (!m_Params.CameraId.IsEmpty())
     {
-        m_pCamera = static_cast<const HnCamera*>(m_RenderIndex->GetSprim(pxr::HdPrimTypeTokens->camera, m_CameraId));
+        m_pCamera = static_cast<const HnCamera*>(m_RenderIndex->GetSprim(pxr::HdPrimTypeTokens->camera, m_Params.CameraId));
         if (m_pCamera == nullptr)
         {
-            LOG_ERROR_MESSAGE("Camera is not set at Id ", m_CameraId);
+            LOG_ERROR_MESSAGE("Camera is not set at Id ", m_Params.CameraId);
         }
     }
     else
@@ -408,13 +403,13 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
 
         RendererParams.LightCount = LightCount;
 
-        RendererParams.OcclusionStrength = m_RendererParams.OcclusionStrength;
-        RendererParams.EmissionScale     = m_RendererParams.EmissionScale;
-        RendererParams.IBLScale          = m_RendererParams.IBLScale;
+        RendererParams.OcclusionStrength = m_Params.Renderer.OcclusionStrength;
+        RendererParams.EmissionScale     = m_Params.Renderer.EmissionScale;
+        RendererParams.IBLScale          = m_Params.Renderer.IBLScale;
 
-        RendererParams.UnshadedColor  = m_RendererParams.UnshadedColor;
+        RendererParams.UnshadedColor  = m_Params.Renderer.UnshadedColor;
         RendererParams.HighlightColor = float4{0, 0, 0, 0};
-        RendererParams.PointSize      = m_RendererParams.PointSize;
+        RendererParams.PointSize      = m_Params.Renderer.PointSize;
 
         RendererParams.MipBias = UseTAA ? -0.5 : 0.0;
 
