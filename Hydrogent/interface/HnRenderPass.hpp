@@ -88,6 +88,11 @@ public:
     void SetParams(const HnRenderPassParams& Params);
     void SetMeshRenderParams(const HnMeshRenderParams& Params);
 
+    const pxr::TfToken& GetId() const
+    {
+        return m_Params.RenderPassId;
+    }
+
     using SupportedVertexInputsSetType = std::unordered_set<pxr::TfToken, pxr::TfToken::HashFunctor>;
     static SupportedVertexInputsSetType GetSupportedVertexInputs(const HnMaterial* Material);
     static PBR_Renderer::PSO_FLAGS      GetMaterialPSOFlags(const HnMaterial& Material);
@@ -100,6 +105,8 @@ public:
         DRAW_LIST_ITEM_DIRTY_FLAG_LAST      = DRAW_LIST_ITEM_DIRTY_FLAG_MESH_DATA,
         DRAW_LIST_ITEM_DIRTY_FLAG_ALL       = DRAW_LIST_ITEM_DIRTY_FLAG_LAST * 2 - 1
     };
+
+    void Execute(const HnRenderPassState& RPState, const pxr::TfTokenVector& Tags);
 
 protected:
     // Virtual API: Execute the buckets corresponding to renderTags;

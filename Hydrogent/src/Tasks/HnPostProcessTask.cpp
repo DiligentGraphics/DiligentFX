@@ -29,7 +29,6 @@
 #include "HnTokens.hpp"
 #include "HnShaderSourceFactory.hpp"
 #include "HnRenderDelegate.hpp"
-#include "HnRenderPassState.hpp"
 #include "HnFrameRenderTargets.hpp"
 #include "HnRenderParam.hpp"
 
@@ -464,17 +463,16 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
         UNEXPECTED("Closest selected location target RTV is not set in the task context");
     }
 
-    std::shared_ptr<HnRenderPassState> RPState = GetRenderPassState(TaskCtx);
-    if (RPState == nullptr)
+    float BackgroundDepth = 1.f;
+    if (!GetTaskContextData(TaskCtx, HnRenderResourceTokens->backgroundDepth, BackgroundDepth))
     {
-        UNEXPECTED("Render pass state is not set in the task context");
-        return;
+        UNEXPECTED("Background depth is not set in the task context");
     }
 
-    if (m_ClearDepth != RPState->GetClearDepth())
+    if (m_BackgroundDepth != BackgroundDepth)
     {
-        m_ClearDepth     = RPState->GetClearDepth();
-        m_AttribsCBDirty = true;
+        m_BackgroundDepth = BackgroundDepth;
+        m_AttribsCBDirty  = true;
     }
 
     const HnFrameRenderTargets* FrameTargets = GetFrameRenderTargets(TaskCtx);
@@ -705,7 +703,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
             ShaderAttribs.ToneMapping.fWhitePoint          = m_Params.WhitePoint;
             ShaderAttribs.ToneMapping.fLuminanceSaturation = m_Params.LuminanceSaturation;
             ShaderAttribs.AverageLogLum                    = m_Params.AverageLogLum;
-            ShaderAttribs.ClearDepth                       = m_ClearDepth;
+            ShaderAttribs.ClearDepth                       = m_BackgroundDepth;
             ShaderAttribs.SelectionOutlineWidth            = m_Params.SelectionOutlineWidth;
             ShaderAttribs.SSRScale                         = m_SSRScale;
             ShaderAttribs.SSAOScale                        = m_SSAOScale;

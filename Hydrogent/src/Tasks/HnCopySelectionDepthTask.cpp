@@ -95,9 +95,6 @@ void HnCopySelectionDepthTask::Execute(pxr::HdTaskContext* TaskCtx)
         RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
     };
     pCtx->CopyTexture(CopyAttribs);
-
-    auto pRTVs = Targets->GBufferRTVs;
-    pCtx->SetRenderTargets(HnFrameRenderTargets::GBUFFER_TARGET_COUNT, pRTVs.data(), Targets->DepthDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 }
 
 } // namespace USD

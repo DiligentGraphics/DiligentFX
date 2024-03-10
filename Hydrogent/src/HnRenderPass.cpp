@@ -239,10 +239,6 @@ GraphicsPipelineDesc HnRenderPass::GetGraphicsDesc(const HnRenderPassState& RPSt
 void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
                             const pxr::TfTokenVector&              Tags)
 {
-    UpdateDrawList(Tags);
-    if (m_DrawList.empty())
-        return;
-
     // Render pass state is initialized by HnBeginFrameTask, and
     // passed from the render Rprims task.
     if (!RPState)
@@ -251,7 +247,16 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
         return;
     }
 
-    RenderState State{*this, *static_cast<const HnRenderPassState*>(RPState.get())};
+    Execute(*static_cast<const HnRenderPassState*>(RPState.get()), Tags);
+}
+
+void HnRenderPass::Execute(const HnRenderPassState& RPState, const pxr::TfTokenVector& Tags)
+{
+    UpdateDrawList(Tags);
+    if (m_DrawList.empty())
+        return;
+
+    RenderState State{*this, RPState};
 
     const std::string DebugGroupName = std::string{"Render Pass - "} + m_MaterialTag.GetString() + " - " + HnRenderPassParams::GetSelectionTypeString(m_Params.Selection);
     ScopedDebugGroup  DebugGroup{State.pCtx, DebugGroupName.c_str()};

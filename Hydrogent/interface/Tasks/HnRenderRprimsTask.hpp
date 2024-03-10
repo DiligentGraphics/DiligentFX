@@ -39,6 +39,8 @@ namespace Diligent
 namespace USD
 {
 
+class HnRenderPass;
+
 struct HnRenderRprimsTaskParams
 {
     float4x4 Transform = float4x4::Identity();
@@ -83,8 +85,8 @@ private:
     void UpdateRenderPassParams(const HnRenderRprimsTaskParams& Params);
 
 private:
-    pxr::TfTokenVector         m_RenderTags;
-    pxr::HdRenderPassSharedPtr m_RenderPass;
+    pxr::TfTokenVector            m_RenderTags;
+    std::shared_ptr<HnRenderPass> m_RenderPass;
 };
 
 } // namespace USD

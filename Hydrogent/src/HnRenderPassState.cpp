@@ -44,20 +44,23 @@ HnRenderPassState::HnRenderPassState()
 {
 }
 
-void HnRenderPassState::Begin(IDeviceContext* pContext)
+void HnRenderPassState::Commit(IDeviceContext* pContext)
 {
-    VERIFY(!_depthMaskEnabled, "Depth mask is not supported");
+    if (m_IsCommited)
+        return;
+
+    //VERIFY(!_depthMaskEnabled, "Depth mask is not supported");
     VERIFY(_camera == nullptr, "Camera is not used");
     VERIFY(!_framing.IsValid(), "Framing is not used");
     VERIFY(!_overrideWindowPolicy.first, "Window policy is not used");
-    VERIFY(_pointSize == 0, "Point size is not supported");
-    VERIFY(!_lightingEnabled, "Lighting is ignored");
-    VERIFY(!_clippingEnabled, "Clipping is not supported");
-    VERIFY(_lineWidth == 0, "Line width is not supported");
-    VERIFY(_tessLevel == 0, "Tessellation level is ignored");
-    VERIFY(_alphaThreshold == 0, "Alpha threshold is not supported");
-    VERIFY(_stepSize == 0, "Step size is not supported");
-    VERIFY(_stepSizeLighting == 0, "Step size lighting is not supported");
+    //VERIFY(_pointSize == 0, "Point size is not supported");
+    //VERIFY(!_lightingEnabled, "Lighting is ignored");
+    //VERIFY(!_clippingEnabled, "Clipping is not supported");
+    //VERIFY(_lineWidth == 0, "Line width is not supported");
+    //VERIFY(_tessLevel == 0, "Tessellation level is ignored");
+    //VERIFY(_alphaThreshold == 0, "Alpha threshold is not supported");
+    //VERIFY(_stepSize == 0, "Step size is not supported");
+    //VERIFY(_stepSizeLighting == 0, "Step size lighting is not supported");
 
     //GfVec4f _overrideColor;
     //GfVec4f _maskColor;
@@ -65,9 +68,25 @@ void HnRenderPassState::Begin(IDeviceContext* pContext)
     //float   _pointSelectedSize;
     //GfVec2f _drawRange;
 
-    pContext->SetBlendFactors(_blendConstantColor.data());
-    Viewport VP{_viewport[0], _viewport[1], _viewport[2], _viewport[3]};
-    pContext->SetViewports(1, &VP, 0, 0);
+    pContext->SetRenderTargets(m_NumRenderTargets, m_RTVs.data(), m_DSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    for (Uint32 rt = 0; rt < m_NumRenderTargets; ++rt)
+    {
+        if ((m_ClearMask & (1u << rt)) != 0)
+        {
+            pContext->ClearRenderTarget(m_RTVs[rt], m_ClearColors[rt].Data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        }
+    }
+    if ((m_ClearMask & ClearDepthBit) != 0)
+    {
+        pContext->ClearDepthStencil(m_DSV, CLEAR_DEPTH_FLAG, m_ClearDepth, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    }
+
+    //pContext->SetBlendFactors(_blendConstantColor.data());
+    //Viewport VP{_viewport[0], _viewport[1], _viewport[2], _viewport[3]};
+    //pContext->SetViewports(1, &VP, 0, 0);
+    pContext->SetStencilRef(_stencilRef);
+
+    m_IsCommited = true;
 }
 
 RasterizerStateDesc HnRenderPassState::GetRasterizerState() const
@@ -150,6 +169,33 @@ GraphicsPipelineDesc HnRenderPassState::GetGraphicsPipelineDesc() const
     GraphicsPipeline.DSVFormat = m_DepthFormat;
 
     return GraphicsPipeline;
+}
+
+void HnRenderPassState::Begin(Uint32        NumRenderTargets,
+                              ITextureView* ppRTVs[],
+                              ITextureView* pDSV,
+                              float4*       ClearColors,
+                              float         ClearDepth,
+                              Uint32        ClearMask)
+{
+    VERIFY(NumRenderTargets == m_NumRenderTargets, "Number of render targets does not match the value set in the render pass state");
+
+    m_ClearMask = ClearMask;
+    for (Uint32 rt = 0; rt < NumRenderTargets; ++rt)
+    {
+        m_RTVs[rt] = ppRTVs[rt];
+        VERIFY((m_RTVs[rt] != nullptr ? m_RTVs[rt]->GetDesc().Format : TEX_FORMAT_UNKNOWN) == m_RTVFormats[rt], "Invalid render target view format");
+        if (ClearColors != nullptr)
+        {
+            m_ClearColors[rt] = ClearColors[rt];
+        }
+    }
+
+    m_DSV = pDSV;
+    VERIFY((m_DSV != nullptr ? m_DSV->GetDesc().Format : TEX_FORMAT_UNKNOWN) == m_DepthFormat, "Invalid depth-stencil view format");
+    m_ClearDepth = ClearDepth;
+
+    m_IsCommited = false;
 }
 
 } // namespace USD

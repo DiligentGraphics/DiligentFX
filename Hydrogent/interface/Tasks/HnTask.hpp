@@ -51,8 +51,8 @@ public:
     HnTask(const pxr::SdfPath& Id);
 
 protected:
-    HnFrameRenderTargets*              GetFrameRenderTargets(pxr::HdTaskContext* TaskCtx) const;
-    std::shared_ptr<HnRenderPassState> GetRenderPassState(pxr::HdTaskContext* TaskCtx) const;
+    HnFrameRenderTargets* GetFrameRenderTargets(pxr::HdTaskContext* TaskCtx) const;
+    HnRenderPassState*    GetRenderPassState(pxr::HdTaskContext* TaskCtx, const pxr::TfToken& Id) const;
 
     static ITextureView* GetRenderBufferTarget(pxr::HdRenderIndex& RenderIndex, const pxr::SdfPath& RenderBufferId);
     ITextureView*        GetRenderBufferTarget(pxr::HdRenderIndex& RenderIndex, pxr::HdTaskContext* TaskCtx, const pxr::TfToken& Name) const;

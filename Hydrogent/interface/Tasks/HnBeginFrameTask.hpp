@@ -29,6 +29,7 @@
 #include <memory>
 #include <array>
 #include <vector>
+#include <unordered_map>
 
 #include "HnTask.hpp"
 #include "../interface/HnRenderPassState.hpp"
@@ -192,8 +193,9 @@ private:
     void UpdateFrameConstants(IDeviceContext* pCtx, IBuffer* pFrameAttrbisCB, bool UseTAA, const float2& Jitter, bool& CameraTransformDirty);
 
 private:
-    std::shared_ptr<HnRenderPassState> m_RenderPassState;
-    HnFrameRenderTargets               m_FrameRenderTargets;
+    std::unordered_map<pxr::TfToken, HnRenderPassState, pxr::TfToken::HashFunctor> m_RenderPassStates;
+
+    HnFrameRenderTargets m_FrameRenderTargets;
 
     pxr::SdfPath m_JitteredFinalColorTargetId;
 

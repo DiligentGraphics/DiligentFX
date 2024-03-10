@@ -32,7 +32,6 @@
 #include "Tasks/HnBeginFrameTask.hpp"
 #include "Tasks/HnRenderRprimsTask.hpp"
 #include "Tasks/HnCopySelectionDepthTask.hpp"
-#include "Tasks/HnSetupSelectionDepthTask.hpp"
 #include "Tasks/HnRenderEnvMapTask.hpp"
 #include "Tasks/HnRenderAxesTask.hpp"
 #include "Tasks/HnReadRprimIdTask.hpp"
@@ -60,7 +59,6 @@ TF_DEFINE_PRIVATE_TOKENS(
     (copySelectionDepth)
     (renderEnvMapTask)
     (renderAxesTask)
-    (setupSelectionDepth)
     (readRprimIdTask)
     (processSelectionTask)
     (postProcessTask)
@@ -188,7 +186,7 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                                HnRenderPassParams::SelectionType::All,
                                USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS,
                            });
-    CreateSetupSelectionDepthTask();
+
     CreateRenderRprimsTask(HnMaterialTagTokens->additive,
                            TaskUID_RenderRprimsAdditiveSelected,
                            {
@@ -322,12 +320,6 @@ void HnTaskManager::CreateCopySelectionDepthTask()
 {
     HnCopySelectionDepthTaskParams TaskParams;
     CreateTask<HnCopySelectionDepthTask>(HnTaskManagerTokens->copySelectionDepth, TaskUID_CopySelectionDepth, TaskParams);
-}
-
-void HnTaskManager::CreateSetupSelectionDepthTask()
-{
-    HnSetupSelectionDepthTaskParams TaskParams;
-    CreateTask<HnSetupSelectionDepthTask>(HnTaskManagerTokens->setupSelectionDepth, TaskUID_SetupSelectionDepth, TaskParams);
 }
 
 void HnTaskManager::CreateProcessSelectionTask()

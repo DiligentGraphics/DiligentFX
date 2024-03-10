@@ -108,8 +108,7 @@ void HnRenderEnvMapTask::Prepare(pxr::HdTaskContext* TaskCtx,
 
     if (!m_EnvMapRenderer)
     {
-        std::shared_ptr<HnRenderPassState> RenderPassState = GetRenderPassState(TaskCtx);
-        if (RenderPassState)
+        if (HnRenderPassState* RenderPassState = GetRenderPassState(TaskCtx, HnRenderResourceTokens->renderPass_OpaqueUnselected_TransparentAll))
         {
             HnRenderDelegate* pRenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
 

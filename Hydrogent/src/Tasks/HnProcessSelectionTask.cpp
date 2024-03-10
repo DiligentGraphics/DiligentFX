@@ -26,7 +26,6 @@
 
 #include "Tasks/HnProcessSelectionTask.hpp"
 #include "HnRenderDelegate.hpp"
-#include "HnRenderPassState.hpp"
 #include "HnFrameRenderTargets.hpp"
 #include "HnTokens.hpp"
 #include "HnRenderParam.hpp"
@@ -289,13 +288,6 @@ void HnProcessSelectionTask::Execute(pxr::HdTaskContext* TaskCtx)
         return;
     }
 
-    std::shared_ptr<HnRenderPassState> RenderPassState = GetRenderPassState(TaskCtx);
-    if (!RenderPassState)
-    {
-        UNEXPECTED("Render pass state is not set in the task context");
-        return;
-    }
-
     const HnFrameRenderTargets* Targets = GetFrameRenderTargets(TaskCtx);
     if (Targets == nullptr)
     {
@@ -315,8 +307,14 @@ void HnProcessSelectionTask::Execute(pxr::HdTaskContext* TaskCtx)
     ScopedDebugGroup DebugGroup{pCtx, "Process Selection"};
 
     {
+        float BackgroundDepth = 1.f;
+        if (!GetTaskContextData(TaskCtx, HnRenderResourceTokens->backgroundDepth, BackgroundDepth))
+        {
+            UNEXPECTED("Background depth is not set in the task context");
+        }
+
         MapHelper<HLSL::ClosestSelectedLocationConstants> Constants{pCtx, m_ConstantsCB, MAP_WRITE, MAP_FLAG_DISCARD};
-        Constants->ClearDepth = RenderPassState->GetClearDepth();
+        Constants->ClearDepth = BackgroundDepth;
     }
 
     ITextureView* ClosestSelectedLocationRTVs[] = {Targets->ClosestSelectedLocationRTV[0], Targets->ClosestSelectedLocationRTV[1]};

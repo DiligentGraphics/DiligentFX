@@ -68,8 +68,7 @@ HnBeginFrameTaskParams::RenderTargetFormats::RenderTargetFormats() noexcept
 }
 
 HnBeginFrameTask::HnBeginFrameTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id) :
-    HnTask{Id},
-    m_RenderPassState{std::make_shared<HnRenderPassState>()}
+    HnTask{Id}
 {
     if (ParamsDelegate == nullptr)
     {
@@ -109,12 +108,16 @@ HnBeginFrameTask::~HnBeginFrameTask()
 {
 }
 
-static void UpdateRenderPassState(const HnBeginFrameTaskParams& Params, HnRenderPassState& RPState)
+static void UpdateRenderPassState(const HnBeginFrameTaskParams& Params,
+                                  const TEXTURE_FORMAT*         RTVFormats,
+                                  Uint32                        NumRTVs,
+                                  TEXTURE_FORMAT                DSVFormat,
+                                  HnRenderPassState&            RPState)
 {
-    RPState.SetNumRenderTargets(HnFrameRenderTargets::GBUFFER_TARGET_COUNT);
-    for (Uint32 i = 0; i < HnFrameRenderTargets::GBUFFER_TARGET_COUNT; ++i)
-        RPState.SetRenderTargetFormat(i, Params.Formats.GBuffer[i]);
-    RPState.SetDepthStencilFormat(Params.Formats.Depth);
+    RPState.SetNumRenderTargets(NumRTVs);
+    for (Uint32 i = 0; i < NumRTVs; ++i)
+        RPState.SetRenderTargetFormat(i, RTVFormats[i]);
+    RPState.SetDepthStencilFormat(DSVFormat);
 
     RPState.SetDepthBias(Params.State.DepthBias, Params.State.SlopeScaledDepthBias);
     RPState.SetDepthFunc(Params.State.DepthFunc);
@@ -128,8 +131,6 @@ static void UpdateRenderPassState(const HnBeginFrameTaskParams& Params, HnRender
                        Params.State.StencilFailOp, Params.State.StencilZFailOp, Params.State.StencilZPassOp);
 
     RPState.SetFrontFaceCCW(Params.State.FrontFaceCCW);
-    RPState.SetClearColor(Params.ClearColor);
-    RPState.SetClearDepth(Params.ClearDepth);
 }
 
 void HnBeginFrameTask::Sync(pxr::HdSceneDelegate* Delegate,
@@ -140,7 +141,23 @@ void HnBeginFrameTask::Sync(pxr::HdSceneDelegate* Delegate,
     {
         if (GetTaskParams(Delegate, m_Params))
         {
-            UpdateRenderPassState(m_Params, *m_RenderPassState);
+            UpdateRenderPassState(m_Params,
+                                  m_Params.Formats.GBuffer.data(),
+                                  m_Params.Formats.GBuffer.size(),
+                                  m_Params.Formats.Depth,
+                                  m_RenderPassStates[HnRenderResourceTokens->renderPass_OpaqueSelected]);
+
+            UpdateRenderPassState(m_Params,
+                                  m_Params.Formats.GBuffer.data(),
+                                  m_Params.Formats.GBuffer.size(),
+                                  m_Params.Formats.Depth,
+                                  m_RenderPassStates[HnRenderResourceTokens->renderPass_OpaqueUnselected_TransparentAll]);
+
+            UpdateRenderPassState(m_Params,
+                                  nullptr,
+                                  0,
+                                  m_Params.Formats.Depth,
+                                  m_RenderPassStates[HnRenderResourceTokens->renderPass_TransparentSelected]);
         }
     }
 
@@ -236,6 +253,33 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
     m_FrameRenderTargets.JitteredFinalColorRTV         = UpdateBrim(m_JitteredFinalColorTargetId, m_Params.Formats.JitteredColor, "Jittered final color");
 
     (*TaskCtx)[HnRenderResourceTokens->frameRenderTargets] = pxr::VtValue{&m_FrameRenderTargets};
+
+    // Set render pass render targets
+
+    std::array<float4, HnFrameRenderTargets::GBUFFER_TARGET_COUNT> ClearValues; // No need to zero-initialize
+    for (Uint32 i = 0; i < HnFrameRenderTargets::GBUFFER_TARGET_COUNT; ++i)
+    {
+        // NB: we should clear alpha to zero to get correct alpha in the final image!
+        ClearValues[i] = (i == HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR) ?
+            float4{m_Params.ClearColor.r, m_Params.ClearColor.g, m_Params.ClearColor.b, 0} :
+            float4{0};
+    }
+
+    HnRenderPassState& RP_OpaqueSelected                  = m_RenderPassStates[HnRenderResourceTokens->renderPass_OpaqueSelected];
+    HnRenderPassState& RP_OpaqueUnselected_TransparentAll = m_RenderPassStates[HnRenderResourceTokens->renderPass_OpaqueUnselected_TransparentAll];
+    HnRenderPassState& RP_TransparentSelected             = m_RenderPassStates[HnRenderResourceTokens->renderPass_TransparentSelected];
+
+    // We first render selected objects using the selection depth buffer.
+    // Selection depth buffer is copied to the main depth buffer by the HnCopySelectionDepthTask.
+    RP_OpaqueSelected.Begin(HnFrameRenderTargets::GBUFFER_TARGET_COUNT, m_FrameRenderTargets.GBufferRTVs.data(), m_FrameRenderTargets.SelectionDepthDSV, ClearValues.data(), m_Params.ClearDepth, ~0u);
+    RP_OpaqueUnselected_TransparentAll.Begin(HnFrameRenderTargets::GBUFFER_TARGET_COUNT, m_FrameRenderTargets.GBufferRTVs.data(), m_FrameRenderTargets.DepthDSV);
+    RP_TransparentSelected.Begin(0, nullptr, m_FrameRenderTargets.SelectionDepthDSV);
+
+    // Register render pass states in the task context
+    for (auto& it : m_RenderPassStates)
+    {
+        (*TaskCtx)[it.first] = pxr::VtValue{&it.second};
+    }
 }
 
 void HnBeginFrameTask::Prepare(pxr::HdTaskContext* TaskCtx,
@@ -265,7 +309,6 @@ void HnBeginFrameTask::Prepare(pxr::HdTaskContext* TaskCtx,
         std::swap(m_DepthBufferId[0], m_DepthBufferId[1]);
     }
 
-    (*TaskCtx)[HnTokens->renderPassState]                = pxr::VtValue{m_RenderPassState};
     (*TaskCtx)[HnRenderResourceTokens->finalColorTarget] = pxr::VtValue{m_Params.FinalColorTargetId};
 
     (*TaskCtx)[HnRenderResourceTokens->offscreenColorTarget] = pxr::VtValue{m_GBufferTargetIds[HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR]};
@@ -282,6 +325,7 @@ void HnBeginFrameTask::Prepare(pxr::HdTaskContext* TaskCtx,
     (*TaskCtx)[HnRenderResourceTokens->closestSelectedLocation0Target] = pxr::VtValue{m_ClosestSelLocnTargetId[0]};
     (*TaskCtx)[HnRenderResourceTokens->closestSelectedLocation1Target] = pxr::VtValue{m_ClosestSelLocnTargetId[1]};
     (*TaskCtx)[HnRenderResourceTokens->jitteredFinalColorTarget]       = pxr::VtValue{m_JitteredFinalColorTargetId};
+    (*TaskCtx)[HnRenderResourceTokens->backgroundDepth]                = pxr::VtValue{m_Params.ClearDepth};
 
     if (ITextureView* pFinalColorRTV = GetRenderBufferTarget(*RenderIndex, m_Params.FinalColorTargetId))
     {
@@ -458,20 +502,6 @@ void HnBeginFrameTask::Execute(pxr::HdTaskContext* TaskCtx)
     {
         UNEXPECTED("Frame attribs constant buffer is null");
     }
-
-    auto pRTVs = m_FrameRenderTargets.GBufferRTVs;
-
-    // We first render selected objects using the selection depth buffer.
-    // Selection depth buffer is copied to the main depth buffer by the HnCopySelectionDepthTask.
-    pCtx->SetRenderTargets(HnFrameRenderTargets::GBUFFER_TARGET_COUNT, pRTVs.data(), m_FrameRenderTargets.SelectionDepthDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    for (Uint32 i = 0; i < HnFrameRenderTargets::GBUFFER_TARGET_COUNT; ++i)
-    {
-        // We should clear alpha to zero to get correct alpha in the final image
-        const float4 ClearColor = (i == HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR) ? float4{m_RenderPassState->GetClearColor(), 0} : float4{0};
-        pCtx->ClearRenderTarget(pRTVs[i], ClearColor.Data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    }
-    pCtx->ClearDepthStencil(m_FrameRenderTargets.SelectionDepthDSV, CLEAR_DEPTH_FLAG, m_RenderPassState->GetClearDepth(), 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    pCtx->SetStencilRef(m_RenderPassState->GetStencilRef());
 }
 
 } // namespace USD

@@ -72,7 +72,6 @@ namespace USD
     (emissiveColor)            \
     (clearcoat)                \
     (clearcoatRoughness)       \
-    (renderPassState) 	       \
     (renderPassParams) 	       
 
 #define HN_MATERIAL_TAG_TOKENS \
@@ -132,7 +131,8 @@ namespace USD
     (cameraTransformDirty)               \
     (renderPass_OpaqueSelected)		     \
     (renderPass_TransparentSelected)	 \
-    (renderPass_OpaqueUnselected_TransparentAll)
+    (renderPass_OpaqueUnselected_TransparentAll) \
+    (backgroundDepth)
 
 // clang-format on
 

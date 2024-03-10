@@ -55,7 +55,7 @@ public:
 
     HnRenderPassState();
 
-    void Begin(IDeviceContext* pContext);
+    void Commit(IDeviceContext* pContext);
 
     void SetRenderTargetFormat(Uint32 rt, TEXTURE_FORMAT Fmt)
     {
@@ -97,33 +97,37 @@ public:
     BlendStateDesc        GetBlendState() const;
     GraphicsPipelineDesc  GetGraphicsPipelineDesc() const;
 
-    void SetClearColor(const float3& ClearColor)
+    const float4& GetClearColor(Uint32 rt) const
     {
-        m_ClearColor = ClearColor;
-    }
-    const float3& GetClearColor() const
-    {
-        return m_ClearColor;
-    }
-
-    void SetClearDepth(float ClearDepth)
-    {
-        m_ClearDepth = ClearDepth;
+        return m_ClearColors[rt];
     }
     float GetClearDepth() const
     {
         return m_ClearDepth;
     }
 
+    static constexpr Uint32 ClearDepthBit = 1u << 31u;
+
+    void Begin(Uint32        NumRenderTargets,
+               ITextureView* ppRTVs[],
+               ITextureView* pDSV,
+               float4*       ClearColors = nullptr,
+               float         ClearDepth  = 0,
+               Uint32        ClearMask   = 0);
+
 private:
     Uint32                                         m_NumRenderTargets = 0;
     std::array<TEXTURE_FORMAT, MAX_RENDER_TARGETS> m_RTVFormats       = {};
     TEXTURE_FORMAT                                 m_DepthFormat      = TEX_FORMAT_UNKNOWN;
 
-    bool m_FrontFaceCCW = false;
+    std::array<ITextureView*, MAX_RENDER_TARGETS> m_RTVs        = {};
+    ITextureView*                                 m_DSV         = nullptr;
+    std::array<float4, MAX_RENDER_TARGETS>        m_ClearColors = {};
+    float                                         m_ClearDepth  = 1.f;
+    Uint32                                        m_ClearMask   = 0;
+    bool                                          m_IsCommited  = false;
 
-    float3 m_ClearColor = {0, 0, 0};
-    float  m_ClearDepth = 1.f;
+    bool m_FrontFaceCCW = false;
 };
 
 } // namespace USD

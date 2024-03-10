@@ -59,7 +59,6 @@ public:
     static constexpr TaskUID TaskUID_RenderRprimsMaskedUnselected    = 0xf5290fec47594711;
     static constexpr TaskUID TaskUID_RenderRprimsAdditive            = 0x37d45531106c4c52;
     static constexpr TaskUID TaskUID_RenderRprimsTranslucent         = 0xa015c7e45941407e;
-    static constexpr TaskUID TaskUID_SetupSelectionDepth             = 0x97087dc2bbdc4876;
     static constexpr TaskUID TaskUID_RenderRprimsAdditiveSelected    = 0x2cb8a35254ec46da;
     static constexpr TaskUID TaskUID_RenderRprimsTranslucentSelected = 0x50a786394d834b4f;
     static constexpr TaskUID TaskUID_RenderEnvMap                    = 0xf646122e1dc74bab;
@@ -101,8 +100,6 @@ public:
     ///                             * Renders all Rprims with additive material tag
     ///                         - RenderRprimsTranslucent
     ///                             * Renders all Rprims with translucent material tag
-    ///                         - SetupSelectionDepth
-    ///                             * Binds the selection depth buffer without any render targets
     ///                         - RenderRprimsAdditiveSelected
     ///                             * Renders only selected Rprims with the additive material tag (depth only)
     ///                         - RenderRprimsTranslucentSelected
@@ -114,17 +111,16 @@ public:
     ///
     ///     | Task                            |  Selected Rprims | Unselected Rprims | Color  |  Mesh ID  | G-Buffer |  Selection Detph | Main Depth |
     ///     |---------------------------------|------------------|-------------------|--------|-----------|----------|------------------|------------|
-    ///     | BeginFrame                      |                  |                   |  bind  |   bind    |   bind   |      bind        |            |
+    ///     | BeginFrame                      |                  |                   |        |           |          |                  |            |
     ///     | RenderRprimsDefaultSelected     |       V          |                   |   V    |     V     |    V     |        V         |            |
     ///     | RenderRprimsMaskedSelected      |       V          |                   |   V    |     V     |    V     |        V         |            |
-    ///     | CopySelectionDepth              |                  |                   |  bind  |   bind    |   bind   |        V---copy--|---->V bind |
+    ///     | CopySelectionDepth              |                  |                   |        |           |          |        V---copy--|---->V      |
     ///     | RenderRprimsDefaultUnselected   |                  |         V         |   V    |     V     |    V     |                  |     V      |
     ///     | RenderRprimsMaskedUnselected    |                  |         V         |   V    |     V     |    V     |                  |     V      |
     ///     | RenderEnvMap                    |                  |                   |   V    |           |          |                  |            |
     ///     | RenderAxes                      |                  |                   |   V    |           |          |                  |            |
     ///     | RenderRprimsAdditive            |       V          |         V         |   V    |     V     |    V     |                  |     V      |
     ///     | RenderRprimsTranslucent         |       V          |         V         |   V    |     V     |    V     |                  |     V      |
-    ///     | SetupSelectionDepth             |                  |                   |        |           |          |       bind       |            |
     ///     | RenderRprimsAdditiveSelected    |       V          |                   |        |           |          |        V         |            |
     ///     | RenderRprimsTranslucentSelected |       V          |                   |        |           |          |        V         |            |
     ///     | ReadRprimId                     |                  |                   |        |           |          |                  |            |
@@ -227,7 +223,6 @@ private:
     void CreateRenderAxesTask();
     void CreateReadRprimIdTask();
     void CreateCopySelectionDepthTask();
-    void CreateSetupSelectionDepthTask();
     void CreateProcessSelectionTask();
     void CreatePostProcessTask();
 

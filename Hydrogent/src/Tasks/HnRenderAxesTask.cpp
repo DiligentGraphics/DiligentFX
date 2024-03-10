@@ -29,6 +29,7 @@
 #include "HnShaderSourceFactory.hpp"
 #include "HnRenderDelegate.hpp"
 #include "HnRenderPassState.hpp"
+#include "HnTokens.hpp"
 
 #include "DebugUtilities.hpp"
 #include "RenderStateCache.hpp"
@@ -173,7 +174,7 @@ void HnRenderAxesTask::Prepare(pxr::HdTaskContext* TaskCtx,
         m_ParamsAreDirty = false;
     }
 
-    if (std::shared_ptr<HnRenderPassState> RenderPassState = GetRenderPassState(TaskCtx))
+    if (HnRenderPassState* RenderPassState = GetRenderPassState(TaskCtx, HnRenderResourceTokens->renderPass_OpaqueUnselected_TransparentAll))
     {
         PreparePSO(*RenderPassState);
     }

@@ -46,10 +46,10 @@ HnFrameRenderTargets* HnTask::GetFrameRenderTargets(pxr::HdTaskContext* TaskCtx)
     return RenderTargets;
 }
 
-std::shared_ptr<HnRenderPassState> HnTask::GetRenderPassState(pxr::HdTaskContext* TaskCtx) const
+HnRenderPassState* HnTask::GetRenderPassState(pxr::HdTaskContext* TaskCtx, const pxr::TfToken& Id) const
 {
-    std::shared_ptr<HnRenderPassState> RenderPassState;
-    _GetTaskContextData(TaskCtx, HnTokens->renderPassState, &RenderPassState);
+    HnRenderPassState* RenderPassState = nullptr;
+    _GetTaskContextData(TaskCtx, Id, &RenderPassState);
     return RenderPassState;
 }
 

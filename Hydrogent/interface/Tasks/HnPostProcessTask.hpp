@@ -151,14 +151,14 @@ private:
     std::unique_ptr<TemporalAntiAliasing>        m_TAA;
 
 
-    ITextureView*               m_FinalColorRTV = nullptr; // Set in Prepare()
-    const HnFrameRenderTargets* m_FrameTargets  = nullptr; // Set in Prepare()
-    float                       m_ClearDepth    = 1.f;     // Set in Prepare()
-    float                       m_SSRScale      = 0;       // Set in Prepare()
-    float                       m_SSAOScale     = 0;       // Set in Prepare()
-    bool                        m_UseTAA        = false;   // Set in Prepare()
-    bool                        m_UseSSR        = false;   // Set in Prepare()
-    bool                        m_UseSSAO       = false;   // Set in Prepare()
+    ITextureView*               m_FinalColorRTV   = nullptr; // Set in Prepare()
+    const HnFrameRenderTargets* m_FrameTargets    = nullptr; // Set in Prepare()
+    float                       m_BackgroundDepth = 1.f;     // Set in Prepare()
+    float                       m_SSRScale        = 0;       // Set in Prepare()
+    float                       m_SSAOScale       = 0;       // Set in Prepare()
+    bool                        m_UseTAA          = false;   // Set in Prepare()
+    bool                        m_UseSSR          = false;   // Set in Prepare()
+    bool                        m_UseSSAO         = false;   // Set in Prepare()
 
     bool m_ResetTAA       = true;
     bool m_AttribsCBDirty = true;

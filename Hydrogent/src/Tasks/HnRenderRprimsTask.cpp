@@ -29,8 +29,10 @@
 #include "HnRenderPassState.hpp"
 #include "HnRenderPass.hpp"
 #include "HnTokens.hpp"
+#include "HnRenderDelegate.hpp"
 
 #include "pxr/imaging/hd/renderDelegate.h"
+#include "pxr/imaging/hd/renderIndex.h"
 
 #include "DebugUtilities.hpp"
 
@@ -56,7 +58,7 @@ void HnRenderRprimsTask::UpdateRenderPassParams(const HnRenderRprimsTaskParams& 
 
     HnMeshRenderParams RenderPassParams;
     RenderPassParams.Transform = Params.Transform;
-    static_cast<HnRenderPass*>(m_RenderPass.get())->SetMeshRenderParams(RenderPassParams);
+    m_RenderPass->SetMeshRenderParams(RenderPassParams);
 }
 
 void HnRenderRprimsTask::Sync(pxr::HdSceneDelegate* Delegate,
@@ -80,14 +82,15 @@ void HnRenderRprimsTask::Sync(pxr::HdSceneDelegate* Delegate,
             {
                 pxr::HdRenderIndex&    Index          = Delegate->GetRenderIndex();
                 pxr::HdRenderDelegate* RenderDelegate = Index.GetRenderDelegate();
-                m_RenderPass                          = RenderDelegate->CreateRenderPass(&Index, Collection);
+
+                m_RenderPass = std::static_pointer_cast<HnRenderPass>(RenderDelegate->CreateRenderPass(&Index, Collection));
 
                 {
                     pxr::VtValue ParamsValue = Delegate->Get(GetId(), HnTokens->renderPassParams);
                     if (ParamsValue.IsHolding<HnRenderPassParams>())
                     {
                         HnRenderPassParams RenderPassParams = ParamsValue.UncheckedGet<HnRenderPassParams>();
-                        static_cast<HnRenderPass*>(m_RenderPass.get())->SetParams(RenderPassParams);
+                        m_RenderPass->SetParams(RenderPassParams);
                     }
                     else
                     {
@@ -135,11 +138,20 @@ void HnRenderRprimsTask::Execute(pxr::HdTaskContext* TaskCtx)
 {
     if (m_RenderPass)
     {
+        const pxr::TfToken& RenderPassId = m_RenderPass->GetId();
+
         // Render pass state is initialized by HnBeginFrameTask.
-        // It is shared between all instances of the render rprims task.
-        std::shared_ptr<HnRenderPassState> RenderPassState = GetRenderPassState(TaskCtx);
-        VERIFY(RenderPassState, "Render pass state is null. This likely indicates that HnBeginFrameTask was not been created or executed.");
-        m_RenderPass->Execute(RenderPassState, GetRenderTags());
+        if (HnRenderPassState* RenderPassState = GetRenderPassState(TaskCtx, RenderPassId))
+        {
+            IDeviceContext* pCtx = static_cast<HnRenderDelegate*>(m_RenderPass->GetRenderIndex()->GetRenderDelegate())->GetDeviceContext();
+            RenderPassState->Commit(pCtx);
+
+            m_RenderPass->Execute(*RenderPassState, GetRenderTags());
+        }
+        else
+        {
+            UNEXPECTED("Render pass state is null. This likely indicates that HnBeginFrameTask was not been created or executed.");
+        }
     }
 }
 
