@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -37,6 +37,13 @@ namespace USD
 HnTask::HnTask(const pxr::SdfPath& Id) :
     pxr::HdTask{Id}
 {
+}
+
+HnFrameRenderTargets* HnTask::GetFrameRenderTargets(pxr::HdTaskContext* TaskCtx) const
+{
+    HnFrameRenderTargets* RenderTargets = nullptr;
+    _GetTaskContextData(TaskCtx, HnRenderResourceTokens->frameRenderTargets, &RenderTargets);
+    return RenderTargets;
 }
 
 std::shared_ptr<HnRenderPassState> HnTask::GetRenderPassState(pxr::HdTaskContext* TaskCtx) const

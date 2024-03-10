@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -42,6 +42,7 @@ namespace USD
 {
 
 class HnRenderPassState;
+struct HnFrameRenderTargets;
 
 /// Hydra task implementation in Hydrogent.
 class HnTask : public pxr::HdTask
@@ -50,6 +51,7 @@ public:
     HnTask(const pxr::SdfPath& Id);
 
 protected:
+    HnFrameRenderTargets*              GetFrameRenderTargets(pxr::HdTaskContext* TaskCtx) const;
     std::shared_ptr<HnRenderPassState> GetRenderPassState(pxr::HdTaskContext* TaskCtx) const;
 
     static ITextureView* GetRenderBufferTarget(pxr::HdRenderIndex& RenderIndex, const pxr::SdfPath& RenderBufferId);

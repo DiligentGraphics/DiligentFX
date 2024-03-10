@@ -26,7 +26,7 @@
 
 #include "Tasks/HnSetupSelectionDepthTask.hpp"
 #include "HnRenderDelegate.hpp"
-#include "HnRenderPassState.hpp"
+#include "HnFrameRenderTargets.hpp"
 #include "ScopedDebugGroup.hpp"
 
 #include "DebugUtilities.hpp"
@@ -67,14 +67,14 @@ void HnSetupSelectionDepthTask::Execute(pxr::HdTaskContext* TaskCtx)
         return;
     }
 
-    std::shared_ptr<HnRenderPassState> RenderPassState = GetRenderPassState(TaskCtx);
-    if (!RenderPassState)
+    const HnFrameRenderTargets* Targets = GetFrameRenderTargets(TaskCtx);
+    if (Targets == nullptr)
     {
-        UNEXPECTED("Render pass state is not set in the task context");
+        UNEXPECTED("Frame render targets are not set in the task context");
         return;
     }
-    const HnFramebufferTargets& Targets = RenderPassState->GetFramebufferTargets();
-    if (Targets.SelectionDepthDSV == nullptr)
+
+    if (Targets->SelectionDepthDSV == nullptr)
     {
         UNEXPECTED("Selection depth buffer is not set in the render pass state");
         return;
@@ -85,7 +85,7 @@ void HnSetupSelectionDepthTask::Execute(pxr::HdTaskContext* TaskCtx)
 
     ScopedDebugGroup DebugGroup{pCtx, "Set up Selection Depth"};
 
-    pCtx->SetRenderTargets(0, nullptr, Targets.SelectionDepthDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    pCtx->SetRenderTargets(0, nullptr, Targets->SelectionDepthDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 }
 
 } // namespace USD

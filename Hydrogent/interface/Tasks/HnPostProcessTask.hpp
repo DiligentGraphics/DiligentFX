@@ -52,7 +52,7 @@ namespace USD
 {
 
 class HnRenderPassState;
-struct HnFramebufferTargets;
+struct HnFrameRenderTargets;
 class HnRenderDelegate;
 
 struct HnPostProcessTaskParams
@@ -152,7 +152,7 @@ private:
 
 
     ITextureView*               m_FinalColorRTV = nullptr; // Set in Prepare()
-    const HnFramebufferTargets* m_FBTargets     = nullptr; // Set in Prepare()
+    const HnFrameRenderTargets* m_FrameTargets  = nullptr; // Set in Prepare()
     float                       m_ClearDepth    = 1.f;     // Set in Prepare()
     float                       m_SSRScale      = 0;       // Set in Prepare()
     float                       m_SSAOScale     = 0;       // Set in Prepare()

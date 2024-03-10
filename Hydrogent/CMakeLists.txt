@@ -22,6 +22,7 @@ set(SOURCE
     src/HnRenderPass.cpp
     src/HnShaderSourceFactory.cpp
     src/HnRenderPassState.cpp
+    src/HnFrameRenderTargets.cpp
     src/HnRenderParam.cpp
     src/HnTokens.cpp
     src/HnTextureRegistry.cpp
@@ -61,6 +62,7 @@ set(INTERFACE
     interface/HnRenderDelegate.hpp
     interface/HnRenderPass.hpp
     interface/HnRenderPassState.hpp
+    interface/HnFrameRenderTargets.hpp
     interface/HnTokens.hpp
     interface/HnTypes.hpp
     interface/HnTextureRegistry.hpp

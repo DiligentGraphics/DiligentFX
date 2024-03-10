@@ -27,6 +27,7 @@
 #include "Tasks/HnBeginFrameTask.hpp"
 #include "HnRenderDelegate.hpp"
 #include "HnRenderPassState.hpp"
+#include "HnFrameRenderTargets.hpp"
 #include "HnTokens.hpp"
 #include "HnRenderBuffer.hpp"
 #include "HnCamera.hpp"
@@ -56,14 +57,14 @@ namespace USD
 
 HnBeginFrameTaskParams::RenderTargetFormats::RenderTargetFormats() noexcept
 {
-    GBuffer[HnFramebufferTargets::GBUFFER_TARGET_SCENE_COLOR]   = TEX_FORMAT_RGBA16_FLOAT;
-    GBuffer[HnFramebufferTargets::GBUFFER_TARGET_MESH_ID]       = TEX_FORMAT_R32_FLOAT;
-    GBuffer[HnFramebufferTargets::GBUFFER_TARGET_MOTION_VECTOR] = TEX_FORMAT_RG16_FLOAT;
-    GBuffer[HnFramebufferTargets::GBUFFER_TARGET_NORMAL]        = TEX_FORMAT_RGBA16_FLOAT;
-    GBuffer[HnFramebufferTargets::GBUFFER_TARGET_BASE_COLOR]    = TEX_FORMAT_RGBA8_UNORM;
-    GBuffer[HnFramebufferTargets::GBUFFER_TARGET_MATERIAL]      = TEX_FORMAT_RG8_UNORM;
-    GBuffer[HnFramebufferTargets::GBUFFER_TARGET_IBL]           = TEX_FORMAT_RGBA16_FLOAT;
-    static_assert(HnFramebufferTargets::GBUFFER_TARGET_COUNT == 7, "Please initialize default render target formats.");
+    GBuffer[HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR]   = TEX_FORMAT_RGBA16_FLOAT;
+    GBuffer[HnFrameRenderTargets::GBUFFER_TARGET_MESH_ID]       = TEX_FORMAT_R32_FLOAT;
+    GBuffer[HnFrameRenderTargets::GBUFFER_TARGET_MOTION_VECTOR] = TEX_FORMAT_RG16_FLOAT;
+    GBuffer[HnFrameRenderTargets::GBUFFER_TARGET_NORMAL]        = TEX_FORMAT_RGBA16_FLOAT;
+    GBuffer[HnFrameRenderTargets::GBUFFER_TARGET_BASE_COLOR]    = TEX_FORMAT_RGBA8_UNORM;
+    GBuffer[HnFrameRenderTargets::GBUFFER_TARGET_MATERIAL]      = TEX_FORMAT_RG8_UNORM;
+    GBuffer[HnFrameRenderTargets::GBUFFER_TARGET_IBL]           = TEX_FORMAT_RGBA16_FLOAT;
+    static_assert(HnFrameRenderTargets::GBUFFER_TARGET_COUNT == 7, "Please initialize default render target formats.");
 }
 
 HnBeginFrameTask::HnBeginFrameTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id) :
@@ -86,14 +87,14 @@ HnBeginFrameTask::HnBeginFrameTask(pxr::HdSceneDelegate* ParamsDelegate, const p
         return Id;
     };
 
-    m_GBufferTargetIds[HnFramebufferTargets::GBUFFER_TARGET_SCENE_COLOR]   = InitBrim(HnRenderResourceTokens->offscreenColorTarget);
-    m_GBufferTargetIds[HnFramebufferTargets::GBUFFER_TARGET_MESH_ID]       = InitBrim(HnRenderResourceTokens->meshIdTarget);
-    m_GBufferTargetIds[HnFramebufferTargets::GBUFFER_TARGET_MOTION_VECTOR] = InitBrim(HnRenderResourceTokens->motionVectors0Target);
-    m_GBufferTargetIds[HnFramebufferTargets::GBUFFER_TARGET_NORMAL]        = InitBrim(HnRenderResourceTokens->normalTarget);
-    m_GBufferTargetIds[HnFramebufferTargets::GBUFFER_TARGET_BASE_COLOR]    = InitBrim(HnRenderResourceTokens->baseColorTarget);
-    m_GBufferTargetIds[HnFramebufferTargets::GBUFFER_TARGET_MATERIAL]      = InitBrim(HnRenderResourceTokens->materialDataTarget);
-    m_GBufferTargetIds[HnFramebufferTargets::GBUFFER_TARGET_IBL]           = InitBrim(HnRenderResourceTokens->iblTarget);
-    static_assert(HnFramebufferTargets::GBUFFER_TARGET_COUNT == 7, "Please initialize GBuffer BPrims.");
+    m_GBufferTargetIds[HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR]   = InitBrim(HnRenderResourceTokens->offscreenColorTarget);
+    m_GBufferTargetIds[HnFrameRenderTargets::GBUFFER_TARGET_MESH_ID]       = InitBrim(HnRenderResourceTokens->meshIdTarget);
+    m_GBufferTargetIds[HnFrameRenderTargets::GBUFFER_TARGET_MOTION_VECTOR] = InitBrim(HnRenderResourceTokens->motionVectors0Target);
+    m_GBufferTargetIds[HnFrameRenderTargets::GBUFFER_TARGET_NORMAL]        = InitBrim(HnRenderResourceTokens->normalTarget);
+    m_GBufferTargetIds[HnFrameRenderTargets::GBUFFER_TARGET_BASE_COLOR]    = InitBrim(HnRenderResourceTokens->baseColorTarget);
+    m_GBufferTargetIds[HnFrameRenderTargets::GBUFFER_TARGET_MATERIAL]      = InitBrim(HnRenderResourceTokens->materialDataTarget);
+    m_GBufferTargetIds[HnFrameRenderTargets::GBUFFER_TARGET_IBL]           = InitBrim(HnRenderResourceTokens->iblTarget);
+    static_assert(HnFrameRenderTargets::GBUFFER_TARGET_COUNT == 7, "Please initialize GBuffer BPrims.");
 
     m_PrevMotionTargetId         = InitBrim(HnRenderResourceTokens->motionVectors1Target);
     m_SelectionDepthBufferId     = InitBrim(HnRenderResourceTokens->selectionDepthBuffer);
@@ -110,8 +111,8 @@ HnBeginFrameTask::~HnBeginFrameTask()
 
 void HnBeginFrameTask::UpdateRenderPassState(const HnBeginFrameTaskParams& Params)
 {
-    m_RenderPassState->SetNumRenderTargets(HnFramebufferTargets::GBUFFER_TARGET_COUNT);
-    for (Uint32 i = 0; i < HnFramebufferTargets::GBUFFER_TARGET_COUNT; ++i)
+    m_RenderPassState->SetNumRenderTargets(HnFrameRenderTargets::GBUFFER_TARGET_COUNT);
+    for (Uint32 i = 0; i < HnFrameRenderTargets::GBUFFER_TARGET_COUNT; ++i)
         m_RenderPassState->SetRenderTargetFormat(i, Params.Formats.GBuffer[i]);
     m_RenderPassState->SetDepthStencilFormat(Params.Formats.Depth);
 
@@ -215,31 +216,31 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
         return pView;
     };
 
-    HnFramebufferTargets FBTargets;
-    FBTargets.FinalColorRTV = pFinalColorRTV;
+    m_FrameRenderTargets.FinalColorRTV = pFinalColorRTV;
 
-    for (Uint32 i = 0; i < HnFramebufferTargets::GBUFFER_TARGET_COUNT; ++i)
+    for (Uint32 i = 0; i < HnFrameRenderTargets::GBUFFER_TARGET_COUNT; ++i)
     {
-        const char* Name         = HnFramebufferTargets::GetTargetName(static_cast<HnFramebufferTargets::GBUFFER_TARGET>(i));
-        FBTargets.GBufferRTVs[i] = UpdateBrim(m_GBufferTargetIds[i], m_RenderPassState->GetRenderTargetFormat(i), Name);
-        if (FBTargets.GBufferRTVs[i])
+        const char* Name                    = HnFrameRenderTargets::GetGBufferTargetName(static_cast<HnFrameRenderTargets::GBUFFER_TARGET>(i));
+        m_FrameRenderTargets.GBufferRTVs[i] = UpdateBrim(m_GBufferTargetIds[i], m_RenderPassState->GetRenderTargetFormat(i), Name);
+        if (m_FrameRenderTargets.GBufferRTVs[i])
         {
-            FBTargets.GBufferSRVs[i] = FBTargets.GBufferRTVs[i]->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-            VERIFY_EXPR(FBTargets.GBufferSRVs[i] != nullptr);
+            m_FrameRenderTargets.GBufferSRVs[i] = m_FrameRenderTargets.GBufferRTVs[i]->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+            VERIFY_EXPR(m_FrameRenderTargets.GBufferSRVs[i] != nullptr);
         }
         else
         {
             UNEXPECTED("Unable to get GBuffer target from Bprim ", m_GBufferTargetIds[i]);
         }
     }
-    FBTargets.SelectionDepthDSV             = UpdateBrim(m_SelectionDepthBufferId, m_RenderPassState->GetDepthStencilFormat(), "Selection depth buffer");
-    FBTargets.DepthDSV                      = UpdateBrim(m_DepthBufferId[0], m_RenderPassState->GetDepthStencilFormat(), "Depth buffer 0");
-    FBTargets.PrevDepthDSV                  = UpdateBrim(m_DepthBufferId[1], m_RenderPassState->GetDepthStencilFormat(), "Depth buffer 1");
-    FBTargets.PrevMotionRTV                 = UpdateBrim(m_PrevMotionTargetId, m_RenderPassState->GetRenderTargetFormat(HnFramebufferTargets::GBUFFER_TARGET_MOTION_VECTOR), "Motion vectors 1");
-    FBTargets.ClosestSelectedLocationRTV[0] = UpdateBrim(m_ClosestSelLocnTargetId[0], m_ClosestSelectedLocationFormat, "Closest selected location 0");
-    FBTargets.ClosestSelectedLocationRTV[1] = UpdateBrim(m_ClosestSelLocnTargetId[1], m_ClosestSelectedLocationFormat, "Closest selected location 1");
-    FBTargets.JitteredFinalColorRTV         = UpdateBrim(m_JitteredFinalColorTargetId, m_JitteredColorFormat, "Jittered final color");
-    m_RenderPassState->SetFramebufferTargets(FBTargets);
+    m_FrameRenderTargets.SelectionDepthDSV             = UpdateBrim(m_SelectionDepthBufferId, m_RenderPassState->GetDepthStencilFormat(), "Selection depth buffer");
+    m_FrameRenderTargets.DepthDSV                      = UpdateBrim(m_DepthBufferId[0], m_RenderPassState->GetDepthStencilFormat(), "Depth buffer 0");
+    m_FrameRenderTargets.PrevDepthDSV                  = UpdateBrim(m_DepthBufferId[1], m_RenderPassState->GetDepthStencilFormat(), "Depth buffer 1");
+    m_FrameRenderTargets.PrevMotionRTV                 = UpdateBrim(m_PrevMotionTargetId, m_RenderPassState->GetRenderTargetFormat(HnFrameRenderTargets::GBUFFER_TARGET_MOTION_VECTOR), "Motion vectors 1");
+    m_FrameRenderTargets.ClosestSelectedLocationRTV[0] = UpdateBrim(m_ClosestSelLocnTargetId[0], m_ClosestSelectedLocationFormat, "Closest selected location 0");
+    m_FrameRenderTargets.ClosestSelectedLocationRTV[1] = UpdateBrim(m_ClosestSelLocnTargetId[1], m_ClosestSelectedLocationFormat, "Closest selected location 1");
+    m_FrameRenderTargets.JitteredFinalColorRTV         = UpdateBrim(m_JitteredFinalColorTargetId, m_JitteredColorFormat, "Jittered final color");
+
+    (*TaskCtx)[HnRenderResourceTokens->frameRenderTargets] = pxr::VtValue{&m_FrameRenderTargets};
 }
 
 void HnBeginFrameTask::Prepare(pxr::HdTaskContext* TaskCtx,
@@ -265,21 +266,21 @@ void HnBeginFrameTask::Prepare(pxr::HdTaskContext* TaskCtx,
 
     if (FrameNumber > 1)
     {
-        std::swap(m_GBufferTargetIds[HnFramebufferTargets::GBUFFER_TARGET_MOTION_VECTOR], m_PrevMotionTargetId);
+        std::swap(m_GBufferTargetIds[HnFrameRenderTargets::GBUFFER_TARGET_MOTION_VECTOR], m_PrevMotionTargetId);
         std::swap(m_DepthBufferId[0], m_DepthBufferId[1]);
     }
 
     (*TaskCtx)[HnTokens->renderPassState]                = pxr::VtValue{m_RenderPassState};
     (*TaskCtx)[HnRenderResourceTokens->finalColorTarget] = pxr::VtValue{m_FinalColorTargetId};
 
-    (*TaskCtx)[HnRenderResourceTokens->offscreenColorTarget] = pxr::VtValue{m_GBufferTargetIds[HnFramebufferTargets::GBUFFER_TARGET_SCENE_COLOR]};
-    (*TaskCtx)[HnRenderResourceTokens->meshIdTarget]         = pxr::VtValue{m_GBufferTargetIds[HnFramebufferTargets::GBUFFER_TARGET_MESH_ID]};
-    (*TaskCtx)[HnRenderResourceTokens->normalTarget]         = pxr::VtValue{m_GBufferTargetIds[HnFramebufferTargets::GBUFFER_TARGET_NORMAL]};
-    (*TaskCtx)[HnRenderResourceTokens->motionVectorsTarget]  = pxr::VtValue{m_GBufferTargetIds[HnFramebufferTargets::GBUFFER_TARGET_MOTION_VECTOR]};
-    (*TaskCtx)[HnRenderResourceTokens->baseColorTarget]      = pxr::VtValue{m_GBufferTargetIds[HnFramebufferTargets::GBUFFER_TARGET_BASE_COLOR]};
-    (*TaskCtx)[HnRenderResourceTokens->materialDataTarget]   = pxr::VtValue{m_GBufferTargetIds[HnFramebufferTargets::GBUFFER_TARGET_MATERIAL]};
-    (*TaskCtx)[HnRenderResourceTokens->iblTarget]            = pxr::VtValue{m_GBufferTargetIds[HnFramebufferTargets::GBUFFER_TARGET_IBL]};
-    static_assert(HnFramebufferTargets::GBUFFER_TARGET_COUNT == 7, "Please initialize all GBuffer targets.");
+    (*TaskCtx)[HnRenderResourceTokens->offscreenColorTarget] = pxr::VtValue{m_GBufferTargetIds[HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR]};
+    (*TaskCtx)[HnRenderResourceTokens->meshIdTarget]         = pxr::VtValue{m_GBufferTargetIds[HnFrameRenderTargets::GBUFFER_TARGET_MESH_ID]};
+    (*TaskCtx)[HnRenderResourceTokens->normalTarget]         = pxr::VtValue{m_GBufferTargetIds[HnFrameRenderTargets::GBUFFER_TARGET_NORMAL]};
+    (*TaskCtx)[HnRenderResourceTokens->motionVectorsTarget]  = pxr::VtValue{m_GBufferTargetIds[HnFrameRenderTargets::GBUFFER_TARGET_MOTION_VECTOR]};
+    (*TaskCtx)[HnRenderResourceTokens->baseColorTarget]      = pxr::VtValue{m_GBufferTargetIds[HnFrameRenderTargets::GBUFFER_TARGET_BASE_COLOR]};
+    (*TaskCtx)[HnRenderResourceTokens->materialDataTarget]   = pxr::VtValue{m_GBufferTargetIds[HnFrameRenderTargets::GBUFFER_TARGET_MATERIAL]};
+    (*TaskCtx)[HnRenderResourceTokens->iblTarget]            = pxr::VtValue{m_GBufferTargetIds[HnFrameRenderTargets::GBUFFER_TARGET_IBL]};
+    static_assert(HnFrameRenderTargets::GBUFFER_TARGET_COUNT == 7, "Please initialize all GBuffer targets.");
 
     (*TaskCtx)[HnRenderResourceTokens->depthBuffer]                    = pxr::VtValue{m_DepthBufferId[0]};
     (*TaskCtx)[HnRenderResourceTokens->selectionDepthBuffer]           = pxr::VtValue{m_SelectionDepthBufferId};
@@ -439,13 +440,6 @@ void HnBeginFrameTask::Execute(pxr::HdTaskContext* TaskCtx)
         return;
     }
 
-    const HnFramebufferTargets& Targets = m_RenderPassState->GetFramebufferTargets();
-    if (!Targets)
-    {
-        UNEXPECTED("Framebuffer targets are not set");
-        return;
-    }
-
     HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
     IDeviceContext*   pCtx           = RenderDelegate->GetDeviceContext();
 
@@ -470,18 +464,18 @@ void HnBeginFrameTask::Execute(pxr::HdTaskContext* TaskCtx)
         UNEXPECTED("Frame attribs constant buffer is null");
     }
 
-    auto pRTVs = Targets.GBufferRTVs;
+    auto pRTVs = m_FrameRenderTargets.GBufferRTVs;
 
     // We first render selected objects using the selection depth buffer.
     // Selection depth buffer is copied to the main depth buffer by the HnCopySelectionDepthTask.
-    pCtx->SetRenderTargets(HnFramebufferTargets::GBUFFER_TARGET_COUNT, pRTVs.data(), Targets.SelectionDepthDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    for (Uint32 i = 0; i < HnFramebufferTargets::GBUFFER_TARGET_COUNT; ++i)
+    pCtx->SetRenderTargets(HnFrameRenderTargets::GBUFFER_TARGET_COUNT, pRTVs.data(), m_FrameRenderTargets.SelectionDepthDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    for (Uint32 i = 0; i < HnFrameRenderTargets::GBUFFER_TARGET_COUNT; ++i)
     {
         // We should clear alpha to zero to get correct alpha in the final image
-        const float4 ClearColor = (i == HnFramebufferTargets::GBUFFER_TARGET_SCENE_COLOR) ? float4{m_RenderPassState->GetClearColor(), 0} : float4{0};
+        const float4 ClearColor = (i == HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR) ? float4{m_RenderPassState->GetClearColor(), 0} : float4{0};
         pCtx->ClearRenderTarget(pRTVs[i], ClearColor.Data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     }
-    pCtx->ClearDepthStencil(Targets.SelectionDepthDSV, CLEAR_DEPTH_FLAG, m_RenderPassState->GetClearDepth(), 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    pCtx->ClearDepthStencil(m_FrameRenderTargets.SelectionDepthDSV, CLEAR_DEPTH_FLAG, m_RenderPassState->GetClearDepth(), 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     pCtx->SetStencilRef(m_RenderPassState->GetStencilRef());
 }
 

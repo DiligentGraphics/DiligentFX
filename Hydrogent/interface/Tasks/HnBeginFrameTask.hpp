@@ -33,6 +33,7 @@
 #include "HnTask.hpp"
 #include "../interface/HnRenderPassState.hpp"
 #include "../interface/HnTypes.hpp"
+#include "../interface/HnFrameRenderTargets.hpp"
 
 #include "../../../../DiligentCore/Common/interface/BasicMath.hpp"
 #include "../../../../DiligentCore/Common/interface/Timer.hpp"
@@ -51,7 +52,7 @@ struct HnBeginFrameTaskParams
 {
     struct RenderTargetFormats
     {
-        std::array<TEXTURE_FORMAT, HnFramebufferTargets::GBUFFER_TARGET_COUNT> GBuffer = {};
+        std::array<TEXTURE_FORMAT, HnFrameRenderTargets::GBUFFER_TARGET_COUNT> GBuffer = {};
 
         TEXTURE_FORMAT Depth                   = TEX_FORMAT_D32_FLOAT;
         TEXTURE_FORMAT ClosestSelectedLocation = TEX_FORMAT_RG16_UNORM;
@@ -193,11 +194,12 @@ private:
 
 private:
     std::shared_ptr<HnRenderPassState> m_RenderPassState;
+    HnFrameRenderTargets               m_FrameRenderTargets;
 
     pxr::SdfPath m_FinalColorTargetId;
     pxr::SdfPath m_JitteredFinalColorTargetId;
 
-    std::array<pxr::SdfPath, HnFramebufferTargets::GBUFFER_TARGET_COUNT> m_GBufferTargetIds;
+    std::array<pxr::SdfPath, HnFrameRenderTargets::GBUFFER_TARGET_COUNT> m_GBufferTargetIds;
 
     pxr::SdfPath m_PrevMotionTargetId;
     pxr::SdfPath m_SelectionDepthBufferId;

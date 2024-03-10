@@ -35,26 +35,6 @@ namespace Diligent
 namespace USD
 {
 
-const char* HnFramebufferTargets::GetTargetName(GBUFFER_TARGET Id)
-{
-    static_assert(HnFramebufferTargets::GBUFFER_TARGET_COUNT == 7, "Please handle all GBuffer target names.");
-    switch (Id)
-    {
-        // clang-format off
-        case HnFramebufferTargets::GBUFFER_TARGET_SCENE_COLOR:   return "Scene color";
-        case HnFramebufferTargets::GBUFFER_TARGET_MESH_ID:       return "Mesh ID";
-        case HnFramebufferTargets::GBUFFER_TARGET_MOTION_VECTOR: return "Motion vectors";
-        case HnFramebufferTargets::GBUFFER_TARGET_NORMAL:        return "Normal";
-        case HnFramebufferTargets::GBUFFER_TARGET_BASE_COLOR:    return "Base color";
-        case HnFramebufferTargets::GBUFFER_TARGET_MATERIAL:      return "Material";
-        case HnFramebufferTargets::GBUFFER_TARGET_IBL:           return "IBL";
-        // clang-format on
-        default:
-            UNEXPECTED("Unexpected GBuffer target");
-            return "Unknown";
-    };
-}
-
 pxr::HdRenderPassStateSharedPtr HnRenderPassState::Create()
 {
     return pxr::HdRenderPassStateSharedPtr{new HnRenderPassState()};

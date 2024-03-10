@@ -121,6 +121,7 @@ namespace USD
     (closestSelectedLocation0Target)     \
     (closestSelectedLocation1Target)     \
     (closestSelectedLocationFinalTarget) \
+    (frameRenderTargets)                 \
     (depthBuffer)                        \
     (depthBuffer0)                       \
     (depthBuffer1)                       \

@@ -30,6 +30,7 @@
 #include "HnShaderSourceFactory.hpp"
 #include "HnRenderDelegate.hpp"
 #include "HnRenderPassState.hpp"
+#include "HnFrameRenderTargets.hpp"
 #include "HnRenderParam.hpp"
 
 #include "DebugUtilities.hpp"
@@ -213,25 +214,25 @@ void HnPostProcessTask::PostProcessingTechnique::PreparePSO(TEXTURE_FORMAT RTVFo
 
 void HnPostProcessTask::PostProcessingTechnique::PrepareSRB(ITextureView* pClosestSelectedLocationSRV)
 {
-    const auto& FBTargets = PPTask.m_FBTargets;
+    const auto* FrameTargets = PPTask.m_FrameTargets;
 
-    for (Uint32 i = 0; i < HnFramebufferTargets::GBUFFER_TARGET_COUNT; ++i)
+    for (Uint32 i = 0; i < HnFrameRenderTargets::GBUFFER_TARGET_COUNT; ++i)
     {
-        if (FBTargets->GBufferSRVs[i] == nullptr)
+        if (FrameTargets->GBufferSRVs[i] == nullptr)
         {
             UNEXPECTED("G-buffer SRV ", i, " is null");
             return;
         }
     }
 
-    ITextureView* pDepthSRV = FBTargets->DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+    ITextureView* pDepthSRV = FrameTargets->DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
     if (pDepthSRV == nullptr)
     {
         UNEXPECTED("Depth SRV is null");
         return;
     }
 
-    ITextureView* pSelectionDepthSRV = FBTargets->SelectionDepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+    ITextureView* pSelectionDepthSRV = FrameTargets->SelectionDepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
     if (pSelectionDepthSRV == nullptr)
     {
         UNEXPECTED("Selection depth SRV is null");
@@ -250,11 +251,11 @@ void HnPostProcessTask::PostProcessingTechnique::PrepareSRB(ITextureView* pClose
     auto&  SRB        = Resources[ResIdx].SRB;
     auto&  ShaderVars = Resources[ResIdx].Vars;
 
-    ITextureView* pOffscreenColorSRV = FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_SCENE_COLOR];
-    ITextureView* pSpecularIblSRV    = FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_IBL];
-    ITextureView* pNormalSRV         = FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_NORMAL];
-    ITextureView* pMaterialSRV       = FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_MATERIAL];
-    ITextureView* pBaseColorSRV      = FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_BASE_COLOR];
+    ITextureView* pOffscreenColorSRV = FrameTargets->GBufferSRVs[HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR];
+    ITextureView* pSpecularIblSRV    = FrameTargets->GBufferSRVs[HnFrameRenderTargets::GBUFFER_TARGET_IBL];
+    ITextureView* pNormalSRV         = FrameTargets->GBufferSRVs[HnFrameRenderTargets::GBUFFER_TARGET_NORMAL];
+    ITextureView* pMaterialSRV       = FrameTargets->GBufferSRVs[HnFrameRenderTargets::GBUFFER_TARGET_MATERIAL];
+    ITextureView* pBaseColorSRV      = FrameTargets->GBufferSRVs[HnFrameRenderTargets::GBUFFER_TARGET_BASE_COLOR];
     if (SRB)
     {
         auto VarValueChanged = [](const ShaderResourceVariableX& Var, IDeviceObject* pValue) {
@@ -476,13 +477,13 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
         m_AttribsCBDirty = true;
     }
 
-    const HnFramebufferTargets& FBTargets = RPState->GetFramebufferTargets();
-    if (!FBTargets)
+    const HnFrameRenderTargets* FrameTargets = GetFrameRenderTargets(TaskCtx);
+    if (FrameTargets == nullptr)
     {
         UNEXPECTED("Framebuffer targets are null");
         return;
     }
-    m_FBTargets = &FBTargets;
+    m_FrameTargets = FrameTargets;
 
     HnRenderDelegate*  RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
     IRenderDevice*     pDevice        = RenderDelegate->GetDevice();
@@ -559,7 +560,7 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
     m_TAA->PrepareResources(pDevice, m_PostFXContext.get(), TAAFeatureFlag);
 
     m_PostProcessTech.PreparePRS();
-    m_PostProcessTech.PreparePSO((m_UseTAA ? m_FBTargets->JitteredFinalColorRTV : m_FinalColorRTV)->GetDesc().Format);
+    m_PostProcessTech.PreparePSO((m_UseTAA ? m_FrameTargets->JitteredFinalColorRTV : m_FinalColorRTV)->GetDesc().Format);
     m_PostProcessTech.PrepareSRB(ClosestSelectedLocationSRV);
 
     if (m_UseTAA)
@@ -606,7 +607,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         return;
     }
 
-    if (m_FBTargets == nullptr)
+    if (m_FrameTargets == nullptr)
     {
         UNEXPECTED("Framebuffer targets are null. This likely indicates that Prepare() has not been called.");
         return;
@@ -620,10 +621,10 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
     VERIFY_EXPR(pRenderParam != nullptr);
 
     {
-        std::array<StateTransitionDesc, HnFramebufferTargets::GBUFFER_TARGET_COUNT> Barriers{};
-        for (Uint32 i = 0; i < HnFramebufferTargets::GBUFFER_TARGET_COUNT; ++i)
+        std::array<StateTransitionDesc, HnFrameRenderTargets::GBUFFER_TARGET_COUNT> Barriers{};
+        for (Uint32 i = 0; i < HnFrameRenderTargets::GBUFFER_TARGET_COUNT; ++i)
         {
-            Barriers[i] = {m_FBTargets->GBufferSRVs[i]->GetTexture(), RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE};
+            Barriers[i] = {m_FrameTargets->GBufferSRVs[i]->GetTexture(), RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE};
         }
         pCtx->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         pCtx->TransitionResourceStates(static_cast<Uint32>(Barriers.size()), Barriers.data());
@@ -660,11 +661,11 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
 
         ScreenSpaceReflection::RenderAttributes SSRRenderAttribs{pDevice, pStateCache, pCtx};
         SSRRenderAttribs.pPostFXContext     = m_PostFXContext.get();
-        SSRRenderAttribs.pColorBufferSRV    = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_SCENE_COLOR];
-        SSRRenderAttribs.pDepthBufferSRV    = m_FBTargets->DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-        SSRRenderAttribs.pNormalBufferSRV   = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_NORMAL];
-        SSRRenderAttribs.pMaterialBufferSRV = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_MATERIAL];
-        SSRRenderAttribs.pMotionVectorsSRV  = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_MOTION_VECTOR];
+        SSRRenderAttribs.pColorBufferSRV    = m_FrameTargets->GBufferSRVs[HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR];
+        SSRRenderAttribs.pDepthBufferSRV    = m_FrameTargets->DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        SSRRenderAttribs.pNormalBufferSRV   = m_FrameTargets->GBufferSRVs[HnFrameRenderTargets::GBUFFER_TARGET_NORMAL];
+        SSRRenderAttribs.pMaterialBufferSRV = m_FrameTargets->GBufferSRVs[HnFrameRenderTargets::GBUFFER_TARGET_MATERIAL];
+        SSRRenderAttribs.pMotionVectorsSRV  = m_FrameTargets->GBufferSRVs[HnFrameRenderTargets::GBUFFER_TARGET_MOTION_VECTOR];
         SSRRenderAttribs.pSSRAttribs        = &SSRAttribs;
         m_SSR->Execute(SSRRenderAttribs);
     }
@@ -678,10 +679,10 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         SSAORenderAttribs.pDevice             = pDevice;
         SSAORenderAttribs.pDeviceContext      = pCtx;
         SSAORenderAttribs.pPostFXContext      = m_PostFXContext.get();
-        SSAORenderAttribs.pCurrDepthBufferSRV = m_FBTargets->DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-        SSAORenderAttribs.pPrevDepthBufferSRV = m_FBTargets->PrevDepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-        SSAORenderAttribs.pNormalBufferSRV    = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_NORMAL];
-        SSAORenderAttribs.pMotionVectorsSRV   = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_MOTION_VECTOR];
+        SSAORenderAttribs.pCurrDepthBufferSRV = m_FrameTargets->DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        SSAORenderAttribs.pPrevDepthBufferSRV = m_FrameTargets->PrevDepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        SSAORenderAttribs.pNormalBufferSRV    = m_FrameTargets->GBufferSRVs[HnFrameRenderTargets::GBUFFER_TARGET_NORMAL];
+        SSAORenderAttribs.pMotionVectorsSRV   = m_FrameTargets->GBufferSRVs[HnFrameRenderTargets::GBUFFER_TARGET_MOTION_VECTOR];
         SSAORenderAttribs.pSSAOAttribs        = &SSAOSettings;
         m_SSAO->Execute(SSAORenderAttribs);
     }
@@ -689,7 +690,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
     {
         ScopedDebugGroup DebugGroup{pCtx, "Post Processing"};
 
-        ITextureView* pRTVs[] = {m_UseTAA ? m_FBTargets->JitteredFinalColorRTV : m_FinalColorRTV};
+        ITextureView* pRTVs[] = {m_UseTAA ? m_FrameTargets->JitteredFinalColorRTV : m_FinalColorRTV};
         pCtx->SetRenderTargets(_countof(pRTVs), pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
         if (m_AttribsCBDirty)
@@ -746,10 +747,10 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
 
         TemporalAntiAliasing::RenderAttributes TAARenderAttribs{pDevice, pStateCache, pCtx};
         TAARenderAttribs.pPostFXContext      = m_PostFXContext.get();
-        TAARenderAttribs.pColorBufferSRV     = m_FBTargets->JitteredFinalColorRTV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-        TAARenderAttribs.pCurrDepthBufferSRV = m_FBTargets->DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-        TAARenderAttribs.pPrevDepthBufferSRV = m_FBTargets->PrevDepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-        TAARenderAttribs.pMotionVectorsSRV   = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_MOTION_VECTOR];
+        TAARenderAttribs.pColorBufferSRV     = m_FrameTargets->JitteredFinalColorRTV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        TAARenderAttribs.pCurrDepthBufferSRV = m_FrameTargets->DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        TAARenderAttribs.pPrevDepthBufferSRV = m_FrameTargets->PrevDepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        TAARenderAttribs.pMotionVectorsSRV   = m_FrameTargets->GBufferSRVs[HnFrameRenderTargets::GBUFFER_TARGET_MOTION_VECTOR];
         TAARenderAttribs.pTAAAttribs         = &TAASettings;
         m_TAA->Execute(TAARenderAttribs);
 
@@ -775,7 +776,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         Attribs.EndColor            = float4{0.5, 0.5, 0.5, 1.0};
         Attribs.ConvertOutputToSRGB = m_Params.ConvertOutputToSRGB;
 
-        Attribs.pVectorField = m_FBTargets->GBufferSRVs[HnFramebufferTargets::GBUFFER_TARGET_MOTION_VECTOR];
+        Attribs.pVectorField = m_FrameTargets->GBufferSRVs[HnFrameRenderTargets::GBUFFER_TARGET_MOTION_VECTOR];
         m_VectorFieldRenderer->Render(Attribs);
     }
 

@@ -27,6 +27,7 @@
 #include "Tasks/HnProcessSelectionTask.hpp"
 #include "HnRenderDelegate.hpp"
 #include "HnRenderPassState.hpp"
+#include "HnFrameRenderTargets.hpp"
 #include "HnTokens.hpp"
 #include "HnRenderParam.hpp"
 #include "HnShaderSourceFactory.hpp"
@@ -165,9 +166,8 @@ void HnProcessSelectionTask::PrepareTechniques(TEXTURE_FORMAT RTVFormat)
     }
 }
 
-void HnProcessSelectionTask::PrepareSRBs(const HnRenderPassState& RPState)
+void HnProcessSelectionTask::PrepareSRBs(const HnFrameRenderTargets& Targets)
 {
-    const HnFramebufferTargets& Targets = RPState.GetFramebufferTargets();
     if (Targets.ClosestSelectedLocationRTV[0] == nullptr || Targets.ClosestSelectedLocationRTV[1] == nullptr || Targets.SelectionDepthDSV == nullptr)
     {
         UNEXPECTED("Closest selected location render targets are not initialized");
@@ -254,27 +254,20 @@ void HnProcessSelectionTask::Prepare(pxr::HdTaskContext* TaskCtx,
         VERIFY(m_ConstantsCB, "Failed to create constants CB");
     }
 
-    if (std::shared_ptr<HnRenderPassState> RenderPassState = GetRenderPassState(TaskCtx))
+    if (const HnFrameRenderTargets* Targets = GetFrameRenderTargets(TaskCtx))
     {
-        if (const HnFramebufferTargets& Targets = RenderPassState->GetFramebufferTargets())
-        {
-            PrepareTechniques(Targets.ClosestSelectedLocationRTV[0]->GetDesc().Format);
-            PrepareSRBs(*RenderPassState);
+        PrepareTechniques(Targets->ClosestSelectedLocationRTV[0]->GetDesc().Format);
+        PrepareSRBs(*Targets);
 
-            const pxr::TfToken& FinalTarget = (m_NumJFIterations % 2 == 0) ?
-                HnRenderResourceTokens->closestSelectedLocation0Target :
-                HnRenderResourceTokens->closestSelectedLocation1Target;
+        const pxr::TfToken& FinalTarget = (m_NumJFIterations % 2 == 0) ?
+            HnRenderResourceTokens->closestSelectedLocation0Target :
+            HnRenderResourceTokens->closestSelectedLocation1Target;
 
-            (*TaskCtx)[HnRenderResourceTokens->closestSelectedLocationFinalTarget] = (*TaskCtx)[FinalTarget];
-        }
-        else
-        {
-            UNEXPECTED("Frame buffer targets are not initialized");
-        }
+        (*TaskCtx)[HnRenderResourceTokens->closestSelectedLocationFinalTarget] = (*TaskCtx)[FinalTarget];
     }
     else
     {
-        UNEXPECTED("Render pass state is not set in the task context");
+        UNEXPECTED("Frame render targets are not set in the task context");
     }
 
     if (HnRenderParam* pRenderParam = static_cast<HnRenderParam*>(RenderDelegate->GetRenderParam()))
@@ -302,10 +295,11 @@ void HnProcessSelectionTask::Execute(pxr::HdTaskContext* TaskCtx)
         UNEXPECTED("Render pass state is not set in the task context");
         return;
     }
-    const HnFramebufferTargets& Targets = RenderPassState->GetFramebufferTargets();
-    if (!Targets)
+
+    const HnFrameRenderTargets* Targets = GetFrameRenderTargets(TaskCtx);
+    if (Targets == nullptr)
     {
-        UNEXPECTED("Frame buffer targets are not initialized");
+        UNEXPECTED("Fraame render targets is not set in the task context");
         return;
     }
 
@@ -325,7 +319,7 @@ void HnProcessSelectionTask::Execute(pxr::HdTaskContext* TaskCtx)
         Constants->ClearDepth = RenderPassState->GetClearDepth();
     }
 
-    ITextureView* ClosestSelectedLocationRTVs[] = {Targets.ClosestSelectedLocationRTV[0], Targets.ClosestSelectedLocationRTV[1]};
+    ITextureView* ClosestSelectedLocationRTVs[] = {Targets->ClosestSelectedLocationRTV[0], Targets->ClosestSelectedLocationRTV[1]};
     pCtx->SetRenderTargets(1, ClosestSelectedLocationRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     pCtx->SetPipelineState(m_InitTech.PSO);
     pCtx->CommitShaderResources(m_InitTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);

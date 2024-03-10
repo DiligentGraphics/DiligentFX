@@ -26,7 +26,7 @@
 
 #include "Tasks/HnCopySelectionDepthTask.hpp"
 #include "HnRenderDelegate.hpp"
-#include "HnRenderPassState.hpp"
+#include "HnFrameRenderTargets.hpp"
 
 #include "DebugUtilities.hpp"
 #include "ScopedDebugGroup.hpp"
@@ -67,14 +67,14 @@ void HnCopySelectionDepthTask::Execute(pxr::HdTaskContext* TaskCtx)
         return;
     }
 
-    std::shared_ptr<HnRenderPassState> RenderPassState = GetRenderPassState(TaskCtx);
-    if (!RenderPassState)
+    const HnFrameRenderTargets* Targets = GetFrameRenderTargets(TaskCtx);
+    if (Targets == nullptr)
     {
-        UNEXPECTED("Render pass state is not set in the task context");
+        UNEXPECTED("Frame render targets are not set in the task context");
         return;
     }
-    const HnFramebufferTargets& Targets = RenderPassState->GetFramebufferTargets();
-    if (Targets.DepthDSV == nullptr || Targets.SelectionDepthDSV == nullptr)
+
+    if (Targets->DepthDSV == nullptr || Targets->SelectionDepthDSV == nullptr)
     {
         UNEXPECTED("Depth buffers are not set in the render pass state");
         return;
@@ -89,15 +89,15 @@ void HnCopySelectionDepthTask::Execute(pxr::HdTaskContext* TaskCtx)
     // and Diligent will emit a warning.
     pCtx->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
     CopyTextureAttribs CopyAttribs{
-        Targets.SelectionDepthDSV->GetTexture(),
+        Targets->SelectionDepthDSV->GetTexture(),
         RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
-        Targets.DepthDSV->GetTexture(),
+        Targets->DepthDSV->GetTexture(),
         RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
     };
     pCtx->CopyTexture(CopyAttribs);
 
-    auto pRTVs = Targets.GBufferRTVs;
-    pCtx->SetRenderTargets(HnFramebufferTargets::GBUFFER_TARGET_COUNT, pRTVs.data(), Targets.DepthDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    auto pRTVs = Targets->GBufferRTVs;
+    pCtx->SetRenderTargets(HnFrameRenderTargets::GBUFFER_TARGET_COUNT, pRTVs.data(), Targets->DepthDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 }
 
 } // namespace USD

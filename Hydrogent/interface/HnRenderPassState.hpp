@@ -47,57 +47,6 @@ namespace Diligent
 namespace USD
 {
 
-struct HnFramebufferTargets
-{
-    enum GBUFFER_TARGET : Uint32
-    {
-        GBUFFER_TARGET_SCENE_COLOR,
-        GBUFFER_TARGET_MESH_ID,
-        GBUFFER_TARGET_MOTION_VECTOR,
-        GBUFFER_TARGET_NORMAL,
-        GBUFFER_TARGET_BASE_COLOR,
-        GBUFFER_TARGET_MATERIAL,
-        GBUFFER_TARGET_IBL,
-        GBUFFER_TARGET_COUNT
-    };
-
-    ITextureView* FinalColorRTV = nullptr;
-
-    std::array<ITextureView*, GBUFFER_TARGET_COUNT> GBufferRTVs = {};
-    std::array<ITextureView*, GBUFFER_TARGET_COUNT> GBufferSRVs = {};
-
-    ITextureView* SelectionDepthDSV = nullptr;
-    ITextureView* DepthDSV          = nullptr;
-    ITextureView* PrevDepthDSV      = nullptr;
-    ITextureView* PrevMotionRTV     = nullptr;
-
-    std::array<ITextureView*, 2> ClosestSelectedLocationRTV = {};
-
-    ITextureView* JitteredFinalColorRTV = nullptr;
-
-    explicit operator bool() const
-    {
-        for (ITextureView* RTV : GBufferRTVs)
-        {
-            if (RTV == nullptr)
-                return false;
-        }
-
-        // clang-format off
-        return FinalColorRTV                 != nullptr &&
-               SelectionDepthDSV             != nullptr &&
-               DepthDSV                      != nullptr &&
-               PrevDepthDSV                  != nullptr &&
-               ClosestSelectedLocationRTV[0] != nullptr &&
-               ClosestSelectedLocationRTV[1] != nullptr &&
-               JitteredFinalColorRTV         != nullptr &&
-               PrevMotionRTV                 != nullptr;
-        // clang-format on
-    }
-
-    static const char* GetTargetName(GBUFFER_TARGET Id);
-};
-
 /// Hydra render pass state implementation in Hydrogent.
 class HnRenderPassState final : public pxr::HdRenderPassState
 {
@@ -148,15 +97,6 @@ public:
     BlendStateDesc        GetBlendState() const;
     GraphicsPipelineDesc  GetGraphicsPipelineDesc() const;
 
-    void SetFramebufferTargets(const HnFramebufferTargets& Targets)
-    {
-        m_FramebufferTargets = Targets;
-    }
-    const HnFramebufferTargets& GetFramebufferTargets() const
-    {
-        return m_FramebufferTargets;
-    }
-
     void SetClearColor(const float3& ClearColor)
     {
         m_ClearColor = ClearColor;
@@ -181,8 +121,6 @@ private:
     TEXTURE_FORMAT                                 m_DepthFormat      = TEX_FORMAT_UNKNOWN;
 
     bool m_FrontFaceCCW = false;
-
-    HnFramebufferTargets m_FramebufferTargets;
 
     float3 m_ClearColor = {0, 0, 0};
     float  m_ClearDepth = 1.f;

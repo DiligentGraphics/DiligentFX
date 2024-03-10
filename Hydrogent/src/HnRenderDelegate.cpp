@@ -31,7 +31,7 @@
 #include "HnLight.hpp"
 #include "HnRenderPass.hpp"
 #include "HnRenderParam.hpp"
-#include "HnRenderPassState.hpp"
+#include "HnFrameRenderTargets.hpp"
 #include "DebugUtilities.hpp"
 #include "GraphicsUtilities.h"
 #include "HnRenderBuffer.hpp"
@@ -129,14 +129,14 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
 
     USDRendererCI.MaxLightCount = RenderDelegateCI.MaxLightCount;
 
-    USDRendererCI.ColorTargetIndex        = HnFramebufferTargets::GBUFFER_TARGET_SCENE_COLOR;
-    USDRendererCI.MeshIdTargetIndex       = HnFramebufferTargets::GBUFFER_TARGET_MESH_ID;
-    USDRendererCI.MotionVectorTargetIndex = HnFramebufferTargets::GBUFFER_TARGET_MOTION_VECTOR;
-    USDRendererCI.NormalTargetIndex       = HnFramebufferTargets::GBUFFER_TARGET_NORMAL;
-    USDRendererCI.BaseColorTargetIndex    = HnFramebufferTargets::GBUFFER_TARGET_BASE_COLOR;
-    USDRendererCI.MaterialDataTargetIndex = HnFramebufferTargets::GBUFFER_TARGET_MATERIAL;
-    USDRendererCI.IBLTargetIndex          = HnFramebufferTargets::GBUFFER_TARGET_IBL;
-    static_assert(HnFramebufferTargets::GBUFFER_TARGET_COUNT == 7, "Unexpected number of G-buffer targets");
+    USDRendererCI.ColorTargetIndex        = HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR;
+    USDRendererCI.MeshIdTargetIndex       = HnFrameRenderTargets::GBUFFER_TARGET_MESH_ID;
+    USDRendererCI.MotionVectorTargetIndex = HnFrameRenderTargets::GBUFFER_TARGET_MOTION_VECTOR;
+    USDRendererCI.NormalTargetIndex       = HnFrameRenderTargets::GBUFFER_TARGET_NORMAL;
+    USDRendererCI.BaseColorTargetIndex    = HnFrameRenderTargets::GBUFFER_TARGET_BASE_COLOR;
+    USDRendererCI.MaterialDataTargetIndex = HnFrameRenderTargets::GBUFFER_TARGET_MATERIAL;
+    USDRendererCI.IBLTargetIndex          = HnFrameRenderTargets::GBUFFER_TARGET_IBL;
+    static_assert(HnFrameRenderTargets::GBUFFER_TARGET_COUNT == 7, "Unexpected number of G-buffer targets");
 
     HN_MATERIAL_TEXTURES_BINDING_MODE TextureBindingMode = RenderDelegateCI.TextureBindingMode;
     Uint32                            TexturesArraySize  = RenderDelegateCI.TexturesArraySize;

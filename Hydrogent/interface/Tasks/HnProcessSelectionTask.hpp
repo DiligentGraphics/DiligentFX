@@ -42,6 +42,8 @@ namespace Diligent
 namespace USD
 {
 
+struct HnFrameRenderTargets;
+
 struct HnProcessSelectionTaskParams
 {
     float MaximumDistance = 4.0f;
@@ -73,7 +75,7 @@ public:
 
 private:
     void PrepareTechniques(TEXTURE_FORMAT RTVFormat);
-    void PrepareSRBs(const HnRenderPassState& RPState);
+    void PrepareSRBs(const HnFrameRenderTargets& FrameTargets);
 
 private:
     Uint32 m_NumJFIterations = 3;
