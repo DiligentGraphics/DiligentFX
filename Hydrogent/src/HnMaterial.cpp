@@ -34,6 +34,8 @@
 #include "HnTypeConversions.hpp"
 #include "HnRenderPass.hpp"
 #include "HnRenderParam.hpp"
+#include "HnShadowMapManager.hpp"
+
 #include "GfTypeConversions.hpp"
 #include "DynamicTextureAtlas.h"
 #include "GLTFResourceManager.hpp"
@@ -619,7 +621,10 @@ void HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
 
     HN_MATERIAL_TEXTURES_BINDING_MODE BindingMode = static_cast<const HnRenderParam*>(RendererDelegate.GetRenderParam())->GetTextureBindingMode();
 
-    const Uint32 AtlasVersion = RendererDelegate.GetTextureRegistry().GetAtlasVersion();
+    const Uint32 AtlasVersion =
+        RendererDelegate.GetTextureRegistry().GetAtlasVersion() +
+        RendererDelegate.GetShadowMapManager().GetAtlasVersion();
+
     if (BindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_ATLAS && AtlasVersion != m_AtlasVersion)
     {
         m_SRB.Release();

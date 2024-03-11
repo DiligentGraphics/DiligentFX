@@ -50,18 +50,16 @@ void HnRenderPassState::Commit(IDeviceContext* pContext)
         return;
 
     //VERIFY(!_depthMaskEnabled, "Depth mask is not supported");
-    VERIFY(_camera == nullptr, "Camera is not used");
     VERIFY(!_framing.IsValid(), "Framing is not used");
     VERIFY(!_overrideWindowPolicy.first, "Window policy is not used");
-    //VERIFY(_pointSize == 0, "Point size is not supported");
-    //VERIFY(!_lightingEnabled, "Lighting is ignored");
-    //VERIFY(!_clippingEnabled, "Clipping is not supported");
-    //VERIFY(_lineWidth == 0, "Line width is not supported");
-    //VERIFY(_tessLevel == 0, "Tessellation level is ignored");
-    //VERIFY(_alphaThreshold == 0, "Alpha threshold is not supported");
-    //VERIFY(_stepSize == 0, "Step size is not supported");
-    //VERIFY(_stepSizeLighting == 0, "Step size lighting is not supported");
-
+    //float   _pointSize;
+    //bool    _lightingEnabled;
+    //bool    _clippingEnabled;
+    //float   _lineWidth;
+    //float   _tessLevel;
+    //float   _alphaThreshold;
+    //float   _stepSize;
+    //float   _stepSizeLighting;
     //GfVec4f _overrideColor;
     //GfVec4f _maskColor;
     //GfVec4f _indicatorColor;

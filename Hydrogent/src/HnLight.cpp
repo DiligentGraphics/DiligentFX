@@ -26,6 +26,8 @@
 
 #include "HnLight.hpp"
 #include "HnRenderParam.hpp"
+#include "HnRenderDelegate.hpp"
+#include "HnShadowMapManager.hpp"
 
 #include <array>
 
@@ -425,12 +427,39 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
 
     if (*DirtyBits & DirtyShadowParams)
     {
-        bool CastShadows = SceneDelegate->GetLightParamValue(Id, pxr::HdLightTokens->shadowEnable).GetWithDefault<bool>(false);
-        if (CastShadows != m_CastShadows)
+        const bool ShadowsEnabled = SceneDelegate->GetLightParamValue(Id, pxr::HdLightTokens->shadowEnable).GetWithDefault<bool>(false);
+        if (ShadowsEnabled)
         {
-            m_CastShadows = CastShadows;
-            LightDirty    = true;
+            if (m_ShadowMapSuballocation &&
+                (m_ShadowMapSuballocation->GetSize().x != m_ShadowMapResolution ||
+                 m_ShadowMapSuballocation->GetSize().y != m_ShadowMapResolution))
+            {
+                m_ShadowMapSuballocation.Release();
+            }
         }
+        else
+        {
+            if (m_ShadowMapSuballocation)
+            {
+                m_ShadowMapSuballocation.Release();
+                LightDirty = true;
+            }
+        }
+
+        if (ShadowsEnabled && !m_ShadowMapSuballocation)
+        {
+            pxr::HdRenderIndex& RenderIndex    = SceneDelegate->GetRenderIndex();
+            HnRenderDelegate&   RenderDelegate = static_cast<HnRenderDelegate&>(*RenderIndex.GetRenderDelegate());
+            HnShadowMapManager& ShadowMapMg    = RenderDelegate.GetShadowMapManager();
+
+            m_ShadowMapSuballocation = ShadowMapMg.Allocate(m_ShadowMapResolution, m_ShadowMapResolution);
+            if (!m_ShadowMapSuballocation)
+            {
+                LOG_ERROR_MESSAGE("Failed to allocate shadow map for light ", Id);
+            }
+            LightDirty = true;
+        }
+
         *DirtyBits &= ~DirtyShadowParams;
     }
 

@@ -59,6 +59,7 @@ class HnMaterial;
 class HnMesh;
 class HnLight;
 class HnRenderParam;
+class HnShadowMapManager;
 
 /// Memory usage statistics of the render delegate.
 struct HnRenderDelegateMemoryStats
@@ -290,7 +291,8 @@ public:
     // memory.
     virtual void CommitResources(pxr::HdChangeTracker* Tracker) override final;
 
-    HnTextureRegistry& GetTextureRegistry() { return m_TextureRegistry; }
+    HnTextureRegistry&  GetTextureRegistry() { return m_TextureRegistry; }
+    HnShadowMapManager& GetShadowMapManager() { return *m_ShadowMapManager; }
 
     FixedBlockMemoryAllocator& GetMeshAttribsAllocator() { return m_MeshAttribsAllocator; }
 
@@ -331,8 +333,9 @@ private:
     std::shared_ptr<USD_Renderer>        m_USDRenderer;
     RefCntAutoPtr<IBuffer>               m_FrameAttribsCB;
 
-    HnTextureRegistry              m_TextureRegistry;
-    std::unique_ptr<HnRenderParam> m_RenderParam;
+    HnTextureRegistry                   m_TextureRegistry;
+    std::unique_ptr<HnRenderParam>      m_RenderParam;
+    std::unique_ptr<HnShadowMapManager> m_ShadowMapManager;
 
     FixedBlockMemoryAllocator m_MeshAttribsAllocator;
 

@@ -275,6 +275,10 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
     RP_OpaqueUnselected_TransparentAll.Begin(HnFrameRenderTargets::GBUFFER_TARGET_COUNT, m_FrameRenderTargets.GBufferRTVs.data(), m_FrameRenderTargets.DepthDSV);
     RP_TransparentSelected.Begin(0, nullptr, m_FrameRenderTargets.SelectionDepthDSV);
 
+    RP_OpaqueSelected.SetCamera(m_pCamera);
+    RP_OpaqueUnselected_TransparentAll.SetCamera(m_pCamera);
+    RP_TransparentSelected.SetCamera(m_pCamera);
+
     // Register render pass states in the task context
     for (auto& it : m_RenderPassStates)
     {
@@ -327,15 +331,6 @@ void HnBeginFrameTask::Prepare(pxr::HdTaskContext* TaskCtx,
     (*TaskCtx)[HnRenderResourceTokens->jitteredFinalColorTarget]       = pxr::VtValue{m_JitteredFinalColorTargetId};
     (*TaskCtx)[HnRenderResourceTokens->backgroundDepth]                = pxr::VtValue{m_Params.ClearDepth};
 
-    if (ITextureView* pFinalColorRTV = GetRenderBufferTarget(*RenderIndex, m_Params.FinalColorTargetId))
-    {
-        PrepareRenderTargets(RenderIndex, TaskCtx, pFinalColorRTV);
-    }
-    else
-    {
-        UNEXPECTED("Unable to get final color target from Bprim ", m_Params.FinalColorTargetId);
-    }
-
     bool ResetTAA = false;
     if (!m_Params.CameraId.IsEmpty())
     {
@@ -351,6 +346,15 @@ void HnBeginFrameTask::Prepare(pxr::HdTaskContext* TaskCtx,
     }
 
     (*TaskCtx)[HnRenderResourceTokens->taaReset] = pxr::VtValue{ResetTAA};
+
+    if (ITextureView* pFinalColorRTV = GetRenderBufferTarget(*RenderIndex, m_Params.FinalColorTargetId))
+    {
+        PrepareRenderTargets(RenderIndex, TaskCtx, pFinalColorRTV);
+    }
+    else
+    {
+        UNEXPECTED("Unable to get final color target from Bprim ", m_Params.FinalColorTargetId);
+    }
 }
 
 void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,

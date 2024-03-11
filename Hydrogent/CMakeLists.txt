@@ -21,6 +21,7 @@ set(SOURCE
     src/HnRenderDelegate.cpp
     src/HnRenderPass.cpp
     src/HnShaderSourceFactory.cpp
+    src/HnShadowMapManager.cpp
     src/HnRenderPassState.cpp
     src/HnFrameRenderTargets.cpp
     src/HnRenderParam.cpp
@@ -44,6 +45,7 @@ set(INCLUDE
     include/HnDrawItem.hpp
     include/HnRenderParam.hpp
     include/HnShaderSourceFactory.hpp
+    include/HnShadowMapManager.hpp
     include/HnTypeConversions.hpp
     include/HnTextureUtils.hpp
     include/HnTextureIdentifier.hpp

@@ -34,6 +34,8 @@
 namespace Diligent
 {
 
+struct ITextureAtlasSuballocation;
+
 namespace USD
 {
 
@@ -58,7 +60,9 @@ public:
     const float3&      GetDirection() const { return m_Direction; }
     const GLTF::Light& GetParams() const { return m_Params; }
     bool               IsVisible() const { return m_IsVisible; }
-    bool               CastShadows() const { return m_CastShadows; }
+    bool               ShadowsEnabled() const { return m_ShadowMapSuballocation != nullptr; }
+
+    ITextureAtlasSuballocation* GetShadowMapSuballocation() const { return m_ShadowMapSuballocation; }
 
 private:
     HnLight(const pxr::SdfPath& Id, const pxr::TfToken& TypeId);
@@ -71,8 +75,10 @@ private:
     float3      m_Position;
     float3      m_Direction;
     GLTF::Light m_Params;
-    bool        m_IsVisible   = true;
-    bool        m_CastShadows = false;
+    bool        m_IsVisible = true;
+
+    Uint32                                    m_ShadowMapResolution = 1024;
+    RefCntAutoPtr<ITextureAtlasSuballocation> m_ShadowMapSuballocation;
 };
 
 } // namespace USD

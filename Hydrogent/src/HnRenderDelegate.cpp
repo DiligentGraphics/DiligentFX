@@ -32,6 +32,8 @@
 #include "HnRenderPass.hpp"
 #include "HnRenderParam.hpp"
 #include "HnFrameRenderTargets.hpp"
+#include "HnShadowMapManager.hpp"
+
 #include "DebugUtilities.hpp"
 #include "GraphicsUtilities.h"
 #include "HnRenderBuffer.hpp"
@@ -270,6 +272,7 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
     m_FrameAttribsCB{CreateFrameAttribsCB(CI.pDevice, m_USDRenderer->GetPRBFrameAttribsSize())},
     m_TextureRegistry{CI.pDevice, CI.TextureAtlasDim != 0 ? m_ResourceMgr : RefCntAutoPtr<GLTF::ResourceManager>{}},
     m_RenderParam{std::make_unique<HnRenderParam>(CI.UseVertexPool, CI.UseIndexPool, CI.TextureBindingMode, CI.MetersPerUnit)},
+    m_ShadowMapManager{std::make_unique<HnShadowMapManager>(HnShadowMapManager::CreateInfo{})},
     m_MeshAttribsAllocator{GetRawAllocator(), sizeof(HnMesh::Attributes), 64}
 {
 }
@@ -470,6 +473,7 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
     m_ResourceMgr->UpdateIndexBuffer(m_pDevice, m_pContext);
 
     m_TextureRegistry.Commit(m_pContext);
+    m_ShadowMapManager->Commit(m_pDevice, m_pContext);
 
     {
         const auto MaterialVersion = m_RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::Material);
