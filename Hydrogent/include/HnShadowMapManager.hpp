@@ -56,6 +56,8 @@ public:
 
     Uint32 GetAtlasVersion() const;
 
+    const TextureDesc& GetAtlasDesc() const;
+
 private:
     RefCntAutoPtr<IDynamicTextureAtlas> m_ShadowMapAtlas;
 };

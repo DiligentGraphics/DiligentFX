@@ -67,6 +67,11 @@ void HnShadowMapManager::Commit(IRenderDevice* pDevice, IDeviceContext* pCtx)
     m_ShadowMapAtlas->Update(pDevice, pCtx);
 }
 
+const TextureDesc& HnShadowMapManager::GetAtlasDesc() const
+{
+    return m_ShadowMapAtlas->GetAtlasDesc();
+}
+
 Uint32 HnShadowMapManager::GetAtlasVersion() const
 {
     return m_ShadowMapAtlas->GetVersion();

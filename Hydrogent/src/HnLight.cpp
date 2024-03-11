@@ -28,6 +28,7 @@
 #include "HnRenderParam.hpp"
 #include "HnRenderDelegate.hpp"
 #include "HnShadowMapManager.hpp"
+#include "HnTokens.hpp"
 
 #include <array>
 
@@ -40,6 +41,13 @@ namespace Diligent
 
 namespace USD
 {
+
+// clang-format off
+TF_DEFINE_PRIVATE_TOKENS(
+    HnLightPrivateTokens,
+    ((shadowResolution, "inputs:shadow:resolution"))
+);
+// clang-format on
 
 HnLight* HnLight::Create(const pxr::SdfPath& Id, const pxr::TfToken& TypeId)
 {
@@ -427,12 +435,30 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
 
     if (*DirtyBits & DirtyShadowParams)
     {
+        pxr::HdRenderIndex& RenderIndex    = SceneDelegate->GetRenderIndex();
+        HnRenderDelegate*   RenderDelegate = static_cast<HnRenderDelegate*>(RenderIndex.GetRenderDelegate());
+        HnShadowMapManager& ShadowMapMg    = RenderDelegate->GetShadowMapManager();
+        const TextureDesc&  ShadowMapDesc  = ShadowMapMg.GetAtlasDesc();
+
+        const pxr::VtValue ShadowResolutionVal = SceneDelegate->GetLightParamValue(Id, HnLightPrivateTokens->shadowResolution);
+        if (ShadowResolutionVal.IsHolding<int>())
+        {
+            m_ShadowMapResolution = static_cast<Uint32>(ShadowResolutionVal.Get<int>());
+        }
+
+        if (m_ShadowMapResolution > ShadowMapDesc.Width ||
+            m_ShadowMapResolution > ShadowMapDesc.Height)
+        {
+            LOG_WARNING_MESSAGE("Requested shadow map resolution ", m_ShadowMapResolution, "x", m_ShadowMapResolution,
+                                "  for light ", Id, " is too large for the shadow map atlas ", ShadowMapDesc.Width, "x", ShadowMapDesc.Height);
+            m_ShadowMapResolution = std::min(ShadowMapDesc.Width, ShadowMapDesc.Height);
+        }
+
         const bool ShadowsEnabled = SceneDelegate->GetLightParamValue(Id, pxr::HdLightTokens->shadowEnable).GetWithDefault<bool>(false);
         if (ShadowsEnabled)
         {
             if (m_ShadowMapSuballocation &&
-                (m_ShadowMapSuballocation->GetSize().x != m_ShadowMapResolution ||
-                 m_ShadowMapSuballocation->GetSize().y != m_ShadowMapResolution))
+                m_ShadowMapSuballocation->GetSize() != uint2{m_ShadowMapResolution, m_ShadowMapResolution})
             {
                 m_ShadowMapSuballocation.Release();
             }
@@ -448,10 +474,6 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
 
         if (ShadowsEnabled && !m_ShadowMapSuballocation)
         {
-            pxr::HdRenderIndex& RenderIndex    = SceneDelegate->GetRenderIndex();
-            HnRenderDelegate&   RenderDelegate = static_cast<HnRenderDelegate&>(*RenderIndex.GetRenderDelegate());
-            HnShadowMapManager& ShadowMapMg    = RenderDelegate.GetShadowMapManager();
-
             m_ShadowMapSuballocation = ShadowMapMg.Allocate(m_ShadowMapResolution, m_ShadowMapResolution);
             if (!m_ShadowMapSuballocation)
             {
