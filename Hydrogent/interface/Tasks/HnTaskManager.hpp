@@ -224,8 +224,8 @@ private:
 
     void CreateBeginFrameTask();
     void CreateRenderRprimsTask(const pxr::TfToken& MaterialTag, TaskUID UID, const HnRenderPassParams& RenderPassParams);
-    void CreateRenderEnvMapTask(const pxr::TfToken& RenderPassId);
-    void CreateRenderAxesTask(const pxr::TfToken& RenderPassId);
+    void CreateRenderEnvMapTask(const pxr::TfToken& RenderPassName);
+    void CreateRenderAxesTask(const pxr::TfToken& RenderPassName);
     void CreateReadRprimIdTask();
     void CreateCopySelectionDepthTask();
     void CreateProcessSelectionTask();

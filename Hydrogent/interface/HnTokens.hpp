@@ -73,7 +73,7 @@ namespace USD
     (clearcoat)                \
     (clearcoatRoughness)       \
     (renderPassParams) 	       \
-	(renderPassId)
+	(renderPassName)
 
 #define HN_MATERIAL_TAG_TOKENS \
     (defaultTag)               \

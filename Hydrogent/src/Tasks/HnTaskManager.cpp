@@ -341,20 +341,20 @@ void HnTaskManager::CreateProcessSelectionTask()
     CreateTask<HnProcessSelectionTask>(HnTaskManagerTokens->processSelectionTask, TaskUID_ProcessSelection, TaskParams);
 }
 
-void HnTaskManager::CreateRenderEnvMapTask(const pxr::TfToken& RenderPassId)
+void HnTaskManager::CreateRenderEnvMapTask(const pxr::TfToken& RenderPassName)
 {
     HnRenderEnvMapTaskParams TaskParams;
     CreateTask<HnRenderEnvMapTask>(HnTaskManagerTokens->renderEnvMapTask, TaskUID_RenderEnvMap, TaskParams);
 
-    SetParameter(HnTaskManagerTokens->renderEnvMapTask, HnTokens->renderPassId, RenderPassId);
+    SetParameter(HnTaskManagerTokens->renderEnvMapTask, HnTokens->renderPassName, RenderPassName);
 }
 
-void HnTaskManager::CreateRenderAxesTask(const pxr::TfToken& RenderPassId)
+void HnTaskManager::CreateRenderAxesTask(const pxr::TfToken& RenderPassName)
 {
     HnRenderAxesTaskParams TaskParams;
     CreateTask<HnRenderAxesTask>(HnTaskManagerTokens->renderAxesTask, TaskUID_RenderAxes, TaskParams);
 
-    SetParameter(HnTaskManagerTokens->renderAxesTask, HnTokens->renderPassId, RenderPassId);
+    SetParameter(HnTaskManagerTokens->renderAxesTask, HnTokens->renderPassName, RenderPassName);
 }
 
 void HnTaskManager::CreateReadRprimIdTask()

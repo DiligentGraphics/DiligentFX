@@ -55,7 +55,8 @@ struct HnMeshRenderParams
 
 struct HnRenderPassParams
 {
-    pxr::TfToken RenderPassId;
+    // Render pass name used to get the render pass state.
+    pxr::TfToken Name;
 
     enum class SelectionType
     {
@@ -88,9 +89,9 @@ public:
     void SetParams(const HnRenderPassParams& Params);
     void SetMeshRenderParams(const HnMeshRenderParams& Params);
 
-    const pxr::TfToken& GetId() const
+    const pxr::TfToken& GetName() const
     {
-        return m_Params.RenderPassId;
+        return m_Params.Name;
     }
 
     using SupportedVertexInputsSetType = std::unordered_set<pxr::TfToken, pxr::TfToken::HashFunctor>;

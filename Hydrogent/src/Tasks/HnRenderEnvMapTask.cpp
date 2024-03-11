@@ -61,7 +61,7 @@ void HnRenderEnvMapTask::Sync(pxr::HdSceneDelegate* Delegate,
         {
         }
 
-        if (!GetTaskParameter(Delegate, HnTokens->renderPassId, m_RenderPassId))
+        if (!GetTaskParameter(Delegate, HnTokens->renderPassName, m_RenderPassName))
         {
             UNEXPECTED("Render pass ID is not set");
         }
@@ -113,7 +113,7 @@ void HnRenderEnvMapTask::Prepare(pxr::HdTaskContext* TaskCtx,
 
     if (!m_EnvMapRenderer)
     {
-        if (HnRenderPassState* RenderPassState = GetRenderPassState(TaskCtx, m_RenderPassId))
+        if (HnRenderPassState* RenderPassState = GetRenderPassState(TaskCtx, m_RenderPassName))
         {
             HnRenderDelegate* pRenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
 
@@ -154,7 +154,7 @@ void HnRenderEnvMapTask::Execute(pxr::HdTaskContext* TaskCtx)
 
     HnRenderDelegate* pRenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
 
-    if (HnRenderPassState* RenderPassState = GetRenderPassState(TaskCtx, m_RenderPassId))
+    if (HnRenderPassState* RenderPassState = GetRenderPassState(TaskCtx, m_RenderPassName))
     {
         RenderPassState->Commit(pRenderDelegate->GetDeviceContext());
     }

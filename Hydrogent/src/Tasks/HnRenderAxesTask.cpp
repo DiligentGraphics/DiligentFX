@@ -139,7 +139,7 @@ void HnRenderAxesTask::Sync(pxr::HdSceneDelegate* Delegate,
             m_ParamsAreDirty = true;
         }
 
-        if (!GetTaskParameter(Delegate, HnTokens->renderPassId, m_RenderPassId))
+        if (!GetTaskParameter(Delegate, HnTokens->renderPassName, m_RenderPassName))
         {
             UNEXPECTED("Render pass ID is not set");
         }
@@ -179,7 +179,7 @@ void HnRenderAxesTask::Prepare(pxr::HdTaskContext* TaskCtx,
         m_ParamsAreDirty = false;
     }
 
-    if (HnRenderPassState* RenderPassState = GetRenderPassState(TaskCtx, m_RenderPassId))
+    if (HnRenderPassState* RenderPassState = GetRenderPassState(TaskCtx, m_RenderPassName))
     {
         PreparePSO(*RenderPassState);
     }
@@ -208,7 +208,7 @@ void HnRenderAxesTask::Execute(pxr::HdTaskContext* TaskCtx)
 
     ScopedDebugGroup DebugGroup{pCtx, "Render Axes"};
 
-    if (HnRenderPassState* RenderPassState = GetRenderPassState(TaskCtx, m_RenderPassId))
+    if (HnRenderPassState* RenderPassState = GetRenderPassState(TaskCtx, m_RenderPassName))
     {
         RenderPassState->Commit(pCtx);
     }

@@ -46,11 +46,11 @@ HnFrameRenderTargets* HnTask::GetFrameRenderTargets(pxr::HdTaskContext* TaskCtx)
     return RenderTargets;
 }
 
-HnRenderPassState* HnTask::GetRenderPassState(pxr::HdTaskContext* TaskCtx, const pxr::TfToken& Id) const
+HnRenderPassState* HnTask::GetRenderPassState(pxr::HdTaskContext* TaskCtx, const pxr::TfToken& Name) const
 {
-    VERIFY(!Id.IsEmpty(), "Render pass state Id must not be empty");
+    VERIFY(!Name.IsEmpty(), "Render pass name must not be empty");
     HnRenderPassState* RenderPassState = nullptr;
-    _GetTaskContextData(TaskCtx, Id, &RenderPassState);
+    _GetTaskContextData(TaskCtx, Name, &RenderPassState);
     return RenderPassState;
 }
 

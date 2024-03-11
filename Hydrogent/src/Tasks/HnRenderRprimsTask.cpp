@@ -136,10 +136,10 @@ void HnRenderRprimsTask::Execute(pxr::HdTaskContext* TaskCtx)
 {
     if (m_RenderPass)
     {
-        const pxr::TfToken& RenderPassId = m_RenderPass->GetId();
+        const pxr::TfToken& RenderPassName = m_RenderPass->GetName();
 
         // Render pass state is initialized by HnBeginFrameTask.
-        if (HnRenderPassState* RenderPassState = GetRenderPassState(TaskCtx, RenderPassId))
+        if (HnRenderPassState* RenderPassState = GetRenderPassState(TaskCtx, RenderPassName))
         {
             m_RenderPass->Execute(*RenderPassState, GetRenderTags());
         }
