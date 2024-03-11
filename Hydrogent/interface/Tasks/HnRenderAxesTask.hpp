@@ -94,6 +94,7 @@ private:
 private:
     pxr::HdRenderIndex* m_RenderIndex = nullptr;
 
+    pxr::TfToken           m_RenderPassId;
     HnRenderAxesTaskParams m_Params;
 
     bool m_ParamsAreDirty = true;

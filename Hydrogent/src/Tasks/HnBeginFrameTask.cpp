@@ -502,6 +502,9 @@ void HnBeginFrameTask::Execute(pxr::HdTaskContext* TaskCtx)
     {
         UNEXPECTED("Frame attribs constant buffer is null");
     }
+
+    // Commit render pass now to make sure that all render targets are cleared
+    m_RenderPassStates[HnRenderResourceTokens->renderPass_OpaqueSelected].Commit(pCtx);
 }
 
 } // namespace USD

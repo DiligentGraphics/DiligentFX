@@ -29,10 +29,8 @@
 #include "HnRenderPassState.hpp"
 #include "HnRenderPass.hpp"
 #include "HnTokens.hpp"
-#include "HnRenderDelegate.hpp"
 
 #include "pxr/imaging/hd/renderDelegate.h"
-#include "pxr/imaging/hd/renderIndex.h"
 
 #include "DebugUtilities.hpp"
 
@@ -143,9 +141,6 @@ void HnRenderRprimsTask::Execute(pxr::HdTaskContext* TaskCtx)
         // Render pass state is initialized by HnBeginFrameTask.
         if (HnRenderPassState* RenderPassState = GetRenderPassState(TaskCtx, RenderPassId))
         {
-            IDeviceContext* pCtx = static_cast<HnRenderDelegate*>(m_RenderPass->GetRenderIndex()->GetRenderDelegate())->GetDeviceContext();
-            RenderPassState->Commit(pCtx);
-
             m_RenderPass->Execute(*RenderPassState, GetRenderTags());
         }
         else

@@ -247,10 +247,10 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
         return;
     }
 
-    Execute(*static_cast<const HnRenderPassState*>(RPState.get()), Tags);
+    Execute(*static_cast<HnRenderPassState*>(RPState.get()), Tags);
 }
 
-void HnRenderPass::Execute(const HnRenderPassState& RPState, const pxr::TfTokenVector& Tags)
+void HnRenderPass::Execute(HnRenderPassState& RPState, const pxr::TfTokenVector& Tags)
 {
     UpdateDrawList(Tags);
     if (m_DrawList.empty())
@@ -260,6 +260,8 @@ void HnRenderPass::Execute(const HnRenderPassState& RPState, const pxr::TfTokenV
 
     const std::string DebugGroupName = std::string{"Render Pass - "} + m_MaterialTag.GetString() + " - " + HnRenderPassParams::GetSelectionTypeString(m_Params.Selection);
     ScopedDebugGroup  DebugGroup{State.pCtx, DebugGroupName.c_str()};
+
+    RPState.Commit(State.pCtx);
 
     {
         PBR_Renderer::DebugViewType DebugView = State.RenderParam.GetDebugView();

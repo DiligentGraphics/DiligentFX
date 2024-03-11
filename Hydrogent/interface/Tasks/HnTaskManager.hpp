@@ -145,6 +145,10 @@ public:
     template <typename ParamterType>
     void SetParameter(const pxr::SdfPath& TaskId, const pxr::TfToken& ValueKey, ParamterType&& Value);
 
+    /// Sets the parameter value
+    template <typename ParamterType>
+    void SetParameter(const pxr::TfToken& TaskName, const pxr::TfToken& ValueKey, ParamterType&& Value);
+
     /// Creates a new render task.
     /// \param [in] TaskId - The task ID that will be used to register the task in the render index.
     /// \param [in] UID    - The task UID that will be used to identify the task in the task manager.
@@ -161,7 +165,7 @@ public:
     /// This is method is similar to the one above, but it automatically appends the task ID
     /// as child of the manager ID.
     template <typename TaskType, typename TaskParamsType>
-    void CreateTask(const pxr::TfToken& TaskId,
+    void CreateTask(const pxr::TfToken& TaskName,
                     TaskUID             UID,
                     TaskParamsType&&    Params,
                     bool                Enabled = true);
@@ -215,12 +219,13 @@ public:
     void ResetTAA();
 
 private:
+    pxr::SdfPath GetTaskId(const pxr::TfToken& TaskName) const;
     pxr::SdfPath GetRenderRprimsTaskId(const pxr::TfToken& MaterialTag, const HnRenderPassParams& RenderPassParams) const;
 
     void CreateBeginFrameTask();
     void CreateRenderRprimsTask(const pxr::TfToken& MaterialTag, TaskUID UID, const HnRenderPassParams& RenderPassParams);
-    void CreateRenderEnvMapTask();
-    void CreateRenderAxesTask();
+    void CreateRenderEnvMapTask(const pxr::TfToken& RenderPassId);
+    void CreateRenderAxesTask(const pxr::TfToken& RenderPassId);
     void CreateReadRprimIdTask();
     void CreateCopySelectionDepthTask();
     void CreateProcessSelectionTask();
@@ -254,7 +259,7 @@ private:
                 return {};
             }
 
-            VERIFY(it->second.IsHolding<T>(), "Unexpected parameter type");
+            VERIFY(it->second.IsHolding<T>(), "Unexpected parameter type: ", it->second.GetTypeName());
             return it->second.Get<T>();
         }
 
@@ -313,7 +318,13 @@ private:
 template <typename ParamterType>
 void HnTaskManager::SetParameter(const pxr::SdfPath& TaskId, const pxr::TfToken& ValueKey, ParamterType&& Value)
 {
-    m_ParamsDelegate.SetParameter(TaskId, pxr::HdTokens->params, std::forward<ParamterType>(Value));
+    m_ParamsDelegate.SetParameter(TaskId, ValueKey, std::forward<ParamterType>(Value));
+}
+
+template <typename ParamterType>
+void HnTaskManager::SetParameter(const pxr::TfToken& TaskName, const pxr::TfToken& ValueKey, ParamterType&& Value)
+{
+    m_ParamsDelegate.SetParameter(GetTaskId(TaskName), ValueKey, std::forward<ParamterType>(Value));
 }
 
 template <typename TaskType, typename TaskParamsType>
@@ -331,12 +342,12 @@ void HnTaskManager::CreateTask(const pxr::SdfPath& TaskId,
 }
 
 template <typename TaskType, typename TaskParamsType>
-void HnTaskManager::CreateTask(const pxr::TfToken& TaskId,
+void HnTaskManager::CreateTask(const pxr::TfToken& TaskName,
                                TaskUID             UID,
                                TaskParamsType&&    Params,
                                bool                Enabled)
 {
-    CreateTask<TaskType>(pxr::SdfPath{GetId().AppendChild(TaskId)}, UID, std::forward<TaskParamsType>(Params), Enabled);
+    CreateTask<TaskType>(GetTaskId(TaskName), UID, std::forward<TaskParamsType>(Params), Enabled);
 }
 
 template <typename TaskParamsType>

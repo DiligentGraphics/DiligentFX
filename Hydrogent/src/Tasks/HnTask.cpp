@@ -48,6 +48,7 @@ HnFrameRenderTargets* HnTask::GetFrameRenderTargets(pxr::HdTaskContext* TaskCtx)
 
 HnRenderPassState* HnTask::GetRenderPassState(pxr::HdTaskContext* TaskCtx, const pxr::TfToken& Id) const
 {
+    VERIFY(!Id.IsEmpty(), "Render pass state Id must not be empty");
     HnRenderPassState* RenderPassState = nullptr;
     _GetTaskContextData(TaskCtx, Id, &RenderPassState);
     return RenderPassState;
@@ -55,6 +56,7 @@ HnRenderPassState* HnTask::GetRenderPassState(pxr::HdTaskContext* TaskCtx, const
 
 ITextureView* HnTask::GetRenderBufferTarget(pxr::HdRenderIndex& RenderIndex, const pxr::SdfPath& RenderBufferId)
 {
+    VERIFY(!RenderBufferId.IsEmpty(), "Render buffer Id must not be empty");
     HnRenderBuffer* RenderBuffer = static_cast<HnRenderBuffer*>(RenderIndex.GetBprim(pxr::HdPrimTypeTokens->renderBuffer, RenderBufferId));
     if (RenderBuffer == nullptr)
     {
@@ -67,6 +69,7 @@ ITextureView* HnTask::GetRenderBufferTarget(pxr::HdRenderIndex& RenderIndex, con
 
 ITextureView* HnTask::GetRenderBufferTarget(pxr::HdRenderIndex& RenderIndex, pxr::HdTaskContext* TaskCtx, const pxr::TfToken& Name) const
 {
+    VERIFY(!Name.IsEmpty(), "Parameter name must not be empty");
     pxr::SdfPath RenderBufferId;
     if (GetTaskContextData(TaskCtx, Name, RenderBufferId))
     {

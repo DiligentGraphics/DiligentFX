@@ -72,7 +72,8 @@ namespace USD
     (emissiveColor)            \
     (clearcoat)                \
     (clearcoatRoughness)       \
-    (renderPassParams) 	       
+    (renderPassParams) 	       \
+	(renderPassId)
 
 #define HN_MATERIAL_TAG_TOKENS \
     (defaultTag)               \

@@ -84,19 +84,25 @@ protected:
     }
 
     template <typename ParamType>
-    bool GetTaskParams(pxr::HdSceneDelegate* Delegate, ParamType& Param) const
+    bool GetTaskParameter(pxr::HdSceneDelegate* Delegate, const pxr::TfToken& Name, ParamType& Param) const
     {
-        pxr::VtValue ParamsValue = Delegate->Get(GetId(), pxr::HdTokens->params);
-        if (ParamsValue.IsHolding<ParamType>())
+        pxr::VtValue ParamValue = Delegate->Get(GetId(), Name);
+        if (ParamValue.IsHolding<ParamType>())
         {
-            Param = ParamsValue.UncheckedGet<ParamType>();
+            Param = ParamValue.UncheckedGet<ParamType>();
             return true;
         }
         else
         {
-            UNEXPECTED("Parameters type ", ParamsValue.GetTypeName(), " is not recognized by task ", GetId());
+            UNEXPECTED("Parameter type ", ParamValue.GetTypeName(), " is not recognized by task ", GetId());
             return false;
         }
+    }
+
+    template <typename ParamsType>
+    bool GetTaskParams(pxr::HdSceneDelegate* Delegate, ParamsType& Params) const
+    {
+        return GetTaskParameter<ParamsType>(Delegate, pxr::HdTokens->params, Params);
     }
 };
 

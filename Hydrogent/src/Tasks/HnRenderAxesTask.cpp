@@ -138,6 +138,11 @@ void HnRenderAxesTask::Sync(pxr::HdSceneDelegate* Delegate,
             m_Params         = Params;
             m_ParamsAreDirty = true;
         }
+
+        if (!GetTaskParameter(Delegate, HnTokens->renderPassId, m_RenderPassId))
+        {
+            UNEXPECTED("Render pass ID is not set");
+        }
     }
 
     *DirtyBits = pxr::HdChangeTracker::Clean;
@@ -174,7 +179,7 @@ void HnRenderAxesTask::Prepare(pxr::HdTaskContext* TaskCtx,
         m_ParamsAreDirty = false;
     }
 
-    if (HnRenderPassState* RenderPassState = GetRenderPassState(TaskCtx, HnRenderResourceTokens->renderPass_OpaqueUnselected_TransparentAll))
+    if (HnRenderPassState* RenderPassState = GetRenderPassState(TaskCtx, m_RenderPassId))
     {
         PreparePSO(*RenderPassState);
     }
@@ -202,6 +207,16 @@ void HnRenderAxesTask::Execute(pxr::HdTaskContext* TaskCtx)
     IDeviceContext*   pCtx           = RenderDelegate->GetDeviceContext();
 
     ScopedDebugGroup DebugGroup{pCtx, "Render Axes"};
+
+    if (HnRenderPassState* RenderPassState = GetRenderPassState(TaskCtx, m_RenderPassId))
+    {
+        RenderPassState->Commit(pCtx);
+    }
+    else
+    {
+        UNEXPECTED("Render pass state is not set in the task context");
+        return;
+    }
 
     pCtx->SetPipelineState(m_PSO);
     pCtx->CommitShaderResources(m_SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);

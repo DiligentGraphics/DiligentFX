@@ -68,6 +68,8 @@ public:
     virtual void Execute(pxr::HdTaskContext* TaskCtx) override final;
 
 private:
+    pxr::TfToken m_RenderPassId;
+
     std::unique_ptr<EnvMapRenderer> m_EnvMapRenderer;
 
     pxr::HdRenderIndex* m_RenderIndex = nullptr;

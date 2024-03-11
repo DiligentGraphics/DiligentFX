@@ -60,6 +60,11 @@ void HnRenderEnvMapTask::Sync(pxr::HdSceneDelegate* Delegate,
         if (GetTaskParams(Delegate, Params))
         {
         }
+
+        if (!GetTaskParameter(Delegate, HnTokens->renderPassId, m_RenderPassId))
+        {
+            UNEXPECTED("Render pass ID is not set");
+        }
     }
 
     *DirtyBits = pxr::HdChangeTracker::Clean;
@@ -108,7 +113,7 @@ void HnRenderEnvMapTask::Prepare(pxr::HdTaskContext* TaskCtx,
 
     if (!m_EnvMapRenderer)
     {
-        if (HnRenderPassState* RenderPassState = GetRenderPassState(TaskCtx, HnRenderResourceTokens->renderPass_OpaqueUnselected_TransparentAll))
+        if (HnRenderPassState* RenderPassState = GetRenderPassState(TaskCtx, m_RenderPassId))
         {
             HnRenderDelegate* pRenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
 
@@ -137,7 +142,7 @@ void HnRenderEnvMapTask::Prepare(pxr::HdTaskContext* TaskCtx,
         }
         else
         {
-            UNEXPECTED("Render pass state is not set");
+            UNEXPECTED("Render pass state is not set in the task context");
         }
     }
 }
@@ -148,6 +153,16 @@ void HnRenderEnvMapTask::Execute(pxr::HdTaskContext* TaskCtx)
         return;
 
     HnRenderDelegate* pRenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+
+    if (HnRenderPassState* RenderPassState = GetRenderPassState(TaskCtx, m_RenderPassId))
+    {
+        RenderPassState->Commit(pRenderDelegate->GetDeviceContext());
+    }
+    else
+    {
+        UNEXPECTED("Render pass state is not set in the task context");
+        return;
+    }
 
     auto USDRenderer = pRenderDelegate->GetUSDRenderer();
     if (!USDRenderer)

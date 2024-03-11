@@ -141,6 +141,8 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
 {
     // Task creation order defines the default task order
     CreateBeginFrameTask();
+
+    // Opaque selected RPrims -> {GBuffer + SelectionDepth}
     CreateRenderRprimsTask(HnMaterialTagTokens->defaultTag,
                            TaskUID_RenderRprimsDefaultSelected,
                            {
@@ -155,7 +157,10 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                                HnRenderPassParams::SelectionType::Selected,
                                USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS,
                            });
+
     CreateCopySelectionDepthTask();
+
+    // Opaque unselected RPrims and all transparent RPrims -> {GBuffer + MainDepth}
     CreateRenderRprimsTask(HnMaterialTagTokens->defaultTag,
                            TaskUID_RenderRprimsDefaultUnselected,
                            {
@@ -170,8 +175,8 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                                HnRenderPassParams::SelectionType::Unselected,
                                USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS,
                            });
-    CreateRenderEnvMapTask();
-    CreateRenderAxesTask();
+    CreateRenderEnvMapTask(HnRenderResourceTokens->renderPass_OpaqueUnselected_TransparentAll);
+    CreateRenderAxesTask(HnRenderResourceTokens->renderPass_OpaqueUnselected_TransparentAll);
     CreateRenderRprimsTask(HnMaterialTagTokens->additive,
                            TaskUID_RenderRprimsAdditive,
                            {
@@ -187,6 +192,7 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                                USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS,
                            });
 
+    // Transparent selected RPrims  -> {0 + SelectionDepth}
     CreateRenderRprimsTask(HnMaterialTagTokens->additive,
                            TaskUID_RenderRprimsAdditiveSelected,
                            {
@@ -201,6 +207,7 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                                HnRenderPassParams::SelectionType::Selected,
                                USD_Renderer::USD_PSO_FLAG_NONE,
                            });
+
     CreateReadRprimIdTask();
     CreateProcessSelectionTask();
     CreatePostProcessTask();
@@ -245,6 +252,11 @@ void HnTaskManager::CreateBeginFrameTask()
     CreateTask<HnBeginFrameTask>(HnTaskManagerTokens->beginFrame, TaskUID_BeginFrame, TaskParams);
 }
 
+pxr::SdfPath HnTaskManager::GetTaskId(const pxr::TfToken& TaskName) const
+{
+    return GetId().AppendChild(TaskName);
+}
+
 pxr::SdfPath HnTaskManager::GetRenderRprimsTaskId(const pxr::TfToken& MaterialTag, const HnRenderPassParams& RenderPassParams) const
 {
     std::string Id = std::string{"RenderRprimsTask_"} + MaterialTag.GetString();
@@ -266,7 +278,7 @@ pxr::SdfPath HnTaskManager::GetRenderRprimsTaskId(const pxr::TfToken& MaterialTa
         default:
             UNEXPECTED("Unknown selection type");
     }
-    return GetId().AppendChild(TfToken{Id});
+    return GetTaskId(TfToken{Id});
 }
 
 void HnTaskManager::CreateRenderRprimsTask(const pxr::TfToken& MaterialTag, TaskUID UID, const HnRenderPassParams& RenderPassParams)
@@ -329,16 +341,20 @@ void HnTaskManager::CreateProcessSelectionTask()
     CreateTask<HnProcessSelectionTask>(HnTaskManagerTokens->processSelectionTask, TaskUID_ProcessSelection, TaskParams);
 }
 
-void HnTaskManager::CreateRenderEnvMapTask()
+void HnTaskManager::CreateRenderEnvMapTask(const pxr::TfToken& RenderPassId)
 {
     HnRenderEnvMapTaskParams TaskParams;
     CreateTask<HnRenderEnvMapTask>(HnTaskManagerTokens->renderEnvMapTask, TaskUID_RenderEnvMap, TaskParams);
+
+    SetParameter(HnTaskManagerTokens->renderEnvMapTask, HnTokens->renderPassId, RenderPassId);
 }
 
-void HnTaskManager::CreateRenderAxesTask()
+void HnTaskManager::CreateRenderAxesTask(const pxr::TfToken& RenderPassId)
 {
     HnRenderAxesTaskParams TaskParams;
     CreateTask<HnRenderAxesTask>(HnTaskManagerTokens->renderAxesTask, TaskUID_RenderAxes, TaskParams);
+
+    SetParameter(HnTaskManagerTokens->renderAxesTask, HnTokens->renderPassId, RenderPassId);
 }
 
 void HnTaskManager::CreateReadRprimIdTask()

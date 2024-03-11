@@ -106,7 +106,7 @@ public:
         DRAW_LIST_ITEM_DIRTY_FLAG_ALL       = DRAW_LIST_ITEM_DIRTY_FLAG_LAST * 2 - 1
     };
 
-    void Execute(const HnRenderPassState& RPState, const pxr::TfTokenVector& Tags);
+    void Execute(HnRenderPassState& RPState, const pxr::TfTokenVector& Tags);
 
 protected:
     // Virtual API: Execute the buckets corresponding to renderTags;
