@@ -38,6 +38,13 @@
 namespace Diligent
 {
 
+namespace HLSL
+{
+
+#include "Shaders/PostProcess/ToneMapping/public/ToneMappingStructures.fxh"
+
+} // namespace HLSL
+
 namespace USD
 {
 

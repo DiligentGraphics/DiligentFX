@@ -26,6 +26,7 @@
 
 #include <unordered_map>
 #include <vector>
+#include <memory>
 
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/DeviceContext.h"
@@ -39,7 +40,7 @@ namespace Diligent
 
 namespace HLSL
 {
-#include "../../Shaders/PostProcess/ToneMapping/public/ToneMappingStructures.fxh"
+struct ToneMappingAttribs;
 } // namespace HLSL
 
 /// Renders the environment map.
@@ -59,6 +60,7 @@ public:
         const char* PSMainSource = nullptr;
     };
     EnvMapRenderer(const CreateInfo& CI);
+    ~EnvMapRenderer();
 
     struct RenderAttribs
     {
@@ -120,6 +122,9 @@ private:
 
     RefCntAutoPtr<IShaderResourceBinding> m_SRB;
     IShaderResourceVariable*              m_pEnvMapVar = nullptr;
+
+    struct EnvMapShaderAttribs;
+    std::unique_ptr<EnvMapShaderAttribs> m_ShaderAttribs;
 };
 
 } // namespace Diligent

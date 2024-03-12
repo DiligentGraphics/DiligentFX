@@ -40,22 +40,20 @@ namespace Diligent
 namespace HLSL
 {
 
-namespace
-{
+#include "../../Shaders/PostProcess/ToneMapping/public/ToneMappingStructures.fxh"
 
-struct EnvMapRenderAttribs
+} // namespace HLSL
+
+
+struct EnvMapRenderer::EnvMapShaderAttribs
 {
-    ToneMappingAttribs ToneMapping;
+    HLSL::ToneMappingAttribs ToneMapping;
 
     float AverageLogLum;
     float MipLevel;
     float Alpha;
     float Padding;
 };
-
-} // namespace
-
-} // namespace HLSL
 
 EnvMapRenderer::EnvMapRenderer(const CreateInfo& CI) :
     m_pDevice{CI.pDevice},
@@ -68,8 +66,25 @@ EnvMapRenderer::EnvMapRenderer(const CreateInfo& CI) :
     DEV_CHECK_ERR(m_pDevice != nullptr, "Device must not be null");
     DEV_CHECK_ERR(m_pCameraAttribsCB != nullptr, "Camera Attribs CB must not be null");
 
-    CreateUniformBuffer(m_pDevice, sizeof(HLSL::EnvMapRenderAttribs), "EnvMap Render Attribs CB", &m_RenderAttribsCB);
+    const RenderDeviceInfo& DeviceInfo = m_pDevice->GetDeviceInfo();
+
+    USAGE Usage = (DeviceInfo.IsGLDevice() || DeviceInfo.Type == RENDER_DEVICE_TYPE_D3D11) ?
+        USAGE_DEFAULT :
+        USAGE_DYNAMIC;
+    if (Usage == USAGE_DEFAULT)
+    {
+        m_ShaderAttribs = std::make_unique<EnvMapShaderAttribs>();
+    }
+
+    CreateUniformBuffer(m_pDevice, sizeof(EnvMapShaderAttribs), "EnvMap Render Attribs CB",
+                        &m_RenderAttribsCB, Usage, BIND_UNIFORM_BUFFER,
+                        Usage == USAGE_DEFAULT ? CPU_ACCESS_NONE : CPU_ACCESS_WRITE,
+                        Usage == USAGE_DEFAULT ? m_ShaderAttribs.get() : nullptr);
     VERIFY_EXPR(m_RenderAttribsCB != nullptr);
+}
+
+EnvMapRenderer::~EnvMapRenderer()
+{
 }
 
 static constexpr char DefaultPSMain[] = R"(
@@ -199,8 +214,26 @@ void EnvMapRenderer::Render(const RenderAttribs& Attribs, const HLSL::ToneMappin
 
     m_pEnvMapVar->Set(Attribs.pEnvMap);
 
+    if (m_ShaderAttribs)
     {
-        MapHelper<HLSL::EnvMapRenderAttribs> EnvMapAttribs{Attribs.pContext, m_RenderAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
+        if (std::memcmp(&m_ShaderAttribs->ToneMapping, &ToneMapping, sizeof(ToneMapping)) != 0 ||
+            m_ShaderAttribs->AverageLogLum != Attribs.AverageLogLum ||
+            m_ShaderAttribs->MipLevel != Attribs.MipLevel ||
+            m_ShaderAttribs->Alpha != Attribs.Alpha)
+        {
+            m_ShaderAttribs->ToneMapping   = ToneMapping;
+            m_ShaderAttribs->AverageLogLum = Attribs.AverageLogLum;
+            m_ShaderAttribs->MipLevel      = Attribs.MipLevel;
+            m_ShaderAttribs->Alpha         = Attribs.Alpha;
+
+            Attribs.pContext->UpdateBuffer(m_RenderAttribsCB, 0, sizeof(EnvMapShaderAttribs), m_ShaderAttribs.get(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+            StateTransitionDesc Barrier{m_RenderAttribsCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE};
+            Attribs.pContext->TransitionResourceStates(1, &Barrier);
+        }
+    }
+    else
+    {
+        MapHelper<EnvMapShaderAttribs> EnvMapAttribs{Attribs.pContext, m_RenderAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
         EnvMapAttribs->ToneMapping   = ToneMapping;
         EnvMapAttribs->AverageLogLum = Attribs.AverageLogLum;
         EnvMapAttribs->MipLevel      = Attribs.MipLevel;
