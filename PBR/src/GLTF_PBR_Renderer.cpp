@@ -843,15 +843,21 @@ void GLTF_PBR_Renderer::WritePBRLightShaderAttribs(const PBRLightShaderAttribsDa
 
     if (AttribsData.Direction != nullptr)
     {
-        pShaderAttribs->Direction = float4{*AttribsData.Direction, 0};
+        pShaderAttribs->DirectionX = AttribsData.Direction->x;
+        pShaderAttribs->DirectionY = AttribsData.Direction->y;
+        pShaderAttribs->DirectionZ = AttribsData.Direction->z;
     }
+
+    pShaderAttribs->ShadowMapIndex = AttribsData.ShadowMapIndex;
 
     auto Intensity = Light.Intensity;
     if (pShaderAttribs->Type != LIGHT_TYPE_DIRECTIONAL)
     {
         Intensity *= AttribsData.DistanceScale * AttribsData.DistanceScale;
     }
-    pShaderAttribs->Intensity = float4{Light.Color * Intensity, 0.0};
+    pShaderAttribs->IntensityR = Light.Color.r * Intensity;
+    pShaderAttribs->IntensityG = Light.Color.g * Intensity;
+    pShaderAttribs->IntensityB = Light.Color.b * Intensity;
 
     float Range            = Light.Range * AttribsData.DistanceScale;
     float Range2           = Range * Range;

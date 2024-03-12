@@ -271,7 +271,8 @@ public:
         const float3*      Direction = nullptr;
         // Distance scaling factor.
         // This value is used to scale the point and spot light's range (by s) and intensity (by s^2).
-        float DistanceScale = 1.f;
+        float DistanceScale  = 1.f;
+        int   ShadowMapIndex = -1;
     };
     static void WritePBRLightShaderAttribs(const PBRLightShaderAttribsData& AttribsData,
                                            HLSL::PBRLightAttribs*           pShaderAttribs);

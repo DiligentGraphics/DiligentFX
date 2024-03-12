@@ -232,16 +232,40 @@ struct PBRLightAttribs
     float PosY; // position; unused for
     float PosZ; // directional light.
     
-    float4 Direction; // Directional and spot lights, w is unused.
-    float4 Intensity; // a is unused
-    
+    float DirectionX; // Directional and spot lights.
+    float DirectionY;
+    float DirectionZ;    
+    int   ShadowMapIndex; // -1 if light does not cast shadows
+
+    float IntensityR;    
+    float IntensityG;
+    float IntensityB;
     float Range4;         // Point and spot light range to the power of 4
+    
     float SpotAngleScale; // 1.0 / (cos(InnerConeAngle) - cos(OuterConeAngle))
     float SpotAngleOffset;// -cos(OuterConeAngle) * SpotAngleScale;
-    float Padding;
+    float Padding0;
+    float Padding1;
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
 	CHECK_STRUCT_ALIGNMENT(PBRLightAttribs);
+#endif
+
+
+struct PBRShadowMapInfo
+{
+    float4x4 WorldToLightProjSpace;
+    
+    float2 UVScale;
+    float2 UVBias;
+    
+    float    ShadowMapSlice;
+    float    Padding0;
+    float    Padding1;
+    float    Padding2;
+};
+#ifdef CHECK_STRUCT_ALIGNMENT
+    CHECK_STRUCT_ALIGNMENT(PBRShadowMapInfo);
 #endif
 
 #endif // _PBR_STRUCTURES_FXH_

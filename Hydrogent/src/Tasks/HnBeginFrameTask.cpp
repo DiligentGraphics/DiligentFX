@@ -363,14 +363,17 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
                                             const float2&   Jitter,
                                             bool&           CameraTransformDirty)
 {
-    HnRenderDelegate*   RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
-    const USD_Renderer& Renderer       = *RenderDelegate->GetUSDRenderer();
+    HnRenderDelegate*   RenderDelegate    = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+    const USD_Renderer& Renderer          = *RenderDelegate->GetUSDRenderer();
+    const int           MaxLightCount     = Renderer.GetSettings().MaxLightCount;
+    const int           MaxShadowMapCount = Renderer.GetSettings().MaxShadowCastingLightCount;
 
     m_FrameAttribsData.resize(Renderer.GetPRBFrameAttribsSize());
-    HLSL::PBRFrameAttribs* FrameAttribs = reinterpret_cast<HLSL::PBRFrameAttribs*>(m_FrameAttribsData.data());
-    HLSL::CameraAttribs&   PrevCamera   = FrameAttribs->PrevCamera;
-    HLSL::CameraAttribs&   CamAttribs   = FrameAttribs->Camera;
-    HLSL::PBRLightAttribs* Lights       = reinterpret_cast<HLSL::PBRLightAttribs*>(FrameAttribs + 1);
+    HLSL::PBRFrameAttribs*  FrameAttribs = reinterpret_cast<HLSL::PBRFrameAttribs*>(m_FrameAttribsData.data());
+    HLSL::CameraAttribs&    PrevCamera   = FrameAttribs->PrevCamera;
+    HLSL::CameraAttribs&    CamAttribs   = FrameAttribs->Camera;
+    HLSL::PBRLightAttribs*  Lights       = reinterpret_cast<HLSL::PBRLightAttribs*>(FrameAttribs + 1);
+    HLSL::PBRShadowMapInfo* ShadowMaps   = reinterpret_cast<HLSL::PBRShadowMapInfo*>(Lights + MaxLightCount);
 
     PrevCamera = CamAttribs;
     if (m_pCamera != nullptr)
@@ -428,15 +431,36 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
         UNEXPECTED("Camera is null. It should've been set in Prepare()");
     }
 
-    const int MaxLightCount = Renderer.GetSettings().MaxLightCount;
-
-    int LightCount = 0;
+    int LightCount     = 0;
+    int ShadowMapCount = 0;
     for (HnLight* Light : RenderDelegate->GetLights())
     {
         if (!Light->IsVisible() || Light->GetParams().Type == GLTF::Light::TYPE::UNKNOWN)
             continue;
 
-        GLTF_PBR_Renderer::WritePBRLightShaderAttribs({&Light->GetParams(), &Light->GetPosition(), &Light->GetDirection()}, Lights + LightCount);
+        GLTF_PBR_Renderer::PBRLightShaderAttribsData LightAttribs{
+            &Light->GetParams(),
+            &Light->GetPosition(),
+            &Light->GetDirection(),
+        };
+
+        if (Light->ShadowsEnabled() && ShadowMapCount < MaxShadowMapCount)
+        {
+            if (const HLSL::PBRShadowMapInfo* pShadowMapInfo = Light->GetShadowMapShaderInfo())
+            {
+                ShadowMaps[ShadowMapCount] = *pShadowMapInfo;
+            }
+            else
+            {
+                UNEXPECTED("Shadow map info is null");
+            }
+            LightAttribs.ShadowMapIndex = ShadowMapCount;
+            // No shadow map yet
+            LightAttribs.ShadowMapIndex = -1;
+            ++ShadowMapCount;
+        }
+
+        GLTF_PBR_Renderer::WritePBRLightShaderAttribs(LightAttribs, Lights + LightCount);
 
         ++LightCount;
         if (LightCount >= MaxLightCount)

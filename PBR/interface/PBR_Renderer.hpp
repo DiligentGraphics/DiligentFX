@@ -178,6 +178,9 @@ public:
         /// The maximum number of lights.
         Uint32 MaxLightCount = 16;
 
+        /// The maximum number of shadow-casting lights.
+        Uint32 MaxShadowCastingLightCount = 8;
+
         static const SamplerDesc DefaultSampler;
 
         /// Immutable sampler for color map texture.
@@ -608,7 +611,7 @@ public:
     Uint32 GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags) const;
 
     /// Returns the PBR Frame attributes shader data size for the given light count.
-    static Uint32 GetPRBFrameAttribsSize(Uint32 LightCount);
+    static Uint32 GetPRBFrameAttribsSize(Uint32 LightCount, Uint32 ShadowCastingLightCount);
 
     /// Returns the PBR Frame attributes shader data size.
     Uint32 GetPRBFrameAttribsSize() const;

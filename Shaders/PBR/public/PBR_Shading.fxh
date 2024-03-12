@@ -603,10 +603,11 @@ void ApplyPunctualLight(in    SurfaceShadingInfo     Shading,
 #if ENABLE_SHADOWS
                         in    Texture2DArray         ShadowMap,
                         in    SamplerComparisonState ShadowMap_sampler,
+                        in    PBRShadowMapInfo       ShadowMapInfo,
 #endif
                         inout SurfaceLightingInfo    SrfLighting)
 {
-    float3 LightDirection = Light.Direction.xyz;
+    float3 LightDirection = float3(Light.DirectionX, Light.DirectionY, Light.DirectionZ);
 
     float Attenuation = 1.0;
     if (Light.Type != PBR_LIGHT_TYPE_DIRECTIONAL)
@@ -636,10 +637,21 @@ void ApplyPunctualLight(in    SurfaceShadingInfo     Shading,
         Attenuation = RangeAttenuation * AngularAttenuation; 
     }
     
+#if ENABLE_SHADOWS
+    if (Light.ShadowMapIndex >= 0)
+    {
+        float4 ShadowPos = mul(float4(Shading.Pos, 1.0), ShadowMapInfo.WorldToLightProjSpace);
+        ShadowPos.xy /= ShadowPos.w;
+        ShadowPos.xy = ShadowPos.xy * ShadowMapInfo.UVScale + ShadowMapInfo.UVBias;
+        float Shadowing = ShadowMap.SampleCmp(ShadowMap_sampler, float3(ShadowPos.xy, ShadowMapInfo.ShadowMapSlice), ShadowPos.z).r;
+        Attenuation *= Shadowing;
+    }
+#endif
+    
     if (Attenuation <= 0.0)
         return;
     
-    float3 LightIntensity = Light.Intensity.rgb * Attenuation;
+    float3 LightIntensity = float3(Light.IntensityR, Light.IntensityG, Light.IntensityB) * Attenuation;
         
     float NdotV = Shading.BaseLayer.NdotV;
     float NdotL = dot_sat(Shading.BaseLayer.Normal, -LightDirection);

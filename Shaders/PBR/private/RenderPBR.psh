@@ -395,6 +395,7 @@ PSOutput main(in VSOutput VSOut,
 #                   if ENABLE_SHADOWS
                         g_ShadowMap,
                         g_ShadowMap_sampler,
+                        g_Frame.ShadowMaps[max(g_Frame.Lights[i].ShadowMapIndex, 0)],
 #                   endif
                     SrfLighting);
             }

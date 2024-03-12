@@ -868,7 +868,7 @@ void PBR_Renderer::CreateSignature()
 
     if (m_Settings.EnableShadows)
     {
-        AddTextureAndSampler("g_ShadowMap", Sam_ComparisonLinearClamp, "g_ShadowSampler");
+        AddTextureAndSampler("g_ShadowMap", Sam_ComparisonLinearClamp, "g_ShadowMap_sampler");
     }
 
     m_ResourceSignature = m_Device.CreatePipelineResourceSignature(SignatureDesc);
@@ -935,6 +935,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
     Macros.Add("PBR_LIGHT_TYPE_DIRECTIONAL", static_cast<int>(LIGHT_TYPE_DIRECTIONAL));
     Macros.Add("PBR_LIGHT_TYPE_POINT", static_cast<int>(LIGHT_TYPE_POINT));
     Macros.Add("PBR_LIGHT_TYPE_SPOT", static_cast<int>(LIGHT_TYPE_SPOT));
+    Macros.Add("PBR_MAX_SHADOW_MAPS", static_cast<int>(m_Settings.MaxShadowCastingLightCount));
 
     Macros.Add("USE_IBL_ENV_MAP_LOD", true);
     Macros.Add("USE_HDR_IBL_CUBEMAPS", true);
@@ -1589,17 +1590,17 @@ Uint32 PBR_Renderer::GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags) const
             sizeof(float4));
 }
 
-Uint32 PBR_Renderer::GetPRBFrameAttribsSize(Uint32 LightCount)
+Uint32 PBR_Renderer::GetPRBFrameAttribsSize(Uint32 LightCount, Uint32 ShadowCastingLightCount)
 {
     return (sizeof(HLSL::CameraAttribs) * 2 +
             sizeof(HLSL::PBRRendererShaderParameters) +
-            sizeof(HLSL::PBRLightAttribs) * LightCount);
+            sizeof(HLSL::PBRLightAttribs) * LightCount +
+            sizeof(HLSL::PBRShadowMapInfo) * ShadowCastingLightCount);
 }
 
 Uint32 PBR_Renderer::GetPRBFrameAttribsSize() const
 {
-    return GetPRBFrameAttribsSize(m_Settings.MaxLightCount);
+    return GetPRBFrameAttribsSize(m_Settings.MaxLightCount, m_Settings.MaxShadowCastingLightCount);
 }
-
 
 } // namespace Diligent

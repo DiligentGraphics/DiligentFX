@@ -131,7 +131,8 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
     // Enable shadows
     USDRendererCI.EnableShadows = true;
 
-    USDRendererCI.MaxLightCount = RenderDelegateCI.MaxLightCount;
+    USDRendererCI.MaxLightCount              = RenderDelegateCI.MaxLightCount;
+    USDRendererCI.MaxShadowCastingLightCount = RenderDelegateCI.MaxShadowCastingLightCount;
 
     USDRendererCI.ColorTargetIndex        = HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR;
     USDRendererCI.MeshIdTargetIndex       = HnFrameRenderTargets::GBUFFER_TARGET_MESH_ID;

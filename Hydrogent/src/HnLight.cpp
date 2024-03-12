@@ -39,6 +39,14 @@
 namespace Diligent
 {
 
+namespace HLSL
+{
+
+#include "Shaders/Common/public/BasicStructures.fxh"
+#include "Shaders/PBR/public/PBR_Structures.fxh"
+
+} // namespace HLSL
+
 namespace USD
 {
 
@@ -461,6 +469,7 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
                 m_ShadowMapSuballocation->GetSize() != uint2{m_ShadowMapResolution, m_ShadowMapResolution})
             {
                 m_ShadowMapSuballocation.Release();
+                m_ShadowMapShaderInfo.reset();
             }
         }
         else
@@ -479,6 +488,8 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
             {
                 LOG_ERROR_MESSAGE("Failed to allocate shadow map for light ", Id);
             }
+            m_ShadowMapShaderInfo = std::make_unique<HLSL::PBRShadowMapInfo>();
+
             LightDirty = true;
         }
 

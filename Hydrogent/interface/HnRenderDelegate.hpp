@@ -163,6 +163,9 @@ public:
         /// The maximum number of lights that can be used by the render delegate.
         Uint32 MaxLightCount = 16;
 
+        /// The maximum number of shadow-casting lights that can be used by the render delegate.
+        Uint32 MaxShadowCastingLightCount = 8;
+
         /// Meters per logical unit.
         float MetersPerUnit = 1.0f;
     };
@@ -292,7 +295,7 @@ public:
     virtual void CommitResources(pxr::HdChangeTracker* Tracker) override final;
 
     HnTextureRegistry&  GetTextureRegistry() { return m_TextureRegistry; }
-    HnShadowMapManager& GetShadowMapManager() { return *m_ShadowMapManager; }
+    HnShadowMapManager& GetShadowMapManager() const { return *m_ShadowMapManager; }
 
     FixedBlockMemoryAllocator& GetMeshAttribsAllocator() { return m_MeshAttribsAllocator; }
 

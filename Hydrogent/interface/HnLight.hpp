@@ -36,6 +36,11 @@ namespace Diligent
 
 struct ITextureAtlasSuballocation;
 
+namespace HLSL
+{
+struct PBRShadowMapInfo;
+}
+
 namespace USD
 {
 
@@ -62,7 +67,8 @@ public:
     bool               IsVisible() const { return m_IsVisible; }
     bool               ShadowsEnabled() const { return m_ShadowMapSuballocation != nullptr; }
 
-    ITextureAtlasSuballocation* GetShadowMapSuballocation() const { return m_ShadowMapSuballocation; }
+    ITextureAtlasSuballocation*   GetShadowMapSuballocation() const { return m_ShadowMapSuballocation; }
+    const HLSL::PBRShadowMapInfo* GetShadowMapShaderInfo() const { return m_ShadowMapShaderInfo.get(); }
 
 private:
     HnLight(const pxr::SdfPath& Id, const pxr::TfToken& TypeId);
@@ -79,6 +85,7 @@ private:
 
     Uint32                                    m_ShadowMapResolution = 1024;
     RefCntAutoPtr<ITextureAtlasSuballocation> m_ShadowMapSuballocation;
+    std::unique_ptr<HLSL::PBRShadowMapInfo>   m_ShadowMapShaderInfo;
 };
 
 } // namespace USD
