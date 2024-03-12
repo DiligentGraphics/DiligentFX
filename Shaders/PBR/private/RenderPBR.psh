@@ -62,6 +62,10 @@ cbuffer cbPrimitiveAttribs
 #   define PRIMITIVE g_Primitive
 #endif
 
+#if ENABLE_SHADOWS
+Texture2DArray         g_ShadowMap;
+SamplerComparisonState g_ShadowMap_sampler;
+#endif
 
 PBRMaterialTextureAttribs GetDefaultTextureAttribs()
 {
@@ -387,6 +391,10 @@ PSOutput main(in VSOutput VSOut,
 #                   if ENABLE_SHEEN
                         g_SheenAlbedoScalingLUT,
                         g_SheenAlbedoScalingLUT_sampler,
+#                   endif
+#                   if ENABLE_SHADOWS
+                        g_ShadowMap,
+                        g_ShadowMap_sampler,
 #                   endif
                     SrfLighting);
             }

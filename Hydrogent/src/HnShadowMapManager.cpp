@@ -53,6 +53,7 @@ HnShadowMapManager::HnShadowMapManager(const CreateInfo& CI)
     AtlasCI.ExtraSliceCount = 1;
 
     CreateDynamicTextureAtlas(nullptr, AtlasCI, &m_ShadowMapAtlas);
+    VERIFY_EXPR(m_ShadowMapAtlas);
 }
 
 RefCntAutoPtr<ITextureAtlasSuballocation> HnShadowMapManager::Allocate(Uint32 Width, Uint32 Height)
@@ -75,6 +76,11 @@ const TextureDesc& HnShadowMapManager::GetAtlasDesc() const
 Uint32 HnShadowMapManager::GetAtlasVersion() const
 {
     return m_ShadowMapAtlas->GetVersion();
+}
+
+ITextureView* HnShadowMapManager::GetAtlasSRV() const
+{
+    return m_ShadowMapAtlas->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
 }
 
 } // namespace USD

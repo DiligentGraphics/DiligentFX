@@ -58,6 +58,8 @@ public:
 
     const TextureDesc& GetAtlasDesc() const;
 
+    ITextureView* GetAtlasSRV() const;
+
 private:
     RefCntAutoPtr<IDynamicTextureAtlas> m_ShadowMapAtlas;
 };

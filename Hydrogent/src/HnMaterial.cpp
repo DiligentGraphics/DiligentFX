@@ -811,7 +811,10 @@ void HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
         //       may require different buffer ranges. We first compute the maximum buffer range for each SRB
         //       and then set the buffer in BindPrimitiveAttribsBuffer().
         constexpr bool BindPrimitiveAttribsBuffer = false;
-        UsdRenderer.InitCommonSRBVars(pSRB, RendererDelegate.GetFrameAttribsCB(), BindPrimitiveAttribsBuffer);
+        UsdRenderer.InitCommonSRBVars(pSRB,
+                                      RendererDelegate.GetFrameAttribsCB(),
+                                      BindPrimitiveAttribsBuffer,
+                                      RendererDelegate.GetShadowMapManager().GetAtlasSRV());
 
         if (BindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_ATLAS ||
             BindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_DYNAMIC)

@@ -613,7 +613,8 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
 
 void PBR_Renderer::InitCommonSRBVars(IShaderResourceBinding* pSRB,
                                      IBuffer*                pFrameAttribs,
-                                     bool                    BindPrimitiveAttribsBuffer) const
+                                     bool                    BindPrimitiveAttribsBuffer,
+                                     ITextureView*           pShadowMap) const
 {
     if (pSRB == nullptr)
     {
@@ -652,6 +653,12 @@ void PBR_Renderer::InitCommonSRBVars(IShaderResourceBinding* pSRB,
 
         if (auto* pPrefilteredEnvMap = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_PrefilteredEnvMap"))
             pPrefilteredEnvMap->Set(m_pPrefilteredEnvMapSRV);
+    }
+
+    if (m_Settings.EnableShadows && pShadowMap != nullptr)
+    {
+        if (auto* pShadowMapVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_ShadowMap"))
+            pShadowMapVar->Set(pShadowMap);
     }
 }
 
@@ -859,6 +866,11 @@ void PBR_Renderer::CreateSignature()
         AddTextureAndSampler("g_SheenAlbedoScalingLUT", Sam_LinearClamp, "g_LinearClampSampler", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
     }
 
+    if (m_Settings.EnableShadows)
+    {
+        AddTextureAndSampler("g_ShadowMap", Sam_ComparisonLinearClamp, "g_ShadowSampler");
+    }
+
     m_ResourceSignature = m_Device.CreatePipelineResourceSignature(SignatureDesc);
 
     if (m_Settings.EnableIBL)
@@ -968,7 +980,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
 
     const PSO_FLAGS PSOFlags = Key.GetFlags();
 
-    static_assert(PSO_FLAG_LAST == PSO_FLAG_BIT(36), "Did you add new PSO Flag? You may need to handle it here.");
+    static_assert(PSO_FLAG_LAST == PSO_FLAG_BIT(37), "Did you add new PSO Flag? You may need to handle it here.");
 #define ADD_PSO_FLAG_MACRO(Flag) Macros.Add(#Flag, (PSOFlags & PSO_FLAG_##Flag) != PSO_FLAG_NONE)
     ADD_PSO_FLAG_MACRO(USE_COLOR_MAP);
     ADD_PSO_FLAG_MACRO(USE_NORMAL_MAP);
@@ -1011,6 +1023,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
     ADD_PSO_FLAG_MACRO(ENABLE_TONE_MAPPING);
     ADD_PSO_FLAG_MACRO(UNSHADED);
     ADD_PSO_FLAG_MACRO(COMPUTE_MOTION_VECTORS);
+    ADD_PSO_FLAG_MACRO(ENABLE_SHADOWS);
 #undef ADD_PSO_FLAG_MACRO
 
     Macros.Add("TEX_COLOR_CONVERSION_MODE_NONE", CreateInfo::TEX_COLOR_CONVERSION_MODE_NONE);
@@ -1471,6 +1484,10 @@ IPipelineState* PBR_Renderer::GetPSO(PsoHashMapType&             PsoHashMap,
     if (!m_Settings.EnableVolume)
     {
         Flags &= ~PSO_FLAG_ENABLE_VOLUME;
+    }
+    if (!m_Settings.EnableShadows)
+    {
+        Flags &= ~PSO_FLAG_ENABLE_SHADOWS;
     }
 
     if (m_Settings.MaxJointCount == 0)

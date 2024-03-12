@@ -594,13 +594,17 @@ SurfaceLightingInfo GetDefaultSurfaceLightingInfo()
     return Lighting;
 }
 
-void ApplyPunctualLight(in    SurfaceShadingInfo  Shading,
-                        in    PBRLightAttribs     Light,
+void ApplyPunctualLight(in    SurfaceShadingInfo     Shading,
+                        in    PBRLightAttribs        Light,
 #if ENABLE_SHEEN
-                        in    Texture2D           AlbedoScalingLUT,
-                        in    SamplerState        AlbedoScalingLUT_sampler,
+                        in    Texture2D              AlbedoScalingLUT,
+                        in    SamplerState           AlbedoScalingLUT_sampler,
+#endif 
+#if ENABLE_SHADOWS
+                        in    Texture2DArray         ShadowMap,
+                        in    SamplerComparisonState ShadowMap_sampler,
 #endif
-                        inout SurfaceLightingInfo SrfLighting)
+                        inout SurfaceLightingInfo    SrfLighting)
 {
     float3 LightDirection = Light.Direction.xyz;
 

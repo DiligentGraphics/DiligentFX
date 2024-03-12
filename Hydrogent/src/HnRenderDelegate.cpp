@@ -128,6 +128,8 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
     USDRendererCI.CreateDefaultTextures = false;
     // Enable clear coat support
     USDRendererCI.EnableClearCoat = true;
+    // Enable shadows
+    USDRendererCI.EnableShadows = true;
 
     USDRendererCI.MaxLightCount = RenderDelegateCI.MaxLightCount;
 

@@ -156,6 +156,10 @@ public:
         ///             - Default physical description map
         bool CreateDefaultTextures = true;
 
+        /// Whether to enable shadows.
+        /// A pipeline state can use shadows only if this flag is set to true.
+        bool EnableShadows = false;
+
         /// Shader textures array access mode, see SHADER_TEXTURE_ARRAY_MODE.
         SHADER_TEXTURE_ARRAY_MODE ShaderTexturesArrayMode = SHADER_TEXTURE_ARRAY_MODE_NONE;
 
@@ -438,8 +442,9 @@ public:
         PSO_FLAG_ENABLE_TONE_MAPPING       = PSO_FLAG_BIT(34),
         PSO_FLAG_UNSHADED                  = PSO_FLAG_BIT(35),
         PSO_FLAG_COMPUTE_MOTION_VECTORS    = PSO_FLAG_BIT(36),
+        PSO_FLAG_ENABLE_SHADOWS            = PSO_FLAG_BIT(37),
 
-        PSO_FLAG_LAST = PSO_FLAG_COMPUTE_MOTION_VECTORS,
+        PSO_FLAG_LAST = PSO_FLAG_ENABLE_SHADOWS,
 
         PSO_FLAG_FIRST_USER_DEFINED = PSO_FLAG_LAST << 1ull,
 
@@ -586,7 +591,11 @@ public:
 
     PsoCacheAccessor GetPsoCacheAccessor(const GraphicsPipelineDesc& GraphicsDesc);
 
-    void InitCommonSRBVars(IShaderResourceBinding* pSRB, IBuffer* pFrameAttribs, bool BindPrimitiveAttribsBuffer = true) const;
+    void InitCommonSRBVars(IShaderResourceBinding* pSRB,
+                           IBuffer*                pFrameAttribs,
+                           bool                    BindPrimitiveAttribsBuffer = true,
+                           ITextureView*           pShadowMap                 = nullptr) const;
+
     void SetMaterialTexture(IShaderResourceBinding* pSRB, ITextureView* pTexSRV, TEXTURE_ATTRIB_ID TextureId) const;
 
     /// Initializes internal renderer parameters.
