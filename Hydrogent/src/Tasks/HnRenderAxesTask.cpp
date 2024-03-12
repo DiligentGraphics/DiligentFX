@@ -175,6 +175,8 @@ void HnRenderAxesTask::Prepare(pxr::HdTaskContext* TaskCtx,
         HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
         IDeviceContext*   pCtx           = RenderDelegate->GetDeviceContext();
         pCtx->UpdateBuffer(m_ConstantsCB, 0, sizeof(Constants), &Constants, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        StateTransitionDesc Barrier{m_ConstantsCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE};
+        pCtx->TransitionResourceStates(1, &Barrier);
 
         m_ParamsAreDirty = false;
     }
@@ -219,7 +221,7 @@ void HnRenderAxesTask::Execute(pxr::HdTaskContext* TaskCtx)
     }
 
     pCtx->SetPipelineState(m_PSO);
-    pCtx->CommitShaderResources(m_SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    pCtx->CommitShaderResources(m_SRB, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
     pCtx->Draw({12, DRAW_FLAG_VERIFY_ALL});
 }
 
