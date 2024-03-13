@@ -34,25 +34,24 @@ namespace Diligent
 namespace USD
 {
 
-struct HnBeginMainPassTaskParams
+struct HnRenderShadowsTaskParams
 {
-    constexpr bool operator==(const HnBeginMainPassTaskParams& rhs) const
+    constexpr bool operator==(const HnRenderShadowsTaskParams& rhs) const
     {
         return true;
     }
-    constexpr bool operator!=(const HnBeginMainPassTaskParams& rhs) const
+    constexpr bool operator!=(const HnRenderShadowsTaskParams& rhs) const
     {
         return !(*this == rhs);
     }
 };
 
-/// Prepares rendering state for the main render pass:
-/// - Binds and clears render targets and the depth buffer
-class HnBeginMainPassTask final : public HnTask
+/// Renders shadow maps for shadow-casting lights
+class HnRenderShadowsTask final : public HnTask
 {
 public:
-    HnBeginMainPassTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id);
-    ~HnBeginMainPassTask();
+    HnRenderShadowsTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id);
+    ~HnRenderShadowsTask();
 
     virtual void Sync(pxr::HdSceneDelegate* Delegate,
                       pxr::HdTaskContext*   TaskCtx,

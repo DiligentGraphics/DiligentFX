@@ -32,6 +32,7 @@ set(SOURCE
     src/Tasks/HnTask.cpp
     src/Tasks/HnCopySelectionDepthTask.cpp
     src/Tasks/HnBeginFrameTask.cpp
+    src/Tasks/HnRenderShadowsTask.cpp
     src/Tasks/HnBeginMainPassTask.cpp
     src/Tasks/HnRenderRprimsTask.cpp
     src/Tasks/HnRenderEnvMapTask.cpp
@@ -72,6 +73,7 @@ set(INTERFACE
     interface/Tasks/HnCopySelectionDepthTask.hpp
     interface/Tasks/HnBeginFrameTask.hpp
     interface/Tasks/HnBeginMainPassTask.hpp
+    interface/Tasks/HnRenderShadowsTask.hpp
     interface/Tasks/HnRenderRprimsTask.hpp
     interface/Tasks/HnRenderEnvMapTask.hpp
     interface/Tasks/HnRenderAxesTask.hpp

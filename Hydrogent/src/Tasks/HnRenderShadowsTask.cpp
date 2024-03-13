@@ -24,10 +24,11 @@
  *  of the possibility of such damages.
  */
 
-#include "Tasks/HnBeginMainPassTask.hpp"
+#include "Tasks/HnRenderShadowsTask.hpp"
 #include "HnRenderDelegate.hpp"
 #include "HnRenderPassState.hpp"
 #include "HnTokens.hpp"
+#include "HnShadowMapManager.hpp"
 
 namespace Diligent
 {
@@ -35,22 +36,22 @@ namespace Diligent
 namespace USD
 {
 
-HnBeginMainPassTask::HnBeginMainPassTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id) :
+HnRenderShadowsTask::HnRenderShadowsTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id) :
     HnTask{Id}
 {
 }
 
-HnBeginMainPassTask::~HnBeginMainPassTask()
+HnRenderShadowsTask::~HnRenderShadowsTask()
 {
 }
 
-void HnBeginMainPassTask::Sync(pxr::HdSceneDelegate* Delegate,
+void HnRenderShadowsTask::Sync(pxr::HdSceneDelegate* Delegate,
                                pxr::HdTaskContext*   TaskCtx,
                                pxr::HdDirtyBits*     DirtyBits)
 {
     if (*DirtyBits & pxr::HdChangeTracker::DirtyParams)
     {
-        HnBeginMainPassTaskParams Params;
+        HnRenderShadowsTaskParams Params;
         if (GetTaskParams(Delegate, Params))
         {
         }
@@ -59,13 +60,13 @@ void HnBeginMainPassTask::Sync(pxr::HdSceneDelegate* Delegate,
     *DirtyBits = pxr::HdChangeTracker::Clean;
 }
 
-void HnBeginMainPassTask::Prepare(pxr::HdTaskContext* TaskCtx,
+void HnRenderShadowsTask::Prepare(pxr::HdTaskContext* TaskCtx,
                                   pxr::HdRenderIndex* RenderIndex)
 {
     m_RenderIndex = RenderIndex;
 }
 
-void HnBeginMainPassTask::Execute(pxr::HdTaskContext* TaskCtx)
+void HnRenderShadowsTask::Execute(pxr::HdTaskContext* TaskCtx)
 {
     if (m_RenderIndex == nullptr)
     {
@@ -73,19 +74,15 @@ void HnBeginMainPassTask::Execute(pxr::HdTaskContext* TaskCtx)
         return;
     }
 
-    HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
-    IDeviceContext*   pCtx           = RenderDelegate->GetDeviceContext();
+    HnRenderDelegate*         RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+    IRenderDevice*            pDevice        = RenderDelegate->GetDevice();
+    IDeviceContext*           pCtx           = RenderDelegate->GetDeviceContext();
+    const HnShadowMapManager& ShadowMapMgr   = RenderDelegate->GetShadowMapManager();
 
-    const pxr::TfToken& RPName = HnRenderResourceTokens->renderPass_OpaqueSelected;
-    if (HnRenderPassState* RenderPassState = GetRenderPassState(TaskCtx, RPName))
-    {
-        // Commit render pass now to make sure that all render targets are cleared
-        RenderPassState->Commit(pCtx);
-    }
-    else
-    {
-        UNEXPECTED("Render pass state ", RPName, " is not set in the task context");
-    }
+    StateTransitionDesc Barrier{ShadowMapMgr.GetAtlasSRV()->GetTexture(), RESOURCE_STATE_UNKNOWN,
+                                pDevice->GetDeviceInfo().IsD3DDevice() ? RESOURCE_STATE_SHADER_RESOURCE : RESOURCE_STATE_DEPTH_READ,
+                                STATE_TRANSITION_FLAG_UPDATE_STATE};
+    pCtx->TransitionResourceStates(1, &Barrier);
 }
 
 } // namespace USD

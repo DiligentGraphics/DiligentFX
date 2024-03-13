@@ -52,6 +52,7 @@ class HnTaskManager
 public:
     using TaskUID                                                    = uint64_t;
     static constexpr TaskUID TaskUID_BeginFrame                      = 0x8362faac57354542;
+    static constexpr TaskUID TaskUID_RenderShadows                   = 0x511e003b7a584315;
     static constexpr TaskUID TaskUID_BeginMainPass                   = 0xbdd00156269447a9;
     static constexpr TaskUID TaskUID_RenderRprimsDefaultSelected     = 0x1cdf84fa9ab5423e;
     static constexpr TaskUID TaskUID_RenderRprimsMaskedSelected      = 0xe926da1de43d4f47;
@@ -85,6 +86,7 @@ public:
     ///                             * Prepares render targets and other frame resources
     ///                         - BeginMainPass
     ///                             * Binds the Color and Mesh Id render targes and the the selection depth buffer
+    ///                         - RenderShadows
     ///                         - RenderRprimsDefaultSelected
     ///                             * Renders only selected Rprims with the default material tag
     ///                         - RenderRprimsMaskedSelected
@@ -115,6 +117,7 @@ public:
     ///     |---------------------------------|------------------|-------------------|--------|-----------|----------|------------------|------------|
     ///     | BeginFrame                      |                  |                   |        |           |          |                  |            |
     ///     | BeginMainPass                   |                  |                   |        |           |          |                  |            |
+    ///     | RenderShadows                   |                  |                   |        |           |          |                  |            |
     ///     | RenderRprimsDefaultSelected     |       V          |                   |   V    |     V     |    V     |        V         |            |
     ///     | RenderRprimsMaskedSelected      |       V          |                   |   V    |     V     |    V     |        V         |            |
     ///     | CopySelectionDepth              |                  |                   |        |           |          |        V---copy--|---->V      |
@@ -227,6 +230,7 @@ private:
 
     void CreateBeginFrameTask();
     void CreateBeginMainPassTask();
+    void CreateRenderShadowsTask();
     void CreateRenderRprimsTask(const pxr::TfToken& MaterialTag, TaskUID UID, const HnRenderPassParams& RenderPassParams);
     void CreateRenderEnvMapTask(const pxr::TfToken& RenderPassName);
     void CreateRenderAxesTask(const pxr::TfToken& RenderPassName);

@@ -30,6 +30,7 @@
 #include <array>
 
 #include "Tasks/HnBeginFrameTask.hpp"
+#include "Tasks/HnRenderShadowsTask.hpp"
 #include "Tasks/HnBeginMainPassTask.hpp"
 #include "Tasks/HnRenderRprimsTask.hpp"
 #include "Tasks/HnCopySelectionDepthTask.hpp"
@@ -57,6 +58,7 @@ TF_DEFINE_PRIVATE_TOKENS(
     HnTaskManagerTokens,
 
     (beginFrame)
+    (renderShadows)
     (beginMainPass)
     (copySelectionDepth)
     (renderEnvMapTask)
@@ -143,6 +145,7 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
 {
     // Task creation order defines the default task order
     CreateBeginFrameTask();
+    CreateRenderShadowsTask();
     CreateBeginMainPassTask();
 
     // Opaque selected RPrims -> {GBuffer + SelectionDepth}
@@ -253,6 +256,12 @@ void HnTaskManager::CreateBeginFrameTask()
 {
     HnBeginFrameTaskParams TaskParams;
     CreateTask<HnBeginFrameTask>(HnTaskManagerTokens->beginFrame, TaskUID_BeginFrame, TaskParams);
+}
+
+void HnTaskManager::CreateRenderShadowsTask()
+{
+    HnRenderShadowsTaskParams TaskParams;
+    CreateTask<HnRenderShadowsTask>(HnTaskManagerTokens->renderShadows, TaskUID_RenderShadows, TaskParams);
 }
 
 void HnTaskManager::CreateBeginMainPassTask()
