@@ -66,6 +66,47 @@ RefCntAutoPtr<ITextureAtlasSuballocation> HnShadowMapManager::Allocate(Uint32 Wi
 void HnShadowMapManager::Commit(IRenderDevice* pDevice, IDeviceContext* pCtx)
 {
     m_ShadowMapAtlas->Update(pDevice, pCtx);
+
+    const Uint32 AtlasVersion = m_ShadowMapAtlas->GetVersion();
+    if (AtlasVersion == m_AtlasVersion)
+        return;
+
+    m_DSVs.clear();
+
+    ITexture* pShadowTexture = m_ShadowMapAtlas->GetTexture();
+    if (pShadowTexture == nullptr)
+    {
+        UNEXPECTED("Shadow map atlas texture is null");
+        return;
+    }
+
+    const TextureDesc& SMDesc = pShadowTexture->GetDesc();
+    VERIFY_EXPR(m_DSVs.empty() || m_DSVs.size() == SMDesc.ArraySize);
+
+    if (m_DSVs.empty())
+    {
+        m_DSVs.resize(SMDesc.ArraySize);
+        for (Uint32 Slice = 0; Slice < SMDesc.ArraySize; ++Slice)
+        {
+            std::string Name = std::string{"Shadow map DSV for slice "} + std::to_string(Slice);
+
+            TextureViewDesc DSVDesc;
+            DSVDesc.Name            = Name.c_str();
+            DSVDesc.ViewType        = TEXTURE_VIEW_DEPTH_STENCIL;
+            DSVDesc.Format          = SMDesc.Format;
+            DSVDesc.TextureDim      = SMDesc.Type;
+            DSVDesc.NumArraySlices  = 1;
+            DSVDesc.FirstArraySlice = Slice;
+            DSVDesc.MostDetailedMip = 0;
+            DSVDesc.NumMipLevels    = 1;
+            RefCntAutoPtr<ITextureView> pDSV;
+            pShadowTexture->CreateView(DSVDesc, &pDSV);
+            VERIFY_EXPR(pDSV);
+            m_DSVs[Slice] = std::move(pDSV);
+        }
+    }
+
+    m_AtlasVersion = AtlasVersion;
 }
 
 const TextureDesc& HnShadowMapManager::GetAtlasDesc() const
@@ -78,7 +119,12 @@ Uint32 HnShadowMapManager::GetAtlasVersion() const
     return m_ShadowMapAtlas->GetVersion();
 }
 
-ITextureView* HnShadowMapManager::GetAtlasSRV() const
+ITexture* HnShadowMapManager::GetShadowTexture() const
+{
+    return m_ShadowMapAtlas->GetTexture();
+}
+
+ITextureView* HnShadowMapManager::GetShadowSRV() const
 {
     return m_ShadowMapAtlas->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
 }

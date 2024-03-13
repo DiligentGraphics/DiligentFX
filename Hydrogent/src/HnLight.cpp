@@ -491,6 +491,20 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
                 }
                 m_ShadowMapShaderInfo = std::make_unique<HLSL::PBRShadowMapInfo>();
 
+
+                const float4& UVScaleBias      = m_ShadowMapSuballocation->GetUVScaleBias();
+                m_ShadowMapShaderInfo->UVScale = {UVScaleBias.x, UVScaleBias.y};
+                m_ShadowMapShaderInfo->UVBias  = {UVScaleBias.z, UVScaleBias.w};
+
+                m_ShadowMapShaderInfo->ShadowMapSlice = static_cast<float>(m_ShadowMapSuballocation->GetSlice());
+
+                m_ShadowMapShaderInfo->WorldToLightProjSpace = {
+                    0, 0, 0, 0,
+                    0, 0, 0, 0,
+                    0, 0, 0, 0,
+                    0, 0, 0, 1, //
+                };
+
                 LightDirty = true;
             }
         }

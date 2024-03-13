@@ -455,8 +455,6 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
                 UNEXPECTED("Shadow map info is null");
             }
             LightAttribs.ShadowMapIndex = ShadowMapCount;
-            // No shadow map yet
-            LightAttribs.ShadowMapIndex = -1;
             ++ShadowMapCount;
         }
 

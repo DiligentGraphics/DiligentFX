@@ -26,6 +26,8 @@
 
 #pragma once
 
+#include <vector>
+
 #include "RenderDevice.h"
 #include "DeviceContext.h"
 #include "RefCntAutoPtr.hpp"
@@ -58,10 +60,16 @@ public:
 
     const TextureDesc& GetAtlasDesc() const;
 
-    ITextureView* GetAtlasSRV() const;
+    ITexture*     GetShadowTexture() const;
+    ITextureView* GetShadowDSV(Uint32 Slice) const { return m_DSVs[Slice]; }
+    ITextureView* GetShadowSRV() const;
 
 private:
     RefCntAutoPtr<IDynamicTextureAtlas> m_ShadowMapAtlas;
+
+    Uint32 m_AtlasVersion = ~0u;
+
+    std::vector<RefCntAutoPtr<ITextureView>> m_DSVs;
 };
 
 } // namespace USD

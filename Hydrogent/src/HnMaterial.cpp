@@ -816,7 +816,7 @@ void HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
         UsdRenderer.InitCommonSRBVars(pSRB,
                                       RendererDelegate.GetFrameAttribsCB(),
                                       BindPrimitiveAttribsBuffer,
-                                      ShadowMapMgr ? ShadowMapMgr->GetAtlasSRV() : nullptr);
+                                      ShadowMapMgr ? ShadowMapMgr->GetShadowSRV() : nullptr);
 
         if (BindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_ATLAS ||
             BindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_DYNAMIC)

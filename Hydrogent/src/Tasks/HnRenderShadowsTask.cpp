@@ -85,7 +85,15 @@ void HnRenderShadowsTask::Execute(pxr::HdTaskContext* TaskCtx)
     IRenderDevice*  pDevice = RenderDelegate->GetDevice();
     IDeviceContext* pCtx    = RenderDelegate->GetDeviceContext();
 
-    StateTransitionDesc Barrier{ShadowMapMgr->GetAtlasSRV()->GetTexture(), RESOURCE_STATE_UNKNOWN,
+    const Uint32 NumSlices = ShadowMapMgr->GetAtlasDesc().ArraySize;
+    for (Uint32 i = 0; i < NumSlices; ++i)
+    {
+        ITextureView* pShadowDSV = ShadowMapMgr->GetShadowDSV(i);
+        pCtx->SetRenderTargets(0, nullptr, pShadowDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        pCtx->ClearDepthStencil(pShadowDSV, CLEAR_DEPTH_FLAG, 1.f, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    }
+
+    StateTransitionDesc Barrier{ShadowMapMgr->GetShadowTexture(), RESOURCE_STATE_UNKNOWN,
                                 pDevice->GetDeviceInfo().IsD3DDevice() ? RESOURCE_STATE_SHADER_RESOURCE : RESOURCE_STATE_DEPTH_READ,
                                 STATE_TRANSITION_FLAG_UPDATE_STATE};
     pCtx->TransitionResourceStates(1, &Barrier);
