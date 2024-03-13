@@ -27,6 +27,8 @@
 #include "Tasks/HnTask.hpp"
 #include "HnTokens.hpp"
 #include "HnRenderBuffer.hpp"
+#include "HnFrameRenderTargets.hpp"
+#include "HnRenderPassState.hpp"
 
 namespace Diligent
 {
