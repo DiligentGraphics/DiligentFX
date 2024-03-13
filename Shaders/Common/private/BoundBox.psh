@@ -1,0 +1,12 @@
+
+struct BoundBoxVSOutput
+{
+    float4 Pos   : SV_Position;
+    float4 Color : COLOR;
+};
+
+void BoundBoxPS(in BoundBoxVSOutput VSOut,
+                out float4 Color : SV_Target0)
+{
+    Color = VSOut.Color;
+}
