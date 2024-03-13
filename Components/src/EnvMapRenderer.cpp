@@ -191,22 +191,18 @@ IPipelineState* EnvMapRenderer::GetPSO(const PSOKey& Key)
     return PSO;
 }
 
-void EnvMapRenderer::Render(const RenderAttribs& Attribs, const HLSL::ToneMappingAttribs& ToneMapping)
+void EnvMapRenderer::Prepare(IDeviceContext*                 pContext,
+                             const RenderAttribs&            Attribs,
+                             const HLSL::ToneMappingAttribs& ToneMapping)
 {
-    if (Attribs.pContext == nullptr)
-    {
-        UNEXPECTED("Context must not be null");
-        return;
-    }
-
     if (Attribs.pEnvMap == nullptr)
     {
         UNEXPECTED("Environment map must not be null");
         return;
     }
 
-    auto* pPSO = GetPSO({ToneMapping.iToneMappingMode, Attribs.ConvertOutputToSRGB, Attribs.ComputeMotionVectors});
-    if (pPSO == nullptr)
+    m_pCurrentPSO = GetPSO({ToneMapping.iToneMappingMode, Attribs.ConvertOutputToSRGB, Attribs.ComputeMotionVectors});
+    if (m_pCurrentPSO == nullptr)
     {
         UNEXPECTED("Failed to get PSO");
         return;
@@ -226,24 +222,39 @@ void EnvMapRenderer::Render(const RenderAttribs& Attribs, const HLSL::ToneMappin
             m_ShaderAttribs->MipLevel      = Attribs.MipLevel;
             m_ShaderAttribs->Alpha         = Attribs.Alpha;
 
-            Attribs.pContext->UpdateBuffer(m_RenderAttribsCB, 0, sizeof(EnvMapShaderAttribs), m_ShaderAttribs.get(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+            pContext->UpdateBuffer(m_RenderAttribsCB, 0, sizeof(EnvMapShaderAttribs), m_ShaderAttribs.get(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
             StateTransitionDesc Barrier{m_RenderAttribsCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE};
-            Attribs.pContext->TransitionResourceStates(1, &Barrier);
+            pContext->TransitionResourceStates(1, &Barrier);
         }
     }
     else
     {
-        MapHelper<EnvMapShaderAttribs> EnvMapAttribs{Attribs.pContext, m_RenderAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
+        MapHelper<EnvMapShaderAttribs> EnvMapAttribs{pContext, m_RenderAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
         EnvMapAttribs->ToneMapping   = ToneMapping;
         EnvMapAttribs->AverageLogLum = Attribs.AverageLogLum;
         EnvMapAttribs->MipLevel      = Attribs.MipLevel;
         EnvMapAttribs->Alpha         = Attribs.Alpha;
     }
+}
 
-    Attribs.pContext->SetPipelineState(pPSO);
-    Attribs.pContext->CommitShaderResources(m_SRB, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
+void EnvMapRenderer::Render(IDeviceContext* pContext)
+{
+    if (pContext == nullptr)
+    {
+        UNEXPECTED("Context must not be null");
+        return;
+    }
+
+    if (m_pCurrentPSO == nullptr)
+    {
+        UNEXPECTED("Current PSO is null. Did you forget to call Prepare()?");
+        return;
+    }
+
+    pContext->SetPipelineState(m_pCurrentPSO);
+    pContext->CommitShaderResources(m_SRB, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
     DrawAttribs drawAttribs{3, DRAW_FLAG_VERIFY_ALL};
-    Attribs.pContext->Draw(drawAttribs);
+    pContext->Draw(drawAttribs);
 }
 
 } // namespace Diligent

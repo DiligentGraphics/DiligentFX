@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -64,8 +64,7 @@ public:
 
     struct RenderAttribs
     {
-        IDeviceContext* pContext = nullptr;
-        ITextureView*   pEnvMap  = nullptr;
+        ITextureView* pEnvMap = nullptr;
 
         float AverageLogLum = 1;
         float MipLevel      = 0;
@@ -76,7 +75,10 @@ public:
 
         bool ComputeMotionVectors = false;
     };
-    void Render(const RenderAttribs& Attribs, const HLSL::ToneMappingAttribs& ToneMapping);
+    void Prepare(IDeviceContext*                 pContext,
+                 const RenderAttribs&            Attribs,
+                 const HLSL::ToneMappingAttribs& ToneMapping);
+    void Render(IDeviceContext* pContext);
 
 
     struct PSOKey
@@ -119,6 +121,8 @@ private:
     const std::string                 m_PSMainSource;
 
     std::unordered_map<PSOKey, RefCntAutoPtr<IPipelineState>, PSOKey::Hasher> m_PSOs;
+
+    IPipelineState* m_pCurrentPSO = nullptr;
 
     RefCntAutoPtr<IShaderResourceBinding> m_SRB;
     IShaderResourceVariable*              m_pEnvMapVar = nullptr;

@@ -118,12 +118,12 @@ void HnRenderEnvMapTask::Prepare(pxr::HdTaskContext* TaskCtx,
 {
     m_RenderIndex = RenderIndex;
 
+    HnRenderDelegate* pRenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+
     if (!m_EnvMapRenderer)
     {
         if (HnRenderPassState* RenderPassState = GetRenderPassState(TaskCtx, m_RenderPassName))
         {
-            HnRenderDelegate* pRenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
-
             EnvMapRenderer::CreateInfo EnvMapRndrCI;
             EnvMapRndrCI.pDevice          = pRenderDelegate->GetDevice();
             EnvMapRndrCI.pCameraAttribsCB = pRenderDelegate->GetFrameAttribsCB();
@@ -152,24 +152,6 @@ void HnRenderEnvMapTask::Prepare(pxr::HdTaskContext* TaskCtx,
             UNEXPECTED("Render pass state is not set in the task context");
         }
     }
-}
-
-void HnRenderEnvMapTask::Execute(pxr::HdTaskContext* TaskCtx)
-{
-    if (!m_EnvMapRenderer)
-        return;
-
-    HnRenderDelegate* pRenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
-
-    if (HnRenderPassState* RenderPassState = GetRenderPassState(TaskCtx, m_RenderPassName))
-    {
-        RenderPassState->Commit(pRenderDelegate->GetDeviceContext());
-    }
-    else
-    {
-        UNEXPECTED("Render pass state is not set in the task context");
-        return;
-    }
 
     auto USDRenderer = pRenderDelegate->GetUSDRenderer();
     if (!USDRenderer)
@@ -192,7 +174,6 @@ void HnRenderEnvMapTask::Execute(pxr::HdTaskContext* TaskCtx)
     TMAttribs.fLuminanceSaturation = 1.0;
 
     EnvMapRenderer::RenderAttribs EnvMapAttribs;
-    EnvMapAttribs.pContext      = pRenderDelegate->GetDeviceContext();
     EnvMapAttribs.pEnvMap       = pEnvMapSRV;
     EnvMapAttribs.AverageLogLum = 0.3f;
     EnvMapAttribs.MipLevel      = 1;
@@ -200,9 +181,29 @@ void HnRenderEnvMapTask::Execute(pxr::HdTaskContext* TaskCtx)
     EnvMapAttribs.Alpha                = 0;
     EnvMapAttribs.ComputeMotionVectors = true;
 
-    ScopedDebugGroup DebugGroup{EnvMapAttribs.pContext, "Render Environment Map"};
+    m_EnvMapRenderer->Prepare(pRenderDelegate->GetDeviceContext(), EnvMapAttribs, TMAttribs);
+}
 
-    m_EnvMapRenderer->Render(EnvMapAttribs, TMAttribs);
+void HnRenderEnvMapTask::Execute(pxr::HdTaskContext* TaskCtx)
+{
+    if (!m_EnvMapRenderer)
+        return;
+
+    HnRenderDelegate* pRenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+    IDeviceContext*   pContext        = pRenderDelegate->GetDeviceContext();
+
+    if (HnRenderPassState* RenderPassState = GetRenderPassState(TaskCtx, m_RenderPassName))
+    {
+        RenderPassState->Commit(pContext);
+    }
+    else
+    {
+        UNEXPECTED("Render pass state is not set in the task context");
+        return;
+    }
+
+    ScopedDebugGroup DebugGroup{pContext, "Render Environment Map"};
+    m_EnvMapRenderer->Render(pContext);
 }
 
 } // namespace USD
