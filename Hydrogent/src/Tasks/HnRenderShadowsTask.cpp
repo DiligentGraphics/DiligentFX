@@ -74,12 +74,18 @@ void HnRenderShadowsTask::Execute(pxr::HdTaskContext* TaskCtx)
         return;
     }
 
-    HnRenderDelegate*         RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
-    IRenderDevice*            pDevice        = RenderDelegate->GetDevice();
-    IDeviceContext*           pCtx           = RenderDelegate->GetDeviceContext();
-    const HnShadowMapManager& ShadowMapMgr   = RenderDelegate->GetShadowMapManager();
+    const HnRenderDelegate*   RenderDelegate = static_cast<const HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+    const HnShadowMapManager* ShadowMapMgr   = RenderDelegate->GetShadowMapManager();
 
-    StateTransitionDesc Barrier{ShadowMapMgr.GetAtlasSRV()->GetTexture(), RESOURCE_STATE_UNKNOWN,
+    if (ShadowMapMgr == nullptr)
+    {
+        UNEXPECTED("Shadow map manager is null, which indicates that shadows are disabled");
+    }
+
+    IRenderDevice*  pDevice = RenderDelegate->GetDevice();
+    IDeviceContext* pCtx    = RenderDelegate->GetDeviceContext();
+
+    StateTransitionDesc Barrier{ShadowMapMgr->GetAtlasSRV()->GetTexture(), RESOURCE_STATE_UNKNOWN,
                                 pDevice->GetDeviceInfo().IsD3DDevice() ? RESOURCE_STATE_SHADER_RESOURCE : RESOURCE_STATE_DEPTH_READ,
                                 STATE_TRANSITION_FLAG_UPDATE_STATE};
     pCtx->TransitionResourceStates(1, &Barrier);

@@ -145,7 +145,10 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
 {
     // Task creation order defines the default task order
     CreateBeginFrameTask();
-    CreateRenderShadowsTask();
+    if (static_cast<const HnRenderDelegate*>(RenderIndex.GetRenderDelegate())->GetShadowMapManager())
+    {
+        CreateRenderShadowsTask();
+    }
     CreateBeginMainPassTask();
 
     // Opaque selected RPrims -> {GBuffer + SelectionDepth}

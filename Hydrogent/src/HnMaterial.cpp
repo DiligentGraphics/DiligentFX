@@ -621,9 +621,11 @@ void HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
 
     HN_MATERIAL_TEXTURES_BINDING_MODE BindingMode = static_cast<const HnRenderParam*>(RendererDelegate.GetRenderParam())->GetTextureBindingMode();
 
+    const auto& ShadowMapMgr = RendererDelegate.GetShadowMapManager();
+
     const Uint32 AtlasVersion =
         RendererDelegate.GetTextureRegistry().GetAtlasVersion() +
-        RendererDelegate.GetShadowMapManager().GetAtlasVersion();
+        (ShadowMapMgr ? ShadowMapMgr->GetAtlasVersion() : 0);
 
     if (BindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_ATLAS && AtlasVersion != m_AtlasVersion)
     {
@@ -814,7 +816,7 @@ void HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
         UsdRenderer.InitCommonSRBVars(pSRB,
                                       RendererDelegate.GetFrameAttribsCB(),
                                       BindPrimitiveAttribsBuffer,
-                                      RendererDelegate.GetShadowMapManager().GetAtlasSRV());
+                                      ShadowMapMgr ? ShadowMapMgr->GetAtlasSRV() : nullptr);
 
         if (BindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_ATLAS ||
             BindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_DYNAMIC)

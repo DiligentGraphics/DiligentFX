@@ -127,6 +127,7 @@ public:
 
         bool UseVertexPool = false;
         bool UseIndexPool  = false;
+        bool EnableShadows = false;
 
         HN_MATERIAL_TEXTURES_BINDING_MODE TextureBindingMode = HN_MATERIAL_TEXTURES_BINDING_MODE_LEGACY;
 
@@ -295,7 +296,7 @@ public:
     virtual void CommitResources(pxr::HdChangeTracker* Tracker) override final;
 
     HnTextureRegistry&  GetTextureRegistry() { return m_TextureRegistry; }
-    HnShadowMapManager& GetShadowMapManager() const { return *m_ShadowMapManager; }
+    HnShadowMapManager* GetShadowMapManager() const { return m_ShadowMapManager.get(); }
 
     FixedBlockMemoryAllocator& GetMeshAttribsAllocator() { return m_MeshAttribsAllocator; }
 

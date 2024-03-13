@@ -445,52 +445,54 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
     {
         pxr::HdRenderIndex& RenderIndex    = SceneDelegate->GetRenderIndex();
         HnRenderDelegate*   RenderDelegate = static_cast<HnRenderDelegate*>(RenderIndex.GetRenderDelegate());
-        HnShadowMapManager& ShadowMapMg    = RenderDelegate->GetShadowMapManager();
-        const TextureDesc&  ShadowMapDesc  = ShadowMapMg.GetAtlasDesc();
-
-        const pxr::VtValue ShadowResolutionVal = SceneDelegate->GetLightParamValue(Id, HnLightPrivateTokens->shadowResolution);
-        if (ShadowResolutionVal.IsHolding<int>())
+        if (HnShadowMapManager* ShadowMapMg = RenderDelegate->GetShadowMapManager())
         {
-            m_ShadowMapResolution = static_cast<Uint32>(ShadowResolutionVal.Get<int>());
-        }
+            const TextureDesc& ShadowMapDesc = ShadowMapMg->GetAtlasDesc();
 
-        if (m_ShadowMapResolution > ShadowMapDesc.Width ||
-            m_ShadowMapResolution > ShadowMapDesc.Height)
-        {
-            LOG_WARNING_MESSAGE("Requested shadow map resolution ", m_ShadowMapResolution, "x", m_ShadowMapResolution,
-                                "  for light ", Id, " is too large for the shadow map atlas ", ShadowMapDesc.Width, "x", ShadowMapDesc.Height);
-            m_ShadowMapResolution = std::min(ShadowMapDesc.Width, ShadowMapDesc.Height);
-        }
-
-        const bool ShadowsEnabled = SceneDelegate->GetLightParamValue(Id, pxr::HdLightTokens->shadowEnable).GetWithDefault<bool>(false);
-        if (ShadowsEnabled)
-        {
-            if (m_ShadowMapSuballocation &&
-                m_ShadowMapSuballocation->GetSize() != uint2{m_ShadowMapResolution, m_ShadowMapResolution})
+            const pxr::VtValue ShadowResolutionVal = SceneDelegate->GetLightParamValue(Id, HnLightPrivateTokens->shadowResolution);
+            if (ShadowResolutionVal.IsHolding<int>())
             {
-                m_ShadowMapSuballocation.Release();
-                m_ShadowMapShaderInfo.reset();
+                m_ShadowMapResolution = static_cast<Uint32>(ShadowResolutionVal.Get<int>());
             }
-        }
-        else
-        {
-            if (m_ShadowMapSuballocation)
+
+            if (m_ShadowMapResolution > ShadowMapDesc.Width ||
+                m_ShadowMapResolution > ShadowMapDesc.Height)
             {
-                m_ShadowMapSuballocation.Release();
+                LOG_WARNING_MESSAGE("Requested shadow map resolution ", m_ShadowMapResolution, "x", m_ShadowMapResolution,
+                                    "  for light ", Id, " is too large for the shadow map atlas ", ShadowMapDesc.Width, "x", ShadowMapDesc.Height);
+                m_ShadowMapResolution = std::min(ShadowMapDesc.Width, ShadowMapDesc.Height);
+            }
+
+            const bool ShadowsEnabled = SceneDelegate->GetLightParamValue(Id, pxr::HdLightTokens->shadowEnable).GetWithDefault<bool>(false);
+            if (ShadowsEnabled)
+            {
+                if (m_ShadowMapSuballocation &&
+                    m_ShadowMapSuballocation->GetSize() != uint2{m_ShadowMapResolution, m_ShadowMapResolution})
+                {
+                    m_ShadowMapSuballocation.Release();
+                    m_ShadowMapShaderInfo.reset();
+                }
+            }
+            else
+            {
+                if (m_ShadowMapSuballocation)
+                {
+                    m_ShadowMapSuballocation.Release();
+                    LightDirty = true;
+                }
+            }
+
+            if (ShadowsEnabled && !m_ShadowMapSuballocation)
+            {
+                m_ShadowMapSuballocation = ShadowMapMg->Allocate(m_ShadowMapResolution, m_ShadowMapResolution);
+                if (!m_ShadowMapSuballocation)
+                {
+                    LOG_ERROR_MESSAGE("Failed to allocate shadow map for light ", Id);
+                }
+                m_ShadowMapShaderInfo = std::make_unique<HLSL::PBRShadowMapInfo>();
+
                 LightDirty = true;
             }
-        }
-
-        if (ShadowsEnabled && !m_ShadowMapSuballocation)
-        {
-            m_ShadowMapSuballocation = ShadowMapMg.Allocate(m_ShadowMapResolution, m_ShadowMapResolution);
-            if (!m_ShadowMapSuballocation)
-            {
-                LOG_ERROR_MESSAGE("Failed to allocate shadow map for light ", Id);
-            }
-            m_ShadowMapShaderInfo = std::make_unique<HLSL::PBRShadowMapInfo>();
-
-            LightDirty = true;
         }
 
         *DirtyBits &= ~DirtyShadowParams;

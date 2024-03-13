@@ -128,10 +128,9 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
     USDRendererCI.CreateDefaultTextures = false;
     // Enable clear coat support
     USDRendererCI.EnableClearCoat = true;
-    // Enable shadows
-    USDRendererCI.EnableShadows = true;
 
     USDRendererCI.MaxLightCount              = RenderDelegateCI.MaxLightCount;
+    USDRendererCI.EnableShadows              = RenderDelegateCI.EnableShadows;
     USDRendererCI.MaxShadowCastingLightCount = RenderDelegateCI.MaxShadowCastingLightCount;
 
     USDRendererCI.ColorTargetIndex        = HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR;
@@ -264,6 +263,15 @@ static RefCntAutoPtr<GLTF::ResourceManager> CreateResourceManager(const HnRender
     return GLTF::ResourceManager::Create(CI.pDevice, ResMgrCI);
 }
 
+static std::unique_ptr<HnShadowMapManager> CreateShadowMapManager(const HnRenderDelegate::CreateInfo& CI)
+{
+    if (!CI.EnableShadows)
+        return {};
+
+    HnShadowMapManager::CreateInfo ShadowMgrCI;
+    return std::make_unique<HnShadowMapManager>(ShadowMgrCI);
+}
+
 HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
     m_pDevice{CI.pDevice},
     m_pContext{CI.pContext},
@@ -275,7 +283,7 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
     m_FrameAttribsCB{CreateFrameAttribsCB(CI.pDevice, m_USDRenderer->GetPRBFrameAttribsSize())},
     m_TextureRegistry{CI.pDevice, CI.TextureAtlasDim != 0 ? m_ResourceMgr : RefCntAutoPtr<GLTF::ResourceManager>{}},
     m_RenderParam{std::make_unique<HnRenderParam>(CI.UseVertexPool, CI.UseIndexPool, CI.TextureBindingMode, CI.MetersPerUnit)},
-    m_ShadowMapManager{std::make_unique<HnShadowMapManager>(HnShadowMapManager::CreateInfo{})},
+    m_ShadowMapManager{CreateShadowMapManager(CI)},
     m_MeshAttribsAllocator{GetRawAllocator(), sizeof(HnMesh::Attributes), 64}
 {
 }
@@ -476,7 +484,10 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
     m_ResourceMgr->UpdateIndexBuffer(m_pDevice, m_pContext);
 
     m_TextureRegistry.Commit(m_pContext);
-    m_ShadowMapManager->Commit(m_pDevice, m_pContext);
+    if (m_ShadowMapManager)
+    {
+        m_ShadowMapManager->Commit(m_pDevice, m_pContext);
+    }
 
     {
         const auto MaterialVersion = m_RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::Material);
