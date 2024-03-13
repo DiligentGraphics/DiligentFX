@@ -941,7 +941,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
     Macros.Add("USE_HDR_IBL_CUBEMAPS", true);
     Macros.Add("USE_SEPARATE_METALLIC_ROUGHNESS_TEXTURES", m_Settings.UseSeparateMetallicRoughnessTextures);
 
-    static_assert(static_cast<int>(DebugViewType::NumDebugViews) == 33, "Did you add debug view? You may need to handle it here.");
+    static_assert(static_cast<int>(DebugViewType::NumDebugViews) == 34, "Did you add debug view? You may need to handle it here.");
     // clang-format off
     Macros.Add("DEBUG_VIEW",                       static_cast<int>(Key.GetDebugView()));
     Macros.Add("DEBUG_VIEW_NONE",                  static_cast<int>(DebugViewType::None));
@@ -963,6 +963,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
     Macros.Add("DEBUG_VIEW_PUNCTUAL_LIGHTING",     static_cast<int>(DebugViewType::PunctualLighting));
     Macros.Add("DEBUG_VIEW_DIFFUSE_IBL",           static_cast<int>(DebugViewType::DiffuseIBL));
     Macros.Add("DEBUG_VIEW_SPECULAR_IBL",          static_cast<int>(DebugViewType::SpecularIBL));
+    Macros.Add("DEBUG_VIEW_WHITE_BASE_COLOR",      static_cast<int>(DebugViewType::WhiteBaseColor));
     Macros.Add("DEBUG_VIEW_CLEAR_COAT",            static_cast<int>(DebugViewType::ClearCoat));
     Macros.Add("DEBUG_VIEW_CLEAR_COAT_FACTOR",     static_cast<int>(DebugViewType::ClearCoatFactor));
     Macros.Add("DEBUG_VIEW_CLEAR_COAT_ROUGHNESS",  static_cast<int>(DebugViewType::ClearCoatRoughness));

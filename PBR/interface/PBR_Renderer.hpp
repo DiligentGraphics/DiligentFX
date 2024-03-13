@@ -352,6 +352,7 @@ public:
         PunctualLighting,
         DiffuseIBL,
         SpecularIBL,
+        WhiteBaseColor,
         ClearCoat,
         ClearCoatFactor,
         ClearCoatRoughness,

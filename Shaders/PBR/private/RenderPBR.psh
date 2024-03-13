@@ -374,7 +374,13 @@ PSOutput main(in VSOutput VSOut,
         discard;
     }
 
-    SurfaceShadingInfo  Shading     = GetSurfaceShadingInfo(VSOut, PRIMITIVE.Material, BaseColor, NormalInfo, NMUVInfo, ClearCoatNMUVInfo);
+#   if DEBUG_VIEW == DEBUG_VIEW_WHITE_BASE_COLOR
+    {
+        BaseColor.rgb = float3(1.0, 1.0, 1.0);
+    }
+#   endif
+
+    SurfaceShadingInfo Shading = GetSurfaceShadingInfo(VSOut, PRIMITIVE.Material, BaseColor, NormalInfo, NMUVInfo, ClearCoatNMUVInfo);
     SurfaceLightingInfo SrfLighting = GetDefaultSurfaceLightingInfo();
 
     float4 OutColor;
@@ -486,6 +492,10 @@ PSOutput main(in VSOutput VSOut,
 #elif (DEBUG_VIEW == DEBUG_VIEW_MOTION_VECTORS)
     {
         OutColor.rgb  = float3(sqrt(abs(MotionVector)) * 5.0, 0.0);
+    }
+#elif (DEBUG_VIEW == DEBUG_VIEW_WHITE_BASE_COLOR)
+    {
+        // Already handled
     }
 #elif (DEBUG_VIEW != DEBUG_VIEW_NONE)
     {

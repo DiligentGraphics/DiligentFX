@@ -516,9 +516,15 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
     const HnRenderParam* pRenderParam   = static_cast<const HnRenderParam*>(RenderDelegate->GetRenderParam());
     const TextureDesc&   FinalColorDesc = m_FinalColorRTV->GetTexture()->GetDesc();
 
+    const PBR_Renderer::DebugViewType DebugView = pRenderParam->GetDebugView();
+
+    const bool EnablePostProcessing =
+        (DebugView == PBR_Renderer::DebugViewType::None || DebugView == PBR_Renderer::DebugViewType::WhiteBaseColor) &&
+        (pRenderParam->GetRenderMode() == HN_RENDER_MODE_SOLID);
+
     float SSRScale  = 0;
     float SSAOScale = 0;
-    if (pRenderParam->GetDebugView() == PBR_Renderer::DebugViewType::None && pRenderParam->GetRenderMode() == HN_RENDER_MODE_SOLID)
+    if (EnablePostProcessing)
     {
         SSRScale  = m_Params.SSRScale;
         SSAOScale = m_Params.SSAOScale;
@@ -536,10 +542,7 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
         m_AttribsCBDirty = true;
     }
     m_UseSSAO = m_SSAOScale > 0;
-
-    m_UseTAA = m_Params.EnableTAA &&
-        pRenderParam->GetDebugView() == PBR_Renderer::DebugViewType::None &&
-        pRenderParam->GetRenderMode() == HN_RENDER_MODE_SOLID;
+    m_UseTAA  = m_Params.EnableTAA && EnablePostProcessing;
 
     m_PostFXContext->PrepareResources({pRenderParam->GetFrameNumber(), FinalColorDesc.Width, FinalColorDesc.Height});
 
