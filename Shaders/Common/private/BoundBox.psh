@@ -5,8 +5,14 @@ struct BoundBoxVSOutput
     float4 Color : COLOR;
 };
 
-void BoundBoxPS(in BoundBoxVSOutput VSOut,
-                out float4 Color : SV_Target0)
+float4 GetBoundBoxColor(BoundBoxVSOutput VSOut)
 {
-    Color = VSOut.Color;
+    return VSOut.Color;
 }
+
+#include "PSMainGenerated.generated"
+//void main(in BoundBoxVSOutput VSOut,
+//          out float4 Color : SV_Target)
+//{
+//    Color = GetBoundBoxColor(VSOut);
+//}

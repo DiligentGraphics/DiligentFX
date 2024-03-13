@@ -75,6 +75,14 @@ BoundBoxRenderer::~BoundBoxRenderer()
 {
 }
 
+static constexpr char DefaultPSMain[] = R"(
+void main(in BoundBoxVSOutput VSOut,
+          out float4 Color : SV_Target)
+{
+    Color = GetBoundBoxColor(VSOut);
+}
+)";
+
 IPipelineState* BoundBoxRenderer::GetPSO(const PSOKey& Key)
 {
     auto it = m_PSOs.find(Key);
@@ -83,7 +91,14 @@ IPipelineState* BoundBoxRenderer::GetPSO(const PSOKey& Key)
 
     RenderDeviceWithCache_N Device{m_pDevice, m_pStateCache};
 
-    IShaderSourceInputStreamFactory* pShaderSourceFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();
+    std::string PSMainSource = m_PSMainSource;
+    if (PSMainSource.empty())
+        PSMainSource = DefaultPSMain;
+
+    RefCntAutoPtr<IShaderSourceInputStreamFactory> pMemorySourceFactory =
+        CreateMemoryShaderSourceFactory({MemoryShaderSourceFileInfo{"PSMainGenerated.generated", PSMainSource}});
+    RefCntAutoPtr<IShaderSourceInputStreamFactory> pShaderSourceFactory =
+        CreateCompoundShaderSourceFactory({&DiligentFXShaderSourceStreamFactory::GetInstance(), pMemorySourceFactory});
 
     ShaderCreateInfo ShaderCI;
     ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
@@ -110,7 +125,7 @@ IPipelineState* BoundBoxRenderer::GetPSO(const PSOKey& Key)
     RefCntAutoPtr<IShader> pPS;
     {
         ShaderCI.Desc       = {"Bound Box PS", SHADER_TYPE_PIXEL, true};
-        ShaderCI.EntryPoint = "BoundBoxPS";
+        ShaderCI.EntryPoint = "main";
         ShaderCI.FilePath   = "BoundBox.psh";
 
         pPS = Device.CreateShader(ShaderCI);
