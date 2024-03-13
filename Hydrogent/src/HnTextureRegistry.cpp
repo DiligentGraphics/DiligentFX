@@ -85,27 +85,38 @@ void HnTextureRegistry::InitializeHandle(IRenderDevice*     pDevice,
     }
     else
     {
-        VERIFY_EXPR(!Handle);
-        if (pLoader->GetTextureDesc().Type == RESOURCE_DIM_TEX_2D)
+        if (!Handle)
         {
-            auto TexDesc = pLoader->GetTextureDesc();
-            // PBR Renderer expects 2D textures to be 2D array textures
-            TexDesc.Type      = RESOURCE_DIM_TEX_2D_ARRAY;
-            TexDesc.ArraySize = 1;
+            if (pLoader->GetTextureDesc().Type == RESOURCE_DIM_TEX_2D)
+            {
+                auto TexDesc = pLoader->GetTextureDesc();
+                // PBR Renderer expects 2D textures to be 2D array textures
+                TexDesc.Type      = RESOURCE_DIM_TEX_2D_ARRAY;
+                TexDesc.ArraySize = 1;
 
-            TextureData InitData = pLoader->GetTextureData();
-            pDevice->CreateTexture(TexDesc, &InitData, &Handle.pTexture);
+                TextureData InitData = pLoader->GetTextureData();
+                pDevice->CreateTexture(TexDesc, &InitData, &Handle.pTexture);
+            }
+            else
+            {
+                pLoader->CreateTexture(pDevice, &Handle.pTexture);
+            }
+            if (!Handle.pTexture)
+            {
+                UNEXPECTED("Failed to create texture");
+                return;
+            }
+
+            pDevice->CreateSampler(SamDesc, &Handle.pSampler);
+            VERIFY_EXPR(Handle.pSampler);
+            Handle.pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE)->SetSampler(Handle.pSampler);
         }
-        else
+
+        if (pContext != nullptr)
         {
-            pLoader->CreateTexture(pDevice, &Handle.pTexture);
+            StateTransitionDesc Barrier{Handle.pTexture, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE};
+            pContext->TransitionResourceStates(1, &Barrier);
         }
-        if (!Handle.pTexture)
-            return;
-
-        pDevice->CreateSampler(SamDesc, &Handle.pSampler);
-        VERIFY_EXPR(Handle.pSampler);
-        Handle.pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE)->SetSampler(Handle.pSampler);
     }
 }
 
@@ -162,7 +173,7 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const pxr:
                 }
             }
 
-            // If texture was not allocated in the atlas (because atlas is disabled or because it does not fit),
+            // If the texture was not allocated in the atlas (because the atlas is disabled or because it does not fit),
             // try to create it as a standalone texture.
             if (!TexHandle->pAtlasSuballocation)
             {
@@ -172,9 +183,9 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const pxr:
                 }
             }
 
-            // If there is no texture (which means it was allocated in the atlas or it
-            // can't be created in the worker thread), handle it in the main thread.
-            if (!TexHandle->pTexture)
+            // Finish initialization in the main thread: we either need to upload the texture data to the atlas or
+            // create the texture in the main thread if the device does not support multithreaded resource creation
+            // and transition it to the shader resource state.
             {
                 std::lock_guard<std::mutex> Lock{m_PendingTexturesMtx};
                 m_PendingTextures.emplace(Key, PendingTextureInfo{std::move(pLoader), SamDesc, TexHandle});

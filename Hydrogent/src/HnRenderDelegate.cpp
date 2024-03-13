@@ -508,6 +508,14 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
             m_MeshResourcesVersion = MeshVersion;
         }
     }
+
+    {
+        GLTF::ResourceManager::TransitionResourceStatesInfo TRSInfo;
+        TRSInfo.VertexBuffers.NewState  = RESOURCE_STATE_VERTEX_BUFFER;
+        TRSInfo.IndexBuffer.NewState    = RESOURCE_STATE_INDEX_BUFFER;
+        TRSInfo.TextureAtlases.NewState = RESOURCE_STATE_SHADER_RESOURCE;
+        m_ResourceMgr->TransitionResourceStates(m_pDevice, m_pContext, TRSInfo);
+    }
 }
 
 const pxr::SdfPath* HnRenderDelegate::GetRPrimId(Uint32 UID) const

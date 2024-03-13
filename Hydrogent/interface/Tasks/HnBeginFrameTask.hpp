@@ -164,14 +164,13 @@ struct HnBeginFrameTaskParams
 };
 
 /// Sets up rendering state for subsequent tasks:
-/// - Prepares color and mesh id render targets and depth buffer
+/// - Prepares the render targets and depth buffer
 ///   - Retrieves final color Bprim from the render index using the FinalColorTargetId
 ///   - (Re)creates the render targets if necessary
 ///   - Inserts them into the render index as Bprims
 ///   - Passes Bprim Id to subsequent tasks via the task context
-/// - Updates the render pass state
-/// - Updates task context with the render pass state so that subsequent tasks can use it
-/// - Binds and clears render targets and the depth buffer
+/// - Updates the render pass states
+/// - Updates the task context with the render pass states so that subsequent tasks can use it
 class HnBeginFrameTask final : public HnTask
 {
 public:

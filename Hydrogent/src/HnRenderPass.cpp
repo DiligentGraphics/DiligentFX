@@ -142,7 +142,7 @@ struct HnRenderPass::RenderState
         if (pNewSRB == nullptr || pNewSRB == this->pSRB)
             return;
 
-        pCtx->CommitShaderResources(pNewSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        pCtx->CommitShaderResources(pNewSRB, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
         pSRB = pNewSRB;
     }
 
@@ -152,7 +152,7 @@ struct HnRenderPass::RenderState
             return;
 
         pIndexBuffer = pNewIndexBuffer;
-        pCtx->SetIndexBuffer(pIndexBuffer, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        pCtx->SetIndexBuffer(pIndexBuffer, 0, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
     }
 
     void SetVertexBuffers(IBuffer* const* ppBuffers, Uint32 NumBuffers)
@@ -175,7 +175,7 @@ struct HnRenderPass::RenderState
 
         if (SetBuffers)
         {
-            pCtx->SetVertexBuffers(0, NumBuffers, ppBuffers, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION, SET_VERTEX_BUFFERS_FLAG_RESET);
+            pCtx->SetVertexBuffers(0, NumBuffers, ppBuffers, nullptr, RESOURCE_STATE_TRANSITION_MODE_VERIFY, SET_VERTEX_BUFFERS_FLAG_RESET);
         }
     }
 
@@ -334,6 +334,8 @@ void HnRenderPass::Execute(HnRenderPassState& RPState, const pxr::TfTokenVector&
         else
         {
             State.pCtx->UpdateBuffer(pPrimitiveAttribsCB, 0, m_PrimitiveAttribsData.size(), m_PrimitiveAttribsData.data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+            StateTransitionDesc Barrier{pPrimitiveAttribsCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE};
+            State.pCtx->TransitionResourceStates(1, &Barrier);
         }
         RenderPendingDrawItems(State);
         VERIFY_EXPR(m_PendingDrawItems.empty());

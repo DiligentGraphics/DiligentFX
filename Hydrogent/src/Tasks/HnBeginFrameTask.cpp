@@ -510,8 +510,8 @@ void HnBeginFrameTask::Execute(pxr::HdTaskContext* TaskCtx)
     HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
     IDeviceContext*   pCtx           = RenderDelegate->GetDeviceContext();
 
-    ScopedDebugGroup DebugGroup{pCtx, "Begin Frame"};
-
+    // NB: we can't move the buffer update to Prepare() because we need TAA parameters
+    //     that are set by HnPostProcessTask::Prepare().
     if (IBuffer* pFrameAttribsCB = RenderDelegate->GetFrameAttribsCB())
     {
         float2 JitterOffsets{0, 0};
@@ -530,9 +530,6 @@ void HnBeginFrameTask::Execute(pxr::HdTaskContext* TaskCtx)
     {
         UNEXPECTED("Frame attribs constant buffer is null");
     }
-
-    // Commit render pass now to make sure that all render targets are cleared
-    m_RenderPassStates[HnRenderResourceTokens->renderPass_OpaqueSelected].Commit(pCtx);
 }
 
 } // namespace USD

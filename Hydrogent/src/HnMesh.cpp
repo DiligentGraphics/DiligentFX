@@ -987,6 +987,9 @@ void HnMesh::UpdateVertexBuffers(HnRenderDelegate& RenderDelegate)
 
             BufferData InitData{pSource->GetData(), Desc.Size};
             pBuffer = Device.CreateBuffer(Desc, &InitData);
+
+            StateTransitionDesc Barrier{pBuffer, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_VERTEX_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE};
+            RenderDelegate.GetDeviceContext()->TransitionResourceStates(1, &Barrier);
         }
         else
         {
@@ -1021,6 +1024,7 @@ void HnMesh::UpdateIndexBuffer(HnRenderDelegate& RenderDelegate)
                                   IBufferSuballocation* pSuballocation) {
         const std::string Name = GetId().GetString() + " - " + BufferName;
 
+        IDeviceContext* pCtx = RenderDelegate.GetDeviceContext();
         if (pSuballocation == nullptr)
         {
             BufferDesc Desc{
@@ -1032,12 +1036,16 @@ void HnMesh::UpdateIndexBuffer(HnRenderDelegate& RenderDelegate)
             BufferData InitData{pData, Desc.Size};
 
             const RenderDeviceX_N& Device{RenderDelegate.GetDevice()};
-            return Device.CreateBuffer(Desc, &InitData);
+            RefCntAutoPtr<IBuffer> pBuffer = Device.CreateBuffer(Desc, &InitData);
+
+            StateTransitionDesc Barrier{pBuffer, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_INDEX_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE};
+            pCtx->TransitionResourceStates(1, &Barrier);
+
+            return pBuffer;
         }
         else
         {
             RefCntAutoPtr<IBuffer> pBuffer{pSuballocation->GetBuffer()};
-            IDeviceContext*        pCtx = RenderDelegate.GetDeviceContext();
             VERIFY_EXPR(pSuballocation->GetSize() == DataSize);
             pCtx->UpdateBuffer(pBuffer, pSuballocation->GetOffset(), DataSize, pData, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
             return pBuffer;
