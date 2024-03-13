@@ -49,16 +49,6 @@ HnRenderRprimsTask::~HnRenderRprimsTask()
 {
 }
 
-void HnRenderRprimsTask::UpdateRenderPassParams(const HnRenderRprimsTaskParams& Params)
-{
-    if (!m_RenderPass)
-        return;
-
-    HnMeshRenderParams RenderPassParams;
-    RenderPassParams.Transform = Params.Transform;
-    m_RenderPass->SetMeshRenderParams(RenderPassParams);
-}
-
 void HnRenderRprimsTask::Sync(pxr::HdSceneDelegate* Delegate,
                               pxr::HdTaskContext*   TaskCtx,
                               pxr::HdDirtyBits*     DirtyBits)
@@ -110,7 +100,6 @@ void HnRenderRprimsTask::Sync(pxr::HdSceneDelegate* Delegate,
         HnRenderRprimsTaskParams Params;
         if (GetTaskParams(Delegate, Params))
         {
-            UpdateRenderPassParams(Params);
         }
     }
 

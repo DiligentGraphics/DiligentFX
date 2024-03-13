@@ -43,11 +43,9 @@ class HnRenderPass;
 
 struct HnRenderRprimsTaskParams
 {
-    float4x4 Transform = float4x4::Identity();
-
     constexpr bool operator==(const HnRenderRprimsTaskParams& rhs) const
     {
-        return Transform == rhs.Transform;
+        return true;
     }
 
     constexpr bool operator!=(const HnRenderRprimsTaskParams& rhs) const
@@ -80,9 +78,6 @@ public:
     {
         return m_RenderTags;
     }
-
-private:
-    void UpdateRenderPassParams(const HnRenderRprimsTaskParams& Params);
 
 private:
     pxr::TfTokenVector            m_RenderTags;

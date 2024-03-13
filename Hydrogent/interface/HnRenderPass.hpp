@@ -48,11 +48,6 @@ class HnDrawItem;
 class HnRenderPassState;
 class HnMaterial;
 
-struct HnMeshRenderParams
-{
-    float4x4 Transform = float4x4::Identity();
-};
-
 struct HnRenderPassParams
 {
     // Render pass name used to get the render pass state.
@@ -87,7 +82,6 @@ public:
                  const pxr::HdRprimCollection& Collection);
 
     void SetParams(const HnRenderPassParams& Params);
-    void SetMeshRenderParams(const HnMeshRenderParams& Params);
 
     const pxr::TfToken& GetName() const
     {
@@ -183,7 +177,6 @@ private:
 
 private:
     HnRenderPassParams m_Params;
-    HnMeshRenderParams m_RenderParams;
 
     HN_RENDER_MODE              m_RenderMode = HN_RENDER_MODE_SOLID;
     PBR_Renderer::DebugViewType m_DebugView  = PBR_Renderer::DebugViewType::None;

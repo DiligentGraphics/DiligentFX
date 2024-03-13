@@ -311,7 +311,6 @@ void HnRenderPass::Execute(HnRenderPassState& RPState, const pxr::TfTokenVector&
     VERIFY_EXPR(pPrimitiveAttribsCB != nullptr);
 
     const BufferDesc& AttribsBuffDesc = pPrimitiveAttribsCB->GetDesc();
-    const bool        ApplyTransform  = m_RenderParams.Transform != float4x4::Identity();
 
     m_PendingDrawItems.clear();
     m_PendingDrawItems.reserve(m_DrawList.size());
@@ -344,9 +343,6 @@ void HnRenderPass::Execute(HnRenderPassState& RPState, const pxr::TfTokenVector&
 
     const Uint32 PrimitiveArraySize = std::max(State.USDRenderer.GetSettings().PrimitiveArraySize, 1u);
     m_ScratchSpace.resize(sizeof(MultiDrawIndexedItem) * State.USDRenderer.GetSettings().PrimitiveArraySize);
-
-    float4x4 MeshTransform;
-    float4x4 PrevMeshTransform;
 
     const auto MeshVisibilityVersion      = State.RenderParam.GetAttribVersion(HnRenderParam::GlobalAttrib::MeshVisibility);
     const bool VisibiltyDirty             = MeshVisibilityVersion != m_GlobalAttribVersions.MeshVisibility;
@@ -442,19 +438,13 @@ void HnRenderPass::Execute(HnRenderPassState& RPState, const pxr::TfTokenVector&
             0,
         };
 
-        const HnMesh::Attributes& MeshAttribs = ListItem.MeshAttribs;
-        if (ApplyTransform)
-        {
-            MeshTransform     = MeshAttribs.Transform * m_RenderParams.Transform;
-            PrevMeshTransform = ListItem.PrevTransform * m_RenderParams.Transform;
-        }
-
+        const HnMesh::Attributes&      MeshAttribs              = ListItem.MeshAttribs;
         HLSL::PBRMaterialBasicAttribs* pDstMaterialBasicAttribs = nullptr;
 
         GLTF_PBR_Renderer::PBRPrimitiveShaderAttribsData AttribsData{
             ListItem.PSOFlags,
-            ApplyTransform ? &MeshTransform : &MeshAttribs.Transform,
-            ApplyTransform ? &PrevMeshTransform : &ListItem.PrevTransform,
+            &MeshAttribs.Transform,
+            &ListItem.PrevTransform,
             0,
             &CustomData,
             sizeof(CustomData),
@@ -484,11 +474,6 @@ void HnRenderPass::_MarkCollectionDirty()
 {
     // Force any cached data based on collection to be refreshed.
     m_GlobalAttribVersions.Collection = ~0u;
-}
-
-void HnRenderPass::SetMeshRenderParams(const HnMeshRenderParams& Params)
-{
-    m_RenderParams = Params;
 }
 
 void HnRenderPass::SetParams(const HnRenderPassParams& Params)
