@@ -79,6 +79,10 @@
 #endif
 
 
+#ifndef ENABLE_SHADOWS
+#   define ENABLE_SHADOWS 0
+#endif
+
 float GetPerceivedBrightness(float3 rgb)
 {
     return sqrt(0.299 * rgb.r * rgb.r + 0.587 * rgb.g * rgb.g + 0.114 * rgb.b * rgb.b);

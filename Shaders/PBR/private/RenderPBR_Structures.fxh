@@ -18,7 +18,7 @@ struct PBRFrameAttribs
     PBRLightAttribs Lights[PBR_MAX_LIGHTS];
 #endif
     
-#if ENABLE_SHADOWS && defined(PBR_MAX_SHADOW_MAPS) && PBR_MAX_SHADOW_MAPS > 0
+#if defined(ENABLE_SHADOWS) && ENABLE_SHADOWS && defined(PBR_MAX_SHADOW_MAPS) && PBR_MAX_SHADOW_MAPS > 0
     PBRShadowMapInfo ShadowMaps[PBR_MAX_SHADOW_MAPS];
 #endif
 };
