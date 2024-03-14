@@ -79,52 +79,56 @@ void HnRenderEnvMapTask::Sync(pxr::HdSceneDelegate* Delegate,
     *DirtyBits = pxr::HdChangeTracker::Clean;
 }
 
-// clang-format off
-static_assert(HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR   == 0, "Shaders below assume that GBUFFER_TARGET_SCENE_COLOR is 0");
-static_assert(HnFrameRenderTargets::GBUFFER_TARGET_MESH_ID       == 1, "Shaders below assume that GBUFFER_TARGET_MESH_ID is 1");
-static_assert(HnFrameRenderTargets::GBUFFER_TARGET_MOTION_VECTOR == 2, "Shaders below assume that GBUFFER_TARGET_MOTION_VECTOR is 2");
-static_assert(HnFrameRenderTargets::GBUFFER_TARGET_NORMAL        == 3, "Shaders below assume that GBUFFER_TARGET_NORMAL is 3");
-static_assert(HnFrameRenderTargets::GBUFFER_TARGET_BASE_COLOR    == 4, "Shaders below assume that GBUFFER_TARGET_BASE_COLOR is 4");
-static_assert(HnFrameRenderTargets::GBUFFER_TARGET_MATERIAL      == 5, "Shaders below assume that GBUFFER_TARGET_MATERIAL is 5");
-static_assert(HnFrameRenderTargets::GBUFFER_TARGET_IBL           == 6, "Shaders below assume that GBUFFER_TARGET_IBL is 6");
-static_assert(HnFrameRenderTargets::GBUFFER_TARGET_COUNT         == 7, "Shaders below assume that GBUFFER_TARGET_COUNT is 7");
-// clang-format on
+static std::string GetEnvMapPSMain(bool IsGL)
+{
+    static_assert(HnFrameRenderTargets::GBUFFER_TARGET_COUNT == 7, "Did you change the number of G-buffer targets? You may need to update the code below.");
 
-static constexpr char EnvMapPSMain[] = R"(
+    std::stringstream ss;
+    ss << R"(
 void main(in  float4 Pos       : SV_Position,
           in  float4 ClipPos   : CLIP_POS,
-          out float4 Color     : SV_Target0,
-          out float4 MotionVec : SV_Target2)
+)";
+    ss << "          out float4 Color     : SV_Target" << HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR << ',' << std::endl
+       << "          out float4 MotionVec : SV_Target" << HnFrameRenderTargets::GBUFFER_TARGET_MOTION_VECTOR;
+
+    if (IsGL)
+    {
+        // Normally, environment map shader does not need to write to anything but
+        // color and motion vector targets.
+        // However, in OpenGL this somehow results in color output also being
+        // written to the MeshID target. To work around this issue, we use a
+        // custom shader that writes 0.
+        ss << ',' << std::endl
+           << "          out float4 MeshId    : SV_Target" << HnFrameRenderTargets::GBUFFER_TARGET_MESH_ID << ',' << std::endl
+           << "          out float4 Normal    : SV_Target" << HnFrameRenderTargets::GBUFFER_TARGET_NORMAL << ',' << std::endl
+           << "          out float4 BaseColor : SV_Target" << HnFrameRenderTargets::GBUFFER_TARGET_BASE_COLOR << ',' << std::endl
+           << "          out float4 Material  : SV_Target" << HnFrameRenderTargets::GBUFFER_TARGET_MATERIAL << ',' << std::endl
+           << "          out float4 IBL       : SV_Target" << HnFrameRenderTargets::GBUFFER_TARGET_IBL;
+    }
+
+    ss << R"()
 {
     SampleEnvMapOutput EnvMap = SampleEnvMap(ClipPos);
 
     Color     = EnvMap.Color;
     MotionVec = float4(EnvMap.MotionVector, 0.0, 1.0);
-}
 )";
 
-static constexpr char EnvMapPSMainGL[] = R"(
-void main(in  float4 Pos       : SV_Position,
-          in  float4 ClipPos   : CLIP_POS,
-          out float4 Color     : SV_Target0,
-          out float4 MeshId    : SV_Target1,
-          out float4 MotionVec : SV_Target2,
-          out float4 Normal    : SV_Target3,
-          out float4 BaseColor : SV_Target4,
-          out float4 Material  : SV_Target5,
-          out float4 IBL       : SV_Target6)
-{
-    SampleEnvMapOutput EnvMap = SampleEnvMap(ClipPos);
-
-    Color     = EnvMap.Color;
+    if (IsGL)
+    {
+        ss << R"(
     MeshId    = float4(0.0, 0.0, 0.0, 1.0);
-    MotionVec = float4(EnvMap.MotionVector, 0.0, 1.0);
     Normal    = float4(0.0, 0.0, 0.0, 0.0);
     BaseColor = float4(0.0, 0.0, 0.0, 0.0);
     Material  = float4(0.0, 0.0, 0.0, 0.0);
     IBL       = float4(0.0, 0.0, 0.0, 0.0);
-}
 )";
+    }
+
+    ss << "}\n";
+
+    return ss.str();
+}
 
 void HnRenderEnvMapTask::Prepare(pxr::HdTaskContext* TaskCtx,
                                  pxr::HdRenderIndex* RenderIndex)
@@ -145,19 +149,9 @@ void HnRenderEnvMapTask::Prepare(pxr::HdTaskContext* TaskCtx,
                 EnvMapRndrCI.RTVFormats[rt] = RenderPassState->GetRenderTargetFormat(rt);
             EnvMapRndrCI.DSVFormat = RenderPassState->GetDepthStencilFormat();
 
-            if (EnvMapRndrCI.pDevice->GetDeviceInfo().IsGLDevice())
-            {
-                // Normally, environment map shader does not need to write to anything but
-                // color and motion vector targets.
-                // However, in OpenGL this somehow results in color output also being
-                // written to the MeshID target. To work around this issue, we use a
-                // custom shader that writes 0.
-                EnvMapRndrCI.PSMainSource = EnvMapPSMainGL;
-            }
-            else
-            {
-                EnvMapRndrCI.PSMainSource = EnvMapPSMain;
-            }
+            const std::string PSMain  = GetEnvMapPSMain(EnvMapRndrCI.pDevice->GetDeviceInfo().IsGLDevice());
+            EnvMapRndrCI.PSMainSource = PSMain.c_str();
+
             m_EnvMapRenderer = std::make_unique<EnvMapRenderer>(EnvMapRndrCI);
         }
         else

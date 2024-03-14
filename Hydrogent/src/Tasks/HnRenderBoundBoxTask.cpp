@@ -72,50 +72,55 @@ void HnRenderBoundBoxTask::Sync(pxr::HdSceneDelegate* Delegate,
     *DirtyBits = pxr::HdChangeTracker::Clean;
 }
 
-// clang-format off
-static_assert(HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR   == 0, "Shaders below assume that GBUFFER_TARGET_SCENE_COLOR is 0");
-static_assert(HnFrameRenderTargets::GBUFFER_TARGET_MESH_ID       == 1, "Shaders below assume that GBUFFER_TARGET_MESH_ID is 1");
-static_assert(HnFrameRenderTargets::GBUFFER_TARGET_MOTION_VECTOR == 2, "Shaders below assume that GBUFFER_TARGET_MOTION_VECTOR is 2");
-static_assert(HnFrameRenderTargets::GBUFFER_TARGET_NORMAL        == 3, "Shaders below assume that GBUFFER_TARGET_NORMAL is 3");
-static_assert(HnFrameRenderTargets::GBUFFER_TARGET_BASE_COLOR    == 4, "Shaders below assume that GBUFFER_TARGET_BASE_COLOR is 4");
-static_assert(HnFrameRenderTargets::GBUFFER_TARGET_MATERIAL      == 5, "Shaders below assume that GBUFFER_TARGET_MATERIAL is 5");
-static_assert(HnFrameRenderTargets::GBUFFER_TARGET_IBL           == 6, "Shaders below assume that GBUFFER_TARGET_IBL is 6");
-static_assert(HnFrameRenderTargets::GBUFFER_TARGET_COUNT         == 7, "Shaders below assume that GBUFFER_TARGET_COUNT is 7");
-// clang-format on
+static std::string GetBoundBoxPSMain(bool IsGL)
+{
+    static_assert(HnFrameRenderTargets::GBUFFER_TARGET_COUNT == 7, "Did you change the number of G-buffer targets? You may need to update the code below.");
 
-static constexpr char BoundBoxPSMain[] = R"(
+    std::stringstream ss;
+    ss << R"(
 void main(in BoundBoxVSOutput VSOut,
-          out float4 Color     : SV_Target0,
-          out float4 MotionVec : SV_Target2)
+)";
+    ss << "          out float4 Color     : SV_Target" << HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR << ',' << std::endl
+       << "          out float4 MotionVec : SV_Target" << HnFrameRenderTargets::GBUFFER_TARGET_MOTION_VECTOR;
+
+    if (IsGL)
+    {
+        // Normally, bound box shader does not need to write to anything but
+        // color and motion vector targets.
+        // However, in OpenGL this somehow results in color output also being
+        // written to the MeshID target. To work around this issue, we use a
+        // custom shader that writes 0.
+        ss << ',' << std::endl
+           << "          out float4 MeshId    : SV_Target" << HnFrameRenderTargets::GBUFFER_TARGET_MESH_ID << ',' << std::endl
+           << "          out float4 Normal    : SV_Target" << HnFrameRenderTargets::GBUFFER_TARGET_NORMAL << ',' << std::endl
+           << "          out float4 BaseColor : SV_Target" << HnFrameRenderTargets::GBUFFER_TARGET_BASE_COLOR << ',' << std::endl
+           << "          out float4 Material  : SV_Target" << HnFrameRenderTargets::GBUFFER_TARGET_MATERIAL << ',' << std::endl
+           << "          out float4 IBL       : SV_Target" << HnFrameRenderTargets::GBUFFER_TARGET_IBL;
+    }
+
+    ss << R"()
 {
     BoundBoxOutput BoundBox = GetBoundBoxOutput(VSOut);
 
     Color     = BoundBox.Color;
     MotionVec = float4(BoundBox.MotionVector, 0.0, 1.0);
-}
 )";
 
-static constexpr char BoundBoxPSMainGL[] = R"(
-void main(in BoundBoxVSOutput VSOut,
-          out float4 Color     : SV_Target0,
-          out float4 MeshId    : SV_Target1,
-          out float4 MotionVec : SV_Target2,
-          out float4 Normal    : SV_Target3,
-          out float4 BaseColor : SV_Target4,
-          out float4 Material  : SV_Target5,
-          out float4 IBL       : SV_Target6)
-{
-    BoundBoxOutput BoundBox = GetBoundBoxOutput(VSOut);
-
-    Color     = BoundBox.Color;
+    if (IsGL)
+    {
+        ss << R"(
     MeshId    = float4(0.0, 0.0, 0.0, 1.0);
-    MotionVec = float4(BoundBox.MotionVector, 0.0, 1.0);
     Normal    = float4(0.0, 0.0, 1.0, 1.0);
     BaseColor = float4(0.0, 0.0, 0.0, 0.0);
     Material  = float4(0.0, 0.0, 0.0, 0.0);
     IBL       = float4(0.0, 0.0, 0.0, 0.0);
-}
 )";
+    }
+
+    ss << "}\n";
+
+    return ss.str();
+}
 
 void HnRenderBoundBoxTask::Prepare(pxr::HdTaskContext* TaskCtx,
                                    pxr::HdRenderIndex* RenderIndex)
@@ -170,19 +175,9 @@ void HnRenderBoundBoxTask::Prepare(pxr::HdTaskContext* TaskCtx,
                 BoundBoxRndrCI.RTVFormats[rt] = RenderPassState->GetRenderTargetFormat(rt);
             BoundBoxRndrCI.DSVFormat = RenderPassState->GetDepthStencilFormat();
 
-            if (BoundBoxRndrCI.pDevice->GetDeviceInfo().IsGLDevice())
-            {
-                // Normally, bounding box shader does not need to write to anything but
-                // color and motion vector targets.
-                // However, in OpenGL this somehow results in color output also being
-                // written to the MeshID target. To work around this issue, we use a
-                // custom shader that writes 0.
-                BoundBoxRndrCI.PSMainSource = BoundBoxPSMainGL;
-            }
-            else
-            {
-                BoundBoxRndrCI.PSMainSource = BoundBoxPSMain;
-            }
+            const std::string PSMain    = GetBoundBoxPSMain(BoundBoxRndrCI.pDevice->GetDeviceInfo().IsGLDevice());
+            BoundBoxRndrCI.PSMainSource = PSMain.c_str();
+
             m_BoundBoxRenderer = std::make_unique<BoundBoxRenderer>(BoundBoxRndrCI);
         }
         else
