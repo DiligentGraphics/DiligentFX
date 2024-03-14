@@ -664,7 +664,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
 
     const TextureDesc& FinalColorDesc = m_FinalColorRTV->GetTexture()->GetDesc();
 
-    if (m_UseSSR || m_UseSSAO)
+    if (m_UseSSR || m_UseSSAO || m_UseTAA)
     {
         PostFXContext::RenderAttributes PostFXAttribs{pDevice, pStateCache, pCtx};
 
