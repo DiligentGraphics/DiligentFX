@@ -81,7 +81,11 @@ void main(in  FullScreenTriangleVSOutput VSOut,
     float Depth          = g_Depth.Load(int3(Pos.xy, 0)).r;
     bool  IsSelected     = Depth != g_Attribs.ClearDepth && SelectionDepth == Depth;
 
-    float  Outline = 0.0;
+    // Desaturate all unselected pixels
+    float DesatFactor = IsSelected ? 0.0 : g_Attribs.NonselectionDesaturationFactor;
+    float Luminance = dot(Color.rgb, float3(0.2126, 0.7152, 0.0722));
+    Color.rgb = lerp(Color.rgb, float3(Luminance, Luminance, Luminance), DesatFactor);
+
     float2 ClosestSelectedLocation;
     if (DecodeClosestSelectedLocation(g_ClosestSelectedLocation.Load(int3(Pos.xy, 0)).xy, ClosestSelectedLocation))
     {
@@ -91,17 +95,23 @@ void main(in  FullScreenTriangleVSOutput VSOut,
         // Get distance in pixels from the current pixel to the closest selected pixel
         float Dist = length(ClosestSelectedLocation - Pos.xy);
         // Make outline fade out with distance from the closest selected pixel
-        Outline = saturate(1.0 - Dist / g_Attribs.SelectionOutlineWidth);
+        float Outline = saturate(1.0 - Dist / g_Attribs.SelectionOutlineWidth);
         // Do not highlight the selected object itself
         Outline *= SelectionDepth != g_Attribs.ClearDepth ? 0.0 : 1.0;
+
+        if (Outline > 0.0)
+        {
+            // Compare depth of the selected pixel with the selection depth to determine if the selected pixel is occluded
+            float SelectedLocationDepth          = g_Depth.Load(int3(ClosestSelectedLocation.xy, 0)).r;
+            float SelectedLocationSelectionDepth = g_SelectionDepth.Load(int3(ClosestSelectedLocation.xy, 0)).r;
+
+            float3 SelectionOutlineColor = (SelectedLocationDepth == SelectedLocationSelectionDepth) ? 
+                g_Attribs.SelectionOutlineColor.rgb :
+                g_Attribs.OccludedSelectionOutlineColor.rgb;
+
+            Color.rgb = lerp(Color.rgb, SelectionOutlineColor.rgb, Outline);
+        }
     }
-
-    // Desaturate all unselected pixels
-    float DesatFactor = IsSelected ? 0.0 : g_Attribs.NonselectionDesaturationFactor;
-    float Luminance = dot(Color.rgb, float3(0.2126, 0.7152, 0.0722));
-    Color.rgb = lerp(Color.rgb, float3(Luminance, Luminance, Luminance), DesatFactor);
-
-    Color.rgb = lerp(Color.rgb, g_Attribs.SelectionOutlineColor.rgb, Outline);
 
 #if CONVERT_OUTPUT_TO_SRGB
     Color.rgb = LinearToSRGB(Color.rgb);

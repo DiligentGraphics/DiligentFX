@@ -4,6 +4,7 @@
 struct PostProcessAttribs
 {
     float4 SelectionOutlineColor;
+    float4 OccludedSelectionOutlineColor;
 
     float NonselectionDesaturationFactor;
     float AverageLogLum;

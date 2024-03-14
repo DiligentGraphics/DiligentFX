@@ -729,6 +729,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         {
             HLSL::PostProcessAttribs ShaderAttribs;
             ShaderAttribs.SelectionOutlineColor            = m_Params.SelectionColor;
+            ShaderAttribs.OccludedSelectionOutlineColor    = m_Params.OccludedSelectionColor;
             ShaderAttribs.NonselectionDesaturationFactor   = m_Params.NonselectionDesaturationFactor;
             ShaderAttribs.ToneMapping.iToneMappingMode     = m_Params.ToneMappingMode;
             ShaderAttribs.ToneMapping.bAutoExposure        = 0;

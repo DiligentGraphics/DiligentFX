@@ -61,7 +61,8 @@ struct HnPostProcessTaskParams
 {
     bool ConvertOutputToSRGB = false;
 
-    float4 SelectionColor = float4{0.75f, 0.75f, 0.25f, 0.5f};
+    float4 SelectionColor         = float4{0.75f, 0.75f, 0.25f, 0.5f};
+    float4 OccludedSelectionColor = float4{0.5f, 0.5f, 0.125f, 0.5f};
 
     float SelectionOutlineWidth = 4.0f;
 
@@ -98,6 +99,7 @@ struct HnPostProcessTaskParams
         // clang-format off
         return ConvertOutputToSRGB            == rhs.ConvertOutputToSRGB &&
                SelectionColor                 == rhs.SelectionColor &&
+               OccludedSelectionColor	      == rhs.OccludedSelectionColor &&
                SelectionOutlineWidth          == rhs.SelectionOutlineWidth &&
                NonselectionDesaturationFactor == rhs.NonselectionDesaturationFactor &&
                ToneMappingMode                == rhs.ToneMappingMode &&
