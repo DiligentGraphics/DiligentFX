@@ -61,8 +61,8 @@ struct HnPostProcessTaskParams
 {
     bool ConvertOutputToSRGB = false;
 
-    float4 SelectionColor         = float4{0.75f, 0.75f, 0.25f, 0.5f};
-    float4 OccludedSelectionColor = float4{0.5f, 0.5f, 0.125f, 0.5f};
+    float4 SelectionColor         = float4{1.000f, 0.675f, 0.250f, 0.5f};
+    float4 OccludedSelectionColor = float4{0.375f, 0.375f, 0.125f, 0.5f};
 
     float SelectionOutlineWidth = 4.0f;
 
