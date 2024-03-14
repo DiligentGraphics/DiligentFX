@@ -46,9 +46,19 @@ struct HnRenderBoundBoxTaskParams
 {
     float4 Color = float4{1.0f, 1.0f, 1.0f, 1.0f};
 
+    /// Pattern length in pixels.
+    float PatternLength = 32;
+
+    /// Pattern mask.
+    /// Each bit defines whether the corresponding 1/32 section of the pattern is filled or not.
+    /// For example, use 0x0000FFFFu to draw a dashed line.
+    Uint32 PatternMask = 0xFFFFFFFFu;
+
     constexpr bool operator==(const HnRenderBoundBoxTaskParams& rhs) const
     {
-        return Color == rhs.Color;
+        return (Color == rhs.Color &&
+                PatternLength == rhs.PatternLength &&
+                PatternMask == rhs.PatternMask);
     }
 
     constexpr bool operator!=(const HnRenderBoundBoxTaskParams& rhs) const

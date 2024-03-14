@@ -67,6 +67,14 @@ public:
         /// If null, white color will be used.
         const float4* Color = nullptr;
 
+        /// Pattern length in pixels.
+        float PatternLength = 32;
+
+        /// Pattern mask.
+        /// Each bit defines whether the corresponding 1/32 section of the pattern is filled or not.
+        /// For example, use 0x0000FFFFu to draw a dashed line.
+        Uint32 PatternMask = 0xFFFFFFFFu;
+
         /// Manually convert shader output to sRGB color space.
         bool ConvertOutputToSRGB = false;
 

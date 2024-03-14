@@ -41,6 +41,11 @@ struct BoundBoxRenderer::BoundBoxShaderAttribs
 {
     float4x4 Transform;
     float4   Color;
+
+    float PatternLength;
+    uint  PatternMask;
+    float Padding0;
+    float Padding1;
 };
 
 BoundBoxRenderer::BoundBoxRenderer(const CreateInfo& CI) :
@@ -184,7 +189,12 @@ void BoundBoxRenderer::Prepare(IDeviceContext* pContext, const RenderAttribs& At
     {
         const BoundBoxShaderAttribs ShaderAttribs{
             Attribs.BoundBoxTransform->Transpose(),
-            Attribs.Color != nullptr ? *Attribs.Color : float4{1.0, 1.0, 1.0, 1.0}};
+            Attribs.Color != nullptr ? *Attribs.Color : float4{1.0, 1.0, 1.0, 1.0},
+            Attribs.PatternLength,
+            Attribs.PatternMask,
+            0,
+            0,
+        };
         if (std::memcmp(m_ShaderAttribs.get(), &ShaderAttribs, sizeof(ShaderAttribs)) != 0)
         {
             *m_ShaderAttribs = ShaderAttribs;
@@ -196,8 +206,10 @@ void BoundBoxRenderer::Prepare(IDeviceContext* pContext, const RenderAttribs& At
     else
     {
         MapHelper<BoundBoxShaderAttribs> BBAttribs{pContext, m_RenderAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
-        BBAttribs->Transform = Attribs.BoundBoxTransform->Transpose();
-        BBAttribs->Color     = Attribs.Color != nullptr ? *Attribs.Color : float4{1.0, 1.0, 1.0, 1.0};
+        BBAttribs->Transform     = Attribs.BoundBoxTransform->Transpose();
+        BBAttribs->Color         = Attribs.Color != nullptr ? *Attribs.Color : float4{1.0, 1.0, 1.0, 1.0};
+        BBAttribs->PatternLength = Attribs.PatternLength;
+        BBAttribs->PatternMask   = Attribs.PatternMask;
     }
 }
 

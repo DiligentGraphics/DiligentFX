@@ -12,9 +12,8 @@ cbuffer cbBoundBoxAttribs
     BoundBoxAttribs g_Attribs;
 }
 
-void BoundBoxVS(uint id : SV_VertexID,
-                out  BoundBoxVSOutput VSOut)
-{   
+float4 GetBoxCorner(uint id)
+{
     //               5________________6
     //               /|              /|
     //              / |             / |
@@ -53,9 +52,20 @@ void BoundBoxVS(uint id : SV_VertexID,
     BoxCorner.w = 1.0;
 
     BoxCorner = mul(BoxCorner, g_Attribs.Transform);
+    
+    return BoxCorner;
+}
+
+void BoundBoxVS(uint id : SV_VertexID,
+                out  BoundBoxVSOutput VSOut)
+{   
+    float4 BoxCorner = GetBoxCorner(id);
+    float4 EdgeStart = GetBoxCorner(id & ~0x01u);
+    
     VSOut.Pos = mul(BoxCorner, g_Camera.mViewProj);
 
     VSOut.ClipPos = VSOut.Pos;
+    VSOut.EdgeStartClipPos = mul(EdgeStart, g_Camera.mViewProj);
 #if COMPUTE_MOTION_VECTORS
     VSOut.PrevClipPos = mul(BoxCorner, g_PrevCamera.mViewProj);
 #else

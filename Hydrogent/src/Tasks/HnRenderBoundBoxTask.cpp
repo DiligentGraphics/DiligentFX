@@ -192,6 +192,8 @@ void HnRenderBoundBoxTask::Prepare(pxr::HdTaskContext* TaskCtx,
     BoundBoxRenderer::RenderAttribs Attribs;
     Attribs.Color                = &m_Params.Color;
     Attribs.BoundBoxTransform    = &BoundBoxTransform;
+    Attribs.PatternLength        = m_Params.PatternLength;
+    Attribs.PatternMask          = m_Params.PatternMask;
     Attribs.ComputeMotionVectors = true;
     m_BoundBoxRenderer->Prepare(pRenderDelegate->GetDeviceContext(), Attribs);
 

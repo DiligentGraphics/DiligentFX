@@ -29,6 +29,12 @@ BoundBoxOutput GetBoundBoxOutput(BoundBoxVSOutput VSOut)
     BoundBoxOutput Output;
     Output.Color = g_Attribs.Color;
 
+    float DistToEdgeStart = length((VSOut.ClipPos.xy / VSOut.ClipPos.w - VSOut.EdgeStartClipPos.xy / VSOut.EdgeStartClipPos.w) * g_Camera.f4ViewportSize.xy);
+    float PatternPos      = frac(DistToEdgeStart / g_Attribs.PatternLength);
+    uint  PatternBit      = min(uint(PatternPos * g_Attribs.PatternLength), 31u);
+    if ((g_Attribs.PatternMask & (1u << PatternBit)) == 0u)
+        discard;
+    
 #if COMPUTE_MOTION_VECTORS
     Output.MotionVector = GetMotionVector(
         VSOut.ClipPos.xy / VSOut.ClipPos.w,
