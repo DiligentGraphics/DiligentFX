@@ -49,9 +49,9 @@ void HnRenderPassState::Commit(IDeviceContext* pContext)
     if (m_IsCommited)
         return;
 
-    //VERIFY(!_depthMaskEnabled, "Depth mask is not supported");
-    VERIFY(!_framing.IsValid(), "Framing is not used");
-    VERIFY(!_overrideWindowPolicy.first, "Window policy is not used");
+    //_depthMaskEnabled
+    //_framing
+    //_overrideWindowPolicy
     //float   _pointSize;
     //bool    _lightingEnabled;
     //bool    _clippingEnabled;

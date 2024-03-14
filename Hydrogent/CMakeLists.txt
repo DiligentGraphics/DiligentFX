@@ -4,7 +4,7 @@ project(Diligent-Hydrogent CXX)
 
 # We need to bring in the OpenUSD package explicitly so that USDViewer can
 # link with the right version of python and boost::python
-if(PLATFORM_LINUX)
+if(PLATFORM_LINUX OR PLATFORM_MACOS)
     set(pxr_DIR ${DILIGENT_USD_PATH})
     find_package(pxr)
 endif()
@@ -123,11 +123,11 @@ elseif(${CMAKE_GENERATOR} MATCHES "Visual Studio")
         ${DILIGENT_USD_PATH}/$<CONFIG>/lib
     )
 else()
-    file(GLOB BOOST_INCLUDE_DEBUG "${DILIGENT_USD_PATH}/Debug/boost-*")
+    file(GLOB BOOST_INCLUDE "${DILIGENT_USD_PATH}/include/boost-*")
     target_include_directories(USD-Libraries
     INTERFACE
         ${DILIGENT_USD_PATH}/include
-        ${BOOST_INCLUDE_DEBUG}
+        ${BOOST_INCLUDE}
     )
 
     target_link_directories(USD-Libraries
@@ -141,7 +141,13 @@ if(MSVC)
     target_compile_options(USD-Libraries INTERFACE /wd4244 /wd4305 /wd4127 /wd4267 /wd4003)
     target_compile_options(Diligent-Hydrogent PRIVATE /permissive-)
 else()
-    target_compile_options(USD-Libraries INTERFACE -Wno-deprecated-builtins -Wno-deprecated-declarations)
+    target_compile_definitions(USD-Libraries INTERFACE _LIBCPP_ENABLE_CXX17_REMOVED_UNARY_BINARY_FUNCTION=1)
+    target_compile_options(USD-Libraries INTERFACE
+        -Wno-deprecated-builtins
+        -Wno-deprecated-declarations
+        -Wno-conversion
+        -Wno-deprecated-copy
+        -Wno-missing-field-initializers)
 endif()
 
 set(USD_LIBS
@@ -205,6 +211,8 @@ PRIVATE
 
 set_target_properties(Diligent-Hydrogent PROPERTIES
     FOLDER DiligentFX
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
 )
 
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${HYDROGENT_SOURCE})
