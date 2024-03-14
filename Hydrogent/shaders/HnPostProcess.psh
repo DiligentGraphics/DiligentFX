@@ -39,7 +39,8 @@ void main(in  FullScreenTriangleVSOutput VSOut,
 
     Color = g_ColorBuffer.Load(int3(Pos.xy, 0));
     
-    if (g_Attribs.SSRScale > 0.0)
+    float SSRScale = g_Attribs.SSRScale * Color.a;
+    if (SSRScale > 0.0)
     {
         float4 SpecularIBL = g_SpecularIBL.Load(int3(Pos.xy, 0));
         float4 SSRRadiance = g_SSR.Load(int3(Pos.xy, 0));
@@ -55,21 +56,22 @@ void main(in  FullScreenTriangleVSOutput VSOut,
         float3 ViewDir = normalize(g_Frame.Camera.f4Position.xyz - WorldPos.xyz / WorldPos.w);
     
         IBLSamplingInfo IBLInfo = GetIBLSamplingInfo(SrfInfo,
-                                                 g_PreintegratedGGX,
-                                                 g_PreintegratedGGX_sampler,
-                                                 Normal,
-                                                 ViewDir);
+                                                     g_PreintegratedGGX,
+                                                     g_PreintegratedGGX_sampler,
+                                                     Normal,
+                                                     ViewDir);
     
         float3 SSR = GetSpecularIBL_GGX(SrfInfo, IBLInfo, SSRRadiance.rgb);
     
-        Color.rgb += (SSR.rgb - SpecularIBL.rgb) * SSRRadiance.w * Color.a * g_Attribs.SSRScale;
+        Color.rgb += (SSR.rgb - SpecularIBL.rgb) * SSRRadiance.w * SSRScale;
     }
 
-    if (g_Attribs.SSAOScale > 0.0)
+    float SSAOScale = g_Attribs.SSAOScale * Color.a;
+    if (SSAOScale > 0.0)
     {
         // Since Color.rgb may be blended with background, we need to attenuate the occlusion
         // factor by transparency or there will be artifacts.
-        float Occlusion = lerp(1.0, g_SSAO.Load(int3(Pos.xy, 0)).x, g_Attribs.SSAOScale * Color.a);
+        float Occlusion = lerp(1.0, g_SSAO.Load(int3(Pos.xy, 0)).x, SSAOScale);
         Color.rgb *= Occlusion;
     }
     
