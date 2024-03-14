@@ -67,6 +67,7 @@ void HnRenderEnvMapTask::Sync(pxr::HdSceneDelegate* Delegate,
         HnRenderEnvMapTaskParams Params;
         if (GetTaskParams(Delegate, Params))
         {
+            (*TaskCtx)[HnRenderResourceTokens->suspendSuperSampling] = pxr::VtValue{true};
         }
 
         if (!GetTaskParameter(Delegate, HnTokens->renderPassName, m_RenderPassName))

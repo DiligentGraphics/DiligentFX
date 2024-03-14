@@ -512,6 +512,7 @@ void HnTaskManager::EnableMaterial(const pxr::TfToken& MaterialTag, bool Enable)
     {
         UNEXPECTED("Unknown material tag ", MaterialTag);
     }
+    SuspededSuperSampling();
 }
 
 bool HnTaskManager::IsMaterialEnabled(const pxr::TfToken& MaterialTag) const
@@ -573,6 +574,7 @@ void HnTaskManager::SetPostProcessParams(const HnPostProcessTaskParams& Params)
 void HnTaskManager::EnableEnvironmentMap(bool Enable)
 {
     EnableTask(TaskUID_RenderEnvMap, Enable);
+    SuspededSuperSampling();
 }
 
 bool HnTaskManager::IsEnvironmentMapEnabled() const
@@ -583,6 +585,7 @@ bool HnTaskManager::IsEnvironmentMapEnabled() const
 void HnTaskManager::EnableAxes(bool Enable)
 {
     EnableTask(TaskUID_RenderAxes, Enable);
+    SuspededSuperSampling();
 }
 
 bool HnTaskManager::AreAxesEnabled() const
@@ -593,6 +596,7 @@ bool HnTaskManager::AreAxesEnabled() const
 void HnTaskManager::EnableSelectedPrimBoundBox(bool Enable)
 {
     EnableTask(TaskUID_RenderBoundBox, Enable);
+    SuspededSuperSampling();
 }
 
 bool HnTaskManager::IsSelectedPrimBoundBoxEnabled() const
@@ -602,15 +606,18 @@ bool HnTaskManager::IsSelectedPrimBoundBoxEnabled() const
 
 void HnTaskManager::ResetTAA()
 {
-    auto it = m_TaskInfo.find(TaskUID{TaskUID_PostProcess});
-    if (it == m_TaskInfo.end())
-        return;
+    if (HnPostProcessTask* Task = GetTask<HnPostProcessTask>(TaskUID{TaskUID_PostProcess}))
+    {
+        Task->ResetTAA();
+    }
+}
 
-    pxr::HdTaskSharedPtr PPTask = m_RenderIndex.GetTask(it->second.Id);
-    if (!PPTask)
-        return;
-
-    static_cast<HnPostProcessTask&>(*PPTask).ResetTAA();
+void HnTaskManager::SuspededSuperSampling()
+{
+    if (HnPostProcessTask* Task = GetTask<HnPostProcessTask>(TaskUID{TaskUID_PostProcess}))
+    {
+        Task->SuspendSuperSampling();
+    }
 }
 
 } // namespace USD

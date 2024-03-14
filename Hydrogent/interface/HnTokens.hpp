@@ -129,6 +129,7 @@ namespace USD
     (useTaa)							 \
 	(taaJitterOffsets)					 \
 	(taaReset)							 \
+	(suspendSuperSampling)				 \
     (cameraTransformDirty)               \
     (renderPass_OpaqueSelected)		     \
     (renderPass_TransparentSelected)	 \

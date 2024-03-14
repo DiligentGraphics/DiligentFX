@@ -60,6 +60,7 @@ void HnRenderBoundBoxTask::Sync(pxr::HdSceneDelegate* Delegate,
     {
         if (GetTaskParams(Delegate, m_Params))
         {
+            (*TaskCtx)[HnRenderResourceTokens->suspendSuperSampling] = pxr::VtValue{true};
         }
 
         if (!GetTaskParameter(Delegate, HnTokens->renderPassName, m_RenderPassName))

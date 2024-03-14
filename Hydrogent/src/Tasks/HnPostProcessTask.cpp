@@ -569,6 +569,37 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
         m_CopyFrameTech.PreparePRS();
         m_CopyFrameTech.PreparePSO(m_FinalColorRTV->GetDesc().Format);
         m_CopyFrameTech.PrepareSRB();
+
+        {
+            auto it = TaskCtx->find(HnRenderResourceTokens->suspendSuperSampling);
+            if (it != TaskCtx->end())
+            {
+                if (it->second.GetWithDefault<bool>(false))
+                {
+                    m_LastSuperSamplingFactors.Version = ~0u;
+                }
+            }
+        }
+
+        SuperSamplingFactors CurrSSFactors{
+            (pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::MeshGeometry) +
+             pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::MeshMaterial) +
+             pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::MeshTransform) +
+             pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::MeshVisibility) +
+             pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::Material) +
+             pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::Light)),
+            m_UseSSR,
+            m_UseSSAO,
+            pRenderParam->GetDebugView(),
+            pRenderParam->GetRenderMode(),
+        };
+
+        if (CurrSSFactors != m_LastSuperSamplingFactors || m_AttribsCBDirty)
+            SuspendSuperSampling();
+
+        m_LastSuperSamplingFactors = CurrSSFactors;
+
+        (*TaskCtx)[HnRenderResourceTokens->suspendSuperSampling] = pxr::VtValue{false};
     }
 
     if (!m_VectorFieldRenderer)
@@ -727,24 +758,15 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
             m_ResetTAA                    = false;
         }
 
+        // cameraTransformDirty is set by HnBeginFrameTask::Execute().
         bool CameraTransformDirty = false;
         GetTaskContextData(TaskCtx, HnRenderResourceTokens->cameraTransformDirty, CameraTransformDirty);
 
-        SuperSamplingFactors CurrSSFactors{
-            (pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::MeshGeometry) +
-             pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::MeshMaterial) +
-             pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::MeshTransform) +
-             pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::MeshVisibility) +
-             pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::Material) +
-             pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::Light)),
-            m_UseSSR,
-            m_UseSSAO,
-        };
-
         // Skip rejection if no geometry has changed and the camera transform is not dirty.
         // This will effectively result in full temporal supersampling for static scenes.
-        TAASettings.SkipRejection  = (CurrSSFactors == m_LastSuperSamplingFactors) && !CameraTransformDirty && !m_AttribsCBDirty;
-        m_LastSuperSamplingFactors = CurrSSFactors;
+        TAASettings.SkipRejection = (m_SuperSamplingSuspensionFrame == 0) && !CameraTransformDirty;
+        if (m_SuperSamplingSuspensionFrame > 0)
+            --m_SuperSamplingSuspensionFrame;
 
         TemporalAntiAliasing::RenderAttributes TAARenderAttribs{pDevice, pStateCache, pCtx};
         TAARenderAttribs.pPostFXContext      = m_PostFXContext.get();
@@ -783,6 +805,11 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
 
     // Checked to set TAASettings.SkipRejection
     m_AttribsCBDirty = false;
+}
+
+void HnPostProcessTask::SuspendSuperSampling()
+{
+    m_SuperSamplingSuspensionFrame = m_Params.SuperSamplingSuspensionFrames;
 }
 
 } // namespace USD

@@ -200,6 +200,9 @@ public:
 
     pxr::HdTaskSharedPtr GetTask(TaskUID UID) const;
 
+    template <typename TaskType>
+    TaskType* GetTask(TaskUID UID) const;
+
     void RemoveTask(TaskUID UID);
 
     /// Returns the Id of the selected Rprim:
@@ -234,6 +237,9 @@ public:
 
     /// Resets temporal anti-aliasing.
     void ResetTAA();
+
+    /// Suspends temporal super-sampling.
+    void SuspededSuperSampling();
 
 private:
     pxr::SdfPath GetTaskId(const pxr::TfToken& TaskName) const;
@@ -368,6 +374,13 @@ void HnTaskManager::CreateTask(const pxr::TfToken& TaskName,
                                bool                Enabled)
 {
     CreateTask<TaskType>(GetTaskId(TaskName), UID, std::forward<TaskParamsType>(Params), Enabled);
+}
+
+template <typename TaskType>
+TaskType* HnTaskManager::GetTask(TaskUID UID) const
+{
+    pxr::HdTaskSharedPtr Task = GetTask(UID);
+    return Task ? static_cast<TaskType*>(Task.get()) : nullptr;
 }
 
 template <typename TaskParamsType>

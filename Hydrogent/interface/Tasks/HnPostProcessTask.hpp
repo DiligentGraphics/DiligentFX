@@ -29,6 +29,7 @@
 #include <memory>
 
 #include "HnTask.hpp"
+#include "HnTypes.hpp"
 
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/PipelineState.h"
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/PipelineResourceSignature.h"
@@ -38,6 +39,7 @@
 #include "../../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
 #include "../../../../DiligentCore/Common/interface/BasicMath.hpp"
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/GraphicsTypesX.hpp"
+#include "../../PBR/interface/PBR_Renderer.hpp"
 
 namespace Diligent
 {
@@ -87,22 +89,27 @@ struct HnPostProcessTaskParams
     // Enable temporal anti-aliasing
     bool EnableTAA = false;
 
+    // The number of frames to suspend temporal super-sampling when
+    // rendering parameters change.
+    Uint32 SuperSamplingSuspensionFrames = 8;
+
     constexpr bool operator==(const HnPostProcessTaskParams& rhs) const
     {
         // clang-format off
-        return ConvertOutputToSRGB == rhs.ConvertOutputToSRGB &&
-               SelectionColor      == rhs.SelectionColor &&
-               SelectionOutlineWidth == rhs.SelectionOutlineWidth &&
+        return ConvertOutputToSRGB            == rhs.ConvertOutputToSRGB &&
+               SelectionColor                 == rhs.SelectionColor &&
+               SelectionOutlineWidth          == rhs.SelectionOutlineWidth &&
                NonselectionDesaturationFactor == rhs.NonselectionDesaturationFactor &&
-               ToneMappingMode     == rhs.ToneMappingMode &&
-               MiddleGray          == rhs.MiddleGray &&
-               WhitePoint          == rhs.WhitePoint &&
-               LuminanceSaturation == rhs.LuminanceSaturation &&
-               AverageLogLum       == rhs.AverageLogLum &&
-               SSRScale            == rhs.SSRScale &&
-               SSAOScale           == rhs.SSAOScale &&
-               SSAORadius		   == rhs.SSAORadius &&
-               EnableTAA           == rhs.EnableTAA;
+               ToneMappingMode                == rhs.ToneMappingMode &&
+               MiddleGray                     == rhs.MiddleGray &&
+               WhitePoint                     == rhs.WhitePoint &&
+               LuminanceSaturation            == rhs.LuminanceSaturation &&
+               AverageLogLum                  == rhs.AverageLogLum &&
+               SSRScale                       == rhs.SSRScale &&
+               SSAOScale                      == rhs.SSAOScale &&
+               SSAORadius		              == rhs.SSAORadius &&
+               EnableTAA                      == rhs.EnableTAA &&
+               SuperSamplingSuspensionFrames  == rhs.SuperSamplingSuspensionFrames;
         // clang-format on
     }
 
@@ -131,6 +138,9 @@ public:
 
 
     virtual void Execute(pxr::HdTaskContext* TaskCtx) override final;
+
+    /// Suspends temporal super-sampling for the number of frames defined in the task parameters.
+    void SuspendSuperSampling();
 
     void ResetTAA() { m_ResetTAA = true; }
 
@@ -169,12 +179,26 @@ private:
         bool   UseSSR  = false;
         bool   UseSSAO = false;
 
+        PBR_Renderer::DebugViewType DebugView  = PBR_Renderer::DebugViewType::NumDebugViews;
+        HN_RENDER_MODE              RenderMode = HN_RENDER_MODE_COUNT;
+
         constexpr bool operator==(const SuperSamplingFactors& rhs) const
         {
-            return Version == rhs.Version && UseSSR == rhs.UseSSR && UseSSAO == rhs.UseSSAO;
+            // clang-format off
+            return (Version    == rhs.Version &&
+                    UseSSR     == rhs.UseSSR &&
+                    UseSSAO    == rhs.UseSSAO &&
+                    DebugView  == rhs.DebugView &&
+                    RenderMode == rhs.RenderMode);
+            // clang-format on
+        }
+        constexpr bool operator!=(const SuperSamplingFactors& rhs) const
+        {
+            return !(*this == rhs);
         }
     };
     SuperSamplingFactors m_LastSuperSamplingFactors;
+    Uint32               m_SuperSamplingSuspensionFrame = 0;
 
     struct PostProcessingTechnique
     {

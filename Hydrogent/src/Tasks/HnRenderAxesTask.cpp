@@ -137,6 +137,8 @@ void HnRenderAxesTask::Sync(pxr::HdSceneDelegate* Delegate,
         {
             m_Params         = Params;
             m_ParamsAreDirty = true;
+
+            (*TaskCtx)[HnRenderResourceTokens->suspendSuperSampling] = pxr::VtValue{true};
         }
 
         if (!GetTaskParameter(Delegate, HnTokens->renderPassName, m_RenderPassName))

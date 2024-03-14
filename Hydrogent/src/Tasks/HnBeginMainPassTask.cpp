@@ -53,6 +53,7 @@ void HnBeginMainPassTask::Sync(pxr::HdSceneDelegate* Delegate,
         HnBeginMainPassTaskParams Params;
         if (GetTaskParams(Delegate, Params))
         {
+            (*TaskCtx)[HnRenderResourceTokens->suspendSuperSampling] = pxr::VtValue{true};
         }
     }
 

@@ -69,6 +69,8 @@ void HnProcessSelectionTask::Sync(pxr::HdSceneDelegate* Delegate,
         if (GetTaskParams(Delegate, Params))
         {
             m_NumJFIterations = static_cast<Uint32>(std::ceil(std::log2(std::max(Params.MaximumDistance, 1.f)))) + 1;
+
+            (*TaskCtx)[HnRenderResourceTokens->suspendSuperSampling] = pxr::VtValue{true};
         }
     }
 

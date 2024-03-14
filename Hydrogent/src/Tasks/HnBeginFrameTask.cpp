@@ -158,6 +158,8 @@ void HnBeginFrameTask::Sync(pxr::HdSceneDelegate* Delegate,
                                   0,
                                   m_Params.Formats.Depth,
                                   m_RenderPassStates[HnRenderResourceTokens->renderPass_TransparentSelected]);
+
+            (*TaskCtx)[HnRenderResourceTokens->suspendSuperSampling] = pxr::VtValue{true};
         }
     }
 
