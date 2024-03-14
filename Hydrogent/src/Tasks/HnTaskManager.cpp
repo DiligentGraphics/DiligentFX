@@ -36,6 +36,7 @@
 #include "Tasks/HnCopySelectionDepthTask.hpp"
 #include "Tasks/HnRenderEnvMapTask.hpp"
 #include "Tasks/HnRenderAxesTask.hpp"
+#include "Tasks/HnRenderBoundBoxTask.hpp"
 #include "Tasks/HnReadRprimIdTask.hpp"
 #include "Tasks/HnPostProcessTask.hpp"
 #include "Tasks/HnProcessSelectionTask.hpp"
@@ -63,6 +64,7 @@ TF_DEFINE_PRIVATE_TOKENS(
     (copySelectionDepth)
     (renderEnvMapTask)
     (renderAxesTask)
+    (renderBoundBoxTask)
     (readRprimIdTask)
     (processSelectionTask)
     (postProcessTask)
@@ -186,6 +188,7 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                            });
     CreateRenderEnvMapTask(HnRenderResourceTokens->renderPass_OpaqueUnselected_TransparentAll);
     CreateRenderAxesTask(HnRenderResourceTokens->renderPass_OpaqueUnselected_TransparentAll);
+    CreateRenderBoundBoxTask(HnRenderResourceTokens->renderPass_OpaqueUnselected_TransparentAll);
     CreateRenderRprimsTask(HnMaterialTagTokens->additive,
                            TaskUID_RenderRprimsAdditive,
                            {
@@ -378,6 +381,14 @@ void HnTaskManager::CreateRenderAxesTask(const pxr::TfToken& RenderPassName)
     SetParameter(HnTaskManagerTokens->renderAxesTask, HnTokens->renderPassName, RenderPassName);
 }
 
+void HnTaskManager::CreateRenderBoundBoxTask(const pxr::TfToken& RenderPassName)
+{
+    HnRenderBoundBoxTaskParams TaskParams;
+    CreateTask<HnRenderBoundBoxTask>(HnTaskManagerTokens->renderBoundBoxTask, TaskUID_RenderBoundBox, TaskParams);
+
+    SetParameter(HnTaskManagerTokens->renderBoundBoxTask, HnTokens->renderPassName, RenderPassName);
+}
+
 void HnTaskManager::CreateReadRprimIdTask()
 {
     HnReadRprimIdTaskParams TaskParams;
@@ -538,6 +549,11 @@ void HnTaskManager::SetRenderAxesParams(const HnRenderAxesTaskParams& Params)
     SetTaskParams(TaskUID_RenderAxes, Params);
 }
 
+void HnTaskManager::SetRenderBoundBoxParams(const HnRenderBoundBoxTaskParams& Params)
+{
+    SetTaskParams(TaskUID_RenderBoundBox, Params);
+}
+
 void HnTaskManager::SetPostProcessParams(const HnPostProcessTaskParams& Params)
 {
     SetTaskParams(TaskUID_PostProcess, Params);
@@ -572,6 +588,16 @@ void HnTaskManager::EnableAxes(bool Enable)
 bool HnTaskManager::AreAxesEnabled() const
 {
     return IsTaskEnabled(TaskUID_RenderAxes);
+}
+
+void HnTaskManager::EnableSelectedPrimBoundBox(bool Enable)
+{
+    EnableTask(TaskUID_RenderBoundBox, Enable);
+}
+
+bool HnTaskManager::IsSelectedPrimBoundBoxEnabled() const
+{
+    return IsTaskEnabled(TaskUID_RenderBoundBox);
 }
 
 void HnTaskManager::ResetTAA()

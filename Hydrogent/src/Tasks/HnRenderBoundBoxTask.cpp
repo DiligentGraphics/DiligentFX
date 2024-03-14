@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2024 Diligent Graphics LLC
+ *  Copyright 2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -24,48 +24,41 @@
  *  of the possibility of such damages.
  */
 
-#include "Tasks/HnRenderEnvMapTask.hpp"
+#include "Tasks/HnRenderBoundBoxTask.hpp"
+
 #include "HnRenderDelegate.hpp"
 #include "HnRenderPassState.hpp"
 #include "HnFrameRenderTargets.hpp"
+#include "HnRenderParam.hpp"
 #include "HnTokens.hpp"
+#include "GfTypeConversions.hpp"
 
-#include "EnvMapRenderer.hpp"
-#include "USD_Renderer.hpp"
-
+#include "BoundBoxRenderer.hpp"
 #include "DebugUtilities.hpp"
 #include "ScopedDebugGroup.hpp"
 
 namespace Diligent
 {
 
-namespace HLSL
-{
-
-#include "Shaders/PostProcess/ToneMapping/public/ToneMappingStructures.fxh"
-
-} // namespace HLSL
-
 namespace USD
 {
 
-HnRenderEnvMapTask::HnRenderEnvMapTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id) :
+HnRenderBoundBoxTask::HnRenderBoundBoxTask(pxr::HdSceneDelegate* ParamsDelegate, const pxr::SdfPath& Id) :
     HnTask{Id}
 {
 }
 
-HnRenderEnvMapTask::~HnRenderEnvMapTask()
+HnRenderBoundBoxTask::~HnRenderBoundBoxTask()
 {
 }
 
-void HnRenderEnvMapTask::Sync(pxr::HdSceneDelegate* Delegate,
-                              pxr::HdTaskContext*   TaskCtx,
-                              pxr::HdDirtyBits*     DirtyBits)
+void HnRenderBoundBoxTask::Sync(pxr::HdSceneDelegate* Delegate,
+                                pxr::HdTaskContext*   TaskCtx,
+                                pxr::HdDirtyBits*     DirtyBits)
 {
     if (*DirtyBits & pxr::HdChangeTracker::DirtyParams)
     {
-        HnRenderEnvMapTaskParams Params;
-        if (GetTaskParams(Delegate, Params))
+        if (GetTaskParams(Delegate, m_Params))
         {
         }
 
@@ -89,22 +82,20 @@ static_assert(HnFrameRenderTargets::GBUFFER_TARGET_IBL           == 6, "Shaders 
 static_assert(HnFrameRenderTargets::GBUFFER_TARGET_COUNT         == 7, "Shaders below assume that GBUFFER_TARGET_COUNT is 7");
 // clang-format on
 
-static constexpr char EnvMapPSMain[] = R"(
-void main(in  float4 Pos       : SV_Position,
-          in  float4 ClipPos   : CLIP_POS,
+static constexpr char BoundBoxPSMain[] = R"(
+void main(in BoundBoxVSOutput VSOut,
           out float4 Color     : SV_Target0,
           out float4 MotionVec : SV_Target2)
 {
-    SampleEnvMapOutput EnvMap = SampleEnvMap(ClipPos);
+    BoundBoxOutput BoundBox = GetBoundBoxOutput(VSOut);
 
-    Color     = EnvMap.Color;
-    MotionVec = float4(EnvMap.MotionVector, 0.0, 1.0);
+    Color     = BoundBox.Color;
+    MotionVec = float4(BoundBox.MotionVector, 0.0, 1.0);
 }
 )";
 
-static constexpr char EnvMapPSMainGL[] = R"(
-void main(in  float4 Pos       : SV_Position,
-          in  float4 ClipPos   : CLIP_POS,
+static constexpr char BoundBoxPSMainGL[] = R"(
+void main(in BoundBoxVSOutput VSOut,
           out float4 Color     : SV_Target0,
           out float4 MeshId    : SV_Target1,
           out float4 MotionVec : SV_Target2,
@@ -113,51 +104,85 @@ void main(in  float4 Pos       : SV_Position,
           out float4 Material  : SV_Target5,
           out float4 IBL       : SV_Target6)
 {
-    SampleEnvMapOutput EnvMap = SampleEnvMap(ClipPos);
+    BoundBoxOutput BoundBox = GetBoundBoxOutput(VSOut);
 
-    Color     = EnvMap.Color;
+    Color     = BoundBox.Color;
     MeshId    = float4(0.0, 0.0, 0.0, 1.0);
-    MotionVec = float4(EnvMap.MotionVector, 0.0, 1.0);
-    Normal    = float4(0.0, 0.0, 0.0, 0.0);
+    MotionVec = float4(BoundBox.MotionVector, 0.0, 1.0);
+    Normal    = float4(0.0, 0.0, 1.0, 1.0);
     BaseColor = float4(0.0, 0.0, 0.0, 0.0);
     Material  = float4(0.0, 0.0, 0.0, 0.0);
     IBL       = float4(0.0, 0.0, 0.0, 0.0);
 }
 )";
 
-void HnRenderEnvMapTask::Prepare(pxr::HdTaskContext* TaskCtx,
-                                 pxr::HdRenderIndex* RenderIndex)
+void HnRenderBoundBoxTask::Prepare(pxr::HdTaskContext* TaskCtx,
+                                   pxr::HdRenderIndex* RenderIndex)
 {
-    m_RenderIndex = RenderIndex;
+    m_RenderIndex    = RenderIndex;
+    m_RenderBoundBox = false;
 
-    HnRenderDelegate* pRenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+    HnRenderDelegate*    pRenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+    const HnRenderParam* pRenderParam    = static_cast<const HnRenderParam*>(pRenderDelegate->GetRenderParam());
+    if (pRenderParam == nullptr)
+    {
+        UNEXPECTED("Render param is not set");
+        return;
+    }
 
-    if (!m_EnvMapRenderer)
+    const pxr::SdfPath& SelectedPrimId = pRenderParam->GetSelectedPrimId();
+    if (SelectedPrimId.IsEmpty())
+    {
+        return;
+    }
+
+    pxr::HdSceneDelegate* SceneDelegate = m_RenderIndex->GetSceneDelegateForRprim(SelectedPrimId);
+    if (SceneDelegate == nullptr)
+    {
+        return;
+    }
+
+    const pxr::GfRange3d PrimExtent = SceneDelegate->GetExtent(SelectedPrimId);
+    if (PrimExtent.IsEmpty())
+    {
+        return;
+    }
+
+    pxr::GfMatrix4d Transform = SceneDelegate->GetTransform(SelectedPrimId);
+    pxr::GfVec3d    Scale     = PrimExtent.GetMax() - PrimExtent.GetMin();
+    pxr::GfVec3d    Offset    = PrimExtent.GetMin();
+
+    float4x4 BoundBoxTransform =
+        float4x4::Scale(ToVector3<float>(Scale)) *
+        float4x4::Translation(ToVector3<float>(Offset)) *
+        ToMatrix4x4<float>(Transform);
+
+    if (!m_BoundBoxRenderer)
     {
         if (HnRenderPassState* RenderPassState = GetRenderPassState(TaskCtx, m_RenderPassName))
         {
-            EnvMapRenderer::CreateInfo EnvMapRndrCI;
-            EnvMapRndrCI.pDevice          = pRenderDelegate->GetDevice();
-            EnvMapRndrCI.pCameraAttribsCB = pRenderDelegate->GetFrameAttribsCB();
-            EnvMapRndrCI.NumRenderTargets = RenderPassState->GetNumRenderTargets();
-            for (Uint32 rt = 0; rt < EnvMapRndrCI.NumRenderTargets; ++rt)
-                EnvMapRndrCI.RTVFormats[rt] = RenderPassState->GetRenderTargetFormat(rt);
-            EnvMapRndrCI.DSVFormat = RenderPassState->GetDepthStencilFormat();
+            BoundBoxRenderer::CreateInfo BoundBoxRndrCI;
+            BoundBoxRndrCI.pDevice          = pRenderDelegate->GetDevice();
+            BoundBoxRndrCI.pCameraAttribsCB = pRenderDelegate->GetFrameAttribsCB();
+            BoundBoxRndrCI.NumRenderTargets = RenderPassState->GetNumRenderTargets();
+            for (Uint32 rt = 0; rt < BoundBoxRndrCI.NumRenderTargets; ++rt)
+                BoundBoxRndrCI.RTVFormats[rt] = RenderPassState->GetRenderTargetFormat(rt);
+            BoundBoxRndrCI.DSVFormat = RenderPassState->GetDepthStencilFormat();
 
-            if (EnvMapRndrCI.pDevice->GetDeviceInfo().IsGLDevice())
+            if (BoundBoxRndrCI.pDevice->GetDeviceInfo().IsGLDevice())
             {
-                // Normally, environment map shader does not need to write to anything but
+                // Normally, bounding box shader does not need to write to anything but
                 // color and motion vector targets.
                 // However, in OpenGL this somehow results in color output also being
                 // written to the MeshID target. To work around this issue, we use a
                 // custom shader that writes 0.
-                EnvMapRndrCI.PSMainSource = EnvMapPSMainGL;
+                BoundBoxRndrCI.PSMainSource = BoundBoxPSMainGL;
             }
             else
             {
-                EnvMapRndrCI.PSMainSource = EnvMapPSMain;
+                BoundBoxRndrCI.PSMainSource = BoundBoxPSMain;
             }
-            m_EnvMapRenderer = std::make_unique<EnvMapRenderer>(EnvMapRndrCI);
+            m_BoundBoxRenderer = std::make_unique<BoundBoxRenderer>(BoundBoxRndrCI);
         }
         else
         {
@@ -165,40 +190,18 @@ void HnRenderEnvMapTask::Prepare(pxr::HdTaskContext* TaskCtx,
         }
     }
 
-    auto USDRenderer = pRenderDelegate->GetUSDRenderer();
-    if (!USDRenderer)
-    {
-        UNEXPECTED("USD renderer is not initialized");
-        return;
-    }
+    BoundBoxRenderer::RenderAttribs Attribs;
+    Attribs.Color                = &m_Params.Color;
+    Attribs.BoundBoxTransform    = &BoundBoxTransform;
+    Attribs.ComputeMotionVectors = true;
+    m_BoundBoxRenderer->Prepare(pRenderDelegate->GetDeviceContext(), Attribs);
 
-    auto* pEnvMapSRV = USDRenderer->GetPrefilteredEnvMapSRV();
-    if (pEnvMapSRV == nullptr)
-        return;
-
-    Diligent::HLSL::ToneMappingAttribs TMAttribs;
-    // Tone mapping is performed in the post-processing pass
-    TMAttribs.iToneMappingMode     = TONE_MAPPING_MODE_NONE;
-    TMAttribs.bAutoExposure        = 0;
-    TMAttribs.fMiddleGray          = 0.18f;
-    TMAttribs.bLightAdaptation     = 0;
-    TMAttribs.fWhitePoint          = 3.0f;
-    TMAttribs.fLuminanceSaturation = 1.0;
-
-    EnvMapRenderer::RenderAttribs EnvMapAttribs;
-    EnvMapAttribs.pEnvMap       = pEnvMapSRV;
-    EnvMapAttribs.AverageLogLum = 0.3f;
-    EnvMapAttribs.MipLevel      = 1;
-    // We should write zero alpha to get correct alpha in the final image
-    EnvMapAttribs.Alpha                = 0;
-    EnvMapAttribs.ComputeMotionVectors = true;
-
-    m_EnvMapRenderer->Prepare(pRenderDelegate->GetDeviceContext(), EnvMapAttribs, TMAttribs);
+    m_RenderBoundBox = true;
 }
 
-void HnRenderEnvMapTask::Execute(pxr::HdTaskContext* TaskCtx)
+void HnRenderBoundBoxTask::Execute(pxr::HdTaskContext* TaskCtx)
 {
-    if (!m_EnvMapRenderer)
+    if (!m_BoundBoxRenderer || !m_RenderBoundBox)
         return;
 
     HnRenderDelegate* pRenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
@@ -214,8 +217,8 @@ void HnRenderEnvMapTask::Execute(pxr::HdTaskContext* TaskCtx)
         return;
     }
 
-    ScopedDebugGroup DebugGroup{pContext, "Render Environment Map"};
-    m_EnvMapRenderer->Render(pContext);
+    ScopedDebugGroup DebugGroup{pContext, "Bounding Box"};
+    m_BoundBoxRenderer->Render(pContext);
 }
 
 } // namespace USD
