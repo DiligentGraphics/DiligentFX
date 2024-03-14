@@ -1,18 +1,49 @@
+#include "BasicStructures.fxh"
+#include "BoundBoxStructures.fxh"
 
-struct BoundBoxVSOutput
+#if COMPUTE_MOTION_VECTORS
+#include "ShaderUtilities.fxh"
+#endif
+
+cbuffer cbCameraAttribs
 {
-    float4 Pos   : SV_Position;
-    float4 Color : COLOR;
+    CameraAttribs g_Camera;
+    CameraAttribs g_PrevCamera;
+}
+
+cbuffer cbBoundBoxAttribs
+{
+    BoundBoxAttribs g_Attribs;
+}
+
+struct BoundBoxOutput
+{
+    float4 Color;
+#if COMPUTE_MOTION_VECTORS
+    float2 MotionVector;
+#endif
 };
 
-float4 GetBoundBoxColor(BoundBoxVSOutput VSOut)
+BoundBoxOutput GetBoundBoxOutput(BoundBoxVSOutput VSOut)
 {
-    return VSOut.Color;
+    BoundBoxOutput Output;
+    Output.Color = g_Attribs.Color;
+
+#if COMPUTE_MOTION_VECTORS
+    Output.MotionVector = GetMotionVector(
+        VSOut.ClipPos.xy / VSOut.ClipPos.w,
+        VSOut.PrevClipPos.xy / VSOut.PrevClipPos.w,
+        g_Camera.f2Jitter,
+        g_PrevCamera.f2Jitter
+    );
+#endif
+
+    return Output;
 }
 
 #include "PSMainGenerated.generated"
 //void main(in BoundBoxVSOutput VSOut,
 //          out float4 Color : SV_Target)
 //{
-//    Color = GetBoundBoxColor(VSOut);
+//    Color = GetBoundBoxOutput(VSOut).Color;
 //}

@@ -1,21 +1,16 @@
 #include "BasicStructures.fxh"
-
-cbuffer cbBoundBoxAttribs
-{
-    float4x4 g_BoundBoxTransform;
-    float4   g_BoundBoxColor;
-}
+#include "BoundBoxStructures.fxh"
 
 cbuffer cbCameraAttribs
 {
-    CameraAttribs g_CameraAttribs;
+    CameraAttribs g_Camera;
+    CameraAttribs g_PrevCamera;
 }
 
-struct BoundBoxVSOutput
+cbuffer cbBoundBoxAttribs
 {
-    float4 Pos   : SV_Position;
-    float4 Color : COLOR;
-};
+    BoundBoxAttribs g_Attribs;
+}
 
 void BoundBoxVS(uint id : SV_VertexID,
                 out  BoundBoxVSOutput VSOut)
@@ -57,8 +52,13 @@ void BoundBoxVS(uint id : SV_VertexID,
     BoxCorner.z = (id & 0x04u) == 0u ? 0.0 : 1.0;
     BoxCorner.w = 1.0;
 
-    BoxCorner = mul(BoxCorner, g_BoundBoxTransform);
-    VSOut.Pos = mul(BoxCorner, g_CameraAttribs.mViewProj);
-    
-    VSOut.Color = g_BoundBoxColor;
+    BoxCorner = mul(BoxCorner, g_Attribs.Transform);
+    VSOut.Pos = mul(BoxCorner, g_Camera.mViewProj);
+
+    VSOut.ClipPos = VSOut.Pos;
+#if COMPUTE_MOTION_VECTORS
+    VSOut.PrevClipPos = mul(BoxCorner, g_PrevCamera.mViewProj);
+#else
+    VSOut.PrevClipPos = VSOut.ClipPos;
+#endif
 }

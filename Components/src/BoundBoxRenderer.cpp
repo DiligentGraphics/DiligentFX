@@ -79,7 +79,7 @@ static constexpr char DefaultPSMain[] = R"(
 void main(in BoundBoxVSOutput VSOut,
           out float4 Color : SV_Target)
 {
-    Color = GetBoundBoxColor(VSOut);
+    Color = GetBoundBoxOutput(VSOut).Color;
 }
 )";
 
@@ -105,7 +105,9 @@ IPipelineState* BoundBoxRenderer::GetPSO(const PSOKey& Key)
     ShaderCI.pShaderSourceStreamFactory = pShaderSourceFactory;
 
     ShaderMacroHelper Macros;
-    Macros.Add("CONVERT_OUTPUT_TO_SRGB", Key.ConvertOutputToSRGB);
+    Macros
+        .Add("CONVERT_OUTPUT_TO_SRGB", Key.ConvertOutputToSRGB)
+        .Add("COMPUTE_MOTION_VECTORS", Key.ComputeMotionVectors);
     ShaderCI.Macros = Macros;
 
     RefCntAutoPtr<IShader> pVS;
@@ -145,6 +147,7 @@ IPipelineState* BoundBoxRenderer::GetPSO(const PSOKey& Key)
     for (auto RTVFormat : m_RTVFormats)
         PsoCI.AddRenderTarget(RTVFormat);
 
+    PsoCI.PSODesc.ResourceLayout.DefaultVariableMergeStages  = SHADER_TYPE_VS_PS;
     PsoCI.GraphicsPipeline.DepthStencilDesc.DepthFunc        = COMPARISON_FUNC_LESS_EQUAL;
     PsoCI.GraphicsPipeline.DepthStencilDesc.DepthWriteEnable = false;
 
@@ -168,7 +171,7 @@ IPipelineState* BoundBoxRenderer::GetPSO(const PSOKey& Key)
 
 void BoundBoxRenderer::Prepare(IDeviceContext* pContext, const RenderAttribs& Attribs)
 {
-    m_pCurrentPSO = GetPSO({Attribs.ConvertOutputToSRGB});
+    m_pCurrentPSO = GetPSO({Attribs.ConvertOutputToSRGB, Attribs.ComputeMotionVectors});
     if (m_pCurrentPSO == nullptr)
     {
         UNEXPECTED("Failed to get PSO");

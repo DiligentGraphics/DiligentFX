@@ -69,6 +69,8 @@ public:
 
         /// Manually convert shader output to sRGB color space.
         bool ConvertOutputToSRGB = false;
+
+        bool ComputeMotionVectors = false;
     };
     void Prepare(IDeviceContext* pContext, const RenderAttribs& Attribs);
     void Render(IDeviceContext* pContext);
@@ -77,14 +79,18 @@ public:
     struct PSOKey
     {
         const bool ConvertOutputToSRGB;
+        const bool ComputeMotionVectors;
 
-        PSOKey(bool _ConvertOutputToSRGB) :
-            ConvertOutputToSRGB{_ConvertOutputToSRGB}
+        PSOKey(bool _ConvertOutputToSRGB,
+               bool _ComputeMotionVectors) :
+            ConvertOutputToSRGB{_ConvertOutputToSRGB},
+            ComputeMotionVectors{_ComputeMotionVectors}
         {}
 
         constexpr bool operator==(const PSOKey& rhs) const
         {
-            return ConvertOutputToSRGB == rhs.ConvertOutputToSRGB;
+            return (ConvertOutputToSRGB == rhs.ConvertOutputToSRGB &&
+                    ComputeMotionVectors == rhs.ComputeMotionVectors);
         }
 
         struct Hasher
