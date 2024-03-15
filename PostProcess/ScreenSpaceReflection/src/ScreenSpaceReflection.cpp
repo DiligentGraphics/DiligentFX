@@ -346,7 +346,7 @@ void ScreenSpaceReflection::Execute(const RenderAttributes& RenderAttribs)
         m_Resources[ResourceIdx].Release();
 }
 
-bool ScreenSpaceReflection::UpdateUI(HLSL::ScreenSpaceReflectionAttribs& SSRAttribs)
+bool ScreenSpaceReflection::UpdateUI(HLSL::ScreenSpaceReflectionAttribs& SSRAttribs, Uint32& DisplayMode)
 {
     const char* RenderMode[] = {
         "Standard",
@@ -355,15 +355,15 @@ bool ScreenSpaceReflection::UpdateUI(HLSL::ScreenSpaceReflectionAttribs& SSRAttr
 
     bool AttribsChanged = false;
 
-    if (ImGui::BeginCombo("DisplayMode", RenderMode[m_ImGuiDisplayMode]))
+    if (ImGui::BeginCombo("DisplayMode", RenderMode[DisplayMode]))
     {
         for (Uint32 RenderModeIdx = 0; RenderModeIdx < _countof(RenderMode); RenderModeIdx++)
         {
-            const bool IsSelected = (m_ImGuiDisplayMode == RenderModeIdx);
+            const bool IsSelected = (DisplayMode == RenderModeIdx);
             if (ImGui::Selectable(RenderMode[RenderModeIdx], IsSelected))
             {
-                m_ImGuiDisplayMode = RenderModeIdx;
-                AttribsChanged     = true;
+                DisplayMode    = RenderModeIdx;
+                AttribsChanged = true;
             }
 
             if (IsSelected)
@@ -372,7 +372,7 @@ bool ScreenSpaceReflection::UpdateUI(HLSL::ScreenSpaceReflectionAttribs& SSRAttr
         ImGui::EndCombo();
     }
 
-    if (m_ImGuiDisplayMode == 0)
+    if (DisplayMode == 0)
     {
         if (ImGui::SliderFloat("Roughness Threshold", &SSRAttribs.RoughnessThreshold, 0.0f, 1.0f))
             AttribsChanged = true;
@@ -383,7 +383,7 @@ bool ScreenSpaceReflection::UpdateUI(HLSL::ScreenSpaceReflectionAttribs& SSRAttr
         if (ImGui::SliderInt("Max Traversal Iterations", reinterpret_cast<Int32*>(&SSRAttribs.MaxTraversalIntersections), 0, 256))
             AttribsChanged = true;
     }
-    else if (m_ImGuiDisplayMode == 1)
+    else if (DisplayMode == 1)
     {
         if (ImGui::TreeNode("Ray Marching"))
         {

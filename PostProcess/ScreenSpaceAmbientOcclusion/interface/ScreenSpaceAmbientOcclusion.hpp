@@ -97,7 +97,7 @@ public:
 
     void Execute(const RenderAttributes& RenderAttribs);
 
-    bool UpdateUI(HLSL::ScreenSpaceAmbientOcclusionAttribs& SSRAttribs);
+    static bool UpdateUI(HLSL::ScreenSpaceAmbientOcclusionAttribs& SSRAttribs);
 
     ITextureView* GetAmbientOcclusionSRV() const;
 

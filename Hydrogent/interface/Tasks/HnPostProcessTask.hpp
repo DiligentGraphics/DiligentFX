@@ -102,7 +102,7 @@ struct HnPostProcessTaskParams
     HLSL::ScreenSpaceAmbientOcclusionAttribs SSAO;
     HLSL::TemporalAntiAliasingAttribs        TAA;
 
-    HnPostProcessTaskParams() noexcept
+    constexpr HnPostProcessTaskParams() noexcept
     {
         SSR.MaxTraversalIntersections = 64;
         SSR.RoughnessChannel          = 0;
