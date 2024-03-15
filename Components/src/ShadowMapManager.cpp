@@ -157,22 +157,7 @@ void ShadowMapManager::DistributeCascades(const DistributeCascadeInfo& Info,
     }
 
     float3 LightSpaceX, LightSpaceY, LightSpaceZ;
-    LightSpaceZ = *Info.pLightDir;
-    VERIFY(length(LightSpaceZ) > 1e-5, "Light direction vector length is zero");
-    LightSpaceZ = normalize(LightSpaceZ);
-
-    auto min_cmp = std::min(std::min(std::abs(Info.pLightDir->x), std::abs(Info.pLightDir->y)), std::abs(Info.pLightDir->z));
-    if (min_cmp == std::abs(Info.pLightDir->x))
-        LightSpaceX = float3(1, 0, 0);
-    else if (min_cmp == std::abs(Info.pLightDir->y))
-        LightSpaceX = float3(0, 1, 0);
-    else
-        LightSpaceX = float3(0, 0, 1);
-
-    LightSpaceY = cross(LightSpaceZ, LightSpaceX);
-    LightSpaceX = cross(LightSpaceY, LightSpaceZ);
-    LightSpaceX = normalize(LightSpaceX);
-    LightSpaceY = normalize(LightSpaceY) * (Info.UseRightHandedLightViewTransform ? +1.f : -1.f);
+    BasisFromDirection(*Info.pLightDir, Info.UseRightHandedLightViewTransform, LightSpaceX, LightSpaceY, LightSpaceZ);
 
     float4x4 WorldToLightViewSpaceMatr =
         float4x4::ViewFromBasis(LightSpaceX, LightSpaceY, LightSpaceZ);
