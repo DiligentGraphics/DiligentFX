@@ -55,9 +55,6 @@ namespace HLSL
 #include "Shaders/PBR/public/PBR_Structures.fxh"
 #include "../shaders/HnPostProcessStructures.fxh"
 #include "Shaders/PBR/private/RenderPBR_Structures.fxh"
-#include "Shaders/PostProcess/ScreenSpaceReflection/public/ScreenSpaceReflectionStructures.fxh"
-#include "Shaders/PostProcess/TemporalAntiAliasing/public/TemporalAntiAliasingStructures.fxh"
-#include "Shaders/PostProcess/ScreenSpaceAmbientOcclusion/public/ScreenSpaceAmbientOcclusionStructures.fxh"
 
 } // namespace HLSL
 
@@ -685,12 +682,6 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
 
     if (m_UseSSR)
     {
-        HLSL::ScreenSpaceReflectionAttribs SSRAttribs{};
-        SSRAttribs.MaxTraversalIntersections = 64;
-        SSRAttribs.RoughnessChannel          = 0;
-        SSRAttribs.IsRoughnessPerceptual     = true;
-        SSRAttribs.RoughnessThreshold        = 0.4f;
-
         ScreenSpaceReflection::RenderAttributes SSRRenderAttribs{pDevice, pStateCache, pCtx};
         SSRRenderAttribs.pPostFXContext     = m_PostFXContext.get();
         SSRRenderAttribs.pColorBufferSRV    = m_FrameTargets->GBufferSRVs[HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR];
@@ -698,15 +689,12 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         SSRRenderAttribs.pNormalBufferSRV   = m_FrameTargets->GBufferSRVs[HnFrameRenderTargets::GBUFFER_TARGET_NORMAL];
         SSRRenderAttribs.pMaterialBufferSRV = m_FrameTargets->GBufferSRVs[HnFrameRenderTargets::GBUFFER_TARGET_MATERIAL];
         SSRRenderAttribs.pMotionVectorsSRV  = m_FrameTargets->GBufferSRVs[HnFrameRenderTargets::GBUFFER_TARGET_MOTION_VECTOR];
-        SSRRenderAttribs.pSSRAttribs        = &SSRAttribs;
+        SSRRenderAttribs.pSSRAttribs        = &m_Params.SSR;
         m_SSR->Execute(SSRRenderAttribs);
     }
 
     if (m_UseSSAO)
     {
-        HLSL::ScreenSpaceAmbientOcclusionAttribs SSAOSettings{};
-        SSAOSettings.EffectRadius = m_Params.SSAORadius;
-
         ScreenSpaceAmbientOcclusion::RenderAttributes SSAORenderAttribs{};
         SSAORenderAttribs.pDevice             = pDevice;
         SSAORenderAttribs.pDeviceContext      = pCtx;
@@ -715,7 +703,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         SSAORenderAttribs.pPrevDepthBufferSRV = m_FrameTargets->PrevDepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
         SSAORenderAttribs.pNormalBufferSRV    = m_FrameTargets->GBufferSRVs[HnFrameRenderTargets::GBUFFER_TARGET_NORMAL];
         SSAORenderAttribs.pMotionVectorsSRV   = m_FrameTargets->GBufferSRVs[HnFrameRenderTargets::GBUFFER_TARGET_MOTION_VECTOR];
-        SSAORenderAttribs.pSSAOAttribs        = &SSAOSettings;
+        SSAORenderAttribs.pSSAOAttribs        = &m_Params.SSAO;
         m_SSAO->Execute(SSAORenderAttribs);
     }
 
@@ -751,7 +739,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
 
     if (m_UseTAA)
     {
-        HLSL::TemporalAntiAliasingAttribs TAASettings{};
+        HLSL::TemporalAntiAliasingAttribs TAASettings = m_Params.TAA;
 
         if (m_ResetTAA)
         {

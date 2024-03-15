@@ -50,6 +50,13 @@ class ScreenSpaceReflection;
 class TemporalAntiAliasing;
 class ScreenSpaceAmbientOcclusion;
 
+namespace HLSL
+{
+#include "../../../Shaders/PostProcess/ScreenSpaceReflection/public/ScreenSpaceReflectionStructures.fxh"
+#include "../../../Shaders/PostProcess/TemporalAntiAliasing/public/TemporalAntiAliasingStructures.fxh"
+#include "../../../Shaders/PostProcess/ScreenSpaceAmbientOcclusion/public/ScreenSpaceAmbientOcclusionStructures.fxh"
+} // namespace HLSL
+
 namespace USD
 {
 
@@ -84,15 +91,24 @@ struct HnPostProcessTaskParams
     // 0 - disable SSAO.
     float SSAOScale = 1.f;
 
-    // SSAO radius in world space
-    float SSAORadius = 1;
-
     // Enable temporal anti-aliasing
     bool EnableTAA = false;
 
     // The number of frames to suspend temporal super-sampling when
     // rendering parameters change.
     Uint32 SuperSamplingSuspensionFrames = 8;
+
+    HLSL::ScreenSpaceReflectionAttribs       SSR;
+    HLSL::ScreenSpaceAmbientOcclusionAttribs SSAO;
+    HLSL::TemporalAntiAliasingAttribs        TAA;
+
+    HnPostProcessTaskParams() noexcept
+    {
+        SSR.MaxTraversalIntersections = 64;
+        SSR.RoughnessChannel          = 0;
+        SSR.IsRoughnessPerceptual     = true;
+        SSR.RoughnessThreshold        = 0.4f;
+    }
 
     constexpr bool operator==(const HnPostProcessTaskParams& rhs) const
     {
@@ -109,9 +125,11 @@ struct HnPostProcessTaskParams
                AverageLogLum                  == rhs.AverageLogLum &&
                SSRScale                       == rhs.SSRScale &&
                SSAOScale                      == rhs.SSAOScale &&
-               SSAORadius		              == rhs.SSAORadius &&
                EnableTAA                      == rhs.EnableTAA &&
-               SuperSamplingSuspensionFrames  == rhs.SuperSamplingSuspensionFrames;
+               SuperSamplingSuspensionFrames  == rhs.SuperSamplingSuspensionFrames &&
+               memcmp(&SSR,  &rhs.SSR,  sizeof(SSR))  == 0 &&
+               memcmp(&SSAO, &rhs.SSAO, sizeof(SSAO)) == 0 &&
+               memcmp(&TAA,  &rhs.TAA,  sizeof(TAA))  == 0;
         // clang-format on
     }
 
