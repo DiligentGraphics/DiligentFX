@@ -35,6 +35,7 @@
 #include "pxr/imaging/hd/sceneDelegate.h"
 
 #include "GfTypeConversions.hpp"
+#include "BasicMath.hpp"
 
 namespace Diligent
 {
@@ -351,6 +352,56 @@ bool HnLight::ApproximateAreaLight(pxr::HdSceneDelegate& SceneDelegate, float Me
     return ParamsDirty;
 }
 
+static float4x4 BuildShdadowTransformMatrix(const float3& Direction, pxr::HdSceneDelegate& SceneDelegate)
+{
+    float3 LightSpaceX, LightSpaceY, LightSpaceZ;
+    BasisFromDirection(Direction, true, LightSpaceX, LightSpaceY, LightSpaceZ);
+
+    const float4x4 WorldToLightViewSpaceMatr = float4x4::ViewFromBasis(LightSpaceX, LightSpaceY, LightSpaceZ);
+
+    BoundBox LightSpaceBounds{float3{+FLT_MAX}, float3{-FLT_MAX}};
+
+    pxr::HdRenderIndex&       RenderIndex = SceneDelegate.GetRenderIndex();
+    const pxr::SdfPathVector& RPrimIds    = RenderIndex.GetRprimIds();
+    for (const pxr::SdfPath& RPrimId : RPrimIds)
+    {
+        if (RPrimId.IsEmpty())
+            continue;
+
+        const pxr::GfRange3d PrimExtent = SceneDelegate.GetExtent(RPrimId);
+        if (PrimExtent.IsEmpty())
+            continue;
+
+        const float3   ExtentMin     = ToFloat3(PrimExtent.GetMin());
+        const float3   ExtentMax     = ToFloat3(PrimExtent.GetMax());
+        const float4x4 PrimTransform = ToMatrix4x4<float>(SceneDelegate.GetTransform(RPrimId));
+        for (Uint32 i = 0; i < 8; ++i)
+        {
+            float4 Corner{
+                (i & 0x01) ? ExtentMax.x : ExtentMin.x,
+                (i & 0x02) ? ExtentMax.y : ExtentMin.y,
+                (i & 0x04) ? ExtentMax.z : ExtentMin.z,
+                1.0,
+            };
+            Corner = Corner * PrimTransform;
+            Corner = Corner * WorldToLightViewSpaceMatr;
+
+            LightSpaceBounds.Min = std::min(LightSpaceBounds.Min, float3{Corner});
+            LightSpaceBounds.Max = std::max(LightSpaceBounds.Max, float3{Corner});
+        }
+    }
+
+    IRenderDevice*          pDevice    = static_cast<const HnRenderDelegate*>(RenderIndex.GetRenderDelegate())->GetDevice();
+    const RenderDeviceInfo& DeviceInfo = pDevice->GetDeviceInfo();
+
+    const float4x4 LightProjMatrix = float4x4::OrthoOffCenter(LightSpaceBounds.Min.x, LightSpaceBounds.Max.x,
+                                                              LightSpaceBounds.Min.y, LightSpaceBounds.Max.y,
+                                                              LightSpaceBounds.Min.z, LightSpaceBounds.Max.z,
+                                                              DeviceInfo.NDC.MinZ == -1);
+
+    return WorldToLightViewSpaceMatr * LightProjMatrix;
+}
+
 void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
                    pxr::HdRenderParam*   RenderParam,
                    pxr::HdDirtyBits*     DirtyBits)
@@ -371,6 +422,7 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
         }
     }
 
+    bool ShadowTransformDirty = false;
     if (*DirtyBits & DirtyTransform)
     {
         const pxr::GfMatrix4d Transform = SceneDelegate->GetTransform(Id);
@@ -390,6 +442,8 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
             m_Direction = Direction;
             LightDirty  = true;
         }
+
+        ShadowTransformDirty = true;
 
         *DirtyBits &= ~DirtyTransform;
     }
@@ -441,11 +495,12 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
         *DirtyBits &= ~DirtyParams;
     }
 
+    pxr::HdRenderIndex& RenderIndex    = SceneDelegate->GetRenderIndex();
+    HnRenderDelegate*   RenderDelegate = static_cast<HnRenderDelegate*>(RenderIndex.GetRenderDelegate());
+    HnShadowMapManager* ShadowMapMg    = RenderDelegate->GetShadowMapManager();
     if (*DirtyBits & DirtyShadowParams)
     {
-        pxr::HdRenderIndex& RenderIndex    = SceneDelegate->GetRenderIndex();
-        HnRenderDelegate*   RenderDelegate = static_cast<HnRenderDelegate*>(RenderIndex.GetRenderDelegate());
-        if (HnShadowMapManager* ShadowMapMg = RenderDelegate->GetShadowMapManager())
+        if (ShadowMapMg != nullptr)
         {
             const TextureDesc& ShadowMapDesc = ShadowMapMg->GetAtlasDesc();
 
@@ -463,53 +518,56 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
                 m_ShadowMapResolution = std::min(ShadowMapDesc.Width, ShadowMapDesc.Height);
             }
 
-            const bool ShadowsEnabled = SceneDelegate->GetLightParamValue(Id, pxr::HdLightTokens->shadowEnable).GetWithDefault<bool>(false);
-            if (ShadowsEnabled)
+            if (m_ShadowMapSuballocation &&
+                m_ShadowMapSuballocation->GetSize() != uint2{m_ShadowMapResolution, m_ShadowMapResolution})
             {
-                if (m_ShadowMapSuballocation &&
-                    m_ShadowMapSuballocation->GetSize() != uint2{m_ShadowMapResolution, m_ShadowMapResolution})
-                {
-                    m_ShadowMapSuballocation.Release();
-                    m_ShadowMapShaderInfo.reset();
-                }
-            }
-            else
-            {
-                if (m_ShadowMapSuballocation)
-                {
-                    m_ShadowMapSuballocation.Release();
-                    LightDirty = true;
-                }
-            }
-
-            if (ShadowsEnabled && !m_ShadowMapSuballocation)
-            {
-                m_ShadowMapSuballocation = ShadowMapMg->Allocate(m_ShadowMapResolution, m_ShadowMapResolution);
-                if (!m_ShadowMapSuballocation)
-                {
-                    LOG_ERROR_MESSAGE("Failed to allocate shadow map for light ", Id);
-                }
-                m_ShadowMapShaderInfo = std::make_unique<HLSL::PBRShadowMapInfo>();
-
-
-                const float4& UVScaleBias      = m_ShadowMapSuballocation->GetUVScaleBias();
-                m_ShadowMapShaderInfo->UVScale = {UVScaleBias.x, UVScaleBias.y};
-                m_ShadowMapShaderInfo->UVBias  = {UVScaleBias.z, UVScaleBias.w};
-
-                m_ShadowMapShaderInfo->ShadowMapSlice = static_cast<float>(m_ShadowMapSuballocation->GetSlice());
-
-                m_ShadowMapShaderInfo->WorldToLightProjSpace = {
-                    0, 0, 0, 0,
-                    0, 0, 0, 0,
-                    0, 0, 0, 0,
-                    0, 0, 0, 1, //
-                };
-
+                m_ShadowMapSuballocation.Release();
+                m_ShadowMapShaderInfo.reset();
                 LightDirty = true;
             }
         }
 
         *DirtyBits &= ~DirtyShadowParams;
+    }
+
+    if (ShadowMapMg != nullptr)
+    {
+        const bool ShadowsEnabled =
+            SceneDelegate->GetLightParamValue(Id, pxr::HdLightTokens->shadowEnable).GetWithDefault<bool>(false) &&
+            m_Params.Type == GLTF::Light::TYPE::DIRECTIONAL;
+        if (!ShadowsEnabled && m_ShadowMapSuballocation)
+        {
+            m_ShadowMapSuballocation.Release();
+            m_ShadowMapShaderInfo.reset();
+            LightDirty = true;
+        }
+
+        if (ShadowsEnabled && !m_ShadowMapSuballocation)
+        {
+            m_ShadowMapSuballocation = ShadowMapMg->Allocate(m_ShadowMapResolution, m_ShadowMapResolution);
+            if (!m_ShadowMapSuballocation)
+            {
+                LOG_ERROR_MESSAGE("Failed to allocate shadow map for light ", Id);
+            }
+            m_ShadowMapShaderInfo = std::make_unique<HLSL::PBRShadowMapInfo>();
+
+            const float4& UVScaleBias      = m_ShadowMapSuballocation->GetUVScaleBias();
+            m_ShadowMapShaderInfo->UVScale = {UVScaleBias.x, UVScaleBias.y};
+            m_ShadowMapShaderInfo->UVBias  = {UVScaleBias.z, UVScaleBias.w};
+
+            m_ShadowMapShaderInfo->ShadowMapSlice = static_cast<float>(m_ShadowMapSuballocation->GetSlice());
+
+            ShadowTransformDirty = true;
+
+            LightDirty = true;
+        }
+
+        if (m_ShadowMapShaderInfo && ShadowTransformDirty)
+        {
+            m_ShadowMapShaderInfo->WorldToLightProjSpace = BuildShdadowTransformMatrix(m_Direction, *SceneDelegate);
+
+            LightDirty = true;
+        }
     }
 
     if (LightDirty && RenderParam != nullptr)
