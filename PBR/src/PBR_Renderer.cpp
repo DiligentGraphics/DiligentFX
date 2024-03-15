@@ -133,7 +133,8 @@ static std::string GetTextureIdString(PBR_Renderer::TEXTURE_ATTRIB_ID Id)
 PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
                            IRenderStateCache* pStateCache,
                            IDeviceContext*    pCtx,
-                           const CreateInfo&  CI) :
+                           const CreateInfo&  CI,
+                           bool               InitSignature) :
     m_InputLayout{CI.InputLayout},
     m_Settings{
         [this](CreateInfo CI) {
@@ -300,7 +301,10 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
         pCtx->TransitionResourceStates(static_cast<Uint32>(Barriers.size()), Barriers.data());
     }
 
-    CreateSignature();
+    if (InitSignature)
+    {
+        CreateSignature();
+    }
 }
 
 PBR_Renderer::~PBR_Renderer()
@@ -707,7 +711,7 @@ void PBR_Renderer::SetMaterialTexture(IShaderResourceBinding* pSRB, ITextureView
 
 void PBR_Renderer::CreateSignature()
 {
-    VERIFY(!m_ResourceSignature, "Resource signature has already been created");
+    VERIFY(m_ResourceSignatures.empty(), "Resource signature has already been created");
 
     PipelineResourceSignatureDescX SignatureDesc{"PBR Renderer Resource Signature"};
     SignatureDesc
@@ -871,21 +875,28 @@ void PBR_Renderer::CreateSignature()
         AddTextureAndSampler("g_ShadowMap", Sam_ComparisonLinearClamp, "g_ShadowMap_sampler");
     }
 
-    m_ResourceSignature = m_Device.CreatePipelineResourceSignature(SignatureDesc);
+    CreateCustomSignature(std::move(SignatureDesc));
+}
+
+void PBR_Renderer::CreateCustomSignature(PipelineResourceSignatureDescX&& SignatureDesc)
+{
+    RefCntAutoPtr<IPipelineResourceSignature> ResourceSignature = m_Device.CreatePipelineResourceSignature(SignatureDesc);
+    VERIFY_EXPR(ResourceSignature);
 
     if (m_Settings.EnableIBL)
     {
-        m_ResourceSignature->GetStaticVariableByName(SHADER_TYPE_PIXEL, "g_PreintegratedGGX")->Set(m_pPreintegratedGGX_SRV);
+        ResourceSignature->GetStaticVariableByName(SHADER_TYPE_PIXEL, "g_PreintegratedGGX")->Set(m_pPreintegratedGGX_SRV);
         if (m_Settings.EnableSheen)
         {
-            m_ResourceSignature->GetStaticVariableByName(SHADER_TYPE_PIXEL, "g_PreintegratedCharlie")->Set(m_pPreintegratedCharlie_SRV);
+            ResourceSignature->GetStaticVariableByName(SHADER_TYPE_PIXEL, "g_PreintegratedCharlie")->Set(m_pPreintegratedCharlie_SRV);
         }
     }
 
     if (m_Settings.EnableSheen)
     {
-        m_ResourceSignature->GetStaticVariableByName(SHADER_TYPE_PIXEL, "g_SheenAlbedoScalingLUT")->Set(m_pSheenAlbedoScaling_LUT_SRV);
+        ResourceSignature->GetStaticVariableByName(SHADER_TYPE_PIXEL, "g_SheenAlbedoScalingLUT")->Set(m_pSheenAlbedoScaling_LUT_SRV);
     }
+    m_ResourceSignatures = {std::move(ResourceSignature)};
 }
 
 ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
@@ -1381,9 +1392,11 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
     GraphicsPipeline             = GraphicsDesc;
     GraphicsPipeline.InputLayout = InputLayout;
 
-    IPipelineResourceSignature* ppSignatures[] = {m_ResourceSignature};
-    PSOCreateInfo.ppResourceSignatures         = ppSignatures;
-    PSOCreateInfo.ResourceSignaturesCount      = _countof(ppSignatures);
+    IPipelineResourceSignature* ppSignatures[MAX_RESOURCE_SIGNATURES];
+    for (size_t i = 0; i < m_ResourceSignatures.size(); ++i)
+        ppSignatures[i] = m_ResourceSignatures[i];
+    PSOCreateInfo.ppResourceSignatures    = ppSignatures;
+    PSOCreateInfo.ResourceSignaturesCount = static_cast<Uint32>(m_ResourceSignatures.size());
 
     PSOCreateInfo.pVS = pVS;
     PSOCreateInfo.pPS = pPS;
@@ -1430,9 +1443,9 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
     }
 }
 
-void PBR_Renderer::CreateResourceBinding(IShaderResourceBinding** ppSRB)
+void PBR_Renderer::CreateResourceBinding(IShaderResourceBinding** ppSRB, Uint32 Idx)
 {
-    m_ResourceSignature->CreateShaderResourceBinding(ppSRB, true);
+    m_ResourceSignatures[Idx]->CreateShaderResourceBinding(ppSRB, true);
 }
 
 PBR_Renderer::PsoCacheAccessor PBR_Renderer::GetPsoCacheAccessor(const GraphicsPipelineDesc& GraphicsDesc)

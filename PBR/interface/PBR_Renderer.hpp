@@ -374,7 +374,8 @@ public:
     PBR_Renderer(IRenderDevice*     pDevice,
                  IRenderStateCache* pStateCache,
                  IDeviceContext*    pCtx,
-                 const CreateInfo&  CI);
+                 const CreateInfo&  CI,
+                 bool               InitSignature = true);
 
     ~PBR_Renderer();
 
@@ -397,7 +398,7 @@ public:
                             Uint32          NumThetaSamples = 32,
                             bool            OptimizeSamples = true);
 
-    void CreateResourceBinding(IShaderResourceBinding** ppSRB);
+    void CreateResourceBinding(IShaderResourceBinding** ppSRB, Uint32 Idx = 0);
 
 #define PSO_FLAG_BIT(Bit) (Uint64{1} << Uint64{Bit})
     enum PSO_FLAGS : Uint64
@@ -638,12 +639,14 @@ protected:
     static std::string GetVSOutputStruct(PSO_FLAGS PSOFlags, bool UseVkPointSize, bool UsePrimitiveId);
     static std::string GetPSOutputStruct(PSO_FLAGS PSOFlags);
 
+    void         CreateSignature();
+    virtual void CreateCustomSignature(PipelineResourceSignatureDescX&& SignatureDesc);
+
 private:
     void PrecomputeBRDF(IDeviceContext* pCtx,
                         Uint32          NumBRDFSamples = 512);
 
     void CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineDesc& GraphicsDesc, const PSOKey& Key);
-    void CreateSignature();
 
 protected:
     const InputLayoutDescX m_InputLayout;
@@ -678,7 +681,7 @@ protected:
     RefCntAutoPtr<IBuffer> m_PrecomputeEnvMapAttribsCB;
     RefCntAutoPtr<IBuffer> m_JointsBuffer;
 
-    RefCntAutoPtr<IPipelineResourceSignature> m_ResourceSignature;
+    std::vector<RefCntAutoPtr<IPipelineResourceSignature>> m_ResourceSignatures;
 
     std::unordered_map<GraphicsPipelineDesc, PsoHashMapType> m_PSOs;
 

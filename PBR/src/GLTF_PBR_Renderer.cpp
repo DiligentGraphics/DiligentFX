@@ -232,7 +232,8 @@ void GLTF_PBR_Renderer::CreateResourceCacheSRB(IRenderDevice*           pDevice,
 {
     DEV_CHECK_ERR(CacheUseInfo.pResourceMgr != nullptr, "Resource manager must not be null");
 
-    m_ResourceSignature->CreateShaderResourceBinding(ppCacheSRB, true);
+    VERIFY_EXPR(m_ResourceSignatures.size() == 1);
+    m_ResourceSignatures[0]->CreateShaderResourceBinding(ppCacheSRB, true);
     IShaderResourceBinding* const pSRB = *ppCacheSRB;
     if (pSRB == nullptr)
     {
