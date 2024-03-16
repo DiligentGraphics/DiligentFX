@@ -267,6 +267,8 @@ void HnTaskManager::CreateBeginFrameTask()
 void HnTaskManager::CreateRenderShadowsTask()
 {
     HnRenderShadowsTaskParams TaskParams;
+    TaskParams.State.DepthBiasEnabled     = true;
+    TaskParams.State.SlopeScaledDepthBias = 2.0f;
     CreateTask<HnRenderShadowsTask>(HnTaskManagerTokens->renderShadowsTask, TaskUID_RenderShadows, TaskParams);
 
     // Only render shadows from default material tfor now
