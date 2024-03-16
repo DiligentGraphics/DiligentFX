@@ -648,7 +648,7 @@ void ApplyPunctualLight(in    SurfaceShadingInfo     Shading,
         ShadowPos.xy /= ShadowPos.w;
         ShadowPos.xy = NormalizedDeviceXYToTexUV(ShadowPos.xy) * ShadowMapInfo.UVScale + ShadowMapInfo.UVBias;
         ShadowPos.z  = NormalizedDeviceZToDepth(ShadowPos.z);
-        float Shadowing = ShadowMap.SampleCmp(ShadowMap_sampler, float3(ShadowPos.xy, ShadowMapInfo.ShadowMapSlice), ShadowPos.z).r;
+        float Shadowing = ShadowMap.SampleCmp(ShadowMap_sampler, float3(ShadowPos.xy, ShadowMapInfo.ShadowMapSlice), ShadowPos.z);
         Attenuation *= Shadowing;
     }
 #endif
