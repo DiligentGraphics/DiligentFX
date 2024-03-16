@@ -28,6 +28,8 @@
 #include "HnRenderDelegate.hpp"
 #include "HnRenderPassState.hpp"
 #include "HnTokens.hpp"
+#include "HnRenderPass.hpp"
+#include "HnLight.hpp"
 #include "HnShadowMapManager.hpp"
 
 namespace Diligent
@@ -49,6 +51,47 @@ void HnRenderShadowsTask::Sync(pxr::HdSceneDelegate* Delegate,
                                pxr::HdTaskContext*   TaskCtx,
                                pxr::HdDirtyBits*     DirtyBits)
 {
+    if (*DirtyBits & pxr::HdChangeTracker::DirtyCollection)
+    {
+        pxr::VtValue           CollectionVal = Delegate->Get(GetId(), pxr::HdTokens->collection);
+        pxr::HdRprimCollection Collection    = CollectionVal.Get<pxr::HdRprimCollection>();
+
+        if (Collection.GetName().IsEmpty())
+        {
+            m_RenderPass.reset();
+        }
+        else
+        {
+            if (!m_RenderPass)
+            {
+                pxr::HdRenderIndex&    Index          = Delegate->GetRenderIndex();
+                pxr::HdRenderDelegate* RenderDelegate = Index.GetRenderDelegate();
+
+                m_RenderPass = std::static_pointer_cast<HnRenderPass>(RenderDelegate->CreateRenderPass(&Index, Collection));
+
+                {
+                    pxr::VtValue ParamsValue = Delegate->Get(GetId(), HnTokens->renderPassParams);
+                    if (ParamsValue.IsHolding<HnRenderPassParams>())
+                    {
+                        HnRenderPassParams RenderPassParams = ParamsValue.UncheckedGet<HnRenderPassParams>();
+                        m_RenderPass->SetParams(RenderPassParams);
+                    }
+                    else
+                    {
+                        UNEXPECTED("Unexpected type of render pass parameters ", ParamsValue.GetTypeName());
+                    }
+                }
+
+                // Need to set params for the new render pass.
+                *DirtyBits |= pxr::HdChangeTracker::DirtyParams;
+            }
+            else
+            {
+                m_RenderPass->SetRprimCollection(Collection);
+            }
+        }
+    }
+
     if (*DirtyBits & pxr::HdChangeTracker::DirtyParams)
     {
         HnRenderShadowsTaskParams Params;
@@ -63,6 +106,16 @@ void HnRenderShadowsTask::Sync(pxr::HdSceneDelegate* Delegate,
             m_RPState.SetCullStyle(Params.State.CullStyle);
             m_RPState.SetFrontFaceCCW(Params.State.FrontFaceCCW);
         }
+    }
+
+    if (*DirtyBits & pxr::HdChangeTracker::DirtyRenderTags)
+    {
+        m_RenderTags = _GetTaskRenderTags(Delegate);
+    }
+
+    if (m_RenderPass)
+    {
+        m_RenderPass->Sync();
     }
 
     *DirtyBits = pxr::HdChangeTracker::Clean;
@@ -86,7 +139,6 @@ void HnRenderShadowsTask::Execute(pxr::HdTaskContext* TaskCtx)
 
     const HnRenderDelegate*   RenderDelegate = static_cast<const HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
     const HnShadowMapManager* ShadowMapMgr   = RenderDelegate->GetShadowMapManager();
-
     if (ShadowMapMgr == nullptr)
     {
         UNEXPECTED("Shadow map manager is null, which indicates that shadows are disabled");
@@ -97,12 +149,21 @@ void HnRenderShadowsTask::Execute(pxr::HdTaskContext* TaskCtx)
     IRenderDevice*  pDevice = RenderDelegate->GetDevice();
     IDeviceContext* pCtx    = RenderDelegate->GetDeviceContext();
 
-    const Uint32 NumSlices = ShadowMapMgr->GetAtlasDesc().ArraySize;
-    for (Uint32 i = 0; i < NumSlices; ++i)
+    const auto& Lights = RenderDelegate->GetLights();
+
+    Uint32 ShadowCatingLightId = 0;
+    for (HnLight* Light : Lights)
     {
-        ITextureView* pShadowDSV = ShadowMapMgr->GetShadowDSV(i);
-        pCtx->SetRenderTargets(0, nullptr, pShadowDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-        pCtx->ClearDepthStencil(pShadowDSV, CLEAR_DEPTH_FLAG, 1.f, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        if (!Light->ShadowsEnabled())
+            continue;
+
+        m_RPState.SetFrameAttribsSRB(RenderDelegate->GetShadowPassFrameAttribsSRB(ShadowCatingLightId));
+
+        ITextureAtlasSuballocation* pAtlasRegion    = Light->GetShadowMapSuballocation();
+        ITextureView*               pShadowSliceDSV = ShadowMapMgr->GetShadowDSV(pAtlasRegion->GetSlice());
+        m_RPState.Begin(0, nullptr, pShadowSliceDSV, nullptr, 1.f, HnRenderPassState::ClearDepthBit);
+
+        m_RenderPass->Execute(m_RPState, GetRenderTags());
     }
 
     StateTransitionDesc Barrier{ShadowMapMgr->GetShadowTexture(), RESOURCE_STATE_UNKNOWN,

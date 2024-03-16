@@ -37,6 +37,8 @@ namespace Diligent
 namespace USD
 {
 
+class HnRenderPass;
+
 struct HnRenderShadowsTaskParams
 {
     struct RenderState
@@ -100,6 +102,9 @@ private:
     pxr::HdRenderIndex* m_RenderIndex = nullptr;
 
     HnRenderPassState m_RPState;
+
+    pxr::TfTokenVector            m_RenderTags;
+    std::shared_ptr<HnRenderPass> m_RenderPass;
 };
 
 } // namespace USD

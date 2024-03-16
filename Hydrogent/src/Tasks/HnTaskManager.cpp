@@ -58,10 +58,10 @@ namespace
 TF_DEFINE_PRIVATE_TOKENS(
     HnTaskManagerTokens,
 
-    (beginFrame)
-    (renderShadows)
-    (beginMainPass)
-    (copySelectionDepth)
+    (beginFrameTask)
+    (renderShadowsTask)
+    (beginMainPassTask)
+    (copySelectionDepthTask)
     (renderEnvMapTask)
     (renderAxesTask)
     (renderBoundBoxTask)
@@ -261,19 +261,40 @@ void HnTaskManager::SetParameter(const pxr::SdfPath& TaskId, const TfToken& Valu
 void HnTaskManager::CreateBeginFrameTask()
 {
     HnBeginFrameTaskParams TaskParams;
-    CreateTask<HnBeginFrameTask>(HnTaskManagerTokens->beginFrame, TaskUID_BeginFrame, TaskParams);
+    CreateTask<HnBeginFrameTask>(HnTaskManagerTokens->beginFrameTask, TaskUID_BeginFrame, TaskParams);
 }
 
 void HnTaskManager::CreateRenderShadowsTask()
 {
     HnRenderShadowsTaskParams TaskParams;
-    CreateTask<HnRenderShadowsTask>(HnTaskManagerTokens->renderShadows, TaskUID_RenderShadows, TaskParams);
+    CreateTask<HnRenderShadowsTask>(HnTaskManagerTokens->renderShadowsTask, TaskUID_RenderShadows, TaskParams);
+
+    // Only render shadows from default material tfor now
+    pxr::HdRprimCollection Collection{
+        pxr::HdTokens->geometry,
+        pxr::HdReprSelector{pxr::HdReprTokens->hull},
+        false, // forcedRepr
+        HnMaterialTagTokens->defaultTag,
+    };
+    Collection.SetRootPath(pxr::SdfPath::AbsoluteRootPath());
+
+    pxr::TfTokenVector RenderTags = {pxr::HdRenderTagTokens->geometry};
+
+    HnRenderPassParams RPParams{
+        HnRenderResourceTokens->renderPass_Shadow,
+        HnRenderPassParams::SelectionType::All,
+        USD_Renderer::USD_PSO_FLAG_NONE,
+    };
+
+    SetParameter(HnTaskManagerTokens->renderShadowsTask, pxr::HdTokens->collection, Collection);
+    SetParameter(HnTaskManagerTokens->renderShadowsTask, pxr::HdTokens->renderTags, RenderTags);
+    SetParameter(HnTaskManagerTokens->renderShadowsTask, HnTokens->renderPassParams, RPParams);
 }
 
 void HnTaskManager::CreateBeginMainPassTask()
 {
     HnBeginMainPassTaskParams TaskParams;
-    CreateTask<HnBeginMainPassTask>(HnTaskManagerTokens->beginMainPass, TaskUID_BeginMainPass, TaskParams);
+    CreateTask<HnBeginMainPassTask>(HnTaskManagerTokens->beginMainPassTask, TaskUID_BeginMainPass, TaskParams);
 }
 
 pxr::SdfPath HnTaskManager::GetTaskId(const pxr::TfToken& TaskName) const
@@ -355,7 +376,7 @@ void HnTaskManager::CreatePostProcessTask()
 void HnTaskManager::CreateCopySelectionDepthTask()
 {
     HnCopySelectionDepthTaskParams TaskParams;
-    CreateTask<HnCopySelectionDepthTask>(HnTaskManagerTokens->copySelectionDepth, TaskUID_CopySelectionDepth, TaskParams);
+    CreateTask<HnCopySelectionDepthTask>(HnTaskManagerTokens->copySelectionDepthTask, TaskUID_CopySelectionDepth, TaskParams);
 }
 
 void HnTaskManager::CreateProcessSelectionTask()

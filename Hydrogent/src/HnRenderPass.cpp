@@ -776,7 +776,7 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
             if (State.RenderParam.GetTextureBindingMode() == HN_MATERIAL_TEXTURES_BINDING_MODE_ATLAS)
                 PSOFlags |= PBR_Renderer::PSO_FLAG_USE_TEXTURE_ATLAS;
 
-            if (State.USDRenderer.GetSettings().EnableShadows)
+            if (State.USDRenderer.GetSettings().EnableShadows && (m_Params.UsdPsoFlags & USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_OUTPUT) != 0)
                 PSOFlags |= PBR_Renderer::PSO_FLAG_ENABLE_SHADOWS;
 
             ListItem.pPSO = PsoCache.Get({PSOFlags, static_cast<PBR_Renderer::ALPHA_MODE>(State.AlphaMode), IsDoubleSided, m_DebugView, ShaderTextureIndexingId}, true);

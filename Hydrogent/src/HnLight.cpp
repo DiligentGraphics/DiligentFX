@@ -565,7 +565,7 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
         if (m_ShadowMapShaderInfo && ShadowTransformDirty)
         {
             ComputeShdadowMatrices(*SceneDelegate);
-            m_ShadowMapShaderInfo->WorldToLightProjSpace = m_ViewProjMatrix;
+            m_ShadowMapShaderInfo->WorldToLightProjSpace = m_ViewProjMatrix.Transpose();
 
             LightDirty = true;
         }
