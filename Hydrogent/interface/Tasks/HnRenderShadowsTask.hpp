@@ -27,6 +27,9 @@
 #pragma once
 
 #include "HnTask.hpp"
+#include "../interface/HnRenderPassState.hpp"
+
+#include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/GraphicsTypes.h"
 
 namespace Diligent
 {
@@ -36,9 +39,40 @@ namespace USD
 
 struct HnRenderShadowsTaskParams
 {
+    struct RenderState
+    {
+        bool FrontFaceCCW = false;
+
+        float                  DepthBias            = 0;
+        float                  SlopeScaledDepthBias = 0;
+        pxr::HdCompareFunction DepthFunc            = pxr::HdCmpFuncLess;
+        bool                   DepthBiasEnabled     = false;
+        bool                   DepthTestEnabled     = true;
+        bool                   DepthClampEnabled    = false;
+
+        pxr::HdCullStyle CullStyle = pxr::HdCullStyleBack;
+
+        constexpr bool operator==(const RenderState& rhs) const
+        {
+            // clang-format off
+            return FrontFaceCCW         == rhs.FrontFaceCCW &&
+                   DepthBias            == rhs.DepthBias &&
+                   SlopeScaledDepthBias == rhs.SlopeScaledDepthBias &&
+                   DepthFunc            == rhs.DepthFunc &&
+                   DepthBiasEnabled     == rhs.DepthBiasEnabled &&
+                   DepthTestEnabled     == rhs.DepthTestEnabled &&
+                   DepthClampEnabled    == rhs.DepthClampEnabled &&
+                   CullStyle            == rhs.CullStyle;
+            // clang-format on
+        }
+    };
+    RenderState State;
+
+    float ClearDepth = 1.f;
+
     constexpr bool operator==(const HnRenderShadowsTaskParams& rhs) const
     {
-        return true;
+        return State == rhs.State && ClearDepth == rhs.ClearDepth;
     }
     constexpr bool operator!=(const HnRenderShadowsTaskParams& rhs) const
     {
@@ -64,6 +98,8 @@ public:
 
 private:
     pxr::HdRenderIndex* m_RenderIndex = nullptr;
+
+    HnRenderPassState m_RPState;
 };
 
 } // namespace USD

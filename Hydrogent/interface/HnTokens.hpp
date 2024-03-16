@@ -134,6 +134,7 @@ namespace USD
     (renderPass_OpaqueSelected)		     \
     (renderPass_TransparentSelected)	 \
     (renderPass_OpaqueUnselected_TransparentAll) \
+    (renderPass_Shadow) \
     (backgroundDepth)
 
 // clang-format on

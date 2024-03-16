@@ -54,6 +54,14 @@ void HnRenderShadowsTask::Sync(pxr::HdSceneDelegate* Delegate,
         HnRenderShadowsTaskParams Params;
         if (GetTaskParams(Delegate, Params))
         {
+            m_RPState.SetDepthBias(Params.State.DepthBias, Params.State.SlopeScaledDepthBias);
+            m_RPState.SetDepthFunc(Params.State.DepthFunc);
+            m_RPState.SetDepthBiasEnabled(Params.State.DepthBiasEnabled);
+            m_RPState.SetEnableDepthTest(Params.State.DepthTestEnabled);
+            m_RPState.SetEnableDepthClamp(Params.State.DepthClampEnabled);
+
+            m_RPState.SetCullStyle(Params.State.CullStyle);
+            m_RPState.SetFrontFaceCCW(Params.State.FrontFaceCCW);
         }
     }
 
@@ -64,6 +72,8 @@ void HnRenderShadowsTask::Prepare(pxr::HdTaskContext* TaskCtx,
                                   pxr::HdRenderIndex* RenderIndex)
 {
     m_RenderIndex = RenderIndex;
+
+    (*TaskCtx)[HnRenderResourceTokens->renderPass_Shadow] = pxr::VtValue{&m_RPState};
 }
 
 void HnRenderShadowsTask::Execute(pxr::HdTaskContext* TaskCtx)
@@ -81,6 +91,8 @@ void HnRenderShadowsTask::Execute(pxr::HdTaskContext* TaskCtx)
     {
         UNEXPECTED("Shadow map manager is null, which indicates that shadows are disabled");
     }
+
+    m_RPState.SetDepthStencilFormat(ShadowMapMgr->GetAtlasDesc().Format);
 
     IRenderDevice*  pDevice = RenderDelegate->GetDevice();
     IDeviceContext* pCtx    = RenderDelegate->GetDeviceContext();
