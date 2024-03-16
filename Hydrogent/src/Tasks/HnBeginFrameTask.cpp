@@ -33,6 +33,7 @@
 #include "HnCamera.hpp"
 #include "HnLight.hpp"
 #include "HnRenderParam.hpp"
+#include "HnShadowMapManager.hpp"
 
 #include "DebugUtilities.hpp"
 #include "GraphicsAccessories.hpp"
@@ -371,125 +372,178 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
     const int           MaxLightCount     = Renderer.GetSettings().MaxLightCount;
     const int           MaxShadowMapCount = Renderer.GetSettings().MaxShadowCastingLightCount;
 
-    m_FrameAttribsData.resize(Renderer.GetPRBFrameAttribsSize());
-    HLSL::PBRFrameAttribs*  FrameAttribs = reinterpret_cast<HLSL::PBRFrameAttribs*>(m_FrameAttribsData.data());
-    HLSL::CameraAttribs&    PrevCamera   = FrameAttribs->PrevCamera;
-    HLSL::CameraAttribs&    CamAttribs   = FrameAttribs->Camera;
-    HLSL::PBRLightAttribs*  Lights       = reinterpret_cast<HLSL::PBRLightAttribs*>(FrameAttribs + 1);
-    HLSL::PBRShadowMapInfo* ShadowMaps   = reinterpret_cast<HLSL::PBRShadowMapInfo*>(Lights + MaxLightCount);
+    const Uint32 NumShadowCastingLights = Renderer.GetSettings().EnableShadows ? Renderer.GetSettings().MaxShadowCastingLightCount : 0;
+    const Uint32 FrameAttribsDataSize   = pFrameAttrbisCB->GetDesc().Size;
+    VERIFY(FrameAttribsDataSize == RenderDelegate->GetShadowPassFrameAttribsOffset(NumShadowCastingLights), "Frame attributes buffer size mismatch");
+    m_FrameAttribsData.resize(FrameAttribsDataSize);
 
-    PrevCamera = CamAttribs;
-    if (m_pCamera != nullptr)
+    // Write main pass frame attributes
     {
-        float4x4 ProjMatrix = m_pCamera->GetProjectionMatrix();
-        ProjMatrix[2][0]    = Jitter.x;
-        ProjMatrix[2][1]    = Jitter.y;
+        HLSL::PBRFrameAttribs*  FrameAttribs = reinterpret_cast<HLSL::PBRFrameAttribs*>(m_FrameAttribsData.data());
+        HLSL::CameraAttribs&    PrevCamera   = FrameAttribs->PrevCamera;
+        HLSL::CameraAttribs&    CamAttribs   = FrameAttribs->Camera;
+        HLSL::PBRLightAttribs*  Lights       = reinterpret_cast<HLSL::PBRLightAttribs*>(FrameAttribs + 1);
+        HLSL::PBRShadowMapInfo* ShadowMaps   = reinterpret_cast<HLSL::PBRShadowMapInfo*>(Lights + MaxLightCount);
 
-        const float4x4& ViewMatrix  = m_pCamera->GetViewMatrix();
-        const float4x4& WorldMatrix = m_pCamera->GetWorldMatrix();
-        const float4x4  ViewProj    = ViewMatrix * ProjMatrix;
-
-        VERIFY_EXPR(m_FrameBufferWidth > 0 && m_FrameBufferHeight > 0);
-        CamAttribs.f4ViewportSize = float4{
-            static_cast<float>(m_FrameBufferWidth),
-            static_cast<float>(m_FrameBufferHeight),
-            1.f / static_cast<float>(m_FrameBufferWidth),
-            1.f / static_cast<float>(m_FrameBufferHeight),
-        };
-        CamAttribs.fHandness = ViewMatrix.Determinant() > 0 ? 1.f : -1.f;
-
-        CamAttribs.mViewT        = ViewMatrix.Transpose();
-        CamAttribs.mProjT        = ProjMatrix.Transpose();
-        CamAttribs.mViewProjT    = ViewProj.Transpose();
-        CamAttribs.mViewInvT     = WorldMatrix.Transpose();
-        CamAttribs.mProjInvT     = ProjMatrix.Inverse().Transpose();
-        CamAttribs.mViewProjInvT = ViewProj.Inverse().Transpose();
-        CamAttribs.f4Position    = float4{float3::MakeVector(WorldMatrix[3]), 1};
-        CamAttribs.f2Jitter      = Jitter;
-
-        if (CamAttribs.mViewT != PrevCamera.mViewT)
+        PrevCamera = CamAttribs;
+        if (m_pCamera != nullptr)
         {
-            CameraTransformDirty = true;
-        }
-        else
-        {
-            float4x4 PrevProjT = PrevCamera.mProjT;
-            PrevProjT[0][2]    = Jitter.x;
-            PrevProjT[1][2]    = Jitter.y;
-            if (PrevProjT != CamAttribs.mProjT)
+            float4x4 ProjMatrix = m_pCamera->GetProjectionMatrix();
+            ProjMatrix[2][0]    = Jitter.x;
+            ProjMatrix[2][1]    = Jitter.y;
+
+            const float4x4& ViewMatrix  = m_pCamera->GetViewMatrix();
+            const float4x4& WorldMatrix = m_pCamera->GetWorldMatrix();
+            const float4x4  ViewProj    = ViewMatrix * ProjMatrix;
+
+            VERIFY_EXPR(m_FrameBufferWidth > 0 && m_FrameBufferHeight > 0);
+            CamAttribs.f4ViewportSize = float4{
+                static_cast<float>(m_FrameBufferWidth),
+                static_cast<float>(m_FrameBufferHeight),
+                1.f / static_cast<float>(m_FrameBufferWidth),
+                1.f / static_cast<float>(m_FrameBufferHeight),
+            };
+            CamAttribs.fHandness = ViewMatrix.Determinant() > 0 ? 1.f : -1.f;
+
+            CamAttribs.mViewT        = ViewMatrix.Transpose();
+            CamAttribs.mProjT        = ProjMatrix.Transpose();
+            CamAttribs.mViewProjT    = ViewProj.Transpose();
+            CamAttribs.mViewInvT     = WorldMatrix.Transpose();
+            CamAttribs.mProjInvT     = ProjMatrix.Inverse().Transpose();
+            CamAttribs.mViewProjInvT = ViewProj.Inverse().Transpose();
+            CamAttribs.f4Position    = float4{float3::MakeVector(WorldMatrix[3]), 1};
+            CamAttribs.f2Jitter      = Jitter;
+
+            if (CamAttribs.mViewT != PrevCamera.mViewT)
             {
                 CameraTransformDirty = true;
             }
-        }
-
-        if (PrevCamera.f4ViewportSize.x == 0)
-        {
-            // First frame
-            PrevCamera           = CamAttribs;
-            CameraTransformDirty = true;
-        }
-    }
-    else
-    {
-        UNEXPECTED("Camera is null. It should've been set in Prepare()");
-    }
-
-    int LightCount     = 0;
-    int ShadowMapCount = 0;
-    for (HnLight* Light : RenderDelegate->GetLights())
-    {
-        if (!Light->IsVisible() || Light->GetParams().Type == GLTF::Light::TYPE::UNKNOWN)
-            continue;
-
-        GLTF_PBR_Renderer::PBRLightShaderAttribsData LightAttribs{
-            &Light->GetParams(),
-            &Light->GetPosition(),
-            &Light->GetDirection(),
-        };
-
-        if (Light->ShadowsEnabled() && ShadowMapCount < MaxShadowMapCount)
-        {
-            if (const HLSL::PBRShadowMapInfo* pShadowMapInfo = Light->GetShadowMapShaderInfo())
-            {
-                ShadowMaps[ShadowMapCount] = *pShadowMapInfo;
-            }
             else
             {
-                UNEXPECTED("Shadow map info is null");
+                float4x4 PrevProjT = PrevCamera.mProjT;
+                PrevProjT[0][2]    = Jitter.x;
+                PrevProjT[1][2]    = Jitter.y;
+                if (PrevProjT != CamAttribs.mProjT)
+                {
+                    CameraTransformDirty = true;
+                }
             }
-            LightAttribs.ShadowMapIndex = ShadowMapCount;
-            ++ShadowMapCount;
+
+            if (PrevCamera.f4ViewportSize.x == 0)
+            {
+                // First frame
+                PrevCamera           = CamAttribs;
+                CameraTransformDirty = true;
+            }
+        }
+        else
+        {
+            UNEXPECTED("Camera is null. It should've been set in Prepare()");
         }
 
-        GLTF_PBR_Renderer::WritePBRLightShaderAttribs(LightAttribs, Lights + LightCount);
-
-        ++LightCount;
-        if (LightCount >= MaxLightCount)
+        int LightCount     = 0;
+        int ShadowMapCount = 0;
+        for (HnLight* Light : RenderDelegate->GetLights())
         {
-            break;
+            if (!Light->IsVisible() || Light->GetParams().Type == GLTF::Light::TYPE::UNKNOWN)
+                continue;
+
+            GLTF_PBR_Renderer::PBRLightShaderAttribsData LightAttribs{
+                &Light->GetParams(),
+                &Light->GetPosition(),
+                &Light->GetDirection(),
+            };
+
+            if (Light->ShadowsEnabled() && ShadowMapCount < MaxShadowMapCount)
+            {
+                if (const HLSL::PBRShadowMapInfo* pShadowMapInfo = Light->GetShadowMapShaderInfo())
+                {
+                    ShadowMaps[ShadowMapCount] = *pShadowMapInfo;
+                }
+                else
+                {
+                    UNEXPECTED("Shadow map info is null");
+                }
+                LightAttribs.ShadowMapIndex = ShadowMapCount;
+                ++ShadowMapCount;
+            }
+
+            GLTF_PBR_Renderer::WritePBRLightShaderAttribs(LightAttribs, Lights + LightCount);
+
+            ++LightCount;
+            if (LightCount >= MaxLightCount)
+            {
+                break;
+            }
+        }
+
+        {
+            HLSL::PBRRendererShaderParameters& RendererParams = FrameAttribs->Renderer;
+            RenderDelegate->GetUSDRenderer()->SetInternalShaderParameters(RendererParams);
+
+            RendererParams.LightCount = LightCount;
+
+            RendererParams.OcclusionStrength = m_Params.Renderer.OcclusionStrength;
+            RendererParams.EmissionScale     = m_Params.Renderer.EmissionScale;
+            RendererParams.IBLScale          = m_Params.Renderer.IBLScale;
+
+            RendererParams.UnshadedColor  = m_Params.Renderer.UnshadedColor;
+            RendererParams.HighlightColor = float4{0, 0, 0, 0};
+            RendererParams.PointSize      = m_Params.Renderer.PointSize;
+
+            RendererParams.MipBias = UseTAA ? -0.5 : 0.0;
+
+            // Tone mapping is performed in the post-processing pass
+            RendererParams.AverageLogLum = 0.3f;
+            RendererParams.MiddleGray    = 0.18f;
+            RendererParams.WhitePoint    = 3.0f;
         }
     }
 
+    // Write shadow casting light attributes
+    if (HnShadowMapManager* ShadowMapMgr = RenderDelegate->GetShadowMapManager())
     {
-        HLSL::PBRRendererShaderParameters& RendererParams = FrameAttribs->Renderer;
-        RenderDelegate->GetUSDRenderer()->SetInternalShaderParameters(RendererParams);
+        const TextureDesc& ShadowAtlasDesc = ShadowMapMgr->GetAtlasDesc();
 
-        RendererParams.LightCount = LightCount;
+        const auto& Lights = RenderDelegate->GetLights();
 
-        RendererParams.OcclusionStrength = m_Params.Renderer.OcclusionStrength;
-        RendererParams.EmissionScale     = m_Params.Renderer.EmissionScale;
-        RendererParams.IBLScale          = m_Params.Renderer.IBLScale;
+        Uint32 ShadowCastingLightIdx = 0;
+        for (const HnLight* Light : Lights)
+        {
+            if (!Light->ShadowsEnabled())
+                continue;
 
-        RendererParams.UnshadedColor  = m_Params.Renderer.UnshadedColor;
-        RendererParams.HighlightColor = float4{0, 0, 0, 0};
-        RendererParams.PointSize      = m_Params.Renderer.PointSize;
+            HLSL::PBRFrameAttribs* ShadowAttribs = reinterpret_cast<HLSL::PBRFrameAttribs*>(&m_FrameAttribsData[RenderDelegate->GetShadowPassFrameAttribsOffset(ShadowCastingLightIdx)]);
+            HLSL::CameraAttribs&   CamAttribs    = ShadowAttribs->Camera;
 
-        RendererParams.MipBias = UseTAA ? -0.5 : 0.0;
+            const float4x4& ProjMatrix = Light->GetViewProjMatrix();
+            const float4x4& ViewMatrix = Light->GetViewMatrix();
+            const float4x4  ViewProj   = Light->GetViewProjMatrix();
 
-        // Tone mapping is performed in the post-processing pass
-        RendererParams.AverageLogLum = 0.3f;
-        RendererParams.MiddleGray    = 0.18f;
-        RendererParams.WhitePoint    = 3.0f;
+            VERIFY_EXPR(ShadowAtlasDesc.Width > 0 && ShadowAtlasDesc.Height > 0);
+            CamAttribs.f4ViewportSize = float4{
+                static_cast<float>(ShadowAtlasDesc.Width),
+                static_cast<float>(ShadowAtlasDesc.Height),
+                1.f / static_cast<float>(ShadowAtlasDesc.Width),
+                1.f / static_cast<float>(ShadowAtlasDesc.Height),
+            };
+            CamAttribs.fHandness = 1.f;
+
+            CamAttribs.mViewT        = ViewMatrix.Transpose();
+            CamAttribs.mProjT        = ProjMatrix.Transpose();
+            CamAttribs.mViewProjT    = ViewProj.Transpose();
+            CamAttribs.mViewInvT     = ViewMatrix.Inverse().Transpose();
+            CamAttribs.mProjInvT     = ProjMatrix.Inverse().Transpose();
+            CamAttribs.mViewProjInvT = ViewProj.Inverse().Transpose();
+            CamAttribs.f4Position    = float4{0, 0, 0, 1};
+            CamAttribs.f2Jitter      = float2{0, 0};
+
+            memset(&ShadowAttribs->Renderer, 0, sizeof(HLSL::PBRRendererShaderParameters));
+
+            ++ShadowCastingLightIdx;
+            if (ShadowCastingLightIdx == NumShadowCastingLights)
+                break;
+        }
     }
 
     pCtx->UpdateBuffer(pFrameAttrbisCB, 0, m_FrameAttribsData.size(), m_FrameAttribsData.data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);

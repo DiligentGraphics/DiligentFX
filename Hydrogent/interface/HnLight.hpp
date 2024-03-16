@@ -65,6 +65,9 @@ public:
     const float3&      GetDirection() const { return m_Direction; }
     const GLTF::Light& GetParams() const { return m_Params; }
     bool               IsVisible() const { return m_IsVisible; }
+    const float4x4&    GetViewMatrix() const { return m_ViewMatrix; }
+    const float4x4&    GetProjMatrix() const { return m_ProjMatrix; }
+    const float4x4&    GetViewProjMatrix() const { return m_ViewProjMatrix; }
     bool               ShadowsEnabled() const { return m_ShadowMapSuballocation != nullptr; }
 
     ITextureAtlasSuballocation*   GetShadowMapSuballocation() const { return m_ShadowMapSuballocation; }
@@ -74,6 +77,7 @@ private:
     HnLight(const pxr::SdfPath& Id, const pxr::TfToken& TypeId);
 
     bool ApproximateAreaLight(pxr::HdSceneDelegate& SceneDelegate, float MetersPerUnit);
+    void ComputeShdadowMatrices(pxr::HdSceneDelegate& SceneDelegate);
 
 private:
     const pxr::TfToken m_TypeId;
@@ -82,6 +86,10 @@ private:
     float3      m_Direction;
     GLTF::Light m_Params;
     bool        m_IsVisible = true;
+
+    float4x4 m_ViewMatrix;
+    float4x4 m_ProjMatrix;
+    float4x4 m_ViewProjMatrix;
 
     Uint32                                    m_ShadowMapResolution = 1024;
     RefCntAutoPtr<ITextureAtlasSuballocation> m_ShadowMapSuballocation;

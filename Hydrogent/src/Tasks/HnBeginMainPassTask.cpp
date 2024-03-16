@@ -87,7 +87,7 @@ void HnBeginMainPassTask::Execute(pxr::HdTaskContext* TaskCtx)
     {
         if (RPState != nullptr)
         {
-            RPState->SetFrameAttribsSRB(RenderDelegate->GetFrameAttribsSRB());
+            RPState->SetFrameAttribsSRB(RenderDelegate->GetMainPassFrameAttribsSRB());
         }
     }
 

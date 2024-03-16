@@ -306,12 +306,15 @@ public:
 
     GLTF::ResourceManager& GetResourceManager() const { return *m_ResourceMgr; }
 
-    IRenderDevice*          GetDevice() const { return m_pDevice; }
-    IDeviceContext*         GetDeviceContext() const { return m_pContext; }
-    IRenderStateCache*      GetRenderStateCache() const { return m_pRenderStateCache; }
-    IBuffer*                GetFrameAttribsCB() const { return m_FrameAttribsCB; }
-    IBuffer*                GetPrimitiveAttribsCB() const { return m_PrimitiveAttribsCB; }
-    IShaderResourceBinding* GetFrameAttribsSRB() const { return m_FrameAttribsSRB; }
+    IRenderDevice*     GetDevice() const { return m_pDevice; }
+    IDeviceContext*    GetDeviceContext() const { return m_pContext; }
+    IRenderStateCache* GetRenderStateCache() const { return m_pRenderStateCache; }
+    IBuffer*           GetFrameAttribsCB() const { return m_FrameAttribsCB; }
+    IBuffer*           GetPrimitiveAttribsCB() const { return m_PrimitiveAttribsCB; }
+
+    IShaderResourceBinding* GetMainPassFrameAttribsSRB() const { return m_MainPassFrameAttribsSRB; }
+    IShaderResourceBinding* GetShadowPassFrameAttribsSRB(Uint32 LightId) const;
+    Uint32                  GetShadowPassFrameAttribsOffset(Uint32 LightId) const;
 
     const auto& GetLights() const { return m_Lights; }
 
@@ -332,12 +335,23 @@ private:
     RefCntAutoPtr<IDeviceContext>    m_pContext;
     RefCntAutoPtr<IRenderStateCache> m_pRenderStateCache;
 
-    RefCntAutoPtr<GLTF::ResourceManager>  m_ResourceMgr;
-    RefCntAutoPtr<IBuffer>                m_PrimitiveAttribsCB;
-    RefCntAutoPtr<IObject>                m_MaterialSRBCache;
-    std::shared_ptr<USD_Renderer>         m_USDRenderer;
-    RefCntAutoPtr<IBuffer>                m_FrameAttribsCB;
-    RefCntAutoPtr<IShaderResourceBinding> m_FrameAttribsSRB;
+    RefCntAutoPtr<GLTF::ResourceManager> m_ResourceMgr;
+    RefCntAutoPtr<IBuffer>               m_PrimitiveAttribsCB;
+    RefCntAutoPtr<IObject>               m_MaterialSRBCache;
+    std::shared_ptr<USD_Renderer>        m_USDRenderer;
+    RefCntAutoPtr<IBuffer>               m_FrameAttribsCB;
+
+    RefCntAutoPtr<IShaderResourceBinding> m_MainPassFrameAttribsSRB;
+
+    struct ShadowPassFrameAttribs
+    {
+        RefCntAutoPtr<IShaderResourceBinding> SRB;
+        IShaderResourceVariable*              FrameAttribsVar = nullptr;
+    };
+    ShadowPassFrameAttribs m_ShadowPassFrameAttribs;
+
+    Uint32 m_MainPassFrameAttribsAlignedSize   = 0;
+    Uint32 m_ShadowPassFrameAttribsAlignedSize = 0;
 
     HnTextureRegistry                   m_TextureRegistry;
     std::unique_ptr<HnRenderParam>      m_RenderParam;

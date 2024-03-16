@@ -82,19 +82,6 @@ const pxr::TfTokenVector HnRenderDelegate::SupportedBPrimTypes = {
     pxr::HdPrimTypeTokens->renderBuffer,
 };
 
-
-static RefCntAutoPtr<IBuffer> CreateFrameAttribsCB(IRenderDevice* pDevice, Uint32 Size)
-{
-    RefCntAutoPtr<IBuffer> FrameAttribsCB;
-    CreateUniformBuffer(
-        pDevice,
-        Size,
-        "PBR frame attribs CB",
-        &FrameAttribsCB,
-        USAGE_DEFAULT);
-    return FrameAttribsCB;
-}
-
 static RefCntAutoPtr<IBuffer> CreatePrimitiveAttribsCB(IRenderDevice* pDevice)
 {
     Uint64 Size  = 65536;
@@ -280,12 +267,23 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
     m_PrimitiveAttribsCB{CreatePrimitiveAttribsCB(CI.pDevice)},
     m_MaterialSRBCache{HnMaterial::CreateSRBCache()},
     m_USDRenderer{CreateUSDRenderer(CI, m_PrimitiveAttribsCB, m_MaterialSRBCache)},
-    m_FrameAttribsCB{CreateFrameAttribsCB(CI.pDevice, m_USDRenderer->GetPRBFrameAttribsSize())},
     m_TextureRegistry{CI.pDevice, CI.TextureAtlasDim != 0 ? m_ResourceMgr : RefCntAutoPtr<GLTF::ResourceManager>{}},
     m_RenderParam{std::make_unique<HnRenderParam>(CI.UseVertexPool, CI.UseIndexPool, CI.TextureBindingMode, CI.MetersPerUnit)},
     m_ShadowMapManager{CreateShadowMapManager(CI)},
     m_MeshAttribsAllocator{GetRawAllocator(), sizeof(HnMesh::Attributes), 64}
 {
+    const Uint32 ConstantBufferOffsetAlignment = m_pDevice->GetAdapterInfo().Buffer.ConstantBufferOffsetAlignment;
+
+    m_MainPassFrameAttribsAlignedSize   = AlignUpNonPw2(m_USDRenderer->GetPRBFrameAttribsSize(), ConstantBufferOffsetAlignment);
+    m_ShadowPassFrameAttribsAlignedSize = AlignUpNonPw2(USD_Renderer::GetPRBFrameAttribsSize(0, 0), ConstantBufferOffsetAlignment);
+
+    // Reserve space in the buffer for each shadow casting light + space for the main pass
+    CreateUniformBuffer(
+        m_pDevice,
+        m_MainPassFrameAttribsAlignedSize + m_ShadowPassFrameAttribsAlignedSize * (CI.EnableShadows ? CI.MaxShadowCastingLightCount : 0),
+        "PBR frame attribs CB",
+        &m_FrameAttribsCB,
+        USAGE_DEFAULT);
 }
 
 HnRenderDelegate::~HnRenderDelegate()
@@ -491,19 +489,48 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
         if (m_ShadowAtlasVersion != ShadowAtlasVersion)
         {
             m_ShadowAtlasVersion = ShadowAtlasVersion;
-            m_FrameAttribsSRB.Release();
+            m_MainPassFrameAttribsSRB.Release();
         }
     }
 
-    if (!m_FrameAttribsSRB)
-    {
-        m_USDRenderer->CreateResourceBinding(&m_FrameAttribsSRB, 0);
+    auto CreateFrameAttribsSRB = [this](Uint32 BufferRange, ITextureView* ShadowSRV) {
+        RefCntAutoPtr<IShaderResourceBinding> SRB;
+        m_USDRenderer->CreateResourceBinding(&SRB, 0);
+        if (!SRB)
+        {
+            UNEXPECTED("Failed to create Frame Atttibs SRB");
+            return SRB;
+        }
+
         // Primitive attribs buffer is in SRB1
         constexpr bool BindPrimitiveAttribsBuffer = false;
-        m_USDRenderer->InitCommonSRBVars(m_FrameAttribsSRB,
-                                         m_FrameAttribsCB,
+        m_USDRenderer->InitCommonSRBVars(SRB,
+                                         nullptr, // pFrameAttribs
                                          BindPrimitiveAttribsBuffer,
-                                         m_ShadowMapManager ? m_ShadowMapManager->GetShadowSRV() : nullptr);
+                                         ShadowSRV);
+        if (auto* pVar = SRB->GetVariableByName(SHADER_TYPE_VERTEX, "cbFrameAttribs"))
+        {
+            // m_FrameAttribsCB has space for the main pass and all shadow passes.
+            pVar->SetBufferRange(m_FrameAttribsCB, 0, BufferRange);
+        }
+        else
+        {
+            UNEXPECTED("cbFrameAttribs variable not found in the SRB");
+        }
+
+        return SRB;
+    };
+
+    if (!m_MainPassFrameAttribsSRB)
+    {
+        m_MainPassFrameAttribsSRB = CreateFrameAttribsSRB(m_USDRenderer->GetPRBFrameAttribsSize(), m_ShadowMapManager ? m_ShadowMapManager->GetShadowSRV() : nullptr);
+    }
+
+    if (m_ShadowMapManager && !m_ShadowPassFrameAttribs.SRB)
+    {
+        m_ShadowPassFrameAttribs.SRB             = CreateFrameAttribsSRB(USD_Renderer::GetPRBFrameAttribsSize(0, 0), nullptr);
+        m_ShadowPassFrameAttribs.FrameAttribsVar = m_ShadowPassFrameAttribs.SRB->GetVariableByName(SHADER_TYPE_VERTEX, "cbFrameAttribs");
+        VERIFY_EXPR(m_ShadowPassFrameAttribs.FrameAttribsVar != nullptr);
     }
 
     {
@@ -592,6 +619,19 @@ void HnRenderDelegate::SetRenderMode(HN_RENDER_MODE RenderMode)
 void HnRenderDelegate::SetSelectedRPrimId(const pxr::SdfPath& RPrimID)
 {
     m_RenderParam->SetSelectedPrimId(RPrimID);
+}
+
+Uint32 HnRenderDelegate::GetShadowPassFrameAttribsOffset(Uint32 LightId) const
+{
+    return m_MainPassFrameAttribsAlignedSize + m_ShadowPassFrameAttribsAlignedSize * LightId;
+}
+
+IShaderResourceBinding* HnRenderDelegate::GetShadowPassFrameAttribsSRB(Uint32 LightId) const
+{
+    VERIFY_EXPR(m_ShadowPassFrameAttribs.SRB);
+    VERIFY_EXPR(m_ShadowPassFrameAttribs.FrameAttribsVar != nullptr);
+    m_ShadowPassFrameAttribs.FrameAttribsVar->SetBufferOffset(GetShadowPassFrameAttribsOffset(LightId));
+    return m_ShadowPassFrameAttribs.SRB;
 }
 
 } // namespace USD

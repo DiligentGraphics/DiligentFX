@@ -352,12 +352,12 @@ bool HnLight::ApproximateAreaLight(pxr::HdSceneDelegate& SceneDelegate, float Me
     return ParamsDirty;
 }
 
-static float4x4 BuildShdadowTransformMatrix(const float3& Direction, pxr::HdSceneDelegate& SceneDelegate)
+void HnLight::ComputeShdadowMatrices(pxr::HdSceneDelegate& SceneDelegate)
 {
     float3 LightSpaceX, LightSpaceY, LightSpaceZ;
-    BasisFromDirection(Direction, true, LightSpaceX, LightSpaceY, LightSpaceZ);
+    BasisFromDirection(m_Direction, true, LightSpaceX, LightSpaceY, LightSpaceZ);
 
-    const float4x4 WorldToLightViewSpaceMatr = float4x4::ViewFromBasis(LightSpaceX, LightSpaceY, LightSpaceZ);
+    m_ViewMatrix = float4x4::ViewFromBasis(LightSpaceX, LightSpaceY, LightSpaceZ);
 
     BoundBox LightSpaceBounds{float3{+FLT_MAX}, float3{-FLT_MAX}};
 
@@ -384,7 +384,7 @@ static float4x4 BuildShdadowTransformMatrix(const float3& Direction, pxr::HdScen
                 1.0,
             };
             Corner = Corner * PrimTransform;
-            Corner = Corner * WorldToLightViewSpaceMatr;
+            Corner = Corner * m_ViewMatrix;
 
             LightSpaceBounds.Min = std::min(LightSpaceBounds.Min, float3{Corner});
             LightSpaceBounds.Max = std::max(LightSpaceBounds.Max, float3{Corner});
@@ -394,12 +394,12 @@ static float4x4 BuildShdadowTransformMatrix(const float3& Direction, pxr::HdScen
     IRenderDevice*          pDevice    = static_cast<const HnRenderDelegate*>(RenderIndex.GetRenderDelegate())->GetDevice();
     const RenderDeviceInfo& DeviceInfo = pDevice->GetDeviceInfo();
 
-    const float4x4 LightProjMatrix = float4x4::OrthoOffCenter(LightSpaceBounds.Min.x, LightSpaceBounds.Max.x,
-                                                              LightSpaceBounds.Min.y, LightSpaceBounds.Max.y,
-                                                              LightSpaceBounds.Min.z, LightSpaceBounds.Max.z,
-                                                              DeviceInfo.NDC.MinZ == -1);
+    m_ProjMatrix = float4x4::OrthoOffCenter(LightSpaceBounds.Min.x, LightSpaceBounds.Max.x,
+                                            LightSpaceBounds.Min.y, LightSpaceBounds.Max.y,
+                                            LightSpaceBounds.Min.z, LightSpaceBounds.Max.z,
+                                            DeviceInfo.NDC.MinZ == -1);
 
-    return WorldToLightViewSpaceMatr * LightProjMatrix;
+    m_ViewProjMatrix = m_ViewMatrix * m_ProjMatrix;
 }
 
 void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
@@ -564,7 +564,8 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
 
         if (m_ShadowMapShaderInfo && ShadowTransformDirty)
         {
-            m_ShadowMapShaderInfo->WorldToLightProjSpace = BuildShdadowTransformMatrix(m_Direction, *SceneDelegate);
+            ComputeShdadowMatrices(*SceneDelegate);
+            m_ShadowMapShaderInfo->WorldToLightProjSpace = m_ViewProjMatrix;
 
             LightDirty = true;
         }
