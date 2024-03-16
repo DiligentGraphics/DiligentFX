@@ -32,7 +32,7 @@ namespace Diligent
 {
 
 /// Implementation of a GLTF PBR renderer
-class USD_Renderer : public PBR_Renderer
+class USD_Renderer final : public PBR_Renderer
 {
 public:
     struct CreateInfo : PBR_Renderer::CreateInfo
@@ -72,6 +72,9 @@ public:
             USD_PSO_FLAG_ENABLE_MATERIAL_DATA_OUTPUT |
             USD_PSO_FLAG_ENABLE_IBL_OUTPUT
     };
+
+protected:
+    virtual void CreateCustomSignature(PipelineResourceSignatureDescX&& SignatureDesc) override final;
 
 private:
     USD_Renderer::CreateInfo::PSMainSourceInfo GetUsdPbrPSMainSource(USD_Renderer::PSO_FLAGS PSOFlags) const;

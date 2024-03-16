@@ -139,11 +139,18 @@ struct HnRenderPass::RenderState
     void CommitShaderResources(IShaderResourceBinding* pNewSRB)
     {
         VERIFY_EXPR(pNewSRB != nullptr);
-        if (pNewSRB == nullptr || pNewSRB == this->pSRB)
+        if (pNewSRB == nullptr || pNewSRB == this->pMaterialSRB)
             return;
 
+        if (pFrameSRB == nullptr)
+        {
+            pFrameSRB = RenderDelegate.GetFrameAttribsSRB();
+            VERIFY_EXPR(pFrameSRB != nullptr);
+            pCtx->CommitShaderResources(pFrameSRB, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
+        }
+
         pCtx->CommitShaderResources(pNewSRB, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
-        pSRB = pNewSRB;
+        pMaterialSRB = pNewSRB;
     }
 
     void SetIndexBuffer(IBuffer* pNewIndexBuffer)
@@ -193,8 +200,9 @@ struct HnRenderPass::RenderState
     }
 
 private:
-    IPipelineState*         pPSO = nullptr;
-    IShaderResourceBinding* pSRB = nullptr;
+    IPipelineState*         pPSO         = nullptr;
+    IShaderResourceBinding* pMaterialSRB = nullptr;
+    IShaderResourceBinding* pFrameSRB    = nullptr;
 
     IBuffer* pIndexBuffer = nullptr;
 

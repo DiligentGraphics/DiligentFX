@@ -205,6 +205,7 @@ USD_Renderer::USD_Renderer(IRenderDevice*     pDevice,
         pStateCache,
         pCtx,
         USDRendererCreateInfoWrapper{CI, *this},
+        false, // InitSignature
     },
     m_ColorTargetIndex{CI.ColorTargetIndex},
     m_MeshIdTargetIndex{CI.MeshIdTargetIndex},
@@ -232,6 +233,88 @@ USD_Renderer::USD_Renderer(IRenderDevice*     pDevice,
         }
     }
 #endif
+
+    CreateSignature();
+}
+
+void USD_Renderer::CreateCustomSignature(PipelineResourceSignatureDescX&& SignatureDesc)
+{
+    PipelineResourceSignatureDescX FrameAttribsSignDesc;
+
+    std::unordered_set<HashMapStringKey> FrameResources;
+    FrameResources.emplace("cbFrameAttribs");
+    FrameResources.emplace("g_PreintegratedGGX");
+    FrameResources.emplace("g_IrradianceMap");
+    FrameResources.emplace("g_PrefilteredEnvMap");
+    FrameResources.emplace("g_PreintegratedCharlie");
+    FrameResources.emplace("g_SheenAlbedoScalingLUT");
+    FrameResources.emplace("g_ShadowMap");
+    FrameResources.emplace("g_ShadowMap_sampler");
+    // Only move separate samplers to the frame signature.
+    // Combined GL samplers should stay in the resource signature.
+    FrameResources.emplace("g_LinearClampSampler");
+    FrameResources.emplace("g_BaseColorMap_sampler");
+    FrameResources.emplace("g_NormalMap_sampler");
+    FrameResources.emplace("g_MetallicMap_sampler");
+    FrameResources.emplace("g_RoughnessMap_sampler");
+    FrameResources.emplace("g_PhysicalDescriptorMap_sampler");
+    FrameResources.emplace("g_OcclusionMap_sampler");
+    FrameResources.emplace("g_EmissiveMap_sampler");
+    FrameResources.emplace("g_ClearCoat_sampler");
+    FrameResources.emplace("g_Sheen_sampler");
+    FrameResources.emplace("g_AnisotropyMap_sampler");
+    FrameResources.emplace("g_Iridescence_sampler");
+    FrameResources.emplace("g_TransmissionMap_sampler");
+    static_assert(TEXTURE_ATTRIB_ID_COUNT == 17, "Did you add a new texture? Don't forget to update the list above");
+
+    for (Uint32 ResIdx = 0; ResIdx < SignatureDesc.NumResources;)
+    {
+        const PipelineResourceDesc& Res = SignatureDesc.GetResource(ResIdx);
+        if (FrameResources.find(Res.Name) != FrameResources.end())
+        {
+            FrameAttribsSignDesc.AddResource(Res);
+            SignatureDesc.RemoveResource(ResIdx);
+        }
+        else
+        {
+            ++ResIdx;
+        }
+    }
+    for (Uint32 SamIdx = 0; SamIdx < SignatureDesc.NumImmutableSamplers;)
+    {
+        const ImmutableSamplerDesc& Sam = SignatureDesc.GetImmutableSampler(SamIdx);
+        if (FrameResources.find(Sam.SamplerOrTextureName) != FrameResources.end())
+        {
+            FrameAttribsSignDesc.AddImmutableSampler(Sam);
+            SignatureDesc.RemoveImmutableSampler(SamIdx);
+        }
+        else
+        {
+            ++SamIdx;
+        }
+    }
+    SignatureDesc.SetBindingIndex(1);
+
+    RefCntAutoPtr<IPipelineResourceSignature> FrameAttribsSignature = m_Device.CreatePipelineResourceSignature(FrameAttribsSignDesc);
+    VERIFY_EXPR(FrameAttribsSignature);
+
+    RefCntAutoPtr<IPipelineResourceSignature> ResourceSignature = m_Device.CreatePipelineResourceSignature(SignatureDesc);
+    VERIFY_EXPR(ResourceSignature);
+
+    if (m_Settings.EnableIBL)
+    {
+        FrameAttribsSignature->GetStaticVariableByName(SHADER_TYPE_PIXEL, "g_PreintegratedGGX")->Set(m_pPreintegratedGGX_SRV);
+        if (m_Settings.EnableSheen)
+        {
+            FrameAttribsSignature->GetStaticVariableByName(SHADER_TYPE_PIXEL, "g_PreintegratedCharlie")->Set(m_pPreintegratedCharlie_SRV);
+        }
+    }
+
+    if (m_Settings.EnableSheen)
+    {
+        FrameAttribsSignature->GetStaticVariableByName(SHADER_TYPE_PIXEL, "g_SheenAlbedoScalingLUT")->Set(m_pSheenAlbedoScaling_LUT_SRV);
+    }
+    m_ResourceSignatures = {std::move(FrameAttribsSignature), std::move(ResourceSignature)};
 }
 
 } // namespace Diligent

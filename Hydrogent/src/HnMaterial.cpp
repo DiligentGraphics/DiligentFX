@@ -34,7 +34,6 @@
 #include "HnTypeConversions.hpp"
 #include "HnRenderPass.hpp"
 #include "HnRenderParam.hpp"
-#include "HnShadowMapManager.hpp"
 
 #include "GfTypeConversions.hpp"
 #include "DynamicTextureAtlas.h"
@@ -621,12 +620,7 @@ void HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
 
     HN_MATERIAL_TEXTURES_BINDING_MODE BindingMode = static_cast<const HnRenderParam*>(RendererDelegate.GetRenderParam())->GetTextureBindingMode();
 
-    const auto& ShadowMapMgr = RendererDelegate.GetShadowMapManager();
-
-    const Uint32 AtlasVersion =
-        RendererDelegate.GetTextureRegistry().GetAtlasVersion() +
-        (ShadowMapMgr ? ShadowMapMgr->GetAtlasVersion() : 0);
-
+    const Uint32 AtlasVersion = RendererDelegate.GetTextureRegistry().GetAtlasVersion();
     if (BindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_ATLAS && AtlasVersion != m_AtlasVersion)
     {
         m_SRB.Release();
@@ -806,7 +800,7 @@ void HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
     m_SRB = SRBCache->GetSRB(SRBKey, [&]() {
         RefCntAutoPtr<IShaderResourceBinding> pSRB;
 
-        UsdRenderer.CreateResourceBinding(&pSRB);
+        UsdRenderer.CreateResourceBinding(&pSRB, 1);
         VERIFY_EXPR(pSRB);
 
         // NOTE: We cannot set the cbPrimitiveAttribs buffer here because different materials that use the same SRB
@@ -814,9 +808,8 @@ void HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
         //       and then set the buffer in BindPrimitiveAttribsBuffer().
         constexpr bool BindPrimitiveAttribsBuffer = false;
         UsdRenderer.InitCommonSRBVars(pSRB,
-                                      RendererDelegate.GetFrameAttribsCB(),
-                                      BindPrimitiveAttribsBuffer,
-                                      ShadowMapMgr ? ShadowMapMgr->GetShadowSRV() : nullptr);
+                                      nullptr, // Frame attribs buffer is in SRB0
+                                      BindPrimitiveAttribsBuffer);
 
         if (BindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_ATLAS ||
             BindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_DYNAMIC)

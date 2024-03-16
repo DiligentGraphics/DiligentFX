@@ -487,6 +487,23 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
     if (m_ShadowMapManager)
     {
         m_ShadowMapManager->Commit(m_pDevice, m_pContext);
+        const Uint32 ShadowAtlasVersion = m_ShadowMapManager->GetAtlasVersion();
+        if (m_ShadowAtlasVersion != ShadowAtlasVersion)
+        {
+            m_ShadowAtlasVersion = ShadowAtlasVersion;
+            m_FrameAttribsSRB.Release();
+        }
+    }
+
+    if (!m_FrameAttribsSRB)
+    {
+        m_USDRenderer->CreateResourceBinding(&m_FrameAttribsSRB, 0);
+        // Primitive attribs buffer is in SRB1
+        constexpr bool BindPrimitiveAttribsBuffer = false;
+        m_USDRenderer->InitCommonSRBVars(m_FrameAttribsSRB,
+                                         m_FrameAttribsCB,
+                                         BindPrimitiveAttribsBuffer,
+                                         m_ShadowMapManager ? m_ShadowMapManager->GetShadowSRV() : nullptr);
     }
 
     {

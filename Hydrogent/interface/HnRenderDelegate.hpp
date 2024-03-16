@@ -306,11 +306,12 @@ public:
 
     GLTF::ResourceManager& GetResourceManager() const { return *m_ResourceMgr; }
 
-    IRenderDevice*     GetDevice() const { return m_pDevice; }
-    IDeviceContext*    GetDeviceContext() const { return m_pContext; }
-    IRenderStateCache* GetRenderStateCache() const { return m_pRenderStateCache; }
-    IBuffer*           GetFrameAttribsCB() const { return m_FrameAttribsCB; }
-    IBuffer*           GetPrimitiveAttribsCB() const { return m_PrimitiveAttribsCB; }
+    IRenderDevice*          GetDevice() const { return m_pDevice; }
+    IDeviceContext*         GetDeviceContext() const { return m_pContext; }
+    IRenderStateCache*      GetRenderStateCache() const { return m_pRenderStateCache; }
+    IBuffer*                GetFrameAttribsCB() const { return m_FrameAttribsCB; }
+    IBuffer*                GetPrimitiveAttribsCB() const { return m_PrimitiveAttribsCB; }
+    IShaderResourceBinding* GetFrameAttribsSRB() const { return m_FrameAttribsSRB; }
 
     const auto& GetLights() const { return m_Lights; }
 
@@ -331,11 +332,12 @@ private:
     RefCntAutoPtr<IDeviceContext>    m_pContext;
     RefCntAutoPtr<IRenderStateCache> m_pRenderStateCache;
 
-    RefCntAutoPtr<GLTF::ResourceManager> m_ResourceMgr;
-    RefCntAutoPtr<IBuffer>               m_PrimitiveAttribsCB;
-    RefCntAutoPtr<IObject>               m_MaterialSRBCache;
-    std::shared_ptr<USD_Renderer>        m_USDRenderer;
-    RefCntAutoPtr<IBuffer>               m_FrameAttribsCB;
+    RefCntAutoPtr<GLTF::ResourceManager>  m_ResourceMgr;
+    RefCntAutoPtr<IBuffer>                m_PrimitiveAttribsCB;
+    RefCntAutoPtr<IObject>                m_MaterialSRBCache;
+    std::shared_ptr<USD_Renderer>         m_USDRenderer;
+    RefCntAutoPtr<IBuffer>                m_FrameAttribsCB;
+    RefCntAutoPtr<IShaderResourceBinding> m_FrameAttribsSRB;
 
     HnTextureRegistry                   m_TextureRegistry;
     std::unique_ptr<HnRenderParam>      m_RenderParam;
@@ -358,6 +360,7 @@ private:
 
     Uint32 m_MeshResourcesVersion     = ~0u;
     Uint32 m_MaterialResourcesVersion = ~0u;
+    Uint32 m_ShadowAtlasVersion       = ~0u;
 };
 
 } // namespace USD
