@@ -70,6 +70,15 @@ public:
         m_NumRenderTargets = NumRTs;
     }
 
+    void SetFrameAttribsSRB(IShaderResourceBinding* pSRB)
+    {
+        m_FrameAttribsSRB = pSRB;
+    }
+    IShaderResourceBinding* GetFrameAttribsSRB() const
+    {
+        return m_FrameAttribsSRB;
+    }
+
     void SetFrontFaceCCW(bool FrontFaceCCW)
     {
         m_FrontFaceCCW = FrontFaceCCW;
@@ -119,6 +128,8 @@ private:
     Uint32                                         m_NumRenderTargets = 0;
     std::array<TEXTURE_FORMAT, MAX_RENDER_TARGETS> m_RTVFormats       = {};
     TEXTURE_FORMAT                                 m_DepthFormat      = TEX_FORMAT_UNKNOWN;
+
+    IShaderResourceBinding* m_FrameAttribsSRB = nullptr;
 
     std::array<ITextureView*, MAX_RENDER_TARGETS> m_RTVs        = {};
     ITextureView*                                 m_DSV         = nullptr;

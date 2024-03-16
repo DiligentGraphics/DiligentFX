@@ -77,15 +77,28 @@ void HnBeginMainPassTask::Execute(pxr::HdTaskContext* TaskCtx)
     HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
     IDeviceContext*   pCtx           = RenderDelegate->GetDeviceContext();
 
-    const pxr::TfToken& RPName = HnRenderResourceTokens->renderPass_OpaqueSelected;
-    if (HnRenderPassState* RenderPassState = GetRenderPassState(TaskCtx, RPName))
+    HnRenderPassState* RP_OpaqueSelected                  = GetRenderPassState(TaskCtx, HnRenderResourceTokens->renderPass_OpaqueSelected);
+    HnRenderPassState* RP_OpaqueUnselected_TransparentAll = GetRenderPassState(TaskCtx, HnRenderResourceTokens->renderPass_OpaqueUnselected_TransparentAll);
+    HnRenderPassState* RP_TransparentSelected             = GetRenderPassState(TaskCtx, HnRenderResourceTokens->renderPass_TransparentSelected);
+
+    for (HnRenderPassState* RPState : {RP_OpaqueSelected,
+                                       RP_OpaqueUnselected_TransparentAll,
+                                       RP_TransparentSelected})
+    {
+        if (RPState != nullptr)
+        {
+            RPState->SetFrameAttribsSRB(RenderDelegate->GetFrameAttribsSRB());
+        }
+    }
+
+    if (RP_OpaqueSelected != nullptr)
     {
         // Commit render pass now to make sure that all render targets are cleared
-        RenderPassState->Commit(pCtx);
+        RP_OpaqueSelected->Commit(pCtx);
     }
     else
     {
-        UNEXPECTED("Render pass state ", RPName, " is not set in the task context");
+        UNEXPECTED("Opaque Selected render pass state is not set in the task context");
     }
 }
 

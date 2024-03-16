@@ -144,7 +144,7 @@ struct HnRenderPass::RenderState
 
         if (pFrameSRB == nullptr)
         {
-            pFrameSRB = RenderDelegate.GetFrameAttribsSRB();
+            pFrameSRB = RPState.GetFrameAttribsSRB();
             VERIFY_EXPR(pFrameSRB != nullptr);
             pCtx->CommitShaderResources(pFrameSRB, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
         }

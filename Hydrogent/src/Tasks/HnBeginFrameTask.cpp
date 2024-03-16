@@ -277,9 +277,10 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
     RP_OpaqueUnselected_TransparentAll.Begin(HnFrameRenderTargets::GBUFFER_TARGET_COUNT, m_FrameRenderTargets.GBufferRTVs.data(), m_FrameRenderTargets.DepthDSV);
     RP_TransparentSelected.Begin(0, nullptr, m_FrameRenderTargets.SelectionDepthDSV);
 
-    RP_OpaqueSelected.SetCamera(m_pCamera);
-    RP_OpaqueUnselected_TransparentAll.SetCamera(m_pCamera);
-    RP_TransparentSelected.SetCamera(m_pCamera);
+    for (HnRenderPassState* RPState : {&RP_OpaqueSelected, &RP_OpaqueUnselected_TransparentAll, &RP_TransparentSelected})
+    {
+        RPState->SetCamera(m_pCamera);
+    }
 
     // Register render pass states in the task context
     for (auto& it : m_RenderPassStates)
