@@ -53,7 +53,7 @@ float ComputeDepthMIPFiltered(in float SampledDepth[9], uint Count)
     float FalloffRange = g_SSAOAttribs.EffectFalloffRange * EffectRadius;
 
     // Fadeout precompute optimisation
-    float FalloffFrom = EffectRadius - g_SSAOAttribs.EffectFalloffRange;
+    float FalloffFrom = EffectRadius - FalloffRange;
     float FalloffMul = -1.0f / (FalloffRange);
     float FalloffAdd = FalloffFrom / FalloffRange + 1.0f;
 

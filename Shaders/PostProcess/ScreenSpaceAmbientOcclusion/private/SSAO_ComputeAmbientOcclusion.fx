@@ -88,7 +88,7 @@ float ComputeAmbientOcclusionPS(in FullScreenTriangleVSOutput VSOut) : SV_Target
 
     float EffectRadius = g_SSAOAttribs.EffectRadius * g_SSAOAttribs.RadiusMultiplier;
     float FalloffRange = g_SSAOAttribs.EffectFalloffRange * EffectRadius;
-    float FalloffFrom = EffectRadius * (1.0 - g_SSAOAttribs.EffectFalloffRange);
+    float FalloffFrom = EffectRadius - FalloffRange;
 
     float FalloffMul = -1.0 / FalloffRange;
     float FalloffAdd = FalloffFrom / FalloffRange + 1.0;
