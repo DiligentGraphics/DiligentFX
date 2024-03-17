@@ -339,7 +339,13 @@ private:
     RefCntAutoPtr<IBuffer>               m_PrimitiveAttribsCB;
     RefCntAutoPtr<IObject>               m_MaterialSRBCache;
     std::shared_ptr<USD_Renderer>        m_USDRenderer;
-    RefCntAutoPtr<IBuffer>               m_FrameAttribsCB;
+
+    // Frame attributes for the main pass and all shadow passes.
+    //
+    // ||                   Main Pass                  ||        Shadow Pass 1       ||  ...  ||       Shadow Pass N        ||
+    // || Camera|PrevCamera|Renderer|Lights|ShadowMaps || Camera|PrevCamera|Renderer ||  ...  || Camera|PrevCamera|Renderer ||
+    //
+    RefCntAutoPtr<IBuffer> m_FrameAttribsCB;
 
     RefCntAutoPtr<IShaderResourceBinding> m_MainPassFrameAttribsSRB;
 

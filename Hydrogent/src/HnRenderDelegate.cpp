@@ -521,15 +521,23 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
         return SRB;
     };
 
+    // FrameAttribs
+    //
+    // ||                   Main Pass                  ||        Shadow Pass 1       ||  ...  ||       Shadow Pass N        ||
+    // || Camera|PrevCamera|Renderer|Lights|ShadowMaps || Camera|PrevCamera|Renderer ||  ...  || Camera|PrevCamera|Renderer ||
+    //  |<-------------------------------------------->||<-------------------------->||
+    //      m_USDRenderer->GetPRBFrameAttribsSize()       USD_Renderer::GetPRBFrameAttribsSize(0, 0)
     if (!m_MainPassFrameAttribsSRB)
     {
         m_MainPassFrameAttribsSRB = CreateFrameAttribsSRB(m_USDRenderer->GetPRBFrameAttribsSize(), m_ShadowMapManager ? m_ShadowMapManager->GetShadowSRV() : nullptr);
     }
-
     if (m_ShadowMapManager && !m_ShadowPassFrameAttribs.SRB)
     {
-        m_ShadowPassFrameAttribs.SRB             = CreateFrameAttribsSRB(USD_Renderer::GetPRBFrameAttribsSize(0, 0), nullptr);
-        m_ShadowPassFrameAttribs.FrameAttribsVar = m_ShadowPassFrameAttribs.SRB->GetVariableByName(SHADER_TYPE_VERTEX, "cbFrameAttribs");
+        constexpr Uint32 LightCount                 = 0;
+        constexpr Uint32 ShadowCastingLightCount    = 0;
+        const Uint32     ShadowPassFrameAttribsSize = USD_Renderer::GetPRBFrameAttribsSize(LightCount, ShadowCastingLightCount);
+        m_ShadowPassFrameAttribs.SRB                = CreateFrameAttribsSRB(ShadowPassFrameAttribsSize, nullptr);
+        m_ShadowPassFrameAttribs.FrameAttribsVar    = m_ShadowPassFrameAttribs.SRB->GetVariableByName(SHADER_TYPE_VERTEX, "cbFrameAttribs");
         VERIFY_EXPR(m_ShadowPassFrameAttribs.FrameAttribsVar != nullptr);
     }
 

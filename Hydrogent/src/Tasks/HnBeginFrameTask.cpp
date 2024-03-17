@@ -376,9 +376,16 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
     const Uint32 FrameAttribsDataSize   = pFrameAttrbisCB->GetDesc().Size;
     VERIFY(FrameAttribsDataSize == RenderDelegate->GetShadowPassFrameAttribsOffset(NumShadowCastingLights), "Frame attributes buffer size mismatch");
     m_FrameAttribsData.resize(FrameAttribsDataSize);
+    //
+    // ||                   Main Pass                  ||        Shadow Pass 1       ||  ...  ||       Shadow Pass N        ||
+    // || Camera|PrevCamera|Renderer|Lights|ShadowMaps || Camera|PrevCamera|Renderer ||  ...  || Camera|PrevCamera|Renderer ||
+    //
 
     // Write main pass frame attributes
     {
+#if defined(PBR_MAX_LIGHTS)
+#    error PBR_MAX_LIGHTS is defined. The logic below will not work correctly.
+#endif
         HLSL::PBRFrameAttribs*  FrameAttribs = reinterpret_cast<HLSL::PBRFrameAttribs*>(m_FrameAttribsData.data());
         HLSL::CameraAttribs&    PrevCamera   = FrameAttribs->PrevCamera;
         HLSL::CameraAttribs&    CamAttribs   = FrameAttribs->Camera;
