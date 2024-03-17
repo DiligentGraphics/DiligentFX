@@ -57,7 +57,7 @@ ScreenSpaceAmbientOcclusion::ScreenSpaceAmbientOcclusion(IRenderDevice* pDevice)
 
 ScreenSpaceAmbientOcclusion::~ScreenSpaceAmbientOcclusion() = default;
 
-void ScreenSpaceAmbientOcclusion::PrepareResources(IRenderDevice* pDevice, PostFXContext* pPostFXContext, FEATURE_FLAGS FeatureFlags)
+void ScreenSpaceAmbientOcclusion::PrepareResources(IRenderDevice* pDevice, IDeviceContext* pDeviceContext, PostFXContext* pPostFXContext, FEATURE_FLAGS FeatureFlags)
 {
     DEV_CHECK_ERR(pDevice != nullptr, "pDevice must not be null");
     DEV_CHECK_ERR(pPostFXContext != nullptr, "pPostFXContext must not be null");
@@ -153,13 +153,16 @@ void ScreenSpaceAmbientOcclusion::PrepareResources(IRenderDevice* pDevice, PostF
     for (Uint32 TextureIdx = RESOURCE_IDENTIFIER_OCCLUSION_HISTORY0; TextureIdx <= RESOURCE_IDENTIFIER_OCCLUSION_HISTORY1; TextureIdx++)
     {
         TextureDesc Desc;
-        Desc.Name      = "ScreenSpaceAmbientOcclusion::OcclusionHistory";
-        Desc.Type      = RESOURCE_DIM_TEX_2D;
-        Desc.Width     = m_BackBufferWidth;
-        Desc.Height    = m_BackBufferHeight;
-        Desc.Format    = TEX_FORMAT_R8_UNORM;
-        Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
-        m_Resources.Insert(TextureIdx, Device.CreateTexture(Desc));
+        Desc.Name          = "ScreenSpaceAmbientOcclusion::OcclusionHistory";
+        Desc.Type          = RESOURCE_DIM_TEX_2D;
+        Desc.Width         = m_BackBufferWidth;
+        Desc.Height        = m_BackBufferHeight;
+        Desc.Format        = TEX_FORMAT_R8_UNORM;
+        Desc.BindFlags     = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
+        auto  pTexture     = Device.CreateTexture(Desc);
+        float ClearColor[] = {1.0, 0.0, 0.0, 0.0};
+        PostFXContext::ClearRenderTarget(pDeviceContext, pTexture, ClearColor);
+        m_Resources.Insert(TextureIdx, pTexture);
     }
 }
 

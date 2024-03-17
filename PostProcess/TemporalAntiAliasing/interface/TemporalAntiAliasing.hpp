@@ -101,7 +101,7 @@ public:
 
     float2 GetJitterOffset() const;
 
-    void PrepareResources(IRenderDevice* pDevice, PostFXContext* pPostFXContext, FEATURE_FLAGS FeatureFlag);
+    void PrepareResources(IRenderDevice* pDevice, IDeviceContext* pDeviceContext, PostFXContext* pPostFXContext, FEATURE_FLAGS FeatureFlag);
 
     void Execute(const RenderAttributes& RenderAttribs);
 

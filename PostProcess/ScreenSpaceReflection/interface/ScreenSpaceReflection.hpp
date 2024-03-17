@@ -107,7 +107,7 @@ public:
 
     ~ScreenSpaceReflection();
 
-    void PrepareResources(IRenderDevice* pDevice, PostFXContext* pPostFXContext, FEATURE_FLAGS FeatureFlags);
+    void PrepareResources(IRenderDevice* pDevice, IDeviceContext* pDeviceContext, PostFXContext* pPostFXContext, FEATURE_FLAGS FeatureFlags);
 
     void Execute(const RenderAttributes& RenderAttribs);
 

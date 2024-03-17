@@ -81,7 +81,7 @@ float2 TemporalAntiAliasing::GetJitterOffset() const
     return float2{JitterX, JitterY};
 }
 
-void TemporalAntiAliasing::PrepareResources(IRenderDevice* pDevice, PostFXContext* pPostFXContext, FEATURE_FLAGS FeatureFlags)
+void TemporalAntiAliasing::PrepareResources(IRenderDevice* pDevice, IDeviceContext* pDeviceContext, PostFXContext* pPostFXContext, FEATURE_FLAGS FeatureFlags)
 {
     DEV_CHECK_ERR(pDevice != nullptr, "pDevice must not be null");
     DEV_CHECK_ERR(pPostFXContext != nullptr, "pPostFXContext must not be null");
@@ -102,13 +102,16 @@ void TemporalAntiAliasing::PrepareResources(IRenderDevice* pDevice, PostFXContex
     for (Uint32 TextureIdx = RESOURCE_IDENTIFIER_ACCUMULATED_BUFFER0; TextureIdx <= RESOURCE_IDENTIFIER_ACCUMULATED_BUFFER1; ++TextureIdx)
     {
         TextureDesc Desc;
-        Desc.Name      = "TemporalAntiAliasing::AccumulatedBuffer";
-        Desc.Type      = RESOURCE_DIM_TEX_2D;
-        Desc.Width     = m_BackBufferWidth;
-        Desc.Height    = m_BackBufferHeight;
-        Desc.Format    = TEX_FORMAT_RGBA16_FLOAT;
-        Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
-        m_Resources.Insert(TextureIdx, Device.CreateTexture(Desc));
+        Desc.Name          = "TemporalAntiAliasing::AccumulatedBuffer";
+        Desc.Type          = RESOURCE_DIM_TEX_2D;
+        Desc.Width         = m_BackBufferWidth;
+        Desc.Height        = m_BackBufferHeight;
+        Desc.Format        = TEX_FORMAT_RGBA16_FLOAT;
+        Desc.BindFlags     = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
+        auto  pTexture     = Device.CreateTexture(Desc);
+        float ClearColor[] = {0.0, 0.0, 0.0, 0.0};
+        PostFXContext::ClearRenderTarget(pDeviceContext, pTexture, ClearColor);
+        m_Resources.Insert(TextureIdx, pTexture);
     }
 }
 

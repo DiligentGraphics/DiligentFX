@@ -85,7 +85,7 @@ ScreenSpaceReflection::ScreenSpaceReflection(IRenderDevice* pDevice) :
 
 ScreenSpaceReflection::~ScreenSpaceReflection() = default;
 
-void ScreenSpaceReflection::PrepareResources(IRenderDevice* pDevice, PostFXContext* pPostFXContext, FEATURE_FLAGS FeatureFlags)
+void ScreenSpaceReflection::PrepareResources(IRenderDevice* pDevice, IDeviceContext* pDeviceContext, PostFXContext* pPostFXContext, FEATURE_FLAGS FeatureFlags)
 {
     const auto& FrameDesc         = pPostFXContext->GetFrameDesc();
     const auto& SupportedFeatures = pPostFXContext->GetSupportedFeatures();
@@ -261,36 +261,45 @@ void ScreenSpaceReflection::PrepareResources(IRenderDevice* pDevice, PostFXConte
     for (Uint32 TextureIdx = RESOURCE_IDENTIFIER_RADIANCE_HISTORY0; TextureIdx <= RESOURCE_IDENTIFIER_RADIANCE_HISTORY1; TextureIdx++)
     {
         TextureDesc Desc;
-        Desc.Name      = "ScreenSpaceReflection::RadianceHistory";
-        Desc.Type      = RESOURCE_DIM_TEX_2D;
-        Desc.Width     = m_BackBufferWidth;
-        Desc.Height    = m_BackBufferHeight;
-        Desc.Format    = TEX_FORMAT_RGBA16_FLOAT;
-        Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
-        m_Resources.Insert(TextureIdx, Device.CreateTexture(Desc));
+        Desc.Name          = "ScreenSpaceReflection::RadianceHistory";
+        Desc.Type          = RESOURCE_DIM_TEX_2D;
+        Desc.Width         = m_BackBufferWidth;
+        Desc.Height        = m_BackBufferHeight;
+        Desc.Format        = TEX_FORMAT_RGBA16_FLOAT;
+        Desc.BindFlags     = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
+        auto  pTexture     = Device.CreateTexture(Desc);
+        float ClearColor[] = {0.0, 0.0, 0.0, 0.0};
+        PostFXContext::ClearRenderTarget(pDeviceContext, pTexture, ClearColor);
+        m_Resources.Insert(TextureIdx, pTexture);
     }
 
     for (Uint32 TextureIdx = RESOURCE_IDENTIFIER_VARIANCE_HISTORY0; TextureIdx <= RESOURCE_IDENTIFIER_VARIANCE_HISTORY1; TextureIdx++)
     {
         TextureDesc Desc;
-        Desc.Name      = "ScreenSpaceReflection::VarianceHistory";
-        Desc.Type      = RESOURCE_DIM_TEX_2D;
-        Desc.Width     = m_BackBufferWidth;
-        Desc.Height    = m_BackBufferHeight;
-        Desc.Format    = TEX_FORMAT_R16_FLOAT;
-        Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
-        m_Resources.Insert(TextureIdx, Device.CreateTexture(Desc));
+        Desc.Name          = "ScreenSpaceReflection::VarianceHistory";
+        Desc.Type          = RESOURCE_DIM_TEX_2D;
+        Desc.Width         = m_BackBufferWidth;
+        Desc.Height        = m_BackBufferHeight;
+        Desc.Format        = TEX_FORMAT_R16_FLOAT;
+        Desc.BindFlags     = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
+        auto  pTexture     = Device.CreateTexture(Desc);
+        float ClearColor[] = {0.0, 0.0, 0.0, 0.0};
+        PostFXContext::ClearRenderTarget(pDeviceContext, pTexture, ClearColor);
+        m_Resources.Insert(TextureIdx, pTexture);
     }
 
     {
         TextureDesc Desc;
-        Desc.Name      = "ScreenSpaceReflection::DepthHistory";
-        Desc.Type      = RESOURCE_DIM_TEX_2D;
-        Desc.Width     = m_BackBufferWidth;
-        Desc.Height    = m_BackBufferHeight;
-        Desc.Format    = TEX_FORMAT_R32_FLOAT;
-        Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
-        m_Resources.Insert(RESOURCE_IDENTIFIER_DEPTH_HISTORY, Device.CreateTexture(Desc));
+        Desc.Name          = "ScreenSpaceReflection::DepthHistory";
+        Desc.Type          = RESOURCE_DIM_TEX_2D;
+        Desc.Width         = m_BackBufferWidth;
+        Desc.Height        = m_BackBufferHeight;
+        Desc.Format        = TEX_FORMAT_R32_FLOAT;
+        Desc.BindFlags     = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
+        auto  pTexture     = Device.CreateTexture(Desc);
+        float ClearColor[] = {1.0, 0.0, 0.0, 0.0};
+        PostFXContext::ClearRenderTarget(pDeviceContext, pTexture, ClearColor);
+        m_Resources.Insert(RESOURCE_IDENTIFIER_DEPTH_HISTORY, pTexture);
     }
 
     {

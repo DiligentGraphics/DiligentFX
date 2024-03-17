@@ -99,6 +99,7 @@ public:
     ~PostFXContext();
 
     void PrepareResources(const FrameDesc& Desc);
+
     void Execute(const RenderAttributes& RenderAttribs);
 
     ITextureView* Get2DBlueNoiseSRV(BLUE_NOISE_DIMENSION Dimension) const;
@@ -114,6 +115,8 @@ public:
     {
         return m_FrameDesc;
     }
+
+    static void ClearRenderTarget(IDeviceContext* pDeviceContext, ITexture* pTexture, float ClearColor[]);
 
 private:
     using RenderTechnique  = PostFXRenderTechnique;

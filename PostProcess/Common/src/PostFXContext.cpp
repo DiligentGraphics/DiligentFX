@@ -234,4 +234,12 @@ IBuffer* PostFXContext::GetCameraAttribsCB() const
     return m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER];
 }
 
+void PostFXContext::ClearRenderTarget(IDeviceContext* pDeviceContext, ITexture* pTexture, float ClearColor[])
+{
+    auto pRTV = pTexture->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET);
+    pDeviceContext->SetRenderTargets(1, &pRTV, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    pDeviceContext->ClearRenderTarget(pRTV, ClearColor, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    pDeviceContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+}
+
 } // namespace Diligent
