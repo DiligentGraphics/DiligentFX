@@ -151,10 +151,13 @@ void HnRenderShadowsTask::Execute(pxr::HdTaskContext* TaskCtx)
 
     const auto& Lights = RenderDelegate->GetLights();
 
-    Uint32 ShadowCatingLightId = 0;
     for (HnLight* Light : Lights)
     {
         if (!Light->ShadowsEnabled())
+            continue;
+
+        Int32 ShadowCatingLightId = Light->GetFrameAttribsIndex();
+        if (ShadowCatingLightId < 0)
             continue;
 
         m_RPState.SetFrameAttribsSRB(RenderDelegate->GetShadowPassFrameAttribsSRB(ShadowCatingLightId));

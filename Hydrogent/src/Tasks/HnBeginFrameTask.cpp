@@ -508,10 +508,18 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
         const auto& Lights = RenderDelegate->GetLights();
 
         Uint32 ShadowCastingLightIdx = 0;
-        for (const HnLight* Light : Lights)
+        for (HnLight* Light : Lights)
         {
             if (!Light->ShadowsEnabled())
                 continue;
+
+            if (ShadowCastingLightIdx >= NumShadowCastingLights)
+            {
+                Light->SetFrameAttribsIndex(-1);
+                continue;
+            }
+
+            Light->SetFrameAttribsIndex(ShadowCastingLightIdx);
 
             HLSL::PBRFrameAttribs* ShadowAttribs = reinterpret_cast<HLSL::PBRFrameAttribs*>(&m_FrameAttribsData[RenderDelegate->GetShadowPassFrameAttribsOffset(ShadowCastingLightIdx)]);
             HLSL::CameraAttribs&   CamAttribs    = ShadowAttribs->Camera;
@@ -541,8 +549,6 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
             memset(&ShadowAttribs->Renderer, 0, sizeof(HLSL::PBRRendererShaderParameters));
 
             ++ShadowCastingLightIdx;
-            if (ShadowCastingLightIdx == NumShadowCastingLights)
-                break;
         }
     }
 

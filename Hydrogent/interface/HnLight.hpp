@@ -70,6 +70,14 @@ public:
     const float4x4&    GetViewProjMatrix() const { return m_ViewProjMatrix; }
     bool               ShadowsEnabled() const { return m_ShadowMapSuballocation != nullptr; }
 
+    /// Sets the index of the light's frame attributes data in the frame attribs buffer.
+    /// This index is passed to the HnRenderDelegate::GetShadowPassFrameAttribsSRB
+    /// method to set the offset in the frame attribs buffer.
+    void SetFrameAttribsIndex(Int32 Index) { m_FrameAttribsIndex = Index; }
+
+    /// Returns the index of the light's frame attributes data in the frame attribs buffer.
+    Int32 GetFrameAttribsIndex() const { return m_FrameAttribsIndex; }
+
     ITextureAtlasSuballocation*   GetShadowMapSuballocation() const { return m_ShadowMapSuballocation; }
     const HLSL::PBRShadowMapInfo* GetShadowMapShaderInfo() const { return m_ShadowMapShaderInfo.get(); }
 
@@ -91,6 +99,7 @@ private:
     float4x4 m_ProjMatrix;
     float4x4 m_ViewProjMatrix;
 
+    Int32                                     m_FrameAttribsIndex   = 0;
     Uint32                                    m_ShadowMapResolution = 1024;
     RefCntAutoPtr<ITextureAtlasSuballocation> m_ShadowMapSuballocation;
     std::unique_ptr<HLSL::PBRShadowMapInfo>   m_ShadowMapShaderInfo;
