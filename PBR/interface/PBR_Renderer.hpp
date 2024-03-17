@@ -377,7 +377,7 @@ public:
                  const CreateInfo&  CI,
                  bool               InitSignature = true);
 
-    ~PBR_Renderer();
+    virtual ~PBR_Renderer();
 
     // clang-format off
     IRenderDevice* GetDevice() const               { return m_Device; }
