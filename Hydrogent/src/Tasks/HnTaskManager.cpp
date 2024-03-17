@@ -515,6 +515,7 @@ void HnTaskManager::EnableMaterial(const pxr::TfToken& MaterialTag, bool Enable)
     {
         EnableTask(TaskUID_RenderRprimsDefaultSelected, Enable);
         EnableTask(TaskUID_RenderRprimsDefaultUnselected, Enable);
+        EnableTask(TaskUID_RenderShadows, Enable);
     }
     else if (MaterialTag == HnMaterialTagTokens->masked)
     {
