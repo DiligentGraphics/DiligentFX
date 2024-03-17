@@ -33,6 +33,9 @@
 #include "../interface/HnRenderPassState.hpp"
 
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/GraphicsTypes.h"
+#include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/PipelineState.h"
+#include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/Buffer.h"
+#include "../../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
 
 namespace Diligent
 {
@@ -42,6 +45,7 @@ namespace USD
 
 class HnRenderPass;
 class HnLight;
+class HnRenderDelegate;
 
 struct HnRenderShadowsTaskParams
 {
@@ -103,12 +107,20 @@ public:
     virtual void Execute(pxr::HdTaskContext* TaskCtx) override final;
 
 private:
+    void PrepareClearDepthPSO(const HnRenderDelegate& RenderDelegate);
+    void PrepareClearDepthVB(const HnRenderDelegate& RenderDelegate);
+
+private:
     pxr::HdRenderIndex* m_RenderIndex = nullptr;
 
     HnRenderPassState m_RPState;
 
     pxr::TfTokenVector            m_RenderTags;
     std::shared_ptr<HnRenderPass> m_RenderPass;
+
+    RefCntAutoPtr<IPipelineState> m_ClearDepthPSO;
+    RefCntAutoPtr<IBuffer>        m_ClearDepthVB;
+    float                         m_ClearDepthValue = 0.f;
 
     std::multimap<Uint32, const HnLight*> m_LightsByShadowSlice;
 };

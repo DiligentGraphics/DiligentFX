@@ -31,6 +31,8 @@
 #include "HnRenderPass.hpp"
 #include "HnLight.hpp"
 #include "HnShadowMapManager.hpp"
+#include "CommonlyUsedStates.h"
+#include "GraphicsUtilities.h"
 
 namespace Diligent
 {
@@ -121,12 +123,112 @@ void HnRenderShadowsTask::Sync(pxr::HdSceneDelegate* Delegate,
     *DirtyBits = pxr::HdChangeTracker::Clean;
 }
 
+static constexpr char ClearDepthVS[] = R"(
+void main(in float4 inPos : ATTRIB0, out float4 outPos : SV_Position)
+{
+    outPos = inPos;
+}
+)";
+
+void HnRenderShadowsTask::PrepareClearDepthPSO(const HnRenderDelegate& RenderDelegate)
+{
+    const HnShadowMapManager* ShadowMapMgr = RenderDelegate.GetShadowMapManager();
+    if (ShadowMapMgr == nullptr)
+        return;
+
+    const TEXTURE_FORMAT DSVFormat = ShadowMapMgr->GetAtlasDesc().Format;
+    if (m_ClearDepthPSO && m_ClearDepthPSO->GetGraphicsPipelineDesc().DSVFormat != DSVFormat)
+        m_ClearDepthPSO.Release();
+
+    if (m_ClearDepthPSO)
+        return;
+
+    try
+    {
+        // RenderDeviceWithCache_E throws exceptions in case of errors
+        RenderDeviceWithCache_E Device{RenderDelegate.GetDevice(), RenderDelegate.GetRenderStateCache()};
+
+        ShaderCreateInfo ShaderCI;
+        ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL;
+
+        RefCntAutoPtr<IShader> pVS;
+        {
+            ShaderCI.Desc         = {"Clear Depth VS", SHADER_TYPE_VERTEX, true};
+            ShaderCI.EntryPoint   = "main";
+            ShaderCI.Source       = ClearDepthVS;
+            ShaderCI.SourceLength = sizeof(ClearDepthVS) - 1;
+
+            pVS = Device.CreateShader(ShaderCI); // Throws exception in case of error
+        }
+
+        InputLayoutDescX InputLayout{
+            LayoutElement{0, 0, 4, VT_FLOAT32},
+        };
+        GraphicsPipelineStateCreateInfoX PsoCI{"Clear Depth"};
+        PsoCI
+            .AddShader(pVS)
+            .SetDepthFormat(DSVFormat)
+            .SetInputLayout(InputLayout)
+            .SetRasterizerDesc(RS_SolidFillNoCull)
+            .SetPrimitiveTopology(PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+        PsoCI.GraphicsPipeline.DepthStencilDesc.DepthFunc = COMPARISON_FUNC_ALWAYS;
+
+        m_ClearDepthPSO = Device.CreateGraphicsPipelineState(PsoCI); // Throws exception in case of error
+    }
+    catch (const std::runtime_error& err)
+    {
+        LOG_ERROR_MESSAGE("Failed to axes PSO: ", err.what());
+    }
+    catch (...)
+    {
+        LOG_ERROR_MESSAGE("Failed to axes PSO");
+    }
+}
+
+void HnRenderShadowsTask::PrepareClearDepthVB(const HnRenderDelegate& RenderDelegate)
+{
+    if (m_ClearDepthVB && m_ClearDepthValue == m_RPState.GetClearDepth())
+        return;
+
+    m_ClearDepthValue = m_RPState.GetClearDepth();
+
+    const float4 Verts[3] = {
+        {-1.0, -1.0, m_ClearDepthValue, 1.0},
+        {-1.0, +3.0, m_ClearDepthValue, 1.0},
+        {+3.0, -1.0, m_ClearDepthValue, 1.0},
+    };
+    if (!m_ClearDepthVB)
+    {
+        BufferDesc BuffDesc{
+            "Clear depth VB",
+            sizeof(Verts),
+            BIND_VERTEX_BUFFER,
+            USAGE_DEFAULT,
+        };
+        BufferData InitData{Verts, sizeof(Verts)};
+        RenderDelegate.GetDevice()->CreateBuffer(BuffDesc, &InitData, &m_ClearDepthVB);
+        VERIFY_EXPR(m_ClearDepthVB);
+    }
+    else
+    {
+        RenderDelegate.GetDeviceContext()->UpdateBuffer(m_ClearDepthVB, 0, sizeof(Verts), Verts, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    }
+
+    StateTransitionDesc Barrier{m_ClearDepthVB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_VERTEX_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE};
+    RenderDelegate.GetDeviceContext()->TransitionResourceStates(1, &Barrier);
+}
+
 void HnRenderShadowsTask::Prepare(pxr::HdTaskContext* TaskCtx,
                                   pxr::HdRenderIndex* RenderIndex)
 {
     m_RenderIndex = RenderIndex;
 
     (*TaskCtx)[HnRenderResourceTokens->renderPass_Shadow] = pxr::VtValue{&m_RPState};
+
+    const HnRenderDelegate* RenderDelegate = static_cast<const HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+
+    PrepareClearDepthPSO(*RenderDelegate);
+    PrepareClearDepthVB(*RenderDelegate);
 }
 
 void HnRenderShadowsTask::Execute(pxr::HdTaskContext* TaskCtx)
@@ -147,8 +249,9 @@ void HnRenderShadowsTask::Execute(pxr::HdTaskContext* TaskCtx)
     const TextureDesc& ShadowAtlasDesc = ShadowMapMgr->GetAtlasDesc();
     m_RPState.SetDepthStencilFormat(ShadowAtlasDesc.Format);
 
-    IRenderDevice*  pDevice = RenderDelegate->GetDevice();
-    IDeviceContext* pCtx    = RenderDelegate->GetDeviceContext();
+    IRenderDevice*          pDevice    = RenderDelegate->GetDevice();
+    IDeviceContext*         pCtx       = RenderDelegate->GetDeviceContext();
+    const RenderDeviceInfo& DeviceInfo = pDevice->GetDeviceInfo();
 
     const auto& Lights = RenderDelegate->GetLights();
 
@@ -194,22 +297,27 @@ void HnRenderShadowsTask::Execute(pxr::HdTaskContext* TaskCtx)
 
         if (!IsEntireSlice)
         {
+            m_RPState.Commit(pCtx);
+
             const uint2 ShadowMapOffset = pAtlasRegion->GetOrigin();
             Viewport    VP;
             VP.TopLeftX = static_cast<float>(ShadowMapOffset.x);
-            VP.TopLeftY = static_cast<float>(ShadowMapOffset.y);
+            VP.TopLeftY = static_cast<float>(DeviceInfo.IsGLDevice() ? ShadowAtlasDesc.Height - (ShadowMapOffset.y + ShadowMapSize.y) : ShadowMapOffset.y);
             VP.Width    = static_cast<float>(ShadowMapSize.x);
             VP.Height   = static_cast<float>(ShadowMapSize.y);
+            pCtx->SetViewports(1, &VP, ShadowAtlasDesc.Width, ShadowAtlasDesc.Height);
 
-            pCtx->SetViewports(1, &VP, 0, 0);
-            // TODO: clear only the region that is actually used
+            pCtx->SetPipelineState(m_ClearDepthPSO);
+            IBuffer* pVBs[] = {m_ClearDepthVB};
+            pCtx->SetVertexBuffers(0, 1, pVBs, nullptr, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
+            pCtx->Draw(DrawAttribs{3, DRAW_FLAG_VERIFY_ALL});
         }
 
         m_RenderPass->Execute(m_RPState, GetRenderTags());
     }
 
     StateTransitionDesc Barrier{ShadowMapMgr->GetShadowTexture(), RESOURCE_STATE_UNKNOWN,
-                                pDevice->GetDeviceInfo().IsD3DDevice() ? RESOURCE_STATE_SHADER_RESOURCE : RESOURCE_STATE_DEPTH_READ,
+                                DeviceInfo.IsD3DDevice() ? RESOURCE_STATE_SHADER_RESOURCE : RESOURCE_STATE_DEPTH_READ,
                                 STATE_TRANSITION_FLAG_UPDATE_STATE};
     pCtx->TransitionResourceStates(1, &Barrier);
 }
