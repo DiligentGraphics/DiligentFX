@@ -144,14 +144,17 @@ void HnRenderShadowsTask::Execute(pxr::HdTaskContext* TaskCtx)
         UNEXPECTED("Shadow map manager is null, which indicates that shadows are disabled");
     }
 
-    m_RPState.SetDepthStencilFormat(ShadowMapMgr->GetAtlasDesc().Format);
+    const TextureDesc& ShadowAtlasDesc = ShadowMapMgr->GetAtlasDesc();
+    m_RPState.SetDepthStencilFormat(ShadowAtlasDesc.Format);
 
     IRenderDevice*  pDevice = RenderDelegate->GetDevice();
     IDeviceContext* pCtx    = RenderDelegate->GetDeviceContext();
 
     const auto& Lights = RenderDelegate->GetLights();
 
-    for (HnLight* Light : Lights)
+    // Sort all shadow lights with dirty shadow maps by shadow map slice
+    m_LightsByShadowSlice.clear();
+    for (const HnLight* Light : Lights)
     {
         if (!Light->ShadowsEnabled())
             continue;
@@ -160,11 +163,47 @@ void HnRenderShadowsTask::Execute(pxr::HdTaskContext* TaskCtx)
         if (ShadowCatingLightId < 0)
             continue;
 
+        ITextureAtlasSuballocation* pAtlasRegion = Light->GetShadowMapSuballocation();
+        m_LightsByShadowSlice.emplace(pAtlasRegion->GetSlice(), Light);
+    }
+
+    int LastSlice = -1;
+    for (const auto it : m_LightsByShadowSlice)
+    {
+        const Uint32   Slice = it.first;
+        const HnLight* Light = it.second;
+        VERIFY_EXPR(Light->ShadowsEnabled());
+
+        Int32 ShadowCatingLightId = Light->GetFrameAttribsIndex();
+        VERIFY_EXPR(ShadowCatingLightId >= 0);
         m_RPState.SetFrameAttribsSRB(RenderDelegate->GetShadowPassFrameAttribsSRB(ShadowCatingLightId));
 
-        ITextureAtlasSuballocation* pAtlasRegion    = Light->GetShadowMapSuballocation();
-        ITextureView*               pShadowSliceDSV = ShadowMapMgr->GetShadowDSV(pAtlasRegion->GetSlice());
-        m_RPState.Begin(0, nullptr, pShadowSliceDSV, nullptr, 1.f, HnRenderPassState::ClearDepthBit);
+        ITextureAtlasSuballocation* pAtlasRegion = Light->GetShadowMapSuballocation();
+        VERIFY_EXPR(pAtlasRegion->GetSlice() == Slice);
+        VERIFY(static_cast<int>(Slice) >= LastSlice, "Shadow map slices must be sorted in ascending order");
+
+        const uint2 ShadowMapSize = pAtlasRegion->GetSize();
+        const bool  IsEntireSlice = ShadowMapSize.x == ShadowAtlasDesc.Width && ShadowMapSize.y == ShadowAtlasDesc.Height;
+        if (static_cast<int>(Slice) > LastSlice)
+        {
+            ITextureView* pShadowSliceDSV = ShadowMapMgr->GetShadowDSV(Slice);
+            // Only clear shadow map if it uses the entire slice
+            m_RPState.Begin(0, nullptr, pShadowSliceDSV, nullptr, m_RPState.GetClearDepth(), IsEntireSlice ? HnRenderPassState::ClearDepthBit : 0);
+            LastSlice = static_cast<int>(Slice);
+        }
+
+        if (!IsEntireSlice)
+        {
+            const uint2 ShadowMapOffset = pAtlasRegion->GetOrigin();
+            Viewport    VP;
+            VP.TopLeftX = static_cast<float>(ShadowMapOffset.x);
+            VP.TopLeftY = static_cast<float>(ShadowMapOffset.y);
+            VP.Width    = static_cast<float>(ShadowMapSize.x);
+            VP.Height   = static_cast<float>(ShadowMapSize.y);
+
+            pCtx->SetViewports(1, &VP, 0, 0);
+            // TODO: clear only the region that is actually used
+        }
 
         m_RenderPass->Execute(m_RPState, GetRenderTags());
     }

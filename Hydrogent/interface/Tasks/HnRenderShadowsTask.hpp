@@ -27,6 +27,9 @@
 #pragma once
 
 #include "HnTask.hpp"
+
+#include <map>
+
 #include "../interface/HnRenderPassState.hpp"
 
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/GraphicsTypes.h"
@@ -38,6 +41,7 @@ namespace USD
 {
 
 class HnRenderPass;
+class HnLight;
 
 struct HnRenderShadowsTaskParams
 {
@@ -105,6 +109,8 @@ private:
 
     pxr::TfTokenVector            m_RenderTags;
     std::shared_ptr<HnRenderPass> m_RenderPass;
+
+    std::multimap<Uint32, const HnLight*> m_LightsByShadowSlice;
 };
 
 } // namespace USD
