@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 #pragma once
 
 #include "../../../DiligentCore/Common/interface/BasicMath.hpp"
+#include "../../../DiligentCore/Common/interface/AdvancedMath.hpp"
 
 #include "pxr/base/gf/vec2f.h"
 #include "pxr/base/gf/vec3f.h"
@@ -34,6 +35,8 @@
 #include "pxr/base/gf/vec2d.h"
 #include "pxr/base/gf/vec3d.h"
 #include "pxr/base/gf/vec4d.h"
+#include "pxr/base/gf/range3f.h"
+#include "pxr/base/gf/range3d.h"
 #include "pxr/base/gf/matrix4f.h"
 #include "pxr/base/gf/matrix4d.h"
 
@@ -223,6 +226,22 @@ inline float4x4 ToFloat4x4(const pxr::GfMatrix4d& m)
 inline float4x4 ToFloat4x4(const pxr::GfMatrix4f& m)
 {
     return ToMatrix4x4<float>(m);
+}
+
+inline BoundBox ToBoundBox(const pxr::GfRange3d& r)
+{
+    return BoundBox{
+        ToFloat3(r.GetMin()),
+        ToFloat3(r.GetMax()),
+    };
+}
+
+inline BoundBox ToBoundBox(const pxr::GfRange3f& r)
+{
+    return BoundBox{
+        ToFloat3(r.GetMin()),
+        ToFloat3(r.GetMax()),
+    };
 }
 
 } // namespace USD

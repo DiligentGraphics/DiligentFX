@@ -65,7 +65,8 @@ HnLight* HnLight::Create(const pxr::SdfPath& Id, const pxr::TfToken& TypeId)
 
 HnLight::HnLight(const pxr::SdfPath& Id, const pxr::TfToken& TypeId) :
     pxr::HdLight{Id},
-    m_TypeId{TypeId}
+    m_TypeId{TypeId},
+    m_SceneBounds{BoundBox::Invalid()}
 {
 }
 
@@ -352,42 +353,50 @@ bool HnLight::ApproximateAreaLight(pxr::HdSceneDelegate& SceneDelegate, float Me
     return ParamsDirty;
 }
 
-void HnLight::ComputeShdadowMatrices(pxr::HdSceneDelegate& SceneDelegate)
+void HnLight::ComputeDirectLightProjMatrix(pxr::HdSceneDelegate& SceneDelegate)
 {
-    float3 LightSpaceX, LightSpaceY, LightSpaceZ;
-    BasisFromDirection(m_Direction, true, LightSpaceX, LightSpaceY, LightSpaceZ);
+    pxr::HdRenderIndex& RenderIndex = SceneDelegate.GetRenderIndex();
 
-    m_ViewMatrix = float4x4::ViewFromBasis(LightSpaceX, LightSpaceY, LightSpaceZ);
-
-    BoundBox LightSpaceBounds{float3{+FLT_MAX}, float3{-FLT_MAX}};
-
-    pxr::HdRenderIndex&       RenderIndex = SceneDelegate.GetRenderIndex();
-    const pxr::SdfPathVector& RPrimIds    = RenderIndex.GetRprimIds();
-    for (const pxr::SdfPath& RPrimId : RPrimIds)
+    BoundBox LightSpaceBounds{BoundBox::Invalid()};
+    if (!m_SceneBounds.IsValid())
     {
-        if (RPrimId.IsEmpty())
-            continue;
+        // First time compute accurate scene bounds in light space by projecting
+        // each primitive's bounding box into light space.
+        // Also, compute the scnene bounds in world space.
 
-        const pxr::GfRange3d PrimExtent = SceneDelegate.GetExtent(RPrimId);
-        if (PrimExtent.IsEmpty())
-            continue;
+        const pxr::SdfPathVector& RPrimIds = RenderIndex.GetRprimIds();
+        for (const pxr::SdfPath& RPrimId : RPrimIds)
+        {
+            if (RPrimId.IsEmpty())
+                continue;
 
-        const float3   ExtentMin     = ToFloat3(PrimExtent.GetMin());
-        const float3   ExtentMax     = ToFloat3(PrimExtent.GetMax());
-        const float4x4 PrimTransform = ToMatrix4x4<float>(SceneDelegate.GetTransform(RPrimId));
+            const pxr::GfRange3d PrimExtent = SceneDelegate.GetExtent(RPrimId);
+            if (PrimExtent.IsEmpty())
+                continue;
+
+            const BoundBox PrimBB        = ToBoundBox(PrimExtent);
+            const float4x4 PrimTransform = ToMatrix4x4<float>(SceneDelegate.GetTransform(RPrimId));
+            for (Uint32 i = 0; i < 8; ++i)
+            {
+                float4 Corner = {PrimBB.GetCorner(i), 1.0};
+
+                Corner        = Corner * PrimTransform;
+                m_SceneBounds = m_SceneBounds.Enclose(Corner);
+
+                Corner           = Corner * m_ViewMatrix;
+                LightSpaceBounds = LightSpaceBounds.Enclose(Corner);
+            }
+        }
+    }
+    else
+    {
+        // Use precomputed scene bounds in world space. This is less accurate, but
+        // much faster.
         for (Uint32 i = 0; i < 8; ++i)
         {
-            float4 Corner{
-                (i & 0x01) ? ExtentMax.x : ExtentMin.x,
-                (i & 0x02) ? ExtentMax.y : ExtentMin.y,
-                (i & 0x04) ? ExtentMax.z : ExtentMin.z,
-                1.0,
-            };
-            Corner = Corner * PrimTransform;
-            Corner = Corner * m_ViewMatrix;
-
-            LightSpaceBounds.Min = std::min(LightSpaceBounds.Min, float3{Corner});
-            LightSpaceBounds.Max = std::max(LightSpaceBounds.Max, float3{Corner});
+            float4 Corner    = {m_SceneBounds.GetCorner(i), 1.0};
+            Corner           = Corner * m_ViewMatrix;
+            LightSpaceBounds = LightSpaceBounds.Enclose(Corner);
         }
     }
 
@@ -398,8 +407,6 @@ void HnLight::ComputeShdadowMatrices(pxr::HdSceneDelegate& SceneDelegate)
                                             LightSpaceBounds.Min.y, LightSpaceBounds.Max.y,
                                             LightSpaceBounds.Min.z, LightSpaceBounds.Max.z,
                                             DeviceInfo.NDC.MinZ == -1);
-
-    m_ViewProjMatrix = m_ViewMatrix * m_ProjMatrix;
 }
 
 void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
@@ -441,7 +448,12 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
         if (Direction != m_Direction)
         {
             m_Direction = Direction;
-            LightDirty  = true;
+
+            float3 LightSpaceX, LightSpaceY, LightSpaceZ;
+            BasisFromDirection(m_Direction, true, LightSpaceX, LightSpaceY, LightSpaceZ);
+            m_ViewMatrix = float4x4::ViewFromBasis(LightSpaceX, LightSpaceY, LightSpaceZ);
+
+            LightDirty = true;
         }
 
         ShadowTransformDirty = true;
@@ -566,7 +578,16 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
 
         if (m_ShadowMapShaderInfo && ShadowTransformDirty)
         {
-            ComputeShdadowMatrices(*SceneDelegate);
+            if (m_TypeId == pxr::HdPrimTypeTokens->distantLight)
+            {
+                ComputeDirectLightProjMatrix(*SceneDelegate);
+            }
+            else
+            {
+                UNEXPECTED("Only distant light is supported for shadow map");
+            }
+            m_ViewProjMatrix = m_ViewMatrix * m_ProjMatrix;
+
             m_ShadowMapShaderInfo->WorldToLightProjSpace = m_ViewProjMatrix.Transpose();
 
             LightDirty         = true;

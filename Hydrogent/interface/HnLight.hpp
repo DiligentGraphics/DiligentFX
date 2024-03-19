@@ -29,6 +29,7 @@
 #include "pxr/imaging/hd/light.h"
 
 #include "../../../DiligentCore/Common/interface/BasicMath.hpp"
+#include "../../../DiligentCore/Common/interface/AdvancedMath.hpp"
 #include "../../../DiligentTools/AssetLoader/interface/GLTFLoader.hpp"
 
 namespace Diligent
@@ -88,7 +89,7 @@ private:
     HnLight(const pxr::SdfPath& Id, const pxr::TfToken& TypeId);
 
     bool ApproximateAreaLight(pxr::HdSceneDelegate& SceneDelegate, float MetersPerUnit);
-    void ComputeShdadowMatrices(pxr::HdSceneDelegate& SceneDelegate);
+    void ComputeDirectLightProjMatrix(pxr::HdSceneDelegate& SceneDelegate);
 
 private:
     const pxr::TfToken m_TypeId;
@@ -102,6 +103,7 @@ private:
     float4x4 m_ViewMatrix;
     float4x4 m_ProjMatrix;
     float4x4 m_ViewProjMatrix;
+    BoundBox m_SceneBounds;
 
     Int32                                     m_FrameAttribsIndex   = 0;
     Uint32                                    m_ShadowMapResolution = 1024;
