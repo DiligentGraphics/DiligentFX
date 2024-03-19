@@ -122,7 +122,10 @@ private:
     RefCntAutoPtr<IBuffer>        m_ClearDepthVB;
     float                         m_ClearDepthValue = 0.f;
 
-    std::multimap<Uint32, const HnLight*> m_LightsByShadowSlice;
+    // Combined geometry version (transform, visibility, etc.) last time we rendered shadows
+    Uint32 m_LastGeometryVersion = ~0u;
+
+    std::multimap<Uint32, HnLight*> m_LightsByShadowSlice;
 };
 
 } // namespace USD

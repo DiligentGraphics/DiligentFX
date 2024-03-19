@@ -417,8 +417,9 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
         bool IsVisible = SceneDelegate->GetVisible(Id);
         if (IsVisible != m_IsVisible)
         {
-            m_IsVisible = IsVisible;
-            LightDirty  = true;
+            m_IsVisible        = IsVisible;
+            LightDirty         = true;
+            m_IsShadowMapDirty = true;
         }
     }
 
@@ -467,8 +468,9 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
 
         if (LightType != m_Params.Type)
         {
-            m_Params.Type = LightType;
-            LightDirty    = true;
+            m_Params.Type        = LightType;
+            LightDirty           = true;
+            ShadowTransformDirty = true;
         }
 
         if (m_TypeId == pxr::HdPrimTypeTokens->cylinderLight ||
@@ -497,12 +499,12 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
 
     pxr::HdRenderIndex& RenderIndex    = SceneDelegate->GetRenderIndex();
     HnRenderDelegate*   RenderDelegate = static_cast<HnRenderDelegate*>(RenderIndex.GetRenderDelegate());
-    HnShadowMapManager* ShadowMapMg    = RenderDelegate->GetShadowMapManager();
+    HnShadowMapManager* ShadowMapMgr   = RenderDelegate->GetShadowMapManager();
     if (*DirtyBits & DirtyShadowParams)
     {
-        if (ShadowMapMg != nullptr)
+        if (ShadowMapMgr != nullptr)
         {
-            const TextureDesc& ShadowMapDesc = ShadowMapMg->GetAtlasDesc();
+            const TextureDesc& ShadowMapDesc = ShadowMapMgr->GetAtlasDesc();
 
             const pxr::VtValue ShadowResolutionVal = SceneDelegate->GetLightParamValue(Id, HnLightPrivateTokens->shadowResolution);
             if (ShadowResolutionVal.IsHolding<int>())
@@ -530,7 +532,7 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
         *DirtyBits &= ~DirtyShadowParams;
     }
 
-    if (ShadowMapMg != nullptr)
+    if (ShadowMapMgr != nullptr)
     {
         const bool ShadowsEnabled =
             SceneDelegate->GetLightParamValue(Id, pxr::HdLightTokens->shadowEnable).GetWithDefault<bool>(false) &&
@@ -544,7 +546,7 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
 
         if (ShadowsEnabled && !m_ShadowMapSuballocation)
         {
-            m_ShadowMapSuballocation = ShadowMapMg->Allocate(m_ShadowMapResolution, m_ShadowMapResolution);
+            m_ShadowMapSuballocation = ShadowMapMgr->Allocate(m_ShadowMapResolution, m_ShadowMapResolution);
             if (!m_ShadowMapSuballocation)
             {
                 LOG_ERROR_MESSAGE("Failed to allocate shadow map for light ", Id);
@@ -567,7 +569,8 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
             ComputeShdadowMatrices(*SceneDelegate);
             m_ShadowMapShaderInfo->WorldToLightProjSpace = m_ViewProjMatrix.Transpose();
 
-            LightDirty = true;
+            LightDirty         = true;
+            m_IsShadowMapDirty = true;
         }
     }
 

@@ -29,6 +29,7 @@
 #include "HnRenderPassState.hpp"
 #include "HnTokens.hpp"
 #include "HnRenderPass.hpp"
+#include "HnRenderParam.hpp"
 #include "HnLight.hpp"
 #include "HnShadowMapManager.hpp"
 #include "CommonlyUsedStates.h"
@@ -229,6 +230,54 @@ void HnRenderShadowsTask::Prepare(pxr::HdTaskContext* TaskCtx,
 
     PrepareClearDepthPSO(*RenderDelegate);
     PrepareClearDepthVB(*RenderDelegate);
+
+    bool GeometryChanged = false;
+    if (const HnRenderParam* pRenderParam = static_cast<const HnRenderParam*>(RenderDelegate->GetRenderParam()))
+    {
+        const Uint32 GeometryVersion =
+            (pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::GeometrySubsetDrawItems) +
+             pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::MeshGeometry) +
+             pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::MeshTransform) +
+             pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::MeshVisibility) +
+             pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::MeshMaterial));
+        static_assert(static_cast<int>(HnRenderParam::GlobalAttrib::Count) == 7, "Please update the code above to handle the new attribute, if necessary.");
+
+        GeometryChanged       = m_LastGeometryVersion != GeometryVersion;
+        m_LastGeometryVersion = GeometryVersion;
+    }
+    else
+    {
+        UNEXPECTED("Render param is null");
+    }
+
+    const auto& Lights = RenderDelegate->GetLights();
+
+    // Sort all shadow lights with dirty shadow maps by shadow map slice
+    m_LightsByShadowSlice.clear();
+    for (HnLight* Light : Lights)
+    {
+        if (!Light->ShadowsEnabled())
+            continue;
+
+        if (GeometryChanged)
+        {
+            // Make shadow map dirty even if the light is disabled so that
+            // when it is enabled, the shadow map will be updated.
+            Light->SetShadowMapDirty(true);
+        }
+
+        if (!Light->IsShadowMapDirty())
+            continue;
+
+        Int32 ShadowCatingLightId = Light->GetFrameAttribsIndex();
+        if (ShadowCatingLightId < 0)
+            continue;
+
+        VERIFY(Light->IsVisible(), "Invisible lights should not be assigned shadow casting light index");
+
+        ITextureAtlasSuballocation* pAtlasRegion = Light->GetShadowMapSuballocation();
+        m_LightsByShadowSlice.emplace(pAtlasRegion->GetSlice(), Light);
+    }
 }
 
 void HnRenderShadowsTask::Execute(pxr::HdTaskContext* TaskCtx)
@@ -253,29 +302,12 @@ void HnRenderShadowsTask::Execute(pxr::HdTaskContext* TaskCtx)
     IDeviceContext*         pCtx       = RenderDelegate->GetDeviceContext();
     const RenderDeviceInfo& DeviceInfo = pDevice->GetDeviceInfo();
 
-    const auto& Lights = RenderDelegate->GetLights();
-
-    // Sort all shadow lights with dirty shadow maps by shadow map slice
-    m_LightsByShadowSlice.clear();
-    for (const HnLight* Light : Lights)
-    {
-        if (!Light->ShadowsEnabled())
-            continue;
-
-        Int32 ShadowCatingLightId = Light->GetFrameAttribsIndex();
-        if (ShadowCatingLightId < 0)
-            continue;
-
-        ITextureAtlasSuballocation* pAtlasRegion = Light->GetShadowMapSuballocation();
-        m_LightsByShadowSlice.emplace(pAtlasRegion->GetSlice(), Light);
-    }
-
     int LastSlice = -1;
     for (const auto it : m_LightsByShadowSlice)
     {
-        const Uint32   Slice = it.first;
-        const HnLight* Light = it.second;
-        VERIFY_EXPR(Light->ShadowsEnabled());
+        Uint32   Slice = it.first;
+        HnLight* Light = it.second;
+        VERIFY_EXPR(Light->ShadowsEnabled() && Light->IsShadowMapDirty());
 
         Int32 ShadowCatingLightId = Light->GetFrameAttribsIndex();
         VERIFY_EXPR(ShadowCatingLightId >= 0);
@@ -314,6 +346,7 @@ void HnRenderShadowsTask::Execute(pxr::HdTaskContext* TaskCtx)
         }
 
         m_RenderPass->Execute(m_RPState, GetRenderTags());
+        Light->SetShadowMapDirty(false);
     }
 
     StateTransitionDesc Barrier{ShadowMapMgr->GetShadowTexture(), RESOURCE_STATE_UNKNOWN,

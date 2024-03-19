@@ -81,6 +81,9 @@ public:
     ITextureAtlasSuballocation*   GetShadowMapSuballocation() const { return m_ShadowMapSuballocation; }
     const HLSL::PBRShadowMapInfo* GetShadowMapShaderInfo() const { return m_ShadowMapShaderInfo.get(); }
 
+    bool IsShadowMapDirty() const { return m_IsShadowMapDirty; }
+    void SetShadowMapDirty(bool IsDirty) { m_IsShadowMapDirty = IsDirty; }
+
 private:
     HnLight(const pxr::SdfPath& Id, const pxr::TfToken& TypeId);
 
@@ -93,7 +96,8 @@ private:
     float3      m_Position;
     float3      m_Direction;
     GLTF::Light m_Params;
-    bool        m_IsVisible = true;
+    bool        m_IsVisible        = true;
+    bool        m_IsShadowMapDirty = true;
 
     float4x4 m_ViewMatrix;
     float4x4 m_ProjMatrix;
