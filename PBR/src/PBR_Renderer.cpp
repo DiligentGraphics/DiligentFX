@@ -952,6 +952,17 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
     Macros.Add("USE_HDR_IBL_CUBEMAPS", true);
     Macros.Add("USE_SEPARATE_METALLIC_ROUGHNESS_TEXTURES", m_Settings.UseSeparateMetallicRoughnessTextures);
 
+    if (m_Settings.EnableShadows)
+    {
+        int KernelSize = static_cast<int>(m_Settings.PCFKernelSize);
+        if (KernelSize != 2 && KernelSize != 3 && KernelSize != 5 && KernelSize != 7)
+        {
+            LOG_WARNING_MESSAGE(KernelSize, " is not a valid PCF kernel size. Allowed values are 2, 3, 5, and 7. Using 3x3 kernel.");
+            KernelSize = 3;
+        }
+        Macros.Add("PCF_FILTER_SIZE", KernelSize);
+    }
+
     static_assert(static_cast<int>(DebugViewType::NumDebugViews) == 34, "Did you add debug view? You may need to handle it here.");
     // clang-format off
     Macros.Add("DEBUG_VIEW",                       static_cast<int>(Key.GetDebugView()));

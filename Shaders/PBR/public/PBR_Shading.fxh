@@ -83,6 +83,13 @@
 #   define ENABLE_SHADOWS 0
 #endif
 
+#if ENABLE_SHADOWS
+#   ifndef PCF_FILTER_SIZE
+#       define PCF_FILTER_SIZE 3
+#   endif
+#   include "PCF.fxh"
+#endif
+
 float GetPerceivedBrightness(float3 rgb)
 {
     return sqrt(0.299 * rgb.r * rgb.r + 0.587 * rgb.g * rgb.g + 0.114 * rgb.b * rgb.b);
@@ -605,7 +612,7 @@ void ApplyPunctualLight(in    SurfaceShadingInfo     Shading,
                         in    SamplerState           AlbedoScalingLUT_sampler,
 #endif 
 #if ENABLE_SHADOWS
-                        in    Texture2DArray         ShadowMap,
+                        in    Texture2DArray<float>  ShadowMap,
                         in    SamplerComparisonState ShadowMap_sampler,
                         in    PBRShadowMapInfo       ShadowMapInfo,
 #endif
@@ -648,7 +655,13 @@ void ApplyPunctualLight(in    SurfaceShadingInfo     Shading,
         ShadowPos.xy /= ShadowPos.w;
         ShadowPos.xy = NormalizedDeviceXYToTexUV(ShadowPos.xy) * ShadowMapInfo.UVScale + ShadowMapInfo.UVBias;
         ShadowPos.z  = NormalizedDeviceZToDepth(ShadowPos.z);
-        float Shadowing = ShadowMap.SampleCmp(ShadowMap_sampler, float3(ShadowPos.xy, ShadowMapInfo.ShadowMapSlice), ShadowPos.z);
+        float4 ShadowMapSize;
+        float Elems;
+        ShadowMap.GetDimensions(ShadowMapSize.x, ShadowMapSize.y, Elems);
+        ShadowMapSize.zw = float2(1.0, 1.0) / ShadowMapSize.xy;
+        float Shadowing = FilterShadowMapFixedPCF(ShadowMap, ShadowMap_sampler, ShadowMapSize,
+                                                  ShadowPos.xy, ShadowMapInfo.ShadowMapSlice, ShadowPos.z,
+                                                  float2(0.0, 0.0));
         Attenuation *= Shadowing;
     }
 #endif

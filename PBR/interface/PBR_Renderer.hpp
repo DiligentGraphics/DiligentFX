@@ -160,6 +160,10 @@ public:
         /// A pipeline state can use shadows only if this flag is set to true.
         bool EnableShadows = false;
 
+        /// PCF shadow kernel size.
+        /// Allowed values are 2, 3, 5, 7.
+        Uint32 PCFKernelSize = 3;
+
         /// Shader textures array access mode, see SHADER_TEXTURE_ARRAY_MODE.
         SHADER_TEXTURE_ARRAY_MODE ShaderTexturesArrayMode = SHADER_TEXTURE_ARRAY_MODE_NONE;
 
