@@ -61,6 +61,9 @@ public:
     const pxr::SdfPath& GetSelectedPrimId() const { return m_SelectedPrimId; }
     void                SetSelectedPrimId(const pxr::SdfPath& PrimId) { m_SelectedPrimId = PrimId; }
 
+    void SetUseShadows(bool UseShadows) { m_UseShadows = UseShadows; }
+    bool GetUseShadows() const { return m_UseShadows; }
+
     enum class GlobalAttrib
     {
         // Indicates changes to geometry subset draw items.
@@ -122,6 +125,8 @@ private:
     std::array<std::atomic<uint32_t>, static_cast<size_t>(GlobalAttrib::Count)> m_GlobalAttribVersions{};
 
     PBR_Renderer::DebugViewType m_DebugView = PBR_Renderer::DebugViewType::None;
+
+    bool m_UseShadows = false;
 
     double   m_FrameTime   = 0.0;
     float    m_ElapsedTime = 0.0;

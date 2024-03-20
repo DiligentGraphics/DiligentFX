@@ -195,9 +195,10 @@ private:
 
     struct SuperSamplingFactors
     {
-        Uint32 Version = ~0u;
-        bool   UseSSR  = false;
-        bool   UseSSAO = false;
+        Uint32 Version    = ~0u;
+        bool   UseSSR     = false;
+        bool   UseSSAO    = false;
+        bool   UseShadows = false;
 
         PBR_Renderer::DebugViewType DebugView  = PBR_Renderer::DebugViewType::NumDebugViews;
         HN_RENDER_MODE              RenderMode = HN_RENDER_MODE_COUNT;
@@ -208,6 +209,7 @@ private:
             return (Version    == rhs.Version &&
                     UseSSR     == rhs.UseSSR &&
                     UseSSAO    == rhs.UseSSAO &&
+                    UseShadows == rhs.UseShadows &&
                     DebugView  == rhs.DebugView &&
                     RenderMode == rhs.RenderMode);
             // clang-format on

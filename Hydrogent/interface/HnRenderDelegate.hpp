@@ -327,6 +327,7 @@ public:
     void SetDebugView(PBR_Renderer::DebugViewType DebugView);
     void SetRenderMode(HN_RENDER_MODE RenderMode);
     void SetSelectedRPrimId(const pxr::SdfPath& RPrimID);
+    void SetUseShadows(bool UseShadows);
 
     IObject* GetMaterialSRBCache() const { return m_MaterialSRBCache; }
 

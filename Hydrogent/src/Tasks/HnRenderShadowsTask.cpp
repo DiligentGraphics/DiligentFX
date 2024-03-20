@@ -224,36 +224,36 @@ void HnRenderShadowsTask::Prepare(pxr::HdTaskContext* TaskCtx,
 {
     m_RenderIndex = RenderIndex;
 
-    (*TaskCtx)[HnRenderResourceTokens->renderPass_Shadow] = pxr::VtValue{&m_RPState};
+    m_LightsByShadowSlice.clear();
 
     const HnRenderDelegate* RenderDelegate = static_cast<const HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+    const HnRenderParam*    pRenderParam   = static_cast<const HnRenderParam*>(RenderDelegate->GetRenderParam());
+    if (pRenderParam == nullptr)
+    {
+        UNEXPECTED("Render param is null");
+        return;
+    }
+
+    if (!pRenderParam->GetUseShadows())
+        return;
 
     PrepareClearDepthPSO(*RenderDelegate);
     PrepareClearDepthVB(*RenderDelegate);
 
-    bool GeometryChanged = false;
-    if (const HnRenderParam* pRenderParam = static_cast<const HnRenderParam*>(RenderDelegate->GetRenderParam()))
-    {
-        const Uint32 GeometryVersion =
-            (pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::GeometrySubsetDrawItems) +
-             pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::MeshGeometry) +
-             pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::MeshTransform) +
-             pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::MeshVisibility) +
-             pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::MeshMaterial));
-        static_assert(static_cast<int>(HnRenderParam::GlobalAttrib::Count) == 7, "Please update the code above to handle the new attribute, if necessary.");
+    const Uint32 GeometryVersion =
+        (pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::GeometrySubsetDrawItems) +
+         pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::MeshGeometry) +
+         pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::MeshTransform) +
+         pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::MeshVisibility) +
+         pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::MeshMaterial));
+    static_assert(static_cast<int>(HnRenderParam::GlobalAttrib::Count) == 7, "Please update the code above to handle the new attribute, if necessary.");
 
-        GeometryChanged       = m_LastGeometryVersion != GeometryVersion;
-        m_LastGeometryVersion = GeometryVersion;
-    }
-    else
-    {
-        UNEXPECTED("Render param is null");
-    }
+    bool GeometryChanged  = m_LastGeometryVersion != GeometryVersion;
+    m_LastGeometryVersion = GeometryVersion;
 
     const auto& Lights = RenderDelegate->GetLights();
 
     // Sort all shadow lights with dirty shadow maps by shadow map slice
-    m_LightsByShadowSlice.clear();
     for (HnLight* Light : Lights)
     {
         if (!Light->ShadowsEnabled())
@@ -287,6 +287,9 @@ void HnRenderShadowsTask::Execute(pxr::HdTaskContext* TaskCtx)
         UNEXPECTED("Render index is null. This likely indicates that Prepare() has not been called.");
         return;
     }
+
+    if (m_LightsByShadowSlice.empty())
+        return;
 
     const HnRenderDelegate*   RenderDelegate = static_cast<const HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
     const HnShadowMapManager* ShadowMapMgr   = RenderDelegate->GetShadowMapManager();

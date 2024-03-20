@@ -285,6 +285,8 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
         "PBR frame attribs CB",
         &m_FrameAttribsCB,
         USAGE_DEFAULT);
+
+    m_RenderParam->SetUseShadows(CI.EnableShadows);
 }
 
 HnRenderDelegate::~HnRenderDelegate()
@@ -628,6 +630,16 @@ void HnRenderDelegate::SetRenderMode(HN_RENDER_MODE RenderMode)
 void HnRenderDelegate::SetSelectedRPrimId(const pxr::SdfPath& RPrimID)
 {
     m_RenderParam->SetSelectedPrimId(RPrimID);
+}
+
+void HnRenderDelegate::SetUseShadows(bool UseShadows)
+{
+    if (UseShadows && !m_USDRenderer->GetSettings().EnableShadows)
+    {
+        LOG_WARNING_MESSAGE("Shadows are not enabled in the renderer settings. Shadows will not be used");
+        return;
+    }
+    m_RenderParam->SetUseShadows(UseShadows);
 }
 
 Uint32 HnRenderDelegate::GetShadowPassFrameAttribsOffset(Uint32 LightId) const

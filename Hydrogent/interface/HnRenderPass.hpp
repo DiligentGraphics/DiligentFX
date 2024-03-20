@@ -180,6 +180,7 @@ private:
 
     HN_RENDER_MODE              m_RenderMode = HN_RENDER_MODE_SOLID;
     PBR_Renderer::DebugViewType m_DebugView  = PBR_Renderer::DebugViewType::None;
+    bool                        m_UseShadows = false;
 
     // All draw items in the collection returned by pRenderIndex->GetDrawItems().
     pxr::HdRenderIndex::HdDrawItemPtrVector m_DrawItems;

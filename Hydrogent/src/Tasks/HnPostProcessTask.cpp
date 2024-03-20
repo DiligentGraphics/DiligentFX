@@ -588,6 +588,7 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
              pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::Light)),
             m_UseSSR,
             m_UseSSAO,
+            pRenderParam->GetUseShadows(),
             pRenderParam->GetDebugView(),
             pRenderParam->GetRenderMode(),
         };
