@@ -129,6 +129,10 @@ public:
         bool UseIndexPool  = false;
         bool EnableShadows = false;
 
+        /// When shadows are enabled, the size of the PCF kernel.
+        /// Allowed values are 2, 3, 5, 7.
+        Uint32 PCFKernelSize = 3;
+
         HN_MATERIAL_TEXTURES_BINDING_MODE TextureBindingMode = HN_MATERIAL_TEXTURES_BINDING_MODE_LEGACY;
 
         /// When TextureBindingMode is HN_MATERIAL_TEXTURES_BINDING_MODE_ATLAS,

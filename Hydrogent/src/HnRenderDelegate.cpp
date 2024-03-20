@@ -118,6 +118,7 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
 
     USDRendererCI.MaxLightCount              = RenderDelegateCI.MaxLightCount;
     USDRendererCI.EnableShadows              = RenderDelegateCI.EnableShadows;
+    USDRendererCI.PCFKernelSize              = RenderDelegateCI.PCFKernelSize;
     USDRendererCI.MaxShadowCastingLightCount = RenderDelegateCI.MaxShadowCastingLightCount;
 
     USDRendererCI.ColorTargetIndex        = HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR;
