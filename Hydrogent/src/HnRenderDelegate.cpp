@@ -116,6 +116,8 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
     // Enable clear coat support
     USDRendererCI.EnableClearCoat = true;
 
+    USDRendererCI.AllowHotShaderReload = RenderDelegateCI.AllowHotShaderReload;
+
     USDRendererCI.MaxLightCount              = RenderDelegateCI.MaxLightCount;
     USDRendererCI.EnableShadows              = RenderDelegateCI.EnableShadows;
     USDRendererCI.PCFKernelSize              = RenderDelegateCI.PCFKernelSize;

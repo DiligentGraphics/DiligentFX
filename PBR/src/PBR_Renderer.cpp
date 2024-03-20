@@ -1315,13 +1315,17 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
         PSMainSource.Footer       = DefaultPSMainFooter;
     }
 
+    // Keep copies of generated strings in the factory when hot shader reload is allowed.
+    const bool CopyGeneratedStrings = m_Settings.AllowHotShaderReload;
+
     RefCntAutoPtr<IShaderSourceInputStreamFactory> pMemorySourceFactory =
         CreateMemoryShaderSourceFactory({
-            MemoryShaderSourceFileInfo{"VSInputStruct.generated", VSInputStruct},
-            MemoryShaderSourceFileInfo{"VSOutputStruct.generated", VSOutputStruct},
-            MemoryShaderSourceFileInfo{"PSOutputStruct.generated", PSMainSource.OutputStruct},
-            MemoryShaderSourceFileInfo{"PSMainFooter.generated", PSMainSource.Footer},
-        });
+                                            MemoryShaderSourceFileInfo{"VSInputStruct.generated", VSInputStruct},
+                                            MemoryShaderSourceFileInfo{"VSOutputStruct.generated", VSOutputStruct},
+                                            MemoryShaderSourceFileInfo{"PSOutputStruct.generated", PSMainSource.OutputStruct},
+                                            MemoryShaderSourceFileInfo{"PSMainFooter.generated", PSMainSource.Footer},
+                                        },
+                                        CopyGeneratedStrings);
     RefCntAutoPtr<IShaderSourceInputStreamFactory> pShaderSourceFactory =
         CreateCompoundShaderSourceFactory({&DiligentFXShaderSourceStreamFactory::GetInstance(), pMemorySourceFactory});
 

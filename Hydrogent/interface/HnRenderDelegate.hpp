@@ -129,6 +129,13 @@ public:
         bool UseIndexPool  = false;
         bool EnableShadows = false;
 
+        /// Whether to allow hot shader reload.
+        ///
+        /// \remarks    When hot shader reload is enabled, the renderer will need
+        ///             to keep copies of generated shaders in the shader source factory.
+        ///             This adds some overhead and should only be used in development mode.
+        bool AllowHotShaderReload = false;
+
         /// When shadows are enabled, the size of the PCF kernel.
         /// Allowed values are 2, 3, 5, 7.
         Uint32 PCFKernelSize = 3;
