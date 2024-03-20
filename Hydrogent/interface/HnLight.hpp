@@ -69,7 +69,7 @@ public:
     const float4x4&    GetViewMatrix() const { return m_ViewMatrix; }
     const float4x4&    GetProjMatrix() const { return m_ProjMatrix; }
     const float4x4&    GetViewProjMatrix() const { return m_ViewProjMatrix; }
-    bool               ShadowsEnabled() const { return m_ShadowMapSuballocation != nullptr; }
+    bool               ShadowsEnabled() const { return m_ShadowMapSuballocation != nullptr && m_SceneBounds.IsValid(); }
 
     /// Sets the index of the light's frame attributes data in the frame attribs buffer.
     /// This index is passed to the HnRenderDelegate::GetShadowPassFrameAttribsSRB
