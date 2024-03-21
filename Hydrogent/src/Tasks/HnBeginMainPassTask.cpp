@@ -27,6 +27,7 @@
 #include "Tasks/HnBeginMainPassTask.hpp"
 #include "HnRenderDelegate.hpp"
 #include "HnRenderPassState.hpp"
+#include "HnShadowMapManager.hpp"
 #include "HnTokens.hpp"
 
 namespace Diligent
@@ -76,6 +77,17 @@ void HnBeginMainPassTask::Execute(pxr::HdTaskContext* TaskCtx)
 
     HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
     IDeviceContext*   pCtx           = RenderDelegate->GetDeviceContext();
+
+    // Note that HnRenderShadowsTask may be disabled, so we need to transition the shadow map state here
+    if (const HnShadowMapManager* ShadowMapMgr = RenderDelegate->GetShadowMapManager())
+    {
+        const RenderDeviceInfo& DeviceInfo = RenderDelegate->GetDevice()->GetDeviceInfo();
+
+        StateTransitionDesc Barrier{ShadowMapMgr->GetShadowTexture(), RESOURCE_STATE_UNKNOWN,
+                                    DeviceInfo.IsD3DDevice() ? RESOURCE_STATE_SHADER_RESOURCE : RESOURCE_STATE_DEPTH_READ,
+                                    STATE_TRANSITION_FLAG_UPDATE_STATE};
+        pCtx->TransitionResourceStates(1, &Barrier);
+    }
 
     HnRenderPassState* RP_OpaqueSelected                  = GetRenderPassState(TaskCtx, HnRenderResourceTokens->renderPass_OpaqueSelected);
     HnRenderPassState* RP_OpaqueUnselected_TransparentAll = GetRenderPassState(TaskCtx, HnRenderResourceTokens->renderPass_OpaqueUnselected_TransparentAll);

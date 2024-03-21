@@ -351,11 +351,6 @@ void HnRenderShadowsTask::Execute(pxr::HdTaskContext* TaskCtx)
         m_RenderPass->Execute(m_RPState, GetRenderTags());
         Light->SetShadowMapDirty(false);
     }
-
-    StateTransitionDesc Barrier{ShadowMapMgr->GetShadowTexture(), RESOURCE_STATE_UNKNOWN,
-                                DeviceInfo.IsD3DDevice() ? RESOURCE_STATE_SHADER_RESOURCE : RESOURCE_STATE_DEPTH_READ,
-                                STATE_TRANSITION_FLAG_UPDATE_STATE};
-    pCtx->TransitionResourceStates(1, &Barrier);
 }
 
 } // namespace USD
