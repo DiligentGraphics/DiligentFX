@@ -38,8 +38,9 @@
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
 #include "../../../DiligentCore/Graphics/GraphicsTools/interface/RenderStateCache.h"
 #include "../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
-#include "../../../DiligentCore/Common/interface/FixedBlockMemoryAllocator.hpp"
 #include "../../PBR/interface/USD_Renderer.hpp"
+
+#include "entt/entity/registry.hpp"
 
 #include "HnTextureRegistry.hpp"
 #include "HnTypes.hpp"
@@ -309,11 +310,11 @@ public:
     HnTextureRegistry&  GetTextureRegistry() { return m_TextureRegistry; }
     HnShadowMapManager* GetShadowMapManager() const { return m_ShadowMapManager.get(); }
 
-    FixedBlockMemoryAllocator& GetMeshAttribsAllocator() { return m_MeshAttribsAllocator; }
-
     const pxr::SdfPath* GetRPrimId(Uint32 UID) const;
 
     std::shared_ptr<USD_Renderer> GetUSDRenderer() const { return m_USDRenderer; }
+
+    entt::registry& GetEcsRegistry() { return m_EcsRegistry; }
 
     GLTF::ResourceManager& GetResourceManager() const { return *m_ResourceMgr; }
 
@@ -352,6 +353,8 @@ private:
     RefCntAutoPtr<IObject>               m_MaterialSRBCache;
     std::shared_ptr<USD_Renderer>        m_USDRenderer;
 
+    entt::registry m_EcsRegistry;
+
     // Frame attributes for the main pass and all shadow passes.
     //
     // ||                   Main Pass                  ||        Shadow Pass 1       ||  ...  ||       Shadow Pass N        ||
@@ -374,8 +377,6 @@ private:
     HnTextureRegistry                   m_TextureRegistry;
     std::unique_ptr<HnRenderParam>      m_RenderParam;
     std::unique_ptr<HnShadowMapManager> m_ShadowMapManager;
-
-    FixedBlockMemoryAllocator m_MeshAttribsAllocator;
 
     std::atomic<Uint32>                      m_RPrimNextUID{1};
     mutable std::mutex                       m_RPrimUIDToSdfPathMtx;

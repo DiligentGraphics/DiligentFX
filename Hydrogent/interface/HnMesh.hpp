@@ -42,6 +42,8 @@
 #include "../../../DiligentCore/Common/interface/BasicMath.hpp"
 #include "../../../DiligentCore/Common/interface/STDAllocator.hpp"
 
+#include "entt/entity/entity.hpp"
+
 namespace Diligent
 {
 
@@ -60,7 +62,8 @@ public:
     static HnMesh* Create(const pxr::TfToken& typeId,
                           const pxr::SdfPath& id,
                           HnRenderDelegate&   RenderDelegate,
-                          Uint32              UID);
+                          Uint32              UID,
+                          entt::entity        Entity);
 
     ~HnMesh();
 
@@ -122,12 +125,18 @@ public:
     ///             for the points drawing commands.
     Uint32 GetPointsStartIndex() const { return m_IndexData.PointsStartIndex; }
 
-    struct Attributes
+    struct Components
     {
-        float4x4 Transform    = float4x4::Identity();
-        float4   DisplayColor = {1, 1, 1, 1};
+        struct Transform
+        {
+            float4x4 Val = float4x4::Identity();
+        };
+
+        struct DisplayColor
+        {
+            float4 Val = {1, 1, 1, 1};
+        };
     };
-    const Attributes& GetAttributes() const { return *m_Attribs; }
 
     bool GetIsDoubleSided() const { return m_IsDoubleSided; }
 
@@ -135,6 +144,8 @@ public:
 
     Uint32 GetGeometryVersion() const { return m_GeometryVersion; }
     Uint32 GetMaterialVersion() const { return m_MaterialVersion; }
+
+    entt::entity GetEntity() const { return m_Entity; }
 
 protected:
     // This callback from Rprim gives the prim an opportunity to set
@@ -158,7 +169,8 @@ private:
     HnMesh(const pxr::TfToken& typeId,
            const pxr::SdfPath& id,
            HnRenderDelegate&   RenderDelegate,
-           Uint32              UID);
+           Uint32              UID,
+           entt::entity        Entity);
 
     void UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
                     pxr::HdRenderParam*   RenderParam,
@@ -207,7 +219,8 @@ private:
     void Invalidate();
 
 private:
-    const Uint32 m_UID;
+    const Uint32       m_UID;
+    const entt::entity m_Entity;
 
     pxr::HdMeshTopology m_Topology;
 
@@ -225,8 +238,6 @@ private:
         std::map<pxr::TfToken, std::shared_ptr<pxr::HdBufferSource>> Sources;
     };
     std::unique_ptr<StagingVertexData> m_StagingVertexData;
-
-    std::unique_ptr<Attributes, STDDeleter<Attributes, IMemoryAllocator>> m_Attribs;
 
     struct IndexData
     {

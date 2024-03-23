@@ -54,25 +54,24 @@ namespace USD
 HnMesh* HnMesh::Create(pxr::TfToken const& typeId,
                        pxr::SdfPath const& id,
                        HnRenderDelegate&   RenderDelegate,
-                       Uint32              UID)
+                       Uint32              UID,
+                       entt::entity        Entity)
 {
-    return new HnMesh{typeId, id, RenderDelegate, UID};
+    return new HnMesh{typeId, id, RenderDelegate, UID, Entity};
 }
 
 HnMesh::HnMesh(pxr::TfToken const& typeId,
                pxr::SdfPath const& id,
                HnRenderDelegate&   RenderDelegate,
-               Uint32              UID) :
+               Uint32              UID,
+               entt::entity        Entity) :
     m_UID{UID},
+    m_Entity{Entity},
     pxr::HdMesh{id}
 {
-    // Allocate mesh attributes using the block allocator to improve cache locality.
-    auto& MeshAttribsAllocator = RenderDelegate.GetMeshAttribsAllocator();
-
-    m_Attribs = decltype(m_Attribs){
-        new (ALLOCATE(MeshAttribsAllocator, "HnMesh Attributes", Attributes, 1)) Attributes{},
-        STDDeleter<Attributes, IMemoryAllocator>{MeshAttribsAllocator},
-    };
+    entt::registry& Regisgtry = RenderDelegate.GetEcsRegistry();
+    Regisgtry.emplace<Components::Transform>(m_Entity);
+    Regisgtry.emplace<Components::DisplayColor>(m_Entity);
 }
 
 HnMesh::~HnMesh()
@@ -333,10 +332,13 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
 
     if (pxr::HdChangeTracker::IsTransformDirty(DirtyBits, Id))
     {
-        auto Transform = ToFloat4x4(SceneDelegate.GetTransform(Id));
-        if (m_Attribs->Transform != Transform)
+        entt::registry& Registry  = static_cast<HnRenderDelegate*>(SceneDelegate.GetRenderIndex().GetRenderDelegate())->GetEcsRegistry();
+        float4x4&       Transform = Registry.get<Components::Transform>(m_Entity).Val;
+
+        auto NewTransform = ToFloat4x4(SceneDelegate.GetTransform(Id));
+        if (Transform != NewTransform)
         {
-            m_Attribs->Transform = Transform;
+            Transform = NewTransform;
             if (RenderParam != nullptr)
             {
                 static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::MeshTransform);
@@ -597,9 +599,12 @@ void HnMesh::UpdateConstantPrimvars(pxr::HdSceneDelegate& SceneDelegate,
         const pxr::HdType ElementType = Source->GetTupleType().type;
         if (PrimDesc.name == pxr::HdTokens->displayColor)
         {
+            entt::registry& Registry     = static_cast<HnRenderDelegate*>(SceneDelegate.GetRenderIndex().GetRenderDelegate())->GetEcsRegistry();
+            float4&         DisplayColor = Registry.get<Components::DisplayColor>(m_Entity).Val;
+
             if (ElementType == pxr::HdTypeFloatVec3)
             {
-                memcpy(m_Attribs->DisplayColor.Data(), Source->GetData(), sizeof(float3));
+                memcpy(DisplayColor.Data(), Source->GetData(), sizeof(float3));
             }
             else
             {
@@ -608,9 +613,12 @@ void HnMesh::UpdateConstantPrimvars(pxr::HdSceneDelegate& SceneDelegate,
         }
         else if (PrimDesc.name == pxr::HdTokens->displayOpacity)
         {
+            entt::registry& Registry = static_cast<HnRenderDelegate*>(SceneDelegate.GetRenderIndex().GetRenderDelegate())->GetEcsRegistry();
+            float&          Opacity  = Registry.get<Components::DisplayColor>(m_Entity).Val.w;
+
             if (ElementType == pxr::HdTypeFloat)
             {
-                memcpy(&m_Attribs->DisplayColor.w, Source->GetData(), sizeof(float));
+                memcpy(&Opacity, Source->GetData(), sizeof(float));
             }
             else
             {

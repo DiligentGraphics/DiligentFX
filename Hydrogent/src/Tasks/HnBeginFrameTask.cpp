@@ -176,7 +176,6 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
         UNEXPECTED("Final color target RTV is null");
         return;
     }
-    const auto& FinalRTVDesc    = pFinalColorRTV->GetDesc();
     const auto& FinalTargetDesc = pFinalColorRTV->GetTexture()->GetDesc();
 
     m_FrameBufferWidth  = FinalTargetDesc.Width;
@@ -367,10 +366,9 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
                                             const float2&   Jitter,
                                             bool&           CameraTransformDirty)
 {
-    HnRenderDelegate*   RenderDelegate    = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
-    const USD_Renderer& Renderer          = *RenderDelegate->GetUSDRenderer();
-    const int           MaxLightCount     = Renderer.GetSettings().MaxLightCount;
-    const int           MaxShadowMapCount = Renderer.GetSettings().MaxShadowCastingLightCount;
+    HnRenderDelegate*   RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+    const USD_Renderer& Renderer       = *RenderDelegate->GetUSDRenderer();
+    const int           MaxLightCount  = Renderer.GetSettings().MaxLightCount;
 
     const Uint32 NumShadowCastingLights = Renderer.GetSettings().EnableShadows ? Renderer.GetSettings().MaxShadowCastingLightCount : 0;
     const Uint32 FrameAttribsDataSize   = pFrameAttrbisCB->GetDesc().Size;

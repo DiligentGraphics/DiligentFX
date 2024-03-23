@@ -80,16 +80,19 @@ pxr::HdRenderPassSharedPtr HnRenderPass::Create(pxr::HdRenderIndex*           pI
     return pxr::HdRenderPassSharedPtr{new HnRenderPass{pIndex, Collection}};
 }
 
-HnRenderPass::DrawListItem::DrawListItem(const HnDrawItem& Item) noexcept :
+HnRenderPass::DrawListItem::DrawListItem(HnRenderDelegate& RenderDelegate, const HnDrawItem& Item) noexcept :
     DrawItem{Item},
     Mesh{Item.GetMesh()},
     Material{*Item.GetMaterial()},
+    MeshEntity{Mesh.GetEntity()},
     MeshUID{static_cast<float>(Mesh.GetUID())},
-    MeshAttribs{Mesh.GetAttributes()},
-    PrevTransform{Mesh.GetAttributes().Transform},
     RenderStateID{0},
     Visible{DrawItem.GetVisible()}
-{}
+{
+    entt::registry& Registry      = RenderDelegate.GetEcsRegistry();
+    const float4x4& MeshTransform = Registry.get<HnMesh::Components::Transform>(MeshEntity).Val;
+    Registry.emplace_or_replace<PrevMeshTransform>(MeshEntity, MeshTransform);
+}
 
 HnRenderPass::HnRenderPass(pxr::HdRenderIndex*           pIndex,
                            const pxr::HdRprimCollection& Collection) :
@@ -102,7 +105,7 @@ struct HnRenderPass::RenderState
     const HnRenderPass&       RenderPass;
     const HnRenderPassState&  RPState;
     const pxr::HdRenderIndex& RenderIndex;
-    const HnRenderDelegate&   RenderDelegate;
+    HnRenderDelegate&         RenderDelegate;
     const HnRenderParam&      RenderParam;
     USD_Renderer&             USDRenderer;
 
@@ -365,6 +368,12 @@ void HnRenderPass::Execute(HnRenderPassState& RPState, const pxr::TfTokenVector&
     const bool VisibiltyDirty             = MeshVisibilityVersion != m_GlobalAttribVersions.MeshVisibility;
     m_GlobalAttribVersions.MeshVisibility = MeshVisibilityVersion;
 
+    entt::registry& Registry = State.RenderDelegate.GetEcsRegistry();
+
+    auto MeshAttribsView = Registry.view<const HnMesh::Components::Transform,
+                                         const HnMesh::Components::DisplayColor,
+                                         DrawListItem::PrevMeshTransform>();
+
     Uint32 MultiDrawCount = 0;
     for (Uint32 ListItemId : m_RenderOrder)
     {
@@ -454,13 +463,20 @@ void HnRenderPass::Execute(HnRenderPassState& RPState, const pxr::TfTokenVector&
             0,
         };
 
-        const HnMesh::Attributes&      MeshAttribs              = ListItem.MeshAttribs;
+        const auto& MeshAttribs = MeshAttribsView.get<const HnMesh::Components::Transform,
+                                                      const HnMesh::Components::DisplayColor,
+                                                      DrawListItem::PrevMeshTransform>(ListItem.MeshEntity);
+
+        const float4x4& Transform     = std::get<0>(MeshAttribs).Val;
+        const float4&   DisplayColor  = std::get<1>(MeshAttribs).Val;
+        float4x4&       PrevTransform = std::get<2>(MeshAttribs).Val;
+
         HLSL::PBRMaterialBasicAttribs* pDstMaterialBasicAttribs = nullptr;
 
         GLTF_PBR_Renderer::PBRPrimitiveShaderAttribsData AttribsData{
             ListItem.PSOFlags,
-            &MeshAttribs.Transform,
-            &ListItem.PrevTransform,
+            &Transform,
+            &PrevTransform,
             0,
             &CustomData,
             sizeof(CustomData),
@@ -469,9 +485,9 @@ void HnRenderPass::Execute(HnRenderPassState& RPState, const pxr::TfTokenVector&
         const GLTF::Material& MaterialData = Material.GetMaterialData();
         GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(pCurrPrimitive, AttribsData, State.USDRenderer.GetSettings().TextureAttribIndices, MaterialData);
 
-        pDstMaterialBasicAttribs->BaseColorFactor = MaterialData.Attribs.BaseColorFactor * MeshAttribs.DisplayColor;
+        pDstMaterialBasicAttribs->BaseColorFactor = MaterialData.Attribs.BaseColorFactor * DisplayColor;
 
-        ListItem.PrevTransform = MeshAttribs.Transform;
+        PrevTransform = Transform;
 
         m_PendingDrawItems.push_back(PendingDrawItem{ListItem, CurrOffset});
 
@@ -502,9 +518,9 @@ void HnRenderPass::SetParams(const HnRenderPassParams& Params)
 
 void HnRenderPass::UpdateDrawList(const pxr::TfTokenVector& RenderTags)
 {
-    pxr::HdRenderIndex*     pRenderIndex    = GetRenderIndex();
-    const HnRenderDelegate* pRenderDelegate = static_cast<HnRenderDelegate*>(pRenderIndex->GetRenderDelegate());
-    const HnRenderParam*    pRenderParam    = static_cast<const HnRenderParam*>(pRenderDelegate->GetRenderParam());
+    pxr::HdRenderIndex*  pRenderIndex    = GetRenderIndex();
+    HnRenderDelegate*    pRenderDelegate = static_cast<HnRenderDelegate*>(pRenderIndex->GetRenderDelegate());
+    const HnRenderParam* pRenderParam    = static_cast<const HnRenderParam*>(pRenderDelegate->GetRenderParam());
     if (pRenderParam == nullptr)
     {
         UNEXPECTED("Render param is null");
@@ -587,7 +603,7 @@ void HnRenderPass::UpdateDrawList(const pxr::TfTokenVector& RenderTags)
             {
                 const HnDrawItem& DrawItem = static_cast<const HnDrawItem&>(*pDrawItem);
                 if (DrawItem.IsValid())
-                    m_DrawList.push_back(DrawListItem{DrawItem});
+                    m_DrawList.push_back(DrawListItem{*pRenderDelegate, DrawItem});
             }
         }
 

@@ -123,6 +123,8 @@ private:
         const HnMesh&     Mesh;
         const HnMaterial& Material;
 
+        const entt::entity MeshEntity;
+
         IPipelineState* pPSO = nullptr;
 
         const float MeshUID;
@@ -138,9 +140,10 @@ private:
 
         PBR_Renderer::PSO_FLAGS PSOFlags = PBR_Renderer::PSO_FLAG_NONE;
 
-        const HnMesh::Attributes& MeshAttribs;
-
-        float4x4 PrevTransform = float4x4::Identity();
+        struct PrevMeshTransform
+        {
+            float4x4 Val = float4x4::Identity();
+        };
 
         // Primitive attributes shader data size computed from the value of PSOFlags.
         // Note: unshaded (aka wireframe/point) rendering modes don't use any textures, so the shader data
@@ -159,7 +162,7 @@ private:
         // Mesh Geometry + Mesh Material version
         Uint32 Version = 0;
 
-        explicit DrawListItem(const HnDrawItem& Item) noexcept;
+        explicit DrawListItem(HnRenderDelegate& RenderDelegate, const HnDrawItem& Item) noexcept;
 
         operator bool() const noexcept
         {

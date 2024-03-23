@@ -2,6 +2,17 @@ cmake_minimum_required (VERSION 3.13)
 
 project(Diligent-Hydrogent CXX)
 
+include(FetchContent)
+
+message("Fetching entt repository...")
+FetchContent_Declare(
+    entt
+    GIT_REPOSITORY https://github.com/skypjack/entt
+    GIT_TAG        v3.13.1
+)
+FetchContent_MakeAvailable(entt)
+set_directory_root_folder(${entt_SOURCE_DIR} "DiligentFX/ThirdParty/entt")
+
 # We need to bring in the OpenUSD package explicitly so that USDViewer can
 # link with the right version of python and boost::python
 if(PLATFORM_LINUX OR PLATFORM_MACOS)
@@ -208,6 +219,8 @@ PRIVATE
     Diligent-TextureLoader
     Diligent-Common
     DiligentFX
+PUBLIC
+    EnTT
 )
 
 set_target_properties(Diligent-Hydrogent PROPERTIES
