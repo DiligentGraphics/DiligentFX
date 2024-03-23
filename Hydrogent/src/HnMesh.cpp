@@ -753,7 +753,6 @@ void HnMesh::ConvertVertexPrimvarSources(FaceSourcesMapType&& FaceSources)
             continue;
 
         const auto*       pSrcData    = static_cast<const Uint8*>(pSource->GetData());
-        const size_t      NumElements = pSource->GetNumElements();
         const pxr::HdType ElementType = pSource->GetTupleType().type;
         const size_t      ElementSize = HdDataSizeOfType(ElementType);
 
@@ -1089,9 +1088,9 @@ void HnMesh::UpdateDrawItemGpuGeometry(HnRenderDelegate& RenderDelegate)
     {
         pxr::HdRepr& Repr          = *it.second;
         const size_t DrawItemCount = Repr.GetDrawItems().size();
-        for (size_t i = 0; i < DrawItemCount; ++i)
+        for (size_t item = 0; item < DrawItemCount; ++item)
         {
-            HnDrawItem& DrawItem = *static_cast<HnDrawItem*>(Repr.GetDrawItem(i));
+            HnDrawItem& DrawItem = *static_cast<HnDrawItem*>(Repr.GetDrawItem(item));
 
             HnDrawItem::GeometryData Geo;
             Geo.Positions = GetVertexBuffer(pxr::HdTokens->points);

@@ -480,10 +480,9 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
     }
     m_FrameTargets = FrameTargets;
 
-    HnRenderDelegate*  RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
-    IRenderDevice*     pDevice        = RenderDelegate->GetDevice();
-    IDeviceContext*    pCtx           = RenderDelegate->GetDeviceContext();
-    IRenderStateCache* pStateCache    = RenderDelegate->GetRenderStateCache();
+    HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+    IRenderDevice*    pDevice        = RenderDelegate->GetDevice();
+    IDeviceContext*   pCtx           = RenderDelegate->GetDeviceContext();
     if (!m_PostProcessAttribsCB)
     {
         CreateUniformBuffer(pDevice, sizeof(HLSL::PostProcessAttribs), "Post process attribs CB", &m_PostProcessAttribsCB, USAGE_DEFAULT);

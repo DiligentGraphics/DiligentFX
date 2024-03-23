@@ -199,6 +199,7 @@ PRIVATE
 
 target_link_libraries(Diligent-Hydrogent
 PRIVATE
+    Diligent-BuildSettings 
     USD-Libraries
     NO_WERROR
     Diligent-GraphicsEngine

@@ -382,7 +382,6 @@ void HnRenderPass::Execute(HnRenderPassState& RPState, const pxr::TfTokenVector&
         // Note: if the material changes in the mesh, the mesh material version and/or
         //       global material version will be updated, and the draw list item GPU
         //       resources will be updated.
-        const HnMesh&     Mesh     = ListItem.Mesh;
         const HnMaterial& Material = ListItem.Material;
 
         if (MultiDrawCount == PrimitiveArraySize)
@@ -864,8 +863,6 @@ void HnRenderPass::RenderPendingDrawItems(RenderState& State)
         const DrawListItem&    ListItem    = PendingItem.ListItem;
 
         State.SetPipelineState(ListItem.pPSO);
-
-        const HnDrawItem::GeometryData& Geo = ListItem.DrawItem.GetGeometryData();
 
         IShaderResourceBinding* pSRB = ListItem.Material.GetSRB(PendingItem.BufferOffset);
         VERIFY(pSRB != nullptr, "Material SRB is null. This may happen if UpdateSRB was not called for this material.");
