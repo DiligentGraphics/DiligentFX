@@ -88,9 +88,8 @@ HnRenderPass::DrawListItem::DrawListItem(HnRenderDelegate& RenderDelegate, const
     MeshUID{static_cast<float>(Mesh.GetUID())},
     RenderStateID{0}
 {
-    entt::registry& Registry      = RenderDelegate.GetEcsRegistry();
-    const float4x4& MeshTransform = Registry.get<HnMesh::Components::Transform>(MeshEntity).Val;
-    Registry.emplace_or_replace<PrevMeshTransform>(MeshEntity, MeshTransform);
+    entt::registry& Registry = RenderDelegate.GetEcsRegistry();
+    PrevTransform            = Registry.get<HnMesh::Components::Transform>(MeshEntity).Val;
 }
 
 HnRenderPass::HnRenderPass(pxr::HdRenderIndex*           pIndex,
@@ -367,8 +366,7 @@ void HnRenderPass::Execute(HnRenderPassState& RPState, const pxr::TfTokenVector&
 
     auto MeshAttribsView = Registry.view<const HnMesh::Components::Transform,
                                          const HnMesh::Components::DisplayColor,
-                                         const HnMesh::Components::Visibility,
-                                         DrawListItem::PrevMeshTransform>();
+                                         const HnMesh::Components::Visibility>();
 
     Uint32 MultiDrawCount = 0;
     for (DrawListItem& ListItem : m_DrawList)
@@ -378,13 +376,11 @@ void HnRenderPass::Execute(HnRenderPassState& RPState, const pxr::TfTokenVector&
 
         const auto& MeshAttribs = MeshAttribsView.get<const HnMesh::Components::Transform,
                                                       const HnMesh::Components::DisplayColor,
-                                                      const HnMesh::Components::Visibility,
-                                                      DrawListItem::PrevMeshTransform>(ListItem.MeshEntity);
+                                                      const HnMesh::Components::Visibility>(ListItem.MeshEntity);
 
-        const float4x4& Transform     = std::get<0>(MeshAttribs).Val;
-        const float4&   DisplayColor  = std::get<1>(MeshAttribs).Val;
-        const bool      MeshVisibile  = std::get<2>(MeshAttribs).Val;
-        float4x4&       PrevTransform = std::get<3>(MeshAttribs).Val;
+        const float4x4& Transform    = std::get<0>(MeshAttribs).Val;
+        const float4&   DisplayColor = std::get<1>(MeshAttribs).Val;
+        const bool      MeshVisibile = std::get<2>(MeshAttribs).Val;
 
         if (!MeshVisibile)
             continue;
@@ -469,7 +465,7 @@ void HnRenderPass::Execute(HnRenderPassState& RPState, const pxr::TfTokenVector&
         GLTF_PBR_Renderer::PBRPrimitiveShaderAttribsData AttribsData{
             ListItem.PSOFlags,
             &Transform,
-            &PrevTransform,
+            &ListItem.PrevTransform,
             0,
             &CustomData,
             sizeof(CustomData),
@@ -480,7 +476,7 @@ void HnRenderPass::Execute(HnRenderPassState& RPState, const pxr::TfTokenVector&
 
         pDstMaterialBasicAttribs->BaseColorFactor = MaterialData.Attribs.BaseColorFactor * DisplayColor;
 
-        PrevTransform = Transform;
+        ListItem.PrevTransform = Transform;
 
         m_PendingDrawItems.push_back(PendingDrawItem{ListItem, CurrOffset});
 
