@@ -294,7 +294,8 @@ void HnBeginFrameTask::Prepare(pxr::HdTaskContext* TaskCtx,
 {
     m_RenderIndex = RenderIndex;
 
-    HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(RenderIndex->GetRenderDelegate());
+    HnRenderDelegate*   RenderDelegate = static_cast<HnRenderDelegate*>(RenderIndex->GetRenderDelegate());
+    const USD_Renderer& Renderer       = *RenderDelegate->GetUSDRenderer();
 
     Uint32 FrameNumber = 0;
     if (HnRenderParam* pRenderParam = static_cast<HnRenderParam*>(RenderDelegate->GetRenderParam()))
@@ -358,6 +359,27 @@ void HnBeginFrameTask::Prepare(pxr::HdTaskContext* TaskCtx,
     {
         UNEXPECTED("Unable to get final color target from Bprim ", m_Params.FinalColorTargetId);
     }
+
+    if (const HnShadowMapManager* ShadowMapMgr = RenderDelegate->GetShadowMapManager())
+    {
+        // Assign indices to shadow casting lights
+
+        const Uint32 NumShadowCastingLights = Renderer.GetSettings().EnableShadows ? Renderer.GetSettings().MaxShadowCastingLightCount : 0;
+        const auto&  Lights                 = RenderDelegate->GetLights();
+
+        Uint32 ShadowCastingLightIdx = 0;
+        for (HnLight* Light : Lights)
+        {
+            if (Light->ShadowsEnabled() && Light->IsVisible() && ShadowCastingLightIdx < NumShadowCastingLights)
+            {
+                Light->SetFrameAttribsIndex(ShadowCastingLightIdx++);
+            }
+            else
+            {
+                Light->SetFrameAttribsIndex(-1);
+            }
+        }
+    }
 }
 
 void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
@@ -380,22 +402,17 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
     //
 
     // Write shadow casting light attributes first to initialize shadow cating light indices
-    if (HnShadowMapManager* ShadowMapMgr = RenderDelegate->GetShadowMapManager())
+    if (const HnShadowMapManager* ShadowMapMgr = RenderDelegate->GetShadowMapManager())
     {
         const TextureDesc& ShadowAtlasDesc = ShadowMapMgr->GetAtlasDesc();
 
         const auto& Lights = RenderDelegate->GetLights();
-
-        Uint32 ShadowCastingLightIdx = 0;
-        for (HnLight* Light : Lights)
+        for (const HnLight* Light : Lights)
         {
-            if (!Light->ShadowsEnabled() || !Light->IsVisible() || ShadowCastingLightIdx >= NumShadowCastingLights)
-            {
-                Light->SetFrameAttribsIndex(-1);
+            const Int32 ShadowCastingLightIdx = Light->GetFrameAttribsIndex();
+            VERIFY_EXPR((ShadowCastingLightIdx < 0) == (!Light->ShadowsEnabled() || !Light->IsVisible() || ShadowCastingLightIdx >= static_cast<Int32>(NumShadowCastingLights)));
+            if (ShadowCastingLightIdx < 0)
                 continue;
-            }
-
-            Light->SetFrameAttribsIndex(ShadowCastingLightIdx);
 
             HLSL::PBRFrameAttribs* ShadowAttribs = reinterpret_cast<HLSL::PBRFrameAttribs*>(&m_FrameAttribsData[RenderDelegate->GetShadowPassFrameAttribsOffset(ShadowCastingLightIdx)]);
             HLSL::CameraAttribs&   CamAttribs    = ShadowAttribs->Camera;
@@ -423,8 +440,6 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
             CamAttribs.f2Jitter      = float2{0, 0};
 
             memset(&ShadowAttribs->Renderer, 0, sizeof(HLSL::PBRRendererShaderParameters));
-
-            ++ShadowCastingLightIdx;
         }
     }
 
