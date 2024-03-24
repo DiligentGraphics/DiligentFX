@@ -131,9 +131,7 @@ private:
 
         // Unique ID that identifies the combination of render states used to render the draw item
         // (PSO, SRB, vertex and index buffers). It is used to batch draw calls into a multi-draw command.
-        Uint32 RenderStateID : 31;
-        // Cached value of DrawItem.GetVisible()
-        Uint32 Visible : 1;
+        Uint32 RenderStateID;
 
         Uint32 NumVertices = 0;
         Uint32 StartIndex  = 0;
@@ -218,7 +216,6 @@ private:
         uint32_t GeomSubsetDrawItems = ~0u;
         uint32_t MeshGeometry        = ~0u;
         uint32_t MeshMaterial        = ~0u;
-        uint32_t MeshVisibility      = ~0u;
         uint32_t Material            = ~0u;
     } m_GlobalAttribVersions;
 

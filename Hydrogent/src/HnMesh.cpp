@@ -72,6 +72,7 @@ HnMesh::HnMesh(pxr::TfToken const& typeId,
     entt::registry& Regisgtry = RenderDelegate.GetEcsRegistry();
     Regisgtry.emplace<Components::Transform>(m_Entity);
     Regisgtry.emplace<Components::DisplayColor>(m_Entity);
+    Regisgtry.emplace<Components::Visibility>(m_Entity, _sharedData.visible);
 }
 
 HnMesh::~HnMesh()
@@ -350,7 +351,7 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
 
     if (pxr::HdChangeTracker::IsVisibilityDirty(DirtyBits, Id))
     {
-        auto Visible = SceneDelegate.GetVisible(Id);
+        bool Visible = SceneDelegate.GetVisible(Id);
         if (_sharedData.visible != Visible)
         {
             _sharedData.visible = SceneDelegate.GetVisible(Id);
@@ -358,6 +359,8 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
             {
                 static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::MeshVisibility);
             }
+            entt::registry& Registry = static_cast<HnRenderDelegate*>(SceneDelegate.GetRenderIndex().GetRenderDelegate())->GetEcsRegistry();
+            Registry.replace<Components::Visibility>(m_Entity, _sharedData.visible);
         }
 
         DirtyBits &= ~pxr::HdChangeTracker::DirtyVisibility;

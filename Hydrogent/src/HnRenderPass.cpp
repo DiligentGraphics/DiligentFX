@@ -86,8 +86,7 @@ HnRenderPass::DrawListItem::DrawListItem(HnRenderDelegate& RenderDelegate, const
     Material{*Item.GetMaterial()},
     MeshEntity{Mesh.GetEntity()},
     MeshUID{static_cast<float>(Mesh.GetUID())},
-    RenderStateID{0},
-    Visible{DrawItem.GetVisible()}
+    RenderStateID{0}
 {
     entt::registry& Registry      = RenderDelegate.GetEcsRegistry();
     const float4x4& MeshTransform = Registry.get<HnMesh::Components::Transform>(MeshEntity).Val;
@@ -364,28 +363,30 @@ void HnRenderPass::Execute(HnRenderPassState& RPState, const pxr::TfTokenVector&
     const Uint32 PrimitiveArraySize = std::max(State.USDRenderer.GetSettings().PrimitiveArraySize, 1u);
     m_ScratchSpace.resize(sizeof(MultiDrawIndexedItem) * State.USDRenderer.GetSettings().PrimitiveArraySize);
 
-    const auto MeshVisibilityVersion      = State.RenderParam.GetAttribVersion(HnRenderParam::GlobalAttrib::MeshVisibility);
-    const bool VisibiltyDirty             = MeshVisibilityVersion != m_GlobalAttribVersions.MeshVisibility;
-    m_GlobalAttribVersions.MeshVisibility = MeshVisibilityVersion;
-
     entt::registry& Registry = State.RenderDelegate.GetEcsRegistry();
 
     auto MeshAttribsView = Registry.view<const HnMesh::Components::Transform,
                                          const HnMesh::Components::DisplayColor,
+                                         const HnMesh::Components::Visibility,
                                          DrawListItem::PrevMeshTransform>();
 
     Uint32 MultiDrawCount = 0;
-    for (Uint32 ListItemId : m_RenderOrder)
+    for (DrawListItem& ListItem : m_DrawList)
     {
-        DrawListItem& ListItem = m_DrawList[ListItemId];
-        if (VisibiltyDirty)
-        {
-            // Calling ListItem.DrawItem.GetVisible() every time is expensive due to multiple hoops
-            // that need to be jumped through to get the visibility state. So, we cache the result
-            // and only update it when the visibility version changes.
-            ListItem.Visible = ListItem.DrawItem.GetVisible();
-        }
-        if (!ListItem || !ListItem.Visible)
+        if (!ListItem)
+            continue;
+
+        const auto& MeshAttribs = MeshAttribsView.get<const HnMesh::Components::Transform,
+                                                      const HnMesh::Components::DisplayColor,
+                                                      const HnMesh::Components::Visibility,
+                                                      DrawListItem::PrevMeshTransform>(ListItem.MeshEntity);
+
+        const float4x4& Transform     = std::get<0>(MeshAttribs).Val;
+        const float4&   DisplayColor  = std::get<1>(MeshAttribs).Val;
+        const bool      MeshVisibile  = std::get<2>(MeshAttribs).Val;
+        float4x4&       PrevTransform = std::get<3>(MeshAttribs).Val;
+
+        if (!MeshVisibile)
             continue;
 
         // Note: if the material changes in the mesh, the mesh material version and/or
@@ -462,14 +463,6 @@ void HnRenderPass::Execute(HnRenderPassState& RPState, const pxr::TfTokenVector&
             0,
             0,
         };
-
-        const auto& MeshAttribs = MeshAttribsView.get<const HnMesh::Components::Transform,
-                                                      const HnMesh::Components::DisplayColor,
-                                                      DrawListItem::PrevMeshTransform>(ListItem.MeshEntity);
-
-        const float4x4& Transform     = std::get<0>(MeshAttribs).Val;
-        const float4&   DisplayColor  = std::get<1>(MeshAttribs).Val;
-        float4x4&       PrevTransform = std::get<2>(MeshAttribs).Val;
 
         HLSL::PBRMaterialBasicAttribs* pDstMaterialBasicAttribs = nullptr;
 
@@ -677,22 +670,55 @@ void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
 
     if (DrawListDirty)
     {
-        if (m_RenderOrder.size() != m_DrawList.size())
-        {
-            m_RenderOrder.resize(m_DrawList.size());
-            for (Uint32 i = 0; i < m_RenderOrder.size(); ++i)
-                m_RenderOrder[i] = i;
-        }
+        m_RenderOrder.resize(m_DrawList.size());
+        for (Uint32 i = 0; i < m_RenderOrder.size(); ++i)
+            m_RenderOrder[i] = i;
+
+        bool DrawOrderDirty = false;
+
         std::sort(m_RenderOrder.begin(), m_RenderOrder.end(),
-                  [this](Uint32 i0, Uint32 i1) {
-                      // Sort by PSO first, then by material SRB
-                      if (m_DrawList[i0].pPSO < m_DrawList[i1].pPSO)
-                          return true;
-                      else if (m_DrawList[i0].pPSO > m_DrawList[i1].pPSO)
-                          return false;
+                  [this, &DrawOrderDirty](Uint32 i0, Uint32 i1) {
+                      const DrawListItem& Item0 = m_DrawList[i0];
+                      const DrawListItem& Item1 = m_DrawList[i1];
+
+                      bool Item0PrecedesItem1;
+                      // Sort by PSO first, then by material SRB, then by entity ID
+                      if (Item0.pPSO < Item1.pPSO)
+                          Item0PrecedesItem1 = true;
+                      else if (Item0.pPSO > Item1.pPSO)
+                          Item0PrecedesItem1 = false;
+                      else if (Item0.Material.GetSRB() < Item1.Material.GetSRB())
+                          Item0PrecedesItem1 = true;
+                      else if (Item0.Material.GetSRB() > Item1.Material.GetSRB())
+                          Item0PrecedesItem1 = false;
                       else
-                          return m_DrawList[i0].Material.GetSRB() < m_DrawList[i1].Material.GetSRB();
+                          Item0PrecedesItem1 = Item0.MeshEntity < Item1.MeshEntity;
+
+                      if ((i0 < i1) != Item0PrecedesItem1)
+                          DrawOrderDirty = true;
+
+                      return Item0PrecedesItem1;
                   });
+
+        if (DrawOrderDirty)
+        {
+            std::vector<DrawListItem> SortedDrawList;
+            SortedDrawList.reserve(m_DrawList.size());
+            for (size_t i = 0; i < m_RenderOrder.size(); ++i)
+            {
+                SortedDrawList.emplace_back(m_DrawList[m_RenderOrder[i]]);
+            }
+            m_DrawList.swap(SortedDrawList);
+        }
+        else
+        {
+#ifdef DILIGENT_DEBUG
+            for (size_t i = 0; i < m_RenderOrder.size(); ++i)
+            {
+                VERIFY_EXPR(m_RenderOrder[i] == i);
+            }
+#endif
+        }
     }
 }
 

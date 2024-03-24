@@ -136,6 +136,11 @@ public:
         {
             float4 Val = {1, 1, 1, 1};
         };
+
+        struct Visibility
+        {
+            bool Val = true;
+        };
     };
 
     bool GetIsDoubleSided() const { return m_IsDoubleSided; }
