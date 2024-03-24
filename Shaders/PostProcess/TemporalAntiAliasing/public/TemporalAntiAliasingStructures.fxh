@@ -52,7 +52,7 @@
 // This parameter defines the threshold for pixel velocity difference that determines whether a pixel is considered to have "no history."
 // If the difference in motion vectors between the current frame and the previous frame exceeds this value, the pixel is treated as if it has no historical data.
 // This helps to prevent ghosting effects by not blending pixels with significantly different motion vectors.
-#define TAA_MOTION_VECTOR_PIXEL_DIFF     8.0
+#define TAA_MOTION_VECTOR_DIFF_FACTOR  256.0
 
 // This parameter sets the threshold for depth disocclusion. It is used to determine how much a change in depth between frames should be considered as disocclusion,
 // which occurs when previously occluded objects become visible. A small threshold value means that only significant depth changes will be treated as disocclusion,

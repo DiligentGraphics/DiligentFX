@@ -93,6 +93,9 @@ void ScreenSpaceReflection::PrepareResources(IRenderDevice* pDevice, IDeviceCont
     if (m_BackBufferWidth == FrameDesc.Width && m_BackBufferHeight == FrameDesc.Height && m_FeatureFlags == FeatureFlags)
         return;
 
+    for (auto& Iter : m_RenderTech)
+        Iter.second.SRB.Release();
+
     m_BackBufferWidth  = FrameDesc.Width;
     m_BackBufferHeight = FrameDesc.Height;
     m_FeatureFlags     = FeatureFlags;
@@ -185,10 +188,10 @@ void ScreenSpaceReflection::PrepareResources(IRenderDevice* pDevice, IDeviceCont
         m_Resources[RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK].AsTexture()->CreateView(ViewDesc, &m_DepthStencilMaskDSVReadOnly);
     }
 
+    m_DepthStencilMaskDSVReadOnlyHalfRes.Release();
+
     if (FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION)
     {
-        m_DepthStencilMaskDSVReadOnlyHalfRes.Release();
-
         TextureDesc Desc;
         Desc.Name      = "ScreenSpaceReflection::DepthStencilMaskHalfRes";
         Desc.Type      = RESOURCE_DIM_TEX_2D;
@@ -290,12 +293,13 @@ void ScreenSpaceReflection::PrepareResources(IRenderDevice* pDevice, IDeviceCont
 
     {
         TextureDesc Desc;
-        Desc.Name          = "ScreenSpaceReflection::DepthHistory";
-        Desc.Type          = RESOURCE_DIM_TEX_2D;
-        Desc.Width         = m_BackBufferWidth;
-        Desc.Height        = m_BackBufferHeight;
-        Desc.Format        = TEX_FORMAT_R32_FLOAT;
-        Desc.BindFlags     = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
+        Desc.Name      = "ScreenSpaceReflection::DepthHistory";
+        Desc.Type      = RESOURCE_DIM_TEX_2D;
+        Desc.Width     = m_BackBufferWidth;
+        Desc.Height    = m_BackBufferHeight;
+        Desc.Format    = TEX_FORMAT_R32_FLOAT;
+        Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
+
         auto  pTexture     = Device.CreateTexture(Desc);
         float ClearColor[] = {1.0, 0.0, 0.0, 0.0};
         PostFXContext::ClearRenderTarget(pDeviceContext, pTexture, ClearColor);
@@ -324,7 +328,7 @@ void ScreenSpaceReflection::Execute(const RenderAttributes& RenderAttribs)
     DEV_CHECK_ERR(RenderAttribs.pDepthBufferSRV != nullptr, "RenderAttribs.pDepthBufferSRV must not be null");
     DEV_CHECK_ERR(RenderAttribs.pNormalBufferSRV != nullptr, "RenderAttribs.pNormalBufferSRV must not be null");
     DEV_CHECK_ERR(RenderAttribs.pMaterialBufferSRV != nullptr, "RenderAttribs.pMaterialBufferSRV must not be null");
-    DEV_CHECK_ERR(RenderAttribs.pMotionVectorsSRV != nullptr, "RenderAttribs.pMotionVectorsSRV must not be null");
+    DEV_CHECK_ERR(RenderAttribs.pMotionVectorsSRV != nullptr, "RenderAttribs.pMotionBufferSRV must not be null");
     DEV_CHECK_ERR(RenderAttribs.pSSRAttribs != nullptr, "RenderAttribs.pSSRAttribs must not be null");
 
     m_Resources.Insert(RESOURCE_IDENTIFIER_INPUT_COLOR, RenderAttribs.pColorBufferSRV->GetTexture());
@@ -448,7 +452,7 @@ ITextureView* ScreenSpaceReflection::GetSSRRadianceSRV() const
 void ScreenSpaceReflection::CopyTextureDepth(const RenderAttributes& RenderAttribs, ITextureView* pSRV, ITextureView* pRTV)
 {
     auto& RenderTech = GetRenderTechnique(RENDER_TECH_COPY_DEPTH, FEATURE_FLAG_NONE);
-    if (!RenderTech.IsInitialized())
+    if (!RenderTech.IsInitializedPSO())
     {
         const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
         const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "CopyTextureDepth.fx", "CopyDepthPS", SHADER_TYPE_PIXEL);
@@ -464,8 +468,10 @@ void ScreenSpaceReflection::CopyTextureDepth(const RenderAttributes& RenderAttri
                                  },
                                  TEX_FORMAT_UNKNOWN,
                                  DSS_DisableDepth, BS_Default, false);
-        RenderTech.InitializeSRB(false);
     }
+
+    if (!RenderTech.IsInitializedSRB())
+        RenderTech.InitializeSRB(false);
 
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureDepth"}.Set(pSRV);
 
@@ -480,7 +486,7 @@ void ScreenSpaceReflection::ComputeHierarchicalDepthBuffer(const RenderAttribute
 {
     auto&       RenderTech        = GetRenderTechnique(RENDER_TECH_COMPUTE_HIERARCHICAL_DEPTH_BUFFER, m_FeatureFlags);
     const auto& SupportedFeatures = RenderAttribs.pPostFXContext->GetSupportedFeatures();
-    if (!RenderTech.IsInitialized())
+    if (!RenderTech.IsInitializedPSO())
     {
         ShaderMacroHelper Macros;
         Macros.Add("SUPPORTED_SHADER_SRV", SupportedFeatures.TextureSubresourceViews);
@@ -510,8 +516,10 @@ void ScreenSpaceReflection::ComputeHierarchicalDepthBuffer(const RenderAttribute
                                  },
                                  TEX_FORMAT_UNKNOWN,
                                  DSS_DisableDepth, BS_Default, false);
-        RenderTech.InitializeSRB(false);
     }
+
+    if (!RenderTech.IsInitializedSRB())
+        RenderTech.InitializeSRB(false);
 
     ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "ComputeHierarchicalDepthBuffer"};
 
@@ -631,7 +639,7 @@ void ScreenSpaceReflection::ComputeHierarchicalDepthBuffer(const RenderAttribute
 void ScreenSpaceReflection::ComputeStencilMaskAndExtractRoughness(const RenderAttributes& RenderAttribs)
 {
     auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_STENCIL_MASK_AND_EXTRACT_ROUGHNESS, m_FeatureFlags);
-    if (!RenderTech.IsInitialized())
+    if (!RenderTech.IsInitializedPSO())
     {
         PipelineResourceLayoutDescX ResourceLayout;
         ResourceLayout
@@ -656,8 +664,10 @@ void ScreenSpaceReflection::ComputeStencilMaskAndExtractRoughness(const RenderAt
                                  DSS_StencilWrite, BS_Default, false);
 
         ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbScreenSpaceReflectionAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
-        RenderTech.InitializeSRB(true);
     }
+
+    if (!RenderTech.IsInitializedSRB())
+        RenderTech.InitializeSRB(true);
 
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureDepth"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_DEPTH].GetTextureSRV());
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureMaterialParameters"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_MATERIAL_PARAMETERS].GetTextureSRV());
@@ -685,7 +695,7 @@ void ScreenSpaceReflection::ComputeDownsampledStencilMask(const RenderAttributes
         return;
 
     auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_DOWNSAMPLED_STENCIL_MASK, m_FeatureFlags);
-    if (!RenderTech.IsInitialized())
+    if (!RenderTech.IsInitializedPSO())
     {
         PipelineResourceLayoutDescX ResourceLayout;
         ResourceLayout
@@ -707,8 +717,10 @@ void ScreenSpaceReflection::ComputeDownsampledStencilMask(const RenderAttributes
                                  DSS_StencilWrite, BS_Default, false);
 
         ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbScreenSpaceReflectionAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
-        RenderTech.InitializeSRB(true);
     }
+
+    if (!RenderTech.IsInitializedSRB())
+        RenderTech.InitializeSRB(true);
 
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureRoughness"}.Set(m_Resources[RESOURCE_IDENTIFIER_ROUGHNESS].GetTextureSRV());
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureDepth"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_DEPTH].GetTextureSRV());
@@ -730,7 +742,7 @@ void ScreenSpaceReflection::ComputeIntersection(const RenderAttributes& RenderAt
 {
     auto&       RenderTech        = GetRenderTechnique(RENDER_TECH_COMPUTE_INTERSECTION, m_FeatureFlags);
     const auto& SupportedFeatures = RenderAttribs.pPostFXContext->GetSupportedFeatures();
-    if (!RenderTech.IsInitialized())
+    if (!RenderTech.IsInitializedPSO())
     {
         PipelineResourceLayoutDescX ResourceLayout;
         ResourceLayout
@@ -768,10 +780,13 @@ void ScreenSpaceReflection::ComputeIntersection(const RenderAttributes& RenderAt
                                  },
                                  m_Resources[RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK].AsTexture()->GetDesc().Format,
                                  DSS_StencilReadComparisonEqual, BS_Default, true);
+
         ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
         ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbScreenSpaceReflectionAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
-        RenderTech.InitializeSRB(true);
     }
+
+    if (!RenderTech.IsInitializedSRB())
+        RenderTech.InitializeSRB(true);
 
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureRadiance"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_COLOR].GetTextureSRV());
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureNormal"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_NORMAL].GetTextureSRV());
@@ -804,7 +819,7 @@ void ScreenSpaceReflection::ComputeIntersection(const RenderAttributes& RenderAt
 void ScreenSpaceReflection::ComputeSpatialReconstruction(const RenderAttributes& RenderAttribs)
 {
     auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_SPATIAL_RECONSTRUCTION, m_FeatureFlags);
-    if (!RenderTech.IsInitialized())
+    if (!RenderTech.IsInitializedPSO())
     {
         PipelineResourceLayoutDescX ResourceLayout;
         ResourceLayout
@@ -837,8 +852,10 @@ void ScreenSpaceReflection::ComputeSpatialReconstruction(const RenderAttributes&
 
         ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
         ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbScreenSpaceReflectionAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
-        RenderTech.InitializeSRB(true);
     }
+
+    if (!RenderTech.IsInitializedSRB())
+        RenderTech.InitializeSRB(true);
 
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureRoughness"}.Set(m_Resources[RESOURCE_IDENTIFIER_ROUGHNESS].GetTextureSRV());
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureNormal"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_NORMAL].GetTextureSRV());
@@ -866,7 +883,7 @@ void ScreenSpaceReflection::ComputeTemporalAccumulation(const RenderAttributes& 
 {
     auto&       RenderTech        = GetRenderTechnique(RENDER_TECH_COMPUTE_TEMPORAL_ACCUMULATION, m_FeatureFlags);
     const auto& SupportedFeatures = RenderAttribs.pPostFXContext->GetSupportedFeatures();
-    if (!RenderTech.IsInitialized())
+    if (!RenderTech.IsInitializedPSO())
     {
         PipelineResourceLayoutDescX ResourceLayout;
         ResourceLayout
@@ -899,10 +916,13 @@ void ScreenSpaceReflection::ComputeTemporalAccumulation(const RenderAttributes& 
                                  },
                                  m_Resources[RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK].AsTexture()->GetDesc().Format,
                                  DSS_StencilReadComparisonEqual, BS_Default, true);
+
         ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
         ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbScreenSpaceReflectionAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
-        RenderTech.InitializeSRB(true);
     }
+
+    if (!RenderTech.IsInitializedSRB())
+        RenderTech.InitializeSRB(true);
 
     const Uint32 FrameIndex   = RenderAttribs.pPostFXContext->GetFrameDesc().Index;
     const Uint32 CurrFrameIdx = (FrameIndex + 0) & 0x01;
@@ -910,7 +930,7 @@ void ScreenSpaceReflection::ComputeTemporalAccumulation(const RenderAttributes& 
 
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureMotion"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_MOTION_VECTORS].GetTextureSRV());
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureHitDepth"}.Set(m_Resources[RESOURCE_IDENTIFIER_RESOLVED_DEPTH].GetTextureSRV());
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureCurrDepth"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_DEPTH].GetTextureSRV());
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureCurrDepth"}.Set(RenderAttribs.pPostFXContext->GetReprojectedDepth());
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureCurrRadiance"}.Set(m_Resources[RESOURCE_IDENTIFIER_RESOLVED_RADIANCE].GetTextureSRV());
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureCurrVariance"}.Set(m_Resources[RESOURCE_IDENTIFIER_RESOLVED_VARIANCE].GetTextureSRV());
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TexturePrevDepth"}.Set(m_Resources[RESOURCE_IDENTIFIER_DEPTH_HISTORY].GetTextureSRV());
@@ -954,7 +974,7 @@ void ScreenSpaceReflection::ComputeBilateralCleanup(const RenderAttributes& Rend
 {
     auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_BILATERAL_CLEANUP, m_FeatureFlags);
 
-    if (!RenderTech.IsInitialized())
+    if (!RenderTech.IsInitializedPSO())
     {
         PipelineResourceLayoutDescX ResourceLayout;
         ResourceLayout
@@ -980,10 +1000,13 @@ void ScreenSpaceReflection::ComputeBilateralCleanup(const RenderAttributes& Rend
                                  },
                                  m_Resources[RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK].AsTexture()->GetDesc().Format,
                                  DSS_StencilReadComparisonEqual, BS_Default, true);
+
         ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
         ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbScreenSpaceReflectionAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
-        RenderTech.InitializeSRB(true);
     }
+
+    if (!RenderTech.IsInitializedSRB())
+        RenderTech.InitializeSRB(true);
 
     const Uint32 CurrFrameIdx = RenderAttribs.pPostFXContext->GetFrameDesc().Index & 0x1u;
 

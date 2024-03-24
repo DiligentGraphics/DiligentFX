@@ -94,6 +94,9 @@ void TemporalAntiAliasing::PrepareResources(IRenderDevice* pDevice, IDeviceConte
     if (m_BackBufferWidth == FrameDesc.Width && m_BackBufferHeight == FrameDesc.Height)
         return;
 
+    for (auto& Iter : m_RenderTech)
+        Iter.second.SRB.Release();
+
     m_BackBufferWidth  = FrameDesc.Width;
     m_BackBufferHeight = FrameDesc.Height;
 
@@ -124,14 +127,11 @@ void TemporalAntiAliasing::Execute(const RenderAttributes& RenderAttribs)
     DEV_CHECK_ERR(RenderAttribs.pColorBufferSRV != nullptr, "RenderAttribs.pColorBufferSRV must not be null");
     DEV_CHECK_ERR(RenderAttribs.pCurrDepthBufferSRV != nullptr, "RenderAttribs.pDepthBufferSRV must not be null");
     DEV_CHECK_ERR(RenderAttribs.pPrevDepthBufferSRV != nullptr, "RenderAttribs.pDepthBufferSRV must not be null");
-    DEV_CHECK_ERR(RenderAttribs.pMotionVectorsSRV != nullptr, "RenderAttribs.pMotionVectorsSRV must not be null");
     DEV_CHECK_ERR(RenderAttribs.pTAAAttribs != nullptr, "RenderAttribs.pTAAAttribs must not be null");
-
 
     m_Resources.Insert(RESOURCE_IDENTIFIER_INPUT_COLOR, RenderAttribs.pColorBufferSRV->GetTexture());
     m_Resources.Insert(RESOURCE_IDENTIFIER_INPUT_CURR_DEPTH, RenderAttribs.pCurrDepthBufferSRV->GetTexture());
     m_Resources.Insert(RESOURCE_IDENTIFIER_INPUT_PREV_DEPTH, RenderAttribs.pPrevDepthBufferSRV->GetTexture());
-    m_Resources.Insert(RESOURCE_IDENTIFIER_INPUT_MOTION_VECTORS, RenderAttribs.pMotionVectorsSRV->GetTexture());
 
     ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "TemporalAccumulation"};
 
@@ -182,7 +182,7 @@ ITextureView* TemporalAntiAliasing::GetAccumulatedFrameSRV(bool IsPrevFrame) con
 void TemporalAntiAliasing::ComputeTemporalAccumulation(const RenderAttributes& RenderAttribs)
 {
     auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_TEMPORAL_ACCUMULATION, m_FeatureFlags);
-    if (!RenderTech.IsInitialized())
+    if (!RenderTech.IsInitializedPSO())
     {
         PipelineResourceLayoutDescX ResourceLayout;
         ResourceLayout
@@ -214,8 +214,10 @@ void TemporalAntiAliasing::ComputeTemporalAccumulation(const RenderAttributes& R
 
         ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
         ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbTemporalAntiAliasingAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER].AsBuffer());
-        RenderTech.InitializeSRB(true);
     }
+
+    if (!RenderTech.IsInitializedSRB())
+        RenderTech.InitializeSRB(true);
 
     const Uint32 FrameIndex   = RenderAttribs.pPostFXContext->GetFrameDesc().Index;
     const Uint32 CurrFrameIdx = (FrameIndex + 0) & 0x01;
@@ -223,8 +225,8 @@ void TemporalAntiAliasing::ComputeTemporalAccumulation(const RenderAttributes& R
 
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureCurrColor"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_COLOR].GetTextureSRV());
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TexturePrevColor"}.Set(m_Resources[RESOURCE_IDENTIFIER_ACCUMULATED_BUFFER0 + PrevFrameIdx].GetTextureSRV());
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureMotion"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_MOTION_VECTORS].GetTextureSRV());
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureCurrDepth"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_CURR_DEPTH].GetTextureSRV());
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureMotion"}.Set(RenderAttribs.pPostFXContext->GetClosestMotionVectors());
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureCurrDepth"}.Set(RenderAttribs.pPostFXContext->GetReprojectedDepth());
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TexturePrevDepth"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_PREV_DEPTH].GetTextureSRV());
 
     ITextureView* pRTVs[] = {

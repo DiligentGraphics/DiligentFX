@@ -19,15 +19,16 @@ Texture2D<float3> g_TextureNormal;
 Texture2D<float2> g_TextureBlueNoise;
 
 SamplerState g_TexturePrefilteredDepth_sampler;
+SamplerState g_TextureNormal_sampler;
 
 float2 SampleRandomVector2D(int2 PixelCoord)
 {
     return g_TextureBlueNoise.Load(int3(PixelCoord & 127, 0));
 }
 
-float3 SampleNormalWS(int2 PixelCoord)
+float3 SampleNormalWS(float2 ScreenCoordUV)
 {
-    return g_TextureNormal.Load(int3(PixelCoord, 0));
+    return g_TextureNormal.SampleLevel(g_TextureNormal_sampler, ScreenCoordUV, 0.0);
 }
 
 float SamplePrefilteredDepth(float2 ScreenCoordUV, float MipLevel)
@@ -37,16 +38,10 @@ float SamplePrefilteredDepth(float2 ScreenCoordUV, float MipLevel)
 
 float2 ComputeSliceDirection(float Xi, int Index)
 {
-    float3 Rotations = float3(0.0, 120.0, 240.0);
+    float3 Rotations = float3(0.0, 120.0, 240);
     float Rotation = Rotations[Index] / 360.0;
     float Phi = (Xi + Rotation) * M_PI;
     return float2(cos(Phi), sin(Phi));
-}
-
-float3 FastReconstructPosition(float3 Coord, float4x4 Transform)
-{
-    float3 NDC = float3(TexUVToNormalizedDeviceXY(Coord.xy), DepthToCameraZ(Coord.z, Transform));
-    return float3(NDC.z * NDC.x / MATRIX_ELEMENT(Transform, 0, 0), NDC.z * NDC.y / MATRIX_ELEMENT(Transform, 1, 1), NDC.z);
 }
 
 float FastACos(float Value)
@@ -69,22 +64,36 @@ float IntegrateArcCosWeighted(float HorizonX, float HorizonY, float N, float Cos
     return 0.25 * ((-cos(H1 - N) + CosN + H1 * SinN) + (-cos(H2 - N) + CosN + H2 * SinN));
 }
 
+float2 GetInvViewportSize() 
+{
+#if SSAO_OPTION_HALF_RESOLUTION
+    return 2.0 * g_Camera.f4ViewportSize.zw;
+#else
+    return g_Camera.f4ViewportSize.zw;
+#endif
+}
+
 float ComputeAmbientOcclusionPS(in FullScreenTriangleVSOutput VSOut) : SV_Target0
 {
-    float4 Position = VSOut.f4PixelPos;
-    float2 ScreenCoordUV = Position.xy * g_Camera.f4ViewportSize.zw;
+    float2 Position = VSOut.f4PixelPos.xy;
+
+    float2 ScreenCoordUV = Position * GetInvViewportSize();
     float3 PositionSS = float3(ScreenCoordUV, SamplePrefilteredDepth(ScreenCoordUV, 0.0));
 
     if (IsBackground(PositionSS.z))
         discard;
 
     // Trying to fix self-occlusion. Maybe there's a better way
-    PositionSS.z *= 0.99999;
-
-    float3 NormalVS = mul(float4(SampleNormalWS(int2(Position.xy)), 0.0), g_Camera.mView).xyz;
+#if SSAO_OPTION_HALF_PRECISION_DEPTH
+    PositionSS.z *= 0.99995;
+#else
+    PositionSS.z *= 0.999999;
+#endif
+    
+    float3 NormalVS = mul(float4(SampleNormalWS(ScreenCoordUV), 0.0), g_Camera.mView).xyz;
     float3 PositionVS = FastReconstructPosition(PositionSS, g_Camera.mProj);
     float3 ViewVS = -normalize(PositionVS);
-    float2 Xi = SampleRandomVector2D(int2(Position.xy));
+    float2 Xi = SampleRandomVector2D(int2(Position));
 
     float EffectRadius = g_SSAOAttribs.EffectRadius * g_SSAOAttribs.RadiusMultiplier;
     float FalloffRange = g_SSAOAttribs.EffectFalloffRange * EffectRadius;

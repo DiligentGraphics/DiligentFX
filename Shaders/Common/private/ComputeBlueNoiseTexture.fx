@@ -70,7 +70,7 @@ float2 SampleRandomVector2D(uint2 PixelCoord, uint FrameIndex)
  // R2 sequence - see http://extremelearning.com.au/unreasonable-effectiveness-of-quasirandom-sequences/
 float2 SampleRandomVector1D1D(uint2 PixelCoord, uint FrameIndex)
 {
-    uint Index = HilbertIndex(PixelCoord);
+    uint Index = (HilbertIndex(PixelCoord) + FrameIndex);
     Index += 288u * (FrameIndex & (HILBERT_WIDTH - 1u));
 
     float G = 1.32471795724474602596;

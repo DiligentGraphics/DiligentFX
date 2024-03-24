@@ -95,7 +95,7 @@ public:
         /// Shader resource view of the source roughness buffer
         ITextureView* pMaterialBufferSRV = nullptr;
 
-        /// Shader resource view of the motion vectors
+        /// Shader resource view of the source motion buffer
         ITextureView* pMotionVectorsSRV = nullptr;
 
         /// SSR settings
@@ -140,7 +140,6 @@ private:
         RESOURCE_IDENTIFIER_INPUT_MATERIAL_PARAMETERS,
         RESOURCE_IDENTIFIER_INPUT_MOTION_VECTORS,
         RESOURCE_IDENTIFIER_INPUT_LAST = RESOURCE_IDENTIFIER_INPUT_MOTION_VECTORS,
-
         RESOURCE_IDENTIFIER_CONSTANT_BUFFER,
         RESOURCE_IDENTIFIER_DEPTH_HIERARCHY,
         RESOURCE_IDENTIFIER_DEPTH_HIERARCHY_INTERMEDIATE,

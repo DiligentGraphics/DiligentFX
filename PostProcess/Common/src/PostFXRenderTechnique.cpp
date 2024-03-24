@@ -87,18 +87,13 @@ void PostFXRenderTechnique::InitializePSO(IRenderDevice*                     pDe
         GraphicsPipeline.RTVFormats[RTIndex] = RTVFmts[RTIndex];
 
     PSO.Release();
-    SRB.Release();
     PSO = RenderDeviceWithCache<false>{pDevice, pStateCache}.CreateGraphicsPipelineState(PSOCreateInfo);
 }
 
 void PostFXRenderTechnique::InitializeSRB(bool InitStaticResources)
 {
+    SRB.Release();
     PSO->CreateShaderResourceBinding(&SRB, InitStaticResources);
-}
-
-bool PostFXRenderTechnique::IsInitialized() const
-{
-    return SRB && PSO;
 }
 
 } // namespace Diligent

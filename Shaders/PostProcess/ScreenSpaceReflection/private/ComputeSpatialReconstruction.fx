@@ -154,7 +154,8 @@ PSOutput ComputeSpatialReconstructionPS(in FullScreenTriangleVSOutput VSOut)
 #else
         int2 SampleCoord = ClampScreenCoord(int2(Position.xy + Radius * Xi), int2(g_Camera.f4ViewportSize.xy));
 #endif
-        float2 WeightLength = ComputeWeightRayLength(SampleCoord, ViewWS, NormalWS, Roughness, NdotV, ComputeGaussianWeight(Poisson[SampleIdx].z));
+        float WeightS = ComputeSpatialWeight(Poisson[SampleIdx].z * Poisson[SampleIdx].z, SSR_SPATIAL_RECONSTRUCTION_SIGMA);
+        float2 WeightLength = ComputeWeightRayLength(SampleCoord, ViewWS, NormalWS, Roughness, NdotV, WeightS);
         float4 SampleColor = g_TextureIntersectSpecular.Load(int3(SampleCoord, 0));
         ComputeWeightedVariance(PixelAreaStat, SampleColor, WeightLength.x);
 

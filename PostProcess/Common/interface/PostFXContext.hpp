@@ -47,6 +47,12 @@ struct CameraAttribs;
 class PostFXContext
 {
 public:
+    enum FEATURE_FLAGS : Uint32
+    {
+        FEATURE_FLAG_NONE           = 0,
+        FEATURE_FLAG_REVERSED_DEPTH = 1 << 0, // Not implemented
+    };
+
     struct FrameDesc
     {
         Uint32 Index  = 0;
@@ -64,6 +70,15 @@ public:
 
         /// Device context that will record the rendering commands.
         IDeviceContext* pDeviceContext = nullptr;
+
+        /// Current depth buffer
+        ITextureView* pCurrDepthBufferSRV = nullptr;
+
+        /// Previous depth buffer
+        ITextureView* pPrevDepthBufferSRV = nullptr;
+
+        /// Shader resource view of the motion vectors.
+        ITextureView* pMotionVectorsSRV = nullptr;
 
         /// Current camera settings
         const HLSL::CameraAttribs* pCurrCamera = nullptr;
@@ -98,11 +113,15 @@ public:
 
     ~PostFXContext();
 
-    void PrepareResources(const FrameDesc& Desc);
+    void PrepareResources(IRenderDevice* pDevice, const FrameDesc& Desc, FEATURE_FLAGS FeatureFlags);
 
     void Execute(const RenderAttributes& RenderAttribs);
 
     ITextureView* Get2DBlueNoiseSRV(BLUE_NOISE_DIMENSION Dimension) const;
+
+    ITextureView* GetReprojectedDepth() const;
+
+    ITextureView* GetClosestMotionVectors() const;
 
     IBuffer* GetCameraAttribsCB() const;
 
@@ -119,23 +138,38 @@ public:
     static void ClearRenderTarget(IDeviceContext* pDeviceContext, ITexture* pTexture, float ClearColor[]);
 
 private:
+    void ComputeBlueNoiseTexture(const RenderAttributes& RenderAttribs);
+
+    void ComputeReprojectedDepth(const RenderAttributes& RenderAttribs);
+
+    void ComputeClosestMotion(const RenderAttributes& RenderAttribs);
+
+private:
     using RenderTechnique  = PostFXRenderTechnique;
     using ResourceInternal = RefCntAutoPtr<IDeviceObject>;
 
     enum RENDER_TECH : Uint32
     {
         RENDER_TECH_COMPUTE_BLUE_NOISE_TEXTURE = 0,
+        RENDER_TECH_COMPUTE_REPROJECTED_DEPTH,
+        RENDER_TECH_COMPUTE_CLOSEST_MOTION,
         RENDER_TECH_COUNT
     };
 
     enum RESOURCE_IDENTIFIER : Uint32
     {
-        RESOURCE_IDENTIFIER_CONSTANT_BUFFER = 0,
+        RESOURCE_IDENTIFIER_INPUT_CURR_DEPTH = 0,
+        RESOURCE_IDENTIFIER_INPUT_PREV_DEPTH,
+        RESOURCE_IDENTIFIER_INPUT_MOTION_VECTORS,
+        RESOURCE_IDENTIFIER_INPUT_LAST = RESOURCE_IDENTIFIER_INPUT_MOTION_VECTORS,
+        RESOURCE_IDENTIFIER_CONSTANT_BUFFER,
         RESOURCE_IDENTIFIER_INDEX_BUFFER_INTERMEDIATE,
         RESOURCE_IDENTIFIER_SOBOL_BUFFER,
         RESOURCE_IDENTIFIER_SCRAMBLING_TILE_BUFFER,
         RESOURCE_IDENTIFIER_BLUE_NOISE_TEXTURE_XY,
         RESOURCE_IDENTIFIER_BLUE_NOISE_TEXTURE_ZW,
+        RESOURCE_IDENTIFIER_REPROJECTED_DEPTH,
+        RESOURCE_IDENTIFIER_CLOSEST_MOTION,
         RESOURCE_IDENTIFIER_COUNT
     };
 
@@ -145,6 +179,8 @@ private:
 
     FrameDesc               m_FrameDesc         = {};
     SupportedDeviceFeatures m_SupportedFeatures = {};
+
+    FEATURE_FLAGS m_FeatureFlags = FEATURE_FLAG_NONE;
 };
 
 } // namespace Diligent
