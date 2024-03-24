@@ -86,7 +86,8 @@ HnRenderPass::DrawListItem::DrawListItem(HnRenderDelegate& RenderDelegate, const
     Material{*Item.GetMaterial()},
     MeshEntity{Mesh.GetEntity()},
     MeshUID{static_cast<float>(Mesh.GetUID())},
-    RenderStateID{0}
+    RenderStateID{0},
+    NumVertexBuffers{0}
 {
     entt::registry& Registry = RenderDelegate.GetEcsRegistry();
     PrevTransform            = Registry.get<HnMesh::Components::Transform>(MeshEntity).Val;

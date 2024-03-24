@@ -123,15 +123,18 @@ private:
         const HnMesh&     Mesh;
         const HnMaterial& Material;
 
-        const entt::entity MeshEntity;
-
         IPipelineState* pPSO = nullptr;
 
-        const float MeshUID;
+        const entt::entity MeshEntity;
+        const float        MeshUID;
 
         // Unique ID that identifies the combination of render states used to render the draw item
         // (PSO, SRB, vertex and index buffers). It is used to batch draw calls into a multi-draw command.
-        Uint32 RenderStateID;
+        Uint32 RenderStateID : 28;
+        Uint32 NumVertexBuffers : 4;
+
+        // Mesh Geometry + Mesh Material version
+        Uint32 Version = 0;
 
         Uint32 NumVertices = 0;
         Uint32 StartIndex  = 0;
@@ -151,11 +154,7 @@ private:
 
         IBuffer* IndexBuffer = nullptr;
 
-        std::array<IBuffer*, 4> VertexBuffers    = {};
-        Uint32                  NumVertexBuffers = 0;
-
-        // Mesh Geometry + Mesh Material version
-        Uint32 Version = 0;
+        std::array<IBuffer*, 4> VertexBuffers = {};
 
         explicit DrawListItem(HnRenderDelegate& RenderDelegate, const HnDrawItem& Item) noexcept;
 
