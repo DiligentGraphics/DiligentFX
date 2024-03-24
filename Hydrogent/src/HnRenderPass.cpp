@@ -365,6 +365,7 @@ void HnRenderPass::Execute(HnRenderPassState& RPState, const pxr::TfTokenVector&
 
     entt::registry& Registry = State.RenderDelegate.GetEcsRegistry();
 
+    // Note: accessing components through a view is faster than accessing them through the registry.
     auto MeshAttribsView = Registry.view<const HnMesh::Components::Transform,
                                          const HnMesh::Components::DisplayColor,
                                          const HnMesh::Components::Visibility>();
