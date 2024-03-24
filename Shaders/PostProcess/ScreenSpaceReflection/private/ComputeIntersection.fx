@@ -42,7 +42,7 @@ float3 ScreenSpaceToWorldSpace(float3 ScreenCoordUV)
 
 float2 GetMipResolution(float2 ScreenDimensions, int MipLevel)
 {
-    return ScreenDimensions * pow(0.5, float(MipLevel));
+    return ScreenDimensions * rcp(float(1 << MipLevel));
 }
 
 float2 SampleRandomVector2D(int2 PixelCoord)
@@ -144,7 +144,7 @@ float3 HierarchicalRaymarch(float3 Origin, float3 Direction, float2 ScreenSize, 
     
     // Offset to the bounding boxes uv space to intersect the ray with the center of the next pixel.
     // This means we ever so slightly over shoot into the next region.
-    float2 UVOffset = 0.005 * exp2(float(MostDetailedMip)) / ScreenSize;
+    float2 UVOffset = 0.005 * float(1 << MostDetailedMip) / ScreenSize;
     UVOffset.x = Direction.x < 0.0f ? -UVOffset.x : UVOffset.x;
     UVOffset.y = Direction.y < 0.0f ? -UVOffset.y : UVOffset.y;
 
@@ -196,7 +196,7 @@ float ValidateHit(float3 Hit, float2 ScreenCoordUV, float3 RayDirectionWS, float
     // Reject hits outside the view frustum
     if (Hit.x < 0.0f || Hit.y < 0.0f || Hit.x > 1.0f || Hit.y > 1.0f)
         return 0.0;
-
+    
     // Reject the hit if we didn't advance the ray significantly to avoid immediate self reflection
     float2 ManhattanDist = abs(Hit.xy - ScreenCoordUV);
     if (ManhattanDist.x < (2.0f / ScreenSize.x) && ManhattanDist.y < (2.0f / ScreenSize.y))
@@ -275,28 +275,11 @@ float4 SampleReflectionVector(float3 View, float3 Normal, float Roughness, int2 
     return float4(normalize(mul(SampleDirTS, TangentToWorld)), PDF);
 }
 
-uint ComputeOffset(uint2 PixelCoord)
-{
-    // This is the packed matrix:
-    //  0 1 2 3
-    //  3 2 1 0
-    //  1 0 3 2
-    //  2 3 0 1
-    uint PackedOffsets =
-        (0u << 0u)  | (1u << 2u)  | (2u << 4u)  | (3u << 6u)  |
-        (3u << 8u)  | (2u << 10u) | (1u << 12u) | (0u << 14u) |
-        (1u << 16u) | (0u << 18u) | (3u << 20u) | (2u << 22u) |
-        (2u << 24u) | (3u << 26u) | (0u << 28u) | (1u << 30u);
-
-    uint Idx = ((PixelCoord.x & 0x3u) << 3u) + ((PixelCoord.y & 0x3u) << 1u);
-    return (PackedOffsets >> Idx) & 0x3u;
-}
-
 SSR_ATTRIBUTE_EARLY_DEPTH_STENCIL
 PSOutput ComputeIntersectionPS(in FullScreenTriangleVSOutput VSOut)
 {
 #if SSR_OPTION_HALF_RESOLUTION
-    uint SampleIdx = ComputeOffset(uint2(VSOut.f4PixelPos.xy));
+    uint SampleIdx = ComputeHalfResolutionOffset(uint2(VSOut.f4PixelPos.xy));
     float2 Position = 2.0 * floor(VSOut.f4PixelPos.xy) + float2(SampleIdx & 0x01u, SampleIdx >> 1u) + 0.5;
 #else
     float2 Position = VSOut.f4PixelPos.xy;

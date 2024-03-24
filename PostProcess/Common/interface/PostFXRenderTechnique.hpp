@@ -59,10 +59,18 @@ struct PostFXRenderTechnique
 
     void InitializeSRB(bool InitStaticResources);
 
-    bool IsInitialized() const;
+    bool IsInitializedPSO() const
+    {
+        return PSO != nullptr;
+    }
 
-    RefCntAutoPtr<IPipelineState>         PSO;
-    RefCntAutoPtr<IShaderResourceBinding> SRB;
+    bool IsInitializedSRB() const
+    {
+        return SRB != nullptr;
+    }
+
+    RefCntAutoPtr<IPipelineState>         PSO{};
+    RefCntAutoPtr<IShaderResourceBinding> SRB{};
 };
 
 } // namespace Diligent

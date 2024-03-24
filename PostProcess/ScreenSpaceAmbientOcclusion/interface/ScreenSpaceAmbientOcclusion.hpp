@@ -54,8 +54,9 @@ public:
         FEATURE_FLAG_REVERSED_DEPTH       = 1 << 0, // Not implemented
         FEATURE_FLAG_PACKED_NORMAL        = 1 << 1, // Nor implemented
         FEATURE_FLAG_HALF_PRECISION_DEPTH = 1 << 2,
-        FEATURE_FLAG_UNIFORM_WEIGHTING    = 1 << 3,
-        FEATURE_FLAG_GUIDED_FILTER        = 1 << 4,
+        FEATURE_FLAG_HALF_RESOLUTION      = 1 << 3,
+        FEATURE_FLAG_UNIFORM_WEIGHTING    = 1 << 4,
+        FEATURE_FLAG_GUIDED_FILTER        = 1 << 5,
     };
 
     struct RenderAttributes
@@ -81,9 +82,6 @@ public:
         /// Shader resource view of the source normal buffer
         ITextureView* pNormalBufferSRV = nullptr;
 
-        /// Shader resource view of the motion vectors.
-        ITextureView* pMotionVectorsSRV = nullptr;
-
         /// SSAO settings
         const HLSL::ScreenSpaceAmbientOcclusionAttribs* pSSAOAttribs = nullptr;
     };
@@ -107,10 +105,14 @@ private:
 
     enum RENDER_TECH : Uint32
     {
-        RENDER_TECH_COMPUTE_PREFILTERED_DEPTH_BUFFER = 0,
+        RENDER_TECH_COMPUTE_DOWNSAMPLED_DEPTH_BUFFER = 0,
+        RENDER_TECH_COMPUTE_PREFILTERED_DEPTH_BUFFER,
         RENDER_TECH_COMPUTE_AMBIENT_OCCLUSION,
-        RENDER_TECH_COMPUTE_SPATIAL_RECONSTRUCTION,
         RENDER_TECH_COMPUTE_TEMPORAL_ACCUMULATION,
+        RENDER_TECH_COMPUTE_CONVOLUTED_DEPTH_HISTORY,
+        RENDER_TECH_COMPUTE_RESAMPLED_HISTORY,
+        RENDER_TECH_COMPUTE_SPATIAL_RECONSTRUCTION,
+        RENDER_TECH_COMPUTE_BILATERAL_UPSAMPLING,
         RENDER_TECH_COPY_DEPTH,
         RENDER_TECH_COUNT
     };
@@ -120,27 +122,43 @@ private:
         RESOURCE_IDENTIFIER_INPUT_CURR_DEPTH = 0,
         RESOURCE_IDENTIFIER_INPUT_PREV_DEPTH,
         RESOURCE_IDENTIFIER_INPUT_NORMAL,
-        RESOURCE_IDENTIFIER_INPUT_MOTION_VECTORS,
-        RESOURCE_IDENTIFIER_INPUT_LAST = RESOURCE_IDENTIFIER_INPUT_MOTION_VECTORS,
+        RESOURCE_IDENTIFIER_INPUT_LAST = RESOURCE_IDENTIFIER_INPUT_NORMAL,
         RESOURCE_IDENTIFIER_CONSTANT_BUFFER,
+        RESOURCE_IDENTIFIER_DEPTH_CHECKERBOARD_HALF_RES,
         RESOURCE_IDENTIFIER_DEPTH_PREFILTERED,
         RESOURCE_IDENTIFIER_DEPTH_PREFILTERED_INTERMEDIATE,
+        RESOURCE_IDENTIFIER_DEPTH_CONVOLUTED,
+        RESOURCE_IDENTIFIER_DEPTH_CONVOLUTED_INTERMEDIATE,
         RESOURCE_IDENTIFIER_OCCLUSION,
-        RESOURCE_IDENTIFIER_OCCLUSION_RESOLVED,
         RESOURCE_IDENTIFIER_OCCLUSION_HISTORY0,
         RESOURCE_IDENTIFIER_OCCLUSION_HISTORY1,
+        RESOURCE_IDENTIFIER_OCCLUSION_HISTORY_LENGTH0,
+        RESOURCE_IDENTIFIER_OCCLUSION_HISTORY_LENGTH1,
+        RESOURCE_IDENTIFIER_OCCLUSION_HISTORY_CONVOLUTED,
+        RESOURCE_IDENTIFIER_OCCLUSION_HISTORY_CONVOLUTED_INTERMEDIATE,
+        RESOURCE_IDENTIFIER_OCCLUSION_HISTORY_RESAMPLED,
+        RESOURCE_IDENTIFIER_OCCLUSION_HISTORY_RESOLVED,
+        RESOURCE_IDENTIFIER_OCCLUSION_UPSAMPLED,
         RESOURCE_IDENTIFIER_COUNT
     };
 
     void CopyTextureDepth(const RenderAttributes& RenderAttribs, ITextureView* pSRV, ITextureView* pRTV);
 
+    void ComputeDepthCheckerboard(const RenderAttributes& RenderAttribs);
+
     void ComputePrefilteredDepth(const RenderAttributes& RenderAttribs);
 
     void ComputeAmbientOcclusion(const RenderAttributes& RenderAttribs);
 
+    void ComputeTemporalAccumulation(const RenderAttributes& RenderAttribs);
+
+    void ComputeConvolutedDepthHistory(const RenderAttributes& RenderAttribs);
+
+    void ComputeResampledHistory(const RenderAttributes& RenderAttribs);
+
     void ComputeSpatialReconstruction(const RenderAttributes& RenderAttribs);
 
-    void ComputeTemporalAccumulation(const RenderAttributes& RenderAttribs);
+    void ComputeBilateralUpsampling(const RenderAttributes& RenderAttribs);
 
     RenderTechnique& GetRenderTechnique(RENDER_TECH RenderTech, FEATURE_FLAGS FeatureFlags);
 
@@ -175,6 +193,12 @@ private:
     ResourceRegistry m_Resources{RESOURCE_IDENTIFIER_COUNT};
 
     std::unique_ptr<HLSL::ScreenSpaceAmbientOcclusionAttribs> m_SSAOAttribs;
+
+    std::vector<RefCntAutoPtr<ITextureView>> m_ConvolutedHistoryMipMapRTV;
+    std::vector<RefCntAutoPtr<ITextureView>> m_ConvolutedHistoryMipMapSRV;
+
+    std::vector<RefCntAutoPtr<ITextureView>> m_ConvolutedDepthMipMapRTV;
+    std::vector<RefCntAutoPtr<ITextureView>> m_ConvolutedDepthMipMapSRV;
 
     std::vector<RefCntAutoPtr<ITextureView>> m_PrefilteredDepthMipMapRTV;
     std::vector<RefCntAutoPtr<ITextureView>> m_PrefilteredDepthMipMapSRV;

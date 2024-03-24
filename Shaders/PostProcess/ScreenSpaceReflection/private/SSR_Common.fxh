@@ -45,34 +45,6 @@ float2 MapSquareToDisk(float2 Point)
     return float2(cos(Phi) * Lam, sin(Phi) * Lam);
 }
 
-float Bayer4x4(uint2 SamplePos, uint FrameIndex)
-{
-    uint2 SamplePosWrap = SamplePos & 3u;
-    uint A = 2068378560u * (1u - (SamplePosWrap.x >> 1u)) + 1500172770u * (SamplePosWrap.x >> 1u);
-    uint B = (SamplePosWrap.y + ((SamplePosWrap.x & 1u) << 2u)) << 2u;
-    uint SampleOffset = FrameIndex;
-    uint Bayer = ((A >> B) + SampleOffset) & 0xFu;
-    return float(Bayer) / 16.0;
-}
-
-float4 GetRotator(float Angle)
-{
-    float Sin = 0.0;
-    float Cos = 0.0;
-    sincos(Angle, Sin, Cos);
-    return float4(Cos, Sin, -Sin, Cos);
-}
-
-float4 CombineRotators(float4 R1, float4 R2)
-{
-    return R1.xyxy * R2.xxzz + R1.zwzw * R2.yyww;
-}
-
-float2 RotateVector(float4 Rotator, float2 Vec)
-{
-    return Vec.x * Rotator.xz + Vec.y * Rotator.yw;
-}
-
 bool IsBackground(float Depth)
 {
 #if SSR_OPTION_INVERTED_DEPTH

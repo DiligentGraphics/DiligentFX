@@ -20,7 +20,7 @@ cbuffer cbScreenSpaceAmbientOcclusionAttribs
 Texture2D<float> g_TextureLastMip;
 #else
 Texture2D<float> g_TextureMips;
-SamplerState     g_TextureMipsSampler;
+SamplerState     g_TextureMips_sampler;
 #endif
 
 #if SUPPORTED_SHADER_SRV

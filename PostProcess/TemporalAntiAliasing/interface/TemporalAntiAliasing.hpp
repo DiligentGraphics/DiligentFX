@@ -87,9 +87,6 @@ public:
         /// Shader resource view of the source depth from previous frame.
         ITextureView* pPrevDepthBufferSRV = nullptr;
 
-        /// Shader resource view of the motion vectors.
-        ITextureView* pMotionVectorsSRV = nullptr;
-
         /// TAA settings.
         const HLSL::TemporalAntiAliasingAttribs* pTAAAttribs = nullptr;
     };
@@ -124,8 +121,7 @@ private:
         RESOURCE_IDENTIFIER_INPUT_COLOR = 0,
         RESOURCE_IDENTIFIER_INPUT_CURR_DEPTH,
         RESOURCE_IDENTIFIER_INPUT_PREV_DEPTH,
-        RESOURCE_IDENTIFIER_INPUT_MOTION_VECTORS,
-        RESOURCE_IDENTIFIER_INPUT_LAST = RESOURCE_IDENTIFIER_INPUT_MOTION_VECTORS,
+        RESOURCE_IDENTIFIER_INPUT_LAST = RESOURCE_IDENTIFIER_INPUT_PREV_DEPTH,
 
         RESOURCE_IDENTIFIER_CONSTANT_BUFFER,
         RESOURCE_IDENTIFIER_ACCUMULATED_BUFFER0,

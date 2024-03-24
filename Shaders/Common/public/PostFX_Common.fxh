@@ -40,6 +40,46 @@ float Luminance(float3 Color)
     return dot(Color, float3(0.299f, 0.587f, 0.114f));
 }
 
+uint ComputeHalfResolutionOffset(uint2 PixelCoord)
+{
+    // This is the packed matrix:
+    //  0 1 2 3
+    //  3 2 1 0
+    //  1 0 3 2
+    //  2 3 0 1
+    uint PackedOffsets = 1320229860u;
+    uint Idx = ((PixelCoord.x & 0x3u) << 3u) + ((PixelCoord.y & 0x3u) << 1u);
+    return (PackedOffsets >> Idx) & 0x3u;
+}
+
+float Bayer4x4(uint2 SamplePos, uint FrameIndex)
+{
+    uint2 SamplePosWrap = SamplePos & 3u;
+    uint A = 2068378560u * (1u - (SamplePosWrap.x >> 1u)) + 1500172770u * (SamplePosWrap.x >> 1u);
+    uint B = (SamplePosWrap.y + ((SamplePosWrap.x & 1u) << 2u)) << 2u;
+    uint SampleOffset = FrameIndex;
+    uint Bayer = ((A >> B) + SampleOffset) & 0xFu;
+    return float(Bayer) / 16.0;
+}
+
+float4 GetRotator(float Angle)
+{
+    float Sin = 0.0;
+    float Cos = 0.0;
+    sincos(Angle, Sin, Cos);
+    return float4(Cos, Sin, -Sin, Cos);
+}
+
+float4 CombineRotators(float4 R1, float4 R2)
+{
+    return R1.xyxy * R2.xxzz + R1.zwzw * R2.yyww;
+}
+
+float2 RotateVector(float4 Rotator, float2 Vec)
+{
+    return Vec.x * Rotator.xz + Vec.y * Rotator.yw;
+}
+
 float3 ProjectPosition(float3 Origin, float4x4 Transform)
 {
     float4 Projected = mul(float4(Origin, 1.0), Transform);
@@ -99,6 +139,11 @@ bool IsInsideScreen(float2 PixelCoord, float2 Dimension)
 int2 ClampScreenCoord(int2 PixelCoord, int2 Dimension)
 {
     return clamp(PixelCoord, int2(0, 0), Dimension - int2(1, 1));
+}
+
+float ComputeSpatialWeight(float Distance, float Sigma)
+{
+    return exp(-(Distance) / (2.0 * Sigma * Sigma));
 }
 
 #endif // _POST_FX_COMMON_FXH_

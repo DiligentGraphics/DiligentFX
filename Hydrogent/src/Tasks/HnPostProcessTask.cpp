@@ -540,7 +540,7 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
     m_UseSSAO = m_SSAOScale > 0;
     m_UseTAA  = m_Params.EnableTAA && EnablePostProcessing;
 
-    m_PostFXContext->PrepareResources({pRenderParam->GetFrameNumber(), FinalColorDesc.Width, FinalColorDesc.Height});
+    m_PostFXContext->PrepareResources(pDevice, {pRenderParam->GetFrameNumber(), FinalColorDesc.Width, FinalColorDesc.Height}, PostFXContext::FEATURE_FLAG_NONE);
 
     constexpr auto SSAOFeatureFlags =
         ScreenSpaceAmbientOcclusion::FEATURE_FLAG_GUIDED_FILTER |
@@ -666,6 +666,10 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
     {
         PostFXContext::RenderAttributes PostFXAttribs{pDevice, pStateCache, pCtx};
 
+        PostFXAttribs.pCurrDepthBufferSRV = m_FrameTargets->DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        PostFXAttribs.pPrevDepthBufferSRV = m_FrameTargets->PrevDepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        PostFXAttribs.pMotionVectorsSRV   = m_FrameTargets->GBufferSRVs[HnFrameRenderTargets::GBUFFER_TARGET_MOTION_VECTOR];
+
         pxr::VtValue PBRFrameAttribsVal = (*TaskCtx)[HnRenderResourceTokens->frameShaderAttribs];
         if (PBRFrameAttribsVal.IsHolding<HLSL::PBRFrameAttribs*>())
         {
@@ -703,7 +707,6 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         SSAORenderAttribs.pCurrDepthBufferSRV = m_FrameTargets->DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
         SSAORenderAttribs.pPrevDepthBufferSRV = m_FrameTargets->PrevDepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
         SSAORenderAttribs.pNormalBufferSRV    = m_FrameTargets->GBufferSRVs[HnFrameRenderTargets::GBUFFER_TARGET_NORMAL];
-        SSAORenderAttribs.pMotionVectorsSRV   = m_FrameTargets->GBufferSRVs[HnFrameRenderTargets::GBUFFER_TARGET_MOTION_VECTOR];
         SSAORenderAttribs.pSSAOAttribs        = &m_Params.SSAO;
         m_SSAO->Execute(SSAORenderAttribs);
     }
@@ -763,7 +766,6 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         TAARenderAttribs.pColorBufferSRV     = m_FrameTargets->JitteredFinalColorRTV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
         TAARenderAttribs.pCurrDepthBufferSRV = m_FrameTargets->DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
         TAARenderAttribs.pPrevDepthBufferSRV = m_FrameTargets->PrevDepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-        TAARenderAttribs.pMotionVectorsSRV   = m_FrameTargets->GBufferSRVs[HnFrameRenderTargets::GBUFFER_TARGET_MOTION_VECTOR];
         TAARenderAttribs.pTAAAttribs         = &TAASettings;
         m_TAA->Execute(TAARenderAttribs);
 

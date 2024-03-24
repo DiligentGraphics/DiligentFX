@@ -15,8 +15,10 @@ cbuffer cbScreenSpaceAmbientOcclusionAttribs
     ScreenSpaceAmbientOcclusionAttribs g_SSAOAttribs;
 }
 
-Texture2D<float> g_TextureOcclusion;
-Texture2D<float> g_TextureDepth;
+Texture2D<float>  g_TextureOcclusion;
+Texture2D<float>  g_TextureHistory;
+Texture2D<float>  g_TextureDepth;
+Texture2D<float3> g_TextureNormal;
 
 float SampleOcclusion(int2 PixelCoord)
 {
@@ -28,98 +30,70 @@ float SampleDepth(int2 PixelCoord)
     return g_TextureDepth.Load(int3(PixelCoord, 0));
 }
 
-float GuidedFilter(int2 Position)
+float SampleHistory(int2 PixelCoord)
 {
-    float X = 0.0f;
-    float Y = 0.0f;
-    float XY = 0.0f;
-    float X2 = 0.0f;
-    float X3 = 0.0f;
-    float X4 = 0.0f;
-    float X2Y = 0.0f;
-
-    float WeightSum = 0.0;
-    for (int x = -SSAO_SPATIAL_RECONSTRUCTION_RADIUS; x <= SSAO_SPATIAL_RECONSTRUCTION_RADIUS; x++)
-    {
-        for (int y = -SSAO_SPATIAL_RECONSTRUCTION_RADIUS; y <= SSAO_SPATIAL_RECONSTRUCTION_RADIUS; y++)
-        {
-            int2 Location = ClampScreenCoord(Position + int2(x, y), int2(g_Camera.f4ViewportSize.xy));
-          
-            float SampledSignal = SampleOcclusion(Location);
-            float SampledGuided = DepthToCameraZ(SampleDepth(Location), g_Camera.mProj);
-            float WeightSpatial = exp(-0.5 * float(x * x + y * y) / (SSAO_SPATIAL_RECONSTRUCTION_SIGMA * SSAO_SPATIAL_RECONSTRUCTION_SIGMA));
-
-            X += WeightSpatial * SampledGuided;
-            Y += WeightSpatial * SampledSignal;
-            XY += WeightSpatial * SampledGuided * SampledSignal;
-            X2 += WeightSpatial * SampledGuided * SampledGuided;
-            X3 += WeightSpatial * SampledGuided * SampledGuided * SampledGuided;
-            X4 += WeightSpatial * SampledGuided * SampledGuided * (SampledGuided * SampledGuided);
-            X2Y += WeightSpatial * SampledGuided * SampledGuided * SampledSignal;
-
-            WeightSum += WeightSpatial;
-        }
-    }
-
-    X /= WeightSum;
-    Y /= WeightSum;
-    XY /= WeightSum;
-    X2 /= WeightSum;
-    X3 /= WeightSum;
-    X4 /= WeightSum;
-    X2Y /= WeightSum;
-
-    float CYX = XY - X * Y;
-    float CYX2 = X2Y - X2 * Y;
-    float CXX2 = X3 - X2 * X;
-    float VX1 = X2 - X * X;
-    float VX2 = X4 - X2 * X2;
-
-    float Divider = (VX1 * VX2 - CXX2 * CXX2);
-    float LinearDepth = DepthToCameraZ(SampleDepth(Position.xy), g_Camera.mProj);
-
-    float Beta1 = (CYX * VX2 - CYX2 * CXX2) / Divider;
-    float Beta2 = (CYX2 * VX1 - CYX * CXX2) / Divider;
-    float Alpha = Y - Beta1 * X - Beta2 * X2;
-    return Beta1 * LinearDepth + Beta2 * LinearDepth * LinearDepth + Alpha;
+    return g_TextureHistory.Load(int3(PixelCoord, 0));
 }
 
-float BilateralFilter(int2 Position)
+float3 SampleNormalWS(int2 PixelCoord)
 {
-    float LinearDepth = DepthToCameraZ(SampleDepth(Position), g_Camera.mProj);
-    float OcclusionSum = 1.e-8f;
-    float WeightSum = 1.e-8f;
-    for (int x = -SSAO_SPATIAL_RECONSTRUCTION_RADIUS; x <= SSAO_SPATIAL_RECONSTRUCTION_RADIUS; x++)
-    {
-        for (int y = -SSAO_SPATIAL_RECONSTRUCTION_RADIUS; y <= SSAO_SPATIAL_RECONSTRUCTION_RADIUS; y++)
-        {
-            int2 Location = ClampScreenCoord(Position + int2(x, y), int2(g_Camera.f4ViewportSize.xy));
-          
-            float SampledSignal = SampleOcclusion(Location);
-            float SampledGuided = DepthToCameraZ(SampleDepth(Location), g_Camera.mProj);
-            float WeightS = exp(-0.5 * float(x * x + y * y) / (SSAO_SPATIAL_RECONSTRUCTION_SIGMA * SSAO_SPATIAL_RECONSTRUCTION_SIGMA));
-            float WeightZ = exp(-0.5 * pow(LinearDepth - SampledGuided, 2.0) / (SSAO_SPATIAL_RECONSTRUCTION_DEPTH_SIGMA * SSAO_SPATIAL_RECONSTRUCTION_DEPTH_SIGMA));
-
-            OcclusionSum += WeightS * WeightZ * SampledSignal;
-            WeightSum    += WeightS * WeightZ;
-        }
-    }
-    return OcclusionSum / WeightSum;
+    return g_TextureNormal.Load(int3(PixelCoord, 0));
+}
+ 
+float4 ComputeBlurKernelRotation(uint2 PixelCoord, uint FrameIndex)
+{
+    float Angle = Bayer4x4(PixelCoord, FrameIndex);
+    return GetRotator(2.0 * M_PI * Angle);
 }
 
-// Implemented based on this article
-// https://bartwronski.com/2019/09/22/local-linear-models-guided-filter/
-// https://colab.research.google.com/github/bartwronski/BlogPostsExtraMaterial/blob/master/Bilateral_and_guided_SSAO.ipynb
 float ComputeSpatialReconstructionPS(in FullScreenTriangleVSOutput VSOut) : SV_Target0
 {
+    // samples = 8, min distance = 0.5, average samples on radius = 2
+    float3 Poisson[SSAO_SPATIAL_RECONSTRUCTION_SAMPLES];
+    Poisson[0] = float3(-0.4706069, -0.4427112, +0.6461146);
+    Poisson[1] = float3(-0.9057375, +0.3003471, +0.9542373);
+    Poisson[2] = float3(-0.3487388, +0.4037880, +0.5335386);
+    Poisson[3] = float3(+0.1023042, +0.6439373, +0.6520134);
+    Poisson[4] = float3(+0.5699277, +0.3513750, +0.6695386);
+    Poisson[5] = float3(+0.2939128, -0.1131226, +0.3149309);
+    Poisson[6] = float3(+0.7836658, -0.4208784, +0.8895339);
+    Poisson[7] = float3(+0.1564120, -0.8198990, +0.8346850);
+    
     float4 Position = VSOut.f4PixelPos;
-    if (IsBackground(SampleDepth(int2(Position.xy))))
-        return 1.0;
+    float History = SampleHistory(int2(Position.xy));
+    float Depth = SampleDepth(int2(Position.xy));
+    float AccumulationFactor = pow(abs((History - 1.0) / float(SSAO_OCCLUSION_HISTORY_MAX_FRAMES_WITH_DENOISING)), 0.2);
+    
+    if (IsBackground(Depth) || AccumulationFactor >= 1.0)
+        return SampleOcclusion(int2(Position.xy));
 
-#if SSAO_OPTION_GUIDED_FILTER
-    return GuidedFilter(int2(Position.xy));
-#else
-    return BilateralFilter(int2(Position.xy));
-#endif
+    float3 PositionSS = float3(Position.xy * g_Camera.f4ViewportSize.zw, Depth);
+    float3 PositionVS = FastReconstructPosition(PositionSS, g_Camera.mProj);
+    float3 NormalVS = mul(float4(SampleNormalWS(int2(Position.xy)), 0.0), g_Camera.mView).xyz;
+    float4 Rotator = ComputeBlurKernelRotation(uint2(Position.xy), g_Camera.uiFrameIndex);
+    float Radius = lerp(0.0, g_SSAOAttribs.SpatialReconstructionRadius, 1.0 - saturate(AccumulationFactor));
+    float PlaneNormalFactor = 10.0 / (1.0 + DepthToCameraZ(Depth, g_Camera.mProj));
+   
+    float OcclusionSum = 0.0;
+    float WeightSum = 0.0;
+        
+    for (int SampleIdx = 0; SampleIdx < SSAO_SPATIAL_RECONSTRUCTION_SAMPLES; SampleIdx++)
+    {
+        float2 Xi = RotateVector(Rotator, Poisson[SampleIdx].xy);
+        int2 SampleCoord = ClampScreenCoord(int2(Position.xy + Radius * Xi), int2(g_Camera.f4ViewportSize.xy));
+        
+        float SampledDepth = SampleDepth(SampleCoord);
+        float SampledOcclusion = SampleOcclusion(SampleCoord);
 
+        float3 SamplePositionSS = float3((float2(SampleCoord) + 0.5) * g_Camera.f4ViewportSize.zw, SampledDepth);
+        float3 SamplePositionVS = FastReconstructPosition(SamplePositionSS, g_Camera.mProj);
+                
+        float WeightS = ComputeSpatialWeight(Poisson[SampleIdx].z * Poisson[SampleIdx].z, SSAO_SPATIAL_RECONSTRUCTION_SIGMA);
+        float WeightZ = ComputeGeometryWeight(PositionVS, SamplePositionVS, NormalVS, PlaneNormalFactor);
+        
+        OcclusionSum += WeightS * WeightZ * SampledOcclusion;
+        WeightSum    += WeightS * WeightZ;
+    }
+
+    return WeightSum > 0.0 ? OcclusionSum / WeightSum : SampleOcclusion(int2(Position.xy));
 }
