@@ -385,11 +385,6 @@ void HnRenderPass::Execute(HnRenderPassState& RPState, const pxr::TfTokenVector&
         if (!MeshVisibile)
             continue;
 
-        // Note: if the material changes in the mesh, the mesh material version and/or
-        //       global material version will be updated, and the draw list item GPU
-        //       resources will be updated.
-        const HnMaterial& Material = ListItem.Material;
-
         if (MultiDrawCount == PrimitiveArraySize)
             MultiDrawCount = 0;
 
@@ -471,7 +466,10 @@ void HnRenderPass::Execute(HnRenderPassState& RPState, const pxr::TfTokenVector&
             sizeof(CustomData),
             &pDstMaterialBasicAttribs,
         };
-        const GLTF::Material& MaterialData = Material.GetMaterialData();
+        // Note: if the material changes in the mesh, the mesh material version and/or
+        //       global material version will be updated, and the draw list item GPU
+        //       resources will be updated.
+        const GLTF::Material& MaterialData = ListItem.Material.GetMaterialData();
         GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(pCurrPrimitive, AttribsData, State.USDRenderer.GetSettings().TextureAttribIndices, MaterialData);
 
         pDstMaterialBasicAttribs->BaseColorFactor = MaterialData.Attribs.BaseColorFactor * DisplayColor;
