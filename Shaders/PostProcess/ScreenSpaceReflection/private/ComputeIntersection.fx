@@ -240,12 +240,12 @@ float ValidateHit(float3 Hit, float2 ScreenCoordUV, float3 RayDirectionWS, float
 
 float3 SmithGGXSampleVisibleNormalEllipsoid(float3 View, float2 Alpha, float2 Xi)
 {
-    return SmithGGXSampleVisibleNormal(View, Alpha.x, Alpha.y, Xi.x, Xi.y);
+    return SmithGGXSampleVisibleNormalSC(View, Alpha.x, Alpha.y, Xi.x, Xi.y);
 }
 
 float3 SmithGGXSampleVisibleNormalHemisphere(float3 View, float Alpha, float2 Xi)
 {
-    return SmithGGXSampleVisibleNormal(View, Alpha, Alpha, Xi.x, Xi.y);
+    return SmithGGXSampleVisibleNormalSC(View, Alpha, Alpha, Xi.x, Xi.y);
 }
 
 float4 SampleReflectionVector(float3 View, float3 Normal, float Roughness, int2 PixelCoord)
@@ -257,10 +257,10 @@ float4 SampleReflectionVector(float3 View, float3 Normal, float Roughness, int2 
     float3x3 TangentToWorld = MatrixFromRows(T, B, N);
 
     float2 Xi = SampleRandomVector2D(PixelCoord);
-    Xi.x = lerp(Xi.x, 0.0f, g_SSRAttribs.GGXImportanceSampleBias);
+    Xi.y = lerp(Xi.y, 0.0, g_SSRAttribs.GGXImportanceSampleBias);
 
     float3 NormalTS = float3(0.0, 0.0, 1.0);
-    float3 ViewDirTS = normalize(mul(View, transpose(TangentToWorld)));
+    float3 ViewDirTS = mul(TangentToWorld, View);
     float3 MicroNormalTS = SmithGGXSampleVisibleNormalHemisphere(ViewDirTS, AlphaRoughness, Xi);
     float3 SampleDirTS = reflect(-ViewDirTS, MicroNormalTS);
 
@@ -272,7 +272,7 @@ float4 SampleReflectionVector(float3 View, float3 Normal, float Roughness, int2 
     float D = NormalDistribution_GGX(NdotH, AlphaRoughness); 
     float G1 = SmithGGXMasking(NdotV, AlphaRoughness);
     float PDF = G1 * D / (4.0 * NdotV);
-    return float4(normalize(mul(SampleDirTS, TangentToWorld)), PDF);
+    return float4(mul(SampleDirTS, TangentToWorld), PDF);
 }
 
 SSR_ATTRIBUTE_EARLY_DEPTH_STENCIL
