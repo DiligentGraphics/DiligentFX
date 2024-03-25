@@ -181,7 +181,7 @@ pxr::TfToken GetMaterialTag(const pxr::VtDictionary&    Metadata,
     }
 
     // Next check for authored terminal.opacityThreshold value > 0
-    for (const auto param_it : Terminal.parameters)
+    for (const auto& param_it : Terminal.parameters)
     {
         if (param_it.first != HnMaterialPrivateTokens->opacityThreshold)
             continue;
@@ -199,7 +199,7 @@ pxr::TfToken GetMaterialTag(const pxr::VtDictionary&    Metadata,
     // Weakest opinion is an authored terminal.opacity value.
     if (!IsTranslucent)
     {
-        for (const auto param_it : Terminal.parameters)
+        for (const auto& param_it : Terminal.parameters)
         {
             if (param_it.first != HnMaterialPrivateTokens->opacity)
                 continue;
@@ -215,7 +215,7 @@ pxr::TfToken GetMaterialTag(const pxr::VtDictionary&    Metadata,
 
 float GetTerminalOpacityThreshold(const pxr::HdMaterialNode2& Terminal)
 {
-    for (const auto param_it : Terminal.parameters)
+    for (const auto& param_it : Terminal.parameters)
     {
         if (param_it.first == HnMaterialPrivateTokens->opacityThreshold)
         {
@@ -228,7 +228,7 @@ float GetTerminalOpacityThreshold(const pxr::HdMaterialNode2& Terminal)
 
 float GetTerminalOpacity(const pxr::HdMaterialNode2& Terminal)
 {
-    for (const auto param_it : Terminal.parameters)
+    for (const auto& param_it : Terminal.parameters)
     {
         if (param_it.first == HnMaterialPrivateTokens->opacity)
         {

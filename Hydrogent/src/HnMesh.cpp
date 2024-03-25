@@ -65,9 +65,9 @@ HnMesh::HnMesh(pxr::TfToken const& typeId,
                HnRenderDelegate&   RenderDelegate,
                Uint32              UID,
                entt::entity        Entity) :
+    pxr::HdMesh{id},
     m_UID{UID},
-    m_Entity{Entity},
-    pxr::HdMesh{id}
+    m_Entity{Entity}
 {
     entt::registry& Regisgtry = RenderDelegate.GetEcsRegistry();
     Regisgtry.emplace<Components::Transform>(m_Entity);
