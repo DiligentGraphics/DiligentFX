@@ -272,6 +272,28 @@ float3 SmithGGXSampleVisibleNormal(float3 View, // View direction in tangent spa
     return normalize(float3(ax * N.x, ay * N.y, max(0.0, N.z)));
 }
 
+// Samples a normal from Visible Normal Distribution as described in
+// [1] "Sampling Visible GGX Normals with Spherical Caps" (2023) by Jonathan Dupuy, Anis Benyoub
+//     https://arxiv.org/pdf/2306.05044.pdf
+float3 SmithGGXSampleVisibleNormalSC(float3 View, // View direction in tangent space
+                                     float  ax,   // X roughness
+                                     float  ay,   // Y roughness
+                                     float  u1,   // Uniform random variable in [0, 1]
+                                     float  u2    // Uniform random variable in [0, 1]
+)
+{
+    // Stretch the view vector so we are sampling as if roughness==1
+    float3 V = normalize(View * float3(ax, ay, 1.0));
+
+    float Phi = 2.0 * PI * u1;
+    float Z = (1.0 - u2) * (1.0 + V.z) - V.z;
+    float SinTheta = sqrt(clamp(1.0 - Z * Z, 0.0, 1.0));
+    float3 H = float3(SinTheta * cos(Phi), SinTheta * sin(Phi), Z) + V;
+
+    // Transform the normal back to the ellipsoid configuration
+    return normalize(float3(ax * H.x, ay * H.y, H.z));
+}
+
 // Returns the probability of sampling direction L for the view direction V and normal N
 // using the visible normals distribution.
 // [1] "Sampling the GGX Distribution of Visible Normals" (2018) by Eric Heitz
