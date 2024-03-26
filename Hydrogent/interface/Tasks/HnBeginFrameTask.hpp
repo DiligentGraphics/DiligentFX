@@ -200,7 +200,6 @@ private:
 
     std::array<pxr::SdfPath, HnFrameRenderTargets::GBUFFER_TARGET_COUNT> m_GBufferTargetIds;
 
-    pxr::SdfPath m_PrevMotionTargetId;
     pxr::SdfPath m_SelectionDepthBufferId;
 
     // Ping-pong buffers for the last two frames

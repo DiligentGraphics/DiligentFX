@@ -113,8 +113,6 @@ namespace USD
     (baseColorTarget)                    \
     (materialDataTarget)                 \
     (motionVectorsTarget)                \
-    (motionVectors0Target)               \
-    (motionVectors1Target)               \
     (iblTarget)                          \
     (meshIdTarget)                       \
     (selectionDepthBuffer)               \

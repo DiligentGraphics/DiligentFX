@@ -58,7 +58,6 @@ struct HnFrameRenderTargets
     ITextureView* SelectionDepthDSV = nullptr;
     ITextureView* DepthDSV          = nullptr;
     ITextureView* PrevDepthDSV      = nullptr;
-    ITextureView* PrevMotionRTV     = nullptr;
 
     std::array<ITextureView*, 2> ClosestSelectedLocationRTV = {};
 

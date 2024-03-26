@@ -89,14 +89,13 @@ HnBeginFrameTask::HnBeginFrameTask(pxr::HdSceneDelegate* ParamsDelegate, const p
 
     m_GBufferTargetIds[HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR]   = InitBrim(HnRenderResourceTokens->offscreenColorTarget);
     m_GBufferTargetIds[HnFrameRenderTargets::GBUFFER_TARGET_MESH_ID]       = InitBrim(HnRenderResourceTokens->meshIdTarget);
-    m_GBufferTargetIds[HnFrameRenderTargets::GBUFFER_TARGET_MOTION_VECTOR] = InitBrim(HnRenderResourceTokens->motionVectors0Target);
+    m_GBufferTargetIds[HnFrameRenderTargets::GBUFFER_TARGET_MOTION_VECTOR] = InitBrim(HnRenderResourceTokens->motionVectorsTarget);
     m_GBufferTargetIds[HnFrameRenderTargets::GBUFFER_TARGET_NORMAL]        = InitBrim(HnRenderResourceTokens->normalTarget);
     m_GBufferTargetIds[HnFrameRenderTargets::GBUFFER_TARGET_BASE_COLOR]    = InitBrim(HnRenderResourceTokens->baseColorTarget);
     m_GBufferTargetIds[HnFrameRenderTargets::GBUFFER_TARGET_MATERIAL]      = InitBrim(HnRenderResourceTokens->materialDataTarget);
     m_GBufferTargetIds[HnFrameRenderTargets::GBUFFER_TARGET_IBL]           = InitBrim(HnRenderResourceTokens->iblTarget);
     static_assert(HnFrameRenderTargets::GBUFFER_TARGET_COUNT == 7, "Please initialize GBuffer BPrims.");
 
-    m_PrevMotionTargetId         = InitBrim(HnRenderResourceTokens->motionVectors1Target);
     m_SelectionDepthBufferId     = InitBrim(HnRenderResourceTokens->selectionDepthBuffer);
     m_DepthBufferId[0]           = InitBrim(HnRenderResourceTokens->depthBuffer0);
     m_DepthBufferId[1]           = InitBrim(HnRenderResourceTokens->depthBuffer1);
@@ -249,7 +248,6 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
     m_FrameRenderTargets.SelectionDepthDSV             = UpdateBrim(m_SelectionDepthBufferId, m_Params.Formats.Depth, "Selection depth buffer");
     m_FrameRenderTargets.DepthDSV                      = UpdateBrim(m_DepthBufferId[0], m_Params.Formats.Depth, "Depth buffer 0");
     m_FrameRenderTargets.PrevDepthDSV                  = UpdateBrim(m_DepthBufferId[1], m_Params.Formats.Depth, "Depth buffer 1");
-    m_FrameRenderTargets.PrevMotionRTV                 = UpdateBrim(m_PrevMotionTargetId, m_Params.Formats.GBuffer[HnFrameRenderTargets::GBUFFER_TARGET_MOTION_VECTOR], "Motion vectors 1");
     m_FrameRenderTargets.ClosestSelectedLocationRTV[0] = UpdateBrim(m_ClosestSelLocnTargetId[0], m_Params.Formats.ClosestSelectedLocation, "Closest selected location 0");
     m_FrameRenderTargets.ClosestSelectedLocationRTV[1] = UpdateBrim(m_ClosestSelLocnTargetId[1], m_Params.Formats.ClosestSelectedLocation, "Closest selected location 1");
     m_FrameRenderTargets.JitteredFinalColorRTV         = UpdateBrim(m_JitteredFinalColorTargetId, m_Params.Formats.JitteredColor, "Jittered final color");
@@ -313,7 +311,6 @@ void HnBeginFrameTask::Prepare(pxr::HdTaskContext* TaskCtx,
 
     if (FrameNumber > 1)
     {
-        std::swap(m_GBufferTargetIds[HnFrameRenderTargets::GBUFFER_TARGET_MOTION_VECTOR], m_PrevMotionTargetId);
         std::swap(m_DepthBufferId[0], m_DepthBufferId[1]);
     }
 
