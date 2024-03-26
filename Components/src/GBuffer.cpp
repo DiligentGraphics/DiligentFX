@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -28,6 +28,8 @@
 
 #include "GraphicsAccessories.hpp"
 #include "PlatformMisc.hpp"
+
+#include <array>
 
 namespace Diligent
 {
@@ -113,63 +115,70 @@ void GBuffer::Resize(IRenderDevice* pDevice, Uint32 Width, Uint32 Height)
     }
 }
 
-void GBuffer::Bind(IDeviceContext* pContext, Uint32 BuffersMask, ITextureView* pDSV, Uint32 ClearMask)
+void GBuffer::Bind(IDeviceContext* pContext,
+                   Uint32          BuffersMask,
+                   ITextureView*   pDSV,
+                   Uint32          ClearMask,
+                   const Uint32*   RTIndices)
 {
-    ITextureView* pRTVs[MAX_RENDER_TARGETS];
+    std::array<ITextureView*, MAX_RENDER_TARGETS> RTVs            = {};
+    std::array<const float*, MAX_RENDER_TARGETS>  ClearColors     = {};
+    const float*                                  ClearDepthVal   = nullptr;
+    const Uint8*                                  ClearStencilVal = nullptr;
 
-    Uint32 NumRTs = 0;
+    Uint32        NumRTs  = 0;
+    const Uint32* RTIndex = RTIndices;
     for (Uint32 i = 0; i < GetBufferCount(); ++i)
     {
-        if ((BuffersMask & (1u << i)) == 0)
-        {
-            pRTVs[i] = nullptr;
+        Uint32 BufferBit = 1u << i;
+        if ((BuffersMask & BufferBit) == 0)
             continue;
-        }
 
-        const auto& BindFlags = GetElementDesc(i).BindFlags;
+        const auto& ElemDesc  = GetElementDesc(i);
+        const auto& BindFlags = ElemDesc.BindFlags;
         if (BindFlags & BIND_RENDER_TARGET)
         {
-            pRTVs[i] = GetBuffer(i)->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET);
-            NumRTs   = std::max(NumRTs, i + 1);
+            const Uint32 RTIdx = RTIndex != nullptr ? *(RTIndex++) : i;
+
+            VERIFY(RTVs[RTIdx] == nullptr, "Render target slot ", RTIdx, " is already used");
+            RTVs[RTIdx] = GetBuffer(i)->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET);
+            NumRTs      = std::max(NumRTs, RTIdx + 1);
+
+            if ((ClearMask & BufferBit) != 0)
+                ClearColors[RTIdx] = ElemDesc.ClearValue.Color;
         }
         else if (BindFlags & BIND_DEPTH_STENCIL)
         {
             VERIFY(pDSV == nullptr, "Only one depth-stencil buffer is expected");
             pDSV = GetBuffer(i)->GetDefaultView(TEXTURE_VIEW_DEPTH_STENCIL);
+
+            if ((ClearMask & BufferBit) != 0)
+            {
+                const TextureFormatAttribs& FmtAttribs = GetTextureFormatAttribs(ElemDesc.Format);
+
+                ClearDepthVal = &ElemDesc.ClearValue.DepthStencil.Depth;
+                if (FmtAttribs.ComponentType == COMPONENT_TYPE_DEPTH_STENCIL)
+                    ClearStencilVal = &ElemDesc.ClearValue.DepthStencil.Stencil;
+            }
         }
     }
 
-    pContext->SetRenderTargets(NumRTs, pRTVs, pDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    pContext->SetRenderTargets(NumRTs, RTVs.data(), pDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
-    ClearMask &= (1u << GetBufferCount()) - 1;
-    while (ClearMask != 0)
+    if ((ClearMask & BuffersMask) != 0)
     {
-        Uint32 i = PlatformMisc::GetLSB(ClearMask);
-        ClearMask &= ~(1u << i);
-
-        const auto& ElemDesc = GetElementDesc(i);
-        if (ElemDesc.BindFlags & BIND_RENDER_TARGET)
+        for (Uint32 rt = 0; rt < NumRTs; ++rt)
         {
-            if (pRTVs[i] != nullptr)
-            {
-                pContext->ClearRenderTarget(pRTVs[i], ElemDesc.ClearValue.Color, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-            }
+            if (ClearColors[rt] != nullptr)
+                pContext->ClearRenderTarget(RTVs[rt], ClearColors[rt], RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         }
-        else if (ElemDesc.BindFlags & BIND_DEPTH_STENCIL)
-        {
-            if (pDSV != nullptr)
-            {
-                CLEAR_DEPTH_STENCIL_FLAGS   ClearFlags = CLEAR_DEPTH_FLAG_NONE;
-                const TextureFormatAttribs& FmtAttribs = GetTextureFormatAttribs(ElemDesc.Format);
-                if (FmtAttribs.ComponentType == COMPONENT_TYPE_DEPTH)
-                    ClearFlags = CLEAR_DEPTH_FLAG;
-                else if (FmtAttribs.ComponentType == COMPONENT_TYPE_DEPTH_STENCIL)
-                    ClearFlags = CLEAR_DEPTH_FLAG | CLEAR_STENCIL_FLAG;
-                else
-                    UNEXPECTED("Unexpected component type");
 
-                pContext->ClearDepthStencil(pDSV, ClearFlags, ElemDesc.ClearValue.DepthStencil.Depth, ElemDesc.ClearValue.DepthStencil.Stencil, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-            }
+        if (ClearDepthVal != nullptr)
+        {
+            CLEAR_DEPTH_STENCIL_FLAGS ClearFlags = CLEAR_DEPTH_FLAG;
+            if (ClearStencilVal != nullptr)
+                ClearFlags |= CLEAR_STENCIL_FLAG;
+            pContext->ClearDepthStencil(pDSV, ClearFlags, *ClearDepthVal, ClearStencilVal != nullptr ? *ClearStencilVal : 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         }
     }
 }

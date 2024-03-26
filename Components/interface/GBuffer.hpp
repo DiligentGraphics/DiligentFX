@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -86,6 +86,9 @@ public:
     /// \param [in] BuffersMask - Bitmask indicating which buffers to bind.
     /// \param [in] pDSV        - Depth-stencil view to set.
     /// \param [in] ClearMask   - Bitmask indicating which buffers to clear.
+    /// \param [in] RTIndices   - Optional array of render target indices to use for each buffer.
+    ///                           If null, the buffer index is used.
+    ///                           The array must contain one index for each buffer specified by the BuffersMask.
     ///
     /// \remarks    The method binds all textures in the order they were specified in the constructor.
     ///             If the corresponding bit in the BuffersMask is not set, null view is bound.
@@ -93,7 +96,11 @@ public:
     ///             the texture is bound as depth-stencil view. Otherwise, the user-provided depth-stencil view is bound.
     ///             If the corresponding bit in the ClearMask is set, the texture is cleared with the clear value
     ///             specified in the corresponding element description.
-    void Bind(IDeviceContext* pContext, Uint32 BuffersMask, ITextureView* pDSV, Uint32 ClearMask = 0);
+    void Bind(IDeviceContext* pContext,
+              Uint32          BuffersMask,
+              ITextureView*   pDSV,
+              Uint32          ClearMask = 0,
+              const Uint32*   RTIndices = nullptr);
 
 private:
     const std::vector<ElementDesc> m_ElemDesc;
