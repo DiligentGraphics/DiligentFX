@@ -701,13 +701,12 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
     if (m_UseSSAO)
     {
         ScreenSpaceAmbientOcclusion::RenderAttributes SSAORenderAttribs{};
-        SSAORenderAttribs.pDevice             = pDevice;
-        SSAORenderAttribs.pDeviceContext      = pCtx;
-        SSAORenderAttribs.pPostFXContext      = m_PostFXContext.get();
-        SSAORenderAttribs.pCurrDepthBufferSRV = m_FrameTargets->DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-        SSAORenderAttribs.pPrevDepthBufferSRV = m_FrameTargets->PrevDepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-        SSAORenderAttribs.pNormalBufferSRV    = m_FrameTargets->GBufferSRVs[HnFrameRenderTargets::GBUFFER_TARGET_NORMAL];
-        SSAORenderAttribs.pSSAOAttribs        = &m_Params.SSAO;
+        SSAORenderAttribs.pDevice          = pDevice;
+        SSAORenderAttribs.pDeviceContext   = pCtx;
+        SSAORenderAttribs.pPostFXContext   = m_PostFXContext.get();
+        SSAORenderAttribs.pDepthBufferSRV  = m_FrameTargets->DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        SSAORenderAttribs.pNormalBufferSRV = m_FrameTargets->GBufferSRVs[HnFrameRenderTargets::GBUFFER_TARGET_NORMAL];
+        SSAORenderAttribs.pSSAOAttribs     = &m_Params.SSAO;
         m_SSAO->Execute(SSAORenderAttribs);
     }
 
@@ -762,11 +761,9 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
             --m_SuperSamplingSuspensionFrame;
 
         TemporalAntiAliasing::RenderAttributes TAARenderAttribs{pDevice, pStateCache, pCtx};
-        TAARenderAttribs.pPostFXContext      = m_PostFXContext.get();
-        TAARenderAttribs.pColorBufferSRV     = m_FrameTargets->JitteredFinalColorRTV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-        TAARenderAttribs.pCurrDepthBufferSRV = m_FrameTargets->DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-        TAARenderAttribs.pPrevDepthBufferSRV = m_FrameTargets->PrevDepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-        TAARenderAttribs.pTAAAttribs         = &TAASettings;
+        TAARenderAttribs.pPostFXContext  = m_PostFXContext.get();
+        TAARenderAttribs.pColorBufferSRV = m_FrameTargets->JitteredFinalColorRTV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        TAARenderAttribs.pTAAAttribs     = &TAASettings;
         m_TAA->Execute(TAARenderAttribs);
 
 
