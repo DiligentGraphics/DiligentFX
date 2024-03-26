@@ -42,17 +42,27 @@ struct PixelStatistic
 
 float3 RGBToYCoCg(float3 RGB)
 {
-    float Y  = dot(float3(+0.25, +0.50, +0.25), RGB);
-    float Co = dot(float3(+0.50, +0.00, -0.50), RGB);
-    float Cg = dot(float3(-0.25, +0.50, -0.25), RGB);
+    // float Y  = dot(float3(+0.25, +0.50, +0.25), RGB);
+    // float Co = dot(float3(+0.50, +0.00, -0.50), RGB);
+    // float Cg = dot(float3(-0.25, +0.50, -0.25), RGB);
+    
+    float Co   = RGB.x - RGB.z;
+    float Temp = RGB.z + 0.5 * Co;
+    float Cg   = RGB.y - Temp;
+    float Y    = Temp + 0.5 * Cg;
     return float3(Y, Co, Cg);
 }
 
 float3 YCoCgToRGB(float3 YCoCg)
 {
-    float R = dot(float3(+1.0, +1.0, -1.0), YCoCg);
-    float G = dot(float3(+1.0, +0.0, +1.0), YCoCg);
-    float B = dot(float3(+1.0, -1.0, -1.0), YCoCg);
+    // float R = dot(float3(+1.0, +1.0, -1.0), YCoCg);
+    // float G = dot(float3(+1.0, +0.0, +1.0), YCoCg);
+    // float B = dot(float3(+1.0, -1.0, -1.0), YCoCg);
+    
+    float Tmp = YCoCg.x - 0.5 * YCoCg.z;
+    float G   = YCoCg.z + Tmp;
+    float B   = Tmp - 0.5 * YCoCg.y;
+    float R   = B + YCoCg.y;
     return float3(R, G, B);
 }
 
@@ -128,59 +138,42 @@ float ComputeDepthDisocclusion(float2 Position, float2 Motion)
 
     return Disocclusion > TAA_DEPTH_DISOCCLUSION_THRESHOLD ? 1.0 : 0.0;
 }
-
+ 
 float4 SamplePrevColorCatmullRom(float2 Position)
 {
-    // Source: https://gist.github.com/TheRealMJP/c83b8c0f46b63f3a88a5986f4fa982b1
-    // License: https://gist.github.com/TheRealMJP/bc503b0b87b643d3505d41eab8b332ae
-
-    // We're going to sample a a 4x4 grid of texels surrounding the target UV coordinate. We'll do this by rounding
-    // down the sample location to get the exact center of our "starting" texel. The starting texel will be at
-    // location [1, 1] in the grid, where [0, 0] is the top left corner.
+    // Source: https://advances.realtimerendering.com/s2016/Filmic%20SMAA%20v7.pptx Slide 77
+    
     float2 TexelSize = g_CurrCamera.f4ViewportSize.zw;
-    float2 TexPos1 = floor(Position - 0.5) + 0.5;
+    float2 CenterPosition = floor(Position - 0.5) + 0.5;
 
-    // Compute the fractional offset from our starting texel to our original sample location, which we'll
-    // feed into the Catmull-Rom spline function to get our filter weights.
-    float2 F = Position - TexPos1;
+    float2 F = Position - CenterPosition;
+    float2 F2 = F * F;
+    float2 F3 = F2 * F;
 
-    // Compute the Catmull-Rom weights using the fractional offset that we calculated earlier.
-    // These equations are pre-expanded based on our knowledge of where the texels will be located,
-    // which lets us avoid having to evaluate a piece-wise function.
-    float2 W0 = F * (-0.5 + F * (1.0 - 0.5 * F));
-    float2 W1 = 1.0 + F * F * (-2.5 + 1.5 * F);
-    float2 W2 = F * (0.5 + F * (2.0 - 1.5 * F));
-    float2 W3 = F * F * (-0.5 + 0.5 * F);
-
-    // Work out weighting factors and sampling offsets that will let us use bilinear filtering to
-    // simultaneously evaluate the middle 2 samples from the 4x4 grid.
+    float2 W0 = -0.5 * F3 + F2 - 0.5 * F;
+    float2 W1 = 1.5 * F3 - 2.5 * F2 + 1.0;
+    float2 W2 = -1.5 * F3 + 2.0 * F2 + 0.5 * F;
+    float2 W3 = 0.5 * F3 - 0.5 * F2;
     float2 W12 = W1 + W2;
-    float2 Offset12 = W2 / (W1 + W2);
 
-    // Compute the final UV coordinates we'll use for sampling the texture
-    float2 TexPos0  = TexPos1 - 1.0;
-    float2 TexPos3  = TexPos1 + 2.0;
-    float2 TexPos12 = TexPos1 + Offset12;
+    float2 TexPos0  = (CenterPosition - 1.0) * TexelSize;
+    float2 TexPos3  = (CenterPosition + 2.0) * TexelSize;
+    float2 TexPos12 = (CenterPosition + W2 / W12) * TexelSize;
 
-    TexPos0  *= TexelSize;
-    TexPos3  *= TexelSize;
-    TexPos12 *= TexelSize;
+    float P0 = W12.x * W0.y;
+    float P1 = W0.x * W12.x;
+    float P2 = W12.x * W12.y;
+    float P3 = W3.x * W12.y;
+    float P4 = W12.x * W3.y;
 
     float4 Result = float4(0.0, 0.0, 0.0, 0.0);
+    Result += g_TexturePrevColor.SampleLevel(g_TexturePrevColor_sampler, float2(TexPos12.x, TexPos0.y),  0.0) * P0;
+    Result += g_TexturePrevColor.SampleLevel(g_TexturePrevColor_sampler, float2(TexPos0.x,  TexPos12.y), 0.0) * P1;
+    Result += g_TexturePrevColor.SampleLevel(g_TexturePrevColor_sampler, float2(TexPos12.x, TexPos12.y), 0.0) * P2;
+    Result += g_TexturePrevColor.SampleLevel(g_TexturePrevColor_sampler, float2(TexPos3.x,  TexPos12.y), 0.0) * P3;
+    Result += g_TexturePrevColor.SampleLevel(g_TexturePrevColor_sampler, float2(TexPos12.x, TexPos3.y),  0.0) * P4;
 
-    Result += g_TexturePrevColor.SampleLevel(g_TexturePrevColor_sampler, float2(TexPos0.x, TexPos0.y),  0.0) * W0.x * W0.y;
-    Result += g_TexturePrevColor.SampleLevel(g_TexturePrevColor_sampler, float2(TexPos12.x, TexPos0.y), 0.0) * W12.x * W0.y;
-    Result += g_TexturePrevColor.SampleLevel(g_TexturePrevColor_sampler, float2(TexPos3.x, TexPos0.y),  0.0) * W3.x * W0.y;
-
-    Result += g_TexturePrevColor.SampleLevel(g_TexturePrevColor_sampler, float2(TexPos0.x, TexPos12.y),  0.0) * W0.x * W12.y;
-    Result += g_TexturePrevColor.SampleLevel(g_TexturePrevColor_sampler, float2(TexPos12.x, TexPos12.y), 0.0) * W12.x * W12.y;
-    Result += g_TexturePrevColor.SampleLevel(g_TexturePrevColor_sampler, float2(TexPos3.x, TexPos12.y),  0.0) * W3.x * W12.y;
-
-    Result += g_TexturePrevColor.SampleLevel(g_TexturePrevColor_sampler, float2(TexPos0.x,  TexPos3.y), 0.0) * W0.x * W3.y;
-    Result += g_TexturePrevColor.SampleLevel(g_TexturePrevColor_sampler, float2(TexPos12.x, TexPos3.y), 0.0) * W12.x * W3.y;
-    Result += g_TexturePrevColor.SampleLevel(g_TexturePrevColor_sampler, float2(TexPos3.x,  TexPos3.y), 0.0) * W3.x * W3.y;
-
-    return max(Result, 0.0);
+    return max(Result * rcp(P0 + P1 + P2 + P3 + P4), 0.0);
 }
 
 float4 SamplePrevColorBilinear(float2 Position)
