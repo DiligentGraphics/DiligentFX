@@ -81,12 +81,6 @@ public:
         /// Shader resource view of the source color.
         ITextureView* pColorBufferSRV = nullptr;
 
-        /// Shader resource view of the source depth.
-        ITextureView* pCurrDepthBufferSRV = nullptr;
-
-        /// Shader resource view of the source depth from previous frame.
-        ITextureView* pPrevDepthBufferSRV = nullptr;
-
         /// TAA settings.
         const HLSL::TemporalAntiAliasingAttribs* pTAAAttribs = nullptr;
     };
@@ -119,10 +113,7 @@ private:
     enum RESOURCE_IDENTIFIER : Uint32
     {
         RESOURCE_IDENTIFIER_INPUT_COLOR = 0,
-        RESOURCE_IDENTIFIER_INPUT_CURR_DEPTH,
-        RESOURCE_IDENTIFIER_INPUT_PREV_DEPTH,
-        RESOURCE_IDENTIFIER_INPUT_LAST = RESOURCE_IDENTIFIER_INPUT_PREV_DEPTH,
-
+        RESOURCE_IDENTIFIER_INPUT_LAST  = RESOURCE_IDENTIFIER_INPUT_COLOR,
         RESOURCE_IDENTIFIER_CONSTANT_BUFFER,
         RESOURCE_IDENTIFIER_ACCUMULATED_BUFFER0,
         RESOURCE_IDENTIFIER_ACCUMULATED_BUFFER1,

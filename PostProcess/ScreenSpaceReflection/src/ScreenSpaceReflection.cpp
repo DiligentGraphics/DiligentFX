@@ -293,21 +293,6 @@ void ScreenSpaceReflection::PrepareResources(IRenderDevice* pDevice, IDeviceCont
 
     {
         TextureDesc Desc;
-        Desc.Name      = "ScreenSpaceReflection::DepthHistory";
-        Desc.Type      = RESOURCE_DIM_TEX_2D;
-        Desc.Width     = m_BackBufferWidth;
-        Desc.Height    = m_BackBufferHeight;
-        Desc.Format    = TEX_FORMAT_R32_FLOAT;
-        Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
-
-        auto  pTexture     = Device.CreateTexture(Desc);
-        float ClearColor[] = {1.0, 0.0, 0.0, 0.0};
-        PostFXContext::ClearRenderTarget(pDeviceContext, pTexture, ClearColor);
-        m_Resources.Insert(RESOURCE_IDENTIFIER_DEPTH_HISTORY, pTexture);
-    }
-
-    {
-        TextureDesc Desc;
         Desc.Name      = "ScreenSpaceReflection::Output";
         Desc.Type      = RESOURCE_DIM_TEX_2D;
         Desc.Width     = m_BackBufferWidth;
@@ -881,8 +866,7 @@ void ScreenSpaceReflection::ComputeSpatialReconstruction(const RenderAttributes&
 
 void ScreenSpaceReflection::ComputeTemporalAccumulation(const RenderAttributes& RenderAttribs)
 {
-    auto&       RenderTech        = GetRenderTechnique(RENDER_TECH_COMPUTE_TEMPORAL_ACCUMULATION, m_FeatureFlags);
-    const auto& SupportedFeatures = RenderAttribs.pPostFXContext->GetSupportedFeatures();
+    auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_TEMPORAL_ACCUMULATION, m_FeatureFlags);
     if (!RenderTech.IsInitializedPSO())
     {
         PipelineResourceLayoutDescX ResourceLayout;
@@ -933,7 +917,7 @@ void ScreenSpaceReflection::ComputeTemporalAccumulation(const RenderAttributes& 
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureCurrDepth"}.Set(RenderAttribs.pPostFXContext->GetReprojectedDepth());
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureCurrRadiance"}.Set(m_Resources[RESOURCE_IDENTIFIER_RESOLVED_RADIANCE].GetTextureSRV());
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureCurrVariance"}.Set(m_Resources[RESOURCE_IDENTIFIER_RESOLVED_VARIANCE].GetTextureSRV());
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TexturePrevDepth"}.Set(m_Resources[RESOURCE_IDENTIFIER_DEPTH_HISTORY].GetTextureSRV());
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TexturePrevDepth"}.Set(RenderAttribs.pPostFXContext->GetPreviousDepth());
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TexturePrevRadiance"}.Set(m_Resources[RESOURCE_IDENTIFIER_RADIANCE_HISTORY0 + PrevFrameIdx].GetTextureSRV());
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TexturePrevVariance"}.Set(m_Resources[RESOURCE_IDENTIFIER_VARIANCE_HISTORY0 + PrevFrameIdx].GetTextureSRV());
 
@@ -950,24 +934,6 @@ void ScreenSpaceReflection::ComputeTemporalAccumulation(const RenderAttributes& 
     RenderAttribs.pDeviceContext->SetPipelineState(RenderTech.PSO);
     RenderAttribs.pDeviceContext->Draw({3, DRAW_FLAG_VERIFY_ALL, 1});
     RenderAttribs.pDeviceContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
-
-    if (SupportedFeatures.CopyDepthToColor)
-    {
-        CopyTextureAttribs CopyAttribs;
-        CopyAttribs.pSrcTexture              = m_Resources[RESOURCE_IDENTIFIER_INPUT_DEPTH];
-        CopyAttribs.pDstTexture              = m_Resources[RESOURCE_IDENTIFIER_DEPTH_HISTORY];
-        CopyAttribs.SrcMipLevel              = 0;
-        CopyAttribs.DstMipLevel              = 0;
-        CopyAttribs.SrcSlice                 = 0;
-        CopyAttribs.DstSlice                 = 0;
-        CopyAttribs.SrcTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
-        CopyAttribs.DstTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
-        RenderAttribs.pDeviceContext->CopyTexture(CopyAttribs);
-    }
-    else
-    {
-        CopyTextureDepth(RenderAttribs, m_Resources[RESOURCE_IDENTIFIER_INPUT_DEPTH].GetTextureSRV(), m_Resources[RESOURCE_IDENTIFIER_DEPTH_HISTORY].GetTextureRTV());
-    }
 }
 
 void ScreenSpaceReflection::ComputeBilateralCleanup(const RenderAttributes& RenderAttribs)

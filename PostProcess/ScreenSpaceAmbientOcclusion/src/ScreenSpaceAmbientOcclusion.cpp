@@ -330,13 +330,11 @@ void ScreenSpaceAmbientOcclusion::Execute(const RenderAttributes& RenderAttribs)
     DEV_CHECK_ERR(RenderAttribs.pDeviceContext != nullptr, "RenderAttribs.pDeviceContext must not be null");
     DEV_CHECK_ERR(RenderAttribs.pPostFXContext != nullptr, "RenderAttribs.pPostFXContext must not be null");
 
-    DEV_CHECK_ERR(RenderAttribs.pCurrDepthBufferSRV != nullptr, "RenderAttribs.pCurrDepthBufferSRV must not be null");
-    DEV_CHECK_ERR(RenderAttribs.pPrevDepthBufferSRV != nullptr, "RenderAttribs.pPrevDepthBufferSRV must not be null");
+    DEV_CHECK_ERR(RenderAttribs.pDepthBufferSRV != nullptr, "RenderAttribs.pDepthBufferSRV must not be null");
     DEV_CHECK_ERR(RenderAttribs.pNormalBufferSRV != nullptr, "RenderAttribs.pNormalBufferSRV must not be null");
     DEV_CHECK_ERR(RenderAttribs.pSSAOAttribs != nullptr, "RenderAttribs.pSSAOAttribs must not be null");
 
-    m_Resources.Insert(RESOURCE_IDENTIFIER_INPUT_CURR_DEPTH, RenderAttribs.pCurrDepthBufferSRV->GetTexture());
-    m_Resources.Insert(RESOURCE_IDENTIFIER_INPUT_PREV_DEPTH, RenderAttribs.pPrevDepthBufferSRV->GetTexture());
+    m_Resources.Insert(RESOURCE_IDENTIFIER_INPUT_DEPTH, RenderAttribs.pDepthBufferSRV->GetTexture());
     m_Resources.Insert(RESOURCE_IDENTIFIER_INPUT_NORMAL, RenderAttribs.pNormalBufferSRV->GetTexture());
 
     ScopedDebugGroup DebugGroupGlobal{RenderAttribs.pDeviceContext, "ScreenSpaceAmbientOcclusion"};
@@ -449,7 +447,7 @@ void ScreenSpaceAmbientOcclusion::ComputeDepthCheckerboard(const RenderAttribute
     if (!RenderTech.IsInitializedSRB())
         RenderTech.InitializeSRB(false);
 
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureDepth"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_CURR_DEPTH].GetTextureSRV());
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureDepth"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_DEPTH].GetTextureSRV());
 
     ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "ComputeDownsampledDepth"};
 
@@ -511,7 +509,7 @@ void ScreenSpaceAmbientOcclusion::ComputePrefilteredDepth(const RenderAttributes
 
     ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "ComputeHierarchicalDepthBuffer"};
 
-    auto DepthResource = (m_FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION) ? m_Resources[RESOURCE_IDENTIFIER_DEPTH_CHECKERBOARD_HALF_RES] : m_Resources[RESOURCE_IDENTIFIER_INPUT_CURR_DEPTH];
+    auto DepthResource = (m_FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION) ? m_Resources[RESOURCE_IDENTIFIER_DEPTH_CHECKERBOARD_HALF_RES] : m_Resources[RESOURCE_IDENTIFIER_INPUT_DEPTH];
 
     CopyTextureDepth(RenderAttribs, DepthResource.GetTextureSRV(), m_PrefilteredDepthMipMapRTV[0]);
 
@@ -707,7 +705,7 @@ void ScreenSpaceAmbientOcclusion::ComputeBilateralUpsampling(const RenderAttribu
     if (!RenderTech.IsInitializedSRB())
         RenderTech.InitializeSRB(true);
 
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureDepth"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_CURR_DEPTH].GetTextureSRV());
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureDepth"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_DEPTH].GetTextureSRV());
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureOcclusion"}.Set(m_Resources[RESOURCE_IDENTIFIER_OCCLUSION].GetTextureSRV());
 
     ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "ComputeBilateralUpsampling"};
@@ -772,7 +770,7 @@ void ScreenSpaceAmbientOcclusion::ComputeTemporalAccumulation(const RenderAttrib
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TexturePrevOcclusion"}.Set(m_Resources[RESOURCE_IDENTIFIER_OCCLUSION_HISTORY0 + PrevFrameIdx].GetTextureSRV());
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureHistory"}.Set(m_Resources[RESOURCE_IDENTIFIER_OCCLUSION_HISTORY_LENGTH0 + PrevFrameIdx].GetTextureSRV());
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureCurrDepth"}.Set(RenderAttribs.pPostFXContext->GetReprojectedDepth());
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TexturePrevDepth"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_PREV_DEPTH].GetTextureSRV());
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TexturePrevDepth"}.Set(RenderAttribs.pPostFXContext->GetPreviousDepth());
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureMotion"}.Set(RenderAttribs.pPostFXContext->GetClosestMotionVectors());
 
     ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "ComputeTemporalAccumulation"};
@@ -853,7 +851,7 @@ void ScreenSpaceAmbientOcclusion::ComputeConvolutedDepthHistory(const RenderAttr
         CopyAttribsHistory.DstTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
         RenderAttribs.pDeviceContext->CopyTexture(CopyAttribsHistory);
 
-        CopyTextureDepth(RenderAttribs, m_Resources[RESOURCE_IDENTIFIER_INPUT_CURR_DEPTH].GetTextureSRV(), m_ConvolutedDepthMipMapRTV[0]);
+        CopyTextureDepth(RenderAttribs, m_Resources[RESOURCE_IDENTIFIER_INPUT_DEPTH].GetTextureSRV(), m_ConvolutedDepthMipMapRTV[0]);
     }
 
     if (!SupportedFeatures.TextureSubresourceViews)
@@ -1102,7 +1100,7 @@ void ScreenSpaceAmbientOcclusion::ComputeSpatialReconstruction(const RenderAttri
     const Uint32 FrameIndex   = RenderAttribs.pPostFXContext->GetFrameDesc().Index;
     const Uint32 CurrFrameIdx = (FrameIndex + 0) & 0x01;
 
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureDepth"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_CURR_DEPTH].GetTextureSRV());
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureDepth"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_DEPTH].GetTextureSRV());
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureOcclusion"}.Set(m_Resources[RESOURCE_IDENTIFIER_OCCLUSION_HISTORY_RESAMPLED].GetTextureSRV());
     ShaderResourceVariableX(RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureNormal").Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_NORMAL].GetTextureSRV());
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureHistory"}.Set(m_Resources[RESOURCE_IDENTIFIER_OCCLUSION_HISTORY_LENGTH0 + CurrFrameIdx].GetTextureSRV());

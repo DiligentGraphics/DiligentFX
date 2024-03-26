@@ -49,8 +49,9 @@ class PostFXContext
 public:
     enum FEATURE_FLAGS : Uint32
     {
-        FEATURE_FLAG_NONE           = 0,
-        FEATURE_FLAG_REVERSED_DEPTH = 1 << 0, // Not implemented
+        FEATURE_FLAG_NONE                 = 0,
+        FEATURE_FLAG_REVERSED_DEPTH       = 1 << 0, // Not implemented
+        FEATURE_FLAG_HALF_PRECISION_DEPTH = 1 << 1,
     };
 
     struct FrameDesc
@@ -121,6 +122,8 @@ public:
 
     ITextureView* GetReprojectedDepth() const;
 
+    ITextureView* GetPreviousDepth() const;
+
     ITextureView* GetClosestMotionVectors() const;
 
     IBuffer* GetCameraAttribsCB() const;
@@ -144,6 +147,8 @@ private:
 
     void ComputeClosestMotion(const RenderAttributes& RenderAttribs);
 
+    void ComputePreviousDepth(const RenderAttributes& RenderAttribs);
+
 private:
     using RenderTechnique  = PostFXRenderTechnique;
     using ResourceInternal = RefCntAutoPtr<IDeviceObject>;
@@ -153,6 +158,7 @@ private:
         RENDER_TECH_COMPUTE_BLUE_NOISE_TEXTURE = 0,
         RENDER_TECH_COMPUTE_REPROJECTED_DEPTH,
         RENDER_TECH_COMPUTE_CLOSEST_MOTION,
+        RENDER_TECH_COPY_DEPTH,
         RENDER_TECH_COUNT
     };
 
@@ -169,6 +175,7 @@ private:
         RESOURCE_IDENTIFIER_BLUE_NOISE_TEXTURE_XY,
         RESOURCE_IDENTIFIER_BLUE_NOISE_TEXTURE_ZW,
         RESOURCE_IDENTIFIER_REPROJECTED_DEPTH,
+        RESOURCE_IDENTIFIER_PREVIOUS_DEPTH,
         RESOURCE_IDENTIFIER_CLOSEST_MOTION,
         RESOURCE_IDENTIFIER_COUNT
     };

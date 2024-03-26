@@ -74,10 +74,7 @@ public:
         PostFXContext* pPostFXContext = nullptr;
 
         /// Shader resource view of the source depth.
-        ITextureView* pCurrDepthBufferSRV = nullptr;
-
-        /// Shader resource view of the source depth.
-        ITextureView* pPrevDepthBufferSRV = nullptr;
+        ITextureView* pDepthBufferSRV = nullptr;
 
         /// Shader resource view of the source normal buffer
         ITextureView* pNormalBufferSRV = nullptr;
@@ -119,8 +116,7 @@ private:
 
     enum RESOURCE_IDENTIFIER : Uint32
     {
-        RESOURCE_IDENTIFIER_INPUT_CURR_DEPTH = 0,
-        RESOURCE_IDENTIFIER_INPUT_PREV_DEPTH,
+        RESOURCE_IDENTIFIER_INPUT_DEPTH = 0,
         RESOURCE_IDENTIFIER_INPUT_NORMAL,
         RESOURCE_IDENTIFIER_INPUT_LAST = RESOURCE_IDENTIFIER_INPUT_NORMAL,
         RESOURCE_IDENTIFIER_CONSTANT_BUFFER,

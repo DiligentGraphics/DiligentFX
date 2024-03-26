@@ -118,9 +118,9 @@ float ComputeDepthDisocclusionWeight(float CurrDepth, float PrevDepth)
     return exp(-abs(LinearDepthPrev - LinearDepthCurr) / LinearDepthCurr);
 }
 
-float ComputeDepthDisocclusion(float2 Position, float2 Motion)
+float ComputeDepthDisocclusion(float2 Position, float2 PrevPosition)
 {
-    int2 PrevLocation = int2(Position.xy - Motion * g_CurrCamera.f4ViewportSize.xy);
+    int2 PrevPositioni = int2(PrevPosition);
     float CurrDepth = SampleCurrDepth(int2(Position));
     float Disocclusion = 0.0;
 
@@ -129,7 +129,7 @@ float ComputeDepthDisocclusion(float2 Position, float2 Motion)
     {
         for (int x = -SearchRadius; x <= SearchRadius; x++)
         {
-            int2 Location = PrevLocation + int2(x, y);
+            int2 Location = PrevPositioni + int2(x, y);
             float PrevDepth = SamplePrevDepth(Location);
             float Weight = ComputeDepthDisocclusionWeight(CurrDepth, PrevDepth);
             Disocclusion = max(Disocclusion, Weight);
@@ -138,7 +138,7 @@ float ComputeDepthDisocclusion(float2 Position, float2 Motion)
 
     return Disocclusion > TAA_DEPTH_DISOCCLUSION_THRESHOLD ? 1.0 : 0.0;
 }
- 
+
 float4 SamplePrevColorCatmullRom(float2 Position)
 {
     // Source: https://advances.realtimerendering.com/s2016/Filmic%20SMAA%20v7.pptx Slide 77
@@ -233,19 +233,19 @@ float ComputeCorrectedAlpha(float Alpha)
 
 float4 ComputeTemporalAccumulationPS(in FullScreenTriangleVSOutput VSOut) : SV_Target0
 {
-    float4 Position = VSOut.f4PixelPos;
+    float2 Position = VSOut.f4PixelPos.xy;
     float2 Motion = SampleMotion(int2(Position.xy));
-    float2 PrevLocation = Position.xy - Motion * g_CurrCamera.f4ViewportSize.xy;
+    float2 PrevPosition = Position.xy - Motion * g_CurrCamera.f4ViewportSize.xy;
 
-    if (!IsInsideScreen(PrevLocation, g_CurrCamera.f4ViewportSize.xy) || g_TAAAttribs.ResetAccumulation)
-        return float4(SampleCurrColor(int2(Position.xy)), 0.5);
+    if (!IsInsideScreen(PrevPosition, g_CurrCamera.f4ViewportSize.xy) || g_TAAAttribs.ResetAccumulation)
+        return float4(SampleCurrColor(int2(Position)), 0.5);
 
     float AspectRatio = g_CurrCamera.f4ViewportSize.x * g_CurrCamera.f4ViewportSize.w;
     float MotionFactor = saturate(1.0 - length(float2(Motion.x * AspectRatio, Motion.y)) * TAA_MOTION_VECTOR_DIFF_FACTOR);
-    float DepthFactor = ComputeDepthDisocclusion(Position.xy, Motion);
+    float DepthFactor = ComputeDepthDisocclusion(Position, PrevPosition);
 
-    float3 RGBHDRCurrColor = SampleCurrColor(int2(Position.xy));
-    float4 RGBHDRPrevColor = SamplePrevColor(PrevLocation);
+    float3 RGBHDRCurrColor = SampleCurrColor(int2(Position));
+    float4 RGBHDRPrevColor = SamplePrevColor(PrevPosition);
 
     if (g_TAAAttribs.SkipRejection)
         return float4(lerp(RGBHDRCurrColor.xyz, RGBHDRPrevColor.xyz, RGBHDRPrevColor.a), ComputeCorrectedAlpha(RGBHDRPrevColor.a));

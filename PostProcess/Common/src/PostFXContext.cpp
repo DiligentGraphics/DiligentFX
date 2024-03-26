@@ -150,9 +150,20 @@ void PostFXContext::PrepareResources(IRenderDevice* pDevice, const FrameDesc& De
         ResourceDesc.Type      = RESOURCE_DIM_TEX_2D;
         ResourceDesc.Width     = m_FrameDesc.Width;
         ResourceDesc.Height    = m_FrameDesc.Height;
-        ResourceDesc.Format    = TEX_FORMAT_R32_FLOAT;
+        ResourceDesc.Format    = (m_FeatureFlags & FEATURE_FLAG_HALF_PRECISION_DEPTH) ? TEX_FORMAT_R16_UNORM : TEX_FORMAT_R32_FLOAT;
         ResourceDesc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
         m_Resources.Insert(RESOURCE_IDENTIFIER_REPROJECTED_DEPTH, Device.CreateTexture(ResourceDesc));
+    }
+
+    {
+        TextureDesc ResourceDesc;
+        ResourceDesc.Name      = "PostFXContext::PreviousDepth";
+        ResourceDesc.Type      = RESOURCE_DIM_TEX_2D;
+        ResourceDesc.Width     = m_FrameDesc.Width;
+        ResourceDesc.Height    = m_FrameDesc.Height;
+        ResourceDesc.Format    = (m_FeatureFlags & FEATURE_FLAG_HALF_PRECISION_DEPTH) ? TEX_FORMAT_R16_UNORM : TEX_FORMAT_R32_FLOAT;
+        ResourceDesc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
+        m_Resources.Insert(RESOURCE_IDENTIFIER_PREVIOUS_DEPTH, Device.CreateTexture(ResourceDesc));
     }
 
     {
@@ -206,6 +217,7 @@ void PostFXContext::Execute(const RenderAttributes& RenderAttribs)
     ComputeBlueNoiseTexture(RenderAttribs);
     ComputeReprojectedDepth(RenderAttribs);
     ComputeClosestMotion(RenderAttribs);
+    ComputePreviousDepth(RenderAttribs);
 
     // Release references to input resources
     for (Uint32 ResourceIdx = 0; ResourceIdx <= RESOURCE_IDENTIFIER_INPUT_LAST; ++ResourceIdx)
@@ -382,5 +394,48 @@ ITextureView* PostFXContext::GetClosestMotionVectors() const
     return m_Resources[RESOURCE_IDENTIFIER_CLOSEST_MOTION].GetTextureSRV();
 }
 
+ITextureView* PostFXContext::GetPreviousDepth() const
+{
+    return m_Resources[RESOURCE_IDENTIFIER_PREVIOUS_DEPTH].GetTextureSRV();
+}
+
+void PostFXContext::ComputePreviousDepth(const RenderAttributes& RenderAttribs)
+{
+    auto& RenderTech = m_RenderTech[RENDER_TECH_COPY_DEPTH];
+    if (!RenderTech.IsInitializedPSO())
+    {
+        const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
+        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "CopyTextureDepth.fx", "CopyDepthPS", SHADER_TYPE_PIXEL);
+
+        PipelineResourceLayoutDescX ResourceLayout;
+        ResourceLayout.AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
+
+        RenderTech.InitializePSO(RenderAttribs.pDevice,
+                                 nullptr, "PostFXContext::ComputePreviousDepth",
+                                 VS, PS, ResourceLayout,
+                                 {
+                                     m_Resources[RESOURCE_IDENTIFIER_PREVIOUS_DEPTH].AsTexture()->GetDesc().Format,
+                                 },
+                                 TEX_FORMAT_UNKNOWN,
+                                 DSS_DisableDepth, BS_Default, false);
+    }
+
+    if (!RenderTech.IsInitializedSRB())
+        RenderTech.InitializeSRB(false);
+
+    ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "ComputePreviousDepth"};
+
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureDepth"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_PREV_DEPTH].GetTextureSRV());
+
+    ITextureView* pRTVs[] = {
+        m_Resources[RESOURCE_IDENTIFIER_PREVIOUS_DEPTH].GetTextureRTV(),
+    };
+
+    RenderAttribs.pDeviceContext->SetRenderTargets(_countof(pRTVs), pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    RenderAttribs.pDeviceContext->SetPipelineState(RenderTech.PSO);
+    RenderAttribs.pDeviceContext->CommitShaderResources(RenderTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    RenderAttribs.pDeviceContext->Draw({3, DRAW_FLAG_VERIFY_ALL, 1});
+    RenderAttribs.pDeviceContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
+}
 
 } // namespace Diligent
