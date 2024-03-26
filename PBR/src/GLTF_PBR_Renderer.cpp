@@ -431,11 +431,6 @@ GLTF_PBR_Renderer::PSO_FLAGS GLTF_PBR_Renderer::GetMaterialPSOFlags(const GLTF::
             PSO_FLAG_USE_THICKNESS_MAP;
     }
 
-    if (m_Settings.EnableIBL)
-    {
-        PSOFlags |= PSO_FLAG_USE_IBL;
-    }
-
     return PSOFlags;
 }
 
@@ -566,7 +561,12 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
                 PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM |
                 PSO_FLAG_CONVERT_OUTPUT_TO_SRGB |
                 PSO_FLAG_ENABLE_TONE_MAPPING |
-                PSO_FLAG_COMPUTE_MOTION_VECTORS;
+                PSO_FLAG_COMPUTE_MOTION_VECTORS |
+                PSO_FLAG_USE_LIGHTS;
+            if (m_Settings.EnableIBL)
+            {
+                PSOFlags |= PSO_FLAG_USE_IBL;
+            }
 
             PSOFlags &= RenderParams.Flags;
 

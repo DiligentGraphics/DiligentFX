@@ -806,7 +806,7 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
                 const PBR_Renderer::PSO_FLAGS MaterialPSOFlags = GetMaterialPSOFlags(*pMaterial);
                 if (m_Params.UsdPsoFlags & USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_OUTPUT)
                 {
-                    PSOFlags |= MaterialPSOFlags | PBR_Renderer::PSO_FLAG_USE_IBL;
+                    PSOFlags |= MaterialPSOFlags | PBR_Renderer::PSO_FLAG_USE_IBL | PBR_Renderer::PSO_FLAG_USE_LIGHTS;
                 }
                 else
                 {

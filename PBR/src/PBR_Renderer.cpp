@@ -901,6 +901,8 @@ void PBR_Renderer::CreateCustomSignature(PipelineResourceSignatureDescX&& Signat
 
 ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
 {
+    const PSO_FLAGS PSOFlags = Key.GetFlags();
+
     ShaderMacroHelper Macros;
     Macros.Add("MAX_JOINT_COUNT", static_cast<int>(m_Settings.MaxJointCount));
     Macros.Add("TONE_MAPPING_MODE", "TONE_MAPPING_MODE_UNCHARTED2");
@@ -942,11 +944,11 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
     Macros.Add("PBR_ALPHA_MODE_MASK", static_cast<int>(ALPHA_MODE_MASK));
     Macros.Add("PBR_ALPHA_MODE_BLEND", static_cast<int>(ALPHA_MODE_BLEND));
 
-    Macros.Add("PBR_MAX_LIGHTS", static_cast<int>(m_Settings.MaxLightCount));
+    Macros.Add("PBR_MAX_LIGHTS", (PSOFlags & PSO_FLAG_USE_LIGHTS) != 0 ? static_cast<int>(m_Settings.MaxLightCount) : 0);
     Macros.Add("PBR_LIGHT_TYPE_DIRECTIONAL", static_cast<int>(LIGHT_TYPE_DIRECTIONAL));
     Macros.Add("PBR_LIGHT_TYPE_POINT", static_cast<int>(LIGHT_TYPE_POINT));
     Macros.Add("PBR_LIGHT_TYPE_SPOT", static_cast<int>(LIGHT_TYPE_SPOT));
-    Macros.Add("PBR_MAX_SHADOW_MAPS", static_cast<int>(m_Settings.MaxShadowCastingLightCount));
+    Macros.Add("PBR_MAX_SHADOW_MAPS", (PSOFlags & PSO_FLAG_USE_LIGHTS) != 0 ? static_cast<int>(m_Settings.MaxShadowCastingLightCount) : 0);
 
     Macros.Add("USE_IBL_ENV_MAP_LOD", true);
     Macros.Add("USE_HDR_IBL_CUBEMAPS", true);
@@ -1002,9 +1004,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
     Macros.Add("DEBUG_VIEW_THICKNESS",             static_cast<int>(DebugViewType::Thickness));
     // clang-format on
 
-    const PSO_FLAGS PSOFlags = Key.GetFlags();
-
-    static_assert(PSO_FLAG_LAST == PSO_FLAG_BIT(37), "Did you add new PSO Flag? You may need to handle it here.");
+    static_assert(PSO_FLAG_LAST == PSO_FLAG_BIT(38), "Did you add new PSO Flag? You may need to handle it here.");
 #define ADD_PSO_FLAG_MACRO(Flag) Macros.Add(#Flag, (PSOFlags & PSO_FLAG_##Flag) != PSO_FLAG_NONE)
     ADD_PSO_FLAG_MACRO(USE_COLOR_MAP);
     ADD_PSO_FLAG_MACRO(USE_NORMAL_MAP);
