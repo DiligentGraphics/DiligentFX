@@ -150,7 +150,7 @@ PSOutput ComputeSpatialReconstructionPS(in FullScreenTriangleVSOutput VSOut)
     {
         float2 Xi = RotateVector(Rotator, Poisson[SampleIdx].xy);
 #if SSR_OPTION_HALF_RESOLUTION
-        int2 SampleCoord = ClampScreenCoord(int2(floor(0.5 * (Position.xy + Radius * Xi)) + float2(0.5, 0.5)), int2(0.5 * g_Camera.f4ViewportSize.xy));
+        int2 SampleCoord = ClampScreenCoord(int2(0.5 * (floor(Position.xy) + Radius * Xi) + float2(0.5, 0.5)), int2(0.5 * g_Camera.f4ViewportSize.xy));
 #else
         int2 SampleCoord = ClampScreenCoord(int2(Position.xy + Radius * Xi), int2(g_Camera.f4ViewportSize.xy));
 #endif
