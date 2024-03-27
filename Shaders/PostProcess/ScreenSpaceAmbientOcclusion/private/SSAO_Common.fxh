@@ -30,12 +30,6 @@ float ComputeDepthWeight(float CenterDepth, float GuideDepth, float4x4 ProjMatri
     return exp(-(Alpha * Alpha) / (2.0 * Sigma * Sigma));
 }
 
-float3 FastReconstructPosition(float3 Coord, float4x4 Transform)
-{
-    float3 NDC = float3(TexUVToNormalizedDeviceXY(Coord.xy), DepthToCameraZ(Coord.z, Transform));
-    return float3(NDC.z * NDC.x / MATRIX_ELEMENT(Transform, 0, 0), NDC.z * NDC.y / MATRIX_ELEMENT(Transform, 1, 1), NDC.z);
-}
-
 float ComputeGeometryWeight(float3 CenterPos, float3 TapPos, float3 CenterNormal, float PlaneDistanceNorm)
 {
     return saturate(1.0 - abs(dot((TapPos - CenterPos), CenterNormal)) * PlaneDistanceNorm);
