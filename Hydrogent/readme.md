@@ -39,7 +39,7 @@ Hydrogent is an implementation of the Hydra rendering API in Diligent Engine.
         ```bash
         git clone https://github.com/PixarAnimationStudios/OpenUSD.git
         cd OpenUSD
-        python3 ./build_scripts/build_usd.py --build-variant debug --no-materialx --generator XCode  ./build -v
+        python3 ./build_scripts/build_usd.py --build-variant debug --no-materialx --generator Xcode  ./build -v
         ```
 
 3. Set environment variables 
