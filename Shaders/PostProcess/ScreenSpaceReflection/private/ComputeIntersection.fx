@@ -28,7 +28,7 @@ Texture2D<float2> g_TextureMotion;
 Texture2D<float2> g_TextureBlueNoise;
 Texture2D<float>  g_TextureDepthHierarchy;
 
-SamplerState g_TextureDepthHierarchySampler;
+SamplerState g_TextureDepthHierarchy_sampler;
 
 float3 ScreenSpaceToViewSpace(float3 ScreenCoordUV)
 {
@@ -209,19 +209,14 @@ float ValidateHit(float3 Hit, float2 ScreenCoordUV, float3 RayDirectionWS, float
     if (IsBackground(SurfaceDepth))
         return 0.0;
 
-    // We check if ray hit below the surface
-    float3 SurfaceNormalWS = SampleNormalWS(int2(ScreenCoordUV * ScreenSize));
-    if (dot(SurfaceNormalWS, RayDirectionWS) < 0.0)
-        return 0.0; 
-
     // We check if we hit the surface from the back, these should be rejected.
     float3 HitNormalWS = SampleNormalWS(TexelCoords);
     if (dot(HitNormalWS, RayDirectionWS) > 0.0)
         return 0.0;
 
-    float3 SurfaceVS = ScreenSpaceToViewSpace(float3(Hit.xy, SurfaceDepth));
-    float3 HitVS = ScreenSpaceToViewSpace(Hit);
-    float Distance = length(SurfaceVS - HitVS);
+    float3 SurfaceVS = FastReconstructPosition(float3(Hit.xy, SurfaceDepth), g_Camera.mProj);
+    float3 HitVS = FastReconstructPosition(Hit, g_Camera.mProj);
+    float Distance = distance(SurfaceVS, HitVS);
 
     // Fade out hits near the screen borders
 #if SSR_OPTION_PREVIOUS_FRAME
@@ -232,7 +227,7 @@ float ValidateHit(float3 Hit, float2 ScreenCoordUV, float3 RayDirectionWS, float
 
     // We accept all hits that are within a reasonable minimum screen-space distance below the surface.
     // Add constant in linear space to avoid growing of the reflections towards the reflected objects.
-    float Confidence = 1.0f - smoothstep(0.0f, DepthBufferThickness, Distance / (SurfaceVS.z + FLT_EPS));
+    float Confidence = 1.0f - smoothstep(0.0f, DepthBufferThickness, Distance * rcp(SurfaceVS.z + FLT_EPS));
     Confidence *= Confidence;
 
     return Vignette * Confidence;
@@ -259,7 +254,6 @@ float4 SampleReflectionVector(float3 View, float3 Normal, float Roughness, int2 
     float2 Xi = SampleRandomVector2D(PixelCoord);
     Xi.y = lerp(Xi.y, 0.0, g_SSRAttribs.GGXImportanceSampleBias);
 
-    float3 NormalTS = float3(0.0, 0.0, 1.0);
     float3 ViewDirTS = mul(TangentToWorld, View);
     float3 MicroNormalTS = SmithGGXSampleVisibleNormalHemisphere(ViewDirTS, AlphaRoughness, Xi);
     float3 SampleDirTS = reflect(-ViewDirTS, MicroNormalTS);
@@ -269,9 +263,9 @@ float4 SampleReflectionVector(float3 View, float3 Normal, float Roughness, int2 
     float NdotV = ViewDirTS.z;
     float NdotH = MicroNormalTS.z;
 
-    float D = NormalDistribution_GGX(NdotH, AlphaRoughness); 
+    float D = NormalDistribution_GGX(NdotH, AlphaRoughness);
     float G1 = SmithGGXMasking(NdotV, AlphaRoughness);
-    float PDF = G1 * D / (4.0 * NdotV);
+    float PDF = G1 * D / (4.0 * NdotV + FLT_EPS);
     return float4(mul(SampleDirTS, TangentToWorld), PDF);
 }
 
@@ -287,6 +281,7 @@ PSOutput ComputeIntersectionPS(in FullScreenTriangleVSOutput VSOut)
 
     float2 ScreenCoordUV = Position * g_Camera.f4ViewportSize.zw;
     float3 NormalWS = SampleNormalWS(int2(Position));
+    float3 NormalVS = mul(float4(NormalWS, 0.0), g_Camera.mView).xyz;
     float Roughness = SampleRoughness(int2(Position));
 
     bool IsMirror = IsMirrorReflection(Roughness);
@@ -294,18 +289,15 @@ PSOutput ComputeIntersectionPS(in FullScreenTriangleVSOutput VSOut)
     float2 MipResolution = GetMipResolution(g_Camera.f4ViewportSize.xy, MostDetailedMip);
 
     float3 RayOriginSS = float3(ScreenCoordUV, SampleDepthHierarchy(int2(ScreenCoordUV * MipResolution), MostDetailedMip));
-    float3 RayOriginVS = ScreenSpaceToViewSpace(RayOriginSS);
-    float3 NormalVS = mul(float4(NormalWS, 0), g_Camera.mView).xyz;
+    float3 RayOriginVS = FastReconstructPosition(RayOriginSS, g_Camera.mProj);
 
     float4 RayDirectionVS = SampleReflectionVector(-normalize(RayOriginVS), NormalVS, Roughness, int2(VSOut.f4PixelPos.xy));
     float3 RayDirectionSS = ProjectDirection(RayOriginVS, RayDirectionVS.xyz, RayOriginSS, g_Camera.mProj);
+    float3 RayDirectionWS = mul(float4(RayDirectionVS.xyz, 0.0), g_Camera.mViewInv).xyz;
 
     bool ValidHit = false;
     float3 SurfaceHitSS = HierarchicalRaymarch(RayOriginSS, RayDirectionSS, g_Camera.f4ViewportSize.xy, MostDetailedMip, g_SSRAttribs.MaxTraversalIntersections, ValidHit);
-
-    float3 RayOriginWS = ScreenSpaceToWorldSpace(RayOriginSS);
-    float3 SurfaceHitWS = ScreenSpaceToWorldSpace(SurfaceHitSS);
-    float3 RayDirectionWS = SurfaceHitWS - RayOriginWS.xyz;
+    float3 SurfaceHitVS = FastReconstructPosition(SurfaceHitSS, g_Camera.mProj);
 
 #if SSR_OPTION_PREVIOUS_FRAME
     float2 Motion = SampleMotion(int2(g_Camera.f4ViewportSize.xy * SurfaceHitSS.xy));
@@ -320,6 +312,6 @@ PSOutput ComputeIntersectionPS(in FullScreenTriangleVSOutput VSOut)
     //TODO: Try to store inverse RayDirectionWS for more accuracy.
     PSOutput Output;
     Output.Specular = float4(ReflectionRadiance, Confidence);
-    Output.DirectionPDF = float4(RayDirectionWS, RayDirectionVS.w);
+    Output.DirectionPDF = float4(RayDirectionWS * distance(SurfaceHitVS, RayOriginVS), RayDirectionVS.w);
     return Output;
 }

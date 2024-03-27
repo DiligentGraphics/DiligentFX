@@ -120,6 +120,12 @@ float CameraZToDepth(in float fDepth, in float4x4 mProj)
     return NormalizedDeviceZToDepth(z);
 }
 
+float3 FastReconstructPosition(float3 Coord, float4x4 Transform)
+{
+    float3 NDC = float3(TexUVToNormalizedDeviceXY(Coord.xy), DepthToCameraZ(Coord.z, Transform));
+    return float3(NDC.z * NDC.x / MATRIX_ELEMENT(Transform, 0, 0), NDC.z * NDC.y / MATRIX_ELEMENT(Transform, 1, 1), NDC.z);
+}
+
 bool IsInsideScreen(int2 PixelCoord, int2 Dimension)
 {
     return PixelCoord.x >= 0 &&
