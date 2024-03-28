@@ -147,6 +147,10 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
         if (TexturesArraySize == 0)
             TexturesArraySize = 256;
 
+#if PLATFORM_APPLE
+        TexturesArraySize = std::min(TexturesArraySize, 96u);
+#endif
+
         USDRendererCI.ShaderTexturesArrayMode   = USD_Renderer::SHADER_TEXTURE_ARRAY_MODE_DYNAMIC;
         USDRendererCI.MaterialTexturesArraySize = TexturesArraySize;
     }
