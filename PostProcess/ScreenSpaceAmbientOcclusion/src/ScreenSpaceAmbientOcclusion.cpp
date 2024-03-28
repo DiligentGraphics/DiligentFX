@@ -358,10 +358,18 @@ void ScreenSpaceAmbientOcclusion::Execute(const RenderAttributes& RenderAttribs)
         m_Resources[ResourceIdx].Release();
 }
 
-bool ScreenSpaceAmbientOcclusion::UpdateUI(HLSL::ScreenSpaceAmbientOcclusionAttribs& SSAOAttribs)
+bool ScreenSpaceAmbientOcclusion::UpdateUI(HLSL::ScreenSpaceAmbientOcclusionAttribs& SSAOAttribs, FEATURE_FLAGS& FeatureFlags)
 {
-    bool AttribsChanged = true;
+    const char* AlgorithmTypeNames[] = {"GTAO", "HBAO"};
 
+    Int32 AlgorithmType             = FeatureFlags & FEATURE_FLAG_UNIFORM_WEIGHTING;
+    bool  FeatureHalfResolution     = FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION;
+    bool  FeatureHalfPrecisionDepth = FeatureFlags & FEATURE_FLAG_HALF_PRECISION_DEPTH;
+
+    bool AttribsChanged = false;
+
+    if (ImGui::Combo("Algorithm", &AlgorithmType, AlgorithmTypeNames, _countof(AlgorithmTypeNames)))
+        AttribsChanged = true;
     if (ImGui::SliderFloat("Effect Radius", &SSAOAttribs.EffectRadius, 0.0f, 10.0f))
         AttribsChanged = true;
     if (ImGui::SliderFloat("Effect Falloff Range", &SSAOAttribs.EffectFalloffRange, 0.0f, 1.0f))
@@ -374,6 +382,21 @@ bool ScreenSpaceAmbientOcclusion::UpdateUI(HLSL::ScreenSpaceAmbientOcclusionAttr
         AttribsChanged = true;
     if (ImGui::SliderFloat("Spatial Reconstruction", &SSAOAttribs.SpatialReconstructionRadius, 0.0, 8.0))
         AttribsChanged = true;
+    if (ImGui::Checkbox("Enable Half Resolution", &FeatureHalfResolution))
+        AttribsChanged = true;
+    if (ImGui::Checkbox("Enable Half Precision Depth", &FeatureHalfPrecisionDepth))
+        AttribsChanged = true;
+
+    auto ResetStateFeatureMask = [](FEATURE_FLAGS& FeatureFlags, FEATURE_FLAGS Flag, bool State) {
+        if (State)
+            FeatureFlags |= Flag;
+        else
+            FeatureFlags &= ~Flag;
+    };
+
+    ResetStateFeatureMask(FeatureFlags, FEATURE_FLAG_UNIFORM_WEIGHTING, static_cast<bool>(AlgorithmType));
+    ResetStateFeatureMask(FeatureFlags, FEATURE_FLAG_HALF_RESOLUTION, FeatureHalfResolution);
+    ResetStateFeatureMask(FeatureFlags, FEATURE_FLAG_HALF_PRECISION_DEPTH, FeatureHalfPrecisionDepth);
 
     return AttribsChanged;
 }
@@ -1066,7 +1089,6 @@ void ScreenSpaceAmbientOcclusion::ComputeSpatialReconstruction(const RenderAttri
     {
         ShaderMacroHelper Macros;
         Macros.Add("SSAO_OPTION_INVERTED_DEPTH", (m_FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
-        Macros.Add("SSAO_OPTION_GUIDED_FILTER", (m_FeatureFlags & FEATURE_FLAG_GUIDED_FILTER) != 0);
         Macros.Add("SSAO_OPTION_HALF_RESOLUTION", (m_FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION) != 0);
 
         const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);

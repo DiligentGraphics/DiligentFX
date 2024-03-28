@@ -542,19 +542,9 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
 
     m_PostFXContext->PrepareResources(pDevice, {pRenderParam->GetFrameNumber(), FinalColorDesc.Width, FinalColorDesc.Height}, PostFXContext::FEATURE_FLAG_NONE);
 
-    constexpr auto SSAOFeatureFlags =
-        ScreenSpaceAmbientOcclusion::FEATURE_FLAG_GUIDED_FILTER |
-        ScreenSpaceAmbientOcclusion::FEATURE_FLAG_HALF_PRECISION_DEPTH;
-    m_SSAO->PrepareResources(pDevice, pCtx, m_PostFXContext.get(), SSAOFeatureFlags);
-
-    constexpr auto SSRFeatureFlags =
-        ScreenSpaceReflection::FEATURE_FLAGS::FEATURE_FLAG_NONE;
-    m_SSR->PrepareResources(pDevice, pCtx, m_PostFXContext.get(), SSRFeatureFlags);
-
-    constexpr auto TAAFeatureFlag =
-        TemporalAntiAliasing::FEATURE_FLAG_BICUBIC_FILTER |
-        TemporalAntiAliasing::FEATURE_FLAG_GAUSSIAN_WEIGHTING;
-    m_TAA->PrepareResources(pDevice, pCtx, m_PostFXContext.get(), TAAFeatureFlag);
+    m_SSAO->PrepareResources(pDevice, pCtx, m_PostFXContext.get(), m_Params.SSAOFeatureFlags);
+    m_SSR->PrepareResources(pDevice, pCtx, m_PostFXContext.get(), m_Params.SSRFeatureFlags);
+    m_TAA->PrepareResources(pDevice, pCtx, m_PostFXContext.get(), m_Params.TAAFeatureFlags);
 
     m_PostProcessTech.PreparePRS();
     m_PostProcessTech.PreparePSO((m_UseTAA ? m_FrameTargets->JitteredFinalColorRTV : m_FinalColorRTV)->GetDesc().Format);

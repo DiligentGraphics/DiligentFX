@@ -178,7 +178,7 @@ float4 SamplePrevColorCatmullRom(float2 Position)
 
 float4 SamplePrevColorBilinear(float2 Position)
 {
-    return g_TexturePrevColor.SampleLevel(g_TexturePrevColor_sampler, Position * g_CurrCamera.f4ViewportSize.zw, 0.0);
+    return max(g_TexturePrevColor.SampleLevel(g_TexturePrevColor_sampler, Position * g_CurrCamera.f4ViewportSize.zw, 0.0), 0.0);
 }
 
 float4 SamplePrevColor(float2 Position)

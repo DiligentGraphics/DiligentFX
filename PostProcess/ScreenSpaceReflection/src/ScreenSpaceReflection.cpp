@@ -344,8 +344,10 @@ void ScreenSpaceReflection::Execute(const RenderAttributes& RenderAttribs)
         m_Resources[ResourceIdx].Release();
 }
 
-bool ScreenSpaceReflection::UpdateUI(HLSL::ScreenSpaceReflectionAttribs& SSRAttribs, Uint32& DisplayMode)
+bool ScreenSpaceReflection::UpdateUI(HLSL::ScreenSpaceReflectionAttribs& SSRAttribs, FEATURE_FLAGS& FeatureFlags, Uint32& DisplayMode)
 {
+    bool FeatureHalfResolution = FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION;
+
     const char* RenderMode[] = {
         "Standard",
         "Advanced",
@@ -380,52 +382,58 @@ bool ScreenSpaceReflection::UpdateUI(HLSL::ScreenSpaceReflectionAttribs& SSRAttr
             AttribsChanged = true;
         if (ImGui::SliderInt("Max Traversal Iterations", reinterpret_cast<Int32*>(&SSRAttribs.MaxTraversalIntersections), 0, 256))
             AttribsChanged = true;
+        if (ImGui::Checkbox("Enable Half Resolution", &FeatureHalfResolution))
+            AttribsChanged = true;
     }
     else if (DisplayMode == 1)
     {
-        if (ImGui::TreeNode("Ray Marching"))
-        {
-            if (ImGui::SliderFloat("Depth Buffer Thickness", &SSRAttribs.DepthBufferThickness, 0.0f, 1.0f))
-                AttribsChanged = true;
-            if (ImGui::SliderFloat("Roughness Threshold", &SSRAttribs.RoughnessThreshold, 0.0f, 1.0f))
-                AttribsChanged = true;
-            if (ImGui::SliderInt("Max Traversal Iterations", reinterpret_cast<Int32*>(&SSRAttribs.MaxTraversalIntersections), 0, 256))
-                AttribsChanged = true;
-            if (ImGui::SliderInt("Most Detailed Mip", reinterpret_cast<Int32*>(&SSRAttribs.MostDetailedMip), 0, SSR_DEPTH_HIERARCHY_MAX_MIP))
-                AttribsChanged = true;
-            if (ImGui::SliderFloat("GGX Importance Sample Bias", &SSRAttribs.GGXImportanceSampleBias, 0.0f, 1.0f))
-                AttribsChanged = true;
-            ImGui::TreePop();
-        }
+        ImGui::Spacing();
+        ImGui::TextDisabled("Ray Marching");
+        if (ImGui::SliderFloat("Depth Buffer Thickness", &SSRAttribs.DepthBufferThickness, 0.0f, 1.0f))
+            AttribsChanged = true;
+        if (ImGui::SliderFloat("Roughness Threshold", &SSRAttribs.RoughnessThreshold, 0.0f, 1.0f))
+            AttribsChanged = true;
+        if (ImGui::SliderInt("Max Traversal Iterations", reinterpret_cast<Int32*>(&SSRAttribs.MaxTraversalIntersections), 0, 256))
+            AttribsChanged = true;
+        if (ImGui::SliderInt("Most Detailed Mip", reinterpret_cast<Int32*>(&SSRAttribs.MostDetailedMip), 0, SSR_DEPTH_HIERARCHY_MAX_MIP))
+            AttribsChanged = true;
+        if (ImGui::SliderFloat("GGX Importance Sample Bias", &SSRAttribs.GGXImportanceSampleBias, 0.0f, 1.0f))
+            AttribsChanged = true;
 
-        if (ImGui::TreeNode("Spatial Reconstruction"))
-        {
-            if (ImGui::SliderFloat("Spatial Reconstruction Radius", &SSRAttribs.SpatialReconstructionRadius, 2.0f, 8.0f))
-                AttribsChanged = true;
-            ImGui::TreePop();
-        }
+        ImGui::Spacing();
+        ImGui::TextDisabled("Spatial Reconstruction");
+        if (ImGui::SliderFloat("Reconstruction Radius", &SSRAttribs.SpatialReconstructionRadius, 2.0f, 8.0f))
+            AttribsChanged = true;
 
-        if (ImGui::TreeNode("Temporal Accumulation"))
-        {
-            if (ImGui::SliderFloat("Temporal Stability Radiance Factor", &SSRAttribs.TemporalRadianceStabilityFactor, 0.0f, 1.0f))
-                AttribsChanged = true;
-            if (ImGui::SliderFloat("Temporal Stability Variance Factor", &SSRAttribs.TemporalVarianceStabilityFactor, 0.0f, 1.0f))
-                AttribsChanged = true;
-            ImGui::TreePop();
-        }
+        ImGui::Spacing();
+        ImGui::TextDisabled("Temporal Accumulation");
+        if (ImGui::SliderFloat("Radiance Factor", &SSRAttribs.TemporalRadianceStabilityFactor, 0.0f, 1.0f))
+            AttribsChanged = true;
+        if (ImGui::SliderFloat("Variance Factor", &SSRAttribs.TemporalVarianceStabilityFactor, 0.0f, 1.0f))
+            AttribsChanged = true;
 
-        if (ImGui::TreeNode("Bilateral Cleanup"))
-        {
-            if (ImGui::SliderFloat("Bilateral Cleanup Spatial Sigma Factor", &SSRAttribs.BilateralCleanupSpatialSigmaFactor, 0.0f, 4.0f))
-                AttribsChanged = true;
-            ImGui::TreePop();
-        }
+        ImGui::Spacing();
+        ImGui::TextDisabled("Bilateral Cleanup");
+        if (ImGui::SliderFloat("Spatial Sigma Factor", &SSRAttribs.BilateralCleanupSpatialSigmaFactor, 0.0f, 4.0f))
+            AttribsChanged = true;
+
+        ImGui::Spacing();
+        if (ImGui::Checkbox("Enable Half Resolution", &FeatureHalfResolution))
+            AttribsChanged = true;
     }
     else
     {
         DEV_ERROR("Unexpected RenderMode");
     }
 
+    auto ResetStateFeatureMask = [](FEATURE_FLAGS& FeatureFlags, FEATURE_FLAGS Flag, bool State) {
+        if (State)
+            FeatureFlags |= Flag;
+        else
+            FeatureFlags &= ~Flag;
+    };
+
+    ResetStateFeatureMask(FeatureFlags, FEATURE_FLAG_HALF_RESOLUTION, FeatureHalfResolution);
     return AttribsChanged;
 }
 
