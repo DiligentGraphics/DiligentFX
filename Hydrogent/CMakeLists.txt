@@ -139,7 +139,6 @@ if(MSVC)
 else()
     target_compile_definitions(USD-Libraries INTERFACE _LIBCPP_ENABLE_CXX17_REMOVED_UNARY_BINARY_FUNCTION=1)
     target_compile_options(USD-Libraries INTERFACE
-        -Wno-deprecated-builtins
         -Wno-deprecated-declarations
         -Wno-conversion
         -Wno-deprecated-copy
