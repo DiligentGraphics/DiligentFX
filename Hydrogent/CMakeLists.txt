@@ -13,13 +13,6 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(entt)
 set_directory_root_folder(${entt_SOURCE_DIR} "DiligentFX/ThirdParty/entt")
 
-# We need to bring in the OpenUSD package explicitly so that USDViewer can
-# link with the right version of python and boost::python
-if(PLATFORM_LINUX OR PLATFORM_MACOS)
-    set(pxr_DIR ${DILIGENT_USD_PATH})
-    find_package(pxr)
-endif()
-
 set(SOURCE
     src/HnMaterial.cpp
     src/HnMaterialNetwork.cpp
@@ -111,15 +104,13 @@ set_common_target_properties(Diligent-Hydrogent)
 
 add_library(USD-Libraries INTERFACE)
 
-if(pxr_FOUND)
-    # PXR is already loaded, so we can use its variables.
-    target_include_directories(USD-Libraries INTERFACE ${PXR_INCLUDE_DIRS})
-elseif(${CMAKE_GENERATOR} MATCHES "Visual Studio")
-    # Boost version depends on Visual Studio version. Since we can't use wildcards in
-    # generator expressions, we have to find boost directory for each configuration
-    file(GLOB BOOST_INCLUDE_DEBUG "${DILIGENT_USD_PATH}/Debug/include/boost-*")
-    file(GLOB BOOST_INCLUDE_RELEASE "${DILIGENT_USD_PATH}/Release/include/boost-*")
-    file(GLOB BOOST_INCLUDE_RELWITHDEBINFO "${DILIGENT_USD_PATH}/RelWithDebInfo/include/boost-*")
+if(${CMAKE_GENERATOR} MATCHES "Visual Studio" OR
+   ${CMAKE_GENERATOR} MATCHES "Xcode")
+    # Since we can't use wildcards in generator expressions, we have to
+    # find boost directory for each configuration
+    file(GLOB BOOST_INCLUDE_DEBUG "${DILIGENT_USD_PATH}/Debug/include/boost*")
+    file(GLOB BOOST_INCLUDE_RELEASE "${DILIGENT_USD_PATH}/Release/include/boost*")
+    file(GLOB BOOST_INCLUDE_RELWITHDEBINFO "${DILIGENT_USD_PATH}/RelWithDebInfo/include/boost*")
 
     target_include_directories(USD-Libraries
     INTERFACE
@@ -134,22 +125,16 @@ elseif(${CMAKE_GENERATOR} MATCHES "Visual Studio")
         ${DILIGENT_USD_PATH}/$<CONFIG>/lib
     )
 else()
-    file(GLOB BOOST_INCLUDE "${DILIGENT_USD_PATH}/include/boost-*")
-    target_include_directories(USD-Libraries
-    INTERFACE
-        ${DILIGENT_USD_PATH}/include
-        ${BOOST_INCLUDE}
-    )
-
-    target_link_directories(USD-Libraries
-    INTERFACE
-        ${DILIGENT_USD_PATH}/lib
-    )
+    # Load the pxr package, which will bring all USD libraries
+    set(pxr_DIR ${DILIGENT_USD_PATH})
+    find_package(pxr)
+    target_include_directories(USD-Libraries INTERFACE ${PXR_INCLUDE_DIRS})
 endif()
 
 if(MSVC)
     target_compile_definitions(USD-Libraries INTERFACE NOMINMAX)
-    target_compile_options(USD-Libraries INTERFACE /wd4244 /wd4305 /wd4127 /wd4267 /wd4003)
+    # Silence compiler warnings and enable RTTI
+    target_compile_options(USD-Libraries INTERFACE /wd4244 /wd4305 /wd4127 /wd4267 /wd4003 /GR)
     target_compile_options(Diligent-Hydrogent PRIVATE /permissive-)
 else()
     target_compile_definitions(USD-Libraries INTERFACE _LIBCPP_ENABLE_CXX17_REMOVED_UNARY_BINARY_FUNCTION=1)
@@ -159,6 +144,9 @@ else()
         -Wno-conversion
         -Wno-deprecated-copy
         -Wno-missing-field-initializers)
+
+    # Set default visibility or there will be issues with VtType
+    set_target_properties(Diligent-Hydrogent PROPERTIES CXX_VISIBILITY_PRESET default)
 endif()
 
 set(USD_LIBS
@@ -176,6 +164,9 @@ set(USD_LIBS
     ndr
     trace
     cameraUtil
+    usdGeom
+    work
+    usdLux
 )
 
 if (NOT pxr_FOUND)
@@ -186,19 +177,25 @@ if (NOT pxr_FOUND)
     endforeach()
     set(USD_LIBS ${_USD_LIBS})
 
+    if (PLATFORM_MACOS)
+        file(GLOB BOOST_PYTHON_LIB_DEBUG "${DILIGENT_USD_PATH}/Debug/lib/*boost_python*")
+        file(GLOB BOOST_PYTHON_LIB_RELEASE "${DILIGENT_USD_PATH}/Release/lib/*boost_python*")
+        file(GLOB BOOST_PYTHON_LIB_RELWITHDEBINFO "${DILIGENT_USD_PATH}/RelWithDebInfo/lib/*boost_python*")
+
+        target_link_libraries(USD-Libraries
+        INTERFACE
+            $<$<CONFIG:DEBUG>:${BOOST_PYTHON_LIB_DEBUG}>
+            $<$<CONFIG:RELEASE>:${BOOST_PYTHON_LIB_RELEASE}>
+            $<$<CONFIG:RELWITHDEBINFO>:${BOOST_PYTHON_LIB_RELWITHDEBINFO}>
+        )
+    endif()
+
     # Add python library
     find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
-
-    target_include_directories(USD-Libraries INTERFACE ${Python3_INCLUDE_DIRS})
-    target_link_directories(USD-Libraries INTERFACE ${Python3_LIBRARY_DIRS})
+    target_link_libraries(USD-Libraries INTERFACE Python3::Python)
 endif()
 
 target_link_libraries(USD-Libraries INTERFACE ${USD_LIBS})
-
-if(MSVC)
-    # USD requires RTTI
-    target_compile_options(USD-Libraries INTERFACE /GR)
-endif()
 
 target_include_directories(Diligent-Hydrogent
 PUBLIC
@@ -211,7 +208,6 @@ PRIVATE
 target_link_libraries(Diligent-Hydrogent
 PRIVATE
     Diligent-BuildSettings 
-    USD-Libraries
     NO_WERROR
     Diligent-GraphicsEngine
     Diligent-BasicPlatform
@@ -221,6 +217,7 @@ PRIVATE
     DiligentFX
 PUBLIC
     EnTT
+    USD-Libraries
 )
 
 set_target_properties(Diligent-Hydrogent PROPERTIES
