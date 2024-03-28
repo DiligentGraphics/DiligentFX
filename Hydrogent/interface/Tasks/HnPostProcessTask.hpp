@@ -40,15 +40,15 @@
 #include "../../../../DiligentCore/Common/interface/BasicMath.hpp"
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/GraphicsTypesX.hpp"
 #include "../../PBR/interface/PBR_Renderer.hpp"
+#include "../../PostProcess/ScreenSpaceAmbientOcclusion/interface/ScreenSpaceAmbientOcclusion.hpp"
+#include "../../PostProcess/ScreenSpaceReflection/interface/ScreenSpaceReflection.hpp"
+#include "../../PostProcess/TemporalAntiAliasing/interface/TemporalAntiAliasing.hpp"
 
 namespace Diligent
 {
 
 class PostFXContext;
 class VectorFieldRenderer;
-class ScreenSpaceReflection;
-class TemporalAntiAliasing;
-class ScreenSpaceAmbientOcclusion;
 
 namespace HLSL
 {
@@ -94,6 +94,10 @@ struct HnPostProcessTaskParams
     // Enable temporal anti-aliasing
     bool EnableTAA = false;
 
+    ScreenSpaceReflection::FEATURE_FLAGS       SSRFeatureFlags  = ScreenSpaceReflection::FEATURE_FLAG_NONE;
+    ScreenSpaceAmbientOcclusion::FEATURE_FLAGS SSAOFeatureFlags = ScreenSpaceAmbientOcclusion::FEATURE_FLAG_NONE;
+    TemporalAntiAliasing::FEATURE_FLAGS        TAAFeatureFlags  = TemporalAntiAliasing::FEATURE_FLAG_BICUBIC_FILTER;
+
     // The number of frames to suspend temporal super-sampling when
     // rendering parameters change.
     Uint32 SuperSamplingSuspensionFrames = 8;
@@ -115,7 +119,7 @@ struct HnPostProcessTaskParams
         // clang-format off
         return ConvertOutputToSRGB            == rhs.ConvertOutputToSRGB &&
                SelectionColor                 == rhs.SelectionColor &&
-               OccludedSelectionColor	      == rhs.OccludedSelectionColor &&
+               OccludedSelectionColor         == rhs.OccludedSelectionColor &&
                SelectionOutlineWidth          == rhs.SelectionOutlineWidth &&
                NonselectionDesaturationFactor == rhs.NonselectionDesaturationFactor &&
                ToneMappingMode                == rhs.ToneMappingMode &&
@@ -126,6 +130,9 @@ struct HnPostProcessTaskParams
                SSRScale                       == rhs.SSRScale &&
                SSAOScale                      == rhs.SSAOScale &&
                EnableTAA                      == rhs.EnableTAA &&
+               SSRFeatureFlags                == rhs.SSRFeatureFlags &&
+               SSAOFeatureFlags               == rhs.SSAOFeatureFlags &&
+               TAAFeatureFlags                == rhs.TAAFeatureFlags &&
                SuperSamplingSuspensionFrames  == rhs.SuperSamplingSuspensionFrames &&
                memcmp(&SSR,  &rhs.SSR,  sizeof(SSR))  == 0 &&
                memcmp(&SSAO, &rhs.SSAO, sizeof(SSAO)) == 0 &&

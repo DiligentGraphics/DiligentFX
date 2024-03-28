@@ -96,7 +96,7 @@ public:
 
     void Execute(const RenderAttributes& RenderAttribs);
 
-    static bool UpdateUI(HLSL::TemporalAntiAliasingAttribs& TAAAttribs);
+    static bool UpdateUI(HLSL::TemporalAntiAliasingAttribs& TAAAttribs, FEATURE_FLAGS& FeatureFlags);
 
     ITextureView* GetAccumulatedFrameSRV(bool IsPrevFrame = false) const;
 

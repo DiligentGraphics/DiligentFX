@@ -55,8 +55,7 @@ public:
         FEATURE_FLAG_PACKED_NORMAL        = 1 << 1, // Nor implemented
         FEATURE_FLAG_HALF_PRECISION_DEPTH = 1 << 2,
         FEATURE_FLAG_HALF_RESOLUTION      = 1 << 3,
-        FEATURE_FLAG_UNIFORM_WEIGHTING    = 1 << 4,
-        FEATURE_FLAG_GUIDED_FILTER        = 1 << 5,
+        FEATURE_FLAG_UNIFORM_WEIGHTING    = 1 << 4
     };
 
     struct RenderAttributes
@@ -92,7 +91,7 @@ public:
 
     void Execute(const RenderAttributes& RenderAttribs);
 
-    static bool UpdateUI(HLSL::ScreenSpaceAmbientOcclusionAttribs& SSRAttribs);
+    static bool UpdateUI(HLSL::ScreenSpaceAmbientOcclusionAttribs& SSRAttribs, FEATURE_FLAGS& FeatureFlags);
 
     ITextureView* GetAmbientOcclusionSRV() const;
 

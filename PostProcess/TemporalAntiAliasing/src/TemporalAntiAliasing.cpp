@@ -164,9 +164,31 @@ void TemporalAntiAliasing::Execute(const RenderAttributes& RenderAttribs)
     m_LastFrameIdx = m_CurrentFrameIdx;
 }
 
-bool TemporalAntiAliasing::UpdateUI(HLSL::TemporalAntiAliasingAttribs& TAAAttribs)
+bool TemporalAntiAliasing::UpdateUI(HLSL::TemporalAntiAliasingAttribs& TAAAttribs, FEATURE_FLAGS& FeatureFlags)
 {
-    return ImGui::SliderFloat("Temporal Stability Factor", &TAAAttribs.TemporalStabilityFactor, 0.0f, 1.0f);
+    bool FeatureBicubicFiltering = FeatureFlags & FEATURE_FLAG_BICUBIC_FILTER;
+    bool FeatureGaussWeighting   = FeatureFlags & FEATURE_FLAG_GAUSSIAN_WEIGHTING;
+
+    bool AttribsChanged = false;
+
+    if (ImGui::SliderFloat("Temporal Stability Factor", &TAAAttribs.TemporalStabilityFactor, 0.0f, 1.0f))
+        AttribsChanged = true;
+    if (ImGui::Checkbox("Enable Bicubic Filtering", &FeatureBicubicFiltering))
+        AttribsChanged = true;
+    if (ImGui::Checkbox("Enable Gauss Weighting", &FeatureGaussWeighting))
+        AttribsChanged = true;
+
+    auto ResetStateFeatureMask = [](FEATURE_FLAGS& FeatureFlags, FEATURE_FLAGS Flag, bool State) {
+        if (State)
+            FeatureFlags |= Flag;
+        else
+            FeatureFlags &= ~Flag;
+    };
+
+    ResetStateFeatureMask(FeatureFlags, FEATURE_FLAG_BICUBIC_FILTER, FeatureBicubicFiltering);
+    ResetStateFeatureMask(FeatureFlags, FEATURE_FLAG_GAUSSIAN_WEIGHTING, FeatureGaussWeighting);
+
+    return AttribsChanged;
 }
 
 ITextureView* TemporalAntiAliasing::GetAccumulatedFrameSRV(bool IsPrevFrame) const
