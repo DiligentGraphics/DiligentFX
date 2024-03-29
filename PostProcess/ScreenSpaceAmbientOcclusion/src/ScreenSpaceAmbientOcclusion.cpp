@@ -370,22 +370,40 @@ bool ScreenSpaceAmbientOcclusion::UpdateUI(HLSL::ScreenSpaceAmbientOcclusionAttr
 
     if (ImGui::Combo("Algorithm", &AlgorithmType, AlgorithmTypeNames, _countof(AlgorithmTypeNames)))
         AttribsChanged = true;
+    ImGui::HelpMarker("This parameter determines which algorithm to use to calculate ambient occlusion. GTAO uses a cosine weighted sum to calculate AO, in the HBAO algorithm the contribution from all directions is uniform weighted");
+
     if (ImGui::SliderFloat("Effect Radius", &SSAOAttribs.EffectRadius, 0.0f, 10.0f))
         AttribsChanged = true;
+    ImGui::HelpMarker("The value defines world space radius of ambient occlusion");
+
     if (ImGui::SliderFloat("Effect Falloff Range", &SSAOAttribs.EffectFalloffRange, 0.0f, 1.0f))
         AttribsChanged = true;
+    ImGui::HelpMarker("The value gently reduces sample impact as it gets out of 'Effect radius' bounds");
+
     if (ImGui::SliderFloat("Radius Multiplier", &SSAOAttribs.RadiusMultiplier, 0.3f, 3.0f))
         AttribsChanged = true;
+    ImGui::HelpMarker("The value allows us to use different value as compared to ground truth radius to counter inherent screen space biases");
+
     if (ImGui::SliderFloat("Depth MIP Sampling Offset", &SSAOAttribs.DepthMIPSamplingOffset, 2.0, 6.0))
         AttribsChanged = true;
+    ImGui::HelpMarker("The value defines main trade-off between performance (memory bandwidth) and quality (temporal stability is the first affected, thin objects next)");
+
     if (ImGui::SliderFloat("Temporal Stability Factor", &SSAOAttribs.TemporalStabilityFactor, 0.0, 1.0))
         AttribsChanged = true;
+    ImGui::HelpMarker("The value is responsible for interpolating between the current and previous frame");
+
     if (ImGui::SliderFloat("Spatial Reconstruction", &SSAOAttribs.SpatialReconstructionRadius, 0.0, 8.0))
         AttribsChanged = true;
+    ImGui::HelpMarker("The value controls the kernel size in the spatial reconstruction step. Increasing the value increases the deviation from the ground truth but reduces the noise");
+
     if (ImGui::Checkbox("Enable Half Resolution", &FeatureHalfResolution))
         AttribsChanged = true;
+    ImGui::HelpMarker("The flag enables calculation of ambient occlusion at half resolution");
+
     if (ImGui::Checkbox("Enable Half Precision Depth", &FeatureHalfPrecisionDepth))
         AttribsChanged = true;
+    ImGui::HelpMarker("The flag enables using half-precision depth (UNORM_R16) for computing ambient occlusion");
+
 
     auto ResetStateFeatureMask = [](FEATURE_FLAGS& FeatureFlags, FEATURE_FLAGS Flag, bool State) {
         if (State)

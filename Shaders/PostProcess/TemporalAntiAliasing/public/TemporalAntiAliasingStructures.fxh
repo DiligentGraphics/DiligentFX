@@ -65,13 +65,14 @@
 
 struct TemporalAntiAliasingAttribs
 {
-    // The value is responsible for interpolating between the current and previous frame.
-    // Increasing the value increases temporal stability but may introduce ghosting
+    // The value is responsible for interpolating between the current and previous frame. Increasing the value increases temporal stability but may introduce ghosting
     float TemporalStabilityFactor    DEFAULT_VALUE(0.9375f);
-    // If this parameter is set to true,
-    // the current frame will be written to the current history buffer without interpolation with the previous history buffer
+    
+    // If this parameter is set to true, the current frame will be written to the current history buffer without interpolation with the previous history buffer
     BOOL  ResetAccumulation          DEFAULT_VALUE(FALSE);
+    
     BOOL  SkipRejection              DEFAULT_VALUE(FALSE);
+    
     float Padding1                   DEFAULT_VALUE(0.0);
 };
 

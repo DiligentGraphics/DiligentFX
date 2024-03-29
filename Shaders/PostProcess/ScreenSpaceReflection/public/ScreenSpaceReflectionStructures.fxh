@@ -64,19 +64,40 @@
 
 struct ScreenSpaceReflectionAttribs
 {
+    // A bias for accepting hits. Larger values can cause streaks, lower values can cause holes
     float DepthBufferThickness               DEFAULT_VALUE(0.025f);
+    
+    // Regions with a roughness value greater than this threshold won't spawn rays"
     float RoughnessThreshold                 DEFAULT_VALUE(0.2f);
+    
+    // The most detailed MIP map level in the depth hierarchy. Perfect mirrors always use 0 as the most detailed level
     uint  MostDetailedMip                    DEFAULT_VALUE(0);
+    
+    // Padding 0
     uint  Padding0                           DEFAULT_VALUE(0);
 
+    // A boolean to describe the space used to store roughness in the materialParameters texture.
     BOOL  IsRoughnessPerceptual              DEFAULT_VALUE(TRUE);
+    
+    // The channel to read the roughness from the materialParameters texture
     uint  RoughnessChannel                   DEFAULT_VALUE(0);
+    
+    // Caps the maximum number of lookups that are performed from the depth buffer hierarchy. Most rays should terminate after approximately 20 lookups
     uint  MaxTraversalIntersections          DEFAULT_VALUE(128);
+    
+    // This parameter is aimed at reducing noise by modify sampling in the ray tracing stage. Increasing the value increases the deviation from the ground truth but reduces the noise
     float GGXImportanceSampleBias            DEFAULT_VALUE(0.3f);
 
+    // The value controls the kernel size in the spatial reconstruction step. Increasing the value increases the deviation from the ground truth but reduces the noise
     float SpatialReconstructionRadius        DEFAULT_VALUE(4.0f);
+    
+    // A factor to control the accmulation of history values of radiance buffer. Higher values reduce noise, but are more likely to exhibit ghosting artefacts
     float TemporalRadianceStabilityFactor    DEFAULT_VALUE(1.0f);
+    
+    // A factor to control the accmulation of history values of variance buffer. Higher values reduce noise, but are more likely to exhibit ghosting artefacts
     float TemporalVarianceStabilityFactor    DEFAULT_VALUE(0.9f);
+    
+    // This parameter represents the standard deviation in the Gaussian kernel, which forms the spatial component of the bilateral filter
     float BilateralCleanupSpatialSigmaFactor DEFAULT_VALUE(0.9f);
 };
 

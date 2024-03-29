@@ -33,6 +33,7 @@
 #include "GraphicsTypesX.hpp"
 
 #include "imgui.h"
+#include "ImGuiUtils.hpp"
 
 namespace Diligent
 {
@@ -376,14 +377,23 @@ bool ScreenSpaceReflection::UpdateUI(HLSL::ScreenSpaceReflectionAttribs& SSRAttr
     {
         if (ImGui::SliderFloat("Roughness Threshold", &SSRAttribs.RoughnessThreshold, 0.0f, 1.0f))
             AttribsChanged = true;
+        ImGui::HelpMarker("Regions with a roughness value greater than this threshold won't spawn rays");
+
         if (ImGui::SliderFloat("Depth Buffer Thickness", &SSRAttribs.DepthBufferThickness, 0.0f, 1.0f, "%.3f", ImGuiSliderFlags_Logarithmic))
             AttribsChanged = true;
+        ImGui::HelpMarker("A bias for accepting hits. Larger values can cause streaks, lower values can cause holes");
+
         if (ImGui::SliderFloat("Temporal Stability Radiance Factor", &SSRAttribs.TemporalRadianceStabilityFactor, 0.0f, 1.0f))
             AttribsChanged = true;
+        ImGui::HelpMarker("A factor to control the accmulation of history values of radiance buffer. Higher values reduce noise, but are more likely to exhibit ghosting artefacts");
+
         if (ImGui::SliderInt("Max Traversal Iterations", reinterpret_cast<Int32*>(&SSRAttribs.MaxTraversalIntersections), 0, 256))
             AttribsChanged = true;
+        ImGui::HelpMarker("Caps the maximum number of lookups that are performed from the depth buffer hierarchy. Most rays should terminate after approximately 20 lookups");
+
         if (ImGui::Checkbox("Enable Half Resolution", &FeatureHalfResolution))
             AttribsChanged = true;
+        ImGui::HelpMarker("The flag enables calculation of reflections at half resolution");
     }
     else if (DisplayMode == 1)
     {
@@ -391,35 +401,50 @@ bool ScreenSpaceReflection::UpdateUI(HLSL::ScreenSpaceReflectionAttribs& SSRAttr
         ImGui::TextDisabled("Ray Marching");
         if (ImGui::SliderFloat("Depth Buffer Thickness", &SSRAttribs.DepthBufferThickness, 0.0f, 1.0f))
             AttribsChanged = true;
+        ImGui::HelpMarker("A bias for accepting hits. Larger values can cause streaks, lower values can cause holes");
+
         if (ImGui::SliderFloat("Roughness Threshold", &SSRAttribs.RoughnessThreshold, 0.0f, 1.0f))
             AttribsChanged = true;
+        ImGui::HelpMarker("Regions with a roughness value greater than this threshold won't spawn rays");
+
         if (ImGui::SliderInt("Max Traversal Iterations", reinterpret_cast<Int32*>(&SSRAttribs.MaxTraversalIntersections), 0, 256))
             AttribsChanged = true;
+        ImGui::HelpMarker("Caps the maximum number of lookups that are performed from the depth buffer hierarchy. Most rays should terminate after approximately 20 lookups");
+
         if (ImGui::SliderInt("Most Detailed Mip", reinterpret_cast<Int32*>(&SSRAttribs.MostDetailedMip), 0, SSR_DEPTH_HIERARCHY_MAX_MIP))
             AttribsChanged = true;
+        ImGui::HelpMarker("The most detailed MIP map level in the depth hierarchy. Perfect mirrors always use 0 as the most detailed level");
+
         if (ImGui::SliderFloat("GGX Importance Sample Bias", &SSRAttribs.GGXImportanceSampleBias, 0.0f, 1.0f))
             AttribsChanged = true;
+        ImGui::HelpMarker("This parameter is aimed at reducing noise by modify sampling in the ray tracing stage. Increasing the value increases the deviation from the ground truth but reduces the noise");
 
         ImGui::Spacing();
         ImGui::TextDisabled("Spatial Reconstruction");
         if (ImGui::SliderFloat("Reconstruction Radius", &SSRAttribs.SpatialReconstructionRadius, 2.0f, 8.0f))
             AttribsChanged = true;
+        ImGui::HelpMarker("The value controls the kernel size in the spatial reconstruction step. Increasing the value increases the deviation from the ground truth but reduces the noise");
 
         ImGui::Spacing();
         ImGui::TextDisabled("Temporal Accumulation");
         if (ImGui::SliderFloat("Radiance Factor", &SSRAttribs.TemporalRadianceStabilityFactor, 0.0f, 1.0f))
             AttribsChanged = true;
+        ImGui::HelpMarker("A factor to control the accmulation of history values of radiance buffer. Higher values reduce noise, but are more likely to exhibit ghosting artefacts");
+
         if (ImGui::SliderFloat("Variance Factor", &SSRAttribs.TemporalVarianceStabilityFactor, 0.0f, 1.0f))
             AttribsChanged = true;
+        ImGui::HelpMarker("A factor to control the accmulation of history values of variance buffer. Higher values reduce noise, but are more likely to exhibit ghosting artefacts");
 
         ImGui::Spacing();
         ImGui::TextDisabled("Bilateral Cleanup");
         if (ImGui::SliderFloat("Spatial Sigma Factor", &SSRAttribs.BilateralCleanupSpatialSigmaFactor, 0.0f, 4.0f))
             AttribsChanged = true;
+        ImGui::HelpMarker("This parameter represents the standard deviation in the Gaussian kernel, which forms the spatial component of the bilateral filter");
 
         ImGui::Spacing();
         if (ImGui::Checkbox("Enable Half Resolution", &FeatureHalfResolution))
             AttribsChanged = true;
+        ImGui::HelpMarker("The flag enables calculation of reflections at half resolution");
     }
     else
     {

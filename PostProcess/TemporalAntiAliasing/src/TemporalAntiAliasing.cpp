@@ -25,6 +25,7 @@
  */
 
 #include "imgui.h"
+#include "ImGuiUtils.hpp"
 
 #include "TemporalAntiAliasing.hpp"
 
@@ -173,10 +174,15 @@ bool TemporalAntiAliasing::UpdateUI(HLSL::TemporalAntiAliasingAttribs& TAAAttrib
 
     if (ImGui::SliderFloat("Temporal Stability Factor", &TAAAttribs.TemporalStabilityFactor, 0.0f, 1.0f))
         AttribsChanged = true;
+    ImGui::HelpMarker("The value is responsible for interpolating between the current and previous frame. Increasing the value increases temporal stability but may introduce ghosting)");
+
     if (ImGui::Checkbox("Enable Bicubic Filtering", &FeatureBicubicFiltering))
         AttribsChanged = true;
+    ImGui::HelpMarker("The flag enables bicubic filtering instead of bilinear filtering from history buffer");
+
     if (ImGui::Checkbox("Enable Gauss Weighting", &FeatureGaussWeighting))
         AttribsChanged = true;
+    ImGui::HelpMarker("The flag enables Gaussian weighting to calculate pixel statistics");
 
     auto ResetStateFeatureMask = [](FEATURE_FLAGS& FeatureFlags, FEATURE_FLAGS Flag, bool State) {
         if (State)

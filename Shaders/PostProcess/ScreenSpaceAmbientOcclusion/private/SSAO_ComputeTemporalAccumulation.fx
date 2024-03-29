@@ -74,7 +74,7 @@ bool IsDepthSimilar(float CurrDepth, float PrevDepth)
 {
     float LinearDepthCurr = DepthToCameraZ(CurrDepth, g_PrevCamera.mProj);
     float LinearDepthPrev = DepthToCameraZ(PrevDepth, g_PrevCamera.mProj);
-    return abs(1.0 - LinearDepthCurr / LinearDepthPrev) < 0.01;
+    return abs(1.0 - LinearDepthCurr / LinearDepthPrev) < SSAO_DISOCCLUSION_DEPTH_THRESHOLD;
 }
 
 bool IsInsideScreenMinusOne(int2 PixelCoord, int2 Dimension)
