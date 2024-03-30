@@ -118,6 +118,9 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
 
     USDRendererCI.AllowHotShaderReload = RenderDelegateCI.AllowHotShaderReload;
 
+    // We use SRGB textures, so color conversion in the shader is not needed
+    USDRendererCI.TexColorConversionMode = PBR_Renderer::CreateInfo::TEX_COLOR_CONVERSION_MODE_NONE;
+
     USDRendererCI.MaxLightCount              = RenderDelegateCI.MaxLightCount;
     USDRendererCI.EnableShadows              = RenderDelegateCI.EnableShadows;
     USDRendererCI.PCFKernelSize              = RenderDelegateCI.PCFKernelSize;
