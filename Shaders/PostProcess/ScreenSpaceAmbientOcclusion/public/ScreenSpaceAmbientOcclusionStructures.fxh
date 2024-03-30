@@ -38,36 +38,46 @@
 
 #endif
 
+// Maximum mip level of depth buffer used in XeGTAO algorithm
 #define SSAO_DEPTH_PREFILTERED_MAX_MIP 4
 
+// Maximum mip level of history buffer used in the resampled history step
 #define SSAO_DEPTH_HISTORY_CONVOLUTED_MAX_MIP 4
 
+// Maximum number of frames using the fixed history buffer
 #define SSAO_OCCLUSION_HISTORY_MAX_FRAMES_WITH_HISTORY_FIX 4
 
+// Maximum number of frames using denoiser
 #define SSAO_OCCLUSION_HISTORY_MAX_FRAMES_WITH_DENOISING 8
 
+// Number of slices used in the calculation of ambient occlusion
 #define SSAO_SLICE_COUNT 3
 
+// Number of samples per slice used in the calculation of ambient occlusion
 #define SSAO_SAMPLES_PER_SLICE 3
 
+// Number of samples on the Poisson disc used in the spatial reconstruction step
 #define SSAO_SPATIAL_RECONSTRUCTION_SAMPLES 8
 
+// Sets the sigma in Gaussian weighting for points on the Poisson disk at the spatial reconstruction step
 #define SSAO_SPATIAL_RECONSTRUCTION_SIGMA 0.9
 
-#define SSAO_BILATERAL_UPSAMPLING_RADIUS 1
-
+// Sets the sigma of spatial component in the bilateral upsampling step
 #define SSAO_BILATERAL_UPSAMPLING_SIGMA 0.9
 
+// Sets the sigma of depth component in the bilateral upsampling step
 #define SSAO_BILATERAL_UPSAMPLING_DEPTH_SIGMA 0.0075
 
-#define SSAO_TEMPORAL_STANDARD_DEVIATION_SCALE 0.5
-
+// Defines the threshold for pixel velocity difference that determines whether a pixel is considered to have "no history" in the temporal accumulation step
 #define SSAO_TEMPORAL_MOTION_VECTOR_DIFF_FACTOR 128.0
 
+// Sets the minimum value for the variance gamma in the temporal accumulation step
 #define SSAO_TEMPORAL_MIN_VARIANCE_GAMMA 0.5
 
+// Sets the maximum value for the variance gamma in the temporal accumulation step
 #define SSAO_TEMPORAL_MAX_VARIANCE_GAMMA 2.5
 
+// Determines the similarity of the depth in the current and previous frame to calculate the disoclusion in the temporal accumulation step
 #define SSAO_DISOCCLUSION_DEPTH_THRESHOLD 0.01
 
 struct ScreenSpaceAmbientOcclusionAttribs
