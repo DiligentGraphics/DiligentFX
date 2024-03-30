@@ -122,7 +122,7 @@ float ComputeDisocclusion(float CurrDepth, float PrevDepth)
 {
     float LinearDepthCurr = DepthToCameraZ(CurrDepth, g_CurrCamera.mProj);
     float LinearDepthPrev = DepthToCameraZ(PrevDepth, g_PrevCamera.mProj);
-    return exp(-abs(LinearDepthPrev - LinearDepthCurr) / LinearDepthCurr * SSR_DISOCCLUSION_DEPTH_WEIGHT);
+    return exp(-abs(LinearDepthPrev - LinearDepthCurr) / LinearDepthCurr);
 }
 
 // Welford's online algorithm:
@@ -251,8 +251,8 @@ PSOutput ComputeTemporalAccumulationPS(in FullScreenTriangleVSOutput VSOut)
     PSOutput Output;
     if (Reprojection.IsSuccess)
     {
-        float4 ColorMin = PixelStat.Mean - SSR_TEMPORAL_STANDARD_DEVIATION_SCALE * PixelStat.StdDev;
-        float4 ColorMax = PixelStat.Mean + SSR_TEMPORAL_STANDARD_DEVIATION_SCALE * PixelStat.StdDev;
+        float4 ColorMin = PixelStat.Mean - SSR_TEMPORAL_VARIANCE_GAMMA * PixelStat.StdDev;
+        float4 ColorMax = PixelStat.Mean + SSR_TEMPORAL_VARIANCE_GAMMA * PixelStat.StdDev;
         float4 PrevRadiance = clamp(Reprojection.Color, ColorMin, ColorMax);
         float  PrevVariance = SamplePrevVarianceLinear(Reprojection.PrevCoord);
         Output.Radiance = lerp(SampleCurrRadiance(int2(Position.xy)), PrevRadiance, g_SSRAttribs.TemporalRadianceStabilityFactor);

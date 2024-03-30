@@ -88,9 +88,11 @@ float ComputeBilateralUpsamplingPS(in FullScreenTriangleVSOutput VSOut) : SV_Tar
     
     float OcclusionSum = 0.0;
     float WeightSum = 0.0;
-    for (int x = -SSAO_BILATERAL_UPSAMPLING_RADIUS; x <= SSAO_BILATERAL_UPSAMPLING_RADIUS; x++)
+    
+    const int UpsamplingRadius = 1;
+    for (int x = -UpsamplingRadius; x <= UpsamplingRadius; x++)
     {
-        for (int y = -SSAO_BILATERAL_UPSAMPLING_RADIUS; y <= SSAO_BILATERAL_UPSAMPLING_RADIUS; y++)
+        for (int y = -UpsamplingRadius; y <= UpsamplingRadius; y++)
         {
             int2 Location = ClampScreenCoord(CenterLocation + int2(x, y), int2(0.5 * g_Camera.f4ViewportSize.xy));
             float2 Texcoord = 2.0 * (float2(Location) + 0.5) * g_Camera.f4ViewportSize.zw;
