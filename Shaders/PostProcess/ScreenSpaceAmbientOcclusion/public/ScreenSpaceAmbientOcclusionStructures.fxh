@@ -75,19 +75,19 @@ struct ScreenSpaceAmbientOcclusionAttribs
     // The value defines world space radius of ambient occlusion
     float EffectRadius                DEFAULT_VALUE(1.0f);
 
-    // The value gently reduces sample impact as it gets out of 'Effect radius' bounds
+    // Gently reduces sample impact as it gets out of the 'Effect radius' bounds
     float EffectFalloffRange          DEFAULT_VALUE(0.615f);
 
-    // The value allows us to use different value as compared to ground truth radius to counter inherent screen space biases
+    // Use different value as compared to the ground truth radius to counter inherent screen space biases
     float RadiusMultiplier            DEFAULT_VALUE(1.457f);
 
-    // The value defines main trade-off between performance (memory bandwidth) and quality (temporal stability is the first affected, thin objects next)
+    // Controls the main trade-off between performance (memory bandwidth) and quality (temporal stability is the first affected, thin objects next)
     float DepthMIPSamplingOffset      DEFAULT_VALUE(3.3f);
 
     // The value is responsible for interpolating between the current and previous frame
     float TemporalStabilityFactor     DEFAULT_VALUE(0.9f);
 
-    // The value controls the kernel size in the spatial reconstruction step. Increasing the value increases the deviation from the ground truth but reduces the noise
+    // Controls the kernel size in the spatial reconstruction step. Increasing the value increases the deviation from the ground truth but reduces the noise
     float SpatialReconstructionRadius DEFAULT_VALUE(4.0f);
     
     // Padding 0

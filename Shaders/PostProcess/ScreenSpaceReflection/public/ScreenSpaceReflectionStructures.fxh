@@ -64,7 +64,7 @@
 
 struct ScreenSpaceReflectionAttribs
 {
-    // A bias for accepting hits. Larger values can cause streaks, lower values can cause holes
+    // A bias for accepting hits. Larger values may cause streaks, lower values may cause holes
     float DepthBufferThickness               DEFAULT_VALUE(0.025f);
     
     // Regions with a roughness value greater than this threshold won't spawn rays"
