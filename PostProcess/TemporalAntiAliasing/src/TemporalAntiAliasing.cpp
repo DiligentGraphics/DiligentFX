@@ -225,7 +225,7 @@ void TemporalAntiAliasing::ComputeTemporalAccumulation(const RenderAttributes& R
         Macros.Add("TAA_OPTION_BICUBIC_FILTER", (m_FeatureFlags & FEATURE_FLAG_BICUBIC_FILTER) != 0);
 
         const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeTemporalAntiAliasing.fx", "ComputeTemporalAccumulationPS", SHADER_TYPE_PIXEL, Macros);
+        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "TAA_ComputeTemporalAccumulation.fx", "ComputeTemporalAccumulationPS", SHADER_TYPE_PIXEL, Macros);
 
         RenderTech.InitializePSO(RenderAttribs.pDevice,
                                  RenderAttribs.pStateCache, "TemporalAntiAliasing::ComputeTemporalAccumulation",

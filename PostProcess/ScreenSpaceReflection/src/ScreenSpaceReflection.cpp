@@ -511,7 +511,7 @@ void ScreenSpaceReflection::ComputeHierarchicalDepthBuffer(const RenderAttribute
         Macros.Add("SSR_OPTION_INVERTED_DEPTH", (m_FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
 
         const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeHierarchicalDepthBuffer.fx", "ComputeHierarchicalDepthBufferPS", SHADER_TYPE_PIXEL, Macros);
+        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSR_ComputeHierarchicalDepthBuffer.fx", "ComputeHierarchicalDepthBufferPS", SHADER_TYPE_PIXEL, Macros);
 
         PipelineResourceLayoutDescX ResourceLayout;
         if (SupportedFeatures.TextureSubresourceViews)
@@ -670,7 +670,7 @@ void ScreenSpaceReflection::ComputeStencilMaskAndExtractRoughness(const RenderAt
         Macros.Add("SSR_OPTION_INVERTED_DEPTH", (m_FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
 
         const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeStencilMaskAndExtractRoughness.fx", "ComputeStencilMaskAndExtractRoughnessPS", SHADER_TYPE_PIXEL, Macros);
+        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSR_ComputeStencilMaskAndExtractRoughness.fx", "ComputeStencilMaskAndExtractRoughnessPS", SHADER_TYPE_PIXEL, Macros);
 
         RenderTech.InitializePSO(RenderAttribs.pDevice,
                                  RenderAttribs.pStateCache, "ScreenSpaceReflection::ComputeStencilMaskAndExtractRoughness",
@@ -725,7 +725,7 @@ void ScreenSpaceReflection::ComputeDownsampledStencilMask(const RenderAttributes
         Macros.Add("SSR_OPTION_INVERTED_DEPTH", (m_FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
 
         const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeDownsampledStencilMask.fx", "ComputeDownsampledStencilMaskPS", SHADER_TYPE_PIXEL, Macros);
+        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSR_ComputeDownsampledStencilMask.fx", "ComputeDownsampledStencilMaskPS", SHADER_TYPE_PIXEL, Macros);
 
         RenderTech.InitializePSO(RenderAttribs.pDevice,
                                  RenderAttribs.pStateCache, "ScreenSpaceReflection::ComputeDownsampledStencilMask",
@@ -787,7 +787,7 @@ void ScreenSpaceReflection::ComputeIntersection(const RenderAttributes& RenderAt
         Macros.Add("SSR_OPTION_HALF_RESOLUTION", (m_FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION) != 0);
 
         const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeIntersection.fx", "ComputeIntersectionPS", SHADER_TYPE_PIXEL, Macros);
+        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSR_ComputeIntersection.fx", "ComputeIntersectionPS", SHADER_TYPE_PIXEL, Macros);
 
         RenderTech.InitializePSO(RenderAttribs.pDevice,
                                  RenderAttribs.pStateCache, "ScreenSpaceReflection::ComputeIntersection",
@@ -855,7 +855,7 @@ void ScreenSpaceReflection::ComputeSpatialReconstruction(const RenderAttributes&
         Macros.Add("SSR_OPTION_HALF_RESOLUTION", (m_FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION) != 0);
 
         const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeSpatialReconstruction.fx", "ComputeSpatialReconstructionPS", SHADER_TYPE_PIXEL, Macros);
+        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSR_ComputeSpatialReconstruction.fx", "ComputeSpatialReconstructionPS", SHADER_TYPE_PIXEL, Macros);
 
         RenderTech.InitializePSO(RenderAttribs.pDevice,
                                  RenderAttribs.pStateCache, "ScreenSpaceReflection::ComputeSpatialReconstruction",
@@ -922,7 +922,7 @@ void ScreenSpaceReflection::ComputeTemporalAccumulation(const RenderAttributes& 
         Macros.Add("SSR_OPTION_INVERTED_DEPTH", (m_FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
 
         const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeTemporalAccumulation.fx", "ComputeTemporalAccumulationPS", SHADER_TYPE_PIXEL, Macros);
+        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSR_ComputeTemporalAccumulation.fx", "ComputeTemporalAccumulationPS", SHADER_TYPE_PIXEL, Macros);
 
         RenderTech.InitializePSO(RenderAttribs.pDevice,
                                  RenderAttribs.pStateCache, "ScreenSpaceReflection::ComputeTemporalAccumulation",
@@ -989,7 +989,7 @@ void ScreenSpaceReflection::ComputeBilateralCleanup(const RenderAttributes& Rend
         Macros.Add("SSR_OPTION_INVERTED_DEPTH", (m_FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
 
         const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeBilateralCleanup.fx", "ComputeBilateralCleanupPS", SHADER_TYPE_PIXEL, Macros);
+        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSR_ComputeBilateralCleanup.fx", "ComputeBilateralCleanupPS", SHADER_TYPE_PIXEL, Macros);
 
         RenderTech.InitializePSO(RenderAttribs.pDevice,
                                  RenderAttribs.pStateCache, "ScreenSpaceReflection::ComputeBilateralCleanup",
