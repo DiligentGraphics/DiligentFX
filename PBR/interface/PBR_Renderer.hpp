@@ -492,6 +492,8 @@ public:
         PSO_FLAG_ALL_USER_DEFINED = ~(PSO_FLAG_FIRST_USER_DEFINED - 1ull)
     };
 
+    static std::string GetPSOFlagsString(PSO_FLAGS Flags);
+
     class PSOKey
     {
     public:

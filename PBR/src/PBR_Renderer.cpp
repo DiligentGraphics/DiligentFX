@@ -130,6 +130,69 @@ static std::string GetTextureIdString(PBR_Renderer::TEXTURE_ATTRIB_ID Id)
     return std::string{GetTextureAttribString(Id)} + "TextureId";
 }
 
+std::string PBR_Renderer::GetPSOFlagsString(PSO_FLAGS Flags)
+{
+    std::string FlagsStr;
+    while (Flags != PSO_FLAG_NONE)
+    {
+        if (!FlagsStr.empty())
+            FlagsStr += " | ";
+
+        const PSO_FLAGS Flag = ExtractLSB(Flags);
+        switch (Flag)
+        {
+            // clang-format off
+            case PSO_FLAG_USE_COLOR_MAP:                 FlagsStr += "COLOR_MAP"; break;
+            case PSO_FLAG_USE_NORMAL_MAP:                FlagsStr += "NORMAL_MAP"; break;
+            case PSO_FLAG_USE_PHYS_DESC_MAP:             FlagsStr += "PHYS_DESC_MAP"; break;
+            case PSO_FLAG_USE_METALLIC_MAP:              FlagsStr += "METALLIC_MAP"; break;
+            case PSO_FLAG_USE_ROUGHNESS_MAP:             FlagsStr += "ROUGHNESS_MAP"; break;
+            case PSO_FLAG_USE_AO_MAP:                    FlagsStr += "AO_MAP"; break;
+            case PSO_FLAG_USE_EMISSIVE_MAP:              FlagsStr += "EMISSIVE_MAP"; break;
+            case PSO_FLAG_USE_CLEAR_COAT_MAP:            FlagsStr += "CLEAR_COAT_MAP"; break;
+            case PSO_FLAG_USE_CLEAR_COAT_ROUGHNESS_MAP:  FlagsStr += "CLEAR_COAT_ROUGHNESS_MAP"; break;
+            case PSO_FLAG_USE_CLEAR_COAT_NORMAL_MAP:     FlagsStr += "CLEAR_COAT_NORMAL_MAP"; break;
+            case PSO_FLAG_USE_SHEEN_COLOR_MAP:           FlagsStr += "SHEEN_COLOR_MAP"; break;
+            case PSO_FLAG_USE_SHEEN_ROUGHNESS_MAP:       FlagsStr += "SHEEN_ROUGHNESS_MAP"; break;
+            case PSO_FLAG_USE_ANISOTROPY_MAP:            FlagsStr += "ANISOTROPY_MAP"; break;
+            case PSO_FLAG_USE_IRIDESCENCE_MAP:           FlagsStr += "IRIDESCENCE_MAP"; break;
+            case PSO_FLAG_USE_IRIDESCENCE_THICKNESS_MAP: FlagsStr += "IRIDESCENCE_THICKNESS_MAP"; break;
+            case PSO_FLAG_USE_TRANSMISSION_MAP:          FlagsStr += "TRANSMISSION_MAP"; break;
+
+            case PSO_FLAG_USE_VERTEX_COLORS:   FlagsStr += "VERTEX_COLORS"; break;
+            case PSO_FLAG_USE_VERTEX_NORMALS:  FlagsStr += "VERTEX_NORMALS"; break;
+            case PSO_FLAG_USE_VERTEX_TANGENTS: FlagsStr += "VERTEX_TANGENTS"; break;
+            case PSO_FLAG_USE_TEXCOORD0:       FlagsStr += "TEXCOORD0"; break;
+            case PSO_FLAG_USE_TEXCOORD1:       FlagsStr += "TEXCOORD1"; break;
+            case PSO_FLAG_USE_JOINTS:          FlagsStr += "JOINTS"; break;
+            case PSO_FLAG_ENABLE_CLEAR_COAT:   FlagsStr += "CLEAR_COAT"; break;
+            case PSO_FLAG_ENABLE_SHEEN:        FlagsStr += "SHEEN"; break;
+            case PSO_FLAG_ENABLE_ANISOTROPY:   FlagsStr += "ANISOTROPY"; break;
+            case PSO_FLAG_ENABLE_IRIDESCENCE:  FlagsStr += "IRIDESCENCE"; break;
+            case PSO_FLAG_ENABLE_TRANSMISSION: FlagsStr += "TRANSMISSION"; break;
+            case PSO_FLAG_ENABLE_VOLUME:       FlagsStr += "VOLUME"; break;
+
+            case PSO_FLAG_USE_IBL:                   FlagsStr += "IBL"; break;
+            case PSO_FLAG_USE_LIGHTS:                FlagsStr += "LIGHTS"; break;
+            case PSO_FLAG_USE_TEXTURE_ATLAS:         FlagsStr += "TEXTURE_ATLAS"; break;
+            case PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM: FlagsStr += "TEXCOORD_TRANSFORM"; break;
+            case PSO_FLAG_CONVERT_OUTPUT_TO_SRGB:    FlagsStr += "SRGB"; break;
+            case PSO_FLAG_ENABLE_CUSTOM_DATA_OUTPUT: FlagsStr += "CUSTOM_DATA"; break;
+            case PSO_FLAG_ENABLE_TONE_MAPPING:       FlagsStr += "TONE_MAPPING"; break;
+            case PSO_FLAG_UNSHADED:                  FlagsStr += "UNSHADED"; break;
+            case PSO_FLAG_COMPUTE_MOTION_VECTORS:    FlagsStr += "MOTION_VECTORS"; break;
+            case PSO_FLAG_ENABLE_SHADOWS:            FlagsStr += "SHADOWS"; break;
+                // clang-format on
+
+            default:
+                FlagsStr += std::to_string(PlatformMisc::GetLSB(Flag));
+        }
+    }
+    static_assert(PSO_FLAG_LAST == 1ull << 38ull, "Please update the switch above to handle the new flag");
+
+    return FlagsStr;
+}
+
 PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
                            IRenderStateCache* pStateCache,
                            IDeviceContext*    pCtx,
@@ -1293,6 +1356,10 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
 
     const auto PSOFlags   = Key.GetFlags();
     const auto IsUnshaded = (PSOFlags & PSO_FLAG_UNSHADED) != 0;
+
+#ifdef DILIGENT_DEVELOPMENT
+    LOG_INFO_MESSAGE("PBR Renderer: creating PSO with flags: ", GetPSOFlagsString(PSOFlags), "; debug view: ", static_cast<int>(Key.GetDebugView()), "; user value: ", Key.GetUserValue());
+#endif
 
     InputLayoutDescX InputLayout;
     std::string      VSInputStruct;
