@@ -372,6 +372,16 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
 
 PBR_Renderer::~PBR_Renderer()
 {
+#ifdef DILIGENT_DEVELOPMENT
+    {
+        size_t NumPSOs = 0;
+        for (const auto& it : m_PSOs)
+        {
+            NumPSOs += it.second.size();
+        }
+        LOG_INFO_MESSAGE("PBR Renderer: PSO cache size: ", NumPSOs, ".");
+    }
+#endif
 }
 
 void PBR_Renderer::PrecomputeBRDF(IDeviceContext* pCtx,
@@ -1357,9 +1367,7 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
     const auto PSOFlags   = Key.GetFlags();
     const auto IsUnshaded = (PSOFlags & PSO_FLAG_UNSHADED) != 0;
 
-#ifdef DILIGENT_DEVELOPMENT
-    LOG_INFO_MESSAGE("PBR Renderer: creating PSO with flags: ", GetPSOFlagsString(PSOFlags), "; debug view: ", static_cast<int>(Key.GetDebugView()), "; user value: ", Key.GetUserValue());
-#endif
+    LOG_DVP_INFO_MESSAGE("PBR Renderer: creating PSO with flags: ", GetPSOFlagsString(PSOFlags), "; debug view: ", static_cast<int>(Key.GetDebugView()), "; user value: ", Key.GetUserValue());
 
     InputLayoutDescX InputLayout;
     std::string      VSInputStruct;
