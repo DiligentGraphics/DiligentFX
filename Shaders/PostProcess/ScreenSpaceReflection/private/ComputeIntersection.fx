@@ -62,7 +62,7 @@ float3 SampleNormalWS(int2 PixelCoord)
 
 float SampleDepthHierarchy(int2 PixelCoord, int MipLevel)
 {
-    return DepthToNormalizedDeviceZ(g_TextureDepthHierarchy.Load(int3(PixelCoord, MipLevel)));
+    return g_TextureDepthHierarchy.Load(int3(PixelCoord, MipLevel));
 }
 
 float2 SampleMotion(int2 PixelCoord)
@@ -214,8 +214,8 @@ float ValidateHit(float3 Hit, float2 ScreenCoordUV, float3 RayDirectionWS, float
     if (dot(HitNormalWS, RayDirectionWS) > 0.0)
         return 0.0;
 
-    float3 SurfaceVS = FastReconstructPosition(float3(Hit.xy, SurfaceDepth), g_Camera.mProj);
-    float3 HitVS = FastReconstructPosition(Hit, g_Camera.mProj);
+    float3 SurfaceVS = ScreenXYDepthToViewSpace(float3(Hit.xy, SurfaceDepth), g_Camera.mProj);
+    float3 HitVS = ScreenXYDepthToViewSpace(Hit, g_Camera.mProj);
     float Distance = distance(SurfaceVS, HitVS);
 
     // Fade out hits near the screen borders
@@ -289,7 +289,7 @@ PSOutput ComputeIntersectionPS(in FullScreenTriangleVSOutput VSOut)
     float2 MipResolution = GetMipResolution(g_Camera.f4ViewportSize.xy, MostDetailedMip);
 
     float3 RayOriginSS = float3(ScreenCoordUV, SampleDepthHierarchy(int2(ScreenCoordUV * MipResolution), MostDetailedMip));
-    float3 RayOriginVS = FastReconstructPosition(RayOriginSS, g_Camera.mProj);
+    float3 RayOriginVS = ScreenXYDepthToViewSpace(RayOriginSS, g_Camera.mProj);
 
     float4 RayDirectionVS = SampleReflectionVector(-normalize(RayOriginVS), NormalVS, Roughness, int2(VSOut.f4PixelPos.xy));
     float3 RayDirectionSS = ProjectDirection(RayOriginVS, RayDirectionVS.xyz, RayOriginSS, g_Camera.mProj);
@@ -297,7 +297,7 @@ PSOutput ComputeIntersectionPS(in FullScreenTriangleVSOutput VSOut)
 
     bool ValidHit = false;
     float3 SurfaceHitSS = HierarchicalRaymarch(RayOriginSS, RayDirectionSS, g_Camera.f4ViewportSize.xy, MostDetailedMip, g_SSRAttribs.MaxTraversalIntersections, ValidHit);
-    float3 SurfaceHitVS = FastReconstructPosition(SurfaceHitSS, g_Camera.mProj);
+    float3 SurfaceHitVS = ScreenXYDepthToViewSpace(SurfaceHitSS, g_Camera.mProj);
 
 #if SSR_OPTION_PREVIOUS_FRAME
     float2 Motion = SampleMotion(int2(g_Camera.f4ViewportSize.xy * SurfaceHitSS.xy));

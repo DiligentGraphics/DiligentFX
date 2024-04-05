@@ -112,7 +112,7 @@ float SamplePrevVarianceLinear(float2 PixelCoord)
 float2 ComputeReflectionHitPosition(int2 PixelCoord, float Depth)
 {
     float2 Texcoord = (float2(PixelCoord) + 0.5) * g_CurrCamera.f4ViewportSize.zw + F3NDC_XYZ_TO_UVD_SCALE.xy * g_CurrCamera.f2Jitter;
-    float3 PositionWS = InvProjectPosition(float3(Texcoord, DepthToNormalizedDeviceZ(Depth)), g_CurrCamera.mViewProjInv);
+    float3 PositionWS = InvProjectPosition(float3(Texcoord, Depth), g_CurrCamera.mViewProjInv);
     float3 PrevCoordUV = ProjectPosition(PositionWS, g_PrevCamera.mViewProj);
     return (PrevCoordUV.xy - F3NDC_XYZ_TO_UVD_SCALE.xy * g_PrevCamera.f2Jitter) * g_CurrCamera.f4ViewportSize.xy;
 }

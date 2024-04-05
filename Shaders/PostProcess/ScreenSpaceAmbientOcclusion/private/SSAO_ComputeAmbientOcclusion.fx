@@ -91,7 +91,7 @@ float ComputeAmbientOcclusionPS(in FullScreenTriangleVSOutput VSOut) : SV_Target
 #endif
     
     float3 NormalVS = mul(float4(SampleNormalWS(ScreenCoordUV), 0.0), g_Camera.mView).xyz;
-    float3 PositionVS = FastReconstructPosition(PositionSS, g_Camera.mProj);
+    float3 PositionVS = ScreenXYDepthToViewSpace(PositionSS, g_Camera.mProj);
     float3 ViewVS = -normalize(PositionVS);
     float2 Xi = SampleRandomVector2D(int2(Position));
 
@@ -138,8 +138,8 @@ float ComputeAmbientOcclusionPS(in FullScreenTriangleVSOutput VSOut) : SV_Target
             float2 SamplePositionSS1 = PositionSS.xy - SampleOffset;
 
             float MipLevel = clamp(log2(length(SampleOffset * g_Camera.f4ViewportSize.xy)) - g_SSAOAttribs.DepthMIPSamplingOffset, 0.0, float(SSAO_DEPTH_PREFILTERED_MAX_MIP));
-            float3 SamplePositionVS0 = FastReconstructPosition(float3(SamplePositionSS0, SamplePrefilteredDepth(SamplePositionSS0, MipLevel)), g_Camera.mProj);
-            float3 SamplePositionVS1 = FastReconstructPosition(float3(SamplePositionSS0, SamplePrefilteredDepth(SamplePositionSS1, MipLevel)), g_Camera.mProj);
+            float3 SamplePositionVS0 = ScreenXYDepthToViewSpace(float3(SamplePositionSS0, SamplePrefilteredDepth(SamplePositionSS0, MipLevel)), g_Camera.mProj);
+            float3 SamplePositionVS1 = ScreenXYDepthToViewSpace(float3(SamplePositionSS0, SamplePrefilteredDepth(SamplePositionSS1, MipLevel)), g_Camera.mProj);
 
             float3 SampleDifference0 = SamplePositionVS0 - PositionVS;
             float3 SampleDifference1 = SamplePositionVS1 - PositionVS;

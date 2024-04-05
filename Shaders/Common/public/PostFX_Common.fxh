@@ -85,6 +85,7 @@ float3 ProjectPosition(float3 Origin, float4x4 Transform)
     float4 Projected = mul(float4(Origin, 1.0), Transform);
     Projected.xyz /= Projected.w;
     Projected.xy = NormalizedDeviceXYToTexUV(Projected.xy);
+    Projected.z = NormalizedDeviceZToDepth(Projected.z);
     return Projected.xyz;
 }
 
@@ -96,6 +97,7 @@ float3 ProjectDirection(float3 Origin, float3 Direction, float3 OriginSS, float4
 float3 InvProjectPosition(float3 Coord, float4x4 Transform)
 {
     Coord.xy = TexUVToNormalizedDeviceXY(Coord.xy);
+    Coord.z = DepthToNormalizedDeviceZ(Coord.z);
     float4 Projected = mul(float4(Coord, 1.0), Transform);
     return Projected.xyz /= Projected.w;
 }
@@ -120,7 +122,7 @@ float CameraZToDepth(in float fDepth, in float4x4 mProj)
     return NormalizedDeviceZToDepth(z);
 }
 
-float3 FastReconstructPosition(float3 Coord, float4x4 Transform)
+float3 ScreenXYDepthToViewSpace(float3 Coord, float4x4 Transform)
 {
     float3 NDC = float3(TexUVToNormalizedDeviceXY(Coord.xy), DepthToCameraZ(Coord.z, Transform));
     return float3(NDC.z * NDC.x / MATRIX_ELEMENT(Transform, 0, 0), NDC.z * NDC.y / MATRIX_ELEMENT(Transform, 1, 1), NDC.z);

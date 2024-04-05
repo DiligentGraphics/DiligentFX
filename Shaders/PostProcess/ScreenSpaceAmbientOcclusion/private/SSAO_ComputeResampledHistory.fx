@@ -67,7 +67,7 @@ float ComputeResampledHistoryPS(in FullScreenTriangleVSOutput VSOut) : SV_Target
         
     int MipLevel = int(float(SSAO_DEPTH_HISTORY_CONVOLUTED_MAX_MIP) * (1.0 - saturate(AccumulationFactor)));
     float3 PositionSS = float3(Position.xy * g_Camera.f4ViewportSize.zw, Depth);
-    float3 PositionVS = FastReconstructPosition(PositionSS, g_Camera.mProj);
+    float3 PositionVS = ScreenXYDepthToViewSpace(PositionSS, g_Camera.mProj);
     float3 NormalVS = mul(float4(SampleNormalWS(int2(Position.xy)), 0.0), g_Camera.mView).xyz;
     float PlaneNormalFactor = 10.0 / (1.0 + DepthToCameraZ(Depth, g_Camera.mProj));
     
@@ -101,7 +101,7 @@ float ComputeResampledHistoryPS(in FullScreenTriangleVSOutput VSOut) : SV_Target
             float SampledOcclusion = SampleOcclusionPoint(Texcoord, MipLevel);
 
             float3 SamplePositionSS = float3(Texcoord, SampledDepth);
-            float3 SamplePositionVS = FastReconstructPosition(SamplePositionSS, g_Camera.mProj);
+            float3 SamplePositionVS = ScreenXYDepthToViewSpace(SamplePositionSS, g_Camera.mProj);
             
             float WeightS = Weight[SampleIdx];
             float WeightZ = ComputeGeometryWeight(PositionVS, SamplePositionVS, NormalVS, PlaneNormalFactor);

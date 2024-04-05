@@ -68,7 +68,7 @@ float ComputeSpatialReconstructionPS(in FullScreenTriangleVSOutput VSOut) : SV_T
         return SampleOcclusion(int2(Position.xy));
 
     float3 PositionSS = float3(Position.xy * g_Camera.f4ViewportSize.zw, Depth);
-    float3 PositionVS = FastReconstructPosition(PositionSS, g_Camera.mProj);
+    float3 PositionVS = ScreenXYDepthToViewSpace(PositionSS, g_Camera.mProj);
     float3 NormalVS = mul(float4(SampleNormalWS(int2(Position.xy)), 0.0), g_Camera.mView).xyz;
     float4 Rotator = ComputeBlurKernelRotation(uint2(Position.xy), g_Camera.uiFrameIndex);
     float Radius = lerp(0.0, g_SSAOAttribs.SpatialReconstructionRadius, 1.0 - saturate(AccumulationFactor));
@@ -86,7 +86,7 @@ float ComputeSpatialReconstructionPS(in FullScreenTriangleVSOutput VSOut) : SV_T
         float SampledOcclusion = SampleOcclusion(SampleCoord);
 
         float3 SamplePositionSS = float3((float2(SampleCoord) + 0.5) * g_Camera.f4ViewportSize.zw, SampledDepth);
-        float3 SamplePositionVS = FastReconstructPosition(SamplePositionSS, g_Camera.mProj);
+        float3 SamplePositionVS = ScreenXYDepthToViewSpace(SamplePositionSS, g_Camera.mProj);
                 
         float WeightS = ComputeSpatialWeight(Poisson[SampleIdx].z * Poisson[SampleIdx].z, SSAO_SPATIAL_RECONSTRUCTION_SIGMA);
         float WeightZ = ComputeGeometryWeight(PositionVS, SamplePositionVS, NormalVS, PlaneNormalFactor);
