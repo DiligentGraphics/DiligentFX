@@ -613,6 +613,96 @@ RefCntAutoPtr<IObject> HnMaterial::CreateSRBCache()
     return HnMaterialSRBCache::Create();
 }
 
+// If possible, applies standard texture indexing to reduce the number of shader permutations, e.g.:
+//  TexIds     StdTexIds      SRB
+//    1           0          Atlas1
+//    2    =>     1          Atlas2
+//    0           2          Atlas0
+//    0           3          Atlas0
+//
+//  TexIds     StdTexIds      SRB
+//    2           0          Atlas2
+//    0    =>     1          Atlas0
+//    1           2          Atlas1
+//    2           3          Atlas2
+//
+//
+// \note    HnRenderPass always enables the following textures (see HnRenderPass::GetMaterialPSOFlags):
+//            - COLOR_MAP
+//            - NORMAL_MAP
+//            - METALLIC_MAP
+//		      - ROUGHNESS_MAP
+//            - AO_MAP
+//		      - EMISSIVE_MAP
+//          For pipelines that only use these textures (which is the most common case), we can use
+//          standard texture indexing and have different SRBs for different texture combinations
+//          instead of heaving a single SRB and multiple PSOs with different indexings.
+//
+//          For pipelines that use additional textures, we can still use standard indexing for the
+//		    first TexturesArraySize PBR textures and use custom indexing for the rest.
+static bool ApplyStandardStaticTextureIndexing(const Uint32                                   TexturesArraySize,
+                                               PBR_Renderer::StaticShaderTextureIdsArrayType& StaticShaderTexIds,
+                                               std::vector<ITexture*>&                        TexArray)
+{
+    bool UseStandardIndexing = false;
+    if (TexturesArraySize >= StaticShaderTexIds.size())
+    {
+        // We can always use standard texture indexing if the texture array size is greater than the
+        // number of PBR textures. We can simply use one slot for each texture:
+        // BASE_COLOR ->  0
+        // NORMAL     ->  1
+        // ...
+        // THICKNESS  -> 16
+        UseStandardIndexing = true;
+    }
+    else
+    {
+        // Check if only the first TexturesArraySize PBR textures are used.
+        UseStandardIndexing = true;
+        for (size_t i = TexturesArraySize; i < StaticShaderTexIds.size(); ++i)
+        {
+            if (StaticShaderTexIds[i] != PBR_Renderer::InvalidMaterialTextureId)
+            {
+                UseStandardIndexing = false;
+                break;
+            }
+        }
+    }
+
+    if (!UseStandardIndexing)
+        return false;
+
+    // Remapped texture array
+    //  StdTexArray  StdTexIds     TexIds      TexArray
+    //    Atlas2         0           2     . -> Atlas0
+    //    Atlas0 - - - > 1 - - - - > 0 - '      Atlas1
+    //    Atlas0         2           0          Atlas2
+    //    Atlas1         3           1          Null
+    std::vector<ITexture*> StdTexArray(TexArray.size());
+    VERIFY_EXPR(StdTexArray.size() == TexturesArraySize);
+
+    PBR_Renderer::StaticShaderTextureIdsArrayType StdStaticShaderTexIds;
+    StdStaticShaderTexIds.fill(decltype(PBR_Renderer::InvalidMaterialTextureId){PBR_Renderer::InvalidMaterialTextureId});
+
+    for (PBR_Renderer::StaticShaderTextureIdsArrayType::value_type i = 0; i < std::min<size_t>(StaticShaderTexIds.size(), TexturesArraySize); ++i)
+    {
+        StdStaticShaderTexIds[i] = i;
+
+        const auto TexId = StaticShaderTexIds[i];
+        if (TexId != PBR_Renderer::InvalidMaterialTextureId)
+        {
+            VERIFY(TexId < TexturesArraySize, "Texture index exceeds the array size. This must be a bug.");
+            VERIFY(TexArray[TexId] != nullptr, "Texture can't be null. This appears to be a bug.");
+            StdTexArray[i] = TexArray[TexId];
+        }
+    }
+
+    StaticShaderTexIds = StdStaticShaderTexIds;
+    TexArray.swap(StdTexArray);
+
+    return true;
+}
+
 void HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
 {
     RefCntAutoPtr<HnMaterialSRBCache> SRBCache{RendererDelegate.GetMaterialSRBCache(), IID_HnMaterialSRBCache};
@@ -786,6 +876,9 @@ void HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
                     StaticShaderTexIds[ID] = Slot;
                 }
             }
+
+            // Try to use standard texture indexing to reduce the number of shader permutations.
+            ApplyStandardStaticTextureIndexing(TexturesArraySize, StaticShaderTexIds, TexArray);
 
             // Construct SRB key from texture atlas object ids
             for (auto& Tex : TexArray)
