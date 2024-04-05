@@ -12,7 +12,7 @@ Texture2D<float> g_TextureDepth;
 
 float SampleDepth(int2 PixelCoord)
 {
-    return DepthToNormalizedDeviceZ(g_TextureDepth.Load(int3(PixelCoord, 0)));
+    return g_TextureDepth.Load(int3(PixelCoord, 0));
 }
 
 float ComputeReprojectedDepthPS(in FullScreenTriangleVSOutput VSOut) : SV_Target0
@@ -26,6 +26,5 @@ float ComputeReprojectedDepthPS(in FullScreenTriangleVSOutput VSOut) : SV_Target
     float3 WorldPosition = InvProjectPosition(CurrScreenCoord, g_CurrCamera.mViewProjInv);
     float3 PrevScreenCoord = ProjectPosition(WorldPosition, g_PrevCamera.mViewProj);
 
-    return NormalizedDeviceZToDepth(PrevScreenCoord.z);
-
+    return PrevScreenCoord.z;
 }
