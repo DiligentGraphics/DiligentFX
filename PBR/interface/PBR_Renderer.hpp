@@ -409,7 +409,7 @@ public:
                             Uint32          NumThetaSamples = 32,
                             bool            OptimizeSamples = true);
 
-    void CreateResourceBinding(IShaderResourceBinding** ppSRB, Uint32 Idx = 0);
+    void CreateResourceBinding(IShaderResourceBinding** ppSRB, Uint32 Idx = 0) const;
 
 #define PSO_FLAG_BIT(Bit) (Uint64{1} << Uint64{Bit})
     enum PSO_FLAGS : Uint64

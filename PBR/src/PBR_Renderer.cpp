@@ -1533,7 +1533,7 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
     }
 }
 
-void PBR_Renderer::CreateResourceBinding(IShaderResourceBinding** ppSRB, Uint32 Idx)
+void PBR_Renderer::CreateResourceBinding(IShaderResourceBinding** ppSRB, Uint32 Idx) const
 {
     m_ResourceSignatures[Idx]->CreateShaderResourceBinding(ppSRB, true);
 }
