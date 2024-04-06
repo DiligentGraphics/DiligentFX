@@ -39,9 +39,6 @@
 #include "CommonlyUsedStates.h"
 #include "GraphicsUtilities.h"
 #include "VectorFieldRenderer.hpp"
-#include "ScreenSpaceReflection.hpp"
-#include "ScreenSpaceAmbientOcclusion.hpp"
-#include "TemporalAntiAliasing.hpp"
 #include "ToneMapping.hpp"
 #include "ScopedDebugGroup.hpp"
 
@@ -390,7 +387,9 @@ void HnPostProcessTask::CopyFrameTechnique::PreparePSO(TEXTURE_FORMAT RTVFormat)
 void HnPostProcessTask::CopyFrameTechnique::PrepareSRB(Uint32 FrameIdx)
 {
     VERIFY_EXPR(PPTask.m_TAA);
-    ITexture* pAccumulatedFrame = PPTask.m_TAA->GetAccumulatedFrameSRV()->GetTexture();
+    ITexture* pAccumulatedFrame = PPTask.m_UseBloom ?
+        PPTask.m_Bloom->GetBloomTextureSRV()->GetTexture() :
+        PPTask.m_TAA->GetAccumulatedFrameSRV()->GetTexture();
     if (pAccumulatedFrame == nullptr)
     {
         UNEXPECTED("Accumulated frame is null");
@@ -532,6 +531,11 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
         m_TAA = std::make_unique<TemporalAntiAliasing>(pDevice);
     }
 
+    if (!m_Bloom)
+    {
+        m_Bloom = std::make_unique<Bloom>(pDevice);
+    }
+
     const HnRenderParam* pRenderParam   = static_cast<const HnRenderParam*>(RenderDelegate->GetRenderParam());
     const TextureDesc&   FinalColorDesc = m_FinalColorRTV->GetTexture()->GetDesc();
 
@@ -560,14 +564,19 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
         m_SSAOScale      = SSAOScale;
         m_AttribsCBDirty = true;
     }
-    m_UseSSAO = m_SSAOScale > 0;
-    m_UseTAA  = m_Params.EnableTAA && EnablePostProcessing;
+    m_UseSSAO  = m_SSAOScale > 0;
+    m_UseTAA   = m_Params.EnableTAA && EnablePostProcessing;
+    m_UseBloom = m_Params.EnableBloom && EnablePostProcessing;
 
     m_PostFXContext->PrepareResources(pDevice, {pRenderParam->GetFrameNumber(), FinalColorDesc.Width, FinalColorDesc.Height}, PostFXContext::FEATURE_FLAG_NONE);
 
     m_SSAO->PrepareResources(pDevice, pCtx, m_PostFXContext.get(), m_Params.SSAOFeatureFlags);
     m_SSR->PrepareResources(pDevice, pCtx, m_PostFXContext.get(), m_Params.SSRFeatureFlags);
     m_TAA->PrepareResources(pDevice, pCtx, m_PostFXContext.get(), m_Params.TAAFeatureFlags);
+    if (m_UseBloom)
+    {
+        m_Bloom->PrepareResources(pDevice, pCtx, m_PostFXContext.get(), m_Params.BloomFeatureFlags);
+    }
 
     m_PostProcessTech.PreparePRS();
     m_PostProcessTech.PreparePSO((m_UseTAA ? m_FrameTargets->JitteredFinalColorRTV : m_FinalColorRTV)->GetDesc().Format);
@@ -789,6 +798,16 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         TAARenderAttribs.pTAAAttribs     = &TAASettings;
         m_TAA->Execute(TAARenderAttribs);
 
+        if (m_UseBloom)
+        {
+            Bloom::RenderAttributes BloomRenderAttribs{};
+            BloomRenderAttribs.pDevice         = pDevice;
+            BloomRenderAttribs.pDeviceContext  = pCtx;
+            BloomRenderAttribs.pPostFXContext  = m_PostFXContext.get();
+            BloomRenderAttribs.pColorBufferSRV = m_TAA->GetAccumulatedFrameSRV();
+            BloomRenderAttribs.pBloomAttribs   = &m_Params.Bloom;
+            m_Bloom->Execute(BloomRenderAttribs);
+        }
 
         ScopedDebugGroup DebugGroup{pCtx, "Copy frame"};
         ITextureView*    pRTVs[] = {m_FinalColorRTV};

@@ -43,6 +43,7 @@
 #include "../../PostProcess/ScreenSpaceAmbientOcclusion/interface/ScreenSpaceAmbientOcclusion.hpp"
 #include "../../PostProcess/ScreenSpaceReflection/interface/ScreenSpaceReflection.hpp"
 #include "../../PostProcess/TemporalAntiAliasing/interface/TemporalAntiAliasing.hpp"
+#include "../../PostProcess/Bloom/interface/Bloom.hpp"
 
 namespace Diligent
 {
@@ -55,6 +56,7 @@ namespace HLSL
 #include "../../../Shaders/PostProcess/ScreenSpaceReflection/public/ScreenSpaceReflectionStructures.fxh"
 #include "../../../Shaders/PostProcess/TemporalAntiAliasing/public/TemporalAntiAliasingStructures.fxh"
 #include "../../../Shaders/PostProcess/ScreenSpaceAmbientOcclusion/public/ScreenSpaceAmbientOcclusionStructures.fxh"
+#include "../../../Shaders/PostProcess/Bloom/public/BloomStructures.fxh"
 } // namespace HLSL
 
 namespace USD
@@ -94,9 +96,13 @@ struct HnPostProcessTaskParams
     // Enable temporal anti-aliasing
     bool EnableTAA = false;
 
-    ScreenSpaceReflection::FEATURE_FLAGS       SSRFeatureFlags  = ScreenSpaceReflection::FEATURE_FLAG_NONE;
-    ScreenSpaceAmbientOcclusion::FEATURE_FLAGS SSAOFeatureFlags = ScreenSpaceAmbientOcclusion::FEATURE_FLAG_NONE;
-    TemporalAntiAliasing::FEATURE_FLAGS        TAAFeatureFlags  = TemporalAntiAliasing::FEATURE_FLAG_BICUBIC_FILTER;
+    // Enable HDR bloom
+    bool EnableBloom = false;
+
+    ScreenSpaceReflection::FEATURE_FLAGS       SSRFeatureFlags   = ScreenSpaceReflection::FEATURE_FLAG_NONE;
+    ScreenSpaceAmbientOcclusion::FEATURE_FLAGS SSAOFeatureFlags  = ScreenSpaceAmbientOcclusion::FEATURE_FLAG_NONE;
+    TemporalAntiAliasing::FEATURE_FLAGS        TAAFeatureFlags   = TemporalAntiAliasing::FEATURE_FLAG_BICUBIC_FILTER;
+    Bloom::FEATURE_FLAGS                       BloomFeatureFlags = Bloom::FEATURE_FLAG_NONE;
 
     // The number of frames to suspend temporal super-sampling when
     // rendering parameters change.
@@ -105,6 +111,7 @@ struct HnPostProcessTaskParams
     HLSL::ScreenSpaceReflectionAttribs       SSR;
     HLSL::ScreenSpaceAmbientOcclusionAttribs SSAO;
     HLSL::TemporalAntiAliasingAttribs        TAA;
+    HLSL::BloomAttribs                       Bloom;
 
     constexpr HnPostProcessTaskParams() noexcept
     {
@@ -130,13 +137,16 @@ struct HnPostProcessTaskParams
                SSRScale                       == rhs.SSRScale &&
                SSAOScale                      == rhs.SSAOScale &&
                EnableTAA                      == rhs.EnableTAA &&
+               EnableBloom					  == rhs.EnableBloom &&
                SSRFeatureFlags                == rhs.SSRFeatureFlags &&
                SSAOFeatureFlags               == rhs.SSAOFeatureFlags &&
                TAAFeatureFlags                == rhs.TAAFeatureFlags &&
+               BloomFeatureFlags              == rhs.BloomFeatureFlags &&
                SuperSamplingSuspensionFrames  == rhs.SuperSamplingSuspensionFrames &&
-               memcmp(&SSR,  &rhs.SSR,  sizeof(SSR))  == 0 &&
-               memcmp(&SSAO, &rhs.SSAO, sizeof(SSAO)) == 0 &&
-               memcmp(&TAA,  &rhs.TAA,  sizeof(TAA))  == 0;
+               memcmp(&SSR,  &rhs.SSR,    sizeof(SSR))   == 0 &&
+               memcmp(&SSAO, &rhs.SSAO,   sizeof(SSAO))  == 0 &&
+               memcmp(&TAA,  &rhs.TAA,    sizeof(TAA))   == 0 &&
+               memcmp(&Bloom, &rhs.Bloom, sizeof(Bloom)) == 0;
         // clang-format on
     }
 
@@ -186,7 +196,7 @@ private:
     std::unique_ptr<ScreenSpaceReflection>       m_SSR;
     std::unique_ptr<ScreenSpaceAmbientOcclusion> m_SSAO;
     std::unique_ptr<TemporalAntiAliasing>        m_TAA;
-
+    std::unique_ptr<Bloom>                       m_Bloom;
 
     ITextureView*               m_FinalColorRTV   = nullptr; // Set in Prepare()
     const HnFrameRenderTargets* m_FrameTargets    = nullptr; // Set in Prepare()
@@ -196,6 +206,7 @@ private:
     bool                        m_UseTAA          = false;   // Set in Prepare()
     bool                        m_UseSSR          = false;   // Set in Prepare()
     bool                        m_UseSSAO         = false;   // Set in Prepare()
+    bool                        m_UseBloom        = false;   // Set in Prepare()
 
     bool m_ResetTAA       = true;
     bool m_AttribsCBDirty = true;
