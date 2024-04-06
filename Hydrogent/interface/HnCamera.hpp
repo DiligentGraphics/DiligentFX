@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -47,9 +47,6 @@ public:
     void Sync(pxr::HdSceneDelegate* SceneDelegate,
               pxr::HdRenderParam*   RenderParam,
               pxr::HdDirtyBits*     DirtyBits) override final;
-
-    void SetViewMatrix(const float4x4& ViewMatrix);
-    void SetProjectionMatrix(const float4x4& ProjectionMatrix);
 
     const float4x4& GetViewMatrix() const { return m_ViewMatrix; }
     const float4x4& GetWorldMatrix() const { return m_WorldMatrix; }

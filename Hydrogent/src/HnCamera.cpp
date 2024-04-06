@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -25,8 +25,12 @@
  */
 
 #include "HnCamera.hpp"
+#include "HnRenderDelegate.hpp"
 
-#include "pxr/imaging/hd/changeTracker.h"
+#include "GfTypeConversions.hpp"
+#include "BasicMath.hpp"
+
+#include "pxr/imaging/hd/sceneDelegate.h"
 
 namespace Diligent
 {
@@ -55,35 +59,27 @@ void HnCamera::Sync(pxr::HdSceneDelegate* SceneDelegate,
     pxr::HdDirtyBits OrigDirtyBits = *DirtyBits;
     pxr::HdCamera::Sync(SceneDelegate, RenderParam, DirtyBits);
 
-    if (OrigDirtyBits & pxr::HdChangeTracker::DirtyTransform)
+    if (OrigDirtyBits & pxr::HdCamera::DirtyTransform)
     {
-        for (int r = 0; r < 4; ++r)
-        {
-            for (int c = 0; c < 4; ++c)
-            {
-                m_WorldMatrix[r][c] = static_cast<float>(_transform[r][c]);
-            }
-        }
-        m_ViewMatrix = m_WorldMatrix.Inverse();
+        m_WorldMatrix = ToFloat4x4(_transform);
+        m_ViewMatrix  = m_WorldMatrix.Inverse();
     }
-}
 
-void HnCamera::SetViewMatrix(const float4x4& ViewMatrix)
-{
-    m_ViewMatrix  = ViewMatrix;
-    m_WorldMatrix = m_ViewMatrix.Inverse();
-    for (int r = 0; r < 4; ++r)
+    if (OrigDirtyBits & pxr::HdCamera::DirtyParams)
     {
-        for (int c = 0; c < 4; ++c)
-        {
-            _transform[r][c] = m_WorldMatrix[r][c];
-        }
-    }
-}
+        const float          HorzAperture  = GetHorizontalAperture();
+        const float          VertAperture  = GetVerticalAperture();
+        const float          FocalLength   = GetFocalLength();
+        const pxr::GfRange1f ClippingRange = GetClippingRange();
 
-void HnCamera::SetProjectionMatrix(const float4x4& ProjectionMatrix)
-{
-    m_ProjectionMatrix = ProjectionMatrix;
+        m_ProjectionMatrix._11 = FocalLength / (0.5f * HorzAperture);
+        m_ProjectionMatrix._22 = FocalLength / (0.5f * VertAperture);
+
+        const HnRenderDelegate* pRenderDelegate = static_cast<const HnRenderDelegate*>(SceneDelegate->GetRenderIndex().GetRenderDelegate());
+        const IRenderDevice*    pDevice         = pRenderDelegate->GetDevice();
+        const RenderDeviceInfo& DeviceInfo      = pDevice->GetDeviceInfo();
+        m_ProjectionMatrix.SetNearFarClipPlanes(ClippingRange.GetMin(), ClippingRange.GetMax(), DeviceInfo.GetNDCAttribs().MinZ == -1);
+    }
 }
 
 } // namespace USD
