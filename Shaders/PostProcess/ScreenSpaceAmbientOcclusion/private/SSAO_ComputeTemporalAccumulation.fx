@@ -13,6 +13,11 @@ cbuffer cbCameraAttribs
     CameraAttribs g_PrevCamera;
 }
 
+cbuffer cbScreenSpaceAmbientOcclusionAttribs
+{
+    ScreenSpaceAmbientOcclusionAttribs g_SSAOAttribs;
+}
+
 Texture2D<float>  g_TextureCurrOcclusion;
 Texture2D<float>  g_TexturePrevOcclusion;
 Texture2D<float>  g_TextureHistory;
@@ -143,7 +148,7 @@ ProjectionDesc ComputeReprojection(float2 PrevPos, float CurrDepth)
         WeightSum += Weight[SampleIdx];
     }
 
-    Desc.IsSuccess = WeightSum > 0.0;
+    Desc.IsSuccess = WeightSum > 0.0 && !g_SSAOAttribs.ResetAccumulation;
     Desc.Occlusion = Desc.IsSuccess ? OcclusionSum / WeightSum : 1.0;
     Desc.History = Desc.IsSuccess ? HistorySum / WeightSum : 1.0;
    
@@ -162,7 +167,6 @@ PSOutput ComputeTemporalAccumulationPS(in FullScreenTriangleVSOutput VSOut)
     ProjectionDesc Reprojection = ComputeReprojection(PrevLocation, Depth);
   
     PSOutput Output;
-    
     if (Reprojection.IsSuccess)
     {
         PixelStatistic PixelStat = ComputePixelStatistic(int2(Position.xy));
