@@ -201,6 +201,7 @@ private:
     Uint32 m_BackBufferWidth  = 0;
     Uint32 m_BackBufferHeight = 0;
     Uint32 m_CurrentFrameIdx  = 0;
+    Uint32 m_LastFrameIdx     = ~0u;
 
     FEATURE_FLAGS m_FeatureFlags = FEATURE_FLAG_NONE;
 };

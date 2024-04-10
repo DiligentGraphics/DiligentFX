@@ -338,10 +338,28 @@ void ScreenSpaceAmbientOcclusion::Execute(const RenderAttributes& RenderAttribs)
     m_Resources.Insert(RESOURCE_IDENTIFIER_INPUT_NORMAL, RenderAttribs.pNormalBufferSRV->GetTexture());
 
     ScopedDebugGroup DebugGroupGlobal{RenderAttribs.pDeviceContext, "ScreenSpaceAmbientOcclusion"};
+
+    bool ResetAccumulation =
+        m_LastFrameIdx == ~0u ||                            // No history on the first frame
+        m_CurrentFrameIdx != m_LastFrameIdx + 1 ||          // Reset history if frames were skipped
+        RenderAttribs.pSSAOAttribs->ResetAccumulation != 0; // Reset history if requested
+
+    bool UpdateConstantBuffer = false;
     if (memcmp(RenderAttribs.pSSAOAttribs, m_SSAOAttribs.get(), sizeof(HLSL::ScreenSpaceAmbientOcclusionAttribs)) != 0)
     {
+        UpdateConstantBuffer = true;
         memcpy(m_SSAOAttribs.get(), RenderAttribs.pSSAOAttribs, sizeof(HLSL::ScreenSpaceAmbientOcclusionAttribs));
-        RenderAttribs.pDeviceContext->UpdateBuffer(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER].AsBuffer(), 0, sizeof(HLSL::ScreenSpaceAmbientOcclusionAttribs), RenderAttribs.pSSAOAttribs, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    }
+
+    if (ResetAccumulation && (m_SSAOAttribs->ResetAccumulation != 0) != ResetAccumulation)
+    {
+        m_SSAOAttribs->ResetAccumulation = 1;
+        UpdateConstantBuffer             = true;
+    }
+
+    if (UpdateConstantBuffer)
+    {
+        RenderAttribs.pDeviceContext->UpdateBuffer(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER].AsBuffer(), 0, sizeof(HLSL::ScreenSpaceAmbientOcclusionAttribs), m_SSAOAttribs.get(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     }
 
     ComputeDepthCheckerboard(RenderAttribs);
@@ -356,6 +374,8 @@ void ScreenSpaceAmbientOcclusion::Execute(const RenderAttributes& RenderAttribs)
     // Release references to input resources
     for (Uint32 ResourceIdx = 0; ResourceIdx <= RESOURCE_IDENTIFIER_INPUT_LAST; ++ResourceIdx)
         m_Resources[ResourceIdx].Release();
+
+    m_LastFrameIdx = m_CurrentFrameIdx;
 }
 
 bool ScreenSpaceAmbientOcclusion::UpdateUI(HLSL::ScreenSpaceAmbientOcclusionAttribs& SSAOAttribs, FEATURE_FLAGS& FeatureFlags)
@@ -776,6 +796,7 @@ void ScreenSpaceAmbientOcclusion::ComputeTemporalAccumulation(const RenderAttrib
         PipelineResourceLayoutDescX ResourceLayout;
         ResourceLayout
             .AddVariable(SHADER_TYPE_PIXEL, "cbCameraAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+            .AddVariable(SHADER_TYPE_PIXEL, "cbScreenSpaceAmbientOcclusionAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
             .AddVariable(SHADER_TYPE_PIXEL, "g_TextureCurrOcclusion", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
             .AddVariable(SHADER_TYPE_PIXEL, "g_TexturePrevOcclusion", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
             .AddVariable(SHADER_TYPE_PIXEL, "g_TextureHistory", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
@@ -795,6 +816,7 @@ void ScreenSpaceAmbientOcclusion::ComputeTemporalAccumulation(const RenderAttrib
                                  DSS_DisableDepth, BS_Default, false);
 
         ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbScreenSpaceAmbientOcclusionAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
     }
 
     if (!RenderTech.IsInitializedSRB())

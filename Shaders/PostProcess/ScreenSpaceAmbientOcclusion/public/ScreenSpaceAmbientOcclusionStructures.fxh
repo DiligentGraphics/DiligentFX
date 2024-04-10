@@ -100,8 +100,8 @@ struct ScreenSpaceAmbientOcclusionAttribs
     // Controls the kernel size in the spatial reconstruction step. Increasing the value increases the deviation from the ground truth but reduces the noise
     float SpatialReconstructionRadius DEFAULT_VALUE(4.0f);
     
-    // Padding 0
-    float Padding0                    DEFAULT_VALUE(0);
+    // If this parameter is set to true, the current frame will be written to the current history buffer without interpolation with the previous history buffer
+    BOOL  ResetAccumulation           DEFAULT_VALUE(FALSE);
     
     // Padding 1
     float Padding1                    DEFAULT_VALUE(0);
