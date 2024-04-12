@@ -78,6 +78,12 @@ The following table enumerates all external inputs required by SSR.
 | Temporal variance stability factor       | A factor to control the accmulation of history values of variance buffer. Higher values reduce noise, but are more likely to exhibit ghosting artefacts         |
 | Bilateral cleanup spatial sigma factor   | This parameter represents the standard deviation ($\sigma$) in the Gaussian kernel, which forms the spatial component of the [bilateral filter](#cross-bilateral-filtering) |
 
+The effect can be configured using the `ScreenSpaceReflection::FEATURE_FLAGS` enumeration. The following table lists the flags and their descriptions.
+
+| **Name**                                 | **Notes** |
+| -----------------------------------------|-----------|
+| `FEATURE_FLAG_PREVIOUS_FRAME`            |  When using this flag, you only need to pass the color buffer of the previous frame. We find the intersection using the depth buffer of the current frame, and when an intersection is found, we make the corresponding offset by the velocity vector at the intersection point, for sampling from the color buffer. |
+| `FEATURE_FLAG_HALF_RESOLUTION`           | When this flag is used, ray tracing step is executed at half resolution |
 
 ### Host API
 
@@ -108,26 +114,28 @@ This needs to be done every frame before starting the rendering process.
     FrameDesc.Index  = m_CurrentFrameNumber; // Current frame number.
     FrameDesc.Width  = SCDesc.Width;         // Current screen width.
     FrameDesc.Height = SCDesc.Height;        // Current screen height.
-    m_PostFXContext->PrepareResources(FrameDesc);
+    m_PostFXContext->PrepareResources(m_pDevice, FrameDesc, PostFXContext::FEATURE_FLAG_NONE);
 
-    m_SSR->PrepareResources(m_pDevice, m_PostFXContext.get());
+    ScreenSpaceReflection::FEATURE_FLAGS ActiveFeatures = ...;
+    m_SSR->PrepareResources(m_pDevice, m_pImmediateContext, m_PostFXContext.get(), ActiveFeatures);
 }
 ```
 
 Now we invoke the method `PostFXContext::Execute`. At this stage, some intermediate resources necessary for all post-processing objects
 dependent on `PostFXContext` are calculated. This method can take a constant buffer directly containing an array from the current and previous
-cameras (for this method, you can refer to this section of the code 
-[[0](https://github.com/DiligentGraphics/DiligentSamples/blob/685b17a7a96b002d46dc63c4821bc5319df15f34/Samples/GLTFViewer/src/GLTFViewer.cpp#L584C4-L584C103)] and
-[[1](https://github.com/DiligentGraphics/DiligentSamples/blob/685b17a7a96b002d46dc63c4821bc5319df15f34/Samples/GLTFViewer/src/GLTFViewer.cpp#L1062)]).
+cameras (for this method, you can refer to this section of the code  [[0](https://github.com/DiligentGraphics/DiligentSamples/blob/380b0a05b6c72d80fd6d574d7343ead77d6dd7eb/Tutorials/Tutorial27_PostProcessing/src/Tutorial27_PostProcessing.cpp#L164)] and [[1](https://github.com/DiligentGraphics/DiligentSamples/blob/380b0a05b6c72d80fd6d574d7343ead77d6dd7eb/Tutorials/Tutorial27_PostProcessing/src/Tutorial27_PostProcessing.cpp#L228)]).
 Alternatively, you can pass the corresponding pointers `const HLSL::CameraAttribs* pCurrCamera` and `const HLSL::CameraAttribs* pPrevCamera` for the current
-and previous cameras, respectively.
+and previous cameras, respectively. You also need to pass the depth of the current and previous frames (the depth buffers should not contain transparent objects), and a buffer with motion vectors in NDC space, into the corresponding `ITextureView* pCurrDepthBufferSRV`, `ITextureView* pPrevDepthBufferSRV`, `ITextureView* pMotionVectorsSRV` pointers.
 
 ```cpp
 {
     PostFXContext::RenderAttributes PostFXAttibs;
-    PostFXAttibs.pDevice          = m_pDevice;
-    PostFXAttibs.pDeviceContext   = m_pImmediateContext;
-    PostFXAttibs.pCameraAttribsCB = m_FrameAttribsCB;
+    PostFXAttibs.pDevice             = m_pDevice;
+    PostFXAttibs.pDeviceContext      = m_pImmediateContext;
+    PostFXAttibs.pCameraAttribsCB    = m_FrameAttribsCB;  // m_Resources[RESOURCE_IDENTIFIER_CAMERA_CONSTANT_BUFFER].AsBuffer();
+    PostFXAttibs.pCurrDepthBufferSRV = m_CurrDepthBuffer; // m_Resources[RESOURCE_IDENTIFIER_DEPTH0 + CurrFrameIdx].GetTextureSRV();
+    PostFXAttibs.pPrevDepthBufferSRV = m_PrevDepthBuffer; // m_Resources[RESOURCE_IDENTIFIER_DEPTH0 + PrevFrameIdx].GetTextureSRV();
+    PostFXAttibs.pMotionVectorsSRV   = m_MotionBuffer;    // m_GBuffer->GetBuffer(GBUFFER_RT_MOTION_VECTORS)->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
     m_PostFXContext->Execute(PostFXAttibs);
 }
 ```
@@ -225,7 +233,7 @@ hierarchical buffer for resolutions not divisible by 2 is not so trivial. The or
 [**[AMD-SPD]**](https://gpuopen.com/manuals/fidelityfx_sdk/fidelityfx_sdk-page_techniques_single-pass-downsampler/) to convolve the depth buffer
 ([DepthDownsample](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/blob/main/sdk/include/FidelityFX/gpu/sssr/ffx_sssr_depth_downsample.h)).
 SPD allows us to compute it in a single **Dispatch** call, but since we can't use compute shaders we use a straightforward approach.
-We calculate each mip level using a pixel shader [**ComputeHierarchicalDepthBuffer.fx**](https://github.com/DiligentGraphics/DiligentFX/blob/master/Shaders/PostProcess/ScreenSpaceReflection/private/ComputeHierarchicalDepthBuffer.fx), using the previous mip level as an input.
+We calculate each mip level using a pixel shader [**SSR_ComputeHierarchicalDepthBuffer.fx**](https://github.com/DiligentGraphics/DiligentFX/blob/master/Shaders/PostProcess/ScreenSpaceReflection/private/SSR_ComputeHierarchicalDepthBuffer.fx), using the previous mip level as an input.
 
 
 #### Stencil mask generation and roughness extraction
@@ -243,7 +251,7 @@ pass. Nothing particular to mention here apart from that it adds 2 entries to th
 
 Since we cannot use compute shaders, we have made compromises. We use a stencil mask to mark pixels that should participate in subsequent calculations.
 To do this, we first clear stencil buffer with `0x0` value, and then we run
-[**ComputeStencilMaskAndExtractRoughness.fx**](https://github.com/DiligentGraphics/DiligentFX/blob/master/Shaders/PostProcess/ScreenSpaceReflection/private/ComputeStencilMaskAndExtractRoughness.fx)
+[**SSR_ComputeStencilMaskAndExtractRoughness.fx**](https://github.com/DiligentGraphics/DiligentFX/blob/master/Shaders/PostProcess/ScreenSpaceReflection/private/SSR_ComputeStencilMaskAndExtractRoughness.fx)
 with stencil test enabled for writing and with the corresponding stencil buffer attached. If the roughness of the current pixel is less than `RoughnessThreshold`,
 we write the value `0xFF` to the stencil buffer; otherwise, the stencil buffer retains its previous value of `0x0`. In subsequent steps, we enable stencil test
 for reading with the `COMPARISON_FUNC_EQUAL` function for the value `0xFF`. While writing to the stencil buffer, we also write the roughness to a separate
@@ -255,9 +263,7 @@ render target. The separate texture allows us to simplify the code for roughness
 
 
 ### Ray tracing
-We have now reached the most crucial part of the algorithm, for which all the previous preparations were made. We almost entirely repeat the
-([**Intersect**](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/blob/main/sdk/include/FidelityFX/gpu/sssr/ffx_sssr_intersect.h))
-step with some exceptions; refer to the difference section.
+We have now reached the most crucial part of the algorithm, for which all the previous preparations were made. We almost entirely repeat the ([**Intersect**](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/blob/main/sdk/include/FidelityFX/gpu/sssr/ffx_sssr_intersect.h)) step with some exceptions; refer to the difference section.
 
 Our goal is to solve the rendering equation for the specular part (GGX Microfacet BRDF)
 
@@ -370,7 +376,7 @@ After finding the intersection point of the ray with the scene, we calculate the
 `ColorBuffer` and write it as the result for the current pixel (the original implementation samples from the Environment Map if no intersection occurs;
 in our implementation, this is not the case). Also, we record the length of the ray, which will be needed during the denoising stages. You can view the
 code implementing this step here:
-[**ComputeIntersection.fx**](https://github.com/DiligentGraphics/DiligentFX/blob/master/Shaders/PostProcess/ScreenSpaceReflection/private/ComputeIntersection.fx).
+[**SSR_ComputeIntersection.fx**](https://github.com/DiligentGraphics/DiligentFX/blob/master/Shaders/PostProcess/ScreenSpaceReflection/private/SSR_ComputeIntersection.fx).
 
 Key differences with the AMD implementation in the ray tracing step:
 * Since the scene may contain multiple environment maps, each of which may interact with a different pixel, we decided not to pass the environment map to the SSR stage (although this means we lose grazing specular reflections in areas where ray does not intersect with scene). Instead, we write a confidence value (roughly speaking, `1` if an intersection occurred, `0` if not) in the alpha channel of the resulting texture. This value will later be used by the user to interpolate between the value from the SSR and the Environment Map.
@@ -406,7 +412,7 @@ To accumulate samples, we use an approach from [**[EA-SSRR]**](https://youtu.be/
 
 As can be noted, to calculate the sums in front of the $T_2$, we already have all the necessary components $L_i$, $l$, $p$, as we have mentioned in the ray tracing step.
 You can view the source code for the computation of this stage:
-[**ComputeSpatialReconstruction.fx**](https://github.com/DiligentGraphics/DiligentFX/blob/master/Shaders/PostProcess/ScreenSpaceReflection/private/ComputeSpatialReconstruction.fx)
+[**SSR_ComputeSpatialReconstruction.fx**](https://github.com/DiligentGraphics/DiligentFX/blob/master/Shaders/PostProcess/ScreenSpaceReflection/private/SSR_ComputeSpatialReconstruction.fx)
 It can be noted that we accumulate samples in screen space, and we also use a variable radius and a variable number of samples depending on the surface roughness when computing this expression.
 Also, during the sum accumulation, we calculate the variance and search for the maximum ray length (from ray tracing stage, we pass non-normalized ray with length (`SurfaceHitWS` - `RayOriginWS`)),
 and then we record the results in separate textures. The variance will be needed for cross-bilateral filtering pass. The ray length will be required during the temporal accumulation stage for
@@ -433,7 +439,7 @@ At a high level, we can divide the current stage into four parts:
 3) Based on the statistics of the current pixel and the intensity values for two points, we select the point on which we will base the reprojection.
 4) If the reprojection is successful, we interpolate the values between the intensity from the selected point (which we calculated in the previous step) and the intensity value for the current pixel. If the reprojection is not successful, we record the intensity value from the current pixel.
 
-For implementation details, look at the source code: [**ComputeTemporalAccumulation.fx**](https://github.com/DiligentGraphics/DiligentFX/blob/master/Shaders/PostProcess/ScreenSpaceReflection/private/ComputeTemporalAccumulation.fx).
+For implementation details, look at the source code: [**SSR_ComputeTemporalAccumulation.fx**](https://github.com/DiligentGraphics/DiligentFX/blob/master/Shaders/PostProcess/ScreenSpaceReflection/private/SSR_ComputeTemporalAccumulation.fx).
 
 |Specular radiance after temporal accumulation|
 |:-------------------------------------------:|
@@ -446,7 +452,7 @@ This stage is based on a standard bilateral filter [**[Wiki, Bilateral filter]**
 * We use variance calculated during the spatial reconstruction stage to determine the $\sigma$ for the spatial kernel $G_s$ of the bilateral filter.
 * Since the image being processed is quite noisy, instead of using the pixel intensity of the processed image to create the range kernel $G_r$, we use the depth buffer and the normals buffer to form the kernel. We took the functions for generate the range kernel $G_r$ from the SVGF algorithm [**[Christoph Schied, SVGF]**](https://cg.ivd.kit.edu/publications/2017/svgf/svgf_preprint.pdf), expressions $(3)$ and $(4)$
 
-You can find the implementation here: [**ComputeBilateralCleanup.fx**](https://github.com/DiligentGraphics/DiligentFX/blob/master/Shaders/PostProcess/ScreenSpaceReflection/private/ComputeBilateralCleanup.fx)
+You can find the implementation here: [**SSR_ComputeBilateralCleanup.fx**](https://github.com/DiligentGraphics/DiligentFX/blob/master/Shaders/PostProcess/ScreenSpaceReflection/private/SSR_ComputeBilateralCleanup.fx)
 
 
 |Specular radiance after bilater filtering |  
@@ -469,8 +475,7 @@ The final frame with reflections is shown below.
 * We can also try calculating direct specular occlussion in the [ray tracing step](#ray-tracing)
 * The bilateral filter does not have separability property, so it will have poor performance on large kernel dimensions. Consider replacing it by [Guided Image Filtering](https://kaiminghe.github.io/eccv10/index.html) since this algorithm has this property
 * Current implementation of hierarchical ray marching has a [problem](https://youtu.be/MlTohmB4Gh4?t=762). We have to try to fix it
-
-* 
+ 
 ## References
 
 - **[AMD-SSSR]**: FidelityFX Stochastic Screen-Space Reflections 1.4 - https://gpuopen.com/manuals/fidelityfx_sdk/fidelityfx_sdk-page_techniques_stochastic-screen-space-reflections/
