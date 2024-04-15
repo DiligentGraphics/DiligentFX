@@ -44,6 +44,8 @@
 #define TONE_MAPPING_FILMIC_ALU         5
 #define TONE_MAPPING_LOGARITHMIC        6
 #define TONE_MAPPING_ADAPTIVE_LOG       7
+#define TONE_MAPPING_AGX                8
+#define TONE_MAPPING_AGX_PUNCHY         9
 
 struct ToneMappingAttribs
 {
