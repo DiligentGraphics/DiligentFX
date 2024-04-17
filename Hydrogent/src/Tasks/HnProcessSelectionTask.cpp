@@ -308,6 +308,14 @@ void HnProcessSelectionTask::Execute(pxr::HdTaskContext* TaskCtx)
 
     ScopedDebugGroup DebugGroup{pCtx, "Process Selection"};
 
+    if (m_SelectedPrimId.IsEmpty())
+    {
+        ITextureView* pFinalRTV = Targets->ClosestSelectedLocationRTV[m_NumJFIterations % 2];
+        pCtx->SetRenderTargets(1, &pFinalRTV, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        pCtx->ClearRenderTarget(pFinalRTV, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        return;
+    }
+
     {
         float BackgroundDepth = 1.f;
         if (!GetTaskContextData(TaskCtx, HnRenderResourceTokens->backgroundDepth, BackgroundDepth))
