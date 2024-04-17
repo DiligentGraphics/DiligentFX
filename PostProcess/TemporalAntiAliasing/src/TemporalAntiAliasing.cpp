@@ -53,70 +53,105 @@ static float HaltonSequence(Uint32 Base, Uint32 Index)
     return Result;
 }
 
-namespace HLSL
+TemporalAntiAliasing::TemporalAntiAliasing(IRenderDevice* pDevice)
 {
-#include "Shaders/PostProcess/TemporalAntiAliasing/public/TemporalAntiAliasingStructures.fxh"
-}
-
-
-TemporalAntiAliasing::TemporalAntiAliasing(IRenderDevice* pDevice) :
-    m_ShaderAttribs{std::make_unique<HLSL::TemporalAntiAliasingAttribs>()}
-{
-    DEV_CHECK_ERR(pDevice != nullptr, "pDevice must not be null");
-
-    RefCntAutoPtr<IBuffer> pBuffer;
-    CreateUniformBuffer(pDevice, sizeof(HLSL::TemporalAntiAliasingAttribs), "TemporalAntiAliasing::ConstantBuffer", &pBuffer, USAGE_DEFAULT, BIND_UNIFORM_BUFFER, CPU_ACCESS_NONE, m_ShaderAttribs.get());
-    m_Resources.Insert(RESOURCE_IDENTIFIER_CONSTANT_BUFFER, pBuffer);
 }
 
 TemporalAntiAliasing::~TemporalAntiAliasing() = default;
 
-float2 TemporalAntiAliasing::GetJitterOffset() const
+float2 TemporalAntiAliasing::GetJitterOffset(Uint32 AccumulationBufferIdx) const
 {
-    if (m_BackBufferWidth == 0 || m_BackBufferHeight == 0)
+    const auto& it = m_AccumulationBuffers.find(AccumulationBufferIdx);
+    if (it == m_AccumulationBuffers.end())
+        return float2{0.0f, 0.0f};
+
+    const auto& AccBuffer = it->second;
+
+    if (AccBuffer.Width == 0 || AccBuffer.Height == 0)
         return float2{0.0f, 0.0f};
 
     constexpr Uint32 SampleCount = 16u;
-    const float      JitterX     = (HaltonSequence(2u, (m_CurrentFrameIdx % SampleCount) + 1) - 0.5f) / (0.5f * static_cast<float>(m_BackBufferWidth));
-    const float      JitterY     = (HaltonSequence(3u, (m_CurrentFrameIdx % SampleCount) + 1) - 0.5f) / (0.5f * static_cast<float>(m_BackBufferHeight));
+    const float      JitterX     = (HaltonSequence(2u, (AccBuffer.CurrentFrameIdx % SampleCount) + 1) - 0.5f) / (0.5f * static_cast<float>(AccBuffer.Width));
+    const float      JitterY     = (HaltonSequence(3u, (AccBuffer.CurrentFrameIdx % SampleCount) + 1) - 0.5f) / (0.5f * static_cast<float>(AccBuffer.Height));
     return float2{JitterX, JitterY};
 }
 
-void TemporalAntiAliasing::PrepareResources(IRenderDevice* pDevice, IDeviceContext* pDeviceContext, PostFXContext* pPostFXContext, FEATURE_FLAGS FeatureFlags)
+void TemporalAntiAliasing::AccumulationBufferInfo::Prepare(IRenderDevice* pDevice, IDeviceContext* pCtx, Uint32 _Width, Uint32 _Height, Uint32 _CurrFrameIdx, FEATURE_FLAGS _FeatureFlags)
+{
+    FeatureFlags    = _FeatureFlags;
+    CurrentFrameIdx = _CurrFrameIdx;
+
+    if (Width == _Width && Height == _Height)
+        return;
+
+    SRB.Release();
+    Width  = _Width;
+    Height = _Height;
+
+    if (!Resources[RESOURCE_ID_CONSTANT_BUFFER])
+    {
+        RefCntAutoPtr<IBuffer> pBuffer;
+        CreateUniformBuffer(pDevice, sizeof(HLSL::TemporalAntiAliasingAttribs), "TemporalAntiAliasing::ConstantBuffer", &pBuffer, USAGE_DEFAULT, BIND_UNIFORM_BUFFER, CPU_ACCESS_NONE, &ShaderAttribs);
+        Resources.Insert(RESOURCE_ID_CONSTANT_BUFFER, pBuffer);
+    }
+
+    RenderDeviceWithCache_N Device{pDevice};
+    for (Uint32 TextureIdx = RESOURCE_ID_ACCUMULATED_BUFFER0; TextureIdx <= RESOURCE_ID_ACCUMULATED_BUFFER1; ++TextureIdx)
+    {
+        TextureDesc Desc;
+        Desc.Name          = "TemporalAntiAliasing::AccumulatedBuffer";
+        Desc.Type          = RESOURCE_DIM_TEX_2D;
+        Desc.Width         = Width;
+        Desc.Height        = Height;
+        Desc.Format        = TEX_FORMAT_RGBA16_FLOAT;
+        Desc.BindFlags     = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
+        auto  pTexture     = Device.CreateTexture(Desc);
+        float ClearColor[] = {0.0, 0.0, 0.0, 0.0};
+        PostFXContext::ClearRenderTarget(pCtx, pTexture, ClearColor);
+        Resources.Insert(TextureIdx, pTexture);
+    }
+}
+
+void TemporalAntiAliasing::AccumulationBufferInfo::UpdateConstantBuffer(IDeviceContext* pCtx, const HLSL::TemporalAntiAliasingAttribs& Attribs)
+{
+    bool ResetAccumulation =
+        LastFrameIdx == ~0u ||                 // No history on the first frame
+        CurrentFrameIdx != LastFrameIdx + 1 || // Reset history if frames were skipped
+        Attribs.ResetAccumulation != 0;        // Reset history if requested
+
+    bool UpdateConstantBuffer = false;
+    if (memcmp(&ShaderAttribs, &Attribs, sizeof(HLSL::TemporalAntiAliasingAttribs)) != 0)
+    {
+        UpdateConstantBuffer = true;
+        memcpy(&ShaderAttribs, &Attribs, sizeof(HLSL::TemporalAntiAliasingAttribs));
+    }
+
+    if (ResetAccumulation && (ShaderAttribs.ResetAccumulation != 0) != ResetAccumulation)
+    {
+        ShaderAttribs.ResetAccumulation = 1;
+        UpdateConstantBuffer            = true;
+    }
+
+    if (UpdateConstantBuffer)
+    {
+        pCtx->UpdateBuffer(Resources[RESOURCE_ID_CONSTANT_BUFFER], 0, sizeof(HLSL::TemporalAntiAliasingAttribs),
+                           &ShaderAttribs, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    }
+
+    LastFrameIdx = CurrentFrameIdx;
+}
+
+void TemporalAntiAliasing::PrepareResources(IRenderDevice*  pDevice,
+                                            IDeviceContext* pDeviceContext,
+                                            PostFXContext*  pPostFXContext,
+                                            FEATURE_FLAGS   FeatureFlags,
+                                            Uint32          AccumulationBufferIdx)
 {
     DEV_CHECK_ERR(pDevice != nullptr, "pDevice must not be null");
     DEV_CHECK_ERR(pPostFXContext != nullptr, "pPostFXContext must not be null");
 
     const auto& FrameDesc = pPostFXContext->GetFrameDesc();
-
-    m_CurrentFrameIdx = FrameDesc.Index;
-    m_FeatureFlags    = FeatureFlags;
-
-    if (m_BackBufferWidth == FrameDesc.Width && m_BackBufferHeight == FrameDesc.Height)
-        return;
-
-    for (auto& Iter : m_RenderTech)
-        Iter.second.SRB.Release();
-
-    m_BackBufferWidth  = FrameDesc.Width;
-    m_BackBufferHeight = FrameDesc.Height;
-
-    RenderDeviceWithCache_N Device{pDevice};
-
-    for (Uint32 TextureIdx = RESOURCE_IDENTIFIER_ACCUMULATED_BUFFER0; TextureIdx <= RESOURCE_IDENTIFIER_ACCUMULATED_BUFFER1; ++TextureIdx)
-    {
-        TextureDesc Desc;
-        Desc.Name          = "TemporalAntiAliasing::AccumulatedBuffer";
-        Desc.Type          = RESOURCE_DIM_TEX_2D;
-        Desc.Width         = m_BackBufferWidth;
-        Desc.Height        = m_BackBufferHeight;
-        Desc.Format        = TEX_FORMAT_RGBA16_FLOAT;
-        Desc.BindFlags     = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
-        auto  pTexture     = Device.CreateTexture(Desc);
-        float ClearColor[] = {0.0, 0.0, 0.0, 0.0};
-        PostFXContext::ClearRenderTarget(pDeviceContext, pTexture, ClearColor);
-        m_Resources.Insert(TextureIdx, pTexture);
-    }
+    m_AccumulationBuffers[AccumulationBufferIdx].Prepare(pDevice, pDeviceContext, FrameDesc.Width, FrameDesc.Height, FrameDesc.Index, FeatureFlags);
 }
 
 void TemporalAntiAliasing::Execute(const RenderAttributes& RenderAttribs)
@@ -128,41 +163,19 @@ void TemporalAntiAliasing::Execute(const RenderAttributes& RenderAttribs)
     DEV_CHECK_ERR(RenderAttribs.pColorBufferSRV != nullptr, "RenderAttribs.pColorBufferSRV must not be null");
     DEV_CHECK_ERR(RenderAttribs.pTAAAttribs != nullptr, "RenderAttribs.pTAAAttribs must not be null");
 
-    m_Resources.Insert(RESOURCE_IDENTIFIER_INPUT_COLOR, RenderAttribs.pColorBufferSRV->GetTexture());
-
     ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "TemporalAccumulation"};
 
-    bool ResetAccumulation =
-        m_LastFrameIdx == ~0u ||                           // No history on the first frame
-        m_CurrentFrameIdx != m_LastFrameIdx + 1 ||         // Reset history if frames were skipped
-        RenderAttribs.pTAAAttribs->ResetAccumulation != 0; // Reset history if requested
-
-    bool UpdateConstantBuffer = false;
-    if (memcmp(m_ShaderAttribs.get(), RenderAttribs.pTAAAttribs, sizeof(HLSL::TemporalAntiAliasingAttribs)) != 0)
+    const auto& it = m_AccumulationBuffers.find(RenderAttribs.AccumulationBufferIdx);
+    if (it == m_AccumulationBuffers.end())
     {
-        UpdateConstantBuffer = true;
-        memcpy(m_ShaderAttribs.get(), RenderAttribs.pTAAAttribs, sizeof(HLSL::TemporalAntiAliasingAttribs));
+        LOG_ERROR_MESSAGE("Accumulation buffer with index ", RenderAttribs.AccumulationBufferIdx,
+                          " is not found, which indicates that PrepareResources() method was not called.");
+        return;
     }
 
-    if (ResetAccumulation && (m_ShaderAttribs->ResetAccumulation != 0) != ResetAccumulation)
-    {
-        m_ShaderAttribs->ResetAccumulation = 1;
-        UpdateConstantBuffer               = true;
-    }
-
-    if (UpdateConstantBuffer)
-    {
-        RenderAttribs.pDeviceContext->UpdateBuffer(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER], 0, sizeof(HLSL::TemporalAntiAliasingAttribs),
-                                                   m_ShaderAttribs.get(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    }
-
-    ComputeTemporalAccumulation(RenderAttribs);
-
-    // Release references to input resources
-    for (Uint32 ResourceIdx = 0; ResourceIdx <= RESOURCE_IDENTIFIER_INPUT_LAST; ++ResourceIdx)
-        m_Resources[ResourceIdx].Release();
-
-    m_LastFrameIdx = m_CurrentFrameIdx;
+    auto& AccBuffer = it->second;
+    AccBuffer.UpdateConstantBuffer(RenderAttribs.pDeviceContext, *RenderAttribs.pTAAAttribs);
+    ComputeTemporalAccumulation(RenderAttribs, AccBuffer);
 }
 
 bool TemporalAntiAliasing::UpdateUI(HLSL::TemporalAntiAliasingAttribs& TAAAttribs, FEATURE_FLAGS& FeatureFlags)
@@ -197,15 +210,22 @@ bool TemporalAntiAliasing::UpdateUI(HLSL::TemporalAntiAliasingAttribs& TAAAttrib
     return AttribsChanged;
 }
 
-ITextureView* TemporalAntiAliasing::GetAccumulatedFrameSRV(bool IsPrevFrame) const
+ITextureView* TemporalAntiAliasing::GetAccumulatedFrameSRV(bool IsPrevFrame, Uint32 AccumulationBufferIdx) const
 {
-    const Uint32 CurrFrameIdx = (m_CurrentFrameIdx + static_cast<Uint32>(IsPrevFrame)) & 0x01u;
-    return m_Resources[RESOURCE_IDENTIFIER_ACCUMULATED_BUFFER0 + CurrFrameIdx].GetTextureSRV();
+    const auto& it = m_AccumulationBuffers.find(AccumulationBufferIdx);
+    if (it == m_AccumulationBuffers.end())
+    {
+        LOG_ERROR_MESSAGE("Accumulation buffer with index ", AccumulationBufferIdx, " is not found.");
+        return nullptr;
+    }
+
+    const Uint32 BuffIdx = (it->second.CurrentFrameIdx + (IsPrevFrame ? 1 : 0)) & 0x01u;
+    return it->second.Resources[AccumulationBufferInfo::RESOURCE_ID_ACCUMULATED_BUFFER0 + BuffIdx].GetTextureSRV();
 }
 
-void TemporalAntiAliasing::ComputeTemporalAccumulation(const RenderAttributes& RenderAttribs)
+void TemporalAntiAliasing::ComputeTemporalAccumulation(const RenderAttributes& RenderAttribs, AccumulationBufferInfo& AccBuff)
 {
-    auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_TEMPORAL_ACCUMULATION, m_FeatureFlags);
+    auto& RenderTech = m_RenderTech[{RENDER_TECH_COMPUTE_TEMPORAL_ACCUMULATION, AccBuff.FeatureFlags}];
     if (!RenderTech.IsInitializedPSO())
     {
         PipelineResourceLayoutDescX ResourceLayout;
@@ -220,9 +240,9 @@ void TemporalAntiAliasing::ComputeTemporalAccumulation(const RenderAttributes& R
             .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TexturePrevColor", Sam_LinearClamp);
 
         ShaderMacroHelper Macros;
-        Macros.Add("TAA_OPTION_GAUSSIAN_WEIGHTING", (m_FeatureFlags & FEATURE_FLAG_GAUSSIAN_WEIGHTING) != 0);
-        Macros.Add("TAA_OPTION_INVERTED_DEPTH", (m_FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
-        Macros.Add("TAA_OPTION_BICUBIC_FILTER", (m_FeatureFlags & FEATURE_FLAG_BICUBIC_FILTER) != 0);
+        Macros.Add("TAA_OPTION_GAUSSIAN_WEIGHTING", (AccBuff.FeatureFlags & FEATURE_FLAG_GAUSSIAN_WEIGHTING) != 0);
+        Macros.Add("TAA_OPTION_INVERTED_DEPTH", (AccBuff.FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
+        Macros.Add("TAA_OPTION_BICUBIC_FILTER", (AccBuff.FeatureFlags & FEATURE_FLAG_BICUBIC_FILTER) != 0);
 
         const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
         const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "TAA_ComputeTemporalAccumulation.fx", "ComputeTemporalAccumulationPS", SHADER_TYPE_PIXEL, Macros);
@@ -231,46 +251,38 @@ void TemporalAntiAliasing::ComputeTemporalAccumulation(const RenderAttributes& R
                                  RenderAttribs.pStateCache, "TemporalAntiAliasing::ComputeTemporalAccumulation",
                                  VS, PS, ResourceLayout,
                                  {
-                                     m_Resources[RESOURCE_IDENTIFIER_ACCUMULATED_BUFFER0].AsTexture()->GetDesc().Format,
+                                     AccBuff.Resources[AccumulationBufferInfo::RESOURCE_ID_ACCUMULATED_BUFFER0].AsTexture()->GetDesc().Format,
                                  },
                                  TEX_FORMAT_UNKNOWN,
                                  DSS_DisableDepth, BS_Default, false);
 
         ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
-        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbTemporalAntiAliasingAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER].AsBuffer());
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbTemporalAntiAliasingAttribs"}.Set(AccBuff.Resources[AccumulationBufferInfo::RESOURCE_ID_CONSTANT_BUFFER].AsBuffer());
     }
 
-    if (!RenderTech.IsInitializedSRB())
-        RenderTech.InitializeSRB(true);
+    auto& SRB = AccBuff.SRB;
+    if (!SRB)
+    {
+        RenderTech.PSO->CreateShaderResourceBinding(&SRB, true);
+    }
 
-    const Uint32 FrameIndex   = RenderAttribs.pPostFXContext->GetFrameDesc().Index;
-    const Uint32 CurrFrameIdx = (FrameIndex + 0) & 0x01;
-    const Uint32 PrevFrameIdx = (FrameIndex + 1) & 0x01;
+    const Uint32  FrameIndex    = RenderAttribs.pPostFXContext->GetFrameDesc().Index;
+    const Uint32  CurrBuffIdx   = (FrameIndex + 0) & 0x01;
+    const Uint32  PrevBuffIdx   = (FrameIndex + 1) & 0x01;
+    ITextureView* PrevBufferSRV = AccBuff.Resources[AccumulationBufferInfo::RESOURCE_ID_ACCUMULATED_BUFFER0 + PrevBuffIdx].GetTextureSRV();
+    ITextureView* CurrBufferRTV = AccBuff.Resources[AccumulationBufferInfo::RESOURCE_ID_ACCUMULATED_BUFFER0 + CurrBuffIdx].GetTextureRTV();
 
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureCurrColor"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_COLOR].GetTextureSRV());
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TexturePrevColor"}.Set(m_Resources[RESOURCE_IDENTIFIER_ACCUMULATED_BUFFER0 + PrevFrameIdx].GetTextureSRV());
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureMotion"}.Set(RenderAttribs.pPostFXContext->GetClosestMotionVectors());
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureCurrDepth"}.Set(RenderAttribs.pPostFXContext->GetReprojectedDepth());
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TexturePrevDepth"}.Set(RenderAttribs.pPostFXContext->GetPreviousDepth());
+    ShaderResourceVariableX{SRB, SHADER_TYPE_PIXEL, "g_TextureCurrColor"}.Set(RenderAttribs.pColorBufferSRV);
+    ShaderResourceVariableX{SRB, SHADER_TYPE_PIXEL, "g_TexturePrevColor"}.Set(PrevBufferSRV);
+    ShaderResourceVariableX{SRB, SHADER_TYPE_PIXEL, "g_TextureMotion"}.Set(RenderAttribs.pPostFXContext->GetClosestMotionVectors());
+    ShaderResourceVariableX{SRB, SHADER_TYPE_PIXEL, "g_TextureCurrDepth"}.Set(RenderAttribs.pPostFXContext->GetReprojectedDepth());
+    ShaderResourceVariableX{SRB, SHADER_TYPE_PIXEL, "g_TexturePrevDepth"}.Set(RenderAttribs.pPostFXContext->GetPreviousDepth());
 
-    ITextureView* pRTVs[] = {
-        m_Resources[RESOURCE_IDENTIFIER_ACCUMULATED_BUFFER0 + CurrFrameIdx].GetTextureRTV(),
-    };
-    RenderAttribs.pDeviceContext->SetRenderTargets(_countof(pRTVs), pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    RenderAttribs.pDeviceContext->SetRenderTargets(1, &CurrBufferRTV, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     RenderAttribs.pDeviceContext->SetPipelineState(RenderTech.PSO);
-    RenderAttribs.pDeviceContext->CommitShaderResources(RenderTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    RenderAttribs.pDeviceContext->CommitShaderResources(SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     RenderAttribs.pDeviceContext->Draw({3, DRAW_FLAG_VERIFY_ALL, 1});
     RenderAttribs.pDeviceContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
-}
-
-TemporalAntiAliasing::RenderTechnique& TemporalAntiAliasing::GetRenderTechnique(RENDER_TECH RenderTech, FEATURE_FLAGS FeatureFlags)
-{
-    auto Iter = m_RenderTech.find({RenderTech, FeatureFlags});
-    if (Iter != m_RenderTech.end())
-        return Iter->second;
-
-    auto Condition = m_RenderTech.emplace(RenderTechniqueKey{RenderTech, FeatureFlags}, RenderTechnique{});
-    return Condition.first->second;
 }
 
 } // namespace Diligent

@@ -44,7 +44,7 @@ namespace Diligent
 
 namespace HLSL
 {
-struct TemporalAntiAliasingAttribs;
+#include "../../../Shaders/PostProcess/TemporalAntiAliasing/public/TemporalAntiAliasingStructures.fxh"
 }
 
 class TemporalAntiAliasing
@@ -83,6 +83,9 @@ public:
 
         /// TAA settings.
         const HLSL::TemporalAntiAliasingAttribs* pTAAAttribs = nullptr;
+
+        /// Accumulation buffer index.
+        Uint32 AccumulationBufferIdx = 0;
     };
 
 public:
@@ -90,15 +93,19 @@ public:
 
     ~TemporalAntiAliasing();
 
-    float2 GetJitterOffset() const;
+    float2 GetJitterOffset(Uint32 AccumulationBufferIdx = 0) const;
 
-    void PrepareResources(IRenderDevice* pDevice, IDeviceContext* pDeviceContext, PostFXContext* pPostFXContext, FEATURE_FLAGS FeatureFlag);
+    void PrepareResources(IRenderDevice*  pDevice,
+                          IDeviceContext* pDeviceContext,
+                          PostFXContext*  pPostFXContext,
+                          FEATURE_FLAGS   FeatureFlag,
+                          Uint32          AccumulationBufferIdx = 0);
 
     void Execute(const RenderAttributes& RenderAttribs);
 
     static bool UpdateUI(HLSL::TemporalAntiAliasingAttribs& TAAAttribs, FEATURE_FLAGS& FeatureFlags);
 
-    ITextureView* GetAccumulatedFrameSRV(bool IsPrevFrame = false) const;
+    ITextureView* GetAccumulatedFrameSRV(bool IsPrevFrame = false, Uint32 AccumulationBufferIdx = 0) const;
 
 private:
     using RenderTechnique  = PostFXRenderTechnique;
@@ -110,19 +117,8 @@ private:
         RENDER_TECH_COUNT
     };
 
-    enum RESOURCE_IDENTIFIER : Uint32
-    {
-        RESOURCE_IDENTIFIER_INPUT_COLOR = 0,
-        RESOURCE_IDENTIFIER_INPUT_LAST  = RESOURCE_IDENTIFIER_INPUT_COLOR,
-        RESOURCE_IDENTIFIER_CONSTANT_BUFFER,
-        RESOURCE_IDENTIFIER_ACCUMULATED_BUFFER0,
-        RESOURCE_IDENTIFIER_ACCUMULATED_BUFFER1,
-        RESOURCE_IDENTIFIER_COUNT
-    };
-
-    void ComputeTemporalAccumulation(const RenderAttributes& RenderAttribs);
-
-    RenderTechnique& GetRenderTechnique(RENDER_TECH RenderTech, FEATURE_FLAGS FeatureFlags);
+    struct AccumulationBufferInfo;
+    void ComputeTemporalAccumulation(const RenderAttributes& RenderAttribs, AccumulationBufferInfo& AccBuff);
 
 private:
     struct RenderTechniqueKey
@@ -151,16 +147,32 @@ private:
 
     std::unordered_map<RenderTechniqueKey, RenderTechnique, RenderTechniqueKey::Hasher> m_RenderTech;
 
-    std::unique_ptr<HLSL::TemporalAntiAliasingAttribs> m_ShaderAttribs;
+    struct AccumulationBufferInfo
+    {
+        enum RESOURCE_ID : Uint32
+        {
+            RESOURCE_ID_CONSTANT_BUFFER,
+            RESOURCE_ID_ACCUMULATED_BUFFER0,
+            RESOURCE_ID_ACCUMULATED_BUFFER1,
+            RESOURCE_ID_COUNT
+        };
 
-    ResourceRegistry m_Resources{RESOURCE_IDENTIFIER_COUNT};
+        ResourceRegistry Resources{RESOURCE_ID_COUNT};
 
-    Uint32 m_BackBufferWidth  = 0;
-    Uint32 m_BackBufferHeight = 0;
-    Uint32 m_CurrentFrameIdx  = 0;
-    Uint32 m_LastFrameIdx     = ~0u;
+        Uint32        Width           = 0;
+        Uint32        Height          = 0;
+        Uint32        CurrentFrameIdx = 0;
+        Uint32        LastFrameIdx    = ~0u;
+        FEATURE_FLAGS FeatureFlags    = FEATURE_FLAG_NONE;
 
-    FEATURE_FLAGS m_FeatureFlags = FEATURE_FLAG_NONE;
+        HLSL::TemporalAntiAliasingAttribs ShaderAttribs;
+
+        RefCntAutoPtr<IShaderResourceBinding> SRB;
+
+        void Prepare(IRenderDevice* pDevice, IDeviceContext* pCtx, Uint32 Width, Uint32 Height, Uint32 CurrFrameIdx, FEATURE_FLAGS FeatureFlags);
+        void UpdateConstantBuffer(IDeviceContext* pCtx, const HLSL::TemporalAntiAliasingAttribs& Attribs);
+    };
+    std::unordered_map<Uint32, AccumulationBufferInfo> m_AccumulationBuffers;
 };
 
 DEFINE_FLAG_ENUM_OPERATORS(TemporalAntiAliasing::FEATURE_FLAGS)
