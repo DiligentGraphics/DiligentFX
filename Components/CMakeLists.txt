@@ -6,6 +6,7 @@ set(SOURCE
     "${CMAKE_CURRENT_SOURCE_DIR}/src/EnvMapRenderer.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/GBuffer.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/VectorFieldRenderer.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/ToneMapping.cpp"
 )
 
 set(INCLUDE
@@ -14,6 +15,7 @@ set(INCLUDE
     "${CMAKE_CURRENT_SOURCE_DIR}/interface/EnvMapRenderer.hpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/interface/GBuffer.hpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/interface/VectorFieldRenderer.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/interface/ToneMapping.hpp"
 )
 
 target_sources(DiligentFX PRIVATE ${SOURCE} ${INCLUDE})
