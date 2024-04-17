@@ -266,7 +266,7 @@ private:
         {}
         void PreparePRS();
         void PreparePSO(TEXTURE_FORMAT RTVFormat);
-        void PrepareSRB(ITextureView* pClosestSelectedLocationSRV);
+        void PrepareSRB(ITextureView* pClosestSelectedLocationSRV, Uint32 FrameIdx);
 
     private:
         bool ConvertOutputToSRGB = false;
@@ -279,20 +279,27 @@ private:
 
         RefCntAutoPtr<IPipelineState>             PSO{};
         RefCntAutoPtr<IPipelineResourceSignature> PRS{};
-        RefCntAutoPtr<IShaderResourceBinding>     SRB{};
 
-        struct ShaderVariables
+        IShaderResourceBinding* CurrSRB = nullptr;
+
+        struct ShaderResources
         {
-            ShaderResourceVariableX Color;
+            RefCntAutoPtr<IShaderResourceBinding> SRB{};
+
+            struct ShaderVariables
+            {
+                ShaderResourceVariableX Color;
+            };
+            ShaderVariables Vars{};
         };
-        ShaderVariables ShaderVars{};
+        std::array<ShaderResources, 2> Resources{};
 
         CopyFrameTechnique(const HnPostProcessTask& _PPTask) :
             PPTask{_PPTask}
         {}
         void PreparePRS();
         void PreparePSO(TEXTURE_FORMAT RTVFormat);
-        void PrepareSRB();
+        void PrepareSRB(Uint32 FrameIdx);
 
     private:
         bool ConvertOutputToSRGB = false;

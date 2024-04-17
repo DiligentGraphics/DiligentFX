@@ -208,7 +208,7 @@ void HnPostProcessTask::PostProcessingTechnique::PreparePSO(TEXTURE_FORMAT RTVFo
     }
 }
 
-void HnPostProcessTask::PostProcessingTechnique::PrepareSRB(ITextureView* pClosestSelectedLocationSRV)
+void HnPostProcessTask::PostProcessingTechnique::PrepareSRB(ITextureView* pClosestSelectedLocationSRV, Uint32 FrameIdx)
 {
     const auto* FrameTargets = PPTask.m_FrameTargets;
 
@@ -241,9 +241,7 @@ void HnPostProcessTask::PostProcessingTechnique::PrepareSRB(ITextureView* pClose
     ITextureView* pSSAO = PPTask.m_SSAO->GetAmbientOcclusionSRV();
     VERIFY_EXPR(pSSAO != nullptr);
 
-    const HnRenderParam* pRenderParam = static_cast<const HnRenderParam*>(PPTask.m_RenderIndex->GetRenderDelegate()->GetRenderParam());
-    VERIFY_EXPR(pRenderParam != nullptr);
-    size_t ResIdx     = pRenderParam != nullptr ? pRenderParam->GetFrameNumber() % Resources.size() : 0;
+    size_t ResIdx     = FrameIdx % Resources.size();
     auto&  SRB        = Resources[ResIdx].SRB;
     auto&  ShaderVars = Resources[ResIdx].Vars;
 
@@ -371,7 +369,7 @@ void HnPostProcessTask::CopyFrameTechnique::PreparePSO(TEXTURE_FORMAT RTVFormat)
     }
 }
 
-void HnPostProcessTask::CopyFrameTechnique::PrepareSRB()
+void HnPostProcessTask::CopyFrameTechnique::PrepareSRB(Uint32 FrameIdx)
 {
     VERIFY_EXPR(PPTask.m_TAA);
     ITexture* pAccumulatedFrame = PPTask.m_TAA->GetAccumulatedFrameSRV()->GetTexture();
@@ -381,6 +379,10 @@ void HnPostProcessTask::CopyFrameTechnique::PrepareSRB()
         return;
     }
 
+    size_t ResIdx     = FrameIdx % Resources.size();
+    auto&  SRB        = Resources[ResIdx].SRB;
+    auto&  ShaderVars = Resources[ResIdx].Vars;
+
     ITextureView* pAccumulatedFrameSRV = pAccumulatedFrame->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
     if (SRB)
     {
@@ -388,6 +390,7 @@ void HnPostProcessTask::CopyFrameTechnique::PrepareSRB()
         {
             SRB.Release();
             ShaderVars = {};
+            CurrSRB    = nullptr;
         }
     }
 
@@ -399,6 +402,8 @@ void HnPostProcessTask::CopyFrameTechnique::PrepareSRB()
         ShaderVars.Color = ShaderResourceVariableX{SRB, SHADER_TYPE_PIXEL, "g_ColorBuffer"};
         ShaderVars.Color.Set(pAccumulatedFrameSRV);
     }
+
+    CurrSRB = SRB;
 }
 
 
@@ -548,13 +553,13 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
 
     m_PostProcessTech.PreparePRS();
     m_PostProcessTech.PreparePSO((m_UseTAA ? m_FrameTargets->JitteredFinalColorRTV : m_FinalColorRTV)->GetDesc().Format);
-    m_PostProcessTech.PrepareSRB(ClosestSelectedLocationSRV);
+    m_PostProcessTech.PrepareSRB(ClosestSelectedLocationSRV, pRenderParam->GetFrameNumber());
 
     if (m_UseTAA)
     {
         m_CopyFrameTech.PreparePRS();
         m_CopyFrameTech.PreparePSO(m_FinalColorRTV->GetDesc().Format);
-        m_CopyFrameTech.PrepareSRB();
+        m_CopyFrameTech.PrepareSRB(pRenderParam->GetFrameNumber());
 
         {
             auto it = TaskCtx->find(HnRenderResourceTokens->suspendSuperSampling);
@@ -761,7 +766,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         ITextureView*    pRTVs[] = {m_FinalColorRTV};
         pCtx->SetRenderTargets(_countof(pRTVs), pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         pCtx->SetPipelineState(m_CopyFrameTech.PSO);
-        pCtx->CommitShaderResources(m_CopyFrameTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        pCtx->CommitShaderResources(m_CopyFrameTech.CurrSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         pCtx->Draw({3, DRAW_FLAG_VERIFY_ALL});
     }
 
