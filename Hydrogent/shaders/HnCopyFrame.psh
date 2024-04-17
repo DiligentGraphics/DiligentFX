@@ -1,6 +1,18 @@
 #include "FullScreenTriangleVSOutput.fxh"
 #include "SRGBUtilities.fxh"
 
+#if TONE_MAPPING_MODE > TONE_MAPPING_MODE_NONE
+#   include "ToneMapping.fxh"
+#   include "HnPostProcessStructures.fxh"
+#endif
+
+#if TONE_MAPPING_MODE > TONE_MAPPING_MODE_NONE
+cbuffer cbPostProcessAttribs
+{
+    PostProcessAttribs g_Attribs;
+}
+#endif
+
 Texture2D g_ColorBuffer;
 
 void main(in  FullScreenTriangleVSOutput VSOut,
@@ -9,6 +21,10 @@ void main(in  FullScreenTriangleVSOutput VSOut,
     float4 Pos = VSOut.f4PixelPos;
 
     Color = g_ColorBuffer.Load(int3(Pos.xy, 0));
+
+#if TONE_MAPPING_MODE > TONE_MAPPING_MODE_NONE
+    Color.rgb = ToneMap(Color.rgb, g_Attribs.ToneMapping, g_Attribs.AverageLogLum);
+#endif
 
 #if CONVERT_OUTPUT_TO_SRGB
     Color.rgb = LinearToSRGB(Color.rgb);

@@ -303,6 +303,7 @@ private:
 
     private:
         bool ConvertOutputToSRGB = false;
+        int  ToneMappingMode     = 0;
     } m_CopyFrameTech;
 };
 

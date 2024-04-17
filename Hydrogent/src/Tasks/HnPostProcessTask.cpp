@@ -42,6 +42,7 @@
 #include "ScreenSpaceReflection.hpp"
 #include "ScreenSpaceAmbientOcclusion.hpp"
 #include "TemporalAntiAliasing.hpp"
+#include "ToneMapping.hpp"
 #include "ScopedDebugGroup.hpp"
 
 namespace Diligent
@@ -157,16 +158,22 @@ void HnPostProcessTask::PostProcessingTechnique::PreparePSO(TEXTURE_FORMAT RTVFo
 {
     bool IsDirty = PSO && PSO->GetGraphicsPipelineDesc().RTVFormats[0] != RTVFormat;
 
-    if (ConvertOutputToSRGB != (!PPTask.m_UseTAA && PPTask.m_Params.ConvertOutputToSRGB))
     {
-        ConvertOutputToSRGB = !PPTask.m_UseTAA && PPTask.m_Params.ConvertOutputToSRGB;
-        IsDirty             = true;
+        const bool _ConvertOutputToSRGB = !PPTask.m_UseTAA && PPTask.m_Params.ConvertOutputToSRGB;
+        if (ConvertOutputToSRGB != _ConvertOutputToSRGB)
+        {
+            ConvertOutputToSRGB = _ConvertOutputToSRGB;
+            IsDirty             = true;
+        }
     }
 
-    if (ToneMappingMode != PPTask.m_Params.ToneMappingMode)
     {
-        ToneMappingMode = PPTask.m_Params.ToneMappingMode;
-        IsDirty         = true;
+        const int _ToneMappingMode = !PPTask.m_UseTAA ? PPTask.m_Params.ToneMappingMode : 0;
+        if (ToneMappingMode != _ToneMappingMode)
+        {
+            ToneMappingMode = _ToneMappingMode;
+            IsDirty         = true;
+        }
     }
 
     if (IsDirty)
@@ -315,10 +322,14 @@ void HnPostProcessTask::CopyFrameTechnique::PreparePRS()
     PipelineResourceSignatureDescX PRSDesc{"HnPostProcessTask: Tone mapping PRS"};
     PRSDesc
         .SetUseCombinedTextureSamplers(true)
+        .AddResource(SHADER_TYPE_PIXEL, "cbPostProcessAttribs", SHADER_RESOURCE_TYPE_CONSTANT_BUFFER, SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
         .AddResource(SHADER_TYPE_PIXEL, "g_ColorBuffer", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
 
     PRS = RenderDeviceWithCache_N{pDevice, pStateCache}.CreatePipelineResourceSignature(PRSDesc);
     VERIFY_EXPR(PRS);
+
+    VERIFY_EXPR(PPTask.m_PostProcessAttribsCB);
+    ShaderResourceVariableX{PRS, SHADER_TYPE_PIXEL, "cbPostProcessAttribs"}.Set(PPTask.m_PostProcessAttribsCB);
 }
 
 void HnPostProcessTask::CopyFrameTechnique::PreparePSO(TEXTURE_FORMAT RTVFormat)
@@ -329,6 +340,12 @@ void HnPostProcessTask::CopyFrameTechnique::PreparePSO(TEXTURE_FORMAT RTVFormat)
     {
         ConvertOutputToSRGB = PPTask.m_Params.ConvertOutputToSRGB;
         IsDirty             = true;
+    }
+
+    if (ToneMappingMode != PPTask.m_Params.ToneMappingMode)
+    {
+        ToneMappingMode = PPTask.m_Params.ToneMappingMode;
+        IsDirty         = true;
     }
 
     if (IsDirty)
@@ -346,6 +363,7 @@ void HnPostProcessTask::CopyFrameTechnique::PreparePSO(TEXTURE_FORMAT RTVFormat)
 
         ShaderMacroHelper Macros;
         Macros.Add("CONVERT_OUTPUT_TO_SRGB", ConvertOutputToSRGB);
+        Macros.Add("TONE_MAPPING_MODE", ToneMappingMode);
 
         GraphicsPipelineStateCreateInfoX PsoCI{"Copy Frame"};
         CreateShaders(Device, "HnCopyFrame.psh", "PostCopy Frame PS", Macros, PsoCI)
@@ -713,9 +731,19 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
 
         if (m_AttribsCBDirty)
         {
+            const bool ReverseToneMapSelectionColors = m_UseTAA && m_Params.ToneMappingMode != 0;
+
+            const float3 SelectionColorHDR = ReverseToneMapSelectionColors ?
+                ReverseExpToneMap(m_Params.SelectionColor, m_Params.MiddleGray, m_Params.AverageLogLum) :
+                m_Params.SelectionColor;
+
+            const float3 OccludedSelectionColorHDR = ReverseToneMapSelectionColors ?
+                ReverseExpToneMap(m_Params.OccludedSelectionColor, m_Params.MiddleGray, m_Params.AverageLogLum) :
+                m_Params.OccludedSelectionColor;
+
             HLSL::PostProcessAttribs ShaderAttribs;
-            ShaderAttribs.SelectionOutlineColor            = m_Params.SelectionColor;
-            ShaderAttribs.OccludedSelectionOutlineColor    = m_Params.OccludedSelectionColor;
+            ShaderAttribs.SelectionOutlineColor            = float4{SelectionColorHDR, m_Params.SelectionColor.a};
+            ShaderAttribs.OccludedSelectionOutlineColor    = float4{OccludedSelectionColorHDR, m_Params.OccludedSelectionColor.a};
             ShaderAttribs.NonselectionDesaturationFactor   = m_Params.NonselectionDesaturationFactor;
             ShaderAttribs.ToneMapping.iToneMappingMode     = m_Params.ToneMappingMode;
             ShaderAttribs.ToneMapping.bAutoExposure        = 0;
