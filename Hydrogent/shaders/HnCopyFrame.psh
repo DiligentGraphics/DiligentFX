@@ -1,10 +1,7 @@
 #include "FullScreenTriangleVSOutput.fxh"
 #include "SRGBUtilities.fxh"
-
-#if TONE_MAPPING_MODE > TONE_MAPPING_MODE_NONE
-#   include "ToneMapping.fxh"
-#   include "HnPostProcessStructures.fxh"
-#endif
+#include "ToneMapping.fxh"
+#include "HnPostProcessStructures.fxh"
 
 #if TONE_MAPPING_MODE > TONE_MAPPING_MODE_NONE
 cbuffer cbPostProcessAttribs
