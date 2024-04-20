@@ -94,7 +94,8 @@ private:
 
     enum RENDER_TECH : Uint32
     {
-        RENDER_TECH_COMPUTE_DOWNSAMPLED_TEXTURE = 0,
+        RENDER_TECH_COMPUTE_PREFILTERED_TEXTURE = 0,
+        RENDER_TECH_COMPUTE_DOWNSAMPLED_TEXTURE,
         RENDER_TECH_COMPUTE_UPSAMPLED_TEXTURE,
         RENDER_TECH_COUNT
     };
@@ -109,9 +110,13 @@ private:
         RESOURCE_IDENTIFIER_COUNT
     };
 
+    void ComputePrefilteredTexture(const RenderAttributes& RenderAttribs);
+
     void ComputeDownsampledTextures(const RenderAttributes& RenderAttribs);
 
     void ComputeUpsampledTextures(const RenderAttributes& RenderAttribs);
+
+    Int32 ComputeMipCount(Uint32 Width, Uint32 Height, float Radius);
 
     RenderTechnique& GetRenderTechnique(RENDER_TECH RenderTech, FEATURE_FLAGS FeatureFlags);
 

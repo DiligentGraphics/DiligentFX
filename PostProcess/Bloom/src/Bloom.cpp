@@ -87,15 +87,10 @@ void Bloom::PrepareResources(IRenderDevice* pDevice, IDeviceContext* pDeviceCont
     m_BackBufferWidth  = FrameDesc.Width;
     m_BackBufferHeight = FrameDesc.Height;
 
-    auto ComputeTextureCount = [](Uint32 Width, Uint32 Height) {
-        Uint32 MaxMipCount = ComputeMipLevelsCount(Width, Height);
-        return static_cast<Uint32>(0.75f * static_cast<float>(MaxMipCount));
-        ;
-    };
 
     Uint32 HalfWidth    = m_BackBufferWidth / 2u;
     Uint32 HalfHeight   = m_BackBufferHeight / 2u;
-    Uint32 TextureCount = ComputeTextureCount(HalfWidth, HalfHeight);
+    Uint32 TextureCount = ComputeMipLevelsCount(HalfWidth, HalfHeight);
 
     RenderDeviceWithCache_N Device{pDevice};
 
@@ -148,6 +143,56 @@ void Bloom::PrepareResources(IRenderDevice* pDevice, IDeviceContext* pDeviceCont
     }
 }
 
+Int32 Bloom::ComputeMipCount(Uint32 Width, Uint32 Height, float Radius)
+{
+    Uint32 MaxMipCount = ComputeMipLevelsCount(Width, Height);
+    return static_cast<Int32>(Radius * static_cast<float>(MaxMipCount));
+}
+
+void Bloom::ComputePrefilteredTexture(const RenderAttributes& RenderAttribs)
+{
+    auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_PREFILTERED_TEXTURE, m_FeatureFlags);
+    if (!RenderTech.IsInitializedPSO())
+    {
+        const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
+        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "Bloom_ComputePrefilteredTexture.fx", "ComputePrefilteredTexturePS", SHADER_TYPE_PIXEL);
+
+        PipelineResourceLayoutDescX ResourceLayout;
+        ResourceLayout
+            .AddVariable(SHADER_TYPE_PIXEL, "cbBloomAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureInput", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureInput", Sam_LinearBoarder);
+
+        RenderTech.InitializePSO(RenderAttribs.pDevice,
+                                 RenderAttribs.pStateCache, "Bloom::ComputePrefilteredTexture",
+                                 VS, PS, ResourceLayout,
+                                 {
+                                     m_DownsampledTextures[0]->GetDesc().Format,
+                                 },
+                                 TEX_FORMAT_UNKNOWN,
+                                 DSS_DisableDepth, BS_Default, false);
+
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbBloomAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
+    }
+
+    if (!RenderTech.IsInitializedSRB())
+        RenderTech.InitializeSRB(true);
+
+    ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "ComputePrefilteredTexture"};
+
+    ITextureView* pRTVs[] = {
+        m_DownsampledTextures[0]->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET),
+    };
+
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureInput"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_COLOR].GetTextureSRV());
+
+    RenderAttribs.pDeviceContext->SetRenderTargets(1, pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    RenderAttribs.pDeviceContext->SetPipelineState(RenderTech.PSO);
+    RenderAttribs.pDeviceContext->CommitShaderResources(RenderTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    RenderAttribs.pDeviceContext->Draw({3, DRAW_FLAG_VERIFY_ALL, 1});
+    RenderAttribs.pDeviceContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
+}
+
 void Bloom::ComputeDownsampledTextures(const RenderAttributes& RenderAttribs)
 {
     auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_DOWNSAMPLED_TEXTURE, m_FeatureFlags);
@@ -165,7 +210,7 @@ void Bloom::ComputeDownsampledTextures(const RenderAttributes& RenderAttribs)
                                  RenderAttribs.pStateCache, "Bloom::ComputeDownsampledTexture",
                                  VS, PS, ResourceLayout,
                                  {
-                                     m_UpsampledTextures[0]->GetDesc().Format,
+                                     m_DownsampledTextures[0]->GetDesc().Format,
                                  },
                                  TEX_FORMAT_UNKNOWN,
                                  DSS_DisableDepth, BS_Default, false);
@@ -176,14 +221,15 @@ void Bloom::ComputeDownsampledTextures(const RenderAttributes& RenderAttribs)
 
     ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "ComputeDownsampledTexture"};
 
+    Int32                   MipCount = ComputeMipCount(m_DownsampledTextures[0]->GetDesc().Width, m_DownsampledTextures[0]->GetDesc().Height, m_BloomAttribs->Radius);
     ShaderResourceVariableX TextureInputSV{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureInput"};
-    for (Uint32 TextureIdx = 0; TextureIdx < m_DownsampledTextures.size(); TextureIdx++)
+    for (Int32 TextureIdx = 1; TextureIdx < MipCount; TextureIdx++)
     {
         ITextureView* pRTVs[] = {
             m_DownsampledTextures[TextureIdx]->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET),
         };
 
-        TextureInputSV.Set(TextureIdx != 0 ? m_DownsampledTextures[TextureIdx - 1]->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE) : m_Resources[RESOURCE_IDENTIFIER_INPUT_COLOR].GetTextureSRV());
+        TextureInputSV.Set(m_DownsampledTextures[TextureIdx - 1]->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
         RenderAttribs.pDeviceContext->SetRenderTargets(1, pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         RenderAttribs.pDeviceContext->SetPipelineState(RenderTech.PSO);
         RenderAttribs.pDeviceContext->CommitShaderResources(RenderTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
@@ -229,15 +275,15 @@ void Bloom::ComputeUpsampledTextures(const RenderAttributes& RenderAttribs)
         ShaderResourceVariableX TextureInputSV{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureInput"};
         ShaderResourceVariableX TextureDowsampledSV{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureDownsampled"};
 
-        Int32 MaxDownsampledTexture = static_cast<Int32>(m_UpsampledTextures.size() - 1);
-        for (Int32 TextureIdx = MaxDownsampledTexture; TextureIdx > 0; TextureIdx--)
+        Int32 MipCount = ComputeMipCount(m_DownsampledTextures[0]->GetDesc().Width, m_DownsampledTextures[0]->GetDesc().Height, m_BloomAttribs->Radius) - 1;
+        for (Int32 TextureIdx = MipCount; TextureIdx > 0; TextureIdx--)
         {
             ITextureView* pRTVs[] = {
                 m_UpsampledTextures[TextureIdx - 1]->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET),
             };
 
             TextureInputSV.Set(m_DownsampledTextures[TextureIdx]->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
-            TextureDowsampledSV.Set(TextureIdx != MaxDownsampledTexture ? m_UpsampledTextures[TextureIdx]->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE) : m_DownsampledTextures[TextureIdx]->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+            TextureDowsampledSV.Set(TextureIdx != MipCount ? m_UpsampledTextures[TextureIdx]->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE) : m_DownsampledTextures[TextureIdx]->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 
             RenderAttribs.pDeviceContext->SetRenderTargets(1, pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
             RenderAttribs.pDeviceContext->SetPipelineState(RenderTech.PSO);
@@ -291,6 +337,7 @@ void Bloom::Execute(const RenderAttributes& RenderAttribs)
         RenderAttribs.pDeviceContext->UpdateBuffer(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER].AsBuffer(), 0, sizeof(HLSL::BloomAttribs), RenderAttribs.pBloomAttribs, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     }
 
+    ComputePrefilteredTexture(RenderAttribs);
     ComputeDownsampledTextures(RenderAttribs);
     ComputeUpsampledTextures(RenderAttribs);
 
@@ -318,13 +365,21 @@ bool Bloom::UpdateUI(HLSL::BloomAttribs& Attribs, FEATURE_FLAGS& FeatureFlags)
 {
     bool AttribsChanged = false;
 
-    if (ImGui::SliderFloat("Internal Blend", &Attribs.InternalBlend, 0.0f, 1.0f))
+    if (ImGui::SliderFloat("Intensity", &Attribs.Intensity, 0.0f, 1.0f))
         AttribsChanged = true;
-    ImGui::HelpMarker("Linear interpolation blending between the upsample passes");
+    ImGui::HelpMarker("The intensity of the bloom effect.");
 
-    if (ImGui::SliderFloat("External Blend", &Attribs.ExternalBlend, 0.0f, 0.3f))
+    if (ImGui::SliderFloat("Radius", &Attribs.Radius, 0.3f, 0.85f))
         AttribsChanged = true;
-    ImGui::HelpMarker("Linear interpolation blending between the current frame and the bloom texture");
+    ImGui::HelpMarker("This variable controls the size of the bloom effect. A larger radius will result in a larger area of the image being affected by the bloom effect.");
+
+    if (ImGui::SliderFloat("Threshold", &Attribs.Threshold, 0.0f, 10.0f))
+        AttribsChanged = true;
+    ImGui::HelpMarker("This value determines the minimum brightness required for a pixel to contribute to the bloom effect.");
+
+    if (ImGui::SliderFloat("Soft Threshold", &Attribs.SoftTreshold, 0.0f, 1.0f))
+        AttribsChanged = true;
+    ImGui::HelpMarker("This value determines the softness of the threshold. A higher value will result in a softer threshold.");
 
     return AttribsChanged;
 }
