@@ -42,17 +42,17 @@
 // https://www.froyok.fr/blog/2021-12-ue4-custom-bloom/
 struct BloomAttribs
 {
-    // Linear interpolation blending between the upsample passes
-    float InternalBlend  DEFAULT_VALUE(0.5f);
-    
-    // Linear interpolation blending between the current frame and the bloom texture
-    float ExternalBlend  DEFAULT_VALUE(0.15f);
-    
-    // Padding 0
-    float Padding0       DEFAULT_VALUE(0);
-    
-    // Padding 1
-    float Padding1       DEFAULT_VALUE(0);
+    // The intensity of the bloom effect.
+    float Intensity      DEFAULT_VALUE(0.15f);
+
+    // This value determines the minimum brightness required for a pixel to contribute to the bloom effect.
+    float Threshold      DEFAULT_VALUE(1.0);
+
+    // This value determines the softness of the threshold. A higher value will result in a softer threshold.
+    float SoftTreshold  DEFAULT_VALUE(0.125);
+
+    // This variable controls the size of the bloom effect. A larger radius will result in a larger area of the image being affected by the bloom effect.
+    float Radius         DEFAULT_VALUE(0.75);
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
     CHECK_STRUCT_ALIGNMENT(BloomAttribs);
