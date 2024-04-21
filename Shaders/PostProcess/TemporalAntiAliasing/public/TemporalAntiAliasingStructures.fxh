@@ -30,7 +30,7 @@
 
 // This parameter sets the max "distance" between source colour and target colour.
 // Setting this to a larger value allows more bright pixels from the history buffer to be leaved unchanged.
-#define TAA_VARIANCE_INTERSECTION_MAX_T  100.0
+#define TAA_VARIANCE_INTERSECTION_MAX_T  10.0
 
 struct TemporalAntiAliasingAttribs
 {
