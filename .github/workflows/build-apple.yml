@@ -5,7 +5,7 @@ on: [push, pull_request]
 jobs:
   precheks:
     name:    MacOS -> Pre-Checks
-    runs-on: macos-12
+    runs-on: macos-14
 
     steps:
     - name: Clone DiligentCore
@@ -27,7 +27,7 @@ jobs:
 
   build:
     needs:   precheks
-    runs-on: macos-12
+    runs-on: macos-14
 
     strategy:
       matrix:
