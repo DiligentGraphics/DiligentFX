@@ -44,7 +44,9 @@ namespace HLSL
 {
 
 #include "Shaders/Common/public/BasicStructures.fxh"
-}
+#include "Shaders/Common/public/CoordinateGridStructures.fxh"
+
+} // namespace HLSL
 
 CoordinateGridRenderer::CoordinateGridRenderer(IRenderDevice* pDevice) :
     m_pRenderAttribs{std::make_unique<HLSL::CoordinateGridAttribs>()}

@@ -1,6 +1,8 @@
 #ifndef _COORDINATE_GRID_FXH_
 #define _COORDINATE_GRID_FXH_
 
+#include "CoordinateGridStructures.fxh"
+
 #if GRID_AXES_OPTION_INVERTED_DEPTH
     #define DepthNearPlane     1.0
     #define DepthFarPlane      0.0
