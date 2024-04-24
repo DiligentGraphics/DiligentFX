@@ -40,7 +40,6 @@ set(SOURCE
     src/Tasks/HnBeginMainPassTask.cpp
     src/Tasks/HnRenderRprimsTask.cpp
     src/Tasks/HnRenderEnvMapTask.cpp
-    src/Tasks/HnRenderAxesTask.cpp
     src/Tasks/HnRenderBoundBoxTask.cpp
     src/Tasks/HnPostProcessTask.cpp
     src/Tasks/HnProcessSelectionTask.cpp
@@ -81,7 +80,6 @@ set(INTERFACE
     interface/Tasks/HnRenderShadowsTask.hpp
     interface/Tasks/HnRenderRprimsTask.hpp
     interface/Tasks/HnRenderEnvMapTask.hpp
-    interface/Tasks/HnRenderAxesTask.hpp
     interface/Tasks/HnRenderBoundBoxTask.hpp
     interface/Tasks/HnPostProcessTask.hpp
     interface/Tasks/HnProcessSelectionTask.hpp

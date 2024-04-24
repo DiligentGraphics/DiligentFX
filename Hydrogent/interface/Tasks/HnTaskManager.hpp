@@ -44,7 +44,6 @@ struct HnRenderRprimsTaskParams;
 struct HnPostProcessTaskParams;
 struct HnRenderPassParams;
 struct HnReadRprimIdTaskParams;
-struct HnRenderAxesTaskParams;
 struct HnRenderBoundBoxTaskParams;
 
 /// Task manager implementation in Hydrogent.
@@ -65,7 +64,6 @@ public:
     static constexpr TaskUID TaskUID_RenderRprimsAdditiveSelected    = 0x2cb8a35254ec46da;
     static constexpr TaskUID TaskUID_RenderRprimsTranslucentSelected = 0x50a786394d834b4f;
     static constexpr TaskUID TaskUID_RenderEnvMap                    = 0xf646122e1dc74bab;
-    static constexpr TaskUID TaskUID_RenderAxes                      = 0x4cbc5eb258b407b8;
     static constexpr TaskUID TaskUID_RenderBoundBox                  = 0x1e7e47f37e6445b4;
     static constexpr TaskUID TaskUID_ReadRprimId                     = 0x199572fe7ff144ef;
     static constexpr TaskUID TaskUID_ProcessSelection                = 0x87ef181ec6d4cf83;
@@ -101,7 +99,6 @@ public:
     ///                         - RenderRprimsMaskedUnselected
     ///                             * Renders only unselected Rprims with the masked material tag
     ///                         - RenderEnvMap
-    ///                         - RenderAxes
     ///                         - RenderBoundBox
     ///                         - RenderRprimsAdditive
     ///                             * Renders all Rprims with additive material tag
@@ -127,7 +124,6 @@ public:
     ///     | RenderRprimsDefaultUnselected   |                  |         V         |   V    |     V     |    V     |                  |     V      |
     ///     | RenderRprimsMaskedUnselected    |                  |         V         |   V    |     V     |    V     |                  |     V      |
     ///     | RenderEnvMap                    |                  |                   |   V    |           |          |                  |            |
-    ///     | RenderAxes                      |                  |                   |   V    |           |          |                  |            |
     ///     | RenderBoundBox                  |                  |                   |   V    |           |          |                  |            |
     ///     | RenderRprimsAdditive            |       V          |         V         |   V    |     V     |    V     |                  |     V      |
     ///     | RenderRprimsTranslucent         |       V          |         V         |   V    |     V     |    V     |                  |     V      |
@@ -192,7 +188,6 @@ public:
     void SetRenderRprimParams(const HnRenderRprimsTaskParams& Params);
     void SetPostProcessParams(const HnPostProcessTaskParams& Params);
     void SetReadRprimIdParams(const HnReadRprimIdTaskParams& Params);
-    void SetRenderAxesParams(const HnRenderAxesTaskParams& Params);
     void SetRenderBoundBoxParams(const HnRenderBoundBoxTaskParams& Params);
 
     void EnableTask(TaskUID UID, bool Enable);
@@ -220,14 +215,8 @@ public:
     /// Returns true if environment map rendering is enabled.
     bool IsEnvironmentMapEnabled() const;
 
-    /// Enables or disables axes rendering.
-    void EnableAxes(bool Enable);
-
     /// Returns true if the tasks associated with the specified material tag are enabled.
     bool IsMaterialEnabled(const pxr::TfToken& MaterialTag) const;
-
-    /// Returns true if axes rendering is enabled.
-    bool AreAxesEnabled() const;
 
     /// Enables or disables the rendering of the selected Rprim's bounding box.
     void EnableSelectedPrimBoundBox(bool Enable);
@@ -250,7 +239,6 @@ private:
     void CreateRenderShadowsTask();
     void CreateRenderRprimsTask(const pxr::TfToken& MaterialTag, TaskUID UID, const HnRenderPassParams& RenderPassParams);
     void CreateRenderEnvMapTask(const pxr::TfToken& RenderPassName);
-    void CreateRenderAxesTask(const pxr::TfToken& RenderPassName);
     void CreateRenderBoundBoxTask(const pxr::TfToken& RenderPassName);
     void CreateReadRprimIdTask();
     void CreateCopySelectionDepthTask();
