@@ -41,8 +41,9 @@ namespace Diligent
 
 namespace HLSL
 {
+#include "Shaders/Common/public/ShaderDefinitions.fxh"
 #include "Shaders/PostProcess/ScreenSpaceAmbientOcclusion/public/ScreenSpaceAmbientOcclusionStructures.fxh"
-}
+} // namespace HLSL
 
 ScreenSpaceAmbientOcclusion::ScreenSpaceAmbientOcclusion(IRenderDevice* pDevice) :
     m_SSAOAttribs{std::make_unique<HLSL::ScreenSpaceAmbientOcclusionAttribs>()}

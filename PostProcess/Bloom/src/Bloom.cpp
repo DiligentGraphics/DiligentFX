@@ -44,8 +44,9 @@ namespace Diligent
 
 namespace HLSL
 {
+#include "Shaders/Common/public/ShaderDefinitions.fxh"
 #include "Shaders/PostProcess/Bloom/public/BloomStructures.fxh"
-}
+} // namespace HLSL
 
 static constexpr SamplerDesc Sam_LinearBoarder{
     FILTER_TYPE_LINEAR,

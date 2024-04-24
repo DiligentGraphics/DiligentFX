@@ -48,8 +48,8 @@ namespace Diligent
 namespace HLSL
 {
 
-#include "Shaders/PostProcess/ToneMapping/public/ToneMappingStructures.fxh"
 #include "Shaders/Common/public/BasicStructures.fxh"
+#include "Shaders/PostProcess/ToneMapping/public/ToneMappingStructures.fxh"
 #include "Shaders/PBR/public/PBR_Structures.fxh"
 #include "../shaders/HnPostProcessStructures.fxh"
 #include "Shaders/PBR/private/RenderPBR_Structures.fxh"

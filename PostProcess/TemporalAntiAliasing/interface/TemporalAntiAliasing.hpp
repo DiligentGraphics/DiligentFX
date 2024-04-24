@@ -44,8 +44,9 @@ namespace Diligent
 
 namespace HLSL
 {
+#include "../../../Shaders/Common/public/ShaderDefinitions.fxh"
 #include "../../../Shaders/PostProcess/TemporalAntiAliasing/public/TemporalAntiAliasingStructures.fxh"
-}
+} // namespace HLSL
 
 class TemporalAntiAliasing
 {

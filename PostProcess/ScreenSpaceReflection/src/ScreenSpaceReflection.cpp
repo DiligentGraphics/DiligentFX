@@ -40,8 +40,9 @@ namespace Diligent
 
 namespace HLSL
 {
+#include "Shaders/Common/public/ShaderDefinitions.fxh"
 #include "Shaders/PostProcess/ScreenSpaceReflection/public/ScreenSpaceReflectionStructures.fxh"
-}
+} // namespace HLSL
 
 static DILIGENT_CONSTEXPR DepthStencilStateDesc DSS_StencilWrite{
     False,                // DepthEnable

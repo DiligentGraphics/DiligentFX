@@ -42,6 +42,7 @@ namespace Diligent
 namespace HLSL
 {
 
+#include "Shaders/Common/public/ShaderDefinitions.fxh"
 #include "Shaders/PostProcess/ToneMapping/public/ToneMappingStructures.fxh"
 
 } // namespace HLSL
