@@ -27,7 +27,7 @@
 #include "imgui.h"
 #include "ImGuiUtils.hpp"
 
-#include "GridAxesRenderer.hpp"
+#include "CoordinateGridRenderer.hpp"
 #include "GraphicsUtilities.h"
 #include "ShaderMacroHelper.hpp"
 #include "PostFXRenderTechnique.hpp"
@@ -46,15 +46,15 @@ namespace HLSL
 #include "Shaders/Common/public/BasicStructures.fxh"
 }
 
-GridAxesRenderer::GridAxesRenderer(IRenderDevice* pDevice) :
-    m_pRenderAttribs{std::make_unique<HLSL::GridAxesRendererAttribs>()}
+CoordinateGridRenderer::CoordinateGridRenderer(IRenderDevice* pDevice) :
+    m_pRenderAttribs{std::make_unique<HLSL::CoordinateGridAttribs>()}
 {
     RefCntAutoPtr<IBuffer> pBuffer;
-    CreateUniformBuffer(pDevice, sizeof(HLSL::GridAxesRendererAttribs), "GridAxesRenderer::ConstantBuffer", &pBuffer, USAGE_DEFAULT, BIND_UNIFORM_BUFFER, CPU_ACCESS_NONE, m_pRenderAttribs.get());
+    CreateUniformBuffer(pDevice, sizeof(HLSL::CoordinateGridAttribs), "CoordinateGridRenderer::ConstantBuffer", &pBuffer, USAGE_DEFAULT, BIND_UNIFORM_BUFFER, CPU_ACCESS_NONE, m_pRenderAttribs.get());
     m_Resources.Insert(RESOURCE_IDENTIFIER_SETTINGS_CONSTANT_BUFFER, pBuffer);
 }
 
-void GridAxesRenderer::Render(const RenderAttributes& RenderAttribs)
+void CoordinateGridRenderer::Render(const RenderAttributes& RenderAttribs)
 {
     DEV_CHECK_ERR(RenderAttribs.pDevice != nullptr, "RenderAttribs.pDevice must not be null");
     DEV_CHECK_ERR(RenderAttribs.pDeviceContext != nullptr, "RenderAttribs.pDeviceContext must not be null");
@@ -64,7 +64,7 @@ void GridAxesRenderer::Render(const RenderAttributes& RenderAttribs)
     m_Resources.Insert(RESOURCE_IDENTIFIER_INPUT_COLOR, RenderAttribs.pColorRTV->GetTexture());
     m_Resources.Insert(RESOURCE_IDENTIFIER_INPUT_DEPTH, RenderAttribs.pDepthSRV->GetTexture());
 
-    ScopedDebugGroup DebugGroupGlobal{RenderAttribs.pDeviceContext, "GridAxesRenderer"};
+    ScopedDebugGroup DebugGroupGlobal{RenderAttribs.pDeviceContext, "CoordinateGridRenderer"};
 
     if (RenderAttribs.pCameraAttribsCB == nullptr)
     {
@@ -73,7 +73,7 @@ void GridAxesRenderer::Render(const RenderAttributes& RenderAttribs)
         if (!m_Resources[RESOURCE_IDENTIFIER_CAMERA_CONSTANT_BUFFER])
         {
             RefCntAutoPtr<IBuffer> pBuffer;
-            CreateUniformBuffer(RenderAttribs.pDevice, sizeof(HLSL::CameraAttribs), "GridAxesRenderer::CameraAttibsConstantBuffer", &pBuffer);
+            CreateUniformBuffer(RenderAttribs.pDevice, sizeof(HLSL::CameraAttribs), "CoordinateGridRenderer::CameraAttibsConstantBuffer", &pBuffer);
             m_Resources.Insert(RESOURCE_IDENTIFIER_CAMERA_CONSTANT_BUFFER, pBuffer);
         }
 
@@ -85,10 +85,10 @@ void GridAxesRenderer::Render(const RenderAttributes& RenderAttribs)
         m_Resources.Insert(RESOURCE_IDENTIFIER_CAMERA_CONSTANT_BUFFER, RenderAttribs.pCameraAttribsCB);
     }
 
-    if (memcmp(RenderAttribs.pAttribs, m_pRenderAttribs.get(), sizeof(HLSL::GridAxesRendererAttribs)) != 0)
+    if (memcmp(RenderAttribs.pAttribs, m_pRenderAttribs.get(), sizeof(HLSL::CoordinateGridAttribs)) != 0)
     {
-        memcpy(m_pRenderAttribs.get(), RenderAttribs.pAttribs, sizeof(HLSL::GridAxesRendererAttribs));
-        RenderAttribs.pDeviceContext->UpdateBuffer(m_Resources[RESOURCE_IDENTIFIER_SETTINGS_CONSTANT_BUFFER].AsBuffer(), 0, sizeof(HLSL::GridAxesRendererAttribs), RenderAttribs.pAttribs, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        memcpy(m_pRenderAttribs.get(), RenderAttribs.pAttribs, sizeof(HLSL::CoordinateGridAttribs));
+        RenderAttribs.pDeviceContext->UpdateBuffer(m_Resources[RESOURCE_IDENTIFIER_SETTINGS_CONSTANT_BUFFER].AsBuffer(), 0, sizeof(HLSL::CoordinateGridAttribs), RenderAttribs.pAttribs, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     }
 
     RenderGridAxes(RenderAttribs);
@@ -98,7 +98,7 @@ void GridAxesRenderer::Render(const RenderAttributes& RenderAttribs)
         m_Resources[ResourceIdx].Release();
 }
 
-bool GridAxesRenderer::UpdateUI(HLSL::GridAxesRendererAttribs& Attribs, GridAxesRenderer::FEATURE_FLAGS& FeatureFlags)
+bool CoordinateGridRenderer::UpdateUI(HLSL::CoordinateGridAttribs& Attribs, CoordinateGridRenderer::FEATURE_FLAGS& FeatureFlags)
 {
     bool ActiveAxisX = FeatureFlags & FEATURE_FLAG_RENDER_AXIS_X;
     bool ActiveAxisY = FeatureFlags & FEATURE_FLAG_RENDER_AXIS_Y;
@@ -168,9 +168,8 @@ bool GridAxesRenderer::UpdateUI(HLSL::GridAxesRendererAttribs& Attribs, GridAxes
     return AttribsChanged;
 }
 
-void GridAxesRenderer::RenderGridAxes(const RenderAttributes& RenderAttribs)
+void CoordinateGridRenderer::RenderGridAxes(const RenderAttributes& RenderAttribs)
 {
-
     auto& pPSO = GetPSO(RenderAttribs.FeatureFlags, RenderAttribs.pColorRTV->GetDesc().Format);
     if (!pPSO)
     {
@@ -187,7 +186,7 @@ void GridAxesRenderer::RenderGridAxes(const RenderAttributes& RenderAttribs)
         Macros.Add("GRID_AXES_OPTION_PLANE_XY", (RenderAttribs.FeatureFlags & FEATURE_FLAG_RENDER_PLANE_XY) != 0);
 
         const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeGridAxes.fx", "ComputeGridAxesPS", SHADER_TYPE_PIXEL, Macros);
+        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "CoordinateGridPS.psh", "ComputeGridAxesPS", SHADER_TYPE_PIXEL, Macros);
 
         PipelineResourceLayoutDescX ResourceLayout;
         ResourceLayout
@@ -195,7 +194,7 @@ void GridAxesRenderer::RenderGridAxes(const RenderAttributes& RenderAttribs)
             .AddVariable(SHADER_TYPE_PIXEL, "cbGridAxesAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
             .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
 
-        GraphicsPipelineStateCreateInfoX PSOCreateInfo{"GridAxesRenderer::GridAxes"};
+        GraphicsPipelineStateCreateInfoX PSOCreateInfo{"CoordinateGridRenderer::GridAxes"};
         PSOCreateInfo
             .AddShader(VS)
             .AddShader(PS)
@@ -228,7 +227,7 @@ void GridAxesRenderer::RenderGridAxes(const RenderAttributes& RenderAttribs)
     RenderAttribs.pDeviceContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
 }
 
-RefCntAutoPtr<IPipelineState>& GridAxesRenderer::GetPSO(FEATURE_FLAGS FeatureFlags, TEXTURE_FORMAT RTVFormat)
+RefCntAutoPtr<IPipelineState>& CoordinateGridRenderer::GetPSO(FEATURE_FLAGS FeatureFlags, TEXTURE_FORMAT RTVFormat)
 {
     auto Iter = m_PSOCache.find(PSOKey{FeatureFlags, RTVFormat});
     if (Iter != m_PSOCache.end())
@@ -237,6 +236,5 @@ RefCntAutoPtr<IPipelineState>& GridAxesRenderer::GetPSO(FEATURE_FLAGS FeatureFla
     auto Condition = m_PSOCache.emplace(PSOKey{FeatureFlags, RTVFormat}, RefCntAutoPtr<IPipelineState>{});
     return Condition.first->second;
 }
-
 
 } // namespace Diligent

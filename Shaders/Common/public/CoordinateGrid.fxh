@@ -62,14 +62,14 @@ float ComputeNDCDepth(float3 Position, float4x4 CameraViewProj)
     return Position_NDC.z / Position_NDC.w;
 }
 
-float4 ComputeCoordinateGrid(in float2                  f2NormalizedXY, 
-                             in float3                  CameraPos,
-                             in float4x4                CameraProj,
-                             in float4x4                CameraViewProj,
-                             in float4x4                CameraViewProjInv,
-                             in float                   FarPlaneZ,
-                             in float                   GeometryDepth,
-                             in GridAxesRendererAttribs GridAttribs)
+float4 ComputeCoordinateGrid(in float2                f2NormalizedXY, 
+                             in float3                CameraPos,
+                             in float4x4              CameraProj,
+                             in float4x4              CameraViewProj,
+                             in float4x4              CameraViewProjInv,
+                             in float                 FarPlaneZ,
+                             in float                 GeometryDepth,
+                             in CoordinateGridAttribs GridAttribs)
 {
     Ray RayWS = CreateCameraRay(f2NormalizedXY, CameraViewProjInv, CameraPos);
 

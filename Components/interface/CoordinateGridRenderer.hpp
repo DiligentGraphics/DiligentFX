@@ -41,10 +41,10 @@ namespace Diligent
 namespace HLSL
 {
 struct CameraAttribs;
-struct GridAxesRendererAttribs;
+struct CoordinateGridAttribs;
 } // namespace HLSL
 
-class GridAxesRenderer
+class CoordinateGridRenderer
 {
 public:
     enum FEATURE_FLAGS : Uint32
@@ -87,15 +87,15 @@ public:
         FEATURE_FLAGS FeatureFlags = FEATURE_FLAG_NONE;
 
         /// Settings
-        const HLSL::GridAxesRendererAttribs* pAttribs = nullptr;
+        const HLSL::CoordinateGridAttribs* pAttribs = nullptr;
     };
 
 public:
-    GridAxesRenderer(IRenderDevice* pDevice);
+    CoordinateGridRenderer(IRenderDevice* pDevice);
 
     void Render(const RenderAttributes& Attribs);
 
-    static bool UpdateUI(HLSL::GridAxesRendererAttribs& Attribs, FEATURE_FLAGS& FeatureFlags);
+    static bool UpdateUI(HLSL::CoordinateGridAttribs& Attribs, FEATURE_FLAGS& FeatureFlags);
 
 private:
     enum RESOURCE_IDENTIFIER : Uint32
@@ -143,7 +143,7 @@ private:
     PipleneStateObjectCache               m_PSOCache;
     RefCntAutoPtr<IShaderResourceBinding> m_SRB;
 
-    std::unique_ptr<HLSL::GridAxesRendererAttribs> m_pRenderAttribs;
+    std::unique_ptr<HLSL::CoordinateGridAttribs> m_pRenderAttribs;
 };
 
 } // namespace Diligent

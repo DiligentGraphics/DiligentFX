@@ -149,7 +149,7 @@ struct CameraAttribs
     CHECK_STRUCT_ALIGNMENT(CameraAttribs);
 #endif
 
-struct GridAxesRendererAttribs
+struct CoordinateGridAttribs
 {
     float4 XAxisColor      DEFAULT_VALUE(float4(1, 0, 0, 1));
     float4 YAxisColor      DEFAULT_VALUE(float4(0, 1, 0, 1));
@@ -162,7 +162,7 @@ struct GridAxesRendererAttribs
     float4 GridSubdivision DEFAULT_VALUE(float4(5, 5, 5, 0));
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
-    CHECK_STRUCT_ALIGNMENT(GridAxesRendererAttribs);
+    CHECK_STRUCT_ALIGNMENT(CoordinateGridAttribs);
 #endif
 
 #endif //_BASIC_STRUCTURES_FXH_

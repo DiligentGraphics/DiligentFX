@@ -13,7 +13,7 @@ cbuffer cbCameraAttribs
 
 cbuffer cbGridAxesAttribs
 {
-    GridAxesRendererAttribs g_GridAxesAttribs;
+    CoordinateGridAttribs g_GridAxesAttribs;
 }
 
 Texture2D<float>  g_TextureDepth;
