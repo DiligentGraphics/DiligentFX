@@ -386,6 +386,7 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
                                             bool&           CameraTransformDirty)
 {
     HnRenderDelegate*   RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+    IRenderDevice*      pDevice        = RenderDelegate->GetDevice();
     const USD_Renderer& Renderer       = *RenderDelegate->GetUSDRenderer();
     const int           MaxLightCount  = Renderer.GetSettings().MaxLightCount;
 
@@ -479,6 +480,8 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
             CamAttribs.mViewProjInvT = ViewProj.Inverse().Transpose();
             CamAttribs.f4Position    = float4{float3::MakeVector(WorldMatrix[3]), 1};
             CamAttribs.f2Jitter      = Jitter;
+
+            ProjMatrix.GetNearFarClipPlanes(CamAttribs.fNearPlaneZ, CamAttribs.fFarPlaneZ, pDevice->GetDeviceInfo().NDC.MinZ == -1);
 
             if (CamAttribs.mViewT != PrevCamera.mViewT)
             {

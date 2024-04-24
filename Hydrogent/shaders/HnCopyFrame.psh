@@ -1,16 +1,28 @@
 #include "FullScreenTriangleVSOutput.fxh"
 #include "SRGBUtilities.fxh"
 #include "ToneMapping.fxh"
+#include "CoordinateGridStructures.fxh"
 #include "HnPostProcessStructures.fxh"
+#include "BasicStructures.fxh"
+#include "PBR_Structures.fxh"
+#include "RenderPBR_Structures.fxh"
 
-#if TONE_MAPPING_MODE > TONE_MAPPING_MODE_NONE
+#ifdef ENABLE_GRID
+#   include "CoordinateGrid.fxh"
+#endif
+
 cbuffer cbPostProcessAttribs
 {
     PostProcessAttribs g_Attribs;
 }
-#endif
+
+cbuffer cbFrameAttribs
+{
+    PBRFrameAttribs g_Frame;
+}
 
 Texture2D g_ColorBuffer;
+Texture2D g_Depth;
 
 void main(in  FullScreenTriangleVSOutput VSOut,
           out float4                     Color : SV_Target0)
@@ -18,11 +30,24 @@ void main(in  FullScreenTriangleVSOutput VSOut,
     float4 Pos = VSOut.f4PixelPos;
 
     Color = g_ColorBuffer.Load(int3(Pos.xy, 0));
-
+    
 #if TONE_MAPPING_MODE > TONE_MAPPING_MODE_NONE
     Color.rgb = ToneMap(Color.rgb, g_Attribs.ToneMapping, g_Attribs.AverageLogLum);
 #endif
 
+#ifdef ENABLE_GRID
+    float Depth = g_Depth.Load(int3(Pos.xy, 0)).r;
+    float4 GridColor = ComputeCoordinateGrid(VSOut.f2NormalizedXY + g_Frame.Camera.f2Jitter,
+                                             g_Frame.Camera.f4Position.xyz,
+                                             g_Frame.Camera.mProj,
+                                             g_Frame.Camera.mViewProj,
+                                             g_Frame.Camera.mViewProjInv,
+                                             g_Frame.Camera.fFarPlaneZ,
+                                             DepthToNormalizedDeviceZ(Depth),
+                                             g_Attribs.CoordinateGrid);
+    Color.rgb = lerp(Color.rgb, GridColor.rgb, GridColor.a);
+#endif
+    
 #if CONVERT_OUTPUT_TO_SRGB
     Color.rgb = LinearToSRGB(Color.rgb);
 #endif

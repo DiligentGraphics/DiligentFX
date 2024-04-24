@@ -16,7 +16,8 @@ struct PostProcessAttribs
     float Padding0;
     float Padding1;
 
-    ToneMappingAttribs ToneMapping;
+    ToneMappingAttribs    ToneMapping;
+    CoordinateGridAttribs CoordinateGrid;
 };
 
 #endif // _HN_POST_PROCESS_STRUCTURES_FXH_

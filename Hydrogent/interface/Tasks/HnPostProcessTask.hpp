@@ -44,6 +44,7 @@
 #include "../../PostProcess/ScreenSpaceReflection/interface/ScreenSpaceReflection.hpp"
 #include "../../PostProcess/TemporalAntiAliasing/interface/TemporalAntiAliasing.hpp"
 #include "../../PostProcess/Bloom/interface/Bloom.hpp"
+#include "../../Components/interface/CoordinateGridRenderer.hpp"
 
 namespace Diligent
 {
@@ -53,6 +54,8 @@ class VectorFieldRenderer;
 
 namespace HLSL
 {
+#include "../../../Shaders/Common/public/ShaderDefinitions.fxh"
+#include "../../../Shaders/Common/public/CoordinateGridStructures.fxh"
 #include "../../../Shaders/PostProcess/ScreenSpaceReflection/public/ScreenSpaceReflectionStructures.fxh"
 #include "../../../Shaders/PostProcess/TemporalAntiAliasing/public/TemporalAntiAliasingStructures.fxh"
 #include "../../../Shaders/PostProcess/ScreenSpaceAmbientOcclusion/public/ScreenSpaceAmbientOcclusionStructures.fxh"
@@ -103,6 +106,7 @@ struct HnPostProcessTaskParams
     ScreenSpaceAmbientOcclusion::FEATURE_FLAGS SSAOFeatureFlags  = ScreenSpaceAmbientOcclusion::FEATURE_FLAG_NONE;
     TemporalAntiAliasing::FEATURE_FLAGS        TAAFeatureFlags   = TemporalAntiAliasing::FEATURE_FLAG_BICUBIC_FILTER;
     Bloom::FEATURE_FLAGS                       BloomFeatureFlags = Bloom::FEATURE_FLAG_NONE;
+    CoordinateGridRenderer::FEATURE_FLAGS      GridFeatureFlags  = CoordinateGridRenderer::FEATURE_FLAG_NONE;
 
     // The number of frames to suspend temporal super-sampling when
     // rendering parameters change.
@@ -112,6 +116,7 @@ struct HnPostProcessTaskParams
     HLSL::ScreenSpaceAmbientOcclusionAttribs SSAO;
     HLSL::TemporalAntiAliasingAttribs        TAA;
     HLSL::BloomAttribs                       Bloom;
+    HLSL::CoordinateGridAttribs              Grid;
 
     constexpr HnPostProcessTaskParams() noexcept
     {
@@ -142,11 +147,13 @@ struct HnPostProcessTaskParams
                SSAOFeatureFlags               == rhs.SSAOFeatureFlags &&
                TAAFeatureFlags                == rhs.TAAFeatureFlags &&
                BloomFeatureFlags              == rhs.BloomFeatureFlags &&
+               GridFeatureFlags               == rhs.GridFeatureFlags &&
                SuperSamplingSuspensionFrames  == rhs.SuperSamplingSuspensionFrames &&
                memcmp(&SSR,  &rhs.SSR,    sizeof(SSR))   == 0 &&
                memcmp(&SSAO, &rhs.SSAO,   sizeof(SSAO))  == 0 &&
                memcmp(&TAA,  &rhs.TAA,    sizeof(TAA))   == 0 &&
-               memcmp(&Bloom, &rhs.Bloom, sizeof(Bloom)) == 0;
+               memcmp(&Bloom, &rhs.Bloom, sizeof(Bloom)) == 0 &&
+               memcmp(&Grid,  &rhs.Grid,  sizeof(Grid))  == 0;
         // clang-format on
     }
 
@@ -282,6 +289,8 @@ private:
     private:
         bool ConvertOutputToSRGB = false;
         int  ToneMappingMode     = 0;
+
+        CoordinateGridRenderer::FEATURE_FLAGS GridFeatureFlags = CoordinateGridRenderer::FEATURE_FLAG_NONE;
     } m_PostProcessTech;
 
     struct CopyFrameTechnique
@@ -300,6 +309,7 @@ private:
             struct ShaderVariables
             {
                 ShaderResourceVariableX Color;
+                ShaderResourceVariableX Depth;
             };
             ShaderVariables Vars{};
         };
@@ -315,6 +325,8 @@ private:
     private:
         bool ConvertOutputToSRGB = false;
         int  ToneMappingMode     = 0;
+
+        CoordinateGridRenderer::FEATURE_FLAGS GridFeatureFlags = CoordinateGridRenderer::FEATURE_FLAG_NONE;
     } m_CopyFrameTech;
 };
 

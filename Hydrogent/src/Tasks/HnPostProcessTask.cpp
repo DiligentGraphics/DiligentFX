@@ -173,6 +173,15 @@ void HnPostProcessTask::PostProcessingTechnique::PreparePSO(TEXTURE_FORMAT RTVFo
         }
     }
 
+    {
+        const CoordinateGridRenderer::FEATURE_FLAGS _GridFeatureFlags = !PPTask.m_UseTAA ? PPTask.m_Params.GridFeatureFlags : CoordinateGridRenderer::FEATURE_FLAG_NONE;
+        if (GridFeatureFlags != _GridFeatureFlags)
+        {
+            GridFeatureFlags = _GridFeatureFlags;
+            IsDirty          = true;
+        }
+    }
+
     if (IsDirty)
         PSO.Release();
 
@@ -189,6 +198,11 @@ void HnPostProcessTask::PostProcessingTechnique::PreparePSO(TEXTURE_FORMAT RTVFo
         ShaderMacroHelper Macros;
         Macros.Add("CONVERT_OUTPUT_TO_SRGB", ConvertOutputToSRGB);
         Macros.Add("TONE_MAPPING_MODE", ToneMappingMode);
+        if (GridFeatureFlags != CoordinateGridRenderer::FEATURE_FLAG_NONE)
+        {
+            Macros.Add("ENABLE_GRID", 1);
+            CoordinateGridRenderer::AddShaderMacros(GridFeatureFlags, Macros);
+        }
 
         GraphicsPipelineStateCreateInfoX PsoCI{"Post process"};
         CreateShaders(Device, "HnPostProcess.psh", "Post-process PS", Macros, PsoCI)
@@ -320,13 +334,18 @@ void HnPostProcessTask::CopyFrameTechnique::PreparePRS()
     PRSDesc
         .SetUseCombinedTextureSamplers(true)
         .AddResource(SHADER_TYPE_PIXEL, "cbPostProcessAttribs", SHADER_RESOURCE_TYPE_CONSTANT_BUFFER, SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
-        .AddResource(SHADER_TYPE_PIXEL, "g_ColorBuffer", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
+        .AddResource(SHADER_TYPE_PIXEL, "cbFrameAttribs", SHADER_RESOURCE_TYPE_CONSTANT_BUFFER, SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+        .AddResource(SHADER_TYPE_PIXEL, "g_ColorBuffer", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
+        .AddResource(SHADER_TYPE_PIXEL, "g_Depth", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
 
     PRS = RenderDeviceWithCache_N{pDevice, pStateCache}.CreatePipelineResourceSignature(PRSDesc);
     VERIFY_EXPR(PRS);
 
     VERIFY_EXPR(PPTask.m_PostProcessAttribsCB);
     ShaderResourceVariableX{PRS, SHADER_TYPE_PIXEL, "cbPostProcessAttribs"}.Set(PPTask.m_PostProcessAttribsCB);
+
+    VERIFY_EXPR(RenderDelegate->GetFrameAttribsCB());
+    ShaderResourceVariableX{PRS, SHADER_TYPE_PIXEL, "cbFrameAttribs"}.Set(RenderDelegate->GetFrameAttribsCB());
 }
 
 void HnPostProcessTask::CopyFrameTechnique::PreparePSO(TEXTURE_FORMAT RTVFormat)
@@ -345,6 +364,15 @@ void HnPostProcessTask::CopyFrameTechnique::PreparePSO(TEXTURE_FORMAT RTVFormat)
         IsDirty         = true;
     }
 
+    {
+        const CoordinateGridRenderer::FEATURE_FLAGS _GridFeatureFlags = PPTask.m_UseTAA ? PPTask.m_Params.GridFeatureFlags : CoordinateGridRenderer::FEATURE_FLAG_NONE;
+        if (GridFeatureFlags != _GridFeatureFlags)
+        {
+            GridFeatureFlags = _GridFeatureFlags;
+            IsDirty          = true;
+        }
+    }
+
     if (IsDirty)
         PSO.Release();
 
@@ -361,6 +389,11 @@ void HnPostProcessTask::CopyFrameTechnique::PreparePSO(TEXTURE_FORMAT RTVFormat)
         ShaderMacroHelper Macros;
         Macros.Add("CONVERT_OUTPUT_TO_SRGB", ConvertOutputToSRGB);
         Macros.Add("TONE_MAPPING_MODE", ToneMappingMode);
+        if (GridFeatureFlags != CoordinateGridRenderer::FEATURE_FLAG_NONE)
+        {
+            Macros.Add("ENABLE_GRID", 1);
+            CoordinateGridRenderer::AddShaderMacros(GridFeatureFlags, Macros);
+        }
 
         GraphicsPipelineStateCreateInfoX PsoCI{"Copy Frame"};
         CreateShaders(Device, "HnCopyFrame.psh", "PostCopy Frame PS", Macros, PsoCI)
@@ -401,9 +434,11 @@ void HnPostProcessTask::CopyFrameTechnique::PrepareSRB(Uint32 FrameIdx)
     auto&  ShaderVars = Resources[ResIdx].Vars;
 
     ITextureView* pAccumulatedFrameSRV = pAccumulatedFrame->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+    ITextureView* pDepthSRV            = PPTask.m_FrameTargets->DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
     if (SRB)
     {
-        if (ShaderVars.Color && ShaderVars.Color.Get() != pAccumulatedFrameSRV)
+        if ((ShaderVars.Color && ShaderVars.Color.Get() != pAccumulatedFrameSRV) ||
+            (ShaderVars.Depth && ShaderVars.Depth.Get() != pDepthSRV))
         {
             SRB.Release();
             ShaderVars = {};
@@ -418,6 +453,9 @@ void HnPostProcessTask::CopyFrameTechnique::PrepareSRB(Uint32 FrameIdx)
 
         ShaderVars.Color = ShaderResourceVariableX{SRB, SHADER_TYPE_PIXEL, "g_ColorBuffer"};
         ShaderVars.Color.Set(pAccumulatedFrameSRV);
+
+        ShaderVars.Depth = ShaderResourceVariableX{SRB, SHADER_TYPE_PIXEL, "g_Depth"};
+        ShaderVars.Depth.Set(pDepthSRV);
     }
 
     CurrSRB = SRB;
@@ -760,11 +798,14 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
             ShaderAttribs.ToneMapping.bLightAdaptation     = 0;
             ShaderAttribs.ToneMapping.fWhitePoint          = m_Params.WhitePoint;
             ShaderAttribs.ToneMapping.fLuminanceSaturation = m_Params.LuminanceSaturation;
-            ShaderAttribs.AverageLogLum                    = m_Params.AverageLogLum;
-            ShaderAttribs.ClearDepth                       = m_BackgroundDepth;
-            ShaderAttribs.SelectionOutlineWidth            = m_Params.SelectionOutlineWidth;
-            ShaderAttribs.SSRScale                         = m_SSRScale;
-            ShaderAttribs.SSAOScale                        = m_SSAOScale;
+
+            ShaderAttribs.CoordinateGrid = m_Params.Grid;
+
+            ShaderAttribs.AverageLogLum         = m_Params.AverageLogLum;
+            ShaderAttribs.ClearDepth            = m_BackgroundDepth;
+            ShaderAttribs.SelectionOutlineWidth = m_Params.SelectionOutlineWidth;
+            ShaderAttribs.SSRScale              = m_SSRScale;
+            ShaderAttribs.SSAOScale             = m_SSAOScale;
             pCtx->UpdateBuffer(m_PostProcessAttribsCB, 0, sizeof(HLSL::PostProcessAttribs), &ShaderAttribs, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         }
         pCtx->SetPipelineState(m_PostProcessTech.PSO);
