@@ -102,17 +102,17 @@ void CoordinateGridRenderer::Render(const RenderAttributes& RenderAttribs)
 
 bool CoordinateGridRenderer::UpdateUI(HLSL::CoordinateGridAttribs& Attribs, CoordinateGridRenderer::FEATURE_FLAGS& FeatureFlags)
 {
-    bool ActiveAxisX = FeatureFlags & FEATURE_FLAG_RENDER_AXIS_X;
-    bool ActiveAxisY = FeatureFlags & FEATURE_FLAG_RENDER_AXIS_Y;
-    bool ActiveAxisZ = FeatureFlags & FEATURE_FLAG_RENDER_AXIS_Z;
+    bool ActiveAxisX = (FeatureFlags & FEATURE_FLAG_RENDER_AXIS_X) != 0;
+    bool ActiveAxisY = (FeatureFlags & FEATURE_FLAG_RENDER_AXIS_Y) != 0;
+    bool ActiveAxisZ = (FeatureFlags & FEATURE_FLAG_RENDER_AXIS_Z) != 0;
 
-    bool ActivePlaneYZ = FeatureFlags & FEATURE_FLAG_RENDER_PLANE_YZ;
-    bool ActivePlaneXZ = FeatureFlags & FEATURE_FLAG_RENDER_PLANE_XZ;
-    bool ActivePlaneXY = FeatureFlags & FEATURE_FLAG_RENDER_PLANE_XY;
+    bool ActivePlaneYZ = (FeatureFlags & FEATURE_FLAG_RENDER_PLANE_YZ) != 0;
+    bool ActivePlaneXZ = (FeatureFlags & FEATURE_FLAG_RENDER_PLANE_XZ) != 0;
+    bool ActivePlaneXY = (FeatureFlags & FEATURE_FLAG_RENDER_PLANE_XY) != 0;
 
     bool AttribsChanged = false;
 
-    ImGui::Text("Axes:");
+    ImGui::Text("Axes");
     ImGui::SameLine();
 
     if (ImGui::Checkbox("X", &ActiveAxisX))
@@ -126,7 +126,7 @@ bool CoordinateGridRenderer::UpdateUI(HLSL::CoordinateGridAttribs& Attribs, Coor
     if (ImGui::Checkbox("Z", &ActiveAxisZ))
         AttribsChanged = true;
 
-    ImGui::Text("Planes:");
+    ImGui::Text("Planes");
     ImGui::SameLine();
 
     if (ImGui::Checkbox("YZ", &ActivePlaneYZ))
@@ -140,17 +140,32 @@ bool CoordinateGridRenderer::UpdateUI(HLSL::CoordinateGridAttribs& Attribs, Coor
     if (ImGui::Checkbox("XY", &ActivePlaneXY))
         AttribsChanged = true;
 
-    ImGui::SliderFloat("Scale YZ: ", &Attribs.GridScale[0], 0.01f, 10.0);
-    ImGui::SliderFloat("Scale XZ: ", &Attribs.GridScale[1], 0.01f, 10.0);
-    ImGui::SliderFloat("Scale XY: ", &Attribs.GridScale[2], 0.01f, 10.0);
+    if (ImGui::SliderFloat("YZ Scale", &Attribs.GridScale[0], 0.01f, 10.0))
+        AttribsChanged = true;
 
-    ImGui::SliderFloat("Subdivision YZ: ", &Attribs.GridSubdivision[0], 2.0, 10.0);
-    ImGui::SliderFloat("Subdivision XZ: ", &Attribs.GridSubdivision[1], 2.0, 10.0);
-    ImGui::SliderFloat("Subdivision XY: ", &Attribs.GridSubdivision[2], 2.0, 10.0);
+    if (ImGui::SliderFloat("XZ Scale", &Attribs.GridScale[1], 0.01f, 10.0))
+        AttribsChanged = true;
 
-    ImGui::ColorEdit3("Color X Axis: ", Attribs.XAxisColor.Data());
-    ImGui::ColorEdit3("Color Y Axis: ", Attribs.YAxisColor.Data());
-    ImGui::ColorEdit3("Color Z Axis: ", Attribs.ZAxisColor.Data());
+    if (ImGui::SliderFloat("XY Scale", &Attribs.GridScale[2], 0.01f, 10.0))
+        AttribsChanged = true;
+
+    if (ImGui::SliderFloat("YZ Subdivision", &Attribs.GridSubdivision[0], 2.0, 10.0))
+        AttribsChanged = true;
+
+    if (ImGui::SliderFloat("XZ Subdivision", &Attribs.GridSubdivision[1], 2.0, 10.0))
+        AttribsChanged = true;
+
+    if (ImGui::SliderFloat("XY Subdivision", &Attribs.GridSubdivision[2], 2.0, 10.0))
+        AttribsChanged = true;
+
+    if (ImGui::ColorEdit3("X Axis Color", Attribs.XAxisColor.Data()))
+        AttribsChanged = true;
+
+    if (ImGui::ColorEdit3("Y Axis Color", Attribs.YAxisColor.Data()))
+        AttribsChanged = true;
+
+    if (ImGui::ColorEdit3("Z Axis Color", Attribs.ZAxisColor.Data()))
+        AttribsChanged = true;
 
     auto ResetStateFeatureMask = [](FEATURE_FLAGS& FeatureFlags, FEATURE_FLAGS Flag, bool State) {
         if (State)
