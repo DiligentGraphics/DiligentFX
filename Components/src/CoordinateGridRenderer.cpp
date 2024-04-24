@@ -170,22 +170,27 @@ bool CoordinateGridRenderer::UpdateUI(HLSL::CoordinateGridAttribs& Attribs, Coor
     return AttribsChanged;
 }
 
+void CoordinateGridRenderer::AddShaderMacros(FEATURE_FLAGS FeatureFlags, ShaderMacroHelper& Macros)
+{
+    Macros.Add("GRID_AXES_OPTION_INVERTED_DEPTH", (FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
+    Macros.Add("GRID_AXES_OPTION_CONVERT_OUTPUT_TO_SRGB", (FeatureFlags & FEATURE_FLAG_CONVERT_TO_SRGB) != 0);
+
+    Macros.Add("GRID_AXES_OPTION_AXIS_X", (FeatureFlags & FEATURE_FLAG_RENDER_AXIS_X) != 0);
+    Macros.Add("GRID_AXES_OPTION_AXIS_Y", (FeatureFlags & FEATURE_FLAG_RENDER_AXIS_Y) != 0);
+    Macros.Add("GRID_AXES_OPTION_AXIS_Z", (FeatureFlags & FEATURE_FLAG_RENDER_AXIS_Z) != 0);
+
+    Macros.Add("GRID_AXES_OPTION_PLANE_YZ", (FeatureFlags & FEATURE_FLAG_RENDER_PLANE_YZ) != 0);
+    Macros.Add("GRID_AXES_OPTION_PLANE_XZ", (FeatureFlags & FEATURE_FLAG_RENDER_PLANE_XZ) != 0);
+    Macros.Add("GRID_AXES_OPTION_PLANE_XY", (FeatureFlags & FEATURE_FLAG_RENDER_PLANE_XY) != 0);
+}
+
 void CoordinateGridRenderer::RenderGridAxes(const RenderAttributes& RenderAttribs)
 {
     auto& pPSO = GetPSO(RenderAttribs.FeatureFlags, RenderAttribs.pColorRTV->GetDesc().Format);
     if (!pPSO)
     {
         ShaderMacroHelper Macros;
-        Macros.Add("GRID_AXES_OPTION_INVERTED_DEPTH", (RenderAttribs.FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
-        Macros.Add("GRID_AXES_OPTION_CONVERT_OUTPUT_TO_SRGB", (RenderAttribs.FeatureFlags & FEATURE_FLAG_CONVERT_TO_SRGB) != 0);
-
-        Macros.Add("GRID_AXES_OPTION_AXIS_X", (RenderAttribs.FeatureFlags & FEATURE_FLAG_RENDER_AXIS_X) != 0);
-        Macros.Add("GRID_AXES_OPTION_AXIS_Y", (RenderAttribs.FeatureFlags & FEATURE_FLAG_RENDER_AXIS_Y) != 0);
-        Macros.Add("GRID_AXES_OPTION_AXIS_Z", (RenderAttribs.FeatureFlags & FEATURE_FLAG_RENDER_AXIS_Z) != 0);
-
-        Macros.Add("GRID_AXES_OPTION_PLANE_YZ", (RenderAttribs.FeatureFlags & FEATURE_FLAG_RENDER_PLANE_YZ) != 0);
-        Macros.Add("GRID_AXES_OPTION_PLANE_XZ", (RenderAttribs.FeatureFlags & FEATURE_FLAG_RENDER_PLANE_XZ) != 0);
-        Macros.Add("GRID_AXES_OPTION_PLANE_XY", (RenderAttribs.FeatureFlags & FEATURE_FLAG_RENDER_PLANE_XY) != 0);
+        AddShaderMacros(RenderAttribs.FeatureFlags, Macros);
 
         const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
         const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "CoordinateGridPS.psh", "ComputeGridAxesPS", SHADER_TYPE_PIXEL, Macros);

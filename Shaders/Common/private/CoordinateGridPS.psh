@@ -1,7 +1,6 @@
 #include "BasicStructures.fxh"
 #include "FullScreenTriangleVSOutput.fxh"
 #include "SRGBUtilities.fxh"
-#include "PostFX_Common.fxh"
 #include "CoordinateGrid.fxh"
 
 #pragma warning(disable : 3078)

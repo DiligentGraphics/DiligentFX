@@ -33,6 +33,7 @@
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/DeviceContext.h"
 #include "../../../DiligentCore/Graphics/GraphicsTools/interface/RenderStateCache.h"
 #include "../../../DiligentCore/Graphics/GraphicsTools/interface/ResourceRegistry.hpp"
+#include "../../../DiligentCore/Graphics/GraphicsTools/interface/ShaderMacroHelper.hpp"
 #include "../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
 #include "../../../DiligentCore/Common/interface/BasicMath.hpp"
 #include "../../../DiligentCore/Common/interface/HashUtils.hpp"
@@ -99,6 +100,8 @@ public:
 
     static bool UpdateUI(HLSL::CoordinateGridAttribs& Attribs, FEATURE_FLAGS& FeatureFlags);
 
+    static void AddShaderMacros(FEATURE_FLAGS FeatureFlags, ShaderMacroHelper& Macros);
+
 private:
     enum RESOURCE_IDENTIFIER : Uint32
     {
@@ -147,5 +150,6 @@ private:
 
     std::unique_ptr<HLSL::CoordinateGridAttribs> m_pRenderAttribs;
 };
+DEFINE_FLAG_ENUM_OPERATORS(CoordinateGridRenderer::FEATURE_FLAGS)
 
 } // namespace Diligent

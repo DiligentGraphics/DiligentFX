@@ -2,6 +2,7 @@
 #define _COORDINATE_GRID_FXH_
 
 #include "CoordinateGridStructures.fxh"
+#include "PostFX_Common.fxh"
 
 #if GRID_AXES_OPTION_INVERTED_DEPTH
     #define DepthNearPlane     1.0
@@ -81,17 +82,22 @@ float4 ComputeCoordinateGrid(in float2                f2NormalizedXY,
     Normals[2] = float3(0.0, 0.0, 1.0); // XY plane
 
     float3 Positions[3];
-    for (int PlaneIdx = 0; PlaneIdx < 3; ++PlaneIdx)
-        Positions[PlaneIdx] = RayWS.Origin + RayWS.Direction *  ComputeRayPlaneIntersection(RayWS, Normals[PlaneIdx], float3(0, 0, 0));
-
-    float Depth[3]; 
-    for (int PlaneIdx = 0; PlaneIdx < 3; ++PlaneIdx)
-        Depth[PlaneIdx] = ComputeNDCDepth(Positions[PlaneIdx], CameraViewProj);
-
-    float DepthAlpha[3];
-    for (int PlaneIdx = 0; PlaneIdx < 3; ++PlaneIdx)
-        DepthAlpha[PlaneIdx] = saturate(1.0 - 1.5 * DepthToCameraZ(Depth[PlaneIdx], CameraProj) / FarPlaneZ); 
+    {
+        for (int PlaneIdx = 0; PlaneIdx < 3; ++PlaneIdx)
+            Positions[PlaneIdx] = RayWS.Origin + RayWS.Direction * ComputeRayPlaneIntersection(RayWS, Normals[PlaneIdx], float3(0, 0, 0));
+    }
     
+    float Depth[3];
+    {
+        for (int PlaneIdx = 0; PlaneIdx < 3; ++PlaneIdx)
+            Depth[PlaneIdx] = ComputeNDCDepth(Positions[PlaneIdx], CameraViewProj);
+    }
+    
+    float DepthAlpha[3];
+    {
+        for (int PlaneIdx = 0; PlaneIdx < 3; ++PlaneIdx)
+            DepthAlpha[PlaneIdx] = saturate(1.0 - 1.5 * DepthToCameraZ(Depth[PlaneIdx], CameraProj) / FarPlaneZ);
+    }
 
     float4 GridResult = float4(0.0, 0.0, 0.0, 0.0);
     float4 AxisResult = float4(0.0, 0.0, 0.0, 0.0);
