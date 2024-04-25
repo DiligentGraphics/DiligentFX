@@ -426,7 +426,7 @@ void HnPostProcessTask::CopyFrameTechnique::PrepareSRB(Uint32 FrameIdx)
     else if (PPTask.m_UseDOF)
         pAccumulatedFrame = PPTask.m_DOF->GetDepthOfFieldTextureSRV()->GetTexture();
     else
-        PPTask.m_TAA->GetAccumulatedFrameSRV()->GetTexture();
+        pAccumulatedFrame = PPTask.m_TAA->GetAccumulatedFrameSRV()->GetTexture();
     if (pAccumulatedFrame == nullptr)
     {
         UNEXPECTED("Accumulated frame is null");
