@@ -44,6 +44,7 @@
 #include "../../PostProcess/ScreenSpaceReflection/interface/ScreenSpaceReflection.hpp"
 #include "../../PostProcess/TemporalAntiAliasing/interface/TemporalAntiAliasing.hpp"
 #include "../../PostProcess/Bloom/interface/Bloom.hpp"
+#include "../../PostProcess/DepthOfField/interface/DepthOfField.hpp"
 #include "../../Components/interface/CoordinateGridRenderer.hpp"
 
 namespace Diligent
@@ -60,6 +61,7 @@ namespace HLSL
 #include "../../../Shaders/PostProcess/TemporalAntiAliasing/public/TemporalAntiAliasingStructures.fxh"
 #include "../../../Shaders/PostProcess/ScreenSpaceAmbientOcclusion/public/ScreenSpaceAmbientOcclusionStructures.fxh"
 #include "../../../Shaders/PostProcess/Bloom/public/BloomStructures.fxh"
+#include "../../../Shaders/PostProcess/DepthOfField/public/DepthOfFieldStructures.fxh"
 } // namespace HLSL
 
 namespace USD
@@ -99,12 +101,16 @@ struct HnPostProcessTaskParams
     // Enable temporal anti-aliasing
     bool EnableTAA = false;
 
+    // Enable depth of field
+    bool EnableDOF = false;
+
     // Enable HDR bloom
     bool EnableBloom = false;
 
     ScreenSpaceReflection::FEATURE_FLAGS       SSRFeatureFlags   = ScreenSpaceReflection::FEATURE_FLAG_NONE;
     ScreenSpaceAmbientOcclusion::FEATURE_FLAGS SSAOFeatureFlags  = ScreenSpaceAmbientOcclusion::FEATURE_FLAG_NONE;
     TemporalAntiAliasing::FEATURE_FLAGS        TAAFeatureFlags   = TemporalAntiAliasing::FEATURE_FLAG_BICUBIC_FILTER;
+    DepthOfField::FEATURE_FLAGS                DOFFeatureFlags   = DepthOfField::FEATURE_FLAG_NONE;
     Bloom::FEATURE_FLAGS                       BloomFeatureFlags = Bloom::FEATURE_FLAG_NONE;
     CoordinateGridRenderer::FEATURE_FLAGS      GridFeatureFlags  = CoordinateGridRenderer::FEATURE_FLAG_NONE;
 
@@ -115,6 +121,7 @@ struct HnPostProcessTaskParams
     HLSL::ScreenSpaceReflectionAttribs       SSR;
     HLSL::ScreenSpaceAmbientOcclusionAttribs SSAO;
     HLSL::TemporalAntiAliasingAttribs        TAA;
+    HLSL::DepthOfFieldAttribs                DOF;
     HLSL::BloomAttribs                       Bloom;
     HLSL::CoordinateGridAttribs              Grid;
 
@@ -142,16 +149,19 @@ struct HnPostProcessTaskParams
                SSRScale                       == rhs.SSRScale &&
                SSAOScale                      == rhs.SSAOScale &&
                EnableTAA                      == rhs.EnableTAA &&
+               EnableDOF                      == rhs.EnableDOF &&
                EnableBloom					  == rhs.EnableBloom &&
                SSRFeatureFlags                == rhs.SSRFeatureFlags &&
                SSAOFeatureFlags               == rhs.SSAOFeatureFlags &&
                TAAFeatureFlags                == rhs.TAAFeatureFlags &&
+               DOFFeatureFlags                == rhs.DOFFeatureFlags &&
                BloomFeatureFlags              == rhs.BloomFeatureFlags &&
                GridFeatureFlags               == rhs.GridFeatureFlags &&
                SuperSamplingSuspensionFrames  == rhs.SuperSamplingSuspensionFrames &&
                memcmp(&SSR,  &rhs.SSR,    sizeof(SSR))   == 0 &&
                memcmp(&SSAO, &rhs.SSAO,   sizeof(SSAO))  == 0 &&
                memcmp(&TAA,  &rhs.TAA,    sizeof(TAA))   == 0 &&
+               memcmp(&DOF,  &rhs.DOF,    sizeof(DOF))   == 0 &&
                memcmp(&Bloom, &rhs.Bloom, sizeof(Bloom)) == 0 &&
                memcmp(&Grid,  &rhs.Grid,  sizeof(Grid))  == 0;
         // clang-format on
@@ -203,6 +213,7 @@ private:
     std::unique_ptr<ScreenSpaceReflection>       m_SSR;
     std::unique_ptr<ScreenSpaceAmbientOcclusion> m_SSAO;
     std::unique_ptr<TemporalAntiAliasing>        m_TAA;
+    std::unique_ptr<DepthOfField>                m_DOF;
     std::unique_ptr<Bloom>                       m_Bloom;
 
     ITextureView*               m_FinalColorRTV   = nullptr; // Set in Prepare()
@@ -213,6 +224,7 @@ private:
     bool                        m_UseTAA          = false;   // Set in Prepare()
     bool                        m_UseSSR          = false;   // Set in Prepare()
     bool                        m_UseSSAO         = false;   // Set in Prepare()
+    bool                        m_UseDOF          = false;   // Set in Prepare()
     bool                        m_UseBloom        = false;   // Set in Prepare()
 
     bool m_ResetTAA       = true;

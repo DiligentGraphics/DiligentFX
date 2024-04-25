@@ -420,8 +420,12 @@ void HnPostProcessTask::CopyFrameTechnique::PreparePSO(TEXTURE_FORMAT RTVFormat)
 void HnPostProcessTask::CopyFrameTechnique::PrepareSRB(Uint32 FrameIdx)
 {
     VERIFY_EXPR(PPTask.m_TAA);
-    ITexture* pAccumulatedFrame = PPTask.m_UseBloom ?
-        PPTask.m_Bloom->GetBloomTextureSRV()->GetTexture() :
+    ITexture* pAccumulatedFrame = nullptr;
+    if (PPTask.m_UseBloom)
+        pAccumulatedFrame = PPTask.m_Bloom->GetBloomTextureSRV()->GetTexture();
+    else if (PPTask.m_UseDOF)
+        pAccumulatedFrame = PPTask.m_DOF->GetDepthOfFieldTextureSRV()->GetTexture();
+    else
         PPTask.m_TAA->GetAccumulatedFrameSRV()->GetTexture();
     if (pAccumulatedFrame == nullptr)
     {
@@ -569,6 +573,11 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
         m_TAA = std::make_unique<TemporalAntiAliasing>(pDevice);
     }
 
+    if (!m_DOF)
+    {
+        m_DOF = std::make_unique<DepthOfField>(pDevice);
+    }
+
     if (!m_Bloom)
     {
         m_Bloom = std::make_unique<Bloom>(pDevice);
@@ -604,7 +613,8 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
     }
     m_UseSSAO  = m_SSAOScale > 0;
     m_UseTAA   = m_Params.EnableTAA && EnablePostProcessing;
-    m_UseBloom = m_Params.EnableBloom && EnablePostProcessing;
+    m_UseBloom = m_Params.EnableBloom && EnablePostProcessing && m_UseTAA;
+    m_UseDOF   = m_Params.EnableDOF && EnablePostProcessing && m_UseTAA;
 
     m_PostFXContext->PrepareResources(pDevice, {pRenderParam->GetFrameNumber(), FinalColorDesc.Width, FinalColorDesc.Height}, PostFXContext::FEATURE_FLAG_NONE);
 
@@ -614,6 +624,11 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
     if (m_UseBloom)
     {
         m_Bloom->PrepareResources(pDevice, pCtx, m_PostFXContext.get(), m_Params.BloomFeatureFlags);
+    }
+
+    if (m_UseDOF)
+    {
+        m_DOF->PrepareResources(pDevice, pCtx, m_PostFXContext.get(), m_Params.DOFFeatureFlags);
     }
 
     m_PostProcessTech.PreparePRS();
@@ -839,13 +854,29 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
         TAARenderAttribs.pTAAAttribs     = &TAASettings;
         m_TAA->Execute(TAARenderAttribs);
 
+        ITextureView* pFrameSRV = m_TAA->GetAccumulatedFrameSRV();
+
+        if (m_UseDOF)
+        {
+            DepthOfField::RenderAttributes DOFRenderAttribs{};
+            DOFRenderAttribs.pDevice         = pDevice;
+            DOFRenderAttribs.pDeviceContext  = pCtx;
+            DOFRenderAttribs.pPostFXContext  = m_PostFXContext.get();
+            DOFRenderAttribs.pColorBufferSRV = pFrameSRV;
+            DOFRenderAttribs.pDepthBufferSRV = m_FrameTargets->DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+            DOFRenderAttribs.pDOFAttribs     = &m_Params.DOF;
+            m_DOF->Execute(DOFRenderAttribs);
+
+            pFrameSRV = m_DOF->GetDepthOfFieldTextureSRV();
+        }
+
         if (m_UseBloom)
         {
             Bloom::RenderAttributes BloomRenderAttribs{};
             BloomRenderAttribs.pDevice         = pDevice;
             BloomRenderAttribs.pDeviceContext  = pCtx;
             BloomRenderAttribs.pPostFXContext  = m_PostFXContext.get();
-            BloomRenderAttribs.pColorBufferSRV = m_TAA->GetAccumulatedFrameSRV();
+            BloomRenderAttribs.pColorBufferSRV = pFrameSRV;
             BloomRenderAttribs.pBloomAttribs   = &m_Params.Bloom;
             m_Bloom->Execute(BloomRenderAttribs);
         }
