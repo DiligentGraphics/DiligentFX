@@ -240,7 +240,7 @@ void CoordinateGridRenderer::RenderGridAxes(const RenderAttributes& RenderAttrib
     ShaderResourceVariableX{m_SRB, SHADER_TYPE_PIXEL, "g_TextureDepth"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_DEPTH].GetTextureSRV());
 
     ITextureView* pRTVs[] = {
-        m_Resources[RESOURCE_IDENTIFIER_INPUT_COLOR].GetTextureRTV()};
+        RenderAttribs.pColorRTV};
 
     RenderAttribs.pDeviceContext->SetRenderTargets(_countof(pRTVs), pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     RenderAttribs.pDeviceContext->SetPipelineState(pPSO);
