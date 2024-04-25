@@ -62,7 +62,7 @@ float4 ComputeGrid(float2 PlanePos, float Scale, bool IsVisible)
 float ComputeAxisAlpha(float Axis, bool IsVisible)
 {
     float Magnitude = 2.5 * fwidth(Axis);
-    float Line = abs(Axis) / Magnitude;
+    float Line = abs(Axis) / min(Magnitude, 1.0);
     return (1.0 - min(Line, 1.0)) * (IsVisible ? 1.0 : 0.0);
 }
 
@@ -90,8 +90,8 @@ float4 ComputeCoordinateGrid(in float2                f2NormalizedXY,
 
     float3 Positions[3];
     {
-        for (int PlaneIdx = 0; PlaneIdx < 3; ++PlaneIdx)
-            Positions[PlaneIdx] = RayWS.Origin + RayWS.Direction * ComputeRayPlaneIntersection(RayWS, Normals[PlaneIdx], float3(0, 0, 0));
+        for (int PlaneIdx = 0; PlaneIdx < 3; ++PlaneIdx) 
+            Positions[PlaneIdx] = RayWS.Origin + RayWS.Direction * ComputeRayPlaneIntersection(RayWS, Normals[PlaneIdx], float3(0, 0, 0)); 
     }
 
     float Depth[3];
@@ -103,22 +103,31 @@ float4 ComputeCoordinateGrid(in float2                f2NormalizedXY,
     float DepthAlpha[3];
     {
         for (int PlaneIdx = 0; PlaneIdx < 3; ++PlaneIdx)
-            DepthAlpha[PlaneIdx] = saturate(1.0 - 1.5 * DepthToCameraZ(Depth[PlaneIdx], CameraProj) / FarPlaneZ);
+            DepthAlpha[PlaneIdx] = saturate(1.0 - DepthToCameraZ(NormalizedDeviceZToDepth(Depth[PlaneIdx]), CameraProj) / FarPlaneZ);
     }
 
     float4 GridResult = float4(0.0, 0.0, 0.0, 0.0);
     float4 AxisResult = float4(0.0, 0.0, 0.0, 0.0);
 
 #if GRID_AXES_OPTION_AXIS_X
-    AxisResult += float4(GridAttribs.XAxisColor.xyz, 1.0) * ComputeAxisAlpha(Positions[1].x, DepthCompare(Depth[1], GeometryDepth)) * DepthAlpha[1];
+    {
+        bool IsVisible = DepthCompare(Depth[1], GeometryDepth);
+        AxisResult += float4(GridAttribs.XAxisColor.xyz, 1.0) * ComputeAxisAlpha(Positions[1].x, IsVisible) * DepthAlpha[1];
+    }
 #endif
 
 #if GRID_AXES_OPTION_AXIS_Y
-    AxisResult += float4(GridAttribs.YAxisColor.xyz, 1.0) * ComputeAxisAlpha(Positions[0].z, DepthCompare(Depth[0], GeometryDepth)) * DepthAlpha[0];
+    {
+        bool IsVisible = DepthCompare(Depth[0], GeometryDepth);
+        AxisResult += float4(GridAttribs.YAxisColor.xyz, 1.0) * ComputeAxisAlpha(Positions[0].z, IsVisible) * DepthAlpha[0];
+    }
 #endif
 
 #if GRID_AXES_OPTION_AXIS_Z
-    AxisResult += float4(GridAttribs.ZAxisColor.xyz, 1.0) * ComputeAxisAlpha(Positions[1].z, DepthCompare(Depth[1], GeometryDepth)) * DepthAlpha[1];
+    {
+        bool IsVisible = DepthCompare(Depth[1], GeometryDepth); 
+        AxisResult += float4(GridAttribs.ZAxisColor.xyz, 1.0) * ComputeAxisAlpha(Positions[1].z, IsVisible) * DepthAlpha[1];
+    }
 #endif
 
 #if GRID_AXES_OPTION_PLANE_YZ
