@@ -101,8 +101,8 @@ void Bloom::PrepareResources(IRenderDevice* pDevice, IDeviceContext* pDeviceCont
         TextureDesc Desc;
         Desc.Name      = "Bloom::UpsampledTexture";
         Desc.Type      = RESOURCE_DIM_TEX_2D;
-        Desc.Width     = HalfWidth >> TextureIdx;
-        Desc.Height    = HalfHeight >> TextureIdx;
+        Desc.Width     = std::max(HalfWidth >> TextureIdx, 1u);
+        Desc.Height    = std::max(HalfHeight >> TextureIdx, 1u);
         Desc.Format    = TEX_FORMAT_R11G11B10_FLOAT;
         Desc.MipLevels = 1;
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
@@ -115,8 +115,8 @@ void Bloom::PrepareResources(IRenderDevice* pDevice, IDeviceContext* pDeviceCont
         TextureDesc Desc;
         Desc.Name      = "Bloom::DownsampledTexture";
         Desc.Type      = RESOURCE_DIM_TEX_2D;
-        Desc.Width     = HalfWidth >> TextureIdx;
-        Desc.Height    = HalfHeight >> TextureIdx;
+        Desc.Width     = std::max(HalfWidth >> TextureIdx, 1u);
+        Desc.Height    = std::max(HalfHeight >> TextureIdx, 1u);
         Desc.Format    = TEX_FORMAT_R11G11B10_FLOAT;
         Desc.MipLevels = 1;
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
