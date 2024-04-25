@@ -142,29 +142,30 @@ bool CoordinateGridRenderer::UpdateUI(HLSL::CoordinateGridAttribs& Attribs, Coor
 
     if (ImGui::SliderFloat("YZ Scale", &Attribs.GridScale[0], 0.01f, 10.0))
         AttribsChanged = true;
-
     if (ImGui::SliderFloat("XZ Scale", &Attribs.GridScale[1], 0.01f, 10.0))
         AttribsChanged = true;
-
     if (ImGui::SliderFloat("XY Scale", &Attribs.GridScale[2], 0.01f, 10.0))
         AttribsChanged = true;
 
     if (ImGui::SliderFloat("YZ Subdivision", &Attribs.GridSubdivision[0], 2.0, 10.0))
         AttribsChanged = true;
-
     if (ImGui::SliderFloat("XZ Subdivision", &Attribs.GridSubdivision[1], 2.0, 10.0))
         AttribsChanged = true;
-
     if (ImGui::SliderFloat("XY Subdivision", &Attribs.GridSubdivision[2], 2.0, 10.0))
         AttribsChanged = true;
 
     if (ImGui::ColorEdit3("X Axis Color", Attribs.XAxisColor.Data()))
         AttribsChanged = true;
-
     if (ImGui::ColorEdit3("Y Axis Color", Attribs.YAxisColor.Data()))
         AttribsChanged = true;
-
     if (ImGui::ColorEdit3("Z Axis Color", Attribs.ZAxisColor.Data()))
+        AttribsChanged = true;
+
+    if (ImGui::SliderFloat("X Axis Width", &Attribs.XAxisWidth, 0.5f, 10.0))
+        AttribsChanged = true;
+    if (ImGui::SliderFloat("Y Axis Width", &Attribs.YAxisWidth, 0.5f, 10.0))
+        AttribsChanged = true;
+    if (ImGui::SliderFloat("Z Axis Width", &Attribs.ZAxisWidth, 0.5f, 10.0))
         AttribsChanged = true;
 
     auto ResetStateFeatureMask = [](FEATURE_FLAGS& FeatureFlags, FEATURE_FLAGS Flag, bool State) {

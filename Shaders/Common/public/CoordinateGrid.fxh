@@ -59,11 +59,11 @@ float4 ComputeGrid(float2 PlanePos, float Scale, bool IsVisible)
     }
 }
 
-float ComputeAxisAlpha(float Axis, bool IsVisible)
+float ComputeAxisAlpha(float Axis, float Width, bool IsVisible)
 {
-    float Magnitude = 2.5 * fwidth(Axis);
+    float Magnitude = Width * fwidth(Axis);
     float Line = abs(Axis) / min(Magnitude, 1.0);
-    return (1.0 - min(Line, 1.0)) * (IsVisible ? 1.0 : 0.0);
+    return (1.0 - min(Line * Line, 1.0)) * (IsVisible ? 1.0 : 0.0);
 }
 
 float ComputeNDCDepth(float3 Position, float4x4 CameraViewProj)
@@ -112,21 +112,21 @@ float4 ComputeCoordinateGrid(in float2                f2NormalizedXY,
 #if GRID_AXES_OPTION_AXIS_X
     {
         bool IsVisible = DepthCompare(Depth[1], GeometryDepth);
-        AxisResult += float4(GridAttribs.XAxisColor.xyz, 1.0) * ComputeAxisAlpha(Positions[1].x, IsVisible) * DepthAlpha[1];
+        AxisResult += float4(GridAttribs.XAxisColor.xyz, 1.0) * ComputeAxisAlpha(Positions[1].x, GridAttribs.XAxisWidth, IsVisible) * DepthAlpha[1];
     }
 #endif
 
 #if GRID_AXES_OPTION_AXIS_Y
     {
         bool IsVisible = DepthCompare(Depth[0], GeometryDepth);
-        AxisResult += float4(GridAttribs.YAxisColor.xyz, 1.0) * ComputeAxisAlpha(Positions[0].z, IsVisible) * DepthAlpha[0];
+        AxisResult += float4(GridAttribs.YAxisColor.xyz, 1.0) * ComputeAxisAlpha(Positions[0].z, GridAttribs.YAxisWidth, IsVisible) * DepthAlpha[0];
     }
 #endif
 
 #if GRID_AXES_OPTION_AXIS_Z
     {
         bool IsVisible = DepthCompare(Depth[1], GeometryDepth); 
-        AxisResult += float4(GridAttribs.ZAxisColor.xyz, 1.0) * ComputeAxisAlpha(Positions[1].z, IsVisible) * DepthAlpha[1];
+        AxisResult += float4(GridAttribs.ZAxisColor.xyz, 1.0) * ComputeAxisAlpha(Positions[1].z, GridAttribs.ZAxisWidth, IsVisible) * DepthAlpha[1];
     }
 #endif
 

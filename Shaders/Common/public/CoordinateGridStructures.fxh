@@ -9,6 +9,11 @@ struct CoordinateGridAttribs
     float4 YAxisColor      DEFAULT_VALUE(float4(0, 1, 0, 1));
     float4 ZAxisColor      DEFAULT_VALUE(float4(0, 0, 1, 1));
 
+    float XAxisWidth       DEFAULT_VALUE(2); // in pixels
+    float YAxisWidth       DEFAULT_VALUE(2); // in pixels
+    float ZAxisWidth       DEFAULT_VALUE(2); // in pixels
+    float Padding          DEFAULT_VALUE(0);
+    
     // YZ, XZ, XY
     float4 GridScale       DEFAULT_VALUE(float4(1, 1, 1, 0));     
      
