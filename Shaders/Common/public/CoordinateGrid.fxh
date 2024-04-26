@@ -40,6 +40,7 @@ Ray CreateCameraRay(float2   NormalizedXY,
 float ComputeRayPlaneIntersection(Ray RayWS, float3 PlaneNormal, float3 PlaneOrigin)
 {
     float NdotD = dot(RayWS.Direction, PlaneNormal);
+    NdotD = max(abs(NdotD), 1e-6) * (NdotD > 0.0 ? +1.0 : -1.0);
     return dot(PlaneNormal, (PlaneOrigin - RayWS.Origin)) / NdotD;
 }
 
@@ -65,7 +66,7 @@ float ComputeDepth(float3 Position, float4x4 CameraViewProj)
 // Compute axes using the two planes
 #define COORDINATE_AXES_MODE_TWO_PLANES 1
 
-#define COORDINATE_AXES_MODE COORDINATE_AXES_MODE_TWO_PLANES
+#define COORDINATE_AXES_MODE COORDINATE_AXES_MODE_CLOSEST_DISTANCE
 
 #if COORDINATE_AXES_MODE == COORDINATE_AXES_MODE_TWO_PLANES
 
@@ -97,34 +98,45 @@ float ComputeAxisAlphaFromTwoPlanes(float Axis0, float PlaneAlpha0, float PlaneC
 
 #elif COORDINATE_AXES_MODE == COORDINATE_AXES_MODE_CLOSEST_DISTANCE
 
-float ComputeAxisAlphaFromClosestDistance(float3 AxisDirection, Ray ViewRay, float AxisLen, float PixelSize, float Depth, float4x4 CameraViewProj)
+float ComputeAxisAlphaFromClosestDistance(float3 AxisDirection, Ray ViewRay, float AxisLen, float PixelSize, float GeometryZ, float4x4 CameraView)
 {
     float3 AxisOrigin = float3(0.0, 0.0, 0.0);
 
     float3 Cross = cross(AxisDirection, ViewRay.Direction);
     float3 Delta = ViewRay.Origin - AxisOrigin;
     float  Denom = dot(Cross, Cross);
-    // Distance from the camera to the point on the camera ray that is closest to the axis ray
-    float  DistFromCamera = dot(cross(Delta, AxisDirection), Cross) / Denom;
-    // Shortest distance between the axis and the view ray
-    float  DistToAxis = abs(dot(Delta, Cross)) / max(length(Cross), 0.001);
+    if (abs(Denom) < 1e-7)
+        return 0.0;
 
+    // Distance from the camera to the point on the camera ray that is closest to the axis ray
+    float DistFromCamera = dot(cross(Delta, AxisDirection), Cross) / Denom;
     if (DistFromCamera < 0.0)
     {
         // Closest point is behind the camera
         return 0.0;
     }
     
-    float3 ViewRayPos = ViewRay.Origin + ViewRay.Direction * DistFromCamera;
-    float ViewRayDepth = ComputeDepth(ViewRayPos, CameraViewProj);
-    if (!DepthCompare(ViewRayDepth, Depth))
-    {
-        return 0.0;
-    }
+    // Distance from the origin of the axis to the point on the axis ray that is closest to the camera ray
+    float DistFromOrigin = dot(cross(Delta, ViewRay.Direction), Cross) / Denom;
 
-    float Magnitude = PixelSize * DistFromCamera;       
-    float Line = abs(DistToAxis) / Magnitude;
-    return (1.0 - min(Line, 1.0)) * saturate(1.0 - DistFromCamera/AxisLen); 
+    // Shortest distance between the axis and the view ray
+    float  DistToAxis = abs(dot(Delta, Cross)) / max(length(Cross), 0.001);
+
+    // Axis width in world space
+    float AxisWidth = PixelSize * DistFromCamera;       
+
+    float3 AxisPos = AxisOrigin + AxisDirection * DistFromOrigin;
+    // Move the point along the view direction to avoid z-fighting with the geometry
+    AxisPos += ViewRay.Direction * AxisWidth;
+
+    float Line = abs(DistToAxis) / AxisWidth;
+    float Alpha = (1.0 - min(Line * Line, 1.0)) * saturate(1.0 - DistFromCamera/AxisLen);
+
+    // Use smooth depth test
+    float AxisPosZ = mul(float4(AxisPos, 1.0), CameraView).z;
+    Alpha *= saturate((GeometryZ - AxisPosZ) / AxisWidth);
+    
+    return Alpha;
 }
 
 #endif
@@ -176,6 +188,7 @@ float4 ComputeCoordinateGrid(in float2                f2NormalizedXY,
 
 #if COORDINATE_AXES_MODE == COORDINATE_AXES_MODE_CLOSEST_DISTANCE
     float PixelSize = length(Camera.f4ViewportSize.zw);
+    float GeometryZ = DepthToCameraZ(GeometryDepth, Camera.mProj);
 #endif
     
 #if GRID_AXES_OPTION_AXIS_X
@@ -190,7 +203,7 @@ float4 ComputeCoordinateGrid(in float2                f2NormalizedXY,
 #       elif COORDINATE_AXES_MODE == COORDINATE_AXES_MODE_CLOSEST_DISTANCE
         {
             AxisAlpha = ComputeAxisAlphaFromClosestDistance(float3(1.0, 0.0, 0.0), RayWS, Camera.fFarPlaneZ, PixelSize * GridAttribs.XAxisWidth,
-                                                            GeometryDepth, Camera.mViewProj);
+                                                            GeometryZ, Camera.mView);
         }
 #       endif
         AxisResult += float4(GridAttribs.XAxisColor.xyz, 1.0) * AxisAlpha;
@@ -209,7 +222,7 @@ float4 ComputeCoordinateGrid(in float2                f2NormalizedXY,
 #       elif COORDINATE_AXES_MODE == COORDINATE_AXES_MODE_CLOSEST_DISTANCE
         {
             AxisAlpha = ComputeAxisAlphaFromClosestDistance(float3(0.0, 1.0, 0.0), RayWS, Camera.fFarPlaneZ, PixelSize * GridAttribs.YAxisWidth,
-                                                            GeometryDepth, Camera.mViewProj);
+                                                            GeometryZ, Camera.mView);
         }
 #       endif
         AxisResult += float4(GridAttribs.YAxisColor.xyz, 1.0) * AxisAlpha;
@@ -228,7 +241,7 @@ float4 ComputeCoordinateGrid(in float2                f2NormalizedXY,
 #       elif COORDINATE_AXES_MODE == COORDINATE_AXES_MODE_CLOSEST_DISTANCE
         {
             AxisAlpha = ComputeAxisAlphaFromClosestDistance(float3(0.0, 0.0, 1.0), RayWS, Camera.fFarPlaneZ, PixelSize * GridAttribs.ZAxisWidth,
-                                                            GeometryDepth, Camera.mViewProj);
+                                                            GeometryZ, Camera.mView);
         }
 #       endif
         AxisResult += float4(GridAttribs.ZAxisColor.xyz, 1.0) * AxisAlpha;
