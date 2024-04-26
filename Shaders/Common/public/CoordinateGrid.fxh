@@ -136,6 +136,8 @@ float ComputeAxisAlphaFromClosestDistance(float3 AxisDirection, Ray ViewRay, flo
     float AxisPosZ = mul(float4(AxisPos, 1.0), CameraView).z;
     Alpha *= saturate((GeometryZ - AxisPosZ) / AxisWidth);
     
+    Alpha *= saturate((1.0 - abs(dot(normalize(ViewRay.Origin), AxisDirection))) * 1e+6);
+
     return Alpha;
 }
 
