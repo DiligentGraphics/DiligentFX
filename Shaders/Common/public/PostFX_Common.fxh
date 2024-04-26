@@ -102,24 +102,30 @@ float3 InvProjectPosition(float3 Coord, float4x4 Transform)
     return Projected.xyz /= Projected.w;
 }
 
+float NormalizedDeviceZToCameraZ(float NdcZ, in float4x4 mProj)
+{
+    return MATRIX_ELEMENT(mProj, 3, 2) / (NdcZ - MATRIX_ELEMENT(mProj, 2, 2));
+}
+
 float DepthToCameraZ(in float fDepth, in float4x4 mProj)
 {
     // Transformations to/from normalized device coordinates are the
     // same in both APIs.
     // However, in GL, depth must be transformed to NDC Z first
-
-    float z = DepthToNormalizedDeviceZ(fDepth);
-    return MATRIX_ELEMENT(mProj, 3, 2) / (z - MATRIX_ELEMENT(mProj, 2, 2));
+    return NormalizedDeviceZToCameraZ(DepthToNormalizedDeviceZ(fDepth), mProj);
 }
 
-float CameraZToDepth(in float fDepth, in float4x4 mProj)
+float CameraZToNormalizedDeviceZ(in float CameraZ, in float4x4 mProj)
+{
+    return MATRIX_ELEMENT(mProj, 3, 2) / CameraZ + MATRIX_ELEMENT(mProj, 2, 2);
+}
+
+float CameraZToDepth(in float CameraZ, in float4x4 mProj)
 {
     // Transformations to/from normalized device coordinates are the
     // same in both APIs.
     // However, in GL, depth must be transformed to NDC Z first
-
-    float z = MATRIX_ELEMENT(mProj, 3, 2) / fDepth + MATRIX_ELEMENT(mProj, 2, 2);
-    return NormalizedDeviceZToDepth(z);
+    return NormalizedDeviceZToDepth(CameraZToNormalizedDeviceZ(CameraZ, mProj));
 }
 
 float3 ScreenXYDepthToViewSpace(float3 Coord, float4x4 Transform)

@@ -72,85 +72,75 @@ float ComputeNDCDepth(float3 Position, float4x4 CameraViewProj)
     return Position_NDC.z / Position_NDC.w;
 }
 
+void ComputePlaneIntersectionAttribs(in CameraAttribs Camera,
+                                     in Ray           RayWS,
+                                     in float3        Normal,
+                                     in float         GeometryDepth,
+                                     out float3       Position,
+                                     out bool         IsVisible,
+                                     out float        DepthAlpha)
+{
+    Position = RayWS.Origin + RayWS.Direction * ComputeRayPlaneIntersection(RayWS, Normal, float3(0.0, 0.0, 0.0)); 
+    float  CameraZ  = mul(float4(Position, 1.0), Camera.mView).z;
+    float  Depth    = CameraZToDepth(CameraZ, Camera.mProj);
+    IsVisible  = DepthCompare(Depth, GeometryDepth);
+    DepthAlpha = saturate(1.0 - CameraZ / Camera.fFarPlaneZ);
+}
+
 float4 ComputeCoordinateGrid(in float2                f2NormalizedXY,
-                             in float3                CameraPos,
-                             in float4x4              CameraProj,
-                             in float4x4              CameraViewProj,
-                             in float4x4              CameraViewProjInv,
-                             in float                 FarPlaneZ,
+                             in CameraAttribs         Camera,
                              in float                 GeometryDepth,
                              in CoordinateGridAttribs GridAttribs)
 {
-    Ray RayWS = CreateCameraRay(f2NormalizedXY, CameraViewProjInv, CameraPos);
-
-    float3 Normals[3];
-    Normals[0] = float3(1.0, 0.0, 0.0); // YZ plane
-    Normals[1] = float3(0.0, 1.0, 0.0); // XZ plane
-    Normals[2] = float3(0.0, 0.0, 1.0); // XY plane
+    Ray RayWS = CreateCameraRay(f2NormalizedXY, Camera.mViewProjInv, Camera.f4Position.xyz);
 
     float3 Positions[3];
-    {
-        for (int PlaneIdx = 0; PlaneIdx < 3; ++PlaneIdx) 
-            Positions[PlaneIdx] = RayWS.Origin + RayWS.Direction * ComputeRayPlaneIntersection(RayWS, Normals[PlaneIdx], float3(0, 0, 0)); 
-    }
-
-    float Depth[3];
-    {
-        for (int PlaneIdx = 0; PlaneIdx < 3; ++PlaneIdx)
-            Depth[PlaneIdx] = ComputeNDCDepth(Positions[PlaneIdx], CameraViewProj);
-    }
+    bool   IsVisible[3];
+    float  DepthAlpha[3];
     
-    float DepthAlpha[3];
-    {
-        for (int PlaneIdx = 0; PlaneIdx < 3; ++PlaneIdx)
-            DepthAlpha[PlaneIdx] = saturate(1.0 - DepthToCameraZ(NormalizedDeviceZToDepth(Depth[PlaneIdx]), CameraProj) / FarPlaneZ);
-    }
+    ComputePlaneIntersectionAttribs(Camera, RayWS, float3(1.0, 0.0, 0.0), GeometryDepth, Positions[0], IsVisible[0], DepthAlpha[0]);
+    ComputePlaneIntersectionAttribs(Camera, RayWS, float3(0.0, 1.0, 0.0), GeometryDepth, Positions[1], IsVisible[1], DepthAlpha[1]);
+    ComputePlaneIntersectionAttribs(Camera, RayWS, float3(0.0, 0.0, 1.0), GeometryDepth, Positions[2], IsVisible[2], DepthAlpha[2]);
 
     float4 GridResult = float4(0.0, 0.0, 0.0, 0.0);
     float4 AxisResult = float4(0.0, 0.0, 0.0, 0.0);
 
 #if GRID_AXES_OPTION_AXIS_X
     {
-        bool IsVisible = DepthCompare(Depth[1], GeometryDepth);
-        AxisResult += float4(GridAttribs.XAxisColor.xyz, 1.0) * ComputeAxisAlpha(Positions[1].x, GridAttribs.XAxisWidth, IsVisible) * DepthAlpha[1];
+        AxisResult += float4(GridAttribs.XAxisColor.xyz, 1.0) * ComputeAxisAlpha(Positions[1].x, GridAttribs.XAxisWidth, IsVisible[1]) * DepthAlpha[1];
     }
 #endif
 
 #if GRID_AXES_OPTION_AXIS_Y
     {
-        bool IsVisible = DepthCompare(Depth[0], GeometryDepth);
-        AxisResult += float4(GridAttribs.YAxisColor.xyz, 1.0) * ComputeAxisAlpha(Positions[0].z, GridAttribs.YAxisWidth, IsVisible) * DepthAlpha[0];
+        AxisResult += float4(GridAttribs.YAxisColor.xyz, 1.0) * ComputeAxisAlpha(Positions[0].z, GridAttribs.YAxisWidth, IsVisible[0]) * DepthAlpha[0];
     }
 #endif
 
 #if GRID_AXES_OPTION_AXIS_Z
     {
-        bool IsVisible = DepthCompare(Depth[1], GeometryDepth); 
-        AxisResult += float4(GridAttribs.ZAxisColor.xyz, 1.0) * ComputeAxisAlpha(Positions[1].z, GridAttribs.ZAxisWidth, IsVisible) * DepthAlpha[1];
+        AxisResult += float4(GridAttribs.ZAxisColor.xyz, 1.0) * ComputeAxisAlpha(Positions[1].z, GridAttribs.ZAxisWidth, IsVisible[1]) * DepthAlpha[1];
     }
 #endif
 
 #if GRID_AXES_OPTION_PLANE_YZ
     {
-        bool IsVisible = DepthCompare(Depth[0], GeometryDepth);
-        GridResult += (0.2 * ComputeGrid(Positions[0].yz, GridAttribs.GridSubdivision.x * GridAttribs.GridScale.x, IsVisible) +
-                       0.8 * ComputeGrid(Positions[0].yz, GridAttribs.GridScale.x, IsVisible)) * DepthAlpha[0];
+        GridResult += (0.2 * ComputeGrid(Positions[0].yz, GridAttribs.GridSubdivision.x * GridAttribs.GridScale.x, IsVisible[0]) +
+                       0.8 * ComputeGrid(Positions[0].yz, GridAttribs.GridScale.x, IsVisible[0])) * DepthAlpha[0];
     }
 #endif 
 
 #if GRID_AXES_OPTION_PLANE_XZ
     {
-        bool IsVisible = DepthCompare(Depth[1], GeometryDepth);
-        GridResult += (0.2 * ComputeGrid(Positions[1].xz, GridAttribs.GridSubdivision.y * GridAttribs.GridScale.y, IsVisible) +
-                       0.8 * ComputeGrid(Positions[1].xz, GridAttribs.GridScale.y, IsVisible)) * DepthAlpha[1]; 
+        GridResult += (0.2 * ComputeGrid(Positions[1].xz, GridAttribs.GridSubdivision.y * GridAttribs.GridScale.y, IsVisible[1]) +
+                       0.8 * ComputeGrid(Positions[1].xz, GridAttribs.GridScale.y, IsVisible[1])) * DepthAlpha[1]; 
     }
 #endif
 
 #if GRID_AXES_OPTION_PLANE_XY
     {
-        bool IsVisible = DepthCompare(Depth[2], GeometryDepth);
-        GridResult += (0.2 * ComputeGrid(Positions[2].xy, GridAttribs.GridSubdivision.z * GridAttribs.GridScale.z, IsVisible) +
-                       0.8 * ComputeGrid(Positions[2].xy, GridAttribs.GridScale.z, IsVisible)) * DepthAlpha[2]; 
+        GridResult += (0.2 * ComputeGrid(Positions[2].xy, GridAttribs.GridSubdivision.z * GridAttribs.GridScale.z, IsVisible[2]) +
+                       0.8 * ComputeGrid(Positions[2].xy, GridAttribs.GridScale.z, IsVisible[2])) * DepthAlpha[2]; 
     }
 #endif
 

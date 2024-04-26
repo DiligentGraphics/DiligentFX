@@ -122,11 +122,7 @@ void main(in  FullScreenTriangleVSOutput VSOut,
 
 #ifdef ENABLE_GRID
     float4 GridColor = ComputeCoordinateGrid(VSOut.f2NormalizedXY + g_Frame.Camera.f2Jitter,
-                                             g_Frame.Camera.f4Position.xyz,
-                                             g_Frame.Camera.mProj,
-                                             g_Frame.Camera.mViewProj,
-                                             g_Frame.Camera.mViewProjInv,
-                                             g_Frame.Camera.fFarPlaneZ,
+                                             g_Frame.Camera,
                                              DepthToNormalizedDeviceZ(Depth),
                                              g_Attribs.CoordinateGrid);
     Color.rgb = lerp(Color.rgb, GridColor.rgb, GridColor.a);
