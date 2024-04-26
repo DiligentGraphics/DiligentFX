@@ -72,7 +72,7 @@ float ComputeNDCDepth(float3 Position, float4x4 CameraViewProj)
 // Compute axes using the two planes
 #define COORDINATE_AXES_MODE_TWO_PLANES 1
 
-#define COORDINATE_AXES_MODE COORDINATE_AXES_MODE_CLOSEST_DISTANCE
+#define COORDINATE_AXES_MODE COORDINATE_AXES_MODE_TWO_PLANES
 
 #if COORDINATE_AXES_MODE == COORDINATE_AXES_MODE_TWO_PLANES
 
@@ -169,10 +169,10 @@ float4 ComputeCoordinateGrid(in float2                f2NormalizedXY,
         float AxisAlpha = 0.0;
 #       if COORDINATE_AXES_MODE == COORDINATE_AXES_MODE_TWO_PLANES
         {
-           AxisAlpha = ComputeAxisAlphaFromTwoPlanes(
-                    Positions[1].x, IsVisible[1], DepthAlpha[1],
-                    Positions[0].y, IsVisible[0], DepthAlpha[0],
-                    GridAttribs.XAxisWidth);
+            AxisAlpha = ComputeAxisAlphaFromTwoPlanes(
+                    Positions[1].z, IsVisible[1], DepthAlpha[1],
+                    Positions[2].y, IsVisible[2], DepthAlpha[2],
+                    GridAttribs.ZAxisWidth);
         }
 #       elif COORDINATE_AXES_MODE == COORDINATE_AXES_MODE_CLOSEST_DISTANCE
         {
@@ -209,10 +209,10 @@ float4 ComputeCoordinateGrid(in float2                f2NormalizedXY,
         float AxisAlpha = 0.0;
 #       if COORDINATE_AXES_MODE == COORDINATE_AXES_MODE_TWO_PLANES
         {
-            AxisAlpha = ComputeAxisAlphaFromTwoPlanes(
-                    Positions[1].z, IsVisible[1], DepthAlpha[1],
-                    Positions[2].y, IsVisible[2], DepthAlpha[2],
-                    GridAttribs.ZAxisWidth);
+           AxisAlpha = ComputeAxisAlphaFromTwoPlanes(
+                    Positions[1].x, IsVisible[1], DepthAlpha[1],
+                    Positions[0].y, IsVisible[0], DepthAlpha[0],
+                    GridAttribs.XAxisWidth);
         }
 #       elif COORDINATE_AXES_MODE == COORDINATE_AXES_MODE_CLOSEST_DISTANCE
         {
