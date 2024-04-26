@@ -4,7 +4,7 @@
 #include "CoordinateGridStructures.fxh"
 #include "ShaderUtilities.fxh"
 
-#if GRID_AXES_OPTION_INVERTED_DEPTH
+#if COORDINATE_GRID_INVERTED_DEPTH
     #define DepthNearPlane     1.0
     #define DepthFarPlane      0.0
     #define DepthMin           max
@@ -14,7 +14,7 @@
     #define DepthFarPlane      1.0
     #define DepthMin           min
     #define DepthCompare(x, y) ((x)<(y))
-#endif // GRID_AXES_OPTION_INVERTED_DEPTH
+#endif // COORDINATE_GRID_INVERTED_DEPTH
 
 struct Ray
 {
@@ -51,13 +51,6 @@ float4 ComputeGrid(float2 PlanePos, float Scale)
     float2 Grid = abs(frac(Coord - 0.5) - 0.5) / Magnitude;
     float Line = min(Grid.x, Grid.y);
     return float4(0.2, 0.2, 0.2, 1.0 - min(Line, 1.0));
-}
-
-
-float ComputeDepth(float3 Position, float4x4 CameraViewProj)
-{
-    float4 Position_NDC = mul(float4(Position, 1.0), CameraViewProj);
-    return NormalizedDeviceZToDepth(Position_NDC.z / Position_NDC.w);
 }
 
 float ComputeAxisAlpha(float3 AxisDirection, Ray ViewRay, float AxisLen, float PixelSize, float GeometryZ, float4x4 CameraView)
@@ -145,42 +138,42 @@ float4 ComputeCoordinateGrid(in float2                f2NormalizedXY,
     float PixelSize = length(Camera.f4ViewportSize.zw);
     float GeometryZ = DepthToCameraZ(GeometryDepth, Camera.mProj);
     
-#if GRID_AXES_OPTION_AXIS_X
+#if COORDINATE_GRID_AXIS_X
     {
         AxisResult += float4(GridAttribs.XAxisColor.xyz, 1.0) *
                       ComputeAxisAlpha(float3(1.0, 0.0, 0.0), RayWS, Camera.fFarPlaneZ, PixelSize * GridAttribs.XAxisWidth, GeometryZ, Camera.mView);
     }
 #endif
 
-#if GRID_AXES_OPTION_AXIS_Y
+#if COORDINATE_GRID_AXIS_Y
     {
         AxisResult += float4(GridAttribs.YAxisColor.xyz, 1.0) *
                       ComputeAxisAlpha(float3(0.0, 1.0, 0.0), RayWS, Camera.fFarPlaneZ, PixelSize * GridAttribs.YAxisWidth, GeometryZ, Camera.mView);
     }
 #endif
 
-#if GRID_AXES_OPTION_AXIS_Z
+#if COORDINATE_GRID_AXIS_Z
     {
         AxisResult += float4(GridAttribs.ZAxisColor.xyz, 1.0) *
                       ComputeAxisAlpha(float3(0.0, 0.0, 1.0), RayWS, Camera.fFarPlaneZ, PixelSize * GridAttribs.ZAxisWidth, GeometryZ, Camera.mView);
     }
 #endif
 
-#if GRID_AXES_OPTION_PLANE_YZ
+#if COORDINATE_GRID_PLANE_YZ
     {
         GridResult += (0.2 * ComputeGrid(Positions[0].yz, GridAttribs.GridSubdivision.x * GridAttribs.GridScale.x) +
                        0.8 * ComputeGrid(Positions[0].yz, GridAttribs.GridScale.x)) * PlaneAlpha[0];
     }
 #endif 
 
-#if GRID_AXES_OPTION_PLANE_XZ
+#if COORDINATE_GRID_PLANE_XZ
     {
         GridResult += (0.2 * ComputeGrid(Positions[1].xz, GridAttribs.GridSubdivision.y * GridAttribs.GridScale.y) +
                        0.8 * ComputeGrid(Positions[1].xz, GridAttribs.GridScale.y)) * PlaneAlpha[1]; 
     }
 #endif
 
-#if GRID_AXES_OPTION_PLANE_XY
+#if COORDINATE_GRID_PLANE_XY
     {
         GridResult += (0.2 * ComputeGrid(Positions[2].xy, GridAttribs.GridSubdivision.z * GridAttribs.GridScale.z) +
                        0.8 * ComputeGrid(Positions[2].xy, GridAttribs.GridScale.z)) * PlaneAlpha[2]; 

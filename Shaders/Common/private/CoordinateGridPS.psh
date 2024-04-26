@@ -36,7 +36,7 @@ float4 ComputeGridAxesPS(in FullScreenTriangleVSOutput VSOut) : SV_Target0
                                           GeometryDepth,
                                           g_GridAxesAttribs);
     
-#if GRID_AXES_OPTION_CONVERT_OUTPUT_TO_SRGB
+#if COORDINATE_GRID_CONVERT_OUTPUT_TO_SRGB
     Result.rgb = LinearToSRGB(Result.rgb);
 #endif
     
