@@ -59,6 +59,23 @@ float4 ComputeGrid(float2 PlanePos, float Scale, bool IsVisible)
     }
 }
 
+
+float ComputeNDCDepth(float3 Position, float4x4 CameraViewProj)
+{
+    float4 Position_NDC = mul(float4(Position, 1.0), CameraViewProj);
+    return Position_NDC.z / Position_NDC.w;
+}
+
+// Compute axis using the closest distance between the axis and the view ray
+#define COORDINATE_AXES_MODE_CLOSEST_DISTANCE 0
+
+// Compute axes using the two planes
+#define COORDINATE_AXES_MODE_TWO_PLANES 1
+
+#define COORDINATE_AXES_MODE COORDINATE_AXES_MODE_CLOSEST_DISTANCE
+
+#if COORDINATE_AXES_MODE == COORDINATE_AXES_MODE_TWO_PLANES
+
 float2 ComputeAxisAlphaFromSinglePlane(float Axis, float Width, bool IsVisible)
 {
     float Magnitude = Width * fwidth(Axis);
@@ -76,11 +93,39 @@ float ComputeAxisAlphaFromTwoPlanes(float Axis0, bool IsVisible0, float DepthAlp
     return (AxisAlpha0.x * AxisAlpha0.y + AxisAlpha1.x * AxisAlpha1.y) / (AxisAlpha0.y + AxisAlpha1.y);
 }
 
-float ComputeNDCDepth(float3 Position, float4x4 CameraViewProj)
+#elif COORDINATE_AXES_MODE == COORDINATE_AXES_MODE_CLOSEST_DISTANCE
+
+float ComputeAxisAlphaFromClosestDistance(float3 AxisDirection, Ray ViewRay, float AxisLen, float PixelSize, float Depth, float4x4 CameraViewProj)
 {
-    float4 Position_NDC = mul(float4(Position, 1.0), CameraViewProj);
-    return Position_NDC.z / Position_NDC.w;
+    float3 AxisOrigin = float3(0.0, 0.0, 0.0);
+
+    float3 Cross = cross(AxisDirection, ViewRay.Direction);
+    float3 Delta = ViewRay.Origin - AxisOrigin;
+    float  Denom = dot(Cross, Cross);
+    // Distance from the camera to the point on the camera ray that is closest to the axis ray
+    float  DistFromCamera = dot(cross(Delta, AxisDirection), Cross) / Denom;
+    // Shortest distance between the axis and the view ray
+    float  DistToAxis = abs(dot(Delta, Cross)) / max(length(Cross), 0.001);
+
+    if (DistFromCamera < 0.0)
+    {
+        // Closest point is behind the camera
+        return 0.0;
+    }
+    
+    float3 ViewRayPos = ViewRay.Origin + ViewRay.Direction * DistFromCamera;
+    float ViewRayDepth = ComputeNDCDepth(ViewRayPos, CameraViewProj);
+    if (!DepthCompare(ViewRayDepth, Depth))
+    {
+        return 0.0;
+    }
+
+    float Magnitude = PixelSize * DistFromCamera;       
+    float Line = abs(DistToAxis) / Magnitude;
+    return (1.0 - min(Line, 1.0)) * saturate(1.0 - DistFromCamera/AxisLen); 
 }
+
+#endif
 
 void ComputePlaneIntersectionAttribs(in CameraAttribs Camera,
                                      in Ray           RayWS,
@@ -115,30 +160,67 @@ float4 ComputeCoordinateGrid(in float2                f2NormalizedXY,
     float4 GridResult = float4(0.0, 0.0, 0.0, 0.0);
     float4 AxisResult = float4(0.0, 0.0, 0.0, 0.0);
 
+#if COORDINATE_AXES_MODE == COORDINATE_AXES_MODE_CLOSEST_DISTANCE
+    float PixelSize = length(Camera.f4ViewportSize.zw);
+#endif
+    
 #if GRID_AXES_OPTION_AXIS_X
     {
-       AxisResult += float4(GridAttribs.XAxisColor.xyz, 1.0) * ComputeAxisAlphaFromTwoPlanes(
-                Positions[1].x, IsVisible[1], DepthAlpha[1],
-                Positions[0].y, IsVisible[0], DepthAlpha[0],
-                GridAttribs.XAxisWidth);
+        float AxisAlpha = 0.0;
+#       if COORDINATE_AXES_MODE == COORDINATE_AXES_MODE_TWO_PLANES
+        {
+           AxisAlpha = ComputeAxisAlphaFromTwoPlanes(
+                    Positions[1].x, IsVisible[1], DepthAlpha[1],
+                    Positions[0].y, IsVisible[0], DepthAlpha[0],
+                    GridAttribs.XAxisWidth);
+        }
+#       elif COORDINATE_AXES_MODE == COORDINATE_AXES_MODE_CLOSEST_DISTANCE
+        {
+            AxisAlpha = ComputeAxisAlphaFromClosestDistance(float3(1.0, 0.0, 0.0), RayWS, Camera.fFarPlaneZ, PixelSize * GridAttribs.XAxisWidth,
+                                                            GeometryDepth, Camera.mViewProj);
+        }
+#       endif
+        AxisResult += float4(GridAttribs.XAxisColor.xyz, 1.0) * AxisAlpha;
     }
 #endif
 
 #if GRID_AXES_OPTION_AXIS_Y
     {
-        AxisResult += float4(GridAttribs.YAxisColor.xyz, 1.0) * ComputeAxisAlphaFromTwoPlanes(
-                Positions[0].z, IsVisible[0], DepthAlpha[0],
-                Positions[2].x, IsVisible[2], DepthAlpha[2],
-                GridAttribs.YAxisWidth);
+        float AxisAlpha = 0.0;
+#       if COORDINATE_AXES_MODE == COORDINATE_AXES_MODE_TWO_PLANES
+        {    
+            AxisAlpha = ComputeAxisAlphaFromTwoPlanes(
+                    Positions[0].z, IsVisible[0], DepthAlpha[0],
+                    Positions[2].x, IsVisible[2], DepthAlpha[2],
+                    GridAttribs.YAxisWidth);
+        }
+#       elif COORDINATE_AXES_MODE == COORDINATE_AXES_MODE_CLOSEST_DISTANCE
+        {
+            AxisAlpha = ComputeAxisAlphaFromClosestDistance(float3(0.0, 1.0, 0.0), RayWS, Camera.fFarPlaneZ, PixelSize * GridAttribs.YAxisWidth,
+                                                            GeometryDepth, Camera.mViewProj);
+        }
+#       endif
+        AxisResult += float4(GridAttribs.YAxisColor.xyz, 1.0) * AxisAlpha;
     }
 #endif
 
 #if GRID_AXES_OPTION_AXIS_Z
     {
-        AxisResult += float4(GridAttribs.ZAxisColor.xyz, 1.0) * ComputeAxisAlphaFromTwoPlanes(
-                Positions[1].z, IsVisible[1], DepthAlpha[1],
-                Positions[2].y, IsVisible[2], DepthAlpha[2],
-                GridAttribs.ZAxisWidth);
+        float AxisAlpha = 0.0;
+#       if COORDINATE_AXES_MODE == COORDINATE_AXES_MODE_TWO_PLANES
+        {
+            AxisAlpha = ComputeAxisAlphaFromTwoPlanes(
+                    Positions[1].z, IsVisible[1], DepthAlpha[1],
+                    Positions[2].y, IsVisible[2], DepthAlpha[2],
+                    GridAttribs.ZAxisWidth);
+        }
+#       elif COORDINATE_AXES_MODE == COORDINATE_AXES_MODE_CLOSEST_DISTANCE
+        {
+            AxisAlpha = ComputeAxisAlphaFromClosestDistance(float3(0.0, 0.0, 1.0), RayWS, Camera.fFarPlaneZ, PixelSize * GridAttribs.ZAxisWidth,
+                                                            GeometryDepth, Camera.mViewProj);
+        }
+#       endif
+        AxisResult += float4(GridAttribs.ZAxisColor.xyz, 1.0) * AxisAlpha;
     }
 #endif
 
