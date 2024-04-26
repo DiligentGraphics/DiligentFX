@@ -3,22 +3,13 @@
 
 #include "BasicStructures.fxh"
 #include "AtmosphereShadersCommon.fxh"
+#include "ShaderUtilities.fxh"
 
 Texture2D<float>  g_tex2DDepthBuffer;
 
 cbuffer cbCameraAttribs
 {
     CameraAttribs g_CameraAttribs;
-}
-
-float DepthToCameraZ(in float fDepth, in matrix mProj)
-{
-    // Transformations to/from normalized device coordinates are the
-    // same in both APIs.
-    // However, in GL, depth must be transformed to NDC Z first
-
-    float z = DepthToNormalizedDeviceZ(fDepth);
-    return MATRIX_ELEMENT(mProj,3,2) / (z - MATRIX_ELEMENT(mProj,2,2));
 }
 
 void ReconstructCameraSpaceZPS(FullScreenTriangleVSOutput VSOut,
