@@ -59,11 +59,21 @@ float4 ComputeGrid(float2 PlanePos, float Scale, bool IsVisible)
     }
 }
 
-float ComputeAxisAlpha(float Axis, float Width, bool IsVisible)
+float2 ComputeAxisAlphaFromSinglePlane(float Axis, float Width, bool IsVisible)
 {
     float Magnitude = Width * fwidth(Axis);
-    float Line = abs(Axis) / min(Magnitude, 1.0);
-    return (1.0 - min(Line * Line, 1.0)) * (IsVisible ? 1.0 : 0.0);
+    Magnitude = max(Magnitude, 1e-5);
+    float Line = abs(Axis) / Magnitude;
+    return float2((1.0 - min(Line * Line, 1.0)) * (IsVisible ? 1.0 : 0.0), 1.0 / Magnitude);
+}
+
+float ComputeAxisAlphaFromTwoPlanes(float Axis0, bool IsVisible0, float DepthAlpha0,
+                                    float Axis1, bool IsVisible1, float DepthAlpha1,
+                                    float Width)
+{
+    float2 AxisAlpha0 = ComputeAxisAlphaFromSinglePlane(Axis0, Width, IsVisible0);
+    float2 AxisAlpha1 = ComputeAxisAlphaFromSinglePlane(Axis1, Width, IsVisible1);
+    return (AxisAlpha0.x * AxisAlpha0.y + AxisAlpha1.x * AxisAlpha1.y) / (AxisAlpha0.y + AxisAlpha1.y);
 }
 
 float ComputeNDCDepth(float3 Position, float4x4 CameraViewProj)
@@ -82,7 +92,7 @@ void ComputePlaneIntersectionAttribs(in CameraAttribs Camera,
 {
     Position = RayWS.Origin + RayWS.Direction * ComputeRayPlaneIntersection(RayWS, Normal, float3(0.0, 0.0, 0.0)); 
     float  CameraZ  = mul(float4(Position, 1.0), Camera.mView).z;
-    float  Depth    = CameraZToDepth(CameraZ, Camera.mProj);
+    float  Depth    = CameraZToNormalizedDeviceZ(CameraZ, Camera.mProj);
     IsVisible  = DepthCompare(Depth, GeometryDepth);
     DepthAlpha = saturate(1.0 - CameraZ / Camera.fFarPlaneZ);
 }
@@ -107,19 +117,28 @@ float4 ComputeCoordinateGrid(in float2                f2NormalizedXY,
 
 #if GRID_AXES_OPTION_AXIS_X
     {
-        AxisResult += float4(GridAttribs.XAxisColor.xyz, 1.0) * ComputeAxisAlpha(Positions[1].x, GridAttribs.XAxisWidth, IsVisible[1]) * DepthAlpha[1];
+       AxisResult += float4(GridAttribs.XAxisColor.xyz, 1.0) * ComputeAxisAlphaFromTwoPlanes(
+                Positions[1].x, IsVisible[1], DepthAlpha[1],
+                Positions[0].y, IsVisible[0], DepthAlpha[0],
+                GridAttribs.XAxisWidth);
     }
 #endif
 
 #if GRID_AXES_OPTION_AXIS_Y
     {
-        AxisResult += float4(GridAttribs.YAxisColor.xyz, 1.0) * ComputeAxisAlpha(Positions[0].z, GridAttribs.YAxisWidth, IsVisible[0]) * DepthAlpha[0];
+        AxisResult += float4(GridAttribs.YAxisColor.xyz, 1.0) * ComputeAxisAlphaFromTwoPlanes(
+                Positions[0].z, IsVisible[0], DepthAlpha[0],
+                Positions[2].x, IsVisible[2], DepthAlpha[2],
+                GridAttribs.YAxisWidth);
     }
 #endif
 
 #if GRID_AXES_OPTION_AXIS_Z
     {
-        AxisResult += float4(GridAttribs.ZAxisColor.xyz, 1.0) * ComputeAxisAlpha(Positions[1].z, GridAttribs.ZAxisWidth, IsVisible[1]) * DepthAlpha[1];
+        AxisResult += float4(GridAttribs.ZAxisColor.xyz, 1.0) * ComputeAxisAlphaFromTwoPlanes(
+                Positions[1].z, IsVisible[1], DepthAlpha[1],
+                Positions[2].y, IsVisible[2], DepthAlpha[2],
+                GridAttribs.ZAxisWidth);
     }
 #endif
 
