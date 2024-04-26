@@ -74,15 +74,24 @@ float2 ComputeAxisAlphaFromSinglePlane(float Axis, float Width)
     float Magnitude = Width * fwidth(Axis);
     Magnitude = max(Magnitude, 1e-10);
     float Line = abs(Axis) / Magnitude;
-    return float2(1.0 - min(Line * Line, 1.0), Magnitude > 1e-10 ? (1.0 / Magnitude) : 0.0);
+    float Alpha = 1.0 - min(Line * Line, 1.0);
+    
+    // Confidence is inversely proportional to the magnitude of the axis as
+    // large magnitudes indicate dicontinuities
+    float Confidence = Magnitude > 1e-10 ? (1.0 / Magnitude) : 0.0;
+    
+    return float2(Alpha, Confidence);
 }
 
-float ComputeAxisAlphaFromTwoPlanes(float Axis0, float PlaneAlpha0,
-                                    float Axis1, float PlaneAlpha1,
+float ComputeAxisAlphaFromTwoPlanes(float Axis0, float PlaneAlpha0, float PlaneConfidence0,
+                                    float Axis1, float PlaneAlpha1, float PlaneConfidence1,
                                     float Width)
 {
+    // Blend two planes using the idea from multiple importance sampling
     float2 AxisAlpha0 = ComputeAxisAlphaFromSinglePlane(Axis0, Width);
     float2 AxisAlpha1 = ComputeAxisAlphaFromSinglePlane(Axis1, Width);
+    AxisAlpha0.y *= PlaneConfidence0;
+    AxisAlpha1.y *= PlaneConfidence1;
     return (AxisAlpha0.x * PlaneAlpha0 * AxisAlpha0.y + AxisAlpha1.x * PlaneAlpha1 * AxisAlpha1.y) / max(AxisAlpha0.y + AxisAlpha1.y, 1e-10);
 }
 
@@ -125,9 +134,11 @@ void ComputePlaneIntersectionAttribs(in CameraAttribs Camera,
                                      in float3        Normal,
                                      in float         GeometryDepth,
                                      out float3       Position,
-                                     out float        Alpha)
+                                     out float        Alpha,
+                                     out float        Confidence)
 {
-    Position = RayWS.Origin + RayWS.Direction * ComputeRayPlaneIntersection(RayWS, Normal, float3(0.0, 0.0, 0.0)); 
+    float DistToPlane = ComputeRayPlaneIntersection(RayWS, Normal, float3(0.0, 0.0, 0.0));
+    Position = RayWS.Origin + RayWS.Direction * DistToPlane; 
     float CameraZ = mul(float4(Position, 1.0), Camera.mView).z;
     float Depth   = CameraZToDepth(CameraZ, Camera.mProj);
     
@@ -137,8 +148,9 @@ void ComputePlaneIntersectionAttribs(in CameraAttribs Camera,
     // Attenuatea alpha based on the CameraZ to make the grid fade out in the distance
     Alpha *= saturate(1.0 - CameraZ / Camera.fFarPlaneZ);
     
-    // Avoid problems when the camera is in the plane
-    Alpha *= saturate(abs(dot(RayWS.Origin, Normal) / Camera.fNearPlaneZ));
+    Confidence = DistToPlane > 0.0 ? 1.0 : 0.0;
+    // Reduce confidence when camera is close to the plane
+    Confidence *= saturate(abs(dot(RayWS.Origin, Normal) / Camera.fNearPlaneZ) - 1.0);
 }
 
 float4 ComputeCoordinateGrid(in float2                f2NormalizedXY,
@@ -150,10 +162,11 @@ float4 ComputeCoordinateGrid(in float2                f2NormalizedXY,
 
     float3 Positions[3];
     float  PlaneAlpha[3];
+    float  PlaneConfidence[3];
     
-    ComputePlaneIntersectionAttribs(Camera, RayWS, float3(1.0, 0.0, 0.0), GeometryDepth, Positions[0], PlaneAlpha[0]);
-    ComputePlaneIntersectionAttribs(Camera, RayWS, float3(0.0, 1.0, 0.0), GeometryDepth, Positions[1], PlaneAlpha[1]);
-    ComputePlaneIntersectionAttribs(Camera, RayWS, float3(0.0, 0.0, 1.0), GeometryDepth, Positions[2], PlaneAlpha[2]);
+    ComputePlaneIntersectionAttribs(Camera, RayWS, float3(1.0, 0.0, 0.0), GeometryDepth, Positions[0], PlaneAlpha[0], PlaneConfidence[0]);
+    ComputePlaneIntersectionAttribs(Camera, RayWS, float3(0.0, 1.0, 0.0), GeometryDepth, Positions[1], PlaneAlpha[1], PlaneConfidence[1]);
+    ComputePlaneIntersectionAttribs(Camera, RayWS, float3(0.0, 0.0, 1.0), GeometryDepth, Positions[2], PlaneAlpha[2], PlaneConfidence[2]);
 
     float4 GridResult = float4(0.0, 0.0, 0.0, 0.0);
     float4 AxisResult = float4(0.0, 0.0, 0.0, 0.0);
@@ -167,8 +180,8 @@ float4 ComputeCoordinateGrid(in float2                f2NormalizedXY,
         float AxisAlpha = 0.0;
 #       if COORDINATE_AXES_MODE == COORDINATE_AXES_MODE_TWO_PLANES
         {
-            AxisAlpha = ComputeAxisAlphaFromTwoPlanes(Positions[1].z, PlaneAlpha[1],
-                                                      Positions[2].y, PlaneAlpha[2],
+            AxisAlpha = ComputeAxisAlphaFromTwoPlanes(Positions[1].z, PlaneAlpha[1], PlaneConfidence[1],
+                                                      Positions[2].y, PlaneAlpha[2], PlaneConfidence[2],
                                                       GridAttribs.ZAxisWidth);
         }
 #       elif COORDINATE_AXES_MODE == COORDINATE_AXES_MODE_CLOSEST_DISTANCE
@@ -186,8 +199,8 @@ float4 ComputeCoordinateGrid(in float2                f2NormalizedXY,
         float AxisAlpha = 0.0;
 #       if COORDINATE_AXES_MODE == COORDINATE_AXES_MODE_TWO_PLANES
         {    
-            AxisAlpha = ComputeAxisAlphaFromTwoPlanes(Positions[0].z, PlaneAlpha[0],
-                                                      Positions[2].x, PlaneAlpha[2],
+            AxisAlpha = ComputeAxisAlphaFromTwoPlanes(Positions[0].z, PlaneAlpha[0], PlaneConfidence[0],
+                                                      Positions[2].x, PlaneAlpha[2], PlaneConfidence[2],
                                                       GridAttribs.YAxisWidth);
         }
 #       elif COORDINATE_AXES_MODE == COORDINATE_AXES_MODE_CLOSEST_DISTANCE
@@ -205,8 +218,8 @@ float4 ComputeCoordinateGrid(in float2                f2NormalizedXY,
         float AxisAlpha = 0.0;
 #       if COORDINATE_AXES_MODE == COORDINATE_AXES_MODE_TWO_PLANES
         {
-           AxisAlpha = ComputeAxisAlphaFromTwoPlanes(Positions[1].x, PlaneAlpha[1],
-                                                     Positions[0].y, PlaneAlpha[0],
+           AxisAlpha = ComputeAxisAlphaFromTwoPlanes(Positions[1].x, PlaneAlpha[1], PlaneConfidence[1],
+                                                     Positions[0].y, PlaneAlpha[0], PlaneConfidence[0],
                                                      GridAttribs.XAxisWidth);
         }
 #       elif COORDINATE_AXES_MODE == COORDINATE_AXES_MODE_CLOSEST_DISTANCE
