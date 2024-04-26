@@ -79,7 +79,7 @@ float2 ComputeAxisAlphaFromSinglePlane(float Axis, float Width)
     
     // Confidence is inversely proportional to the magnitude of the axis as
     // large magnitudes indicate dicontinuities
-    float Confidence = Magnitude > 1e-10 ? (1.0 / Magnitude) : 0.0;
+    float Confidence = 1.0 / Magnitude;
     
     return float2(Alpha, Confidence);
 }
@@ -153,7 +153,7 @@ void ComputePlaneIntersectionAttribs(in CameraAttribs Camera,
 {
     float DistToPlane = ComputeRayPlaneIntersection(RayWS, Normal, float3(0.0, 0.0, 0.0));
     // Slightly offset the intersection point to avoid z-fighting with geometry in the plane
-    DistToPlane = DistToPlane * (1.0 + 1e-5) + 1e-6;
+    DistToPlane = DistToPlane * (1.0 + 1e-5) + 1e-6 * sign(DistToPlane);
     
     Position = RayWS.Origin + RayWS.Direction * DistToPlane; 
     float CameraZ = mul(float4(Position, 1.0), Camera.mView).z;
@@ -165,9 +165,11 @@ void ComputePlaneIntersectionAttribs(in CameraAttribs Camera,
     // Attenuate alpha based on the CameraZ to make the grid fade out in the distance
     Alpha *= saturate(1.0 - CameraZ / Camera.fFarPlaneZ);
     
-    Confidence = DistToPlane > 0.0 ? 1.0 : 0.0;
+    // No matter how confidence is computed, it causes artifacts produced by larger value
+    // resulting from gradients.
+    //Confidence = DistToPlane > 0.0 ? 1.0 : 0.0;
     // Reduce confidence when camera is close to the plane
-    Confidence *= saturate(abs(dot(RayWS.Origin, Normal) / Camera.fNearPlaneZ) - 1.0);
+    Confidence = 1.0; //saturate(abs(dot(RayWS.Origin, Normal) / Camera.fNearPlaneZ) - 1.0);
 }
 
 float4 ComputeCoordinateGrid(in float2                f2NormalizedXY,
