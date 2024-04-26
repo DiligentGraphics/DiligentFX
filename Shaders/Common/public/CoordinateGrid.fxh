@@ -43,20 +43,13 @@ float ComputeRayPlaneIntersection(Ray RayWS, float3 PlaneNormal, float3 PlaneOri
     return dot(PlaneNormal, (PlaneOrigin - RayWS.Origin)) / NdotD;
 }
 
-float4 ComputeGrid(float2 PlanePos, float Scale, bool IsVisible) 
+float4 ComputeGrid(float2 PlanePos, float Scale) 
 {
     float2 Coord = PlanePos * Scale; // use the scale variable to set the distance between the lines
     float2 Magnitude = fwidth(Coord);
-    if (IsVisible)
-    {
-        float2 Grid = abs(frac(Coord - 0.5) - 0.5) / Magnitude;
-        float Line = min(Grid.x, Grid.y);
-        return float4(0.2, 0.2, 0.2, 1.0 - min(Line, 1.0));
-    }
-    else
-    {
-        return float4(0.0, 0.0, 0.0, 0.0);
-    }
+    float2 Grid = abs(frac(Coord - 0.5) - 0.5) / Magnitude;
+    float Line = min(Grid.x, Grid.y);
+    return float4(0.2, 0.2, 0.2, 1.0 - min(Line, 1.0));
 }
 
 
@@ -76,21 +69,21 @@ float ComputeNDCDepth(float3 Position, float4x4 CameraViewProj)
 
 #if COORDINATE_AXES_MODE == COORDINATE_AXES_MODE_TWO_PLANES
 
-float2 ComputeAxisAlphaFromSinglePlane(float Axis, float Width, bool IsVisible)
+float2 ComputeAxisAlphaFromSinglePlane(float Axis, float Width)
 {
     float Magnitude = Width * fwidth(Axis);
-    Magnitude = max(Magnitude, 1e-5);
+    Magnitude = max(Magnitude, 1e-10);
     float Line = abs(Axis) / Magnitude;
-    return float2((1.0 - min(Line * Line, 1.0)) * (IsVisible ? 1.0 : 0.0), 1.0 / Magnitude);
+    return float2(1.0 - min(Line * Line, 1.0), Magnitude > 1e-10 ? (1.0 / Magnitude) : 0.0);
 }
 
-float ComputeAxisAlphaFromTwoPlanes(float Axis0, bool IsVisible0, float DepthAlpha0,
-                                    float Axis1, bool IsVisible1, float DepthAlpha1,
+float ComputeAxisAlphaFromTwoPlanes(float Axis0, float PlaneAlpha0,
+                                    float Axis1, float PlaneAlpha1,
                                     float Width)
 {
-    float2 AxisAlpha0 = ComputeAxisAlphaFromSinglePlane(Axis0, Width, IsVisible0);
-    float2 AxisAlpha1 = ComputeAxisAlphaFromSinglePlane(Axis1, Width, IsVisible1);
-    return (AxisAlpha0.x * AxisAlpha0.y + AxisAlpha1.x * AxisAlpha1.y) / (AxisAlpha0.y + AxisAlpha1.y);
+    float2 AxisAlpha0 = ComputeAxisAlphaFromSinglePlane(Axis0, Width);
+    float2 AxisAlpha1 = ComputeAxisAlphaFromSinglePlane(Axis1, Width);
+    return (AxisAlpha0.x * PlaneAlpha0 * AxisAlpha0.y + AxisAlpha1.x * PlaneAlpha1 * AxisAlpha1.y) / max(AxisAlpha0.y + AxisAlpha1.y, 1e-10);
 }
 
 #elif COORDINATE_AXES_MODE == COORDINATE_AXES_MODE_CLOSEST_DISTANCE
@@ -132,14 +125,20 @@ void ComputePlaneIntersectionAttribs(in CameraAttribs Camera,
                                      in float3        Normal,
                                      in float         GeometryDepth,
                                      out float3       Position,
-                                     out bool         IsVisible,
-                                     out float        DepthAlpha)
+                                     out float        Alpha)
 {
     Position = RayWS.Origin + RayWS.Direction * ComputeRayPlaneIntersection(RayWS, Normal, float3(0.0, 0.0, 0.0)); 
-    float  CameraZ  = mul(float4(Position, 1.0), Camera.mView).z;
-    float  Depth    = CameraZToNormalizedDeviceZ(CameraZ, Camera.mProj);
-    IsVisible  = DepthCompare(Depth, GeometryDepth);
-    DepthAlpha = saturate(1.0 - CameraZ / Camera.fFarPlaneZ);
+    float CameraZ = mul(float4(Position, 1.0), Camera.mView).z;
+    float Depth   = CameraZToNormalizedDeviceZ(CameraZ, Camera.mProj);
+    
+    // Check if the intersection point is visible
+    Alpha = DepthCompare(Depth, GeometryDepth) ? 1.0 : 0.0;
+    
+    // Attenuatea alpha based on the CameraZ to make the grid fade out in the distance
+    Alpha *= saturate(1.0 - CameraZ / Camera.fFarPlaneZ);
+    
+    // Avoid problems when the camera is in the plane
+    Alpha *= saturate(abs(dot(RayWS.Origin, Normal) / Camera.fNearPlaneZ));
 }
 
 float4 ComputeCoordinateGrid(in float2                f2NormalizedXY,
@@ -150,12 +149,11 @@ float4 ComputeCoordinateGrid(in float2                f2NormalizedXY,
     Ray RayWS = CreateCameraRay(f2NormalizedXY, Camera.mViewProjInv, Camera.f4Position.xyz);
 
     float3 Positions[3];
-    bool   IsVisible[3];
-    float  DepthAlpha[3];
+    float  PlaneAlpha[3];
     
-    ComputePlaneIntersectionAttribs(Camera, RayWS, float3(1.0, 0.0, 0.0), GeometryDepth, Positions[0], IsVisible[0], DepthAlpha[0]);
-    ComputePlaneIntersectionAttribs(Camera, RayWS, float3(0.0, 1.0, 0.0), GeometryDepth, Positions[1], IsVisible[1], DepthAlpha[1]);
-    ComputePlaneIntersectionAttribs(Camera, RayWS, float3(0.0, 0.0, 1.0), GeometryDepth, Positions[2], IsVisible[2], DepthAlpha[2]);
+    ComputePlaneIntersectionAttribs(Camera, RayWS, float3(1.0, 0.0, 0.0), GeometryDepth, Positions[0], PlaneAlpha[0]);
+    ComputePlaneIntersectionAttribs(Camera, RayWS, float3(0.0, 1.0, 0.0), GeometryDepth, Positions[1], PlaneAlpha[1]);
+    ComputePlaneIntersectionAttribs(Camera, RayWS, float3(0.0, 0.0, 1.0), GeometryDepth, Positions[2], PlaneAlpha[2]);
 
     float4 GridResult = float4(0.0, 0.0, 0.0, 0.0);
     float4 AxisResult = float4(0.0, 0.0, 0.0, 0.0);
@@ -169,10 +167,9 @@ float4 ComputeCoordinateGrid(in float2                f2NormalizedXY,
         float AxisAlpha = 0.0;
 #       if COORDINATE_AXES_MODE == COORDINATE_AXES_MODE_TWO_PLANES
         {
-            AxisAlpha = ComputeAxisAlphaFromTwoPlanes(
-                    Positions[1].z, IsVisible[1], DepthAlpha[1],
-                    Positions[2].y, IsVisible[2], DepthAlpha[2],
-                    GridAttribs.ZAxisWidth);
+            AxisAlpha = ComputeAxisAlphaFromTwoPlanes(Positions[1].z, PlaneAlpha[1],
+                                                      Positions[2].y, PlaneAlpha[2],
+                                                      GridAttribs.ZAxisWidth);
         }
 #       elif COORDINATE_AXES_MODE == COORDINATE_AXES_MODE_CLOSEST_DISTANCE
         {
@@ -189,10 +186,9 @@ float4 ComputeCoordinateGrid(in float2                f2NormalizedXY,
         float AxisAlpha = 0.0;
 #       if COORDINATE_AXES_MODE == COORDINATE_AXES_MODE_TWO_PLANES
         {    
-            AxisAlpha = ComputeAxisAlphaFromTwoPlanes(
-                    Positions[0].z, IsVisible[0], DepthAlpha[0],
-                    Positions[2].x, IsVisible[2], DepthAlpha[2],
-                    GridAttribs.YAxisWidth);
+            AxisAlpha = ComputeAxisAlphaFromTwoPlanes(Positions[0].z, PlaneAlpha[0],
+                                                      Positions[2].x, PlaneAlpha[2],
+                                                      GridAttribs.YAxisWidth);
         }
 #       elif COORDINATE_AXES_MODE == COORDINATE_AXES_MODE_CLOSEST_DISTANCE
         {
@@ -209,10 +205,9 @@ float4 ComputeCoordinateGrid(in float2                f2NormalizedXY,
         float AxisAlpha = 0.0;
 #       if COORDINATE_AXES_MODE == COORDINATE_AXES_MODE_TWO_PLANES
         {
-           AxisAlpha = ComputeAxisAlphaFromTwoPlanes(
-                    Positions[1].x, IsVisible[1], DepthAlpha[1],
-                    Positions[0].y, IsVisible[0], DepthAlpha[0],
-                    GridAttribs.XAxisWidth);
+           AxisAlpha = ComputeAxisAlphaFromTwoPlanes(Positions[1].x, PlaneAlpha[1],
+                                                     Positions[0].y, PlaneAlpha[0],
+                                                     GridAttribs.XAxisWidth);
         }
 #       elif COORDINATE_AXES_MODE == COORDINATE_AXES_MODE_CLOSEST_DISTANCE
         {
@@ -226,22 +221,22 @@ float4 ComputeCoordinateGrid(in float2                f2NormalizedXY,
 
 #if GRID_AXES_OPTION_PLANE_YZ
     {
-        GridResult += (0.2 * ComputeGrid(Positions[0].yz, GridAttribs.GridSubdivision.x * GridAttribs.GridScale.x, IsVisible[0]) +
-                       0.8 * ComputeGrid(Positions[0].yz, GridAttribs.GridScale.x, IsVisible[0])) * DepthAlpha[0];
+        GridResult += (0.2 * ComputeGrid(Positions[0].yz, GridAttribs.GridSubdivision.x * GridAttribs.GridScale.x) +
+                       0.8 * ComputeGrid(Positions[0].yz, GridAttribs.GridScale.x)) * PlaneAlpha[0];
     }
 #endif 
 
 #if GRID_AXES_OPTION_PLANE_XZ
     {
-        GridResult += (0.2 * ComputeGrid(Positions[1].xz, GridAttribs.GridSubdivision.y * GridAttribs.GridScale.y, IsVisible[1]) +
-                       0.8 * ComputeGrid(Positions[1].xz, GridAttribs.GridScale.y, IsVisible[1])) * DepthAlpha[1]; 
+        GridResult += (0.2 * ComputeGrid(Positions[1].xz, GridAttribs.GridSubdivision.y * GridAttribs.GridScale.y) +
+                       0.8 * ComputeGrid(Positions[1].xz, GridAttribs.GridScale.y)) * PlaneAlpha[1]; 
     }
 #endif
 
 #if GRID_AXES_OPTION_PLANE_XY
     {
-        GridResult += (0.2 * ComputeGrid(Positions[2].xy, GridAttribs.GridSubdivision.z * GridAttribs.GridScale.z, IsVisible[2]) +
-                       0.8 * ComputeGrid(Positions[2].xy, GridAttribs.GridScale.z, IsVisible[2])) * DepthAlpha[2]; 
+        GridResult += (0.2 * ComputeGrid(Positions[2].xy, GridAttribs.GridSubdivision.z * GridAttribs.GridScale.z) +
+                       0.8 * ComputeGrid(Positions[2].xy, GridAttribs.GridScale.z)) * PlaneAlpha[2]; 
     }
 #endif
 
@@ -251,5 +246,9 @@ float4 ComputeCoordinateGrid(in float2                f2NormalizedXY,
 
     return Result;
 }
+
+#undef COORDINATE_AXES_MODE
+#undef COORDINATE_AXES_MODE_TWO_PLANES
+#undef COORDINATE_AXES_MODE_CLOSEST_DISTANCE
 
 #endif //_COORDINATE_GRID_FXH_
