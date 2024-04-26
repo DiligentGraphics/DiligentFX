@@ -1,6 +1,8 @@
 #ifndef _POST_FX_COMMON_FXH_
 #define _POST_FX_COMMON_FXH_
 
+#include "ShaderUtilities.fxh"
+
 #define M_PI                      3.14159265358979
 #define M_HALF_PI                 1.57079632679490
 #define M_EPSILON                 1e-3
@@ -100,32 +102,6 @@ float3 InvProjectPosition(float3 Coord, float4x4 Transform)
     Coord.z = DepthToNormalizedDeviceZ(Coord.z);
     float4 Projected = mul(float4(Coord, 1.0), Transform);
     return Projected.xyz /= Projected.w;
-}
-
-float NormalizedDeviceZToCameraZ(float NdcZ, in float4x4 mProj)
-{
-    return MATRIX_ELEMENT(mProj, 3, 2) / (NdcZ - MATRIX_ELEMENT(mProj, 2, 2));
-}
-
-float DepthToCameraZ(in float fDepth, in float4x4 mProj)
-{
-    // Transformations to/from normalized device coordinates are the
-    // same in both APIs.
-    // However, in GL, depth must be transformed to NDC Z first
-    return NormalizedDeviceZToCameraZ(DepthToNormalizedDeviceZ(fDepth), mProj);
-}
-
-float CameraZToNormalizedDeviceZ(in float CameraZ, in float4x4 mProj)
-{
-    return MATRIX_ELEMENT(mProj, 3, 2) / CameraZ + MATRIX_ELEMENT(mProj, 2, 2);
-}
-
-float CameraZToDepth(in float CameraZ, in float4x4 mProj)
-{
-    // Transformations to/from normalized device coordinates are the
-    // same in both APIs.
-    // However, in GL, depth must be transformed to NDC Z first
-    return NormalizedDeviceZToDepth(CameraZToNormalizedDeviceZ(CameraZ, mProj));
 }
 
 float3 ScreenXYDepthToViewSpace(float3 Coord, float4x4 Transform)

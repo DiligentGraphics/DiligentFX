@@ -9,6 +9,27 @@ float CameraZToNormalizedDeviceZ(in float CameraZ, in float4x4 mProj)
     return MATRIX_ELEMENT(mProj,2,2) + MATRIX_ELEMENT(mProj,3,2) / CameraZ;
 }
 
+float CameraZToDepth(in float CameraZ, in float4x4 mProj)
+{
+    // Transformations to/from normalized device coordinates are the
+    // same in both APIs.
+    // However, in GL, depth must be transformed to NDC Z first
+    return NormalizedDeviceZToDepth(CameraZToNormalizedDeviceZ(CameraZ, mProj));
+}
+
+float NormalizedDeviceZToCameraZ(float NdcZ, in float4x4 mProj)
+{
+    return MATRIX_ELEMENT(mProj, 3, 2) / (NdcZ - MATRIX_ELEMENT(mProj, 2, 2));
+}
+
+float DepthToCameraZ(in float fDepth, in float4x4 mProj)
+{
+    // Transformations to/from normalized device coordinates are the
+    // same in both APIs.
+    // However, in GL, depth must be transformed to NDC Z first
+    return NormalizedDeviceZToCameraZ(DepthToNormalizedDeviceZ(fDepth), mProj);
+}
+
 // Transforms the normal from tangent space to world space using the
 // position and UV derivatives.
 float3 TransformTangentSpaceNormalGrad(in float3 dPos_dx,     // Position dx derivative

@@ -2,7 +2,7 @@
 #define _COORDINATE_GRID_FXH_
 
 #include "CoordinateGridStructures.fxh"
-#include "PostFX_Common.fxh"
+#include "ShaderUtilities.fxh"
 
 #if GRID_AXES_OPTION_INVERTED_DEPTH
     #define DepthNearPlane     1.0
