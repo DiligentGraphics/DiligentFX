@@ -53,10 +53,10 @@ float4 ComputeGrid(float2 PlanePos, float Scale)
 }
 
 
-float ComputeNDCDepth(float3 Position, float4x4 CameraViewProj)
+float ComputeDepth(float3 Position, float4x4 CameraViewProj)
 {
     float4 Position_NDC = mul(float4(Position, 1.0), CameraViewProj);
-    return Position_NDC.z / Position_NDC.w;
+    return NormalizedDeviceZToDepth(Position_NDC.z / Position_NDC.w);
 }
 
 // Compute axis using the closest distance between the axis and the view ray
@@ -107,7 +107,7 @@ float ComputeAxisAlphaFromClosestDistance(float3 AxisDirection, Ray ViewRay, flo
     }
     
     float3 ViewRayPos = ViewRay.Origin + ViewRay.Direction * DistFromCamera;
-    float ViewRayDepth = ComputeNDCDepth(ViewRayPos, CameraViewProj);
+    float ViewRayDepth = ComputeDepth(ViewRayPos, CameraViewProj);
     if (!DepthCompare(ViewRayDepth, Depth))
     {
         return 0.0;
@@ -129,7 +129,7 @@ void ComputePlaneIntersectionAttribs(in CameraAttribs Camera,
 {
     Position = RayWS.Origin + RayWS.Direction * ComputeRayPlaneIntersection(RayWS, Normal, float3(0.0, 0.0, 0.0)); 
     float CameraZ = mul(float4(Position, 1.0), Camera.mView).z;
-    float Depth   = CameraZToNormalizedDeviceZ(CameraZ, Camera.mProj);
+    float Depth   = CameraZToDepth(CameraZ, Camera.mProj);
     
     // Check if the intersection point is visible
     Alpha = DepthCompare(Depth, GeometryDepth) ? 1.0 : 0.0;
