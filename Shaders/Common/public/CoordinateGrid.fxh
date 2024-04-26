@@ -138,6 +138,9 @@ void ComputePlaneIntersectionAttribs(in CameraAttribs Camera,
                                      out float        Confidence)
 {
     float DistToPlane = ComputeRayPlaneIntersection(RayWS, Normal, float3(0.0, 0.0, 0.0));
+    // Slightly offset the intersection point to avoid z-fighting with geometry in the plane
+    DistToPlane = DistToPlane * (1.0 + 1e-5) + 1e-6;
+    
     Position = RayWS.Origin + RayWS.Direction * DistToPlane; 
     float CameraZ = mul(float4(Position, 1.0), Camera.mView).z;
     float Depth   = CameraZToDepth(CameraZ, Camera.mProj);
@@ -145,7 +148,7 @@ void ComputePlaneIntersectionAttribs(in CameraAttribs Camera,
     // Check if the intersection point is visible
     Alpha = DepthCompare(Depth, GeometryDepth) ? 1.0 : 0.0;
     
-    // Attenuatea alpha based on the CameraZ to make the grid fade out in the distance
+    // Attenuate alpha based on the CameraZ to make the grid fade out in the distance
     Alpha *= saturate(1.0 - CameraZ / Camera.fFarPlaneZ);
     
     Confidence = DistToPlane > 0.0 ? 1.0 : 0.0;
