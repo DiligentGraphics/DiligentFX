@@ -25,15 +25,11 @@ float SampleDepth(int2 PixelCoord)
 
 float4 ComputeGridAxesPS(in FullScreenTriangleVSOutput VSOut) : SV_Target0
 {
-    float GeometryDepth = DepthToNormalizedDeviceZ(SampleDepth(int2(VSOut.f4PixelPos.xy)));
+    float GeometryDepth = SampleDepth(int2(VSOut.f4PixelPos.xy));
 
     float4 Result = ComputeCoordinateGrid(VSOut.f2NormalizedXY + g_Camera.f2Jitter,
-                                          g_Camera.f4Position.xyz,
-                                          g_Camera.mProj,
-                                          g_Camera.mViewProj,
-                                          g_Camera.mViewProjInv,
-                                          g_Camera.fFarPlaneZ,
-                                          GeometryDepth,
+                                          g_Camera,
+                                          GeometryDepth, GeometryDepth,
                                           g_GridAxesAttribs);
     
 #if COORDINATE_GRID_CONVERT_OUTPUT_TO_SRGB
