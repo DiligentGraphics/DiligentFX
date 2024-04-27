@@ -36,20 +36,23 @@ void main(in  FullScreenTriangleVSOutput VSOut,
 #endif
 
 #ifdef ENABLE_GRID
-    // Compute minimum depth in the 3x3 neighborhood to avoid grid flickering
+    // Compute depth range in the 3x3 neighborhood to avoid grid flickering
     // caused by temporal jittering.
-    float Depth = 1.0;
+    float MinDepth = 1.0;
+    float MaxDepth = 0.0;
     for (int i = -1; i <= +1; ++i)
     {
         for (int j = -1; j <= +1; ++j)
         {
-            Depth = min(Depth, g_Depth.Load(int3(int2(Pos.xy) + int2(i, j), 0)).r);
+            float Depth = g_Depth.Load(int3(int2(Pos.xy) + int2(i, j), 0)).r;
+            MinDepth = min(MinDepth, Depth);
+            MaxDepth = max(MaxDepth, Depth);
         }
     }
 
     float4 GridColor = ComputeCoordinateGrid(VSOut.f2NormalizedXY + g_Frame.Camera.f2Jitter,
                                              g_Frame.Camera,
-                                             Depth,
+                                             MinDepth, MaxDepth,
                                              g_Attribs.CoordinateGrid);
     Color.rgb = lerp(Color.rgb, GridColor.rgb, GridColor.a);
 #endif

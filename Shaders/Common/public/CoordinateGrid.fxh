@@ -53,7 +53,13 @@ float4 ComputeGrid(float2 PlanePos, float Scale)
     return float4(0.2, 0.2, 0.2, 1.0 - min(Line, 1.0));
 }
 
-float ComputeAxisAlpha(float3 AxisDirection, Ray ViewRay, float AxisLen, float PixelSize, float GeometryZ, float4x4 CameraView)
+float ComputeAxisAlpha(float3   AxisDirection, 
+                       Ray      ViewRay,
+                       float    AxisLen,
+                       float    PixelSize,
+                       float    MaxCameraZ,
+                       float    CameraZRange,
+                       float4x4 CameraView)
 {
     float3 AxisOrigin = float3(0.0, 0.0, 0.0);
 
@@ -79,17 +85,17 @@ float ComputeAxisAlpha(float3 AxisDirection, Ray ViewRay, float AxisLen, float P
 
     // Axis width in world space
     float AxisWidth = PixelSize * DistFromCamera;       
-
-    float3 AxisPos = AxisOrigin + AxisDirection * DistFromOrigin;
-    // Move the point along the view direction to avoid z-fighting with the geometry
-    AxisPos += ViewRay.Direction * AxisWidth;
-
     float Line = abs(DistToAxis) / AxisWidth;
     float Alpha = (1.0 - min(Line * Line, 1.0)) * saturate(1.0 - DistFromCamera/AxisLen);
 
     // Use smooth depth test
+    float3 AxisPos = AxisOrigin + AxisDirection * DistFromOrigin;
     float AxisPosZ = mul(float4(AxisPos, 1.0), CameraView).z;
-    Alpha *= saturate((GeometryZ - AxisPosZ) / AxisWidth);
+    // Move the point along the view direction to avoid z-fighting with the geometry
+    AxisPosZ += AxisWidth;
+    
+    float Visibility = saturate((MaxCameraZ - AxisPosZ) / CameraZRange);
+    Alpha *= Visibility;
     
     Alpha *= saturate((1.0 - abs(dot(normalize(ViewRay.Origin), AxisDirection))) * 1e+6);
 
@@ -99,20 +105,22 @@ float ComputeAxisAlpha(float3 AxisDirection, Ray ViewRay, float AxisLen, float P
 void ComputePlaneIntersectionAttribs(in CameraAttribs Camera,
                                      in Ray           RayWS,
                                      in float3        Normal,
-                                     in float         GeometryDepth,
+                                     in float         MaxCameraZ,
+                                     in float         CameraZRange,
                                      out float3       Position,
                                      out float        Alpha)
 {
     float DistToPlane = ComputeRayPlaneIntersection(RayWS, Normal, float3(0.0, 0.0, 0.0));
+    Alpha = DistToPlane > 0.0 ? 1.0 : 0.0;
+    
     // Slightly offset the intersection point to avoid z-fighting with geometry in the plane
     DistToPlane = DistToPlane * (1.0 + 1e-5) + 1e-6 * sign(DistToPlane);
     
     Position = RayWS.Origin + RayWS.Direction * DistToPlane; 
     float CameraZ = mul(float4(Position, 1.0), Camera.mView).z;
-    float Depth   = CameraZToDepth(CameraZ, Camera.mProj);
-    
-    // Check if the intersection point is visible
-    Alpha = DepthCompare(Depth, GeometryDepth) ? 1.0 : 0.0;
+
+    float Visibility = saturate((MaxCameraZ - CameraZ) / CameraZRange);
+    Alpha *= Visibility;
     
     // Attenuate alpha based on the CameraZ to make the grid fade out in the distance
     Alpha *= saturate(1.0 - CameraZ / Camera.fFarPlaneZ);
@@ -120,7 +128,8 @@ void ComputePlaneIntersectionAttribs(in CameraAttribs Camera,
 
 float4 ComputeCoordinateGrid(in float2                f2NormalizedXY,
                              in CameraAttribs         Camera,
-                             in float                 GeometryDepth,
+                             in float                 MinDepth,
+                             in float                 MaxDepth,
                              in CoordinateGridAttribs GridAttribs)
 {
     Ray RayWS = CreateCameraRay(f2NormalizedXY, Camera.mViewProjInv, Camera.f4Position.xyz);
@@ -128,34 +137,36 @@ float4 ComputeCoordinateGrid(in float2                f2NormalizedXY,
     float3 Positions[3];
     float  PlaneAlpha[3];
     
-    ComputePlaneIntersectionAttribs(Camera, RayWS, float3(1.0, 0.0, 0.0), GeometryDepth, Positions[0], PlaneAlpha[0]);
-    ComputePlaneIntersectionAttribs(Camera, RayWS, float3(0.0, 1.0, 0.0), GeometryDepth, Positions[1], PlaneAlpha[1]);
-    ComputePlaneIntersectionAttribs(Camera, RayWS, float3(0.0, 0.0, 1.0), GeometryDepth, Positions[2], PlaneAlpha[2]);
+    float PixelSize = length(Camera.f4ViewportSize.zw);
+    float MinCameraZ = DepthToCameraZ(MinDepth, Camera.mProj);
+    float MaxCameraZ = DepthToCameraZ(MaxDepth, Camera.mProj);
+    float CameraZRange = max(MaxCameraZ - MinCameraZ, 1e-6);
+
+    ComputePlaneIntersectionAttribs(Camera, RayWS, float3(1.0, 0.0, 0.0), MaxCameraZ, CameraZRange, Positions[0], PlaneAlpha[0]);
+    ComputePlaneIntersectionAttribs(Camera, RayWS, float3(0.0, 1.0, 0.0), MaxCameraZ, CameraZRange, Positions[1], PlaneAlpha[1]);
+    ComputePlaneIntersectionAttribs(Camera, RayWS, float3(0.0, 0.0, 1.0), MaxCameraZ, CameraZRange, Positions[2], PlaneAlpha[2]);
 
     float4 GridResult = float4(0.0, 0.0, 0.0, 0.0);
     float4 AxisResult = float4(0.0, 0.0, 0.0, 0.0);
-
-    float PixelSize = length(Camera.f4ViewportSize.zw);
-    float GeometryZ = DepthToCameraZ(GeometryDepth, Camera.mProj);
     
 #if COORDINATE_GRID_AXIS_X
     {
         AxisResult += float4(GridAttribs.XAxisColor.xyz, 1.0) *
-                      ComputeAxisAlpha(float3(1.0, 0.0, 0.0), RayWS, Camera.fFarPlaneZ, PixelSize * GridAttribs.XAxisWidth, GeometryZ, Camera.mView);
+                      ComputeAxisAlpha(float3(1.0, 0.0, 0.0), RayWS, Camera.fFarPlaneZ, PixelSize * GridAttribs.XAxisWidth, MaxCameraZ, CameraZRange, Camera.mView);
     }
 #endif
 
 #if COORDINATE_GRID_AXIS_Y
     {
         AxisResult += float4(GridAttribs.YAxisColor.xyz, 1.0) *
-                      ComputeAxisAlpha(float3(0.0, 1.0, 0.0), RayWS, Camera.fFarPlaneZ, PixelSize * GridAttribs.YAxisWidth, GeometryZ, Camera.mView);
+                      ComputeAxisAlpha(float3(0.0, 1.0, 0.0), RayWS, Camera.fFarPlaneZ, PixelSize * GridAttribs.YAxisWidth, MaxCameraZ, CameraZRange, Camera.mView);
     }
 #endif
 
 #if COORDINATE_GRID_AXIS_Z
     {
         AxisResult += float4(GridAttribs.ZAxisColor.xyz, 1.0) *
-                      ComputeAxisAlpha(float3(0.0, 0.0, 1.0), RayWS, Camera.fFarPlaneZ, PixelSize * GridAttribs.ZAxisWidth, GeometryZ, Camera.mView);
+                      ComputeAxisAlpha(float3(0.0, 0.0, 1.0), RayWS, Camera.fFarPlaneZ, PixelSize * GridAttribs.ZAxisWidth, MaxCameraZ, CameraZRange, Camera.mView);
     }
 #endif
 
