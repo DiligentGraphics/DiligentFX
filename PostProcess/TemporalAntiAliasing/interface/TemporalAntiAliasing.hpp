@@ -62,7 +62,10 @@ public:
         FEATURE_FLAG_GAUSSIAN_WEIGHTING = 1u << 1u,
 
         // Use Catmull-Rom filter to sample the history buffer.
-        FEATURE_FLAG_BICUBIC_FILTER = 1u << 2u
+        FEATURE_FLAG_BICUBIC_FILTER = 1u << 2u,
+
+        // Use YCoCg color space for color clipping.
+        FEATURE_FLAG_YCOCG_COLOR_SPACE = 1u << 3u,
     };
 
     struct RenderAttributes
