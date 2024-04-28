@@ -182,6 +182,7 @@ bool TemporalAntiAliasing::UpdateUI(HLSL::TemporalAntiAliasingAttribs& TAAAttrib
 {
     bool FeatureBicubicFiltering = FeatureFlags & FEATURE_FLAG_BICUBIC_FILTER;
     bool FeatureGaussWeighting   = FeatureFlags & FEATURE_FLAG_GAUSSIAN_WEIGHTING;
+    bool FeatureYCoCgColorSpace  = FeatureFlags & FEATURE_FLAG_YCOCG_COLOR_SPACE;
 
     bool AttribsChanged = false;
 
@@ -197,6 +198,11 @@ bool TemporalAntiAliasing::UpdateUI(HLSL::TemporalAntiAliasingAttribs& TAAAttrib
         AttribsChanged = true;
     ImGui::HelpMarker("Use Gaussian weighting to calculate pixel statistics");
 
+    if (ImGui::Checkbox("Use YCoCg color space", &FeatureYCoCgColorSpace))
+        AttribsChanged = true;
+
+    ImGui::HelpMarker("Use YCoCg color space for color clipping.");
+
     auto ResetStateFeatureMask = [](FEATURE_FLAGS& FeatureFlags, FEATURE_FLAGS Flag, bool State) {
         if (State)
             FeatureFlags |= Flag;
@@ -206,6 +212,7 @@ bool TemporalAntiAliasing::UpdateUI(HLSL::TemporalAntiAliasingAttribs& TAAAttrib
 
     ResetStateFeatureMask(FeatureFlags, FEATURE_FLAG_BICUBIC_FILTER, FeatureBicubicFiltering);
     ResetStateFeatureMask(FeatureFlags, FEATURE_FLAG_GAUSSIAN_WEIGHTING, FeatureGaussWeighting);
+    ResetStateFeatureMask(FeatureFlags, FEATURE_FLAG_YCOCG_COLOR_SPACE, FeatureYCoCgColorSpace);
 
     return AttribsChanged;
 }
@@ -243,6 +250,7 @@ void TemporalAntiAliasing::ComputeTemporalAccumulation(const RenderAttributes& R
         Macros.Add("TAA_OPTION_GAUSSIAN_WEIGHTING", (AccBuff.FeatureFlags & FEATURE_FLAG_GAUSSIAN_WEIGHTING) != 0);
         Macros.Add("TAA_OPTION_INVERTED_DEPTH", (AccBuff.FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
         Macros.Add("TAA_OPTION_BICUBIC_FILTER", (AccBuff.FeatureFlags & FEATURE_FLAG_BICUBIC_FILTER) != 0);
+        Macros.Add("TAA_OPTION_YCOCG_COLOR_SPACE", (AccBuff.FeatureFlags & FEATURE_FLAG_YCOCG_COLOR_SPACE) != 0);
 
         const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
         const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "TAA_ComputeTemporalAccumulation.fx", "ComputeTemporalAccumulationPS", SHADER_TYPE_PIXEL, Macros);

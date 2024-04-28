@@ -45,12 +45,16 @@ float3 RGBToYCoCg(float3 RGB)
     // float Y  = dot(float3(+0.25, +0.50, +0.25), RGB);
     // float Co = dot(float3(+0.50, +0.00, -0.50), RGB);
     // float Cg = dot(float3(-0.25, +0.50, -0.25), RGB);
-    
+
+#if TAA_OPTION_YCOCG_COLOR_SPACE
     float Co   = RGB.x - RGB.z;
     float Temp = RGB.z + 0.5 * Co;
     float Cg   = RGB.y - Temp;
     float Y    = Temp + 0.5 * Cg;
     return float3(Y, Co, Cg);
+#else
+    return RGB;
+#endif
 }
 
 float3 YCoCgToRGB(float3 YCoCg)
@@ -58,12 +62,16 @@ float3 YCoCgToRGB(float3 YCoCg)
     // float R = dot(float3(+1.0, +1.0, -1.0), YCoCg);
     // float G = dot(float3(+1.0, +0.0, +1.0), YCoCg);
     // float B = dot(float3(+1.0, -1.0, -1.0), YCoCg);
-    
+
+#if TAA_OPTION_YCOCG_COLOR_SPACE 
     float Tmp = YCoCg.x - 0.5 * YCoCg.z;
     float G   = YCoCg.z + Tmp;
     float B   = Tmp - 0.5 * YCoCg.y;
     float R   = B + YCoCg.y;
     return float3(R, G, B);
+#else
+    return YCoCg;
+#endif
 }
 
 float3 HDRToSDR(float3 Color)
@@ -247,12 +255,15 @@ float4 ComputeTemporalAccumulationPS(in FullScreenTriangleVSOutput VSOut) : SV_T
     float3 RGBHDRCurrColor = SampleCurrColor(int2(Position));
     float4 RGBHDRPrevColor = SamplePrevColor(PrevPosition);
 
-    if (g_TAAAttribs.SkipRejection)
-        return float4(lerp(RGBHDRCurrColor.xyz, RGBHDRPrevColor.xyz, RGBHDRPrevColor.a), ComputeCorrectedAlpha(RGBHDRPrevColor.a));
-
     float3 YCoCgSDRCurrColor = RGBToYCoCg(HDRToSDR(RGBHDRCurrColor.xyz));
     float3 YCoCgSDRPrevColor = RGBToYCoCg(HDRToSDR(RGBHDRPrevColor.xyz));
 
+    if (g_TAAAttribs.SkipRejection) 
+    {
+        float3 RGBHDROutput = SDRToHDR(YCoCgToRGB(lerp(YCoCgSDRCurrColor, YCoCgSDRPrevColor, RGBHDRPrevColor.a)));
+        return float4(RGBHDROutput, ComputeCorrectedAlpha(RGBHDRPrevColor.a));
+    }
+        
     float VarianceGamma = lerp(TAA_MIN_VARIANCE_GAMMA, TAA_MAX_VARIANCE_GAMMA, MotionFactor * MotionFactor);
     PixelStatistic PixelStat = ComputePixelStatisticYCoCgSDR(int2(Position.xy));
     float3 YCoCgSDRClampedColor = ClipToAABB(YCoCgSDRPrevColor, YCoCgSDRCurrColor, PixelStat.Mean, VarianceGamma * PixelStat.StdDev);
