@@ -190,7 +190,7 @@ float NormalDistribution_GGX(float NdotH, float AlphaRoughness)
     float a2  = AlphaRoughness * AlphaRoughness;
     float nh2 = NdotH * NdotH;
     float f   = nh2 * a2 + (1.0 - nh2);
-    return a2 / (PI * f * f);
+    return a2 / max(PI * f * f, 1e-9);
 }
 
 // https://google.github.io/filament/Filament.md.html#materialsystem/anisotropicmodel
