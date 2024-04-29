@@ -12,15 +12,15 @@
 
 ## Introduction
 
-Depth of Field is a visualization technique used in photography and cinematography to create a sense of depth by focusing on certain objects, while keeping others out of focus and blurred. 
-In real-time rendering, accurately calculating the depth of field effect is prohibitvely expensive. When using rasterization, the virtual camera is always in focus, making all objects in the frame equally sharp.
-Therefore, in real-time rendering, depth of field is approximated by applying a blur effect to the final image, using information from the depth buffer.
+Depth of Field is a visualization technique used in photography and cinematography to create a sense of depth by focusing on certain objects, while keeping others out-of-focus and blurred. 
+In real-time rendering, accurately calculating the depth of field effect is prohibitvely expensive. Rasterization uses a pinhole camera model that makes all objects in the frame equally sharp.
+Therefore, in real-time rendering, depth of field is approximated by applying a blur effect to the final image, using the information from the depth buffer.
 
 ## Integration guidelines
 
 ### Input resources
 
-The following table enumerates all external inputs required by Bloom.
+The following table enumerates all external inputs required by the Depth Of Field effect.
 
 | **Name**                          |  **Format**                        | **Notes**                                           |
 | --------------------------------- |------------------------------------|---------------------------------------------------- |
@@ -39,7 +39,7 @@ The following table lists the parameters and their descriptions.
 
 ### Host API
 
-To integrate Depth of Field into your project, include the following necessary header files:
+To integrate Depth of Field into your project, include the following header files:
 
 ```cpp
 #include "PostFXContext.hpp"
@@ -64,54 +64,47 @@ Next, call the methods to prepare resources for the `PostFXContext` and `DepthOf
 This needs to be done every frame before starting the rendering process.
 
 ```cpp
-{
-    PostFXContext::FrameDesc FrameDesc;
-    FrameDesc.Index  = m_CurrentFrameNumber; // Current frame number.
-    FrameDesc.Width  = SCDesc.Width;         // Current screen width.
-    FrameDesc.Height = SCDesc.Height;        // Current screen height.
-    m_PostFXContext->PrepareResources(m_pDevice, FrameDesc, PostFXContext::FEATURE_FLAG_NONE);
+PostFXContext::FrameDesc FrameDesc;
+FrameDesc.Index  = m_CurrentFrameNumber; // Current frame number.
+FrameDesc.Width  = SCDesc.Width;         // Current screen width.
+FrameDesc.Height = SCDesc.Height;        // Current screen height.
+m_PostFXContext->PrepareResources(m_pDevice, FrameDesc, PostFXContext::FEATURE_FLAG_NONE);
 
-    Bloom::FEATURE_FLAGS ActiveFeatures = ...;
-    m_ScreenSpaceAmbientOcclusion->PrepareResources(m_pDevice, m_pImmediateContext, m_PostFXContext.get(), ActiveFeatures);
-}
+m_DepthOfField->PrepareResources(m_pDevice, m_pImmediateContext, m_PostFXContext.get(), DepthOfField::FEATURE_FLAG_NONE);
 ```
 
 Call the method `PostFXContext::Execute` to prepare intermediate resources necessary for all post-processing objects
 dependent on `PostFXContext`. This method can take a constant buffer containing the current and previous-frame
 cameras (refer to this code [[0](https://github.com/DiligentGraphics/DiligentSamples/blob/380b0a05b6c72d80fd6d574d7343ead77d6dd7eb/Tutorials/Tutorial27_PostProcessing/src/Tutorial27_PostProcessing.cpp#L164)] and [[1](https://github.com/DiligentGraphics/DiligentSamples/blob/380b0a05b6c72d80fd6d574d7343ead77d6dd7eb/Tutorials/Tutorial27_PostProcessing/src/Tutorial27_PostProcessing.cpp#L228)]).
 Alternatively, you can pass the corresponding pointers `const HLSL::CameraAttribs* pCurrCamera` and `const HLSL::CameraAttribs* pPrevCamera` for the current
-and previous cameras, respectively. You also need to pass the depth of the current and previous frames (the depth buffers should not contain transparent objects),
-and a buffer with motion vectors in NDC space, via the corresponding `ITextureView* pCurrDepthBufferSRV`, `ITextureView* pPrevDepthBufferSRV`, `ITextureView* pMotionVectorsSRV` parameters.
+and previous cameras, respectively. You also need to pass the depth of the current and previous frames,
+and a buffer with motion vectors in NDC space, via the corresponding `ITextureView* pCurrDepthBufferSRV`, `ITextureView* pPrevDepthBufferSRV`, and `ITextureView* pMotionVectorsSRV` parameters.
 
 ```cpp
-{
-    PostFXContext::RenderAttributes PostFXAttibs;
-    PostFXAttibs.pDevice             = m_pDevice;
-    PostFXAttibs.pDeviceContext      = m_pImmediateContext;
-    PostFXAttibs.pCameraAttribsCB    = m_FrameAttribsCB;
-    PostFXAttibs.pCurrDepthBufferSRV = m_CurrDepthBuffer;
-    PostFXAttibs.pPrevDepthBufferSRV = m_PrevDepthBuffer;
-    PostFXAttibs.pMotionVectorsSRV   = m_MotionBuffer;
-    m_PostFXContext->Execute(PostFXAttibs);
-}
+PostFXContext::RenderAttributes PostFXAttibs;
+PostFXAttibs.pDevice             = m_pDevice;
+PostFXAttibs.pDeviceContext      = m_pImmediateContext;
+PostFXAttibs.pCameraAttribsCB    = m_FrameAttribsCB;
+PostFXAttibs.pCurrDepthBufferSRV = m_CurrDepthBuffer;
+PostFXAttibs.pPrevDepthBufferSRV = m_PrevDepthBuffer;
+PostFXAttibs.pMotionVectorsSRV   = m_MotionBuffer;
+m_PostFXContext->Execute(PostFXAttibs);
 ```
 
 To compute the depth of field effect, call the `DepthOfField::Execute` method. Before this, fill the `DepthOfFieldAttribs` and `DepthOfField::RenderAttributes` structures 
 with the necessary data. Refer to the [Input resources section](#input-resources) for parameter description.
 
 ```cpp
-{
-    HLSL::DepthOfFieldAttribs DOFSettings{};
+HLSL::DepthOfFieldAttribs DOFSettings{};
 
-    DepthOfField::RenderAttributes DOFRenderAttribs{};
-    DOFRenderAttribs.pDevice         = m_pDevice;
-    DOFRenderAttribs.pDeviceContext  = m_pImmediateContext;
-    DOFRenderAttribs.pPostFXContext  = m_PostFXContext.get();
-    DOFRenderAttribs.pColorBufferSRV = m_ColorBuffer;
-    DOFRenderAttribs.pDepthBufferSRv = m_CurrDepthBuffer;
-    DOFRenderAttribs.pDOFAttribs     = &DOFSettings;
-    m_DOF->Execute(SSAORenderAttribs);
-}
+DepthOfField::RenderAttributes DOFRenderAttribs{};
+DOFRenderAttribs.pDevice         = m_pDevice;
+DOFRenderAttribs.pDeviceContext  = m_pImmediateContext;
+DOFRenderAttribs.pPostFXContext  = m_PostFXContext.get();
+DOFRenderAttribs.pColorBufferSRV = m_ColorBuffer;
+DOFRenderAttribs.pDepthBufferSRv = m_CurrDepthBuffer;
+DOFRenderAttribs.pDOFAttribs     = &DOFSettings;
+m_DOF->Execute(SSAORenderAttribs);
 ```
 
 An `ITextureView` of the texture containing the depth of field result can be obtained using the `DepthOfField::GetDepthOfFieldTextureSRV` method.
