@@ -60,47 +60,40 @@ m_Bloom         = std::make_unique<Bloom>(m_pDevice);
 Next, call the methods to prepare resources for the `PostFXContext` and `Bloom` objects.
 This needs to be done every frame before starting the rendering process.
 ```cpp
-{
-    PostFXContext::FrameDesc FrameDesc;
-    FrameDesc.Index  = m_CurrentFrameNumber; // Current frame number.
-    FrameDesc.Width  = SCDesc.Width;         // Current screen width.
-    FrameDesc.Height = SCDesc.Height;        // Current screen height.
-    m_PostFXContext->PrepareResources(m_pDevice, FrameDesc, PostFXContext::FEATURE_FLAG_NONE);
+PostFXContext::FrameDesc FrameDesc;
+FrameDesc.Index  = m_CurrentFrameNumber; // Current frame number.
+FrameDesc.Width  = SCDesc.Width;         // Current screen width.
+FrameDesc.Height = SCDesc.Height;        // Current screen height.
+m_PostFXContext->PrepareResources(m_pDevice, FrameDesc, PostFXContext::FEATURE_FLAG_NONE);
 
-    Bloom::FEATURE_FLAGS ActiveFeatures = ...;
-    m_ScreenSpaceAmbientOcclusion->PrepareResources(m_pDevice, m_pImmediateContext, m_PostFXContext.get(), ActiveFeatures);
-}
+m_Bloom->PrepareResources(m_pDevice, m_pImmediateContext, m_PostFXContext.get(), Bloom::FEATURE_FLAG_NONE);
 ```
 
-Next, call the `PostFXContext::Execute` method prepare intermediate resources necessary for all post-processing objects
+Next, call the `PostFXContext::Execute` method prepare intermediate resources required by all post-processing objects
 dependent on `PostFXContext`. This method can take a constant buffer containing the current and previous-frame
 cameras (refer to these code examples: [[0](https://github.com/DiligentGraphics/DiligentSamples/blob/380b0a05b6c72d80fd6d574d7343ead77d6dd7eb/Tutorials/Tutorial27_PostProcessing/src/Tutorial27_PostProcessing.cpp#L164)] and [[1](https://github.com/DiligentGraphics/DiligentSamples/blob/380b0a05b6c72d80fd6d574d7343ead77d6dd7eb/Tutorials/Tutorial27_PostProcessing/src/Tutorial27_PostProcessing.cpp#L228)]).
 Alternatively, you can pass the corresponding pointers `const HLSL::CameraAttribs* pCurrCamera` and `const HLSL::CameraAttribs* pPrevCamera` for the current
-and previous cameras, respectively. You also need to pass the depth of the current and previous frames (the depth buffers should not contain transparent objects), and a buffer with motion vectors in NDC space, via the corresponding `ITextureView* pCurrDepthBufferSRV`, `ITextureView* pPrevDepthBufferSRV`, `ITextureView* pMotionVectorsSRV` pointers.
+and previous cameras, respectively. You also need to pass the depth of the current and previous frames, and a buffer with motion vectors in NDC space, via the corresponding `ITextureView* pCurrDepthBufferSRV`, `ITextureView* pPrevDepthBufferSRV`, and `ITextureView* pMotionVectorsSRV` pointers.
 
 ```cpp
-{
-    PostFXContext::RenderAttributes PostFXAttibs;
-    PostFXAttibs.pDevice             = m_pDevice;
-    PostFXAttibs.pDeviceContext      = m_pImmediateContext;
-    PostFXAttibs.pCameraAttribsCB    = m_FrameAttribsCB;
-    m_PostFXContext->Execute(PostFXAttibs);
-}
+PostFXContext::RenderAttributes PostFXAttibs;
+PostFXAttibs.pDevice             = m_pDevice;
+PostFXAttibs.pDeviceContext      = m_pImmediateContext;
+PostFXAttibs.pCameraAttribsCB    = m_FrameAttribsCB;
+m_PostFXContext->Execute(PostFXAttibs);
 ```
 
 To calculate bloom effect, call the `Bloom::Execute` method. Before this, fill the `BloomAttribs` and `Bloom::RenderAttributes ` structures with the necessary data. Refer to the [Input resources section](#input-resources) for parameter description.
 ```cpp
-{
-    HLSL::BloomAttribs BloomSettings{};
+HLSL::BloomAttribs BloomSettings{};
 
-    Bloom::RenderAttributes BloomRenderAttribs{};
-    BloomRenderAttribs.pDevice         = m_pDevice;
-    BloomRenderAttribs.pDeviceContext  = m_pImmediateContext;
-    BloomRenderAttribs.pPostFXContext  = m_PostFXContext.get();
-    BloomRenderAttribs.pColorBufferSRV = m_ColorBuffer;
-    BloomRenderAttribs.pBloomAttribs   = &BloomSettings;
-    m_Bloom->Execute(SSAORenderAttribs);
-}
+Bloom::RenderAttributes BloomRenderAttribs{};
+BloomRenderAttribs.pDevice         = m_pDevice;
+BloomRenderAttribs.pDeviceContext  = m_pImmediateContext;
+BloomRenderAttribs.pPostFXContext  = m_PostFXContext.get();
+BloomRenderAttribs.pColorBufferSRV = m_ColorBuffer;
+BloomRenderAttribs.pBloomAttribs   = &BloomSettings;
+m_Bloom->Execute(SSAORenderAttribs);
 ```
 
 To obtain an `ITextureView` of the texture containing the bloom result, use the `Bloom::GetBloomTextureSRV` method.
