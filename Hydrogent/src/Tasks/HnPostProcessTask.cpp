@@ -775,9 +775,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
 
     if (m_UseSSAO)
     {
-        ScreenSpaceAmbientOcclusion::RenderAttributes SSAORenderAttribs{};
-        SSAORenderAttribs.pDevice          = pDevice;
-        SSAORenderAttribs.pDeviceContext   = pCtx;
+        ScreenSpaceAmbientOcclusion::RenderAttributes SSAORenderAttribs{pDevice, pStateCache, pCtx};
         SSAORenderAttribs.pPostFXContext   = m_PostFXContext.get();
         SSAORenderAttribs.pDepthBufferSRV  = m_FrameTargets->DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
         SSAORenderAttribs.pNormalBufferSRV = m_FrameTargets->GBufferSRVs[HnFrameRenderTargets::GBUFFER_TARGET_NORMAL];
@@ -858,9 +856,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
 
         if (m_UseDOF)
         {
-            DepthOfField::RenderAttributes DOFRenderAttribs{};
-            DOFRenderAttribs.pDevice         = pDevice;
-            DOFRenderAttribs.pDeviceContext  = pCtx;
+            DepthOfField::RenderAttributes DOFRenderAttribs{pDevice, pStateCache, pCtx};
             DOFRenderAttribs.pPostFXContext  = m_PostFXContext.get();
             DOFRenderAttribs.pColorBufferSRV = pFrameSRV;
             DOFRenderAttribs.pDepthBufferSRV = m_FrameTargets->DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
@@ -872,9 +868,7 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
 
         if (m_UseBloom)
         {
-            Bloom::RenderAttributes BloomRenderAttribs{};
-            BloomRenderAttribs.pDevice         = pDevice;
-            BloomRenderAttribs.pDeviceContext  = pCtx;
+            Bloom::RenderAttributes BloomRenderAttribs{pDevice, pStateCache, pCtx};
             BloomRenderAttribs.pPostFXContext  = m_PostFXContext.get();
             BloomRenderAttribs.pColorBufferSRV = pFrameSRV;
             BloomRenderAttribs.pBloomAttribs   = &m_Params.Bloom;
