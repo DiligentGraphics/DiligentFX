@@ -100,9 +100,10 @@ public:
 
     struct SupportedDeviceFeatures
     {
-        bool TransitionSubresources  = false;
-        bool TextureSubresourceViews = false;
-        bool CopyDepthToColor        = false;
+        bool TransitionSubresources      = false;
+        bool TextureSubresourceViews     = false;
+        bool CopyDepthToColor            = false;
+        bool BorderSamplingModeSupported = false;
 
         /// Indicates whether the Base Vertex is added to the VertexID
         /// in the vertex shader.

@@ -12,7 +12,9 @@
     #define DepthFarPlane 1.0
 #endif // TAA_OPTION_INVERTED_DEPTH
 
-#pragma warning(disable : 3078)
+#if !defined(GLSL) && !defined(GL_ES)
+    #pragma warning(disable : 3078)
+#endif
 
 cbuffer cbCameraAttribs
 {

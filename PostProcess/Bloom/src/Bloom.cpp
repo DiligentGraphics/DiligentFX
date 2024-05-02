@@ -152,6 +152,8 @@ Int32 Bloom::ComputeMipCount(Uint32 Width, Uint32 Height, float Radius)
 
 void Bloom::ComputePrefilteredTexture(const RenderAttributes& RenderAttribs)
 {
+    auto const& SupportedFeatures = RenderAttribs.pPostFXContext->GetSupportedFeatures();
+
     auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_PREFILTERED_TEXTURE, m_FeatureFlags);
     if (!RenderTech.IsInitializedPSO())
     {
@@ -162,7 +164,7 @@ void Bloom::ComputePrefilteredTexture(const RenderAttributes& RenderAttribs)
         ResourceLayout
             .AddVariable(SHADER_TYPE_PIXEL, "cbBloomAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
             .AddVariable(SHADER_TYPE_PIXEL, "g_TextureInput", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureInput", Sam_LinearBoarder);
+            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureInput", SupportedFeatures.BorderSamplingModeSupported ? Sam_LinearBoarder : Sam_LinearClamp);
 
         RenderTech.InitializePSO(RenderAttribs.pDevice,
                                  RenderAttribs.pStateCache, "Bloom::ComputePrefilteredTexture",
@@ -196,6 +198,8 @@ void Bloom::ComputePrefilteredTexture(const RenderAttributes& RenderAttribs)
 
 void Bloom::ComputeDownsampledTextures(const RenderAttributes& RenderAttribs)
 {
+    auto const& SupportedFeatures = RenderAttribs.pPostFXContext->GetSupportedFeatures();
+
     auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_DOWNSAMPLED_TEXTURE, m_FeatureFlags);
     if (!RenderTech.IsInitializedPSO())
     {
@@ -205,7 +209,7 @@ void Bloom::ComputeDownsampledTextures(const RenderAttributes& RenderAttribs)
         PipelineResourceLayoutDescX ResourceLayout;
         ResourceLayout
             .AddVariable(SHADER_TYPE_PIXEL, "g_TextureInput", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureInput", Sam_LinearBoarder);
+            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureInput", SupportedFeatures.BorderSamplingModeSupported ? Sam_LinearBoarder : Sam_LinearClamp);
 
         RenderTech.InitializePSO(RenderAttribs.pDevice,
                                  RenderAttribs.pStateCache, "Bloom::ComputeDownsampledTexture",

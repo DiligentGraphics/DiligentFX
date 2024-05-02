@@ -54,12 +54,14 @@ namespace NoiseBuffers
 PostFXContext::PostFXContext(IRenderDevice* pDevice)
 {
     DEV_CHECK_ERR(pDevice != nullptr, "pDevice must not be null");
-    const auto& DeviceInfo = pDevice->GetDeviceInfo();
+    const auto& DeviceInfo  = pDevice->GetDeviceInfo();
+    const auto& AdapterInfo = pDevice->GetAdapterInfo();
 
-    m_SupportedFeatures.TransitionSubresources  = DeviceInfo.Type == RENDER_DEVICE_TYPE_D3D12 || DeviceInfo.Type == RENDER_DEVICE_TYPE_VULKAN;
-    m_SupportedFeatures.TextureSubresourceViews = DeviceInfo.Features.TextureSubresourceViews;
-    m_SupportedFeatures.CopyDepthToColor        = DeviceInfo.IsD3DDevice();
-    m_SupportedFeatures.ShaderBaseVertexOffset  = !DeviceInfo.IsD3DDevice();
+    m_SupportedFeatures.TransitionSubresources      = DeviceInfo.Type == RENDER_DEVICE_TYPE_D3D12 || DeviceInfo.Type == RENDER_DEVICE_TYPE_VULKAN;
+    m_SupportedFeatures.TextureSubresourceViews     = DeviceInfo.Features.TextureSubresourceViews;
+    m_SupportedFeatures.CopyDepthToColor            = DeviceInfo.IsD3DDevice();
+    m_SupportedFeatures.ShaderBaseVertexOffset      = !DeviceInfo.IsD3DDevice();
+    m_SupportedFeatures.BorderSamplingModeSupported = AdapterInfo.Sampler.BorderSamplingModeSupported;
 
     RenderDeviceWithCache_N Device{pDevice};
     {

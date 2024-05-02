@@ -4,7 +4,9 @@
 #include "FullScreenTriangleVSOutput.fxh"
 #include "PostFX_Common.fxh"
 
-#pragma warning(disable : 3078)
+#if !defined(GLSL) && !defined(GL_ES)
+    #pragma warning(disable : 3078)
+#endif
 
 cbuffer cbCameraAttribs
 {
