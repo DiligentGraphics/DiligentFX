@@ -38,8 +38,7 @@ float SamplePrefilteredDepth(float2 ScreenCoordUV, float MipLevel)
 
 float2 ComputeSliceDirection(float Xi, int Index)
 {
-    float3 Rotations = float3(0.0, 120.0, 240);
-    float Rotation = Rotations[Index] / 360.0;
+    float Rotation = float(Index) / 3.0;
     float Phi = (Xi + Rotation) * M_PI;
     return float2(cos(Phi), sin(Phi));
 }

@@ -3,8 +3,6 @@
 #include "BasicStructures.fxh"
 #include "FullScreenTriangleVSOutput.fxh"
 
-#pragma warning(disable : 3078)
-
 cbuffer cbCameraAttribs
 {
     CameraAttribs g_CurrCamera;
@@ -194,25 +192,30 @@ ProjectionDesc ComputeReprojection(float2 PrevPos, float CurrDepth)
         Weight[2] = (1.0 - x) * y;
         Weight[3] = x * y;
 
-        for (int SampleIdx = 0; SampleIdx < 4; ++SampleIdx)
         {
-            int2 Location = PrevPosi + int2(SampleIdx & 0x01, SampleIdx >> 1);
-            float PrevDepth = SamplePrevDepth(Location);
-            bool IsValidSample = ComputeDisocclusion(CurrDepth, PrevDepth) > (SSR_DISOCCLUSION_THRESHOLD / 2.0);
-            Weight[SampleIdx] *= float(IsValidSample);
+            for (int SampleIdx = 0; SampleIdx < 4; ++SampleIdx)
+            {
+                int2 Location = PrevPosi + int2(SampleIdx & 0x01, SampleIdx >> 1);
+                float PrevDepth = SamplePrevDepth(Location);
+                bool IsValidSample = ComputeDisocclusion(CurrDepth, PrevDepth) > (SSR_DISOCCLUSION_THRESHOLD / 2.0);
+                Weight[SampleIdx] *= float(IsValidSample);
+            }
         }
 
         float WeightSum = 0.0;
         float DepthSum = 0.0;
         float4 ColorSum = float4(0.0, 0.0, 0.0, 0.0);
 
-        for (int SampleIdx = 0; SampleIdx < 4; ++SampleIdx)
         {
-            int2 Location = PrevPosi + int2(SampleIdx & 0x01, SampleIdx >> 1);
-            ColorSum  += Weight[SampleIdx] * SamplePrevRadiance(Location);
-            DepthSum  += Weight[SampleIdx] * SamplePrevDepth(Location);
-            WeightSum += Weight[SampleIdx];
+            for (int SampleIdx = 0; SampleIdx < 4; ++SampleIdx)
+            {
+                int2 Location = PrevPosi + int2(SampleIdx & 0x01, SampleIdx >> 1);
+                ColorSum  += Weight[SampleIdx] * SamplePrevRadiance(Location);
+                DepthSum  += Weight[SampleIdx] * SamplePrevDepth(Location);
+                WeightSum += Weight[SampleIdx];
+            }
         }
+        
         DepthSum /= max(WeightSum, 1.0e-6f);
         ColorSum /= max(WeightSum, 1.0e-6f);
 

@@ -5,8 +5,6 @@
 #include "ScreenSpaceAmbientOcclusionStructures.fxh"
 #include "SSAO_Common.fxh"
 
-#pragma warning(disable : 3078)
-
 cbuffer cbCameraAttribs
 {
     CameraAttribs g_Camera;
@@ -83,11 +81,11 @@ float ComputeResampledHistoryPS(in FullScreenTriangleVSOutput VSOut) : SV_Target
         float x = frac(MipLocation.x + 0.5);
         float y = frac(MipLocation.y + 0.5);
 
-        float4 Weight;
-        Weight.x = (1.0 - x) * (1.0 - y);
-        Weight.y = x * (1.0 - y);
-        Weight.z = (1.0 - x) * y;
-        Weight.w = x * y;
+        float Weight[4];
+        Weight[0] = (1.0 - x) * (1.0 - y);
+        Weight[1] = x * (1.0 - y);
+        Weight[2] = (1.0 - x) * y;
+        Weight[3] = x * y;
         
         OcclusionSum = 0.0;
         WeightSum = 0.0;

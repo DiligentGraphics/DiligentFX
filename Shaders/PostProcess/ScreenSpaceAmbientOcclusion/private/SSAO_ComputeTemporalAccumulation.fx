@@ -5,8 +5,6 @@
 #include "ScreenSpaceAmbientOcclusionStructures.fxh"
 #include "SSAO_Common.fxh"
 
-#pragma warning(disable : 3078)
-
 cbuffer cbCameraAttribs
 {
     CameraAttribs g_CurrCamera;
@@ -128,24 +126,28 @@ ProjectionDesc ComputeReprojection(float2 PrevPos, float CurrDepth)
     Weight[2] = (1.0 - x) * y;
     Weight[3] = x * y;
 
-    for (int SampleIdx = 0; SampleIdx < 4; ++SampleIdx)
     {
-        int2 Location = PrevPosi + int2(SampleIdx & 0x01, SampleIdx >> 1);
-        float PrevDepth = SamplePrevDepth(Location);
-        Weight[SampleIdx] *= float(IsDepthSimilar(CurrDepth, PrevDepth));
-        Weight[SampleIdx] *= float(IsInsideScreenMinusOne(Location, int2(g_CurrCamera.f4ViewportSize.xy)));
+        for (int SampleIdx = 0; SampleIdx < 4; ++SampleIdx)
+        {
+            int2 Location = PrevPosi + int2(SampleIdx & 0x01, SampleIdx >> 1);
+            float PrevDepth = SamplePrevDepth(Location);
+            Weight[SampleIdx] *= float(IsDepthSimilar(CurrDepth, PrevDepth));
+            Weight[SampleIdx] *= float(IsInsideScreenMinusOne(Location, int2(g_CurrCamera.f4ViewportSize.xy)));
+        }
     }
 
     float WeightSum = 0.0;
     float OcclusionSum = 0.0;
     float HistorySum = 0.0;
 
-    for (int SampleIdx = 0; SampleIdx < 4; ++SampleIdx)
     {
-        int2 Location = PrevPosi + int2(SampleIdx & 0x01, SampleIdx >> 1);
-        OcclusionSum += Weight[SampleIdx] * SamplePrevOcclusion(Location);
-        HistorySum += Weight[SampleIdx] * min(16.0, SampleHistory(Location) + 1.0);;
-        WeightSum += Weight[SampleIdx];
+        for (int SampleIdx = 0; SampleIdx < 4; ++SampleIdx)
+        {
+            int2 Location = PrevPosi + int2(SampleIdx & 0x01, SampleIdx >> 1);
+            OcclusionSum += Weight[SampleIdx] * SamplePrevOcclusion(Location);
+            HistorySum += Weight[SampleIdx] * min(16.0, SampleHistory(Location) + 1.0);;
+            WeightSum += Weight[SampleIdx];
+        }
     }
 
     Desc.IsSuccess = WeightSum > 0.0 && !g_SSAOAttribs.ResetAccumulation;

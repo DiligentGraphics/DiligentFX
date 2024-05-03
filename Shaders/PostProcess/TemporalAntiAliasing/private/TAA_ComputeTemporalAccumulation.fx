@@ -12,8 +12,6 @@
     #define DepthFarPlane 1.0
 #endif // TAA_OPTION_INVERTED_DEPTH
 
-#pragma warning(disable : 3078)
-
 cbuffer cbCameraAttribs
 {
     CameraAttribs g_CurrCamera;

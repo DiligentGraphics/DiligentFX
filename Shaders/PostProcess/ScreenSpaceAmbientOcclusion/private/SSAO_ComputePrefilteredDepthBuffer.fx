@@ -4,8 +4,6 @@
 #include "FullScreenTriangleVSOutput.fxh"
 #include "PostFX_Common.fxh"
 
-#pragma warning(disable : 3078)
-
 cbuffer cbCameraAttribs
 {
     CameraAttribs g_Camera;
@@ -45,9 +43,11 @@ float SampleDepthViewSpace(int2 Location, int2 Offset, int3 Dimension)
 float ComputeDepthMIPFiltered(in float SampledDepth[9], uint Count)
 {
     float WeightDepth = SampledDepth[0];
-    for (uint Idx = 1u; Idx < Count; Idx++)
-        WeightDepth = min(WeightDepth, SampledDepth[Idx]);
-
+    {
+        for (uint Idx = 1u; Idx < Count; Idx++)
+            WeightDepth = min(WeightDepth, SampledDepth[Idx]);
+    }
+    
     float DepthRangeScaleFactor = 0.75; // Found empirically :)
     float EffectRadius = DepthRangeScaleFactor * g_SSAOAttribs.EffectRadius * g_SSAOAttribs.RadiusMultiplier;
     float FalloffRange = g_SSAOAttribs.EffectFalloffRange * EffectRadius;
@@ -59,11 +59,13 @@ float ComputeDepthMIPFiltered(in float SampledDepth[9], uint Count)
 
     float DepthSum = 0.0f;
     float WeightSum = 0.0f;
-    for (uint Idx = 0u; Idx < Count; Idx++)
     {
-        float Weight = saturate(abs(WeightDepth - SampledDepth[Idx]) * FalloffMul + FalloffAdd);
-        DepthSum += Weight * SampledDepth[Idx];
-        WeightSum += Weight;
+        for (uint Idx = 0u; Idx < Count; Idx++)
+        {
+            float Weight = saturate(abs(WeightDepth - SampledDepth[Idx]) * FalloffMul + FalloffAdd);
+            DepthSum += Weight * SampledDepth[Idx];
+            WeightSum += Weight;
+        }
     }
     
     return DepthSum / WeightSum;

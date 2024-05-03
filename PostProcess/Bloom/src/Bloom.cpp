@@ -158,11 +158,13 @@ void Bloom::ComputePrefilteredTexture(const RenderAttributes& RenderAttribs)
         const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
         const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "Bloom_ComputePrefilteredTexture.fx", "ComputePrefilteredTexturePS", SHADER_TYPE_PIXEL);
 
+        const bool BorderSamplingModeSupported = RenderAttribs.pDevice->GetAdapterInfo().Sampler.BorderSamplingModeSupported;
+
         PipelineResourceLayoutDescX ResourceLayout;
         ResourceLayout
             .AddVariable(SHADER_TYPE_PIXEL, "cbBloomAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
             .AddVariable(SHADER_TYPE_PIXEL, "g_TextureInput", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureInput", Sam_LinearBoarder);
+            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureInput", BorderSamplingModeSupported ? Sam_LinearBoarder : Sam_LinearClamp);
 
         RenderTech.InitializePSO(RenderAttribs.pDevice,
                                  RenderAttribs.pStateCache, "Bloom::ComputePrefilteredTexture",
@@ -202,10 +204,12 @@ void Bloom::ComputeDownsampledTextures(const RenderAttributes& RenderAttribs)
         const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
         const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "Bloom_ComputeDownsampledTexture.fx", "ComputeDownsampledTexturePS", SHADER_TYPE_PIXEL);
 
+        const bool BorderSamplingModeSupported = RenderAttribs.pDevice->GetAdapterInfo().Sampler.BorderSamplingModeSupported;
+
         PipelineResourceLayoutDescX ResourceLayout;
         ResourceLayout
             .AddVariable(SHADER_TYPE_PIXEL, "g_TextureInput", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureInput", Sam_LinearBoarder);
+            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureInput", BorderSamplingModeSupported ? Sam_LinearBoarder : Sam_LinearClamp);
 
         RenderTech.InitializePSO(RenderAttribs.pDevice,
                                  RenderAttribs.pStateCache, "Bloom::ComputeDownsampledTexture",
