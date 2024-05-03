@@ -44,13 +44,44 @@ float ComputeRayPlaneIntersection(Ray RayWS, float3 PlaneNormal, float3 PlaneOri
     return dot(PlaneNormal, (PlaneOrigin - RayWS.Origin)) / NdotD;
 }
 
-float4 ComputeGrid(float2 PlanePos, float Scale) 
+float MinComponent2(float2 v)
 {
-    float2 Coord = PlanePos * Scale; // use the scale variable to set the distance between the lines
+    return min(v.x, v.y);
+}
+
+float MaxComponent2(float2 v)
+{
+    return max(v.x, v.y);
+}
+
+float2 MapToSignNorm(float2 v)
+{
+    return 2.0 * saturate(v) - float2(1.0, 1.0);
+}
+
+float4 ComputeGrid(float2 PlanePos, float Scale, int Subdivision, CoordinateGridAttribs GridAttribs)
+{
+    float2 Coord = PlanePos * Scale;
     float2 Magnitude = fwidth(Coord);
-    float2 Grid = abs(frac(Coord - 0.5) - 0.5) / Magnitude;
-    float Line = min(Grid.x, Grid.y);
-    return float4(0.2, 0.2, 0.2, 1.0 - min(Line, 1.0));
+
+    float3 ThickColor = GridAttribs.GridMajorColor.xyz;
+    float3 ThinColor  = GridAttribs.GridMinorColor.xyz;
+    float2 LineWidth = Magnitude * GridAttribs.GridLineWidth;
+
+    float LodLevel = max(0.0, log10(length(Magnitude) * GridAttribs.GridMinCellWidth / GridAttribs.GridMinCellSize) + 1.0);
+    float LodFade = frac(LodLevel);
+
+    float Lod[3];
+    Lod[0] = GridAttribs.GridMinCellSize * pow(float(Subdivision), floor(LodLevel));
+    Lod[1] = Lod[0] * float(Subdivision);
+    Lod[2] = Lod[1] * float(Subdivision);
+
+    float LodAlpha[3];
+    for (int LodIdx = 0; LodIdx < 3; LodIdx++) 
+        LodAlpha[LodIdx] = MaxComponent2(float2(1.0, 1.0) - abs(MapToSignNorm((fmod(abs(Coord - 0.5 * Lod[LodIdx]), Lod[LodIdx]) - 0.5 * Lod[LodIdx]) / LineWidth)));
+
+    return float4(LodAlpha[2] > 0 ? ThickColor  : LodAlpha[1] > 0 ? lerp(ThickColor, ThinColor, LodFade) : ThinColor,
+                  LodAlpha[2] > 0 ? LodAlpha[2] : LodAlpha[1] > 0 ? LodAlpha[1] : LodAlpha[0] * (1 - LodFade));
 }
 
 float ComputeAxisAlpha(float3   AxisDirection, 
@@ -177,22 +208,19 @@ float4 ComputeCoordinateGrid(in float2                f2NormalizedXY,
 
 #if COORDINATE_GRID_PLANE_YZ
     {
-        GridResult += (0.2 * ComputeGrid(Positions[0].yz, GridAttribs.GridSubdivision.x * GridAttribs.GridScale.x) +
-                       0.8 * ComputeGrid(Positions[0].yz, GridAttribs.GridScale.x)) * PlaneAlpha[0];
+        GridResult += ComputeGrid(Positions[0].yz, GridAttribs.GridScale.x, GridAttribs.GridSubdivision.x, GridAttribs) * PlaneAlpha[0];
     }
 #endif 
 
 #if COORDINATE_GRID_PLANE_XZ
     {
-        GridResult += (0.2 * ComputeGrid(Positions[1].xz, GridAttribs.GridSubdivision.y * GridAttribs.GridScale.y) +
-                       0.8 * ComputeGrid(Positions[1].xz, GridAttribs.GridScale.y)) * PlaneAlpha[1]; 
+        GridResult += ComputeGrid(Positions[1].xz, GridAttribs.GridScale.y, GridAttribs.GridSubdivision.y, GridAttribs) * PlaneAlpha[1];
     }
 #endif
 
 #if COORDINATE_GRID_PLANE_XY
     {
-        GridResult += (0.2 * ComputeGrid(Positions[2].xy, GridAttribs.GridSubdivision.z * GridAttribs.GridScale.z) +
-                       0.8 * ComputeGrid(Positions[2].xy, GridAttribs.GridScale.z)) * PlaneAlpha[2]; 
+        GridResult += ComputeGrid(Positions[2].xy, GridAttribs.GridScale.z, GridAttribs.GridSubdivision.z, GridAttribs) * PlaneAlpha[2]; 
     }
 #endif
 

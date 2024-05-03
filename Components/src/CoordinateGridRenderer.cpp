@@ -147,11 +147,11 @@ bool CoordinateGridRenderer::UpdateUI(HLSL::CoordinateGridAttribs& Attribs, Coor
     if (ImGui::SliderFloat("XY Scale", &Attribs.GridScale[2], 0.01f, 10.0))
         AttribsChanged = true;
 
-    if (ImGui::SliderFloat("YZ Subdivision", &Attribs.GridSubdivision[0], 2.0, 10.0))
+    if (ImGui::SliderInt("YZ Subdivision", &Attribs.GridSubdivision[0], 2, 10))
         AttribsChanged = true;
-    if (ImGui::SliderFloat("XZ Subdivision", &Attribs.GridSubdivision[1], 2.0, 10.0))
+    if (ImGui::SliderInt("XZ Subdivision", &Attribs.GridSubdivision[1], 2, 10))
         AttribsChanged = true;
-    if (ImGui::SliderFloat("XY Subdivision", &Attribs.GridSubdivision[2], 2.0, 10.0))
+    if (ImGui::SliderInt("XY Subdivision", &Attribs.GridSubdivision[2], 2, 10))
         AttribsChanged = true;
 
     if (ImGui::ColorEdit3("X Axis Color", Attribs.XAxisColor.Data()))
@@ -166,6 +166,18 @@ bool CoordinateGridRenderer::UpdateUI(HLSL::CoordinateGridAttribs& Attribs, Coor
     if (ImGui::SliderFloat("Y Axis Width", &Attribs.YAxisWidth, 0.5f, 10.0))
         AttribsChanged = true;
     if (ImGui::SliderFloat("Z Axis Width", &Attribs.ZAxisWidth, 0.5f, 10.0))
+        AttribsChanged = true;
+
+    if (ImGui::SliderFloat("Grid Min Cell Size", &Attribs.GridMinCellSize, 0.0001f, 1.0, "%.4f", ImGuiSliderFlags_Logarithmic))
+        AttribsChanged = true;
+    if (ImGui::SliderFloat("Grid Min Cell Width", &Attribs.GridMinCellWidth, 1.0f, 10.0))
+        AttribsChanged = true;
+    if (ImGui::SliderFloat("Grid Line Width", &Attribs.GridLineWidth, 1.0f, 5.0))
+        AttribsChanged = true;
+
+    if (ImGui::ColorEdit3("Grid Major Color", Attribs.GridMajorColor.Data()))
+        AttribsChanged = true;
+    if (ImGui::ColorEdit3("Grid Minor Color", Attribs.GridMinorColor.Data()))
         AttribsChanged = true;
 
     auto ResetStateFeatureMask = [](FEATURE_FLAGS& FeatureFlags, FEATURE_FLAGS Flag, bool State) {
