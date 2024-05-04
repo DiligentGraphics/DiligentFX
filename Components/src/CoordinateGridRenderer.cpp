@@ -147,11 +147,21 @@ bool CoordinateGridRenderer::UpdateUI(HLSL::CoordinateGridAttribs& Attribs, Coor
     if (ImGui::SliderFloat("XY Scale", &Attribs.GridScale[2], 0.01f, 10.0))
         AttribsChanged = true;
 
-    if (ImGui::SliderInt("YZ Subdivision", &Attribs.GridSubdivision[0], 2, 10))
+
+    auto SubdivisionSlider = [](const char* Name, float& Subdivision) {
+        int SubdivisionInt = static_cast<int>(Subdivision);
+        if (ImGui::SliderInt(Name, &SubdivisionInt, 2, 10))
+        {
+            Subdivision = static_cast<float>(SubdivisionInt);
+            return true;
+        }
+        return false;
+    };
+    if (SubdivisionSlider("YZ Subdivision", Attribs.GridSubdivision[0]))
         AttribsChanged = true;
-    if (ImGui::SliderInt("XZ Subdivision", &Attribs.GridSubdivision[1], 2, 10))
+    if (SubdivisionSlider("XZ Subdivision", Attribs.GridSubdivision[1]))
         AttribsChanged = true;
-    if (ImGui::SliderInt("XY Subdivision", &Attribs.GridSubdivision[2], 2, 10))
+    if (SubdivisionSlider("XY Subdivision", Attribs.GridSubdivision[2]))
         AttribsChanged = true;
 
     if (ImGui::ColorEdit3("X Axis Color", Attribs.XAxisColor.Data()))
