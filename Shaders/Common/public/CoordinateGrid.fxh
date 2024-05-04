@@ -54,11 +54,6 @@ float MaxComponent2(float2 v)
     return max(v.x, v.y);
 }
 
-float2 MapToSignNorm(float2 v)
-{
-    return 2.0 * saturate(v) - float2(1.0, 1.0);
-}
-
 float4 ComputeGrid(float2 PlanePos, float Scale, int Subdivision, CoordinateGridAttribs GridAttribs)
 {
     float2 Coord = PlanePos * Scale;
@@ -66,7 +61,7 @@ float4 ComputeGrid(float2 PlanePos, float Scale, int Subdivision, CoordinateGrid
 
     float3 ThickColor = GridAttribs.GridMajorColor.xyz;
     float3 ThinColor  = GridAttribs.GridMinorColor.xyz;
-    float2 LineWidth = Magnitude * GridAttribs.GridLineWidth;
+    float2 LineWidth = 0.5 * Magnitude * GridAttribs.GridLineWidth;
 
     float LodLevel = max(0.0, log10(length(Magnitude) * GridAttribs.GridMinCellWidth / GridAttribs.GridMinCellSize) + 1.0);
     float LodFade = frac(LodLevel);
@@ -78,7 +73,7 @@ float4 ComputeGrid(float2 PlanePos, float Scale, int Subdivision, CoordinateGrid
 
     float LodAlpha[3];
     for (int LodIdx = 0; LodIdx < 3; LodIdx++) 
-        LodAlpha[LodIdx] = MaxComponent2(float2(1.0, 1.0) - abs(MapToSignNorm((fmod(abs(Coord - 0.5 * Lod[LodIdx]), Lod[LodIdx]) - 0.5 * Lod[LodIdx]) / LineWidth)));
+        LodAlpha[LodIdx] = MaxComponent2(float2(1.0, 1.0) - saturate(abs((fmod(abs(Coord - 0.5 * Lod[LodIdx]), Lod[LodIdx]) - 0.5 * Lod[LodIdx]) / LineWidth)));
 
     return float4(LodAlpha[2] > 0 ? ThickColor  : LodAlpha[1] > 0 ? lerp(ThickColor, ThinColor, LodFade) : ThinColor,
                   LodAlpha[2] > 0 ? LodAlpha[2] : LodAlpha[1] > 0 ? LodAlpha[1] : LodAlpha[0] * (1 - LodFade));
