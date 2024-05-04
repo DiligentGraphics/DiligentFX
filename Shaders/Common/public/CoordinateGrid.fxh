@@ -146,16 +146,14 @@ void ComputePlaneIntersectionAttribs(in CameraAttribs Camera,
 {
     float DistToPlane = ComputeRayPlaneIntersection(RayWS, Normal, float3(0.0, 0.0, 0.0));
     Alpha = DistToPlane > 0.0 ? 1.0 : 0.0;
-    
-    // Slightly offset the intersection point to avoid z-fighting with geometry in the plane
-    DistToPlane = DistToPlane * (1.0 + 1e-5) + 1e-6 * sign(DistToPlane);
-    
+        
     Position = RayWS.Origin + RayWS.Direction * DistToPlane; 
     float CameraZ = mul(float4(Position, 1.0), Camera.mView).z;
 
     // Note: using minimum depth when TAA is enabled looks bad from the distance
     //       when there is small geometry (e.g. bicycle while spokes)
-    float Visibility = saturate((MaxCameraZ - CameraZ) / CameraZRange);
+    // Add bias to avoid z-fighting with geometry in the plane
+    float Visibility = saturate((MaxCameraZ - CameraZ) / CameraZRange + 0.1);
     Alpha *= Visibility;
     
     // Attenuate alpha based on the CameraZ to make the grid fade out in the distance
