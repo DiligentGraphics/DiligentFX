@@ -71,17 +71,17 @@ float3 AgXEotf(float3 Color)
     return SRGBToLinear(Color);
 }
 
-float3 AgXPunchyLook(float3 Color, float Saturation) 
+float3 AgXPunchyLook(float3 Color, float fSaturation, float fOffset, float fSlope, float fPower) 
 {
     float Lum = dot(Color, RGB_TO_LUMINANCE);
   
-    float3 Offset = float3(0.0, 0.0, 0.0);
-    float3 Slope  = float3(1.0, 1.0, 1.0);
-    float3 Power  = float3(1.35, 1.35, 1.35);
+    float3 Offset = float3(fOffset, fOffset, fOffset);
+    float3 Slope  = float3(fSlope, fSlope, fSlope);
+    float3 Power  = float3(fPower, fPower, fPower);
   
     // ASC CDL
     Color = pow(Color * Slope + Offset, Power);
-    return Lum + Saturation * (Color - Lum);
+    return Lum + fSaturation * (Color - Lum);
 }
 
 float3 ToneMap(in float3 f3Color, ToneMappingAttribs Attribs, float fAveLogLum)
@@ -161,12 +161,12 @@ float3 ToneMap(in float3 f3Color, ToneMappingAttribs Attribs, float fAveLogLum)
         f3ToneMappedColor = AgXEotf(f3ToneMappedColor);
         return f3ToneMappedColor;
     }
-#elif TONE_MAPPING_MODE == TONE_MAPPING_AGX_PUNCHY
+#elif TONE_MAPPING_MODE == TONE_MAPPING_AGX_CUSTOM
     {
         // https://iolite-engine.com/blog_posts/minimal_agx_implementation
         // The constant was chosen experimentally to preserve the brightness when changing the tone mapper
-        float3 f3ToneMappedColor = AgX(3.0 * f3ScaledColor);
-        f3ToneMappedColor = AgXPunchyLook(f3ToneMappedColor, 1.4);
+        float3 f3ToneMappedColor = AgX(f3ScaledColor);
+        f3ToneMappedColor = AgXPunchyLook(f3ToneMappedColor, Attribs.AgX.Saturation, Attribs.AgX.Offset, Attribs.AgX.Slope, Attribs.AgX.Power);
         f3ToneMappedColor = AgXEotf(f3ToneMappedColor);
         return f3ToneMappedColor;
     }

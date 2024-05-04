@@ -24,10 +24,21 @@
  *  of the possibility of such damages.
  */
 
+#include "imgui.h"
+#include "ImGuiUtils.hpp"
+
 #include "ToneMapping.hpp"
+
+#include <array>
 
 namespace Diligent
 {
+
+namespace HLSL
+{
+#include "Shaders/Common/public/ShaderDefinitions.fxh"
+#include "Shaders/PostProcess/ToneMapping/public/ToneMappingStructures.fxh"
+} // namespace HLSL
 
 float3 ReverseExpToneMap(const float3& Color, float MiddleGray, float AverageLogLum)
 {
@@ -69,6 +80,57 @@ float3 ReverseExpToneMap(const float3& Color, float MiddleGray, float AverageLog
     float fLumScale     = MiddleGray / AverageLogLum;
     float ToneMappedLum = -std::log(std::max(1.0f - Luminance, 0.01f)) / fLumScale;
     return Color * ToneMappedLum / Luminance;
+}
+
+bool ToneMappingUpdateUI(HLSL::ToneMappingAttribs& Attribs, float* AverageLogLum)
+{
+    bool AttribsChanged = false;
+    {
+        std::array<const char*, 10> ToneMappingMode{};
+        ToneMappingMode[TONE_MAPPING_MODE_NONE]         = "None";
+        ToneMappingMode[TONE_MAPPING_MODE_EXP]          = "Exp";
+        ToneMappingMode[TONE_MAPPING_MODE_REINHARD]     = "Reinhard";
+        ToneMappingMode[TONE_MAPPING_MODE_REINHARD_MOD] = "Reinhard Mod";
+        ToneMappingMode[TONE_MAPPING_MODE_UNCHARTED2]   = "Uncharted 2";
+        ToneMappingMode[TONE_MAPPING_FILMIC_ALU]        = "Filmic ALU";
+        ToneMappingMode[TONE_MAPPING_LOGARITHMIC]       = "Logarithmic";
+        ToneMappingMode[TONE_MAPPING_ADAPTIVE_LOG]      = "Adaptive log";
+        ToneMappingMode[TONE_MAPPING_AGX]               = "AgX";
+        ToneMappingMode[TONE_MAPPING_AGX_CUSTOM]        = "AgX Custom";
+        if (ImGui::Combo("Tone Mapping Mode", &Attribs.iToneMappingMode, ToneMappingMode.data(), static_cast<int>(ToneMappingMode.size())))
+            AttribsChanged = true;
+    }
+
+    if (AverageLogLum != nullptr)
+    {
+        if (ImGui::SliderFloat("Average log lum", AverageLogLum, 0.01f, 10.0f))
+            AttribsChanged = true;
+    }
+
+    if (ImGui::SliderFloat("Middle gray", &Attribs.fMiddleGray, 0.01f, 1.0f))
+        AttribsChanged = true;
+    if (ImGui::SliderFloat("White point", &Attribs.fWhitePoint, 0.1f, 20.0f))
+        AttribsChanged = true;
+
+    if (Attribs.iToneMappingMode == TONE_MAPPING_AGX_CUSTOM)
+    {
+        if (ImGui::TreeNode("AgX Custom Settings"))
+        {
+            if (ImGui::SliderFloat("Saturation", &Attribs.AgX.Saturation, 0.0f, 2.0f))
+                AttribsChanged = true;
+
+            if (ImGui::SliderFloat("Offset", &Attribs.AgX.Offset, 0.0f, 1.0f))
+                AttribsChanged = true;
+            if (ImGui::SliderFloat("Slope", &Attribs.AgX.Slope, 0.0f, 10.0f))
+                AttribsChanged = true;
+            if (ImGui::SliderFloat("Power", &Attribs.AgX.Power, 0.0f, 10.0f))
+                AttribsChanged = true;
+
+            ImGui::TreePop();
+        }
+    }
+
+    return AttribsChanged;
 }
 
 } // namespace Diligent

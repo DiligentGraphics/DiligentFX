@@ -50,6 +50,7 @@ namespace HLSL
 #include "Shaders/Common/public/BasicStructures.fxh"
 #include "Shaders/PBR/public/PBR_Structures.fxh"
 #include "Shaders/PBR/private/RenderPBR_Structures.fxh"
+#include "Shaders/PostProcess/ToneMapping/public/ToneMappingStructures.fxh"
 
 } // namespace HLSL
 
@@ -563,8 +564,8 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
 
             // Tone mapping is performed in the post-processing pass
             RendererParams.AverageLogLum = 0.3f;
-            RendererParams.MiddleGray    = 0.18f;
-            RendererParams.WhitePoint    = 3.0f;
+            RendererParams.MiddleGray    = HLSL::ToneMappingAttribs{}.fMiddleGray;
+            RendererParams.WhitePoint    = HLSL::ToneMappingAttribs{}.fWhitePoint;
         }
     }
 

@@ -165,7 +165,7 @@ void HnPostProcessTask::PostProcessingTechnique::PreparePSO(TEXTURE_FORMAT RTVFo
     }
 
     {
-        const int _ToneMappingMode = !PPTask.m_UseTAA ? PPTask.m_Params.ToneMappingMode : 0;
+        const int _ToneMappingMode = !PPTask.m_UseTAA ? PPTask.m_Params.ToneMapping.iToneMappingMode : 0;
         if (ToneMappingMode != _ToneMappingMode)
         {
             ToneMappingMode = _ToneMappingMode;
@@ -358,9 +358,9 @@ void HnPostProcessTask::CopyFrameTechnique::PreparePSO(TEXTURE_FORMAT RTVFormat)
         IsDirty             = true;
     }
 
-    if (ToneMappingMode != PPTask.m_Params.ToneMappingMode)
+    if (ToneMappingMode != PPTask.m_Params.ToneMapping.iToneMappingMode)
     {
-        ToneMappingMode = PPTask.m_Params.ToneMappingMode;
+        ToneMappingMode = PPTask.m_Params.ToneMapping.iToneMappingMode;
         IsDirty         = true;
     }
 
@@ -791,30 +791,24 @@ void HnPostProcessTask::Execute(pxr::HdTaskContext* TaskCtx)
 
         if (m_AttribsCBDirty)
         {
-            const bool ReverseToneMapSelectionColors = m_UseTAA && m_Params.ToneMappingMode != 0;
+            const bool ReverseToneMapSelectionColors = m_UseTAA && m_Params.ToneMapping.iToneMappingMode != 0;
 
             const float3 SelectionColorHDR = ReverseToneMapSelectionColors ?
-                ReverseExpToneMap(m_Params.SelectionColor, m_Params.MiddleGray, m_Params.AverageLogLum) :
+                ReverseExpToneMap(m_Params.SelectionColor, m_Params.ToneMapping.fMiddleGray, m_Params.AverageLogLum) :
                 m_Params.SelectionColor;
 
             const float3 OccludedSelectionColorHDR = ReverseToneMapSelectionColors ?
-                ReverseExpToneMap(m_Params.OccludedSelectionColor, m_Params.MiddleGray, m_Params.AverageLogLum) :
+                ReverseExpToneMap(m_Params.OccludedSelectionColor, m_Params.ToneMapping.fMiddleGray, m_Params.AverageLogLum) :
                 m_Params.OccludedSelectionColor;
 
             HLSL::PostProcessAttribs ShaderAttribs;
-            ShaderAttribs.SelectionOutlineColor            = float4{SelectionColorHDR, m_Params.SelectionColor.a};
-            ShaderAttribs.OccludedSelectionOutlineColor    = float4{OccludedSelectionColorHDR, m_Params.OccludedSelectionColor.a};
-            ShaderAttribs.NonselectionDesaturationFactor   = m_Params.NonselectionDesaturationFactor;
-            ShaderAttribs.ToneMapping.iToneMappingMode     = m_Params.ToneMappingMode;
-            ShaderAttribs.ToneMapping.bAutoExposure        = 0;
-            ShaderAttribs.ToneMapping.fMiddleGray          = m_Params.MiddleGray;
-            ShaderAttribs.ToneMapping.bLightAdaptation     = 0;
-            ShaderAttribs.ToneMapping.fWhitePoint          = m_Params.WhitePoint;
-            ShaderAttribs.ToneMapping.fLuminanceSaturation = m_Params.LuminanceSaturation;
-
-            ShaderAttribs.CoordinateGrid = m_Params.Grid;
+            ShaderAttribs.SelectionOutlineColor          = float4{SelectionColorHDR, m_Params.SelectionColor.a};
+            ShaderAttribs.OccludedSelectionOutlineColor  = float4{OccludedSelectionColorHDR, m_Params.OccludedSelectionColor.a};
+            ShaderAttribs.NonselectionDesaturationFactor = m_Params.NonselectionDesaturationFactor;
+            ShaderAttribs.CoordinateGrid                 = m_Params.Grid;
 
             ShaderAttribs.AverageLogLum         = m_Params.AverageLogLum;
+            ShaderAttribs.ToneMapping           = m_Params.ToneMapping;
             ShaderAttribs.ClearDepth            = m_BackgroundDepth;
             ShaderAttribs.SelectionOutlineWidth = m_Params.SelectionOutlineWidth;
             ShaderAttribs.SSRScale              = m_SSRScale;

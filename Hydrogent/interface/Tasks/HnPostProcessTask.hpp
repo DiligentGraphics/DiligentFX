@@ -62,6 +62,7 @@ namespace HLSL
 #include "../../../Shaders/PostProcess/ScreenSpaceAmbientOcclusion/public/ScreenSpaceAmbientOcclusionStructures.fxh"
 #include "../../../Shaders/PostProcess/Bloom/public/BloomStructures.fxh"
 #include "../../../Shaders/PostProcess/DepthOfField/public/DepthOfFieldStructures.fxh"
+#include "../../../Shaders/PostProcess/ToneMapping/public/ToneMappingStructures.fxh"
 } // namespace HLSL
 
 namespace USD
@@ -84,11 +85,7 @@ struct HnPostProcessTaskParams
     float NonselectionDesaturationFactor = 0.0f;
 
     // Tone mappig attribs
-    int   ToneMappingMode     = 0;     // TONE_MAPPING_MODE enum
-    float MiddleGray          = 0.18f; // Middle gray luminance
-    float WhitePoint          = 3.0f;  // White point luminance
-    float LuminanceSaturation = 1.0;   // Luminance saturation factor
-    float AverageLogLum       = 0.3f;  // Average log luminance of the scene
+    float AverageLogLum = 0.3f; // Average log luminance of the scene
 
     // Screen-space reflection scale.
     // 0 - disable SSR.
@@ -124,6 +121,7 @@ struct HnPostProcessTaskParams
     HLSL::DepthOfFieldAttribs                DOF;
     HLSL::BloomAttribs                       Bloom;
     HLSL::CoordinateGridAttribs              Grid;
+    HLSL::ToneMappingAttribs                 ToneMapping;
 
     constexpr HnPostProcessTaskParams() noexcept
     {
@@ -131,6 +129,8 @@ struct HnPostProcessTaskParams
         SSR.RoughnessChannel          = 0;
         SSR.IsRoughnessPerceptual     = true;
         SSR.RoughnessThreshold        = 0.4f;
+
+        ToneMapping.AgX.Saturation = 1.4f;
     }
 
     constexpr bool operator==(const HnPostProcessTaskParams& rhs) const
@@ -141,16 +141,12 @@ struct HnPostProcessTaskParams
                OccludedSelectionColor         == rhs.OccludedSelectionColor &&
                SelectionOutlineWidth          == rhs.SelectionOutlineWidth &&
                NonselectionDesaturationFactor == rhs.NonselectionDesaturationFactor &&
-               ToneMappingMode                == rhs.ToneMappingMode &&
-               MiddleGray                     == rhs.MiddleGray &&
-               WhitePoint                     == rhs.WhitePoint &&
-               LuminanceSaturation            == rhs.LuminanceSaturation &&
                AverageLogLum                  == rhs.AverageLogLum &&
                SSRScale                       == rhs.SSRScale &&
                SSAOScale                      == rhs.SSAOScale &&
                EnableTAA                      == rhs.EnableTAA &&
                EnableDOF                      == rhs.EnableDOF &&
-               EnableBloom					  == rhs.EnableBloom &&
+               EnableBloom                      == rhs.EnableBloom &&
                SSRFeatureFlags                == rhs.SSRFeatureFlags &&
                SSAOFeatureFlags               == rhs.SSAOFeatureFlags &&
                TAAFeatureFlags                == rhs.TAAFeatureFlags &&
@@ -158,12 +154,13 @@ struct HnPostProcessTaskParams
                BloomFeatureFlags              == rhs.BloomFeatureFlags &&
                GridFeatureFlags               == rhs.GridFeatureFlags &&
                SuperSamplingSuspensionFrames  == rhs.SuperSamplingSuspensionFrames &&
-               memcmp(&SSR,  &rhs.SSR,    sizeof(SSR))   == 0 &&
-               memcmp(&SSAO, &rhs.SSAO,   sizeof(SSAO))  == 0 &&
-               memcmp(&TAA,  &rhs.TAA,    sizeof(TAA))   == 0 &&
-               memcmp(&DOF,  &rhs.DOF,    sizeof(DOF))   == 0 &&
-               memcmp(&Bloom, &rhs.Bloom, sizeof(Bloom)) == 0 &&
-               memcmp(&Grid,  &rhs.Grid,  sizeof(Grid))  == 0;
+               memcmp(&SSR,  &rhs.SSR,    sizeof(SSR))                     == 0 &&
+               memcmp(&SSAO, &rhs.SSAO,   sizeof(SSAO))                    == 0 &&
+               memcmp(&TAA,  &rhs.TAA,    sizeof(TAA))                     == 0 &&
+               memcmp(&DOF,  &rhs.DOF,    sizeof(DOF))                     == 0 &&
+               memcmp(&Bloom, &rhs.Bloom, sizeof(Bloom))                   == 0 &&
+               memcmp(&Grid,  &rhs.Grid,  sizeof(Grid))                    == 0 &&
+               memcmp(&ToneMapping, &rhs.ToneMapping, sizeof(ToneMapping)) == 0;
         // clang-format on
     }
 

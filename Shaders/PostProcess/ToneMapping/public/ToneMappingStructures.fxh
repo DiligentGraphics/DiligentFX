@@ -17,7 +17,15 @@
 #define TONE_MAPPING_LOGARITHMIC        6
 #define TONE_MAPPING_ADAPTIVE_LOG       7
 #define TONE_MAPPING_AGX                8
-#define TONE_MAPPING_AGX_PUNCHY         9
+#define TONE_MAPPING_AGX_CUSTOM         9
+
+struct AgXAttribs
+{
+    float Saturation  DEFAULT_VALUE(1.f);
+    float Slope       DEFAULT_VALUE(1.f);
+    float Power       DEFAULT_VALUE(1.f);
+    float Offset      DEFAULT_VALUE(0.f);
+};
 
 struct ToneMappingAttribs
 {
@@ -34,8 +42,11 @@ struct ToneMappingAttribs
     float fWhitePoint                       DEFAULT_VALUE(3.f);
     // Luminance point to use in tone mapping.
     float fLuminanceSaturation              DEFAULT_VALUE(1.f);
-    uint Padding0                           DEFAULT_VALUE(0);
-    uint Padding1                           DEFAULT_VALUE(0);
+    uint  Padding0                          DEFAULT_VALUE(0);
+    uint  Padding1                          DEFAULT_VALUE(0);
+
+    // Settings for AGX custom tone mapping operator.
+    AgXAttribs AgX                          DEFAULT_VALUE({});
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
     CHECK_STRUCT_ALIGNMENT(ToneMappingAttribs);

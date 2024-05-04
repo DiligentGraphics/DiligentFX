@@ -29,6 +29,11 @@
 namespace Diligent
 {
 
+namespace HLSL
+{
+struct ToneMappingAttribs;
+} // namespace HLSL
+
 /// Computes approximate reverse tone mapping for the given tone-mapped color.
 /// \param               - Tone-mapped color.
 /// \param MiddleGray    - Middle gray value used by the tone mapping operator.
@@ -36,8 +41,10 @@ namespace Diligent
 /// \return  Approximate reverse tone-mapped color.
 ///
 /// \remarks The function computes approximate reverse tone mapping assuming the
-///		     exponential tone mapping operator. The value is not exact, but
-///  		 works well for practical purposes.
+///          exponential tone mapping operator. The value is not exact, but
+///          works well for practical purposes.
 float3 ReverseExpToneMap(const float3& Color, float MiddleGray, float AverageLogLum);
+
+bool ToneMappingUpdateUI(HLSL::ToneMappingAttribs& Attribs, float* AverageLogLum = nullptr);
 
 } // namespace Diligent
