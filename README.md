@@ -18,18 +18,46 @@ DiligentFX is the [Diligent Engine](https://github.com/DiligentGraphics/Diligent
 [![MSVC Code Analysis](https://github.com/DiligentGraphics/DiligentFX/actions/workflows/msvc_analysis.yml/badge.svg?branch=master)](https://github.com/DiligentGraphics/DiligentFX/actions/workflows/msvc_analysis.yml?query=branch%3Amaster)
 [![Lines of Code](https://tokei.rs/b1/github.com/DiligentGraphics/DiligentFX)](https://github.com/DiligentGraphics/DiligentFX)
 
-The framework implements the following components
+The following components are now available:
 
-* [Epipolar light scattering post-effect](https://github.com/DiligentGraphics/DiligentFX/tree/master/PostProcess/EpipolarLightScattering)
-<img src="https://github.com/DiligentGraphics/DiligentFX/blob/master/PostProcess/EpipolarLightScattering/media/LightScattering.png" width=240>
+<a name="gltf_loader_and_renderer"></a>
+* [GLTF2.0 Loader](https://github.com/DiligentGraphics/DiligentTools/tree/master/AssetLoader)
+  and [Physically-based renderer with image-based lighting](https://github.com/DiligentGraphics/DiligentFX/tree/master/PBR).
+  
+|||
+|-----------------|-----------------|
+| ![](https://github.com/DiligentGraphics/DiligentFX/blob/master/PBR/screenshots/damaged_helmet.jpg) | ![](https://github.com/DiligentGraphics/DiligentFX/blob/master/PBR/screenshots/flight_helmet.jpg) |
+| ![](https://github.com/DiligentGraphics/DiligentFX/blob/master/PBR/screenshots/mr_spheres.jpg)     | ![](https://github.com/DiligentGraphics/DiligentSamples/blob/master/Samples/GLTFViewer/screenshots/cesium_man_large.gif)  |
 
-* [Tone mapping utilities](https://github.com/DiligentGraphics/DiligentFX/tree/master/Shaders/PostProcess/ToneMapping/public)
 
-* [Physically-Based GLTF2.0 Renderer](https://github.com/DiligentGraphics/DiligentFX/tree/master/PBR)
-<img src="https://github.com/DiligentGraphics/DiligentFX/blob/master/PBR/screenshots/flight_helmet.jpg" width=240>
+* [Hydrogent](https://github.com/DiligentGraphics/DiligentFX/tree/master/Hydrogent), an implementation of the Hydra rendering API in Diligent Engine.
+<img src="https://github.com/DiligentGraphics/DiligentSamples/blob/master/Samples/USDViewer/Screenshot.jpg" width=400>
 
 * [Shadows](https://github.com/DiligentGraphics/DiligentFX/tree/master/Components#shadows)
-<img src="https://github.com/DiligentGraphics/DiligentFX/blob/master/Components/media/Powerplant-Shadows.jpg" width=240>
+<img src="https://github.com/DiligentGraphics/DiligentFX/blob/master/Components/media/Powerplant-Shadows.jpg" width=400>
+
+
+**Post-processing effects**
+
+* [Screen-Space Reflections](https://github.com/DiligentGraphics/DiligentFX/tree/master/PostProcess/ScreenSpaceReflection)
+<img src="https://github.com/DiligentGraphics/DiligentFX/blob/master/PostProcess/ScreenSpaceReflection/media/ssr-logo.jpg" width=400>
+
+* [Screen-Space Ambient Occlusion](https://github.com/DiligentGraphics/DiligentFX/tree/master/PostProcess/ScreenSpaceAmbientOcclusion)
+<img src="https://github.com/DiligentGraphics/DiligentFX/blob/master/PostProcess/ScreenSpaceAmbientOcclusion/media/ssao-kitchen.jpg" width=400>
+
+* [Depth of Field](https://github.com/DiligentGraphics/DiligentFX/tree/master/PostProcess/DepthOfField)
+<img src="https://github.com/DiligentGraphics/DiligentFX/blob/master/PostProcess/DepthOfField/media/depth_of_field.jpg" width=400>
+
+* [Bloom](https://github.com/DiligentGraphics/DiligentFX/tree/master/PostProcess/Bloom)
+<img src="https://github.com/DiligentGraphics/DiligentFX/blob/master/PostProcess/Bloom/media/bloom.jpg" width=400>
+
+* [Epipolar light scattering](https://github.com/DiligentGraphics/DiligentFX/tree/master/PostProcess/EpipolarLightScattering)
+<img src="https://github.com/DiligentGraphics/DiligentFX/blob/master/PostProcess/EpipolarLightScattering/media/LightScattering.png" width=400>
+
+* [Temporal Anti-Aliasing](https://github.com/DiligentGraphics/DiligentFX/tree/master/PostProcess/TemporalAntiAliasing)
+
+* [Tone mapping shader utilities](https://github.com/DiligentGraphics/DiligentFX/tree/master/Shaders/PostProcess/ToneMapping/public)
+
 
 # License
 
