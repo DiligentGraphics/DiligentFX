@@ -103,31 +103,32 @@ bool ToneMappingUpdateUI(HLSL::ToneMappingAttribs& Attribs, float* AverageLogLum
 
     if (AverageLogLum != nullptr)
     {
-        if (ImGui::SliderFloat("Average log lum", AverageLogLum, 0.01f, 10.0f))
+        if (ImGui::SliderFloat("Average log lum", AverageLogLum, 0.01f, 10.0f, "%.3f", ImGuiSliderFlags_Logarithmic))
             AttribsChanged = true;
     }
 
     if (ImGui::SliderFloat("Middle gray", &Attribs.fMiddleGray, 0.01f, 1.0f))
         AttribsChanged = true;
-    if (ImGui::SliderFloat("White point", &Attribs.fWhitePoint, 0.1f, 20.0f))
-        AttribsChanged = true;
+
+    if (Attribs.iToneMappingMode == TONE_MAPPING_MODE_REINHARD_MOD ||
+        Attribs.iToneMappingMode == TONE_MAPPING_MODE_UNCHARTED2 ||
+        Attribs.iToneMappingMode == TONE_MAPPING_LOGARITHMIC ||
+        Attribs.iToneMappingMode == TONE_MAPPING_ADAPTIVE_LOG)
+    {
+        if (ImGui::SliderFloat("White point", &Attribs.fWhitePoint, 0.1f, 20.0f))
+            AttribsChanged = true;
+    }
 
     if (Attribs.iToneMappingMode == TONE_MAPPING_AGX_CUSTOM)
     {
-        if (ImGui::TreeNode("AgX Custom Settings"))
-        {
-            if (ImGui::SliderFloat("Saturation", &Attribs.AgX.Saturation, 0.0f, 2.0f))
-                AttribsChanged = true;
-
-            if (ImGui::SliderFloat("Offset", &Attribs.AgX.Offset, 0.0f, 1.0f))
-                AttribsChanged = true;
-            if (ImGui::SliderFloat("Slope", &Attribs.AgX.Slope, 0.0f, 10.0f))
-                AttribsChanged = true;
-            if (ImGui::SliderFloat("Power", &Attribs.AgX.Power, 0.0f, 10.0f))
-                AttribsChanged = true;
-
-            ImGui::TreePop();
-        }
+        if (ImGui::SliderFloat("AgX Saturation", &Attribs.AgX.Saturation, 0.0f, 2.0f))
+            AttribsChanged = true;
+        if (ImGui::SliderFloat("AgX Offset", &Attribs.AgX.Offset, 0.0f, 1.0f))
+            AttribsChanged = true;
+        if (ImGui::SliderFloat("AgX Slope", &Attribs.AgX.Slope, 0.0f, 10.0f))
+            AttribsChanged = true;
+        if (ImGui::SliderFloat("AgX Power", &Attribs.AgX.Power, 0.0f, 10.0f))
+            AttribsChanged = true;
     }
 
     return AttribsChanged;
