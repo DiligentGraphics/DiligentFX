@@ -213,6 +213,17 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
     {
         PrecomputeBRDF(pCtx, m_Settings.NumBRDFSamples);
 
+        TEXTURE_FORMAT IrradianceCubeFmt = TEX_FORMAT_RGBA32_FLOAT;
+        if (!m_Device.GetTextureFormatInfo(IrradianceCubeFmt))
+        {
+            IrradianceCubeFmt = TEX_FORMAT_RGBA16_FLOAT;
+            if (!m_Device.GetTextureFormatInfo(IrradianceCubeFmt))
+            {
+                LOG_WARNING_MESSAGE("This device supports neither RGBA32_FLOAT nor RGBA16_FLOAT formats. Using RGBA8 as fallback for irradiance cube map, so expect artifacts in IBL.");
+                IrradianceCubeFmt = TEX_FORMAT_RGBA8_UNORM;
+            }
+        }
+
         TextureDesc TexDesc;
         TexDesc.Name      = "Irradiance cube map for PBR renderer";
         TexDesc.Type      = RESOURCE_DIM_TEX_CUBE;
@@ -526,7 +537,7 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
         PSODesc.PipelineType = PIPELINE_TYPE_GRAPHICS;
 
         GraphicsPipeline.NumRenderTargets             = 1;
-        GraphicsPipeline.RTVFormats[0]                = IrradianceCubeFmt;
+        GraphicsPipeline.RTVFormats[0]                = m_pIrradianceCubeSRV->GetDesc().Format;
         GraphicsPipeline.PrimitiveTopology            = PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
         GraphicsPipeline.RasterizerDesc.CullMode      = CULL_MODE_NONE;
         GraphicsPipeline.DepthStencilDesc.DepthEnable = False;

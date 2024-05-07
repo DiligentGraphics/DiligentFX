@@ -680,7 +680,6 @@ protected:
     RefCntAutoPtr<ITextureView> m_pDefaultNormalMapSRV;
     RefCntAutoPtr<ITextureView> m_pDefaultPhysDescSRV;
 
-    static constexpr TEXTURE_FORMAT IrradianceCubeFmt    = TEX_FORMAT_RGBA32_FLOAT;
     static constexpr TEXTURE_FORMAT PrefilteredEnvMapFmt = TEX_FORMAT_RGBA16_FLOAT;
     static constexpr Uint32         IrradianceCubeDim    = 64;
     static constexpr Uint32         PrefilteredEnvMapDim = 256;
