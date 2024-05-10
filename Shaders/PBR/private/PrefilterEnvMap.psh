@@ -57,8 +57,10 @@ float3 PrefilterEnvMap( float PerceptualRoughness, float3 R )
             float OmegaS = 1.0 / (float(g_NumSamples) * pdf);
             // Solid angle of 1 pixel across all cube faces
             float OmegaP = 4.0 * PI / (6.0 * g_EnvMapDim * g_EnvMapDim);
-            // Do not apply mip bias as this produces results that are not consistent with the reference
-            float MipLevel = (AlphaRoughness == 0.0) ? 0.0 : max(0.5 * log2(OmegaS / OmegaP), 0.0);
+            // Applying mip bias produces better results, especially for environments maps with
+            // very bright spots.
+            float MipBias = 1.0; 
+            float MipLevel = (AlphaRoughness == 0.0) ? 0.0 : max(0.5 * log2(OmegaS / OmegaP) + MipBias, 0.0);
 #else
             float MipLevel = 0.0;
 #endif
