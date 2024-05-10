@@ -213,17 +213,6 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
     {
         PrecomputeBRDF(pCtx, m_Settings.NumBRDFSamples);
 
-        TEXTURE_FORMAT IrradianceCubeFmt = TEX_FORMAT_RGBA32_FLOAT;
-        if (!m_Device.GetTextureFormatInfo(IrradianceCubeFmt))
-        {
-            IrradianceCubeFmt = TEX_FORMAT_RGBA16_FLOAT;
-            if (!m_Device.GetTextureFormatInfo(IrradianceCubeFmt))
-            {
-                LOG_WARNING_MESSAGE("This device supports neither RGBA32_FLOAT nor RGBA16_FLOAT formats. Using RGBA8 as fallback for irradiance cube map, so expect artifacts in IBL.");
-                IrradianceCubeFmt = TEX_FORMAT_RGBA8_UNORM;
-            }
-        }
-
         TextureDesc TexDesc;
         TexDesc.Name      = "Irradiance cube map for PBR renderer";
         TexDesc.Type      = RESOURCE_DIM_TEX_CUBE;
@@ -233,15 +222,16 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
         TexDesc.Height    = IrradianceCubeDim;
         TexDesc.Format    = IrradianceCubeFmt;
         TexDesc.ArraySize = 6;
-        TexDesc.MipLevels = 0;
+        TexDesc.MipLevels = 1;
 
         auto IrradainceCubeTex = m_Device.CreateTexture(TexDesc);
         m_pIrradianceCubeSRV   = IrradainceCubeTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
 
-        TexDesc.Name   = "Prefiltered environment map for PBR renderer";
-        TexDesc.Width  = PrefilteredEnvMapDim;
-        TexDesc.Height = PrefilteredEnvMapDim;
-        TexDesc.Format = PrefilteredEnvMapFmt;
+        TexDesc.Name      = "Prefiltered environment map for PBR renderer";
+        TexDesc.Width     = PrefilteredEnvMapDim;
+        TexDesc.Height    = PrefilteredEnvMapDim;
+        TexDesc.Format    = PrefilteredEnvMapFmt;
+        TexDesc.MipLevels = 0;
 
         auto PrefilteredEnvMapTex = m_Device.CreateTexture(TexDesc);
         m_pPrefilteredEnvMapSRV   = PrefilteredEnvMapTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
@@ -475,8 +465,8 @@ void PBR_Renderer::PrecomputeBRDF(IDeviceContext* pCtx,
 
 void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
                                       ITextureView*   pEnvironmentMap,
-                                      Uint32          NumPhiSamples,
-                                      Uint32          NumThetaSamples,
+                                      Uint32          NumDiffuseSamples,
+                                      Uint32          NumSpecularSamples,
                                       bool            OptimizeSamples)
 {
     if (!m_Settings.EnableIBL)
@@ -506,10 +496,6 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
         ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
         ShaderCI.pShaderSourceStreamFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();
 
-        ShaderMacroHelper Macros;
-        Macros.AddShaderMacro("NUM_PHI_SAMPLES", static_cast<int>(NumPhiSamples));
-        Macros.AddShaderMacro("NUM_THETA_SAMPLES", static_cast<int>(NumThetaSamples));
-        ShaderCI.Macros = Macros;
         RefCntAutoPtr<IShader> pVS;
         {
             ShaderCI.Desc       = {"Cubemap face VS", SHADER_TYPE_VERTEX, true};
@@ -554,6 +540,7 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
 
         m_pPrecomputeIrradianceCubePSO = m_Device.CreateGraphicsPipelineState(PSOCreateInfo);
         m_pPrecomputeIrradianceCubePSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "cbTransform")->Set(m_PrecomputeEnvMapAttribsCB);
+        m_pPrecomputeIrradianceCubePSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "FilterAttribs")->Set(m_PrecomputeEnvMapAttribsCB);
         m_pPrecomputeIrradianceCubePSO->CreateShaderResourceBinding(&m_pPrecomputeIrradianceCubeSRB, true);
     }
 
@@ -631,27 +618,26 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
     pCtx->SetPipelineState(m_pPrecomputeIrradianceCubePSO);
     m_pPrecomputeIrradianceCubeSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_EnvironmentMap")->Set(pEnvironmentMap);
     pCtx->CommitShaderResources(m_pPrecomputeIrradianceCubeSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    auto*       pIrradianceCube    = m_pIrradianceCubeSRV->GetTexture();
-    const auto& IrradianceCubeDesc = pIrradianceCube->GetDesc();
-    for (Uint32 mip = 0; mip < IrradianceCubeDesc.MipLevels; ++mip)
+    auto* pIrradianceCube = m_pIrradianceCubeSRV->GetTexture();
+
+    for (Uint32 face = 0; face < 6; ++face)
     {
-        for (Uint32 face = 0; face < 6; ++face)
+        TextureViewDesc RTVDesc{"RTV for irradiance cube texture", TEXTURE_VIEW_RENDER_TARGET, RESOURCE_DIM_TEX_2D_ARRAY};
+        RTVDesc.MostDetailedMip = 0;
+        RTVDesc.FirstArraySlice = face;
+        RTVDesc.NumArraySlices  = 1;
+        RefCntAutoPtr<ITextureView> pRTV;
+        pIrradianceCube->CreateView(RTVDesc, &pRTV);
+        ITextureView* ppRTVs[] = {pRTV};
+        pCtx->SetRenderTargets(_countof(ppRTVs), ppRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         {
-            TextureViewDesc RTVDesc{"RTV for irradiance cube texture", TEXTURE_VIEW_RENDER_TARGET, RESOURCE_DIM_TEX_2D_ARRAY};
-            RTVDesc.MostDetailedMip = mip;
-            RTVDesc.FirstArraySlice = face;
-            RTVDesc.NumArraySlices  = 1;
-            RefCntAutoPtr<ITextureView> pRTV;
-            pIrradianceCube->CreateView(RTVDesc, &pRTV);
-            ITextureView* ppRTVs[] = {pRTV};
-            pCtx->SetRenderTargets(_countof(ppRTVs), ppRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-            {
-                MapHelper<PrecomputeEnvMapAttribs> Attribs{pCtx, m_PrecomputeEnvMapAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
-                Attribs->Rotation = Matrices[face];
-            }
-            DrawAttribs drawAttrs(4, DRAW_FLAG_VERIFY_ALL);
-            pCtx->Draw(drawAttrs);
+            MapHelper<PrecomputeEnvMapAttribs> Attribs{pCtx, m_PrecomputeEnvMapAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
+            Attribs->Rotation   = Matrices[face];
+            Attribs->EnvMapDim  = static_cast<float>(pEnvironmentMap->GetTexture()->GetDesc().Width);
+            Attribs->NumSamples = NumDiffuseSamples;
         }
+        DrawAttribs drawAttrs(4, DRAW_FLAG_VERIFY_ALL);
+        pCtx->Draw(drawAttrs);
     }
 
     pCtx->SetPipelineState(m_pPrefilterEnvMapPSO);
@@ -676,8 +662,8 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
                 MapHelper<PrecomputeEnvMapAttribs> Attribs{pCtx, m_PrecomputeEnvMapAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
                 Attribs->Rotation   = Matrices[face];
                 Attribs->Roughness  = static_cast<float>(mip) / static_cast<float>(PrefilteredEnvMapDesc.MipLevels - 1);
-                Attribs->EnvMapDim  = static_cast<float>(PrefilteredEnvMapDesc.Width);
-                Attribs->NumSamples = 256;
+                Attribs->EnvMapDim  = static_cast<float>(pEnvironmentMap->GetTexture()->GetDesc().Width);
+                Attribs->NumSamples = NumSpecularSamples;
             }
 
             DrawAttribs drawAttrs(4, DRAW_FLAG_VERIFY_ALL);

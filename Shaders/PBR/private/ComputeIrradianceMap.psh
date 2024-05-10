@@ -1,42 +1,60 @@
 // Generates an irradiance cube from an environment map using convolution
 
-#ifndef NUM_PHI_SAMPLES
-#   define NUM_PHI_SAMPLES 64
-#endif
-
-#ifndef NUM_THETA_SAMPLES
-#   define NUM_THETA_SAMPLES 32
-#endif
+#include "PBR_PrecomputeCommon.fxh"
 
 TextureCube  g_EnvironmentMap;
 SamplerState g_EnvironmentMap_sampler;
+
+cbuffer FilterAttribs
+{
+    float4x4 g_RotationUnused;
+
+    float g_Roughness;
+    float g_EnvMapDim;
+    uint  g_NumSamples;
+    float Dummy;
+}
+
+float3 IrradianceMap(float3 N)
+{
+    // When the HDRI map has points occupying a small area but with high peak brightness (such as the sun), brightness spikes appear on the irradiance map. 
+    // To resolve this issue, we used the approach from the comments in this post:
+    // https://www.reddit.com/r/opengl/comments/l0h5fy/rendering_the_irradiance_map_for_physically_based/
+    float3 Irradiance = float3(0.0, 0.0, 0.0);   
+    for (uint i = 0u; i < g_NumSamples; ++i)
+    {
+        float2 Xi = Hammersley2D(i, g_NumSamples);
+        
+        // Importance sample the hemisphere with a cosine-weighted distribution
+        float3 L = ImportanceSampleGGX(Xi, 1.0, N);
+        
+        // NdotL is equal to cos(theta)
+        float NoL = max(dot(N, L), 0.0);
+        
+        // Probability density function for cosine-weighted hemisphere
+        float pdf = max((1.0 / PI) * NoL, 0.0001);
+
+        // Solid angle of current smple
+        float OmegaS = 1.0 / (float(g_NumSamples) * pdf);
+        
+        // Solid angle of 1 pixel across all cube faces
+        float OmegaP = 4.0 * PI / (6.0 * g_EnvMapDim * g_EnvMapDim);
+        
+        // Applying mip bias produces better results, especially for environments maps with
+        // very bright spots.
+        float MipBias = 1.0;
+        float MipLevel = max(0.5 * log2(OmegaS / OmegaP) + MipBias, 0.0);
+
+        Irradiance += g_EnvironmentMap.SampleLevel(g_EnvironmentMap_sampler, L, MipLevel).rgb;
+    }
+    return Irradiance / float(g_NumSamples);
+}
 
 void main(in float4 Pos      : SV_Position,
           in float3 WorldPos : WORLD_POS,
           out float4 Color   : SV_Target)
 {
-    float3 N     = normalize(WorldPos);
-    float3 up    = float3(0.0, 1.0, 0.0);
-    float3 right = normalize(cross(up, N));
-    up = cross(N, right);
-
-    const float PI         = 3.14159265;
-    const float deltaPhi   = 2.0 * PI / float(NUM_PHI_SAMPLES);
-    const float deltaTheta = 0.5 * PI / float(NUM_THETA_SAMPLES);
-
-    float3 color = float3(0.0, 0.0, 0.0);
-    float sampleCount = 0.0;
-    for (int p=0; p < NUM_PHI_SAMPLES; ++p)
-    {
-        float phi = float(p) * deltaPhi;
-        for (int t=0; t < NUM_THETA_SAMPLES; ++t)
-        {
-            float theta = float(t) * deltaTheta;
-            float3 tempVec   = cos(phi) * right + sin(phi) * up;
-            float3 sampleDir = cos(theta) * N + sin(theta) * tempVec;
-            color += g_EnvironmentMap.Sample(g_EnvironmentMap_sampler, sampleDir).rgb * cos(theta) * sin(theta);
-            sampleCount += 1.0;
-        }
-    }
-    Color = float4(PI * color / sampleCount, 1.0);
+    float3 N = normalize(WorldPos);
+    Color.rgb = IrradianceMap(N);
+    Color.a = 1.0;
 }

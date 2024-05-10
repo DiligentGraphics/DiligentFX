@@ -418,9 +418,9 @@ public:
     /// Precompute cubemaps used by IBL.
     void PrecomputeCubemaps(IDeviceContext* pCtx,
                             ITextureView*   pEnvironmentMap,
-                            Uint32          NumPhiSamples   = 64,
-                            Uint32          NumThetaSamples = 32,
-                            bool            OptimizeSamples = true);
+                            Uint32          NumDiffuseSamples  = 8192,
+                            Uint32          NumSpecularSamples = 256,
+                            bool            OptimizeSamples    = true);
 
     void CreateResourceBinding(IShaderResourceBinding** ppSRB, Uint32 Idx = 0) const;
 
@@ -694,6 +694,7 @@ protected:
     RefCntAutoPtr<ITextureView> m_pDefaultPhysDescSRV;
 
     static constexpr TEXTURE_FORMAT PrefilteredEnvMapFmt = TEX_FORMAT_RGBA16_FLOAT;
+    static constexpr TEXTURE_FORMAT IrradianceCubeFmt    = TEX_FORMAT_RGBA16_FLOAT;
     static constexpr Uint32         IrradianceCubeDim    = 64;
     static constexpr Uint32         PrefilteredEnvMapDim = 256;
 
