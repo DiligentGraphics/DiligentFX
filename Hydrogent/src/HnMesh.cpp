@@ -980,9 +980,11 @@ void HnMesh::UpdateVertexBuffers(HnRenderDelegate& RenderDelegate)
         const auto ElementType = pSource->GetTupleType().type;
         const auto ElementSize = HdDataSizeOfType(ElementType);
         if (PrimName == pxr::HdTokens->points)
-            VERIFY(ElementType == pxr::HdTypeFloatVec3, "Unexpected vertex size");
+            VERIFY(ElementType == pxr::HdTypeFloatVec3, "Unexpected vertex element type");
         else if (PrimName == pxr::HdTokens->normals)
-            VERIFY(ElementType == pxr::HdTypeFloatVec3, "Unexpected normal size");
+            VERIFY(ElementType == pxr::HdTypeFloatVec3, "Unexpected normal element type");
+        else if (PrimName == pxr::HdTokens->displayColor)
+            VERIFY(ElementType == pxr::HdTypeFloatVec3, "Unexpected vertex color element type");
 
         RefCntAutoPtr<IBuffer> pBuffer;
         if (!m_VertexData.PoolAllocation)
@@ -1104,8 +1106,9 @@ void HnMesh::UpdateDrawItemGpuGeometry(HnRenderDelegate& RenderDelegate)
             HnDrawItem& DrawItem = *static_cast<HnDrawItem*>(Repr.GetDrawItem(item));
 
             HnDrawItem::GeometryData Geo;
-            Geo.Positions = GetVertexBuffer(pxr::HdTokens->points);
-            Geo.Normals   = GetVertexBuffer(pxr::HdTokens->normals);
+            Geo.Positions    = GetVertexBuffer(pxr::HdTokens->points);
+            Geo.Normals      = GetVertexBuffer(pxr::HdTokens->normals);
+            Geo.VertexColors = GetVertexBuffer(pxr::HdTokens->displayColor);
 
             // Our shader currently supports two texture coordinate sets.
             // Gather vertex buffers for both sets.

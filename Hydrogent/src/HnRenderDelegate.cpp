@@ -184,6 +184,7 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
             {USD_Renderer::VERTEX_ATTRIB_ID_NORMAL,    1, 3, VT_FLOAT32}, //float3 Normal  : ATTRIB1;
             {USD_Renderer::VERTEX_ATTRIB_ID_TEXCOORD0, 2, 2, VT_FLOAT32}, //float2 UV0     : ATTRIB2;
             {USD_Renderer::VERTEX_ATTRIB_ID_TEXCOORD1, 3, 2, VT_FLOAT32}, //float2 UV1     : ATTRIB3;
+            {USD_Renderer::VERTEX_ATTRIB_ID_COLOR,     4, 3, VT_FLOAT32}, //float3 Color   : ATTRIB6;
             // clang-format on
         };
 

@@ -209,7 +209,7 @@ private:
     IBuffer* pIndexBuffer = nullptr;
 
     Uint32                  NumVertexBuffers = 0;
-    std::array<IBuffer*, 4> ppVertexBuffers  = {};
+    std::array<IBuffer*, 5> ppVertexBuffers  = {};
 
     USD_Renderer::PsoCacheAccessor PsoCache;
 };
@@ -720,7 +720,7 @@ void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
 
 HnRenderPass::SupportedVertexInputsSetType HnRenderPass::GetSupportedVertexInputs(const HnMaterial* Material)
 {
-    SupportedVertexInputsSetType SupportedInputs{{pxr::HdTokens->points, pxr::HdTokens->normals}};
+    SupportedVertexInputsSetType SupportedInputs{{pxr::HdTokens->points, pxr::HdTokens->normals, pxr::HdTokens->displayColor}};
     if (Material != nullptr)
     {
         const auto& TexCoordSets = Material->GetTextureCoordinateSets();
@@ -794,8 +794,13 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
 
         if (m_RenderMode == HN_RENDER_MODE_SOLID)
         {
-            if (Geo.Normals != nullptr && (m_Params.UsdPsoFlags & USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_OUTPUT) != 0)
-                PSOFlags |= PBR_Renderer::PSO_FLAG_USE_VERTEX_NORMALS;
+            if ((m_Params.UsdPsoFlags & USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_OUTPUT) != 0)
+            {
+                if (Geo.Normals != nullptr)
+                    PSOFlags |= PBR_Renderer::PSO_FLAG_USE_VERTEX_NORMALS;
+                if (Geo.VertexColors != nullptr)
+                    PSOFlags |= PBR_Renderer::PSO_FLAG_USE_VERTEX_COLORS;
+            }
             if (Geo.TexCoords[0] != nullptr)
                 PSOFlags |= PBR_Renderer::PSO_FLAG_USE_TEXCOORD0;
             if (Geo.TexCoords[1] != nullptr)
@@ -853,14 +858,15 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
     {
         const HnDrawItem::GeometryData& Geo = DrawItem.GetGeometryData();
 
-        ListItem.VertexBuffers = {Geo.Positions, Geo.Normals, Geo.TexCoords[0], Geo.TexCoords[1]};
+        // Input layout is defined by HnRenderDelegate when creating USD renderer.
+        ListItem.VertexBuffers = {Geo.Positions, Geo.Normals, Geo.TexCoords[0], Geo.TexCoords[1], Geo.VertexColors};
 
         const HnDrawItem::TopologyData* Topology = nullptr;
         switch (m_RenderMode)
         {
             case HN_RENDER_MODE_SOLID:
                 Topology                  = &DrawItem.GetFaces();
-                ListItem.NumVertexBuffers = 4;
+                ListItem.NumVertexBuffers = 5;
                 break;
 
             case HN_RENDER_MODE_MESH_EDGES:

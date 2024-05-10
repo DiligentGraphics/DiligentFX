@@ -154,7 +154,7 @@ private:
 
         IBuffer* IndexBuffer = nullptr;
 
-        std::array<IBuffer*, 4> VertexBuffers = {};
+        std::array<IBuffer*, 5> VertexBuffers = {};
 
         explicit DrawListItem(HnRenderDelegate& RenderDelegate, const HnDrawItem& Item) noexcept;
 
