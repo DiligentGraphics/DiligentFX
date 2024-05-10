@@ -5,7 +5,7 @@
 #    define NUM_SAMPLES 512u
 #endif
 
-float2 IntegrateBRDF( float Roughness, float NoV, uint NumSamples )
+float2 IntegrateBRDF( float PerceptualRoughness, float NoV, uint NumSamples )
 {
     float3 V;
     V.x = sqrt( 1.0 - NoV * NoV ); // sin
@@ -17,7 +17,7 @@ float2 IntegrateBRDF( float Roughness, float NoV, uint NumSamples )
     for( uint i = 0u; i < NumSamples; i++ )
     {
         float2 Xi = Hammersley2D( i, NumSamples );
-        float3 H = ImportanceSampleGGX( Xi, Roughness, N );
+        float3 H = ImportanceSampleGGX( Xi, PerceptualRoughness, N );
         float3 L = 2.0 * dot( V, H ) * H - V;
         float NoL = saturate( L.z );
         float NoH = saturate( H.z );
@@ -26,8 +26,10 @@ float2 IntegrateBRDF( float Roughness, float NoV, uint NumSamples )
         {
             // https://blog.selfshadow.com/publications/s2013-shading-course/karis/s2013_pbs_epic_notes_v2.pdf
             // Also see eq. 92 in  https://google.github.io/filament/Filament.md.html#lighting/imagebasedlights
+            // Also https://www.shadertoy.com/view/3lXXDB
             // Note that VoH / (NormalDistribution_GGX(H,Roughness) * NoH) term comes from importance sampling
-            float G_Vis = 4.0 * SmithGGXVisibilityCorrelated( NoL, NoV, Roughness ) * VoH * NoL / NoH;
+            float AlphaRoughness = PerceptualRoughness * PerceptualRoughness;
+            float G_Vis = 4.0 * SmithGGXVisibilityCorrelated( NoL, NoV, AlphaRoughness ) * VoH * NoL / NoH;
             float Fc = pow( 1.0 - VoH, 5.0 );
             A += (1.0 - Fc) * G_Vis;
             B += Fc * G_Vis;

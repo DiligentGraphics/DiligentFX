@@ -18,7 +18,7 @@ cbuffer FilterAttribs
 }
 
 // https://blog.selfshadow.com/publications/s2013-shading-course/karis/s2013_pbs_epic_notes_v2.pdf
-float3 PrefilterEnvMap( float Roughness, float3 R )
+float3 PrefilterEnvMap( float PerceptualRoughness, float3 R )
 {
     // https://bruop.github.io/ibl/
     // Even though all papers describe split-sum approximation as
@@ -39,7 +39,7 @@ float3 PrefilterEnvMap( float Roughness, float3 R )
     for( uint i = 0u; i < g_NumSamples; i++ )
     {
         float2 Xi = Hammersley2D( i, g_NumSamples );
-        float3 H  = ImportanceSampleGGX( Xi, Roughness, N );
+        float3 H  = ImportanceSampleGGX( Xi, PerceptualRoughness, N );
         float3 L  = 2.0 * dot(V, H) * H - V;
         float NoL = clamp(dot(N, L), 0.0, 1.0);
         float VoH = clamp(dot(V, H), 0.0, 1.0);
@@ -51,13 +51,14 @@ float3 PrefilterEnvMap( float Roughness, float3 R )
             float NoH = clamp(dot(N, H), 0.0, 1.0);
 
             // Probability Distribution Function
-            float pdf = max(SmithGGXSampleDirectionPDF(V, N, L, Roughness), 0.0001);
+            float AlphaRoughness = PerceptualRoughness * PerceptualRoughness;
+            float pdf = max(SmithGGXSampleDirectionPDF(V, N, L, AlphaRoughness), 0.0001);
             // Solid angle of current smple
             float OmegaS = 1.0 / (float(g_NumSamples) * pdf);
             // Solid angle of 1 pixel across all cube faces
             float OmegaP = 4.0 * PI / (6.0 * g_EnvMapDim * g_EnvMapDim);
             // Do not apply mip bias as this produces results that are not consistent with the reference
-            float MipLevel = (Roughness == 0.0) ? 0.0 : max(0.5 * log2(OmegaS / OmegaP), 0.0);
+            float MipLevel = (AlphaRoughness == 0.0) ? 0.0 : max(0.5 * log2(OmegaS / OmegaP), 0.0);
 #else
             float MipLevel = 0.0;
 #endif
