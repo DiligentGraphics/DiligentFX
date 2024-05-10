@@ -1201,7 +1201,7 @@ void PBR_Renderer::GetVSInputStructAndLayout(PSO_FLAGS         PSOFlags,
     //    float2 UV1     : ATTRIB3;
     //    float4 Joint0  : ATTRIB4;
     //    float4 Weight0 : ATTRIB5;
-    //    float4 Color   : ATTRIB6;
+    //    float4 Color   : ATTRIB6; // May be float3
     //    float3 Tangent : ATTRIB7;
     //};
     struct VSAttribInfo
@@ -1212,22 +1212,38 @@ void PBR_Renderer::GetVSInputStructAndLayout(PSO_FLAGS         PSOFlags,
         const Uint32      NumComponents;
         const PSO_FLAGS   Flag;
     };
-    static constexpr std::array<VSAttribInfo, 8> VSAttribs = //
-        {
-            // clang-format off
-            VSAttribInfo{VERTEX_ATTRIB_ID_POSITION,  "Pos",     VT_FLOAT32, 3, PSO_FLAG_NONE},
-            VSAttribInfo{VERTEX_ATTRIB_ID_NORMAL,    "Normal",  VT_FLOAT32, 3, PSO_FLAG_USE_VERTEX_NORMALS},
-            VSAttribInfo{VERTEX_ATTRIB_ID_TEXCOORD0, "UV0",     VT_FLOAT32, 2, PSO_FLAG_USE_TEXCOORD0},
-            VSAttribInfo{VERTEX_ATTRIB_ID_TEXCOORD1, "UV1",     VT_FLOAT32, 2, PSO_FLAG_USE_TEXCOORD1},
-            VSAttribInfo{VERTEX_ATTRIB_ID_JOINTS,    "Joint0",  VT_FLOAT32, 4, PSO_FLAG_USE_JOINTS},
-            VSAttribInfo{VERTEX_ATTRIB_ID_WEIGHTS,   "Weight0", VT_FLOAT32, 4, PSO_FLAG_USE_JOINTS},
-            VSAttribInfo{VERTEX_ATTRIB_ID_COLOR,     "Color",   VT_FLOAT32, 4, PSO_FLAG_USE_VERTEX_COLORS},
-            VSAttribInfo{VERTEX_ATTRIB_ID_TANGENT,   "Tangent", VT_FLOAT32, 3, PSO_FLAG_USE_VERTEX_TANGENTS}
-            // clang-format on
-        };
 
     InputLayout = m_Settings.InputLayout;
     InputLayout.ResolveAutoOffsetsAndStrides();
+
+    Uint32 NumColorComp = 4;
+    if (PSOFlags & PSO_FLAG_USE_VERTEX_COLORS)
+    {
+        for (Uint32 i = 0; i < InputLayout.GetNumElements(); ++i)
+        {
+            const auto& Elem = InputLayout[i];
+            if (Elem.InputIndex == VERTEX_ATTRIB_ID_COLOR)
+            {
+                NumColorComp = Elem.NumComponents;
+                DEV_CHECK_ERR(NumColorComp == 3 || NumColorComp == 4, "Color attribute must have 3 or 4 components");
+                break;
+            }
+        }
+    }
+
+    const std::array<VSAttribInfo, 8> VSAttribs = //
+        {
+            // clang-format off
+            VSAttribInfo{VERTEX_ATTRIB_ID_POSITION,  "Pos",     VT_FLOAT32, 3,            PSO_FLAG_NONE},
+            VSAttribInfo{VERTEX_ATTRIB_ID_NORMAL,    "Normal",  VT_FLOAT32, 3,            PSO_FLAG_USE_VERTEX_NORMALS},
+            VSAttribInfo{VERTEX_ATTRIB_ID_TEXCOORD0, "UV0",     VT_FLOAT32, 2,            PSO_FLAG_USE_TEXCOORD0},
+            VSAttribInfo{VERTEX_ATTRIB_ID_TEXCOORD1, "UV1",     VT_FLOAT32, 2,            PSO_FLAG_USE_TEXCOORD1},
+            VSAttribInfo{VERTEX_ATTRIB_ID_JOINTS,    "Joint0",  VT_FLOAT32, 4,            PSO_FLAG_USE_JOINTS},
+            VSAttribInfo{VERTEX_ATTRIB_ID_WEIGHTS,   "Weight0", VT_FLOAT32, 4,            PSO_FLAG_USE_JOINTS},
+            VSAttribInfo{VERTEX_ATTRIB_ID_COLOR,     "Color",   VT_FLOAT32, NumColorComp, PSO_FLAG_USE_VERTEX_COLORS},
+            VSAttribInfo{VERTEX_ATTRIB_ID_TANGENT,   "Tangent", VT_FLOAT32, 3,            PSO_FLAG_USE_VERTEX_TANGENTS}
+            // clang-format on
+        };
 
     std::stringstream ss;
     ss << "struct VSInput" << std::endl

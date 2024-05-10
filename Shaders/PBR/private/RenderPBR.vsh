@@ -12,7 +12,7 @@
 //    float2 UV1     : ATTRIB3;
 //    float4 Joint0  : ATTRIB4;
 //    float4 Weight0 : ATTRIB5;
-//    float4 Color   : ATTRIB6;
+//    float4 Color   : ATTRIB6; // May be float3
 //    float3 Tangent : ATTRIB7;
 //};
 
@@ -65,6 +65,16 @@ cbuffer cbJointTransforms
 #endif
 }
 #endif
+
+float4 GetVertexColor(float3 Color)
+{
+    return float4(Color, 1.0);
+}
+
+float4 GetVertexColor(float4 Color)
+{
+    return Color;
+}
 
 void main(in  VSInput  VSIn,
           out VSOutput VSOut)
@@ -119,7 +129,7 @@ void main(in  VSInput  VSIn,
     VSOut.WorldPos = TransformedVert.WorldPos;
 
 #if USE_VERTEX_COLORS
-    VSOut.Color    = VSIn.Color;
+    VSOut.Color    = GetVertexColor(VSIn.Color);
 #endif
 
 #if USE_VERTEX_NORMALS
