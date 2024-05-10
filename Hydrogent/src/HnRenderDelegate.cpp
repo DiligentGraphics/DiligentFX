@@ -179,10 +179,12 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
 
     static constexpr LayoutElement Inputs[] =
         {
-            {0, 0, 3, VT_FLOAT32}, //float3 Pos     : ATTRIB0;
-            {1, 1, 3, VT_FLOAT32}, //float3 Normal  : ATTRIB1;
-            {2, 2, 2, VT_FLOAT32}, //float2 UV0     : ATTRIB2;
-            {3, 3, 2, VT_FLOAT32}, //float2 UV1     : ATTRIB3;
+            // clang-format off
+            {USD_Renderer::VERTEX_ATTRIB_ID_POSITION,  0, 3, VT_FLOAT32}, //float3 Pos     : ATTRIB0;
+            {USD_Renderer::VERTEX_ATTRIB_ID_NORMAL,    1, 3, VT_FLOAT32}, //float3 Normal  : ATTRIB1;
+            {USD_Renderer::VERTEX_ATTRIB_ID_TEXCOORD0, 2, 2, VT_FLOAT32}, //float2 UV0     : ATTRIB2;
+            {USD_Renderer::VERTEX_ATTRIB_ID_TEXCOORD1, 3, 2, VT_FLOAT32}, //float2 UV1     : ATTRIB3;
+            // clang-format on
         };
 
     const auto& DeviceInfo = RenderDelegateCI.pDevice->GetDeviceInfo();

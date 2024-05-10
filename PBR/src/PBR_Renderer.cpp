@@ -1215,14 +1215,14 @@ void PBR_Renderer::GetVSInputStructAndLayout(PSO_FLAGS         PSOFlags,
     static constexpr std::array<VSAttribInfo, 8> VSAttribs = //
         {
             // clang-format off
-            VSAttribInfo{0, "Pos",     VT_FLOAT32, 3, PSO_FLAG_NONE},
-            VSAttribInfo{1, "Normal",  VT_FLOAT32, 3, PSO_FLAG_USE_VERTEX_NORMALS},
-            VSAttribInfo{2, "UV0",     VT_FLOAT32, 2, PSO_FLAG_USE_TEXCOORD0},
-            VSAttribInfo{3, "UV1",     VT_FLOAT32, 2, PSO_FLAG_USE_TEXCOORD1},
-            VSAttribInfo{4, "Joint0",  VT_FLOAT32, 4, PSO_FLAG_USE_JOINTS},
-            VSAttribInfo{5, "Weight0", VT_FLOAT32, 4, PSO_FLAG_USE_JOINTS},
-            VSAttribInfo{6, "Color",   VT_FLOAT32, 4, PSO_FLAG_USE_VERTEX_COLORS},
-            VSAttribInfo{7, "Tangent", VT_FLOAT32, 3, PSO_FLAG_USE_VERTEX_TANGENTS}
+            VSAttribInfo{VERTEX_ATTRIB_ID_POSITION,  "Pos",     VT_FLOAT32, 3, PSO_FLAG_NONE},
+            VSAttribInfo{VERTEX_ATTRIB_ID_NORMAL,    "Normal",  VT_FLOAT32, 3, PSO_FLAG_USE_VERTEX_NORMALS},
+            VSAttribInfo{VERTEX_ATTRIB_ID_TEXCOORD0, "UV0",     VT_FLOAT32, 2, PSO_FLAG_USE_TEXCOORD0},
+            VSAttribInfo{VERTEX_ATTRIB_ID_TEXCOORD1, "UV1",     VT_FLOAT32, 2, PSO_FLAG_USE_TEXCOORD1},
+            VSAttribInfo{VERTEX_ATTRIB_ID_JOINTS,    "Joint0",  VT_FLOAT32, 4, PSO_FLAG_USE_JOINTS},
+            VSAttribInfo{VERTEX_ATTRIB_ID_WEIGHTS,   "Weight0", VT_FLOAT32, 4, PSO_FLAG_USE_JOINTS},
+            VSAttribInfo{VERTEX_ATTRIB_ID_COLOR,     "Color",   VT_FLOAT32, 4, PSO_FLAG_USE_VERTEX_COLORS},
+            VSAttribInfo{VERTEX_ATTRIB_ID_TANGENT,   "Tangent", VT_FLOAT32, 3, PSO_FLAG_USE_VERTEX_TANGENTS}
             // clang-format on
         };
 
