@@ -86,25 +86,28 @@ public:
         const int  ToneMappingMode;
         const bool ConvertOutputToSRGB;
         const bool ComputeMotionVectors;
+        const bool SamplingSphere;
 
-        PSOKey(int _ToneMappingMode, bool _ConvertOutputToSRGB, bool _ComputeMotionVectors) :
+        PSOKey(int _ToneMappingMode, bool _ConvertOutputToSRGB, bool _ComputeMotionVectors, bool _SamplingSphere) :
             ToneMappingMode{_ToneMappingMode},
             ConvertOutputToSRGB{_ConvertOutputToSRGB},
-            ComputeMotionVectors{_ComputeMotionVectors}
+            ComputeMotionVectors{_ComputeMotionVectors},
+            SamplingSphere{_SamplingSphere}
         {}
 
         constexpr bool operator==(const PSOKey& rhs) const
         {
             return (ToneMappingMode == rhs.ToneMappingMode &&
                     ConvertOutputToSRGB == rhs.ConvertOutputToSRGB &&
-                    ComputeMotionVectors == rhs.ComputeMotionVectors);
+                    ComputeMotionVectors == rhs.ComputeMotionVectors &&
+                    SamplingSphere == rhs.SamplingSphere);
         }
 
         struct Hasher
         {
             size_t operator()(const PSOKey& Key) const
             {
-                return ComputeHash(Key.ToneMappingMode, Key.ConvertOutputToSRGB, Key.ComputeMotionVectors);
+                return ComputeHash(Key.ToneMappingMode, Key.ConvertOutputToSRGB, Key.ComputeMotionVectors, Key.SamplingSphere);
             }
         };
     };

@@ -4,17 +4,30 @@
 #   define OPTIMIZE_SAMPLES 1
 #endif
 
-TextureCube  g_EnvironmentMap;
+#if SAMPLING_SPHERE
+Texture2D   g_EnvironmentMap;
+#else
+TextureCube g_EnvironmentMap;
+#endif
 SamplerState g_EnvironmentMap_sampler;
 
 cbuffer FilterAttribs
 {
     float4x4 g_RotationUnused;
 
-    float    g_Roughness;
-    float    g_EnvMapDim;
-    uint     g_NumSamples;
-    float    Dummy;
+    float g_Roughness;
+    float g_EnvMapWidth;
+    float g_EnvMapHeight;
+    uint  g_NumSamples;
+}
+
+float3 SampleEnvrionmentMap(float3 R, float MipLevel)
+{
+#if SAMPLING_SPHERE
+    return g_EnvironmentMap.SampleLevel(g_EnvironmentMap_sampler, TransformDirectionToSpherePoint(R), MipLevel).rgb;
+#else
+    return g_EnvironmentMap.SampleLevel(g_EnvironmentMap_sampler, R, MipLevel).rgb;
+#endif
 }
 
 // https://blog.selfshadow.com/publications/s2013-shading-course/karis/s2013_pbs_epic_notes_v2.pdf
@@ -56,7 +69,7 @@ float3 PrefilterEnvMap( float PerceptualRoughness, float3 R )
             // Solid angle of current smple
             float OmegaS = 1.0 / (float(g_NumSamples) * pdf);
             // Solid angle of 1 pixel across all cube faces
-            float OmegaP = 4.0 * PI / (6.0 * g_EnvMapDim * g_EnvMapDim);
+            float OmegaP = 4.0 * PI / (6.0 * g_EnvMapWidth * g_EnvMapHeight);
             // Applying mip bias produces better results, especially for environments maps with
             // very bright spots.
             float MipBias = 1.0; 
@@ -64,7 +77,7 @@ float3 PrefilterEnvMap( float PerceptualRoughness, float3 R )
 #else
             float MipLevel = 0.0;
 #endif
-            PrefilteredColor += g_EnvironmentMap.SampleLevel(g_EnvironmentMap_sampler, L, MipLevel).rgb * NoL;
+            PrefilteredColor += SampleEnvrionmentMap(L, MipLevel) * NoL;
             TotalWeight += NoL; // Sum_i{ (n, li) } 
         }
     }

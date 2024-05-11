@@ -2,7 +2,15 @@
 
 #include "PBR_PrecomputeCommon.fxh"
 
+#ifndef OPTIMIZE_SAMPLES
+#   define OPTIMIZE_SAMPLES 1
+#endif
+
+#if SAMPLING_SPHERE
+Texture2D    g_EnvironmentMap;
+#else
 TextureCube  g_EnvironmentMap;
+#endif
 SamplerState g_EnvironmentMap_sampler;
 
 cbuffer FilterAttribs
@@ -10,9 +18,18 @@ cbuffer FilterAttribs
     float4x4 g_RotationUnused;
 
     float g_Roughness;
-    float g_EnvMapDim;
+    float g_EnvMapWidth;
+    float g_EnvMapHeight;
     uint  g_NumSamples;
-    float Dummy;
+}
+
+float3 SampleEnvrionmentMap(float3 R, float MipLevel)
+{
+#if SAMPLING_SPHERE
+    return g_EnvironmentMap.SampleLevel(g_EnvironmentMap_sampler, TransformDirectionToSpherePoint(R), MipLevel).rgb;
+#else
+    return g_EnvironmentMap.SampleLevel(g_EnvironmentMap_sampler, R, MipLevel).rgb;
+#endif
 }
 
 float3 IrradianceMap(float3 N)
@@ -27,7 +44,8 @@ float3 IrradianceMap(float3 N)
         
         // Importance sample the hemisphere with a cosine-weighted distribution
         float3 L = ImportanceSampleGGX(Xi, 1.0, N);
-        
+
+ #if OPTIMIZE_SAMPLES       
         // NdotL is equal to cos(theta)
         float NoL = max(dot(N, L), 0.0);
         
@@ -38,14 +56,16 @@ float3 IrradianceMap(float3 N)
         float OmegaS = 1.0 / (float(g_NumSamples) * pdf);
         
         // Solid angle of 1 pixel across all cube faces
-        float OmegaP = 4.0 * PI / (6.0 * g_EnvMapDim * g_EnvMapDim);
+        float OmegaP = 4.0 * PI / (6.0 * g_EnvMapWidth * g_EnvMapHeight);
         
         // Applying mip bias produces better results, especially for environments maps with
         // very bright spots.
         float MipBias = 1.0;
         float MipLevel = max(0.5 * log2(OmegaS / OmegaP) + MipBias, 0.0);
-
-        Irradiance += g_EnvironmentMap.SampleLevel(g_EnvironmentMap_sampler, L, MipLevel).rgb;
+#else
+        float MipLevel = 0.0;
+#endif
+        Irradiance += SampleEnvrionmentMap(L, MipLevel);
     }
     return Irradiance / float(g_NumSamples);
 }

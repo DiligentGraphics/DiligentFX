@@ -120,7 +120,8 @@ IPipelineState* EnvMapRenderer::GetPSO(const PSOKey& Key)
     Macros
         .Add("CONVERT_OUTPUT_TO_SRGB", Key.ConvertOutputToSRGB)
         .Add("TONE_MAPPING_MODE", Key.ToneMappingMode)
-        .Add("COMPUTE_MOTION_VECTORS", Key.ComputeMotionVectors);
+        .Add("COMPUTE_MOTION_VECTORS", Key.ComputeMotionVectors)
+        .Add("SAMPLING_SPHERE", Key.SamplingSphere);
     ShaderCI.Macros = Macros;
 
     RefCntAutoPtr<IShader> pVS;
@@ -200,7 +201,8 @@ void EnvMapRenderer::Prepare(IDeviceContext*                 pContext,
         return;
     }
 
-    m_pCurrentPSO = GetPSO({ToneMapping.iToneMappingMode, Attribs.ConvertOutputToSRGB, Attribs.ComputeMotionVectors});
+
+    m_pCurrentPSO = GetPSO({ToneMapping.iToneMappingMode, Attribs.ConvertOutputToSRGB, Attribs.ComputeMotionVectors, !Attribs.pEnvMap->GetTexture()->GetDesc().IsCube()});
     if (m_pCurrentPSO == nullptr)
     {
         UNEXPECTED("Failed to get PSO");

@@ -677,6 +677,38 @@ private:
     void CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineDesc& GraphicsDesc, const PSOKey& Key);
 
 protected:
+    enum IBL_FEATURE_FLAGS : Uint32
+    {
+        IBL_FEATURE_FLAG_NONE             = 0,
+        IBL_FEATURE_FLAG_OPTIMIZE_SAMPLES = 1u << 0u,
+        IBL_FEATURE_FLAG_SAMPLING_SPHERE  = 1u << 1u
+    };
+
+    struct IBL_PSOKey
+    {
+        const IBL_FEATURE_FLAGS FeatureFlags;
+        const TEXTURE_FORMAT    RTVFormat;
+
+        IBL_PSOKey(IBL_FEATURE_FLAGS _FeatureFlags, TEXTURE_FORMAT Format) :
+            FeatureFlags{_FeatureFlags}, RTVFormat{Format}
+        {}
+
+        constexpr bool operator==(const IBL_PSOKey& rhs) const
+        {
+            return FeatureFlags == rhs.FeatureFlags && RTVFormat == rhs.RTVFormat;
+        }
+
+        struct Hasher
+        {
+            size_t operator()(const IBL_PSOKey& Key) const
+            {
+                return ComputeHash(Key.FeatureFlags, Key.RTVFormat);
+            }
+        };
+    };
+    using IBL_PipelineStateObjectCache = std::unordered_map<IBL_PSOKey, RefCntAutoPtr<IPipelineState>, IBL_PSOKey::Hasher>;
+
+
     const InputLayoutDescX m_InputLayout;
 
     CreateInfo m_Settings;
@@ -698,12 +730,13 @@ protected:
     static constexpr Uint32         IrradianceCubeDim    = 64;
     static constexpr Uint32         PrefilteredEnvMapDim = 256;
 
-    RefCntAutoPtr<ITextureView>           m_pIrradianceCubeSRV;
-    RefCntAutoPtr<ITextureView>           m_pPrefilteredEnvMapSRV;
-    RefCntAutoPtr<IPipelineState>         m_pPrecomputeIrradianceCubePSO;
-    RefCntAutoPtr<IPipelineState>         m_pPrefilterEnvMapPSO;
+    RefCntAutoPtr<ITextureView> m_pIrradianceCubeSRV;
+    RefCntAutoPtr<ITextureView> m_pPrefilteredEnvMapSRV;
+
     RefCntAutoPtr<IShaderResourceBinding> m_pPrecomputeIrradianceCubeSRB;
     RefCntAutoPtr<IShaderResourceBinding> m_pPrefilterEnvMapSRB;
+
+    IBL_PipelineStateObjectCache m_IBL_PSOCache;
 
     RefCntAutoPtr<IBuffer> m_PBRPrimitiveAttribsCB;
     RefCntAutoPtr<IBuffer> m_PrecomputeEnvMapAttribsCB;

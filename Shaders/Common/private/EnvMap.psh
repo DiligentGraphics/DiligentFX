@@ -1,6 +1,7 @@
 #include "BasicStructures.fxh"
 #include "ToneMapping.fxh"
 #include "ShaderUtilities.fxh"
+#include "PBR_PrecomputeCommon.fxh"
 
 cbuffer cbCameraAttribs
 {
@@ -18,8 +19,21 @@ cbuffer cbEnvMapRenderAttribs
     float Unusued2;
 }
 
+#if SAMPLING_SPHERE
+Texture2D    EnvMap;
+#else
 TextureCube  EnvMap;
+#endif
 SamplerState EnvMap_sampler;
+
+float3 SampleEnvrionmentMap(float3 R, float MipLevel)
+{
+#if SAMPLING_SPHERE
+    return EnvMap.SampleLevel(EnvMap_sampler, TransformDirectionToSpherePoint(R), MipLevel).rgb;
+#else
+    return EnvMap.SampleLevel(EnvMap_sampler, R, MipLevel).rgb;
+#endif
+}
 
 struct SampleEnvMapOutput
 {
@@ -31,7 +45,7 @@ SampleEnvMapOutput SampleEnvMap(in float4 ClipPos)
 {
     float4 WorldPos  = mul(ClipPos, g_Camera.mViewProjInv);
     float3 Direction = WorldPos.xyz / WorldPos.w - g_Camera.f4Position.xyz;
-    float3 Color     = EnvMap.SampleLevel(EnvMap_sampler, Direction, MipLevel).rgb;
+    float3 Color = SampleEnvrionmentMap(normalize(Direction), MipLevel);
 
 #if TONE_MAPPING_MODE > TONE_MAPPING_MODE_NONE    
     Color.rgb = ToneMap(Color.rgb, g_ToneMappingAttribs, AverageLogLum);
