@@ -1,7 +1,6 @@
 #include "BasicStructures.fxh"
 #include "ToneMapping.fxh"
 #include "ShaderUtilities.fxh"
-#include "PBR_PrecomputeCommon.fxh"
 
 cbuffer cbCameraAttribs
 {
@@ -19,19 +18,19 @@ cbuffer cbEnvMapRenderAttribs
     float Unusued2;
 }
 
-#if SAMPLING_SPHERE
-Texture2D    EnvMap;
-#else
+#if ENV_MAP_TYPE == ENV_MAP_TYPE_CUBE
 TextureCube  EnvMap;
+#elif ENV_MAP_TYPE == ENV_MAP_TYPE_SPHERE
+Texture2D    EnvMap;
 #endif
 SamplerState EnvMap_sampler;
 
 float3 SampleEnvrionmentMap(float3 R, float MipLevel)
 {
-#if SAMPLING_SPHERE
-    return EnvMap.SampleLevel(EnvMap_sampler, TransformDirectionToSpherePoint(R), MipLevel).rgb;
-#else
+#if ENV_MAP_TYPE == ENV_MAP_TYPE_CUBE
     return EnvMap.SampleLevel(EnvMap_sampler, R, MipLevel).rgb;
+#elif ENV_MAP_TYPE == ENV_MAP_TYPE_SPHERE
+    return EnvMap.SampleLevel(EnvMap_sampler, TransformDirectionToSphereMapUV(R), MipLevel).rgb;
 #endif
 }
 

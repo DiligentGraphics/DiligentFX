@@ -84,4 +84,10 @@ float2 GetMotionVector(float2 ClipPos, float2 PrevClipPos)
     return ClipPos - PrevClipPos;
 }
 
+float2 TransformDirectionToSphereMapUV(float3 Direction)
+{
+    float OneOverPi = 0.3183098862;
+    return OneOverPi * float2(0.5 * atan2(Direction.z, Direction.x), asin(Direction.y)) + float2(0.5, 0.5);
+}
+
 #endif //_SHADER_UTILITIES_FXH_

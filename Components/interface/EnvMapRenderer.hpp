@@ -27,6 +27,7 @@
 #include <unordered_map>
 #include <vector>
 #include <memory>
+#include <array>
 
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/DeviceContext.h"
@@ -83,16 +84,22 @@ public:
 
     struct PSOKey
     {
-        const int  ToneMappingMode;
-        const bool ConvertOutputToSRGB;
-        const bool ComputeMotionVectors;
-        const bool SamplingSphere;
+        enum ENV_MAP_TYPE : Uint8
+        {
+            ENV_MAP_TYPE_CUBE = 0,
+            ENV_MAP_TYPE_SPHERE,
+            ENV_MAP_TYPE_COUNT
+        };
+        const int          ToneMappingMode;
+        const bool         ConvertOutputToSRGB;
+        const bool         ComputeMotionVectors;
+        const ENV_MAP_TYPE EnvMapType;
 
-        PSOKey(int _ToneMappingMode, bool _ConvertOutputToSRGB, bool _ComputeMotionVectors, bool _SamplingSphere) :
+        PSOKey(int _ToneMappingMode, bool _ConvertOutputToSRGB, bool _ComputeMotionVectors, ENV_MAP_TYPE _EnvMapType) :
             ToneMappingMode{_ToneMappingMode},
             ConvertOutputToSRGB{_ConvertOutputToSRGB},
             ComputeMotionVectors{_ComputeMotionVectors},
-            SamplingSphere{_SamplingSphere}
+            EnvMapType{_EnvMapType}
         {}
 
         constexpr bool operator==(const PSOKey& rhs) const
@@ -100,14 +107,14 @@ public:
             return (ToneMappingMode == rhs.ToneMappingMode &&
                     ConvertOutputToSRGB == rhs.ConvertOutputToSRGB &&
                     ComputeMotionVectors == rhs.ComputeMotionVectors &&
-                    SamplingSphere == rhs.SamplingSphere);
+                    EnvMapType == rhs.EnvMapType);
         }
 
         struct Hasher
         {
             size_t operator()(const PSOKey& Key) const
             {
-                return ComputeHash(Key.ToneMappingMode, Key.ConvertOutputToSRGB, Key.ComputeMotionVectors, Key.SamplingSphere);
+                return ComputeHash(Key.ToneMappingMode, Key.ConvertOutputToSRGB, Key.ComputeMotionVectors, Key.EnvMapType);
             }
         };
     };

@@ -121,7 +121,9 @@ IPipelineState* EnvMapRenderer::GetPSO(const PSOKey& Key)
         .Add("CONVERT_OUTPUT_TO_SRGB", Key.ConvertOutputToSRGB)
         .Add("TONE_MAPPING_MODE", Key.ToneMappingMode)
         .Add("COMPUTE_MOTION_VECTORS", Key.ComputeMotionVectors)
-        .Add("SAMPLING_SPHERE", Key.SamplingSphere);
+        .Add("ENV_MAP_TYPE_CUBE", static_cast<int>(PSOKey::ENV_MAP_TYPE_CUBE))
+        .Add("ENV_MAP_TYPE_SPHERE", static_cast<int>(PSOKey::ENV_MAP_TYPE_SPHERE))
+        .Add("ENV_MAP_TYPE", static_cast<int>(Key.EnvMapType));
     ShaderCI.Macros = Macros;
 
     RefCntAutoPtr<IShader> pVS;
@@ -201,8 +203,11 @@ void EnvMapRenderer::Prepare(IDeviceContext*                 pContext,
         return;
     }
 
+    const PSOKey::ENV_MAP_TYPE EnvMapType = Attribs.pEnvMap->GetTexture()->GetDesc().IsCube() ?
+        PSOKey::ENV_MAP_TYPE_CUBE :
+        PSOKey::ENV_MAP_TYPE_SPHERE;
 
-    m_pCurrentPSO = GetPSO({ToneMapping.iToneMappingMode, Attribs.ConvertOutputToSRGB, Attribs.ComputeMotionVectors, !Attribs.pEnvMap->GetTexture()->GetDesc().IsCube()});
+    m_pCurrentPSO = GetPSO({ToneMapping.iToneMappingMode, Attribs.ConvertOutputToSRGB, Attribs.ComputeMotionVectors, EnvMapType});
     if (m_pCurrentPSO == nullptr)
     {
         UNEXPECTED("Failed to get PSO");

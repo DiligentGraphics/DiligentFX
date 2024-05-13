@@ -493,18 +493,22 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
     IBL_FEATURE_FLAGS FeatureFlags = IBL_FEATURE_FLAG_NONE;
 
     if (OptimizeSamples)
-        FeatureFlags = static_cast<IBL_FEATURE_FLAGS>(FeatureFlags | IBL_FEATURE_FLAG_OPTIMIZE_SAMPLES);
+        FeatureFlags |= IBL_FEATURE_FLAG_OPTIMIZE_SAMPLES;
 
-    if (!pEnvironmentMap->GetTexture()->GetDesc().IsCube())
-        FeatureFlags = static_cast<IBL_FEATURE_FLAGS>(FeatureFlags | IBL_FEATURE_FLAG_SAMPLING_SPHERE);
+    const IBL_PSOKey::ENV_MAP_TYPE EnvMapType = pEnvironmentMap->GetTexture()->GetDesc().IsCube() ?
+        IBL_PSOKey::ENV_MAP_TYPE_CUBE :
+        IBL_PSOKey::ENV_MAP_TYPE_SPHERE;
 
-    auto& pPrecomputeIrradianceCubePSO = m_IBL_PSOCache[IBL_PSOKey{FeatureFlags, m_pIrradianceCubeSRV->GetDesc().Format}];
+    ShaderMacroHelper Macros;
+    Macros
+        .Add("OPTIMIZE_SAMPLES", (FeatureFlags & IBL_FEATURE_FLAG_OPTIMIZE_SAMPLES) != 0)
+        .Add("ENV_MAP_TYPE_CUBE", static_cast<int>(IBL_PSOKey::ENV_MAP_TYPE_CUBE))
+        .Add("ENV_MAP_TYPE_SPHERE", static_cast<int>(IBL_PSOKey::ENV_MAP_TYPE_SPHERE))
+        .Add("ENV_MAP_TYPE", static_cast<int>(EnvMapType));
+
+    auto& pPrecomputeIrradianceCubePSO = m_IBL_PSOCache[IBL_PSOKey{IBL_PSOKey::PSO_TYPE_IRRADIANCE_CUBE, EnvMapType, FeatureFlags, m_pIrradianceCubeSRV->GetDesc().Format}];
     if (!pPrecomputeIrradianceCubePSO)
     {
-        ShaderMacroHelper Macros;
-        Macros.AddShaderMacro("OPTIMIZE_SAMPLES", (FeatureFlags & IBL_FEATURE_FLAG_OPTIMIZE_SAMPLES) != 0);
-        Macros.AddShaderMacro("SAMPLING_SPHERE", (FeatureFlags & IBL_FEATURE_FLAG_SAMPLING_SPHERE) != 0);
-
         ShaderCreateInfo ShaderCI;
         ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
         ShaderCI.pShaderSourceStreamFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();
@@ -560,13 +564,9 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
     if (!m_pPrecomputeIrradianceCubeSRB)
         pPrecomputeIrradianceCubePSO->CreateShaderResourceBinding(&m_pPrecomputeIrradianceCubeSRB, true);
 
-    auto& pPrefilterEnvMapPSO = m_IBL_PSOCache[IBL_PSOKey{FeatureFlags, m_pPrefilteredEnvMapSRV->GetDesc().Format}];
+    auto& pPrefilterEnvMapPSO = m_IBL_PSOCache[IBL_PSOKey{IBL_PSOKey::PSO_TYPE_PREFILTERED_ENV_MAP, EnvMapType, FeatureFlags, m_pPrefilteredEnvMapSRV->GetDesc().Format}];
     if (!pPrefilterEnvMapPSO)
     {
-        ShaderMacroHelper Macros;
-        Macros.AddShaderMacro("OPTIMIZE_SAMPLES", (FeatureFlags & IBL_FEATURE_FLAG_OPTIMIZE_SAMPLES) != 0);
-        Macros.AddShaderMacro("SAMPLING_SPHERE", (FeatureFlags & IBL_FEATURE_FLAG_SAMPLING_SPHERE) != 0);
-
         ShaderCreateInfo ShaderCI;
         ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
         ShaderCI.pShaderSourceStreamFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();

@@ -39,9 +39,4 @@ float3 ImportanceSampleGGX(float2 Xi, float PerceptualRoughness, float3 N)
     return TangentX * H.x + TangentY * H.y + N * H.z;
 }
 
-float2 TransformDirectionToSpherePoint(float3 Direction)
-{
-    return rcp(PI) * float2(0.5 * atan2(Direction.z, Direction.x), asin(Direction.y)) + float2(0.5, 0.5);
-}
-
 #endif // _PBR_PRECOMPUTE_COMMON_FXH_

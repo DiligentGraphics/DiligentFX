@@ -681,28 +681,51 @@ protected:
     {
         IBL_FEATURE_FLAG_NONE             = 0,
         IBL_FEATURE_FLAG_OPTIMIZE_SAMPLES = 1u << 0u,
-        IBL_FEATURE_FLAG_SAMPLING_SPHERE  = 1u << 1u
     };
+    DECLARE_FRIEND_FLAG_ENUM_OPERATORS(IBL_FEATURE_FLAGS)
 
     struct IBL_PSOKey
     {
+        enum PSO_TYPE : Uint8
+        {
+            PSO_TYPE_IRRADIANCE_CUBE = 0,
+            PSO_TYPE_PREFILTERED_ENV_MAP,
+        };
+        enum ENV_MAP_TYPE : Uint8
+        {
+            ENV_MAP_TYPE_CUBE = 0,
+            ENV_MAP_TYPE_SPHERE,
+            ENV_MAP_TYPE_NUM_TYPES
+        };
+
+        const PSO_TYPE          PSOType;
+        const ENV_MAP_TYPE      EnvMapType;
         const IBL_FEATURE_FLAGS FeatureFlags;
         const TEXTURE_FORMAT    RTVFormat;
 
-        IBL_PSOKey(IBL_FEATURE_FLAGS _FeatureFlags, TEXTURE_FORMAT Format) :
-            FeatureFlags{_FeatureFlags}, RTVFormat{Format}
+        IBL_PSOKey(PSO_TYPE          _PSOType,
+                   ENV_MAP_TYPE      _EnvMapType,
+                   IBL_FEATURE_FLAGS _FeatureFlags,
+                   TEXTURE_FORMAT    _Format) :
+            PSOType{_PSOType},
+            EnvMapType{_EnvMapType},
+            FeatureFlags{_FeatureFlags},
+            RTVFormat{_Format}
         {}
 
         constexpr bool operator==(const IBL_PSOKey& rhs) const
         {
-            return FeatureFlags == rhs.FeatureFlags && RTVFormat == rhs.RTVFormat;
+            return (PSOType == rhs.PSOType &&
+                    EnvMapType == rhs.EnvMapType &&
+                    FeatureFlags == rhs.FeatureFlags &&
+                    RTVFormat == rhs.RTVFormat);
         }
 
         struct Hasher
         {
             size_t operator()(const IBL_PSOKey& Key) const
             {
-                return ComputeHash(Key.FeatureFlags, Key.RTVFormat);
+                return ComputeHash(Key.PSOType, Key.EnvMapType, Key.FeatureFlags, Key.RTVFormat);
             }
         };
     };
@@ -750,7 +773,7 @@ protected:
 };
 
 DEFINE_FLAG_ENUM_OPERATORS(PBR_Renderer::PSO_FLAGS)
-
+DEFINE_FLAG_ENUM_OPERATORS(PBR_Renderer::IBL_FEATURE_FLAGS)
 
 inline constexpr PBR_Renderer::PSO_FLAGS PBR_Renderer::GetTextureAttribPSOFlag(PBR_Renderer::TEXTURE_ATTRIB_ID AttribId)
 {
