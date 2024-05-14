@@ -246,7 +246,7 @@ void HnRenderShadowsTask::Prepare(pxr::HdTaskContext* TaskCtx,
          pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::MeshTransform) +
          pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::MeshVisibility) +
          pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::MeshMaterial));
-    static_assert(static_cast<int>(HnRenderParam::GlobalAttrib::Count) == 7, "Please update the code above to handle the new attribute, if necessary.");
+    static_assert(static_cast<int>(HnRenderParam::GlobalAttrib::Count) == 8, "Please update the code above to handle the new attribute, if necessary.");
 
     bool GeometryChanged  = m_LastGeometryVersion != GeometryVersion;
     m_LastGeometryVersion = GeometryVersion;

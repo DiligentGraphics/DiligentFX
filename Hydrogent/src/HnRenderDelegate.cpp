@@ -592,15 +592,15 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
     }
 
     {
-        const auto LightVersion = m_RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::Light);
-        if (m_LightResourcesVersion != LightVersion)
+        const auto LightResourcesVersion = m_RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::LightResources);
+        if (m_LightResourcesVersion != LightResourcesVersion)
         {
             std::lock_guard<std::mutex> Guard{m_LightsMtx};
             for (auto* pLight : m_Lights)
             {
                 pLight->PrepareGPUResources(*this);
             }
-            m_LightResourcesVersion = LightVersion;
+            m_LightResourcesVersion = LightResourcesVersion;
         }
     }
 

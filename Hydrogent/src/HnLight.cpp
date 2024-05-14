@@ -620,9 +620,13 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
         }
     }
 
-    if (LightDirty && RenderParam != nullptr)
+    if (RenderParam != nullptr)
     {
-        static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::Light);
+        if (LightDirty)
+            static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::Light);
+
+        if (m_IsTextureDirty)
+            static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::LightResources);
     }
 
     *DirtyBits = HdLight::Clean;
