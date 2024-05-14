@@ -19,7 +19,12 @@ cbuffer FilterAttribs
     float g_Roughness;
     float g_EnvMapWidth;
     float g_EnvMapHeight;
+    float g_EnvMipCount;
+    
     uint  g_NumSamples;
+    uint  _Padding0;
+    uint  _Padding1;
+    uint  _Padding2;
 }
 
 float3 SampleEnvrionmentMap(float3 R, float MipLevel)
@@ -71,17 +76,17 @@ float3 PrefilterEnvMap( float PerceptualRoughness, float3 R )
             // Solid angle of current smple
             float OmegaS = 1.0 / (float(g_NumSamples) * pdf);
 
-            float NumPixels = g_EnvMapWidth * g_EnvMapHeight;
 #if ENV_MAP_TYPE == ENV_MAP_TYPE_CUBE
-            NumPixels *= 6.0;
-#endif
-
             // Solid angle of 1 pixel across all cube faces
-            float OmegaP = 4.0 * PI / NumPixels;
-            // Applying mip bias produces better results, especially for environments maps with
+            float OmegaP = ComputeCubeMapPixelSolidAngle(g_EnvMapWidth, g_EnvMapHeight);
+#else
+            // Solid angle of 1 pixel on sphere
+            float OmegaP = ComputeSphereMapPixelSolidAngle(g_EnvMapWidth, g_EnvMapHeight, acos(L.y), 1.0);
+#endif
+            // Applying mip bias produces better results, especially for environment maps with
             // very bright spots.
-            float MipBias = 1.0; 
-            float MipLevel = (AlphaRoughness == 0.0) ? 0.0 : max(0.5 * log2(OmegaS / OmegaP) + MipBias, 0.0);
+            float MipBias = 1.0;
+            float MipLevel = (AlphaRoughness == 0.0) ? 0.0 : clamp(0.5 * log2(OmegaS / max(OmegaP, 1e-10)) + MipBias, 0.0, g_EnvMipCount - 1.0);
 #else
             float MipLevel = 0.0;
 #endif

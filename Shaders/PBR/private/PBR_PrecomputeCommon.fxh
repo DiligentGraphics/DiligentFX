@@ -39,4 +39,16 @@ float3 ImportanceSampleGGX(float2 Xi, float PerceptualRoughness, float3 N)
     return TangentX * H.x + TangentY * H.y + N * H.z;
 }
 
+float ComputeCubeMapPixelSolidAngle(float Width, float Height)
+{
+    return 4.0 * PI / (6.0 * Width * Height);
+} 
+
+float ComputeSphereMapPixelSolidAngle(float Width, float Height, float Theta, float Gamma)
+{
+    float dTheta = PI / Width;
+    float dPhi = 2.0 * PI / Height;
+    return dPhi * (cos(Theta - 0.5 * dTheta * Gamma) - cos(Theta + 0.5 * dTheta * Gamma));
+}
+
 #endif // _PBR_PRECOMPUTE_COMMON_FXH_
