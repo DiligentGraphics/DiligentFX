@@ -443,6 +443,7 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
     }
 
     // Write main pass frame attributes
+    HnLight* DomeLight = nullptr;
     {
 #if defined(PBR_MAX_LIGHTS)
 #    error PBR_MAX_LIGHTS is defined. The logic below will not work correctly.
@@ -511,8 +512,7 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
             UNEXPECTED("Camera is null. It should've been set in Prepare()");
         }
 
-        HnLight* DomeLight  = nullptr;
-        int      LightCount = 0;
+        int LightCount = 0;
         for (HnLight* Light : RenderDelegate->GetLights())
         {
             if (!Light->IsVisible())
@@ -587,11 +587,17 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
     }
 
     pCtx->UpdateBuffer(pFrameAttrbisCB, 0, m_FrameAttribsData.size(), m_FrameAttribsData.data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    StateTransitionDesc Barriers[] =
+    std::vector<StateTransitionDesc> Barriers =
         {
             {pFrameAttrbisCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE},
         };
-    pCtx->TransitionResourceStates(_countof(Barriers), Barriers);
+    if (DomeLight == nullptr)
+    {
+        // Since there is no dome light, IBL cube maps may still be in RTV state after they were cleared during the initialization.
+        Barriers.emplace_back(Renderer.GetIrradianceCubeSRV()->GetTexture(), RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE);
+        Barriers.emplace_back(Renderer.GetPrefilteredEnvMapSRV()->GetTexture(), RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE);
+    }
+    pCtx->TransitionResourceStates(static_cast<Uint32>(Barriers.size()), Barriers.data());
 }
 
 void HnBeginFrameTask::Execute(pxr::HdTaskContext* TaskCtx)
