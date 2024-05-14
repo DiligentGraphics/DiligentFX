@@ -706,9 +706,6 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
     };
     // clang-format on
     pCtx->TransitionResourceStates(_countof(Barriers), Barriers);
-
-    // To avoid crashes on some low-end Android devices
-    pCtx->Flush();
 }
 
 
