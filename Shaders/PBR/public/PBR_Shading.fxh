@@ -557,7 +557,7 @@ struct SurfaceShadingInfo
     float VolumeThickness;
 #endif
     
-    float IBLScale;
+    float3 IBLScale;
 };
 
 struct LayerLightingInfo

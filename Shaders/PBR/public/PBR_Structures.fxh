@@ -79,15 +79,17 @@ struct PBRRendererShaderParameters
     float WhitePoint;
 	float PrefilteredCubeLastMip; // Prefiltered cube map last mip level
 
-	float IBLScale;
+	float4 IBLScale;
+
     float OcclusionStrength;
     float EmissionScale;
     float PointSize; // OpenGL and Vulkan
-
     float MipBias;
+
     int   LightCount;
     float Padding0;
     float Padding1;
+    float Padding2;
     
     float4 UnshadedColor;
     float4 HighlightColor;
