@@ -76,6 +76,7 @@ const pxr::TfTokenVector HnRenderDelegate::SupportedSPrimTypes = {
     pxr::HdPrimTypeTokens->distantLight,
     pxr::HdPrimTypeTokens->rectLight,
     pxr::HdPrimTypeTokens->sphereLight,
+    pxr::HdPrimTypeTokens->domeLight,
 };
 
 const pxr::TfTokenVector HnRenderDelegate::SupportedBPrimTypes = {
@@ -406,7 +407,8 @@ pxr::HdSprim* HnRenderDelegate::CreateSprim(const pxr::TfToken& TypeId,
              TypeId == pxr::HdPrimTypeTokens->diskLight ||
              TypeId == pxr::HdPrimTypeTokens->distantLight ||
              TypeId == pxr::HdPrimTypeTokens->rectLight ||
-             TypeId == pxr::HdPrimTypeTokens->sphereLight)
+             TypeId == pxr::HdPrimTypeTokens->sphereLight ||
+             TypeId == pxr::HdPrimTypeTokens->domeLight)
     {
         HnLight* Light = HnLight::Create(SPrimId, TypeId);
         {
@@ -440,7 +442,8 @@ pxr::HdSprim* HnRenderDelegate::CreateFallbackSprim(const pxr::TfToken& TypeId)
              TypeId == pxr::HdPrimTypeTokens->diskLight ||
              TypeId == pxr::HdPrimTypeTokens->distantLight ||
              TypeId == pxr::HdPrimTypeTokens->rectLight ||
-             TypeId == pxr::HdPrimTypeTokens->sphereLight)
+             TypeId == pxr::HdPrimTypeTokens->sphereLight ||
+             TypeId == pxr::HdPrimTypeTokens->domeLight)
     {
         SPrim = nullptr;
     }
@@ -585,6 +588,19 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
                 pMesh->CommitGPUResources(*this);
             }
             m_MeshResourcesVersion = MeshVersion;
+        }
+    }
+
+    {
+        const auto LightVersion = m_RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::Light);
+        if (m_LightResourcesVersion != LightVersion)
+        {
+            std::lock_guard<std::mutex> Guard{m_LightsMtx};
+            for (auto* pLight : m_Lights)
+            {
+                pLight->PrepareGPUResources(*this);
+            }
+            m_LightResourcesVersion = LightVersion;
         }
     }
 

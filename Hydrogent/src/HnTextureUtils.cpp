@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -38,9 +38,13 @@ namespace USD
 RefCntAutoPtr<ITextureLoader> CreateTextureLoaderFromSdfPath(const char*            SdfPath,
                                                              const TextureLoadInfo& LoadInfo)
 {
+    pxr::ArResolver& Resolver = pxr::ArGetResolver();
 
-    pxr::ArResolvedPath           ResolvedPath{SdfPath};
-    std::shared_ptr<pxr::ArAsset> Asset = pxr::ArGetResolver().OpenAsset(ResolvedPath);
+    pxr::ArResolvedPath ResolvedPath = Resolver.Resolve(SdfPath);
+    if (ResolvedPath.empty())
+        return {};
+
+    std::shared_ptr<pxr::ArAsset> Asset = Resolver.OpenAsset(ResolvedPath);
     if (!Asset)
         return {};
 

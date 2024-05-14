@@ -394,6 +394,7 @@ private:
     Uint32 m_MeshResourcesVersion     = ~0u;
     Uint32 m_MaterialResourcesVersion = ~0u;
     Uint32 m_ShadowAtlasVersion       = ~0u;
+    Uint32 m_LightResourcesVersion    = ~0u;
 };
 
 } // namespace USD

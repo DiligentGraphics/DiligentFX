@@ -659,6 +659,9 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
         DrawAttribs drawAttrs(4, DRAW_FLAG_VERIFY_ALL);
         pCtx->Draw(drawAttrs);
     }
+    // Release reference to the environment map
+    m_pPrecomputeIrradianceCubeSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_EnvironmentMap")->Set(nullptr);
+
 
     pCtx->SetPipelineState(pPrefilterEnvMapPSO);
     m_pPrefilterEnvMapSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_EnvironmentMap")->Set(pEnvironmentMap);
@@ -691,6 +694,9 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
             pCtx->Draw(drawAttrs);
         }
     }
+    // Release reference to the environment map
+    m_pPrefilterEnvMapSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_EnvironmentMap")->Set(nullptr);
+
 
     // clang-format off
     StateTransitionDesc Barriers[] = 

@@ -45,6 +45,8 @@ struct PBRShadowMapInfo;
 namespace USD
 {
 
+class HnRenderDelegate;
+
 /// Light implementation in Hydrogent.
 class HnLight final : public pxr::HdLight
 {
@@ -85,11 +87,14 @@ public:
     bool IsShadowMapDirty() const { return m_IsShadowMapDirty; }
     void SetShadowMapDirty(bool IsDirty) { m_IsShadowMapDirty = IsDirty; }
 
+    void PrepareGPUResources(HnRenderDelegate& RenderDelegate);
+
 private:
     HnLight(const pxr::SdfPath& Id, const pxr::TfToken& TypeId);
 
     bool ApproximateAreaLight(pxr::HdSceneDelegate& SceneDelegate, float MetersPerUnit);
     void ComputeDirectLightProjMatrix(pxr::HdSceneDelegate& SceneDelegate);
+    void PrecomputeIBLCubemaps(HnRenderDelegate& RenderDelegate);
 
 private:
     const pxr::TfToken m_TypeId;
@@ -99,11 +104,14 @@ private:
     GLTF::Light m_Params;
     bool        m_IsVisible        = true;
     bool        m_IsShadowMapDirty = true;
+    bool        m_IsTextureDirty   = true;
 
     float4x4 m_ViewMatrix;
     float4x4 m_ProjMatrix;
     float4x4 m_ViewProjMatrix;
     BoundBox m_SceneBounds;
+
+    std::string m_TexturePath;
 
     Int32                                     m_FrameAttribsIndex   = 0;
     Uint32                                    m_ShadowMapResolution = 1024;

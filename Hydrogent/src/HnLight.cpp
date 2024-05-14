@@ -29,8 +29,10 @@
 #include "HnRenderDelegate.hpp"
 #include "HnShadowMapManager.hpp"
 #include "HnTokens.hpp"
+#include "HnTextureUtils.hpp"
 
 #include <array>
+#include <vector>
 
 #include "pxr/imaging/hd/sceneDelegate.h"
 
@@ -353,6 +355,19 @@ bool HnLight::ApproximateAreaLight(pxr::HdSceneDelegate& SceneDelegate, float Me
     return ParamsDirty;
 }
 
+static pxr::SdfAssetPath GetTextureFile(pxr::HdSceneDelegate& SceneDelegate, const pxr::SdfPath& Id)
+{
+    pxr::SdfAssetPath FilePath;
+
+    const pxr::VtValue TextureFileVal = SceneDelegate.GetLightParamValue(Id, pxr::HdLightTokens->textureFile);
+    if (TextureFileVal.IsHolding<pxr::SdfAssetPath>())
+    {
+        FilePath = TextureFileVal.Get<pxr::SdfAssetPath>();
+    }
+
+    return FilePath;
+}
+
 void HnLight::ComputeDirectLightProjMatrix(pxr::HdSceneDelegate& SceneDelegate)
 {
     pxr::HdRenderIndex& RenderIndex = SceneDelegate.GetRenderIndex();
@@ -501,6 +516,16 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
                 LightDirty = true;
             }
         }
+        else if (m_TypeId == pxr::HdPrimTypeTokens->domeLight)
+        {
+            std::string TexturePath = GetTextureFile(*SceneDelegate, Id).GetAssetPath();
+            if (TexturePath != m_TexturePath)
+            {
+                m_TexturePath    = std::move(TexturePath);
+                LightDirty       = true;
+                m_IsTextureDirty = true;
+            }
+        }
         else
         {
             LOG_ERROR_MESSAGE("Unsupported light type: ", m_TypeId);
@@ -601,6 +626,64 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
     }
 
     *DirtyBits = HdLight::Clean;
+}
+
+void HnLight::PrecomputeIBLCubemaps(HnRenderDelegate& RenderDelegate)
+{
+    VERIFY_EXPR(m_TypeId == pxr::HdPrimTypeTokens->domeLight);
+
+    IRenderDevice*  pDevice = RenderDelegate.GetDevice();
+    IDeviceContext* pCtx    = RenderDelegate.GetDeviceContext();
+
+    RefCntAutoPtr<ITexture> pEnvMap;
+    if (!m_TexturePath.empty())
+    {
+        TextureLoadInfo LoadInfo;
+        LoadInfo.Name = m_TexturePath.c_str();
+        if (RefCntAutoPtr<ITextureLoader> pLoader = CreateTextureLoaderFromSdfPath(m_TexturePath.c_str(), LoadInfo))
+        {
+            pLoader->CreateTexture(pDevice, &pEnvMap);
+        }
+    }
+
+    if (!pEnvMap)
+    {
+        // Create uniform white environment map
+        TextureDesc EnvMapDesc;
+        EnvMapDesc.Name      = "Default Env Map";
+        EnvMapDesc.Type      = RESOURCE_DIM_TEX_2D;
+        EnvMapDesc.Format    = TEX_FORMAT_RGBA8_UNORM;
+        EnvMapDesc.Width     = 32;
+        EnvMapDesc.Height    = 32;
+        EnvMapDesc.BindFlags = BIND_SHADER_RESOURCE;
+        EnvMapDesc.MipLevels = 1;
+        EnvMapDesc.Usage     = USAGE_IMMUTABLE;
+
+        std::vector<Uint32> EnvMapData(EnvMapDesc.Width * EnvMapDesc.Height, 0xFFFFFFFFu);
+        TextureSubResData   Mip0Data{EnvMapData.data(), EnvMapDesc.Width * sizeof(Uint32)};
+        TextureData         InitData = {&Mip0Data, 1};
+
+        pDevice->CreateTexture(EnvMapDesc, &InitData, &pEnvMap);
+    }
+
+    StateTransitionDesc Barriers[] = {
+        {pEnvMap, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE},
+    };
+    pCtx->TransitionResourceStates(_countof(Barriers), Barriers);
+
+    RenderDelegate.GetUSDRenderer()->PrecomputeCubemaps(pCtx, pEnvMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+}
+
+void HnLight::PrepareGPUResources(HnRenderDelegate& RenderDelegate)
+{
+    if (m_TypeId == pxr::HdPrimTypeTokens->domeLight)
+    {
+        if (m_IsTextureDirty)
+        {
+            PrecomputeIBLCubemaps(RenderDelegate);
+            m_IsTextureDirty = false;
+        }
+    }
 }
 
 } // namespace USD
