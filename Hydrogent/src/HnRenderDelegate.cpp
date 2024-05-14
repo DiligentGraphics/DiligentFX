@@ -596,9 +596,22 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
         if (m_LightResourcesVersion != LightResourcesVersion)
         {
             std::lock_guard<std::mutex> Guard{m_LightsMtx};
-            for (auto* pLight : m_Lights)
+
+            HnLight* DomeLight = nullptr;
+            for (HnLight* pLight : m_Lights)
             {
-                pLight->PrepareGPUResources(*this);
+                if (pLight->GetTypeId() == pxr::HdPrimTypeTokens->domeLight)
+                {
+                    if (DomeLight == nullptr)
+                    {
+                        pLight->PrecomputeIBLCubemaps(*this);
+                        DomeLight = pLight;
+                    }
+                    else
+                    {
+                        LOG_WARNING_MESSAGE("Only one dome light is supported. ", pLight->GetId(), " will be ignored");
+                    }
+                }
             }
             m_LightResourcesVersion = LightResourcesVersion;
         }

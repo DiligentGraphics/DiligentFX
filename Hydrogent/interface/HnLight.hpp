@@ -88,14 +88,13 @@ public:
     bool IsShadowMapDirty() const { return m_IsShadowMapDirty; }
     void SetShadowMapDirty(bool IsDirty) { m_IsShadowMapDirty = IsDirty; }
 
-    void PrepareGPUResources(HnRenderDelegate& RenderDelegate);
+    void PrecomputeIBLCubemaps(HnRenderDelegate& RenderDelegate);
 
 private:
     HnLight(const pxr::SdfPath& Id, const pxr::TfToken& TypeId);
 
     bool ApproximateAreaLight(pxr::HdSceneDelegate& SceneDelegate, float MetersPerUnit);
     void ComputeDirectLightProjMatrix(pxr::HdSceneDelegate& SceneDelegate);
-    void PrecomputeIBLCubemaps(HnRenderDelegate& RenderDelegate);
 
 private:
     const pxr::TfToken m_TypeId;

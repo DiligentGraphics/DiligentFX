@@ -520,11 +520,10 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
 
             if (Light->GetTypeId() == pxr::HdPrimTypeTokens->domeLight)
             {
-                if (DomeLight != nullptr)
-                {
-                    LOG_DVP_WARNING_MESSAGE("Multiple dome lights are currently not supported.");
-                }
-                DomeLight = Light;
+                // Only use the first dome light
+                if (DomeLight == nullptr)
+                    DomeLight = Light;
+
                 continue;
             }
 

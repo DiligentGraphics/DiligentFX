@@ -637,6 +637,8 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
 void HnLight::PrecomputeIBLCubemaps(HnRenderDelegate& RenderDelegate)
 {
     VERIFY_EXPR(m_TypeId == pxr::HdPrimTypeTokens->domeLight);
+    if (!m_IsTextureDirty)
+        return;
 
     IRenderDevice*  pDevice = RenderDelegate.GetDevice();
     IDeviceContext* pCtx    = RenderDelegate.GetDeviceContext();
@@ -678,18 +680,8 @@ void HnLight::PrecomputeIBLCubemaps(HnRenderDelegate& RenderDelegate)
     pCtx->TransitionResourceStates(_countof(Barriers), Barriers);
 
     RenderDelegate.GetUSDRenderer()->PrecomputeCubemaps(pCtx, pEnvMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
-}
 
-void HnLight::PrepareGPUResources(HnRenderDelegate& RenderDelegate)
-{
-    if (m_TypeId == pxr::HdPrimTypeTokens->domeLight)
-    {
-        if (m_IsTextureDirty)
-        {
-            PrecomputeIBLCubemaps(RenderDelegate);
-            m_IsTextureDirty = false;
-        }
-    }
+    m_IsTextureDirty = false;
 }
 
 } // namespace USD
