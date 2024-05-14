@@ -511,10 +511,24 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
             UNEXPECTED("Camera is null. It should've been set in Prepare()");
         }
 
-        int LightCount = 0;
+        HnLight* DomeLight  = nullptr;
+        int      LightCount = 0;
         for (HnLight* Light : RenderDelegate->GetLights())
         {
-            if (!Light->IsVisible() || Light->GetParams().Type == GLTF::Light::TYPE::UNKNOWN)
+            if (!Light->IsVisible())
+                continue;
+
+            if (Light->GetTypeId() == pxr::HdPrimTypeTokens->domeLight)
+            {
+                if (DomeLight != nullptr)
+                {
+                    LOG_DVP_WARNING_MESSAGE("Multiple dome lights are currently not supported.");
+                }
+                DomeLight = Light;
+                continue;
+            }
+
+            if (Light->GetParams().Type == GLTF::Light::TYPE::UNKNOWN)
                 continue;
 
             GLTF_PBR_Renderer::PBRLightShaderAttribsData LightAttribs{
@@ -554,7 +568,10 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
 
             RendererParams.OcclusionStrength = m_Params.Renderer.OcclusionStrength;
             RendererParams.EmissionScale     = m_Params.Renderer.EmissionScale;
-            RendererParams.IBLScale          = m_Params.Renderer.IBLScale;
+
+            RendererParams.IBLScale = DomeLight != nullptr ?
+                DomeLight->GetParams().Color * DomeLight->GetParams().Intensity * m_Params.Renderer.IBLScale :
+                float4{0};
 
             RendererParams.UnshadedColor  = m_Params.Renderer.UnshadedColor;
             RendererParams.HighlightColor = float4{0, 0, 0, 0};

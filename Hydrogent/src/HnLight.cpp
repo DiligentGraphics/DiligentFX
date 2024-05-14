@@ -504,7 +504,8 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
             m_TypeId == pxr::HdPrimTypeTokens->diskLight ||
             m_TypeId == pxr::HdPrimTypeTokens->distantLight ||
             m_TypeId == pxr::HdPrimTypeTokens->rectLight ||
-            m_TypeId == pxr::HdPrimTypeTokens->sphereLight)
+            m_TypeId == pxr::HdPrimTypeTokens->sphereLight ||
+            m_TypeId == pxr::HdPrimTypeTokens->domeLight)
         {
             float MetersPerUnit = 1;
             if (RenderParam != nullptr)
@@ -516,7 +517,12 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
                 LightDirty = true;
             }
         }
-        else if (m_TypeId == pxr::HdPrimTypeTokens->domeLight)
+        else
+        {
+            LOG_ERROR_MESSAGE("Unsupported light type: ", m_TypeId);
+        }
+
+        if (m_TypeId == pxr::HdPrimTypeTokens->domeLight)
         {
             std::string TexturePath = GetTextureFile(*SceneDelegate, Id).GetAssetPath();
             if (TexturePath != m_TexturePath)
@@ -525,10 +531,6 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
                 LightDirty       = true;
                 m_IsTextureDirty = true;
             }
-        }
-        else
-        {
-            LOG_ERROR_MESSAGE("Unsupported light type: ", m_TypeId);
         }
 
         *DirtyBits &= ~DirtyParams;
