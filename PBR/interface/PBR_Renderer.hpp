@@ -416,10 +416,13 @@ public:
     // clang-format on
 
     /// Precompute cubemaps used by IBL.
+    ///
+    /// \remarks If NumDiffuseSamples or NumSpecularSamples is 0,
+    ///          the renderer will choose the optimal number of samples.
     void PrecomputeCubemaps(IDeviceContext* pCtx,
                             ITextureView*   pEnvironmentMap,
-                            Uint32          NumDiffuseSamples  = 8192,
-                            Uint32          NumSpecularSamples = 256,
+                            Uint32          NumDiffuseSamples  = 0,
+                            Uint32          NumSpecularSamples = 0,
                             bool            OptimizeSamples    = true);
 
     void CreateResourceBinding(IShaderResourceBinding** ppSRB, Uint32 Idx = 0) const;

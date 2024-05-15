@@ -508,6 +508,48 @@ void PBR_Renderer::PrecomputeBRDF(IDeviceContext* pCtx,
     pCtx->TransitionResourceStates(_countof(Barriers), Barriers);
 }
 
+static Uint32 GetDefaultDiffuseSamplesCount(const GraphicsAdapterInfo& AdapterInfo)
+{
+#if PLATFORM_WIN32 || PLATFORM_UNIVERSAL_WINDOWS || PLATFORM_LINUX || PLATFORM_MACOS
+    {
+        if (AdapterInfo.Type == ADAPTER_TYPE_DISCRETE)
+        {
+            // Any discrete GPU should be able to handle 8192 samples
+            return 8192;
+        }
+
+        // Note that in OpenGL, the adapter type is not detected.
+        if (AdapterInfo.Vendor == ADAPTER_VENDOR_NVIDIA ||
+            AdapterInfo.Vendor == ADAPTER_VENDOR_AMD)
+        {
+            // NVidia and AMD GPUs should be able to handle 8192 samples
+            return 8192;
+        }
+
+        if (AdapterInfo.Type == ADAPTER_TYPE_INTEGRATED)
+            return 2048;
+
+        if (AdapterInfo.Type == ADAPTER_TYPE_SOFTWARE)
+            return 1024;
+
+        // Desktop GPUs should be able to handle 4096 samples
+        return 4096;
+    }
+#elif PLATFORM_ANDROID || PLATFORM_IOS || PLATFORM_TVOS
+    {
+        return 512;
+    }
+#elif PLATFORM_EMSCRIPTEN
+    {
+        return 1024;
+    }
+#else
+    {
+        return 512;
+    }
+#endif
+}
+
 void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
                                       ITextureView*   pEnvironmentMap,
                                       Uint32          NumDiffuseSamples,
@@ -518,6 +560,15 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
     {
         LOG_WARNING_MESSAGE("IBL is disabled, so precomputing cube maps will have no effect");
         return;
+    }
+
+    if (NumSpecularSamples == 0)
+    {
+        NumSpecularSamples = 256;
+    }
+    if (NumDiffuseSamples == 0)
+    {
+        NumDiffuseSamples = GetDefaultDiffuseSamplesCount(m_Device.GetAdapterInfo());
     }
 
     struct PrecomputeEnvMapAttribs
