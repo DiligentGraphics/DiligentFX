@@ -90,4 +90,11 @@ float2 TransformDirectionToSphereMapUV(float3 Direction)
     return OneOverPi * float2(0.5 * atan2(Direction.z, Direction.x), asin(Direction.y)) + float2(0.5, 0.5);
 }
 
+void BasisFromNormal(in  float3 N,
+                     out float3 T,
+                     out float3 B)
+{
+    T = normalize(cross(N, abs(N.y) > 0.5 ? float3(1.0, 0.0, 0.0) : float3(0.0, 1.0, 0.0)));
+    B = cross(T, N);
+}
 #endif //_SHADER_UTILITIES_FXH_

@@ -2,6 +2,7 @@
 
 #include "PBR_PrecomputeCommon.fxh"
 #include "ShaderUtilities.fxh"
+#include "PBR_Common.fxh"
 
 #ifndef OPTIMIZE_SAMPLES
 #   define OPTIMIZE_SAMPLES 1
@@ -41,6 +42,9 @@ float3 SampleEnvrionmentMap(float3 R, float MipLevel)
 
 float3 IrradianceMap(float3 N)
 {
+    float3 T, B;
+    BasisFromNormal(N, T, B);
+    
     // When the HDRI map has points occupying a small area but with high peak brightness (such as the sun), brightness spikes appear on the irradiance map. 
     // To resolve this issue, we used the approach from the comments in this post:
     // https://www.reddit.com/r/opengl/comments/l0h5fy/rendering_the_irradiance_map_for_physically_based/
@@ -50,15 +54,12 @@ float3 IrradianceMap(float3 N)
         float2 Xi = Hammersley2D(i, g_NumSamples);
         
         // Importance sample the hemisphere with a cosine-weighted distribution
-        float3 L = ImportanceSampleGGX(Xi, 1.0, N);
+        float3 L;
+        float  pdf;
+        SampleDirectionCosineHemisphere(Xi, L, pdf);
+        L = normalize(L.x * T + L.y * B + L.z * N);
 
 #if OPTIMIZE_SAMPLES       
-        // NdotL is equal to cos(theta)
-        float NoL = max(dot(N, L), 0.0);
-        
-        // Probability density function for cosine-weighted hemisphere
-        float pdf = max((1.0 / PI) * NoL, 0.0001);
-
         // Solid angle of current smple
         float OmegaS = 1.0 / (float(g_NumSamples) * pdf);
         
