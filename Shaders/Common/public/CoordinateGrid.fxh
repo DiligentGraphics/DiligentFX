@@ -166,7 +166,7 @@ float4 ComputeCoordinateGrid(in float2                f2NormalizedXY,
     float3 Positions[3];
     float  PlaneAlpha[3];
     
-    float PixelSize = length(Camera.f4ViewportSize.zw);
+    float PixelSize = length(Camera.f4ViewportSize.zw / float2(Camera.mProj[0][0], Camera.mProj[1][1]));
     float MinCameraZ = DepthToCameraZ(MinDepth, Camera.mProj);
     float MaxCameraZ = DepthToCameraZ(MaxDepth, Camera.mProj);
     float CameraZRange = max(MaxCameraZ - MinCameraZ, 1e-6);
