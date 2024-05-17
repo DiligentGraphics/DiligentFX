@@ -169,4 +169,6 @@ private:
     Timer m_FrameTimer;
 };
 
+DEFINE_FLAG_ENUM_OPERATORS(Bloom::FEATURE_FLAGS)
+
 } // namespace Diligent

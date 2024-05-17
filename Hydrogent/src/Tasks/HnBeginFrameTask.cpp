@@ -474,14 +474,21 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
             };
             CamAttribs.fHandness = ViewMatrix.Determinant() > 0 ? 1.f : -1.f;
 
-            CamAttribs.mViewT        = ViewMatrix.Transpose();
-            CamAttribs.mProjT        = ProjMatrix.Transpose();
-            CamAttribs.mViewProjT    = ViewProj.Transpose();
-            CamAttribs.mViewInvT     = WorldMatrix.Transpose();
-            CamAttribs.mProjInvT     = ProjMatrix.Inverse().Transpose();
-            CamAttribs.mViewProjInvT = ViewProj.Inverse().Transpose();
-            CamAttribs.f4Position    = float4{float3::MakeVector(WorldMatrix[3]), 1};
-            CamAttribs.f2Jitter      = Jitter;
+            CamAttribs.mViewT         = ViewMatrix.Transpose();
+            CamAttribs.mProjT         = ProjMatrix.Transpose();
+            CamAttribs.mViewProjT     = ViewProj.Transpose();
+            CamAttribs.mViewInvT      = WorldMatrix.Transpose();
+            CamAttribs.mProjInvT      = ProjMatrix.Inverse().Transpose();
+            CamAttribs.mViewProjInvT  = ViewProj.Inverse().Transpose();
+            CamAttribs.f4Position     = float4{float3::MakeVector(WorldMatrix[3]), 1};
+            CamAttribs.f2Jitter       = Jitter;
+            CamAttribs.fFStop         = m_pCamera->GetFStop();
+            CamAttribs.fFocusDistance = m_pCamera->GetFocusDistance();
+
+            // TODO: Need understand why params returned by the camera are in cm
+            CamAttribs.fFocalLength  = 10.0f * m_pCamera->GetFocalLength();
+            CamAttribs.fSensorWidth  = 10.0f * m_pCamera->GetHorizontalAperture();
+            CamAttribs.fSensorHeight = 10.0f * m_pCamera->GetVerticalAperture();
 
             ProjMatrix.GetNearFarClipPlanes(CamAttribs.fNearPlaneZ, CamAttribs.fFarPlaneZ, pDevice->GetDeviceInfo().NDC.MinZ == -1);
 

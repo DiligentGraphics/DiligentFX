@@ -33,9 +33,10 @@ The following table lists the parameters and their descriptions.
 
 | **Name**                                 | **Notes** |
 | -----------------------------------------|-----------|
-| `BokehRadius`                            | Intensity of the depth of field effect. |
-| `FocusDistance`                          | Distance from the camera at which the depth of field effect is focused. |
-| `FocusRange`                             | Range of distances from the focus distance at which the depth of field effect is applied. |
+| `MaxCircleOfConfusion`                   | This is the maximum size of CoC in texture coordinates for a pixel. |
+| `TemporalStabilityFactor`                | This parameter is used to control the stability of the temporal accumulation of the CoC. |
+| `BokehKernelRingCount`                   | The number of rings in the Octaweb kernel. |
+| `BokehKernelRingDensity`                 | The number of samples within each ring of the Octaweb kernel. |
 
 ### Host API
 
@@ -111,9 +112,15 @@ An `ITextureView` of the texture containing the depth of field result can be obt
 
 ## Implementation details
 
-TBD
+Our algorithm is based on the approach described in article **[Jasper Flick, 2018]**, but we have significantly modified our version. Specifically, we handle the blurring of the near and far planes separately.
+For the near plane, we calculate the dilation and blurring of the CoC before computing the bokeh. This step is essential to avoid bleed effects.
+We also added an approach to eliminate the undersampling effect from article **[Tiago Sousa, 2013]**.
 
 ## References
-- **[Jasper Flick,, 2018]**: Advanced rendering: Depth of Field - https://catlikecoding.com/unity/tutorials/advanced-rendering/depth-of-field/
+- **[Jasper Flick, 2018]**: Advanced rendering: Depth of Field - https://catlikecoding.com/unity/tutorials/advanced-rendering/depth-of-field/
 - **[Steve Avery, 2016]**: Bokeh Depth of Field - https://pixelmischiefblog.wordpress.com/2016/11/25/bokeh-depth-of-field/
 - **[Matt Pettineo, 2011]**: How To Fake Bokeh (And Make It Look Pretty Good)  https://therealmjp.github.io/posts/bokeh/
+- **[Tiago Sousa, 2013]**: Graphics Gems from CryENGINE 3 https://www.slideshare.net/TiagoAlexSousa/graphics-gems-from-cryengine-3-siggraph-2013
+- **[Jeff Conrad, 2004]**: Depth of Field in Depth https://www.largeformatphotography.info/articles/DoFinDepth.pdf
+- **[Michael Bemowski]**: Depth of Field simulator https://dofsimulator.net/en/
+- **[Adrian Courrèges]**: UE4 Optimized Post-Effects https://www.adriancourreges.com/blog/2018/12/02/ue4-optimized-post-effects/#ue4_dynres

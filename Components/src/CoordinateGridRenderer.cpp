@@ -192,9 +192,9 @@ bool CoordinateGridRenderer::UpdateUI(HLSL::CoordinateGridAttribs& Attribs, Coor
 
     auto ResetStateFeatureMask = [](FEATURE_FLAGS& FeatureFlags, FEATURE_FLAGS Flag, bool State) {
         if (State)
-            FeatureFlags = static_cast<FEATURE_FLAGS>(FeatureFlags | Flag);
+            FeatureFlags |= Flag;
         else
-            FeatureFlags = static_cast<FEATURE_FLAGS>(FeatureFlags & ~Flag);
+            FeatureFlags &= ~Flag;
     };
 
     ResetStateFeatureMask(FeatureFlags, FEATURE_FLAG_RENDER_AXIS_X, ActiveAxisX);

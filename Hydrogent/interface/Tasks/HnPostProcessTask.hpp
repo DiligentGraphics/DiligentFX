@@ -107,7 +107,7 @@ struct HnPostProcessTaskParams
     ScreenSpaceReflection::FEATURE_FLAGS       SSRFeatureFlags   = ScreenSpaceReflection::FEATURE_FLAG_NONE;
     ScreenSpaceAmbientOcclusion::FEATURE_FLAGS SSAOFeatureFlags  = ScreenSpaceAmbientOcclusion::FEATURE_FLAG_NONE;
     TemporalAntiAliasing::FEATURE_FLAGS        TAAFeatureFlags   = TemporalAntiAliasing::FEATURE_FLAG_BICUBIC_FILTER;
-    DepthOfField::FEATURE_FLAGS                DOFFeatureFlags   = DepthOfField::FEATURE_FLAG_NONE;
+    DepthOfField::FEATURE_FLAGS                DOFFeatureFlags   = DepthOfField::FEATURE_FLAG_ENABLE_KARIS_INVERSE | DepthOfField::FEATURE_FLAG_ENABLE_TEMPORAL_SMOOTHING;
     Bloom::FEATURE_FLAGS                       BloomFeatureFlags = Bloom::FEATURE_FLAG_NONE;
     CoordinateGridRenderer::FEATURE_FLAGS      GridFeatureFlags  = CoordinateGridRenderer::FEATURE_FLAG_NONE;
 

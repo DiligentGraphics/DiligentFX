@@ -7,20 +7,43 @@
 #   error "Include ShaderDefinitions.fxh before including this file"
 #endif
 
-#define DOF_KERNEL_SAMPLE_COUNT 22
+#define DOF_TEMPORAL_VARIANCE_GAMMA         2.5
+
+// Number of rings in the bokeh kernel for flood-filling.
+#define DOF_BOKEH_KERNEL_SMALL_RING_COUNT   3
+
+// Number of samples within each ring of the bokeh kernel the bokeh kernel for flood-filling.
+#define DOF_BOKEH_KERNEL_SMALL_RING_DENSITY 5
+
+// Gaussian kernel radius for blurring the dilated CoC texture
+#define DOF_GAUSS_KERNEL_RADIUS             6
+
+// Gaussian kernel sigma for blurring the dilated CoC texture
+#define DOF_GAUSS_KERNEL_SIGMA              5.0
+
+// Macro for selecting the direction of CoC blur
+#define DOF_CIRCLE_OF_CONFUSION_BLUR_X      0
+
+// Macro for selecting the direction of CoC blur
+#define DOF_CIRCLE_OF_CONFUSION_BLUR_Y      1
+
 
 struct DepthOfFieldAttribs
 {
-    // The intensity of the depth of field effect.
-    float BokehRadius     DEFAULT_VALUE(4.0f);
+    // This is the maximum size of CoC in texture coordinates for a pixel.
+    // This parameter affects the strength of the bokeh effect.
+    // In reality, such a parameter does not exist, but unfortunately, we have to use it for performance reasons.
+    float MaxCircleOfConfusion    DEFAULT_VALUE(0.01f);
 
-    // The distance from the camera at which the depth of field effect is focused.
-    float FocusDistance   DEFAULT_VALUE(10.0f);
+    // This parameter is used to control the stability of the temporal accumulation of the CoC.
+    float TemporalStabilityFactor DEFAULT_VALUE(0.9375f);
 
-    // The range of distances from the focus distance at which the depth of field effect is applied.
-    float FocusRange      DEFAULT_VALUE(3.0f);
-   
-    float Padding0        DEFAULT_VALUE(0.0f);
+    // The number of rings in the Octaweb kernel
+    int   BokehKernelRingCount    DEFAULT_VALUE(5);
+
+    // The number of samples within each ring of the Octaweb kernel.
+    int   BokehKernelRingDensity  DEFAULT_VALUE(7);
+
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
     CHECK_STRUCT_ALIGNMENT(DepthOfFieldAttribs);

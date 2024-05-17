@@ -50,7 +50,9 @@ class DepthOfField
 public:
     enum FEATURE_FLAGS : Uint32
     {
-        FEATURE_FLAG_NONE = 0
+        FEATURE_FLAG_NONE                      = 0,
+        FEATURE_FLAG_ENABLE_TEMPORAL_SMOOTHING = 1 << 0,
+        FEATURE_FLAG_ENABLE_KARIS_INVERSE      = 1 << 1,
     };
 
     struct RenderAttributes
@@ -70,7 +72,7 @@ public:
         /// Shader resource view of the source color.
         ITextureView* pColorBufferSRV = nullptr;
 
-        /// Shader resource view of the source color.
+        /// Shader resource view of the source depth.
         ITextureView* pDepthBufferSRV = nullptr;
 
         /// Bloom settings
@@ -96,10 +98,16 @@ private:
 
     enum RENDER_TECH : Uint32
     {
-        RENDER_TECH_COMPUTE_CIRCLE_OF_CONFUSION = 0,
+        RENDER_TECH_COMPUTE_CIRCLE_OF_CONFUSION,
+        RENDER_TECH_COMPUTE_CIRCLE_OF_CONFUSION_TEMPORAL,
+        RENDER_TECH_COMPUTE_CIRCLE_OF_CONFUSION_DILATION,
+        RENDER_TECH_COMPUTE_CIRCLE_OF_CONFUSION_SEPARATED,
+        RENDER_TECH_COMPUTE_CIRCLE_OF_CONFUSION_BLUR_X,
+        RENDER_TECH_COMPUTE_CIRCLE_OF_CONFUSION_BLUR_Y,
         RENDER_TECH_COMPUTE_PREFILTERED_TEXTURE,
-        RENDER_TECH_COMPUTE_BOKEH_TEXTURE,
-        RENDER_TECH_COMPUTE_POSTFILTERED_TEXTURE,
+        RENDER_TECH_COMPUTE_BOKEH_FIRST_PASS,
+        RENDER_TECH_COMPUTE_BOKEH_SECOND_PASS,
+        RENDER_TECH_COMPUTE_POST_FILTERED_TEXTURE,
         RENDER_TECH_COMPUTE_COMBINED_TEXTURE,
         RENDER_TECH_COUNT
     };
@@ -109,10 +117,22 @@ private:
         RESOURCE_IDENTIFIER_INPUT_COLOR = 0,
         RESOURCE_IDENTIFIER_INPUT_DEPTH,
         RESOURCE_IDENTIFIER_INPUT_LAST = RESOURCE_IDENTIFIER_INPUT_DEPTH,
+        RESOURCE_IDENTIFIER_GAUSS_KERNEL_TEXTURE,
+        RESOURCE_IDENTIFIER_BOKEH_LARGE_KERNEL_TEXTURE,
+        RESOURCE_IDENTIFIER_BOKEH_SMALL_KERNEL_TEXTURE,
         RESOURCE_IDENTIFIER_CIRCLE_OF_CONFUSION_TEXTURE,
-        RESOURCE_IDENTIFIER_PREFILTERED_TEXTURE,
-        RESOURCE_IDENTIFIER_BOKEH_TEXTURE,
-        RESOURCE_IDENTIFIER_POSTFILTERED_TEXTURE,
+        RESOURCE_IDENTIFIER_CIRCLE_OF_CONFUSION_DILATION_TEXTURE_MIP0, // We don't use mip levels, because WebGL doesn't support concurrent read/write to separate mip levels
+        RESOURCE_IDENTIFIER_CIRCLE_OF_CONFUSION_DILATION_TEXTURE_MIP1,
+        RESOURCE_IDENTIFIER_CIRCLE_OF_CONFUSION_DILATION_TEXTURE_MIP2,
+        RESOURCE_IDENTIFIER_CIRCLE_OF_CONFUSION_DILATION_TEXTURE_MIP3,
+        RESOURCE_IDENTIFIER_CIRCLE_OF_CONFUSION_DILATION_TEXTURE_LAST_MIP = RESOURCE_IDENTIFIER_CIRCLE_OF_CONFUSION_DILATION_TEXTURE_MIP3,
+        RESOURCE_IDENTIFIER_CIRCLE_OF_CONFUSION_DILATION_TEXTURE_INTERMEDIATE,
+        RESOURCE_IDENTIFIER_CIRCLE_OF_CONFUSION_TEMPORAL_TEXTURE0,
+        RESOURCE_IDENTIFIER_CIRCLE_OF_CONFUSION_TEMPORAL_TEXTURE1,
+        RESOURCE_IDENTIFIER_PREFILTERED_TEXTURE0, // Reuse texture for bokeh second pass
+        RESOURCE_IDENTIFIER_PREFILTERED_TEXTURE1, // Reuse texture for bokeh second pass
+        RESOURCE_IDENTIFIER_BOKEH_TEXTURE0,       // Reuse texture for post-filtered texture
+        RESOURCE_IDENTIFIER_BOKEH_TEXTURE1,       // Reuse texture for post-filtered texture
         RESOURCE_IDENTIFIER_COMBINED_TEXTURE,
         RESOURCE_IDENTIFIER_CONSTANT_BUFFER,
         RESOURCE_IDENTIFIER_COUNT
@@ -120,11 +140,23 @@ private:
 
     void ComputeCircleOfConfusion(const RenderAttributes& RenderAttribs);
 
+    void ComputeTemporalCircleOfConfusion(const RenderAttributes& RenderAttribs);
+
+    void ComputeSeparatedCircleOfConfusion(const RenderAttributes& RenderAttribs);
+
+    void ComputeDilationCircleOfConfusion(const RenderAttributes& RenderAttribs);
+
+    void ComputeCircleOfConfusionBlurX(const RenderAttributes& RenderAttribs);
+
+    void ComputeCircleOfConfusionBlurY(const RenderAttributes& RenderAttribs);
+
     void ComputePrefilteredTexture(const RenderAttributes& RenderAttribs);
 
-    void ComputeBokehTexture(const RenderAttributes& RenderAttribs);
+    void ComputeBokehFirstPass(const RenderAttributes& RenderAttribs);
 
-    void ComputePostfilteredTexture(const RenderAttributes& RenderAttribs);
+    void ComputeBokehSecondPass(const RenderAttributes& RenderAttribs);
+
+    void ComputePostFilteredTexture(const RenderAttributes& RenderAttribs);
 
     void ComputeCombinedTexture(const RenderAttributes& RenderAttribs);
 
@@ -166,7 +198,10 @@ private:
     Uint32 m_BackBufferHeight = 0;
     Uint32 m_CurrentFrameIdx  = 0;
 
+
     FEATURE_FLAGS m_FeatureFlags = FEATURE_FLAG_NONE;
 };
+
+DEFINE_FLAG_ENUM_OPERATORS(DepthOfField::FEATURE_FLAGS)
 
 } // namespace Diligent

@@ -94,8 +94,23 @@ struct CameraAttribs
     float fHandness;   // +1.0 for right-handed coordinate system, -1.0 for left-handed
     uint  uiFrameIndex;
     
+    // Distance to the point of focus
+    float fFocusDistance DEFAULT_VALUE(10.0f); 
+    // Ratio of the aperture (known as f-stop or f-number)
+    float fFStop         DEFAULT_VALUE(5.6f);
+    // Distance between the lens and the film in mm
+    float fFocalLength   DEFAULT_VALUE(50.0f);
+    // Sensor width in mm
+    float fSensorWidth   DEFAULT_VALUE(36.0f);
+    // Sensor height in mm
+    float fSensorHeight  DEFAULT_VALUE(24.0f);
+
+    float fPadding0;
+    float fPadding1;
+    float fPadding2;
+
     float2 f2Jitter;   // TAA jitter
-    float2 f2Padding1;
+    float2 f2Padding3;
     
 #ifdef __cplusplus
     float4x4 mViewT;
