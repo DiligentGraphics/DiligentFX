@@ -203,6 +203,8 @@ private:
     // Scratch space for the MultiDraw/MultiDrawIndexed command items.
     std::vector<Uint8> m_ScratchSpace;
 
+    std::unordered_map<IPipelineState*, bool> m_PendingPSOs;
+
     pxr::SdfPath m_SelectedPrimId = {};
     struct GlobalAttribVersions
     {

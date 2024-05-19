@@ -137,6 +137,13 @@ public:
         ///             This adds some overhead and should only be used in development mode.
         bool AllowHotShaderReload = false;
 
+        /// Whether to use asynchronous shader and pipeline state compilation.
+        ///
+        /// \remarks    When set to true, the renderer will compile shaders asynchronously
+        ///             in a separate thread. Until the final shader is ready, the
+        ///             renderer will use a simple fallback shader.
+        bool AsyncShaderCompilation = false;
+
         /// When shadows are enabled, the size of the PCF kernel.
         /// Allowed values are 2, 3, 5, 7.
         Uint32 PCFKernelSize = 3;

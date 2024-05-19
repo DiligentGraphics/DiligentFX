@@ -326,6 +326,35 @@ void HnRenderPass::Execute(HnRenderPassState& RPState, const pxr::TfTokenVector&
         }
     }
 
+    // Wait until all PSOs are ready
+    if (!m_PendingPSOs.empty())
+    {
+        size_t NumPSOsReady = 0;
+        for (auto& it : m_PendingPSOs)
+        {
+            if (!it.second)
+            {
+                it.second = (it.first->GetStatus() == PIPELINE_STATE_STATUS_READY);
+                if (!it.second)
+                {
+                    // Note that in WebGL, checking pipeline status may block calling thread.
+                    // If at least one PSO is not ready, do not check the rest.
+                    break;
+                }
+            }
+
+            ++NumPSOsReady;
+        }
+        if (NumPSOsReady == m_PendingPSOs.size())
+        {
+            m_PendingPSOs.clear();
+        }
+        else
+        {
+            return;
+        }
+    }
+
     IBuffer* const pPrimitiveAttribsCB = State.RenderDelegate.GetPrimitiveAttribsCB();
     VERIFY_EXPR(pPrimitiveAttribsCB != nullptr);
 
@@ -607,6 +636,11 @@ void HnRenderPass::UpdateDrawList(const pxr::TfTokenVector& RenderTags)
 
 void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
 {
+    if (m_DrawListItemsDirtyFlags & DRAW_LIST_ITEM_DIRTY_FLAG_PSO)
+    {
+        m_PendingPSOs.clear();
+    }
+
     struct DrawListItemRenderState
     {
         const DrawListItem& Item;
@@ -852,6 +886,7 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
                ListItem.ShaderAttribsBufferRange, ") computed from material PSO flags. The latter is used by HnMaterial to set the buffer range.");
 
         VERIFY_EXPR(ListItem.pPSO != nullptr);
+        m_PendingPSOs.emplace(ListItem.pPSO, false);
     }
 
     if (DirtyFlags & DRAW_LIST_ITEM_DIRTY_FLAG_MESH_DATA)

@@ -1482,6 +1482,9 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
     PipelineStateDesc&              PSODesc          = PSOCreateInfo.PSODesc;
     GraphicsPipelineDesc&           GraphicsPipeline = PSOCreateInfo.GraphicsPipeline;
 
+    if (m_Settings.AsyncShaderCompilation)
+        PSOCreateInfo.Flags |= PSO_CREATE_FLAG_ASYNCHRONOUS;
+
     const auto PSOFlags   = Key.GetFlags();
     const auto IsUnshaded = (PSOFlags & PSO_FLAG_UNSHADED) != 0;
 
@@ -1513,10 +1516,10 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
 
     RefCntAutoPtr<IShaderSourceInputStreamFactory> pMemorySourceFactory =
         CreateMemoryShaderSourceFactory({
-                                            MemoryShaderSourceFileInfo{"VSInputStruct.generated", VSInputStruct},
-                                            MemoryShaderSourceFileInfo{"VSOutputStruct.generated", VSOutputStruct},
-                                            MemoryShaderSourceFileInfo{"PSOutputStruct.generated", PSMainSource.OutputStruct},
-                                            MemoryShaderSourceFileInfo{"PSMainFooter.generated", PSMainSource.Footer},
+                                            MemoryShaderSourceFileInfo{"VSInputStruct.generated", m_Settings.AsyncShaderCompilation ? *m_GeneratedIncludes.emplace(VSInputStruct).first : VSInputStruct},
+                                            MemoryShaderSourceFileInfo{"VSOutputStruct.generated", m_Settings.AsyncShaderCompilation ? *m_GeneratedIncludes.emplace(VSOutputStruct).first : VSOutputStruct},
+                                            MemoryShaderSourceFileInfo{"PSOutputStruct.generated", m_Settings.AsyncShaderCompilation ? *m_GeneratedIncludes.emplace(PSMainSource.OutputStruct).first : PSMainSource.OutputStruct},
+                                            MemoryShaderSourceFileInfo{"PSMainFooter.generated", m_Settings.AsyncShaderCompilation ? *m_GeneratedIncludes.emplace(PSMainSource.Footer).first : PSMainSource.Footer},
                                         },
                                         CopyGeneratedStrings);
     RefCntAutoPtr<IShaderSourceInputStreamFactory> pShaderSourceFactory =
@@ -1541,6 +1544,8 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
             SHADER_SOURCE_LANGUAGE_HLSL,
             {"PBR VS", SHADER_TYPE_VERTEX, UseCombinedSamplers},
         };
+        if (m_Settings.AsyncShaderCompilation)
+            ShaderCI.CompileFlags |= SHADER_COMPILE_FLAG_ASYNCHRONOUS;
 
         std::string GLSLSource;
         if (m_Settings.PrimitiveArraySize > 0)
@@ -1594,6 +1599,9 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
             SHADER_SOURCE_LANGUAGE_HLSL,
             {!IsUnshaded ? "PBR PS" : "Unshaded PS", SHADER_TYPE_PIXEL, UseCombinedSamplers},
         };
+        if (m_Settings.AsyncShaderCompilation)
+            ShaderCI.CompileFlags |= SHADER_COMPILE_FLAG_ASYNCHRONOUS;
+
         pPS = m_Device.CreateShader(ShaderCI);
     }
 

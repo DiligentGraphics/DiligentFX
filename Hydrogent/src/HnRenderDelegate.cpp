@@ -117,7 +117,8 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
     // Enable clear coat support
     USDRendererCI.EnableClearCoat = true;
 
-    USDRendererCI.AllowHotShaderReload = RenderDelegateCI.AllowHotShaderReload;
+    USDRendererCI.AllowHotShaderReload   = RenderDelegateCI.AllowHotShaderReload;
+    USDRendererCI.AsyncShaderCompilation = RenderDelegateCI.AsyncShaderCompilation;
 
     // We use SRGB textures, so color conversion in the shader is not needed
     USDRendererCI.TexColorConversionMode = PBR_Renderer::CreateInfo::TEX_COLOR_CONVERSION_MODE_NONE;

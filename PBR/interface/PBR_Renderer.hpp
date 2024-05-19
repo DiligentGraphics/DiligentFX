@@ -27,6 +27,7 @@
 #pragma once
 
 #include <unordered_map>
+#include <unordered_set>
 #include <functional>
 #include <array>
 
@@ -179,6 +180,13 @@ public:
         ///             to keep copies of generated shaders in the shader source factory.
         ///             This adds some overhead and should only be used in development mode.
         bool AllowHotShaderReload = false;
+
+        /// Whether to use asynchronous shader and pipeline state compilation.
+        ///
+        /// \remarks    When set to true, the renderer will compile shaders asynchronously
+        ///             in a separate thread. Until the final shader is ready, the
+        ///             renderer will use a simple fallback shader.
+        bool AsyncShaderCompilation = false;
 
         /// PCF shadow kernel size.
         /// Allowed values are 2, 3, 5, 7.
@@ -767,6 +775,8 @@ protected:
     RefCntAutoPtr<IBuffer> m_PBRPrimitiveAttribsCB;
     RefCntAutoPtr<IBuffer> m_PrecomputeEnvMapAttribsCB;
     RefCntAutoPtr<IBuffer> m_JointsBuffer;
+
+    std::unordered_set<std::string> m_GeneratedIncludes;
 
     std::vector<RefCntAutoPtr<IPipelineResourceSignature>> m_ResourceSignatures;
 

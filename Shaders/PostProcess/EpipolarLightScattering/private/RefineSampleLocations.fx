@@ -223,7 +223,7 @@ void RefineSampleLocationsCS(uint3 Gid  : SV_GroupID,
                     uiFlagPack |= ( uint(0x0FFFFFFFFU) << uint(iFlagOrderInPack+1) );
                 }
                 // Find first zero flag starting from iFlagOrderInPack position. Since all
-                // higher bits are set, they will be effectivelly skipped
+                // higher bits are set, they will be effectively skipped
                 int iFirstUnsetFlagPos = firstbithigh( uint(~uiFlagPack) );
                 // firstbithigh(0) == +INT_MAX
                 if( !(0 <= iFirstUnsetFlagPos && iFirstUnsetFlagPos < 32) )

@@ -59,7 +59,7 @@ static const DepthStencilStateDesc DSS_CmpEqNoWrites
 // Pixel shader discards pixels that should not be further processed, thus keeping the
 // stencil value untouched.
 // For instance, pixel shader performing epipolar coordinates generation discards all 
-// sampes, whose coordinates are outside the screen [-1,1]x[-1,1] area.
+// samples, whose coordinates are outside the screen [-1,1]x[-1,1] area.
 static const DepthStencilStateDesc DSS_IncStencilAlways
 {
     False,                  // DepthEnable

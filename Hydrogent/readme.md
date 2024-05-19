@@ -39,7 +39,7 @@ Hydrogent is an implementation of the Hydra rendering API in Diligent Engine.
 
    * Use the following options `--draco --openimageio` to build OpenUSD with Draco and OpenImageIO support in step 1.
     
-     * :warning: if you arleady built OpenUSD, you will need to delete the build folder and start over
+     * :warning: if you already built OpenUSD, you will need to delete the build folder and start over
        as OpenUSD does not handle changing build options well.
 
    * On Windows and MacOS, follow the [build instructions](https://github.com/adobe/USD-Fileformat-plugins?tab=readme-ov-file#build),
