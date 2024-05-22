@@ -27,6 +27,7 @@
 #pragma once
 
 #include <array>
+#include <unordered_map>
 
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
 #include "../../../../DiligentCore/Graphics/GraphicsTools/interface/RenderStateCache.h"
@@ -91,6 +92,15 @@ public:
         IBuffer* pCameraAttribsCB = nullptr;
     };
 
+    struct TextureOperationAttribs
+    {
+        IRenderDevice* pDevice = nullptr;
+
+        IRenderStateCache* pStateCache = nullptr;
+
+        IDeviceContext* pDeviceContext = nullptr;
+    };
+
     enum BLUE_NOISE_DIMENSION : Uint32
     {
         BLUE_NOISE_DIMENSION_XY = 0,
@@ -138,16 +148,11 @@ public:
         return m_FrameDesc;
     }
 
-    static void ClearRenderTarget(IDeviceContext* pDeviceContext, ITexture* pTexture, float ClearColor[]);
+    void ClearRenderTarget(const TextureOperationAttribs& Attribs, ITexture* pTexture, float ClearColor[]);
 
-private:
-    void ComputeBlueNoiseTexture(const RenderAttributes& RenderAttribs);
+    void CopyTextureDepth(const TextureOperationAttribs& Attribs, ITextureView* pSRV, ITextureView* pRTV);
 
-    void ComputeReprojectedDepth(const RenderAttributes& RenderAttribs);
-
-    void ComputeClosestMotion(const RenderAttributes& RenderAttribs);
-
-    void ComputePreviousDepth(const RenderAttributes& RenderAttribs);
+    void CopyTextureColor(const TextureOperationAttribs& attribs, ITextureView* pSRV, ITextureView* pRTV);
 
 private:
     using RenderTechnique  = PostFXRenderTechnique;
@@ -159,6 +164,7 @@ private:
         RENDER_TECH_COMPUTE_REPROJECTED_DEPTH,
         RENDER_TECH_COMPUTE_CLOSEST_MOTION,
         RENDER_TECH_COPY_DEPTH,
+        RENDER_TECH_COPY_COLOR,
         RENDER_TECH_COUNT
     };
 
@@ -180,7 +186,46 @@ private:
         RESOURCE_IDENTIFIER_COUNT
     };
 
-    std::array<RenderTechnique, RENDER_TECH_COUNT> m_RenderTech{};
+    void ComputeBlueNoiseTexture(const RenderAttributes& RenderAttribs);
+
+    void ComputeReprojectedDepth(const RenderAttributes& RenderAttribs);
+
+    void ComputeClosestMotion(const RenderAttributes& RenderAttribs);
+
+    void ComputePreviousDepth(const RenderAttributes& RenderAttribs);
+
+    RenderTechnique& GetRenderTechnique(RENDER_TECH RenderTech, FEATURE_FLAGS FeatureFlags, TEXTURE_FORMAT TextureFormat);
+
+private:
+    struct RenderTechniqueKey
+    {
+        const RENDER_TECH    RenderTech;
+        const FEATURE_FLAGS  FeatureFlags;
+        const TEXTURE_FORMAT TextureFormat;
+
+        RenderTechniqueKey(RENDER_TECH _RenderTech, FEATURE_FLAGS _FeatureFlags, TEXTURE_FORMAT _TextureFormat) :
+            RenderTech{_RenderTech},
+            FeatureFlags{_FeatureFlags},
+            TextureFormat{_TextureFormat}
+        {}
+
+        constexpr bool operator==(const RenderTechniqueKey& RHS) const
+        {
+            return RenderTech == RHS.RenderTech &&
+                FeatureFlags == RHS.FeatureFlags &&
+                TextureFormat == RHS.TextureFormat;
+        }
+
+        struct Hasher
+        {
+            size_t operator()(const RenderTechniqueKey& Key) const
+            {
+                return ComputeHash(Key.FeatureFlags, Key.FeatureFlags, Key.TextureFormat);
+            }
+        };
+    };
+
+    std::unordered_map<RenderTechniqueKey, RenderTechnique, RenderTechniqueKey::Hasher> m_RenderTech;
 
     ResourceRegistry m_Resources{RESOURCE_IDENTIFIER_COUNT};
 

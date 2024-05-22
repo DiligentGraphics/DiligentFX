@@ -128,7 +128,6 @@ private:
         RENDER_TECH_COMPUTE_SPATIAL_RECONSTRUCTION,
         RENDER_TECH_COMPUTE_TEMPORAL_ACCUMULATION,
         RENDER_TECH_COMPUTE_BILATERAL_CLEANUP,
-        RENDER_TECH_COPY_DEPTH,
         RENDER_TECH_COUNT
     };
 
@@ -159,7 +158,7 @@ private:
         RESOURCE_IDENTIFIER_COUNT
     };
 
-    void CopyTextureDepth(const RenderAttributes& RenderAttribs, ITextureView* pSRV, ITextureView* pRTV);
+    void PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_FLAGS FeatureFlags);
 
     void ComputeHierarchicalDepthBuffer(const RenderAttributes& RenderAttribs);
 
@@ -174,6 +173,8 @@ private:
     void ComputeTemporalAccumulation(const RenderAttributes& RenderAttribs);
 
     void ComputeBilateralCleanup(const RenderAttributes& RenderAttribs);
+
+    void ComputePlaceholderTexture(const RenderAttributes& RenderAttribs);
 
     RenderTechnique& GetRenderTechnique(RENDER_TECH RenderTech, FEATURE_FLAGS FeatureFlags);
 

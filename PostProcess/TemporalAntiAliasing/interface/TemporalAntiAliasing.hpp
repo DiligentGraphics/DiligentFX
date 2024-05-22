@@ -114,6 +114,7 @@ public:
 private:
     using RenderTechnique  = PostFXRenderTechnique;
     using ResourceInternal = RefCntAutoPtr<IDeviceObject>;
+    struct AccumulationBufferInfo;
 
     enum RENDER_TECH : Uint32
     {
@@ -121,8 +122,11 @@ private:
         RENDER_TECH_COUNT
     };
 
-    struct AccumulationBufferInfo;
+    void PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_FLAGS FeatureFlags, TEXTURE_FORMAT TextureFormat);
+
     void ComputeTemporalAccumulation(const RenderAttributes& RenderAttribs, AccumulationBufferInfo& AccBuff);
+
+    void ComputePlaceholderTexture(const RenderAttributes& RenderAttribs, AccumulationBufferInfo& AccBuff);
 
 private:
     struct RenderTechniqueKey
@@ -149,8 +153,6 @@ private:
         };
     };
 
-    std::unordered_map<RenderTechniqueKey, RenderTechnique, RenderTechniqueKey::Hasher> m_RenderTech;
-
     struct AccumulationBufferInfo
     {
         enum RESOURCE_ID : Uint32
@@ -173,10 +175,13 @@ private:
 
         RefCntAutoPtr<IShaderResourceBinding> SRB;
 
-        void Prepare(IRenderDevice* pDevice, IDeviceContext* pCtx, Uint32 Width, Uint32 Height, Uint32 CurrFrameIdx, FEATURE_FLAGS FeatureFlags);
+        void Prepare(PostFXContext* pPostFXContext, IRenderDevice* pDevice, IDeviceContext* pCtx, Uint32 Width, Uint32 Height, Uint32 CurrFrameIdx, FEATURE_FLAGS FeatureFlags);
+
         void UpdateConstantBuffer(IDeviceContext* pCtx, const HLSL::TemporalAntiAliasingAttribs& Attribs);
     };
-    std::unordered_map<Uint32, AccumulationBufferInfo> m_AccumulationBuffers;
+
+    std::unordered_map<RenderTechniqueKey, RenderTechnique, RenderTechniqueKey::Hasher> m_RenderTech;
+    std::unordered_map<Uint32, AccumulationBufferInfo>                                  m_AccumulationBuffers;
 };
 
 DEFINE_FLAG_ENUM_OPERATORS(TemporalAntiAliasing::FEATURE_FLAGS)

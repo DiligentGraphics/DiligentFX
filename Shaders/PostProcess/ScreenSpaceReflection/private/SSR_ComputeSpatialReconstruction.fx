@@ -67,23 +67,27 @@ float2 ComputeWeightRayLength(int2 PixelCoord, float3 V, float3 N, float Roughne
     float4 RayDirectionPDF = g_TextureRayDirectionPDF.Load(int3(PixelCoord, 0));
     float InvRayLength = rsqrt(dot(RayDirectionPDF.xyz, RayDirectionPDF.xyz));
     if (isnan(InvRayLength))
+    {
         return float2(1.0e-6f, 1.0e-6f);
+    }
+    else
+    {
+        float3 RayDirection = RayDirectionPDF.xyz * InvRayLength;
+        float PDF = RayDirectionPDF.w;
+        float AlphaRoughness = Roughness * Roughness;
 
-    float3 RayDirection = RayDirectionPDF.xyz * InvRayLength;
-    float PDF = RayDirectionPDF.w;
-    float AlphaRoughness = Roughness * Roughness;
+        float3 L = RayDirection;
+        float3 H = normalize(L + V);
 
-    float3 L = RayDirection;
-    float3 H = normalize(L + V);
+        float NdotH = saturate(dot(N, H));
+        float NdotL = saturate(dot(N, L));
 
-    float NdotH = saturate(dot(N, H));
-    float NdotL = saturate(dot(N, L));
-
-    float Vis = SmithGGXVisibilityCorrelated(NdotL, NdotV, AlphaRoughness);
-    float D = NormalDistribution_GGX(NdotH, AlphaRoughness);
-    float LocalBRDF = Vis * D * NdotL;
-    LocalBRDF *= ComputeGaussianWeight(Weight);
-    return float2(max(LocalBRDF / max(PDF, 1.0e-5f), 1e-6), rcp(InvRayLength));
+        float Vis = SmithGGXVisibilityCorrelated(NdotL, NdotV, AlphaRoughness);
+        float D = NormalDistribution_GGX(NdotH, AlphaRoughness);
+        float LocalBRDF = Vis * D * NdotL;
+        LocalBRDF *= ComputeGaussianWeight(Weight);
+        return float2(max(LocalBRDF / max(PDF, 1.0e-5f), 1e-6), rcp(InvRayLength));
+    }
 }
 
 // Weighted incremental variance

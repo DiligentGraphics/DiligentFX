@@ -110,11 +110,15 @@ private:
         RESOURCE_IDENTIFIER_COUNT
     };
 
+    void PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_FLAGS FeatureFlags);
+
     void ComputePrefilteredTexture(const RenderAttributes& RenderAttribs);
 
     void ComputeDownsampledTextures(const RenderAttributes& RenderAttribs);
 
     void ComputeUpsampledTextures(const RenderAttributes& RenderAttribs);
+
+    void ComputePlaceholderTexture(const RenderAttributes& RenderAttribs);
 
     Int32 ComputeMipCount(Uint32 Width, Uint32 Height, float Radius);
 

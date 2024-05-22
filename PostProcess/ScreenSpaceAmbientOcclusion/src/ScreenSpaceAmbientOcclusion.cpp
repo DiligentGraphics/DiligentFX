@@ -77,6 +77,9 @@ void ScreenSpaceAmbientOcclusion::PrepareResources(IRenderDevice* pDevice, IDevi
     m_BackBufferHeight = FrameDesc.Height;
     m_FeatureFlags     = FeatureFlags;
 
+    m_BackBufferFormats.ConvolutionDepth  = FeatureFlags & FEATURE_FLAG_HALF_PRECISION_DEPTH ? TEX_FORMAT_R16_UNORM : TEX_FORMAT_R32_FLOAT;
+    m_BackBufferFormats.PrefileteredDepth = FeatureFlags & FEATURE_FLAG_HALF_PRECISION_DEPTH ? TEX_FORMAT_R16_UNORM : TEX_FORMAT_R32_FLOAT;
+
     RenderDeviceWithCache_N Device{pDevice};
 
     constexpr Uint32 DepthPrefilteredMipCount = SSAO_DEPTH_PREFILTERED_MAX_MIP + 1;
@@ -89,7 +92,7 @@ void ScreenSpaceAmbientOcclusion::PrepareResources(IRenderDevice* pDevice, IDevi
         Desc.Type      = RESOURCE_DIM_TEX_2D;
         Desc.Width     = (m_FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION) ? m_BackBufferWidth / 2 : m_BackBufferWidth;
         Desc.Height    = (m_FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION) ? m_BackBufferHeight / 2 : m_BackBufferHeight;
-        Desc.Format    = (m_FeatureFlags & FEATURE_FLAG_HALF_PRECISION_DEPTH) ? TEX_FORMAT_R16_UNORM : TEX_FORMAT_R32_FLOAT;
+        Desc.Format    = m_BackBufferFormats.PrefileteredDepth;
         Desc.MipLevels = std::min(ComputeMipLevelsCount(m_BackBufferWidth, m_BackBufferHeight), DepthPrefilteredMipCount);
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
 
@@ -125,7 +128,7 @@ void ScreenSpaceAmbientOcclusion::PrepareResources(IRenderDevice* pDevice, IDevi
         Desc.Type      = RESOURCE_DIM_TEX_2D;
         Desc.Width     = (m_FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION) ? m_BackBufferWidth / 2 : m_BackBufferWidth;
         Desc.Height    = (m_FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION) ? m_BackBufferHeight / 2 : m_BackBufferHeight;
-        Desc.Format    = (m_FeatureFlags & FEATURE_FLAG_HALF_PRECISION_DEPTH) ? TEX_FORMAT_R16_UNORM : TEX_FORMAT_R32_FLOAT;
+        Desc.Format    = m_BackBufferFormats.PrefileteredDepth;
         Desc.MipLevels = std::min(ComputeMipLevelsCount(m_BackBufferWidth, m_BackBufferHeight), DepthPrefilteredMipCount);
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
         m_Resources.Insert(RESOURCE_IDENTIFIER_DEPTH_PREFILTERED_INTERMEDIATE, Device.CreateTexture(Desc));
@@ -141,7 +144,7 @@ void ScreenSpaceAmbientOcclusion::PrepareResources(IRenderDevice* pDevice, IDevi
         Desc.Type      = RESOURCE_DIM_TEX_2D;
         Desc.Width     = m_BackBufferWidth;
         Desc.Height    = m_BackBufferHeight;
-        Desc.Format    = TEX_FORMAT_R8_UNORM;
+        Desc.Format    = m_BackBufferFormats.Occlusion;
         Desc.MipLevels = std::min(ComputeMipLevelsCount(Desc.Width, Desc.Height), DepthHistoryConvolutedMipCount);
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
 
@@ -177,7 +180,7 @@ void ScreenSpaceAmbientOcclusion::PrepareResources(IRenderDevice* pDevice, IDevi
         Desc.Type      = RESOURCE_DIM_TEX_2D;
         Desc.Width     = m_BackBufferWidth;
         Desc.Height    = m_BackBufferHeight;
-        Desc.Format    = TEX_FORMAT_R8_UNORM;
+        Desc.Format    = m_BackBufferFormats.Occlusion;
         Desc.MipLevels = std::min(ComputeMipLevelsCount(Desc.Width, Desc.Height), DepthPrefilteredMipCount);
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
         m_Resources.Insert(RESOURCE_IDENTIFIER_OCCLUSION_HISTORY_CONVOLUTED_INTERMEDIATE, Device.CreateTexture(Desc));
@@ -188,12 +191,11 @@ void ScreenSpaceAmbientOcclusion::PrepareResources(IRenderDevice* pDevice, IDevi
         m_ConvolutedDepthMipMapSRV.clear();
 
         TextureDesc Desc;
-        Desc.Name   = "ScreenSpaceAmbientOcclusion::DepthConvoluted";
-        Desc.Type   = RESOURCE_DIM_TEX_2D;
-        Desc.Width  = m_BackBufferWidth;
-        Desc.Height = m_BackBufferHeight;
-        Desc.Format = (m_FeatureFlags & FEATURE_FLAG_HALF_PRECISION_DEPTH) ? TEX_FORMAT_R16_UNORM : TEX_FORMAT_R32_FLOAT;
-        ;
+        Desc.Name      = "ScreenSpaceAmbientOcclusion::DepthConvoluted";
+        Desc.Type      = RESOURCE_DIM_TEX_2D;
+        Desc.Width     = m_BackBufferWidth;
+        Desc.Height    = m_BackBufferHeight;
+        Desc.Format    = m_BackBufferFormats.ConvolutionDepth;
         Desc.MipLevels = std::min(ComputeMipLevelsCount(Desc.Width, Desc.Height), DepthHistoryConvolutedMipCount);
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
 
@@ -229,7 +231,7 @@ void ScreenSpaceAmbientOcclusion::PrepareResources(IRenderDevice* pDevice, IDevi
         Desc.Type      = RESOURCE_DIM_TEX_2D;
         Desc.Width     = m_BackBufferWidth;
         Desc.Height    = m_BackBufferHeight;
-        Desc.Format    = (m_FeatureFlags & FEATURE_FLAG_HALF_PRECISION_DEPTH) ? TEX_FORMAT_R16_UNORM : TEX_FORMAT_R32_FLOAT;
+        Desc.Format    = m_BackBufferFormats.ConvolutionDepth;
         Desc.MipLevels = std::min(ComputeMipLevelsCount(Desc.Width, Desc.Height), DepthHistoryConvolutedMipCount);
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
         m_Resources.Insert(RESOURCE_IDENTIFIER_DEPTH_CONVOLUTED_INTERMEDIATE, Device.CreateTexture(Desc));
@@ -243,7 +245,7 @@ void ScreenSpaceAmbientOcclusion::PrepareResources(IRenderDevice* pDevice, IDevi
         Desc.Type      = RESOURCE_DIM_TEX_2D;
         Desc.Width     = m_BackBufferWidth / 2;
         Desc.Height    = m_BackBufferHeight / 2;
-        Desc.Format    = TEX_FORMAT_R32_FLOAT;
+        Desc.Format    = m_BackBufferFormats.CheckerBoardDepth;
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
         m_Resources.Insert(RESOURCE_IDENTIFIER_DEPTH_CHECKERBOARD_HALF_RES, Device.CreateTexture(Desc));
     }
@@ -254,7 +256,7 @@ void ScreenSpaceAmbientOcclusion::PrepareResources(IRenderDevice* pDevice, IDevi
         Desc.Type      = RESOURCE_DIM_TEX_2D;
         Desc.Width     = (m_FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION) ? m_BackBufferWidth / 2 : m_BackBufferWidth;
         Desc.Height    = (m_FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION) ? m_BackBufferHeight / 2 : m_BackBufferHeight;
-        Desc.Format    = TEX_FORMAT_R8_UNORM;
+        Desc.Format    = m_BackBufferFormats.Occlusion;
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
         m_Resources.Insert(RESOURCE_IDENTIFIER_OCCLUSION, Device.CreateTexture(Desc));
     }
@@ -267,7 +269,7 @@ void ScreenSpaceAmbientOcclusion::PrepareResources(IRenderDevice* pDevice, IDevi
         Desc.Type      = RESOURCE_DIM_TEX_2D;
         Desc.Width     = m_BackBufferWidth;
         Desc.Height    = m_BackBufferHeight;
-        Desc.Format    = TEX_FORMAT_R8_UNORM;
+        Desc.Format    = m_BackBufferFormats.Occlusion;
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
         m_Resources.Insert(RESOURCE_IDENTIFIER_OCCLUSION_UPSAMPLED, Device.CreateTexture(Desc));
     }
@@ -279,11 +281,11 @@ void ScreenSpaceAmbientOcclusion::PrepareResources(IRenderDevice* pDevice, IDevi
         Desc.Type          = RESOURCE_DIM_TEX_2D;
         Desc.Width         = m_BackBufferWidth;
         Desc.Height        = m_BackBufferHeight;
-        Desc.Format        = TEX_FORMAT_R8_UNORM;
+        Desc.Format        = m_BackBufferFormats.Occlusion;
         Desc.BindFlags     = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
         auto  pTexture     = Device.CreateTexture(Desc);
         float ClearColor[] = {1.0, 0.0, 0.0, 0.0};
-        PostFXContext::ClearRenderTarget(pDeviceContext, pTexture, ClearColor);
+        pPostFXContext->ClearRenderTarget({pDevice, nullptr, pDeviceContext}, pTexture, ClearColor);
         m_Resources.Insert(TextureIdx, pTexture);
     }
 
@@ -294,11 +296,11 @@ void ScreenSpaceAmbientOcclusion::PrepareResources(IRenderDevice* pDevice, IDevi
         Desc.Type          = RESOURCE_DIM_TEX_2D;
         Desc.Width         = m_BackBufferWidth;
         Desc.Height        = m_BackBufferHeight;
-        Desc.Format        = TEX_FORMAT_R16_FLOAT;
+        Desc.Format        = m_BackBufferFormats.HistoryLength;
         Desc.BindFlags     = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
         auto  pTexture     = Device.CreateTexture(Desc);
         float ClearColor[] = {1.0, 0.0, 0.0, 0.0};
-        PostFXContext::ClearRenderTarget(pDeviceContext, pTexture, ClearColor);
+        pPostFXContext->ClearRenderTarget({pDevice, nullptr, pDeviceContext}, pTexture, ClearColor);
         m_Resources.Insert(TextureIdx, pTexture);
     }
 
@@ -308,7 +310,7 @@ void ScreenSpaceAmbientOcclusion::PrepareResources(IRenderDevice* pDevice, IDevi
         Desc.Type      = RESOURCE_DIM_TEX_2D;
         Desc.Width     = m_BackBufferWidth;
         Desc.Height    = m_BackBufferHeight;
-        Desc.Format    = TEX_FORMAT_R8_UNORM;
+        Desc.Format    = m_BackBufferFormats.Occlusion;
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
         m_Resources.Insert(RESOURCE_IDENTIFIER_OCCLUSION_HISTORY_RESAMPLED, Device.CreateTexture(Desc));
     }
@@ -319,7 +321,7 @@ void ScreenSpaceAmbientOcclusion::PrepareResources(IRenderDevice* pDevice, IDevi
         Desc.Type      = RESOURCE_DIM_TEX_2D;
         Desc.Width     = m_BackBufferWidth;
         Desc.Height    = m_BackBufferHeight;
-        Desc.Format    = TEX_FORMAT_R8_UNORM;
+        Desc.Format    = m_BackBufferFormats.Occlusion;
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
         m_Resources.Insert(RESOURCE_IDENTIFIER_OCCLUSION_HISTORY_RESOLVED, Device.CreateTexture(Desc));
     }
@@ -363,14 +365,34 @@ void ScreenSpaceAmbientOcclusion::Execute(const RenderAttributes& RenderAttribs)
         RenderAttribs.pDeviceContext->UpdateBuffer(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER].AsBuffer(), 0, sizeof(HLSL::ScreenSpaceAmbientOcclusionAttribs), m_SSAOAttribs.get(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     }
 
-    ComputeDepthCheckerboard(RenderAttribs);
-    ComputePrefilteredDepth(RenderAttribs);
-    ComputeAmbientOcclusion(RenderAttribs);
-    ComputeBilateralUpsampling(RenderAttribs);
-    ComputeTemporalAccumulation(RenderAttribs);
-    ComputeConvolutedDepthHistory(RenderAttribs);
-    ComputeResampledHistory(RenderAttribs);
-    ComputeSpatialReconstruction(RenderAttribs);
+    PrepareShadersAndPSO(RenderAttribs, m_FeatureFlags);
+
+    bool AllPSOsReady = true;
+    for (Uint32 RenderTechIdx = 0; RenderTechIdx < RENDER_TECH_COUNT; RenderTechIdx++)
+    {
+        const auto& RenderTech = GetRenderTechnique(static_cast<RENDER_TECH>(RenderTechIdx), m_FeatureFlags);
+        if (!RenderTech.IsReady())
+        {
+            AllPSOsReady = false;
+            break;
+        }
+    }
+
+    if (AllPSOsReady)
+    {
+        ComputeDepthCheckerboard(RenderAttribs);
+        ComputePrefilteredDepth(RenderAttribs);
+        ComputeAmbientOcclusion(RenderAttribs);
+        ComputeBilateralUpsampling(RenderAttribs);
+        ComputeTemporalAccumulation(RenderAttribs);
+        ComputeConvolutedDepthHistory(RenderAttribs);
+        ComputeResampledHistory(RenderAttribs);
+        ComputeSpatialReconstruction(RenderAttribs);
+    }
+    else
+    {
+        ComputePlaceholderTexture(RenderAttribs);
+    }
 
     // Release references to input resources
     for (Uint32 ResourceIdx = 0; ResourceIdx <= RESOURCE_IDENTIFIER_INPUT_LAST; ++ResourceIdx)
@@ -445,37 +467,268 @@ ITextureView* ScreenSpaceAmbientOcclusion::GetAmbientOcclusionSRV() const
     return m_Resources[RESOURCE_IDENTIFIER_OCCLUSION_HISTORY_RESOLVED].GetTextureSRV();
 }
 
-void ScreenSpaceAmbientOcclusion::CopyTextureDepth(const RenderAttributes& RenderAttribs, ITextureView* pSRV, ITextureView* pRTV)
+void ScreenSpaceAmbientOcclusion::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_FLAGS FeatureFlags)
 {
-    auto& RenderTech = GetRenderTechnique(RENDER_TECH_COPY_DEPTH, m_FeatureFlags);
-    if (!RenderTech.IsInitializedPSO())
+    const auto& SupportedFeatures = RenderAttribs.pPostFXContext->GetSupportedFeatures();
     {
-        const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "CopyTextureDepth.fx", "CopyDepthPS", SHADER_TYPE_PIXEL);
+        auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_DOWNSAMPLED_DEPTH_BUFFER, FeatureFlags);
 
-        PipelineResourceLayoutDescX ResourceLayout;
-        ResourceLayout.AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
+        if (!RenderTech.IsInitializedPSO())
+        {
+            ShaderMacroHelper Macros;
+            Macros.Add("SSAO_OPTION_INVERTED_DEPTH", (FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
 
-        RenderTech.InitializePSO(RenderAttribs.pDevice,
-                                 nullptr, "ScreenSpaceAmbientOcclusion::CopyDepth",
-                                 VS, PS, ResourceLayout,
-                                 {
-                                     pRTV->GetTexture()->GetDesc().Format,
-                                 },
-                                 TEX_FORMAT_UNKNOWN,
-                                 DSS_DisableDepth, BS_Default, false);
+            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
+            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSAO_ComputeDownsampledDepth.fx", "ComputeDownsampledDepthPS", SHADER_TYPE_PIXEL, Macros);
+
+            PipelineResourceLayoutDescX ResourceLayout;
+            ResourceLayout.AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
+
+            RenderTech.InitializePSO(RenderAttribs.pDevice,
+                                     nullptr, "ScreenSpaceAmbientOcclusion::ComputeDownsampledDepth",
+                                     VS, PS, ResourceLayout,
+                                     {
+                                         m_BackBufferFormats.CheckerBoardDepth,
+                                     },
+                                     TEX_FORMAT_UNKNOWN,
+                                     DSS_DisableDepth, BS_Default, false);
+        }
     }
 
-    if (!RenderTech.IsInitializedSRB())
-        RenderTech.InitializeSRB(false);
+    {
+        auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_PREFILTERED_DEPTH_BUFFER, FeatureFlags);
+        if (!RenderTech.IsInitializedPSO())
+        {
+            ShaderMacroHelper Macros;
+            Macros.Add("SUPPORTED_SHADER_SRV", SupportedFeatures.TextureSubresourceViews);
+            Macros.Add("SSAO_OPTION_INVERTED_DEPTH", (FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
 
-    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureDepth"}.Set(pSRV);
+            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
+            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSAO_ComputePrefilteredDepthBuffer.fx", "ComputePrefilteredDepthBufferPS", SHADER_TYPE_PIXEL, Macros);
 
-    RenderAttribs.pDeviceContext->SetRenderTargets(1, &pRTV, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    RenderAttribs.pDeviceContext->SetPipelineState(RenderTech.PSO);
-    RenderAttribs.pDeviceContext->CommitShaderResources(RenderTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    RenderAttribs.pDeviceContext->Draw({3, DRAW_FLAG_VERIFY_ALL, 1});
-    RenderAttribs.pDeviceContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
+            PipelineResourceLayoutDescX ResourceLayout;
+            ResourceLayout.AddVariable(SHADER_TYPE_PIXEL, "cbCameraAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
+            ResourceLayout.AddVariable(SHADER_TYPE_PIXEL, "cbScreenSpaceAmbientOcclusionAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
+
+            if (SupportedFeatures.TextureSubresourceViews)
+            {
+                ResourceLayout.AddVariable(SHADER_TYPE_PIXEL, "g_TextureLastMip", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
+            }
+            else
+            {
+                ResourceLayout
+                    .AddVariable(SHADER_TYPE_PIXEL, "g_TextureMips", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                    // Immutable samplers are required for WebGL to work properly
+                    .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureMips", Sam_PointWrap);
+            }
+
+            RenderTech.InitializePSO(RenderAttribs.pDevice,
+                                     RenderAttribs.pStateCache, "ScreenSpaceAmbientOcclusion::ComputePrefilteredDepthBuffer",
+                                     VS, PS, ResourceLayout,
+                                     {
+                                         m_BackBufferFormats.PrefileteredDepth,
+                                     },
+                                     TEX_FORMAT_UNKNOWN,
+                                     DSS_DisableDepth, BS_Default, false);
+        }
+    }
+
+    {
+        auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_AMBIENT_OCCLUSION, FeatureFlags);
+        if (!RenderTech.IsInitializedPSO())
+        {
+            ShaderMacroHelper Macros;
+            Macros.Add("SSAO_OPTION_INVERTED_DEPTH", (FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
+            Macros.Add("SSAO_OPTION_UNIFORM_WEIGHTING", (FeatureFlags & FEATURE_FLAG_UNIFORM_WEIGHTING) != 0);
+            Macros.Add("SSAO_OPTION_HALF_RESOLUTION", (FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION) != 0);
+            Macros.Add("SSAO_OPTION_HALF_PRECISION_DEPTH", (FeatureFlags & FEATURE_FLAG_HALF_PRECISION_DEPTH) != 0);
+
+            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
+            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSAO_ComputeAmbientOcclusion.fx", "ComputeAmbientOcclusionPS", SHADER_TYPE_PIXEL, Macros);
+
+            PipelineResourceLayoutDescX ResourceLayout;
+            ResourceLayout
+                .AddVariable(SHADER_TYPE_PIXEL, "cbCameraAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "cbScreenSpaceAmbientOcclusionAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TexturePrefilteredDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureNormal", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureBlueNoise", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TexturePrefilteredDepth", Sam_PointClamp)
+                .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureNormal", Sam_PointClamp);
+
+            RenderTech.InitializePSO(RenderAttribs.pDevice,
+                                     RenderAttribs.pStateCache, "ScreenSpaceAmbientOcclusion::ComputeAmbientOcclusion",
+                                     VS, PS, ResourceLayout,
+                                     {m_BackBufferFormats.Occlusion},
+                                     TEX_FORMAT_UNKNOWN,
+                                     DSS_DisableDepth, BS_Default, false);
+        }
+    }
+
+    {
+        auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_BILATERAL_UPSAMPLING, FeatureFlags);
+        if (!RenderTech.IsInitializedPSO())
+        {
+            ShaderMacroHelper Macros;
+            Macros.Add("SSAO_OPTION_INVERTED_DEPTH", (FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
+
+            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
+            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSAO_ComputeBilateralUpsampling.fx", "ComputeBilateralUpsamplingPS", SHADER_TYPE_PIXEL, Macros);
+
+            PipelineResourceLayoutDescX ResourceLayout;
+            ResourceLayout
+                .AddVariable(SHADER_TYPE_PIXEL, "cbCameraAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "cbScreenSpaceAmbientOcclusionAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureOcclusion", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureDepth", Sam_LinearClamp)
+                .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureOcclusion", Sam_LinearClamp);
+
+            RenderTech.InitializePSO(RenderAttribs.pDevice,
+                                     RenderAttribs.pStateCache, "ScreenSpaceAmbientOcclusion::ComputeBilateralUpsampling",
+                                     VS, PS, ResourceLayout,
+                                     {
+                                         m_BackBufferFormats.Occlusion,
+                                     },
+                                     TEX_FORMAT_UNKNOWN,
+                                     DSS_DisableDepth, BS_Default, false);
+        }
+    }
+
+    {
+        auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_TEMPORAL_ACCUMULATION, FeatureFlags);
+        if (!RenderTech.IsInitializedPSO())
+        {
+            ShaderMacroHelper Macros;
+            Macros.Add("SSAO_OPTION_INVERTED_DEPTH", (FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
+
+            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
+            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSAO_ComputeTemporalAccumulation.fx", "ComputeTemporalAccumulationPS", SHADER_TYPE_PIXEL, Macros);
+
+            PipelineResourceLayoutDescX ResourceLayout;
+            ResourceLayout
+                .AddVariable(SHADER_TYPE_PIXEL, "cbCameraAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "cbScreenSpaceAmbientOcclusionAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureCurrOcclusion", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TexturePrevOcclusion", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureHistory", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureCurrDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TexturePrevDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureMotion", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureCurrOcclusion", Sam_LinearClamp);
+
+            RenderTech.InitializePSO(RenderAttribs.pDevice,
+                                     RenderAttribs.pStateCache, "ScreenSpaceAmbientOcclusion::ComputeTemporalAccumulation",
+                                     VS, PS, ResourceLayout,
+                                     {
+                                         m_BackBufferFormats.Occlusion,
+                                         m_BackBufferFormats.HistoryLength,
+                                     },
+                                     TEX_FORMAT_UNKNOWN,
+                                     DSS_DisableDepth, BS_Default, false);
+        }
+    }
+
+    {
+        auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_CONVOLUTED_DEPTH_HISTORY, FeatureFlags);
+        if (!RenderTech.IsInitializedPSO())
+        {
+            ShaderMacroHelper Macros;
+            Macros.Add("SUPPORTED_SHADER_SRV", SupportedFeatures.TextureSubresourceViews);
+            Macros.Add("SSAO_OPTION_INVERTED_DEPTH", (FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
+
+            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
+            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSAO_ComputeConvolutedDepthHistory.fx", "ComputeConvolutedDepthHistoryPS", SHADER_TYPE_PIXEL, Macros);
+
+            PipelineResourceLayoutDescX ResourceLayout;
+            if (SupportedFeatures.TextureSubresourceViews)
+            {
+                ResourceLayout.AddVariable(SHADER_TYPE_PIXEL, "g_TextureHistoryLastMip", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
+                ResourceLayout.AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepthLastMip", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
+            }
+            else
+            {
+                ResourceLayout
+                    .AddVariable(SHADER_TYPE_PIXEL, "g_TextureHistoryMips", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                    .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepthMips", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                    // Immutable samplers are required for WebGL to work properly
+                    .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureHistoryMips", Sam_PointWrap)
+                    .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureDepthMips", Sam_PointWrap);
+            }
+
+            RenderTech.InitializePSO(RenderAttribs.pDevice,
+                                     RenderAttribs.pStateCache, "ScreenSpaceAmbientOcclusion::ComputeConvolutedDepthHistory",
+                                     VS, PS, ResourceLayout,
+                                     {
+                                         m_BackBufferFormats.Occlusion,
+                                         m_BackBufferFormats.ConvolutionDepth,
+                                     },
+                                     TEX_FORMAT_UNKNOWN,
+                                     DSS_DisableDepth, BS_Default, false);
+        }
+    }
+
+    {
+        auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_RESAMPLED_HISTORY, FeatureFlags);
+        if (!RenderTech.IsInitializedPSO())
+        {
+            ShaderMacroHelper Macros;
+            Macros.Add("SSAO_OPTION_INVERTED_DEPTH", (FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
+
+            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
+            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSAO_ComputeResampledHistory.fx", "ComputeResampledHistoryPS", SHADER_TYPE_PIXEL, Macros);
+
+            PipelineResourceLayoutDescX ResourceLayout;
+            ResourceLayout
+                .AddVariable(SHADER_TYPE_PIXEL, "cbCameraAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureOcclusion", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureHistory", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureNormal", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureDepth", Sam_LinearClamp)
+                .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureOcclusion", Sam_PointClamp);
+
+            RenderTech.InitializePSO(RenderAttribs.pDevice,
+                                     RenderAttribs.pStateCache, "ScreenSpaceAmbientOcclusion::ComputeResampledHistory",
+                                     VS, PS, ResourceLayout,
+                                     {
+                                         m_BackBufferFormats.Occlusion,
+                                     },
+                                     TEX_FORMAT_UNKNOWN,
+                                     DSS_DisableDepth, BS_Default, false);
+        }
+    }
+
+    {
+        auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_SPATIAL_RECONSTRUCTION, FeatureFlags);
+        if (!RenderTech.IsInitializedPSO())
+        {
+            ShaderMacroHelper Macros;
+            Macros.Add("SSAO_OPTION_INVERTED_DEPTH", (FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
+            Macros.Add("SSAO_OPTION_HALF_RESOLUTION", (FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION) != 0);
+
+            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
+            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSAO_ComputeSpatialReconstruction.fx", "ComputeSpatialReconstructionPS", SHADER_TYPE_PIXEL, Macros);
+
+            PipelineResourceLayoutDescX ResourceLayout;
+            ResourceLayout
+                .AddVariable(SHADER_TYPE_PIXEL, "cbCameraAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "cbScreenSpaceAmbientOcclusionAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureOcclusion", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureNormal", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureHistory", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
+
+            RenderTech.InitializePSO(RenderAttribs.pDevice,
+                                     RenderAttribs.pStateCache, "ScreenSpaceAmbientOcclusion::ComputeSpatialReconstruction",
+                                     VS, PS, ResourceLayout,
+                                     {
+                                         m_BackBufferFormats.Occlusion,
+                                     },
+                                     TEX_FORMAT_UNKNOWN,
+                                     DSS_DisableDepth, BS_Default, false);
+        }
+    }
 }
 
 void ScreenSpaceAmbientOcclusion::ComputeDepthCheckerboard(const RenderAttributes& RenderAttribs)
@@ -484,27 +737,6 @@ void ScreenSpaceAmbientOcclusion::ComputeDepthCheckerboard(const RenderAttribute
         return;
 
     auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_DOWNSAMPLED_DEPTH_BUFFER, m_FeatureFlags);
-
-    if (!RenderTech.IsInitializedPSO())
-    {
-        ShaderMacroHelper Macros;
-        Macros.Add("SSAO_OPTION_INVERTED_DEPTH", (m_FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
-
-        const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSAO_ComputeDownsampledDepth.fx", "ComputeDownsampledDepthPS", SHADER_TYPE_PIXEL, Macros);
-
-        PipelineResourceLayoutDescX ResourceLayout;
-        ResourceLayout.AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
-
-        RenderTech.InitializePSO(RenderAttribs.pDevice,
-                                 nullptr, "ScreenSpaceAmbientOcclusion::ComputeDownsampledDepth",
-                                 VS, PS, ResourceLayout,
-                                 {
-                                     m_Resources[RESOURCE_IDENTIFIER_DEPTH_CHECKERBOARD_HALF_RES].AsTexture()->GetDesc().Format,
-                                 },
-                                 TEX_FORMAT_UNKNOWN,
-                                 DSS_DisableDepth, BS_Default, false);
-    }
 
     if (!RenderTech.IsInitializedSRB())
         RenderTech.InitializeSRB(false);
@@ -528,52 +760,25 @@ void ScreenSpaceAmbientOcclusion::ComputePrefilteredDepth(const RenderAttributes
 {
     auto&       RenderTech        = GetRenderTechnique(RENDER_TECH_COMPUTE_PREFILTERED_DEPTH_BUFFER, m_FeatureFlags);
     const auto& SupportedFeatures = RenderAttribs.pPostFXContext->GetSupportedFeatures();
-    if (!RenderTech.IsInitializedPSO())
-    {
-        ShaderMacroHelper Macros;
-        Macros.Add("SUPPORTED_SHADER_SRV", SupportedFeatures.TextureSubresourceViews);
-        Macros.Add("SSAO_OPTION_INVERTED_DEPTH", (m_FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
-
-        const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSAO_ComputePrefilteredDepthBuffer.fx", "ComputePrefilteredDepthBufferPS", SHADER_TYPE_PIXEL, Macros);
-
-        PipelineResourceLayoutDescX ResourceLayout;
-        ResourceLayout.AddVariable(SHADER_TYPE_PIXEL, "cbCameraAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
-        ResourceLayout.AddVariable(SHADER_TYPE_PIXEL, "cbScreenSpaceAmbientOcclusionAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
-
-        if (SupportedFeatures.TextureSubresourceViews)
-        {
-            ResourceLayout.AddVariable(SHADER_TYPE_PIXEL, "g_TextureLastMip", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
-        }
-        else
-        {
-            ResourceLayout
-                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureMips", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-                // Immutable samplers are required for WebGL to work properly
-                .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureMips", Sam_PointWrap);
-        }
-
-        RenderTech.InitializePSO(RenderAttribs.pDevice,
-                                 RenderAttribs.pStateCache, "ScreenSpaceAmbientOcclusion::ComputePrefilteredDepthBuffer",
-                                 VS, PS, ResourceLayout,
-                                 {
-                                     m_Resources[RESOURCE_IDENTIFIER_DEPTH_PREFILTERED].AsTexture()->GetDesc().Format,
-                                 },
-                                 TEX_FORMAT_UNKNOWN,
-                                 DSS_DisableDepth, BS_Default, false);
-
-        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
-        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbScreenSpaceAmbientOcclusionAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
-    }
 
     if (!RenderTech.IsInitializedSRB())
+    {
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbScreenSpaceAmbientOcclusionAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
         RenderTech.InitializeSRB(true);
+    }
 
     ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "ComputeHierarchicalDepthBuffer"};
 
     auto DepthResource = (m_FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION) ? m_Resources[RESOURCE_IDENTIFIER_DEPTH_CHECKERBOARD_HALF_RES] : m_Resources[RESOURCE_IDENTIFIER_INPUT_DEPTH];
 
-    CopyTextureDepth(RenderAttribs, DepthResource.GetTextureSRV(), m_PrefilteredDepthMipMapRTV[0]);
+    {
+        PostFXContext::TextureOperationAttribs CopyAttribs;
+        CopyAttribs.pDevice        = RenderAttribs.pDevice;
+        CopyAttribs.pStateCache    = RenderAttribs.pStateCache;
+        CopyAttribs.pDeviceContext = RenderAttribs.pDeviceContext;
+        RenderAttribs.pPostFXContext->CopyTextureDepth(CopyAttribs, DepthResource.GetTextureSRV(), m_PrefilteredDepthMipMapRTV[0]);
+    }
 
     if (!SupportedFeatures.TextureSubresourceViews)
     {
@@ -672,41 +877,13 @@ void ScreenSpaceAmbientOcclusion::ComputePrefilteredDepth(const RenderAttributes
 void ScreenSpaceAmbientOcclusion::ComputeAmbientOcclusion(const RenderAttributes& RenderAttribs)
 {
     auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_AMBIENT_OCCLUSION, m_FeatureFlags);
-    if (!RenderTech.IsInitializedPSO())
-    {
-        ShaderMacroHelper Macros;
-        Macros.Add("SSAO_OPTION_INVERTED_DEPTH", (m_FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
-        Macros.Add("SSAO_OPTION_UNIFORM_WEIGHTING", (m_FeatureFlags & FEATURE_FLAG_UNIFORM_WEIGHTING) != 0);
-        Macros.Add("SSAO_OPTION_HALF_RESOLUTION", (m_FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION) != 0);
-        Macros.Add("SSAO_OPTION_HALF_PRECISION_DEPTH", (m_FeatureFlags & FEATURE_FLAG_HALF_PRECISION_DEPTH) != 0);
-
-        const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSAO_ComputeAmbientOcclusion.fx", "ComputeAmbientOcclusionPS", SHADER_TYPE_PIXEL, Macros);
-
-        PipelineResourceLayoutDescX ResourceLayout;
-        ResourceLayout
-            .AddVariable(SHADER_TYPE_PIXEL, "cbCameraAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "cbScreenSpaceAmbientOcclusionAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TexturePrefilteredDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureNormal", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureBlueNoise", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TexturePrefilteredDepth", Sam_PointClamp)
-            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureNormal", Sam_PointClamp);
-
-        RenderTech.InitializePSO(RenderAttribs.pDevice,
-                                 RenderAttribs.pStateCache, "ScreenSpaceAmbientOcclusion::ComputeAmbientOcclusion",
-                                 VS, PS, ResourceLayout,
-                                 {
-                                     m_Resources[RESOURCE_IDENTIFIER_OCCLUSION].AsTexture()->GetDesc().Format,
-                                 },
-                                 TEX_FORMAT_UNKNOWN,
-                                 DSS_DisableDepth, BS_Default, false);
-        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
-        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbScreenSpaceAmbientOcclusionAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
-    }
 
     if (!RenderTech.IsInitializedSRB())
+    {
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbScreenSpaceAmbientOcclusionAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
         RenderTech.InitializeSRB(true);
+    }
 
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TexturePrefilteredDepth"}.Set(m_Resources[RESOURCE_IDENTIFIER_DEPTH_PREFILTERED].GetTextureSRV());
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureNormal"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_NORMAL].GetTextureSRV());
@@ -734,38 +911,13 @@ void ScreenSpaceAmbientOcclusion::ComputeBilateralUpsampling(const RenderAttribu
         return;
 
     auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_BILATERAL_UPSAMPLING, m_FeatureFlags);
-    if (!RenderTech.IsInitializedPSO())
-    {
-        ShaderMacroHelper Macros;
-        Macros.Add("SSAO_OPTION_INVERTED_DEPTH", (m_FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
-
-        const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSAO_ComputeBilateralUpsampling.fx", "ComputeBilateralUpsamplingPS", SHADER_TYPE_PIXEL, Macros);
-
-        PipelineResourceLayoutDescX ResourceLayout;
-        ResourceLayout
-            .AddVariable(SHADER_TYPE_PIXEL, "cbCameraAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "cbScreenSpaceAmbientOcclusionAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureOcclusion", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureDepth", Sam_LinearClamp)
-            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureOcclusion", Sam_LinearClamp);
-
-        RenderTech.InitializePSO(RenderAttribs.pDevice,
-                                 RenderAttribs.pStateCache, "ScreenSpaceAmbientOcclusion::ComputeBilateralUpsampling",
-                                 VS, PS, ResourceLayout,
-                                 {
-                                     m_Resources[RESOURCE_IDENTIFIER_OCCLUSION_UPSAMPLED].AsTexture()->GetDesc().Format,
-                                 },
-                                 TEX_FORMAT_UNKNOWN,
-                                 DSS_DisableDepth, BS_Default, false);
-
-        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
-        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbScreenSpaceAmbientOcclusionAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
-    }
 
     if (!RenderTech.IsInitializedSRB())
+    {
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbScreenSpaceAmbientOcclusionAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
         RenderTech.InitializeSRB(true);
+    }
 
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureDepth"}.Set(m_Resources[RESOURCE_IDENTIFIER_INPUT_DEPTH].GetTextureSRV());
     ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureOcclusion"}.Set(m_Resources[RESOURCE_IDENTIFIER_OCCLUSION].GetTextureSRV());
@@ -783,45 +935,26 @@ void ScreenSpaceAmbientOcclusion::ComputeBilateralUpsampling(const RenderAttribu
     RenderAttribs.pDeviceContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
 }
 
+void ScreenSpaceAmbientOcclusion::ComputePlaceholderTexture(const RenderAttributes& RenderAttribs)
+{
+    PostFXContext::TextureOperationAttribs CopyAttribs;
+    CopyAttribs.pDevice        = RenderAttribs.pDevice;
+    CopyAttribs.pDeviceContext = RenderAttribs.pDeviceContext;
+
+    float ClearColor[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+    RenderAttribs.pPostFXContext->ClearRenderTarget(CopyAttribs, m_Resources[RESOURCE_IDENTIFIER_OCCLUSION_HISTORY_RESOLVED], ClearColor);
+}
+
 void ScreenSpaceAmbientOcclusion::ComputeTemporalAccumulation(const RenderAttributes& RenderAttribs)
 {
     auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_TEMPORAL_ACCUMULATION, m_FeatureFlags);
-    if (!RenderTech.IsInitializedPSO())
-    {
-        ShaderMacroHelper Macros;
-        Macros.Add("SSAO_OPTION_INVERTED_DEPTH", (m_FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
-
-        const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSAO_ComputeTemporalAccumulation.fx", "ComputeTemporalAccumulationPS", SHADER_TYPE_PIXEL, Macros);
-
-        PipelineResourceLayoutDescX ResourceLayout;
-        ResourceLayout
-            .AddVariable(SHADER_TYPE_PIXEL, "cbCameraAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "cbScreenSpaceAmbientOcclusionAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureCurrOcclusion", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TexturePrevOcclusion", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureHistory", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureCurrDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TexturePrevDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureMotion", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureCurrOcclusion", Sam_LinearClamp);
-
-        RenderTech.InitializePSO(RenderAttribs.pDevice,
-                                 RenderAttribs.pStateCache, "ScreenSpaceAmbientOcclusion::ComputeTemporalAccumulation",
-                                 VS, PS, ResourceLayout,
-                                 {
-                                     m_Resources[RESOURCE_IDENTIFIER_OCCLUSION_HISTORY0].AsTexture()->GetDesc().Format,
-                                     m_Resources[RESOURCE_IDENTIFIER_OCCLUSION_HISTORY_LENGTH0].AsTexture()->GetDesc().Format,
-                                 },
-                                 TEX_FORMAT_UNKNOWN,
-                                 DSS_DisableDepth, BS_Default, false);
-
-        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
-        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbScreenSpaceAmbientOcclusionAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
-    }
 
     if (!RenderTech.IsInitializedSRB())
+    {
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbScreenSpaceAmbientOcclusionAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
         RenderTech.InitializeSRB(true);
+    }
 
     const Uint32 FrameIndex   = RenderAttribs.pPostFXContext->GetFrameDesc().Index;
     const Uint32 CurrFrameIdx = (FrameIndex + 0) & 0x01;
@@ -859,41 +992,6 @@ void ScreenSpaceAmbientOcclusion::ComputeConvolutedDepthHistory(const RenderAttr
 {
     auto&       RenderTech        = GetRenderTechnique(RENDER_TECH_COMPUTE_CONVOLUTED_DEPTH_HISTORY, m_FeatureFlags);
     const auto& SupportedFeatures = RenderAttribs.pPostFXContext->GetSupportedFeatures();
-    if (!RenderTech.IsInitializedPSO())
-    {
-        ShaderMacroHelper Macros;
-        Macros.Add("SUPPORTED_SHADER_SRV", SupportedFeatures.TextureSubresourceViews);
-        Macros.Add("SSAO_OPTION_INVERTED_DEPTH", (m_FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
-
-        const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSAO_ComputeConvolutedDepthHistory.fx", "ComputeConvolutedDepthHistoryPS", SHADER_TYPE_PIXEL, Macros);
-
-        PipelineResourceLayoutDescX ResourceLayout;
-        if (SupportedFeatures.TextureSubresourceViews)
-        {
-            ResourceLayout.AddVariable(SHADER_TYPE_PIXEL, "g_TextureHistoryLastMip", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
-            ResourceLayout.AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepthLastMip", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
-        }
-        else
-        {
-            ResourceLayout
-                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureHistoryMips", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepthMips", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-                // Immutable samplers are required for WebGL to work properly
-                .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureHistoryMips", Sam_PointWrap)
-                .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureDepthMips", Sam_PointWrap);
-        }
-
-        RenderTech.InitializePSO(RenderAttribs.pDevice,
-                                 RenderAttribs.pStateCache, "ScreenSpaceAmbientOcclusion::ComputeConvolutedDepthHistory",
-                                 VS, PS, ResourceLayout,
-                                 {
-                                     m_Resources[RESOURCE_IDENTIFIER_OCCLUSION_HISTORY_CONVOLUTED].AsTexture()->GetDesc().Format,
-                                     m_Resources[RESOURCE_IDENTIFIER_DEPTH_CONVOLUTED].AsTexture()->GetDesc().Format,
-                                 },
-                                 TEX_FORMAT_UNKNOWN,
-                                 DSS_DisableDepth, BS_Default, false);
-    }
 
     if (!RenderTech.IsInitializedSRB())
         RenderTech.InitializeSRB(false);
@@ -914,8 +1012,14 @@ void ScreenSpaceAmbientOcclusion::ComputeConvolutedDepthHistory(const RenderAttr
         CopyAttribsHistory.SrcTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
         CopyAttribsHistory.DstTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
         RenderAttribs.pDeviceContext->CopyTexture(CopyAttribsHistory);
+    }
 
-        CopyTextureDepth(RenderAttribs, m_Resources[RESOURCE_IDENTIFIER_INPUT_DEPTH].GetTextureSRV(), m_ConvolutedDepthMipMapRTV[0]);
+    {
+        PostFXContext::TextureOperationAttribs CopyAttribs;
+        CopyAttribs.pDevice        = RenderAttribs.pDevice;
+        CopyAttribs.pStateCache    = RenderAttribs.pStateCache;
+        CopyAttribs.pDeviceContext = RenderAttribs.pDeviceContext;
+        RenderAttribs.pPostFXContext->CopyTextureDepth(CopyAttribs, m_Resources[RESOURCE_IDENTIFIER_INPUT_DEPTH].GetTextureSRV(), m_ConvolutedDepthMipMapRTV[0]);
     }
 
     if (!SupportedFeatures.TextureSubresourceViews)
@@ -1069,38 +1173,12 @@ void ScreenSpaceAmbientOcclusion::ComputeConvolutedDepthHistory(const RenderAttr
 void ScreenSpaceAmbientOcclusion::ComputeResampledHistory(const RenderAttributes& RenderAttribs)
 {
     auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_RESAMPLED_HISTORY, m_FeatureFlags);
-    if (!RenderTech.IsInitializedPSO())
-    {
-        ShaderMacroHelper Macros;
-        Macros.Add("SSAO_OPTION_INVERTED_DEPTH", (m_FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
-
-        const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSAO_ComputeResampledHistory.fx", "ComputeResampledHistoryPS", SHADER_TYPE_PIXEL, Macros);
-
-        PipelineResourceLayoutDescX ResourceLayout;
-        ResourceLayout
-            .AddVariable(SHADER_TYPE_PIXEL, "cbCameraAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureOcclusion", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureHistory", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureNormal", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureDepth", Sam_LinearClamp)
-            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureOcclusion", Sam_PointClamp);
-
-        RenderTech.InitializePSO(RenderAttribs.pDevice,
-                                 RenderAttribs.pStateCache, "ScreenSpaceAmbientOcclusion::ComputeResampledHistory",
-                                 VS, PS, ResourceLayout,
-                                 {
-                                     m_Resources[RESOURCE_IDENTIFIER_OCCLUSION].AsTexture()->GetDesc().Format,
-                                 },
-                                 TEX_FORMAT_UNKNOWN,
-                                 DSS_DisableDepth, BS_Default, false);
-
-        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
-    }
 
     if (!RenderTech.IsInitializedSRB())
+    {
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
         RenderTech.InitializeSRB(true);
+    }
 
     const Uint32 FrameIndex   = RenderAttribs.pPostFXContext->GetFrameDesc().Index;
     const Uint32 CurrFrameIdx = (FrameIndex + 0) & 0x01;
@@ -1126,39 +1204,13 @@ void ScreenSpaceAmbientOcclusion::ComputeResampledHistory(const RenderAttributes
 void ScreenSpaceAmbientOcclusion::ComputeSpatialReconstruction(const RenderAttributes& RenderAttribs)
 {
     auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_SPATIAL_RECONSTRUCTION, m_FeatureFlags);
-    if (!RenderTech.IsInitializedPSO())
-    {
-        ShaderMacroHelper Macros;
-        Macros.Add("SSAO_OPTION_INVERTED_DEPTH", (m_FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
-        Macros.Add("SSAO_OPTION_HALF_RESOLUTION", (m_FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION) != 0);
-
-        const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSAO_ComputeSpatialReconstruction.fx", "ComputeSpatialReconstructionPS", SHADER_TYPE_PIXEL, Macros);
-
-        PipelineResourceLayoutDescX ResourceLayout;
-        ResourceLayout
-            .AddVariable(SHADER_TYPE_PIXEL, "cbCameraAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "cbScreenSpaceAmbientOcclusionAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureOcclusion", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureNormal", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureHistory", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
-
-        RenderTech.InitializePSO(RenderAttribs.pDevice,
-                                 RenderAttribs.pStateCache, "ScreenSpaceAmbientOcclusion::ComputeSpatialReconstruction",
-                                 VS, PS, ResourceLayout,
-                                 {
-                                     m_Resources[RESOURCE_IDENTIFIER_OCCLUSION_HISTORY_RESOLVED].AsTexture()->GetDesc().Format,
-                                 },
-                                 TEX_FORMAT_UNKNOWN,
-                                 DSS_DisableDepth, BS_Default, false);
-
-        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
-        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbScreenSpaceAmbientOcclusionAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
-    }
 
     if (!RenderTech.IsInitializedSRB())
+    {
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbScreenSpaceAmbientOcclusionAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
         RenderTech.InitializeSRB(true);
+    }
 
     const Uint32 FrameIndex   = RenderAttribs.pPostFXContext->GetFrameDesc().Index;
     const Uint32 CurrFrameIdx = (FrameIndex + 0) & 0x01;
