@@ -109,7 +109,6 @@ private:
         RENDER_TECH_COMPUTE_RESAMPLED_HISTORY,
         RENDER_TECH_COMPUTE_SPATIAL_RECONSTRUCTION,
         RENDER_TECH_COMPUTE_BILATERAL_UPSAMPLING,
-        RENDER_TECH_COPY_DEPTH,
         RENDER_TECH_COUNT
     };
 
@@ -137,7 +136,7 @@ private:
         RESOURCE_IDENTIFIER_COUNT
     };
 
-    void CopyTextureDepth(const RenderAttributes& RenderAttribs, ITextureView* pSRV, ITextureView* pRTV);
+    void PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_FLAGS FeatureFlags);
 
     void ComputeDepthCheckerboard(const RenderAttributes& RenderAttribs);
 
@@ -154,6 +153,8 @@ private:
     void ComputeSpatialReconstruction(const RenderAttributes& RenderAttribs);
 
     void ComputeBilateralUpsampling(const RenderAttributes& RenderAttribs);
+
+    void ComputePlaceholderTexture(const RenderAttributes& RenderAttribs);
 
     RenderTechnique& GetRenderTechnique(RENDER_TECH RenderTech, FEATURE_FLAGS FeatureFlags);
 
@@ -197,6 +198,16 @@ private:
 
     std::vector<RefCntAutoPtr<ITextureView>> m_PrefilteredDepthMipMapRTV;
     std::vector<RefCntAutoPtr<ITextureView>> m_PrefilteredDepthMipMapSRV;
+
+    struct
+    {
+        TEXTURE_FORMAT PrefileteredDepth = TEX_FORMAT_R32_FLOAT;
+        TEXTURE_FORMAT CheckerBoardDepth = TEX_FORMAT_R32_FLOAT;
+        TEXTURE_FORMAT ConvolutionDepth  = TEX_FORMAT_R32_FLOAT;
+        TEXTURE_FORMAT Occlusion         = TEX_FORMAT_R8_UNORM;
+        TEXTURE_FORMAT HistoryLength     = TEX_FORMAT_R16_FLOAT;
+
+    } m_BackBufferFormats;
 
     Uint32 m_BackBufferWidth  = 0;
     Uint32 m_BackBufferHeight = 0;

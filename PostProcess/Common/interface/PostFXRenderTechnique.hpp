@@ -43,7 +43,8 @@ struct PostFXRenderTechnique
                                                const Char*             FileName,
                                                const Char*             EntryPoint,
                                                SHADER_TYPE             Type,
-                                               const ShaderMacroArray& Macros = {});
+                                               const ShaderMacroArray& Macros         = {},
+                                               bool                    IsAsynchronous = true);
 
     void InitializePSO(IRenderDevice*                     pDevice,
                        IRenderStateCache*                 pStateCache,
@@ -55,7 +56,8 @@ struct PostFXRenderTechnique
                        TEXTURE_FORMAT                     DSVFmt,
                        const DepthStencilStateDesc&       DSSDesc,
                        const BlendStateDesc&              BSDesc,
-                       bool                               IsDSVReadOnly);
+                       bool                               IsDSVReadOnly,
+                       bool                               IsAsynchronous = true);
 
     void InitializeSRB(bool InitStaticResources);
 
@@ -67,6 +69,11 @@ struct PostFXRenderTechnique
     bool IsInitializedSRB() const
     {
         return SRB != nullptr;
+    }
+
+    bool IsReady() const
+    {
+        return PSO->GetStatus() == PIPELINE_STATE_STATUS_READY;
     }
 
     RefCntAutoPtr<IPipelineState>         PSO{};

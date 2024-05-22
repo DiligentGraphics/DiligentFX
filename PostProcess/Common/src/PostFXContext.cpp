@@ -234,17 +234,84 @@ IBuffer* PostFXContext::GetCameraAttribsCB() const
     return m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER];
 }
 
-void PostFXContext::ClearRenderTarget(IDeviceContext* pDeviceContext, ITexture* pTexture, float ClearColor[])
+void PostFXContext::ClearRenderTarget(const TextureOperationAttribs& Attribs, ITexture* pTexture, float ClearColor[])
 {
     auto pRTV = pTexture->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET);
-    pDeviceContext->SetRenderTargets(1, &pRTV, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    pDeviceContext->ClearRenderTarget(pRTV, ClearColor, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    pDeviceContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    Attribs.pDeviceContext->SetRenderTargets(1, &pRTV, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    Attribs.pDeviceContext->ClearRenderTarget(pRTV, ClearColor, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    Attribs.pDeviceContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+}
+
+void PostFXContext::CopyTextureDepth(const TextureOperationAttribs& Attribs, ITextureView* pSRV, ITextureView* pRTV)
+{
+    auto& RenderTech = GetRenderTechnique(RENDER_TECH_COPY_DEPTH, FEATURE_FLAG_NONE, pRTV->GetTexture()->GetDesc().Format);
+    if (!RenderTech.IsInitializedPSO())
+    {
+        const auto VS = PostFXRenderTechnique::CreateShader(Attribs.pDevice, Attribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, false);
+        const auto PS = PostFXRenderTechnique::CreateShader(Attribs.pDevice, Attribs.pStateCache, "CopyTextureDepth.fx", "CopyDepthPS", SHADER_TYPE_PIXEL, {}, false);
+
+        PipelineResourceLayoutDescX ResourceLayout;
+        ResourceLayout.AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
+
+        RenderTech.InitializePSO(Attribs.pDevice,
+                                 nullptr, "PostFXContext::CopyTextureDepth",
+                                 VS, PS, ResourceLayout,
+                                 {
+                                     pRTV->GetTexture()->GetDesc().Format,
+                                 },
+                                 TEX_FORMAT_UNKNOWN,
+                                 DSS_DisableDepth, BS_Default, false, false);
+    }
+
+    if (!RenderTech.IsInitializedSRB())
+        RenderTech.InitializeSRB(false);
+
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureDepth"}.Set(pSRV);
+
+    Attribs.pDeviceContext->SetRenderTargets(1, &pRTV, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    Attribs.pDeviceContext->SetPipelineState(RenderTech.PSO);
+    Attribs.pDeviceContext->CommitShaderResources(RenderTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    Attribs.pDeviceContext->Draw({3, DRAW_FLAG_VERIFY_ALL, 1});
+    Attribs.pDeviceContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
+}
+
+void PostFXContext::CopyTextureColor(const TextureOperationAttribs& Attribs, ITextureView* pSRV, ITextureView* pRTV)
+{
+    auto& RenderTech = GetRenderTechnique(RENDER_TECH_COPY_COLOR, FEATURE_FLAG_NONE, pRTV->GetTexture()->GetDesc().Format);
+    if (!RenderTech.IsInitializedPSO())
+    {
+        const auto VS = PostFXRenderTechnique::CreateShader(Attribs.pDevice, Attribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, false);
+        const auto PS = PostFXRenderTechnique::CreateShader(Attribs.pDevice, Attribs.pStateCache, "CopyTextureColor.fx", "CopyColorPS", SHADER_TYPE_PIXEL, {}, false);
+
+        PipelineResourceLayoutDescX ResourceLayout;
+        ResourceLayout.AddVariable(SHADER_TYPE_PIXEL, "g_TextureColor", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
+        ResourceLayout.AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureColor", Sam_LinearClamp);
+
+        RenderTech.InitializePSO(Attribs.pDevice,
+                                 nullptr, "PostFXContext::CopyTextureColor",
+                                 VS, PS, ResourceLayout,
+                                 {
+                                     pRTV->GetTexture()->GetDesc().Format,
+                                 },
+                                 TEX_FORMAT_UNKNOWN,
+                                 DSS_DisableDepth, BS_Default, false, false);
+    }
+
+    if (!RenderTech.IsInitializedSRB())
+        RenderTech.InitializeSRB(false);
+
+    ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureColor"}.Set(pSRV);
+
+    Attribs.pDeviceContext->SetRenderTargets(1, &pRTV, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    Attribs.pDeviceContext->SetPipelineState(RenderTech.PSO);
+    Attribs.pDeviceContext->CommitShaderResources(RenderTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    Attribs.pDeviceContext->Draw({3, DRAW_FLAG_VERIFY_ALL, 1});
+    Attribs.pDeviceContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
 }
 
 void PostFXContext::ComputeBlueNoiseTexture(const RenderAttributes& RenderAttribs)
 {
-    auto& RenderTech = m_RenderTech[RENDER_TECH_COMPUTE_BLUE_NOISE_TEXTURE];
+    auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_BLUE_NOISE_TEXTURE, FEATURE_FLAG_NONE, TEX_FORMAT_UNKNOWN);
     if (!RenderTech.IsInitializedPSO())
     {
         PipelineResourceLayoutDescX ResourceLayout;
@@ -252,8 +319,8 @@ void PostFXContext::ComputeBlueNoiseTexture(const RenderAttributes& RenderAttrib
             .AddVariable(SHADER_TYPE_PIXEL, "g_SobolBuffer", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
             .AddVariable(SHADER_TYPE_PIXEL, "g_ScramblingTileBuffer", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
 
-        const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeBlueNoiseTexture.fx", "ComputeBlueNoiseTexturePS", SHADER_TYPE_PIXEL);
+        const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, false);
+        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeBlueNoiseTexture.fx", "ComputeBlueNoiseTexturePS", SHADER_TYPE_PIXEL, {}, false);
 
         RenderTech.InitializePSO(RenderAttribs.pDevice,
                                  RenderAttribs.pStateCache, "PreparePostFX::ComputeBlueNoiseTexture",
@@ -263,8 +330,11 @@ void PostFXContext::ComputeBlueNoiseTexture(const RenderAttributes& RenderAttrib
                                      m_Resources[RESOURCE_IDENTIFIER_BLUE_NOISE_TEXTURE_ZW].AsTexture()->GetDesc().Format,
                                  },
                                  TEX_FORMAT_UNKNOWN,
-                                 DSS_DisableDepth, BS_Default, false);
+                                 DSS_DisableDepth, BS_Default, false, false);
+    }
 
+    if (!RenderTech.IsInitializedSRB())
+    {
         ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "g_SobolBuffer"}.Set(m_Resources[RESOURCE_IDENTIFIER_SOBOL_BUFFER].GetTextureSRV());
         ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "g_ScramblingTileBuffer"}.Set(m_Resources[RESOURCE_IDENTIFIER_SCRAMBLING_TILE_BUFFER].GetTextureSRV());
         RenderTech.InitializeSRB(true);
@@ -306,7 +376,7 @@ void PostFXContext::ComputeBlueNoiseTexture(const RenderAttributes& RenderAttrib
 
 void PostFXContext::ComputeReprojectedDepth(const RenderAttributes& RenderAttribs)
 {
-    auto& RenderTech = m_RenderTech[RENDER_TECH_COMPUTE_REPROJECTED_DEPTH];
+    auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_REPROJECTED_DEPTH, FEATURE_FLAG_NONE, TEX_FORMAT_UNKNOWN);
     if (!RenderTech.IsInitializedPSO())
     {
         PipelineResourceLayoutDescX ResourceLayout;
@@ -314,16 +384,19 @@ void PostFXContext::ComputeReprojectedDepth(const RenderAttributes& RenderAttrib
             .AddVariable(SHADER_TYPE_PIXEL, "cbCameraAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
             .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
 
-        const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeReprojectedDepth.fx", "ComputeReprojectedDepthPS", SHADER_TYPE_PIXEL);
+        const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, false);
+        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeReprojectedDepth.fx", "ComputeReprojectedDepthPS", SHADER_TYPE_PIXEL, {}, false);
 
         RenderTech.InitializePSO(RenderAttribs.pDevice,
                                  RenderAttribs.pStateCache, "PreparePostFX::ComputeReprojectedDepth",
                                  VS, PS, ResourceLayout,
                                  {m_Resources[RESOURCE_IDENTIFIER_REPROJECTED_DEPTH].AsTexture()->GetDesc().Format},
                                  TEX_FORMAT_UNKNOWN,
-                                 DSS_DisableDepth, BS_Default, false);
+                                 DSS_DisableDepth, BS_Default, false, false);
+    }
 
+    if (!RenderTech.IsInitializedSRB())
+    {
         ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
         RenderTech.InitializeSRB(true);
     }
@@ -345,7 +418,7 @@ void PostFXContext::ComputeReprojectedDepth(const RenderAttributes& RenderAttrib
 
 void PostFXContext::ComputeClosestMotion(const RenderAttributes& RenderAttribs)
 {
-    auto& RenderTech = m_RenderTech[RENDER_TECH_COMPUTE_CLOSEST_MOTION];
+    auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_CLOSEST_MOTION, FEATURE_FLAG_NONE, TEX_FORMAT_UNKNOWN);
     if (!RenderTech.IsInitializedPSO())
     {
         ShaderMacroHelper Macros;
@@ -356,17 +429,19 @@ void PostFXContext::ComputeClosestMotion(const RenderAttributes& RenderAttribs)
             .AddVariable(SHADER_TYPE_PIXEL, "g_TextureMotion", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
             .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
 
-        const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeClosestMotion.fx", "ComputeClosestMotionPS", SHADER_TYPE_PIXEL, Macros);
+        const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, false);
+        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeClosestMotion.fx", "ComputeClosestMotionPS", SHADER_TYPE_PIXEL, Macros, false);
 
         RenderTech.InitializePSO(RenderAttribs.pDevice,
                                  RenderAttribs.pStateCache, "PreparePostFX::ComputeClosestMotion",
                                  VS, PS, ResourceLayout,
                                  {m_Resources[RESOURCE_IDENTIFIER_CLOSEST_MOTION].AsTexture()->GetDesc().Format},
                                  TEX_FORMAT_UNKNOWN,
-                                 DSS_DisableDepth, BS_Default, false);
-        RenderTech.InitializeSRB(false);
+                                 DSS_DisableDepth, BS_Default, false, false);
     }
+
+    if (!RenderTech.IsInitializedSRB())
+        RenderTech.InitializeSRB(false);
 
     ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "ComputeClosestMotion"};
 
@@ -384,28 +459,13 @@ void PostFXContext::ComputeClosestMotion(const RenderAttributes& RenderAttribs)
     RenderAttribs.pDeviceContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
 }
 
-ITextureView* PostFXContext::GetReprojectedDepth() const
-{
-    return m_Resources[RESOURCE_IDENTIFIER_REPROJECTED_DEPTH].GetTextureSRV();
-}
-
-ITextureView* PostFXContext::GetClosestMotionVectors() const
-{
-    return m_Resources[RESOURCE_IDENTIFIER_CLOSEST_MOTION].GetTextureSRV();
-}
-
-ITextureView* PostFXContext::GetPreviousDepth() const
-{
-    return m_Resources[RESOURCE_IDENTIFIER_PREVIOUS_DEPTH].GetTextureSRV();
-}
-
 void PostFXContext::ComputePreviousDepth(const RenderAttributes& RenderAttribs)
 {
-    auto& RenderTech = m_RenderTech[RENDER_TECH_COPY_DEPTH];
+    auto& RenderTech = GetRenderTechnique(RENDER_TECH_COPY_DEPTH, FEATURE_FLAG_NONE, TEX_FORMAT_UNKNOWN);
     if (!RenderTech.IsInitializedPSO())
     {
-        const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "CopyTextureDepth.fx", "CopyDepthPS", SHADER_TYPE_PIXEL);
+        const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, false);
+        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "CopyTextureDepth.fx", "CopyDepthPS", SHADER_TYPE_PIXEL, {}, false);
 
         PipelineResourceLayoutDescX ResourceLayout;
         ResourceLayout.AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
@@ -417,7 +477,7 @@ void PostFXContext::ComputePreviousDepth(const RenderAttributes& RenderAttribs)
                                      m_Resources[RESOURCE_IDENTIFIER_PREVIOUS_DEPTH].AsTexture()->GetDesc().Format,
                                  },
                                  TEX_FORMAT_UNKNOWN,
-                                 DSS_DisableDepth, BS_Default, false);
+                                 DSS_DisableDepth, BS_Default, false, false);
     }
 
     if (!RenderTech.IsInitializedSRB())
@@ -436,6 +496,31 @@ void PostFXContext::ComputePreviousDepth(const RenderAttributes& RenderAttribs)
     RenderAttribs.pDeviceContext->CommitShaderResources(RenderTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     RenderAttribs.pDeviceContext->Draw({3, DRAW_FLAG_VERIFY_ALL, 1});
     RenderAttribs.pDeviceContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
+}
+
+PostFXContext::RenderTechnique& PostFXContext::GetRenderTechnique(RENDER_TECH RenderTech, FEATURE_FLAGS FeatureFlags, TEXTURE_FORMAT TextureFormat)
+{
+    auto Iter = m_RenderTech.find({RenderTech, FeatureFlags, TextureFormat});
+    if (Iter != m_RenderTech.end())
+        return Iter->second;
+
+    auto Condition = m_RenderTech.emplace(RenderTechniqueKey{RenderTech, FeatureFlags, TextureFormat}, RenderTechnique{});
+    return Condition.first->second;
+}
+
+ITextureView* PostFXContext::GetReprojectedDepth() const
+{
+    return m_Resources[RESOURCE_IDENTIFIER_REPROJECTED_DEPTH].GetTextureSRV();
+}
+
+ITextureView* PostFXContext::GetClosestMotionVectors() const
+{
+    return m_Resources[RESOURCE_IDENTIFIER_CLOSEST_MOTION].GetTextureSRV();
+}
+
+ITextureView* PostFXContext::GetPreviousDepth() const
+{
+    return m_Resources[RESOURCE_IDENTIFIER_PREVIOUS_DEPTH].GetTextureSRV();
 }
 
 } // namespace Diligent

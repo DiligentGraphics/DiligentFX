@@ -15,17 +15,25 @@ Texture2D<float> g_TextureDepth;
 float SampleRoughness(uint2 Location, uint2 Offset, uint2 Dimension)
 {
     uint2 Position = Location + Offset;
-    if (Position.x >= Dimension.x || Position.y >= Dimension.y)
+    if (Position.x >= Dimension.x || Position.y >= Dimension.y) 
+    {
         return g_TextureRoughness.Load(int3(Location, 0));
-    return g_TextureRoughness.Load(int3(Position, 0));
+    } else
+    {
+        return g_TextureRoughness.Load(int3(Position, 0));
+    }
 }
 
 float SampleDepth(uint2 Location, uint2 Offset, uint2 Dimension)
 {
     uint2 Position = Location + Offset;
-    if (Position.x >= Dimension.x || Position.y >= Dimension.y)
+    if (Position.x >= Dimension.x || Position.y >= Dimension.y) 
+    {
         return g_TextureDepth.Load(int3(Location, 0));
-    return g_TextureDepth.Load(int3(Position, 0));
+    } else 
+    {
+        return g_TextureDepth.Load(int3(Position, 0));
+    } 
 }
 
 void ComputeDownsampledStencilMaskPS(in FullScreenTriangleVSOutput VSOut)
