@@ -50,9 +50,6 @@ struct ScreenSpaceReflectionAttribs
     
     // The most detailed MIP map level in the depth hierarchy. Perfect mirrors always use 0 as the most detailed level
     uint  MostDetailedMip                    DEFAULT_VALUE(0);
-    
-    // Padding 0
-    uint  Padding0                           DEFAULT_VALUE(0);
 
     // A boolean to describe the space used to store roughness in the materialParameters texture.
     BOOL  IsRoughnessPerceptual              DEFAULT_VALUE(TRUE);
@@ -77,6 +74,9 @@ struct ScreenSpaceReflectionAttribs
     
     // This parameter represents the standard deviation in the Gaussian kernel, which forms the spatial component of the bilateral filter
     float BilateralCleanupSpatialSigmaFactor DEFAULT_VALUE(0.9f);
+
+    // The parameter is responsible for adjusting the intensity of SSR with time
+    float AlphaInterpolation                 DEFAULT_VALUE(1.0);
 };
 
 #ifdef CHECK_STRUCT_ALIGNMENT

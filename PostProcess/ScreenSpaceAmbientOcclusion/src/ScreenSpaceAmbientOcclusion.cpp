@@ -340,7 +340,29 @@ void ScreenSpaceAmbientOcclusion::Execute(const RenderAttributes& RenderAttribs)
     m_Resources.Insert(RESOURCE_IDENTIFIER_INPUT_DEPTH, RenderAttribs.pDepthBufferSRV->GetTexture());
     m_Resources.Insert(RESOURCE_IDENTIFIER_INPUT_NORMAL, RenderAttribs.pNormalBufferSRV->GetTexture());
 
-    ScopedDebugGroup DebugGroupGlobal{RenderAttribs.pDeviceContext, "ScreenSpaceAmbientOcclusion"};
+    PrepareShadersAndPSO(RenderAttribs, m_FeatureFlags);
+
+    bool AllPSOsReady = true;
+    for (Uint32 RenderTechIdx = 0; RenderTechIdx < RENDER_TECH_COUNT; RenderTechIdx++)
+    {
+        const auto& RenderTech = GetRenderTechnique(static_cast<RENDER_TECH>(RenderTechIdx), m_FeatureFlags);
+        if (!RenderTech.IsReady())
+        {
+            AllPSOsReady = false;
+            break;
+        }
+    }
+
+    if (AllPSOsReady && RenderAttribs.pPostFXContext->IsPSOsReady())
+    {
+        auto dT = m_FrameTimer.GetElapsedTimef();
+
+        const_cast<HLSL::ScreenSpaceAmbientOcclusionAttribs*>(RenderAttribs.pSSAOAttribs)->AlphaInterpolation = std::min(std::max(dT, 0.0f), 1.0f);
+    }
+    else
+    {
+        m_FrameTimer.Restart();
+    }
 
     bool ResetAccumulation =
         m_LastFrameIdx == ~0u ||                            // No history on the first frame
@@ -360,25 +382,14 @@ void ScreenSpaceAmbientOcclusion::Execute(const RenderAttributes& RenderAttribs)
         UpdateConstantBuffer             = true;
     }
 
+    ScopedDebugGroup DebugGroupGlobal{RenderAttribs.pDeviceContext, "ScreenSpaceAmbientOcclusion"};
+
     if (UpdateConstantBuffer)
     {
         RenderAttribs.pDeviceContext->UpdateBuffer(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER].AsBuffer(), 0, sizeof(HLSL::ScreenSpaceAmbientOcclusionAttribs), m_SSAOAttribs.get(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     }
 
-    PrepareShadersAndPSO(RenderAttribs, m_FeatureFlags);
-
-    bool AllPSOsReady = true;
-    for (Uint32 RenderTechIdx = 0; RenderTechIdx < RENDER_TECH_COUNT; RenderTechIdx++)
-    {
-        const auto& RenderTech = GetRenderTechnique(static_cast<RENDER_TECH>(RenderTechIdx), m_FeatureFlags);
-        if (!RenderTech.IsReady())
-        {
-            AllPSOsReady = false;
-            break;
-        }
-    }
-
-    if (AllPSOsReady)
+    if (AllPSOsReady && RenderAttribs.pPostFXContext->IsPSOsReady())
     {
         ComputeDepthCheckerboard(RenderAttribs);
         ComputePrefilteredDepth(RenderAttribs);

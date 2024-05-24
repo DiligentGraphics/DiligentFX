@@ -44,7 +44,7 @@ float3 ComputeUpsampledTexturePS(in FullScreenTriangleVSOutput VSOut) : SV_Targe
     if (VSOut.uInstID != 0u)
     {
         float3 SourceColor = g_TextureInput.SampleLevel(g_TextureInput_sampler, CenterTexcoord, 0.0);
-        return SourceColor + g_BloomAttribs.Intensity * ColorSum;
+        return lerp(SourceColor, SourceColor + g_BloomAttribs.Intensity * ColorSum, g_BloomAttribs.AlphaInterpolation);
     } 
     else
     {

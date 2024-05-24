@@ -30,6 +30,7 @@
 #include <unordered_map>
 #include <memory>
 
+#include "../../../../DiligentCore/Common/interface/Timer.hpp"
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
 #include "../../../../DiligentCore/Graphics/GraphicsTools/interface/RenderStateCache.h"
 #include "../../../../DiligentCore/Graphics/GraphicsTools/interface/ResourceRegistry.hpp"
@@ -219,6 +220,8 @@ private:
     Uint32 m_BackBufferHeight = 0;
 
     FEATURE_FLAGS m_FeatureFlags = FEATURE_FLAG_NONE;
+
+    Timer m_FrameTimer;
 };
 
 DEFINE_FLAG_ENUM_OPERATORS(ScreenSpaceReflection::FEATURE_FLAGS)

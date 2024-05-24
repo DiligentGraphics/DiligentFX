@@ -327,15 +327,6 @@ void ScreenSpaceReflection::Execute(const RenderAttributes& RenderAttribs)
     m_Resources.Insert(RESOURCE_IDENTIFIER_INPUT_MATERIAL_PARAMETERS, RenderAttribs.pMaterialBufferSRV->GetTexture());
     m_Resources.Insert(RESOURCE_IDENTIFIER_INPUT_MOTION_VECTORS, RenderAttribs.pMotionVectorsSRV->GetTexture());
 
-    ScopedDebugGroup DebugGroupGlobal{RenderAttribs.pDeviceContext, "ScreenSpaceReflection"};
-
-    if (memcmp(RenderAttribs.pSSRAttribs, m_SSRAttribs.get(), sizeof(HLSL::ScreenSpaceReflectionAttribs)) != 0)
-    {
-        memcpy(m_SSRAttribs.get(), RenderAttribs.pSSRAttribs, sizeof(HLSL::ScreenSpaceReflectionAttribs));
-        RenderAttribs.pDeviceContext->UpdateBuffer(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER], 0, sizeof(HLSL::ScreenSpaceReflectionAttribs),
-                                                   m_SSRAttribs.get(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    }
-
     PrepareShadersAndPSO(RenderAttribs, m_FeatureFlags);
 
     bool AllPSOsReady = true;
@@ -349,7 +340,27 @@ void ScreenSpaceReflection::Execute(const RenderAttributes& RenderAttribs)
         }
     }
 
-    if (AllPSOsReady)
+    if (AllPSOsReady && RenderAttribs.pPostFXContext->IsPSOsReady())
+    {
+        auto dT = m_FrameTimer.GetElapsedTimef();
+
+        const_cast<HLSL::ScreenSpaceReflectionAttribs*>(RenderAttribs.pSSRAttribs)->AlphaInterpolation = std::min(std::max(dT, 0.0f), 1.0f);
+    }
+    else
+    {
+        m_FrameTimer.Restart();
+    }
+
+    ScopedDebugGroup DebugGroupGlobal{RenderAttribs.pDeviceContext, "ScreenSpaceReflection"};
+
+    if (memcmp(RenderAttribs.pSSRAttribs, m_SSRAttribs.get(), sizeof(HLSL::ScreenSpaceReflectionAttribs)) != 0)
+    {
+        memcpy(m_SSRAttribs.get(), RenderAttribs.pSSRAttribs, sizeof(HLSL::ScreenSpaceReflectionAttribs));
+        RenderAttribs.pDeviceContext->UpdateBuffer(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER], 0, sizeof(HLSL::ScreenSpaceReflectionAttribs),
+                                                   m_SSRAttribs.get(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    }
+
+    if (AllPSOsReady && RenderAttribs.pPostFXContext->IsPSOsReady())
     {
         ComputeHierarchicalDepthBuffer(RenderAttribs);
         ComputeStencilMaskAndExtractRoughness(RenderAttribs);

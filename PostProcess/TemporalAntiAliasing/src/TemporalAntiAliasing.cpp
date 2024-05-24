@@ -67,7 +67,18 @@ float2 TemporalAntiAliasing::GetJitterOffset(Uint32 AccumulationBufferIdx) const
 
     const auto& AccBuffer = Iter->second;
 
-    if (AccBuffer.Width == 0 || AccBuffer.Height == 0)
+    bool AllPSOsReady = true;
+    for (Uint32 RenderTechIdx = 0; RenderTechIdx < RENDER_TECH_COUNT; RenderTechIdx++)
+    {
+        auto RenderTech = m_RenderTech.find({static_cast<RENDER_TECH>(RenderTechIdx), AccBuffer.FeatureFlags});
+        if (RenderTech == m_RenderTech.end() || !RenderTech->second.IsReady())
+        {
+            AllPSOsReady = false;
+            break;
+        }
+    }
+
+    if (AccBuffer.Width == 0 || AccBuffer.Height == 0 || !AllPSOsReady)
         return float2{0.0f, 0.0f};
 
     constexpr Uint32 SampleCount = 16u;
@@ -169,8 +180,6 @@ void TemporalAntiAliasing::Execute(const RenderAttributes& RenderAttribs)
     DEV_CHECK_ERR(RenderAttribs.pColorBufferSRV != nullptr, "RenderAttribs.pColorBufferSRV must not be null");
     DEV_CHECK_ERR(RenderAttribs.pTAAAttribs != nullptr, "RenderAttribs.pTAAAttribs must not be null");
 
-    ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "TemporalAccumulation"};
-
     const auto& Iter = m_AccumulationBuffers.find(RenderAttribs.AccumulationBufferIdx);
     if (Iter == m_AccumulationBuffers.end())
     {
@@ -193,9 +202,11 @@ void TemporalAntiAliasing::Execute(const RenderAttributes& RenderAttribs)
         }
     }
 
+    ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "TemporalAccumulation"};
+
     AccBuffer.UpdateConstantBuffer(RenderAttribs.pDeviceContext, *RenderAttribs.pTAAAttribs);
 
-    if (AllPSOsReady)
+    if (AllPSOsReady && RenderAttribs.pPostFXContext->IsPSOsReady())
     {
         ComputeTemporalAccumulation(RenderAttribs, AccBuffer);
     }

@@ -65,7 +65,7 @@ float ComputeSpatialReconstructionPS(in FullScreenTriangleVSOutput VSOut) : SV_T
     float AccumulationFactor = pow(abs((History - 1.0) / float(SSAO_OCCLUSION_HISTORY_MAX_FRAMES_WITH_DENOISING)), 0.2);
     
     if (IsBackground(Depth) || AccumulationFactor >= 1.0)
-        return SampleOcclusion(int2(Position.xy));
+        return lerp(1.0, SampleOcclusion(int2(Position.xy)), g_SSAOAttribs.AlphaInterpolation);
 
     float3 PositionSS = float3(Position.xy * g_Camera.f4ViewportSize.zw, Depth);
     float3 PositionVS = ScreenXYDepthToViewSpace(PositionSS, g_Camera.mProj);
@@ -95,5 +95,6 @@ float ComputeSpatialReconstructionPS(in FullScreenTriangleVSOutput VSOut) : SV_T
         WeightSum    += WeightS * WeightZ;
     }
 
-    return WeightSum > 0.0 ? OcclusionSum / WeightSum : SampleOcclusion(int2(Position.xy));
+    float Occlusion = WeightSum > 0.0 ? OcclusionSum / WeightSum : SampleOcclusion(int2(Position.xy));
+    return lerp(1.0, Occlusion, g_SSAOAttribs.AlphaInterpolation);
 }

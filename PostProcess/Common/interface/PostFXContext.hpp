@@ -128,6 +128,8 @@ public:
 
     void Execute(const RenderAttributes& RenderAttribs);
 
+    bool IsPSOsReady() const;
+
     ITextureView* Get2DBlueNoiseSRV(BLUE_NOISE_DIMENSION Dimension) const;
 
     ITextureView* GetReprojectedDepth() const;
@@ -163,6 +165,8 @@ private:
         RENDER_TECH_COMPUTE_BLUE_NOISE_TEXTURE = 0,
         RENDER_TECH_COMPUTE_REPROJECTED_DEPTH,
         RENDER_TECH_COMPUTE_CLOSEST_MOTION,
+        RENDER_TECH_COMPUTE_PREVIOUS_DEPTH,
+        RENDER_TECH_INTERNAL_LAST = RENDER_TECH_COMPUTE_PREVIOUS_DEPTH,
         RENDER_TECH_COPY_DEPTH,
         RENDER_TECH_COPY_COLOR,
         RENDER_TECH_COUNT
@@ -185,6 +189,8 @@ private:
         RESOURCE_IDENTIFIER_CLOSEST_MOTION,
         RESOURCE_IDENTIFIER_COUNT
     };
+
+    void PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_FLAGS FeatureFlags);
 
     void ComputeBlueNoiseTexture(const RenderAttributes& RenderAttribs);
 
@@ -231,6 +237,10 @@ private:
 
     FrameDesc               m_FrameDesc         = {};
     SupportedDeviceFeatures m_SupportedFeatures = {};
+    bool                    m_IsPSOsReady       = false;
+
+    RefCntAutoPtr<IShader> m_pVSCopyTexture;
+    RefCntAutoPtr<IShader> m_pPSCopyTexture;
 
     FEATURE_FLAGS m_FeatureFlags = FEATURE_FLAG_NONE;
 };

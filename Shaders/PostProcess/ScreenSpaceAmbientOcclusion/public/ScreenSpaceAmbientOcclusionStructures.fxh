@@ -72,8 +72,8 @@ struct ScreenSpaceAmbientOcclusionAttribs
     // If this parameter is set to true, the current frame will be written to the current history buffer without interpolation with the previous history buffer
     BOOL  ResetAccumulation           DEFAULT_VALUE(FALSE);
     
-    // Padding 1
-    float Padding1                    DEFAULT_VALUE(0);
+    // The parameter is responsible for adjusting the intensity of SSAO with time
+    float AlphaInterpolation          DEFAULT_VALUE(1.0);
 };
 
 #ifdef CHECK_STRUCT_ALIGNMENT

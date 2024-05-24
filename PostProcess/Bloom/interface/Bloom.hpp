@@ -29,6 +29,7 @@
 #include <vector>
 #include <memory>
 
+#include "../../../../DiligentCore/Common/interface/Timer.hpp"
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
 #include "../../../../DiligentCore/Graphics/GraphicsTools/interface/RenderStateCache.h"
 #include "../../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
@@ -164,6 +165,8 @@ private:
     Uint32 m_CurrentFrameIdx  = 0;
 
     FEATURE_FLAGS m_FeatureFlags = FEATURE_FLAG_NONE;
+
+    Timer m_FrameTimer;
 };
 
 } // namespace Diligent

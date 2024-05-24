@@ -360,13 +360,6 @@ void Bloom::Execute(const RenderAttributes& RenderAttribs)
 
     m_Resources.Insert(RESOURCE_IDENTIFIER_INPUT_COLOR, RenderAttribs.pColorBufferSRV->GetTexture());
 
-    ScopedDebugGroup DebugGroupGlobal{RenderAttribs.pDeviceContext, "Bloom"};
-    if (memcmp(RenderAttribs.pBloomAttribs, m_BloomAttribs.get(), sizeof(HLSL::BloomAttribs)) != 0)
-    {
-        memcpy(m_BloomAttribs.get(), RenderAttribs.pBloomAttribs, sizeof(HLSL::BloomAttribs));
-        RenderAttribs.pDeviceContext->UpdateBuffer(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER].AsBuffer(), 0, sizeof(HLSL::BloomAttribs), RenderAttribs.pBloomAttribs, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    }
-
     PrepareShadersAndPSO(RenderAttribs, m_FeatureFlags);
 
     bool AllPSOsReady = true;
@@ -380,7 +373,25 @@ void Bloom::Execute(const RenderAttributes& RenderAttribs)
         }
     }
 
-    if (AllPSOsReady)
+    if (AllPSOsReady && RenderAttribs.pPostFXContext->IsPSOsReady())
+    {
+        auto dT = m_FrameTimer.GetElapsedTimef();
+
+        const_cast<HLSL::BloomAttribs*>(RenderAttribs.pBloomAttribs)->AlphaInterpolation = std::min(std::max(dT, 0.0f), 1.0f);
+    }
+    else
+    {
+        m_FrameTimer.Restart();
+    }
+
+    ScopedDebugGroup DebugGroupGlobal{RenderAttribs.pDeviceContext, "Bloom"};
+    if (memcmp(RenderAttribs.pBloomAttribs, m_BloomAttribs.get(), sizeof(HLSL::BloomAttribs)) != 0)
+    {
+        memcpy(m_BloomAttribs.get(), RenderAttribs.pBloomAttribs, sizeof(HLSL::BloomAttribs));
+        RenderAttribs.pDeviceContext->UpdateBuffer(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER].AsBuffer(), 0, sizeof(HLSL::BloomAttribs), RenderAttribs.pBloomAttribs, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    }
+
+    if (AllPSOsReady && RenderAttribs.pPostFXContext->IsPSOsReady())
     {
         ComputePrefilteredTexture(RenderAttribs);
         ComputeDownsampledTextures(RenderAttribs);

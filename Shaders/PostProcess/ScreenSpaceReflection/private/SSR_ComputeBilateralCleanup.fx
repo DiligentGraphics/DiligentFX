@@ -94,5 +94,5 @@ float4 ComputeBilateralCleanupPS(in FullScreenTriangleVSOutput VSOut) : SV_Targe
         RadianceResult = ColorSum / max(WeightSum, 1.0e-6f);
     }
 
-    return RadianceResult;
+    return float4(RadianceResult.rgb, RadianceResult.a * g_SSRAttribs.AlphaInterpolation);
 }
