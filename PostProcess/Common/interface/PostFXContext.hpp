@@ -237,7 +237,7 @@ private:
 
     FrameDesc               m_FrameDesc         = {};
     SupportedDeviceFeatures m_SupportedFeatures = {};
-    bool                    m_IsPSOsReady       = false;
+    bool                    m_PSOsReady         = false;
 
     RefCntAutoPtr<IShader> m_pVSCopyTexture;
     RefCntAutoPtr<IShader> m_pPSCopyTexture;

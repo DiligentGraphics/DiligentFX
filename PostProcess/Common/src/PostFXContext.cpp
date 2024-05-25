@@ -51,7 +51,10 @@ namespace NoiseBuffers
 
 }
 
-static constexpr char VertexShaderHLSL[] = R"(
+namespace HLSL
+{
+
+static constexpr char ScreenTriangleVS[] = R"(
 struct VSOutput
 {
     float4 Position : SV_POSITION;
@@ -67,12 +70,12 @@ void main(uint VertexId : SV_VertexID, out VSOutput VSOut)
 
     float2 f2XY = PosXY[VertexId % 3u];
 
-    VSOut.Texcoord = float2(0.5,0.5) + float2(0.5,-0.5) * f2XY;
+    VSOut.Texcoord = float2(0.5, 0.5) + float2(0.5, -0.5) * f2XY;
     VSOut.Position = float4(f2XY, 0.0, 1.0);
 }
 )";
 
-static constexpr char PixelShaderHLSL[] = R"(
+static constexpr char CopyTexturePS[] = R"(
 struct PSInput
 {
     float4 Position : SV_POSITION;
@@ -88,16 +91,13 @@ float4 main(in PSInput PSIn) : SV_Target
 }
 )";
 
-static constexpr char VertexShaderGLSL[] = R"(
-#ifdef VULKAN
-#   define BINDING(X)      layout(binding=X)
-#   define OUT_LOCATION(X) layout(location=X) // Requires separable programs
-#else
-#   define BINDING(X)
-#   define OUT_LOCATION(X)
-#endif
+} // namespace HLSL
 
-OUT_LOCATION(0) out vec2 VSOut_Texcoord;
+namespace GLSL
+{
+
+static constexpr char ScreenTriangleVS[] = R"(
+out vec2 VSOut_Texcoord;
 
 #ifndef GL_ES
 out gl_PerVertex
@@ -120,25 +120,21 @@ void main()
 }
 )";
 
-static constexpr char PixelShaderGLSL[] = R"(
-#ifdef VULKAN
-#   define BINDING(X)     layout(binding=X)
-#   define IN_LOCATION(X) layout(location=X) // Requires separable programs
-#else
-#   define BINDING(X)
-#   define IN_LOCATION(X)
-#endif
-BINDING(0) uniform sampler2D g_Texture;
+static constexpr char CopyTexturePS[] = R"(
+uniform sampler2D g_Texture;
 
-IN_LOCATION(0) in vec2 VSOut_Texcoord;
+in vec2 VSOut_Texcoord;
 
 layout(location = 0) out vec4 PSOut_Color;
 
 void main()
 {
-    PSOut_Color = texture(g_Texture, VSOut_Texcoord);;
+    PSOut_Color = texture(g_Texture, VSOut_Texcoord);
 }
 )";
+
+} // namespace GLSL
+
 
 PostFXContext::PostFXContext(IRenderDevice* pDevice)
 {
@@ -218,29 +214,22 @@ PostFXContext::PostFXContext(IRenderDevice* pDevice)
         m_Resources.Insert(RESOURCE_IDENTIFIER_INDEX_BUFFER_INTERMEDIATE, Device.CreateBuffer(Desc, nullptr));
     }
 
-    bool IsGLSL = DeviceInfo.IsGLDevice();
+    bool IsGL = DeviceInfo.IsGLDevice();
 
     {
         ShaderCreateInfo ShaderCI;
-        ShaderCI.SourceLanguage                  = IsGLSL ? SHADER_SOURCE_LANGUAGE_GLSL : SHADER_SOURCE_LANGUAGE_HLSL;
-        ShaderCI.Desc.ShaderType                 = SHADER_TYPE_VERTEX;
-        ShaderCI.Desc.Name                       = "CopyTextureVS";
-        ShaderCI.Desc.UseCombinedTextureSamplers = true;
-        ShaderCI.CompileFlags                    = SHADER_COMPILE_FLAG_NONE;
-        ShaderCI.Source                          = IsGLSL ? VertexShaderGLSL : VertexShaderHLSL;
+        ShaderCI.SourceLanguage = IsGL ? SHADER_SOURCE_LANGUAGE_GLSL : SHADER_SOURCE_LANGUAGE_HLSL;
+        ShaderCI.Desc           = {"CopyTextureVS", SHADER_TYPE_VERTEX, /*UseCombinedTextureSamplers = */ true};
+        ShaderCI.Source         = IsGL ? GLSL::ScreenTriangleVS : HLSL::ScreenTriangleVS;
 
         m_pVSCopyTexture = RenderDeviceWithCache<false>{pDevice, nullptr}.CreateShader(ShaderCI);
     }
 
     {
         ShaderCreateInfo ShaderCI;
-        ShaderCI.SourceLanguage = IsGLSL ? SHADER_SOURCE_LANGUAGE_GLSL : SHADER_SOURCE_LANGUAGE_HLSL;
-        ;
-        ShaderCI.Desc.ShaderType                 = SHADER_TYPE_PIXEL;
-        ShaderCI.Desc.Name                       = "CopyTexturePS";
-        ShaderCI.Desc.UseCombinedTextureSamplers = true;
-        ShaderCI.CompileFlags                    = SHADER_COMPILE_FLAG_NONE;
-        ShaderCI.Source                          = IsGLSL ? PixelShaderGLSL : PixelShaderHLSL;
+        ShaderCI.SourceLanguage = IsGL ? SHADER_SOURCE_LANGUAGE_GLSL : SHADER_SOURCE_LANGUAGE_HLSL;
+        ShaderCI.Desc           = {"CopyTexturePS", SHADER_TYPE_PIXEL, /*UseCombinedTextureSamplers = */ true};
+        ShaderCI.Source         = IsGL ? GLSL::CopyTexturePS : HLSL::CopyTexturePS;
 
         m_pPSCopyTexture = RenderDeviceWithCache<false>{pDevice, nullptr}.CreateShader(ShaderCI);
     }
@@ -332,18 +321,18 @@ void PostFXContext::Execute(const RenderAttributes& RenderAttribs)
 
     PrepareShadersAndPSO(RenderAttribs, m_FeatureFlags);
 
-    m_IsPSOsReady = true;
+    m_PSOsReady = true;
     for (Uint32 RenderTechIdx = 0; RenderTechIdx <= RENDER_TECH_INTERNAL_LAST; RenderTechIdx++)
     {
         const auto& RenderTech = GetRenderTechnique(static_cast<RENDER_TECH>(RenderTechIdx), m_FeatureFlags, TEX_FORMAT_UNKNOWN);
         if (!RenderTech.IsReady())
         {
-            m_IsPSOsReady = false;
+            m_PSOsReady = false;
             break;
         }
     }
 
-    if (m_IsPSOsReady)
+    if (m_PSOsReady)
     {
         ComputeBlueNoiseTexture(RenderAttribs);
         ComputeReprojectedDepth(RenderAttribs);
@@ -358,7 +347,7 @@ void PostFXContext::Execute(const RenderAttributes& RenderAttribs)
 
 bool PostFXContext::IsPSOsReady() const
 {
-    return m_IsPSOsReady;
+    return m_PSOsReady;
 }
 
 ITextureView* PostFXContext::Get2DBlueNoiseSRV(BLUE_NOISE_DIMENSION Dimension) const
