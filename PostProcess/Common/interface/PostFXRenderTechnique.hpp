@@ -73,7 +73,7 @@ struct PostFXRenderTechnique
 
     bool IsReady() const
     {
-        return PSO->GetStatus() == PIPELINE_STATE_STATUS_READY;
+        return PSO != nullptr && PSO->GetStatus() == PIPELINE_STATE_STATUS_READY;
     }
 
     RefCntAutoPtr<IPipelineState>         PSO{};

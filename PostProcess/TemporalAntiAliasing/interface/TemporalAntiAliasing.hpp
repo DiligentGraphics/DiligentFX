@@ -182,6 +182,8 @@ private:
 
     std::unordered_map<RenderTechniqueKey, RenderTechnique, RenderTechniqueKey::Hasher> m_RenderTech;
     std::unordered_map<Uint32, AccumulationBufferInfo>                                  m_AccumulationBuffers;
+
+    bool m_AllPSOsReady = false;
 };
 
 DEFINE_FLAG_ENUM_OPERATORS(TemporalAntiAliasing::FEATURE_FLAGS)

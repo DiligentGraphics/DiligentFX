@@ -67,18 +67,7 @@ float2 TemporalAntiAliasing::GetJitterOffset(Uint32 AccumulationBufferIdx) const
 
     const auto& AccBuffer = Iter->second;
 
-    bool AllPSOsReady = true;
-    for (Uint32 RenderTechIdx = 0; RenderTechIdx < RENDER_TECH_COUNT; RenderTechIdx++)
-    {
-        auto RenderTech = m_RenderTech.find({static_cast<RENDER_TECH>(RenderTechIdx), AccBuffer.FeatureFlags});
-        if (RenderTech == m_RenderTech.end() || !RenderTech->second.IsReady())
-        {
-            AllPSOsReady = false;
-            break;
-        }
-    }
-
-    if (AccBuffer.Width == 0 || AccBuffer.Height == 0 || !AllPSOsReady)
+    if (AccBuffer.Width == 0 || AccBuffer.Height == 0 || !m_AllPSOsReady)
         return float2{0.0f, 0.0f};
 
     constexpr Uint32 SampleCount = 16u;
@@ -169,6 +158,17 @@ void TemporalAntiAliasing::PrepareResources(IRenderDevice*  pDevice,
 
     const auto& FrameDesc = pPostFXContext->GetFrameDesc();
     m_AccumulationBuffers[AccumulationBufferIdx].Prepare(pPostFXContext, pDevice, pDeviceContext, FrameDesc.Width, FrameDesc.Height, FrameDesc.Index, FeatureFlags);
+
+    m_AllPSOsReady = true;
+    for (Uint32 RenderTechIdx = 0; RenderTechIdx < RENDER_TECH_COUNT; RenderTechIdx++)
+    {
+        auto tech_it = m_RenderTech.find({static_cast<RENDER_TECH>(RenderTechIdx), FeatureFlags});
+        if (tech_it == m_RenderTech.end() || !tech_it->second.IsReady())
+        {
+            m_AllPSOsReady = false;
+            break;
+        }
+    }
 }
 
 void TemporalAntiAliasing::Execute(const RenderAttributes& RenderAttribs)
@@ -191,22 +191,11 @@ void TemporalAntiAliasing::Execute(const RenderAttributes& RenderAttribs)
     auto& AccBuffer = Iter->second;
     PrepareShadersAndPSO(RenderAttribs, AccBuffer.FeatureFlags, AccBuffer.Resources[AccumulationBufferInfo::RESOURCE_ID_ACCUMULATED_BUFFER0].AsTexture()->GetDesc().Format);
 
-    bool AllPSOsReady = true;
-    for (Uint32 RenderTechIdx = 0; RenderTechIdx < RENDER_TECH_COUNT; RenderTechIdx++)
-    {
-        auto& RenderTech = m_RenderTech[{static_cast<RENDER_TECH>(RenderTechIdx), AccBuffer.FeatureFlags}];
-        if (!RenderTech.IsReady())
-        {
-            AllPSOsReady = false;
-            break;
-        }
-    }
-
     ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "TemporalAccumulation"};
 
     AccBuffer.UpdateConstantBuffer(RenderAttribs.pDeviceContext, *RenderAttribs.pTAAAttribs);
 
-    if (AllPSOsReady && RenderAttribs.pPostFXContext->IsPSOsReady())
+    if (m_AllPSOsReady && RenderAttribs.pPostFXContext->IsPSOsReady())
     {
         ComputeTemporalAccumulation(RenderAttribs, AccBuffer);
     }
