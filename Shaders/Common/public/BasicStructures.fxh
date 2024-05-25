@@ -102,15 +102,11 @@ struct CameraAttribs
     float fFocalLength   DEFAULT_VALUE(50.0f);
     // Sensor width in mm
     float fSensorWidth   DEFAULT_VALUE(36.0f);
+    
     // Sensor height in mm
-    float fSensorHeight  DEFAULT_VALUE(24.0f);
-
-    float fPadding0;
-    float fPadding1;
-    float fPadding2;
-
+    float  fSensorHeight  DEFAULT_VALUE(24.0f);
+    float  fPadding0;
     float2 f2Jitter;   // TAA jitter
-    float2 f2Padding3;
     
 #ifdef __cplusplus
     float4x4 mViewT;
@@ -129,7 +125,6 @@ struct CameraAttribs
 #endif
 
     float4 f4ExtraData[5]; // Any appliation-specific data
-    // Sizeof(CameraAttribs) == 256*2
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
     CHECK_STRUCT_ALIGNMENT(CameraAttribs);

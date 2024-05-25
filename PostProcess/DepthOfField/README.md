@@ -33,8 +33,8 @@ The following table lists the parameters and their descriptions.
 
 | **Name**                                 | **Notes** |
 | -----------------------------------------|-----------|
-| `MaxCircleOfConfusion`                   | This is the maximum size of CoC in texture coordinates for a pixel. |
-| `TemporalStabilityFactor`                | This parameter is used to control the stability of the temporal accumulation of the CoC. |
+| `MaxCircleOfConfusion`                   | The maximum size of CoC in texture coordinates for a pixel. |
+| `TemporalStabilityFactor`                | Stability of the temporal accumulation of the CoC. |
 | `BokehKernelRingCount`                   | The number of rings in the Octaweb kernel. |
 | `BokehKernelRingDensity`                 | The number of samples within each ring of the Octaweb kernel. |
 
@@ -112,9 +112,9 @@ An `ITextureView` of the texture containing the depth of field result can be obt
 
 ## Implementation details
 
-Our algorithm is based on the approach described in article **[Jasper Flick, 2018]**, but we have significantly modified our version. Specifically, we handle the blurring of the near and far planes separately.
+Our algorithm is based on the approach described in **[Jasper Flick, 2018]**, but we have significantly modified our version. Specifically, we handle the blurring of the near and far planes separately.
 For the near plane, we calculate the dilation and blurring of the CoC before computing the bokeh. This step is essential to avoid bleed effects.
-We also added an approach to eliminate the undersampling effect from article **[Tiago Sousa, 2013]**.
+We also added an approach to eliminate the undersampling effect from **[Tiago Sousa, 2013]**.
 
 ## References
 - **[Jasper Flick, 2018]**: Advanced rendering: Depth of Field - https://catlikecoding.com/unity/tutorials/advanced-rendering/depth-of-field/

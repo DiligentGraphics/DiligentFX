@@ -12,7 +12,7 @@
 // Number of rings in the bokeh kernel for flood-filling.
 #define DOF_BOKEH_KERNEL_SMALL_RING_COUNT   3
 
-// Number of samples within each ring of the bokeh kernel the bokeh kernel for flood-filling.
+// Number of samples within each ring of the bokeh kernel for flood-filling.
 #define DOF_BOKEH_KERNEL_SMALL_RING_DENSITY 5
 
 // Gaussian kernel radius for blurring the dilated CoC texture
