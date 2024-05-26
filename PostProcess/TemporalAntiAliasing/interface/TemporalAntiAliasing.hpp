@@ -53,7 +53,7 @@ class TemporalAntiAliasing
 public:
     enum FEATURE_FLAGS : Uint32
     {
-        FEATURE_FLAG_NONE = 0,
+        FEATURE_FLAG_NONE = 0u,
 
         // Indicates that the application uses a reversed depth buffer.
         FEATURE_FLAG_REVERSED_DEPTH = 1u << 0u,
@@ -66,6 +66,9 @@ public:
 
         // Use YCoCg color space for color clipping.
         FEATURE_FLAG_YCOCG_COLOR_SPACE = 1u << 3u,
+
+        // Use async compilation for shaders
+        FEATURE_FLAG_ASYNC_CREATION = 1u << 4u
     };
 
     struct RenderAttributes
@@ -177,7 +180,7 @@ private:
 
         void Prepare(PostFXContext* pPostFXContext, IRenderDevice* pDevice, IDeviceContext* pCtx, Uint32 Width, Uint32 Height, Uint32 CurrFrameIdx, FEATURE_FLAGS FeatureFlags);
 
-        void UpdateConstantBuffer(IDeviceContext* pCtx, const HLSL::TemporalAntiAliasingAttribs& Attribs);
+        void UpdateConstantBuffer(IDeviceContext* pDeviceContext, const HLSL::TemporalAntiAliasingAttribs& Attribs);
     };
 
     std::unordered_map<RenderTechniqueKey, RenderTechnique, RenderTechniqueKey::Hasher> m_RenderTech;

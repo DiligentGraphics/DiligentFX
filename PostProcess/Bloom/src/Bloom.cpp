@@ -150,14 +150,16 @@ Int32 Bloom::ComputeMipCount(Uint32 Width, Uint32 Height, float Radius)
     return static_cast<Int32>(Radius * static_cast<float>(MaxMipCount));
 }
 
-void Bloom::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_FLAGS FeatureFlags)
+bool Bloom::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_FLAGS FeatureFlags)
 {
+    bool       AllPSOsReady    = true;
+    const bool IsAsyncCreation = FEATURE_FLAG_ASYNC_CREATION & FeatureFlags;
     {
         auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_PREFILTERED_TEXTURE, FeatureFlags);
         if (!RenderTech.IsInitializedPSO())
         {
-            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "Bloom_ComputePrefilteredTexture.fx", "ComputePrefilteredTexturePS", SHADER_TYPE_PIXEL);
+            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, IsAsyncCreation);
+            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "Bloom_ComputePrefilteredTexture.fx", "ComputePrefilteredTexturePS", SHADER_TYPE_PIXEL, {}, IsAsyncCreation);
 
             const bool BorderSamplingModeSupported = RenderAttribs.pDevice->GetAdapterInfo().Sampler.BorderSamplingModeSupported;
 
@@ -174,16 +176,17 @@ void Bloom::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_
                                          m_DownsampledTextures[0]->GetDesc().Format,
                                      },
                                      TEX_FORMAT_UNKNOWN,
-                                     DSS_DisableDepth, BS_Default, false);
+                                     DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
         }
+        AllPSOsReady &= RenderTech.IsReady();
     }
 
     {
         auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_DOWNSAMPLED_TEXTURE, FeatureFlags);
         if (!RenderTech.IsInitializedPSO())
         {
-            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "Bloom_ComputeDownsampledTexture.fx", "ComputeDownsampledTexturePS", SHADER_TYPE_PIXEL);
+            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, IsAsyncCreation);
+            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "Bloom_ComputeDownsampledTexture.fx", "ComputeDownsampledTexturePS", SHADER_TYPE_PIXEL, {}, IsAsyncCreation);
 
             const bool BorderSamplingModeSupported = RenderAttribs.pDevice->GetAdapterInfo().Sampler.BorderSamplingModeSupported;
 
@@ -199,16 +202,17 @@ void Bloom::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_
                                          m_DownsampledTextures[0]->GetDesc().Format,
                                      },
                                      TEX_FORMAT_UNKNOWN,
-                                     DSS_DisableDepth, BS_Default, false);
+                                     DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
         }
+        AllPSOsReady &= RenderTech.IsReady();
     }
 
     {
         auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_UPSAMPLED_TEXTURE, FeatureFlags);
         if (!RenderTech.IsInitializedPSO())
         {
-            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "Bloom_ComputeUpsampledTexture.fx", "ComputeUpsampledTexturePS", SHADER_TYPE_PIXEL);
+            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, IsAsyncCreation);
+            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "Bloom_ComputeUpsampledTexture.fx", "ComputeUpsampledTexturePS", SHADER_TYPE_PIXEL, {}, IsAsyncCreation);
 
             PipelineResourceLayoutDescX ResourceLayout;
             ResourceLayout
@@ -225,8 +229,27 @@ void Bloom::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_
                                          m_UpsampledTextures[0]->GetDesc().Format,
                                      },
                                      TEX_FORMAT_UNKNOWN,
-                                     DSS_DisableDepth, BS_Default, false);
+                                     DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
         }
+        AllPSOsReady &= RenderTech.IsReady();
+    }
+
+    return AllPSOsReady;
+}
+
+void Bloom::UpdateConstantBuffer(const RenderAttributes& RenderAttribs, bool ResetTimer)
+{
+    if (ResetTimer)
+        m_FrameTimer.Restart();
+
+    float Alpha = std::min(std::max(m_FrameTimer.GetElapsedTimef(), 0.0f), 1.0f);
+
+    bool UpdateRequired = m_BloomAttribs->AlphaInterpolation != Alpha || memcmp(RenderAttribs.pBloomAttribs, m_BloomAttribs.get(), sizeof(HLSL::BloomAttribs)) != 0;
+    if (UpdateRequired)
+    {
+        memcpy(m_BloomAttribs.get(), RenderAttribs.pBloomAttribs, sizeof(HLSL::BloomAttribs));
+        m_BloomAttribs->AlphaInterpolation = Alpha;
+        RenderAttribs.pDeviceContext->UpdateBuffer(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER].AsBuffer(), 0, sizeof(HLSL::BloomAttribs), m_BloomAttribs.get(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     }
 }
 
@@ -360,38 +383,11 @@ void Bloom::Execute(const RenderAttributes& RenderAttribs)
 
     m_Resources.Insert(RESOURCE_IDENTIFIER_INPUT_COLOR, RenderAttribs.pColorBufferSRV->GetTexture());
 
-    PrepareShadersAndPSO(RenderAttribs, m_FeatureFlags);
-
-    bool AllPSOsReady = true;
-    for (Uint32 RenderTechIdx = 0; RenderTechIdx < RENDER_TECH_COUNT; RenderTechIdx++)
-    {
-        auto& RenderTech = GetRenderTechnique(static_cast<RENDER_TECH>(RenderTechIdx), m_FeatureFlags);
-        if (!RenderTech.IsReady())
-        {
-            AllPSOsReady = false;
-            break;
-        }
-    }
-
-    if (AllPSOsReady && RenderAttribs.pPostFXContext->IsPSOsReady())
-    {
-        auto dT = m_FrameTimer.GetElapsedTimef();
-
-        const_cast<HLSL::BloomAttribs*>(RenderAttribs.pBloomAttribs)->AlphaInterpolation = std::min(std::max(dT, 0.0f), 1.0f);
-    }
-    else
-    {
-        m_FrameTimer.Restart();
-    }
-
     ScopedDebugGroup DebugGroupGlobal{RenderAttribs.pDeviceContext, "Bloom"};
-    if (memcmp(RenderAttribs.pBloomAttribs, m_BloomAttribs.get(), sizeof(HLSL::BloomAttribs)) != 0)
-    {
-        memcpy(m_BloomAttribs.get(), RenderAttribs.pBloomAttribs, sizeof(HLSL::BloomAttribs));
-        RenderAttribs.pDeviceContext->UpdateBuffer(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER].AsBuffer(), 0, sizeof(HLSL::BloomAttribs), RenderAttribs.pBloomAttribs, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    }
 
-    if (AllPSOsReady && RenderAttribs.pPostFXContext->IsPSOsReady())
+    bool AllPSOsReady = PrepareShadersAndPSO(RenderAttribs, m_FeatureFlags) && RenderAttribs.pPostFXContext->IsPSOsReady();
+    UpdateConstantBuffer(RenderAttribs, !AllPSOsReady);
+    if (AllPSOsReady)
     {
         ComputePrefilteredTexture(RenderAttribs);
         ComputeDownsampledTextures(RenderAttribs);

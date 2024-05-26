@@ -28,6 +28,7 @@
 #include <unordered_map>
 #include <memory>
 
+#include "../../../../DiligentCore/Common/interface/Timer.hpp"
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
 #include "../../../../DiligentCore/Graphics/GraphicsTools/interface/RenderStateCache.h"
 #include "../../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
@@ -50,9 +51,10 @@ class DepthOfField
 public:
     enum FEATURE_FLAGS : Uint32
     {
-        FEATURE_FLAG_NONE                      = 0,
-        FEATURE_FLAG_ENABLE_TEMPORAL_SMOOTHING = 1 << 0,
-        FEATURE_FLAG_ENABLE_KARIS_INVERSE      = 1 << 1,
+        FEATURE_FLAG_NONE                      = 0u,
+        FEATURE_FLAG_ENABLE_TEMPORAL_SMOOTHING = 1u << 0u,
+        FEATURE_FLAG_ENABLE_KARIS_INVERSE      = 1u << 1u,
+        FEATURE_FLAG_ASYNC_CREATION            = 1u << 2u
     };
 
     struct RenderAttributes
@@ -138,6 +140,10 @@ private:
         RESOURCE_IDENTIFIER_COUNT
     };
 
+    bool PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_FLAGS FeatureFlags);
+
+    void UpdateConstantBuffers(const RenderAttributes& RenderAttribs, bool ResetTimer);
+
     void ComputeCircleOfConfusion(const RenderAttributes& RenderAttribs);
 
     void ComputeTemporalCircleOfConfusion(const RenderAttributes& RenderAttribs);
@@ -159,6 +165,8 @@ private:
     void ComputePostFilteredTexture(const RenderAttributes& RenderAttribs);
 
     void ComputeCombinedTexture(const RenderAttributes& RenderAttribs);
+
+    void ComputePlaceholderTexture(const RenderAttributes& RenderAttribs);
 
     RenderTechnique& GetRenderTechnique(RENDER_TECH RenderTech, FEATURE_FLAGS FeatureFlags);
 
@@ -199,6 +207,8 @@ private:
     Uint32 m_CurrentFrameIdx  = 0;
 
     FEATURE_FLAGS m_FeatureFlags = FEATURE_FLAG_NONE;
+
+    Timer m_FrameTimer;
 };
 
 DEFINE_FLAG_ENUM_OPERATORS(DepthOfField::FEATURE_FLAGS)

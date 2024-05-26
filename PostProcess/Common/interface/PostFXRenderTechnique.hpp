@@ -44,7 +44,7 @@ struct PostFXRenderTechnique
                                                const Char*             EntryPoint,
                                                SHADER_TYPE             Type,
                                                const ShaderMacroArray& Macros         = {},
-                                               bool                    IsAsynchronous = true);
+                                               bool                    IsAsynchronous = false);
 
     void InitializePSO(IRenderDevice*                     pDevice,
                        IRenderStateCache*                 pStateCache,
@@ -57,7 +57,7 @@ struct PostFXRenderTechnique
                        const DepthStencilStateDesc&       DSSDesc,
                        const BlendStateDesc&              BSDesc,
                        bool                               IsDSVReadOnly,
-                       bool                               IsAsynchronous = true);
+                       bool                               IsAsynchronous = false);
 
     void InitializeSRB(bool InitStaticResources);
 

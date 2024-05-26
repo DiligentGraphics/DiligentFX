@@ -44,6 +44,15 @@ struct DepthOfFieldAttribs
     // The number of samples within each ring of the Octaweb kernel.
     int   BokehKernelRingDensity  DEFAULT_VALUE(7);
 
+    // The parameter is responsible for adjusting the intensity of DoF with time
+    float AlphaInterpolation      DEFAULT_VALUE(1.0);
+
+    float Padding0                DEFAULT_VALUE(0.0);
+
+    float Padding1                DEFAULT_VALUE(0.0);
+
+    float Padding2                DEFAULT_VALUE(0.0);
+
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
     CHECK_STRUCT_ALIGNMENT(DepthOfFieldAttribs);

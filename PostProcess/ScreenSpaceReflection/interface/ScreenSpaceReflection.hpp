@@ -56,17 +56,20 @@ class ScreenSpaceReflection
 public:
     enum FEATURE_FLAGS : Uint32
     {
-        FEATURE_FLAG_NONE           = 0,
-        FEATURE_FLAG_REVERSED_DEPTH = 1 << 0, // Not implemented
-        FEATURE_FLAG_PACKED_NORMAL  = 1 << 1, // Nor implemented
+        FEATURE_FLAG_NONE           = 0u,
+        FEATURE_FLAG_REVERSED_DEPTH = 1u << 0u, // Not implemented
+        FEATURE_FLAG_PACKED_NORMAL  = 1u << 1u, // Nor implemented
 
         // When using this flag, you only need to pass the color buffer of the previous frame.
         // We find the intersection using the depth buffer of the current frame, and when an intersection is found,
         // we make the corresponding offset by the velocity vector at the intersection point, for sampling from the color buffer.
-        FEATURE_FLAG_PREVIOUS_FRAME = 1 << 2,
+        FEATURE_FLAG_PREVIOUS_FRAME = 1u << 2u,
 
         // When this flag is used, ray tracing step is executed at half resolution
-        FEATURE_FLAG_HALF_RESOLUTION = 1 << 3,
+        FEATURE_FLAG_HALF_RESOLUTION = 1u << 3u,
+
+        // Use async compilation for shaders
+        FEATURE_FLAG_ASYNC_CREATION = 1u << 4u
 
     };
 
@@ -159,7 +162,9 @@ private:
         RESOURCE_IDENTIFIER_COUNT
     };
 
-    void PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_FLAGS FeatureFlags);
+    bool PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_FLAGS FeatureFlags);
+
+    void UpdateConstantBuffer(const RenderAttributes& RenderAttribs, bool ResetTimer);
 
     void ComputeHierarchicalDepthBuffer(const RenderAttributes& RenderAttribs);
 

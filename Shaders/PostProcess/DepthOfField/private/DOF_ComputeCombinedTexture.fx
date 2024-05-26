@@ -42,5 +42,5 @@ float3 ComputeCombinedTexturePS(in FullScreenTriangleVSOutput VSOut) : SV_Target
     float3 Result = SourceFullRes;
     Result.rgb = lerp(Result, DoFFar.rgb, smoothstep(0.1, 1.0, DoFFar.a));
     Result.rgb = lerp(Result.rgb, DoFNear.rgb, smoothstep(0.1, 1.0, DoFNear.a));
-    return Result;
+    return lerp(SourceFullRes, Result, g_DOFAttribs.AlphaInterpolation);
 }

@@ -50,9 +50,10 @@ class PostFXContext
 public:
     enum FEATURE_FLAGS : Uint32
     {
-        FEATURE_FLAG_NONE                 = 0,
-        FEATURE_FLAG_REVERSED_DEPTH       = 1 << 0, // Not implemented
-        FEATURE_FLAG_HALF_PRECISION_DEPTH = 1 << 1,
+        FEATURE_FLAG_NONE                 = 0u,
+        FEATURE_FLAG_REVERSED_DEPTH       = 1u << 0u, // Not implemented
+        FEATURE_FLAG_HALF_PRECISION_DEPTH = 1u << 1u,
+        FEATURE_FLAG_ASYNC_CREATION       = 1u << 2u
     };
 
     struct FrameDesc
@@ -130,6 +131,8 @@ public:
 
     bool IsPSOsReady() const;
 
+    float GetInterpolationSpeed() const;
+
     ITextureView* Get2DBlueNoiseSRV(BLUE_NOISE_DIMENSION Dimension) const;
 
     ITextureView* GetReprojectedDepth() const;
@@ -190,7 +193,7 @@ private:
         RESOURCE_IDENTIFIER_COUNT
     };
 
-    void PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_FLAGS FeatureFlags);
+    bool PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_FLAGS FeatureFlags);
 
     void ComputeBlueNoiseTexture(const RenderAttributes& RenderAttribs);
 
@@ -235,9 +238,10 @@ private:
 
     ResourceRegistry m_Resources{RESOURCE_IDENTIFIER_COUNT};
 
-    FrameDesc               m_FrameDesc         = {};
-    SupportedDeviceFeatures m_SupportedFeatures = {};
-    bool                    m_PSOsReady         = false;
+    FrameDesc               m_FrameDesc               = {};
+    SupportedDeviceFeatures m_SupportedFeatures       = {};
+    bool                    m_PSOsReady               = false;
+    float                   m_AlphaFallbackMultiplier = 1.0f;
 
     RefCntAutoPtr<IShader> m_pVSCopyTexture;
     RefCntAutoPtr<IShader> m_pPSCopyTexture;

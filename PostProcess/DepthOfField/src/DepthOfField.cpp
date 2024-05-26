@@ -298,35 +298,26 @@ void DepthOfField::Execute(const RenderAttributes& RenderAttribs)
 
     ScopedDebugGroup DebugGroupGlobal{RenderAttribs.pDeviceContext, "DepthOfField"};
 
-    if (RenderAttribs.pDOFAttribs->BokehKernelRingCount != m_pDOFAttribs->BokehKernelRingCount || RenderAttribs.pDOFAttribs->BokehKernelRingDensity != m_pDOFAttribs->BokehKernelRingDensity)
+    bool AllPSOsReady = PrepareShadersAndPSO(RenderAttribs, m_FeatureFlags) && RenderAttribs.pPostFXContext->IsPSOsReady();
+    UpdateConstantBuffers(RenderAttribs, !AllPSOsReady);
+    if (AllPSOsReady)
     {
-        auto KernelData = GenerateKernelPoints(RenderAttribs.pDOFAttribs->BokehKernelRingCount, RenderAttribs.pDOFAttribs->BokehKernelRingDensity);
-
-        TextureSubResData ResourceData;
-        ResourceData.pData  = KernelData.data();
-        ResourceData.Stride = sizeof(float2) * KernelData.size();
-
-        Box Region{0u, static_cast<Uint32>(KernelData.size()), 0u, 1};
-        RenderAttribs.pDeviceContext->UpdateTexture(m_Resources[RESOURCE_IDENTIFIER_BOKEH_LARGE_KERNEL_TEXTURE].AsTexture(), 0, 0, Region, ResourceData, RESOURCE_STATE_TRANSITION_MODE_TRANSITION, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        ComputeCircleOfConfusion(RenderAttribs);
+        ComputeTemporalCircleOfConfusion(RenderAttribs);
+        ComputeSeparatedCircleOfConfusion(RenderAttribs);
+        ComputeDilationCircleOfConfusion(RenderAttribs);
+        ComputeCircleOfConfusionBlurX(RenderAttribs);
+        ComputeCircleOfConfusionBlurY(RenderAttribs);
+        ComputePrefilteredTexture(RenderAttribs);
+        ComputeBokehFirstPass(RenderAttribs);
+        ComputeBokehSecondPass(RenderAttribs);
+        ComputePostFilteredTexture(RenderAttribs);
+        ComputeCombinedTexture(RenderAttribs);
     }
-
-    if (memcmp(RenderAttribs.pDOFAttribs, m_pDOFAttribs.get(), sizeof(HLSL::DepthOfFieldAttribs)) != 0)
+    else
     {
-        memcpy(m_pDOFAttribs.get(), RenderAttribs.pDOFAttribs, sizeof(HLSL::DepthOfFieldAttribs));
-        RenderAttribs.pDeviceContext->UpdateBuffer(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER].AsBuffer(), 0, sizeof(HLSL::DepthOfFieldAttribs), RenderAttribs.pDOFAttribs, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        ComputePlaceholderTexture(RenderAttribs);
     }
-
-    ComputeCircleOfConfusion(RenderAttribs);
-    ComputeTemporalCircleOfConfusion(RenderAttribs);
-    ComputeSeparatedCircleOfConfusion(RenderAttribs);
-    ComputeDilationCircleOfConfusion(RenderAttribs);
-    ComputeCircleOfConfusionBlurX(RenderAttribs);
-    ComputeCircleOfConfusionBlurY(RenderAttribs);
-    ComputePrefilteredTexture(RenderAttribs);
-    ComputeBokehFirstPass(RenderAttribs);
-    ComputeBokehSecondPass(RenderAttribs);
-    ComputePostFilteredTexture(RenderAttribs);
-    ComputeCombinedTexture(RenderAttribs);
 
     // Release references to input resources
     for (Uint32 ResourceIdx = 0; ResourceIdx <= RESOURCE_IDENTIFIER_INPUT_LAST; ++ResourceIdx)
@@ -384,32 +375,377 @@ ITextureView* DepthOfField::GetDepthOfFieldTextureSRV() const
     return m_Resources[RESOURCE_IDENTIFIER_COMBINED_TEXTURE].GetTextureSRV();
 }
 
+bool DepthOfField::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_FLAGS FeatureFlags)
+{
+    bool       AllPSOsReady    = true;
+    const bool IsAsyncCreation = FEATURE_FLAG_ASYNC_CREATION & FeatureFlags;
+    {
+        auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_CIRCLE_OF_CONFUSION, FeatureFlags);
+        if (!RenderTech.IsInitializedPSO())
+        {
+            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, IsAsyncCreation);
+            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "DOF_ComputeCircleOfConfusion.fx", "ComputeCircleOfConfusionPS", SHADER_TYPE_PIXEL, {}, IsAsyncCreation);
+
+            PipelineResourceLayoutDescX ResourceLayout;
+            ResourceLayout
+                .AddVariable(SHADER_TYPE_PIXEL, "cbCameraAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
+
+            RenderTech.InitializePSO(RenderAttribs.pDevice,
+                                     RenderAttribs.pStateCache, "DepthOfField::ComputeCircleOfConfusion",
+                                     VS, PS, ResourceLayout,
+                                     {
+                                         m_Resources[RESOURCE_IDENTIFIER_CIRCLE_OF_CONFUSION_TEXTURE].AsTexture()->GetDesc().Format,
+                                     },
+                                     TEX_FORMAT_UNKNOWN,
+                                     DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
+
+            ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
+            ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
+        }
+        AllPSOsReady &= RenderTech.IsReady();
+    }
+
+    {
+        auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_CIRCLE_OF_CONFUSION_TEMPORAL, FeatureFlags);
+        if (!RenderTech.IsInitializedPSO())
+        {
+            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, IsAsyncCreation);
+            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "DOF_ComputeTemporalCircleOfConfusion.fx", "ComputeTemporalCircleOfConfusionPS", SHADER_TYPE_PIXEL, {}, IsAsyncCreation);
+
+            PipelineResourceLayoutDescX ResourceLayout;
+            ResourceLayout
+                .AddVariable(SHADER_TYPE_PIXEL, "cbCameraAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TexturePrevCoC", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureCurrCoC", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureMotion", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TexturePrevCoC", Sam_LinearClamp)
+                .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureCurrCoC", Sam_PointClamp);
+
+
+            RenderTech.InitializePSO(RenderAttribs.pDevice,
+                                     RenderAttribs.pStateCache, "DepthOfField::ComputeTemporalCircleOfConfusion",
+                                     VS, PS, ResourceLayout,
+                                     {
+                                         m_Resources[RENDER_TECH_COMPUTE_CIRCLE_OF_CONFUSION_TEMPORAL].AsTexture()->GetDesc().Format,
+                                     },
+                                     TEX_FORMAT_UNKNOWN,
+                                     DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
+
+            ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
+            ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
+        }
+        AllPSOsReady &= RenderTech.IsReady();
+    }
+
+    {
+        auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_CIRCLE_OF_CONFUSION_SEPARATED, FeatureFlags);
+        if (!RenderTech.IsInitializedPSO())
+        {
+            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, IsAsyncCreation);
+            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "DOF_ComputeSeparatedCircleOfConfusion.fx", "ComputeSeparatedCoCPS", SHADER_TYPE_PIXEL, {}, IsAsyncCreation);
+
+            PipelineResourceLayoutDescX ResourceLayout;
+            ResourceLayout
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureCoC", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
+
+            RenderTech.InitializePSO(RenderAttribs.pDevice,
+                                     RenderAttribs.pStateCache, "DepthOfField::ComputeSeparatedCircleOfConfusion",
+                                     VS, PS, ResourceLayout,
+                                     {
+                                         m_Resources[RESOURCE_IDENTIFIER_CIRCLE_OF_CONFUSION_DILATION_TEXTURE_MIP0].AsTexture()->GetDesc().Format,
+                                     },
+                                     TEX_FORMAT_UNKNOWN,
+                                     DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
+        }
+        AllPSOsReady &= RenderTech.IsReady();
+    }
+
+    {
+        auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_CIRCLE_OF_CONFUSION_DILATION, FeatureFlags);
+        if (!RenderTech.IsInitializedPSO())
+        {
+            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, IsAsyncCreation);
+            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "DOF_ComputeDilationCircleOfConfusion.fx", "ComputeDilationCoCPS", SHADER_TYPE_PIXEL, {}, IsAsyncCreation);
+
+            PipelineResourceLayoutDescX ResourceLayout;
+            ResourceLayout.AddVariable(SHADER_TYPE_PIXEL, "g_TextureLastMip", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
+
+
+            RenderTech.InitializePSO(RenderAttribs.pDevice,
+                                     RenderAttribs.pStateCache, "DepthOfField::ComputeDilationCircleOfConfusion",
+                                     VS, PS, ResourceLayout,
+                                     {
+                                         m_Resources[RESOURCE_IDENTIFIER_CIRCLE_OF_CONFUSION_DILATION_TEXTURE_MIP0].AsTexture()->GetDesc().Format,
+                                     },
+                                     TEX_FORMAT_UNKNOWN,
+                                     DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
+        }
+        AllPSOsReady &= RenderTech.IsReady();
+    }
+
+    {
+        auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_CIRCLE_OF_CONFUSION_BLUR_X, FeatureFlags);
+        if (!RenderTech.IsInitializedPSO())
+        {
+            ShaderMacroHelper Macros;
+            Macros.Add("DOF_CIRCLE_OF_CONFUSION_BLUR_TYPE", DOF_CIRCLE_OF_CONFUSION_BLUR_X);
+
+            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, IsAsyncCreation);
+            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "DOF_ComputeBlurredCircleOfConfusion.fx", "ComputeBlurredCoCPS", SHADER_TYPE_PIXEL, Macros, IsAsyncCreation);
+
+            PipelineResourceLayoutDescX ResourceLayout;
+            ResourceLayout
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureCoC", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureGaussKernel", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
+
+            RenderTech.InitializePSO(RenderAttribs.pDevice,
+                                     RenderAttribs.pStateCache, "DepthOfField::ComputeCircleOfConfusionBlurX",
+                                     VS, PS, ResourceLayout,
+                                     {
+                                         m_Resources[RESOURCE_IDENTIFIER_CIRCLE_OF_CONFUSION_DILATION_TEXTURE_INTERMEDIATE].AsTexture()->GetDesc().Format,
+                                     },
+                                     TEX_FORMAT_UNKNOWN,
+                                     DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
+
+            ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "g_TextureGaussKernel"}.Set(m_Resources[RESOURCE_IDENTIFIER_GAUSS_KERNEL_TEXTURE].GetTextureSRV());
+        }
+        AllPSOsReady &= RenderTech.IsReady();
+    }
+
+    {
+        auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_CIRCLE_OF_CONFUSION_BLUR_Y, FeatureFlags);
+        if (!RenderTech.IsInitializedPSO())
+        {
+            ShaderMacroHelper Macros;
+            Macros.Add("DOF_CIRCLE_OF_CONFUSION_BLUR_TYPE", DOF_CIRCLE_OF_CONFUSION_BLUR_Y);
+
+            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, IsAsyncCreation);
+            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "DOF_ComputeBlurredCircleOfConfusion.fx", "ComputeBlurredCoCPS", SHADER_TYPE_PIXEL, Macros, IsAsyncCreation);
+
+            PipelineResourceLayoutDescX ResourceLayout;
+            ResourceLayout
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureCoC", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureGaussKernel", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
+
+            RenderTech.InitializePSO(RenderAttribs.pDevice,
+                                     RenderAttribs.pStateCache, "DepthOfField::ComputeCircleOfConfusionBlurY",
+                                     VS, PS, ResourceLayout,
+                                     {
+                                         m_Resources[RESOURCE_IDENTIFIER_CIRCLE_OF_CONFUSION_DILATION_TEXTURE_LAST_MIP].AsTexture()->GetDesc().Format,
+                                     },
+                                     TEX_FORMAT_UNKNOWN,
+                                     DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
+
+            ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "g_TextureGaussKernel"}.Set(m_Resources[RESOURCE_IDENTIFIER_GAUSS_KERNEL_TEXTURE].GetTextureSRV());
+        }
+        AllPSOsReady &= RenderTech.IsReady();
+    }
+
+    {
+        auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_PREFILTERED_TEXTURE, FeatureFlags);
+        if (!RenderTech.IsInitializedPSO())
+        {
+            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, IsAsyncCreation);
+            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "DOF_ComputePrefilteredTexture.fx", "ComputePrefilteredTexturePS", SHADER_TYPE_PIXEL, {}, IsAsyncCreation);
+
+            PipelineResourceLayoutDescX ResourceLayout;
+            ResourceLayout
+                .AddVariable(SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureColor", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureCoC", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDilationCoC", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureDilationCoC", Sam_LinearClamp);
+
+            RenderTech.InitializePSO(RenderAttribs.pDevice,
+                                     RenderAttribs.pStateCache, "DepthOfField::ComputePrefilteredTexture",
+                                     VS, PS, ResourceLayout,
+                                     {
+                                         m_Resources[RESOURCE_IDENTIFIER_PREFILTERED_TEXTURE0].AsTexture()->GetDesc().Format,
+                                         m_Resources[RESOURCE_IDENTIFIER_PREFILTERED_TEXTURE1].AsTexture()->GetDesc().Format,
+                                     },
+                                     TEX_FORMAT_UNKNOWN,
+                                     DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
+
+            ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
+        }
+        AllPSOsReady &= RenderTech.IsReady();
+    }
+
+    {
+        auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_BOKEH_FIRST_PASS, FeatureFlags);
+        if (!RenderTech.IsInitializedPSO())
+        {
+            ShaderMacroHelper Macros;
+            Macros.Add("DOF_OPTION_KARIS_INVERSE", (m_FeatureFlags & FEATURE_FLAG_ENABLE_KARIS_INVERSE) != 0);
+
+            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, IsAsyncCreation);
+            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "DOF_ComputeBokehFirstPass.fx", "ComputeBokehPS", SHADER_TYPE_PIXEL, Macros, IsAsyncCreation);
+
+            PipelineResourceLayoutDescX ResourceLayout;
+            ResourceLayout
+                .AddVariable(SHADER_TYPE_PIXEL, "cbCameraAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureBokehKernel", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureColorCoCNear", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureColorCoCFar", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureColorCoCNear", Sam_LinearClamp)
+                .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureColorCoCFar", Sam_LinearClamp);
+
+            if (m_FeatureFlags & FEATURE_FLAG_ENABLE_KARIS_INVERSE)
+            {
+                ResourceLayout
+                    .AddVariable(SHADER_TYPE_PIXEL, "g_TextureRadiance", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                    .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureRadiance", Sam_LinearClamp);
+            }
+
+            RenderTech.InitializePSO(RenderAttribs.pDevice,
+                                     RenderAttribs.pStateCache, "DepthOfField::ComputeBokehFirstPass",
+                                     VS, PS, ResourceLayout,
+                                     {
+                                         m_Resources[RESOURCE_IDENTIFIER_BOKEH_TEXTURE0].AsTexture()->GetDesc().Format,
+                                         m_Resources[RESOURCE_IDENTIFIER_BOKEH_TEXTURE1].AsTexture()->GetDesc().Format,
+                                     },
+                                     TEX_FORMAT_UNKNOWN,
+                                     DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
+
+            ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
+            ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
+            ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "g_TextureBokehKernel"}.Set(m_Resources[RESOURCE_IDENTIFIER_BOKEH_LARGE_KERNEL_TEXTURE].GetTextureSRV());
+        }
+        AllPSOsReady &= RenderTech.IsReady();
+    }
+
+    {
+        auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_BOKEH_SECOND_PASS, FeatureFlags);
+        if (!RenderTech.IsInitializedPSO())
+        {
+            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, IsAsyncCreation);
+            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "DOF_ComputeBokehSecondPass.fx", "ComputeBokehPS", SHADER_TYPE_PIXEL, {}, IsAsyncCreation);
+
+            PipelineResourceLayoutDescX ResourceLayout;
+            ResourceLayout
+                .AddVariable(SHADER_TYPE_PIXEL, "cbCameraAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureBokehKernel", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureColorCoCNear", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureColorCoCFar", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureColorCoCNear", Sam_LinearClamp)
+                .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureColorCoCFar", Sam_LinearClamp);
+
+            RenderTech.InitializePSO(RenderAttribs.pDevice,
+                                     RenderAttribs.pStateCache, "DepthOfField::ComputeBokehSecondPass",
+                                     VS, PS, ResourceLayout,
+                                     {
+                                         m_Resources[RESOURCE_IDENTIFIER_PREFILTERED_TEXTURE0].AsTexture()->GetDesc().Format,
+                                         m_Resources[RESOURCE_IDENTIFIER_PREFILTERED_TEXTURE1].AsTexture()->GetDesc().Format,
+                                     },
+                                     TEX_FORMAT_UNKNOWN,
+                                     DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
+
+            ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
+            ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
+            ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "g_TextureBokehKernel"}.Set(m_Resources[RESOURCE_IDENTIFIER_BOKEH_SMALL_KERNEL_TEXTURE].GetTextureSRV());
+        }
+        AllPSOsReady &= RenderTech.IsReady();
+    }
+
+    {
+        auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_POST_FILTERED_TEXTURE, FeatureFlags);
+        if (!RenderTech.IsInitializedPSO())
+        {
+            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, IsAsyncCreation);
+            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "DOF_ComputePostfilteredTexture.fx", "ComputePostfilteredTexturePS", SHADER_TYPE_PIXEL, {}, IsAsyncCreation);
+
+            PipelineResourceLayoutDescX ResourceLayout;
+            ResourceLayout
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureColorCoCNear", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureColorCoCFar", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureColorCoCNear", Sam_LinearClamp)
+                .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureColorCoCFar", Sam_LinearClamp);
+
+            RenderTech.InitializePSO(RenderAttribs.pDevice,
+                                     RenderAttribs.pStateCache, "DepthOfField::ComputePostFilteredTexture",
+                                     VS, PS, ResourceLayout,
+                                     {
+                                         m_Resources[RESOURCE_IDENTIFIER_BOKEH_TEXTURE0].AsTexture()->GetDesc().Format,
+                                         m_Resources[RESOURCE_IDENTIFIER_BOKEH_TEXTURE0].AsTexture()->GetDesc().Format,
+                                     },
+                                     TEX_FORMAT_UNKNOWN,
+                                     DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
+        }
+        AllPSOsReady &= RenderTech.IsReady();
+    }
+
+    {
+        auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_COMBINED_TEXTURE, FeatureFlags);
+        if (!RenderTech.IsInitializedPSO())
+        {
+            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, IsAsyncCreation);
+            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "DOF_ComputeCombinedTexture.fx", "ComputeCombinedTexturePS", SHADER_TYPE_PIXEL, {}, IsAsyncCreation);
+
+            PipelineResourceLayoutDescX ResourceLayout;
+            ResourceLayout
+                .AddVariable(SHADER_TYPE_PIXEL, "cbCameraAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureColor", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureCoC", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDoFNearPlane", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDoFFarPlane", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureDoFNearPlane", Sam_LinearClamp)
+                .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureDoFFarPlane", Sam_LinearClamp);
+
+            RenderTech.InitializePSO(RenderAttribs.pDevice,
+                                     RenderAttribs.pStateCache, "DepthOfField::ComputeCombinedTexture",
+                                     VS, PS, ResourceLayout,
+                                     {
+                                         m_Resources[RESOURCE_IDENTIFIER_COMBINED_TEXTURE].AsTexture()->GetDesc().Format,
+                                     },
+                                     TEX_FORMAT_UNKNOWN,
+                                     DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
+
+            ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
+            ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
+        }
+        AllPSOsReady &= RenderTech.IsReady();
+    }
+
+    return AllPSOsReady;
+}
+
+void DepthOfField::UpdateConstantBuffers(const RenderAttributes& RenderAttribs, bool ResetTimer)
+{
+    if (ResetTimer)
+        m_FrameTimer.Restart();
+
+    float Alpha = std::min(std::max(m_FrameTimer.GetElapsedTimef() * RenderAttribs.pPostFXContext->GetInterpolationSpeed(), 0.0f), 1.0f);
+
+    if (RenderAttribs.pDOFAttribs->BokehKernelRingCount != m_pDOFAttribs->BokehKernelRingCount || RenderAttribs.pDOFAttribs->BokehKernelRingDensity != m_pDOFAttribs->BokehKernelRingDensity)
+    {
+        auto KernelData = GenerateKernelPoints(RenderAttribs.pDOFAttribs->BokehKernelRingCount, RenderAttribs.pDOFAttribs->BokehKernelRingDensity);
+
+        TextureSubResData ResourceData;
+        ResourceData.pData  = KernelData.data();
+        ResourceData.Stride = sizeof(float2) * KernelData.size();
+
+        Box Region{0u, static_cast<Uint32>(KernelData.size()), 0u, 1};
+        RenderAttribs.pDeviceContext->UpdateTexture(m_Resources[RESOURCE_IDENTIFIER_BOKEH_LARGE_KERNEL_TEXTURE].AsTexture(), 0, 0, Region, ResourceData, RESOURCE_STATE_TRANSITION_MODE_TRANSITION, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    }
+
+    bool UpdateRequired = m_pDOFAttribs->AlphaInterpolation != Alpha || memcmp(RenderAttribs.pDOFAttribs, m_pDOFAttribs.get(), sizeof(HLSL::DepthOfFieldAttribs)) != 0;
+    if (UpdateRequired)
+    {
+        memcpy(m_pDOFAttribs.get(), RenderAttribs.pDOFAttribs, sizeof(HLSL::DepthOfFieldAttribs));
+        m_pDOFAttribs->AlphaInterpolation = Alpha;
+        RenderAttribs.pDeviceContext->UpdateBuffer(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER].AsBuffer(), 0, sizeof(HLSL::DepthOfFieldAttribs), m_pDOFAttribs.get(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    }
+}
+
 void DepthOfField::ComputeCircleOfConfusion(const RenderAttributes& RenderAttribs)
 {
     auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_CIRCLE_OF_CONFUSION, m_FeatureFlags);
-    if (!RenderTech.IsInitializedPSO())
-    {
-        const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "DOF_ComputeCircleOfConfusion.fx", "ComputeCircleOfConfusionPS", SHADER_TYPE_PIXEL);
-
-        PipelineResourceLayoutDescX ResourceLayout;
-        ResourceLayout
-            .AddVariable(SHADER_TYPE_PIXEL, "cbCameraAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
-
-        RenderTech.InitializePSO(RenderAttribs.pDevice,
-                                 RenderAttribs.pStateCache, "DepthOfField::ComputeCircleOfConfusion",
-                                 VS, PS, ResourceLayout,
-                                 {
-                                     m_Resources[RESOURCE_IDENTIFIER_CIRCLE_OF_CONFUSION_TEXTURE].AsTexture()->GetDesc().Format,
-                                 },
-                                 TEX_FORMAT_UNKNOWN,
-                                 DSS_DisableDepth, BS_Default, false);
-
-        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
-        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
-    }
 
     if (!RenderTech.IsInitializedSRB())
         RenderTech.InitializeSRB(true);
@@ -434,34 +770,6 @@ void DepthOfField::ComputeTemporalCircleOfConfusion(const RenderAttributes& Rend
         return;
 
     auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_CIRCLE_OF_CONFUSION_TEMPORAL, m_FeatureFlags);
-    if (!RenderTech.IsInitializedPSO())
-    {
-        const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "DOF_ComputeTemporalCircleOfConfusion.fx", "ComputeTemporalCircleOfConfusionPS", SHADER_TYPE_PIXEL);
-
-        PipelineResourceLayoutDescX ResourceLayout;
-        ResourceLayout
-            .AddVariable(SHADER_TYPE_PIXEL, "cbCameraAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TexturePrevCoC", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureCurrCoC", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureMotion", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TexturePrevCoC", Sam_LinearClamp)
-            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureCurrCoC", Sam_PointClamp);
-
-
-        RenderTech.InitializePSO(RenderAttribs.pDevice,
-                                 RenderAttribs.pStateCache, "DepthOfField::ComputeTemporalCircleOfConfusion",
-                                 VS, PS, ResourceLayout,
-                                 {
-                                     m_Resources[RESOURCE_IDENTIFIER_CIRCLE_OF_CONFUSION_TEMPORAL_TEXTURE0].AsTexture()->GetDesc().Format,
-                                 },
-                                 TEX_FORMAT_UNKNOWN,
-                                 DSS_DisableDepth, BS_Default, false);
-
-        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
-        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
-    }
 
     if (!RenderTech.IsInitializedSRB())
         RenderTech.InitializeSRB(true);
@@ -489,25 +797,6 @@ void DepthOfField::ComputeTemporalCircleOfConfusion(const RenderAttributes& Rend
 void DepthOfField::ComputeSeparatedCircleOfConfusion(const RenderAttributes& RenderAttribs)
 {
     auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_CIRCLE_OF_CONFUSION_SEPARATED, m_FeatureFlags);
-    if (!RenderTech.IsInitializedPSO())
-    {
-        const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "DOF_ComputeSeparatedCircleOfConfusion.fx", "ComputeSeparatedCoCPS", SHADER_TYPE_PIXEL);
-
-        PipelineResourceLayoutDescX ResourceLayout;
-        ResourceLayout
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureCoC", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
-
-        RenderTech.InitializePSO(RenderAttribs.pDevice,
-                                 RenderAttribs.pStateCache, "DepthOfField::ComputeSeparatedCircleOfConfusion",
-                                 VS, PS, ResourceLayout,
-                                 {
-                                     m_Resources[RESOURCE_IDENTIFIER_CIRCLE_OF_CONFUSION_DILATION_TEXTURE_MIP0].AsTexture()->GetDesc().Format,
-                                 },
-                                 TEX_FORMAT_UNKNOWN,
-                                 DSS_DisableDepth, BS_Default, false);
-    }
-
     if (!RenderTech.IsInitializedSRB())
         RenderTech.InitializeSRB(true);
 
@@ -533,25 +822,6 @@ void DepthOfField::ComputeSeparatedCircleOfConfusion(const RenderAttributes& Ren
 void DepthOfField::ComputeDilationCircleOfConfusion(const RenderAttributes& RenderAttribs)
 {
     auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_CIRCLE_OF_CONFUSION_DILATION, m_FeatureFlags);
-    if (!RenderTech.IsInitializedPSO())
-    {
-        const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "DOF_ComputeDilationCircleOfConfusion.fx", "ComputeDilationCoCPS", SHADER_TYPE_PIXEL);
-
-        PipelineResourceLayoutDescX ResourceLayout;
-        ResourceLayout.AddVariable(SHADER_TYPE_PIXEL, "g_TextureLastMip", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
-
-
-        RenderTech.InitializePSO(RenderAttribs.pDevice,
-                                 RenderAttribs.pStateCache, "DepthOfField::ComputeDilationCircleOfConfusion",
-                                 VS, PS, ResourceLayout,
-                                 {
-                                     m_Resources[RESOURCE_IDENTIFIER_CIRCLE_OF_CONFUSION_DILATION_TEXTURE_MIP0].AsTexture()->GetDesc().Format,
-                                 },
-                                 TEX_FORMAT_UNKNOWN,
-                                 DSS_DisableDepth, BS_Default, false);
-    }
-
     if (!RenderTech.IsInitializedSRB())
         RenderTech.InitializeSRB(false);
 
@@ -574,30 +844,6 @@ void DepthOfField::ComputeDilationCircleOfConfusion(const RenderAttributes& Rend
 void DepthOfField::ComputeCircleOfConfusionBlurX(const RenderAttributes& RenderAttribs)
 {
     auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_CIRCLE_OF_CONFUSION_BLUR_X, m_FeatureFlags);
-    if (!RenderTech.IsInitializedPSO())
-    {
-        ShaderMacroHelper Macros;
-        Macros.Add("DOF_CIRCLE_OF_CONFUSION_BLUR_TYPE", DOF_CIRCLE_OF_CONFUSION_BLUR_X);
-
-        const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "DOF_ComputeBlurredCircleOfConfusion.fx", "ComputeBlurredCoCPS", SHADER_TYPE_PIXEL, Macros);
-
-        PipelineResourceLayoutDescX ResourceLayout;
-        ResourceLayout
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureCoC", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureGaussKernel", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
-
-        RenderTech.InitializePSO(RenderAttribs.pDevice,
-                                 RenderAttribs.pStateCache, "DepthOfField::ComputeCircleOfConfusionBlurX",
-                                 VS, PS, ResourceLayout,
-                                 {
-                                     m_Resources[RESOURCE_IDENTIFIER_CIRCLE_OF_CONFUSION_DILATION_TEXTURE_INTERMEDIATE].AsTexture()->GetDesc().Format,
-                                 },
-                                 TEX_FORMAT_UNKNOWN,
-                                 DSS_DisableDepth, BS_Default, false);
-
-        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "g_TextureGaussKernel"}.Set(m_Resources[RESOURCE_IDENTIFIER_GAUSS_KERNEL_TEXTURE].GetTextureSRV());
-    }
 
     if (!RenderTech.IsInitializedSRB())
         RenderTech.InitializeSRB(true);
@@ -619,31 +865,6 @@ void DepthOfField::ComputeCircleOfConfusionBlurX(const RenderAttributes& RenderA
 void DepthOfField::ComputeCircleOfConfusionBlurY(const RenderAttributes& RenderAttribs)
 {
     auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_CIRCLE_OF_CONFUSION_BLUR_Y, m_FeatureFlags);
-    if (!RenderTech.IsInitializedPSO())
-    {
-        ShaderMacroHelper Macros;
-        Macros.Add("DOF_CIRCLE_OF_CONFUSION_BLUR_TYPE", DOF_CIRCLE_OF_CONFUSION_BLUR_Y);
-
-        const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "DOF_ComputeBlurredCircleOfConfusion.fx", "ComputeBlurredCoCPS", SHADER_TYPE_PIXEL, Macros);
-
-        PipelineResourceLayoutDescX ResourceLayout;
-        ResourceLayout
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureCoC", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureGaussKernel", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
-
-        RenderTech.InitializePSO(RenderAttribs.pDevice,
-                                 RenderAttribs.pStateCache, "DepthOfField::ComputeCircleOfConfusionBlurY",
-                                 VS, PS, ResourceLayout,
-                                 {
-                                     m_Resources[RESOURCE_IDENTIFIER_CIRCLE_OF_CONFUSION_DILATION_TEXTURE_LAST_MIP].AsTexture()->GetDesc().Format,
-                                 },
-                                 TEX_FORMAT_UNKNOWN,
-                                 DSS_DisableDepth, BS_Default, false);
-
-        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "g_TextureGaussKernel"}.Set(m_Resources[RESOURCE_IDENTIFIER_GAUSS_KERNEL_TEXTURE].GetTextureSRV());
-    }
-
     if (!RenderTech.IsInitializedSRB())
         RenderTech.InitializeSRB(true);
 
@@ -664,31 +885,6 @@ void DepthOfField::ComputeCircleOfConfusionBlurY(const RenderAttributes& RenderA
 void DepthOfField::ComputePrefilteredTexture(const RenderAttributes& RenderAttribs)
 {
     auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_PREFILTERED_TEXTURE, m_FeatureFlags);
-    if (!RenderTech.IsInitializedPSO())
-    {
-        const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "DOF_ComputePrefilteredTexture.fx", "ComputePrefilteredTexturePS", SHADER_TYPE_PIXEL);
-
-        PipelineResourceLayoutDescX ResourceLayout;
-        ResourceLayout
-            .AddVariable(SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureColor", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureCoC", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDilationCoC", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureDilationCoC", Sam_LinearClamp);
-
-        RenderTech.InitializePSO(RenderAttribs.pDevice,
-                                 RenderAttribs.pStateCache, "DepthOfField::ComputePrefilteredTexture",
-                                 VS, PS, ResourceLayout,
-                                 {
-                                     m_Resources[RESOURCE_IDENTIFIER_PREFILTERED_TEXTURE0].AsTexture()->GetDesc().Format,
-                                     m_Resources[RESOURCE_IDENTIFIER_PREFILTERED_TEXTURE1].AsTexture()->GetDesc().Format,
-                                 },
-                                 TEX_FORMAT_UNKNOWN,
-                                 DSS_DisableDepth, BS_Default, false);
-
-        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
-    }
 
     if (!RenderTech.IsInitializedSRB())
         RenderTech.InitializeSRB(true);
@@ -710,7 +906,6 @@ void DepthOfField::ComputePrefilteredTexture(const RenderAttributes& RenderAttri
     else
         ShaderResourceVariableX{RenderTech.SRB, SHADER_TYPE_PIXEL, "g_TextureCoC"}.Set(m_Resources[RESOURCE_IDENTIFIER_CIRCLE_OF_CONFUSION_TEXTURE].GetTextureSRV());
 
-
     RenderAttribs.pDeviceContext->SetRenderTargets(_countof(pRTVs), pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     RenderAttribs.pDeviceContext->SetPipelineState(RenderTech.PSO);
     RenderAttribs.pDeviceContext->CommitShaderResources(RenderTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
@@ -721,46 +916,6 @@ void DepthOfField::ComputePrefilteredTexture(const RenderAttributes& RenderAttri
 void DepthOfField::ComputeBokehFirstPass(const RenderAttributes& RenderAttribs)
 {
     auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_BOKEH_FIRST_PASS, m_FeatureFlags);
-    if (!RenderTech.IsInitializedPSO())
-    {
-        ShaderMacroHelper Macros;
-        Macros.Add("DOF_OPTION_KARIS_INVERSE", (m_FeatureFlags & FEATURE_FLAG_ENABLE_KARIS_INVERSE) != 0);
-
-        const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "DOF_ComputeBokehFirstPass.fx", "ComputeBokehPS", SHADER_TYPE_PIXEL, Macros);
-
-        PipelineResourceLayoutDescX ResourceLayout;
-        ResourceLayout
-            .AddVariable(SHADER_TYPE_PIXEL, "cbCameraAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureBokehKernel", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureColorCoCNear", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureColorCoCFar", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureColorCoCNear", Sam_LinearClamp)
-            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureColorCoCFar", Sam_LinearClamp);
-
-        if (m_FeatureFlags & FEATURE_FLAG_ENABLE_KARIS_INVERSE)
-        {
-            ResourceLayout
-                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureRadiance", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-                .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureRadiance", Sam_LinearClamp);
-        }
-
-        RenderTech.InitializePSO(RenderAttribs.pDevice,
-                                 RenderAttribs.pStateCache, "DepthOfField::ComputeBokehFirstPass",
-                                 VS, PS, ResourceLayout,
-                                 {
-                                     m_Resources[RESOURCE_IDENTIFIER_BOKEH_TEXTURE0].AsTexture()->GetDesc().Format,
-                                     m_Resources[RESOURCE_IDENTIFIER_BOKEH_TEXTURE1].AsTexture()->GetDesc().Format,
-                                 },
-                                 TEX_FORMAT_UNKNOWN,
-                                 DSS_DisableDepth, BS_Default, false);
-
-        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
-        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
-        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "g_TextureBokehKernel"}.Set(m_Resources[RESOURCE_IDENTIFIER_BOKEH_LARGE_KERNEL_TEXTURE].GetTextureSRV());
-    }
-
     if (!RenderTech.IsInitializedSRB())
         RenderTech.InitializeSRB(true);
 
@@ -784,36 +939,6 @@ void DepthOfField::ComputeBokehFirstPass(const RenderAttributes& RenderAttribs)
 void DepthOfField::ComputeBokehSecondPass(const RenderAttributes& RenderAttribs)
 {
     auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_BOKEH_SECOND_PASS, m_FeatureFlags);
-    if (!RenderTech.IsInitializedPSO())
-    {
-        const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "DOF_ComputeBokehSecondPass.fx", "ComputeBokehPS", SHADER_TYPE_PIXEL);
-
-        PipelineResourceLayoutDescX ResourceLayout;
-        ResourceLayout
-            .AddVariable(SHADER_TYPE_PIXEL, "cbCameraAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureBokehKernel", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureColorCoCNear", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureColorCoCFar", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureColorCoCNear", Sam_LinearClamp)
-            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureColorCoCFar", Sam_LinearClamp);
-
-        RenderTech.InitializePSO(RenderAttribs.pDevice,
-                                 RenderAttribs.pStateCache, "DepthOfField::ComputeBokehSecondPass",
-                                 VS, PS, ResourceLayout,
-                                 {
-                                     m_Resources[RESOURCE_IDENTIFIER_PREFILTERED_TEXTURE0].AsTexture()->GetDesc().Format,
-                                     m_Resources[RESOURCE_IDENTIFIER_PREFILTERED_TEXTURE1].AsTexture()->GetDesc().Format,
-                                 },
-                                 TEX_FORMAT_UNKNOWN,
-                                 DSS_DisableDepth, BS_Default, false);
-
-        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
-        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
-        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "g_TextureBokehKernel"}.Set(m_Resources[RESOURCE_IDENTIFIER_BOKEH_SMALL_KERNEL_TEXTURE].GetTextureSRV());
-    }
-
     if (!RenderTech.IsInitializedSRB())
         RenderTech.InitializeSRB(true);
 
@@ -836,29 +961,6 @@ void DepthOfField::ComputeBokehSecondPass(const RenderAttributes& RenderAttribs)
 void DepthOfField::ComputePostFilteredTexture(const RenderAttributes& RenderAttribs)
 {
     auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_POST_FILTERED_TEXTURE, m_FeatureFlags);
-    if (!RenderTech.IsInitializedPSO())
-    {
-        const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "DOF_ComputePostfilteredTexture.fx", "ComputePostfilteredTexturePS", SHADER_TYPE_PIXEL);
-
-        PipelineResourceLayoutDescX ResourceLayout;
-        ResourceLayout
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureColorCoCNear", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureColorCoCFar", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureColorCoCNear", Sam_LinearClamp)
-            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureColorCoCFar", Sam_LinearClamp);
-
-        RenderTech.InitializePSO(RenderAttribs.pDevice,
-                                 RenderAttribs.pStateCache, "DepthOfField::ComputePostFilteredTexture",
-                                 VS, PS, ResourceLayout,
-                                 {
-                                     m_Resources[RESOURCE_IDENTIFIER_BOKEH_TEXTURE0].AsTexture()->GetDesc().Format,
-                                     m_Resources[RESOURCE_IDENTIFIER_BOKEH_TEXTURE0].AsTexture()->GetDesc().Format,
-                                 },
-                                 TEX_FORMAT_UNKNOWN,
-                                 DSS_DisableDepth, BS_Default, false);
-    }
-
     if (!RenderTech.IsInitializedSRB())
         RenderTech.InitializeSRB(false);
 
@@ -881,35 +983,6 @@ void DepthOfField::ComputePostFilteredTexture(const RenderAttributes& RenderAttr
 void DepthOfField::ComputeCombinedTexture(const RenderAttributes& RenderAttribs)
 {
     auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_COMBINED_TEXTURE, m_FeatureFlags);
-    if (!RenderTech.IsInitializedPSO())
-    {
-        const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "DOF_ComputeCombinedTexture.fx", "ComputeCombinedTexturePS", SHADER_TYPE_PIXEL);
-
-        PipelineResourceLayoutDescX ResourceLayout;
-        ResourceLayout
-            .AddVariable(SHADER_TYPE_PIXEL, "cbCameraAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureColor", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureCoC", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDoFNearPlane", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDoFFarPlane", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureDoFNearPlane", Sam_LinearClamp)
-            .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureDoFFarPlane", Sam_LinearClamp);
-
-        RenderTech.InitializePSO(RenderAttribs.pDevice,
-                                 RenderAttribs.pStateCache, "DepthOfField::ComputeCombinedTexture",
-                                 VS, PS, ResourceLayout,
-                                 {
-                                     m_Resources[RESOURCE_IDENTIFIER_COMBINED_TEXTURE].AsTexture()->GetDesc().Format,
-                                 },
-                                 TEX_FORMAT_UNKNOWN,
-                                 DSS_DisableDepth, BS_Default, false);
-
-        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
-        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
-    }
-
     if (!RenderTech.IsInitializedSRB())
         RenderTech.InitializeSRB(true);
 
@@ -935,6 +1008,15 @@ void DepthOfField::ComputeCombinedTexture(const RenderAttributes& RenderAttribs)
     RenderAttribs.pDeviceContext->CommitShaderResources(RenderTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     RenderAttribs.pDeviceContext->Draw({3, DRAW_FLAG_VERIFY_ALL, 1});
     RenderAttribs.pDeviceContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
+}
+
+void DepthOfField::ComputePlaceholderTexture(const RenderAttributes& RenderAttribs)
+{
+    PostFXContext::TextureOperationAttribs CopyTextureAttribs;
+    CopyTextureAttribs.pDevice        = RenderAttribs.pDevice;
+    CopyTextureAttribs.pDeviceContext = RenderAttribs.pDeviceContext;
+    CopyTextureAttribs.pStateCache    = RenderAttribs.pStateCache;
+    RenderAttribs.pPostFXContext->CopyTextureColor(CopyTextureAttribs, m_Resources[RESOURCE_IDENTIFIER_INPUT_COLOR].GetTextureSRV(), m_Resources[RESOURCE_IDENTIFIER_COMBINED_TEXTURE].GetTextureRTV());
 }
 
 DepthOfField::RenderTechnique& DepthOfField::GetRenderTechnique(RENDER_TECH RenderTech, FEATURE_FLAGS FeatureFlags)

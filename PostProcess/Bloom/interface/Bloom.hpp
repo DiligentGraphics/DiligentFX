@@ -52,7 +52,8 @@ class Bloom
 public:
     enum FEATURE_FLAGS : Uint32
     {
-        FEATURE_FLAG_NONE = 0
+        FEATURE_FLAG_NONE           = 0u,
+        FEATURE_FLAG_ASYNC_CREATION = 1u << 0u
     };
 
     struct RenderAttributes
@@ -111,7 +112,9 @@ private:
         RESOURCE_IDENTIFIER_COUNT
     };
 
-    void PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_FLAGS FeatureFlags);
+    bool PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_FLAGS FeatureFlags);
+
+    void UpdateConstantBuffer(const RenderAttributes& RenderAttribs, bool ResetTimer);
 
     void ComputePrefilteredTexture(const RenderAttributes& RenderAttribs);
 

@@ -51,12 +51,13 @@ class ScreenSpaceAmbientOcclusion
 public:
     enum FEATURE_FLAGS : Uint32
     {
-        FEATURE_FLAG_NONE                 = 0,
-        FEATURE_FLAG_REVERSED_DEPTH       = 1 << 0, // Not implemented
-        FEATURE_FLAG_PACKED_NORMAL        = 1 << 1, // Nor implemented
-        FEATURE_FLAG_HALF_PRECISION_DEPTH = 1 << 2,
-        FEATURE_FLAG_HALF_RESOLUTION      = 1 << 3,
-        FEATURE_FLAG_UNIFORM_WEIGHTING    = 1 << 4
+        FEATURE_FLAG_NONE                 = 0u,
+        FEATURE_FLAG_REVERSED_DEPTH       = 1u << 0u, // Not implemented
+        FEATURE_FLAG_PACKED_NORMAL        = 1u << 1u, // Nor implemented
+        FEATURE_FLAG_HALF_PRECISION_DEPTH = 1u << 2u,
+        FEATURE_FLAG_HALF_RESOLUTION      = 1u << 3u,
+        FEATURE_FLAG_UNIFORM_WEIGHTING    = 1u << 4u,
+        FEATURE_FLAG_ASYNC_CREATION       = 1u << 5u
     };
 
     struct RenderAttributes
@@ -137,7 +138,9 @@ private:
         RESOURCE_IDENTIFIER_COUNT
     };
 
-    void PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_FLAGS FeatureFlags);
+    bool PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_FLAGS FeatureFlags);
+
+    void UpdateConstantBuffer(const RenderAttributes& RenderAttribs, bool ResetTimer);
 
     void ComputeDepthCheckerboard(const RenderAttributes& RenderAttribs);
 

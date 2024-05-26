@@ -42,7 +42,7 @@ struct TemporalAntiAliasingAttribs
 
     BOOL  SkipRejection              DEFAULT_VALUE(FALSE);
 
-    float Padding1                   DEFAULT_VALUE(0.0);
+    float Padding0                   DEFAULT_VALUE(0.0);
 };
 
 #endif //_TEMPORAL_ANTI_ALIASING_STRUCTURES_FXH_
