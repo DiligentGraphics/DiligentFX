@@ -58,9 +58,11 @@ public:
 
     struct FrameDesc
     {
-        Uint32 Index  = 0;
-        Uint32 Width  = 0;
-        Uint32 Height = 0;
+        Uint32 Index        = 0;
+        Uint32 Width        = 0;
+        Uint32 Height       = 0;
+        Uint32 OutputWidth  = 0;
+        Uint32 OutputHeight = 0;
     };
 
     struct RenderAttributes
@@ -248,5 +250,7 @@ private:
 
     FEATURE_FLAGS m_FeatureFlags = FEATURE_FLAG_NONE;
 };
+
+DEFINE_FLAG_ENUM_OPERATORS(PostFXContext::FEATURE_FLAGS)
 
 } // namespace Diligent

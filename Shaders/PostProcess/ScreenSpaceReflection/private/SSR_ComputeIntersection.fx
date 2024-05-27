@@ -133,7 +133,10 @@ bool AdvanceRay(float3 Origin, float3 Direction, float3 InvDirection, float2 Cur
 // Requires origin and direction of the ray to be in screen space [0, 1] x [0, 1]
 float3 HierarchicalRaymarch(float3 Origin, float3 Direction, float2 ScreenSize, int MostDetailedMip, uint MaxTraversalIntersections, out bool ValidHit)
 {
-    float3 InvDirection = Direction != float3(0.0f, 0.0f, 0.0f) ? rcp(Direction) : float3(FLT_MAX, FLT_MAX, FLT_MAX);
+    float3 InvDirection = float3(
+                    Direction.x != 0.0 ? rcp(Direction.x) : FLT_MAX,
+                    Direction.y != 0.0 ? rcp(Direction.y) : FLT_MAX,
+                    Direction.z != 0.0 ? rcp(Direction.z) : FLT_MAX);
 
     // Start on mip with highest detail.
     int CurrentMip = MostDetailedMip;

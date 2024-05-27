@@ -364,7 +364,7 @@ void PostFXContext::ClearRenderTarget(const TextureOperationAttribs& Attribs, IT
 
 void PostFXContext::CopyTextureDepth(const TextureOperationAttribs& Attribs, ITextureView* pSRV, ITextureView* pRTV)
 {
-    auto& RenderTech = GetRenderTechnique(RENDER_TECH_COPY_DEPTH, FEATURE_FLAG_NONE, pRTV->GetTexture()->GetDesc().Format);
+    auto& RenderTech = GetRenderTechnique(RENDER_TECH_COPY_DEPTH, FEATURE_FLAG_NONE, pRTV->GetDesc().Format);
     if (!RenderTech.IsInitializedPSO())
     {
         PipelineResourceLayoutDescX ResourceLayout;
@@ -375,7 +375,7 @@ void PostFXContext::CopyTextureDepth(const TextureOperationAttribs& Attribs, ITe
                                  nullptr, "PostFXContext::CopyTextureDepth",
                                  m_pVSCopyTexture, m_pPSCopyTexture, ResourceLayout,
                                  {
-                                     pRTV->GetTexture()->GetDesc().Format,
+                                     pRTV->GetDesc().Format,
                                  },
                                  TEX_FORMAT_UNKNOWN,
                                  DSS_DisableDepth, BS_Default, false, false);
@@ -395,7 +395,7 @@ void PostFXContext::CopyTextureDepth(const TextureOperationAttribs& Attribs, ITe
 
 void PostFXContext::CopyTextureColor(const TextureOperationAttribs& Attribs, ITextureView* pSRV, ITextureView* pRTV)
 {
-    auto& RenderTech = GetRenderTechnique(RENDER_TECH_COPY_COLOR, FEATURE_FLAG_NONE, pRTV->GetTexture()->GetDesc().Format);
+    auto& RenderTech = GetRenderTechnique(RENDER_TECH_COPY_COLOR, FEATURE_FLAG_NONE, pRTV->GetDesc().Format);
     if (!RenderTech.IsInitializedPSO())
     {
         PipelineResourceLayoutDescX ResourceLayout;
@@ -406,7 +406,7 @@ void PostFXContext::CopyTextureColor(const TextureOperationAttribs& Attribs, ITe
                                  nullptr, "PostFXContext::CopyTextureColor",
                                  m_pVSCopyTexture, m_pPSCopyTexture, ResourceLayout,
                                  {
-                                     pRTV->GetTexture()->GetDesc().Format,
+                                     pRTV->GetDesc().Format,
                                  },
                                  TEX_FORMAT_UNKNOWN,
                                  DSS_DisableDepth, BS_Default, false, false);
