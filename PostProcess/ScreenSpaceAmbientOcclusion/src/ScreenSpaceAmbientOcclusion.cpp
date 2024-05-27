@@ -460,7 +460,8 @@ bool ScreenSpaceAmbientOcclusion::PrepareShadersAndPSO(const RenderAttributes& R
                                      TEX_FORMAT_UNKNOWN,
                                      DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
         }
-        AllPSOsReady &= RenderTech.IsReady();
+        if (AllPSOsReady && !RenderTech.IsReady())
+            AllPSOsReady = false;
     }
 
     {
@@ -499,7 +500,8 @@ bool ScreenSpaceAmbientOcclusion::PrepareShadersAndPSO(const RenderAttributes& R
                                      TEX_FORMAT_UNKNOWN,
                                      DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
         }
-        AllPSOsReady &= RenderTech.IsReady();
+        if (AllPSOsReady && !RenderTech.IsReady())
+            AllPSOsReady = false;
     }
 
     {
@@ -532,7 +534,8 @@ bool ScreenSpaceAmbientOcclusion::PrepareShadersAndPSO(const RenderAttributes& R
                                      TEX_FORMAT_UNKNOWN,
                                      DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
         }
-        AllPSOsReady &= RenderTech.IsReady();
+        if (AllPSOsReady && !RenderTech.IsReady())
+            AllPSOsReady = false;
     }
 
     {
@@ -563,7 +566,8 @@ bool ScreenSpaceAmbientOcclusion::PrepareShadersAndPSO(const RenderAttributes& R
                                      TEX_FORMAT_UNKNOWN,
                                      DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
         }
-        AllPSOsReady &= RenderTech.IsReady();
+        if (AllPSOsReady && !RenderTech.IsReady())
+            AllPSOsReady = false;
     }
 
     {
@@ -598,7 +602,8 @@ bool ScreenSpaceAmbientOcclusion::PrepareShadersAndPSO(const RenderAttributes& R
                                      TEX_FORMAT_UNKNOWN,
                                      DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
         }
-        AllPSOsReady &= RenderTech.IsReady();
+        if (AllPSOsReady && !RenderTech.IsReady())
+            AllPSOsReady = false;
     }
 
     {
@@ -638,7 +643,8 @@ bool ScreenSpaceAmbientOcclusion::PrepareShadersAndPSO(const RenderAttributes& R
                                      TEX_FORMAT_UNKNOWN,
                                      DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
         }
-        AllPSOsReady &= RenderTech.IsReady();
+        if (AllPSOsReady && !RenderTech.IsReady())
+            AllPSOsReady = false;
     }
 
     {
@@ -670,7 +676,8 @@ bool ScreenSpaceAmbientOcclusion::PrepareShadersAndPSO(const RenderAttributes& R
                                      TEX_FORMAT_UNKNOWN,
                                      DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
         }
-        AllPSOsReady &= RenderTech.IsReady();
+        if (AllPSOsReady && !RenderTech.IsReady())
+            AllPSOsReady = false;
     }
 
     {
@@ -702,7 +709,8 @@ bool ScreenSpaceAmbientOcclusion::PrepareShadersAndPSO(const RenderAttributes& R
                                      TEX_FORMAT_UNKNOWN,
                                      DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
         }
-        AllPSOsReady &= RenderTech.IsReady();
+        if (AllPSOsReady && !RenderTech.IsReady())
+            AllPSOsReady = false;
     }
 
     return AllPSOsReady;

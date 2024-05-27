@@ -450,7 +450,8 @@ bool PostFXContext::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, 
                                      TEX_FORMAT_UNKNOWN,
                                      DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
         }
-        AllPSOsReady &= RenderTech.IsReady();
+        if (AllPSOsReady && !RenderTech.IsReady())
+            AllPSOsReady = false;
     }
 
     {
@@ -472,7 +473,8 @@ bool PostFXContext::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, 
                                      TEX_FORMAT_UNKNOWN,
                                      DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
         }
-        AllPSOsReady &= RenderTech.IsReady();
+        if (AllPSOsReady && !RenderTech.IsReady())
+            AllPSOsReady = false;
     }
 
     {
@@ -497,7 +499,8 @@ bool PostFXContext::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, 
                                      TEX_FORMAT_UNKNOWN,
                                      DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
         }
-        AllPSOsReady &= RenderTech.IsReady();
+        if (AllPSOsReady && !RenderTech.IsReady())
+            AllPSOsReady = false;
     }
 
     {
@@ -517,7 +520,8 @@ bool PostFXContext::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, 
                                      TEX_FORMAT_UNKNOWN,
                                      DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
         }
-        AllPSOsReady &= RenderTech.IsReady();
+        if (AllPSOsReady && !RenderTech.IsReady())
+            AllPSOsReady = false;
     }
 
     return AllPSOsReady;

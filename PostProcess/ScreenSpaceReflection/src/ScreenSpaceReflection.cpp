@@ -511,7 +511,8 @@ bool ScreenSpaceReflection::PrepareShadersAndPSO(const RenderAttributes& RenderA
                                      TEX_FORMAT_UNKNOWN,
                                      DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
         }
-        AllPSOsReady &= RenderTech.IsReady();
+        if (AllPSOsReady && !RenderTech.IsReady())
+            AllPSOsReady = false;
     }
 
     {
@@ -540,7 +541,8 @@ bool ScreenSpaceReflection::PrepareShadersAndPSO(const RenderAttributes& RenderA
                                      m_Resources[RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK].AsTexture()->GetDesc().Format,
                                      DSS_StencilWrite, BS_Default, false, IsAsyncCreation);
         }
-        AllPSOsReady &= RenderTech.IsReady();
+        if (AllPSOsReady && !RenderTech.IsReady())
+            AllPSOsReady = false;
     }
 
     {
@@ -566,7 +568,8 @@ bool ScreenSpaceReflection::PrepareShadersAndPSO(const RenderAttributes& RenderA
                                      m_Resources[RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK].AsTexture()->GetDesc().Format,
                                      DSS_StencilWrite, BS_Default, false, IsAsyncCreation);
         }
-        AllPSOsReady &= RenderTech.IsReady();
+        if (AllPSOsReady && !RenderTech.IsReady())
+            AllPSOsReady = false;
     }
 
     {
@@ -608,7 +611,8 @@ bool ScreenSpaceReflection::PrepareShadersAndPSO(const RenderAttributes& RenderA
                                      m_Resources[RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK].AsTexture()->GetDesc().Format,
                                      DSS_StencilReadComparisonEqual, BS_Default, true, IsAsyncCreation);
         }
-        AllPSOsReady &= RenderTech.IsReady();
+        if (AllPSOsReady && !RenderTech.IsReady())
+            AllPSOsReady = false;
     }
 
     {
@@ -644,7 +648,8 @@ bool ScreenSpaceReflection::PrepareShadersAndPSO(const RenderAttributes& RenderA
                                      m_Resources[RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK].AsTexture()->GetDesc().Format,
                                      DSS_StencilReadComparisonEqual, BS_Default, true, IsAsyncCreation);
         }
-        AllPSOsReady &= RenderTech.IsReady();
+        if (AllPSOsReady && !RenderTech.IsReady())
+            AllPSOsReady = false;
     }
 
     {
@@ -683,7 +688,8 @@ bool ScreenSpaceReflection::PrepareShadersAndPSO(const RenderAttributes& RenderA
                                      m_Resources[RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK].AsTexture()->GetDesc().Format,
                                      DSS_StencilReadComparisonEqual, BS_Default, true, IsAsyncCreation);
         }
-        AllPSOsReady &= RenderTech.IsReady();
+        if (AllPSOsReady && !RenderTech.IsReady())
+            AllPSOsReady = false;
     }
 
     {
@@ -716,7 +722,8 @@ bool ScreenSpaceReflection::PrepareShadersAndPSO(const RenderAttributes& RenderA
                                      m_Resources[RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK].AsTexture()->GetDesc().Format,
                                      DSS_StencilReadComparisonEqual, BS_Default, true, IsAsyncCreation);
         }
-        AllPSOsReady &= RenderTech.IsReady();
+        if (AllPSOsReady && !RenderTech.IsReady())
+            AllPSOsReady = false;
     }
 
     return AllPSOsReady;

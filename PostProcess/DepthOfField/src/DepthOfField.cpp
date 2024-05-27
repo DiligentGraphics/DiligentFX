@@ -404,7 +404,8 @@ bool DepthOfField::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, F
             ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
             ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
         }
-        AllPSOsReady &= RenderTech.IsReady();
+        if (AllPSOsReady && !RenderTech.IsReady())
+            AllPSOsReady = false;
     }
 
     {
@@ -437,7 +438,8 @@ bool DepthOfField::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, F
             ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
             ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
         }
-        AllPSOsReady &= RenderTech.IsReady();
+        if (AllPSOsReady && !RenderTech.IsReady())
+            AllPSOsReady = false;
     }
 
     {
@@ -460,7 +462,8 @@ bool DepthOfField::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, F
                                      TEX_FORMAT_UNKNOWN,
                                      DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
         }
-        AllPSOsReady &= RenderTech.IsReady();
+        if (AllPSOsReady && !RenderTech.IsReady())
+            AllPSOsReady = false;
     }
 
     {
@@ -483,7 +486,8 @@ bool DepthOfField::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, F
                                      TEX_FORMAT_UNKNOWN,
                                      DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
         }
-        AllPSOsReady &= RenderTech.IsReady();
+        if (AllPSOsReady && !RenderTech.IsReady())
+            AllPSOsReady = false;
     }
 
     {
@@ -512,7 +516,8 @@ bool DepthOfField::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, F
 
             ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "g_TextureGaussKernel"}.Set(m_Resources[RESOURCE_IDENTIFIER_GAUSS_KERNEL_TEXTURE].GetTextureSRV());
         }
-        AllPSOsReady &= RenderTech.IsReady();
+        if (AllPSOsReady && !RenderTech.IsReady())
+            AllPSOsReady = false;
     }
 
     {
@@ -541,7 +546,8 @@ bool DepthOfField::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, F
 
             ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "g_TextureGaussKernel"}.Set(m_Resources[RESOURCE_IDENTIFIER_GAUSS_KERNEL_TEXTURE].GetTextureSRV());
         }
-        AllPSOsReady &= RenderTech.IsReady();
+        if (AllPSOsReady && !RenderTech.IsReady())
+            AllPSOsReady = false;
     }
 
     {
@@ -571,7 +577,8 @@ bool DepthOfField::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, F
 
             ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
         }
-        AllPSOsReady &= RenderTech.IsReady();
+        if (AllPSOsReady && !RenderTech.IsReady())
+            AllPSOsReady = false;
     }
 
     {
@@ -615,7 +622,8 @@ bool DepthOfField::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, F
             ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
             ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "g_TextureBokehKernel"}.Set(m_Resources[RESOURCE_IDENTIFIER_BOKEH_LARGE_KERNEL_TEXTURE].GetTextureSRV());
         }
-        AllPSOsReady &= RenderTech.IsReady();
+        if (AllPSOsReady && !RenderTech.IsReady())
+            AllPSOsReady = false;
     }
 
     {
@@ -649,7 +657,8 @@ bool DepthOfField::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, F
             ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
             ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "g_TextureBokehKernel"}.Set(m_Resources[RESOURCE_IDENTIFIER_BOKEH_SMALL_KERNEL_TEXTURE].GetTextureSRV());
         }
-        AllPSOsReady &= RenderTech.IsReady();
+        if (AllPSOsReady && !RenderTech.IsReady())
+            AllPSOsReady = false;
     }
 
     {
@@ -676,7 +685,8 @@ bool DepthOfField::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, F
                                      TEX_FORMAT_UNKNOWN,
                                      DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
         }
-        AllPSOsReady &= RenderTech.IsReady();
+        if (AllPSOsReady && !RenderTech.IsReady())
+            AllPSOsReady = false;
     }
 
     {
@@ -709,7 +719,8 @@ bool DepthOfField::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, F
             ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
             ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
         }
-        AllPSOsReady &= RenderTech.IsReady();
+        if (AllPSOsReady && !RenderTech.IsReady())
+            AllPSOsReady = false;
     }
 
     return AllPSOsReady;

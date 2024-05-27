@@ -65,7 +65,6 @@ void PostFXRenderTechnique::InitializePSO(IRenderDevice*                     pDe
                                           bool                               IsDSVReadOnly,
                                           bool                               IsAsynchronous)
 {
-
     GraphicsPipelineStateCreateInfo PSOCreateInfo;
     PipelineStateDesc&              PSODesc = PSOCreateInfo.PSODesc;
 

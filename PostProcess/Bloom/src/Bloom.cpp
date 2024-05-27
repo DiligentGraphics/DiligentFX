@@ -153,7 +153,7 @@ Int32 Bloom::ComputeMipCount(Uint32 Width, Uint32 Height, float Radius)
 bool Bloom::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_FLAGS FeatureFlags)
 {
     bool       AllPSOsReady    = true;
-    const bool IsAsyncCreation = FEATURE_FLAG_ASYNC_CREATION & FeatureFlags;
+    const bool IsAsyncCreation = (FEATURE_FLAG_ASYNC_CREATION & FeatureFlags) != 0;
     {
         auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_PREFILTERED_TEXTURE, FeatureFlags);
         if (!RenderTech.IsInitializedPSO())
@@ -178,7 +178,8 @@ bool Bloom::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_
                                      TEX_FORMAT_UNKNOWN,
                                      DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
         }
-        AllPSOsReady &= RenderTech.IsReady();
+        if (AllPSOsReady && !RenderTech.IsReady())
+            AllPSOsReady = false;
     }
 
     {
@@ -204,7 +205,8 @@ bool Bloom::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_
                                      TEX_FORMAT_UNKNOWN,
                                      DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
         }
-        AllPSOsReady &= RenderTech.IsReady();
+        if (AllPSOsReady && !RenderTech.IsReady())
+            AllPSOsReady = false;
     }
 
     {
@@ -231,7 +233,8 @@ bool Bloom::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_
                                      TEX_FORMAT_UNKNOWN,
                                      DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
         }
-        AllPSOsReady &= RenderTech.IsReady();
+        if (AllPSOsReady && !RenderTech.IsReady())
+            AllPSOsReady = false;
     }
 
     return AllPSOsReady;
