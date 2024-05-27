@@ -87,7 +87,7 @@ void Bloom::PrepareResources(IRenderDevice* pDevice, IDeviceContext* pDeviceCont
 
     m_BackBufferWidth  = FrameDesc.Width;
     m_BackBufferHeight = FrameDesc.Height;
-
+    m_FeatureFlags     = FeatureFlags;
 
     Uint32 HalfWidth    = m_BackBufferWidth / 2u;
     Uint32 HalfHeight   = m_BackBufferHeight / 2u;
