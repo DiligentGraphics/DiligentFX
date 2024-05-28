@@ -173,7 +173,6 @@ DepthOfField::~DepthOfField() {}
 
 void DepthOfField::PrepareResources(IRenderDevice* pDevice, IDeviceContext* pDeviceContext, PostFXContext* pPostFXContext, FEATURE_FLAGS FeatureFlags)
 {
-
     DEV_CHECK_ERR(pDevice != nullptr, "pDevice must not be null");
     DEV_CHECK_ERR(pPostFXContext != nullptr, "pPostFXContext must not be null");
 
@@ -400,9 +399,6 @@ bool DepthOfField::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, F
                                      },
                                      TEX_FORMAT_UNKNOWN,
                                      DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
-
-            ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
-            ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
         }
         if (AllPSOsReady && !RenderTech.IsReady())
             AllPSOsReady = false;
@@ -430,13 +426,10 @@ bool DepthOfField::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, F
                                      RenderAttribs.pStateCache, "DepthOfField::ComputeTemporalCircleOfConfusion",
                                      VS, PS, ResourceLayout,
                                      {
-                                         m_Resources[RENDER_TECH_COMPUTE_CIRCLE_OF_CONFUSION_TEMPORAL].AsTexture()->GetDesc().Format,
+                                         m_Resources[RESOURCE_IDENTIFIER_CIRCLE_OF_CONFUSION_TEXTURE].AsTexture()->GetDesc().Format,
                                      },
                                      TEX_FORMAT_UNKNOWN,
                                      DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
-
-            ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
-            ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
         }
         if (AllPSOsReady && !RenderTech.IsReady())
             AllPSOsReady = false;
@@ -513,8 +506,6 @@ bool DepthOfField::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, F
                                      },
                                      TEX_FORMAT_UNKNOWN,
                                      DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
-
-            ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "g_TextureGaussKernel"}.Set(m_Resources[RESOURCE_IDENTIFIER_GAUSS_KERNEL_TEXTURE].GetTextureSRV());
         }
         if (AllPSOsReady && !RenderTech.IsReady())
             AllPSOsReady = false;
@@ -543,8 +534,6 @@ bool DepthOfField::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, F
                                      },
                                      TEX_FORMAT_UNKNOWN,
                                      DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
-
-            ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "g_TextureGaussKernel"}.Set(m_Resources[RESOURCE_IDENTIFIER_GAUSS_KERNEL_TEXTURE].GetTextureSRV());
         }
         if (AllPSOsReady && !RenderTech.IsReady())
             AllPSOsReady = false;
@@ -574,8 +563,6 @@ bool DepthOfField::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, F
                                      },
                                      TEX_FORMAT_UNKNOWN,
                                      DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
-
-            ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
         }
         if (AllPSOsReady && !RenderTech.IsReady())
             AllPSOsReady = false;
@@ -617,10 +604,6 @@ bool DepthOfField::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, F
                                      },
                                      TEX_FORMAT_UNKNOWN,
                                      DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
-
-            ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
-            ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
-            ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "g_TextureBokehKernel"}.Set(m_Resources[RESOURCE_IDENTIFIER_BOKEH_LARGE_KERNEL_TEXTURE].GetTextureSRV());
         }
         if (AllPSOsReady && !RenderTech.IsReady())
             AllPSOsReady = false;
@@ -652,10 +635,6 @@ bool DepthOfField::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, F
                                      },
                                      TEX_FORMAT_UNKNOWN,
                                      DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
-
-            ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
-            ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
-            ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "g_TextureBokehKernel"}.Set(m_Resources[RESOURCE_IDENTIFIER_BOKEH_SMALL_KERNEL_TEXTURE].GetTextureSRV());
         }
         if (AllPSOsReady && !RenderTech.IsReady())
             AllPSOsReady = false;
@@ -715,9 +694,6 @@ bool DepthOfField::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, F
                                      },
                                      TEX_FORMAT_UNKNOWN,
                                      DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
-
-            ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
-            ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
         }
         if (AllPSOsReady && !RenderTech.IsReady())
             AllPSOsReady = false;
@@ -759,7 +735,11 @@ void DepthOfField::ComputeCircleOfConfusion(const RenderAttributes& RenderAttrib
     auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_CIRCLE_OF_CONFUSION, m_FeatureFlags);
 
     if (!RenderTech.IsInitializedSRB())
+    {
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
         RenderTech.InitializeSRB(true);
+    }
 
     ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "ComputeCircleOfConfusion"};
 
@@ -783,7 +763,11 @@ void DepthOfField::ComputeTemporalCircleOfConfusion(const RenderAttributes& Rend
     auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_CIRCLE_OF_CONFUSION_TEMPORAL, m_FeatureFlags);
 
     if (!RenderTech.IsInitializedSRB())
+    {
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
         RenderTech.InitializeSRB(true);
+    }
 
     ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "ComputeTemporalCircleOfConfusion"};
 
@@ -857,7 +841,10 @@ void DepthOfField::ComputeCircleOfConfusionBlurX(const RenderAttributes& RenderA
     auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_CIRCLE_OF_CONFUSION_BLUR_X, m_FeatureFlags);
 
     if (!RenderTech.IsInitializedSRB())
+    {
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "g_TextureGaussKernel"}.Set(m_Resources[RESOURCE_IDENTIFIER_GAUSS_KERNEL_TEXTURE].GetTextureSRV());
         RenderTech.InitializeSRB(true);
+    }
 
     ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "ComputeCircleOfConfusionBlurX"};
 
@@ -877,7 +864,10 @@ void DepthOfField::ComputeCircleOfConfusionBlurY(const RenderAttributes& RenderA
 {
     auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_CIRCLE_OF_CONFUSION_BLUR_Y, m_FeatureFlags);
     if (!RenderTech.IsInitializedSRB())
+    {
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "g_TextureGaussKernel"}.Set(m_Resources[RESOURCE_IDENTIFIER_GAUSS_KERNEL_TEXTURE].GetTextureSRV());
         RenderTech.InitializeSRB(true);
+    }
 
     ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "ComputeCircleOfConfusionBlurY"};
 
@@ -898,7 +888,10 @@ void DepthOfField::ComputePrefilteredTexture(const RenderAttributes& RenderAttri
     auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_PREFILTERED_TEXTURE, m_FeatureFlags);
 
     if (!RenderTech.IsInitializedSRB())
+    {
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
         RenderTech.InitializeSRB(true);
+    }
 
     ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "ComputePrefilteredTexture"};
 
@@ -928,7 +921,12 @@ void DepthOfField::ComputeBokehFirstPass(const RenderAttributes& RenderAttribs)
 {
     auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_BOKEH_FIRST_PASS, m_FeatureFlags);
     if (!RenderTech.IsInitializedSRB())
+    {
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "g_TextureBokehKernel"}.Set(m_Resources[RESOURCE_IDENTIFIER_BOKEH_LARGE_KERNEL_TEXTURE].GetTextureSRV());
         RenderTech.InitializeSRB(true);
+    }
 
     ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "ComputeBokehFirstPass"};
 
@@ -951,7 +949,12 @@ void DepthOfField::ComputeBokehSecondPass(const RenderAttributes& RenderAttribs)
 {
     auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_BOKEH_SECOND_PASS, m_FeatureFlags);
     if (!RenderTech.IsInitializedSRB())
+    {
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "g_TextureBokehKernel"}.Set(m_Resources[RESOURCE_IDENTIFIER_BOKEH_SMALL_KERNEL_TEXTURE].GetTextureSRV());
         RenderTech.InitializeSRB(true);
+    }
 
     ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "ComputeBokehSecondPass"};
 
@@ -995,7 +998,11 @@ void DepthOfField::ComputeCombinedTexture(const RenderAttributes& RenderAttribs)
 {
     auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_COMBINED_TEXTURE, m_FeatureFlags);
     if (!RenderTech.IsInitializedSRB())
+    {
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());
+        ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
         RenderTech.InitializeSRB(true);
+    }
 
     ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "ComputeCombinedTexture"};
 
