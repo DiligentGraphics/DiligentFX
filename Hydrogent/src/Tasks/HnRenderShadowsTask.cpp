@@ -355,8 +355,10 @@ void HnRenderShadowsTask::Execute(pxr::HdTaskContext* TaskCtx)
             pCtx->Draw(DrawAttribs{3, DRAW_FLAG_VERIFY_ALL});
         }
 
-        m_RenderPass->Execute(m_RPState, GetRenderTags());
-        Light->SetShadowMapDirty(false);
+        if (m_RenderPass->Execute(m_RPState, GetRenderTags()) == HnRenderPass::EXECUTE_RESULT_OK)
+        {
+            Light->SetShadowMapDirty(false);
+        }
     }
 }
 

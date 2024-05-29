@@ -101,7 +101,18 @@ public:
         DRAW_LIST_ITEM_DIRTY_FLAG_ALL       = DRAW_LIST_ITEM_DIRTY_FLAG_LAST * 2 - 1
     };
 
-    void Execute(HnRenderPassState& RPState, const pxr::TfTokenVector& Tags);
+    enum EXECUTE_RESULT : Uint32
+    {
+        // Render pass was executed successfully
+        EXECUTE_RESULT_OK,
+
+        // Render pass was executed using fallback shaders
+        EXECUTE_RESULT_FALLBACK,
+
+        // Render pass was skipped
+        EXECUTE_RESULT_SKIPPED
+    };
+    EXECUTE_RESULT Execute(HnRenderPassState& RPState, const pxr::TfTokenVector& Tags);
 
 protected:
     // Virtual API: Execute the buckets corresponding to renderTags;

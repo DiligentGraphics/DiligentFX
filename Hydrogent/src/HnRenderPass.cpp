@@ -260,11 +260,11 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
     Execute(*static_cast<HnRenderPassState*>(RPState.get()), Tags);
 }
 
-void HnRenderPass::Execute(HnRenderPassState& RPState, const pxr::TfTokenVector& Tags)
+HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, const pxr::TfTokenVector& Tags)
 {
     UpdateDrawList(Tags);
     if (m_DrawList.empty())
-        return;
+        return EXECUTE_RESULT_OK;
 
     RenderState State{*this, RPState};
 
@@ -351,7 +351,7 @@ void HnRenderPass::Execute(HnRenderPassState& RPState, const pxr::TfTokenVector&
         }
         else
         {
-            return;
+            return EXECUTE_RESULT_SKIPPED;
         }
     }
 
@@ -518,6 +518,8 @@ void HnRenderPass::Execute(HnRenderPassState& RPState, const pxr::TfTokenVector&
     }
 
     m_DrawListItemsDirtyFlags = DRAW_LIST_ITEM_DIRTY_FLAG_NONE;
+
+    return EXECUTE_RESULT_OK;
 }
 
 void HnRenderPass::_MarkCollectionDirty()
