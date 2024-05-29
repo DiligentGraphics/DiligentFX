@@ -282,6 +282,13 @@ void HnRenderShadowsTask::Prepare(pxr::HdTaskContext* TaskCtx,
 
 void HnRenderShadowsTask::Execute(pxr::HdTaskContext* TaskCtx)
 {
+    bool SkipPass = false;
+    if (GetTaskContextData(TaskCtx, HnRenderResourceTokens->skipGeometryPasses, SkipPass, /* Required = */ false))
+    {
+        if (SkipPass)
+            return;
+    }
+
     if (m_RenderIndex == nullptr)
     {
         UNEXPECTED("Render index is null. This likely indicates that Prepare() has not been called.");

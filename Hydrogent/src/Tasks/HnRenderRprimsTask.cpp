@@ -123,6 +123,13 @@ void HnRenderRprimsTask::Prepare(pxr::HdTaskContext* TaskCtx,
 
 void HnRenderRprimsTask::Execute(pxr::HdTaskContext* TaskCtx)
 {
+    bool SkipPass = false;
+    if (GetTaskContextData(TaskCtx, HnRenderResourceTokens->skipGeometryPasses, SkipPass, /* Required = */ false))
+    {
+        if (SkipPass)
+            return;
+    }
+
     if (m_RenderPass)
     {
         const pxr::TfToken& RenderPassName = m_RenderPass->GetName();

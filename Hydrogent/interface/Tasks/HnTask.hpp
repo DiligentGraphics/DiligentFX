@@ -58,7 +58,7 @@ protected:
     ITextureView*        GetRenderBufferTarget(pxr::HdRenderIndex& RenderIndex, pxr::HdTaskContext* TaskCtx, const pxr::TfToken& Name) const;
 
     template <typename ParamType>
-    bool GetTaskContextData(pxr::HdTaskContext* TaskCtx, const pxr::TfToken& Name, ParamType& Param) const
+    bool GetTaskContextData(pxr::HdTaskContext* TaskCtx, const pxr::TfToken& Name, ParamType& Param, bool Required = true) const
     {
         if (TaskCtx == nullptr)
         {
@@ -69,7 +69,10 @@ protected:
         auto param_it = TaskCtx->find(Name);
         if (param_it == TaskCtx->end())
         {
-            UNEXPECTED("Parameter '", Name, "' is not set in the task context");
+            if (Required)
+            {
+                UNEXPECTED("Parameter '", Name, "' is not set in the task context");
+            }
             return false;
         }
 
