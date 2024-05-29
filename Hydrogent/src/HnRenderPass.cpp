@@ -327,6 +327,7 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
     }
 
     // Wait until all PSOs are ready
+    m_UseFallbackPSO = false;
     if (!m_PendingPSOs.empty())
     {
         size_t NumPSOsReady = 0;
@@ -351,7 +352,16 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
         }
         else
         {
-            return EXECUTE_RESULT_SKIPPED;
+            if ((m_Params.UsdPsoFlags & USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_OUTPUT) != 0 &&
+                m_FallbackPSO != nullptr &&
+                m_FallbackPSO->GetStatus() == PIPELINE_STATE_STATUS_READY)
+            {
+                m_UseFallbackPSO = true;
+            }
+            else
+            {
+                return EXECUTE_RESULT_SKIPPED;
+            }
         }
     }
 
@@ -389,7 +399,10 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
         CurrOffset = 0;
     };
 
-    const Uint32 PrimitiveArraySize = std::max(State.USDRenderer.GetSettings().PrimitiveArraySize, 1u);
+    const Uint32 PrimitiveArraySize = !m_UseFallbackPSO ?
+        std::max(State.USDRenderer.GetSettings().PrimitiveArraySize, 1u) :
+        1u; // Fallback PSO uses flags that are not consistent with material SRB flags.
+            // Hence the size of the shader primitive data is different and we can't use multi-draw.
     m_ScratchSpace.resize(sizeof(MultiDrawIndexedItem) * State.USDRenderer.GetSettings().PrimitiveArraySize);
 
     entt::registry& Registry = State.RenderDelegate.GetEcsRegistry();
@@ -519,7 +532,7 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
 
     m_DrawListItemsDirtyFlags = DRAW_LIST_ITEM_DIRTY_FLAG_NONE;
 
-    return EXECUTE_RESULT_OK;
+    return m_UseFallbackPSO ? EXECUTE_RESULT_FALLBACK : EXECUTE_RESULT_OK;
 }
 
 void HnRenderPass::_MarkCollectionDirty()
@@ -641,6 +654,18 @@ void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
     if (m_DrawListItemsDirtyFlags & DRAW_LIST_ITEM_DIRTY_FLAG_PSO)
     {
         m_PendingPSOs.clear();
+    }
+
+    if (State.USDRenderer.GetSettings().AsyncShaderCompilation &&
+        m_FallbackPSO == nullptr &&
+        (m_Params.UsdPsoFlags & USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_OUTPUT) != 0)
+    {
+        const PBR_Renderer::PSO_FLAGS FallbackPSOFlags =
+            PBR_Renderer::PSO_FLAG_COMPUTE_MOTION_VECTORS |
+            PBR_Renderer::PSO_FLAG_USE_IBL |
+            static_cast<PBR_Renderer::PSO_FLAGS>(m_Params.UsdPsoFlags);
+
+        m_FallbackPSO = State.GePsoCache().Get({FallbackPSOFlags, PBR_Renderer::ALPHA_MODE_OPAQUE}, true);
     }
 
     struct DrawListItemRenderState
@@ -943,7 +968,7 @@ void HnRenderPass::RenderPendingDrawItems(RenderState& State)
         const PendingDrawItem& PendingItem = m_PendingDrawItems[item_idx];
         const DrawListItem&    ListItem    = PendingItem.ListItem;
 
-        State.SetPipelineState(ListItem.pPSO);
+        State.SetPipelineState(m_UseFallbackPSO ? m_FallbackPSO : ListItem.pPSO);
 
         IShaderResourceBinding* pSRB = ListItem.Material.GetSRB(PendingItem.BufferOffset);
         VERIFY(pSRB != nullptr, "Material SRB is null. This may happen if UpdateSRB was not called for this material.");

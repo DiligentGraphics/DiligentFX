@@ -186,9 +186,10 @@ private:
 private:
     HnRenderPassParams m_Params;
 
-    HN_RENDER_MODE              m_RenderMode = HN_RENDER_MODE_SOLID;
-    PBR_Renderer::DebugViewType m_DebugView  = PBR_Renderer::DebugViewType::None;
-    bool                        m_UseShadows = false;
+    HN_RENDER_MODE              m_RenderMode     = HN_RENDER_MODE_SOLID;
+    PBR_Renderer::DebugViewType m_DebugView      = PBR_Renderer::DebugViewType::None;
+    bool                        m_UseShadows     = false;
+    bool                        m_UseFallbackPSO = false;
 
     // All draw items in the collection returned by pRenderIndex->GetDrawItems().
     pxr::HdRenderIndex::HdDrawItemPtrVector m_DrawItems;
@@ -215,6 +216,7 @@ private:
     std::vector<Uint8> m_ScratchSpace;
 
     std::unordered_map<IPipelineState*, bool> m_PendingPSOs;
+    IPipelineState*                           m_FallbackPSO = nullptr;
 
     pxr::SdfPath m_SelectedPrimId = {};
     struct GlobalAttribVersions
