@@ -492,12 +492,6 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
         }
 
         // Write current primitive attributes
-        float4 CustomData{
-            ListItem.MeshUID,
-            m_Params.Selection == HnRenderPassParams::SelectionType::Selected ? 1.f : 0.f,
-            0,
-            0,
-        };
 
         HLSL::PBRMaterialBasicAttribs* pDstMaterialBasicAttribs = nullptr;
 
@@ -505,9 +499,9 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
             ListItem.PSOFlags,
             &Transform,
             &ListItem.PrevTransform,
-            0,
-            &CustomData,
-            sizeof(CustomData),
+            0,       // JointCount
+            nullptr, // CustomData
+            0,       // CustomDataSize
             &pDstMaterialBasicAttribs,
         };
         // Note: if the material changes in the mesh, the mesh material version and/or
@@ -517,6 +511,9 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
         GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(pCurrPrimitive, AttribsData, State.USDRenderer.GetSettings().TextureAttribIndices, MaterialData);
 
         pDstMaterialBasicAttribs->BaseColorFactor = MaterialData.Attribs.BaseColorFactor * DisplayColor;
+        // Write Mesh ID to material custom data to make sure that selection works for fallback PSO.
+        // Using PBRPrimitiveShaderAttribs's CustomData will not work as fallback PSO uses different flags.
+        pDstMaterialBasicAttribs->CustomData.x = ListItem.MeshUID;
 
         ListItem.PrevTransform = Transform;
 
