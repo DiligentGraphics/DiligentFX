@@ -1779,7 +1779,7 @@ void PBR_Renderer::SetInternalShaderParameters(HLSL::PBRRendererShaderParameters
     Renderer.PrefilteredCubeLastMip = m_Settings.EnableIBL ? static_cast<float>(m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels - 1) : 0.f;
 }
 
-Uint32 PBR_Renderer::GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags) const
+Uint32 PBR_Renderer::GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags, Uint32 CustomDataSize) const
 {
     //struct PBRPrimitiveAttribs
     //{
@@ -1795,7 +1795,7 @@ Uint32 PBR_Renderer::GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags) const
     //        PBRMaterialVolumeAttribs       Volume;       // #if ENABLE_VOLUME
     //        PBRMaterialTextureAttribs Textures[PBR_NUM_TEXTURE_ATTRIBUTES];
     //    } Material;
-    //    float4 CustomData;
+    //    UserDefined CustomData;
     //};
 
     Uint32 NumTextureAttribs = 0;
@@ -1817,7 +1817,7 @@ Uint32 PBR_Renderer::GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags) const
             ((Flags & PSO_FLAG_ENABLE_TRANSMISSION) ? sizeof(HLSL::PBRMaterialTransmissionAttribs) : 0) +
             ((Flags & PSO_FLAG_ENABLE_VOLUME) ? sizeof(HLSL::PBRMaterialVolumeAttribs) : 0) +
             sizeof(HLSL::PBRMaterialTextureAttribs) * NumTextureAttribs +
-            sizeof(float4));
+            CustomDataSize);
 }
 
 Uint32 PBR_Renderer::GetPRBFrameAttribsSize(Uint32 LightCount, Uint32 ShadowCastingLightCount)

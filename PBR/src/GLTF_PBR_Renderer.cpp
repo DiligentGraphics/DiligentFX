@@ -728,7 +728,7 @@ void* GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                   
     //        PBRMaterialVolumeAttribs       Volume;       // #if ENABLE_VOLUME
     //        PBRMaterialTextureAttribs Textures[PBR_NUM_TEXTURE_ATTRIBUTES];
     //    } Material;
-    //    float4 CustomData;
+    //    UserDefined CustomData;
     //};
 
     Uint8* pDstPtr = reinterpret_cast<Uint8*>(pDstShaderAttribs);

@@ -649,7 +649,7 @@ public:
     void SetInternalShaderParameters(HLSL::PBRRendererShaderParameters& Renderer);
 
     /// Returns the PBR primitive attributes shader data size for the given PSO flags.
-    Uint32 GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags) const;
+    Uint32 GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags, Uint32 CustomDataSize = sizeof(float4)) const;
 
     /// Returns the PBR Frame attributes shader data size for the given light count.
     static Uint32 GetPRBFrameAttribsSize(Uint32 LightCount, Uint32 ShadowCastingLightCount);
