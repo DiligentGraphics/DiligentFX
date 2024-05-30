@@ -140,13 +140,12 @@ bool CoordinateGridRenderer::UpdateUI(HLSL::CoordinateGridAttribs& Attribs, Coor
     if (ImGui::Checkbox("XY", &ActivePlaneXY))
         AttribsChanged = true;
 
-    if (ImGui::SliderFloat("YZ Scale", &Attribs.GridScale[0], 0.01f, 10.0))
+    if (ImGui::SliderFloat("YZ Min Grid Size", &Attribs.GridMinCellSize[0], 0.001f, 1.0, "%.4f", ImGuiSliderFlags_Logarithmic))
         AttribsChanged = true;
-    if (ImGui::SliderFloat("XZ Scale", &Attribs.GridScale[1], 0.01f, 10.0))
+    if (ImGui::SliderFloat("XZ Min Grid Size", &Attribs.GridMinCellSize[1], 0.001f, 1.0, "%.4f", ImGuiSliderFlags_Logarithmic))
         AttribsChanged = true;
-    if (ImGui::SliderFloat("XY Scale", &Attribs.GridScale[2], 0.01f, 10.0))
+    if (ImGui::SliderFloat("XY Min Grid Size", &Attribs.GridMinCellSize[2], 0.001f, 1.0, "%.4f", ImGuiSliderFlags_Logarithmic))
         AttribsChanged = true;
-
 
     auto SubdivisionSlider = [](const char* Name, float& Subdivision) {
         int SubdivisionInt = static_cast<int>(Subdivision);
@@ -176,13 +175,6 @@ bool CoordinateGridRenderer::UpdateUI(HLSL::CoordinateGridAttribs& Attribs, Coor
     if (ImGui::SliderFloat("Y Axis Width", &Attribs.YAxisWidth, 0.5f, 10.0))
         AttribsChanged = true;
     if (ImGui::SliderFloat("Z Axis Width", &Attribs.ZAxisWidth, 0.5f, 10.0))
-        AttribsChanged = true;
-
-    if (ImGui::SliderFloat("Grid Min Cell Size", &Attribs.GridMinCellSize, 0.0001f, 1.0, "%.4f", ImGuiSliderFlags_Logarithmic))
-        AttribsChanged = true;
-    if (ImGui::SliderFloat("Grid Min Cell Width", &Attribs.GridMinCellWidth, 1.0f, 10.0))
-        AttribsChanged = true;
-    if (ImGui::SliderFloat("Grid Line Width", &Attribs.GridLineWidth, 1.0f, 5.0))
         AttribsChanged = true;
 
     if (ImGui::ColorEdit3("Grid Major Color", Attribs.GridMajorColor.Data()))

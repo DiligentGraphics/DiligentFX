@@ -16,13 +16,8 @@ struct CoordinateGridAttribs
 
     float4 GridMajorColor   DEFAULT_VALUE(float4(0.4f, 0.4f, 0.4f, 1));
     float4 GridMinorColor   DEFAULT_VALUE(float4(0.1f, 0.1f, 0.1f, 1));
-    float4 GridScale        DEFAULT_VALUE(float4(1, 1, 1, 0));    // YZ, XZ, XY   
-    float4 GridSubdivision  DEFAULT_VALUE(float4(10, 10, 10, 0)); // YZ, XZ, XY
-
-    float  GridLineWidth    DEFAULT_VALUE(2); // in pixels
-    float  GridMinCellWidth DEFAULT_VALUE(4); // in pixels
-    float  GridMinCellSize  DEFAULT_VALUE(0.0001f);
-    float  Padding1         DEFAULT_VALUE(0);
+    float4 GridMinCellSize  DEFAULT_VALUE(float4(0.1f, 0.1f, 0.1f, 0.1f)); // YZ, XZ, XY   
+    float4 GridSubdivision  DEFAULT_VALUE(float4(10, 10, 10, 0));          // YZ, XZ, XY
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
     CHECK_STRUCT_ALIGNMENT(CoordinateGridAttribs);

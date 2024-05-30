@@ -54,29 +54,32 @@ float MaxComponent2(float2 v)
     return max(v.x, v.y);
 }
 
-float4 ComputeGrid(float2 PlanePos, float Scale, float Subdivision, CoordinateGridAttribs GridAttribs)
+float4 ComputeGrid(float2 PlanePos, float Subdivision, CoordinateGridAttribs GridAttribs)
 {
-    float2 Coord = PlanePos * Scale;
-    float2 Magnitude = fwidth(Coord);
+    float2 Coord = PlanePos;
+    float QuadSegmentSize = length(float2(length(ddx(Coord)), length(ddy(Coord))));
+    float MinSegmentsCount = length(QuadSegmentSize) / GridAttribs.GridMinCellSize;
+    float LodLevel = max(0.0, log(MinSegmentsCount) / log(Subdivision) + 1.0);
+    
+    float LodFade  = frac(LodLevel);
+    float LodIndex = floor(LodLevel);
 
     float3 ThickColor = GridAttribs.GridMajorColor.xyz;
     float3 ThinColor  = GridAttribs.GridMinorColor.xyz;
-    float2 LineWidth = 0.5 * Magnitude * GridAttribs.GridLineWidth;
-
-    float LodLevel = max(0.0, log10(length(Magnitude) * GridAttribs.GridMinCellWidth / GridAttribs.GridMinCellSize) + 1.0);
-    float LodFade = frac(LodLevel);
-
+    float2 LineWidth  = fwidth(Coord);
+    
     float Lod[3];
-    Lod[0] = GridAttribs.GridMinCellSize * pow(Subdivision, floor(LodLevel));
+    Lod[0] = GridAttribs.GridMinCellSize * pow(Subdivision, LodIndex);
     Lod[1] = Lod[0] * Subdivision;
     Lod[2] = Lod[1] * Subdivision;
 
     float LodAlpha[3];
-    for (int LodIdx = 0; LodIdx < 3; LodIdx++) 
-        LodAlpha[LodIdx] = MaxComponent2(float2(1.0, 1.0) - saturate(abs((fmod(abs(Coord - 0.5 * Lod[LodIdx]), Lod[LodIdx]) - 0.5 * Lod[LodIdx]) / LineWidth)));
+    LodAlpha[0] = MaxComponent2(float2(1.0, 1.0) - saturate(abs((fmod(abs(Coord - 0.5 * Lod[0]), Lod[0]) - 0.5 * Lod[0]) / (1.00 * LineWidth))));
+    LodAlpha[1] = MaxComponent2(float2(1.0, 1.0) - saturate(abs((fmod(abs(Coord - 0.5 * Lod[1]), Lod[1]) - 0.5 * Lod[1]) / (1.25 * LineWidth))));
+    LodAlpha[2] = MaxComponent2(float2(1.0, 1.0) - saturate(abs((fmod(abs(Coord - 0.5 * Lod[2]), Lod[2]) - 0.5 * Lod[2]) / (1.50 * LineWidth))));
 
     return float4(LodAlpha[2] > 0.0 ? ThickColor  : LodAlpha[1] > 0.0 ? lerp(ThickColor, ThinColor, LodFade) : ThinColor,
-                  LodAlpha[2] > 0.0 ? LodAlpha[2] : LodAlpha[1] > 0.0 ? LodAlpha[1] : LodAlpha[0] * (1.0 - LodFade));
+                  LodAlpha[2] > 0.0 ? LodAlpha[2] : LodAlpha[1] > 0.0 ? LodAlpha[1] : lerp(LodAlpha[0], 0.0, LodFade));
 }
 
 float ComputeAxisAlpha(float3   AxisDirection, 
@@ -201,26 +204,25 @@ float4 ComputeCoordinateGrid(in float2                f2NormalizedXY,
 
 #if COORDINATE_GRID_PLANE_YZ
     {
-        GridResult += ComputeGrid(Positions[0].yz, GridAttribs.GridScale.x, GridAttribs.GridSubdivision.x, GridAttribs) * PlaneAlpha[0];
+        GridResult += ComputeGrid(Positions[0].yz, GridAttribs.GridSubdivision.x, GridAttribs) * PlaneAlpha[0];
     }
 #endif 
 
 #if COORDINATE_GRID_PLANE_XZ
     {
-        GridResult += ComputeGrid(Positions[1].xz, GridAttribs.GridScale.y, GridAttribs.GridSubdivision.y, GridAttribs) * PlaneAlpha[1];
+        GridResult += ComputeGrid(Positions[1].xz, GridAttribs.GridSubdivision.y, GridAttribs) * PlaneAlpha[1];
     }
 #endif
 
 #if COORDINATE_GRID_PLANE_XY
     {
-        GridResult += ComputeGrid(Positions[2].xy, GridAttribs.GridScale.z, GridAttribs.GridSubdivision.z, GridAttribs) * PlaneAlpha[2]; 
+        GridResult += ComputeGrid(Positions[2].xy, GridAttribs.GridSubdivision.z, GridAttribs) * PlaneAlpha[2]; 
     }
 #endif
 
     float4 Result;
-    Result.rgb = GridResult.rgb * exp(-10.0 * AxisResult.a * AxisResult.a) + AxisResult.rgb;
-    Result.a   = GridResult.a * (1.0 - AxisResult.a) + AxisResult.a;
-
+    Result.rgb = AxisResult.a > 0.0 ? AxisResult.rgb / AxisResult.a : GridResult.rgb; //GridResult.rgb * (1.0 - AxisResult.a) + max(AxisResult.rgb / AxisResult.a, 0.0);
+    Result.a   = AxisResult.a > 0.0 ? AxisResult.a : GridResult.a; // GridResult.a * (1.0 - AxisResult.a) + AxisResult.a;
     return Result;
 }
 
