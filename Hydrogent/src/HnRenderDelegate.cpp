@@ -644,6 +644,13 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
     }
 }
 
+bool HnRenderDelegate::IsParallelSyncEnabled(pxr::TfToken primType) const
+{
+    return (primType == pxr::HdPrimTypeTokens->mesh ||
+            primType == pxr::HdPrimTypeTokens->material ||
+            primType == pxr::HdPrimTypeTokens->camera);
+}
+
 const pxr::SdfPath* HnRenderDelegate::GetRPrimId(Uint32 UID) const
 {
     std::lock_guard<std::mutex> Guard{m_RPrimUIDToSdfPathMtx};
