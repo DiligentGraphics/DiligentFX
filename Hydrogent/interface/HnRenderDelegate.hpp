@@ -314,6 +314,9 @@ public:
     // memory.
     virtual void CommitResources(pxr::HdChangeTracker* Tracker) override final;
 
+    /// Whether or not multithreaded sync is enabled for the specified prim type.
+    virtual bool IsParallelSyncEnabled(pxr::TfToken primType) const override final;
+
     HnTextureRegistry&  GetTextureRegistry() { return m_TextureRegistry; }
     HnShadowMapManager* GetShadowMapManager() const { return m_ShadowMapManager.get(); }
 
