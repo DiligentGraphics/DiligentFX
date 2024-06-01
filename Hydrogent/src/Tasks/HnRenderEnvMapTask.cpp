@@ -80,7 +80,7 @@ void HnRenderEnvMapTask::Sync(pxr::HdSceneDelegate* Delegate,
     *DirtyBits = pxr::HdChangeTracker::Clean;
 }
 
-static std::string GetEnvMapPSMain(bool IsGL)
+static std::string GetEnvMapPSMain(bool WriteAllTargets)
 {
     static_assert(HnFrameRenderTargets::GBUFFER_TARGET_COUNT == 7, "Did you change the number of G-buffer targets? You may need to update the code below.");
 
@@ -92,13 +92,8 @@ void main(in  float4 Pos       : SV_Position,
     ss << "          out float4 Color     : SV_Target" << HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR << ',' << std::endl
        << "          out float4 MotionVec : SV_Target" << HnFrameRenderTargets::GBUFFER_TARGET_MOTION_VECTOR;
 
-    if (IsGL)
+    if (WriteAllTargets)
     {
-        // Normally, environment map shader does not need to write to anything but
-        // color and motion vector targets.
-        // However, in OpenGL this somehow results in color output also being
-        // written to the MeshID target. To work around this issue, we use a
-        // custom shader that writes 0.
         ss << ',' << std::endl
            << "          out float4 MeshId    : SV_Target" << HnFrameRenderTargets::GBUFFER_TARGET_MESH_ID << ',' << std::endl
            << "          out float4 Normal    : SV_Target" << HnFrameRenderTargets::GBUFFER_TARGET_NORMAL << ',' << std::endl
@@ -115,7 +110,7 @@ void main(in  float4 Pos       : SV_Position,
     MotionVec = float4(EnvMap.MotionVector, 0.0, 1.0);
 )";
 
-    if (IsGL)
+    if (WriteAllTargets)
     {
         ss << R"(
     MeshId    = float4(0.0, 0.0, 0.0, 1.0);
@@ -150,7 +145,9 @@ void HnRenderEnvMapTask::Prepare(pxr::HdTaskContext* TaskCtx,
                 EnvMapRndrCI.RTVFormats[rt] = RenderPassState->GetRenderTargetFormat(rt);
             EnvMapRndrCI.DSVFormat = RenderPassState->GetDepthStencilFormat();
 
-            const std::string PSMain  = GetEnvMapPSMain(EnvMapRndrCI.pDevice->GetDeviceInfo().IsGLDevice());
+            const std::string PSMain = GetEnvMapPSMain(EnvMapRndrCI.pDevice->GetDeviceInfo().IsGLDevice() ||
+                                                       EnvMapRndrCI.pDevice->GetDeviceInfo().IsVulkanDevice());
+
             EnvMapRndrCI.PSMainSource = PSMain.c_str();
 
             m_EnvMapRenderer = std::make_unique<EnvMapRenderer>(EnvMapRndrCI);
