@@ -45,7 +45,7 @@ Hydrogent is an implementation of the Hydra rendering API in Diligent Engine.
    * On Windows and MacOS, follow the [build instructions](https://github.com/adobe/USD-Fileformat-plugins?tab=readme-ov-file#build),
      but build each configuration in a respective folder. For example, on Windows:
 	 ```bash
-     cmake -S . -B build -DCMAKE_INSTALL_PREFIX=bin/Debug -Dpxr_ROOT=<OPEN_USD_ROOT>/build/Debug <OPTIONS>
+     cmake -S . -B build/Debug -DCMAKE_INSTALL_PREFIX=bin/Debug -Dpxr_ROOT=<OPEN_USD_ROOT>/build/Debug -DUSD_FILEFORMATS_BUILD_TESTS=OFF <OPTIONS>
      cmake --build   build/Debug --config debug
      cmake --install build/Debug --config debug
 	 ```
@@ -76,5 +76,5 @@ If you are using USD File Format Plugins, the following paths must be also added
 Additionally, the following path must be added to the `PXR_PLUGINPATH_NAME` environment variable:
 
 ```
-<USD_FILEFORMAT_PLUGINS_ROOT>\USD-Fileformat-plugins\bin\Debug\plugin\usd
+<USD_FILEFORMAT_PLUGINS_ROOT>\bin\Debug\plugin\usd
 ```
