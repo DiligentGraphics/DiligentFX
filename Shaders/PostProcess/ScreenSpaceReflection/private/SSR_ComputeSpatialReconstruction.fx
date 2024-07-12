@@ -62,11 +62,21 @@ float4 ComputeBlurKernelRotation(uint2 PixelCoord, uint FrameIndex)
     return GetRotator(2.0 * M_PI * Angle);
 }
 
+bool IsNaN(float x)
+{
+#if WEBGPU
+	// Tint reader can't generate correct code for isnan
+    return (asuint(x) & 0x7FFFFFFF) > 0x7F800000;
+#else
+    return isnan(x);
+#endif
+}
+
 float2 ComputeWeightRayLength(int2 PixelCoord, float3 V, float3 N, float Roughness, float NdotV, float Weight)
 {
     float4 RayDirectionPDF = g_TextureRayDirectionPDF.Load(int3(PixelCoord, 0));
     float InvRayLength = rsqrt(dot(RayDirectionPDF.xyz, RayDirectionPDF.xyz));
-    if (isnan(InvRayLength))
+    if (IsNaN(InvRayLength))
     {
         return float2(1.0e-6f, 1.0e-6f);
     }

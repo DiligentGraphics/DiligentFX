@@ -77,8 +77,9 @@ void ScreenSpaceAmbientOcclusion::PrepareResources(IRenderDevice* pDevice, IDevi
     m_BackBufferHeight = FrameDesc.Height;
     m_FeatureFlags     = FeatureFlags;
 
-    m_BackBufferFormats.ConvolutionDepth  = FeatureFlags & FEATURE_FLAG_HALF_PRECISION_DEPTH ? TEX_FORMAT_R16_UNORM : TEX_FORMAT_R32_FLOAT;
-    m_BackBufferFormats.PrefileteredDepth = FeatureFlags & FEATURE_FLAG_HALF_PRECISION_DEPTH ? TEX_FORMAT_R16_UNORM : TEX_FORMAT_R32_FLOAT;
+    bool Unorm16Supported                 = pDevice->GetTextureFormatInfoExt(TEX_FORMAT_R16_UNORM).BindFlags & BIND_RENDER_TARGET;
+    m_BackBufferFormats.ConvolutionDepth  = (FeatureFlags & FEATURE_FLAG_HALF_PRECISION_DEPTH) && Unorm16Supported ? TEX_FORMAT_R16_UNORM : TEX_FORMAT_R32_FLOAT;
+    m_BackBufferFormats.PrefileteredDepth = (FeatureFlags & FEATURE_FLAG_HALF_PRECISION_DEPTH) && Unorm16Supported ? TEX_FORMAT_R16_UNORM : TEX_FORMAT_R32_FLOAT;
 
     RenderDeviceWithCache_N Device{pDevice};
 
@@ -449,7 +450,7 @@ bool ScreenSpaceAmbientOcclusion::PrepareShadersAndPSO(const RenderAttributes& R
             const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSAO_ComputeDownsampledDepth.fx", "ComputeDownsampledDepthPS", SHADER_TYPE_PIXEL, Macros, IsAsyncCreation);
 
             PipelineResourceLayoutDescX ResourceLayout;
-            ResourceLayout.AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
+            ResourceLayout.AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC, SHADER_VARIABLE_FLAG_UNFILTERABLE_FLOAT_TEXTURE_WEBGPU);
 
             RenderTech.InitializePSO(RenderAttribs.pDevice,
                                      nullptr, "ScreenSpaceAmbientOcclusion::ComputeDownsampledDepth",
@@ -548,13 +549,15 @@ bool ScreenSpaceAmbientOcclusion::PrepareShadersAndPSO(const RenderAttributes& R
             const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, IsAsyncCreation);
             const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSAO_ComputeBilateralUpsampling.fx", "ComputeBilateralUpsamplingPS", SHADER_TYPE_PIXEL, Macros, IsAsyncCreation);
 
+            bool LinearDepthSamplingSupported = !RenderAttribs.pDevice->GetDeviceInfo().IsWebGPUDevice();
+
             PipelineResourceLayoutDescX ResourceLayout;
             ResourceLayout
                 .AddVariable(SHADER_TYPE_PIXEL, "cbCameraAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
                 .AddVariable(SHADER_TYPE_PIXEL, "cbScreenSpaceAmbientOcclusionAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
-                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC, SHADER_VARIABLE_FLAG_UNFILTERABLE_FLOAT_TEXTURE_WEBGPU)
                 .AddVariable(SHADER_TYPE_PIXEL, "g_TextureOcclusion", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-                .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureDepth", Sam_LinearClamp)
+                .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureDepth", LinearDepthSamplingSupported ? Sam_LinearClamp : Sam_PointClamp)
                 .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureOcclusion", Sam_LinearClamp);
 
             RenderTech.InitializePSO(RenderAttribs.pDevice,
@@ -695,7 +698,7 @@ bool ScreenSpaceAmbientOcclusion::PrepareShadersAndPSO(const RenderAttributes& R
             ResourceLayout
                 .AddVariable(SHADER_TYPE_PIXEL, "cbCameraAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
                 .AddVariable(SHADER_TYPE_PIXEL, "cbScreenSpaceAmbientOcclusionAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
-                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC, SHADER_VARIABLE_FLAG_UNFILTERABLE_FLOAT_TEXTURE_WEBGPU)
                 .AddVariable(SHADER_TYPE_PIXEL, "g_TextureOcclusion", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
                 .AddVariable(SHADER_TYPE_PIXEL, "g_TextureNormal", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
                 .AddVariable(SHADER_TYPE_PIXEL, "g_TextureHistory", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);

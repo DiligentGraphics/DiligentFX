@@ -39,7 +39,29 @@ float SampleOcclusionLinear(float2 Texcoord)
 
 float SampleDepthLinear(float2 Texcoord)
 {
+#if defined(WEBGPU)
+    float2 Position = g_Camera.f4ViewportSize.xy * Texcoord;
+    int2 Positioni = int2(Position - 0.5);
+    
+    float x = frac(Position + 0.5);
+    float y = frac(Position + 0.5);
+
+    float4 Weight;
+    Weight.x = (1.0 - x) * (1.0 - y);
+    Weight.y = x * (1.0 - y);
+    Weight.z = (1.0 - x) * y;
+    Weight.w = x * y;
+    
+    float4 Gather;
+    Gather.x = g_TextureDepth.Load(int3(Positioni + int2(0, 0), 0));
+    Gather.y = g_TextureDepth.Load(int3(Positioni + int2(1, 0), 0));
+    Gather.z = g_TextureDepth.Load(int3(Positioni + int2(0, 1), 0));
+    Gather.w = g_TextureDepth.Load(int3(Positioni + int2(1, 1), 0));
+    
+    return dot(Weight, Gather);
+#else
     return g_TextureDepth.SampleLevel(g_TextureDepth_sampler, Texcoord, 0.0);
+#endif
 }
 
 float ComputeBilateralUpsamplingPS(in FullScreenTriangleVSOutput VSOut) : SV_Target0

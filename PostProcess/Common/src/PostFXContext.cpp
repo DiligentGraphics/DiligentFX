@@ -368,7 +368,7 @@ void PostFXContext::CopyTextureDepth(const TextureOperationAttribs& Attribs, ITe
     if (!RenderTech.IsInitializedPSO())
     {
         PipelineResourceLayoutDescX ResourceLayout;
-        ResourceLayout.AddVariable(SHADER_TYPE_PIXEL, "g_Texture", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
+        ResourceLayout.AddVariable(SHADER_TYPE_PIXEL, "g_Texture", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC, SHADER_VARIABLE_FLAG_UNFILTERABLE_FLOAT_TEXTURE_WEBGPU);
         ResourceLayout.AddImmutableSampler(SHADER_TYPE_PIXEL, "g_Texture", Sam_PointClamp);
 
         RenderTech.InitializePSO(Attribs.pDevice,
@@ -461,7 +461,7 @@ bool PostFXContext::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, 
             PipelineResourceLayoutDescX ResourceLayout;
             ResourceLayout
                 .AddVariable(SHADER_TYPE_PIXEL, "cbCameraAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
-                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC, SHADER_VARIABLE_FLAG_UNFILTERABLE_FLOAT_TEXTURE_WEBGPU);
 
             const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, IsAsyncCreation);
             const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeReprojectedDepth.fx", "ComputeReprojectedDepthPS", SHADER_TYPE_PIXEL, {}, IsAsyncCreation);
@@ -487,7 +487,7 @@ bool PostFXContext::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, 
             PipelineResourceLayoutDescX ResourceLayout;
             ResourceLayout
                 .AddVariable(SHADER_TYPE_PIXEL, "g_TextureMotion", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
-                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC, SHADER_VARIABLE_FLAG_UNFILTERABLE_FLOAT_TEXTURE_WEBGPU);
 
             const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, IsAsyncCreation);
             const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeClosestMotion.fx", "ComputeClosestMotionPS", SHADER_TYPE_PIXEL, Macros, IsAsyncCreation);
@@ -508,7 +508,7 @@ bool PostFXContext::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, 
         if (!RenderTech.IsInitializedPSO())
         {
             PipelineResourceLayoutDescX ResourceLayout;
-            ResourceLayout.AddVariable(SHADER_TYPE_PIXEL, "g_Texture", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
+            ResourceLayout.AddVariable(SHADER_TYPE_PIXEL, "g_Texture", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC, SHADER_VARIABLE_FLAG_UNFILTERABLE_FLOAT_TEXTURE_WEBGPU);
             ResourceLayout.AddImmutableSampler(SHADER_TYPE_PIXEL, "g_Texture", Sam_PointClamp);
 
             RenderTech.InitializePSO(RenderAttribs.pDevice,

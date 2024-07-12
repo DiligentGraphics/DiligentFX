@@ -30,7 +30,7 @@ float SampleDepth(int2 PixelCoord, int MipLevel)
 
 float2 GetMipResolution(float2 ScreenDimensions, int MipLevel)
 {
-    return ScreenDimensions * rcp(float(1 << MipLevel));
+    return ScreenDimensions * rcp(float(1u << uint(MipLevel)));
 }
 
 float SampleDepthLinear(float2 Texcoord, int MipLevel)
@@ -75,7 +75,7 @@ float ComputeResampledHistoryPS(in FullScreenTriangleVSOutput VSOut) : SV_Target
     while (MipLevel >= 0 && WeightSum < 0.995) {
 
         float2 MipResolution = GetMipResolution(g_Camera.f4ViewportSize.xy, MipLevel);
-        float2 MipLocation = Position.xy * rcp(float(1 << MipLevel));
+        float2 MipLocation = Position.xy * rcp(float(1u << uint(MipLevel)));
 
         int2 MipLocationi = int2(MipLocation - 0.5);
         float x = frac(MipLocation.x + 0.5);
