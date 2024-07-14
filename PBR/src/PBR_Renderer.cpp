@@ -935,7 +935,8 @@ void PBR_Renderer::CreateSignature()
         else if (m_Settings.ShaderTexturesArrayMode == SHADER_TEXTURE_ARRAY_MODE_NONE)
         {
             TextureName = GetTextureShaderName(TexId);
-            SignatureDesc.AddResource(SHADER_TYPE_PIXEL, TextureName.c_str(), SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
+            SignatureDesc.AddResource(SHADER_TYPE_PIXEL, TextureName.c_str(), SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE,
+                                      PIPELINE_RESOURCE_FLAG_NONE, WebGPUResourceAttribs{WEB_GPU_BINDING_TYPE_DEFAULT, RESOURCE_DIM_TEX_2D_ARRAY});
             if (m_Device.GetDeviceInfo().IsGLDevice())
             {
                 SamplerName = TextureName.c_str();
@@ -1017,9 +1018,10 @@ void PBR_Renderer::CreateSignature()
     auto AddTextureAndSampler = [&](const char*                   TextureName,
                                     const SamplerDesc&            SamDesc,
                                     const char*                   SeparateSamplerName,
-                                    SHADER_RESOURCE_VARIABLE_TYPE VarType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE) //
+                                    SHADER_RESOURCE_VARIABLE_TYPE VarType     = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE,
+                                    const WebGPUResourceAttribs&  WGPUAttribs = {}) //
     {
-        SignatureDesc.AddResource(SHADER_TYPE_PIXEL, TextureName, SHADER_RESOURCE_TYPE_TEXTURE_SRV, VarType);
+        SignatureDesc.AddResource(SHADER_TYPE_PIXEL, TextureName, SHADER_RESOURCE_TYPE_TEXTURE_SRV, VarType, PIPELINE_RESOURCE_FLAG_NONE, WGPUAttribs);
 
         const char* SamplerName = m_Device.GetDeviceInfo().IsGLDevice() ? TextureName : SeparateSamplerName;
         if (Samplers.emplace(SamplerName).second)
@@ -1031,8 +1033,8 @@ void PBR_Renderer::CreateSignature()
     if (m_Settings.EnableIBL)
     {
         AddTextureAndSampler("g_PreintegratedGGX", Sam_LinearClamp, "g_LinearClampSampler", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
-        AddTextureAndSampler("g_IrradianceMap", Sam_LinearClamp, "g_LinearClampSampler");
-        AddTextureAndSampler("g_PrefilteredEnvMap", Sam_LinearClamp, "g_LinearClampSampler");
+        AddTextureAndSampler("g_IrradianceMap", Sam_LinearClamp, "g_LinearClampSampler", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE, {WEB_GPU_BINDING_TYPE_DEFAULT, RESOURCE_DIM_TEX_CUBE});
+        AddTextureAndSampler("g_PrefilteredEnvMap", Sam_LinearClamp, "g_LinearClampSampler", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE, {WEB_GPU_BINDING_TYPE_DEFAULT, RESOURCE_DIM_TEX_CUBE});
 
         if (m_Settings.EnableSheen)
         {
