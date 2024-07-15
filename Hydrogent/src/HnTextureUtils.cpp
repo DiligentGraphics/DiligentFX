@@ -38,13 +38,12 @@ namespace USD
 RefCntAutoPtr<ITextureLoader> CreateTextureLoaderFromSdfPath(const char*            SdfPath,
                                                              const TextureLoadInfo& LoadInfo)
 {
-    pxr::ArResolver& Resolver = pxr::ArGetResolver();
-
-    pxr::ArResolvedPath ResolvedPath = Resolver.Resolve(SdfPath);
+    pxr::ArResolvedPath ResolvedPath{SdfPath};
     if (ResolvedPath.empty())
         return {};
 
-    std::shared_ptr<pxr::ArAsset> Asset = Resolver.OpenAsset(ResolvedPath);
+    const pxr::ArResolver&        Resolver = pxr::ArGetResolver();
+    std::shared_ptr<pxr::ArAsset> Asset    = Resolver.OpenAsset(ResolvedPath);
     if (!Asset)
         return {};
 
