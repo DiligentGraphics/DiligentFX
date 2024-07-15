@@ -136,7 +136,15 @@ SamplerState g_LinearClampSampler;
 
 
 #if USE_MATERIAL_TEXTURES_ARRAY && defined(PBR_NUM_MATERIAL_TEXTURES) && PBR_NUM_MATERIAL_TEXTURES > 0
-    Texture2DArray g_MaterialTextures[PBR_NUM_MATERIAL_TEXTURES];
+#   ifndef WEBGPU // WebGPU does not support resource arrays
+        Texture2DArray g_MaterialTextures[PBR_NUM_MATERIAL_TEXTURES];
+#   else
+        // Defined on the host
+        UNROLLED_MATERIAL_TEXTURES_ARRAY
+        // Texture2DArray g_MaterialTextures_0;
+        // Texture2DArray g_MaterialTextures_1;
+        // ...
+#   endif
 #endif
 
 #if PBR_TEXTURE_ARRAY_INDEXING_MODE == PBR_TEXTURE_ARRAY_INDEXING_MODE_DYNAMIC
@@ -160,9 +168,17 @@ SamplerState g_LinearClampSampler;
 #   define ThicknessTextureId            Material.Textures[ThicknessTextureAttribId].TextureSlice
 #endif
 
+#ifndef WEBGPU
+#   define MATERIAL_TEXTURE(Idx) g_MaterialTextures[Idx]
+#else
+    // glsang supports token pasting, but it is not part of official GLSL or HLSL specs,
+    // so we define this macros on the host.
+    // #define MATERIAL_TEXTURE(Idx) g_MaterialTextures_##Idx
+#endif
+
 #if USE_COLOR_MAP
 #   if USE_MATERIAL_TEXTURES_ARRAY
-#       define g_BaseColorMap g_MaterialTextures[BaseColorTextureId]
+#       define g_BaseColorMap MATERIAL_TEXTURE(BaseColorTextureId)
 #   else
         Texture2DArray g_BaseColorMap;
 #   endif
@@ -171,7 +187,7 @@ SamplerState g_LinearClampSampler;
 
 #if USE_METALLIC_MAP
 #   if USE_MATERIAL_TEXTURES_ARRAY
-#       define g_MetallicMap g_MaterialTextures[MetallicTextureId]
+#       define g_MetallicMap MATERIAL_TEXTURE(MetallicTextureId)
 #   else
         Texture2DArray g_MetallicMap;
 #   endif
@@ -180,7 +196,7 @@ SamplerState g_LinearClampSampler;
 
 #if USE_ROUGHNESS_MAP
 #   if USE_MATERIAL_TEXTURES_ARRAY
-#       define g_RoughnessMap g_MaterialTextures[RoughnessTextureId]
+#       define g_RoughnessMap MATERIAL_TEXTURE(RoughnessTextureId)
 #   else
         Texture2DArray g_RoughnessMap;
 #   endif
@@ -189,7 +205,7 @@ SamplerState g_LinearClampSampler;
 
 #if USE_PHYS_DESC_MAP
 #   if USE_MATERIAL_TEXTURES_ARRAY
-#       define g_PhysicalDescriptorMap g_MaterialTextures[PhysicalDescriptorTextureId]
+#       define g_PhysicalDescriptorMap MATERIAL_TEXTURE(PhysicalDescriptorTextureId)
 #   else
         Texture2DArray g_PhysicalDescriptorMap;
 #   endif
@@ -198,7 +214,7 @@ SamplerState g_LinearClampSampler;
 
 #if USE_NORMAL_MAP
 #   if USE_MATERIAL_TEXTURES_ARRAY
-#       define g_NormalMap g_MaterialTextures[NormalTextureId]
+#       define g_NormalMap MATERIAL_TEXTURE(NormalTextureId)
 #   else
         Texture2DArray g_NormalMap;
 #   endif
@@ -207,7 +223,7 @@ SamplerState g_LinearClampSampler;
 
 #if USE_AO_MAP
 #   if USE_MATERIAL_TEXTURES_ARRAY
-#       define g_OcclusionMap g_MaterialTextures[OcclusionTextureId]
+#       define g_OcclusionMap MATERIAL_TEXTURE(OcclusionTextureId)
 #   else
         Texture2DArray g_OcclusionMap;
 #   endif
@@ -216,7 +232,7 @@ SamplerState g_LinearClampSampler;
 
 #if USE_EMISSIVE_MAP
 #   if USE_MATERIAL_TEXTURES_ARRAY
-#       define g_EmissiveMap g_MaterialTextures[EmissiveTextureId]
+#       define g_EmissiveMap MATERIAL_TEXTURE(EmissiveTextureId)
 #   else
         Texture2DArray g_EmissiveMap;
 #   endif
@@ -230,7 +246,7 @@ SamplerState g_LinearClampSampler;
 
 #if USE_CLEAR_COAT_MAP
 #   if USE_MATERIAL_TEXTURES_ARRAY
-#       define g_ClearCoatMap g_MaterialTextures[ClearCoatTextureId]
+#       define g_ClearCoatMap MATERIAL_TEXTURE(ClearCoatTextureId)
 #   else
         Texture2DArray g_ClearCoatMap;
 #   endif
@@ -239,7 +255,7 @@ SamplerState g_LinearClampSampler;
 
 #if USE_CLEAR_COAT_ROUGHNESS_MAP
 #   if USE_MATERIAL_TEXTURES_ARRAY
-#       define g_ClearCoatRoughnessMap g_MaterialTextures[ClearCoatRoughnessTextureId]
+#       define g_ClearCoatRoughnessMap MATERIAL_TEXTURE(ClearCoatRoughnessTextureId)
 #   else
         Texture2DArray g_ClearCoatRoughnessMap;
 #   endif
@@ -248,7 +264,7 @@ SamplerState g_LinearClampSampler;
 
 #if USE_CLEAR_COAT_NORMAL_MAP
 #   if USE_MATERIAL_TEXTURES_ARRAY
-#       define g_ClearCoatNormalMap g_MaterialTextures[ClearCoatNormalTextureId]
+#       define g_ClearCoatNormalMap MATERIAL_TEXTURE(ClearCoatNormalTextureId)
 #   else
         Texture2DArray g_ClearCoatNormalMap;
 #   endif
@@ -262,7 +278,7 @@ SamplerState g_LinearClampSampler;
 
 #if USE_SHEEN_COLOR_MAP
 #   if USE_MATERIAL_TEXTURES_ARRAY
-#       define g_SheenColorMap g_MaterialTextures[SheenColorTextureId]
+#       define g_SheenColorMap MATERIAL_TEXTURE(SheenColorTextureId)
 #   else
         Texture2DArray g_SheenColorMap;
 #   endif
@@ -271,7 +287,7 @@ SamplerState g_LinearClampSampler;
 
 #if USE_SHEEN_ROUGHNESS_MAP
 #   if USE_MATERIAL_TEXTURES_ARRAY
-#       define g_SheenRoughnessMap g_MaterialTextures[SheenRoughnessTextureId]
+#       define g_SheenRoughnessMap MATERIAL_TEXTURE(SheenRoughnessTextureId)
 #   else
         Texture2DArray g_SheenRoughnessMap;
 #   endif
@@ -280,7 +296,7 @@ SamplerState g_LinearClampSampler;
 
 #if USE_ANISOTROPY_MAP
 #   if USE_MATERIAL_TEXTURES_ARRAY
-#       define g_AnisotropyMap g_MaterialTextures[AnisotropyTextureId]
+#       define g_AnisotropyMap MATERIAL_TEXTURE(AnisotropyTextureId)
 #   else
         Texture2DArray g_AnisotropyMap;
 #   endif
@@ -293,7 +309,7 @@ SamplerState g_LinearClampSampler;
 
 #if USE_IRIDESCENCE_MAP
 #   if USE_MATERIAL_TEXTURES_ARRAY
-#       define g_IridescenceMap g_MaterialTextures[IridescenceTextureId]
+#       define g_IridescenceMap MATERIAL_TEXTURE(IridescenceTextureId)
 #   else
         Texture2DArray g_IridescenceMap;
 #   endif
@@ -302,7 +318,7 @@ SamplerState g_LinearClampSampler;
 
 #if USE_IRIDESCENCE_THICKNESS_MAP
 #   if USE_MATERIAL_TEXTURES_ARRAY
-#       define g_IridescenceThicknessMap g_MaterialTextures[IridescenceThicknessTextureId]
+#       define g_IridescenceThicknessMap MATERIAL_TEXTURE(IridescenceThicknessTextureId)
 #   else
         Texture2DArray g_IridescenceThicknessMap;
 #   endif
@@ -311,7 +327,7 @@ SamplerState g_LinearClampSampler;
 
 #if USE_TRANSMISSION_MAP
 #   if USE_MATERIAL_TEXTURES_ARRAY
-#       define g_TransmissionMap g_MaterialTextures[TransmissionTextureId]
+#       define g_TransmissionMap MATERIAL_TEXTURE(TransmissionTextureId)
 #   else
         Texture2DArray g_TransmissionMap;
 #   endif
@@ -320,7 +336,7 @@ SamplerState g_LinearClampSampler;
 
 #if USE_THICKNESS_MAP
 #   if USE_MATERIAL_TEXTURES_ARRAY
-#       define g_ThicknessMap g_MaterialTextures[ThicknessTextureId]
+#       define g_ThicknessMap MATERIAL_TEXTURE(ThicknessTextureId)
 #   else
         Texture2DArray g_ThicknessMap;
 #   endif

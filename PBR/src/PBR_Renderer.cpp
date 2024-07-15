@@ -1012,7 +1012,8 @@ void PBR_Renderer::CreateSignature()
 
     if (MaterialTexturesArraySize > 0)
     {
-        SignatureDesc.AddResource(SHADER_TYPE_PIXEL, "g_MaterialTextures", MaterialTexturesArraySize, SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
+        SignatureDesc.AddResource(SHADER_TYPE_PIXEL, "g_MaterialTextures", MaterialTexturesArraySize, SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE,
+                                  PIPELINE_RESOURCE_FLAG_NONE, WebGPUResourceAttribs{WEB_GPU_BINDING_TYPE_DEFAULT, RESOURCE_DIM_TEX_2D_ARRAY});
     }
 
     auto AddTextureAndSampler = [&](const char*                   TextureName,
@@ -1278,6 +1279,19 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
         .Add("PBR_TEXTURE_ARRAY_INDEXING_MODE_STATIC", static_cast<int>(SHADER_TEXTURE_ARRAY_MODE_STATIC))
         .Add("PBR_TEXTURE_ARRAY_INDEXING_MODE_DYNAMIC", static_cast<int>(SHADER_TEXTURE_ARRAY_MODE_DYNAMIC))
         .Add("PBR_TEXTURE_ARRAY_INDEXING_MODE", static_cast<int>(m_Settings.ShaderTexturesArrayMode));
+
+    if (m_Device.GetDeviceInfo().IsWebGPUDevice())
+    {
+        std::string UnrolledMaterialTextureArray{"Texture2DArray "};
+        for (Uint32 i = 0; i < m_Settings.MaterialTexturesArraySize; ++i)
+        {
+            UnrolledMaterialTextureArray += std::string{"g_MaterialTextures_"} + std::to_string(i);
+            UnrolledMaterialTextureArray += i + 1 < m_Settings.MaterialTexturesArraySize ? ", " : ";";
+        }
+        Macros
+            .Add("UNROLLED_MATERIAL_TEXTURES_ARRAY", UnrolledMaterialTextureArray)
+            .Add("MATERIAL_TEXTURE(Idx)", "g_MaterialTextures_##Idx");
+    }
 
     return Macros;
 }
@@ -1601,6 +1615,8 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
             SHADER_SOURCE_LANGUAGE_HLSL,
             {!IsUnshaded ? "PBR PS" : "Unshaded PS", SHADER_TYPE_PIXEL, UseCombinedSamplers},
         };
+        ShaderCI.WebGPUEmulatedArrayIndexSuffix = "_";
+
         if (m_Settings.AsyncShaderCompilation)
             ShaderCI.CompileFlags |= SHADER_COMPILE_FLAG_ASYNCHRONOUS;
 
