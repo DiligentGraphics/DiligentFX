@@ -170,6 +170,9 @@ IPipelineState* EnvMapRenderer::GetPSO(const PSOKey& Key)
     for (auto RTVFormat : m_RTVFormats)
         PsoCI.AddRenderTarget(RTVFormat);
 
+    for (Uint32 RTVIndex = 1; RTVIndex < m_RTVFormats.size(); ++RTVIndex)
+        PsoCI.GraphicsPipeline.BlendDesc.RenderTargets[RTVIndex].RenderTargetWriteMask = COLOR_MASK_NONE;
+
     PsoCI.GraphicsPipeline.DepthStencilDesc.DepthFunc        = COMPARISON_FUNC_LESS_EQUAL;
     PsoCI.GraphicsPipeline.DepthStencilDesc.DepthWriteEnable = false;
 
