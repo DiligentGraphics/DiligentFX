@@ -83,7 +83,7 @@ float4 SampleTextureAtlas(Texture2DArray            Atlas,
     float fMaxGrad = max(fGradX, fGradY);
     
     float LOD;
-#ifndef GL_ES
+#if !defined(GL_ES) && !defined(WEBGPU)
     {
         // Calculate the texture LOD using smooth coordinates
         LOD = Atlas.CalculateLevelOfDetail(Atlas_sampler, Attribs.f2SmoothUV);
