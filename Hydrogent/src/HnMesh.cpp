@@ -40,6 +40,7 @@
 #include "EngineMemory.h"
 
 #include "pxr/base/gf/vec2f.h"
+#include "pxr/base/tf/smallVector.h"
 #include "pxr/imaging/hd/meshUtil.h"
 #include "pxr/imaging/hd/vtBufferSource.h"
 #include "pxr/imaging/hd/vertexAdjacency.h"
@@ -411,11 +412,11 @@ void HnMesh::UpdateTopology(pxr::HdSceneDelegate& SceneDelegate,
 
     m_StagingIndexData = std::make_unique<StagingIndexData>();
 
+    m_StagingIndexData->Faces = ComputeTriangleFaceIndices();
     pxr::HdMeshUtil MeshUtil{&m_Topology, Id};
-    pxr::VtIntArray PrimitiveParams;
-    MeshUtil.ComputeTriangleIndices(&m_StagingIndexData->TrianglesFaceIndices, &PrimitiveParams, nullptr);
     MeshUtil.EnumerateEdges(&m_StagingIndexData->MeshEdgeIndices);
-    m_IndexData.NumFaceTriangles = static_cast<Uint32>(m_StagingIndexData->TrianglesFaceIndices.size());
+    m_IndexData.Subsets          = m_StagingIndexData->Faces.Subsets;
+    m_IndexData.NumFaceTriangles = static_cast<Uint32>(m_StagingIndexData->Faces.Indices.size());
     m_IndexData.NumEdges         = static_cast<Uint32>(m_StagingIndexData->MeshEdgeIndices.size());
 
     DirtyBits &= ~pxr::HdChangeTracker::DirtyTopology;
@@ -739,19 +740,91 @@ private:
 
 } // namespace
 
+HnMesh::TriangleFaceIndexData HnMesh::ComputeTriangleFaceIndices()
+{
+    TriangleFaceIndexData FaceIndexData;
+
+    pxr::HdMeshUtil MeshUtil{&m_Topology, GetId()};
+    pxr::VtIntArray PrimitiveParams;
+    MeshUtil.ComputeTriangleIndices(&FaceIndexData.Indices, &PrimitiveParams, nullptr);
+
+    if (!m_Topology.GetGeomSubsets().empty())
+    {
+        const size_t FaceCount = m_Topology.GetFaceVertexCounts().size();
+        // PrimitiveParams is the mapping from the triangle index to the original face index.
+        //            +--------+---------------+
+        //           /| \      |\      |      /
+        //          / |  \  B  | \  C  |     /
+        //         /  |   \    |  \    |    /
+        //        /   |    \   |   \   | C /
+        //       / A  |  B  \  | C  \  |  /
+        //      /     |      \ |     \ | /
+        //     /      |       \|      \|/
+        //    +-------+--------+-------+
+        //
+        //  0 -> A
+        //  1 -> B, 2 -> B
+        //  3 -> C, 4 -> C, 5 -> C
+        //
+        // We need the reverse mapping:
+        //  A -> {0}
+        //  B -> {1, 2}
+        //  C -> {3, 4, 5}
+        std::vector<pxr::TfSmallVector<int, 4>> FaceIdxToTriIdx(FaceCount);
+        for (int i = 0; i < PrimitiveParams.size(); ++i)
+        {
+            int FaceIndex = pxr::HdMeshUtil::DecodeFaceIndexFromCoarseFaceParam(PrimitiveParams[i]);
+            if (FaceIndex >= FaceCount)
+            {
+                LOG_ERROR_MESSAGE("Invalid face index ", FaceIndex, " decoded from primitive param for triangle ", i, " in ", GetId(), " mesh. Expected value in the range [0, ", FaceCount, ").");
+                continue;
+            }
+            FaceIdxToTriIdx[FaceIndex].push_back(i);
+        }
+
+        pxr::VtVec3iArray Indices;
+
+        ProcessDrawItems(
+            [](HnDrawItem& DrawItem) {},
+            [&](const pxr::HdGeomSubset& Subset, HnDrawItem& DrawItem) {
+                const Uint32 FirstTri = static_cast<Uint32>(Indices.size());
+                for (int FaceIndex : Subset.indices)
+                {
+                    if (FaceIndex >= FaceCount)
+                    {
+                        LOG_ERROR_MESSAGE("Invalid face index ", FaceIndex, " for subset ", Subset.id, " in ", GetId(), " mesh. Expected value in the range [0, ", FaceCount, ").");
+                        continue;
+                    }
+
+                    for (int TriIndex : FaceIdxToTriIdx[FaceIndex])
+                    {
+                        Indices.push_back(FaceIndexData.Indices[TriIndex]);
+                    }
+                }
+                const Uint32 NumTris = static_cast<Uint32>(Indices.size() - FirstTri);
+                FaceIndexData.Subsets.emplace_back(GeometrySubsetRange{FirstTri * 3, NumTris * 3});
+            });
+        FaceIndexData.Indices = std::move(Indices);
+    }
+
+    return FaceIndexData;
+}
+
 void HnMesh::ConvertVertexPrimvarSources(FaceSourcesMapType&& FaceSources)
 {
-    pxr::VtVec3iArray TrianglesFaceIndices;
-    if (!m_StagingIndexData || m_StagingIndexData->TrianglesFaceIndices.empty())
+    TriangleFaceIndexData Faces;
+    if (!m_StagingIndexData || !m_StagingIndexData->Faces)
     {
         // Need to regenerate triangle indices
-        pxr::HdMeshUtil MeshUtil{&m_Topology, GetId()};
-        pxr::VtIntArray PrimitiveParams;
-        MeshUtil.ComputeTriangleIndices(&TrianglesFaceIndices, &PrimitiveParams, nullptr);
-        if (TrianglesFaceIndices.empty())
+        Faces = ComputeTriangleFaceIndices();
+        if (!Faces)
             return;
+
+        VERIFY(Faces.Subsets.size() == m_IndexData.Subsets.size(),
+               "The number of subsets is not consistent with the previously computed value. "
+               "This may indicate that the topology was not updated during the last sync.");
     }
-    const pxr::VtVec3iArray& Indices = !TrianglesFaceIndices.empty() ? TrianglesFaceIndices : m_StagingIndexData->TrianglesFaceIndices;
+    const pxr::VtVec3iArray& Indices = !Faces.Indices.empty() ? Faces.Indices : m_StagingIndexData->Faces.Indices;
     VERIFY(Indices.size() == m_IndexData.NumFaceTriangles,
            "The number of indices is not consistent with the previously computed value. "
            "This may indicate that the topology was not updated during the last sync.");
@@ -809,10 +882,10 @@ void HnMesh::ConvertVertexPrimvarSources(FaceSourcesMapType&& FaceSources)
     }
 
     // Replace original triangle indices with the list of unfolded face indices
-    m_StagingIndexData->TrianglesFaceIndices.resize(GetNumFaceTriangles());
-    for (Uint32 i = 0; i < m_StagingIndexData->TrianglesFaceIndices.size(); ++i)
+    m_StagingIndexData->Faces.Indices.resize(m_IndexData.NumFaceTriangles);
+    for (Uint32 i = 0; i < m_StagingIndexData->Faces.Indices.size(); ++i)
     {
-        pxr::GfVec3i& Tri{m_StagingIndexData->TrianglesFaceIndices[i]};
+        pxr::GfVec3i& Tri{m_StagingIndexData->Faces.Indices[i]};
         Tri[0] = i * 3 + 0;
         Tri[1] = i * 3 + 1;
         Tri[2] = i * 3 + 2;
@@ -836,7 +909,7 @@ void HnMesh::ConvertVertexPrimvarSources(FaceSourcesMapType&& FaceSources)
     }
 
     // Create point indices
-    m_StagingIndexData->PointIndices.resize(GetNumPoints());
+    m_StagingIndexData->PointIndices.resize(m_Topology.GetNumPoints());
     for (size_t i = 0; i < m_StagingIndexData->PointIndices.size(); ++i)
     {
         auto v_it                           = ReverseVertexMapping.find(i);
@@ -899,9 +972,9 @@ void HnMesh::AllocatePooledResources(pxr::HdSceneDelegate& SceneDelegate,
         const Uint32 StartVertex = m_VertexData.PoolAllocation->GetStartVertex();
         if (m_StagingIndexData && StartVertex != 0)
         {
-            if (!m_StagingIndexData->TrianglesFaceIndices.empty())
+            if (!m_StagingIndexData->Faces.Indices.empty())
             {
-                for (pxr::GfVec3i& Tri : m_StagingIndexData->TrianglesFaceIndices)
+                for (pxr::GfVec3i& Tri : m_StagingIndexData->Faces.Indices)
                 {
                     Tri[0] += StartVertex;
                     Tri[1] += StartVertex;
@@ -928,7 +1001,7 @@ void HnMesh::AllocatePooledResources(pxr::HdSceneDelegate& SceneDelegate,
             else
             {
                 // If there are no point indices, we need to create them
-                m_StagingIndexData->PointIndices.resize(GetNumPoints());
+                m_StagingIndexData->PointIndices.resize(m_Topology.GetNumPoints());
                 for (Uint32 i = 0; i < m_StagingIndexData->PointIndices.size(); ++i)
                 {
                     m_StagingIndexData->PointIndices[i] = StartVertex + i;
@@ -939,21 +1012,21 @@ void HnMesh::AllocatePooledResources(pxr::HdSceneDelegate& SceneDelegate,
 
     if (m_StagingIndexData && static_cast<const HnRenderParam*>(RenderParam)->GetUseIndexPool())
     {
-        if (!m_StagingIndexData->TrianglesFaceIndices.empty())
+        if (!m_StagingIndexData->Faces.Indices.empty())
         {
-            m_IndexData.FaceAllocation = ResMgr.AllocateIndices(sizeof(Uint32) * GetNumFaceTriangles() * 3);
+            m_IndexData.FaceAllocation = ResMgr.AllocateIndices(sizeof(Uint32) * m_IndexData.NumFaceTriangles * 3);
             m_IndexData.FaceStartIndex = m_IndexData.FaceAllocation->GetOffset() / sizeof(Uint32);
         }
 
         if (!m_StagingIndexData->MeshEdgeIndices.empty())
         {
-            m_IndexData.EdgeAllocation = ResMgr.AllocateIndices(sizeof(Uint32) * GetNumEdges() * 2);
+            m_IndexData.EdgeAllocation = ResMgr.AllocateIndices(sizeof(Uint32) * m_IndexData.NumEdges * 2);
             m_IndexData.EdgeStartIndex = m_IndexData.EdgeAllocation->GetOffset() / sizeof(Uint32);
         }
 
         if (!m_StagingIndexData->PointIndices.empty())
         {
-            m_IndexData.PointsAllocation = ResMgr.AllocateIndices(sizeof(Uint32) * GetNumPoints());
+            m_IndexData.PointsAllocation = ResMgr.AllocateIndices(sizeof(Uint32) * m_Topology.GetNumPoints());
             m_IndexData.PointsStartIndex = m_IndexData.PointsAllocation->GetOffset() / sizeof(Uint32);
         }
     }
@@ -1064,31 +1137,31 @@ void HnMesh::UpdateIndexBuffer(HnRenderDelegate& RenderDelegate)
         }
     };
 
-    if (!m_StagingIndexData->TrianglesFaceIndices.empty())
+    if (!m_StagingIndexData->Faces.Indices.empty())
     {
-        VERIFY_EXPR(GetNumFaceTriangles() == static_cast<size_t>(m_StagingIndexData->TrianglesFaceIndices.size()));
-        static_assert(sizeof(m_StagingIndexData->TrianglesFaceIndices[0]) == sizeof(Uint32) * 3, "Unexpected triangle data size");
+        VERIFY_EXPR(m_IndexData.NumFaceTriangles == static_cast<size_t>(m_StagingIndexData->Faces.Indices.size()));
+        static_assert(sizeof(m_StagingIndexData->Faces.Indices[0]) == sizeof(Uint32) * 3, "Unexpected triangle data size");
         m_IndexData.Faces = PrepareIndexBuffer("Triangle Index Buffer",
-                                               m_StagingIndexData->TrianglesFaceIndices.data(),
-                                               GetNumFaceTriangles() * sizeof(Uint32) * 3,
+                                               m_StagingIndexData->Faces.Indices.data(),
+                                               m_IndexData.NumFaceTriangles * sizeof(Uint32) * 3,
                                                m_IndexData.FaceAllocation);
     }
 
     if (!m_StagingIndexData->MeshEdgeIndices.empty())
     {
-        VERIFY_EXPR(GetNumEdges() == static_cast<Uint32>(m_StagingIndexData->MeshEdgeIndices.size()));
+        VERIFY_EXPR(m_IndexData.NumEdges == static_cast<Uint32>(m_StagingIndexData->MeshEdgeIndices.size()));
         m_IndexData.Edges = PrepareIndexBuffer("Edge Index Buffer",
                                                m_StagingIndexData->MeshEdgeIndices.data(),
-                                               GetNumEdges() * sizeof(Uint32) * 2,
+                                               m_IndexData.NumEdges * sizeof(Uint32) * 2,
                                                m_IndexData.EdgeAllocation);
     }
 
     if (!m_StagingIndexData->PointIndices.empty())
     {
-        VERIFY_EXPR(GetNumPoints() == static_cast<Uint32>(m_StagingIndexData->PointIndices.size()));
+        VERIFY_EXPR(m_Topology.GetNumPoints() == static_cast<int>(m_StagingIndexData->PointIndices.size()));
         m_IndexData.Points = PrepareIndexBuffer("Points Index Buffer",
                                                 m_StagingIndexData->PointIndices.data(),
-                                                GetNumPoints() * sizeof(Uint32),
+                                                m_Topology.GetNumPoints() * sizeof(Uint32),
                                                 m_IndexData.PointsAllocation);
     }
 
@@ -1136,44 +1209,49 @@ void HnMesh::UpdateDrawItemGpuGeometry(HnRenderDelegate& RenderDelegate)
 
 void HnMesh::UpdateDrawItemGpuTopology()
 {
-    HnDrawItem::TopologyData FaceTopology{
-        GetFaceIndexBuffer(),
-        GetFaceStartIndex(),
-        GetNumFaceTriangles() * 3,
-    };
-    HnDrawItem::TopologyData EdgeTopology{
-        GetEdgeIndexBuffer(),
-        GetEdgeStartIndex(),
-        GetNumEdges() * 2,
-    };
-    HnDrawItem::TopologyData PointsTopology{
-        GetPointsIndexBuffer(),
-        GetPointsStartIndex(),
-        GetNumPoints(),
-    };
-
+    Uint32 SubsetIdx = 0;
     ProcessDrawItems(
         [&](HnDrawItem& DrawItem) {
             if (m_Topology.GetGeomSubsets().empty())
             {
-                DrawItem.SetFaces(FaceTopology);
-                DrawItem.SetEdges(EdgeTopology);
-                DrawItem.SetPoints(PointsTopology);
+                DrawItem.SetFaces({
+                    m_IndexData.Faces,
+                    m_IndexData.FaceStartIndex,
+                    m_IndexData.NumFaceTriangles * 3,
+                });
             }
             else
             {
                 // Do not set topology if there are geometry subsets, so
                 // that the render pass skips this draw item.
                 DrawItem.SetFaces({});
-                DrawItem.SetEdges({});
-                DrawItem.SetPoints({});
             }
+
+            // Render edgesand points for the entire mesh at once
+            DrawItem.SetEdges({
+                m_IndexData.Edges,
+                m_IndexData.EdgeStartIndex,
+                m_IndexData.NumEdges * 2,
+            });
+
+            DrawItem.SetPoints({
+                m_IndexData.Points,
+                m_IndexData.PointsStartIndex,
+                static_cast<Uint32>(m_Topology.GetNumPoints()),
+            });
         },
         [&](const pxr::HdGeomSubset& Subset, HnDrawItem& DrawItem) {
-            DrawItem.SetFaces(FaceTopology);
-            DrawItem.SetEdges(EdgeTopology);
-            DrawItem.SetPoints(PointsTopology);
+            const GeometrySubsetRange& SubsetRange = m_IndexData.Subsets[SubsetIdx++];
+            DrawItem.SetFaces({
+                m_IndexData.Faces,
+                m_IndexData.FaceStartIndex + SubsetRange.StartIndex,
+                SubsetRange.NumIndices,
+            });
+            // Do not set edges and points for subsets
+            DrawItem.SetEdges({});
+            DrawItem.SetPoints({});
         });
+    VERIFY_EXPR(m_IndexData.Subsets.size() == SubsetIdx);
 }
 
 void HnMesh::CommitGPUResources(HnRenderDelegate& RenderDelegate)

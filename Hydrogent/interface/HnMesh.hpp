@@ -88,43 +88,6 @@ public:
     /// If the buffer doesn't exist, returns nullptr.
     IBuffer* GetVertexBuffer(const pxr::TfToken& Name) const;
 
-    /// Returns the face index buffer.
-    ///
-    /// \remarks    The index buffer contains the triangle list.
-    IBuffer* GetFaceIndexBuffer() const { return m_IndexData.Faces; }
-
-    /// Returns the edges index buffer.
-    ///
-    /// \remarks    The index buffer contains the line list.
-    IBuffer* GetEdgeIndexBuffer() const { return m_IndexData.Edges; }
-
-    /// Returns the points index buffer.
-    ///
-    /// \remarks    The index buffer contains the point list.
-    IBuffer* GetPointsIndexBuffer() const { return m_IndexData.Points; }
-
-    Uint32 GetNumFaceTriangles() const { return m_IndexData.NumFaceTriangles; }
-    Uint32 GetNumEdges() const { return m_IndexData.NumEdges; }
-    Uint32 GetNumPoints() const { return m_Topology.GetNumPoints(); }
-
-    /// Returns the start index of the face data in the index buffer.
-    ///
-    /// \remarks    This value should be used as the start index location
-    ///             for the face drawing commands.
-    Uint32 GetFaceStartIndex() const { return m_IndexData.FaceStartIndex; }
-
-    /// Returns the start index of the edges data in the index buffer.
-    ///
-    /// \remarks    This value should be used as the start index location
-    ///             for the mesh edges drawing commands.
-    Uint32 GetEdgeStartIndex() const { return m_IndexData.EdgeStartIndex; }
-
-    /// Returns the start index of the points data in the index buffer.
-    ///
-    /// \remarks    This value should be used as the start index location
-    ///             for the points drawing commands.
-    Uint32 GetPointsStartIndex() const { return m_IndexData.PointsStartIndex; }
-
     struct Components
     {
         struct Transform
@@ -201,6 +164,22 @@ private:
 
     void GenerateSmoothNormals();
 
+    struct GeometrySubsetRange
+    {
+        Uint32 StartIndex = 0;
+        Uint32 NumIndices = 0;
+    };
+
+    struct TriangleFaceIndexData
+    {
+        pxr::VtVec3iArray Indices;
+
+        std::vector<GeometrySubsetRange> Subsets;
+
+        operator bool() const { return !Indices.empty(); }
+    };
+    TriangleFaceIndexData ComputeTriangleFaceIndices();
+
     // Converts vertex primvar sources into face-varying primvar sources.
     void ConvertVertexPrimvarSources(FaceSourcesMapType&& FaceSources);
 
@@ -231,7 +210,8 @@ private:
 
     struct StagingIndexData
     {
-        pxr::VtVec3iArray         TrianglesFaceIndices;
+        TriangleFaceIndexData Faces;
+
         std::vector<pxr::GfVec2i> MeshEdgeIndices;
         std::vector<Uint32>       PointIndices;
     };
@@ -251,6 +231,8 @@ private:
         Uint32 FaceStartIndex   = 0;
         Uint32 EdgeStartIndex   = 0;
         Uint32 PointsStartIndex = 0;
+
+        std::vector<GeometrySubsetRange> Subsets;
 
         RefCntAutoPtr<IBuffer> Faces;
         RefCntAutoPtr<IBuffer> Edges;
