@@ -64,7 +64,7 @@ float4 ComputeBlurKernelRotation(uint2 PixelCoord, uint FrameIndex)
 
 bool IsNaN(float x)
 {
-#if WEBGPU
+#ifdef WEBGPU
 	// Tint reader can't generate correct code for isnan
     return (asuint(x) & 0x7FFFFFFF) > 0x7F800000;
 #else
