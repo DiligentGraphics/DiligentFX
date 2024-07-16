@@ -288,6 +288,8 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
         {
             m_RenderMode = RenderMode;
             m_DrawListItemsDirtyFlags |= DRAW_LIST_ITEM_DIRTY_FLAG_PSO | DRAW_LIST_ITEM_DIRTY_FLAG_MESH_DATA;
+            // Reset fallback PSO so that it is updated in UpdateDrawListGPUResources
+            m_FallbackPSO = nullptr;
         }
     }
 
