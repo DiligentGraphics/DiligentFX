@@ -830,6 +830,7 @@ void HnMesh::ConvertVertexPrimvarSources(FaceSourcesMapType&& FaceSources)
            "This may indicate that the topology was not updated during the last sync.");
 
     // Unpack vertex sources by unfolding triangle indices into linear list of vertices
+    int NumVerts = 0;
     for (auto& source_it : m_StagingVertexData->Sources)
     {
         auto& pSource = source_it.second;
@@ -839,6 +840,8 @@ void HnMesh::ConvertVertexPrimvarSources(FaceSourcesMapType&& FaceSources)
         const auto*       pSrcData    = static_cast<const Uint8*>(pSource->GetData());
         const pxr::HdType ElementType = pSource->GetTupleType().type;
         const size_t      ElementSize = HdDataSizeOfType(ElementType);
+
+        NumVerts = std::max(NumVerts, static_cast<int>(pSource->GetNumElements()));
 
         auto  FaceSource = std::make_shared<TriangulatedFaceBufferSource>(pSource->GetName(), pSource->GetTupleType(), Indices.size() * 3);
         auto& FaceData   = FaceSource->GetData();
@@ -873,12 +876,21 @@ void HnMesh::ConvertVertexPrimvarSources(FaceSourcesMapType&& FaceSources)
     //  Indices:  3 4 5 0 1 2
     //  Unfolded: D E F A B C
     //  Mapping:  0->3, 1->4, 2->5, 3->0, 4->1, 5->2
-    std::unordered_map<size_t, size_t> ReverseVertexMapping;
-    for (size_t i = 0; i < Indices.size(); ++i)
+    std::vector<int> ReverseVertexMapping(NumVerts, -1);
+    for (int i = 0; i < Indices.size(); ++i)
     {
         const pxr::GfVec3i& Tri = Indices[i];
-        for (size_t v = 0; v < 3; ++v)
-            ReverseVertexMapping.emplace(Tri[v], i * 3 + v);
+        for (int v = 0; v < 3; ++v)
+        {
+            if (Tri[v] >= NumVerts)
+            {
+                LOG_ERROR_MESSAGE("Invalid vertex index ", Tri[v], " in triangle ", i, " in ", GetId(), " mesh. Expected value in the range [0, ", NumVerts, ").");
+                continue;
+            }
+            int& MappedIndex = ReverseVertexMapping[Tri[v]];
+            if (MappedIndex < 0)
+                MappedIndex = i * 3 + v;
+        }
     }
 
     // Replace original triangle indices with the list of unfolded face indices
@@ -894,12 +906,18 @@ void HnMesh::ConvertVertexPrimvarSources(FaceSourcesMapType&& FaceSources)
     // Update edge indices
     for (pxr::GfVec2i& Edge : m_StagingIndexData->MeshEdgeIndices)
     {
-        auto v0_it = ReverseVertexMapping.find(Edge[0]);
-        auto v1_it = ReverseVertexMapping.find(Edge[1]);
-        if (v0_it != ReverseVertexMapping.end() && v1_it != ReverseVertexMapping.end())
+        if (Edge[0] >= NumVerts || Edge[1] >= NumVerts)
         {
-            Edge[0] = static_cast<int>(v0_it->second);
-            Edge[1] = static_cast<int>(v1_it->second);
+            LOG_ERROR_MESSAGE("Invalid vertex index in edge ", Edge[0], " - ", Edge[1], " in ", GetId(), " mesh. Expected value in the range [0, ", NumVerts, ").");
+            continue;
+        }
+
+        int v0 = ReverseVertexMapping[Edge[0]];
+        int v1 = ReverseVertexMapping[Edge[1]];
+        if (v0 >= 0 && v1 >= 0)
+        {
+            Edge[0] = v0;
+            Edge[1] = v1;
         }
         else
         {
@@ -912,8 +930,10 @@ void HnMesh::ConvertVertexPrimvarSources(FaceSourcesMapType&& FaceSources)
     m_StagingIndexData->PointIndices.resize(m_Topology.GetNumPoints());
     for (size_t i = 0; i < m_StagingIndexData->PointIndices.size(); ++i)
     {
-        auto v_it                           = ReverseVertexMapping.find(i);
-        m_StagingIndexData->PointIndices[i] = v_it != ReverseVertexMapping.end() ? static_cast<Uint32>(v_it->second) : 0;
+        if (i < NumVerts)
+        {
+            m_StagingIndexData->PointIndices[i] = ReverseVertexMapping[i];
+        }
     }
 }
 
