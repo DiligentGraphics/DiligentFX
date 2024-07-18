@@ -193,6 +193,18 @@ std::string PBR_Renderer::GetPSOFlagsString(PSO_FLAGS Flags)
     return FlagsStr;
 }
 
+const char* PBR_Renderer::GetAlphaModeString(ALPHA_MODE AlphaMode)
+{
+    switch (AlphaMode)
+    {
+        case ALPHA_MODE_OPAQUE: return "opaque";
+        case ALPHA_MODE_MASK: return "mask";
+        case ALPHA_MODE_BLEND: return "blend";
+        default: UNEXPECTED("Unknown alpha mode");
+    }
+    return "";
+}
+
 template <typename FaceHandlerType>
 void ProcessCubemapFaces(IDeviceContext* pCtx, ITexture* pCubemap, FaceHandlerType&& FaceHandler)
 {
@@ -425,7 +437,7 @@ PBR_Renderer::~PBR_Renderer()
         {
             NumPSOs += it.second.size();
         }
-        LOG_INFO_MESSAGE("PBR Renderer: PSO cache size: ", NumPSOs, ".");
+        LOG_INFO_MESSAGE("PBR Renderer objects: PSO: ", NumPSOs, "; VS: ", m_VertexShaders.size(), "; PS: ", m_PixelShaders.size());
     }
 #endif
 }
@@ -1504,7 +1516,11 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
     const auto PSOFlags   = Key.GetFlags();
     const auto IsUnshaded = (PSOFlags & PSO_FLAG_UNSHADED) != 0;
 
-    LOG_DVP_INFO_MESSAGE("PBR Renderer: creating PSO with flags: ", GetPSOFlagsString(PSOFlags), "; debug view: ", static_cast<int>(Key.GetDebugView()), "; user value: ", Key.GetUserValue());
+    LOG_DVP_INFO_MESSAGE("PBR Renderer: creating PSO with flags: ", GetPSOFlagsString(PSOFlags),
+                         "; debug view: ", static_cast<int>(Key.GetDebugView()),
+                         "; user value: ", Key.GetUserValue(),
+                         ": cull: ", GetCullModeLiteralName(Key.IsDoubleSided() ? CULL_MODE_NONE : CULL_MODE_BACK),
+                         "; alpha: ", GetAlphaModeString(Key.GetAlphaMode()));
 
     InputLayoutDescX InputLayout;
     std::string      VSInputStruct;
@@ -1550,7 +1566,8 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
 
     const bool UseCombinedSamplers = m_Device.GetDeviceInfo().IsGLDevice();
 
-    RefCntAutoPtr<IShader> pVS;
+    RefCntAutoPtr<IShader>& pVS = m_VertexShaders[PSOFlags];
+    if (!pVS)
     {
         ShaderCreateInfo ShaderCI{
             "RenderPBR.vsh",
@@ -1605,7 +1622,8 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
         pVS = m_Device.CreateShader(ShaderCI);
     }
 
-    RefCntAutoPtr<IShader> pPS;
+    RefCntAutoPtr<IShader>& pPS = m_PixelShaders[PSOFlags];
+    if (!pPS)
     {
         ShaderCreateInfo ShaderCI{
             !IsUnshaded ? "RenderPBR.psh" : "RenderUnshaded.psh",
@@ -1635,45 +1653,44 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
     PSOCreateInfo.pVS = pVS;
     PSOCreateInfo.pPS = pPS;
 
-    for (auto AlphaMode : {ALPHA_MODE_OPAQUE, ALPHA_MODE_BLEND})
+    const ALPHA_MODE AlphaMode = Key.GetAlphaMode();
+    if (AlphaMode == ALPHA_MODE_OPAQUE ||
+        AlphaMode == ALPHA_MODE_MASK)
     {
-        if (AlphaMode == ALPHA_MODE_OPAQUE)
-        {
-            PSOCreateInfo.GraphicsPipeline.BlendDesc = BS_Default;
-        }
-        else
-        {
-            if (IsUnshaded)
-                continue;
+        PSOCreateInfo.GraphicsPipeline.BlendDesc = BS_Default;
+    }
+    else if (AlphaMode == ALPHA_MODE_BLEND)
+    {
+        VERIFY(!IsUnshaded, "Unshaded mode should use OpaquePSO. The PSOKey's ctor sets the alpha mode to opaque.");
 
-            auto& RT0          = GraphicsPipeline.BlendDesc.RenderTargets[0];
-            RT0.BlendEnable    = true;
-            RT0.SrcBlend       = BLEND_FACTOR_ONE;
-            RT0.DestBlend      = BLEND_FACTOR_INV_SRC_ALPHA;
-            RT0.BlendOp        = BLEND_OPERATION_ADD;
-            RT0.SrcBlendAlpha  = BLEND_FACTOR_ONE;
-            RT0.DestBlendAlpha = BLEND_FACTOR_INV_SRC_ALPHA;
-            RT0.BlendOpAlpha   = BLEND_OPERATION_ADD;
-        }
+        auto& RT0          = GraphicsPipeline.BlendDesc.RenderTargets[0];
+        RT0.BlendEnable    = true;
+        RT0.SrcBlend       = BLEND_FACTOR_ONE;
+        RT0.DestBlend      = BLEND_FACTOR_INV_SRC_ALPHA;
+        RT0.BlendOp        = BLEND_OPERATION_ADD;
+        RT0.SrcBlendAlpha  = BLEND_FACTOR_ONE;
+        RT0.DestBlendAlpha = BLEND_FACTOR_INV_SRC_ALPHA;
+        RT0.BlendOpAlpha   = BLEND_OPERATION_ADD;
+    }
+    else
+    {
+        UNEXPECTED("Unknown alpha mode");
+    }
 
-        for (auto CullMode : {CULL_MODE_BACK, CULL_MODE_NONE})
-        {
-            std::string PSOName{!IsUnshaded ? "PBR PSO" : "Unshaded PSO"};
-            PSOName += (AlphaMode == ALPHA_MODE_OPAQUE ? " - opaque" : " - blend");
-            PSOName += (CullMode == CULL_MODE_BACK ? " - backface culling" : " - no culling");
-            PSODesc.Name = PSOName.c_str();
+    std::string PSOName{!IsUnshaded ? "PBR PSO - " : "Unshaded PSO - "};
+    PSOName += GetAlphaModeString(AlphaMode);
+    PSOName += (!Key.IsDoubleSided() ? " - backface culling" : " - no culling");
+    PSODesc.Name = PSOName.c_str();
 
-            GraphicsPipeline.RasterizerDesc.CullMode = CullMode;
-            const auto DoubleSided                   = CullMode == CULL_MODE_NONE;
-            auto       PSO                           = m_Device.CreateGraphicsPipelineState(PSOCreateInfo);
+    GraphicsPipeline.RasterizerDesc.CullMode = Key.IsDoubleSided() ? CULL_MODE_NONE : CULL_MODE_BACK;
+    auto PSO                                 = m_Device.CreateGraphicsPipelineState(PSOCreateInfo);
 
-            PsoHashMap[{PSOFlags, AlphaMode, DoubleSided, Key}] = PSO;
-            if (AlphaMode == ALPHA_MODE_OPAQUE)
-            {
-                // Mask and opaque use the same PSO
-                PsoHashMap[{PSOFlags, ALPHA_MODE_MASK, DoubleSided, Key}] = PSO;
-            }
-        }
+    PsoHashMap[Key] = PSO;
+    // Mask and opaque use the same PSO
+    if (AlphaMode == ALPHA_MODE_OPAQUE || AlphaMode == ALPHA_MODE_MASK)
+    {
+
+        PsoHashMap[{PSOFlags, AlphaMode == ALPHA_MODE_OPAQUE ? ALPHA_MODE_MASK : ALPHA_MODE_OPAQUE, Key.IsDoubleSided(), Key}] = PSO;
     }
 }
 

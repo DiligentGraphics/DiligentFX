@@ -517,6 +517,7 @@ public:
     };
 
     static std::string GetPSOFlagsString(PSO_FLAGS Flags);
+    static const char* GetAlphaModeString(ALPHA_MODE AlphaMode);
 
     class PSOKey
     {
@@ -779,6 +780,9 @@ protected:
     std::unordered_set<std::string> m_GeneratedIncludes;
 
     std::vector<RefCntAutoPtr<IPipelineResourceSignature>> m_ResourceSignatures;
+
+    std::unordered_map<PSO_FLAGS, RefCntAutoPtr<IShader>> m_VertexShaders;
+    std::unordered_map<PSO_FLAGS, RefCntAutoPtr<IShader>> m_PixelShaders;
 
     std::unordered_map<GraphicsPipelineDesc, PsoHashMapType> m_PSOs;
 
