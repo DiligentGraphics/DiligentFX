@@ -106,7 +106,7 @@ public:
         };
     };
 
-    CULL_MODE GetCullMode() const { return m_IsDoubleSided ? CULL_MODE_NONE : CULL_MODE_BACK; }
+    CULL_MODE GetCullMode() const { return m_CullMode != CULL_MODE_UNDEFINED ? m_CullMode : CULL_MODE_BACK; }
 
     Uint32 GetUID() const { return m_UID; }
 
@@ -256,7 +256,8 @@ private:
     };
     VertexData m_VertexData;
 
-    bool m_IsDoubleSided = false;
+    bool      m_IsDoubleSided = false;
+    CULL_MODE m_CullMode      = CULL_MODE_UNDEFINED;
 
     std::atomic<Uint32> m_GeometryVersion{0};
     std::atomic<Uint32> m_MaterialVersion{0};

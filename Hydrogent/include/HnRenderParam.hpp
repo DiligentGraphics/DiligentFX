@@ -80,6 +80,9 @@ public:
         // Indicates changes to mesh visibility.
         MeshVisibility,
 
+        // Indicates changes to mesh culling mode (front, back, none).
+        MeshCulling,
+
         // Indicates changes to mesh materials:
         //   - Material assignment
         //   - Display style

@@ -164,10 +164,12 @@ void HnMesh::Sync(pxr::HdSceneDelegate* Delegate,
     if (*DirtyBits == pxr::HdChangeTracker::Clean)
         return;
 
+    const pxr::SdfPath& Id = GetId();
+
     bool UpdateMaterials = false;
     if (*DirtyBits & pxr::HdChangeTracker::DirtyMaterialId)
     {
-        const pxr::SdfPath& MaterialId = Delegate->GetMaterialId(GetId());
+        const pxr::SdfPath& MaterialId = Delegate->GetMaterialId(Id);
         if (GetMaterialId() != MaterialId)
         {
             SetMaterialId(MaterialId);
@@ -178,8 +180,8 @@ void HnMesh::Sync(pxr::HdSceneDelegate* Delegate,
     {
         UpdateMaterials = true;
     }
+    bool UpdateCullMode = pxr::HdChangeTracker::IsTransformDirty(*DirtyBits, Id) || m_CullMode == CULL_MODE_UNDEFINED;
 
-    const pxr::SdfPath& Id = GetId();
     if (Delegate != nullptr && DirtyBits != nullptr)
     {
         UpdateRepr(*Delegate, RenderParam, *DirtyBits, ReprToken);
@@ -194,6 +196,26 @@ void HnMesh::Sync(pxr::HdSceneDelegate* Delegate,
     if (DirtyDoubleSided)
     {
         m_IsDoubleSided = Delegate->GetDoubleSided(Id);
+        UpdateCullMode  = true;
+    }
+
+    if (UpdateCullMode)
+    {
+        CULL_MODE CullMode = CULL_MODE_UNDEFINED;
+        if (m_IsDoubleSided)
+        {
+            CullMode = CULL_MODE_NONE;
+        }
+        else
+        {
+            CullMode = Delegate->GetTransform(Id).GetDeterminant() > 0 ? CULL_MODE_BACK : CULL_MODE_FRONT;
+        }
+
+        if (m_CullMode != CullMode)
+        {
+            m_CullMode = CullMode;
+            static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::MeshCulling);
+        }
     }
 
     if ((DirtyDoubleSided || UpdateMaterials) && RenderParam != nullptr)

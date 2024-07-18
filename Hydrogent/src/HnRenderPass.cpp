@@ -303,13 +303,20 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
     }
 
     {
-        const Uint32 MaterialVersion = State.RenderParam.GetAttribVersion(HnRenderParam::GlobalAttrib::Material);
-        if (m_GlobalAttribVersions.Material != MaterialVersion)
+        const Uint32 MaterialVersion    = State.RenderParam.GetAttribVersion(HnRenderParam::GlobalAttrib::Material);
+        const Uint32 MeshCullingVersion = State.RenderParam.GetAttribVersion(HnRenderParam::GlobalAttrib::MeshCulling);
+        if (m_GlobalAttribVersions.Material != MaterialVersion ||
+            m_GlobalAttribVersions.MeshCulling != MeshCullingVersion)
         {
             // Attributes of some material have changed. We don't know which meshes may be affected,
             // so we need to process the entire draw list.
+
+            // Also update draw list items when mesh culling changes as it affects the PSO.
+
             m_DrawListItemsDirtyFlags |= DRAW_LIST_ITEM_DIRTY_FLAG_PSO;
-            m_GlobalAttribVersions.Material = MaterialVersion;
+
+            m_GlobalAttribVersions.Material    = MaterialVersion;
+            m_GlobalAttribVersions.MeshCulling = MeshCullingVersion;
         }
 
         // If either mesh material or mesh geometry changes, call UpdateDrawListGPUResources(), but

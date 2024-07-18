@@ -227,6 +227,7 @@ private:
         uint32_t GeomSubsetDrawItems = ~0u;
         uint32_t MeshGeometry        = ~0u;
         uint32_t MeshMaterial        = ~0u;
+        uint32_t MeshCulling         = ~0u;
         uint32_t Material            = ~0u;
     } m_GlobalAttribVersions;
 
