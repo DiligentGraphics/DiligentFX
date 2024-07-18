@@ -141,7 +141,7 @@ std::string PBR_Renderer::GetPSOFlagsString(PSO_FLAGS Flags)
         const PSO_FLAGS Flag = ExtractLSB(Flags);
         switch (Flag)
         {
-            // clang-format off
+                // clang-format off
             case PSO_FLAG_USE_COLOR_MAP:                 FlagsStr += "COLOR_MAP"; break;
             case PSO_FLAG_USE_NORMAL_MAP:                FlagsStr += "NORMAL_MAP"; break;
             case PSO_FLAG_USE_PHYS_DESC_MAP:             FlagsStr += "PHYS_DESC_MAP"; break;
@@ -1566,7 +1566,7 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
 
     const bool UseCombinedSamplers = m_Device.GetDeviceInfo().IsGLDevice();
 
-    RefCntAutoPtr<IShader>& pVS = m_VertexShaders[PSOFlags];
+    RefCntAutoPtr<IShader>& pVS = m_VertexShaders[{PSOFlags, ALPHA_MODE_OPAQUE, CULL_MODE_BACK, DebugViewType::None, Key.GetUserValue()}];
     if (!pVS)
     {
         ShaderCreateInfo ShaderCI{
@@ -1622,7 +1622,7 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
         pVS = m_Device.CreateShader(ShaderCI);
     }
 
-    RefCntAutoPtr<IShader>& pPS = m_PixelShaders[PSOFlags];
+    RefCntAutoPtr<IShader>& pPS = m_PixelShaders[{PSOFlags, ALPHA_MODE_OPAQUE, CULL_MODE_BACK, Key}];
     if (!pPS)
     {
         ShaderCreateInfo ShaderCI{

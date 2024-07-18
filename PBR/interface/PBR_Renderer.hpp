@@ -781,8 +781,8 @@ protected:
 
     std::vector<RefCntAutoPtr<IPipelineResourceSignature>> m_ResourceSignatures;
 
-    std::unordered_map<PSO_FLAGS, RefCntAutoPtr<IShader>> m_VertexShaders;
-    std::unordered_map<PSO_FLAGS, RefCntAutoPtr<IShader>> m_PixelShaders;
+    std::unordered_map<PSOKey, RefCntAutoPtr<IShader>, PSOKey::Hasher> m_VertexShaders;
+    std::unordered_map<PSOKey, RefCntAutoPtr<IShader>, PSOKey::Hasher> m_PixelShaders;
 
     std::unordered_map<GraphicsPipelineDesc, PsoHashMapType> m_PSOs;
 
