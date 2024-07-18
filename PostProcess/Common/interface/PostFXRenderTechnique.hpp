@@ -43,8 +43,8 @@ struct PostFXRenderTechnique
                                                const Char*             FileName,
                                                const Char*             EntryPoint,
                                                SHADER_TYPE             Type,
-                                               const ShaderMacroArray& Macros         = {},
-                                               bool                    IsAsynchronous = false);
+                                               const ShaderMacroArray& Macros       = {},
+                                               SHADER_COMPILE_FLAGS    CompileFlags = SHADER_COMPILE_FLAG_NONE);
 
     void InitializePSO(IRenderDevice*                     pDevice,
                        IRenderStateCache*                 pStateCache,
@@ -57,7 +57,7 @@ struct PostFXRenderTechnique
                        const DepthStencilStateDesc&       DSSDesc,
                        const BlendStateDesc&              BSDesc,
                        bool                               IsDSVReadOnly,
-                       bool                               IsAsynchronous = false);
+                       PSO_CREATE_FLAGS                   PSOFlags = PSO_CREATE_FLAG_NONE);
 
     void InitializeSRB(bool InitStaticResources);
 

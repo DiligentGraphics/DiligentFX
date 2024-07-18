@@ -52,8 +52,7 @@ public:
     {
         FEATURE_FLAG_NONE                 = 0u,
         FEATURE_FLAG_REVERSED_DEPTH       = 1u << 0u, // Not implemented
-        FEATURE_FLAG_HALF_PRECISION_DEPTH = 1u << 1u,
-        FEATURE_FLAG_ASYNC_CREATION       = 1u << 2u
+        FEATURE_FLAG_HALF_PRECISION_DEPTH = 1u << 1u
     };
 
     struct FrameDesc
@@ -116,14 +115,17 @@ public:
         bool TransitionSubresources  = false;
         bool TextureSubresourceViews = false;
         bool CopyDepthToColor        = false;
+        bool ShaderBaseVertexOffset  = false; /// Indicates whether the Base Vertex is added to the VertexID in the vertex shader.
+    };
 
-        /// Indicates whether the Base Vertex is added to the VertexID
-        /// in the vertex shader.
-        bool ShaderBaseVertexOffset = false;
+    struct CreateInfo
+    {
+        bool EnablePackMatrixRowMajor;
+        bool EnableAsyncCreation;
     };
 
 public:
-    PostFXContext(IRenderDevice* pDevice);
+    PostFXContext(IRenderDevice* pDevice, const CreateInfo& CI);
 
     ~PostFXContext();
 
@@ -132,6 +134,8 @@ public:
     void Execute(const RenderAttributes& RenderAttribs);
 
     bool IsPSOsReady() const;
+
+    bool IsPackedMatrixRowMajor() const;
 
     float GetInterpolationSpeed() const;
 
@@ -249,6 +253,7 @@ private:
     RefCntAutoPtr<IShader> m_pPSCopyTexture;
 
     FEATURE_FLAGS m_FeatureFlags = FEATURE_FLAG_NONE;
+    CreateInfo    m_Settings;
 };
 
 DEFINE_FLAG_ENUM_OPERATORS(PostFXContext::FEATURE_FLAGS)

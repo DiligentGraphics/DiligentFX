@@ -53,8 +53,7 @@ public:
     {
         FEATURE_FLAG_NONE                      = 0u,
         FEATURE_FLAG_ENABLE_TEMPORAL_SMOOTHING = 1u << 0u,
-        FEATURE_FLAG_ENABLE_KARIS_INVERSE      = 1u << 1u,
-        FEATURE_FLAG_ASYNC_CREATION            = 1u << 2u
+        FEATURE_FLAG_ENABLE_KARIS_INVERSE      = 1u << 1u
     };
 
     struct RenderAttributes
@@ -81,8 +80,13 @@ public:
         const HLSL::DepthOfFieldAttribs* pDOFAttribs = nullptr;
     };
 
+    struct CreateInfo
+    {
+        bool EnableAsyncCreation;
+    };
+
 public:
-    DepthOfField(IRenderDevice* pDevice);
+    DepthOfField(IRenderDevice* pDevice, const CreateInfo& CI);
 
     ~DepthOfField();
 
@@ -207,6 +211,7 @@ private:
     Uint32 m_CurrentFrameIdx  = 0;
 
     FEATURE_FLAGS m_FeatureFlags = FEATURE_FLAG_NONE;
+    CreateInfo    m_Settings;
 
     Timer m_FrameTimer;
 };

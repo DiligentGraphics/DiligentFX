@@ -53,7 +53,8 @@ static float HaltonSequence(Uint32 Base, Uint32 Index)
     return Result;
 }
 
-TemporalAntiAliasing::TemporalAntiAliasing(IRenderDevice* pDevice)
+TemporalAntiAliasing::TemporalAntiAliasing(IRenderDevice* pDevice, const CreateInfo& CI) :
+    m_Settings{CI}
 {
 }
 
@@ -213,8 +214,14 @@ ITextureView* TemporalAntiAliasing::GetAccumulatedFrameSRV(bool IsPrevFrame, Uin
 
 void TemporalAntiAliasing::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_FLAGS FeatureFlags, TEXTURE_FORMAT TextureFormat)
 {
-    bool  IsAsyncCreation = FEATURE_FLAG_ASYNC_CREATION & FeatureFlags;
-    auto& RenderTech      = m_RenderTech[{RENDER_TECH_COMPUTE_TEMPORAL_ACCUMULATION, FeatureFlags}];
+
+    const SHADER_COMPILE_FLAGS ShaderFlags =
+        (RenderAttribs.pPostFXContext->IsPackedMatrixRowMajor() ? SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR : SHADER_COMPILE_FLAG_NONE) |
+        (m_Settings.EnableAsyncCreation ? SHADER_COMPILE_FLAG_ASYNCHRONOUS : SHADER_COMPILE_FLAG_NONE);
+
+    const PSO_CREATE_FLAGS PSOFlags = m_Settings.EnableAsyncCreation ? PSO_CREATE_FLAG_ASYNCHRONOUS : PSO_CREATE_FLAG_NONE;
+
+    auto& RenderTech = m_RenderTech[{RENDER_TECH_COMPUTE_TEMPORAL_ACCUMULATION, FeatureFlags}];
     if (!RenderTech.IsInitializedPSO())
     {
         PipelineResourceLayoutDescX ResourceLayout;
@@ -234,15 +241,15 @@ void TemporalAntiAliasing::PrepareShadersAndPSO(const RenderAttributes& RenderAt
         Macros.Add("TAA_OPTION_BICUBIC_FILTER", (FeatureFlags & FEATURE_FLAG_BICUBIC_FILTER) != 0);
         Macros.Add("TAA_OPTION_YCOCG_COLOR_SPACE", (FeatureFlags & FEATURE_FLAG_YCOCG_COLOR_SPACE) != 0);
 
-        const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, IsAsyncCreation);
-        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "TAA_ComputeTemporalAccumulation.fx", "ComputeTemporalAccumulationPS", SHADER_TYPE_PIXEL, Macros, IsAsyncCreation);
+        const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
+        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "TAA_ComputeTemporalAccumulation.fx", "ComputeTemporalAccumulationPS", SHADER_TYPE_PIXEL, Macros, ShaderFlags);
 
         RenderTech.InitializePSO(RenderAttribs.pDevice,
                                  RenderAttribs.pStateCache, "TemporalAntiAliasing::ComputeTemporalAccumulation",
                                  VS, PS, ResourceLayout,
                                  {TextureFormat},
                                  TEX_FORMAT_UNKNOWN,
-                                 DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
+                                 DSS_DisableDepth, BS_Default, false, PSOFlags);
     }
 }
 

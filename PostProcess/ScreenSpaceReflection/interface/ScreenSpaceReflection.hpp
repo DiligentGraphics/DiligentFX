@@ -66,11 +66,7 @@ public:
         FEATURE_FLAG_PREVIOUS_FRAME = 1u << 2u,
 
         // When this flag is used, ray tracing step is executed at half resolution
-        FEATURE_FLAG_HALF_RESOLUTION = 1u << 3u,
-
-        // Use async compilation for shaders
-        FEATURE_FLAG_ASYNC_CREATION = 1u << 4u
-
+        FEATURE_FLAG_HALF_RESOLUTION = 1u << 3u
     };
 
     struct RenderAttributes
@@ -106,8 +102,13 @@ public:
         const HLSL::ScreenSpaceReflectionAttribs* pSSRAttribs = nullptr;
     };
 
+    struct CreateInfo
+    {
+        bool EnableAsyncCreation;
+    };
+
 public:
-    ScreenSpaceReflection(IRenderDevice* pDevice);
+    ScreenSpaceReflection(IRenderDevice* pDevice, const CreateInfo& CI);
 
     ~ScreenSpaceReflection();
 
@@ -225,6 +226,7 @@ private:
     Uint32 m_BackBufferHeight = 0;
 
     FEATURE_FLAGS m_FeatureFlags = FEATURE_FLAG_NONE;
+    CreateInfo    m_Settings;
 
     Timer m_FrameTimer;
 };

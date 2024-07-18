@@ -65,10 +65,7 @@ public:
         FEATURE_FLAG_BICUBIC_FILTER = 1u << 2u,
 
         // Use YCoCg color space for color clipping.
-        FEATURE_FLAG_YCOCG_COLOR_SPACE = 1u << 3u,
-
-        // Use async compilation for shaders
-        FEATURE_FLAG_ASYNC_CREATION = 1u << 4u
+        FEATURE_FLAG_YCOCG_COLOR_SPACE = 1u << 3u
     };
 
     struct RenderAttributes
@@ -95,8 +92,13 @@ public:
         Uint32 AccumulationBufferIdx = 0;
     };
 
+    struct CreateInfo
+    {
+        bool EnableAsyncCreation;
+    };
+
 public:
-    TemporalAntiAliasing(IRenderDevice* pDevice);
+    TemporalAntiAliasing(IRenderDevice* pDevice, const CreateInfo& CI);
 
     ~TemporalAntiAliasing();
 
@@ -186,7 +188,8 @@ private:
     std::unordered_map<RenderTechniqueKey, RenderTechnique, RenderTechniqueKey::Hasher> m_RenderTech;
     std::unordered_map<Uint32, AccumulationBufferInfo>                                  m_AccumulationBuffers;
 
-    bool m_AllPSOsReady = false;
+    bool       m_AllPSOsReady = false;
+    CreateInfo m_Settings;
 };
 
 DEFINE_FLAG_ENUM_OPERATORS(TemporalAntiAliasing::FEATURE_FLAGS)

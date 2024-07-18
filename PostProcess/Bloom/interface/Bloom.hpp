@@ -52,8 +52,7 @@ class Bloom
 public:
     enum FEATURE_FLAGS : Uint32
     {
-        FEATURE_FLAG_NONE           = 0u,
-        FEATURE_FLAG_ASYNC_CREATION = 1u << 0u
+        FEATURE_FLAG_NONE = 0u
     };
 
     struct RenderAttributes
@@ -77,8 +76,13 @@ public:
         const HLSL::BloomAttribs* pBloomAttribs = nullptr;
     };
 
+    struct CreateInfo
+    {
+        bool EnableAsyncCreation;
+    };
+
 public:
-    Bloom(IRenderDevice* pDevice);
+    Bloom(IRenderDevice* pDevice, const CreateInfo& CI);
 
     ~Bloom();
 
@@ -168,6 +172,7 @@ private:
     Uint32 m_CurrentFrameIdx  = 0;
 
     FEATURE_FLAGS m_FeatureFlags = FEATURE_FLAG_NONE;
+    CreateInfo    m_Settings;
 
     Timer m_FrameTimer;
 };

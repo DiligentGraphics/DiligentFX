@@ -57,8 +57,9 @@ static constexpr SamplerDesc Sam_LinearBoarder{
     TEXTURE_ADDRESS_BORDER,
 };
 
-Bloom::Bloom(IRenderDevice* pDevice) :
-    m_BloomAttribs{std::make_unique<HLSL::BloomAttribs>()}
+Bloom::Bloom(IRenderDevice* pDevice, const CreateInfo& CI) :
+    m_BloomAttribs{std::make_unique<HLSL::BloomAttribs>()},
+    m_Settings{CI}
 {
     DEV_CHECK_ERR(pDevice != nullptr, "pDevice must not be null");
 
@@ -152,14 +153,20 @@ Int32 Bloom::ComputeMipCount(Uint32 Width, Uint32 Height, float Radius)
 
 bool Bloom::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_FLAGS FeatureFlags)
 {
-    bool       AllPSOsReady    = true;
-    const bool IsAsyncCreation = (FEATURE_FLAG_ASYNC_CREATION & FeatureFlags) != 0;
+    bool AllPSOsReady = true;
+
+    const SHADER_COMPILE_FLAGS ShaderFlags =
+        (RenderAttribs.pPostFXContext->IsPackedMatrixRowMajor() ? SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR : SHADER_COMPILE_FLAG_NONE) |
+        (m_Settings.EnableAsyncCreation ? SHADER_COMPILE_FLAG_ASYNCHRONOUS : SHADER_COMPILE_FLAG_NONE);
+
+    const PSO_CREATE_FLAGS PSOFlags = m_Settings.EnableAsyncCreation ? PSO_CREATE_FLAG_ASYNCHRONOUS : PSO_CREATE_FLAG_NONE;
+
     {
         auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_PREFILTERED_TEXTURE, FeatureFlags);
         if (!RenderTech.IsInitializedPSO())
         {
-            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, IsAsyncCreation);
-            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "Bloom_ComputePrefilteredTexture.fx", "ComputePrefilteredTexturePS", SHADER_TYPE_PIXEL, {}, IsAsyncCreation);
+            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
+            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "Bloom_ComputePrefilteredTexture.fx", "ComputePrefilteredTexturePS", SHADER_TYPE_PIXEL, {}, ShaderFlags);
 
             const bool BorderSamplingModeSupported = RenderAttribs.pDevice->GetAdapterInfo().Sampler.BorderSamplingModeSupported;
 
@@ -176,7 +183,7 @@ bool Bloom::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_
                                          m_DownsampledTextures[0]->GetDesc().Format,
                                      },
                                      TEX_FORMAT_UNKNOWN,
-                                     DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
+                                     DSS_DisableDepth, BS_Default, false, PSOFlags);
         }
         if (AllPSOsReady && !RenderTech.IsReady())
             AllPSOsReady = false;
@@ -186,8 +193,8 @@ bool Bloom::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_
         auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_DOWNSAMPLED_TEXTURE, FeatureFlags);
         if (!RenderTech.IsInitializedPSO())
         {
-            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, IsAsyncCreation);
-            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "Bloom_ComputeDownsampledTexture.fx", "ComputeDownsampledTexturePS", SHADER_TYPE_PIXEL, {}, IsAsyncCreation);
+            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
+            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "Bloom_ComputeDownsampledTexture.fx", "ComputeDownsampledTexturePS", SHADER_TYPE_PIXEL, {}, ShaderFlags);
 
             const bool BorderSamplingModeSupported = RenderAttribs.pDevice->GetAdapterInfo().Sampler.BorderSamplingModeSupported;
 
@@ -203,7 +210,7 @@ bool Bloom::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_
                                          m_DownsampledTextures[0]->GetDesc().Format,
                                      },
                                      TEX_FORMAT_UNKNOWN,
-                                     DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
+                                     DSS_DisableDepth, BS_Default, false, PSOFlags);
         }
         if (AllPSOsReady && !RenderTech.IsReady())
             AllPSOsReady = false;
@@ -213,8 +220,8 @@ bool Bloom::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_
         auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_UPSAMPLED_TEXTURE, FeatureFlags);
         if (!RenderTech.IsInitializedPSO())
         {
-            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, IsAsyncCreation);
-            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "Bloom_ComputeUpsampledTexture.fx", "ComputeUpsampledTexturePS", SHADER_TYPE_PIXEL, {}, IsAsyncCreation);
+            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
+            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "Bloom_ComputeUpsampledTexture.fx", "ComputeUpsampledTexturePS", SHADER_TYPE_PIXEL, {}, ShaderFlags);
 
             PipelineResourceLayoutDescX ResourceLayout;
             ResourceLayout
@@ -231,7 +238,7 @@ bool Bloom::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_
                                          m_UpsampledTextures[0]->GetDesc().Format,
                                      },
                                      TEX_FORMAT_UNKNOWN,
-                                     DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
+                                     DSS_DisableDepth, BS_Default, false, PSOFlags);
         }
         if (AllPSOsReady && !RenderTech.IsReady())
             AllPSOsReady = false;

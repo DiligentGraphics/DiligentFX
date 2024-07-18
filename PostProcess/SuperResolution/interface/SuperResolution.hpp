@@ -51,8 +51,7 @@ class SuperResolution
 public:
     enum FEATURE_FLAGS : Uint32
     {
-        FEATURE_FLAG_NONE           = 0u,
-        FEATURE_FLAG_ASYNC_CREATION = 1u << 0u
+        FEATURE_FLAG_NONE = 0u,
     };
 
     struct RenderAttributes
@@ -76,8 +75,13 @@ public:
         const HLSL::SuperResolutionAttribs* pFSRAttribs = nullptr;
     };
 
+    struct CreateInfo
+    {
+        bool EnableAsyncCreation;
+    };
+
 public:
-    SuperResolution(IRenderDevice* pDevice);
+    SuperResolution(IRenderDevice* pDevice, const CreateInfo& CI);
 
     ~SuperResolution();
 
@@ -159,6 +163,7 @@ private:
     Uint32 m_CurrentFrameIdx  = 0;
 
     FEATURE_FLAGS m_FeatureFlags = FEATURE_FLAG_NONE;
+    CreateInfo    m_Settings;
 };
 
 DEFINE_FLAG_ENUM_OPERATORS(SuperResolution::FEATURE_FLAGS)

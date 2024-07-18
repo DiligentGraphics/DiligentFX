@@ -56,8 +56,7 @@ public:
         FEATURE_FLAG_PACKED_NORMAL        = 1u << 1u, // Nor implemented
         FEATURE_FLAG_HALF_PRECISION_DEPTH = 1u << 2u,
         FEATURE_FLAG_HALF_RESOLUTION      = 1u << 3u,
-        FEATURE_FLAG_UNIFORM_WEIGHTING    = 1u << 4u,
-        FEATURE_FLAG_ASYNC_CREATION       = 1u << 5u
+        FEATURE_FLAG_UNIFORM_WEIGHTING    = 1u << 4u
     };
 
     struct RenderAttributes
@@ -84,8 +83,13 @@ public:
         const HLSL::ScreenSpaceAmbientOcclusionAttribs* pSSAOAttribs = nullptr;
     };
 
+    struct CreateInfo
+    {
+        bool EnableAsyncCreation;
+    };
+
 public:
-    ScreenSpaceAmbientOcclusion(IRenderDevice* pDevice);
+    ScreenSpaceAmbientOcclusion(IRenderDevice* pDevice, const CreateInfo& CI);
 
     ~ScreenSpaceAmbientOcclusion();
 
@@ -219,6 +223,7 @@ private:
     Uint32 m_LastFrameIdx     = ~0u;
 
     FEATURE_FLAGS m_FeatureFlags = FEATURE_FLAG_NONE;
+    CreateInfo    m_Settings;
 
     Timer m_FrameTimer;
 };

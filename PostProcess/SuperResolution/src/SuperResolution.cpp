@@ -40,8 +40,9 @@ namespace HLSL
 #include "Shaders/PostProcess/SuperResolution/public/SuperResolutionStructures.fxh"
 } // namespace HLSL
 
-SuperResolution::SuperResolution(IRenderDevice* pDevice) :
-    m_SuperResolutionAttribs{std::make_unique<HLSL::SuperResolutionAttribs>()}
+SuperResolution::SuperResolution(IRenderDevice* pDevice, const CreateInfo& CI) :
+    m_SuperResolutionAttribs{std::make_unique<HLSL::SuperResolutionAttribs>()},
+    m_Settings{CI}
 {
     DEV_CHECK_ERR(pDevice != nullptr, "pDevice must not be null");
 
@@ -157,14 +158,20 @@ SuperResolution::RenderTechnique& SuperResolution::GetRenderTechnique(RENDER_TEC
 
 bool SuperResolution::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_FLAGS FeatureFlags)
 {
-    bool       AllPSOsReady    = true;
-    const bool IsAsyncCreation = FEATURE_FLAG_ASYNC_CREATION & FeatureFlags;
+    bool AllPSOsReady = true;
+
+    const SHADER_COMPILE_FLAGS ShaderFlags =
+        (RenderAttribs.pPostFXContext->IsPackedMatrixRowMajor() ? SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR : SHADER_COMPILE_FLAG_NONE) |
+        (m_Settings.EnableAsyncCreation ? SHADER_COMPILE_FLAG_ASYNCHRONOUS : SHADER_COMPILE_FLAG_NONE);
+
+    const PSO_CREATE_FLAGS PSOFlags = m_Settings.EnableAsyncCreation ? PSO_CREATE_FLAG_ASYNCHRONOUS : PSO_CREATE_FLAG_NONE;
+
     {
         auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_EDGE_ADAPTIVE_UPSAMPLING, FeatureFlags);
         if (!RenderTech.IsInitializedPSO())
         {
-            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, IsAsyncCreation);
-            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FSR_EdgeAdaptiveUpsampling.fx", "ComputeEdgeAdaptiveUpsamplingPS", SHADER_TYPE_PIXEL, {}, IsAsyncCreation);
+            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
+            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FSR_EdgeAdaptiveUpsampling.fx", "ComputeEdgeAdaptiveUpsamplingPS", SHADER_TYPE_PIXEL, {}, ShaderFlags);
 
             PipelineResourceLayoutDescX ResourceLayout;
             ResourceLayout
@@ -179,7 +186,7 @@ bool SuperResolution::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs
                                          m_Resources[RESOURCE_IDENTIFIER_EAU].AsTexture()->GetDesc().Format,
                                      },
                                      TEX_FORMAT_UNKNOWN,
-                                     DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
+                                     DSS_DisableDepth, BS_Default, false, PSOFlags);
         }
         if (AllPSOsReady && !RenderTech.IsReady())
             AllPSOsReady = false;
@@ -189,8 +196,8 @@ bool SuperResolution::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs
         auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_CONTRAST_ADAPTIVE_SHARPENING, FeatureFlags);
         if (!RenderTech.IsInitializedPSO())
         {
-            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, IsAsyncCreation);
-            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FSR_ContrastAdaptiveSharpening.fx", "ComputeContrastAdaptiveSharpeningPS", SHADER_TYPE_PIXEL, {}, IsAsyncCreation);
+            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
+            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FSR_ContrastAdaptiveSharpening.fx", "ComputeContrastAdaptiveSharpeningPS", SHADER_TYPE_PIXEL, {}, ShaderFlags);
 
             PipelineResourceLayoutDescX ResourceLayout;
             ResourceLayout
@@ -204,7 +211,7 @@ bool SuperResolution::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs
                                          m_Resources[RESOURCE_IDENTIFIER_CAS].AsTexture()->GetDesc().Format,
                                      },
                                      TEX_FORMAT_UNKNOWN,
-                                     DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
+                                     DSS_DisableDepth, BS_Default, false, PSOFlags);
         }
         if (AllPSOsReady && !RenderTech.IsReady())
             AllPSOsReady = false;

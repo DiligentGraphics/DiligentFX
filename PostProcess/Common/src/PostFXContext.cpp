@@ -136,7 +136,8 @@ void main()
 } // namespace GLSL
 
 
-PostFXContext::PostFXContext(IRenderDevice* pDevice)
+PostFXContext::PostFXContext(IRenderDevice* pDevice, const CreateInfo& CI) :
+    m_Settings{CI}
 {
     DEV_CHECK_ERR(pDevice != nullptr, "pDevice must not be null");
     const auto& DeviceInfo = pDevice->GetDeviceInfo();
@@ -339,6 +340,11 @@ bool PostFXContext::IsPSOsReady() const
     return m_PSOsReady;
 }
 
+bool PostFXContext::IsPackedMatrixRowMajor() const
+{
+    return m_Settings.EnablePackMatrixRowMajor;
+}
+
 float PostFXContext::GetInterpolationSpeed() const
 {
     return m_AlphaFallbackMultiplier;
@@ -378,7 +384,7 @@ void PostFXContext::CopyTextureDepth(const TextureOperationAttribs& Attribs, ITe
                                      pRTV->GetDesc().Format,
                                  },
                                  TEX_FORMAT_UNKNOWN,
-                                 DSS_DisableDepth, BS_Default, false, false);
+                                 DSS_DisableDepth, BS_Default, false);
     }
 
     if (!RenderTech.IsInitializedSRB())
@@ -409,7 +415,7 @@ void PostFXContext::CopyTextureColor(const TextureOperationAttribs& Attribs, ITe
                                      pRTV->GetDesc().Format,
                                  },
                                  TEX_FORMAT_UNKNOWN,
-                                 DSS_DisableDepth, BS_Default, false, false);
+                                 DSS_DisableDepth, BS_Default, false);
     }
 
     if (!RenderTech.IsInitializedSRB())
@@ -426,8 +432,14 @@ void PostFXContext::CopyTextureColor(const TextureOperationAttribs& Attribs, ITe
 
 bool PostFXContext::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_FLAGS FeatureFlags)
 {
-    bool       AllPSOsReady    = true;
-    const bool IsAsyncCreation = FEATURE_FLAG_ASYNC_CREATION & FeatureFlags;
+    bool AllPSOsReady = true;
+
+    const SHADER_COMPILE_FLAGS ShaderFlags =
+        (m_Settings.EnablePackMatrixRowMajor ? SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR : SHADER_COMPILE_FLAG_NONE) |
+        (m_Settings.EnableAsyncCreation ? SHADER_COMPILE_FLAG_ASYNCHRONOUS : SHADER_COMPILE_FLAG_NONE);
+
+    const PSO_CREATE_FLAGS PSOFlags = m_Settings.EnableAsyncCreation ? PSO_CREATE_FLAG_ASYNCHRONOUS : PSO_CREATE_FLAG_NONE;
+
     {
         auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_BLUE_NOISE_TEXTURE, FeatureFlags, TEX_FORMAT_UNKNOWN);
         if (!RenderTech.IsInitializedPSO())
@@ -437,8 +449,8 @@ bool PostFXContext::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, 
                 .AddVariable(SHADER_TYPE_PIXEL, "g_SobolBuffer", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
                 .AddVariable(SHADER_TYPE_PIXEL, "g_ScramblingTileBuffer", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
 
-            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, IsAsyncCreation);
-            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeBlueNoiseTexture.fx", "ComputeBlueNoiseTexturePS", SHADER_TYPE_PIXEL, {}, IsAsyncCreation);
+            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
+            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeBlueNoiseTexture.fx", "ComputeBlueNoiseTexturePS", SHADER_TYPE_PIXEL, {}, ShaderFlags);
 
             RenderTech.InitializePSO(RenderAttribs.pDevice,
                                      RenderAttribs.pStateCache, "PreparePostFX::ComputeBlueNoiseTexture",
@@ -448,7 +460,7 @@ bool PostFXContext::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, 
                                          m_Resources[RESOURCE_IDENTIFIER_BLUE_NOISE_TEXTURE_ZW].AsTexture()->GetDesc().Format,
                                      },
                                      TEX_FORMAT_UNKNOWN,
-                                     DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
+                                     DSS_DisableDepth, BS_Default, false, PSOFlags);
         }
         if (AllPSOsReady && !RenderTech.IsReady())
             AllPSOsReady = false;
@@ -463,15 +475,15 @@ bool PostFXContext::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, 
                 .AddVariable(SHADER_TYPE_PIXEL, "cbCameraAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
                 .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC, SHADER_VARIABLE_FLAG_UNFILTERABLE_FLOAT_TEXTURE_WEBGPU);
 
-            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, IsAsyncCreation);
-            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeReprojectedDepth.fx", "ComputeReprojectedDepthPS", SHADER_TYPE_PIXEL, {}, IsAsyncCreation);
+            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
+            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeReprojectedDepth.fx", "ComputeReprojectedDepthPS", SHADER_TYPE_PIXEL, {}, ShaderFlags);
 
             RenderTech.InitializePSO(RenderAttribs.pDevice,
                                      RenderAttribs.pStateCache, "PreparePostFX::ComputeReprojectedDepth",
                                      VS, PS, ResourceLayout,
                                      {m_Resources[RESOURCE_IDENTIFIER_REPROJECTED_DEPTH].AsTexture()->GetDesc().Format},
                                      TEX_FORMAT_UNKNOWN,
-                                     DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
+                                     DSS_DisableDepth, BS_Default, false, PSOFlags);
         }
         if (AllPSOsReady && !RenderTech.IsReady())
             AllPSOsReady = false;
@@ -489,15 +501,15 @@ bool PostFXContext::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, 
                 .AddVariable(SHADER_TYPE_PIXEL, "g_TextureMotion", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
                 .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC, SHADER_VARIABLE_FLAG_UNFILTERABLE_FLOAT_TEXTURE_WEBGPU);
 
-            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, IsAsyncCreation);
-            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeClosestMotion.fx", "ComputeClosestMotionPS", SHADER_TYPE_PIXEL, Macros, IsAsyncCreation);
+            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
+            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "ComputeClosestMotion.fx", "ComputeClosestMotionPS", SHADER_TYPE_PIXEL, Macros, ShaderFlags);
 
             RenderTech.InitializePSO(RenderAttribs.pDevice,
                                      RenderAttribs.pStateCache, "PreparePostFX::ComputeClosestMotion",
                                      VS, PS, ResourceLayout,
                                      {m_Resources[RESOURCE_IDENTIFIER_CLOSEST_MOTION].AsTexture()->GetDesc().Format},
                                      TEX_FORMAT_UNKNOWN,
-                                     DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
+                                     DSS_DisableDepth, BS_Default, false, PSOFlags);
         }
         if (AllPSOsReady && !RenderTech.IsReady())
             AllPSOsReady = false;
@@ -518,7 +530,7 @@ bool PostFXContext::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, 
                                          m_Resources[RESOURCE_IDENTIFIER_PREVIOUS_DEPTH].AsTexture()->GetDesc().Format,
                                      },
                                      TEX_FORMAT_UNKNOWN,
-                                     DSS_DisableDepth, BS_Default, false, IsAsyncCreation);
+                                     DSS_DisableDepth, BS_Default, false, PSOFlags);
         }
         if (AllPSOsReady && !RenderTech.IsReady())
             AllPSOsReady = false;

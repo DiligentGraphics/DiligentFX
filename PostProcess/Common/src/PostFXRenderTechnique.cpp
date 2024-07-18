@@ -37,7 +37,7 @@ RefCntAutoPtr<IShader> PostFXRenderTechnique::CreateShader(IRenderDevice*       
                                                            const Char*             EntryPoint,
                                                            SHADER_TYPE             Type,
                                                            const ShaderMacroArray& Macros,
-                                                           bool                    IsAsynchronous)
+                                                           SHADER_COMPILE_FLAGS    CompileFlags)
 {
     ShaderCreateInfo ShaderCI;
     ShaderCI.EntryPoint                      = EntryPoint;
@@ -48,7 +48,7 @@ RefCntAutoPtr<IShader> PostFXRenderTechnique::CreateShader(IRenderDevice*       
     ShaderCI.Desc.Name                       = EntryPoint;
     ShaderCI.pShaderSourceStreamFactory      = &DiligentFXShaderSourceStreamFactory::GetInstance();
     ShaderCI.Desc.UseCombinedTextureSamplers = true;
-    ShaderCI.CompileFlags                    = IsAsynchronous ? SHADER_COMPILE_FLAG_ASYNCHRONOUS : SHADER_COMPILE_FLAG_NONE;
+    ShaderCI.CompileFlags                    = CompileFlags;
     return RenderDeviceWithCache<false>{pDevice, pStateCache}.CreateShader(ShaderCI);
 }
 
@@ -63,7 +63,7 @@ void PostFXRenderTechnique::InitializePSO(IRenderDevice*                     pDe
                                           const DepthStencilStateDesc&       DSSDesc,
                                           const BlendStateDesc&              BSDesc,
                                           bool                               IsDSVReadOnly,
-                                          bool                               IsAsynchronous)
+                                          PSO_CREATE_FLAGS                   PSOFlags)
 {
     GraphicsPipelineStateCreateInfo PSOCreateInfo;
     PipelineStateDesc&              PSODesc = PSOCreateInfo.PSODesc;
@@ -80,7 +80,7 @@ void PostFXRenderTechnique::InitializePSO(IRenderDevice*                     pDe
     GraphicsPipeline.BlendDesc                            = BSDesc;
     PSOCreateInfo.pVS                                     = VertexShader;
     PSOCreateInfo.pPS                                     = PixelShader;
-    PSOCreateInfo.Flags                                   = IsAsynchronous ? PSO_CREATE_FLAG_ASYNCHRONOUS : PSO_CREATE_FLAG_NONE;
+    PSOCreateInfo.Flags                                   = PSOFlags;
     GraphicsPipeline.PrimitiveTopology                    = PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
     GraphicsPipeline.NumRenderTargets                     = static_cast<Uint8>(RTVFmts.size());
     GraphicsPipeline.DSVFormat                            = DSVFmt;
