@@ -65,12 +65,12 @@ namespace HLSL
 
 PBR_Renderer::PSOKey::PSOKey(PSO_FLAGS     _Flags,
                              ALPHA_MODE    _AlphaMode,
-                             bool          _DoubleSided,
+                             CULL_MODE     _CullMode,
                              DebugViewType _DebugView,
                              Uint64        _UserValue) noexcept :
     Flags{_Flags},
     AlphaMode{_AlphaMode},
-    DoubleSided{_DoubleSided},
+    CullMode{_CullMode},
     DebugView{_DebugView},
     UserValue{_UserValue}
 {
@@ -84,7 +84,7 @@ PBR_Renderer::PSOKey::PSOKey(PSO_FLAGS     _Flags,
         DebugView = DebugViewType::None;
     }
 
-    Hash = ComputeHash(Flags, AlphaMode, DoubleSided, static_cast<Uint32>(DebugView), UserValue);
+    Hash = ComputeHash(Flags, AlphaMode, CullMode, static_cast<Uint32>(DebugView), UserValue);
 }
 
 static const char* GetTextureAttribString(PBR_Renderer::TEXTURE_ATTRIB_ID Id)
@@ -1519,7 +1519,7 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
     LOG_DVP_INFO_MESSAGE("PBR Renderer: creating PSO with flags: ", GetPSOFlagsString(PSOFlags),
                          "; debug view: ", static_cast<int>(Key.GetDebugView()),
                          "; user value: ", Key.GetUserValue(),
-                         ": cull: ", GetCullModeLiteralName(Key.IsDoubleSided() ? CULL_MODE_NONE : CULL_MODE_BACK),
+                         ": cull: ", GetCullModeLiteralName(Key.GetCullMode()),
                          "; alpha: ", GetAlphaModeString(Key.GetAlphaMode()));
 
     InputLayoutDescX InputLayout;
@@ -1677,20 +1677,24 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
         UNEXPECTED("Unknown alpha mode");
     }
 
-    std::string PSOName{!IsUnshaded ? "PBR PSO - " : "Unshaded PSO - "};
+    std::string PSOName{!IsUnshaded ? "PBR PSO " : "Unshaded PSO "};
+    PSOName += std::to_string(Uint64{PSOFlags});
+    PSOName += " - ";
     PSOName += GetAlphaModeString(AlphaMode);
-    PSOName += (!Key.IsDoubleSided() ? " - backface culling" : " - no culling");
+    PSOName += " - ";
+    PSOName += GetCullModeLiteralName(Key.GetCullMode());
     PSODesc.Name = PSOName.c_str();
 
-    GraphicsPipeline.RasterizerDesc.CullMode = Key.IsDoubleSided() ? CULL_MODE_NONE : CULL_MODE_BACK;
-    auto PSO                                 = m_Device.CreateGraphicsPipelineState(PSOCreateInfo);
+    GraphicsPipeline.RasterizerDesc.CullMode = Key.GetCullMode();
+    RefCntAutoPtr<IPipelineState> PSO        = m_Device.CreateGraphicsPipelineState(PSOCreateInfo);
+    VERIFY_EXPR(PSO);
 
     PsoHashMap[Key] = PSO;
     // Mask and opaque use the same PSO
     if (AlphaMode == ALPHA_MODE_OPAQUE || AlphaMode == ALPHA_MODE_MASK)
     {
 
-        PsoHashMap[{PSOFlags, AlphaMode == ALPHA_MODE_OPAQUE ? ALPHA_MODE_MASK : ALPHA_MODE_OPAQUE, Key.IsDoubleSided(), Key}] = PSO;
+        PsoHashMap[{PSOFlags, AlphaMode == ALPHA_MODE_OPAQUE ? ALPHA_MODE_MASK : ALPHA_MODE_OPAQUE, Key.GetCullMode(), Key}] = PSO;
     }
 }
 

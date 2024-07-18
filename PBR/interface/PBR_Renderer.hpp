@@ -526,38 +526,38 @@ public:
 
         PSOKey(PSO_FLAGS     _Flags,
                ALPHA_MODE    _AlphaMode,
-               bool          _DoubleSided,
+               CULL_MODE     _CullMode,
                DebugViewType _DebugView = DebugViewType::None,
                Uint64        _UserValue = 0) noexcept;
 
         PSOKey(PSO_FLAGS     _Flags,
-               bool          _DoubleSided,
+               CULL_MODE     _CullMode,
                DebugViewType _DebugView = DebugViewType::None,
                Uint64        _UserValue = 0) noexcept :
-            PSOKey{_Flags, ALPHA_MODE_OPAQUE, _DoubleSided, _DebugView, _UserValue}
+            PSOKey{_Flags, ALPHA_MODE_OPAQUE, _CullMode, _DebugView, _UserValue}
         {}
 
         PSOKey(PSO_FLAGS     _Flags,
                ALPHA_MODE    _AlphaMode,
-               bool          _DoubleSided,
+               CULL_MODE     _CullMode,
                const PSOKey& Other) noexcept :
-            PSOKey{_Flags, _AlphaMode, _DoubleSided, Other.GetDebugView(), Other.GetUserValue()}
+            PSOKey{_Flags, _AlphaMode, _CullMode, Other.GetDebugView(), Other.GetUserValue()}
         {}
 
         PSOKey(PSO_FLAGS     _Flags,
                const PSOKey& Other) noexcept :
-            PSOKey{_Flags, Other.GetAlphaMode(), Other.IsDoubleSided(), Other}
+            PSOKey{_Flags, Other.GetAlphaMode(), Other.GetCullMode(), Other}
         {}
 
         constexpr bool operator==(const PSOKey& rhs) const noexcept
         {
             // clang-format off
-            return Hash        == rhs.Hash        &&
-                   Flags       == rhs.Flags       &&
-                   DoubleSided == rhs.DoubleSided &&
-                   AlphaMode   == rhs.AlphaMode   &&
-                   DebugView   == rhs.DebugView   &&
-                   UserValue   == rhs.UserValue;
+            return Hash      == rhs.Hash      &&
+                   Flags     == rhs.Flags     &&
+                   CullMode  == rhs.CullMode  &&
+                   AlphaMode == rhs.AlphaMode &&
+                   DebugView == rhs.DebugView &&
+                   UserValue == rhs.UserValue;
             // clang-format on
         }
         constexpr bool operator!=(const PSOKey& rhs) const noexcept
@@ -574,18 +574,18 @@ public:
         };
 
         constexpr PSO_FLAGS     GetFlags() const noexcept { return Flags; }
-        constexpr bool          IsDoubleSided() const noexcept { return DoubleSided; }
+        constexpr CULL_MODE     GetCullMode() const noexcept { return CullMode; }
         constexpr ALPHA_MODE    GetAlphaMode() const noexcept { return AlphaMode; }
         constexpr DebugViewType GetDebugView() const noexcept { return DebugView; }
         constexpr Uint64        GetUserValue() const noexcept { return UserValue; }
 
     private:
-        PSO_FLAGS     Flags       = PSO_FLAG_NONE;
-        ALPHA_MODE    AlphaMode   = ALPHA_MODE_OPAQUE;
-        bool          DoubleSided = false;
-        DebugViewType DebugView   = DebugViewType::None;
-        Uint64        UserValue   = 0;
-        size_t        Hash        = 0;
+        PSO_FLAGS     Flags     = PSO_FLAG_NONE;
+        ALPHA_MODE    AlphaMode = ALPHA_MODE_OPAQUE;
+        CULL_MODE     CullMode  = CULL_MODE_BACK;
+        DebugViewType DebugView = DebugViewType::None;
+        Uint64        UserValue = 0;
+        size_t        Hash      = 0;
     };
 
     using PsoHashMapType = std::unordered_map<PSOKey, RefCntAutoPtr<IPipelineState>, PSOKey::Hasher>;

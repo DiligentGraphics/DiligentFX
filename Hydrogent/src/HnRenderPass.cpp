@@ -664,7 +664,7 @@ void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
             PBR_Renderer::PSO_FLAG_USE_IBL |
             static_cast<PBR_Renderer::PSO_FLAGS>(m_Params.UsdPsoFlags);
 
-        m_FallbackPSO = State.GePsoCache().Get({FallbackPSOFlags, PBR_Renderer::ALPHA_MODE_OPAQUE}, true);
+        m_FallbackPSO = State.GePsoCache().Get({FallbackPSOFlags, PBR_Renderer::ALPHA_MODE_OPAQUE, CULL_MODE_NONE}, true);
     }
 
     struct DrawListItemRenderState
@@ -846,7 +846,7 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
         const HnMaterial*               pMaterial = DrawItem.GetMaterial();
         VERIFY(pMaterial != nullptr, "Material is null");
 
-        const bool IsDoubleSided = ListItem.Mesh.GetIsDoubleSided();
+        const CULL_MODE CullMode = ListItem.Mesh.GetCullMode();
 
         // Use the material's texture indexing ID as the user value in the PSO key.
         // The USD renderer will use this ID to return the indexing.
@@ -892,13 +892,13 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
                 State.RenderParam.GetUseShadows())
                 PSOFlags |= PBR_Renderer::PSO_FLAG_ENABLE_SHADOWS;
 
-            ListItem.pPSO = PsoCache.Get({PSOFlags, static_cast<PBR_Renderer::ALPHA_MODE>(State.AlphaMode), IsDoubleSided, m_DebugView, ShaderTextureIndexingId}, true);
+            ListItem.pPSO = PsoCache.Get({PSOFlags, static_cast<PBR_Renderer::ALPHA_MODE>(State.AlphaMode), CullMode, m_DebugView, ShaderTextureIndexingId}, true);
         }
         else if (m_RenderMode == HN_RENDER_MODE_MESH_EDGES ||
                  m_RenderMode == HN_RENDER_MODE_POINTS)
         {
             PSOFlags |= PBR_Renderer::PSO_FLAG_UNSHADED;
-            ListItem.pPSO = PsoCache.Get({PSOFlags, IsDoubleSided, PBR_Renderer::DebugViewType::None, ShaderTextureIndexingId}, true);
+            ListItem.pPSO = PsoCache.Get({PSOFlags, CullMode, PBR_Renderer::DebugViewType::None, ShaderTextureIndexingId}, true);
         }
         else
         {

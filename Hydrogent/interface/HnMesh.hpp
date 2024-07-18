@@ -106,7 +106,7 @@ public:
         };
     };
 
-    bool GetIsDoubleSided() const { return m_IsDoubleSided; }
+    CULL_MODE GetCullMode() const { return m_IsDoubleSided ? CULL_MODE_NONE : CULL_MODE_BACK; }
 
     Uint32 GetUID() const { return m_UID; }
 
