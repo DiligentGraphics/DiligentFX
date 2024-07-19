@@ -1557,8 +1557,12 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
     RefCntAutoPtr<IShaderSourceInputStreamFactory> pShaderSourceFactory =
         CreateCompoundShaderSourceFactory({&DiligentFXShaderSourceStreamFactory::GetInstance(), pMemorySourceFactory});
 
-    auto Macros = DefineMacros(Key);
-    if (GraphicsDesc.PrimitiveTopology == PRIMITIVE_TOPOLOGY_POINT_LIST && (m_Device.GetDeviceInfo().IsGLDevice() || m_Device.GetDeviceInfo().IsVulkanDevice()))
+    ShaderMacroHelper Macros = DefineMacros(Key);
+
+    const bool UseGLPointSize =
+        (GraphicsDesc.PrimitiveTopology == PRIMITIVE_TOPOLOGY_POINT_LIST) &&
+        (m_Device.GetDeviceInfo().IsGLDevice() || m_Device.GetDeviceInfo().IsVulkanDevice());
+    if (UseGLPointSize)
     {
         // If gl_PointSize is not defined, points are not rendered in GLES.
         Macros.Add("USE_GL_POINT_SIZE", "1");
@@ -1566,7 +1570,15 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
 
     const bool UseCombinedSamplers = m_Device.GetDeviceInfo().IsGLDevice();
 
-    RefCntAutoPtr<IShader>& pVS = m_VertexShaders[{PSOFlags, ALPHA_MODE_OPAQUE, CULL_MODE_BACK, DebugViewType::None, Key.GetUserValue()}];
+    RefCntAutoPtr<IShader>& pVS = m_VertexShaders[{
+        PSOFlags,
+        ALPHA_MODE_OPAQUE,
+        // Cull mode is irrelevant for the shader, but we need different keys when GL point size is used,
+        // so we use the cull mode to differentiate between the two.
+        UseGLPointSize ? CULL_MODE_NONE : CULL_MODE_BACK,
+        DebugViewType::None,
+        Key.GetUserValue(),
+    }];
     if (!pVS)
     {
         ShaderCreateInfo ShaderCI{
