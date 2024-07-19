@@ -172,7 +172,11 @@ private:
 
     struct TriangleFaceIndexData
     {
+        // Original indices reordered by geometry subsets
         pxr::VtVec3iArray Indices;
+
+        // Face reordering for face-varying primvars
+        pxr::VtVec3iArray FaceReordering;
 
         std::vector<GeometrySubsetRange> Subsets;
 

@@ -582,6 +582,9 @@ void HnMesh::UpdateFaceVaryingPrimvars(pxr::HdSceneDelegate& SceneDelegate,
 
         pxr::VtValue    TriangulatedPrimValue;
         pxr::HdMeshUtil MeshUtil{&m_Topology, Id};
+        // The method outputs a linear non-indexed list of values.
+        // If Indices is the list of indices produced by MeshUtil.ComputeTriangleIndices, then
+        // values in the output are indexed by i rather than Indices[i].
         if (MeshUtil.ComputeTriangulatedFaceVaryingPrimvar(PrimVarSource->GetData(),
                                                            PrimVarSource->GetNumElements(),
                                                            PrimVarSource->GetTupleType().type,
@@ -821,6 +824,7 @@ HnMesh::TriangleFaceIndexData HnMesh::ComputeTriangleFaceIndices()
                     for (int TriIndex : FaceIdxToTriIdx[FaceIndex])
                     {
                         Indices.push_back(FaceIndexData.Indices[TriIndex]);
+                        FaceIndexData.FaceReordering.emplace_back(TriIndex * 3 + 0, TriIndex * 3 + 1, TriIndex * 3 + 2);
                     }
                 }
                 const Uint32 NumTris = static_cast<Uint32>(Indices.size() - FirstTri);
@@ -830,6 +834,32 @@ HnMesh::TriangleFaceIndexData HnMesh::ComputeTriangleFaceIndices()
     }
 
     return FaceIndexData;
+}
+
+static std::shared_ptr<pxr::HdBufferSource> ReindexBufferSource(const pxr::HdBufferSource& SrcSource,
+                                                                const pxr::VtVec3iArray&   Indices)
+{
+    const Uint8*      pSrcData    = static_cast<const Uint8*>(SrcSource.GetData());
+    const pxr::HdType ElementType = SrcSource.GetTupleType().type;
+    const size_t      ElementSize = HdDataSizeOfType(ElementType);
+
+    std::shared_ptr<TriangulatedFaceBufferSource> ReindexedSource =
+        std::make_shared<TriangulatedFaceBufferSource>(SrcSource.GetName(), SrcSource.GetTupleType(), Indices.size() * 3);
+
+    std::vector<Uint8>& DstData = ReindexedSource->GetData();
+    VERIFY_EXPR(DstData.size() == Indices.size() * 3 * ElementSize);
+    Uint8* pDst = DstData.data();
+    for (size_t i = 0; i < Indices.size(); ++i)
+    {
+        const pxr::GfVec3i& Tri = Indices[i];
+        for (size_t v = 0; v < 3; ++v)
+        {
+            const auto* pSrc = pSrcData + Tri[v] * ElementSize;
+            memcpy(pDst + (i * 3 + v) * ElementSize, pSrc, ElementSize);
+        }
+    }
+
+    return ReindexedSource;
 }
 
 void HnMesh::ConvertVertexPrimvarSources(FaceSourcesMapType&& FaceSources)
@@ -846,10 +876,17 @@ void HnMesh::ConvertVertexPrimvarSources(FaceSourcesMapType&& FaceSources)
                "The number of subsets is not consistent with the previously computed value. "
                "This may indicate that the topology was not updated during the last sync.");
     }
-    const pxr::VtVec3iArray& Indices = !Faces.Indices.empty() ? Faces.Indices : m_StagingIndexData->Faces.Indices;
+    const pxr::VtVec3iArray& Indices        = Faces ? Faces.Indices : m_StagingIndexData->Faces.Indices;
+    const pxr::VtVec3iArray& FaceReordering = Faces ? Faces.FaceReordering : m_StagingIndexData->Faces.FaceReordering;
+
     VERIFY(Indices.size() == m_IndexData.NumFaceTriangles,
            "The number of indices is not consistent with the previously computed value. "
            "This may indicate that the topology was not updated during the last sync.");
+
+    // Vertex data is indexed by triangle indices produced by MeshUtil.ComputeTriangleIndices.
+    // However, triangulation of face-varying primvars produced by MeshUtil.ComputeTriangulatedFaceVaryingPrimvar
+    // is non-indexed. It contains one value per index, rather than one value per vertex.
+    // We need to unfold vertex data to match the face-varying data.
 
     // Unpack vertex sources by unfolding triangle indices into linear list of vertices
     int NumVerts = 0;
@@ -858,37 +895,26 @@ void HnMesh::ConvertVertexPrimvarSources(FaceSourcesMapType&& FaceSources)
         auto& pSource = source_it.second;
         if (pSource == nullptr)
             continue;
-
-        const auto*       pSrcData    = static_cast<const Uint8*>(pSource->GetData());
-        const pxr::HdType ElementType = pSource->GetTupleType().type;
-        const size_t      ElementSize = HdDataSizeOfType(ElementType);
-
         NumVerts = std::max(NumVerts, static_cast<int>(pSource->GetNumElements()));
 
-        auto  FaceSource = std::make_shared<TriangulatedFaceBufferSource>(pSource->GetName(), pSource->GetTupleType(), Indices.size() * 3);
-        auto& FaceData   = FaceSource->GetData();
-        VERIFY_EXPR(FaceData.size() == Indices.size() * 3 * ElementSize);
-        auto* pDstData = FaceData.data();
-        for (size_t i = 0; i < Indices.size(); ++i)
-        {
-            const pxr::GfVec3i& Tri = Indices[i];
-            for (size_t v = 0; v < 3; ++v)
-            {
-                const auto* pSrc = pSrcData + Tri[v] * ElementSize;
-                memcpy(pDstData + (i * 3 + v) * ElementSize, pSrc, ElementSize);
-            }
-        }
         // Replace original vertex source with the triangulated face source
-        pSource = std::move(FaceSource);
+        pSource = ReindexBufferSource(*pSource, Indices);
     }
 
     // Add face-varying sources
     for (auto& face_source_it : FaceSources)
     {
-        auto inserted = m_StagingVertexData->Sources.emplace(face_source_it.first, std::move(face_source_it.second)).second;
-        if (!inserted)
+        auto it_inserted = m_StagingVertexData->Sources.emplace(face_source_it.first, std::move(face_source_it.second));
+        if (!it_inserted.second)
         {
             LOG_ERROR_MESSAGE("Failed to add face-varying source ", face_source_it.first, " to ", GetId(), " as vertex source with the same name already exists.");
+            continue;
+        }
+
+        if (!FaceReordering.empty() && it_inserted.first->second)
+        {
+            // Reorder face-varying data to match the geometry subset face order
+            it_inserted.first->second = ReindexBufferSource(*it_inserted.first->second, FaceReordering);
         }
     }
 
