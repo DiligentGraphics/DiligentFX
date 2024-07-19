@@ -626,6 +626,8 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
         ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
         ShaderCI.pShaderSourceStreamFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();
         ShaderCI.Macros                     = Macros;
+        // WebGPU only supports row-major matrices
+        ShaderCI.CompileFlags = SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR;
 
         RefCntAutoPtr<IShader> pVS;
         {
@@ -684,6 +686,7 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
         ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
         ShaderCI.pShaderSourceStreamFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();
         ShaderCI.Macros                     = Macros;
+        ShaderCI.CompileFlags               = SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR;
 
         RefCntAutoPtr<IShader> pVS;
         {
@@ -738,12 +741,12 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
     // clang-format off
     const std::array<float4x4, 6> Matrices =
     {
-/* +X */ float4x4::RotationY(+PI_F / 2.f),
-/* -X */ float4x4::RotationY(-PI_F / 2.f),
-/* +Y */ float4x4::RotationX(-PI_F / 2.f),
-/* -Y */ float4x4::RotationX(+PI_F / 2.f),
+/* +X */ float4x4::RotationY(-PI_F / 2.f),
+/* -X */ float4x4::RotationY(+PI_F / 2.f),
+/* +Y */ float4x4::RotationX(+PI_F / 2.f),
+/* -Y */ float4x4::RotationX(-PI_F / 2.f),
 /* +Z */ float4x4::Identity(),
-/* -Z */ float4x4::RotationY(PI_F)
+/* -Z */ float4x4::RotationY(-PI_F)
     };
     // clang-format on
 
