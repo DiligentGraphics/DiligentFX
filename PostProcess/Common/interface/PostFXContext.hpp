@@ -120,8 +120,8 @@ public:
 
     struct CreateInfo
     {
-        bool EnablePackMatrixRowMajor;
-        bool EnableAsyncCreation;
+        bool EnableAsyncCreation = false;
+        bool PackMatrixRowMajor  = false;
     };
 
 public:
@@ -135,7 +135,7 @@ public:
 
     bool IsPSOsReady() const;
 
-    bool IsPackedMatrixRowMajor() const;
+    SHADER_COMPILE_FLAGS GetShaderCompileFlags(bool CompileAsynchronously) const;
 
     float GetInterpolationSpeed() const;
 

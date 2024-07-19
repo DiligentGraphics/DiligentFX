@@ -340,9 +340,14 @@ bool PostFXContext::IsPSOsReady() const
     return m_PSOsReady;
 }
 
-bool PostFXContext::IsPackedMatrixRowMajor() const
+SHADER_COMPILE_FLAGS PostFXContext::GetShaderCompileFlags(bool CompileAsynchronously) const
 {
-    return m_Settings.EnablePackMatrixRowMajor;
+    SHADER_COMPILE_FLAGS Flags = SHADER_COMPILE_FLAG_NONE;
+    if (m_Settings.PackMatrixRowMajor)
+        Flags |= SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR;
+    if (CompileAsynchronously)
+        Flags |= SHADER_COMPILE_FLAG_ASYNCHRONOUS;
+    return Flags;
 }
 
 float PostFXContext::GetInterpolationSpeed() const
@@ -434,11 +439,8 @@ bool PostFXContext::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, 
 {
     bool AllPSOsReady = true;
 
-    const SHADER_COMPILE_FLAGS ShaderFlags =
-        (m_Settings.EnablePackMatrixRowMajor ? SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR : SHADER_COMPILE_FLAG_NONE) |
-        (m_Settings.EnableAsyncCreation ? SHADER_COMPILE_FLAG_ASYNCHRONOUS : SHADER_COMPILE_FLAG_NONE);
-
-    const PSO_CREATE_FLAGS PSOFlags = m_Settings.EnableAsyncCreation ? PSO_CREATE_FLAG_ASYNCHRONOUS : PSO_CREATE_FLAG_NONE;
+    const SHADER_COMPILE_FLAGS ShaderFlags = GetShaderCompileFlags(m_Settings.EnableAsyncCreation);
+    const PSO_CREATE_FLAGS     PSOFlags    = m_Settings.EnableAsyncCreation ? PSO_CREATE_FLAG_ASYNCHRONOUS : PSO_CREATE_FLAG_NONE;
 
     {
         auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_BLUE_NOISE_TEXTURE, FeatureFlags, TEX_FORMAT_UNKNOWN);

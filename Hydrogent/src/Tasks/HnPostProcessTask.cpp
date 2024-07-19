@@ -553,34 +553,35 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
         VERIFY(m_PostProcessAttribsCB, "Failed to create post process attribs CB");
     }
 
+    const bool AsyncShaderCompilation = RenderDelegate->GetUSDRenderer()->GetSettings().AsyncShaderCompilation;
     if (!m_PostFXContext)
     {
-        m_PostFXContext = std::make_unique<PostFXContext>(pDevice);
+        m_PostFXContext = std::make_unique<PostFXContext>(pDevice, PostFXContext::CreateInfo{AsyncShaderCompilation});
     }
 
     if (!m_SSR)
     {
-        m_SSR = std::make_unique<ScreenSpaceReflection>(pDevice);
+        m_SSR = std::make_unique<ScreenSpaceReflection>(pDevice, ScreenSpaceReflection::CreateInfo{AsyncShaderCompilation});
     }
 
     if (!m_SSAO)
     {
-        m_SSAO = std::make_unique<ScreenSpaceAmbientOcclusion>(pDevice);
+        m_SSAO = std::make_unique<ScreenSpaceAmbientOcclusion>(pDevice, ScreenSpaceAmbientOcclusion::CreateInfo{AsyncShaderCompilation});
     }
 
     if (!m_TAA)
     {
-        m_TAA = std::make_unique<TemporalAntiAliasing>(pDevice);
+        m_TAA = std::make_unique<TemporalAntiAliasing>(pDevice, TemporalAntiAliasing::CreateInfo{AsyncShaderCompilation});
     }
 
     if (!m_DOF)
     {
-        m_DOF = std::make_unique<DepthOfField>(pDevice);
+        m_DOF = std::make_unique<DepthOfField>(pDevice, DepthOfField::CreateInfo{AsyncShaderCompilation});
     }
 
     if (!m_Bloom)
     {
-        m_Bloom = std::make_unique<Bloom>(pDevice);
+        m_Bloom = std::make_unique<Bloom>(pDevice, Bloom::CreateInfo{AsyncShaderCompilation});
     }
 
     const HnRenderParam* pRenderParam   = static_cast<const HnRenderParam*>(RenderDelegate->GetRenderParam());
@@ -616,33 +617,18 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
     m_UseBloom = m_Params.EnableBloom && EnablePostProcessing && m_UseTAA;
     m_UseDOF   = m_Params.EnableDOF && EnablePostProcessing && m_UseTAA;
 
-    const bool AsyncShaderCompilation = RenderDelegate->GetUSDRenderer()->GetSettings().AsyncShaderCompilation;
-    m_PostFXContext->PrepareResources(pDevice, {pRenderParam->GetFrameNumber(), FinalColorDesc.Width, FinalColorDesc.Height},
-                                      AsyncShaderCompilation ? PostFXContext::FEATURE_FLAG_ASYNC_CREATION : PostFXContext::FEATURE_FLAG_NONE);
-
-    const ScreenSpaceAmbientOcclusion::FEATURE_FLAGS SSAOFeatureFlags = m_Params.SSAOFeatureFlags |
-        (AsyncShaderCompilation ? ScreenSpaceAmbientOcclusion::FEATURE_FLAG_ASYNC_CREATION : ScreenSpaceAmbientOcclusion::FEATURE_FLAG_NONE);
-    m_SSAO->PrepareResources(pDevice, pCtx, m_PostFXContext.get(), SSAOFeatureFlags);
-
-    const ScreenSpaceReflection::FEATURE_FLAGS SSRFeatureFlags = m_Params.SSRFeatureFlags |
-        (AsyncShaderCompilation ? ScreenSpaceReflection::FEATURE_FLAG_ASYNC_CREATION : ScreenSpaceReflection::FEATURE_FLAG_NONE);
-    m_SSR->PrepareResources(pDevice, pCtx, m_PostFXContext.get(), SSRFeatureFlags);
-
-    const TemporalAntiAliasing::FEATURE_FLAGS TAAFeatureFlags = m_Params.TAAFeatureFlags |
-        (AsyncShaderCompilation ? TemporalAntiAliasing::FEATURE_FLAG_ASYNC_CREATION : TemporalAntiAliasing::FEATURE_FLAG_NONE);
-    m_TAA->PrepareResources(pDevice, pCtx, m_PostFXContext.get(), TAAFeatureFlags);
+    m_PostFXContext->PrepareResources(pDevice, {pRenderParam->GetFrameNumber(), FinalColorDesc.Width, FinalColorDesc.Height}, PostFXContext::FEATURE_FLAG_NONE);
+    m_SSAO->PrepareResources(pDevice, pCtx, m_PostFXContext.get(), m_Params.SSAOFeatureFlags);
+    m_SSR->PrepareResources(pDevice, pCtx, m_PostFXContext.get(), m_Params.SSRFeatureFlags);
+    m_TAA->PrepareResources(pDevice, pCtx, m_PostFXContext.get(), m_Params.TAAFeatureFlags);
     if (m_UseBloom)
     {
-        const Bloom::FEATURE_FLAGS BloomFeatureFlags = m_Params.BloomFeatureFlags |
-            (AsyncShaderCompilation ? Bloom::FEATURE_FLAG_ASYNC_CREATION : Bloom::FEATURE_FLAG_NONE);
-        m_Bloom->PrepareResources(pDevice, pCtx, m_PostFXContext.get(), BloomFeatureFlags);
+        m_Bloom->PrepareResources(pDevice, pCtx, m_PostFXContext.get(), m_Params.BloomFeatureFlags);
     }
 
     if (m_UseDOF)
     {
-        const DepthOfField::FEATURE_FLAGS DOFFeatureFlags = m_Params.DOFFeatureFlags |
-            (AsyncShaderCompilation ? DepthOfField::FEATURE_FLAG_ASYNC_CREATION : DepthOfField::FEATURE_FLAG_NONE);
-        m_DOF->PrepareResources(pDevice, pCtx, m_PostFXContext.get(), DOFFeatureFlags);
+        m_DOF->PrepareResources(pDevice, pCtx, m_PostFXContext.get(), m_Params.DOFFeatureFlags);
     }
 
     m_PostProcessTech.PreparePRS();

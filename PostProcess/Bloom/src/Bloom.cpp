@@ -155,11 +155,8 @@ bool Bloom::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_
 {
     bool AllPSOsReady = true;
 
-    const SHADER_COMPILE_FLAGS ShaderFlags =
-        (RenderAttribs.pPostFXContext->IsPackedMatrixRowMajor() ? SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR : SHADER_COMPILE_FLAG_NONE) |
-        (m_Settings.EnableAsyncCreation ? SHADER_COMPILE_FLAG_ASYNCHRONOUS : SHADER_COMPILE_FLAG_NONE);
-
-    const PSO_CREATE_FLAGS PSOFlags = m_Settings.EnableAsyncCreation ? PSO_CREATE_FLAG_ASYNCHRONOUS : PSO_CREATE_FLAG_NONE;
+    const SHADER_COMPILE_FLAGS ShaderFlags = RenderAttribs.pPostFXContext->GetShaderCompileFlags(m_Settings.EnableAsyncCreation);
+    const PSO_CREATE_FLAGS     PSOFlags    = m_Settings.EnableAsyncCreation ? PSO_CREATE_FLAG_ASYNCHRONOUS : PSO_CREATE_FLAG_NONE;
 
     {
         auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_PREFILTERED_TEXTURE, FeatureFlags);

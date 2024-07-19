@@ -77,7 +77,7 @@ public:
 
     struct CreateInfo
     {
-        bool EnableAsyncCreation;
+        bool EnableAsyncCreation = false;
     };
 
 public:

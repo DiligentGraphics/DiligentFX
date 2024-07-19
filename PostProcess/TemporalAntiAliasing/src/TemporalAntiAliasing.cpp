@@ -215,11 +215,8 @@ ITextureView* TemporalAntiAliasing::GetAccumulatedFrameSRV(bool IsPrevFrame, Uin
 void TemporalAntiAliasing::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_FLAGS FeatureFlags, TEXTURE_FORMAT TextureFormat)
 {
 
-    const SHADER_COMPILE_FLAGS ShaderFlags =
-        (RenderAttribs.pPostFXContext->IsPackedMatrixRowMajor() ? SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR : SHADER_COMPILE_FLAG_NONE) |
-        (m_Settings.EnableAsyncCreation ? SHADER_COMPILE_FLAG_ASYNCHRONOUS : SHADER_COMPILE_FLAG_NONE);
-
-    const PSO_CREATE_FLAGS PSOFlags = m_Settings.EnableAsyncCreation ? PSO_CREATE_FLAG_ASYNCHRONOUS : PSO_CREATE_FLAG_NONE;
+    const SHADER_COMPILE_FLAGS ShaderFlags = RenderAttribs.pPostFXContext->GetShaderCompileFlags(m_Settings.EnableAsyncCreation);
+    const PSO_CREATE_FLAGS     PSOFlags    = m_Settings.EnableAsyncCreation ? PSO_CREATE_FLAG_ASYNCHRONOUS : PSO_CREATE_FLAG_NONE;
 
     auto& RenderTech = m_RenderTech[{RENDER_TECH_COMPUTE_TEMPORAL_ACCUMULATION, FeatureFlags}];
     if (!RenderTech.IsInitializedPSO())
