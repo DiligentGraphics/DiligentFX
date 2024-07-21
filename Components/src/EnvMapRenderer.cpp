@@ -55,7 +55,7 @@ struct EnvMapRenderer::EnvMapShaderAttribs
 };
 
 EnvMapRenderer::EnvMapRenderer(const CreateInfo& CI) :
-    m_ShaderMatricesRowMajor{CI.ShaderMatricesRowMajor},
+    m_PackMatrixRowMajor{CI.PackMatrixRowMajor},
     m_pDevice{CI.pDevice},
     m_pStateCache{CI.pStateCache},
     m_pCameraAttribsCB{CI.pCameraAttribsCB},
@@ -116,7 +116,7 @@ IPipelineState* EnvMapRenderer::GetPSO(const PSOKey& Key)
     ShaderCreateInfo ShaderCI;
     ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
     ShaderCI.pShaderSourceStreamFactory = pShaderSourceFactory;
-    ShaderCI.CompileFlags               = m_ShaderMatricesRowMajor ? SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR : SHADER_COMPILE_FLAG_NONE;
+    ShaderCI.CompileFlags               = m_PackMatrixRowMajor ? SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR : SHADER_COMPILE_FLAG_NONE;
 
     ShaderMacroHelper Macros;
     Macros

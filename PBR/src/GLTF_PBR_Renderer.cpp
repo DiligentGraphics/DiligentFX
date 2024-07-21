@@ -630,11 +630,11 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
                 if (JointCount != 0)
                 {
                     MapHelper<float4x4> pJoints{pCtx, m_JointsBuffer, MAP_WRITE, MAP_FLAG_DISCARD};
-                    memcpy(pJoints, JointMatrices.data(), JointCount * sizeof(float4x4));
+                    WriteShaderMatrices(pJoints, JointMatrices.data(), JointCount, m_Settings.PackMatrixRowMajor);
                     if ((CurrPsoKey.GetFlags() & PSO_FLAG_COMPUTE_MOTION_VECTORS) != 0)
                     {
                         const auto& PrevJointMatrices = PrevTransforms->Skins[Node.SkinTransformsIndex].JointMatrices;
-                        memcpy(pJoints + m_Settings.MaxJointCount, PrevJointMatrices.data(), JointCount * sizeof(float4x4));
+                        WriteShaderMatrices(pJoints + m_Settings.MaxJointCount, PrevJointMatrices.data(), JointCount, m_Settings.PackMatrixRowMajor);
                     }
                 }
             }
@@ -659,7 +659,7 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
                         &PrevNodeTransform,
                         static_cast<Uint32>(JointCount),
                     };
-                    auto* pEndPtr = WritePBRPrimitiveShaderAttribs(pAttribsData, AttribsData, m_Settings.TextureAttribIndices, material);
+                    auto* pEndPtr = WritePBRPrimitiveShaderAttribs(pAttribsData, AttribsData, m_Settings.TextureAttribIndices, material, m_Settings.PackMatrixRowMajor);
 
                     VERIFY(reinterpret_cast<uint8_t*>(pEndPtr) <= static_cast<uint8_t*>(pAttribsData) + m_PBRPrimitiveAttribsCB->GetDesc().Size,
                            "Not enough space in the buffer to store primitive attributes");
@@ -710,7 +710,8 @@ Uint8* WriteShaderAttribs(Uint8* pDstPtr, HostStructType* pSrc, const char* Debu
 void* GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                                           pDstShaderAttribs,
                                                         const PBRPrimitiveShaderAttribsData&            AttribsData,
                                                         const std::array<int, TEXTURE_ATTRIB_ID_COUNT>& TextureAttribIndices,
-                                                        const GLTF::Material&                           Material)
+                                                        const GLTF::Material&                           Material,
+                                                        bool                                            TransposeMatrices)
 {
     // When adding new members, don't forget to update PBR_Renderer::GetPBRPrimitiveAttribsSize!
 
@@ -737,7 +738,7 @@ void* GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                   
         HLSL::GLTFNodeShaderTransforms* pDstTransforms = reinterpret_cast<HLSL::GLTFNodeShaderTransforms*>(pDstPtr);
         if (AttribsData.NodeMatrix != nullptr)
         {
-            memcpy(&pDstTransforms->NodeMatrix, AttribsData.NodeMatrix, sizeof(float4x4));
+            WriteShaderMatrix(&pDstTransforms->NodeMatrix, *AttribsData.NodeMatrix, TransposeMatrices);
         }
         else
         {
@@ -753,7 +754,7 @@ void* GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                   
     {
         if (AttribsData.PrevNodeMatrix != nullptr)
         {
-            memcpy(pDstPtr, AttribsData.PrevNodeMatrix, sizeof(float4x4));
+            WriteShaderMatrix(pDstPtr, *AttribsData.PrevNodeMatrix, TransposeMatrices);
         }
         else
         {

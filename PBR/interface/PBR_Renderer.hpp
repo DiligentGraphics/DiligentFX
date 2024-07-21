@@ -194,7 +194,7 @@ public:
         ///             in GPU memory. If this option is set to true, shaders will be compiled
         ///             with the SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR flag and
         ///             use the row-major layout.
-        bool ShaderMatricesRowMajor = false;
+        bool PackMatrixRowMajor = false;
 
         /// PCF shadow kernel size.
         /// Allowed values are 2, 3, 5, 7.

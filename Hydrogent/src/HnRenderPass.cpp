@@ -517,7 +517,8 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
         //       global material version will be updated, and the draw list item GPU
         //       resources will be updated.
         const GLTF::Material& MaterialData = ListItem.Material.GetMaterialData();
-        GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(pCurrPrimitive, AttribsData, State.USDRenderer.GetSettings().TextureAttribIndices, MaterialData);
+        GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(pCurrPrimitive, AttribsData, State.USDRenderer.GetSettings().TextureAttribIndices,
+                                                          MaterialData, /*TransposeMatrices = */ false);
 
         pDstMaterialBasicAttribs->BaseColorFactor = MaterialData.Attribs.BaseColorFactor * DisplayColor;
         // Write Mesh ID to material custom data to make sure that selection works for fallback PSO.

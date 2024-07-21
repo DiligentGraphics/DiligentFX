@@ -66,7 +66,7 @@ public:
         ///             in GPU memory. If this option is set to true, shaders will be compiled
         ///             with the SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR flag and
         ///             use the row-major layout.
-        bool ShaderMatricesRowMajor = false;
+        bool PackMatrixRowMajor = false;
     };
     EnvMapRenderer(const CreateInfo& CI);
     ~EnvMapRenderer();
@@ -129,7 +129,7 @@ public:
     IPipelineState* GetPSO(const PSOKey& Key);
 
 private:
-    const bool m_ShaderMatricesRowMajor = false;
+    const bool m_PackMatrixRowMajor = false;
 
     RefCntAutoPtr<IRenderDevice>     m_pDevice;
     RefCntAutoPtr<IRenderStateCache> m_pStateCache;

@@ -1575,7 +1575,7 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
 
     const SHADER_COMPILE_FLAGS ShaderCompileFlags =
         (m_Settings.AsyncShaderCompilation ? SHADER_COMPILE_FLAG_ASYNCHRONOUS : SHADER_COMPILE_FLAG_NONE) |
-        (m_Settings.ShaderMatricesRowMajor ? SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR : SHADER_COMPILE_FLAG_NONE);
+        (m_Settings.PackMatrixRowMajor ? SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR : SHADER_COMPILE_FLAG_NONE);
 
     RefCntAutoPtr<IShader>& pVS = m_VertexShaders[{
         PSOFlags,

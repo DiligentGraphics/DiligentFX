@@ -262,7 +262,8 @@ public:
     static void* WritePBRPrimitiveShaderAttribs(void*                                           pDstShaderAttribs,
                                                 const PBRPrimitiveShaderAttribsData&            AttribsData,
                                                 const std::array<int, TEXTURE_ATTRIB_ID_COUNT>& TextureAttribIndices,
-                                                const GLTF::Material&                           Material);
+                                                const GLTF::Material&                           Material,
+                                                bool                                            TransposeMatrices);
 
     struct PBRLightShaderAttribsData
     {
