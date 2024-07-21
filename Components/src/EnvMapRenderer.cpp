@@ -55,13 +55,13 @@ struct EnvMapRenderer::EnvMapShaderAttribs
 };
 
 EnvMapRenderer::EnvMapRenderer(const CreateInfo& CI) :
-    m_PackMatrixRowMajor{CI.PackMatrixRowMajor},
     m_pDevice{CI.pDevice},
     m_pStateCache{CI.pStateCache},
     m_pCameraAttribsCB{CI.pCameraAttribsCB},
     m_RTVFormats{CI.RTVFormats, CI.RTVFormats + CI.NumRenderTargets},
     m_DSVFormat{CI.DSVFormat},
-    m_PSMainSource{CI.PSMainSource != nullptr ? CI.PSMainSource : ""}
+    m_PSMainSource{CI.PSMainSource != nullptr ? CI.PSMainSource : ""},
+    m_PackMatrixRowMajor{CI.PackMatrixRowMajor}
 {
     DEV_CHECK_ERR(m_pDevice != nullptr, "Device must not be null");
     DEV_CHECK_ERR(m_pCameraAttribsCB != nullptr, "Camera Attribs CB must not be null");

@@ -129,8 +129,6 @@ public:
     IPipelineState* GetPSO(const PSOKey& Key);
 
 private:
-    const bool m_PackMatrixRowMajor = false;
-
     RefCntAutoPtr<IRenderDevice>     m_pDevice;
     RefCntAutoPtr<IRenderStateCache> m_pStateCache;
     RefCntAutoPtr<IBuffer>           m_pCameraAttribsCB;
@@ -139,6 +137,7 @@ private:
     const std::vector<TEXTURE_FORMAT> m_RTVFormats;
     const TEXTURE_FORMAT              m_DSVFormat;
     const std::string                 m_PSMainSource;
+    const bool                        m_PackMatrixRowMajor;
 
     std::unordered_map<PSOKey, RefCntAutoPtr<IPipelineState>, PSOKey::Hasher> m_PSOs;
 

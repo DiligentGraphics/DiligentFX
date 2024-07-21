@@ -54,6 +54,14 @@ public:
         TEXTURE_FORMAT DSVFormat                               = TEX_FORMAT_UNKNOWN;
 
         const char* PSMainSource = nullptr;
+
+        /// Whether shader matrices are laid out in row-major order in GPU memory.
+        ///
+        /// \remarks    By default, shader matrices are laid out in column-major order
+        ///             in GPU memory. If this option is set to true, shaders will be compiled
+        ///             with the SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR flag and
+        ///             use the row-major layout.
+        bool PackMatrixRowMajor = false;
     };
     VectorFieldRenderer(const CreateInfo& CI);
 
@@ -118,6 +126,7 @@ private:
     const std::vector<TEXTURE_FORMAT> m_RTVFormats;
     const TEXTURE_FORMAT              m_DSVFormat;
     const std::string                 m_PSMainSource;
+    const bool                        m_PackMatrixRowMajor;
 
     std::unordered_map<PSOKey, RefCntAutoPtr<IPipelineState>, PSOKey::Hasher> m_PSOs;
 

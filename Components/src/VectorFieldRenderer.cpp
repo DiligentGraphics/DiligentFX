@@ -63,7 +63,8 @@ VectorFieldRenderer::VectorFieldRenderer(const CreateInfo& CI) :
     m_pStateCache{CI.pStateCache},
     m_RTVFormats{CI.RTVFormats, CI.RTVFormats + CI.NumRenderTargets},
     m_DSVFormat{CI.DSVFormat},
-    m_PSMainSource{CI.PSMainSource != nullptr ? CI.PSMainSource : ""}
+    m_PSMainSource{CI.PSMainSource != nullptr ? CI.PSMainSource : ""},
+    m_PackMatrixRowMajor{CI.PackMatrixRowMajor}
 {
     DEV_CHECK_ERR(m_pDevice != nullptr, "Device must not be null");
 
@@ -103,6 +104,7 @@ IPipelineState* VectorFieldRenderer::GetPSO(const PSOKey& Key)
     ShaderCreateInfo ShaderCI;
     ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
     ShaderCI.pShaderSourceStreamFactory = pShaderSourceFactory;
+    ShaderCI.CompileFlags               = m_PackMatrixRowMajor ? SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR : SHADER_COMPILE_FLAG_NONE;
 
     ShaderMacroHelper Macros;
     Macros.Add("CONVERT_OUTPUT_TO_SRGB", Key.ConvertOutputToSRGB);

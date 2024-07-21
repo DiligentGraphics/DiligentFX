@@ -33,6 +33,7 @@
 #include "MapHelper.hpp"
 #include "GraphicsUtilities.h"
 #include "ShaderSourceFactoryUtils.hpp"
+#include "GraphicsAccessories.hpp"
 
 namespace Diligent
 {
@@ -54,7 +55,8 @@ BoundBoxRenderer::BoundBoxRenderer(const CreateInfo& CI) :
     m_pCameraAttribsCB{CI.pCameraAttribsCB},
     m_RTVFormats{CI.RTVFormats, CI.RTVFormats + CI.NumRenderTargets},
     m_DSVFormat{CI.DSVFormat},
-    m_PSMainSource{CI.PSMainSource != nullptr ? CI.PSMainSource : ""}
+    m_PSMainSource{CI.PSMainSource != nullptr ? CI.PSMainSource : ""},
+    m_PackMatrixRowMajor{CI.PackMatrixRowMajor}
 {
     DEV_CHECK_ERR(m_pDevice != nullptr, "Device must not be null");
     DEV_CHECK_ERR(m_pCameraAttribsCB != nullptr, "Camera Attribs CB must not be null");
@@ -108,6 +110,7 @@ IPipelineState* BoundBoxRenderer::GetPSO(const PSOKey& Key)
     ShaderCreateInfo ShaderCI;
     ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
     ShaderCI.pShaderSourceStreamFactory = pShaderSourceFactory;
+    ShaderCI.CompileFlags               = m_PackMatrixRowMajor ? SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR : SHADER_COMPILE_FLAG_NONE;
 
     ShaderMacroHelper Macros;
     Macros
@@ -188,7 +191,7 @@ void BoundBoxRenderer::Prepare(IDeviceContext* pContext, const RenderAttribs& At
     if (m_ShaderAttribs)
     {
         const BoundBoxShaderAttribs ShaderAttribs{
-            Attribs.BoundBoxTransform->Transpose(),
+            m_PackMatrixRowMajor ? *Attribs.BoundBoxTransform : Attribs.BoundBoxTransform->Transpose(),
             Attribs.Color != nullptr ? *Attribs.Color : float4{1.0, 1.0, 1.0, 1.0},
             Attribs.PatternLength,
             Attribs.PatternMask,
@@ -206,7 +209,7 @@ void BoundBoxRenderer::Prepare(IDeviceContext* pContext, const RenderAttribs& At
     else
     {
         MapHelper<BoundBoxShaderAttribs> BBAttribs{pContext, m_RenderAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
-        BBAttribs->Transform     = Attribs.BoundBoxTransform->Transpose();
+        WriteShaderMatrix(&BBAttribs->Transform, *Attribs.BoundBoxTransform, !m_PackMatrixRowMajor);
         BBAttribs->Color         = Attribs.Color != nullptr ? *Attribs.Color : float4{1.0, 1.0, 1.0, 1.0};
         BBAttribs->PatternLength = Attribs.PatternLength;
         BBAttribs->PatternMask   = Attribs.PatternMask;
