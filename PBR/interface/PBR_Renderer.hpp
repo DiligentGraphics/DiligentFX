@@ -188,6 +188,14 @@ public:
         ///             renderer will use a simple fallback shader.
         bool AsyncShaderCompilation = false;
 
+        /// Whether shader matrices are laid out in row-major order in GPU memory.
+        ///
+        /// \remarks    By default, shader matrices are laid out in column-major order
+        ///             in GPU memory. If this option is set to true, shaders will be compiled
+        ///             with the SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR flag and
+        ///             use the row-major layout.
+        bool ShaderMatricesRowMajor = false;
+
         /// PCF shadow kernel size.
         /// Allowed values are 2, 3, 5, 7.
         Uint32 PCFKernelSize = 3;

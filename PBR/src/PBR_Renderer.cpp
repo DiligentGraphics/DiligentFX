@@ -1573,6 +1573,10 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
 
     const bool UseCombinedSamplers = m_Device.GetDeviceInfo().IsGLDevice();
 
+    const SHADER_COMPILE_FLAGS ShaderCompileFlags =
+        (m_Settings.AsyncShaderCompilation ? SHADER_COMPILE_FLAG_ASYNCHRONOUS : SHADER_COMPILE_FLAG_NONE) |
+        (m_Settings.ShaderMatricesRowMajor ? SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR : SHADER_COMPILE_FLAG_NONE);
+
     RefCntAutoPtr<IShader>& pVS = m_VertexShaders[{
         PSOFlags,
         ALPHA_MODE_OPAQUE,
@@ -1592,8 +1596,7 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
             SHADER_SOURCE_LANGUAGE_HLSL,
             {"PBR VS", SHADER_TYPE_VERTEX, UseCombinedSamplers},
         };
-        if (m_Settings.AsyncShaderCompilation)
-            ShaderCI.CompileFlags |= SHADER_COMPILE_FLAG_ASYNCHRONOUS;
+        ShaderCI.CompileFlags = ShaderCompileFlags;
 
         std::string GLSLSource;
         if (m_Settings.PrimitiveArraySize > 0)
@@ -1648,10 +1651,8 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
             SHADER_SOURCE_LANGUAGE_HLSL,
             {!IsUnshaded ? "PBR PS" : "Unshaded PS", SHADER_TYPE_PIXEL, UseCombinedSamplers},
         };
+        ShaderCI.CompileFlags                   = ShaderCompileFlags;
         ShaderCI.WebGPUEmulatedArrayIndexSuffix = "_";
-
-        if (m_Settings.AsyncShaderCompilation)
-            ShaderCI.CompileFlags |= SHADER_COMPILE_FLAG_ASYNCHRONOUS;
 
         pPS = m_Device.CreateShader(ShaderCI);
     }
