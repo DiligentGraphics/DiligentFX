@@ -15,14 +15,17 @@ jobs:
             build_type: "Release"
 
         include:
-          - os:        "windows-latest"
-            host_name: "Win10"
+          - os:         "windows-latest"
+            host_name:  "Win10"
+            cmake_args: "-DDILIGENT_NO_WEBGPU=ON"
 
-          - os:        "ubuntu-20.04"
-            host_name: "Linux"
+          - os:         "ubuntu-20.04"
+            host_name:  "Linux"
+            cmake_args: "-DDILIGENT_NO_WEBGPU=ON"
 
-          - os:        "macos-14"
-            host_name: "MacOS"
+          - os:         "macos-14"
+            host_name:  "MacOS"
+            cmake_args: "-DDILIGENT_NO_WEBGPU=ON"
 
     runs-on: ${{ matrix.os }}
     name: ${{ matrix.host_name }} -> Emscripten, ${{ matrix.build_type }}
@@ -42,6 +45,7 @@ jobs:
       uses: DiligentGraphics/github-action/configure-cmake@v1
       with:
         build-type: ${{ matrix.build_type }}
+        cmake-args: ${{ matrix.cmake_args }}
 
     - name: Build
       if:   success()
