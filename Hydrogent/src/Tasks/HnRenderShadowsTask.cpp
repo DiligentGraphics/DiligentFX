@@ -151,6 +151,7 @@ void HnRenderShadowsTask::PrepareClearDepthPSO(const HnRenderDelegate& RenderDel
 
         ShaderCreateInfo ShaderCI;
         ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL;
+        ShaderCI.CompileFlags   = SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR;
 
         RefCntAutoPtr<IShader> pVS;
         {

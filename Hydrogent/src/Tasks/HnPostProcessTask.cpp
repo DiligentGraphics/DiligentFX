@@ -126,6 +126,7 @@ static GraphicsPipelineStateCreateInfoX& CreateShaders(RenderDeviceWithCache_E& 
     ShaderCreateInfo ShaderCI;
     ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL;
     ShaderCI.Macros         = Macros;
+    ShaderCI.CompileFlags   = SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR;
 
     auto pHnFxCompoundSourceFactory     = HnShaderSourceFactory::CreateHnFxCompoundFactory();
     ShaderCI.pShaderSourceStreamFactory = pHnFxCompoundSourceFactory;
@@ -471,10 +472,11 @@ void HnPostProcessTask::CreateVectorFieldRenderer(TEXTURE_FORMAT RTVFormat)
     HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
 
     VectorFieldRenderer::CreateInfo CI;
-    CI.pDevice          = RenderDelegate->GetDevice();
-    CI.pStateCache      = RenderDelegate->GetRenderStateCache();
-    CI.NumRenderTargets = 1;
-    CI.RTVFormats[0]    = RTVFormat;
+    CI.pDevice            = RenderDelegate->GetDevice();
+    CI.pStateCache        = RenderDelegate->GetRenderStateCache();
+    CI.NumRenderTargets   = 1;
+    CI.RTVFormats[0]      = RTVFormat;
+    CI.PackMatrixRowMajor = true;
 
     m_VectorFieldRenderer = std::make_unique<VectorFieldRenderer>(CI);
 }
@@ -556,7 +558,11 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
     const bool AsyncShaderCompilation = RenderDelegate->GetUSDRenderer()->GetSettings().AsyncShaderCompilation;
     if (!m_PostFXContext)
     {
-        m_PostFXContext = std::make_unique<PostFXContext>(pDevice, PostFXContext::CreateInfo{AsyncShaderCompilation});
+        PostFXContext::CreateInfo PostFXCI;
+        PostFXCI.EnableAsyncCreation = AsyncShaderCompilation;
+        PostFXCI.PackMatrixRowMajor  = true;
+
+        m_PostFXContext = std::make_unique<PostFXContext>(pDevice, PostFXCI);
     }
 
     if (!m_SSR)

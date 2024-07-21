@@ -435,12 +435,12 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
             };
             CamAttribs.fHandness = 1.f;
 
-            CamAttribs.mViewT        = ViewMatrix.Transpose();
-            CamAttribs.mProjT        = ProjMatrix.Transpose();
-            CamAttribs.mViewProjT    = ViewProj.Transpose();
-            CamAttribs.mViewInvT     = ViewMatrix.Inverse().Transpose();
-            CamAttribs.mProjInvT     = ProjMatrix.Inverse().Transpose();
-            CamAttribs.mViewProjInvT = ViewProj.Inverse().Transpose();
+            CamAttribs.mViewT        = ViewMatrix;
+            CamAttribs.mProjT        = ProjMatrix;
+            CamAttribs.mViewProjT    = ViewProj;
+            CamAttribs.mViewInvT     = ViewMatrix.Inverse();
+            CamAttribs.mProjInvT     = ProjMatrix.Inverse();
+            CamAttribs.mViewProjInvT = ViewProj.Inverse();
             CamAttribs.f4Position    = float4{0, 0, 0, 1};
             CamAttribs.f2Jitter      = float2{0, 0};
 
@@ -480,12 +480,12 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
             };
             CamAttribs.fHandness = ViewMatrix.Determinant() > 0 ? 1.f : -1.f;
 
-            CamAttribs.mViewT         = ViewMatrix.Transpose();
-            CamAttribs.mProjT         = ProjMatrix.Transpose();
-            CamAttribs.mViewProjT     = ViewProj.Transpose();
-            CamAttribs.mViewInvT      = WorldMatrix.Transpose();
-            CamAttribs.mProjInvT      = ProjMatrix.Inverse().Transpose();
-            CamAttribs.mViewProjInvT  = ViewProj.Inverse().Transpose();
+            CamAttribs.mViewT         = ViewMatrix;
+            CamAttribs.mProjT         = ProjMatrix;
+            CamAttribs.mViewProjT     = ViewProj;
+            CamAttribs.mViewInvT      = WorldMatrix;
+            CamAttribs.mProjInvT      = ProjMatrix.Inverse();
+            CamAttribs.mViewProjInvT  = ViewProj.Inverse();
             CamAttribs.f4Position     = float4{float3::MakeVector(WorldMatrix[3]), 1};
             CamAttribs.f2Jitter       = Jitter;
             CamAttribs.fFStop         = m_pCamera->GetFStop();

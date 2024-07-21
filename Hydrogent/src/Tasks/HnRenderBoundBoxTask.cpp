@@ -171,14 +171,17 @@ void HnRenderBoundBoxTask::Prepare(pxr::HdTaskContext* TaskCtx,
         if (HnRenderPassState* RenderPassState = GetRenderPassState(TaskCtx, m_RenderPassName))
         {
             BoundBoxRenderer::CreateInfo BoundBoxRndrCI;
-            BoundBoxRndrCI.pDevice          = pRenderDelegate->GetDevice();
-            BoundBoxRndrCI.pCameraAttribsCB = pRenderDelegate->GetFrameAttribsCB();
-            BoundBoxRndrCI.NumRenderTargets = RenderPassState->GetNumRenderTargets();
+            BoundBoxRndrCI.pDevice            = pRenderDelegate->GetDevice();
+            BoundBoxRndrCI.PackMatrixRowMajor = true;
+            BoundBoxRndrCI.pCameraAttribsCB   = pRenderDelegate->GetFrameAttribsCB();
+            BoundBoxRndrCI.NumRenderTargets   = RenderPassState->GetNumRenderTargets();
             for (Uint32 rt = 0; rt < BoundBoxRndrCI.NumRenderTargets; ++rt)
                 BoundBoxRndrCI.RTVFormats[rt] = RenderPassState->GetRenderTargetFormat(rt);
             BoundBoxRndrCI.DSVFormat = RenderPassState->GetDepthStencilFormat();
 
-            const std::string PSMain    = GetBoundBoxPSMain(BoundBoxRndrCI.pDevice->GetDeviceInfo().IsGLDevice());
+            const std::string PSMain = GetBoundBoxPSMain(BoundBoxRndrCI.pDevice->GetDeviceInfo().IsGLDevice() ||
+                                                         BoundBoxRndrCI.pDevice->GetDeviceInfo().IsWebGPUDevice());
+
             BoundBoxRndrCI.PSMainSource = PSMain.c_str();
 
             m_BoundBoxRenderer = std::make_unique<BoundBoxRenderer>(BoundBoxRndrCI);

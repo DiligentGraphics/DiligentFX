@@ -138,15 +138,17 @@ void HnRenderEnvMapTask::Prepare(pxr::HdTaskContext* TaskCtx,
         if (HnRenderPassState* RenderPassState = GetRenderPassState(TaskCtx, m_RenderPassName))
         {
             EnvMapRenderer::CreateInfo EnvMapRndrCI;
-            EnvMapRndrCI.pDevice          = pRenderDelegate->GetDevice();
-            EnvMapRndrCI.pCameraAttribsCB = pRenderDelegate->GetFrameAttribsCB();
-            EnvMapRndrCI.NumRenderTargets = RenderPassState->GetNumRenderTargets();
+            EnvMapRndrCI.pDevice            = pRenderDelegate->GetDevice();
+            EnvMapRndrCI.pCameraAttribsCB   = pRenderDelegate->GetFrameAttribsCB();
+            EnvMapRndrCI.PackMatrixRowMajor = true;
+            EnvMapRndrCI.NumRenderTargets   = RenderPassState->GetNumRenderTargets();
             for (Uint32 rt = 0; rt < EnvMapRndrCI.NumRenderTargets; ++rt)
                 EnvMapRndrCI.RTVFormats[rt] = RenderPassState->GetRenderTargetFormat(rt);
             EnvMapRndrCI.DSVFormat = RenderPassState->GetDepthStencilFormat();
 
             const std::string PSMain = GetEnvMapPSMain(EnvMapRndrCI.pDevice->GetDeviceInfo().IsGLDevice() ||
-                                                       EnvMapRndrCI.pDevice->GetDeviceInfo().IsVulkanDevice());
+                                                       EnvMapRndrCI.pDevice->GetDeviceInfo().IsVulkanDevice() ||
+                                                       EnvMapRndrCI.pDevice->GetDeviceInfo().IsWebGPUDevice());
 
             EnvMapRndrCI.PSMainSource = PSMain.c_str();
 
