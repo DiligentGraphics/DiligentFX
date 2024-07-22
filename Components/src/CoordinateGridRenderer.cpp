@@ -48,8 +48,9 @@ namespace HLSL
 
 } // namespace HLSL
 
-CoordinateGridRenderer::CoordinateGridRenderer(IRenderDevice* pDevice) :
-    m_pRenderAttribs{std::make_unique<HLSL::CoordinateGridAttribs>()}
+CoordinateGridRenderer::CoordinateGridRenderer(IRenderDevice* pDevice, const CreateInfo& CI) :
+    m_pRenderAttribs{std::make_unique<HLSL::CoordinateGridAttribs>()},
+    m_Settings{CI}
 {
     RefCntAutoPtr<IBuffer> pBuffer;
     CreateUniformBuffer(pDevice, sizeof(HLSL::CoordinateGridAttribs), "CoordinateGridRenderer::ConstantBuffer", &pBuffer, USAGE_DEFAULT, BIND_UNIFORM_BUFFER, CPU_ACCESS_NONE, m_pRenderAttribs.get());
@@ -227,17 +228,19 @@ void CoordinateGridRenderer::RenderGridAxes(const RenderAttributes& RenderAttrib
     auto& pPSO = GetPSO(RenderAttribs.FeatureFlags, RenderAttribs.pColorRTV->GetDesc().Format);
     if (!pPSO)
     {
+        const SHADER_COMPILE_FLAGS ShaderFlags = m_Settings.PackMatrixRowMajor ? SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR : SHADER_COMPILE_FLAG_NONE;
+
         ShaderMacroHelper Macros;
         AddShaderMacros(RenderAttribs.FeatureFlags, Macros);
 
-        const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX);
-        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "CoordinateGridPS.psh", "ComputeGridAxesPS", SHADER_TYPE_PIXEL, Macros);
+        const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
+        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "CoordinateGridPS.psh", "ComputeGridAxesPS", SHADER_TYPE_PIXEL, Macros, ShaderFlags);
 
         PipelineResourceLayoutDescX ResourceLayout;
         ResourceLayout
             .AddVariable(SHADER_TYPE_PIXEL, "cbCameraAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
             .AddVariable(SHADER_TYPE_PIXEL, "cbGridAxesAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
-            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
+            .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC, SHADER_VARIABLE_FLAG_UNFILTERABLE_FLOAT_TEXTURE_WEBGPU);
 
         GraphicsPipelineStateCreateInfoX PSOCreateInfo{"CoordinateGridRenderer::GridAxes"};
         PSOCreateInfo

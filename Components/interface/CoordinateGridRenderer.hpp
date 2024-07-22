@@ -93,8 +93,13 @@ public:
         const HLSL::CoordinateGridAttribs* pAttribs = nullptr;
     };
 
+    struct CreateInfo
+    {
+        bool PackMatrixRowMajor = false;
+    };
+
 public:
-    CoordinateGridRenderer(IRenderDevice* pDevice);
+    CoordinateGridRenderer(IRenderDevice* pDevice, const CreateInfo& CI);
 
     void Render(const RenderAttributes& Attribs);
 
@@ -141,14 +146,15 @@ private:
         };
     };
 
-    using PipleneStateObjectCache = std::unordered_map<PSOKey, RefCntAutoPtr<IPipelineState>, PSOKey::Hasher>;
+    using PipelineStateObjectCache = std::unordered_map<PSOKey, RefCntAutoPtr<IPipelineState>, PSOKey::Hasher>;
 
     ResourceRegistry m_Resources{RESOURCE_IDENTIFIER_COUNT};
 
-    PipleneStateObjectCache               m_PSOCache;
+    PipelineStateObjectCache              m_PSOCache;
     RefCntAutoPtr<IShaderResourceBinding> m_SRB;
 
     std::unique_ptr<HLSL::CoordinateGridAttribs> m_pRenderAttribs;
+    CreateInfo                                   m_Settings;
 };
 DEFINE_FLAG_ENUM_OPERATORS(CoordinateGridRenderer::FEATURE_FLAGS)
 
