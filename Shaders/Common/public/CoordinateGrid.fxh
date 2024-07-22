@@ -79,13 +79,15 @@ float4 ComputeGrid(float2 PlanePos, float Scale, float Subdivision, CoordinateGr
                   LodAlpha[2] > 0.0 ? LodAlpha[2] : LodAlpha[1] > 0.0 ? LodAlpha[1] : LodAlpha[0] * (1.0 - LodFade));
 }
 
-float ComputeAxisAlpha(float3   AxisDirection, 
-                       Ray      ViewRay,
-                       float    AxisLen,
-                       float    PixelSize,
-                       float    MaxCameraZ,
-                       float    CameraZRange,
-                       float4x4 CameraView)
+float4 ComputeAxis(float3   AxisDirection, 
+                   Ray      ViewRay,
+                   float    AxisLen,
+                   float    PixelSize,
+                   float    MaxCameraZ,
+                   float    CameraZRange,
+                   float4x4 CameraView,
+                   float3   PositiveColor,
+                   float3   NegativeColor)
 {
     float3 AxisOrigin = float3(0.0, 0.0, 0.0);
 
@@ -93,14 +95,14 @@ float ComputeAxisAlpha(float3   AxisDirection,
     float3 Delta = ViewRay.Origin - AxisOrigin;
     float  Denom = dot(Cross, Cross);
     if (abs(Denom) < 1e-7)
-        return 0.0;
+        return float4(0.0, 0.0, 0.0, 0.0);
 
     // Distance from the camera to the point on the camera ray that is closest to the axis ray
     float DistFromCamera = dot(cross(Delta, AxisDirection), Cross) / Denom;
     if (DistFromCamera < 0.0)
     {
         // Closest point is behind the camera
-        return 0.0;
+        return float4(0.0, 0.0, 0.0, 0.0);
     }
     
     // Distance from the origin of the axis to the point on the axis ray that is closest to the camera ray
@@ -128,7 +130,8 @@ float ComputeAxisAlpha(float3   AxisDirection,
     // Make axis fade out when looking straight along it
     Alpha *= saturate((1.0 - abs(dot(normalize(ViewRay.Origin), AxisDirection))) * 1e+6);
 
-    return Alpha;
+    float3 Color = DistFromOrigin > 0.0 ? PositiveColor : NegativeColor;
+    return float4(Color * Alpha, Alpha);
 }
 
 void ComputePlaneIntersectionAttribs(in CameraAttribs Camera,
@@ -180,22 +183,22 @@ float4 ComputeCoordinateGrid(in float2                f2NormalizedXY,
     
 #if COORDINATE_GRID_AXIS_X
     {
-        AxisResult += float4(GridAttribs.XAxisColor.xyz, 1.0) *
-                      ComputeAxisAlpha(float3(1.0, 0.0, 0.0), RayWS, Camera.fFarPlaneZ, PixelSize * GridAttribs.XAxisWidth, MaxCameraZ, CameraZRange, Camera.mView);
+        AxisResult += ComputeAxis(float3(1.0, 0.0, 0.0), RayWS, Camera.fFarPlaneZ, PixelSize * GridAttribs.XAxisWidth, MaxCameraZ, 
+                                  CameraZRange, Camera.mView, GridAttribs.PositiveXAxisColor.rgb, GridAttribs.NegativeXAxisColor.rgb);
     }
 #endif
 
 #if COORDINATE_GRID_AXIS_Y
     {
-        AxisResult += float4(GridAttribs.YAxisColor.xyz, 1.0) *
-                      ComputeAxisAlpha(float3(0.0, 1.0, 0.0), RayWS, Camera.fFarPlaneZ, PixelSize * GridAttribs.YAxisWidth, MaxCameraZ, CameraZRange, Camera.mView);
+        AxisResult += ComputeAxis(float3(0.0, 1.0, 0.0), RayWS, Camera.fFarPlaneZ, PixelSize * GridAttribs.YAxisWidth, MaxCameraZ, 
+                                  CameraZRange, Camera.mView, GridAttribs.PositiveYAxisColor.rgb, GridAttribs.NegativeYAxisColor.rgb);
     }
 #endif
 
 #if COORDINATE_GRID_AXIS_Z
     {
-        AxisResult += float4(GridAttribs.ZAxisColor.xyz, 1.0) *
-                      ComputeAxisAlpha(float3(0.0, 0.0, 1.0), RayWS, Camera.fFarPlaneZ, PixelSize * GridAttribs.ZAxisWidth, MaxCameraZ, CameraZRange, Camera.mView);
+        AxisResult += ComputeAxis(float3(0.0, 0.0, 1.0), RayWS, Camera.fFarPlaneZ, PixelSize * GridAttribs.ZAxisWidth, MaxCameraZ,
+                                  CameraZRange, Camera.mView, GridAttribs.PositiveZAxisColor.rgb, GridAttribs.NegativeZAxisColor.rgb);
     }
 #endif
 

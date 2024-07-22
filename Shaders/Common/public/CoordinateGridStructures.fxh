@@ -5,9 +5,12 @@
 
 struct CoordinateGridAttribs
 {
-    float4 XAxisColor       DEFAULT_VALUE(float4(1, 0, 0, 1));
-    float4 YAxisColor       DEFAULT_VALUE(float4(0, 1, 0, 1));
-    float4 ZAxisColor       DEFAULT_VALUE(float4(0, 0, 1, 1));
+    float4 PositiveXAxisColor DEFAULT_VALUE(float4(1, 0, 0, 1));
+    float4 PositiveYAxisColor DEFAULT_VALUE(float4(0, 1, 0, 1));
+    float4 PositiveZAxisColor DEFAULT_VALUE(float4(0, 0, 1, 1));
+    float4 NegativeXAxisColor DEFAULT_VALUE(float4(0.40f, 0.15f, 0.15f, 1));
+    float4 NegativeYAxisColor DEFAULT_VALUE(float4(0.15f, 0.40f, 0.15f, 1));
+    float4 NegativeZAxisColor DEFAULT_VALUE(float4(0.15f, 0.15f, 0.40f, 1));
 
     float XAxisWidth        DEFAULT_VALUE(3); // in pixels
     float YAxisWidth        DEFAULT_VALUE(3); // in pixels

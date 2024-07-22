@@ -165,11 +165,18 @@ bool CoordinateGridRenderer::UpdateUI(HLSL::CoordinateGridAttribs& Attribs, Coor
     if (SubdivisionSlider("XY Subdivision", Attribs.GridSubdivision[2]))
         AttribsChanged = true;
 
-    if (ImGui::ColorEdit3("X Axis Color", Attribs.XAxisColor.Data()))
+    if (ImGui::ColorEdit3("Positive X Axis Color", Attribs.PositiveXAxisColor.Data()))
         AttribsChanged = true;
-    if (ImGui::ColorEdit3("Y Axis Color", Attribs.YAxisColor.Data()))
+    if (ImGui::ColorEdit3("Positive Y Axis Color", Attribs.PositiveYAxisColor.Data()))
         AttribsChanged = true;
-    if (ImGui::ColorEdit3("Z Axis Color", Attribs.ZAxisColor.Data()))
+    if (ImGui::ColorEdit3("Positive Z Axis Color", Attribs.PositiveZAxisColor.Data()))
+        AttribsChanged = true;
+
+    if (ImGui::ColorEdit3("Negative X Axis Color", Attribs.NegativeXAxisColor.Data()))
+        AttribsChanged = true;
+    if (ImGui::ColorEdit3("Negative Y Axis Color", Attribs.NegativeYAxisColor.Data()))
+        AttribsChanged = true;
+    if (ImGui::ColorEdit3("Negative Z Axis Color", Attribs.NegativeZAxisColor.Data()))
         AttribsChanged = true;
 
     if (ImGui::SliderFloat("X Axis Width", &Attribs.XAxisWidth, 0.5f, 10.0))
