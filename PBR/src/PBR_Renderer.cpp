@@ -1048,9 +1048,10 @@ void PBR_Renderer::CreateSignature()
 
     if (m_Settings.EnableIBL)
     {
+        constexpr WebGPUResourceAttribs WGPUCubeMap{WEB_GPU_BINDING_TYPE_DEFAULT, RESOURCE_DIM_TEX_CUBE};
         AddTextureAndSampler("g_PreintegratedGGX", Sam_LinearClamp, "g_LinearClampSampler", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
-        AddTextureAndSampler("g_IrradianceMap", Sam_LinearClamp, "g_LinearClampSampler", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE, {WEB_GPU_BINDING_TYPE_DEFAULT, RESOURCE_DIM_TEX_CUBE});
-        AddTextureAndSampler("g_PrefilteredEnvMap", Sam_LinearClamp, "g_LinearClampSampler", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE, {WEB_GPU_BINDING_TYPE_DEFAULT, RESOURCE_DIM_TEX_CUBE});
+        AddTextureAndSampler("g_IrradianceMap", Sam_LinearClamp, "g_LinearClampSampler", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE, WGPUCubeMap);
+        AddTextureAndSampler("g_PrefilteredEnvMap", Sam_LinearClamp, "g_LinearClampSampler", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE, WGPUCubeMap);
 
         if (m_Settings.EnableSheen)
         {
@@ -1065,7 +1066,8 @@ void PBR_Renderer::CreateSignature()
 
     if (m_Settings.EnableShadows)
     {
-        AddTextureAndSampler("g_ShadowMap", Sam_ComparisonLinearClamp, "g_ShadowMap_sampler");
+        constexpr WebGPUResourceAttribs WGPUShadowMap{WEB_GPU_BINDING_TYPE_DEPTH_TEXTURE, RESOURCE_DIM_TEX_2D_ARRAY};
+        AddTextureAndSampler("g_ShadowMap", Sam_ComparisonLinearClamp, "g_ShadowMap_sampler", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE, WGPUShadowMap);
     }
 
     CreateCustomSignature(std::move(SignatureDesc));

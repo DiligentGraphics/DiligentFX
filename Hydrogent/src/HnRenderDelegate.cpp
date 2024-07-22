@@ -557,8 +557,25 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
         constexpr Uint32 LightCount                 = 0;
         constexpr Uint32 ShadowCastingLightCount    = 0;
         const Uint32     ShadowPassFrameAttribsSize = USD_Renderer::GetPRBFrameAttribsSize(LightCount, ShadowCastingLightCount);
-        m_ShadowPassFrameAttribs.SRB                = CreateFrameAttribsSRB(ShadowPassFrameAttribsSize, nullptr);
-        m_ShadowPassFrameAttribs.FrameAttribsVar    = m_ShadowPassFrameAttribs.SRB->GetVariableByName(SHADER_TYPE_VERTEX, "cbFrameAttribs");
+
+        RefCntAutoPtr<ITextureView> pDummyShadowSRV;
+        if (m_ShadowMapManager && m_pDevice->GetDeviceInfo().IsWebGPUDevice())
+        {
+            // Even though the shadow map SRV is not used in the shadow pass, WebGPU errors out
+            // if there is a null resource in the bind group. So we have to create a dummy SRV.
+            TextureDesc DummyShadowMapDesc = m_ShadowMapManager->GetAtlasDesc();
+            DummyShadowMapDesc.Name        = "Dummy shadow map SRV";
+            DummyShadowMapDesc.Width       = 16;
+            DummyShadowMapDesc.Height      = 16;
+            DummyShadowMapDesc.ArraySize   = 1;
+            DummyShadowMapDesc.MipLevels   = 1;
+            RefCntAutoPtr<ITexture> pDummyShadowMap;
+            m_pDevice->CreateTexture(DummyShadowMapDesc, nullptr, &pDummyShadowMap);
+            VERIFY_EXPR(pDummyShadowMap);
+            pDummyShadowSRV = pDummyShadowMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        }
+        m_ShadowPassFrameAttribs.SRB             = CreateFrameAttribsSRB(ShadowPassFrameAttribsSize, pDummyShadowSRV);
+        m_ShadowPassFrameAttribs.FrameAttribsVar = m_ShadowPassFrameAttribs.SRB->GetVariableByName(SHADER_TYPE_VERTEX, "cbFrameAttribs");
         VERIFY_EXPR(m_ShadowPassFrameAttribs.FrameAttribsVar != nullptr);
     }
 
