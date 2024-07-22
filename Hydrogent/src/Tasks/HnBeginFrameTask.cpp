@@ -134,6 +134,17 @@ static void UpdateRenderPassState(const HnBeginFrameTaskParams& Params,
     RPState.SetFrontFaceCCW(Params.State.FrontFaceCCW);
 }
 
+static TEXTURE_FORMAT GetFallbackTextureFormat(TEXTURE_FORMAT Format)
+{
+    switch (Format)
+    {
+        case TEX_FORMAT_R16_UNORM: return TEX_FORMAT_R16_FLOAT;
+        case TEX_FORMAT_RG16_UNORM: return TEX_FORMAT_RG16_FLOAT;
+        case TEX_FORMAT_RGBA16_UNORM: return TEX_FORMAT_RGBA16_FLOAT;
+        default: return Format;
+    }
+}
+
 void HnBeginFrameTask::Sync(pxr::HdSceneDelegate* Delegate,
                             pxr::HdTaskContext*   TaskCtx,
                             pxr::HdDirtyBits*     DirtyBits)
@@ -185,6 +196,12 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
         if (Format == TEX_FORMAT_UNKNOWN)
             return nullptr;
 
+        IRenderDevice* const pDevice = static_cast<HnRenderDelegate*>(RenderIndex->GetRenderDelegate())->GetDevice();
+        if (!pDevice->GetTextureFormatInfo(Format).Supported)
+        {
+            Format = GetFallbackTextureFormat(Format);
+        }
+
         VERIFY_EXPR(!Id.IsEmpty());
 
         HnRenderBuffer* Renderbuffer = static_cast<HnRenderBuffer*>(RenderIndex->GetBprim(pxr::HdPrimTypeTokens->renderBuffer, Id));
@@ -204,8 +221,7 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
                 return pView;
         }
 
-        const bool  IsDepth = GetTextureFormatAttribs(Format).IsDepthStencil();
-        auto* const pDevice = static_cast<HnRenderDelegate*>(RenderIndex->GetRenderDelegate())->GetDevice();
+        const bool IsDepth = GetTextureFormatAttribs(Format).IsDepthStencil();
 
         auto TargetDesc      = FinalTargetDesc;
         TargetDesc.Name      = Name.c_str();
