@@ -408,10 +408,11 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
                                             const float2&   Jitter,
                                             bool&           CameraTransformDirty)
 {
-    HnRenderDelegate*   RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
-    IRenderDevice*      pDevice        = RenderDelegate->GetDevice();
-    const USD_Renderer& Renderer       = *RenderDelegate->GetUSDRenderer();
-    const int           MaxLightCount  = Renderer.GetSettings().MaxLightCount;
+    HnRenderDelegate*    RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+    const HnRenderParam* RenderParam    = static_cast<const HnRenderParam*>(RenderDelegate->GetRenderParam());
+    IRenderDevice*       pDevice        = RenderDelegate->GetDevice();
+    const USD_Renderer&  Renderer       = *RenderDelegate->GetUSDRenderer();
+    const int            MaxLightCount  = Renderer.GetSettings().MaxLightCount;
 
     const Uint32 NumShadowCastingLights = Renderer.GetSettings().EnableShadows ? Renderer.GetSettings().MaxShadowCastingLightCount : 0;
     const Uint32 FrameAttribsDataSize   = pFrameAttrbisCB->GetDesc().Size;
@@ -496,19 +497,40 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
             };
             CamAttribs.fHandness = ViewMatrix.Determinant() > 0 ? 1.f : -1.f;
 
-            CamAttribs.mViewT         = ViewMatrix;
-            CamAttribs.mProjT         = ProjMatrix;
-            CamAttribs.mViewProjT     = ViewProj;
-            CamAttribs.mViewInvT      = WorldMatrix;
-            CamAttribs.mProjInvT      = ProjMatrix.Inverse();
-            CamAttribs.mViewProjInvT  = ViewProj.Inverse();
-            CamAttribs.f4Position     = float4{float3::MakeVector(WorldMatrix[3]), 1};
-            CamAttribs.f2Jitter       = Jitter;
-            CamAttribs.fFStop         = m_pCamera->GetFStop();
-            CamAttribs.fFocusDistance = m_pCamera->GetFocusDistance();
-            CamAttribs.fFocalLength   = m_pCamera->GetFocalLength();
-            CamAttribs.fSensorWidth   = m_pCamera->GetHorizontalAperture();
-            CamAttribs.fSensorHeight  = m_pCamera->GetVerticalAperture();
+            CamAttribs.mViewT        = ViewMatrix;
+            CamAttribs.mProjT        = ProjMatrix;
+            CamAttribs.mViewProjT    = ViewProj;
+            CamAttribs.mViewInvT     = WorldMatrix;
+            CamAttribs.mProjInvT     = ProjMatrix.Inverse();
+            CamAttribs.mViewProjInvT = ViewProj.Inverse();
+            CamAttribs.f4Position    = float4{float3::MakeVector(WorldMatrix[3]), 1};
+            CamAttribs.f2Jitter      = Jitter;
+            CamAttribs.fFStop        = m_pCamera->GetFStop();
+
+            const float MetersPerUnit = RenderParam ? RenderParam->GetMetersPerUnit() : 0.01f;
+
+            // USD camera properties are measured in scene units, but Diligent camera expects them in world units.
+            CamAttribs.fFocusDistance = m_pCamera->GetFocusDistance() * MetersPerUnit;
+
+            // Diligent sensor properties and focal length are measured in millimeters.
+            const float MillimetersPerUnit = MetersPerUnit * 1000.f;
+
+            // Note that by an odd convention, lens and filmback properties are measured in tenths of a scene unit rather than "raw" scene units.
+            // https://openusd.org/dev/api/class_usd_geom_camera.html#UsdGeom_CameraUnits
+            // So, for example after
+            //      UsdCamera.GetFocalLengthAttr().Set(30.f)
+            // Reading the attribute will return same value:
+            //      float focalLength;
+            //      UsdCamera.GetFocalLengthAttr().Get(&focalLength); // focalLength == 30
+            // However
+            //      focalLength = SceneDelegate->GetCameraParamValue(id, HdCameraTokens->focalLength).Get<float>(); //  focalLength == 3
+            //
+            // Since HnCamera gets its properties from SceneDelegate, the units are already scaled to scene units.
+            // We only need to convert them to world units.
+
+            CamAttribs.fSensorWidth  = m_pCamera->GetHorizontalAperture() * MillimetersPerUnit;
+            CamAttribs.fSensorHeight = m_pCamera->GetVerticalAperture() * MillimetersPerUnit;
+            CamAttribs.fFocalLength  = m_pCamera->GetFocalLength() * MillimetersPerUnit;
 
             ProjMatrix.GetNearFarClipPlanes(CamAttribs.fNearPlaneZ, CamAttribs.fFarPlaneZ, pDevice->GetDeviceInfo().NDC.MinZ == -1);
 

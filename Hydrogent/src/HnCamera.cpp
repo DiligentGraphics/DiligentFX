@@ -26,6 +26,7 @@
 
 #include "HnCamera.hpp"
 #include "HnRenderDelegate.hpp"
+#include "HnRenderParam.hpp"
 
 #include "GfTypeConversions.hpp"
 #include "BasicMath.hpp"
@@ -67,6 +68,7 @@ void HnCamera::Sync(pxr::HdSceneDelegate* SceneDelegate,
 
     if (OrigDirtyBits & pxr::HdCamera::DirtyParams)
     {
+        const float          MetersPerUnit = RenderParam ? static_cast<const HnRenderParam*>(RenderParam)->GetMetersPerUnit() : 0.01f;
         const float          HorzAperture  = GetHorizontalAperture();
         const float          VertAperture  = GetVerticalAperture();
         const float          FocalLength   = GetFocalLength();
@@ -78,7 +80,8 @@ void HnCamera::Sync(pxr::HdSceneDelegate* SceneDelegate,
         const HnRenderDelegate* pRenderDelegate = static_cast<const HnRenderDelegate*>(SceneDelegate->GetRenderIndex().GetRenderDelegate());
         const IRenderDevice*    pDevice         = pRenderDelegate->GetDevice();
         const RenderDeviceInfo& DeviceInfo      = pDevice->GetDeviceInfo();
-        m_ProjectionMatrix.SetNearFarClipPlanes(ClippingRange.GetMin(), ClippingRange.GetMax(), DeviceInfo.GetNDCAttribs().MinZ == -1);
+        // USD camera attributes are in scene units, while Diligent expects them in world units
+        m_ProjectionMatrix.SetNearFarClipPlanes(ClippingRange.GetMin() * MetersPerUnit, ClippingRange.GetMax() * MetersPerUnit, DeviceInfo.GetNDCAttribs().MinZ == -1);
     }
 }
 
