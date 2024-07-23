@@ -506,11 +506,9 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
             CamAttribs.f2Jitter       = Jitter;
             CamAttribs.fFStop         = m_pCamera->GetFStop();
             CamAttribs.fFocusDistance = m_pCamera->GetFocusDistance();
-
-            // TODO: Need understand why params returned by the camera are in cm
-            CamAttribs.fFocalLength  = 10.0f * m_pCamera->GetFocalLength();
-            CamAttribs.fSensorWidth  = 10.0f * m_pCamera->GetHorizontalAperture();
-            CamAttribs.fSensorHeight = 10.0f * m_pCamera->GetVerticalAperture();
+            CamAttribs.fFocalLength   = m_pCamera->GetFocalLength();
+            CamAttribs.fSensorWidth   = m_pCamera->GetHorizontalAperture();
+            CamAttribs.fSensorHeight  = m_pCamera->GetVerticalAperture();
 
             ProjMatrix.GetNearFarClipPlanes(CamAttribs.fNearPlaneZ, CamAttribs.fFarPlaneZ, pDevice->GetDeviceInfo().NDC.MinZ == -1);
 
