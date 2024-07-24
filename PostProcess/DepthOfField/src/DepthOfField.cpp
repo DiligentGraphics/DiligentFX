@@ -222,6 +222,10 @@ void DepthOfField::PrepareResources(IRenderDevice* pDevice, IDeviceContext* pDev
         }
     }
 
+    TEXTURE_FORMAT TextureCoCFormat = TEX_FORMAT_R16_FLOAT;
+    if (pDevice->GetTextureFormatInfo(TEX_FORMAT_R16_UNORM).Supported)
+        TextureCoCFormat = TEX_FORMAT_R16_UNORM;
+
     for (Uint32 TextureIdx = RESOURCE_IDENTIFIER_CIRCLE_OF_CONFUSION_DILATION_TEXTURE_MIP0; TextureIdx <= RESOURCE_IDENTIFIER_CIRCLE_OF_CONFUSION_DILATION_TEXTURE_LAST_MIP; ++TextureIdx)
     {
         TextureDesc Desc;
@@ -229,7 +233,7 @@ void DepthOfField::PrepareResources(IRenderDevice* pDevice, IDeviceContext* pDev
         Desc.Type      = RESOURCE_DIM_TEX_2D;
         Desc.Width     = m_BackBufferWidth >> (TextureIdx - RESOURCE_IDENTIFIER_CIRCLE_OF_CONFUSION_DILATION_TEXTURE_MIP0);
         Desc.Height    = m_BackBufferHeight >> (TextureIdx - RESOURCE_IDENTIFIER_CIRCLE_OF_CONFUSION_DILATION_TEXTURE_MIP0);
-        Desc.Format    = TEX_FORMAT_R16_UNORM;
+        Desc.Format    = TextureCoCFormat;
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
         m_Resources.Insert(TextureIdx, Device.CreateTexture(Desc));
     }
@@ -241,7 +245,7 @@ void DepthOfField::PrepareResources(IRenderDevice* pDevice, IDeviceContext* pDev
         Desc.Type      = RESOURCE_DIM_TEX_2D;
         Desc.Width     = m_BackBufferWidth >> (RESOURCE_IDENTIFIER_CIRCLE_OF_CONFUSION_DILATION_TEXTURE_LAST_MIP - RESOURCE_IDENTIFIER_CIRCLE_OF_CONFUSION_DILATION_TEXTURE_MIP0);
         Desc.Height    = m_BackBufferHeight >> (RESOURCE_IDENTIFIER_CIRCLE_OF_CONFUSION_DILATION_TEXTURE_LAST_MIP - RESOURCE_IDENTIFIER_CIRCLE_OF_CONFUSION_DILATION_TEXTURE_MIP0);
-        Desc.Format    = TEX_FORMAT_R16_UNORM;
+        Desc.Format    = TextureCoCFormat;
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
         m_Resources.Insert(RESOURCE_IDENTIFIER_CIRCLE_OF_CONFUSION_DILATION_TEXTURE_INTERMEDIATE, Device.CreateTexture(Desc));
     }
@@ -393,7 +397,7 @@ bool DepthOfField::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, F
             ResourceLayout
                 .AddVariable(SHADER_TYPE_PIXEL, "cbCameraAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
                 .AddVariable(SHADER_TYPE_PIXEL, "cbDepthOfFieldAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
-                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
+                .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC, SHADER_VARIABLE_FLAG_UNFILTERABLE_FLOAT_TEXTURE_WEBGPU);
 
             RenderTech.InitializePSO(RenderAttribs.pDevice,
                                      RenderAttribs.pStateCache, "DepthOfField::ComputeCircleOfConfusion",
