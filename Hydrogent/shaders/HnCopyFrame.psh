@@ -32,7 +32,7 @@ void main(in  FullScreenTriangleVSOutput VSOut,
     Color = g_ColorBuffer.Load(int3(Pos.xy, 0));
     
 #if TONE_MAPPING_MODE > TONE_MAPPING_MODE_NONE
-    Color.rgb = ToneMap(Color.rgb, g_Attribs.ToneMapping, g_Attribs.AverageLogLum);
+    Color.rgb = ToneMap(Color.rgb, g_Attribs.ToneMapping, g_Attribs.AverageLogLum * exp2(-g_Frame.Camera.fExposure));
 #endif
 
 #ifdef ENABLE_GRID

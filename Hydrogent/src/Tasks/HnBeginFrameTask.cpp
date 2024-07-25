@@ -531,6 +531,7 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
             CamAttribs.fSensorWidth  = m_pCamera->GetHorizontalAperture() * MillimetersPerUnit;
             CamAttribs.fSensorHeight = m_pCamera->GetVerticalAperture() * MillimetersPerUnit;
             CamAttribs.fFocalLength  = m_pCamera->GetFocalLength() * MillimetersPerUnit;
+            CamAttribs.fExposure     = m_pCamera->GetExposure();
 
             ProjMatrix.GetNearFarClipPlanes(CamAttribs.fNearPlaneZ, CamAttribs.fFarPlaneZ, pDevice->GetDeviceInfo().NDC.MinZ == -1);
 

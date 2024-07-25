@@ -105,8 +105,10 @@ struct CameraAttribs
     
     // Sensor height in mm
     float  fSensorHeight  DEFAULT_VALUE(24.0f);
-    float  fPadding0;
-    float2 f2Jitter;   // TAA jitter
+    // 	Exposure adjustment as a log base-2 value.
+    float  fExposure      DEFAULT_VALUE(0.0f);
+    // TAA jitter
+    float2 f2Jitter;
     
 #ifdef __cplusplus
     float4x4 mViewT;
