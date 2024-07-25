@@ -34,6 +34,7 @@
 #include "MapHelper.hpp"
 #include "CommonlyUsedStates.h"
 #include "RenderStateCache.hpp"
+#include "GraphicsAccessories.hpp"
 
 namespace Diligent
 {
@@ -162,7 +163,7 @@ void ShadowMapManager::DistributeCascades(const DistributeCascadeInfo& Info,
     float4x4 WorldToLightViewSpaceMatr =
         float4x4::ViewFromBasis(LightSpaceX, LightSpaceY, LightSpaceZ);
 
-    ShadowAttribs.mWorldToLightViewT = WorldToLightViewSpaceMatr.Transpose();
+    WriteShaderMatrix(&ShadowAttribs.mWorldToLightViewT, WorldToLightViewSpaceMatr, !Info.PackMatrixRowMajor);
 
     const auto& CameraWorld = Info.pCameraWorld != nullptr ? *Info.pCameraWorld : Info.pCameraView->Inverse();
     //const float3 f3CameraPos = {CameraWorld._41, CameraWorld._42, CameraWorld._43};
@@ -386,8 +387,8 @@ void ShadowMapManager::DistributeCascades(const DistributeCascadeInfo& Info,
         float4x4    ProjToUVScale = float4x4::Scale(0.5f, NDCAttribs.YtoVScale, NDCAttribs.ZtoDepthScale);
         float4x4    ProjToUVBias  = float4x4::Translation(0.5f, 0.5f, NDCAttribs.GetZtoDepthBias());
 
-        float4x4 WorldToShadowMapUVDepthMatr              = WorldToLightProjSpaceMatr * ProjToUVScale * ProjToUVBias;
-        ShadowAttribs.mWorldToShadowMapUVDepthT[iCascade] = WorldToShadowMapUVDepthMatr.Transpose();
+        float4x4 WorldToShadowMapUVDepthMatr = WorldToLightProjSpaceMatr * ProjToUVScale * ProjToUVBias;
+        WriteShaderMatrix(ShadowAttribs.mWorldToShadowMapUVDepthT + iCascade, WorldToShadowMapUVDepthMatr, Info.PackMatrixRowMajor);
     }
 }
 

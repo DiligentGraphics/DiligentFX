@@ -109,6 +109,9 @@ public:
         /// Whether to use right-handed or left-handed light view transform matrix
         bool               UseRightHandedLightViewTransform = true;
 
+        /// Whether to pack matrices in row-major order.
+        bool               PackMatrixRowMajor = false;
+
         /// Callback that allows the application to adjust z range of every cascade.
         /// The callback is also called with cascade value -1 to adjust that entire camera range.
         ///
