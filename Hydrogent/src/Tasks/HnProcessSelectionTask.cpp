@@ -113,6 +113,7 @@ void HnProcessSelectionTask::PrepareTechniques(TEXTURE_FORMAT RTVFormat)
         PipelineResourceLayoutDescX ResourceLauout;
         ResourceLauout
             .SetDefaultVariableType(SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
+            .AddVariable(SHADER_TYPE_PIXEL, "g_SelectionDepth", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE, SHADER_VARIABLE_FLAG_UNFILTERABLE_FLOAT_TEXTURE_WEBGPU)
             .AddVariable(SHADER_TYPE_PIXEL, "cbConstants", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
 
         GraphicsPipelineStateCreateInfoX PsoCI;
@@ -142,6 +143,9 @@ void HnProcessSelectionTask::PrepareTechniques(TEXTURE_FORMAT RTVFormat)
             m_InitTech.PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbConstants")->Set(m_ConstantsCB);
             m_InitTech.IsDirty = false;
         }
+
+        ResourceLauout.RemoveVariable("g_SelectionDepth");
+        PsoCI.SetResourceLayout(ResourceLauout);
 
         if (!m_UpdateTech.PSO)
         {
