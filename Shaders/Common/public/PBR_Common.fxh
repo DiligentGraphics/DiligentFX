@@ -307,16 +307,20 @@ float SmithGGXSampleDirectionPDF(float3 V, float3 N, float3 L, float AlphaRoughn
     float NdotV = dot(N, V);
     float NdotL = dot(N, L);
     //float VdotH = dot(V, H);
-    if (NdotH <= 0.0 || NdotV <= 0.0 || NdotL <= 0.0)
+    if (NdotH > 0.0 && NdotV > 0.0 && NdotL > 0.0)
+    {
+        // Note that [1] uses notation N for the micronormal, but in our case N is the macronormal,
+        // while micronormal is H (aka the halfway vector).
+        float NDF = NormalDistribution_GGX(NdotH, AlphaRoughness); // (1) - D(N)
+        float G1  = SmithGGXMasking(NdotV, AlphaRoughness);        // (2) - G1(V)
+
+        float VNDF = G1 /* * VdotH */ * NDF / NdotV; // (3) - Dv(N)
+        return  VNDF / (4.0 /* * VdotH */); // (17) - VdotH cancels out
+    }
+    else
+    {
         return 0.0;
-
-    // Note that [1] uses notation N for the micronormal, but in our case N is the macronormal,
-    // while micronormal is H (aka the halfway vector).
-    float NDF = NormalDistribution_GGX(NdotH, AlphaRoughness); // (1) - D(N)
-    float G1  = SmithGGXMasking(NdotV, AlphaRoughness);        // (2) - G1(V)
-
-    float VNDF = G1 /* * VdotH */ * NDF / NdotV; // (3) - Dv(N)
-    return  VNDF / (4.0 /* * VdotH */); // (17) - VdotH cancels out
+    }
 }
 
 struct AngularInfo

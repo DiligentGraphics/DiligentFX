@@ -102,19 +102,21 @@ float SolveMetallic(float3 diffuse,
 {
     const float c_MinReflectance = 0.04;
     float specularBrightness = GetPerceivedBrightness(specular);
-    if (specularBrightness < c_MinReflectance)
+    if (specularBrightness >= c_MinReflectance)
+    {
+        float diffuseBrightness = GetPerceivedBrightness(diffuse);
+
+        float a = c_MinReflectance;
+        float b = diffuseBrightness * oneMinusSpecularStrength / (1.0 - c_MinReflectance) + specularBrightness - 2.0 * c_MinReflectance;
+        float c = c_MinReflectance - specularBrightness;
+        float D = b * b - 4.0 * a * c;
+
+        return clamp((-b + sqrt(D)) / (2.0 * a), 0.0, 1.0);
+    }
+    else
     {
         return 0.0;
-    }
-
-    float diffuseBrightness = GetPerceivedBrightness(diffuse);
-
-    float a = c_MinReflectance;
-    float b = diffuseBrightness * oneMinusSpecularStrength / (1.0 - c_MinReflectance) + specularBrightness - 2.0 * c_MinReflectance;
-    float c = c_MinReflectance - specularBrightness;
-    float D = b * b - 4.0 * a * c;
-
-    return clamp((-b + sqrt(D)) / (2.0 * a), 0.0, 1.0);
+    }    
 }
 
 float3 ApplyDirectionalLightGGX(float3 lightDir, float3 lightColor, SurfaceReflectanceInfo srfInfo, float3 N, float3 V)
@@ -398,7 +400,7 @@ SurfaceReflectanceInfo GetSurfaceReflectance(int       Workflow,
         // do conversion between metallic M-R and S-G metallic
         Metallic = SolveMetallic(BaseColor.rgb, SpecularColor, oneMinusSpecularStrength);
     }
-    else if (Workflow == PBR_WORKFLOW_METALLIC_ROUGHNESS)
+    else // if (Workflow == PBR_WORKFLOW_METALLIC_ROUGHNESS)
     {
         // Roughness is stored in the 'g' channel, metallic is stored in the 'b' channel.
         // This layout intentionally reserves the 'r' channel for (optional) occlusion map data
@@ -408,15 +410,6 @@ SurfaceReflectanceInfo GetSurfaceReflectance(int       Workflow,
         SrfInfo.DiffuseColor  = BaseColor.rgb * (float3(1.0, 1.0, 1.0) - f0) * (1.0 - Metallic);
         SpecularColor         = lerp(f0, BaseColor.rgb, Metallic);
     }
-
-//#ifdef ALPHAMODE_OPAQUE
-//    baseColor.a = 1.0;
-//#endif
-//
-//#ifdef MATERIAL_UNLIT
-//    gl_FragColor = float4(gammaCorrection(baseColor.rgb), baseColor.a);
-//    return;
-//#endif
 
     SrfInfo.PerceptualRoughness = clamp(SrfInfo.PerceptualRoughness, 0.0, 1.0);
 

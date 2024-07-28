@@ -368,47 +368,45 @@ float4 SampleTexture(Texture2DArray            Tex,
                      float                     MipBias,
                      float4                    DefaultValue)
 {
-    if (TexAttribs.UVSelector < 0.0)
-    {
-        return DefaultValue;
-    }
-    
+    float4 SampledValue = DefaultValue;
 #   if USE_TEXCOORD0 || USE_TEXCOORD1
     {
-        float2 UV = SelectUV(VSOut, TexAttribs.UVSelector);
-#       if ENABLE_TEXCOORD_TRANSFORM
+        if (TexAttribs.UVSelector >= 0.0)
         {
-            UV = TransformUV(UV, TexAttribs);
-        }
-#       endif
+            float2 UV = SelectUV(VSOut, TexAttribs.UVSelector);
+#           if ENABLE_TEXCOORD_TRANSFORM
+            {
+                UV = TransformUV(UV, TexAttribs);
+            }
+#           endif
 
-#       if USE_TEXTURE_ATLAS
-        {
-            float GradientScale = exp2(MipBias);
+#           if USE_TEXTURE_ATLAS
+            {
+                float GradientScale = exp2(MipBias);
 
-            SampleTextureAtlasAttribs SampleAttribs;
-            SampleAttribs.f2UV                   = frac(UV) * TexAttribs.AtlasUVScaleAndBias.xy + TexAttribs.AtlasUVScaleAndBias.zw;
-            SampleAttribs.f2SmoothUV             = UV      * TexAttribs.AtlasUVScaleAndBias.xy * GradientScale;
-            SampleAttribs.f2dSmoothUV_dx         = ddx(UV) * TexAttribs.AtlasUVScaleAndBias.xy * GradientScale;
-            SampleAttribs.f2dSmoothUV_dy         = ddy(UV) * TexAttribs.AtlasUVScaleAndBias.xy * GradientScale;
-            SampleAttribs.fSlice                 = TexAttribs.TextureSlice;
-            SampleAttribs.f4UVRegion             = TexAttribs.AtlasUVScaleAndBias;
-            SampleAttribs.fSmallestValidLevelDim = 4.0;
-            SampleAttribs.IsNonFilterable        = false;
-            SampleAttribs.fMaxAnisotropy         = 1.0; // Only used on GLES
-            return SampleTextureAtlas(Tex, Tex_sampler, SampleAttribs);
+                SampleTextureAtlasAttribs SampleAttribs;
+                SampleAttribs.f2UV                   = frac(UV) * TexAttribs.AtlasUVScaleAndBias.xy + TexAttribs.AtlasUVScaleAndBias.zw;
+                SampleAttribs.f2SmoothUV             = UV      * TexAttribs.AtlasUVScaleAndBias.xy * GradientScale;
+                SampleAttribs.f2dSmoothUV_dx         = ddx(UV) * TexAttribs.AtlasUVScaleAndBias.xy * GradientScale;
+                SampleAttribs.f2dSmoothUV_dy         = ddy(UV) * TexAttribs.AtlasUVScaleAndBias.xy * GradientScale;
+                SampleAttribs.fSlice                 = TexAttribs.TextureSlice;
+                SampleAttribs.f4UVRegion             = TexAttribs.AtlasUVScaleAndBias;
+                SampleAttribs.fSmallestValidLevelDim = 4.0;
+                SampleAttribs.IsNonFilterable        = false;
+                SampleAttribs.fMaxAnisotropy         = 1.0; // Only used on GLES
+    
+                SampledValue = SampleTextureAtlas(Tex, Tex_sampler, SampleAttribs);
+            }
+#           else
+            {
+                SampledValue = Tex.SampleBias(Tex_sampler, float3(UV, TexAttribs.TextureSlice), MipBias);
+            }
+#           endif
         }
-#       else
-        {
-            return Tex.SampleBias(Tex_sampler, float3(UV, TexAttribs.TextureSlice), MipBias);
-        }
-#       endif
-    }
-#   else
-    {
-        return DefaultValue;
     }
 #   endif
+    
+    return SampledValue;
 }
 
 float4 GetBaseColor(VSOutput              VSOut,
@@ -447,32 +445,34 @@ float3 SampleNormalTexture(PBRMaterialTextureAttribs TexAttribs,
                            float2                    dNormalMapUV_dy,
                            float                     MipBias)
 {
-    if (TexAttribs.UVSelector < 0.0)
+    float3 SampledNormal = float3(0.5, 0.5, 1.0);
+    if (TexAttribs.UVSelector >= 0.0)
     {
-        return float3(0.5, 0.5, 1.0);
+#       if USE_TEXTURE_ATLAS
+        {
+            float GradientScale = exp2(MipBias);
+    
+            SampleTextureAtlasAttribs SampleAttribs;
+            SampleAttribs.f2UV                   = NormalMapUV;
+            SampleAttribs.f2SmoothUV             = SmoothNormalMapUV * GradientScale;
+            SampleAttribs.f2dSmoothUV_dx         = dNormalMapUV_dx   * GradientScale;
+            SampleAttribs.f2dSmoothUV_dy         = dNormalMapUV_dy   * GradientScale;
+            SampleAttribs.fSlice                 = TexAttribs.TextureSlice;
+            SampleAttribs.f4UVRegion             = TexAttribs.AtlasUVScaleAndBias;
+            SampleAttribs.fSmallestValidLevelDim = 4.0;
+            SampleAttribs.IsNonFilterable        = false;
+            SampleAttribs.fMaxAnisotropy         = 1.0; // Only used on GLES
+
+            SampledNormal = SampleTextureAtlas(NormalMap, NormalMap_sampler, SampleAttribs).xyz;
+        }
+#       else
+        {
+            SampledNormal = NormalMap.SampleBias(NormalMap_sampler, float3(NormalMapUV, TexAttribs.TextureSlice), MipBias).xyz;
+        }
+#endif
     }
 
-#   if USE_TEXTURE_ATLAS
-    {
-        float GradientScale = exp2(MipBias);
-    
-        SampleTextureAtlasAttribs SampleAttribs;
-        SampleAttribs.f2UV                   = NormalMapUV;
-        SampleAttribs.f2SmoothUV             = SmoothNormalMapUV * GradientScale;
-        SampleAttribs.f2dSmoothUV_dx         = dNormalMapUV_dx   * GradientScale;
-        SampleAttribs.f2dSmoothUV_dy         = dNormalMapUV_dy   * GradientScale;
-        SampleAttribs.fSlice                 = TexAttribs.TextureSlice;
-        SampleAttribs.f4UVRegion             = TexAttribs.AtlasUVScaleAndBias;
-        SampleAttribs.fSmallestValidLevelDim = 4.0;
-        SampleAttribs.IsNonFilterable        = false;
-        SampleAttribs.fMaxAnisotropy         = 1.0; // Only used on GLES
-        return SampleTextureAtlas(NormalMap, NormalMap_sampler, SampleAttribs).xyz;
-    }
-#   else
-    {
-        return NormalMap.SampleBias(NormalMap_sampler, float3(NormalMapUV, TexAttribs.TextureSlice), MipBias).xyz;
-    }
-#   endif
+    return SampledNormal;
 }
 
 float3 GetMicroNormal(PBRMaterialShaderInfo Material,

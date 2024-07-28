@@ -94,44 +94,45 @@ float4 ComputeAxis(float3   AxisDirection,
     float3 Cross = cross(AxisDirection, ViewRay.Direction);
     float3 Delta = ViewRay.Origin - AxisOrigin;
     float  Denom = dot(Cross, Cross);
-    if (abs(Denom) < 1e-7)
-        return float4(0.0, 0.0, 0.0, 0.0);
-
-    // Distance from the camera to the point on the camera ray that is closest to the axis ray
-    float DistFromCamera = dot(cross(Delta, AxisDirection), Cross) / Denom;
-    if (DistFromCamera < 0.0)
+    
+    float4 AxisRGBA = float4(0.0, 0.0, 0.0, 0.0);
+    if (abs(Denom) > 1e-7)
     {
-        // Closest point is behind the camera
-        return float4(0.0, 0.0, 0.0, 0.0);
+        // Distance from the camera to the point on the camera ray that is closest to the axis ray
+        float DistFromCamera = dot(cross(Delta, AxisDirection), Cross) / Denom;
+        if (DistFromCamera > 0.0)
+        {
+            // Distance from the origin of the axis to the point on the axis ray that is closest to the camera ray
+            float DistFromOrigin = dot(cross(Delta, ViewRay.Direction), Cross) / Denom;
+            // Point on the axis ray that is closest to the camera ray
+            float3 AxisPos = AxisOrigin + AxisDirection * DistFromOrigin;
+
+            // Shortest distance between the axis and the view ray
+            float DistToAxis = abs(dot(Delta, Cross)) / max(length(Cross), 0.001);
+
+            // Axis width in world space
+            float AxisWidth = PixelSize * DistFromCamera;
+            float Line = abs(DistToAxis) / AxisWidth;
+            float Alpha = (1.0 - min(Line * Line, 1.0)) * saturate(1.0 - DistFromCamera / AxisLen);
+
+            float AxisPosZ = mul(float4(AxisPos, 1.0), CameraView).z;
+            // Move the point along the view direction to alleviate z-fighting with the geometry
+            AxisPosZ += AxisWidth;
+            // Compute smooth visibility
+            // Note: using minimum depth when TAA is enabled looks bad from the distance
+            //       when there is small geometry (e.g. bicycle while spokes)
+            float Visibility = saturate((MaxCameraZ - AxisPosZ) / CameraZRange);
+            Alpha *= Visibility;
+    
+            // Make axis fade out when looking straight along it
+            Alpha *= saturate((1.0 - abs(dot(normalize(ViewRay.Origin), AxisDirection))) * 1e+6);
+
+            float3 Color = DistFromOrigin > 0.0 ? PositiveColor : NegativeColor;
+            AxisRGBA = float4(Color * Alpha, Alpha);
+        }
     }
     
-    // Distance from the origin of the axis to the point on the axis ray that is closest to the camera ray
-    float DistFromOrigin = dot(cross(Delta, ViewRay.Direction), Cross) / Denom;
-    // Point on the axis ray that is closest to the camera ray
-    float3 AxisPos = AxisOrigin + AxisDirection * DistFromOrigin;
-
-    // Shortest distance between the axis and the view ray
-    float  DistToAxis = abs(dot(Delta, Cross)) / max(length(Cross), 0.001);
-
-    // Axis width in world space
-    float AxisWidth = PixelSize * DistFromCamera;       
-    float Line = abs(DistToAxis) / AxisWidth;
-    float Alpha = (1.0 - min(Line * Line, 1.0)) * saturate(1.0 - DistFromCamera/AxisLen);
-
-    float AxisPosZ = mul(float4(AxisPos, 1.0), CameraView).z;
-    // Move the point along the view direction to alleviate z-fighting with the geometry
-    AxisPosZ += AxisWidth;
-    // Compute smooth visibility
-    // Note: using minimum depth when TAA is enabled looks bad from the distance
-    //       when there is small geometry (e.g. bicycle while spokes)
-    float Visibility = saturate((MaxCameraZ - AxisPosZ) / CameraZRange);
-    Alpha *= Visibility;
-    
-    // Make axis fade out when looking straight along it
-    Alpha *= saturate((1.0 - abs(dot(normalize(ViewRay.Origin), AxisDirection))) * 1e+6);
-
-    float3 Color = DistFromOrigin > 0.0 ? PositiveColor : NegativeColor;
-    return float4(Color * Alpha, Alpha);
+    return AxisRGBA;
 }
 
 void ComputePlaneIntersectionAttribs(in CameraAttribs Camera,
