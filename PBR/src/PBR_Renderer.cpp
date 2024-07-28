@@ -1138,6 +1138,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
     Macros.Add("PBR_ALPHA_MODE_OPAQUE", static_cast<int>(ALPHA_MODE_OPAQUE));
     Macros.Add("PBR_ALPHA_MODE_MASK", static_cast<int>(ALPHA_MODE_MASK));
     Macros.Add("PBR_ALPHA_MODE_BLEND", static_cast<int>(ALPHA_MODE_BLEND));
+    Macros.Add("PBR_ALPHA_MODE", static_cast<int>(Key.GetAlphaMode()));
 
     Macros.Add("PBR_MAX_LIGHTS", (PSOFlags & PSO_FLAG_USE_LIGHTS) != 0 ? static_cast<int>(m_Settings.MaxLightCount) : 0);
     Macros.Add("PBR_LIGHT_TYPE_DIRECTIONAL", static_cast<int>(LIGHT_TYPE_DIRECTIONAL));
@@ -1642,7 +1643,13 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
         pVS = m_Device.CreateShader(ShaderCI);
     }
 
-    RefCntAutoPtr<IShader>& pPS = m_PixelShaders[{PSOFlags, ALPHA_MODE_OPAQUE, CULL_MODE_BACK, Key}];
+    RefCntAutoPtr<IShader>& pPS = m_PixelShaders[{
+        PSOFlags,
+        // Opaque and Blend modes use the same shader
+        Key.GetAlphaMode() == ALPHA_MODE_MASK ? ALPHA_MODE_MASK : ALPHA_MODE_OPAQUE,
+        CULL_MODE_BACK,
+        Key,
+    }];
     if (!pPS)
     {
         ShaderCreateInfo ShaderCI{
@@ -1708,12 +1715,6 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
     VERIFY_EXPR(PSO);
 
     PsoHashMap[Key] = PSO;
-    // Mask and opaque use the same PSO
-    if (AlphaMode == ALPHA_MODE_OPAQUE || AlphaMode == ALPHA_MODE_MASK)
-    {
-
-        PsoHashMap[{PSOFlags, AlphaMode == ALPHA_MODE_OPAQUE ? ALPHA_MODE_MASK : ALPHA_MODE_OPAQUE, Key.GetCullMode(), Key}] = PSO;
-    }
 }
 
 void PBR_Renderer::CreateResourceBinding(IShaderResourceBinding** ppSRB, Uint32 Idx) const

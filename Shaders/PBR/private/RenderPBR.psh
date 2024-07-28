@@ -369,10 +369,12 @@ PSOutput main(in VSOutput VSOut,
 #   endif
 
     PBRMaterialBasicAttribs BasicAttribs = PRIMITIVE.Material.Basic;
-    if (BasicAttribs.AlphaMode == PBR_ALPHA_MODE_MASK && BaseColor.a < BasicAttribs.AlphaMaskCutoff)
+#   if PBR_ALPHA_MODE == PBR_ALPHA_MODE_MASK
+    if (BaseColor.a < BasicAttribs.AlphaMaskCutoff)
     {
         discard;
     }
+#   endif
 
 #   if DEBUG_VIEW == DEBUG_VIEW_WHITE_BASE_COLOR
     {
