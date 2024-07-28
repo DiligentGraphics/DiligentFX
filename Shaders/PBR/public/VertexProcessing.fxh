@@ -25,10 +25,10 @@ GLTF_TransformedVertex GLTF_TransformVertex(in float3   Pos,
 {
     GLTF_TransformedVertex TransformedVert;
 
-    float4 locPos = mul(Transform, float4(Pos, 1.0));
+    float4 locPos = mul(float4(Pos, 1.0), Transform);
     float3x3 NormalTransform = float3x3(Transform[0].xyz, Transform[1].xyz, Transform[2].xyz);
     NormalTransform = InverseTranspose3x3(NormalTransform);
-    Normal = mul(NormalTransform, Normal);
+    Normal = mul(Normal, NormalTransform);
     float NormalLen = length(Normal);
     TransformedVert.Normal = Normal / max(NormalLen, 1e-5);
 

@@ -630,11 +630,11 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
                 if (JointCount != 0)
                 {
                     MapHelper<float4x4> pJoints{pCtx, m_JointsBuffer, MAP_WRITE, MAP_FLAG_DISCARD};
-                    WriteShaderMatrices(pJoints, JointMatrices.data(), JointCount, m_Settings.PackMatrixRowMajor);
+                    WriteShaderMatrices(pJoints, JointMatrices.data(), JointCount, !m_Settings.PackMatrixRowMajor);
                     if ((CurrPsoKey.GetFlags() & PSO_FLAG_COMPUTE_MOTION_VECTORS) != 0)
                     {
                         const auto& PrevJointMatrices = PrevTransforms->Skins[Node.SkinTransformsIndex].JointMatrices;
-                        WriteShaderMatrices(pJoints + m_Settings.MaxJointCount, PrevJointMatrices.data(), JointCount, m_Settings.PackMatrixRowMajor);
+                        WriteShaderMatrices(pJoints + m_Settings.MaxJointCount, PrevJointMatrices.data(), JointCount, !m_Settings.PackMatrixRowMajor);
                     }
                 }
             }
@@ -659,7 +659,7 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
                         &PrevNodeTransform,
                         static_cast<Uint32>(JointCount),
                     };
-                    auto* pEndPtr = WritePBRPrimitiveShaderAttribs(pAttribsData, AttribsData, m_Settings.TextureAttribIndices, material, m_Settings.PackMatrixRowMajor);
+                    auto* pEndPtr = WritePBRPrimitiveShaderAttribs(pAttribsData, AttribsData, m_Settings.TextureAttribIndices, material, !m_Settings.PackMatrixRowMajor);
 
                     VERIFY(reinterpret_cast<uint8_t*>(pEndPtr) <= static_cast<uint8_t*>(pAttribsData) + m_PBRPrimitiveAttribsCB->GetDesc().Size,
                            "Not enough space in the buffer to store primitive attributes");

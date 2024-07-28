@@ -97,7 +97,7 @@ void main(in  VSInput  VSIn,
             VSIn.Weight0.y * g_Joints[int(VSIn.Joint0.y)] +
             VSIn.Weight0.z * g_Joints[int(VSIn.Joint0.z)] +
             VSIn.Weight0.w * g_Joints[int(VSIn.Joint0.w)];
-        Transform = mul(Transform, SkinMat);
+        Transform = mul(SkinMat, Transform);
 
 #       if COMPUTE_MOTION_VECTORS
         {
@@ -106,7 +106,7 @@ void main(in  VSInput  VSIn,
                 VSIn.Weight0.x * g_PrevJoints[int(VSIn.Joint0.x)] +
                 VSIn.Weight0.z * g_PrevJoints[int(VSIn.Joint0.z)] +
                 VSIn.Weight0.w * g_PrevJoints[int(VSIn.Joint0.w)];
-            PrevTransform = mul(PrevTransform, PrevSkinMat);
+            PrevTransform = mul(PrevSkinMat, PrevTransform);
         }
 #       endif
     }
@@ -145,7 +145,7 @@ void main(in  VSInput  VSIn,
 #endif
     
 #if USE_VERTEX_TANGENTS
-    VSOut.Tangent  = normalize(mul(float3x3(Transform[0].xyz, Transform[1].xyz, Transform[2].xyz), VSIn.Tangent));
+    VSOut.Tangent  = normalize(mul(VSIn.Tangent, float3x3(Transform[0].xyz, Transform[1].xyz, Transform[2].xyz)));
 #endif
 
 #ifdef USE_GL_POINT_SIZE
