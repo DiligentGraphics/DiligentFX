@@ -3,8 +3,6 @@
 #include "SRGBUtilities.fxh"
 #include "CoordinateGrid.fxh"
 
-#pragma warning(disable : 3078)
-
 cbuffer cbCameraAttribs
 {
     CameraAttribs g_Camera;

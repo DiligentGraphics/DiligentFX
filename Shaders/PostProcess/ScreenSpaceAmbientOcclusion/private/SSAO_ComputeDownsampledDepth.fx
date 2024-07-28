@@ -3,8 +3,6 @@
 #include "BasicStructures.fxh"
 #include "FullScreenTriangleVSOutput.fxh"
 
-#pragma warning(disable : 3078)
-
 Texture2D g_TextureDepth;
 
 int ComputeCheckerboardPattern(int2 Position)

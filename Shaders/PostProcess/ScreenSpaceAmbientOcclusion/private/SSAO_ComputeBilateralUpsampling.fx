@@ -4,8 +4,6 @@
 #include "ScreenSpaceAmbientOcclusionStructures.fxh"
 #include "FullScreenTriangleVSOutput.fxh"
 
-#pragma warning(disable : 3078)
-
 cbuffer cbCameraAttribs
 {
     CameraAttribs g_Camera;

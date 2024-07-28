@@ -2,8 +2,6 @@
 #include "SSR_Common.fxh"
 #include "FullScreenTriangleVSOutput.fxh"
 
-#pragma warning(disable : 3078)
-
 cbuffer cbScreenSpaceReflectionAttribs
 {
     ScreenSpaceReflectionAttribs g_SSRAttribs;
