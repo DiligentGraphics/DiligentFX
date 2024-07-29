@@ -388,7 +388,7 @@ void ShadowMapManager::DistributeCascades(const DistributeCascadeInfo& Info,
         float4x4    ProjToUVBias  = float4x4::Translation(0.5f, 0.5f, NDCAttribs.GetZtoDepthBias());
 
         float4x4 WorldToShadowMapUVDepthMatr = WorldToLightProjSpaceMatr * ProjToUVScale * ProjToUVBias;
-        WriteShaderMatrix(ShadowAttribs.mWorldToShadowMapUVDepthT + iCascade, WorldToShadowMapUVDepthMatr, Info.PackMatrixRowMajor);
+        WriteShaderMatrix(ShadowAttribs.mWorldToShadowMapUVDepthT + iCascade, WorldToShadowMapUVDepthMatr, !Info.PackMatrixRowMajor);
     }
 }
 
