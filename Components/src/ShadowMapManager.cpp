@@ -458,7 +458,7 @@ void ShadowMapManager::InitializeConversionTechniques(TEXTURE_FORMAT FilterableS
 
         ShaderResourceVariableDesc Variables[] =
             {
-                {SHADER_TYPE_PIXEL, "g_tex2DShadowMap", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE} //
+                {SHADER_TYPE_PIXEL, "g_tex2DShadowMap", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE, SHADER_VARIABLE_FLAG_UNFILTERABLE_FLOAT_TEXTURE_WEBGPU} //
             };
 
         ImmutableSamplerDesc ImtblSampler[] =
