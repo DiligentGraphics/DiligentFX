@@ -852,7 +852,7 @@ void EpipolarLightScattering::CreateLowResLuminanceTexture(IRenderDevice* pDevic
     TexDesc.Type      = RESOURCE_DIM_TEX_2D;
     TexDesc.Width     = 1 << (sm_iLowResLuminanceMips - 1);
     TexDesc.Height    = 1 << (sm_iLowResLuminanceMips - 1);
-    TexDesc.Format    = WeightedLogLumTexFmt,
+    TexDesc.Format    = pDevice->GetDeviceInfo().IsWebGPUDevice() ? WeightedLogLumTexWebGpuFmt : WeightedLogLumTexFmt,
     TexDesc.MipLevels = sm_iLowResLuminanceMips;
     TexDesc.Usage     = USAGE_DEFAULT;
     TexDesc.BindFlags = BIND_RENDER_TARGET | BIND_SHADER_RESOURCE;
@@ -1746,7 +1746,7 @@ void EpipolarLightScattering::UnwarpEpipolarScattering(bool bRenderLuminance)
         UnwarpAndRenderLuminanceTech.InitializeFullScreenTriangleTechnique(
             m_FrameAttribs.pDevice, m_FrameAttribs.pStateCache, "UnwarpAndRenderLuminance",
             m_pFullScreenTriangleVS, pUnwarpAndRenderLuminancePS,
-            ResourceLayout, WeightedLogLumTexFmt);
+            ResourceLayout, m_ptex2DLowResLuminanceRTV->GetDesc().Format);
         UnwarpAndRenderLuminanceTech.PSO->BindStaticResources(SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL, m_pResMapping, BIND_SHADER_RESOURCES_UPDATE_ALL);
 
         UnwarpAndRenderLuminanceTech.PSODependencyFlags = PSO_DEPENDENCY_EXTINCTION_EVAL_MODE;
@@ -1904,7 +1904,7 @@ void EpipolarLightScattering::FixInscatteringAtDepthBreaks(Uint32               
             FixInsctrAtDepthBreaksTech.InitializeFullScreenTriangleTechnique(
                 m_FrameAttribs.pDevice, m_FrameAttribs.pStateCache, "FixInsctrAtDepthBreaksLumOnly",
                 m_pFullScreenTriangleVS, pFixInsctrAtDepthBreaksPS,
-                ResourceLayout, WeightedLogLumTexFmt);
+                ResourceLayout, m_ptex2DLowResLuminanceRTV->GetDesc().Format);
         }
         else if (Mode == EFixInscatteringMode::FixInscattering)
         {
