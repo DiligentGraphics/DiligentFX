@@ -1,5 +1,5 @@
 /*
- *  Copyright 2019-2022 Diligent Graphics LLC
+ *  Copyright 2019-2024 Diligent Graphics LLC
  *  Copyright 2015-2019 Egor Yusov
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -85,13 +85,19 @@ public:
         ITextureView* ptex2DShadowMapSRV = nullptr;
     };
 
-    EpipolarLightScattering(IRenderDevice*              pDevice,
-                            IRenderStateCache*          pStateCache,
-                            IDeviceContext*             pContext,
-                            TEXTURE_FORMAT              BackBufferFmt,
-                            TEXTURE_FORMAT              DepthBufferFmt,
-                            TEXTURE_FORMAT              OffscreenBackBuffer,
-                            const AirScatteringAttribs& ScatteringAttibs = AirScatteringAttribs{});
+    struct CreateInfo
+    {
+        IRenderDevice*       pDevice             = nullptr;
+        IRenderStateCache*   pStateCache         = nullptr;
+        IDeviceContext*      pContext            = nullptr;
+        TEXTURE_FORMAT       BackBufferFmt       = TEX_FORMAT_RGBA8_UNORM_SRGB;
+        TEXTURE_FORMAT       DepthBufferFmt      = TEX_FORMAT_D32_FLOAT;
+        TEXTURE_FORMAT       OffscreenBackBuffer = TEX_FORMAT_R11G11B10_FLOAT;
+        bool                 PackMatrixRowMajor  = false;
+        AirScatteringAttribs ScatteringAttibs    = {};
+    };
+
+    EpipolarLightScattering(const CreateInfo& CI);
     ~EpipolarLightScattering();
 
 
@@ -157,8 +163,9 @@ private:
 
     void DefineMacros(class ShaderMacroHelper& Macros);
 
-    const TEXTURE_FORMAT m_BackBufferFmt;
-    const TEXTURE_FORMAT m_DepthBufferFmt;
+    const TEXTURE_FORMAT       m_BackBufferFmt;
+    const TEXTURE_FORMAT       m_DepthBufferFmt;
+    const SHADER_COMPILE_FLAGS m_ShaderFlags;
 
     static constexpr TEXTURE_FORMAT PrecomputedNetDensityTexFmt = TEX_FORMAT_RG32_FLOAT;
     static constexpr TEXTURE_FORMAT CoordinateTexFmt            = TEX_FORMAT_RG32_FLOAT;

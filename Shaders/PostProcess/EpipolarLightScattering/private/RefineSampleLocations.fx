@@ -8,7 +8,7 @@
 // interpolation source indices. However, NVidia GLES does
 // not supported imge load/store operations on this format, 
 // so we have to resort to RGBA32U.
-RWTexture2D<uint2/*format = rgba32ui*/> g_rwtex2DInterpolationSource;
+RWTexture2D<uint4/*format = rgba32ui*/> g_rwtex2DInterpolationSource;
 
 Texture2D<float2> g_tex2DCoordinates;
 Texture2D<float>  g_tex2DEpipolarCamSpaceZ;
@@ -291,5 +291,5 @@ void RefineSampleLocationsCS(uint3 Gid  : SV_GroupID,
             uiLeftSrcSampleInd = uiRightSrcSampleInd = uiSampleInd;
     }
 
-    g_rwtex2DInterpolationSource[ int2(uiGlobalSampleInd, uiSliceInd) ] = uint2(uiGroupStartGlobalInd + uiLeftSrcSampleInd, uiGroupStartGlobalInd + uiRightSrcSampleInd);
+    g_rwtex2DInterpolationSource[ int2(uiGlobalSampleInd, uiSliceInd) ] = uint4(uiGroupStartGlobalInd + uiLeftSrcSampleInd, uiGroupStartGlobalInd + uiRightSrcSampleInd, 0, 0);
 }
