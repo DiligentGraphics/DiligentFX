@@ -2269,8 +2269,11 @@ void EpipolarLightScattering::PrepareForNewFrame(FrameAttribs&                  
         1.f / static_cast<float>(m_uiBackBufferWidth),
         1.f / static_cast<float>(m_uiBackBufferHeight));
 
-    auto   mCameraViewProj = frameAttribs.pCameraAttribs->mViewProjT;
-    float4 f4LightPosPS    = -frameAttribs.pLightAttribs->f4Direction * mCameraViewProj;
+    const auto& mCameraViewProj = (m_ShaderFlags & SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR) ?
+        frameAttribs.pCameraAttribs->mViewProjT :
+        frameAttribs.pCameraAttribs->mViewProjT.Transpose();
+
+    float4 f4LightPosPS = -frameAttribs.pLightAttribs->f4Direction * mCameraViewProj;
     f4LightPosPS.x /= f4LightPosPS.w;
     f4LightPosPS.y /= f4LightPosPS.w;
     f4LightPosPS.z /= f4LightPosPS.w;
