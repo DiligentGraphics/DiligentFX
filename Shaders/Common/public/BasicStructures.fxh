@@ -28,19 +28,16 @@ struct CascadeAttribs
 struct ShadowMapAttribs
 {
     // 0
-#ifdef __cplusplus
-    float4x4 mWorldToLightViewT; // Matrices in HLSL are COLUMN-major while float4x4 is ROW major
-#else
-    matrix mWorldToLightView;  // Transform from view space to light projection space
-#endif
+    float4x4 mWorldToLightView;  // Transform from view space to light projection space
+    
     // 16
     CascadeAttribs Cascades[MAX_CASCADES];
 
+    float4x4 mWorldToShadowMapUVDepth[MAX_CASCADES];
+
 #ifdef __cplusplus
-    float4x4 mWorldToShadowMapUVDepthT[MAX_CASCADES];
-    float fCascadeCamSpaceZEnd[MAX_CASCADES];
+    float  fCascadeCamSpaceZEnd [MAX_CASCADES];
 #else
-    matrix mWorldToShadowMapUVDepth[MAX_CASCADES];
     float4 f4CascadeCamSpaceZEnd[MAX_CASCADES/4];
 #endif
 
@@ -110,21 +107,12 @@ struct CameraAttribs
     // TAA jitter
     float2 f2Jitter;
     
-#ifdef __cplusplus
-    float4x4 mViewT;
-    float4x4 mProjT;
-    float4x4 mViewProjT;
-    float4x4 mViewInvT;
-    float4x4 mProjInvT;
-    float4x4 mViewProjInvT;
-#else
-    matrix mView;
-    matrix mProj;
-    matrix mViewProj;
-    matrix mViewInv;
-    matrix mProjInv;
-    matrix mViewProjInv;
-#endif
+    float4x4 mView;
+    float4x4 mProj;
+    float4x4 mViewProj;
+    float4x4 mViewInv;
+    float4x4 mProjInv;
+    float4x4 mViewProjInv;
 
     float4 f4ExtraData[5]; // Any appliation-specific data
 };
@@ -133,4 +121,3 @@ struct CameraAttribs
 #endif
 
 #endif //_BASIC_STRUCTURES_FXH_
-    

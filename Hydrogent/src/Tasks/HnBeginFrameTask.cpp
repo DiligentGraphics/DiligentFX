@@ -452,14 +452,14 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
             };
             CamAttribs.fHandness = 1.f;
 
-            CamAttribs.mViewT        = ViewMatrix;
-            CamAttribs.mProjT        = ProjMatrix;
-            CamAttribs.mViewProjT    = ViewProj;
-            CamAttribs.mViewInvT     = ViewMatrix.Inverse();
-            CamAttribs.mProjInvT     = ProjMatrix.Inverse();
-            CamAttribs.mViewProjInvT = ViewProj.Inverse();
-            CamAttribs.f4Position    = float4{0, 0, 0, 1};
-            CamAttribs.f2Jitter      = float2{0, 0};
+            CamAttribs.mView        = ViewMatrix;
+            CamAttribs.mProj        = ProjMatrix;
+            CamAttribs.mViewProj    = ViewProj;
+            CamAttribs.mViewInv     = ViewMatrix.Inverse();
+            CamAttribs.mProjInv     = ProjMatrix.Inverse();
+            CamAttribs.mViewProjInv = ViewProj.Inverse();
+            CamAttribs.f4Position   = float4{0, 0, 0, 1};
+            CamAttribs.f2Jitter     = float2{0, 0};
 
             memset(&ShadowAttribs->Renderer, 0, sizeof(HLSL::PBRRendererShaderParameters));
         }
@@ -497,15 +497,15 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
             };
             CamAttribs.fHandness = ViewMatrix.Determinant() > 0 ? 1.f : -1.f;
 
-            CamAttribs.mViewT        = ViewMatrix;
-            CamAttribs.mProjT        = ProjMatrix;
-            CamAttribs.mViewProjT    = ViewProj;
-            CamAttribs.mViewInvT     = WorldMatrix;
-            CamAttribs.mProjInvT     = ProjMatrix.Inverse();
-            CamAttribs.mViewProjInvT = ViewProj.Inverse();
-            CamAttribs.f4Position    = float4{float3::MakeVector(WorldMatrix[3]), 1};
-            CamAttribs.f2Jitter      = Jitter;
-            CamAttribs.fFStop        = m_pCamera->GetFStop();
+            CamAttribs.mView        = ViewMatrix;
+            CamAttribs.mProj        = ProjMatrix;
+            CamAttribs.mViewProj    = ViewProj;
+            CamAttribs.mViewInv     = WorldMatrix;
+            CamAttribs.mProjInv     = ProjMatrix.Inverse();
+            CamAttribs.mViewProjInv = ViewProj.Inverse();
+            CamAttribs.f4Position   = float4{float3::MakeVector(WorldMatrix[3]), 1};
+            CamAttribs.f2Jitter     = Jitter;
+            CamAttribs.fFStop       = m_pCamera->GetFStop();
 
             const float MetersPerUnit = RenderParam ? RenderParam->GetMetersPerUnit() : 0.01f;
 
@@ -535,16 +535,16 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
 
             ProjMatrix.GetNearFarClipPlanes(CamAttribs.fNearPlaneZ, CamAttribs.fFarPlaneZ, pDevice->GetDeviceInfo().NDC.MinZ == -1);
 
-            if (CamAttribs.mViewT != PrevCamera.mViewT)
+            if (CamAttribs.mView != PrevCamera.mView)
             {
                 CameraTransformDirty = true;
             }
             else
             {
-                float4x4 PrevProjT = PrevCamera.mProjT;
-                PrevProjT[0][2]    = Jitter.x;
-                PrevProjT[1][2]    = Jitter.y;
-                if (PrevProjT != CamAttribs.mProjT)
+                float4x4 PrevProj = PrevCamera.mProj;
+                PrevProj[0][2]    = Jitter.x;
+                PrevProj[1][2]    = Jitter.y;
+                if (PrevProj != CamAttribs.mProj)
                 {
                     CameraTransformDirty = true;
                 }

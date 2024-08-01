@@ -163,7 +163,7 @@ void ShadowMapManager::DistributeCascades(const DistributeCascadeInfo& Info,
     float4x4 WorldToLightViewSpaceMatr =
         float4x4::ViewFromBasis(LightSpaceX, LightSpaceY, LightSpaceZ);
 
-    WriteShaderMatrix(&ShadowAttribs.mWorldToLightViewT, WorldToLightViewSpaceMatr, !Info.PackMatrixRowMajor);
+    WriteShaderMatrix(&ShadowAttribs.mWorldToLightView, WorldToLightViewSpaceMatr, !Info.PackMatrixRowMajor);
 
     const auto& CameraWorld = Info.pCameraWorld != nullptr ? *Info.pCameraWorld : Info.pCameraView->Inverse();
     //const float3 f3CameraPos = {CameraWorld._41, CameraWorld._42, CameraWorld._43};
@@ -388,7 +388,7 @@ void ShadowMapManager::DistributeCascades(const DistributeCascadeInfo& Info,
         float4x4    ProjToUVBias  = float4x4::Translation(0.5f, 0.5f, NDCAttribs.GetZtoDepthBias());
 
         float4x4 WorldToShadowMapUVDepthMatr = WorldToLightProjSpaceMatr * ProjToUVScale * ProjToUVBias;
-        WriteShaderMatrix(ShadowAttribs.mWorldToShadowMapUVDepthT + iCascade, WorldToShadowMapUVDepthMatr, !Info.PackMatrixRowMajor);
+        WriteShaderMatrix(ShadowAttribs.mWorldToShadowMapUVDepth + iCascade, WorldToShadowMapUVDepthMatr, !Info.PackMatrixRowMajor);
     }
 }
 
