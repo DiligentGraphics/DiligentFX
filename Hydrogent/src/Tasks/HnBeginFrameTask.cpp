@@ -349,12 +349,6 @@ void HnBeginFrameTask::Prepare(pxr::HdTaskContext* TaskCtx,
     (*TaskCtx)[HnRenderResourceTokens->jitteredFinalColorTarget]       = pxr::VtValue{m_JitteredFinalColorTargetId};
     (*TaskCtx)[HnRenderResourceTokens->backgroundDepth]                = pxr::VtValue{m_Params.ClearDepth};
 
-#if PLATFORM_EMSCRIPTEN
-    // When asynchronous shader compilation is enabled, we need to skip rendering geometry on the first frame
-    // to allow synchronous shaders (background, copy frame, etc.) to compile first.
-    (*TaskCtx)[HnRenderResourceTokens->skipGeometryPasses] = pxr::VtValue{Renderer.GetSettings().AsyncShaderCompilation && FrameNumber == 1};
-#endif
-
     bool ResetTAA = false;
     if (!m_Params.CameraId.IsEmpty())
     {

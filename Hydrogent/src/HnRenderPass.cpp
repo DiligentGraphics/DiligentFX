@@ -537,8 +537,6 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
         FlushPendingDraws();
     }
 
-    m_DrawListItemsDirtyFlags = DRAW_LIST_ITEM_DIRTY_FLAG_NONE;
-
     return m_UseFallbackPSO ? EXECUTE_RESULT_FALLBACK : EXECUTE_RESULT_OK;
 }
 
@@ -676,6 +674,13 @@ void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
         m_FallbackPSO = State.GePsoCache().Get({FallbackPSOFlags, PBR_Renderer::ALPHA_MODE_OPAQUE, CULL_MODE_NONE}, true);
     }
 
+    if (State.RenderParam.GetFrameNumber() <= 1)
+    {
+        // Do not initialize draw items on the first frame to allow
+        // post-processing shaders to be compiled first.
+        return;
+    }
+
     struct DrawListItemRenderState
     {
         const DrawListItem& Item;
@@ -785,6 +790,8 @@ void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
 #endif
         }
     }
+
+    m_DrawListItemsDirtyFlags = DRAW_LIST_ITEM_DIRTY_FLAG_NONE;
 }
 
 HnRenderPass::SupportedVertexInputsSetType HnRenderPass::GetSupportedVertexInputs(const HnMaterial* Material)

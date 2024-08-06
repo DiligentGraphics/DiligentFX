@@ -624,6 +624,14 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
     m_UseBloom = m_Params.EnableBloom && EnablePostProcessing && m_UseTAA;
     m_UseDOF   = m_Params.EnableDOF && EnablePostProcessing && m_UseTAA;
 
+    // Initialize post-processing and copy frame techniques first as they
+    // don't use async shader compilation.
+    m_PostProcessTech.PreparePRS();
+    m_PostProcessTech.PreparePSO((m_UseTAA ? m_FrameTargets->JitteredFinalColorRTV : m_FinalColorRTV)->GetDesc().Format);
+
+    m_CopyFrameTech.PreparePRS();
+    m_CopyFrameTech.PreparePSO(m_FinalColorRTV->GetDesc().Format);
+
     m_PostFXContext->PrepareResources(pDevice, {pRenderParam->GetFrameNumber(), FinalColorDesc.Width, FinalColorDesc.Height}, PostFXContext::FEATURE_FLAG_NONE);
     m_SSAO->PrepareResources(pDevice, pCtx, m_PostFXContext.get(), m_Params.SSAOFeatureFlags);
     m_SSR->PrepareResources(pDevice, pCtx, m_PostFXContext.get(), m_Params.SSRFeatureFlags);
@@ -638,14 +646,10 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
         m_DOF->PrepareResources(pDevice, pCtx, m_PostFXContext.get(), m_Params.DOFFeatureFlags);
     }
 
-    m_PostProcessTech.PreparePRS();
-    m_PostProcessTech.PreparePSO((m_UseTAA ? m_FrameTargets->JitteredFinalColorRTV : m_FinalColorRTV)->GetDesc().Format);
     m_PostProcessTech.PrepareSRB(ClosestSelectedLocationSRV, pRenderParam->GetFrameNumber());
 
     if (m_UseTAA)
     {
-        m_CopyFrameTech.PreparePRS();
-        m_CopyFrameTech.PreparePSO(m_FinalColorRTV->GetDesc().Format);
         m_CopyFrameTech.PrepareSRB(pRenderParam->GetFrameNumber());
 
         {
