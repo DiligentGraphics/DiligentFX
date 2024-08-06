@@ -661,7 +661,7 @@ void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
         m_PendingPSOs.clear();
     }
 
-    if (State.USDRenderer.GetSettings().AsyncShaderCompilation &&
+    if (State.RenderParam.GetAsyncShaderCompilation() &&
         m_FallbackPSO == nullptr &&
         (m_Params.UsdPsoFlags & USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_OUTPUT) != 0)
     {
@@ -671,7 +671,7 @@ void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
                  PBR_Renderer::PSO_FLAG_UNSHADED) |
             static_cast<PBR_Renderer::PSO_FLAGS>(m_Params.UsdPsoFlags);
 
-        m_FallbackPSO = State.GePsoCache().Get({FallbackPSOFlags, PBR_Renderer::ALPHA_MODE_OPAQUE, CULL_MODE_NONE}, true);
+        m_FallbackPSO = State.GePsoCache().Get({FallbackPSOFlags, PBR_Renderer::ALPHA_MODE_OPAQUE, CULL_MODE_NONE}, PBR_Renderer::PsoCacheAccessor::GET_FLAG_CREATE_IF_NULL);
     }
 
     if (State.RenderParam.GetFrameNumber() <= 1)
@@ -868,6 +868,10 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
         // The USD renderer will use this ID to return the indexing.
         const auto ShaderTextureIndexingId = pMaterial->GetStaticShaderTextureIndexingId();
 
+        PBR_Renderer::PsoCacheAccessor::GET_FLAGS GetPSOFlags = PBR_Renderer::PsoCacheAccessor::GET_FLAG_CREATE_IF_NULL;
+        if (State.RenderParam.GetAsyncShaderCompilation())
+            GetPSOFlags |= PBR_Renderer::PsoCacheAccessor::GET_FLAG_ASYNC_COMPILE;
+
         if (m_RenderMode == HN_RENDER_MODE_SOLID)
         {
             if ((m_Params.UsdPsoFlags & USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_OUTPUT) != 0)
@@ -908,13 +912,13 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
                 State.RenderParam.GetUseShadows())
                 PSOFlags |= PBR_Renderer::PSO_FLAG_ENABLE_SHADOWS;
 
-            ListItem.pPSO = PsoCache.Get({PSOFlags, static_cast<PBR_Renderer::ALPHA_MODE>(State.AlphaMode), CullMode, m_DebugView, ShaderTextureIndexingId}, true);
+            ListItem.pPSO = PsoCache.Get({PSOFlags, static_cast<PBR_Renderer::ALPHA_MODE>(State.AlphaMode), CullMode, m_DebugView, ShaderTextureIndexingId}, GetPSOFlags);
         }
         else if (m_RenderMode == HN_RENDER_MODE_MESH_EDGES ||
                  m_RenderMode == HN_RENDER_MODE_POINTS)
         {
             PSOFlags |= PBR_Renderer::PSO_FLAG_UNSHADED;
-            ListItem.pPSO = PsoCache.Get({PSOFlags, CullMode, PBR_Renderer::DebugViewType::None, ShaderTextureIndexingId}, true);
+            ListItem.pPSO = PsoCache.Get({PSOFlags, CullMode, PBR_Renderer::DebugViewType::None, ShaderTextureIndexingId}, GetPSOFlags);
         }
         else
         {

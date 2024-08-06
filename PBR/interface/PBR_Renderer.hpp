@@ -181,13 +181,6 @@ public:
         ///             This adds some overhead and should only be used in development mode.
         bool AllowHotShaderReload = false;
 
-        /// Whether to use asynchronous shader and pipeline state compilation.
-        ///
-        /// \remarks    When set to true, the renderer will compile shaders asynchronously
-        ///             in a separate thread. Until the final shader is ready, the
-        ///             renderer will use a simple fallback shader.
-        bool AsyncShaderCompilation = false;
-
         /// Whether shader matrices are laid out in row-major order in GPU memory.
         ///
         /// \remarks    By default, shader matrices are laid out in column-major order
@@ -616,14 +609,20 @@ public:
             return m_pRenderer != nullptr && m_pPsoHashMap != nullptr && m_pGraphicsDesc != nullptr;
         }
 
-        IPipelineState* Get(const PSOKey& Key, bool CreateIfNull) const
+        enum GET_FLAGS : Uint32
+        {
+            GET_FLAG_NONE           = 0u,
+            GET_FLAG_CREATE_IF_NULL = 1u << 0u,
+            GET_FLAG_ASYNC_COMPILE  = 1u << 1u
+        };
+        IPipelineState* Get(const PSOKey& Key, GET_FLAGS Flags = GET_FLAG_NONE) const
         {
             if (!*this)
             {
                 UNEXPECTED("Accessor is not initialized");
                 return nullptr;
             }
-            return m_pRenderer->GetPSO(*m_pPsoHashMap, *m_pGraphicsDesc, Key, CreateIfNull);
+            return m_pRenderer->GetPSO(*m_pPsoHashMap, *m_pGraphicsDesc, Key, Flags);
         }
 
     private:
@@ -682,7 +681,7 @@ protected:
     IPipelineState* GetPSO(PsoHashMapType&             PsoHashMap,
                            const GraphicsPipelineDesc& GraphicsDesc,
                            const PSOKey&               Key,
-                           bool                        CreateIfNull);
+                           PsoCacheAccessor::GET_FLAGS GetFlags);
 
     static std::string GetVSOutputStruct(PSO_FLAGS PSOFlags, bool UseVkPointSize, bool UsePrimitiveId);
     static std::string GetPSOutputStruct(PSO_FLAGS PSOFlags);
@@ -694,7 +693,10 @@ private:
     void PrecomputeBRDF(IDeviceContext* pCtx,
                         Uint32          NumBRDFSamples = 512);
 
-    void CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineDesc& GraphicsDesc, const PSOKey& Key);
+    void CreatePSO(PsoHashMapType&             PsoHashMap,
+                   const GraphicsPipelineDesc& GraphicsDesc,
+                   const PSOKey&               Key,
+                   bool                        AsyncCompile);
 
 protected:
     enum IBL_FEATURE_FLAGS : Uint32
@@ -799,6 +801,7 @@ protected:
 
 DEFINE_FLAG_ENUM_OPERATORS(PBR_Renderer::PSO_FLAGS)
 DEFINE_FLAG_ENUM_OPERATORS(PBR_Renderer::IBL_FEATURE_FLAGS)
+DEFINE_FLAG_ENUM_OPERATORS(PBR_Renderer::PsoCacheAccessor::GET_FLAGS)
 
 inline constexpr PBR_Renderer::PSO_FLAGS PBR_Renderer::GetTextureAttribPSOFlag(PBR_Renderer::TEXTURE_ATTRIB_ID AttribId)
 {

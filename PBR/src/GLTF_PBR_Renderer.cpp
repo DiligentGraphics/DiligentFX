@@ -582,13 +582,13 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
 
             if (pCurrPSO == nullptr)
             {
-                pCurrPSO = (RenderParams.Wireframe ? m_WireframePSOCache : m_PbrPSOCache).Get(NewKey, true);
+                pCurrPSO = (RenderParams.Wireframe ? m_WireframePSOCache : m_PbrPSOCache).Get(NewKey, PsoCacheAccessor::GET_FLAG_CREATE_IF_NULL);
                 VERIFY_EXPR(pCurrPSO != nullptr);
                 pCtx->SetPipelineState(pCurrPSO);
             }
             else
             {
-                VERIFY_EXPR(pCurrPSO == (RenderParams.Wireframe ? m_WireframePSOCache : m_PbrPSOCache).Get(NewKey, false));
+                VERIFY_EXPR(pCurrPSO == (RenderParams.Wireframe ? m_WireframePSOCache : m_PbrPSOCache).Get(NewKey));
             }
 
             if (pModelBindings != nullptr)

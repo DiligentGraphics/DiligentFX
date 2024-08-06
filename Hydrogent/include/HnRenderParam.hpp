@@ -46,12 +46,14 @@ class HnRenderParam final : public pxr::HdRenderParam
 public:
     HnRenderParam(bool                              UseVertexPool,
                   bool                              UseIndexPool,
+                  bool                              AsyncShaderCompilation,
                   HN_MATERIAL_TEXTURES_BINDING_MODE TextureBindingMode,
                   float                             MetersPerUnit) noexcept;
     ~HnRenderParam();
 
     bool                              GetUseVertexPool() const { return m_UseVertexPool; }
     bool                              GetUseIndexPool() const { return m_UseIndexPool; }
+    bool                              GetAsyncShaderCompilation() const { return m_AsyncShaderCompilation; }
     HN_MATERIAL_TEXTURES_BINDING_MODE GetTextureBindingMode() const { return m_TextureBindingMode; }
     float                             GetMetersPerUnit() const { return m_MetersPerUnit; }
 
@@ -119,6 +121,7 @@ public:
 private:
     const bool m_UseVertexPool;
     const bool m_UseIndexPool;
+    const bool m_AsyncShaderCompilation;
 
     const HN_MATERIAL_TEXTURES_BINDING_MODE m_TextureBindingMode;
 

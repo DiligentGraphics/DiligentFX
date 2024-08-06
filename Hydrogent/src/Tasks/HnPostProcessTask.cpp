@@ -556,7 +556,8 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
         VERIFY(m_PostProcessAttribsCB, "Failed to create post process attribs CB");
     }
 
-    const bool AsyncShaderCompilation = RenderDelegate->GetUSDRenderer()->GetSettings().AsyncShaderCompilation;
+    const HnRenderParam* pRenderParam           = static_cast<const HnRenderParam*>(RenderDelegate->GetRenderParam());
+    const bool           AsyncShaderCompilation = pRenderParam->GetAsyncShaderCompilation();
     if (!m_PostFXContext)
     {
         PostFXContext::CreateInfo PostFXCI;
@@ -590,9 +591,6 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
     {
         m_Bloom = std::make_unique<Bloom>(pDevice, Bloom::CreateInfo{AsyncShaderCompilation});
     }
-
-    const HnRenderParam* pRenderParam   = static_cast<const HnRenderParam*>(RenderDelegate->GetRenderParam());
-    const TextureDesc&   FinalColorDesc = m_FinalColorRTV->GetTexture()->GetDesc();
 
     const PBR_Renderer::DebugViewType DebugView = pRenderParam->GetDebugView();
 
@@ -631,6 +629,8 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
 
     m_CopyFrameTech.PreparePRS();
     m_CopyFrameTech.PreparePSO(m_FinalColorRTV->GetDesc().Format);
+
+    const TextureDesc& FinalColorDesc = m_FinalColorRTV->GetTexture()->GetDesc();
 
     m_PostFXContext->PrepareResources(pDevice, {pRenderParam->GetFrameNumber(), FinalColorDesc.Width, FinalColorDesc.Height}, PostFXContext::FEATURE_FLAG_NONE);
     m_SSAO->PrepareResources(pDevice, pCtx, m_PostFXContext.get(), m_Params.SSAOFeatureFlags);

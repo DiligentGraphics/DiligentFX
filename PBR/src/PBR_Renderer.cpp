@@ -1510,13 +1510,16 @@ static constexpr char DefaultPSMainFooter[] = R"(
     return PSOut;
 )";
 
-void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineDesc& GraphicsDesc, const PSOKey& Key)
+void PBR_Renderer::CreatePSO(PsoHashMapType&             PsoHashMap,
+                             const GraphicsPipelineDesc& GraphicsDesc,
+                             const PSOKey&               Key,
+                             bool                        AsyncCompile)
 {
     GraphicsPipelineStateCreateInfo PSOCreateInfo;
     PipelineStateDesc&              PSODesc          = PSOCreateInfo.PSODesc;
     GraphicsPipelineDesc&           GraphicsPipeline = PSOCreateInfo.GraphicsPipeline;
 
-    if (m_Settings.AsyncShaderCompilation)
+    if (AsyncCompile)
         PSOCreateInfo.Flags |= PSO_CREATE_FLAG_ASYNCHRONOUS;
 
     const auto PSOFlags   = Key.GetFlags();
@@ -1554,10 +1557,10 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
 
     RefCntAutoPtr<IShaderSourceInputStreamFactory> pMemorySourceFactory =
         CreateMemoryShaderSourceFactory({
-                                            MemoryShaderSourceFileInfo{"VSInputStruct.generated", m_Settings.AsyncShaderCompilation ? *m_GeneratedIncludes.emplace(VSInputStruct).first : VSInputStruct},
-                                            MemoryShaderSourceFileInfo{"VSOutputStruct.generated", m_Settings.AsyncShaderCompilation ? *m_GeneratedIncludes.emplace(VSOutputStruct).first : VSOutputStruct},
-                                            MemoryShaderSourceFileInfo{"PSOutputStruct.generated", m_Settings.AsyncShaderCompilation ? *m_GeneratedIncludes.emplace(PSMainSource.OutputStruct).first : PSMainSource.OutputStruct},
-                                            MemoryShaderSourceFileInfo{"PSMainFooter.generated", m_Settings.AsyncShaderCompilation ? *m_GeneratedIncludes.emplace(PSMainSource.Footer).first : PSMainSource.Footer},
+                                            MemoryShaderSourceFileInfo{"VSInputStruct.generated", AsyncCompile ? *m_GeneratedIncludes.emplace(VSInputStruct).first : VSInputStruct},
+                                            MemoryShaderSourceFileInfo{"VSOutputStruct.generated", AsyncCompile ? *m_GeneratedIncludes.emplace(VSOutputStruct).first : VSOutputStruct},
+                                            MemoryShaderSourceFileInfo{"PSOutputStruct.generated", AsyncCompile ? *m_GeneratedIncludes.emplace(PSMainSource.OutputStruct).first : PSMainSource.OutputStruct},
+                                            MemoryShaderSourceFileInfo{"PSMainFooter.generated", AsyncCompile ? *m_GeneratedIncludes.emplace(PSMainSource.Footer).first : PSMainSource.Footer},
                                         },
                                         CopyGeneratedStrings);
     RefCntAutoPtr<IShaderSourceInputStreamFactory> pShaderSourceFactory =
@@ -1577,7 +1580,7 @@ void PBR_Renderer::CreatePSO(PsoHashMapType& PsoHashMap, const GraphicsPipelineD
     const bool UseCombinedSamplers = m_Device.GetDeviceInfo().IsGLDevice();
 
     const SHADER_COMPILE_FLAGS ShaderCompileFlags =
-        (m_Settings.AsyncShaderCompilation ? SHADER_COMPILE_FLAG_ASYNCHRONOUS : SHADER_COMPILE_FLAG_NONE) |
+        (AsyncCompile ? SHADER_COMPILE_FLAG_ASYNCHRONOUS : SHADER_COMPILE_FLAG_NONE) |
         (m_Settings.PackMatrixRowMajor ? SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR : SHADER_COMPILE_FLAG_NONE);
 
     RefCntAutoPtr<IShader>& pVS = m_VertexShaders[{
@@ -1735,9 +1738,9 @@ PBR_Renderer::PsoCacheAccessor PBR_Renderer::GetPsoCacheAccessor(const GraphicsP
 IPipelineState* PBR_Renderer::GetPSO(PsoHashMapType&             PsoHashMap,
                                      const GraphicsPipelineDesc& GraphicsDesc,
                                      const PSOKey&               Key,
-                                     bool                        CreateIfNull)
+                                     PsoCacheAccessor::GET_FLAGS GetFlags)
 {
-    auto Flags = Key.GetFlags();
+    PSO_FLAGS Flags = Key.GetFlags();
     if (!m_Settings.EnableIBL)
     {
         Flags &= ~PSO_FLAG_USE_IBL;
@@ -1821,9 +1824,9 @@ IPipelineState* PBR_Renderer::GetPSO(PsoHashMapType&             PsoHashMap,
     auto it = PsoHashMap.find(UpdatedKey);
     if (it == PsoHashMap.end())
     {
-        if (CreateIfNull)
+        if (GetFlags & PsoCacheAccessor::GET_FLAG_CREATE_IF_NULL)
         {
-            CreatePSO(PsoHashMap, GraphicsDesc, UpdatedKey);
+            CreatePSO(PsoHashMap, GraphicsDesc, UpdatedKey, GetFlags & PsoCacheAccessor::GET_FLAG_ASYNC_COMPILE);
             it = PsoHashMap.find(UpdatedKey);
             VERIFY_EXPR(it != PsoHashMap.end());
         }
