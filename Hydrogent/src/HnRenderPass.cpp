@@ -335,6 +335,13 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
         }
     }
 
+    if (m_DrawListItemsDirtyFlags != DRAW_LIST_ITEM_DIRTY_FLAG_NONE)
+    {
+        // Draw list GPU resources have not been updated. This may only happen on the first frame.
+        VERIFY(State.RenderParam.GetFrameNumber() <= 1, "Draw list items should always be updated by UpdateDrawListGPUResources except for the first frame.");
+        return EXECUTE_RESULT_SKIPPED;
+    }
+
     // Wait until all PSOs are ready
     m_UseFallbackPSO = false;
     if (!m_PendingPSOs.empty())
