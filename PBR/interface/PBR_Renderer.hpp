@@ -403,6 +403,14 @@ public:
         NumDebugViews
     };
 
+    enum class LoadingAnimationMode
+    {
+        None,
+        Always,
+        Transitioning,
+        Count
+    };
+
     /// Initializes the renderer
     PBR_Renderer(IRenderDevice*     pDevice,
                  IRenderStateCache* pStateCache,
@@ -485,9 +493,8 @@ public:
         PSO_FLAG_UNSHADED                  = PSO_FLAG_BIT(36),
         PSO_FLAG_COMPUTE_MOTION_VECTORS    = PSO_FLAG_BIT(37),
         PSO_FLAG_ENABLE_SHADOWS            = PSO_FLAG_BIT(38),
-        PSO_FLAG_LOADING_ANIMATION         = PSO_FLAG_BIT(39),
 
-        PSO_FLAG_LAST = PSO_FLAG_LOADING_ANIMATION,
+        PSO_FLAG_LAST = PSO_FLAG_ENABLE_SHADOWS,
 
         PSO_FLAG_FIRST_USER_DEFINED = PSO_FLAG_LAST << 1ull,
 
@@ -526,24 +533,26 @@ public:
     public:
         constexpr PSOKey() noexcept {};
 
-        PSOKey(PSO_FLAGS     _Flags,
-               ALPHA_MODE    _AlphaMode,
-               CULL_MODE     _CullMode,
-               DebugViewType _DebugView = DebugViewType::None,
-               Uint64        _UserValue = 0) noexcept;
+        PSOKey(PSO_FLAGS            _Flags,
+               ALPHA_MODE           _AlphaMode,
+               CULL_MODE            _CullMode,
+               DebugViewType        _DebugView        = DebugViewType::None,
+               LoadingAnimationMode _LoadingAnimation = LoadingAnimationMode::None,
+               Uint64               _UserValue        = 0) noexcept;
 
-        PSOKey(PSO_FLAGS     _Flags,
-               CULL_MODE     _CullMode,
-               DebugViewType _DebugView = DebugViewType::None,
-               Uint64        _UserValue = 0) noexcept :
-            PSOKey{_Flags, ALPHA_MODE_OPAQUE, _CullMode, _DebugView, _UserValue}
+        PSOKey(PSO_FLAGS            _Flags,
+               CULL_MODE            _CullMode,
+               DebugViewType        _DebugView        = DebugViewType::None,
+               LoadingAnimationMode _LoadingAnimation = LoadingAnimationMode::None,
+               Uint64               _UserValue        = 0) noexcept :
+            PSOKey{_Flags, ALPHA_MODE_OPAQUE, _CullMode, _DebugView, _LoadingAnimation, _UserValue}
         {}
 
         PSOKey(PSO_FLAGS     _Flags,
                ALPHA_MODE    _AlphaMode,
                CULL_MODE     _CullMode,
                const PSOKey& Other) noexcept :
-            PSOKey{_Flags, _AlphaMode, _CullMode, Other.GetDebugView(), Other.GetUserValue()}
+            PSOKey{_Flags, _AlphaMode, _CullMode, Other.GetDebugView(), Other.GetLoadingAnimation(), Other.GetUserValue()}
         {}
 
         PSOKey(PSO_FLAGS     _Flags,
@@ -554,12 +563,13 @@ public:
         constexpr bool operator==(const PSOKey& rhs) const noexcept
         {
             // clang-format off
-            return Hash      == rhs.Hash      &&
-                   Flags     == rhs.Flags     &&
-                   CullMode  == rhs.CullMode  &&
-                   AlphaMode == rhs.AlphaMode &&
-                   DebugView == rhs.DebugView &&
-                   UserValue == rhs.UserValue;
+            return Hash             == rhs.Hash      &&
+                   Flags            == rhs.Flags     &&
+                   CullMode         == rhs.CullMode  &&
+                   AlphaMode        == rhs.AlphaMode &&
+                   DebugView        == rhs.DebugView &&
+                   LoadingAnimation == rhs.LoadingAnimation &&
+                   UserValue        == rhs.UserValue;
             // clang-format on
         }
         constexpr bool operator!=(const PSOKey& rhs) const noexcept
@@ -575,19 +585,21 @@ public:
             }
         };
 
-        constexpr PSO_FLAGS     GetFlags() const noexcept { return Flags; }
-        constexpr CULL_MODE     GetCullMode() const noexcept { return CullMode; }
-        constexpr ALPHA_MODE    GetAlphaMode() const noexcept { return AlphaMode; }
-        constexpr DebugViewType GetDebugView() const noexcept { return DebugView; }
-        constexpr Uint64        GetUserValue() const noexcept { return UserValue; }
+        constexpr PSO_FLAGS            GetFlags() const noexcept { return Flags; }
+        constexpr CULL_MODE            GetCullMode() const noexcept { return CullMode; }
+        constexpr ALPHA_MODE           GetAlphaMode() const noexcept { return AlphaMode; }
+        constexpr DebugViewType        GetDebugView() const noexcept { return DebugView; }
+        constexpr LoadingAnimationMode GetLoadingAnimation() const noexcept { return LoadingAnimation; }
+        constexpr Uint64               GetUserValue() const noexcept { return UserValue; }
 
     private:
-        PSO_FLAGS     Flags     = PSO_FLAG_NONE;
-        ALPHA_MODE    AlphaMode = ALPHA_MODE_OPAQUE;
-        CULL_MODE     CullMode  = CULL_MODE_BACK;
-        DebugViewType DebugView = DebugViewType::None;
-        Uint64        UserValue = 0;
-        size_t        Hash      = 0;
+        PSO_FLAGS            Flags            = PSO_FLAG_NONE;
+        ALPHA_MODE           AlphaMode        = ALPHA_MODE_OPAQUE;
+        CULL_MODE            CullMode         = CULL_MODE_BACK;
+        DebugViewType        DebugView        = DebugViewType::None;
+        LoadingAnimationMode LoadingAnimation = LoadingAnimationMode::None;
+        Uint64               UserValue        = 0;
+        size_t               Hash             = 0;
     };
 
     using PsoHashMapType = std::unordered_map<PSOKey, RefCntAutoPtr<IPipelineState>, PSOKey::Hasher>;

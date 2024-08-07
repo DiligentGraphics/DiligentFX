@@ -676,10 +676,16 @@ void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
             (m_RenderMode == HN_RENDER_MODE_SOLID ?
                  PBR_Renderer::PSO_FLAG_COMPUTE_MOTION_VECTORS :
                  PBR_Renderer::PSO_FLAG_UNSHADED) |
-            PBR_Renderer::PSO_FLAG_LOADING_ANIMATION |
             static_cast<PBR_Renderer::PSO_FLAGS>(m_Params.UsdPsoFlags);
 
-        m_FallbackPSO = State.GePsoCache().Get({FallbackPSOFlags, PBR_Renderer::ALPHA_MODE_OPAQUE, CULL_MODE_NONE}, PBR_Renderer::PsoCacheAccessor::GET_FLAG_CREATE_IF_NULL);
+        const PBR_Renderer::PSOKey FallbackPSOKey{
+            FallbackPSOFlags,
+            PBR_Renderer::ALPHA_MODE_OPAQUE,
+            CULL_MODE_NONE,
+            PBR_Renderer::DebugViewType::None,
+            PBR_Renderer::LoadingAnimationMode::Always,
+        };
+        m_FallbackPSO = State.GePsoCache().Get(FallbackPSOKey, PBR_Renderer::PsoCacheAccessor::GET_FLAG_CREATE_IF_NULL);
     }
 
     if (State.RenderParam.GetFrameNumber() <= 1)
@@ -920,13 +926,13 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
                 State.RenderParam.GetUseShadows())
                 PSOFlags |= PBR_Renderer::PSO_FLAG_ENABLE_SHADOWS;
 
-            ListItem.pPSO = PsoCache.Get({PSOFlags, static_cast<PBR_Renderer::ALPHA_MODE>(State.AlphaMode), CullMode, m_DebugView, ShaderTextureIndexingId}, GetPSOFlags);
+            ListItem.pPSO = PsoCache.Get({PSOFlags, static_cast<PBR_Renderer::ALPHA_MODE>(State.AlphaMode), CullMode, m_DebugView, PBR_Renderer::LoadingAnimationMode::None, ShaderTextureIndexingId}, GetPSOFlags);
         }
         else if (m_RenderMode == HN_RENDER_MODE_MESH_EDGES ||
                  m_RenderMode == HN_RENDER_MODE_POINTS)
         {
             PSOFlags |= PBR_Renderer::PSO_FLAG_UNSHADED;
-            ListItem.pPSO = PsoCache.Get({PSOFlags, CullMode, PBR_Renderer::DebugViewType::None, ShaderTextureIndexingId}, GetPSOFlags);
+            ListItem.pPSO = PsoCache.Get({PSOFlags, CullMode, PBR_Renderer::DebugViewType::None, PBR_Renderer::LoadingAnimationMode::None, ShaderTextureIndexingId}, GetPSOFlags);
         }
         else
         {

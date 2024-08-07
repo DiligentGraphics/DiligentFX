@@ -63,15 +63,17 @@ namespace HLSL
 
 } // namespace HLSL
 
-PBR_Renderer::PSOKey::PSOKey(PSO_FLAGS     _Flags,
-                             ALPHA_MODE    _AlphaMode,
-                             CULL_MODE     _CullMode,
-                             DebugViewType _DebugView,
-                             Uint64        _UserValue) noexcept :
+PBR_Renderer::PSOKey::PSOKey(PSO_FLAGS            _Flags,
+                             ALPHA_MODE           _AlphaMode,
+                             CULL_MODE            _CullMode,
+                             DebugViewType        _DebugView,
+                             LoadingAnimationMode _LoadingAnimation,
+                             Uint64               _UserValue) noexcept :
     Flags{_Flags},
     AlphaMode{_AlphaMode},
     CullMode{_CullMode},
     DebugView{_DebugView},
+    LoadingAnimation{_LoadingAnimation},
     UserValue{_UserValue}
 {
     if (Flags & PSO_FLAG_UNSHADED)
@@ -84,7 +86,7 @@ PBR_Renderer::PSOKey::PSOKey(PSO_FLAGS     _Flags,
         DebugView = DebugViewType::None;
     }
 
-    Hash = ComputeHash(Flags, AlphaMode, CullMode, static_cast<Uint32>(DebugView), UserValue);
+    Hash = ComputeHash(Flags, AlphaMode, CullMode, static_cast<Uint32>(DebugView), static_cast<Uint32>(LoadingAnimation), UserValue);
 }
 
 static const char* GetTextureAttribString(PBR_Renderer::TEXTURE_ATTRIB_ID Id)
@@ -182,14 +184,13 @@ std::string PBR_Renderer::GetPSOFlagsString(PSO_FLAGS Flags)
             case PSO_FLAG_UNSHADED:                  FlagsStr += "UNSHADED"; break;
             case PSO_FLAG_COMPUTE_MOTION_VECTORS:    FlagsStr += "MOTION_VECTORS"; break;
             case PSO_FLAG_ENABLE_SHADOWS:            FlagsStr += "SHADOWS"; break;
-            case PSO_FLAG_LOADING_ANIMATION:         FlagsStr += "LOADING_ANIMATION"; break;
                 // clang-format on
 
             default:
                 FlagsStr += std::to_string(PlatformMisc::GetLSB(Flag));
         }
     }
-    static_assert(PSO_FLAG_LAST == 1ull << 39ull, "Please update the switch above to handle the new flag");
+    static_assert(PSO_FLAG_LAST == 1ull << 38ull, "Please update the switch above to handle the new flag");
 
     return FlagsStr;
 }
@@ -1201,7 +1202,15 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
     Macros.Add("DEBUG_VIEW_THICKNESS",             static_cast<int>(DebugViewType::Thickness));
     // clang-format on
 
-    static_assert(PSO_FLAG_LAST == PSO_FLAG_BIT(39), "Did you add new PSO Flag? You may need to handle it here.");
+    static_assert(static_cast<int>(LoadingAnimationMode::Count) == 3, "Did you add new loading animation mode? You may need to handle it here.");
+    // clang-format off
+    Macros.Add("LOADING_ANIMATION",               static_cast<int>(Key.GetLoadingAnimation()));
+    Macros.Add("LOADING_ANIMATION_NONE",          static_cast<int>(LoadingAnimationMode::None));
+    Macros.Add("LOADING_ANIMATION_ALWAYS",        static_cast<int>(LoadingAnimationMode::Always));
+    Macros.Add("LOADING_ANIMATION_TRANSITIONING", static_cast<int>(LoadingAnimationMode::Transitioning));
+    // clang-format on
+
+    static_assert(PSO_FLAG_LAST == PSO_FLAG_BIT(38), "Did you add new PSO Flag? You may need to handle it here.");
 #define ADD_PSO_FLAG_MACRO(Flag) Macros.Add(#Flag, (PSOFlags & PSO_FLAG_##Flag) != PSO_FLAG_NONE)
     ADD_PSO_FLAG_MACRO(USE_COLOR_MAP);
     ADD_PSO_FLAG_MACRO(USE_NORMAL_MAP);
@@ -1245,7 +1254,6 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
     ADD_PSO_FLAG_MACRO(UNSHADED);
     ADD_PSO_FLAG_MACRO(COMPUTE_MOTION_VECTORS);
     ADD_PSO_FLAG_MACRO(ENABLE_SHADOWS);
-    ADD_PSO_FLAG_MACRO(LOADING_ANIMATION);
 #undef ADD_PSO_FLAG_MACRO
 
     Macros.Add("TEX_COLOR_CONVERSION_MODE_NONE", CreateInfo::TEX_COLOR_CONVERSION_MODE_NONE);
@@ -1524,14 +1532,30 @@ void PBR_Renderer::CreatePSO(PsoHashMapType&             PsoHashMap,
     if (AsyncCompile)
         PSOCreateInfo.Flags |= PSO_CREATE_FLAG_ASYNCHRONOUS;
 
-    const auto PSOFlags   = Key.GetFlags();
-    const auto IsUnshaded = (PSOFlags & PSO_FLAG_UNSHADED) != 0;
+    const PSO_FLAGS PSOFlags   = Key.GetFlags();
+    const bool      IsUnshaded = (PSOFlags & PSO_FLAG_UNSHADED) != 0;
 
-    LOG_DVP_INFO_MESSAGE("PBR Renderer: creating PSO with flags: ", GetPSOFlagsString(PSOFlags),
-                         "; debug view: ", static_cast<int>(Key.GetDebugView()),
-                         "; user value: ", Key.GetUserValue(),
-                         ": cull: ", GetCullModeLiteralName(Key.GetCullMode()),
-                         "; alpha: ", GetAlphaModeString(Key.GetAlphaMode()));
+#ifdef DILIGENT_DEVELOPMENT
+    {
+        std::stringstream msg_ss;
+        msg_ss << "PBR Renderer: creating PSO with flags: " << GetPSOFlagsString(PSOFlags)
+               << ": cull: " << GetCullModeLiteralName(Key.GetCullMode())
+               << "; alpha: " << GetAlphaModeString(Key.GetAlphaMode());
+        if (Key.GetDebugView() != DebugViewType::None)
+        {
+            msg_ss << "; debug view: " << static_cast<int>(Key.GetDebugView());
+        }
+        if (Key.GetLoadingAnimation() != LoadingAnimationMode::None)
+        {
+            msg_ss << "; loading animation: " << static_cast<int>(Key.GetLoadingAnimation());
+        }
+        if (Key.GetUserValue() != 0)
+        {
+            msg_ss << "; user value: " << Key.GetUserValue();
+        }
+        LOG_INFO_MESSAGE(msg_ss.str());
+    }
+#endif
 
     InputLayoutDescX InputLayout;
     std::string      VSInputStruct;
@@ -1592,6 +1616,7 @@ void PBR_Renderer::CreatePSO(PsoHashMapType&             PsoHashMap,
         // so we use the cull mode to differentiate between the two.
         UseGLPointSize ? CULL_MODE_NONE : CULL_MODE_BACK,
         DebugViewType::None,
+        LoadingAnimationMode::None,
         Key.GetUserValue(),
     }];
     if (!pVS)
@@ -1713,6 +1738,12 @@ void PBR_Renderer::CreatePSO(PsoHashMapType&             PsoHashMap,
     PSOName += GetAlphaModeString(AlphaMode);
     PSOName += " - ";
     PSOName += GetCullModeLiteralName(Key.GetCullMode());
+    PSOName += " - ";
+    PSOName += std::to_string(static_cast<int>(Key.GetDebugView()));
+    PSOName += " - ";
+    PSOName += std::to_string(static_cast<int>(Key.GetLoadingAnimation()));
+    PSOName += " - ";
+    PSOName += std::to_string(Key.GetUserValue());
     PSODesc.Name = PSOName.c_str();
 
     GraphicsPipeline.RasterizerDesc.CullMode = Key.GetCullMode();

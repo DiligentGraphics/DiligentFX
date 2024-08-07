@@ -293,13 +293,13 @@ SurfaceShadingInfo GetSurfaceShadingInfo(in VSOutput              VSOut,
     }
 #   endif
     
-#if ENABLE_SHEEN
+#   if ENABLE_SHEEN
     {    
         Shading.Sheen = ReadSheenLayerProperties(VSOut, Material);
     }
 #   endif
     
-#if ENABLE_ANISOTROPY
+#   if ENABLE_ANISOTROPY
     {
         Shading.Anisotropy = ReadAnisotropyProperties(VSOut, Material, Shading.BaseLayer);
     }
@@ -321,20 +321,19 @@ SurfaceShadingInfo GetSurfaceShadingInfo(in VSOutput              VSOut,
     }
 #   endif
     
-#if ENABLE_VOLUME
+#   if ENABLE_VOLUME
     {
         Shading.VolumeThickness = GetVolumeThickness(VSOut, Material, g_Frame.Renderer.MipBias);
     }
-#endif
+#   endif
     
     return Shading;
 }
 
-#if LOADING_ANIMATION
-float4 GetLoadingAnimationColor(float3 WorldPos)
+#if LOADING_ANIMATION != LOADING_ANIMATION_NONE
+float4 GetLoadingAnimationColor(float3 WorldPos, float Factor)
 {
     float  Time   = g_Frame.Renderer.Time;
-    float  Factor = g_Frame.Renderer.LoadingAnimationFactor;
     float3 Color0 = g_Frame.Renderer.LoadingAnimationColor0.rgb;
     float3 Color1 = g_Frame.Renderer.LoadingAnimationColor1.rgb;
     float  Scale  = g_Frame.Renderer.LoadingAnimationWorldScale;
@@ -483,15 +482,7 @@ PSOutput main(in VSOutput VSOut,
     
     // Add highlight color
     OutColor.rgb = lerp(OutColor.rgb, g_Frame.Renderer.HighlightColor.rgb, g_Frame.Renderer.HighlightColor.a);
-    
-#if LOADING_ANIMATION
-    if (g_Frame.Renderer.LoadingAnimationFactor > 0)
-    {
-        float4 LoadingAnimationColor = GetLoadingAnimationColor(Shading.Pos);
-        OutColor.rgb = lerp(OutColor.rgb, LoadingAnimationColor.rgb, LoadingAnimationColor.a);
-    }
-#endif
-    
+        
     float2 MotionVector = float2(0.0, 0.0);
 #   if COMPUTE_MOTION_VECTORS
     {
@@ -502,40 +493,56 @@ PSOutput main(in VSOutput VSOut,
 #   endif
     
     // Shader inputs debug visualization
-#if (DEBUG_VIEW == DEBUG_VIEW_BASE_COLOR)
+    #if (DEBUG_VIEW == DEBUG_VIEW_BASE_COLOR)
     {
         OutColor.rgba = BaseColor;
     }
-#elif (DEBUG_VIEW == DEBUG_VIEW_TEXCOORD0 && USE_TEXCOORD0)
+#   elif (DEBUG_VIEW == DEBUG_VIEW_TEXCOORD0 && USE_TEXCOORD0)
     {
         OutColor.rgb = float3(VSOut.UV0, 0.0);
     }
-#elif (DEBUG_VIEW == DEBUG_VIEW_TEXCOORD1 && USE_TEXCOORD1)
+#   elif (DEBUG_VIEW == DEBUG_VIEW_TEXCOORD1 && USE_TEXCOORD1)
     {
         OutColor.rgb = float3(VSOut.UV1, 0.0);
     }
-#elif (DEBUG_VIEW == DEBUG_VIEW_TRANSPARENCY)
+#   elif (DEBUG_VIEW == DEBUG_VIEW_TRANSPARENCY)
     {
         OutColor.rgba = float4(BaseColor.a, BaseColor.a, BaseColor.a, 1.0);
     }
-#elif (DEBUG_VIEW == DEBUG_VIEW_MESH_NORMAL)
+#   elif (DEBUG_VIEW == DEBUG_VIEW_MESH_NORMAL)
     {
         OutColor.rgb  = MeshNormal * float3(0.5, 0.5, 0.5) + float3(0.5, 0.5, 0.5);
     }
-#elif (DEBUG_VIEW == DEBUG_VIEW_MOTION_VECTORS)
+#   elif (DEBUG_VIEW == DEBUG_VIEW_MOTION_VECTORS)
     {
         OutColor.rgb  = float3(sqrt(abs(MotionVector)) * 5.0, 0.0);
     }
-#elif (DEBUG_VIEW == DEBUG_VIEW_WHITE_BASE_COLOR)
+#   elif (DEBUG_VIEW == DEBUG_VIEW_WHITE_BASE_COLOR)
     {
         // Already handled
     }
-#elif (DEBUG_VIEW != DEBUG_VIEW_NONE)
+#   elif (DEBUG_VIEW != DEBUG_VIEW_NONE)
     {
         OutColor.rgb = GetDebugColor(Shading, SrfLighting);
     }
-#endif
+#   endif
     
+#   if LOADING_ANIMATION != LOADING_ANIMATION_NONE
+    {
+        float Factor = 1.0;
+#       if LOADING_ANIMATION == LOADING_ANIMATION_TRANSITIONING
+        {
+            Factor = g_Frame.Renderer.LoadingAnimationFactor;
+        }
+#       endif
+    
+        if (Factor > 0)
+        {
+            float4 LoadingAnimationColor = GetLoadingAnimationColor(Shading.Pos, Factor);
+            OutColor.rgb = lerp(OutColor.rgb, LoadingAnimationColor.rgb, LoadingAnimationColor.a);
+        }
+    }
+#endif
 
 #if CONVERT_OUTPUT_TO_SRGB
     {
