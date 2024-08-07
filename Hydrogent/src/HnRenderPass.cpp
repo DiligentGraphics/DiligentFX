@@ -667,8 +667,9 @@ void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
     {
         const PBR_Renderer::PSO_FLAGS FallbackPSOFlags =
             (m_RenderMode == HN_RENDER_MODE_SOLID ?
-                 PBR_Renderer::PSO_FLAG_COMPUTE_MOTION_VECTORS | PBR_Renderer::PSO_FLAG_USE_IBL :
+                 PBR_Renderer::PSO_FLAG_COMPUTE_MOTION_VECTORS :
                  PBR_Renderer::PSO_FLAG_UNSHADED) |
+            PBR_Renderer::PSO_FLAG_LOADING_ANIMATION |
             static_cast<PBR_Renderer::PSO_FLAGS>(m_Params.UsdPsoFlags);
 
         m_FallbackPSO = State.GePsoCache().Get({FallbackPSOFlags, PBR_Renderer::ALPHA_MODE_OPAQUE, CULL_MODE_NONE}, PBR_Renderer::PsoCacheAccessor::GET_FLAG_CREATE_IF_NULL);

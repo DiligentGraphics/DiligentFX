@@ -330,6 +330,29 @@ SurfaceShadingInfo GetSurfaceShadingInfo(in VSOutput              VSOut,
     return Shading;
 }
 
+#if LOADING_ANIMATION
+float4 GetLoadingAnimationColor(float3 WorldPos)
+{
+    float  Time   = g_Frame.Renderer.Time;
+    float  Factor = g_Frame.Renderer.LoadingAnimationFactor;
+    float3 Color0 = g_Frame.Renderer.LoadingAnimationColor0.rgb;
+    float3 Color1 = g_Frame.Renderer.LoadingAnimationColor1.rgb;
+    float  Scale  = g_Frame.Renderer.LoadingAnimationWorldScale;
+    float  Speed  = g_Frame.Renderer.LoadingAnimationSpeed;
+
+    float3 Dist3 = frac(WorldPos * Scale);
+    Dist3 = min(Dist3, float3(1.0, 1.0, 1.0) - Dist3) * 2.0;
+    Dist3 = sin(Dist3 * PI/2.0);
+
+    float Dist = dot(Dist3, Dist3);
+
+    float Weight = (sin(Dist + Time * Speed) + 1.0) * 0.5;
+    Weight *= Weight;
+    float3 Color = lerp(Color0, Color1, Weight);
+    return float4(Color, Factor);
+}
+#endif
+
 PSOutput main(in VSOutput VSOut,
               in bool     IsFrontFace : SV_IsFrontFace)
 {
@@ -460,6 +483,14 @@ PSOutput main(in VSOutput VSOut,
     
     // Add highlight color
     OutColor.rgb = lerp(OutColor.rgb, g_Frame.Renderer.HighlightColor.rgb, g_Frame.Renderer.HighlightColor.a);
+    
+#if LOADING_ANIMATION
+    if (g_Frame.Renderer.LoadingAnimationFactor > 0)
+    {
+        float4 LoadingAnimationColor = GetLoadingAnimationColor(Shading.Pos);
+        OutColor.rgb = lerp(OutColor.rgb, LoadingAnimationColor.rgb, LoadingAnimationColor.a);
+    }
+#endif
     
     float2 MotionVector = float2(0.0, 0.0);
 #   if COMPUTE_MOTION_VECTORS

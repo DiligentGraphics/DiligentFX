@@ -626,6 +626,13 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
             RendererParams.AverageLogLum = 0.3f;
             RendererParams.MiddleGray    = HLSL::ToneMappingAttribs{}.fMiddleGray;
             RendererParams.WhitePoint    = HLSL::ToneMappingAttribs{}.fWhitePoint;
+
+            RendererParams.Time                       = static_cast<float>(RenderParam->GetFrameTime());
+            RendererParams.LoadingAnimationFactor     = 1.0;
+            RendererParams.LoadingAnimationColor0     = m_Params.Renderer.LoadingAnimationColor0;
+            RendererParams.LoadingAnimationColor1     = m_Params.Renderer.LoadingAnimationColor1;
+            RendererParams.LoadingAnimationWorldScale = m_Params.Renderer.LoadingAnimationWorldScale;
+            RendererParams.LoadingAnimationSpeed      = m_Params.Renderer.LoadingAnimationSpeed;
         }
     }
 

@@ -182,13 +182,14 @@ std::string PBR_Renderer::GetPSOFlagsString(PSO_FLAGS Flags)
             case PSO_FLAG_UNSHADED:                  FlagsStr += "UNSHADED"; break;
             case PSO_FLAG_COMPUTE_MOTION_VECTORS:    FlagsStr += "MOTION_VECTORS"; break;
             case PSO_FLAG_ENABLE_SHADOWS:            FlagsStr += "SHADOWS"; break;
+            case PSO_FLAG_LOADING_ANIMATION:         FlagsStr += "LOADING_ANIMATION"; break;
                 // clang-format on
 
             default:
                 FlagsStr += std::to_string(PlatformMisc::GetLSB(Flag));
         }
     }
-    static_assert(PSO_FLAG_LAST == 1ull << 38ull, "Please update the switch above to handle the new flag");
+    static_assert(PSO_FLAG_LAST == 1ull << 39ull, "Please update the switch above to handle the new flag");
 
     return FlagsStr;
 }
@@ -1200,7 +1201,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
     Macros.Add("DEBUG_VIEW_THICKNESS",             static_cast<int>(DebugViewType::Thickness));
     // clang-format on
 
-    static_assert(PSO_FLAG_LAST == PSO_FLAG_BIT(38), "Did you add new PSO Flag? You may need to handle it here.");
+    static_assert(PSO_FLAG_LAST == PSO_FLAG_BIT(39), "Did you add new PSO Flag? You may need to handle it here.");
 #define ADD_PSO_FLAG_MACRO(Flag) Macros.Add(#Flag, (PSOFlags & PSO_FLAG_##Flag) != PSO_FLAG_NONE)
     ADD_PSO_FLAG_MACRO(USE_COLOR_MAP);
     ADD_PSO_FLAG_MACRO(USE_NORMAL_MAP);
@@ -1244,6 +1245,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
     ADD_PSO_FLAG_MACRO(UNSHADED);
     ADD_PSO_FLAG_MACRO(COMPUTE_MOTION_VECTORS);
     ADD_PSO_FLAG_MACRO(ENABLE_SHADOWS);
+    ADD_PSO_FLAG_MACRO(LOADING_ANIMATION);
 #undef ADD_PSO_FLAG_MACRO
 
     Macros.Add("TEX_COLOR_CONVERSION_MODE_NONE", CreateInfo::TEX_COLOR_CONVERSION_MODE_NONE);

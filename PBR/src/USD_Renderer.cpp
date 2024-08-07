@@ -115,6 +115,9 @@ USD_Renderer::CreateInfo::PSMainSourceInfo USD_Renderer::GetUsdPbrPSMainSource(U
         IBL = lerp(IBL, GetClearcoatIBL(Shading, SrfLighting), Shading.Clearcoat.Factor);
     }
 #   endif
+#   if LOADING_ANIMATION
+        MaterialData = lerp(MaterialData, float2(1.0, 0.0), g_Frame.Renderer.LoadingAnimationFactor);
+#   endif
 #endif
     
 )";

@@ -132,14 +132,23 @@ struct HnBeginFrameTaskParams
         float4 UnshadedColor = {1, 1, 1, 1};
         float  PointSize     = 1;
 
+        float4 LoadingAnimationColor0     = {0.1f, 0.1f, 0.1f, 1.0f};
+        float4 LoadingAnimationColor1     = {0.7f, 0.6f, 0.3f, 1.0f};
+        float  LoadingAnimationWorldScale = 1.0f;
+        float  LoadingAnimationSpeed      = 3.0f;
+
         constexpr bool operator==(const RendererParams& rhs) const
         {
             // clang-format off
-            return OcclusionStrength == rhs.OcclusionStrength &&
-                   EmissionScale     == rhs.EmissionScale &&
-                   IBLScale          == rhs.IBLScale &&
-                   UnshadedColor     == rhs.UnshadedColor &&
-                   PointSize         == rhs.PointSize;
+            return OcclusionStrength          == rhs.OcclusionStrength &&
+                   EmissionScale              == rhs.EmissionScale &&
+                   IBLScale                   == rhs.IBLScale &&
+                   UnshadedColor              == rhs.UnshadedColor &&
+                   PointSize                  == rhs.PointSize &&
+                   LoadingAnimationColor0     == rhs.LoadingAnimationColor0 &&
+                   LoadingAnimationColor1     == rhs.LoadingAnimationColor1 &&
+                   LoadingAnimationWorldScale == rhs.LoadingAnimationWorldScale &&
+                   LoadingAnimationSpeed      == rhs.LoadingAnimationSpeed;
             // clang-format on
         }
     };
