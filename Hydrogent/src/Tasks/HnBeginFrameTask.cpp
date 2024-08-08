@@ -628,27 +628,30 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
             RendererParams.MiddleGray    = HLSL::ToneMappingAttribs{}.fMiddleGray;
             RendererParams.WhitePoint    = HLSL::ToneMappingAttribs{}.fWhitePoint;
 
-            RendererParams.Time = static_cast<float>(m_CurrFrameTime);
-
-            float LoadingAnimationFactor = m_FallBackPsoUseStartTime > 0 ? 1.0 : 0.0;
-            if (m_FallBackPsoUseStartTime > 0 && m_FallBackPsoUseEndTime > m_FallBackPsoUseStartTime)
             {
-                float FallbackDuration   = static_cast<float>(m_FallBackPsoUseEndTime - m_FallBackPsoUseStartTime);
-                float TransitionDuration = std::min(0.5f, FallbackDuration * 0.5f);
-                LoadingAnimationFactor   = static_cast<float>(m_CurrFrameTime - m_FallBackPsoUseEndTime) / TransitionDuration;
-                LoadingAnimationFactor   = std::max(1.f - LoadingAnimationFactor, 0.f);
-                if (LoadingAnimationFactor == 0)
+                float LoadingAnimationFactor = m_FallBackPsoUseStartTime > 0 ? 1.0 : 0.0;
+                float LoadingAnimationTime   = static_cast<float>(m_CurrFrameTime);
+                if (m_FallBackPsoUseStartTime > 0 && m_FallBackPsoUseEndTime > m_FallBackPsoUseStartTime)
                 {
-                    // Transition is over
-                    m_FallBackPsoUseStartTime = -1;
+                    LoadingAnimationTime     = static_cast<float>(m_FallBackPsoUseEndTime);
+                    float FallbackDuration   = static_cast<float>(m_FallBackPsoUseEndTime - m_FallBackPsoUseStartTime);
+                    float TransitionDuration = std::min(0.5f, FallbackDuration * 0.5f);
+                    LoadingAnimationFactor   = static_cast<float>(m_CurrFrameTime - m_FallBackPsoUseEndTime) / TransitionDuration;
+                    LoadingAnimationFactor   = std::max(1.f - LoadingAnimationFactor, 0.f);
+                    if (LoadingAnimationFactor == 0)
+                    {
+                        // Transition is over
+                        m_FallBackPsoUseStartTime = -1;
+                    }
                 }
-            }
 
-            RendererParams.LoadingAnimationFactor     = LoadingAnimationFactor;
-            RendererParams.LoadingAnimationColor0     = m_Params.Renderer.LoadingAnimationColor0;
-            RendererParams.LoadingAnimationColor1     = m_Params.Renderer.LoadingAnimationColor1;
-            RendererParams.LoadingAnimationWorldScale = m_Params.Renderer.LoadingAnimationWorldScale;
-            RendererParams.LoadingAnimationSpeed      = m_Params.Renderer.LoadingAnimationSpeed;
+                RendererParams.LoadingAnimation.Time       = LoadingAnimationTime;
+                RendererParams.LoadingAnimation.Factor     = LoadingAnimationFactor;
+                RendererParams.LoadingAnimation.Color0     = m_Params.Renderer.LoadingAnimationColor0;
+                RendererParams.LoadingAnimation.Color1     = m_Params.Renderer.LoadingAnimationColor1;
+                RendererParams.LoadingAnimation.WorldScale = m_Params.Renderer.LoadingAnimationWorldScale;
+                RendererParams.LoadingAnimation.Speed      = m_Params.Renderer.LoadingAnimationSpeed;
+            }
         }
     }
 

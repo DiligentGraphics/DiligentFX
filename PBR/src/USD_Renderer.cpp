@@ -116,7 +116,7 @@ USD_Renderer::CreateInfo::PSMainSourceInfo USD_Renderer::GetUsdPbrPSMainSource(U
     }
 #   endif
 #   if LOADING_ANIMATION
-        MaterialData = lerp(MaterialData, float2(1.0, 0.0), g_Frame.Renderer.LoadingAnimationFactor);
+        MaterialData = lerp(MaterialData, float2(1.0, 0.0), g_Frame.Renderer.LoadingAnimation.Factor);
 #   endif
 #endif
     

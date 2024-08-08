@@ -71,6 +71,19 @@ struct GLTFNodeShaderTransforms
 	CHECK_STRUCT_ALIGNMENT(GLTFNodeShaderTransforms);
 #endif
 
+struct LoadingAnimationShaderParameters
+{
+    float Time;
+    float Factor;
+    float WorldScale;
+    float Speed;
+    
+    float4 Color0;
+    float4 Color1;
+};
+#ifdef CHECK_STRUCT_ALIGNMENT
+	CHECK_STRUCT_ALIGNMENT(LoadingAnimationShaderParameters);
+#endif
 
 struct PBRRendererShaderParameters
 {
@@ -87,20 +100,14 @@ struct PBRRendererShaderParameters
     float MipBias;
 
     int   LightCount;
-    float Time;
-    float LoadingAnimationFactor;
-    float LoadingAnimationWorldScale;
-    
-    float LoadingAnimationSpeed;
     float Padding0;
     float Padding1;
     float Padding2;
     
     float4 UnshadedColor;
     float4 HighlightColor;
-    
-    float4 LoadingAnimationColor0;
-    float4 LoadingAnimationColor1;
+
+    LoadingAnimationShaderParameters LoadingAnimation;
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
 	CHECK_STRUCT_ALIGNMENT(PBRRendererShaderParameters);
