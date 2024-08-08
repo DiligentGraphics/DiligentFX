@@ -628,12 +628,12 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
             RendererParams.MiddleGray    = HLSL::ToneMappingAttribs{}.fMiddleGray;
             RendererParams.WhitePoint    = HLSL::ToneMappingAttribs{}.fWhitePoint;
 
+            RendererParams.Time = static_cast<float>(m_CurrFrameTime);
+
             {
                 float LoadingAnimationFactor = m_FallBackPsoUseStartTime > 0 ? 1.0 : 0.0;
-                float LoadingAnimationTime   = static_cast<float>(m_CurrFrameTime);
                 if (m_FallBackPsoUseStartTime > 0 && m_FallBackPsoUseEndTime > m_FallBackPsoUseStartTime)
                 {
-                    LoadingAnimationTime     = static_cast<float>(m_FallBackPsoUseEndTime);
                     float FallbackDuration   = static_cast<float>(m_FallBackPsoUseEndTime - m_FallBackPsoUseStartTime);
                     float TransitionDuration = std::min(0.5f, FallbackDuration * 0.5f);
                     LoadingAnimationFactor   = static_cast<float>(m_CurrFrameTime - m_FallBackPsoUseEndTime) / TransitionDuration;
@@ -645,7 +645,6 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
                     }
                 }
 
-                RendererParams.LoadingAnimation.Time       = LoadingAnimationTime;
                 RendererParams.LoadingAnimation.Factor     = LoadingAnimationFactor;
                 RendererParams.LoadingAnimation.Color0     = m_Params.Renderer.LoadingAnimationColor0;
                 RendererParams.LoadingAnimation.Color1     = m_Params.Renderer.LoadingAnimationColor1;

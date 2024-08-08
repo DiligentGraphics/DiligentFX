@@ -73,10 +73,10 @@ struct GLTFNodeShaderTransforms
 
 struct LoadingAnimationShaderParameters
 {
-    float Time;
     float Factor;
     float WorldScale;
     float Speed;
+    float Padding;
     
     float4 Color0;
     float4 Color1;
@@ -100,9 +100,9 @@ struct PBRRendererShaderParameters
     float MipBias;
 
     int   LightCount;
+    float Time;
     float Padding0;
     float Padding1;
-    float Padding2;
     
     float4 UnshadedColor;
     float4 HighlightColor;
