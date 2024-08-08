@@ -228,6 +228,10 @@ private:
     Uint32 m_FrameBufferHeight = 0;
 
     Timer m_FrameTimer;
+
+    double m_CurrFrameTime           = 0;
+    double m_FallBackPsoUseStartTime = -1;
+    double m_FallBackPsoUseEndTime   = -1;
 };
 
 } // namespace USD

@@ -539,7 +539,7 @@ PSOutput main(in VSOutput VSOut,
         if (Factor > 0)
         {
             float4 LoadingAnimationColor = GetLoadingAnimationColor(Shading.Pos, Factor);
-            OutColor.rgb = lerp(OutColor.rgb, LoadingAnimationColor.rgb, LoadingAnimationColor.a);
+            OutColor = lerp(OutColor, float4(LoadingAnimationColor.rgb, 1.0), LoadingAnimationColor.a);
         }
     }
 #endif

@@ -670,7 +670,8 @@ void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
 
     if (State.RenderParam.GetAsyncShaderCompilation() &&
         m_FallbackPSO == nullptr &&
-        (m_Params.UsdPsoFlags & USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_OUTPUT) != 0)
+        (m_Params.UsdPsoFlags & USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_OUTPUT) != 0 &&
+        m_RenderMode == HN_RENDER_MODE_SOLID)
     {
         const PBR_Renderer::PSO_FLAGS FallbackPSOFlags =
             (m_RenderMode == HN_RENDER_MODE_SOLID ?
@@ -926,7 +927,11 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
                 State.RenderParam.GetUseShadows())
                 PSOFlags |= PBR_Renderer::PSO_FLAG_ENABLE_SHADOWS;
 
-            ListItem.pPSO = PsoCache.Get({PSOFlags, static_cast<PBR_Renderer::ALPHA_MODE>(State.AlphaMode), CullMode, m_DebugView, PBR_Renderer::LoadingAnimationMode::None, ShaderTextureIndexingId}, GetPSOFlags);
+            const PBR_Renderer::LoadingAnimationMode LoadingAnimationMode = (m_FallbackPSO != nullptr) ?
+                PBR_Renderer::LoadingAnimationMode::Transitioning :
+                PBR_Renderer::LoadingAnimationMode::None;
+
+            ListItem.pPSO = PsoCache.Get({PSOFlags, static_cast<PBR_Renderer::ALPHA_MODE>(State.AlphaMode), CullMode, m_DebugView, LoadingAnimationMode, ShaderTextureIndexingId}, GetPSOFlags);
         }
         else if (m_RenderMode == HN_RENDER_MODE_MESH_EDGES ||
                  m_RenderMode == HN_RENDER_MODE_POINTS)

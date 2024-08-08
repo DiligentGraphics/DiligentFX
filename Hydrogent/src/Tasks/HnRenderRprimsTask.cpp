@@ -130,7 +130,9 @@ void HnRenderRprimsTask::Execute(pxr::HdTaskContext* TaskCtx)
         // Render pass state is initialized by HnBeginFrameTask.
         if (HnRenderPassState* RenderPassState = GetRenderPassState(TaskCtx, RenderPassName))
         {
-            m_RenderPass->Execute(*RenderPassState, GetRenderTags());
+            HnRenderPass::EXECUTE_RESULT Result = m_RenderPass->Execute(*RenderPassState, GetRenderTags());
+            if (Result == HnRenderPass::EXECUTE_RESULT_FALLBACK)
+                (*TaskCtx)[HnRenderResourceTokens->fallBackPsoInUse] = pxr::VtValue{true};
         }
         else
         {

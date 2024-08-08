@@ -312,12 +312,13 @@ void HnBeginFrameTask::Prepare(pxr::HdTaskContext* TaskCtx,
     HnRenderDelegate*   RenderDelegate = static_cast<HnRenderDelegate*>(RenderIndex->GetRenderDelegate());
     const USD_Renderer& Renderer       = *RenderDelegate->GetUSDRenderer();
 
+    m_CurrFrameTime = m_FrameTimer.GetElapsedTime();
+
     Uint32 FrameNumber = 0;
     if (HnRenderParam* pRenderParam = static_cast<HnRenderParam*>(RenderDelegate->GetRenderParam()))
     {
-        double CurrFrameTime = m_FrameTimer.GetElapsedTime();
-        pRenderParam->SetElapsedTime(static_cast<float>(CurrFrameTime - pRenderParam->GetFrameTime()));
-        pRenderParam->SetFrameTime(CurrFrameTime);
+        pRenderParam->SetElapsedTime(static_cast<float>(m_CurrFrameTime - pRenderParam->GetFrameTime()));
+        pRenderParam->SetFrameTime(m_CurrFrameTime);
         pRenderParam->SetFrameNumber(pRenderParam->GetFrameNumber() + 1);
         FrameNumber = pRenderParam->GetFrameNumber();
     }
@@ -627,8 +628,23 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
             RendererParams.MiddleGray    = HLSL::ToneMappingAttribs{}.fMiddleGray;
             RendererParams.WhitePoint    = HLSL::ToneMappingAttribs{}.fWhitePoint;
 
-            RendererParams.Time                       = static_cast<float>(RenderParam->GetFrameTime());
-            RendererParams.LoadingAnimationFactor     = 1.0;
+            RendererParams.Time = static_cast<float>(m_CurrFrameTime);
+
+            float LoadingAnimationFactor = m_FallBackPsoUseStartTime > 0 ? 1.0 : 0.0;
+            if (m_FallBackPsoUseStartTime > 0 && m_FallBackPsoUseEndTime > m_FallBackPsoUseStartTime)
+            {
+                float FallbackDuration   = static_cast<float>(m_FallBackPsoUseEndTime - m_FallBackPsoUseStartTime);
+                float TransitionDuration = std::min(0.5f, FallbackDuration * 0.5f);
+                LoadingAnimationFactor   = static_cast<float>(m_CurrFrameTime - m_FallBackPsoUseEndTime) / TransitionDuration;
+                LoadingAnimationFactor   = std::max(1.f - LoadingAnimationFactor, 0.f);
+                if (LoadingAnimationFactor == 0)
+                {
+                    // Transition is over
+                    m_FallBackPsoUseStartTime = -1;
+                }
+            }
+
+            RendererParams.LoadingAnimationFactor     = LoadingAnimationFactor;
             RendererParams.LoadingAnimationColor0     = m_Params.Renderer.LoadingAnimationColor0;
             RendererParams.LoadingAnimationColor1     = m_Params.Renderer.LoadingAnimationColor1;
             RendererParams.LoadingAnimationWorldScale = m_Params.Renderer.LoadingAnimationWorldScale;
@@ -670,6 +686,28 @@ void HnBeginFrameTask::Execute(pxr::HdTaskContext* TaskCtx)
         // Set by HnPostProcessTask::Prepare()
         GetTaskContextData(TaskCtx, HnRenderResourceTokens->taaJitterOffsets, JitterOffsets);
         GetTaskContextData(TaskCtx, HnRenderResourceTokens->useTaa, UseTAA);
+
+        bool FallBackPsoInUse = false;
+        if (GetTaskContextData(TaskCtx, HnRenderResourceTokens->fallBackPsoInUse, FallBackPsoInUse, /*Required = */ false))
+        {
+            if (FallBackPsoInUse)
+            {
+                if (m_FallBackPsoUseStartTime < 0)
+                {
+                    // Fallback PSO is in use for the first time
+                    m_FallBackPsoUseStartTime = m_CurrFrameTime;
+                    m_FallBackPsoUseEndTime   = -1;
+                }
+            }
+            else if (m_FallBackPsoUseEndTime < 0)
+            {
+                // First frame after fallback PSO was used
+                m_FallBackPsoUseEndTime = m_CurrFrameTime;
+            }
+        }
+        // Reset the fallBackPsoInUse flag.
+        // HnRenderRprimsTask::Execute sets it to true if the fallback PSO was used.
+        (*TaskCtx)[HnRenderResourceTokens->fallBackPsoInUse] = pxr::VtValue{false};
 
         bool CameraTransformDirty = false;
         UpdateFrameConstants(pCtx, pFrameAttribsCB, UseTAA, JitterOffsets, CameraTransformDirty);
