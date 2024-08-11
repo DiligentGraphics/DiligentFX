@@ -228,7 +228,7 @@ public:
     void ResetTAA();
 
     /// Suspends temporal super-sampling.
-    void SuspededSuperSampling();
+    void SuspendSuperSampling();
 
 private:
     pxr::SdfPath GetTaskId(const pxr::TfToken& TaskName) const;
