@@ -89,7 +89,8 @@ void HnProcessSelectionTask::PrepareTechniques(TEXTURE_FORMAT RTVFormat)
 
     try
     {
-        HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+        const HnRenderDelegate* RenderDelegate = static_cast<const HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+        const HnRenderParam*    RenderParam    = static_cast<const HnRenderParam*>(RenderDelegate->GetRenderParam());
 
         // RenderDeviceWithCache_E throws exceptions in case of errors
         RenderDeviceWithCache_E Device{RenderDelegate->GetDevice(), RenderDelegate->GetRenderStateCache()};
@@ -97,6 +98,8 @@ void HnProcessSelectionTask::PrepareTechniques(TEXTURE_FORMAT RTVFormat)
         ShaderCreateInfo ShaderCI;
         ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL;
         ShaderCI.CompileFlags   = SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR;
+        if (RenderParam->GetAsyncShaderCompilation())
+            ShaderCI.CompileFlags |= SHADER_COMPILE_FLAG_ASYNCHRONOUS;
 
         auto pHnFxCompoundSourceFactory     = HnShaderSourceFactory::CreateHnFxCompoundFactory();
         ShaderCI.pShaderSourceStreamFactory = pHnFxCompoundSourceFactory;
@@ -114,7 +117,7 @@ void HnProcessSelectionTask::PrepareTechniques(TEXTURE_FORMAT RTVFormat)
         ResourceLauout
             .SetDefaultVariableType(SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
             .AddVariable(SHADER_TYPE_PIXEL, "g_SelectionDepth", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE, SHADER_VARIABLE_FLAG_UNFILTERABLE_FLOAT_TEXTURE_WEBGPU)
-            .AddVariable(SHADER_TYPE_PIXEL, "cbConstants", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
+            .AddVariable(SHADER_TYPE_PIXEL, "cbConstants", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
 
         GraphicsPipelineStateCreateInfoX PsoCI;
         PsoCI
@@ -124,6 +127,9 @@ void HnProcessSelectionTask::PrepareTechniques(TEXTURE_FORMAT RTVFormat)
             .SetDepthStencilDesc(DSS_DisableDepth)
             .SetRasterizerDesc(RS_SolidFillNoCull)
             .SetPrimitiveTopology(PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+
+        if (RenderParam->GetAsyncShaderCompilation())
+            PsoCI.Flags |= PSO_CREATE_FLAG_ASYNCHRONOUS;
 
         if (!m_InitTech.PSO)
         {
@@ -139,8 +145,7 @@ void HnProcessSelectionTask::PrepareTechniques(TEXTURE_FORMAT RTVFormat)
             PsoCI
                 .SetName("Init closest selection")
                 .AddShader(pPS);
-            m_InitTech.PSO = Device.CreateGraphicsPipelineState(PsoCI); // Throws an exception in case of error
-            m_InitTech.PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbConstants")->Set(m_ConstantsCB);
+            m_InitTech.PSO     = Device.CreateGraphicsPipelineState(PsoCI); // Throws an exception in case of error
             m_InitTech.IsDirty = false;
         }
 
@@ -161,8 +166,7 @@ void HnProcessSelectionTask::PrepareTechniques(TEXTURE_FORMAT RTVFormat)
             PsoCI
                 .SetName("Update closest selection")
                 .AddShader(pPS);
-            m_UpdateTech.PSO = Device.CreateGraphicsPipelineState(PsoCI); // Throws an exception in case of error
-            m_UpdateTech.PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbConstants")->Set(m_ConstantsCB);
+            m_UpdateTech.PSO     = Device.CreateGraphicsPipelineState(PsoCI); // Throws an exception in case of error
             m_UpdateTech.IsDirty = false;
         }
     }
@@ -203,6 +207,13 @@ void HnProcessSelectionTask::PrepareSRBs(const HnFrameRenderTargets& Targets)
         return;
     }
 
+    if (m_InitTech.PSO->GetStatus() != PIPELINE_STATE_STATUS_READY ||
+        m_UpdateTech.PSO->GetStatus() != PIPELINE_STATE_STATUS_READY)
+    {
+        // Wait until PSOs are ready
+        return;
+    }
+
     if (m_InitTech.SRB && m_InitTech.Vars)
     {
         if (m_InitTech.Vars.SelectionDepth->Get() != pSelectionDepthSRV)
@@ -216,6 +227,7 @@ void HnProcessSelectionTask::PrepareSRBs(const HnFrameRenderTargets& Targets)
     {
         m_InitTech.PSO->CreateShaderResourceBinding(&m_InitTech.SRB, true);
         VERIFY_EXPR(m_InitTech.SRB);
+        m_InitTech.SRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbConstants")->Set(m_ConstantsCB);
         m_InitTech.Vars.SelectionDepth = m_InitTech.SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_SelectionDepth");
         VERIFY_EXPR(m_InitTech.Vars);
 
@@ -239,6 +251,7 @@ void HnProcessSelectionTask::PrepareSRBs(const HnFrameRenderTargets& Targets)
         {
             m_UpdateTech.PSO->CreateShaderResourceBinding(&Res.SRB, true);
             VERIFY_EXPR(Res.SRB);
+            Res.SRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbConstants")->Set(m_ConstantsCB);
             Res.Vars.SrcClosestLocation = Res.SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_SrcClosestLocation");
             VERIFY_EXPR(Res.Vars);
 
@@ -302,7 +315,7 @@ void HnProcessSelectionTask::Execute(pxr::HdTaskContext* TaskCtx)
         return;
     }
 
-    if (!m_InitTech || !m_UpdateTech)
+    if (!m_InitTech.PSO || !m_UpdateTech.PSO)
     {
         UNEXPECTED("Render techniques are not initialized");
         return;
@@ -313,7 +326,7 @@ void HnProcessSelectionTask::Execute(pxr::HdTaskContext* TaskCtx)
 
     ScopedDebugGroup DebugGroup{pCtx, "Process Selection"};
 
-    if (m_SelectedPrimId.IsEmpty())
+    if (m_SelectedPrimId.IsEmpty() || !m_InitTech.IsReady() || !m_UpdateTech.IsReady())
     {
         ITextureView* pFinalRTV = Targets->ClosestSelectedLocationRTV[m_NumJFIterations % 2];
         pCtx->SetRenderTargets(1, &pFinalRTV, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);

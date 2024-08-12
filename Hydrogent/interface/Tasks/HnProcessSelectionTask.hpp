@@ -100,9 +100,9 @@ private:
             }
         } Vars;
 
-        explicit operator bool() const
+        bool IsReady() const
         {
-            return PSO && SRB;
+            return PSO && SRB && PSO->GetStatus() == PIPELINE_STATE_STATUS_READY;
         }
 
         bool IsDirty = true;
@@ -129,9 +129,9 @@ private:
         };
         std::array<ShaderResources, 2> Res; // Ping-pong
 
-        explicit operator bool() const
+        bool IsReady() const
         {
-            return PSO && Res[0].SRB && Res[1].SRB;
+            return PSO && Res[0].SRB && Res[1].SRB && PSO->GetStatus() == PIPELINE_STATE_STATUS_READY;
         }
 
         bool IsDirty = true;
