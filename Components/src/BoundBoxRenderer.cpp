@@ -56,7 +56,8 @@ BoundBoxRenderer::BoundBoxRenderer(const CreateInfo& CI) :
     m_RTVFormats{CI.RTVFormats, CI.RTVFormats + CI.NumRenderTargets},
     m_DSVFormat{CI.DSVFormat},
     m_PSMainSource{CI.PSMainSource != nullptr ? CI.PSMainSource : ""},
-    m_PackMatrixRowMajor{CI.PackMatrixRowMajor}
+    m_PackMatrixRowMajor{CI.PackMatrixRowMajor},
+    m_AsyncShaders{CI.AsyncShaders}
 {
     DEV_CHECK_ERR(m_pDevice != nullptr, "Device must not be null");
     DEV_CHECK_ERR(m_pCameraAttribsCB != nullptr, "Camera Attribs CB must not be null");
@@ -98,19 +99,18 @@ IPipelineState* BoundBoxRenderer::GetPSO(const PSOKey& Key)
 
     RenderDeviceWithCache_N Device{m_pDevice, m_pStateCache};
 
-    std::string PSMainSource = m_PSMainSource;
-    if (PSMainSource.empty())
-        PSMainSource = DefaultPSMain;
-
     RefCntAutoPtr<IShaderSourceInputStreamFactory> pMemorySourceFactory =
-        CreateMemoryShaderSourceFactory({MemoryShaderSourceFileInfo{"PSMainGenerated.generated", PSMainSource}});
+        CreateMemoryShaderSourceFactory({MemoryShaderSourceFileInfo{"PSMainGenerated.generated", !m_PSMainSource.empty() ? m_PSMainSource.c_str() : DefaultPSMain}});
     RefCntAutoPtr<IShaderSourceInputStreamFactory> pShaderSourceFactory =
         CreateCompoundShaderSourceFactory({&DiligentFXShaderSourceStreamFactory::GetInstance(), pMemorySourceFactory});
 
     ShaderCreateInfo ShaderCI;
     ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
     ShaderCI.pShaderSourceStreamFactory = pShaderSourceFactory;
-    ShaderCI.CompileFlags               = m_PackMatrixRowMajor ? SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR : SHADER_COMPILE_FLAG_NONE;
+    if (m_PackMatrixRowMajor)
+        ShaderCI.CompileFlags |= SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR;
+    if (m_AsyncShaders)
+        ShaderCI.CompileFlags |= SHADER_COMPILE_FLAG_ASYNCHRONOUS;
 
     ShaderMacroHelper Macros;
     Macros
@@ -156,21 +156,17 @@ IPipelineState* BoundBoxRenderer::GetPSO(const PSOKey& Key)
         PsoCI.AddRenderTarget(RTVFormat);
 
     PsoCI.PSODesc.ResourceLayout.DefaultVariableMergeStages  = SHADER_TYPE_VS_PS;
+    PsoCI.PSODesc.ResourceLayout.DefaultVariableType         = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
     PsoCI.GraphicsPipeline.DepthStencilDesc.DepthFunc        = COMPARISON_FUNC_LESS_EQUAL;
     PsoCI.GraphicsPipeline.DepthStencilDesc.DepthWriteEnable = false;
+    if (m_AsyncShaders)
+        PsoCI.Flags |= PSO_CREATE_FLAG_ASYNCHRONOUS;
 
     auto PSO = Device.CreateGraphicsPipelineState(PsoCI);
     if (!PSO)
     {
         UNEXPECTED("Failed to create bound box PSO");
         return nullptr;
-    }
-    PSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "cbCameraAttribs")->Set(m_pCameraAttribsCB);
-    PSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "cbBoundBoxAttribs")->Set(m_RenderAttribsCB);
-
-    if (!m_SRB)
-    {
-        PSO->CreateShaderResourceBinding(&m_SRB, true);
     }
 
     m_PSOs.emplace(Key, PSO);
@@ -184,6 +180,16 @@ void BoundBoxRenderer::Prepare(IDeviceContext* pContext, const RenderAttribs& At
     {
         UNEXPECTED("Failed to get PSO");
         return;
+    }
+
+    if (m_pCurrentPSO->GetStatus() != PIPELINE_STATE_STATUS_READY)
+        return;
+
+    if (!m_SRB)
+    {
+        m_pCurrentPSO->CreateShaderResourceBinding(&m_SRB, true);
+        m_SRB->GetVariableByName(SHADER_TYPE_VERTEX, "cbCameraAttribs")->Set(m_pCameraAttribsCB);
+        m_SRB->GetVariableByName(SHADER_TYPE_VERTEX, "cbBoundBoxAttribs")->Set(m_RenderAttribsCB);
     }
 
     VERIFY_EXPR(Attribs.BoundBoxTransform != nullptr);
@@ -229,6 +235,9 @@ void BoundBoxRenderer::Render(IDeviceContext* pContext)
         UNEXPECTED("Current PSO is null. Did you forget to call Prepare()?");
         return;
     }
+
+    if (m_pCurrentPSO->GetStatus() != PIPELINE_STATE_STATUS_READY || !m_SRB)
+        return;
 
     pContext->SetPipelineState(m_pCurrentPSO);
     pContext->CommitShaderResources(m_SRB, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
