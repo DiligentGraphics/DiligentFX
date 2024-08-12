@@ -470,7 +470,8 @@ void HnPostProcessTask::CopyFrameTechnique::PrepareSRB(Uint32 FrameIdx)
 
 void HnPostProcessTask::CreateVectorFieldRenderer(TEXTURE_FORMAT RTVFormat)
 {
-    HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+    HnRenderDelegate*    RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+    const HnRenderParam* pRenderParam   = static_cast<const HnRenderParam*>(RenderDelegate->GetRenderParam());
 
     VectorFieldRenderer::CreateInfo CI;
     CI.pDevice            = RenderDelegate->GetDevice();
@@ -478,6 +479,7 @@ void HnPostProcessTask::CreateVectorFieldRenderer(TEXTURE_FORMAT RTVFormat)
     CI.NumRenderTargets   = 1;
     CI.RTVFormats[0]      = RTVFormat;
     CI.PackMatrixRowMajor = true;
+    CI.AsyncShaders       = pRenderParam->GetAsyncShaderCompilation();
 
     m_VectorFieldRenderer = std::make_unique<VectorFieldRenderer>(CI);
 }

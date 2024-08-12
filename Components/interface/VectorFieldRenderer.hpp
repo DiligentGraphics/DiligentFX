@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -62,6 +62,9 @@ public:
         ///             with the SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR flag and
         ///             use the row-major layout.
         bool PackMatrixRowMajor = false;
+
+        /// Whether to compile shaders asynchronously.
+        bool AsyncShaders = false;
     };
     VectorFieldRenderer(const CreateInfo& CI);
 
@@ -127,6 +130,7 @@ private:
     const TEXTURE_FORMAT              m_DSVFormat;
     const std::string                 m_PSMainSource;
     const bool                        m_PackMatrixRowMajor;
+    const bool                        m_AsyncShaders;
 
     std::unordered_map<PSOKey, RefCntAutoPtr<IPipelineState>, PSOKey::Hasher> m_PSOs;
 

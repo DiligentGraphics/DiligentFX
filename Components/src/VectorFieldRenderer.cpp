@@ -64,7 +64,8 @@ VectorFieldRenderer::VectorFieldRenderer(const CreateInfo& CI) :
     m_RTVFormats{CI.RTVFormats, CI.RTVFormats + CI.NumRenderTargets},
     m_DSVFormat{CI.DSVFormat},
     m_PSMainSource{CI.PSMainSource != nullptr ? CI.PSMainSource : ""},
-    m_PackMatrixRowMajor{CI.PackMatrixRowMajor}
+    m_PackMatrixRowMajor{CI.PackMatrixRowMajor},
+    m_AsyncShaders{CI.AsyncShaders}
 {
     DEV_CHECK_ERR(m_pDevice != nullptr, "Device must not be null");
 
@@ -92,19 +93,18 @@ IPipelineState* VectorFieldRenderer::GetPSO(const PSOKey& Key)
 
     RenderDeviceWithCache_N Device{m_pDevice, m_pStateCache};
 
-    std::string PSMainSource = m_PSMainSource;
-    if (PSMainSource.empty())
-        PSMainSource = DefaultPSMain;
-
     RefCntAutoPtr<IShaderSourceInputStreamFactory> pMemorySourceFactory =
-        CreateMemoryShaderSourceFactory({MemoryShaderSourceFileInfo{"PSMainGenerated.generated", PSMainSource}});
+        CreateMemoryShaderSourceFactory({MemoryShaderSourceFileInfo{"PSMainGenerated.generated", !m_PSMainSource.empty() ? m_PSMainSource.c_str() : DefaultPSMain}});
     RefCntAutoPtr<IShaderSourceInputStreamFactory> pShaderSourceFactory =
         CreateCompoundShaderSourceFactory({&DiligentFXShaderSourceStreamFactory::GetInstance(), pMemorySourceFactory});
 
     ShaderCreateInfo ShaderCI;
     ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
     ShaderCI.pShaderSourceStreamFactory = pShaderSourceFactory;
-    ShaderCI.CompileFlags               = m_PackMatrixRowMajor ? SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR : SHADER_COMPILE_FLAG_NONE;
+    if (m_PackMatrixRowMajor)
+        ShaderCI.CompileFlags |= SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR;
+    if (m_AsyncShaders)
+        ShaderCI.CompileFlags |= SHADER_COMPILE_FLAG_ASYNCHRONOUS;
 
     ShaderMacroHelper Macros;
     Macros.Add("CONVERT_OUTPUT_TO_SRGB", Key.ConvertOutputToSRGB);
@@ -141,7 +141,7 @@ IPipelineState* VectorFieldRenderer::GetPSO(const PSOKey& Key)
 
     PipelineResourceLayoutDescX ResourceLauout;
     ResourceLauout
-        .SetDefaultVariableType(SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
+        .SetDefaultVariableType(SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
         .AddVariable(SHADER_TYPE_VERTEX, "g_tex2DVectorField", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
         .AddImmutableSampler(SHADER_TYPE_VERTEX, "g_tex2DVectorField", Sam_LinearClamp);
 
@@ -156,19 +156,14 @@ IPipelineState* VectorFieldRenderer::GetPSO(const PSOKey& Key)
     for (auto RTVFormat : m_RTVFormats)
         PsoCI.AddRenderTarget(RTVFormat);
 
+    if (m_AsyncShaders)
+        PsoCI.Flags |= PSO_CREATE_FLAG_ASYNCHRONOUS;
+
     auto PSO = Device.CreateGraphicsPipelineState(PsoCI);
     if (!PSO)
     {
         UNEXPECTED("Failed to create vector field PSO");
         return nullptr;
-    }
-    PSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "cbAttribs")->Set(m_RenderAttribsCB);
-
-    if (!m_SRB)
-    {
-        PSO->CreateShaderResourceBinding(&m_SRB, true);
-        m_pVectorFieldVar = m_SRB->GetVariableByName(SHADER_TYPE_VERTEX, "g_tex2DVectorField");
-        VERIFY_EXPR(m_pVectorFieldVar != nullptr);
     }
 
     m_PSOs.emplace(Key, PSO);
@@ -197,6 +192,17 @@ void VectorFieldRenderer::Render(const RenderAttribs& Attribs)
     {
         UNEXPECTED("Failed to get PSO");
         return;
+    }
+
+    if (pPSO->GetStatus() != PIPELINE_STATE_STATUS_READY)
+        return;
+
+    if (!m_SRB)
+    {
+        pPSO->CreateShaderResourceBinding(&m_SRB, true);
+        m_SRB->GetVariableByName(SHADER_TYPE_VERTEX, "cbAttribs")->Set(m_RenderAttribsCB);
+        m_pVectorFieldVar = m_SRB->GetVariableByName(SHADER_TYPE_VERTEX, "g_tex2DVectorField");
+        VERIFY_EXPR(m_pVectorFieldVar != nullptr);
     }
 
     m_pVectorFieldVar->Set(Attribs.pVectorField);
