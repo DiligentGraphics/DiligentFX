@@ -22,8 +22,8 @@ float3 ImportanceSampleGGX(float2 Xi, float PerceptualRoughness, float3 N)
     float a2             = AlphaRoughness * AlphaRoughness;
     
     float Phi      = 2.0 * PI * Xi.x;
-    float CosTheta = sqrt( (1.0 - Xi.y) / ( 1.0 + (a2 - 1.0) * Xi.y ) );
-    float SinTheta = sqrt( 1.0 - CosTheta * CosTheta );
+    float CosTheta = sqrt( saturate((1.0 - Xi.y) / (1.0 + (a2 - 1.0) * Xi.y)) );
+    float SinTheta = sqrt( saturate(1.0 - CosTheta * CosTheta) );
     float3 H;
     H.x = SinTheta * cos( Phi );
     H.y = SinTheta * sin( Phi );
