@@ -764,8 +764,19 @@ protected:
             }
         };
     };
-    using IBL_PipelineStateObjectCache = std::unordered_map<IBL_PSOKey, RefCntAutoPtr<IPipelineState>, IBL_PSOKey::Hasher>;
 
+    struct IBL_RenderTechnique
+    {
+        RefCntAutoPtr<IPipelineState>         PSO{};
+        RefCntAutoPtr<IShaderResourceBinding> SRB{};
+
+        bool IsInitialized() const
+        {
+            return PSO != nullptr && SRB != nullptr;
+        }
+    };
+
+    using IBL_PipelineStateObjectCache = std::unordered_map<IBL_PSOKey, IBL_RenderTechnique, IBL_PSOKey::Hasher>;
 
     const InputLayoutDescX m_InputLayout;
 
@@ -790,9 +801,6 @@ protected:
 
     RefCntAutoPtr<ITextureView> m_pIrradianceCubeSRV;
     RefCntAutoPtr<ITextureView> m_pPrefilteredEnvMapSRV;
-
-    RefCntAutoPtr<IShaderResourceBinding> m_pPrecomputeIrradianceCubeSRB;
-    RefCntAutoPtr<IShaderResourceBinding> m_pPrefilterEnvMapSRB;
 
     IBL_PipelineStateObjectCache m_IBL_PSOCache;
 
