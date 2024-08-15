@@ -621,8 +621,8 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
         .Add("ENV_MAP_TYPE_SPHERE", static_cast<int>(IBL_PSOKey::ENV_MAP_TYPE_SPHERE))
         .Add("ENV_MAP_TYPE", static_cast<int>(EnvMapType));
 
-    auto& pPrecomputeIrradianceCubePSO = m_IBL_PSOCache[IBL_PSOKey{IBL_PSOKey::PSO_TYPE_IRRADIANCE_CUBE, EnvMapType, FeatureFlags, m_pIrradianceCubeSRV->GetDesc().Format}];
-    if (!pPrecomputeIrradianceCubePSO)
+    auto& PrecomputeIrradianceCubeTech = m_IBL_PSOCache[IBL_PSOKey{IBL_PSOKey::PSO_TYPE_IRRADIANCE_CUBE, EnvMapType, FeatureFlags, m_pIrradianceCubeSRV->GetDesc().Format}];
+    if (!PrecomputeIrradianceCubeTech.IsInitialized())
     {
         ShaderCreateInfo ShaderCI;
         ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
@@ -673,16 +673,14 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
             .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_EnvironmentMap", Sam_LinearClamp);
         PSODesc.ResourceLayout = ResourceLayout;
 
-        pPrecomputeIrradianceCubePSO = m_Device.CreateGraphicsPipelineState(PSOCreateInfo);
-        pPrecomputeIrradianceCubePSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "cbTransform")->Set(m_PrecomputeEnvMapAttribsCB);
-        pPrecomputeIrradianceCubePSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "FilterAttribs")->Set(m_PrecomputeEnvMapAttribsCB);
+        PrecomputeIrradianceCubeTech.PSO = m_Device.CreateGraphicsPipelineState(PSOCreateInfo);
+        PrecomputeIrradianceCubeTech.PSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "cbTransform")->Set(m_PrecomputeEnvMapAttribsCB);
+        PrecomputeIrradianceCubeTech.PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "FilterAttribs")->Set(m_PrecomputeEnvMapAttribsCB);
+        PrecomputeIrradianceCubeTech.PSO->CreateShaderResourceBinding(&PrecomputeIrradianceCubeTech.SRB, true);
     }
 
-    if (!m_pPrecomputeIrradianceCubeSRB)
-        pPrecomputeIrradianceCubePSO->CreateShaderResourceBinding(&m_pPrecomputeIrradianceCubeSRB, true);
-
-    auto& pPrefilterEnvMapPSO = m_IBL_PSOCache[IBL_PSOKey{IBL_PSOKey::PSO_TYPE_PREFILTERED_ENV_MAP, EnvMapType, FeatureFlags, m_pPrefilteredEnvMapSRV->GetDesc().Format}];
-    if (!pPrefilterEnvMapPSO)
+    auto& PrefilterEnvMapTech = m_IBL_PSOCache[IBL_PSOKey{IBL_PSOKey::PSO_TYPE_PREFILTERED_ENV_MAP, EnvMapType, FeatureFlags, m_pPrefilteredEnvMapSRV->GetDesc().Format}];
+    if (!PrefilterEnvMapTech.IsInitialized())
     {
         ShaderCreateInfo ShaderCI;
         ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
@@ -732,13 +730,11 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
             .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_EnvironmentMap", Sam_LinearClamp);
         PSODesc.ResourceLayout = ResourceLayout;
 
-        pPrefilterEnvMapPSO = m_Device.CreateGraphicsPipelineState(PSOCreateInfo);
-        pPrefilterEnvMapPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "cbTransform")->Set(m_PrecomputeEnvMapAttribsCB);
-        pPrefilterEnvMapPSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "FilterAttribs")->Set(m_PrecomputeEnvMapAttribsCB);
+        PrefilterEnvMapTech.PSO = m_Device.CreateGraphicsPipelineState(PSOCreateInfo);
+        PrefilterEnvMapTech.PSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "cbTransform")->Set(m_PrecomputeEnvMapAttribsCB);
+        PrefilterEnvMapTech.PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "FilterAttribs")->Set(m_PrecomputeEnvMapAttribsCB);
+        PrefilterEnvMapTech.PSO->CreateShaderResourceBinding(&PrefilterEnvMapTech.SRB, true);
     }
-
-    if (!m_pPrefilterEnvMapSRB)
-        pPrefilterEnvMapPSO->CreateShaderResourceBinding(&m_pPrefilterEnvMapSRB, true);
 
     // clang-format off
     const std::array<float4x4, 6> Matrices =
@@ -752,9 +748,9 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
     };
     // clang-format on
 
-    pCtx->SetPipelineState(pPrecomputeIrradianceCubePSO);
-    m_pPrecomputeIrradianceCubeSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_EnvironmentMap")->Set(pEnvironmentMap);
-    pCtx->CommitShaderResources(m_pPrecomputeIrradianceCubeSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    pCtx->SetPipelineState(PrecomputeIrradianceCubeTech.PSO);
+    PrecomputeIrradianceCubeTech.SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_EnvironmentMap")->Set(pEnvironmentMap);
+    pCtx->CommitShaderResources(PrecomputeIrradianceCubeTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     auto* pIrradianceCube = m_pIrradianceCubeSRV->GetTexture();
     ProcessCubemapFaces(pCtx, pIrradianceCube, [&](ITextureView* pRTV, Uint32 mip, Uint32 face) {
         VERIFY_EXPR(mip == 0);
@@ -770,12 +766,12 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
         pCtx->Draw(drawAttrs);
     });
     // Release reference to the environment map
-    m_pPrecomputeIrradianceCubeSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_EnvironmentMap")->Set(nullptr);
+    PrecomputeIrradianceCubeTech.SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_EnvironmentMap")->Set(nullptr);
 
 
-    pCtx->SetPipelineState(pPrefilterEnvMapPSO);
-    m_pPrefilterEnvMapSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_EnvironmentMap")->Set(pEnvironmentMap);
-    pCtx->CommitShaderResources(m_pPrefilterEnvMapSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    pCtx->SetPipelineState(PrefilterEnvMapTech.PSO);
+    PrefilterEnvMapTech.SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_EnvironmentMap")->Set(pEnvironmentMap);
+    pCtx->CommitShaderResources(PrefilterEnvMapTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     auto* pPrefilteredEnvMap = m_pPrefilteredEnvMapSRV->GetTexture();
     ProcessCubemapFaces(pCtx, pPrefilteredEnvMap, [&](ITextureView* pRTV, Uint32 mip, Uint32 face) {
         {
@@ -793,7 +789,7 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
     });
 
     // Release reference to the environment map
-    m_pPrefilterEnvMapSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_EnvironmentMap")->Set(nullptr);
+    PrefilterEnvMapTech.SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_EnvironmentMap")->Set(nullptr);
 
 
     // clang-format off
