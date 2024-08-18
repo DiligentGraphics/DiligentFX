@@ -79,9 +79,9 @@ void HnProcessSelectionTask::Sync(pxr::HdSceneDelegate* Delegate,
 
 void HnProcessSelectionTask::PrepareTechniques(TEXTURE_FORMAT RTVFormat)
 {
-    if (m_InitTech.IsDirty || (m_InitTech.PSO && m_InitTech.PSO->GetGraphicsPipelineDesc().RTVFormats[0] != RTVFormat))
+    if (m_InitTech.IsDirty || (m_InitTech.PSO && m_InitTech.PSO->GetStatus() == PIPELINE_STATE_STATUS_READY && m_InitTech.PSO->GetGraphicsPipelineDesc().RTVFormats[0] != RTVFormat))
         m_InitTech.PSO.Release();
-    if (m_UpdateTech.IsDirty || (m_UpdateTech.PSO && m_UpdateTech.PSO->GetGraphicsPipelineDesc().RTVFormats[0] != RTVFormat))
+    if (m_UpdateTech.IsDirty || (m_UpdateTech.PSO && m_UpdateTech.PSO->GetStatus() == PIPELINE_STATE_STATUS_READY && m_UpdateTech.PSO->GetGraphicsPipelineDesc().RTVFormats[0] != RTVFormat))
         m_UpdateTech.PSO.Release();
 
     if (m_InitTech.PSO && m_UpdateTech.PSO)
