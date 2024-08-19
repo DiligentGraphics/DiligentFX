@@ -852,7 +852,7 @@ void EpipolarLightScattering::CreateLowResLuminanceTexture(IRenderDevice* pDevic
     TexDesc.Type      = RESOURCE_DIM_TEX_2D;
     TexDesc.Width     = 1 << (sm_iLowResLuminanceMips - 1);
     TexDesc.Height    = 1 << (sm_iLowResLuminanceMips - 1);
-    TexDesc.Format    = pDevice->GetDeviceInfo().IsWebGPUDevice() ? WeightedLogLumTexWebGpuFmt : WeightedLogLumTexFmt,
+    TexDesc.Format    = WeightedLogLumTexFmt,
     TexDesc.MipLevels = sm_iLowResLuminanceMips;
     TexDesc.Usage     = USAGE_DEFAULT;
     TexDesc.BindFlags = BIND_RENDER_TARGET | BIND_SHADER_RESOURCE;
