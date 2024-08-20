@@ -647,7 +647,7 @@ void ApplyPunctualLight(in    SurfaceShadingInfo     Shading,
         float4 ShadowPos = mul(float4(Shading.Pos, 1.0), ShadowMapInfo.WorldToLightProjSpace);
         ShadowPos.xy /= ShadowPos.w;
         ShadowPos.xy = NormalizedDeviceXYToTexUV(ShadowPos.xy) * ShadowMapInfo.UVScale + ShadowMapInfo.UVBias;
-        ShadowPos.z  = NormalizedDeviceZToDepth(ShadowPos.z);
+        ShadowPos.z  = NormalizedDeviceZToDepth(ShadowPos.z) - ShadowMapInfo.FixedDepthBias;
         float4 ShadowMapSize;
         float Elems;
         ShadowMap.GetDimensions(ShadowMapSize.x, ShadowMapSize.y, Elems);

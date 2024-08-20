@@ -277,7 +277,7 @@ struct PBRShadowMapInfo
     float2 UVBias;
     
     float    ShadowMapSlice;
-    float    Padding0;
+    float    FixedDepthBias;
     float    Padding1;
     float    Padding2;
 };
