@@ -198,12 +198,12 @@ float FilterShadowCascade(in ShadowMapAttribs       ShadowAttribs,
 
 #if defined(PCF_FILTER_SIZE) && PCF_FILTER_SIZE > 0
     return FilterShadowMapFixedPCF(tex2DShadowMap, tex2DShadowMap_sampler, ShadowAttribs.f4ShadowMapDim,
-                                   SamplingInfo.f2UV, SamplingInfo.iCascadeIdx, SamplingInfo.fDepth,
+                                   SamplingInfo.f2UV, float(SamplingInfo.iCascadeIdx), SamplingInfo.fDepth,
                                    f2DepthSlopeScaledBias);
 #else
     float2 f2FilterSize = abs(ShadowAttribs.fFilterWorldSize * SamplingInfo.f3LightSpaceScale.xy * F3NDC_XYZ_TO_UVD_SCALE.xy);
     return FilterShadowMapVaryingPCF(tex2DShadowMap, tex2DShadowMap_sampler, ShadowAttribs.f4ShadowMapDim,
-                                     SamplingInfo.f2UV, SamplingInfo.iCascadeIdx, SamplingInfo.fDepth,
+                                     SamplingInfo.f2UV, float(SamplingInfo.iCascadeIdx), SamplingInfo.fDepth,
                                      f2DepthSlopeScaledBias, f2FilterSize);
 #endif
 }
