@@ -1104,27 +1104,35 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
     if (m_Settings.PrimitiveArraySize > 0)
     {
         const char* PrimitiveID = nullptr;
-        if (m_Device.GetDeviceInfo().IsGLDevice())
+        if (m_Device.GetDeviceInfo().Features.NativeMultiDraw)
         {
+            if (m_Device.GetDeviceInfo().IsGLDevice())
+            {
 #if PLATFORM_EMSCRIPTEN
-            PrimitiveID = "gl_DrawID";
+                PrimitiveID = "gl_DrawID";
 #else
-            PrimitiveID = "gl_DrawIDARB";
+                PrimitiveID = "gl_DrawIDARB";
 #endif
-        }
-        else if (m_Device.GetDeviceInfo().IsVulkanDevice())
-        {
+            }
+            else if (m_Device.GetDeviceInfo().IsVulkanDevice())
+            {
 #ifdef HLSL2GLSL_CONVERTER_SUPPORTED
-            PrimitiveID = "gl_DrawID";
+                PrimitiveID = "gl_DrawID";
 #else
-            UNSUPPORTED("Primitive ID on Vulkan requires HLSL2GLSL converter");
-            PrimitiveID = "0";
+                UNSUPPORTED("Primitive ID on Vulkan requires HLSL2GLSL converter");
+                PrimitiveID = "0";
 #endif
+            }
+            else
+            {
+                UNEXPECTED("Native multi-draw is only expected in GL and Vulkan");
+                PrimitiveID = "0";
+            }
         }
         else
         {
-            UNSUPPORTED("Primitive ID is only supported in GL and Vulkan");
-            PrimitiveID = "0";
+            // Use instance ID as primitive ID
+            PrimitiveID = "int(VSIn.InstanceID)";
         }
         Macros.Add("PRIMITIVE_ID", PrimitiveID);
     }
@@ -1402,7 +1410,7 @@ void PBR_Renderer::GetVSInputStructAndLayout(PSO_FLAGS         PSOFlags,
             }
 #endif
             VERIFY_EXPR(Attrib.Type == VT_FLOAT32);
-            ss << "    " << std::setw(7) << "float" << Attrib.NumComponents << std::setw(9) << Attrib.Name << ": ATTRIB" << Attrib.Index << ";" << std::endl;
+            ss << "    float" << Attrib.NumComponents << std::setw(9) << Attrib.Name << " : ATTRIB" << Attrib.Index << ";" << std::endl;
         }
         else
         {
@@ -1417,6 +1425,12 @@ void PBR_Renderer::GetVSInputStructAndLayout(PSO_FLAGS         PSOFlags,
                 }
             }
         }
+    }
+
+    if (m_Settings.PrimitiveArraySize > 0 && !m_Device.GetDeviceInfo().Features.NativeMultiDraw)
+    {
+        // Draw id is emulated using instance id
+        ss << "    uint InstanceID : SV_InstanceID;" << std::endl;
     }
 
     ss << "};" << std::endl;
@@ -1473,7 +1487,7 @@ std::string PBR_Renderer::GetVSOutputStruct(PSO_FLAGS PSOFlags, bool UseVkPointS
     }
     if (UsePrimitiveId)
     {
-        ss << "    int PrimitiveID : PRIMITIVE_ID;" << std::endl;
+        ss << "    int PrimitiveID : PRIM_ID;" << std::endl;
     }
     ss << "};" << std::endl;
     return ss.str();
@@ -1630,39 +1644,42 @@ void PBR_Renderer::CreatePSO(PsoHashMapType&             PsoHashMap,
         std::string GLSLSource;
         if (m_Settings.PrimitiveArraySize > 0)
         {
-            if (m_Device.GetDeviceInfo().IsGLDevice())
+            if (m_Device.GetDeviceInfo().Features.NativeMultiDraw)
             {
-                ShaderCI.GLSLExtensions = MultiDrawGLSLExtension;
-            }
-            else if (m_Device.GetDeviceInfo().IsVulkanDevice())
-            {
-#ifdef HLSL2GLSL_CONVERTER_SUPPORTED
-                // Since we use gl_DrawID in HLSL, we need to manually convert the shader to GLSL
-                HLSL2GLSLConverterImpl::ConversionAttribs Attribs;
-                Attribs.pSourceStreamFactory       = ShaderCI.pShaderSourceStreamFactory;
-                Attribs.EntryPoint                 = ShaderCI.EntryPoint;
-                Attribs.ShaderType                 = ShaderCI.Desc.ShaderType;
-                Attribs.InputFileName              = ShaderCI.FilePath;
-                Attribs.SamplerSuffix              = UseCombinedSamplers ? ShaderCI.Desc.CombinedSamplerSuffix : ShaderDesc{}.CombinedSamplerSuffix;
-                Attribs.UseInOutLocationQualifiers = true;
-                Attribs.IncludeDefinitions         = true;
-
-                GLSLSource = HLSL2GLSLConverterImpl::GetInstance().Convert(Attribs);
-                if (GLSLSource.empty())
+                if (m_Device.GetDeviceInfo().IsGLDevice())
                 {
-                    UNEXPECTED("Failed to convert HLSL source to GLSL");
+                    ShaderCI.GLSLExtensions = MultiDrawGLSLExtension;
                 }
-                ShaderCI.FilePath       = nullptr;
-                ShaderCI.Source         = GLSLSource.c_str();
-                ShaderCI.SourceLength   = GLSLSource.length();
-                ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_GLSL;
+                else if (m_Device.GetDeviceInfo().IsVulkanDevice())
+                {
+#ifdef HLSL2GLSL_CONVERTER_SUPPORTED
+                    // Since we use gl_DrawID in HLSL, we need to manually convert the shader to GLSL
+                    HLSL2GLSLConverterImpl::ConversionAttribs Attribs;
+                    Attribs.pSourceStreamFactory       = ShaderCI.pShaderSourceStreamFactory;
+                    Attribs.EntryPoint                 = ShaderCI.EntryPoint;
+                    Attribs.ShaderType                 = ShaderCI.Desc.ShaderType;
+                    Attribs.InputFileName              = ShaderCI.FilePath;
+                    Attribs.SamplerSuffix              = UseCombinedSamplers ? ShaderCI.Desc.CombinedSamplerSuffix : ShaderDesc{}.CombinedSamplerSuffix;
+                    Attribs.UseInOutLocationQualifiers = true;
+                    Attribs.IncludeDefinitions         = true;
+
+                    GLSLSource = HLSL2GLSLConverterImpl::GetInstance().Convert(Attribs);
+                    if (GLSLSource.empty())
+                    {
+                        UNEXPECTED("Failed to convert HLSL source to GLSL");
+                    }
+                    ShaderCI.FilePath       = nullptr;
+                    ShaderCI.Source         = GLSLSource.c_str();
+                    ShaderCI.SourceLength   = GLSLSource.length();
+                    ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_GLSL;
 #else
-                UNSUPPORTED("Primitive array on Vulkan requires HLSL2GLSL converter");
+                    UNSUPPORTED("Primitive array on Vulkan requires HLSL2GLSL converter");
 #endif
-            }
-            else
-            {
-                UNSUPPORTED("Primitive array is only supported in GL and Vulkan");
+                }
+                else
+                {
+                    UNEXPECTED("Native multi-draw is only expected in GL and Vulkan");
+                }
             }
         }
 

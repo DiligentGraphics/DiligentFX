@@ -191,8 +191,14 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
         };
 
     const auto& DeviceInfo = RenderDelegateCI.pDevice->GetDeviceInfo();
-    if (DeviceInfo.Features.NativeMultiDraw && (DeviceInfo.IsVulkanDevice() || DeviceInfo.IsGLDevice()))
+    if (DeviceInfo.IsVulkanDevice() ||
+        DeviceInfo.IsWebGPUDevice() ||
+        (DeviceInfo.IsGLDevice() && DeviceInfo.Features.NativeMultiDraw))
+    {
+        // When native multi-draw is not supported, we use instance id as a primitive id.
+        // Direct3D is currently not supported because SV_InstanceID is not offset by base instance.
         USDRendererCI.PrimitiveArraySize = RenderDelegateCI.MultiDrawBatchSize;
+    }
 
     USDRendererCI.InputLayout.LayoutElements = Inputs;
     USDRendererCI.InputLayout.NumElements    = _countof(Inputs);

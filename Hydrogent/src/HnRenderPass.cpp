@@ -113,6 +113,7 @@ struct HnRenderPass::RenderState
     const USD_Renderer::ALPHA_MODE AlphaMode;
 
     const Uint32 ConstantBufferOffsetAlignment;
+    const bool   NativeMultiDrawSupported;
 
     RenderState(const HnRenderPass&      _RenderPass,
                 const HnRenderPassState& _RPState) :
@@ -124,7 +125,8 @@ struct HnRenderPass::RenderState
         USDRenderer{*RenderDelegate.GetUSDRenderer()},
         pCtx{RenderDelegate.GetDeviceContext()},
         AlphaMode{MaterialTagToPbrAlphaMode(RenderPass.m_MaterialTag)},
-        ConstantBufferOffsetAlignment{RenderDelegate.GetDevice()->GetAdapterInfo().Buffer.ConstantBufferOffsetAlignment}
+        ConstantBufferOffsetAlignment{RenderDelegate.GetDevice()->GetAdapterInfo().Buffer.ConstantBufferOffsetAlignment},
+        NativeMultiDrawSupported{RenderDelegate.GetDevice()->GetDeviceInfo().Features.NativeMultiDraw == DEVICE_FEATURE_STATE_ENABLED}
     {
     }
 
@@ -1034,23 +1036,60 @@ void HnRenderPass::RenderPendingDrawItems(RenderState& State)
 
             if (ListItem.IndexBuffer != nullptr)
             {
-                MultiDrawIndexedItem* pMultiDrawItems = reinterpret_cast<MultiDrawIndexedItem*>(m_ScratchSpace.data());
-                for (size_t i = 0; i < PendingItem.DrawCount; ++i)
+                if (State.NativeMultiDrawSupported)
                 {
-                    const auto& BatchItem = m_PendingDrawItems[item_idx + i].ListItem;
-                    pMultiDrawItems[i]    = {BatchItem.NumVertices, BatchItem.StartIndex, 0};
+                    MultiDrawIndexedItem* pMultiDrawItems = reinterpret_cast<MultiDrawIndexedItem*>(m_ScratchSpace.data());
+                    for (size_t i = 0; i < PendingItem.DrawCount; ++i)
+                    {
+                        const DrawListItem& BatchItem = m_PendingDrawItems[item_idx + i].ListItem;
+                        pMultiDrawItems[i]            = {BatchItem.NumVertices, BatchItem.StartIndex, 0};
+                    }
+                    State.pCtx->MultiDrawIndexed({PendingItem.DrawCount, pMultiDrawItems, VT_UINT32, DRAW_FLAG_VERIFY_ALL});
                 }
-                State.pCtx->MultiDrawIndexed({PendingItem.DrawCount, pMultiDrawItems, VT_UINT32, DRAW_FLAG_VERIFY_ALL});
+                else
+                {
+                    for (size_t i = 0; i < PendingItem.DrawCount; ++i)
+                    {
+                        // When native multi-draw is not supported, we pass primitive ID as instance ID.
+                        const DrawListItem& BatchItem = m_PendingDrawItems[item_idx + i].ListItem;
+                        DrawIndexedAttribs  Attribs{BatchItem.NumVertices, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
+                        if (i > 0)
+                        {
+                            Attribs.Flags |= DRAW_FLAG_DYNAMIC_RESOURCE_BUFFERS_INTACT;
+                        }
+                        Attribs.FirstIndexLocation    = BatchItem.StartIndex;
+                        Attribs.FirstInstanceLocation = i;
+                        State.pCtx->DrawIndexed(Attribs);
+                    }
+                }
             }
             else
             {
-                MultiDrawItem* pMultiDrawItems = reinterpret_cast<MultiDrawItem*>(m_ScratchSpace.data());
-                for (size_t i = 0; i < PendingItem.DrawCount; ++i)
+                if (State.NativeMultiDrawSupported)
                 {
-                    const auto& BatchItem = m_PendingDrawItems[item_idx + i].ListItem;
-                    pMultiDrawItems[i]    = {BatchItem.NumVertices, 0};
+                    MultiDrawItem* pMultiDrawItems = reinterpret_cast<MultiDrawItem*>(m_ScratchSpace.data());
+                    for (size_t i = 0; i < PendingItem.DrawCount; ++i)
+                    {
+                        const DrawListItem& BatchItem = m_PendingDrawItems[item_idx + i].ListItem;
+                        pMultiDrawItems[i]            = {BatchItem.NumVertices, 0};
+                    }
+                    State.pCtx->MultiDraw({PendingItem.DrawCount, pMultiDrawItems, DRAW_FLAG_VERIFY_ALL});
                 }
-                State.pCtx->MultiDraw({PendingItem.DrawCount, pMultiDrawItems, DRAW_FLAG_VERIFY_ALL});
+                else
+                {
+                    // When native multi-draw is not supported, we pass primitive ID as instance ID.
+                    for (size_t i = 0; i < PendingItem.DrawCount; ++i)
+                    {
+                        const DrawListItem& BatchItem = m_PendingDrawItems[item_idx + i].ListItem;
+                        DrawAttribs         Attribs{BatchItem.NumVertices, DRAW_FLAG_VERIFY_ALL};
+                        if (i > 0)
+                        {
+                            Attribs.Flags |= DRAW_FLAG_DYNAMIC_RESOURCE_BUFFERS_INTACT;
+                        }
+                        Attribs.FirstInstanceLocation = i;
+                        State.pCtx->Draw(Attribs);
+                    }
+                }
             }
         }
         else
