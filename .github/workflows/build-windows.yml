@@ -9,13 +9,13 @@ jobs:
 
     steps:
     - name: Clone DiligentCore
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         repository: DiligentGraphics/DiligentCore
         path:       DiligentCore
 
     - name: Clone DiligentFX
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         path: DiligentFX
 
