@@ -471,10 +471,8 @@ float3 SampleNormalTexture(PBRMaterialTextureAttribs TexAttribs,
         }
 #endif
     }
-
-    SampledNormal = normalize(SampledNormal * 2.0 - 1.0) * float3(TexAttribs.NormalScale, TexAttribs.NormalScale, 1.0);
-    SampledNormal = (SampledNormal + 1.0) / 2.0;
-    return float3(SampledNormal.rg, 1.0);
+    
+    return normalize(SampledNormal * 2.0 - 1.0) * float3(TexAttribs.NormalScale, TexAttribs.NormalScale, 1.0);
 }
 
 float3 GetMicroNormal(PBRMaterialShaderInfo Material,
@@ -484,7 +482,7 @@ float3 GetMicroNormal(PBRMaterialShaderInfo Material,
                       float2                dNormalMapUV_dy,
                       float                 MipBias)
 {
-    float3 MicroNormal = float3(0.5, 0.5, 1.0);
+    float3 MicroNormal = float3(0.0, 0.0, 1.0);
 
 #   if USE_NORMAL_MAP && (USE_TEXCOORD0 || USE_TEXCOORD1)
     {
@@ -499,7 +497,7 @@ float3 GetMicroNormal(PBRMaterialShaderInfo Material,
     }
 #endif
 
-    return MicroNormal * float3(2.0, 2.0, 2.0) - float3(1.0, 1.0, 1.0);
+    return MicroNormal;
 }
 
 float GetOcclusion(VSOutput              VSOut,
@@ -650,7 +648,7 @@ float3 GetClearcoatNormal(PBRMaterialShaderInfo Material,
                           float2                dNormalMapUV_dy,
                           float                 MipBias)
 {
-    float3 ClearcoatNormal = float3(0.5, 0.5, 1.0);
+    float3 ClearcoatNormal = float3(0.0, 0.0, 1.0);
 #   if ENABLE_CLEAR_COAT
     {
 #       if USE_CLEAR_COAT_NORMAL_MAP
@@ -668,7 +666,7 @@ float3 GetClearcoatNormal(PBRMaterialShaderInfo Material,
 #       endif
     }
 #endif
-    return ClearcoatNormal * float3(2.0, 2.0, 2.0) - float3(1.0, 1.0, 1.0);
+    return ClearcoatNormal;
 }
 
 
