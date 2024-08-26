@@ -77,6 +77,8 @@ PBRMaterialTextureAttribs GetDefaultTextureAttribs()
 
     Attribs.UVScaleAndRotation  = float4(1.0, 0.0, 0.0, 1.0);
     Attribs.AtlasUVScaleAndBias = float4(1.0, 1.0, 0.0, 0.0);
+
+    Attribs.NormalScale = 1.0;
     
     return Attribs;
 }

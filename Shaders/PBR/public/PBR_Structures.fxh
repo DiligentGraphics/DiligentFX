@@ -205,6 +205,11 @@ struct PBRMaterialTextureAttribs
 
     float4 UVScaleAndRotation;
     float4 AtlasUVScaleAndBias;
+
+    float NormalScale;
+    float Padding0;
+    float Padding1;
+    float Padding2;
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
 	CHECK_STRUCT_ALIGNMENT(PBRMaterialTextureAttribs);

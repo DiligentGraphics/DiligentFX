@@ -472,6 +472,8 @@ float3 SampleNormalTexture(PBRMaterialTextureAttribs TexAttribs,
 #endif
     }
 
+    SampledNormal = normalize(SampledNormal * 2.0 - 1.0) * float3(TexAttribs.NormalScale, TexAttribs.NormalScale, 1.0);
+    SampledNormal = (SampledNormal + 1.0) / 2.0;
     return SampledNormal;
 }
 
