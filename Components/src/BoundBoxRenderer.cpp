@@ -43,10 +43,10 @@ struct BoundBoxRenderer::BoundBoxShaderAttribs
     float4x4 Transform;
     float4   Color;
 
-    float PatternLength;
-    uint  PatternMask;
-    float Padding0;
-    float Padding1;
+    float PatternLength = 32;
+    uint  PatternMask   = 0xFFFFFFFFu;
+    float Padding0      = 0;
+    float Padding1      = 0;
 };
 
 BoundBoxRenderer::BoundBoxRenderer(const CreateInfo& CI) :

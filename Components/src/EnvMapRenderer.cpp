@@ -48,10 +48,10 @@ struct EnvMapRenderer::EnvMapShaderAttribs
 {
     HLSL::ToneMappingAttribs ToneMapping;
 
-    float AverageLogLum;
-    float MipLevel;
-    float Alpha;
-    float Padding;
+    float AverageLogLum = 0.3f;
+    float MipLevel      = 0.f;
+    float Alpha         = 0.f;
+    float Padding       = 0.f;
 };
 
 EnvMapRenderer::EnvMapRenderer(const CreateInfo& CI) :
