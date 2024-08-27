@@ -497,7 +497,9 @@ float3 GetMicroNormal(PBRMaterialShaderInfo Material,
     }
 #endif
 
-    return MicroNormal * float3(2.0, 2.0, 2.0) - float3(1.0, 1.0, 1.0);
+    MicroNormal = MicroNormal * float3(2.0, 2.0, 2.0) - float3(1.0, 1.0, 1.0);
+    MicroNormal.xy *= Material.Basic.NormalScale;
+    return MicroNormal;
 }
 
 float GetOcclusion(VSOutput              VSOut,
@@ -534,7 +536,10 @@ float3 GetEmissive(VSOutput              VSOut,
         Emissive = TO_LINEAR(Emissive);
     }
 #   endif
-    return Emissive * Material.Basic.EmissiveFactor.rgb;
+    Emissive.r *= Material.Basic.EmissiveFactorR;
+    Emissive.g *= Material.Basic.EmissiveFactorG;
+    Emissive.b *= Material.Basic.EmissiveFactorB;
+    return Emissive;
 }
 
 float4 GetPhysicalDesc(VSOutput              VSOut,

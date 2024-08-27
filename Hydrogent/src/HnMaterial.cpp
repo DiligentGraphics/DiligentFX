@@ -77,7 +77,8 @@ HnMaterial::HnMaterial(const pxr::SdfPath& id) :
     pxr::HdMaterial{id}
 {
     m_MaterialData.Attribs.BaseColorFactor = float4{1, 1, 1, 1};
-    m_MaterialData.Attribs.SpecularFactor  = float4{1, 1, 1, 1};
+    m_MaterialData.Attribs.SpecularFactor  = float3{1, 1, 1};
+    m_MaterialData.Attribs.NormalScale     = 1;
     m_MaterialData.Attribs.MetallicFactor  = 1;
     m_MaterialData.Attribs.RoughnessFactor = 1;
     m_MaterialData.Attribs.OcclusionFactor = 1;
@@ -147,6 +148,17 @@ void HnMaterial::Sync(pxr::HdSceneDelegate* SceneDelegate,
     }
 
     *DirtyBits = HdMaterial::Clean;
+}
+
+static bool ReadFallbackValue(const HnMaterialNetwork& Network, const pxr::TfToken& Name, float3& Value)
+{
+    if (const HnMaterialParameter* Param = Network.GetParameter(HnMaterialParameter::ParamType::Fallback, Name))
+    {
+        Value = ToFloat3(Param->FallbackValue.Get<pxr::GfVec3f>());
+        return true;
+    }
+
+    return false;
 }
 
 static bool ReadFallbackValue(const HnMaterialNetwork& Network, const pxr::TfToken& Name, float4& Value)

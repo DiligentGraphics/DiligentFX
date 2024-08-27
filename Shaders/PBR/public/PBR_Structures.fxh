@@ -116,8 +116,16 @@ struct PBRRendererShaderParameters
 struct PBRMaterialBasicAttribs
 {
     float4 BaseColorFactor;
-    float4 EmissiveFactor;
-    float4 SpecularFactor;
+
+    float EmissiveFactorR;
+    float EmissiveFactorG;
+    float EmissiveFactorB;
+    float NormalScale;
+
+    float SpecularFactorR;
+    float SpecularFactorG;
+    float SpecularFactorB;
+    float Padding;
 
     int   Workflow;
     int   AlphaMode;

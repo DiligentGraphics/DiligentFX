@@ -131,7 +131,11 @@ BaseLayerShadingInfo ReadBaseLayerProperties(in VSOutput              VSOut,
     PBRMaterialBasicAttribs BasicAttribs = Material.Basic;
     if (BasicAttribs.Workflow == PBR_WORKFLOW_SPECULAR_GLOSINESS)
     {
-        PhysicalDesc.rgb = TO_LINEAR(PhysicalDesc.rgb) * BasicAttribs.SpecularFactor.rgb;
+        PhysicalDesc.rgb = TO_LINEAR(PhysicalDesc.rgb);
+        PhysicalDesc.r *= BasicAttribs.SpecularFactorR;
+        PhysicalDesc.g *= BasicAttribs.SpecularFactorG;
+        PhysicalDesc.b *= BasicAttribs.SpecularFactorB;
+
         const float u_GlossinessFactor = 1.0;
         PhysicalDesc.a *= u_GlossinessFactor;
     }
