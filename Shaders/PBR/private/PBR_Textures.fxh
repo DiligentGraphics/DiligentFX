@@ -671,7 +671,10 @@ float3 GetClearcoatNormal(PBRMaterialShaderInfo Material,
 #       endif
     }
 #endif
-    return ClearcoatNormal * float3(2.0, 2.0, 2.0) - float3(1.0, 1.0, 1.0);
+
+    ClearcoatNormal = ClearcoatNormal * float3(2.0, 2.0, 2.0) - float3(1.0, 1.0, 1.0);
+    ClearcoatNormal.xy *= Material.Basic.ClearcoatNormalScale;
+    return ClearcoatNormal;
 }
 
 

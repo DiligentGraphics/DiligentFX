@@ -125,7 +125,7 @@ struct PBRMaterialBasicAttribs
     float SpecularFactorR;
     float SpecularFactorG;
     float SpecularFactorB;
-    float Padding;
+    float ClearcoatNormalScale;
 
     int   Workflow;
     int   AlphaMode;
