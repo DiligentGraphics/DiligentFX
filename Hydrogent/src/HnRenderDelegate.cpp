@@ -29,6 +29,7 @@
 #include "HnMaterial.hpp"
 #include "HnCamera.hpp"
 #include "HnLight.hpp"
+#include "HnExtComputation.hpp"
 #include "HnRenderPass.hpp"
 #include "HnRenderParam.hpp"
 #include "HnFrameRenderTargets.hpp"
@@ -77,6 +78,7 @@ const pxr::TfTokenVector HnRenderDelegate::SupportedSPrimTypes = {
     pxr::HdPrimTypeTokens->rectLight,
     pxr::HdPrimTypeTokens->sphereLight,
     pxr::HdPrimTypeTokens->domeLight,
+    pxr::HdPrimTypeTokens->extComputation,
 };
 
 const pxr::TfTokenVector HnRenderDelegate::SupportedBPrimTypes = {
@@ -424,6 +426,10 @@ pxr::HdSprim* HnRenderDelegate::CreateSprim(const pxr::TfToken& TypeId,
         }
         SPrim = Light;
     }
+    else if (TypeId == pxr::HdPrimTypeTokens->extComputation)
+    {
+        SPrim = HnExtComputation::Create(SPrimId);
+    }
     else
     {
         UNEXPECTED("Unexpected Sprim Type: ", TypeId.GetText());
@@ -450,7 +456,8 @@ pxr::HdSprim* HnRenderDelegate::CreateFallbackSprim(const pxr::TfToken& TypeId)
              TypeId == pxr::HdPrimTypeTokens->distantLight ||
              TypeId == pxr::HdPrimTypeTokens->rectLight ||
              TypeId == pxr::HdPrimTypeTokens->sphereLight ||
-             TypeId == pxr::HdPrimTypeTokens->domeLight)
+             TypeId == pxr::HdPrimTypeTokens->domeLight ||
+             TypeId == pxr::HdPrimTypeTokens->extComputation)
     {
         SPrim = nullptr;
     }

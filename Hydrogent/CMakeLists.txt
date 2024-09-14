@@ -19,6 +19,7 @@ set(SOURCE
     src/HnMesh.cpp
     src/HnBuffer.cpp
     src/HnDrawItem.cpp
+    src/HnExtComputation.cpp
     src/HnCamera.cpp
     src/HnLight.cpp
     src/HnRenderBuffer.cpp
@@ -62,6 +63,7 @@ set(INTERFACE
     interface/HnMaterial.hpp
     interface/HnMaterialNetwork.hpp
     interface/HnMesh.hpp
+    interface/HnExtComputation.hpp
     interface/HnBuffer.hpp
     interface/HnCamera.hpp
     interface/HnLight.hpp
@@ -154,16 +156,17 @@ set(USD_LIBS
     usd
     plug
     hd
-    usdImaging
     vt
     hio
     sdr
     ndr
     trace
+    work
     cameraUtil
     usdGeom
-    work
+    usdSkel
     usdLux
+    usdImaging
 )
 
 if (NOT pxr_FOUND)
