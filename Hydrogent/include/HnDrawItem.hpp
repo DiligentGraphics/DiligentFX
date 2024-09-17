@@ -64,6 +64,7 @@ public:
         RefCntAutoPtr<IBuffer> Positions;
         RefCntAutoPtr<IBuffer> Normals;
         RefCntAutoPtr<IBuffer> VertexColors;
+        RefCntAutoPtr<IBuffer> Joints;
 
         std::array<RefCntAutoPtr<IBuffer>, 2> TexCoords;
 

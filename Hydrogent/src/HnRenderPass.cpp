@@ -84,6 +84,7 @@ HnRenderPass::DrawListItem::DrawListItem(HnRenderDelegate& RenderDelegate, const
     DrawItem{Item},
     Mesh{Item.GetMesh()},
     Material{*Item.GetMaterial()},
+    SkinningXforms{DrawItem.GetGeometryData().Joints ? &Mesh.GetSkinningXforms() : nullptr},
     MeshEntity{Mesh.GetEntity()},
     MeshUID{static_cast<float>(Mesh.GetUID())},
     RenderStateID{0},
@@ -210,8 +211,8 @@ private:
 
     IBuffer* pIndexBuffer = nullptr;
 
-    Uint32                  NumVertexBuffers = 0;
-    std::array<IBuffer*, 5> ppVertexBuffers  = {};
+    Uint32                                                             NumVertexBuffers = 0;
+    std::array<IBuffer*, HnRenderPass::DrawListItem::MaxVertexBuffers> ppVertexBuffers  = {};
 
     USD_Renderer::PsoCacheAccessor PsoCache;
 };
@@ -385,6 +386,8 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
 
     IBuffer* const pPrimitiveAttribsCB = State.RenderDelegate.GetPrimitiveAttribsCB();
     VERIFY_EXPR(pPrimitiveAttribsCB != nullptr);
+    IBuffer* const pJointsCB     = State.USDRenderer.GetJointsBuffer();
+    const Uint32   MaxJointCount = State.USDRenderer.GetSettings().MaxJointCount;
 
     const BufferDesc& AttribsBuffDesc = pPrimitiveAttribsCB->GetDesc();
 
@@ -425,6 +428,9 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
 
     entt::registry& Registry = State.RenderDelegate.GetEcsRegistry();
 
+    const pxr::VtMatrix4fArray* SkinningXforms = nullptr;
+    Uint32                      JointCount     = 0;
+
     // Note: accessing components through a view is faster than accessing them through the registry.
     auto MeshAttribsView = Registry.view<const HnMesh::Components::Transform,
                                          const HnMesh::Components::DisplayColor,
@@ -449,6 +455,23 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
 
         if (MultiDrawCount == PrimitiveArraySize)
             MultiDrawCount = 0;
+
+        if (ListItem.SkinningXforms != SkinningXforms && pJointsCB != nullptr)
+        {
+            SkinningXforms = ListItem.SkinningXforms;
+            if (SkinningXforms != nullptr)
+            {
+                JointCount = std::min(static_cast<Uint32>(SkinningXforms->size()), MaxJointCount);
+
+                MapHelper<float4x4> JointsData{State.pCtx, pJointsCB, MAP_WRITE, MAP_FLAG_DISCARD};
+                memcpy(JointsData, SkinningXforms->data(), JointCount * sizeof(float4x4));
+
+                // TODO: properly compute previous frame transforms
+                memcpy(JointsData + MaxJointCount, SkinningXforms->data(), JointCount * sizeof(float4x4));
+
+                MultiDrawCount = 0;
+            }
+        }
 
         if (MultiDrawCount > 0)
         {
@@ -517,7 +540,7 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
             ListItem.PSOFlags,
             &Transform,
             &ListItem.PrevTransform,
-            0,       // JointCount
+            JointCount,
             nullptr, // CustomData
             0,       // CustomDataSize
             &pDstMaterialBasicAttribs,
@@ -889,6 +912,9 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
         if (State.RenderParam.GetAsyncShaderCompilation())
             GetPSOFlags |= PBR_Renderer::PsoCacheAccessor::GET_FLAG_ASYNC_COMPILE;
 
+        if (Geo.Joints != nullptr)
+            PSOFlags |= PBR_Renderer::PSO_FLAG_USE_JOINTS;
+
         if (m_RenderMode == HN_RENDER_MODE_SOLID)
         {
             if ((m_Params.UsdPsoFlags & USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_OUTPUT) != 0)
@@ -961,24 +987,24 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
         const HnDrawItem::GeometryData& Geo = DrawItem.GetGeometryData();
 
         // Input layout is defined by HnRenderDelegate when creating USD renderer.
-        ListItem.VertexBuffers = {Geo.Positions, Geo.Normals, Geo.TexCoords[0], Geo.TexCoords[1], Geo.VertexColors};
+        ListItem.VertexBuffers = {Geo.Positions, Geo.Normals, Geo.TexCoords[0], Geo.TexCoords[1], Geo.VertexColors, Geo.Joints};
 
         const HnDrawItem::TopologyData* Topology = nullptr;
         switch (m_RenderMode)
         {
             case HN_RENDER_MODE_SOLID:
                 Topology                  = &DrawItem.GetFaces();
-                ListItem.NumVertexBuffers = 5;
+                ListItem.NumVertexBuffers = 6;
                 break;
 
             case HN_RENDER_MODE_MESH_EDGES:
                 Topology                  = &DrawItem.GetEdges();
-                ListItem.NumVertexBuffers = 1; // Only positions are used
+                ListItem.NumVertexBuffers = Geo.Joints ? 6 : 1; // Only positions and joints are used
                 break;
 
             case HN_RENDER_MODE_POINTS:
                 Topology                  = &DrawItem.GetPoints();
-                ListItem.NumVertexBuffers = 1; // Only positions are used
+                ListItem.NumVertexBuffers = Geo.Joints ? 6 : 1; // Only positions and joints are used
                 break;
 
             default:

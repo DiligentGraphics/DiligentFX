@@ -43,7 +43,7 @@ namespace USD
     (smoothNormals)            \
     (packedFlatNormals)        \
     (flatNormals)              \
-    (jointInfluences)          \
+    (joints)                   \
     (scale)                    \
     (bias)                     \
     (rotation)                 \

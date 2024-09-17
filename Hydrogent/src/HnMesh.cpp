@@ -60,6 +60,7 @@ TF_DEFINE_PRIVATE_TOKENS(
     (skinnedPoints)
     (numInfluencesPerComponent)
     (influences)
+    (skinningXforms)
 );
 // clang-format on
 
@@ -532,7 +533,7 @@ std::shared_ptr<pxr::HdBufferSource> HnMesh::CreateJointInfluencesBufferSource(p
 
     int NumInfluencesPerComponent = 0;
 
-    pxr::VtVec2fArray SrcInfluences;
+    pxr::VtVec2fArray Influences;
 
     // NB: use influences from the skinnig computation, not from the primvars because
     //     the computation may have performed necessary reindexing of primvar indices.
@@ -557,7 +558,7 @@ std::shared_ptr<pxr::HdBufferSource> HnMesh::CreateJointInfluencesBufferSource(p
                 LOG_ERROR_MESSAGE("Influences of mesh ", Id, " are of type ", InfluencesVal.GetTypeName(), ", but VtVec2fArray is expected");
                 return {};
             }
-            SrcInfluences = InfluencesVal.Get<pxr::VtVec2fArray>();
+            Influences = InfluencesVal.Get<pxr::VtVec2fArray>();
         }
     }
 
@@ -577,29 +578,29 @@ std::shared_ptr<pxr::HdBufferSource> HnMesh::CreateJointInfluencesBufferSource(p
 
     // We can't use pxr::VtArray<JointInfluence> because JointInfluence is not the type recognized
     // by HdVtBufferSource.
-    const size_t      NumJoints = SrcInfluences.size() / NumInfluencesPerComponent;
-    pxr::VtVec4fArray Influences(NumJoints * 2, pxr::GfVec4f{0});
+    const size_t      NumJoints = Influences.size() / NumInfluencesPerComponent;
+    pxr::VtVec4fArray Joints(NumJoints * 2, pxr::GfVec4f{0});
 
     if (NumInfluencesPerComponent > 4)
     {
         // Sort influences by weight.
         for (size_t i = 0; i < NumJoints; ++i)
         {
-            std::sort(SrcInfluences.begin() + i * NumInfluencesPerComponent,
-                      SrcInfluences.begin() + (i + 1) * NumInfluencesPerComponent,
+            std::sort(Influences.begin() + i * NumInfluencesPerComponent,
+                      Influences.begin() + (i + 1) * NumInfluencesPerComponent,
                       [](const pxr::GfVec2f& a, const pxr::GfVec2f& b) {
                           return a[1] > b[1];
                       });
             // Renormalize for the top 4 influences.
-            float TotalWeight = (SrcInfluences[i * NumInfluencesPerComponent + 0][1] +
-                                 SrcInfluences[i * NumInfluencesPerComponent + 1][1] +
-                                 SrcInfluences[i * NumInfluencesPerComponent + 2][1] +
-                                 SrcInfluences[i * NumInfluencesPerComponent + 3][1]);
+            float TotalWeight = (Influences[i * NumInfluencesPerComponent + 0][1] +
+                                 Influences[i * NumInfluencesPerComponent + 1][1] +
+                                 Influences[i * NumInfluencesPerComponent + 2][1] +
+                                 Influences[i * NumInfluencesPerComponent + 3][1]);
             TotalWeight       = std::max(TotalWeight, 1e-5f);
-            SrcInfluences[i * NumInfluencesPerComponent + 0][1] /= TotalWeight;
-            SrcInfluences[i * NumInfluencesPerComponent + 1][1] /= TotalWeight;
-            SrcInfluences[i * NumInfluencesPerComponent + 2][1] /= TotalWeight;
-            SrcInfluences[i * NumInfluencesPerComponent + 3][1] /= TotalWeight;
+            Influences[i * NumInfluencesPerComponent + 0][1] /= TotalWeight;
+            Influences[i * NumInfluencesPerComponent + 1][1] /= TotalWeight;
+            Influences[i * NumInfluencesPerComponent + 2][1] /= TotalWeight;
+            Influences[i * NumInfluencesPerComponent + 3][1] /= TotalWeight;
         }
     }
 
@@ -608,12 +609,12 @@ std::shared_ptr<pxr::HdBufferSource> HnMesh::CreateJointInfluencesBufferSource(p
     {
         for (int j = 0; j < std::min(NumInfluencesPerComponent, 4); ++j)
         {
-            Influences[i * 2 + 0][j] = SrcInfluences[i * NumInfluencesPerComponent + j][0];
-            Influences[i * 2 + 1][j] = SrcInfluences[i * NumInfluencesPerComponent + j][1];
+            Joints[i * 2 + 0][j] = Influences[i * NumInfluencesPerComponent + j][0];
+            Joints[i * 2 + 1][j] = Influences[i * NumInfluencesPerComponent + j][1];
         }
     }
 
-    return CreateBufferSource(HnTokens->jointInfluences, pxr::VtValue{Influences}, 2, m_Topology.GetNumPoints(), Id);
+    return CreateBufferSource(HnTokens->joints, pxr::VtValue{Joints}, 2, m_Topology.GetNumPoints(), Id);
 }
 
 void HnMesh::UpdateSkinningPrimvars(pxr::HdSceneDelegate&                         SceneDelegate,
@@ -649,7 +650,19 @@ void HnMesh::UpdateSkinningPrimvars(pxr::HdSceneDelegate&                       
     {
         if (auto BufferSource = CreateJointInfluencesBufferSource(SceneDelegate, SkinningComp))
         {
-            m_StagingVertexData->Sources.emplace(HnTokens->jointInfluences, std::move(BufferSource));
+            m_StagingVertexData->Sources.emplace(HnTokens->joints, std::move(BufferSource));
+        }
+    }
+
+    {
+        pxr::VtValue SkinningXformsVal = SceneDelegate.GetExtComputationInput(SkinningCompPrimDesc.sourceComputationId, HnSkinningPrivateTokens->skinningXforms);
+        if (SkinningXformsVal.IsHolding<pxr::VtMatrix4fArray>())
+        {
+            m_SkinningXforms = SkinningXformsVal.Get<pxr::VtMatrix4fArray>();
+        }
+        else
+        {
+            LOG_ERROR_MESSAGE("Skinning transforms of mesh ", Id, " are of type ", SkinningXformsVal.GetTypeName(), ", but VtMatrix4fArray is expected");
         }
     }
 }
@@ -865,7 +878,7 @@ public:
         m_Name{Name},
         m_TupleType{TupleType},
         m_NumElements{NumElements},
-        m_Data(HdDataSizeOfType(TupleType.type) * NumElements)
+        m_Data(HdDataSizeOfType(TupleType.type) * TupleType.count * NumElements)
     {
     }
 
@@ -998,9 +1011,9 @@ HnMesh::TriangleFaceIndexData HnMesh::ComputeTriangleFaceIndices()
 static std::shared_ptr<pxr::HdBufferSource> ReindexBufferSource(const pxr::HdBufferSource& SrcSource,
                                                                 const pxr::VtVec3iArray&   Indices)
 {
-    const Uint8*      pSrcData    = static_cast<const Uint8*>(SrcSource.GetData());
-    const pxr::HdType ElementType = SrcSource.GetTupleType().type;
-    const size_t      ElementSize = HdDataSizeOfType(ElementType);
+    const Uint8*           pSrcData    = static_cast<const Uint8*>(SrcSource.GetData());
+    const pxr::HdTupleType ElementType = SrcSource.GetTupleType();
+    const size_t           ElementSize = HdDataSizeOfType(ElementType.type) * ElementType.count;
 
     std::shared_ptr<TriangulatedFaceBufferSource> ReindexedSource =
         std::make_shared<TriangulatedFaceBufferSource>(SrcSource.GetName(), SrcSource.GetTupleType(), Indices.size() * 3);
@@ -1170,8 +1183,8 @@ void HnMesh::AllocatePooledResources(pxr::HdSceneDelegate& SceneDelegate,
                 const pxr::TfToken&                         Name   = source_it.first;
                 const std::shared_ptr<pxr::HdBufferSource>& Source = source_it.second;
                 VERIFY(NumVerts == Source->GetNumElements(), "Inconsistent number of elements in vertex data sources");
-                const auto ElementType = Source->GetTupleType().type;
-                const auto ElementSize = HdDataSizeOfType(ElementType);
+                const pxr::HdTupleType ElementType = Source->GetTupleType();
+                const size_t           ElementSize = HdDataSizeOfType(ElementType.type) * ElementType.count;
 
                 m_VertexData.NameToPoolIndex[Name] = static_cast<Uint32>(VtxKey.Elements.size());
                 VtxKey.Elements.emplace_back(static_cast<Uint32>(ElementSize), BIND_VERTEX_BUFFER);
@@ -1276,15 +1289,17 @@ void HnMesh::UpdateVertexBuffers(HnRenderDelegate& RenderDelegate)
             continue;
         const pxr::TfToken& PrimName = source_it.first;
 
-        const auto NumElements = pSource->GetNumElements();
-        const auto ElementType = pSource->GetTupleType().type;
-        const auto ElementSize = HdDataSizeOfType(ElementType);
+        const size_t           NumElements = pSource->GetNumElements();
+        const pxr::HdTupleType ElementType = pSource->GetTupleType();
+        const size_t           ElementSize = HdDataSizeOfType(ElementType.type) * ElementType.count;
         if (PrimName == pxr::HdTokens->points)
-            VERIFY(ElementType == pxr::HdTypeFloatVec3, "Unexpected vertex element type");
+            VERIFY(ElementType.type == pxr::HdTypeFloatVec3 && ElementType.count == 1, "Unexpected vertex element type");
         else if (PrimName == pxr::HdTokens->normals)
-            VERIFY(ElementType == pxr::HdTypeFloatVec3, "Unexpected normal element type");
+            VERIFY(ElementType.type == pxr::HdTypeFloatVec3 && ElementType.count == 1, "Unexpected normal element type");
         else if (PrimName == pxr::HdTokens->displayColor)
-            VERIFY(ElementType == pxr::HdTypeFloatVec3, "Unexpected vertex color element type");
+            VERIFY(ElementType.type == pxr::HdTypeFloatVec3 && ElementType.count == 1, "Unexpected vertex color element type");
+        else if (PrimName == HnTokens->joints)
+            VERIFY(ElementType.type == pxr::HdTypeFloatVec4 && ElementType.count == 2, "Unexpected joints element type");
 
         RefCntAutoPtr<IBuffer> pBuffer;
         if (!m_VertexData.PoolAllocation)
@@ -1409,6 +1424,7 @@ void HnMesh::UpdateDrawItemGpuGeometry(HnRenderDelegate& RenderDelegate)
             Geo.Positions    = GetVertexBuffer(pxr::HdTokens->points);
             Geo.Normals      = GetVertexBuffer(pxr::HdTokens->normals);
             Geo.VertexColors = GetVertexBuffer(pxr::HdTokens->displayColor);
+            Geo.Joints       = GetVertexBuffer(HnTokens->joints);
 
             // Our shader currently supports two texture coordinate sets.
             // Gather vertex buffers for both sets.

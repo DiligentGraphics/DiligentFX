@@ -129,6 +129,7 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
     USDRendererCI.EnableShadows              = RenderDelegateCI.EnableShadows;
     USDRendererCI.PCFKernelSize              = RenderDelegateCI.PCFKernelSize;
     USDRendererCI.MaxShadowCastingLightCount = RenderDelegateCI.MaxShadowCastingLightCount;
+    USDRendererCI.MaxJointCount              = RenderDelegateCI.MaxJointCount;
 
     USDRendererCI.ColorTargetIndex        = HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR;
     USDRendererCI.MeshIdTargetIndex       = HnFrameRenderTargets::GBUFFER_TARGET_MESH_ID;
@@ -189,6 +190,8 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
             {USD_Renderer::VERTEX_ATTRIB_ID_TEXCOORD0, 2, 2, VT_FLOAT32}, //float2 UV0     : ATTRIB2;
             {USD_Renderer::VERTEX_ATTRIB_ID_TEXCOORD1, 3, 2, VT_FLOAT32}, //float2 UV1     : ATTRIB3;
             {USD_Renderer::VERTEX_ATTRIB_ID_COLOR,     4, 3, VT_FLOAT32}, //float3 Color   : ATTRIB6;
+            {USD_Renderer::VERTEX_ATTRIB_ID_JOINTS,    5, 4, VT_FLOAT32}, //float4 Joint0  : ATTRIB4;
+            {USD_Renderer::VERTEX_ATTRIB_ID_WEIGHTS,   5, 4, VT_FLOAT32}, //float4 Weight0 : ATTRIB5;
             // clang-format on
         };
 

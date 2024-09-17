@@ -134,6 +134,8 @@ private:
         const HnMesh&     Mesh;
         const HnMaterial& Material;
 
+        const pxr::VtMatrix4fArray* SkinningXforms = nullptr;
+
         IPipelineState* pPSO = nullptr;
 
         const entt::entity MeshEntity;
@@ -165,7 +167,8 @@ private:
 
         IBuffer* IndexBuffer = nullptr;
 
-        std::array<IBuffer*, 5> VertexBuffers = {};
+        static constexpr size_t                MaxVertexBuffers = 6;
+        std::array<IBuffer*, MaxVertexBuffers> VertexBuffers    = {};
 
         explicit DrawListItem(HnRenderDelegate& RenderDelegate, const HnDrawItem& Item) noexcept;
 
