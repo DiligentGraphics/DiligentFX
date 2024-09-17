@@ -47,7 +47,6 @@
 #include "pxr/imaging/hd/vertexAdjacency.h"
 #include "pxr/imaging/hd/smoothNormals.h"
 #include "pxr/usd/usdSkel/tokens.h"
-#include "pxr/usd/usdSkel/utils.h"
 
 namespace Diligent
 {
@@ -60,6 +59,7 @@ TF_DEFINE_PRIVATE_TOKENS(
     HnSkinningPrivateTokens,
     (skinnedPoints)
     (numInfluencesPerComponent)
+    (influences)
 );
 // clang-format on
 
@@ -530,6 +530,42 @@ std::shared_ptr<pxr::HdBufferSource> HnMesh::CreateJointInfluencesBufferSource(p
 {
     const pxr::SdfPath& Id = GetId();
 
+    int NumInfluencesPerComponent = 0;
+
+    pxr::VtVec2fArray SrcInfluences;
+
+    // NB: use influences from the skinnig computation, not from the primvars because
+    //     the computation may have performed necessary reindexing of primvar indices.
+    const pxr::HdExtComputationInputDescriptorVector& ComputationInputs = SkinningComp->GetComputationInputs();
+    for (const pxr::HdExtComputationInputDescriptor& CompInput : ComputationInputs)
+    {
+        if (CompInput.name == HnSkinningPrivateTokens->numInfluencesPerComponent)
+        {
+            pxr::VtValue NumInfluencesPerComponentVal = SceneDelegate.GetExtComputationInput(CompInput.sourceComputationId, CompInput.name);
+            if (!NumInfluencesPerComponentVal.IsHolding<int>())
+            {
+                LOG_ERROR_MESSAGE("Number of influences per component of mesh ", Id, " is of type ", NumInfluencesPerComponentVal.GetTypeName(), ", but int is expected");
+                return {};
+            }
+            NumInfluencesPerComponent = NumInfluencesPerComponentVal.Get<int>();
+        }
+        else if (CompInput.name == HnSkinningPrivateTokens->influences)
+        {
+            pxr::VtValue InfluencesVal = SceneDelegate.GetExtComputationInput(CompInput.sourceComputationId, CompInput.name);
+            if (!InfluencesVal.IsHolding<pxr::VtVec2fArray>())
+            {
+                LOG_ERROR_MESSAGE("Influences of mesh ", Id, " are of type ", InfluencesVal.GetTypeName(), ", but VtVec2fArray is expected");
+                return {};
+            }
+            SrcInfluences = InfluencesVal.Get<pxr::VtVec2fArray>();
+        }
+    }
+
+    if (NumInfluencesPerComponent <= 0)
+    {
+        return {};
+    }
+
     // 'influences' input of skinnig computation contains pairs of joint indices and weights.
     // Our shader always uses 4 joints packed into the following structure:
     // struct JointInfluence
@@ -538,81 +574,43 @@ std::shared_ptr<pxr::HdBufferSource> HnMesh::CreateJointInfluencesBufferSource(p
     //     float4 Weights;
     // };
 
-    pxr::VtValue JointIndicesPrimvar = GetPrimvar(&SceneDelegate, pxr::UsdSkelTokens->primvarsSkelJointIndices);
-    if (!JointIndicesPrimvar.IsHolding<pxr::VtIntArray>())
-    {
-        LOG_ERROR_MESSAGE("Joint indices of mesh ", Id, " are of type ", JointIndicesPrimvar.GetTypeName(), ", but VtIntArray is expected");
-        return {};
-    }
-
-    pxr::VtValue JointWeightsPrimvar = GetPrimvar(&SceneDelegate, pxr::UsdSkelTokens->primvarsSkelJointWeights);
-    if (!JointWeightsPrimvar.IsHolding<pxr::VtFloatArray>())
-    {
-        LOG_ERROR_MESSAGE("Joint weights of mesh ", Id, " are of type ", JointWeightsPrimvar.GetTypeName(), ", but VtFloatArray is expected");
-        return {};
-    }
-
-    pxr::VtIntArray   JointIndices = JointIndicesPrimvar.Get<pxr::VtIntArray>();
-    pxr::VtFloatArray JointWeights = JointWeightsPrimvar.Get<pxr::VtFloatArray>();
-    if (JointIndices.size() != JointWeights.size())
-    {
-        LOG_ERROR_MESSAGE("Joint indices and weights of mesh ", Id, " have different array sizes: ", JointIndices.size(), " and ", JointWeights.size());
-        return {};
-    }
-
-    auto GetNumInfluencesPerComponent = [&]() -> int {
-        const pxr::HdExtComputationInputDescriptorVector& ComputationInputs = SkinningComp->GetComputationInputs();
-        for (const pxr::HdExtComputationInputDescriptor& CompInput : ComputationInputs)
-        {
-            if (CompInput.name == HnSkinningPrivateTokens->numInfluencesPerComponent)
-            {
-                pxr::VtValue NumInfluencesPerComponent = SceneDelegate.GetExtComputationInput(CompInput.sourceComputationId, CompInput.name);
-                if (NumInfluencesPerComponent.IsHolding<int>())
-                {
-                    return NumInfluencesPerComponent.Get<int>();
-                }
-                else
-                {
-                    LOG_ERROR_MESSAGE("Number of influences per component of mesh ", Id, " is of type ", NumInfluencesPerComponent.GetTypeName(), ", but int is expected");
-                    return 0;
-                }
-            }
-        }
-        return 0;
-    };
-
-    int NumInfluencesPerComponent = GetNumInfluencesPerComponent();
-    if (NumInfluencesPerComponent == 0)
-    {
-        return {};
-    }
-
-    if (NumInfluencesPerComponent != 4)
-    {
-        pxr::UsdSkelSortInfluences(&JointIndices, &JointWeights, NumInfluencesPerComponent);
-        pxr::UsdSkelResizeInfluences(&JointIndices, NumInfluencesPerComponent, 4);
-        pxr::UsdSkelResizeInfluences(&JointWeights, NumInfluencesPerComponent, 4);
-        NumInfluencesPerComponent = 4;
-    }
 
     // We can't use pxr::VtArray<JointInfluence> because JointInfluence is not the type recognized
     // by HdVtBufferSource.
-    const size_t      NumJoints = JointIndices.size() / NumInfluencesPerComponent;
-    pxr::VtVec4fArray Influences(NumJoints * 2);
+    const size_t      NumJoints = SrcInfluences.size() / NumInfluencesPerComponent;
+    pxr::VtVec4fArray Influences(NumJoints * 2, pxr::GfVec4f{0});
+
+    if (NumInfluencesPerComponent > 4)
+    {
+        // Sort influences by weight.
+        for (size_t i = 0; i < NumJoints; ++i)
+        {
+            std::sort(SrcInfluences.begin() + i * NumInfluencesPerComponent,
+                      SrcInfluences.begin() + (i + 1) * NumInfluencesPerComponent,
+                      [](const pxr::GfVec2f& a, const pxr::GfVec2f& b) {
+                          return a[1] > b[1];
+                      });
+            // Renormalize for the top 4 influences.
+            float TotalWeight = (SrcInfluences[i * NumInfluencesPerComponent + 0][1] +
+                                 SrcInfluences[i * NumInfluencesPerComponent + 1][1] +
+                                 SrcInfluences[i * NumInfluencesPerComponent + 2][1] +
+                                 SrcInfluences[i * NumInfluencesPerComponent + 3][1]);
+            TotalWeight       = std::max(TotalWeight, 1e-5f);
+            SrcInfluences[i * NumInfluencesPerComponent + 0][1] /= TotalWeight;
+            SrcInfluences[i * NumInfluencesPerComponent + 1][1] /= TotalWeight;
+            SrcInfluences[i * NumInfluencesPerComponent + 2][1] /= TotalWeight;
+            SrcInfluences[i * NumInfluencesPerComponent + 3][1] /= TotalWeight;
+        }
+    }
+
+    // Keep only the top 4 influences.
     for (size_t i = 0; i < NumJoints; ++i)
     {
-        Influences[i * 2 + 0] = {
-            static_cast<float>(JointIndices[i * NumInfluencesPerComponent + 0]),
-            static_cast<float>(JointIndices[i * NumInfluencesPerComponent + 1]),
-            static_cast<float>(JointIndices[i * NumInfluencesPerComponent + 2]),
-            static_cast<float>(JointIndices[i * NumInfluencesPerComponent + 3]),
-        };
-        Influences[i * 2 + 1] = {
-            JointWeights[i * NumInfluencesPerComponent + 0],
-            JointWeights[i * NumInfluencesPerComponent + 1],
-            JointWeights[i * NumInfluencesPerComponent + 2],
-            JointWeights[i * NumInfluencesPerComponent + 3],
-        };
+        for (int j = 0; j < std::min(NumInfluencesPerComponent, 4); ++j)
+        {
+            Influences[i * 2 + 0][j] = SrcInfluences[i * NumInfluencesPerComponent + j][0];
+            Influences[i * 2 + 1][j] = SrcInfluences[i * NumInfluencesPerComponent + j][1];
+        }
     }
 
     return CreateBufferSource(HnTokens->jointInfluences, pxr::VtValue{Influences}, 2, m_Topology.GetNumPoints(), Id);
