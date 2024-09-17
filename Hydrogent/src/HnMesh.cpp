@@ -32,6 +32,7 @@
 #include "HnRenderParam.hpp"
 #include "HnRenderPass.hpp"
 #include "HnDrawItem.hpp"
+#include "HnExtComputation.hpp"
 #include "GfTypeConversions.hpp"
 
 #include "DebugUtilities.hpp"
@@ -45,12 +46,22 @@
 #include "pxr/imaging/hd/vtBufferSource.h"
 #include "pxr/imaging/hd/vertexAdjacency.h"
 #include "pxr/imaging/hd/smoothNormals.h"
+#include "pxr/usd/usdSkel/tokens.h"
+#include "pxr/usd/usdSkel/utils.h"
 
 namespace Diligent
 {
 
 namespace USD
 {
+
+// clang-format off
+TF_DEFINE_PRIVATE_TOKENS(
+    HnSkinningPrivateTokens,
+    (skinnedPoints)
+    (numInfluencesPerComponent)
+);
+// clang-format on
 
 HnMesh* HnMesh::Create(pxr::TfToken const& typeId,
                        pxr::SdfPath const& id,
@@ -444,13 +455,20 @@ void HnMesh::UpdateTopology(pxr::HdSceneDelegate& SceneDelegate,
     DirtyBits &= ~pxr::HdChangeTracker::DirtyTopology;
 }
 
-static std::shared_ptr<pxr::HdBufferSource> CreateBufferSource(const pxr::TfToken& Name, const pxr::VtValue& Data, size_t ExpectedNumElements, const pxr::SdfPath& MeshId)
+static std::shared_ptr<pxr::HdBufferSource> CreateBufferSource(const pxr::TfToken& Name,
+                                                               const pxr::VtValue& Data,
+                                                               int                 ValuesPerElement,
+                                                               size_t              ExpectedNumElements,
+                                                               const pxr::SdfPath& MeshId)
 {
+    if (Data.IsEmpty())
+        return nullptr;
+
     auto BufferSource = std::make_shared<pxr::HdVtBufferSource>(
         Name,
         Data,
-        1,    // values per element
-        false // whether doubles are supported or must be converted to floats
+        ValuesPerElement, // values per element
+        false             // whether doubles are supported or must be converted to floats
     );
 
     if (BufferSource->GetNumElements() == 0)
@@ -478,6 +496,14 @@ static std::shared_ptr<pxr::HdBufferSource> CreateBufferSource(const pxr::TfToke
     return BufferSource;
 }
 
+static std::shared_ptr<pxr::HdBufferSource> CreateBufferSource(const pxr::TfToken& Name,
+                                                               const pxr::VtValue& Data,
+                                                               size_t              ExpectedNumElements,
+                                                               const pxr::SdfPath& MeshId)
+{
+    return CreateBufferSource(Name, Data, 1, ExpectedNumElements, MeshId);
+}
+
 static HnRenderPass::SupportedVertexInputsSetType GetSupportedPrimvars(
     const pxr::HdRenderIndex&  RenderIndex,
     const pxr::SdfPath&        MaterialId,
@@ -497,6 +523,134 @@ static HnRenderPass::SupportedVertexInputsSetType GetSupportedPrimvars(
     }
 
     return SupportedPrimvars;
+}
+
+std::shared_ptr<pxr::HdBufferSource> HnMesh::CreateJointInfluencesBufferSource(pxr::HdSceneDelegate&   SceneDelegate,
+                                                                               const HnExtComputation* SkinningComp)
+{
+    const pxr::SdfPath& Id = GetId();
+
+    // 'influences' input of skinnig computation contains pairs of joint indices and weights.
+    // Our shader always uses 4 joints packed into the following structure:
+    // struct JointInfluence
+    // {
+    //     float4 Indices;
+    //     float4 Weights;
+    // };
+
+    pxr::VtValue JointIndicesPrimvar = GetPrimvar(&SceneDelegate, pxr::UsdSkelTokens->primvarsSkelJointIndices);
+    if (!JointIndicesPrimvar.IsHolding<pxr::VtIntArray>())
+    {
+        LOG_ERROR_MESSAGE("Joint indices of mesh ", Id, " are of type ", JointIndicesPrimvar.GetTypeName(), ", but VtIntArray is expected");
+        return {};
+    }
+
+    pxr::VtValue JointWeightsPrimvar = GetPrimvar(&SceneDelegate, pxr::UsdSkelTokens->primvarsSkelJointWeights);
+    if (!JointWeightsPrimvar.IsHolding<pxr::VtFloatArray>())
+    {
+        LOG_ERROR_MESSAGE("Joint weights of mesh ", Id, " are of type ", JointWeightsPrimvar.GetTypeName(), ", but VtFloatArray is expected");
+        return {};
+    }
+
+    pxr::VtIntArray   JointIndices = JointIndicesPrimvar.Get<pxr::VtIntArray>();
+    pxr::VtFloatArray JointWeights = JointWeightsPrimvar.Get<pxr::VtFloatArray>();
+    if (JointIndices.size() != JointWeights.size())
+    {
+        LOG_ERROR_MESSAGE("Joint indices and weights of mesh ", Id, " have different array sizes: ", JointIndices.size(), " and ", JointWeights.size());
+        return {};
+    }
+
+    auto GetNumInfluencesPerComponent = [&]() -> int {
+        const pxr::HdExtComputationInputDescriptorVector& ComputationInputs = SkinningComp->GetComputationInputs();
+        for (const pxr::HdExtComputationInputDescriptor& CompInput : ComputationInputs)
+        {
+            if (CompInput.name == HnSkinningPrivateTokens->numInfluencesPerComponent)
+            {
+                pxr::VtValue NumInfluencesPerComponent = SceneDelegate.GetExtComputationInput(CompInput.sourceComputationId, CompInput.name);
+                if (NumInfluencesPerComponent.IsHolding<int>())
+                {
+                    return NumInfluencesPerComponent.Get<int>();
+                }
+                else
+                {
+                    LOG_ERROR_MESSAGE("Number of influences per component of mesh ", Id, " is of type ", NumInfluencesPerComponent.GetTypeName(), ", but int is expected");
+                    return 0;
+                }
+            }
+        }
+        return 0;
+    };
+
+    int NumInfluencesPerComponent = GetNumInfluencesPerComponent();
+    if (NumInfluencesPerComponent == 0)
+    {
+        return {};
+    }
+
+    if (NumInfluencesPerComponent != 4)
+    {
+        pxr::UsdSkelSortInfluences(&JointIndices, &JointWeights, NumInfluencesPerComponent);
+        pxr::UsdSkelResizeInfluences(&JointIndices, NumInfluencesPerComponent, 4);
+        pxr::UsdSkelResizeInfluences(&JointWeights, NumInfluencesPerComponent, 4);
+        NumInfluencesPerComponent = 4;
+    }
+
+    // We can't use pxr::VtArray<JointInfluence> because JointInfluence is not the type recognized
+    // by HdVtBufferSource.
+    const size_t      NumJoints = JointIndices.size() / NumInfluencesPerComponent;
+    pxr::VtVec4fArray Influences(NumJoints * 2);
+    for (size_t i = 0; i < NumJoints; ++i)
+    {
+        Influences[i * 2 + 0] = {
+            static_cast<float>(JointIndices[i * NumInfluencesPerComponent + 0]),
+            static_cast<float>(JointIndices[i * NumInfluencesPerComponent + 1]),
+            static_cast<float>(JointIndices[i * NumInfluencesPerComponent + 2]),
+            static_cast<float>(JointIndices[i * NumInfluencesPerComponent + 3]),
+        };
+        Influences[i * 2 + 1] = {
+            JointWeights[i * NumInfluencesPerComponent + 0],
+            JointWeights[i * NumInfluencesPerComponent + 1],
+            JointWeights[i * NumInfluencesPerComponent + 2],
+            JointWeights[i * NumInfluencesPerComponent + 3],
+        };
+    }
+
+    return CreateBufferSource(HnTokens->jointInfluences, pxr::VtValue{Influences}, 2, m_Topology.GetNumPoints(), Id);
+}
+
+void HnMesh::UpdateSkinningPrimvars(pxr::HdSceneDelegate&                         SceneDelegate,
+                                    pxr::HdRenderParam*                           RenderParam,
+                                    pxr::HdDirtyBits&                             DirtyBits,
+                                    const pxr::TfToken&                           ReprToken,
+                                    const pxr::HdExtComputationPrimvarDescriptor& SkinningCompPrimDesc)
+{
+    const pxr::SdfPath&     SkinnigCompId = SkinningCompPrimDesc.sourceComputationId;
+    const HnExtComputation* SkinningComp  = static_cast<const HnExtComputation*>(SceneDelegate.GetRenderIndex().GetSprim(pxr::HdPrimTypeTokens->extComputation, SkinnigCompId));
+    if (SkinningComp == nullptr)
+    {
+        LOG_ERROR_MESSAGE("Unable to find skinning computation ", SkinnigCompId);
+        return;
+    }
+
+    const pxr::SdfPath& Id = GetId();
+
+    if (pxr::HdChangeTracker::IsPrimvarDirty(DirtyBits, Id, SkinningCompPrimDesc.name))
+    {
+        pxr::VtValue PrimValue = GetPrimvar(&SceneDelegate, SkinningCompPrimDesc.name);
+        if (auto BufferSource = CreateBufferSource(SkinningCompPrimDesc.name, PrimValue, m_Topology.GetNumPoints(), Id))
+        {
+            m_StagingVertexData->Sources.emplace(SkinningCompPrimDesc.name, std::move(BufferSource));
+        }
+    }
+
+    if (pxr::HdChangeTracker::IsPrimvarDirty(DirtyBits, Id, pxr::UsdSkelTokens->primvarsSkelJointIndices) ||
+        pxr::HdChangeTracker::IsPrimvarDirty(DirtyBits, Id, pxr::UsdSkelTokens->primvarsSkelJointWeights))
+    {
+        if (auto BufferSource = CreateJointInfluencesBufferSource(SceneDelegate, SkinningComp))
+        {
+            m_StagingVertexData->Sources.emplace(HnTokens->jointInfluences, std::move(BufferSource));
+        }
+    }
 }
 
 void HnMesh::UpdateVertexAndVaryingPrimvars(pxr::HdSceneDelegate& SceneDelegate,
@@ -540,7 +694,11 @@ void HnMesh::UpdateVertexAndVaryingPrimvars(pxr::HdSceneDelegate& SceneDelegate,
         pxr::HdExtComputationPrimvarDescriptorVector CompPrimvarsDescs = SceneDelegate.GetExtComputationPrimvarDescriptors(Id, Interpolation);
         for (const pxr::HdExtComputationPrimvarDescriptor& ExtCompPrimDesc : CompPrimvarsDescs)
         {
-            AddPrimvarSource(ExtCompPrimDesc);
+            // Skinnig ext computation is created by the skeleton adapter
+            if (ExtCompPrimDesc.sourceComputationOutputName == HnSkinningPrivateTokens->skinnedPoints)
+            {
+                UpdateSkinningPrimvars(SceneDelegate, RenderParam, DirtyBits, ReprToken, ExtCompPrimDesc);
+            }
         }
     }
 }

@@ -54,6 +54,7 @@ namespace USD
 {
 
 class HnRenderDelegate;
+class HnExtComputation;
 
 /// Hydra mesh implementation in Hydrogent.
 class HnMesh final : public pxr::HdMesh
@@ -161,6 +162,15 @@ private:
                                 pxr::HdRenderParam*   RenderParam,
                                 pxr::HdDirtyBits&     DirtyBits,
                                 const pxr::TfToken&   ReprToken);
+
+    std::shared_ptr<pxr::HdBufferSource> CreateJointInfluencesBufferSource(pxr::HdSceneDelegate&   SceneDelegate,
+                                                                           const HnExtComputation* SkinningComp);
+
+    void UpdateSkinningPrimvars(pxr::HdSceneDelegate&                         SceneDelegate,
+                                pxr::HdRenderParam*                           RenderParam,
+                                pxr::HdDirtyBits&                             DirtyBits,
+                                const pxr::TfToken&                           ReprToken,
+                                const pxr::HdExtComputationPrimvarDescriptor& SkinningCompPrimDesc);
 
     void GenerateSmoothNormals();
 
