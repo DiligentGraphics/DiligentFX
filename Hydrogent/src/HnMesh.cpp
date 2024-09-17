@@ -634,7 +634,10 @@ void HnMesh::UpdateSkinningPrimvars(pxr::HdSceneDelegate&                       
 
     const pxr::SdfPath& Id = GetId();
 
-    if (pxr::HdChangeTracker::IsPrimvarDirty(DirtyBits, Id, SkinningCompPrimDesc.name))
+    // When animation is played, the points primvar is marked as dirty each frame.
+    // We only need to really update it if any other primvar is dirty or topology is dirty.
+    if (pxr::HdChangeTracker::IsPrimvarDirty(DirtyBits, Id, SkinningCompPrimDesc.name) &&
+        ((DirtyBits & pxr::HdChangeTracker::DirtyPrimvar) || m_StagingIndexData))
     {
         pxr::VtValue PrimValue = GetPrimvar(&SceneDelegate, SkinningCompPrimDesc.name);
         if (auto BufferSource = CreateBufferSource(SkinningCompPrimDesc.name, PrimValue, m_Topology.GetNumPoints(), Id))
