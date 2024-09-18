@@ -110,8 +110,6 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
 {
     USD_Renderer::CreateInfo USDRendererCI;
 
-    // Disable animation
-    USDRendererCI.MaxJointCount = 0;
     // Use separate textures for metallic and roughness
     USDRendererCI.UseSeparateMetallicRoughnessTextures = true;
     // Default textures will be provided by the texture registry

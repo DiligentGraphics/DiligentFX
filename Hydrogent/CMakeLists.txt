@@ -167,6 +167,7 @@ set(USD_LIBS
     usdSkel
     usdLux
     usdImaging
+    usdSkelImaging
 )
 
 if (NOT pxr_FOUND)
