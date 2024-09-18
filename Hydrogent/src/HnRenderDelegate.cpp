@@ -183,13 +183,13 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
     static constexpr LayoutElement Inputs[] =
         {
             // clang-format off
-            {USD_Renderer::VERTEX_ATTRIB_ID_POSITION,  0, 3, VT_FLOAT32}, //float3 Pos     : ATTRIB0;
-            {USD_Renderer::VERTEX_ATTRIB_ID_NORMAL,    1, 3, VT_FLOAT32}, //float3 Normal  : ATTRIB1;
-            {USD_Renderer::VERTEX_ATTRIB_ID_TEXCOORD0, 2, 2, VT_FLOAT32}, //float2 UV0     : ATTRIB2;
-            {USD_Renderer::VERTEX_ATTRIB_ID_TEXCOORD1, 3, 2, VT_FLOAT32}, //float2 UV1     : ATTRIB3;
-            {USD_Renderer::VERTEX_ATTRIB_ID_COLOR,     4, 3, VT_FLOAT32}, //float3 Color   : ATTRIB6;
-            {USD_Renderer::VERTEX_ATTRIB_ID_JOINTS,    5, 4, VT_FLOAT32}, //float4 Joint0  : ATTRIB4;
-            {USD_Renderer::VERTEX_ATTRIB_ID_WEIGHTS,   5, 4, VT_FLOAT32}, //float4 Weight0 : ATTRIB5;
+            {USD_Renderer::VERTEX_ATTRIB_ID_POSITION,  HnRenderPass::VERTEX_BUFFER_SLOT_POSITIONS,     3, VT_FLOAT32}, // float3 Pos     : ATTRIB0;
+            {USD_Renderer::VERTEX_ATTRIB_ID_NORMAL,    HnRenderPass::VERTEX_BUFFER_SLOT_NORMALS,       3, VT_FLOAT32}, // float3 Normal  : ATTRIB1;
+            {USD_Renderer::VERTEX_ATTRIB_ID_TEXCOORD0, HnRenderPass::VERTEX_BUFFER_SLOT_TEX_COORDS0,   2, VT_FLOAT32}, // float2 UV0     : ATTRIB2;
+            {USD_Renderer::VERTEX_ATTRIB_ID_TEXCOORD1, HnRenderPass::VERTEX_BUFFER_SLOT_TEX_COORDS1,   2, VT_FLOAT32}, // float2 UV1     : ATTRIB3;
+            {USD_Renderer::VERTEX_ATTRIB_ID_COLOR,     HnRenderPass::VERTEX_BUFFER_SLOT_VERTEX_COLORS, 3, VT_FLOAT32}, // float3 Color   : ATTRIB6;
+            {USD_Renderer::VERTEX_ATTRIB_ID_JOINTS,    HnRenderPass::VERTEX_BUFFER_SLOT_VERTEX_JOINTS, 4, VT_FLOAT32}, // float4 Joint0  : ATTRIB4;
+            {USD_Renderer::VERTEX_ATTRIB_ID_WEIGHTS,   HnRenderPass::VERTEX_BUFFER_SLOT_VERTEX_JOINTS, 4, VT_FLOAT32}, // float4 Weight0 : ATTRIB5;
             // clang-format on
         };
 

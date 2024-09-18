@@ -211,8 +211,8 @@ private:
 
     IBuffer* pIndexBuffer = nullptr;
 
-    Uint32                                                             NumVertexBuffers = 0;
-    std::array<IBuffer*, HnRenderPass::DrawListItem::MaxVertexBuffers> ppVertexBuffers  = {};
+    Uint32                                         NumVertexBuffers = 0;
+    std::array<IBuffer*, VERTEX_BUFFER_SLOT_COUNT> ppVertexBuffers  = {};
 
     USD_Renderer::PsoCacheAccessor PsoCache;
 };
@@ -747,11 +747,24 @@ void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
 
         bool operator==(const DrawListItemRenderState& rhs) const
         {
-            return (Item.pPSO == rhs.Item.pPSO &&
-                    Item.IndexBuffer == rhs.Item.IndexBuffer &&
-                    Item.NumVertexBuffers == rhs.Item.NumVertexBuffers &&
-                    Item.Material.GetSRB() == rhs.Item.Material.GetSRB() &&
-                    Item.VertexBuffers == rhs.Item.VertexBuffers);
+            if (Hash != rhs.Hash)
+                return false;
+
+            // clang-format off
+            if (Item.pPSO              != rhs.Item.pPSO ||
+                Item.IndexBuffer       != rhs.Item.IndexBuffer ||
+                Item.NumVertexBuffers  != rhs.Item.NumVertexBuffers ||
+                Item.Material.GetSRB() != rhs.Item.Material.GetSRB())
+                return false;
+            // clang-format on
+
+            for (Uint32 i = 0; i < Item.NumVertexBuffers; ++i)
+            {
+                if (Item.VertexBuffers[i] != rhs.Item.VertexBuffers[i])
+                    return false;
+            }
+
+            return true;
         }
     };
     std::unordered_map<DrawListItemRenderState, Uint32, DrawListItemRenderState::Hasher> DrawListItemRenderStateIDs;
@@ -986,25 +999,50 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
     {
         const HnDrawItem::GeometryData& Geo = DrawItem.GetGeometryData();
 
+        static_assert(HN_RENDER_MODE_COUNT == 3, "Please handle the new render mode here");
+
         // Input layout is defined by HnRenderDelegate when creating USD renderer.
-        ListItem.VertexBuffers = {Geo.Positions, Geo.Normals, Geo.TexCoords[0], Geo.TexCoords[1], Geo.VertexColors, Geo.Joints};
+        ListItem.VertexBuffers[VERTEX_BUFFER_SLOT_POSITIONS]     = Geo.Positions;
+        ListItem.VertexBuffers[VERTEX_BUFFER_SLOT_VERTEX_JOINTS] = Geo.Joints;
+        if (m_RenderMode == HN_RENDER_MODE_SOLID)
+        {
+            ListItem.VertexBuffers[VERTEX_BUFFER_SLOT_NORMALS]       = Geo.Normals;
+            ListItem.VertexBuffers[VERTEX_BUFFER_SLOT_TEX_COORDS0]   = Geo.TexCoords[0];
+            ListItem.VertexBuffers[VERTEX_BUFFER_SLOT_TEX_COORDS1]   = Geo.TexCoords[1];
+            ListItem.VertexBuffers[VERTEX_BUFFER_SLOT_VERTEX_COLORS] = Geo.VertexColors;
+
+            // It is OK if some buffers are null
+            ListItem.NumVertexBuffers = VERTEX_BUFFER_SLOT_COUNT;
+        }
+        else if (m_RenderMode == HN_RENDER_MODE_MESH_EDGES ||
+                 m_RenderMode == HN_RENDER_MODE_POINTS)
+        {
+            // Only positions and joints are used
+            ListItem.VertexBuffers[VERTEX_BUFFER_SLOT_NORMALS]       = nullptr;
+            ListItem.VertexBuffers[VERTEX_BUFFER_SLOT_TEX_COORDS0]   = nullptr;
+            ListItem.VertexBuffers[VERTEX_BUFFER_SLOT_TEX_COORDS1]   = nullptr;
+            ListItem.VertexBuffers[VERTEX_BUFFER_SLOT_VERTEX_COLORS] = nullptr;
+
+            ListItem.NumVertexBuffers = (Geo.Joints ? VERTEX_BUFFER_SLOT_VERTEX_JOINTS : VERTEX_BUFFER_SLOT_POSITIONS) + 1;
+        }
+        else
+        {
+            UNEXPECTED("Unexpected render mode");
+        }
 
         const HnDrawItem::TopologyData* Topology = nullptr;
         switch (m_RenderMode)
         {
             case HN_RENDER_MODE_SOLID:
-                Topology                  = &DrawItem.GetFaces();
-                ListItem.NumVertexBuffers = 6;
+                Topology = &DrawItem.GetFaces();
                 break;
 
             case HN_RENDER_MODE_MESH_EDGES:
-                Topology                  = &DrawItem.GetEdges();
-                ListItem.NumVertexBuffers = Geo.Joints ? 6 : 1; // Only positions and joints are used
+                Topology = &DrawItem.GetEdges();
                 break;
 
             case HN_RENDER_MODE_POINTS:
-                Topology                  = &DrawItem.GetPoints();
-                ListItem.NumVertexBuffers = Geo.Joints ? 6 : 1; // Only positions and joints are used
+                Topology = &DrawItem.GetPoints();
                 break;
 
             default:
@@ -1050,12 +1088,14 @@ void HnRenderPass::RenderPendingDrawItems(RenderState& State)
             for (size_t i = 1; i < PendingItem.DrawCount; ++i)
             {
                 const auto& BatchItem = m_PendingDrawItems[item_idx + i].ListItem;
-                VERIFY_EXPR(BatchItem.RenderStateID == ListItem.RenderStateID &&
-                            BatchItem.pPSO == ListItem.pPSO &&
-                            BatchItem.IndexBuffer == ListItem.IndexBuffer &&
+                // clang-format off
+                VERIFY_EXPR(BatchItem.RenderStateID    == ListItem.RenderStateID &&
+                            BatchItem.pPSO             == ListItem.pPSO &&
+                            BatchItem.IndexBuffer      == ListItem.IndexBuffer &&
                             BatchItem.NumVertexBuffers == ListItem.NumVertexBuffers &&
-                            BatchItem.VertexBuffers == ListItem.VertexBuffers &&
+                            BatchItem.VertexBuffers    == ListItem.VertexBuffers &&
                             BatchItem.DrawItem.GetMaterial()->GetSRB() == ListItem.DrawItem.GetMaterial()->GetSRB());
+                // clang-format on
             }
             VERIFY_EXPR(m_ScratchSpace.size() >= PendingItem.DrawCount * (ListItem.IndexBuffer != nullptr ? sizeof(MultiDrawIndexedItem) : sizeof(MultiDrawItem)));
 #endif

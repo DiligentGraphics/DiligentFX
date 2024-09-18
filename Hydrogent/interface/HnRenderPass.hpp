@@ -114,6 +114,17 @@ public:
     };
     EXECUTE_RESULT Execute(HnRenderPassState& RPState, const pxr::TfTokenVector& Tags);
 
+    enum VERTEX_BUFFER_SLOT : Uint32
+    {
+        VERTEX_BUFFER_SLOT_POSITIONS = 0,
+        VERTEX_BUFFER_SLOT_NORMALS,
+        VERTEX_BUFFER_SLOT_TEX_COORDS0,
+        VERTEX_BUFFER_SLOT_TEX_COORDS1,
+        VERTEX_BUFFER_SLOT_VERTEX_COLORS,
+        VERTEX_BUFFER_SLOT_VERTEX_JOINTS,
+        VERTEX_BUFFER_SLOT_COUNT
+    };
+
 protected:
     // Virtual API: Execute the buckets corresponding to renderTags;
     // renderTags.empty() implies execute everything.
@@ -167,8 +178,7 @@ private:
 
         IBuffer* IndexBuffer = nullptr;
 
-        static constexpr size_t                MaxVertexBuffers = 6;
-        std::array<IBuffer*, MaxVertexBuffers> VertexBuffers    = {};
+        std::array<IBuffer*, VERTEX_BUFFER_SLOT_COUNT> VertexBuffers = {};
 
         explicit DrawListItem(HnRenderDelegate& RenderDelegate, const HnDrawItem& Item) noexcept;
 
