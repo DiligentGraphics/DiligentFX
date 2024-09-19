@@ -537,8 +537,8 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
             else
             {
                 float4x4 PrevProj = PrevCamera.mProj;
-                PrevProj[0][2]    = Jitter.x;
-                PrevProj[1][2]    = Jitter.y;
+                PrevProj[2][0]    = Jitter.x;
+                PrevProj[2][1]    = Jitter.y;
                 if (PrevProj != CamAttribs.mProj)
                 {
                     CameraTransformDirty = true;
