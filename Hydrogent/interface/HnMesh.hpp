@@ -108,7 +108,8 @@ public:
 
         struct Skinning
         {
-            const pxr::VtMatrix4fArray* Xforms = nullptr;
+            const pxr::VtMatrix4fArray* Xforms     = nullptr;
+            size_t                      XformsHash = 0;
         };
     };
 

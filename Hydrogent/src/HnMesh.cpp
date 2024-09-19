@@ -660,7 +660,8 @@ void HnMesh::UpdateSkinningPrimvars(pxr::HdSceneDelegate&                       
         entt::registry&       Registry     = static_cast<HnRenderDelegate*>(SceneDelegate.GetRenderIndex().GetRenderDelegate())->GetEcsRegistry();
         Components::Skinning& SkinningData = Registry.get<Components::Skinning>(m_Entity);
 
-        SkinningData.Xforms = &SkinningCompImpl->GetXforms();
+        SkinningData.Xforms     = &SkinningCompImpl->GetXforms();
+        SkinningData.XformsHash = SkinningCompImpl->GetXformsHash();
     }
     else
     {

@@ -431,6 +431,7 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
 
     entt::registry& Registry = State.RenderDelegate.GetEcsRegistry();
 
+    size_t XformsHash = 0;
     Uint32 JointCount = 0;
 
     // Note: accessing components through a view is faster than accessing them through the registry.
@@ -462,17 +463,18 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
         if (ListItem.IsSkinned && pJointsCB != nullptr)
         {
             const HnMesh::Components::Skinning& SkinningData = MeshAttribsView.get<const HnMesh::Components::Skinning>(ListItem.MeshEntity);
-            if (const pxr::VtMatrix4fArray* SkinningXforms = SkinningData.Xforms)
+            if (SkinningData.Xforms != nullptr && SkinningData.XformsHash != XformsHash)
             {
-                JointCount = std::min(static_cast<Uint32>(SkinningXforms->size()), MaxJointCount);
+                JointCount = std::min(static_cast<Uint32>(SkinningData.Xforms->size()), MaxJointCount);
 
                 MapHelper<float4x4> JointsData{State.pCtx, pJointsCB, MAP_WRITE, MAP_FLAG_DISCARD};
-                memcpy(JointsData, SkinningXforms->data(), JointCount * sizeof(float4x4));
+                memcpy(JointsData, SkinningData.Xforms->data(), JointCount * sizeof(float4x4));
 
                 // TODO: properly compute previous frame transforms
-                memcpy(JointsData + MaxJointCount, SkinningXforms->data(), JointCount * sizeof(float4x4));
+                memcpy(JointsData + MaxJointCount, SkinningData.Xforms->data(), JointCount * sizeof(float4x4));
 
                 MultiDrawCount = 0;
+                XformsHash     = SkinningData.XformsHash;
             }
         }
 

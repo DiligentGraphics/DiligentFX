@@ -56,9 +56,11 @@ public:
     static bool IsCompatible(const HnExtComputation& Owner);
 
     const pxr::VtMatrix4fArray& GetXforms() const { return m_Xforms; }
+    size_t                      GetXformsHash() const { return m_XformsHash; }
 
 private:
     pxr::VtMatrix4fArray m_Xforms;
+    size_t               m_XformsHash = 0;
 };
 
 } // namespace USD
