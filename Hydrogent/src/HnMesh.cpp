@@ -220,7 +220,7 @@ void HnMesh::Sync(pxr::HdSceneDelegate* Delegate,
         }
         else
         {
-            CullMode = Delegate->GetTransform(Id).GetDeterminant() > 0 ? CULL_MODE_BACK : CULL_MODE_FRONT;
+            CullMode = Delegate->GetTransform(Id).IsRightHanded() ? CULL_MODE_BACK : CULL_MODE_FRONT;
         }
 
         if (m_CullMode != CullMode)
