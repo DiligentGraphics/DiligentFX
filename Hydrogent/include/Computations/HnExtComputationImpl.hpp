@@ -24,7 +24,11 @@
  *  of the possibility of such damages.
  */
 
-#include "HnExtComputation.hpp"
+#pragma once
+
+#include <memory>
+
+#include "pxr/imaging/hd/sceneDelegate.h"
 
 namespace Diligent
 {
@@ -32,46 +36,46 @@ namespace Diligent
 namespace USD
 {
 
-HnExtComputation* HnExtComputation::Create(const pxr::SdfPath& Id)
-{
-    return new HnExtComputation{Id};
-}
+class HnExtComputation;
 
-HnExtComputation::HnExtComputation(const pxr::SdfPath& Id) :
-    pxr::HdExtComputation{Id}
+class HnExtComputationImpl
 {
-}
-
-HnExtComputation::~HnExtComputation()
-{
-}
-
-void HnExtComputation::Sync(pxr::HdSceneDelegate* SceneDelegate,
-                            pxr::HdRenderParam*   RenderParam,
-                            pxr::HdDirtyBits*     DirtyBits)
-{
-    pxr::HdExtComputation::_Sync(SceneDelegate, RenderParam, DirtyBits);
-
-    HnExtComputationImpl::ImplType Type = HnExtComputationImpl::GetType(*this);
-    if (m_Impl && m_Impl->GetType() != Type)
+public:
+    enum class ImplType
     {
-        m_Impl.reset();
+        Unknown,
+        Skinning
+    };
+
+    HnExtComputationImpl(HnExtComputation& Owner, ImplType Type);
+    virtual ~HnExtComputationImpl();
+
+    ImplType GetType() const { return m_Type; }
+
+    static ImplType                              GetType(const HnExtComputation& Owner);
+    static std::unique_ptr<HnExtComputationImpl> Create(HnExtComputation& Owner);
+
+    // Synchronizes state from the delegate to this object.
+    virtual void Sync(pxr::HdSceneDelegate* SceneDelegate,
+                      pxr::HdRenderParam*   RenderParam,
+                      pxr::HdDirtyBits*     DirtyBits) = 0;
+
+    template <typename T>
+    T* As()
+    {
+        return m_Type == T::Type ? static_cast<T*>(this) : nullptr;
     }
 
-    if (!m_Impl)
+    template <typename T>
+    const T* As() const
     {
-        m_Impl = HnExtComputationImpl::Create(*this);
+        return m_Type == T::Type ? static_cast<const T*>(this) : nullptr;
     }
 
-    if (m_Impl)
-    {
-        m_Impl->Sync(SceneDelegate, RenderParam, DirtyBits);
-    }
-    else
-    {
-        *DirtyBits = pxr::HdExtComputation::Clean;
-    }
-}
+protected:
+    HnExtComputation& m_Owner;
+    const ImplType    m_Type;
+};
 
 } // namespace USD
 

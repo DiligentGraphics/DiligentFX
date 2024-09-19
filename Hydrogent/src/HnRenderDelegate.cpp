@@ -662,7 +662,8 @@ bool HnRenderDelegate::IsParallelSyncEnabled(pxr::TfToken primType) const
 {
     return (primType == pxr::HdPrimTypeTokens->mesh ||
             primType == pxr::HdPrimTypeTokens->material ||
-            primType == pxr::HdPrimTypeTokens->camera);
+            primType == pxr::HdPrimTypeTokens->camera ||
+            primType == pxr::HdPrimTypeTokens->extComputation);
 }
 
 const pxr::SdfPath* HnRenderDelegate::GetRPrimId(Uint32 UID) const

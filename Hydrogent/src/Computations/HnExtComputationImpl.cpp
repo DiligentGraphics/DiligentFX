@@ -24,7 +24,8 @@
  *  of the possibility of such damages.
  */
 
-#include "HnExtComputation.hpp"
+#include "Computations/HnExtComputationImpl.hpp"
+#include "Computations/HnSkinningComputation.hpp"
 
 namespace Diligent
 {
@@ -32,45 +33,33 @@ namespace Diligent
 namespace USD
 {
 
-HnExtComputation* HnExtComputation::Create(const pxr::SdfPath& Id)
-{
-    return new HnExtComputation{Id};
-}
+HnExtComputationImpl::HnExtComputationImpl(HnExtComputation& Owner, ImplType Type) :
+    m_Owner{Owner},
+    m_Type{Type}
+{}
 
-HnExtComputation::HnExtComputation(const pxr::SdfPath& Id) :
-    pxr::HdExtComputation{Id}
-{
-}
-
-HnExtComputation::~HnExtComputation()
+HnExtComputationImpl::~HnExtComputationImpl()
 {
 }
 
-void HnExtComputation::Sync(pxr::HdSceneDelegate* SceneDelegate,
-                            pxr::HdRenderParam*   RenderParam,
-                            pxr::HdDirtyBits*     DirtyBits)
+HnExtComputationImpl::ImplType HnExtComputationImpl::GetType(const HnExtComputation& Owner)
 {
-    pxr::HdExtComputation::_Sync(SceneDelegate, RenderParam, DirtyBits);
-
-    HnExtComputationImpl::ImplType Type = HnExtComputationImpl::GetType(*this);
-    if (m_Impl && m_Impl->GetType() != Type)
+    if (HnSkinningComputation::IsCompatible(Owner))
     {
-        m_Impl.reset();
+        return ImplType::Skinning;
     }
 
-    if (!m_Impl)
+    return ImplType::Unknown;
+}
+
+std::unique_ptr<HnExtComputationImpl> HnExtComputationImpl::Create(HnExtComputation& Owner)
+{
+    if (HnSkinningComputation::IsCompatible(Owner))
     {
-        m_Impl = HnExtComputationImpl::Create(*this);
+        return std::make_unique<HnSkinningComputation>(Owner);
     }
 
-    if (m_Impl)
-    {
-        m_Impl->Sync(SceneDelegate, RenderParam, DirtyBits);
-    }
-    else
-    {
-        *DirtyBits = pxr::HdExtComputation::Clean;
-    }
+    return {};
 }
 
 } // namespace USD

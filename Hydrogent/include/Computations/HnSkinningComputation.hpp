@@ -24,7 +24,14 @@
  *  of the possibility of such damages.
  */
 
-#include "HnExtComputation.hpp"
+#pragma once
+
+#include <memory>
+
+#include "HnExtComputationImpl.hpp"
+
+#include "pxr/base/gf/matrix4f.h"
+#include "pxr/base/vt/types.h"
 
 namespace Diligent
 {
@@ -32,46 +39,27 @@ namespace Diligent
 namespace USD
 {
 
-HnExtComputation* HnExtComputation::Create(const pxr::SdfPath& Id)
+class HnSkinningComputation final : public HnExtComputationImpl
 {
-    return new HnExtComputation{Id};
-}
+public:
+    static constexpr ImplType Type = ImplType::Skinning;
 
-HnExtComputation::HnExtComputation(const pxr::SdfPath& Id) :
-    pxr::HdExtComputation{Id}
-{
-}
+    static std::unique_ptr<HnSkinningComputation> Create(HnExtComputation& Owner);
 
-HnExtComputation::~HnExtComputation()
-{
-}
+    HnSkinningComputation(HnExtComputation& Owner);
+    ~HnSkinningComputation();
 
-void HnExtComputation::Sync(pxr::HdSceneDelegate* SceneDelegate,
-                            pxr::HdRenderParam*   RenderParam,
-                            pxr::HdDirtyBits*     DirtyBits)
-{
-    pxr::HdExtComputation::_Sync(SceneDelegate, RenderParam, DirtyBits);
+    virtual void Sync(pxr::HdSceneDelegate* SceneDelegate,
+                      pxr::HdRenderParam*   RenderParam,
+                      pxr::HdDirtyBits*     DirtyBits) override final;
 
-    HnExtComputationImpl::ImplType Type = HnExtComputationImpl::GetType(*this);
-    if (m_Impl && m_Impl->GetType() != Type)
-    {
-        m_Impl.reset();
-    }
+    static bool IsCompatible(const HnExtComputation& Owner);
 
-    if (!m_Impl)
-    {
-        m_Impl = HnExtComputationImpl::Create(*this);
-    }
+    const pxr::VtMatrix4fArray& GetXforms() const { return m_Xforms; }
 
-    if (m_Impl)
-    {
-        m_Impl->Sync(SceneDelegate, RenderParam, DirtyBits);
-    }
-    else
-    {
-        *DirtyBits = pxr::HdExtComputation::Clean;
-    }
-}
+private:
+    pxr::VtMatrix4fArray m_Xforms;
+};
 
 } // namespace USD
 

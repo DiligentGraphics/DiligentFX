@@ -26,7 +26,10 @@
 
 #pragma once
 
+#include <memory>
+
 #include "pxr/imaging/hd/extComputation.h"
+#include "Computations/HnExtComputationImpl.hpp"
 
 namespace Diligent
 {
@@ -47,6 +50,21 @@ public:
     virtual void Sync(pxr::HdSceneDelegate* SceneDelegate,
                       pxr::HdRenderParam*   RenderParam,
                       pxr::HdDirtyBits*     DirtyBits) override final;
+
+    template <typename T>
+    T* GetImpl()
+    {
+        return m_Impl ? m_Impl->As<T>() : nullptr;
+    }
+
+    template <typename T>
+    const T* GetImpl() const
+    {
+        return m_Impl ? m_Impl->As<T>() : nullptr;
+    }
+
+private:
+    std::unique_ptr<HnExtComputationImpl> m_Impl;
 };
 
 } // namespace USD

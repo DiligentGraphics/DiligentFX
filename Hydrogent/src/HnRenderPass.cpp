@@ -84,14 +84,17 @@ HnRenderPass::DrawListItem::DrawListItem(HnRenderDelegate& RenderDelegate, const
     DrawItem{Item},
     Mesh{Item.GetMesh()},
     Material{*Item.GetMaterial()},
-    SkinningXforms{DrawItem.GetGeometryData().Joints ? &Mesh.GetSkinningXforms() : nullptr},
     MeshEntity{Mesh.GetEntity()},
     MeshUID{static_cast<float>(Mesh.GetUID())},
     RenderStateID{0},
-    NumVertexBuffers{0}
+    NumVertexBuffers{0},
+    IsSkinned{0}
 {
     entt::registry& Registry = RenderDelegate.GetEcsRegistry();
     PrevTransform            = Registry.get<HnMesh::Components::Transform>(MeshEntity).Val;
+
+    if (Registry.get<HnMesh::Components::Skinning>(MeshEntity).Xforms != nullptr)
+        IsSkinned = 1;
 }
 
 HnRenderPass::HnRenderPass(pxr::HdRenderIndex*           pIndex,
@@ -428,13 +431,13 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
 
     entt::registry& Registry = State.RenderDelegate.GetEcsRegistry();
 
-    const pxr::VtMatrix4fArray* SkinningXforms = nullptr;
-    Uint32                      JointCount     = 0;
+    Uint32 JointCount = 0;
 
     // Note: accessing components through a view is faster than accessing them through the registry.
     auto MeshAttribsView = Registry.view<const HnMesh::Components::Transform,
                                          const HnMesh::Components::DisplayColor,
-                                         const HnMesh::Components::Visibility>();
+                                         const HnMesh::Components::Visibility,
+                                         const HnMesh::Components::Skinning>();
 
     Uint32 MultiDrawCount = 0;
     for (DrawListItem& ListItem : m_DrawList)
@@ -456,10 +459,10 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
         if (MultiDrawCount == PrimitiveArraySize)
             MultiDrawCount = 0;
 
-        if (ListItem.SkinningXforms != SkinningXforms && pJointsCB != nullptr)
+        if (ListItem.IsSkinned && pJointsCB != nullptr)
         {
-            SkinningXforms = ListItem.SkinningXforms;
-            if (SkinningXforms != nullptr)
+            const HnMesh::Components::Skinning& SkinningData = MeshAttribsView.get<const HnMesh::Components::Skinning>(ListItem.MeshEntity);
+            if (const pxr::VtMatrix4fArray* SkinningXforms = SkinningData.Xforms)
             {
                 JointCount = std::min(static_cast<Uint32>(SkinningXforms->size()), MaxJointCount);
 

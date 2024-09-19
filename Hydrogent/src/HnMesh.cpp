@@ -33,6 +33,7 @@
 #include "HnRenderPass.hpp"
 #include "HnDrawItem.hpp"
 #include "HnExtComputation.hpp"
+#include "Computations/HnSkinningComputation.hpp"
 #include "GfTypeConversions.hpp"
 
 #include "DebugUtilities.hpp"
@@ -60,7 +61,6 @@ TF_DEFINE_PRIVATE_TOKENS(
     (skinnedPoints)
     (numInfluencesPerComponent)
     (influences)
-    (skinningXforms)
 );
 // clang-format on
 
@@ -86,6 +86,7 @@ HnMesh::HnMesh(pxr::TfToken const& typeId,
     Regisgtry.emplace<Components::Transform>(m_Entity);
     Regisgtry.emplace<Components::DisplayColor>(m_Entity);
     Regisgtry.emplace<Components::Visibility>(m_Entity, _sharedData.visible);
+    Regisgtry.emplace<Components::Skinning>(m_Entity);
 }
 
 HnMesh::~HnMesh()
@@ -536,7 +537,7 @@ std::shared_ptr<pxr::HdBufferSource> HnMesh::CreateJointInfluencesBufferSource(p
     pxr::VtVec2fArray Influences;
 
     // NB: use influences from the skinnig computation, not from the primvars because
-    //     the computation may have performed necessary reindexing of primvar indices.
+    //     the computation may have performed necessary reindexing of the joint indices.
     const pxr::HdExtComputationInputDescriptorVector& ComputationInputs = SkinningComp->GetComputationInputs();
     for (const pxr::HdExtComputationInputDescriptor& CompInput : ComputationInputs)
     {
@@ -548,7 +549,7 @@ std::shared_ptr<pxr::HdBufferSource> HnMesh::CreateJointInfluencesBufferSource(p
                 LOG_ERROR_MESSAGE("Number of influences per component of mesh ", Id, " is of type ", NumInfluencesPerComponentVal.GetTypeName(), ", but int is expected");
                 return {};
             }
-            NumInfluencesPerComponent = NumInfluencesPerComponentVal.Get<int>();
+            NumInfluencesPerComponent = NumInfluencesPerComponentVal.UncheckedGet<int>();
         }
         else if (CompInput.name == HnSkinningPrivateTokens->influences)
         {
@@ -558,7 +559,7 @@ std::shared_ptr<pxr::HdBufferSource> HnMesh::CreateJointInfluencesBufferSource(p
                 LOG_ERROR_MESSAGE("Influences of mesh ", Id, " are of type ", InfluencesVal.GetTypeName(), ", but VtVec2fArray is expected");
                 return {};
             }
-            Influences = InfluencesVal.Get<pxr::VtVec2fArray>();
+            Influences = InfluencesVal.UncheckedGet<pxr::VtVec2fArray>();
         }
     }
 
@@ -654,16 +655,16 @@ void HnMesh::UpdateSkinningPrimvars(pxr::HdSceneDelegate&                       
         }
     }
 
+    if (const HnSkinningComputation* SkinningCompImpl = SkinningComp->GetImpl<HnSkinningComputation>())
     {
-        pxr::VtValue SkinningXformsVal = SceneDelegate.GetExtComputationInput(SkinningCompPrimDesc.sourceComputationId, HnSkinningPrivateTokens->skinningXforms);
-        if (SkinningXformsVal.IsHolding<pxr::VtMatrix4fArray>())
-        {
-            m_SkinningXforms = SkinningXformsVal.Get<pxr::VtMatrix4fArray>();
-        }
-        else
-        {
-            LOG_ERROR_MESSAGE("Skinning transforms of mesh ", Id, " are of type ", SkinningXformsVal.GetTypeName(), ", but VtMatrix4fArray is expected");
-        }
+        entt::registry&       Registry     = static_cast<HnRenderDelegate*>(SceneDelegate.GetRenderIndex().GetRenderDelegate())->GetEcsRegistry();
+        Components::Skinning& SkinningData = Registry.get<Components::Skinning>(m_Entity);
+
+        SkinningData.Xforms = &SkinningCompImpl->GetXforms();
+    }
+    else
+    {
+        DEV_ERROR("Skinning computation ", SkinnigCompId, " does not have a valid implementation");
     }
 }
 

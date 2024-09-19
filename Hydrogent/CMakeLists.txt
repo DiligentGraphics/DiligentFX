@@ -46,6 +46,8 @@ set(SOURCE
     src/Tasks/HnProcessSelectionTask.cpp
     src/Tasks/HnReadRprimIdTask.cpp
     src/Tasks/HnTaskManager.cpp
+    src/Computations/HnExtComputationImpl.cpp
+    src/Computations/HnSkinningComputation.cpp
 )
 
 set(INCLUDE
@@ -56,6 +58,8 @@ set(INCLUDE
     include/HnTypeConversions.hpp
     include/HnTextureUtils.hpp
     include/HnTextureIdentifier.hpp
+    include/Computations/HnExtComputationImpl.hpp
+    include/Computations/HnSkinningComputation.hpp
 )
 
 set(INTERFACE

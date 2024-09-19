@@ -105,6 +105,11 @@ public:
         {
             bool Val = true;
         };
+
+        struct Skinning
+        {
+            const pxr::VtMatrix4fArray* Xforms = nullptr;
+        };
     };
 
     CULL_MODE GetCullMode() const { return m_CullMode != CULL_MODE_UNDEFINED ? m_CullMode : CULL_MODE_BACK; }
@@ -115,8 +120,6 @@ public:
     Uint32 GetMaterialVersion() const { return m_MaterialVersion; }
 
     entt::entity GetEntity() const { return m_Entity; }
-
-    const pxr::VtMatrix4fArray& GetSkinningXforms() const { return m_SkinningXforms; }
 
 protected:
     // This callback from Rprim gives the prim an opportunity to set
@@ -271,8 +274,6 @@ private:
         std::unordered_map<pxr::TfToken, RefCntAutoPtr<IBuffer>, pxr::TfToken::HashFunctor> Buffers;
     };
     VertexData m_VertexData;
-
-    pxr::VtMatrix4fArray m_SkinningXforms;
 
     bool      m_IsDoubleSided = false;
     CULL_MODE m_CullMode      = CULL_MODE_UNDEFINED;
