@@ -47,7 +47,6 @@
 #include "pxr/imaging/hd/vtBufferSource.h"
 #include "pxr/imaging/hd/vertexAdjacency.h"
 #include "pxr/imaging/hd/smoothNormals.h"
-#include "pxr/usd/usdSkel/tokens.h"
 
 namespace Diligent
 {
@@ -58,6 +57,7 @@ namespace USD
 // clang-format off
 TF_DEFINE_PRIVATE_TOKENS(
     HnSkinningPrivateTokens,
+    (restPoints)
     (skinnedPoints)
     (numInfluencesPerComponent)
     (influences)
@@ -351,7 +351,7 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
             // Note that this only reserves space, but does not create any buffers.
             AllocatePooledResources(SceneDelegate, RenderParam);
         }
-        else
+        else if (GetVertexBuffer(pxr::HdTokens->points) == nullptr)
         {
             LOG_WARNING_MESSAGE("Unable to find required primvar 'points' for rprim ", Id, ".");
 
@@ -527,46 +527,28 @@ static HnRenderPass::SupportedVertexInputsSetType GetSupportedPrimvars(
     return SupportedPrimvars;
 }
 
-std::shared_ptr<pxr::HdBufferSource> HnMesh::CreateJointInfluencesBufferSource(pxr::HdSceneDelegate&   SceneDelegate,
-                                                                               const HnExtComputation* SkinningComp)
+std::shared_ptr<pxr::HdBufferSource> HnMesh::CreateJointInfluencesBufferSource(const pxr::VtValue& NumInfluencesPerComponentVal,
+                                                                               const pxr::VtValue& InfluencesVal)
 {
     const pxr::SdfPath& Id = GetId();
-
-    int NumInfluencesPerComponent = 0;
-
-    pxr::VtVec2fArray Influences;
-
-    // NB: use influences from the skinnig computation, not from the primvars because
-    //     the computation may have performed necessary reindexing of the joint indices.
-    const pxr::HdExtComputationInputDescriptorVector& ComputationInputs = SkinningComp->GetComputationInputs();
-    for (const pxr::HdExtComputationInputDescriptor& CompInput : ComputationInputs)
+    if (!NumInfluencesPerComponentVal.IsHolding<int>())
     {
-        if (CompInput.name == HnSkinningPrivateTokens->numInfluencesPerComponent)
-        {
-            pxr::VtValue NumInfluencesPerComponentVal = SceneDelegate.GetExtComputationInput(CompInput.sourceComputationId, CompInput.name);
-            if (!NumInfluencesPerComponentVal.IsHolding<int>())
-            {
-                LOG_ERROR_MESSAGE("Number of influences per component of mesh ", Id, " is of type ", NumInfluencesPerComponentVal.GetTypeName(), ", but int is expected");
-                return {};
-            }
-            NumInfluencesPerComponent = NumInfluencesPerComponentVal.UncheckedGet<int>();
-        }
-        else if (CompInput.name == HnSkinningPrivateTokens->influences)
-        {
-            pxr::VtValue InfluencesVal = SceneDelegate.GetExtComputationInput(CompInput.sourceComputationId, CompInput.name);
-            if (!InfluencesVal.IsHolding<pxr::VtVec2fArray>())
-            {
-                LOG_ERROR_MESSAGE("Influences of mesh ", Id, " are of type ", InfluencesVal.GetTypeName(), ", but VtVec2fArray is expected");
-                return {};
-            }
-            Influences = InfluencesVal.UncheckedGet<pxr::VtVec2fArray>();
-        }
+        LOG_ERROR_MESSAGE("Number of influences per component of mesh ", Id, " is of type ", NumInfluencesPerComponentVal.GetTypeName(), ", but int is expected");
+        return {};
+    }
+    if (!InfluencesVal.IsHolding<pxr::VtVec2fArray>())
+    {
+        LOG_ERROR_MESSAGE("Influences of mesh ", Id, " are of type ", InfluencesVal.GetTypeName(), ", but VtVec2fArray is expected");
+        return {};
     }
 
+    const int NumInfluencesPerComponent = NumInfluencesPerComponentVal.UncheckedGet<int>();
     if (NumInfluencesPerComponent <= 0)
     {
         return {};
     }
+
+    pxr::VtVec2fArray Influences = InfluencesVal.UncheckedGet<pxr::VtVec2fArray>();
 
     // 'influences' input of skinnig computation contains pairs of joint indices and weights.
     // Our shader always uses 4 joints packed into the following structure:
@@ -624,8 +606,9 @@ void HnMesh::UpdateSkinningPrimvars(pxr::HdSceneDelegate&                       
                                     const pxr::TfToken&                           ReprToken,
                                     const pxr::HdExtComputationPrimvarDescriptor& SkinningCompPrimDesc)
 {
-    const pxr::SdfPath&     SkinnigCompId = SkinningCompPrimDesc.sourceComputationId;
-    const HnExtComputation* SkinningComp  = static_cast<const HnExtComputation*>(SceneDelegate.GetRenderIndex().GetSprim(pxr::HdPrimTypeTokens->extComputation, SkinnigCompId));
+    const pxr::HdRenderIndex& RenderIndex   = SceneDelegate.GetRenderIndex();
+    const pxr::SdfPath&       SkinnigCompId = SkinningCompPrimDesc.sourceComputationId;
+    const HnExtComputation*   SkinningComp  = static_cast<const HnExtComputation*>(RenderIndex.GetSprim(pxr::HdPrimTypeTokens->extComputation, SkinnigCompId));
     if (SkinningComp == nullptr)
     {
         LOG_ERROR_MESSAGE("Unable to find skinning computation ", SkinnigCompId);
@@ -634,25 +617,71 @@ void HnMesh::UpdateSkinningPrimvars(pxr::HdSceneDelegate&                       
 
     const pxr::SdfPath& Id = GetId();
 
+    Uint32 SkinningPrimvarsVersion = 0;
+
     // When animation is played, the points primvar is marked as dirty each frame.
-    // We only need to really update it if any other primvar is dirty or topology is dirty.
-    if (pxr::HdChangeTracker::IsPrimvarDirty(DirtyBits, Id, SkinningCompPrimDesc.name) &&
-        ((DirtyBits & pxr::HdChangeTracker::DirtyPrimvar) || m_StagingIndexData))
+    // To detect if skinning primvars are truly dirty, we need to check the version of the skinning computation inputs.
+    const pxr::HdExtComputationInputDescriptorVector& ComputationInputs = SkinningComp->GetComputationInputs();
+    for (const pxr::HdExtComputationInputDescriptor& CompInput : ComputationInputs)
     {
-        pxr::VtValue PrimValue = GetPrimvar(&SceneDelegate, SkinningCompPrimDesc.name);
-        if (auto BufferSource = CreateBufferSource(SkinningCompPrimDesc.name, PrimValue, m_Topology.GetNumPoints(), Id))
+        const pxr::SdfPath      InputAggregatorCompId = CompInput.sourceComputationId;
+        const HnExtComputation* InputAggregatorComp   = static_cast<const HnExtComputation*>(RenderIndex.GetSprim(pxr::HdPrimTypeTokens->extComputation, CompInput.sourceComputationId));
+        if (InputAggregatorComp == nullptr)
+        {
+            LOG_ERROR_MESSAGE("Unable to find skinning input aggregator computation ", InputAggregatorCompId, " for input ", CompInput.name, " of skinning computation ", SkinnigCompId);
+            return;
+        }
+        SkinningPrimvarsVersion += InputAggregatorComp->GetSceneInputsVersion();
+    }
+
+    if (SkinningPrimvarsVersion != m_SkinningPrimvarsVersion)
+    {
+        pxr::VtValue RestPointsVal;
+        pxr::VtValue NumInfluencesPerComponentVal;
+        pxr::VtValue InfluencesVal;
+        for (const pxr::HdExtComputationInputDescriptor& CompInput : ComputationInputs)
+        {
+            if (CompInput.name == HnSkinningPrivateTokens->restPoints)
+            {
+                RestPointsVal = SceneDelegate.GetExtComputationInput(CompInput.sourceComputationId, CompInput.name);
+            }
+            else if (CompInput.name == HnSkinningPrivateTokens->numInfluencesPerComponent)
+            {
+                NumInfluencesPerComponentVal = SceneDelegate.GetExtComputationInput(CompInput.sourceComputationId, CompInput.name);
+            }
+            else if (CompInput.name == HnSkinningPrivateTokens->influences)
+            {
+                InfluencesVal = SceneDelegate.GetExtComputationInput(CompInput.sourceComputationId, CompInput.name);
+            }
+        }
+
+        if (RestPointsVal.IsEmpty())
+        {
+            LOG_ERROR_MESSAGE("Unable to find rest points for skinning computation ", SkinnigCompId);
+            return;
+        }
+        if (NumInfluencesPerComponentVal.IsEmpty())
+        {
+            LOG_ERROR_MESSAGE("Unable to find number of influences per component for skinning computation ", SkinnigCompId);
+            return;
+        }
+        if (InfluencesVal.IsEmpty())
+        {
+            LOG_ERROR_MESSAGE("Unable to find influences for skinning computation ", SkinnigCompId);
+            return;
+        }
+
+        if (auto BufferSource = CreateBufferSource(SkinningCompPrimDesc.name, RestPointsVal, m_Topology.GetNumPoints(), Id))
         {
             m_StagingVertexData->Sources.emplace(SkinningCompPrimDesc.name, std::move(BufferSource));
         }
-    }
 
-    if (pxr::HdChangeTracker::IsPrimvarDirty(DirtyBits, Id, pxr::UsdSkelTokens->primvarsSkelJointIndices) ||
-        pxr::HdChangeTracker::IsPrimvarDirty(DirtyBits, Id, pxr::UsdSkelTokens->primvarsSkelJointWeights))
-    {
-        if (auto BufferSource = CreateJointInfluencesBufferSource(SceneDelegate, SkinningComp))
+        if (auto BufferSource = CreateJointInfluencesBufferSource(NumInfluencesPerComponentVal, InfluencesVal))
         {
             m_StagingVertexData->Sources.emplace(HnTokens->joints, std::move(BufferSource));
         }
+
+        m_SkinningPrimvarsVersion = SkinningPrimvarsVersion;
     }
 
     if (const HnSkinningComputation* SkinningCompImpl = SkinningComp->GetImpl<HnSkinningComputation>())

@@ -169,8 +169,8 @@ private:
                                 pxr::HdDirtyBits&     DirtyBits,
                                 const pxr::TfToken&   ReprToken);
 
-    std::shared_ptr<pxr::HdBufferSource> CreateJointInfluencesBufferSource(pxr::HdSceneDelegate&   SceneDelegate,
-                                                                           const HnExtComputation* SkinningComp);
+    std::shared_ptr<pxr::HdBufferSource> CreateJointInfluencesBufferSource(const pxr::VtValue& NumInfluencesPerComponentVal,
+                                                                           const pxr::VtValue& InfluencesVal);
 
     void UpdateSkinningPrimvars(pxr::HdSceneDelegate&                         SceneDelegate,
                                 pxr::HdRenderParam*                           RenderParam,
@@ -281,6 +281,7 @@ private:
 
     std::atomic<Uint32> m_GeometryVersion{0};
     std::atomic<Uint32> m_MaterialVersion{0};
+    std::atomic<Uint32> m_SkinningPrimvarsVersion{0};
 };
 
 } // namespace USD

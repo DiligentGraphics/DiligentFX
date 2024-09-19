@@ -27,9 +27,11 @@
 #pragma once
 
 #include <memory>
+#include <atomic>
 
 #include "pxr/imaging/hd/extComputation.h"
 #include "Computations/HnExtComputationImpl.hpp"
+#include "BasicTypes.h"
 
 namespace Diligent
 {
@@ -51,6 +53,11 @@ public:
                       pxr::HdRenderParam*   RenderParam,
                       pxr::HdDirtyBits*     DirtyBits) override final;
 
+    Uint32 GetSceneInputsVersion() const
+    {
+        return m_SceneInputsVersion.load();
+    }
+
     template <typename T>
     T* GetImpl()
     {
@@ -65,6 +72,8 @@ public:
 
 private:
     std::unique_ptr<HnExtComputationImpl> m_Impl;
+
+    std::atomic<Uint32> m_SceneInputsVersion{0};
 };
 
 } // namespace USD

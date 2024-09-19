@@ -25,6 +25,7 @@
  */
 
 #include "HnExtComputation.hpp"
+#include "DebugUtilities.hpp"
 
 namespace Diligent
 {
@@ -52,9 +53,16 @@ void HnExtComputation::Sync(pxr::HdSceneDelegate* SceneDelegate,
 {
     pxr::HdExtComputation::_Sync(SceneDelegate, RenderParam, DirtyBits);
 
+    if (*DirtyBits & pxr::HdExtComputation::DirtySceneInput)
+    {
+        m_SceneInputsVersion.fetch_add(1);
+    }
+
     HnExtComputationImpl::ImplType Type = HnExtComputationImpl::GetType(*this);
     if (m_Impl && m_Impl->GetType() != Type)
     {
+        VERIFY(m_Impl->GetType() != HnExtComputationImpl::ImplType::Skinning,
+               "Deleting skinning computation may result in a crash since render passes may still keep references to the previous-frame Xforms owned by it.");
         m_Impl.reset();
     }
 
