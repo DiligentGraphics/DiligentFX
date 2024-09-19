@@ -27,6 +27,7 @@
 #pragma once
 
 #include <memory>
+#include <array>
 
 #include "HnExtComputationImpl.hpp"
 
@@ -55,12 +56,15 @@ public:
 
     static bool IsCompatible(const HnExtComputation& Owner);
 
-    const pxr::VtMatrix4fArray& GetXforms() const { return m_Xforms; }
+    const pxr::VtMatrix4fArray& GetXforms() const { return m_Xforms[m_CurrXformsIdx]; }
     size_t                      GetXformsHash() const { return m_XformsHash; }
 
 private:
-    pxr::VtMatrix4fArray m_Xforms;
-    size_t               m_XformsHash = 0;
+    // Keep two transforms to allow render passes reference previous-frame transforms
+    std::array<pxr::VtMatrix4fArray, 2> m_Xforms;
+    size_t                              m_CurrXformsIdx = 0;
+
+    size_t m_XformsHash = 0;
 };
 
 } // namespace USD

@@ -164,7 +164,8 @@ private:
 
         PBR_Renderer::PSO_FLAGS PSOFlags = PBR_Renderer::PSO_FLAG_NONE;
 
-        float4x4 PrevTransform = float4x4::Identity();
+        const pxr::VtMatrix4fArray* PrevXforms    = nullptr;
+        float4x4                    PrevTransform = float4x4::Identity();
 
         // Primitive attributes shader data size computed from the value of PSOFlags.
         // Note: unshaded (aka wireframe/point) rendering modes don't use any textures, so the shader data

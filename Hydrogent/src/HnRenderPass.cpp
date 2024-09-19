@@ -470,11 +470,12 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
                 MapHelper<float4x4> JointsData{State.pCtx, pJointsCB, MAP_WRITE, MAP_FLAG_DISCARD};
                 memcpy(JointsData, SkinningData.Xforms->data(), JointCount * sizeof(float4x4));
 
-                // TODO: properly compute previous frame transforms
-                memcpy(JointsData + MaxJointCount, SkinningData.Xforms->data(), JointCount * sizeof(float4x4));
+                const pxr::VtMatrix4fArray* PrevXforms = ListItem.PrevXforms != nullptr ? ListItem.PrevXforms : SkinningData.Xforms;
+                memcpy(JointsData + MaxJointCount, PrevXforms->data(), JointCount * sizeof(float4x4));
 
-                MultiDrawCount = 0;
-                XformsHash     = SkinningData.XformsHash;
+                XformsHash          = SkinningData.XformsHash;
+                ListItem.PrevXforms = SkinningData.Xforms;
+                MultiDrawCount      = 0;
             }
         }
 

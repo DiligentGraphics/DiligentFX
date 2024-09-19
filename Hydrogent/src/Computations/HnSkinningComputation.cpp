@@ -69,8 +69,11 @@ void HnSkinningComputation::Sync(pxr::HdSceneDelegate* SceneDelegate,
         pxr::VtValue SkinningXformsVal = SceneDelegate->GetExtComputationInput(Id, HnSkinningComputationPrivateTokens->skinningXforms);
         if (SkinningXformsVal.IsHolding<pxr::VtMatrix4fArray>())
         {
-            m_Xforms     = SkinningXformsVal.Get<pxr::VtMatrix4fArray>();
-            m_XformsHash = pxr::TfHash{}(m_Xforms);
+            m_CurrXformsIdx              = (m_CurrXformsIdx + 1) % m_Xforms.size();
+            pxr::VtMatrix4fArray& Xforms = m_Xforms[m_CurrXformsIdx];
+
+            Xforms       = SkinningXformsVal.UncheckedGet<pxr::VtMatrix4fArray>();
+            m_XformsHash = pxr::TfHash{}(Xforms);
         }
         else
         {
