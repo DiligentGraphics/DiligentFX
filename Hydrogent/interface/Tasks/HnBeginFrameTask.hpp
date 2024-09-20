@@ -198,7 +198,12 @@ public:
 
 private:
     void PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex, pxr::HdTaskContext* TaskCtx, ITextureView* pFinalColorRTV);
-    void UpdateFrameConstants(IDeviceContext* pCtx, IBuffer* pFrameAttrbisCB, bool UseTAA, const float2& Jitter, bool& CameraTransformDirty);
+    void UpdateFrameConstants(IDeviceContext* pCtx,
+                              IBuffer*        pFrameAttrbisCB,
+                              bool            UseTAA,
+                              const float2&   Jitter,
+                              bool&           CameraTransformDirty,
+                              bool&           LoadingAnimationActive);
 
 private:
     std::unordered_map<pxr::TfToken, HnRenderPassState, pxr::TfToken::HashFunctor> m_RenderPassStates;

@@ -401,7 +401,8 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
                                             IBuffer*        pFrameAttrbisCB,
                                             bool            UseTAA,
                                             const float2&   Jitter,
-                                            bool&           CameraTransformDirty)
+                                            bool&           CameraTransformDirty,
+                                            bool&           LoadingAnimationActive)
 {
     HnRenderDelegate*    RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
     const HnRenderParam* RenderParam    = static_cast<const HnRenderParam*>(RenderDelegate->GetRenderParam());
@@ -650,6 +651,8 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
                 RendererParams.LoadingAnimation.Color1     = m_Params.Renderer.LoadingAnimationColor1;
                 RendererParams.LoadingAnimation.WorldScale = m_Params.Renderer.LoadingAnimationWorldScale;
                 RendererParams.LoadingAnimation.Speed      = m_Params.Renderer.LoadingAnimationSpeed;
+
+                LoadingAnimationActive = LoadingAnimationFactor > 0;
             }
         }
     }
@@ -711,11 +714,17 @@ void HnBeginFrameTask::Execute(pxr::HdTaskContext* TaskCtx)
         // HnRenderRprimsTask::Execute sets it to true if the fallback PSO was used.
         (*TaskCtx)[HnRenderResourceTokens->fallBackPsoInUse] = pxr::VtValue{false};
 
-        bool CameraTransformDirty = false;
-        UpdateFrameConstants(pCtx, pFrameAttribsCB, UseTAA, JitterOffsets, CameraTransformDirty);
+        bool CameraTransformDirty   = false;
+        bool LoadingAnimationActive = false;
+        UpdateFrameConstants(pCtx, pFrameAttribsCB, UseTAA, JitterOffsets, CameraTransformDirty, LoadingAnimationActive);
         (*TaskCtx)[HnRenderResourceTokens->frameShaderAttribs] = pxr::VtValue{reinterpret_cast<HLSL::PBRFrameAttribs*>(m_FrameAttribsData.data())};
         // Will be used by HnPostProcessTask::Execute()
         (*TaskCtx)[HnRenderResourceTokens->cameraTransformDirty] = pxr::VtValue{CameraTransformDirty};
+        if (LoadingAnimationActive)
+        {
+            // Disable temporal AA while loading animation is active
+            (*TaskCtx)[HnRenderResourceTokens->suspendSuperSampling] = pxr::VtValue{true};
+        }
     }
     else
     {
