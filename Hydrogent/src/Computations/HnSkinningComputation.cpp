@@ -29,6 +29,7 @@
 #include "HnTokens.hpp"
 #include "DebugUtilities.hpp"
 #include "GfTypeConversions.hpp"
+#include "HnRenderDelegate.hpp"
 
 namespace Diligent
 {
@@ -78,6 +79,14 @@ void HnSkinningComputation::Sync(pxr::HdSceneDelegate* SceneDelegate,
 
                 Xforms       = SkinningXformsVal.UncheckedGet<pxr::VtMatrix4fArray>();
                 m_XformsHash = pxr::TfHash{}(Xforms);
+
+                const HnRenderDelegate* RenderDelegate = static_cast<const HnRenderDelegate*>(SceneDelegate->GetRenderIndex().GetRenderDelegate());
+                const USD_Renderer&     USDRenderer    = *RenderDelegate->GetUSDRenderer();
+                const Uint32            MaxJointCount  = USDRenderer.GetSettings().MaxJointCount;
+                if (Xforms.size() > MaxJointCount)
+                {
+                    LOG_ERROR_MESSAGE("Skinning transforms of computation ", Id, " contain ", Xforms.size(), " elements, but the maximum number of joints supported by the renderer is ", MaxJointCount);
+                }
             }
             else
             {
