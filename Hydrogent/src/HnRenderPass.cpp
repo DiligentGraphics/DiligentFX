@@ -396,8 +396,9 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
 
     m_PendingDrawItems.clear();
     m_PendingDrawItems.reserve(m_DrawList.size());
-    void*  pMappedBufferData = nullptr;
-    Uint32 CurrOffset        = 0;
+    void*  pMappedBufferData      = nullptr;
+    Uint32 CurrOffset             = 0;
+    Uint32 NumPendingSkinnedItems = 0;
 
     if (AttribsBuffDesc.Usage != USAGE_DYNAMIC)
     {
@@ -420,7 +421,8 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
         }
         RenderPendingDrawItems(State);
         VERIFY_EXPR(m_PendingDrawItems.empty());
-        CurrOffset = 0;
+        CurrOffset             = 0;
+        NumPendingSkinnedItems = 0;
     };
 
     const Uint32 PrimitiveArraySize = !m_UseFallbackPSO ?
@@ -454,29 +456,46 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
         const float4&   DisplayColor = std::get<1>(MeshAttribs).Val;
         const bool      MeshVisibile = std::get<2>(MeshAttribs).Val;
 
+        const HnMesh::Components::Skinning* pSkinningData = (ListItem.IsSkinned && pJointsCB != nullptr) ?
+            &MeshAttribsView.get<const HnMesh::Components::Skinning>(ListItem.MeshEntity) :
+            nullptr;
+
         if (!MeshVisibile)
             continue;
 
         if (MultiDrawCount == PrimitiveArraySize)
             MultiDrawCount = 0;
 
-        if (ListItem.IsSkinned && pJointsCB != nullptr)
+        if (pSkinningData && pSkinningData->XformsHash != XformsHash)
         {
-            const HnMesh::Components::Skinning& SkinningData = MeshAttribsView.get<const HnMesh::Components::Skinning>(ListItem.MeshEntity);
-            if (SkinningData.Xforms != nullptr && SkinningData.XformsHash != XformsHash)
+            // Flush pending draws if there are skinned items that use different joint transforms
+            if (NumPendingSkinnedItems > 0)
             {
-                JointCount = std::min(static_cast<Uint32>(SkinningData.Xforms->size()), MaxJointCount);
-
-                MapHelper<float4x4> JointsData{State.pCtx, pJointsCB, MAP_WRITE, MAP_FLAG_DISCARD};
-                memcpy(JointsData, SkinningData.Xforms->data(), JointCount * sizeof(float4x4));
-
-                const pxr::VtMatrix4fArray* PrevXforms = ListItem.PrevXforms != nullptr ? ListItem.PrevXforms : SkinningData.Xforms;
-                memcpy(JointsData + MaxJointCount, PrevXforms->data(), JointCount * sizeof(float4x4));
-
-                XformsHash          = SkinningData.XformsHash;
-                ListItem.PrevXforms = SkinningData.Xforms;
-                MultiDrawCount      = 0;
+                FlushPendingDraws();
+                MultiDrawCount = 0;
             }
+
+            JointCount = std::min(static_cast<Uint32>(pSkinningData->Xforms->size()), MaxJointCount);
+
+            // Write new joint transforms
+            {
+                MapHelper<float4x4> JointsData{State.pCtx, pJointsCB, MAP_WRITE, MAP_FLAG_DISCARD};
+                float4x4*           pDst = JointsData;
+
+                memcpy(pDst, pSkinningData->GeomBindXform.Data(), sizeof(float4x4));
+                pDst += 1;
+                memcpy(pDst, pSkinningData->Xforms->data(), JointCount * sizeof(float4x4));
+                pDst += MaxJointCount;
+
+                memcpy(pDst, pSkinningData->GeomBindXform.Data(), sizeof(float4x4));
+                pDst += 1;
+                const pxr::VtMatrix4fArray* PrevXforms = ListItem.PrevXforms != nullptr ? ListItem.PrevXforms : pSkinningData->Xforms;
+                memcpy(pDst, PrevXforms->data(), JointCount * sizeof(float4x4));
+                pDst += MaxJointCount;
+            }
+
+            ListItem.PrevXforms = pSkinningData->Xforms;
+            XformsHash          = pSkinningData->XformsHash;
         }
 
         if (MultiDrawCount > 0)
@@ -569,6 +588,8 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
 
         CurrOffset += ListItem.ShaderAttribsDataSize;
         ++MultiDrawCount;
+        if (pSkinningData != nullptr)
+            ++NumPendingSkinnedItems;
     }
     if (CurrOffset != 0)
     {

@@ -128,6 +128,7 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
     USDRendererCI.PCFKernelSize              = RenderDelegateCI.PCFKernelSize;
     USDRendererCI.MaxShadowCastingLightCount = RenderDelegateCI.MaxShadowCastingLightCount;
     USDRendererCI.MaxJointCount              = RenderDelegateCI.MaxJointCount;
+    USDRendererCI.UseSkinPreTransform        = true;
 
     USDRendererCI.ColorTargetIndex        = HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR;
     USDRendererCI.MeshIdTargetIndex       = HnFrameRenderTargets::GBUFFER_TARGET_MESH_ID;
