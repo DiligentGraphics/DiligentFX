@@ -627,16 +627,17 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
                     JointCount = m_Settings.MaxJointCount;
                 }
 
-                if (JointCount != 0)
+                if ((PSOFlags & PSO_FLAG_USE_JOINTS) != 0)
                 {
                     MapHelper<float4x4> pJoints{pCtx, m_JointsBuffer, MAP_WRITE, MAP_FLAG_DISCARD};
-                    VERIFY(!m_Settings.UseSkinPreTransform, "GLTF does not use skin pre-transforms");
-                    WriteShaderMatrices(pJoints, JointMatrices.data(), JointCount, !m_Settings.PackMatrixRowMajor);
-                    if ((CurrPsoKey.GetFlags() & PSO_FLAG_COMPUTE_MOTION_VECTORS) != 0)
+
+                    WriteSkinningDataAttribs WriteSkinningAttribs{PSOFlags, static_cast<Uint32>(JointCount)};
+                    WriteSkinningAttribs.JointMatrices = JointMatrices.data();
+                    if ((PSOFlags & PSO_FLAG_COMPUTE_MOTION_VECTORS) != 0)
                     {
-                        const auto& PrevJointMatrices = PrevTransforms->Skins[Node.SkinTransformsIndex].JointMatrices;
-                        WriteShaderMatrices(pJoints + JointCount, PrevJointMatrices.data(), JointCount, !m_Settings.PackMatrixRowMajor);
+                        WriteSkinningAttribs.PrevJointMatrices = PrevTransforms->Skins[Node.SkinTransformsIndex].JointMatrices.data();
                     }
+                    WriteSkinningData(pJoints, WriteSkinningAttribs);
                 }
             }
 

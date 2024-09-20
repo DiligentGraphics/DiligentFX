@@ -689,6 +689,20 @@ public:
     template <typename HandlerType>
     inline static void ProcessTexturAttribs(PSO_FLAGS PSOFlags, HandlerType&& Handler);
 
+    struct WriteSkinningDataAttribs
+    {
+        PSO_FLAGS    PSOFlags   = PSO_FLAG_NONE;
+        const Uint32 JointCount = 0;
+
+        const float4x4* PreTransform      = nullptr; // If UseSkinPreTransform
+        const float4x4* JointMatrices     = nullptr;
+        const float4x4* PrevPreTransform  = nullptr; // If UseSkinPreTransform and PSO_FLAG_COMPUTE_MOTION_VECTORS
+        const float4x4* PrevJointMatrices = nullptr; // If PSO_FLAG_COMPUTE_MOTION_VECTORS
+    };
+    /// Writes skinning data to the cbJointTransforms buffer as expected by the shader.
+    static void* WriteSkinningData(void* pDst, const WriteSkinningDataAttribs& Attribs, bool PackMatrixRowMajor, Uint32 MaxJointCount, bool UseSkinPreTransform);
+    void*        WriteSkinningData(void* pDst, const WriteSkinningDataAttribs& Attribs);
+
 protected:
     ShaderMacroHelper DefineMacros(const PSOKey& Key) const;
 

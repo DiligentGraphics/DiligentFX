@@ -1948,4 +1948,64 @@ Uint32 PBR_Renderer::GetPRBFrameAttribsSize() const
     return GetPRBFrameAttribsSize(m_Settings.MaxLightCount, m_Settings.MaxShadowCastingLightCount);
 }
 
+void* PBR_Renderer::WriteSkinningData(void* _pDst, const WriteSkinningDataAttribs& Attribs, bool PackMatrixRowMajor, Uint32 MaxJointCount, bool UseSkinPreTransform)
+{
+    Uint32 JointCount = Attribs.JointCount;
+    if (JointCount > MaxJointCount)
+    {
+        DEV_ERROR("Joint count (", JointCount, ") exceeds the maximum allowed joint count (", MaxJointCount, ")");
+        JointCount = MaxJointCount;
+    }
+
+    float4x4* pDst = static_cast<float4x4*>(_pDst);
+
+    if (UseSkinPreTransform)
+    {
+        static const float4x4 Identity = float4x4::Identity();
+
+        // g_Skin.PreTransform
+        const float4x4& PreTransform = Attribs.PreTransform != nullptr ? *Attribs.PreTransform : Identity;
+        WriteShaderMatrix(pDst++, PreTransform, !PackMatrixRowMajor);
+
+        if (Attribs.PSOFlags & PBR_Renderer::PSO_FLAG_COMPUTE_MOTION_VECTORS)
+        {
+            // g_Skin.PrevPreTransform
+            const float4x4& PrevPreTransform = Attribs.PrevPreTransform != nullptr ? *Attribs.PrevPreTransform : Identity;
+            WriteShaderMatrix(pDst++, PrevPreTransform, !PackMatrixRowMajor);
+        }
+    }
+
+    if (Attribs.JointMatrices != nullptr)
+    {
+        // g_Skin.Joints
+        WriteShaderMatrices(pDst, Attribs.JointMatrices, JointCount, !PackMatrixRowMajor);
+    }
+    else
+    {
+        DEV_ERROR("Joint matrices are not provided");
+    }
+    pDst += JointCount;
+
+    if (Attribs.PSOFlags & PBR_Renderer::PSO_FLAG_COMPUTE_MOTION_VECTORS)
+    {
+        if (Attribs.PrevJointMatrices != nullptr)
+        {
+            // g_Skin.Joints
+            WriteShaderMatrices(pDst, Attribs.PrevJointMatrices, JointCount, !PackMatrixRowMajor);
+        }
+        else
+        {
+            DEV_ERROR("Previous joint matrices are not provided");
+        }
+        pDst += JointCount;
+    }
+
+    return pDst;
+}
+
+void* PBR_Renderer::WriteSkinningData(void* pDst, const WriteSkinningDataAttribs& Attribs)
+{
+    return WriteSkinningData(pDst, Attribs, m_Settings.PackMatrixRowMajor, m_Settings.MaxJointCount, m_Settings.UseSkinPreTransform);
+}
+
 } // namespace Diligent
