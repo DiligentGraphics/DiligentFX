@@ -270,7 +270,7 @@ void HnTaskManager::CreateRenderShadowsTask()
     TaskParams.State.SlopeScaledDepthBias = Renderer.GetSettings().PCFKernelSize * 0.5f + 0.5f;
     CreateTask<HnRenderShadowsTask>(HnTaskManagerTokens->renderShadowsTask, TaskUID_RenderShadows, TaskParams);
 
-    // Only render shadows from default material tfor now
+    // Only render shadows from default material for now
     pxr::HdRprimCollection Collection{
         pxr::HdTokens->geometry,
         pxr::HdReprSelector{pxr::HdReprTokens->hull},

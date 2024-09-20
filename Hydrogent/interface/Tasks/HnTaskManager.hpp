@@ -84,9 +84,9 @@ public:
     /// \param [in] TaskOrder - Optional task order. If not specified, the following default order is used:
     ///                         - BeginFrame
     ///                             * Prepares render targets and other frame resources
+    ///                         - RenderShadows
     ///                         - BeginMainPass
     ///                             * Binds the Color and Mesh Id render targes and the the selection depth buffer
-    ///                         - RenderShadows
     ///                         - RenderRprimsDefaultSelected
     ///                             * Renders only selected Rprims with the default material tag
     ///                         - RenderRprimsMaskedSelected
@@ -116,8 +116,8 @@ public:
     ///     | Task                            |  Selected Rprims | Unselected Rprims | Color  |  Mesh ID  | G-Buffer |  Selection Detph | Main Depth |
     ///     |---------------------------------|------------------|-------------------|--------|-----------|----------|------------------|------------|
     ///     | BeginFrame                      |                  |                   |        |           |          |                  |            |
-    ///     | BeginMainPass                   |                  |                   |        |           |          |                  |            |
     ///     | RenderShadows                   |                  |                   |        |           |          |                  |            |
+    ///     | BeginMainPass                   |                  |                   |        |           |          |                  |            |
     ///     | RenderRprimsDefaultSelected     |       V          |                   |   V    |     V     |    V     |        V         |            |
     ///     | RenderRprimsMaskedSelected      |       V          |                   |   V    |     V     |    V     |        V         |            |
     ///     | CopySelectionDepth              |                  |                   |        |           |          |        V---copy--|---->V      |
