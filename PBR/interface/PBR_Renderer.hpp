@@ -189,6 +189,9 @@ public:
         ///             use the row-major layout.
         bool PackMatrixRowMajor = false;
 
+        /// Whether to use skin pre-transform before applying joint transformations.
+        bool UseSkinPreTransform = false;
+
         /// PCF shadow kernel size.
         /// Allowed values are 2, 3, 5, 7.
         Uint32 PCFKernelSize = 3;

@@ -407,7 +407,14 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
         }
         if (m_Settings.MaxJointCount > 0)
         {
-            const size_t JointsBufferSize = sizeof(float4x4) * m_Settings.MaxJointCount * 2; // Current and previous transforms
+            const Uint32 MaxJointCount = 65536 / (2 * sizeof(float4x4)) - (m_Settings.UseSkinPreTransform ? 1 : 0);
+            if (m_Settings.MaxJointCount > MaxJointCount)
+            {
+                LOG_ERROR_MESSAGE("PBR_Renderer settings specify ", m_Settings.MaxJointCount, " joints, but the maximum allowed number of joints is ", MaxJointCount);
+                m_Settings.MaxJointCount = MaxJointCount;
+            }
+
+            const size_t JointsBufferSize = sizeof(float4x4) * (m_Settings.MaxJointCount + (m_Settings.UseSkinPreTransform ? 1 : 0)) * 2; // Current and previous transforms
             if (!m_JointsBuffer)
             {
                 CreateUniformBuffer(pDevice, static_cast<Uint32>(JointsBufferSize), "PBR joint transforms", &m_JointsBuffer);
@@ -1098,6 +1105,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
 
     ShaderMacroHelper Macros;
     Macros.Add("MAX_JOINT_COUNT", static_cast<int>(m_Settings.MaxJointCount));
+    Macros.Add("USE_SKIN_PRE_TRANSFORM", m_Settings.UseSkinPreTransform);
     Macros.Add("TONE_MAPPING_MODE", "TONE_MAPPING_MODE_UNCHARTED2");
 
     Macros.Add("PRIMITIVE_ARRAY_SIZE", static_cast<int>(m_Settings.PrimitiveArraySize));

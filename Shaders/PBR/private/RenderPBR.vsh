@@ -57,11 +57,20 @@ cbuffer cbPrimitiveAttribs
 
 
 #if MAX_JOINT_COUNT > 0 && USE_JOINTS
+struct SkinnigData
+{
+#if USE_SKIN_PRE_TRANSFORM
+    float4x4 PreTransform;
+#endif
+    float4x4 Joints[MAX_JOINT_COUNT];
+};
+
 cbuffer cbJointTransforms
 {
-    float4x4 g_Joints[MAX_JOINT_COUNT];
+    SkinnigData g_Skin;
+
 #if COMPUTE_MOTION_VECTORS
-    float4x4 g_PrevJoints[MAX_JOINT_COUNT];
+    SkinnigData g_PrevSkin;
 #endif
 }
 #endif
@@ -93,20 +102,30 @@ void main(in  VSInput  VSIn,
     {
         // Mesh is skinned
         float4x4 SkinMat = 
-            VSIn.Weight0.x * g_Joints[int(VSIn.Joint0.x)] +
-            VSIn.Weight0.y * g_Joints[int(VSIn.Joint0.y)] +
-            VSIn.Weight0.z * g_Joints[int(VSIn.Joint0.z)] +
-            VSIn.Weight0.w * g_Joints[int(VSIn.Joint0.w)];
+            VSIn.Weight0.x * g_Skin.Joints[int(VSIn.Joint0.x)] +
+            VSIn.Weight0.y * g_Skin.Joints[int(VSIn.Joint0.y)] +
+            VSIn.Weight0.z * g_Skin.Joints[int(VSIn.Joint0.z)] +
+            VSIn.Weight0.w * g_Skin.Joints[int(VSIn.Joint0.w)];
         Transform = mul(SkinMat, Transform);
-
+#       if USE_SKIN_PRE_TRANSFORM
+        {
+            Transform = mul(g_Skin.PreTransform, Transform);
+        }
+#       endif
+    
 #       if COMPUTE_MOTION_VECTORS
         {
             float4x4 PrevSkinMat = 
-                VSIn.Weight0.y * g_PrevJoints[int(VSIn.Joint0.y)] +
-                VSIn.Weight0.x * g_PrevJoints[int(VSIn.Joint0.x)] +
-                VSIn.Weight0.z * g_PrevJoints[int(VSIn.Joint0.z)] +
-                VSIn.Weight0.w * g_PrevJoints[int(VSIn.Joint0.w)];
+                VSIn.Weight0.x * g_PrevSkin.Joints[int(VSIn.Joint0.x)] +
+                VSIn.Weight0.y * g_PrevSkin.Joints[int(VSIn.Joint0.y)] +
+                VSIn.Weight0.z * g_PrevSkin.Joints[int(VSIn.Joint0.z)] +
+                VSIn.Weight0.w * g_PrevSkin.Joints[int(VSIn.Joint0.w)];
             PrevTransform = mul(PrevSkinMat, PrevTransform);
+#           if USE_SKIN_PRE_TRANSFORM
+            {
+                PrevTransform = mul(g_PrevSkin.PreTransform, PrevTransform);
+            }
+#           endif    
         }
 #       endif
     }
