@@ -61,17 +61,21 @@ struct SkinnigData
 {
 #if USE_SKIN_PRE_TRANSFORM
     float4x4 PreTransform;
+#   if COMPUTE_MOTION_VECTORS
+        float4x4 PrevPreTransform;
+#   endif
 #endif
-    float4x4 Joints[MAX_JOINT_COUNT];
+
+#   if COMPUTE_MOTION_VECTORS
+        float4x4 Joints[MAX_JOINT_COUNT * 2];
+#   else
+        float4x4 Joints[MAX_JOINT_COUNT];
+#   endif
 };
 
 cbuffer cbJointTransforms
 {
     SkinnigData g_Skin;
-
-#if COMPUTE_MOTION_VECTORS
-    SkinnigData g_PrevSkin;
-#endif
 }
 #endif
 
@@ -98,7 +102,8 @@ void main(in  VSInput  VSIn,
 #endif
     
 #if MAX_JOINT_COUNT > 0 && USE_JOINTS
-    if (PRIMITIVE.Transforms.JointCount > 0)
+    int JointCount = PRIMITIVE.Transforms.JointCount;
+    if (JointCount > 0)
     {
         // Mesh is skinned
         float4x4 SkinMat = 
@@ -116,14 +121,14 @@ void main(in  VSInput  VSIn,
 #       if COMPUTE_MOTION_VECTORS
         {
             float4x4 PrevSkinMat = 
-                VSIn.Weight0.x * g_PrevSkin.Joints[int(VSIn.Joint0.x)] +
-                VSIn.Weight0.y * g_PrevSkin.Joints[int(VSIn.Joint0.y)] +
-                VSIn.Weight0.z * g_PrevSkin.Joints[int(VSIn.Joint0.z)] +
-                VSIn.Weight0.w * g_PrevSkin.Joints[int(VSIn.Joint0.w)];
+                VSIn.Weight0.x * g_Skin.Joints[JointCount + int(VSIn.Joint0.x)] +
+                VSIn.Weight0.y * g_Skin.Joints[JointCount + int(VSIn.Joint0.y)] +
+                VSIn.Weight0.z * g_Skin.Joints[JointCount + int(VSIn.Joint0.z)] +
+                VSIn.Weight0.w * g_Skin.Joints[JointCount + int(VSIn.Joint0.w)];
             PrevTransform = mul(PrevSkinMat, PrevTransform);
 #           if USE_SKIN_PRE_TRANSFORM
             {
-                PrevTransform = mul(g_PrevSkin.PreTransform, PrevTransform);
+                PrevTransform = mul(g_Skin.PrevPreTransform, PrevTransform);
             }
 #           endif    
         }

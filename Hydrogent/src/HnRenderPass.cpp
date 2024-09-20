@@ -482,16 +482,15 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
                 MapHelper<float4x4> JointsData{State.pCtx, pJointsCB, MAP_WRITE, MAP_FLAG_DISCARD};
                 float4x4*           pDst = JointsData;
 
-                memcpy(pDst, pSkinningData->GeomBindXform.Data(), sizeof(float4x4));
-                pDst += 1;
-                memcpy(pDst, pSkinningData->Xforms->data(), JointCount * sizeof(float4x4));
-                pDst += MaxJointCount;
+                memcpy(pDst++, pSkinningData->GeomBindXform.Data(), sizeof(float4x4)); // g_Skin.PreTransform
+                memcpy(pDst++, pSkinningData->GeomBindXform.Data(), sizeof(float4x4)); // g_Skin.PrevPreTransform
 
-                memcpy(pDst, pSkinningData->GeomBindXform.Data(), sizeof(float4x4));
-                pDst += 1;
+                memcpy(pDst, pSkinningData->Xforms->data(), JointCount * sizeof(float4x4));
+                pDst += JointCount;
+
                 const pxr::VtMatrix4fArray* PrevXforms = ListItem.PrevXforms != nullptr ? ListItem.PrevXforms : pSkinningData->Xforms;
                 memcpy(pDst, PrevXforms->data(), JointCount * sizeof(float4x4));
-                pDst += MaxJointCount;
+                pDst += JointCount;
             }
 
             ListItem.PrevXforms = pSkinningData->Xforms;
