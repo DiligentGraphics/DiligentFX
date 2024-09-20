@@ -87,14 +87,10 @@ HnRenderPass::DrawListItem::DrawListItem(HnRenderDelegate& RenderDelegate, const
     MeshEntity{Mesh.GetEntity()},
     MeshUID{static_cast<float>(Mesh.GetUID())},
     RenderStateID{0},
-    NumVertexBuffers{0},
-    IsSkinned{0}
+    NumVertexBuffers{0}
 {
     entt::registry& Registry = RenderDelegate.GetEcsRegistry();
     PrevTransform            = Registry.get<HnMesh::Components::Transform>(MeshEntity).Val;
-
-    if (Registry.get<HnMesh::Components::Skinning>(MeshEntity).Xforms != nullptr)
-        IsSkinned = 1;
 }
 
 HnRenderPass::HnRenderPass(pxr::HdRenderIndex*           pIndex,
@@ -456,7 +452,7 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
         const float4&   DisplayColor = std::get<1>(MeshAttribs).Val;
         const bool      MeshVisibile = std::get<2>(MeshAttribs).Val;
 
-        const HnMesh::Components::Skinning* pSkinningData = (ListItem.IsSkinned && pJointsCB != nullptr) ?
+        const HnMesh::Components::Skinning* pSkinningData = ((ListItem.PSOFlags & PBR_Renderer::PSO_FLAG_USE_JOINTS) && pJointsCB != nullptr) ?
             &MeshAttribsView.get<const HnMesh::Components::Skinning>(ListItem.MeshEntity) :
             nullptr;
 
@@ -483,14 +479,20 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
                 float4x4*           pDst = JointsData;
 
                 memcpy(pDst++, pSkinningData->GeomBindXform.Data(), sizeof(float4x4)); // g_Skin.PreTransform
-                memcpy(pDst++, pSkinningData->GeomBindXform.Data(), sizeof(float4x4)); // g_Skin.PrevPreTransform
+                if (ListItem.PSOFlags & PBR_Renderer::PSO_FLAG_COMPUTE_MOTION_VECTORS)
+                {
+                    memcpy(pDst++, pSkinningData->GeomBindXform.Data(), sizeof(float4x4)); // g_Skin.PrevPreTransform
+                }
 
                 memcpy(pDst, pSkinningData->Xforms->data(), JointCount * sizeof(float4x4));
                 pDst += JointCount;
 
-                const pxr::VtMatrix4fArray* PrevXforms = ListItem.PrevXforms != nullptr ? ListItem.PrevXforms : pSkinningData->Xforms;
-                memcpy(pDst, PrevXforms->data(), JointCount * sizeof(float4x4));
-                pDst += JointCount;
+                if (ListItem.PSOFlags & PBR_Renderer::PSO_FLAG_COMPUTE_MOTION_VECTORS)
+                {
+                    const pxr::VtMatrix4fArray* PrevXforms = ListItem.PrevXforms != nullptr ? ListItem.PrevXforms : pSkinningData->Xforms;
+                    memcpy(pDst, PrevXforms->data(), JointCount * sizeof(float4x4));
+                    pDst += JointCount;
+                }
             }
 
             ListItem.PrevXforms = pSkinningData->Xforms;
