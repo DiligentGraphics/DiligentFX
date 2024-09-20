@@ -61,6 +61,7 @@ TF_DEFINE_PRIVATE_TOKENS(
     (skinnedPoints)
     (numInfluencesPerComponent)
     (influences)
+    (geomBindXform)
 );
 // clang-format on
 
@@ -372,7 +373,7 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
         entt::registry& Registry  = static_cast<HnRenderDelegate*>(SceneDelegate.GetRenderIndex().GetRenderDelegate())->GetEcsRegistry();
         float4x4&       Transform = Registry.get<Components::Transform>(m_Entity).Val;
 
-        auto NewTransform = ToFloat4x4(SceneDelegate.GetTransform(Id));
+        float4x4 NewTransform = m_SkelLocalToPrimLocal * ToFloat4x4(SceneDelegate.GetTransform(Id));
         if (Transform != NewTransform)
         {
             Transform = NewTransform;
@@ -634,6 +635,9 @@ void HnMesh::UpdateSkinningPrimvars(pxr::HdSceneDelegate&                       
         SkinningPrimvarsVersion += InputAggregatorComp->GetSceneInputsVersion();
     }
 
+    entt::registry&       Registry     = static_cast<HnRenderDelegate*>(SceneDelegate.GetRenderIndex().GetRenderDelegate())->GetEcsRegistry();
+    Components::Skinning& SkinningData = Registry.get<Components::Skinning>(m_Entity);
+
     if (SkinningPrimvarsVersion != m_SkinningPrimvarsVersion)
     {
         pxr::VtValue RestPointsVal;
@@ -652,6 +656,14 @@ void HnMesh::UpdateSkinningPrimvars(pxr::HdSceneDelegate&                       
             else if (CompInput.name == HnSkinningPrivateTokens->influences)
             {
                 InfluencesVal = SceneDelegate.GetExtComputationInput(CompInput.sourceComputationId, CompInput.name);
+            }
+            else if (CompInput.name == HnSkinningPrivateTokens->geomBindXform)
+            {
+                pxr::VtValue GeomBindXformVal = SceneDelegate.GetExtComputationInput(CompInput.sourceComputationId, CompInput.name);
+
+                SkinningData.GeomBindXform = GeomBindXformVal.IsHolding<pxr::GfMatrix4f>() ?
+                    ToFloat4x4(GeomBindXformVal.UncheckedGet<pxr::GfMatrix4f>()) :
+                    float4x4::Identity();
             }
         }
 
@@ -686,11 +698,15 @@ void HnMesh::UpdateSkinningPrimvars(pxr::HdSceneDelegate&                       
 
     if (const HnSkinningComputation* SkinningCompImpl = SkinningComp->GetImpl<HnSkinningComputation>())
     {
-        entt::registry&       Registry     = static_cast<HnRenderDelegate*>(SceneDelegate.GetRenderIndex().GetRenderDelegate())->GetEcsRegistry();
-        Components::Skinning& SkinningData = Registry.get<Components::Skinning>(m_Entity);
-
         SkinningData.Xforms     = &SkinningCompImpl->GetXforms();
         SkinningData.XformsHash = SkinningCompImpl->GetXformsHash();
+
+        const float4x4& SkelLocalToPrimLocal = SkinningCompImpl->GetSkelLocalToPrimLocal();
+        if (SkelLocalToPrimLocal != m_SkelLocalToPrimLocal)
+        {
+            m_SkelLocalToPrimLocal = SkelLocalToPrimLocal;
+            DirtyBits |= pxr::HdChangeTracker::DirtyTransform;
+        }
     }
     else
     {
@@ -1121,69 +1137,72 @@ void HnMesh::ConvertVertexPrimvarSources(FaceSourcesMapType&& FaceSources)
         }
     }
 
-    // Mapping from the original vertex index to the first occurrence of this vertex in the unfolded list
-    //
-    //  Verts:    A B C D E F
-    //  Indices:  3 4 5 0 1 2
-    //  Unfolded: D E F A B C
-    //  Mapping:  0->3, 1->4, 2->5, 3->0, 4->1, 5->2
-    std::vector<int> ReverseVertexMapping(NumVerts, -1);
-    for (int i = 0; i < Indices.size(); ++i)
+    if (m_StagingIndexData)
     {
-        const pxr::GfVec3i& Tri = Indices[i];
-        for (int v = 0; v < 3; ++v)
+        // Mapping from the original vertex index to the first occurrence of this vertex in the unfolded list
+        //
+        //  Verts:    A B C D E F
+        //  Indices:  3 4 5 0 1 2
+        //  Unfolded: D E F A B C
+        //  Mapping:  0->3, 1->4, 2->5, 3->0, 4->1, 5->2
+        std::vector<int> ReverseVertexMapping(NumVerts, -1);
+        for (int i = 0; i < Indices.size(); ++i)
         {
-            if (Tri[v] >= NumVerts)
+            const pxr::GfVec3i& Tri = Indices[i];
+            for (int v = 0; v < 3; ++v)
             {
-                LOG_ERROR_MESSAGE("Invalid vertex index ", Tri[v], " in triangle ", i, " in ", GetId(), " mesh. Expected value in the range [0, ", NumVerts, ").");
+                if (Tri[v] >= NumVerts)
+                {
+                    LOG_ERROR_MESSAGE("Invalid vertex index ", Tri[v], " in triangle ", i, " in ", GetId(), " mesh. Expected value in the range [0, ", NumVerts, ").");
+                    continue;
+                }
+                int& MappedIndex = ReverseVertexMapping[Tri[v]];
+                if (MappedIndex < 0)
+                    MappedIndex = i * 3 + v;
+            }
+        }
+
+        // Replace original triangle indices with the list of unfolded face indices
+        m_StagingIndexData->Faces.Indices.resize(m_IndexData.NumFaceTriangles);
+        for (Uint32 i = 0; i < m_StagingIndexData->Faces.Indices.size(); ++i)
+        {
+            pxr::GfVec3i& Tri{m_StagingIndexData->Faces.Indices[i]};
+            Tri[0] = i * 3 + 0;
+            Tri[1] = i * 3 + 1;
+            Tri[2] = i * 3 + 2;
+        }
+
+        // Update edge indices
+        for (pxr::GfVec2i& Edge : m_StagingIndexData->MeshEdgeIndices)
+        {
+            if (Edge[0] >= NumVerts || Edge[1] >= NumVerts)
+            {
+                LOG_ERROR_MESSAGE("Invalid vertex index in edge ", Edge[0], " - ", Edge[1], " in ", GetId(), " mesh. Expected value in the range [0, ", NumVerts, ").");
                 continue;
             }
-            int& MappedIndex = ReverseVertexMapping[Tri[v]];
-            if (MappedIndex < 0)
-                MappedIndex = i * 3 + v;
-        }
-    }
 
-    // Replace original triangle indices with the list of unfolded face indices
-    m_StagingIndexData->Faces.Indices.resize(m_IndexData.NumFaceTriangles);
-    for (Uint32 i = 0; i < m_StagingIndexData->Faces.Indices.size(); ++i)
-    {
-        pxr::GfVec3i& Tri{m_StagingIndexData->Faces.Indices[i]};
-        Tri[0] = i * 3 + 0;
-        Tri[1] = i * 3 + 1;
-        Tri[2] = i * 3 + 2;
-    }
-
-    // Update edge indices
-    for (pxr::GfVec2i& Edge : m_StagingIndexData->MeshEdgeIndices)
-    {
-        if (Edge[0] >= NumVerts || Edge[1] >= NumVerts)
-        {
-            LOG_ERROR_MESSAGE("Invalid vertex index in edge ", Edge[0], " - ", Edge[1], " in ", GetId(), " mesh. Expected value in the range [0, ", NumVerts, ").");
-            continue;
+            int v0 = ReverseVertexMapping[Edge[0]];
+            int v1 = ReverseVertexMapping[Edge[1]];
+            if (v0 >= 0 && v1 >= 0)
+            {
+                Edge[0] = v0;
+                Edge[1] = v1;
+            }
+            else
+            {
+                Edge[0] = 0;
+                Edge[1] = 0;
+            }
         }
 
-        int v0 = ReverseVertexMapping[Edge[0]];
-        int v1 = ReverseVertexMapping[Edge[1]];
-        if (v0 >= 0 && v1 >= 0)
+        // Create point indices
+        m_StagingIndexData->PointIndices.resize(m_Topology.GetNumPoints());
+        for (size_t i = 0; i < m_StagingIndexData->PointIndices.size(); ++i)
         {
-            Edge[0] = v0;
-            Edge[1] = v1;
-        }
-        else
-        {
-            Edge[0] = 0;
-            Edge[1] = 0;
-        }
-    }
-
-    // Create point indices
-    m_StagingIndexData->PointIndices.resize(m_Topology.GetNumPoints());
-    for (size_t i = 0; i < m_StagingIndexData->PointIndices.size(); ++i)
-    {
-        if (i < NumVerts)
-        {
-            m_StagingIndexData->PointIndices[i] = ReverseVertexMapping[i];
+            if (i < NumVerts)
+            {
+                m_StagingIndexData->PointIndices[i] = ReverseVertexMapping[i];
+            }
         }
     }
 }

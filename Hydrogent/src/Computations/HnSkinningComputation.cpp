@@ -28,6 +28,7 @@
 #include "HnExtComputation.hpp"
 #include "HnTokens.hpp"
 #include "DebugUtilities.hpp"
+#include "GfTypeConversions.hpp"
 
 namespace Diligent
 {
@@ -40,6 +41,8 @@ TF_DEFINE_PRIVATE_TOKENS(
     HnSkinningComputationPrivateTokens,
     (skinnedPoints)
     (skinningXforms)
+    (primWorldToLocal)
+    (skelLocalToWorld)
 );
 // clang-format on
 
@@ -66,19 +69,63 @@ void HnSkinningComputation::Sync(pxr::HdSceneDelegate* SceneDelegate,
     {
         const pxr::SdfPath& Id = m_Owner.GetId();
 
-        pxr::VtValue SkinningXformsVal = SceneDelegate->GetExtComputationInput(Id, HnSkinningComputationPrivateTokens->skinningXforms);
-        if (SkinningXformsVal.IsHolding<pxr::VtMatrix4fArray>())
         {
-            m_CurrXformsIdx              = (m_CurrXformsIdx + 1) % m_Xforms.size();
-            pxr::VtMatrix4fArray& Xforms = m_Xforms[m_CurrXformsIdx];
+            pxr::VtValue SkinningXformsVal = SceneDelegate->GetExtComputationInput(Id, HnSkinningComputationPrivateTokens->skinningXforms);
+            if (SkinningXformsVal.IsHolding<pxr::VtMatrix4fArray>())
+            {
+                m_CurrXformsIdx              = (m_CurrXformsIdx + 1) % m_Xforms.size();
+                pxr::VtMatrix4fArray& Xforms = m_Xforms[m_CurrXformsIdx];
 
-            Xforms       = SkinningXformsVal.UncheckedGet<pxr::VtMatrix4fArray>();
-            m_XformsHash = pxr::TfHash{}(Xforms);
+                Xforms       = SkinningXformsVal.UncheckedGet<pxr::VtMatrix4fArray>();
+                m_XformsHash = pxr::TfHash{}(Xforms);
+            }
+            else
+            {
+                LOG_ERROR_MESSAGE("Skinning transforms of computation ", Id, " are of type ", SkinningXformsVal.GetTypeName(), ", but VtMatrix4fArray is expected");
+            }
         }
-        else
+
         {
-            LOG_ERROR_MESSAGE("Skinning transforms of computation ", Id, " are of type ", SkinningXformsVal.GetTypeName(), ", but VtMatrix4fArray is expected");
+            pxr::VtValue PrimWorldToLocalVal = SceneDelegate->GetExtComputationInput(Id, HnSkinningComputationPrivateTokens->primWorldToLocal);
+            if (!PrimWorldToLocalVal.IsEmpty())
+            {
+                if (PrimWorldToLocalVal.IsHolding<pxr::GfMatrix4d>())
+                {
+                    m_PrimWorldToLocal = ToFloat4x4(PrimWorldToLocalVal.UncheckedGet<pxr::GfMatrix4d>());
+                }
+                else
+                {
+                    LOG_ERROR_MESSAGE("PrimWorldToLocal of computation ", Id, " is of type ", PrimWorldToLocalVal.GetTypeName(), ", but GfMatrix4d is expected");
+                    m_PrimWorldToLocal = float4x4::Identity();
+                }
+            }
+            else
+            {
+                m_PrimWorldToLocal = float4x4::Identity();
+            }
         }
+
+        {
+            pxr::VtValue SkelLocalToWorldVal = SceneDelegate->GetExtComputationInput(Id, HnSkinningComputationPrivateTokens->skelLocalToWorld);
+            if (!SkelLocalToWorldVal.IsEmpty())
+            {
+                if (SkelLocalToWorldVal.IsHolding<pxr::GfMatrix4d>())
+                {
+                    m_SkelLocalToWorld = ToFloat4x4(SkelLocalToWorldVal.UncheckedGet<pxr::GfMatrix4d>());
+                }
+                else
+                {
+                    LOG_ERROR_MESSAGE("SkelLocalToWorld of computation ", Id, " is of type ", SkelLocalToWorldVal.GetTypeName(), ", but GfMatrix4d is expected");
+                    m_SkelLocalToWorld = float4x4::Identity();
+                }
+            }
+            else
+            {
+                m_SkelLocalToWorld = float4x4::Identity();
+            }
+        }
+
+        m_SkelLocalToPrimLocal = m_SkelLocalToWorld * m_PrimWorldToLocal;
     }
 
     *DirtyBits &= pxr::HdExtComputation::Clean;

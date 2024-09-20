@@ -108,8 +108,11 @@ public:
 
         struct Skinning
         {
-            const pxr::VtMatrix4fArray* Xforms     = nullptr;
-            size_t                      XformsHash = 0;
+            const pxr::VtMatrix4fArray* Xforms        = nullptr;
+            size_t                      XformsHash    = 0;
+            float4x4                    GeomBindXform = float4x4::Identity();
+
+            explicit operator bool() const { return Xforms != nullptr; }
         };
     };
 
@@ -282,6 +285,8 @@ private:
     std::atomic<Uint32> m_GeometryVersion{0};
     std::atomic<Uint32> m_MaterialVersion{0};
     std::atomic<Uint32> m_SkinningPrimvarsVersion{0};
+
+    float4x4 m_SkelLocalToPrimLocal = float4x4::Identity();
 };
 
 } // namespace USD

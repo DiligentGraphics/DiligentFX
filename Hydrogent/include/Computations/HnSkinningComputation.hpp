@@ -29,6 +29,8 @@
 #include <memory>
 #include <array>
 
+#include "BasicMath.hpp"
+
 #include "HnExtComputationImpl.hpp"
 
 #include "pxr/base/gf/matrix4f.h"
@@ -59,12 +61,19 @@ public:
     const pxr::VtMatrix4fArray& GetXforms() const { return m_Xforms[m_CurrXformsIdx]; }
     size_t                      GetXformsHash() const { return m_XformsHash; }
 
+    const float4x4& GetPrimWorldToLocal() const { return m_PrimWorldToLocal; }
+    const float4x4& GetSkelLocalToWorld() const { return m_SkelLocalToWorld; }
+    const float4x4& GetSkelLocalToPrimLocal() const { return m_SkelLocalToPrimLocal; }
+
 private:
     // Keep two transforms to allow render passes reference previous-frame transforms
     std::array<pxr::VtMatrix4fArray, 2> m_Xforms;
     size_t                              m_CurrXformsIdx = 0;
+    size_t                              m_XformsHash    = 0;
 
-    size_t m_XformsHash = 0;
+    float4x4 m_PrimWorldToLocal     = float4x4::Identity();
+    float4x4 m_SkelLocalToWorld     = float4x4::Identity();
+    float4x4 m_SkelLocalToPrimLocal = float4x4::Identity();
 };
 
 } // namespace USD
