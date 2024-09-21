@@ -703,6 +703,10 @@ public:
     static void* WriteSkinningData(void* pDst, const WriteSkinningDataAttribs& Attribs, bool PackMatrixRowMajor, Uint32 MaxJointCount, bool UseSkinPreTransform);
     void*        WriteSkinningData(void* pDst, const WriteSkinningDataAttribs& Attribs);
 
+    static Uint32 GetJointsDataSize(Uint32 MaxJointCount, bool UseSkinPreTransform, bool UsePrevFrameTransforms);
+    Uint32        GetJointsDataSize(Uint32 JointCount, PSO_FLAGS PSOFlags) const;
+    Uint32        GetJointsBufferSize() const;
+
 protected:
     ShaderMacroHelper DefineMacros(const PSOKey& Key) const;
 
