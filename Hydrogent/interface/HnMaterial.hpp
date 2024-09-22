@@ -88,6 +88,15 @@ public:
             m_PrimitiveAttribsVar->SetBufferOffset(PrimitiveAttribsOffset);
         return m_SRB;
     }
+    void SetJointsBufferOffset(Uint32 Offset) const
+    {
+        if (m_JointTransformsVar == nullptr)
+        {
+            UNEXPECTED("Joint transforms variable is not initialized, which indicates that skinning is not enabled in the renderer.");
+            return;
+        }
+        m_JointTransformsVar->SetBufferOffset(Offset);
+    }
 
     const GLTF::Material& GetMaterialData() const { return m_MaterialData; }
 
@@ -147,6 +156,7 @@ private:
 
     RefCntAutoPtr<IShaderResourceBinding> m_SRB;
     IShaderResourceVariable*              m_PrimitiveAttribsVar = nullptr; // cbPrimitiveAttribs
+    IShaderResourceVariable*              m_JointTransformsVar  = nullptr; // cbJointTransforms
 
     GLTF::Material m_MaterialData;
 

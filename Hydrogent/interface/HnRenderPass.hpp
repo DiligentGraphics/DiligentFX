@@ -212,8 +212,9 @@ private:
     struct PendingDrawItem
     {
         const DrawListItem& ListItem;
-        const Uint32        BufferOffset;
-        Uint32              DrawCount = 1;
+        const Uint32        AttribsBufferOffset;
+        Uint32              JointsBufferOffset = ~0u;
+        Uint32              DrawCount          = 1;
     };
 
     // Draw list items to be rendered in the current batch.
@@ -221,8 +222,11 @@ private:
     // Rendering order of the draw list items sorted by the PSO.
     std::vector<Uint32> m_RenderOrder;
 
-    // Scratch space prepare data for the primitive attributes buffer.
+    // Scratch space to prepare data for the primitive attributes buffer.
     std::vector<Uint8> m_PrimitiveAttribsData;
+
+    // Scratch space to prepare data for the joints buffer.
+    std::vector<Uint8> m_JointsData;
 
     // Scratch space for the MultiDraw/MultiDrawIndexed command items.
     std::vector<Uint8> m_ScratchSpace;

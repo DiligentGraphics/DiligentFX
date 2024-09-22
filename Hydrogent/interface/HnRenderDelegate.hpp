@@ -192,7 +192,7 @@ public:
         /// The maximum number of joints.
         ///
         /// If set to 0, skinning will be disabled.
-        Uint32 MaxJointCount = 64;
+        Uint32 MaxJointCount = 128;
     };
     static std::unique_ptr<HnRenderDelegate> Create(const CreateInfo& CI);
 

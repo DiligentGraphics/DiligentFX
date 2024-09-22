@@ -100,8 +100,23 @@ static RefCntAutoPtr<IBuffer> CreatePrimitiveAttribsCB(IRenderDevice* pDevice)
     }
     // Allocate a large buffer to batch primitive draw calls
     RefCntAutoPtr<IBuffer> PrimitiveAttribsCB;
-    CreateUniformBuffer(pDevice, Size, "PBR frame attribs CB", &PrimitiveAttribsCB, Usage);
+    CreateUniformBuffer(pDevice, Size, "PBR primitive attribs", &PrimitiveAttribsCB, Usage);
     return PrimitiveAttribsCB;
+}
+
+static RefCntAutoPtr<IBuffer> CreateJointsCB(IRenderDevice* pDevice)
+{
+    Uint64 Size  = 65536;
+    USAGE  Usage = USAGE_DYNAMIC;
+    if (pDevice->GetDeviceInfo().IsGLDevice())
+    {
+        // On OpenGL, use USAGE_DEFAULT buffer and update it
+        // with UpdateBuffer() method.
+        Usage = USAGE_DEFAULT;
+    }
+    RefCntAutoPtr<IBuffer> JointsCB;
+    CreateUniformBuffer(pDevice, Size, "Joint transforms", &JointsCB, Usage);
+    return JointsCB;
 }
 
 static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::CreateInfo& RenderDelegateCI,
@@ -208,6 +223,9 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
     USDRendererCI.InputLayout.NumElements    = _countof(Inputs);
 
     USDRendererCI.pPrimitiveAttribsCB = pPrimitiveAttribsCB;
+
+    RefCntAutoPtr<IBuffer> pJointsCB = CreateJointsCB(RenderDelegateCI.pDevice);
+    USDRendererCI.pJointsBuffer      = pJointsCB;
 
     return std::make_shared<USD_Renderer>(RenderDelegateCI.pDevice, RenderDelegateCI.pRenderStateCache, RenderDelegateCI.pContext, USDRendererCI);
 }

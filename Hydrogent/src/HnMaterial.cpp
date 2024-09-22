@@ -728,6 +728,7 @@ void HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
     {
         m_SRB.Release();
         m_PrimitiveAttribsVar            = nullptr;
+        m_JointTransformsVar             = nullptr;
         m_PBRPrimitiveAttribsBufferRange = 0;
         m_AtlasVersion                   = AtlasVersion;
     }
@@ -1009,6 +1010,8 @@ void HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
         const Uint32 PBRPrimitiveAttribsSize = UsdRenderer.GetPBRPrimitiveAttribsSize(PSOFlags);
         const Uint32 PrimitiveArraySize      = std::max(UsdRenderer.GetSettings().PrimitiveArraySize, 1u);
         SRBCache->UpdatePrimitiveAttribsBufferRange(m_SRB, PBRPrimitiveAttribsSize * PrimitiveArraySize);
+        m_JointTransformsVar = m_SRB->GetVariableByName(SHADER_TYPE_VERTEX, "cbJointTransforms");
+        VERIFY_EXPR(m_JointTransformsVar != nullptr || RendererSettings.MaxJointCount == 0);
     }
     else
     {
