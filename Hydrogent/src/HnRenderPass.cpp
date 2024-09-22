@@ -434,8 +434,9 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
         };
 
         VERIFY_EXPR(AttribsBufferOffset > 0);
+        VERIFY_EXPR(AttribsBuffDesc.Usage == USAGE_DYNAMIC || AttribsBufferOffset <= m_PrimitiveAttribsData.size());
         UnmapOrUpdateBuffer(pPrimitiveAttribsCB, AttribsBuffDesc, pMappedPrimitiveData,
-                            m_PrimitiveAttribsData.data(), m_PrimitiveAttribsData.size());
+                            m_PrimitiveAttribsData.data(), AttribsBufferOffset);
         AttribsBufferOffset = 0;
 
         if (CurrJointsDataSize > 0)
