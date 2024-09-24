@@ -155,25 +155,46 @@ private:
                     pxr::HdDirtyBits&     DirtyBits,
                     const pxr::TfToken&   ReprToken);
 
+    struct PrimvarsInfo
+    {
+        // The total number of supported primvars
+        Uint32 Count = 0;
+
+        // Dirty primvars
+        pxr::HdPrimvarDescriptorVector Dirty;
+
+        // Computation primvars
+        pxr::HdExtComputationPrimvarDescriptorVector ExtComp;
+    };
+    void GetPrimvarsInfo(pxr::HdSceneDelegate& SceneDelegate,
+                         pxr::HdDirtyBits&     DirtyBits,
+                         PrimvarsInfo&         VertexPrimvarsInfo,
+                         PrimvarsInfo&         FacePrimvarsInfo) const;
+
     void UpdateVertexAndVaryingPrimvars(pxr::HdSceneDelegate& SceneDelegate,
                                         pxr::HdRenderParam*   RenderParam,
                                         pxr::HdDirtyBits&     DirtyBits,
-                                        const pxr::TfToken&   ReprToken);
+                                        const pxr::TfToken&   ReprToken,
+                                        const PrimvarsInfo&   VertexPrimvarsInfo);
 
-    using FaceSourcesMapType = std::unordered_map<pxr::TfToken, std::shared_ptr<pxr::HdBufferSource>, pxr::TfToken::HashFunctor>;
     void UpdateFaceVaryingPrimvars(pxr::HdSceneDelegate& SceneDelegate,
                                    pxr::HdRenderParam*   RenderParam,
                                    pxr::HdDirtyBits&     DirtyBits,
                                    const pxr::TfToken&   ReprToken,
-                                   FaceSourcesMapType&   FaceSources);
+                                   const PrimvarsInfo&   FacePrimvarsInfo);
 
     void UpdateConstantPrimvars(pxr::HdSceneDelegate& SceneDelegate,
                                 pxr::HdRenderParam*   RenderParam,
                                 pxr::HdDirtyBits&     DirtyBits,
                                 const pxr::TfToken&   ReprToken);
 
-    std::shared_ptr<pxr::HdBufferSource> CreateJointInfluencesBufferSource(const pxr::VtValue& NumInfluencesPerComponentVal,
-                                                                           const pxr::VtValue& InfluencesVal);
+    bool AddStagingBufferSourceForPrimvar(const pxr::TfToken&  Name,
+                                          pxr::VtValue         Primvar,
+                                          pxr::HdInterpolation Interpolation,
+                                          int                  ValuesPerElement = 1);
+
+    bool AddJointInfluencesStagingBufferSource(const pxr::VtValue& NumInfluencesPerComponentVal,
+                                               const pxr::VtValue& InfluencesVal);
 
     void UpdateSkinningPrimvars(pxr::HdSceneDelegate&                         SceneDelegate,
                                 pxr::HdRenderParam*                           RenderParam,
@@ -189,22 +210,7 @@ private:
         Uint32 NumIndices = 0;
     };
 
-    struct TriangleFaceIndexData
-    {
-        // Original indices reordered by geometry subsets
-        pxr::VtVec3iArray Indices;
-
-        // Face reordering for face-varying primvars
-        pxr::VtVec3iArray FaceReordering;
-
-        std::vector<GeometrySubsetRange> Subsets;
-
-        operator bool() const { return !Indices.empty(); }
-    };
-    TriangleFaceIndexData ComputeTriangleFaceIndices();
-
-    // Converts vertex primvar sources into face-varying primvar sources.
-    void ConvertVertexPrimvarSources(FaceSourcesMapType&& FaceSources);
+    void UpdateIndexData();
 
     void UpdateTopology(pxr::HdSceneDelegate& SceneDelegate,
                         pxr::HdRenderParam*   RenderParam,
@@ -233,7 +239,7 @@ private:
 
     struct StagingIndexData
     {
-        TriangleFaceIndexData Faces;
+        pxr::VtVec3iArray FaceIndices;
 
         std::vector<pxr::GfVec2i> MeshEdgeIndices;
         std::vector<Uint32>       PointIndices;
@@ -242,6 +248,8 @@ private:
 
     struct StagingVertexData
     {
+        pxr::VtValue Points;
+
         // Use map to keep buffer sources sorted by name
         std::map<pxr::TfToken, std::shared_ptr<pxr::HdBufferSource>> Sources;
     };
@@ -279,8 +287,9 @@ private:
     };
     VertexData m_VertexData;
 
-    bool      m_IsDoubleSided = false;
-    CULL_MODE m_CullMode      = CULL_MODE_UNDEFINED;
+    bool      m_HasFaceVaryingPrimvars = false;
+    bool      m_IsDoubleSided          = false;
+    CULL_MODE m_CullMode               = CULL_MODE_UNDEFINED;
 
     std::atomic<Uint32> m_GeometryVersion{0};
     std::atomic<Uint32> m_MaterialVersion{0};

@@ -17,6 +17,7 @@ set(SOURCE
     src/HnMaterial.cpp
     src/HnMaterialNetwork.cpp
     src/HnMesh.cpp
+    src/HnMeshUtils.cpp
     src/HnBuffer.cpp
     src/HnDrawItem.cpp
     src/HnExtComputation.cpp
@@ -57,6 +58,7 @@ set(INCLUDE
     include/HnShadowMapManager.hpp
     include/HnTypeConversions.hpp
     include/HnTextureUtils.hpp
+    include/HnMeshUtils.hpp
     include/HnTextureIdentifier.hpp
     include/Computations/HnExtComputationImpl.hpp
     include/Computations/HnSkinningComputation.hpp

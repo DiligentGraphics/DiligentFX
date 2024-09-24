@@ -33,6 +33,7 @@
 #include "HnRenderPass.hpp"
 #include "HnDrawItem.hpp"
 #include "HnExtComputation.hpp"
+#include "HnMeshUtils.hpp"
 #include "Computations/HnSkinningComputation.hpp"
 #include "GfTypeConversions.hpp"
 
@@ -43,7 +44,6 @@
 
 #include "pxr/base/gf/vec2f.h"
 #include "pxr/base/tf/smallVector.h"
-#include "pxr/imaging/hd/meshUtil.h"
 #include "pxr/imaging/hd/vtBufferSource.h"
 #include "pxr/imaging/hd/vertexAdjacency.h"
 #include "pxr/imaging/hd/smoothNormals.h"
@@ -314,36 +314,50 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
 
     const pxr::SdfPath& Id = GetId();
 
-    const bool TopologyDirty = pxr::HdChangeTracker::IsTopologyDirty(DirtyBits, Id);
+    const bool TopologyDirty   = pxr::HdChangeTracker::IsTopologyDirty(DirtyBits, Id);
+    const bool AnyPrimvarDirty = pxr::HdChangeTracker::IsAnyPrimvarDirty(DirtyBits, Id);
+
+    bool IndexDataDirty = TopologyDirty;
     if (TopologyDirty)
     {
         UpdateTopology(SceneDelegate, RenderParam, DirtyBits, ReprToken);
         DirtyBits &= ~pxr::HdChangeTracker::DirtyTopology;
     }
 
-    const bool AnyPrimvarDirty = pxr::HdChangeTracker::IsAnyPrimvarDirty(DirtyBits, Id);
+    PrimvarsInfo VertexPrimvarsInfo;
+    PrimvarsInfo FacePrimvarsInfo;
+    if (TopologyDirty || AnyPrimvarDirty)
+    {
+        GetPrimvarsInfo(SceneDelegate, DirtyBits, VertexPrimvarsInfo, FacePrimvarsInfo);
+        bool HasFaceVaryingPrimvars = FacePrimvarsInfo.Count > 0;
+        if (m_HasFaceVaryingPrimvars != HasFaceVaryingPrimvars)
+        {
+            m_HasFaceVaryingPrimvars = HasFaceVaryingPrimvars;
+            IndexDataDirty           = true;
+        }
+    }
+
+    if (IndexDataDirty)
+    {
+        UpdateIndexData();
+    }
+
     if (AnyPrimvarDirty)
     {
         m_StagingVertexData = std::make_unique<StagingVertexData>();
-        UpdateVertexAndVaryingPrimvars(SceneDelegate, RenderParam, DirtyBits, ReprToken);
+        UpdateVertexAndVaryingPrimvars(SceneDelegate, RenderParam, DirtyBits, ReprToken, VertexPrimvarsInfo);
 
-        if (m_StagingVertexData->Sources.find(pxr::HdTokens->points) != m_StagingVertexData->Sources.end())
+        if (m_StagingVertexData->Sources.find(pxr::HdTokens->points) != m_StagingVertexData->Sources.end() ||
+            GetVertexBuffer(pxr::HdTokens->points) != nullptr)
         {
             // Collect face-varying primvar sources
-            FaceSourcesMapType FaceSources;
-            UpdateFaceVaryingPrimvars(SceneDelegate, RenderParam, DirtyBits, ReprToken, FaceSources);
+            UpdateFaceVaryingPrimvars(SceneDelegate, RenderParam, DirtyBits, ReprToken, FacePrimvarsInfo);
 
             // If there are neither vertex nor face-varying normals, generate smooth normals
             if (m_StagingVertexData->Sources.find(pxr::HdTokens->normals) == m_StagingVertexData->Sources.end() &&
-                FaceSources.find(pxr::HdTokens->normals) == FaceSources.end())
+                !m_StagingVertexData->Points.IsEmpty())
             {
                 GenerateSmoothNormals();
-            }
-
-            // If there are face-varying sources, we need to convert all vertex sources into face-varying sources
-            if (!FaceSources.empty())
-            {
-                ConvertVertexPrimvarSources(std::move(FaceSources));
             }
 
             UpdateConstantPrimvars(SceneDelegate, RenderParam, DirtyBits, ReprToken);
@@ -352,7 +366,7 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
             // Note that this only reserves space, but does not create any buffers.
             AllocatePooledResources(SceneDelegate, RenderParam);
         }
-        else if (GetVertexBuffer(pxr::HdTokens->points) == nullptr)
+        else
         {
             LOG_WARNING_MESSAGE("Unable to find required primvar 'points' for rprim ", Id, ".");
 
@@ -362,7 +376,7 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
         DirtyBits &= ~pxr::HdChangeTracker::DirtyPrimvar;
     }
 
-    if ((TopologyDirty || AnyPrimvarDirty) && RenderParam != nullptr)
+    if ((IndexDataDirty || AnyPrimvarDirty) && RenderParam != nullptr)
     {
         static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::MeshGeometry);
         ++m_GeometryVersion;
@@ -446,65 +460,69 @@ void HnMesh::UpdateTopology(pxr::HdSceneDelegate& SceneDelegate,
         }
     }
 
-    m_StagingIndexData = std::make_unique<StagingIndexData>();
-
-    m_StagingIndexData->Faces = ComputeTriangleFaceIndices();
-    pxr::HdMeshUtil MeshUtil{&m_Topology, Id};
-    MeshUtil.EnumerateEdges(&m_StagingIndexData->MeshEdgeIndices);
-    m_IndexData.Subsets          = m_StagingIndexData->Faces.Subsets;
-    m_IndexData.NumFaceTriangles = static_cast<Uint32>(m_StagingIndexData->Faces.Indices.size());
-    m_IndexData.NumEdges         = static_cast<Uint32>(m_StagingIndexData->MeshEdgeIndices.size());
-
     DirtyBits &= ~pxr::HdChangeTracker::DirtyTopology;
 }
 
-static std::shared_ptr<pxr::HdBufferSource> CreateBufferSource(const pxr::TfToken& Name,
-                                                               const pxr::VtValue& Data,
-                                                               int                 ValuesPerElement,
-                                                               size_t              ExpectedNumElements,
-                                                               const pxr::SdfPath& MeshId)
+bool HnMesh::AddStagingBufferSourceForPrimvar(const pxr::TfToken&  Name,
+                                              pxr::VtValue         Primvar,
+                                              pxr::HdInterpolation Interpolation,
+                                              int                  ValuesPerElement)
 {
-    if (Data.IsEmpty())
-        return nullptr;
+    if (!m_StagingVertexData)
+    {
+        UNEXPECTED("Staging vertex data is not initialized");
+        return false;
+    }
+
+    if (Primvar.IsEmpty())
+        return false;
+
+    pxr::VtValue  FaceVaryingPrimvar;
+    pxr::VtValue* pSrcPrimvar = &Primvar;
+    if ((Interpolation == pxr::HdInterpolationVertex || Interpolation == pxr::HdInterpolationVarying) && m_HasFaceVaryingPrimvars)
+    {
+        HnMeshUtils MeshUtils{m_Topology, GetId()};
+        FaceVaryingPrimvar = MeshUtils.ConvertVertexPrimvarToFaceVarying(Primvar, ValuesPerElement);
+        pSrcPrimvar        = &FaceVaryingPrimvar;
+    }
+
+    if (pSrcPrimvar == nullptr || pSrcPrimvar->IsEmpty())
+        return false;
 
     auto BufferSource = std::make_shared<pxr::HdVtBufferSource>(
         Name,
-        Data,
+        std::move(*pSrcPrimvar),
         ValuesPerElement, // values per element
         false             // whether doubles are supported or must be converted to floats
     );
 
     if (BufferSource->GetNumElements() == 0)
-        return nullptr;
+        return false;
+
+    const size_t ExpectedNumElements = m_HasFaceVaryingPrimvars ? m_Topology.GetNumFaceVaryings() : m_Topology.GetNumPoints();
 
     // Verify primvar length - it is alright to have more data than we index into.
     if (BufferSource->GetNumElements() < ExpectedNumElements)
     {
-        LOG_WARNING_MESSAGE("Primvar '", Name, "' in mesh ", MeshId, " has only ", BufferSource->GetNumElements(),
+        LOG_WARNING_MESSAGE("Primvar '", Name, "' in mesh ", GetId(), " has only ", BufferSource->GetNumElements(),
                             " elements, while its topology expects at least ", ExpectedNumElements,
                             " elements. Skipping primvar.");
-        return nullptr;
+        return false;
     }
     else if (BufferSource->GetNumElements() > ExpectedNumElements)
     {
         // If the primvar has more data than needed, we issue a warning,
         // but don't skip the primvar update. Truncate the buffer to
         // the expected length.
-        LOG_WARNING_MESSAGE("Primvar '", Name, "' in mesh ", MeshId, " has ", BufferSource->GetNumElements(),
+        LOG_WARNING_MESSAGE("Primvar '", Name, "' in mesh ", GetId(), " has ", BufferSource->GetNumElements(),
                             " elements, while its topology expects ", ExpectedNumElements,
                             " elements. Truncating.");
         BufferSource->Truncate(ExpectedNumElements);
     }
 
-    return BufferSource;
-}
+    m_StagingVertexData->Sources.emplace(Name, std::move(BufferSource));
 
-static std::shared_ptr<pxr::HdBufferSource> CreateBufferSource(const pxr::TfToken& Name,
-                                                               const pxr::VtValue& Data,
-                                                               size_t              ExpectedNumElements,
-                                                               const pxr::SdfPath& MeshId)
-{
-    return CreateBufferSource(Name, Data, 1, ExpectedNumElements, MeshId);
+    return true;
 }
 
 static HnRenderPass::SupportedVertexInputsSetType GetSupportedPrimvars(
@@ -528,25 +546,25 @@ static HnRenderPass::SupportedVertexInputsSetType GetSupportedPrimvars(
     return SupportedPrimvars;
 }
 
-std::shared_ptr<pxr::HdBufferSource> HnMesh::CreateJointInfluencesBufferSource(const pxr::VtValue& NumInfluencesPerComponentVal,
-                                                                               const pxr::VtValue& InfluencesVal)
+bool HnMesh::AddJointInfluencesStagingBufferSource(const pxr::VtValue& NumInfluencesPerComponentVal,
+                                                   const pxr::VtValue& InfluencesVal)
 {
     const pxr::SdfPath& Id = GetId();
     if (!NumInfluencesPerComponentVal.IsHolding<int>())
     {
         LOG_ERROR_MESSAGE("Number of influences per component of mesh ", Id, " is of type ", NumInfluencesPerComponentVal.GetTypeName(), ", but int is expected");
-        return {};
+        return false;
     }
     if (!InfluencesVal.IsHolding<pxr::VtVec2fArray>())
     {
         LOG_ERROR_MESSAGE("Influences of mesh ", Id, " are of type ", InfluencesVal.GetTypeName(), ", but VtVec2fArray is expected");
-        return {};
+        return false;
     }
 
     const int NumInfluencesPerComponent = NumInfluencesPerComponentVal.UncheckedGet<int>();
     if (NumInfluencesPerComponent <= 0)
     {
-        return {};
+        return false;
     }
 
     pxr::VtVec2fArray Influences = InfluencesVal.UncheckedGet<pxr::VtVec2fArray>();
@@ -598,7 +616,48 @@ std::shared_ptr<pxr::HdBufferSource> HnMesh::CreateJointInfluencesBufferSource(c
         }
     }
 
-    return CreateBufferSource(HnTokens->joints, pxr::VtValue{Joints}, 2, m_Topology.GetNumPoints(), Id);
+    return AddStagingBufferSourceForPrimvar(HnTokens->joints, pxr::VtValue{std::move(Joints)}, pxr::HdInterpolationVertex, 2);
+}
+
+void HnMesh::GetPrimvarsInfo(pxr::HdSceneDelegate& SceneDelegate,
+                             pxr::HdDirtyBits&     DirtyBits,
+                             PrimvarsInfo&         VertexPrimvarsInfo,
+                             PrimvarsInfo&         FacePrimvarsInfo) const
+{
+    const pxr::SdfPath& Id = GetId();
+
+    const HnRenderPass::SupportedVertexInputsSetType SupportedPrimvars = GetSupportedPrimvars(SceneDelegate.GetRenderIndex(), GetMaterialId(), m_Topology);
+
+    auto UpdatePrimvarsInfo = [&](const pxr::HdInterpolation Interpolation,
+                                  PrimvarsInfo&              PrimvarsInfo) {
+        pxr::HdPrimvarDescriptorVector PrimVarDescs = GetPrimvarDescriptors(&SceneDelegate, Interpolation);
+        for (const pxr::HdPrimvarDescriptor& PrimDesc : PrimVarDescs)
+        {
+            if (SupportedPrimvars.find(PrimDesc.name) == SupportedPrimvars.end())
+                continue;
+
+            ++PrimvarsInfo.Count;
+
+            if (pxr::HdChangeTracker::IsPrimvarDirty(DirtyBits, Id, PrimDesc.name))
+            {
+                PrimvarsInfo.Dirty.push_back(PrimDesc);
+            }
+        }
+    };
+
+    for (pxr::HdInterpolation Interpolation : {pxr::HdInterpolationVertex, pxr::HdInterpolationVarying})
+    {
+        UpdatePrimvarsInfo(Interpolation, VertexPrimvarsInfo);
+
+        pxr::HdExtComputationPrimvarDescriptorVector CompPrimvarsDescs = SceneDelegate.GetExtComputationPrimvarDescriptors(Id, Interpolation);
+        for (const pxr::HdExtComputationPrimvarDescriptor& ExtCompPrimDesc : CompPrimvarsDescs)
+        {
+            // Skinnig ext computation is created by the skeleton adapter
+            VertexPrimvarsInfo.ExtComp.push_back(ExtCompPrimDesc);
+        }
+    }
+
+    UpdatePrimvarsInfo(pxr::HdInterpolationFaceVarying, FacePrimvarsInfo);
 }
 
 void HnMesh::UpdateSkinningPrimvars(pxr::HdSceneDelegate&                         SceneDelegate,
@@ -615,8 +674,6 @@ void HnMesh::UpdateSkinningPrimvars(pxr::HdSceneDelegate&                       
         LOG_ERROR_MESSAGE("Unable to find skinning computation ", SkinnigCompId);
         return;
     }
-
-    const pxr::SdfPath& Id = GetId();
 
     Uint32 SkinningPrimvarsVersion = 0;
 
@@ -683,15 +740,10 @@ void HnMesh::UpdateSkinningPrimvars(pxr::HdSceneDelegate&                       
             return;
         }
 
-        if (auto BufferSource = CreateBufferSource(SkinningCompPrimDesc.name, RestPointsVal, m_Topology.GetNumPoints(), Id))
-        {
-            m_StagingVertexData->Sources.emplace(SkinningCompPrimDesc.name, std::move(BufferSource));
-        }
+        m_StagingVertexData->Points = RestPointsVal;
 
-        if (auto BufferSource = CreateJointInfluencesBufferSource(NumInfluencesPerComponentVal, InfluencesVal))
-        {
-            m_StagingVertexData->Sources.emplace(HnTokens->joints, std::move(BufferSource));
-        }
+        AddStagingBufferSourceForPrimvar(SkinningCompPrimDesc.name, std::move(RestPointsVal), SkinningCompPrimDesc.interpolation);
+        AddJointInfluencesStagingBufferSource(NumInfluencesPerComponentVal, InfluencesVal);
 
         m_SkinningPrimvarsVersion = SkinningPrimvarsVersion;
     }
@@ -717,49 +769,29 @@ void HnMesh::UpdateSkinningPrimvars(pxr::HdSceneDelegate&                       
 void HnMesh::UpdateVertexAndVaryingPrimvars(pxr::HdSceneDelegate& SceneDelegate,
                                             pxr::HdRenderParam*   RenderParam,
                                             pxr::HdDirtyBits&     DirtyBits,
-                                            const pxr::TfToken&   ReprToken)
+                                            const pxr::TfToken&   ReprToken,
+                                            const PrimvarsInfo&   VertexPrimvarsInfo)
 {
     VERIFY_EXPR(m_StagingVertexData);
-    const pxr::SdfPath& Id = GetId();
 
-    const int NumPoints = m_Topology.GetNumPoints();
-
-    const HnRenderPass::SupportedVertexInputsSetType SupportedPrimvars = GetSupportedPrimvars(SceneDelegate.GetRenderIndex(), GetMaterialId(), m_Topology);
-
-    auto AddPrimvarSource = [&](const pxr::HdPrimvarDescriptor& PrimDesc) {
-        if (!pxr::HdChangeTracker::IsPrimvarDirty(DirtyBits, Id, PrimDesc.name))
-            return;
-
-        // Skip unsupported primvars
-        if (SupportedPrimvars.find(PrimDesc.name) == SupportedPrimvars.end())
-            return;
-
+    for (const pxr::HdPrimvarDescriptor& PrimDesc : VertexPrimvarsInfo.Dirty)
+    {
         pxr::VtValue PrimValue = GetPrimvar(&SceneDelegate, PrimDesc.name);
         if (PrimValue.IsEmpty())
             return;
 
-        if (auto BufferSource = CreateBufferSource(PrimDesc.name, PrimValue, NumPoints, Id))
-        {
-            m_StagingVertexData->Sources.emplace(PrimDesc.name, std::move(BufferSource));
-        }
-    };
+        if (PrimDesc.name == pxr::HdTokens->points)
+            m_StagingVertexData->Points = PrimValue;
 
-    for (pxr::HdInterpolation Interpolation : {pxr::HdInterpolationVertex, pxr::HdInterpolationVarying})
+        AddStagingBufferSourceForPrimvar(PrimDesc.name, std::move(PrimValue), PrimDesc.interpolation);
+    }
+
+    for (const pxr::HdExtComputationPrimvarDescriptor& ExtCompPrimDesc : VertexPrimvarsInfo.ExtComp)
     {
-        pxr::HdPrimvarDescriptorVector PrimVarDescs = GetPrimvarDescriptors(&SceneDelegate, Interpolation);
-        for (const pxr::HdPrimvarDescriptor& PrimDesc : PrimVarDescs)
+        // Skinnig ext computation is created by the skeleton adapter
+        if (ExtCompPrimDesc.sourceComputationOutputName == HnSkinningPrivateTokens->skinnedPoints)
         {
-            AddPrimvarSource(PrimDesc);
-        }
-
-        pxr::HdExtComputationPrimvarDescriptorVector CompPrimvarsDescs = SceneDelegate.GetExtComputationPrimvarDescriptors(Id, Interpolation);
-        for (const pxr::HdExtComputationPrimvarDescriptor& ExtCompPrimDesc : CompPrimvarsDescs)
-        {
-            // Skinnig ext computation is created by the skeleton adapter
-            if (ExtCompPrimDesc.sourceComputationOutputName == HnSkinningPrivateTokens->skinnedPoints)
-            {
-                UpdateSkinningPrimvars(SceneDelegate, RenderParam, DirtyBits, ReprToken, ExtCompPrimDesc);
-            }
+            UpdateSkinningPrimvars(SceneDelegate, RenderParam, DirtyBits, ReprToken, ExtCompPrimDesc);
         }
     }
 }
@@ -768,52 +800,13 @@ void HnMesh::UpdateFaceVaryingPrimvars(pxr::HdSceneDelegate& SceneDelegate,
                                        pxr::HdRenderParam*   RenderParam,
                                        pxr::HdDirtyBits&     DirtyBits,
                                        const pxr::TfToken&   ReprToken,
-                                       FaceSourcesMapType&   FaceSources)
+                                       const PrimvarsInfo&   FacePrimvarsInfo)
 {
     VERIFY_EXPR(m_StagingVertexData);
-    const pxr::SdfPath& Id = GetId();
-
-    const HnRenderPass::SupportedVertexInputsSetType SupportedPrimvars = GetSupportedPrimvars(SceneDelegate.GetRenderIndex(), GetMaterialId(), m_Topology);
-
-    pxr::HdPrimvarDescriptorVector FaceVaryingPrims = GetPrimvarDescriptors(&SceneDelegate, pxr::HdInterpolationFaceVarying);
-    for (const pxr::HdPrimvarDescriptor& PrimDesc : FaceVaryingPrims)
+    for (const pxr::HdPrimvarDescriptor& PrimDesc : FacePrimvarsInfo.Dirty)
     {
-        if (!pxr::HdChangeTracker::IsPrimvarDirty(DirtyBits, Id, PrimDesc.name))
-            continue;
-
-        // Skip unsupported primvars
-        if (SupportedPrimvars.find(PrimDesc.name) == SupportedPrimvars.end())
-            continue;
-
         pxr::VtValue PrimValue = GetPrimvar(&SceneDelegate, PrimDesc.name);
-        if (PrimValue.IsEmpty())
-            continue;
-
-        auto PrimVarSource = std::make_shared<pxr::HdVtBufferSource>(
-            PrimDesc.name,
-            PrimValue,
-            1,    // values per element
-            false // whether doubles are supported or must be converted to floats
-        );
-
-        if (PrimVarSource->GetNumElements() == 0)
-            continue;
-
-        pxr::VtValue    TriangulatedPrimValue;
-        pxr::HdMeshUtil MeshUtil{&m_Topology, Id};
-        // The method outputs a linear non-indexed list of values.
-        // If Indices is the list of indices produced by MeshUtil.ComputeTriangleIndices, then
-        // values in the output are indexed by i rather than Indices[i].
-        if (MeshUtil.ComputeTriangulatedFaceVaryingPrimvar(PrimVarSource->GetData(),
-                                                           PrimVarSource->GetNumElements(),
-                                                           PrimVarSource->GetTupleType().type,
-                                                           &TriangulatedPrimValue))
-        {
-            if (auto BufferSource = CreateBufferSource(PrimDesc.name, TriangulatedPrimValue, size_t{m_IndexData.NumFaceTriangles} * 3, Id))
-            {
-                FaceSources.emplace(PrimDesc.name, std::move(BufferSource));
-            }
-        }
+        AddStagingBufferSourceForPrimvar(PrimDesc.name, std::move(PrimValue), PrimDesc.interpolation);
     }
 }
 
@@ -886,325 +879,51 @@ void HnMesh::GenerateSmoothNormals()
         return;
     }
 
-    auto points_it = m_StagingVertexData->Sources.find(pxr::HdTokens->points);
-    if (points_it == m_StagingVertexData->Sources.end())
-    {
-        LOG_ERROR_MESSAGE("Skipping smooth normal generation for ", GetId(), " because its points data is missing.");
-        return;
-    }
-
-    const pxr::HdBufferSource& PointsSource = *points_it->second;
-    if (PointsSource.GetTupleType().type != pxr::HdTypeFloatVec3)
+    if (!m_StagingVertexData->Points.IsHolding<pxr::VtVec3fArray>())
     {
         LOG_ERROR_MESSAGE("Skipping smooth normal generation for ", GetId(), " because its points data is not float3.");
         return;
     }
 
-    pxr::VtVec3fArray Normals = pxr::Hd_SmoothNormals::ComputeSmoothNormals(&Adjacency, static_cast<int>(PointsSource.GetNumElements()), static_cast<const pxr::GfVec3f*>(PointsSource.GetData()));
-    if (Normals.size() != PointsSource.GetNumElements())
+    const pxr::VtVec3fArray& Points = m_StagingVertexData->Points.UncheckedGet<pxr::VtVec3fArray>();
+
+    pxr::VtVec3fArray Normals = pxr::Hd_SmoothNormals::ComputeSmoothNormals(&Adjacency, static_cast<int>(Points.size()), Points.data());
+    if (Normals.size() != Points.size())
     {
-        LOG_ERROR_MESSAGE("Failed to generate smooth normals for ", GetId(), ". Expected ", PointsSource.GetNumElements(), " normals, got ", Normals.size(), ".");
+        LOG_ERROR_MESSAGE("Failed to generate smooth normals for ", GetId(), ". Expected ", Points.size(), " normals, got ", Normals.size(), ".");
         return;
     }
 
-    if (auto BufferSource = CreateBufferSource(pxr::HdTokens->normals, pxr::VtValue{Normals}, PointsSource.GetNumElements(), GetId()))
-    {
-        m_StagingVertexData->Sources.emplace(pxr::HdTokens->normals, std::move(BufferSource));
-    }
+    AddStagingBufferSourceForPrimvar(pxr::HdTokens->normals, pxr::VtValue{std::move(Normals)}, pxr::HdInterpolationVertex);
 }
 
-namespace
+void HnMesh::UpdateIndexData()
 {
+    m_StagingIndexData = std::make_unique<StagingIndexData>();
 
-class TriangulatedFaceBufferSource final : public pxr::HdBufferSource
-{
-public:
-    TriangulatedFaceBufferSource(const pxr::TfToken& Name,
-                                 pxr::HdTupleType    TupleType,
-                                 size_t              NumElements) :
-        m_Name{Name},
-        m_TupleType{TupleType},
-        m_NumElements{NumElements},
-        m_Data(HdDataSizeOfType(TupleType.type) * TupleType.count * NumElements)
-    {
-    }
-
-    virtual TfToken const& GetName() const override
-    {
-        return m_Name;
-    }
-
-    virtual void const* GetData() const override
-    {
-        return m_Data.data();
-    }
-
-    virtual size_t ComputeHash() const override
-    {
-        UNEXPECTED("This is not supposed to be called");
-        return 0;
-    }
-
-    virtual size_t GetNumElements() const override
-    {
-        return m_NumElements;
-    }
-
-    virtual pxr::HdTupleType GetTupleType() const override
-    {
-        return m_TupleType;
-    }
-
-    virtual void GetBufferSpecs(pxr::HdBufferSpecVector* specs) const override
-    {
-        UNEXPECTED("This is not supposed to be called");
-    }
-
-    virtual bool Resolve() override final
-    {
-        return true;
-    }
-
-    virtual bool _CheckValid() const override final
-    {
-        return !m_Data.empty();
-    }
-
-    std::vector<Uint8>& GetData()
-    {
-        return m_Data;
-    }
-
-private:
-    pxr::TfToken       m_Name;
-    pxr::HdTupleType   m_TupleType;
-    size_t             m_NumElements;
-    std::vector<Uint8> m_Data;
-};
-
-} // namespace
-
-HnMesh::TriangleFaceIndexData HnMesh::ComputeTriangleFaceIndices()
-{
-    TriangleFaceIndexData FaceIndexData;
-
-    pxr::HdMeshUtil MeshUtil{&m_Topology, GetId()};
-    pxr::VtIntArray PrimitiveParams;
-    MeshUtil.ComputeTriangleIndices(&FaceIndexData.Indices, &PrimitiveParams, nullptr);
-
+    HnMeshUtils     MeshUtils{m_Topology, GetId()};
+    pxr::VtIntArray SubsetStart;
+    MeshUtils.Triangulate(!m_HasFaceVaryingPrimvars, m_StagingIndexData->FaceIndices, SubsetStart);
     if (!m_Topology.GetGeomSubsets().empty())
     {
-        const size_t FaceCount = m_Topology.GetFaceVertexCounts().size();
-        // PrimitiveParams is the mapping from the triangle index to the original face index.
-        //            +--------+---------------+
-        //           /| \      |\      |      /
-        //          / |  \  B  | \  C  |     /
-        //         /  |   \    |  \    |    /
-        //        /   |    \   |   \   | C /
-        //       / A  |  B  \  | C  \  |  /
-        //      /     |      \ |     \ | /
-        //     /      |       \|      \|/
-        //    +-------+--------+-------+
-        //
-        //  0 -> A
-        //  1 -> B, 2 -> B
-        //  3 -> C, 4 -> C, 5 -> C
-        //
-        // We need the reverse mapping:
-        //  A -> {0}
-        //  B -> {1, 2}
-        //  C -> {3, 4, 5}
-        std::vector<pxr::TfSmallVector<int, 4>> FaceIdxToTriIdx(FaceCount);
-        for (int i = 0; i < PrimitiveParams.size(); ++i)
+        VERIFY_EXPR(SubsetStart.size() == m_Topology.GetGeomSubsets().size() + 1);
+        m_IndexData.Subsets.reserve(SubsetStart.size() - 1);
+        for (size_t i = 0; i < SubsetStart.size() - 1; ++i)
         {
-            int FaceIndex = pxr::HdMeshUtil::DecodeFaceIndexFromCoarseFaceParam(PrimitiveParams[i]);
-            if (FaceIndex >= FaceCount)
-            {
-                LOG_ERROR_MESSAGE("Invalid face index ", FaceIndex, " decoded from primitive param for triangle ", i, " in ", GetId(), " mesh. Expected value in the range [0, ", FaceCount, ").");
-                continue;
-            }
-            FaceIdxToTriIdx[FaceIndex].push_back(i);
+            const Uint32 StartTri = static_cast<Uint32>(SubsetStart[i]);
+            const Uint32 EndTri   = static_cast<Uint32>(SubsetStart[i + 1]);
+            m_IndexData.Subsets.emplace_back(GeometrySubsetRange{StartTri * 3, (EndTri - StartTri) * 3});
         }
-
-        pxr::VtVec3iArray Indices;
-
-        ProcessDrawItems(
-            [](HnDrawItem& DrawItem) {},
-            [&](const pxr::HdGeomSubset& Subset, HnDrawItem& DrawItem) {
-                const Uint32 FirstTri = static_cast<Uint32>(Indices.size());
-                for (int FaceIndex : Subset.indices)
-                {
-                    if (FaceIndex >= FaceCount)
-                    {
-                        LOG_ERROR_MESSAGE("Invalid face index ", FaceIndex, " for subset ", Subset.id, " in ", GetId(), " mesh. Expected value in the range [0, ", FaceCount, ").");
-                        continue;
-                    }
-
-                    for (int TriIndex : FaceIdxToTriIdx[FaceIndex])
-                    {
-                        Indices.push_back(FaceIndexData.Indices[TriIndex]);
-                        FaceIndexData.FaceReordering.emplace_back(TriIndex * 3 + 0, TriIndex * 3 + 1, TriIndex * 3 + 2);
-                    }
-                }
-                const Uint32 NumTris = static_cast<Uint32>(Indices.size() - FirstTri);
-                FaceIndexData.Subsets.emplace_back(GeometrySubsetRange{FirstTri * 3, NumTris * 3});
-            });
-        FaceIndexData.Indices = std::move(Indices);
     }
-
-    return FaceIndexData;
-}
-
-static std::shared_ptr<pxr::HdBufferSource> ReindexBufferSource(const pxr::HdBufferSource& SrcSource,
-                                                                const pxr::VtVec3iArray&   Indices)
-{
-    const Uint8*           pSrcData    = static_cast<const Uint8*>(SrcSource.GetData());
-    const pxr::HdTupleType ElementType = SrcSource.GetTupleType();
-    const size_t           ElementSize = HdDataSizeOfType(ElementType.type) * ElementType.count;
-
-    std::shared_ptr<TriangulatedFaceBufferSource> ReindexedSource =
-        std::make_shared<TriangulatedFaceBufferSource>(SrcSource.GetName(), SrcSource.GetTupleType(), Indices.size() * 3);
-
-    std::vector<Uint8>& DstData = ReindexedSource->GetData();
-    VERIFY_EXPR(DstData.size() == Indices.size() * 3 * ElementSize);
-    Uint8* pDst = DstData.data();
-    for (size_t i = 0; i < Indices.size(); ++i)
+    else
     {
-        const pxr::GfVec3i& Tri = Indices[i];
-        for (size_t v = 0; v < 3; ++v)
-        {
-            const auto* pSrc = pSrcData + Tri[v] * ElementSize;
-            memcpy(pDst + (i * 3 + v) * ElementSize, pSrc, ElementSize);
-        }
+        m_IndexData.Subsets.clear();
     }
 
-    return ReindexedSource;
-}
-
-void HnMesh::ConvertVertexPrimvarSources(FaceSourcesMapType&& FaceSources)
-{
-    TriangleFaceIndexData Faces;
-    if (!m_StagingIndexData || !m_StagingIndexData->Faces)
-    {
-        // Need to regenerate triangle indices
-        Faces = ComputeTriangleFaceIndices();
-        if (!Faces)
-            return;
-
-        VERIFY(Faces.Subsets.size() == m_IndexData.Subsets.size(),
-               "The number of subsets is not consistent with the previously computed value. "
-               "This may indicate that the topology was not updated during the last sync.");
-    }
-    const pxr::VtVec3iArray& Indices        = Faces ? Faces.Indices : m_StagingIndexData->Faces.Indices;
-    const pxr::VtVec3iArray& FaceReordering = Faces ? Faces.FaceReordering : m_StagingIndexData->Faces.FaceReordering;
-
-    VERIFY(Indices.size() == m_IndexData.NumFaceTriangles,
-           "The number of indices is not consistent with the previously computed value. "
-           "This may indicate that the topology was not updated during the last sync.");
-
-    // Vertex data is indexed by triangle indices produced by MeshUtil.ComputeTriangleIndices.
-    // However, triangulation of face-varying primvars produced by MeshUtil.ComputeTriangulatedFaceVaryingPrimvar
-    // is non-indexed. It contains one value per index, rather than one value per vertex.
-    // We need to unfold vertex data to match the face-varying data.
-
-    // Unpack vertex sources by unfolding triangle indices into linear list of vertices
-    int NumVerts = 0;
-    for (auto& source_it : m_StagingVertexData->Sources)
-    {
-        auto& pSource = source_it.second;
-        if (pSource == nullptr)
-            continue;
-        NumVerts = std::max(NumVerts, static_cast<int>(pSource->GetNumElements()));
-
-        // Replace original vertex source with the triangulated face source
-        pSource = ReindexBufferSource(*pSource, Indices);
-    }
-
-    // Add face-varying sources
-    for (auto& face_source_it : FaceSources)
-    {
-        auto it_inserted = m_StagingVertexData->Sources.emplace(face_source_it.first, std::move(face_source_it.second));
-        if (!it_inserted.second)
-        {
-            LOG_ERROR_MESSAGE("Failed to add face-varying source ", face_source_it.first, " to ", GetId(), " as vertex source with the same name already exists.");
-            continue;
-        }
-
-        if (!FaceReordering.empty() && it_inserted.first->second)
-        {
-            // Reorder face-varying data to match the geometry subset face order
-            it_inserted.first->second = ReindexBufferSource(*it_inserted.first->second, FaceReordering);
-        }
-    }
-
-    if (m_StagingIndexData)
-    {
-        // Mapping from the original vertex index to the first occurrence of this vertex in the unfolded list
-        //
-        //  Verts:    A B C D E F
-        //  Indices:  3 4 5 0 1 2
-        //  Unfolded: D E F A B C
-        //  Mapping:  0->3, 1->4, 2->5, 3->0, 4->1, 5->2
-        std::vector<int> ReverseVertexMapping(NumVerts, -1);
-        for (int i = 0; i < Indices.size(); ++i)
-        {
-            const pxr::GfVec3i& Tri = Indices[i];
-            for (int v = 0; v < 3; ++v)
-            {
-                if (Tri[v] >= NumVerts)
-                {
-                    LOG_ERROR_MESSAGE("Invalid vertex index ", Tri[v], " in triangle ", i, " in ", GetId(), " mesh. Expected value in the range [0, ", NumVerts, ").");
-                    continue;
-                }
-                int& MappedIndex = ReverseVertexMapping[Tri[v]];
-                if (MappedIndex < 0)
-                    MappedIndex = i * 3 + v;
-            }
-        }
-
-        // Replace original triangle indices with the list of unfolded face indices
-        m_StagingIndexData->Faces.Indices.resize(m_IndexData.NumFaceTriangles);
-        for (Uint32 i = 0; i < m_StagingIndexData->Faces.Indices.size(); ++i)
-        {
-            pxr::GfVec3i& Tri{m_StagingIndexData->Faces.Indices[i]};
-            Tri[0] = i * 3 + 0;
-            Tri[1] = i * 3 + 1;
-            Tri[2] = i * 3 + 2;
-        }
-
-        // Update edge indices
-        for (pxr::GfVec2i& Edge : m_StagingIndexData->MeshEdgeIndices)
-        {
-            if (Edge[0] >= NumVerts || Edge[1] >= NumVerts)
-            {
-                LOG_ERROR_MESSAGE("Invalid vertex index in edge ", Edge[0], " - ", Edge[1], " in ", GetId(), " mesh. Expected value in the range [0, ", NumVerts, ").");
-                continue;
-            }
-
-            int v0 = ReverseVertexMapping[Edge[0]];
-            int v1 = ReverseVertexMapping[Edge[1]];
-            if (v0 >= 0 && v1 >= 0)
-            {
-                Edge[0] = v0;
-                Edge[1] = v1;
-            }
-            else
-            {
-                Edge[0] = 0;
-                Edge[1] = 0;
-            }
-        }
-
-        // Create point indices
-        m_StagingIndexData->PointIndices.resize(m_Topology.GetNumPoints());
-        for (size_t i = 0; i < m_StagingIndexData->PointIndices.size(); ++i)
-        {
-            if (i < NumVerts)
-            {
-                m_StagingIndexData->PointIndices[i] = ReverseVertexMapping[i];
-            }
-        }
-    }
+    //pxr::HdMeshUtil MeshUtil{&m_Topology, Id};
+    //MeshUtil.EnumerateEdges(&m_StagingIndexData->MeshEdgeIndices);
+    m_IndexData.NumFaceTriangles = static_cast<Uint32>(m_StagingIndexData->FaceIndices.size());
+    m_IndexData.NumEdges         = static_cast<Uint32>(m_StagingIndexData->MeshEdgeIndices.size());
 }
 
 void HnMesh::AllocatePooledResources(pxr::HdSceneDelegate& SceneDelegate,
@@ -1262,9 +981,9 @@ void HnMesh::AllocatePooledResources(pxr::HdSceneDelegate& SceneDelegate,
         const Uint32 StartVertex = m_VertexData.PoolAllocation->GetStartVertex();
         if (m_StagingIndexData && StartVertex != 0)
         {
-            if (!m_StagingIndexData->Faces.Indices.empty())
+            if (!m_StagingIndexData->FaceIndices.empty())
             {
-                for (pxr::GfVec3i& Tri : m_StagingIndexData->Faces.Indices)
+                for (pxr::GfVec3i& Tri : m_StagingIndexData->FaceIndices)
                 {
                     Tri[0] += StartVertex;
                     Tri[1] += StartVertex;
@@ -1302,7 +1021,7 @@ void HnMesh::AllocatePooledResources(pxr::HdSceneDelegate& SceneDelegate,
 
     if (m_StagingIndexData && static_cast<const HnRenderParam*>(RenderParam)->GetUseIndexPool())
     {
-        if (!m_StagingIndexData->Faces.Indices.empty())
+        if (!m_StagingIndexData->FaceIndices.empty())
         {
             m_IndexData.FaceAllocation = ResMgr.AllocateIndices(sizeof(Uint32) * m_IndexData.NumFaceTriangles * 3);
             m_IndexData.FaceStartIndex = m_IndexData.FaceAllocation->GetOffset() / sizeof(Uint32);
@@ -1429,12 +1148,12 @@ void HnMesh::UpdateIndexBuffer(HnRenderDelegate& RenderDelegate)
         }
     };
 
-    if (!m_StagingIndexData->Faces.Indices.empty())
+    if (!m_StagingIndexData->FaceIndices.empty())
     {
-        VERIFY_EXPR(m_IndexData.NumFaceTriangles == static_cast<size_t>(m_StagingIndexData->Faces.Indices.size()));
-        static_assert(sizeof(m_StagingIndexData->Faces.Indices[0]) == sizeof(Uint32) * 3, "Unexpected triangle data size");
+        VERIFY_EXPR(m_IndexData.NumFaceTriangles == static_cast<size_t>(m_StagingIndexData->FaceIndices.size()));
+        static_assert(sizeof(m_StagingIndexData->FaceIndices[0]) == sizeof(Uint32) * 3, "Unexpected triangle data size");
         m_IndexData.Faces = PrepareIndexBuffer("Triangle Index Buffer",
-                                               m_StagingIndexData->Faces.Indices.data(),
+                                               m_StagingIndexData->FaceIndices.data(),
                                                m_IndexData.NumFaceTriangles * sizeof(Uint32) * 3,
                                                m_IndexData.FaceAllocation);
     }
