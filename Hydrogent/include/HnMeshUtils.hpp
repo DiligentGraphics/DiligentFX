@@ -103,6 +103,32 @@ public:
     pxr::VtVec2iArray ComputeEdgeIndices(bool UseFaceVertexIndices) const;
 
 
+    /// Computes the point indices.
+    ///
+    /// \param[in] ConvertToFaceVarying - Whether to convert points to face-varying.
+    /// \return The point indices.
+    ///
+    /// Example:
+    ///     Input:
+    ///         FaceVertexCounts = {4, 4}
+    ///         FaceVertexIndices= {0, 1, 2, 3,  3, 2, 4, 5}
+    ///
+    ///         V1________V2_______V4
+    ///          |1      2|5      6|
+    ///          |        |        |
+    ///          |        |        |
+    ///          |0______3|4______7|
+    ///         V0        V3       V5
+    ///
+    ///     Output:
+    ///         ConvertToFaceVarying == false
+    /// 		    PointIndices = {0, 1, 2, 3, 4, 5}
+    ///
+    ///         ConvertToFaceVarying == true
+    /// 		    PointIndices = {0, 1, 2, 3, 6, 7}
+    pxr::VtIntArray ComputePointIndices(bool ConvertToFaceVarying) const;
+
+
     /// Converts vertex/varying primvar data to face-varying primvar data.
     ///
     /// \param[in] VertexData      - The vertex/varying primvar data.

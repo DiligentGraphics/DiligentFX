@@ -920,9 +920,10 @@ void HnMesh::UpdateIndexData()
         m_IndexData.Subsets.clear();
     }
 
-    m_StagingIndexData->EdgeIndices = MeshUtils.ComputeEdgeIndices(!m_HasFaceVaryingPrimvars);
-    m_IndexData.NumFaceTriangles    = static_cast<Uint32>(m_StagingIndexData->FaceIndices.size());
-    m_IndexData.NumEdges            = static_cast<Uint32>(m_StagingIndexData->EdgeIndices.size());
+    m_StagingIndexData->EdgeIndices  = MeshUtils.ComputeEdgeIndices(!m_HasFaceVaryingPrimvars);
+    m_StagingIndexData->PointIndices = MeshUtils.ComputePointIndices(m_HasFaceVaryingPrimvars);
+    m_IndexData.NumFaceTriangles     = static_cast<Uint32>(m_StagingIndexData->FaceIndices.size());
+    m_IndexData.NumEdges             = static_cast<Uint32>(m_StagingIndexData->EdgeIndices.size());
 }
 
 void HnMesh::AllocatePooledResources(pxr::HdSceneDelegate& SceneDelegate,
@@ -1004,15 +1005,6 @@ void HnMesh::AllocatePooledResources(pxr::HdSceneDelegate& SceneDelegate,
                 for (int& Point : m_StagingIndexData->PointIndices)
                 {
                     Point += StartVertex;
-                }
-            }
-            else
-            {
-                // If there are no point indices, we need to create them
-                m_StagingIndexData->PointIndices.resize(m_Topology.GetNumPoints());
-                for (Uint32 i = 0; i < m_StagingIndexData->PointIndices.size(); ++i)
-                {
-                    m_StagingIndexData->PointIndices[i] = StartVertex + i;
                 }
             }
         }

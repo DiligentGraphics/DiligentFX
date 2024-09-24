@@ -218,6 +218,48 @@ pxr::VtVec2iArray HnMeshUtils::ComputeEdgeIndices(bool UseFaceVertexIndices) con
     return EdgeIndices;
 }
 
+pxr::VtIntArray HnMeshUtils::ComputePointIndices(bool ConvertToFaceVarying) const
+{
+    const int NumPoints = m_Topology.GetNumPoints();
+
+    pxr::VtIntArray PointIndices;
+    PointIndices.reserve(NumPoints);
+    if (ConvertToFaceVarying)
+    {
+        const pxr::VtIntArray& FaceVertexIndices = m_Topology.GetFaceVertexIndices();
+        const int              NumVertexIndices  = FaceVertexIndices.size();
+
+        std::vector<bool> PointAdded(NumPoints, false);
+        ProcessFaces(
+            [&](size_t FaceId, int StartVertex, int VertCount) {
+                for (int v = 0; v < VertCount; ++v)
+                {
+                    int FaceVertIdx = StartVertex + v;
+                    if (FaceVertIdx >= NumVertexIndices)
+                        continue;
+
+                    int PointIdx = FaceVertexIndices[FaceVertIdx];
+                    if (PointIdx >= NumPoints)
+                        continue;
+
+                    if (!PointAdded[PointIdx])
+                    {
+                        PointIndices.push_back(FaceVertIdx);
+                        PointAdded[PointIdx] = true;
+                    }
+                }
+            });
+    }
+    else
+    {
+        PointIndices.resize(NumPoints);
+        for (int i = 0; i < NumPoints; ++i)
+            PointIndices[i] = i;
+    }
+
+    return PointIndices;
+}
+
 template <typename T>
 pxr::VtValue ConvertVertexArrayToFaceVaryingArray(const pxr::VtIntArray& FaceVertexIndices, const pxr::VtArray<T>& VertexData, size_t ValuesPerVertex)
 {
