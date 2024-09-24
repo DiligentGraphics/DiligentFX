@@ -920,10 +920,9 @@ void HnMesh::UpdateIndexData()
         m_IndexData.Subsets.clear();
     }
 
-    //pxr::HdMeshUtil MeshUtil{&m_Topology, Id};
-    //MeshUtil.EnumerateEdges(&m_StagingIndexData->MeshEdgeIndices);
-    m_IndexData.NumFaceTriangles = static_cast<Uint32>(m_StagingIndexData->FaceIndices.size());
-    m_IndexData.NumEdges         = static_cast<Uint32>(m_StagingIndexData->MeshEdgeIndices.size());
+    m_StagingIndexData->EdgeIndices = MeshUtils.ComputeEdgeIndices(!m_HasFaceVaryingPrimvars);
+    m_IndexData.NumFaceTriangles    = static_cast<Uint32>(m_StagingIndexData->FaceIndices.size());
+    m_IndexData.NumEdges            = static_cast<Uint32>(m_StagingIndexData->EdgeIndices.size());
 }
 
 void HnMesh::AllocatePooledResources(pxr::HdSceneDelegate& SceneDelegate,
@@ -991,9 +990,9 @@ void HnMesh::AllocatePooledResources(pxr::HdSceneDelegate& SceneDelegate,
                 }
             }
 
-            if (!m_StagingIndexData->MeshEdgeIndices.empty())
+            if (!m_StagingIndexData->EdgeIndices.empty())
             {
-                for (pxr::GfVec2i& Edge : m_StagingIndexData->MeshEdgeIndices)
+                for (pxr::GfVec2i& Edge : m_StagingIndexData->EdgeIndices)
                 {
                     Edge[0] += StartVertex;
                     Edge[1] += StartVertex;
@@ -1002,7 +1001,7 @@ void HnMesh::AllocatePooledResources(pxr::HdSceneDelegate& SceneDelegate,
 
             if (!m_StagingIndexData->PointIndices.empty())
             {
-                for (Uint32& Point : m_StagingIndexData->PointIndices)
+                for (int& Point : m_StagingIndexData->PointIndices)
                 {
                     Point += StartVertex;
                 }
@@ -1027,7 +1026,7 @@ void HnMesh::AllocatePooledResources(pxr::HdSceneDelegate& SceneDelegate,
             m_IndexData.FaceStartIndex = m_IndexData.FaceAllocation->GetOffset() / sizeof(Uint32);
         }
 
-        if (!m_StagingIndexData->MeshEdgeIndices.empty())
+        if (!m_StagingIndexData->EdgeIndices.empty())
         {
             m_IndexData.EdgeAllocation = ResMgr.AllocateIndices(sizeof(Uint32) * m_IndexData.NumEdges * 2);
             m_IndexData.EdgeStartIndex = m_IndexData.EdgeAllocation->GetOffset() / sizeof(Uint32);
@@ -1158,11 +1157,11 @@ void HnMesh::UpdateIndexBuffer(HnRenderDelegate& RenderDelegate)
                                                m_IndexData.FaceAllocation);
     }
 
-    if (!m_StagingIndexData->MeshEdgeIndices.empty())
+    if (!m_StagingIndexData->EdgeIndices.empty())
     {
-        VERIFY_EXPR(m_IndexData.NumEdges == static_cast<Uint32>(m_StagingIndexData->MeshEdgeIndices.size()));
+        VERIFY_EXPR(m_IndexData.NumEdges == static_cast<Uint32>(m_StagingIndexData->EdgeIndices.size()));
         m_IndexData.Edges = PrepareIndexBuffer("Edge Index Buffer",
-                                               m_StagingIndexData->MeshEdgeIndices.data(),
+                                               m_StagingIndexData->EdgeIndices.data(),
                                                m_IndexData.NumEdges * sizeof(Uint32) * 2,
                                                m_IndexData.EdgeAllocation);
     }

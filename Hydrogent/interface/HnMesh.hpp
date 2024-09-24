@@ -240,9 +240,8 @@ private:
     struct StagingIndexData
     {
         pxr::VtVec3iArray FaceIndices;
-
-        std::vector<pxr::GfVec2i> MeshEdgeIndices;
-        std::vector<Uint32>       PointIndices;
+        pxr::VtVec2iArray EdgeIndices;
+        pxr::VtIntArray   PointIndices;
     };
     std::unique_ptr<StagingIndexData> m_StagingIndexData;
 

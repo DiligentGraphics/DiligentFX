@@ -77,6 +77,32 @@ public:
                      pxr::VtIntArray&   SubsetStart) const;
 
 
+    /// Computes the edge indices.
+    ///
+    /// \param[in] UseFaceVertexIndices - Whether to use face vertex indices.
+    /// \return The edge indices.
+    ///
+    /// Example:
+    ///     Input:
+    ///         FaceVertexCounts = {4, 4}
+    ///         FaceVertexIndices= {0, 1, 2, 3,  3, 2, 4, 5}
+    ///
+    ///         V1________V2_______V4
+    ///          |1      2|5      6|
+    ///          |        |        |
+    ///          |        |        |
+    ///          |0______3|4______7|
+    ///         V0        V3       V5
+    ///
+    ///     Output:
+    ///         UseFaceVertexIndices == false
+    /// 		    EdgeIndices = {0, 1,  1, 2,  2, 3,  3, 0,  4, 5,  5, 6,  6, 7,  7, 4}
+    ///
+    ///         UseFaceVertexIndices == true
+    /// 		    EdgeIndices = {0, 1,  1, 2,  2, 3,  3, 0,  3, 2,  2, 4,  4, 5,  5, 3}
+    pxr::VtVec2iArray ComputeEdgeIndices(bool UseFaceVertexIndices) const;
+
+
     /// Converts vertex/varying primvar data to face-varying primvar data.
     ///
     /// \param[in] VertexData      - The vertex/varying primvar data.
@@ -107,6 +133,10 @@ public:
     ///         V0       V3 V3       V5
     ///
     pxr::VtValue ConvertVertexPrimvarToFaceVarying(const pxr::VtValue& VertexData, size_t ValuesPerVertex = 1) const;
+
+private:
+    template <typename HandleFaceType>
+    void ProcessFaces(HandleFaceType&& HandleFace) const;
 
 private:
     const pxr::HdMeshTopology& m_Topology;
