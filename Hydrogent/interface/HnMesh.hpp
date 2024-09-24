@@ -258,6 +258,7 @@ private:
     {
         Uint32 NumFaceTriangles = 0;
         Uint32 NumEdges         = 0;
+        Uint32 NumPoints        = 0;
         Uint32 FaceStartIndex   = 0;
         Uint32 EdgeStartIndex   = 0;
         Uint32 PointsStartIndex = 0;

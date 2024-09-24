@@ -924,6 +924,7 @@ void HnMesh::UpdateIndexData()
     m_StagingIndexData->PointIndices = MeshUtils.ComputePointIndices(m_HasFaceVaryingPrimvars);
     m_IndexData.NumFaceTriangles     = static_cast<Uint32>(m_StagingIndexData->FaceIndices.size());
     m_IndexData.NumEdges             = static_cast<Uint32>(m_StagingIndexData->EdgeIndices.size());
+    m_IndexData.NumPoints            = static_cast<Uint32>(m_StagingIndexData->PointIndices.size());
 }
 
 void HnMesh::AllocatePooledResources(pxr::HdSceneDelegate& SceneDelegate,
@@ -1026,7 +1027,7 @@ void HnMesh::AllocatePooledResources(pxr::HdSceneDelegate& SceneDelegate,
 
         if (!m_StagingIndexData->PointIndices.empty())
         {
-            m_IndexData.PointsAllocation = ResMgr.AllocateIndices(sizeof(Uint32) * m_Topology.GetNumPoints());
+            m_IndexData.PointsAllocation = ResMgr.AllocateIndices(sizeof(Uint32) * m_IndexData.NumPoints);
             m_IndexData.PointsStartIndex = m_IndexData.PointsAllocation->GetOffset() / sizeof(Uint32);
         }
     }
@@ -1160,10 +1161,10 @@ void HnMesh::UpdateIndexBuffer(HnRenderDelegate& RenderDelegate)
 
     if (!m_StagingIndexData->PointIndices.empty())
     {
-        VERIFY_EXPR(m_Topology.GetNumPoints() == static_cast<int>(m_StagingIndexData->PointIndices.size()));
+        VERIFY_EXPR(m_IndexData.NumPoints == static_cast<Uint32>(m_StagingIndexData->PointIndices.size()));
         m_IndexData.Points = PrepareIndexBuffer("Points Index Buffer",
                                                 m_StagingIndexData->PointIndices.data(),
-                                                m_Topology.GetNumPoints() * sizeof(Uint32),
+                                                m_IndexData.NumPoints * sizeof(Uint32),
                                                 m_IndexData.PointsAllocation);
     }
 
@@ -1240,7 +1241,7 @@ void HnMesh::UpdateDrawItemGpuTopology()
             DrawItem.SetPoints({
                 m_IndexData.Points,
                 m_IndexData.PointsStartIndex,
-                static_cast<Uint32>(m_Topology.GetNumPoints()),
+                m_IndexData.NumPoints,
             });
         },
         [&](const pxr::HdGeomSubset& Subset, HnDrawItem& DrawItem) {
