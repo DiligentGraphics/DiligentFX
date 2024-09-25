@@ -47,6 +47,7 @@ public:
     /// Triangulates the mesh and returns the triangle indices and the start of each subset.
     ///
     /// \param[in]  UseFaceVertexIndices - Whether to use face vertex indices.
+    /// \param[in]  PointsPrimvar        - Pointer to the points primvar data.
     /// \param[out] TriangleIndices      - The triangle indices.
     /// \param[out] SubsetStart          - The index of the first triangle in each subset.
     ///                                    The last element is the total number of triangles.
@@ -72,9 +73,10 @@ public:
     ///             TriangleIndices = {0, 1, 2,  0, 2, 3,  3, 2, 4,  3, 4, 5}
     ///             SubsetStart     = {0, 2, 4}
     ///
-    void Triangulate(bool               UseFaceVertexIndices,
-                     pxr::VtVec3iArray& TriangleIndices,
-                     pxr::VtIntArray&   SubsetStart) const;
+    void Triangulate(bool                UseFaceVertexIndices,
+                     const pxr::VtValue* PointsPrimvar,
+                     pxr::VtVec3iArray&  TriangleIndices,
+                     pxr::VtIntArray&    SubsetStart) const;
 
 
     /// Computes the edge indices.

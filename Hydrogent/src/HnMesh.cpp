@@ -337,11 +337,6 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
         }
     }
 
-    if (IndexDataDirty)
-    {
-        UpdateIndexData();
-    }
-
     if (AnyPrimvarDirty)
     {
         m_StagingVertexData = std::make_unique<StagingVertexData>();
@@ -361,10 +356,6 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
             }
 
             UpdateConstantPrimvars(SceneDelegate, RenderParam, DirtyBits, ReprToken);
-
-            // Allocate space for vertex and index buffers.
-            // Note that this only reserves space, but does not create any buffers.
-            AllocatePooledResources(SceneDelegate, RenderParam);
         }
         else
         {
@@ -374,6 +365,18 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
         }
 
         DirtyBits &= ~pxr::HdChangeTracker::DirtyPrimvar;
+    }
+
+    if (IndexDataDirty)
+    {
+        UpdateIndexData();
+    }
+
+    if (m_StagingVertexData || m_StagingIndexData)
+    {
+        // Allocate space for vertex and index buffers.
+        // Note that this only reserves space, but does not create any buffers.
+        AllocatePooledResources(SceneDelegate, RenderParam);
     }
 
     if ((IndexDataDirty || AnyPrimvarDirty) && RenderParam != nullptr)
@@ -903,7 +906,7 @@ void HnMesh::UpdateIndexData()
 
     HnMeshUtils     MeshUtils{m_Topology, GetId()};
     pxr::VtIntArray SubsetStart;
-    MeshUtils.Triangulate(!m_HasFaceVaryingPrimvars, m_StagingIndexData->FaceIndices, SubsetStart);
+    MeshUtils.Triangulate(!m_HasFaceVaryingPrimvars, m_StagingVertexData ? &m_StagingVertexData->Points : nullptr, m_StagingIndexData->FaceIndices, SubsetStart);
     if (!m_Topology.GetGeomSubsets().empty())
     {
         VERIFY_EXPR(SubsetStart.size() == m_Topology.GetGeomSubsets().size() + 1);
@@ -1013,22 +1016,27 @@ void HnMesh::AllocatePooledResources(pxr::HdSceneDelegate& SceneDelegate,
 
     if (m_StagingIndexData && static_cast<const HnRenderParam*>(RenderParam)->GetUseIndexPool())
     {
+        auto AllocateIndices = [&ResMgr](Uint32 Size, RefCntAutoPtr<IBufferSuballocation>& Allocation, Uint32& StartIndex) {
+            if (Allocation && Allocation->GetSize() == Size)
+                return;
+
+            Allocation = ResMgr.AllocateIndices(Size);
+            StartIndex = Allocation->GetOffset() / sizeof(Uint32);
+        };
+
         if (!m_StagingIndexData->FaceIndices.empty())
         {
-            m_IndexData.FaceAllocation = ResMgr.AllocateIndices(sizeof(Uint32) * m_IndexData.NumFaceTriangles * 3);
-            m_IndexData.FaceStartIndex = m_IndexData.FaceAllocation->GetOffset() / sizeof(Uint32);
+            AllocateIndices(sizeof(Uint32) * m_IndexData.NumFaceTriangles * 3, m_IndexData.FaceAllocation, m_IndexData.FaceStartIndex);
         }
 
         if (!m_StagingIndexData->EdgeIndices.empty())
         {
-            m_IndexData.EdgeAllocation = ResMgr.AllocateIndices(sizeof(Uint32) * m_IndexData.NumEdges * 2);
-            m_IndexData.EdgeStartIndex = m_IndexData.EdgeAllocation->GetOffset() / sizeof(Uint32);
+            AllocateIndices(sizeof(Uint32) * m_IndexData.NumEdges * 2, m_IndexData.EdgeAllocation, m_IndexData.EdgeStartIndex);
         }
 
         if (!m_StagingIndexData->PointIndices.empty())
         {
-            m_IndexData.PointsAllocation = ResMgr.AllocateIndices(sizeof(Uint32) * m_IndexData.NumPoints);
-            m_IndexData.PointsStartIndex = m_IndexData.PointsAllocation->GetOffset() / sizeof(Uint32);
+            AllocateIndices(sizeof(Uint32) * m_IndexData.NumPoints, m_IndexData.PointsAllocation, m_IndexData.PointsStartIndex);
         }
     }
 }

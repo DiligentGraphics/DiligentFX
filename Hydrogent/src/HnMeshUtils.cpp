@@ -26,6 +26,8 @@
 
 #include "HnMeshUtils.hpp"
 #include "DebugUtilities.hpp"
+#include "AdvancedMath.hpp"
+#include "GfTypeConversions.hpp"
 
 #include "pxr/base/gf/vec2i.h"
 #include "pxr/base/gf/vec3i.h"
@@ -48,14 +50,21 @@ HnMeshUtils::~HnMeshUtils()
 template <typename HandleFaceType>
 void HnMeshUtils::ProcessFaces(HandleFaceType&& HandleFace) const
 {
-    const pxr::VtIntArray& FaceVertCounts = m_Topology.GetFaceVertexCounts();
-    const size_t           NumFaces       = FaceVertCounts.size();
+    const pxr::VtIntArray& FaceVertCounts   = m_Topology.GetFaceVertexCounts();
+    const size_t           NumFaces         = FaceVertCounts.size();
+    const int              NumVertexIndices = static_cast<int>(m_Topology.GetFaceVertexIndices().size());
+
     VERIFY_EXPR(NumFaces == static_cast<size_t>(m_Topology.GetNumFaces()));
 
     int FaceStartVertex = 0;
     for (size_t i = 0; i < NumFaces; ++i)
     {
         const int VertCount = FaceVertCounts[i];
+        if (FaceStartVertex + VertCount > NumVertexIndices)
+        {
+            break;
+        }
+
         if (VertCount >= 3)
         {
             HandleFace(i, FaceStartVertex, VertCount);
@@ -64,13 +73,18 @@ void HnMeshUtils::ProcessFaces(HandleFaceType&& HandleFace) const
     }
 }
 
-void HnMeshUtils::Triangulate(bool               UseFaceVertexIndices,
-                              pxr::VtVec3iArray& TriangleIndices,
-                              pxr::VtIntArray&   SubsetStart) const
+void HnMeshUtils::Triangulate(bool                UseFaceVertexIndices,
+                              const pxr::VtValue* PointsPrimvar,
+                              pxr::VtVec3iArray&  TriangleIndices,
+                              pxr::VtIntArray&    SubsetStart) const
 {
     const size_t           NumFaces          = m_Topology.GetNumFaces();
     const pxr::VtIntArray& FaceVertexIndices = m_Topology.GetFaceVertexIndices();
     const int              NumVertexIndices  = static_cast<int>(FaceVertexIndices.size());
+
+    const pxr::VtVec3fArray* const Points = (PointsPrimvar != nullptr && PointsPrimvar->IsHolding<pxr::VtVec3fArray>()) ?
+        &PointsPrimvar->UncheckedGet<pxr::VtVec3fArray>() :
+        nullptr;
 
     // Count the number of triangles
     size_t NumTriangles = 0;
@@ -83,38 +97,80 @@ void HnMeshUtils::Triangulate(bool               UseFaceVertexIndices,
     TriangleIndices.reserve(NumTriangles);
     std::vector<size_t> FaceStartTriangle(NumFaces + 1);
 
+    std::vector<float3>               Polygon;
+    Polygon3DTriangulator<int, float> Triangulator;
+#ifdef DILIGENT_DEVELOPMENT
+    std::vector<size_t> dvpFailedFaces;
+#endif
     ProcessFaces(
         [&](size_t FaceId, int StartVertex, int VertCount) {
             FaceStartTriangle[FaceId] = TriangleIndices.size();
-            for (int i = 0; i < VertCount - 2; ++i)
+            if (VertCount <= 4 || Points == nullptr)
             {
-                pxr::GfVec3i Triangle{
-                    StartVertex,
-                    StartVertex + i + 1,
-                    StartVertex + i + 2,
-                };
-                if (UseFaceVertexIndices)
+                for (int i = 0; i < VertCount - 2; ++i)
                 {
-                    int& Idx0 = Triangle[0];
-                    int& Idx1 = Triangle[1];
-                    int& Idx2 = Triangle[2];
-                    if (Idx0 < NumVertexIndices && Idx1 < NumVertexIndices && Idx2 < NumVertexIndices)
+                    int Idx0 = StartVertex;
+                    int Idx1 = StartVertex + i + 1;
+                    int Idx2 = StartVertex + i + 2;
+                    if (UseFaceVertexIndices)
                     {
+                        VERIFY_EXPR(Idx0 < NumVertexIndices && Idx1 < NumVertexIndices && Idx2 < NumVertexIndices);
                         Idx0 = FaceVertexIndices[Idx0];
                         Idx1 = FaceVertexIndices[Idx1];
                         Idx2 = FaceVertexIndices[Idx2];
                     }
-                    else
-                    {
-                        Idx0 = 0;
-                        Idx1 = 0;
-                        Idx2 = 0;
-                    }
+
+                    TriangleIndices.emplace_back(Idx0, Idx1, Idx2);
                 }
-                TriangleIndices.push_back(Triangle);
+            }
+            else
+            {
+                Polygon.resize(VertCount);
+                for (int i = 0; i < VertCount; ++i)
+                {
+                    int Idx = FaceVertexIndices[StartVertex + i];
+                    if (Idx >= NumVertexIndices)
+                        return; // Invalid vertex index
+                    Polygon[i] = ToFloat3((*Points)[Idx]);
+                }
+                const std::vector<int>& Indices = Triangulator.Triangulate(Polygon);
+#ifdef DILIGENT_DEVELOPMENT
+                if (Triangulator.GetResult() != TRIANGULATE_POLYGON_RESULT_OK)
+                {
+                    dvpFailedFaces.push_back(FaceId);
+                }
+#endif
+                for (size_t i = 0; i < Indices.size() / 3; ++i)
+                {
+                    int Idx0 = StartVertex + Indices[i * 3 + 0];
+                    int Idx1 = StartVertex + Indices[i * 3 + 1];
+                    int Idx2 = StartVertex + Indices[i * 3 + 2];
+                    if (UseFaceVertexIndices)
+                    {
+                        VERIFY_EXPR(Idx0 < NumVertexIndices && Idx1 < NumVertexIndices && Idx2 < NumVertexIndices);
+                        Idx0 = FaceVertexIndices[Idx0];
+                        Idx1 = FaceVertexIndices[Idx1];
+                        Idx2 = FaceVertexIndices[Idx2];
+                    }
+                    TriangleIndices.emplace_back(Idx0, Idx1, Idx2);
+                }
             }
         });
-    VERIFY_EXPR(TriangleIndices.size() == NumTriangles);
+#ifdef DILIGENT_DEVELOPMENT
+    if (!dvpFailedFaces.empty())
+    {
+        std::stringstream ss;
+        for (size_t i = 0; i < dvpFailedFaces.size(); ++i)
+        {
+            ss << dvpFailedFaces[i];
+            if (i < dvpFailedFaces.size() - 1)
+                ss << ", ";
+        }
+        LOG_WARNING_MESSAGE(dvpFailedFaces.size(), " faces in mesh '", m_MeshId.GetString(), "' were triangulated with potential issues: ", ss.str());
+    }
+#endif
+
+    VERIFY_EXPR(TriangleIndices.size() <= NumTriangles);
     FaceStartTriangle.back() = TriangleIndices.size();
 
     if (m_Topology.GetOrientation() != pxr::HdTokens->rightHanded)
@@ -202,16 +258,9 @@ pxr::VtVec2iArray HnMeshUtils::ComputeEdgeIndices(bool UseFaceVertexIndices) con
         {
             int& Idx0 = Edge[0];
             int& Idx1 = Edge[1];
-            if (Idx0 < NumVertexIndices && Idx1 < NumVertexIndices)
-            {
-                Idx0 = FaceVertexIndices[Idx0];
-                Idx1 = FaceVertexIndices[Idx1];
-            }
-            else
-            {
-                Idx0 = 0;
-                Idx1 = 0;
-            }
+            VERIFY_EXPR(Idx0 < NumVertexIndices && Idx1 < NumVertexIndices);
+            Idx0 = FaceVertexIndices[Idx0];
+            Idx1 = FaceVertexIndices[Idx1];
         }
     }
 
