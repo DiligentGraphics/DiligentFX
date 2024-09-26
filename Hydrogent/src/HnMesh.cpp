@@ -350,6 +350,7 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
 
             // If there are neither vertex nor face-varying normals, generate smooth normals
             if (m_StagingVertexData->Sources.find(pxr::HdTokens->normals) == m_StagingVertexData->Sources.end() &&
+                GetVertexBuffer(pxr::HdTokens->normals) == nullptr &&
                 !m_StagingVertexData->Points.IsEmpty())
             {
                 GenerateSmoothNormals();
@@ -648,6 +649,7 @@ void HnMesh::GetPrimvarsInfo(pxr::HdSceneDelegate& SceneDelegate,
         }
     };
 
+    bool HasSkinningComputation = false;
     for (pxr::HdInterpolation Interpolation : {pxr::HdInterpolationVertex, pxr::HdInterpolationVarying})
     {
         UpdatePrimvarsInfo(Interpolation, VertexPrimvarsInfo);
@@ -657,10 +659,25 @@ void HnMesh::GetPrimvarsInfo(pxr::HdSceneDelegate& SceneDelegate,
         {
             // Skinnig ext computation is created by the skeleton adapter
             VertexPrimvarsInfo.ExtComp.push_back(ExtCompPrimDesc);
+            if (ExtCompPrimDesc.sourceComputationOutputName == HnSkinningPrivateTokens->skinnedPoints)
+            {
+                HasSkinningComputation = true;
+            }
         }
     }
 
     UpdatePrimvarsInfo(pxr::HdInterpolationFaceVarying, FacePrimvarsInfo);
+
+    if (HasSkinningComputation && FacePrimvarsInfo.Count == 0)
+    {
+        // Skeleton Adapter hides normals, so we try to get them directly from the scene delegate.
+        // However, there is no other way to check if the primvar exists than to try to get it,
+        // which is not very efficient. We need to get the primvar to know its interpolation.
+        // If normals turn out to be the only face-varying primvar, then vertex primvars that may have
+        // been added before would need to be converted to face-varying as well.
+        // To avoid these complications, we always convert primvars to face-varying if there is a skinning computation.
+        FacePrimvarsInfo.Count = 1;
+    }
 }
 
 void HnMesh::UpdateSkinningPrimvars(pxr::HdSceneDelegate&                         SceneDelegate,
@@ -747,6 +764,18 @@ void HnMesh::UpdateSkinningPrimvars(pxr::HdSceneDelegate&                       
 
         AddStagingBufferSourceForPrimvar(SkinningCompPrimDesc.name, std::move(RestPointsVal), SkinningCompPrimDesc.interpolation);
         AddJointInfluencesStagingBufferSource(NumInfluencesPerComponentVal, InfluencesVal);
+
+        // Skeleton adapter hides normals, so try to get them directly from the scene delegate
+        pxr::VtValue NormalsPrimvar = GetPrimvar(&SceneDelegate, pxr::HdTokens->normals);
+        if (!NormalsPrimvar.IsEmpty() && NormalsPrimvar.IsArrayValued())
+        {
+            // There is no way to get the interpolation of the normals primvar from the scene delegate,
+            // so rely on the number of elements.
+            if (NormalsPrimvar.GetArraySize() == m_Topology.GetNumPoints())
+                AddStagingBufferSourceForPrimvar(pxr::HdTokens->normals, std::move(NormalsPrimvar), pxr::HdInterpolationVertex);
+            else if (NormalsPrimvar.GetArraySize() == m_Topology.GetNumFaceVaryings())
+                AddStagingBufferSourceForPrimvar(pxr::HdTokens->normals, std::move(NormalsPrimvar), pxr::HdInterpolationFaceVarying);
+        }
 
         m_SkinningPrimvarsVersion = SkinningPrimvarsVersion;
     }
