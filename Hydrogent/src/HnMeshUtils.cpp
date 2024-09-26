@@ -78,12 +78,12 @@ void HnMeshUtils::Triangulate(bool                UseFaceVertexIndices,
                               pxr::VtVec3iArray&  TriangleIndices,
                               pxr::VtIntArray&    SubsetStart) const
 {
-    const size_t           NumFaces          = m_Topology.GetNumFaces();
-    const pxr::VtIntArray& FaceVertexIndices = m_Topology.GetFaceVertexIndices();
-    const int              NumVertexIndices  = static_cast<int>(FaceVertexIndices.size());
+    const size_t NumFaces          = m_Topology.GetNumFaces();
+    const int*   FaceVertexIndices = m_Topology.GetFaceVertexIndices().cdata();
+    const int    NumVertexIndices  = static_cast<int>(m_Topology.GetFaceVertexIndices().size());
 
-    const pxr::VtVec3fArray* const Points = (PointsPrimvar != nullptr && PointsPrimvar->IsHolding<pxr::VtVec3fArray>()) ?
-        &PointsPrimvar->UncheckedGet<pxr::VtVec3fArray>() :
+    const pxr::GfVec3f* const Points = (PointsPrimvar != nullptr && PointsPrimvar->IsHolding<pxr::VtVec3fArray>()) ?
+        PointsPrimvar->UncheckedGet<pxr::VtVec3fArray>().cdata() :
         nullptr;
 
     // Count the number of triangles
@@ -131,7 +131,7 @@ void HnMeshUtils::Triangulate(bool                UseFaceVertexIndices,
                     int Idx = FaceVertexIndices[StartVertex + i];
                     if (Idx >= NumVertexIndices)
                         return; // Invalid vertex index
-                    Polygon[i] = ToFloat3((*Points)[Idx]);
+                    Polygon[i] = ToFloat3(Points[Idx]);
                 }
                 const std::vector<int>& Indices = Triangulator.Triangulate(Polygon);
 #ifdef DILIGENT_DEVELOPMENT
@@ -252,8 +252,8 @@ pxr::VtVec2iArray HnMeshUtils::ComputeEdgeIndices(bool UseFaceVertexIndices) con
 
     if (UseFaceVertexIndices)
     {
-        const pxr::VtIntArray& FaceVertexIndices = m_Topology.GetFaceVertexIndices();
-        const size_t           NumVertexIndices  = FaceVertexIndices.size();
+        const int*   FaceVertexIndices = m_Topology.GetFaceVertexIndices().cdata();
+        const size_t NumVertexIndices  = m_Topology.GetFaceVertexIndices().size();
         for (pxr::GfVec2i& Edge : EdgeIndices)
         {
             int& Idx0 = Edge[0];
@@ -275,8 +275,8 @@ pxr::VtIntArray HnMeshUtils::ComputePointIndices(bool ConvertToFaceVarying) cons
     PointIndices.reserve(NumPoints);
     if (ConvertToFaceVarying)
     {
-        const pxr::VtIntArray& FaceVertexIndices = m_Topology.GetFaceVertexIndices();
-        const int              NumVertexIndices  = FaceVertexIndices.size();
+        const int*   FaceVertexIndices = m_Topology.GetFaceVertexIndices().cdata();
+        const size_t NumVertexIndices  = m_Topology.GetFaceVertexIndices().size();
 
         std::vector<bool> PointAdded(NumPoints, false);
         ProcessFaces(
@@ -310,21 +310,26 @@ pxr::VtIntArray HnMeshUtils::ComputePointIndices(bool ConvertToFaceVarying) cons
 }
 
 template <typename T>
-pxr::VtValue ConvertVertexArrayToFaceVaryingArray(const pxr::VtIntArray& FaceVertexIndices, const pxr::VtArray<T>& VertexData, size_t ValuesPerVertex)
+pxr::VtValue ConvertVertexArrayToFaceVaryingArray(const pxr::VtIntArray& FaceVertexIndices, const pxr::VtArray<T>& VertexArray, size_t ValuesPerVertex)
 {
-    pxr::VtArray<T> FaceData(FaceVertexIndices.size() * ValuesPerVertex);
+    const int VertexDataSize = static_cast<int>(VertexArray.size());
+    // Use raw pointers as VtArray::operator[] has measurable overhead even in release build
+    const T* pVertData = VertexArray.cdata();
+
+    pxr::VtArray<T> FaceArray(FaceVertexIndices.size() * ValuesPerVertex);
+    T*              pFaceData = FaceArray.data();
     for (size_t i = 0; i < FaceVertexIndices.size(); ++i)
     {
         const int Idx = FaceVertexIndices[i];
-        if (Idx < static_cast<int>(VertexData.size()))
+        if (Idx < VertexDataSize)
         {
             for (size_t elem = 0; elem < ValuesPerVertex; ++elem)
             {
-                FaceData[i * ValuesPerVertex + elem] = VertexData[Idx * ValuesPerVertex + elem];
+                pFaceData[i * ValuesPerVertex + elem] = pVertData[Idx * ValuesPerVertex + elem];
             }
         }
     }
-    return pxr::VtValue{FaceData};
+    return pxr::VtValue{FaceArray};
 }
 
 pxr::VtValue HnMeshUtils::ConvertVertexPrimvarToFaceVarying(const pxr::VtValue& VertexData, size_t ValuesPerVertex) const
