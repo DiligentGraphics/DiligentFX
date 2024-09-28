@@ -1261,6 +1261,19 @@ const HnMaterialParameter* HnMaterialNetwork::GetParameter(HnMaterialParameter::
     return nullptr;
 }
 
+const HnMaterialNetwork::TextureDescriptor* HnMaterialNetwork::GetTexture(const pxr::TfToken& Name) const
+{
+    for (const TextureDescriptor& Tex : m_Textures)
+    {
+        if (Tex.Name == Name)
+        {
+            return &Tex;
+        }
+    }
+
+    return nullptr;
+}
+
 } // namespace USD
 
 } // namespace Diligent

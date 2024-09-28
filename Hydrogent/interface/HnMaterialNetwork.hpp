@@ -190,6 +190,7 @@ public:
     const auto&              GetTextures() const { return m_Textures; }
 
     const HnMaterialParameter* GetParameter(HnMaterialParameter::ParamType Type, const pxr::TfToken& Name) const;
+    const TextureDescriptor*   GetTexture(const pxr::TfToken& Name) const;
 
     float GetOpacity() const { return m_Opacity; }
     float GetOpacityThreshold() const { return m_OpacityThreshold; }

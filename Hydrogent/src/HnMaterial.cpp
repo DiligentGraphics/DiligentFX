@@ -270,6 +270,13 @@ void HnMaterial::InitTextureAttribs(HnTextureRegistry& TexRegistry, const USD_Re
 
                 TexAttribs.UVScaleAndRotation = UVScaleAndRotation;
             }
+
+            if (const HnMaterialNetwork::TextureDescriptor* TexDescriptor = m_Network.GetTexture(Name))
+            {
+                const pxr::HdSamplerParameters& SamplerParams = TexDescriptor->SamplerParams;
+                TexAttribs.SetWrapUMode(HdWrapToAddressMode(SamplerParams.wrapS));
+                TexAttribs.SetWrapVMode(HdWrapToAddressMode(SamplerParams.wrapT));
+            }
         }
         else
         {
