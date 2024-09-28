@@ -70,7 +70,7 @@ SamplerComparisonState g_ShadowMap_sampler;
 PBRMaterialTextureAttribs GetDefaultTextureAttribs()
 {
     PBRMaterialTextureAttribs Attribs;
-    Attribs.UVSelector   = -1.0;
+    Attribs.PackedProps  = 0u;
     Attribs.TextureSlice = 0.0;
     Attribs.UBias        = 0.0;
     Attribs.VBias        = 0.0;
@@ -94,8 +94,8 @@ NormalMapUVInfo GetNormalMapUVInfo(in VSOutput VSOut, in PBRMaterialTextureAttri
 {
     NormalMapUVInfo UVInfo;
     
-    UVInfo.Selector = TexAttribs.UVSelector;
-    UVInfo.UV       = SelectUV(VSOut, TexAttribs.UVSelector);
+    UVInfo.Selector = UnpackPBRMaterialTextureUVSelector(TexAttribs.PackedProps);
+    UVInfo.UV       = SelectUV(VSOut, UVInfo.Selector);
 
 #if ENABLE_TEXCOORD_TRANSFORM
     UVInfo.UV = TransformUV(UVInfo.UV, TexAttribs);
@@ -104,9 +104,18 @@ NormalMapUVInfo GetNormalMapUVInfo(in VSOutput VSOut, in PBRMaterialTextureAttri
     UVInfo.SmoothUV = UVInfo.UV;
     UVInfo.dUV_dx   = ddx(UVInfo.UV);
     UVInfo.dUV_dy   = ddy(UVInfo.UV);
+     
 #if USE_TEXTURE_ATLAS
     {
-        UVInfo.UV = frac(UVInfo.UV) * TexAttribs.AtlasUVScaleAndBias.xy + TexAttribs.AtlasUVScaleAndBias.zw;
+        uint WrapUMode     = UnpackPBRMaterialTextureWrapUMode(TexAttribs.PackedProps);
+        uint WrapVMode     = UnpackPBRMaterialTextureWrapVMode(TexAttribs.PackedProps);
+        uint WrapModeClamp = 3u; // TEXTURE_ADDRESS_CLAMP
+ 
+        // Note: Mirror mode is not supported
+        UVInfo.UV.x = (WrapUMode == WrapModeClamp) ? saturate(UVInfo.UV.x) : frac(UVInfo.UV.x);
+        UVInfo.UV.y = (WrapVMode == WrapModeClamp) ? saturate(UVInfo.UV.y) : frac(UVInfo.UV.y);
+ 
+        UVInfo.UV = UVInfo.UV * TexAttribs.AtlasUVScaleAndBias.xy + TexAttribs.AtlasUVScaleAndBias.zw;
         UVInfo.SmoothUV *= TexAttribs.AtlasUVScaleAndBias.xy;
         UVInfo.dUV_dx   *= TexAttribs.AtlasUVScaleAndBias.xy;
         UVInfo.dUV_dy   *= TexAttribs.AtlasUVScaleAndBias.xy;

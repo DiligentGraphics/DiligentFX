@@ -10,6 +10,16 @@
 #       define CHECK_STRUCT_ALIGNMENT(s) static_assert( sizeof(s) % 16 == 0, "sizeof(" #s ") is not multiple of 16" )
 #   endif
 
+#ifndef INLINE
+#   define INLINE inline
+#endif
+
+#else
+
+#ifndef INLINE
+#   define INLINE
+#endif
+
 #endif
 
 #ifndef PBR_WORKFLOW_METALLIC_ROUGHNESS
@@ -206,7 +216,7 @@ struct PBRMaterialVolumeAttribs
 
 struct PBRMaterialTextureAttribs
 {
-    float UVSelector;
+    uint  PackedProps; // See GLTF::Material::TextureShaderAttribs
     float TextureSlice;
     float UBias;
     float VBias;
@@ -217,6 +227,24 @@ struct PBRMaterialTextureAttribs
 #ifdef CHECK_STRUCT_ALIGNMENT
 	CHECK_STRUCT_ALIGNMENT(PBRMaterialTextureAttribs);
 #endif
+
+INLINE float UnpackPBRMaterialTextureUVSelector(uint PackedProps)
+{
+    // See GLTF::Material::TextureShaderAttribs::SetUVSelector
+    return float(PackedProps & 7u) - float(1.0);
+}
+
+INLINE uint UnpackPBRMaterialTextureWrapUMode(uint PackedProps)
+{
+    // See GLTF::Material::TextureShaderAttribs::SetWrapUMode
+    return ((PackedProps >> 3u) & 7u) + 1u;
+}
+
+INLINE uint UnpackPBRMaterialTextureWrapVMode(uint PackedProps)
+{
+    // See GLTF::Material::TextureShaderAttribs::SetWrapVMode
+    return ((PackedProps >> 6u) & 7u) + 1u;
+}
 
 struct PBRMaterialShaderInfo
 {

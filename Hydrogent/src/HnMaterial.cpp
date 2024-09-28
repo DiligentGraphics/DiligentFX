@@ -246,10 +246,8 @@ void HnMaterial::InitTextureAttribs(HnTextureRegistry& TexRegistry, const USD_Re
     auto SetTextureParams = [&](const pxr::TfToken& Name, Uint32 Idx) {
         GLTF::Material::TextureShaderAttribs& TexAttribs = MatBuilder.GetTextureAttrib(Idx);
 
-        auto coord_it         = TexNameToCoordSetMap.find(Name);
-        TexAttribs.UVSelector = coord_it != TexNameToCoordSetMap.end() ?
-            static_cast<float>(coord_it->second) :
-            0;
+        auto coord_it = TexNameToCoordSetMap.find(Name);
+        TexAttribs.SetUVSelector(coord_it != TexNameToCoordSetMap.end() ? coord_it->second : 0);
 
         TexAttribs.UBias              = 0;
         TexAttribs.VBias              = 0;

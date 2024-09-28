@@ -371,9 +371,13 @@ float4 SampleTexture(Texture2DArray            Tex,
     float4 SampledValue = DefaultValue;
 #   if USE_TEXCOORD0 || USE_TEXCOORD1
     {
-        if (TexAttribs.UVSelector >= 0.0)
+        float UVSelector = UnpackPBRMaterialTextureUVSelector(TexAttribs.PackedProps);
+        uint  WrapUMode  = UnpackPBRMaterialTextureWrapUMode(TexAttribs.PackedProps);
+        uint  WrapVMode  = UnpackPBRMaterialTextureWrapVMode(TexAttribs.PackedProps);
+        uint  WrapModeClamp = 3u; // TEXTURE_ADDRESS_CLAMP
+        if (UVSelector >= 0.0)
         {
-            float2 UV = SelectUV(VSOut, TexAttribs.UVSelector);
+            float2 UV = SelectUV(VSOut, UVSelector);
 #           if ENABLE_TEXCOORD_TRANSFORM
             {
                 UV = TransformUV(UV, TexAttribs);
@@ -382,10 +386,14 @@ float4 SampleTexture(Texture2DArray            Tex,
 
 #           if USE_TEXTURE_ATLAS
             {
+                // Note: Mirror mode is not supported
+                float2 WrappedUV = float2(WrapUMode == WrapModeClamp ? saturate(UV.x) : frac(UV.x),
+                                          WrapVMode == WrapModeClamp ? saturate(UV.y) : frac(UV.y));
+                    
                 float GradientScale = exp2(MipBias);
 
                 SampleTextureAtlasAttribs SampleAttribs;
-                SampleAttribs.f2UV                   = frac(UV) * TexAttribs.AtlasUVScaleAndBias.xy + TexAttribs.AtlasUVScaleAndBias.zw;
+                SampleAttribs.f2UV                   = WrappedUV * TexAttribs.AtlasUVScaleAndBias.xy + TexAttribs.AtlasUVScaleAndBias.zw;
                 SampleAttribs.f2SmoothUV             = UV      * TexAttribs.AtlasUVScaleAndBias.xy * GradientScale;
                 SampleAttribs.f2dSmoothUV_dx         = ddx(UV) * TexAttribs.AtlasUVScaleAndBias.xy * GradientScale;
                 SampleAttribs.f2dSmoothUV_dy         = ddy(UV) * TexAttribs.AtlasUVScaleAndBias.xy * GradientScale;
@@ -399,6 +407,17 @@ float4 SampleTexture(Texture2DArray            Tex,
             }
 #           else
             {
+                // Tex_sampler uses wrap, so we only need to clamp the UVs.
+                // Note: Mirror mode is not supported
+                if (WrapUMode == WrapModeClamp || WrapVMode == WrapModeClamp)
+                {
+                    float2 TexDim;
+                    float  Elements;
+                    Tex.GetDimensions(TexDim.x, TexDim.y, Elements);
+                    // Note: to be accurate, the bias should depend on LOD
+                    UV.x = (WrapUMode == WrapModeClamp) ? clamp(UV.x, 0.5 / TexDim.x, 1.0 - 0.5 / TexDim.x) : UV.x;
+                    UV.y = (WrapVMode == WrapModeClamp) ? clamp(UV.y, 0.5 / TexDim.y, 1.0 - 0.5 / TexDim.y) : UV.y;
+                }    
                 SampledValue = Tex.SampleBias(Tex_sampler, float3(UV, TexAttribs.TextureSlice), MipBias);
             }
 #           endif
@@ -446,7 +465,9 @@ float3 SampleNormalTexture(PBRMaterialTextureAttribs TexAttribs,
                            float                     MipBias)
 {
     float3 SampledNormal = float3(0.5, 0.5, 1.0);
-    if (TexAttribs.UVSelector >= 0.0)
+    
+    float UVSelector = UnpackPBRMaterialTextureUVSelector(TexAttribs.PackedProps);
+    if (UVSelector >= 0.0)
     {
 #       if USE_TEXTURE_ATLAS
         {
@@ -467,6 +488,21 @@ float3 SampleNormalTexture(PBRMaterialTextureAttribs TexAttribs,
         }
 #       else
         {
+            uint WrapUMode     = UnpackPBRMaterialTextureWrapUMode(TexAttribs.PackedProps);
+            uint WrapVMode     = UnpackPBRMaterialTextureWrapVMode(TexAttribs.PackedProps);
+            uint WrapModeClamp = 3u; // TEXTURE_ADDRESS_CLAMP
+ 
+            // Tex_sampler uses wrap, so we only need to clamp the UVs.
+            // Note: Mirror mode is not supported
+            if (WrapUMode == WrapModeClamp || WrapVMode == WrapModeClamp)
+            {
+                float2 TexDim;
+                float  Elements;
+                NormalMap.GetDimensions(TexDim.x, TexDim.y, Elements);
+                // Note: to be accurate, the bias should depend on LOD
+                NormalMapUV.x = (WrapUMode == WrapModeClamp) ? clamp(NormalMapUV.x, 0.5 / TexDim.x, 1.0 - 0.5 / TexDim.x) : NormalMapUV.x;
+                NormalMapUV.y = (WrapVMode == WrapModeClamp) ? clamp(NormalMapUV.y, 0.5 / TexDim.y, 1.0 - 0.5 / TexDim.y) : NormalMapUV.y;
+            }       
             SampledNormal = NormalMap.SampleBias(NormalMap_sampler, float3(NormalMapUV, TexAttribs.TextureSlice), MipBias).xyz;
         }
 #endif
