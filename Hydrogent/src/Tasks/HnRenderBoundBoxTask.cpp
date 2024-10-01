@@ -172,7 +172,7 @@ void HnRenderBoundBoxTask::Prepare(pxr::HdTaskContext* TaskCtx,
         {
             BoundBoxRenderer::CreateInfo BoundBoxRndrCI;
             BoundBoxRndrCI.pDevice            = pRenderDelegate->GetDevice();
-            BoundBoxRndrCI.PackMatrixRowMajor = true;
+            BoundBoxRndrCI.PackMatrixRowMajor = pRenderDelegate->GetUSDRenderer()->GetSettings().PackMatrixRowMajor;
             BoundBoxRndrCI.AsyncShaders       = pRenderParam->GetAsyncShaderCompilation();
             BoundBoxRndrCI.pCameraAttribsCB   = pRenderDelegate->GetFrameAttribsCB();
             BoundBoxRndrCI.NumRenderTargets   = RenderPassState->GetNumRenderTargets();

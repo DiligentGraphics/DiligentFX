@@ -404,11 +404,12 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
                                             bool&           CameraTransformDirty,
                                             bool&           LoadingAnimationActive)
 {
-    HnRenderDelegate*    RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
-    const HnRenderParam* RenderParam    = static_cast<const HnRenderParam*>(RenderDelegate->GetRenderParam());
-    IRenderDevice*       pDevice        = RenderDelegate->GetDevice();
-    const USD_Renderer&  Renderer       = *RenderDelegate->GetUSDRenderer();
-    const int            MaxLightCount  = Renderer.GetSettings().MaxLightCount;
+    HnRenderDelegate*    RenderDelegate     = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+    const HnRenderParam* RenderParam        = static_cast<const HnRenderParam*>(RenderDelegate->GetRenderParam());
+    IRenderDevice*       pDevice            = RenderDelegate->GetDevice();
+    const USD_Renderer&  Renderer           = *RenderDelegate->GetUSDRenderer();
+    const int            MaxLightCount      = Renderer.GetSettings().MaxLightCount;
+    const bool           PackMatrixRowMajor = Renderer.GetSettings().PackMatrixRowMajor;
 
     const Uint32 NumShadowCastingLights = Renderer.GetSettings().EnableShadows ? Renderer.GetSettings().MaxShadowCastingLightCount : 0;
     const Uint32 FrameAttribsDataSize   = pFrameAttrbisCB->GetDesc().Size;
@@ -448,14 +449,14 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
             };
             CamAttribs.fHandness = 1.f;
 
-            CamAttribs.mView        = ViewMatrix;
-            CamAttribs.mProj        = ProjMatrix;
-            CamAttribs.mViewProj    = ViewProj;
-            CamAttribs.mViewInv     = ViewMatrix.Inverse();
-            CamAttribs.mProjInv     = ProjMatrix.Inverse();
-            CamAttribs.mViewProjInv = ViewProj.Inverse();
-            CamAttribs.f4Position   = float4{0, 0, 0, 1};
-            CamAttribs.f2Jitter     = float2{0, 0};
+            WriteShaderMatrix(&CamAttribs.mView, ViewMatrix, !PackMatrixRowMajor);
+            WriteShaderMatrix(&CamAttribs.mProj, ProjMatrix, !PackMatrixRowMajor);
+            WriteShaderMatrix(&CamAttribs.mViewProj, ViewProj, !PackMatrixRowMajor);
+            WriteShaderMatrix(&CamAttribs.mViewInv, ViewMatrix.Inverse(), !PackMatrixRowMajor);
+            WriteShaderMatrix(&CamAttribs.mProjInv, ProjMatrix.Inverse(), !PackMatrixRowMajor);
+            WriteShaderMatrix(&CamAttribs.mViewProjInv, ViewProj.Inverse(), !PackMatrixRowMajor);
+            CamAttribs.f4Position = float4{0, 0, 0, 1};
+            CamAttribs.f2Jitter   = float2{0, 0};
 
             memset(&ShadowAttribs->Renderer, 0, sizeof(HLSL::PBRRendererShaderParameters));
         }
@@ -493,15 +494,15 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
             };
             CamAttribs.fHandness = ViewMatrix.Determinant() > 0 ? 1.f : -1.f;
 
-            CamAttribs.mView        = ViewMatrix;
-            CamAttribs.mProj        = ProjMatrix;
-            CamAttribs.mViewProj    = ViewProj;
-            CamAttribs.mViewInv     = WorldMatrix;
-            CamAttribs.mProjInv     = ProjMatrix.Inverse();
-            CamAttribs.mViewProjInv = ViewProj.Inverse();
-            CamAttribs.f4Position   = float4{float3::MakeVector(WorldMatrix[3]), 1};
-            CamAttribs.f2Jitter     = Jitter;
-            CamAttribs.fFStop       = m_pCamera->GetFStop();
+            WriteShaderMatrix(&CamAttribs.mView, ViewMatrix, !PackMatrixRowMajor);
+            WriteShaderMatrix(&CamAttribs.mProj, ProjMatrix, !PackMatrixRowMajor);
+            WriteShaderMatrix(&CamAttribs.mViewProj, ViewProj, !PackMatrixRowMajor);
+            WriteShaderMatrix(&CamAttribs.mViewInv, WorldMatrix, !PackMatrixRowMajor);
+            WriteShaderMatrix(&CamAttribs.mProjInv, ProjMatrix.Inverse(), !PackMatrixRowMajor);
+            WriteShaderMatrix(&CamAttribs.mViewProjInv, ViewProj.Inverse(), !PackMatrixRowMajor);
+            CamAttribs.f4Position = float4{float3::MakeVector(WorldMatrix[3]), 1};
+            CamAttribs.f2Jitter   = Jitter;
+            CamAttribs.fFStop     = m_pCamera->GetFStop();
 
             const float MetersPerUnit = RenderParam ? RenderParam->GetMetersPerUnit() : 0.01f;
 
@@ -587,7 +588,11 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
             {
                 if (const HLSL::PBRShadowMapInfo* pShadowMapInfo = Light->GetShadowMapShaderInfo())
                 {
-                    ShadowMaps[ShadowMapIndex] = *pShadowMapInfo;
+                    HLSL::PBRShadowMapInfo& DstShadowMap = ShadowMaps[ShadowMapIndex];
+                    WriteShaderMatrix(&DstShadowMap.WorldToLightProjSpace, pShadowMapInfo->WorldToLightProjSpace, !PackMatrixRowMajor);
+                    DstShadowMap.UVScale        = pShadowMapInfo->UVScale;
+                    DstShadowMap.UVBias         = pShadowMapInfo->UVBias;
+                    DstShadowMap.ShadowMapSlice = pShadowMapInfo->ShadowMapSlice;
                 }
                 else
                 {

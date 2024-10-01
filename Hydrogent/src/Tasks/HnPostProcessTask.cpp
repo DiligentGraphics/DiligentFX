@@ -122,12 +122,13 @@ static GraphicsPipelineStateCreateInfoX& CreateShaders(RenderDeviceWithCache_E& 
                                                        const char*                       PSFilePath,
                                                        const char*                       PSName,
                                                        const ShaderMacroArray&           Macros,
+                                                       bool                              PackMatrixRowMajor,
                                                        GraphicsPipelineStateCreateInfoX& PsoCI)
 {
     ShaderCreateInfo ShaderCI;
     ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL;
     ShaderCI.Macros         = Macros;
-    ShaderCI.CompileFlags   = SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR;
+    ShaderCI.CompileFlags   = PackMatrixRowMajor ? SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR : SHADER_COMPILE_FLAG_NONE;
 
     auto pHnFxCompoundSourceFactory     = HnShaderSourceFactory::CreateHnFxCompoundFactory();
     ShaderCI.pShaderSourceStreamFactory = pHnFxCompoundSourceFactory;
@@ -192,7 +193,8 @@ void HnPostProcessTask::PostProcessingTechnique::PreparePSO(TEXTURE_FORMAT RTVFo
 
     try
     {
-        HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(PPTask.m_RenderIndex->GetRenderDelegate());
+        HnRenderDelegate* RenderDelegate     = static_cast<HnRenderDelegate*>(PPTask.m_RenderIndex->GetRenderDelegate());
+        const bool        PackMatrixRowMajor = RenderDelegate->GetUSDRenderer()->GetSettings().PackMatrixRowMajor;
 
         // RenderDeviceWithCache_E throws exceptions in case of errors
         RenderDeviceWithCache_E Device{RenderDelegate->GetDevice(), RenderDelegate->GetRenderStateCache()};
@@ -207,7 +209,7 @@ void HnPostProcessTask::PostProcessingTechnique::PreparePSO(TEXTURE_FORMAT RTVFo
         }
 
         GraphicsPipelineStateCreateInfoX PsoCI{"Post process"};
-        CreateShaders(Device, "HnPostProcess.psh", "Post-process PS", Macros, PsoCI)
+        CreateShaders(Device, "HnPostProcess.psh", "Post-process PS", Macros, PackMatrixRowMajor, PsoCI)
             .AddRenderTarget(RTVFormat)
             .SetDepthStencilDesc(DSS_DisableDepth)
             .SetRasterizerDesc(RS_SolidFillNoCull)
@@ -383,7 +385,8 @@ void HnPostProcessTask::CopyFrameTechnique::PreparePSO(TEXTURE_FORMAT RTVFormat)
 
     try
     {
-        HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(PPTask.m_RenderIndex->GetRenderDelegate());
+        HnRenderDelegate* RenderDelegate     = static_cast<HnRenderDelegate*>(PPTask.m_RenderIndex->GetRenderDelegate());
+        const bool        PackMatrixRowMajor = RenderDelegate->GetUSDRenderer()->GetSettings().PackMatrixRowMajor;
 
         // RenderDeviceWithCache_E throws exceptions in case of errors
         RenderDeviceWithCache_E Device{RenderDelegate->GetDevice(), RenderDelegate->GetRenderStateCache()};
@@ -398,7 +401,7 @@ void HnPostProcessTask::CopyFrameTechnique::PreparePSO(TEXTURE_FORMAT RTVFormat)
         }
 
         GraphicsPipelineStateCreateInfoX PsoCI{"Copy Frame"};
-        CreateShaders(Device, "HnCopyFrame.psh", "PostCopy Frame PS", Macros, PsoCI)
+        CreateShaders(Device, "HnCopyFrame.psh", "PostCopy Frame PS", Macros, PackMatrixRowMajor, PsoCI)
             .AddRenderTarget(RTVFormat)
             .SetDepthStencilDesc(DSS_DisableDepth)
             .SetRasterizerDesc(RS_SolidFillNoCull)
@@ -478,7 +481,7 @@ void HnPostProcessTask::CreateVectorFieldRenderer(TEXTURE_FORMAT RTVFormat)
     CI.pStateCache        = RenderDelegate->GetRenderStateCache();
     CI.NumRenderTargets   = 1;
     CI.RTVFormats[0]      = RTVFormat;
-    CI.PackMatrixRowMajor = true;
+    CI.PackMatrixRowMajor = RenderDelegate->GetUSDRenderer()->GetSettings().PackMatrixRowMajor;
     CI.AsyncShaders       = pRenderParam->GetAsyncShaderCompilation();
 
     m_VectorFieldRenderer = std::make_unique<VectorFieldRenderer>(CI);
@@ -564,7 +567,7 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
     {
         PostFXContext::CreateInfo PostFXCI;
         PostFXCI.EnableAsyncCreation = AsyncShaderCompilation;
-        PostFXCI.PackMatrixRowMajor  = true;
+        PostFXCI.PackMatrixRowMajor  = RenderDelegate->GetUSDRenderer()->GetSettings().PackMatrixRowMajor;
 
         m_PostFXContext = std::make_unique<PostFXContext>(pDevice, PostFXCI);
     }

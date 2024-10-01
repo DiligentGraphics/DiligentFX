@@ -133,7 +133,11 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
     USDRendererCI.EnableClearCoat = true;
 
     USDRendererCI.AllowHotShaderReload = RenderDelegateCI.AllowHotShaderReload;
-    USDRendererCI.PackMatrixRowMajor   = true;
+
+    const RenderDeviceInfo& DeviceInfo = RenderDelegateCI.pDevice->GetDeviceInfo();
+    // There is a major performance degradation when using row-major matrices
+    // on Safari/WebGL, so use column-major matrices on OpenGL.
+    USDRendererCI.PackMatrixRowMajor = !DeviceInfo.IsGLDevice();
 
     // We use SRGB textures, so color conversion in the shader is not needed
     USDRendererCI.TexColorConversionMode = PBR_Renderer::CreateInfo::TEX_COLOR_CONVERSION_MODE_NONE;
@@ -157,7 +161,7 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
     HN_MATERIAL_TEXTURES_BINDING_MODE TextureBindingMode = RenderDelegateCI.TextureBindingMode;
     Uint32                            TexturesArraySize  = RenderDelegateCI.TexturesArraySize;
     if (TextureBindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_DYNAMIC &&
-        !RenderDelegateCI.pDevice->GetDeviceInfo().Features.BindlessResources)
+        !DeviceInfo.Features.BindlessResources)
     {
         LOG_WARNING_MESSAGE("This device does not support bindless resources. Switching to texture atlas mode");
         TextureBindingMode = HN_MATERIAL_TEXTURES_BINDING_MODE_ATLAS;
@@ -209,7 +213,6 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
             // clang-format on
         };
 
-    const auto& DeviceInfo = RenderDelegateCI.pDevice->GetDeviceInfo();
     if (DeviceInfo.IsVulkanDevice() ||
         DeviceInfo.IsWebGPUDevice() ||
         (DeviceInfo.IsGLDevice() && DeviceInfo.Features.NativeMultiDraw))

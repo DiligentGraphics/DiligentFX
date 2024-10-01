@@ -132,6 +132,12 @@ void HnRenderEnvMapTask::Prepare(pxr::HdTaskContext* TaskCtx,
     m_RenderIndex = RenderIndex;
 
     HnRenderDelegate* pRenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+    const auto&       USDRenderer     = pRenderDelegate->GetUSDRenderer();
+    if (!USDRenderer)
+    {
+        UNEXPECTED("USD renderer is not initialized");
+        return;
+    }
 
     if (!m_EnvMapRenderer)
     {
@@ -140,7 +146,7 @@ void HnRenderEnvMapTask::Prepare(pxr::HdTaskContext* TaskCtx,
             EnvMapRenderer::CreateInfo EnvMapRndrCI;
             EnvMapRndrCI.pDevice            = pRenderDelegate->GetDevice();
             EnvMapRndrCI.pCameraAttribsCB   = pRenderDelegate->GetFrameAttribsCB();
-            EnvMapRndrCI.PackMatrixRowMajor = true;
+            EnvMapRndrCI.PackMatrixRowMajor = USDRenderer->GetSettings().PackMatrixRowMajor;
             EnvMapRndrCI.NumRenderTargets   = RenderPassState->GetNumRenderTargets();
             for (Uint32 rt = 0; rt < EnvMapRndrCI.NumRenderTargets; ++rt)
                 EnvMapRndrCI.RTVFormats[rt] = RenderPassState->GetRenderTargetFormat(rt);
@@ -158,13 +164,6 @@ void HnRenderEnvMapTask::Prepare(pxr::HdTaskContext* TaskCtx,
         {
             UNEXPECTED("Render pass state is not set in the task context");
         }
-    }
-
-    auto USDRenderer = pRenderDelegate->GetUSDRenderer();
-    if (!USDRenderer)
-    {
-        UNEXPECTED("USD renderer is not initialized");
-        return;
     }
 
     auto* pEnvMapSRV = USDRenderer->GetPrefilteredEnvMapSRV();

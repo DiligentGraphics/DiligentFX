@@ -151,7 +151,8 @@ void HnRenderShadowsTask::PrepareClearDepthPSO(const HnRenderDelegate& RenderDel
 
         ShaderCreateInfo ShaderCI;
         ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL;
-        ShaderCI.CompileFlags   = SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR;
+        if (RenderDelegate.GetUSDRenderer()->GetSettings().PackMatrixRowMajor)
+            ShaderCI.CompileFlags |= SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR;
 
         RefCntAutoPtr<IShader> pVS;
         {
@@ -179,11 +180,11 @@ void HnRenderShadowsTask::PrepareClearDepthPSO(const HnRenderDelegate& RenderDel
     }
     catch (const std::runtime_error& err)
     {
-        LOG_ERROR_MESSAGE("Failed to axes PSO: ", err.what());
+        LOG_ERROR_MESSAGE("Failed to create Clear Depth PSO: ", err.what());
     }
     catch (...)
     {
-        LOG_ERROR_MESSAGE("Failed to axes PSO");
+        LOG_ERROR_MESSAGE("Failed to create Clear Depth PSO");
     }
 }
 

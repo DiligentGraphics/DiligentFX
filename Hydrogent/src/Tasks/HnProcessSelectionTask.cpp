@@ -97,7 +97,8 @@ void HnProcessSelectionTask::PrepareTechniques(TEXTURE_FORMAT RTVFormat)
 
         ShaderCreateInfo ShaderCI;
         ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL;
-        ShaderCI.CompileFlags   = SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR;
+        if (RenderDelegate->GetUSDRenderer()->GetSettings().PackMatrixRowMajor)
+            ShaderCI.CompileFlags |= SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR;
         if (RenderParam->GetAsyncShaderCompilation())
             ShaderCI.CompileFlags |= SHADER_COMPILE_FLAG_ASYNCHRONOUS;
 
