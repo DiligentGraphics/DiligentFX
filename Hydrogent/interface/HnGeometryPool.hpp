@@ -66,8 +66,8 @@ public:
     {
     public:
         virtual IBuffer* GetBuffer(const pxr::TfToken& Name) = 0;
-
-        virtual Uint32 GetStartVertex() const = 0;
+        virtual Uint32   GetNumVertices() const              = 0;
+        virtual Uint32   GetStartVertex() const              = 0;
     };
 
     struct IndexHandle : public IObject
@@ -79,7 +79,7 @@ public:
 
     using BufferSourcesMapType = std::map<pxr::TfToken, std::shared_ptr<pxr::HdBufferSource>>;
 
-    void AllocateVertices(const std::string& Name, const BufferSourcesMapType& Sources, VertexHandle** ppHandle);
+    void AllocateVertices(const std::string& Name, const BufferSourcesMapType& Sources, RefCntAutoPtr<VertexHandle>& Handle);
     void AllocateIndices(const std::string& Name, pxr::VtValue Indices, Uint32 StartVertex, RefCntAutoPtr<IndexHandle>& Handle);
 
 private:

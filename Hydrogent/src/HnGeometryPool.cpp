@@ -61,48 +61,24 @@ HnGeometryPool::~HnGeometryPool()
 class HnGeometryPool::VertexHandleImpl final : public ObjectBase<VertexHandle>
 {
 public:
-    VertexHandleImpl(IReferenceCounters* pRefCounters, std::string Name) :
-        ObjectBase<VertexHandle>{pRefCounters},
-        m_Name{std::move(Name)}
+    static RefCntAutoPtr<VertexHandleImpl> Create(std::string                 Name,
+                                                  const BufferSourcesMapType& Sources,
+                                                  GLTF::ResourceManager*      pResMgr)
     {
-    }
-
-    VertexHandleImpl(IReferenceCounters*         pRefCounters,
-                     std::string                 Name,
-                     GLTF::ResourceManager&      ResMgr,
-                     const BufferSourcesMapType& Sources) :
-        VertexHandleImpl{pRefCounters, std::move(Name)}
-    {
-        if (Sources.empty())
-        {
-            UNEXPECTED("No vertex data sources provided");
-            return;
-        }
-
-        const size_t NumVerts = Sources.begin()->second->GetNumElements();
-
-        GLTF::ResourceManager::VertexLayoutKey VtxKey;
-        VtxKey.Elements.reserve(Sources.size());
-        for (const auto& source_it : Sources)
-        {
-            const pxr::TfToken&                         SourceName = source_it.first;
-            const std::shared_ptr<pxr::HdBufferSource>& Source     = source_it.second;
-            VERIFY(NumVerts == Source->GetNumElements(), "Inconsistent number of elements in vertex data sources");
-            const pxr::HdTupleType ElementType = Source->GetTupleType();
-            const size_t           ElementSize = HdDataSizeOfType(ElementType.type) * ElementType.count;
-
-            m_NameToPoolIndex[SourceName] = static_cast<Uint32>(VtxKey.Elements.size());
-            VtxKey.Elements.emplace_back(static_cast<Uint32>(ElementSize), BIND_VERTEX_BUFFER);
-        }
-
-        m_PoolAllocation = ResMgr.AllocateVertices(VtxKey, static_cast<Uint32>(NumVerts));
-        VERIFY_EXPR(m_PoolAllocation);
+        return RefCntAutoPtr<VertexHandleImpl>{
+            MakeNewRCObj<VertexHandleImpl>()(std::move(Name), Sources, pResMgr),
+        };
     }
 
     IBuffer* GetBuffer(const pxr::TfToken& Name) override final
     {
         auto it = m_Buffers.find(Name);
         return it != m_Buffers.end() ? it->second.RawPtr() : nullptr;
+    }
+
+    Uint32 GetNumVertices() const override final
+    {
+        return m_NumVertices;
     }
 
     virtual Uint32 GetStartVertex() const override final
@@ -123,7 +99,9 @@ public:
                 continue;
             const pxr::TfToken& PrimName = source_it.first;
 
-            const size_t           NumElements = pSource->GetNumElements();
+            const size_t NumElements = pSource->GetNumElements();
+            VERIFY(NumElements == m_NumVertices, "Unexpected number of elements in vertex data source ", PrimName);
+
             const pxr::HdTupleType ElementType = pSource->GetTupleType();
             const size_t           ElementSize = HdDataSizeOfType(ElementType.type) * ElementType.count;
             if (PrimName == pxr::HdTokens->points)
@@ -180,7 +158,55 @@ public:
     }
 
 private:
+    template <typename AllocatorType, typename ObjectType>
+    friend class MakeNewRCObj;
+
+    VertexHandleImpl(IReferenceCounters*         pRefCounters,
+                     std::string                 Name,
+                     const BufferSourcesMapType& Sources,
+                     GLTF::ResourceManager*      pResMgr) :
+        ObjectBase<VertexHandle>{pRefCounters},
+        m_Name{std::move(Name)}
+    {
+        if (Sources.empty())
+        {
+            UNEXPECTED("No vertex data sources provided");
+            return;
+        }
+
+        m_NumVertices = static_cast<Uint32>(Sources.begin()->second->GetNumElements());
+#ifdef DILIGENT_DEBUG
+        for (const auto& source_it : Sources)
+        {
+            VERIFY(m_NumVertices == source_it.second->GetNumElements(), "Inconsistent number of elements in vertex data sources");
+        }
+#endif
+
+        if (pResMgr != nullptr)
+        {
+            GLTF::ResourceManager::VertexLayoutKey VtxKey;
+            VtxKey.Elements.reserve(Sources.size());
+            for (const auto& source_it : Sources)
+            {
+                const pxr::TfToken&                         SourceName = source_it.first;
+                const std::shared_ptr<pxr::HdBufferSource>& Source     = source_it.second;
+
+                const pxr::HdTupleType ElementType = Source->GetTupleType();
+                const size_t           ElementSize = HdDataSizeOfType(ElementType.type) * ElementType.count;
+
+                m_NameToPoolIndex[SourceName] = static_cast<Uint32>(VtxKey.Elements.size());
+                VtxKey.Elements.emplace_back(static_cast<Uint32>(ElementSize), BIND_VERTEX_BUFFER);
+            }
+
+            m_PoolAllocation = pResMgr->AllocateVertices(VtxKey, m_NumVertices);
+            VERIFY_EXPR(m_PoolAllocation);
+        }
+    }
+
+private:
     const std::string m_Name;
+
+    Uint32 m_NumVertices = 0;
 
     RefCntAutoPtr<IVertexPoolAllocation> m_PoolAllocation;
 
@@ -194,18 +220,11 @@ private:
 class HnGeometryPool::IndexHandleImpl final : public ObjectBase<IndexHandle>
 {
 public:
-    IndexHandleImpl(IReferenceCounters*    pRefCounters,
-                    std::string            Name,
-                    const pxr::VtValue&    Indices,
-                    GLTF::ResourceManager* pResMgr) :
-        ObjectBase<IndexHandle>{pRefCounters},
-        m_Name{std::move(Name)},
-        m_NumIndices{static_cast<Uint32>(GetIndexCountAndPtr(Indices).first)}
+    static RefCntAutoPtr<IndexHandleImpl> Create(std::string Name, const pxr::VtValue& Indices, GLTF::ResourceManager* pResMgr)
     {
-        if (pResMgr != nullptr && m_NumIndices > 0)
-        {
-            m_Suballocation = pResMgr->AllocateIndices(m_NumIndices * sizeof(Uint32));
-        }
+        return RefCntAutoPtr<IndexHandleImpl>{
+            MakeNewRCObj<IndexHandleImpl>()(std::move(Name), Indices, pResMgr),
+        };
     }
 
     IBuffer* GetBuffer() override final
@@ -294,6 +313,24 @@ public:
     }
 
 private:
+    template <typename AllocatorType, typename ObjectType>
+    friend class MakeNewRCObj;
+
+    IndexHandleImpl(IReferenceCounters*    pRefCounters,
+                    std::string            Name,
+                    const pxr::VtValue&    Indices,
+                    GLTF::ResourceManager* pResMgr) :
+        ObjectBase<IndexHandle>{pRefCounters},
+        m_Name{std::move(Name)},
+        m_NumIndices{static_cast<Uint32>(GetIndexCountAndPtr(Indices).first)}
+    {
+        if (pResMgr != nullptr && m_NumIndices > 0)
+        {
+            m_Suballocation = pResMgr->AllocateIndices(m_NumIndices * sizeof(Uint32));
+        }
+    }
+
+private:
     const std::string m_Name;
     const Uint32      m_NumIndices;
 
@@ -305,6 +342,11 @@ struct HnGeometryPool::StagingVertexData
 {
     BufferSourcesMapType            Sources;
     RefCntAutoPtr<VertexHandleImpl> Handle;
+
+    StagingVertexData(const BufferSourcesMapType& Sources, VertexHandle* _Handle) :
+        Sources{Sources},
+        Handle{static_cast<VertexHandleImpl*>(_Handle)}
+    {}
 };
 
 struct HnGeometryPool::StagingIndexData
@@ -312,13 +354,15 @@ struct HnGeometryPool::StagingIndexData
     pxr::VtValue                   Indices;
     RefCntAutoPtr<IndexHandleImpl> Handle;
 
-    StagingIndexData(pxr::VtValue&& Indices, const RefCntAutoPtr<HnGeometryPool::IndexHandle>& Handle) :
+    StagingIndexData(pxr::VtValue&& Indices, IndexHandle* _Handle) :
         Indices{std::move(Indices)},
-        Handle{Handle.RawPtr<IndexHandleImpl>()}
+        Handle{static_cast<IndexHandleImpl*>(_Handle)}
     {}
 };
 
-void HnGeometryPool::AllocateVertices(const std::string& Name, const BufferSourcesMapType& Sources, VertexHandle** ppHandle)
+void HnGeometryPool::AllocateVertices(const std::string&           Name,
+                                      const BufferSourcesMapType&  Sources,
+                                      RefCntAutoPtr<VertexHandle>& Handle)
 {
     if (Sources.empty())
     {
@@ -326,23 +370,13 @@ void HnGeometryPool::AllocateVertices(const std::string& Name, const BufferSourc
         return;
     }
 
-    VertexHandleImpl* pHandle = static_cast<VertexHandleImpl*>(*ppHandle);
-    if (pHandle == nullptr)
+    if (!Handle)
     {
-        if (m_UseVertexPool)
-        {
-            pHandle = MakeNewRCObj<VertexHandleImpl>()(Name, m_ResMgr, Sources);
-        }
-        else
-        {
-            pHandle = MakeNewRCObj<VertexHandleImpl>()(Name);
-        }
-        pHandle->AddRef();
-        *ppHandle = pHandle;
+        Handle = VertexHandleImpl::Create(Name, Sources, m_UseVertexPool ? &m_ResMgr : nullptr);
     }
 
     std::lock_guard<std::mutex> Guard{m_StagingVertexDataMtx};
-    m_StagingVertexData.emplace_back(StagingVertexData{Sources, RefCntAutoPtr<VertexHandleImpl>{pHandle}});
+    m_StagingVertexData.emplace_back(Sources, Handle);
 }
 
 void HnGeometryPool::AllocateIndices(const std::string& Name, pxr::VtValue Indices, Uint32 StartVertex, RefCntAutoPtr<IndexHandle>& Handle)
@@ -355,7 +389,7 @@ void HnGeometryPool::AllocateIndices(const std::string& Name, pxr::VtValue Indic
 
     if (!Handle)
     {
-        Handle = MakeNewRCObj<IndexHandleImpl>()(Name, Indices, m_UseIndexPool ? &m_ResMgr : nullptr);
+        Handle = IndexHandleImpl::Create(Name, Indices, m_UseIndexPool ? &m_ResMgr : nullptr);
     }
     else
     {
