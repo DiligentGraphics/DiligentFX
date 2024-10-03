@@ -72,15 +72,15 @@ public:
 
     struct IndexHandle : public IObject
     {
-        virtual IBuffer* GetBuffer() = 0;
-
-        virtual Uint32 GetStartIndex() const = 0;
+        virtual IBuffer* GetBuffer()           = 0;
+        virtual Uint32   GetNumIndices() const = 0;
+        virtual Uint32   GetStartIndex() const = 0;
     };
 
     using BufferSourcesMapType = std::map<pxr::TfToken, std::shared_ptr<pxr::HdBufferSource>>;
 
     void AllocateVertices(const std::string& Name, const BufferSourcesMapType& Sources, VertexHandle** ppHandle);
-    void AllocateIndices(const std::string& Name, pxr::VtValue Indices, Uint32 StartVertex, IndexHandle** ppHandle);
+    void AllocateIndices(const std::string& Name, pxr::VtValue Indices, Uint32 StartVertex, RefCntAutoPtr<IndexHandle>& Handle);
 
 private:
 private:

@@ -253,10 +253,6 @@ private:
 
     struct IndexData
     {
-        Uint32 NumFaceTriangles = 0;
-        Uint32 NumEdges         = 0;
-        Uint32 NumPoints        = 0;
-
         std::vector<GeometrySubsetRange> Subsets;
 
         RefCntAutoPtr<HnGeometryPool::IndexHandle> Faces;

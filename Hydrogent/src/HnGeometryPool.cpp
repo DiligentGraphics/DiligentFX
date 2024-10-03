@@ -194,28 +194,17 @@ private:
 class HnGeometryPool::IndexHandleImpl final : public ObjectBase<IndexHandle>
 {
 public:
-    IndexHandleImpl(IReferenceCounters* pRefCounters, std::string Name) :
+    IndexHandleImpl(IReferenceCounters*    pRefCounters,
+                    std::string            Name,
+                    const pxr::VtValue&    Indices,
+                    GLTF::ResourceManager* pResMgr) :
         ObjectBase<IndexHandle>{pRefCounters},
-        m_Name{std::move(Name)}
+        m_Name{std::move(Name)},
+        m_NumIndices{static_cast<Uint32>(GetIndexCountAndPtr(Indices).first)}
     {
-    }
-
-    IndexHandleImpl(IReferenceCounters* pRefCounters, std::string Name, GLTF::ResourceManager& ResMgr, const pxr::VtValue& Indices) :
-        IndexHandleImpl{pRefCounters, std::move(Name)}
-    {
-        Uint32 Size = 0;
-        if (Indices.IsHolding<pxr::VtVec3iArray>())
-            Size = static_cast<Uint32>(Indices.UncheckedGet<pxr::VtVec3iArray>().size() * sizeof(pxr::GfVec3i));
-        else if (Indices.IsHolding<pxr::VtVec2iArray>())
-            Size = static_cast<Uint32>(Indices.UncheckedGet<pxr::VtVec2iArray>().size() * sizeof(pxr::GfVec2i));
-        else if (Indices.IsHolding<pxr::VtIntArray>())
-            Size = static_cast<Uint32>(Indices.UncheckedGet<pxr::VtIntArray>().size() * sizeof(int));
-        else
-            UNEXPECTED("Unexpected index data type");
-
-        if (Size > 0)
+        if (pResMgr != nullptr && m_NumIndices > 0)
         {
-            m_Suballocation = ResMgr.AllocateIndices(Size);
+            m_Suballocation = pResMgr->AllocateIndices(m_NumIndices * sizeof(Uint32));
         }
     }
 
@@ -229,57 +218,44 @@ public:
         return m_Suballocation ? m_Suballocation->GetOffset() / sizeof(Uint32) : 0;
     }
 
+    Uint32 GetNumIndices() const override final
+    {
+        return m_NumIndices;
+    }
+
     void Update(IRenderDevice*      pDevice,
                 IDeviceContext*     pContext,
                 const pxr::VtValue& Indices)
     {
-        const void* pData    = nullptr;
-        Uint32      DataSize = 0;
-        if (Indices.IsHolding<pxr::VtVec3iArray>())
+        std::pair<size_t, const void*> IndexCountAndPtr = GetIndexCountAndPtr(Indices);
+        if (IndexCountAndPtr.second == nullptr)
         {
-            const pxr::VtVec3iArray& IndicesArray = Indices.UncheckedGet<pxr::VtVec3iArray>();
-
-            pData    = IndicesArray.data();
-            DataSize = static_cast<Uint32>(IndicesArray.size() * sizeof(pxr::GfVec3i));
-        }
-        else if (Indices.IsHolding<pxr::VtVec2iArray>())
-        {
-            const pxr::VtVec2iArray& IndicesArray = Indices.UncheckedGet<pxr::VtVec2iArray>();
-
-            pData    = IndicesArray.data();
-            DataSize = static_cast<Uint32>(IndicesArray.size() * sizeof(pxr::GfVec2i));
-        }
-        else if (Indices.IsHolding<pxr::VtIntArray>())
-        {
-            const pxr::VtIntArray& IndicesArray = Indices.UncheckedGet<pxr::VtIntArray>();
-
-            pData    = IndicesArray.data();
-            DataSize = static_cast<Uint32>(IndicesArray.size() * sizeof(int));
-        }
-        else
-        {
-            UNEXPECTED("Unexpected index data type");
             return;
         }
 
+        if (IndexCountAndPtr.first != m_NumIndices)
+        {
+            DEV_ERROR("The number of indices has changed. This is unexpected as in this case the topology is expected to change and new index handle should be created.");
+            return;
+        }
+
+        BufferData IBData{IndexCountAndPtr.second, IndexCountAndPtr.first * sizeof(Uint32)};
         if (m_Suballocation == nullptr)
         {
-            BufferDesc Desc{
-                m_Name.c_str(),
-                DataSize,
-                BIND_INDEX_BUFFER,
-                USAGE_DEFAULT,
-            };
-            BufferData InitData{pData, Desc.Size};
-
-            if (m_Buffer && m_Buffer->GetDesc().Size == Desc.Size)
+            if (m_Buffer)
             {
-                pContext->UpdateBuffer(m_Buffer, 0, InitData.DataSize, InitData.pData, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+                pContext->UpdateBuffer(m_Buffer, 0, IBData.DataSize, IBData.pData, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
             }
             else
             {
-                const RenderDeviceX_N& Device{pDevice};
-                m_Buffer = Device.CreateBuffer(Desc, &InitData);
+                BufferDesc Desc{
+                    m_Name.c_str(),
+                    IBData.DataSize,
+                    BIND_INDEX_BUFFER,
+                    USAGE_DEFAULT,
+                };
+                pDevice->CreateBuffer(Desc, &IBData, &m_Buffer);
+                VERIFY_EXPR(m_Buffer != nullptr);
             }
 
             StateTransitionDesc Barrier{m_Buffer, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_INDEX_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE};
@@ -288,13 +264,38 @@ public:
         else
         {
             m_Buffer = m_Suballocation->GetBuffer();
-            VERIFY_EXPR(m_Suballocation->GetSize() == DataSize);
-            pContext->UpdateBuffer(m_Buffer, m_Suballocation->GetOffset(), DataSize, pData, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+            VERIFY_EXPR(m_Suballocation->GetSize() == IBData.DataSize);
+            pContext->UpdateBuffer(m_Buffer, m_Suballocation->GetOffset(), IBData.DataSize, IBData.pData, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        }
+    }
+
+    static std::pair<size_t, const void*> GetIndexCountAndPtr(const pxr::VtValue& Indices)
+    {
+        if (Indices.IsHolding<pxr::VtVec3iArray>())
+        {
+            const pxr::VtVec3iArray& IndicesArray = Indices.UncheckedGet<pxr::VtVec3iArray>();
+            return {IndicesArray.size() * 3, IndicesArray.data()};
+        }
+        else if (Indices.IsHolding<pxr::VtVec2iArray>())
+        {
+            const pxr::VtVec2iArray& IndicesArray = Indices.UncheckedGet<pxr::VtVec2iArray>();
+            return {IndicesArray.size() * 2, IndicesArray.data()};
+        }
+        else if (Indices.IsHolding<pxr::VtIntArray>())
+        {
+            const pxr::VtIntArray& IndicesArray = Indices.UncheckedGet<pxr::VtIntArray>();
+            return {IndicesArray.size(), IndicesArray.data()};
+        }
+        else
+        {
+            UNEXPECTED("Unexpected index data type");
+            return {};
         }
     }
 
 private:
     const std::string m_Name;
+    const Uint32      m_NumIndices;
 
     RefCntAutoPtr<IBuffer>              m_Buffer;
     RefCntAutoPtr<IBufferSuballocation> m_Suballocation;
@@ -302,14 +303,19 @@ private:
 
 struct HnGeometryPool::StagingVertexData
 {
-    BufferSourcesMapType                            Sources;
-    RefCntAutoPtr<HnGeometryPool::VertexHandleImpl> Handle;
+    BufferSourcesMapType            Sources;
+    RefCntAutoPtr<VertexHandleImpl> Handle;
 };
 
 struct HnGeometryPool::StagingIndexData
 {
-    pxr::VtValue                                   Indices;
-    RefCntAutoPtr<HnGeometryPool::IndexHandleImpl> Handle;
+    pxr::VtValue                   Indices;
+    RefCntAutoPtr<IndexHandleImpl> Handle;
+
+    StagingIndexData(pxr::VtValue&& Indices, const RefCntAutoPtr<HnGeometryPool::IndexHandle>& Handle) :
+        Indices{std::move(Indices)},
+        Handle{Handle.RawPtr<IndexHandleImpl>()}
+    {}
 };
 
 void HnGeometryPool::AllocateVertices(const std::string& Name, const BufferSourcesMapType& Sources, VertexHandle** ppHandle)
@@ -339,7 +345,7 @@ void HnGeometryPool::AllocateVertices(const std::string& Name, const BufferSourc
     m_StagingVertexData.emplace_back(StagingVertexData{Sources, RefCntAutoPtr<VertexHandleImpl>{pHandle}});
 }
 
-void HnGeometryPool::AllocateIndices(const std::string& Name, pxr::VtValue Indices, Uint32 StartVertex, IndexHandle** ppHandle)
+void HnGeometryPool::AllocateIndices(const std::string& Name, pxr::VtValue Indices, Uint32 StartVertex, RefCntAutoPtr<IndexHandle>& Handle)
 {
     if (Indices.IsEmpty())
     {
@@ -347,19 +353,14 @@ void HnGeometryPool::AllocateIndices(const std::string& Name, pxr::VtValue Indic
         return;
     }
 
-    IndexHandleImpl* pHandle = static_cast<IndexHandleImpl*>(*ppHandle);
-    if (pHandle == nullptr)
+    if (!Handle)
     {
-        if (m_UseIndexPool)
-        {
-            pHandle = MakeNewRCObj<IndexHandleImpl>()(Name, m_ResMgr, Indices);
-        }
-        else
-        {
-            pHandle = MakeNewRCObj<IndexHandleImpl>()(Name);
-        }
-        pHandle->AddRef();
-        *ppHandle = pHandle;
+        Handle = MakeNewRCObj<IndexHandleImpl>()(Name, Indices, m_UseIndexPool ? &m_ResMgr : nullptr);
+    }
+    else
+    {
+        DEV_CHECK_ERR(Handle->GetNumIndices() == IndexHandleImpl::GetIndexCountAndPtr(Indices).first,
+                      "The number of indices has changed. This is unexpected as in this case the topology is expected to change and new index handle should be created.");
     }
 
     if (StartVertex != 0)
@@ -399,7 +400,7 @@ void HnGeometryPool::AllocateIndices(const std::string& Name, pxr::VtValue Indic
     }
 
     std::lock_guard<std::mutex> Guard{m_StagingIndexDataMtx};
-    m_StagingIndexData.emplace_back(StagingIndexData{std::move(Indices), RefCntAutoPtr<IndexHandleImpl>{pHandle}});
+    m_StagingIndexData.emplace_back(std::move(Indices), std::move(Handle));
 }
 
 
