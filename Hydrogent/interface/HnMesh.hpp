@@ -246,13 +246,13 @@ private:
     {
         std::vector<GeometrySubsetRange> Subsets;
 
-        RefCntAutoPtr<HnGeometryPool::IndexHandle> Faces;
-        RefCntAutoPtr<HnGeometryPool::IndexHandle> Edges;
-        RefCntAutoPtr<HnGeometryPool::IndexHandle> Points;
+        std::shared_ptr<HnGeometryPool::IndexHandle> Faces;
+        std::shared_ptr<HnGeometryPool::IndexHandle> Edges;
+        std::shared_ptr<HnGeometryPool::IndexHandle> Points;
     };
     IndexData m_IndexData;
 
-    RefCntAutoPtr<HnGeometryPool::VertexHandle> m_VertexHandle;
+    std::shared_ptr<HnGeometryPool::VertexHandle> m_VertexHandle;
 
     bool      m_HasFaceVaryingPrimvars = false;
     bool      m_IsDoubleSided          = false;

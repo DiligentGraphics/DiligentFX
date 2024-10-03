@@ -28,7 +28,6 @@
 #include "HnTokens.hpp"
 
 #include "GraphicsTypesX.hpp"
-#include "ObjectBase.hpp"
 #include "GLTFResourceManager.hpp"
 
 #include "pxr/base/tf/token.h"
@@ -50,7 +49,9 @@ HnGeometryPool::HnGeometryPool(IRenderDevice*         pDevice,
     m_pDevice{pDevice},
     m_ResMgr{ResMgr},
     m_UseVertexPool{UseVertexPool},
-    m_UseIndexPool{UseIndexPool}
+    m_UseIndexPool{UseIndexPool},
+    m_VertexCache{/*NumRequestsToPurge = */ 128},
+    m_IndexCache{/*NumRequestsToPurge = */ 128}
 {
 }
 
@@ -202,14 +203,12 @@ private:
     std::unordered_map<pxr::TfToken, RefCntAutoPtr<IBuffer>, pxr::TfToken::HashFunctor> m_Buffers;
 };
 
-class HnGeometryPool::VertexHandleImpl final : public ObjectBase<VertexHandle>
+class HnGeometryPool::VertexHandleImpl final : public HnGeometryPool::VertexHandle
 {
 public:
-    static RefCntAutoPtr<VertexHandleImpl> Create(std::shared_ptr<VertexData> Data)
+    VertexHandleImpl(std::shared_ptr<VertexData> Data) :
+        m_Data{std::move(Data)}
     {
-        return RefCntAutoPtr<VertexHandleImpl>{
-            MakeNewRCObj<VertexHandleImpl>()(std::move(Data)),
-        };
     }
 
     virtual IBuffer* GetBuffer(const pxr::TfToken& Name) override final
@@ -225,17 +224,6 @@ public:
     virtual Uint32 GetStartVertex() const override final
     {
         return m_Data->GetStartVertex();
-    }
-
-private:
-    template <typename AllocatorType, typename ObjectType>
-    friend class MakeNewRCObj;
-
-    VertexHandleImpl(IReferenceCounters*         pRefCounters,
-                     std::shared_ptr<VertexData> Data) :
-        ObjectBase<VertexHandle>{pRefCounters},
-        m_Data{std::move(Data)}
-    {
     }
 
 private:
@@ -350,14 +338,12 @@ private:
     RefCntAutoPtr<IBufferSuballocation> m_Suballocation;
 };
 
-class HnGeometryPool::IndexHandleImpl final : public ObjectBase<IndexHandle>
+class HnGeometryPool::IndexHandleImpl final : public HnGeometryPool::IndexHandle
 {
 public:
-    static RefCntAutoPtr<IndexHandleImpl> Create(std::shared_ptr<IndexData> Data)
+    IndexHandleImpl(std::shared_ptr<IndexData> Data) :
+        m_Data{std::move(Data)}
     {
-        return RefCntAutoPtr<IndexHandleImpl>{
-            MakeNewRCObj<IndexHandleImpl>()(std::move(Data)),
-        };
     }
 
     virtual IBuffer* GetBuffer() override final
@@ -373,17 +359,6 @@ public:
     virtual Uint32 GetStartIndex() const override final
     {
         return m_Data->GetStartIndex();
-    }
-
-private:
-    template <typename AllocatorType, typename ObjectType>
-    friend class MakeNewRCObj;
-
-    IndexHandleImpl(IReferenceCounters*        pRefCounters,
-                    std::shared_ptr<IndexData> Data) :
-        ObjectBase<IndexHandle>{pRefCounters},
-        m_Data{std::move(Data)}
-    {
     }
 
 private:
@@ -403,9 +378,9 @@ struct HnGeometryPool::StagingIndexData
 };
 
 
-void HnGeometryPool::AllocateVertices(const std::string&           Name,
-                                      const BufferSourcesMapType&  Sources,
-                                      RefCntAutoPtr<VertexHandle>& Handle)
+void HnGeometryPool::AllocateVertices(const std::string&             Name,
+                                      const BufferSourcesMapType&    Sources,
+                                      std::shared_ptr<VertexHandle>& Handle)
 {
     if (Sources.empty())
     {
@@ -430,13 +405,16 @@ void HnGeometryPool::AllocateVertices(const std::string&           Name,
             return Data;
         });
 
-    //if (!Handle)
+    if (!Handle)
     {
-        Handle = VertexHandleImpl::Create(std::move(Data));
+        Handle = std::make_shared<VertexHandleImpl>(std::move(Data));
     }
 }
 
-void HnGeometryPool::AllocateIndices(const std::string& Name, pxr::VtValue Indices, Uint32 StartVertex, RefCntAutoPtr<IndexHandle>& Handle)
+void HnGeometryPool::AllocateIndices(const std::string&            Name,
+                                     pxr::VtValue                  Indices,
+                                     Uint32                        StartVertex,
+                                     std::shared_ptr<IndexHandle>& Handle)
 {
     if (Indices.IsEmpty())
     {
@@ -494,9 +472,9 @@ void HnGeometryPool::AllocateIndices(const std::string& Name, pxr::VtValue Indic
             return Data;
         });
 
-    //if (!Handle)
+    if (!Handle)
     {
-        Handle = IndexHandleImpl::Create(std::move(Data));
+        Handle = std::make_shared<IndexHandleImpl>(std::move(Data));
     }
     //else
     //{

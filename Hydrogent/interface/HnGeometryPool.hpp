@@ -64,16 +64,18 @@ public:
 
     void Commit(IDeviceContext* pContext);
 
-    class VertexHandle : public IObject
+    class VertexHandle
     {
     public:
+        virtual ~VertexHandle() {}
         virtual IBuffer* GetBuffer(const pxr::TfToken& Name) = 0;
         virtual Uint32   GetNumVertices() const              = 0;
         virtual Uint32   GetStartVertex() const              = 0;
     };
 
-    struct IndexHandle : public IObject
+    struct IndexHandle
     {
+        virtual ~IndexHandle() {}
         virtual IBuffer* GetBuffer()           = 0;
         virtual Uint32   GetNumIndices() const = 0;
         virtual Uint32   GetStartIndex() const = 0;
@@ -81,10 +83,9 @@ public:
 
     using BufferSourcesMapType = std::map<pxr::TfToken, std::shared_ptr<pxr::HdBufferSource>>;
 
-    void AllocateVertices(const std::string& Name, const BufferSourcesMapType& Sources, RefCntAutoPtr<VertexHandle>& Handle);
-    void AllocateIndices(const std::string& Name, pxr::VtValue Indices, Uint32 StartVertex, RefCntAutoPtr<IndexHandle>& Handle);
+    void AllocateVertices(const std::string& Name, const BufferSourcesMapType& Sources, std::shared_ptr<VertexHandle>& Handle);
+    void AllocateIndices(const std::string& Name, pxr::VtValue Indices, Uint32 StartVertex, std::shared_ptr<IndexHandle>& Handle);
 
-private:
 private:
     RefCntAutoPtr<IRenderDevice> m_pDevice;
     GLTF::ResourceManager&       m_ResMgr;
