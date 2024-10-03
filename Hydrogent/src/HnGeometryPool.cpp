@@ -58,30 +58,61 @@ HnGeometryPool::~HnGeometryPool()
 {
 }
 
-class HnGeometryPool::VertexHandleImpl final : public ObjectBase<VertexHandle>
+class HnGeometryPool::VertexData final
 {
 public:
-    static RefCntAutoPtr<VertexHandleImpl> Create(std::string                 Name,
-                                                  const BufferSourcesMapType& Sources,
-                                                  GLTF::ResourceManager*      pResMgr)
+    VertexData(std::string                 Name,
+               const BufferSourcesMapType& Sources,
+               GLTF::ResourceManager*      pResMgr) :
+        m_Name{std::move(Name)}
     {
-        return RefCntAutoPtr<VertexHandleImpl>{
-            MakeNewRCObj<VertexHandleImpl>()(std::move(Name), Sources, pResMgr),
-        };
+        if (Sources.empty())
+        {
+            UNEXPECTED("No vertex data sources provided");
+            return;
+        }
+
+        m_NumVertices = static_cast<Uint32>(Sources.begin()->second->GetNumElements());
+#ifdef DILIGENT_DEBUG
+        for (const auto& source_it : Sources)
+        {
+            VERIFY(m_NumVertices == source_it.second->GetNumElements(), "Inconsistent number of elements in vertex data sources");
+        }
+#endif
+
+        if (pResMgr != nullptr)
+        {
+            GLTF::ResourceManager::VertexLayoutKey VtxKey;
+            VtxKey.Elements.reserve(Sources.size());
+            for (const auto& source_it : Sources)
+            {
+                const pxr::TfToken&                         SourceName = source_it.first;
+                const std::shared_ptr<pxr::HdBufferSource>& Source     = source_it.second;
+
+                const pxr::HdTupleType ElementType = Source->GetTupleType();
+                const size_t           ElementSize = HdDataSizeOfType(ElementType.type) * ElementType.count;
+
+                m_NameToPoolIndex[SourceName] = static_cast<Uint32>(VtxKey.Elements.size());
+                VtxKey.Elements.emplace_back(static_cast<Uint32>(ElementSize), BIND_VERTEX_BUFFER);
+            }
+
+            m_PoolAllocation = pResMgr->AllocateVertices(VtxKey, m_NumVertices);
+            VERIFY_EXPR(m_PoolAllocation);
+        }
     }
 
-    IBuffer* GetBuffer(const pxr::TfToken& Name) override final
+    IBuffer* GetBuffer(const pxr::TfToken& Name)
     {
         auto it = m_Buffers.find(Name);
         return it != m_Buffers.end() ? it->second.RawPtr() : nullptr;
     }
 
-    Uint32 GetNumVertices() const override final
+    Uint32 GetNumVertices() const
     {
         return m_NumVertices;
     }
 
-    virtual Uint32 GetStartVertex() const override final
+    Uint32 GetStartVertex() const
     {
         return m_PoolAllocation ? m_PoolAllocation->GetStartVertex() : 0;
     }
@@ -158,52 +189,6 @@ public:
     }
 
 private:
-    template <typename AllocatorType, typename ObjectType>
-    friend class MakeNewRCObj;
-
-    VertexHandleImpl(IReferenceCounters*         pRefCounters,
-                     std::string                 Name,
-                     const BufferSourcesMapType& Sources,
-                     GLTF::ResourceManager*      pResMgr) :
-        ObjectBase<VertexHandle>{pRefCounters},
-        m_Name{std::move(Name)}
-    {
-        if (Sources.empty())
-        {
-            UNEXPECTED("No vertex data sources provided");
-            return;
-        }
-
-        m_NumVertices = static_cast<Uint32>(Sources.begin()->second->GetNumElements());
-#ifdef DILIGENT_DEBUG
-        for (const auto& source_it : Sources)
-        {
-            VERIFY(m_NumVertices == source_it.second->GetNumElements(), "Inconsistent number of elements in vertex data sources");
-        }
-#endif
-
-        if (pResMgr != nullptr)
-        {
-            GLTF::ResourceManager::VertexLayoutKey VtxKey;
-            VtxKey.Elements.reserve(Sources.size());
-            for (const auto& source_it : Sources)
-            {
-                const pxr::TfToken&                         SourceName = source_it.first;
-                const std::shared_ptr<pxr::HdBufferSource>& Source     = source_it.second;
-
-                const pxr::HdTupleType ElementType = Source->GetTupleType();
-                const size_t           ElementSize = HdDataSizeOfType(ElementType.type) * ElementType.count;
-
-                m_NameToPoolIndex[SourceName] = static_cast<Uint32>(VtxKey.Elements.size());
-                VtxKey.Elements.emplace_back(static_cast<Uint32>(ElementSize), BIND_VERTEX_BUFFER);
-            }
-
-            m_PoolAllocation = pResMgr->AllocateVertices(VtxKey, m_NumVertices);
-            VERIFY_EXPR(m_PoolAllocation);
-        }
-    }
-
-private:
     const std::string m_Name;
 
     Uint32 m_NumVertices = 0;
@@ -217,27 +202,72 @@ private:
     std::unordered_map<pxr::TfToken, RefCntAutoPtr<IBuffer>, pxr::TfToken::HashFunctor> m_Buffers;
 };
 
-class HnGeometryPool::IndexHandleImpl final : public ObjectBase<IndexHandle>
+class HnGeometryPool::VertexHandleImpl final : public ObjectBase<VertexHandle>
 {
 public:
-    static RefCntAutoPtr<IndexHandleImpl> Create(std::string Name, const pxr::VtValue& Indices, GLTF::ResourceManager* pResMgr)
+    static RefCntAutoPtr<VertexHandleImpl> Create(std::shared_ptr<VertexData> Data)
     {
-        return RefCntAutoPtr<IndexHandleImpl>{
-            MakeNewRCObj<IndexHandleImpl>()(std::move(Name), Indices, pResMgr),
+        return RefCntAutoPtr<VertexHandleImpl>{
+            MakeNewRCObj<VertexHandleImpl>()(std::move(Data)),
         };
     }
 
-    IBuffer* GetBuffer() override final
+    virtual IBuffer* GetBuffer(const pxr::TfToken& Name) override final
+    {
+        return m_Data->GetBuffer(Name);
+    }
+
+    virtual Uint32 GetNumVertices() const override final
+    {
+        return m_Data->GetNumVertices();
+    }
+
+    virtual Uint32 GetStartVertex() const override final
+    {
+        return m_Data->GetStartVertex();
+    }
+
+private:
+    template <typename AllocatorType, typename ObjectType>
+    friend class MakeNewRCObj;
+
+    VertexHandleImpl(IReferenceCounters*         pRefCounters,
+                     std::shared_ptr<VertexData> Data) :
+        ObjectBase<VertexHandle>{pRefCounters},
+        m_Data{std::move(Data)}
+    {
+    }
+
+private:
+    std::shared_ptr<VertexData> m_Data;
+};
+
+class HnGeometryPool::IndexData final
+{
+public:
+    IndexData(std::string            Name,
+              const pxr::VtValue&    Indices,
+              GLTF::ResourceManager* pResMgr) :
+        m_Name{std::move(Name)},
+        m_NumIndices{static_cast<Uint32>(GetIndexCountAndPtr(Indices).first)}
+    {
+        if (pResMgr != nullptr && m_NumIndices > 0)
+        {
+            m_Suballocation = pResMgr->AllocateIndices(m_NumIndices * sizeof(Uint32));
+        }
+    }
+
+    IBuffer* GetBuffer()
     {
         return m_Buffer;
     }
 
-    Uint32 GetStartIndex() const override final
+    Uint32 GetStartIndex() const
     {
         return m_Suballocation ? m_Suballocation->GetOffset() / sizeof(Uint32) : 0;
     }
 
-    Uint32 GetNumIndices() const override final
+    Uint32 GetNumIndices() const
     {
         return m_NumIndices;
     }
@@ -313,24 +343,6 @@ public:
     }
 
 private:
-    template <typename AllocatorType, typename ObjectType>
-    friend class MakeNewRCObj;
-
-    IndexHandleImpl(IReferenceCounters*    pRefCounters,
-                    std::string            Name,
-                    const pxr::VtValue&    Indices,
-                    GLTF::ResourceManager* pResMgr) :
-        ObjectBase<IndexHandle>{pRefCounters},
-        m_Name{std::move(Name)},
-        m_NumIndices{static_cast<Uint32>(GetIndexCountAndPtr(Indices).first)}
-    {
-        if (pResMgr != nullptr && m_NumIndices > 0)
-        {
-            m_Suballocation = pResMgr->AllocateIndices(m_NumIndices * sizeof(Uint32));
-        }
-    }
-
-private:
     const std::string m_Name;
     const Uint32      m_NumIndices;
 
@@ -338,27 +350,58 @@ private:
     RefCntAutoPtr<IBufferSuballocation> m_Suballocation;
 };
 
+class HnGeometryPool::IndexHandleImpl final : public ObjectBase<IndexHandle>
+{
+public:
+    static RefCntAutoPtr<IndexHandleImpl> Create(std::shared_ptr<IndexData> Data)
+    {
+        return RefCntAutoPtr<IndexHandleImpl>{
+            MakeNewRCObj<IndexHandleImpl>()(std::move(Data)),
+        };
+    }
+
+    virtual IBuffer* GetBuffer() override final
+    {
+        return m_Data->GetBuffer();
+    }
+
+    virtual Uint32 GetNumIndices() const override final
+    {
+        return m_Data->GetNumIndices();
+    }
+
+    virtual Uint32 GetStartIndex() const override final
+    {
+        return m_Data->GetStartIndex();
+    }
+
+private:
+    template <typename AllocatorType, typename ObjectType>
+    friend class MakeNewRCObj;
+
+    IndexHandleImpl(IReferenceCounters*        pRefCounters,
+                    std::shared_ptr<IndexData> Data) :
+        ObjectBase<IndexHandle>{pRefCounters},
+        m_Data{std::move(Data)}
+    {
+    }
+
+private:
+    std::shared_ptr<IndexData> m_Data;
+};
+
 struct HnGeometryPool::StagingVertexData
 {
-    BufferSourcesMapType            Sources;
-    RefCntAutoPtr<VertexHandleImpl> Handle;
-
-    StagingVertexData(const BufferSourcesMapType& Sources, VertexHandle* _Handle) :
-        Sources{Sources},
-        Handle{static_cast<VertexHandleImpl*>(_Handle)}
-    {}
+    BufferSourcesMapType        Sources;
+    std::shared_ptr<VertexData> Data;
 };
 
 struct HnGeometryPool::StagingIndexData
 {
-    pxr::VtValue                   Indices;
-    RefCntAutoPtr<IndexHandleImpl> Handle;
-
-    StagingIndexData(pxr::VtValue&& Indices, IndexHandle* _Handle) :
-        Indices{std::move(Indices)},
-        Handle{static_cast<IndexHandleImpl*>(_Handle)}
-    {}
+    pxr::VtValue               Indices;
+    std::shared_ptr<IndexData> Data;
 };
+
 
 void HnGeometryPool::AllocateVertices(const std::string&           Name,
                                       const BufferSourcesMapType&  Sources,
@@ -370,13 +413,27 @@ void HnGeometryPool::AllocateVertices(const std::string&           Name,
         return;
     }
 
-    if (!Handle)
+    size_t Hash = 0;
+    for (const auto& source_it : Sources)
     {
-        Handle = VertexHandleImpl::Create(Name, Sources, m_UseVertexPool ? &m_ResMgr : nullptr);
+        Hash = pxr::TfHash::Combine(Hash, source_it.second->ComputeHash());
     }
 
-    std::lock_guard<std::mutex> Guard{m_StagingVertexDataMtx};
-    m_StagingVertexData.emplace_back(Sources, Handle);
+    std::shared_ptr<VertexData> Data = m_VertexCache.Get(
+        Hash,
+        [&]() {
+            std::shared_ptr<VertexData> Data = std::make_shared<VertexData>(Name, Sources, m_UseVertexPool ? &m_ResMgr : nullptr);
+
+            std::lock_guard<std::mutex> Guard{m_StagingVertexDataMtx};
+            m_StagingVertexData.emplace_back(StagingVertexData{Sources, Data});
+
+            return Data;
+        });
+
+    //if (!Handle)
+    {
+        Handle = VertexHandleImpl::Create(std::move(Data));
+    }
 }
 
 void HnGeometryPool::AllocateIndices(const std::string& Name, pxr::VtValue Indices, Uint32 StartVertex, RefCntAutoPtr<IndexHandle>& Handle)
@@ -387,54 +444,65 @@ void HnGeometryPool::AllocateIndices(const std::string& Name, pxr::VtValue Indic
         return;
     }
 
-    if (!Handle)
-    {
-        Handle = IndexHandleImpl::Create(Name, Indices, m_UseIndexPool ? &m_ResMgr : nullptr);
-    }
-    else
-    {
-        DEV_CHECK_ERR(Handle->GetNumIndices() == IndexHandleImpl::GetIndexCountAndPtr(Indices).first,
-                      "The number of indices has changed. This is unexpected as in this case the topology is expected to change and new index handle should be created.");
-    }
+    size_t Hash = Indices.GetHash();
+    Hash        = pxr::TfHash::Combine(Hash, StartVertex);
 
-    if (StartVertex != 0)
-    {
-        if (Indices.IsHolding<pxr::VtVec3iArray>())
-        {
-            pxr::VtVec3iArray IndicesArray = Indices.UncheckedRemove<pxr::VtVec3iArray>();
-            for (pxr::GfVec3i& idx : IndicesArray)
-            {
-                idx[0] += StartVertex;
-                idx[1] += StartVertex;
-                idx[2] += StartVertex;
-            }
-            Indices = IndicesArray;
-        }
-        else if (Indices.IsHolding<pxr::VtVec2iArray>())
-        {
-            pxr::VtVec2iArray IndicesArray = Indices.UncheckedRemove<pxr::VtVec2iArray>();
-            for (pxr::GfVec2i& idx : IndicesArray)
-            {
-                idx[0] += StartVertex;
-                idx[1] += StartVertex;
-            }
-            Indices = IndicesArray;
-        }
-        else if (Indices.IsHolding<pxr::VtIntArray>())
-        {
-            pxr::VtIntArray IndicesArray = Indices.UncheckedRemove<pxr::VtIntArray>();
-            for (int& idx : IndicesArray)
-                idx += StartVertex;
-            Indices = IndicesArray;
-        }
-        else
-        {
-            UNEXPECTED("Unexpected index data type");
-        }
-    }
+    std::shared_ptr<IndexData> Data = m_IndexCache.Get(
+        Hash,
+        [&]() {
+            std::shared_ptr<IndexData> Data = std::make_shared<IndexData>(Name, Indices, m_UseIndexPool ? &m_ResMgr : nullptr);
 
-    std::lock_guard<std::mutex> Guard{m_StagingIndexDataMtx};
-    m_StagingIndexData.emplace_back(std::move(Indices), std::move(Handle));
+            if (StartVertex != 0)
+            {
+                if (Indices.IsHolding<pxr::VtVec3iArray>())
+                {
+                    pxr::VtVec3iArray IndicesArray = Indices.UncheckedRemove<pxr::VtVec3iArray>();
+                    for (pxr::GfVec3i& idx : IndicesArray)
+                    {
+                        idx[0] += StartVertex;
+                        idx[1] += StartVertex;
+                        idx[2] += StartVertex;
+                    }
+                    Indices = IndicesArray;
+                }
+                else if (Indices.IsHolding<pxr::VtVec2iArray>())
+                {
+                    pxr::VtVec2iArray IndicesArray = Indices.UncheckedRemove<pxr::VtVec2iArray>();
+                    for (pxr::GfVec2i& idx : IndicesArray)
+                    {
+                        idx[0] += StartVertex;
+                        idx[1] += StartVertex;
+                    }
+                    Indices = IndicesArray;
+                }
+                else if (Indices.IsHolding<pxr::VtIntArray>())
+                {
+                    pxr::VtIntArray IndicesArray = Indices.UncheckedRemove<pxr::VtIntArray>();
+                    for (int& idx : IndicesArray)
+                        idx += StartVertex;
+                    Indices = IndicesArray;
+                }
+                else
+                {
+                    UNEXPECTED("Unexpected index data type");
+                }
+            }
+
+            std::lock_guard<std::mutex> Guard{m_StagingIndexDataMtx};
+            m_StagingIndexData.emplace_back(StagingIndexData{std::move(Indices), Data});
+
+            return Data;
+        });
+
+    //if (!Handle)
+    {
+        Handle = IndexHandleImpl::Create(std::move(Data));
+    }
+    //else
+    //{
+    //    DEV_CHECK_ERR(Handle->GetNumIndices() == IndexHandleImpl::GetIndexCountAndPtr(Indices).first,
+    //                  "The number of indices has changed. This is unexpected as in this case the topology is expected to change and new index handle should be created.");
+    //}
 }
 
 
@@ -442,13 +510,13 @@ void HnGeometryPool::Commit(IDeviceContext* pContext)
 {
     for (StagingVertexData& VertData : m_StagingVertexData)
     {
-        VertData.Handle->Update(m_pDevice, pContext, VertData.Sources);
+        VertData.Data->Update(m_pDevice, pContext, VertData.Sources);
     }
     m_StagingVertexData.clear();
 
     for (StagingIndexData& IdxData : m_StagingIndexData)
     {
-        IdxData.Handle->Update(m_pDevice, pContext, IdxData.Indices);
+        IdxData.Data->Update(m_pDevice, pContext, IdxData.Indices);
     }
     m_StagingIndexData.clear();
 }

@@ -29,6 +29,7 @@
 #include <map>
 #include <vector>
 #include <mutex>
+#include <memory>
 
 #include "pxr/pxr.h"
 #include "pxr/base/tf/token.h"
@@ -38,6 +39,7 @@
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/DeviceContext.h"
 #include "../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
+#include "../../../DiligentCore/Common/interface/ObjectsRegistry.hpp"
 
 namespace Diligent
 {
@@ -90,6 +92,8 @@ private:
     const bool m_UseVertexPool;
     const bool m_UseIndexPool;
 
+    class VertexData;
+    class IndexData;
     class VertexHandleImpl;
     class IndexHandleImpl;
     struct StagingVertexData;
@@ -100,6 +104,9 @@ private:
 
     std::mutex                    m_StagingIndexDataMtx;
     std::vector<StagingIndexData> m_StagingIndexData;
+
+    ObjectsRegistry<size_t, std::shared_ptr<VertexData>> m_VertexCache;
+    ObjectsRegistry<size_t, std::shared_ptr<IndexData>>  m_IndexCache;
 };
 
 } // namespace USD
