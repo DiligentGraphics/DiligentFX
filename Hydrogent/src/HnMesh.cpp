@@ -297,12 +297,25 @@ void HnMesh::_InitRepr(const pxr::TfToken& ReprToken, pxr::HdDirtyBits* DirtyBit
 
 void HnMesh::Invalidate()
 {
-    m_StagingVertexData.reset();
-    m_StagingIndexData.reset();
     m_Topology     = {};
     m_VertexHandle = {};
     m_IndexData    = {};
 }
+
+struct HnMesh::StagingIndexData
+{
+    pxr::VtVec3iArray FaceIndices;
+    pxr::VtVec2iArray EdgeIndices;
+    pxr::VtIntArray   PointIndices;
+};
+
+struct HnMesh::StagingVertexData
+{
+    pxr::VtValue Points;
+
+    // Use map to keep buffer sources sorted by name
+    std::map<pxr::TfToken, std::shared_ptr<pxr::HdBufferSource>> Sources;
+};
 
 void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
                         pxr::HdRenderParam*   RenderParam,
@@ -340,23 +353,23 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
         }
     }
 
+    StagingVertexData StagingVerts;
     if (AnyPrimvarDirty)
     {
-        m_StagingVertexData = std::make_unique<StagingVertexData>();
-        UpdateVertexAndVaryingPrimvars(SceneDelegate, RenderParam, DirtyBits, ReprToken, VertexPrimvarsInfo);
+        UpdateVertexAndVaryingPrimvars(SceneDelegate, RenderParam, DirtyBits, ReprToken, VertexPrimvarsInfo, StagingVerts);
 
-        if (m_StagingVertexData->Sources.find(pxr::HdTokens->points) != m_StagingVertexData->Sources.end() ||
+        if (StagingVerts.Sources.find(pxr::HdTokens->points) != StagingVerts.Sources.end() ||
             GetVertexBuffer(pxr::HdTokens->points) != nullptr)
         {
             // Collect face-varying primvar sources
-            UpdateFaceVaryingPrimvars(SceneDelegate, RenderParam, DirtyBits, ReprToken, FacePrimvarsInfo);
+            UpdateFaceVaryingPrimvars(SceneDelegate, RenderParam, DirtyBits, ReprToken, FacePrimvarsInfo, StagingVerts);
 
             // If there are neither vertex nor face-varying normals, generate smooth normals
-            if (m_StagingVertexData->Sources.find(pxr::HdTokens->normals) == m_StagingVertexData->Sources.end() &&
+            if (StagingVerts.Sources.find(pxr::HdTokens->normals) == StagingVerts.Sources.end() &&
                 GetVertexBuffer(pxr::HdTokens->normals) == nullptr &&
-                !m_StagingVertexData->Points.IsEmpty())
+                !StagingVerts.Points.IsEmpty())
             {
-                GenerateSmoothNormals();
+                GenerateSmoothNormals(StagingVerts);
             }
 
             UpdateConstantPrimvars(SceneDelegate, RenderParam, DirtyBits, ReprToken);
@@ -371,27 +384,29 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
         DirtyBits &= ~pxr::HdChangeTracker::DirtyPrimvar;
     }
 
+    StagingIndexData StagingInds;
     if (IndexDataDirty)
     {
-        UpdateIndexData();
+        UpdateIndexData(StagingInds, StagingVerts.Points);
     }
 
-    if (m_StagingVertexData && !m_StagingVertexData->Sources.empty())
+    if (!StagingVerts.Sources.empty())
     {
         HnGeometryPool& GeometryPool = static_cast<HnRenderDelegate*>(SceneDelegate.GetRenderIndex().GetRenderDelegate())->GetGeometryPool();
-        GeometryPool.AllocateVertices(Id.GetString(), m_StagingVertexData->Sources, m_VertexHandle);
-        m_StagingVertexData = {};
+        GeometryPool.AllocateVertices(Id.GetString(), StagingVerts.Sources, m_VertexHandle);
+
         m_DrawItemGpuTopologyDirty.store(true);
     }
 
-    if (m_StagingIndexData)
+    if (IndexDataDirty)
     {
-        HnGeometryPool& GeometryPool = static_cast<HnRenderDelegate*>(SceneDelegate.GetRenderIndex().GetRenderDelegate())->GetGeometryPool();
-        GeometryPool.AllocateIndices(Id.GetString() + " - faces", pxr::VtValue{std::move(m_StagingIndexData->FaceIndices)}, m_VertexHandle->GetStartVertex(), m_IndexData.Faces);
-        GeometryPool.AllocateIndices(Id.GetString() + " - edges", pxr::VtValue{std::move(m_StagingIndexData->EdgeIndices)}, m_VertexHandle->GetStartVertex(), m_IndexData.Edges);
-        GeometryPool.AllocateIndices(Id.GetString() + " - points", pxr::VtValue{std::move(m_StagingIndexData->PointIndices)}, m_VertexHandle->GetStartVertex(), m_IndexData.Points);
+        VERIFY_EXPR(m_VertexHandle != nullptr);
 
-        m_StagingIndexData = {};
+        HnGeometryPool& GeometryPool = static_cast<HnRenderDelegate*>(SceneDelegate.GetRenderIndex().GetRenderDelegate())->GetGeometryPool();
+        GeometryPool.AllocateIndices(Id.GetString() + " - faces", pxr::VtValue{std::move(StagingInds.FaceIndices)}, m_VertexHandle->GetStartVertex(), m_IndexData.Faces);
+        GeometryPool.AllocateIndices(Id.GetString() + " - edges", pxr::VtValue{std::move(StagingInds.EdgeIndices)}, m_VertexHandle->GetStartVertex(), m_IndexData.Edges);
+        GeometryPool.AllocateIndices(Id.GetString() + " - points", pxr::VtValue{std::move(StagingInds.PointIndices)}, m_VertexHandle->GetStartVertex(), m_IndexData.Points);
+
         m_DrawItemGpuTopologyDirty.store(true);
     }
 
@@ -482,17 +497,12 @@ void HnMesh::UpdateTopology(pxr::HdSceneDelegate& SceneDelegate,
     DirtyBits &= ~pxr::HdChangeTracker::DirtyTopology;
 }
 
-bool HnMesh::AddStagingBufferSourceForPrimvar(const pxr::TfToken&  Name,
+bool HnMesh::AddStagingBufferSourceForPrimvar(StagingVertexData&   StagingVerts,
+                                              const pxr::TfToken&  Name,
                                               pxr::VtValue         Primvar,
                                               pxr::HdInterpolation Interpolation,
                                               int                  ValuesPerElement)
 {
-    if (!m_StagingVertexData)
-    {
-        UNEXPECTED("Staging vertex data is not initialized");
-        return false;
-    }
-
     if (Primvar.IsEmpty())
         return false;
 
@@ -539,7 +549,7 @@ bool HnMesh::AddStagingBufferSourceForPrimvar(const pxr::TfToken&  Name,
         BufferSource->Truncate(ExpectedNumElements);
     }
 
-    m_StagingVertexData->Sources.emplace(Name, std::move(BufferSource));
+    StagingVerts.Sources.emplace(Name, std::move(BufferSource));
 
     return true;
 }
@@ -566,7 +576,8 @@ static HnRenderPass::SupportedVertexInputsSetType GetSupportedPrimvars(
 }
 
 bool HnMesh::AddJointInfluencesStagingBufferSource(const pxr::VtValue& NumInfluencesPerComponentVal,
-                                                   const pxr::VtValue& InfluencesVal)
+                                                   const pxr::VtValue& InfluencesVal,
+                                                   StagingVertexData&  StagingVerts)
 {
     const pxr::SdfPath& Id = GetId();
     if (!NumInfluencesPerComponentVal.IsHolding<int>())
@@ -635,7 +646,7 @@ bool HnMesh::AddJointInfluencesStagingBufferSource(const pxr::VtValue& NumInflue
         }
     }
 
-    return AddStagingBufferSourceForPrimvar(HnTokens->joints, pxr::VtValue{std::move(Joints)}, pxr::HdInterpolationVertex, 2);
+    return AddStagingBufferSourceForPrimvar(StagingVerts, HnTokens->joints, pxr::VtValue{std::move(Joints)}, pxr::HdInterpolationVertex, 2);
 }
 
 void HnMesh::GetPrimvarsInfo(pxr::HdSceneDelegate& SceneDelegate,
@@ -699,7 +710,8 @@ void HnMesh::UpdateSkinningPrimvars(pxr::HdSceneDelegate&                       
                                     pxr::HdRenderParam*                           RenderParam,
                                     pxr::HdDirtyBits&                             DirtyBits,
                                     const pxr::TfToken&                           ReprToken,
-                                    const pxr::HdExtComputationPrimvarDescriptor& SkinningCompPrimDesc)
+                                    const pxr::HdExtComputationPrimvarDescriptor& SkinningCompPrimDesc,
+                                    StagingVertexData&                            StagingVerts)
 {
     const pxr::HdRenderIndex& RenderIndex   = SceneDelegate.GetRenderIndex();
     const pxr::SdfPath&       SkinnigCompId = SkinningCompPrimDesc.sourceComputationId;
@@ -775,10 +787,10 @@ void HnMesh::UpdateSkinningPrimvars(pxr::HdSceneDelegate&                       
             return;
         }
 
-        m_StagingVertexData->Points = RestPointsVal;
+        StagingVerts.Points = RestPointsVal;
 
-        AddStagingBufferSourceForPrimvar(SkinningCompPrimDesc.name, std::move(RestPointsVal), SkinningCompPrimDesc.interpolation);
-        AddJointInfluencesStagingBufferSource(NumInfluencesPerComponentVal, InfluencesVal);
+        AddStagingBufferSourceForPrimvar(StagingVerts, SkinningCompPrimDesc.name, std::move(RestPointsVal), SkinningCompPrimDesc.interpolation);
+        AddJointInfluencesStagingBufferSource(NumInfluencesPerComponentVal, InfluencesVal, StagingVerts);
 
         // Skeleton adapter hides normals, so try to get them directly from the scene delegate
         pxr::VtValue NormalsPrimvar = GetPrimvar(&SceneDelegate, pxr::HdTokens->normals);
@@ -787,9 +799,9 @@ void HnMesh::UpdateSkinningPrimvars(pxr::HdSceneDelegate&                       
             // There is no way to get the interpolation of the normals primvar from the scene delegate,
             // so rely on the number of elements.
             if (NormalsPrimvar.GetArraySize() == m_Topology.GetNumPoints())
-                AddStagingBufferSourceForPrimvar(pxr::HdTokens->normals, std::move(NormalsPrimvar), pxr::HdInterpolationVertex);
+                AddStagingBufferSourceForPrimvar(StagingVerts, pxr::HdTokens->normals, std::move(NormalsPrimvar), pxr::HdInterpolationVertex);
             else if (NormalsPrimvar.GetArraySize() == m_Topology.GetNumFaceVaryings())
-                AddStagingBufferSourceForPrimvar(pxr::HdTokens->normals, std::move(NormalsPrimvar), pxr::HdInterpolationFaceVarying);
+                AddStagingBufferSourceForPrimvar(StagingVerts, pxr::HdTokens->normals, std::move(NormalsPrimvar), pxr::HdInterpolationFaceVarying);
         }
 
         m_SkinningPrimvarsVersion = SkinningPrimvarsVersion;
@@ -817,10 +829,9 @@ void HnMesh::UpdateVertexAndVaryingPrimvars(pxr::HdSceneDelegate& SceneDelegate,
                                             pxr::HdRenderParam*   RenderParam,
                                             pxr::HdDirtyBits&     DirtyBits,
                                             const pxr::TfToken&   ReprToken,
-                                            const PrimvarsInfo&   VertexPrimvarsInfo)
+                                            const PrimvarsInfo&   VertexPrimvarsInfo,
+                                            StagingVertexData&    StagingVerts)
 {
-    VERIFY_EXPR(m_StagingVertexData);
-
     for (const pxr::HdPrimvarDescriptor& PrimDesc : VertexPrimvarsInfo.Dirty)
     {
         pxr::VtValue PrimValue = GetPrimvar(&SceneDelegate, PrimDesc.name);
@@ -828,9 +839,9 @@ void HnMesh::UpdateVertexAndVaryingPrimvars(pxr::HdSceneDelegate& SceneDelegate,
             return;
 
         if (PrimDesc.name == pxr::HdTokens->points)
-            m_StagingVertexData->Points = PrimValue;
+            StagingVerts.Points = PrimValue;
 
-        AddStagingBufferSourceForPrimvar(PrimDesc.name, std::move(PrimValue), PrimDesc.interpolation);
+        AddStagingBufferSourceForPrimvar(StagingVerts, PrimDesc.name, std::move(PrimValue), PrimDesc.interpolation);
     }
 
     for (const pxr::HdExtComputationPrimvarDescriptor& ExtCompPrimDesc : VertexPrimvarsInfo.ExtComp)
@@ -838,7 +849,7 @@ void HnMesh::UpdateVertexAndVaryingPrimvars(pxr::HdSceneDelegate& SceneDelegate,
         // Skinnig ext computation is created by the skeleton adapter
         if (ExtCompPrimDesc.sourceComputationOutputName == HnSkinningPrivateTokens->skinnedPoints)
         {
-            UpdateSkinningPrimvars(SceneDelegate, RenderParam, DirtyBits, ReprToken, ExtCompPrimDesc);
+            UpdateSkinningPrimvars(SceneDelegate, RenderParam, DirtyBits, ReprToken, ExtCompPrimDesc, StagingVerts);
         }
     }
 }
@@ -847,13 +858,13 @@ void HnMesh::UpdateFaceVaryingPrimvars(pxr::HdSceneDelegate& SceneDelegate,
                                        pxr::HdRenderParam*   RenderParam,
                                        pxr::HdDirtyBits&     DirtyBits,
                                        const pxr::TfToken&   ReprToken,
-                                       const PrimvarsInfo&   FacePrimvarsInfo)
+                                       const PrimvarsInfo&   FacePrimvarsInfo,
+                                       StagingVertexData&    StagingVerts)
 {
-    VERIFY_EXPR(m_StagingVertexData);
     for (const pxr::HdPrimvarDescriptor& PrimDesc : FacePrimvarsInfo.Dirty)
     {
         pxr::VtValue PrimValue = GetPrimvar(&SceneDelegate, PrimDesc.name);
-        AddStagingBufferSourceForPrimvar(PrimDesc.name, std::move(PrimValue), PrimDesc.interpolation);
+        AddStagingBufferSourceForPrimvar(StagingVerts, PrimDesc.name, std::move(PrimValue), PrimDesc.interpolation);
     }
 }
 
@@ -862,7 +873,6 @@ void HnMesh::UpdateConstantPrimvars(pxr::HdSceneDelegate& SceneDelegate,
                                     pxr::HdDirtyBits&     DirtyBits,
                                     const pxr::TfToken&   ReprToken)
 {
-    VERIFY_EXPR(m_StagingVertexData);
     const pxr::SdfPath& Id = GetId();
 
     pxr::HdPrimvarDescriptorVector ConstantPrims = GetPrimvarDescriptors(&SceneDelegate, pxr::HdInterpolationConstant);
@@ -916,7 +926,7 @@ void HnMesh::UpdateConstantPrimvars(pxr::HdSceneDelegate& SceneDelegate,
     }
 }
 
-void HnMesh::GenerateSmoothNormals()
+void HnMesh::GenerateSmoothNormals(StagingVertexData& StagingVerts)
 {
     pxr::Hd_VertexAdjacency Adjacency;
     Adjacency.BuildAdjacencyTable(&m_Topology);
@@ -926,13 +936,13 @@ void HnMesh::GenerateSmoothNormals()
         return;
     }
 
-    if (!m_StagingVertexData->Points.IsHolding<pxr::VtVec3fArray>())
+    if (!StagingVerts.Points.IsHolding<pxr::VtVec3fArray>())
     {
         LOG_ERROR_MESSAGE("Skipping smooth normal generation for ", GetId(), " because its points data is not float3.");
         return;
     }
 
-    const pxr::VtVec3fArray& Points = m_StagingVertexData->Points.UncheckedGet<pxr::VtVec3fArray>();
+    const pxr::VtVec3fArray& Points = StagingVerts.Points.UncheckedGet<pxr::VtVec3fArray>();
 
     pxr::VtVec3fArray Normals = pxr::Hd_SmoothNormals::ComputeSmoothNormals(&Adjacency, static_cast<int>(Points.size()), Points.data());
     if (Normals.size() != Points.size())
@@ -941,16 +951,14 @@ void HnMesh::GenerateSmoothNormals()
         return;
     }
 
-    AddStagingBufferSourceForPrimvar(pxr::HdTokens->normals, pxr::VtValue{std::move(Normals)}, pxr::HdInterpolationVertex);
+    AddStagingBufferSourceForPrimvar(StagingVerts, pxr::HdTokens->normals, pxr::VtValue{std::move(Normals)}, pxr::HdInterpolationVertex);
 }
 
-void HnMesh::UpdateIndexData()
+void HnMesh::UpdateIndexData(StagingIndexData& StagingInds, const pxr::VtValue& Points)
 {
-    m_StagingIndexData = std::make_unique<StagingIndexData>();
-
     HnMeshUtils     MeshUtils{m_Topology, GetId()};
     pxr::VtIntArray SubsetStart;
-    MeshUtils.Triangulate(!m_HasFaceVaryingPrimvars, m_StagingVertexData ? &m_StagingVertexData->Points : nullptr, m_StagingIndexData->FaceIndices, SubsetStart);
+    MeshUtils.Triangulate(!m_HasFaceVaryingPrimvars, &Points, StagingInds.FaceIndices, SubsetStart);
     if (!m_Topology.GetGeomSubsets().empty())
     {
         VERIFY_EXPR(SubsetStart.size() == m_Topology.GetGeomSubsets().size() + 1);
@@ -967,8 +975,8 @@ void HnMesh::UpdateIndexData()
         m_IndexData.Subsets.clear();
     }
 
-    m_StagingIndexData->EdgeIndices  = MeshUtils.ComputeEdgeIndices(!m_HasFaceVaryingPrimvars);
-    m_StagingIndexData->PointIndices = MeshUtils.ComputePointIndices(m_HasFaceVaryingPrimvars);
+    StagingInds.EdgeIndices  = MeshUtils.ComputeEdgeIndices(!m_HasFaceVaryingPrimvars);
+    StagingInds.PointIndices = MeshUtils.ComputePointIndices(m_HasFaceVaryingPrimvars);
 }
 
 void HnMesh::UpdateDrawItemGpuGeometry(HnRenderDelegate& RenderDelegate)

@@ -147,6 +147,9 @@ private:
            Uint32              UID,
            entt::entity        Entity);
 
+    struct StagingIndexData;
+    struct StagingVertexData;
+
     void UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
                     pxr::HdRenderParam*   RenderParam,
                     pxr::HdDirtyBits&     DirtyBits,
@@ -172,34 +175,39 @@ private:
                                         pxr::HdRenderParam*   RenderParam,
                                         pxr::HdDirtyBits&     DirtyBits,
                                         const pxr::TfToken&   ReprToken,
-                                        const PrimvarsInfo&   VertexPrimvarsInfo);
+                                        const PrimvarsInfo&   VertexPrimvarsInfo,
+                                        StagingVertexData&    StagingVerts);
 
     void UpdateFaceVaryingPrimvars(pxr::HdSceneDelegate& SceneDelegate,
                                    pxr::HdRenderParam*   RenderParam,
                                    pxr::HdDirtyBits&     DirtyBits,
                                    const pxr::TfToken&   ReprToken,
-                                   const PrimvarsInfo&   FacePrimvarsInfo);
+                                   const PrimvarsInfo&   FacePrimvarsInfo,
+                                   StagingVertexData&    StagingVerts);
 
     void UpdateConstantPrimvars(pxr::HdSceneDelegate& SceneDelegate,
                                 pxr::HdRenderParam*   RenderParam,
                                 pxr::HdDirtyBits&     DirtyBits,
                                 const pxr::TfToken&   ReprToken);
 
-    bool AddStagingBufferSourceForPrimvar(const pxr::TfToken&  Name,
+    bool AddStagingBufferSourceForPrimvar(StagingVertexData&   StagingVerts,
+                                          const pxr::TfToken&  Name,
                                           pxr::VtValue         Primvar,
                                           pxr::HdInterpolation Interpolation,
                                           int                  ValuesPerElement = 1);
 
     bool AddJointInfluencesStagingBufferSource(const pxr::VtValue& NumInfluencesPerComponentVal,
-                                               const pxr::VtValue& InfluencesVal);
+                                               const pxr::VtValue& InfluencesVal,
+                                               StagingVertexData&  StagingVerts);
 
     void UpdateSkinningPrimvars(pxr::HdSceneDelegate&                         SceneDelegate,
                                 pxr::HdRenderParam*                           RenderParam,
                                 pxr::HdDirtyBits&                             DirtyBits,
                                 const pxr::TfToken&                           ReprToken,
-                                const pxr::HdExtComputationPrimvarDescriptor& SkinningCompPrimDesc);
+                                const pxr::HdExtComputationPrimvarDescriptor& SkinningCompPrimDesc,
+                                StagingVertexData&                            StagingVerts);
 
-    void GenerateSmoothNormals();
+    void GenerateSmoothNormals(StagingVertexData& StagingVerts);
 
     struct GeometrySubsetRange
     {
@@ -207,7 +215,7 @@ private:
         Uint32 NumIndices = 0;
     };
 
-    void UpdateIndexData();
+    void UpdateIndexData(StagingIndexData& StagingInds, const pxr::VtValue& Points);
 
     void UpdateTopology(pxr::HdSceneDelegate& SceneDelegate,
                         pxr::HdRenderParam*   RenderParam,
@@ -233,23 +241,6 @@ private:
     const entt::entity m_Entity;
 
     pxr::HdMeshTopology m_Topology;
-
-    struct StagingIndexData
-    {
-        pxr::VtVec3iArray FaceIndices;
-        pxr::VtVec2iArray EdgeIndices;
-        pxr::VtIntArray   PointIndices;
-    };
-    std::unique_ptr<StagingIndexData> m_StagingIndexData;
-
-    struct StagingVertexData
-    {
-        pxr::VtValue Points;
-
-        // Use map to keep buffer sources sorted by name
-        std::map<pxr::TfToken, std::shared_ptr<pxr::HdBufferSource>> Sources;
-    };
-    std::unique_ptr<StagingVertexData> m_StagingVertexData;
 
     struct IndexData
     {
