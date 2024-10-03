@@ -33,6 +33,7 @@ set(SOURCE
     src/HnRenderParam.cpp
     src/HnTokens.cpp
     src/HnTextureRegistry.cpp
+    src/HnGeometryPool.cpp
     src/HnTextureUtils.cpp
     src/HnTypeConversions.cpp
     src/Tasks/HnTask.cpp
@@ -81,6 +82,7 @@ set(INTERFACE
     interface/HnTokens.hpp
     interface/HnTypes.hpp
     interface/HnTextureRegistry.hpp
+    interface/HnGeometryPool.hpp
     interface/Tasks/HnTask.hpp
     interface/Tasks/HnCopySelectionDepthTask.hpp
     interface/Tasks/HnBeginFrameTask.hpp

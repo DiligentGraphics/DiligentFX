@@ -35,6 +35,8 @@
 #include "pxr/imaging/hd/mesh.h"
 #include "pxr/base/tf/token.h"
 
+#include "HnGeometryPool.hpp"
+
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/Buffer.h"
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/GraphicsTypesX.hpp"
@@ -134,11 +136,6 @@ protected:
     // This is called prior to syncing the prim, the first time the repr
     // is used.
     virtual void _InitRepr(const pxr::TfToken& reprToken, pxr::HdDirtyBits* dirtyBits) override final;
-
-    void UpdateVertexBuffers(HnRenderDelegate& RenderDelegate);
-    void UpdateIndexBuffer(HnRenderDelegate& RenderDelegate);
-    void AllocatePooledResources(pxr::HdSceneDelegate& SceneDelegate,
-                                 pxr::HdRenderParam*   RenderParam);
 
     void UpdateReprMaterials(pxr::HdSceneDelegate* SceneDelegate,
                              pxr::HdRenderParam*   RenderParam);
@@ -259,33 +256,16 @@ private:
         Uint32 NumFaceTriangles = 0;
         Uint32 NumEdges         = 0;
         Uint32 NumPoints        = 0;
-        Uint32 FaceStartIndex   = 0;
-        Uint32 EdgeStartIndex   = 0;
-        Uint32 PointsStartIndex = 0;
 
         std::vector<GeometrySubsetRange> Subsets;
 
-        RefCntAutoPtr<IBuffer> Faces;
-        RefCntAutoPtr<IBuffer> Edges;
-        RefCntAutoPtr<IBuffer> Points;
-
-        RefCntAutoPtr<IBufferSuballocation> FaceAllocation;
-        RefCntAutoPtr<IBufferSuballocation> EdgeAllocation;
-        RefCntAutoPtr<IBufferSuballocation> PointsAllocation;
+        RefCntAutoPtr<HnGeometryPool::IndexHandle> Faces;
+        RefCntAutoPtr<HnGeometryPool::IndexHandle> Edges;
+        RefCntAutoPtr<HnGeometryPool::IndexHandle> Points;
     };
     IndexData m_IndexData;
 
-    struct VertexData
-    {
-        RefCntAutoPtr<IVertexPoolAllocation> PoolAllocation;
-
-        // Buffer name to vertex pool element index (e.g. "normals" -> 0, "points" -> 1, etc.)
-        std::unordered_map<pxr::TfToken, Uint32, pxr::TfToken::HashFunctor> NameToPoolIndex;
-
-        // Buffer name to buffer
-        std::unordered_map<pxr::TfToken, RefCntAutoPtr<IBuffer>, pxr::TfToken::HashFunctor> Buffers;
-    };
-    VertexData m_VertexData;
+    RefCntAutoPtr<HnGeometryPool::VertexHandle> m_VertexHandle;
 
     bool      m_HasFaceVaryingPrimvars = false;
     bool      m_IsDoubleSided          = false;
@@ -294,6 +274,8 @@ private:
     std::atomic<Uint32> m_GeometryVersion{0};
     std::atomic<Uint32> m_MaterialVersion{0};
     std::atomic<Uint32> m_SkinningPrimvarsVersion{0};
+    std::atomic<bool>   m_DrawItemGpuTopologyDirty{true};
+    std::atomic<bool>   m_DrawItemGpuGeometryDirty{true};
 
     float4x4 m_SkelLocalToPrimLocal = float4x4::Identity();
 };

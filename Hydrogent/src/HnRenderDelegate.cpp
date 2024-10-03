@@ -314,6 +314,7 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
     m_MaterialSRBCache{HnMaterial::CreateSRBCache()},
     m_USDRenderer{CreateUSDRenderer(CI, m_PrimitiveAttribsCB, m_MaterialSRBCache)},
     m_TextureRegistry{CI.pDevice, CI.TextureAtlasDim != 0 ? m_ResourceMgr : RefCntAutoPtr<GLTF::ResourceManager>{}},
+    m_GeometryPool{CI.pDevice, *m_ResourceMgr, CI.UseVertexPool, CI.UseIndexPool},
     m_RenderParam{std::make_unique<HnRenderParam>(CI.UseVertexPool, CI.UseIndexPool, CI.AsyncShaderCompilation, CI.TextureBindingMode, CI.MetersPerUnit)},
     m_ShadowMapManager{CreateShadowMapManager(CI)}
 {
@@ -538,6 +539,7 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
     m_ResourceMgr->UpdateIndexBuffer(m_pDevice, m_pContext);
 
     m_TextureRegistry.Commit(m_pContext);
+    m_GeometryPool.Commit(m_pContext);
     if (m_ShadowMapManager)
     {
         m_ShadowMapManager->Commit(m_pDevice, m_pContext);
