@@ -62,9 +62,13 @@ HnGeometryPool::~HnGeometryPool()
 class HnGeometryPool::VertexData final
 {
 public:
-    VertexData(std::string                 Name,
-               const BufferSourcesMapType& Sources,
-               GLTF::ResourceManager*      pResMgr) :
+    using VertexStreamHashesType = std::map<pxr::TfToken, size_t>;
+
+    VertexData(std::string                   Name,
+               const BufferSourcesMapType&   Sources,
+               const VertexStreamHashesType& Hashes,
+               GLTF::ResourceManager*        pResMgr,
+               std::shared_ptr<VertexData>   ExistingData) :
         m_Name{std::move(Name)},
         m_StagingData{std::make_unique<StagingData>()}
     {
@@ -95,9 +99,45 @@ public:
                 VERIFY(ElementType.type == pxr::HdTypeFloatVec4 && ElementType.count == 2, "Unexpected joints element type");
 
             VERIFY(m_Streams.find(SourceName) == m_Streams.end(), "Duplicate vertex data source '", SourceName, "'");
-            m_Streams[SourceName].ElementSize = ElementSize;
+            VertexStream& Stream = m_Streams[SourceName];
+            Stream.ElementSize   = ElementSize;
+
+            auto hash_it = Hashes.find(SourceName);
+            if (hash_it != Hashes.end())
+                Stream.Hash = hash_it->second;
+            else
+                UNEXPECTED("Failed to find hash for vertex stream '", SourceName, "'. This is a bug.");
 
             m_StagingData->Sources[SourceName].Source = Source;
+        }
+
+        // Add sources from the existing data that are not present in the new sources
+        if (ExistingData)
+        {
+            for (auto& stream_it : ExistingData->m_Streams)
+            {
+                const pxr::TfToken& SourceName     = stream_it.first;
+                VertexStream&       ExistingStream = stream_it.second;
+
+                const auto new_stream_it = m_Streams.find(SourceName);
+                if (new_stream_it == m_Streams.end())
+                {
+                    VertexStream& Stream = m_Streams[SourceName];
+                    Stream.ElementSize   = ExistingStream.ElementSize;
+
+                    auto hash_it = Hashes.find(SourceName);
+                    if (hash_it != Hashes.end())
+                        Stream.Hash = hash_it->second;
+                    else
+                        UNEXPECTED("Failed to find hash for vertex stream '", SourceName, "'. This is a bug.");
+
+                    VERIFY_EXPR(ExistingStream.Buffer);
+                    m_StagingData->Sources[SourceName].Buffer = ExistingStream.Buffer;
+
+                    if (!m_StagingData->ExistingData)
+                        m_StagingData->ExistingData = ExistingData;
+                }
+            }
         }
 
         if (pResMgr != nullptr)
@@ -153,12 +193,6 @@ public:
                 continue;
             }
 
-            const pxr::HdBufferSource* pSource = source_it->second.Source.get();
-            if (pSource == nullptr)
-                continue;
-
-            VERIFY(pSource->GetNumElements() == m_NumVertices, "Unexpected number of elements in vertex data source ", StreamName);
-
             const Uint32 DataSize = static_cast<Uint32>(m_NumVertices * Stream.ElementSize);
             if (m_PoolAllocation)
             {
@@ -177,7 +211,27 @@ public:
                 pDevice->CreateBuffer(Desc, nullptr, &Stream.Buffer);
             }
 
-            pContext->UpdateBuffer(Stream.Buffer, GetStartVertex() * Stream.ElementSize, DataSize, pSource->GetData(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+            if (const pxr::HdBufferSource* pSource = source_it->second.Source.get())
+            {
+                VERIFY(pSource->GetNumElements() == m_NumVertices, "Unexpected number of elements in vertex data source ", StreamName);
+                pContext->UpdateBuffer(Stream.Buffer, GetStartVertex() * Stream.ElementSize, DataSize, pSource->GetData(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+            }
+            else if (IBuffer* pSrcBuffer = source_it->second.Buffer)
+            {
+                pContext->CopyBuffer(
+                    Stream.Buffer,
+                    m_StagingData->ExistingData->GetStartVertex() * Stream.ElementSize,
+                    RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
+                    Stream.Buffer,
+                    GetStartVertex() * Stream.ElementSize,
+                    DataSize,
+                    RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+            }
+            else
+            {
+                UNEXPECTED("No source data provided for vertex stream '", StreamName, "'");
+            }
+
             if (!m_PoolAllocation)
             {
                 StateTransitionDesc Barrier{Stream.Buffer, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_VERTEX_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE};
@@ -186,6 +240,57 @@ public:
         }
 
         m_StagingData.reset();
+    }
+
+    bool IsCompatible(const BufferSourcesMapType& Sources) const
+    {
+        if (Sources.empty())
+        {
+            UNEXPECTED("No vertex data sources provided");
+            return false;
+        }
+
+        for (const auto& source_it : Sources)
+        {
+            const pxr::TfToken&                         SourceName = source_it.first;
+            const std::shared_ptr<pxr::HdBufferSource>& Source     = source_it.second;
+
+            if (Source->GetNumElements() != m_NumVertices)
+                return false;
+
+            const auto stream_it = m_Streams.find(SourceName);
+            if (stream_it == m_Streams.end())
+                return false;
+
+            const pxr::HdTupleType ElementType = Source->GetTupleType();
+            const size_t           ElementSize = HdDataSizeOfType(ElementType.type) * ElementType.count;
+            if (ElementSize != stream_it->second.ElementSize)
+                return false;
+        }
+
+        return true;
+    }
+
+    static VertexStreamHashesType ComputeVertexStreamHashes(const BufferSourcesMapType& Sources, const VertexData* pData)
+    {
+        VertexStreamHashesType Hashes;
+        if (pData != nullptr)
+        {
+            VERIFY_EXPR(pData->IsCompatible(Sources));
+            for (const auto& it : pData->m_Streams)
+            {
+                const pxr::TfToken& StreamName = it.first;
+                const VertexStream& Stream     = it.second;
+                Hashes[StreamName]             = Stream.Hash;
+            }
+        }
+
+        for (const auto& source_it : Sources)
+        {
+            Hashes[source_it.first] = source_it.second->ComputeHash();
+        }
+
+        return Hashes;
     }
 
 private:
@@ -203,6 +308,8 @@ private:
         RefCntAutoPtr<IBuffer> Buffer;
 
         size_t ElementSize = 0;
+
+        size_t Hash = 0;
     };
     // Keep streams sorted by name to ensure deterministic order
     std::map<pxr::TfToken, VertexStream> m_Streams;
@@ -212,9 +319,12 @@ private:
         struct SourceData
         {
             std::shared_ptr<pxr::HdBufferSource> Source;
+            RefCntAutoPtr<IBuffer>               Buffer;
         };
 
         std::unordered_map<pxr::TfToken, SourceData, pxr::TfToken::HashFunctor> Sources;
+
+        std::shared_ptr<VertexData> ExistingData;
     };
     std::unique_ptr<StagingData> m_StagingData;
 };
@@ -240,6 +350,11 @@ public:
     virtual Uint32 GetStartVertex() const override final
     {
         return m_Data->GetStartVertex();
+    }
+
+    std::shared_ptr<VertexData> GetData() const
+    {
+        return m_Data;
     }
 
 private:
@@ -448,16 +563,32 @@ void HnGeometryPool::AllocateVertices(const std::string&             Name,
         return;
     }
 
-    size_t Hash = 0;
-    for (const auto& source_it : Sources)
+    std::shared_ptr<VertexData> ExistingData;
+    if (Handle)
     {
-        Hash = pxr::TfHash::Combine(Hash, source_it.second->ComputeHash());
+        ExistingData = static_cast<VertexHandleImpl*>(Handle.get())->GetData();
+        if (!ExistingData->IsCompatible(Sources))
+        {
+            UNEXPECTED("Existing vertex data is not compatible with the provided sources. "
+                       "This indicates that the number of vertices, the element size or the vertex data source names have changed. "
+                       "In any of this cases the mesh should request a new vertex handle.");
+            Handle.reset();
+            ExistingData.reset();
+        }
+    }
+
+    VertexData::VertexStreamHashesType Hashes = VertexData::ComputeVertexStreamHashes(Sources, ExistingData.get());
+
+    size_t Hash = 0;
+    for (const auto& hash_it : Hashes)
+    {
+        Hash = pxr::TfHash::Combine(Hash, hash_it.second);
     }
 
     std::shared_ptr<VertexData> Data = m_VertexCache.Get(
         Hash,
         [&]() {
-            std::shared_ptr<VertexData> Data = std::make_shared<VertexData>(Name, Sources, m_UseVertexPool ? &m_ResMgr : nullptr);
+            std::shared_ptr<VertexData> Data = std::make_shared<VertexData>(Name, Sources, Hashes, m_UseVertexPool ? &m_ResMgr : nullptr, ExistingData);
 
             {
                 std::lock_guard<std::mutex> Guard{m_PendingVertexDataMtx};
