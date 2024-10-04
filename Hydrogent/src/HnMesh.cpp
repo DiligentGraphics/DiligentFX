@@ -404,9 +404,9 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
 
         HnGeometryPool& GeometryPool = static_cast<HnRenderDelegate*>(SceneDelegate.GetRenderIndex().GetRenderDelegate())->GetGeometryPool();
 
-        m_IndexData.Faces  = GeometryPool.AllocateIndices(Id.GetString() + " - faces", pxr::VtValue{std::move(StagingInds.FaceIndices)}, m_VertexHandle->GetStartVertex());
-        m_IndexData.Edges  = GeometryPool.AllocateIndices(Id.GetString() + " - edges", pxr::VtValue{std::move(StagingInds.EdgeIndices)}, m_VertexHandle->GetStartVertex());
-        m_IndexData.Points = GeometryPool.AllocateIndices(Id.GetString() + " - points", pxr::VtValue{std::move(StagingInds.PointIndices)}, m_VertexHandle->GetStartVertex());
+        m_IndexData.Faces  = GeometryPool.AllocateIndices(Id.GetString() + " - faces", pxr::VtValue::Take(StagingInds.FaceIndices), m_VertexHandle->GetStartVertex());
+        m_IndexData.Edges  = GeometryPool.AllocateIndices(Id.GetString() + " - edges", pxr::VtValue::Take(StagingInds.EdgeIndices), m_VertexHandle->GetStartVertex());
+        m_IndexData.Points = GeometryPool.AllocateIndices(Id.GetString() + " - points", pxr::VtValue::Take(StagingInds.PointIndices), m_VertexHandle->GetStartVertex());
 
         m_DrawItemGpuTopologyDirty.store(true);
     }
@@ -647,7 +647,7 @@ bool HnMesh::AddJointInfluencesStagingBufferSource(const pxr::VtValue& NumInflue
         }
     }
 
-    return AddStagingBufferSourceForPrimvar(StagingVerts, HnTokens->joints, pxr::VtValue{std::move(Joints)}, pxr::HdInterpolationVertex, 2);
+    return AddStagingBufferSourceForPrimvar(StagingVerts, HnTokens->joints, pxr::VtValue::Take(Joints), pxr::HdInterpolationVertex, 2);
 }
 
 void HnMesh::GetPrimvarsInfo(pxr::HdSceneDelegate& SceneDelegate,
@@ -952,7 +952,7 @@ void HnMesh::GenerateSmoothNormals(StagingVertexData& StagingVerts)
         return;
     }
 
-    AddStagingBufferSourceForPrimvar(StagingVerts, pxr::HdTokens->normals, pxr::VtValue{std::move(Normals)}, pxr::HdInterpolationVertex);
+    AddStagingBufferSourceForPrimvar(StagingVerts, pxr::HdTokens->normals, pxr::VtValue::Take(Normals), pxr::HdInterpolationVertex);
 }
 
 void HnMesh::UpdateIndexData(StagingIndexData& StagingInds, const pxr::VtValue& Points)

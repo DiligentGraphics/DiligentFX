@@ -329,7 +329,7 @@ pxr::VtValue ConvertVertexArrayToFaceVaryingArray(const pxr::VtIntArray& FaceVer
             }
         }
     }
-    return pxr::VtValue{FaceArray};
+    return pxr::VtValue::Take(FaceArray);
 }
 
 pxr::VtValue HnMeshUtils::ConvertVertexPrimvarToFaceVarying(const pxr::VtValue& VertexData, size_t ValuesPerVertex) const

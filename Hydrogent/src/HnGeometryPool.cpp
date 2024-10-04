@@ -346,7 +346,7 @@ private:
                         idx[1] += StartVertex;
                         idx[2] += StartVertex;
                     }
-                    Indices = IndicesArray;
+                    Indices = pxr::VtValue::Take(IndicesArray);
                 }
                 const pxr::VtVec3iArray& IndicesArray = Indices.UncheckedGet<pxr::VtVec3iArray>();
 
@@ -363,7 +363,7 @@ private:
                         idx[0] += StartVertex;
                         idx[1] += StartVertex;
                     }
-                    Indices = IndicesArray;
+                    Indices = pxr::VtValue::Take(IndicesArray);
                 }
 
                 const pxr::VtVec2iArray& IndicesArray = Indices.UncheckedGet<pxr::VtVec2iArray>();
@@ -378,7 +378,7 @@ private:
                     pxr::VtIntArray IndicesArray = Indices.UncheckedRemove<pxr::VtIntArray>();
                     for (int& idx : IndicesArray)
                         idx += StartVertex;
-                    Indices = IndicesArray;
+                    Indices = pxr::VtValue::Take(IndicesArray);
                 }
 
                 const pxr::VtIntArray& IndicesArray = Indices.UncheckedGet<pxr::VtIntArray>();
