@@ -389,13 +389,11 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
         HnGeometryPool& GeometryPool = static_cast<HnRenderDelegate*>(SceneDelegate.GetRenderIndex().GetRenderDelegate())->GetGeometryPool();
         GeometryPool.AllocateVertices(Id.GetString(), StagingVerts.Sources, m_VertexHandle);
 
-        m_DrawItemGpuTopologyDirty.store(true);
+        m_DrawItemGpuGeometryDirty.store(true);
     }
 
-    if (IndexDataDirty)
+    if (IndexDataDirty && m_VertexHandle)
     {
-        VERIFY_EXPR(m_VertexHandle != nullptr);
-
         StagingIndexData StagingInds;
         UpdateIndexData(StagingInds, StagingVerts.Points);
 

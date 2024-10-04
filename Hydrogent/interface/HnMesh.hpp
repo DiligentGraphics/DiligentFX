@@ -261,8 +261,8 @@ private:
     std::atomic<Uint32> m_GeometryVersion{0};
     std::atomic<Uint32> m_MaterialVersion{0};
     std::atomic<Uint32> m_SkinningPrimvarsVersion{0};
-    std::atomic<bool>   m_DrawItemGpuTopologyDirty{true};
-    std::atomic<bool>   m_DrawItemGpuGeometryDirty{true};
+    std::atomic<bool>   m_DrawItemGpuTopologyDirty{false};
+    std::atomic<bool>   m_DrawItemGpuGeometryDirty{false};
 
     float4x4 m_SkelLocalToPrimLocal = float4x4::Identity();
 };
