@@ -434,6 +434,12 @@ static TEXTURE_FORMAT GetMaterialTextureFormat(const pxr::TfToken& Name)
 
 HnMaterial::TexNameToCoordSetMapType HnMaterial::AllocateTextures(HnTextureRegistry& TexRegistry)
 {
+    // Keep old textures alive in the cache
+    auto OldTextures = std::move(m_Textures);
+
+    m_Textures.clear();
+    m_TexCoords.clear();
+
     // Texture name to texture coordinate set index (e.g. "diffuseColor" -> 0)
     TexNameToCoordSetMapType TexNameToCoordSetMap;
 
