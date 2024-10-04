@@ -234,14 +234,22 @@ class HnGeometryPool::IndexData final
 {
 public:
     IndexData(std::string            Name,
-              const pxr::VtValue&    Indices,
+              pxr::VtValue           Indices,
+              Uint32                 StartVertex,
               GLTF::ResourceManager* pResMgr) :
         m_Name{std::move(Name)},
-        m_NumIndices{static_cast<Uint32>(GetIndexCountAndPtr(Indices).first)}
+        m_StagingData{std::make_unique<StagingData>(std::move(Indices), StartVertex)}
     {
+        if (m_StagingData->Size == 0)
+        {
+            UNEXPECTED("No index data provided");
+            return;
+        }
+
+        m_NumIndices = static_cast<Uint32>(m_StagingData->Size / sizeof(Uint32));
         if (pResMgr != nullptr && m_NumIndices > 0)
         {
-            m_Suballocation = pResMgr->AllocateIndices(m_NumIndices * sizeof(Uint32));
+            m_Suballocation = pResMgr->AllocateIndices(m_StagingData->Size);
         }
     }
 
@@ -260,23 +268,24 @@ public:
         return m_NumIndices;
     }
 
-    void Update(IRenderDevice*      pDevice,
-                IDeviceContext*     pContext,
-                const pxr::VtValue& Indices)
+    void Update(IRenderDevice*  pDevice,
+                IDeviceContext* pContext)
     {
-        std::pair<size_t, const void*> IndexCountAndPtr = GetIndexCountAndPtr(Indices);
-        if (IndexCountAndPtr.second == nullptr)
+        if (!m_StagingData)
         {
+            UNEXPECTED("No staging data. This may indicate the Update() method is called more than once, which is a bug.");
             return;
         }
 
-        if (IndexCountAndPtr.first != m_NumIndices)
+        if (m_StagingData->Size == 0)
         {
-            DEV_ERROR("The number of indices has changed. This is unexpected as in this case the topology is expected to change and new index handle should be created.");
+            UNEXPECTED("No index data provided");
             return;
         }
 
-        BufferData IBData{IndexCountAndPtr.second, IndexCountAndPtr.first * sizeof(Uint32)};
+        VERIFY(m_StagingData->Size / sizeof(Uint32) == m_NumIndices, "Unexpected number of indices in the staging data");
+
+        BufferData IBData{m_StagingData->Ptr, m_StagingData->Size};
         if (m_Suballocation == nullptr)
         {
             if (m_Buffer)
@@ -304,38 +313,86 @@ public:
             VERIFY_EXPR(m_Suballocation->GetSize() == IBData.DataSize);
             pContext->UpdateBuffer(m_Buffer, m_Suballocation->GetOffset(), IBData.DataSize, IBData.pData, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         }
-    }
 
-    static std::pair<size_t, const void*> GetIndexCountAndPtr(const pxr::VtValue& Indices)
-    {
-        if (Indices.IsHolding<pxr::VtVec3iArray>())
-        {
-            const pxr::VtVec3iArray& IndicesArray = Indices.UncheckedGet<pxr::VtVec3iArray>();
-            return {IndicesArray.size() * 3, IndicesArray.data()};
-        }
-        else if (Indices.IsHolding<pxr::VtVec2iArray>())
-        {
-            const pxr::VtVec2iArray& IndicesArray = Indices.UncheckedGet<pxr::VtVec2iArray>();
-            return {IndicesArray.size() * 2, IndicesArray.data()};
-        }
-        else if (Indices.IsHolding<pxr::VtIntArray>())
-        {
-            const pxr::VtIntArray& IndicesArray = Indices.UncheckedGet<pxr::VtIntArray>();
-            return {IndicesArray.size(), IndicesArray.data()};
-        }
-        else
-        {
-            UNEXPECTED("Unexpected index data type");
-            return {};
-        }
+        m_StagingData.reset();
     }
 
 private:
     const std::string m_Name;
-    const Uint32      m_NumIndices;
+    Uint32            m_NumIndices = 0;
 
     RefCntAutoPtr<IBuffer>              m_Buffer;
     RefCntAutoPtr<IBufferSuballocation> m_Suballocation;
+
+    struct StagingData
+    {
+        pxr::VtValue Indices;
+
+        const void* Ptr  = nullptr;
+        size_t      Size = 0;
+
+        StagingData(pxr::VtValue _Indices,
+                    Uint32       StartVertex) :
+            Indices{std::move(_Indices)}
+        {
+            if (Indices.IsHolding<pxr::VtVec3iArray>())
+            {
+                if (StartVertex != 0)
+                {
+                    pxr::VtVec3iArray IndicesArray = Indices.UncheckedRemove<pxr::VtVec3iArray>();
+                    for (pxr::GfVec3i& idx : IndicesArray)
+                    {
+                        idx[0] += StartVertex;
+                        idx[1] += StartVertex;
+                        idx[2] += StartVertex;
+                    }
+                    Indices = IndicesArray;
+                }
+                const pxr::VtVec3iArray& IndicesArray = Indices.UncheckedGet<pxr::VtVec3iArray>();
+
+                Ptr  = IndicesArray.data();
+                Size = IndicesArray.size() * sizeof(pxr::GfVec3i);
+            }
+            else if (Indices.IsHolding<pxr::VtVec2iArray>())
+            {
+                if (StartVertex != 0)
+                {
+                    pxr::VtVec2iArray IndicesArray = Indices.UncheckedRemove<pxr::VtVec2iArray>();
+                    for (pxr::GfVec2i& idx : IndicesArray)
+                    {
+                        idx[0] += StartVertex;
+                        idx[1] += StartVertex;
+                    }
+                    Indices = IndicesArray;
+                }
+
+                const pxr::VtVec2iArray& IndicesArray = Indices.UncheckedGet<pxr::VtVec2iArray>();
+
+                Ptr  = IndicesArray.data();
+                Size = IndicesArray.size() * sizeof(pxr::GfVec2i);
+            }
+            else if (Indices.IsHolding<pxr::VtIntArray>())
+            {
+                if (StartVertex != 0)
+                {
+                    pxr::VtIntArray IndicesArray = Indices.UncheckedRemove<pxr::VtIntArray>();
+                    for (int& idx : IndicesArray)
+                        idx += StartVertex;
+                    Indices = IndicesArray;
+                }
+
+                const pxr::VtIntArray& IndicesArray = Indices.UncheckedGet<pxr::VtIntArray>();
+
+                Ptr  = IndicesArray.data();
+                Size = IndicesArray.size() * sizeof(int);
+            }
+            else
+            {
+                UNEXPECTED("Unexpected index data type: ", Indices.GetTypeName());
+            }
+        }
+    };
+    std::unique_ptr<StagingData> m_StagingData;
 };
 
 class HnGeometryPool::IndexHandleImpl final : public HnGeometryPool::IndexHandle
@@ -371,13 +428,6 @@ struct HnGeometryPool::StagingVertexData
     std::shared_ptr<VertexData> Data;
 };
 
-struct HnGeometryPool::StagingIndexData
-{
-    pxr::VtValue               Indices;
-    std::shared_ptr<IndexData> Data;
-};
-
-
 void HnGeometryPool::AllocateVertices(const std::string&             Name,
                                       const BufferSourcesMapType&    Sources,
                                       std::shared_ptr<VertexHandle>& Handle)
@@ -411,15 +461,14 @@ void HnGeometryPool::AllocateVertices(const std::string&             Name,
     }
 }
 
-void HnGeometryPool::AllocateIndices(const std::string&            Name,
-                                     pxr::VtValue                  Indices,
-                                     Uint32                        StartVertex,
-                                     std::shared_ptr<IndexHandle>& Handle)
+std::shared_ptr<HnGeometryPool::IndexHandle> HnGeometryPool::AllocateIndices(const std::string& Name,
+                                                                             pxr::VtValue       Indices,
+                                                                             Uint32             StartVertex)
 {
     if (Indices.IsEmpty())
     {
         UNEXPECTED("No index data provided");
-        return;
+        return {};
     }
 
     size_t Hash = Indices.GetHash();
@@ -428,59 +477,17 @@ void HnGeometryPool::AllocateIndices(const std::string&            Name,
     std::shared_ptr<IndexData> Data = m_IndexCache.Get(
         Hash,
         [&]() {
-            std::shared_ptr<IndexData> Data = std::make_shared<IndexData>(Name, Indices, m_UseIndexPool ? &m_ResMgr : nullptr);
+            std::shared_ptr<IndexData> Data = std::make_shared<IndexData>(Name, std::move(Indices), StartVertex, m_UseIndexPool ? &m_ResMgr : nullptr);
 
-            if (StartVertex != 0)
             {
-                if (Indices.IsHolding<pxr::VtVec3iArray>())
-                {
-                    pxr::VtVec3iArray IndicesArray = Indices.UncheckedRemove<pxr::VtVec3iArray>();
-                    for (pxr::GfVec3i& idx : IndicesArray)
-                    {
-                        idx[0] += StartVertex;
-                        idx[1] += StartVertex;
-                        idx[2] += StartVertex;
-                    }
-                    Indices = IndicesArray;
-                }
-                else if (Indices.IsHolding<pxr::VtVec2iArray>())
-                {
-                    pxr::VtVec2iArray IndicesArray = Indices.UncheckedRemove<pxr::VtVec2iArray>();
-                    for (pxr::GfVec2i& idx : IndicesArray)
-                    {
-                        idx[0] += StartVertex;
-                        idx[1] += StartVertex;
-                    }
-                    Indices = IndicesArray;
-                }
-                else if (Indices.IsHolding<pxr::VtIntArray>())
-                {
-                    pxr::VtIntArray IndicesArray = Indices.UncheckedRemove<pxr::VtIntArray>();
-                    for (int& idx : IndicesArray)
-                        idx += StartVertex;
-                    Indices = IndicesArray;
-                }
-                else
-                {
-                    UNEXPECTED("Unexpected index data type");
-                }
+                std::lock_guard<std::mutex> Guard{m_PendingIndexDataMtx};
+                m_PendingIndexData.emplace_back(Data);
             }
-
-            std::lock_guard<std::mutex> Guard{m_StagingIndexDataMtx};
-            m_StagingIndexData.emplace_back(StagingIndexData{std::move(Indices), Data});
 
             return Data;
         });
 
-    if (!Handle)
-    {
-        Handle = std::make_shared<IndexHandleImpl>(std::move(Data));
-    }
-    //else
-    //{
-    //    DEV_CHECK_ERR(Handle->GetNumIndices() == IndexHandleImpl::GetIndexCountAndPtr(Indices).first,
-    //                  "The number of indices has changed. This is unexpected as in this case the topology is expected to change and new index handle should be created.");
-    //}
+    return std::make_shared<IndexHandleImpl>(std::move(Data));
 }
 
 
@@ -492,11 +499,14 @@ void HnGeometryPool::Commit(IDeviceContext* pContext)
     }
     m_StagingVertexData.clear();
 
-    for (StagingIndexData& IdxData : m_StagingIndexData)
     {
-        IdxData.Data->Update(m_pDevice, pContext, IdxData.Indices);
+        std::lock_guard<std::mutex> Guard{m_PendingIndexDataMtx};
+        for (auto& Data : m_PendingIndexData)
+        {
+            Data->Update(m_pDevice, pContext);
+        }
+        m_PendingIndexData.clear();
     }
-    m_StagingIndexData.clear();
 }
 
 } // namespace USD

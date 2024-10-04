@@ -84,7 +84,8 @@ public:
     using BufferSourcesMapType = std::map<pxr::TfToken, std::shared_ptr<pxr::HdBufferSource>>;
 
     void AllocateVertices(const std::string& Name, const BufferSourcesMapType& Sources, std::shared_ptr<VertexHandle>& Handle);
-    void AllocateIndices(const std::string& Name, pxr::VtValue Indices, Uint32 StartVertex, std::shared_ptr<IndexHandle>& Handle);
+
+    std::shared_ptr<IndexHandle> AllocateIndices(const std::string& Name, pxr::VtValue Indices, Uint32 StartVertex);
 
 private:
     RefCntAutoPtr<IRenderDevice> m_pDevice;
@@ -98,13 +99,12 @@ private:
     class VertexHandleImpl;
     class IndexHandleImpl;
     struct StagingVertexData;
-    struct StagingIndexData;
 
     std::mutex                     m_StagingVertexDataMtx;
     std::vector<StagingVertexData> m_StagingVertexData;
 
-    std::mutex                    m_StagingIndexDataMtx;
-    std::vector<StagingIndexData> m_StagingIndexData;
+    std::mutex                              m_PendingIndexDataMtx;
+    std::vector<std::shared_ptr<IndexData>> m_PendingIndexData;
 
     ObjectsRegistry<size_t, std::shared_ptr<VertexData>> m_VertexCache;
     ObjectsRegistry<size_t, std::shared_ptr<IndexData>>  m_IndexCache;

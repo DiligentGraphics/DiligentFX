@@ -403,9 +403,10 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
         VERIFY_EXPR(m_VertexHandle != nullptr);
 
         HnGeometryPool& GeometryPool = static_cast<HnRenderDelegate*>(SceneDelegate.GetRenderIndex().GetRenderDelegate())->GetGeometryPool();
-        GeometryPool.AllocateIndices(Id.GetString() + " - faces", pxr::VtValue{std::move(StagingInds.FaceIndices)}, m_VertexHandle->GetStartVertex(), m_IndexData.Faces);
-        GeometryPool.AllocateIndices(Id.GetString() + " - edges", pxr::VtValue{std::move(StagingInds.EdgeIndices)}, m_VertexHandle->GetStartVertex(), m_IndexData.Edges);
-        GeometryPool.AllocateIndices(Id.GetString() + " - points", pxr::VtValue{std::move(StagingInds.PointIndices)}, m_VertexHandle->GetStartVertex(), m_IndexData.Points);
+
+        m_IndexData.Faces  = GeometryPool.AllocateIndices(Id.GetString() + " - faces", pxr::VtValue{std::move(StagingInds.FaceIndices)}, m_VertexHandle->GetStartVertex());
+        m_IndexData.Edges  = GeometryPool.AllocateIndices(Id.GetString() + " - edges", pxr::VtValue{std::move(StagingInds.EdgeIndices)}, m_VertexHandle->GetStartVertex());
+        m_IndexData.Points = GeometryPool.AllocateIndices(Id.GetString() + " - points", pxr::VtValue{std::move(StagingInds.PointIndices)}, m_VertexHandle->GetStartVertex());
 
         m_DrawItemGpuTopologyDirty.store(true);
     }
