@@ -79,6 +79,7 @@ public:
         IBuffer* IndexBuffer = nullptr;
         Uint32   StartIndex  = 0;
         Uint32   NumVertices = 0;
+        Uint32   StartVertex = 0;
 
         operator bool() const { return NumVertices > 0; }
     };

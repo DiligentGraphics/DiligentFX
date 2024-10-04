@@ -315,7 +315,15 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
     m_USDRenderer{CreateUSDRenderer(CI, m_PrimitiveAttribsCB, m_MaterialSRBCache)},
     m_TextureRegistry{CI.pDevice, CI.TextureAtlasDim != 0 ? m_ResourceMgr : RefCntAutoPtr<GLTF::ResourceManager>{}},
     m_GeometryPool{CI.pDevice, *m_ResourceMgr, CI.UseVertexPool, CI.UseIndexPool},
-    m_RenderParam{std::make_unique<HnRenderParam>(CI.UseVertexPool, CI.UseIndexPool, CI.AsyncShaderCompilation, CI.TextureBindingMode, CI.MetersPerUnit)},
+    m_RenderParam{
+        std::make_unique<HnRenderParam>(
+            CI.UseVertexPool,
+            CI.UseIndexPool,
+            CI.AsyncShaderCompilation,
+            !CI.pDevice->GetDeviceInfo().IsGLDevice(), // UseNativeStartVertex
+            CI.TextureBindingMode,
+            CI.MetersPerUnit),
+    },
     m_ShadowMapManager{CreateShadowMapManager(CI)}
 {
     const Uint32 ConstantBufferOffsetAlignment = m_pDevice->GetAdapterInfo().Buffer.ConstantBufferOffsetAlignment;

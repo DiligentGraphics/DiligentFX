@@ -228,7 +228,7 @@ private:
                                            pxr::HdRenderParam*   RenderParam);
 
     void UpdateDrawItemGpuGeometry(HnRenderDelegate& RenderDelegate);
-    void UpdateDrawItemGpuTopology();
+    void UpdateDrawItemGpuTopology(HnRenderDelegate& RenderDelegate);
 
     template <typename HandleDrawItemFuncType, typename HandleGeomSubsetDrawItemFuncType>
     void ProcessDrawItems(HandleDrawItemFuncType&&           HandleDrawItem,

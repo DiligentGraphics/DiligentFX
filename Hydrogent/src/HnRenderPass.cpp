@@ -1143,12 +1143,14 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
             ListItem.IndexBuffer = Topology->IndexBuffer;
             ListItem.StartIndex  = Topology->StartIndex;
             ListItem.NumVertices = Topology->NumVertices;
+            ListItem.StartVertex = Topology->StartVertex;
         }
         else
         {
             ListItem.IndexBuffer = nullptr;
             ListItem.StartIndex  = 0;
             ListItem.NumVertices = 0;
+            ListItem.StartVertex = 0;
         }
     }
 }
@@ -1205,7 +1207,7 @@ void HnRenderPass::RenderPendingDrawItems(RenderState& State)
                     for (size_t i = 0; i < PendingItem.DrawCount; ++i)
                     {
                         const DrawListItem& BatchItem = m_PendingDrawItems[item_idx + i].ListItem;
-                        pMultiDrawItems[i]            = {BatchItem.NumVertices, BatchItem.StartIndex, 0};
+                        pMultiDrawItems[i]            = {BatchItem.NumVertices, BatchItem.StartIndex, BatchItem.StartVertex};
                     }
                     State.pCtx->MultiDrawIndexed({PendingItem.DrawCount, pMultiDrawItems, VT_UINT32, DRAW_FLAG_VERIFY_ALL});
                 }
@@ -1222,6 +1224,7 @@ void HnRenderPass::RenderPendingDrawItems(RenderState& State)
                         }
                         Attribs.FirstIndexLocation    = BatchItem.StartIndex;
                         Attribs.FirstInstanceLocation = i;
+                        Attribs.BaseVertex            = BatchItem.StartVertex;
                         State.pCtx->DrawIndexed(Attribs);
                     }
                 }
@@ -1234,7 +1237,7 @@ void HnRenderPass::RenderPendingDrawItems(RenderState& State)
                     for (size_t i = 0; i < PendingItem.DrawCount; ++i)
                     {
                         const DrawListItem& BatchItem = m_PendingDrawItems[item_idx + i].ListItem;
-                        pMultiDrawItems[i]            = {BatchItem.NumVertices, 0};
+                        pMultiDrawItems[i]            = {BatchItem.NumVertices, BatchItem.StartVertex};
                     }
                     State.pCtx->MultiDraw({PendingItem.DrawCount, pMultiDrawItems, DRAW_FLAG_VERIFY_ALL});
                 }
@@ -1250,6 +1253,7 @@ void HnRenderPass::RenderPendingDrawItems(RenderState& State)
                             Attribs.Flags |= DRAW_FLAG_DYNAMIC_RESOURCE_BUFFERS_INTACT;
                         }
                         Attribs.FirstInstanceLocation = i;
+                        Attribs.StartVertexLocation   = BatchItem.StartVertex;
                         State.pCtx->Draw(Attribs);
                     }
                 }
@@ -1257,14 +1261,14 @@ void HnRenderPass::RenderPendingDrawItems(RenderState& State)
         }
         else
         {
+            constexpr Uint32 NumInstances = 1;
             if (ListItem.IndexBuffer != nullptr)
             {
-                constexpr Uint32 NumInstances = 1;
-                State.pCtx->DrawIndexed({ListItem.NumVertices, VT_UINT32, DRAW_FLAG_VERIFY_ALL, NumInstances, ListItem.StartIndex});
+                State.pCtx->DrawIndexed({ListItem.NumVertices, VT_UINT32, DRAW_FLAG_VERIFY_ALL, NumInstances, ListItem.StartIndex, ListItem.StartVertex});
             }
             else
             {
-                State.pCtx->Draw({ListItem.NumVertices, DRAW_FLAG_VERIFY_ALL});
+                State.pCtx->Draw({ListItem.NumVertices, DRAW_FLAG_VERIFY_ALL, NumInstances, ListItem.StartVertex});
             }
         }
 

@@ -399,9 +399,11 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
 
         HnGeometryPool& GeometryPool = static_cast<HnRenderDelegate*>(SceneDelegate.GetRenderIndex().GetRenderDelegate())->GetGeometryPool();
 
-        m_IndexData.Faces  = GeometryPool.AllocateIndices(Id.GetString() + " - faces", pxr::VtValue::Take(StagingInds.FaceIndices), m_VertexHandle->GetStartVertex());
-        m_IndexData.Edges  = GeometryPool.AllocateIndices(Id.GetString() + " - edges", pxr::VtValue::Take(StagingInds.EdgeIndices), m_VertexHandle->GetStartVertex());
-        m_IndexData.Points = GeometryPool.AllocateIndices(Id.GetString() + " - points", pxr::VtValue::Take(StagingInds.PointIndices), m_VertexHandle->GetStartVertex());
+        const Uint32 StartVertex = static_cast<HnRenderParam*>(RenderParam)->GetUseNativeStartVertex() ? 0 : m_VertexHandle->GetStartVertex();
+
+        m_IndexData.Faces  = GeometryPool.AllocateIndices(Id.GetString() + " - faces", pxr::VtValue::Take(StagingInds.FaceIndices), StartVertex);
+        m_IndexData.Edges  = GeometryPool.AllocateIndices(Id.GetString() + " - edges", pxr::VtValue::Take(StagingInds.EdgeIndices), StartVertex);
+        m_IndexData.Points = GeometryPool.AllocateIndices(Id.GetString() + " - points", pxr::VtValue::Take(StagingInds.PointIndices), StartVertex);
 
         m_DrawItemGpuTopologyDirty.store(true);
     }
@@ -1016,8 +1018,11 @@ void HnMesh::UpdateDrawItemGpuGeometry(HnRenderDelegate& RenderDelegate)
     m_DrawItemGpuGeometryDirty.store(false);
 }
 
-void HnMesh::UpdateDrawItemGpuTopology()
+void HnMesh::UpdateDrawItemGpuTopology(HnRenderDelegate& RenderDelegate)
 {
+    const HnRenderParam* pRenderParam = static_cast<const HnRenderParam*>(RenderDelegate.GetRenderParam());
+    const Uint32         StartVertex  = pRenderParam->GetUseNativeStartVertex() ? m_VertexHandle->GetStartVertex() : 0;
+
     Uint32 SubsetIdx = 0;
     ProcessDrawItems(
         [&](HnDrawItem& DrawItem) {
@@ -1027,6 +1032,7 @@ void HnMesh::UpdateDrawItemGpuTopology()
                     m_IndexData.Faces->GetBuffer(),
                     m_IndexData.Faces->GetStartIndex(),
                     m_IndexData.Faces->GetNumIndices(),
+                    StartVertex,
                 });
             }
             else
@@ -1041,12 +1047,14 @@ void HnMesh::UpdateDrawItemGpuTopology()
                 m_IndexData.Edges->GetBuffer(),
                 m_IndexData.Edges->GetStartIndex(),
                 m_IndexData.Edges->GetNumIndices(),
+                StartVertex,
             });
 
             DrawItem.SetPoints({
                 m_IndexData.Points->GetBuffer(),
                 m_IndexData.Points->GetStartIndex(),
                 m_IndexData.Points->GetNumIndices(),
+                StartVertex,
             });
         },
         [&](const pxr::HdGeomSubset& Subset, HnDrawItem& DrawItem) {
@@ -1055,6 +1063,7 @@ void HnMesh::UpdateDrawItemGpuTopology()
                 m_IndexData.Faces->GetBuffer(),
                 m_IndexData.Faces->GetStartIndex() + SubsetRange.StartIndex,
                 SubsetRange.NumIndices,
+                StartVertex,
             });
             // Do not set edges and points for subsets
             DrawItem.SetEdges({});
@@ -1068,7 +1077,7 @@ void HnMesh::CommitGPUResources(HnRenderDelegate& RenderDelegate)
 {
     if (m_DrawItemGpuTopologyDirty.load())
     {
-        UpdateDrawItemGpuTopology();
+        UpdateDrawItemGpuTopology(RenderDelegate);
     }
 
     if (m_DrawItemGpuGeometryDirty.load())

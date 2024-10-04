@@ -35,11 +35,13 @@ namespace USD
 HnRenderParam::HnRenderParam(bool                              UseVertexPool,
                              bool                              UseIndexPool,
                              bool                              AsyncShaderCompilation,
+                             bool                              UseNativeStartVertex,
                              HN_MATERIAL_TEXTURES_BINDING_MODE TextureBindingMode,
                              float                             MetersPerUnit) noexcept :
     m_UseVertexPool{UseVertexPool},
     m_UseIndexPool{UseIndexPool},
     m_AsyncShaderCompilation{AsyncShaderCompilation},
+    m_UseNativeStartVertex{UseNativeStartVertex},
     m_TextureBindingMode{TextureBindingMode},
     m_MetersPerUnit{MetersPerUnit}
 {

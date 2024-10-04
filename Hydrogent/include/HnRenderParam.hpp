@@ -47,15 +47,19 @@ public:
     HnRenderParam(bool                              UseVertexPool,
                   bool                              UseIndexPool,
                   bool                              AsyncShaderCompilation,
+                  bool                              UseNativeStartVertex,
                   HN_MATERIAL_TEXTURES_BINDING_MODE TextureBindingMode,
                   float                             MetersPerUnit) noexcept;
     ~HnRenderParam();
 
-    bool                              GetUseVertexPool() const { return m_UseVertexPool; }
-    bool                              GetUseIndexPool() const { return m_UseIndexPool; }
-    bool                              GetAsyncShaderCompilation() const { return m_AsyncShaderCompilation; }
+    bool GetUseVertexPool() const { return m_UseVertexPool; }
+    bool GetUseIndexPool() const { return m_UseIndexPool; }
+    bool GetAsyncShaderCompilation() const { return m_AsyncShaderCompilation; }
+    bool GetUseNativeStartVertex() const { return m_UseNativeStartVertex; }
+
     HN_MATERIAL_TEXTURES_BINDING_MODE GetTextureBindingMode() const { return m_TextureBindingMode; }
-    float                             GetMetersPerUnit() const { return m_MetersPerUnit; }
+
+    float GetMetersPerUnit() const { return m_MetersPerUnit; }
 
     HN_RENDER_MODE GetRenderMode() const { return m_RenderMode; }
     void           SetRenderMode(HN_RENDER_MODE Mode) { m_RenderMode = Mode; }
@@ -122,6 +126,7 @@ private:
     const bool m_UseVertexPool;
     const bool m_UseIndexPool;
     const bool m_AsyncShaderCompilation;
+    const bool m_UseNativeStartVertex;
 
     const HN_MATERIAL_TEXTURES_BINDING_MODE m_TextureBindingMode;
 

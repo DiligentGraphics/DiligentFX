@@ -160,6 +160,7 @@ private:
 
         Uint32 NumVertices = 0;
         Uint32 StartIndex  = 0;
+        Uint32 StartVertex = 0;
 
         PBR_Renderer::PSO_FLAGS PSOFlags = PBR_Renderer::PSO_FLAG_NONE;
 
