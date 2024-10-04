@@ -384,16 +384,10 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
         DirtyBits &= ~pxr::HdChangeTracker::DirtyPrimvar;
     }
 
-    StagingIndexData StagingInds;
-    if (IndexDataDirty)
-    {
-        UpdateIndexData(StagingInds, StagingVerts.Points);
-    }
-
     if (!StagingVerts.Sources.empty())
     {
         HnGeometryPool& GeometryPool = static_cast<HnRenderDelegate*>(SceneDelegate.GetRenderIndex().GetRenderDelegate())->GetGeometryPool();
-        GeometryPool.AllocateVertices(Id.GetString(), std::move(StagingVerts.Sources), m_VertexHandle);
+        GeometryPool.AllocateVertices(Id.GetString(), StagingVerts.Sources, m_VertexHandle);
 
         m_DrawItemGpuTopologyDirty.store(true);
     }
@@ -401,6 +395,9 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
     if (IndexDataDirty)
     {
         VERIFY_EXPR(m_VertexHandle != nullptr);
+
+        StagingIndexData StagingInds;
+        UpdateIndexData(StagingInds, StagingVerts.Points);
 
         HnGeometryPool& GeometryPool = static_cast<HnRenderDelegate*>(SceneDelegate.GetRenderIndex().GetRenderDelegate())->GetGeometryPool();
 

@@ -62,13 +62,12 @@ HnGeometryPool::~HnGeometryPool()
 class HnGeometryPool::VertexData final
 {
 public:
-    VertexData(std::string            Name,
-               BufferSourcesMapType   _Sources,
-               GLTF::ResourceManager* pResMgr) :
+    VertexData(std::string                 Name,
+               const BufferSourcesMapType& Sources,
+               GLTF::ResourceManager*      pResMgr) :
         m_Name{std::move(Name)},
-        m_StagingData{std::make_unique<StagingData>(std::move(_Sources))}
+        m_StagingData{std::make_unique<StagingData>()}
     {
-        const BufferSourcesMapType& Sources = m_StagingData->Sources;
         if (Sources.empty())
         {
             UNEXPECTED("No vertex data sources provided");
@@ -76,27 +75,40 @@ public:
         }
 
         m_NumVertices = static_cast<Uint32>(Sources.begin()->second->GetNumElements());
-#ifdef DILIGENT_DEBUG
         for (const auto& source_it : Sources)
         {
-            VERIFY(m_NumVertices == source_it.second->GetNumElements(), "Inconsistent number of elements in vertex data sources");
+            const pxr::TfToken&                         SourceName = source_it.first;
+            const std::shared_ptr<pxr::HdBufferSource>& Source     = source_it.second;
+
+            VERIFY(m_NumVertices == source_it.second->GetNumElements(), "The number of elements in buffer source '", SourceName,
+                   "' does not match the number of vertices (", m_NumVertices, ")");
+
+            const pxr::HdTupleType ElementType = Source->GetTupleType();
+            const size_t           ElementSize = HdDataSizeOfType(ElementType.type) * ElementType.count;
+            if (SourceName == pxr::HdTokens->points)
+                VERIFY(ElementType.type == pxr::HdTypeFloatVec3 && ElementType.count == 1, "Unexpected vertex element type");
+            else if (SourceName == pxr::HdTokens->normals)
+                VERIFY(ElementType.type == pxr::HdTypeFloatVec3 && ElementType.count == 1, "Unexpected normal element type");
+            else if (SourceName == pxr::HdTokens->displayColor)
+                VERIFY(ElementType.type == pxr::HdTypeFloatVec3 && ElementType.count == 1, "Unexpected vertex color element type");
+            else if (SourceName == HnTokens->joints)
+                VERIFY(ElementType.type == pxr::HdTypeFloatVec4 && ElementType.count == 2, "Unexpected joints element type");
+
+            VERIFY(m_Streams.find(SourceName) == m_Streams.end(), "Duplicate vertex data source '", SourceName, "'");
+            m_Streams[SourceName].ElementSize = ElementSize;
+
+            m_StagingData->Sources[SourceName].Source = Source;
         }
-#endif
 
         if (pResMgr != nullptr)
         {
             GLTF::ResourceManager::VertexLayoutKey VtxKey;
-            VtxKey.Elements.reserve(Sources.size());
-            for (const auto& source_it : Sources)
+            VtxKey.Elements.reserve(m_Streams.size());
+            for (auto& stream_it : m_Streams)
             {
-                const pxr::TfToken&                         SourceName = source_it.first;
-                const std::shared_ptr<pxr::HdBufferSource>& Source     = source_it.second;
-
-                const pxr::HdTupleType ElementType = Source->GetTupleType();
-                const size_t           ElementSize = HdDataSizeOfType(ElementType.type) * ElementType.count;
-
-                m_NameToPoolIndex[SourceName] = static_cast<Uint32>(VtxKey.Elements.size());
-                VtxKey.Elements.emplace_back(static_cast<Uint32>(ElementSize), BIND_VERTEX_BUFFER);
+                VertexStream& Stream = stream_it.second;
+                Stream.PoolIndex     = static_cast<Uint32>(VtxKey.Elements.size());
+                VtxKey.Elements.emplace_back(static_cast<Uint32>(Stream.ElementSize), BIND_VERTEX_BUFFER);
             }
 
             m_PoolAllocation = pResMgr->AllocateVertices(VtxKey, m_NumVertices);
@@ -104,10 +116,10 @@ public:
         }
     }
 
-    IBuffer* GetBuffer(const pxr::TfToken& Name)
+    IBuffer* GetBuffer(const pxr::TfToken& Name) const
     {
-        auto it = m_Buffers.find(Name);
-        return it != m_Buffers.end() ? it->second.RawPtr() : nullptr;
+        auto it = m_Streams.find(Name);
+        return it != m_Streams.end() ? it->second.Buffer : nullptr;
     }
 
     Uint32 GetNumVertices() const
@@ -130,70 +142,48 @@ public:
             UNEXPECTED("No staging data. This may indicate the Update() method is called more than once, which is a bug.");
             return;
         }
-        const BufferSourcesMapType& Sources = m_StagingData->Sources;
 
-        for (auto source_it : Sources)
+        for (auto& stream_it : m_Streams)
         {
-            const pxr::HdBufferSource* pSource = source_it.second.get();
+            const pxr::TfToken& StreamName = stream_it.first;
+            VertexStream&       Stream     = stream_it.second;
+
+            auto source_it = m_StagingData->Sources.find(StreamName);
+            if (source_it == m_StagingData->Sources.end())
+            {
+                UNEXPECTED("Failed to find staging data for vertex stream '", StreamName, "'. This is a bug.");
+                continue;
+            }
+
+            const pxr::HdBufferSource* pSource = source_it->second.Source.get();
             if (pSource == nullptr)
                 continue;
-            const pxr::TfToken& PrimName = source_it.first;
 
-            const size_t NumElements = pSource->GetNumElements();
-            VERIFY(NumElements == m_NumVertices, "Unexpected number of elements in vertex data source ", PrimName);
+            VERIFY(pSource->GetNumElements() == m_NumVertices, "Unexpected number of elements in vertex data source ", StreamName);
 
-            const pxr::HdTupleType ElementType = pSource->GetTupleType();
-            const size_t           ElementSize = HdDataSizeOfType(ElementType.type) * ElementType.count;
-            if (PrimName == pxr::HdTokens->points)
-                VERIFY(ElementType.type == pxr::HdTypeFloatVec3 && ElementType.count == 1, "Unexpected vertex element type");
-            else if (PrimName == pxr::HdTokens->normals)
-                VERIFY(ElementType.type == pxr::HdTypeFloatVec3 && ElementType.count == 1, "Unexpected normal element type");
-            else if (PrimName == pxr::HdTokens->displayColor)
-                VERIFY(ElementType.type == pxr::HdTypeFloatVec3 && ElementType.count == 1, "Unexpected vertex color element type");
-            else if (PrimName == HnTokens->joints)
-                VERIFY(ElementType.type == pxr::HdTypeFloatVec4 && ElementType.count == 2, "Unexpected joints element type");
-
-            RefCntAutoPtr<IBuffer> pBuffer;
+            BufferData InitData{pSource->GetData(), static_cast<Uint32>(m_NumVertices * Stream.ElementSize)};
             if (!m_PoolAllocation)
             {
-                const auto BufferName = m_Name + " - " + PrimName.GetString();
+                const auto BufferName = m_Name + " - " + StreamName.GetString();
                 BufferDesc Desc{
                     BufferName.c_str(),
-                    NumElements * ElementSize,
+                    InitData.DataSize,
                     BIND_VERTEX_BUFFER,
                     USAGE_DEFAULT,
                 };
 
-                BufferData InitData{pSource->GetData(), Desc.Size};
-                if (pBuffer && pBuffer->GetDesc().Size == Desc.Size)
-                {
-                    pContext->UpdateBuffer(pBuffer, 0, InitData.DataSize, InitData.pData, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-                }
-                else
-                {
-                    pBuffer = Device.CreateBuffer(Desc, &InitData);
-                }
+                Stream.Buffer = Device.CreateBuffer(Desc, &InitData);
 
-                StateTransitionDesc Barrier{pBuffer, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_VERTEX_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE};
+                StateTransitionDesc Barrier{Stream.Buffer, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_VERTEX_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE};
                 pContext->TransitionResourceStates(1, &Barrier);
             }
             else
             {
-                auto idx_it = m_NameToPoolIndex.find(PrimName);
-                if (idx_it != m_NameToPoolIndex.end())
-                {
-                    pBuffer = m_PoolAllocation->GetBuffer(idx_it->second);
+                Stream.Buffer = m_PoolAllocation->GetBuffer(Stream.PoolIndex);
 
-                    VERIFY(m_PoolAllocation->GetVertexCount() == NumElements, "The number of vertices has changed. This is unexpected as in this case the topology is expected to change and new vertex handle should be created.");
-                    pContext->UpdateBuffer(pBuffer, m_PoolAllocation->GetStartVertex() * ElementSize, NumElements * ElementSize, pSource->GetData(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-                }
-                else
-                {
-                    UNEXPECTED("Failed to find vertex buffer index for ", PrimName, ". This is unexpected as when a new buffer is added, a new vertex handle should be created.");
-                }
+                VERIFY(m_PoolAllocation->GetVertexCount() == m_NumVertices, "Unexpected number of vertices in the pool allocation.");
+                pContext->UpdateBuffer(Stream.Buffer, m_PoolAllocation->GetStartVertex() * Stream.ElementSize, InitData.DataSize, InitData.pData, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
             }
-
-            m_Buffers[source_it.first] = pBuffer;
         }
 
         m_StagingData.reset();
@@ -206,20 +196,26 @@ private:
 
     RefCntAutoPtr<IVertexPoolAllocation> m_PoolAllocation;
 
-    // Buffer name to vertex pool element index (e.g. "normals" -> 0, "points" -> 1, etc.)
-    std::unordered_map<pxr::TfToken, Uint32, pxr::TfToken::HashFunctor> m_NameToPoolIndex;
+    struct VertexStream
+    {
+        // pool element index (e.g. "normals" -> 0, "points" -> 1, etc.)
+        Uint32 PoolIndex;
 
-    // Buffer name to buffer
-    std::unordered_map<pxr::TfToken, RefCntAutoPtr<IBuffer>, pxr::TfToken::HashFunctor> m_Buffers;
+        RefCntAutoPtr<IBuffer> Buffer;
+
+        size_t ElementSize = 0;
+    };
+    // Keep streams sorted by name to ensure deterministic order
+    std::map<pxr::TfToken, VertexStream> m_Streams;
 
     struct StagingData
     {
-        BufferSourcesMapType Sources;
-
-        StagingData(BufferSourcesMapType _Sources) :
-            Sources{std::move(_Sources)}
+        struct SourceData
         {
-        }
+            std::shared_ptr<pxr::HdBufferSource> Source;
+        };
+
+        std::unordered_map<pxr::TfToken, SourceData, pxr::TfToken::HashFunctor> Sources;
     };
     std::unique_ptr<StagingData> m_StagingData;
 };
@@ -232,7 +228,7 @@ public:
     {
     }
 
-    virtual IBuffer* GetBuffer(const pxr::TfToken& Name) override final
+    virtual IBuffer* GetBuffer(const pxr::TfToken& Name) const override final
     {
         return m_Data->GetBuffer(Name);
     }
@@ -274,7 +270,7 @@ public:
         }
     }
 
-    IBuffer* GetBuffer()
+    IBuffer* GetBuffer() const
     {
         return m_Buffer;
     }
@@ -424,7 +420,7 @@ public:
     {
     }
 
-    virtual IBuffer* GetBuffer() override final
+    virtual IBuffer* GetBuffer() const override final
     {
         return m_Data->GetBuffer();
     }
@@ -444,7 +440,7 @@ private:
 };
 
 void HnGeometryPool::AllocateVertices(const std::string&             Name,
-                                      BufferSourcesMapType           Sources,
+                                      const BufferSourcesMapType&    Sources,
                                       std::shared_ptr<VertexHandle>& Handle)
 {
     if (Sources.empty())
@@ -462,7 +458,7 @@ void HnGeometryPool::AllocateVertices(const std::string&             Name,
     std::shared_ptr<VertexData> Data = m_VertexCache.Get(
         Hash,
         [&]() {
-            std::shared_ptr<VertexData> Data = std::make_shared<VertexData>(Name, std::move(Sources), m_UseVertexPool ? &m_ResMgr : nullptr);
+            std::shared_ptr<VertexData> Data = std::make_shared<VertexData>(Name, Sources, m_UseVertexPool ? &m_ResMgr : nullptr);
 
             {
                 std::lock_guard<std::mutex> Guard{m_PendingVertexDataMtx};
