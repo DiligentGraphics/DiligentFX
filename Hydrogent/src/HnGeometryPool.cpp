@@ -135,8 +135,6 @@ public:
     void Update(IRenderDevice*  pDevice,
                 IDeviceContext* pContext)
     {
-        const RenderDeviceX_N& Device{pDevice};
-
         if (!m_StagingData)
         {
             UNEXPECTED("No staging data. This may indicate the Update() method is called more than once, which is a bug.");
@@ -161,28 +159,29 @@ public:
 
             VERIFY(pSource->GetNumElements() == m_NumVertices, "Unexpected number of elements in vertex data source ", StreamName);
 
-            BufferData InitData{pSource->GetData(), static_cast<Uint32>(m_NumVertices * Stream.ElementSize)};
-            if (!m_PoolAllocation)
+            const Uint32 DataSize = static_cast<Uint32>(m_NumVertices * Stream.ElementSize);
+            if (m_PoolAllocation)
+            {
+                VERIFY(m_PoolAllocation->GetVertexCount() == m_NumVertices, "Unexpected number of vertices in the pool allocation.");
+                Stream.Buffer = m_PoolAllocation->GetBuffer(Stream.PoolIndex);
+            }
+            else
             {
                 const auto BufferName = m_Name + " - " + StreamName.GetString();
                 BufferDesc Desc{
                     BufferName.c_str(),
-                    InitData.DataSize,
+                    DataSize,
                     BIND_VERTEX_BUFFER,
                     USAGE_DEFAULT,
                 };
+                pDevice->CreateBuffer(Desc, nullptr, &Stream.Buffer);
+            }
 
-                Stream.Buffer = Device.CreateBuffer(Desc, &InitData);
-
+            pContext->UpdateBuffer(Stream.Buffer, GetStartVertex() * Stream.ElementSize, DataSize, pSource->GetData(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+            if (!m_PoolAllocation)
+            {
                 StateTransitionDesc Barrier{Stream.Buffer, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_VERTEX_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE};
                 pContext->TransitionResourceStates(1, &Barrier);
-            }
-            else
-            {
-                Stream.Buffer = m_PoolAllocation->GetBuffer(Stream.PoolIndex);
-
-                VERIFY(m_PoolAllocation->GetVertexCount() == m_NumVertices, "Unexpected number of vertices in the pool allocation.");
-                pContext->UpdateBuffer(Stream.Buffer, m_PoolAllocation->GetStartVertex() * Stream.ElementSize, InitData.DataSize, InitData.pData, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
             }
         }
 
