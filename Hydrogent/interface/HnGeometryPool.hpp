@@ -83,7 +83,7 @@ public:
 
     using BufferSourcesMapType = std::map<pxr::TfToken, std::shared_ptr<pxr::HdBufferSource>>;
 
-    void AllocateVertices(const std::string& Name, const BufferSourcesMapType& Sources, std::shared_ptr<VertexHandle>& Handle);
+    void AllocateVertices(const std::string& Name, BufferSourcesMapType Sources, std::shared_ptr<VertexHandle>& Handle);
 
     std::shared_ptr<IndexHandle> AllocateIndices(const std::string& Name, pxr::VtValue Indices, Uint32 StartVertex);
 
@@ -98,10 +98,9 @@ private:
     class IndexData;
     class VertexHandleImpl;
     class IndexHandleImpl;
-    struct StagingVertexData;
 
-    std::mutex                     m_StagingVertexDataMtx;
-    std::vector<StagingVertexData> m_StagingVertexData;
+    std::mutex                               m_PendingVertexDataMtx;
+    std::vector<std::shared_ptr<VertexData>> m_PendingVertexData;
 
     std::mutex                              m_PendingIndexDataMtx;
     std::vector<std::shared_ptr<IndexData>> m_PendingIndexData;

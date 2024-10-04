@@ -393,7 +393,7 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
     if (!StagingVerts.Sources.empty())
     {
         HnGeometryPool& GeometryPool = static_cast<HnRenderDelegate*>(SceneDelegate.GetRenderIndex().GetRenderDelegate())->GetGeometryPool();
-        GeometryPool.AllocateVertices(Id.GetString(), StagingVerts.Sources, m_VertexHandle);
+        GeometryPool.AllocateVertices(Id.GetString(), std::move(StagingVerts.Sources), m_VertexHandle);
 
         m_DrawItemGpuTopologyDirty.store(true);
     }

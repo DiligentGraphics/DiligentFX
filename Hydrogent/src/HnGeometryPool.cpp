@@ -62,11 +62,13 @@ HnGeometryPool::~HnGeometryPool()
 class HnGeometryPool::VertexData final
 {
 public:
-    VertexData(std::string                 Name,
-               const BufferSourcesMapType& Sources,
-               GLTF::ResourceManager*      pResMgr) :
-        m_Name{std::move(Name)}
+    VertexData(std::string            Name,
+               BufferSourcesMapType   _Sources,
+               GLTF::ResourceManager* pResMgr) :
+        m_Name{std::move(Name)},
+        m_StagingData{std::make_unique<StagingData>(std::move(_Sources))}
     {
+        const BufferSourcesMapType& Sources = m_StagingData->Sources;
         if (Sources.empty())
         {
             UNEXPECTED("No vertex data sources provided");
@@ -118,11 +120,17 @@ public:
         return m_PoolAllocation ? m_PoolAllocation->GetStartVertex() : 0;
     }
 
-    void Update(IRenderDevice*              pDevice,
-                IDeviceContext*             pContext,
-                const BufferSourcesMapType& Sources)
+    void Update(IRenderDevice*  pDevice,
+                IDeviceContext* pContext)
     {
         const RenderDeviceX_N& Device{pDevice};
+
+        if (!m_StagingData)
+        {
+            UNEXPECTED("No staging data. This may indicate the Update() method is called more than once, which is a bug.");
+            return;
+        }
+        const BufferSourcesMapType& Sources = m_StagingData->Sources;
 
         for (auto source_it : Sources)
         {
@@ -187,6 +195,8 @@ public:
 
             m_Buffers[source_it.first] = pBuffer;
         }
+
+        m_StagingData.reset();
     }
 
 private:
@@ -201,6 +211,17 @@ private:
 
     // Buffer name to buffer
     std::unordered_map<pxr::TfToken, RefCntAutoPtr<IBuffer>, pxr::TfToken::HashFunctor> m_Buffers;
+
+    struct StagingData
+    {
+        BufferSourcesMapType Sources;
+
+        StagingData(BufferSourcesMapType _Sources) :
+            Sources{std::move(_Sources)}
+        {
+        }
+    };
+    std::unique_ptr<StagingData> m_StagingData;
 };
 
 class HnGeometryPool::VertexHandleImpl final : public HnGeometryPool::VertexHandle
@@ -422,14 +443,8 @@ private:
     std::shared_ptr<IndexData> m_Data;
 };
 
-struct HnGeometryPool::StagingVertexData
-{
-    BufferSourcesMapType        Sources;
-    std::shared_ptr<VertexData> Data;
-};
-
 void HnGeometryPool::AllocateVertices(const std::string&             Name,
-                                      const BufferSourcesMapType&    Sources,
+                                      BufferSourcesMapType           Sources,
                                       std::shared_ptr<VertexHandle>& Handle)
 {
     if (Sources.empty())
@@ -447,10 +462,12 @@ void HnGeometryPool::AllocateVertices(const std::string&             Name,
     std::shared_ptr<VertexData> Data = m_VertexCache.Get(
         Hash,
         [&]() {
-            std::shared_ptr<VertexData> Data = std::make_shared<VertexData>(Name, Sources, m_UseVertexPool ? &m_ResMgr : nullptr);
+            std::shared_ptr<VertexData> Data = std::make_shared<VertexData>(Name, std::move(Sources), m_UseVertexPool ? &m_ResMgr : nullptr);
 
-            std::lock_guard<std::mutex> Guard{m_StagingVertexDataMtx};
-            m_StagingVertexData.emplace_back(StagingVertexData{Sources, Data});
+            {
+                std::lock_guard<std::mutex> Guard{m_PendingVertexDataMtx};
+                m_PendingVertexData.emplace_back(Data);
+            }
 
             return Data;
         });
@@ -493,11 +510,14 @@ std::shared_ptr<HnGeometryPool::IndexHandle> HnGeometryPool::AllocateIndices(con
 
 void HnGeometryPool::Commit(IDeviceContext* pContext)
 {
-    for (StagingVertexData& VertData : m_StagingVertexData)
     {
-        VertData.Data->Update(m_pDevice, pContext, VertData.Sources);
+        std::lock_guard<std::mutex> Guard{m_PendingVertexDataMtx};
+        for (auto& Data : m_PendingVertexData)
+        {
+            Data->Update(m_pDevice, pContext);
+        }
+        m_PendingVertexData.clear();
     }
-    m_StagingVertexData.clear();
 
     {
         std::lock_guard<std::mutex> Guard{m_PendingIndexDataMtx};
