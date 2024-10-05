@@ -293,6 +293,11 @@ public:
         return Hashes;
     }
 
+    size_t GetStreamCount() const
+    {
+        return m_Streams.size();
+    }
+
 private:
     const std::string m_Name;
 
@@ -339,22 +344,27 @@ public:
 
     virtual IBuffer* GetBuffer(const pxr::TfToken& Name) const override final
     {
-        return m_Data->GetBuffer(Name);
+        return m_Data ? m_Data->GetBuffer(Name) : nullptr;
     }
 
     virtual Uint32 GetNumVertices() const override final
     {
-        return m_Data->GetNumVertices();
+        return m_Data ? m_Data->GetNumVertices() : 0;
     }
 
     virtual Uint32 GetStartVertex() const override final
     {
-        return m_Data->GetStartVertex();
+        return m_Data ? m_Data->GetStartVertex() : 0;
     }
 
     std::shared_ptr<VertexData> GetData() const
     {
         return m_Data;
+    }
+
+    void SetData(std::shared_ptr<VertexData> Data)
+    {
+        m_Data = std::move(Data);
     }
 
 private:
@@ -536,17 +546,22 @@ public:
 
     virtual IBuffer* GetBuffer() const override final
     {
-        return m_Data->GetBuffer();
+        return m_Data ? m_Data->GetBuffer() : nullptr;
     }
 
     virtual Uint32 GetNumIndices() const override final
     {
-        return m_Data->GetNumIndices();
+        return m_Data ? m_Data->GetNumIndices() : 0;
     }
 
     virtual Uint32 GetStartIndex() const override final
     {
-        return m_Data->GetStartIndex();
+        return m_Data ? m_Data->GetStartIndex() : 0;
+    }
+
+    void SetData(std::shared_ptr<IndexData> Data)
+    {
+        m_Data = std::move(Data);
     }
 
 private:
@@ -575,6 +590,11 @@ void HnGeometryPool::AllocateVertices(const std::string&             Name,
             Handle.reset();
             ExistingData.reset();
         }
+        if (ExistingData && ExistingData->GetStreamCount() == Sources.size())
+        {
+            // All streams in the existing data are present in the new sources - no data to move
+            ExistingData.reset();
+        }
     }
 
     VertexData::VertexStreamHashesType Hashes = VertexData::ComputeVertexStreamHashes(Sources, ExistingData.get());
@@ -598,20 +618,26 @@ void HnGeometryPool::AllocateVertices(const std::string&             Name,
             return Data;
         });
 
-    if (!Handle)
+
+    if (Handle)
+    {
+        static_cast<VertexHandleImpl*>(Handle.get())->SetData(std::move(Data));
+    }
+    else
     {
         Handle = std::make_shared<VertexHandleImpl>(std::move(Data));
     }
 }
 
-std::shared_ptr<HnGeometryPool::IndexHandle> HnGeometryPool::AllocateIndices(const std::string& Name,
-                                                                             pxr::VtValue       Indices,
-                                                                             Uint32             StartVertex)
+void HnGeometryPool::AllocateIndices(const std::string&                            Name,
+                                     pxr::VtValue                                  Indices,
+                                     Uint32                                        StartVertex,
+                                     std::shared_ptr<HnGeometryPool::IndexHandle>& Handle)
 {
     if (Indices.IsEmpty())
     {
         UNEXPECTED("No index data provided");
-        return {};
+        return;
     }
 
     size_t Hash = Indices.GetHash();
@@ -630,7 +656,14 @@ std::shared_ptr<HnGeometryPool::IndexHandle> HnGeometryPool::AllocateIndices(con
             return Data;
         });
 
-    return std::make_shared<IndexHandleImpl>(std::move(Data));
+    if (Handle)
+    {
+        static_cast<IndexHandleImpl*>(Handle.get())->SetData(std::move(Data));
+    }
+    else
+    {
+        Handle = std::make_shared<IndexHandleImpl>(std::move(Data));
+    }
 }
 
 

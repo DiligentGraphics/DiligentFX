@@ -83,9 +83,14 @@ public:
 
     using BufferSourcesMapType = std::map<pxr::TfToken, std::shared_ptr<pxr::HdBufferSource>>;
 
-    void AllocateVertices(const std::string& Name, const BufferSourcesMapType& Sources, std::shared_ptr<VertexHandle>& Handle);
+    void AllocateVertices(const std::string&             Name,
+                          const BufferSourcesMapType&    Sources,
+                          std::shared_ptr<VertexHandle>& Handle);
 
-    std::shared_ptr<IndexHandle> AllocateIndices(const std::string& Name, pxr::VtValue Indices, Uint32 StartVertex);
+    void AllocateIndices(const std::string&                            Name,
+                         pxr::VtValue                                  Indices,
+                         Uint32                                        StartVertex,
+                         std::shared_ptr<HnGeometryPool::IndexHandle>& Handle);
 
 private:
     RefCntAutoPtr<IRenderDevice> m_pDevice;

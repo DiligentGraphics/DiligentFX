@@ -326,6 +326,8 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
     if (!CurrRepr)
         return;
 
+    HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(SceneDelegate.GetRenderIndex().GetRenderDelegate());
+
     const pxr::SdfPath& Id = GetId();
 
     const bool TopologyDirty   = pxr::HdChangeTracker::IsTopologyDirty(DirtyBits, Id);
@@ -384,10 +386,25 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
         DirtyBits &= ~pxr::HdChangeTracker::DirtyPrimvar;
     }
 
+    const bool UseNativeStartVertex = static_cast<HnRenderParam*>(RenderParam)->GetUseNativeStartVertex();
+
+    // When native start vertex is not supported, start vertex needs to be baked into the index data.
+    Uint32 BakedStartVertex = (!UseNativeStartVertex && m_VertexHandle) ? m_VertexHandle->GetStartVertex() : 0;
     if (!StagingVerts.Sources.empty())
     {
-        HnGeometryPool& GeometryPool = static_cast<HnRenderDelegate*>(SceneDelegate.GetRenderIndex().GetRenderDelegate())->GetGeometryPool();
+        HnGeometryPool& GeometryPool = RenderDelegate->GetGeometryPool();
         GeometryPool.AllocateVertices(Id.GetString(), StagingVerts.Sources, m_VertexHandle);
+
+        if (!UseNativeStartVertex)
+        {
+            Uint32 StartVertex = m_VertexHandle->GetStartVertex();
+            if (StartVertex != BakedStartVertex)
+            {
+                BakedStartVertex = StartVertex;
+                // Start vertex has changed, need to update index data
+                IndexDataDirty = true;
+            }
+        }
 
         m_DrawItemGpuGeometryDirty.store(true);
     }
@@ -397,13 +414,11 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
         StagingIndexData StagingInds;
         UpdateIndexData(StagingInds, StagingVerts.Points);
 
-        HnGeometryPool& GeometryPool = static_cast<HnRenderDelegate*>(SceneDelegate.GetRenderIndex().GetRenderDelegate())->GetGeometryPool();
+        HnGeometryPool& GeometryPool = RenderDelegate->GetGeometryPool();
 
-        const Uint32 StartVertex = static_cast<HnRenderParam*>(RenderParam)->GetUseNativeStartVertex() ? 0 : m_VertexHandle->GetStartVertex();
-
-        m_IndexData.Faces  = GeometryPool.AllocateIndices(Id.GetString() + " - faces", pxr::VtValue::Take(StagingInds.FaceIndices), StartVertex);
-        m_IndexData.Edges  = GeometryPool.AllocateIndices(Id.GetString() + " - edges", pxr::VtValue::Take(StagingInds.EdgeIndices), StartVertex);
-        m_IndexData.Points = GeometryPool.AllocateIndices(Id.GetString() + " - points", pxr::VtValue::Take(StagingInds.PointIndices), StartVertex);
+        GeometryPool.AllocateIndices(Id.GetString() + " - faces", pxr::VtValue::Take(StagingInds.FaceIndices), BakedStartVertex, m_IndexData.Faces);
+        GeometryPool.AllocateIndices(Id.GetString() + " - edges", pxr::VtValue::Take(StagingInds.EdgeIndices), BakedStartVertex, m_IndexData.Edges);
+        GeometryPool.AllocateIndices(Id.GetString() + " - points", pxr::VtValue::Take(StagingInds.PointIndices), BakedStartVertex, m_IndexData.Points);
 
         m_DrawItemGpuTopologyDirty.store(true);
     }
@@ -416,7 +431,7 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
 
     if (pxr::HdChangeTracker::IsTransformDirty(DirtyBits, Id))
     {
-        entt::registry& Registry  = static_cast<HnRenderDelegate*>(SceneDelegate.GetRenderIndex().GetRenderDelegate())->GetEcsRegistry();
+        entt::registry& Registry  = RenderDelegate->GetEcsRegistry();
         float4x4&       Transform = Registry.get<Components::Transform>(m_Entity).Val;
 
         float4x4 NewTransform = m_SkelLocalToPrimLocal * ToFloat4x4(SceneDelegate.GetTransform(Id));
@@ -442,7 +457,7 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
             {
                 static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::MeshVisibility);
             }
-            entt::registry& Registry = static_cast<HnRenderDelegate*>(SceneDelegate.GetRenderIndex().GetRenderDelegate())->GetEcsRegistry();
+            entt::registry& Registry = RenderDelegate->GetEcsRegistry();
             Registry.replace<Components::Visibility>(m_Entity, _sharedData.visible);
         }
 
