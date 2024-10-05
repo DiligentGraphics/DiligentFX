@@ -79,6 +79,10 @@ public:
     {
         return m_PendingUseCount.fetch_add(1) + 1;
     }
+    int GetPendingUseCount() const
+    {
+        return m_PendingUseCount.load();
+    }
     void CommitPendingUses()
     {
         m_UseCount.fetch_add(m_PendingUseCount.exchange(0));
@@ -94,6 +98,8 @@ private:
 // The vertex data is stored in a pool of buffers managed by the GLTF::ResourceManager,
 // or in standalone buffers if the pool is not used.
 // The data is immutable. Updating the contents requires creating a new VertexData object.
+// The buffers from the existing data can be reused if the new data is compatible with the existing data
+// and there are no other handles that reference the existing data.
 class HnGeometryPool::VertexData final : public GeometryPoolData
 {
 public:
@@ -115,7 +121,7 @@ public:
                std::shared_ptr<VertexData>   ExistingData) :
         m_Name{std::move(Name)},
         m_NumVertices{!Sources.empty() ? static_cast<Uint32>(Sources.begin()->second->GetNumElements()) : 0},
-        m_StagingData{std::make_unique<StagingData>()}
+        m_StagingData{std::make_unique<StagingData>(pResMgr)}
     {
         if (Sources.empty() || m_NumVertices == 0)
         {
@@ -186,19 +192,11 @@ public:
             }
         }
 
-        if (pResMgr != nullptr)
+        // If there is existing data, we will check if it is not used by other
+        // handles in the Update() method and its buffers can be reused.
+        if (!ExistingData)
         {
-            GLTF::ResourceManager::VertexLayoutKey VtxKey;
-            VtxKey.Elements.reserve(m_Streams.size());
-            for (auto& stream_it : m_Streams)
-            {
-                VertexStream& Stream = stream_it.second;
-                Stream.PoolIndex     = static_cast<Uint32>(VtxKey.Elements.size());
-                VtxKey.Elements.emplace_back(static_cast<Uint32>(Stream.ElementSize), BIND_VERTEX_BUFFER);
-            }
-
-            m_PoolAllocation = pResMgr->AllocateVertices(VtxKey, m_NumVertices);
-            VERIFY_EXPR(m_PoolAllocation);
+            InitPoolAllocation();
         }
     }
 
@@ -227,6 +225,40 @@ public:
             return;
         }
 
+        std::shared_ptr<VertexData>& ExistingData = m_StagingData->ExistingData;
+        if (ExistingData)
+        {
+            if (ExistingData->GetUseCount() == 0)
+            {
+                // If existing data has no uses, take its buffers and pool allocation
+                VERIFY(ExistingData->GetPendingUseCount() == 0, "Existing data has pending uses. This is a bug.");
+                m_PoolAllocation = std::move(ExistingData->m_PoolAllocation);
+                for (auto& stream_it : m_Streams)
+                {
+                    const pxr::TfToken& StreamName = stream_it.first;
+                    VertexStream&       Stream     = stream_it.second;
+
+                    auto src_stream_it = ExistingData->m_Streams.find(StreamName);
+                    if (src_stream_it != ExistingData->m_Streams.end())
+                    {
+                        Stream.Buffer = std::move(src_stream_it->second.Buffer);
+                        VERIFY_EXPR(Stream.Buffer);
+                    }
+                    else
+                    {
+                        UNEXPECTED("Failed to find existing data for vertex stream '", StreamName, "'. This is a bug.");
+                    }
+                }
+
+                ExistingData.reset();
+            }
+            else
+            {
+                // If existing data has uses, we need to create new buffers and pool allocation
+                InitPoolAllocation();
+            }
+        }
+
         for (auto& stream_it : m_Streams)
         {
             const pxr::TfToken& StreamName = stream_it.first;
@@ -245,7 +277,7 @@ public:
                 VERIFY(m_PoolAllocation->GetVertexCount() == m_NumVertices, "Unexpected number of vertices in the pool allocation.");
                 Stream.Buffer = m_PoolAllocation->GetBuffer(Stream.PoolIndex);
             }
-            else
+            else if (!Stream.Buffer)
             {
                 const auto BufferName = m_Name + " - " + StreamName.GetString();
                 BufferDesc Desc{
@@ -264,15 +296,22 @@ public:
             }
             else if (IBuffer* pSrcBuffer = source_it->second.Buffer)
             {
-                VERIFY(m_StagingData->ExistingData, "Existing data is null while SrcBuffer is not null. This is a bug.");
-                pContext->CopyBuffer(
-                    Stream.Buffer,
-                    m_StagingData->ExistingData->GetStartVertex() * Stream.ElementSize,
-                    RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
-                    Stream.Buffer,
-                    GetStartVertex() * Stream.ElementSize,
-                    DataSize,
-                    RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+                if (ExistingData)
+                {
+                    pContext->CopyBuffer(
+                        Stream.Buffer,
+                        ExistingData->GetStartVertex() * Stream.ElementSize,
+                        RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
+                        Stream.Buffer,
+                        GetStartVertex() * Stream.ElementSize,
+                        DataSize,
+                        RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+                }
+                else
+                {
+                    // We have taken the buffer from the existing data - no need to copy
+                    VERIFY_EPXR(Stream.Buffer == pSrcBuffer, "Unexpected buffer for vertex stream '", StreamName, "'");
+                }
             }
             else
             {
@@ -344,9 +383,33 @@ public:
         return Hashes;
     }
 
-    size_t GetStreamCount() const
+private:
+    void InitPoolAllocation()
     {
-        return m_Streams.size();
+        if (!m_StagingData)
+        {
+            UNEXPECTED("Staging data is null. This is a bug.");
+            return;
+        }
+
+        if (m_StagingData->pResMgr == nullptr)
+        {
+            return;
+        }
+
+        VERIFY(!m_PoolAllocation, "Pool allocation is already initialized");
+
+        GLTF::ResourceManager::VertexLayoutKey VtxKey;
+        VtxKey.Elements.reserve(m_Streams.size());
+        for (auto& stream_it : m_Streams)
+        {
+            VertexStream& Stream = stream_it.second;
+            Stream.PoolIndex     = static_cast<Uint32>(VtxKey.Elements.size());
+            VtxKey.Elements.emplace_back(static_cast<Uint32>(Stream.ElementSize), BIND_VERTEX_BUFFER);
+        }
+
+        m_PoolAllocation = m_StagingData->pResMgr->AllocateVertices(VtxKey, m_NumVertices);
+        VERIFY_EXPR(m_PoolAllocation);
     }
 
 private:
@@ -376,6 +439,8 @@ private:
 
     struct StagingData
     {
+        GLTF::ResourceManager* const pResMgr;
+
         struct SourceData
         {
             std::shared_ptr<pxr::HdBufferSource> Source;
@@ -390,6 +455,10 @@ private:
         std::unordered_map<pxr::TfToken, SourceData, pxr::TfToken::HashFunctor> Sources;
 
         std::shared_ptr<VertexData> ExistingData;
+
+        StagingData(GLTF::ResourceManager* pResMgr) :
+            pResMgr{pResMgr}
+        {}
     };
     std::unique_ptr<StagingData> m_StagingData;
 };
