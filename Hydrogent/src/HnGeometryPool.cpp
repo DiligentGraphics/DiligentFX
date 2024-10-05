@@ -193,7 +193,7 @@ public:
         }
 
         // If there is existing data, we will check if it is not used by other
-        // handles in the Update() method and its buffers can be reused.
+        // handles in the Update() method and hence its buffers can be reused.
         if (!ExistingData)
         {
             InitPoolAllocation();
@@ -310,7 +310,7 @@ public:
                 else
                 {
                     // We have taken the buffer from the existing data - no need to copy
-                    VERIFY_EPXR(Stream.Buffer == pSrcBuffer, "Unexpected buffer for vertex stream '", StreamName, "'");
+                    VERIFY(Stream.Buffer == pSrcBuffer, "Unexpected buffer for vertex stream '", StreamName, "'");
                 }
             }
             else
@@ -536,12 +536,13 @@ private:
 class HnGeometryPool::IndexData final : public GeometryPoolData
 {
 public:
-    IndexData(std::string            Name,
-              pxr::VtValue           Indices,
-              Uint32                 StartVertex,
-              GLTF::ResourceManager* pResMgr) :
+    IndexData(std::string                Name,
+              pxr::VtValue               Indices,
+              Uint32                     StartVertex,
+              GLTF::ResourceManager*     pResMgr,
+              std::shared_ptr<IndexData> ExistingData) :
         m_Name{std::move(Name)},
-        m_StagingData{std::make_unique<StagingData>(std::move(Indices), StartVertex)}
+        m_StagingData{std::make_unique<StagingData>(pResMgr, ExistingData, std::move(Indices), StartVertex)}
     {
         if (m_StagingData->Size == 0)
         {
@@ -550,9 +551,11 @@ public:
         }
 
         m_NumIndices = static_cast<Uint32>(m_StagingData->Size / sizeof(Uint32));
-        if (pResMgr != nullptr && m_NumIndices > 0)
+        // If there is existing data, we will check if it is not used by other
+        // handles in the Update() method and hence its buffer can be reused.
+        if (!ExistingData)
         {
-            m_Suballocation = pResMgr->AllocateIndices(m_StagingData->Size);
+            InitPoolAllocation();
         }
     }
 
@@ -588,30 +591,74 @@ public:
 
         VERIFY(m_StagingData->Size / sizeof(Uint32) == m_NumIndices, "Unexpected number of indices in the staging data");
 
-        BufferData IBData{m_StagingData->Ptr, m_StagingData->Size};
-        if (m_Suballocation == nullptr)
+        std::shared_ptr<IndexData>& ExistingData = m_StagingData->ExistingData;
+        if (ExistingData && ExistingData->GetNumIndices() != m_NumIndices)
+        {
+            UNEXPECTED("Existing data has different number of indices");
+            ExistingData.reset();
+        }
+        if (ExistingData)
+        {
+            if (ExistingData->GetUseCount() == 0)
+            {
+                // If existing data has no uses, take its buffer
+                VERIFY(ExistingData->GetPendingUseCount() == 0, "Existing data has pending uses. This is a bug.");
+                m_Suballocation = std::move(ExistingData->m_Suballocation);
+                m_Buffer        = std::move(ExistingData->m_Buffer);
+                ExistingData.reset();
+            }
+            else
+            {
+                // If existing data has uses, we need to create a new buffer
+                InitPoolAllocation();
+            }
+        }
+
+        if (m_Suballocation)
+        {
+            m_Buffer = m_Suballocation->GetBuffer();
+            VERIFY_EXPR(m_Suballocation->GetSize() == m_StagingData->Size);
+        }
+        else if (!m_Buffer)
         {
             BufferDesc Desc{
                 m_Name.c_str(),
-                IBData.DataSize,
+                m_StagingData->Size,
                 BIND_INDEX_BUFFER,
                 USAGE_DEFAULT,
             };
-            pDevice->CreateBuffer(Desc, &IBData, &m_Buffer);
-            VERIFY_EXPR(m_Buffer != nullptr);
+        }
 
+        pContext->UpdateBuffer(m_Buffer, GetStartIndex() * sizeof(Uint32), m_StagingData->Size, m_StagingData->Ptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+        if (!m_Suballocation)
+        {
             StateTransitionDesc Barrier{m_Buffer, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_INDEX_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE};
             pContext->TransitionResourceStates(1, &Barrier);
-        }
-        else
-        {
-            m_Buffer = m_Suballocation->GetBuffer();
-            VERIFY_EXPR(m_Suballocation->GetSize() == IBData.DataSize);
-            pContext->UpdateBuffer(m_Buffer, m_Suballocation->GetOffset(), IBData.DataSize, IBData.pData, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         }
 
         m_StagingData.reset();
         CommitPendingUses();
+    }
+
+private:
+    void InitPoolAllocation()
+    {
+        if (!m_StagingData)
+        {
+            UNEXPECTED("Staging data is null. This is a bug.");
+            return;
+        }
+
+        if (m_StagingData->pResMgr == nullptr)
+        {
+            return;
+        }
+
+        VERIFY(!m_Suballocation, "Pool allocation is already initialized");
+
+        m_Suballocation = m_StagingData->pResMgr->AllocateIndices(m_StagingData->Size);
+        VERIFY_EXPR(m_Suballocation);
     }
 
 private:
@@ -623,13 +670,20 @@ private:
 
     struct StagingData
     {
+        GLTF::ResourceManager* const pResMgr;
+        std::shared_ptr<IndexData>   ExistingData;
+
         pxr::VtValue Indices;
 
         const void* Ptr  = nullptr;
         size_t      Size = 0;
 
-        StagingData(pxr::VtValue _Indices,
-                    Uint32       StartVertex) :
+        StagingData(GLTF::ResourceManager*     _pResMgr,
+                    std::shared_ptr<IndexData> _ExistingData,
+                    pxr::VtValue               _Indices,
+                    Uint32                     StartVertex) :
+            pResMgr{_pResMgr},
+            ExistingData{std::move(_ExistingData)},
             Indices{std::move(_Indices)}
         {
             if (Indices.IsHolding<pxr::VtVec3iArray>())
@@ -835,7 +889,7 @@ void HnGeometryPool::AllocateIndices(const std::string&                         
         [&]() {
             // This code is executed only if the data is not found in the cache, and the data is created only once.
 
-            std::shared_ptr<IndexData> Data = std::make_shared<IndexData>(Name, std::move(Indices), StartVertex, m_UseIndexPool ? &m_ResMgr : nullptr);
+            std::shared_ptr<IndexData> Data = std::make_shared<IndexData>(Name, std::move(Indices), StartVertex, m_UseIndexPool ? &m_ResMgr : nullptr, ExistingData);
 
             {
                 std::lock_guard<std::mutex> Guard{m_PendingIndexDataMtx};
