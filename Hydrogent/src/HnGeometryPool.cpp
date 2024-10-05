@@ -118,6 +118,7 @@ public:
                const BufferSourcesMapType&   Sources,
                const VertexStreamHashesType& Hashes,
                GLTF::ResourceManager*        pResMgr,
+               bool                          DisallowPoolAllocationReuse,
                std::shared_ptr<VertexData>   ExistingData) :
         m_Name{std::move(Name)},
         m_NumVertices{!Sources.empty() ? static_cast<Uint32>(Sources.begin()->second->GetNumElements()) : 0},
@@ -194,7 +195,7 @@ public:
 
         // If there is existing data, we will check if it is not used by other
         // handles in the Update() method and hence its buffers can be reused.
-        if (!ExistingData)
+        if (!ExistingData || DisallowPoolAllocationReuse)
         {
             InitPoolAllocation();
         }
@@ -226,7 +227,7 @@ public:
         }
 
         std::shared_ptr<VertexData>& ExistingData = m_StagingData->ExistingData;
-        if (ExistingData)
+        if (ExistingData && !m_PoolAllocation)
         {
             if (ExistingData->GetUseCount() == 0)
             {
@@ -456,8 +457,8 @@ private:
 
         std::shared_ptr<VertexData> ExistingData;
 
-        StagingData(GLTF::ResourceManager* pResMgr) :
-            pResMgr{pResMgr}
+        StagingData(GLTF::ResourceManager* _pResMgr) :
+            pResMgr{_pResMgr}
         {}
     };
     std::unique_ptr<StagingData> m_StagingData;
@@ -813,7 +814,8 @@ private:
 
 void HnGeometryPool::AllocateVertices(const std::string&             Name,
                                       const BufferSourcesMapType&    Sources,
-                                      std::shared_ptr<VertexHandle>& Handle)
+                                      std::shared_ptr<VertexHandle>& Handle,
+                                      bool                           DisallowPoolAllocationReuse)
 {
     if (Sources.empty())
     {
@@ -845,7 +847,9 @@ void HnGeometryPool::AllocateVertices(const std::string&             Name,
         [&]() {
             // This code is executed only if the data is not found in the cache, and the data is created only once.
 
-            std::shared_ptr<VertexData> Data = std::make_shared<VertexData>(Name, Sources, Hashes, m_UseVertexPool ? &m_ResMgr : nullptr, ExistingData);
+            std::shared_ptr<VertexData> Data = std::make_shared<VertexData>(Name, Sources, Hashes,
+                                                                            m_UseVertexPool ? &m_ResMgr : nullptr,
+                                                                            DisallowPoolAllocationReuse, ExistingData);
 
             {
                 std::lock_guard<std::mutex> Guard{m_PendingVertexDataMtx};

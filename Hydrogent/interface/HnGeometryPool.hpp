@@ -85,7 +85,8 @@ public:
 
     void AllocateVertices(const std::string&             Name,
                           const BufferSourcesMapType&    Sources,
-                          std::shared_ptr<VertexHandle>& Handle);
+                          std::shared_ptr<VertexHandle>& Handle,
+                          bool                           DisallowPoolAllocationReuse);
 
     void AllocateIndices(const std::string&                            Name,
                          pxr::VtValue                                  Indices,

@@ -393,7 +393,10 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
     if (!StagingVerts.Sources.empty())
     {
         HnGeometryPool& GeometryPool = RenderDelegate->GetGeometryPool();
-        GeometryPool.AllocateVertices(Id.GetString(), StagingVerts.Sources, m_VertexHandle);
+        // When native start vertex is not supported, start vertex needs to be baked into the index data, and
+        // we need to know the start vertex now, so we have to disallow pool allocation reuse (with pool allocation reuse
+        // enabled, the allocation initialization is delayed until the GeometryPool.Commit() is called later).
+        GeometryPool.AllocateVertices(Id.GetString(), StagingVerts.Sources, m_VertexHandle, /*DisallowPoolAllocationReuse = */ !UseNativeStartVertex);
 
         if (!UseNativeStartVertex)
         {
