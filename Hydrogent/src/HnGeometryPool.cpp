@@ -27,7 +27,6 @@
 #include "HnGeometryPool.hpp"
 #include "HnTokens.hpp"
 
-#include "GraphicsTypesX.hpp"
 #include "GLTFResourceManager.hpp"
 
 #include "pxr/base/tf/token.h"
@@ -59,33 +58,71 @@ HnGeometryPool::~HnGeometryPool()
 {
 }
 
+// Vertex data.
+//
+// The vertex data is stored in a pool of buffers managed by the GLTF::ResourceManager,
+// or in standalone buffers if the pool is not used.
+// The data is immutable. Updating the contents requires creating a new VertexData object.
 class HnGeometryPool::VertexData final
 {
 public:
+    // A mapping from the source name to the source data hash, e.g.:
+    //  "points"  -> 7957704880698454784
+    //  "normals" -> 7753567487763246288
     using VertexStreamHashesType = std::map<pxr::TfToken, size_t>;
 
+    // Constructs the vertex data from the provided sources.
+    //
+    // The vertex data will contain data from the provided sources and the existing data.
+    // The existing data is used to copy the sources that are not present in the new sources,
+    // e.g. the normals from the existing data will be copied to the new data if the new data
+    // does not provide normals. This happens when only some of the primvars are updated.
     VertexData(std::string                   Name,
                const BufferSourcesMapType&   Sources,
                const VertexStreamHashesType& Hashes,
                GLTF::ResourceManager*        pResMgr,
                std::shared_ptr<VertexData>   ExistingData) :
         m_Name{std::move(Name)},
+        m_NumVertices{!Sources.empty() ? static_cast<Uint32>(Sources.begin()->second->GetNumElements()) : 0},
         m_StagingData{std::make_unique<StagingData>()}
     {
-        if (Sources.empty())
+        if (Sources.empty() || m_NumVertices == 0)
         {
             UNEXPECTED("No vertex data sources provided");
             return;
         }
 
-        m_NumVertices = static_cast<Uint32>(Sources.begin()->second->GetNumElements());
+        auto AddStream = [this, &Hashes](const pxr::TfToken&                  Name,
+                                         size_t                               ElementSize,
+                                         std::shared_ptr<pxr::HdBufferSource> Source,
+                                         IBuffer*                             SrcBuffer) {
+            size_t Hash = 0;
+            {
+                auto hash_it = Hashes.find(Name);
+                if (hash_it != Hashes.end())
+                    Hash = hash_it->second;
+                else
+                    UNEXPECTED("Failed to find hash for vertex stream '", Name, "'. This is a bug.");
+            }
+
+            {
+                auto it_inserted = m_Streams.emplace(Name, VertexStream{ElementSize, Hash});
+                VERIFY(it_inserted.second, "Failed to insert vertex stream '", Name, "' into the map, which means the stream already exists.");
+            }
+
+            {
+                auto it_inserted = m_StagingData->Sources.emplace(Name, StagingData::SourceData{std::move(Source), SrcBuffer});
+                VERIFY(it_inserted.second, "Failed to insert staging data for vertex stream '", Name, "' into the map, which means the stream already exists.");
+            }
+        };
+
         for (const auto& source_it : Sources)
         {
             const pxr::TfToken&                         SourceName = source_it.first;
             const std::shared_ptr<pxr::HdBufferSource>& Source     = source_it.second;
 
-            VERIFY(m_NumVertices == source_it.second->GetNumElements(), "The number of elements in buffer source '", SourceName,
-                   "' does not match the number of vertices (", m_NumVertices, ")");
+            VERIFY(m_NumVertices == Source->GetNumElements(), "The number of elements (", Source->GetNumElements(),
+                   ") in buffer source '", SourceName, "' does not match the number of vertices (", m_NumVertices, ")");
 
             const pxr::HdTupleType ElementType = Source->GetTupleType();
             const size_t           ElementSize = HdDataSizeOfType(ElementType.type) * ElementType.count;
@@ -98,42 +135,20 @@ public:
             else if (SourceName == HnTokens->joints)
                 VERIFY(ElementType.type == pxr::HdTypeFloatVec4 && ElementType.count == 2, "Unexpected joints element type");
 
-            VERIFY(m_Streams.find(SourceName) == m_Streams.end(), "Duplicate vertex data source '", SourceName, "'");
-            VertexStream& Stream = m_Streams[SourceName];
-            Stream.ElementSize   = ElementSize;
-
-            auto hash_it = Hashes.find(SourceName);
-            if (hash_it != Hashes.end())
-                Stream.Hash = hash_it->second;
-            else
-                UNEXPECTED("Failed to find hash for vertex stream '", SourceName, "'. This is a bug.");
-
-            m_StagingData->Sources[SourceName].Source = Source;
+            AddStream(SourceName, ElementSize, Source, nullptr);
         }
 
         // Add sources from the existing data that are not present in the new sources
         if (ExistingData)
         {
-            for (auto& stream_it : ExistingData->m_Streams)
+            for (const auto& stream_it : ExistingData->m_Streams)
             {
                 const pxr::TfToken& SourceName     = stream_it.first;
-                VertexStream&       ExistingStream = stream_it.second;
-
-                const auto new_stream_it = m_Streams.find(SourceName);
-                if (new_stream_it == m_Streams.end())
+                const VertexStream& ExistingStream = stream_it.second;
+                if (m_Streams.find(SourceName) == m_Streams.end())
                 {
-                    VertexStream& Stream = m_Streams[SourceName];
-                    Stream.ElementSize   = ExistingStream.ElementSize;
-
-                    auto hash_it = Hashes.find(SourceName);
-                    if (hash_it != Hashes.end())
-                        Stream.Hash = hash_it->second;
-                    else
-                        UNEXPECTED("Failed to find hash for vertex stream '", SourceName, "'. This is a bug.");
-
                     VERIFY_EXPR(ExistingStream.Buffer);
-                    m_StagingData->Sources[SourceName].Buffer = ExistingStream.Buffer;
-
+                    AddStream(SourceName, ExistingStream.ElementSize, nullptr, ExistingStream.Buffer);
                     if (!m_StagingData->ExistingData)
                         m_StagingData->ExistingData = ExistingData;
                 }
@@ -218,6 +233,7 @@ public:
             }
             else if (IBuffer* pSrcBuffer = source_it->second.Buffer)
             {
+                VERIFY(m_StagingData->ExistingData, "Existing data is null while SrcBuffer is not null. This is a bug.");
                 pContext->CopyBuffer(
                     Stream.Buffer,
                     m_StagingData->ExistingData->GetStartVertex() * Stream.ElementSize,
@@ -271,9 +287,11 @@ public:
         return true;
     }
 
+    // Computes vertex stream hashes for the data sources and the existing data.
     static VertexStreamHashesType ComputeVertexStreamHashes(const BufferSourcesMapType& Sources, const VertexData* pData)
     {
         VertexStreamHashesType Hashes;
+        // If the existing data is provided, copy the hashes from it
         if (pData != nullptr)
         {
             VERIFY_EXPR(pData->IsCompatible(Sources));
@@ -285,6 +303,7 @@ public:
             }
         }
 
+        // Override the hashes with the new data
         for (const auto& source_it : Sources)
         {
             Hashes[source_it.first] = source_it.second->ComputeHash();
@@ -301,20 +320,24 @@ public:
 private:
     const std::string m_Name;
 
-    Uint32 m_NumVertices = 0;
+    const Uint32 m_NumVertices;
 
     RefCntAutoPtr<IVertexPoolAllocation> m_PoolAllocation;
 
     struct VertexStream
     {
+        const size_t ElementSize;
+        const size_t Hash;
+
         // pool element index (e.g. "normals" -> 0, "points" -> 1, etc.)
-        Uint32 PoolIndex;
+        Uint32 PoolIndex = 0;
 
         RefCntAutoPtr<IBuffer> Buffer;
 
-        size_t ElementSize = 0;
-
-        size_t Hash = 0;
+        VertexStream(size_t _ElementSize, size_t _Hash) :
+            ElementSize{_ElementSize},
+            Hash{_Hash}
+        {}
     };
     // Keep streams sorted by name to ensure deterministic order
     std::map<pxr::TfToken, VertexStream> m_Streams;
@@ -325,6 +348,11 @@ private:
         {
             std::shared_ptr<pxr::HdBufferSource> Source;
             RefCntAutoPtr<IBuffer>               Buffer;
+
+            SourceData(std::shared_ptr<pxr::HdBufferSource> _Source, IBuffer* _Buffer) :
+                Source{std::move(_Source)},
+                Buffer{_Buffer}
+            {}
         };
 
         std::unordered_map<pxr::TfToken, SourceData, pxr::TfToken::HashFunctor> Sources;
@@ -334,6 +362,9 @@ private:
     std::unique_ptr<StagingData> m_StagingData;
 };
 
+
+// Vertex handle keeps a reference to the vertex data.
+// Multiple handles can reference the same data.
 class HnGeometryPool::VertexHandleImpl final : public HnGeometryPool::VertexHandle
 {
 public:
@@ -371,6 +402,12 @@ private:
     std::shared_ptr<VertexData> m_Data;
 };
 
+
+// Index data.
+//
+// The index data is stored in the index pool managed by the GLTF::ResourceManager,
+// or in a standalone buffer if the pool is not used.
+// The data is immutable. Updating the contents requires creating a new IndexData object.
 class HnGeometryPool::IndexData final
 {
 public:
@@ -429,21 +466,14 @@ public:
         BufferData IBData{m_StagingData->Ptr, m_StagingData->Size};
         if (m_Suballocation == nullptr)
         {
-            if (m_Buffer)
-            {
-                pContext->UpdateBuffer(m_Buffer, 0, IBData.DataSize, IBData.pData, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-            }
-            else
-            {
-                BufferDesc Desc{
-                    m_Name.c_str(),
-                    IBData.DataSize,
-                    BIND_INDEX_BUFFER,
-                    USAGE_DEFAULT,
-                };
-                pDevice->CreateBuffer(Desc, &IBData, &m_Buffer);
-                VERIFY_EXPR(m_Buffer != nullptr);
-            }
+            BufferDesc Desc{
+                m_Name.c_str(),
+                IBData.DataSize,
+                BIND_INDEX_BUFFER,
+                USAGE_DEFAULT,
+            };
+            pDevice->CreateBuffer(Desc, &IBData, &m_Buffer);
+            VERIFY_EXPR(m_Buffer != nullptr);
 
             StateTransitionDesc Barrier{m_Buffer, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_INDEX_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE};
             pContext->TransitionResourceStates(1, &Barrier);
@@ -536,6 +566,9 @@ private:
     std::unique_ptr<StagingData> m_StagingData;
 };
 
+
+// Index handle keeps a reference to the index data.
+// Multiple handles can reference the same data.
 class HnGeometryPool::IndexHandleImpl final : public HnGeometryPool::IndexHandle
 {
 public:
@@ -567,6 +600,7 @@ public:
 private:
     std::shared_ptr<IndexData> m_Data;
 };
+
 
 void HnGeometryPool::AllocateVertices(const std::string&             Name,
                                       const BufferSourcesMapType&    Sources,
@@ -608,6 +642,8 @@ void HnGeometryPool::AllocateVertices(const std::string&             Name,
     std::shared_ptr<VertexData> Data = m_VertexCache.Get(
         Hash,
         [&]() {
+            // This code is executed only if the data is not found in the cache, and the data is created only once.
+
             std::shared_ptr<VertexData> Data = std::make_shared<VertexData>(Name, Sources, Hashes, m_UseVertexPool ? &m_ResMgr : nullptr, ExistingData);
 
             {
@@ -646,6 +682,8 @@ void HnGeometryPool::AllocateIndices(const std::string&                         
     std::shared_ptr<IndexData> Data = m_IndexCache.Get(
         Hash,
         [&]() {
+            // This code is executed only if the data is not found in the cache, and the data is created only once.
+
             std::shared_ptr<IndexData> Data = std::make_shared<IndexData>(Name, std::move(Indices), StartVertex, m_UseIndexPool ? &m_ResMgr : nullptr);
 
             {
