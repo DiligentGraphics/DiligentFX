@@ -58,12 +58,43 @@ HnGeometryPool::~HnGeometryPool()
 {
 }
 
+class GeometryPoolData
+{
+public:
+    ~GeometryPoolData()
+    {
+        VERIFY(m_UseCount.load() == 0, "Use count is not 0");
+    }
+
+    int RemoveUse()
+    {
+        VERIFY(m_UseCount.load() > 0, "Use count is already 0");
+        return m_UseCount.fetch_add(-1) - 1;
+    }
+    int GetUseCount() const
+    {
+        return m_UseCount.load();
+    }
+    int AddPendingUse()
+    {
+        return m_PendingUseCount.fetch_add(1) + 1;
+    }
+    void CommitPendingUses()
+    {
+        m_UseCount.fetch_add(m_PendingUseCount.exchange(0));
+    }
+
+private:
+    std::atomic<int> m_UseCount{0};
+    std::atomic<int> m_PendingUseCount{0};
+};
+
 // Vertex data.
 //
 // The vertex data is stored in a pool of buffers managed by the GLTF::ResourceManager,
 // or in standalone buffers if the pool is not used.
 // The data is immutable. Updating the contents requires creating a new VertexData object.
-class HnGeometryPool::VertexData final
+class HnGeometryPool::VertexData final : public GeometryPoolData
 {
 public:
     // A mapping from the source name to the source data hash, e.g.:
@@ -256,6 +287,7 @@ public:
         }
 
         m_StagingData.reset();
+        CommitPendingUses();
     }
 
     bool IsCompatible(const BufferSourcesMapType& Sources) const
@@ -371,6 +403,18 @@ public:
     VertexHandleImpl(std::shared_ptr<VertexData> Data) :
         m_Data{std::move(Data)}
     {
+        if (m_Data)
+        {
+            m_Data->AddPendingUse();
+        }
+    }
+
+    ~VertexHandleImpl()
+    {
+        if (m_Data)
+        {
+            m_Data->RemoveUse();
+        }
     }
 
     virtual IBuffer* GetBuffer(const pxr::TfToken& Name) const override final
@@ -395,6 +439,18 @@ public:
 
     void SetData(std::shared_ptr<VertexData> Data)
     {
+        if (m_Data == Data)
+            return;
+
+        if (m_Data)
+        {
+            m_Data->RemoveUse();
+        }
+        if (Data)
+        {
+            Data->AddPendingUse();
+        }
+
         m_Data = std::move(Data);
     }
 
@@ -408,7 +464,7 @@ private:
 // The index data is stored in the index pool managed by the GLTF::ResourceManager,
 // or in a standalone buffer if the pool is not used.
 // The data is immutable. Updating the contents requires creating a new IndexData object.
-class HnGeometryPool::IndexData final
+class HnGeometryPool::IndexData final : public GeometryPoolData
 {
 public:
     IndexData(std::string            Name,
@@ -486,6 +542,7 @@ public:
         }
 
         m_StagingData.reset();
+        CommitPendingUses();
     }
 
 private:
@@ -575,6 +632,18 @@ public:
     IndexHandleImpl(std::shared_ptr<IndexData> Data) :
         m_Data{std::move(Data)}
     {
+        if (m_Data)
+        {
+            m_Data->AddPendingUse();
+        }
+    }
+
+    ~IndexHandleImpl()
+    {
+        if (m_Data)
+        {
+            m_Data->RemoveUse();
+        }
     }
 
     virtual IBuffer* GetBuffer() const override final
@@ -592,8 +661,25 @@ public:
         return m_Data ? m_Data->GetStartIndex() : 0;
     }
 
+    std::shared_ptr<IndexData> GetData() const
+    {
+        return m_Data;
+    }
+
     void SetData(std::shared_ptr<IndexData> Data)
     {
+        if (m_Data == Data)
+            return;
+
+        if (m_Data)
+        {
+            m_Data->RemoveUse();
+        }
+        if (Data)
+        {
+            Data->AddPendingUse();
+        }
+
         m_Data = std::move(Data);
     }
 
@@ -612,23 +698,15 @@ void HnGeometryPool::AllocateVertices(const std::string&             Name,
         return;
     }
 
-    std::shared_ptr<VertexData> ExistingData;
-    if (Handle)
+    std::shared_ptr<VertexData> ExistingData = Handle ?
+        static_cast<VertexHandleImpl*>(Handle.get())->GetData() :
+        nullptr;
+    if (ExistingData && !ExistingData->IsCompatible(Sources))
     {
-        ExistingData = static_cast<VertexHandleImpl*>(Handle.get())->GetData();
-        if (!ExistingData->IsCompatible(Sources))
-        {
-            UNEXPECTED("Existing vertex data is not compatible with the provided sources. "
-                       "This indicates that the number of vertices, the element size or the vertex data source names have changed. "
-                       "In any of this cases the mesh should request a new vertex handle.");
-            Handle.reset();
-            ExistingData.reset();
-        }
-        if (ExistingData && ExistingData->GetStreamCount() == Sources.size())
-        {
-            // All streams in the existing data are present in the new sources - no data to move
-            ExistingData.reset();
-        }
+        UNEXPECTED("Existing vertex data is not compatible with the provided sources. "
+                   "This indicates that the number of vertices, the element size or the vertex data source names have changed. "
+                   "In any of this cases the mesh should request a new vertex handle.");
+        ExistingData.reset();
     }
 
     VertexData::VertexStreamHashesType Hashes = VertexData::ComputeVertexStreamHashes(Sources, ExistingData.get());
@@ -678,6 +756,10 @@ void HnGeometryPool::AllocateIndices(const std::string&                         
 
     size_t Hash = Indices.GetHash();
     Hash        = pxr::TfHash::Combine(Hash, StartVertex);
+
+    std::shared_ptr<IndexData> ExistingData = Handle ?
+        static_cast<IndexHandleImpl*>(Handle.get())->GetData() :
+        nullptr;
 
     std::shared_ptr<IndexData> Data = m_IndexCache.Get(
         Hash,
