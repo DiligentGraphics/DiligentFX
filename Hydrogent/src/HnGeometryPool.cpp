@@ -66,8 +66,14 @@ public:
         VERIFY(m_UseCount.load() == 0, "Use count is not 0");
     }
 
+    int AddUse()
+    {
+        VERIFY(IsInitialized(), "Adding use for uninitialized data. This is a bug.");
+        return m_UseCount.fetch_add(1) + 1;
+    }
     int RemoveUse()
     {
+        VERIFY(IsInitialized(), "Removing use for uninitialized data. This is a bug.");
         VERIFY(m_UseCount.load() > 0, "Use count is already 0");
         return m_UseCount.fetch_add(-1) - 1;
     }
@@ -77,6 +83,10 @@ public:
     }
     int AddPendingUse()
     {
+        VERIFY(!IsInitialized(), "Adding pending use for initialized data. This is a bug.");
+        VERIFY(m_UseCount.load() == 0,
+               "Adding pending use for data that is already in use. This should never happen as the data is only initialized once, which is when "
+               "all pending uses are committed. After data is initialized, it can never be in pending state again.");
         return m_PendingUseCount.fetch_add(1) + 1;
     }
     int GetPendingUseCount() const
@@ -87,6 +97,8 @@ public:
     {
         m_UseCount.fetch_add(m_PendingUseCount.exchange(0));
     }
+
+    virtual bool IsInitialized() const = 0;
 
 private:
     std::atomic<int> m_UseCount{0};
@@ -122,7 +134,7 @@ public:
                std::shared_ptr<VertexData>   ExistingData) :
         m_Name{std::move(Name)},
         m_NumVertices{!Sources.empty() ? static_cast<Uint32>(Sources.begin()->second->GetNumElements()) : 0},
-        m_StagingData{std::make_unique<StagingData>(pResMgr)}
+        m_StagingData{std::make_unique<StagingData>(pResMgr, ExistingData)}
     {
         if (Sources.empty() || m_NumVertices == 0)
         {
@@ -187,14 +199,12 @@ public:
                 {
                     VERIFY_EXPR(ExistingStream.Buffer);
                     AddStream(SourceName, ExistingStream.ElementSize, nullptr, ExistingStream.Buffer);
-                    if (!m_StagingData->ExistingData)
-                        m_StagingData->ExistingData = ExistingData;
                 }
             }
         }
 
         // If there is existing data, we will check if it is not used by other
-        // handles in the Update() method and hence its buffers can be reused.
+        // handles in the Initialize() method and hence its buffers can be reused.
         if (!ExistingData || DisallowPoolAllocationReuse)
         {
             InitPoolAllocation();
@@ -217,12 +227,17 @@ public:
         return m_PoolAllocation ? m_PoolAllocation->GetStartVertex() : 0;
     }
 
-    void Update(IRenderDevice*  pDevice,
-                IDeviceContext* pContext)
+    virtual bool IsInitialized() const override final
+    {
+        return !m_StagingData;
+    }
+
+    void Initialize(IRenderDevice*  pDevice,
+                    IDeviceContext* pContext)
     {
         if (!m_StagingData)
         {
-            UNEXPECTED("No staging data. This may indicate the Update() method is called more than once, which is a bug.");
+            UNEXPECTED("No staging data. This may indicate the Initialize() method is called more than once, which is a bug.");
             return;
         }
 
@@ -233,6 +248,7 @@ public:
             {
                 // If existing data has no uses, take its buffers and pool allocation
                 VERIFY(ExistingData->GetPendingUseCount() == 0, "Existing data has pending uses. This is a bug.");
+                VERIFY(ExistingData->IsInitialized(), "Existing data is not initialized. This is a bug.");
                 m_PoolAllocation = std::move(ExistingData->m_PoolAllocation);
                 for (auto& stream_it : m_Streams)
                 {
@@ -242,8 +258,9 @@ public:
                     auto src_stream_it = ExistingData->m_Streams.find(StreamName);
                     if (src_stream_it != ExistingData->m_Streams.end())
                     {
+                        VERIFY_EXPR(Stream.ElementSize == src_stream_it->second.ElementSize);
+                        VERIFY_EXPR(src_stream_it->second.Buffer);
                         Stream.Buffer = std::move(src_stream_it->second.Buffer);
-                        VERIFY_EXPR(Stream.Buffer);
                     }
                     else
                     {
@@ -251,6 +268,7 @@ public:
                     }
                 }
 
+                // Reset existing data since we don't need to copy anything from it
                 ExistingData.reset();
             }
             else
@@ -300,7 +318,7 @@ public:
                 if (ExistingData)
                 {
                     pContext->CopyBuffer(
-                        Stream.Buffer,
+                        pSrcBuffer,
                         ExistingData->GetStartVertex() * Stream.ElementSize,
                         RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
                         Stream.Buffer,
@@ -441,6 +459,7 @@ private:
     struct StagingData
     {
         GLTF::ResourceManager* const pResMgr;
+        std::shared_ptr<VertexData>  ExistingData;
 
         struct SourceData
         {
@@ -455,36 +474,70 @@ private:
 
         std::unordered_map<pxr::TfToken, SourceData, pxr::TfToken::HashFunctor> Sources;
 
-        std::shared_ptr<VertexData> ExistingData;
-
-        StagingData(GLTF::ResourceManager* _pResMgr) :
-            pResMgr{_pResMgr}
+        StagingData(GLTF::ResourceManager* _pResMgr, std::shared_ptr<VertexData> _ExistingData) :
+            pResMgr{_pResMgr},
+            ExistingData{std::move(_ExistingData)}
         {}
     };
     std::unique_ptr<StagingData> m_StagingData;
 };
 
 
-// Vertex handle keeps a reference to the vertex data.
-// Multiple handles can reference the same data.
-class HnGeometryPool::VertexHandleImpl final : public HnGeometryPool::VertexHandle
+template <typename T, typename Base>
+class PoolDataHandle : public Base
 {
 public:
-    VertexHandleImpl(std::shared_ptr<VertexData> Data) :
-        m_Data{std::move(Data)}
+    PoolDataHandle(std::shared_ptr<T> Data)
     {
-        if (m_Data)
-        {
-            m_Data->AddPendingUse();
-        }
+        SetData(std::move(Data));
     }
 
-    ~VertexHandleImpl()
+    ~PoolDataHandle()
     {
         if (m_Data)
         {
             m_Data->RemoveUse();
         }
+    }
+
+    std::shared_ptr<T> GetData() const
+    {
+        return m_Data;
+    }
+
+    void SetData(std::shared_ptr<T> Data)
+    {
+        if (m_Data == Data)
+            return;
+
+        if (m_Data)
+        {
+            m_Data->RemoveUse();
+        }
+
+        if (Data)
+        {
+            if (!Data->IsInitialized())
+                Data->AddPendingUse();
+            else
+                Data->AddUse();
+        }
+
+        m_Data = std::move(Data);
+    }
+
+protected:
+    std::shared_ptr<T> m_Data;
+};
+
+// Vertex handle keeps a reference to the vertex data.
+// Multiple handles can reference the same data.
+class HnGeometryPool::VertexHandleImpl final : public PoolDataHandle<VertexData, HnGeometryPool::VertexHandle>
+{
+public:
+    VertexHandleImpl(std::shared_ptr<VertexData> Data) :
+        PoolDataHandle<VertexData, HnGeometryPool::VertexHandle>{std::move(Data)}
+    {
     }
 
     virtual IBuffer* GetBuffer(const pxr::TfToken& Name) const override final
@@ -501,31 +554,6 @@ public:
     {
         return m_Data ? m_Data->GetStartVertex() : 0;
     }
-
-    std::shared_ptr<VertexData> GetData() const
-    {
-        return m_Data;
-    }
-
-    void SetData(std::shared_ptr<VertexData> Data)
-    {
-        if (m_Data == Data)
-            return;
-
-        if (m_Data)
-        {
-            m_Data->RemoveUse();
-        }
-        if (Data)
-        {
-            Data->AddPendingUse();
-        }
-
-        m_Data = std::move(Data);
-    }
-
-private:
-    std::shared_ptr<VertexData> m_Data;
 };
 
 
@@ -553,7 +581,7 @@ public:
 
         m_NumIndices = static_cast<Uint32>(m_StagingData->Size / sizeof(Uint32));
         // If there is existing data, we will check if it is not used by other
-        // handles in the Update() method and hence its buffer can be reused.
+        // handles in the Initialize() method and hence its buffer can be reused.
         if (!ExistingData)
         {
             InitPoolAllocation();
@@ -575,12 +603,17 @@ public:
         return m_NumIndices;
     }
 
-    void Update(IRenderDevice*  pDevice,
-                IDeviceContext* pContext)
+    virtual bool IsInitialized() const override final
+    {
+        return !m_StagingData;
+    }
+
+    void Initialize(IRenderDevice*  pDevice,
+                    IDeviceContext* pContext)
     {
         if (!m_StagingData)
         {
-            UNEXPECTED("No staging data. This may indicate the Update() method is called more than once, which is a bug.");
+            UNEXPECTED("No staging data. This may indicate the Initialize() method is called more than once, which is a bug.");
             return;
         }
 
@@ -750,24 +783,12 @@ private:
 
 // Index handle keeps a reference to the index data.
 // Multiple handles can reference the same data.
-class HnGeometryPool::IndexHandleImpl final : public HnGeometryPool::IndexHandle
+class HnGeometryPool::IndexHandleImpl final : public PoolDataHandle<IndexData, HnGeometryPool::IndexHandle>
 {
 public:
     IndexHandleImpl(std::shared_ptr<IndexData> Data) :
-        m_Data{std::move(Data)}
+        PoolDataHandle<IndexData, HnGeometryPool::IndexHandle>{std::move(Data)}
     {
-        if (m_Data)
-        {
-            m_Data->AddPendingUse();
-        }
-    }
-
-    ~IndexHandleImpl()
-    {
-        if (m_Data)
-        {
-            m_Data->RemoveUse();
-        }
     }
 
     virtual IBuffer* GetBuffer() const override final
@@ -789,26 +810,6 @@ public:
     {
         return m_Data;
     }
-
-    void SetData(std::shared_ptr<IndexData> Data)
-    {
-        if (m_Data == Data)
-            return;
-
-        if (m_Data)
-        {
-            m_Data->RemoveUse();
-        }
-        if (Data)
-        {
-            Data->AddPendingUse();
-        }
-
-        m_Data = std::move(Data);
-    }
-
-private:
-    std::shared_ptr<IndexData> m_Data;
 };
 
 
@@ -920,7 +921,7 @@ void HnGeometryPool::Commit(IDeviceContext* pContext)
         std::lock_guard<std::mutex> Guard{m_PendingVertexDataMtx};
         for (auto& Data : m_PendingVertexData)
         {
-            Data->Update(m_pDevice, pContext);
+            Data->Initialize(m_pDevice, pContext);
         }
         m_PendingVertexData.clear();
     }
@@ -929,7 +930,7 @@ void HnGeometryPool::Commit(IDeviceContext* pContext)
         std::lock_guard<std::mutex> Guard{m_PendingIndexDataMtx};
         for (auto& Data : m_PendingIndexData)
         {
-            Data->Update(m_pDevice, pContext);
+            Data->Initialize(m_pDevice, pContext);
         }
         m_PendingIndexData.clear();
     }
