@@ -108,7 +108,7 @@ convert_shaders_to_headers("${SHADERS}" ${SHADER_OUTPUT_DIR} ${SHADERS_LIST_FILE
 set(HYDROGENT_SOURCE ${SOURCE} ${INCLUDE} ${INTERFACE} ${SHADERS} readme.md)
 add_library(Diligent-Hydrogent STATIC ${HYDROGENT_SOURCE} ${SHADERS_LIST_FILE} ${SHADERS_INC_LIST})
 
-set_common_target_properties(Diligent-Hydrogent)
+set_common_target_properties(Diligent-Hydrogent 17)
 
 add_library(USD-Libraries INTERFACE)
 
@@ -231,8 +231,6 @@ PUBLIC
 
 set_target_properties(Diligent-Hydrogent PROPERTIES
     FOLDER DiligentFX
-    CXX_STANDARD 17
-    CXX_STANDARD_REQUIRED ON
 )
 
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${HYDROGENT_SOURCE})
