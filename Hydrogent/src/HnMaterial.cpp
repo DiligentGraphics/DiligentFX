@@ -106,45 +106,48 @@ void HnMaterial::Sync(pxr::HdSceneDelegate* SceneDelegate,
     if (*DirtyBits == pxr::HdMaterial::Clean)
         return;
 
-    HnRenderDelegate*   RenderDelegate = static_cast<HnRenderDelegate*>(SceneDelegate->GetRenderIndex().GetRenderDelegate());
-    HnTextureRegistry&  TexRegistry    = RenderDelegate->GetTextureRegistry();
-    const USD_Renderer& UsdRenderer    = *RenderDelegate->GetUSDRenderer();
-
-    // A mapping from the texture name to the texture coordinate set index (e.g. "diffuseColor" -> 0)
-    TexNameToCoordSetMapType TexNameToCoordSetMap;
-
-    pxr::VtValue vtMat = SceneDelegate->GetMaterialResource(GetId());
-    if (vtMat.IsHolding<pxr::HdMaterialNetworkMap>())
+    if (*DirtyBits & pxr::HdMaterial::DirtyResource)
     {
-        const pxr::HdMaterialNetworkMap& hdNetworkMap = vtMat.UncheckedGet<pxr::HdMaterialNetworkMap>();
-        if (!hdNetworkMap.terminals.empty() && !hdNetworkMap.map.empty())
-        {
-            try
-            {
-                m_Network = HnMaterialNetwork{GetId(), hdNetworkMap}; // May throw
+        HnRenderDelegate*   RenderDelegate = static_cast<HnRenderDelegate*>(SceneDelegate->GetRenderIndex().GetRenderDelegate());
+        HnTextureRegistry&  TexRegistry    = RenderDelegate->GetTextureRegistry();
+        const USD_Renderer& UsdRenderer    = *RenderDelegate->GetUSDRenderer();
 
-                TexNameToCoordSetMap = AllocateTextures(TexRegistry);
-                ProcessMaterialNetwork();
-            }
-            catch (const std::runtime_error& err)
+        // A mapping from the texture name to the texture coordinate set index (e.g. "diffuseColor" -> 0)
+        TexNameToCoordSetMapType TexNameToCoordSetMap;
+
+        pxr::VtValue vtMat = SceneDelegate->GetMaterialResource(GetId());
+        if (vtMat.IsHolding<pxr::HdMaterialNetworkMap>())
+        {
+            const pxr::HdMaterialNetworkMap& hdNetworkMap = vtMat.UncheckedGet<pxr::HdMaterialNetworkMap>();
+            if (!hdNetworkMap.terminals.empty() && !hdNetworkMap.map.empty())
             {
-                LOG_ERROR_MESSAGE("Failed to create material network for material ", GetId(), ": ", err.what());
-                m_Network = {};
-            }
-            catch (...)
-            {
-                LOG_ERROR_MESSAGE("Failed to create material network for material ", GetId(), ": unknown error");
-                m_Network = {};
+                try
+                {
+                    m_Network = HnMaterialNetwork{GetId(), hdNetworkMap}; // May throw
+
+                    TexNameToCoordSetMap = AllocateTextures(TexRegistry);
+                    ProcessMaterialNetwork();
+                }
+                catch (const std::runtime_error& err)
+                {
+                    LOG_ERROR_MESSAGE("Failed to create material network for material ", GetId(), ": ", err.what());
+                    m_Network = {};
+                }
+                catch (...)
+                {
+                    LOG_ERROR_MESSAGE("Failed to create material network for material ", GetId(), ": unknown error");
+                    m_Network = {};
+                }
             }
         }
-    }
 
-    // It is important to initialize texture attributes with default values even if there is no material network.
-    InitTextureAttribs(TexRegistry, UsdRenderer, TexNameToCoordSetMap);
+        // It is important to initialize texture attributes with default values even if there is no material network.
+        InitTextureAttribs(TexRegistry, UsdRenderer, TexNameToCoordSetMap);
 
-    if (RenderParam)
-    {
-        static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::Material);
+        if (RenderParam)
+        {
+            static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::Material);
+        }
     }
 
     *DirtyBits = HdMaterial::Clean;
