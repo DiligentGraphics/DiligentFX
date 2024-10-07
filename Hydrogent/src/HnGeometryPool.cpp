@@ -68,12 +68,17 @@ public:
 
     int AddUse()
     {
-        VERIFY(IsInitialized(), "Adding use for uninitialized data. This is a bug.");
+        VERIFY(IsInitialized(), "Uninitialized data should be initialized first. Before that only pending uses can be added.");
         return m_UseCount.fetch_add(1) + 1;
     }
     int RemoveUse()
     {
-        VERIFY(IsInitialized(), "Removing use for uninitialized data. This is a bug.");
+        VERIFY(IsInitialized(), "Any unitiailized data should be initialized before a use can be removed since the timeline is as follows:\n"
+                                "Frame n:\n"
+                                "- HdEngine::Execute() -> HdRenderIndex::SyncAll() -> HnMesh::Sync() -> create VertexData /* Add pending use */\n"
+                                "- HdEngine::Execute() -> HnRenderDelegate::CommitResources() -> HnGeometryPool::Commit() -> VertexData::Initialize() /* Pending uses -> uses */\n"
+                                "Frame n+m:\n"
+                                "- HdEngine::Execute() -> HdRenderIndex::SyncAll() -> HnMesh::Sync() -> Release VertexHandle /* Remove use */\n");
         VERIFY(m_UseCount.load() > 0, "Use count is already 0");
         return m_UseCount.fetch_add(-1) - 1;
     }
@@ -126,6 +131,7 @@ public:
     // The existing data is used to copy the sources that are not present in the new sources,
     // e.g. the normals from the existing data will be copied to the new data if the new data
     // does not provide normals. This happens when only some of the primvars are updated.
+    // Buffers from the existing data may be reused if the existing data is not used by other handles.
     VertexData(std::string                   Name,
                const BufferSourcesMapType&   Sources,
                const VertexStreamHashesType& Hashes,
@@ -142,6 +148,8 @@ public:
             return;
         }
 
+        VERIFY(!ExistingData || ExistingData->IsInitialized(), "Existing data must be initialized.");
+
         auto AddStream = [this, &Hashes](const pxr::TfToken&                  Name,
                                          size_t                               ElementSize,
                                          std::shared_ptr<pxr::HdBufferSource> Source,
@@ -157,12 +165,12 @@ public:
 
             {
                 auto it_inserted = m_Streams.emplace(Name, VertexStream{ElementSize, Hash});
-                VERIFY(it_inserted.second, "Failed to insert vertex stream '", Name, "' into the map, which means the stream already exists.");
+                VERIFY(it_inserted.second, "Vertex stream '", Name, "' already exists.");
             }
 
             {
                 auto it_inserted = m_StagingData->Sources.emplace(Name, StagingData::SourceData{std::move(Source), SrcBuffer});
-                VERIFY(it_inserted.second, "Failed to insert staging data for vertex stream '", Name, "' into the map, which means the stream already exists.");
+                VERIFY(it_inserted.second, "Vertex stream '", Name, "' already exists.");
             }
         };
 
@@ -197,14 +205,15 @@ public:
                 const VertexStream& ExistingStream = stream_it.second;
                 if (m_Streams.find(SourceName) == m_Streams.end())
                 {
-                    VERIFY_EXPR(ExistingStream.Buffer);
+                    VERIFY(ExistingStream.Buffer, "ExistingStream.Buffer must not be null for existing data as it is set in the Initialize() method and the data must be initialized.");
                     AddStream(SourceName, ExistingStream.ElementSize, nullptr, ExistingStream.Buffer);
                 }
             }
         }
 
-        // If there is existing data, we will check if it is not used by other
-        // handles in the Initialize() method and hence its buffers can be reused.
+        // If there is existing data, do not initialize the pool allocation yet (unless it is disallowed).
+        // In the Initialize() method, we will check if the existing data is not used by other
+        // handles and reuse its buffers and pool allocation if possible.
         if (!ExistingData || DisallowPoolAllocationReuse)
         {
             InitPoolAllocation();
@@ -247,8 +256,8 @@ public:
             if (ExistingData->GetUseCount() == 0)
             {
                 // If existing data has no uses, take its buffers and pool allocation
-                VERIFY(ExistingData->GetPendingUseCount() == 0, "Existing data has pending uses. This is a bug.");
                 VERIFY(ExistingData->IsInitialized(), "Existing data is not initialized. This is a bug.");
+                VERIFY(ExistingData->GetPendingUseCount() == 0, "Existing data has pending uses. This is a bug as the data should be initialized before it can be referenced as existing.");
                 m_PoolAllocation = std::move(ExistingData->m_PoolAllocation);
                 for (auto& stream_it : m_Streams)
                 {
@@ -562,6 +571,8 @@ public:
 // The index data is stored in the index pool managed by the GLTF::ResourceManager,
 // or in a standalone buffer if the pool is not used.
 // The data is immutable. Updating the contents requires creating a new IndexData object.
+// The buffer from the existing data can be reused if the new data is compatible with the existing data
+// and there are no other handles that reference the existing data.
 class HnGeometryPool::IndexData final : public GeometryPoolData
 {
 public:
@@ -579,9 +590,13 @@ public:
             return;
         }
 
+        VERIFY(!ExistingData || ExistingData->IsInitialized(), "Existing data must be initialized.");
+
         m_NumIndices = static_cast<Uint32>(m_StagingData->Size / sizeof(Uint32));
-        // If there is existing data, we will check if it is not used by other
-        // handles in the Initialize() method and hence its buffer can be reused.
+
+        // If there is existing data, do not initialize the pool allocation yet.
+        // In the Initialize() method, we will check if the existing data is not used by other
+        // handles and reuse its buffer and pool allocation if possible.
         if (!ExistingData)
         {
             InitPoolAllocation();
@@ -636,6 +651,7 @@ public:
             if (ExistingData->GetUseCount() == 0)
             {
                 // If existing data has no uses, take its buffer
+                VERIFY(ExistingData->IsInitialized(), "Existing data is not initialized.");
                 VERIFY(ExistingData->GetPendingUseCount() == 0, "Existing data has pending uses. This is a bug.");
                 m_Suballocation = std::move(ExistingData->m_Suballocation);
                 m_Buffer        = std::move(ExistingData->m_Buffer);
@@ -827,6 +843,7 @@ void HnGeometryPool::AllocateVertices(const std::string&             Name,
     std::shared_ptr<VertexData> ExistingData = Handle ?
         static_cast<VertexHandleImpl*>(Handle.get())->GetData() :
         nullptr;
+    VERIFY(!ExistingData || ExistingData->IsInitialized(), "Existing data must be initialized.");
     if (ExistingData && !ExistingData->IsCompatible(Sources))
     {
         UNEXPECTED("Existing vertex data is not compatible with the provided sources. "
@@ -888,6 +905,7 @@ void HnGeometryPool::AllocateIndices(const std::string&                         
     std::shared_ptr<IndexData> ExistingData = Handle ?
         static_cast<IndexHandleImpl*>(Handle.get())->GetData() :
         nullptr;
+    VERIFY(!ExistingData || ExistingData->IsInitialized(), "Existing data must be initialized.");
 
     std::shared_ptr<IndexData> Data = m_IndexCache.Get(
         Hash,
