@@ -59,8 +59,9 @@ struct HnTextureIdentifier;
 class HnTextureRegistry final
 {
 public:
-    HnTextureRegistry(IRenderDevice*         pDevice,
-                      GLTF::ResourceManager* pResourceManager);
+    HnTextureRegistry(IRenderDevice*             pDevice,
+                      GLTF::ResourceManager*     pResourceManager,
+                      TEXTURE_LOAD_COMPRESS_MODE CompressMode);
     ~HnTextureRegistry();
 
     void Commit(IDeviceContext* pContext);
@@ -106,6 +107,8 @@ public:
         m_Cache.ProcessElements(Handler);
     }
 
+    TEXTURE_LOAD_COMPRESS_MODE GetCompressMode() const { return m_CompressMode; }
+
 private:
     void InitializeHandle(IRenderDevice*     pDevice,
                           IDeviceContext*    pContext,
@@ -114,9 +117,9 @@ private:
                           TextureHandle&     Handle);
 
 private:
-    RefCntAutoPtr<IRenderDevice> m_pDevice;
-
-    GLTF::ResourceManager* const m_pResourceManager;
+    RefCntAutoPtr<IRenderDevice>     m_pDevice;
+    GLTF::ResourceManager* const     m_pResourceManager;
+    const TEXTURE_LOAD_COMPRESS_MODE m_CompressMode;
 
     ObjectsRegistry<pxr::TfToken, TextureHandleSharedPtr, pxr::TfToken::HashFunctor> m_Cache;
 

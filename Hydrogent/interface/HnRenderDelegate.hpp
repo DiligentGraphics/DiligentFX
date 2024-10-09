@@ -131,6 +131,8 @@ public:
         bool UseIndexPool  = false;
         bool EnableShadows = false;
 
+        TEXTURE_LOAD_COMPRESS_MODE TextureCompressMode = TEXTURE_LOAD_COMPRESS_MODE_NONE;
+
         /// Whether to allow hot shader reload.
         ///
         /// \remarks    When hot shader reload is enabled, the renderer will need

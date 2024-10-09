@@ -313,7 +313,25 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
     m_PrimitiveAttribsCB{CreatePrimitiveAttribsCB(CI.pDevice)},
     m_MaterialSRBCache{HnMaterial::CreateSRBCache()},
     m_USDRenderer{CreateUSDRenderer(CI, m_PrimitiveAttribsCB, m_MaterialSRBCache)},
-    m_TextureRegistry{CI.pDevice, CI.TextureAtlasDim != 0 ? m_ResourceMgr : RefCntAutoPtr<GLTF::ResourceManager>{}},
+    m_TextureRegistry{
+        CI.pDevice,
+        CI.TextureAtlasDim != 0 ? m_ResourceMgr : RefCntAutoPtr<GLTF::ResourceManager>{},
+        [](IRenderDevice* pDevice, TEXTURE_LOAD_COMPRESS_MODE CompressMode) {
+            switch (CompressMode)
+            {
+                case TEXTURE_LOAD_COMPRESS_MODE_NONE:
+                    return TEXTURE_LOAD_COMPRESS_MODE_NONE;
+
+                case TEXTURE_LOAD_COMPRESS_MODE_BC:
+                case TEXTURE_LOAD_COMPRESS_MODE_BC_HIGH_QUAL:
+                    return pDevice->GetDeviceInfo().Features.TextureCompressionBC ? CompressMode : TEXTURE_LOAD_COMPRESS_MODE_NONE;
+
+                default:
+                    UNEXPECTED("Unexpected compress mode");
+                    return TEXTURE_LOAD_COMPRESS_MODE_NONE;
+            }
+        }(CI.pDevice, CI.TextureCompressMode),
+    },
     m_GeometryPool{CI.pDevice, *m_ResourceMgr, CI.UseVertexPool, CI.UseIndexPool},
     m_RenderParam{
         std::make_unique<HnRenderParam>(

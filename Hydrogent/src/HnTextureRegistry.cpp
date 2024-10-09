@@ -40,10 +40,12 @@ namespace Diligent
 namespace USD
 {
 
-HnTextureRegistry::HnTextureRegistry(IRenderDevice*         pDevice,
-                                     GLTF::ResourceManager* pResourceManager) :
+HnTextureRegistry::HnTextureRegistry(IRenderDevice*             pDevice,
+                                     GLTF::ResourceManager*     pResourceManager,
+                                     TEXTURE_LOAD_COMPRESS_MODE CompressMode) :
     m_pDevice{pDevice},
-    m_pResourceManager{pResourceManager}
+    m_pResourceManager{pResourceManager},
+    m_CompressMode{CompressMode}
 {
 }
 
@@ -61,13 +63,14 @@ void HnTextureRegistry::InitializeHandle(IRenderDevice*     pDevice,
     {
         VERIFY_EXPR(pContext != nullptr);
 
-        IDynamicTextureAtlas* pAtlas      = Handle.pAtlasSuballocation->GetAtlas();
-        ITexture*             pDstTex     = pAtlas->GetTexture();
-        const TextureDesc&    AtlasDesc   = pAtlas->GetAtlasDesc();
-        const TextureData     UploadData  = pLoader->GetTextureData();
-        const TextureDesc&    SrcDataDesc = pLoader->GetTextureDesc();
-        const uint2&          Origin      = Handle.pAtlasSuballocation->GetOrigin();
-        const Uint32          Slice       = Handle.pAtlasSuballocation->GetSlice();
+        IDynamicTextureAtlas*       pAtlas      = Handle.pAtlasSuballocation->GetAtlas();
+        ITexture*                   pDstTex     = pAtlas->GetTexture();
+        const TextureDesc&          AtlasDesc   = pAtlas->GetAtlasDesc();
+        const TextureFormatAttribs& FmtAttribs  = GetTextureFormatAttribs(AtlasDesc.Format);
+        const TextureData           UploadData  = pLoader->GetTextureData();
+        const TextureDesc&          SrcDataDesc = pLoader->GetTextureDesc();
+        const uint2&                Origin      = Handle.pAtlasSuballocation->GetOrigin();
+        const Uint32                Slice       = Handle.pAtlasSuballocation->GetSlice();
 
         const Uint32 MipsToUpload = std::min(UploadData.NumSubresources, AtlasDesc.MipLevels);
         for (Uint32 mip = 0; mip < MipsToUpload; ++mip)
@@ -76,10 +79,10 @@ void HnTextureRegistry::InitializeHandle(IRenderDevice*     pDevice,
             const MipLevelProperties MipProps  = GetMipLevelProperties(SrcDataDesc, mip);
 
             Box UpdateBox;
-            UpdateBox.MinX = Origin.x >> mip;
-            UpdateBox.MaxX = UpdateBox.MinX + MipProps.LogicalWidth;
-            UpdateBox.MinY = Origin.y >> mip;
-            UpdateBox.MaxY = UpdateBox.MinY + MipProps.LogicalHeight;
+            UpdateBox.MinX = AlignDown(Origin.x >> mip, FmtAttribs.BlockWidth);
+            UpdateBox.MaxX = AlignUp(UpdateBox.MinX + MipProps.LogicalWidth, FmtAttribs.BlockWidth);
+            UpdateBox.MinY = AlignDown(Origin.y >> mip, FmtAttribs.BlockHeight);
+            UpdateBox.MaxY = AlignUp(UpdateBox.MinY + MipProps.LogicalHeight, FmtAttribs.BlockHeight);
             pContext->UpdateTexture(pDstTex, mip, Slice, UpdateBox, LevelData, RESOURCE_STATE_TRANSITION_MODE_NONE, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         }
     }
@@ -206,7 +209,7 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const HnTe
     }
 
     return Allocate(TexId.FilePath, TexId.SubtextureId.Swizzle, SamplerParams,
-                    [&TexId, Format]() {
+                    [&TexId, Format, CompressMode = m_CompressMode]() {
                         TextureLoadInfo LoadInfo;
                         LoadInfo.Name   = TexId.FilePath.GetText();
                         LoadInfo.Format = Format;
@@ -216,6 +219,7 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const HnTe
                         LoadInfo.IsSRGB           = TexId.SubtextureId.IsSRGB;
                         LoadInfo.PermultiplyAlpha = TexId.SubtextureId.PremultiplyAlpha;
                         LoadInfo.Swizzle          = TexId.SubtextureId.Swizzle;
+                        LoadInfo.CompressMode     = CompressMode;
 
                         return CreateTextureLoaderFromSdfPath(TexId.FilePath.GetText(), LoadInfo);
                     });

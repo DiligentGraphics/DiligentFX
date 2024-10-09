@@ -407,7 +407,8 @@ HnTextureRegistry::TextureHandleSharedPtr HnMaterial::GetDefaultTexture(HnTextur
                                 [&]() {
                                     RefCntAutoPtr<Image> pImage = CreateDefaultImage(DefaultTexName);
 
-                                    TextureLoadInfo               LoadInfo{Name.GetText()};
+                                    TextureLoadInfo LoadInfo{Name.GetText()};
+                                    LoadInfo.CompressMode = TexRegistry.GetCompressMode();
                                     RefCntAutoPtr<ITextureLoader> pLoader;
                                     CreateTextureLoaderFromImage(pImage, LoadInfo, &pLoader);
                                     VERIFY_EXPR(pLoader);
