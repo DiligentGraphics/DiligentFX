@@ -535,6 +535,11 @@ float3 GetMicroNormal(PBRMaterialShaderInfo Material,
 
     MicroNormal = MicroNormal * float3(2.0, 2.0, 2.0) - float3(1.0, 1.0, 1.0);
     MicroNormal.xy *= Material.Basic.NormalScale;
+    if (MicroNormal.z < 0.0)
+    {
+        // The texture does not contain the Z component of the normal.
+        MicroNormal.z = sqrt(max(1.0 - dot(MicroNormal.xy, MicroNormal.xy), 0.0));
+    }
     return MicroNormal;
 }
 
@@ -710,6 +715,11 @@ float3 GetClearcoatNormal(PBRMaterialShaderInfo Material,
 
     ClearcoatNormal = ClearcoatNormal * float3(2.0, 2.0, 2.0) - float3(1.0, 1.0, 1.0);
     ClearcoatNormal.xy *= Material.Basic.ClearcoatNormalScale;
+    if (ClearcoatNormal.z < 0.0)
+    {
+        // The texture does not contain the Z component of the normal.
+        ClearcoatNormal.z = sqrt(max(1.0 - dot(ClearcoatNormal.xy, ClearcoatNormal.xy), 0.0));
+    }
     return ClearcoatNormal;
 }
 
