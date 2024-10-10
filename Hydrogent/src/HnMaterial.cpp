@@ -311,7 +311,7 @@ void HnMaterial::InitTextureAttribs(HnTextureRegistry& TexRegistry, const USD_Re
     MatBuilder.Finalize();
 }
 
-static RefCntAutoPtr<Image> CreateDefaultImage(const pxr::TfToken& Name, Uint32 Dimension = 64)
+static RefCntAutoPtr<Image> CreateDefaultImage(const pxr::TfToken& Name, Uint32 Dimension = 32)
 {
     ImageDesc ImgDesc;
     ImgDesc.Width         = Dimension;
