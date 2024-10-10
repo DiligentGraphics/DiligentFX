@@ -416,13 +416,18 @@ HnTextureRegistry::TextureHandleSharedPtr HnMaterial::GetDefaultTexture(HnTextur
                                 });
 }
 
-static TEXTURE_FORMAT GetMaterialTextureFormat(const pxr::TfToken& Name)
+static TEXTURE_FORMAT GetMaterialTextureFormat(const pxr::TfToken& Name, TEXTURE_LOAD_COMPRESS_MODE CompressMode)
 {
     if (Name == HnTokens->diffuseColor ||
-        Name == HnTokens->emissiveColor ||
-        Name == HnTokens->normal)
+        Name == HnTokens->emissiveColor)
     {
         return TEX_FORMAT_RGBA8_UNORM;
+    }
+    else if (Name == HnTokens->normal)
+    {
+        // It is essential to use two-channel BC5 compression and not BC1
+        // for normal maps to avoid artifacts
+        return CompressMode != TEXTURE_LOAD_COMPRESS_MODE_NONE ? TEX_FORMAT_RG8_UNORM : TEX_FORMAT_RGBA8_UNORM;
     }
     else if (Name == HnTokens->metallic ||
              Name == HnTokens->roughness ||
@@ -451,7 +456,7 @@ HnMaterial::TexNameToCoordSetMapType HnMaterial::AllocateTextures(HnTextureRegis
     std::unordered_map<pxr::TfToken, size_t, pxr::TfToken::HashFunctor> TexCoordPrimvarMapping;
     for (const HnMaterialNetwork::TextureDescriptor& TexDescriptor : m_Network.GetTextures())
     {
-        TEXTURE_FORMAT Format = GetMaterialTextureFormat(TexDescriptor.Name);
+        TEXTURE_FORMAT Format = GetMaterialTextureFormat(TexDescriptor.Name, TexRegistry.GetCompressMode());
         if (Format == TEX_FORMAT_UNKNOWN)
         {
             LOG_INFO_MESSAGE("Skipping unknown texture '", TexDescriptor.Name, "' in material '", GetId(), "'");
