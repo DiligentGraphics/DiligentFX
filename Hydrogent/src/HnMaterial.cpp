@@ -28,12 +28,14 @@
 
 #include <vector>
 #include <set>
+#include <array>
 
 #include "HnRenderDelegate.hpp"
 #include "HnTokens.hpp"
 #include "HnTypeConversions.hpp"
 #include "HnRenderPass.hpp"
 #include "HnRenderParam.hpp"
+#include "HnMaterialNetwork.hpp"
 
 #include "GfTypeConversions.hpp"
 #include "DynamicTextureAtlas.h"
@@ -92,7 +94,7 @@ HnMaterial::HnMaterial(HnTextureRegistry& TexRegistry, const USD_Renderer& UsdRe
     HnMaterial{pxr::SdfPath{}}
 {
     // Sync() is never called for the default material, so we need to initialize texture attributes now.
-    InitTextureAttribs(TexRegistry, UsdRenderer, {});
+    AllocateTextures({}, TexRegistry, UsdRenderer);
 }
 
 HnMaterial::~HnMaterial()
@@ -115,7 +117,8 @@ void HnMaterial::Sync(pxr::HdSceneDelegate* SceneDelegate,
         // A mapping from the texture name to the texture coordinate set index (e.g. "diffuseColor" -> 0)
         TexNameToCoordSetMapType TexNameToCoordSetMap;
 
-        pxr::VtValue vtMat = SceneDelegate->GetMaterialResource(GetId());
+        pxr::VtValue      vtMat = SceneDelegate->GetMaterialResource(GetId());
+        HnMaterialNetwork MatNetwork;
         if (vtMat.IsHolding<pxr::HdMaterialNetworkMap>())
         {
             const pxr::HdMaterialNetworkMap& hdNetworkMap = vtMat.UncheckedGet<pxr::HdMaterialNetworkMap>();
@@ -123,26 +126,24 @@ void HnMaterial::Sync(pxr::HdSceneDelegate* SceneDelegate,
             {
                 try
                 {
-                    m_Network = HnMaterialNetwork{GetId(), hdNetworkMap}; // May throw
-
-                    TexNameToCoordSetMap = AllocateTextures(TexRegistry);
-                    ProcessMaterialNetwork();
+                    MatNetwork = HnMaterialNetwork{GetId(), hdNetworkMap}; // May throw
+                    ProcessMaterialNetwork(MatNetwork);
                 }
                 catch (const std::runtime_error& err)
                 {
                     LOG_ERROR_MESSAGE("Failed to create material network for material ", GetId(), ": ", err.what());
-                    m_Network = {};
+                    MatNetwork = {};
                 }
                 catch (...)
                 {
                     LOG_ERROR_MESSAGE("Failed to create material network for material ", GetId(), ": unknown error");
-                    m_Network = {};
+                    MatNetwork = {};
                 }
             }
         }
 
         // It is important to initialize texture attributes with default values even if there is no material network.
-        InitTextureAttribs(TexRegistry, UsdRenderer, TexNameToCoordSetMap);
+        AllocateTextures(MatNetwork, TexRegistry, UsdRenderer);
 
         if (RenderParam)
         {
@@ -204,49 +205,77 @@ static void ApplyTextureInputScale(const HnMaterialNetwork& Network, const pxr::
     }
 }
 
-void HnMaterial::ProcessMaterialNetwork()
+void HnMaterial::ProcessMaterialNetwork(const HnMaterialNetwork& Network)
 {
-    ReadFallbackValue(m_Network, HnTokens->diffuseColor, m_MaterialData.Attribs.BaseColorFactor);
-    ReadFallbackValue(m_Network, HnTokens->metallic, m_MaterialData.Attribs.MetallicFactor);
-    ReadFallbackValue(m_Network, HnTokens->roughness, m_MaterialData.Attribs.RoughnessFactor);
-    ReadFallbackValue(m_Network, HnTokens->occlusion, m_MaterialData.Attribs.OcclusionFactor);
-    if (!ReadFallbackValue(m_Network, HnTokens->emissiveColor, m_MaterialData.Attribs.EmissiveFactor))
+    ReadFallbackValue(Network, HnTokens->diffuseColor, m_MaterialData.Attribs.BaseColorFactor);
+    ReadFallbackValue(Network, HnTokens->metallic, m_MaterialData.Attribs.MetallicFactor);
+    ReadFallbackValue(Network, HnTokens->roughness, m_MaterialData.Attribs.RoughnessFactor);
+    ReadFallbackValue(Network, HnTokens->occlusion, m_MaterialData.Attribs.OcclusionFactor);
+    if (!ReadFallbackValue(Network, HnTokens->emissiveColor, m_MaterialData.Attribs.EmissiveFactor))
     {
-        m_MaterialData.Attribs.EmissiveFactor = m_Textures.find(HnTokens->emissiveColor) != m_Textures.end() ? float4{1} : float4{0};
+        m_MaterialData.Attribs.EmissiveFactor = Network.GetTexture(HnTokens->emissiveColor) != nullptr ? float4{1} : float4{0};
     }
 
-    ApplyTextureInputScale(m_Network, HnTokens->diffuseColor, m_MaterialData.Attribs.BaseColorFactor);
-    ApplyTextureInputScale(m_Network, HnTokens->metallic, m_MaterialData.Attribs.MetallicFactor);
-    ApplyTextureInputScale(m_Network, HnTokens->roughness, m_MaterialData.Attribs.RoughnessFactor);
-    ApplyTextureInputScale(m_Network, HnTokens->occlusion, m_MaterialData.Attribs.OcclusionFactor);
-    ApplyTextureInputScale(m_Network, HnTokens->emissiveColor, m_MaterialData.Attribs.EmissiveFactor);
+    ApplyTextureInputScale(Network, HnTokens->diffuseColor, m_MaterialData.Attribs.BaseColorFactor);
+    ApplyTextureInputScale(Network, HnTokens->metallic, m_MaterialData.Attribs.MetallicFactor);
+    ApplyTextureInputScale(Network, HnTokens->roughness, m_MaterialData.Attribs.RoughnessFactor);
+    ApplyTextureInputScale(Network, HnTokens->occlusion, m_MaterialData.Attribs.OcclusionFactor);
+    ApplyTextureInputScale(Network, HnTokens->emissiveColor, m_MaterialData.Attribs.EmissiveFactor);
 
-    if (const HnMaterialParameter* Param = m_Network.GetParameter(HnMaterialParameter::ParamType::Fallback, HnTokens->clearcoat))
+    if (const HnMaterialParameter* Param = Network.GetParameter(HnMaterialParameter::ParamType::Fallback, HnTokens->clearcoat))
     {
         m_MaterialData.Attribs.ClearcoatFactor = Param->FallbackValue.Get<float>();
         if (m_MaterialData.Attribs.ClearcoatFactor > 0)
         {
             m_MaterialData.HasClearcoat = true;
 
-            if (const HnMaterialParameter* RoughnessParam = m_Network.GetParameter(HnMaterialParameter::ParamType::Fallback, HnTokens->clearcoatRoughness))
+            if (const HnMaterialParameter* RoughnessParam = Network.GetParameter(HnMaterialParameter::ParamType::Fallback, HnTokens->clearcoatRoughness))
             {
                 m_MaterialData.Attribs.ClearcoatRoughnessFactor = RoughnessParam->FallbackValue.Get<float>();
             }
         }
     }
 
+    m_Tag                            = Network.GetTag();
+    m_MaterialData.Attribs.AlphaMode = MaterialTagToPbrAlphaMode(m_Tag);
 
-    m_MaterialData.Attribs.AlphaMode = MaterialTagToPbrAlphaMode(m_Network.GetTag());
-
-    m_MaterialData.Attribs.AlphaCutoff       = m_Network.GetOpacityThreshold();
-    m_MaterialData.Attribs.BaseColorFactor.a = m_Network.GetOpacity();
+    m_MaterialData.Attribs.AlphaCutoff       = Network.GetOpacityThreshold();
+    m_MaterialData.Attribs.BaseColorFactor.a = Network.GetOpacity();
 }
 
-void HnMaterial::InitTextureAttribs(HnTextureRegistry& TexRegistry, const USD_Renderer& UsdRenderer, const TexNameToCoordSetMapType& TexNameToCoordSetMap)
+namespace
+{
+
+struct TextureParamInfo
+{
+    const pxr::TfToken&                   Name;
+    const PBR_Renderer::TEXTURE_ATTRIB_ID TextureAttribId;
+};
+
+static const std::array<TextureParamInfo, 6> kTextureParams{
+    TextureParamInfo{HnTokens->diffuseColor, PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR},
+    TextureParamInfo{HnTokens->normal, PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL},
+    TextureParamInfo{HnTokens->metallic, PBR_Renderer::TEXTURE_ATTRIB_ID_METALLIC},
+    TextureParamInfo{HnTokens->roughness, PBR_Renderer::TEXTURE_ATTRIB_ID_ROUGHNESS},
+    TextureParamInfo{HnTokens->occlusion, PBR_Renderer::TEXTURE_ATTRIB_ID_OCCLUSION},
+    TextureParamInfo{HnTokens->emissiveColor, PBR_Renderer::TEXTURE_ATTRIB_ID_EMISSIVE},
+};
+
+} // namespace
+
+void HnMaterial::InitTextureAttribs(const HnMaterialNetwork&        Network,
+                                    HnTextureRegistry&              TexRegistry,
+                                    const USD_Renderer&             UsdRenderer,
+                                    const TexNameToCoordSetMapType& TexNameToCoordSetMap)
 {
     GLTF::MaterialBuilder MatBuilder{m_MaterialData};
 
-    auto SetTextureParams = [&](const pxr::TfToken& Name, Uint32 Idx) {
+    const auto& TexAttribIndices = UsdRenderer.GetSettings().TextureAttribIndices;
+    for (const TextureParamInfo& ParamInfo : kTextureParams)
+    {
+        const pxr::TfToken& Name = ParamInfo.Name;
+        const int           Idx  = TexAttribIndices[ParamInfo.TextureAttribId];
+
         GLTF::Material::TextureShaderAttribs& TexAttribs = MatBuilder.GetTextureAttrib(Idx);
 
         auto coord_it = TexNameToCoordSetMap.find(Name);
@@ -259,7 +288,7 @@ void HnMaterial::InitTextureAttribs(HnTextureRegistry& TexRegistry, const USD_Re
         auto tex_it = m_Textures.find(Name);
         if (tex_it != m_Textures.end())
         {
-            if (const HnMaterialParameter* Param = m_Network.GetParameter(HnMaterialParameter::ParamType::Transform2d, Name))
+            if (const HnMaterialParameter* Param = Network.GetParameter(HnMaterialParameter::ParamType::Transform2d, Name))
             {
                 float2x2 UVScaleAndRotation = float2x2::Scale(Param->Transform2d.Scale[0], Param->Transform2d.Scale[1]);
                 float    Rotation           = Param->Transform2d.Rotation;
@@ -274,7 +303,7 @@ void HnMaterial::InitTextureAttribs(HnTextureRegistry& TexRegistry, const USD_Re
                 TexAttribs.UVScaleAndRotation = UVScaleAndRotation;
             }
 
-            if (const HnMaterialNetwork::TextureDescriptor* TexDescriptor = m_Network.GetTexture(Name))
+            if (const HnMaterialNetwork::TextureDescriptor* TexDescriptor = Network.GetTexture(Name))
             {
                 const pxr::HdSamplerParameters& SamplerParams = TexDescriptor->SamplerParams;
                 TexAttribs.SetWrapUMode(HdWrapToAddressMode(SamplerParams.wrapS));
@@ -297,16 +326,6 @@ void HnMaterial::InitTextureAttribs(HnTextureRegistry& TexRegistry, const USD_Re
             TexAttribs.AtlasUVScaleAndBias = float4{1, 1, 0, 0};
         }
     };
-
-    const auto& TexAttribIndices = UsdRenderer.GetSettings().TextureAttribIndices;
-    // clang-format off
-    SetTextureParams(HnTokens->diffuseColor,  TexAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR]);
-    SetTextureParams(HnTokens->normal,        TexAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_NORMAL]);
-    SetTextureParams(HnTokens->metallic,      TexAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_METALLIC]);
-    SetTextureParams(HnTokens->roughness,     TexAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_ROUGHNESS]);
-    SetTextureParams(HnTokens->occlusion,     TexAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_OCCLUSION]);
-    SetTextureParams(HnTokens->emissiveColor, TexAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_EMISSIVE]);
-    // clang-format on
 
     MatBuilder.Finalize();
 }
@@ -441,7 +460,7 @@ static TEXTURE_FORMAT GetMaterialTextureFormat(const pxr::TfToken& Name, TEXTURE
     }
 }
 
-HnMaterial::TexNameToCoordSetMapType HnMaterial::AllocateTextures(HnTextureRegistry& TexRegistry)
+void HnMaterial::AllocateTextures(const HnMaterialNetwork& Network, HnTextureRegistry& TexRegistry, const USD_Renderer& UsdRenderer)
 {
     // Keep old textures alive in the cache
     auto OldTextures = std::move(m_Textures);
@@ -454,7 +473,7 @@ HnMaterial::TexNameToCoordSetMapType HnMaterial::AllocateTextures(HnTextureRegis
 
     // Texture coordinate primvar name to texture coordinate set index (e.g. "st" -> 0)
     std::unordered_map<pxr::TfToken, size_t, pxr::TfToken::HashFunctor> TexCoordPrimvarMapping;
-    for (const HnMaterialNetwork::TextureDescriptor& TexDescriptor : m_Network.GetTextures())
+    for (const HnMaterialNetwork::TextureDescriptor& TexDescriptor : Network.GetTextures())
     {
         TEXTURE_FORMAT Format = GetMaterialTextureFormat(TexDescriptor.Name, TexRegistry.GetCompressMode());
         if (Format == TEX_FORMAT_UNKNOWN)
@@ -474,7 +493,7 @@ HnMaterial::TexNameToCoordSetMapType HnMaterial::AllocateTextures(HnTextureRegis
             m_Textures[TexDescriptor.Name] = pTex;
             // Find texture coordinate
             size_t TexCoordIdx = ~size_t{0};
-            if (const HnMaterialParameter* Param = m_Network.GetParameter(HnMaterialParameter::ParamType::Texture, TexDescriptor.Name))
+            if (const HnMaterialParameter* Param = Network.GetParameter(HnMaterialParameter::ParamType::Texture, TexDescriptor.Name))
             {
                 if (!Param->SamplerCoords.empty())
                 {
@@ -508,7 +527,7 @@ HnMaterial::TexNameToCoordSetMapType HnMaterial::AllocateTextures(HnTextureRegis
         }
     }
 
-    return TexNameToCoordSetMap;
+    InitTextureAttribs(Network, TexRegistry, UsdRenderer, TexNameToCoordSetMap);
 }
 
 

@@ -73,7 +73,11 @@ public:
 
         RefCntAutoPtr<ITextureAtlasSuballocation> pAtlasSuballocation;
 
-        Uint32 TextureId = ~0u;
+        // Texture ID used for bindless access
+        const Uint32 TextureId;
+
+        TextureHandle(Uint32 Id) noexcept;
+        ~TextureHandle();
 
         explicit operator bool() const noexcept
         {

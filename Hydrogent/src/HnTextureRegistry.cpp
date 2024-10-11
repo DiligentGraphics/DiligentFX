@@ -40,6 +40,14 @@ namespace Diligent
 namespace USD
 {
 
+HnTextureRegistry::TextureHandle::TextureHandle(Uint32 Id) noexcept :
+    TextureId{Id}
+{}
+
+HnTextureRegistry::TextureHandle::~TextureHandle()
+{
+}
+
 HnTextureRegistry::HnTextureRegistry(IRenderDevice*             pDevice,
                                      GLTF::ResourceManager*     pResourceManager,
                                      TEXTURE_LOAD_COMPRESS_MODE CompressMode) :
@@ -153,8 +161,7 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const pxr:
                 return TextureHandleSharedPtr{};
             }
 
-            auto TexHandle       = std::make_shared<TextureHandle>();
-            TexHandle->TextureId = m_NextTextureId.fetch_add(1);
+            std::shared_ptr<TextureHandle> TexHandle = std::make_shared<TextureHandle>(m_NextTextureId.fetch_add(1));
 
             auto SamDesc = HdSamplerParametersToSamplerDesc(SamplerParams);
             // Try to allocate texture in the atlas first

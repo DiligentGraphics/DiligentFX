@@ -30,7 +30,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include "HnMaterialNetwork.hpp"
 #include "HnTextureRegistry.hpp"
 
 #include "pxr/imaging/hd/material.h"
@@ -56,6 +55,7 @@ namespace USD
 {
 
 class HnRenderDelegate;
+class HnMaterialNetwork;
 
 /// Hydra material implementation in Hydrogent.
 class HnMaterial final : public pxr::HdMaterial
@@ -110,7 +110,7 @@ public:
     // { { "st0" }, { "st1" } }
     const auto& GetTextureCoordinateSets() const { return m_TexCoords; }
 
-    const pxr::TfToken& GetTag() const { return m_Network.GetTag(); }
+    const pxr::TfToken& GetTag() const { return m_Tag; }
 
     /// Static shader texture indexing identifier, for example:
     ///    0 -> {0, 0, 0, 1, 1, 2}
@@ -142,15 +142,20 @@ private:
     // The same index is set in m_ShaderTextureAttribs[].UVSelector for the corresponding texture.
     // The name of the primvar that contains the texture coordinates is given by m_TexCoords[index].PrimVarName (e.g. "st0").
     using TexNameToCoordSetMapType = std::unordered_map<pxr::TfToken, size_t, pxr::TfToken::HashFunctor>;
-    TexNameToCoordSetMapType AllocateTextures(HnTextureRegistry& TexRegistry);
+    void AllocateTextures(const HnMaterialNetwork& Network,
+                          HnTextureRegistry&       TexRegistry,
+                          const USD_Renderer&      UsdRenderer);
+    void InitTextureAttribs(const HnMaterialNetwork&        Network,
+                            HnTextureRegistry&              TexRegistry,
+                            const USD_Renderer&             UsdRenderer,
+                            const TexNameToCoordSetMapType& TexNameToCoordSetMap);
 
     HnTextureRegistry::TextureHandleSharedPtr GetDefaultTexture(HnTextureRegistry& TexRegistry, const pxr::TfToken& Name);
 
-    void ProcessMaterialNetwork();
-    void InitTextureAttribs(HnTextureRegistry& TexRegistry, const USD_Renderer& UsdRenderer, const TexNameToCoordSetMapType& TexNameToCoordSetMap);
+    void ProcessMaterialNetwork(const HnMaterialNetwork& Network);
 
 private:
-    HnMaterialNetwork m_Network;
+    pxr::TfToken m_Tag;
 
     std::unordered_map<pxr::TfToken, HnTextureRegistry::TextureHandleSharedPtr, pxr::TfToken::HashFunctor> m_Textures;
 
