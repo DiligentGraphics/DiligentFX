@@ -157,16 +157,17 @@ void HnMeshUtils::Triangulate(bool                UseFaceVertexIndices,
             }
         });
 #ifdef DILIGENT_DEVELOPMENT
-    if (!dvpFailedFaces.empty())
+    if (const size_t NumFailedFaces = dvpFailedFaces.size())
     {
         std::stringstream ss;
-        for (size_t i = 0; i < dvpFailedFaces.size(); ++i)
+        for (size_t i = 0; i < NumFailedFaces; ++i)
         {
             ss << dvpFailedFaces[i];
-            if (i < dvpFailedFaces.size() - 1)
+            if (i < NumFailedFaces - 1)
                 ss << ", ";
         }
-        LOG_WARNING_MESSAGE(dvpFailedFaces.size(), " faces in mesh '", m_MeshId.GetString(), "' were triangulated with potential issues: ", ss.str());
+        LOG_WARNING_MESSAGE(NumFailedFaces, (NumFailedFaces > 1 ? " faces" : " face"), " in mesh '", m_MeshId.GetString(),
+                            (NumFailedFaces > 1 ? "' were" : "' was"), " triangulated with potential issues: ", ss.str());
     }
 #endif
 
