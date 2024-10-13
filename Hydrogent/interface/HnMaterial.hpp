@@ -78,7 +78,7 @@ public:
     /// Creates an SRB cache that should be passed to UpdateSRB().
     static RefCntAutoPtr<IObject> CreateSRBCache();
 
-    void UpdateSRB(HnRenderDelegate& RendererDelegate);
+    bool UpdateSRB(HnRenderDelegate& RendererDelegate);
     void BindPrimitiveAttribsBuffer(HnRenderDelegate& RendererDelegate);
 
     IShaderResourceBinding* GetSRB() const { return m_SRB; }
@@ -149,6 +149,7 @@ private:
                             HnTextureRegistry&              TexRegistry,
                             const USD_Renderer&             UsdRenderer,
                             const TexNameToCoordSetMapType& TexNameToCoordSetMap);
+    bool InitTextureAddressingAttribs(const USD_Renderer& UsdRenderer);
 
     HnTextureRegistry::TextureHandleSharedPtr GetDefaultTexture(HnTextureRegistry& TexRegistry, const pxr::TfToken& Name);
 
@@ -164,6 +165,8 @@ private:
     IShaderResourceVariable*              m_JointTransformsVar  = nullptr; // cbJointTransforms
 
     GLTF::Material m_MaterialData;
+
+    std::atomic<bool> m_TextureAddressingAttribsDirty{false};
 
     // The names of the primvars that contain unique texture coordinate sets for this material (e.g. "st0", "st1").
     // The index in this array for texture N is given by m_ShaderTextureAttribs[N].UVSelector.

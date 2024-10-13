@@ -76,12 +76,21 @@ public:
         // Texture ID used for bindless access
         const Uint32 TextureId;
 
+    private:
+        std::atomic<bool> IsInitialized{false};
+
+    public:
         TextureHandle(Uint32 Id) noexcept;
         ~TextureHandle();
 
-        explicit operator bool() const noexcept
+        void Initialize(IRenderDevice*     pDevice,
+                        IDeviceContext*    pContext,
+                        ITextureLoader*    pLoader,
+                        const SamplerDesc& SamDesc);
+
+        bool IsLoaded() const noexcept
         {
-            return pTexture != nullptr || pAtlasSuballocation != nullptr;
+            return IsInitialized.load() && (pTexture != nullptr || pAtlasSuballocation != nullptr);
         }
     };
 
@@ -112,13 +121,6 @@ public:
     }
 
     TEXTURE_LOAD_COMPRESS_MODE GetCompressMode() const { return m_CompressMode; }
-
-private:
-    void InitializeHandle(IRenderDevice*     pDevice,
-                          IDeviceContext*    pContext,
-                          ITextureLoader*    pLoader,
-                          const SamplerDesc& SamDesc,
-                          TextureHandle&     Handle);
 
 private:
     RefCntAutoPtr<IRenderDevice>     m_pDevice;

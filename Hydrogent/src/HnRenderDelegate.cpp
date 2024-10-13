@@ -647,16 +647,22 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
         if (m_MaterialResourcesVersion != MaterialVersion)
         {
             std::lock_guard<std::mutex> Guard{m_MaterialsMtx};
+
+            bool AllMaterialsUpdated = true;
             for (auto* pMat : m_Materials)
             {
-                pMat->UpdateSRB(*this);
+                if (!pMat->UpdateSRB(*this))
+                    AllMaterialsUpdated = false;
             }
             for (auto* pMat : m_Materials)
             {
                 pMat->BindPrimitiveAttribsBuffer(*this);
             }
 
-            m_MaterialResourcesVersion = MaterialVersion;
+            if (AllMaterialsUpdated)
+            {
+                m_MaterialResourcesVersion = MaterialVersion;
+            }
         }
     }
 

@@ -61,24 +61,25 @@ HnTextureRegistry::~HnTextureRegistry()
 {
 }
 
-void HnTextureRegistry::InitializeHandle(IRenderDevice*     pDevice,
-                                         IDeviceContext*    pContext,
-                                         ITextureLoader*    pLoader,
-                                         const SamplerDesc& SamDesc,
-                                         TextureHandle&     Handle)
+void HnTextureRegistry::TextureHandle::Initialize(IRenderDevice*     pDevice,
+                                                  IDeviceContext*    pContext,
+                                                  ITextureLoader*    pLoader,
+                                                  const SamplerDesc& SamDesc)
 {
-    if (Handle.pAtlasSuballocation != nullptr)
+    VERIFY(!IsInitialized.load(), "Texture handle is already initialized");
+
+    if (pAtlasSuballocation != nullptr)
     {
         VERIFY_EXPR(pContext != nullptr);
 
-        IDynamicTextureAtlas*       pAtlas      = Handle.pAtlasSuballocation->GetAtlas();
+        IDynamicTextureAtlas*       pAtlas      = pAtlasSuballocation->GetAtlas();
         ITexture*                   pDstTex     = pAtlas->GetTexture();
         const TextureDesc&          AtlasDesc   = pAtlas->GetAtlasDesc();
         const TextureFormatAttribs& FmtAttribs  = GetTextureFormatAttribs(AtlasDesc.Format);
         const TextureData           UploadData  = pLoader->GetTextureData();
         const TextureDesc&          SrcDataDesc = pLoader->GetTextureDesc();
-        const uint2&                Origin      = Handle.pAtlasSuballocation->GetOrigin();
-        const Uint32                Slice       = Handle.pAtlasSuballocation->GetSlice();
+        const uint2&                Origin      = pAtlasSuballocation->GetOrigin();
+        const Uint32                Slice       = pAtlasSuballocation->GetSlice();
 
         const Uint32 MipsToUpload = std::min(UploadData.NumSubresources, AtlasDesc.MipLevels);
         for (Uint32 mip = 0; mip < MipsToUpload; ++mip)
@@ -93,40 +94,44 @@ void HnTextureRegistry::InitializeHandle(IRenderDevice*     pDevice,
             UpdateBox.MaxY = AlignUp(UpdateBox.MinY + MipProps.LogicalHeight, FmtAttribs.BlockHeight);
             pContext->UpdateTexture(pDstTex, mip, Slice, UpdateBox, LevelData, RESOURCE_STATE_TRANSITION_MODE_NONE, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         }
+
+        IsInitialized.store(true);
     }
     else
     {
-        if (!Handle)
+        if (!pTexture)
         {
             if (pLoader->GetTextureDesc().Type == RESOURCE_DIM_TEX_2D)
             {
-                auto TexDesc = pLoader->GetTextureDesc();
+                TextureDesc TexDesc = pLoader->GetTextureDesc();
                 // PBR Renderer expects 2D textures to be 2D array textures
                 TexDesc.Type      = RESOURCE_DIM_TEX_2D_ARRAY;
                 TexDesc.ArraySize = 1;
 
                 TextureData InitData = pLoader->GetTextureData();
-                pDevice->CreateTexture(TexDesc, &InitData, &Handle.pTexture);
+                pDevice->CreateTexture(TexDesc, &InitData, &pTexture);
             }
             else
             {
-                pLoader->CreateTexture(pDevice, &Handle.pTexture);
+                pLoader->CreateTexture(pDevice, &pTexture);
             }
-            if (!Handle.pTexture)
+            if (!pTexture)
             {
                 UNEXPECTED("Failed to create texture");
                 return;
             }
 
-            pDevice->CreateSampler(SamDesc, &Handle.pSampler);
-            VERIFY_EXPR(Handle.pSampler);
-            Handle.pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE)->SetSampler(Handle.pSampler);
+            pDevice->CreateSampler(SamDesc, &pSampler);
+            VERIFY_EXPR(pSampler);
+            pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE)->SetSampler(pSampler);
         }
 
         if (pContext != nullptr)
         {
-            StateTransitionDesc Barrier{Handle.pTexture, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE};
+            StateTransitionDesc Barrier{pTexture, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE};
             pContext->TransitionResourceStates(1, &Barrier);
+
+            IsInitialized.store(true);
         }
     }
 }
@@ -140,7 +145,7 @@ void HnTextureRegistry::Commit(IDeviceContext* pContext)
     std::lock_guard<std::mutex> Lock{m_PendingTexturesMtx};
     for (auto tex_it : m_PendingTextures)
     {
-        InitializeHandle(m_pDevice, pContext, tex_it.second.pLoader, tex_it.second.SamDesc, *tex_it.second.Handle);
+        tex_it.second.Handle->Initialize(m_pDevice, pContext, tex_it.second.pLoader, tex_it.second.SamDesc);
     }
     m_PendingTextures.clear();
 }
@@ -189,7 +194,7 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const pxr:
             {
                 if (m_pDevice->GetDeviceInfo().Features.MultithreadedResourceCreation)
                 {
-                    InitializeHandle(m_pDevice, nullptr, pLoader, SamDesc, *TexHandle);
+                    TexHandle->Initialize(m_pDevice, nullptr, pLoader, SamDesc);
                 }
             }
 

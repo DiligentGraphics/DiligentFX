@@ -314,7 +314,33 @@ void HnMaterial::InitTextureAttribs(const HnMaterialNetwork&        Network,
         {
             tex_it = m_Textures.emplace(Name, GetDefaultTexture(TexRegistry, Name)).first;
         }
+    };
 
+    MatBuilder.Finalize();
+}
+
+bool HnMaterial::InitTextureAddressingAttribs(const USD_Renderer& UsdRenderer)
+{
+    for (const auto& tex_it : m_Textures)
+    {
+        if (!tex_it.second->IsLoaded())
+        {
+            return false;
+        }
+    }
+
+    const auto& TexAttribIndices = UsdRenderer.GetSettings().TextureAttribIndices;
+    for (const TextureParamInfo& ParamInfo : kTextureParams)
+    {
+        auto tex_it = m_Textures.find(ParamInfo.Name);
+        if (tex_it == m_Textures.end())
+        {
+            UNEXPECTED("Texture '", ParamInfo.Name, "' not found. This should never happen as all textures are initialized in InitTextureAttribs()");
+            continue;
+        }
+
+        const int                             Idx        = TexAttribIndices[ParamInfo.TextureAttribId];
+        GLTF::Material::TextureShaderAttribs& TexAttribs = m_MaterialData.GetTextureAttrib(Idx);
         if (ITextureAtlasSuballocation* pAtlasSuballocation = tex_it->second->pAtlasSuballocation)
         {
             TexAttribs.TextureSlice        = static_cast<float>(pAtlasSuballocation->GetSlice());
@@ -325,9 +351,10 @@ void HnMaterial::InitTextureAttribs(const HnMaterialNetwork&        Network,
             TexAttribs.TextureSlice        = static_cast<float>(tex_it->second->TextureId);
             TexAttribs.AtlasUVScaleAndBias = float4{1, 1, 0, 0};
         }
-    };
+    }
 
-    MatBuilder.Finalize();
+    m_TextureAddressingAttribsDirty.store(false);
+    return true;
 }
 
 static RefCntAutoPtr<Image> CreateDefaultImage(const pxr::TfToken& Name, Uint32 Dimension = 32)
@@ -490,7 +517,8 @@ void HnMaterial::AllocateTextures(const HnMaterialNetwork& Network, HnTextureReg
 
         if (auto pTex = TexRegistry.Allocate(TexDescriptor.TextureId, Format, TexDescriptor.SamplerParams))
         {
-            m_Textures[TexDescriptor.Name] = pTex;
+            m_Textures[TexDescriptor.Name] = std::move(pTex);
+
             // Find texture coordinate
             size_t TexCoordIdx = ~size_t{0};
             if (const HnMaterialParameter* Param = Network.GetParameter(HnMaterialParameter::ParamType::Texture, TexDescriptor.Name))
@@ -528,6 +556,8 @@ void HnMaterial::AllocateTextures(const HnMaterialNetwork& Network, HnTextureReg
     }
 
     InitTextureAttribs(Network, TexRegistry, UsdRenderer, TexNameToCoordSetMap);
+    // Update texture addressing attribs when all textures are loaded
+    m_TextureAddressingAttribsDirty.store(true);
 }
 
 
@@ -755,8 +785,19 @@ static bool ApplyStandardStaticTextureIndexing(const PBR_Renderer::CreateInfo&  
     return true;
 }
 
-void HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
+bool HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
 {
+    const USD_Renderer& UsdRenderer = *RendererDelegate.GetUSDRenderer();
+
+    if (m_TextureAddressingAttribsDirty.load())
+    {
+        if (!InitTextureAddressingAttribs(UsdRenderer))
+        {
+            // Wait for all textures to be loaded
+            return false;
+        }
+    }
+
     RefCntAutoPtr<HnMaterialSRBCache> SRBCache{RendererDelegate.GetMaterialSRBCache(), IID_HnMaterialSRBCache};
     VERIFY_EXPR(SRBCache);
 
@@ -773,9 +814,10 @@ void HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
     }
 
     if (m_SRB)
-        return;
+    {
+        return true;
+    }
 
-    const USD_Renderer&             UsdRenderer       = *RendererDelegate.GetUSDRenderer();
     const PBR_Renderer::CreateInfo& RendererSettings  = UsdRenderer.GetSettings();
     const Uint32                    TexturesArraySize = RendererSettings.MaterialTexturesArraySize;
 
@@ -1056,11 +1098,13 @@ void HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
     {
         UNEXPECTED("Failed to create shader resource binding for material ", GetId());
     }
+
+    return true;
 }
 
 void HnMaterial::BindPrimitiveAttribsBuffer(HnRenderDelegate& RendererDelegate)
 {
-    if (m_PrimitiveAttribsVar != nullptr)
+    if (!m_SRB || m_PrimitiveAttribsVar != nullptr)
         return;
 
     m_PrimitiveAttribsVar = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbPrimitiveAttribs");
