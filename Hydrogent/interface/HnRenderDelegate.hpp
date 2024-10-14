@@ -151,6 +151,12 @@ public:
         ///             renderer will use a simple fallback shader.
         bool AsyncShaderCompilation = false;
 
+        /// Whether to enable asynchronous texture loading.
+        ///
+        /// \remarks    If no thread pool is provided (pThreadPool is null), the flag
+        ///             has no effect and texture loading will be synchronous.
+        bool AsyncTextureLoading = false;
+
         /// When shadows are enabled, the size of the PCF kernel.
         /// Allowed values are 2, 3, 5, 7.
         Uint32 PCFKernelSize = 3;
@@ -200,6 +206,17 @@ public:
         ///
         /// If set to 0, skinning will be disabled.
         Uint32 MaxJointCount = 128;
+
+        /// When asynchronous texture loading is enabled, the maximum amount of texture data
+        /// that can be loaded at the same time.
+        ///
+        /// \remarks    The budget is used to limit the amount of texture data that can be loaded
+        ///             at the same time. The budget is shared between all threads loading textures.
+        ///			    If the budget is exceeded, no more textures will be loaded until some
+        ///             of the previous textures are loaded and the budget is freed.
+        ///
+        ///             If set to 0, the budget is unlimited.
+        Uint64 TextureLoadBudget = 0;
     };
     static std::unique_ptr<HnRenderDelegate> Create(const CreateInfo& CI);
 

@@ -60,10 +60,16 @@ struct HnTextureIdentifier;
 class HnTextureRegistry final
 {
 public:
-    HnTextureRegistry(IRenderDevice*             pDevice,
-                      IThreadPool*               pThreadPool,
-                      GLTF::ResourceManager*     pResourceManager,
-                      TEXTURE_LOAD_COMPRESS_MODE CompressMode);
+    struct CreateInfo
+    {
+        IRenderDevice*             pDevice          = nullptr;
+        IThreadPool*               pThreadPool      = nullptr;
+        GLTF::ResourceManager*     pResourceManager = nullptr;
+        TEXTURE_LOAD_COMPRESS_MODE CompressMode     = TEXTURE_LOAD_COMPRESS_MODE_NONE;
+        Uint64                     LoadBudget       = 0;
+    };
+
+    HnTextureRegistry(const CreateInfo& CI);
     ~HnTextureRegistry();
 
     void Commit(IDeviceContext* pContext);
@@ -129,7 +135,7 @@ public:
     Int32 GetNumTexturesLoading() const { return m_NumTexturesLoading.load(); }
 
 private:
-    bool LoadTexture(const pxr::TfToken                             Key,
+    void LoadTexture(const pxr::TfToken                             Key,
                      const pxr::TfToken&                            FilePath,
                      const pxr::HdSamplerParameters&                SamplerParams,
                      std::function<RefCntAutoPtr<ITextureLoader>()> CreateLoader,
@@ -140,6 +146,7 @@ private:
     RefCntAutoPtr<IThreadPool>       m_pThreadPool;
     GLTF::ResourceManager* const     m_pResourceManager;
     const TEXTURE_LOAD_COMPRESS_MODE m_CompressMode;
+    const Int64                      m_LoadBudget;
 
     ObjectsRegistry<pxr::TfToken, TextureHandleSharedPtr, pxr::TfToken::HashFunctor> m_Cache;
 
@@ -162,6 +169,7 @@ private:
 
     std::atomic<Uint32> m_NextTextureId{0};
     std::atomic<Int32>  m_NumTexturesLoading{0};
+    std::atomic<Int64>  m_LoadingTexDataSize{0};
 };
 
 } // namespace USD

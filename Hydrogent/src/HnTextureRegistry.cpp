@@ -49,14 +49,12 @@ HnTextureRegistry::TextureHandle::~TextureHandle()
 {
 }
 
-HnTextureRegistry::HnTextureRegistry(IRenderDevice*             pDevice,
-                                     IThreadPool*               pThreadPool,
-                                     GLTF::ResourceManager*     pResourceManager,
-                                     TEXTURE_LOAD_COMPRESS_MODE CompressMode) :
-    m_pDevice{pDevice},
-    m_pThreadPool{pThreadPool},
-    m_pResourceManager{pResourceManager},
-    m_CompressMode{CompressMode}
+HnTextureRegistry::HnTextureRegistry(const CreateInfo& CI) :
+    m_pDevice{CI.pDevice},
+    m_pThreadPool{CI.pThreadPool},
+    m_pResourceManager{CI.pResourceManager},
+    m_CompressMode{CI.CompressMode},
+    m_LoadBudget{static_cast<Int64>(std::min(CI.LoadBudget, static_cast<Uint64>(INT64_MAX)))}
 {
 }
 
@@ -175,6 +173,12 @@ void HnTextureRegistry::Commit(IDeviceContext* pContext)
         for (auto& tex_it : m_WIPPendingTextures)
         {
             tex_it.second.InitHandle(m_pDevice, pContext);
+            if (tex_it.second.pLoader)
+            {
+                Uint64 TexDataSize = GetStagingTextureDataSize(tex_it.second.pLoader->GetTextureDesc());
+                m_LoadingTexDataSize.fetch_add(-static_cast<Int64>(TexDataSize));
+                VERIFY_EXPR(m_LoadingTexDataSize.load() >= 0);
+            }
         }
 
         VERIFY_EXPR(m_NumTexturesLoading.load() >= static_cast<int>(m_WIPPendingTextures.size()));
@@ -202,7 +206,7 @@ void HnTextureRegistry::Commit(IDeviceContext* pContext)
     }
 }
 
-bool HnTextureRegistry::LoadTexture(const pxr::TfToken                             Key,
+void HnTextureRegistry::LoadTexture(const pxr::TfToken                             Key,
                                     const pxr::TfToken&                            FilePath,
                                     const pxr::HdSamplerParameters&                SamplerParams,
                                     std::function<RefCntAutoPtr<ITextureLoader>()> CreateLoader,
@@ -213,14 +217,14 @@ bool HnTextureRegistry::LoadTexture(const pxr::TfToken                          
     {
         LOG_ERROR_MESSAGE("Failed to create texture loader for texture ", FilePath);
         m_NumTexturesLoading.fetch_add(-1);
-        return false;
     }
+
+    const TextureDesc& TexDesc = pLoader->GetTextureDesc();
 
     SamplerDesc SamDesc = HdSamplerParametersToSamplerDesc(SamplerParams);
     // Try to allocate texture in the atlas first
     if (m_pResourceManager != nullptr)
     {
-        const TextureDesc& TexDesc   = pLoader->GetTextureDesc();
         const TextureDesc& AtlasDesc = m_pResourceManager->GetAtlasDesc(TexDesc.Format);
         if (TexDesc.Width <= AtlasDesc.Width && TexDesc.Height <= AtlasDesc.Height)
         {
@@ -254,7 +258,8 @@ bool HnTextureRegistry::LoadTexture(const pxr::TfToken                          
         m_PendingTextures.emplace(Key, PendingTextureInfo{std::move(pLoader), SamDesc, TexHandle});
     }
 
-    return true;
+    Uint64 TexDataSize = GetStagingTextureDataSize(TexDesc);
+    m_LoadingTexDataSize.fetch_add(static_cast<Int64>(TexDataSize));
 }
 
 HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const pxr::TfToken&                            FilePath,
@@ -279,6 +284,12 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const pxr:
                 RefCntAutoPtr<IAsyncTask> pTask = EnqueueAsyncWork(
                     m_pThreadPool,
                     [=](Uint32 ThreadId) {
+                        if (m_LoadBudget != 0 && m_LoadingTexDataSize.load() > m_LoadBudget)
+                        {
+                            // Reschedule the task
+                            return ASYNC_TASK_STATUS_NOT_STARTED;
+                        }
+
                         LoadTexture(Key, FilePath, SamplerParams, CreateLoader, TexHandle);
                         return ASYNC_TASK_STATUS_COMPLETE;
                     },
