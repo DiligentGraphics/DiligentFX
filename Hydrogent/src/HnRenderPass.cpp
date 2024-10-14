@@ -344,8 +344,7 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
         return EXECUTE_RESULT_SKIPPED;
     }
 
-    // Wait until all PSOs are ready
-    m_UseFallbackPSO = false;
+    // Check the status of the pending PSOs
     if (!m_PendingPSOs.empty())
     {
         size_t NumPSOsReady = 0;
@@ -368,18 +367,21 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
         {
             m_PendingPSOs.clear();
         }
+    }
+
+    // Wait until all PSOs are ready and textures are loaded
+    m_UseFallbackPSO = false;
+    if (!m_PendingPSOs.empty() || State.RenderDelegate.GetTextureRegistry().GetNumTexturesLoading() > 0)
+    {
+        if ((m_Params.UsdPsoFlags & USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_OUTPUT) != 0 &&
+            m_FallbackPSO != nullptr &&
+            m_FallbackPSO->GetStatus() == PIPELINE_STATE_STATUS_READY)
+        {
+            m_UseFallbackPSO = true;
+        }
         else
         {
-            if ((m_Params.UsdPsoFlags & USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_OUTPUT) != 0 &&
-                m_FallbackPSO != nullptr &&
-                m_FallbackPSO->GetStatus() == PIPELINE_STATE_STATUS_READY)
-            {
-                m_UseFallbackPSO = true;
-            }
-            else
-            {
-                return EXECUTE_RESULT_SKIPPED;
-            }
+            return EXECUTE_RESULT_SKIPPED;
         }
     }
 
@@ -993,18 +995,27 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
     {
         ListItem.pPSO = nullptr;
 
+        const HnMaterial* pMaterial = DrawItem.GetMaterial();
+        VERIFY(pMaterial != nullptr, "Material must not be null");
+        if (pMaterial->GetSRB() == nullptr)
+        {
+            // Use fallback material until the material is initialized.
+            // When all textures are loaded, the render delegate will make the global material
+            // attrib dirty, and the material will be reinitialized.
+            pMaterial = State.RenderDelegate.GetFallbackMaterial();
+            VERIFY(pMaterial != nullptr, "Fallback material must not be null");
+            VERIFY(pMaterial->GetSRB() != nullptr, "Fallback material must be initialized");
+        }
+        ListItem.pMaterial = pMaterial;
+
         auto& PsoCache = State.GePsoCache();
         VERIFY_EXPR(PsoCache);
 
         auto& PSOFlags = ListItem.PSOFlags;
         PSOFlags       = static_cast<PBR_Renderer::PSO_FLAGS>(m_Params.UsdPsoFlags);
 
-        const HnDrawItem::GeometryData& Geo       = DrawItem.GetGeometryData();
-        const HnMaterial*               pMaterial = DrawItem.GetMaterial();
-        VERIFY(pMaterial != nullptr, "Material is null");
-        ListItem.pMaterial = pMaterial;
-
-        const CULL_MODE CullMode = ListItem.Mesh.GetCullMode();
+        const HnDrawItem::GeometryData& Geo      = DrawItem.GetGeometryData();
+        const CULL_MODE                 CullMode = ListItem.Mesh.GetCullMode();
 
         // Use the material's texture indexing ID as the user value in the PSO key.
         // The USD renderer will use this ID to return the indexing.

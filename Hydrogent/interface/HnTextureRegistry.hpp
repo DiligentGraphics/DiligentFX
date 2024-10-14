@@ -29,6 +29,7 @@
 #include <memory>
 #include <mutex>
 #include <unordered_map>
+#include <vector>
 #include <atomic>
 
 #include "pxr/pxr.h"
@@ -60,6 +61,7 @@ class HnTextureRegistry final
 {
 public:
     HnTextureRegistry(IRenderDevice*             pDevice,
+                      IThreadPool*               pThreadPool,
                       GLTF::ResourceManager*     pResourceManager,
                       TEXTURE_LOAD_COMPRESS_MODE CompressMode);
     ~HnTextureRegistry();
@@ -98,13 +100,15 @@ public:
 
     TextureHandleSharedPtr Allocate(const HnTextureIdentifier&      TexId,
                                     TEXTURE_FORMAT                  Format,
-                                    const pxr::HdSamplerParameters& SamplerParams);
+                                    const pxr::HdSamplerParameters& SamplerParams,
+                                    bool                            IsAsync);
 
     // Allocates texture handle for the specified texture file path.
     // If the texture is not loaded, calls CreateLoader() to create the texture loader.
     TextureHandleSharedPtr Allocate(const pxr::TfToken&                            FilePath,
                                     const TextureComponentMapping&                 Swizzle,
                                     const pxr::HdSamplerParameters&                SamplerParams,
+                                    bool                                           IsAsync,
                                     std::function<RefCntAutoPtr<ITextureLoader>()> CreateLoader);
 
     TextureHandleSharedPtr Get(const pxr::TfToken& Path)
@@ -122,8 +126,18 @@ public:
 
     TEXTURE_LOAD_COMPRESS_MODE GetCompressMode() const { return m_CompressMode; }
 
+    Int32 GetNumTexturesLoading() const { return m_NumTexturesLoading.load(); }
+
+private:
+    bool LoadTexture(const pxr::TfToken                             Key,
+                     const pxr::TfToken&                            FilePath,
+                     const pxr::HdSamplerParameters&                SamplerParams,
+                     std::function<RefCntAutoPtr<ITextureLoader>()> CreateLoader,
+                     std::shared_ptr<TextureHandle>                 TexHandle);
+
 private:
     RefCntAutoPtr<IRenderDevice>     m_pDevice;
+    RefCntAutoPtr<IThreadPool>       m_pThreadPool;
     GLTF::ResourceManager* const     m_pResourceManager;
     const TEXTURE_LOAD_COMPRESS_MODE m_CompressMode;
 
@@ -134,12 +148,20 @@ private:
         RefCntAutoPtr<ITextureLoader> pLoader;
         SamplerDesc                   SamDesc;
         TextureHandleSharedPtr        Handle;
+
+        void InitHandle(IRenderDevice* pDevice, IDeviceContext* pContext);
     };
 
-    std::mutex                                                                      m_PendingTexturesMtx;
-    std::unordered_map<pxr::TfToken, PendingTextureInfo, pxr::TfToken::HashFunctor> m_PendingTextures;
+    using PendingTexturesMapType = std::unordered_map<pxr::TfToken, PendingTextureInfo, pxr::TfToken::HashFunctor>;
+    std::mutex             m_PendingTexturesMtx;
+    PendingTexturesMapType m_PendingTextures;
+    PendingTexturesMapType m_WIPPendingTextures;
+
+    std::mutex                             m_AsyncTasksMtx;
+    std::vector<RefCntAutoPtr<IAsyncTask>> m_AsyncTasks;
 
     std::atomic<Uint32> m_NextTextureId{0};
+    std::atomic<Int32>  m_NumTexturesLoading{0};
 };
 
 } // namespace USD

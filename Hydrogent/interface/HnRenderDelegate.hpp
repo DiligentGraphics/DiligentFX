@@ -127,6 +127,10 @@ public:
         IDeviceContext*    pContext          = nullptr;
         IRenderStateCache* pRenderStateCache = nullptr;
 
+        /// Thread pool used for asynchronous tasks (e.g. texture loading).
+        /// If null, the tasks will be executed synchronously.
+        IThreadPool* pThreadPool = nullptr;
+
         bool UseVertexPool = false;
         bool UseIndexPool  = false;
         bool EnableShadows = false;

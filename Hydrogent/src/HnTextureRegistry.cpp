@@ -31,6 +31,7 @@
 #include "USD_Renderer.hpp"
 #include "HnTextureIdentifier.hpp"
 #include "GraphicsAccessories.hpp"
+#include "ThreadPool.hpp"
 
 #include <mutex>
 
@@ -49,9 +50,11 @@ HnTextureRegistry::TextureHandle::~TextureHandle()
 }
 
 HnTextureRegistry::HnTextureRegistry(IRenderDevice*             pDevice,
+                                     IThreadPool*               pThreadPool,
                                      GLTF::ResourceManager*     pResourceManager,
                                      TEXTURE_LOAD_COMPRESS_MODE CompressMode) :
     m_pDevice{pDevice},
+    m_pThreadPool{pThreadPool},
     m_pResourceManager{pResourceManager},
     m_CompressMode{CompressMode}
 {
@@ -59,6 +62,14 @@ HnTextureRegistry::HnTextureRegistry(IRenderDevice*             pDevice,
 
 HnTextureRegistry::~HnTextureRegistry()
 {
+    if (m_pThreadPool)
+    {
+        for (RefCntAutoPtr<IAsyncTask>& pTask : m_AsyncTasks)
+        {
+            pTask->Cancel();
+        }
+        m_pThreadPool->WaitForAllTasks();
+    }
 }
 
 void HnTextureRegistry::TextureHandle::Initialize(IRenderDevice*     pDevice,
@@ -136,74 +147,151 @@ void HnTextureRegistry::TextureHandle::Initialize(IRenderDevice*     pDevice,
     }
 }
 
+void HnTextureRegistry::PendingTextureInfo::InitHandle(IRenderDevice* pDevice, IDeviceContext* pContext)
+{
+    VERIFY_EXPR(pDevice != nullptr);
+    VERIFY_EXPR(pContext != nullptr);
+    VERIFY_EXPR(Handle);
+
+    Handle->Initialize(pDevice, pContext, pLoader, SamDesc);
+}
+
 void HnTextureRegistry::Commit(IDeviceContext* pContext)
 {
+    // We only can process these textures for which the atlas has been updated
+    // by m_pResourceManager->UpdateTextures
+    {
+        std::lock_guard<std::mutex> Lock{m_PendingTexturesMtx};
+        m_WIPPendingTextures.swap(m_PendingTextures);
+    }
+
     if (m_pResourceManager)
     {
         m_pResourceManager->UpdateTextures(m_pDevice, pContext);
     }
-    std::lock_guard<std::mutex> Lock{m_PendingTexturesMtx};
-    for (auto tex_it : m_PendingTextures)
+
+    if (!m_WIPPendingTextures.empty())
     {
-        tex_it.second.Handle->Initialize(m_pDevice, pContext, tex_it.second.pLoader, tex_it.second.SamDesc);
+        for (auto& tex_it : m_WIPPendingTextures)
+        {
+            tex_it.second.InitHandle(m_pDevice, pContext);
+        }
+
+        VERIFY_EXPR(m_NumTexturesLoading.load() >= static_cast<int>(m_WIPPendingTextures.size()));
+        m_NumTexturesLoading.fetch_add(-static_cast<int>(m_WIPPendingTextures.size()));
+
+        m_WIPPendingTextures.clear();
     }
-    m_PendingTextures.clear();
+
+    // Remove finished tasks from the list
+    {
+        std::lock_guard<std::mutex> Lock{m_AsyncTasksMtx};
+
+        auto it = m_AsyncTasks.begin();
+        while (it != m_AsyncTasks.end())
+        {
+            if ((*it)->IsFinished())
+            {
+                it = m_AsyncTasks.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
+    }
+}
+
+bool HnTextureRegistry::LoadTexture(const pxr::TfToken                             Key,
+                                    const pxr::TfToken&                            FilePath,
+                                    const pxr::HdSamplerParameters&                SamplerParams,
+                                    std::function<RefCntAutoPtr<ITextureLoader>()> CreateLoader,
+                                    std::shared_ptr<TextureHandle>                 TexHandle)
+{
+    RefCntAutoPtr<ITextureLoader> pLoader = CreateLoader();
+    if (!pLoader)
+    {
+        LOG_ERROR_MESSAGE("Failed to create texture loader for texture ", FilePath);
+        m_NumTexturesLoading.fetch_add(-1);
+        return false;
+    }
+
+    SamplerDesc SamDesc = HdSamplerParametersToSamplerDesc(SamplerParams);
+    // Try to allocate texture in the atlas first
+    if (m_pResourceManager != nullptr)
+    {
+        const TextureDesc& TexDesc   = pLoader->GetTextureDesc();
+        const TextureDesc& AtlasDesc = m_pResourceManager->GetAtlasDesc(TexDesc.Format);
+        if (TexDesc.Width <= AtlasDesc.Width && TexDesc.Height <= AtlasDesc.Height)
+        {
+            TexHandle->pAtlasSuballocation = m_pResourceManager->AllocateTextureSpace(TexDesc.Format, TexDesc.Width, TexDesc.Height);
+            if (!TexHandle->pAtlasSuballocation)
+            {
+                LOG_ERROR_MESSAGE("Failed to allocate atlas region for texture ", FilePath);
+            }
+        }
+        else
+        {
+            LOG_WARNING_MESSAGE("Texture ", FilePath, " is too large to fit into atlas (", TexDesc.Width, "x", TexDesc.Height, " vs ", AtlasDesc.Width, "x", AtlasDesc.Height, ")");
+        }
+    }
+
+    // If the texture was not allocated in the atlas (because the atlas is disabled or because it does not fit),
+    // try to create it as a standalone texture.
+    if (!TexHandle->pAtlasSuballocation)
+    {
+        if (m_pDevice->GetDeviceInfo().Features.MultithreadedResourceCreation)
+        {
+            TexHandle->Initialize(m_pDevice, nullptr, pLoader, SamDesc);
+        }
+    }
+
+    // Finish initialization in the main thread: we either need to upload the texture data to the atlas or
+    // create the texture in the main thread if the device does not support multithreaded resource creation
+    // and transition it to the shader resource state.
+    {
+        std::lock_guard<std::mutex> Lock{m_PendingTexturesMtx};
+        m_PendingTextures.emplace(Key, PendingTextureInfo{std::move(pLoader), SamDesc, TexHandle});
+    }
+
+    return true;
 }
 
 HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const pxr::TfToken&                            FilePath,
                                                                       const TextureComponentMapping&                 Swizzle,
                                                                       const pxr::HdSamplerParameters&                SamplerParams,
+                                                                      bool                                           IsAsync,
                                                                       std::function<RefCntAutoPtr<ITextureLoader>()> CreateLoader)
 {
     const pxr::TfToken Key{FilePath.GetString() + '.' + GetTextureComponentMappingString(Swizzle)};
     return m_Cache.Get(
         Key,
         [&]() {
-            RefCntAutoPtr<ITextureLoader> pLoader = CreateLoader();
-            if (!pLoader)
-            {
-                LOG_ERROR_MESSAGE("Failed to create texture loader for texture ", FilePath);
-                return TextureHandleSharedPtr{};
-            }
+            m_NumTexturesLoading.fetch_add(+1);
 
             std::shared_ptr<TextureHandle> TexHandle = std::make_shared<TextureHandle>(m_NextTextureId.fetch_add(1));
 
-            auto SamDesc = HdSamplerParametersToSamplerDesc(SamplerParams);
-            // Try to allocate texture in the atlas first
-            if (m_pResourceManager != nullptr)
+            if (IsAsync && m_pThreadPool)
             {
-                const auto& TexDesc   = pLoader->GetTextureDesc();
-                const auto& AtlasDesc = m_pResourceManager->GetAtlasDesc(TexDesc.Format);
-                if (TexDesc.Width <= AtlasDesc.Width && TexDesc.Height <= AtlasDesc.Height)
+                // Load textures with lower priority to let e.g. the shaders compile first
+                constexpr float Priority = -1;
+
+                RefCntAutoPtr<IAsyncTask> pTask = EnqueueAsyncWork(
+                    m_pThreadPool,
+                    [=](Uint32 ThreadId) {
+                        LoadTexture(Key, FilePath, SamplerParams, CreateLoader, TexHandle);
+                        return ASYNC_TASK_STATUS_COMPLETE;
+                    },
+                    Priority);
+
                 {
-                    TexHandle->pAtlasSuballocation = m_pResourceManager->AllocateTextureSpace(TexDesc.Format, TexDesc.Width, TexDesc.Height);
-                    if (!TexHandle->pAtlasSuballocation)
-                    {
-                        LOG_ERROR_MESSAGE("Failed to allocate atlas region for texture ", FilePath);
-                    }
-                }
-                else
-                {
-                    LOG_WARNING_MESSAGE("Texture ", FilePath, " is too large to fit into atlas (", TexDesc.Width, "x", TexDesc.Height, " vs ", AtlasDesc.Width, "x", AtlasDesc.Height, ")");
+                    std::lock_guard<std::mutex> Lock{m_AsyncTasksMtx};
+                    m_AsyncTasks.emplace_back(pTask);
                 }
             }
-
-            // If the texture was not allocated in the atlas (because the atlas is disabled or because it does not fit),
-            // try to create it as a standalone texture.
-            if (!TexHandle->pAtlasSuballocation)
+            else
             {
-                if (m_pDevice->GetDeviceInfo().Features.MultithreadedResourceCreation)
-                {
-                    TexHandle->Initialize(m_pDevice, nullptr, pLoader, SamDesc);
-                }
-            }
-
-            // Finish initialization in the main thread: we either need to upload the texture data to the atlas or
-            // create the texture in the main thread if the device does not support multithreaded resource creation
-            // and transition it to the shader resource state.
-            {
-                std::lock_guard<std::mutex> Lock{m_PendingTexturesMtx};
-                m_PendingTextures.emplace(Key, PendingTextureInfo{std::move(pLoader), SamDesc, TexHandle});
+                LoadTexture(Key, FilePath, SamplerParams, CreateLoader, TexHandle);
             }
 
             return TexHandle;
@@ -212,7 +300,8 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const pxr:
 
 HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const HnTextureIdentifier&      TexId,
                                                                       TEXTURE_FORMAT                  Format,
-                                                                      const pxr::HdSamplerParameters& SamplerParams)
+                                                                      const pxr::HdSamplerParameters& SamplerParams,
+                                                                      bool                            IsAsync)
 {
     if (TexId.FilePath.IsEmpty())
     {
@@ -220,8 +309,8 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const HnTe
         return {};
     }
 
-    return Allocate(TexId.FilePath, TexId.SubtextureId.Swizzle, SamplerParams,
-                    [&TexId, Format, CompressMode = m_CompressMode]() {
+    return Allocate(TexId.FilePath, TexId.SubtextureId.Swizzle, SamplerParams, IsAsync,
+                    [TexId, Format, CompressMode = m_CompressMode]() {
                         TextureLoadInfo LoadInfo;
                         LoadInfo.Name   = TexId.FilePath.GetText();
                         LoadInfo.Format = Format;

@@ -450,6 +450,9 @@ HnTextureRegistry::TextureHandleSharedPtr HnMaterial::GetDefaultTexture(HnTextur
     SamplerParams.minFilter = pxr::HdMinFilterLinearMipmapLinear;
     SamplerParams.magFilter = pxr::HdMagFilterLinear;
     return TexRegistry.Allocate(DefaultTexPath, TextureComponentMapping::Identity(), SamplerParams,
+                                /*IsAsync = */ false, // Allocate default textures synchronously to make
+                                                      // them immediately available after the first Sync
+                                                      // for the fallback material.
                                 [&]() {
                                     RefCntAutoPtr<Image> pImage = CreateDefaultImage(DefaultTexName);
 
@@ -515,7 +518,7 @@ void HnMaterial::AllocateTextures(const HnMaterialNetwork& Network, HnTextureReg
             continue;
         }
 
-        if (auto pTex = TexRegistry.Allocate(TexDescriptor.TextureId, Format, TexDescriptor.SamplerParams))
+        if (auto pTex = TexRegistry.Allocate(TexDescriptor.TextureId, Format, TexDescriptor.SamplerParams, /*IsAsync = */ true))
         {
             m_Textures[TexDescriptor.Name] = std::move(pTex);
 

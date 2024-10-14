@@ -315,6 +315,7 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
     m_USDRenderer{CreateUSDRenderer(CI, m_PrimitiveAttribsCB, m_MaterialSRBCache)},
     m_TextureRegistry{
         CI.pDevice,
+        CI.pThreadPool,
         CI.TextureAtlasDim != 0 ? m_ResourceMgr : RefCntAutoPtr<GLTF::ResourceManager>{},
         [](IRenderDevice* pDevice, TEXTURE_LOAD_COMPRESS_MODE CompressMode) {
             switch (CompressMode)
@@ -643,8 +644,7 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
     }
 
     {
-        const auto MaterialVersion = m_RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::Material);
-        if (m_MaterialResourcesVersion != MaterialVersion)
+        if (m_MaterialResourcesVersion != m_RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::Material))
         {
             std::lock_guard<std::mutex> Guard{m_MaterialsMtx};
 
@@ -661,7 +661,8 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
 
             if (AllMaterialsUpdated)
             {
-                m_MaterialResourcesVersion = MaterialVersion;
+                // Make global material attrib dirty to let the render passes update PSOs
+                m_MaterialResourcesVersion = m_RenderParam->MakeAttribDirty(HnRenderParam::GlobalAttrib::Material);
             }
         }
     }
