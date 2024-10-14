@@ -143,9 +143,9 @@ private:
 
         const HnDrawItem& DrawItem;
         const HnMesh&     Mesh;
-        const HnMaterial& Material;
 
-        IPipelineState* pPSO = nullptr;
+        const HnMaterial* pMaterial = nullptr;
+        IPipelineState*   pPSO      = nullptr;
 
         const entt::entity MeshEntity;
         const float        MeshUID;
@@ -184,7 +184,7 @@ private:
 
         operator bool() const noexcept
         {
-            return pPSO != nullptr && NumVertices > 0;
+            return pPSO != nullptr && pMaterial != nullptr && NumVertices > 0;
         }
     };
 

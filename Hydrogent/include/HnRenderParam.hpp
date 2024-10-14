@@ -107,7 +107,7 @@ public:
         Count
     };
     uint32_t GetAttribVersion(GlobalAttrib Attrib) const { return m_GlobalAttribVersions[static_cast<size_t>(Attrib)].load(); }
-    void     MakeAttribDirty(GlobalAttrib Attrib) { m_GlobalAttribVersions[static_cast<size_t>(Attrib)].fetch_add(1); }
+    uint32_t MakeAttribDirty(GlobalAttrib Attrib) { return m_GlobalAttribVersions[static_cast<size_t>(Attrib)].fetch_add(1) + 1; }
 
     PBR_Renderer::DebugViewType GetDebugView() const { return m_DebugView; }
 

@@ -80,10 +80,10 @@ pxr::HdRenderPassSharedPtr HnRenderPass::Create(pxr::HdRenderIndex*           pI
     return pxr::HdRenderPassSharedPtr{new HnRenderPass{pIndex, Collection}};
 }
 
-HnRenderPass::DrawListItem::DrawListItem(HnRenderDelegate& RenderDelegate, const HnDrawItem& Item) noexcept :
+HnRenderPass::DrawListItem::DrawListItem(HnRenderDelegate& RenderDelegate,
+                                         const HnDrawItem& Item) noexcept :
     DrawItem{Item},
     Mesh{Item.GetMesh()},
-    Material{*Item.GetMaterial()},
     MeshEntity{Mesh.GetEntity()},
     MeshUID{static_cast<float>(Mesh.GetUID())},
     RenderStateID{0},
@@ -521,7 +521,7 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
                             FirstMultiDrawItem.ListItem.IndexBuffer == ListItem.IndexBuffer &&
                             FirstMultiDrawItem.ListItem.NumVertexBuffers == ListItem.NumVertexBuffers &&
                             FirstMultiDrawItem.ListItem.VertexBuffers == ListItem.VertexBuffers &&
-                            FirstMultiDrawItem.ListItem.Material.GetSRB() == ListItem.Material.GetSRB());
+                            FirstMultiDrawItem.ListItem.pMaterial->GetSRB() == ListItem.pMaterial->GetSRB());
                 VERIFY_EXPR(AttribsBufferOffset + ListItem.ShaderAttribsDataSize <= AttribsBuffDesc.Size);
 
                 ++FirstMultiDrawItem.DrawCount;
@@ -637,7 +637,7 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
         // Note: if the material changes in the mesh, the mesh material version and/or
         //       global material version will be updated, and the draw list item GPU
         //       resources will be updated.
-        const GLTF::Material& MaterialData = ListItem.Material.GetMaterialData();
+        const GLTF::Material& MaterialData = ListItem.pMaterial->GetMaterialData();
         GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(pCurrPrimitive, AttribsData, State.USDRenderer.GetSettings().TextureAttribIndices,
                                                           MaterialData, /*TransposeMatrices = */ !PackMatrixRowMajor);
 
@@ -782,8 +782,7 @@ void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
         m_PendingPSOs.clear();
     }
 
-    if (State.RenderParam.GetAsyncShaderCompilation() &&
-        m_FallbackPSO == nullptr &&
+    if (m_FallbackPSO == nullptr &&
         (m_Params.UsdPsoFlags & USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_OUTPUT) != 0 &&
         m_RenderMode == HN_RENDER_MODE_SOLID)
     {
@@ -824,7 +823,7 @@ void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
                     State.Hash = ComputeHash(State.Item.pPSO,
                                              State.Item.IndexBuffer,
                                              State.Item.NumVertexBuffers,
-                                             State.Item.Material.GetSRB());
+                                             State.Item.pMaterial->GetSRB());
                     for (Uint32 i = 0; i < State.Item.NumVertexBuffers; ++i)
                     {
                         HashCombine(State.Hash, State.Item.VertexBuffers[i]);
@@ -843,7 +842,7 @@ void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
             if (Item.pPSO              != rhs.Item.pPSO ||
                 Item.IndexBuffer       != rhs.Item.IndexBuffer ||
                 Item.NumVertexBuffers  != rhs.Item.NumVertexBuffers ||
-                Item.Material.GetSRB() != rhs.Item.Material.GetSRB())
+                Item.pMaterial->GetSRB() != rhs.Item.pMaterial->GetSRB())
                 return false;
             // clang-format on
 
@@ -899,9 +898,9 @@ void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
                           Item0PrecedesItem1 = true;
                       else if (Item0.pPSO > Item1.pPSO)
                           Item0PrecedesItem1 = false;
-                      else if (Item0.Material.GetSRB() < Item1.Material.GetSRB())
+                      else if (Item0.pMaterial->GetSRB() < Item1.pMaterial->GetSRB())
                           Item0PrecedesItem1 = true;
-                      else if (Item0.Material.GetSRB() > Item1.Material.GetSRB())
+                      else if (Item0.pMaterial->GetSRB() > Item1.pMaterial->GetSRB())
                           Item0PrecedesItem1 = false;
                       else
                           Item0PrecedesItem1 = Item0.MeshEntity < Item1.MeshEntity;
@@ -1003,6 +1002,7 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
         const HnDrawItem::GeometryData& Geo       = DrawItem.GetGeometryData();
         const HnMaterial*               pMaterial = DrawItem.GetMaterial();
         VERIFY(pMaterial != nullptr, "Material is null");
+        ListItem.pMaterial = pMaterial;
 
         const CULL_MODE CullMode = ListItem.Mesh.GetCullMode();
 
@@ -1166,12 +1166,12 @@ void HnRenderPass::RenderPendingDrawItems(RenderState& State)
 
         State.SetPipelineState(m_UseFallbackPSO ? m_FallbackPSO : ListItem.pPSO);
 
-        IShaderResourceBinding* pSRB = ListItem.Material.GetSRB(PendingItem.AttribsBufferOffset);
+        IShaderResourceBinding* pSRB = ListItem.pMaterial->GetSRB(PendingItem.AttribsBufferOffset);
         VERIFY(pSRB != nullptr, "Material SRB is null. This may happen if UpdateSRB was not called for this material.");
         if (PendingItem.JointsBufferOffset != ~0u && PendingItem.JointsBufferOffset != JointsBufferOffset)
         {
             JointsBufferOffset = PendingItem.JointsBufferOffset;
-            ListItem.Material.SetJointsBufferOffset(JointsBufferOffset);
+            ListItem.pMaterial->SetJointsBufferOffset(JointsBufferOffset);
         }
         State.CommitShaderResources(pSRB);
 
@@ -1184,15 +1184,15 @@ void HnRenderPass::RenderPendingDrawItems(RenderState& State)
             VERIFY_EXPR(item_idx + PendingItem.DrawCount <= m_PendingDrawItems.size());
             for (size_t i = 1; i < PendingItem.DrawCount; ++i)
             {
-                const auto& BatchItem     = m_PendingDrawItems[item_idx + i];
-                const auto& BatchListItem = BatchItem.ListItem;
+                const PendingDrawItem& BatchItem     = m_PendingDrawItems[item_idx + i];
+                const DrawListItem&    BatchListItem = BatchItem.ListItem;
                 // clang-format off
                 VERIFY_EXPR(BatchListItem.RenderStateID    == ListItem.RenderStateID &&
                             BatchListItem.pPSO             == ListItem.pPSO &&
                             BatchListItem.IndexBuffer      == ListItem.IndexBuffer &&
                             BatchListItem.NumVertexBuffers == ListItem.NumVertexBuffers &&
                             BatchListItem.VertexBuffers    == ListItem.VertexBuffers &&
-                            BatchListItem.DrawItem.GetMaterial()->GetSRB() == ListItem.DrawItem.GetMaterial()->GetSRB() &&
+                            BatchListItem.pMaterial->GetSRB() == ListItem.pMaterial->GetSRB() &&
                             BatchItem.JointsBufferOffset == PendingItem.JointsBufferOffset);
                 // clang-format on
             }

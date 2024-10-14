@@ -358,6 +358,8 @@ public:
 
     IObject* GetMaterialSRBCache() const { return m_MaterialSRBCache; }
 
+    HnMaterial* GetFallbackMaterial() const { return m_FallbackMaterial; }
+
 private:
     static const pxr::TfTokenVector SupportedRPrimTypes;
     static const pxr::TfTokenVector SupportedSPrimTypes;
@@ -407,6 +409,7 @@ private:
 
     std::mutex                      m_MaterialsMtx;
     std::unordered_set<HnMaterial*> m_Materials;
+    HnMaterial*                     m_FallbackMaterial = nullptr;
 
     std::mutex                   m_LightsMtx;
     std::unordered_set<HnLight*> m_Lights;
