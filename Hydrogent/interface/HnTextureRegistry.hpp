@@ -122,7 +122,18 @@ public:
         return m_Cache.Get(Path);
     }
 
-    Uint32 GetAtlasVersion() const;
+    /// Returns the texture registry storage version.
+    ///
+    /// \remarks    The storage version is incremented every time a new texture is created
+    ///             or dynamic texture atlas version changes.
+    ///
+    ///             The storage version is not incremented when the texture data is updated.
+    Uint32 GetStorageVersion() const;
+
+    /// Returns the texture registry data version.
+    ///
+    /// \remarks    The data version is incremented every time a texture is loaded or updated.
+    Uint32 GetDataVersion() const;
 
     template <typename HandlerType>
     void ProcessTextures(HandlerType&& Handler)
@@ -170,6 +181,8 @@ private:
     std::atomic<Uint32> m_NextTextureId{0};
     std::atomic<Int32>  m_NumTexturesLoading{0};
     std::atomic<Int64>  m_LoadingTexDataSize{0};
+    std::atomic<Uint32> m_StorageVersion{0};
+    std::atomic<Uint32> m_DataVersion{0};
 };
 
 } // namespace USD

@@ -790,6 +790,7 @@ static bool ApplyStandardStaticTextureIndexing(const PBR_Renderer::CreateInfo&  
 
 bool HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
 {
+    HnTextureRegistry&  TexRegistry = RendererDelegate.GetTextureRegistry();
     const USD_Renderer& UsdRenderer = *RendererDelegate.GetUSDRenderer();
 
     if (m_TextureAddressingAttribsDirty.load())
@@ -804,16 +805,16 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
     RefCntAutoPtr<HnMaterialSRBCache> SRBCache{RendererDelegate.GetMaterialSRBCache(), IID_HnMaterialSRBCache};
     VERIFY_EXPR(SRBCache);
 
-    HN_MATERIAL_TEXTURES_BINDING_MODE BindingMode = static_cast<const HnRenderParam*>(RendererDelegate.GetRenderParam())->GetTextureBindingMode();
+    const HN_MATERIAL_TEXTURES_BINDING_MODE BindingMode = static_cast<const HnRenderParam*>(RendererDelegate.GetRenderParam())->GetTextureBindingMode();
 
-    const Uint32 AtlasVersion = RendererDelegate.GetTextureRegistry().GetAtlasVersion();
-    if (BindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_ATLAS && AtlasVersion != m_AtlasVersion)
+    const Uint32 TexStorageVersion = TexRegistry.GetStorageVersion();
+    if (TexStorageVersion != m_TexRegistryStorageVersion)
     {
         m_SRB.Release();
         m_PrimitiveAttribsVar            = nullptr;
         m_JointTransformsVar             = nullptr;
         m_PBRPrimitiveAttribsBufferRange = 0;
-        m_AtlasVersion                   = AtlasVersion;
+        m_TexRegistryStorageVersion      = TexStorageVersion;
     }
 
     if (m_SRB)
@@ -988,6 +989,11 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
             m_ShaderTextureIndexingId = SRBCache->AddShaderTextureIndexing(StaticShaderTexIds);
         }
     }
+    else if (BindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_DYNAMIC)
+    {
+        // Update SRB whenever texture storage version changes
+        SRBKey.UniqueIDs.push_back(m_TexRegistryStorageVersion);
+    }
 
     m_SRB = SRBCache->GetSRB(SRBKey, [&]() {
         RefCntAutoPtr<IShaderResourceBinding> pSRB;
@@ -1014,9 +1020,14 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
                     // that contains all textures.
                     TexArray.resize(TexturesArraySize);
 
-                    HnTextureRegistry& TexRegistry = RendererDelegate.GetTextureRegistry();
                     TexRegistry.ProcessTextures(
                         [&TexArray](const pxr::TfToken& Name, const HnTextureRegistry::TextureHandle& Handle) {
+                            if (!Handle.IsLoaded())
+                            {
+                                // Skip textures that are being loaded
+                                return;
+                            }
+
                             if (!Handle.pTexture)
                             {
                                 UNEXPECTED("Texture '", Name, "' is not initialized.");

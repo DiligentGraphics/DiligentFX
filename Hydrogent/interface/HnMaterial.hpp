@@ -175,8 +175,8 @@ private:
     // The range that is used to bind the cbPrimitiveAttribs buffer.
     Uint32 m_PBRPrimitiveAttribsBufferRange = 0;
 
-    // Current atlas version
-    Uint32 m_AtlasVersion = 0;
+    // Current texture storage version
+    Uint32 m_TexRegistryStorageVersion = 0;
 
     ShaderTextureIndexingIdType m_ShaderTextureIndexingId = 0;
 };

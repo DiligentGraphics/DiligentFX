@@ -644,7 +644,9 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
     }
 
     {
-        if (m_MaterialResourcesVersion != m_RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::Material))
+        // Tex storage version is incremented every time a new texture is created or texture atlas version changes.
+        const Uint32 TexStorageVersion = m_TextureRegistry.GetStorageVersion();
+        if (m_MaterialResourcesVersion != m_RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::Material) + TexStorageVersion)
         {
             std::lock_guard<std::mutex> Guard{m_MaterialsMtx};
 
@@ -662,7 +664,7 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
             if (AllMaterialsUpdated)
             {
                 // Make global material attrib dirty to let the render passes update PSOs
-                m_MaterialResourcesVersion = m_RenderParam->MakeAttribDirty(HnRenderParam::GlobalAttrib::Material);
+                m_MaterialResourcesVersion = m_RenderParam->MakeAttribDirty(HnRenderParam::GlobalAttrib::Material) + TexStorageVersion;
             }
         }
     }

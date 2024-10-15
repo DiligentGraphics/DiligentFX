@@ -179,12 +179,17 @@ void HnTextureRegistry::Commit(IDeviceContext* pContext)
                 m_LoadingTexDataSize.fetch_add(-static_cast<Int64>(TexDataSize));
                 VERIFY_EXPR(m_LoadingTexDataSize.load() >= 0);
             }
+            if (tex_it.second.Handle->pTexture)
+            {
+                m_StorageVersion.fetch_add(1);
+            }
         }
 
         VERIFY_EXPR(m_NumTexturesLoading.load() >= static_cast<int>(m_WIPPendingTextures.size()));
         m_NumTexturesLoading.fetch_add(-static_cast<int>(m_WIPPendingTextures.size()));
 
         m_WIPPendingTextures.clear();
+        m_DataVersion.fetch_add(1);
     }
 
     // Remove finished tasks from the list
@@ -338,9 +343,17 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const HnTe
                     });
 }
 
-Uint32 HnTextureRegistry::GetAtlasVersion() const
+Uint32 HnTextureRegistry::GetStorageVersion() const
 {
-    return m_pResourceManager != nullptr ? m_pResourceManager->GetTextureVersion() : 0;
+    Uint32 Version = m_StorageVersion.load();
+    if (m_pResourceManager != nullptr)
+        Version += m_pResourceManager->GetTextureVersion();
+    return Version;
+}
+
+Uint32 HnTextureRegistry::GetDataVersion() const
+{
+    return m_DataVersion.load();
 }
 
 } // namespace USD
