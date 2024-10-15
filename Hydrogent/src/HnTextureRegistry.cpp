@@ -33,8 +33,6 @@
 #include "GraphicsAccessories.hpp"
 #include "ThreadPool.hpp"
 
-#include <mutex>
-
 namespace Diligent
 {
 
@@ -62,11 +60,18 @@ HnTextureRegistry::~HnTextureRegistry()
 {
     if (m_pThreadPool)
     {
+        VERIFY(m_NumTexturesLoading != 0 || m_LoadingTexDataSize == 0,
+               "The number of loading textures is zero, but the loading data size is non-zero (", m_LoadingTexDataSize, ")");
+
         for (RefCntAutoPtr<IAsyncTask>& pTask : m_AsyncTasks)
         {
             pTask->Cancel();
         }
-        m_pThreadPool->WaitForAllTasks();
+        // Only wait for our own tasks
+        for (RefCntAutoPtr<IAsyncTask>& pTask : m_AsyncTasks)
+        {
+            pTask->WaitForCompletion();
+        }
     }
 }
 
@@ -124,23 +129,29 @@ void HnTextureRegistry::TextureHandle::Initialize(IRenderDevice*     pDevice,
             {
                 pLoader->CreateTexture(pDevice, &m_pTexture);
             }
-            if (!m_pTexture)
+
+            if (m_pTexture)
+            {
+                RefCntAutoPtr<ISampler> pSampler;
+                pDevice->CreateSampler(SamDesc, &pSampler);
+                VERIFY_EXPR(pSampler);
+                m_pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE)->SetSampler(pSampler);
+            }
+            else
             {
                 UNEXPECTED("Failed to create texture");
-                return;
             }
-
-            RefCntAutoPtr<ISampler> pSampler;
-            pDevice->CreateSampler(SamDesc, &pSampler);
-            VERIFY_EXPR(pSampler);
-            m_pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE)->SetSampler(pSampler);
         }
 
         if (pContext != nullptr)
         {
-            StateTransitionDesc Barrier{m_pTexture, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE};
-            pContext->TransitionResourceStates(1, &Barrier);
+            if (m_pTexture)
+            {
+                StateTransitionDesc Barrier{m_pTexture, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE};
+                pContext->TransitionResourceStates(1, &Barrier);
+            }
 
+            // Set the IsInitialized flag even if the texture creation failed
             m_IsInitialized.store(true);
         }
     }
@@ -163,8 +174,8 @@ void HnTextureRegistry::PendingTextureInfo::InitHandle(IRenderDevice* pDevice, I
 
 void HnTextureRegistry::Commit(IDeviceContext* pContext)
 {
-    // We only can process these textures for which the atlas has been updated
-    // by m_pResourceManager->UpdateTextures
+    // We can only process those textures for which the atlas has been updated
+    // by m_pResourceManager->UpdateTextures, so move them to a separate list.
     {
         std::lock_guard<std::mutex> Lock{m_PendingTexturesMtx};
         m_WIPPendingTextures.swap(m_PendingTextures);
@@ -185,6 +196,8 @@ void HnTextureRegistry::Commit(IDeviceContext* pContext)
                 Uint64 TexDataSize = GetStagingTextureDataSize(tex_it.second.pLoader->GetTextureDesc());
                 m_LoadingTexDataSize.fetch_add(-static_cast<Int64>(TexDataSize));
                 VERIFY_EXPR(m_LoadingTexDataSize.load() >= 0);
+
+                m_DataVersion.fetch_add(1);
             }
             if (tex_it.second.Handle->GetTexture())
             {
@@ -196,7 +209,6 @@ void HnTextureRegistry::Commit(IDeviceContext* pContext)
         m_NumTexturesLoading.fetch_add(-static_cast<int>(m_WIPPendingTextures.size()));
 
         m_WIPPendingTextures.clear();
-        m_DataVersion.fetch_add(1);
     }
 
     // Remove finished tasks from the list
@@ -228,12 +240,19 @@ void HnTextureRegistry::LoadTexture(const pxr::TfToken                          
     if (!pLoader)
     {
         LOG_ERROR_MESSAGE("Failed to create texture loader for texture ", FilePath);
+
+        // Since we don't add the handle to the pending list, we need to decrement the counter here
         m_NumTexturesLoading.fetch_add(-1);
+
+        // Set the m_IsInitialized flag or the handle will be stuck in the loading state
         TexHandle->m_IsInitialized.store(true);
+
         return;
     }
 
-    const TextureDesc& TexDesc = pLoader->GetTextureDesc();
+    const TextureDesc& TexDesc     = pLoader->GetTextureDesc();
+    const Uint64       TexDataSize = GetStagingTextureDataSize(TexDesc);
+    m_LoadingTexDataSize.fetch_add(static_cast<Int64>(TexDataSize));
 
     // Try to allocate texture in the atlas first
     RefCntAutoPtr<ITextureAtlasSuballocation> pAtlasSuballocation;
@@ -275,11 +294,8 @@ void HnTextureRegistry::LoadTexture(const pxr::TfToken                          
     // and transition it to the shader resource state.
     {
         std::lock_guard<std::mutex> Lock{m_PendingTexturesMtx};
-        m_PendingTextures.emplace(Key, PendingTextureInfo{std::move(pLoader), SamDesc, TexHandle});
+        m_PendingTextures.emplace(Key, PendingTextureInfo{std::move(pLoader), SamDesc, std::move(TexHandle)});
     }
-
-    Uint64 TexDataSize = GetStagingTextureDataSize(TexDesc);
-    m_LoadingTexDataSize.fetch_add(static_cast<Int64>(TexDataSize));
 }
 
 HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const pxr::TfToken&                            FilePath,
