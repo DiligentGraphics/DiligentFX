@@ -323,7 +323,7 @@ bool HnMaterial::InitTextureAddressingAttribs(const USD_Renderer& UsdRenderer)
 {
     for (const auto& tex_it : m_Textures)
     {
-        if (!tex_it.second->IsLoaded())
+        if (!tex_it.second->IsInitialized())
         {
             return false;
         }
@@ -341,14 +341,16 @@ bool HnMaterial::InitTextureAddressingAttribs(const USD_Renderer& UsdRenderer)
 
         const int                             Idx        = TexAttribIndices[ParamInfo.TextureAttribId];
         GLTF::Material::TextureShaderAttribs& TexAttribs = m_MaterialData.GetTextureAttrib(Idx);
-        if (ITextureAtlasSuballocation* pAtlasSuballocation = tex_it->second->pAtlasSuballocation)
+        if (ITextureAtlasSuballocation* pAtlasSuballocation = tex_it->second->GetAtlasSuballocation())
         {
             TexAttribs.TextureSlice        = static_cast<float>(pAtlasSuballocation->GetSlice());
             TexAttribs.AtlasUVScaleAndBias = pAtlasSuballocation->GetUVScaleBias();
         }
         else
         {
-            TexAttribs.TextureSlice        = static_cast<float>(tex_it->second->TextureId);
+            // Write texture Id into the slice field. It will be used by the bindless shader to
+            // index into the texture array.
+            TexAttribs.TextureSlice        = static_cast<float>(tex_it->second->GetId());
             TexAttribs.AtlasUVScaleAndBias = float4{1, 1, 0, 0};
         }
     }
@@ -877,18 +879,18 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
             ITexture* pTexture = nullptr;
 
             const HnTextureRegistry::TextureHandleSharedPtr& pTexHandle = tex_it->second;
-            if (pTexHandle->pTexture)
+            if (pTexHandle->GetTexture())
             {
-                const auto& TexDesc = pTexHandle->pTexture->GetDesc();
+                pTexture                   = pTexHandle->GetTexture();
+                const TextureDesc& TexDesc = pTexture->GetDesc();
                 VERIFY(TexDesc.Type == RESOURCE_DIM_TEX_2D_ARRAY, "2D textures should be loaded as single-slice 2D array textures");
-                pTexture = pTexHandle->pTexture;
 
                 StandaloneTextures.emplace(ID, pTexture);
             }
-            else if (pTexHandle->pAtlasSuballocation)
+            else if (pTexHandle->GetAtlasSuballocation())
             {
                 VERIFY_EXPR(BindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_ATLAS);
-                pTexture = pTexHandle->pAtlasSuballocation->GetAtlas()->GetTexture();
+                pTexture = pTexHandle->GetAtlasSuballocation()->GetAtlas()->GetTexture();
 
                 const TEXTURE_FORMAT AtlasFmt = pTexture->GetDesc().Format;
 
@@ -906,7 +908,7 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
             }
             else
             {
-                UNEXPECTED("Texture '", TexName, "' is not initialized. This likely indicates that HnRenderDelegate::CommitResources() was not called.");
+                LOG_ERROR_MESSAGE("Texture '", TexName, "' in material '", GetId(), "' is not loaded.");
                 continue;
             }
 
@@ -1021,28 +1023,29 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
                     TexArray.resize(TexturesArraySize);
 
                     TexRegistry.ProcessTextures(
-                        [&TexArray](const pxr::TfToken& Name, const HnTextureRegistry::TextureHandle& Handle) {
-                            if (!Handle.IsLoaded())
+                        [this, &TexArray](const pxr::TfToken& Name, const HnTextureRegistry::TextureHandle& Handle) {
+                            if (!Handle.IsInitialized())
                             {
-                                // Skip textures that are being loaded
+                                // Skip textures that are not initialized
                                 return;
                             }
 
-                            if (!Handle.pTexture)
+                            if (!Handle.GetTexture())
                             {
-                                UNEXPECTED("Texture '", Name, "' is not initialized.");
+                                LOG_ERROR_MESSAGE("Texture '", Name, "' in material '", GetId(), "' is not loaded.");
                                 return;
                             }
 
-                            if (Handle.TextureId >= TexArray.size())
+                            const Uint32 TextureId = Handle.GetId();
+                            if (TextureId >= TexArray.size())
                             {
-                                LOG_ERROR_MESSAGE("Texture ", Name, " uses texture array slot ", Handle.TextureId, " which is greater than the texture array size ", TexArray.size());
+                                LOG_ERROR_MESSAGE("Texture ", Name, " uses texture array slot ", TextureId, " which is greater than the texture array size ", TexArray.size());
                                 return;
                             }
 
-                            VERIFY_EXPR(Handle.TextureId != ~0u);
-                            VERIFY(TexArray[Handle.TextureId] == nullptr, "Texture ", Handle.TextureId, " is already initialized");
-                            TexArray[Handle.TextureId] = Handle.pTexture;
+                            VERIFY_EXPR(TextureId != ~0u);
+                            VERIFY(TexArray[TextureId] == nullptr, "Texture ", TextureId, " is already initialized");
+                            TexArray[TextureId] = Handle.GetTexture();
                         });
                 }
 
@@ -1055,12 +1058,12 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
                         if (!WhiteTex)
                         {
                             WhiteTex = GetDefaultTexture(RendererDelegate.GetTextureRegistry(), HnTokens->diffuseColor);
-                            VERIFY_EXPR(WhiteTex->pTexture || WhiteTex->pAtlasSuballocation);
+                            VERIFY_EXPR(WhiteTex->GetTexture() || WhiteTex->GetAtlasSuballocation());
                         }
-                        if (WhiteTex->pTexture)
-                            Tex = WhiteTex->pTexture;
-                        else if (WhiteTex->pAtlasSuballocation)
-                            Tex = WhiteTex->pAtlasSuballocation->GetAtlas()->GetTexture();
+                        if (WhiteTex->GetTexture())
+                            Tex = WhiteTex->GetTexture();
+                        else if (WhiteTex->GetAtlasSuballocation())
+                            Tex = WhiteTex->GetAtlasSuballocation()->GetAtlas()->GetTexture();
                     }
                 }
 

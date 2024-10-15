@@ -42,7 +42,7 @@ namespace USD
 {
 
 HnTextureRegistry::TextureHandle::TextureHandle(Uint32 Id) noexcept :
-    TextureId{Id}
+    m_TextureId{Id}
 {}
 
 HnTextureRegistry::TextureHandle::~TextureHandle()
@@ -75,20 +75,20 @@ void HnTextureRegistry::TextureHandle::Initialize(IRenderDevice*     pDevice,
                                                   ITextureLoader*    pLoader,
                                                   const SamplerDesc& SamDesc)
 {
-    VERIFY(!IsInitialized.load(), "Texture handle is already initialized");
+    VERIFY(!m_IsInitialized.load(), "Texture handle is already initialized");
 
-    if (pAtlasSuballocation != nullptr)
+    if (m_pAtlasSuballocation != nullptr)
     {
         VERIFY_EXPR(pContext != nullptr);
 
-        IDynamicTextureAtlas*       pAtlas      = pAtlasSuballocation->GetAtlas();
+        IDynamicTextureAtlas*       pAtlas      = m_pAtlasSuballocation->GetAtlas();
         ITexture*                   pDstTex     = pAtlas->GetTexture();
         const TextureDesc&          AtlasDesc   = pAtlas->GetAtlasDesc();
         const TextureFormatAttribs& FmtAttribs  = GetTextureFormatAttribs(AtlasDesc.Format);
         const TextureData           UploadData  = pLoader->GetTextureData();
         const TextureDesc&          SrcDataDesc = pLoader->GetTextureDesc();
-        const uint2&                Origin      = pAtlasSuballocation->GetOrigin();
-        const Uint32                Slice       = pAtlasSuballocation->GetSlice();
+        const uint2&                Origin      = m_pAtlasSuballocation->GetOrigin();
+        const Uint32                Slice       = m_pAtlasSuballocation->GetSlice();
 
         const Uint32 MipsToUpload = std::min(UploadData.NumSubresources, AtlasDesc.MipLevels);
         for (Uint32 mip = 0; mip < MipsToUpload; ++mip)
@@ -104,11 +104,11 @@ void HnTextureRegistry::TextureHandle::Initialize(IRenderDevice*     pDevice,
             pContext->UpdateTexture(pDstTex, mip, Slice, UpdateBox, LevelData, RESOURCE_STATE_TRANSITION_MODE_NONE, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         }
 
-        IsInitialized.store(true);
+        m_IsInitialized.store(true);
     }
     else
     {
-        if (!pTexture)
+        if (!m_pTexture)
         {
             if (pLoader->GetTextureDesc().Type == RESOURCE_DIM_TEX_2D)
             {
@@ -118,31 +118,38 @@ void HnTextureRegistry::TextureHandle::Initialize(IRenderDevice*     pDevice,
                 TexDesc.ArraySize = 1;
 
                 TextureData InitData = pLoader->GetTextureData();
-                pDevice->CreateTexture(TexDesc, &InitData, &pTexture);
+                pDevice->CreateTexture(TexDesc, &InitData, &m_pTexture);
             }
             else
             {
-                pLoader->CreateTexture(pDevice, &pTexture);
+                pLoader->CreateTexture(pDevice, &m_pTexture);
             }
-            if (!pTexture)
+            if (!m_pTexture)
             {
                 UNEXPECTED("Failed to create texture");
                 return;
             }
 
+            RefCntAutoPtr<ISampler> pSampler;
             pDevice->CreateSampler(SamDesc, &pSampler);
             VERIFY_EXPR(pSampler);
-            pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE)->SetSampler(pSampler);
+            m_pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE)->SetSampler(pSampler);
         }
 
         if (pContext != nullptr)
         {
-            StateTransitionDesc Barrier{pTexture, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE};
+            StateTransitionDesc Barrier{m_pTexture, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE};
             pContext->TransitionResourceStates(1, &Barrier);
 
-            IsInitialized.store(true);
+            m_IsInitialized.store(true);
         }
     }
+}
+
+void HnTextureRegistry::TextureHandle::SetAtlasSuballocation(ITextureAtlasSuballocation* pSuballocation)
+{
+    VERIFY(m_pAtlasSuballocation == nullptr, "Atlas suballocation is already set");
+    m_pAtlasSuballocation = pSuballocation;
 }
 
 void HnTextureRegistry::PendingTextureInfo::InitHandle(IRenderDevice* pDevice, IDeviceContext* pContext)
@@ -179,7 +186,7 @@ void HnTextureRegistry::Commit(IDeviceContext* pContext)
                 m_LoadingTexDataSize.fetch_add(-static_cast<Int64>(TexDataSize));
                 VERIFY_EXPR(m_LoadingTexDataSize.load() >= 0);
             }
-            if (tex_it.second.Handle->pTexture)
+            if (tex_it.second.Handle->GetTexture())
             {
                 m_StorageVersion.fetch_add(1);
             }
@@ -222,19 +229,21 @@ void HnTextureRegistry::LoadTexture(const pxr::TfToken                          
     {
         LOG_ERROR_MESSAGE("Failed to create texture loader for texture ", FilePath);
         m_NumTexturesLoading.fetch_add(-1);
+        TexHandle->m_IsInitialized.store(true);
+        return;
     }
 
     const TextureDesc& TexDesc = pLoader->GetTextureDesc();
 
-    SamplerDesc SamDesc = HdSamplerParametersToSamplerDesc(SamplerParams);
     // Try to allocate texture in the atlas first
+    RefCntAutoPtr<ITextureAtlasSuballocation> pAtlasSuballocation;
     if (m_pResourceManager != nullptr)
     {
         const TextureDesc& AtlasDesc = m_pResourceManager->GetAtlasDesc(TexDesc.Format);
         if (TexDesc.Width <= AtlasDesc.Width && TexDesc.Height <= AtlasDesc.Height)
         {
-            TexHandle->pAtlasSuballocation = m_pResourceManager->AllocateTextureSpace(TexDesc.Format, TexDesc.Width, TexDesc.Height);
-            if (!TexHandle->pAtlasSuballocation)
+            pAtlasSuballocation = m_pResourceManager->AllocateTextureSpace(TexDesc.Format, TexDesc.Width, TexDesc.Height);
+            if (!pAtlasSuballocation)
             {
                 LOG_ERROR_MESSAGE("Failed to allocate atlas region for texture ", FilePath);
             }
@@ -245,10 +254,16 @@ void HnTextureRegistry::LoadTexture(const pxr::TfToken                          
         }
     }
 
-    // If the texture was not allocated in the atlas (because the atlas is disabled or because it does not fit),
-    // try to create it as a standalone texture.
-    if (!TexHandle->pAtlasSuballocation)
+    const SamplerDesc SamDesc = HdSamplerParametersToSamplerDesc(SamplerParams);
+
+    if (pAtlasSuballocation)
     {
+        TexHandle->SetAtlasSuballocation(pAtlasSuballocation);
+    }
+    else
+    {
+        // If the texture was not allocated in the atlas (because the atlas is not used or the texture is too large),
+        // try to create it as a standalone texture.
         if (m_pDevice->GetDeviceInfo().Features.MultithreadedResourceCreation)
         {
             TexHandle->Initialize(m_pDevice, nullptr, pLoader, SamDesc);

@@ -74,19 +74,8 @@ public:
 
     void Commit(IDeviceContext* pContext);
 
-    struct TextureHandle
+    class TextureHandle
     {
-        RefCntAutoPtr<ITexture> pTexture;
-        RefCntAutoPtr<ISampler> pSampler;
-
-        RefCntAutoPtr<ITextureAtlasSuballocation> pAtlasSuballocation;
-
-        // Texture ID used for bindless access
-        const Uint32 TextureId;
-
-    private:
-        std::atomic<bool> IsInitialized{false};
-
     public:
         TextureHandle(Uint32 Id) noexcept;
         ~TextureHandle();
@@ -96,10 +85,27 @@ public:
                         ITextureLoader*    pLoader,
                         const SamplerDesc& SamDesc);
 
-        bool IsLoaded() const noexcept
+        bool IsInitialized() const noexcept
         {
-            return IsInitialized.load() && (pTexture != nullptr || pAtlasSuballocation != nullptr);
+            return m_IsInitialized.load();
         }
+
+        void SetAtlasSuballocation(ITextureAtlasSuballocation* pSuballocation);
+
+        Uint32                      GetId() const { return m_TextureId; }
+        ITexture*                   GetTexture() const { return m_pTexture; }
+        ITextureAtlasSuballocation* GetAtlasSuballocation() const { return m_pAtlasSuballocation; }
+
+    private:
+        RefCntAutoPtr<ITexture>                   m_pTexture;
+        RefCntAutoPtr<ITextureAtlasSuballocation> m_pAtlasSuballocation;
+
+        // Texture ID used for bindless access
+        const Uint32 m_TextureId;
+
+        std::atomic<bool> m_IsInitialized{false};
+
+        friend HnTextureRegistry;
     };
 
     using TextureHandleSharedPtr = std::shared_ptr<TextureHandle>;
