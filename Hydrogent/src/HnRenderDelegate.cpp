@@ -286,11 +286,8 @@ static RefCntAutoPtr<GLTF::ResourceManager> CreateResourceManager(const HnRender
         ResMgrCI.DefaultAtlasDesc.Desc.Width     = TextureAtlasDim;
         ResMgrCI.DefaultAtlasDesc.Desc.Height    = TextureAtlasDim;
         ResMgrCI.DefaultAtlasDesc.Desc.MipLevels = 6;
-        // Since texture atlas is resized only once, we can add one
-        // slice at a time to avoid wasting memory.
-        ResMgrCI.DefaultAtlasDesc.ExtraSliceCount = 1;
-
-        ResMgrCI.DefaultAtlasDesc.MinAlignment = 64;
+        ResMgrCI.DefaultAtlasDesc.GrowthFactor   = 1.25f;
+        ResMgrCI.DefaultAtlasDesc.MinAlignment   = 64;
     }
 
     return GLTF::ResourceManager::Create(CI.pDevice, ResMgrCI);
