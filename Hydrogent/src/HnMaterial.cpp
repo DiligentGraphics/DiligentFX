@@ -952,7 +952,7 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
                     {
                         TEXTURE_FORMAT AtlasFmt = AtlasFormats[AtlasId];
                         VERIFY_EXPR(AtlasFormatIds.find(AtlasFmt)->second == AtlasId);
-                        auto* pAtlasTexture = RendererDelegate.GetResourceManager().GetTexture(AtlasFmt);
+                        ITexture* pAtlasTexture = RendererDelegate.GetResourceManager().GetTexture(AtlasFmt);
                         VERIFY_EXPR(pAtlasTexture != nullptr);
                         TexArray[AtlasId] = pAtlasTexture;
                     }

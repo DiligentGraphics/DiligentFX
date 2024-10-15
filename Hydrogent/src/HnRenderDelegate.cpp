@@ -285,6 +285,11 @@ static RefCntAutoPtr<GLTF::ResourceManager> CreateResourceManager(const HnRender
         ResMgrCI.DefaultAtlasDesc.Desc.BindFlags = BIND_SHADER_RESOURCE;
         ResMgrCI.DefaultAtlasDesc.Desc.Width     = TextureAtlasDim;
         ResMgrCI.DefaultAtlasDesc.Desc.Height    = TextureAtlasDim;
+        // Ensure that the atlas will have at least one slice the first time it is updated.
+        // Since textures are loaded asynchronously, no texture may be loaded during the first update
+        // and RendererDelegate.GetResourceManager().GetTexture(AtlasFmt) in HnMaterial::UpdateSRB() will
+        // return null.
+        ResMgrCI.DefaultAtlasDesc.Desc.ArraySize = 1;
         ResMgrCI.DefaultAtlasDesc.Desc.MipLevels = 6;
         ResMgrCI.DefaultAtlasDesc.GrowthFactor   = 1.25f;
         ResMgrCI.DefaultAtlasDesc.MinAlignment   = 64;
