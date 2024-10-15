@@ -150,7 +150,7 @@ public:
 
     void ConvertToFilterable(IDeviceContext* pCtx, const ShadowMapAttribs& ShadowAttribs);
 
-    const CascadeTransforms& GetCascadeTranform(Uint32 Cascade) const { return m_CascadeTransforms[Cascade]; }
+    const CascadeTransforms& GetCascadeTransform(Uint32 Cascade) const { return m_CascadeTransforms[Cascade]; }
 
 private:
     void InitializeConversionTechniques(TEXTURE_FORMAT FilterableShadowMapFmt);
