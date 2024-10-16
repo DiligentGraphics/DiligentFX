@@ -319,7 +319,8 @@ void HnMaterial::InitTextureAttribs(const HnMaterialNetwork&        Network,
     MatBuilder.Finalize();
 }
 
-bool HnMaterial::InitTextureAddressingAttribs(const USD_Renderer& UsdRenderer)
+bool HnMaterial::InitTextureAddressingAttribs(const USD_Renderer& UsdRenderer,
+                                              HnTextureRegistry&  TexRegistry)
 {
     for (const auto& tex_it : m_Textures)
     {
@@ -339,9 +340,26 @@ bool HnMaterial::InitTextureAddressingAttribs(const USD_Renderer& UsdRenderer)
             continue;
         }
 
+        HnTextureRegistry::TextureHandleSharedPtr& pTexHandle = tex_it->second;
+        if (!pTexHandle->IsLoaded())
+        {
+            LOG_ERROR_MESSAGE("Texture '", ParamInfo.Name, "' in material '", GetId(), "' is not loaded.");
+            pTexHandle = GetDefaultTexture(TexRegistry, ParamInfo.Name);
+            if (!pTexHandle)
+            {
+                LOG_ERROR_MESSAGE("Failed to get default texture '", ParamInfo.Name, "' for material '", GetId(), "'");
+                continue;
+            }
+            if (!pTexHandle->IsLoaded())
+            {
+                UNEXPECTED("Default texture '", ParamInfo.Name, "' is not loaded. This appears to be a bug as default textures should always be loaded.");
+                continue;
+            }
+        }
+
         const int                             Idx        = TexAttribIndices[ParamInfo.TextureAttribId];
         GLTF::Material::TextureShaderAttribs& TexAttribs = m_MaterialData.GetTextureAttrib(Idx);
-        if (ITextureAtlasSuballocation* pAtlasSuballocation = tex_it->second->GetAtlasSuballocation())
+        if (ITextureAtlasSuballocation* pAtlasSuballocation = pTexHandle->GetAtlasSuballocation())
         {
             TexAttribs.TextureSlice        = static_cast<float>(pAtlasSuballocation->GetSlice());
             TexAttribs.AtlasUVScaleAndBias = pAtlasSuballocation->GetUVScaleBias();
@@ -350,7 +368,7 @@ bool HnMaterial::InitTextureAddressingAttribs(const USD_Renderer& UsdRenderer)
         {
             // Write texture Id into the slice field. It will be used by the bindless shader to
             // index into the texture array.
-            TexAttribs.TextureSlice        = static_cast<float>(tex_it->second->GetId());
+            TexAttribs.TextureSlice        = static_cast<float>(pTexHandle->GetId());
             TexAttribs.AtlasUVScaleAndBias = float4{1, 1, 0, 0};
         }
     }
@@ -798,7 +816,7 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
 
     if (m_TextureAddressingAttribsDirty.load())
     {
-        if (!InitTextureAddressingAttribs(UsdRenderer))
+        if (!InitTextureAddressingAttribs(UsdRenderer, TexRegistry))
         {
             // Wait for all textures to be loaded
             return false;
@@ -879,23 +897,7 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
 
             ITexture* pTexture = nullptr;
 
-            HnTextureRegistry::TextureHandleSharedPtr pTexHandle = tex_it->second;
-            if (!pTexHandle->IsLoaded())
-            {
-                LOG_ERROR_MESSAGE("Texture '", TexName, "' in material '", GetId(), "' is not loaded.");
-                pTexHandle = GetDefaultTexture(RendererDelegate.GetTextureRegistry(), TexName);
-                if (!pTexHandle)
-                {
-                    LOG_ERROR_MESSAGE("Failed to get default texture '", TexName, "' for material '", GetId(), "'");
-                    continue;
-                }
-                if (!pTexHandle->IsLoaded())
-                {
-                    UNEXPECTED("Default texture '", TexName, "' is not loaded. This appears to be a bug as default textures should always be loaded.");
-                    continue;
-                }
-            }
-
+            const HnTextureRegistry::TextureHandleSharedPtr& pTexHandle = tex_it->second;
             if (pTexHandle->GetTexture())
             {
                 pTexture                   = pTexHandle->GetTexture();
@@ -925,7 +927,7 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
             }
             else
             {
-                UNEXPECTED("If texture is not loaded, we should use a default texture.");
+                UNEXPECTED("If a texture is not loaded, a default texture should be set in InitTextureAddressingAttribs.");
                 continue;
             }
 

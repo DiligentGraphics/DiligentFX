@@ -149,7 +149,8 @@ private:
                             HnTextureRegistry&              TexRegistry,
                             const USD_Renderer&             UsdRenderer,
                             const TexNameToCoordSetMapType& TexNameToCoordSetMap);
-    bool InitTextureAddressingAttribs(const USD_Renderer& UsdRenderer);
+    bool InitTextureAddressingAttribs(const USD_Renderer& UsdRenderer,
+                                      HnTextureRegistry&  TexRegistry);
 
     HnTextureRegistry::TextureHandleSharedPtr GetDefaultTexture(HnTextureRegistry& TexRegistry, const pxr::TfToken& Name);
 
