@@ -582,7 +582,8 @@ public:
     using ShaderTextureIndexingIdType     = HnMaterial::ShaderTextureIndexingIdType;
 
     HnMaterialSRBCache(IReferenceCounters* pRefCounters) :
-        ObjectBase<IObject>{pRefCounters}
+        ObjectBase<IObject>{pRefCounters},
+        m_Cache{/*NumRequestsToPurge = */ 128}
     {}
 
     static RefCntAutoPtr<IObject> Create()
