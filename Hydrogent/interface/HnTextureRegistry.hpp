@@ -89,6 +89,10 @@ public:
         {
             return m_IsInitialized.load();
         }
+        bool IsLoaded() const noexcept
+        {
+            return IsInitialized() && (m_pTexture || m_pAtlasSuballocation);
+        }
 
         void SetAtlasSuballocation(ITextureAtlasSuballocation* pSuballocation);
 

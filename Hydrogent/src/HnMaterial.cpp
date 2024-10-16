@@ -878,7 +878,23 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
 
             ITexture* pTexture = nullptr;
 
-            const HnTextureRegistry::TextureHandleSharedPtr& pTexHandle = tex_it->second;
+            HnTextureRegistry::TextureHandleSharedPtr pTexHandle = tex_it->second;
+            if (!pTexHandle->IsLoaded())
+            {
+                LOG_ERROR_MESSAGE("Texture '", TexName, "' in material '", GetId(), "' is not loaded.");
+                pTexHandle = GetDefaultTexture(RendererDelegate.GetTextureRegistry(), TexName);
+                if (!pTexHandle)
+                {
+                    LOG_ERROR_MESSAGE("Failed to get default texture '", TexName, "' for material '", GetId(), "'");
+                    continue;
+                }
+                if (!pTexHandle->IsLoaded())
+                {
+                    UNEXPECTED("Default texture '", TexName, "' is not loaded. This appears to be a bug as default textures should always be loaded.");
+                    continue;
+                }
+            }
+
             if (pTexHandle->GetTexture())
             {
                 pTexture                   = pTexHandle->GetTexture();
@@ -908,7 +924,7 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
             }
             else
             {
-                LOG_ERROR_MESSAGE("Texture '", TexName, "' in material '", GetId(), "' is not loaded.");
+                UNEXPECTED("If texture is not loaded, we should use a default texture.");
                 continue;
             }
 
