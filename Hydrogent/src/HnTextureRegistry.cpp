@@ -75,10 +75,10 @@ HnTextureRegistry::~HnTextureRegistry()
     }
 }
 
-void HnTextureRegistry::TextureHandle::Initialize(IRenderDevice*     pDevice,
-                                                  IDeviceContext*    pContext,
-                                                  ITextureLoader*    pLoader,
-                                                  const SamplerDesc& SamDesc)
+void HnTextureRegistry::TextureHandle::Initialize(IRenderDevice*                  pDevice,
+                                                  IDeviceContext*                 pContext,
+                                                  ITextureLoader*                 pLoader,
+                                                  const pxr::HdSamplerParameters& SamplerParams)
 {
     VERIFY(!m_IsInitialized.load(), "Texture handle is already initialized");
 
@@ -132,6 +132,8 @@ void HnTextureRegistry::TextureHandle::Initialize(IRenderDevice*     pDevice,
 
             if (m_pTexture)
             {
+                const SamplerDesc SamDesc = HdSamplerParametersToSamplerDesc(SamplerParams);
+
                 RefCntAutoPtr<ISampler> pSampler;
                 pDevice->CreateSampler(SamDesc, &pSampler);
                 VERIFY_EXPR(pSampler);
@@ -169,13 +171,13 @@ void HnTextureRegistry::PendingTextureInfo::InitHandle(IRenderDevice* pDevice, I
     VERIFY_EXPR(pContext != nullptr);
     VERIFY_EXPR(Handle);
 
-    Handle->Initialize(pDevice, pContext, pLoader, SamDesc);
+    Handle->Initialize(pDevice, pContext, pLoader, SamplerParams);
 }
 
 void HnTextureRegistry::Commit(IDeviceContext* pContext)
 {
-    // We can only process those textures for which the atlas has been updated
-    // by m_pResourceManager->UpdateTextures, so move them to a separate list.
+    // We can only process those textures for which the atlas has been updated,
+    // so move them to a separate list before calling m_pResourceManager->UpdateTextures().
     {
         std::lock_guard<std::mutex> Lock{m_PendingTexturesMtx};
         m_WIPPendingTextures.swap(m_PendingTextures);
@@ -191,6 +193,7 @@ void HnTextureRegistry::Commit(IDeviceContext* pContext)
         for (auto& tex_it : m_WIPPendingTextures)
         {
             tex_it.second.InitHandle(m_pDevice, pContext);
+            VERIFY_EXPR(tex_it.second.Handle->IsInitialized());
             if (tex_it.second.pLoader)
             {
                 Uint64 TexDataSize = GetStagingTextureDataSize(tex_it.second.pLoader->GetTextureDesc());
@@ -273,8 +276,6 @@ void HnTextureRegistry::LoadTexture(const pxr::TfToken                          
         }
     }
 
-    const SamplerDesc SamDesc = HdSamplerParametersToSamplerDesc(SamplerParams);
-
     if (pAtlasSuballocation)
     {
         TexHandle->SetAtlasSuballocation(pAtlasSuballocation);
@@ -285,7 +286,7 @@ void HnTextureRegistry::LoadTexture(const pxr::TfToken                          
         // try to create it as a standalone texture.
         if (m_pDevice->GetDeviceInfo().Features.MultithreadedResourceCreation)
         {
-            TexHandle->Initialize(m_pDevice, nullptr, pLoader, SamDesc);
+            TexHandle->Initialize(m_pDevice, nullptr, pLoader, SamplerParams);
         }
     }
 
@@ -294,7 +295,7 @@ void HnTextureRegistry::LoadTexture(const pxr::TfToken                          
     // and transition it to the shader resource state.
     {
         std::lock_guard<std::mutex> Lock{m_PendingTexturesMtx};
-        m_PendingTextures.emplace(Key, PendingTextureInfo{std::move(pLoader), SamDesc, std::move(TexHandle)});
+        m_PendingTextures.emplace(Key, PendingTextureInfo{std::move(pLoader), SamplerParams, std::move(TexHandle)});
     }
 }
 

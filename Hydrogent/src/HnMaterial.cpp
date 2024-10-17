@@ -898,6 +898,7 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
             ITexture* pTexture = nullptr;
 
             const HnTextureRegistry::TextureHandleSharedPtr& pTexHandle = tex_it->second;
+            VERIFY(pTexHandle->IsInitialized(), "Texture '", TexName, "' must be initialized because we checked it in InitTextureAddressingAttribs");
             if (pTexHandle->GetTexture())
             {
                 pTexture                   = pTexHandle->GetTexture();
@@ -1077,7 +1078,7 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
                         if (!WhiteTex)
                         {
                             WhiteTex = GetDefaultTexture(RendererDelegate.GetTextureRegistry(), HnTokens->diffuseColor);
-                            VERIFY_EXPR(WhiteTex->GetTexture() || WhiteTex->GetAtlasSuballocation());
+                            VERIFY(WhiteTex->IsLoaded(), "Default texture must be loaded");
                         }
                         if (WhiteTex->GetTexture())
                             Tex = WhiteTex->GetTexture();

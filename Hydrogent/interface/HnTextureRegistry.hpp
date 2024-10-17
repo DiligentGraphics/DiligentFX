@@ -80,11 +80,6 @@ public:
         TextureHandle(Uint32 Id) noexcept;
         ~TextureHandle();
 
-        void Initialize(IRenderDevice*     pDevice,
-                        IDeviceContext*    pContext,
-                        ITextureLoader*    pLoader,
-                        const SamplerDesc& SamDesc);
-
         bool IsInitialized() const noexcept
         {
             return m_IsInitialized.load();
@@ -94,11 +89,33 @@ public:
             return IsInitialized() && (m_pTexture || m_pAtlasSuballocation);
         }
 
+        Uint32 GetId() const
+        {
+            VERIFY(IsInitialized(), "Reading texture Id is not safe before the handle is initialized");
+            return m_TextureId;
+        }
+
+        ITexture* GetTexture() const
+        {
+            VERIFY(IsInitialized(), "Reading texture is not safe before the handle is initialized");
+            return m_pTexture;
+        }
+
+        ITextureAtlasSuballocation* GetAtlasSuballocation() const
+        {
+            VERIFY(IsInitialized(), "Reading texture atlas suballocation is not safe before the handle is initialized");
+            return m_pAtlasSuballocation;
+        }
+
+    private:
+        friend HnTextureRegistry;
+
         void SetAtlasSuballocation(ITextureAtlasSuballocation* pSuballocation);
 
-        Uint32                      GetId() const { return m_TextureId; }
-        ITexture*                   GetTexture() const { return m_pTexture; }
-        ITextureAtlasSuballocation* GetAtlasSuballocation() const { return m_pAtlasSuballocation; }
+        void Initialize(IRenderDevice*                  pDevice,
+                        IDeviceContext*                 pContext,
+                        ITextureLoader*                 pLoader,
+                        const pxr::HdSamplerParameters& SamplerParams);
 
     private:
         RefCntAutoPtr<ITexture>                   m_pTexture;
@@ -108,8 +125,6 @@ public:
         const Uint32 m_TextureId;
 
         std::atomic<bool> m_IsInitialized{false};
-
-        friend HnTextureRegistry;
     };
 
     using TextureHandleSharedPtr = std::shared_ptr<TextureHandle>;
@@ -174,7 +189,7 @@ private:
     struct PendingTextureInfo
     {
         RefCntAutoPtr<ITextureLoader> pLoader;
-        SamplerDesc                   SamDesc;
+        pxr::HdSamplerParameters      SamplerParams;
         TextureHandleSharedPtr        Handle;
 
         void InitHandle(IRenderDevice* pDevice, IDeviceContext* pContext);
