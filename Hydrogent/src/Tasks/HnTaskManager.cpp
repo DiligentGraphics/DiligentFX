@@ -43,6 +43,7 @@
 #include "HashUtils.hpp"
 #include "HnRenderDelegate.hpp"
 #include "HnRenderPass.hpp"
+#include "HnShadowMapManager.hpp"
 
 namespace Diligent
 {
@@ -145,9 +146,9 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
 {
     // Task creation order defines the default task order
     CreateBeginFrameTask();
-    if (static_cast<const HnRenderDelegate*>(RenderIndex.GetRenderDelegate())->GetShadowMapManager())
+    if (const HnShadowMapManager* pShadowMapMgr = static_cast<const HnRenderDelegate*>(RenderIndex.GetRenderDelegate())->GetShadowMapManager())
     {
-        CreateRenderShadowsTask();
+        CreateRenderShadowsTask(*pShadowMapMgr);
     }
     CreateBeginMainPassTask();
 
@@ -261,13 +262,15 @@ void HnTaskManager::CreateBeginFrameTask()
     CreateTask<HnBeginFrameTask>(HnTaskManagerTokens->beginFrameTask, TaskUID_BeginFrame, TaskParams);
 }
 
-void HnTaskManager::CreateRenderShadowsTask()
+void HnTaskManager::CreateRenderShadowsTask(const HnShadowMapManager& ShadowMapMgr)
 {
     const USD_Renderer& Renderer = *static_cast<const HnRenderDelegate*>(GetRenderIndex().GetRenderDelegate())->GetUSDRenderer();
 
     HnRenderShadowsTaskParams TaskParams;
     TaskParams.State.DepthBiasEnabled     = true;
     TaskParams.State.SlopeScaledDepthBias = Renderer.GetSettings().PCFKernelSize * 0.5f + 0.5f;
+    const TEXTURE_FORMAT ShadowMapFmt     = ShadowMapMgr.GetAtlasDesc().Format;
+    TaskParams.State.DepthBias            = (ShadowMapFmt == TEX_FORMAT_D32_FLOAT || ShadowMapFmt == TEX_FORMAT_D32_FLOAT_S8X24_UINT) ? 10000 : 10;
     CreateTask<HnRenderShadowsTask>(HnTaskManagerTokens->renderShadowsTask, TaskUID_RenderShadows, TaskParams);
 
     // Only render shadows from default material for now

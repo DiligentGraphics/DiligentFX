@@ -46,6 +46,8 @@ struct HnRenderPassParams;
 struct HnReadRprimIdTaskParams;
 struct HnRenderBoundBoxTaskParams;
 
+class HnShadowMapManager;
+
 /// Task manager implementation in Hydrogent.
 class HnTaskManager
 {
@@ -236,7 +238,7 @@ private:
 
     void CreateBeginFrameTask();
     void CreateBeginMainPassTask();
-    void CreateRenderShadowsTask();
+    void CreateRenderShadowsTask(const HnShadowMapManager& ShadowMapMgr);
     void CreateRenderRprimsTask(const pxr::TfToken& MaterialTag, TaskUID UID, const HnRenderPassParams& RenderPassParams);
     void CreateRenderEnvMapTask(const pxr::TfToken& RenderPassName);
     void CreateRenderBoundBoxTask(const pxr::TfToken& RenderPassName);
