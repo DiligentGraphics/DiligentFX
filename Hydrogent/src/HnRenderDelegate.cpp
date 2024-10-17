@@ -715,9 +715,18 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
 
     {
         GLTF::ResourceManager::TransitionResourceStatesInfo TRSInfo;
-        TRSInfo.VertexBuffers.NewState  = RESOURCE_STATE_VERTEX_BUFFER;
-        TRSInfo.IndexBuffer.NewState    = RESOURCE_STATE_INDEX_BUFFER;
+        TRSInfo.VertexBuffers.NewState = RESOURCE_STATE_VERTEX_BUFFER;
+        TRSInfo.VertexBuffers.Update   = false;
+
+        TRSInfo.IndexBuffer.NewState = RESOURCE_STATE_INDEX_BUFFER;
+        TRSInfo.IndexBuffer.Update   = false;
+
         TRSInfo.TextureAtlases.NewState = RESOURCE_STATE_SHADER_RESOURCE;
+        // It is important to not update texture atlases here. With dynamic texture streaming,
+        // new slices may have been added since the last update. If Update is true, new texture
+        // atlases may be created and transitioned instead of the ones bound in the material SRBs.
+        // Besides, this will intoduce extra memory overhead and extra copies.
+        TRSInfo.TextureAtlases.Update = false;
         m_ResourceMgr->TransitionResourceStates(m_pDevice, m_pContext, TRSInfo);
     }
 }
