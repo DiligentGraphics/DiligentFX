@@ -270,7 +270,20 @@ void HnTaskManager::CreateRenderShadowsTask(const HnShadowMapManager& ShadowMapM
     TaskParams.State.DepthBiasEnabled     = true;
     TaskParams.State.SlopeScaledDepthBias = Renderer.GetSettings().PCFKernelSize * 0.5f + 0.5f;
     const TEXTURE_FORMAT ShadowMapFmt     = ShadowMapMgr.GetAtlasDesc().Format;
-    TaskParams.State.DepthBias            = (ShadowMapFmt == TEX_FORMAT_D32_FLOAT || ShadowMapFmt == TEX_FORMAT_D32_FLOAT_S8X24_UINT) ? 10000 : 10;
+    if (ShadowMapFmt == TEX_FORMAT_D32_FLOAT ||
+        ShadowMapFmt == TEX_FORMAT_D32_FLOAT_S8X24_UINT)
+    {
+        // Bias = (float)DepthBias * 2**(exponent(max z in primitive) - r) +
+        //     SlopeScaledDepthBias * MaxDepthSlope;
+        // where r is the number of mantissa bits in the floating point representation (excluding the hidden bit); for example, 23 for float32.
+        TaskParams.State.DepthBias = 10000;
+    }
+    else
+    {
+        // Bias = (float)DepthBias * r + SlopeScaledDepthBias * MaxDepthSlope;
+        // where r is the minimum representable value > 0 in the depth-buffer format converted to float32
+        TaskParams.State.DepthBias = 10;
+    }
     CreateTask<HnRenderShadowsTask>(HnTaskManagerTokens->renderShadowsTask, TaskUID_RenderShadows, TaskParams);
 
     // Only render shadows from default material for now
