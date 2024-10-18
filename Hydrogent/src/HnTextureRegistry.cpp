@@ -360,11 +360,9 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const HnTe
     return Allocate(TexId.FilePath, TexId.SubtextureId.Swizzle, SamplerParams, IsAsync,
                     [TexId, Format, CompressMode = m_CompressMode]() {
                         TextureLoadInfo LoadInfo;
-                        LoadInfo.Name   = TexId.FilePath.GetText();
-                        LoadInfo.Format = Format;
-
-                        // TODO: why do textures need to be flipped vertically?
-                        LoadInfo.FlipVertically      = !TexId.SubtextureId.FlipVertically;
+                        LoadInfo.Name                = TexId.FilePath.GetText();
+                        LoadInfo.Format              = Format;
+                        LoadInfo.FlipVertically      = TexId.SubtextureId.FlipVertically;
                         LoadInfo.IsSRGB              = TexId.SubtextureId.IsSRGB;
                         LoadInfo.PermultiplyAlpha    = TexId.SubtextureId.PremultiplyAlpha;
                         LoadInfo.Swizzle             = TexId.SubtextureId.Swizzle;

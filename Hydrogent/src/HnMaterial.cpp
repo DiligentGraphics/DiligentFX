@@ -303,6 +303,11 @@ void HnMaterial::InitTextureAttribs(const HnMaterialNetwork&        Network,
                 TexAttribs.UVScaleAndRotation = UVScaleAndRotation;
             }
 
+            // Flip V coordinate
+            TexAttribs.UVScaleAndRotation._12 *= -1;
+            TexAttribs.UVScaleAndRotation._22 *= -1;
+            TexAttribs.VBias = 1 - TexAttribs.VBias;
+
             if (const HnMaterialNetwork::TextureDescriptor* TexDescriptor = Network.GetTexture(Name))
             {
                 const pxr::HdSamplerParameters& SamplerParams = TexDescriptor->SamplerParams;
