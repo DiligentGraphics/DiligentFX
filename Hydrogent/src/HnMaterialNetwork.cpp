@@ -187,14 +187,15 @@ pxr::TfToken GetMaterialTag(const pxr::VtDictionary&    Metadata,
             continue;
 
         const pxr::VtValue& vtOpacityThreshold = param_it.second;
-        if (vtOpacityThreshold.Get<float>() > 0.0f)
+        const float         OpacityThreshold   = vtOpacityThreshold.Get<float>();
+        if (OpacityThreshold > 0.f && OpacityThreshold < 1.f)
         {
             return HnMaterialTagTokens->masked;
         }
     }
 
     // Next strongest opinion is a connection to 'terminal.opacity'
-    auto IsTranslucent = (Terminal.inputConnections.find(HnMaterialPrivateTokens->opacity) != Terminal.inputConnections.end());
+    bool IsTranslucent = (Terminal.inputConnections.find(HnMaterialPrivateTokens->opacity) != Terminal.inputConnections.end());
 
     // Weakest opinion is an authored terminal.opacity value.
     if (!IsTranslucent)
