@@ -34,6 +34,7 @@
 #include "HnRenderParam.hpp"
 #include "HnFrameRenderTargets.hpp"
 #include "HnShadowMapManager.hpp"
+#include "HnTextureRegistry.hpp"
 
 #include "DebugUtilities.hpp"
 #include "GraphicsUtilities.h"
@@ -316,27 +317,28 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
     m_MaterialSRBCache{HnMaterial::CreateSRBCache()},
     m_USDRenderer{CreateUSDRenderer(CI, m_PrimitiveAttribsCB, m_MaterialSRBCache)},
     m_TextureRegistry{
-        {
-            CI.pDevice,
-            CI.AsyncTextureLoading ? CI.pThreadPool : nullptr,
-            CI.TextureAtlasDim != 0 ? m_ResourceMgr : RefCntAutoPtr<GLTF::ResourceManager>{},
-            [](IRenderDevice* pDevice, TEXTURE_LOAD_COMPRESS_MODE CompressMode) {
-                switch (CompressMode)
-                {
-                    case TEXTURE_LOAD_COMPRESS_MODE_NONE:
-                        return TEXTURE_LOAD_COMPRESS_MODE_NONE;
+        std::make_shared<HnTextureRegistry>(
+            HnTextureRegistry::CreateInfo{
+                CI.pDevice,
+                CI.AsyncTextureLoading ? CI.pThreadPool : nullptr,
+                CI.TextureAtlasDim != 0 ? m_ResourceMgr : RefCntAutoPtr<GLTF::ResourceManager>{},
+                [](IRenderDevice* pDevice, TEXTURE_LOAD_COMPRESS_MODE CompressMode) {
+                    switch (CompressMode)
+                    {
+                        case TEXTURE_LOAD_COMPRESS_MODE_NONE:
+                            return TEXTURE_LOAD_COMPRESS_MODE_NONE;
 
-                    case TEXTURE_LOAD_COMPRESS_MODE_BC:
-                    case TEXTURE_LOAD_COMPRESS_MODE_BC_HIGH_QUAL:
-                        return pDevice->GetDeviceInfo().Features.TextureCompressionBC ? CompressMode : TEXTURE_LOAD_COMPRESS_MODE_NONE;
+                        case TEXTURE_LOAD_COMPRESS_MODE_BC:
+                        case TEXTURE_LOAD_COMPRESS_MODE_BC_HIGH_QUAL:
+                            return pDevice->GetDeviceInfo().Features.TextureCompressionBC ? CompressMode : TEXTURE_LOAD_COMPRESS_MODE_NONE;
 
-                    default:
-                        UNEXPECTED("Unexpected compress mode");
-                        return TEXTURE_LOAD_COMPRESS_MODE_NONE;
-                }
-            }(CI.pDevice, CI.TextureCompressMode),
-            CI.TextureLoadBudget,
-        },
+                        default:
+                            UNEXPECTED("Unexpected compress mode");
+                            return TEXTURE_LOAD_COMPRESS_MODE_NONE;
+                    }
+                }(CI.pDevice, CI.TextureCompressMode),
+                CI.TextureLoadBudget,
+            }),
     },
     m_GeometryPool{CI.pDevice, *m_ResourceMgr, CI.UseVertexPool, CI.UseIndexPool},
     m_RenderParam{
@@ -368,6 +370,14 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
 
 HnRenderDelegate::~HnRenderDelegate()
 {
+    VERIFY(m_Meshes.empty(), "Not all mesh prims have been destroyed. Verify that the imaging delegate is destroyed first, then the render index, and the render delegate is destroyed last.");
+    VERIFY(m_Materials.empty(), "Not all material prims have been destroyed. Verify that the imaging delegate is destroyed first, then the render index, and the render delegate is destroyed last.");
+    VERIFY(m_Lights.empty(), "Not all light prims have been destroyed. Verify that the imaging delegate is destroyed first, then the render index, and the render delegate is destroyed last.");
+
+    // Wait for all async tasks to complete.
+    // Note that this can't be done in the texture registry's destructor because shared pointer is
+    // destroyed before the destructor is called.
+    m_TextureRegistry->WaitForAsyncTasks();
 }
 
 pxr::HdRenderParam* HnRenderDelegate::GetRenderParam() const
@@ -498,7 +508,7 @@ pxr::HdSprim* HnRenderDelegate::CreateFallbackSprim(const pxr::TfToken& TypeId)
     pxr::HdSprim* SPrim = nullptr;
     if (TypeId == pxr::HdPrimTypeTokens->material)
     {
-        m_FallbackMaterial = HnMaterial::CreateFallback(m_TextureRegistry, *m_USDRenderer);
+        m_FallbackMaterial = HnMaterial::CreateFallback(*m_TextureRegistry, *m_USDRenderer);
         {
             std::lock_guard<std::mutex> Guard{m_MaterialsMtx};
             m_Materials.emplace(m_FallbackMaterial);
@@ -570,7 +580,7 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
     m_ResourceMgr->UpdateVertexBuffers(m_pDevice, m_pContext);
     m_ResourceMgr->UpdateIndexBuffer(m_pDevice, m_pContext);
 
-    m_TextureRegistry.Commit(m_pContext);
+    m_TextureRegistry->Commit(m_pContext);
     m_GeometryPool.Commit(m_pContext);
     if (m_ShadowMapManager)
     {
@@ -650,7 +660,7 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
 
     {
         // Tex storage version is incremented every time a new texture is created or texture atlas version changes.
-        const Uint32 TexStorageVersion = m_TextureRegistry.GetStorageVersion();
+        const Uint32 TexStorageVersion = m_TextureRegistry->GetStorageVersion();
         if (m_MaterialResourcesVersion != m_RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::Material) + TexStorageVersion)
         {
             std::lock_guard<std::mutex> Guard{m_MaterialsMtx};
@@ -751,9 +761,10 @@ HnRenderDelegateMemoryStats HnRenderDelegate::GetMemoryStats() const
 {
     HnRenderDelegateMemoryStats MemoryStats;
 
-    const BufferSuballocatorUsageStats  IndexUsage  = m_ResourceMgr->GetIndexBufferUsageStats();
-    const VertexPoolUsageStats          VertexUsage = m_ResourceMgr->GetVertexPoolUsageStats();
-    const DynamicTextureAtlasUsageStats AtlasUsage  = m_ResourceMgr->GetAtlasUsageStats();
+    const BufferSuballocatorUsageStats  IndexUsage       = m_ResourceMgr->GetIndexBufferUsageStats();
+    const VertexPoolUsageStats          VertexUsage      = m_ResourceMgr->GetVertexPoolUsageStats();
+    const DynamicTextureAtlasUsageStats AtlasUsage       = m_ResourceMgr->GetAtlasUsageStats();
+    const HnTextureRegistry::UsageStats TexRegistryStats = m_TextureRegistry->GetUsageStats();
 
     MemoryStats.IndexPool.CommittedSize   = IndexUsage.CommittedSize;
     MemoryStats.IndexPool.UsedSize        = IndexUsage.UsedSize;
@@ -768,6 +779,11 @@ HnRenderDelegateMemoryStats HnRenderDelegate::GetMemoryStats() const
     MemoryStats.Atlas.AllocationCount = AtlasUsage.AllocationCount;
     MemoryStats.Atlas.TotalTexels     = AtlasUsage.TotalArea;
     MemoryStats.Atlas.AllocatedTexels = AtlasUsage.AllocatedArea;
+
+    MemoryStats.TextureRegistry.NumTexturesLoading  = TexRegistryStats.NumTexturesLoading;
+    MemoryStats.TextureRegistry.LoadingTexDataSize  = TexRegistryStats.LoadingTexDataSize;
+    MemoryStats.TextureRegistry.AtlasDataSize       = TexRegistryStats.AtlasDataSize;
+    MemoryStats.TextureRegistry.SeparateTexDataSize = TexRegistryStats.SeparateTexDataSize;
 
     return MemoryStats;
 }

@@ -39,12 +39,21 @@ namespace Diligent
 namespace USD
 {
 
-HnTextureRegistry::TextureHandle::TextureHandle(Uint32 Id) noexcept :
+HnTextureRegistry::TextureHandle::TextureHandle(HnTextureRegistry& Registry, Uint32 Id) noexcept :
+    m_Registry{Registry.shared_from_this()},
     m_TextureId{Id}
 {}
 
 HnTextureRegistry::TextureHandle::~TextureHandle()
 {
+    if (auto Registry = m_Registry.lock())
+    {
+        Registry->OnHandleDestroyed(*this);
+    }
+    else
+    {
+        UNEXPECTED("All texture handles must be destroyed before the registry is destroyed.");
+    }
 }
 
 HnTextureRegistry::HnTextureRegistry(const CreateInfo& CI) :
@@ -57,6 +66,19 @@ HnTextureRegistry::HnTextureRegistry(const CreateInfo& CI) :
 }
 
 HnTextureRegistry::~HnTextureRegistry()
+{
+    // Note that we can't wait for async tasks here because the shared pointer to the registry is already expired,
+    // and the texture handles will not be able to access the registry to decrement the data size counters.
+    VERIFY(m_AsyncTasks.empty(), "There are still async tasks pending. Call WaitForAsyncTasks() before destroying the registry.");
+
+    VERIFY(m_AtlasDataSize == 0 && m_SeparateTexDataSize == 0,
+           "Atlas data size and/or Separate texture data size are non-zero. "
+           "This either indicates that data size is not properly tracked or that some texture handles are still alive. "
+           "There should be no texture handles alive at this point because all prims should have been destroyed by now and because we "
+           "waited for all async tasks to finish.");
+}
+
+void HnTextureRegistry::WaitForAsyncTasks()
 {
     if (m_pThreadPool)
     {
@@ -72,7 +94,12 @@ HnTextureRegistry::~HnTextureRegistry()
         {
             pTask->WaitForCompletion();
         }
+
+        m_AsyncTasks.clear();
     }
+
+    // Clear the pending textures list to release the shared pointers to the texture handles
+    m_PendingTextures.clear();
 }
 
 void HnTextureRegistry::TextureHandle::Initialize(IRenderDevice*                  pDevice,
@@ -193,16 +220,15 @@ void HnTextureRegistry::Commit(IDeviceContext* pContext)
         for (auto& tex_it : m_WIPPendingTextures)
         {
             tex_it.second.InitHandle(m_pDevice, pContext);
-            VERIFY_EXPR(tex_it.second.Handle->IsInitialized());
-            if (tex_it.second.pLoader)
-            {
-                Uint64 TexDataSize = GetStagingTextureDataSize(tex_it.second.pLoader->GetTextureDesc());
-                m_LoadingTexDataSize.fetch_add(-static_cast<Int64>(TexDataSize));
-                VERIFY_EXPR(m_LoadingTexDataSize.load() >= 0);
+            TextureHandle& Handle = *tex_it.second.Handle;
+            VERIFY_EXPR(Handle.IsInitialized());
 
-                m_DataVersion.fetch_add(1);
-            }
-            if (tex_it.second.Handle->GetTexture())
+            m_LoadingTexDataSize.fetch_add(-static_cast<Int64>(Handle.DataSize));
+            VERIFY_EXPR(m_LoadingTexDataSize.load() >= 0);
+
+            m_DataVersion.fetch_add(1);
+
+            if (Handle.GetTexture())
             {
                 m_StorageVersion.fetch_add(1);
             }
@@ -253,9 +279,9 @@ void HnTextureRegistry::LoadTexture(const pxr::TfToken                          
         return;
     }
 
-    const TextureDesc& TexDesc     = pLoader->GetTextureDesc();
-    const Uint64       TexDataSize = GetStagingTextureDataSize(TexDesc);
-    m_LoadingTexDataSize.fetch_add(static_cast<Int64>(TexDataSize));
+    const TextureDesc& TexDesc = pLoader->GetTextureDesc();
+    TexHandle->DataSize        = GetStagingTextureDataSize(TexDesc);
+    m_LoadingTexDataSize.fetch_add(static_cast<Int64>(TexHandle->DataSize));
 
     // Try to allocate texture in the atlas first
     RefCntAutoPtr<ITextureAtlasSuballocation> pAtlasSuballocation;
@@ -279,15 +305,17 @@ void HnTextureRegistry::LoadTexture(const pxr::TfToken                          
     if (pAtlasSuballocation)
     {
         TexHandle->SetAtlasSuballocation(pAtlasSuballocation);
+        m_AtlasDataSize.fetch_add(static_cast<Int64>(TexHandle->DataSize));
     }
     else
     {
         // If the texture was not allocated in the atlas (because the atlas is not used or the texture is too large),
-        // try to create it as a standalone texture.
+        // try to create it as a Separate texture.
         if (m_pDevice->GetDeviceInfo().Features.MultithreadedResourceCreation)
         {
             TexHandle->Initialize(m_pDevice, nullptr, pLoader, SamplerParams);
         }
+        m_SeparateTexDataSize.fetch_add(static_cast<Int64>(TexHandle->DataSize));
     }
 
     // Finish initialization in the main thread: we either need to upload the texture data to the atlas or
@@ -311,7 +339,7 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const pxr:
         [&]() {
             m_NumTexturesLoading.fetch_add(+1);
 
-            std::shared_ptr<TextureHandle> TexHandle = std::make_shared<TextureHandle>(m_NextTextureId.fetch_add(1));
+            std::shared_ptr<TextureHandle> TexHandle = std::make_shared<TextureHandle>(*this, m_NextTextureId.fetch_add(1));
 
             if (IsAsync && m_pThreadPool)
             {
@@ -384,6 +412,30 @@ Uint32 HnTextureRegistry::GetStorageVersion() const
 Uint32 HnTextureRegistry::GetDataVersion() const
 {
     return m_DataVersion.load();
+}
+
+void HnTextureRegistry::OnHandleDestroyed(const TextureHandle& Handle)
+{
+    if (Handle.m_pAtlasSuballocation)
+    {
+        m_AtlasDataSize.fetch_add(-static_cast<Int64>(Handle.DataSize));
+        VERIFY_EXPR(m_AtlasDataSize >= 0);
+    }
+    else
+    {
+        m_SeparateTexDataSize.fetch_add(-static_cast<Int64>(Handle.DataSize));
+        VERIFY_EXPR(m_SeparateTexDataSize >= 0);
+    }
+}
+
+HnTextureRegistry::UsageStats HnTextureRegistry::GetUsageStats() const
+{
+    UsageStats Stats;
+    Stats.NumTexturesLoading  = m_NumTexturesLoading.load();
+    Stats.LoadingTexDataSize  = m_LoadingTexDataSize.load();
+    Stats.AtlasDataSize       = m_AtlasDataSize.load();
+    Stats.SeparateTexDataSize = m_SeparateTexDataSize.load();
+    return Stats;
 }
 
 } // namespace USD

@@ -38,11 +38,11 @@
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
 #include "../../../DiligentCore/Graphics/GraphicsTools/interface/RenderStateCache.h"
 #include "../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
+#include "../../../DiligentTools/TextureLoader/interface/TextureLoader.h"
 #include "../../PBR/interface/USD_Renderer.hpp"
 
 #include "entt/entity/registry.hpp"
 
-#include "HnTextureRegistry.hpp"
 #include "HnGeometryPool.hpp"
 #include "HnTypes.hpp"
 
@@ -62,6 +62,7 @@ class HnMesh;
 class HnLight;
 class HnRenderParam;
 class HnShadowMapManager;
+class HnTextureRegistry;
 
 /// Memory usage statistics of the render delegate.
 struct HnRenderDelegateMemoryStats
@@ -115,6 +116,23 @@ struct HnRenderDelegateMemoryStats
         Uint64 AllocatedTexels = 0;
     };
     TextureAtlasUsage Atlas;
+
+    /// Texture registry usage statistics.
+    struct TextureRegistryUsage
+    {
+        /// The number of textures currently loading.
+        Uint32 NumTexturesLoading = 0;
+
+        /// The total size of texture data currently loading, in bytes.
+        Uint64 LoadingTexDataSize = 0;
+
+        /// The size of textures loaded into the atlas, in bytes.
+        Uint64 AtlasDataSize = 0;
+
+        /// The size of separate textures, in bytes.
+        Uint64 SeparateTexDataSize = 0;
+    };
+    TextureRegistryUsage TextureRegistry;
 };
 
 /// USD render delegate implementation in Hydrogent.
@@ -346,7 +364,7 @@ public:
     /// Whether or not multithreaded sync is enabled for the specified prim type.
     virtual bool IsParallelSyncEnabled(pxr::TfToken primType) const override final;
 
-    HnTextureRegistry&  GetTextureRegistry() { return m_TextureRegistry; }
+    HnTextureRegistry&  GetTextureRegistry() { return *m_TextureRegistry; }
     HnGeometryPool&     GetGeometryPool() { return m_GeometryPool; }
     HnShadowMapManager* GetShadowMapManager() const { return m_ShadowMapManager.get(); }
 
@@ -416,7 +434,7 @@ private:
     Uint32 m_MainPassFrameAttribsAlignedSize   = 0;
     Uint32 m_ShadowPassFrameAttribsAlignedSize = 0;
 
-    HnTextureRegistry                   m_TextureRegistry;
+    std::shared_ptr<HnTextureRegistry>  m_TextureRegistry;
     HnGeometryPool                      m_GeometryPool;
     std::unique_ptr<HnRenderParam>      m_RenderParam;
     std::unique_ptr<HnShadowMapManager> m_ShadowMapManager;

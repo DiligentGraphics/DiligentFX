@@ -57,7 +57,7 @@ namespace USD
 
 struct HnTextureIdentifier;
 
-class HnTextureRegistry final
+class HnTextureRegistry final : public std::enable_shared_from_this<HnTextureRegistry>
 {
 public:
     struct CreateInfo
@@ -77,7 +77,7 @@ public:
     class TextureHandle
     {
     public:
-        TextureHandle(Uint32 Id) noexcept;
+        TextureHandle(HnTextureRegistry& Registry, Uint32 Id) noexcept;
         ~TextureHandle();
 
         bool IsInitialized() const noexcept
@@ -121,10 +121,15 @@ public:
         RefCntAutoPtr<ITexture>                   m_pTexture;
         RefCntAutoPtr<ITextureAtlasSuballocation> m_pAtlasSuballocation;
 
+        std::weak_ptr<HnTextureRegistry> m_Registry;
+
         // Texture ID used for bindless access
         const Uint32 m_TextureId;
 
         std::atomic<bool> m_IsInitialized{false};
+
+        // Texture data size in bytes
+        Uint64 DataSize = 0;
     };
 
     using TextureHandleSharedPtr = std::shared_ptr<TextureHandle>;
@@ -170,12 +175,25 @@ public:
 
     Int32 GetNumTexturesLoading() const { return m_NumTexturesLoading.load(); }
 
+    void WaitForAsyncTasks();
+
+    struct UsageStats
+    {
+        Uint32 NumTexturesLoading  = 0;
+        Uint64 LoadingTexDataSize  = 0;
+        Uint64 AtlasDataSize       = 0;
+        Uint64 SeparateTexDataSize = 0;
+    };
+    UsageStats GetUsageStats() const;
+
 private:
     void LoadTexture(const pxr::TfToken                             Key,
                      const pxr::TfToken&                            FilePath,
                      const pxr::HdSamplerParameters&                SamplerParams,
                      std::function<RefCntAutoPtr<ITextureLoader>()> CreateLoader,
                      std::shared_ptr<TextureHandle>                 TexHandle);
+
+    void OnHandleDestroyed(const TextureHandle& Handle);
 
 private:
     RefCntAutoPtr<IRenderDevice>     m_pDevice;
@@ -208,6 +226,8 @@ private:
     std::atomic<Int64>  m_LoadingTexDataSize{0};
     std::atomic<Uint32> m_StorageVersion{0};
     std::atomic<Uint32> m_DataVersion{0};
+    std::atomic<Int64>  m_AtlasDataSize{0};
+    std::atomic<Int64>  m_SeparateTexDataSize{0};
 };
 
 } // namespace USD
