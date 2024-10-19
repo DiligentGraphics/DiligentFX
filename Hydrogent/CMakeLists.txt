@@ -61,6 +61,8 @@ set(INCLUDE
     include/HnTextureUtils.hpp
     include/HnMeshUtils.hpp
     include/HnTextureIdentifier.hpp
+    include/HnTextureRegistry.hpp
+    include/HnGeometryPool.hpp
     include/Computations/HnExtComputationImpl.hpp
     include/Computations/HnSkinningComputation.hpp
 )
@@ -81,8 +83,6 @@ set(INTERFACE
     interface/HnFrameRenderTargets.hpp
     interface/HnTokens.hpp
     interface/HnTypes.hpp
-    interface/HnTextureRegistry.hpp
-    interface/HnGeometryPool.hpp
     interface/Tasks/HnTask.hpp
     interface/Tasks/HnCopySelectionDepthTask.hpp
     interface/Tasks/HnBeginFrameTask.hpp

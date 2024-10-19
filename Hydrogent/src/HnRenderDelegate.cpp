@@ -35,6 +35,7 @@
 #include "HnFrameRenderTargets.hpp"
 #include "HnShadowMapManager.hpp"
 #include "HnTextureRegistry.hpp"
+#include "HnGeometryPool.hpp"
 
 #include "DebugUtilities.hpp"
 #include "GraphicsUtilities.h"
@@ -340,7 +341,13 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
                 CI.TextureLoadBudget,
             }),
     },
-    m_GeometryPool{CI.pDevice, *m_ResourceMgr, CI.UseVertexPool, CI.UseIndexPool},
+    m_GeometryPool{
+        std::make_unique<HnGeometryPool>(
+            CI.pDevice,
+            *m_ResourceMgr,
+            CI.UseVertexPool,
+            CI.UseIndexPool),
+    },
     m_RenderParam{
         std::make_unique<HnRenderParam>(
             CI.UseVertexPool,
@@ -581,7 +588,7 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
     m_ResourceMgr->UpdateIndexBuffer(m_pDevice, m_pContext);
 
     m_TextureRegistry->Commit(m_pContext);
-    m_GeometryPool.Commit(m_pContext);
+    m_GeometryPool->Commit(m_pContext);
     if (m_ShadowMapManager)
     {
         m_ShadowMapManager->Commit(m_pDevice, m_pContext);

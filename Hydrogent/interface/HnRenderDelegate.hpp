@@ -43,7 +43,6 @@
 
 #include "entt/entity/registry.hpp"
 
-#include "HnGeometryPool.hpp"
 #include "HnTypes.hpp"
 
 namespace Diligent
@@ -63,6 +62,7 @@ class HnLight;
 class HnRenderParam;
 class HnShadowMapManager;
 class HnTextureRegistry;
+class HnGeometryPool;
 
 /// Memory usage statistics of the render delegate.
 struct HnRenderDelegateMemoryStats
@@ -365,7 +365,7 @@ public:
     virtual bool IsParallelSyncEnabled(pxr::TfToken primType) const override final;
 
     HnTextureRegistry&  GetTextureRegistry() { return *m_TextureRegistry; }
-    HnGeometryPool&     GetGeometryPool() { return m_GeometryPool; }
+    HnGeometryPool&     GetGeometryPool() { return *m_GeometryPool; }
     HnShadowMapManager* GetShadowMapManager() const { return m_ShadowMapManager.get(); }
 
     const pxr::SdfPath* GetRPrimId(Uint32 UID) const;
@@ -435,7 +435,7 @@ private:
     Uint32 m_ShadowPassFrameAttribsAlignedSize = 0;
 
     std::shared_ptr<HnTextureRegistry>  m_TextureRegistry;
-    HnGeometryPool                      m_GeometryPool;
+    std::unique_ptr<HnGeometryPool>     m_GeometryPool;
     std::unique_ptr<HnRenderParam>      m_RenderParam;
     std::unique_ptr<HnShadowMapManager> m_ShadowMapManager;
 
