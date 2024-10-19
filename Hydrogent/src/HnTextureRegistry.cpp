@@ -48,7 +48,7 @@ HnTextureRegistry::TextureHandle::~TextureHandle()
 {
     if (auto Registry = m_Registry.lock())
     {
-        Registry->OnHandleDestroyed(*this);
+        Registry->OnDestroyHandle(*this);
     }
     else
     {
@@ -339,7 +339,21 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const pxr:
         [&]() {
             m_NumTexturesLoading.fetch_add(+1);
 
-            std::shared_ptr<TextureHandle> TexHandle = std::make_shared<TextureHandle>(*this, m_NextTextureId.fetch_add(1));
+            Uint32 TextureId = 0;
+            {
+                std::lock_guard<std::mutex> Lock{m_RecycledTextureIdsMtx};
+                if (!m_RecycledTextureIds.empty())
+                {
+                    TextureId = m_RecycledTextureIds.back();
+                    m_RecycledTextureIds.pop_back();
+                }
+                else
+                {
+                    TextureId = m_NextTextureId.fetch_add(1);
+                }
+            }
+
+            std::shared_ptr<TextureHandle> TexHandle = std::make_shared<TextureHandle>(*this, TextureId);
 
             if (IsAsync && m_pThreadPool)
             {
@@ -414,8 +428,15 @@ Uint32 HnTextureRegistry::GetDataVersion() const
     return m_DataVersion.load();
 }
 
-void HnTextureRegistry::OnHandleDestroyed(const TextureHandle& Handle)
+void HnTextureRegistry::OnDestroyHandle(const TextureHandle& Handle)
 {
+    {
+        std::lock_guard<std::mutex> Guard{m_RecycledTextureIdsMtx};
+        // Use m_TextureId since the handle may be uninitialized, which is totally
+        // OK here, but GetId() would assert in this case.
+        m_RecycledTextureIds.push_back(Handle.m_TextureId);
+    }
+
     if (Handle.m_pAtlasSuballocation)
     {
         m_AtlasDataSize.fetch_add(-static_cast<Int64>(Handle.DataSize));

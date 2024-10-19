@@ -193,7 +193,7 @@ private:
                      std::function<RefCntAutoPtr<ITextureLoader>()> CreateLoader,
                      std::shared_ptr<TextureHandle>                 TexHandle);
 
-    void OnHandleDestroyed(const TextureHandle& Handle);
+    void OnDestroyHandle(const TextureHandle& Handle);
 
 private:
     RefCntAutoPtr<IRenderDevice>     m_pDevice;
@@ -220,6 +220,9 @@ private:
 
     std::mutex                             m_AsyncTasksMtx;
     std::vector<RefCntAutoPtr<IAsyncTask>> m_AsyncTasks;
+
+    std::mutex          m_RecycledTextureIdsMtx;
+    std::vector<Uint32> m_RecycledTextureIds;
 
     std::atomic<Uint32> m_NextTextureId{0};
     std::atomic<Int32>  m_NumTexturesLoading{0};
