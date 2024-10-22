@@ -37,6 +37,7 @@
 #include <unordered_map>
 
 #include "pxr/imaging/hd/renderIndex.h"
+#include "pxr/imaging/hd/primvarSchema.h"
 
 #include "USD_Renderer.hpp"
 #include "GLTF_PBR_Renderer.hpp"
@@ -937,16 +938,20 @@ void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
     m_DrawListItemsDirtyFlags = DRAW_LIST_ITEM_DIRTY_FLAG_NONE;
 }
 
-HnRenderPass::SupportedVertexInputsSetType HnRenderPass::GetSupportedVertexInputs(const HnMaterial* Material)
+HnRenderPass::SupportedVertexInputsMapType HnRenderPass::GetSupportedVertexInputs(const HnMaterial* Material)
 {
-    SupportedVertexInputsSetType SupportedInputs{{pxr::HdTokens->points, pxr::HdTokens->normals, pxr::HdTokens->displayColor}};
+    SupportedVertexInputsMapType SupportedInputs{
+        {pxr::HdTokens->points, pxr::HdPrimvarSchemaTokens->point},
+        {pxr::HdTokens->normals, pxr::HdPrimvarSchemaTokens->normal},
+        {pxr::HdTokens->displayColor, pxr::HdPrimvarSchemaTokens->color},
+    };
     if (Material != nullptr)
     {
         const auto& TexCoordSets = Material->GetTextureCoordinateSets();
         for (const auto& TexCoordSet : TexCoordSets)
         {
             if (!TexCoordSet.PrimVarName.IsEmpty())
-                SupportedInputs.emplace(TexCoordSet.PrimVarName);
+                SupportedInputs.emplace(TexCoordSet.PrimVarName, pxr::HdPrimvarSchemaTokens->textureCoordinate);
         }
     }
 

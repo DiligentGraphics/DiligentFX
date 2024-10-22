@@ -61,6 +61,7 @@ TF_DEFINE_PRIVATE_TOKENS(
     (whiteRgba8)
     (blackRgba8)
     (whiteR8)
+    (st0)
 );
 // clang-format on
 
@@ -548,37 +549,36 @@ void HnMaterial::AllocateTextures(const HnMaterialNetwork& Network, HnTextureReg
             m_Textures[TexDescriptor.Name] = std::move(pTex);
 
             // Find texture coordinate
-            size_t TexCoordIdx = ~size_t{0};
             if (const HnMaterialParameter* Param = Network.GetParameter(HnMaterialParameter::ParamType::Texture, TexDescriptor.Name))
             {
-                if (!Param->SamplerCoords.empty())
+                const pxr::TfToken& TexCoordName = !Param->SamplerCoords.empty() ? Param->SamplerCoords[0] : HnMaterialPrivateTokens->st0;
+                if (Param->SamplerCoords.empty())
                 {
-                    if (Param->SamplerCoords.size() > 1)
-                        LOG_WARNING_MESSAGE("Texture '", TexDescriptor.Name, "' has ", Param->SamplerCoords.size(), " texture coordinates. Only the first set will be used");
-                    const pxr::TfToken& TexCoordName = Param->SamplerCoords[0];
-
-                    // Check if the texture coordinate set primvar (e.g. "st0") has already been allocated
-                    auto it_inserted = TexCoordPrimvarMapping.emplace(TexCoordName, m_TexCoords.size());
-                    TexCoordIdx      = it_inserted.first->second;
-                    if (it_inserted.second)
-                    {
-                        // Add new texture coordinate set
-                        VERIFY_EXPR(TexCoordIdx == m_TexCoords.size());
-                        m_TexCoords.resize(TexCoordIdx + 1);
-                        m_TexCoords[TexCoordIdx] = {TexCoordName};
-                    }
-
-                    TexNameToCoordSetMap[TexDescriptor.Name] = TexCoordIdx;
+                    LOG_WARNING_MESSAGE("Texture '", TexDescriptor.Name, "' in material '", GetId(), "' has no texture coordinates. Using ", TexCoordName, " as fallback.");
                 }
-                else
+                else if (Param->SamplerCoords.size() > 1)
                 {
-                    LOG_ERROR_MESSAGE("Texture '", TexDescriptor.Name, "' in material '", GetId(), "' has no texture coordinates");
+                    LOG_WARNING_MESSAGE("Texture '", TexDescriptor.Name, "' has ", Param->SamplerCoords.size(), " texture coordinates. Using the first one (", TexCoordName, ").");
                 }
+
+                // Check if the texture coordinate set primvar (e.g. "st0") has already been allocated
+                auto   it_inserted = TexCoordPrimvarMapping.emplace(TexCoordName, m_TexCoords.size());
+                size_t TexCoordIdx = it_inserted.first->second;
+                if (it_inserted.second)
+                {
+                    // Add new texture coordinate set
+                    VERIFY_EXPR(TexCoordIdx == m_TexCoords.size());
+                    m_TexCoords.resize(TexCoordIdx + 1);
+                    m_TexCoords[TexCoordIdx] = {TexCoordName};
+                }
+
+                TexNameToCoordSetMap[TexDescriptor.Name] = TexCoordIdx;
             }
-
-            if (TexCoordIdx == ~size_t{0})
+            else
             {
-                LOG_ERROR_MESSAGE("Failed to find texture coordinates for texture '", TexDescriptor.Name, "' in material '", GetId(), "'");
+                UNEXPECTED("Texture parameter '", TexDescriptor.Name,
+                           "' is not found in the material network. This looks like a bug since we obtained the texture descriptor from the network, "
+                           "and all textures in the network should have a corresponding parameter.");
             }
         }
     }

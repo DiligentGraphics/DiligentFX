@@ -48,6 +48,7 @@
 #include "pxr/imaging/hd/vtBufferSource.h"
 #include "pxr/imaging/hd/vertexAdjacency.h"
 #include "pxr/imaging/hd/smoothNormals.h"
+#include "pxr/imaging/hd/primvarSchema.h"
 
 namespace Diligent
 {
@@ -570,19 +571,19 @@ bool HnMesh::AddStagingBufferSourceForPrimvar(StagingVertexData&   StagingVerts,
     return true;
 }
 
-static HnRenderPass::SupportedVertexInputsSetType GetSupportedPrimvars(
+static HnRenderPass::SupportedVertexInputsMapType GetSupportedPrimvars(
     const pxr::HdRenderIndex&  RenderIndex,
     const pxr::SdfPath&        MaterialId,
     const pxr::HdMeshTopology& Topology)
 {
-    HnRenderPass::SupportedVertexInputsSetType SupportedPrimvars =
+    HnRenderPass::SupportedVertexInputsMapType SupportedPrimvars =
         HnRenderPass::GetSupportedVertexInputs(static_cast<const HnMaterial*>(RenderIndex.GetSprim(pxr::HdPrimTypeTokens->material, MaterialId)));
 
     {
         const pxr::HdGeomSubsets GeomSubsets = Topology.GetGeomSubsets();
         for (const pxr::HdGeomSubset& Subset : GeomSubsets)
         {
-            HnRenderPass::SupportedVertexInputsSetType SubsetPrimvars =
+            HnRenderPass::SupportedVertexInputsMapType SubsetPrimvars =
                 HnRenderPass::GetSupportedVertexInputs(static_cast<const HnMaterial*>(RenderIndex.GetSprim(pxr::HdPrimTypeTokens->material, Subset.materialId)));
             SupportedPrimvars.insert(SubsetPrimvars.begin(), SubsetPrimvars.end());
         }
@@ -672,21 +673,52 @@ void HnMesh::GetPrimvarsInfo(pxr::HdSceneDelegate& SceneDelegate,
 {
     const pxr::SdfPath& Id = GetId();
 
-    const HnRenderPass::SupportedVertexInputsSetType SupportedPrimvars = GetSupportedPrimvars(SceneDelegate.GetRenderIndex(), GetMaterialId(), m_Topology);
+    const HnRenderPass::SupportedVertexInputsMapType SupportedPrimvars = GetSupportedPrimvars(SceneDelegate.GetRenderIndex(), GetMaterialId(), m_Topology);
+
+    HnRenderPass::SupportedVertexInputsMapType SupportedPrimvarsByRole;
+    for (const auto& it : SupportedPrimvars)
+    {
+        const pxr::TfToken& Role = it.second;
+        if (Role == pxr::HdPrimvarSchemaTokens->point ||
+            Role == pxr::HdPrimvarSchemaTokens->normal ||
+            Role == pxr::HdPrimvarSchemaTokens->textureCoordinate)
+        {
+            SupportedPrimvarsByRole[Role] = it.first;
+        }
+    }
 
     auto UpdatePrimvarsInfo = [&](const pxr::HdInterpolation Interpolation,
                                   PrimvarsInfo&              PrimvarsInfo) {
         pxr::HdPrimvarDescriptorVector PrimVarDescs = GetPrimvarDescriptors(&SceneDelegate, Interpolation);
         for (const pxr::HdPrimvarDescriptor& PrimDesc : PrimVarDescs)
         {
-            if (SupportedPrimvars.find(PrimDesc.name) == SupportedPrimvars.end())
-                continue;
+            pxr::TfToken Name = PrimDesc.name;
+            if (SupportedPrimvars.find(Name) == SupportedPrimvars.end())
+            {
+                const auto RoleIt = SupportedPrimvarsByRole.find(PrimDesc.role);
+                if (RoleIt != SupportedPrimvarsByRole.end())
+                {
+                    LOG_WARNING_MESSAGE("Primvar '", Name, "' in mesh ", Id, " is not recognized by the material, but matches primvar '",
+                                        RoleIt->second, "' by role '", PrimDesc.role, "'.");
+                    Name = RoleIt->second;
+                }
+                else
+                {
+                    continue;
+                }
+            }
 
             ++PrimvarsInfo.Count;
 
-            if (pxr::HdChangeTracker::IsPrimvarDirty(DirtyBits, Id, PrimDesc.name))
+            if (pxr::HdChangeTracker::IsPrimvarDirty(DirtyBits, Id, Name))
             {
-                PrimvarsInfo.Dirty.push_back(PrimDesc);
+                auto it_inserted = PrimvarsInfo.Dirty.emplace(Name, PrimDesc);
+                if (!it_inserted.second && Name == PrimDesc.name)
+                {
+                    // We previously found a primvar with a different name but same role.
+                    // Now we found a primvar with the same name, so we need to update the descriptor.
+                    it_inserted.first->second = PrimDesc;
+                }
             }
         }
     };
@@ -848,16 +880,19 @@ void HnMesh::UpdateVertexAndVaryingPrimvars(pxr::HdSceneDelegate& SceneDelegate,
                                             const PrimvarsInfo&   VertexPrimvarsInfo,
                                             StagingVertexData&    StagingVerts)
 {
-    for (const pxr::HdPrimvarDescriptor& PrimDesc : VertexPrimvarsInfo.Dirty)
+    for (const auto& it : VertexPrimvarsInfo.Dirty)
     {
+        const pxr::TfToken&             Name     = it.first;
+        const pxr::HdPrimvarDescriptor& PrimDesc = it.second;
+
         pxr::VtValue PrimValue = GetPrimvar(&SceneDelegate, PrimDesc.name);
         if (PrimValue.IsEmpty())
-            return;
+            continue;
 
         if (PrimDesc.name == pxr::HdTokens->points)
             StagingVerts.Points = PrimValue;
 
-        AddStagingBufferSourceForPrimvar(StagingVerts, PrimDesc.name, std::move(PrimValue), PrimDesc.interpolation);
+        AddStagingBufferSourceForPrimvar(StagingVerts, Name, std::move(PrimValue), PrimDesc.interpolation);
     }
 
     for (const pxr::HdExtComputationPrimvarDescriptor& ExtCompPrimDesc : VertexPrimvarsInfo.ExtComp)
@@ -877,10 +912,13 @@ void HnMesh::UpdateFaceVaryingPrimvars(pxr::HdSceneDelegate& SceneDelegate,
                                        const PrimvarsInfo&   FacePrimvarsInfo,
                                        StagingVertexData&    StagingVerts)
 {
-    for (const pxr::HdPrimvarDescriptor& PrimDesc : FacePrimvarsInfo.Dirty)
+    for (const auto& it : FacePrimvarsInfo.Dirty)
     {
+        const pxr::TfToken&             Name     = it.first;
+        const pxr::HdPrimvarDescriptor& PrimDesc = it.second;
+
         pxr::VtValue PrimValue = GetPrimvar(&SceneDelegate, PrimDesc.name);
-        AddStagingBufferSourceForPrimvar(StagingVerts, PrimDesc.name, std::move(PrimValue), PrimDesc.interpolation);
+        AddStagingBufferSourceForPrimvar(StagingVerts, Name, std::move(PrimValue), PrimDesc.interpolation);
     }
 }
 

@@ -88,8 +88,9 @@ public:
         return m_Params.Name;
     }
 
-    using SupportedVertexInputsSetType = std::unordered_set<pxr::TfToken, pxr::TfToken::HashFunctor>;
-    static SupportedVertexInputsSetType GetSupportedVertexInputs(const HnMaterial* Material);
+    // A mapping from the primvar name to its role (e.g. "points" -> "point", "normals" -> "normal", "st0" -> "textureCoordinate", etc.)
+    using SupportedVertexInputsMapType = std::unordered_map<pxr::TfToken, pxr::TfToken, pxr::TfToken::HashFunctor>;
+    static SupportedVertexInputsMapType GetSupportedVertexInputs(const HnMaterial* Material);
     static PBR_Renderer::PSO_FLAGS      GetMaterialPSOFlags(const HnMaterial& Material);
 
     enum DRAW_LIST_ITEM_DIRTY_FLAGS : Uint32

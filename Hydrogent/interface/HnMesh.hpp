@@ -160,8 +160,10 @@ private:
         // The total number of supported primvars
         Uint32 Count = 0;
 
-        // Dirty primvars
-        pxr::HdPrimvarDescriptorVector Dirty;
+        // Dirty primvars arranged by name.
+        // Typically, the name is the same as the primvar descriptor name,
+        // but it may be different if the primvar is found using the role.
+        std::unordered_map<pxr::TfToken, pxr::HdPrimvarDescriptor, pxr::TfToken::HashFunctor> Dirty;
 
         // Computation primvars
         pxr::HdExtComputationPrimvarDescriptorVector ExtComp;
