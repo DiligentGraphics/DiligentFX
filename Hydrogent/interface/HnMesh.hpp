@@ -167,6 +167,11 @@ private:
 
         // Computation primvars
         pxr::HdExtComputationPrimvarDescriptorVector ExtComp;
+
+        void AddDirtyPrimvar(pxr::HdDirtyBits&               DirtyBits,
+                             const pxr::SdfPath&             Id,
+                             const pxr::TfToken&             Name,
+                             const pxr::HdPrimvarDescriptor& PrimDesc);
     };
     void GetPrimvarsInfo(pxr::HdSceneDelegate& SceneDelegate,
                          pxr::HdDirtyBits&     DirtyBits,

@@ -666,6 +666,19 @@ bool HnMesh::AddJointInfluencesStagingBufferSource(const pxr::VtValue& NumInflue
     return AddStagingBufferSourceForPrimvar(StagingVerts, HnTokens->joints, pxr::VtValue::Take(Joints), pxr::HdInterpolationVertex, 2);
 }
 
+void HnMesh::PrimvarsInfo::AddDirtyPrimvar(pxr::HdDirtyBits&               DirtyBits,
+                                           const pxr::SdfPath&             Id,
+                                           const pxr::TfToken&             Name,
+                                           const pxr::HdPrimvarDescriptor& PrimDesc)
+{
+    if (pxr::HdChangeTracker::IsPrimvarDirty(DirtyBits, Id, PrimDesc.name))
+    {
+        Dirty.emplace(Name, PrimDesc);
+    }
+
+    ++Count;
+}
+
 void HnMesh::GetPrimvarsInfo(pxr::HdSceneDelegate& SceneDelegate,
                              pxr::HdDirtyBits&     DirtyBits,
                              PrimvarsInfo&         VertexPrimvarsInfo,
@@ -673,53 +686,28 @@ void HnMesh::GetPrimvarsInfo(pxr::HdSceneDelegate& SceneDelegate,
 {
     const pxr::SdfPath& Id = GetId();
 
-    const HnRenderPass::SupportedVertexInputsMapType SupportedPrimvars = GetSupportedPrimvars(SceneDelegate.GetRenderIndex(), GetMaterialId(), m_Topology);
+    HnRenderPass::SupportedVertexInputsMapType SupportedPrimvars = GetSupportedPrimvars(SceneDelegate.GetRenderIndex(), GetMaterialId(), m_Topology);
 
-    HnRenderPass::SupportedVertexInputsMapType SupportedPrimvarsByRole;
-    for (const auto& it : SupportedPrimvars)
-    {
-        const pxr::TfToken& Role = it.second;
-        if (Role == pxr::HdPrimvarSchemaTokens->point ||
-            Role == pxr::HdPrimvarSchemaTokens->normal ||
-            Role == pxr::HdPrimvarSchemaTokens->textureCoordinate)
-        {
-            SupportedPrimvarsByRole[Role] = it.first;
-        }
-    }
+    std::unordered_map<pxr::TfToken, pxr::HdPrimvarDescriptor, pxr::TfToken::HashFunctor> SkippedPrimvarsByRole;
 
     auto UpdatePrimvarsInfo = [&](const pxr::HdInterpolation Interpolation,
                                   PrimvarsInfo&              PrimvarsInfo) {
         pxr::HdPrimvarDescriptorVector PrimVarDescs = GetPrimvarDescriptors(&SceneDelegate, Interpolation);
         for (const pxr::HdPrimvarDescriptor& PrimDesc : PrimVarDescs)
         {
-            pxr::TfToken Name = PrimDesc.name;
-            if (SupportedPrimvars.find(Name) == SupportedPrimvars.end())
+            if (SupportedPrimvars.find(PrimDesc.name) == SupportedPrimvars.end())
             {
-                const auto RoleIt = SupportedPrimvarsByRole.find(PrimDesc.role);
-                if (RoleIt != SupportedPrimvarsByRole.end())
+                if (PrimDesc.role == pxr::HdPrimvarSchemaTokens->point ||
+                    PrimDesc.role == pxr::HdPrimvarSchemaTokens->normal ||
+                    PrimDesc.role == pxr::HdPrimvarSchemaTokens->textureCoordinate)
                 {
-                    LOG_WARNING_MESSAGE("Primvar '", Name, "' in mesh ", Id, " is not recognized by the material, but matches primvar '",
-                                        RoleIt->second, "' by role '", PrimDesc.role, "'.");
-                    Name = RoleIt->second;
+                    SkippedPrimvarsByRole.emplace(PrimDesc.role, PrimDesc);
                 }
-                else
-                {
-                    continue;
-                }
+                continue;
             }
 
-            ++PrimvarsInfo.Count;
-
-            if (pxr::HdChangeTracker::IsPrimvarDirty(DirtyBits, Id, Name))
-            {
-                auto it_inserted = PrimvarsInfo.Dirty.emplace(Name, PrimDesc);
-                if (!it_inserted.second && Name == PrimDesc.name)
-                {
-                    // We previously found a primvar with a different name but same role.
-                    // Now we found a primvar with the same name, so we need to update the descriptor.
-                    it_inserted.first->second = PrimDesc;
-                }
-            }
+            PrimvarsInfo.AddDirtyPrimvar(DirtyBits, Id, PrimDesc.name, PrimDesc);
+            SupportedPrimvars.erase(PrimDesc.name);
         }
     };
 
@@ -741,6 +729,24 @@ void HnMesh::GetPrimvarsInfo(pxr::HdSceneDelegate& SceneDelegate,
     }
 
     UpdatePrimvarsInfo(pxr::HdInterpolationFaceVarying, FacePrimvarsInfo);
+
+    if (!SupportedPrimvars.empty() && !SkippedPrimvarsByRole.empty())
+    {
+        // Try to find a primvar that matches the role of the skipped primvar.
+        for (const auto& it : SupportedPrimvars)
+        {
+            const pxr::TfToken& Name   = it.first;
+            const pxr::TfToken& Role   = it.second;
+            const auto          PrimIt = SkippedPrimvarsByRole.find(Role);
+            if (PrimIt != SkippedPrimvarsByRole.end())
+            {
+                const pxr::HdPrimvarDescriptor& PrimDesc = PrimIt->second;
+                LOG_WARNING_MESSAGE("Primvar '", PrimDesc.name, "' in mesh ", Id, " is not recognized by the material, but matches primvar '",
+                                    Name, "' by role '", PrimDesc.role, "'.");
+                (PrimDesc.interpolation == pxr::HdInterpolationFaceVarying ? FacePrimvarsInfo : VertexPrimvarsInfo).AddDirtyPrimvar(DirtyBits, Id, Name, PrimDesc);
+            }
+        }
+    }
 
     if (HasSkinningComputation && FacePrimvarsInfo.Count == 0)
     {
