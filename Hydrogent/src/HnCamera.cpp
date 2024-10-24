@@ -62,7 +62,8 @@ void HnCamera::Sync(pxr::HdSceneDelegate* SceneDelegate,
 
     if (OrigDirtyBits & pxr::HdCamera::DirtyTransform)
     {
-        m_WorldMatrix = ToFloat4x4(_transform);
+        // USD camera looks along -Z axis, while Diligent camera looks along +Z axis
+        m_WorldMatrix = float4x4::Scale(1, 1, -1) * ToFloat4x4(_transform);
         m_ViewMatrix  = m_WorldMatrix.Inverse();
     }
 
