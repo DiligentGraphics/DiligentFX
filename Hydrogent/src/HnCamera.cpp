@@ -60,16 +60,18 @@ void HnCamera::Sync(pxr::HdSceneDelegate* SceneDelegate,
     pxr::HdDirtyBits OrigDirtyBits = *DirtyBits;
     pxr::HdCamera::Sync(SceneDelegate, RenderParam, DirtyBits);
 
+    const float MetersPerUnit = RenderParam ? static_cast<const HnRenderParam*>(RenderParam)->GetMetersPerUnit() : 0.01f;
+    const float UnitsPerMeter = 1.f / MetersPerUnit;
     if (OrigDirtyBits & pxr::HdCamera::DirtyTransform)
     {
-        // USD camera looks along -Z axis, while Diligent camera looks along +Z axis
-        m_WorldMatrix = float4x4::Scale(1, 1, -1) * ToFloat4x4(_transform);
+        // USD camera transform is defined in scene units, with camera looking along -Z axis.
+        // Diligent camera transform is defined in world units, with camera looking along +Z axis.
+        m_WorldMatrix = float4x4::Scale(UnitsPerMeter, UnitsPerMeter, -UnitsPerMeter) * ToFloat4x4(_transform);
         m_ViewMatrix  = m_WorldMatrix.Inverse();
     }
 
     if (OrigDirtyBits & pxr::HdCamera::DirtyParams)
     {
-        const float          MetersPerUnit = RenderParam ? static_cast<const HnRenderParam*>(RenderParam)->GetMetersPerUnit() : 0.01f;
         const float          HorzAperture  = GetHorizontalAperture();
         const float          VertAperture  = GetVerticalAperture();
         const float          FocalLength   = GetFocalLength();
