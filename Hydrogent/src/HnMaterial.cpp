@@ -417,7 +417,7 @@ static RefCntAutoPtr<Image> CreateDefaultImage(const pxr::TfToken& Name, Uint32 
     {
         InitData(4, -1);
 
-        Uint8* pDst = reinterpret_cast<Uint8*>(pData->GetDataPtr());
+        Uint8* pDst = pData->GetDataPtr<Uint8>();
         for (size_t i = 0; i < pData->GetSize(); i += 4)
         {
             pDst[i + 0] = 128;
