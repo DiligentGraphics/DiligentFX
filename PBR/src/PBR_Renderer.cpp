@@ -255,6 +255,13 @@ Uint32 PBR_Renderer::GetJointsBufferSize() const
         0;
 }
 
+const char* PBR_Renderer::GetJointTransformsVarName() const
+{
+    return m_Settings.JointsBufferMode == JOINTS_BUFFER_MODE_UNIFORM ?
+        "cbJointTransforms" :
+        "g_JointTransforms";
+}
+
 PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
                            IRenderStateCache* pStateCache,
                            IDeviceContext*    pCtx,
@@ -434,7 +441,23 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
             const Uint32 JointsBufferSize = GetJointsBufferSize();
             if (!m_JointsBuffer)
             {
-                CreateUniformBuffer(pDevice, JointsBufferSize, "PBR joint transforms", &m_JointsBuffer);
+                BufferDesc JointsBuffDesc;
+                JointsBuffDesc.Name           = "PBR joint transforms";
+                JointsBuffDesc.Size           = JointsBufferSize;
+                JointsBuffDesc.Usage          = USAGE_DYNAMIC;
+                JointsBuffDesc.CPUAccessFlags = CPU_ACCESS_WRITE;
+                if (m_Settings.JointsBufferMode == JOINTS_BUFFER_MODE_UNIFORM)
+                {
+                    JointsBuffDesc.BindFlags = BIND_UNIFORM_BUFFER;
+                }
+                else
+                {
+                    JointsBuffDesc.Mode              = BUFFER_MODE_STRUCTURED;
+                    JointsBuffDesc.BindFlags         = BIND_SHADER_RESOURCE;
+                    JointsBuffDesc.ElementByteStride = sizeof(float4x4);
+                }
+                pDevice->CreateBuffer(JointsBuffDesc, nullptr, &m_JointsBuffer);
+                VERIFY_EXPR(m_JointsBuffer);
             }
             else
             {
@@ -444,7 +467,12 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
         std::vector<StateTransitionDesc> Barriers;
         Barriers.emplace_back(m_PBRPrimitiveAttribsCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE);
         if (m_JointsBuffer)
-            Barriers.emplace_back(m_JointsBuffer, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE);
+        {
+            const RESOURCE_STATE JointsBufferState = m_Settings.JointsBufferMode == JOINTS_BUFFER_MODE_UNIFORM ?
+                RESOURCE_STATE_CONSTANT_BUFFER :
+                RESOURCE_STATE_SHADER_RESOURCE;
+            Barriers.emplace_back(m_JointsBuffer, RESOURCE_STATE_UNKNOWN, JointsBufferState, STATE_TRANSITION_FLAG_UPDATE_STATE);
+        }
         pCtx->TransitionResourceStates(static_cast<Uint32>(Barriers.size()), Barriers.data());
     }
 
@@ -840,7 +868,7 @@ void PBR_Renderer::InitCommonSRBVars(IShaderResourceBinding* pSRB,
 
     if (BindPrimitiveAttribsBuffer)
     {
-        if (auto* pVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbPrimitiveAttribs"))
+        if (IShaderResourceVariable* pVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbPrimitiveAttribs"))
         {
             if (pVar->Get() == nullptr)
                 pVar->Set(m_PBRPrimitiveAttribsCB);
@@ -849,34 +877,45 @@ void PBR_Renderer::InitCommonSRBVars(IShaderResourceBinding* pSRB,
 
     if (m_Settings.MaxJointCount > 0)
     {
-        if (auto* pVar = pSRB->GetVariableByName(SHADER_TYPE_VERTEX, "cbJointTransforms"))
+        if (IShaderResourceVariable* pVar = pSRB->GetVariableByName(SHADER_TYPE_VERTEX, GetJointTransformsVarName()))
         {
             if (pVar->Get() == nullptr)
             {
-                const Uint32 JointsBufferSize = GetJointsBufferSize();
-                pVar->SetBufferRange(m_JointsBuffer, 0, JointsBufferSize);
+                if (m_Settings.JointsBufferMode == JOINTS_BUFFER_MODE_UNIFORM)
+                {
+                    const Uint32 JointsBufferSize = GetJointsBufferSize();
+                    pVar->SetBufferRange(m_JointsBuffer, 0, JointsBufferSize);
+                }
+                else if (m_Settings.JointsBufferMode == JOINTS_BUFFER_MODE_STRUCTURED)
+                {
+                    pVar->Set(m_JointsBuffer->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+                }
+                else
+                {
+                    UNEXPECTED("Unexpected joints buffer mode");
+                }
             }
         }
     }
 
     if (pFrameAttribs != nullptr)
     {
-        if (auto* pVar = pSRB->GetVariableByName(SHADER_TYPE_VERTEX, "cbFrameAttribs"))
+        if (IShaderResourceVariable* pVar = pSRB->GetVariableByName(SHADER_TYPE_VERTEX, "cbFrameAttribs"))
             pVar->Set(pFrameAttribs);
     }
 
     if (m_Settings.EnableIBL)
     {
-        if (auto* pIrradianceMapPSVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_IrradianceMap"))
+        if (IShaderResourceVariable* pIrradianceMapPSVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_IrradianceMap"))
             pIrradianceMapPSVar->Set(m_pIrradianceCubeSRV);
 
-        if (auto* pPrefilteredEnvMap = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_PrefilteredEnvMap"))
+        if (IShaderResourceVariable* pPrefilteredEnvMap = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_PrefilteredEnvMap"))
             pPrefilteredEnvMap->Set(m_pPrefilteredEnvMapSRV);
     }
 
     if (m_Settings.EnableShadows && pShadowMap != nullptr)
     {
-        if (auto* pShadowMapVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_ShadowMap"))
+        if (IShaderResourceVariable* pShadowMapVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_ShadowMap"))
             pShadowMapVar->Set(pShadowMap);
     }
 }
@@ -935,7 +974,12 @@ void PBR_Renderer::CreateSignature()
         .AddResource(SHADER_TYPE_VS_PS, "cbPrimitiveAttribs", SHADER_RESOURCE_TYPE_CONSTANT_BUFFER, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
 
     if (m_Settings.MaxJointCount > 0)
-        SignatureDesc.AddResource(SHADER_TYPE_VERTEX, "cbJointTransforms", SHADER_RESOURCE_TYPE_CONSTANT_BUFFER, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
+    {
+        const SHADER_RESOURCE_TYPE JointsBufferResType = m_Settings.JointsBufferMode == JOINTS_BUFFER_MODE_UNIFORM ?
+            SHADER_RESOURCE_TYPE_CONSTANT_BUFFER :
+            SHADER_RESOURCE_TYPE_BUFFER_SRV;
+        SignatureDesc.AddResource(SHADER_TYPE_VERTEX, GetJointTransformsVarName(), JointsBufferResType, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
+    }
 
     std::unordered_set<std::string> Samplers;
     if (!m_Device.GetDeviceInfo().IsGLDevice())
@@ -1125,6 +1169,10 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
 
     ShaderMacroHelper Macros;
     Macros.Add("MAX_JOINT_COUNT", static_cast<int>(m_Settings.MaxJointCount));
+    Macros.Add("JOINTS_BUFFER_MODE_UNIFORM", static_cast<int>(JOINTS_BUFFER_MODE_UNIFORM));
+    Macros.Add("JOINTS_BUFFER_MODE_STRUCTURED", static_cast<int>(JOINTS_BUFFER_MODE_STRUCTURED));
+    Macros.Add("JOINTS_BUFFER_MODE", static_cast<int>(m_Settings.JointsBufferMode));
+
     Macros.Add("USE_SKIN_PRE_TRANSFORM", m_Settings.UseSkinPreTransform);
     Macros.Add("TONE_MAPPING_MODE", "TONE_MAPPING_MODE_UNCHARTED2");
 

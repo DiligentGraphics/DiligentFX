@@ -118,6 +118,16 @@ public:
         SHADER_TEXTURE_ARRAY_MODE_DYNAMIC
     };
 
+    /// Skinning joints buffer mode.
+    enum JOINTS_BUFFER_MODE : Uint8
+    {
+        /// Joints are stored in a uniform buffer.
+        JOINTS_BUFFER_MODE_UNIFORM = 0,
+
+        /// Joints are stored in a structured buffer.
+        JOINTS_BUFFER_MODE_STRUCTURED,
+    };
+
     /// Renderer create info
     struct CreateInfo
     {
@@ -256,6 +266,9 @@ public:
         ///
         /// If set to 0, the animation will be disabled.
         Uint32 MaxJointCount = 64;
+
+        /// Joints buffer mode.
+        JOINTS_BUFFER_MODE JointsBufferMode = JOINTS_BUFFER_MODE_UNIFORM;
 
         /// The number of samples for BRDF LUT creation.
         Uint32 NumBRDFSamples = 512;
@@ -706,6 +719,7 @@ public:
     static Uint32 GetJointsDataSize(Uint32 MaxJointCount, bool UseSkinPreTransform, bool UsePrevFrameTransforms);
     Uint32        GetJointsDataSize(Uint32 JointCount, PSO_FLAGS PSOFlags) const;
     Uint32        GetJointsBufferSize() const;
+    const char*   GetJointTransformsVarName() const;
 
 protected:
     ShaderMacroHelper DefineMacros(const PSOKey& Key) const;

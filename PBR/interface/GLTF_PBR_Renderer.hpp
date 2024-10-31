@@ -254,6 +254,7 @@ public:
         const float4x4* NodeMatrix     = nullptr;
         const float4x4* PrevNodeMatrix = nullptr;
         const Uint32    JointCount     = 0;
+        const Uint32    FirstJoint     = 0;
         const void*     CustomData     = nullptr;
         size_t          CustomDataSize = 0;
 

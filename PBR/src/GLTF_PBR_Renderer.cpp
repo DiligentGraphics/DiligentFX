@@ -748,6 +748,7 @@ void* GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                   
             UNEXPECTED("Node matrix must not be null");
         }
         pDstTransforms->JointCount = static_cast<int>(AttribsData.JointCount);
+        pDstTransforms->FirstJoint = static_cast<int>(AttribsData.FirstJoint);
 
         static_assert(sizeof(HLSL::GLTFNodeShaderTransforms) % 16 == 0, "Size of HLSL::GLTFNodeShaderTransforms must be a multiple of 16");
         pDstPtr += sizeof(HLSL::GLTFNodeShaderTransforms);

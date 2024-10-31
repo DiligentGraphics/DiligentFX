@@ -73,7 +73,7 @@ struct GLTFNodeShaderTransforms
 	float4x4 NodeMatrix;
 
 	int   JointCount;
-    float Dummy0;
+    int   FirstJoint; // Index of the first joint in the joints buffer to start from
     float Dummy1;
     float Dummy2;
 };
