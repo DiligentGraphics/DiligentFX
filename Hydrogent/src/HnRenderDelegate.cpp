@@ -106,7 +106,7 @@ static RefCntAutoPtr<IBuffer> CreatePrimitiveAttribsCB(IRenderDevice* pDevice)
     return PrimitiveAttribsCB;
 }
 
-static RefCntAutoPtr<IBuffer> CreateJointsBuffer(IRenderDevice* pDevice, BUFFER_MODE Mode)
+static RefCntAutoPtr<IBuffer> CreateJointsBuffer(IRenderDevice* pDevice, USD_Renderer::JOINTS_BUFFER_MODE Mode, Uint32& MaxJointCount)
 {
     BufferDesc Desc;
     Desc.Name = "Joint transforms";
@@ -123,15 +123,31 @@ static RefCntAutoPtr<IBuffer> CreateJointsBuffer(IRenderDevice* pDevice, BUFFER_
         Desc.CPUAccessFlags = CPU_ACCESS_WRITE;
     }
 
-    if (Mode == BUFFER_MODE_UNDEFINED)
+    auto GetMaxAllowedJointCount = [](Uint64 BufferSize) {
+        // (PreTransform matrix + MaxJointCount matrices) * 2
+        return static_cast<Uint32>(BufferSize / sizeof(float4x4) / 2 - 1);
+    };
+
+    if (Mode == USD_Renderer::JOINTS_BUFFER_MODE_UNIFORM)
     {
         Desc.BindFlags = BIND_UNIFORM_BUFFER;
+
+        const Uint32 MaxAllowedJointCount = GetMaxAllowedJointCount(Desc.Size);
+        if (MaxJointCount > MaxAllowedJointCount)
+        {
+            LOG_WARNING_MESSAGE("The maximum number of joints (", MaxJointCount, ") exceeds the limit (", MaxAllowedJointCount, ") for the uniform buffer. Clamping the number of joints.");
+            MaxJointCount = MaxAllowedJointCount;
+        }
     }
-    else if (Mode == BUFFER_MODE_STRUCTURED)
+    else if (Mode == USD_Renderer::JOINTS_BUFFER_MODE_STRUCTURED)
     {
         Desc.BindFlags         = BIND_SHADER_RESOURCE;
-        Desc.Mode              = Mode;
+        Desc.Mode              = BUFFER_MODE_STRUCTURED;
         Desc.ElementByteStride = sizeof(float4x4);
+
+        Desc.Size = std::max<Uint64>(Desc.Size, USD_Renderer::GetJointsDataSize(MaxJointCount, /*UseSkinPreTransform = */ true, /*UsePrevFrameTransforms = */ true));
+        // In structured mode, the entire buffer may be used to store joints for a single mesh.
+        MaxJointCount = GetMaxAllowedJointCount(Desc.Size);
     }
     else
     {
@@ -176,22 +192,13 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
     if (RenderDelegateCI.MaxJointCount > 0)
     {
         USDRendererCI.UseSkinPreTransform = true;
+        USDRendererCI.MaxJointCount       = RenderDelegateCI.MaxJointCount;
 
-        if (DeviceInfo.IsGLDevice())
-        {
-            pJointsCB                      = CreateJointsBuffer(RenderDelegateCI.pDevice, BUFFER_MODE_UNDEFINED);
-            USDRendererCI.MaxJointCount    = RenderDelegateCI.MaxJointCount;
-            USDRendererCI.JointsBufferMode = USD_Renderer::JOINTS_BUFFER_MODE_UNIFORM;
-        }
-        else
-        {
-            pJointsCB = CreateJointsBuffer(RenderDelegateCI.pDevice, BUFFER_MODE_STRUCTURED);
-            // In structured mode, the entire buffer may be used to store joints for a single mesh.
-            const Uint64 JointsBufferSize = pJointsCB->GetDesc().Size;
-            // (PreTransform matrix + MaxJointCount matrices) * 2
-            USDRendererCI.MaxJointCount    = static_cast<Uint32>(JointsBufferSize / sizeof(float4x4) / 2 - 1);
-            USDRendererCI.JointsBufferMode = USD_Renderer::JOINTS_BUFFER_MODE_STRUCTURED;
-        }
+        USDRendererCI.JointsBufferMode = DeviceInfo.IsGLDevice() ?
+            USD_Renderer::JOINTS_BUFFER_MODE_UNIFORM :
+            USD_Renderer::JOINTS_BUFFER_MODE_STRUCTURED;
+
+        pJointsCB = CreateJointsBuffer(RenderDelegateCI.pDevice, USDRendererCI.JointsBufferMode, USDRendererCI.MaxJointCount);
     }
 
     USDRendererCI.ColorTargetIndex        = HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR;

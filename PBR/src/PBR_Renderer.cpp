@@ -28,6 +28,7 @@
 
 #include <array>
 #include <vector>
+#include <limits.h>
 
 #include "RenderStateCache.hpp"
 #include "GraphicsUtilities.h"
@@ -1168,7 +1169,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
     const PSO_FLAGS PSOFlags = Key.GetFlags();
 
     ShaderMacroHelper Macros;
-    Macros.Add("MAX_JOINT_COUNT", static_cast<int>(m_Settings.MaxJointCount));
+    Macros.Add("MAX_JOINT_COUNT", m_Settings.JointsBufferMode == JOINTS_BUFFER_MODE_UNIFORM ? static_cast<int>(m_Settings.MaxJointCount) : INT_MAX);
     Macros.Add("JOINTS_BUFFER_MODE_UNIFORM", static_cast<int>(JOINTS_BUFFER_MODE_UNIFORM));
     Macros.Add("JOINTS_BUFFER_MODE_STRUCTURED", static_cast<int>(JOINTS_BUFFER_MODE_STRUCTURED));
     Macros.Add("JOINTS_BUFFER_MODE", static_cast<int>(m_Settings.JointsBufferMode));
