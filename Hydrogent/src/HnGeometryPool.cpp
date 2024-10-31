@@ -690,6 +690,7 @@ public:
                 BIND_INDEX_BUFFER,
                 USAGE_DEFAULT,
             };
+            pDevice->CreateBuffer(Desc, nullptr, &m_Buffer);
         }
 
         pContext->UpdateBuffer(m_Buffer, GetStartIndex() * sizeof(Uint32), m_StagingData->Size, m_StagingData->Ptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
