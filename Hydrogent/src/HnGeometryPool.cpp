@@ -56,6 +56,8 @@ HnGeometryPool::HnGeometryPool(IRenderDevice*         pDevice,
 
 HnGeometryPool::~HnGeometryPool()
 {
+    VERIFY((m_PendingVertexData.empty() && m_PendingVertexDataSize >= 0) || m_PendingVertexDataSize == 0, "Pending vertex data size must be 0 when there are no pending data");
+    VERIFY((m_PendingIndexData.empty() && m_PendingIndexDataSize >= 0) || m_PendingIndexDataSize == 0, "Pending index data size must be 0 when there are no pending data");
 }
 
 class GeometryPoolData
@@ -411,6 +413,17 @@ public:
         return Hashes;
     }
 
+    size_t GetTotalSize() const
+    {
+        size_t TotalSize = 0;
+        for (const auto& stream_it : m_Streams)
+        {
+            const VertexStream& Stream = stream_it.second;
+            TotalSize += m_NumVertices * Stream.ElementSize;
+        }
+        return TotalSize;
+    }
+
 private:
     void InitPoolAllocation()
     {
@@ -691,6 +704,11 @@ public:
         CommitPendingUses();
     }
 
+    size_t GetSize() const
+    {
+        return m_NumIndices * sizeof(Uint32);
+    }
+
 private:
     void InitPoolAllocation()
     {
@@ -869,6 +887,8 @@ void HnGeometryPool::AllocateVertices(const std::string&             Name,
                                                                             m_UseVertexPool ? &m_ResMgr : nullptr,
                                                                             DisallowPoolAllocationReuse, ExistingData);
 
+            m_PendingVertexDataSize.fetch_add(static_cast<Int64>(Data->GetTotalSize()));
+
             {
                 std::lock_guard<std::mutex> Guard{m_PendingVertexDataMtx};
                 m_PendingVertexData.emplace_back(Data);
@@ -914,6 +934,8 @@ void HnGeometryPool::AllocateIndices(const std::string&                         
 
             std::shared_ptr<IndexData> Data = std::make_shared<IndexData>(Name, std::move(Indices), StartVertex, m_UseIndexPool ? &m_ResMgr : nullptr, ExistingData);
 
+            m_PendingIndexDataSize.fetch_add(static_cast<Int64>(Data->GetSize()));
+
             {
                 std::lock_guard<std::mutex> Guard{m_PendingIndexDataMtx};
                 m_PendingIndexData.emplace_back(Data);
@@ -940,6 +962,8 @@ void HnGeometryPool::Commit(IDeviceContext* pContext)
         for (auto& Data : m_PendingVertexData)
         {
             Data->Initialize(m_pDevice, pContext);
+            m_PendingVertexDataSize.fetch_add(-static_cast<Int64>(Data->GetTotalSize()));
+            VERIFY_EXPR(m_PendingVertexDataSize >= 0);
         }
         m_PendingVertexData.clear();
     }
@@ -949,6 +973,8 @@ void HnGeometryPool::Commit(IDeviceContext* pContext)
         for (auto& Data : m_PendingIndexData)
         {
             Data->Initialize(m_pDevice, pContext);
+            m_PendingIndexDataSize.fetch_add(-static_cast<Int64>(Data->GetSize()));
+            VERIFY_EXPR(m_PendingIndexDataSize >= 0);
         }
         m_PendingIndexData.clear();
     }

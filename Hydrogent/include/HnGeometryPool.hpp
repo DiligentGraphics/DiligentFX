@@ -30,6 +30,7 @@
 #include <vector>
 #include <mutex>
 #include <memory>
+#include <atomic>
 
 #include "pxr/pxr.h"
 #include "pxr/base/tf/token.h"
@@ -93,6 +94,9 @@ public:
                          Uint32                                        StartVertex,
                          std::shared_ptr<HnGeometryPool::IndexHandle>& Handle);
 
+    Int64 GetPendingVertexDataSize() const { return m_PendingVertexDataSize; }
+    Int64 GetPendingIndexDataSize() const { return m_PendingIndexDataSize; }
+
 private:
     RefCntAutoPtr<IRenderDevice> m_pDevice;
     GLTF::ResourceManager&       m_ResMgr;
@@ -107,9 +111,11 @@ private:
 
     std::mutex                               m_PendingVertexDataMtx;
     std::vector<std::shared_ptr<VertexData>> m_PendingVertexData;
+    std::atomic<Int64>                       m_PendingVertexDataSize{0};
 
     std::mutex                              m_PendingIndexDataMtx;
     std::vector<std::shared_ptr<IndexData>> m_PendingIndexData;
+    std::atomic<Int64>                      m_PendingIndexDataSize{0};
 
     ObjectsRegistry<size_t, std::shared_ptr<VertexData>> m_VertexCache;
     ObjectsRegistry<size_t, std::shared_ptr<IndexData>>  m_IndexCache;
