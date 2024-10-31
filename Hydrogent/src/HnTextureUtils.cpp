@@ -26,6 +26,9 @@
 
 #include "HnTextureUtils.hpp"
 
+#include "ProxyDataBlob.hpp"
+#include "RefCntContainer.hpp"
+
 #include "pxr/usd/ar/asset.h"
 #include "pxr/usd/ar/resolver.h"
 
@@ -52,8 +55,11 @@ RefCntAutoPtr<ITextureLoader> CreateTextureLoaderFromSdfPath(const char*        
     if (!Buffer)
         return {};
 
+    RefCntAutoPtr<IObject>   pAssetData = RefCntContainer<std::shared_ptr<const char>>::Create(Buffer);
+    RefCntAutoPtr<IDataBlob> pDataBlob  = ProxyDataBlob::Create(Buffer.get(), Asset->GetSize(), pAssetData);
+
     RefCntAutoPtr<ITextureLoader> pLoader;
-    CreateTextureLoaderFromMemory(Buffer.get(), Asset->GetSize(), true, LoadInfo, &pLoader);
+    CreateTextureLoaderFromDataBlob(pDataBlob, LoadInfo, &pLoader);
 
     return pLoader;
 }
