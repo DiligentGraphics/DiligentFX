@@ -310,22 +310,38 @@ void HnBeginFrameTask::Prepare(pxr::HdTaskContext* TaskCtx,
     m_RenderIndex = RenderIndex;
 
     HnRenderDelegate*   RenderDelegate = static_cast<HnRenderDelegate*>(RenderIndex->GetRenderDelegate());
+    HnRenderParam*      pRenderParam   = static_cast<HnRenderParam*>(RenderDelegate->GetRenderParam());
     const USD_Renderer& Renderer       = *RenderDelegate->GetUSDRenderer();
+    if (pRenderParam == nullptr)
+    {
+        UNEXPECTED("Render param is null");
+        return;
+    }
+
+    // Mark dirty RPrims that were not synced in the change tracker.
+    // Note: we need to mark the prims dirty after the sync finishes, because OpenUSD marks
+    //       all prims clean after the sync. There may be a better place to do this, but
+    //       it's not clear where that would be.
+    {
+        const auto& DirtyRPrims = pRenderParam->GetDirtyRPrims();
+        if (!DirtyRPrims.empty())
+        {
+            pxr::HdChangeTracker& ChangeTracker = m_RenderIndex->GetChangeTracker();
+            for (const auto& DidrtRPrim : DirtyRPrims)
+            {
+                ChangeTracker.MarkRprimDirty(DidrtRPrim.first, DidrtRPrim.second);
+            }
+            pRenderParam->ClearDirtyRPrims();
+        }
+    }
 
     m_CurrFrameTime = m_FrameTimer.GetElapsedTime();
 
     Uint32 FrameNumber = 0;
-    if (HnRenderParam* pRenderParam = static_cast<HnRenderParam*>(RenderDelegate->GetRenderParam()))
-    {
-        pRenderParam->SetElapsedTime(static_cast<float>(m_CurrFrameTime - pRenderParam->GetFrameTime()));
-        pRenderParam->SetFrameTime(m_CurrFrameTime);
-        pRenderParam->SetFrameNumber(pRenderParam->GetFrameNumber() + 1);
-        FrameNumber = pRenderParam->GetFrameNumber();
-    }
-    else
-    {
-        UNEXPECTED("Render param is null");
-    }
+    pRenderParam->SetElapsedTime(static_cast<float>(m_CurrFrameTime - pRenderParam->GetFrameTime()));
+    pRenderParam->SetFrameTime(m_CurrFrameTime);
+    pRenderParam->SetFrameNumber(pRenderParam->GetFrameNumber() + 1);
+    FrameNumber = pRenderParam->GetFrameNumber();
 
     if (FrameNumber > 1)
     {

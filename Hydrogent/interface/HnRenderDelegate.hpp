@@ -235,6 +235,17 @@ public:
         ///
         ///             If set to 0, the budget is unlimited.
         Uint64 TextureLoadBudget = 0;
+
+        /// The maximum amount of geometry data that can be loaded at the same time.
+        ///
+        /// \remarks    The budget is used to limit the amount of geometry data that can be loaded
+        ///             at the same time. The budget is shared between all threads loading geometry.
+        /// 		    If the budget is exceeded, no more geometry data will be loaded until some
+        ///             of the previous geometry data is loaded and the budget is freed.
+        ///             Meshes that exceed the budget will be synced again next frame.
+        ///
+        /// If set to 0, the budget is unlimited.
+        Uint64 GeometryLoadBudget = 0;
     };
     static std::unique_ptr<HnRenderDelegate> Create(const CreateInfo& CI);
 

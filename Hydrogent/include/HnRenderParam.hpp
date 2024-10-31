@@ -28,6 +28,8 @@
 
 #include <atomic>
 #include <array>
+#include <mutex>
+#include <vector>
 
 #include "HnTypes.hpp"
 
@@ -49,7 +51,8 @@ public:
                   bool                              AsyncShaderCompilation,
                   bool                              UseNativeStartVertex,
                   HN_MATERIAL_TEXTURES_BINDING_MODE TextureBindingMode,
-                  float                             MetersPerUnit) noexcept;
+                  float                             MetersPerUnit,
+                  Uint64                            GeometryLoadBudget) noexcept;
     ~HnRenderParam();
 
     bool GetUseVertexPool() const { return m_UseVertexPool; }
@@ -59,7 +62,8 @@ public:
 
     HN_MATERIAL_TEXTURES_BINDING_MODE GetTextureBindingMode() const { return m_TextureBindingMode; }
 
-    float GetMetersPerUnit() const { return m_MetersPerUnit; }
+    float  GetMetersPerUnit() const { return m_MetersPerUnit; }
+    Uint64 GetGeometryLoadBudget() const { return m_GeometryLoadBudget; }
 
     HN_RENDER_MODE GetRenderMode() const { return m_RenderMode; }
     void           SetRenderMode(HN_RENDER_MODE Mode) { m_RenderMode = Mode; }
@@ -122,6 +126,10 @@ public:
     Uint32 GetFrameNumber() const { return m_FrameNumber; }
     void   SetFrameNumber(Uint32 FrameNumber) { m_FrameNumber = FrameNumber; }
 
+    void        AddDirtyRPrim(const pxr::SdfPath& RPrimId, pxr::HdDirtyBits DirtyBits);
+    void        ClearDirtyRPrims();
+    const auto& GetDirtyRPrims() const { return m_DirtyRPrims; }
+
 private:
     const bool m_UseVertexPool;
     const bool m_UseIndexPool;
@@ -130,7 +138,8 @@ private:
 
     const HN_MATERIAL_TEXTURES_BINDING_MODE m_TextureBindingMode;
 
-    const float m_MetersPerUnit;
+    const float  m_MetersPerUnit;
+    const Uint64 m_GeometryLoadBudget;
 
     HN_RENDER_MODE m_RenderMode = HN_RENDER_MODE_SOLID;
 
@@ -145,6 +154,9 @@ private:
     double   m_FrameTime   = 0.0;
     float    m_ElapsedTime = 0.0;
     uint32_t m_FrameNumber = 0;
+
+    std::mutex                                             m_DirtyRPrimsMtx;
+    std::vector<std::pair<pxr::SdfPath, pxr::HdDirtyBits>> m_DirtyRPrims;
 };
 
 } // namespace USD

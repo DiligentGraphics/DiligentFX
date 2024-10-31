@@ -198,9 +198,16 @@ void HnMesh::Sync(pxr::HdSceneDelegate* Delegate,
     }
     bool UpdateCullMode = pxr::HdChangeTracker::IsTransformDirty(*DirtyBits, Id) || m_CullMode == CULL_MODE_UNDEFINED;
 
-    if (Delegate != nullptr && DirtyBits != nullptr)
+
+    HnRenderDelegate* RenderDelegate      = static_cast<HnRenderDelegate*>(Delegate->GetRenderIndex().GetRenderDelegate());
+    HnGeometryPool&   GeometryPool        = RenderDelegate->GetGeometryPool();
+    const Int64       PendingGeometrySize = GeometryPool.GetPendingVertexDataSize() + GeometryPool.GetPendingIndexDataSize();
+    const Uint64      GeometryLoadBudget  = static_cast<HnRenderParam*>(RenderParam)->GetGeometryLoadBudget();
+    bool              ReprUpdated         = false;
+    if (GeometryLoadBudget == 0 || static_cast<Uint64>(PendingGeometrySize) < GeometryLoadBudget)
     {
         UpdateRepr(*Delegate, RenderParam, *DirtyBits, ReprToken);
+        ReprUpdated = true;
     }
 
     if (UpdateMaterials)
@@ -238,6 +245,13 @@ void HnMesh::Sync(pxr::HdSceneDelegate* Delegate,
     {
         static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::MeshMaterial);
         ++m_MaterialVersion;
+    }
+
+    if (!ReprUpdated)
+    {
+        // We can't mark the prim as dirty here, because OpenUSD marks the prim as clean after Sync() is called.
+        // We mark the prim as dirty in HnBeginFrameTask::Prepare
+        static_cast<HnRenderParam*>(RenderParam)->AddDirtyRPrim(Id, *DirtyBits);
     }
 
     *DirtyBits &= ~pxr::HdChangeTracker::AllSceneDirtyBits;

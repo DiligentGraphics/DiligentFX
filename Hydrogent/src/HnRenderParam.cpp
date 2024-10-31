@@ -37,13 +37,15 @@ HnRenderParam::HnRenderParam(bool                              UseVertexPool,
                              bool                              AsyncShaderCompilation,
                              bool                              UseNativeStartVertex,
                              HN_MATERIAL_TEXTURES_BINDING_MODE TextureBindingMode,
-                             float                             MetersPerUnit) noexcept :
+                             float                             MetersPerUnit,
+                             Uint64                            GeometryLoadBudget) noexcept :
     m_UseVertexPool{UseVertexPool},
     m_UseIndexPool{UseIndexPool},
     m_AsyncShaderCompilation{AsyncShaderCompilation},
     m_UseNativeStartVertex{UseNativeStartVertex},
     m_TextureBindingMode{TextureBindingMode},
-    m_MetersPerUnit{MetersPerUnit}
+    m_MetersPerUnit{MetersPerUnit},
+    m_GeometryLoadBudget{GeometryLoadBudget}
 {
     for (auto& Version : m_GlobalAttribVersions)
         Version.store(0);
@@ -51,6 +53,18 @@ HnRenderParam::HnRenderParam(bool                              UseVertexPool,
 
 HnRenderParam::~HnRenderParam()
 {
+}
+
+void HnRenderParam::AddDirtyRPrim(const pxr::SdfPath& RPrimId, pxr::HdDirtyBits DirtyBits)
+{
+    std::lock_guard<std::mutex> Lock{m_DirtyRPrimsMtx};
+    m_DirtyRPrims.emplace_back(RPrimId, DirtyBits);
+}
+
+void HnRenderParam::ClearDirtyRPrims()
+{
+    std::lock_guard<std::mutex> Lock{m_DirtyRPrimsMtx};
+    m_DirtyRPrims.clear();
 }
 
 } // namespace USD

@@ -403,7 +403,8 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
             CI.AsyncShaderCompilation,
             !CI.pDevice->GetDeviceInfo().IsGLDevice(), // UseNativeStartVertex
             CI.TextureBindingMode,
-            CI.MetersPerUnit),
+            CI.MetersPerUnit,
+            CI.GeometryLoadBudget),
     },
     m_ShadowMapManager{CreateShadowMapManager(CI)}
 {
