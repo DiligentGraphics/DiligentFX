@@ -107,7 +107,9 @@ struct HnRenderPass::RenderState
     const pxr::HdRenderIndex& RenderIndex;
     HnRenderDelegate&         RenderDelegate;
     const HnRenderParam&      RenderParam;
-    USD_Renderer&             USDRenderer;
+
+    USD_Renderer&                   USDRenderer;
+    const PBR_Renderer::CreateInfo& RendererSettings;
 
     IDeviceContext* const pCtx;
 
@@ -124,6 +126,7 @@ struct HnRenderPass::RenderState
         RenderDelegate{*static_cast<HnRenderDelegate*>(RenderIndex.GetRenderDelegate())},
         RenderParam{*static_cast<const HnRenderParam*>(RenderDelegate.GetRenderParam())},
         USDRenderer{*RenderDelegate.GetUSDRenderer()},
+        RendererSettings{USDRenderer.GetSettings()},
         pCtx{RenderDelegate.GetDeviceContext()},
         AlphaMode{MaterialTagToPbrAlphaMode(RenderPass.m_MaterialTag)},
         ConstantBufferOffsetAlignment{RenderDelegate.GetDevice()->GetAdapterInfo().Buffer.ConstantBufferOffsetAlignment},
@@ -389,10 +392,13 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
     IBuffer* const pPrimitiveAttribsCB = State.RenderDelegate.GetPrimitiveAttribsCB();
     VERIFY_EXPR(pPrimitiveAttribsCB != nullptr);
     IBuffer* const pJointsCB          = State.USDRenderer.GetJointsBuffer();
-    const Uint32   MaxJointCount      = State.USDRenderer.GetSettings().MaxJointCount;
+    const Uint32   MaxJointCount      = State.RendererSettings.MaxJointCount;
     const Uint32   JointsDataRange    = State.USDRenderer.GetJointsBufferSize();
-    const bool     PackMatrixRowMajor = State.USDRenderer.GetSettings().PackMatrixRowMajor;
+    const bool     PackMatrixRowMajor = State.RendererSettings.PackMatrixRowMajor;
     VERIFY_EXPR(pJointsCB != nullptr || JointsDataRange == 0);
+    const Uint32 JointsBufferOffsetAlignment = (State.RendererSettings.JointsBufferMode == USD_Renderer::JOINTS_BUFFER_MODE_UNIFORM) ?
+        State.ConstantBufferOffsetAlignment :
+        sizeof(float4x4);
 
     const BufferDesc& AttribsBuffDesc = pPrimitiveAttribsCB->GetDesc();
     const BufferDesc& JointsBuffDesc  = pJointsCB != nullptr ? pJointsCB->GetDesc() : BufferDesc{};
@@ -461,10 +467,10 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
     };
 
     const Uint32 PrimitiveArraySize = !m_UseFallbackPSO ?
-        std::max(State.USDRenderer.GetSettings().PrimitiveArraySize, 1u) :
+        std::max(State.RendererSettings.PrimitiveArraySize, 1u) :
         1u; // Fallback PSO uses flags that are not consistent with material SRB flags.
             // Hence the size of the shader primitive data is different and we can't use multi-draw.
-    m_ScratchSpace.resize(sizeof(MultiDrawIndexedItem) * State.USDRenderer.GetSettings().PrimitiveArraySize);
+    m_ScratchSpace.resize(sizeof(MultiDrawIndexedItem) * State.RendererSettings.PrimitiveArraySize);
 
     entt::registry& Registry = State.RenderDelegate.GetEcsRegistry();
 
@@ -601,7 +607,7 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
                 void*        pDataEnd       = State.USDRenderer.WriteSkinningData(pJointsData, WriteSkinningAttribs);
                 const Uint32 JointsDataSize = static_cast<Uint32>(reinterpret_cast<Uint8*>(pDataEnd) - reinterpret_cast<Uint8*>(pJointsData));
                 VERIFY_EXPR(JointsDataSize == State.USDRenderer.GetJointsDataSize(JointCount, ListItem.PSOFlags));
-                CurrJointsDataSize = AlignUp(JointsBufferOffset + JointsDataSize, State.ConstantBufferOffsetAlignment);
+                CurrJointsDataSize = AlignUp(JointsBufferOffset + JointsDataSize, JointsBufferOffsetAlignment);
 
                 XformsHash = pSkinningData->XformsHash;
 
@@ -628,11 +634,18 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
 
         HLSL::PBRMaterialBasicAttribs* pDstMaterialBasicAttribs = nullptr;
 
+        // In structured buffer mode, we use the first joint index.
+        // In uniform buffer mode, we use the joint buffer offset.
+        const Uint32 FirstJoint = (State.RendererSettings.JointsBufferMode == USD_Renderer::JOINTS_BUFFER_MODE_STRUCTURED) ?
+            JointsBufferOffset / sizeof(float4x4) :
+            0;
+
         GLTF_PBR_Renderer::PBRPrimitiveShaderAttribsData AttribsData{
             ListItem.PSOFlags,
             &Transform,
             &ListItem.PrevTransform,
             JointCount,
+            FirstJoint,
             nullptr, // CustomData
             0,       // CustomDataSize
             &pDstMaterialBasicAttribs,
@@ -641,7 +654,7 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
         //       global material version will be updated, and the draw list item GPU
         //       resources will be updated.
         const GLTF::Material& MaterialData = ListItem.pMaterial->GetMaterialData();
-        GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(pCurrPrimitive, AttribsData, State.USDRenderer.GetSettings().TextureAttribIndices,
+        GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(pCurrPrimitive, AttribsData, State.RendererSettings.TextureAttribIndices,
                                                           MaterialData, /*TransposeMatrices = */ !PackMatrixRowMajor);
 
         pDstMaterialBasicAttribs->BaseColorFactor = MaterialData.Attribs.BaseColorFactor * DisplayColor;
@@ -651,7 +664,11 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
 
         ListItem.PrevTransform = Transform;
 
-        m_PendingDrawItems.push_back(PendingDrawItem{ListItem, AttribsBufferOffset, pSkinningData != nullptr ? JointsBufferOffset : ~0u});
+        m_PendingDrawItems.push_back(PendingDrawItem{
+            ListItem,
+            AttribsBufferOffset,
+            pSkinningData != nullptr ? JointsBufferOffset : ~0u,
+        });
 
         AttribsBufferOffset += ListItem.ShaderAttribsDataSize;
         ++MultiDrawCount;
@@ -1184,10 +1201,17 @@ void HnRenderPass::RenderPendingDrawItems(RenderState& State)
 
         IShaderResourceBinding* pSRB = ListItem.pMaterial->GetSRB(PendingItem.AttribsBufferOffset);
         VERIFY(pSRB != nullptr, "Material SRB is null. This may happen if UpdateSRB was not called for this material.");
-        if (PendingItem.JointsBufferOffset != ~0u && PendingItem.JointsBufferOffset != JointsBufferOffset)
+        if (State.RendererSettings.JointsBufferMode == USD_Renderer::JOINTS_BUFFER_MODE_UNIFORM)
         {
-            JointsBufferOffset = PendingItem.JointsBufferOffset;
-            ListItem.pMaterial->SetJointsBufferOffset(JointsBufferOffset);
+            if (PendingItem.JointsBufferOffset != ~0u && PendingItem.JointsBufferOffset != JointsBufferOffset)
+            {
+                JointsBufferOffset = PendingItem.JointsBufferOffset;
+                ListItem.pMaterial->SetJointsBufferOffset(JointsBufferOffset);
+            }
+        }
+        else
+        {
+            // In structud buffer mode, we use the first joint index, so we do not need to set the joint buffer offset.
         }
         State.CommitShaderResources(pSRB);
 

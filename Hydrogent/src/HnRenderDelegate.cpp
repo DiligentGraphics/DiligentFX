@@ -106,19 +106,42 @@ static RefCntAutoPtr<IBuffer> CreatePrimitiveAttribsCB(IRenderDevice* pDevice)
     return PrimitiveAttribsCB;
 }
 
-static RefCntAutoPtr<IBuffer> CreateJointsCB(IRenderDevice* pDevice)
+static RefCntAutoPtr<IBuffer> CreateJointsBuffer(IRenderDevice* pDevice, BUFFER_MODE Mode)
 {
-    Uint64 Size  = 65536;
-    USAGE  Usage = USAGE_DYNAMIC;
+    BufferDesc Desc;
+    Desc.Name = "Joint transforms";
+    Desc.Size = 65536;
     if (pDevice->GetDeviceInfo().IsGLDevice())
     {
         // On OpenGL, use USAGE_DEFAULT buffer and update it
         // with UpdateBuffer() method.
-        Usage = USAGE_DEFAULT;
+        Desc.Usage = USAGE_DEFAULT;
     }
-    RefCntAutoPtr<IBuffer> JointsCB;
-    CreateUniformBuffer(pDevice, Size, "Joint transforms", &JointsCB, Usage);
-    return JointsCB;
+    else
+    {
+        Desc.Usage          = USAGE_DYNAMIC;
+        Desc.CPUAccessFlags = CPU_ACCESS_WRITE;
+    }
+
+    if (Mode == BUFFER_MODE_UNDEFINED)
+    {
+        Desc.BindFlags = BIND_UNIFORM_BUFFER;
+    }
+    else if (Mode == BUFFER_MODE_STRUCTURED)
+    {
+        Desc.BindFlags         = BIND_SHADER_RESOURCE;
+        Desc.Mode              = Mode;
+        Desc.ElementByteStride = sizeof(float4x4);
+    }
+    else
+    {
+        UNEXPECTED("Unexpected buffer mode");
+    }
+
+    RefCntAutoPtr<IBuffer> JointsBuffer;
+    pDevice->CreateBuffer(Desc, nullptr, &JointsBuffer);
+    VERIFY_EXPR(JointsBuffer);
+    return JointsBuffer;
 }
 
 static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::CreateInfo& RenderDelegateCI,
@@ -148,8 +171,28 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
     USDRendererCI.EnableShadows              = RenderDelegateCI.EnableShadows;
     USDRendererCI.PCFKernelSize              = RenderDelegateCI.PCFKernelSize;
     USDRendererCI.MaxShadowCastingLightCount = RenderDelegateCI.MaxShadowCastingLightCount;
-    USDRendererCI.MaxJointCount              = RenderDelegateCI.MaxJointCount;
-    USDRendererCI.UseSkinPreTransform        = true;
+
+    RefCntAutoPtr<IBuffer> pJointsCB;
+    if (RenderDelegateCI.MaxJointCount > 0)
+    {
+        USDRendererCI.UseSkinPreTransform = true;
+
+        if (DeviceInfo.IsGLDevice())
+        {
+            pJointsCB                      = CreateJointsBuffer(RenderDelegateCI.pDevice, BUFFER_MODE_UNDEFINED);
+            USDRendererCI.MaxJointCount    = RenderDelegateCI.MaxJointCount;
+            USDRendererCI.JointsBufferMode = USD_Renderer::JOINTS_BUFFER_MODE_UNIFORM;
+        }
+        else
+        {
+            pJointsCB = CreateJointsBuffer(RenderDelegateCI.pDevice, BUFFER_MODE_STRUCTURED);
+            // In structured mode, the entire buffer may be used to store joints for a single mesh.
+            const Uint64 JointsBufferSize = pJointsCB->GetDesc().Size;
+            // (PreTransform matrix + MaxJointCount matrices) * 2
+            USDRendererCI.MaxJointCount    = static_cast<Uint32>(JointsBufferSize / sizeof(float4x4) / 2 - 1);
+            USDRendererCI.JointsBufferMode = USD_Renderer::JOINTS_BUFFER_MODE_STRUCTURED;
+        }
+    }
 
     USDRendererCI.ColorTargetIndex        = HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR;
     USDRendererCI.MeshIdTargetIndex       = HnFrameRenderTargets::GBUFFER_TARGET_MESH_ID;
@@ -228,9 +271,7 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
     USDRendererCI.InputLayout.NumElements    = _countof(Inputs);
 
     USDRendererCI.pPrimitiveAttribsCB = pPrimitiveAttribsCB;
-
-    RefCntAutoPtr<IBuffer> pJointsCB = CreateJointsCB(RenderDelegateCI.pDevice);
-    USDRendererCI.pJointsBuffer      = pJointsCB;
+    USDRendererCI.pJointsBuffer       = pJointsCB;
 
     return std::make_shared<USD_Renderer>(RenderDelegateCI.pDevice, RenderDelegateCI.pRenderStateCache, RenderDelegateCI.pContext, USDRendererCI);
 }
