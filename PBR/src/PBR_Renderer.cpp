@@ -2080,7 +2080,12 @@ void* PBR_Renderer::WriteSkinningData(void*                           _pDst,
 
 void* PBR_Renderer::WriteSkinningData(void* pDst, const WriteSkinningDataAttribs& Attribs)
 {
-    return WriteSkinningData(pDst, Attribs, m_Settings.PackMatrixRowMajor, m_Settings.MaxJointCount, m_Settings.UseSkinPreTransform);
+    bool PackMatrixRowMajor = m_Settings.PackMatrixRowMajor;
+    if (m_Settings.JointsBufferMode == JOINTS_BUFFER_MODE_STRUCTURED)
+    {
+        PackMatrixRowMajor = m_Device.GetDeviceInfo().IsWebGPUDevice();
+    }
+    return WriteSkinningData(pDst, Attribs, PackMatrixRowMajor, m_Settings.MaxJointCount, m_Settings.UseSkinPreTransform);
 }
 
 } // namespace Diligent
