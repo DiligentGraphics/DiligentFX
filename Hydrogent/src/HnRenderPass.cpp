@@ -481,8 +481,22 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
                                          const HnMesh::Components::Skinning>();
 
     Uint32 MultiDrawCount = 0;
-    for (DrawListItem& ListItem : m_DrawList)
+    for (size_t item_idx = 0; item_idx < m_DrawList.size(); ++item_idx)
     {
+        DrawListItem& ListItem = m_DrawList[item_idx];
+        if (!ListItem.DrawItem.IsValid())
+        {
+            // All invalid draw items are grouped at the end of the draw list.
+#ifdef DILIGENT_DEBUG
+            for (size_t i = item_idx + 1; i < m_DrawList.size(); ++i)
+            {
+                VERIFY(!m_DrawList[i].DrawItem.IsValid(), "Invalid draw items must be grouped at the end of the draw list");
+            }
+
+#endif
+            break;
+        }
+
         if (!ListItem)
             continue;
 
@@ -714,17 +728,6 @@ void HnRenderPass::UpdateDrawList(const pxr::TfTokenVector& RenderTags)
         DrawListDirty = true;
     }
 
-    const Uint32 MeshGeometryVersion = pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::MeshGeometry);
-    if (m_GlobalAttribVersions.MeshGeometry != MeshGeometryVersion)
-    {
-        // Only update draw list, but not the draw items list.
-        // Note: it is important to update the draw list when mesh geometry changes
-        //       to handle meshes that are being loaded over multiple frames.
-        DrawListDirty = true;
-        // NB: Do NOT update m_GlobalAttribVersions.MeshGeometry here.
-        //     It will be updated later in HnRenderPass::Execute.
-    }
-
     const pxr::HdRprimCollection& Collection  = GetRprimCollection();
     const pxr::HdChangeTracker&   Tracker     = pRenderIndex->GetChangeTracker();
     const pxr::TfToken&           MaterialTag = Collection.GetMaterialTag();
@@ -792,8 +795,12 @@ void HnRenderPass::UpdateDrawList(const pxr::TfTokenVector& RenderTags)
                 (m_Params.Selection == HnRenderPassParams::SelectionType::Unselected && !IsSelected))
             {
                 const HnDrawItem& DrawItem = static_cast<const HnDrawItem&>(*pDrawItem);
-                if (DrawItem.IsValid())
-                    m_DrawList.push_back(DrawListItem{*pRenderDelegate, DrawItem});
+                // Add all draw items, including invalid ones, to the draw list.
+                // An item may be currently invalid if it was skipped during the last sync,
+                // but may become valid soon. When this happens, mesh geometry version will
+                // be updated, and items in the list will be updated, but the list itself
+                // will not be recreated.
+                m_DrawList.push_back(DrawListItem{*pRenderDelegate, DrawItem});
             }
         }
 
@@ -891,6 +898,12 @@ void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
     bool DrawListDirty = false;
     for (DrawListItem& ListItem : m_DrawList)
     {
+        if (!ListItem.DrawItem.IsValid())
+        {
+            // Skip invalid draw items.
+            continue;
+        }
+
         auto DrawItemGPUResDirtyFlags = m_DrawListItemsDirtyFlags;
 
         const auto Version = ListItem.Mesh.GetGeometryVersion() + ListItem.Mesh.GetMaterialVersion();
@@ -924,17 +937,25 @@ void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
                       const DrawListItem& Item1 = m_DrawList[i1];
 
                       bool Item0PrecedesItem1;
-                      // Sort by PSO first, then by material SRB, then by entity ID
-                      if (Item0.pPSO < Item1.pPSO)
-                          Item0PrecedesItem1 = true;
-                      else if (Item0.pPSO > Item1.pPSO)
-                          Item0PrecedesItem1 = false;
-                      else if (Item0.pMaterial->GetSRB() < Item1.pMaterial->GetSRB())
-                          Item0PrecedesItem1 = true;
-                      else if (Item0.pMaterial->GetSRB() > Item1.pMaterial->GetSRB())
-                          Item0PrecedesItem1 = false;
+                      if (!Item0.DrawItem.IsValid() || !Item1.DrawItem.IsValid())
+                      {
+                          // Group all invalid items at the end of the list
+                          Item0PrecedesItem1 = Item0.DrawItem.IsValid() && !Item1.DrawItem.IsValid();
+                      }
                       else
-                          Item0PrecedesItem1 = Item0.MeshEntity < Item1.MeshEntity;
+                      {
+                          // Sort by PSO first, then by material SRB, then by entity ID
+                          if (Item0.pPSO < Item1.pPSO)
+                              Item0PrecedesItem1 = true;
+                          else if (Item0.pPSO > Item1.pPSO)
+                              Item0PrecedesItem1 = false;
+                          else if (Item0.pMaterial->GetSRB() < Item1.pMaterial->GetSRB())
+                              Item0PrecedesItem1 = true;
+                          else if (Item0.pMaterial->GetSRB() > Item1.pMaterial->GetSRB())
+                              Item0PrecedesItem1 = false;
+                          else
+                              Item0PrecedesItem1 = Item0.MeshEntity < Item1.MeshEntity;
+                      }
 
                       if ((i0 < i1) != Item0PrecedesItem1)
                           DrawOrderDirty = true;
