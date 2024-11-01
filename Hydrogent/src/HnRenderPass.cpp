@@ -714,6 +714,17 @@ void HnRenderPass::UpdateDrawList(const pxr::TfTokenVector& RenderTags)
         DrawListDirty = true;
     }
 
+    const Uint32 MeshGeometryVersion = pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::MeshGeometry);
+    if (m_GlobalAttribVersions.MeshGeometry != MeshGeometryVersion)
+    {
+        // Only update draw list, but not the draw items list.
+        // Note: it is important to update the draw list when mesh geometry changes
+        //       to handle meshes that are being loaded over multiple frames.
+        DrawListDirty = true;
+        // NB: Do NOT update m_GlobalAttribVersions.MeshGeometry here.
+        //     It will be updated later in HnRenderPass::Execute.
+    }
+
     const pxr::HdRprimCollection& Collection  = GetRprimCollection();
     const pxr::HdChangeTracker&   Tracker     = pRenderIndex->GetChangeTracker();
     const pxr::TfToken&           MaterialTag = Collection.GetMaterialTag();
