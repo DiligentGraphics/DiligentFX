@@ -226,7 +226,6 @@ private:
 
     std::atomic<Uint32> m_NextTextureId{0};
     std::atomic<Int32>  m_NumTexturesLoading{0};
-    std::atomic<Int64>  m_LoadingTexDataSize{0};
     std::atomic<Uint32> m_StorageVersion{0};
     std::atomic<Uint32> m_DataVersion{0};
     std::atomic<Int64>  m_AtlasDataSize{0};

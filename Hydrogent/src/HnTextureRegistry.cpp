@@ -82,9 +82,6 @@ void HnTextureRegistry::WaitForAsyncTasks()
 {
     if (m_pThreadPool)
     {
-        VERIFY(m_NumTexturesLoading != 0 || m_LoadingTexDataSize == 0,
-               "The number of loading textures is zero, but the loading data size is non-zero (", m_LoadingTexDataSize, ")");
-
         for (RefCntAutoPtr<IAsyncTask>& pTask : m_AsyncTasks)
         {
             pTask->Cancel();
@@ -223,9 +220,6 @@ void HnTextureRegistry::Commit(IDeviceContext* pContext)
             TextureHandle& Handle = *tex_it.second.Handle;
             VERIFY_EXPR(Handle.IsInitialized());
 
-            m_LoadingTexDataSize.fetch_add(-static_cast<Int64>(Handle.DataSize));
-            VERIFY_EXPR(m_LoadingTexDataSize.load() >= 0);
-
             m_DataVersion.fetch_add(1);
 
             if (Handle.GetTexture())
@@ -281,7 +275,6 @@ void HnTextureRegistry::LoadTexture(const pxr::TfToken                          
 
     const TextureDesc& TexDesc = pLoader->GetTextureDesc();
     TexHandle->DataSize        = GetStagingTextureDataSize(TexDesc);
-    m_LoadingTexDataSize.fetch_add(static_cast<Int64>(TexHandle->DataSize));
 
     // Try to allocate texture in the atlas first
     RefCntAutoPtr<ITextureAtlasSuballocation> pAtlasSuballocation;
@@ -363,7 +356,7 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const pxr:
                 RefCntAutoPtr<IAsyncTask> pTask = EnqueueAsyncWork(
                     m_pThreadPool,
                     [=](Uint32 ThreadId) {
-                        if (m_LoadBudget != 0 && m_LoadingTexDataSize.load() > m_LoadBudget)
+                        if (m_LoadBudget != 0 && GetTextureLoaderMemoryUsage() > m_LoadBudget)
                         {
                             // Reschedule the task
                             return ASYNC_TASK_STATUS_NOT_STARTED;
@@ -453,7 +446,7 @@ HnTextureRegistry::UsageStats HnTextureRegistry::GetUsageStats() const
 {
     UsageStats Stats;
     Stats.NumTexturesLoading  = m_NumTexturesLoading.load();
-    Stats.LoadingTexDataSize  = m_LoadingTexDataSize.load();
+    Stats.LoadingTexDataSize  = GetTextureLoaderMemoryUsage();
     Stats.AtlasDataSize       = m_AtlasDataSize.load();
     Stats.SeparateTexDataSize = m_SeparateTexDataSize.load();
     return Stats;

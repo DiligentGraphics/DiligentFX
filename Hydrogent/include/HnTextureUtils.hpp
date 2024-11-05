@@ -38,6 +38,8 @@ namespace USD
 RefCntAutoPtr<ITextureLoader> CreateTextureLoaderFromSdfPath(const char*            SdfPath,
                                                              const TextureLoadInfo& LoadInfo);
 
+Int64 GetTextureLoaderMemoryUsage();
+
 } // namespace USD
 
 } // namespace Diligent
