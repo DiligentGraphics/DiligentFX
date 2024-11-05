@@ -126,21 +126,22 @@ private:
     std::atomic<int64_t>                    m_TotalAllocatedSize{0};
 };
 
-class AssetDataContainer : public RefCntContainer<std::shared_ptr<const char>>
+class AssetDataContainer : public ObjectBase<IDataBlob>
 {
 public:
-    using TBase = RefCntContainer<std::shared_ptr<const char>>;
+    using TBase = ObjectBase<IDataBlob>;
 
-    AssetDataContainer(IReferenceCounters* pRefCounters, std::shared_ptr<const char> _Data, size_t _Size) :
-        TBase{pRefCounters, std::move(_Data)},
-        Size{_Size}
+    AssetDataContainer(IReferenceCounters* pRefCounters, std::shared_ptr<const char> Data, size_t Size) :
+        TBase{pRefCounters},
+        m_Data{std::move(Data)},
+        m_Size{Size}
     {
-        s_AssetDataSize.fetch_add(static_cast<int64_t>(Size));
+        s_AssetDataSize.fetch_add(static_cast<int64_t>(m_Size));
     }
 
     ~AssetDataContainer()
     {
-        s_AssetDataSize.fetch_add(-static_cast<int64_t>(Size));
+        s_AssetDataSize.fetch_add(-static_cast<int64_t>(m_Size));
     }
 
     static RefCntAutoPtr<AssetDataContainer> Create(std::shared_ptr<const char> Data, size_t Size)
@@ -153,8 +154,33 @@ public:
         return s_AssetDataSize.load();
     }
 
+    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_DataBlob, TBase)
+
+    virtual void DILIGENT_CALL_TYPE Resize(size_t NewSize) override
+    {
+        UNEXPECTED("Resize is not supported by asset data container.");
+    }
+
+    virtual size_t DILIGENT_CALL_TYPE GetSize() const override
+    {
+        return m_Size;
+    }
+
+    virtual void* DILIGENT_CALL_TYPE GetDataPtr(size_t Offset = 0) override
+    {
+        UNEXPECTED("Non-const data access is not supported by asset data container.");
+        return nullptr;
+    }
+
+    virtual const void* DILIGENT_CALL_TYPE GetConstDataPtr(size_t Offset = 0) const override
+    {
+        VERIFY(Offset < m_Size, "Offset (", Offset, ") exceeds the data size (", m_Size, ")");
+        return m_Data.get() + Offset;
+    }
+
 private:
-    const size_t Size;
+    std::shared_ptr<const char> m_Data;
+    const size_t                m_Size;
 
     static std::atomic<int64_t> s_AssetDataSize;
 };
@@ -170,24 +196,28 @@ RefCntAutoPtr<ITextureLoader> CreateTextureLoaderFromSdfPath(const char*        
     if (ResolvedPath.empty())
         return {};
 
-    const pxr::ArResolver&        Resolver = pxr::ArGetResolver();
-    std::shared_ptr<pxr::ArAsset> Asset    = Resolver.OpenAsset(ResolvedPath);
-    if (!Asset)
-        return {};
+    std::shared_ptr<const char> Buffer;
+    size_t                      Size = 0;
+    {
+        const pxr::ArResolver&        Resolver = pxr::ArGetResolver();
+        std::shared_ptr<pxr::ArAsset> Asset    = Resolver.OpenAsset(ResolvedPath);
+        if (!Asset)
+            return {};
 
+        Buffer = Asset->GetBuffer();
+        if (!Buffer)
+            return {};
 
-    std::shared_ptr<const char> Buffer = Asset->GetBuffer();
-    if (!Buffer)
-        return {};
+        Size = Asset->GetSize();
+    }
 
-    RefCntAutoPtr<IObject>   pAssetData = AssetDataContainer::Create(Buffer, Asset->GetSize());
-    RefCntAutoPtr<IDataBlob> pDataBlob  = ProxyDataBlob::Create(Buffer.get(), Asset->GetSize(), pAssetData);
+    RefCntAutoPtr<IDataBlob> pAssetData = AssetDataContainer::Create(std::move(Buffer), Size);
 
     TextureLoadInfo LoadInfo = _LoadInfo;
     LoadInfo.pAllocator      = &TextureMemoryAllocator::Get();
 
     RefCntAutoPtr<ITextureLoader> pLoader;
-    CreateTextureLoaderFromDataBlob(pDataBlob, LoadInfo, &pLoader);
+    CreateTextureLoaderFromDataBlob(std::move(pAssetData), LoadInfo, &pLoader);
 
     return pLoader;
 }
