@@ -202,11 +202,15 @@ HnLoadTextureResult LoadTextureFromSdfPath(const char*            SdfPath,
                                            Int64                  MemoryBudget,
                                            size_t                 LoaderMemorySize)
 {
+    // Keep track of estimated loader memory usage to avoid exceeding the budget.
+    // Unlike GetTextureLoaderMemoryUsage() that returns current memory usage, this value is an estimate
+    // of the memory that will be used by all loaders that are or will be in the process of loading textures.
+    static std::atomic<Int64> EstimatedLoaderMemoryUsage{0};
+
     // Check memory budget before opening the asset.
-    // If we already tried to load this texture before, LoaderMemorySize will be non-zero
-    if (MemoryBudget != 0 && GetTextureLoaderMemoryUsage() + static_cast<Int64>(LoaderMemorySize) > MemoryBudget)
+    // If we already tried to load this texture before, LoaderMemorySize will be non-zero.
+    if (MemoryBudget != 0 && std::max(GetTextureLoaderMemoryUsage(), EstimatedLoaderMemoryUsage.load()) + static_cast<Int64>(LoaderMemorySize) > MemoryBudget)
     {
-        // Reschedule the task
         return {HN_LOAD_TEXTURE_STATUS_BUDGET_EXCEEDED};
     }
 
@@ -236,8 +240,11 @@ HnLoadTextureResult LoadTextureFromSdfPath(const char*            SdfPath,
         if (MemoryBudget != 0)
         {
             LoaderMemorySize = GetTextureLoaderMemoryRequirement(Buffer.get(), Size, _LoadInfo) + Size;
-            if (GetTextureLoaderMemoryUsage() + static_cast<Int64>(LoaderMemorySize) > MemoryBudget)
+
+            Int64 LoaderMemoryUsage = EstimatedLoaderMemoryUsage.fetch_add(static_cast<Int64>(LoaderMemorySize));
+            if (std::max(GetTextureLoaderMemoryUsage(), LoaderMemoryUsage) + static_cast<Int64>(LoaderMemorySize) > MemoryBudget)
             {
+                EstimatedLoaderMemoryUsage.fetch_add(-static_cast<Int64>(LoaderMemorySize));
                 // Return LoaderMemorySize so that it can be used next time we try to load this texture
                 return {HN_LOAD_TEXTURE_STATUS_BUDGET_EXCEEDED, LoaderMemorySize};
             }
@@ -251,6 +258,8 @@ HnLoadTextureResult LoadTextureFromSdfPath(const char*            SdfPath,
     HnLoadTextureResult Res;
     CreateTextureLoaderFromDataBlob(std::move(pAssetData), LoadInfo, &Res.pLoader);
     Res.LoadStatus = Res.pLoader ? HN_LOAD_TEXTURE_STATUS_SUCCESS : HN_LOAD_TEXTURE_STATUS_FAILED;
+
+    EstimatedLoaderMemoryUsage.fetch_add(-static_cast<Int64>(LoaderMemorySize));
 
     return Res;
 }
