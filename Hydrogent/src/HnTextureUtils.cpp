@@ -54,8 +54,10 @@ public:
 
     virtual void Free(void* Ptr) override final
     {
+        // Unregister the allocation before freeing it as the pointer may be reused
+        size_t Size = UnregisterAllocation(Ptr);
         DefaultRawMemoryAllocator::GetAllocator().Free(Ptr);
-        UnregisterAllocation(Ptr);
+        m_TotalAllocatedSize.fetch_add(-static_cast<int64_t>(Size));
     }
 
     virtual void* AllocateAligned(size_t Size, size_t Alignment, const Char* dbgDescription, const char* dbgFileName, const Int32 dbgLineNumber) override final
@@ -67,8 +69,10 @@ public:
 
     virtual void FreeAligned(void* Ptr) override final
     {
+        // Unregister the allocation before freeing it as the pointer may be reused
+        size_t Size = UnregisterAllocation(Ptr);
         DefaultRawMemoryAllocator::GetAllocator().FreeAligned(Ptr);
-        UnregisterAllocation(Ptr);
+        m_TotalAllocatedSize.fetch_add(-static_cast<int64_t>(Size));
     }
 
     static TextureMemoryAllocator& Get()
@@ -102,22 +106,26 @@ private:
         m_TotalAllocatedSize.fetch_add(Size);
     }
 
-    void UnregisterAllocation(const void* Ptr)
+    size_t UnregisterAllocation(const void* Ptr)
     {
-        if (Ptr == nullptr)
-            return;
+        size_t Size = 0;
+        if (Ptr != nullptr)
+        {
+            std::lock_guard<std::mutex> Guard{m_AllocationsMtx};
 
-        std::lock_guard<std::mutex> Guard{m_AllocationsMtx};
-        auto                        it = m_Allocations.find(Ptr);
-        if (it != m_Allocations.end())
-        {
-            m_TotalAllocatedSize.fetch_add(-static_cast<int64_t>(it->second));
-            m_Allocations.erase(it);
+            auto it = m_Allocations.find(Ptr);
+            if (it != m_Allocations.end())
+            {
+                Size = it->second;
+                m_Allocations.erase(it);
+            }
+            else
+            {
+                UNEXPECTED("Failed to find allocation");
+            }
         }
-        else
-        {
-            UNEXPECTED("Failed to find allocation");
-        }
+
+        return Size;
     }
 
 private:
