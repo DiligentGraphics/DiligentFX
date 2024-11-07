@@ -62,15 +62,17 @@ enum HN_LOAD_TEXTURE_STATUS
 
 struct HnLoadTextureResult
 {
-    HN_LOAD_TEXTURE_STATUS        LoadStatus = HN_LOAD_TEXTURE_STATUS_UNKNOWN;
-    RefCntAutoPtr<ITextureLoader> pLoader    = {};
+    HN_LOAD_TEXTURE_STATUS        LoadStatus       = HN_LOAD_TEXTURE_STATUS_UNKNOWN;
+    size_t                        LoaderMemorySize = 0;
+    RefCntAutoPtr<ITextureLoader> pLoader          = {};
 
     operator bool() const { return pLoader != nullptr; }
 };
 
 HnLoadTextureResult LoadTextureFromSdfPath(const char*            SdfPath,
                                            const TextureLoadInfo& LoadInfo,
-                                           Int64                  MemoryBudget = 0);
+                                           Int64                  MemoryBudget     = 0,
+                                           size_t                 LoaderMemorySize = 0);
 
 Int64 GetTextureLoaderMemoryUsage();
 

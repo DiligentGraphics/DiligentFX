@@ -199,10 +199,12 @@ std::atomic<int64_t> AssetDataContainer::s_AssetDataSize{0};
 
 HnLoadTextureResult LoadTextureFromSdfPath(const char*            SdfPath,
                                            const TextureLoadInfo& _LoadInfo,
-                                           Int64                  MemoryBudget)
+                                           Int64                  MemoryBudget,
+                                           size_t                 LoaderMemorySize)
 {
-    // Check memory budget before opening the asset
-    if (MemoryBudget != 0 && GetTextureLoaderMemoryUsage() > MemoryBudget)
+    // Check memory budget before opening the asset.
+    // If we already tried to load this texture before, LoaderMemorySize will be non-zero
+    if (MemoryBudget != 0 && GetTextureLoaderMemoryUsage() + static_cast<Int64>(LoaderMemorySize) > MemoryBudget)
     {
         // Reschedule the task
         return {HN_LOAD_TEXTURE_STATUS_BUDGET_EXCEEDED};
@@ -229,16 +231,18 @@ HnLoadTextureResult LoadTextureFromSdfPath(const char*            SdfPath,
             return {HN_LOAD_TEXTURE_STATUS_EMPTY_ASSET};
         }
 
-        // Create asset data container to account for the asset memory usage
-        pAssetData = AssetDataContainer::Create(std::move(Buffer), Asset->GetSize());
+        size_t Size = Asset->GetSize();
+
         if (MemoryBudget != 0)
         {
-            size_t LoaderMemoryReq = GetTextureLoaderMemoryRequirement(pAssetData->GetConstDataPtr(), pAssetData->GetSize(), _LoadInfo);
-            if (GetTextureLoaderMemoryUsage() + static_cast<Int64>(LoaderMemoryReq) > MemoryBudget)
+            LoaderMemorySize = GetTextureLoaderMemoryRequirement(Buffer.get(), Size, _LoadInfo) + Size;
+            if (GetTextureLoaderMemoryUsage() + static_cast<Int64>(LoaderMemorySize) > MemoryBudget)
             {
-                return {HN_LOAD_TEXTURE_STATUS_BUDGET_EXCEEDED};
+                // Return LoaderMemorySize so that it can be used next time we try to load this texture
+                return {HN_LOAD_TEXTURE_STATUS_BUDGET_EXCEEDED, LoaderMemorySize};
             }
         }
+        pAssetData = AssetDataContainer::Create(std::move(Buffer), Size);
     }
 
     TextureLoadInfo LoadInfo = _LoadInfo;

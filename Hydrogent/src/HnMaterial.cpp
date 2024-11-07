@@ -480,7 +480,7 @@ HnTextureRegistry::TextureHandleSharedPtr HnMaterial::GetDefaultTexture(HnTextur
                                 /*IsAsync = */ false, // Allocate default textures synchronously to make
                                                       // them immediately available after the first Sync
                                                       // for the fallback material.
-                                [&](Int64 /*MemoryBudget*/) {
+                                [&](Int64 /*MemoryBudget*/, size_t /*LoaderMemorySize*/) {
                                     RefCntAutoPtr<Image> pImage = CreateDefaultImage(DefaultTexName);
 
                                     TextureLoadInfo LoadInfo{Name.GetText()};

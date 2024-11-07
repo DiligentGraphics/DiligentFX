@@ -260,9 +260,12 @@ HN_LOAD_TEXTURE_STATUS HnTextureRegistry::LoadTexture(const pxr::TfToken        
                                                       CreateTextureLoaderCallbackType CreateLoader,
                                                       std::shared_ptr<TextureHandle>  TexHandle)
 {
-    HnLoadTextureResult LoadResult = CreateLoader(MemoryBudget);
+    HnLoadTextureResult LoadResult = CreateLoader(MemoryBudget, TexHandle->LoaderMemorySize);
     if (!LoadResult)
     {
+        // Save loader memory size so that next time we can check it up front
+        TexHandle->LoaderMemorySize = LoadResult.LoaderMemorySize;
+
         if (LoadResult.LoadStatus != HN_LOAD_TEXTURE_STATUS_BUDGET_EXCEEDED)
         {
             LOG_ERROR_MESSAGE("Failed to create texture loader for texture ", FilePath);
@@ -396,7 +399,7 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const HnTe
     }
 
     return Allocate(TexId.FilePath, TexId.SubtextureId.Swizzle, SamplerParams, IsAsync,
-                    [TexId, Format, CompressMode = m_CompressMode](Int64 MemoryBudget) {
+                    [TexId, Format, CompressMode = m_CompressMode](Int64 MemoryBudget, size_t LoaderMemorySize) {
                         TextureLoadInfo LoadInfo;
                         LoadInfo.Name                = TexId.FilePath.GetText();
                         LoadInfo.Format              = Format;
@@ -407,7 +410,7 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const HnTe
                         LoadInfo.CompressMode        = CompressMode;
                         LoadInfo.UniformImageClipDim = 32;
 
-                        return LoadTextureFromSdfPath(TexId.FilePath.GetText(), LoadInfo, MemoryBudget);
+                        return LoadTextureFromSdfPath(TexId.FilePath.GetText(), LoadInfo, MemoryBudget, LoaderMemorySize);
                     });
 }
 

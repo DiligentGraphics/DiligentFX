@@ -130,6 +130,8 @@ public:
 
         std::atomic<bool> m_IsInitialized{false};
 
+        size_t LoaderMemorySize = 0;
+
         // Texture data size in bytes
         Uint64 DataSize = 0;
     };
@@ -141,7 +143,7 @@ public:
                                     const pxr::HdSamplerParameters& SamplerParams,
                                     bool                            IsAsync);
 
-    using CreateTextureLoaderCallbackType = std::function<HnLoadTextureResult(Int64)>;
+    using CreateTextureLoaderCallbackType = std::function<HnLoadTextureResult(Int64, size_t)>;
 
     // Allocates texture handle for the specified texture file path.
     // If the texture is not loaded, calls CreateLoader() to create the texture loader.
