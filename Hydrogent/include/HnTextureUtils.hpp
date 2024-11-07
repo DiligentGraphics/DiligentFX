@@ -70,7 +70,7 @@ struct HnLoadTextureResult
 
 HnLoadTextureResult LoadTextureFromSdfPath(const char*            SdfPath,
                                            const TextureLoadInfo& LoadInfo,
-                                           Uint64                 MemoryBudget = 0);
+                                           Int64                  MemoryBudget = 0);
 
 Int64 GetTextureLoaderMemoryUsage();
 

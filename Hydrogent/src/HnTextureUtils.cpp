@@ -199,16 +199,22 @@ std::atomic<int64_t> AssetDataContainer::s_AssetDataSize{0};
 
 HnLoadTextureResult LoadTextureFromSdfPath(const char*            SdfPath,
                                            const TextureLoadInfo& _LoadInfo,
-                                           Uint64                 MemoryBudget)
+                                           Int64                  MemoryBudget)
 {
+    // Check memory budget before opening the asset
+    if (MemoryBudget != 0 && GetTextureLoaderMemoryUsage() > MemoryBudget)
+    {
+        // Reschedule the task
+        return {HN_LOAD_TEXTURE_STATUS_BUDGET_EXCEEDED};
+    }
+
     pxr::ArResolvedPath ResolvedPath{SdfPath};
     if (ResolvedPath.empty())
     {
         return {HN_LOAD_TEXTURE_STATUS_INVALID_PATH};
     }
 
-    std::shared_ptr<const char> Buffer;
-    size_t                      Size = 0;
+    RefCntAutoPtr<IDataBlob> pAssetData;
     {
         const pxr::ArResolver&        Resolver = pxr::ArGetResolver();
         std::shared_ptr<pxr::ArAsset> Asset    = Resolver.OpenAsset(ResolvedPath);
@@ -217,16 +223,23 @@ HnLoadTextureResult LoadTextureFromSdfPath(const char*            SdfPath,
             return {HN_LOAD_TEXTURE_STATUS_ASSET_NOT_FOUND};
         }
 
-        Buffer = Asset->GetBuffer();
+        std::shared_ptr<const char> Buffer = Asset->GetBuffer();
         if (!Buffer)
         {
             return {HN_LOAD_TEXTURE_STATUS_EMPTY_ASSET};
         }
 
-        Size = Asset->GetSize();
+        // Create asset data container to account for the asset memory usage
+        pAssetData = AssetDataContainer::Create(std::move(Buffer), Asset->GetSize());
+        if (MemoryBudget != 0)
+        {
+            size_t LoaderMemoryReq = GetTextureLoaderMemoryRequirement(pAssetData->GetConstDataPtr(), pAssetData->GetSize(), _LoadInfo);
+            if (GetTextureLoaderMemoryUsage() + static_cast<Int64>(LoaderMemoryReq) > MemoryBudget)
+            {
+                return {HN_LOAD_TEXTURE_STATUS_BUDGET_EXCEEDED};
+            }
+        }
     }
-
-    RefCntAutoPtr<IDataBlob> pAssetData = AssetDataContainer::Create(std::move(Buffer), Size);
 
     TextureLoadInfo LoadInfo = _LoadInfo;
     LoadInfo.pAllocator      = &TextureMemoryAllocator::Get();

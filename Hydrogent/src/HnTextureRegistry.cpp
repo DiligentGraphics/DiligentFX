@@ -253,24 +253,28 @@ void HnTextureRegistry::Commit(IDeviceContext* pContext)
     }
 }
 
-void HnTextureRegistry::LoadTexture(const pxr::TfToken                   Key,
-                                    const pxr::TfToken&                  FilePath,
-                                    const pxr::HdSamplerParameters&      SamplerParams,
-                                    std::function<HnLoadTextureResult()> CreateLoader,
-                                    std::shared_ptr<TextureHandle>       TexHandle)
+HN_LOAD_TEXTURE_STATUS HnTextureRegistry::LoadTexture(const pxr::TfToken              Key,
+                                                      const pxr::TfToken&             FilePath,
+                                                      const pxr::HdSamplerParameters& SamplerParams,
+                                                      Int64                           MemoryBudget,
+                                                      CreateTextureLoaderCallbackType CreateLoader,
+                                                      std::shared_ptr<TextureHandle>  TexHandle)
 {
-    HnLoadTextureResult LoadResult = CreateLoader();
+    HnLoadTextureResult LoadResult = CreateLoader(MemoryBudget);
     if (!LoadResult)
     {
-        LOG_ERROR_MESSAGE("Failed to create texture loader for texture ", FilePath);
+        if (LoadResult.LoadStatus != HN_LOAD_TEXTURE_STATUS_BUDGET_EXCEEDED)
+        {
+            LOG_ERROR_MESSAGE("Failed to create texture loader for texture ", FilePath);
 
-        // Since we don't add the handle to the pending list, we need to decrement the counter here
-        m_NumTexturesLoading.fetch_add(-1);
+            // Since we don't add the handle to the pending list, we need to decrement the counter here
+            m_NumTexturesLoading.fetch_add(-1);
 
-        // Set the m_IsInitialized flag or the handle will be stuck in the loading state
-        TexHandle->m_IsInitialized.store(true);
+            // Set the m_IsInitialized flag or the handle will be stuck in the loading state
+            TexHandle->m_IsInitialized.store(true);
+        }
 
-        return;
+        return LoadResult.LoadStatus;
     }
     RefCntAutoPtr<ITextureLoader> pLoader = std::move(LoadResult.pLoader);
 
@@ -319,13 +323,15 @@ void HnTextureRegistry::LoadTexture(const pxr::TfToken                   Key,
         std::lock_guard<std::mutex> Lock{m_PendingTexturesMtx};
         m_PendingTextures.emplace(Key, PendingTextureInfo{std::move(pLoader), SamplerParams, std::move(TexHandle)});
     }
+
+    return LoadResult.LoadStatus;
 }
 
-HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const pxr::TfToken&                  FilePath,
-                                                                      const TextureComponentMapping&       Swizzle,
-                                                                      const pxr::HdSamplerParameters&      SamplerParams,
-                                                                      bool                                 IsAsync,
-                                                                      std::function<HnLoadTextureResult()> CreateLoader)
+HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const pxr::TfToken&             FilePath,
+                                                                      const TextureComponentMapping&  Swizzle,
+                                                                      const pxr::HdSamplerParameters& SamplerParams,
+                                                                      bool                            IsAsync,
+                                                                      CreateTextureLoaderCallbackType CreateLoader)
 {
     const pxr::TfToken Key{FilePath.GetString() + '.' + GetTextureComponentMappingString(Swizzle)};
     return m_Cache.Get(
@@ -357,14 +363,10 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const pxr:
                 RefCntAutoPtr<IAsyncTask> pTask = EnqueueAsyncWork(
                     m_pThreadPool,
                     [=](Uint32 ThreadId) {
-                        if (m_LoadBudget != 0 && GetTextureLoaderMemoryUsage() > m_LoadBudget)
-                        {
-                            // Reschedule the task
-                            return ASYNC_TASK_STATUS_NOT_STARTED;
-                        }
-
-                        LoadTexture(Key, FilePath, SamplerParams, CreateLoader, TexHandle);
-                        return ASYNC_TASK_STATUS_COMPLETE;
+                        HN_LOAD_TEXTURE_STATUS LoadStatus = LoadTexture(Key, FilePath, SamplerParams, m_LoadBudget, CreateLoader, TexHandle);
+                        return LoadStatus != HN_LOAD_TEXTURE_STATUS_BUDGET_EXCEEDED ?
+                            ASYNC_TASK_STATUS_COMPLETE :
+                            ASYNC_TASK_STATUS_NOT_STARTED; // Reschedule the task
                     },
                     Priority);
 
@@ -375,7 +377,7 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const pxr:
             }
             else
             {
-                LoadTexture(Key, FilePath, SamplerParams, CreateLoader, TexHandle);
+                LoadTexture(Key, FilePath, SamplerParams, 0, CreateLoader, TexHandle);
             }
 
             return TexHandle;
@@ -394,7 +396,7 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const HnTe
     }
 
     return Allocate(TexId.FilePath, TexId.SubtextureId.Swizzle, SamplerParams, IsAsync,
-                    [TexId, Format, CompressMode = m_CompressMode]() {
+                    [TexId, Format, CompressMode = m_CompressMode](Int64 MemoryBudget) {
                         TextureLoadInfo LoadInfo;
                         LoadInfo.Name                = TexId.FilePath.GetText();
                         LoadInfo.Format              = Format;
@@ -405,7 +407,7 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const HnTe
                         LoadInfo.CompressMode        = CompressMode;
                         LoadInfo.UniformImageClipDim = 32;
 
-                        return LoadTextureFromSdfPath(TexId.FilePath.GetText(), LoadInfo);
+                        return LoadTextureFromSdfPath(TexId.FilePath.GetText(), LoadInfo, MemoryBudget);
                     });
 }
 
