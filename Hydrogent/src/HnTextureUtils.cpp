@@ -189,12 +189,15 @@ std::atomic<int64_t> AssetDataContainer::s_AssetDataSize{0};
 
 } // namespace
 
-RefCntAutoPtr<ITextureLoader> CreateTextureLoaderFromSdfPath(const char*            SdfPath,
-                                                             const TextureLoadInfo& _LoadInfo)
+HnLoadTextureResult LoadTextureFromSdfPath(const char*            SdfPath,
+                                           const TextureLoadInfo& _LoadInfo,
+                                           Uint64                 MemoryBudget)
 {
     pxr::ArResolvedPath ResolvedPath{SdfPath};
     if (ResolvedPath.empty())
-        return {};
+    {
+        return {HN_LOAD_TEXTURE_STATUS_INVALID_PATH};
+    }
 
     std::shared_ptr<const char> Buffer;
     size_t                      Size = 0;
@@ -202,11 +205,15 @@ RefCntAutoPtr<ITextureLoader> CreateTextureLoaderFromSdfPath(const char*        
         const pxr::ArResolver&        Resolver = pxr::ArGetResolver();
         std::shared_ptr<pxr::ArAsset> Asset    = Resolver.OpenAsset(ResolvedPath);
         if (!Asset)
-            return {};
+        {
+            return {HN_LOAD_TEXTURE_STATUS_ASSET_NOT_FOUND};
+        }
 
         Buffer = Asset->GetBuffer();
         if (!Buffer)
-            return {};
+        {
+            return {HN_LOAD_TEXTURE_STATUS_EMPTY_ASSET};
+        }
 
         Size = Asset->GetSize();
     }
@@ -216,10 +223,11 @@ RefCntAutoPtr<ITextureLoader> CreateTextureLoaderFromSdfPath(const char*        
     TextureLoadInfo LoadInfo = _LoadInfo;
     LoadInfo.pAllocator      = &TextureMemoryAllocator::Get();
 
-    RefCntAutoPtr<ITextureLoader> pLoader;
-    CreateTextureLoaderFromDataBlob(std::move(pAssetData), LoadInfo, &pLoader);
+    HnLoadTextureResult Res;
+    CreateTextureLoaderFromDataBlob(std::move(pAssetData), LoadInfo, &Res.pLoader);
+    Res.LoadStatus = Res.pLoader ? HN_LOAD_TEXTURE_STATUS_SUCCESS : HN_LOAD_TEXTURE_STATUS_FAILED;
 
-    return pLoader;
+    return Res;
 }
 
 Int64 GetTextureLoaderMemoryUsage()

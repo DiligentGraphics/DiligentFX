@@ -36,6 +36,7 @@
 #include "HnRenderPass.hpp"
 #include "HnRenderParam.hpp"
 #include "HnMaterialNetwork.hpp"
+#include "HnTextureUtils.hpp"
 
 #include "GfTypeConversions.hpp"
 #include "DynamicTextureAtlas.h"
@@ -433,7 +434,7 @@ static RefCntAutoPtr<Image> CreateDefaultImage(const pxr::TfToken& Name, Uint32 
     }
 
     RefCntAutoPtr<Image> pImage;
-    Image::CreateFromMemory(ImgDesc, pData, &pImage);
+    Image::CreateFromPixels(ImgDesc, pData, &pImage);
     VERIFY_EXPR(pImage);
     return pImage;
 }
@@ -484,10 +485,11 @@ HnTextureRegistry::TextureHandleSharedPtr HnMaterial::GetDefaultTexture(HnTextur
 
                                     TextureLoadInfo LoadInfo{Name.GetText()};
                                     LoadInfo.CompressMode = TexRegistry.GetCompressMode();
-                                    RefCntAutoPtr<ITextureLoader> pLoader;
-                                    CreateTextureLoaderFromImage(pImage, LoadInfo, &pLoader);
-                                    VERIFY_EXPR(pLoader);
-                                    return pLoader;
+                                    HnLoadTextureResult LoadResult;
+                                    CreateTextureLoaderFromImage(pImage, LoadInfo, &LoadResult.pLoader);
+                                    LoadResult.LoadStatus = LoadResult.pLoader ? HN_LOAD_TEXTURE_STATUS_SUCCESS : HN_LOAD_TEXTURE_STATUS_FAILED;
+                                    VERIFY_EXPR(LoadResult);
+                                    return LoadResult;
                                 });
 }
 

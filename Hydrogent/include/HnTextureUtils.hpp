@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2024 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -35,8 +35,42 @@ namespace Diligent
 namespace USD
 {
 
-RefCntAutoPtr<ITextureLoader> CreateTextureLoaderFromSdfPath(const char*            SdfPath,
-                                                             const TextureLoadInfo& LoadInfo);
+/// Load texture status.
+enum HN_LOAD_TEXTURE_STATUS
+{
+    /// The status is unknown.
+    HN_LOAD_TEXTURE_STATUS_UNKNOWN,
+
+    /// The texture was successfully loaded.
+    HN_LOAD_TEXTURE_STATUS_SUCCESS,
+
+    /// Not enough memory to load the texture.
+    HN_LOAD_TEXTURE_STATUS_BUDGET_EXCEEDED,
+
+    /// The texture path is invalid.
+    HN_LOAD_TEXTURE_STATUS_INVALID_PATH,
+
+    /// The texture asset was not found.
+    HN_LOAD_TEXTURE_STATUS_ASSET_NOT_FOUND,
+
+    /// The texture asset is empty.
+    HN_LOAD_TEXTURE_STATUS_EMPTY_ASSET,
+
+    /// Failed to load the texture.
+    HN_LOAD_TEXTURE_STATUS_FAILED
+};
+
+struct HnLoadTextureResult
+{
+    HN_LOAD_TEXTURE_STATUS        LoadStatus = HN_LOAD_TEXTURE_STATUS_UNKNOWN;
+    RefCntAutoPtr<ITextureLoader> pLoader    = {};
+
+    operator bool() const { return pLoader != nullptr; }
+};
+
+HnLoadTextureResult LoadTextureFromSdfPath(const char*            SdfPath,
+                                           const TextureLoadInfo& LoadInfo,
+                                           Uint64                 MemoryBudget = 0);
 
 Int64 GetTextureLoaderMemoryUsage();
 

@@ -648,9 +648,9 @@ void HnLight::PrecomputeIBLCubemaps(HnRenderDelegate& RenderDelegate)
     {
         TextureLoadInfo LoadInfo;
         LoadInfo.Name = m_TexturePath.c_str();
-        if (RefCntAutoPtr<ITextureLoader> pLoader = CreateTextureLoaderFromSdfPath(m_TexturePath.c_str(), LoadInfo))
+        if (HnLoadTextureResult LoadResult = LoadTextureFromSdfPath(m_TexturePath.c_str(), LoadInfo))
         {
-            pLoader->CreateTexture(pDevice, &pEnvMap);
+            LoadResult.pLoader->CreateTexture(pDevice, &pEnvMap);
         }
     }
 

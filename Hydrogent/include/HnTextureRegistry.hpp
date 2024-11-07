@@ -56,6 +56,7 @@ namespace USD
 {
 
 struct HnTextureIdentifier;
+struct HnLoadTextureResult;
 
 class HnTextureRegistry final : public std::enable_shared_from_this<HnTextureRegistry>
 {
@@ -141,11 +142,11 @@ public:
 
     // Allocates texture handle for the specified texture file path.
     // If the texture is not loaded, calls CreateLoader() to create the texture loader.
-    TextureHandleSharedPtr Allocate(const pxr::TfToken&                            FilePath,
-                                    const TextureComponentMapping&                 Swizzle,
-                                    const pxr::HdSamplerParameters&                SamplerParams,
-                                    bool                                           IsAsync,
-                                    std::function<RefCntAutoPtr<ITextureLoader>()> CreateLoader);
+    TextureHandleSharedPtr Allocate(const pxr::TfToken&                  FilePath,
+                                    const TextureComponentMapping&       Swizzle,
+                                    const pxr::HdSamplerParameters&      SamplerParams,
+                                    bool                                 IsAsync,
+                                    std::function<HnLoadTextureResult()> CreateLoader);
 
     TextureHandleSharedPtr Get(const pxr::TfToken& Path)
     {
@@ -187,11 +188,11 @@ public:
     UsageStats GetUsageStats() const;
 
 private:
-    void LoadTexture(const pxr::TfToken                             Key,
-                     const pxr::TfToken&                            FilePath,
-                     const pxr::HdSamplerParameters&                SamplerParams,
-                     std::function<RefCntAutoPtr<ITextureLoader>()> CreateLoader,
-                     std::shared_ptr<TextureHandle>                 TexHandle);
+    void LoadTexture(const pxr::TfToken                   Key,
+                     const pxr::TfToken&                  FilePath,
+                     const pxr::HdSamplerParameters&      SamplerParams,
+                     std::function<HnLoadTextureResult()> CreateLoader,
+                     std::shared_ptr<TextureHandle>       TexHandle);
 
     void OnDestroyHandle(const TextureHandle& Handle);
 

@@ -253,14 +253,14 @@ void HnTextureRegistry::Commit(IDeviceContext* pContext)
     }
 }
 
-void HnTextureRegistry::LoadTexture(const pxr::TfToken                             Key,
-                                    const pxr::TfToken&                            FilePath,
-                                    const pxr::HdSamplerParameters&                SamplerParams,
-                                    std::function<RefCntAutoPtr<ITextureLoader>()> CreateLoader,
-                                    std::shared_ptr<TextureHandle>                 TexHandle)
+void HnTextureRegistry::LoadTexture(const pxr::TfToken                   Key,
+                                    const pxr::TfToken&                  FilePath,
+                                    const pxr::HdSamplerParameters&      SamplerParams,
+                                    std::function<HnLoadTextureResult()> CreateLoader,
+                                    std::shared_ptr<TextureHandle>       TexHandle)
 {
-    RefCntAutoPtr<ITextureLoader> pLoader = CreateLoader();
-    if (!pLoader)
+    HnLoadTextureResult LoadResult = CreateLoader();
+    if (!LoadResult)
     {
         LOG_ERROR_MESSAGE("Failed to create texture loader for texture ", FilePath);
 
@@ -272,6 +272,7 @@ void HnTextureRegistry::LoadTexture(const pxr::TfToken                          
 
         return;
     }
+    RefCntAutoPtr<ITextureLoader> pLoader = std::move(LoadResult.pLoader);
 
     const TextureDesc& TexDesc = pLoader->GetTextureDesc();
     TexHandle->DataSize        = GetStagingTextureDataSize(TexDesc);
@@ -320,11 +321,11 @@ void HnTextureRegistry::LoadTexture(const pxr::TfToken                          
     }
 }
 
-HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const pxr::TfToken&                            FilePath,
-                                                                      const TextureComponentMapping&                 Swizzle,
-                                                                      const pxr::HdSamplerParameters&                SamplerParams,
-                                                                      bool                                           IsAsync,
-                                                                      std::function<RefCntAutoPtr<ITextureLoader>()> CreateLoader)
+HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const pxr::TfToken&                  FilePath,
+                                                                      const TextureComponentMapping&       Swizzle,
+                                                                      const pxr::HdSamplerParameters&      SamplerParams,
+                                                                      bool                                 IsAsync,
+                                                                      std::function<HnLoadTextureResult()> CreateLoader)
 {
     const pxr::TfToken Key{FilePath.GetString() + '.' + GetTextureComponentMappingString(Swizzle)};
     return m_Cache.Get(
@@ -404,7 +405,7 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const HnTe
                         LoadInfo.CompressMode        = CompressMode;
                         LoadInfo.UniformImageClipDim = 32;
 
-                        return CreateTextureLoaderFromSdfPath(TexId.FilePath.GetText(), LoadInfo);
+                        return LoadTextureFromSdfPath(TexId.FilePath.GetText(), LoadInfo);
                     });
 }
 
