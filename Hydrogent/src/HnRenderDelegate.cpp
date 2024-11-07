@@ -637,7 +637,11 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
     m_ResourceMgr->UpdateIndexBuffer(m_pDevice, m_pContext);
 
     m_TextureRegistry->Commit(m_pContext);
+
+    m_LastPendingIndexDataSize  = m_GeometryPool->GetPendingIndexDataSize();
+    m_LastPendingVertexDataSize = m_GeometryPool->GetPendingVertexDataSize();
     m_GeometryPool->Commit(m_pContext);
+
     if (m_ShadowMapManager)
     {
         m_ShadowMapManager->Commit(m_pDevice, m_pContext);
@@ -825,11 +829,13 @@ HnRenderDelegateMemoryStats HnRenderDelegate::GetMemoryStats() const
     MemoryStats.IndexPool.CommittedSize   = IndexUsage.CommittedSize;
     MemoryStats.IndexPool.UsedSize        = IndexUsage.UsedSize;
     MemoryStats.IndexPool.AllocationCount = IndexUsage.AllocationCount;
+    MemoryStats.IndexPool.PendingDataSize = m_LastPendingIndexDataSize;
 
     MemoryStats.VertexPool.CommittedSize        = VertexUsage.CommittedMemorySize;
     MemoryStats.VertexPool.UsedSize             = VertexUsage.UsedMemorySize;
     MemoryStats.VertexPool.AllocationCount      = VertexUsage.AllocationCount;
     MemoryStats.VertexPool.AllocatedVertexCount = VertexUsage.AllocatedVertexCount;
+    MemoryStats.VertexPool.PendingDataSize      = m_LastPendingVertexDataSize;
 
     MemoryStats.Atlas.CommittedSize   = AtlasUsage.CommittedSize;
     MemoryStats.Atlas.AllocationCount = AtlasUsage.AllocationCount;

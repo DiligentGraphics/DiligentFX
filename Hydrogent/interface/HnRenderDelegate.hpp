@@ -78,6 +78,9 @@ struct HnRenderDelegateMemoryStats
 
         /// The number of allcations.
         Uint32 AllocationCount = 0;
+
+        /// The amount of index data pending upload, in bytes.
+        Uint64 PendingDataSize = 0;
     };
     /// Index pool usage statistics.
     IndexPoolUsage IndexPool;
@@ -96,6 +99,9 @@ struct HnRenderDelegateMemoryStats
 
         /// The number of vertices allocated from the pool.
         Uint64 AllocatedVertexCount = 0;
+
+        /// The amount vertex data pending upload, in bytes.
+        Uint64 PendingDataSize = 0;
     };
     /// Vertex pool usage statistics.
     VertexPoolUsage VertexPool;
@@ -468,6 +474,11 @@ private:
     Uint32 m_MaterialResourcesVersion = ~0u;
     Uint32 m_ShadowAtlasVersion       = ~0u;
     Uint32 m_LightResourcesVersion    = ~0u;
+
+    // Amount of index data pending upload before the last call to m_GeometryPool->Commit
+    Uint64 m_LastPendingIndexDataSize = 0;
+    // Amount of vertex data pending upload before the last call to m_GeometryPool->Commit
+    Uint64 m_LastPendingVertexDataSize = 0;
 };
 
 } // namespace USD
