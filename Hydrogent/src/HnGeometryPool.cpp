@@ -187,13 +187,22 @@ public:
             const pxr::HdTupleType ElementType = Source->GetTupleType();
             const size_t           ElementSize = HdDataSizeOfType(ElementType.type) * ElementType.count;
             if (SourceName == pxr::HdTokens->points)
+            {
                 VERIFY(ElementType.type == pxr::HdTypeFloatVec3 && ElementType.count == 1, "Unexpected vertex element type");
+            }
             else if (SourceName == pxr::HdTokens->normals)
-                VERIFY(ElementType.type == pxr::HdTypeFloatVec3 && ElementType.count == 1, "Unexpected normal element type");
+            {
+                VERIFY((ElementType.type == pxr::HdTypeFloatVec3 || ElementType.type == pxr::HdTypeInt32) && ElementType.count == 1,
+                       "Unexpected normal element type");
+            }
             else if (SourceName == pxr::HdTokens->displayColor)
+            {
                 VERIFY(ElementType.type == pxr::HdTypeFloatVec3 && ElementType.count == 1, "Unexpected vertex color element type");
+            }
             else if (SourceName == HnTokens->joints)
+            {
                 VERIFY(ElementType.type == pxr::HdTypeFloatVec4 && ElementType.count == 2, "Unexpected joints element type");
+            }
 
             AddStream(SourceName, ElementSize, Source, nullptr);
         }

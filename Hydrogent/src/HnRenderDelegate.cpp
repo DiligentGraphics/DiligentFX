@@ -174,6 +174,7 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
     USDRendererCI.EnableClearCoat = true;
 
     USDRendererCI.AllowHotShaderReload = RenderDelegateCI.AllowHotShaderReload;
+    USDRendererCI.PackVertexNormals    = RenderDelegateCI.PackVertexNormals;
 
     const RenderDeviceInfo& DeviceInfo = RenderDelegateCI.pDevice->GetDeviceInfo();
     // There is a major performance degradation when using row-major matrices
@@ -252,11 +253,21 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
         USDRendererCI.ShaderTexturesArrayMode = USD_Renderer::SHADER_TEXTURE_ARRAY_MODE_NONE;
     }
 
-    static constexpr LayoutElement Inputs[] =
+    // float3 Normal  : ATTRIB1;
+    // or
+    // uint   Normal  : ATTRIB1;
+    const LayoutElement NormalInput{
+        USD_Renderer::VERTEX_ATTRIB_ID_NORMAL,
+        HnRenderPass::VERTEX_BUFFER_SLOT_NORMALS,
+        USDRendererCI.PackVertexNormals ? 1u : 3u,
+        USDRendererCI.PackVertexNormals ? VT_UINT32 : VT_FLOAT32,
+        false, // IsNormalized
+    };
+    const LayoutElement Inputs[] =
         {
             // clang-format off
             {USD_Renderer::VERTEX_ATTRIB_ID_POSITION,  HnRenderPass::VERTEX_BUFFER_SLOT_POSITIONS,     3, VT_FLOAT32}, // float3 Pos     : ATTRIB0;
-            {USD_Renderer::VERTEX_ATTRIB_ID_NORMAL,    HnRenderPass::VERTEX_BUFFER_SLOT_NORMALS,       3, VT_FLOAT32}, // float3 Normal  : ATTRIB1;
+            NormalInput,
             {USD_Renderer::VERTEX_ATTRIB_ID_TEXCOORD0, HnRenderPass::VERTEX_BUFFER_SLOT_TEX_COORDS0,   2, VT_FLOAT32}, // float2 UV0     : ATTRIB2;
             {USD_Renderer::VERTEX_ATTRIB_ID_TEXCOORD1, HnRenderPass::VERTEX_BUFFER_SLOT_TEX_COORDS1,   2, VT_FLOAT32}, // float2 UV1     : ATTRIB3;
             {USD_Renderer::VERTEX_ATTRIB_ID_COLOR,     HnRenderPass::VERTEX_BUFFER_SLOT_VERTEX_COLORS, 3, VT_FLOAT32}, // float3 Color   : ATTRIB6;

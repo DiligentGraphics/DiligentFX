@@ -1175,6 +1175,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
     Macros.Add("JOINTS_BUFFER_MODE", static_cast<int>(m_Settings.JointsBufferMode));
 
     Macros.Add("USE_SKIN_PRE_TRANSFORM", m_Settings.UseSkinPreTransform);
+    Macros.Add("PACK_VERTEX_NORMALS", m_Settings.PackVertexNormals);
     Macros.Add("TONE_MAPPING_MODE", "TONE_MAPPING_MODE_UNCHARTED2");
 
     Macros.Add("PRIMITIVE_ARRAY_SIZE", static_cast<int>(m_Settings.PrimitiveArraySize));
@@ -1447,11 +1448,19 @@ void PBR_Renderer::GetVSInputStructAndLayout(PSO_FLAGS         PSOFlags,
         }
     }
 
+    const VSAttribInfo VSNormalAttrib{
+        VERTEX_ATTRIB_ID_NORMAL,
+        "Normal",
+        m_Settings.PackVertexNormals ? VT_UINT32 : VT_FLOAT32,
+        m_Settings.PackVertexNormals ? 1u : 3u,
+        PSO_FLAG_USE_VERTEX_NORMALS,
+    };
+
     const std::array<VSAttribInfo, 8> VSAttribs = //
         {
             // clang-format off
             VSAttribInfo{VERTEX_ATTRIB_ID_POSITION,  "Pos",     VT_FLOAT32, 3,            PSO_FLAG_NONE},
-            VSAttribInfo{VERTEX_ATTRIB_ID_NORMAL,    "Normal",  VT_FLOAT32, 3,            PSO_FLAG_USE_VERTEX_NORMALS},
+            VSNormalAttrib,
             VSAttribInfo{VERTEX_ATTRIB_ID_TEXCOORD0, "UV0",     VT_FLOAT32, 2,            PSO_FLAG_USE_TEXCOORD0},
             VSAttribInfo{VERTEX_ATTRIB_ID_TEXCOORD1, "UV1",     VT_FLOAT32, 2,            PSO_FLAG_USE_TEXCOORD1},
             VSAttribInfo{VERTEX_ATTRIB_ID_JOINTS,    "Joint0",  VT_FLOAT32, 4,            PSO_FLAG_USE_JOINTS},
@@ -1486,8 +1495,26 @@ void PBR_Renderer::GetVSInputStructAndLayout(PSO_FLAGS         PSOFlags,
                 DEV_CHECK_ERR(AttribFound, "Input layout does not contain attribute '", Attrib.Name, "' (index ", Attrib.Index, ")");
             }
 #endif
-            VERIFY_EXPR(Attrib.Type == VT_FLOAT32);
-            ss << "    float" << Attrib.NumComponents << std::setw(9) << Attrib.Name << " : ATTRIB" << Attrib.Index << ";" << std::endl;
+            switch (Attrib.Type)
+            {
+                case VT_FLOAT32:
+                    ss << "    float";
+                    break;
+                case VT_UINT32:
+                    ss << "     uint";
+                    break;
+                default:
+                    UNEXPECTED("Unexpected attribute type");
+            }
+            if (Attrib.NumComponents > 1)
+            {
+                ss << Attrib.NumComponents;
+            }
+            else
+            {
+                ss << ' ';
+            }
+            ss << std::setw(9) << Attrib.Name << " : ATTRIB" << Attrib.Index << ";" << std::endl;
         }
         else
         {
@@ -1652,7 +1679,7 @@ void PBR_Renderer::CreatePSO(PsoHashMapType&             PsoHashMap,
         GraphicsDesc.PrimitiveTopology == PRIMITIVE_TOPOLOGY_POINT_LIST &&
         m_Device.GetDeviceInfo().IsVulkanDevice() &&
         m_Settings.PrimitiveArraySize == 0; // When PrimitiveArraySize > 0, we convert HLSL to GLSL
-    const auto VSOutputStruct = GetVSOutputStruct(PSOFlags, UseVkPointSize, m_Settings.PrimitiveArraySize > 0);
+    const std::string VSOutputStruct = GetVSOutputStruct(PSOFlags, UseVkPointSize, m_Settings.PrimitiveArraySize > 0);
 
     CreateInfo::PSMainSourceInfo PSMainSource;
     if (m_Settings.GetPSMainSource)
@@ -2087,6 +2114,14 @@ void* PBR_Renderer::WriteSkinningData(void* pDst, const WriteSkinningDataAttribs
         PackMatrixRowMajor = m_Device.GetDeviceInfo().IsWebGPUDevice();
     }
     return WriteSkinningData(pDst, Attribs, PackMatrixRowMajor, m_Settings.MaxJointCount, m_Settings.UseSkinPreTransform);
+}
+
+Uint32 PBR_Renderer::PackVertexNormal(const float3& Normal)
+{
+    Uint32 x = static_cast<Uint32>(clamp((Normal.x + 1.f) * 32767.f, 0.f, 65535.f));
+    Uint32 y = static_cast<Uint32>(clamp((Normal.y + 1.f) * 16383.f, 0.f, 32767.f));
+    Uint32 z = Normal.z >= 0 ? 0 : 1;
+    return x | (y << 16) | (z << 31);
 }
 
 } // namespace Diligent

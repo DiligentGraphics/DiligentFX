@@ -181,6 +181,9 @@ public:
         ///             has no effect and texture loading will be synchronous.
         bool AsyncTextureLoading = false;
 
+        /// Whether to pack vertex normals into a 32-bit uint.
+        bool PackVertexNormals = false;
+
         /// When shadows are enabled, the size of the PCF kernel.
         /// Allowed values are 2, 3, 5, 7.
         Uint32 PCFKernelSize = 3;

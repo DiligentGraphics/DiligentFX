@@ -28,6 +28,7 @@
 #include "DebugUtilities.hpp"
 #include "AdvancedMath.hpp"
 #include "GfTypeConversions.hpp"
+#include "PBR_Renderer.hpp"
 
 #include "pxr/base/gf/vec2i.h"
 #include "pxr/base/gf/vec3i.h"
@@ -371,6 +372,26 @@ pxr::VtValue HnMeshUtils::ConvertVertexPrimvarToFaceVarying(const pxr::VtValue& 
     else
     {
         LOG_ERROR_MESSAGE("Failed to convert vertex data to face-varying data for mesh '", m_MeshId.GetString(), "': ", VertexData.GetTypeName(), " is not supported");
+        return {};
+    }
+}
+
+pxr::VtValue HnMeshUtils::PackVertexNormals(const pxr::VtValue& Normals) const
+{
+    if (Normals.IsHolding<pxr::VtVec3fArray>())
+    {
+        const pxr::VtVec3fArray& NormalsArray = Normals.UncheckedGet<pxr::VtVec3fArray>();
+        pxr::VtIntArray          PackedNormals(NormalsArray.size());
+        Uint32*                  pPackedNormals = reinterpret_cast<Uint32*>(PackedNormals.data());
+        for (size_t i = 0; i < NormalsArray.size(); ++i)
+        {
+            pPackedNormals[i] = PBR_Renderer::PackVertexNormal(ToFloat3(NormalsArray[i]));
+        }
+        return pxr::VtValue::Take(PackedNormals);
+    }
+    else
+    {
+        LOG_ERROR_MESSAGE("Failed to pack vertex normals for mesh '", m_MeshId.GetString(), "': ", Normals.GetTypeName(), " is not supported");
         return {};
     }
 }

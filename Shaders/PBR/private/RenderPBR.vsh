@@ -139,6 +139,23 @@ float4 GetVertexColor(float4 Color)
     return Color;
 }
 
+#if PACK_VERTEX_NORMALS
+float3 GetNormal(in uint PackedNormal)
+{
+    float3 Normal;
+    Normal.x = float( PackedNormal         & 0xFFFFu) / 32767.0 - 1.0;
+    Normal.y = float((PackedNormal >> 16u) & 0x7FFFu) / 16383.0 - 1.0;
+    Normal.z = sqrt(max(1.0 - dot(Normal.xy, Normal.xy), 0.0));
+    Normal.z *= (PackedNormal & 0x80000000u) != 0u ? -1.0 : 1.0;
+    return Normal;
+}
+#else
+float3 GetNormal(in float3 Normal)
+{
+    return Normal;
+}
+#endif
+
 void main(in  VSInput  VSIn,
           out VSOutput VSOut)
 {
@@ -188,7 +205,7 @@ void main(in  VSInput  VSIn,
 #endif
 
 #if USE_VERTEX_NORMALS
-    float3 Normal = VSIn.Normal;
+    float3 Normal = GetNormal(VSIn.Normal);
 #else
     float3 Normal = float3(0.0, 0.0, 1.0);
 #endif

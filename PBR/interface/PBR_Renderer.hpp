@@ -202,6 +202,9 @@ public:
         /// Whether to use skin pre-transform before applying joint transformations.
         bool UseSkinPreTransform = false;
 
+        /// Whether vertex normals are packed into a single 32-bit uint, see PackVertexNormal().
+        bool PackVertexNormals = false;
+
         /// PCF shadow kernel size.
         /// Allowed values are 2, 3, 5, 7.
         Uint32 PCFKernelSize = 3;
@@ -720,6 +723,11 @@ public:
     Uint32        GetJointsDataSize(Uint32 JointCount, PSO_FLAGS PSOFlags) const;
     Uint32        GetJointsBufferSize() const;
     const char*   GetJointTransformsVarName() const;
+
+    /// Packs normal into a single 32-bit uint.
+    ///
+    /// \remarks    The function assumes that the input vector is normalized.
+    static Uint32 PackVertexNormal(const float3& Normal);
 
 protected:
     ShaderMacroHelper DefineMacros(const PSOKey& Key) const;

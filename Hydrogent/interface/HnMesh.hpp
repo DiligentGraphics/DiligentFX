@@ -197,7 +197,8 @@ private:
                                 pxr::HdDirtyBits&     DirtyBits,
                                 const pxr::TfToken&   ReprToken);
 
-    bool AddStagingBufferSourceForPrimvar(StagingVertexData&   StagingVerts,
+    bool AddStagingBufferSourceForPrimvar(HnRenderDelegate*    RenderDelegate,
+                                          StagingVertexData&   StagingVerts,
                                           const pxr::TfToken&  Name,
                                           pxr::VtValue         Primvar,
                                           pxr::HdInterpolation Interpolation,
@@ -214,7 +215,7 @@ private:
                                 const pxr::HdExtComputationPrimvarDescriptor& SkinningCompPrimDesc,
                                 StagingVertexData&                            StagingVerts);
 
-    void GenerateSmoothNormals(StagingVertexData& StagingVerts);
+    void GenerateSmoothNormals(HnRenderDelegate& RenderDelegate, StagingVertexData& StagingVerts);
 
     struct GeometrySubsetRange
     {

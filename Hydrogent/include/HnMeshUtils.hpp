@@ -162,6 +162,10 @@ public:
     ///
     pxr::VtValue ConvertVertexPrimvarToFaceVarying(const pxr::VtValue& VertexData, size_t ValuesPerVertex = 1) const;
 
+
+    /// Pack vertex normals into 32-bit unsigned integers.
+    pxr::VtValue PackVertexNormals(const pxr::VtValue& Normals) const;
+
 private:
     template <typename HandleFaceType>
     void ProcessFaces(HandleFaceType&& HandleFace) const;
