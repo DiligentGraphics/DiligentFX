@@ -422,6 +422,8 @@ public:
 
     HnMaterial* GetFallbackMaterial() const { return m_FallbackMaterial; }
 
+    bool AllowPrimitiveRestart() const;
+
 private:
     static const pxr::TfTokenVector SupportedRPrimTypes;
     static const pxr::TfTokenVector SupportedSPrimTypes;

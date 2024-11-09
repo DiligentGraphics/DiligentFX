@@ -899,6 +899,13 @@ IShaderResourceBinding* HnRenderDelegate::GetShadowPassFrameAttribsSRB(Uint32 Li
     return m_ShadowPassFrameAttribs.SRB;
 }
 
+bool HnRenderDelegate::AllowPrimitiveRestart() const
+{
+    // WebGL supports primitive restart index, however on MacOS the presence of the restart index
+    // in the buffer causes disastrous performance degradation. So we disable it on OpenGL.
+    return !m_pDevice->GetDeviceInfo().IsGLDevice();
+}
+
 } // namespace USD
 
 } // namespace Diligent

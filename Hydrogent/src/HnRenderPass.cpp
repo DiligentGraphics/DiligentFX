@@ -198,7 +198,7 @@ struct HnRenderPass::RenderState
     {
         if (!PsoCache)
         {
-            GraphicsPipelineDesc GraphicsDesc = RenderPass.GetGraphicsDesc(RPState);
+            GraphicsPipelineDesc GraphicsDesc = RenderPass.GetGraphicsDesc(RPState, RenderDelegate.AllowPrimitiveRestart());
 
             PsoCache = USDRenderer.GetPsoCacheAccessor(GraphicsDesc);
             VERIFY_EXPR(PsoCache);
@@ -220,7 +220,7 @@ private:
     USD_Renderer::PsoCacheAccessor PsoCache;
 };
 
-GraphicsPipelineDesc HnRenderPass::GetGraphicsDesc(const HnRenderPassState& RPState) const
+GraphicsPipelineDesc HnRenderPass::GetGraphicsDesc(const HnRenderPassState& RPState, bool UseStripTopology) const
 {
     GraphicsPipelineDesc GraphicsDesc = RPState.GetGraphicsPipelineDesc();
     if ((m_Params.UsdPsoFlags & USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS) == 0)
@@ -237,7 +237,7 @@ GraphicsPipelineDesc HnRenderPass::GetGraphicsDesc(const HnRenderPassState& RPSt
             break;
 
         case HN_RENDER_MODE_MESH_EDGES:
-            GraphicsDesc.PrimitiveTopology = PRIMITIVE_TOPOLOGY_LINE_STRIP;
+            GraphicsDesc.PrimitiveTopology = UseStripTopology ? PRIMITIVE_TOPOLOGY_LINE_STRIP : PRIMITIVE_TOPOLOGY_LINE_LIST;
             break;
 
         case HN_RENDER_MODE_POINTS:

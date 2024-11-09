@@ -195,7 +195,7 @@ private:
 
     void RenderPendingDrawItems(RenderState& State);
 
-    GraphicsPipelineDesc GetGraphicsDesc(const HnRenderPassState& RPState) const;
+    GraphicsPipelineDesc GetGraphicsDesc(const HnRenderPassState& RPState, bool UseStripTopology) const;
 
 private:
     HnRenderPassParams m_Params;

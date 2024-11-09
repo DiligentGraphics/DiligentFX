@@ -227,7 +227,7 @@ private:
         Uint32 NumIndices = 0;
     };
 
-    void UpdateIndexData(StagingIndexData& StagingInds, const pxr::VtValue& Points);
+    void UpdateIndexData(StagingIndexData& StagingInds, const pxr::VtValue& Points, bool UseStripTopology);
 
     void UpdateTopology(pxr::HdSceneDelegate& SceneDelegate,
                         pxr::HdRenderParam*   RenderParam,

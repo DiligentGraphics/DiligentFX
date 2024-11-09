@@ -430,7 +430,7 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
     if (IndexDataDirty && m_VertexHandle)
     {
         StagingIndexData StagingInds;
-        UpdateIndexData(StagingInds, StagingVerts.Points);
+        UpdateIndexData(StagingInds, StagingVerts.Points, RenderDelegate->AllowPrimitiveRestart());
 
         HnGeometryPool& GeometryPool = RenderDelegate->GetGeometryPool();
 
@@ -1064,7 +1064,7 @@ void HnMesh::GenerateSmoothNormals(HnRenderDelegate& RenderDelegate, StagingVert
     AddStagingBufferSourceForPrimvar(&RenderDelegate, StagingVerts, pxr::HdTokens->normals, pxr::VtValue::Take(Normals), pxr::HdInterpolationVertex);
 }
 
-void HnMesh::UpdateIndexData(StagingIndexData& StagingInds, const pxr::VtValue& Points)
+void HnMesh::UpdateIndexData(StagingIndexData& StagingInds, const pxr::VtValue& Points, bool UseStripTopology)
 {
     HnMeshUtils     MeshUtils{m_Topology, GetId()};
     pxr::VtIntArray SubsetStart;
@@ -1085,7 +1085,7 @@ void HnMesh::UpdateIndexData(StagingIndexData& StagingInds, const pxr::VtValue& 
         m_IndexData.Subsets.clear();
     }
 
-    StagingInds.EdgeIndices  = MeshUtils.ComputeEdgeIndices(!m_HasFaceVaryingPrimvars, true);
+    StagingInds.EdgeIndices  = MeshUtils.ComputeEdgeIndices(!m_HasFaceVaryingPrimvars, UseStripTopology);
     StagingInds.PointIndices = MeshUtils.ComputePointIndices(m_HasFaceVaryingPrimvars);
 }
 
@@ -1154,7 +1154,7 @@ void HnMesh::UpdateDrawItemGpuTopology(HnRenderDelegate& RenderDelegate)
                 DrawItem.SetFaces({});
             }
 
-            // Render edgesand points for the entire mesh at once
+            // Render edges and points for the entire mesh at once
             DrawItem.SetEdges({
                 m_IndexData.Edges->GetBuffer(),
                 m_IndexData.Edges->GetStartIndex(),
