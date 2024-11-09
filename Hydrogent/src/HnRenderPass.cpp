@@ -412,6 +412,7 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
     Uint32 JointsBufferOffset = 0;
     Uint32 CurrJointsDataSize = 0;
     size_t XformsHash         = 0;
+    size_t GeomBindXformHash  = 0;
     Uint32 JointCount         = 0;
 
     if (AttribsBuffDesc.Usage != USAGE_DYNAMIC)
@@ -460,7 +461,8 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
         // Reset the hash to force updating the joint transforms for the next draw item.
         // NB: we can't reuse the transforms at the existing offset because they may be
         //     overwritten by the next draw item.
-        XformsHash = 0;
+        XformsHash        = 0;
+        GeomBindXformHash = 0;
 
         RenderPendingDrawItems(State);
         VERIFY_EXPR(m_PendingDrawItems.empty());
@@ -518,7 +520,7 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
         if (MultiDrawCount == PrimitiveArraySize)
             MultiDrawCount = 0;
 
-        if (pSkinningData && pSkinningData->XformsHash != XformsHash)
+        if (pSkinningData && (pSkinningData->XformsHash != XformsHash || pSkinningData->GeomBindXformHash != GeomBindXformHash))
         {
             // Restart batch when the joint transforms change
             MultiDrawCount = 0;
@@ -598,7 +600,9 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
 
         if (pSkinningData)
         {
-            if (pSkinningData->XformsHash != XformsHash)
+            // NOTE: we currently reupload all joint transforms if geometry bind matrix changes, which is not optimal.
+            //       A better approach would be to move the matrix to PBRPrimitiveAttribs.
+            if (pSkinningData->XformsHash != XformsHash || pSkinningData->GeomBindXformHash != GeomBindXformHash)
             {
                 VERIFY(CurrJointsDataSize + JointsDataRange <= JointsBuffDesc.Size,
                        "There must be enough space for the new joint transforms as we flush the pending draw if there is not enough space.");
@@ -623,7 +627,8 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
                 VERIFY_EXPR(JointsDataSize == State.USDRenderer.GetJointsDataSize(JointCount, ListItem.PSOFlags));
                 CurrJointsDataSize = AlignUp(JointsBufferOffset + JointsDataSize, JointsBufferOffsetAlignment);
 
-                XformsHash = pSkinningData->XformsHash;
+                XformsHash        = pSkinningData->XformsHash;
+                GeomBindXformHash = pSkinningData->GeomBindXformHash;
 
                 VERIFY(MultiDrawCount == 0, "The batch must be reset when the joint transforms change.");
             }
