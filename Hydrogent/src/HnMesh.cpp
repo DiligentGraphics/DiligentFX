@@ -320,7 +320,7 @@ void HnMesh::Invalidate()
 struct HnMesh::StagingIndexData
 {
     pxr::VtVec3iArray FaceIndices;
-    pxr::VtVec2iArray EdgeIndices;
+    pxr::VtIntArray   EdgeIndices;
     pxr::VtIntArray   PointIndices;
 };
 
@@ -1085,7 +1085,7 @@ void HnMesh::UpdateIndexData(StagingIndexData& StagingInds, const pxr::VtValue& 
         m_IndexData.Subsets.clear();
     }
 
-    StagingInds.EdgeIndices  = MeshUtils.ComputeEdgeIndices(!m_HasFaceVaryingPrimvars);
+    StagingInds.EdgeIndices  = MeshUtils.ComputeEdgeIndices(!m_HasFaceVaryingPrimvars, true);
     StagingInds.PointIndices = MeshUtils.ComputePointIndices(m_HasFaceVaryingPrimvars);
 }
 

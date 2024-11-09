@@ -233,36 +233,58 @@ void HnMeshUtils::Triangulate(bool                UseFaceVertexIndices,
     }
 }
 
-pxr::VtVec2iArray HnMeshUtils::ComputeEdgeIndices(bool UseFaceVertexIndices) const
+pxr::VtIntArray HnMeshUtils::ComputeEdgeIndices(bool UseFaceVertexIndices, bool UseLineStrip) const
 {
     size_t NumEdges = 0;
+    size_t NumFaces = 0; // Count the actual number of faces
     ProcessFaces(
         [&](size_t FaceId, int StartVertex, int VertCount) {
             NumEdges += VertCount;
+            ++NumFaces;
         });
 
-    pxr::VtVec2iArray EdgeIndices;
-    EdgeIndices.reserve(NumEdges);
-
-    ProcessFaces(
-        [&](size_t FaceId, int StartVertex, int VertCount) {
-            for (int v = 0; v < VertCount - 1; ++v)
-                EdgeIndices.push_back({StartVertex + v, StartVertex + (v + 1)});
-            EdgeIndices.push_back({StartVertex + VertCount - 1, StartVertex});
-        });
-    VERIFY_EXPR(EdgeIndices.size() == NumEdges);
+    pxr::VtIntArray EdgeIndices;
+    if (UseLineStrip)
+    {
+        EdgeIndices.reserve(NumEdges + NumFaces * 2);
+        ProcessFaces(
+            [&](size_t FaceId, int StartVertex, int VertCount) {
+                for (int v = 0; v < VertCount; ++v)
+                {
+                    EdgeIndices.push_back(StartVertex + v);
+                }
+                EdgeIndices.push_back(StartVertex);
+                EdgeIndices.push_back(-1);
+            });
+        VERIFY_EXPR(EdgeIndices.size() == NumEdges + NumFaces * 2);
+    }
+    else
+    {
+        EdgeIndices.reserve(NumEdges * 2);
+        ProcessFaces(
+            [&](size_t FaceId, int StartVertex, int VertCount) {
+                for (int v = 0; v < VertCount - 1; ++v)
+                {
+                    EdgeIndices.push_back(StartVertex + v);
+                    EdgeIndices.push_back(StartVertex + (v + 1));
+                }
+                EdgeIndices.push_back(StartVertex + VertCount - 1);
+                EdgeIndices.push_back(StartVertex);
+            });
+        VERIFY_EXPR(EdgeIndices.size() == NumEdges * 2);
+    }
 
     if (UseFaceVertexIndices)
     {
         const int*   FaceVertexIndices = m_Topology.GetFaceVertexIndices().cdata();
         const size_t NumVertexIndices  = m_Topology.GetFaceVertexIndices().size();
-        for (pxr::GfVec2i& Edge : EdgeIndices)
+        for (int& Idx : EdgeIndices)
         {
-            int& Idx0 = Edge[0];
-            int& Idx1 = Edge[1];
-            VERIFY_EXPR(Idx0 < NumVertexIndices && Idx1 < NumVertexIndices);
-            Idx0 = FaceVertexIndices[Idx0];
-            Idx1 = FaceVertexIndices[Idx1];
+            if (Idx < 0)
+                continue;
+
+            VERIFY_EXPR(Idx < NumVertexIndices);
+            Idx = FaceVertexIndices[Idx];
         }
     }
 

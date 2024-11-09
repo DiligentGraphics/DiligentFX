@@ -765,6 +765,13 @@ private:
             ExistingData{std::move(_ExistingData)},
             Indices{std::move(_Indices)}
         {
+            auto ShiftIndex = [StartVertex](int& Idx) {
+                if (Idx >= 0)
+                {
+                    Idx += static_cast<int>(StartVertex);
+                }
+            };
+
             if (Indices.IsHolding<pxr::VtVec3iArray>())
             {
                 if (StartVertex != 0)
@@ -772,9 +779,9 @@ private:
                     pxr::VtVec3iArray IndicesArray = Indices.UncheckedRemove<pxr::VtVec3iArray>();
                     for (pxr::GfVec3i& idx : IndicesArray)
                     {
-                        idx[0] += StartVertex;
-                        idx[1] += StartVertex;
-                        idx[2] += StartVertex;
+                        ShiftIndex(idx[0]);
+                        ShiftIndex(idx[1]);
+                        ShiftIndex(idx[2]);
                     }
                     Indices = pxr::VtValue::Take(IndicesArray);
                 }
@@ -790,8 +797,8 @@ private:
                     pxr::VtVec2iArray IndicesArray = Indices.UncheckedRemove<pxr::VtVec2iArray>();
                     for (pxr::GfVec2i& idx : IndicesArray)
                     {
-                        idx[0] += StartVertex;
-                        idx[1] += StartVertex;
+                        ShiftIndex(idx[0]);
+                        ShiftIndex(idx[1]);
                     }
                     Indices = pxr::VtValue::Take(IndicesArray);
                 }
@@ -807,7 +814,7 @@ private:
                 {
                     pxr::VtIntArray IndicesArray = Indices.UncheckedRemove<pxr::VtIntArray>();
                     for (int& idx : IndicesArray)
-                        idx += StartVertex;
+                        ShiftIndex(idx);
                     Indices = pxr::VtValue::Take(IndicesArray);
                 }
 

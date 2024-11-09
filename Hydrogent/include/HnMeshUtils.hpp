@@ -82,6 +82,8 @@ public:
     /// Computes the edge indices.
     ///
     /// \param[in] UseFaceVertexIndices - Whether to use face vertex indices.
+    /// \param[in] UseLineStrip         - Whether to use line strip topology.
+    ///                                   If false, line list will be used.
     /// \return The edge indices.
     ///
     /// Example:
@@ -102,7 +104,7 @@ public:
     ///
     ///         UseFaceVertexIndices == true
     /// 		    EdgeIndices = {0, 1,  1, 2,  2, 3,  3, 0,  3, 2,  2, 4,  4, 5,  5, 3}
-    pxr::VtVec2iArray ComputeEdgeIndices(bool UseFaceVertexIndices) const;
+    pxr::VtIntArray ComputeEdgeIndices(bool UseFaceVertexIndices, bool UseLineStrip = false) const;
 
 
     /// Computes the point indices.

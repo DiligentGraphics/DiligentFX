@@ -237,7 +237,7 @@ GraphicsPipelineDesc HnRenderPass::GetGraphicsDesc(const HnRenderPassState& RPSt
             break;
 
         case HN_RENDER_MODE_MESH_EDGES:
-            GraphicsDesc.PrimitiveTopology = PRIMITIVE_TOPOLOGY_LINE_LIST;
+            GraphicsDesc.PrimitiveTopology = PRIMITIVE_TOPOLOGY_LINE_STRIP;
             break;
 
         case HN_RENDER_MODE_POINTS:
