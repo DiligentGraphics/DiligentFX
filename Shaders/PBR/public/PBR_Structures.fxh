@@ -74,8 +74,13 @@ struct GLTFNodeShaderTransforms
 
 	int   JointCount;
     int   FirstJoint; // Index of the first joint in the joints buffer to start from
-    float Dummy1;
-    float Dummy2;
+    float PosBiasX;   // Bias to apply to the position
+    float PosBiasY;
+    
+    float PosBiasZ;   // Scale and bias are used to unpack
+    float PosScaleX;  // position (Pos = Pos * PosScale + PosBias)
+    float PosScaleY;  // and are applied before the NodeMatrix.
+    float PosScaleZ;
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
 	CHECK_STRUCT_ALIGNMENT(GLTFNodeShaderTransforms);

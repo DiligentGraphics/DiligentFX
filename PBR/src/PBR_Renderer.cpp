@@ -1178,6 +1178,10 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
     Macros.Add("PACK_VERTEX_NORMALS", m_Settings.PackVertexNormals);
     Macros.Add("TONE_MAPPING_MODE", "TONE_MAPPING_MODE_UNCHARTED2");
 
+    Macros.Add("VERTEX_POS_PACK_MODE", static_cast<int>(m_Settings.VertexPosPackMode));
+    Macros.Add("VERTEX_POS_PACK_MODE_NONE", static_cast<int>(VERTEX_POS_PACK_MODE_NONE));
+    Macros.Add("VERTEX_POS_PACK_MODE_64_BIT", static_cast<int>(VERTEX_POS_PACK_MODE_64_BIT));
+
     Macros.Add("PRIMITIVE_ARRAY_SIZE", static_cast<int>(m_Settings.PrimitiveArraySize));
     if (m_Settings.PrimitiveArraySize > 0)
     {
@@ -1448,19 +1452,18 @@ void PBR_Renderer::GetVSInputStructAndLayout(PSO_FLAGS         PSOFlags,
         }
     }
 
-    const VSAttribInfo VSNormalAttrib{
-        VERTEX_ATTRIB_ID_NORMAL,
-        "Normal",
-        m_Settings.PackVertexNormals ? VT_UINT32 : VT_FLOAT32,
-        m_Settings.PackVertexNormals ? 1u : 3u,
-        PSO_FLAG_USE_VERTEX_NORMALS,
-    };
+    // clang-format off
+    constexpr VSAttribInfo VSPosAttrib      {VERTEX_ATTRIB_ID_POSITION, "Pos",    VT_FLOAT32, 3, PSO_FLAG_NONE};
+    constexpr VSAttribInfo VSPosPack64Attrib{VERTEX_ATTRIB_ID_POSITION, "Pos",    VT_UINT32,  2, PSO_FLAG_NONE};
+    constexpr VSAttribInfo VSNormAttrib     {VERTEX_ATTRIB_ID_NORMAL,   "Normal", VT_FLOAT32, 3, PSO_FLAG_NONE};
+    constexpr VSAttribInfo VSNormPackAttrib {VERTEX_ATTRIB_ID_NORMAL,   "Normal", VT_UINT32,  1, PSO_FLAG_NONE};
+    // clang-format on
 
     const std::array<VSAttribInfo, 8> VSAttribs = //
         {
             // clang-format off
-            VSAttribInfo{VERTEX_ATTRIB_ID_POSITION,  "Pos",     VT_FLOAT32, 3,            PSO_FLAG_NONE},
-            VSNormalAttrib,
+            m_Settings.VertexPosPackMode == VERTEX_POS_PACK_MODE_64_BIT ? VSPosPack64Attrib : VSPosAttrib,
+            m_Settings.PackVertexNormals ? VSNormPackAttrib : VSNormAttrib,
             VSAttribInfo{VERTEX_ATTRIB_ID_TEXCOORD0, "UV0",     VT_FLOAT32, 2,            PSO_FLAG_USE_TEXCOORD0},
             VSAttribInfo{VERTEX_ATTRIB_ID_TEXCOORD1, "UV1",     VT_FLOAT32, 2,            PSO_FLAG_USE_TEXCOORD1},
             VSAttribInfo{VERTEX_ATTRIB_ID_JOINTS,    "Joint0",  VT_FLOAT32, 4,            PSO_FLAG_USE_JOINTS},
@@ -2114,14 +2117,6 @@ void* PBR_Renderer::WriteSkinningData(void* pDst, const WriteSkinningDataAttribs
         PackMatrixRowMajor = m_Device.GetDeviceInfo().IsWebGPUDevice();
     }
     return WriteSkinningData(pDst, Attribs, PackMatrixRowMajor, m_Settings.MaxJointCount, m_Settings.UseSkinPreTransform);
-}
-
-Uint32 PBR_Renderer::PackVertexNormal(const float3& Normal)
-{
-    Uint32 x = static_cast<Uint32>(clamp((Normal.x + 1.f) * 32767.f, 0.f, 65535.f));
-    Uint32 y = static_cast<Uint32>(clamp((Normal.y + 1.f) * 16383.f, 0.f, 32767.f));
-    Uint32 z = Normal.z >= 0 ? 0 : 1;
-    return x | (y << 16) | (z << 31);
 }
 
 } // namespace Diligent

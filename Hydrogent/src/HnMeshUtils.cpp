@@ -378,22 +378,66 @@ pxr::VtValue HnMeshUtils::ConvertVertexPrimvarToFaceVarying(const pxr::VtValue& 
 
 pxr::VtValue HnMeshUtils::PackVertexNormals(const pxr::VtValue& Normals) const
 {
-    if (Normals.IsHolding<pxr::VtVec3fArray>())
-    {
-        const pxr::VtVec3fArray& NormalsArray = Normals.UncheckedGet<pxr::VtVec3fArray>();
-        pxr::VtIntArray          PackedNormals(NormalsArray.size());
-        Uint32*                  pPackedNormals = reinterpret_cast<Uint32*>(PackedNormals.data());
-        for (size_t i = 0; i < NormalsArray.size(); ++i)
-        {
-            pPackedNormals[i] = PBR_Renderer::PackVertexNormal(ToFloat3(NormalsArray[i]));
-        }
-        return pxr::VtValue::Take(PackedNormals);
-    }
-    else
+    if (!Normals.IsHolding<pxr::VtVec3fArray>())
     {
         LOG_ERROR_MESSAGE("Failed to pack vertex normals for mesh '", m_MeshId.GetString(), "': ", Normals.GetTypeName(), " is not supported");
         return {};
     }
+
+    const pxr::VtVec3fArray& NormalsArray = Normals.UncheckedGet<pxr::VtVec3fArray>();
+    pxr::VtIntArray          PackedNormals(NormalsArray.size());
+    Uint32*                  pPackedNormals = reinterpret_cast<Uint32*>(PackedNormals.data());
+    for (size_t i = 0; i < NormalsArray.size(); ++i)
+    {
+        pPackedNormals[i] = PBR_Renderer::PackVertexNormal(ToFloat3(NormalsArray[i]));
+    }
+    return pxr::VtValue::Take(PackedNormals);
+}
+
+pxr::VtValue HnMeshUtils::PackVertexPositions(const pxr::VtValue& Points, pxr::GfVec3f& Scale, pxr::GfVec3f& Bias) const
+{
+    if (!Points.IsHolding<pxr::VtVec3fArray>())
+    {
+        LOG_ERROR_MESSAGE("Failed to pack vertex positions for mesh '", m_MeshId.GetString(), "': ", Points.GetTypeName(), " is not supported");
+        return {};
+    }
+
+    const pxr::VtVec3fArray& PointsArray = Points.UncheckedGet<pxr::VtVec3fArray>();
+
+    pxr::GfVec3f MinPos{FLT_MAX};
+    pxr::GfVec3f MaxPos{-FLT_MAX};
+    for (const pxr::GfVec3f& Pos : PointsArray)
+    {
+        MinPos[0] = std::min(MinPos[0], Pos[0]);
+        MinPos[1] = std::min(MinPos[1], Pos[1]);
+        MinPos[2] = std::min(MinPos[2], Pos[2]);
+        MaxPos[0] = std::max(MaxPos[0], Pos[0]);
+        MaxPos[1] = std::max(MaxPos[1], Pos[1]);
+        MaxPos[2] = std::max(MaxPos[2], Pos[2]);
+    }
+    Bias  = MinPos;
+    Scale = MaxPos - MinPos;
+
+    const float3 PackScale{
+        Scale[0] != 0.f ? 1.f / Scale[0] : 1.f,
+        Scale[1] != 0.f ? 1.f / Scale[1] : 1.f,
+        Scale[2] != 0.f ? 1.f / Scale[2] : 1.f,
+    };
+    const float3 PackBias{
+        -MinPos[0],
+        -MinPos[1],
+        -MinPos[2],
+    };
+
+    pxr::VtVec2iArray PackedPositions(PointsArray.size());
+    uint2*            pPackedPositions = reinterpret_cast<uint2*>(PackedPositions.data());
+    const float3*     pPoints          = reinterpret_cast<const float3*>(PointsArray.data());
+    for (size_t i = 0; i < PointsArray.size(); ++i)
+    {
+        PBR_Renderer::PackVertexPos64(pPoints[i], PackBias, PackScale, pPackedPositions[i].x, pPackedPositions[i].y);
+    }
+
+    return pxr::VtValue::Take(PackedPositions);
 }
 
 } // namespace USD

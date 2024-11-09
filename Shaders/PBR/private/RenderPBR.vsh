@@ -140,6 +140,7 @@ float4 GetVertexColor(float4 Color)
 }
 
 #if PACK_VERTEX_NORMALS
+// Reverse of PBR_Renderer::PackVertexNormal()
 float3 GetNormal(in uint PackedNormal)
 {
     float3 Normal;
@@ -156,21 +157,53 @@ float3 GetNormal(in float3 Normal)
 }
 #endif
 
+#if VERTEX_POS_PACK_MODE == VERTEX_POS_PACK_MODE_64_BIT
+// Reverse of PBR_Renderer::PackVertexPos64()
+float3 GetPosition(VSInput VSIn)
+{
+    uint2 PackedPos = VSIn.Pos;
+    
+    //       PackedPos.x               PackedPos.y
+    //      X           Y             Y		     Z
+    // | 0 ... 20 | 21 ... 31|   | 0 ... 9 | 10 ... 30 |  |
+    //      21         11             10         21     31
+    float U21Scale = 1.0 / 2097151.0; // 2^21 - 1
+    uint  U21Mask  = 2097151u;
+    
+    float3 Pos;
+    Pos.x = float(PackedPos.x & U21Mask) * U21Scale;
+    Pos.y = float((PackedPos.x >> 21u) | ((PackedPos.y & 1023u) << 11u)) * U21Scale;
+    Pos.z = float(PackedPos.y >> 10u) * U21Scale;
+    
+    GLTFNodeShaderTransforms PrimTransforms = PRIMITIVE.Transforms;
+    float3 PosScale = float3(PrimTransforms.PosScaleX, PrimTransforms.PosScaleY, PrimTransforms.PosScaleZ);
+    float3 PosBias  = float3(PrimTransforms.PosBiasX,  PrimTransforms.PosBiasY,  PrimTransforms.PosBiasZ);
+    return Pos * PosScale + PosBias;
+}
+#else
+float3 GetPosition(VSInput VSIn)
+{
+    return VSIn.Pos;
+}
+#endif
+
 void main(in  VSInput  VSIn,
           out VSOutput VSOut)
 {
+    PBRPrimitiveAttribs Primitive = PRIMITIVE;
+    
     // Warning: moving this block into GLTF_TransformVertex() function causes huge
     // performance degradation on Vulkan because glslang/SPIRV-Tools are apparently not able
     // to eliminate the copy of g_Transforms structure.
-    float4x4 Transform = PRIMITIVE.Transforms.NodeMatrix;
+    float4x4 Transform = Primitive.Transforms.NodeMatrix;
 
 #if COMPUTE_MOTION_VECTORS
-    float4x4 PrevTransform = PRIMITIVE.PrevNodeMatrix;
+    float4x4 PrevTransform = Primitive.PrevNodeMatrix;
 #endif
     
 #if MAX_JOINT_COUNT > 0 && USE_JOINTS
-    int JointCount = PRIMITIVE.Transforms.JointCount;
-    int FirstJoint = PRIMITIVE.Transforms.FirstJoint;
+    int JointCount = Primitive.Transforms.JointCount;
+    int FirstJoint = Primitive.Transforms.FirstJoint;
     if (JointCount > 0)
     {
         // Mesh is skinned
@@ -210,11 +243,13 @@ void main(in  VSInput  VSIn,
     float3 Normal = float3(0.0, 0.0, 1.0);
 #endif
 
-    GLTF_TransformedVertex TransformedVert = GLTF_TransformVertex(VSIn.Pos, Normal, Transform);    
+    float3 Pos = GetPosition(VSIn);
+
+    GLTF_TransformedVertex TransformedVert = GLTF_TransformVertex(Pos, Normal, Transform);    
     VSOut.ClipPos = mul(float4(TransformedVert.WorldPos, 1.0), g_Frame.Camera.mViewProj);
 
 #if COMPUTE_MOTION_VECTORS
-    GLTF_TransformedVertex PrevTransformedVert = GLTF_TransformVertex(VSIn.Pos, Normal, PrevTransform);
+    GLTF_TransformedVertex PrevTransformedVert = GLTF_TransformVertex(Pos, Normal, PrevTransform);
     VSOut.PrevClipPos  = mul(float4(PrevTransformedVert.WorldPos, 1.0), g_Frame.PrevCamera.mViewProj);
 #endif  
     

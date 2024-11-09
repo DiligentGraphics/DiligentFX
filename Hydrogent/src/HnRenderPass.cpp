@@ -91,7 +91,7 @@ HnRenderPass::DrawListItem::DrawListItem(HnRenderDelegate& RenderDelegate,
     NumVertexBuffers{0}
 {
     entt::registry& Registry = RenderDelegate.GetEcsRegistry();
-    PrevTransform            = Registry.get<HnMesh::Components::Transform>(MeshEntity).Val;
+    PrevTransform            = Registry.get<HnMesh::Components::Transform>(MeshEntity).Matrix;
 }
 
 HnRenderPass::HnRenderPass(pxr::HdRenderIndex*           pIndex,
@@ -504,9 +504,9 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
                                                       const HnMesh::Components::DisplayColor,
                                                       const HnMesh::Components::Visibility>(ListItem.MeshEntity);
 
-        const float4x4& Transform    = std::get<0>(MeshAttribs).Val;
-        const float4&   DisplayColor = std::get<1>(MeshAttribs).Val;
-        const bool      MeshVisibile = std::get<2>(MeshAttribs).Val;
+        const HnMesh::Components::Transform& Transform    = std::get<0>(MeshAttribs);
+        const float4&                        DisplayColor = std::get<1>(MeshAttribs).Val;
+        const bool                           MeshVisibile = std::get<2>(MeshAttribs).Val;
 
         const HnMesh::Components::Skinning* pSkinningData = ((ListItem.PSOFlags & PBR_Renderer::PSO_FLAG_USE_JOINTS) && pJointsCB != nullptr) ?
             &MeshAttribsView.get<const HnMesh::Components::Skinning>(ListItem.MeshEntity) :
@@ -656,10 +656,12 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
 
         GLTF_PBR_Renderer::PBRPrimitiveShaderAttribsData AttribsData{
             ListItem.PSOFlags,
-            &Transform,
+            &Transform.Matrix,
             &ListItem.PrevTransform,
             JointCount,
             FirstJoint,
+            &Transform.PosScale,
+            &Transform.PosBias,
             nullptr, // CustomData
             0,       // CustomDataSize
             &pDstMaterialBasicAttribs,
@@ -676,7 +678,7 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
         // Using PBRPrimitiveShaderAttribs's CustomData will not work as fallback PSO uses different flags.
         pDstMaterialBasicAttribs->CustomData.x = ListItem.MeshUID;
 
-        ListItem.PrevTransform = Transform;
+        ListItem.PrevTransform = Transform.Matrix;
 
         m_PendingDrawItems.push_back(PendingDrawItem{
             ListItem,

@@ -188,7 +188,8 @@ public:
             const size_t           ElementSize = HdDataSizeOfType(ElementType.type) * ElementType.count;
             if (SourceName == pxr::HdTokens->points)
             {
-                VERIFY(ElementType.type == pxr::HdTypeFloatVec3 && ElementType.count == 1, "Unexpected vertex element type");
+                VERIFY((ElementType.type == pxr::HdTypeFloatVec3 || ElementType.type == pxr::HdTypeInt32Vec2) && ElementType.count == 1,
+                       "Unexpected vertex element type");
             }
             else if (SourceName == pxr::HdTokens->normals)
             {

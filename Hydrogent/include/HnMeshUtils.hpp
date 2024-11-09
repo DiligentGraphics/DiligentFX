@@ -166,6 +166,13 @@ public:
     /// Pack vertex normals into 32-bit unsigned integers.
     pxr::VtValue PackVertexNormals(const pxr::VtValue& Normals) const;
 
+
+    /// Pack positions into two 32-bit unsigned integers.
+    /// The positions are scaled and biased to fit into the range [0, 1].
+    /// The original positions can be recovered using the following formula:
+    ///     Position = (PackedPosition * Scale) + Bias
+    pxr::VtValue PackVertexPositions(const pxr::VtValue& Points, pxr::GfVec3f& Scale, pxr::GfVec3f& Bias) const;
+
 private:
     template <typename HandleFaceType>
     void ProcessFaces(HandleFaceType&& HandleFace) const;

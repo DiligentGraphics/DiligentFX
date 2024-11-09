@@ -95,7 +95,9 @@ public:
     {
         struct Transform
         {
-            float4x4 Val = float4x4::Identity();
+            float4x4 Matrix   = float4x4::Identity();
+            float3   PosScale = {1, 1, 1};
+            float3   PosBias  = {0, 0, 0};
         };
 
         struct DisplayColor
@@ -203,6 +205,8 @@ private:
                                           pxr::VtValue         Primvar,
                                           pxr::HdInterpolation Interpolation,
                                           int                  ValuesPerElement = 1);
+
+    void PreprocessPrimvar(HnRenderDelegate* RenderDelegate, const pxr::TfToken& Name, pxr::VtValue& Primvar);
 
     bool AddJointInfluencesStagingBufferSource(const pxr::VtValue& NumInfluencesPerComponentVal,
                                                const pxr::VtValue& InfluencesVal,

@@ -450,7 +450,7 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
     if (pxr::HdChangeTracker::IsTransformDirty(DirtyBits, Id))
     {
         entt::registry& Registry  = RenderDelegate->GetEcsRegistry();
-        float4x4&       Transform = Registry.get<Components::Transform>(m_Entity).Val;
+        float4x4&       Transform = Registry.get<Components::Transform>(m_Entity).Matrix;
 
         float4x4 NewTransform = m_SkelLocalToPrimLocal * ToFloat4x4(SceneDelegate.GetTransform(Id));
         if (Transform != NewTransform)
@@ -528,6 +528,34 @@ void HnMesh::UpdateTopology(pxr::HdSceneDelegate& SceneDelegate,
     DirtyBits &= ~pxr::HdChangeTracker::DirtyTopology;
 }
 
+void HnMesh::PreprocessPrimvar(HnRenderDelegate* RenderDelegate, const pxr::TfToken& Name, pxr::VtValue& Primvar)
+{
+    if (Name == pxr::HdTokens->points)
+    {
+        VERIFY_EXPR(RenderDelegate != nullptr);
+        if (RenderDelegate != nullptr && RenderDelegate->GetUSDRenderer()->GetSettings().VertexPosPackMode == PBR_Renderer::VERTEX_POS_PACK_MODE_64_BIT)
+        {
+            HnMeshUtils  MeshUtils{m_Topology, GetId()};
+            pxr::GfVec3f UnpackScale, UnpackBias;
+            Primvar = MeshUtils.PackVertexPositions(Primvar, UnpackScale, UnpackBias);
+
+            entt::registry&        Registry  = RenderDelegate->GetEcsRegistry();
+            Components::Transform& Transform = Registry.get<Components::Transform>(m_Entity);
+            Transform.PosScale               = ToFloat3(UnpackScale);
+            Transform.PosBias                = ToFloat3(UnpackBias);
+        }
+    }
+    else if (Name == pxr::HdTokens->normals)
+    {
+        VERIFY_EXPR(RenderDelegate != nullptr);
+        if (RenderDelegate != nullptr && RenderDelegate->GetUSDRenderer()->GetSettings().PackVertexNormals)
+        {
+            HnMeshUtils MeshUtils{m_Topology, GetId()};
+            Primvar = MeshUtils.PackVertexNormals(Primvar);
+        }
+    }
+}
+
 bool HnMesh::AddStagingBufferSourceForPrimvar(HnRenderDelegate*    RenderDelegate,
                                               StagingVertexData&   StagingVerts,
                                               const pxr::TfToken&  Name,
@@ -538,15 +566,7 @@ bool HnMesh::AddStagingBufferSourceForPrimvar(HnRenderDelegate*    RenderDelegat
     if (Primvar.IsEmpty())
         return false;
 
-    if (Name == pxr::HdTokens->normals)
-    {
-        VERIFY_EXPR(RenderDelegate != nullptr);
-        if (RenderDelegate != nullptr && RenderDelegate->GetUSDRenderer()->GetSettings().PackVertexNormals)
-        {
-            HnMeshUtils MeshUtils{m_Topology, GetId()};
-            Primvar = MeshUtils.PackVertexNormals(Primvar);
-        }
-    }
+    PreprocessPrimvar(RenderDelegate, Name, Primvar);
 
     pxr::VtValue  FaceVaryingPrimvar;
     pxr::VtValue* pSrcPrimvar = &Primvar;

@@ -128,6 +128,17 @@ public:
         JOINTS_BUFFER_MODE_STRUCTURED,
     };
 
+    /// Vertex position packing mode.
+    enum VERTEX_POS_PACK_MODE : Uint8
+    {
+        /// Vertex positions are not packed and are stored as float3.
+        VERTEX_POS_PACK_MODE_NONE = 0,
+
+        /// Vertex positions are packed into two 32-bit uints using
+        /// 21 bits for normalized x, y, z coordinates, see PackVertxPos64().
+        VERTEX_POS_PACK_MODE_64_BIT,
+    };
+
     /// Renderer create info
     struct CreateInfo
     {
@@ -204,6 +215,9 @@ public:
 
         /// Whether vertex normals are packed into a single 32-bit uint, see PackVertexNormal().
         bool PackVertexNormals = false;
+
+        /// Vertex position packing mode, see VERTEX_POS_PACK_MODE.
+        VERTEX_POS_PACK_MODE VertexPosPackMode = VERTEX_POS_PACK_MODE_NONE;
 
         /// PCF shadow kernel size.
         /// Allowed values are 2, 3, 5, 7.
@@ -727,7 +741,15 @@ public:
     /// Packs normal into a single 32-bit uint.
     ///
     /// \remarks    The function assumes that the input vector is normalized.
-    static Uint32 PackVertexNormal(const float3& Normal);
+    static inline Uint32 PackVertexNormal(const float3& Normal);
+
+    /// Packs vertex position into two 32-bit uints.
+    ///
+    /// \remarks    Bias and Scale are used to map the vertex position to the [0, 1] range as follows:
+    ///                 NormPos = (Pos + Bias) * Scale
+    ///             Typically, Bias is set to the negated minimum vertex position and Scale is set to
+    ///             one over the maximum vertex position minus the minimum vertex position.
+    static inline void PackVertexPos64(const float3& Pos, const float3& Bias, const float3& Scale, Uint32& U0, Uint32& U1);
 
 protected:
     ShaderMacroHelper DefineMacros(const PSOKey& Key) const;
@@ -904,6 +926,27 @@ inline void PBR_Renderer::ProcessTexturAttribs(PBR_Renderer::PSO_FLAGS PSOFlags,
         Handler(AttribIndex++, AttribId);
         PSOFlags &= ~GetTextureAttribPSOFlag(AttribId);
     }
+}
+
+inline Uint32 PBR_Renderer::PackVertexNormal(const float3& Normal)
+{
+    Uint32 x = static_cast<Uint32>(clamp((Normal.x + 1.f) * 32767.f, 0.f, 65535.f));
+    Uint32 y = static_cast<Uint32>(clamp((Normal.y + 1.f) * 16383.f, 0.f, 32767.f));
+    Uint32 z = Normal.z >= 0 ? 0 : 1;
+    return x | (y << 16) | (z << 31);
+}
+
+inline void PBR_Renderer::PackVertexPos64(const float3& Pos, const float3& Bias, const float3& Scale, Uint32& U0, Uint32& U1)
+{
+    //      X           Y             Y		     Z
+    // | 0 ... 20 | 21 ... 31|   | 0 ... 9 | 10 ... 30 |
+    //      21         11             10         21
+    constexpr float3 U21Scale{static_cast<float>((1 << 21) - 1)};
+    const float3     NormPos = (Pos + Bias) * Scale;
+    const uint3      U21Pos  = clamp(NormPos * U21Scale, float3{0}, U21Scale).Recast<uint>();
+
+    U0 = U21Pos.x | (U21Pos.y << 21u);
+    U1 = (U21Pos.y >> 11u) | (U21Pos.z << 10u);
 }
 
 } // namespace Diligent
