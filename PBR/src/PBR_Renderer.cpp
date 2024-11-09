@@ -1455,8 +1455,8 @@ void PBR_Renderer::GetVSInputStructAndLayout(PSO_FLAGS         PSOFlags,
     // clang-format off
     constexpr VSAttribInfo VSPosAttrib      {VERTEX_ATTRIB_ID_POSITION, "Pos",    VT_FLOAT32, 3, PSO_FLAG_NONE};
     constexpr VSAttribInfo VSPosPack64Attrib{VERTEX_ATTRIB_ID_POSITION, "Pos",    VT_UINT32,  2, PSO_FLAG_NONE};
-    constexpr VSAttribInfo VSNormAttrib     {VERTEX_ATTRIB_ID_NORMAL,   "Normal", VT_FLOAT32, 3, PSO_FLAG_NONE};
-    constexpr VSAttribInfo VSNormPackAttrib {VERTEX_ATTRIB_ID_NORMAL,   "Normal", VT_UINT32,  1, PSO_FLAG_NONE};
+    constexpr VSAttribInfo VSNormAttrib     {VERTEX_ATTRIB_ID_NORMAL,   "Normal", VT_FLOAT32, 3, PSO_FLAG_USE_VERTEX_NORMALS};
+    constexpr VSAttribInfo VSNormPackAttrib {VERTEX_ATTRIB_ID_NORMAL,   "Normal", VT_UINT32,  1, PSO_FLAG_USE_VERTEX_NORMALS};
     // clang-format on
 
     const std::array<VSAttribInfo, 8> VSAttribs = //
