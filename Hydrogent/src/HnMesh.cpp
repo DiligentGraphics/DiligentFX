@@ -869,12 +869,10 @@ void HnMesh::UpdateSkinningPrimvars(pxr::HdSceneDelegate&                       
                 {
                     const pxr::GfMatrix4f& GeomBindXform = GeomBindXformVal.UncheckedGet<pxr::GfMatrix4f>();
                     SkinningData.GeomBindXform           = ToFloat4x4(GeomBindXform);
-                    SkinningData.GeomBindXformHash       = pxr::TfHash{}(GeomBindXform);
                 }
                 else
                 {
-                    SkinningData.GeomBindXform     = float4x4::Identity();
-                    SkinningData.GeomBindXformHash = 0;
+                    SkinningData.GeomBindXform = float4x4::Identity();
                 }
             }
         }

@@ -89,8 +89,11 @@ const pxr::TfTokenVector HnRenderDelegate::SupportedBPrimTypes = {
 
 static RefCntAutoPtr<IBuffer> CreatePrimitiveAttribsCB(IRenderDevice* pDevice)
 {
-    Uint64 Size  = 65536;
-    USAGE  Usage = USAGE_DYNAMIC;
+    Uint64 Size = 65536;
+    // Add extra space as buffer for the attributes buffer range.
+    Size += 8192;
+
+    USAGE Usage = USAGE_DYNAMIC;
     if (pDevice->GetDeviceInfo().IsGLDevice())
     {
         // On OpenGL, use large USAGE_DEFAULT buffer and update it
@@ -124,8 +127,8 @@ static RefCntAutoPtr<IBuffer> CreateJointsBuffer(IRenderDevice* pDevice, USD_Ren
     }
 
     auto GetMaxAllowedJointCount = [](Uint64 BufferSize) {
-        // (PreTransform matrix + MaxJointCount matrices) * 2
-        return static_cast<Uint32>(BufferSize / sizeof(float4x4) / 2 - 1);
+        // MaxJointCount matrices * (this + last frames)
+        return static_cast<Uint32>(BufferSize / sizeof(float4x4) / 2);
     };
 
     if (Mode == USD_Renderer::JOINTS_BUFFER_MODE_UNIFORM)
@@ -145,7 +148,7 @@ static RefCntAutoPtr<IBuffer> CreateJointsBuffer(IRenderDevice* pDevice, USD_Ren
         Desc.Mode              = BUFFER_MODE_STRUCTURED;
         Desc.ElementByteStride = sizeof(float4x4);
 
-        Desc.Size = std::max<Uint64>(Desc.Size, USD_Renderer::GetJointsDataSize(MaxJointCount, /*UseSkinPreTransform = */ true, /*UsePrevFrameTransforms = */ true));
+        Desc.Size = std::max<Uint64>(Desc.Size, USD_Renderer::GetJointsDataSize(MaxJointCount, /*UsePrevFrameTransforms = */ true));
         // In structured mode, the entire buffer may be used to store joints for a single mesh.
         MaxJointCount = GetMaxAllowedJointCount(Desc.Size);
     }

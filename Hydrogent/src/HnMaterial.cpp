@@ -1131,7 +1131,10 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
 
     if (m_SRB)
     {
-        const auto   PSOFlags                = HnRenderPass::GetMaterialPSOFlags(*this);
+        const PBR_Renderer::PSO_FLAGS PSOFlags = HnRenderPass::GetMaterialPSOFlags(*this)
+            // Since we don't know whether the mesh will use joints, we have to reserve space for the joint transforms.
+            | PBR_Renderer::PSO_FLAG_USE_JOINTS;
+
         const Uint32 PBRPrimitiveAttribsSize = UsdRenderer.GetPBRPrimitiveAttribsSize(PSOFlags);
         const Uint32 PrimitiveArraySize      = std::max(UsdRenderer.GetSettings().PrimitiveArraySize, 1u);
         SRBCache->UpdatePrimitiveAttribsBufferRange(m_SRB, PBRPrimitiveAttribsSize * PrimitiveArraySize);

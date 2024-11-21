@@ -250,15 +250,17 @@ public:
 
     struct PBRPrimitiveShaderAttribsData
     {
-        PSO_FLAGS       PSOFlags       = PSO_FLAG_NONE;
-        const float4x4* NodeMatrix     = nullptr;
-        const float4x4* PrevNodeMatrix = nullptr;
-        const Uint32    JointCount     = 0;
-        const Uint32    FirstJoint     = 0;
-        const float3*   PosScale       = nullptr;
-        const float3*   PosBias        = nullptr;
-        const void*     CustomData     = nullptr;
-        size_t          CustomDataSize = 0;
+        PSO_FLAGS       PSOFlags             = PSO_FLAG_NONE;
+        const float4x4* NodeMatrix           = nullptr;
+        const float4x4* PrevNodeMatrix       = nullptr; // #if COMPUTE_MOTION_VECTORS
+        const Uint32    JointCount           = 0;
+        const Uint32    FirstJoint           = 0;
+        const float3*   PosScale             = nullptr;
+        const float3*   PosBias              = nullptr;
+        const float4x4* SkinPreTransform     = nullptr; // #if USE_JOINTS && USE_SKIN_PRE_TRANSFORM
+        const float4x4* PrevSkinPreTransform = nullptr; // #if USE_JOINTS && USE_SKIN_PRE_TRANSFORM && COMPUTE_MOTION_VECTORS
+        const void*     CustomData           = nullptr;
+        size_t          CustomDataSize       = 0;
 
         HLSL::PBRMaterialBasicAttribs** pMaterialBasicAttribsDstPtr = nullptr;
     };
@@ -266,7 +268,8 @@ public:
                                                 const PBRPrimitiveShaderAttribsData&            AttribsData,
                                                 const std::array<int, TEXTURE_ATTRIB_ID_COUNT>& TextureAttribIndices,
                                                 const GLTF::Material&                           Material,
-                                                bool                                            TransposeMatrices);
+                                                bool                                            TransposeMatrices,
+                                                bool                                            UseSkinPreTransform);
 
     struct PBRLightShaderAttribsData
     {

@@ -662,7 +662,7 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
                         &PrevNodeTransform,
                         static_cast<Uint32>(JointCount),
                     };
-                    auto* pEndPtr = WritePBRPrimitiveShaderAttribs(pAttribsData, AttribsData, m_Settings.TextureAttribIndices, material, !m_Settings.PackMatrixRowMajor);
+                    auto* pEndPtr = WritePBRPrimitiveShaderAttribs(pAttribsData, AttribsData, m_Settings.TextureAttribIndices, material, !m_Settings.PackMatrixRowMajor, m_Settings.UseSkinPreTransform);
 
                     VERIFY(reinterpret_cast<uint8_t*>(pEndPtr) <= static_cast<uint8_t*>(pAttribsData) + m_PBRPrimitiveAttribsCB->GetDesc().Size,
                            "Not enough space in the buffer to store primitive attributes");
@@ -714,7 +714,8 @@ void* GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                   
                                                         const PBRPrimitiveShaderAttribsData&            AttribsData,
                                                         const std::array<int, TEXTURE_ATTRIB_ID_COUNT>& TextureAttribIndices,
                                                         const GLTF::Material&                           Material,
-                                                        bool                                            TransposeMatrices)
+                                                        bool                                            TransposeMatrices,
+                                                        bool                                            UseSkinPreTransform)
 {
     // When adding new members, don't forget to update PBR_Renderer::GetPBRPrimitiveAttribsSize!
 
@@ -723,7 +724,7 @@ void* GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                   
     //    struct GLTFNodeShaderTransforms
     //    {
     //        float4x4 NodeMatrix;
-    //        float4x4 PrevNodeMatrix; // #if ENABLE_MOTION_VECTORS
+    //        float4x4 PrevNodeMatrix; // #if COMPUTE_MOTION_VECTORS
     //
     //        int   JointCount;
     //        int   FirstJoint;
@@ -734,6 +735,9 @@ void* GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                   
     //        float PosScaleX;
     //        float PosScaleY;
     //        float PosScaleZ;
+    //
+    //        float4x4 SkinPreTransform;     // #if USE_JOINTS && USE_SKIN_PRE_TRANSFORM
+    //        float4x4 PrevSkinPreTransform; // #if USE_JOINTS && USE_SKIN_PRE_TRANSFORM && COMPUTE_MOTION_VECTORS
     //    } Transforms;
     //
     //    struct PBRMaterialShaderInfo
@@ -791,6 +795,32 @@ void* GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                   
         WriteValue(PosScale.x);
         WriteValue(PosScale.y);
         WriteValue(PosScale.z);
+
+        if (UseSkinPreTransform && (AttribsData.PSOFlags & PSO_FLAG_USE_JOINTS))
+        {
+            if (AttribsData.SkinPreTransform != nullptr)
+            {
+                WriteShaderMatrix(pDstPtr, *AttribsData.SkinPreTransform, TransposeMatrices);
+            }
+            else
+            {
+                UNEXPECTED("Skin pre-transform matrix must not be null");
+            }
+            pDstPtr += sizeof(float4x4);
+
+            if (AttribsData.PSOFlags & PSO_FLAG_COMPUTE_MOTION_VECTORS)
+            {
+                if (AttribsData.PrevSkinPreTransform != nullptr)
+                {
+                    WriteShaderMatrix(pDstPtr, *AttribsData.PrevSkinPreTransform, TransposeMatrices);
+                }
+                else
+                {
+                    UNEXPECTED("Previous skin pre-transform matrix must not be null");
+                }
+                pDstPtr += sizeof(float4x4);
+            }
+        }
     }
 
     if (AttribsData.pMaterialBasicAttribsDstPtr != nullptr)

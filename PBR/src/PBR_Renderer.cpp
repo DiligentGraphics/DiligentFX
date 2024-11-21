@@ -239,20 +239,20 @@ static void ClearCubemap(IDeviceContext* pCtx, ITexture* pCubemap)
     });
 }
 
-Uint32 PBR_Renderer::GetJointsDataSize(Uint32 MaxJointCount, bool UseSkinPreTransform, bool UsePrevFrameTransforms)
+Uint32 PBR_Renderer::GetJointsDataSize(Uint32 MaxJointCount, bool UsePrevFrameTransforms)
 {
-    return sizeof(float4x4) * (MaxJointCount + (UseSkinPreTransform ? 1 : 0)) * (UsePrevFrameTransforms ? 2 : 1);
+    return sizeof(float4x4) * MaxJointCount * (UsePrevFrameTransforms ? 2 : 1);
 }
 
 Uint32 PBR_Renderer::GetJointsDataSize(Uint32 JointCount, PSO_FLAGS PSOFlags) const
 {
-    return GetJointsDataSize(JointCount, m_Settings.UseSkinPreTransform, (PSOFlags & PSO_FLAG_COMPUTE_MOTION_VECTORS) != 0);
+    return GetJointsDataSize(JointCount, (PSOFlags & PSO_FLAG_COMPUTE_MOTION_VECTORS) != 0);
 }
 
 Uint32 PBR_Renderer::GetJointsBufferSize() const
 {
     return m_Settings.MaxJointCount > 0 ?
-        GetJointsDataSize(m_Settings.MaxJointCount, m_Settings.UseSkinPreTransform, true) :
+        GetJointsDataSize(m_Settings.MaxJointCount, true) :
         0;
 }
 
@@ -432,7 +432,7 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
         }
         if (m_Settings.MaxJointCount > 0)
         {
-            const Uint32 MaxJointCount = 65536 / (2 * sizeof(float4x4)) - (m_Settings.UseSkinPreTransform ? 1 : 0);
+            const Uint32 MaxJointCount = 65536 / (2 * sizeof(float4x4));
             if (m_Settings.MaxJointCount > MaxJointCount)
             {
                 LOG_ERROR_MESSAGE("PBR_Renderer settings specify ", m_Settings.MaxJointCount, " joints, but the maximum allowed number of joints is ", MaxJointCount);
@@ -2000,7 +2000,7 @@ Uint32 PBR_Renderer::GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags, Uint32 CustomDa
     //    struct GLTFNodeShaderTransforms
     //    {
     //        float4x4 NodeMatrix;
-    //        float4x4 PrevNodeMatrix; // #if ENABLE_MOTION_VECTORS
+    //        float4x4 PrevNodeMatrix; // #if COMPUTE_MOTION_VECTORS
     //
     //        int   JointCount;
     //        int   FirstJoint;
@@ -2011,6 +2011,9 @@ Uint32 PBR_Renderer::GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags, Uint32 CustomDa
     //        float PosScaleX;
     //        float PosScaleY;
     //        float PosScaleZ;
+    //
+    //        float4x4 SkinPreTransform;     // #if USE_JOINTS && USE_SKIN_PRE_TRANSFORM
+    //        float4x4 PrevSkinPreTransform; // #if USE_JOINTS && USE_SKIN_PRE_TRANSFORM && COMPUTE_MOTION_VECTORS
     //    } Transforms;
     //
     //    struct PBRMaterialShaderInfo
@@ -2036,9 +2039,14 @@ Uint32 PBR_Renderer::GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags, Uint32 CustomDa
                              }
                          });
 
+    const bool UseSkinPreTransform     = m_Settings.UseSkinPreTransform && (Flags & PSO_FLAG_USE_JOINTS) != 0;
+    const bool UsePrevSkinPreTransform = UseSkinPreTransform && (Flags & PSO_FLAG_COMPUTE_MOTION_VECTORS) != 0;
+
     return (sizeof(float4x4) +                                                   // Transforms.NodeMatrix
             ((Flags & PSO_FLAG_COMPUTE_MOTION_VECTORS) ? sizeof(float4x4) : 0) + // Transforms.PrevNodeMatrix
             sizeof(int) * 2 + sizeof(float) * 6 +                                // Transforms.JointCount ... Transforms.PosScaleZ
+            (UseSkinPreTransform ? sizeof(float4x4) : 0) +                       // Transforms.SkinPreTransform
+            (UsePrevSkinPreTransform ? sizeof(float4x4) : 0) +                   // Transforms.PrevSkinPreTransform
 
             sizeof(HLSL::PBRMaterialBasicAttribs) +
             ((Flags & PSO_FLAG_ENABLE_SHEEN) ? sizeof(HLSL::PBRMaterialSheenAttribs) : 0) +
@@ -2066,8 +2074,7 @@ Uint32 PBR_Renderer::GetPRBFrameAttribsSize() const
 void* PBR_Renderer::WriteSkinningData(void*                           _pDst,
                                       const WriteSkinningDataAttribs& Attribs,
                                       bool                            PackMatrixRowMajor,
-                                      Uint32                          MaxJointCount,
-                                      bool                            UseSkinPreTransform)
+                                      Uint32                          MaxJointCount)
 {
     Uint32 JointCount = Attribs.JointCount;
     if (JointCount > MaxJointCount)
@@ -2077,23 +2084,6 @@ void* PBR_Renderer::WriteSkinningData(void*                           _pDst,
     }
 
     float4x4* pDst = static_cast<float4x4*>(_pDst);
-
-    const bool UsePrevFrameTransforms = (Attribs.PSOFlags & PBR_Renderer::PSO_FLAG_COMPUTE_MOTION_VECTORS) != 0;
-    if (UseSkinPreTransform)
-    {
-        static const float4x4 Identity = float4x4::Identity();
-
-        // g_Skin.PreTransform
-        const float4x4& PreTransform = Attribs.PreTransform != nullptr ? *Attribs.PreTransform : Identity;
-        WriteShaderMatrix(pDst++, PreTransform, !PackMatrixRowMajor);
-
-        if (UsePrevFrameTransforms)
-        {
-            // g_Skin.PrevPreTransform
-            const float4x4& PrevPreTransform = Attribs.PrevPreTransform != nullptr ? *Attribs.PrevPreTransform : Identity;
-            WriteShaderMatrix(pDst++, PrevPreTransform, !PackMatrixRowMajor);
-        }
-    }
 
     if (Attribs.JointMatrices != nullptr)
     {
@@ -2106,6 +2096,7 @@ void* PBR_Renderer::WriteSkinningData(void*                           _pDst,
     }
     pDst += JointCount;
 
+    const bool UsePrevFrameTransforms = (Attribs.PSOFlags & PBR_Renderer::PSO_FLAG_COMPUTE_MOTION_VECTORS) != 0;
     if (UsePrevFrameTransforms)
     {
         if (Attribs.PrevJointMatrices != nullptr)
@@ -2120,7 +2111,7 @@ void* PBR_Renderer::WriteSkinningData(void*                           _pDst,
         pDst += JointCount;
     }
 
-    VERIFY_EXPR(static_cast<Uint32>(pDst - static_cast<float4x4*>(_pDst)) * sizeof(float4x4) == GetJointsDataSize(JointCount, UseSkinPreTransform, UsePrevFrameTransforms));
+    VERIFY_EXPR(static_cast<Uint32>(pDst - static_cast<float4x4*>(_pDst)) * sizeof(float4x4) == GetJointsDataSize(JointCount, UsePrevFrameTransforms));
 
     return pDst;
 }
@@ -2132,7 +2123,7 @@ void* PBR_Renderer::WriteSkinningData(void* pDst, const WriteSkinningDataAttribs
     {
         PackMatrixRowMajor = m_Device.GetDeviceInfo().IsWebGPUDevice();
     }
-    return WriteSkinningData(pDst, Attribs, PackMatrixRowMajor, m_Settings.MaxJointCount, m_Settings.UseSkinPreTransform);
+    return WriteSkinningData(pDst, Attribs, PackMatrixRowMajor, m_Settings.MaxJointCount);
 }
 
 } // namespace Diligent

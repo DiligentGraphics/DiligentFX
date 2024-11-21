@@ -71,6 +71,14 @@
 #   define COMPUTE_MOTION_VECTORS 0
 #endif
 
+#ifndef USE_JOINTS
+#   define USE_JOINTS 0
+#endif
+
+#ifndef USE_SKIN_PRE_TRANSFORM
+#   define USE_SKIN_PRE_TRANSFORM 0
+#endif
+
 // When updating this structure, make sure to update GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs,
 // and PBR_Renderer::GetPBRPrimitiveAttribsSize.
 struct GLTFNodeShaderTransforms
@@ -89,6 +97,13 @@ struct GLTFNodeShaderTransforms
     float PosScaleX;  // position (Pos = Pos * PosScale + PosBias)
     float PosScaleY;  // and are applied before the NodeMatrix.
     float PosScaleZ;
+    
+#if USE_JOINTS && USE_SKIN_PRE_TRANSFORM
+    float4x4 SkinPreTransform;
+#   if COMPUTE_MOTION_VECTORS
+        float4x4 PrevSkinPreTransform;
+#   endif
+#endif
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
 	CHECK_STRUCT_ALIGNMENT(GLTFNodeShaderTransforms);

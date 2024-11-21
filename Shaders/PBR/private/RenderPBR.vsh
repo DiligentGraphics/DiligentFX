@@ -62,13 +62,6 @@ cbuffer cbPrimitiveAttribs
 
 struct SkinnigData
 {
-#if USE_SKIN_PRE_TRANSFORM
-    float4x4 PreTransform;
-#   if COMPUTE_MOTION_VECTORS
-        float4x4 PrevPreTransform;
-#   endif
-#endif
-
 #   if COMPUTE_MOTION_VECTORS
         float4x4 Joints[MAX_JOINT_COUNT * 2];
 #   else
@@ -86,42 +79,13 @@ float4x4 GetJointMatrix(int JointIndex, int FirstJoint)
     return g_Skin.Joints[JointIndex];
 }
 
-#if USE_SKIN_PRE_TRANSFORM
-float4x4 GetSkinPretransform(int FirstJoint)
-{
-    return g_Skin.PreTransform;
-}
-#if COMPUTE_MOTION_VECTORS
-float4x4 GetPrevSkinPretransform(int FirstJoint)
-{
-    return g_Skin.PrevPreTransform;
-}
-#endif
-#endif
-
 #elif JOINTS_BUFFER_MODE == JOINTS_BUFFER_MODE_STRUCTURED
 
 StructuredBuffer<float4x4> g_JointTransforms;
 
 float4x4 GetJointMatrix(int JointIndex, int FirstJoint)
 {
-    JointIndex += FirstJoint;
-#if USE_SKIN_PRE_TRANSFORM
-    JointIndex += 1; // Skip skin pre-transform
-#   if COMPUTE_MOTION_VECTORS
-        JointIndex += 1; // Skip skin pre-transform for previous frame
-#   endif
-#endif
-
-    return g_JointTransforms[JointIndex];
-}
-float4x4 GetSkinPretransform(int FirstJoint)
-{
-    return g_JointTransforms[FirstJoint];
-}
-float4x4 GetPrevSkinPretransform(int FirstJoint)
-{
-    return g_JointTransforms[FirstJoint + 1];
+    return g_JointTransforms[JointIndex + FirstJoint];
 }
 
 #endif // JOINTS_BUFFER_MODE == JOINTS_BUFFER_MODE_STRUCTURED
@@ -215,7 +179,7 @@ void main(in  VSInput  VSIn,
         Transform = mul(SkinMat, Transform);
 #       if USE_SKIN_PRE_TRANSFORM
         {
-            Transform = mul(GetSkinPretransform(FirstJoint), Transform);
+            Transform = mul(Primitive.Transforms.SkinPreTransform, Transform);
         }
 #       endif
     
@@ -229,7 +193,7 @@ void main(in  VSInput  VSIn,
             PrevTransform = mul(PrevSkinMat, PrevTransform);
 #           if USE_SKIN_PRE_TRANSFORM
             {
-                PrevTransform = mul(GetPrevSkinPretransform(FirstJoint), PrevTransform);
+                PrevTransform = mul(Primitive.Transforms.PrevSkinPreTransform, PrevTransform);
             }
 #           endif    
         }
