@@ -1997,8 +1997,22 @@ Uint32 PBR_Renderer::GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags, Uint32 CustomDa
 {
     //struct PBRPrimitiveAttribs
     //{
-    //    GLTFNodeShaderTransforms Transforms;
-    //    float4x4                 PrevNodeMatrix; // #if ENABLE_MOTION_VECTORS
+    //    struct GLTFNodeShaderTransforms
+    //    {
+    //        float4x4 NodeMatrix;
+    //        float4x4 PrevNodeMatrix; // #if ENABLE_MOTION_VECTORS
+    //
+    //        int   JointCount;
+    //        int   FirstJoint;
+    //        float PosBiasX;
+    //        float PosBiasY;
+    //
+    //        float PosBiasZ;
+    //        float PosScaleX;
+    //        float PosScaleY;
+    //        float PosScaleZ;
+    //    } Transforms;
+    //
     //    struct PBRMaterialShaderInfo
     //    {
     //        PBRMaterialBasicAttribs        Basic;
@@ -2022,8 +2036,10 @@ Uint32 PBR_Renderer::GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags, Uint32 CustomDa
                              }
                          });
 
-    return (sizeof(HLSL::GLTFNodeShaderTransforms) +
-            ((Flags & PSO_FLAG_COMPUTE_MOTION_VECTORS) ? sizeof(float4x4) : 0) +
+    return (sizeof(float4x4) +                                                   // Transforms.NodeMatrix
+            ((Flags & PSO_FLAG_COMPUTE_MOTION_VECTORS) ? sizeof(float4x4) : 0) + // Transforms.PrevNodeMatrix
+            sizeof(int) * 2 + sizeof(float) * 6 +                                // Transforms.JointCount ... Transforms.PosScaleZ
+
             sizeof(HLSL::PBRMaterialBasicAttribs) +
             ((Flags & PSO_FLAG_ENABLE_SHEEN) ? sizeof(HLSL::PBRMaterialSheenAttribs) : 0) +
             ((Flags & PSO_FLAG_ENABLE_ANISOTROPY) ? sizeof(HLSL::PBRMaterialAnisotropyAttribs) : 0) +

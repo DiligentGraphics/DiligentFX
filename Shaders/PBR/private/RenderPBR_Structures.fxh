@@ -30,9 +30,6 @@ struct PBRFrameAttribs
 struct PBRPrimitiveAttribs
 {
     GLTFNodeShaderTransforms Transforms;
-#if COMPUTE_MOTION_VECTORS
-    float4x4                 PrevNodeMatrix;
-#endif
     PBRMaterialShaderInfo    Material;
 
     float4 CustomData;

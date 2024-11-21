@@ -198,7 +198,7 @@ void main(in  VSInput  VSIn,
     float4x4 Transform = Primitive.Transforms.NodeMatrix;
 
 #if COMPUTE_MOTION_VECTORS
-    float4x4 PrevTransform = Primitive.PrevNodeMatrix;
+    float4x4 PrevTransform = Primitive.Transforms.PrevNodeMatrix;
 #endif
     
 #if MAX_JOINT_COUNT > 0 && USE_JOINTS

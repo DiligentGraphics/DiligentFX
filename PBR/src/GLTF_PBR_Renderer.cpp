@@ -720,8 +720,22 @@ void* GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                   
 
     //struct PBRPrimitiveAttribs
     //{
-    //    GLTFNodeShaderTransforms Transforms;
-    //    float4x4                 PrevNodeMatrix; // #if ENABLE_MOTION_VECTORS
+    //    struct GLTFNodeShaderTransforms
+    //    {
+    //        float4x4 NodeMatrix;
+    //        float4x4 PrevNodeMatrix; // #if ENABLE_MOTION_VECTORS
+    //
+    //        int   JointCount;
+    //        int   FirstJoint;
+    //        float PosBiasX;
+    //        float PosBiasY;
+    //
+    //        float PosBiasZ;
+    //        float PosScaleX;
+    //        float PosScaleY;
+    //        float PosScaleZ;
+    //    } Transforms;
+    //
     //    struct PBRMaterialShaderInfo
     //    {
     //        PBRMaterialBasicAttribs        Basic;
@@ -735,46 +749,48 @@ void* GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                   
     //    UserDefined CustomData;
     //};
 
-    Uint8* pDstPtr = reinterpret_cast<Uint8*>(pDstShaderAttribs);
+    Uint8* pDstPtr    = reinterpret_cast<Uint8*>(pDstShaderAttribs);
+    auto   WriteValue = [&pDstPtr](auto Val) {
+        *reinterpret_cast<decltype(Val)*>(pDstPtr) = Val;
+        pDstPtr += sizeof(Val);
+    };
 
     {
-        HLSL::GLTFNodeShaderTransforms* pDstTransforms = reinterpret_cast<HLSL::GLTFNodeShaderTransforms*>(pDstPtr);
         if (AttribsData.NodeMatrix != nullptr)
         {
-            WriteShaderMatrix(&pDstTransforms->NodeMatrix, *AttribsData.NodeMatrix, TransposeMatrices);
+            WriteShaderMatrix(pDstPtr, *AttribsData.NodeMatrix, TransposeMatrices);
         }
         else
         {
             UNEXPECTED("Node matrix must not be null");
         }
-        pDstTransforms->JointCount = static_cast<int>(AttribsData.JointCount);
-        pDstTransforms->FirstJoint = static_cast<int>(AttribsData.FirstJoint);
-
-        const float3& PosScale    = AttribsData.PosScale != nullptr ? *AttribsData.PosScale : float3{1, 1, 1};
-        pDstTransforms->PosScaleX = PosScale.x;
-        pDstTransforms->PosScaleY = PosScale.y;
-        pDstTransforms->PosScaleZ = PosScale.z;
-
-        const float3& PosBias    = AttribsData.PosBias != nullptr ? *AttribsData.PosBias : float3{0, 0, 0};
-        pDstTransforms->PosBiasX = PosBias.x;
-        pDstTransforms->PosBiasY = PosBias.y;
-        pDstTransforms->PosBiasZ = PosBias.z;
-
-        static_assert(sizeof(HLSL::GLTFNodeShaderTransforms) % 16 == 0, "Size of HLSL::GLTFNodeShaderTransforms must be a multiple of 16");
-        pDstPtr += sizeof(HLSL::GLTFNodeShaderTransforms);
-    }
-
-    if (AttribsData.PSOFlags & PSO_FLAG_COMPUTE_MOTION_VECTORS)
-    {
-        if (AttribsData.PrevNodeMatrix != nullptr)
-        {
-            WriteShaderMatrix(pDstPtr, *AttribsData.PrevNodeMatrix, TransposeMatrices);
-        }
-        else
-        {
-            UNEXPECTED("Prev node matrix must not be null when motion vectors are enabled");
-        }
         pDstPtr += sizeof(float4x4);
+
+        if (AttribsData.PSOFlags & PSO_FLAG_COMPUTE_MOTION_VECTORS)
+        {
+            if (AttribsData.PrevNodeMatrix != nullptr)
+            {
+                WriteShaderMatrix(pDstPtr, *AttribsData.PrevNodeMatrix, TransposeMatrices);
+            }
+            else
+            {
+                UNEXPECTED("Prev node matrix must not be null when motion vectors are enabled");
+            }
+            pDstPtr += sizeof(float4x4);
+        }
+
+        WriteValue(static_cast<int>(AttribsData.JointCount));
+        WriteValue(static_cast<int>(AttribsData.FirstJoint));
+
+        const float3& PosBias = AttribsData.PosBias != nullptr ? *AttribsData.PosBias : float3{0, 0, 0};
+        WriteValue(PosBias.x);
+        WriteValue(PosBias.y);
+        WriteValue(PosBias.z);
+
+        const float3& PosScale = AttribsData.PosScale != nullptr ? *AttribsData.PosScale : float3{1, 1, 1};
+        WriteValue(PosScale.x);
+        WriteValue(PosScale.y);
+        WriteValue(PosScale.z);
     }
 
     if (AttribsData.pMaterialBasicAttribsDstPtr != nullptr)

@@ -67,10 +67,18 @@
 #   define PBR_NUM_TEXTURE_ATTRIBUTES 0
 #endif
 
+#ifndef COMPUTE_MOTION_VECTORS
+#   define COMPUTE_MOTION_VECTORS 0
+#endif
 
+// When updating this structure, make sure to update GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs,
+// and PBR_Renderer::GetPBRPrimitiveAttribsSize.
 struct GLTFNodeShaderTransforms
 {
 	float4x4 NodeMatrix;
+#if COMPUTE_MOTION_VECTORS
+    float4x4 PrevNodeMatrix;
+#endif
 
 	int   JointCount;
     int   FirstJoint; // Index of the first joint in the joints buffer to start from
