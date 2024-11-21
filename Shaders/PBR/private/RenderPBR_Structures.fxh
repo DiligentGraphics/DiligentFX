@@ -30,7 +30,6 @@ struct PBRFrameAttribs
 struct PBRPrimitiveAttribs
 {
     GLTFNodeShaderTransforms Transforms;
-    PBRMaterialShaderInfo    Material;
 
     float4 CustomData;
 };

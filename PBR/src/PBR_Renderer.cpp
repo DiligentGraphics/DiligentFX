@@ -277,6 +277,7 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
         }(CI)},
     m_Device{pDevice, pStateCache},
     m_PBRPrimitiveAttribsCB{CI.pPrimitiveAttribsCB},
+    m_PBRMaterialAttribsCB{CI.pMaterialAttribsCB},
     m_JointsBuffer{CI.pJointsBuffer}
 {
     if (m_Settings.EnableIBL)
@@ -430,6 +431,10 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
         {
             CreateUniformBuffer(pDevice, GetPBRPrimitiveAttribsSize(PSO_FLAG_ALL), "PBR primitive attribs CB", &m_PBRPrimitiveAttribsCB);
         }
+        if (!m_PBRMaterialAttribsCB)
+        {
+            CreateUniformBuffer(pDevice, GetPBRMaterialAttribsSize(PSO_FLAG_ALL), "PBR material attribs CB", &m_PBRMaterialAttribsCB);
+        }
         if (m_Settings.MaxJointCount > 0)
         {
             const Uint32 MaxJointCount = 65536 / (2 * sizeof(float4x4));
@@ -467,6 +472,7 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
         }
         std::vector<StateTransitionDesc> Barriers;
         Barriers.emplace_back(m_PBRPrimitiveAttribsCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE);
+        Barriers.emplace_back(m_PBRMaterialAttribsCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE);
         if (m_JointsBuffer)
         {
             const RESOURCE_STATE JointsBufferState = m_Settings.JointsBufferMode == JOINTS_BUFFER_MODE_UNIFORM ?
@@ -859,6 +865,7 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
 void PBR_Renderer::InitCommonSRBVars(IShaderResourceBinding* pSRB,
                                      IBuffer*                pFrameAttribs,
                                      bool                    BindPrimitiveAttribsBuffer,
+                                     bool                    BindMaterialAttribsBuffer,
                                      ITextureView*           pShadowMap) const
 {
     if (pSRB == nullptr)
@@ -873,6 +880,15 @@ void PBR_Renderer::InitCommonSRBVars(IShaderResourceBinding* pSRB,
         {
             if (pVar->Get() == nullptr)
                 pVar->Set(m_PBRPrimitiveAttribsCB);
+        }
+    }
+
+    if (BindMaterialAttribsBuffer)
+    {
+        if (IShaderResourceVariable* pVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbMaterialAttribs"))
+        {
+            if (pVar->Get() == nullptr)
+                pVar->Set(m_PBRMaterialAttribsCB);
         }
     }
 
@@ -972,7 +988,8 @@ void PBR_Renderer::CreateSignature()
     SignatureDesc
         .SetUseCombinedTextureSamplers(m_Device.GetDeviceInfo().IsGLDevice())
         .AddResource(SHADER_TYPE_VS_PS, "cbFrameAttribs", SHADER_RESOURCE_TYPE_CONSTANT_BUFFER, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
-        .AddResource(SHADER_TYPE_VS_PS, "cbPrimitiveAttribs", SHADER_RESOURCE_TYPE_CONSTANT_BUFFER, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
+        .AddResource(SHADER_TYPE_VS_PS, "cbPrimitiveAttribs", SHADER_RESOURCE_TYPE_CONSTANT_BUFFER, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
+        .AddResource(SHADER_TYPE_VS_PS, "cbMaterialAttribs", SHADER_RESOURCE_TYPE_CONSTANT_BUFFER, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
 
     if (m_Settings.MaxJointCount > 0)
     {
@@ -2016,18 +2033,33 @@ Uint32 PBR_Renderer::GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags, Uint32 CustomDa
     //        float4x4 PrevSkinPreTransform; // #if USE_JOINTS && USE_SKIN_PRE_TRANSFORM && COMPUTE_MOTION_VECTORS
     //    } Transforms;
     //
-    //    struct PBRMaterialShaderInfo
-    //    {
-    //        PBRMaterialBasicAttribs        Basic;
-    //        PBRMaterialSheenAttribs        Sheen;        // #if ENABLE_SHEEN
-    //        PBRMaterialAnisotropyAttribs   Anisotropy;   // #if ENABLE_ANISOTROPY
-    //        PBRMaterialIridescenceAttribs  Iridescence;  // #if ENABLE_IRIDESCENCE
-    //        PBRMaterialTransmissionAttribs Transmission; // #if ENABLE_TRANSMISSION
-    //        PBRMaterialVolumeAttribs       Volume;       // #if ENABLE_VOLUME
-    //        PBRMaterialTextureAttribs Textures[PBR_NUM_TEXTURE_ATTRIBUTES];
-    //    } Material;
     //    UserDefined CustomData;
     //};
+
+    const bool UseSkinPreTransform     = m_Settings.UseSkinPreTransform && (Flags & PSO_FLAG_USE_JOINTS) != 0;
+    const bool UsePrevSkinPreTransform = UseSkinPreTransform && (Flags & PSO_FLAG_COMPUTE_MOTION_VECTORS) != 0;
+
+    return (sizeof(float4x4) +                                                   // Transforms.NodeMatrix
+            ((Flags & PSO_FLAG_COMPUTE_MOTION_VECTORS) ? sizeof(float4x4) : 0) + // Transforms.PrevNodeMatrix
+            sizeof(int) * 2 + sizeof(float) * 6 +                                // Transforms.JointCount ... Transforms.PosScaleZ
+            (UseSkinPreTransform ? sizeof(float4x4) : 0) +                       // Transforms.SkinPreTransform
+            (UsePrevSkinPreTransform ? sizeof(float4x4) : 0) +                   // Transforms.PrevSkinPreTransform
+
+            CustomDataSize);
+}
+
+Uint32 PBR_Renderer::GetPBRMaterialAttribsSize(PSO_FLAGS Flags) const
+{
+    // struct PBRMaterialShaderInfo
+    // {
+    //     PBRMaterialBasicAttribs        Basic;
+    //     PBRMaterialSheenAttribs        Sheen;        // #if ENABLE_SHEEN
+    //     PBRMaterialAnisotropyAttribs   Anisotropy;   // #if ENABLE_ANISOTROPY
+    //     PBRMaterialIridescenceAttribs  Iridescence;  // #if ENABLE_IRIDESCENCE
+    //     PBRMaterialTransmissionAttribs Transmission; // #if ENABLE_TRANSMISSION
+    //     PBRMaterialVolumeAttribs       Volume;       // #if ENABLE_VOLUME
+    //     PBRMaterialTextureAttribs Textures[PBR_NUM_TEXTURE_ATTRIBUTES];
+    // } Material;
 
     Uint32 NumTextureAttribs = 0;
     ProcessTexturAttribs(Flags, [&](int CurrIndex, PBR_Renderer::TEXTURE_ATTRIB_ID AttribId) //
@@ -2039,23 +2071,13 @@ Uint32 PBR_Renderer::GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags, Uint32 CustomDa
                              }
                          });
 
-    const bool UseSkinPreTransform     = m_Settings.UseSkinPreTransform && (Flags & PSO_FLAG_USE_JOINTS) != 0;
-    const bool UsePrevSkinPreTransform = UseSkinPreTransform && (Flags & PSO_FLAG_COMPUTE_MOTION_VECTORS) != 0;
-
-    return (sizeof(float4x4) +                                                   // Transforms.NodeMatrix
-            ((Flags & PSO_FLAG_COMPUTE_MOTION_VECTORS) ? sizeof(float4x4) : 0) + // Transforms.PrevNodeMatrix
-            sizeof(int) * 2 + sizeof(float) * 6 +                                // Transforms.JointCount ... Transforms.PosScaleZ
-            (UseSkinPreTransform ? sizeof(float4x4) : 0) +                       // Transforms.SkinPreTransform
-            (UsePrevSkinPreTransform ? sizeof(float4x4) : 0) +                   // Transforms.PrevSkinPreTransform
-
-            sizeof(HLSL::PBRMaterialBasicAttribs) +
+    return (sizeof(HLSL::PBRMaterialBasicAttribs) +
             ((Flags & PSO_FLAG_ENABLE_SHEEN) ? sizeof(HLSL::PBRMaterialSheenAttribs) : 0) +
             ((Flags & PSO_FLAG_ENABLE_ANISOTROPY) ? sizeof(HLSL::PBRMaterialAnisotropyAttribs) : 0) +
             ((Flags & PSO_FLAG_ENABLE_IRIDESCENCE) ? sizeof(HLSL::PBRMaterialIridescenceAttribs) : 0) +
             ((Flags & PSO_FLAG_ENABLE_TRANSMISSION) ? sizeof(HLSL::PBRMaterialTransmissionAttribs) : 0) +
             ((Flags & PSO_FLAG_ENABLE_VOLUME) ? sizeof(HLSL::PBRMaterialVolumeAttribs) : 0) +
-            sizeof(HLSL::PBRMaterialTextureAttribs) * NumTextureAttribs +
-            CustomDataSize);
+            sizeof(HLSL::PBRMaterialTextureAttribs) * NumTextureAttribs);
 }
 
 Uint32 PBR_Renderer::GetPRBFrameAttribsSize(Uint32 LightCount, Uint32 ShadowCastingLightCount)

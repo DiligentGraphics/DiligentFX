@@ -536,8 +536,9 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
             GLTF::Material::ALPHA_MODE_BLEND,  // Transparent primitives - last (TODO: depth sorting)
         };
 
-    IPipelineState*         pCurrPSO = nullptr;
-    IShaderResourceBinding* pCurrSRB = nullptr;
+    IPipelineState*         pCurrPSO      = nullptr;
+    IShaderResourceBinding* pCurrSRB      = nullptr;
+    const GLTF::Material*   pCurrMaterial = nullptr;
     PSOKey                  CurrPsoKey;
 
     if (PrevTransforms == nullptr)
@@ -577,8 +578,9 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
             const PSOKey NewKey{PSOFlags, GltfAlphaModeToAlphaMode(AlphaMode), material.DoubleSided ? CULL_MODE_NONE : CULL_MODE_BACK, RenderParams.DebugView};
             if (NewKey != CurrPsoKey)
             {
-                CurrPsoKey = NewKey;
-                pCurrPSO   = nullptr;
+                CurrPsoKey    = NewKey;
+                pCurrPSO      = nullptr;
+                pCurrMaterial = nullptr;
             }
 
             if (pCurrPSO == nullptr)
@@ -647,10 +649,6 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
                 pCtx->MapBuffer(m_PBRPrimitiveAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD, pAttribsData);
                 if (pAttribsData != nullptr)
                 {
-                    static_assert(static_cast<PBR_WORKFLOW>(GLTF::Material::PBR_WORKFLOW_METALL_ROUGH) == PBR_WORKFLOW_METALL_ROUGH, "GLTF::Material::PBR_WORKFLOW_METALL_ROUGH != PBR_WORKFLOW_METALL_ROUGH");
-                    static_assert(static_cast<PBR_WORKFLOW>(GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS) == PBR_WORKFLOW_SPEC_GLOSS, "GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS != PBR_WORKFLOW_SPEC_GLOSS");
-                    static_assert(static_cast<PBR_WORKFLOW>(GLTF::Material::PBR_WORKFLOW_UNLIT) == PBR_WORKFLOW_UNLIT, "GLTF::Material::PBR_WORKFLOW_UNLIT != PBR_WORKFLOW_UNLIT");
-
                     const float4x4  NodeTransform     = NodeGlobalMatrix * RenderParams.ModelTransform;
                     const float4x4& PrevNodeTransform = (CurrPsoKey.GetFlags() & PSO_FLAG_COMPUTE_MOTION_VECTORS) != 0 ?
                         PrevNodeGlobalMatrix * RenderParams.ModelTransform :
@@ -662,7 +660,7 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
                         &PrevNodeTransform,
                         static_cast<Uint32>(JointCount),
                     };
-                    auto* pEndPtr = WritePBRPrimitiveShaderAttribs(pAttribsData, AttribsData, m_Settings.TextureAttribIndices, material, !m_Settings.PackMatrixRowMajor, m_Settings.UseSkinPreTransform);
+                    void* pEndPtr = WritePBRPrimitiveShaderAttribs(pAttribsData, AttribsData, !m_Settings.PackMatrixRowMajor, m_Settings.UseSkinPreTransform);
 
                     VERIFY(reinterpret_cast<uint8_t*>(pEndPtr) <= static_cast<uint8_t*>(pAttribsData) + m_PBRPrimitiveAttribsCB->GetDesc().Size,
                            "Not enough space in the buffer to store primitive attributes");
@@ -673,6 +671,36 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
                 {
                     UNEXPECTED("Unable to map the buffer");
                 }
+            }
+
+            if (pCurrMaterial != &material)
+            {
+                void* pAttribsData = nullptr;
+                pCtx->MapBuffer(m_PBRMaterialAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD, pAttribsData);
+                if (pAttribsData != nullptr)
+                {
+                    static_assert(static_cast<PBR_WORKFLOW>(GLTF::Material::PBR_WORKFLOW_METALL_ROUGH) == PBR_WORKFLOW_METALL_ROUGH, "GLTF::Material::PBR_WORKFLOW_METALL_ROUGH != PBR_WORKFLOW_METALL_ROUGH");
+                    static_assert(static_cast<PBR_WORKFLOW>(GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS) == PBR_WORKFLOW_SPEC_GLOSS, "GLTF::Material::PBR_WORKFLOW_SPEC_GLOSS != PBR_WORKFLOW_SPEC_GLOSS");
+                    static_assert(static_cast<PBR_WORKFLOW>(GLTF::Material::PBR_WORKFLOW_UNLIT) == PBR_WORKFLOW_UNLIT, "GLTF::Material::PBR_WORKFLOW_UNLIT != PBR_WORKFLOW_UNLIT");
+
+                    PBRMaterialShaderAttribsData AttribsData{
+                        CurrPsoKey.GetFlags(),
+                        m_Settings.TextureAttribIndices,
+                        material,
+                    };
+                    void* pEndPtr = WritePBRMaterialShaderAttribs(pAttribsData, AttribsData);
+
+                    VERIFY(reinterpret_cast<uint8_t*>(pEndPtr) <= static_cast<uint8_t*>(pAttribsData) + m_PBRMaterialAttribsCB->GetDesc().Size,
+                           "Not enough space in the buffer to store material attributes");
+
+                    pCtx->UnmapBuffer(m_PBRMaterialAttribsCB, MAP_WRITE);
+                }
+                else
+                {
+                    UNEXPECTED("Unable to map the buffer");
+                }
+
+                pCurrMaterial = &material;
             }
 
             if (primitive.HasIndices())
@@ -710,12 +738,10 @@ Uint8* WriteShaderAttribs(Uint8* pDstPtr, HostStructType* pSrc, const char* Debu
 }
 
 
-void* GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                                           pDstShaderAttribs,
-                                                        const PBRPrimitiveShaderAttribsData&            AttribsData,
-                                                        const std::array<int, TEXTURE_ATTRIB_ID_COUNT>& TextureAttribIndices,
-                                                        const GLTF::Material&                           Material,
-                                                        bool                                            TransposeMatrices,
-                                                        bool                                            UseSkinPreTransform)
+void* GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                                pDstShaderAttribs,
+                                                        const PBRPrimitiveShaderAttribsData& AttribsData,
+                                                        bool                                 TransposeMatrices,
+                                                        bool                                 UseSkinPreTransform)
 {
     // When adding new members, don't forget to update PBR_Renderer::GetPBRPrimitiveAttribsSize!
 
@@ -740,16 +766,6 @@ void* GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                   
     //        float4x4 PrevSkinPreTransform; // #if USE_JOINTS && USE_SKIN_PRE_TRANSFORM && COMPUTE_MOTION_VECTORS
     //    } Transforms;
     //
-    //    struct PBRMaterialShaderInfo
-    //    {
-    //        PBRMaterialBasicAttribs        Basic;
-    //        PBRMaterialSheenAttribs        Sheen;        // #if ENABLE_SHEEN
-    //        PBRMaterialAnisotropyAttribs   Anisotropy;   // #if ENABLE_ANISOTROPY
-    //        PBRMaterialIridescenceAttribs  Iridescence;  // #if ENABLE_IRIDESCENCE
-    //        PBRMaterialTransmissionAttribs Transmission; // #if ENABLE_TRANSMISSION
-    //        PBRMaterialVolumeAttribs       Volume;       // #if ENABLE_VOLUME
-    //        PBRMaterialTextureAttribs Textures[PBR_NUM_TEXTURE_ATTRIBUTES];
-    //    } Material;
     //    UserDefined CustomData;
     //};
 
@@ -823,8 +839,38 @@ void* GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                   
         }
     }
 
-    if (AttribsData.pMaterialBasicAttribsDstPtr != nullptr)
-        *AttribsData.pMaterialBasicAttribsDstPtr = reinterpret_cast<HLSL::PBRMaterialBasicAttribs*>(pDstPtr);
+    {
+        if (AttribsData.CustomData != nullptr)
+        {
+            VERIFY_EXPR(AttribsData.CustomDataSize > 0);
+            memcpy(pDstPtr, AttribsData.CustomData, AttribsData.CustomDataSize);
+        }
+        pDstPtr += AttribsData.CustomDataSize;
+    }
+
+    return pDstPtr;
+}
+
+void* GLTF_PBR_Renderer::WritePBRMaterialShaderAttribs(void*                               pDstShaderAttribs,
+                                                       const PBRMaterialShaderAttribsData& AttribsData)
+{
+    // When adding new members, don't forget to update PBR_Renderer::GetPBRMaterialAttribsSize!
+
+    // struct PBRMaterialShaderInfo
+    // {
+    //     PBRMaterialBasicAttribs        Basic;
+    //     PBRMaterialSheenAttribs        Sheen;        // #if ENABLE_SHEEN
+    //     PBRMaterialAnisotropyAttribs   Anisotropy;   // #if ENABLE_ANISOTROPY
+    //     PBRMaterialIridescenceAttribs  Iridescence;  // #if ENABLE_IRIDESCENCE
+    //     PBRMaterialTransmissionAttribs Transmission; // #if ENABLE_TRANSMISSION
+    //     PBRMaterialVolumeAttribs       Volume;       // #if ENABLE_VOLUME
+    //     PBRMaterialTextureAttribs Textures[PBR_NUM_TEXTURE_ATTRIBUTES];
+    // } Material;
+
+    const GLTF::Material& Material = AttribsData.Material;
+
+    Uint8* pDstPtr = reinterpret_cast<Uint8*>(pDstShaderAttribs);
+
     pDstPtr = WriteShaderAttribs<HLSL::PBRMaterialBasicAttribs>(pDstPtr, &Material.Attribs, "Basic Attribs");
 
     if (AttribsData.PSOFlags & PSO_FLAG_ENABLE_SHEEN)
@@ -859,7 +905,7 @@ void* GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                   
         Uint32 NumTextureAttribs = 0;
         ProcessTexturAttribs(AttribsData.PSOFlags, [&](int CurrIndex, PBR_Renderer::TEXTURE_ATTRIB_ID AttribId) //
                              {
-                                 const int SrcAttribIndex = TextureAttribIndices[AttribId];
+                                 const int SrcAttribIndex = AttribsData.TextureAttribIndices[AttribId];
                                  if (SrcAttribIndex < 0)
                                  {
                                      UNEXPECTED("Shader attribute ", Uint32{AttribId}, " is not initialized");
@@ -873,15 +919,6 @@ void* GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                   
                              });
 
         pDstPtr = reinterpret_cast<Uint8*>(pDstTextures + NumTextureAttribs);
-    }
-
-    {
-        if (AttribsData.CustomData != nullptr)
-        {
-            VERIFY_EXPR(AttribsData.CustomDataSize > 0);
-            memcpy(pDstPtr, AttribsData.CustomData, AttribsData.CustomDataSize);
-        }
-        pDstPtr += AttribsData.CustomDataSize;
     }
 
     return pDstPtr;

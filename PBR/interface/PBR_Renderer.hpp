@@ -360,6 +360,10 @@ public:
         /// If null, the renderer will allocate the buffer.
         IBuffer* pPrimitiveAttribsCB = nullptr;
 
+        /// A pointer to the user-provided material attribs buffer.
+        /// If null, the renderer will allocate the buffer.
+        IBuffer* pMaterialAttribsCB = nullptr;
+
         /// A pointer to the user-provided joints buffer.
         /// If null, the renderer will allocate the buffer.
         IBuffer* pJointsBuffer = nullptr;
@@ -462,6 +466,7 @@ public:
     ITextureView* GetBlackTexSRV() const           { return m_pBlackTexSRV; }
     ITextureView* GetDefaultNormalMapSRV() const   { return m_pDefaultNormalMapSRV; }
     IBuffer*      GetPBRPrimitiveAttribsCB() const {return m_PBRPrimitiveAttribsCB;}
+    IBuffer*      GetPBRMaterialAttribsCB() const  {return m_PBRMaterialAttribsCB;}
     IBuffer*      GetJointsBuffer() const          {return m_JointsBuffer;}
     // clang-format on
 
@@ -692,6 +697,7 @@ public:
     void InitCommonSRBVars(IShaderResourceBinding* pSRB,
                            IBuffer*                pFrameAttribs,
                            bool                    BindPrimitiveAttribsBuffer = true,
+                           bool                    BindMaterialAttribsBuffer  = true,
                            ITextureView*           pShadowMap                 = nullptr) const;
 
     void SetMaterialTexture(IShaderResourceBinding* pSRB, ITextureView* pTexSRV, TEXTURE_ATTRIB_ID TextureId) const;
@@ -704,6 +710,9 @@ public:
 
     /// Returns the PBR primitive attributes shader data size for the given PSO flags.
     Uint32 GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags, Uint32 CustomDataSize = sizeof(float4)) const;
+
+    /// Returns the PBR material attributes shader data size for the given PSO flags.
+    Uint32 GetPBRMaterialAttribsSize(PSO_FLAGS Flags) const;
 
     /// Returns the PBR Frame attributes shader data size for the given light count.
     static Uint32 GetPRBFrameAttribsSize(Uint32 LightCount, Uint32 ShadowCastingLightCount);
@@ -868,6 +877,7 @@ protected:
     IBL_PipelineStateObjectCache m_IBL_PSOCache;
 
     RefCntAutoPtr<IBuffer> m_PBRPrimitiveAttribsCB;
+    RefCntAutoPtr<IBuffer> m_PBRMaterialAttribsCB;
     RefCntAutoPtr<IBuffer> m_PrecomputeEnvMapAttribsCB;
     RefCntAutoPtr<IBuffer> m_JointsBuffer;
 

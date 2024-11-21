@@ -62,6 +62,11 @@ cbuffer cbPrimitiveAttribs
 #   define PRIMITIVE g_Primitive
 #endif
 
+cbuffer cbMaterialAttribs
+{
+    PBRMaterialShaderInfo g_Material;
+}
+
 #if ENABLE_SHADOWS
 Texture2DArray<float>  g_ShadowMap;
 SamplerComparisonState g_ShadowMap_sampler;
@@ -373,7 +378,7 @@ float4 GetLoadingAnimationColor(float3 WorldPos, float Factor)
 PSOutput main(in VSOutput VSOut,
               in bool     IsFrontFace : SV_IsFrontFace)
 {
-    float4 BaseColor = GetBaseColor(VSOut, PRIMITIVE.Material, g_Frame.Renderer.MipBias);
+    float4 BaseColor = GetBaseColor(VSOut, g_Material, g_Frame.Renderer.MipBias);
 
 #if USE_VERTEX_NORMALS
     float3 MeshNormal = VSOut.Normal;
@@ -387,7 +392,7 @@ PSOutput main(in VSOutput VSOut,
     PBRMaterialTextureAttribs NormalTexAttribs;
 #   if USE_NORMAL_MAP
     {
-        NormalTexAttribs = PRIMITIVE.Material.Textures[NormalTextureAttribId];
+        NormalTexAttribs = g_Material.Textures[NormalTextureAttribId];
     }
 #   else
     {
@@ -400,7 +405,7 @@ PSOutput main(in VSOutput VSOut,
     NormalMapUVInfo ClearCoatNMUVInfo;
 #   if USE_CLEAR_COAT_NORMAL_MAP
     {
-        ClearCoatNMUVInfo = GetNormalMapUVInfo(VSOut, PRIMITIVE.Material.Textures[ClearCoatNormalTextureAttribId]);
+        ClearCoatNMUVInfo = GetNormalMapUVInfo(VSOut, g_Material.Textures[ClearCoatNormalTextureAttribId]);
     }
 #   else
     {
@@ -408,7 +413,7 @@ PSOutput main(in VSOutput VSOut,
     }
 #   endif
 
-    PBRMaterialBasicAttribs BasicAttribs = PRIMITIVE.Material.Basic;
+    PBRMaterialBasicAttribs BasicAttribs = g_Material.Basic;
 #   if PBR_ALPHA_MODE == PBR_ALPHA_MODE_MASK
     if (BaseColor.a < BasicAttribs.AlphaMaskCutoff)
     {
@@ -422,7 +427,7 @@ PSOutput main(in VSOutput VSOut,
     }
 #   endif
 
-    SurfaceShadingInfo Shading = GetSurfaceShadingInfo(VSOut, PRIMITIVE.Material, BaseColor, NormalInfo, NMUVInfo, ClearCoatNMUVInfo);
+    SurfaceShadingInfo Shading = GetSurfaceShadingInfo(VSOut, g_Material, BaseColor, NormalInfo, NMUVInfo, ClearCoatNMUVInfo);
     SurfaceLightingInfo SrfLighting = GetDefaultSurfaceLightingInfo();
 
     float4 OutColor;

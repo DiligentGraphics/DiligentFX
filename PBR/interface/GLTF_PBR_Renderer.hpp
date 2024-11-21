@@ -261,15 +261,20 @@ public:
         const float4x4* PrevSkinPreTransform = nullptr; // #if USE_JOINTS && USE_SKIN_PRE_TRANSFORM && COMPUTE_MOTION_VECTORS
         const void*     CustomData           = nullptr;
         size_t          CustomDataSize       = 0;
-
-        HLSL::PBRMaterialBasicAttribs** pMaterialBasicAttribsDstPtr = nullptr;
     };
-    static void* WritePBRPrimitiveShaderAttribs(void*                                           pDstShaderAttribs,
-                                                const PBRPrimitiveShaderAttribsData&            AttribsData,
-                                                const std::array<int, TEXTURE_ATTRIB_ID_COUNT>& TextureAttribIndices,
-                                                const GLTF::Material&                           Material,
-                                                bool                                            TransposeMatrices,
-                                                bool                                            UseSkinPreTransform);
+    static void* WritePBRPrimitiveShaderAttribs(void*                                pDstShaderAttribs,
+                                                const PBRPrimitiveShaderAttribsData& AttribsData,
+                                                bool                                 TransposeMatrices,
+                                                bool                                 UseSkinPreTransform);
+
+    struct PBRMaterialShaderAttribsData
+    {
+        PSO_FLAGS                                       PSOFlags = PSO_FLAG_NONE;
+        const std::array<int, TEXTURE_ATTRIB_ID_COUNT>& TextureAttribIndices;
+        const GLTF::Material&                           Material;
+    };
+    static void* WritePBRMaterialShaderAttribs(void*                               pDstShaderAttribs,
+                                               const PBRMaterialShaderAttribsData& AttribsData);
 
     struct PBRLightShaderAttribsData
     {
