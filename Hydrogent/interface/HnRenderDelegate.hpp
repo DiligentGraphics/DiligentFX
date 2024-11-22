@@ -404,6 +404,7 @@ public:
     IRenderStateCache* GetRenderStateCache() const { return m_pRenderStateCache; }
     IBuffer*           GetFrameAttribsCB() const { return m_FrameAttribsCB; }
     IBuffer*           GetPrimitiveAttribsCB() const { return m_PrimitiveAttribsCB; }
+    IBuffer*           GetMaterialAttribsCB() const { return m_MaterialAttribsCB; }
 
     IShaderResourceBinding* GetMainPassFrameAttribsSRB() const { return m_MainPassFrameAttribsSRB; }
     IShaderResourceBinding* GetShadowPassFrameAttribsSRB(Uint32 LightId) const;
@@ -435,6 +436,7 @@ private:
 
     RefCntAutoPtr<GLTF::ResourceManager> m_ResourceMgr;
     RefCntAutoPtr<IBuffer>               m_PrimitiveAttribsCB;
+    RefCntAutoPtr<IBuffer>               m_MaterialAttribsCB;
     RefCntAutoPtr<IObject>               m_MaterialSRBCache;
     std::shared_ptr<USD_Renderer>        m_USDRenderer;
 

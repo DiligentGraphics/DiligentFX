@@ -544,7 +544,7 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
                             FirstMultiDrawItem.ListItem.IndexBuffer == ListItem.IndexBuffer &&
                             FirstMultiDrawItem.ListItem.NumVertexBuffers == ListItem.NumVertexBuffers &&
                             FirstMultiDrawItem.ListItem.VertexBuffers == ListItem.VertexBuffers &&
-                            FirstMultiDrawItem.ListItem.pMaterial->GetSRB() == ListItem.pMaterial->GetSRB());
+                            FirstMultiDrawItem.ListItem.pMaterial == ListItem.pMaterial);
                 VERIFY_EXPR(AttribsBufferOffset + ListItem.ShaderAttribsDataSize <= AttribsBuffDesc.Size);
 
                 ++FirstMultiDrawItem.DrawCount;
@@ -644,8 +644,6 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
 
         // Write current primitive attributes
 
-        HLSL::PBRMaterialBasicAttribs* pDstMaterialBasicAttribs = nullptr;
-
         // In structured buffer mode, we use the first joint index.
         // In uniform buffer mode, we use the joint buffer offset.
         const Uint32 FirstJoint = (State.RendererSettings.JointsBufferMode == USD_Renderer::JOINTS_BUFFER_MODE_STRUCTURED) ?
@@ -664,20 +662,20 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
             pSkinningData ? reinterpret_cast<const float4x4*>(pSkinningData->GeomBindXform.Data()) : nullptr,
             nullptr, // CustomData
             0,       // CustomDataSize
-            &pDstMaterialBasicAttribs,
         };
-        // Note: if the material changes in the mesh, the mesh material version and/or
-        //       global material version will be updated, and the draw list item GPU
-        //       resources will be updated.
-        const GLTF::Material& MaterialData = ListItem.pMaterial->GetMaterialData();
-        GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(pCurrPrimitive, AttribsData, State.RendererSettings.TextureAttribIndices,
-                                                          MaterialData, /*TransposeMatrices = */ !PackMatrixRowMajor,
+        GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(pCurrPrimitive, AttribsData,
+                                                          /*TransposeMatrices = */ !PackMatrixRowMajor,
                                                           State.RendererSettings.UseSkinPreTransform);
+
+        // TODO:
+#if 0
+        HLSL::PBRMaterialBasicAttribs* pDstMaterialBasicAttribs = nullptr;
 
         pDstMaterialBasicAttribs->BaseColorFactor = MaterialData.Attribs.BaseColorFactor * DisplayColor;
         // Write Mesh ID to material custom data to make sure that selection works for fallback PSO.
         // Using PBRPrimitiveShaderAttribs's CustomData will not work as fallback PSO uses different flags.
         pDstMaterialBasicAttribs->CustomData.x = ListItem.MeshUID;
+#endif
 
         ListItem.PrevTransform = Transform.Matrix;
 
@@ -864,7 +862,7 @@ void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
                     State.Hash = ComputeHash(State.Item.pPSO,
                                              State.Item.IndexBuffer,
                                              State.Item.NumVertexBuffers,
-                                             State.Item.pMaterial->GetSRB());
+                                             State.Item.pMaterial);
                     for (Uint32 i = 0; i < State.Item.NumVertexBuffers; ++i)
                     {
                         HashCombine(State.Hash, State.Item.VertexBuffers[i]);
@@ -880,10 +878,10 @@ void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
                 return false;
 
             // clang-format off
-            if (Item.pPSO              != rhs.Item.pPSO ||
-                Item.IndexBuffer       != rhs.Item.IndexBuffer ||
-                Item.NumVertexBuffers  != rhs.Item.NumVertexBuffers ||
-                Item.pMaterial->GetSRB() != rhs.Item.pMaterial->GetSRB())
+            if (Item.pPSO             != rhs.Item.pPSO ||
+                Item.IndexBuffer      != rhs.Item.IndexBuffer ||
+                Item.NumVertexBuffers != rhs.Item.NumVertexBuffers ||
+                Item.pMaterial        != rhs.Item.pMaterial)
                 return false;
             // clang-format on
 
@@ -947,7 +945,7 @@ void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
                       }
                       else
                       {
-                          // Sort by PSO first, then by material SRB, then by entity ID
+                          // Sort by PSO first, then by material SRB, then by material, and finally by entity ID
                           if (Item0.pPSO < Item1.pPSO)
                               Item0PrecedesItem1 = true;
                           else if (Item0.pPSO > Item1.pPSO)
@@ -955,6 +953,10 @@ void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
                           else if (Item0.pMaterial->GetSRB() < Item1.pMaterial->GetSRB())
                               Item0PrecedesItem1 = true;
                           else if (Item0.pMaterial->GetSRB() > Item1.pMaterial->GetSRB())
+                              Item0PrecedesItem1 = false;
+                          else if (Item0.pMaterial < Item1.pMaterial)
+                              Item0PrecedesItem1 = true;
+                          else if (Item0.pMaterial > Item1.pMaterial)
                               Item0PrecedesItem1 = false;
                           else
                               Item0PrecedesItem1 = Item0.MeshEntity < Item1.MeshEntity;
@@ -1225,6 +1227,10 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
 
 void HnRenderPass::RenderPendingDrawItems(RenderState& State)
 {
+    const HnMaterial* pCurrMaterial      = nullptr;
+    IBuffer* const    pMaterialAttribsCB = State.RenderDelegate.GetMaterialAttribsCB();
+    VERIFY_EXPR(pMaterialAttribsCB != nullptr);
+
     size_t item_idx           = 0;
     Uint32 JointsBufferOffset = ~0u;
     while (item_idx < m_PendingDrawItems.size())
@@ -1233,6 +1239,22 @@ void HnRenderPass::RenderPendingDrawItems(RenderState& State)
         const DrawListItem&    ListItem    = PendingItem.ListItem;
 
         State.SetPipelineState(m_UseFallbackPSO ? m_FallbackPSO : ListItem.pPSO);
+
+        if (pCurrMaterial != ListItem.pMaterial)
+        {
+            // Note: if the material changes in the mesh, the mesh material version and/or
+            //       global material version will be updated, and the draw list item GPU
+            //       resources will be updated.
+            GLTF_PBR_Renderer::PBRMaterialShaderAttribsData AttribsData{
+                ListItem.PSOFlags,
+                State.RendererSettings.TextureAttribIndices,
+                ListItem.pMaterial->GetMaterialData(),
+            };
+            MapHelper<Uint8> pMaterialData{State.pCtx, pMaterialAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
+            GLTF_PBR_Renderer::WritePBRMaterialShaderAttribs(pMaterialData, AttribsData);
+
+            pCurrMaterial = ListItem.pMaterial;
+        }
 
         IShaderResourceBinding* pSRB = ListItem.pMaterial->GetSRB(PendingItem.AttribsBufferOffset);
         VERIFY(pSRB != nullptr, "Material SRB is null. This may happen if UpdateSRB was not called for this material.");

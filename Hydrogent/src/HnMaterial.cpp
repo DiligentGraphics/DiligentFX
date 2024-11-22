@@ -674,21 +674,21 @@ public:
         return it->second;
     }
 
-    void UpdatePrimitiveAttribsBufferRange(const IShaderResourceBinding* pSRB, Uint32 Range)
+    void UpdateMaterialAttribsBufferRange(const IShaderResourceBinding* pSRB, Uint32 Range)
     {
-        std::lock_guard<std::mutex> Lock{m_PrimitiveAttribsBufferRangeMtx};
+        std::lock_guard<std::mutex> Lock{m_MaterialAttribsBufferRangeMtx};
 
-        auto& SRBRange = m_PrimitiveAttribsBufferRange[pSRB];
+        auto& SRBRange = m_MaterialAttribsBufferRange[pSRB];
         SRBRange       = std::max(SRBRange, Range);
     }
 
-    Uint32 GetPrimitiveAttribsBufferRange(const IShaderResourceBinding* pSRB) const
+    Uint32 GetMaterialAttribsBufferRange(const IShaderResourceBinding* pSRB) const
     {
-        std::lock_guard<std::mutex> Lock{m_PrimitiveAttribsBufferRangeMtx};
+        std::lock_guard<std::mutex> Lock{m_MaterialAttribsBufferRangeMtx};
 
-        auto it = m_PrimitiveAttribsBufferRange.find(pSRB);
-        VERIFY(it != m_PrimitiveAttribsBufferRange.end(), "SRB is not found in the cache");
-        return it != m_PrimitiveAttribsBufferRange.end() ? it->second : 0;
+        auto it = m_MaterialAttribsBufferRange.find(pSRB);
+        VERIFY(it != m_MaterialAttribsBufferRange.end(), "SRB is not found in the cache");
+        return it != m_MaterialAttribsBufferRange.end() ? it->second : 0;
     }
 
 private:
@@ -711,8 +711,8 @@ private:
     std::unordered_map<ShaderTextureIndexingIdType, const StaticShaderTextureIdsArrayType&> m_IdToIndexing;
 
     // A mapping from the SRB to the maximum buffer range required by a material that uses the SRB.
-    mutable std::mutex                                        m_PrimitiveAttribsBufferRangeMtx;
-    std::unordered_map<const IShaderResourceBinding*, Uint32> m_PrimitiveAttribsBufferRange;
+    mutable std::mutex                                        m_MaterialAttribsBufferRangeMtx;
+    std::unordered_map<const IShaderResourceBinding*, Uint32> m_MaterialAttribsBufferRange;
 };
 
 const PBR_Renderer::StaticShaderTextureIdsArrayType& HnMaterial::GetStaticShaderTextureIds(IObject* SRBCache, ShaderTextureIndexingIdType Id)
@@ -839,10 +839,11 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
     if (TexStorageVersion != m_TexRegistryStorageVersion)
     {
         m_SRB.Release();
-        m_PrimitiveAttribsVar            = nullptr;
-        m_JointTransformsVar             = nullptr;
-        m_PBRPrimitiveAttribsBufferRange = 0;
-        m_TexRegistryStorageVersion      = TexStorageVersion;
+        m_PrimitiveAttribsVar           = nullptr;
+        m_MaterialAttribsVar            = nullptr;
+        m_JointTransformsVar            = nullptr;
+        m_PBRMaterialAttribsBufferRange = 0;
+        m_TexRegistryStorageVersion     = TexStorageVersion;
     }
 
     if (m_SRB)
@@ -1030,13 +1031,15 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
         UsdRenderer.CreateResourceBinding(&pSRB, 1);
         VERIFY_EXPR(pSRB);
 
-        // NOTE: We cannot set the cbPrimitiveAttribs buffer here because different materials that use the same SRB
+        // NOTE: We cannot set the cbMaterialAttribs buffer here because different materials that use the same SRB
         //       may require different buffer ranges. We first compute the maximum buffer range for each SRB
-        //       and then set the buffer in BindPrimitiveAttribsBuffer().
+        //       and then set the buffer in BindMaterialAttribsBuffer().
         constexpr bool BindPrimitiveAttribsBuffer = false;
+        constexpr bool BindMaterialAttribsBuffer  = false;
         UsdRenderer.InitCommonSRBVars(pSRB,
                                       nullptr, // Frame attribs buffer is in SRB0
-                                      BindPrimitiveAttribsBuffer);
+                                      BindPrimitiveAttribsBuffer,
+                                      BindMaterialAttribsBuffer);
 
         if (BindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_ATLAS ||
             BindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_DYNAMIC)
@@ -1131,15 +1134,19 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
 
     if (m_SRB)
     {
-        const PBR_Renderer::PSO_FLAGS PSOFlags = HnRenderPass::GetMaterialPSOFlags(*this)
-            // Since we don't know whether the mesh will use joints, we have to reserve space for the joint transforms.
-            | PBR_Renderer::PSO_FLAG_USE_JOINTS;
-
-        const Uint32 PBRPrimitiveAttribsSize = UsdRenderer.GetPBRPrimitiveAttribsSize(PSOFlags);
-        const Uint32 PrimitiveArraySize      = std::max(UsdRenderer.GetSettings().PrimitiveArraySize, 1u);
-        SRBCache->UpdatePrimitiveAttribsBufferRange(m_SRB, PBRPrimitiveAttribsSize * PrimitiveArraySize);
+        const PBR_Renderer::PSO_FLAGS PSOFlags               = HnRenderPass::GetMaterialPSOFlags(*this);
+        const Uint32                  PBRMaterialAttribsSize = UsdRenderer.GetPBRMaterialAttribsSize(PSOFlags);
+        SRBCache->UpdateMaterialAttribsBufferRange(m_SRB, PBRMaterialAttribsSize);
         m_JointTransformsVar = m_SRB->GetVariableByName(SHADER_TYPE_VERTEX, UsdRenderer.GetJointTransformsVarName());
         VERIFY_EXPR(m_JointTransformsVar != nullptr || RendererSettings.MaxJointCount == 0);
+
+        const Uint32 PBRPrimitiveAttribsSize = UsdRenderer.GetPBRPrimitiveAttribsSize(PBR_Renderer::PSO_FLAG_ALL);
+        const Uint32 PrimitiveArraySize      = std::max(UsdRenderer.GetSettings().PrimitiveArraySize, 1u);
+        m_PBRPrimitiveAttribsBufferRange     = PBRPrimitiveAttribsSize * PrimitiveArraySize;
+
+        m_PrimitiveAttribsVar = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbPrimitiveAttribs");
+        VERIFY_EXPR(m_PrimitiveAttribsVar != nullptr);
+        m_PrimitiveAttribsVar->SetBufferRange(UsdRenderer.GetPBRPrimitiveAttribsCB(), 0, m_PBRPrimitiveAttribsBufferRange);
     }
     else
     {
@@ -1149,33 +1156,31 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
     return true;
 }
 
-void HnMaterial::BindPrimitiveAttribsBuffer(HnRenderDelegate& RendererDelegate)
+void HnMaterial::BindMaterialAttribsBuffer(HnRenderDelegate& RendererDelegate)
 {
-    if (!m_SRB || m_PrimitiveAttribsVar != nullptr)
+    if (!m_SRB || m_MaterialAttribsVar != nullptr)
         return;
 
-    m_PrimitiveAttribsVar = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbPrimitiveAttribs");
-    if (m_PrimitiveAttribsVar == nullptr)
+    m_MaterialAttribsVar = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbMaterialAttribs");
+    if (m_MaterialAttribsVar == nullptr)
     {
-        UNEXPECTED("Failed to find 'cbPrimitiveAttribs' variable in the shader resource binding.");
+        UNEXPECTED("Failed to find 'cbMaterialAttribs' variable in the shader resource binding.");
         return;
     }
 
     RefCntAutoPtr<HnMaterialSRBCache> SRBCache{RendererDelegate.GetMaterialSRBCache(), IID_HnMaterialSRBCache};
     VERIFY_EXPR(SRBCache);
 
-    m_PBRPrimitiveAttribsBufferRange = SRBCache->GetPrimitiveAttribsBufferRange(m_SRB);
-    VERIFY(m_PBRPrimitiveAttribsBufferRange != 0,
-           "PBRRimitiveAttribsBufferRange is zero, which indicates the SRB was not found in the cache. This appears to be a bug.");
+    m_PBRMaterialAttribsBufferRange = SRBCache->GetMaterialAttribsBufferRange(m_SRB);
+    VERIFY(m_PBRMaterialAttribsBufferRange != 0,
+           "PBRMaterialAttribsBufferRange is zero, which indicates the SRB was not found in the cache. This appears to be a bug.");
 
-    if (m_PrimitiveAttribsVar->Get() != nullptr)
+    // Check if the buffer has already been set by another material that uses the same SRB
+    if (m_MaterialAttribsVar->Get() == nullptr)
     {
-        // The buffer has already been set by another material that uses the same SRB
-        return;
+        USD_Renderer& UsdRenderer = *RendererDelegate.GetUSDRenderer();
+        m_MaterialAttribsVar->SetBufferRange(UsdRenderer.GetPBRMaterialAttribsCB(), 0, m_PBRMaterialAttribsBufferRange);
     }
-
-    USD_Renderer& UsdRenderer = *RendererDelegate.GetUSDRenderer();
-    m_PrimitiveAttribsVar->SetBufferRange(UsdRenderer.GetPBRPrimitiveAttribsCB(), 0, m_PBRPrimitiveAttribsBufferRange);
 }
 
 } // namespace USD

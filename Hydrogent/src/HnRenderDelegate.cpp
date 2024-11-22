@@ -109,6 +109,17 @@ static RefCntAutoPtr<IBuffer> CreatePrimitiveAttribsCB(IRenderDevice* pDevice)
     return PrimitiveAttribsCB;
 }
 
+static RefCntAutoPtr<IBuffer> CreateMaterialAttribsCB(IRenderDevice* pDevice)
+{
+    // Temporary
+    Uint64 Size  = 1024;
+    USAGE  Usage = USAGE_DYNAMIC;
+
+    RefCntAutoPtr<IBuffer> MaterialAttribsCB;
+    CreateUniformBuffer(pDevice, Size, "PBR material attribs", &MaterialAttribsCB, Usage);
+    return MaterialAttribsCB;
+}
+
 static RefCntAutoPtr<IBuffer> CreateJointsBuffer(IRenderDevice* pDevice, USD_Renderer::JOINTS_BUFFER_MODE Mode, Uint32& MaxJointCount)
 {
     BufferDesc Desc;
@@ -165,6 +176,7 @@ static RefCntAutoPtr<IBuffer> CreateJointsBuffer(IRenderDevice* pDevice, USD_Ren
 
 static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::CreateInfo& RenderDelegateCI,
                                                        IBuffer*                            pPrimitiveAttribsCB,
+                                                       IBuffer*                            pMaterialAttribsCB,
                                                        IObject*                            MaterialSRBCache)
 {
     USD_Renderer::CreateInfo USDRendererCI;
@@ -292,6 +304,7 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
     USDRendererCI.InputLayout.NumElements    = _countof(Inputs);
 
     USDRendererCI.pPrimitiveAttribsCB = pPrimitiveAttribsCB;
+    USDRendererCI.pMaterialAttribsCB  = pMaterialAttribsCB;
     USDRendererCI.pJointsBuffer       = pJointsCB;
 
     return std::make_shared<USD_Renderer>(RenderDelegateCI.pDevice, RenderDelegateCI.pRenderStateCache, RenderDelegateCI.pContext, USDRendererCI);
@@ -377,8 +390,9 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
     m_pRenderStateCache{CI.pRenderStateCache},
     m_ResourceMgr{CreateResourceManager(CI)},
     m_PrimitiveAttribsCB{CreatePrimitiveAttribsCB(CI.pDevice)},
+    m_MaterialAttribsCB{CreateMaterialAttribsCB(CI.pDevice)},
     m_MaterialSRBCache{HnMaterial::CreateSRBCache()},
-    m_USDRenderer{CreateUSDRenderer(CI, m_PrimitiveAttribsCB, m_MaterialSRBCache)},
+    m_USDRenderer{CreateUSDRenderer(CI, m_PrimitiveAttribsCB, m_MaterialAttribsCB, m_MaterialSRBCache)},
     m_TextureRegistry{
         std::make_shared<HnTextureRegistry>(
             HnTextureRegistry::CreateInfo{
@@ -676,11 +690,13 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
             return SRB;
         }
 
-        // Primitive attribs buffer is in SRB1
+        // Primitive attribs and material attribs buffers are in SRB1
         constexpr bool BindPrimitiveAttribsBuffer = false;
+        constexpr bool BindMaterialAttribsBuffer  = false;
         m_USDRenderer->InitCommonSRBVars(SRB,
                                          nullptr, // pFrameAttribs
                                          BindPrimitiveAttribsBuffer,
+                                         BindMaterialAttribsBuffer,
                                          ShadowSRV);
         if (auto* pVar = SRB->GetVariableByName(SHADER_TYPE_VERTEX, "cbFrameAttribs"))
         {
@@ -747,7 +763,7 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
             }
             for (auto* pMat : m_Materials)
             {
-                pMat->BindPrimitiveAttribsBuffer(*this);
+                pMat->BindMaterialAttribsBuffer(*this);
             }
 
             if (AllMaterialsUpdated)

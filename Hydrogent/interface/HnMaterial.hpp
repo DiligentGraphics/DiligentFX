@@ -79,7 +79,7 @@ public:
     static RefCntAutoPtr<IObject> CreateSRBCache();
 
     bool UpdateSRB(HnRenderDelegate& RendererDelegate);
-    void BindPrimitiveAttribsBuffer(HnRenderDelegate& RendererDelegate);
+    void BindMaterialAttribsBuffer(HnRenderDelegate& RendererDelegate);
 
     IShaderResourceBinding* GetSRB() const { return m_SRB; }
     IShaderResourceBinding* GetSRB(Uint32 PrimitiveAttribsOffset) const
@@ -127,6 +127,7 @@ public:
     }
 
     Uint32 GetPBRPrimitiveAttribsBufferRange() const { return m_PBRPrimitiveAttribsBufferRange; }
+    Uint32 GetPBRMaterailAttribsBufferRange() const { return m_PBRMaterialAttribsBufferRange; }
 
 private:
     HnMaterial(pxr::SdfPath const& id);
@@ -163,6 +164,7 @@ private:
 
     RefCntAutoPtr<IShaderResourceBinding> m_SRB;
     IShaderResourceVariable*              m_PrimitiveAttribsVar = nullptr; // cbPrimitiveAttribs
+    IShaderResourceVariable*              m_MaterialAttribsVar  = nullptr; // cbMaterialAttribs
     IShaderResourceVariable*              m_JointTransformsVar  = nullptr; // cbJointTransforms
 
     GLTF::Material m_MaterialData;
@@ -175,6 +177,9 @@ private:
 
     // The range that is used to bind the cbPrimitiveAttribs buffer.
     Uint32 m_PBRPrimitiveAttribsBufferRange = 0;
+
+    // The range that is used to bind the cbMaterialAttribs buffer.
+    Uint32 m_PBRMaterialAttribsBufferRange = 0;
 
     // Current texture storage version
     Uint32 m_TexRegistryStorageVersion = 0;
