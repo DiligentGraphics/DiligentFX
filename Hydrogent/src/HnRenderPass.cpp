@@ -144,10 +144,22 @@ struct HnRenderPass::RenderState
         pPSO = pNewPSO;
     }
 
-    void CommitShaderResources(IShaderResourceBinding* pNewSRB)
+    void CommitMaterialSRB(const HnMaterial& Material, Uint32 PrimitiveAttribsOffset, Uint32 MaterialAttribsOffset)
     {
-        VERIFY_EXPR(pNewSRB != nullptr);
-        if (pNewSRB == nullptr || pNewSRB == this->pMaterialSRB)
+        IShaderResourceBinding* pNewSRB = Material.GetSRB(PrimitiveAttribsOffset);
+        if (pNewSRB == nullptr)
+        {
+            UNEXPECTED("Material SRB is null. This may happen if UpdateSRB was not called for this material.");
+            return;
+        }
+
+        if (pNewSRB != this->pMaterialSRB || this->MaterialBufferOffset != MaterialAttribsOffset)
+        {
+            Material.SetMaterialAttribsBufferOffset(MaterialAttribsOffset);
+            this->MaterialBufferOffset = MaterialAttribsOffset;
+        }
+
+        if (pNewSRB == this->pMaterialSRB)
             return;
 
         if (pFrameSRB == nullptr)
@@ -214,6 +226,8 @@ private:
 
     IBuffer* pIndexBuffer = nullptr;
 
+    Uint32 MaterialBufferOffset = 0;
+
     Uint32                                         NumVertexBuffers = 0;
     std::array<IBuffer*, VERTEX_BUFFER_SLOT_COUNT> ppVertexBuffers  = {};
 
@@ -264,6 +278,55 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
     }
 
     Execute(*static_cast<HnRenderPassState*>(RPState.get()), Tags);
+}
+
+size_t HnRenderPass::UpdateMaterialAttribsBuffer(RenderState& State, size_t FirstItemIdx)
+{
+    IBuffer* const pMaterialAttribsCB = State.RenderDelegate.GetMaterialAttribsCB();
+    VERIFY_EXPR(pMaterialAttribsCB != nullptr);
+
+    MapHelper<Uint8> pMaterialData{State.pCtx, pMaterialAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
+
+    size_t ItemIdx = FirstItemIdx;
+    while (ItemIdx < m_DrawList.size())
+    {
+        DrawListItem& ListItem = m_DrawList[ItemIdx];
+        if (!ListItem.DrawItem.IsValid())
+        {
+            // All invalid draw items are grouped at the end of the draw list.
+#ifdef DILIGENT_DEBUG
+            for (size_t i = ItemIdx + 1; i < m_DrawList.size(); ++i)
+            {
+                VERIFY(!m_DrawList[i].DrawItem.IsValid(), "Invalid draw items must be grouped at the end of the draw list");
+            }
+
+#endif
+            ItemIdx = m_DrawList.size();
+            break;
+        }
+
+        if (ItemIdx > FirstItemIdx && ListItem.MaterialAttribsOffset < m_DrawList[ItemIdx - 1].MaterialAttribsOffset)
+        {
+            // The offset was reset - there is no more space in the buffer
+            break;
+        }
+
+        if (ItemIdx == FirstItemIdx || ListItem.MaterialAttribsOffset > m_DrawList[ItemIdx - 1].MaterialAttribsOffset)
+        {
+            // Note: if the material changes in the mesh, the mesh material version and/or
+            //       global material version will be updated, and the draw list item GPU
+            //       resources will be updated.
+            GLTF_PBR_Renderer::PBRMaterialShaderAttribsData AttribsData{
+                ListItem.PSOFlags,
+                State.RendererSettings.TextureAttribIndices,
+                ListItem.pMaterial->GetMaterialData(),
+            };
+            GLTF_PBR_Renderer::WritePBRMaterialShaderAttribs(pMaterialData + ListItem.MaterialAttribsOffset, AttribsData);
+        }
+        ++ItemIdx;
+    }
+
+    return ItemIdx;
 }
 
 HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, const pxr::TfTokenVector& Tags)
@@ -480,7 +543,8 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
                                          const HnMesh::Components::Visibility,
                                          const HnMesh::Components::Skinning>();
 
-    Uint32 MultiDrawCount = 0;
+    Uint32 MultiDrawCount                  = 0;
+    size_t NextMaterialAttribsResetItemIdx = 0;
     for (size_t item_idx = 0; item_idx < m_DrawList.size(); ++item_idx)
     {
         DrawListItem& ListItem = m_DrawList[item_idx];
@@ -514,6 +578,11 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
 
         if (!MeshVisibile)
             continue;
+
+        if (item_idx >= NextMaterialAttribsResetItemIdx)
+        {
+            NextMaterialAttribsResetItemIdx = UpdateMaterialAttribsBuffer(State, item_idx);
+        }
 
         if (MultiDrawCount == PrimitiveArraySize)
             MultiDrawCount = 0;
@@ -563,7 +632,7 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
             // Note that the actual attribs size may be smaller than the range, but we need
             // to check for the entire range to avoid errors because this range is set in
             // the shader variable in the SRB.
-            if (AttribsBufferOffset + ListItem.ShaderAttribsBufferRange > AttribsBuffDesc.Size)
+            if (AttribsBufferOffset + ListItem.PrimitiveAttribsBufferRange > AttribsBuffDesc.Size)
             {
                 // The buffer is full. Render the pending items and start filling the buffer from the beginning.
                 FlushPendingDraws();
@@ -682,6 +751,7 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
         m_PendingDrawItems.push_back(PendingDrawItem{
             ListItem,
             AttribsBufferOffset,
+            ListItem.MaterialAttribsOffset,
             pSkinningData != nullptr ? JointsBufferOffset : ~0u,
         });
 
@@ -989,6 +1059,50 @@ void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
         }
     }
 
+    // Set material attributes offsets
+    if (!m_DrawList.empty())
+    {
+        IBuffer* const pMaterialAttribsCB = State.RenderDelegate.GetMaterialAttribsCB();
+        VERIFY_EXPR(pMaterialAttribsCB != nullptr);
+        const Uint32 MaterialAttribsBufferSize = static_cast<Uint32>(pMaterialAttribsCB->GetDesc().Size);
+
+        m_DrawList[0].MaterialAttribsOffset = 0;
+        for (size_t item_idx = 1; item_idx < m_DrawList.size(); ++item_idx)
+        {
+            DrawListItem& ListItem = m_DrawList[item_idx];
+            if (!ListItem.DrawItem.IsValid())
+            {
+                // All invalid draw items are grouped at the end of the draw list.
+#ifdef DILIGENT_DEBUG
+                for (size_t i = item_idx + 1; i < m_DrawList.size(); ++i)
+                {
+                    VERIFY(!m_DrawList[i].DrawItem.IsValid(), "Invalid draw items must be grouped at the end of the draw list");
+                }
+
+#endif
+                break;
+            }
+
+            const DrawListItem& PrevListItem = m_DrawList[item_idx - 1];
+            if (ListItem.pPSO == PrevListItem.pPSO &&
+                ListItem.pMaterial == PrevListItem.pMaterial)
+            {
+                ListItem.MaterialAttribsOffset = PrevListItem.MaterialAttribsOffset;
+            }
+            else
+            {
+                const Uint32 MaterialAttribsSize = State.USDRenderer.GetPBRMaterialAttribsSize(PrevListItem.PSOFlags);
+
+                ListItem.MaterialAttribsOffset = AlignUp(PrevListItem.MaterialAttribsOffset + MaterialAttribsSize, State.ConstantBufferOffsetAlignment);
+                if (ListItem.MaterialAttribsOffset + ListItem.pMaterial->GetPBRMaterailAttribsBufferRange() > MaterialAttribsBufferSize)
+                {
+                    // No more space - start from the beginning
+                    ListItem.MaterialAttribsOffset = 0;
+                }
+            }
+        }
+    }
+
     m_DrawListItemsDirtyFlags = DRAW_LIST_ITEM_DIRTY_FLAG_NONE;
 }
 
@@ -1144,11 +1258,11 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
             UNEXPECTED("Unexpected render mode");
         }
 
-        ListItem.ShaderAttribsDataSize    = State.USDRenderer.GetPBRPrimitiveAttribsSize(PSOFlags);
-        ListItem.ShaderAttribsBufferRange = pMaterial->GetPBRPrimitiveAttribsBufferRange();
-        VERIFY(ListItem.ShaderAttribsDataSize <= ListItem.ShaderAttribsBufferRange,
+        ListItem.ShaderAttribsDataSize       = State.USDRenderer.GetPBRPrimitiveAttribsSize(PSOFlags);
+        ListItem.PrimitiveAttribsBufferRange = pMaterial->GetPBRPrimitiveAttribsBufferRange();
+        VERIFY(ListItem.ShaderAttribsDataSize <= ListItem.PrimitiveAttribsBufferRange,
                "Attribs data size (", ListItem.ShaderAttribsDataSize, ") computed from the PSO flags exceeds the attribs buffer range (",
-               ListItem.ShaderAttribsBufferRange, ") computed from material PSO flags. The latter is used by HnMaterial to set the buffer range.");
+               ListItem.PrimitiveAttribsBufferRange, ") computed from material PSO flags. The latter is used by HnMaterial to set the buffer range.");
 
         VERIFY_EXPR(ListItem.pPSO != nullptr);
         m_PendingPSOs.emplace(ListItem.pPSO, false);
@@ -1227,10 +1341,6 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
 
 void HnRenderPass::RenderPendingDrawItems(RenderState& State)
 {
-    const HnMaterial* pCurrMaterial      = nullptr;
-    IBuffer* const    pMaterialAttribsCB = State.RenderDelegate.GetMaterialAttribsCB();
-    VERIFY_EXPR(pMaterialAttribsCB != nullptr);
-
     size_t item_idx           = 0;
     Uint32 JointsBufferOffset = ~0u;
     while (item_idx < m_PendingDrawItems.size())
@@ -1240,24 +1350,6 @@ void HnRenderPass::RenderPendingDrawItems(RenderState& State)
 
         State.SetPipelineState(m_UseFallbackPSO ? m_FallbackPSO : ListItem.pPSO);
 
-        if (pCurrMaterial != ListItem.pMaterial)
-        {
-            // Note: if the material changes in the mesh, the mesh material version and/or
-            //       global material version will be updated, and the draw list item GPU
-            //       resources will be updated.
-            GLTF_PBR_Renderer::PBRMaterialShaderAttribsData AttribsData{
-                ListItem.PSOFlags,
-                State.RendererSettings.TextureAttribIndices,
-                ListItem.pMaterial->GetMaterialData(),
-            };
-            MapHelper<Uint8> pMaterialData{State.pCtx, pMaterialAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
-            GLTF_PBR_Renderer::WritePBRMaterialShaderAttribs(pMaterialData, AttribsData);
-
-            pCurrMaterial = ListItem.pMaterial;
-        }
-
-        IShaderResourceBinding* pSRB = ListItem.pMaterial->GetSRB(PendingItem.AttribsBufferOffset);
-        VERIFY(pSRB != nullptr, "Material SRB is null. This may happen if UpdateSRB was not called for this material.");
         if (State.RendererSettings.JointsBufferMode == USD_Renderer::JOINTS_BUFFER_MODE_UNIFORM)
         {
             if (PendingItem.JointsBufferOffset != ~0u && PendingItem.JointsBufferOffset != JointsBufferOffset)
@@ -1270,7 +1362,7 @@ void HnRenderPass::RenderPendingDrawItems(RenderState& State)
         {
             // In structud buffer mode, we use the first joint index, so we do not need to set the joint buffer offset.
         }
-        State.CommitShaderResources(pSRB);
+        State.CommitMaterialSRB(*ListItem.pMaterial, PendingItem.PrimitiveAttribsOffset, PendingItem.MaterialAttribsOffset);
 
         State.SetIndexBuffer(ListItem.IndexBuffer);
         State.SetVertexBuffers(ListItem.VertexBuffers.data(), ListItem.NumVertexBuffers);

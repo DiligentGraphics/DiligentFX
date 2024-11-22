@@ -175,7 +175,10 @@ private:
 
         // Primitive attributes buffer range used to set the cbPrimitiveAttribs buffer
         // in the material's SRB.
-        Uint32 ShaderAttribsBufferRange = 0;
+        Uint32 PrimitiveAttribsBufferRange = 0;
+
+        /// Offset in the material attribs buffer.
+        Uint32 MaterialAttribsOffset = 0;
 
         IBuffer* IndexBuffer = nullptr;
 
@@ -193,7 +196,8 @@ private:
     void UpdateDrawListGPUResources(RenderState& State);
     void UpdateDrawListItemGPUResources(DrawListItem& ListItem, RenderState& State, DRAW_LIST_ITEM_DIRTY_FLAGS DirtyFlags);
 
-    void RenderPendingDrawItems(RenderState& State);
+    size_t UpdateMaterialAttribsBuffer(RenderState& State, size_t FirstItemIdx);
+    void   RenderPendingDrawItems(RenderState& State);
 
     GraphicsPipelineDesc GetGraphicsDesc(const HnRenderPassState& RPState, bool UseStripTopology) const;
 
@@ -214,7 +218,8 @@ private:
     struct PendingDrawItem
     {
         const DrawListItem& ListItem;
-        const Uint32        AttribsBufferOffset;
+        const Uint32        PrimitiveAttribsOffset;
+        const Uint32        MaterialAttribsOffset;
         Uint32              JointsBufferOffset = ~0u;
         Uint32              DrawCount          = 1;
     };

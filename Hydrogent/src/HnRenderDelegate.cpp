@@ -111,8 +111,7 @@ static RefCntAutoPtr<IBuffer> CreatePrimitiveAttribsCB(IRenderDevice* pDevice)
 
 static RefCntAutoPtr<IBuffer> CreateMaterialAttribsCB(IRenderDevice* pDevice)
 {
-    // Temporary
-    Uint64 Size  = 1024;
+    Uint64 Size  = 65536;
     USAGE  Usage = USAGE_DYNAMIC;
 
     RefCntAutoPtr<IBuffer> MaterialAttribsCB;

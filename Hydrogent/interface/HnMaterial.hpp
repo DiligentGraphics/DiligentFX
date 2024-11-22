@@ -84,9 +84,14 @@ public:
     IShaderResourceBinding* GetSRB() const { return m_SRB; }
     IShaderResourceBinding* GetSRB(Uint32 PrimitiveAttribsOffset) const
     {
-        if (m_PrimitiveAttribsVar != nullptr)
-            m_PrimitiveAttribsVar->SetBufferOffset(PrimitiveAttribsOffset);
+        VERIFY_EXPR(m_PrimitiveAttribsVar != nullptr);
+        m_PrimitiveAttribsVar->SetBufferOffset(PrimitiveAttribsOffset);
         return m_SRB;
+    }
+    void SetMaterialAttribsBufferOffset(Uint32 Offset) const
+    {
+        VERIFY_EXPR(m_MaterialAttribsVar != nullptr);
+        m_MaterialAttribsVar->SetBufferOffset(Offset);
     }
     void SetJointsBufferOffset(Uint32 Offset) const
     {
