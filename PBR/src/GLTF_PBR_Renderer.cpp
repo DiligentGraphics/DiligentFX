@@ -766,7 +766,7 @@ void* GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                   
     //        float4x4 PrevSkinPreTransform; // #if USE_JOINTS && USE_SKIN_PRE_TRANSFORM && COMPUTE_MOTION_VECTORS
     //    } Transforms;
     //
-    //    float4      BaseColorFactor;
+    //    float4      FallbackColor;
     //    UserDefined CustomData;
     //};
 
@@ -841,9 +841,9 @@ void* GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                   
     }
 
     {
-        const float4& BaseColorFactor = AttribsData.BaseColorFactor != nullptr ? *AttribsData.BaseColorFactor : float4{1, 1, 1, 1};
-        memcpy(pDstPtr, &BaseColorFactor, sizeof(BaseColorFactor));
-        pDstPtr += sizeof(BaseColorFactor);
+        const float4& FallbackColor = AttribsData.FallbackColor != nullptr ? *AttribsData.FallbackColor : float4{1, 1, 1, 1};
+        memcpy(pDstPtr, &FallbackColor, sizeof(FallbackColor));
+        pDstPtr += sizeof(FallbackColor);
     }
 
     {

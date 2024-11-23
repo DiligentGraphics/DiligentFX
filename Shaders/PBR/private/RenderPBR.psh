@@ -378,8 +378,7 @@ float4 GetLoadingAnimationColor(float3 WorldPos, float Factor)
 PSOutput main(in VSOutput VSOut,
               in bool     IsFrontFace : SV_IsFrontFace)
 {
-    float4 BaseColor = GetBaseColor(VSOut, g_Material, g_Frame.Renderer.MipBias);
-    BaseColor *= PRIMITIVE.BaseColorFactor;
+    float4 BaseColor = GetBaseColor(VSOut, g_Material, g_Frame.Renderer.MipBias, PRIMITIVE.FallbackColor);
 
 #if USE_VERTEX_NORMALS
     float3 MeshNormal = VSOut.Normal;

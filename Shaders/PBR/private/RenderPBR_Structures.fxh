@@ -31,7 +31,7 @@ struct PBRPrimitiveAttribs
 {
     GLTFNodeShaderTransforms Transforms;
 
-    float4 BaseColorFactor;
+    float4 FallbackColor;
     float4 CustomData;
 };
 #ifdef CHECK_STRUCT_ALIGNMENT

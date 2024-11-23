@@ -430,9 +430,10 @@ float4 SampleTexture(Texture2DArray            Tex,
 
 float4 GetBaseColor(VSOutput              VSOut,
                     PBRMaterialShaderInfo Material,
-                    float                 MipBias)
+                    float                 MipBias,
+                    float4                DefaultValue)
 {
-    float4 BaseColor = float4(1.0, 1.0, 1.0, 1.0);
+    float4 BaseColor = DefaultValue;
 
 #   if USE_COLOR_MAP
     {
@@ -441,7 +442,7 @@ float4 GetBaseColor(VSOutput              VSOut,
                                   VSOut,
                                   Material.Textures[BaseColorTextureAttribId],
                                   MipBias,
-                                  float4(1.0, 1.0, 1.0, 1.0));
+                                  DefaultValue);
         BaseColor = float4(TO_LINEAR(BaseColor.rgb), BaseColor.a);
     }
 #   endif
