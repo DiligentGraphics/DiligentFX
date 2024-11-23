@@ -109,16 +109,6 @@ static RefCntAutoPtr<IBuffer> CreatePrimitiveAttribsCB(IRenderDevice* pDevice)
     return PrimitiveAttribsCB;
 }
 
-static RefCntAutoPtr<IBuffer> CreateMaterialAttribsCB(IRenderDevice* pDevice)
-{
-    Uint64 Size  = 65536;
-    USAGE  Usage = USAGE_DYNAMIC;
-
-    RefCntAutoPtr<IBuffer> MaterialAttribsCB;
-    CreateUniformBuffer(pDevice, Size, "PBR material attribs", &MaterialAttribsCB, Usage);
-    return MaterialAttribsCB;
-}
-
 static RefCntAutoPtr<IBuffer> CreateJointsBuffer(IRenderDevice* pDevice, USD_Renderer::JOINTS_BUFFER_MODE Mode, Uint32& MaxJointCount)
 {
     BufferDesc Desc;
@@ -175,7 +165,6 @@ static RefCntAutoPtr<IBuffer> CreateJointsBuffer(IRenderDevice* pDevice, USD_Ren
 
 static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::CreateInfo& RenderDelegateCI,
                                                        IBuffer*                            pPrimitiveAttribsCB,
-                                                       IBuffer*                            pMaterialAttribsCB,
                                                        IObject*                            MaterialSRBCache)
 {
     USD_Renderer::CreateInfo USDRendererCI;
@@ -303,7 +292,6 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
     USDRendererCI.InputLayout.NumElements    = _countof(Inputs);
 
     USDRendererCI.pPrimitiveAttribsCB = pPrimitiveAttribsCB;
-    USDRendererCI.pMaterialAttribsCB  = pMaterialAttribsCB;
     USDRendererCI.pJointsBuffer       = pJointsCB;
 
     return std::make_shared<USD_Renderer>(RenderDelegateCI.pDevice, RenderDelegateCI.pRenderStateCache, RenderDelegateCI.pContext, USDRendererCI);
@@ -389,9 +377,8 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
     m_pRenderStateCache{CI.pRenderStateCache},
     m_ResourceMgr{CreateResourceManager(CI)},
     m_PrimitiveAttribsCB{CreatePrimitiveAttribsCB(CI.pDevice)},
-    m_MaterialAttribsCB{CreateMaterialAttribsCB(CI.pDevice)},
     m_MaterialSRBCache{HnMaterial::CreateSRBCache()},
-    m_USDRenderer{CreateUSDRenderer(CI, m_PrimitiveAttribsCB, m_MaterialAttribsCB, m_MaterialSRBCache)},
+    m_USDRenderer{CreateUSDRenderer(CI, m_PrimitiveAttribsCB, m_MaterialSRBCache)},
     m_TextureRegistry{
         std::make_shared<HnTextureRegistry>(
             HnTextureRegistry::CreateInfo{
@@ -591,7 +578,7 @@ pxr::HdSprim* HnRenderDelegate::CreateFallbackSprim(const pxr::TfToken& TypeId)
     pxr::HdSprim* SPrim = nullptr;
     if (TypeId == pxr::HdPrimTypeTokens->material)
     {
-        m_FallbackMaterial = HnMaterial::CreateFallback(*m_TextureRegistry, *m_USDRenderer);
+        m_FallbackMaterial = HnMaterial::CreateFallback(*this);
         {
             std::lock_guard<std::mutex> Guard{m_MaterialsMtx};
             m_Materials.emplace(m_FallbackMaterial);

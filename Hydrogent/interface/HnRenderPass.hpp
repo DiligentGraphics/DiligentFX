@@ -177,9 +177,6 @@ private:
         // in the material's SRB.
         Uint32 PrimitiveAttribsBufferRange = 0;
 
-        /// Offset in the material attribs buffer.
-        Uint32 MaterialAttribsOffset = 0;
-
         IBuffer* IndexBuffer = nullptr;
 
         std::array<IBuffer*, VERTEX_BUFFER_SLOT_COUNT> VertexBuffers = {};
@@ -196,8 +193,7 @@ private:
     void UpdateDrawListGPUResources(RenderState& State);
     void UpdateDrawListItemGPUResources(DrawListItem& ListItem, RenderState& State, DRAW_LIST_ITEM_DIRTY_FLAGS DirtyFlags);
 
-    size_t UpdateMaterialAttribsBuffer(RenderState& State, size_t FirstItemIdx);
-    void   RenderPendingDrawItems(RenderState& State);
+    void RenderPendingDrawItems(RenderState& State);
 
     GraphicsPipelineDesc GetGraphicsDesc(const HnRenderPassState& RPState, bool UseStripTopology) const;
 
@@ -219,7 +215,6 @@ private:
     {
         const DrawListItem& ListItem;
         const Uint32        PrimitiveAttribsOffset;
-        const Uint32        MaterialAttribsOffset;
         Uint32              JointsBufferOffset = ~0u;
         Uint32              DrawCount          = 1;
     };

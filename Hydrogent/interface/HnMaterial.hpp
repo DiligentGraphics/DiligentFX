@@ -62,7 +62,7 @@ class HnMaterial final : public pxr::HdMaterial
 {
 public:
     static HnMaterial* Create(const pxr::SdfPath& id);
-    static HnMaterial* CreateFallback(HnTextureRegistry& TexRegistry, const USD_Renderer& UsdRenderer);
+    static HnMaterial* CreateFallback(HnRenderDelegate& RenderDelegate);
 
     ~HnMaterial();
 
@@ -78,8 +78,8 @@ public:
     /// Creates an SRB cache that should be passed to UpdateSRB().
     static RefCntAutoPtr<IObject> CreateSRBCache();
 
-    bool UpdateSRB(HnRenderDelegate& RendererDelegate);
-    void BindMaterialAttribsBuffer(HnRenderDelegate& RendererDelegate);
+    bool UpdateSRB(HnRenderDelegate& RenderDelegate);
+    void BindMaterialAttribsBuffer(HnRenderDelegate& RenderDelegate);
 
     IShaderResourceBinding* GetSRB() const { return m_SRB; }
     IShaderResourceBinding* GetSRB(Uint32 PrimitiveAttribsOffset) const
@@ -88,10 +88,11 @@ public:
         m_PrimitiveAttribsVar->SetBufferOffset(PrimitiveAttribsOffset);
         return m_SRB;
     }
-    void SetMaterialAttribsBufferOffset(Uint32 Offset) const
+    void ApplyMaterialAttribsBufferOffset() const
     {
         VERIFY_EXPR(m_MaterialAttribsVar != nullptr);
-        m_MaterialAttribsVar->SetBufferOffset(Offset);
+        VERIFY_EXPR(m_PBRMaterialAttribsBufferOffset != ~0u);
+        m_MaterialAttribsVar->SetBufferOffset(m_PBRMaterialAttribsBufferOffset);
     }
     void SetJointsBufferOffset(Uint32 Offset) const
     {
@@ -132,7 +133,12 @@ public:
     }
 
     Uint32 GetPBRPrimitiveAttribsBufferRange() const { return m_PBRPrimitiveAttribsBufferRange; }
-    Uint32 GetPBRMaterailAttribsBufferRange() const { return m_PBRMaterialAttribsBufferRange; }
+    Uint32 GetPBRMaterialAttribsSize() const { return m_PBRMaterialAttribsSize; }
+    Uint32 GetPBRMaterialAttribsBufferOffset() const
+    {
+        VERIFY_EXPR(m_PBRMaterialAttribsBufferOffset != ~0u);
+        return m_PBRMaterialAttribsBufferOffset;
+    }
 
 private:
     HnMaterial(pxr::SdfPath const& id);
@@ -142,15 +148,14 @@ private:
     // \remarks     Sync() is not called on fallback material,
     //  	        but we need to initialize default textures,
     //  	        so we have to use this special constructor.
-    HnMaterial(HnTextureRegistry& TexRegistry, const USD_Renderer& UsdRenderer);
+    HnMaterial(HnRenderDelegate& RenderDelegate);
 
     // A mapping from the texture name to the texture coordinate set index in m_TexCoords array (e.g. "diffuseColor" -> 0)
     // The same index is set in m_ShaderTextureAttribs[].UVSelector for the corresponding texture.
     // The name of the primvar that contains the texture coordinates is given by m_TexCoords[index].PrimVarName (e.g. "st0").
     using TexNameToCoordSetMapType = std::unordered_map<pxr::TfToken, size_t, pxr::TfToken::HashFunctor>;
     void AllocateTextures(const HnMaterialNetwork& Network,
-                          HnTextureRegistry&       TexRegistry,
-                          const USD_Renderer&      UsdRenderer);
+                          HnRenderDelegate&        RenderDelegate);
     void InitTextureAttribs(const HnMaterialNetwork&        Network,
                             HnTextureRegistry&              TexRegistry,
                             const USD_Renderer&             UsdRenderer,
@@ -161,6 +166,7 @@ private:
     HnTextureRegistry::TextureHandleSharedPtr GetDefaultTexture(HnTextureRegistry& TexRegistry, const pxr::TfToken& Name);
 
     void ProcessMaterialNetwork(const HnMaterialNetwork& Network);
+    void AllocateBufferSpace(HnRenderDelegate& RenderDelegate);
 
 private:
     pxr::TfToken m_Tag;
@@ -175,6 +181,7 @@ private:
     GLTF::Material m_MaterialData;
 
     std::atomic<bool> m_TextureAddressingAttribsDirty{false};
+    std::atomic<bool> m_GPUDataDirty{true};
 
     // The names of the primvars that contain unique texture coordinate sets for this material (e.g. "st0", "st1").
     // The index in this array for texture N is given by m_ShaderTextureAttribs[N].UVSelector.
@@ -184,10 +191,23 @@ private:
     Uint32 m_PBRPrimitiveAttribsBufferRange = 0;
 
     // The range that is used to bind the cbMaterialAttribs buffer.
+    // This is the maximum of all material attribs buffer sizes for
+    // all materials that use the same SRB.
     Uint32 m_PBRMaterialAttribsBufferRange = 0;
+
+    PBR_Renderer::PSO_FLAGS m_PSOFlags = PBR_Renderer::PSO_FLAG_NONE;
+
+    // Material attribs shader data size in bytes.
+    Uint32 m_PBRMaterialAttribsSize = 0;
+
+    // The offset in the cbMaterialAttribs buffer.
+    Uint32 m_PBRMaterialAttribsBufferOffset = ~0u;
 
     // Current texture storage version
     Uint32 m_TexRegistryStorageVersion = 0;
+
+    // Current material attribs buffer version
+    Uint32 m_MaterialAttribsBufferVersion = ~0u;
 
     ShaderTextureIndexingIdType m_ShaderTextureIndexingId = 0;
 };

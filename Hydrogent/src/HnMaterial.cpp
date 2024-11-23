@@ -40,8 +40,10 @@
 
 #include "GfTypeConversions.hpp"
 #include "DynamicTextureAtlas.h"
+#include "DynamicBuffer.hpp"
 #include "GLTFResourceManager.hpp"
 #include "GLTFBuilder.hpp"
+#include "GLTF_PBR_Renderer.hpp"
 #include "DataBlobImpl.hpp"
 
 #include "pxr/imaging/hd/sceneDelegate.h"
@@ -72,9 +74,9 @@ HnMaterial* HnMaterial::Create(const pxr::SdfPath& id)
     return new HnMaterial{id};
 }
 
-HnMaterial* HnMaterial::CreateFallback(HnTextureRegistry& TexRegistry, const USD_Renderer& UsdRenderer)
+HnMaterial* HnMaterial::CreateFallback(HnRenderDelegate& RenderDelegate)
 {
-    return new HnMaterial{TexRegistry, UsdRenderer};
+    return new HnMaterial{RenderDelegate};
 }
 
 HnMaterial::HnMaterial(const pxr::SdfPath& id) :
@@ -92,11 +94,11 @@ HnMaterial::HnMaterial(const pxr::SdfPath& id) :
 
 
 // Default material
-HnMaterial::HnMaterial(HnTextureRegistry& TexRegistry, const USD_Renderer& UsdRenderer) :
+HnMaterial::HnMaterial(HnRenderDelegate& RenderDelegate) :
     HnMaterial{pxr::SdfPath{}}
 {
     // Sync() is never called for the default material, so we need to initialize texture attributes now.
-    AllocateTextures({}, TexRegistry, UsdRenderer);
+    AllocateTextures({}, RenderDelegate);
 }
 
 HnMaterial::~HnMaterial()
@@ -112,9 +114,7 @@ void HnMaterial::Sync(pxr::HdSceneDelegate* SceneDelegate,
 
     if (*DirtyBits & pxr::HdMaterial::DirtyResource)
     {
-        HnRenderDelegate*   RenderDelegate = static_cast<HnRenderDelegate*>(SceneDelegate->GetRenderIndex().GetRenderDelegate());
-        HnTextureRegistry&  TexRegistry    = RenderDelegate->GetTextureRegistry();
-        const USD_Renderer& UsdRenderer    = *RenderDelegate->GetUSDRenderer();
+        HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(SceneDelegate->GetRenderIndex().GetRenderDelegate());
 
         // A mapping from the texture name to the texture coordinate set index (e.g. "diffuseColor" -> 0)
         TexNameToCoordSetMapType TexNameToCoordSetMap;
@@ -145,12 +145,14 @@ void HnMaterial::Sync(pxr::HdSceneDelegate* SceneDelegate,
         }
 
         // It is important to initialize texture attributes with default values even if there is no material network.
-        AllocateTextures(MatNetwork, TexRegistry, UsdRenderer);
+        AllocateTextures(MatNetwork, *RenderDelegate);
 
         if (RenderParam)
         {
             static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::Material);
         }
+
+        m_GPUDataDirty.store(true);
     }
 
     *DirtyBits = HdMaterial::Clean;
@@ -518,8 +520,12 @@ static TEXTURE_FORMAT GetMaterialTextureFormat(const pxr::TfToken& Name, TEXTURE
     }
 }
 
-void HnMaterial::AllocateTextures(const HnMaterialNetwork& Network, HnTextureRegistry& TexRegistry, const USD_Renderer& UsdRenderer)
+void HnMaterial::AllocateTextures(const HnMaterialNetwork& Network,
+                                  HnRenderDelegate&        RenderDelegate)
 {
+    HnTextureRegistry&  TexRegistry = RenderDelegate.GetTextureRegistry();
+    const USD_Renderer& UsdRenderer = *RenderDelegate.GetUSDRenderer();
+
     // Keep old textures alive in the cache
     auto OldTextures = std::move(m_Textures);
 
@@ -588,6 +594,8 @@ void HnMaterial::AllocateTextures(const HnMaterialNetwork& Network, HnTextureReg
     InitTextureAttribs(Network, TexRegistry, UsdRenderer, TexNameToCoordSetMap);
     // Update texture addressing attribs when all textures are loaded
     m_TextureAddressingAttribsDirty.store(true);
+
+    AllocateBufferSpace(RenderDelegate);
 }
 
 
@@ -608,7 +616,18 @@ public:
 
     HnMaterialSRBCache(IReferenceCounters* pRefCounters) :
         ObjectBase<IObject>{pRefCounters},
-        m_Cache{/*NumRequestsToPurge = */ 128}
+        m_Cache{/*NumRequestsToPurge = */ 128},
+        m_MaterialAttribsBuffer{
+            nullptr,
+            DynamicBufferCreateInfo{
+                BufferDesc{
+                    "Material attribs buffer",
+                    64 << 10, // 64 KB,
+                    BIND_UNIFORM_BUFFER,
+                    USAGE_DEFAULT,
+                },
+            },
+        }
     {}
 
     static RefCntAutoPtr<IObject> Create()
@@ -691,6 +710,35 @@ public:
         return it != m_MaterialAttribsBufferRange.end() ? it->second : 0;
     }
 
+    Uint32 AllocateBufferOffset(Uint32 Size, Uint32 Alignment, Uint32 MaxAttribsDataSize)
+    {
+        std::lock_guard<std::mutex> Lock{m_CurrBufferOffsetMtx};
+
+        const Uint32 Offset  = AlignUp(m_CurrBufferOffset, Alignment);
+        m_CurrBufferOffset   = Offset + Size;
+        m_RequiredBufferSize = AlignUp(Offset + MaxAttribsDataSize, Alignment);
+        return Offset;
+    }
+
+    IBuffer* UpdateMaterialAttribsBuffer(IRenderDevice* pDevice, IDeviceContext* pContext)
+    {
+        if (m_RequiredBufferSize > m_MaterialAttribsBuffer.GetDesc().Size)
+        {
+            m_MaterialAttribsBuffer.Resize(pDevice, pContext, m_RequiredBufferSize);
+        }
+        return m_MaterialAttribsBuffer.GetBuffer();
+    }
+
+    IBuffer* GetMaterialAttribsBuffer() const
+    {
+        return m_MaterialAttribsBuffer.GetBuffer();
+    }
+
+    Uint32 GetMaterialAttribsBufferVersion() const
+    {
+        return m_MaterialAttribsBuffer.GetVersion();
+    }
+
 private:
     ObjectsRegistry<ResourceKey, RefCntAutoPtr<IShaderResourceBinding>, ResourceKey::Hasher> m_Cache;
 
@@ -713,7 +761,34 @@ private:
     // A mapping from the SRB to the maximum buffer range required by a material that uses the SRB.
     mutable std::mutex                                        m_MaterialAttribsBufferRangeMtx;
     std::unordered_map<const IShaderResourceBinding*, Uint32> m_MaterialAttribsBufferRange;
+
+    std::mutex m_CurrBufferOffsetMtx;
+    Uint32     m_CurrBufferOffset   = 0;
+    Uint32     m_RequiredBufferSize = 0;
+
+    DynamicBuffer m_MaterialAttribsBuffer;
 };
+
+void HnMaterial::AllocateBufferSpace(HnRenderDelegate& RenderDelegate)
+{
+    const USD_Renderer& UsdRenderer = *RenderDelegate.GetUSDRenderer();
+
+    m_PSOFlags                        = HnRenderPass::GetMaterialPSOFlags(*this);
+    Uint32 LastPBRMaterialAttribsSize = m_PBRMaterialAttribsSize;
+    m_PBRMaterialAttribsSize          = UsdRenderer.GetPBRMaterialAttribsSize(m_PSOFlags);
+
+    // Note that in case material attribs size increases, previously allocated space will not be reused.
+    // This, however, is unlikely to happen in practice.
+    if (m_PBRMaterialAttribsBufferOffset == ~0u || m_PBRMaterialAttribsSize > LastPBRMaterialAttribsSize)
+    {
+        RefCntAutoPtr<HnMaterialSRBCache> SRBCache{RenderDelegate.GetMaterialSRBCache(), IID_HnMaterialSRBCache};
+        VERIFY_EXPR(SRBCache);
+
+        const Uint32 ConstantBufferOffsetAlignment = RenderDelegate.GetDevice()->GetAdapterInfo().Buffer.ConstantBufferOffsetAlignment;
+        const Uint32 MaxAttribsDataSize            = UsdRenderer.GetPBRMaterialAttribsSize(PBR_Renderer::PSO_FLAG_ALL);
+        m_PBRMaterialAttribsBufferOffset           = SRBCache->AllocateBufferOffset(m_PBRMaterialAttribsSize, ConstantBufferOffsetAlignment, MaxAttribsDataSize);
+    }
+}
 
 const PBR_Renderer::StaticShaderTextureIdsArrayType& HnMaterial::GetStaticShaderTextureIds(IObject* SRBCache, ShaderTextureIndexingIdType Id)
 {
@@ -816,10 +891,10 @@ static bool ApplyStandardStaticTextureIndexing(const PBR_Renderer::CreateInfo&  
     return true;
 }
 
-bool HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
+bool HnMaterial::UpdateSRB(HnRenderDelegate& RenderDelegate)
 {
-    HnTextureRegistry&  TexRegistry = RendererDelegate.GetTextureRegistry();
-    const USD_Renderer& UsdRenderer = *RendererDelegate.GetUSDRenderer();
+    HnTextureRegistry&  TexRegistry = RenderDelegate.GetTextureRegistry();
+    const USD_Renderer& UsdRenderer = *RenderDelegate.GetUSDRenderer();
 
     if (m_TextureAddressingAttribsDirty.load())
     {
@@ -830,13 +905,35 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
         }
     }
 
-    RefCntAutoPtr<HnMaterialSRBCache> SRBCache{RendererDelegate.GetMaterialSRBCache(), IID_HnMaterialSRBCache};
+    RefCntAutoPtr<HnMaterialSRBCache> SRBCache{RenderDelegate.GetMaterialSRBCache(), IID_HnMaterialSRBCache};
     VERIFY_EXPR(SRBCache);
 
-    const HN_MATERIAL_TEXTURES_BINDING_MODE BindingMode = static_cast<const HnRenderParam*>(RendererDelegate.GetRenderParam())->GetTextureBindingMode();
+    if (m_GPUDataDirty.load())
+    {
+        IDeviceContext* pContext               = RenderDelegate.GetDeviceContext();
+        IBuffer*        pMaterialAttribsBuffer = SRBCache->UpdateMaterialAttribsBuffer(RenderDelegate.GetDevice(), pContext);
+        VERIFY_EXPR(m_PSOFlags == HnRenderPass::GetMaterialPSOFlags(*this));
 
-    const Uint32 TexStorageVersion = TexRegistry.GetStorageVersion();
-    if (TexStorageVersion != m_TexRegistryStorageVersion)
+        GLTF_PBR_Renderer::PBRMaterialShaderAttribsData AttribsData{
+            m_PSOFlags,
+            UsdRenderer.GetSettings().TextureAttribIndices,
+            m_MaterialData,
+        };
+        std::vector<Uint8> MaterialAttribsData(m_PBRMaterialAttribsSize);
+        void*              pEnd = GLTF_PBR_Renderer::WritePBRMaterialShaderAttribs(MaterialAttribsData.data(), AttribsData);
+        VERIFY_EXPR(static_cast<size_t>(reinterpret_cast<const Uint8*>(pEnd) - MaterialAttribsData.data()) == m_PBRMaterialAttribsSize);
+
+        pContext->UpdateBuffer(pMaterialAttribsBuffer, m_PBRMaterialAttribsBufferOffset, m_PBRMaterialAttribsSize, MaterialAttribsData.data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+        m_GPUDataDirty.store(false);
+    }
+
+    const HN_MATERIAL_TEXTURES_BINDING_MODE BindingMode = static_cast<const HnRenderParam*>(RenderDelegate.GetRenderParam())->GetTextureBindingMode();
+
+    const Uint32 TexStorageVersion            = TexRegistry.GetStorageVersion();
+    const Uint32 MaterialAttribsBufferVersion = SRBCache->GetMaterialAttribsBufferVersion();
+    if (TexStorageVersion != m_TexRegistryStorageVersion ||
+        m_MaterialAttribsBufferVersion != MaterialAttribsBufferVersion)
     {
         m_SRB.Release();
         m_PrimitiveAttribsVar           = nullptr;
@@ -844,6 +941,7 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
         m_JointTransformsVar            = nullptr;
         m_PBRMaterialAttribsBufferRange = 0;
         m_TexRegistryStorageVersion     = TexStorageVersion;
+        m_MaterialAttribsBufferVersion  = MaterialAttribsBufferVersion;
     }
 
     if (m_SRB)
@@ -876,7 +974,7 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
         std::unordered_map<TEXTURE_FORMAT, Uint32> AtlasFormatIds;
         if (BindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_ATLAS)
         {
-            AtlasFormats = RendererDelegate.GetResourceManager().GetAllocatedAtlasFormats();
+            AtlasFormats = RenderDelegate.GetResourceManager().GetAllocatedAtlasFormats();
             for (Uint32 i = 0; i < AtlasFormats.size(); ++i)
             {
                 AtlasFormatIds.emplace(AtlasFormats[i], i);
@@ -957,7 +1055,7 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
                 for (size_t i = 0; i < AtlasFormats.size(); ++i)
                 {
                     TEXTURE_FORMAT AtlasFmt      = AtlasFormats[i];
-                    ITexture*      pAtlasTexture = RendererDelegate.GetResourceManager().GetTexture(AtlasFmt);
+                    ITexture*      pAtlasTexture = RenderDelegate.GetResourceManager().GetTexture(AtlasFmt);
                     VERIFY_EXPR(pAtlasTexture != nullptr);
                     TexArray[i] = pAtlasTexture;
                 }
@@ -980,7 +1078,7 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
                     {
                         TEXTURE_FORMAT AtlasFmt = AtlasFormats[AtlasId];
                         VERIFY_EXPR(AtlasFormatIds.find(AtlasFmt)->second == AtlasId);
-                        ITexture* pAtlasTexture = RendererDelegate.GetResourceManager().GetTexture(AtlasFmt);
+                        ITexture* pAtlasTexture = RenderDelegate.GetResourceManager().GetTexture(AtlasFmt);
                         VERIFY_EXPR(pAtlasTexture != nullptr);
                         TexArray[AtlasId] = pAtlasTexture;
                     }
@@ -1087,7 +1185,7 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
                     {
                         if (!WhiteTex)
                         {
-                            WhiteTex = GetDefaultTexture(RendererDelegate.GetTextureRegistry(), HnTokens->diffuseColor);
+                            WhiteTex = GetDefaultTexture(RenderDelegate.GetTextureRegistry(), HnTokens->diffuseColor);
                             VERIFY(WhiteTex->IsLoaded(), "Default texture must be loaded");
                         }
                         if (WhiteTex->GetTexture())
@@ -1156,7 +1254,7 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RendererDelegate)
     return true;
 }
 
-void HnMaterial::BindMaterialAttribsBuffer(HnRenderDelegate& RendererDelegate)
+void HnMaterial::BindMaterialAttribsBuffer(HnRenderDelegate& RenderDelegate)
 {
     if (!m_SRB || m_MaterialAttribsVar != nullptr)
         return;
@@ -1168,7 +1266,7 @@ void HnMaterial::BindMaterialAttribsBuffer(HnRenderDelegate& RendererDelegate)
         return;
     }
 
-    RefCntAutoPtr<HnMaterialSRBCache> SRBCache{RendererDelegate.GetMaterialSRBCache(), IID_HnMaterialSRBCache};
+    RefCntAutoPtr<HnMaterialSRBCache> SRBCache{RenderDelegate.GetMaterialSRBCache(), IID_HnMaterialSRBCache};
     VERIFY_EXPR(SRBCache);
 
     m_PBRMaterialAttribsBufferRange = SRBCache->GetMaterialAttribsBufferRange(m_SRB);
@@ -1178,8 +1276,7 @@ void HnMaterial::BindMaterialAttribsBuffer(HnRenderDelegate& RendererDelegate)
     // Check if the buffer has already been set by another material that uses the same SRB
     if (m_MaterialAttribsVar->Get() == nullptr)
     {
-        USD_Renderer& UsdRenderer = *RendererDelegate.GetUSDRenderer();
-        m_MaterialAttribsVar->SetBufferRange(UsdRenderer.GetPBRMaterialAttribsCB(), 0, m_PBRMaterialAttribsBufferRange);
+        m_MaterialAttribsVar->SetBufferRange(SRBCache->GetMaterialAttribsBuffer(), 0, m_PBRMaterialAttribsBufferRange);
     }
 }
 
