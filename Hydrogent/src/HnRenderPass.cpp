@@ -1158,6 +1158,7 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
                "Attribs data size (", ListItem.ShaderAttribsDataSize, ") computed from the PSO flags exceeds the attribs buffer range (",
                ListItem.PrimitiveAttribsBufferRange, ") computed from material PSO flags. The latter is used by HnMaterial to set the buffer range.");
 
+        // Note: some PSOs (e.g. shadow) may not use the full range of the material attribs buffer.
         VERIFY(ListItem.pMaterial->GetPBRMaterialAttribsSize() >= State.USDRenderer.GetPBRMaterialAttribsSize(ListItem.PSOFlags),
                "Material attribs size is smaller than required by the PSO flags");
         VERIFY_EXPR(ListItem.pPSO != nullptr);

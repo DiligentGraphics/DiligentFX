@@ -192,6 +192,12 @@ private:
 
     PBR_Renderer::PSO_FLAGS m_PSOFlags = PBR_Renderer::PSO_FLAG_NONE;
 
+    // Material attribs data resides in a single buffer shared by all SRBs.
+    //
+    //                 Size
+    // |         |-------------| x x x x |
+    //        Offset            Alignment
+
     // Material attribs shader data size in bytes.
     Uint32 m_PBRMaterialAttribsSize = 0;
 

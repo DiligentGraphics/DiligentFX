@@ -743,6 +743,8 @@ public:
                 m_DirtyRangeEnd   = m_MaterialAttribsData.size();
             }
             pContext->UpdateBuffer(pBuffer, m_DirtyRangeStart, m_DirtyRangeEnd - m_DirtyRangeStart, &m_MaterialAttribsData[m_DirtyRangeStart], RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+            m_DirtyRangeStart = 0;
+            m_DirtyRangeEnd   = 0;
         }
         return pBuffer;
     }
@@ -775,6 +777,7 @@ private:
     Uint32     m_CurrBufferOffset   = 0;
     Uint32     m_RequiredBufferSize = 0;
 
+    // Material attribs data resides in a single buffer shared by all SRBs.
     DynamicBuffer      m_MaterialAttribsBuffer;
     std::vector<Uint8> m_MaterialAttribsData;
     Uint32             m_DirtyRangeStart = 0;
