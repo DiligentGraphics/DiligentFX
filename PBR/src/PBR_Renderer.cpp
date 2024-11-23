@@ -2033,6 +2033,7 @@ Uint32 PBR_Renderer::GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags, Uint32 CustomDa
     //        float4x4 PrevSkinPreTransform; // #if USE_JOINTS && USE_SKIN_PRE_TRANSFORM && COMPUTE_MOTION_VECTORS
     //    } Transforms;
     //
+    //    float4      BaseColorFactor;
     //    UserDefined CustomData;
     //};
 
@@ -2045,6 +2046,7 @@ Uint32 PBR_Renderer::GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags, Uint32 CustomDa
             (UseSkinPreTransform ? sizeof(float4x4) : 0) +                       // Transforms.SkinPreTransform
             (UsePrevSkinPreTransform ? sizeof(float4x4) : 0) +                   // Transforms.PrevSkinPreTransform
 
+            sizeof(float4) + // BaseColorFactor
             CustomDataSize);
 }
 

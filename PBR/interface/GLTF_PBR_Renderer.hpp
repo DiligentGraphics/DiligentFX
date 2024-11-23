@@ -259,6 +259,7 @@ public:
         const float3*   PosBias              = nullptr;
         const float4x4* SkinPreTransform     = nullptr; // #if USE_JOINTS && USE_SKIN_PRE_TRANSFORM
         const float4x4* PrevSkinPreTransform = nullptr; // #if USE_JOINTS && USE_SKIN_PRE_TRANSFORM && COMPUTE_MOTION_VECTORS
+        const float4*   BaseColorFactor      = nullptr;
         const void*     CustomData           = nullptr;
         size_t          CustomDataSize       = 0;
     };

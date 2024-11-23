@@ -766,6 +766,7 @@ void* GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                   
     //        float4x4 PrevSkinPreTransform; // #if USE_JOINTS && USE_SKIN_PRE_TRANSFORM && COMPUTE_MOTION_VECTORS
     //    } Transforms;
     //
+    //    float4      BaseColorFactor;
     //    UserDefined CustomData;
     //};
 
@@ -837,6 +838,12 @@ void* GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(void*                   
                 pDstPtr += sizeof(float4x4);
             }
         }
+    }
+
+    {
+        const float4& BaseColorFactor = AttribsData.BaseColorFactor != nullptr ? *AttribsData.BaseColorFactor : float4{1, 1, 1, 1};
+        memcpy(pDstPtr, &BaseColorFactor, sizeof(BaseColorFactor));
+        pDstPtr += sizeof(BaseColorFactor);
     }
 
     {

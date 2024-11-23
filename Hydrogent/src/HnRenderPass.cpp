@@ -675,6 +675,7 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
             &Transform.PosBias,
             pSkinningData ? reinterpret_cast<const float4x4*>(pSkinningData->GeomBindXform.Data()) : nullptr,
             pSkinningData ? reinterpret_cast<const float4x4*>(pSkinningData->GeomBindXform.Data()) : nullptr,
+            &DisplayColor,
             &ListItem.MeshUID,        // CustomData
             sizeof(ListItem.MeshUID), // CustomDataSize
         };
