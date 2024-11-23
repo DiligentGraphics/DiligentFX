@@ -747,10 +747,7 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
                 if (!pMat->UpdateSRB(*this))
                     AllMaterialsUpdated = false;
             }
-            for (auto* pMat : m_Materials)
-            {
-                pMat->BindMaterialAttribsBuffer(*this);
-            }
+            HnMaterial::CommitCacheResources(*this);
 
             if (AllMaterialsUpdated)
             {

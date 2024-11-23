@@ -693,45 +693,58 @@ public:
         return it->second;
     }
 
-    void UpdateMaterialAttribsBufferRange(const IShaderResourceBinding* pSRB, Uint32 Range)
-    {
-        std::lock_guard<std::mutex> Lock{m_MaterialAttribsBufferRangeMtx};
-
-        auto& SRBRange = m_MaterialAttribsBufferRange[pSRB];
-        SRBRange       = std::max(SRBRange, Range);
-    }
-
-    Uint32 GetMaterialAttribsBufferRange(const IShaderResourceBinding* pSRB) const
-    {
-        std::lock_guard<std::mutex> Lock{m_MaterialAttribsBufferRangeMtx};
-
-        auto it = m_MaterialAttribsBufferRange.find(pSRB);
-        VERIFY(it != m_MaterialAttribsBufferRange.end(), "SRB is not found in the cache");
-        return it != m_MaterialAttribsBufferRange.end() ? it->second : 0;
-    }
-
     Uint32 AllocateBufferOffset(Uint32 Size, Uint32 Alignment, Uint32 MaxAttribsDataSize)
     {
         std::lock_guard<std::mutex> Lock{m_CurrBufferOffsetMtx};
 
-        const Uint32 Offset  = AlignUp(m_CurrBufferOffset, Alignment);
-        m_CurrBufferOffset   = Offset + Size;
+        const Uint32 Offset = AlignUp(m_CurrBufferOffset, Alignment);
+        m_CurrBufferOffset  = Offset + Size;
+        // Reserve enough space for the maximum possible attribs data size.
         m_RequiredBufferSize = AlignUp(Offset + MaxAttribsDataSize, Alignment);
         return Offset;
     }
 
-    IBuffer* UpdateMaterialAttribsBuffer(IRenderDevice* pDevice, IDeviceContext* pContext)
+    IBuffer* PrepareMaterialAttribsBuffer(IRenderDevice* pDevice, IDeviceContext* pContext)
     {
         if (m_RequiredBufferSize > m_MaterialAttribsBuffer.GetDesc().Size)
         {
-            m_MaterialAttribsBuffer.Resize(pDevice, pContext, m_RequiredBufferSize);
+            m_MaterialAttribsData.resize(m_RequiredBufferSize);
+            return m_MaterialAttribsBuffer.Resize(pDevice, pContext, m_RequiredBufferSize);
         }
-        return m_MaterialAttribsBuffer.GetBuffer();
+        else
+        {
+            return m_MaterialAttribsBuffer.GetBuffer();
+        }
     }
 
-    IBuffer* GetMaterialAttribsBuffer() const
+    void UpdateMaterialAttribsData(Uint32 Offset, Uint32 Size, const GLTF_PBR_Renderer::PBRMaterialShaderAttribsData AttribsData)
     {
-        return m_MaterialAttribsBuffer.GetBuffer();
+        if (Offset + Size > m_MaterialAttribsData.size())
+        {
+            UNEXPECTED("Offset + Size (", Offset + Size, ") exceeds the size of the material attribs data buffer (", m_MaterialAttribsData.size(), ")");
+            return;
+        }
+        void* pEnd = GLTF_PBR_Renderer::WritePBRMaterialShaderAttribs(&m_MaterialAttribsData[Offset], AttribsData);
+        VERIFY_EXPR(static_cast<Uint32>(reinterpret_cast<const Uint8*>(pEnd) - &m_MaterialAttribsData[Offset]) == Size);
+        (void)pEnd;
+        m_DirtyRangeStart = std::min(m_DirtyRangeStart, Offset);
+        m_DirtyRangeEnd   = std::max(m_DirtyRangeEnd, Offset + Size);
+    }
+
+    IBuffer* CommitUpdates(IRenderDevice* pDevice, IDeviceContext* pContext)
+    {
+        IBuffer* pBuffer = m_MaterialAttribsBuffer.GetBuffer();
+        if (m_DirtyRangeStart < m_DirtyRangeEnd)
+        {
+            if (pDevice->GetDeviceInfo().Type == RENDER_DEVICE_TYPE_D3D11)
+            {
+                // Direct3D11 for unknown reason does not support partial constant buffer updates
+                m_DirtyRangeStart = 0;
+                m_DirtyRangeEnd   = m_MaterialAttribsData.size();
+            }
+            pContext->UpdateBuffer(pBuffer, m_DirtyRangeStart, m_DirtyRangeEnd - m_DirtyRangeStart, &m_MaterialAttribsData[m_DirtyRangeStart], RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        }
+        return pBuffer;
     }
 
     Uint32 GetMaterialAttribsBufferVersion() const
@@ -758,15 +771,14 @@ private:
 
     std::unordered_map<ShaderTextureIndexingIdType, const StaticShaderTextureIdsArrayType&> m_IdToIndexing;
 
-    // A mapping from the SRB to the maximum buffer range required by a material that uses the SRB.
-    mutable std::mutex                                        m_MaterialAttribsBufferRangeMtx;
-    std::unordered_map<const IShaderResourceBinding*, Uint32> m_MaterialAttribsBufferRange;
-
     std::mutex m_CurrBufferOffsetMtx;
     Uint32     m_CurrBufferOffset   = 0;
     Uint32     m_RequiredBufferSize = 0;
 
-    DynamicBuffer m_MaterialAttribsBuffer;
+    DynamicBuffer      m_MaterialAttribsBuffer;
+    std::vector<Uint8> m_MaterialAttribsData;
+    Uint32             m_DirtyRangeStart = 0;
+    Uint32             m_DirtyRangeEnd   = 0;
 };
 
 void HnMaterial::AllocateBufferSpace(HnRenderDelegate& RenderDelegate)
@@ -907,24 +919,17 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RenderDelegate)
 
     RefCntAutoPtr<HnMaterialSRBCache> SRBCache{RenderDelegate.GetMaterialSRBCache(), IID_HnMaterialSRBCache};
     VERIFY_EXPR(SRBCache);
+    IBuffer* pMaterialAttribsBuffer = SRBCache->PrepareMaterialAttribsBuffer(RenderDelegate.GetDevice(), RenderDelegate.GetDeviceContext());
 
     if (m_GPUDataDirty.load())
     {
-        IDeviceContext* pContext               = RenderDelegate.GetDeviceContext();
-        IBuffer*        pMaterialAttribsBuffer = SRBCache->UpdateMaterialAttribsBuffer(RenderDelegate.GetDevice(), pContext);
         VERIFY_EXPR(m_PSOFlags == HnRenderPass::GetMaterialPSOFlags(*this));
-
-        GLTF_PBR_Renderer::PBRMaterialShaderAttribsData AttribsData{
-            m_PSOFlags,
-            UsdRenderer.GetSettings().TextureAttribIndices,
-            m_MaterialData,
-        };
-        std::vector<Uint8> MaterialAttribsData(m_PBRMaterialAttribsSize);
-        void*              pEnd = GLTF_PBR_Renderer::WritePBRMaterialShaderAttribs(MaterialAttribsData.data(), AttribsData);
-        VERIFY_EXPR(static_cast<size_t>(reinterpret_cast<const Uint8*>(pEnd) - MaterialAttribsData.data()) == m_PBRMaterialAttribsSize);
-
-        pContext->UpdateBuffer(pMaterialAttribsBuffer, m_PBRMaterialAttribsBufferOffset, m_PBRMaterialAttribsSize, MaterialAttribsData.data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-
+        SRBCache->UpdateMaterialAttribsData(m_PBRMaterialAttribsBufferOffset, m_PBRMaterialAttribsSize,
+                                            {
+                                                m_PSOFlags,
+                                                UsdRenderer.GetSettings().TextureAttribIndices,
+                                                m_MaterialData,
+                                            });
         m_GPUDataDirty.store(false);
     }
 
@@ -936,12 +941,11 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RenderDelegate)
         m_MaterialAttribsBufferVersion != MaterialAttribsBufferVersion)
     {
         m_SRB.Release();
-        m_PrimitiveAttribsVar           = nullptr;
-        m_MaterialAttribsVar            = nullptr;
-        m_JointTransformsVar            = nullptr;
-        m_PBRMaterialAttribsBufferRange = 0;
-        m_TexRegistryStorageVersion     = TexStorageVersion;
-        m_MaterialAttribsBufferVersion  = MaterialAttribsBufferVersion;
+        m_PrimitiveAttribsVar          = nullptr;
+        m_MaterialAttribsVar           = nullptr;
+        m_JointTransformsVar           = nullptr;
+        m_TexRegistryStorageVersion    = TexStorageVersion;
+        m_MaterialAttribsBufferVersion = MaterialAttribsBufferVersion;
     }
 
     if (m_SRB)
@@ -1232,9 +1236,15 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RenderDelegate)
 
     if (m_SRB)
     {
-        const PBR_Renderer::PSO_FLAGS PSOFlags               = HnRenderPass::GetMaterialPSOFlags(*this);
-        const Uint32                  PBRMaterialAttribsSize = UsdRenderer.GetPBRMaterialAttribsSize(PSOFlags);
-        SRBCache->UpdateMaterialAttribsBufferRange(m_SRB, PBRMaterialAttribsSize);
+        m_MaterialAttribsVar = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbMaterialAttribs");
+        VERIFY_EXPR(m_MaterialAttribsVar != nullptr);
+        if (m_MaterialAttribsVar->Get() == nullptr)
+        {
+            // Bind maximum possible buffer range
+            const Uint32 PBRMaterialAttribsMaxSize = UsdRenderer.GetPBRMaterialAttribsSize(PBR_Renderer::PSO_FLAG_ALL);
+            m_MaterialAttribsVar->SetBufferRange(pMaterialAttribsBuffer, 0, PBRMaterialAttribsMaxSize);
+        }
+
         m_JointTransformsVar = m_SRB->GetVariableByName(SHADER_TYPE_VERTEX, UsdRenderer.GetJointTransformsVarName());
         VERIFY_EXPR(m_JointTransformsVar != nullptr || RendererSettings.MaxJointCount == 0);
 
@@ -1244,7 +1254,10 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RenderDelegate)
 
         m_PrimitiveAttribsVar = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbPrimitiveAttribs");
         VERIFY_EXPR(m_PrimitiveAttribsVar != nullptr);
-        m_PrimitiveAttribsVar->SetBufferRange(UsdRenderer.GetPBRPrimitiveAttribsCB(), 0, m_PBRPrimitiveAttribsBufferRange);
+        if (m_PrimitiveAttribsVar->Get() == nullptr)
+        {
+            m_PrimitiveAttribsVar->SetBufferRange(UsdRenderer.GetPBRPrimitiveAttribsCB(), 0, m_PBRPrimitiveAttribsBufferRange);
+        }
     }
     else
     {
@@ -1254,30 +1267,15 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RenderDelegate)
     return true;
 }
 
-void HnMaterial::BindMaterialAttribsBuffer(HnRenderDelegate& RenderDelegate)
+void HnMaterial::CommitCacheResources(HnRenderDelegate& RenderDelegate)
 {
-    if (!m_SRB || m_MaterialAttribsVar != nullptr)
-        return;
-
-    m_MaterialAttribsVar = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbMaterialAttribs");
-    if (m_MaterialAttribsVar == nullptr)
-    {
-        UNEXPECTED("Failed to find 'cbMaterialAttribs' variable in the shader resource binding.");
-        return;
-    }
-
     RefCntAutoPtr<HnMaterialSRBCache> SRBCache{RenderDelegate.GetMaterialSRBCache(), IID_HnMaterialSRBCache};
     VERIFY_EXPR(SRBCache);
 
-    m_PBRMaterialAttribsBufferRange = SRBCache->GetMaterialAttribsBufferRange(m_SRB);
-    VERIFY(m_PBRMaterialAttribsBufferRange != 0,
-           "PBRMaterialAttribsBufferRange is zero, which indicates the SRB was not found in the cache. This appears to be a bug.");
-
-    // Check if the buffer has already been set by another material that uses the same SRB
-    if (m_MaterialAttribsVar->Get() == nullptr)
-    {
-        m_MaterialAttribsVar->SetBufferRange(SRBCache->GetMaterialAttribsBuffer(), 0, m_PBRMaterialAttribsBufferRange);
-    }
+    IDeviceContext*     pContext = RenderDelegate.GetDeviceContext();
+    IBuffer*            pBuffer  = SRBCache->CommitUpdates(RenderDelegate.GetDevice(), pContext);
+    StateTransitionDesc Barrier{pBuffer, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE};
+    pContext->TransitionResourceStates(1, &Barrier);
 }
 
 } // namespace USD

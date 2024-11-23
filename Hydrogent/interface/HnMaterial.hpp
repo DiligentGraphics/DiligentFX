@@ -78,8 +78,8 @@ public:
     /// Creates an SRB cache that should be passed to UpdateSRB().
     static RefCntAutoPtr<IObject> CreateSRBCache();
 
-    bool UpdateSRB(HnRenderDelegate& RenderDelegate);
-    void BindMaterialAttribsBuffer(HnRenderDelegate& RenderDelegate);
+    bool        UpdateSRB(HnRenderDelegate& RenderDelegate);
+    static void CommitCacheResources(HnRenderDelegate& RenderDelegate);
 
     IShaderResourceBinding* GetSRB() const { return m_SRB; }
     IShaderResourceBinding* GetSRB(Uint32 PrimitiveAttribsOffset) const
@@ -189,11 +189,6 @@ private:
 
     // The range that is used to bind the cbPrimitiveAttribs buffer.
     Uint32 m_PBRPrimitiveAttribsBufferRange = 0;
-
-    // The range that is used to bind the cbMaterialAttribs buffer.
-    // This is the maximum of all material attribs buffer sizes for
-    // all materials that use the same SRB.
-    Uint32 m_PBRMaterialAttribsBufferRange = 0;
 
     PBR_Renderer::PSO_FLAGS m_PSOFlags = PBR_Renderer::PSO_FLAG_NONE;
 
