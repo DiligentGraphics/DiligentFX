@@ -78,8 +78,9 @@ public:
     /// Creates an SRB cache that should be passed to UpdateSRB().
     static RefCntAutoPtr<IObject> CreateSRBCache();
 
+    static void BeginResourceUpdate(HnRenderDelegate& RenderDelegate);
     bool        UpdateSRB(HnRenderDelegate& RenderDelegate);
-    static void CommitCacheResources(HnRenderDelegate& RenderDelegate);
+    static void EndResourceUpdate(HnRenderDelegate& RenderDelegate);
 
     IShaderResourceBinding* GetSRB() const { return m_SRB; }
     IShaderResourceBinding* GetSRB(Uint32 PrimitiveAttribsOffset) const
@@ -204,11 +205,8 @@ private:
     // The offset in the cbMaterialAttribs buffer.
     Uint32 m_PBRMaterialAttribsBufferOffset = ~0u;
 
-    // Current texture storage version
-    Uint32 m_TexRegistryStorageVersion = 0;
-
-    // Current material attribs buffer version
-    Uint32 m_MaterialAttribsBufferVersion = ~0u;
+    // Texture registry storage version + material attribs buffer version.
+    Uint32 m_ResourceCacheVersion = ~0u;
 
     ShaderTextureIndexingIdType m_ShaderTextureIndexingId = 0;
 };

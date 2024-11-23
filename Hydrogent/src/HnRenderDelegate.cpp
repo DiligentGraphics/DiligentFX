@@ -741,13 +741,14 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
         {
             std::lock_guard<std::mutex> Guard{m_MaterialsMtx};
 
+            HnMaterial::BeginResourceUpdate(*this);
             bool AllMaterialsUpdated = true;
             for (auto* pMat : m_Materials)
             {
                 if (!pMat->UpdateSRB(*this))
                     AllMaterialsUpdated = false;
             }
-            HnMaterial::CommitCacheResources(*this);
+            HnMaterial::EndResourceUpdate(*this);
 
             if (AllMaterialsUpdated)
             {

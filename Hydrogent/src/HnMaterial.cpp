@@ -642,18 +642,22 @@ public:
     /// The key is the combination of unique IDs of the texture objects used by the SRB.
     struct ResourceKey
     {
+        const Uint32 ResourceCacheVersion;
+
         std::vector<Int32> UniqueIDs;
 
         bool operator==(const ResourceKey& rhs) const
         {
-            return UniqueIDs == rhs.UniqueIDs;
+            return ResourceCacheVersion == rhs.ResourceCacheVersion && UniqueIDs == rhs.UniqueIDs;
         }
 
         struct Hasher
         {
             size_t operator()(const ResourceKey& Key) const
             {
-                return ComputeHashRaw(Key.UniqueIDs.data(), Key.UniqueIDs.size() * sizeof(Key.UniqueIDs[0]));
+                return ComputeHash(
+                    Key.ResourceCacheVersion,
+                    ComputeHashRaw(Key.UniqueIDs.data(), Key.UniqueIDs.size() * sizeof(Key.UniqueIDs[0])));
             }
         };
     };
@@ -717,6 +721,12 @@ public:
         }
     }
 
+    IBuffer* GetMaterialAttribsBuffer() const
+    {
+        VERIFY_EXPR(m_RequiredBufferSize == m_MaterialAttribsBuffer.GetDesc().Size, "The buffer needs to be resized.");
+        return m_MaterialAttribsBuffer.GetBuffer();
+    }
+
     void UpdateMaterialAttribsData(Uint32 Offset, Uint32 Size, const GLTF_PBR_Renderer::PBRMaterialShaderAttribsData AttribsData)
     {
         if (Offset + Size > m_MaterialAttribsData.size())
@@ -733,6 +743,7 @@ public:
 
     IBuffer* CommitUpdates(IRenderDevice* pDevice, IDeviceContext* pContext)
     {
+        VERIFY_EXPR(m_RequiredBufferSize == m_MaterialAttribsBuffer.GetDesc().Size, "The buffer needs to be resized.");
         IBuffer* pBuffer = m_MaterialAttribsBuffer.GetBuffer();
         if (m_DirtyRangeStart < m_DirtyRangeEnd)
         {
@@ -911,6 +922,19 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RenderDelegate)
     HnTextureRegistry&  TexRegistry = RenderDelegate.GetTextureRegistry();
     const USD_Renderer& UsdRenderer = *RenderDelegate.GetUSDRenderer();
 
+    RefCntAutoPtr<HnMaterialSRBCache> SRBCache{RenderDelegate.GetMaterialSRBCache(), IID_HnMaterialSRBCache};
+    VERIFY_EXPR(SRBCache);
+
+    const Uint32 ResourceCacheVersion = TexRegistry.GetStorageVersion() + SRBCache->GetMaterialAttribsBufferVersion();
+    if (m_ResourceCacheVersion != ResourceCacheVersion)
+    {
+        m_SRB.Release();
+        m_PrimitiveAttribsVar  = nullptr;
+        m_MaterialAttribsVar   = nullptr;
+        m_JointTransformsVar   = nullptr;
+        m_ResourceCacheVersion = ResourceCacheVersion;
+    }
+
     if (m_TextureAddressingAttribsDirty.load())
     {
         if (!InitTextureAddressingAttribs(UsdRenderer, TexRegistry))
@@ -919,10 +943,6 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RenderDelegate)
             return false;
         }
     }
-
-    RefCntAutoPtr<HnMaterialSRBCache> SRBCache{RenderDelegate.GetMaterialSRBCache(), IID_HnMaterialSRBCache};
-    VERIFY_EXPR(SRBCache);
-    IBuffer* pMaterialAttribsBuffer = SRBCache->PrepareMaterialAttribsBuffer(RenderDelegate.GetDevice(), RenderDelegate.GetDeviceContext());
 
     if (m_GPUDataDirty.load())
     {
@@ -934,21 +954,6 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RenderDelegate)
                                                 m_MaterialData,
                                             });
         m_GPUDataDirty.store(false);
-    }
-
-    const HN_MATERIAL_TEXTURES_BINDING_MODE BindingMode = static_cast<const HnRenderParam*>(RenderDelegate.GetRenderParam())->GetTextureBindingMode();
-
-    const Uint32 TexStorageVersion            = TexRegistry.GetStorageVersion();
-    const Uint32 MaterialAttribsBufferVersion = SRBCache->GetMaterialAttribsBufferVersion();
-    if (TexStorageVersion != m_TexRegistryStorageVersion ||
-        m_MaterialAttribsBufferVersion != MaterialAttribsBufferVersion)
-    {
-        m_SRB.Release();
-        m_PrimitiveAttribsVar          = nullptr;
-        m_MaterialAttribsVar           = nullptr;
-        m_JointTransformsVar           = nullptr;
-        m_TexRegistryStorageVersion    = TexStorageVersion;
-        m_MaterialAttribsBufferVersion = MaterialAttribsBufferVersion;
     }
 
     if (m_SRB)
@@ -965,8 +970,9 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RenderDelegate)
     // Standalone textures not allocated in the atlas.
     std::unordered_map<PBR_Renderer::TEXTURE_ATTRIB_ID, ITexture*> StandaloneTextures;
 
-    HnMaterialSRBCache::ResourceKey SRBKey;
+    HnMaterialSRBCache::ResourceKey SRBKey{m_ResourceCacheVersion};
 
+    const HN_MATERIAL_TEXTURES_BINDING_MODE BindingMode = static_cast<const HnRenderParam*>(RenderDelegate.GetRenderParam())->GetTextureBindingMode();
     if (BindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_LEGACY ||
         BindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_ATLAS)
     {
@@ -1124,11 +1130,6 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RenderDelegate)
             m_ShaderTextureIndexingId = SRBCache->AddShaderTextureIndexing(StaticShaderTexIds);
         }
     }
-    else if (BindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_DYNAMIC)
-    {
-        // Update SRB whenever texture storage version changes
-        SRBKey.UniqueIDs.push_back(m_TexRegistryStorageVersion);
-    }
 
     m_SRB = SRBCache->GetSRB(SRBKey, [&]() {
         RefCntAutoPtr<IShaderResourceBinding> pSRB;
@@ -1243,6 +1244,7 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RenderDelegate)
         VERIFY_EXPR(m_MaterialAttribsVar != nullptr);
         if (m_MaterialAttribsVar->Get() == nullptr)
         {
+            IBuffer* pMaterialAttribsBuffer = SRBCache->GetMaterialAttribsBuffer();
             // Bind maximum possible buffer range
             const Uint32 PBRMaterialAttribsMaxSize = UsdRenderer.GetPBRMaterialAttribsSize(PBR_Renderer::PSO_FLAG_ALL);
             m_MaterialAttribsVar->SetBufferRange(pMaterialAttribsBuffer, 0, PBRMaterialAttribsMaxSize);
@@ -1270,7 +1272,15 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RenderDelegate)
     return true;
 }
 
-void HnMaterial::CommitCacheResources(HnRenderDelegate& RenderDelegate)
+void HnMaterial::BeginResourceUpdate(HnRenderDelegate& RenderDelegate)
+{
+    RefCntAutoPtr<HnMaterialSRBCache> SRBCache{RenderDelegate.GetMaterialSRBCache(), IID_HnMaterialSRBCache};
+    VERIFY_EXPR(SRBCache);
+
+    SRBCache->PrepareMaterialAttribsBuffer(RenderDelegate.GetDevice(), RenderDelegate.GetDeviceContext());
+}
+
+void HnMaterial::EndResourceUpdate(HnRenderDelegate& RenderDelegate)
 {
     RefCntAutoPtr<HnMaterialSRBCache> SRBCache{RenderDelegate.GetMaterialSRBCache(), IID_HnMaterialSRBCache};
     VERIFY_EXPR(SRBCache);
