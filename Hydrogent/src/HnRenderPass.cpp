@@ -521,8 +521,9 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
         const HnMesh::Components::Transform& Transform    = std::get<0>(MeshAttribs);
         const float4&                        DisplayColor = std::get<1>(MeshAttribs).Val;
         const bool                           MeshVisibile = std::get<2>(MeshAttribs).Val;
+        const PBR_Renderer::PSO_FLAGS        PSOFlags     = m_UseFallbackPSO ? GetFallbackPSOFlags() : ListItem.PSOFlags;
 
-        const HnMesh::Components::Skinning* pSkinningData = ((ListItem.PSOFlags & PBR_Renderer::PSO_FLAG_USE_JOINTS) && pJointsCB != nullptr) ?
+        const HnMesh::Components::Skinning* pSkinningData = ((PSOFlags & PBR_Renderer::PSO_FLAG_USE_JOINTS) && pJointsCB != nullptr) ?
             &MeshAttribsView.get<const HnMesh::Components::Skinning>(ListItem.MeshEntity) :
             nullptr;
 
@@ -626,13 +627,13 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
 
                 // Write new joint transforms
                 const pxr::VtMatrix4fArray*            PrevXforms = ListItem.PrevXforms != nullptr ? ListItem.PrevXforms : pSkinningData->Xforms;
-                USD_Renderer::WriteSkinningDataAttribs WriteSkinningAttribs{ListItem.PSOFlags, JointCount};
+                USD_Renderer::WriteSkinningDataAttribs WriteSkinningAttribs{PSOFlags, JointCount};
                 WriteSkinningAttribs.JointMatrices     = reinterpret_cast<const float4x4*>(pSkinningData->Xforms->data());
                 WriteSkinningAttribs.PrevJointMatrices = reinterpret_cast<const float4x4*>(PrevXforms->data());
 
                 void*        pDataEnd       = State.USDRenderer.WriteSkinningData(pJointsData, WriteSkinningAttribs);
                 const Uint32 JointsDataSize = static_cast<Uint32>(reinterpret_cast<Uint8*>(pDataEnd) - reinterpret_cast<Uint8*>(pJointsData));
-                VERIFY_EXPR(JointsDataSize == State.USDRenderer.GetJointsDataSize(JointCount, ListItem.PSOFlags));
+                VERIFY_EXPR(JointsDataSize == State.USDRenderer.GetJointsDataSize(JointCount, PSOFlags));
                 CurrJointsDataSize = AlignUp(JointsBufferOffset + JointsDataSize, JointsBufferOffsetAlignment);
 
                 XformsHash = pSkinningData->XformsHash;
@@ -665,7 +666,7 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
             0;
 
         GLTF_PBR_Renderer::PBRPrimitiveShaderAttribsData AttribsData{
-            ListItem.PSOFlags,
+            PSOFlags,
             &Transform.Matrix,
             &ListItem.PrevTransform,
             JointCount,
@@ -674,22 +675,12 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
             &Transform.PosBias,
             pSkinningData ? reinterpret_cast<const float4x4*>(pSkinningData->GeomBindXform.Data()) : nullptr,
             pSkinningData ? reinterpret_cast<const float4x4*>(pSkinningData->GeomBindXform.Data()) : nullptr,
-            nullptr, // CustomData
-            0,       // CustomDataSize
+            &ListItem.MeshUID,        // CustomData
+            sizeof(ListItem.MeshUID), // CustomDataSize
         };
         GLTF_PBR_Renderer::WritePBRPrimitiveShaderAttribs(pCurrPrimitive, AttribsData,
                                                           /*TransposeMatrices = */ !PackMatrixRowMajor,
                                                           State.RendererSettings.UseSkinPreTransform);
-
-        // TODO:
-#if 0
-        HLSL::PBRMaterialBasicAttribs* pDstMaterialBasicAttribs = nullptr;
-
-        pDstMaterialBasicAttribs->BaseColorFactor = MaterialData.Attribs.BaseColorFactor * DisplayColor;
-        // Write Mesh ID to material custom data to make sure that selection works for fallback PSO.
-        // Using PBRPrimitiveShaderAttribs's CustomData will not work as fallback PSO uses different flags.
-        pDstMaterialBasicAttribs->CustomData.x = ListItem.MeshUID;
-#endif
 
         ListItem.PrevTransform = Transform.Matrix;
 
@@ -828,6 +819,14 @@ void HnRenderPass::UpdateDrawList(const pxr::TfTokenVector& RenderTags)
     m_GlobalAttribVersions.GeomSubsetDrawItems = GeomSubsetDrawItemsVersion;
 }
 
+PBR_Renderer::PSO_FLAGS HnRenderPass::GetFallbackPSOFlags() const
+{
+    return (m_RenderMode == HN_RENDER_MODE_SOLID ?
+                PBR_Renderer::PSO_FLAG_COMPUTE_MOTION_VECTORS :
+                PBR_Renderer::PSO_FLAG_UNSHADED) |
+        static_cast<PBR_Renderer::PSO_FLAGS>(m_Params.UsdPsoFlags);
+}
+
 void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
 {
     if (m_DrawListItemsDirtyFlags & DRAW_LIST_ITEM_DIRTY_FLAG_PSO)
@@ -839,14 +838,8 @@ void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
         (m_Params.UsdPsoFlags & USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_OUTPUT) != 0 &&
         m_RenderMode == HN_RENDER_MODE_SOLID)
     {
-        const PBR_Renderer::PSO_FLAGS FallbackPSOFlags =
-            (m_RenderMode == HN_RENDER_MODE_SOLID ?
-                 PBR_Renderer::PSO_FLAG_COMPUTE_MOTION_VECTORS :
-                 PBR_Renderer::PSO_FLAG_UNSHADED) |
-            static_cast<PBR_Renderer::PSO_FLAGS>(m_Params.UsdPsoFlags);
-
         const PBR_Renderer::PSOKey FallbackPSOKey{
-            FallbackPSOFlags,
+            GetFallbackPSOFlags(),
             PBR_Renderer::ALPHA_MODE_OPAQUE,
             CULL_MODE_NONE,
             PBR_Renderer::DebugViewType::None,

@@ -93,7 +93,7 @@ USD_Renderer::CreateInfo::PSMainSourceInfo USD_Renderer::GetUsdPbrPSMainSource(U
     float4 BaseColor    = float4(0.0, 0.0, 0.0, 0.0);
     float2 MotionVector = float2(0.0, 0.0);
 #else
-    MeshId       = PRIMITIVE.Material.Basic.CustomData.x;
+    MeshId       = PRIMITIVE.CustomData.x;
     Normal       = Shading.BaseLayer.Normal.xyz;
     MaterialData = float2(Shading.BaseLayer.Srf.PerceptualRoughness, Shading.BaseLayer.Metallic);
     IBL          = GetBaseLayerSpecularIBL(Shading, SrfLighting);

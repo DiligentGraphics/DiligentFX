@@ -197,6 +197,8 @@ private:
 
     GraphicsPipelineDesc GetGraphicsDesc(const HnRenderPassState& RPState, bool UseStripTopology) const;
 
+    PBR_Renderer::PSO_FLAGS GetFallbackPSOFlags() const;
+
 private:
     HnRenderPassParams m_Params;
 
