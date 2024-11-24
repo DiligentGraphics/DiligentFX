@@ -56,6 +56,7 @@ namespace USD
 
 class HnRenderDelegate;
 class HnMaterialNetwork;
+class HnMaterialSRBCache;
 
 /// Hydra material implementation in Hydrogent.
 class HnMaterial final : public pxr::HdMaterial
@@ -210,6 +211,8 @@ private:
     Uint32 m_ResourceCacheVersion = ~0u;
 
     ShaderTextureIndexingIdType m_ShaderTextureIndexingId = 0;
+
+    RefCntAutoPtr<HnMaterialSRBCache> m_SRBCache;
 };
 
 } // namespace USD

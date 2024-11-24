@@ -45,6 +45,8 @@
 #include "GLTFBuilder.hpp"
 #include "GLTF_PBR_Renderer.hpp"
 #include "DataBlobImpl.hpp"
+#include "VariableSizeAllocationsManager.hpp"
+#include "DefaultRawMemoryAllocator.hpp"
 
 #include "pxr/imaging/hd/sceneDelegate.h"
 
@@ -99,10 +101,6 @@ HnMaterial::HnMaterial(HnRenderDelegate& RenderDelegate) :
 {
     // Sync() is never called for the default material, so we need to initialize texture attributes now.
     AllocateTextures({}, RenderDelegate);
-}
-
-HnMaterial::~HnMaterial()
-{
 }
 
 void HnMaterial::Sync(pxr::HdSceneDelegate* SceneDelegate,
@@ -617,6 +615,13 @@ public:
     HnMaterialSRBCache(IReferenceCounters* pRefCounters) :
         ObjectBase<IObject>{pRefCounters},
         m_Cache{/*NumRequestsToPurge = */ 128},
+        m_BufferRegionMgr{
+            VariableSizeAllocationsManager::CreateInfo{
+                DefaultRawMemoryAllocator::GetAllocator(),
+                2048,
+                true, // DisableDebugValidation,
+            },
+        },
         m_MaterialAttribsBuffer{
             nullptr,
             DynamicBufferCreateInfo{
@@ -629,6 +634,11 @@ public:
             },
         }
     {}
+
+    ~HnMaterialSRBCache()
+    {
+        VERIFY(m_BufferRegionMgr.GetUsedSize() == 0, "Not all buffer regions have been released");
+    }
 
     static RefCntAutoPtr<IObject> Create()
     {
@@ -703,17 +713,41 @@ public:
         return it->second;
     }
 
-    Uint32 AllocateBufferOffset(Uint32 Size)
+    void AllocateBufferOffset(Uint32& Offset, Uint32& Size, Uint32 RequiredSize)
     {
-        std::lock_guard<std::mutex> Lock{m_CurrBufferOffsetMtx};
+        std::lock_guard<std::mutex> Lock{m_BufferRegionMgrMtx};
 
         VERIFY(m_ConstantBufferOffsetAlignment != 0 && m_MaxAttribsDataSize != 0, "The cache is not initialized");
+        // Release the previously allocated region
+        if (Offset != ~0u)
+        {
+            VERIFY_EXPR(Size != 0);
+            VERIFY_EXPR(AlignUp(Offset, m_ConstantBufferOffsetAlignment) == Offset);
+            m_BufferRegionMgr.Free(Offset, AlignUp(Size, m_ConstantBufferOffsetAlignment));
+        }
 
-        const Uint32 Offset = AlignUp(m_CurrBufferOffset, m_ConstantBufferOffsetAlignment);
-        m_CurrBufferOffset  = Offset + Size;
-        // Reserve enough space for the maximum possible attribs data size.
-        m_RequiredBufferSize = AlignUp(Offset + m_MaxAttribsDataSize, m_ConstantBufferOffsetAlignment);
-        return Offset;
+        Size = RequiredSize;
+        if (RequiredSize != 0)
+        {
+            RequiredSize = AlignUp(RequiredSize, m_ConstantBufferOffsetAlignment);
+
+            VariableSizeAllocationsManager::Allocation Allocation = m_BufferRegionMgr.Allocate(RequiredSize, 1);
+            if (!Allocation.IsValid())
+            {
+                VERIFY_EXPR(RequiredSize <= m_BufferRegionMgr.GetMaxSize());
+                m_BufferRegionMgr.Extend(m_BufferRegionMgr.GetMaxSize());
+                Allocation = m_BufferRegionMgr.Allocate(RequiredSize, 1);
+                VERIFY_EXPR(Allocation.IsValid());
+            }
+
+            Offset = Allocation.UnalignedOffset;
+            // Reserve enough space for the maximum possible attribs data size.
+            m_RequiredBufferSize = std::max(m_RequiredBufferSize, AlignUp(Offset + m_MaxAttribsDataSize, m_ConstantBufferOffsetAlignment));
+        }
+        else
+        {
+            Offset = ~0u;
+        }
     }
 
     IBuffer* PrepareMaterialAttribsBuffer(IRenderDevice* pDevice, IDeviceContext* pContext)
@@ -731,7 +765,7 @@ public:
 
     IBuffer* GetMaterialAttribsBuffer() const
     {
-        VERIFY_EXPR(m_RequiredBufferSize == m_MaterialAttribsBuffer.GetDesc().Size, "The buffer needs to be resized.");
+        VERIFY(m_RequiredBufferSize == m_MaterialAttribsBuffer.GetDesc().Size, "The buffer needs to be resized.");
         return m_MaterialAttribsBuffer.GetBuffer();
     }
 
@@ -751,7 +785,7 @@ public:
 
     IBuffer* CommitUpdates(IRenderDevice* pDevice, IDeviceContext* pContext)
     {
-        VERIFY_EXPR(m_RequiredBufferSize == m_MaterialAttribsBuffer.GetDesc().Size, "The buffer needs to be resized.");
+        VERIFY(m_RequiredBufferSize == m_MaterialAttribsBuffer.GetDesc().Size, "The buffer needs to be resized.");
         IBuffer* pBuffer = m_MaterialAttribsBuffer.GetBuffer();
         if (m_DirtyRangeStart < m_DirtyRangeEnd)
         {
@@ -800,9 +834,9 @@ private:
     Uint32 m_ConstantBufferOffsetAlignment = 0;
     Uint32 m_MaxAttribsDataSize            = 0;
 
-    std::mutex m_CurrBufferOffsetMtx;
-    Uint32     m_CurrBufferOffset   = 0;
-    Uint32     m_RequiredBufferSize = 0;
+    std::mutex                     m_BufferRegionMgrMtx;
+    VariableSizeAllocationsManager m_BufferRegionMgr;
+    Uint32                         m_RequiredBufferSize = 0;
 
     // Material attribs data resides in a single buffer shared by all SRBs.
     DynamicBuffer      m_MaterialAttribsBuffer;
@@ -815,18 +849,20 @@ void HnMaterial::AllocateBufferSpace(HnRenderDelegate& RenderDelegate)
 {
     const USD_Renderer& UsdRenderer = *RenderDelegate.GetUSDRenderer();
 
-    m_PSOFlags                        = HnRenderPass::GetMaterialPSOFlags(*this);
-    Uint32 LastPBRMaterialAttribsSize = m_PBRMaterialAttribsSize;
-    m_PBRMaterialAttribsSize          = UsdRenderer.GetPBRMaterialAttribsSize(m_PSOFlags);
-
-    // Note that in case material attribs size increases, previously allocated space will not be reused.
-    // This, however, is unlikely to happen in practice.
-    if (m_PBRMaterialAttribsBufferOffset == ~0u || m_PBRMaterialAttribsSize > LastPBRMaterialAttribsSize)
+    m_PSOFlags         = HnRenderPass::GetMaterialPSOFlags(*this);
+    Uint32 AttribsSize = UsdRenderer.GetPBRMaterialAttribsSize(m_PSOFlags);
+    if (m_PBRMaterialAttribsBufferOffset == ~0u || AttribsSize > m_PBRMaterialAttribsSize)
     {
-        RefCntAutoPtr<HnMaterialSRBCache> SRBCache{RenderDelegate.GetMaterialSRBCache(), IID_HnMaterialSRBCache};
-        VERIFY_EXPR(SRBCache);
-
-        m_PBRMaterialAttribsBufferOffset = SRBCache->AllocateBufferOffset(m_PBRMaterialAttribsSize);
+        if (!m_SRBCache)
+        {
+            m_SRBCache = RefCntAutoPtr<HnMaterialSRBCache>{RenderDelegate.GetMaterialSRBCache(), IID_HnMaterialSRBCache};
+            VERIFY_EXPR(m_SRBCache);
+        }
+        else
+        {
+            VERIFY_EXPR(m_SRBCache == RenderDelegate.GetMaterialSRBCache());
+        }
+        m_SRBCache->AllocateBufferOffset(m_PBRMaterialAttribsBufferOffset, m_PBRMaterialAttribsSize, AttribsSize);
     }
 }
 
@@ -1323,6 +1359,11 @@ void HnMaterial::EndResourceUpdate(HnRenderDelegate& RenderDelegate)
     {
         UNEXPECTED("Material SRB cache must not be null");
     }
+}
+
+HnMaterial::~HnMaterial()
+{
+    m_SRBCache->AllocateBufferOffset(m_PBRMaterialAttribsBufferOffset, m_PBRMaterialAttribsSize, 0);
 }
 
 } // namespace USD
