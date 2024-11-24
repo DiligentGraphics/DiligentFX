@@ -422,6 +422,8 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
     },
     m_ShadowMapManager{CreateShadowMapManager(CI)}
 {
+    HnMaterial::InitSRBCache(*this);
+
     const Uint32 ConstantBufferOffsetAlignment = m_pDevice->GetAdapterInfo().Buffer.ConstantBufferOffsetAlignment;
 
     m_MainPassFrameAttribsAlignedSize   = AlignUpNonPw2(m_USDRenderer->GetPRBFrameAttribsSize(), ConstantBufferOffsetAlignment);

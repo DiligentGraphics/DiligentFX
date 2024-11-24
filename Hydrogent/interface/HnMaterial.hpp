@@ -78,6 +78,7 @@ public:
     /// Creates an SRB cache that should be passed to UpdateSRB().
     static RefCntAutoPtr<IObject> CreateSRBCache();
 
+    static void InitSRBCache(HnRenderDelegate& RenderDelegate);
     static void BeginResourceUpdate(HnRenderDelegate& RenderDelegate);
     bool        UpdateSRB(HnRenderDelegate& RenderDelegate);
     static void EndResourceUpdate(HnRenderDelegate& RenderDelegate);

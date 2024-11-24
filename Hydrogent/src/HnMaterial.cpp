@@ -637,6 +637,12 @@ public:
 
     IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_HnMaterialSRBCache, ObjectBase<IObject>)
 
+    void Initialize(HnRenderDelegate& RenderDelegate)
+    {
+        m_ConstantBufferOffsetAlignment = RenderDelegate.GetDevice()->GetAdapterInfo().Buffer.ConstantBufferOffsetAlignment;
+        m_MaxAttribsDataSize            = RenderDelegate.GetUSDRenderer()->GetPBRMaterialAttribsSize(PBR_Renderer::PSO_FLAG_ALL);
+    }
+
     /// SRB cache key
     ///
     /// The key is the combination of unique IDs of the texture objects used by the SRB.
@@ -697,14 +703,16 @@ public:
         return it->second;
     }
 
-    Uint32 AllocateBufferOffset(Uint32 Size, Uint32 Alignment, Uint32 MaxAttribsDataSize)
+    Uint32 AllocateBufferOffset(Uint32 Size)
     {
         std::lock_guard<std::mutex> Lock{m_CurrBufferOffsetMtx};
 
-        const Uint32 Offset = AlignUp(m_CurrBufferOffset, Alignment);
+        VERIFY(m_ConstantBufferOffsetAlignment != 0 && m_MaxAttribsDataSize != 0, "The cache is not initialized");
+
+        const Uint32 Offset = AlignUp(m_CurrBufferOffset, m_ConstantBufferOffsetAlignment);
         m_CurrBufferOffset  = Offset + Size;
         // Reserve enough space for the maximum possible attribs data size.
-        m_RequiredBufferSize = AlignUp(Offset + MaxAttribsDataSize, Alignment);
+        m_RequiredBufferSize = AlignUp(Offset + m_MaxAttribsDataSize, m_ConstantBufferOffsetAlignment);
         return Offset;
     }
 
@@ -760,6 +768,11 @@ public:
         return pBuffer;
     }
 
+    Uint32 GetMaxAttribsDataSize() const
+    {
+        return m_MaxAttribsDataSize;
+    }
+
     Uint32 GetMaterialAttribsBufferVersion() const
     {
         return m_MaterialAttribsBuffer.GetVersion();
@@ -783,6 +796,9 @@ private:
         m_ShaderTextureIndexingCache;
 
     std::unordered_map<ShaderTextureIndexingIdType, const StaticShaderTextureIdsArrayType&> m_IdToIndexing;
+
+    Uint32 m_ConstantBufferOffsetAlignment = 0;
+    Uint32 m_MaxAttribsDataSize            = 0;
 
     std::mutex m_CurrBufferOffsetMtx;
     Uint32     m_CurrBufferOffset   = 0;
@@ -810,9 +826,7 @@ void HnMaterial::AllocateBufferSpace(HnRenderDelegate& RenderDelegate)
         RefCntAutoPtr<HnMaterialSRBCache> SRBCache{RenderDelegate.GetMaterialSRBCache(), IID_HnMaterialSRBCache};
         VERIFY_EXPR(SRBCache);
 
-        const Uint32 ConstantBufferOffsetAlignment = RenderDelegate.GetDevice()->GetAdapterInfo().Buffer.ConstantBufferOffsetAlignment;
-        const Uint32 MaxAttribsDataSize            = UsdRenderer.GetPBRMaterialAttribsSize(PBR_Renderer::PSO_FLAG_ALL);
-        m_PBRMaterialAttribsBufferOffset           = SRBCache->AllocateBufferOffset(m_PBRMaterialAttribsSize, ConstantBufferOffsetAlignment, MaxAttribsDataSize);
+        m_PBRMaterialAttribsBufferOffset = SRBCache->AllocateBufferOffset(m_PBRMaterialAttribsSize);
     }
 }
 
@@ -1246,7 +1260,7 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RenderDelegate)
         {
             IBuffer* pMaterialAttribsBuffer = SRBCache->GetMaterialAttribsBuffer();
             // Bind maximum possible buffer range
-            const Uint32 PBRMaterialAttribsMaxSize = UsdRenderer.GetPBRMaterialAttribsSize(PBR_Renderer::PSO_FLAG_ALL);
+            const Uint32 PBRMaterialAttribsMaxSize = SRBCache->GetMaxAttribsDataSize();
             m_MaterialAttribsVar->SetBufferRange(pMaterialAttribsBuffer, 0, PBRMaterialAttribsMaxSize);
         }
 
@@ -1272,23 +1286,43 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RenderDelegate)
     return true;
 }
 
+void HnMaterial::InitSRBCache(HnRenderDelegate& RenderDelegate)
+{
+    if (RefCntAutoPtr<HnMaterialSRBCache> SRBCache{RenderDelegate.GetMaterialSRBCache(), IID_HnMaterialSRBCache})
+    {
+        SRBCache->Initialize(RenderDelegate);
+    }
+    else
+    {
+        UNEXPECTED("Material SRB cache must not be null");
+    }
+}
+
 void HnMaterial::BeginResourceUpdate(HnRenderDelegate& RenderDelegate)
 {
-    RefCntAutoPtr<HnMaterialSRBCache> SRBCache{RenderDelegate.GetMaterialSRBCache(), IID_HnMaterialSRBCache};
-    VERIFY_EXPR(SRBCache);
-
-    SRBCache->PrepareMaterialAttribsBuffer(RenderDelegate.GetDevice(), RenderDelegate.GetDeviceContext());
+    if (RefCntAutoPtr<HnMaterialSRBCache> SRBCache{RenderDelegate.GetMaterialSRBCache(), IID_HnMaterialSRBCache})
+    {
+        SRBCache->PrepareMaterialAttribsBuffer(RenderDelegate.GetDevice(), RenderDelegate.GetDeviceContext());
+    }
+    else
+    {
+        UNEXPECTED("Material SRB cache must not be null");
+    }
 }
 
 void HnMaterial::EndResourceUpdate(HnRenderDelegate& RenderDelegate)
 {
-    RefCntAutoPtr<HnMaterialSRBCache> SRBCache{RenderDelegate.GetMaterialSRBCache(), IID_HnMaterialSRBCache};
-    VERIFY_EXPR(SRBCache);
-
-    IDeviceContext*     pContext = RenderDelegate.GetDeviceContext();
-    IBuffer*            pBuffer  = SRBCache->CommitUpdates(RenderDelegate.GetDevice(), pContext);
-    StateTransitionDesc Barrier{pBuffer, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE};
-    pContext->TransitionResourceStates(1, &Barrier);
+    if (RefCntAutoPtr<HnMaterialSRBCache> SRBCache{RenderDelegate.GetMaterialSRBCache(), IID_HnMaterialSRBCache})
+    {
+        IDeviceContext*     pContext = RenderDelegate.GetDeviceContext();
+        IBuffer*            pBuffer  = SRBCache->CommitUpdates(RenderDelegate.GetDevice(), pContext);
+        StateTransitionDesc Barrier{pBuffer, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE};
+        pContext->TransitionResourceStates(1, &Barrier);
+    }
+    else
+    {
+        UNEXPECTED("Material SRB cache must not be null");
+    }
 }
 
 } // namespace USD
