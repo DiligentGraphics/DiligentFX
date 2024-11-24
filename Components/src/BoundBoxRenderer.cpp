@@ -214,11 +214,13 @@ void BoundBoxRenderer::Prepare(IDeviceContext* pContext, const RenderAttribs& At
     }
     else
     {
-        MapHelper<BoundBoxShaderAttribs> BBAttribs{pContext, m_RenderAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
-        WriteShaderMatrix(&BBAttribs->Transform, *Attribs.BoundBoxTransform, !m_PackMatrixRowMajor);
-        BBAttribs->Color         = Attribs.Color != nullptr ? *Attribs.Color : float4{1.0, 1.0, 1.0, 1.0};
-        BBAttribs->PatternLength = Attribs.PatternLength;
-        BBAttribs->PatternMask   = Attribs.PatternMask;
+        if (MapHelper<BoundBoxShaderAttribs> BBAttribs{pContext, m_RenderAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD})
+        {
+            WriteShaderMatrix(&BBAttribs->Transform, *Attribs.BoundBoxTransform, !m_PackMatrixRowMajor);
+            BBAttribs->Color         = Attribs.Color != nullptr ? *Attribs.Color : float4{1.0, 1.0, 1.0, 1.0};
+            BBAttribs->PatternLength = Attribs.PatternLength;
+            BBAttribs->PatternMask   = Attribs.PatternMask;
+        }
     }
 }
 

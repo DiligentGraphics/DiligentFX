@@ -311,9 +311,11 @@ void PostFXContext::Execute(const RenderAttributes& RenderAttribs)
             m_Resources.Insert(RESOURCE_IDENTIFIER_CONSTANT_BUFFER, pBuffer);
         }
 
-        MapHelper<HLSL::CameraAttribs> CameraAttibs{RenderAttribs.pDeviceContext, m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER], MAP_WRITE, MAP_FLAG_DISCARD};
-        CameraAttibs[0] = *RenderAttribs.pCurrCamera;
-        CameraAttibs[1] = *RenderAttribs.pPrevCamera;
+        if (MapHelper<HLSL::CameraAttribs> CameraAttibs{RenderAttribs.pDeviceContext, m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER], MAP_WRITE, MAP_FLAG_DISCARD})
+        {
+            CameraAttibs[0] = *RenderAttribs.pCurrCamera;
+            CameraAttibs[1] = *RenderAttribs.pPrevCamera;
+        }
     }
     else
     {
@@ -573,8 +575,8 @@ void PostFXContext::ComputeBlueNoiseTexture(const RenderAttributes& RenderAttrib
     }
     else
     {
+        if (MapHelper<Uint32> IndexBuffer{RenderAttribs.pDeviceContext, m_Resources[RESOURCE_IDENTIFIER_INDEX_BUFFER_INTERMEDIATE], MAP_WRITE, MAP_FLAG_DISCARD})
         {
-            MapHelper<Uint32> IndexBuffer{RenderAttribs.pDeviceContext, m_Resources[RESOURCE_IDENTIFIER_INDEX_BUFFER_INTERMEDIATE], MAP_WRITE, MAP_FLAG_DISCARD};
             IndexBuffer[0] = 3 * m_FrameDesc.Index + 0;
             IndexBuffer[1] = 3 * m_FrameDesc.Index + 1;
             IndexBuffer[2] = 3 * m_FrameDesc.Index + 2;

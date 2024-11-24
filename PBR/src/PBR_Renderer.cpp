@@ -814,12 +814,14 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
     ProcessCubemapFaces(pCtx, pIrradianceCube, [&](ITextureView* pRTV, Uint32 mip, Uint32 face) {
         VERIFY_EXPR(mip == 0);
         {
-            MapHelper<PrecomputeEnvMapAttribs> Attribs{pCtx, m_PrecomputeEnvMapAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
-            Attribs->Rotation       = Matrices[face];
-            Attribs->EnvMapWidth    = static_cast<float>(pEnvironmentMap->GetTexture()->GetDesc().Width);
-            Attribs->EnvMapHeight   = static_cast<float>(pEnvironmentMap->GetTexture()->GetDesc().Height);
-            Attribs->EnvMapMipCount = static_cast<float>(pEnvironmentMap->GetTexture()->GetDesc().MipLevels);
-            Attribs->NumSamples     = NumDiffuseSamples;
+            if (MapHelper<PrecomputeEnvMapAttribs> Attribs{pCtx, m_PrecomputeEnvMapAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD})
+            {
+                Attribs->Rotation       = Matrices[face];
+                Attribs->EnvMapWidth    = static_cast<float>(pEnvironmentMap->GetTexture()->GetDesc().Width);
+                Attribs->EnvMapHeight   = static_cast<float>(pEnvironmentMap->GetTexture()->GetDesc().Height);
+                Attribs->EnvMapMipCount = static_cast<float>(pEnvironmentMap->GetTexture()->GetDesc().MipLevels);
+                Attribs->NumSamples     = NumDiffuseSamples;
+            }
         }
         DrawAttribs drawAttrs(4, DRAW_FLAG_VERIFY_ALL);
         pCtx->Draw(drawAttrs);
@@ -834,13 +836,15 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
     auto* pPrefilteredEnvMap = m_pPrefilteredEnvMapSRV->GetTexture();
     ProcessCubemapFaces(pCtx, pPrefilteredEnvMap, [&](ITextureView* pRTV, Uint32 mip, Uint32 face) {
         {
-            MapHelper<PrecomputeEnvMapAttribs> Attribs{pCtx, m_PrecomputeEnvMapAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
-            Attribs->Rotation       = Matrices[face];
-            Attribs->Roughness      = static_cast<float>(mip) / static_cast<float>(pPrefilteredEnvMap->GetDesc().MipLevels - 1);
-            Attribs->EnvMapWidth    = static_cast<float>(pEnvironmentMap->GetTexture()->GetDesc().Width);
-            Attribs->EnvMapHeight   = static_cast<float>(pEnvironmentMap->GetTexture()->GetDesc().Height);
-            Attribs->EnvMapMipCount = static_cast<float>(pEnvironmentMap->GetTexture()->GetDesc().MipLevels);
-            Attribs->NumSamples     = NumSpecularSamples;
+            if (MapHelper<PrecomputeEnvMapAttribs> Attribs{pCtx, m_PrecomputeEnvMapAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD})
+            {
+                Attribs->Rotation       = Matrices[face];
+                Attribs->Roughness      = static_cast<float>(mip) / static_cast<float>(pPrefilteredEnvMap->GetDesc().MipLevels - 1);
+                Attribs->EnvMapWidth    = static_cast<float>(pEnvironmentMap->GetTexture()->GetDesc().Width);
+                Attribs->EnvMapHeight   = static_cast<float>(pEnvironmentMap->GetTexture()->GetDesc().Height);
+                Attribs->EnvMapMipCount = static_cast<float>(pEnvironmentMap->GetTexture()->GetDesc().MipLevels);
+                Attribs->NumSamples     = NumSpecularSamples;
+            }
         }
 
         DrawAttribs drawAttrs(4, DRAW_FLAG_VERIFY_ALL);

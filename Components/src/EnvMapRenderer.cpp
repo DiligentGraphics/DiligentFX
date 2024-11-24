@@ -237,11 +237,13 @@ void EnvMapRenderer::Prepare(IDeviceContext*                 pContext,
     }
     else
     {
-        MapHelper<EnvMapShaderAttribs> EnvMapAttribs{pContext, m_RenderAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
-        EnvMapAttribs->ToneMapping   = ToneMapping;
-        EnvMapAttribs->AverageLogLum = Attribs.AverageLogLum;
-        EnvMapAttribs->MipLevel      = Attribs.MipLevel;
-        EnvMapAttribs->Alpha         = Attribs.Alpha;
+        if (MapHelper<EnvMapShaderAttribs> EnvMapAttribs{pContext, m_RenderAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD})
+        {
+            EnvMapAttribs->ToneMapping   = ToneMapping;
+            EnvMapAttribs->AverageLogLum = Attribs.AverageLogLum;
+            EnvMapAttribs->MipLevel      = Attribs.MipLevel;
+            EnvMapAttribs->Alpha         = Attribs.Alpha;
+        }
     }
 }
 

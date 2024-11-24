@@ -632,15 +632,16 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
 
                 if ((PSOFlags & PSO_FLAG_USE_JOINTS) != 0)
                 {
-                    MapHelper<float4x4> pJoints{pCtx, m_JointsBuffer, MAP_WRITE, MAP_FLAG_DISCARD};
-
-                    WriteSkinningDataAttribs WriteSkinningAttribs{PSOFlags, static_cast<Uint32>(JointCount)};
-                    WriteSkinningAttribs.JointMatrices = JointMatrices.data();
-                    if ((PSOFlags & PSO_FLAG_COMPUTE_MOTION_VECTORS) != 0)
+                    if (MapHelper<float4x4> pJoints{pCtx, m_JointsBuffer, MAP_WRITE, MAP_FLAG_DISCARD})
                     {
-                        WriteSkinningAttribs.PrevJointMatrices = PrevTransforms->Skins[Node.SkinTransformsIndex].JointMatrices.data();
+                        WriteSkinningDataAttribs WriteSkinningAttribs{PSOFlags, static_cast<Uint32>(JointCount)};
+                        WriteSkinningAttribs.JointMatrices = JointMatrices.data();
+                        if ((PSOFlags & PSO_FLAG_COMPUTE_MOTION_VECTORS) != 0)
+                        {
+                            WriteSkinningAttribs.PrevJointMatrices = PrevTransforms->Skins[Node.SkinTransformsIndex].JointMatrices.data();
+                        }
+                        WriteSkinningData(pJoints, WriteSkinningAttribs);
                     }
-                    WriteSkinningData(pJoints, WriteSkinningAttribs);
                 }
             }
 

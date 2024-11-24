@@ -207,8 +207,8 @@ void VectorFieldRenderer::Render(const RenderAttribs& Attribs)
 
     m_pVectorFieldVar->Set(Attribs.pVectorField);
 
+    if (MapHelper<HLSL::VectorFieldRenderAttribs> AttribsData{Attribs.pContext, m_RenderAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD})
     {
-        MapHelper<HLSL::VectorFieldRenderAttribs> AttribsData{Attribs.pContext, m_RenderAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
         AttribsData->ScaleAndBias = {Attribs.Scale, Attribs.Bias};
         AttribsData->f2GridSize   = {static_cast<float>(Attribs.GridSize.x), static_cast<float>(Attribs.GridSize.y)};
         AttribsData->u2GridSize   = {Attribs.GridSize.x, Attribs.GridSize.y};

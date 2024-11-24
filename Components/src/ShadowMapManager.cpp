@@ -556,25 +556,27 @@ void ShadowMapManager::ConvertToFilterable(IDeviceContext* pCtx, const ShadowMap
                     float fEVSMNegativeExponent;
                     int   Is32BitEVSM;
                 };
-                MapHelper<ConversionAttribs> pAttribs(pCtx, m_pConversionAttribsBuffer, MAP_WRITE, MAP_FLAG_DISCARD);
-                pAttribs->iCascade = i;
-                if (ShadowAttribs.iFixedFilterSize > 0)
+                if (MapHelper<ConversionAttribs> pAttribs{pCtx, m_pConversionAttribsBuffer, MAP_WRITE, MAP_FLAG_DISCARD})
                 {
-                    pAttribs->fHorzFilterRadius = static_cast<float>(iFilterRadius);
-                    pAttribs->fVertFilterRadius = static_cast<float>(iFilterRadius);
+                    pAttribs->iCascade = i;
+                    if (ShadowAttribs.iFixedFilterSize > 0)
+                    {
+                        pAttribs->fHorzFilterRadius = static_cast<float>(iFilterRadius);
+                        pAttribs->fVertFilterRadius = static_cast<float>(iFilterRadius);
+                    }
+                    else
+                    {
+                        const auto& Cascade         = ShadowAttribs.Cascades[i];
+                        float       fNDCtoUVScale   = 0.5f;
+                        float       fFilterWidth    = ShadowAttribs.fFilterWorldSize * Cascade.f4LightSpaceScale.x * fNDCtoUVScale;
+                        float       fFilterHeight   = ShadowAttribs.fFilterWorldSize * Cascade.f4LightSpaceScale.y * fNDCtoUVScale;
+                        pAttribs->fHorzFilterRadius = fFilterWidth / 2.f * static_cast<float>(ShadowMapDesc.Width);
+                        pAttribs->fVertFilterRadius = fFilterHeight / 2.f * static_cast<float>(ShadowMapDesc.Height);
+                    }
+                    pAttribs->fEVSMPositiveExponent = ShadowAttribs.fEVSMPositiveExponent;
+                    pAttribs->fEVSMNegativeExponent = ShadowAttribs.fEVSMNegativeExponent;
+                    pAttribs->Is32BitEVSM           = ShadowAttribs.bIs32BitEVSM;
                 }
-                else
-                {
-                    const auto& Cascade         = ShadowAttribs.Cascades[i];
-                    float       fNDCtoUVScale   = 0.5f;
-                    float       fFilterWidth    = ShadowAttribs.fFilterWorldSize * Cascade.f4LightSpaceScale.x * fNDCtoUVScale;
-                    float       fFilterHeight   = ShadowAttribs.fFilterWorldSize * Cascade.f4LightSpaceScale.y * fNDCtoUVScale;
-                    pAttribs->fHorzFilterRadius = fFilterWidth / 2.f * static_cast<float>(ShadowMapDesc.Width);
-                    pAttribs->fVertFilterRadius = fFilterHeight / 2.f * static_cast<float>(ShadowMapDesc.Height);
-                }
-                pAttribs->fEVSMPositiveExponent = ShadowAttribs.fEVSMPositiveExponent;
-                pAttribs->fEVSMNegativeExponent = ShadowAttribs.fEVSMNegativeExponent;
-                pAttribs->Is32BitEVSM           = ShadowAttribs.bIs32BitEVSM;
             }
             pCtx->SetPipelineState(Tech.PSO);
             pCtx->CommitShaderResources(Tech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);

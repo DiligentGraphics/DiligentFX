@@ -342,8 +342,10 @@ void HnProcessSelectionTask::Execute(pxr::HdTaskContext* TaskCtx)
             UNEXPECTED("Background depth is not set in the task context");
         }
 
-        MapHelper<HLSL::ClosestSelectedLocationConstants> Constants{pCtx, m_ConstantsCB, MAP_WRITE, MAP_FLAG_DISCARD};
-        Constants->ClearDepth = BackgroundDepth;
+        if (MapHelper<HLSL::ClosestSelectedLocationConstants> Constants{pCtx, m_ConstantsCB, MAP_WRITE, MAP_FLAG_DISCARD})
+        {
+            Constants->ClearDepth = BackgroundDepth;
+        }
     }
 
     ITextureView* ClosestSelectedLocationRTVs[] = {Targets->ClosestSelectedLocationRTV[0], Targets->ClosestSelectedLocationRTV[1]};
@@ -354,8 +356,8 @@ void HnProcessSelectionTask::Execute(pxr::HdTaskContext* TaskCtx)
 
     for (Uint32 i = 0; i < m_NumJFIterations; ++i)
     {
+        if (MapHelper<HLSL::ClosestSelectedLocationConstants> Constants{pCtx, m_ConstantsCB, MAP_WRITE, MAP_FLAG_DISCARD})
         {
-            MapHelper<HLSL::ClosestSelectedLocationConstants> Constants{pCtx, m_ConstantsCB, MAP_WRITE, MAP_FLAG_DISCARD};
             Constants->SampleRange = static_cast<float>(1 << (m_NumJFIterations - 1 - i));
         }
 

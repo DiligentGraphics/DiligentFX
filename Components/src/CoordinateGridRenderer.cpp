@@ -80,8 +80,10 @@ void CoordinateGridRenderer::Render(const RenderAttributes& RenderAttribs)
             m_Resources.Insert(RESOURCE_IDENTIFIER_CAMERA_CONSTANT_BUFFER, pBuffer);
         }
 
-        MapHelper<HLSL::CameraAttribs> CameraAttibs{RenderAttribs.pDeviceContext, m_Resources[RESOURCE_IDENTIFIER_CAMERA_CONSTANT_BUFFER], MAP_WRITE, MAP_FLAG_DISCARD};
-        *CameraAttibs = *RenderAttribs.pCamera;
+        if (MapHelper<HLSL::CameraAttribs> CameraAttibs{RenderAttribs.pDeviceContext, m_Resources[RESOURCE_IDENTIFIER_CAMERA_CONSTANT_BUFFER], MAP_WRITE, MAP_FLAG_DISCARD})
+        {
+            *CameraAttibs = *RenderAttribs.pCamera;
+        }
     }
     else
     {

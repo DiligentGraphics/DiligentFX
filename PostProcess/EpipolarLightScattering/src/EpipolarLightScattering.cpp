@@ -1427,8 +1427,8 @@ void EpipolarLightScattering::Build1DMinMaxMipMap(int iCascadeIndex)
         m_FrameAttribs.pDeviceContext->SetViewports(1, &VP, 0, 0);
 
         // Set source and destination min/max data offsets:
+        if (MapHelper<MiscDynamicParams> pMiscDynamicParams{m_FrameAttribs.pDeviceContext, m_pcbMiscParams, MAP_WRITE, MAP_FLAG_DISCARD})
         {
-            MapHelper<MiscDynamicParams> pMiscDynamicParams(m_FrameAttribs.pDeviceContext, m_pcbMiscParams, MAP_WRITE, MAP_FLAG_DISCARD);
             pMiscDynamicParams->ui4SrcMinMaxLevelXOffset = uiPrevXOffset;
             pMiscDynamicParams->ui4DstMinMaxLevelXOffset = uiXOffset;
             pMiscDynamicParams->fCascadeInd              = static_cast<float>(iCascadeIndex);
@@ -1560,8 +1560,8 @@ void EpipolarLightScattering::DoRayMarching(Uint32 uiMaxStepsAlongRay,
             SRB_DEPENDENCY_AVERAGE_LUMINANCE_TEX;
     }
 
+    if (MapHelper<MiscDynamicParams> pMiscDynamicParams{m_FrameAttribs.pDeviceContext, m_pcbMiscParams, MAP_WRITE, MAP_FLAG_DISCARD})
     {
-        MapHelper<MiscDynamicParams> pMiscDynamicParams(m_FrameAttribs.pDeviceContext, m_pcbMiscParams, MAP_WRITE, MAP_FLAG_DISCARD);
         pMiscDynamicParams->fMaxStepsAlongRay = static_cast<float>(uiMaxStepsAlongRay);
         pMiscDynamicParams->fCascadeInd       = static_cast<float>(iCascadeIndex);
     }
@@ -1813,8 +1813,8 @@ void EpipolarLightScattering::UpdateAverageLuminance()
         UpdateAverageLuminanceTech.PSODependencyFlags = PSO_DEPENDENCY_LIGHT_ADAPTATION;
     }
 
+    if (MapHelper<MiscDynamicParams> pMiscDynamicParams{m_FrameAttribs.pDeviceContext, m_pcbMiscParams, MAP_WRITE, MAP_FLAG_DISCARD})
     {
-        MapHelper<MiscDynamicParams> pMiscDynamicParams(m_FrameAttribs.pDeviceContext, m_pcbMiscParams, MAP_WRITE, MAP_FLAG_DISCARD);
         pMiscDynamicParams->fElapsedTime = (float)m_FrameAttribs.dElapsedTime;
     }
 
@@ -1952,8 +1952,8 @@ void EpipolarLightScattering::FixInscatteringAtDepthBreaks(Uint32               
             SRB_DEPENDENCY_AVERAGE_LUMINANCE_TEX;
     }
 
+    if (MapHelper<MiscDynamicParams> pMiscDynamicParams{m_FrameAttribs.pDeviceContext, m_pcbMiscParams, MAP_WRITE, MAP_FLAG_DISCARD})
     {
-        MapHelper<MiscDynamicParams> pMiscDynamicParams(m_FrameAttribs.pDeviceContext, m_pcbMiscParams, MAP_WRITE, MAP_FLAG_DISCARD);
         pMiscDynamicParams->fMaxStepsAlongRay = static_cast<float>(uiMaxStepsAlongRay);
         pMiscDynamicParams->fCascadeInd       = static_cast<float>(m_PostProcessingAttribs.iFirstCascadeToRayMarch);
     }
@@ -2310,9 +2310,10 @@ void EpipolarLightScattering::PrepareForNewFrame(FrameAttribs&                  
             CreateUniformBuffer(m_FrameAttribs.pDevice, sizeof(CameraAttribs), "Camera attribs", &m_pcbCameraAttribs);
             VERIFY_EXPR(StaleSRBDependencyFlags & SRB_DEPENDENCY_CAMERA_ATTRIBS);
         }
-        MapHelper<CameraAttribs> CamAttribs(m_FrameAttribs.pDeviceContext, m_pcbCameraAttribs, MAP_WRITE, MAP_FLAG_DISCARD);
-        *CamAttribs = *m_FrameAttribs.pCameraAttribs;
-
+        if (MapHelper<CameraAttribs> CamAttribs{m_FrameAttribs.pDeviceContext, m_pcbCameraAttribs, MAP_WRITE, MAP_FLAG_DISCARD})
+        {
+            *CamAttribs = *m_FrameAttribs.pCameraAttribs;
+        }
         m_FrameAttribs.pcbCameraAttribs = m_pcbCameraAttribs;
     }
 
@@ -2323,9 +2324,10 @@ void EpipolarLightScattering::PrepareForNewFrame(FrameAttribs&                  
             CreateUniformBuffer(m_FrameAttribs.pDevice, sizeof(LightAttribs), "Light attribs", &m_pcbLightAttribs);
             VERIFY_EXPR(StaleSRBDependencyFlags & SRB_DEPENDENCY_LIGHT_ATTRIBS);
         }
-        MapHelper<LightAttribs> LightAttribs(m_FrameAttribs.pDeviceContext, m_pcbLightAttribs, MAP_WRITE, MAP_FLAG_DISCARD);
-        *LightAttribs = *m_FrameAttribs.pLightAttribs;
-
+        if (MapHelper<LightAttribs> LightAttribs{m_FrameAttribs.pDeviceContext, m_pcbLightAttribs, MAP_WRITE, MAP_FLAG_DISCARD})
+        {
+            *LightAttribs = *m_FrameAttribs.pLightAttribs;
+        }
         m_FrameAttribs.pcbLightAttribs = m_pcbLightAttribs;
     }
 
@@ -2360,8 +2362,8 @@ void EpipolarLightScattering::PrepareForNewFrame(FrameAttribs&                  
         }
     }
 
+    if (MapHelper<EpipolarLightScatteringAttribs> pPPAttribsBuffData{m_FrameAttribs.pDeviceContext, m_pcbPostProcessingAttribs, MAP_WRITE, MAP_FLAG_DISCARD})
     {
-        MapHelper<EpipolarLightScatteringAttribs> pPPAttribsBuffData(m_FrameAttribs.pDeviceContext, m_pcbPostProcessingAttribs, MAP_WRITE, MAP_FLAG_DISCARD);
         memcpy(pPPAttribsBuffData, &m_PostProcessingAttribs, sizeof(m_PostProcessingAttribs));
     }
 
