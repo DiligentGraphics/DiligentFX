@@ -445,8 +445,10 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
                                                        size_t            DataSize) {
             if (BuffDesc.Usage == USAGE_DYNAMIC)
             {
-                VERIFY_EXPR(pMappedData != nullptr);
-                pCtx->UnmapBuffer(pBuffer, MAP_WRITE);
+                if (pMappedData != nullptr)
+                {
+                    pCtx->UnmapBuffer(pBuffer, MAP_WRITE);
+                }
                 pMappedData = nullptr;
             }
             else
@@ -598,7 +600,7 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
                     pCtx->MapBuffer(pBuffer, MAP_WRITE, MAP_FLAG_DISCARD, pMappedData);
                     if (pMappedData == nullptr)
                     {
-                        UNEXPECTED("Failed to map the buffer");
+                        LOG_DVP_ERROR_MESSAGE("Failed to map buffer '", BuffDesc.Name, "'.");
                         return nullptr;
                     }
                 }
