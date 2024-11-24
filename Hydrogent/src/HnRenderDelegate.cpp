@@ -90,8 +90,9 @@ const pxr::TfTokenVector HnRenderDelegate::SupportedBPrimTypes = {
 static RefCntAutoPtr<IBuffer> CreatePrimitiveAttribsCB(IRenderDevice* pDevice)
 {
     Uint64 Size = 65536;
-    // Add extra space as buffer for the attributes buffer range.
-    Size += 8192;
+
+    // Don't do this as this degrades dynamic memory utilization!
+    //Size += 8192; // Add extra space as buffer for the attributes buffer range.
 
     USAGE Usage = USAGE_DYNAMIC;
     if (pDevice->GetDeviceInfo().IsGLDevice())
