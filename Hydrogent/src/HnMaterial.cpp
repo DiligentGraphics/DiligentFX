@@ -851,7 +851,7 @@ void HnMaterial::AllocateBufferSpace(HnRenderDelegate& RenderDelegate)
 
     m_PSOFlags         = HnRenderPass::GetMaterialPSOFlags(*this);
     Uint32 AttribsSize = UsdRenderer.GetPBRMaterialAttribsSize(m_PSOFlags);
-    if (m_PBRMaterialAttribsBufferOffset == ~0u || AttribsSize > m_PBRMaterialAttribsSize)
+    if (m_PBRMaterialAttribsBufferOffset == ~0u || AttribsSize != m_PBRMaterialAttribsSize)
     {
         if (!m_SRBCache)
         {
@@ -1363,7 +1363,10 @@ void HnMaterial::EndResourceUpdate(HnRenderDelegate& RenderDelegate)
 
 HnMaterial::~HnMaterial()
 {
-    m_SRBCache->AllocateBufferOffset(m_PBRMaterialAttribsBufferOffset, m_PBRMaterialAttribsSize, 0);
+    if (m_SRBCache)
+    {
+        m_SRBCache->AllocateBufferOffset(m_PBRMaterialAttribsBufferOffset, m_PBRMaterialAttribsSize, 0);
+    }
 }
 
 } // namespace USD
