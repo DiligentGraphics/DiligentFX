@@ -79,10 +79,11 @@ public:
     /// Creates an SRB cache that should be passed to UpdateSRB().
     static RefCntAutoPtr<IObject> CreateSRBCache();
 
-    static void InitSRBCache(HnRenderDelegate& RenderDelegate);
-    static void BeginResourceUpdate(HnRenderDelegate& RenderDelegate);
-    bool        UpdateSRB(HnRenderDelegate& RenderDelegate);
-    static void EndResourceUpdate(HnRenderDelegate& RenderDelegate);
+    static Uint32 GetResourceCacheVersion(HnRenderDelegate& RenderDelegate);
+    static void   InitSRBCache(HnRenderDelegate& RenderDelegate);
+    static void   BeginResourceUpdate(HnRenderDelegate& RenderDelegate);
+    bool          UpdateSRB(HnRenderDelegate& RenderDelegate);
+    static void   EndResourceUpdate(HnRenderDelegate& RenderDelegate);
 
     IShaderResourceBinding* GetSRB() const { return m_SRB; }
     IShaderResourceBinding* GetSRB(Uint32 PrimitiveAttribsOffset) const

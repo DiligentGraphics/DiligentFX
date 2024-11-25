@@ -970,10 +970,9 @@ static bool ApplyStandardStaticTextureIndexing(const PBR_Renderer::CreateInfo&  
     return true;
 }
 
-bool HnMaterial::UpdateSRB(HnRenderDelegate& RenderDelegate)
+Uint32 HnMaterial::GetResourceCacheVersion(HnRenderDelegate& RenderDelegate)
 {
-    HnTextureRegistry&  TexRegistry = RenderDelegate.GetTextureRegistry();
-    const USD_Renderer& UsdRenderer = *RenderDelegate.GetUSDRenderer();
+    HnTextureRegistry& TexRegistry = RenderDelegate.GetTextureRegistry();
 
     RefCntAutoPtr<HnMaterialSRBCache> SRBCache{RenderDelegate.GetMaterialSRBCache(), IID_HnMaterialSRBCache};
     VERIFY_EXPR(SRBCache);
@@ -992,6 +991,15 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RenderDelegate)
         ResourceCacheVersion += TexRegistry.GetStorageVersion();
     }
 
+    return ResourceCacheVersion;
+}
+
+bool HnMaterial::UpdateSRB(HnRenderDelegate& RenderDelegate)
+{
+    HnTextureRegistry&  TexRegistry = RenderDelegate.GetTextureRegistry();
+    const USD_Renderer& UsdRenderer = *RenderDelegate.GetUSDRenderer();
+
+    const Uint32 ResourceCacheVersion = GetResourceCacheVersion(RenderDelegate);
     if (m_ResourceCacheVersion != ResourceCacheVersion)
     {
         m_SRB.Release();
@@ -1007,6 +1015,9 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RenderDelegate)
             return false;
         }
     }
+
+    RefCntAutoPtr<HnMaterialSRBCache> SRBCache{RenderDelegate.GetMaterialSRBCache(), IID_HnMaterialSRBCache};
+    VERIFY_EXPR(SRBCache);
 
     if (m_GPUDataDirty.load())
     {
@@ -1036,6 +1047,7 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RenderDelegate)
 
     HnMaterialSRBCache::ResourceKey SRBKey{m_ResourceCacheVersion};
 
+    const HN_MATERIAL_TEXTURES_BINDING_MODE BindingMode = static_cast<const HnRenderParam*>(RenderDelegate.GetRenderParam())->GetTextureBindingMode();
     if (BindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_LEGACY ||
         BindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_ATLAS)
     {
