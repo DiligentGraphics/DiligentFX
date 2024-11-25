@@ -298,6 +298,30 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
     return std::make_shared<USD_Renderer>(RenderDelegateCI.pDevice, RenderDelegateCI.pRenderStateCache, RenderDelegateCI.pContext, USDRendererCI);
 }
 
+static bool CheckSparseTextureSupport(IRenderDevice* pDevice)
+{
+    const DeviceFeatures& Features = pDevice->GetDeviceInfo().Features;
+    if (!Features.SparseResources)
+    {
+        return false;
+    }
+
+    const SparseResourceProperties& SparseRes = pDevice->GetAdapterInfo().SparseResources;
+    return (SparseRes.CapFlags & SPARSE_RESOURCE_CAP_FLAG_TEXTURE_2D_ARRAY_MIP_TAIL) != 0;
+}
+
+static bool CheckSparseBufferSupport(IRenderDevice* pDevice)
+{
+    const DeviceFeatures& Features = pDevice->GetDeviceInfo().Features;
+    if (!Features.SparseResources)
+    {
+        return false;
+    }
+
+    const SparseResourceProperties& SparseRes = pDevice->GetAdapterInfo().SparseResources;
+    return (SparseRes.CapFlags & SPARSE_RESOURCE_CAP_FLAG_BUFFER) != 0;
+}
+
 static RefCntAutoPtr<GLTF::ResourceManager> CreateResourceManager(const HnRenderDelegate::CreateInfo& CI)
 {
     // Initial vertex and index counts are not important as the
@@ -313,6 +337,23 @@ static RefCntAutoPtr<GLTF::ResourceManager> CreateResourceManager(const HnRender
 
     ResMgrCI.DefaultPoolDesc.VertexCount = InitialVertexCount;
     ResMgrCI.DefaultPoolDesc.Usage       = USAGE_DEFAULT;
+
+    if (CheckSparseBufferSupport(CI.pDevice))
+    {
+        if (CI.pDevice->GetDeviceInfo().Type != RENDER_DEVICE_TYPE_D3D11)
+        {
+            // Direct3D11 does not support sparse index buffers
+            ResMgrCI.IndexAllocatorCI.Desc.Usage = USAGE_SPARSE;
+            // Initial buffer size defines the page size. Too small page
+            // size may be a problem on Vulkan because the number of
+            // memory objects is limited by 4096.
+            ResMgrCI.IndexAllocatorCI.Desc.Size = 8 << 20;
+        }
+        ResMgrCI.DefaultPoolDesc.Usage = USAGE_SPARSE;
+        // Similar to index buffer, make sure that the initial buffer size
+        // is not too small.
+        ResMgrCI.DefaultPoolDesc.VertexCount = 256 << 10;
+    }
 
     if (CI.TextureBindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_ATLAS)
     {
@@ -344,9 +385,18 @@ static RefCntAutoPtr<GLTF::ResourceManager> CreateResourceManager(const HnRender
             TextureAtlasDim = 2048;
         }
 
-        ResMgrCI.DefaultAtlasDesc.Desc.Name      = "Hydrogent texture atlas";
-        ResMgrCI.DefaultAtlasDesc.Desc.Type      = RESOURCE_DIM_TEX_2D_ARRAY;
-        ResMgrCI.DefaultAtlasDesc.Desc.Usage     = USAGE_DEFAULT;
+        ResMgrCI.DefaultAtlasDesc.Desc.Name = "Hydrogent texture atlas";
+        ResMgrCI.DefaultAtlasDesc.Desc.Type = RESOURCE_DIM_TEX_2D_ARRAY;
+        if (CheckSparseTextureSupport(CI.pDevice))
+        {
+            ResMgrCI.DefaultAtlasDesc.Desc.Usage      = USAGE_SPARSE;
+            ResMgrCI.DefaultAtlasDesc.ExtraSliceCount = 1;
+        }
+        else
+        {
+            ResMgrCI.DefaultAtlasDesc.Desc.Usage   = USAGE_DEFAULT;
+            ResMgrCI.DefaultAtlasDesc.GrowthFactor = 1.25f;
+        }
         ResMgrCI.DefaultAtlasDesc.Desc.BindFlags = BIND_SHADER_RESOURCE;
         ResMgrCI.DefaultAtlasDesc.Desc.Width     = TextureAtlasDim;
         ResMgrCI.DefaultAtlasDesc.Desc.Height    = TextureAtlasDim;
@@ -356,7 +406,6 @@ static RefCntAutoPtr<GLTF::ResourceManager> CreateResourceManager(const HnRender
         // return null.
         ResMgrCI.DefaultAtlasDesc.Desc.ArraySize = 1;
         ResMgrCI.DefaultAtlasDesc.Desc.MipLevels = 6;
-        ResMgrCI.DefaultAtlasDesc.GrowthFactor   = 1.25f;
         ResMgrCI.DefaultAtlasDesc.MinAlignment   = 64;
     }
 
