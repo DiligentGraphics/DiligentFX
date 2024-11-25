@@ -594,6 +594,9 @@ void HnMaterial::AllocateTextures(const HnMaterialNetwork& Network,
     m_TextureAddressingAttribsDirty.store(true);
 
     AllocateBufferSpace(RenderDelegate);
+
+    // Make sure we recreate the SRB next time UpdateSRB() is called
+    m_ResourceCacheVersion = ~0u;
 }
 
 
