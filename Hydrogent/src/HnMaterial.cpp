@@ -621,7 +621,7 @@ public:
         m_BufferRegionMgr{
             VariableSizeAllocationsManager::CreateInfo{
                 DefaultRawMemoryAllocator::GetAllocator(),
-                2048,
+                64 << 10,
                 true, // DisableDebugValidation,
             },
         },
@@ -630,7 +630,7 @@ public:
             DynamicBufferCreateInfo{
                 BufferDesc{
                     "Material attribs buffer",
-                    64 << 10, // 64 KB,
+                    0,
                     BIND_UNIFORM_BUFFER,
                     USAGE_DEFAULT,
                 },
