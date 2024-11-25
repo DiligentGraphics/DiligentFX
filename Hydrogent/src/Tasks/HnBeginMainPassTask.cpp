@@ -29,6 +29,7 @@
 #include "HnRenderPassState.hpp"
 #include "HnShadowMapManager.hpp"
 #include "HnTokens.hpp"
+#include "ScopedDebugGroup.hpp"
 
 namespace Diligent
 {
@@ -77,6 +78,8 @@ void HnBeginMainPassTask::Execute(pxr::HdTaskContext* TaskCtx)
 
     HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
     IDeviceContext*   pCtx           = RenderDelegate->GetDeviceContext();
+
+    ScopedDebugGroup DebugGroup{pCtx, "Begin Main Pass"};
 
     // Note that HnRenderShadowsTask may be disabled, so we need to transition the shadow map state here
     if (const HnShadowMapManager* ShadowMapMgr = RenderDelegate->GetShadowMapManager())

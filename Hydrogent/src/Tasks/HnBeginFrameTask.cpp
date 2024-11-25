@@ -703,6 +703,8 @@ void HnBeginFrameTask::Execute(pxr::HdTaskContext* TaskCtx)
     HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
     IDeviceContext*   pCtx           = RenderDelegate->GetDeviceContext();
 
+    ScopedDebugGroup DebugGroup{pCtx, "Begin Frame"};
+
     // NB: we can't move the buffer update to Prepare() because we need TAA parameters
     //     that are set by HnPostProcessTask::Prepare().
     if (IBuffer* pFrameAttribsCB = RenderDelegate->GetFrameAttribsCB())
