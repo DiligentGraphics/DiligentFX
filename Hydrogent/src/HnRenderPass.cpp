@@ -153,11 +153,11 @@ struct HnRenderPass::RenderState
             return;
         }
 
-        if (pNewSRB != this->pMaterialSRB || this->MaterialBufferOffset != Material.GetPBRMaterialAttribsBufferOffset())
+        if (pNewSRB != this->pMaterialSRB)
         {
-            Material.ApplyMaterialAttribsBufferOffset();
-            this->MaterialBufferOffset = Material.GetPBRMaterialAttribsBufferOffset();
+            this->MaterialBufferOffset = ~0u;
         }
+        Material.ApplyMaterialAttribsBufferOffset(this->MaterialBufferOffset);
 
         if (pNewSRB == this->pMaterialSRB)
             return;
@@ -226,7 +226,7 @@ private:
 
     IBuffer* pIndexBuffer = nullptr;
 
-    Uint32 MaterialBufferOffset = 0;
+    Uint32 MaterialBufferOffset = ~0u;
 
     Uint32                                         NumVertexBuffers = 0;
     std::array<IBuffer*, VERTEX_BUFFER_SLOT_COUNT> ppVertexBuffers  = {};

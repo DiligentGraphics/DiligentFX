@@ -91,11 +91,15 @@ public:
         m_PrimitiveAttribsVar->SetBufferOffset(PrimitiveAttribsOffset);
         return m_SRB;
     }
-    void ApplyMaterialAttribsBufferOffset() const
+    void ApplyMaterialAttribsBufferOffset(Uint32& CurrentOffset) const
     {
         VERIFY_EXPR(m_MaterialAttribsVar != nullptr);
         VERIFY_EXPR(m_PBRMaterialAttribsBufferOffset != ~0u);
-        m_MaterialAttribsVar->SetBufferOffset(m_PBRMaterialAttribsBufferOffset);
+        if (CurrentOffset != m_PBRMaterialAttribsBufferOffset)
+        {
+            m_MaterialAttribsVar->SetBufferOffset(m_PBRMaterialAttribsBufferOffset);
+            CurrentOffset = m_PBRMaterialAttribsBufferOffset;
+        }
     }
     void SetJointsBufferOffset(Uint32 Offset) const
     {
@@ -137,11 +141,6 @@ public:
 
     Uint32 GetPBRPrimitiveAttribsBufferRange() const { return m_PBRPrimitiveAttribsBufferRange; }
     Uint32 GetPBRMaterialAttribsSize() const { return m_PBRMaterialAttribsSize; }
-    Uint32 GetPBRMaterialAttribsBufferOffset() const
-    {
-        VERIFY_EXPR(m_PBRMaterialAttribsBufferOffset != ~0u);
-        return m_PBRMaterialAttribsBufferOffset;
-    }
 
 private:
     HnMaterial(pxr::SdfPath const& id);
