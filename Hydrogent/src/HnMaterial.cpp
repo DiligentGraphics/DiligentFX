@@ -975,7 +975,20 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RenderDelegate)
     RefCntAutoPtr<HnMaterialSRBCache> SRBCache{RenderDelegate.GetMaterialSRBCache(), IID_HnMaterialSRBCache};
     VERIFY_EXPR(SRBCache);
 
-    const Uint32 ResourceCacheVersion = TexRegistry.GetStorageVersion() + SRBCache->GetMaterialAttribsBufferVersion();
+    const HN_MATERIAL_TEXTURES_BINDING_MODE BindingMode = static_cast<const HnRenderParam*>(RenderDelegate.GetRenderParam())->GetTextureBindingMode();
+
+    Uint32 ResourceCacheVersion = SRBCache->GetMaterialAttribsBufferVersion();
+    if (BindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_ATLAS)
+    {
+        // Need to recreate SRBs if the atlas texture has changed
+        ResourceCacheVersion += TexRegistry.GetAtlasVersion();
+    }
+    else if (BindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_DYNAMIC)
+    {
+        // Need to recreate the SRB if any new texture is created
+        ResourceCacheVersion += TexRegistry.GetStorageVersion();
+    }
+
     if (m_ResourceCacheVersion != ResourceCacheVersion)
     {
         m_SRB.Release();
@@ -1022,7 +1035,6 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RenderDelegate)
 
     HnMaterialSRBCache::ResourceKey SRBKey{m_ResourceCacheVersion};
 
-    const HN_MATERIAL_TEXTURES_BINDING_MODE BindingMode = static_cast<const HnRenderParam*>(RenderDelegate.GetRenderParam())->GetTextureBindingMode();
     if (BindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_LEGACY ||
         BindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_ATLAS)
     {

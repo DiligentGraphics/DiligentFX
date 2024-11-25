@@ -160,11 +160,12 @@ public:
 
     /// Returns the texture registry storage version.
     ///
-    /// \remarks    The storage version is incremented every time a new texture is created
-    ///             or dynamic texture atlas version changes.
+    /// \remarks    The storage version is incremented every time a new texture is created.
     ///
     ///             The storage version is not incremented when the texture data is updated.
     Uint32 GetStorageVersion() const;
+
+    Uint32 GetAtlasVersion() const;
 
     /// Returns the texture registry data version.
     ///

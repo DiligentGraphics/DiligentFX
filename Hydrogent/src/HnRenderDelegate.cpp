@@ -738,8 +738,8 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
     }
 
     {
-        // Tex storage version is incremented every time a new texture is created or texture atlas version changes.
-        const Uint32 TexStorageVersion = m_TextureRegistry->GetStorageVersion();
+        // Tex storage version is incremented every time a new texture is created.
+        const Uint32 TexStorageVersion = m_TextureRegistry->GetStorageVersion() + m_TextureRegistry->GetAtlasVersion();
         if (m_MaterialResourcesVersion != m_RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::Material) + TexStorageVersion)
         {
             std::lock_guard<std::mutex> Guard{m_MaterialsMtx};

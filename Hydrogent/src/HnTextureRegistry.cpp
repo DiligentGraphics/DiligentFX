@@ -416,10 +416,12 @@ HnTextureRegistry::TextureHandleSharedPtr HnTextureRegistry::Allocate(const HnTe
 
 Uint32 HnTextureRegistry::GetStorageVersion() const
 {
-    Uint32 Version = m_StorageVersion.load();
-    if (m_pResourceManager != nullptr)
-        Version += m_pResourceManager->GetTextureVersion();
-    return Version;
+    return m_StorageVersion.load();
+}
+
+Uint32 HnTextureRegistry::GetAtlasVersion() const
+{
+    return m_pResourceManager != nullptr ? m_pResourceManager->GetTextureVersion() : 0;
 }
 
 Uint32 HnTextureRegistry::GetDataVersion() const
