@@ -995,9 +995,7 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RenderDelegate)
     if (m_ResourceCacheVersion != ResourceCacheVersion)
     {
         m_SRB.Release();
-        m_PrimitiveAttribsVar  = nullptr;
-        m_MaterialAttribsVar   = nullptr;
-        m_JointTransformsVar   = nullptr;
+        m_SRBVars              = {};
         m_ResourceCacheVersion = ResourceCacheVersion;
     }
 
@@ -1305,28 +1303,28 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RenderDelegate)
 
     if (m_SRB)
     {
-        m_MaterialAttribsVar = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbMaterialAttribs");
-        VERIFY_EXPR(m_MaterialAttribsVar != nullptr);
-        if (m_MaterialAttribsVar->Get() == nullptr)
+        m_SRBVars.MaterialAttribs = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbMaterialAttribs");
+        VERIFY_EXPR(m_SRBVars.MaterialAttribs != nullptr);
+        if (m_SRBVars.MaterialAttribs->Get() == nullptr)
         {
             IBuffer* pMaterialAttribsBuffer = SRBCache->GetMaterialAttribsBuffer();
             // Bind maximum possible buffer range
             const Uint32 PBRMaterialAttribsMaxSize = SRBCache->GetMaxAttribsDataSize();
-            m_MaterialAttribsVar->SetBufferRange(pMaterialAttribsBuffer, 0, PBRMaterialAttribsMaxSize);
+            m_SRBVars.MaterialAttribs->SetBufferRange(pMaterialAttribsBuffer, 0, PBRMaterialAttribsMaxSize);
         }
 
-        m_JointTransformsVar = m_SRB->GetVariableByName(SHADER_TYPE_VERTEX, UsdRenderer.GetJointTransformsVarName());
-        VERIFY_EXPR(m_JointTransformsVar != nullptr || RendererSettings.MaxJointCount == 0);
+        m_SRBVars.JointTransforms = m_SRB->GetVariableByName(SHADER_TYPE_VERTEX, UsdRenderer.GetJointTransformsVarName());
+        VERIFY_EXPR(m_SRBVars.JointTransforms != nullptr || RendererSettings.MaxJointCount == 0);
 
         const Uint32 PBRPrimitiveAttribsSize = UsdRenderer.GetPBRPrimitiveAttribsSize(PBR_Renderer::PSO_FLAG_ALL);
         const Uint32 PrimitiveArraySize      = std::max(UsdRenderer.GetSettings().PrimitiveArraySize, 1u);
         m_PBRPrimitiveAttribsBufferRange     = PBRPrimitiveAttribsSize * PrimitiveArraySize;
 
-        m_PrimitiveAttribsVar = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbPrimitiveAttribs");
-        VERIFY_EXPR(m_PrimitiveAttribsVar != nullptr);
-        if (m_PrimitiveAttribsVar->Get() == nullptr)
+        m_SRBVars.PrimitiveAttribs = m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbPrimitiveAttribs");
+        VERIFY_EXPR(m_SRBVars.PrimitiveAttribs != nullptr);
+        if (m_SRBVars.PrimitiveAttribs->Get() == nullptr)
         {
-            m_PrimitiveAttribsVar->SetBufferRange(UsdRenderer.GetPBRPrimitiveAttribsCB(), 0, m_PBRPrimitiveAttribsBufferRange);
+            m_SRBVars.PrimitiveAttribs->SetBufferRange(UsdRenderer.GetPBRPrimitiveAttribsCB(), 0, m_PBRPrimitiveAttribsBufferRange);
         }
     }
     else

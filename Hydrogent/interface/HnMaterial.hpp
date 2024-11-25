@@ -87,28 +87,28 @@ public:
     IShaderResourceBinding* GetSRB() const { return m_SRB; }
     IShaderResourceBinding* GetSRB(Uint32 PrimitiveAttribsOffset) const
     {
-        VERIFY_EXPR(m_PrimitiveAttribsVar != nullptr);
-        m_PrimitiveAttribsVar->SetBufferOffset(PrimitiveAttribsOffset);
+        VERIFY_EXPR(m_SRBVars.PrimitiveAttribs != nullptr);
+        m_SRBVars.PrimitiveAttribs->SetBufferOffset(PrimitiveAttribsOffset);
         return m_SRB;
     }
     void ApplyMaterialAttribsBufferOffset(Uint32& CurrentOffset) const
     {
-        VERIFY_EXPR(m_MaterialAttribsVar != nullptr);
+        VERIFY_EXPR(m_SRBVars.MaterialAttribs != nullptr);
         VERIFY_EXPR(m_PBRMaterialAttribsBufferOffset != ~0u);
         if (CurrentOffset != m_PBRMaterialAttribsBufferOffset)
         {
-            m_MaterialAttribsVar->SetBufferOffset(m_PBRMaterialAttribsBufferOffset);
+            m_SRBVars.MaterialAttribs->SetBufferOffset(m_PBRMaterialAttribsBufferOffset);
             CurrentOffset = m_PBRMaterialAttribsBufferOffset;
         }
     }
     void SetJointsBufferOffset(Uint32 Offset) const
     {
-        if (m_JointTransformsVar == nullptr)
+        if (m_SRBVars.JointTransforms == nullptr)
         {
             UNEXPECTED("Joint transforms variable is not initialized, which indicates that skinning is not enabled in the renderer.");
             return;
         }
-        m_JointTransformsVar->SetBufferOffset(Offset);
+        m_SRBVars.JointTransforms->SetBufferOffset(Offset);
     }
 
     const GLTF::Material& GetMaterialData() const { return m_MaterialData; }
@@ -176,9 +176,13 @@ private:
     std::unordered_map<pxr::TfToken, HnTextureRegistry::TextureHandleSharedPtr, pxr::TfToken::HashFunctor> m_Textures;
 
     RefCntAutoPtr<IShaderResourceBinding> m_SRB;
-    IShaderResourceVariable*              m_PrimitiveAttribsVar = nullptr; // cbPrimitiveAttribs
-    IShaderResourceVariable*              m_MaterialAttribsVar  = nullptr; // cbMaterialAttribs
-    IShaderResourceVariable*              m_JointTransformsVar  = nullptr; // cbJointTransforms
+    struct SRBVariables
+    {
+        IShaderResourceVariable* PrimitiveAttribs = nullptr; // cbPrimitiveAttribs
+        IShaderResourceVariable* MaterialAttribs  = nullptr; // cbMaterialAttribs
+        IShaderResourceVariable* JointTransforms  = nullptr; // cbJointTransforms
+    };
+    SRBVariables m_SRBVars;
 
     GLTF::Material m_MaterialData;
 
