@@ -407,9 +407,8 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
     VERIFY_EXPR(pPrimitiveAttribsCB != nullptr);
     IBuffer* const pJointsCB          = State.USDRenderer.GetJointsBuffer();
     const Uint32   MaxJointCount      = State.RendererSettings.MaxJointCount;
-    const Uint32   JointsDataRange    = State.USDRenderer.GetJointsBufferSize();
     const bool     PackMatrixRowMajor = State.RendererSettings.PackMatrixRowMajor;
-    VERIFY_EXPR(pJointsCB != nullptr || JointsDataRange == 0);
+
     const Uint32 JointsBufferOffsetAlignment = (State.RendererSettings.JointsBufferMode == USD_Renderer::JOINTS_BUFFER_MODE_UNIFORM) ?
         State.ConstantBufferOffsetAlignment :
         sizeof(float4x4);
@@ -422,11 +421,13 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
     void*  pMappedPrimitiveData = nullptr;
     Uint32 AttribsBufferOffset  = 0;
 
-    void*  pMappedJointsData  = nullptr;
-    Uint32 JointsBufferOffset = 0;
-    Uint32 CurrJointsDataSize = 0;
-    size_t XformsHash         = 0;
-    Uint32 JointCount         = 0;
+    void*  pMappedJointsData   = nullptr;
+    Uint32 JointsBufferOffset  = 0;
+    Uint32 TotalJointsDataSize = 0;
+    size_t XformsHash          = 0;
+    Uint32 JointCount          = 0;
+    Uint32 JointsDataRange     = 0;
+    Uint32 JointsDataSize      = 0;
 
     if (AttribsBuffDesc.Usage != USAGE_DYNAMIC)
     {
@@ -465,18 +466,21 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
                             m_PrimitiveAttribsData.data(), AttribsBufferOffset);
         AttribsBufferOffset = 0;
 
-        if (CurrJointsDataSize > 0)
+        if (TotalJointsDataSize > 0)
         {
-            VERIFY_EXPR(JointsBuffDesc.Usage == USAGE_DYNAMIC || CurrJointsDataSize <= m_JointsData.size());
+            VERIFY_EXPR(JointsBuffDesc.Usage == USAGE_DYNAMIC || TotalJointsDataSize <= m_JointsData.size());
             UnmapOrUpdateBuffer(pJointsCB, JointsBuffDesc, pMappedJointsData,
-                                m_JointsData.data(), CurrJointsDataSize);
+                                m_JointsData.data(), TotalJointsDataSize);
         }
-        JointsBufferOffset = 0;
-        CurrJointsDataSize = 0;
+        JointsBufferOffset  = 0;
+        TotalJointsDataSize = 0;
         // Reset the hash to force updating the joint transforms for the next draw item.
         // NB: we can't reuse the transforms at the existing offset because they may be
         //     overwritten by the next draw item.
         XformsHash = 0;
+
+        // NB: do NOT zero-out JointCount, JointsDataRange, and JointsDataSize as they
+        //     are set before FlushPendingDraws() is called.
 
         RenderPendingDrawItems(State);
         VERIFY_EXPR(m_PendingDrawItems.empty());
@@ -540,7 +544,39 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
             // Restart batch when the joint transforms change
             MultiDrawCount = 0;
 
-            if (CurrJointsDataSize + JointsDataRange > JointsBuffDesc.Size)
+            JointCount     = std::min(static_cast<Uint32>(pSkinningData->Xforms->size()), MaxJointCount);
+            JointsDataSize = State.USDRenderer.GetJointsDataSize(JointCount, PSOFlags);
+            if (State.RendererSettings.JointsBufferMode == USD_Renderer::JOINTS_BUFFER_MODE_UNIFORM)
+            {
+                // RenderPBR.vsh
+                //
+                //  struct SkinnigData
+                //  {
+                //  #   if COMPUTE_MOTION_VECTORS
+                //          float4x4 Joints[MAX_JOINT_COUNT * 2];
+                //  #   else
+                //          float4x4 Joints[MAX_JOINT_COUNT];
+                //  #   endif
+                //  };
+                //
+                // Joints data range is the size of the entire structure with the maximum number of joints.
+                JointsDataRange = State.USDRenderer.GetJointsDataSize(MaxJointCount, PSOFlags);
+            }
+            else if (State.RendererSettings.JointsBufferMode == USD_Renderer::JOINTS_BUFFER_MODE_STRUCTURED)
+            {
+                // RenderPBR.vsh
+                //
+                // StructuredBuffer<float4x4> g_JointTransforms;
+                //
+                // Joints data range is the size of the actual data.
+                JointsDataRange = JointsDataSize;
+            }
+            else
+            {
+                UNEXPECTED("Unexpected joints buffer mode");
+            }
+
+            if (TotalJointsDataSize + JointsDataRange > JointsBuffDesc.Size)
             {
                 // There is not enough space for the new joint transforms.
                 // Flush pending draws to start filling the joints buffer from the beginning.
@@ -617,11 +653,10 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
         {
             if (pSkinningData->XformsHash != XformsHash)
             {
-                VERIFY(CurrJointsDataSize + JointsDataRange <= JointsBuffDesc.Size,
+                VERIFY(TotalJointsDataSize + JointsDataRange <= JointsBuffDesc.Size,
                        "There must be enough space for the new joint transforms as we flush the pending draw if there is not enough space.");
 
-                JointsBufferOffset = CurrJointsDataSize;
-                JointCount         = std::min(static_cast<Uint32>(pSkinningData->Xforms->size()), MaxJointCount);
+                JointsBufferOffset = TotalJointsDataSize;
 
                 void* pJointsData = GetBufferDataPtr(pJointsCB, JointsBuffDesc, pMappedJointsData, JointsBufferOffset, m_JointsData, JointsDataRange);
                 if (pJointsData == nullptr)
@@ -633,10 +668,10 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
                 WriteSkinningAttribs.JointMatrices     = reinterpret_cast<const float4x4*>(pSkinningData->Xforms->data());
                 WriteSkinningAttribs.PrevJointMatrices = reinterpret_cast<const float4x4*>(PrevXforms->data());
 
-                void*        pDataEnd       = State.USDRenderer.WriteSkinningData(pJointsData, WriteSkinningAttribs);
-                const Uint32 JointsDataSize = static_cast<Uint32>(reinterpret_cast<Uint8*>(pDataEnd) - reinterpret_cast<Uint8*>(pJointsData));
-                VERIFY_EXPR(JointsDataSize == State.USDRenderer.GetJointsDataSize(JointCount, PSOFlags));
-                CurrJointsDataSize = AlignUp(JointsBufferOffset + JointsDataSize, JointsBufferOffsetAlignment);
+                void* pDataEnd = State.USDRenderer.WriteSkinningData(pJointsData, WriteSkinningAttribs);
+                VERIFY_EXPR(JointsDataSize == static_cast<Uint32>(reinterpret_cast<Uint8*>(pDataEnd) - reinterpret_cast<Uint8*>(pJointsData)));
+                (void)pDataEnd;
+                TotalJointsDataSize = AlignUp(JointsBufferOffset + JointsDataSize, JointsBufferOffsetAlignment);
 
                 XformsHash = pSkinningData->XformsHash;
 
