@@ -253,8 +253,8 @@ public:
         PSO_FLAGS       PSOFlags             = PSO_FLAG_NONE;
         const float4x4* NodeMatrix           = nullptr;
         const float4x4* PrevNodeMatrix       = nullptr; // #if COMPUTE_MOTION_VECTORS
-        const Uint32    JointCount           = 0;
-        const Uint32    FirstJoint           = 0;
+        Uint32          JointCount           = 0;
+        Uint32          FirstJoint           = 0;
         const float3*   PosScale             = nullptr;
         const float3*   PosBias              = nullptr;
         const float4x4* SkinPreTransform     = nullptr; // #if USE_JOINTS && USE_SKIN_PRE_TRANSFORM
