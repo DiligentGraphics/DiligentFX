@@ -59,6 +59,7 @@ public:
     static bool IsCompatible(const HnExtComputation& Owner);
 
     const pxr::VtMatrix4fArray& GetXforms() const { return m_Xforms[m_CurrXformsIdx]; }
+    const pxr::VtMatrix4fArray& GetLastFrameXforms() const { return m_Xforms[1 - m_CurrXformsIdx]; }
     size_t                      GetXformsHash() const { return m_XformsHash; }
 
     const float4x4& GetPrimWorldToLocal() const { return m_PrimWorldToLocal; }
