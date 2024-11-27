@@ -915,9 +915,7 @@ void HnMesh::UpdateSkinningPrimvars(pxr::HdSceneDelegate&                       
 
     if (const HnSkinningComputation* SkinningCompImpl = SkinningComp->GetImpl<HnSkinningComputation>())
     {
-        SkinningData.Xforms          = &SkinningCompImpl->GetXforms();
-        SkinningData.LastFrameXforms = &SkinningCompImpl->GetLastFrameXforms();
-        SkinningData.XformsHash      = SkinningCompImpl->GetXformsHash();
+        SkinningData.Computation = SkinningCompImpl;
 
         const float4x4& SkelLocalToPrimLocal = SkinningCompImpl->GetSkelLocalToPrimLocal();
         if (SkelLocalToPrimLocal != m_SkelLocalToPrimLocal)

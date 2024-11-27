@@ -32,6 +32,7 @@
 #include "HnDrawItem.hpp"
 #include "HnTypeConversions.hpp"
 #include "HnRenderParam.hpp"
+#include "Computations/HnSkinningComputation.hpp"
 
 #include <array>
 #include <unordered_map>
@@ -280,6 +281,91 @@ void HnRenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& RPState,
     Execute(*static_cast<HnRenderPassState*>(RPState.get()), Tags);
 }
 
+void HnRenderPass::WriteJointsDataBatch(RenderState& State, Uint32 BatchIdx, PBR_Renderer::PSO_FLAGS PSOFlags)
+{
+    IBuffer* const pJointsCB = State.USDRenderer.GetJointsBuffer();
+    if (pJointsCB == nullptr)
+    {
+        UNEXPECTED("Joints buffer must not be null");
+        return;
+    }
+
+    if (m_CurrDrawItemJointIdx >= m_DrawItemJoints.size())
+    {
+        UNEXPECTED("All joints data has been written");
+        return;
+    }
+    VERIFY(BatchIdx >= m_DrawItemJoints[m_CurrDrawItemJointIdx].BatchIdx, "Batch indices must be monotonically increasing");
+    while (m_CurrDrawItemJointIdx < m_DrawItemJoints.size() && BatchIdx > m_DrawItemJoints[m_CurrDrawItemJointIdx].BatchIdx)
+    {
+        ++m_CurrDrawItemJointIdx;
+    }
+    if (m_CurrDrawItemJointIdx == m_DrawItemJoints.size())
+    {
+        UNEXPECTED("Unable to find batch index ", BatchIdx);
+        return;
+    }
+    VERIFY(m_DrawItemJoints[m_CurrDrawItemJointIdx].BatchIdx == BatchIdx, "Unexpected batch index");
+    VERIFY(m_DrawItemJoints[m_CurrDrawItemJointIdx].BufferOffset == 0, "Joint data batch must start at offset 0");
+
+    const BufferDesc& JointsBuffDesc = pJointsCB->GetDesc();
+
+    Uint32 FrameNumber = static_cast<const HnRenderParam*>(State.RenderDelegate.GetRenderParam())->GetFrameNumber();
+
+    Uint8* pJointsData = nullptr;
+    if (JointsBuffDesc.Usage == USAGE_DYNAMIC)
+    {
+        State.pCtx->MapBuffer(pJointsCB, MAP_WRITE, MAP_FLAG_DISCARD, reinterpret_cast<PVoid&>(pJointsData));
+        if (pJointsData == nullptr)
+        {
+            LOG_ERROR_MESSAGE("Failed to map joints data buffer '", JointsBuffDesc.Name, "'.");
+            return;
+        }
+    }
+    else
+    {
+        m_JointsData.resize(static_cast<size_t>(JointsBuffDesc.Size));
+        pJointsData = m_JointsData.data();
+    }
+
+    Uint32 JointsDataSize = 0;
+    while (m_CurrDrawItemJointIdx < m_DrawItemJoints.size())
+    {
+        DrawItemJointsData& Joints = m_DrawItemJoints[m_CurrDrawItemJointIdx];
+        VERIFY(Joints.BatchIdx != ~0u && Joints.BufferOffset != ~0u, "Joint data is not initialized");
+        if (Joints.BatchIdx != BatchIdx)
+        {
+            VERIFY(Joints.BatchIdx == BatchIdx + 1, "Batch indices must be monotonically increasing");
+            break;
+        }
+
+        USD_Renderer::WriteSkinningDataAttribs WriteSkinningAttribs{
+            PSOFlags,
+            Joints.JointCount,
+            reinterpret_cast<const float4x4*>(Joints.SkinComp->GetXforms().data()),
+            reinterpret_cast<const float4x4*>(Joints.SkinComp->GetPrevFrameXforms(FrameNumber).data()),
+        };
+
+        JointsDataSize = Joints.BufferOffset + Joints.DataSize;
+        VERIFY_EXPR(JointsDataSize <= JointsBuffDesc.Size);
+        void* pDataEnd = State.USDRenderer.WriteSkinningData(pJointsData + Joints.BufferOffset, WriteSkinningAttribs);
+        VERIFY_EXPR(JointsDataSize >= static_cast<Uint32>(static_cast<const Uint8*>(pDataEnd) - pJointsData));
+
+        ++m_CurrDrawItemJointIdx;
+    }
+
+    if (JointsBuffDesc.Usage == USAGE_DYNAMIC)
+    {
+        State.pCtx->UnmapBuffer(pJointsCB, MAP_WRITE);
+    }
+    else
+    {
+        State.pCtx->UpdateBuffer(pJointsCB, 0, JointsDataSize, m_JointsData.data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        StateTransitionDesc Barrier{pJointsCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE};
+        State.pCtx->TransitionResourceStates(1, &Barrier);
+    }
+}
+
 HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, const pxr::TfTokenVector& Tags)
 {
     UpdateDrawList(Tags);
@@ -405,82 +491,42 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
 
     IBuffer* const pPrimitiveAttribsCB = State.RenderDelegate.GetPrimitiveAttribsCB();
     VERIFY_EXPR(pPrimitiveAttribsCB != nullptr);
-    IBuffer* const pJointsCB          = State.USDRenderer.GetJointsBuffer();
-    const Uint32   MaxJointCount      = State.RendererSettings.MaxJointCount;
-    const bool     PackMatrixRowMajor = State.RendererSettings.PackMatrixRowMajor;
-
-    const Uint32 JointsBufferOffsetAlignment = (State.RendererSettings.JointsBufferMode == USD_Renderer::JOINTS_BUFFER_MODE_UNIFORM) ?
-        State.ConstantBufferOffsetAlignment :
-        sizeof(float4x4);
+    const bool PackMatrixRowMajor = State.RendererSettings.PackMatrixRowMajor;
 
     const BufferDesc& AttribsBuffDesc = pPrimitiveAttribsCB->GetDesc();
-    const BufferDesc& JointsBuffDesc  = pJointsCB != nullptr ? pJointsCB->GetDesc() : BufferDesc{};
 
     m_PendingDrawItems.clear();
     m_PendingDrawItems.reserve(m_DrawList.size());
     void*  pMappedPrimitiveData = nullptr;
     Uint32 AttribsBufferOffset  = 0;
 
-    void*  pMappedJointsData   = nullptr;
-    Uint32 JointsBufferOffset  = 0;
-    Uint32 TotalJointsDataSize = 0;
-    size_t XformsHash          = 0;
-    Uint32 JointCount          = 0;
-    Uint32 JointsDataRange     = 0;
-    Uint32 JointsDataSize      = 0;
+    Uint32 CurrJointDataBatch     = ~0u;
+    Uint32 CurrJointsBufferOffset = ~0u;
+    m_CurrDrawItemJointIdx        = 0;
 
     if (AttribsBuffDesc.Usage != USAGE_DYNAMIC)
     {
         m_PrimitiveAttribsData.resize(static_cast<size_t>(AttribsBuffDesc.Size));
     }
-    if (JointsBuffDesc.Usage != USAGE_DYNAMIC)
-    {
-        m_JointsData.resize(static_cast<size_t>(JointsBuffDesc.Size));
-    }
 
     auto FlushPendingDraws = [&]() {
-        auto UnmapOrUpdateBuffer = [pCtx = State.pCtx](IBuffer*          pBuffer,
-                                                       const BufferDesc& BuffDesc,
-                                                       void*&            pMappedData,
-                                                       const void*       pStagingData,
-                                                       size_t            DataSize) {
-            if (BuffDesc.Usage == USAGE_DYNAMIC)
-            {
-                if (pMappedData != nullptr)
-                {
-                    pCtx->UnmapBuffer(pBuffer, MAP_WRITE);
-                }
-                pMappedData = nullptr;
-            }
-            else
-            {
-                pCtx->UpdateBuffer(pBuffer, 0, DataSize, pStagingData, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-                StateTransitionDesc Barrier{pBuffer, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE};
-                pCtx->TransitionResourceStates(1, &Barrier);
-            }
-        };
-
         VERIFY_EXPR(AttribsBufferOffset > 0);
         VERIFY_EXPR(AttribsBuffDesc.Usage == USAGE_DYNAMIC || AttribsBufferOffset <= m_PrimitiveAttribsData.size());
-        UnmapOrUpdateBuffer(pPrimitiveAttribsCB, AttribsBuffDesc, pMappedPrimitiveData,
-                            m_PrimitiveAttribsData.data(), AttribsBufferOffset);
-        AttribsBufferOffset = 0;
-
-        if (TotalJointsDataSize > 0)
+        if (AttribsBuffDesc.Usage == USAGE_DYNAMIC)
         {
-            VERIFY_EXPR(JointsBuffDesc.Usage == USAGE_DYNAMIC || TotalJointsDataSize <= m_JointsData.size());
-            UnmapOrUpdateBuffer(pJointsCB, JointsBuffDesc, pMappedJointsData,
-                                m_JointsData.data(), TotalJointsDataSize);
+            if (pMappedPrimitiveData != nullptr)
+            {
+                State.pCtx->UnmapBuffer(pPrimitiveAttribsCB, MAP_WRITE);
+            }
+            pMappedPrimitiveData = nullptr;
         }
-        JointsBufferOffset  = 0;
-        TotalJointsDataSize = 0;
-        // Reset the hash to force updating the joint transforms for the next draw item.
-        // NB: we can't reuse the transforms at the existing offset because they may be
-        //     overwritten by the next draw item.
-        XformsHash = 0;
-
-        // NB: do NOT zero-out JointCount, JointsDataRange, and JointsDataSize as they
-        //     are set before FlushPendingDraws() is called.
+        else
+        {
+            State.pCtx->UpdateBuffer(pPrimitiveAttribsCB, 0, AttribsBufferOffset, m_PrimitiveAttribsData.data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+            StateTransitionDesc Barrier{pPrimitiveAttribsCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE};
+            State.pCtx->TransitionResourceStates(1, &Barrier);
+        }
+        AttribsBufferOffset = 0;
 
         RenderPendingDrawItems(State);
         VERIFY_EXPR(m_PendingDrawItems.empty());
@@ -529,9 +575,17 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
         const bool                           MeshVisibile = std::get<2>(MeshAttribs).Val;
         const PBR_Renderer::PSO_FLAGS        PSOFlags     = m_UseFallbackPSO ? GetFallbackPSOFlags() : ListItem.PSOFlags;
 
-        const HnMesh::Components::Skinning* pSkinningData = ((PSOFlags & PBR_Renderer::PSO_FLAG_USE_JOINTS) && pJointsCB != nullptr) ?
+        const HnMesh::Components::Skinning* pSkinningData = (PSOFlags & PBR_Renderer::PSO_FLAG_USE_JOINTS) ?
             &MeshAttribsView.get<const HnMesh::Components::Skinning>(ListItem.MeshEntity) :
             nullptr;
+        VERIFY(pSkinningData == nullptr || ListItem.JointsIdx != ~0u, "Joints index must be valid if skinning data is present");
+
+        const DrawItemJointsData& Joints = (PSOFlags & PBR_Renderer::PSO_FLAG_USE_JOINTS) != 0 && ListItem.JointsIdx != ~0u ?
+            m_DrawItemJoints[ListItem.JointsIdx] :
+            DrawItemJointsData{};
+        VERIFY(((pSkinningData != nullptr ? pSkinningData->Computation->GetXformsHash() : 0) ==
+                (Joints.SkinComp != nullptr ? Joints.SkinComp->GetXformsHash() : 0)),
+               "Skinning xforms must match the joints data");
 
         if (!MeshVisibile)
             continue;
@@ -539,48 +593,29 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
         if (MultiDrawCount == PrimitiveArraySize)
             MultiDrawCount = 0;
 
-        if (pSkinningData && pSkinningData->XformsHash != XformsHash)
+        if (Joints)
         {
-            // Restart batch when the joint transforms change
-            MultiDrawCount = 0;
-
-            JointCount     = std::min(static_cast<Uint32>(pSkinningData->Xforms->size()), MaxJointCount);
-            JointsDataSize = State.USDRenderer.GetJointsDataSize(JointCount, PSOFlags);
-            if (State.RendererSettings.JointsBufferMode == USD_Renderer::JOINTS_BUFFER_MODE_UNIFORM)
+            if (State.RendererSettings.JointsBufferMode == USD_Renderer::JOINTS_BUFFER_MODE_UNIFORM &&
+                Joints.BufferOffset != CurrJointsBufferOffset)
             {
-                // RenderPBR.vsh
-                //
-                //  struct SkinnigData
-                //  {
-                //  #   if COMPUTE_MOTION_VECTORS
-                //          float4x4 Joints[MAX_JOINT_COUNT * 2];
-                //  #   else
-                //          float4x4 Joints[MAX_JOINT_COUNT];
-                //  #   endif
-                //  };
-                //
-                // Joints data range is the size of the entire structure with the maximum number of joints.
-                JointsDataRange = State.USDRenderer.GetJointsDataSize(MaxJointCount, PSOFlags);
-            }
-            else if (State.RendererSettings.JointsBufferMode == USD_Renderer::JOINTS_BUFFER_MODE_STRUCTURED)
-            {
-                // RenderPBR.vsh
-                //
-                // StructuredBuffer<float4x4> g_JointTransforms;
-                //
-                // Joints data range is the size of the actual data.
-                JointsDataRange = JointsDataSize;
-            }
-            else
-            {
-                UNEXPECTED("Unexpected joints buffer mode");
+                // Start a new multi-draw batch if the joints buffer offset changes
+                MultiDrawCount         = 0;
+                CurrJointsBufferOffset = Joints.BufferOffset;
             }
 
-            if (TotalJointsDataSize + JointsDataRange > JointsBuffDesc.Size)
+            if (Joints.BatchIdx != CurrJointDataBatch)
             {
-                // There is not enough space for the new joint transforms.
-                // Flush pending draws to start filling the joints buffer from the beginning.
-                AttribsBufferOffset = AttribsBuffDesc.Size;
+                VERIFY(CurrJointDataBatch == ~0u || Joints.BatchIdx > CurrJointDataBatch, "Joint data batch indices must be increasing");
+                if (CurrJointDataBatch != ~0u)
+                {
+                    // Joints buffer needs to be updated - flush pending draws
+                    MultiDrawCount      = 0;
+                    AttribsBufferOffset = AttribsBuffDesc.Size;
+                }
+                else
+                {
+                    // Joints buffer needs to be updated, but previous draw items do not use it.
+                }
             }
         }
 
@@ -623,91 +658,41 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
             }
         }
 
-        auto GetBufferDataPtr = [pCtx = State.pCtx](IBuffer*            pBuffer,
-                                                    const BufferDesc&   BuffDesc,
-                                                    void*&              pMappedData,
-                                                    Uint32              Offset,
-                                                    std::vector<Uint8>& StagingData,
-                                                    Uint32              DataRange) -> void* {
-            if (BuffDesc.Usage == USAGE_DYNAMIC)
-            {
-                if (pMappedData == nullptr)
-                {
-                    pCtx->MapBuffer(pBuffer, MAP_WRITE, MAP_FLAG_DISCARD, pMappedData);
-                    if (pMappedData == nullptr)
-                    {
-                        LOG_DVP_ERROR_MESSAGE("Failed to map buffer '", BuffDesc.Name, "'.");
-                        return nullptr;
-                    }
-                }
-                return reinterpret_cast<Uint8*>(pMappedData) + Offset;
-            }
-            else
-            {
-                VERIFY_EXPR(Offset + DataRange <= StagingData.size());
-                return &StagingData[Offset];
-            }
-        };
-
-        if (pSkinningData)
+        if (Joints && Joints.BatchIdx != CurrJointDataBatch)
         {
-            if (pSkinningData->XformsHash != XformsHash)
-            {
-                VERIFY(TotalJointsDataSize + JointsDataRange <= JointsBuffDesc.Size,
-                       "There must be enough space for the new joint transforms as we flush the pending draw if there is not enough space.");
-
-                JointsBufferOffset = TotalJointsDataSize;
-
-                void* pJointsData = GetBufferDataPtr(pJointsCB, JointsBuffDesc, pMappedJointsData, JointsBufferOffset, m_JointsData, JointsDataRange);
-                if (pJointsData == nullptr)
-                    break;
-
-                // Write new joint transforms
-                const pxr::VtMatrix4fArray*            PrevXforms = ListItem.PrevXforms != nullptr ? ListItem.PrevXforms : pSkinningData->Xforms;
-                USD_Renderer::WriteSkinningDataAttribs WriteSkinningAttribs{PSOFlags, JointCount};
-                WriteSkinningAttribs.JointMatrices     = reinterpret_cast<const float4x4*>(pSkinningData->Xforms->data());
-                WriteSkinningAttribs.PrevJointMatrices = reinterpret_cast<const float4x4*>(PrevXforms->data());
-
-                void* pDataEnd = State.USDRenderer.WriteSkinningData(pJointsData, WriteSkinningAttribs);
-                VERIFY_EXPR(JointsDataSize == static_cast<Uint32>(reinterpret_cast<Uint8*>(pDataEnd) - reinterpret_cast<Uint8*>(pJointsData)));
-                (void)pDataEnd;
-                TotalJointsDataSize = AlignUp(JointsBufferOffset + JointsDataSize, JointsBufferOffsetAlignment);
-
-                XformsHash = pSkinningData->XformsHash;
-
-                VERIFY(MultiDrawCount == 0, "The batch must be reset when the joint transforms change.");
-            }
-
-#ifdef DILIGENT_DEBUG
-            if (MultiDrawCount > 0)
-            {
-                auto& FirstMultiDrawItem = m_PendingDrawItems[m_PendingDrawItems.size() - MultiDrawCount];
-                VERIFY(FirstMultiDrawItem.JointsBufferOffset == JointsBufferOffset,
-                       "All items in the batch must have the same joints buffer offset since we reset the batch when the joint transforms change.");
-            }
-#endif
-
-            ListItem.PrevXforms = pSkinningData->Xforms;
+            // Write next joints data batch after flushing pending draws
+            WriteJointsDataBatch(State, Joints.BatchIdx, PSOFlags);
+            VERIFY(CurrJointDataBatch == ~0u || Joints.BatchIdx > CurrJointDataBatch, "Joint data batch indices must be increasing");
+            CurrJointDataBatch = Joints.BatchIdx;
         }
 
-        void* pCurrPrimitive = GetBufferDataPtr(pPrimitiveAttribsCB, AttribsBuffDesc, pMappedPrimitiveData, AttribsBufferOffset, m_PrimitiveAttribsData, ListItem.ShaderAttribsDataSize);
-        if (pCurrPrimitive == nullptr)
-            break;
+        void* pCurrPrimitive = nullptr;
+        if (AttribsBuffDesc.Usage == USAGE_DYNAMIC)
+        {
+            if (pMappedPrimitiveData == nullptr)
+            {
+                State.pCtx->MapBuffer(pPrimitiveAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD, pMappedPrimitiveData);
+                if (pMappedPrimitiveData == nullptr)
+                {
+                    LOG_ERROR_MESSAGE("Failed to map primitive attribs buffer '", AttribsBuffDesc.Name, "'.");
+                    break;
+                }
+            }
+            pCurrPrimitive = reinterpret_cast<Uint8*>(pMappedPrimitiveData) + AttribsBufferOffset;
+        }
+        else
+        {
+            VERIFY_EXPR(AttribsBufferOffset + ListItem.ShaderAttribsDataSize <= m_PrimitiveAttribsData.size());
+            pCurrPrimitive = &m_PrimitiveAttribsData[AttribsBufferOffset];
+        }
 
         // Write current primitive attributes
-
-        // In structured buffer mode, we use the first joint index.
-        // In uniform buffer mode, we use the joint buffer offset.
-        const Uint32 FirstJoint = (State.RendererSettings.JointsBufferMode == USD_Renderer::JOINTS_BUFFER_MODE_STRUCTURED) ?
-            JointsBufferOffset / sizeof(float4x4) :
-            0;
-
         GLTF_PBR_Renderer::PBRPrimitiveShaderAttribsData AttribsData{
             PSOFlags,
             &Transform.Matrix,
             &ListItem.PrevTransform,
-            JointCount,
-            FirstJoint,
+            Joints.JointCount,
+            Joints.FirstJoint,
             &Transform.PosScale,
             &Transform.PosBias,
             pSkinningData ? reinterpret_cast<const float4x4*>(pSkinningData->GeomBindXform.Data()) : nullptr,
@@ -725,7 +710,7 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
         m_PendingDrawItems.push_back(PendingDrawItem{
             ListItem,
             AttribsBufferOffset,
-            pSkinningData != nullptr ? JointsBufferOffset : ~0u,
+            Joints.BufferOffset,
         });
 
         AttribsBufferOffset += ListItem.ShaderAttribsDataSize;
@@ -855,6 +840,134 @@ void HnRenderPass::UpdateDrawList(const pxr::TfTokenVector& RenderTags)
     m_GlobalAttribVersions.RprimRenderTag      = RprimRenderTagVersion;
     m_MaterialTag                              = MaterialTag;
     m_GlobalAttribVersions.GeomSubsetDrawItems = GeomSubsetDrawItemsVersion;
+}
+
+void HnRenderPass::UpdateDrawListJoints(HnRenderDelegate& RenderDelegate)
+{
+    // Each skinned draw item references joints data.
+    // Joints data is organized in batches that fit into the joints buffer.
+    //
+    //              |             Batch 0             | |          Batch 1         |
+    //              |                                 | |                          |
+    //  Draw Items  [  0  ][  0  ][ -1  ][  1  ][  1  ] [  0  ][  0  ][ -1  ][  1  ]
+    //                 |      |             |      |       |      |             |
+    //                 |.----'  .-----------'------'       |      |             |
+    //                 |       |      .--------------------'------'             |
+    //                 |       |     |      .-----------------------------------'
+    //                 V       V     V      V
+    // Joints Data  [     ][     ][     ][     ]
+    //              |  upload 0  ||  upload 1  |
+
+    m_DrawItemJoints.clear();
+
+    const USD_Renderer&             USDRenderer      = *RenderDelegate.GetUSDRenderer();
+    const PBR_Renderer::CreateInfo& RendererSettings = USDRenderer.GetSettings();
+
+    if (RendererSettings.MaxJointCount == 0)
+        return;
+
+    IBuffer* pJointsCB = USDRenderer.GetJointsBuffer();
+    if (pJointsCB == nullptr)
+    {
+        UNEXPECTED("Joints buffer must not be null");
+        return;
+    }
+    const BufferDesc& JointsBuffDesc = pJointsCB->GetDesc();
+
+    const Uint32 JointsBufferOffsetAlignment = (RendererSettings.JointsBufferMode == USD_Renderer::JOINTS_BUFFER_MODE_UNIFORM) ?
+        RenderDelegate.GetDevice()->GetAdapterInfo().Buffer.ConstantBufferOffsetAlignment :
+        sizeof(float4x4);
+
+    auto MeshSkinningView = RenderDelegate.GetEcsRegistry().view<const HnMesh::Components::Skinning>();
+
+    Uint32                             CurrBufferOffset = 0;
+    Uint32                             CurrBatchIdx     = 0;
+    std::unordered_map<size_t, Uint32> XformsHashToJointDataIdx;
+    for (DrawListItem& ListItem : m_DrawList)
+    {
+        if (!ListItem.DrawItem.IsValid() || !ListItem.DrawItem.GetGeometryData().Joints)
+            continue;
+
+        const HnMesh::Components::Skinning& Skinning = MeshSkinningView.get<const HnMesh::Components::Skinning>(ListItem.MeshEntity);
+        const HnSkinningComputation*        SkinComp = Skinning.Computation;
+        if (SkinComp == nullptr)
+            continue;
+
+        size_t XformsHash = SkinComp->GetXformsHash();
+        VERIFY_EXPR(XformsHash != 0);
+
+        // Note that we rely on the XformsHash computed at the time when the draw list is updated.
+        // In theory it is possible that different xforms have the same hash at one time and
+        // different hashes at another time, but this is highly unlikely.
+        auto XformsHashIt = XformsHashToJointDataIdx.find(XformsHash);
+        if (XformsHashIt != XformsHashToJointDataIdx.end())
+        {
+            ListItem.JointsIdx = XformsHashIt->second;
+            continue;
+        }
+
+        DrawItemJointsData Joints;
+
+        Joints.JointCount = std::min(static_cast<Uint32>(SkinComp->GetXforms().size()), RendererSettings.MaxJointCount);
+        // Reserve max space that may be needed for the joints data.
+        Joints.DataSize = USDRenderer.GetJointsDataSize(Joints.JointCount, PBR_Renderer::PSO_FLAG_ALL);
+
+        Uint32 JointsDataRange = 0;
+        if (RendererSettings.JointsBufferMode == USD_Renderer::JOINTS_BUFFER_MODE_UNIFORM)
+        {
+            // RenderPBR.vsh
+            //
+            //  struct SkinnigData
+            //  {
+            //  #   if COMPUTE_MOTION_VECTORS
+            //          float4x4 Joints[MAX_JOINT_COUNT * 2];
+            //  #   else
+            //          float4x4 Joints[MAX_JOINT_COUNT];
+            //  #   endif
+            //  };
+            //
+            // Joints data range is the size of the entire structure with the maximum number of joints.
+            JointsDataRange = USDRenderer.GetJointsDataSize(RendererSettings.MaxJointCount, PBR_Renderer::PSO_FLAG_ALL);
+        }
+        else if (RendererSettings.JointsBufferMode == USD_Renderer::JOINTS_BUFFER_MODE_STRUCTURED)
+        {
+            // RenderPBR.vsh
+            //
+            // StructuredBuffer<float4x4> g_JointTransforms;
+            //
+            // Joints data range is the size of the actual data.
+            JointsDataRange = Joints.DataSize;
+        }
+        else
+        {
+            UNEXPECTED("Unexpected joints buffer mode");
+        }
+
+        if (CurrBufferOffset + JointsDataRange > JointsBuffDesc.Size)
+        {
+            // There is not enough space for the new joint transforms - start new batch.
+            CurrBufferOffset = 0;
+            ++CurrBatchIdx;
+            XformsHashToJointDataIdx.clear();
+        }
+
+        Joints.BatchIdx     = CurrBatchIdx;
+        Joints.BufferOffset = CurrBufferOffset;
+
+        // In structured buffer mode, we use the first joint index.
+        // In uniform buffer mode, we use the joint buffer offset.
+        Joints.FirstJoint = (RendererSettings.JointsBufferMode == USD_Renderer::JOINTS_BUFFER_MODE_STRUCTURED) ?
+            CurrBufferOffset / sizeof(float4x4) :
+            0;
+
+        Joints.SkinComp = SkinComp;
+
+        ListItem.JointsIdx = static_cast<Uint32>(m_DrawItemJoints.size());
+        XformsHashToJointDataIdx.emplace(XformsHash, ListItem.JointsIdx);
+        m_DrawItemJoints.push_back(Joints);
+
+        CurrBufferOffset = AlignUp(CurrBufferOffset + Joints.DataSize, JointsBufferOffsetAlignment);
+    }
 }
 
 PBR_Renderer::PSO_FLAGS HnRenderPass::GetFallbackPSOFlags() const
@@ -1032,6 +1145,8 @@ void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
             }
 #endif
         }
+
+        UpdateDrawListJoints(State.RenderDelegate);
     }
 
     m_DrawListItemsDirtyFlags = DRAW_LIST_ITEM_DIRTY_FLAG_NONE;
@@ -1189,8 +1304,8 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
             UNEXPECTED("Unexpected render mode");
         }
 
-        ListItem.ShaderAttribsDataSize       = State.USDRenderer.GetPBRPrimitiveAttribsSize(PSOFlags);
-        ListItem.PrimitiveAttribsBufferRange = pMaterial->GetPBRPrimitiveAttribsBufferRange();
+        ListItem.ShaderAttribsDataSize       = StaticCast<Uint16>(State.USDRenderer.GetPBRPrimitiveAttribsSize(PSOFlags));
+        ListItem.PrimitiveAttribsBufferRange = StaticCast<Uint16>(pMaterial->GetPBRPrimitiveAttribsBufferRange());
         VERIFY(ListItem.ShaderAttribsDataSize <= ListItem.PrimitiveAttribsBufferRange,
                "Attribs data size (", ListItem.ShaderAttribsDataSize, ") computed from the PSO flags exceeds the attribs buffer range (",
                ListItem.PrimitiveAttribsBufferRange, ") computed from material PSO flags. The latter is used by HnMaterial to set the buffer range.");

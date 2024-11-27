@@ -59,7 +59,7 @@ public:
     static bool IsCompatible(const HnExtComputation& Owner);
 
     const pxr::VtMatrix4fArray& GetXforms() const { return m_Xforms[m_CurrXformsIdx]; }
-    const pxr::VtMatrix4fArray& GetLastFrameXforms() const { return m_Xforms[1 - m_CurrXformsIdx]; }
+    const pxr::VtMatrix4fArray& GetPrevFrameXforms(Uint32 FrameNumber) const;
     size_t                      GetXformsHash() const { return m_XformsHash; }
 
     const float4x4& GetPrimWorldToLocal() const { return m_PrimWorldToLocal; }
@@ -75,6 +75,8 @@ private:
     float4x4 m_PrimWorldToLocal     = float4x4::Identity();
     float4x4 m_SkelLocalToWorld     = float4x4::Identity();
     float4x4 m_SkelLocalToPrimLocal = float4x4::Identity();
+
+    Uint32 m_LastXformSyncFrameNumber = 0;
 };
 
 } // namespace USD

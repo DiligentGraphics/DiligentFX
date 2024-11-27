@@ -56,7 +56,7 @@ namespace USD
 {
 
 class HnRenderDelegate;
-class HnExtComputation;
+class HnSkinningComputation;
 
 /// Hydra mesh implementation in Hydrogent.
 class HnMesh final : public pxr::HdMesh
@@ -112,12 +112,11 @@ public:
 
         struct Skinning
         {
-            const pxr::VtMatrix4fArray* Xforms          = nullptr;
-            const pxr::VtMatrix4fArray* LastFrameXforms = nullptr;
-            size_t                      XformsHash      = 0;
-            float4x4                    GeomBindXform   = float4x4::Identity();
+            const HnSkinningComputation* Computation = nullptr;
 
-            explicit operator bool() const { return Xforms != nullptr; }
+            float4x4 GeomBindXform = float4x4::Identity();
+
+            explicit operator bool() const { return Computation != nullptr; }
         };
     };
 

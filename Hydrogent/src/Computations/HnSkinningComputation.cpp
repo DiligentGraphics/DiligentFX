@@ -27,6 +27,7 @@
 #include "Computations/HnSkinningComputation.hpp"
 #include "HnExtComputation.hpp"
 #include "HnTokens.hpp"
+#include "HnRenderParam.hpp"
 #include "DebugUtilities.hpp"
 #include "GfTypeConversions.hpp"
 #include "HnRenderDelegate.hpp"
@@ -74,16 +75,14 @@ void HnSkinningComputation::Sync(pxr::HdSceneDelegate* SceneDelegate,
             pxr::VtValue SkinningXformsVal = SceneDelegate->GetExtComputationInput(Id, HnSkinningComputationPrivateTokens->skinningXforms);
             if (SkinningXformsVal.IsHolding<pxr::VtMatrix4fArray>())
             {
-                pxr::VtMatrix4fArray& LastXforms = m_Xforms[m_CurrXformsIdx];
                 VERIFY_EXPR(m_Xforms.size() == 2);
                 m_CurrXformsIdx              = 1 - m_CurrXformsIdx;
                 pxr::VtMatrix4fArray& Xforms = m_Xforms[m_CurrXformsIdx];
 
-                Xforms = SkinningXformsVal.UncheckedGet<pxr::VtMatrix4fArray>();
-                if (LastXforms.empty())
-                    LastXforms = Xforms;
-
+                Xforms       = SkinningXformsVal.UncheckedGet<pxr::VtMatrix4fArray>();
                 m_XformsHash = pxr::TfHash{}(Xforms);
+
+                m_LastXformSyncFrameNumber = static_cast<const HnRenderParam*>(RenderParam)->GetFrameNumber();
 
                 const HnRenderDelegate* RenderDelegate = static_cast<const HnRenderDelegate*>(SceneDelegate->GetRenderIndex().GetRenderDelegate());
                 const USD_Renderer&     USDRenderer    = *RenderDelegate->GetUSDRenderer();
@@ -149,6 +148,22 @@ bool HnSkinningComputation::IsCompatible(const HnExtComputation& Owner)
 {
     const pxr::HdExtComputationOutputDescriptorVector& Outputs = Owner.GetComputationOutputs();
     return Outputs.size() == 1 && Outputs[0].name == HnSkinningComputationPrivateTokens->skinnedPoints;
+}
+
+const pxr::VtMatrix4fArray& HnSkinningComputation::GetPrevFrameXforms(Uint32 FrameNumber) const
+{
+    // Frame number is incremented by HnBeginFrameTask after all computations have been synced.
+    if (FrameNumber == m_LastXformSyncFrameNumber + 1)
+    {
+        const pxr::VtMatrix4fArray& PrevXforms = m_Xforms[1 - m_CurrXformsIdx];
+        return !PrevXforms.empty() ? PrevXforms : m_Xforms[m_CurrXformsIdx];
+    }
+    else
+    {
+        // Skinning xforms have not been updated for the current frame, so
+        // they are the same as the previous frame.
+        return m_Xforms[m_CurrXformsIdx];
+    }
 }
 
 } // namespace USD

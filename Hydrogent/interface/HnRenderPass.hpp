@@ -47,6 +47,7 @@ namespace USD
 class HnDrawItem;
 class HnRenderPassState;
 class HnMaterial;
+class HnSkinningComputation;
 
 struct HnRenderPassParams
 {
@@ -165,17 +166,27 @@ private:
 
         PBR_Renderer::PSO_FLAGS PSOFlags = PBR_Renderer::PSO_FLAG_NONE;
 
-        const pxr::VtMatrix4fArray* PrevXforms    = nullptr;
-        float4x4                    PrevTransform = float4x4::Identity();
+        float4x4 PrevTransform = float4x4::Identity();
 
         // Primitive attributes shader data size computed from the value of PSOFlags.
         // Note: unshaded (aka wireframe/point) rendering modes don't use any textures, so the shader data
         //       is smaller than that for the shaded mode.
-        Uint32 ShaderAttribsDataSize = 0;
+        Uint16 ShaderAttribsDataSize = 0;
 
         // Primitive attributes buffer range used to set the cbPrimitiveAttribs buffer
         // in the material's SRB.
-        Uint32 PrimitiveAttribsBufferRange = 0;
+        Uint16 PrimitiveAttribsBufferRange = 0;
+
+        // Joints data index in m_DrawItemJoints.
+        // Multiple draw items can share the same joints data.
+        //
+        //  Draw Items  [  0  ][  0  ][ -1  ][  1  ][  1  ]
+        //                 |      |             |      |
+        //                 |.----'  .-----------'------'
+        //                 V       V
+        // Joints Data  [     ][     ]
+        //
+        Uint32 JointsIdx = ~0u;
 
         IBuffer* IndexBuffer = nullptr;
 
@@ -190,9 +201,11 @@ private:
     };
 
     void UpdateDrawList(const pxr::TfTokenVector& RenderTags);
+    void UpdateDrawListJoints(HnRenderDelegate& RenderDelegate);
     void UpdateDrawListGPUResources(RenderState& State);
     void UpdateDrawListItemGPUResources(DrawListItem& ListItem, RenderState& State, DRAW_LIST_ITEM_DIRTY_FLAGS DirtyFlags);
 
+    void WriteJointsDataBatch(RenderState& State, Uint32 BatchIdx, PBR_Renderer::PSO_FLAGS PSOFlags);
     void RenderPendingDrawItems(RenderState& State);
 
     GraphicsPipelineDesc GetGraphicsDesc(const HnRenderPassState& RPState, bool UseStripTopology) const;
@@ -225,6 +238,24 @@ private:
     std::vector<PendingDrawItem> m_PendingDrawItems;
     // Rendering order of the draw list items sorted by the PSO.
     std::vector<Uint32> m_RenderOrder;
+
+    struct DrawItemJointsData
+    {
+        Uint32 BatchIdx     = ~0u;
+        Uint32 BufferOffset = ~0u;
+        Uint32 JointCount   = 0;
+        Uint32 FirstJoint   = 0;
+        Uint32 DataSize     = 0;
+
+        const HnSkinningComputation* SkinComp = nullptr;
+
+        constexpr operator bool() const noexcept
+        {
+            return BatchIdx != ~0u;
+        }
+    };
+    std::vector<DrawItemJointsData> m_DrawItemJoints;
+    size_t                          m_CurrDrawItemJointIdx = 0;
 
     // Scratch space to prepare data for the primitive attributes buffer.
     std::vector<Uint8> m_PrimitiveAttribsData;
