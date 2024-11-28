@@ -707,10 +707,18 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
 
         ListItem.PrevTransform = Transform.Matrix;
 
+        Uint32 JointsBufferOffset = ~0u;
+        if (Joints)
+        {
+            JointsBufferOffset = (State.RendererSettings.JointsBufferMode == USD_Renderer::JOINTS_BUFFER_MODE_UNIFORM) ?
+                Joints.BufferOffset :
+                0;
+        }
+
         m_PendingDrawItems.push_back(PendingDrawItem{
             ListItem,
             AttribsBufferOffset,
-            Joints.BufferOffset,
+            JointsBufferOffset,
         });
 
         AttribsBufferOffset += ListItem.ShaderAttribsDataSize;
