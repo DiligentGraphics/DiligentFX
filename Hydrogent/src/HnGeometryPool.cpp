@@ -217,8 +217,9 @@ public:
                 const VertexStream& ExistingStream = stream_it.second;
                 if (m_Streams.find(SourceName) == m_Streams.end())
                 {
-                    VERIFY(ExistingStream.Buffer, "ExistingStream.Buffer must not be null for existing data as it is set in the Initialize() method and the data must be initialized.");
-                    AddStream(SourceName, ExistingStream.ElementSize, nullptr, ExistingStream.Buffer);
+                    IBuffer* pSrcBuffer = ExistingData->GetBuffer(SourceName);
+                    VERIFY(pSrcBuffer, "pSrcBuffer must not be null for existing data as it must be initialized.");
+                    AddStream(SourceName, ExistingStream.ElementSize, nullptr, pSrcBuffer);
                 }
             }
         }
@@ -235,7 +236,11 @@ public:
     IBuffer* GetBuffer(const pxr::TfToken& Name) const
     {
         auto it = m_Streams.find(Name);
-        return it != m_Streams.end() ? it->second.Buffer : nullptr;
+        if (it == m_Streams.end())
+            return nullptr;
+
+        VERIFY_EXPR(!m_PoolAllocation || !it->second.Buffer);
+        return m_PoolAllocation ? m_PoolAllocation->GetBuffer(it->second.PoolIndex) : it->second.Buffer;
     }
 
     Uint32 GetNumVertices() const
@@ -280,7 +285,7 @@ public:
                     if (src_stream_it != ExistingData->m_Streams.end())
                     {
                         VERIFY_EXPR(Stream.ElementSize == src_stream_it->second.ElementSize);
-                        VERIFY_EXPR(src_stream_it->second.Buffer);
+                        VERIFY_EXPR(m_PoolAllocation || src_stream_it->second.Buffer);
                         Stream.Buffer = std::move(src_stream_it->second.Buffer);
                     }
                     else
@@ -311,28 +316,34 @@ public:
                 continue;
             }
 
+            IBuffer*     pBuffer  = nullptr;
             const Uint32 DataSize = static_cast<Uint32>(m_NumVertices * Stream.ElementSize);
             if (m_PoolAllocation)
             {
                 VERIFY(m_PoolAllocation->GetVertexCount() == m_NumVertices, "Unexpected number of vertices in the pool allocation.");
-                Stream.Buffer = m_PoolAllocation->GetBuffer(Stream.PoolIndex);
+                pBuffer = m_PoolAllocation->GetBuffer(Stream.PoolIndex);
             }
-            else if (!Stream.Buffer)
+            else
             {
-                const auto BufferName = m_Name + " - " + StreamName.GetString();
-                BufferDesc Desc{
-                    BufferName.c_str(),
-                    DataSize,
-                    BIND_VERTEX_BUFFER,
-                    USAGE_DEFAULT,
-                };
-                pDevice->CreateBuffer(Desc, nullptr, &Stream.Buffer);
+                if (!Stream.Buffer)
+                {
+                    const auto BufferName = m_Name + " - " + StreamName.GetString();
+                    BufferDesc Desc{
+                        BufferName.c_str(),
+                        DataSize,
+                        BIND_VERTEX_BUFFER,
+                        USAGE_DEFAULT,
+                    };
+                    pDevice->CreateBuffer(Desc, nullptr, &Stream.Buffer);
+                }
+                pBuffer = Stream.Buffer;
             }
+            VERIFY_EXPR(pBuffer != nullptr);
 
             if (const pxr::HdBufferSource* pSource = source_it->second.Source.get())
             {
                 VERIFY(pSource->GetNumElements() == m_NumVertices, "Unexpected number of elements in vertex data source ", StreamName);
-                pContext->UpdateBuffer(Stream.Buffer, GetStartVertex() * Stream.ElementSize, DataSize, pSource->GetData(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+                pContext->UpdateBuffer(pBuffer, GetStartVertex() * Stream.ElementSize, DataSize, pSource->GetData(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
             }
             else if (IBuffer* pSrcBuffer = source_it->second.Buffer)
             {
@@ -342,7 +353,7 @@ public:
                         pSrcBuffer,
                         ExistingData->GetStartVertex() * Stream.ElementSize,
                         RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
-                        Stream.Buffer,
+                        pBuffer,
                         GetStartVertex() * Stream.ElementSize,
                         DataSize,
                         RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
@@ -350,7 +361,7 @@ public:
                 else
                 {
                     // We have taken the buffer from the existing data - no need to copy
-                    VERIFY(Stream.Buffer == pSrcBuffer, "Unexpected buffer for vertex stream '", StreamName, "'");
+                    VERIFY(pBuffer == pSrcBuffer, "Unexpected buffer for vertex stream '", StreamName, "'");
                 }
             }
             else
@@ -628,7 +639,8 @@ public:
 
     IBuffer* GetBuffer() const
     {
-        return m_Buffer;
+        VERIFY_EXPR(!m_Suballocation || !m_Buffer);
+        return m_Suballocation ? m_Suballocation->GetBuffer() : m_Buffer;
     }
 
     Uint32 GetStartIndex() const
@@ -687,27 +699,33 @@ public:
             }
         }
 
+        IBuffer* pBuffer = nullptr;
         if (m_Suballocation)
         {
-            m_Buffer = m_Suballocation->GetBuffer();
+            pBuffer = m_Suballocation->GetBuffer();
             VERIFY_EXPR(m_Suballocation->GetSize() == m_StagingData->Size);
         }
-        else if (!m_Buffer)
+        else
         {
-            BufferDesc Desc{
-                m_Name.c_str(),
-                m_StagingData->Size,
-                BIND_INDEX_BUFFER,
-                USAGE_DEFAULT,
-            };
-            pDevice->CreateBuffer(Desc, nullptr, &m_Buffer);
+            if (!m_Buffer)
+            {
+                BufferDesc Desc{
+                    m_Name.c_str(),
+                    m_StagingData->Size,
+                    BIND_INDEX_BUFFER,
+                    USAGE_DEFAULT,
+                };
+                pDevice->CreateBuffer(Desc, nullptr, &m_Buffer);
+            }
+            pBuffer = m_Buffer;
         }
+        VERIFY_EXPR(pBuffer != nullptr);
 
-        pContext->UpdateBuffer(m_Buffer, GetStartIndex() * sizeof(Uint32), m_StagingData->Size, m_StagingData->Ptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        pContext->UpdateBuffer(pBuffer, GetStartIndex() * sizeof(Uint32), m_StagingData->Size, m_StagingData->Ptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
         if (!m_Suballocation)
         {
-            StateTransitionDesc Barrier{m_Buffer, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_INDEX_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE};
+            StateTransitionDesc Barrier{pBuffer, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_INDEX_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE};
             pContext->TransitionResourceStates(1, &Barrier);
         }
 
