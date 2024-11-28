@@ -225,6 +225,8 @@ private:
 
     // Only selected/unselected items from m_DrawItems.
     std::vector<DrawListItem> m_DrawList;
+    // The number of valid draw items in m_DrawList.
+    size_t m_ValidDrawItemCount = 0;
 
     struct PendingDrawItem
     {

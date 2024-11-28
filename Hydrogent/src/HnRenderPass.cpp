@@ -547,21 +547,10 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
                                          const HnMesh::Components::Skinning>();
 
     Uint32 MultiDrawCount = 0;
-    for (size_t item_idx = 0; item_idx < m_DrawList.size(); ++item_idx)
+    for (size_t item_idx = 0; item_idx < m_ValidDrawItemCount; ++item_idx)
     {
         DrawListItem& ListItem = m_DrawList[item_idx];
-        if (!ListItem.DrawItem.IsValid())
-        {
-            // All invalid draw items are grouped at the end of the draw list.
-#ifdef DILIGENT_DEBUG
-            for (size_t i = item_idx + 1; i < m_DrawList.size(); ++i)
-            {
-                VERIFY(!m_DrawList[i].DrawItem.IsValid(), "Invalid draw items must be grouped at the end of the draw list");
-            }
-
-#endif
-            break;
-        }
+        VERIFY(ListItem.DrawItem.IsValid(), "All valid draw items must be grouped at the beginning of the list by UpdateDrawListGPUResources");
 
         if (!ListItem)
             continue;
@@ -724,6 +713,12 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
         AttribsBufferOffset += ListItem.ShaderAttribsDataSize;
         ++MultiDrawCount;
     }
+#ifdef DILIGENT_DEBUG
+    for (size_t i = m_ValidDrawItemCount; i < m_DrawList.size(); ++i)
+    {
+        VERIFY(!m_DrawList[i].DrawItem.IsValid(), "All invalid draw items must be grouped at the end of the list by UpdateDrawListGPUResources");
+    }
+#endif
     if (AttribsBufferOffset != 0)
     {
         FlushPendingDraws();
@@ -1062,7 +1057,8 @@ void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
     };
     std::unordered_map<DrawListItemRenderState, Uint32, DrawListItemRenderState::Hasher> DrawListItemRenderStateIDs;
 
-    bool DrawListDirty = false;
+    bool DrawListDirty   = false;
+    m_ValidDrawItemCount = 0;
     for (DrawListItem& ListItem : m_DrawList)
     {
         if (!ListItem.DrawItem.IsValid())
@@ -1071,9 +1067,9 @@ void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
             continue;
         }
 
-        auto DrawItemGPUResDirtyFlags = m_DrawListItemsDirtyFlags;
+        DRAW_LIST_ITEM_DIRTY_FLAGS DrawItemGPUResDirtyFlags = m_DrawListItemsDirtyFlags;
 
-        const auto Version = ListItem.Mesh.GetGeometryVersion() + ListItem.Mesh.GetMaterialVersion();
+        const Uint32 Version = ListItem.Mesh.GetGeometryVersion() + ListItem.Mesh.GetMaterialVersion();
         if (ListItem.Version != Version)
         {
             DrawItemGPUResDirtyFlags |= DRAW_LIST_ITEM_DIRTY_FLAG_PSO | DRAW_LIST_ITEM_DIRTY_FLAG_MESH_DATA;
@@ -1088,6 +1084,7 @@ void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
         // Assign a unique ID to the combination of render states used to render the draw item.
         // We have to do this after we update the draw item GPU resources.
         ListItem.RenderStateID = DrawListItemRenderStateIDs.emplace(DrawListItemRenderState{ListItem}, static_cast<Uint32>(DrawListItemRenderStateIDs.size())).first->second;
+        ++m_ValidDrawItemCount;
     }
 
     if (DrawListDirty)
@@ -1153,6 +1150,17 @@ void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
             }
 #endif
         }
+
+#ifdef DILIGENT_DEBUG
+        for (size_t i = 0; i < m_ValidDrawItemCount; ++i)
+        {
+            VERIFY(m_DrawList[i].DrawItem.IsValid(), "All valid draw items must be grouped at the beginning of the list");
+        }
+        for (size_t i = m_ValidDrawItemCount; i < m_DrawList.size(); ++i)
+        {
+            VERIFY(!m_DrawList[i].DrawItem.IsValid(), "All invalid draw items must be grouped at the end of the list");
+        }
+#endif
 
         UpdateDrawListJoints(State.RenderDelegate);
     }
