@@ -83,6 +83,7 @@ void HnSkinningComputation::Sync(pxr::HdSceneDelegate* SceneDelegate,
                 m_XformsHash = pxr::TfHash{}(Xforms);
 
                 m_LastXformSyncFrameNumber = static_cast<const HnRenderParam*>(RenderParam)->GetFrameNumber();
+                static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::SkinningXForms);
 
                 const HnRenderDelegate* RenderDelegate = static_cast<const HnRenderDelegate*>(SceneDelegate->GetRenderIndex().GetRenderDelegate());
                 const USD_Renderer&     USDRenderer    = *RenderDelegate->GetUSDRenderer();

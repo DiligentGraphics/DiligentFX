@@ -108,6 +108,9 @@ public:
         // Indicates changes to light resources (e.g. textures).
         LightResources,
 
+        // Indicates changes to skinning xforms
+        SkinningXForms,
+
         Count
     };
     uint32_t GetAttribVersion(GlobalAttrib Attrib) const { return m_GlobalAttribVersions[static_cast<size_t>(Attrib)].load(); }
