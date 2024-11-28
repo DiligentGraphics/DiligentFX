@@ -441,7 +441,7 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
         m_DrawItemGpuTopologyDirty.store(true);
     }
 
-    if ((IndexDataDirty || AnyPrimvarDirty) && RenderParam != nullptr)
+    if ((m_DrawItemGpuGeometryDirty.load() || m_DrawItemGpuTopologyDirty.load()) && RenderParam != nullptr)
     {
         static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::MeshGeometry);
         ++m_GeometryVersion;
