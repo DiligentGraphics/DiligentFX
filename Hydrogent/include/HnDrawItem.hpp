@@ -61,14 +61,14 @@ public:
 
     struct GeometryData
     {
-        RefCntAutoPtr<IBuffer> Positions;
-        RefCntAutoPtr<IBuffer> Normals;
-        RefCntAutoPtr<IBuffer> VertexColors;
-        RefCntAutoPtr<IBuffer> Joints;
+        IBuffer* Positions    = nullptr;
+        IBuffer* Normals      = nullptr;
+        IBuffer* VertexColors = nullptr;
+        IBuffer* Joints       = nullptr;
 
-        std::array<RefCntAutoPtr<IBuffer>, 2> TexCoords;
+        std::array<IBuffer*, 2> TexCoords{};
 
-        operator bool() const { return Positions; }
+        operator bool() const { return Positions != nullptr; }
     };
 
     void                SetGeometryData(GeometryData&& Data) { m_GeometryData = std::move(Data); }

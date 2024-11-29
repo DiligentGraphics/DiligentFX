@@ -129,6 +129,8 @@ public:
 
     entt::entity GetEntity() const { return m_Entity; }
 
+    static Uint32 GetCacheResourceVersion(const HnRenderDelegate& RenderDelegate);
+
 protected:
     // This callback from Rprim gives the prim an opportunity to set
     // additional dirty bits based on those already set.
@@ -273,6 +275,8 @@ private:
     std::atomic<Uint32> m_GeometryVersion{0};
     std::atomic<Uint32> m_MaterialVersion{0};
     std::atomic<Uint32> m_SkinningPrimvarsVersion{0};
+    Uint32              m_IndexPoolVersion  = ~0u;
+    Uint32              m_VertexPoolVersion = ~0u;
     std::atomic<bool>   m_DrawItemGpuTopologyDirty{false};
     std::atomic<bool>   m_DrawItemGpuGeometryDirty{false};
 

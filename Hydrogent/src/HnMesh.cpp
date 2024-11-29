@@ -1192,6 +1192,30 @@ void HnMesh::UpdateDrawItemGpuTopology(HnRenderDelegate& RenderDelegate)
 
 void HnMesh::CommitGPUResources(HnRenderDelegate& RenderDelegate)
 {
+    const GLTF::ResourceManager& ResMgr            = RenderDelegate.GetResourceManager();
+    const Uint32                 IndexPoolVersion  = ResMgr.GetIndexBufferVersion();
+    const Uint32                 VertexPoolVersion = ResMgr.GetVertexPoolsVersion();
+    if (m_VertexHandle)
+    {
+        if (m_IndexPoolVersion != IndexPoolVersion)
+        {
+            // Update index buffer
+            m_DrawItemGpuTopologyDirty.store(true);
+        }
+
+        if (m_VertexPoolVersion != VertexPoolVersion)
+        {
+            // Update vertex buffers
+            m_DrawItemGpuGeometryDirty.store(true);
+        }
+    }
+    else
+    {
+        // The mesh has not been initialized yet.
+        // m_DrawItemGpuGeometryDirty and m_DrawItemGpuTopologyDirty will be set
+        // by UpdateRepr() when the mesh is initialized.
+    }
+
     if (m_DrawItemGpuTopologyDirty.load())
     {
         UpdateDrawItemGpuTopology(RenderDelegate);
@@ -1201,11 +1225,20 @@ void HnMesh::CommitGPUResources(HnRenderDelegate& RenderDelegate)
     {
         UpdateDrawItemGpuGeometry(RenderDelegate);
     }
+
+    m_IndexPoolVersion  = IndexPoolVersion;
+    m_VertexPoolVersion = VertexPoolVersion;
 }
 
 IBuffer* HnMesh::GetVertexBuffer(const pxr::TfToken& Name) const
 {
     return m_VertexHandle ? m_VertexHandle->GetBuffer(Name) : nullptr;
+}
+
+Uint32 HnMesh::GetCacheResourceVersion(const HnRenderDelegate& RenderDelegate)
+{
+    const GLTF::ResourceManager& ResMgr = RenderDelegate.GetResourceManager();
+    return ResMgr.GetIndexBufferVersion() + ResMgr.GetVertexPoolsVersion();
 }
 
 } // namespace USD

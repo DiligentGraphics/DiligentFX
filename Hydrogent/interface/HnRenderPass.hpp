@@ -282,6 +282,7 @@ private:
         uint32_t MeshMaterial        = ~0u;
         uint32_t MeshCulling         = ~0u;
         uint32_t Material            = ~0u;
+        uint32_t MeshResourceCache   = ~0u;
     } m_GlobalAttribVersions;
 
     DRAW_LIST_ITEM_DIRTY_FLAGS m_DrawListItemsDirtyFlags = DRAW_LIST_ITEM_DIRTY_FLAG_ALL;

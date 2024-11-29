@@ -425,6 +425,13 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
             m_GlobalAttribVersions.MeshCulling = MeshCullingVersion;
         }
 
+        const Uint32 MeshResourceCacheVersion = HnMesh::GetCacheResourceVersion(State.RenderDelegate);
+        if (m_GlobalAttribVersions.MeshResourceCache != MeshResourceCacheVersion)
+        {
+            m_GlobalAttribVersions.MeshResourceCache = MeshResourceCacheVersion;
+            m_DrawListItemsDirtyFlags |= DRAW_LIST_ITEM_DIRTY_FLAG_MESH_DATA;
+        }
+
         // If either mesh material or mesh geometry changes, call UpdateDrawListGPUResources(), but
         // don't set the dirty flags in the m_DrawListItemsDirtyFlags. The UpdateDrawListGPUResources()
         // method will check the version of each individual mesh and only update those that have changed.
