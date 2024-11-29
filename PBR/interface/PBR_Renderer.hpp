@@ -938,6 +938,9 @@ inline void PBR_Renderer::ProcessTexturAttribs(PBR_Renderer::PSO_FLAGS PSOFlags,
 
 inline Uint32 PBR_Renderer::PackVertexNormal(const float3& Normal)
 {
+    if (Normal == float3{})
+        return ~0u;
+
     Uint32 x = static_cast<Uint32>(clamp((Normal.x + 1.f) * 32767.f, 0.f, 65535.f));
     Uint32 y = static_cast<Uint32>(clamp((Normal.y + 1.f) * 16383.f, 0.f, 32767.f));
     Uint32 z = Normal.z >= 0 ? 0 : 1;

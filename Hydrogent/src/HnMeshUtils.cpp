@@ -411,7 +411,12 @@ pxr::VtValue HnMeshUtils::PackVertexNormals(const pxr::VtValue& Normals) const
     Uint32*                  pPackedNormals = reinterpret_cast<Uint32*>(PackedNormals.data());
     for (size_t i = 0; i < NormalsArray.size(); ++i)
     {
-        pPackedNormals[i] = PBR_Renderer::PackVertexNormal(normalize(ToFloat3(NormalsArray[i])));
+        float3 Normal = ToFloat3(NormalsArray[i]);
+        float  Length = length(Normal);
+        if (Length != 0)
+            Normal /= Length;
+
+        pPackedNormals[i] = PBR_Renderer::PackVertexNormal(Normal);
     }
     return pxr::VtValue::Take(PackedNormals);
 }
