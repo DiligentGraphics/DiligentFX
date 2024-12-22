@@ -18,6 +18,9 @@
 #define TONE_MAPPING_ADAPTIVE_LOG       7
 #define TONE_MAPPING_AGX                8
 #define TONE_MAPPING_AGX_CUSTOM         9
+#define TONE_MAPPING_PBR_NEUTRAL       10
+#define TONE_MAPPING_MODE_COUNT        11
+
 
 struct AgXAttribs
 {

@@ -170,6 +170,28 @@ float3 ToneMap(in float3 f3Color, ToneMappingAttribs Attribs, float fAveLogLum)
         f3ToneMappedColor = AgXEotf(f3ToneMappedColor);
         return f3ToneMappedColor;
     }
+#elif TONE_MAPPING_MODE == TONE_MAPPING_PBR_NEUTRAL
+    {
+        // https://modelviewer.dev/examples/tone-mapping
+        // https://github.com/KhronosGroup/ToneMapping/blob/main/PBR_Neutral/README.md#pbr-neutral-specification
+        float F90 = 0.04;      // Fresnel reflection at normal incidence
+        float Ks  = 0.8 - F90; // Highlight compression start
+        float Kd  = 0.15;      // Speed of desaturation
+        
+        float x      = min(f3Color.r, min(f3Color.g, f3Color.b));
+        float Offset = (x <= 2.0 * F90) ? (x - x * x / (4.0 * F90)) : F90;
+        float3 f3ToneMappedColor = f3Color - float3(Offset, Offset, Offset);
+
+        float Peak = max(f3ToneMappedColor.r, max(f3ToneMappedColor.g, f3ToneMappedColor.b));
+        if (Peak > Ks)
+        {
+            float NewPeak = 1.0 - (1.0 - Ks) * (1.0 - Ks) / (Peak + 1.0 - 2.0 * Ks);
+            f3ToneMappedColor *= NewPeak / Peak;
+            float g = 1.0 / (Kd * (Peak - NewPeak) + 1.0);
+            f3ToneMappedColor = lerp(float3(NewPeak, NewPeak, NewPeak), f3ToneMappedColor, g);
+        }
+        return f3ToneMappedColor; 
+    }
 #else
     {
         return f3Color;
