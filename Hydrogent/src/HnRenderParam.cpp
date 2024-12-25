@@ -32,20 +32,8 @@ namespace Diligent
 namespace USD
 {
 
-HnRenderParam::HnRenderParam(bool                              UseVertexPool,
-                             bool                              UseIndexPool,
-                             bool                              AsyncShaderCompilation,
-                             bool                              UseNativeStartVertex,
-                             HN_MATERIAL_TEXTURES_BINDING_MODE TextureBindingMode,
-                             float                             MetersPerUnit,
-                             Uint64                            GeometryLoadBudget) noexcept :
-    m_UseVertexPool{UseVertexPool},
-    m_UseIndexPool{UseIndexPool},
-    m_AsyncShaderCompilation{AsyncShaderCompilation},
-    m_UseNativeStartVertex{UseNativeStartVertex},
-    m_TextureBindingMode{TextureBindingMode},
-    m_MetersPerUnit{MetersPerUnit},
-    m_GeometryLoadBudget{GeometryLoadBudget}
+HnRenderParam::HnRenderParam(const Configuration& Config) noexcept :
+    m_Config{Config}
 {
     for (auto& Version : m_GlobalAttribVersions)
         Version.store(0);

@@ -46,24 +46,21 @@ namespace USD
 class HnRenderParam final : public pxr::HdRenderParam
 {
 public:
-    HnRenderParam(bool                              UseVertexPool,
-                  bool                              UseIndexPool,
-                  bool                              AsyncShaderCompilation,
-                  bool                              UseNativeStartVertex,
-                  HN_MATERIAL_TEXTURES_BINDING_MODE TextureBindingMode,
-                  float                             MetersPerUnit,
-                  Uint64                            GeometryLoadBudget) noexcept;
+    struct Configuration
+    {
+        bool                              UseVertexPool          = false;
+        bool                              UseIndexPool           = false;
+        bool                              AsyncShaderCompilation = false;
+        bool                              UseNativeStartVertex   = false;
+        HN_MATERIAL_TEXTURES_BINDING_MODE TextureBindingMode     = {};
+        float                             MetersPerUnit          = 1.0f;
+        Uint64                            GeometryLoadBudget     = 0;
+    };
+
+    HnRenderParam(const Configuration& Config) noexcept;
     ~HnRenderParam();
 
-    bool GetUseVertexPool() const { return m_UseVertexPool; }
-    bool GetUseIndexPool() const { return m_UseIndexPool; }
-    bool GetAsyncShaderCompilation() const { return m_AsyncShaderCompilation; }
-    bool GetUseNativeStartVertex() const { return m_UseNativeStartVertex; }
-
-    HN_MATERIAL_TEXTURES_BINDING_MODE GetTextureBindingMode() const { return m_TextureBindingMode; }
-
-    float  GetMetersPerUnit() const { return m_MetersPerUnit; }
-    Uint64 GetGeometryLoadBudget() const { return m_GeometryLoadBudget; }
+    const Configuration& GetConfig() const { return m_Config; }
 
     HN_RENDER_MODE GetRenderMode() const { return m_RenderMode; }
     void           SetRenderMode(HN_RENDER_MODE Mode) { m_RenderMode = Mode; }
@@ -134,15 +131,7 @@ public:
     const auto& GetDirtyRPrims() const { return m_DirtyRPrims; }
 
 private:
-    const bool m_UseVertexPool;
-    const bool m_UseIndexPool;
-    const bool m_AsyncShaderCompilation;
-    const bool m_UseNativeStartVertex;
-
-    const HN_MATERIAL_TEXTURES_BINDING_MODE m_TextureBindingMode;
-
-    const float  m_MetersPerUnit;
-    const Uint64 m_GeometryLoadBudget;
+    const Configuration m_Config;
 
     HN_RENDER_MODE m_RenderMode = HN_RENDER_MODE_SOLID;
 

@@ -518,7 +518,7 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
             CamAttribs.f2Jitter   = Jitter;
             CamAttribs.fFStop     = m_pCamera->GetFStop();
 
-            const float MetersPerUnit = RenderParam ? RenderParam->GetMetersPerUnit() : 0.01f;
+            const float MetersPerUnit = RenderParam ? RenderParam->GetConfig().MetersPerUnit : 0.01f;
 
             // USD camera properties are measured in scene units, but Diligent camera expects them in world units.
             CamAttribs.fFocusDistance = m_pCamera->GetFocusDistance() * MetersPerUnit;

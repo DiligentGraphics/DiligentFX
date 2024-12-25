@@ -60,7 +60,7 @@ void HnCamera::Sync(pxr::HdSceneDelegate* SceneDelegate,
     pxr::HdDirtyBits OrigDirtyBits = *DirtyBits;
     pxr::HdCamera::Sync(SceneDelegate, RenderParam, DirtyBits);
 
-    const float MetersPerUnit = RenderParam ? static_cast<const HnRenderParam*>(RenderParam)->GetMetersPerUnit() : 0.01f;
+    const float MetersPerUnit = RenderParam ? static_cast<const HnRenderParam*>(RenderParam)->GetConfig().MetersPerUnit : 0.01f;
     const float UnitsPerMeter = 1.f / MetersPerUnit;
     if (OrigDirtyBits & pxr::HdCamera::DirtyTransform)
     {

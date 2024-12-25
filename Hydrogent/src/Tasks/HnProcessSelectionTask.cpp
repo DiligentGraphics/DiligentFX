@@ -99,7 +99,7 @@ void HnProcessSelectionTask::PrepareTechniques(TEXTURE_FORMAT RTVFormat)
         ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL;
         if (RenderDelegate->GetUSDRenderer()->GetSettings().PackMatrixRowMajor)
             ShaderCI.CompileFlags |= SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR;
-        if (RenderParam->GetAsyncShaderCompilation())
+        if (RenderParam->GetConfig().AsyncShaderCompilation)
             ShaderCI.CompileFlags |= SHADER_COMPILE_FLAG_ASYNCHRONOUS;
 
         auto pHnFxCompoundSourceFactory     = HnShaderSourceFactory::CreateHnFxCompoundFactory();
@@ -129,7 +129,7 @@ void HnProcessSelectionTask::PrepareTechniques(TEXTURE_FORMAT RTVFormat)
             .SetRasterizerDesc(RS_SolidFillNoCull)
             .SetPrimitiveTopology(PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 
-        if (RenderParam->GetAsyncShaderCompilation())
+        if (RenderParam->GetConfig().AsyncShaderCompilation)
             PsoCI.Flags |= PSO_CREATE_FLAG_ASYNCHRONOUS;
 
         if (!m_InitTech.PSO)
