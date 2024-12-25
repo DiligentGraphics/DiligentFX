@@ -462,13 +462,15 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
     },
     m_RenderParam{
         std::make_unique<HnRenderParam>(
-            CI.UseVertexPool,
-            CI.UseIndexPool,
-            CI.AsyncShaderCompilation,
-            !CI.pDevice->GetDeviceInfo().IsGLDevice(), // UseNativeStartVertex
-            CI.TextureBindingMode,
-            CI.MetersPerUnit,
-            CI.GeometryLoadBudget),
+            HnRenderParam::Configuration{
+                CI.UseVertexPool,
+                CI.UseIndexPool,
+                CI.AsyncShaderCompilation,
+                !CI.pDevice->GetDeviceInfo().IsGLDevice(), // UseNativeStartVertex
+                CI.TextureBindingMode,
+                CI.MetersPerUnit,
+                CI.GeometryLoadBudget,
+            }),
     },
     m_ShadowMapManager{CreateShadowMapManager(CI)}
 {

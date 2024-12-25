@@ -482,7 +482,7 @@ void HnPostProcessTask::CreateVectorFieldRenderer(TEXTURE_FORMAT RTVFormat)
     CI.NumRenderTargets   = 1;
     CI.RTVFormats[0]      = RTVFormat;
     CI.PackMatrixRowMajor = RenderDelegate->GetUSDRenderer()->GetSettings().PackMatrixRowMajor;
-    CI.AsyncShaders       = pRenderParam->GetAsyncShaderCompilation();
+    CI.AsyncShaders       = pRenderParam->GetConfig().AsyncShaderCompilation;
 
     m_VectorFieldRenderer = std::make_unique<VectorFieldRenderer>(CI);
 }
@@ -562,7 +562,7 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
     }
 
     const HnRenderParam* pRenderParam           = static_cast<const HnRenderParam*>(RenderDelegate->GetRenderParam());
-    const bool           AsyncShaderCompilation = pRenderParam->GetAsyncShaderCompilation();
+    const bool           AsyncShaderCompilation = pRenderParam->GetConfig().AsyncShaderCompilation;
     if (!m_PostFXContext)
     {
         PostFXContext::CreateInfo PostFXCI;

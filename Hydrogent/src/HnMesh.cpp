@@ -202,7 +202,7 @@ void HnMesh::Sync(pxr::HdSceneDelegate* Delegate,
     HnRenderDelegate* RenderDelegate      = static_cast<HnRenderDelegate*>(Delegate->GetRenderIndex().GetRenderDelegate());
     HnGeometryPool&   GeometryPool        = RenderDelegate->GetGeometryPool();
     const Int64       PendingGeometrySize = GeometryPool.GetPendingVertexDataSize() + GeometryPool.GetPendingIndexDataSize();
-    const Uint64      GeometryLoadBudget  = static_cast<HnRenderParam*>(RenderParam)->GetGeometryLoadBudget();
+    const Uint64      GeometryLoadBudget  = static_cast<HnRenderParam*>(RenderParam)->GetConfig().GeometryLoadBudget;
     bool              ReprUpdated         = false;
     if (GeometryLoadBudget == 0 || static_cast<Uint64>(PendingGeometrySize) < GeometryLoadBudget)
     {
@@ -401,7 +401,7 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
         DirtyBits &= ~pxr::HdChangeTracker::DirtyPrimvar;
     }
 
-    const bool UseNativeStartVertex = static_cast<HnRenderParam*>(RenderParam)->GetUseNativeStartVertex();
+    const bool UseNativeStartVertex = static_cast<HnRenderParam*>(RenderParam)->GetConfig().UseNativeStartVertex;
 
     // When native start vertex is not supported, start vertex needs to be baked into the index data.
     Uint32 BakedStartVertex = (!UseNativeStartVertex && m_VertexHandle) ? m_VertexHandle->GetStartVertex() : 0;
@@ -1138,7 +1138,7 @@ void HnMesh::UpdateDrawItemGpuGeometry(HnRenderDelegate& RenderDelegate)
 void HnMesh::UpdateDrawItemGpuTopology(HnRenderDelegate& RenderDelegate)
 {
     const HnRenderParam* pRenderParam = static_cast<const HnRenderParam*>(RenderDelegate.GetRenderParam());
-    const Uint32         StartVertex  = pRenderParam->GetUseNativeStartVertex() ? m_VertexHandle->GetStartVertex() : 0;
+    const Uint32         StartVertex  = pRenderParam->GetConfig().UseNativeStartVertex ? m_VertexHandle->GetStartVertex() : 0;
 
     Uint32 SubsetIdx = 0;
     ProcessDrawItems(

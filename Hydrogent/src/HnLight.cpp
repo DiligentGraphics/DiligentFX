@@ -510,7 +510,7 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
             float MetersPerUnit = 1;
             if (RenderParam != nullptr)
             {
-                MetersPerUnit = static_cast<const HnRenderParam*>(RenderParam)->GetMetersPerUnit();
+                MetersPerUnit = static_cast<const HnRenderParam*>(RenderParam)->GetConfig().MetersPerUnit;
             }
             if (ApproximateAreaLight(*SceneDelegate, MetersPerUnit))
             {

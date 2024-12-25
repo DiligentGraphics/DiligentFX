@@ -1264,7 +1264,7 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
         const auto ShaderTextureIndexingId = pMaterial->GetStaticShaderTextureIndexingId();
 
         PBR_Renderer::PsoCacheAccessor::GET_FLAGS GetPSOFlags = PBR_Renderer::PsoCacheAccessor::GET_FLAG_CREATE_IF_NULL;
-        if (State.RenderParam.GetAsyncShaderCompilation())
+        if (State.RenderParam.GetConfig().AsyncShaderCompilation)
             GetPSOFlags |= PBR_Renderer::PsoCacheAccessor::GET_FLAG_ASYNC_COMPILE;
 
         if (Geo.Joints != nullptr)
@@ -1302,7 +1302,7 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
                        "This may indicate an issue in how alpha mode is determined in the material, or (less likely) an issue in Rprim sorting by Hydra.");
             }
 
-            if (State.RenderParam.GetTextureBindingMode() == HN_MATERIAL_TEXTURES_BINDING_MODE_ATLAS)
+            if (State.RenderParam.GetConfig().TextureBindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_ATLAS)
                 PSOFlags |= PBR_Renderer::PSO_FLAG_USE_TEXTURE_ATLAS;
 
             if (State.USDRenderer.GetSettings().EnableShadows &&
