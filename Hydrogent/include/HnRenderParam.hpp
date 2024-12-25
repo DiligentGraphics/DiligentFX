@@ -52,6 +52,7 @@ public:
         bool                              UseIndexPool           = false;
         bool                              AsyncShaderCompilation = false;
         bool                              UseNativeStartVertex   = false;
+        bool                              EnableOIT              = false;
         HN_MATERIAL_TEXTURES_BINDING_MODE TextureBindingMode     = {};
         float                             MetersPerUnit          = 1.0f;
         Uint64                            GeometryLoadBudget     = 0;

@@ -466,7 +466,8 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
                 CI.UseVertexPool,
                 CI.UseIndexPool,
                 CI.AsyncShaderCompilation,
-                !CI.pDevice->GetDeviceInfo().IsGLDevice(), // UseNativeStartVertex
+                !CI.pDevice->GetDeviceInfo().IsGLDevice(),                                                        // UseNativeStartVertex
+                !CI.pDevice->GetDeviceInfo().IsGLDevice() && CI.pDevice->GetDeviceInfo().Features.ComputeShaders, // EnableOIT
                 CI.TextureBindingMode,
                 CI.MetersPerUnit,
                 CI.GeometryLoadBudget,

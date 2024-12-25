@@ -67,6 +67,7 @@ public:
     static constexpr TaskUID TaskUID_RenderRprimsTranslucentSelected = 0x50a786394d834b4f;
     static constexpr TaskUID TaskUID_RenderEnvMap                    = 0xf646122e1dc74bab;
     static constexpr TaskUID TaskUID_RenderBoundBox                  = 0x1e7e47f37e6445b4;
+    static constexpr TaskUID TaskUID_BuildTransmittance              = 0x32d1e87379ba4b92;
     static constexpr TaskUID TaskUID_ReadRprimId                     = 0x199572fe7ff144ef;
     static constexpr TaskUID TaskUID_ProcessSelection                = 0x87ef181ec6d4cf83;
     static constexpr TaskUID TaskUID_PostProcess                     = 0x1f5367e65d034500;
@@ -102,6 +103,8 @@ public:
     ///                             * Renders only unselected Rprims with the masked material tag
     ///                         - RenderEnvMap
     ///                         - RenderBoundBox
+    ///                         - BuildTransmittance
+    ///                             * Builds transmittance representation for OIT
     ///                         - RenderRprimsAdditive
     ///                             * Renders all Rprims with additive material tag
     ///                         - RenderRprimsTranslucent
@@ -127,6 +130,7 @@ public:
     ///     | RenderRprimsMaskedUnselected    |                  |         V         |   V    |     V     |    V     |                  |     V      |
     ///     | RenderEnvMap                    |                  |                   |   V    |           |          |                  |            |
     ///     | RenderBoundBox                  |                  |                   |   V    |           |          |                  |            |
+    ///     | BuildTransmittance              |                  |                   |        |           |          |                  |            |
     ///     | RenderRprimsAdditive            |       V          |         V         |   V    |     V     |    V     |                  |     V      |
     ///     | RenderRprimsTranslucent         |       V          |         V         |   V    |     V     |    V     |                  |     V      |
     ///     | RenderRprimsAdditiveSelected    |       V          |                   |        |           |          |        V         |            |
@@ -242,6 +246,7 @@ private:
     void CreateRenderRprimsTask(const pxr::TfToken& MaterialTag, TaskUID UID, const HnRenderPassParams& RenderPassParams);
     void CreateRenderEnvMapTask(const pxr::TfToken& RenderPassName);
     void CreateRenderBoundBoxTask(const pxr::TfToken& RenderPassName);
+    void CreateBuildTransmittanceTask();
     void CreateReadRprimIdTask();
     void CreateCopySelectionDepthTask();
     void CreateProcessSelectionTask();

@@ -36,6 +36,7 @@
 #include "Tasks/HnCopySelectionDepthTask.hpp"
 #include "Tasks/HnRenderEnvMapTask.hpp"
 #include "Tasks/HnRenderBoundBoxTask.hpp"
+#include "Tasks/HnBuildTransmittanceTask.hpp"
 #include "Tasks/HnReadRprimIdTask.hpp"
 #include "Tasks/HnPostProcessTask.hpp"
 #include "Tasks/HnProcessSelectionTask.hpp"
@@ -43,6 +44,7 @@
 #include "HashUtils.hpp"
 #include "HnRenderDelegate.hpp"
 #include "HnRenderPass.hpp"
+#include "HnRenderParam.hpp"
 #include "HnShadowMapManager.hpp"
 
 namespace Diligent
@@ -64,6 +66,7 @@ TF_DEFINE_PRIVATE_TOKENS(
     (copySelectionDepthTask)
     (renderEnvMapTask)
     (renderBoundBoxTask)
+    (buildTransmittanceTask)
     (readRprimIdTask)
     (processSelectionTask)
     (postProcessTask)
@@ -144,9 +147,11 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
     m_ManagerId{ManagerId},
     m_ParamsDelegate{RenderIndex, ManagerId}
 {
+    HnRenderDelegate*    pRenderDelegate = static_cast<HnRenderDelegate*>(RenderIndex.GetRenderDelegate());
+    const HnRenderParam* pRenderParam    = static_cast<const HnRenderParam*>(pRenderDelegate->GetRenderParam());
     // Task creation order defines the default task order
     CreateBeginFrameTask();
-    if (const HnShadowMapManager* pShadowMapMgr = static_cast<const HnRenderDelegate*>(RenderIndex.GetRenderDelegate())->GetShadowMapManager())
+    if (const HnShadowMapManager* pShadowMapMgr = pRenderDelegate->GetShadowMapManager())
     {
         CreateRenderShadowsTask(*pShadowMapMgr);
     }
@@ -187,6 +192,10 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                            });
     CreateRenderEnvMapTask(HnRenderResourceTokens->renderPass_OpaqueUnselected_TransparentAll);
     CreateRenderBoundBoxTask(HnRenderResourceTokens->renderPass_OpaqueUnselected_TransparentAll);
+    if (pRenderParam->GetConfig().EnableOIT)
+    {
+        CreateBuildTransmittanceTask();
+    }
     CreateRenderRprimsTask(HnMaterialTagTokens->additive,
                            TaskUID_RenderRprimsAdditive,
                            {
@@ -417,6 +426,32 @@ void HnTaskManager::CreateRenderBoundBoxTask(const pxr::TfToken& RenderPassName)
     CreateTask<HnRenderBoundBoxTask>(HnTaskManagerTokens->renderBoundBoxTask, TaskUID_RenderBoundBox, TaskParams);
 
     SetParameter(HnTaskManagerTokens->renderBoundBoxTask, HnTokens->renderPassName, RenderPassName);
+}
+
+void HnTaskManager::CreateBuildTransmittanceTask()
+{
+    HnBuildTransmittanceTaskParams TaskParams;
+    CreateTask<HnBuildTransmittanceTask>(HnTaskManagerTokens->buildTransmittanceTask, TaskUID_BuildTransmittance, TaskParams);
+
+    pxr::HdRprimCollection Collection{
+        pxr::HdTokens->geometry,
+        pxr::HdReprSelector{pxr::HdReprTokens->hull},
+        false, // forcedRepr
+        HnMaterialTagTokens->translucent,
+    };
+    Collection.SetRootPath(pxr::SdfPath::AbsoluteRootPath());
+
+    pxr::TfTokenVector RenderTags = {pxr::HdRenderTagTokens->geometry};
+
+    HnRenderPassParams RPParams{
+        HnRenderResourceTokens->renderPass_BuildTransmittance,
+        HnRenderPassParams::SelectionType::All,
+        USD_Renderer::USD_PSO_FLAG_NONE,
+    };
+
+    SetParameter(HnTaskManagerTokens->buildTransmittanceTask, pxr::HdTokens->collection, Collection);
+    SetParameter(HnTaskManagerTokens->buildTransmittanceTask, pxr::HdTokens->renderTags, RenderTags);
+    SetParameter(HnTaskManagerTokens->buildTransmittanceTask, HnTokens->renderPassParams, RPParams);
 }
 
 void HnTaskManager::CreateReadRprimIdTask()
