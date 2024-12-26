@@ -440,11 +440,19 @@ public:
         NumDebugViews
     };
 
-    enum class LoadingAnimationMode
+    enum class LoadingAnimationMode : Uint8
     {
         None,
         Always,
         Transitioning,
+        Count
+    };
+
+    enum class RenderPassType : Uint8
+    {
+        Main,
+        Shadow,
+        BuildTransmittance,
         Count
     };
 
@@ -571,26 +579,28 @@ public:
     public:
         constexpr PSOKey() noexcept {};
 
-        PSOKey(PSO_FLAGS            _Flags,
+        PSOKey(RenderPassType       _Type,
+               PSO_FLAGS            _Flags,
                ALPHA_MODE           _AlphaMode,
                CULL_MODE            _CullMode,
                DebugViewType        _DebugView        = DebugViewType::None,
                LoadingAnimationMode _LoadingAnimation = LoadingAnimationMode::None,
                Uint64               _UserValue        = 0) noexcept;
 
-        PSOKey(PSO_FLAGS            _Flags,
+        PSOKey(RenderPassType       _Type,
+               PSO_FLAGS            _Flags,
                CULL_MODE            _CullMode,
                DebugViewType        _DebugView        = DebugViewType::None,
                LoadingAnimationMode _LoadingAnimation = LoadingAnimationMode::None,
                Uint64               _UserValue        = 0) noexcept :
-            PSOKey{_Flags, ALPHA_MODE_OPAQUE, _CullMode, _DebugView, _LoadingAnimation, _UserValue}
+            PSOKey{_Type, _Flags, ALPHA_MODE_OPAQUE, _CullMode, _DebugView, _LoadingAnimation, _UserValue}
         {}
 
         PSOKey(PSO_FLAGS     _Flags,
                ALPHA_MODE    _AlphaMode,
                CULL_MODE     _CullMode,
                const PSOKey& Other) noexcept :
-            PSOKey{_Flags, _AlphaMode, _CullMode, Other.GetDebugView(), Other.GetLoadingAnimation(), Other.GetUserValue()}
+            PSOKey{Other.GetType(), _Flags, _AlphaMode, _CullMode, Other.GetDebugView(), Other.GetLoadingAnimation(), Other.GetUserValue()}
         {}
 
         PSOKey(PSO_FLAGS     _Flags,
@@ -602,6 +612,7 @@ public:
         {
             // clang-format off
             return Hash             == rhs.Hash      &&
+                   Type             == rhs.Type      &&
                    Flags            == rhs.Flags     &&
                    CullMode         == rhs.CullMode  &&
                    AlphaMode        == rhs.AlphaMode &&
@@ -623,6 +634,7 @@ public:
             }
         };
 
+        constexpr RenderPassType       GetType() const noexcept { return Type; }
         constexpr PSO_FLAGS            GetFlags() const noexcept { return Flags; }
         constexpr CULL_MODE            GetCullMode() const noexcept { return CullMode; }
         constexpr ALPHA_MODE           GetAlphaMode() const noexcept { return AlphaMode; }
@@ -631,6 +643,7 @@ public:
         constexpr Uint64               GetUserValue() const noexcept { return UserValue; }
 
     private:
+        RenderPassType       Type             = RenderPassType::Main;
         PSO_FLAGS            Flags            = PSO_FLAG_NONE;
         ALPHA_MODE           AlphaMode        = ALPHA_MODE_OPAQUE;
         CULL_MODE            CullMode         = CULL_MODE_BACK;

@@ -62,11 +62,14 @@ struct HnRenderPassParams
     };
     SelectionType Selection = SelectionType::All;
 
-    USD_Renderer::USD_PSO_FLAGS UsdPsoFlags = USD_Renderer::USD_PSO_FLAG_NONE;
+    USD_Renderer::RenderPassType Type        = USD_Renderer::RenderPassType::Main;
+    USD_Renderer::USD_PSO_FLAGS  UsdPsoFlags = USD_Renderer::USD_PSO_FLAG_NONE;
 
     constexpr bool operator==(const HnRenderPassParams& rhs) const
     {
-        return Selection == rhs.Selection && UsdPsoFlags == rhs.UsdPsoFlags;
+        return (Selection == rhs.Selection &&
+                Type == rhs.Type &&
+                UsdPsoFlags == rhs.UsdPsoFlags);
     }
 
     static const char* GetSelectionTypeString(SelectionType Type);
