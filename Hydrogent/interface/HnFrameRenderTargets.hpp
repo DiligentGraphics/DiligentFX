@@ -27,6 +27,7 @@
 #pragma once
 
 #include <array>
+#include <vector>
 
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/TextureView.h"
 
@@ -60,6 +61,7 @@ struct HnFrameRenderTargets
     ITextureView* PrevDepthDSV      = nullptr;
 
     std::array<ITextureView*, 2> ClosestSelectedLocationRTV = {};
+    std::vector<ITextureView*>   OITUAVs;
 
     ITextureView* JitteredFinalColorRTV = nullptr;
 

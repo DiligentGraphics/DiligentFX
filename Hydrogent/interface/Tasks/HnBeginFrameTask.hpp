@@ -213,6 +213,7 @@ private:
     pxr::SdfPath m_JitteredFinalColorTargetId;
 
     std::array<pxr::SdfPath, HnFrameRenderTargets::GBUFFER_TARGET_COUNT> m_GBufferTargetIds;
+    std::vector<pxr::SdfPath>                                            m_OITTargetIds;
 
     pxr::SdfPath m_SelectionDepthBufferId;
 

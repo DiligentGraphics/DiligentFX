@@ -356,7 +356,7 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
 
     if (m_Settings.EnableOIT)
     {
-        if (m_Device.GetDeviceInfo().Features.ComputeShaders)
+        if (!m_Device.GetDeviceInfo().Features.ComputeShaders)
         {
             LOG_WARNING_MESSAGE("OIT requires compute shaders, but they are not supported by the device. OIT will be disabled.");
             m_Settings.EnableOIT = false;
@@ -2194,6 +2194,29 @@ void* PBR_Renderer::WriteSkinningData(void* pDst, const WriteSkinningDataAttribs
         PackMatrixRowMajor = m_Device.GetDeviceInfo().IsWebGPUDevice();
     }
     return WriteSkinningData(pDst, Attribs, PackMatrixRowMajor, m_Settings.MaxJointCount);
+}
+
+std::vector<TextureDesc> PBR_Renderer::GetOITTextureDescs() const
+{
+    std::vector<TextureDesc> OITTextures;
+    if (m_Settings.EnableOIT)
+    {
+        TextureDesc Desc;
+        Desc.Type      = RESOURCE_DIM_TEX_2D;
+        Desc.MipLevels = 1;
+        Desc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
+
+        OITTextures.reserve(2);
+
+        Desc.Name   = "OIT transparency";
+        Desc.Format = TEX_FORMAT_RGBA8_UNORM;
+        OITTextures.emplace_back(Desc);
+
+        Desc.Name   = "OIT depth";
+        Desc.Format = TEX_FORMAT_RGBA32_FLOAT;
+        OITTextures.emplace_back(Desc);
+    }
+    return OITTextures;
 }
 
 } // namespace Diligent

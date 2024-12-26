@@ -187,6 +187,12 @@ public:
         /// Whether to pack vertex positions into two 32-bit uints.
         bool PackVertexPositions = false;
 
+        /// Whether to use order-independent transparency.
+        ///
+        /// \remarks    OIT improves visual quality when rendering transparent objects,
+        ///             but requires additional memory and processing power.
+        bool UseOIT = false;
+
         /// When shadows are enabled, the size of the PCF kernel.
         /// Allowed values are 2, 3, 5, 7.
         Uint32 PCFKernelSize = 3;

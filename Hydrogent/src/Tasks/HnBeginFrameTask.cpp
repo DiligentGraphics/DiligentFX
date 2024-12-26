@@ -77,7 +77,9 @@ HnBeginFrameTask::HnBeginFrameTask(pxr::HdSceneDelegate* ParamsDelegate, const p
         UNEXPECTED("ParamsDelegate is null");
         return;
     }
-    pxr::HdRenderIndex& RenderIndex = ParamsDelegate->GetRenderIndex();
+    pxr::HdRenderIndex& RenderIndex     = ParamsDelegate->GetRenderIndex();
+    HnRenderDelegate*   pRenderDelegate = static_cast<HnRenderDelegate*>(RenderIndex.GetRenderDelegate());
+    USD_Renderer&       Renderer        = *pRenderDelegate->GetUSDRenderer();
 
     // Insert empty Bprims for offscreen render targets into the render index.
     // The render targets will be created when Prepare() is called and the
@@ -103,6 +105,16 @@ HnBeginFrameTask::HnBeginFrameTask(pxr::HdSceneDelegate* ParamsDelegate, const p
     m_ClosestSelLocnTargetId[0]  = InitBrim(HnRenderResourceTokens->closestSelectedLocation0Target);
     m_ClosestSelLocnTargetId[1]  = InitBrim(HnRenderResourceTokens->closestSelectedLocation1Target);
     m_JitteredFinalColorTargetId = InitBrim(HnRenderResourceTokens->jitteredFinalColorTarget);
+
+    if (Renderer.GetSettings().EnableOIT)
+    {
+        const std::vector<TextureDesc> OITDescs = Renderer.GetOITTextureDescs();
+        m_OITTargetIds.resize(OITDescs.size());
+        for (size_t i = 0; i < OITDescs.size(); ++i)
+        {
+            m_OITTargetIds[i] = InitBrim(pxr::TfToken{HnRenderResourceTokens->oitTarget.GetString() + std::to_string(i)});
+        }
+    }
 }
 
 HnBeginFrameTask::~HnBeginFrameTask()
@@ -192,11 +204,17 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
     m_FrameBufferWidth  = FinalTargetDesc.Width;
     m_FrameBufferHeight = FinalTargetDesc.Height;
 
-    auto UpdateBrim = [&](const pxr::SdfPath& Id, TEXTURE_FORMAT Format, const std::string& Name) -> ITextureView* {
+    HnRenderDelegate* pRenderDelegate = static_cast<HnRenderDelegate*>(RenderIndex->GetRenderDelegate());
+    IRenderDevice*    pDevice         = pRenderDelegate->GetDevice();
+    USD_Renderer&     Renderer        = *pRenderDelegate->GetUSDRenderer();
+
+    auto UpdateBrim = [&](const pxr::SdfPath& Id,
+                          TEXTURE_FORMAT      Format,
+                          BIND_FLAGS          BindFlags,
+                          const std::string&  Name) -> ITextureView* {
         if (Format == TEX_FORMAT_UNKNOWN)
             return nullptr;
 
-        IRenderDevice* const pDevice = static_cast<HnRenderDelegate*>(RenderIndex->GetRenderDelegate())->GetDevice();
         if (!pDevice->GetTextureFormatInfo(Format).Supported)
         {
             Format = GetFallbackTextureFormat(Format);
@@ -211,22 +229,20 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
             return nullptr;
         }
 
-        if (auto* pView = Renderbuffer->GetTarget())
+        if (ITextureView* pView = Renderbuffer->GetTarget())
         {
-            const auto& ViewDesc   = pView->GetDesc();
-            const auto& TargetDesc = pView->GetTexture()->GetDesc();
+            const TextureViewDesc& ViewDesc   = pView->GetDesc();
+            const TextureDesc&     TargetDesc = pView->GetTexture()->GetDesc();
             if (TargetDesc.GetWidth() == FinalTargetDesc.GetWidth() &&
                 TargetDesc.GetHeight() == FinalTargetDesc.GetHeight() &&
                 ViewDesc.Format == Format)
                 return pView;
         }
 
-        const bool IsDepth = GetTextureFormatAttribs(Format).IsDepthStencil();
-
-        auto TargetDesc      = FinalTargetDesc;
-        TargetDesc.Name      = Name.c_str();
-        TargetDesc.Format    = Format;
-        TargetDesc.BindFlags = (IsDepth ? BIND_DEPTH_STENCIL : BIND_RENDER_TARGET) | BIND_SHADER_RESOURCE;
+        TextureDesc TargetDesc = FinalTargetDesc;
+        TargetDesc.Name        = Name.c_str();
+        TargetDesc.Format      = Format;
+        TargetDesc.BindFlags   = BindFlags;
 
         RefCntAutoPtr<ITexture> pTarget;
         pDevice->CreateTexture(TargetDesc, nullptr, &pTarget);
@@ -237,7 +253,19 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
         }
         LOG_INFO_MESSAGE("HnBeginFrameTask: created ", TargetDesc.GetWidth(), "x", TargetDesc.GetHeight(), " ", Name, " texture");
 
-        auto* const pView = pTarget->GetDefaultView(IsDepth ? TEXTURE_VIEW_DEPTH_STENCIL : TEXTURE_VIEW_RENDER_TARGET);
+        TEXTURE_VIEW_TYPE ViewType = TEXTURE_VIEW_UNDEFINED;
+        if (BindFlags & BIND_DEPTH_STENCIL)
+            ViewType = TEXTURE_VIEW_DEPTH_STENCIL;
+        else if (BindFlags & BIND_UNORDERED_ACCESS)
+            ViewType = TEXTURE_VIEW_UNORDERED_ACCESS;
+        else if (BindFlags & BIND_RENDER_TARGET)
+            ViewType = TEXTURE_VIEW_RENDER_TARGET;
+        else if (BindFlags & BIND_SHADER_RESOURCE)
+            ViewType = TEXTURE_VIEW_SHADER_RESOURCE;
+        else
+            UNEXPECTED("Unexpected bind flags");
+
+        ITextureView* const pView = pTarget->GetDefaultView(ViewType);
         VERIFY(pView != nullptr, "Failed to get texture view for target ", Name);
 
         Renderbuffer->SetTarget(pView);
@@ -247,10 +275,12 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
 
     m_FrameRenderTargets.FinalColorRTV = pFinalColorRTV;
 
+    constexpr BIND_FLAGS BIND_RT_SR = BIND_RENDER_TARGET | BIND_SHADER_RESOURCE;
+    constexpr BIND_FLAGS BIND_DS_SR = BIND_DEPTH_STENCIL | BIND_SHADER_RESOURCE;
     for (Uint32 i = 0; i < HnFrameRenderTargets::GBUFFER_TARGET_COUNT; ++i)
     {
         const char* Name                    = HnFrameRenderTargets::GetGBufferTargetName(static_cast<HnFrameRenderTargets::GBUFFER_TARGET>(i));
-        m_FrameRenderTargets.GBufferRTVs[i] = UpdateBrim(m_GBufferTargetIds[i], m_Params.Formats.GBuffer[i], Name);
+        m_FrameRenderTargets.GBufferRTVs[i] = UpdateBrim(m_GBufferTargetIds[i], m_Params.Formats.GBuffer[i], BIND_RT_SR, Name);
         if (m_FrameRenderTargets.GBufferRTVs[i])
         {
             m_FrameRenderTargets.GBufferSRVs[i] = m_FrameRenderTargets.GBufferRTVs[i]->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
@@ -262,12 +292,23 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
         }
     }
 
-    m_FrameRenderTargets.SelectionDepthDSV             = UpdateBrim(m_SelectionDepthBufferId, m_Params.Formats.Depth, "Selection depth buffer");
-    m_FrameRenderTargets.DepthDSV                      = UpdateBrim(m_DepthBufferId[0], m_Params.Formats.Depth, "Depth buffer 0");
-    m_FrameRenderTargets.PrevDepthDSV                  = UpdateBrim(m_DepthBufferId[1], m_Params.Formats.Depth, "Depth buffer 1");
-    m_FrameRenderTargets.ClosestSelectedLocationRTV[0] = UpdateBrim(m_ClosestSelLocnTargetId[0], m_Params.Formats.ClosestSelectedLocation, "Closest selected location 0");
-    m_FrameRenderTargets.ClosestSelectedLocationRTV[1] = UpdateBrim(m_ClosestSelLocnTargetId[1], m_Params.Formats.ClosestSelectedLocation, "Closest selected location 1");
-    m_FrameRenderTargets.JitteredFinalColorRTV         = UpdateBrim(m_JitteredFinalColorTargetId, m_Params.Formats.JitteredColor, "Jittered final color");
+    m_FrameRenderTargets.SelectionDepthDSV             = UpdateBrim(m_SelectionDepthBufferId, m_Params.Formats.Depth, BIND_DS_SR, "Selection depth buffer");
+    m_FrameRenderTargets.DepthDSV                      = UpdateBrim(m_DepthBufferId[0], m_Params.Formats.Depth, BIND_DS_SR, "Depth buffer 0");
+    m_FrameRenderTargets.PrevDepthDSV                  = UpdateBrim(m_DepthBufferId[1], m_Params.Formats.Depth, BIND_DS_SR, "Depth buffer 1");
+    m_FrameRenderTargets.ClosestSelectedLocationRTV[0] = UpdateBrim(m_ClosestSelLocnTargetId[0], m_Params.Formats.ClosestSelectedLocation, BIND_RT_SR, "Closest selected location 0");
+    m_FrameRenderTargets.ClosestSelectedLocationRTV[1] = UpdateBrim(m_ClosestSelLocnTargetId[1], m_Params.Formats.ClosestSelectedLocation, BIND_RT_SR, "Closest selected location 1");
+    m_FrameRenderTargets.JitteredFinalColorRTV         = UpdateBrim(m_JitteredFinalColorTargetId, m_Params.Formats.JitteredColor, BIND_RT_SR, "Jittered final color");
+
+    if (Renderer.GetSettings().EnableOIT)
+    {
+        const std::vector<TextureDesc> OITDescs = Renderer.GetOITTextureDescs();
+        m_FrameRenderTargets.OITUAVs.resize(OITDescs.size());
+        for (size_t i = 0; i < OITDescs.size(); ++i)
+        {
+            const TextureDesc& Desc         = OITDescs[i];
+            m_FrameRenderTargets.OITUAVs[i] = UpdateBrim(m_OITTargetIds[i], Desc.Format, Desc.BindFlags, Desc.Name);
+        }
+    }
 
     (*TaskCtx)[HnRenderResourceTokens->frameRenderTargets] = pxr::VtValue{&m_FrameRenderTargets};
 

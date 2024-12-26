@@ -196,7 +196,7 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
     USDRendererCI.PCFKernelSize              = RenderDelegateCI.PCFKernelSize;
     USDRendererCI.MaxShadowCastingLightCount = RenderDelegateCI.MaxShadowCastingLightCount;
 
-    USDRendererCI.EnableOIT = !DeviceInfo.IsGLDevice();
+    USDRendererCI.EnableOIT = RenderDelegateCI.UseOIT;
 
     RefCntAutoPtr<IBuffer> pJointsCB;
     if (RenderDelegateCI.MaxJointCount > 0)
