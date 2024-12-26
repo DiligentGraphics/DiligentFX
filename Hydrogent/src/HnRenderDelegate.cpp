@@ -196,6 +196,8 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
     USDRendererCI.PCFKernelSize              = RenderDelegateCI.PCFKernelSize;
     USDRendererCI.MaxShadowCastingLightCount = RenderDelegateCI.MaxShadowCastingLightCount;
 
+    USDRendererCI.EnableOIT = !DeviceInfo.IsGLDevice();
+
     RefCntAutoPtr<IBuffer> pJointsCB;
     if (RenderDelegateCI.MaxJointCount > 0)
     {
@@ -466,8 +468,7 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
                 CI.UseVertexPool,
                 CI.UseIndexPool,
                 CI.AsyncShaderCompilation,
-                !CI.pDevice->GetDeviceInfo().IsGLDevice(),                                                        // UseNativeStartVertex
-                !CI.pDevice->GetDeviceInfo().IsGLDevice() && CI.pDevice->GetDeviceInfo().Features.ComputeShaders, // EnableOIT
+                !CI.pDevice->GetDeviceInfo().IsGLDevice(), // UseNativeStartVertex
                 CI.TextureBindingMode,
                 CI.MetersPerUnit,
                 CI.GeometryLoadBudget,

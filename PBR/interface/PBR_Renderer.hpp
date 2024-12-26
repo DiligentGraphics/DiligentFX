@@ -195,6 +195,9 @@ public:
         /// A pipeline state can use shadows only if this flag is set to true.
         bool EnableShadows = false;
 
+        /// Enable OIT (order-independent transparency).
+        bool EnableOIT = false;
+
         /// Whether to allow hot shader reload.
         ///
         /// \remarks    When hot shader reload is enabled, the renderer will need

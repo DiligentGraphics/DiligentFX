@@ -44,7 +44,6 @@
 #include "HashUtils.hpp"
 #include "HnRenderDelegate.hpp"
 #include "HnRenderPass.hpp"
-#include "HnRenderParam.hpp"
 #include "HnShadowMapManager.hpp"
 
 namespace Diligent
@@ -147,8 +146,7 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
     m_ManagerId{ManagerId},
     m_ParamsDelegate{RenderIndex, ManagerId}
 {
-    HnRenderDelegate*    pRenderDelegate = static_cast<HnRenderDelegate*>(RenderIndex.GetRenderDelegate());
-    const HnRenderParam* pRenderParam    = static_cast<const HnRenderParam*>(pRenderDelegate->GetRenderParam());
+    HnRenderDelegate* pRenderDelegate = static_cast<HnRenderDelegate*>(RenderIndex.GetRenderDelegate());
     // Task creation order defines the default task order
     CreateBeginFrameTask();
     if (const HnShadowMapManager* pShadowMapMgr = pRenderDelegate->GetShadowMapManager())
@@ -196,7 +194,7 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                            });
     CreateRenderEnvMapTask(HnRenderResourceTokens->renderPass_OpaqueUnselected_TransparentAll);
     CreateRenderBoundBoxTask(HnRenderResourceTokens->renderPass_OpaqueUnselected_TransparentAll);
-    if (pRenderParam->GetConfig().EnableOIT)
+    if (pRenderDelegate->GetUSDRenderer()->GetSettings().EnableOIT)
     {
         CreateBuildTransmittanceTask();
     }

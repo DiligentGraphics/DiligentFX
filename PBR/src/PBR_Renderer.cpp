@@ -354,6 +354,15 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
         }
     }
 
+    if (m_Settings.EnableOIT)
+    {
+        if (m_Device.GetDeviceInfo().Features.ComputeShaders)
+        {
+            LOG_WARNING_MESSAGE("OIT requires compute shaders, but they are not supported by the device. OIT will be disabled.");
+            m_Settings.EnableOIT = false;
+        }
+    }
+
     if (m_Settings.CreateDefaultTextures)
     {
         static constexpr Uint32 TexDim = 8;
