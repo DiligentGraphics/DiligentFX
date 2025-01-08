@@ -1,5 +1,5 @@
 /*
- *  Copyright 2024 Diligent Graphics LLC
+ *  Copyright 2024-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -115,6 +115,25 @@ public:
     static bool UpdateUI(HLSL::TemporalAntiAliasingAttribs& TAAAttribs, FEATURE_FLAGS& FeatureFlags);
 
     ITextureView* GetAccumulatedFrameSRV(bool IsPrevFrame = false, Uint32 AccumulationBufferIdx = 0) const;
+
+    static inline float4x4 GetJitteredProjMatrix(float4x4 Proj, const float2& Jitter)
+    {
+        if (Proj.m33 == 0.f)
+        {
+            // Perspective projection.
+            // Make jitter proportional to z so that it is constant in screen space.
+            Proj.m20 += Jitter.x;
+            Proj.m21 += Jitter.y;
+        }
+        else
+        {
+            // Orthographic projection.
+            // Apply offsets directly.
+            Proj.m30 += Jitter.x;
+            Proj.m31 += Jitter.y;
+        }
+        return Proj;
+    }
 
 private:
     using RenderTechnique  = PostFXRenderTechnique;

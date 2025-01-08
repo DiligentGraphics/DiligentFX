@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2024 Diligent Graphics LLC
+ *  Copyright 2023-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -40,6 +40,7 @@
 #include "MapHelper.hpp"
 #include "ScopedDebugGroup.hpp"
 #include "GLTF_PBR_Renderer.hpp"
+#include "TemporalAntiAliasing.hpp"
 
 namespace Diligent
 {
@@ -493,10 +494,7 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
         PrevCamera = CamAttribs;
         if (m_pCamera != nullptr)
         {
-            float4x4 ProjMatrix = m_pCamera->GetProjectionMatrix();
-            ProjMatrix[2][0]    = Jitter.x;
-            ProjMatrix[2][1]    = Jitter.y;
-
+            const float4x4  ProjMatrix  = TemporalAntiAliasing::GetJitteredProjMatrix(m_pCamera->GetProjectionMatrix(), Jitter);
             const float4x4& ViewMatrix  = m_pCamera->GetViewMatrix();
             const float4x4& WorldMatrix = m_pCamera->GetWorldMatrix();
             const float4x4  ViewProj    = ViewMatrix * ProjMatrix;
@@ -554,9 +552,7 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
             }
             else
             {
-                float4x4 PrevProj = PrevCamera.mProj;
-                PrevProj[2][0]    = Jitter.x;
-                PrevProj[2][1]    = Jitter.y;
+                const float4x4 PrevProj = TemporalAntiAliasing::GetJitteredProjMatrix(PrevCamera.mProj, Jitter);
                 if (PrevProj != CamAttribs.mProj)
                 {
                     CameraTransformDirty = true;
