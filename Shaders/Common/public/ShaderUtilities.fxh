@@ -6,7 +6,11 @@ float CameraZToNormalizedDeviceZ(in float CameraZ, in float4x4 mProj)
 {
     // In Direct3D and Vulkan, normalized device z range is [0, +1]
     // In OpengGL, normalized device z range is [-1, +1] (unless GL_ARB_clip_control extension is used to correct this nonsense).
-    return MATRIX_ELEMENT(mProj,2,2) + MATRIX_ELEMENT(mProj,3,2) / CameraZ;
+    float m22 = MATRIX_ELEMENT(mProj, 2, 2);
+    float m32 = MATRIX_ELEMENT(mProj, 3, 2);
+    float m23 = MATRIX_ELEMENT(mProj, 2, 3);
+    float m33 = MATRIX_ELEMENT(mProj, 3, 3);
+    return (m22 * CameraZ + m32) / (m23 * CameraZ + m33);
 }
 
 float CameraZToDepth(in float CameraZ, in float4x4 mProj)
@@ -19,7 +23,11 @@ float CameraZToDepth(in float CameraZ, in float4x4 mProj)
 
 float NormalizedDeviceZToCameraZ(float NdcZ, in float4x4 mProj)
 {
-    return MATRIX_ELEMENT(mProj, 3, 2) / (NdcZ - MATRIX_ELEMENT(mProj, 2, 2));
+    float m22 = MATRIX_ELEMENT(mProj, 2, 2);
+    float m32 = MATRIX_ELEMENT(mProj, 3, 2);
+    float m23 = MATRIX_ELEMENT(mProj, 2, 3);
+    float m33 = MATRIX_ELEMENT(mProj, 3, 3);
+    return (m32 - NdcZ * m33) / (NdcZ * m23 - m22);
 }
 
 float DepthToCameraZ(in float fDepth, in float4x4 mProj)
