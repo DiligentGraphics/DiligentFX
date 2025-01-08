@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2024 Diligent Graphics LLC
+ *  Copyright 2023-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -72,19 +72,50 @@ void HnCamera::Sync(pxr::HdSceneDelegate* SceneDelegate,
 
     if (OrigDirtyBits & pxr::HdCamera::DirtyParams)
     {
-        const float          HorzAperture  = GetHorizontalAperture();
-        const float          VertAperture  = GetVerticalAperture();
-        const float          FocalLength   = GetFocalLength();
-        const pxr::GfRange1f ClippingRange = GetClippingRange();
+        // By an odd convention, lens and filmback properties are measured in tenths of a scene unit rather than "raw" scene units.
+        // https://openusd.org/dev/api/class_usd_geom_camera.html#UsdGeom_CameraUnits
+        // So, for example after
+        //      UsdCamera.GetFocalLengthAttr().Set(30.f)
+        // Reading the attribute will return same value:
+        //      float focalLength;
+        //      UsdCamera.GetFocalLengthAttr().Get(&focalLength); // focalLength == 30
+        // However
+        //      focalLength = SceneDelegate->GetCameraParamValue(id, HdCameraTokens->focalLength).Get<float>(); //  focalLength == 3
+        constexpr float      UsdCamLensUnitScale = 10;
+        const float          HorzApertureUnits   = GetHorizontalAperture() * UsdCamLensUnitScale;
+        const float          VertApertureUnits   = GetVerticalAperture() * UsdCamLensUnitScale;
+        const float          FocalLengthUnits    = GetFocalLength() * UsdCamLensUnitScale;
+        const pxr::GfRange1f ClippingRangeUnits  = GetClippingRange();
 
-        m_ProjectionMatrix._11 = FocalLength / (0.5f * HorzAperture);
-        m_ProjectionMatrix._22 = FocalLength / (0.5f * VertAperture);
+        // Diligent expects camera attributes in world units
+        const float          HorzApertureMeters  = HorzApertureUnits * MetersPerUnit;
+        const float          VertApertureMeters  = VertApertureUnits * MetersPerUnit;
+        const pxr::GfRange1f ClippingRangeMeters = ClippingRangeUnits * MetersPerUnit;
 
-        const HnRenderDelegate* pRenderDelegate = static_cast<const HnRenderDelegate*>(SceneDelegate->GetRenderIndex().GetRenderDelegate());
-        const IRenderDevice*    pDevice         = pRenderDelegate->GetDevice();
-        const RenderDeviceInfo& DeviceInfo      = pDevice->GetDeviceInfo();
-        // USD camera attributes are in scene units, while Diligent expects them in world units
-        m_ProjectionMatrix.SetNearFarClipPlanes(ClippingRange.GetMin() * MetersPerUnit, ClippingRange.GetMax() * MetersPerUnit, DeviceInfo.GetNDCAttribs().MinZ == -1);
+        const HnRenderDelegate* pRenderDelegate      = static_cast<const HnRenderDelegate*>(SceneDelegate->GetRenderIndex().GetRenderDelegate());
+        const IRenderDevice*    pDevice              = pRenderDelegate->GetDevice();
+        const RenderDeviceInfo& DeviceInfo           = pDevice->GetDeviceInfo();
+        const bool              NegativeOneToOneNDCZ = DeviceInfo.GetNDCAttribs().MinZ == -1;
+
+        if (GetProjection() == pxr::HdCamera::Projection::Perspective)
+        {
+            m_ProjectionMatrix = {};
+
+            m_ProjectionMatrix._11 = FocalLengthUnits / (0.5f * HorzApertureUnits);
+            m_ProjectionMatrix._22 = FocalLengthUnits / (0.5f * VertApertureUnits);
+
+            m_ProjectionMatrix.SetNearFarClipPlanes(ClippingRangeMeters.GetMin(), ClippingRangeMeters.GetMax(), NegativeOneToOneNDCZ);
+        }
+        else if (GetProjection() == pxr::HdCamera::Projection::Orthographic)
+        {
+
+            m_ProjectionMatrix = float4x4::Ortho(HorzApertureMeters, VertApertureMeters, ClippingRangeMeters.GetMin(), ClippingRangeMeters.GetMax(), NegativeOneToOneNDCZ);
+        }
+        else
+        {
+            LOG_ERROR_MESSAGE("Unknown camera projection");
+            m_ProjectionMatrix = float4x4::Identity();
+        }
     }
 }
 
