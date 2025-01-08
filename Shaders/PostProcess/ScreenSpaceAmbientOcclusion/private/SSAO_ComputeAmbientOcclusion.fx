@@ -100,7 +100,12 @@ float ComputeAmbientOcclusionPS(in FullScreenTriangleVSOutput VSOut) : SV_Target
 
     float FalloffMul = -1.0 / FalloffRange;
     float FalloffAdd = FalloffFrom / FalloffRange + 1.0;
-    float SampleRadius = 0.5 * EffectRadius * MATRIX_ELEMENT(g_Camera.mProj, 0, 0) / PositionVS.z;
+    float SampleRadius = 0.5 * EffectRadius * MATRIX_ELEMENT(g_Camera.mProj, 0, 0);
+    if (g_Camera.mProj[3][3] == 0.0)
+    {
+        // Perspective
+        SampleRadius /= PositionVS.z;
+    }
 
     float Visibility = 0.0;
     for (int SliceIdx = 0; SliceIdx < SSAO_SLICE_COUNT; SliceIdx++)
