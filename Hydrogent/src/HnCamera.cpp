@@ -79,13 +79,13 @@ void HnCamera::Sync(pxr::HdSceneDelegate* SceneDelegate,
         // Reading the attribute will return same value:
         //      float focalLength;
         //      UsdCamera.GetFocalLengthAttr().Get(&focalLength); // focalLength == 30
-        // However
+        //
+        // Scene delegate, however, applies 0.1 scale when reading the property, so we don't need to
         //      focalLength = SceneDelegate->GetCameraParamValue(id, HdCameraTokens->focalLength).Get<float>(); //  focalLength == 3
-        constexpr float      UsdCamLensUnitScale = 10;
-        const float          HorzApertureUnits   = GetHorizontalAperture() * UsdCamLensUnitScale;
-        const float          VertApertureUnits   = GetVerticalAperture() * UsdCamLensUnitScale;
-        const float          FocalLengthUnits    = GetFocalLength() * UsdCamLensUnitScale;
-        const pxr::GfRange1f ClippingRangeUnits  = GetClippingRange();
+        const float          HorzApertureUnits  = GetHorizontalAperture();
+        const float          VertApertureUnits  = GetVerticalAperture();
+        const float          FocalLengthUnits   = GetFocalLength();
+        const pxr::GfRange1f ClippingRangeUnits = GetClippingRange();
 
         // Diligent expects camera attributes in world units
         const float          HorzApertureMeters  = HorzApertureUnits * MetersPerUnit;
