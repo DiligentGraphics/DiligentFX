@@ -56,7 +56,8 @@ SampleEnvMapOutput SampleEnvMap(in float4 ClipPos)
 
     float2 MotionVector = float2(0.0, 0.0);
 #if COMPUTE_MOTION_VECTORS
-    float4 PrevClipPos = mul(float4(Direction, 0.0), g_PrevCamera.mViewProj);
+    float3 PrevWorldPos = g_PrevCamera.f4Position.xyz + Direction;
+    float4 PrevClipPos = mul(float4(PrevWorldPos, 1.0), g_PrevCamera.mViewProj);
     PrevClipPos.xy /= PrevClipPos.w;
     MotionVector = GetMotionVector(ClipPos.xy, PrevClipPos.xy, g_Camera.f2Jitter, g_PrevCamera.f2Jitter);
 #endif
