@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2024 Diligent Graphics LLC
+ *  Copyright 2023-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -405,6 +405,17 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
         {
             m_DrawListItemsDirtyFlags |= DRAW_LIST_ITEM_DIRTY_FLAG_PSO;
             m_UseShadows = UseShadows;
+        }
+    }
+
+    if (IRenderStateCache* pStateCache = State.RenderDelegate.GetRenderStateCache())
+    {
+        Uint32 ReloadVersion = pStateCache->GetReloadVersion();
+        if (m_RenderStateCacheReloadVersion != ReloadVersion)
+        {
+            // Make sure all PSOs are added to m_PendingPSOs as they may be in compiling state
+            m_DrawListItemsDirtyFlags |= DRAW_LIST_ITEM_DIRTY_FLAG_PSO;
+            m_RenderStateCacheReloadVersion = ReloadVersion;
         }
     }
 

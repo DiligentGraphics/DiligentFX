@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2024 Diligent Graphics LLC
+ *  Copyright 2023-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -286,6 +286,8 @@ private:
     } m_GlobalAttribVersions;
 
     DRAW_LIST_ITEM_DIRTY_FLAGS m_DrawListItemsDirtyFlags = DRAW_LIST_ITEM_DIRTY_FLAG_ALL;
+
+    Uint32 m_RenderStateCacheReloadVersion = 0;
 
     pxr::TfTokenVector m_RenderTags;
     pxr::TfToken       m_MaterialTag;
