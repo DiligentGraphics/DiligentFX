@@ -552,8 +552,9 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
             }
             else
             {
-                const float4x4 PrevProj = TemporalAntiAliasing::GetJitteredProjMatrix(PrevCamera.mProj, Jitter);
-                if (PrevProj != CamAttribs.mProj)
+                float4x4 PrevProj;
+                WriteShaderMatrix(&PrevProj, TemporalAntiAliasing::GetJitteredProjMatrix(m_pCamera->GetProjectionMatrix(), PrevCamera.f2Jitter), !PackMatrixRowMajor);
+                if (PrevProj != PrevCamera.mProj)
                 {
                     CameraTransformDirty = true;
                 }
