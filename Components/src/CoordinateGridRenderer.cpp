@@ -1,5 +1,5 @@
 /*
- *  Copyright 2024 Diligent Graphics LLC
+ *  Copyright 2024-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -220,7 +220,6 @@ bool CoordinateGridRenderer::UpdateUI(HLSL::CoordinateGridAttribs& Attribs, Coor
 
 void CoordinateGridRenderer::AddShaderMacros(FEATURE_FLAGS FeatureFlags, ShaderMacroHelper& Macros)
 {
-    Macros.Add("COORDINATE_GRID_INVERTED_DEPTH", (FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
     Macros.Add("COORDINATE_GRID_CONVERT_OUTPUT_TO_SRGB", (FeatureFlags & FEATURE_FLAG_CONVERT_TO_SRGB) != 0);
 
     Macros.Add("COORDINATE_GRID_AXIS_X", (FeatureFlags & FEATURE_FLAG_RENDER_AXIS_X) != 0);

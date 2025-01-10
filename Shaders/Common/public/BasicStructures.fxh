@@ -88,8 +88,13 @@ struct CameraAttribs
 
     float fNearPlaneZ; 
     float fFarPlaneZ;  // fNearPlaneZ < fFarPlaneZ
+    float fNearPlaneDepth;
+    float fFarPlaneDepth;
+    
     float fHandness;   // +1.0 for right-handed coordinate system, -1.0 for left-handed
     uint  uiFrameIndex;
+    float Padding0;
+    float Padding1;
     
     // Distance to the point of focus
     float fFocusDistance DEFAULT_VALUE(10.0f); 

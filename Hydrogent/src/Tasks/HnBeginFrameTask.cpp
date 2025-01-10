@@ -548,7 +548,8 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
             CamAttribs.f2Jitter   = Jitter;
             CamAttribs.fFStop     = m_pCamera->GetFStop();
 
-            const float MetersPerUnit = RenderParam ? RenderParam->GetConfig().MetersPerUnit : 0.01f;
+            const HnRenderParam::Configuration& RenderConfig  = RenderParam->GetConfig();
+            const float                         MetersPerUnit = RenderConfig.MetersPerUnit;
 
             // USD camera properties are measured in scene units, but Diligent camera expects them in world units.
             CamAttribs.fFocusDistance = m_pCamera->GetFocusDistance() * MetersPerUnit;
@@ -574,7 +575,22 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
             CamAttribs.fFocalLength  = m_pCamera->GetFocalLength() * MillimetersPerUnit;
             CamAttribs.fExposure     = m_pCamera->GetExposure();
 
-            ProjMatrix.GetNearFarClipPlanes(CamAttribs.fNearPlaneZ, CamAttribs.fFarPlaneZ, pDevice->GetDeviceInfo().NDC.MinZ == -1);
+            float fNearPlaneZ, fFarPlaneZ;
+            ProjMatrix.GetNearFarClipPlanes(fNearPlaneZ, fFarPlaneZ, pDevice->GetDeviceInfo().NDC.MinZ == -1);
+            if (RenderConfig.UseReverseDepth)
+            {
+                CamAttribs.fNearPlaneZ     = fFarPlaneZ;
+                CamAttribs.fFarPlaneZ      = fNearPlaneZ;
+                CamAttribs.fNearPlaneDepth = 1.f;
+                CamAttribs.fFarPlaneDepth  = 0.f;
+            }
+            else
+            {
+                CamAttribs.fNearPlaneZ     = fNearPlaneZ;
+                CamAttribs.fFarPlaneZ      = fFarPlaneZ;
+                CamAttribs.fNearPlaneDepth = 0.f;
+                CamAttribs.fFarPlaneDepth  = 1.f;
+            }
 
             if (CamAttribs.mView != PrevCamera.mView)
             {

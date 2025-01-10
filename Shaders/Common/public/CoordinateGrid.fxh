@@ -4,18 +4,6 @@
 #include "CoordinateGridStructures.fxh"
 #include "ShaderUtilities.fxh"
 
-#if COORDINATE_GRID_INVERTED_DEPTH
-    #define DepthNearPlane     1.0
-    #define DepthFarPlane      0.0
-    #define DepthMin           max
-    #define DepthCompare(x, y) ((x)>(y))
-#else
-    #define DepthNearPlane     0.0
-    #define DepthFarPlane      1.0
-    #define DepthMin           min
-    #define DepthCompare(x, y) ((x)<(y))
-#endif // COORDINATE_GRID_INVERTED_DEPTH
-
 struct Ray
 {
     float3 Origin;
@@ -25,11 +13,13 @@ struct Ray
 Ray CreateCameraRay(float2   NormalizedXY,
                     float4x4 CameraProj,
                     float4x4 CameraViewProjInv,
-                    float3   CameraPosition)
+                    float3   CameraPosition,
+                    float    NearPlaneDepth,
+                    float    FarPlaneDepth)
 {
     Ray CameraRay;
-    float4 RayStart = mul(float4(NormalizedXY, DepthToNormalizedDeviceZ(DepthNearPlane), 1.0f), CameraViewProjInv);
-    float4 RayEnd   = mul(float4(NormalizedXY, DepthToNormalizedDeviceZ(DepthFarPlane),  1.0f), CameraViewProjInv);
+    float4 RayStart = mul(float4(NormalizedXY, DepthToNormalizedDeviceZ(NearPlaneDepth), 1.0f), CameraViewProjInv);
+    float4 RayEnd   = mul(float4(NormalizedXY, DepthToNormalizedDeviceZ(FarPlaneDepth),  1.0f), CameraViewProjInv);
 
     RayStart.xyz /= RayStart.w;
     RayEnd.xyz   /= RayEnd.w;
@@ -171,7 +161,7 @@ float4 ComputeCoordinateGrid(in float2                f2NormalizedXY,
                              in float                 MaxDepth,
                              in CoordinateGridAttribs GridAttribs)
 {
-    Ray RayWS = CreateCameraRay(f2NormalizedXY, Camera.mProj, Camera.mViewProjInv, Camera.f4Position.xyz);
+    Ray RayWS = CreateCameraRay(f2NormalizedXY, Camera.mProj, Camera.mViewProjInv, Camera.f4Position.xyz, Camera.fNearPlaneDepth, Camera.fFarPlaneDepth);
 
     float3 Positions[3];
     float  PlaneAlpha[3];

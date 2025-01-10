@@ -1,5 +1,5 @@
 /*
- *  Copyright 2024 Diligent Graphics LLC
+ *  Copyright 2024-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -53,14 +53,13 @@ public:
     enum FEATURE_FLAGS : Uint32
     {
         FEATURE_FLAG_NONE            = 0u,
-        FEATURE_FLAG_REVERSED_DEPTH  = 1u << 0u,
-        FEATURE_FLAG_CONVERT_TO_SRGB = 1u << 1u,
-        FEATURE_FLAG_RENDER_PLANE_YZ = 1u << 2u,
-        FEATURE_FLAG_RENDER_PLANE_XZ = 1u << 3u,
-        FEATURE_FLAG_RENDER_PLANE_XY = 1u << 4u,
-        FEATURE_FLAG_RENDER_AXIS_X   = 1u << 5u,
-        FEATURE_FLAG_RENDER_AXIS_Y   = 1u << 6u,
-        FEATURE_FLAG_RENDER_AXIS_Z   = 1u << 7u,
+        FEATURE_FLAG_CONVERT_TO_SRGB = 1u << 0u,
+        FEATURE_FLAG_RENDER_PLANE_YZ = 1u << 1u,
+        FEATURE_FLAG_RENDER_PLANE_XZ = 1u << 2u,
+        FEATURE_FLAG_RENDER_PLANE_XY = 1u << 3u,
+        FEATURE_FLAG_RENDER_AXIS_X   = 1u << 4u,
+        FEATURE_FLAG_RENDER_AXIS_Y   = 1u << 5u,
+        FEATURE_FLAG_RENDER_AXIS_Z   = 1u << 6u,
     };
 
     struct RenderAttributes
