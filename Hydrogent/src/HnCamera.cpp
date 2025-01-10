@@ -60,8 +60,9 @@ void HnCamera::Sync(pxr::HdSceneDelegate* SceneDelegate,
     pxr::HdDirtyBits OrigDirtyBits = *DirtyBits;
     pxr::HdCamera::Sync(SceneDelegate, RenderParam, DirtyBits);
 
-    const float MetersPerUnit = RenderParam ? static_cast<const HnRenderParam*>(RenderParam)->GetConfig().MetersPerUnit : 0.01f;
-    const float UnitsPerMeter = 1.f / MetersPerUnit;
+    const HnRenderParam::Configuration& RenderConfig  = static_cast<const HnRenderParam*>(RenderParam)->GetConfig();
+    const float                         MetersPerUnit = RenderConfig.MetersPerUnit;
+    const float                         UnitsPerMeter = 1.f / MetersPerUnit;
     if (OrigDirtyBits & pxr::HdCamera::DirtyTransform)
     {
         // USD camera transform is defined in scene units, with camera looking along -Z axis.
@@ -97,6 +98,12 @@ void HnCamera::Sync(pxr::HdSceneDelegate* SceneDelegate,
         const RenderDeviceInfo& DeviceInfo           = pDevice->GetDeviceInfo();
         const bool              NegativeOneToOneNDCZ = DeviceInfo.GetNDCAttribs().MinZ == -1;
 
+        float NearPlane = ClippingRangeMeters.GetMin();
+        float FarPlane  = ClippingRangeMeters.GetMax();
+        if (RenderConfig.UseReverseDepth)
+        {
+            std::swap(NearPlane, FarPlane);
+        }
         if (GetProjection() == pxr::HdCamera::Projection::Perspective)
         {
             m_ProjectionMatrix = {};
@@ -104,12 +111,12 @@ void HnCamera::Sync(pxr::HdSceneDelegate* SceneDelegate,
             m_ProjectionMatrix._11 = FocalLengthUnits / (0.5f * HorzApertureUnits);
             m_ProjectionMatrix._22 = FocalLengthUnits / (0.5f * VertApertureUnits);
 
-            m_ProjectionMatrix.SetNearFarClipPlanes(ClippingRangeMeters.GetMin(), ClippingRangeMeters.GetMax(), NegativeOneToOneNDCZ);
+            m_ProjectionMatrix.SetNearFarClipPlanes(NearPlane, FarPlane, NegativeOneToOneNDCZ);
         }
         else if (GetProjection() == pxr::HdCamera::Projection::Orthographic)
         {
 
-            m_ProjectionMatrix = float4x4::Ortho(HorzApertureMeters, VertApertureMeters, ClippingRangeMeters.GetMin(), ClippingRangeMeters.GetMax(), NegativeOneToOneNDCZ);
+            m_ProjectionMatrix = float4x4::Ortho(HorzApertureMeters, VertApertureMeters, NearPlane, FarPlane, NegativeOneToOneNDCZ);
         }
         else
         {

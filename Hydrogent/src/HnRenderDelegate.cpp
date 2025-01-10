@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2024 Diligent Graphics LLC
+ *  Copyright 2023-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -467,6 +467,7 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
                 CI.UseIndexPool,
                 CI.AsyncShaderCompilation,
                 !CI.pDevice->GetDeviceInfo().IsGLDevice(), // UseNativeStartVertex
+                CI.pDevice->GetDeviceInfo().NDC.MinZ == 0, // UseReverseDepth
                 CI.TextureBindingMode,
                 CI.MetersPerUnit,
                 CI.GeometryLoadBudget,

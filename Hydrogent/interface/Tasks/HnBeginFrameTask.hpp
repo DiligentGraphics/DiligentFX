@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2024 Diligent Graphics LLC
+ *  Copyright 2023-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -73,52 +73,7 @@ struct HnBeginFrameTaskParams
     };
     RenderTargetFormats Formats;
 
-    struct RenderState
-    {
-        bool FrontFaceCCW = false;
-
-        float                  DepthBias            = 0;
-        float                  SlopeScaledDepthBias = 0;
-        pxr::HdCompareFunction DepthFunc            = pxr::HdCmpFuncLess;
-        bool                   DepthBiasEnabled     = false;
-        bool                   DepthTestEnabled     = true;
-        bool                   DepthClampEnabled    = false;
-
-        pxr::HdCullStyle CullStyle = pxr::HdCullStyleBack;
-
-        pxr::HdCompareFunction StencilFunc    = pxr::HdCmpFuncAlways;
-        int                    StencilRef     = 0;
-        int                    StencilMask    = 0xFF;
-        pxr::HdStencilOp       StencilFailOp  = pxr::HdStencilOpKeep;
-        pxr::HdStencilOp       StencilZFailOp = pxr::HdStencilOpKeep;
-        pxr::HdStencilOp       StencilZPassOp = pxr::HdStencilOpKeep;
-        bool                   StencilEnabled = false;
-
-        constexpr bool operator==(const RenderState& rhs) const
-        {
-            // clang-format off
-            return FrontFaceCCW         == rhs.FrontFaceCCW &&
-                   DepthBias            == rhs.DepthBias &&
-                   SlopeScaledDepthBias == rhs.SlopeScaledDepthBias &&
-                   DepthFunc            == rhs.DepthFunc &&
-                   DepthBiasEnabled     == rhs.DepthBiasEnabled &&
-                   DepthTestEnabled     == rhs.DepthTestEnabled &&
-                   DepthClampEnabled    == rhs.DepthClampEnabled &&
-                   CullStyle            == rhs.CullStyle &&
-                   StencilFunc          == rhs.StencilFunc &&
-                   StencilRef           == rhs.StencilRef &&
-                   StencilMask          == rhs.StencilMask &&
-                   StencilFailOp        == rhs.StencilFailOp &&
-                   StencilZFailOp       == rhs.StencilZFailOp &&
-                   StencilZPassOp       == rhs.StencilZPassOp &&
-                   StencilEnabled       == rhs.StencilEnabled;
-            // clang-format on
-        }
-    };
-    RenderState State;
-
     float4 ClearColor = {0, 0, 0, 0};
-    float  ClearDepth = 1.f;
 
     pxr::SdfPath FinalColorTargetId;
     pxr::SdfPath CameraId;
@@ -157,13 +112,11 @@ struct HnBeginFrameTaskParams
     bool operator==(const HnBeginFrameTaskParams& rhs) const
     {
         // clang-format off
-        return Formats              == rhs.Formats &&
-               ClearColor           == rhs.ClearColor &&
-               ClearDepth           == rhs.ClearDepth &&
-               State                == rhs.State &&
-               FinalColorTargetId   == rhs.FinalColorTargetId &&
-               CameraId             == rhs.CameraId &&
-               Renderer             == rhs.Renderer;
+        return Formats            == rhs.Formats &&
+               ClearColor         == rhs.ClearColor &&
+               FinalColorTargetId == rhs.FinalColorTargetId &&
+               CameraId           == rhs.CameraId &&
+               Renderer           == rhs.Renderer;
         // clang-format on
     }
     bool operator!=(const HnBeginFrameTaskParams& rhs) const
@@ -231,6 +184,7 @@ private:
 
     Uint32 m_FrameBufferWidth  = 0;
     Uint32 m_FrameBufferHeight = 0;
+    float  m_DepthClearValue   = 1.f;
 
     Timer m_FrameTimer;
 

@@ -114,25 +114,46 @@ static void UpdateRenderPassState(const HnBeginFrameTaskParams& Params,
                                   const TEXTURE_FORMAT*         RTVFormats,
                                   Uint32                        NumRTVs,
                                   TEXTURE_FORMAT                DSVFormat,
+                                  const HnRenderParam*          RenderParam,
                                   HnRenderPassState&            RPState)
 {
     RPState.SetNumRenderTargets(NumRTVs);
     for (Uint32 i = 0; i < NumRTVs; ++i)
         RPState.SetRenderTargetFormat(i, RTVFormats[i]);
+
     RPState.SetDepthStencilFormat(DSVFormat);
 
-    RPState.SetDepthBias(Params.State.DepthBias, Params.State.SlopeScaledDepthBias);
-    RPState.SetDepthFunc(Params.State.DepthFunc);
-    RPState.SetDepthBiasEnabled(Params.State.DepthBiasEnabled);
-    RPState.SetEnableDepthTest(Params.State.DepthTestEnabled);
-    RPState.SetEnableDepthClamp(Params.State.DepthClampEnabled);
+    bool FrontFaceCCW = true;
 
-    RPState.SetCullStyle(Params.State.CullStyle);
+    float                  DepthBias            = 0;
+    float                  SlopeScaledDepthBias = 0;
+    pxr::HdCompareFunction DepthFunc            = RenderParam->GetConfig().UseReverseDepth ? pxr::HdCmpFuncGreater : pxr::HdCmpFuncLess;
+    bool                   DepthBiasEnabled     = false;
+    bool                   DepthTestEnabled     = true;
+    bool                   DepthClampEnabled    = false;
 
-    RPState.SetStencil(Params.State.StencilFunc, Params.State.StencilRef, Params.State.StencilMask,
-                       Params.State.StencilFailOp, Params.State.StencilZFailOp, Params.State.StencilZPassOp);
+    pxr::HdCullStyle CullStyle = pxr::HdCullStyleBack;
 
-    RPState.SetFrontFaceCCW(Params.State.FrontFaceCCW);
+    pxr::HdCompareFunction StencilFunc    = pxr::HdCmpFuncAlways;
+    int                    StencilRef     = 0;
+    int                    StencilMask    = 0xFF;
+    pxr::HdStencilOp       StencilFailOp  = pxr::HdStencilOpKeep;
+    pxr::HdStencilOp       StencilZFailOp = pxr::HdStencilOpKeep;
+    pxr::HdStencilOp       StencilZPassOp = pxr::HdStencilOpKeep;
+    bool                   StencilEnabled = false;
+
+    RPState.SetDepthFunc(DepthFunc);
+    RPState.SetDepthBias(DepthBias, SlopeScaledDepthBias);
+    RPState.SetDepthBiasEnabled(DepthBiasEnabled);
+    RPState.SetEnableDepthTest(DepthTestEnabled);
+    RPState.SetEnableDepthClamp(DepthClampEnabled);
+
+    RPState.SetCullStyle(CullStyle);
+
+    RPState.SetStencilEnabled(StencilEnabled);
+    RPState.SetStencil(StencilFunc, StencilRef, StencilMask, StencilFailOp, StencilZFailOp, StencilZPassOp);
+
+    RPState.SetFrontFaceCCW(FrontFaceCCW);
 }
 
 static TEXTURE_FORMAT GetFallbackTextureFormat(TEXTURE_FORMAT Format)
@@ -154,25 +175,35 @@ void HnBeginFrameTask::Sync(pxr::HdSceneDelegate* Delegate,
     {
         if (GetTaskParams(Delegate, m_Params))
         {
+            pxr::HdRenderIndex&     RenderIndex    = Delegate->GetRenderIndex();
+            const HnRenderDelegate* RenderDelegate = static_cast<const HnRenderDelegate*>(RenderIndex.GetRenderDelegate());
+            const HnRenderParam*    RenderParam    = static_cast<const HnRenderParam*>(RenderDelegate->GetRenderParam());
+
             UpdateRenderPassState(m_Params,
                                   m_Params.Formats.GBuffer.data(),
                                   m_Params.Formats.GBuffer.size(),
                                   m_Params.Formats.Depth,
+                                  RenderParam,
                                   m_RenderPassStates[HnRenderResourceTokens->renderPass_OpaqueSelected]);
 
             UpdateRenderPassState(m_Params,
                                   m_Params.Formats.GBuffer.data(),
                                   m_Params.Formats.GBuffer.size(),
                                   m_Params.Formats.Depth,
+                                  RenderParam,
                                   m_RenderPassStates[HnRenderResourceTokens->renderPass_OpaqueUnselected_TransparentAll]);
 
             UpdateRenderPassState(m_Params,
                                   nullptr,
                                   0,
                                   m_Params.Formats.Depth,
+                                  RenderParam,
                                   m_RenderPassStates[HnRenderResourceTokens->renderPass_TransparentSelected]);
 
+            m_DepthClearValue = RenderParam->GetConfig().UseReverseDepth ? 0.f : 1.f;
+
             (*TaskCtx)[HnRenderResourceTokens->suspendSuperSampling] = pxr::VtValue{true};
+            (*TaskCtx)[HnRenderResourceTokens->backgroundDepth]      = pxr::VtValue{m_DepthClearValue};
         }
     }
 
@@ -289,7 +320,7 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
 
     // We first render selected objects using the selection depth buffer.
     // Selection depth buffer is copied to the main depth buffer by the HnCopySelectionDepthTask.
-    RP_OpaqueSelected.Begin(HnFrameRenderTargets::GBUFFER_TARGET_COUNT, m_FrameRenderTargets.GBufferRTVs.data(), m_FrameRenderTargets.SelectionDepthDSV, ClearValues.data(), m_Params.ClearDepth, ~0u);
+    RP_OpaqueSelected.Begin(HnFrameRenderTargets::GBUFFER_TARGET_COUNT, m_FrameRenderTargets.GBufferRTVs.data(), m_FrameRenderTargets.SelectionDepthDSV, ClearValues.data(), m_DepthClearValue, ~0u);
     RP_OpaqueUnselected_TransparentAll.Begin(HnFrameRenderTargets::GBUFFER_TARGET_COUNT, m_FrameRenderTargets.GBufferRTVs.data(), m_FrameRenderTargets.DepthDSV);
     RP_TransparentSelected.Begin(0, nullptr, m_FrameRenderTargets.SelectionDepthDSV);
 
@@ -365,7 +396,6 @@ void HnBeginFrameTask::Prepare(pxr::HdTaskContext* TaskCtx,
     (*TaskCtx)[HnRenderResourceTokens->closestSelectedLocation0Target] = pxr::VtValue{m_ClosestSelLocnTargetId[0]};
     (*TaskCtx)[HnRenderResourceTokens->closestSelectedLocation1Target] = pxr::VtValue{m_ClosestSelLocnTargetId[1]};
     (*TaskCtx)[HnRenderResourceTokens->jitteredFinalColorTarget]       = pxr::VtValue{m_JitteredFinalColorTargetId};
-    (*TaskCtx)[HnRenderResourceTokens->backgroundDepth]                = pxr::VtValue{m_Params.ClearDepth};
 
     bool ResetTAA = false;
     if (!m_Params.CameraId.IsEmpty())
