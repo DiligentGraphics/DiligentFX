@@ -23,6 +23,7 @@ struct Ray
 };
 
 Ray CreateCameraRay(float2   NormalizedXY,
+                    float4x4 CameraProj,
                     float4x4 CameraViewProjInv,
                     float3   CameraPosition)
 {
@@ -33,7 +34,7 @@ Ray CreateCameraRay(float2   NormalizedXY,
     RayStart.xyz /= RayStart.w;
     RayEnd.xyz   /= RayEnd.w;
     CameraRay.Direction = normalize(RayEnd.xyz - RayStart.xyz);
-    CameraRay.Origin    = CameraPosition;
+    CameraRay.Origin    = CameraProj[3][3] == 0.0 ? CameraPosition : RayStart.xyz;
     return CameraRay;
 }
 
@@ -86,6 +87,7 @@ float4 ComputeAxis(float3   AxisDirection,
                    float    MaxCameraZ,
                    float    CameraZRange,
                    float4x4 CameraView,
+                   float4x4 CameraProj,
                    float3   PositiveColor,
                    float3   NegativeColor)
 {
@@ -111,7 +113,11 @@ float4 ComputeAxis(float3   AxisDirection,
             float DistToAxis = abs(dot(Delta, Cross)) / max(length(Cross), 0.001);
 
             // Axis width in world space
-            float AxisWidth = PixelSize * DistFromCamera;
+            float AxisWidth = PixelSize;
+            if (CameraProj[3][3] == 0.0)
+            {
+                AxisWidth *= DistFromCamera;
+            }
             float Line = abs(DistToAxis) / AxisWidth;
             float Alpha = (1.0 - min(Line * Line, 1.0)) * saturate(1.0 - DistFromCamera / AxisLen);
 
@@ -120,7 +126,7 @@ float4 ComputeAxis(float3   AxisDirection,
             AxisPosZ += AxisWidth;
             // Compute smooth visibility
             // Note: using minimum depth when TAA is enabled looks bad from the distance
-            //       when there is small geometry (e.g. bicycle while spokes)
+            //       when there is small geometry (e.g. bicycle wheel spokes)
             float Visibility = saturate((MaxCameraZ - AxisPosZ) / CameraZRange);
             Alpha *= Visibility;
     
@@ -165,7 +171,7 @@ float4 ComputeCoordinateGrid(in float2                f2NormalizedXY,
                              in float                 MaxDepth,
                              in CoordinateGridAttribs GridAttribs)
 {
-    Ray RayWS = CreateCameraRay(f2NormalizedXY, Camera.mViewProjInv, Camera.f4Position.xyz);
+    Ray RayWS = CreateCameraRay(f2NormalizedXY, Camera.mProj, Camera.mViewProjInv, Camera.f4Position.xyz);
 
     float3 Positions[3];
     float  PlaneAlpha[3];
@@ -185,21 +191,21 @@ float4 ComputeCoordinateGrid(in float2                f2NormalizedXY,
 #if COORDINATE_GRID_AXIS_X
     {
         AxisResult += ComputeAxis(float3(1.0, 0.0, 0.0), RayWS, Camera.fFarPlaneZ, PixelSize * GridAttribs.XAxisWidth, MaxCameraZ, 
-                                  CameraZRange, Camera.mView, GridAttribs.PositiveXAxisColor.rgb, GridAttribs.NegativeXAxisColor.rgb);
+                                  CameraZRange, Camera.mView, Camera.mProj, GridAttribs.PositiveXAxisColor.rgb, GridAttribs.NegativeXAxisColor.rgb);
     }
 #endif
 
 #if COORDINATE_GRID_AXIS_Y
     {
         AxisResult += ComputeAxis(float3(0.0, 1.0, 0.0), RayWS, Camera.fFarPlaneZ, PixelSize * GridAttribs.YAxisWidth, MaxCameraZ, 
-                                  CameraZRange, Camera.mView, GridAttribs.PositiveYAxisColor.rgb, GridAttribs.NegativeYAxisColor.rgb);
+                                  CameraZRange, Camera.mView, Camera.mProj, GridAttribs.PositiveYAxisColor.rgb, GridAttribs.NegativeYAxisColor.rgb);
     }
 #endif
 
 #if COORDINATE_GRID_AXIS_Z
     {
         AxisResult += ComputeAxis(float3(0.0, 0.0, 1.0), RayWS, Camera.fFarPlaneZ, PixelSize * GridAttribs.ZAxisWidth, MaxCameraZ,
-                                  CameraZRange, Camera.mView, GridAttribs.PositiveZAxisColor.rgb, GridAttribs.NegativeZAxisColor.rgb);
+                                  CameraZRange, Camera.mView, Camera.mProj, GridAttribs.PositiveZAxisColor.rgb, GridAttribs.NegativeZAxisColor.rgb);
     }
 #endif
 
