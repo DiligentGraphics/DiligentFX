@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2024 Diligent Graphics LLC
+ *  Copyright 2023-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -120,9 +120,9 @@ IPipelineState* EnvMapRenderer::GetPSO(const PSOKey& Key)
 
     ShaderMacroHelper Macros;
     Macros
-        .Add("CONVERT_OUTPUT_TO_SRGB", Key.ConvertOutputToSRGB)
+        .Add("CONVERT_OUTPUT_TO_SRGB", (Key.Flags & OPTION_FLAG_CONVERT_OUTPUT_TO_SRGB) != 0)
         .Add("TONE_MAPPING_MODE", Key.ToneMappingMode)
-        .Add("COMPUTE_MOTION_VECTORS", Key.ComputeMotionVectors)
+        .Add("COMPUTE_MOTION_VECTORS", (Key.Flags & OPTION_FLAG_COMPUTE_MOTION_VECTORS) != 0)
         .Add("ENV_MAP_TYPE_CUBE", static_cast<int>(PSOKey::ENV_MAP_TYPE_CUBE))
         .Add("ENV_MAP_TYPE_SPHERE", static_cast<int>(PSOKey::ENV_MAP_TYPE_SPHERE))
         .Add("ENV_MAP_TYPE", static_cast<int>(Key.EnvMapType));
@@ -159,6 +159,7 @@ IPipelineState* EnvMapRenderer::GetPSO(const PSOKey& Key)
 
     PipelineResourceLayoutDescX ResourceLauout;
     ResourceLauout
+        .SetDefaultVariableMergeStages(SHADER_TYPE_VS_PS)
         .AddVariable(SHADER_TYPE_PIXEL, "EnvMap", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
         .AddImmutableSampler(SHADER_TYPE_PIXEL, "EnvMap", Sam_LinearClamp);
 
@@ -172,7 +173,7 @@ IPipelineState* EnvMapRenderer::GetPSO(const PSOKey& Key)
     for (auto RTVFormat : m_RTVFormats)
         PsoCI.AddRenderTarget(RTVFormat);
 
-    PsoCI.GraphicsPipeline.DepthStencilDesc.DepthFunc        = COMPARISON_FUNC_LESS_EQUAL;
+    PsoCI.GraphicsPipeline.DepthStencilDesc.DepthFunc        = (Key.Flags & OPTION_FLAG_USE_REVERSE_DEPTH) != 0 ? COMPARISON_FUNC_GREATER_EQUAL : COMPARISON_FUNC_LESS_EQUAL;
     PsoCI.GraphicsPipeline.DepthStencilDesc.DepthWriteEnable = false;
 
     auto PSO = Device.CreateGraphicsPipelineState(PsoCI);
@@ -209,7 +210,7 @@ void EnvMapRenderer::Prepare(IDeviceContext*                 pContext,
         PSOKey::ENV_MAP_TYPE_CUBE :
         PSOKey::ENV_MAP_TYPE_SPHERE;
 
-    m_pCurrentPSO = GetPSO({ToneMapping.iToneMappingMode, Attribs.ConvertOutputToSRGB, Attribs.ComputeMotionVectors, EnvMapType});
+    m_pCurrentPSO = GetPSO({ToneMapping.iToneMappingMode, Attribs.Options, EnvMapType});
     if (m_pCurrentPSO == nullptr)
     {
         UNEXPECTED("Failed to get PSO");

@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2024 Diligent Graphics LLC
+ *  Copyright 2023-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -35,6 +35,7 @@
 
 #include "DebugUtilities.hpp"
 #include "ScopedDebugGroup.hpp"
+#include "HnRenderParam.hpp"
 
 namespace Diligent
 {
@@ -184,8 +185,10 @@ void HnRenderEnvMapTask::Prepare(pxr::HdTaskContext* TaskCtx,
     EnvMapAttribs.AverageLogLum = 0.3f;
     EnvMapAttribs.MipLevel      = 1;
     // We should write zero alpha to get correct alpha in the final image
-    EnvMapAttribs.Alpha                = 0;
-    EnvMapAttribs.ComputeMotionVectors = true;
+    EnvMapAttribs.Alpha   = 0;
+    EnvMapAttribs.Options = EnvMapRenderer::OPTION_FLAG_COMPUTE_MOTION_VECTORS;
+    if (static_cast<HnRenderParam*>(pRenderDelegate->GetRenderParam())->GetConfig().UseReverseDepth)
+        EnvMapAttribs.Options |= EnvMapRenderer::OPTION_FLAG_USE_REVERSE_DEPTH;
 
     m_EnvMapRenderer->Prepare(pRenderDelegate->GetDeviceContext(), EnvMapAttribs, TMAttribs);
 }

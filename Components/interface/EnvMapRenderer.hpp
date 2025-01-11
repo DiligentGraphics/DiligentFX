@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2024 Diligent Graphics LLC
+ *  Copyright 2023-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -35,6 +35,7 @@
 #include "../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
 #include "../../../DiligentCore/Common/interface/BasicMath.hpp"
 #include "../../../DiligentCore/Common/interface/HashUtils.hpp"
+#include "../../../DiligentCore/Primitives/interface/FlagEnum.h"
 
 namespace Diligent
 {
@@ -71,6 +72,21 @@ public:
     EnvMapRenderer(const CreateInfo& CI);
     ~EnvMapRenderer();
 
+    /// Option flags.
+    enum OPTION_FLAGS : Uint32
+    {
+        OPTION_FLAG_NONE = 0u,
+
+        /// Manually convert shader output to sRGB color space.
+        OPTION_FLAG_CONVERT_OUTPUT_TO_SRGB = 1u << 0u,
+
+        /// Compute motion vectors.
+        OPTION_FLAG_COMPUTE_MOTION_VECTORS = 1u << 1u,
+
+        /// Use reverse depth (i.e. near plane is at 1.0, far plane is at 0.0).
+        OPTION_FLAG_USE_REVERSE_DEPTH = 1u << 2u
+    };
+
     struct RenderAttribs
     {
         ITextureView* pEnvMap = nullptr;
@@ -79,17 +95,14 @@ public:
         float MipLevel      = 0;
         float Alpha         = 1;
 
-        /// Manually convert shader output to sRGB color space.
-        bool ConvertOutputToSRGB = false;
-
-        bool ComputeMotionVectors = false;
+        OPTION_FLAGS Options = OPTION_FLAG_NONE;
     };
     void Prepare(IDeviceContext*                 pContext,
                  const RenderAttribs&            Attribs,
                  const HLSL::ToneMappingAttribs& ToneMapping);
     void Render(IDeviceContext* pContext);
 
-
+private:
     struct PSOKey
     {
         enum ENV_MAP_TYPE : Uint8
@@ -98,23 +111,23 @@ public:
             ENV_MAP_TYPE_SPHERE,
             ENV_MAP_TYPE_COUNT
         };
+
         const int          ToneMappingMode;
-        const bool         ConvertOutputToSRGB;
-        const bool         ComputeMotionVectors;
+        const OPTION_FLAGS Flags;
         const ENV_MAP_TYPE EnvMapType;
 
-        PSOKey(int _ToneMappingMode, bool _ConvertOutputToSRGB, bool _ComputeMotionVectors, ENV_MAP_TYPE _EnvMapType) :
+        PSOKey(int          _ToneMappingMode,
+               OPTION_FLAGS _Flags,
+               ENV_MAP_TYPE _EnvMapType) :
             ToneMappingMode{_ToneMappingMode},
-            ConvertOutputToSRGB{_ConvertOutputToSRGB},
-            ComputeMotionVectors{_ComputeMotionVectors},
+            Flags{_Flags},
             EnvMapType{_EnvMapType}
         {}
 
         constexpr bool operator==(const PSOKey& rhs) const
         {
             return (ToneMappingMode == rhs.ToneMappingMode &&
-                    ConvertOutputToSRGB == rhs.ConvertOutputToSRGB &&
-                    ComputeMotionVectors == rhs.ComputeMotionVectors &&
+                    Flags == rhs.Flags &&
                     EnvMapType == rhs.EnvMapType);
         }
 
@@ -122,13 +135,12 @@ public:
         {
             size_t operator()(const PSOKey& Key) const
             {
-                return ComputeHash(Key.ToneMappingMode, Key.ConvertOutputToSRGB, Key.ComputeMotionVectors, Key.EnvMapType);
+                return ComputeHash(Key.ToneMappingMode, Key.Flags, Key.EnvMapType);
             }
         };
     };
     IPipelineState* GetPSO(const PSOKey& Key);
 
-private:
     RefCntAutoPtr<IRenderDevice>     m_pDevice;
     RefCntAutoPtr<IRenderStateCache> m_pStateCache;
     RefCntAutoPtr<IBuffer>           m_pCameraAttribsCB;
@@ -149,5 +161,6 @@ private:
     struct EnvMapShaderAttribs;
     std::unique_ptr<EnvMapShaderAttribs> m_ShaderAttribs;
 };
+DEFINE_FLAG_ENUM_OPERATORS(EnvMapRenderer::OPTION_FLAGS);
 
 } // namespace Diligent
