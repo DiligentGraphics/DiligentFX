@@ -167,8 +167,10 @@ float4 ComputeCoordinateGrid(in float2                f2NormalizedXY,
     float  PlaneAlpha[3];
     
     float PixelSize = length(Camera.f4ViewportSize.zw / float2(Camera.mProj[0][0], Camera.mProj[1][1]));
-    float MinCameraZ = DepthToCameraZ(MinDepth, Camera.mProj);
-    float MaxCameraZ = DepthToCameraZ(MaxDepth, Camera.mProj);
+    float CameraZ0 = DepthToCameraZ(MinDepth, Camera.mProj);
+    float CameraZ1 = DepthToCameraZ(MaxDepth, Camera.mProj);
+    float MinCameraZ = min(CameraZ0, CameraZ1);
+    float MaxCameraZ = max(CameraZ0, CameraZ1);
     float CameraZRange = max(MaxCameraZ - MinCameraZ, 1e-6);
 
     ComputePlaneIntersectionAttribs(Camera, RayWS, float3(1.0, 0.0, 0.0), MaxCameraZ, CameraZRange, Positions[0], PlaneAlpha[0]);
