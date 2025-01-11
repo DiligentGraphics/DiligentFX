@@ -1,5 +1,5 @@
 /*
- *  Copyright 2024 Diligent Graphics LLC
+ *  Copyright 2024-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -63,8 +63,8 @@ void ScreenSpaceAmbientOcclusion::PrepareResources(IRenderDevice* pDevice, IDevi
     DEV_CHECK_ERR(pDevice != nullptr, "pDevice must not be null");
     DEV_CHECK_ERR(pPostFXContext != nullptr, "pPostFXContext must not be null");
 
-    const auto& FrameDesc         = pPostFXContext->GetFrameDesc();
-    const auto& SupportedFeatures = pPostFXContext->GetSupportedFeatures();
+    const PostFXContext::FrameDesc&               FrameDesc         = pPostFXContext->GetFrameDesc();
+    const PostFXContext::SupportedDeviceFeatures& SupportedFeatures = pPostFXContext->GetSupportedFeatures();
 
     m_CurrentFrameIdx = FrameDesc.Index;
 
@@ -279,14 +279,15 @@ void ScreenSpaceAmbientOcclusion::PrepareResources(IRenderDevice* pDevice, IDevi
     for (Uint32 TextureIdx = RESOURCE_IDENTIFIER_OCCLUSION_HISTORY0; TextureIdx <= RESOURCE_IDENTIFIER_OCCLUSION_HISTORY1; TextureIdx++)
     {
         TextureDesc Desc;
-        Desc.Name          = "ScreenSpaceAmbientOcclusion::OcclusionHistory";
-        Desc.Type          = RESOURCE_DIM_TEX_2D;
-        Desc.Width         = m_BackBufferWidth;
-        Desc.Height        = m_BackBufferHeight;
-        Desc.Format        = m_BackBufferFormats.Occlusion;
-        Desc.BindFlags     = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
-        auto  pTexture     = Device.CreateTexture(Desc);
-        float ClearColor[] = {1.0, 0.0, 0.0, 0.0};
+        Desc.Name      = "ScreenSpaceAmbientOcclusion::OcclusionHistory";
+        Desc.Type      = RESOURCE_DIM_TEX_2D;
+        Desc.Width     = m_BackBufferWidth;
+        Desc.Height    = m_BackBufferHeight;
+        Desc.Format    = m_BackBufferFormats.Occlusion;
+        Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
+
+        RefCntAutoPtr<ITexture> pTexture     = Device.CreateTexture(Desc);
+        float                   ClearColor[] = {1.0, 0.0, 0.0, 0.0};
         pPostFXContext->ClearRenderTarget({pDevice, nullptr, pDeviceContext}, pTexture, ClearColor);
         m_Resources.Insert(TextureIdx, pTexture);
     }
@@ -294,14 +295,15 @@ void ScreenSpaceAmbientOcclusion::PrepareResources(IRenderDevice* pDevice, IDevi
     for (Uint32 TextureIdx = RESOURCE_IDENTIFIER_OCCLUSION_HISTORY_LENGTH0; TextureIdx <= RESOURCE_IDENTIFIER_OCCLUSION_HISTORY_LENGTH1; TextureIdx++)
     {
         TextureDesc Desc;
-        Desc.Name          = "ScreenSpaceAmbientOcclusion::OcclusionHistoryLength";
-        Desc.Type          = RESOURCE_DIM_TEX_2D;
-        Desc.Width         = m_BackBufferWidth;
-        Desc.Height        = m_BackBufferHeight;
-        Desc.Format        = m_BackBufferFormats.HistoryLength;
-        Desc.BindFlags     = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
-        auto  pTexture     = Device.CreateTexture(Desc);
-        float ClearColor[] = {1.0, 0.0, 0.0, 0.0};
+        Desc.Name      = "ScreenSpaceAmbientOcclusion::OcclusionHistoryLength";
+        Desc.Type      = RESOURCE_DIM_TEX_2D;
+        Desc.Width     = m_BackBufferWidth;
+        Desc.Height    = m_BackBufferHeight;
+        Desc.Format    = m_BackBufferFormats.HistoryLength;
+        Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
+
+        RefCntAutoPtr<ITexture> pTexture     = Device.CreateTexture(Desc);
+        float                   ClearColor[] = {1.0, 0.0, 0.0, 0.0};
         pPostFXContext->ClearRenderTarget({pDevice, nullptr, pDeviceContext}, pTexture, ClearColor);
         m_Resources.Insert(TextureIdx, pTexture);
     }
@@ -436,23 +438,28 @@ ITextureView* ScreenSpaceAmbientOcclusion::GetAmbientOcclusionSRV() const
 
 bool ScreenSpaceAmbientOcclusion::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_FLAGS FeatureFlags)
 {
-    bool AllPSOsReady = true;
-
-    const auto& SupportedFeatures = RenderAttribs.pPostFXContext->GetSupportedFeatures();
+    const PostFXContext::SupportedDeviceFeatures& SupportedFeatures  = RenderAttribs.pPostFXContext->GetSupportedFeatures();
+    const PostFXContext::FEATURE_FLAGS            PostFXFeatureFlags = RenderAttribs.pPostFXContext->GetFeatureFlags();
 
     const SHADER_COMPILE_FLAGS ShaderFlags = RenderAttribs.pPostFXContext->GetShaderCompileFlags(m_Settings.EnableAsyncCreation);
     const PSO_CREATE_FLAGS     PSOFlags    = m_Settings.EnableAsyncCreation ? PSO_CREATE_FLAG_ASYNCHRONOUS : PSO_CREATE_FLAG_NONE;
 
+    ShaderMacroHelper Macros;
+    Macros.Add("SSAO_OPTION_INVERTED_DEPTH", (PostFXFeatureFlags & PostFXContext::FEATURE_FLAG_REVERSED_DEPTH) != 0);
+    Macros.Add("SUPPORTED_SHADER_SRV", SupportedFeatures.TextureSubresourceViews);
+    Macros.Add("SSAO_OPTION_UNIFORM_WEIGHTING", (FeatureFlags & FEATURE_FLAG_UNIFORM_WEIGHTING) != 0);
+    Macros.Add("SSAO_OPTION_HALF_RESOLUTION", (FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION) != 0);
+    Macros.Add("SSAO_OPTION_HALF_PRECISION_DEPTH", (FeatureFlags & FEATURE_FLAG_HALF_PRECISION_DEPTH) != 0);
+
+    bool AllPSOsReady = true;
+
     {
-        auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_DOWNSAMPLED_DEPTH_BUFFER, FeatureFlags);
+        RenderTechnique& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_DOWNSAMPLED_DEPTH_BUFFER, FeatureFlags);
 
         if (!RenderTech.IsInitializedPSO())
         {
-            ShaderMacroHelper Macros;
-            Macros.Add("SSAO_OPTION_INVERTED_DEPTH", (FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
-
-            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
-            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSAO_ComputeDownsampledDepth.fx", "ComputeDownsampledDepthPS", SHADER_TYPE_PIXEL, Macros, ShaderFlags);
+            RefCntAutoPtr<IShader> VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
+            RefCntAutoPtr<IShader> PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSAO_ComputeDownsampledDepth.fx", "ComputeDownsampledDepthPS", SHADER_TYPE_PIXEL, Macros, ShaderFlags);
 
             PipelineResourceLayoutDescX ResourceLayout;
             ResourceLayout.AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC, SHADER_VARIABLE_FLAG_UNFILTERABLE_FLOAT_TEXTURE_WEBGPU);
@@ -471,15 +478,11 @@ bool ScreenSpaceAmbientOcclusion::PrepareShadersAndPSO(const RenderAttributes& R
     }
 
     {
-        auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_PREFILTERED_DEPTH_BUFFER, FeatureFlags);
+        RenderTechnique& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_PREFILTERED_DEPTH_BUFFER, FeatureFlags);
         if (!RenderTech.IsInitializedPSO())
         {
-            ShaderMacroHelper Macros;
-            Macros.Add("SUPPORTED_SHADER_SRV", SupportedFeatures.TextureSubresourceViews);
-            Macros.Add("SSAO_OPTION_INVERTED_DEPTH", (FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
-
-            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
-            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSAO_ComputePrefilteredDepthBuffer.fx", "ComputePrefilteredDepthBufferPS", SHADER_TYPE_PIXEL, Macros, ShaderFlags);
+            RefCntAutoPtr<IShader> VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
+            RefCntAutoPtr<IShader> PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSAO_ComputePrefilteredDepthBuffer.fx", "ComputePrefilteredDepthBufferPS", SHADER_TYPE_PIXEL, Macros, ShaderFlags);
 
             PipelineResourceLayoutDescX ResourceLayout;
             ResourceLayout.AddVariable(SHADER_TYPE_PIXEL, "cbCameraAttribs", SHADER_RESOURCE_VARIABLE_TYPE_STATIC);
@@ -511,17 +514,11 @@ bool ScreenSpaceAmbientOcclusion::PrepareShadersAndPSO(const RenderAttributes& R
     }
 
     {
-        auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_AMBIENT_OCCLUSION, FeatureFlags);
+        RenderTechnique& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_AMBIENT_OCCLUSION, FeatureFlags);
         if (!RenderTech.IsInitializedPSO())
         {
-            ShaderMacroHelper Macros;
-            Macros.Add("SSAO_OPTION_INVERTED_DEPTH", (FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
-            Macros.Add("SSAO_OPTION_UNIFORM_WEIGHTING", (FeatureFlags & FEATURE_FLAG_UNIFORM_WEIGHTING) != 0);
-            Macros.Add("SSAO_OPTION_HALF_RESOLUTION", (FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION) != 0);
-            Macros.Add("SSAO_OPTION_HALF_PRECISION_DEPTH", (FeatureFlags & FEATURE_FLAG_HALF_PRECISION_DEPTH) != 0);
-
-            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
-            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSAO_ComputeAmbientOcclusion.fx", "ComputeAmbientOcclusionPS", SHADER_TYPE_PIXEL, Macros, ShaderFlags);
+            RefCntAutoPtr<IShader> VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
+            RefCntAutoPtr<IShader> PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSAO_ComputeAmbientOcclusion.fx", "ComputeAmbientOcclusionPS", SHADER_TYPE_PIXEL, Macros, ShaderFlags);
 
             PipelineResourceLayoutDescX ResourceLayout;
             ResourceLayout
@@ -545,14 +542,11 @@ bool ScreenSpaceAmbientOcclusion::PrepareShadersAndPSO(const RenderAttributes& R
     }
 
     {
-        auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_BILATERAL_UPSAMPLING, FeatureFlags);
+        RenderTechnique& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_BILATERAL_UPSAMPLING, FeatureFlags);
         if (!RenderTech.IsInitializedPSO())
         {
-            ShaderMacroHelper Macros;
-            Macros.Add("SSAO_OPTION_INVERTED_DEPTH", (FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
-
-            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
-            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSAO_ComputeBilateralUpsampling.fx", "ComputeBilateralUpsamplingPS", SHADER_TYPE_PIXEL, Macros, ShaderFlags);
+            RefCntAutoPtr<IShader> VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
+            RefCntAutoPtr<IShader> PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSAO_ComputeBilateralUpsampling.fx", "ComputeBilateralUpsamplingPS", SHADER_TYPE_PIXEL, Macros, ShaderFlags);
 
             bool LinearDepthSamplingSupported = !RenderAttribs.pDevice->GetDeviceInfo().IsWebGPUDevice();
 
@@ -579,14 +573,11 @@ bool ScreenSpaceAmbientOcclusion::PrepareShadersAndPSO(const RenderAttributes& R
     }
 
     {
-        auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_TEMPORAL_ACCUMULATION, FeatureFlags);
+        RenderTechnique& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_TEMPORAL_ACCUMULATION, FeatureFlags);
         if (!RenderTech.IsInitializedPSO())
         {
-            ShaderMacroHelper Macros;
-            Macros.Add("SSAO_OPTION_INVERTED_DEPTH", (FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
-
-            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
-            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSAO_ComputeTemporalAccumulation.fx", "ComputeTemporalAccumulationPS", SHADER_TYPE_PIXEL, Macros, ShaderFlags);
+            RefCntAutoPtr<IShader> VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
+            RefCntAutoPtr<IShader> PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSAO_ComputeTemporalAccumulation.fx", "ComputeTemporalAccumulationPS", SHADER_TYPE_PIXEL, Macros, ShaderFlags);
 
             PipelineResourceLayoutDescX ResourceLayout;
             ResourceLayout
@@ -615,15 +606,11 @@ bool ScreenSpaceAmbientOcclusion::PrepareShadersAndPSO(const RenderAttributes& R
     }
 
     {
-        auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_CONVOLUTED_DEPTH_HISTORY, FeatureFlags);
+        RenderTechnique& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_CONVOLUTED_DEPTH_HISTORY, FeatureFlags);
         if (!RenderTech.IsInitializedPSO())
         {
-            ShaderMacroHelper Macros;
-            Macros.Add("SUPPORTED_SHADER_SRV", SupportedFeatures.TextureSubresourceViews);
-            Macros.Add("SSAO_OPTION_INVERTED_DEPTH", (FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
-
-            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
-            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSAO_ComputeConvolutedDepthHistory.fx", "ComputeConvolutedDepthHistoryPS", SHADER_TYPE_PIXEL, Macros, ShaderFlags);
+            RefCntAutoPtr<IShader> VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
+            RefCntAutoPtr<IShader> PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSAO_ComputeConvolutedDepthHistory.fx", "ComputeConvolutedDepthHistoryPS", SHADER_TYPE_PIXEL, Macros, ShaderFlags);
 
             PipelineResourceLayoutDescX ResourceLayout;
             if (SupportedFeatures.TextureSubresourceViews)
@@ -656,14 +643,11 @@ bool ScreenSpaceAmbientOcclusion::PrepareShadersAndPSO(const RenderAttributes& R
     }
 
     {
-        auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_RESAMPLED_HISTORY, FeatureFlags);
+        RenderTechnique& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_RESAMPLED_HISTORY, FeatureFlags);
         if (!RenderTech.IsInitializedPSO())
         {
-            ShaderMacroHelper Macros;
-            Macros.Add("SSAO_OPTION_INVERTED_DEPTH", (FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
-
-            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
-            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSAO_ComputeResampledHistory.fx", "ComputeResampledHistoryPS", SHADER_TYPE_PIXEL, Macros, ShaderFlags);
+            RefCntAutoPtr<IShader> VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
+            RefCntAutoPtr<IShader> PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSAO_ComputeResampledHistory.fx", "ComputeResampledHistoryPS", SHADER_TYPE_PIXEL, Macros, ShaderFlags);
 
             PipelineResourceLayoutDescX ResourceLayout;
             ResourceLayout
@@ -689,15 +673,11 @@ bool ScreenSpaceAmbientOcclusion::PrepareShadersAndPSO(const RenderAttributes& R
     }
 
     {
-        auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_SPATIAL_RECONSTRUCTION, FeatureFlags);
+        RenderTechnique& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_SPATIAL_RECONSTRUCTION, FeatureFlags);
         if (!RenderTech.IsInitializedPSO())
         {
-            ShaderMacroHelper Macros;
-            Macros.Add("SSAO_OPTION_INVERTED_DEPTH", (FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
-            Macros.Add("SSAO_OPTION_HALF_RESOLUTION", (FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION) != 0);
-
-            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
-            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSAO_ComputeSpatialReconstruction.fx", "ComputeSpatialReconstructionPS", SHADER_TYPE_PIXEL, Macros, ShaderFlags);
+            RefCntAutoPtr<IShader> VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
+            RefCntAutoPtr<IShader> PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSAO_ComputeSpatialReconstruction.fx", "ComputeSpatialReconstructionPS", SHADER_TYPE_PIXEL, Macros, ShaderFlags);
 
             PipelineResourceLayoutDescX ResourceLayout;
             ResourceLayout
@@ -757,7 +737,7 @@ void ScreenSpaceAmbientOcclusion::ComputeDepthCheckerboard(const RenderAttribute
     if (!(m_FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION))
         return;
 
-    auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_DOWNSAMPLED_DEPTH_BUFFER, m_FeatureFlags);
+    RenderTechnique& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_DOWNSAMPLED_DEPTH_BUFFER, m_FeatureFlags);
 
     if (!RenderTech.IsInitializedSRB())
         RenderTech.InitializeSRB(false);
@@ -779,8 +759,8 @@ void ScreenSpaceAmbientOcclusion::ComputeDepthCheckerboard(const RenderAttribute
 
 void ScreenSpaceAmbientOcclusion::ComputePrefilteredDepth(const RenderAttributes& RenderAttribs)
 {
-    auto&       RenderTech        = GetRenderTechnique(RENDER_TECH_COMPUTE_PREFILTERED_DEPTH_BUFFER, m_FeatureFlags);
-    const auto& SupportedFeatures = RenderAttribs.pPostFXContext->GetSupportedFeatures();
+    RenderTechnique&                              RenderTech        = GetRenderTechnique(RENDER_TECH_COMPUTE_PREFILTERED_DEPTH_BUFFER, m_FeatureFlags);
+    const PostFXContext::SupportedDeviceFeatures& SupportedFeatures = RenderAttribs.pPostFXContext->GetSupportedFeatures();
 
     if (!RenderTech.IsInitializedSRB())
     {
@@ -897,7 +877,7 @@ void ScreenSpaceAmbientOcclusion::ComputePrefilteredDepth(const RenderAttributes
 
 void ScreenSpaceAmbientOcclusion::ComputeAmbientOcclusion(const RenderAttributes& RenderAttribs)
 {
-    auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_AMBIENT_OCCLUSION, m_FeatureFlags);
+    RenderTechnique& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_AMBIENT_OCCLUSION, m_FeatureFlags);
 
     if (!RenderTech.IsInitializedSRB())
     {
@@ -931,7 +911,7 @@ void ScreenSpaceAmbientOcclusion::ComputeBilateralUpsampling(const RenderAttribu
     if (!(m_FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION))
         return;
 
-    auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_BILATERAL_UPSAMPLING, m_FeatureFlags);
+    RenderTechnique& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_BILATERAL_UPSAMPLING, m_FeatureFlags);
 
     if (!RenderTech.IsInitializedSRB())
     {
@@ -968,7 +948,7 @@ void ScreenSpaceAmbientOcclusion::ComputePlaceholderTexture(const RenderAttribut
 
 void ScreenSpaceAmbientOcclusion::ComputeTemporalAccumulation(const RenderAttributes& RenderAttribs)
 {
-    auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_TEMPORAL_ACCUMULATION, m_FeatureFlags);
+    RenderTechnique& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_TEMPORAL_ACCUMULATION, m_FeatureFlags);
 
     if (!RenderTech.IsInitializedSRB())
     {
@@ -1011,8 +991,8 @@ void ScreenSpaceAmbientOcclusion::ComputeTemporalAccumulation(const RenderAttrib
 
 void ScreenSpaceAmbientOcclusion::ComputeConvolutedDepthHistory(const RenderAttributes& RenderAttribs)
 {
-    auto&       RenderTech        = GetRenderTechnique(RENDER_TECH_COMPUTE_CONVOLUTED_DEPTH_HISTORY, m_FeatureFlags);
-    const auto& SupportedFeatures = RenderAttribs.pPostFXContext->GetSupportedFeatures();
+    RenderTechnique&                              RenderTech        = GetRenderTechnique(RENDER_TECH_COMPUTE_CONVOLUTED_DEPTH_HISTORY, m_FeatureFlags);
+    const PostFXContext::SupportedDeviceFeatures& SupportedFeatures = RenderAttribs.pPostFXContext->GetSupportedFeatures();
 
     if (!RenderTech.IsInitializedSRB())
         RenderTech.InitializeSRB(false);
@@ -1193,7 +1173,7 @@ void ScreenSpaceAmbientOcclusion::ComputeConvolutedDepthHistory(const RenderAttr
 
 void ScreenSpaceAmbientOcclusion::ComputeResampledHistory(const RenderAttributes& RenderAttribs)
 {
-    auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_RESAMPLED_HISTORY, m_FeatureFlags);
+    RenderTechnique& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_RESAMPLED_HISTORY, m_FeatureFlags);
 
     if (!RenderTech.IsInitializedSRB())
     {
@@ -1224,7 +1204,7 @@ void ScreenSpaceAmbientOcclusion::ComputeResampledHistory(const RenderAttributes
 
 void ScreenSpaceAmbientOcclusion::ComputeSpatialReconstruction(const RenderAttributes& RenderAttribs)
 {
-    auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_SPATIAL_RECONSTRUCTION, m_FeatureFlags);
+    RenderTechnique& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_SPATIAL_RECONSTRUCTION, m_FeatureFlags);
 
     if (!RenderTech.IsInitializedSRB())
     {

@@ -48,9 +48,9 @@ float2 MapSquareToDisk(float2 Point)
 bool IsBackground(float Depth)
 {
 #if SSR_OPTION_INVERTED_DEPTH
-    return Depth < 1.0e-6;
+    return Depth < 1e-6;
 #else
-    return Depth >= (1.0 - 1.0e-6);
+    return Depth >= (1.0 - 1e-6);
 #endif // SSR_OPTION_INVERTED_DEPTH
 }
 
