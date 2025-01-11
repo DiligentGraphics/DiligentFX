@@ -43,7 +43,8 @@ float ComputeHierarchicalDepthBufferPS(in FullScreenTriangleVSOutput VSOut) : SV
     SampledPixels.z = SampleDepth(RemappedPosition, int2(1, 0), LastMipDimension);
     SampledPixels.w = SampleDepth(RemappedPosition, int2(1, 1), LastMipDimension);
 
-    float MinDepth = MipConvFunc(MipConvFunc(SampledPixels.x, SampledPixels.y), MipConvFunc(SampledPixels.z, SampledPixels.w));
+    float MinDepth = ClosestDepth(ClosestDepth(SampledPixels.x, SampledPixels.y),
+                                  ClosestDepth(SampledPixels.z, SampledPixels.w));
 
     bool IsWidthOdd  = (LastMipDimension.x & 1) != 0;
     bool IsHeightOdd = (LastMipDimension.y & 1) != 0;
@@ -52,19 +53,19 @@ float ComputeHierarchicalDepthBufferPS(in FullScreenTriangleVSOutput VSOut) : SV
     {
         SampledPixels.x = SampleDepth(RemappedPosition, int2(2, 0), LastMipDimension);
         SampledPixels.y = SampleDepth(RemappedPosition, int2(2, 1), LastMipDimension);
-        MinDepth = MipConvFunc(MinDepth, MipConvFunc(SampledPixels.x, SampledPixels.y));
+        MinDepth = ClosestDepth(MinDepth, ClosestDepth(SampledPixels.x, SampledPixels.y));
     }
     
     if (IsHeightOdd)
     {
         SampledPixels.x = SampleDepth(RemappedPosition, int2(0, 2), LastMipDimension);
         SampledPixels.y = SampleDepth(RemappedPosition, int2(1, 2), LastMipDimension);
-        MinDepth = MipConvFunc(MinDepth, MipConvFunc(SampledPixels.x, SampledPixels.y));
+        MinDepth = ClosestDepth(MinDepth, ClosestDepth(SampledPixels.x, SampledPixels.y));
     }
     
     if (IsWidthOdd && IsHeightOdd)
     {
-        MinDepth = MipConvFunc(MinDepth, SampleDepth(RemappedPosition, int2(2, 2), LastMipDimension));
+        MinDepth = ClosestDepth(MinDepth, SampleDepth(RemappedPosition, int2(2, 2), LastMipDimension));
     }
 
     return MinDepth;

@@ -4,10 +4,10 @@
 #include "PostFX_Common.fxh"
 
 #if SSR_OPTION_INVERTED_DEPTH
-    #define MipConvFunc max
+    #define ClosestDepth max
     #define DepthFarPlane 0.0
 #else
-    #define MipConvFunc min
+    #define ClosestDepth min
     #define DepthFarPlane 1.0
 #endif // SSR_OPTION_INVERTED_DEPTH
 
@@ -48,9 +48,9 @@ float2 MapSquareToDisk(float2 Point)
 bool IsBackground(float Depth)
 {
 #if SSR_OPTION_INVERTED_DEPTH
-    return Depth < 1.0e-6f;
+    return Depth < 1.0e-6;
 #else
-    return Depth >= (1.0f - 1.0e-6f);
+    return Depth >= (1.0 - 1.0e-6);
 #endif // SSR_OPTION_INVERTED_DEPTH
 }
 

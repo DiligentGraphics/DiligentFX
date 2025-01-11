@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2024 Diligent Graphics LLC
+ *  Copyright 2023-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -637,7 +637,10 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
 
     const TextureDesc& FinalColorDesc = m_FinalColorRTV->GetTexture()->GetDesc();
 
-    m_PostFXContext->PrepareResources(pDevice, {pRenderParam->GetFrameNumber(), FinalColorDesc.Width, FinalColorDesc.Height}, PostFXContext::FEATURE_FLAG_NONE);
+    const PostFXContext::FEATURE_FLAGS PostFXFlags = pRenderParam->GetConfig().UseReverseDepth ?
+        PostFXContext::FEATURE_FLAG_REVERSED_DEPTH :
+        PostFXContext::FEATURE_FLAG_NONE;
+    m_PostFXContext->PrepareResources(pDevice, {pRenderParam->GetFrameNumber(), FinalColorDesc.Width, FinalColorDesc.Height}, PostFXFlags);
     m_SSAO->PrepareResources(pDevice, pCtx, m_PostFXContext.get(), m_Params.SSAOFeatureFlags);
     m_SSR->PrepareResources(pDevice, pCtx, m_PostFXContext.get(), m_Params.SSRFeatureFlags);
     m_TAA->PrepareResources(pDevice, pCtx, m_PostFXContext.get(), m_Params.TAAFeatureFlags);

@@ -49,7 +49,7 @@ void ComputeDownsampledStencilMaskPS(in FullScreenTriangleVSOutput VSOut)
     for (uint SampleIdx = 0u; SampleIdx < 4u; ++SampleIdx)
     {
         uint2 Offset = uint2(SampleIdx & 0x01u, SampleIdx >> 1u);
-        MinDepth = MipConvFunc(MinDepth, SampleDepth(RemappedPosition, Offset, TextureDimension));
+        MinDepth = ClosestDepth(MinDepth, SampleDepth(RemappedPosition, Offset, TextureDimension));
         MaxRoughness = max(MaxRoughness, SampleRoughness(RemappedPosition, Offset, TextureDimension));
     }
 
@@ -61,7 +61,7 @@ void ComputeDownsampledStencilMaskPS(in FullScreenTriangleVSOutput VSOut)
         for (uint SampleIdx = 0u; SampleIdx < 2u; ++SampleIdx)
         {
             uint2 Offset = uint2(2u, SampleIdx);
-            MinDepth = MipConvFunc(MinDepth, SampleDepth(RemappedPosition, Offset, TextureDimension));
+            MinDepth = ClosestDepth(MinDepth, SampleDepth(RemappedPosition, Offset, TextureDimension));
             MaxRoughness = max(MaxRoughness, SampleRoughness(RemappedPosition, Offset, TextureDimension));
         }
     }
@@ -71,14 +71,14 @@ void ComputeDownsampledStencilMaskPS(in FullScreenTriangleVSOutput VSOut)
         for (uint SampleIdx = 0u; SampleIdx < 2u; ++SampleIdx)
         {
             uint2 Offset = uint2(SampleIdx, 2);
-            MinDepth = MipConvFunc(MinDepth, SampleDepth(RemappedPosition, Offset, TextureDimension));
+            MinDepth = ClosestDepth(MinDepth, SampleDepth(RemappedPosition, Offset, TextureDimension));
             MaxRoughness = max(MaxRoughness, SampleRoughness(RemappedPosition, Offset, TextureDimension));
         }
     }
     
     if (IsWidthOdd && IsHeightOdd)
     {
-        MinDepth = MipConvFunc(MinDepth, SampleDepth(RemappedPosition, uint2(2, 2), TextureDimension));
+        MinDepth = ClosestDepth(MinDepth, SampleDepth(RemappedPosition, uint2(2, 2), TextureDimension));
         MaxRoughness = max(MaxRoughness, SampleRoughness(RemappedPosition, uint2(2, 2), TextureDimension));
     }
 

@@ -56,17 +56,15 @@ class ScreenSpaceReflection
 public:
     enum FEATURE_FLAGS : Uint32
     {
-        FEATURE_FLAG_NONE           = 0u,
-        FEATURE_FLAG_REVERSED_DEPTH = 1u << 0u, // Not implemented
-        FEATURE_FLAG_PACKED_NORMAL  = 1u << 1u, // Nor implemented
+        FEATURE_FLAG_NONE = 0u,
 
         // When using this flag, you only need to pass the color buffer of the previous frame.
         // We find the intersection using the depth buffer of the current frame, and when an intersection is found,
         // we make the corresponding offset by the velocity vector at the intersection point, for sampling from the color buffer.
-        FEATURE_FLAG_PREVIOUS_FRAME = 1u << 2u,
+        FEATURE_FLAG_PREVIOUS_FRAME = 1u << 0u,
 
         // When this flag is used, ray tracing step is executed at half resolution
-        FEATURE_FLAG_HALF_RESOLUTION = 1u << 3u
+        FEATURE_FLAG_HALF_RESOLUTION = 1u << 1u
     };
 
     struct RenderAttributes
