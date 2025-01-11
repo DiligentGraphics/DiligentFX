@@ -55,17 +55,14 @@ public:
     {
         FEATURE_FLAG_NONE = 0u,
 
-        // Indicates that the application uses a reversed depth buffer.
-        FEATURE_FLAG_REVERSED_DEPTH = 1u << 0u,
-
         // Use Gaussian weighting in the variance clipping step.
-        FEATURE_FLAG_GAUSSIAN_WEIGHTING = 1u << 1u,
+        FEATURE_FLAG_GAUSSIAN_WEIGHTING = 1u << 0u,
 
         // Use Catmull-Rom filter to sample the history buffer.
-        FEATURE_FLAG_BICUBIC_FILTER = 1u << 2u,
+        FEATURE_FLAG_BICUBIC_FILTER = 1u << 1u,
 
         // Use YCoCg color space for color clipping.
-        FEATURE_FLAG_YCOCG_COLOR_SPACE = 1u << 3u
+        FEATURE_FLAG_YCOCG_COLOR_SPACE = 1u << 2u
     };
 
     struct RenderAttributes

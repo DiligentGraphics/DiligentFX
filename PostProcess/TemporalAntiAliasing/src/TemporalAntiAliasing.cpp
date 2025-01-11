@@ -1,5 +1,5 @@
 /*
- *  Copyright 2024 Diligent Graphics LLC
+ *  Copyright 2024-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -234,7 +234,6 @@ void TemporalAntiAliasing::PrepareShadersAndPSO(const RenderAttributes& RenderAt
 
         ShaderMacroHelper Macros;
         Macros.Add("TAA_OPTION_GAUSSIAN_WEIGHTING", (FeatureFlags & FEATURE_FLAG_GAUSSIAN_WEIGHTING) != 0);
-        Macros.Add("TAA_OPTION_INVERTED_DEPTH", (FeatureFlags & FEATURE_FLAG_REVERSED_DEPTH) != 0);
         Macros.Add("TAA_OPTION_BICUBIC_FILTER", (FeatureFlags & FEATURE_FLAG_BICUBIC_FILTER) != 0);
         Macros.Add("TAA_OPTION_YCOCG_COLOR_SPACE", (FeatureFlags & FEATURE_FLAG_YCOCG_COLOR_SPACE) != 0);
 

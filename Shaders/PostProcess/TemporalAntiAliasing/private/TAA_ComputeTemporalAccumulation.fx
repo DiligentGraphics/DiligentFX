@@ -3,14 +3,7 @@
 #include "PostFX_Common.fxh"
 #include "TemporalAntiAliasingStructures.fxh"
 
-#define FLT_EPS   5.960464478e-8
-#define FLT_MAX   3.402823466e+38
-
-#if TAA_OPTION_INVERTED_DEPTH
-    #define DepthFarPlane 0.0
-#else
-    #define DepthFarPlane 1.0
-#endif // TAA_OPTION_INVERTED_DEPTH
+#define FLT_EPS 5.960464478e-8
 
 cbuffer cbCameraAttribs
 {
@@ -119,9 +112,11 @@ float3 ClipToAABB(float3 ColorPrev, float3 ColorCurr, float3 AABBCentre, float3 
 
 float ComputeDepthDisocclusionWeight(float CurrDepth, float PrevDepth)
 {
-    float LinearDepthCurr = DepthToCameraZ(CurrDepth, g_PrevCamera.mProj);
-    float LinearDepthPrev = DepthToCameraZ(PrevDepth, g_PrevCamera.mProj);
-    return exp(-abs(LinearDepthPrev - LinearDepthCurr) / LinearDepthCurr);
+    float LinearDepthCurr  = abs(DepthToCameraZ(CurrDepth, g_PrevCamera.mProj));
+    float LinearDepthPrev  = abs(DepthToCameraZ(PrevDepth, g_PrevCamera.mProj));
+    float MaxLinearDepth   = max(LinearDepthCurr, LinearDepthPrev);
+    float LinearDepthDelta = abs(LinearDepthCurr - LinearDepthPrev);
+    return exp(-LinearDepthDelta / max(MaxLinearDepth, 1e-6));
 }
 
 float ComputeDepthDisocclusion(float2 Position, float2 PrevPosition)
