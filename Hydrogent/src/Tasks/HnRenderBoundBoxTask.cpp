@@ -1,5 +1,5 @@
 /*
- *  Copyright 2024 Diligent Graphics LLC
+ *  Copyright 2024-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -194,11 +194,14 @@ void HnRenderBoundBoxTask::Prepare(pxr::HdTaskContext* TaskCtx,
     }
 
     BoundBoxRenderer::RenderAttribs Attribs;
-    Attribs.Color                = &m_Params.Color;
-    Attribs.BoundBoxTransform    = &BoundBoxTransform;
-    Attribs.PatternLength        = m_Params.PatternLength;
-    Attribs.PatternMask          = m_Params.PatternMask;
-    Attribs.ComputeMotionVectors = true;
+    Attribs.Color             = &m_Params.Color;
+    Attribs.BoundBoxTransform = &BoundBoxTransform;
+    Attribs.PatternLength     = m_Params.PatternLength;
+    Attribs.PatternMask       = m_Params.PatternMask;
+    Attribs.Options           = BoundBoxRenderer::OPTION_FLAG_COMPUTE_MOTION_VECTORS;
+    if (pRenderParam->GetConfig().UseReverseDepth)
+        Attribs.Options |= BoundBoxRenderer::OPTION_FLAG_USE_REVERSE_DEPTH;
+
     m_BoundBoxRenderer->Prepare(pRenderDelegate->GetDeviceContext(), Attribs);
 
     m_RenderBoundBox = true;

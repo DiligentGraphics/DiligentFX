@@ -1,5 +1,5 @@
 /*
- *  Copyright 2024 Diligent Graphics LLC
+ *  Copyright 2024-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -114,8 +114,8 @@ IPipelineState* BoundBoxRenderer::GetPSO(const PSOKey& Key)
 
     ShaderMacroHelper Macros;
     Macros
-        .Add("CONVERT_OUTPUT_TO_SRGB", Key.ConvertOutputToSRGB)
-        .Add("COMPUTE_MOTION_VECTORS", Key.ComputeMotionVectors);
+        .Add("CONVERT_OUTPUT_TO_SRGB", (Key.Flags & OPTION_FLAG_CONVERT_OUTPUT_TO_SRGB) != 0)
+        .Add("COMPUTE_MOTION_VECTORS", (Key.Flags & OPTION_FLAG_COMPUTE_MOTION_VECTORS) != 0);
     ShaderCI.Macros = Macros;
 
     RefCntAutoPtr<IShader> pVS;
@@ -157,7 +157,7 @@ IPipelineState* BoundBoxRenderer::GetPSO(const PSOKey& Key)
 
     PsoCI.PSODesc.ResourceLayout.DefaultVariableMergeStages  = SHADER_TYPE_VS_PS;
     PsoCI.PSODesc.ResourceLayout.DefaultVariableType         = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
-    PsoCI.GraphicsPipeline.DepthStencilDesc.DepthFunc        = COMPARISON_FUNC_LESS_EQUAL;
+    PsoCI.GraphicsPipeline.DepthStencilDesc.DepthFunc        = (Key.Flags & OPTION_FLAG_USE_REVERSE_DEPTH) != 0 ? COMPARISON_FUNC_GREATER_EQUAL : COMPARISON_FUNC_LESS_EQUAL;
     PsoCI.GraphicsPipeline.DepthStencilDesc.DepthWriteEnable = false;
     if (m_AsyncShaders)
         PsoCI.Flags |= PSO_CREATE_FLAG_ASYNCHRONOUS;
@@ -175,7 +175,7 @@ IPipelineState* BoundBoxRenderer::GetPSO(const PSOKey& Key)
 
 void BoundBoxRenderer::Prepare(IDeviceContext* pContext, const RenderAttribs& Attribs)
 {
-    m_pCurrentPSO = GetPSO({Attribs.ConvertOutputToSRGB, Attribs.ComputeMotionVectors});
+    m_pCurrentPSO = GetPSO(PSOKey{Attribs.Options});
     if (m_pCurrentPSO == nullptr)
     {
         UNEXPECTED("Failed to get PSO");

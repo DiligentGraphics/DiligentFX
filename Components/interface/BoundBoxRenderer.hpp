@@ -1,5 +1,5 @@
 /*
- *  Copyright 2024 Diligent Graphics LLC
+ *  Copyright 2024-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@
 #include "../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
 #include "../../../DiligentCore/Common/interface/HashUtils.hpp"
 #include "../../../DiligentCore/Common/interface/BasicMath.hpp"
+#include "../../../DiligentCore/Primitives/interface/FlagEnum.h"
 
 namespace Diligent
 {
@@ -68,6 +69,21 @@ public:
     BoundBoxRenderer(const CreateInfo& CI);
     ~BoundBoxRenderer();
 
+    /// Option flags.
+    enum OPTION_FLAGS : Uint32
+    {
+        OPTION_FLAG_NONE = 0u,
+
+        /// Manually convert shader output to sRGB color space.
+        OPTION_FLAG_CONVERT_OUTPUT_TO_SRGB = 1u << 0u,
+
+        /// Compute motion vectors.
+        OPTION_FLAG_COMPUTE_MOTION_VECTORS = 1u << 1u,
+
+        /// Use reverse depth (i.e. near plane is at 1.0, far plane is at 0.0).
+        OPTION_FLAG_USE_REVERSE_DEPTH = 1u << 2u
+    };
+
     struct RenderAttribs
     {
         /// Bounding box transformation matrix.
@@ -86,43 +102,36 @@ public:
         /// For example, use 0x0000FFFFu to draw a dashed line.
         Uint32 PatternMask = 0xFFFFFFFFu;
 
-        /// Manually convert shader output to sRGB color space.
-        bool ConvertOutputToSRGB = false;
-
-        bool ComputeMotionVectors = false;
+        /// Render options.
+        OPTION_FLAGS Options = OPTION_FLAG_NONE;
     };
     void Prepare(IDeviceContext* pContext, const RenderAttribs& Attribs);
     void Render(IDeviceContext* pContext);
 
-
+private:
     struct PSOKey
     {
-        const bool ConvertOutputToSRGB;
-        const bool ComputeMotionVectors;
+        const OPTION_FLAGS Flags;
 
-        PSOKey(bool _ConvertOutputToSRGB,
-               bool _ComputeMotionVectors) :
-            ConvertOutputToSRGB{_ConvertOutputToSRGB},
-            ComputeMotionVectors{_ComputeMotionVectors}
+        explicit PSOKey(OPTION_FLAGS _Flags) :
+            Flags{_Flags}
         {}
 
         constexpr bool operator==(const PSOKey& rhs) const
         {
-            return (ConvertOutputToSRGB == rhs.ConvertOutputToSRGB &&
-                    ComputeMotionVectors == rhs.ComputeMotionVectors);
+            return Flags == rhs.Flags;
         }
 
         struct Hasher
         {
             size_t operator()(const PSOKey& Key) const
             {
-                return ComputeHash(Key.ConvertOutputToSRGB);
+                return ComputeHash(Key.Flags);
             }
         };
     };
     IPipelineState* GetPSO(const PSOKey& Key);
 
-private:
     RefCntAutoPtr<IRenderDevice>     m_pDevice;
     RefCntAutoPtr<IRenderStateCache> m_pStateCache;
     RefCntAutoPtr<IBuffer>           m_pCameraAttribsCB;
@@ -143,5 +152,7 @@ private:
     struct BoundBoxShaderAttribs;
     std::unique_ptr<BoundBoxShaderAttribs> m_ShaderAttribs;
 };
+DEFINE_FLAG_ENUM_OPERATORS(BoundBoxRenderer::OPTION_FLAGS);
+
 
 } // namespace Diligent
