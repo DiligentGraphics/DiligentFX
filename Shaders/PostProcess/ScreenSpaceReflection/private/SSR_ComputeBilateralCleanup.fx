@@ -80,7 +80,7 @@ float4 ComputeBilateralCleanupPS(in FullScreenTriangleVSOutput VSOut) : SV_Targe
                 {
                     float SampledLinearDepth = DepthToCameraZ(SampledDepth, g_Camera.mProj);
                     float WeightS = exp(-0.5 * dot(float2(x, y), float2(x, y)) / (Sigma * Sigma));
-                    float WeightZ = exp(-abs(LinearDepth - SampledLinearDepth) / (SSR_BILATERAL_SIGMA_DEPTH * abs(dot(float2(x, y), GradDepth)+1.e-6)));
+                    float WeightZ = exp(-abs(LinearDepth - SampledLinearDepth) / (SSR_BILATERAL_SIGMA_DEPTH * (abs(dot(float2(x, y), GradDepth)) + 1e-6)));
                     float WeightN = pow(max(0.0, dot(NormalWS, SampledNormalWS)), SSR_BILATERAL_SIGMA_NORMAL);
                     float Weight = WeightS * WeightN * WeightZ;
 

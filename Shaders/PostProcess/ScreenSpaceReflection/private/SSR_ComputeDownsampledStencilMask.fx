@@ -10,76 +10,50 @@ cbuffer cbScreenSpaceReflectionAttribs
 Texture2D<float> g_TextureRoughness;
 Texture2D<float> g_TextureDepth;
 
-float SampleRoughness(uint2 Location, uint2 Offset, uint2 Dimension)
+void UpdateClosestDepthAndMaxRoughness(int2 Location, int2 Dimension, inout float MinDepth, inout float MaxRoughness)
 {
-    uint2 Position = Location + Offset;
-    if (Position.x >= Dimension.x || Position.y >= Dimension.y)
-    {
-        return g_TextureRoughness.Load(int3(Location, 0));
-    }
-    else
-    {
-        return g_TextureRoughness.Load(int3(Position, 0));
-    }
-}
+    Location = ClampScreenCoord(Location, Dimension);
 
-float SampleDepth(uint2 Location, uint2 Offset, uint2 Dimension)
-{
-    uint2 Position = Location + Offset;
-    if (Position.x >= Dimension.x || Position.y >= Dimension.y)
-    {
-        return g_TextureDepth.Load(int3(Location, 0));
-    }
-    else
-    {
-        return g_TextureDepth.Load(int3(Position, 0));
-    } 
+    float Depth     = g_TextureDepth.Load(int3(Location, 0));
+    float Roughness = g_TextureRoughness.Load(int3(Location, 0));
+
+    MinDepth     = ClosestDepth(MinDepth, Depth);
+    MaxRoughness = max(MaxRoughness, Roughness);
 }
 
 void ComputeDownsampledStencilMaskPS(in FullScreenTriangleVSOutput VSOut)
 {
-    uint2 RemappedPosition = uint2(2.0 * floor(VSOut.f4PixelPos.xy));
+    int2 RemappedPosition = int2(2.0 * floor(VSOut.f4PixelPos.xy));
 
-    uint2 TextureDimension;
+    int2 TextureDimension;
     g_TextureDepth.GetDimensions(TextureDimension.x, TextureDimension.y);
 
     float MinDepth = DepthFarPlane;
     float MaxRoughness = 0.0f;
+    
+    UpdateClosestDepthAndMaxRoughness(RemappedPosition + int2(0, 0), TextureDimension, MinDepth, MaxRoughness);
+    UpdateClosestDepthAndMaxRoughness(RemappedPosition + int2(1, 0), TextureDimension, MinDepth, MaxRoughness);
+    UpdateClosestDepthAndMaxRoughness(RemappedPosition + int2(0, 1), TextureDimension, MinDepth, MaxRoughness);
+    UpdateClosestDepthAndMaxRoughness(RemappedPosition + int2(1, 1), TextureDimension, MinDepth, MaxRoughness);
 
-    for (uint SampleIdx = 0u; SampleIdx < 4u; ++SampleIdx)
-    {
-        uint2 Offset = uint2(SampleIdx & 0x01u, SampleIdx >> 1u);
-        MinDepth = ClosestDepth(MinDepth, SampleDepth(RemappedPosition, Offset, TextureDimension));
-        MaxRoughness = max(MaxRoughness, SampleRoughness(RemappedPosition, Offset, TextureDimension));
-    }
-
-    bool IsWidthOdd  = (TextureDimension.x & 1u) != 0u;
-    bool IsHeightOdd = (TextureDimension.y & 1u) != 0u;
+    bool IsWidthOdd  = (TextureDimension.x & 1) != 0;
+    bool IsHeightOdd = (TextureDimension.y & 1) != 0;
     
     if (IsWidthOdd)
     {
-        for (uint SampleIdx = 0u; SampleIdx < 2u; ++SampleIdx)
-        {
-            uint2 Offset = uint2(2u, SampleIdx);
-            MinDepth = ClosestDepth(MinDepth, SampleDepth(RemappedPosition, Offset, TextureDimension));
-            MaxRoughness = max(MaxRoughness, SampleRoughness(RemappedPosition, Offset, TextureDimension));
-        }
+        UpdateClosestDepthAndMaxRoughness(RemappedPosition + int2(2, 0), TextureDimension, MinDepth, MaxRoughness);
+        UpdateClosestDepthAndMaxRoughness(RemappedPosition + int2(2, 1), TextureDimension, MinDepth, MaxRoughness);
     }
     
     if (IsHeightOdd)
     {
-        for (uint SampleIdx = 0u; SampleIdx < 2u; ++SampleIdx)
-        {
-            uint2 Offset = uint2(SampleIdx, 2);
-            MinDepth = ClosestDepth(MinDepth, SampleDepth(RemappedPosition, Offset, TextureDimension));
-            MaxRoughness = max(MaxRoughness, SampleRoughness(RemappedPosition, Offset, TextureDimension));
-        }
+        UpdateClosestDepthAndMaxRoughness(RemappedPosition + int2(0, 2), TextureDimension, MinDepth, MaxRoughness);
+        UpdateClosestDepthAndMaxRoughness(RemappedPosition + int2(1, 2), TextureDimension, MinDepth, MaxRoughness);
     }
     
     if (IsWidthOdd && IsHeightOdd)
     {
-        MinDepth = ClosestDepth(MinDepth, SampleDepth(RemappedPosition, uint2(2, 2), TextureDimension));
-        MaxRoughness = max(MaxRoughness, SampleRoughness(RemappedPosition, uint2(2, 2), TextureDimension));
+        UpdateClosestDepthAndMaxRoughness(RemappedPosition + int2(2, 2), TextureDimension, MinDepth, MaxRoughness);
     }
 
     if (!IsReflectionSample(MaxRoughness, MinDepth, g_SSRAttribs.RoughnessThreshold))

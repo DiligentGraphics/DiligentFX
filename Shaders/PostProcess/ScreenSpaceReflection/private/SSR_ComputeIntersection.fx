@@ -75,7 +75,15 @@ float3 SampleRadiance(int2 PixelCoord)
     return g_TextureRadiance.Load(int3(PixelCoord, 0));
 }
 
-void InitialAdvanceRay(float3 Origin, float3 Direction, float3 InvDirection, float2 CurrentMipResolution, float2 InvCurrentMipResolution, float2 FloorOffset, float2 UVOffset, out float3 Position, out float CurrentT)
+void InitialAdvanceRay(float3 Origin,
+                       float3 Direction,
+                       float3 InvDirection,
+                       float2 CurrentMipResolution,
+                       float2 InvCurrentMipResolution,
+                       float2 FloorOffset,
+                       float2 UVOffset,
+                       out float3 Position,
+                       out float  CurrentT)
 {
     float2 CurrentMipPosition = CurrentMipResolution * Origin.xy;
 
@@ -89,12 +97,21 @@ void InitialAdvanceRay(float3 Origin, float3 Direction, float3 InvDirection, flo
     Position = Origin + CurrentT * Direction;
 }
 
-bool AdvanceRay(float3 Origin, float3 Direction, float3 InvDirection, float2 CurrentMipPosition, float2 InvCurrentMipResolution, float2 FloorOffset, float2 UVOffset, float SurfaceZ, inout float3 Position, inout float CurrentT)
+bool AdvanceRay(float3 Origin,
+                float3 Direction,
+                float3 InvDirection,
+                float2 CurrentMipPosition,
+                float2 InvCurrentMipResolution,
+                float2 FloorOffset,
+                float2 UVOffset,
+                float  SurfaceDepth,
+                inout float3 Position,
+                inout float  CurrentT)
 {
     // Create boundary planes
     float2 XYPlane = floor(CurrentMipPosition) + FloorOffset;
     XYPlane = XYPlane * InvCurrentMipResolution + UVOffset;
-    float3 BoundaryPlanes = float3(XYPlane, SurfaceZ);
+    float3 BoundaryPlanes = float3(XYPlane, SurfaceDepth);
 
     // Intersect ray with the half box that is pointing away from the ray origin.
     // o + d * t = p' => t = (p' - o) / d
@@ -112,10 +129,10 @@ bool AdvanceRay(float3 Origin, float3 Direction, float3 InvDirection, float2 Cur
 
 #if SSR_OPTION_INVERTED_DEPTH
     // Larger z means closer to the camera.
-    bool AboveSurface = SurfaceZ < Position.z;
+    bool AboveSurface = SurfaceDepth < Position.z;
 #else
     // Smaller z means closer to the camera.
-    bool AboveSurface = SurfaceZ > Position.z;
+    bool AboveSurface = SurfaceDepth > Position.z;
 #endif
 
     // Decide whether we are able to advance the ray until we hit the xy boundaries or if we had to clamp it at the surface.
@@ -165,8 +182,8 @@ float3 HierarchicalRaymarch(float3 Origin, float3 Direction, float2 ScreenSize, 
     while (Idx < MaxTraversalIntersections && CurrentMip >= MostDetailedMip)
     {
         float2 CurrentMipPosition = CurrentMipResolution * Position.xy;
-        float SurfaceZ = SampleDepthHierarchy(int2(CurrentMipPosition), CurrentMip);
-        bool SkippedTile = AdvanceRay(Origin, Direction, InvDirection, CurrentMipPosition, InvCurrentMipResolution, FloorOffset, UVOffset, SurfaceZ, Position, CurrentT);
+        float SurfaceDepth = SampleDepthHierarchy(int2(CurrentMipPosition), CurrentMip);
+        bool SkippedTile = AdvanceRay(Origin, Direction, InvDirection, CurrentMipPosition, InvCurrentMipResolution, FloorOffset, UVOffset, SurfaceDepth, Position, CurrentT);
         
         // Don't increase mip further than this because we did not generate it
         bool NextMipIsOutOfRange = SkippedTile && (CurrentMip >= SSR_DEPTH_HIERARCHY_MAX_MIP);

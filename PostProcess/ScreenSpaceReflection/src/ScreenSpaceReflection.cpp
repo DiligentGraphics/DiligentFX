@@ -45,12 +45,12 @@ namespace HLSL
 } // namespace HLSL
 
 static DILIGENT_CONSTEXPR DepthStencilStateDesc DSS_StencilWrite{
-    False,                // DepthEnable
-    False,                // DepthWriteEnable
-    COMPARISON_FUNC_LESS, // DepthFunc
-    True,                 // StencilEnable
-    0xFF,                 // StencilReadMask
-    0xFF,                 // StencilWriteMask
+    False,                  // DepthEnable
+    False,                  // DepthWriteEnable
+    COMPARISON_FUNC_ALWAYS, // DepthFunc
+    True,                   // StencilEnable
+    0xFF,                   // StencilReadMask
+    0xFF,                   // StencilWriteMask
     {
         STENCIL_OP_KEEP,       // StencilFailOp
         STENCIL_OP_KEEP,       // StencilDepthFailOp
@@ -60,12 +60,12 @@ static DILIGENT_CONSTEXPR DepthStencilStateDesc DSS_StencilWrite{
 };
 
 static DILIGENT_CONSTEXPR DepthStencilStateDesc DSS_StencilReadComparisonEqual{
-    False,                // DepthEnable
-    False,                // DepthWriteEnable
-    COMPARISON_FUNC_LESS, // DepthFunc
-    True,                 // StencilEnable
-    0xFF,                 // StencilReadMask
-    0xFF,                 // StencilWriteMask
+    False,                  // DepthEnable
+    False,                  // DepthWriteEnable
+    COMPARISON_FUNC_ALWAYS, // DepthFunc
+    True,                   // StencilEnable
+    0xFF,                   // StencilReadMask
+    0xFF,                   // StencilWriteMask
     {
         STENCIL_OP_KEEP,      // StencilFailOp
         STENCIL_OP_KEEP,      // StencilDepthFailOp

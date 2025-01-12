@@ -118,9 +118,9 @@ float2 ComputeReflectionHitPosition(int2 PixelCoord, float Depth)
 // TODO: Use normals to compute disocclusion
 float ComputeDisocclusion(float CurrDepth, float PrevDepth)
 {
-    float LinearDepthCurr = DepthToCameraZ(CurrDepth, g_CurrCamera.mProj);
-    float LinearDepthPrev = DepthToCameraZ(PrevDepth, g_PrevCamera.mProj);
-    return exp(-abs(LinearDepthPrev - LinearDepthCurr) / LinearDepthCurr);
+    float LinearDepthCurr = abs(DepthToCameraZ(CurrDepth, g_CurrCamera.mProj));
+    float LinearDepthPrev = abs(DepthToCameraZ(PrevDepth, g_PrevCamera.mProj));
+    return exp(-abs(LinearDepthPrev - LinearDepthCurr) / max(max(LinearDepthCurr, LinearDepthPrev), 1e-6));
 }
 
 // Welford's online algorithm:
