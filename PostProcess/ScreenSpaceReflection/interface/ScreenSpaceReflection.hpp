@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2024 Diligent Graphics LLC
+ *  Copyright 2023-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -161,7 +161,7 @@ private:
         RESOURCE_IDENTIFIER_COUNT
     };
 
-    bool PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_FLAGS FeatureFlags);
+    bool PrepareShadersAndPSO(const RenderAttributes& RenderAttribs);
 
     void UpdateConstantBuffer(const RenderAttributes& RenderAttribs, bool ResetTimer);
 
@@ -181,30 +181,33 @@ private:
 
     void ComputePlaceholderTexture(const RenderAttributes& RenderAttribs);
 
-    RenderTechnique& GetRenderTechnique(RENDER_TECH RenderTech, FEATURE_FLAGS FeatureFlags);
+    RenderTechnique& GetRenderTechnique(RENDER_TECH RenderTech);
 
 private:
     struct RenderTechniqueKey
     {
         const RENDER_TECH   RenderTech;
         const FEATURE_FLAGS FeatureFlags;
+        const bool          UseReverseDepth;
 
-        RenderTechniqueKey(RENDER_TECH _RenderTech, FEATURE_FLAGS _FeatureFlags) :
+        RenderTechniqueKey(RENDER_TECH _RenderTech, FEATURE_FLAGS _FeatureFlags, bool _UseReverseDepth) :
             RenderTech{_RenderTech},
-            FeatureFlags{_FeatureFlags}
+            FeatureFlags{_FeatureFlags},
+            UseReverseDepth{_UseReverseDepth}
         {}
 
         constexpr bool operator==(const RenderTechniqueKey& RHS) const
         {
             return RenderTech == RHS.RenderTech &&
-                FeatureFlags == RHS.FeatureFlags;
+                FeatureFlags == RHS.FeatureFlags &&
+                UseReverseDepth == RHS.UseReverseDepth;
         }
 
         struct Hasher
         {
             size_t operator()(const RenderTechniqueKey& Key) const
             {
-                return ComputeHash(Key.FeatureFlags, Key.FeatureFlags);
+                return ComputeHash(Key.FeatureFlags, Key.FeatureFlags, Key.UseReverseDepth);
             }
         };
     };
@@ -223,7 +226,8 @@ private:
     Uint32 m_BackBufferWidth  = 0;
     Uint32 m_BackBufferHeight = 0;
 
-    FEATURE_FLAGS m_FeatureFlags = FEATURE_FLAG_NONE;
+    FEATURE_FLAGS m_FeatureFlags    = FEATURE_FLAG_NONE;
+    bool          m_UseReverseDepth = false;
     CreateInfo    m_Settings;
 
     Timer m_FrameTimer;
