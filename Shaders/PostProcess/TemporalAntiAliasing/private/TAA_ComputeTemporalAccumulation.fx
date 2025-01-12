@@ -112,7 +112,7 @@ float3 ClipToAABB(float3 ColorPrev, float3 ColorCurr, float3 AABBCentre, float3 
 
 float ComputeDepthDisocclusionWeight(float CurrDepth, float PrevDepth)
 {
-    float LinearDepthCurr  = abs(DepthToCameraZ(CurrDepth, g_PrevCamera.mProj));
+    float LinearDepthCurr  = abs(DepthToCameraZ(CurrDepth, g_CurrCamera.mProj));
     float LinearDepthPrev  = abs(DepthToCameraZ(PrevDepth, g_PrevCamera.mProj));
     float MaxLinearDepth   = max(LinearDepthCurr, LinearDepthPrev);
     float LinearDepthDelta = abs(LinearDepthCurr - LinearDepthPrev);
