@@ -116,11 +116,18 @@ float2 ComputeReflectionHitPosition(int2 PixelCoord, float Depth)
 }
 
 // TODO: Use normals to compute disocclusion
-float ComputeDisocclusion(float CurrDepth, float PrevDepth)
+float ComputeDisocclusionZ(float CurrCameraZ, float PrevCameraZ)
 {
-    float LinearDepthCurr = abs(DepthToCameraZ(CurrDepth, g_CurrCamera.mProj));
-    float LinearDepthPrev = abs(DepthToCameraZ(PrevDepth, g_PrevCamera.mProj));
-    return exp(-abs(LinearDepthPrev - LinearDepthCurr) / max(max(LinearDepthCurr, LinearDepthPrev), 1e-6));
+    CurrCameraZ = abs(CurrCameraZ);
+    PrevCameraZ = abs(PrevCameraZ);
+    return exp(-abs(CurrCameraZ - PrevCameraZ) / max(max(CurrCameraZ, PrevCameraZ), 1e-6));
+}
+
+float ComputeDisocclusionD(float CurrDepth, float PrevDepth)
+{
+    float CurrCameraZ = DepthToCameraZ(CurrDepth, g_CurrCamera.mProj);
+    float PrevCameraZ = DepthToCameraZ(PrevDepth, g_PrevCamera.mProj);
+    return ComputeDisocclusionZ(CurrCameraZ, PrevCameraZ);
 }
 
 // Welford's online algorithm:
@@ -154,7 +161,7 @@ ProjectionDesc ComputeReprojection(float2 PrevPos, float CurrDepth)
 {
     ProjectionDesc Desc;
     Desc.PrevCoord = PrevPos;
-    Desc.IsSuccess = ComputeDisocclusion(CurrDepth, SamplePrevDepth(int2(PrevPos))) > SSR_DISOCCLUSION_THRESHOLD;
+    Desc.IsSuccess = ComputeDisocclusionD(CurrDepth, SamplePrevDepth(int2(PrevPos))) > SSR_DISOCCLUSION_THRESHOLD;
     Desc.Color = SamplePrevRadianceLinear(Desc.PrevCoord);
 
     if (!Desc.IsSuccess)
@@ -167,7 +174,7 @@ ProjectionDesc ComputeReprojection(float2 PrevPos, float CurrDepth)
             {
                 float2 Location = PrevPos + float2(x, y);
                 float PrevDepth = SamplePrevDepthLinear(Location);
-                float Weight = ComputeDisocclusion(CurrDepth, PrevDepth);
+                float Weight = ComputeDisocclusionD(CurrDepth, PrevDepth);
                 if (Weight > Disocclusion)
                 {
                     Disocclusion = Weight;
@@ -197,29 +204,29 @@ ProjectionDesc ComputeReprojection(float2 PrevPos, float CurrDepth)
             {
                 int2 Location = PrevPosi + int2(SampleIdx & 0x01, SampleIdx >> 1);
                 float PrevDepth = SamplePrevDepth(Location);
-                bool IsValidSample = ComputeDisocclusion(CurrDepth, PrevDepth) > (SSR_DISOCCLUSION_THRESHOLD / 2.0);
+                bool IsValidSample = ComputeDisocclusionD(CurrDepth, PrevDepth) > (SSR_DISOCCLUSION_THRESHOLD / 2.0);
                 Weight[SampleIdx] *= float(IsValidSample);
             }
         }
 
-        float WeightSum = 0.0;
-        float DepthSum = 0.0;
+        float WeightSum    = 0.0;
+        float WeightedCamZ = 0.0;
         float4 ColorSum = float4(0.0, 0.0, 0.0, 0.0);
 
         {
             for (int SampleIdx = 0; SampleIdx < 4; ++SampleIdx)
             {
                 int2 Location = PrevPosi + int2(SampleIdx & 0x01, SampleIdx >> 1);
-                ColorSum  += Weight[SampleIdx] * SamplePrevRadiance(Location);
-                DepthSum  += Weight[SampleIdx] * SamplePrevDepth(Location);
-                WeightSum += Weight[SampleIdx];
+                ColorSum     += Weight[SampleIdx] * SamplePrevRadiance(Location);
+                WeightedCamZ += Weight[SampleIdx] * DepthToCameraZ(SamplePrevDepth(Location), g_PrevCamera.mProj);
+                WeightSum    += Weight[SampleIdx];
             }
         }
         
-        DepthSum /= max(WeightSum, 1.0e-6f);
-        ColorSum /= max(WeightSum, 1.0e-6f);
+        WeightedCamZ /= max(WeightSum, 1e-6);
+        ColorSum /= max(WeightSum, 1e-6);
 
-        Desc.IsSuccess = ComputeDisocclusion(CurrDepth, DepthSum) > SSR_DISOCCLUSION_THRESHOLD;
+        Desc.IsSuccess = ComputeDisocclusionZ(DepthToCameraZ(CurrDepth, g_CurrCamera.mProj), WeightedCamZ) > SSR_DISOCCLUSION_THRESHOLD;
         Desc.Color = ColorSum;
     } 
 
