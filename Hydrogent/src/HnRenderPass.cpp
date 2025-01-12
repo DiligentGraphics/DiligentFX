@@ -408,6 +408,12 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
         }
     }
 
+    if (m_DepthCompareFunc != RPState.GetDepthFunc())
+    {
+        m_DrawListItemsDirtyFlags |= DRAW_LIST_ITEM_DIRTY_FLAG_PSO;
+        m_DepthCompareFunc = RPState.GetDepthFunc();
+    }
+
     if (IRenderStateCache* pStateCache = State.RenderDelegate.GetRenderStateCache())
     {
         Uint32 ReloadVersion = pStateCache->GetReloadVersion();

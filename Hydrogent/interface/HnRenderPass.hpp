@@ -289,6 +289,8 @@ private:
 
     Uint32 m_RenderStateCacheReloadVersion = 0;
 
+    pxr::HdCompareFunction m_DepthCompareFunc = pxr::HdCmpFuncLess;
+
     pxr::TfTokenVector m_RenderTags;
     pxr::TfToken       m_MaterialTag;
 };
