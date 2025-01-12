@@ -40,7 +40,6 @@
 #include "MapHelper.hpp"
 #include "ScopedDebugGroup.hpp"
 #include "GLTF_PBR_Renderer.hpp"
-#include "TemporalAntiAliasing.hpp"
 
 namespace Diligent
 {
@@ -114,7 +113,6 @@ static void UpdateRenderPassState(const HnBeginFrameTaskParams& Params,
                                   const TEXTURE_FORMAT*         RTVFormats,
                                   Uint32                        NumRTVs,
                                   TEXTURE_FORMAT                DSVFormat,
-                                  const HnRenderParam*          RenderParam,
                                   HnRenderPassState&            RPState)
 {
     RPState.SetNumRenderTargets(NumRTVs);
@@ -127,7 +125,7 @@ static void UpdateRenderPassState(const HnBeginFrameTaskParams& Params,
 
     float                  DepthBias            = 0;
     float                  SlopeScaledDepthBias = 0;
-    pxr::HdCompareFunction DepthFunc            = RenderParam->GetConfig().UseReverseDepth ? pxr::HdCmpFuncGreater : pxr::HdCmpFuncLess;
+    pxr::HdCompareFunction DepthFunc            = Params.UseReverseDepth ? pxr::HdCmpFuncGreater : pxr::HdCmpFuncLess;
     bool                   DepthBiasEnabled     = false;
     bool                   DepthTestEnabled     = true;
     bool                   DepthClampEnabled    = false;
@@ -175,35 +173,25 @@ void HnBeginFrameTask::Sync(pxr::HdSceneDelegate* Delegate,
     {
         if (GetTaskParams(Delegate, m_Params))
         {
-            pxr::HdRenderIndex&     RenderIndex    = Delegate->GetRenderIndex();
-            const HnRenderDelegate* RenderDelegate = static_cast<const HnRenderDelegate*>(RenderIndex.GetRenderDelegate());
-            const HnRenderParam*    RenderParam    = static_cast<const HnRenderParam*>(RenderDelegate->GetRenderParam());
-
             UpdateRenderPassState(m_Params,
                                   m_Params.Formats.GBuffer.data(),
                                   m_Params.Formats.GBuffer.size(),
                                   m_Params.Formats.Depth,
-                                  RenderParam,
                                   m_RenderPassStates[HnRenderResourceTokens->renderPass_OpaqueSelected]);
 
             UpdateRenderPassState(m_Params,
                                   m_Params.Formats.GBuffer.data(),
                                   m_Params.Formats.GBuffer.size(),
                                   m_Params.Formats.Depth,
-                                  RenderParam,
                                   m_RenderPassStates[HnRenderResourceTokens->renderPass_OpaqueUnselected_TransparentAll]);
 
             UpdateRenderPassState(m_Params,
                                   nullptr,
                                   0,
                                   m_Params.Formats.Depth,
-                                  RenderParam,
                                   m_RenderPassStates[HnRenderResourceTokens->renderPass_TransparentSelected]);
 
-            m_DepthClearValue = RenderParam->GetConfig().UseReverseDepth ? 0.f : 1.f;
-
             (*TaskCtx)[HnRenderResourceTokens->suspendSuperSampling] = pxr::VtValue{true};
-            (*TaskCtx)[HnRenderResourceTokens->backgroundDepth]      = pxr::VtValue{m_DepthClearValue};
         }
     }
 
@@ -318,9 +306,11 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
     HnRenderPassState& RP_OpaqueUnselected_TransparentAll = m_RenderPassStates[HnRenderResourceTokens->renderPass_OpaqueUnselected_TransparentAll];
     HnRenderPassState& RP_TransparentSelected             = m_RenderPassStates[HnRenderResourceTokens->renderPass_TransparentSelected];
 
+    const float DepthClearValue = m_Params.UseReverseDepth ? 0.f : 1.f;
+
     // We first render selected objects using the selection depth buffer.
     // Selection depth buffer is copied to the main depth buffer by the HnCopySelectionDepthTask.
-    RP_OpaqueSelected.Begin(HnFrameRenderTargets::GBUFFER_TARGET_COUNT, m_FrameRenderTargets.GBufferRTVs.data(), m_FrameRenderTargets.SelectionDepthDSV, ClearValues.data(), m_DepthClearValue, ~0u);
+    RP_OpaqueSelected.Begin(HnFrameRenderTargets::GBUFFER_TARGET_COUNT, m_FrameRenderTargets.GBufferRTVs.data(), m_FrameRenderTargets.SelectionDepthDSV, ClearValues.data(), DepthClearValue, ~0u);
     RP_OpaqueUnselected_TransparentAll.Begin(HnFrameRenderTargets::GBUFFER_TARGET_COUNT, m_FrameRenderTargets.GBufferRTVs.data(), m_FrameRenderTargets.DepthDSV);
     RP_TransparentSelected.Begin(0, nullptr, m_FrameRenderTargets.SelectionDepthDSV);
 
@@ -334,6 +324,8 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
     {
         (*TaskCtx)[it.first] = pxr::VtValue{&it.second};
     }
+    (*TaskCtx)[HnRenderResourceTokens->backgroundDepth] = pxr::VtValue{DepthClearValue};
+    (*TaskCtx)[HnRenderResourceTokens->useReverseDepth] = pxr::VtValue{m_Params.UseReverseDepth};
 }
 
 void HnBeginFrameTask::Prepare(pxr::HdTaskContext* TaskCtx,
@@ -524,7 +516,7 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
         PrevCamera = CamAttribs;
         if (m_pCamera != nullptr)
         {
-            const float4x4  ProjMatrix  = TemporalAntiAliasing::GetJitteredProjMatrix(m_pCamera->GetProjectionMatrix(), Jitter);
+            const float4x4  ProjMatrix  = m_pCamera->GetProjectionMatrix(m_Params.UseReverseDepth, Jitter);
             const float4x4& ViewMatrix  = m_pCamera->GetViewMatrix();
             const float4x4& WorldMatrix = m_pCamera->GetWorldMatrix();
             const float4x4  ViewProj    = ViewMatrix * ProjMatrix;
@@ -577,7 +569,7 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
 
             float fNearPlaneZ, fFarPlaneZ;
             ProjMatrix.GetNearFarClipPlanes(fNearPlaneZ, fFarPlaneZ, pDevice->GetDeviceInfo().NDC.MinZ == -1);
-            if (RenderConfig.UseReverseDepth)
+            if (m_Params.UseReverseDepth)
             {
                 CamAttribs.fNearPlaneZ     = fFarPlaneZ;
                 CamAttribs.fFarPlaneZ      = fNearPlaneZ;
@@ -599,7 +591,7 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
             else
             {
                 float4x4 PrevProj;
-                WriteShaderMatrix(&PrevProj, TemporalAntiAliasing::GetJitteredProjMatrix(m_pCamera->GetProjectionMatrix(), PrevCamera.f2Jitter), !PackMatrixRowMajor);
+                WriteShaderMatrix(&PrevProj, m_pCamera->GetProjectionMatrix(m_Params.UseReverseDepth, PrevCamera.f2Jitter), !PackMatrixRowMajor);
                 if (PrevProj != PrevCamera.mProj)
                 {
                     CameraTransformDirty = true;

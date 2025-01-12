@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2024 Diligent Graphics LLC
+ *  Copyright 2023-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -32,8 +32,9 @@ namespace Diligent
 namespace USD
 {
 
-HnRenderParam::HnRenderParam(const Configuration& Config) noexcept :
-    m_Config{Config}
+HnRenderParam::HnRenderParam(const Configuration& Config, bool UseShadows) noexcept :
+    m_Config{Config},
+    m_UseShadows{UseShadows}
 {
     for (auto& Version : m_GlobalAttribVersions)
         Version.store(0);

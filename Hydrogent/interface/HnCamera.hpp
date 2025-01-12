@@ -50,7 +50,7 @@ public:
 
     const float4x4& GetViewMatrix() const { return m_ViewMatrix; }
     const float4x4& GetWorldMatrix() const { return m_WorldMatrix; }
-    const float4x4& GetProjectionMatrix() const { return m_ProjectionMatrix; }
+    float4x4        GetProjectionMatrix(bool UseReverseDepth, const float2& Jitter) const;
 
 private:
     HnCamera(const pxr::SdfPath& Id);
@@ -59,6 +59,9 @@ private:
     float4x4 m_ViewMatrix;
     float4x4 m_WorldMatrix;
     float4x4 m_ProjectionMatrix;
+
+    bool           m_NegativeOneToOneNDCZ = false;
+    pxr::GfRange1f m_ClippingRangeMeters{};
 };
 
 } // namespace USD

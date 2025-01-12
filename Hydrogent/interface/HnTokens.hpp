@@ -135,6 +135,7 @@ namespace USD
     (renderPass_OpaqueUnselected_TransparentAll) \
     (renderPass_Shadow) \
     (backgroundDepth)   \
+    (useReverseDepth)   \
 	(fallBackPsoInUse)
 
 

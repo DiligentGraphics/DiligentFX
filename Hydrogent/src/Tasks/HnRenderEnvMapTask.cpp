@@ -187,7 +187,10 @@ void HnRenderEnvMapTask::Prepare(pxr::HdTaskContext* TaskCtx,
     // We should write zero alpha to get correct alpha in the final image
     EnvMapAttribs.Alpha   = 0;
     EnvMapAttribs.Options = EnvMapRenderer::OPTION_FLAG_COMPUTE_MOTION_VECTORS;
-    if (static_cast<HnRenderParam*>(pRenderDelegate->GetRenderParam())->GetConfig().UseReverseDepth)
+
+    bool UseReverseDepth = false;
+    GetTaskContextData(TaskCtx, HnRenderResourceTokens->useReverseDepth, UseReverseDepth);
+    if (UseReverseDepth)
         EnvMapAttribs.Options |= EnvMapRenderer::OPTION_FLAG_USE_REVERSE_DEPTH;
 
     m_EnvMapRenderer->Prepare(pRenderDelegate->GetDeviceContext(), EnvMapAttribs, TMAttribs);

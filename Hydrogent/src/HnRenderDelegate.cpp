@@ -467,11 +467,11 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
                 CI.UseIndexPool,
                 CI.AsyncShaderCompilation,
                 !CI.pDevice->GetDeviceInfo().IsGLDevice(), // UseNativeStartVertex
-                CI.pDevice->GetDeviceInfo().NDC.MinZ == 0, // UseReverseDepth
                 CI.TextureBindingMode,
                 CI.MetersPerUnit,
                 CI.GeometryLoadBudget,
-            }),
+            },
+            CI.EnableShadows),
     },
     m_ShadowMapManager{CreateShadowMapManager(CI)}
 {
@@ -489,8 +489,6 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
         "PBR frame attribs CB",
         &m_FrameAttribsCB,
         USAGE_DEFAULT);
-
-    m_RenderParam->SetUseShadows(CI.EnableShadows);
 }
 
 HnRenderDelegate::~HnRenderDelegate()

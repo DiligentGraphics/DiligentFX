@@ -637,7 +637,9 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
 
     const TextureDesc& FinalColorDesc = m_FinalColorRTV->GetTexture()->GetDesc();
 
-    const PostFXContext::FEATURE_FLAGS PostFXFlags = pRenderParam->GetConfig().UseReverseDepth ?
+    bool UseReverseDepth = false;
+    GetTaskContextData(TaskCtx, HnRenderResourceTokens->useReverseDepth, UseReverseDepth);
+    const PostFXContext::FEATURE_FLAGS PostFXFlags = UseReverseDepth ?
         PostFXContext::FEATURE_FLAG_REVERSED_DEPTH :
         PostFXContext::FEATURE_FLAG_NONE;
     m_PostFXContext->PrepareResources(pDevice, {pRenderParam->GetFrameNumber(), FinalColorDesc.Width, FinalColorDesc.Height}, PostFXFlags);

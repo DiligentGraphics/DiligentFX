@@ -31,6 +31,8 @@
 #include "GfTypeConversions.hpp"
 #include "BasicMath.hpp"
 
+#include "TemporalAntiAliasing.hpp"
+
 #include "pxr/imaging/hd/sceneDelegate.h"
 
 namespace Diligent
@@ -89,34 +91,27 @@ void HnCamera::Sync(pxr::HdSceneDelegate* SceneDelegate,
         const pxr::GfRange1f ClippingRangeUnits = GetClippingRange();
 
         // Diligent expects camera attributes in world units
-        const float          HorzApertureMeters  = HorzApertureUnits * MetersPerUnit;
-        const float          VertApertureMeters  = VertApertureUnits * MetersPerUnit;
-        const pxr::GfRange1f ClippingRangeMeters = ClippingRangeUnits * MetersPerUnit;
+        const float HorzApertureMeters = HorzApertureUnits * MetersPerUnit;
+        const float VertApertureMeters = VertApertureUnits * MetersPerUnit;
+        m_ClippingRangeMeters          = ClippingRangeUnits * MetersPerUnit;
 
-        const HnRenderDelegate* pRenderDelegate      = static_cast<const HnRenderDelegate*>(SceneDelegate->GetRenderIndex().GetRenderDelegate());
-        const IRenderDevice*    pDevice              = pRenderDelegate->GetDevice();
-        const RenderDeviceInfo& DeviceInfo           = pDevice->GetDeviceInfo();
-        const bool              NegativeOneToOneNDCZ = DeviceInfo.GetNDCAttribs().MinZ == -1;
+        const HnRenderDelegate* pRenderDelegate = static_cast<const HnRenderDelegate*>(SceneDelegate->GetRenderIndex().GetRenderDelegate());
+        const IRenderDevice*    pDevice         = pRenderDelegate->GetDevice();
+        const RenderDeviceInfo& DeviceInfo      = pDevice->GetDeviceInfo();
+        m_NegativeOneToOneNDCZ                  = DeviceInfo.GetNDCAttribs().MinZ == -1;
 
-        float NearPlane = ClippingRangeMeters.GetMin();
-        float FarPlane  = ClippingRangeMeters.GetMax();
-        if (RenderConfig.UseReverseDepth)
-        {
-            std::swap(NearPlane, FarPlane);
-        }
         if (GetProjection() == pxr::HdCamera::Projection::Perspective)
         {
             m_ProjectionMatrix = {};
 
             m_ProjectionMatrix._11 = FocalLengthUnits / (0.5f * HorzApertureUnits);
             m_ProjectionMatrix._22 = FocalLengthUnits / (0.5f * VertApertureUnits);
-
-            m_ProjectionMatrix.SetNearFarClipPlanes(NearPlane, FarPlane, NegativeOneToOneNDCZ);
         }
         else if (GetProjection() == pxr::HdCamera::Projection::Orthographic)
         {
-
-            m_ProjectionMatrix = float4x4::Ortho(HorzApertureMeters, VertApertureMeters, NearPlane, FarPlane, NegativeOneToOneNDCZ);
+            m_ProjectionMatrix     = float4x4::Identity();
+            m_ProjectionMatrix._11 = 2.f / HorzApertureMeters;
+            m_ProjectionMatrix._22 = 2.f / VertApertureMeters;
         }
         else
         {
@@ -124,6 +119,23 @@ void HnCamera::Sync(pxr::HdSceneDelegate* SceneDelegate,
             m_ProjectionMatrix = float4x4::Identity();
         }
     }
+}
+
+float4x4 HnCamera::GetProjectionMatrix(bool UseReverseDepth, const float2& Jitter) const
+{
+    float4x4 ProjMatrix = m_ProjectionMatrix;
+
+    float NearPlane = m_ClippingRangeMeters.GetMin();
+    float FarPlane  = m_ClippingRangeMeters.GetMax();
+    if (UseReverseDepth)
+    {
+        std::swap(NearPlane, FarPlane);
+    }
+    ProjMatrix.SetNearFarClipPlanes(NearPlane, FarPlane, m_NegativeOneToOneNDCZ);
+
+    return Jitter != float2{} ?
+        TemporalAntiAliasing::GetJitteredProjMatrix(ProjMatrix, Jitter) :
+        ProjMatrix;
 }
 
 } // namespace USD

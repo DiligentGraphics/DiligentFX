@@ -52,13 +52,12 @@ public:
         bool                              UseIndexPool           = false;
         bool                              AsyncShaderCompilation = false;
         bool                              UseNativeStartVertex   = false;
-        bool                              UseReverseDepth        = false;
         HN_MATERIAL_TEXTURES_BINDING_MODE TextureBindingMode     = {};
         float                             MetersPerUnit          = 1.0f;
         Uint64                            GeometryLoadBudget     = 0;
     };
 
-    HnRenderParam(const Configuration& Config) noexcept;
+    HnRenderParam(const Configuration& Config, bool UseShadows) noexcept;
     ~HnRenderParam();
 
     const Configuration& GetConfig() const { return m_Config; }

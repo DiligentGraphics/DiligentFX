@@ -75,6 +75,8 @@ struct HnBeginFrameTaskParams
 
     float4 ClearColor = {0, 0, 0, 0};
 
+    bool UseReverseDepth = false;
+
     pxr::SdfPath FinalColorTargetId;
     pxr::SdfPath CameraId;
 
@@ -114,6 +116,7 @@ struct HnBeginFrameTaskParams
         // clang-format off
         return Formats            == rhs.Formats &&
                ClearColor         == rhs.ClearColor &&
+               UseReverseDepth    == rhs.UseReverseDepth &&
                FinalColorTargetId == rhs.FinalColorTargetId &&
                CameraId           == rhs.CameraId &&
                Renderer           == rhs.Renderer;
@@ -184,7 +187,6 @@ private:
 
     Uint32 m_FrameBufferWidth  = 0;
     Uint32 m_FrameBufferHeight = 0;
-    float  m_DepthClearValue   = 1.f;
 
     Timer m_FrameTimer;
 

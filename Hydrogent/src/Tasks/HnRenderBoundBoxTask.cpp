@@ -199,7 +199,10 @@ void HnRenderBoundBoxTask::Prepare(pxr::HdTaskContext* TaskCtx,
     Attribs.PatternLength     = m_Params.PatternLength;
     Attribs.PatternMask       = m_Params.PatternMask;
     Attribs.Options           = BoundBoxRenderer::OPTION_FLAG_COMPUTE_MOTION_VECTORS;
-    if (pRenderParam->GetConfig().UseReverseDepth)
+
+    bool UseReverseDepth = false;
+    GetTaskContextData(TaskCtx, HnRenderResourceTokens->useReverseDepth, UseReverseDepth);
+    if (UseReverseDepth)
         Attribs.Options |= BoundBoxRenderer::OPTION_FLAG_USE_REVERSE_DEPTH;
 
     m_BoundBoxRenderer->Prepare(pRenderDelegate->GetDeviceContext(), Attribs);
