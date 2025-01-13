@@ -18,26 +18,25 @@ cbuffer cbScreenSpaceAmbientOcclusionAttribs
 Texture2D<float> g_TextureLastMip;
 #else
 Texture2D<float> g_TextureMips;
-SamplerState     g_TextureMips_sampler;
 #endif
 
 #if SUPPORTED_SHADER_SRV
-float SampleDepth(int2 Location, int2 Offset, int3 Dimension)
+float LoadDepth(int2 Location, int2 Offset, int3 Dimension)
 {
     int2 Position = ClampScreenCoord(Location + Offset, Dimension.xy);
     return g_TextureLastMip.Load(int3(Position, 0));
 }
 #else
-float SampleDepth(int2 Location, int2 Offset, int3 Dimension)
+float LoadDepth(int2 Location, int2 Offset, int3 Dimension)
 {
     int2 Position = ClampScreenCoord(Location + Offset, Dimension.xy);
     return g_TextureMips.Load(int3(Position, Dimension.z));
 }
 #endif
 
-float SampleDepthViewSpace(int2 Location, int2 Offset, int3 Dimension)
+float LoadDepthViewSpace(int2 Location, int2 Offset, int3 Dimension)
 {
-    return DepthToCameraZ(SampleDepth(Location, Offset, Dimension), g_Camera.mProj);
+    return DepthToCameraZ(LoadDepth(Location, Offset, Dimension), g_Camera.mProj);
 }
 
 float ComputeDepthMIPFiltered(in float SampledDepth[9], uint Count)
@@ -94,29 +93,29 @@ float ComputePrefilteredDepthBufferPS(in FullScreenTriangleVSOutput VSOut) : SV_
 
     uint SampleCount = 0u;
     float SampledPixels[9];
-    ArrayAppend(SampleDepthViewSpace(RemappedPosition, int2(0, 0), LastMipDimension), SampledPixels, SampleCount);
-    ArrayAppend(SampleDepthViewSpace(RemappedPosition, int2(0, 1), LastMipDimension), SampledPixels, SampleCount);
-    ArrayAppend(SampleDepthViewSpace(RemappedPosition, int2(1, 0), LastMipDimension), SampledPixels, SampleCount);
-    ArrayAppend(SampleDepthViewSpace(RemappedPosition, int2(1, 1), LastMipDimension), SampledPixels, SampleCount);
+    ArrayAppend(LoadDepthViewSpace(RemappedPosition, int2(0, 0), LastMipDimension), SampledPixels, SampleCount);
+    ArrayAppend(LoadDepthViewSpace(RemappedPosition, int2(0, 1), LastMipDimension), SampledPixels, SampleCount);
+    ArrayAppend(LoadDepthViewSpace(RemappedPosition, int2(1, 0), LastMipDimension), SampledPixels, SampleCount);
+    ArrayAppend(LoadDepthViewSpace(RemappedPosition, int2(1, 1), LastMipDimension), SampledPixels, SampleCount);
 
     bool IsWidthOdd  = (LastMipDimension.x & 1) != 0;
     bool IsHeightOdd = (LastMipDimension.y & 1) != 0;
     
     if (IsWidthOdd)
     {
-        ArrayAppend(SampleDepthViewSpace(RemappedPosition, int2(2, 0), LastMipDimension), SampledPixels, SampleCount);
-        ArrayAppend(SampleDepthViewSpace(RemappedPosition, int2(2, 1), LastMipDimension), SampledPixels, SampleCount);
+        ArrayAppend(LoadDepthViewSpace(RemappedPosition, int2(2, 0), LastMipDimension), SampledPixels, SampleCount);
+        ArrayAppend(LoadDepthViewSpace(RemappedPosition, int2(2, 1), LastMipDimension), SampledPixels, SampleCount);
     }
     
     if (IsHeightOdd)
     {
-        ArrayAppend(SampleDepthViewSpace(RemappedPosition, int2(0, 2), LastMipDimension), SampledPixels, SampleCount);
-        ArrayAppend(SampleDepthViewSpace(RemappedPosition, int2(1, 2), LastMipDimension), SampledPixels, SampleCount);
+        ArrayAppend(LoadDepthViewSpace(RemappedPosition, int2(0, 2), LastMipDimension), SampledPixels, SampleCount);
+        ArrayAppend(LoadDepthViewSpace(RemappedPosition, int2(1, 2), LastMipDimension), SampledPixels, SampleCount);
     }
     
     if (IsWidthOdd && IsHeightOdd)
     {
-        ArrayAppend(SampleDepthViewSpace(RemappedPosition, int2(2, 2), LastMipDimension), SampledPixels, SampleCount);
+        ArrayAppend(LoadDepthViewSpace(RemappedPosition, int2(2, 2), LastMipDimension), SampledPixels, SampleCount);
     }
 
     return saturate(CameraZToDepth(ComputeDepthMIPFiltered(SampledPixels, SampleCount), g_Camera.mProj));

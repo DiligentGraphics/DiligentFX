@@ -15,27 +15,27 @@ cbuffer cbScreenSpaceAmbientOcclusionAttribs
 }
 
 Texture2D<float> g_TextureDepth;
+SamplerState     g_TextureDepth_sampler;
+
 Texture2D<float> g_TextureOcclusion;
+SamplerState     g_TextureOcclusion_sampler;
 
-SamplerState g_TextureDepth_sampler;
-SamplerState g_TextureOcclusion_sampler;
-
-float SampleDepth(int2 Location)
+float LoadDepth(int2 Location)
 {
     return g_TextureDepth.Load(int3(Location, 0));
 }
 
-float SampleOcclusion(int2 Location)
+float LoadOcclusion(int2 Location)
 {
     return g_TextureOcclusion.Load(int3(Location, 0));
 }
 
-float SampleOcclusionLinear(float2 Texcoord)
+float LoadOcclusionLinear(float2 Texcoord)
 {
     return g_TextureOcclusion.SampleLevel(g_TextureOcclusion_sampler, Texcoord, 0.0);
 }
 
-float SampleDepthLinear(float2 Texcoord)
+float LoadDepthLinear(float2 Texcoord)
 {
 #if defined(WEBGPU)
     float2 Position = g_Camera.f4ViewportSize.xy * Texcoord;
@@ -62,10 +62,18 @@ float SampleDepthLinear(float2 Texcoord)
 #endif
 }
 
+float ComputeDepthWeight(float CenterDepth, float GuideDepth, float Sigma)
+{
+    float LinearDepth0 = DepthToCameraZ(CenterDepth, g_Camera.mProj);
+    float LinearDepth1 = DepthToCameraZ(GuideDepth, g_Camera.mProj);
+    float Alpha = abs(LinearDepth0 - LinearDepth1) / max(LinearDepth0, 1e-6);
+    return exp(-(Alpha * Alpha) / (2.0 * Sigma * Sigma));
+}
+
 float ComputeBilateralUpsamplingPS(in FullScreenTriangleVSOutput VSOut) : SV_Target0
 {
     float2 Position = VSOut.f4PixelPos.xy;
-    float CenterDepth = SampleDepth(int2(Position));
+    float CenterDepth = LoadDepth(int2(Position));
     if (IsBackground(CenterDepth))
        return 1.0;
 
@@ -90,11 +98,11 @@ float ComputeBilateralUpsamplingPS(in FullScreenTriangleVSOutput VSOut) : SV_Tar
     {
         int2 Location = HalfPositioni + int2(SampleIdx & 0x01, SampleIdx >> 1);
 
-        float SampledSignal = SampleOcclusion(Location);
-        float SampledGuided = SampleDepthLinear(2.0 * (float2(Location) + 0.5) * g_Camera.f4ViewportSize.zw);
+        float SampledSignal = LoadOcclusion(Location);
+        float SampledGuided = LoadDepthLinear(2.0 * (float2(Location) + 0.5) * g_Camera.f4ViewportSize.zw);
 
         float WeightS = Weight[SampleIdx];
-        float WeightZ = ComputeDepthWeight(CenterDepth, SampledGuided, g_Camera.mProj, SSAO_BILATERAL_UPSAMPLING_DEPTH_SIGMA);
+        float WeightZ = ComputeDepthWeight(CenterDepth, SampledGuided, SSAO_BILATERAL_UPSAMPLING_DEPTH_SIGMA);
         OcclusionSum += SampledSignal * WeightS * WeightZ;
         WeightSum += WeightS *  WeightZ;
     }
@@ -117,15 +125,15 @@ float ComputeBilateralUpsamplingPS(in FullScreenTriangleVSOutput VSOut) : SV_Tar
             int2 Location = ClampScreenCoord(CenterLocation + int2(x, y), int2(0.5 * g_Camera.f4ViewportSize.xy));
             float2 Texcoord = 2.0 * (float2(Location) + 0.5) * g_Camera.f4ViewportSize.zw;
 
-            float SampledSignal = SampleOcclusion(Location);
-            float SampledGuided = SampleDepthLinear(Texcoord);
+            float SampledSignal = LoadOcclusion(Location);
+            float SampledGuided = LoadDepthLinear(Texcoord);
             float WeightS = ComputeSpatialWeight(float(x * x + y * y), SSAO_BILATERAL_UPSAMPLING_SIGMA);
-            float WeightZ = ComputeDepthWeight(CenterDepth, SampledGuided, g_Camera.mProj, SSAO_BILATERAL_UPSAMPLING_DEPTH_SIGMA);
+            float WeightZ = ComputeDepthWeight(CenterDepth, SampledGuided, SSAO_BILATERAL_UPSAMPLING_DEPTH_SIGMA);
 
             OcclusionSum += WeightS * WeightZ * SampledSignal;
             WeightSum += WeightS * WeightZ;
         }
     }
 
-    return WeightSum > 0.0 ? OcclusionSum / WeightSum : SampleOcclusionLinear(2.0 * (float2(CenterLocation) + 0.5) * g_Camera.f4ViewportSize.zw);
+    return WeightSum > 0.0 ? OcclusionSum / WeightSum : LoadOcclusionLinear(2.0 * (float2(CenterLocation) + 0.5) * g_Camera.f4ViewportSize.zw);
 }

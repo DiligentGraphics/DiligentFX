@@ -22,14 +22,6 @@ bool IsBackground(float Depth)
 #endif // SSAO_OPTION_INVERTED_DEPTH
 }
 
-float ComputeDepthWeight(float CenterDepth, float GuideDepth, float4x4 ProjMatrix, float Sigma)
-{
-    float LinearDepth0 = DepthToCameraZ(CenterDepth, ProjMatrix);
-    float LinearDepth1 = DepthToCameraZ(GuideDepth, ProjMatrix);
-    float Alpha = abs(LinearDepth0 - LinearDepth1) / max(LinearDepth0, 1e-6);
-    return exp(-(Alpha * Alpha) / (2.0 * Sigma * Sigma));
-}
-
 float ComputeGeometryWeight(float3 CenterPos, float3 TapPos, float3 CenterNormal, float PlaneDistanceNorm)
 {
     return saturate(1.0 - abs(dot((TapPos - CenterPos), CenterNormal)) * PlaneDistanceNorm);

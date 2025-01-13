@@ -19,13 +19,13 @@ struct PSOutput
 };
 
 #if SUPPORTED_SHADER_SRV
-float SampleFromTexture(Texture2D SampledTexture, int2 Location, int2 Offset, int3 Dimension)
+float LoadFromTexture(Texture2D SampledTexture, int2 Location, int2 Offset, int3 Dimension)
 {
     int2 Position = ClampScreenCoord(Location + Offset, Dimension.xy);
     return SampledTexture.Load(int3(Position, 0)).x;
 }
 #else
-float SampleFromTexture(Texture2D SampledTexture, int2 Location, int2 Offset, int3 Dimension)
+float LoadFromTexture(Texture2D SampledTexture, int2 Location, int2 Offset, int3 Dimension)
 {
     int2 Position = ClampScreenCoord(Location + Offset, Dimension.xy);
     return SampledTexture.Load(int3(Position, Dimension.z)).x;
@@ -62,29 +62,29 @@ float ComputeAverageForTexture(Texture2D SampledTexture, int2 RemappedPosition, 
 
     uint SampleCount = 0u;
     float SampledPixels[9];
-    ArrayAppend(SampleFromTexture(SampledTexture, RemappedPosition, int2(0, 0), LastMipDimension), SampledPixels, SampleCount);
-    ArrayAppend(SampleFromTexture(SampledTexture, RemappedPosition, int2(0, 1), LastMipDimension), SampledPixels, SampleCount);
-    ArrayAppend(SampleFromTexture(SampledTexture, RemappedPosition, int2(1, 0), LastMipDimension), SampledPixels, SampleCount);
-    ArrayAppend(SampleFromTexture(SampledTexture, RemappedPosition, int2(1, 1), LastMipDimension), SampledPixels, SampleCount);
+    ArrayAppend(LoadFromTexture(SampledTexture, RemappedPosition, int2(0, 0), LastMipDimension), SampledPixels, SampleCount);
+    ArrayAppend(LoadFromTexture(SampledTexture, RemappedPosition, int2(0, 1), LastMipDimension), SampledPixels, SampleCount);
+    ArrayAppend(LoadFromTexture(SampledTexture, RemappedPosition, int2(1, 0), LastMipDimension), SampledPixels, SampleCount);
+    ArrayAppend(LoadFromTexture(SampledTexture, RemappedPosition, int2(1, 1), LastMipDimension), SampledPixels, SampleCount);
 
     bool IsWidthOdd  = (LastMipDimension.x & 1) != 0;
     bool IsHeightOdd = (LastMipDimension.y & 1) != 0;
     
     if (IsWidthOdd)
     {
-        ArrayAppend(SampleFromTexture(SampledTexture, RemappedPosition, int2(2, 0), LastMipDimension), SampledPixels, SampleCount);
-        ArrayAppend(SampleFromTexture(SampledTexture, RemappedPosition, int2(2, 1), LastMipDimension), SampledPixels, SampleCount);
+        ArrayAppend(LoadFromTexture(SampledTexture, RemappedPosition, int2(2, 0), LastMipDimension), SampledPixels, SampleCount);
+        ArrayAppend(LoadFromTexture(SampledTexture, RemappedPosition, int2(2, 1), LastMipDimension), SampledPixels, SampleCount);
     }
     
     if (IsHeightOdd)
     {
-        ArrayAppend(SampleFromTexture(SampledTexture, RemappedPosition, int2(0, 2), LastMipDimension), SampledPixels, SampleCount);
-        ArrayAppend(SampleFromTexture(SampledTexture, RemappedPosition, int2(1, 2), LastMipDimension), SampledPixels, SampleCount);
+        ArrayAppend(LoadFromTexture(SampledTexture, RemappedPosition, int2(0, 2), LastMipDimension), SampledPixels, SampleCount);
+        ArrayAppend(LoadFromTexture(SampledTexture, RemappedPosition, int2(1, 2), LastMipDimension), SampledPixels, SampleCount);
     }
     
     if (IsWidthOdd && IsHeightOdd)
     {
-        ArrayAppend(SampleFromTexture(SampledTexture, RemappedPosition, int2(2, 2), LastMipDimension), SampledPixels, SampleCount);
+        ArrayAppend(LoadFromTexture(SampledTexture, RemappedPosition, int2(2, 2), LastMipDimension), SampledPixels, SampleCount);
     }
 
     return ComputeAverage(SampledPixels, SampleCount);

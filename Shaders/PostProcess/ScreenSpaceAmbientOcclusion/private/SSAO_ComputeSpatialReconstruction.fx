@@ -20,22 +20,22 @@ Texture2D<float>  g_TextureHistory;
 Texture2D<float>  g_TextureDepth;
 Texture2D<float3> g_TextureNormal;
 
-float SampleOcclusion(int2 PixelCoord)
+float LoadOcclusion(int2 PixelCoord)
 {
     return g_TextureOcclusion.Load(int3(PixelCoord, 0));
 }
 
-float SampleDepth(int2 PixelCoord)
+float LoadDepth(int2 PixelCoord)
 {
     return g_TextureDepth.Load(int3(PixelCoord, 0));
 }
 
-float SampleHistory(int2 PixelCoord)
+float LoadHistory(int2 PixelCoord)
 {
     return g_TextureHistory.Load(int3(PixelCoord, 0));
 }
 
-float3 SampleNormalWS(int2 PixelCoord)
+float3 LoadNormalWS(int2 PixelCoord)
 {
     return g_TextureNormal.Load(int3(PixelCoord, 0));
 }
@@ -60,16 +60,16 @@ float ComputeSpatialReconstructionPS(in FullScreenTriangleVSOutput VSOut) : SV_T
     Poisson[7] = float3(+0.1564120, -0.8198990, +0.8346850);
     
     float4 Position = VSOut.f4PixelPos;
-    float History = SampleHistory(int2(Position.xy));
-    float Depth = SampleDepth(int2(Position.xy));
+    float History = LoadHistory(int2(Position.xy));
+    float Depth = LoadDepth(int2(Position.xy));
     float AccumulationFactor = pow(abs((History - 1.0) / float(SSAO_OCCLUSION_HISTORY_MAX_FRAMES_WITH_DENOISING)), 0.2);
     
     if (IsBackground(Depth) || AccumulationFactor >= 1.0)
-        return lerp(1.0, SampleOcclusion(int2(Position.xy)), g_SSAOAttribs.AlphaInterpolation);
+        return lerp(1.0, LoadOcclusion(int2(Position.xy)), g_SSAOAttribs.AlphaInterpolation);
 
     float3 PositionSS = float3(Position.xy * g_Camera.f4ViewportSize.zw, Depth);
     float3 PositionVS = ScreenXYDepthToViewSpace(PositionSS, g_Camera.mProj);
-    float3 NormalVS = mul(float4(SampleNormalWS(int2(Position.xy)), 0.0), g_Camera.mView).xyz;
+    float3 NormalVS = mul(float4(LoadNormalWS(int2(Position.xy)), 0.0), g_Camera.mView).xyz;
     float4 Rotator = ComputeBlurKernelRotation(uint2(Position.xy), g_Camera.uiFrameIndex);
     float Radius = lerp(0.0, g_SSAOAttribs.SpatialReconstructionRadius, 1.0 - saturate(AccumulationFactor));
     float PlaneNormalFactor = 10.0 / (1.0 + DepthToCameraZ(Depth, g_Camera.mProj));
@@ -82,8 +82,8 @@ float ComputeSpatialReconstructionPS(in FullScreenTriangleVSOutput VSOut) : SV_T
         float2 Xi = RotateVector(Rotator, Poisson[SampleIdx].xy);
         int2 SampleCoord = ClampScreenCoord(int2(Position.xy + Radius * Xi), int2(g_Camera.f4ViewportSize.xy));
         
-        float SampledDepth = SampleDepth(SampleCoord);
-        float SampledOcclusion = SampleOcclusion(SampleCoord);
+        float SampledDepth = LoadDepth(SampleCoord);
+        float SampledOcclusion = LoadOcclusion(SampleCoord);
 
         float3 SamplePositionSS = float3((float2(SampleCoord) + 0.5) * g_Camera.f4ViewportSize.zw, SampledDepth);
         float3 SamplePositionVS = ScreenXYDepthToViewSpace(SamplePositionSS, g_Camera.mProj);
@@ -95,6 +95,6 @@ float ComputeSpatialReconstructionPS(in FullScreenTriangleVSOutput VSOut) : SV_T
         WeightSum    += WeightS * WeightZ;
     }
 
-    float Occlusion = WeightSum > 0.0 ? OcclusionSum / WeightSum : SampleOcclusion(int2(Position.xy));
+    float Occlusion = WeightSum > 0.0 ? OcclusionSum / WeightSum : LoadOcclusion(int2(Position.xy));
     return lerp(1.0, Occlusion, g_SSAOAttribs.AlphaInterpolation);
 }

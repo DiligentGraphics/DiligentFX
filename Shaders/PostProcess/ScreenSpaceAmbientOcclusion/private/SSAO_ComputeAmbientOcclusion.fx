@@ -15,18 +15,19 @@ cbuffer cbScreenSpaceAmbientOcclusionAttribs
 }
 
 Texture2D<float>  g_TexturePrefilteredDepth;
+SamplerState      g_TexturePrefilteredDepth_sampler;
+
 Texture2D<float3> g_TextureNormal;
+SamplerState      g_TextureNormal_sampler;
+
 Texture2D<float2> g_TextureBlueNoise;
 
-SamplerState g_TexturePrefilteredDepth_sampler;
-SamplerState g_TextureNormal_sampler;
-
-float2 SampleRandomVector2D(int2 PixelCoord)
+float2 LoadRandomVector2D(int2 PixelCoord)
 {
     return g_TextureBlueNoise.Load(int3(PixelCoord & 127, 0));
 }
 
-float3 SampleNormalWS(float2 ScreenCoordUV)
+float3 LoadNormalWS(float2 ScreenCoordUV)
 {
     return g_TextureNormal.SampleLevel(g_TextureNormal_sampler, ScreenCoordUV, 0.0);
 }
@@ -84,15 +85,20 @@ float ComputeAmbientOcclusionPS(in FullScreenTriangleVSOutput VSOut) : SV_Target
 
     // Trying to fix self-occlusion. Maybe there's a better way
 #if SSAO_OPTION_HALF_PRECISION_DEPTH
-    PositionSS.z *= 0.99995;
+    float Epsilon = 0.000005;
 #else
-    PositionSS.z *= 0.999999;
+    float Epsilon = 0.000001;
+#endif
+#if SSAO_OPTION_INVERTED_DEPTH
+    PositionSS.z *= 1.0 + Epsilon;
+#else    
+    PositionSS.z *= 1.0 - Epsilon;
 #endif
     
-    float3 NormalVS = mul(float4(SampleNormalWS(ScreenCoordUV), 0.0), g_Camera.mView).xyz;
+    float3 NormalVS = mul(float4(LoadNormalWS(ScreenCoordUV), 0.0), g_Camera.mView).xyz; 
     float3 PositionVS = ScreenXYDepthToViewSpace(PositionSS, g_Camera.mProj);
     float3 ViewVS = -normalize(PositionVS);
-    float2 Xi = SampleRandomVector2D(int2(Position));
+    float2 Xi = LoadRandomVector2D(int2(Position));
 
     float EffectRadius = g_SSAOAttribs.EffectRadius * g_SSAOAttribs.RadiusMultiplier;
     float FalloffRange = g_SSAOAttribs.EffectFalloffRange * EffectRadius;

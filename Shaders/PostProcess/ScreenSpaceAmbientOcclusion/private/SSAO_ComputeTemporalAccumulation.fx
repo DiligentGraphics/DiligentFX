@@ -43,32 +43,32 @@ struct ProjectionDesc
     bool   IsSuccess;
 };
 
-float SampleCurrOcclusion(int2 PixelCoord)
+float LoadCurrOcclusion(int2 PixelCoord)
 {
     return g_TextureCurrOcclusion.Load(int3(PixelCoord, 0));
 }
 
-float SampleCurrDepth(int2 PixelCoord)
+float LoadCurrDepth(int2 PixelCoord)
 {
     return g_TextureCurrDepth.Load(int3(PixelCoord, 0));
 }
 
-float SamplePrevOcclusion(int2 PixelCoord)
+float LoadPrevOcclusion(int2 PixelCoord)
 {
     return g_TexturePrevOcclusion.Load(int3(PixelCoord, 0));
 }
 
-float SamplePrevDepth(int2 PixelCoord)
+float LoadPrevDepth(int2 PixelCoord)
 {
     return g_TexturePrevDepth.Load(int3(PixelCoord, 0));
 }
 
-float SampleHistory(int2 PixelCoord)
+float LoadHistory(int2 PixelCoord)
 {
     return g_TextureHistory.Load(int3(PixelCoord, 0));
 }
 
-float2 SampleMotion(int2 PixelCoord)
+float2 LoadMotion(int2 PixelCoord)
 {
     return g_TextureMotion.Load(int3(PixelCoord, 0)) * F3NDC_XYZ_TO_UVD_SCALE.xy;
 }
@@ -100,7 +100,7 @@ PixelStatistic ComputePixelStatistic(int2 PixelCoord)
         for (int y = -SearchRadius; y <= SearchRadius; ++y)
         {
             int2 Location = ClampScreenCoord(PixelCoord + int2(x, y), int2(g_CurrCamera.f4ViewportSize.xy));
-            float SampleOcclusion = SampleCurrOcclusion(Location);
+            float SampleOcclusion = LoadCurrOcclusion(Location);
             M1 += SampleOcclusion;
             M2 += SampleOcclusion * SampleOcclusion;
         }
@@ -130,7 +130,7 @@ ProjectionDesc ComputeReprojection(float2 PrevPos, float CurrDepth)
         for (int SampleIdx = 0; SampleIdx < 4; ++SampleIdx)
         {
             int2 Location = PrevPosi + int2(SampleIdx & 0x01, SampleIdx >> 1);
-            float PrevDepth = SamplePrevDepth(Location);
+            float PrevDepth = LoadPrevDepth(Location);
             Weight[SampleIdx] *= float(IsDepthSimilar(CurrDepth, PrevDepth));
             Weight[SampleIdx] *= float(IsInsideScreenMinusOne(Location, int2(g_CurrCamera.f4ViewportSize.xy)));
         }
@@ -144,8 +144,8 @@ ProjectionDesc ComputeReprojection(float2 PrevPos, float CurrDepth)
         for (int SampleIdx = 0; SampleIdx < 4; ++SampleIdx)
         {
             int2 Location = PrevPosi + int2(SampleIdx & 0x01, SampleIdx >> 1);
-            OcclusionSum += Weight[SampleIdx] * SamplePrevOcclusion(Location);
-            HistorySum += Weight[SampleIdx] * min(16.0, SampleHistory(Location) + 1.0);;
+            OcclusionSum += Weight[SampleIdx] * LoadPrevOcclusion(Location);
+            HistorySum += Weight[SampleIdx] * min(16.0, LoadHistory(Location) + 1.0);;
             WeightSum += Weight[SampleIdx];
         }
     }
@@ -160,11 +160,11 @@ ProjectionDesc ComputeReprojection(float2 PrevPos, float CurrDepth)
 PSOutput ComputeTemporalAccumulationPS(in FullScreenTriangleVSOutput VSOut)
 {
     float4 Position = VSOut.f4PixelPos;
-    float Depth = SampleCurrDepth(int2(Position.xy));
+    float Depth = LoadCurrDepth(int2(Position.xy));
     if (IsBackground(Depth))
         discard;
         
-    float2 Motion = SampleMotion(int2(Position.xy));
+    float2 Motion = LoadMotion(int2(Position.xy));
     float2 PrevLocation = Position.xy - Motion * g_CurrCamera.f4ViewportSize.xy;
     ProjectionDesc Reprojection = ComputeReprojection(PrevLocation, Depth);
   
@@ -185,7 +185,7 @@ PSOutput ComputeTemporalAccumulationPS(in FullScreenTriangleVSOutput VSOut)
     }
   
     float Alpha = rcp(Reprojection.History);
-    Output.Occlusion = lerp(Reprojection.Occlusion, SampleCurrOcclusion(int2(Position.xy)), Alpha);
+    Output.Occlusion = lerp(Reprojection.Occlusion, LoadCurrOcclusion(int2(Position.xy)), Alpha);
     Output.History = Reprojection.History;
     return Output;
 }
