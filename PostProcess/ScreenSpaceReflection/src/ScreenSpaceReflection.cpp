@@ -44,34 +44,10 @@ namespace HLSL
 #include "Shaders/PostProcess/ScreenSpaceReflection/public/ScreenSpaceReflectionStructures.fxh"
 } // namespace HLSL
 
-static DILIGENT_CONSTEXPR DepthStencilStateDesc DSS_StencilWrite{
-    False,                  // DepthEnable
-    False,                  // DepthWriteEnable
-    COMPARISON_FUNC_ALWAYS, // DepthFunc
-    True,                   // StencilEnable
-    0xFF,                   // StencilReadMask
-    0xFF,                   // StencilWriteMask
-    {
-        STENCIL_OP_KEEP,       // StencilFailOp
-        STENCIL_OP_KEEP,       // StencilDepthFailOp
-        STENCIL_OP_REPLACE,    // StencilPassOp
-        COMPARISON_FUNC_ALWAYS // StencilFunc
-    },
-};
-
-static DILIGENT_CONSTEXPR DepthStencilStateDesc DSS_StencilReadComparisonEqual{
-    False,                  // DepthEnable
-    False,                  // DepthWriteEnable
-    COMPARISON_FUNC_ALWAYS, // DepthFunc
-    True,                   // StencilEnable
-    0xFF,                   // StencilReadMask
-    0xFF,                   // StencilWriteMask
-    {
-        STENCIL_OP_KEEP,      // StencilFailOp
-        STENCIL_OP_KEEP,      // StencilDepthFailOp
-        STENCIL_OP_KEEP,      // StencilPassOp
-        COMPARISON_FUNC_EQUAL // StencilFunc
-    },
+static DILIGENT_CONSTEXPR DepthStencilStateDesc DSS_WriteAlways{
+    True,                  // DepthEnable
+    True,                  // DepthWriteEnable
+    COMPARISON_FUNC_ALWAYS // DepthFunc
 };
 
 ScreenSpaceReflection::ScreenSpaceReflection(IRenderDevice* pDevice, const CreateInfo& CI) :
@@ -181,11 +157,7 @@ void ScreenSpaceReflection::PrepareResources(IRenderDevice* pDevice, IDeviceCont
         m_Resources.Insert(RESOURCE_IDENTIFIER_ROUGHNESS, Device.CreateTexture(Desc));
     }
 
-    TEXTURE_FORMAT DepthStencilFormat = TEX_FORMAT_D32_FLOAT_S8X24_UINT;
-
-    TextureFormatInfoExt FormatInfo = Device.GetTextureFormatInfoExt(TEX_FORMAT_D24_UNORM_S8_UINT);
-    if (FormatInfo.Supported && FormatInfo.BindFlags & BIND_DEPTH_STENCIL)
-        DepthStencilFormat = TEX_FORMAT_D24_UNORM_S8_UINT;
+    constexpr TEXTURE_FORMAT DepthStencilFormat = TEX_FORMAT_D16_UNORM;
 
     {
         m_DepthStencilMaskDSVReadOnly.Release();
@@ -502,6 +474,10 @@ bool ScreenSpaceReflection::PrepareShadersAndPSO(const RenderAttributes& RenderA
     Macros.Add("SSR_OPTION_PREVIOUS_FRAME", (m_FeatureFlags & FEATURE_FLAG_PREVIOUS_FRAME) != 0);
     Macros.Add("SSR_OPTION_HALF_RESOLUTION", (m_FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION) != 0);
 
+    // We clear depth to 0.0 and then write 1.0 to mask pixels with reflection.
+    const ShaderMacroHelper TriangleDepth05{{ShaderMacro{"TRIANGLE_DEPTH", "0.5"}}};
+    const ShaderMacroHelper TriangleDepth10{{ShaderMacro{"TRIANGLE_DEPTH", "1.0"}}};
+
     bool AllPSOsReady = true;
 
     {
@@ -547,7 +523,7 @@ bool ScreenSpaceReflection::PrepareShadersAndPSO(const RenderAttributes& RenderA
                 .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC, SHADER_VARIABLE_FLAG_UNFILTERABLE_FLOAT_TEXTURE_WEBGPU)
                 .AddVariable(SHADER_TYPE_PIXEL, "g_TextureMaterialParameters", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
 
-            RefCntAutoPtr<IShader> VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
+            RefCntAutoPtr<IShader> VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, TriangleDepth10, ShaderFlags);
             RefCntAutoPtr<IShader> PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSR_ComputeStencilMaskAndExtractRoughness.fx", "ComputeStencilMaskAndExtractRoughnessPS", SHADER_TYPE_PIXEL, Macros, ShaderFlags);
 
             RenderTech.InitializePSO(RenderAttribs.pDevice,
@@ -557,7 +533,7 @@ bool ScreenSpaceReflection::PrepareShadersAndPSO(const RenderAttributes& RenderA
                                          m_Resources[RESOURCE_IDENTIFIER_ROUGHNESS].AsTexture()->GetDesc().Format,
                                      },
                                      m_Resources[RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK].AsTexture()->GetDesc().Format,
-                                     DSS_StencilWrite, BS_Default, false, PSOFlags);
+                                     DSS_WriteAlways, BS_Default, false, PSOFlags);
         }
         if (AllPSOsReady && !RenderTech.IsReady())
             AllPSOsReady = false;
@@ -573,7 +549,7 @@ bool ScreenSpaceReflection::PrepareShadersAndPSO(const RenderAttributes& RenderA
                 .AddVariable(SHADER_TYPE_PIXEL, "g_TextureDepth", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC, SHADER_VARIABLE_FLAG_UNFILTERABLE_FLOAT_TEXTURE_WEBGPU)
                 .AddVariable(SHADER_TYPE_PIXEL, "g_TextureRoughness", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
 
-            RefCntAutoPtr<IShader> VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
+            RefCntAutoPtr<IShader> VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, TriangleDepth10, ShaderFlags);
             RefCntAutoPtr<IShader> PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSR_ComputeDownsampledStencilMask.fx", "ComputeDownsampledStencilMaskPS", SHADER_TYPE_PIXEL, Macros, ShaderFlags);
 
             RenderTech.InitializePSO(RenderAttribs.pDevice,
@@ -581,7 +557,7 @@ bool ScreenSpaceReflection::PrepareShadersAndPSO(const RenderAttributes& RenderA
                                      VS, PS, ResourceLayout,
                                      {},
                                      m_Resources[RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK].AsTexture()->GetDesc().Format,
-                                     DSS_StencilWrite, BS_Default, false, PSOFlags);
+                                     DSS_WriteAlways, BS_Default, false, PSOFlags);
         }
         if (AllPSOsReady && !RenderTech.IsReady())
             AllPSOsReady = false;
@@ -608,7 +584,7 @@ bool ScreenSpaceReflection::PrepareShadersAndPSO(const RenderAttributes& RenderA
             if (!SupportedFeatures.TextureSubresourceViews)
                 ResourceLayout.AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TextureDepthHierarchy", Sam_PointClamp);
 
-            RefCntAutoPtr<IShader> VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
+            RefCntAutoPtr<IShader> VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, TriangleDepth05, ShaderFlags);
             RefCntAutoPtr<IShader> PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSR_ComputeIntersection.fx", "ComputeIntersectionPS", SHADER_TYPE_PIXEL, Macros, ShaderFlags);
 
             RenderTech.InitializePSO(RenderAttribs.pDevice,
@@ -619,7 +595,7 @@ bool ScreenSpaceReflection::PrepareShadersAndPSO(const RenderAttributes& RenderA
                                          m_Resources[RESOURCE_IDENTIFIER_RAY_DIRECTION_PDF].AsTexture()->GetDesc().Format,
                                      },
                                      m_Resources[RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK].AsTexture()->GetDesc().Format,
-                                     DSS_StencilReadComparisonEqual, BS_Default, true, PSOFlags);
+                                     DSS_EnableDepthNoWrites, BS_Default, true, PSOFlags);
         }
         if (AllPSOsReady && !RenderTech.IsReady())
             AllPSOsReady = false;
@@ -640,7 +616,7 @@ bool ScreenSpaceReflection::PrepareShadersAndPSO(const RenderAttributes& RenderA
                 .AddVariable(SHADER_TYPE_PIXEL, "g_TextureIntersectSpecular", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
                 .AddVariable(SHADER_TYPE_PIXEL, "g_TextureRayLength", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
 
-            RefCntAutoPtr<IShader> VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
+            RefCntAutoPtr<IShader> VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, TriangleDepth05, ShaderFlags);
             RefCntAutoPtr<IShader> PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSR_ComputeSpatialReconstruction.fx", "ComputeSpatialReconstructionPS", SHADER_TYPE_PIXEL, Macros, ShaderFlags);
 
             RenderTech.InitializePSO(RenderAttribs.pDevice,
@@ -652,7 +628,7 @@ bool ScreenSpaceReflection::PrepareShadersAndPSO(const RenderAttributes& RenderA
                                          m_Resources[RESOURCE_IDENTIFIER_RESOLVED_DEPTH].AsTexture()->GetDesc().Format,
                                      },
                                      m_Resources[RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK].AsTexture()->GetDesc().Format,
-                                     DSS_StencilReadComparisonEqual, BS_Default, true, PSOFlags);
+                                     DSS_EnableDepthNoWrites, BS_Default, true, PSOFlags);
         }
         if (AllPSOsReady && !RenderTech.IsReady())
             AllPSOsReady = false;
@@ -678,7 +654,7 @@ bool ScreenSpaceReflection::PrepareShadersAndPSO(const RenderAttributes& RenderA
                 .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TexturePrevRadiance", Sam_LinearClamp)
                 .AddImmutableSampler(SHADER_TYPE_PIXEL, "g_TexturePrevVariance", Sam_LinearClamp);
 
-            RefCntAutoPtr<IShader> VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
+            RefCntAutoPtr<IShader> VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, TriangleDepth05, ShaderFlags);
             RefCntAutoPtr<IShader> PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSR_ComputeTemporalAccumulation.fx", "ComputeTemporalAccumulationPS", SHADER_TYPE_PIXEL, Macros, ShaderFlags);
 
             RenderTech.InitializePSO(RenderAttribs.pDevice,
@@ -689,7 +665,7 @@ bool ScreenSpaceReflection::PrepareShadersAndPSO(const RenderAttributes& RenderA
                                          m_Resources[RESOURCE_IDENTIFIER_VARIANCE_HISTORY0].AsTexture()->GetDesc().Format,
                                      },
                                      m_Resources[RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK].AsTexture()->GetDesc().Format,
-                                     DSS_StencilReadComparisonEqual, BS_Default, true, PSOFlags);
+                                     DSS_EnableDepthNoWrites, BS_Default, true, PSOFlags);
         }
         if (AllPSOsReady && !RenderTech.IsReady())
             AllPSOsReady = false;
@@ -710,7 +686,7 @@ bool ScreenSpaceReflection::PrepareShadersAndPSO(const RenderAttributes& RenderA
                 .AddVariable(SHADER_TYPE_PIXEL, "g_TextureRadiance", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC)
                 .AddVariable(SHADER_TYPE_PIXEL, "g_TextureVariance", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC);
 
-            RefCntAutoPtr<IShader> VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
+            RefCntAutoPtr<IShader> VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, TriangleDepth05, ShaderFlags);
             RefCntAutoPtr<IShader> PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "SSR_ComputeBilateralCleanup.fx", "ComputeBilateralCleanupPS", SHADER_TYPE_PIXEL, Macros, ShaderFlags);
 
             RenderTech.InitializePSO(RenderAttribs.pDevice,
@@ -720,7 +696,7 @@ bool ScreenSpaceReflection::PrepareShadersAndPSO(const RenderAttributes& RenderA
                                          m_Resources[RESOURCE_IDENTIFIER_OUTPUT].AsTexture()->GetDesc().Format,
                                      },
                                      m_Resources[RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK].AsTexture()->GetDesc().Format,
-                                     DSS_StencilReadComparisonEqual, BS_Default, true, PSOFlags);
+                                     DSS_EnableDepthNoWrites, BS_Default, true, PSOFlags);
         }
         if (AllPSOsReady && !RenderTech.IsReady())
             AllPSOsReady = false;
@@ -898,8 +874,8 @@ void ScreenSpaceReflection::ComputeStencilMaskAndExtractRoughness(const RenderAt
     ITextureView* pDSV = m_Resources[RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK].GetTextureDSV();
 
     RenderAttribs.pDeviceContext->SetRenderTargets(_countof(pRTVs), pRTVs, pDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    RenderAttribs.pDeviceContext->ClearDepthStencil(pDSV, CLEAR_STENCIL_FLAG, 1.0, 0x00, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    RenderAttribs.pDeviceContext->SetStencilRef(0xFF);
+    // Clear depth to 0.0. Pixels that are not discarded write 1.0.
+    RenderAttribs.pDeviceContext->ClearDepthStencil(pDSV, CLEAR_DEPTH_FLAG_NONE, 0.0, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     RenderAttribs.pDeviceContext->SetPipelineState(RenderTech.PSO);
     RenderAttribs.pDeviceContext->CommitShaderResources(RenderTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     RenderAttribs.pDeviceContext->Draw({3, DRAW_FLAG_VERIFY_ALL, 1});
@@ -927,8 +903,8 @@ void ScreenSpaceReflection::ComputeDownsampledStencilMask(const RenderAttributes
     ITextureView* pDSV = m_Resources[RESOURCE_IDENTIFIER_DEPTH_STENCIL_MASK_HALF_RES].GetTextureDSV();
 
     RenderAttribs.pDeviceContext->SetRenderTargets(0, nullptr, pDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    RenderAttribs.pDeviceContext->ClearDepthStencil(pDSV, CLEAR_STENCIL_FLAG, 1.0, 0x00, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    RenderAttribs.pDeviceContext->SetStencilRef(0xFF);
+    // Clear depth to 0.0. Pixels that are not discarded write 1.0.
+    RenderAttribs.pDeviceContext->ClearDepthStencil(pDSV, CLEAR_DEPTH_FLAG, 0.0, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     RenderAttribs.pDeviceContext->SetPipelineState(RenderTech.PSO);
     RenderAttribs.pDeviceContext->CommitShaderResources(RenderTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     RenderAttribs.pDeviceContext->Draw({3, DRAW_FLAG_VERIFY_ALL, 1});
@@ -967,7 +943,6 @@ void ScreenSpaceReflection::ComputeIntersection(const RenderAttributes& RenderAt
     RenderAttribs.pDeviceContext->SetRenderTargets(_countof(pRTVs), pRTVs, pDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     RenderAttribs.pDeviceContext->ClearRenderTarget(pRTVs[0], RTVClearColor.Data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     RenderAttribs.pDeviceContext->ClearRenderTarget(pRTVs[1], RTVClearColor.Data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    RenderAttribs.pDeviceContext->SetStencilRef(0xFF);
     RenderAttribs.pDeviceContext->SetPipelineState(RenderTech.PSO);
     RenderAttribs.pDeviceContext->CommitShaderResources(RenderTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     RenderAttribs.pDeviceContext->Draw({3, DRAW_FLAG_VERIFY_ALL, 1});
@@ -1000,7 +975,6 @@ void ScreenSpaceReflection::ComputeSpatialReconstruction(const RenderAttributes&
     };
 
     RenderAttribs.pDeviceContext->SetRenderTargets(_countof(pRTVs), pRTVs, m_DepthStencilMaskDSVReadOnly, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    RenderAttribs.pDeviceContext->SetStencilRef(0xFF);
     RenderAttribs.pDeviceContext->SetPipelineState(RenderTech.PSO);
     RenderAttribs.pDeviceContext->CommitShaderResources(RenderTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     RenderAttribs.pDeviceContext->Draw({3, DRAW_FLAG_VERIFY_ALL, 1});
@@ -1040,7 +1014,6 @@ void ScreenSpaceReflection::ComputeTemporalAccumulation(const RenderAttributes& 
 
     RenderAttribs.pDeviceContext->CommitShaderResources(RenderTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     RenderAttribs.pDeviceContext->SetRenderTargets(_countof(pRTVs), pRTVs, m_DepthStencilMaskDSVReadOnly, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    RenderAttribs.pDeviceContext->SetStencilRef(0xFF);
     RenderAttribs.pDeviceContext->SetPipelineState(RenderTech.PSO);
     RenderAttribs.pDeviceContext->Draw({3, DRAW_FLAG_VERIFY_ALL, 1});
     RenderAttribs.pDeviceContext->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
@@ -1075,7 +1048,6 @@ void ScreenSpaceReflection::ComputeBilateralCleanup(const RenderAttributes& Rend
 
     RenderAttribs.pDeviceContext->SetRenderTargets(_countof(pRTVs), pRTVs, m_DepthStencilMaskDSVReadOnly, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     RenderAttribs.pDeviceContext->ClearRenderTarget(pRTVs[0], RTVClearColor.Data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    RenderAttribs.pDeviceContext->SetStencilRef(0xFF);
     RenderAttribs.pDeviceContext->SetPipelineState(RenderTech.PSO);
     RenderAttribs.pDeviceContext->CommitShaderResources(RenderTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     RenderAttribs.pDeviceContext->Draw({3, DRAW_FLAG_VERIFY_ALL, 1});

@@ -15,9 +15,14 @@ void FullScreenTriangleVS(in  uint                       VertexId : SV_VertexID,
     // We use VertexId trick on old hardware that does not support BaseInstance.
     VSOut.uInstID = InstID != 0u ? InstID : VertexId / 3u;
 
+#ifdef TRIANGLE_DEPTH
+    float z = DepthToNormalizedDeviceZ(TRIANGLE_DEPTH);
+#else
     // Write 0 to the depth buffer
     // NDC_MIN_Z ==  0 in DX
     // NDC_MIN_Z == -1 in GL
     float z = NDC_MIN_Z;
+#endif
+
     VSOut.f4PixelPos = float4(f2XY, z, 1.0);
 }
