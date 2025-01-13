@@ -108,4 +108,37 @@ void BasisFromNormal(in  float3 N,
     T = normalize(cross(N, abs(N.y) > 0.5 ? float3(1.0, 0.0, 0.0) : float3(0.0, 1.0, 0.0)));
     B = cross(T, N);
 }
+
+/// Returns bilinear sampling information for unnormailzed coordinates.
+///
+/// \param [in]  Location    - Unnormalized location in the texture space.
+/// \param [in]  Dimensions  - Texture dimensions.
+/// \param [out] FetchCoords - Texture coordinates to fetch the data from:
+///                            (x, y) - lower left corner
+///                            (z, w) - upper right corner
+/// \param [out] Weights     - Bilinear interpolation weights.
+///
+/// \remarks    The filtering should be done as follows:
+///                 Tex.Load(FetchCoords.xy) * Weights.x +
+///                 Tex.Load(FetchCoords.zy) * Weights.y +
+///                 Tex.Load(FetchCoords.xw) * Weights.z +
+///                 Tex.Load(FetchCoords.zw) * Weights.w
+void GetBilinearSamplingInfoUC(in float2  Location,
+                               in int2    Dimensions,
+                               out int4   FetchCoords,
+                               out float4 Weights)
+{
+    Location -= float2(0.5, 0.5);
+    float2 Location00 = floor(Location);
+
+    FetchCoords.xy = int2(Location00);
+    FetchCoords.zw = FetchCoords.xy + int2(1, 1); 
+    Dimensions -= int2(1, 1);
+    FetchCoords = clamp(FetchCoords, int4(0, 0, 0, 0), Dimensions.xyxy);
+
+    float x = Location.x - Location00.x;
+    float y = Location.y - Location00.y;
+    Weights = float4(1.0 - x, x, 1.0 - x, x) * float4(1.0 - y, 1.0 - y, y, y);
+}
+
 #endif //_SHADER_UTILITIES_FXH_

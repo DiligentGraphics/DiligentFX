@@ -161,64 +161,60 @@ ProjectionDesc ComputeReprojection(float2 PrevPos, float CurrDepth)
     g_TextureCurrDepth.GetDimensions(DepthDim.x, DepthDim.y);
     if (!Desc.IsSuccess)
     {
-        float Disocclusion = 0.0;
-        const int SearchRadius = 1;
+        float4 BestWeights     = float4(0.0, 0.0, 0.0, 0.0);
+        int4   BestFetchCoords = int4(0, 0, 0, 0);
+        float  BestTotalWeight = 0.0;
+
+        const int   SearchRadius = 1;
+        const float BestTotalWeightEarlyExitThreshold = 0.9;
         for (int y = -SearchRadius; y <= SearchRadius; y++)
         {
             for (int x = -SearchRadius; x <= SearchRadius; x++)
             {
-                float2 Location    = PrevPos + float2(x, y);
-                float  PrevCameraZ = SampleCameraZFromDepthUC(g_TexturePrevDepth, DepthDim, Location, 0, g_PrevCamera.mProj);
-                float  Weight      = ComputeDisocclusion(CurrCamZ, PrevCameraZ);
-                if (Weight > Disocclusion)
+                float2 Location = PrevPos + float2(x, y);
+
+                int4   FetchCoords;
+                float4 Weights;
+                GetBilinearSamplingInfoUC(Location, DepthDim, FetchCoords, Weights);
+ 
+                float PrevZ00 = DepthToCameraZ(LoadPrevDepth(FetchCoords.xy), g_PrevCamera.mProj);
+                float PrevZ10 = DepthToCameraZ(LoadPrevDepth(FetchCoords.zy), g_PrevCamera.mProj);
+                float PrevZ01 = DepthToCameraZ(LoadPrevDepth(FetchCoords.xw), g_PrevCamera.mProj);
+                float PrevZ11 = DepthToCameraZ(LoadPrevDepth(FetchCoords.zw), g_PrevCamera.mProj);
+ 
+                Weights.x *= ComputeDisocclusion(CurrCamZ, PrevZ00) > (SSR_DISOCCLUSION_THRESHOLD / 2.0) ? 1.0 : 0.0;
+                Weights.y *= ComputeDisocclusion(CurrCamZ, PrevZ10) > (SSR_DISOCCLUSION_THRESHOLD / 2.0) ? 1.0 : 0.0;
+                Weights.z *= ComputeDisocclusion(CurrCamZ, PrevZ01) > (SSR_DISOCCLUSION_THRESHOLD / 2.0) ? 1.0 : 0.0;
+                Weights.w *= ComputeDisocclusion(CurrCamZ, PrevZ11) > (SSR_DISOCCLUSION_THRESHOLD / 2.0) ? 1.0 : 0.0;
+
+                float TotalWeight = dot(Weights, float4(1.0, 1.0, 1.0, 1.0));
+                if (TotalWeight > BestTotalWeight)
                 {
-                    Disocclusion = Weight;
-                    Desc.PrevCoord = Location;
+                    BestTotalWeight = TotalWeight;
+                    BestWeights     = Weights;
+                    BestFetchCoords = FetchCoords;
+                    Desc.PrevCoord  = Location;
+                    
+                    if (BestTotalWeight > BestTotalWeightEarlyExitThreshold)
+                        break;
                 }
             }
+            
+            if (BestTotalWeight > BestTotalWeightEarlyExitThreshold)
+                break; 
         }
 
-        Desc.IsSuccess = Disocclusion > SSR_DISOCCLUSION_THRESHOLD;
-        Desc.Color = SamplePrevRadianceLinear(Desc.PrevCoord);
-    }
-
-    if (!Desc.IsSuccess)
-    {
-        float2 PrevCoord    = Desc.PrevCoord - float2(0.5, 0.5);
-        float2 PrevCoord00  = floor(PrevCoord);
-        int2   PrevCoord00i = int2(PrevCoord00);
-        float x = PrevCoord.x - PrevCoord00.x;
-        float y = PrevCoord.y - PrevCoord00.y;
-
-        float Weight[4];
-        Weight[0] = (1.0 - x) * (1.0 - y);
-        Weight[1] = x * (1.0 - y);
-        Weight[2] = (1.0 - x) * y;
-        Weight[3] = x * y;
-
-        float  WeightSum     = 0.0;
-        float  WeightedCamZ  = 0.0;
-        float4 WeightedColor = float4(0.0, 0.0, 0.0, 0.0);
-        for (int SampleIdx = 0; SampleIdx < 4; ++SampleIdx)
+        Desc.IsSuccess = BestTotalWeight > 0.1;
+        if (Desc.IsSuccess)
         {
-            int2 Location = PrevCoord00i + int2(SampleIdx & 0x01, SampleIdx >> 1);
-            float PrevCamZ = DepthToCameraZ(LoadPrevDepth(Location), g_PrevCamera.mProj);
-                
-            bool IsValidSample = ComputeDisocclusion(CurrCamZ, PrevCamZ) > (SSR_DISOCCLUSION_THRESHOLD / 2.0);
-            Weight[SampleIdx] *= float(IsValidSample);
-
-            WeightedColor += Weight[SampleIdx] * LoadPrevRadiance(Location);
-            WeightedCamZ  += Weight[SampleIdx] * PrevCamZ;
-            WeightSum     += Weight[SampleIdx]; 
+            Desc.Color = (
+                LoadPrevRadiance(BestFetchCoords.xy) * BestWeights.x + 
+                LoadPrevRadiance(BestFetchCoords.zy) * BestWeights.y +
+                LoadPrevRadiance(BestFetchCoords.xw) * BestWeights.z +
+                LoadPrevRadiance(BestFetchCoords.zw) * BestWeights.w
+            ) / BestTotalWeight;
         }
-        
-        WeightSum = max(WeightSum, 1e-6);
-        WeightedCamZ  /= WeightSum;
-        WeightedColor /= WeightSum;
-
-        Desc.IsSuccess = ComputeDisocclusion(CurrCamZ, WeightedCamZ) > SSR_DISOCCLUSION_THRESHOLD;
-        Desc.Color = WeightedColor;
-    } 
+    }
 
     Desc.IsSuccess = Desc.IsSuccess && IsInsideScreen(Desc.PrevCoord, g_CurrCamera.f4ViewportSize.xy);
     return Desc;
