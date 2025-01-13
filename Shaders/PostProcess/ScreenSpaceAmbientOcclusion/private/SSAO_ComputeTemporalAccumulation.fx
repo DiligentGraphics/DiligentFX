@@ -73,19 +73,9 @@ float2 LoadMotion(int2 PixelCoord)
     return g_TextureMotion.Load(int3(PixelCoord, 0)) * F3NDC_XYZ_TO_UVD_SCALE.xy;
 }
 
-bool IsDepthSimilar(float CurrDepth, float PrevDepth)
+float IsCameraZSimilar(float CurrCamZ, float PrevCamZ)
 {
-    float LinearDepthCurr = DepthToCameraZ(CurrDepth, g_PrevCamera.mProj);
-    float LinearDepthPrev = DepthToCameraZ(PrevDepth, g_PrevCamera.mProj);
-    return abs(1.0 - LinearDepthCurr / LinearDepthPrev) < SSAO_DISOCCLUSION_DEPTH_THRESHOLD;
-}
-
-bool IsInsideScreenMinusOne(int2 PixelCoord, int2 Dimension)
-{
-    return PixelCoord.x > 0 &&
-           PixelCoord.y > 0 &&
-           PixelCoord.x < (Dimension.x - 1) &&
-           PixelCoord.y < (Dimension.y - 1);
+    return abs(1.0 - CurrCamZ / PrevCamZ) < SSAO_DISOCCLUSION_DEPTH_THRESHOLD ? 1.0 : 0.0;
 }
 
 PixelStatistic ComputePixelStatistic(int2 PixelCoord)
@@ -114,45 +104,46 @@ PixelStatistic ComputePixelStatistic(int2 PixelCoord)
 
 ProjectionDesc ComputeReprojection(float2 PrevPos, float CurrDepth)
 {
-    ProjectionDesc Desc;
+    float CurrCamZ = DepthToCameraZ(CurrDepth, g_CurrCamera.mProj);
+
+    int4   FetchCoords;
+    float4 Weights;
+    GetBilinearSamplingInfoUC(PrevPos, int2(g_CurrCamera.f4ViewportSize.xy), FetchCoords, Weights);
+ 
+    float PrevCamZ00 = DepthToCameraZ(LoadPrevDepth(FetchCoords.xy), g_PrevCamera.mProj);
+    float PrevCamZ10 = DepthToCameraZ(LoadPrevDepth(FetchCoords.zy), g_PrevCamera.mProj);
+    float PrevCamZ01 = DepthToCameraZ(LoadPrevDepth(FetchCoords.xw), g_PrevCamera.mProj);
+    float PrevCamZ11 = DepthToCameraZ(LoadPrevDepth(FetchCoords.zw), g_PrevCamera.mProj);
     
-    int2 PrevPosi = int2(PrevPos - 0.5);
-    float x = frac(PrevPos.x + 0.5);
-    float y = frac(PrevPos.y + 0.5);
+    Weights.x *= IsCameraZSimilar(CurrCamZ, PrevCamZ00);
+    Weights.y *= IsCameraZSimilar(CurrCamZ, PrevCamZ10);
+    Weights.z *= IsCameraZSimilar(CurrCamZ, PrevCamZ01);
+    Weights.w *= IsCameraZSimilar(CurrCamZ, PrevCamZ11);
 
-    float Weight[4];
-    Weight[0] = (1.0 - x) * (1.0 - y);
-    Weight[1] = x * (1.0 - y);
-    Weight[2] = (1.0 - x) * y;
-    Weight[3] = x * y;
-
+    float TotalWeight = dot(Weights, float4(1.0, 1.0, 1.0, 1.0));
+    
+    ProjectionDesc Desc;
+    Desc.Occlusion = 1.0;
+    Desc.History   = 1.0;
+    Desc.IsSuccess = TotalWeight > 0.01 && !g_SSAOAttribs.ResetAccumulation;
+    if (Desc.IsSuccess)
     {
-        for (int SampleIdx = 0; SampleIdx < 4; ++SampleIdx)
-        {
-            int2 Location = PrevPosi + int2(SampleIdx & 0x01, SampleIdx >> 1);
-            float PrevDepth = LoadPrevDepth(Location);
-            Weight[SampleIdx] *= float(IsDepthSimilar(CurrDepth, PrevDepth));
-            Weight[SampleIdx] *= float(IsInsideScreenMinusOne(Location, int2(g_CurrCamera.f4ViewportSize.xy)));
-        }
+        float4 PrevOcclusion = float4(
+            LoadPrevOcclusion(FetchCoords.xy),
+            LoadPrevOcclusion(FetchCoords.zy),
+            LoadPrevOcclusion(FetchCoords.xw),
+            LoadPrevOcclusion(FetchCoords.zw)
+        );
+        float4 History = float4(
+            LoadHistory(FetchCoords.xy),
+            LoadHistory(FetchCoords.zy),
+            LoadHistory(FetchCoords.xw),
+            LoadHistory(FetchCoords.zw)
+        );
+        History = min(float4(16.0, 16.0, 16.0, 16.0), History + float4(1.0, 1.0, 1.0, 1.0));
+        Desc.Occlusion = dot(PrevOcclusion, Weights) / TotalWeight;
+        Desc.History = dot(History, Weights) / TotalWeight;
     }
-
-    float WeightSum = 0.0;
-    float OcclusionSum = 0.0;
-    float HistorySum = 0.0;
-
-    {
-        for (int SampleIdx = 0; SampleIdx < 4; ++SampleIdx)
-        {
-            int2 Location = PrevPosi + int2(SampleIdx & 0x01, SampleIdx >> 1);
-            OcclusionSum += Weight[SampleIdx] * LoadPrevOcclusion(Location);
-            HistorySum += Weight[SampleIdx] * min(16.0, LoadHistory(Location) + 1.0);;
-            WeightSum += Weight[SampleIdx];
-        }
-    }
-
-    Desc.IsSuccess = WeightSum > 0.0 && !g_SSAOAttribs.ResetAccumulation;
-    Desc.Occlusion = Desc.IsSuccess ? OcclusionSum / WeightSum : 1.0;
-    Desc.History = Desc.IsSuccess ? HistorySum / WeightSum : 1.0;
    
     return Desc;
 }
