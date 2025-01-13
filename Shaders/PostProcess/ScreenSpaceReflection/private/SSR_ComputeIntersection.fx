@@ -28,49 +28,37 @@ Texture2D<float2> g_TextureMotion;
 Texture2D<float2> g_TextureBlueNoise;
 Texture2D<float>  g_TextureDepthHierarchy;
 
-SamplerState g_TextureDepthHierarchy_sampler;
-
-float3 ScreenSpaceToViewSpace(float3 ScreenCoordUV)
-{
-    return InvProjectPosition(ScreenCoordUV, g_Camera.mProjInv);
-}
-
-float3 ScreenSpaceToWorldSpace(float3 ScreenCoordUV)
-{
-    return InvProjectPosition(ScreenCoordUV, g_Camera.mViewProjInv);
-}
-
 float2 GetMipResolution(float2 ScreenDimensions, int MipLevel)
 {
     return ScreenDimensions * rcp(float(1 << MipLevel));
 }
 
-float2 SampleRandomVector2D(int2 PixelCoord)
+float2 LoadRandomVector2D(int2 PixelCoord)
 {
     return g_TextureBlueNoise.Load(int3(PixelCoord & 127, 0));
 }
 
-float SampleRoughness(int2 PixelCoord)
+float LoadRoughness(int2 PixelCoord)
 {
     return g_TextureRoughness.Load(int3(PixelCoord, 0));
 }
 
-float3 SampleNormalWS(int2 PixelCoord)
+float3 LoadNormalWS(int2 PixelCoord)
 {
     return g_TextureNormal.Load(int3(PixelCoord, 0));
 }
 
-float SampleDepthHierarchy(int2 PixelCoord, int MipLevel)
+float LoadDepthHierarchy(int2 PixelCoord, int MipLevel)
 {
     return g_TextureDepthHierarchy.Load(int3(PixelCoord, MipLevel));
 }
 
-float2 SampleMotion(int2 PixelCoord)
+float2 LoadMotion(int2 PixelCoord)
 {
     return g_TextureMotion.Load(int3(PixelCoord, 0)) * F3NDC_XYZ_TO_UVD_SCALE.xy;
 }
 
-float3 SampleRadiance(int2 PixelCoord)
+float3 LoadRadiance(int2 PixelCoord)
 {
     return g_TextureRadiance.Load(int3(PixelCoord, 0));
 }
@@ -182,7 +170,7 @@ float3 HierarchicalRaymarch(float3 Origin, float3 Direction, float2 ScreenSize, 
     while (Idx < MaxTraversalIntersections && CurrentMip >= MostDetailedMip)
     {
         float2 CurrentMipPosition = CurrentMipResolution * Position.xy;
-        float SurfaceDepth = SampleDepthHierarchy(int2(CurrentMipPosition), CurrentMip);
+        float SurfaceDepth = LoadDepthHierarchy(int2(CurrentMipPosition), CurrentMip);
         bool SkippedTile = AdvanceRay(Origin, Direction, InvDirection, CurrentMipPosition, InvCurrentMipResolution, FloorOffset, UVOffset, SurfaceDepth, Position, CurrentT);
         
         // Don't increase mip further than this because we did not generate it
@@ -224,13 +212,13 @@ float ValidateHit(float3 Hit, float2 ScreenCoordUV, float3 RayDirectionWS, float
 
     // Don't lookup radiance from the background.
     int2 TexelCoords = int2(ScreenSize * Hit.xy);
-    float SurfaceDepth = SampleDepthHierarchy(TexelCoords, 0);
+    float SurfaceDepth = LoadDepthHierarchy(TexelCoords, 0);
 
     if (IsBackground(SurfaceDepth))
         return 0.0;
 
     // We check if we hit the surface from the back, these should be rejected.
-    float3 HitNormalWS = SampleNormalWS(TexelCoords);
+    float3 HitNormalWS = LoadNormalWS(TexelCoords);
     if (dot(HitNormalWS, RayDirectionWS) > 0.0)
         return 0.0;
 
@@ -271,7 +259,7 @@ float4 SampleReflectionVector(float3 View, float3 Normal, float Roughness, int2 
     float3 B = cross(T, N);
     float3x3 TangentToWorld = MatrixFromRows(T, B, N);
 
-    float2 Xi = SampleRandomVector2D(PixelCoord);
+    float2 Xi = LoadRandomVector2D(PixelCoord);
     Xi.y = lerp(Xi.y, 0.0, g_SSRAttribs.GGXImportanceSampleBias);
 
     float3 ViewDirTS = mul(TangentToWorld, View);
@@ -300,15 +288,15 @@ PSOutput ComputeIntersectionPS(in FullScreenTriangleVSOutput VSOut)
 #endif
 
     float2 ScreenCoordUV = Position * g_Camera.f4ViewportSize.zw;
-    float3 NormalWS = SampleNormalWS(int2(Position));
+    float3 NormalWS = LoadNormalWS(int2(Position));
     float3 NormalVS = mul(float4(NormalWS, 0.0), g_Camera.mView).xyz;
-    float Roughness = SampleRoughness(int2(Position));
+    float Roughness = LoadRoughness(int2(Position));
 
     bool IsMirror = IsMirrorReflection(Roughness);
     int MostDetailedMip = IsMirror ? 0 : int(g_SSRAttribs.MostDetailedMip);
     float2 MipResolution = GetMipResolution(g_Camera.f4ViewportSize.xy, MostDetailedMip);
 
-    float3 RayOriginSS = float3(ScreenCoordUV, SampleDepthHierarchy(int2(ScreenCoordUV * MipResolution), MostDetailedMip));
+    float3 RayOriginSS = float3(ScreenCoordUV, LoadDepthHierarchy(int2(ScreenCoordUV * MipResolution), MostDetailedMip));
     float3 RayOriginVS = ScreenXYDepthToViewSpace(RayOriginSS, g_Camera.mProj);
 
     float4 RayDirectionVS = SampleReflectionVector(-normalize(RayOriginVS), NormalVS, Roughness, int2(VSOut.f4PixelPos.xy));
@@ -320,13 +308,13 @@ PSOutput ComputeIntersectionPS(in FullScreenTriangleVSOutput VSOut)
     float3 SurfaceHitVS = ScreenXYDepthToViewSpace(SurfaceHitSS, g_Camera.mProj);
 
 #if SSR_OPTION_PREVIOUS_FRAME
-    float2 Motion = SampleMotion(int2(g_Camera.f4ViewportSize.xy * SurfaceHitSS.xy));
+    float2 Motion = LoadMotion(int2(g_Camera.f4ViewportSize.xy * SurfaceHitSS.xy));
     float2 SurfaceHitSSPrev = SurfaceHitSS.xy - Motion;
     float Confidence = ValidHit ? ValidateHit(SurfaceHitSS, SurfaceHitSSPrev, ScreenCoordUV, RayDirectionWS, g_Camera.f4ViewportSize.xy, g_SSRAttribs.DepthBufferThickness) : 0.0;
-    float3 ReflectionRadiance = Confidence > 0.0f ? SampleRadiance(int2(g_Camera.f4ViewportSize.xy * SurfaceHitSSPrev)) : float3(0.0, 0.0, 0.0);
+    float3 ReflectionRadiance = Confidence > 0.0f ? LoadRadiance(int2(g_Camera.f4ViewportSize.xy * SurfaceHitSSPrev)) : float3(0.0, 0.0, 0.0);
 #else
     float Confidence = ValidHit ? ValidateHit(SurfaceHitSS, ScreenCoordUV, RayDirectionWS, g_Camera.f4ViewportSize.xy, g_SSRAttribs.DepthBufferThickness) : 0.0;
-    float3 ReflectionRadiance = Confidence > 0.0f ? SampleRadiance(int2(g_Camera.f4ViewportSize.xy * SurfaceHitSS.xy)) : float3(0.0, 0.0, 0.0);
+    float3 ReflectionRadiance = Confidence > 0.0f ? LoadRadiance(int2(g_Camera.f4ViewportSize.xy * SurfaceHitSS.xy)) : float3(0.0, 0.0, 0.0);
 #endif
 
     //TODO: Try to store inverse RayDirectionWS for more accuracy.

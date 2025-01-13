@@ -5,28 +5,34 @@
 Texture2D<float> g_TextureLastMip;
 #else
 Texture2D<float> g_TextureMips;
-SamplerState     g_TextureMips_sampler;
 #endif
 
 #if SUPPORTED_SHADER_SRV
-float SampleDepth(int2 Location, int2 Offset, int3 Dimension)
+float LoadDepth(int2 Location, int3 Dimension)
 {
-    int2 Position = ClampScreenCoord(Location + Offset, Dimension.xy);
+    int2 Position = ClampScreenCoord(Location, Dimension.xy);
     return g_TextureLastMip.Load(int3(Position, 0));
 }
 #else
-float SampleDepth(int2 Location, int2 Offset, int3 Dimension)
+float LoadDepth(int2 Location, int3 Dimension)
 {
-    int2 Position = ClampScreenCoord(Location + Offset, Dimension.xy);
+    int2 Position = ClampScreenCoord(Location, Dimension.xy);
     return g_TextureMips.Load(int3(Position, Dimension.z));
 }
 #endif
+
+void UpdateClosestDepth(int2 Location, int3 LastMipDimension, inout float MinDepth)
+{
+    float Depth = LoadDepth(Location, LastMipDimension);
+    MinDepth = ClosestDepth(MinDepth, Depth);
+}
 
 float ComputeHierarchicalDepthBufferPS(in FullScreenTriangleVSOutput VSOut) : SV_Target0
 {
     int3 LastMipDimension;
 #if SUPPORTED_SHADER_SRV
     g_TextureLastMip.GetDimensions(LastMipDimension.x, LastMipDimension.y);
+    LastMipDimension.z = 0; // Unused
 #else
     int Dummy;
     g_TextureMips.GetDimensions(0, LastMipDimension.x, LastMipDimension.y, Dummy);
@@ -37,35 +43,30 @@ float ComputeHierarchicalDepthBufferPS(in FullScreenTriangleVSOutput VSOut) : SV
 
     int2 RemappedPosition = int2(2.0 * floor(VSOut.f4PixelPos.xy)); 
 
-    float4 SampledPixels;
-    SampledPixels.x = SampleDepth(RemappedPosition, int2(0, 0), LastMipDimension);
-    SampledPixels.y = SampleDepth(RemappedPosition, int2(0, 1), LastMipDimension);
-    SampledPixels.z = SampleDepth(RemappedPosition, int2(1, 0), LastMipDimension);
-    SampledPixels.w = SampleDepth(RemappedPosition, int2(1, 1), LastMipDimension);
-
-    float MinDepth = ClosestDepth(ClosestDepth(SampledPixels.x, SampledPixels.y),
-                                  ClosestDepth(SampledPixels.z, SampledPixels.w));
+    float MinDepth = DepthFarPlane;
+    UpdateClosestDepth(RemappedPosition + int2(0, 0), LastMipDimension, MinDepth);
+    UpdateClosestDepth(RemappedPosition + int2(0, 1), LastMipDimension, MinDepth);
+    UpdateClosestDepth(RemappedPosition + int2(1, 0), LastMipDimension, MinDepth);
+    UpdateClosestDepth(RemappedPosition + int2(1, 1), LastMipDimension, MinDepth);
 
     bool IsWidthOdd  = (LastMipDimension.x & 1) != 0;
     bool IsHeightOdd = (LastMipDimension.y & 1) != 0;
     
     if (IsWidthOdd)
     {
-        SampledPixels.x = SampleDepth(RemappedPosition, int2(2, 0), LastMipDimension);
-        SampledPixels.y = SampleDepth(RemappedPosition, int2(2, 1), LastMipDimension);
-        MinDepth = ClosestDepth(MinDepth, ClosestDepth(SampledPixels.x, SampledPixels.y));
+        UpdateClosestDepth(RemappedPosition + int2(2, 0), LastMipDimension, MinDepth);
+        UpdateClosestDepth(RemappedPosition + int2(2, 1), LastMipDimension, MinDepth);
     }
     
     if (IsHeightOdd)
     {
-        SampledPixels.x = SampleDepth(RemappedPosition, int2(0, 2), LastMipDimension);
-        SampledPixels.y = SampleDepth(RemappedPosition, int2(1, 2), LastMipDimension);
-        MinDepth = ClosestDepth(MinDepth, ClosestDepth(SampledPixels.x, SampledPixels.y));
+        UpdateClosestDepth(RemappedPosition + int2(0, 2), LastMipDimension, MinDepth);
+        UpdateClosestDepth(RemappedPosition + int2(1, 2), LastMipDimension, MinDepth);
     }
     
     if (IsWidthOdd && IsHeightOdd)
     {
-        MinDepth = ClosestDepth(MinDepth, SampleDepth(RemappedPosition, int2(2, 2), LastMipDimension));
+        UpdateClosestDepth(RemappedPosition + int2(2, 2), LastMipDimension, MinDepth);
     }
 
     return MinDepth;

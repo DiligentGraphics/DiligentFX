@@ -49,50 +49,44 @@ struct PSOutput
     float  Variance : SV_Target1;
 };
 
-float2 SampleMotion(int2 PixelCoord)
+float2 LoadMotion(int2 PixelCoord)
 {
     return g_TextureMotion.Load(int3(PixelCoord, 0)) * F3NDC_XYZ_TO_UVD_SCALE.xy;
 }
 
-float SampleCurrDepth(int2 PixelCoord)
+float LoadCurrDepth(int2 PixelCoord)
 {
     return g_TextureCurrDepth.Load(int3(PixelCoord, 0));
 }
 
-float SamplePrevDepth(int2 PixelCoord)
+float LoadPrevDepth(int2 PixelCoord)
 {
     return g_TexturePrevDepth.Load(int3(PixelCoord, 0));
 }
 
-float SampleHitDepth(int2 PixelCoord)
+float LoadHitDepth(int2 PixelCoord)
 {
     return g_TextureHitDepth.Load(int3(PixelCoord, 0));
 }
 
-float4 SampleCurrRadiance(int2 PixelCoord)
+float4 LoadCurrRadiance(int2 PixelCoord)
 {
     return g_TextureCurrRadiance.Load(int3(PixelCoord, 0));
 }
 
-float SampleCurrVariance(int2 PixelCoord)
+float LoadCurrVariance(int2 PixelCoord)
 {
     return g_TextureCurrVariance.Load(int3(PixelCoord, 0));
 }
 
-float4 SamplePrevRadiance(int2 PixelCoord)
+float4 LoadPrevRadiance(int2 PixelCoord)
 {
     return g_TexturePrevRadiance.Load(int3(PixelCoord, 0));
 }
 
-float SamplePrevVariance(int2 PixelCoord)
+float LoadPrevVariance(int2 PixelCoord)
 {
     return g_TexturePrevVariance.Load(int3(PixelCoord, 0));
-}
-
-float SamplePrevDepthLinear(float2 PixelCoord)
-{
-    float2 Texcoord = PixelCoord * g_CurrCamera.f4ViewportSize.zw;
-    return g_TexturePrevDepth.SampleLevel(g_TexturePrevDepth_sampler, Texcoord, 0);
 }
 
 float4 SamplePrevRadianceLinear(float2 PixelCoord)
@@ -116,18 +110,11 @@ float2 ComputeReflectionHitPosition(int2 PixelCoord, float Depth)
 }
 
 // TODO: Use normals to compute disocclusion
-float ComputeDisocclusionZ(float CurrCameraZ, float PrevCameraZ)
+float ComputeDisocclusion(float CurrCameraZ, float PrevCameraZ)
 {
     CurrCameraZ = abs(CurrCameraZ);
     PrevCameraZ = abs(PrevCameraZ);
     return exp(-abs(CurrCameraZ - PrevCameraZ) / max(max(CurrCameraZ, PrevCameraZ), 1e-6));
-}
-
-float ComputeDisocclusionD(float CurrDepth, float PrevDepth)
-{
-    float CurrCameraZ = DepthToCameraZ(CurrDepth, g_CurrCamera.mProj);
-    float PrevCameraZ = DepthToCameraZ(PrevDepth, g_PrevCamera.mProj);
-    return ComputeDisocclusionZ(CurrCameraZ, PrevCameraZ);
 }
 
 // Welford's online algorithm:
@@ -159,11 +146,19 @@ PixelStatistic ComputePixelStatistic(int2 PixelCoord)
 
 ProjectionDesc ComputeReprojection(float2 PrevPos, float CurrDepth)
 {
+    float CurrCamZ = DepthToCameraZ(CurrDepth, g_CurrCamera.mProj);
+ 
     ProjectionDesc Desc;
-    Desc.PrevCoord = PrevPos;
-    Desc.IsSuccess = ComputeDisocclusionD(CurrDepth, SamplePrevDepth(int2(PrevPos))) > SSR_DISOCCLUSION_THRESHOLD;
-    Desc.Color = SamplePrevRadianceLinear(Desc.PrevCoord);
-
+ 
+    {
+        float PrevCamZ = DepthToCameraZ(LoadPrevDepth(int2(PrevPos)), g_PrevCamera.mProj);     
+        Desc.PrevCoord = PrevPos;
+        Desc.Color     = SamplePrevRadianceLinear(Desc.PrevCoord);
+        Desc.IsSuccess = ComputeDisocclusion(CurrCamZ, PrevCamZ) > SSR_DISOCCLUSION_THRESHOLD;
+    }
+    
+    int2 DepthDim;
+    g_TextureCurrDepth.GetDimensions(DepthDim.x, DepthDim.y);
     if (!Desc.IsSuccess)
     {
         float Disocclusion = 0.0;
@@ -172,9 +167,9 @@ ProjectionDesc ComputeReprojection(float2 PrevPos, float CurrDepth)
         {
             for (int x = -SearchRadius; x <= SearchRadius; x++)
             {
-                float2 Location = PrevPos + float2(x, y);
-                float PrevDepth = SamplePrevDepthLinear(Location);
-                float Weight = ComputeDisocclusionD(CurrDepth, PrevDepth);
+                float2 Location    = PrevPos + float2(x, y);
+                float  PrevCameraZ = SampleCameraZFromDepthUC(g_TexturePrevDepth, DepthDim, Location, 0, g_PrevCamera.mProj);
+                float  Weight      = ComputeDisocclusion(CurrCamZ, PrevCameraZ);
                 if (Weight > Disocclusion)
                 {
                     Disocclusion = Weight;
@@ -189,9 +184,11 @@ ProjectionDesc ComputeReprojection(float2 PrevPos, float CurrDepth)
 
     if (!Desc.IsSuccess)
     {
-        int2 PrevPosi = int2(Desc.PrevCoord - 0.5);
-        float x = frac(Desc.PrevCoord.x + 0.5);
-        float y = frac(Desc.PrevCoord.y + 0.5);
+        float2 PrevCoord    = Desc.PrevCoord - float2(0.5, 0.5);
+        float2 PrevCoord00  = floor(PrevCoord);
+        int2   PrevCoord00i = int2(PrevCoord00);
+        float x = PrevCoord.x - PrevCoord00.x;
+        float y = PrevCoord.y - PrevCoord00.y;
 
         float Weight[4];
         Weight[0] = (1.0 - x) * (1.0 - y);
@@ -199,35 +196,28 @@ ProjectionDesc ComputeReprojection(float2 PrevPos, float CurrDepth)
         Weight[2] = (1.0 - x) * y;
         Weight[3] = x * y;
 
+        float  WeightSum     = 0.0;
+        float  WeightedCamZ  = 0.0;
+        float4 WeightedColor = float4(0.0, 0.0, 0.0, 0.0);
+        for (int SampleIdx = 0; SampleIdx < 4; ++SampleIdx)
         {
-            for (int SampleIdx = 0; SampleIdx < 4; ++SampleIdx)
-            {
-                int2 Location = PrevPosi + int2(SampleIdx & 0x01, SampleIdx >> 1);
-                float PrevDepth = SamplePrevDepth(Location);
-                bool IsValidSample = ComputeDisocclusionD(CurrDepth, PrevDepth) > (SSR_DISOCCLUSION_THRESHOLD / 2.0);
-                Weight[SampleIdx] *= float(IsValidSample);
-            }
-        }
+            int2 Location = PrevCoord00i + int2(SampleIdx & 0x01, SampleIdx >> 1);
+            float PrevCamZ = DepthToCameraZ(LoadPrevDepth(Location), g_PrevCamera.mProj);
+                
+            bool IsValidSample = ComputeDisocclusion(CurrCamZ, PrevCamZ) > (SSR_DISOCCLUSION_THRESHOLD / 2.0);
+            Weight[SampleIdx] *= float(IsValidSample);
 
-        float WeightSum    = 0.0;
-        float WeightedCamZ = 0.0;
-        float4 ColorSum = float4(0.0, 0.0, 0.0, 0.0);
-
-        {
-            for (int SampleIdx = 0; SampleIdx < 4; ++SampleIdx)
-            {
-                int2 Location = PrevPosi + int2(SampleIdx & 0x01, SampleIdx >> 1);
-                ColorSum     += Weight[SampleIdx] * SamplePrevRadiance(Location);
-                WeightedCamZ += Weight[SampleIdx] * DepthToCameraZ(SamplePrevDepth(Location), g_PrevCamera.mProj);
-                WeightSum    += Weight[SampleIdx];
-            }
+            WeightedColor += Weight[SampleIdx] * LoadPrevRadiance(Location);
+            WeightedCamZ  += Weight[SampleIdx] * PrevCamZ;
+            WeightSum     += Weight[SampleIdx]; 
         }
         
-        WeightedCamZ /= max(WeightSum, 1e-6);
-        ColorSum /= max(WeightSum, 1e-6);
+        WeightSum = max(WeightSum, 1e-6);
+        WeightedCamZ  /= WeightSum;
+        WeightedColor /= WeightSum;
 
-        Desc.IsSuccess = ComputeDisocclusionZ(DepthToCameraZ(CurrDepth, g_CurrCamera.mProj), WeightedCamZ) > SSR_DISOCCLUSION_THRESHOLD;
-        Desc.Color = ColorSum;
+        Desc.IsSuccess = ComputeDisocclusion(CurrCamZ, WeightedCamZ) > SSR_DISOCCLUSION_THRESHOLD;
+        Desc.Color = WeightedColor;
     } 
 
     Desc.IsSuccess = Desc.IsSuccess && IsInsideScreen(Desc.PrevCoord, g_CurrCamera.f4ViewportSize.xy);
@@ -242,9 +232,9 @@ PSOutput ComputeTemporalAccumulationPS(in FullScreenTriangleVSOutput VSOut)
     // Secondary reprojection based on ray lengths:
     // https://www.ea.com/seed/news/seed-dd18-presentation-slides-raytracing (Slide 45)
     PixelStatistic PixelStat = ComputePixelStatistic(int2(Position.xy));
-    float Depth = SampleCurrDepth(int2(Position.xy));
-    float HitDepth = SampleHitDepth(int2(Position.xy));
-    float2 Motion = SampleMotion(int2(Position.xy));
+    float Depth = LoadCurrDepth(int2(Position.xy));
+    float HitDepth = LoadHitDepth(int2(Position.xy));
+    float2 Motion = LoadMotion(int2(Position.xy));
 
     float2 PrevIncidentPoint = Position.xy - Motion * float2(g_CurrCamera.f4ViewportSize.xy);
     float2 PrevReflectionHit = ComputeReflectionHitPosition(int2(Position.xy), HitDepth);
@@ -265,12 +255,12 @@ PSOutput ComputeTemporalAccumulationPS(in FullScreenTriangleVSOutput VSOut)
         float4 ColorMax = PixelStat.Mean + SSR_TEMPORAL_VARIANCE_GAMMA * PixelStat.StdDev;
         float4 PrevRadiance = clamp(Reprojection.Color, ColorMin, ColorMax);
         float  PrevVariance = SamplePrevVarianceLinear(Reprojection.PrevCoord);
-        Output.Radiance = lerp(SampleCurrRadiance(int2(Position.xy)), PrevRadiance, g_SSRAttribs.TemporalRadianceStabilityFactor);
-        Output.Variance = lerp(SampleCurrVariance(int2(Position.xy)), PrevVariance, g_SSRAttribs.TemporalVarianceStabilityFactor);
+        Output.Radiance = lerp(LoadCurrRadiance(int2(Position.xy)), PrevRadiance, g_SSRAttribs.TemporalRadianceStabilityFactor);
+        Output.Variance = lerp(LoadCurrVariance(int2(Position.xy)), PrevVariance, g_SSRAttribs.TemporalVarianceStabilityFactor);
     }
     else
     {
-        Output.Radiance = SampleCurrRadiance(int2(Position.xy));
+        Output.Radiance = LoadCurrRadiance(int2(Position.xy));
         Output.Variance = 1.0f;
     }
     return Output;

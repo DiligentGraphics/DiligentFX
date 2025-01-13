@@ -36,17 +36,17 @@ struct PixelAreaStatistic
     float4 ColorSum;
 };
 
-float SampleRoughness(int2 PixelCoord)
+float LoadRoughness(int2 PixelCoord)
 {
     return g_TextureRoughness.Load(int3(PixelCoord, 0));
 }
 
-float3 SampleNormalWS(int2 PixelCoord)
+float3 LoadNormalWS(int2 PixelCoord)
 {
     return g_TextureNormal.Load(int3(PixelCoord, 0));
 }
 
-float SampleDepth(int2 PixelCoord)
+float LoadDepth(int2 PixelCoord)
 {
     return g_TextureDepth.Load(int3(PixelCoord, 0));
 }
@@ -62,27 +62,17 @@ float4 ComputeBlurKernelRotation(uint2 PixelCoord, uint FrameIndex)
     return GetRotator(2.0 * M_PI * Angle);
 }
 
-bool IsNaN(float x)
-{
-#ifdef WEBGPU
-	// Tint reader can't generate correct code for isnan
-    return (asuint(x) & 0x7FFFFFFF) > 0x7F800000;
-#else
-    return isnan(x);
-#endif
-}
-
 float2 ComputeWeightRayLength(int2 PixelCoord, float3 V, float3 N, float Roughness, float NdotV, float Weight)
 {
     float4 RayDirectionPDF = g_TextureRayDirectionPDF.Load(int3(PixelCoord, 0));
-    float InvRayLength = rsqrt(dot(RayDirectionPDF.xyz, RayDirectionPDF.xyz));
-    if (IsNaN(InvRayLength))
+    float RayLength = length(RayDirectionPDF.xyz);
+    if (RayLength < 1e-6)
     {
-        return float2(1.0e-6f, 1.0e-6f);
+        return float2(1e-6, 1e-6);
     }
     else
     {
-        float3 RayDirection = RayDirectionPDF.xyz * InvRayLength;
+        float3 RayDirection = RayDirectionPDF.xyz / RayLength;
         float PDF = RayDirectionPDF.w;
         float AlphaRoughness = Roughness * Roughness;
 
@@ -96,7 +86,7 @@ float2 ComputeWeightRayLength(int2 PixelCoord, float3 V, float3 N, float Roughne
         float D = NormalDistribution_GGX(NdotH, AlphaRoughness);
         float LocalBRDF = Vis * D * NdotL;
         LocalBRDF *= ComputeGaussianWeight(Weight);
-        return float2(max(LocalBRDF / max(PDF, 1.0e-5f), 1e-6), rcp(InvRayLength));
+        return float2(max(LocalBRDF / max(PDF, 1e-5), 1e-6), RayLength);
     }
 }
 
@@ -140,16 +130,18 @@ PSOutput ComputeSpatialReconstructionPS(in FullScreenTriangleVSOutput VSOut)
     Poisson[7] = float3(+0.1564120, -0.8198990, +0.8346850);
 
     float4 Position = VSOut.f4PixelPos;
+    int2   PixelCoord = int2(Position.xy);
+    
     float2 ScreenCoordUV = Position.xy * g_Camera.f4ViewportSize.zw;
-    float3 PositionWS = ScreenSpaceToWorldSpace(float3(ScreenCoordUV, SampleDepth(int2(Position.xy))));
-    float3 NormalWS = SampleNormalWS(int2(Position.xy));
+    float3 PositionWS = ScreenSpaceToWorldSpace(float3(ScreenCoordUV, LoadDepth(PixelCoord)));
+    float3 NormalWS = LoadNormalWS(PixelCoord);
     float3 ViewWS = normalize(g_Camera.f4Position.xyz - PositionWS);
     float NdotV = saturate(dot(NormalWS, ViewWS));
 
-    float Roughness = SampleRoughness(int2(Position.xy));
+    float Roughness = LoadRoughness(PixelCoord);
     float RoughnessFactor = saturate(float(SSR_SPATIAL_RECONSTRUCTION_ROUGHNESS_FACTOR) * Roughness);
     float Radius = lerp(0.0, g_SSRAttribs.SpatialReconstructionRadius, RoughnessFactor);
-    float4 Rotator = ComputeBlurKernelRotation(uint2(Position.xy), g_Camera.uiFrameIndex);
+    float4 Rotator = ComputeBlurKernelRotation(uint2(PixelCoord), g_Camera.uiFrameIndex);
 
     PixelAreaStatistic PixelAreaStat;
     PixelAreaStat.ColorSum = float4(0.0, 0.0, 0.0, 0.0);

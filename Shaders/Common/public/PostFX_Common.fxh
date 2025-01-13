@@ -136,4 +136,42 @@ float ComputeSpatialWeight(float Distance, float Sigma)
     return exp(-(Distance) / (2.0 * Sigma * Sigma));
 }
 
+// Samples a depth buffer at the given unnormalized coordinates and returns the interpolated
+// camera space Z value.
+float SampleCameraZFromDepthUC(Texture2D<float> DepthBuffer, 
+                               int2             Dimensions,
+                               float2           Location,
+                               int              MipLevel,
+                               float4x4         Proj)
+{
+    Location -= float2(0.5, 0.5);
+    
+    float2 Location00 = floor(Location);
+    float2 Weights    = Location - Location00;
+    
+    int i0 = clamp(int(Location00.x),     0, Dimensions.x - 1);
+    int j0 = clamp(int(Location00.y),     0, Dimensions.y - 1);
+    int i1 = clamp(int(Location00.x) + 1, 0, Dimensions.x - 1);
+    int j1 = clamp(int(Location00.y) + 1, 0, Dimensions.y - 1);
+ 
+    float Z00 = DepthToCameraZ(DepthBuffer.Load(int3(i0, j0, MipLevel)), Proj);
+    float Z10 = DepthToCameraZ(DepthBuffer.Load(int3(i1, j0, MipLevel)), Proj);
+    float Z01 = DepthToCameraZ(DepthBuffer.Load(int3(i0, j1, MipLevel)), Proj);
+    float Z11 = DepthToCameraZ(DepthBuffer.Load(int3(i1, j1, MipLevel)), Proj);
+    
+    return lerp(lerp(Z00, Z10, Weights.x), 
+                lerp(Z01, Z11, Weights.x),
+                Weights.y);
+}
+
+float SampleCameraZFromDepthUC(Texture2D<float> DepthBuffer, 
+                               float2           Location,
+                               int              MipLevel,
+                               float4x4         Proj)
+{
+    int2 Dimensions;
+    DepthBuffer.GetDimensions(Dimensions.x, Dimensions.y);
+    return SampleCameraZFromDepthUC(DepthBuffer, Dimensions, Location, MipLevel, Proj);
+}
+
 #endif // _POST_FX_COMMON_FXH_
