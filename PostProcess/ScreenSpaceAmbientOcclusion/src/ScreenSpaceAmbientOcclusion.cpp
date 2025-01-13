@@ -72,9 +72,6 @@ void ScreenSpaceAmbientOcclusion::PrepareResources(IRenderDevice* pDevice, IDevi
     const bool UseReverseDepth = (PostFXFeatureFlags & PostFXContext::FEATURE_FLAG_REVERSED_DEPTH) != 0;
     if (m_FeatureFlags != FeatureFlags || m_UseReverseDepth != UseReverseDepth)
     {
-        for (auto& Iter : m_RenderTech)
-            Iter.second.SRB.Release();
-
         if ((m_FeatureFlags & (FEATURE_FLAG_HALF_PRECISION_DEPTH | FEATURE_FLAG_HALF_RESOLUTION)) !=
             (FeatureFlags & (FEATURE_FLAG_HALF_PRECISION_DEPTH | FEATURE_FLAG_HALF_RESOLUTION)))
         {
@@ -88,6 +85,9 @@ void ScreenSpaceAmbientOcclusion::PrepareResources(IRenderDevice* pDevice, IDevi
 
     if (m_BackBufferWidth == FrameDesc.Width && m_BackBufferHeight == FrameDesc.Height)
         return;
+
+    for (auto& Iter : m_RenderTech)
+        Iter.second.SRB.Release();
 
     m_BackBufferWidth  = FrameDesc.Width;
     m_BackBufferHeight = FrameDesc.Height;
@@ -388,9 +388,9 @@ bool ScreenSpaceAmbientOcclusion::UpdateUI(HLSL::ScreenSpaceAmbientOcclusionAttr
 {
     const char* AlgorithmTypeNames[] = {"GTAO", "HBAO"};
 
-    Int32 AlgorithmType             = FeatureFlags & FEATURE_FLAG_UNIFORM_WEIGHTING;
-    bool  FeatureHalfResolution     = FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION;
-    bool  FeatureHalfPrecisionDepth = FeatureFlags & FEATURE_FLAG_HALF_PRECISION_DEPTH;
+    int  AlgorithmType             = (FeatureFlags & FEATURE_FLAG_UNIFORM_WEIGHTING) != 0 ? 1 : 0;
+    bool FeatureHalfResolution     = (FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION) != 0;
+    bool FeatureHalfPrecisionDepth = (FeatureFlags & FEATURE_FLAG_HALF_PRECISION_DEPTH) != 0;
 
     bool AttribsChanged = false;
 
@@ -438,7 +438,7 @@ bool ScreenSpaceAmbientOcclusion::UpdateUI(HLSL::ScreenSpaceAmbientOcclusionAttr
             FeatureFlags &= ~Flag;
     };
 
-    ResetStateFeatureMask(FeatureFlags, FEATURE_FLAG_UNIFORM_WEIGHTING, static_cast<bool>(AlgorithmType));
+    ResetStateFeatureMask(FeatureFlags, FEATURE_FLAG_UNIFORM_WEIGHTING, AlgorithmType == 1);
     ResetStateFeatureMask(FeatureFlags, FEATURE_FLAG_HALF_RESOLUTION, FeatureHalfResolution);
     ResetStateFeatureMask(FeatureFlags, FEATURE_FLAG_HALF_PRECISION_DEPTH, FeatureHalfPrecisionDepth);
 

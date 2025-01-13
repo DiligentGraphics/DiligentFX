@@ -97,9 +97,6 @@ void ScreenSpaceReflection::PrepareResources(IRenderDevice* pDevice, IDeviceCont
     const bool UseReverseDepth = (PostFXFeatureFlags & PostFXContext::FEATURE_FLAG_REVERSED_DEPTH) != 0;
     if (m_FeatureFlags != FeatureFlags || m_UseReverseDepth != UseReverseDepth)
     {
-        for (auto& Iter : m_RenderTech)
-            Iter.second.SRB.Release();
-
         if ((m_FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION) != (FeatureFlags & FEATURE_FLAG_HALF_RESOLUTION))
         {
             m_BackBufferWidth  = 0;
@@ -112,6 +109,9 @@ void ScreenSpaceReflection::PrepareResources(IRenderDevice* pDevice, IDeviceCont
 
     if (m_BackBufferWidth == FrameDesc.Width && m_BackBufferHeight == FrameDesc.Height)
         return;
+
+    for (auto& Iter : m_RenderTech)
+        Iter.second.SRB.Release();
 
     m_BackBufferWidth  = FrameDesc.Width;
     m_BackBufferHeight = FrameDesc.Height;
