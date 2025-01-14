@@ -83,20 +83,17 @@ float ComputeAmbientOcclusionPS(in FullScreenTriangleVSOutput VSOut) : SV_Target
     if (IsBackground(PositionSS.z))
         discard;
 
-    // Trying to fix self-occlusion. Maybe there's a better way
-#if SSAO_OPTION_HALF_PRECISION_DEPTH
-    float Epsilon = 0.000005;
-#else
-    float Epsilon = 0.000001;
-#endif
-#if SSAO_OPTION_INVERTED_DEPTH
-    PositionSS.z *= 1.0 + Epsilon;
-#else
-    PositionSS.z *= 1.0 - Epsilon;
-#endif
-
     float3 NormalVS = mul(float4(LoadNormalWS(ScreenCoordUV), 0.0), g_Camera.mView).xyz; 
     float3 PositionVS = ScreenXYDepthToViewSpace(PositionSS, g_Camera.mProj);
+
+    // Fix self-occlusion
+#if SSAO_OPTION_HALF_PRECISION_DEPTH
+    float Offset = 0.005;
+#else
+    float Offset = 0.00001;
+#endif
+    PositionVS += NormalVS * Offset * PositionVS.z;
+
     float3 ViewVS = -normalize(PositionVS);
     float2 Xi = LoadRandomVector2D(int2(Position));
 
