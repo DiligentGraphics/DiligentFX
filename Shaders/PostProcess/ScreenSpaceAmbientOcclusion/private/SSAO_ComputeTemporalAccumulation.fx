@@ -140,7 +140,7 @@ ProjectionDesc ComputeReprojection(float2 PrevPos, float CurrDepth)
             LoadHistory(FetchCoords.xw),
             LoadHistory(FetchCoords.zw)
         );
-        History = min(float4(16.0, 16.0, 16.0, 16.0), History + float4(1.0, 1.0, 1.0, 1.0));
+        History = min(History + float4(1.0, 1.0, 1.0, 1.0), float4(SSAO_MAX_HISTORY_LENGTH, SSAO_MAX_HISTORY_LENGTH, SSAO_MAX_HISTORY_LENGTH, SSAO_MAX_HISTORY_LENGTH));
         Desc.Occlusion = dot(PrevOcclusion, Weights) / TotalWeight;
         Desc.History = dot(History, Weights) / TotalWeight;
     }

@@ -49,6 +49,10 @@
 // Determines the similarity of the depth in the current and previous frame to calculate the disoclusion in the temporal accumulation step
 #define SSAO_DISOCCLUSION_DEPTH_THRESHOLD 0.01
 
+// Maximum history length in the temporal accumulation step.
+// Higher values reduce noise for the price of increased ghosting.
+#define SSAO_MAX_HISTORY_LENGTH 16.0
+
 struct ScreenSpaceAmbientOcclusionAttribs
 {
     // The value defines world space radius of ambient occlusion
