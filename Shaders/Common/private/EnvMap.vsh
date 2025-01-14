@@ -16,6 +16,6 @@ void main(in  uint   VertexId : SV_VertexID,
     PosXY[2] = float2(+3.0, -1.0);
 
     float2 f2XY = PosXY[VertexId];
-    Pos = float4(f2XY, g_Camera.fFarPlaneDepth, 1.0);
+    Pos = float4(f2XY, DepthToNormalizedDeviceZ(g_Camera.fFarPlaneDepth), 1.0);
     ClipPos = Pos;
 }
