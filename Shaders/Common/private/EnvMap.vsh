@@ -3,6 +3,7 @@
 cbuffer cbCameraAttribs
 {
     CameraAttribs g_Camera;
+    CameraAttribs g_PrevCamera;
 }
 
 void main(in  uint   VertexId : SV_VertexID,

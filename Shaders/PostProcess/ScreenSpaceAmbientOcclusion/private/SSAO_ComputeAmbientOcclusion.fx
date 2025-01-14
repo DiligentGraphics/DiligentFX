@@ -91,10 +91,10 @@ float ComputeAmbientOcclusionPS(in FullScreenTriangleVSOutput VSOut) : SV_Target
 #endif
 #if SSAO_OPTION_INVERTED_DEPTH
     PositionSS.z *= 1.0 + Epsilon;
-#else    
+#else
     PositionSS.z *= 1.0 - Epsilon;
 #endif
-    
+
     float3 NormalVS = mul(float4(LoadNormalWS(ScreenCoordUV), 0.0), g_Camera.mView).xyz; 
     float3 PositionVS = ScreenXYDepthToViewSpace(PositionSS, g_Camera.mProj);
     float3 ViewVS = -normalize(PositionVS);
