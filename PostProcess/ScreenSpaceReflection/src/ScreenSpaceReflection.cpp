@@ -875,7 +875,7 @@ void ScreenSpaceReflection::ComputeStencilMaskAndExtractRoughness(const RenderAt
 
     RenderAttribs.pDeviceContext->SetRenderTargets(_countof(pRTVs), pRTVs, pDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     // Clear depth to 0.0. Pixels that are not discarded write 1.0.
-    RenderAttribs.pDeviceContext->ClearDepthStencil(pDSV, CLEAR_DEPTH_FLAG_NONE, 0.0, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    RenderAttribs.pDeviceContext->ClearDepthStencil(pDSV, CLEAR_DEPTH_FLAG, 0.0, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     RenderAttribs.pDeviceContext->SetPipelineState(RenderTech.PSO);
     RenderAttribs.pDeviceContext->CommitShaderResources(RenderTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     RenderAttribs.pDeviceContext->Draw({3, DRAW_FLAG_VERIFY_ALL, 1});
