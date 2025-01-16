@@ -1,5 +1,5 @@
 /*
- *  Copyright 2024 Diligent Graphics LLC
+ *  Copyright 2024-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -166,14 +166,17 @@ public:
 
 
     /// Pack vertex normals into 32-bit unsigned integers.
-    pxr::VtValue PackVertexNormals(const pxr::VtValue& Normals) const;
+    static pxr::VtValue PackVertexNormals(const pxr::SdfPath& MeshId, const pxr::VtValue& Normals);
 
 
     /// Pack positions into two 32-bit unsigned integers.
     /// The positions are scaled and biased to fit into the range [0, 1].
     /// The original positions can be recovered using the following formula:
     ///     Position = (PackedPosition * Scale) + Bias
-    pxr::VtValue PackVertexPositions(const pxr::VtValue& Points, pxr::GfVec3f& Scale, pxr::GfVec3f& Bias) const;
+    static pxr::VtValue PackVertexPositions(const pxr::SdfPath& MeshId,
+                                            const pxr::VtValue& Points,
+                                            pxr::GfVec3f&       Scale,
+                                            pxr::GfVec3f&       Bias);
 
 private:
     template <typename HandleFaceType>

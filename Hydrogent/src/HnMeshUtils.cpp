@@ -1,5 +1,5 @@
 /*
- *  Copyright 2024 Diligent Graphics LLC
+ *  Copyright 2024-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -398,11 +398,11 @@ pxr::VtValue HnMeshUtils::ConvertVertexPrimvarToFaceVarying(const pxr::VtValue& 
     }
 }
 
-pxr::VtValue HnMeshUtils::PackVertexNormals(const pxr::VtValue& Normals) const
+pxr::VtValue HnMeshUtils::PackVertexNormals(const pxr::SdfPath& MeshId, const pxr::VtValue& Normals)
 {
     if (!Normals.IsHolding<pxr::VtVec3fArray>())
     {
-        LOG_ERROR_MESSAGE("Failed to pack vertex normals for mesh '", m_MeshId.GetString(), "': ", Normals.GetTypeName(), " is not supported");
+        LOG_ERROR_MESSAGE("Failed to pack vertex normals for mesh '", MeshId.GetString(), "': ", Normals.GetTypeName(), " is not supported");
         return {};
     }
 
@@ -421,11 +421,14 @@ pxr::VtValue HnMeshUtils::PackVertexNormals(const pxr::VtValue& Normals) const
     return pxr::VtValue::Take(PackedNormals);
 }
 
-pxr::VtValue HnMeshUtils::PackVertexPositions(const pxr::VtValue& Points, pxr::GfVec3f& Scale, pxr::GfVec3f& Bias) const
+pxr::VtValue HnMeshUtils::PackVertexPositions(const pxr::SdfPath& MeshId,
+                                              const pxr::VtValue& Points,
+                                              pxr::GfVec3f&       Scale,
+                                              pxr::GfVec3f&       Bias)
 {
     if (!Points.IsHolding<pxr::VtVec3fArray>())
     {
-        LOG_ERROR_MESSAGE("Failed to pack vertex positions for mesh '", m_MeshId.GetString(), "': ", Points.GetTypeName(), " is not supported");
+        LOG_ERROR_MESSAGE("Failed to pack vertex positions for mesh '", MeshId.GetString(), "': ", Points.GetTypeName(), " is not supported");
         return {};
     }
 

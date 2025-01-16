@@ -532,9 +532,8 @@ void HnMesh::PreprocessPrimvar(HnRenderDelegate* RenderDelegate, const pxr::TfTo
         VERIFY_EXPR(RenderDelegate != nullptr);
         if (RenderDelegate != nullptr && RenderDelegate->GetUSDRenderer()->GetSettings().VertexPosPackMode == PBR_Renderer::VERTEX_POS_PACK_MODE_64_BIT)
         {
-            HnMeshUtils  MeshUtils{m_Topology, GetId()};
             pxr::GfVec3f UnpackScale, UnpackBias;
-            Primvar = MeshUtils.PackVertexPositions(Primvar, UnpackScale, UnpackBias);
+            Primvar = HnMeshUtils::PackVertexPositions(GetId(), Primvar, UnpackScale, UnpackBias);
 
             entt::registry&        Registry  = RenderDelegate->GetEcsRegistry();
             Components::Transform& Transform = Registry.get<Components::Transform>(m_Entity);
@@ -547,8 +546,7 @@ void HnMesh::PreprocessPrimvar(HnRenderDelegate* RenderDelegate, const pxr::TfTo
         VERIFY_EXPR(RenderDelegate != nullptr);
         if (RenderDelegate != nullptr && RenderDelegate->GetUSDRenderer()->GetSettings().PackVertexNormals)
         {
-            HnMeshUtils MeshUtils{m_Topology, GetId()};
-            Primvar = MeshUtils.PackVertexNormals(Primvar);
+            Primvar = HnMeshUtils::PackVertexNormals(GetId(), Primvar);
         }
     }
 }
