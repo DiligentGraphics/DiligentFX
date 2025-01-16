@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2024 Diligent Graphics LLC
+ *  Copyright 2023-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -154,7 +154,7 @@ private:
     struct StagingIndexData;
     struct StagingVertexData;
 
-    void UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
+    bool UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
                     pxr::HdRenderParam*   RenderParam,
                     pxr::HdDirtyBits&     DirtyBits,
                     const pxr::TfToken&   ReprToken);

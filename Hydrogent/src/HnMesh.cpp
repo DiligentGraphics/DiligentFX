@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2024 Diligent Graphics LLC
+ *  Copyright 2023-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -198,17 +198,7 @@ void HnMesh::Sync(pxr::HdSceneDelegate* Delegate,
     }
     bool UpdateCullMode = pxr::HdChangeTracker::IsTransformDirty(*DirtyBits, Id) || m_CullMode == CULL_MODE_UNDEFINED;
 
-
-    HnRenderDelegate* RenderDelegate      = static_cast<HnRenderDelegate*>(Delegate->GetRenderIndex().GetRenderDelegate());
-    HnGeometryPool&   GeometryPool        = RenderDelegate->GetGeometryPool();
-    const Int64       PendingGeometrySize = GeometryPool.GetPendingVertexDataSize() + GeometryPool.GetPendingIndexDataSize();
-    const Uint64      GeometryLoadBudget  = static_cast<HnRenderParam*>(RenderParam)->GetConfig().GeometryLoadBudget;
-    bool              ReprUpdated         = false;
-    if (GeometryLoadBudget == 0 || static_cast<Uint64>(PendingGeometrySize) < GeometryLoadBudget)
-    {
-        UpdateRepr(*Delegate, RenderParam, *DirtyBits, ReprToken);
-        ReprUpdated = true;
-    }
+    const bool ReprUpdated = UpdateRepr(*Delegate, RenderParam, *DirtyBits, ReprToken);
 
     if (UpdateMaterials)
     {
@@ -332,16 +322,24 @@ struct HnMesh::StagingVertexData
     std::map<pxr::TfToken, std::shared_ptr<pxr::HdBufferSource>> Sources;
 };
 
-void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
+bool HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
                         pxr::HdRenderParam*   RenderParam,
                         pxr::HdDirtyBits&     DirtyBits,
                         const pxr::TfToken&   ReprToken)
 {
     const pxr::HdReprSharedPtr& CurrRepr = _GetRepr(ReprToken);
     if (!CurrRepr)
-        return;
+        return true;
 
-    HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(SceneDelegate.GetRenderIndex().GetRenderDelegate());
+    HnRenderDelegate* RenderDelegate      = static_cast<HnRenderDelegate*>(SceneDelegate.GetRenderIndex().GetRenderDelegate());
+    HnGeometryPool&   GeometryPool        = RenderDelegate->GetGeometryPool();
+    const Int64       PendingGeometrySize = GeometryPool.GetPendingVertexDataSize() + GeometryPool.GetPendingIndexDataSize();
+    const Uint64      GeometryLoadBudget  = static_cast<HnRenderParam*>(RenderParam)->GetConfig().GeometryLoadBudget;
+    if (GeometryLoadBudget > 0 && static_cast<Uint64>(PendingGeometrySize) > GeometryLoadBudget)
+    {
+        // Pending geometry size exceeds the budget, skip updating the repr
+        return false;
+    }
 
     const pxr::SdfPath& Id = GetId();
 
@@ -407,7 +405,6 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
     Uint32 BakedStartVertex = (!UseNativeStartVertex && m_VertexHandle) ? m_VertexHandle->GetStartVertex() : 0;
     if (!StagingVerts.Sources.empty())
     {
-        HnGeometryPool& GeometryPool = RenderDelegate->GetGeometryPool();
         // When native start vertex is not supported, start vertex needs to be baked into the index data, and
         // we need to know the start vertex now, so we have to disallow pool allocation reuse (with pool allocation reuse
         // enabled, the allocation initialization is delayed until the GeometryPool.Commit() is called later).
@@ -431,8 +428,6 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
     {
         StagingIndexData StagingInds;
         UpdateIndexData(StagingInds, StagingVerts.Points, RenderDelegate->AllowPrimitiveRestart());
-
-        HnGeometryPool& GeometryPool = RenderDelegate->GetGeometryPool();
 
         GeometryPool.AllocateIndices(Id.GetString() + " - faces", pxr::VtValue::Take(StagingInds.FaceIndices), BakedStartVertex, m_IndexData.Faces);
         GeometryPool.AllocateIndices(Id.GetString() + " - edges", pxr::VtValue::Take(StagingInds.EdgeIndices), BakedStartVertex, m_IndexData.Edges);
@@ -483,6 +478,8 @@ void HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
     }
 
     DirtyBits &= ~pxr::HdChangeTracker::NewRepr;
+
+    return true;
 }
 
 void HnMesh::UpdateDrawItemsForGeometrySubsets(pxr::HdSceneDelegate& SceneDelegate,
