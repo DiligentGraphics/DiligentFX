@@ -1,5 +1,5 @@
 /*
- *  Copyright 2024 Diligent Graphics LLC
+ *  Copyright 2024-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -58,6 +58,7 @@ HnGeometryPool::~HnGeometryPool()
 {
     VERIFY((m_PendingVertexData.empty() && m_PendingVertexDataSize >= 0) || m_PendingVertexDataSize == 0, "Pending vertex data size must be 0 when there are no pending data");
     VERIFY((m_PendingIndexData.empty() && m_PendingIndexDataSize >= 0) || m_PendingIndexDataSize == 0, "Pending index data size must be 0 when there are no pending data");
+    VERIFY(m_ReservedDataSize.load() == 0, "Reserved data size (", m_ReservedDataSize, ") must be 0");
 }
 
 class GeometryPoolData
@@ -1014,6 +1015,20 @@ void HnGeometryPool::Commit(IDeviceContext* pContext)
         }
         m_PendingIndexData.clear();
     }
+}
+
+Int64 HnGeometryPool::ReserveDataSize(Uint64 Size)
+{
+    return GetPendingVertexDataSize() +
+        GetPendingIndexDataSize() +
+        m_ReservedDataSize.fetch_add(static_cast<Int64>(Size)) +
+        static_cast<Int64>(Size);
+}
+
+void HnGeometryPool::ReleaseReservedDataSize(Uint64 Size)
+{
+    VERIFY_EXPR(m_ReservedDataSize.load() >= static_cast<Int64>(Size));
+    m_ReservedDataSize.fetch_add(-static_cast<Int64>(Size));
 }
 
 } // namespace USD

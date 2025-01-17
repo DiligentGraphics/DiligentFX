@@ -1,5 +1,5 @@
 /*
- *  Copyright 2024 Diligent Graphics LLC
+ *  Copyright 2024-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -94,8 +94,11 @@ public:
                          Uint32                                        StartVertex,
                          std::shared_ptr<HnGeometryPool::IndexHandle>& Handle);
 
-    Int64 GetPendingVertexDataSize() const { return m_PendingVertexDataSize; }
-    Int64 GetPendingIndexDataSize() const { return m_PendingIndexDataSize; }
+    Int64 GetPendingVertexDataSize() const { return m_PendingVertexDataSize.load(); }
+    Int64 GetPendingIndexDataSize() const { return m_PendingIndexDataSize.load(); }
+
+    Int64 ReserveDataSize(Uint64 Size);
+    void  ReleaseReservedDataSize(Uint64 Size);
 
 private:
     RefCntAutoPtr<IRenderDevice> m_pDevice;
@@ -116,6 +119,8 @@ private:
     std::mutex                              m_PendingIndexDataMtx;
     std::vector<std::shared_ptr<IndexData>> m_PendingIndexData;
     std::atomic<Int64>                      m_PendingIndexDataSize{0};
+
+    std::atomic<Int64> m_ReservedDataSize{0};
 
     ObjectsRegistry<size_t, std::shared_ptr<VertexData>> m_VertexCache;
     ObjectsRegistry<size_t, std::shared_ptr<IndexData>>  m_IndexCache;

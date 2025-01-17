@@ -322,6 +322,36 @@ struct HnMesh::StagingVertexData
     std::map<pxr::TfToken, std::shared_ptr<pxr::HdBufferSource>> Sources;
 };
 
+static size_t GetPrimvarElementSize(const pxr::TfToken& Name, const pxr::TfToken& Role)
+{
+    if (Name == pxr::HdTokens->points ||
+        Role == pxr::HdPrimvarSchemaTokens->point)
+    {
+        return sizeof(float3);
+    }
+    else if (Name == pxr::HdTokens->normals ||
+             Role == pxr::HdPrimvarSchemaTokens->normal)
+    {
+        return sizeof(float3);
+    }
+    else if (Name == pxr::HdTokens->displayColor ||
+             Role == pxr::HdPrimvarSchemaTokens->color)
+    {
+        return sizeof(float3);
+    }
+    else if (Role == pxr::HdPrimvarSchemaTokens->textureCoordinate)
+    {
+        return sizeof(float2);
+    }
+    else
+    {
+        UNEXPECTED("Unrecognized primvar ", Name, " with role ", Role,
+                   ". This likely indicated that HnRenderPass::GetSupportedVertexInputs "
+                   " supports a vertex input that is not handled here.");
+        return 0;
+    }
+}
+
 bool HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
                         pxr::HdRenderParam*   RenderParam,
                         pxr::HdDirtyBits&     DirtyBits,
@@ -346,7 +376,7 @@ bool HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
     const bool TopologyDirty   = pxr::HdChangeTracker::IsTopologyDirty(DirtyBits, Id);
     const bool AnyPrimvarDirty = pxr::HdChangeTracker::IsAnyPrimvarDirty(DirtyBits, Id);
 
-    bool IndexDataDirty = TopologyDirty;
+    bool IndexDataDirty = TopologyDirty || !m_IndexData.Faces;
     if (TopologyDirty)
     {
         UpdateTopology(SceneDelegate, RenderParam, DirtyBits, ReprToken);
@@ -365,6 +395,55 @@ bool HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
         {
             m_HasFaceVaryingPrimvars = HasFaceVaryingPrimvars;
             IndexDataDirty           = true;
+        }
+    }
+
+    const bool UseLineStrip = RenderDelegate->AllowPrimitiveRestart();
+
+    size_t ExpectedGeometryDataSize = VertexPrimvarsInfo.ExpectedDataSize + FacePrimvarsInfo.ExpectedDataSize;
+    if (IndexDataDirty)
+    {
+        HnMeshUtils MeshUtils{m_Topology, GetId()};
+
+        const HnMeshUtils::GET_TOTAL_INDEX_COUNT_FLAGS IndexCountFlags =
+            HnMeshUtils::GET_TOTAL_INDEX_COUNT_FLAG_TRIANGLES |
+            HnMeshUtils::GET_TOTAL_INDEX_COUNT_FLAG_POINTS |
+            (UseLineStrip ? HnMeshUtils::GET_TOTAL_INDEX_COUNT_FLAG_EDGES_STRIP : HnMeshUtils::GET_TOTAL_INDEX_COUNT_FLAG_EDGES_LIST);
+        ExpectedGeometryDataSize += MeshUtils.GetTotalIndexCount(IndexCountFlags) * sizeof(Uint32);
+    }
+
+    class GeometryPoolReservedDataGuard
+    {
+    public:
+        GeometryPoolReservedDataGuard(HnGeometryPool& Pool, Uint64 Size) :
+            m_Pool{Pool},
+            m_Size{Size},
+            m_TotalSize{static_cast<Uint64>(Pool.ReserveDataSize(Size))}
+        {
+        }
+        ~GeometryPoolReservedDataGuard()
+        {
+            m_Pool.ReleaseReservedDataSize(m_Size);
+        }
+        Uint64 GetTotalSize() const { return m_TotalSize; }
+
+    private:
+        HnGeometryPool& m_Pool;
+        const Uint64    m_Size;
+        const Uint64    m_TotalSize;
+    };
+    GeometryPoolReservedDataGuard ReservedDataGuard{GeometryPool, ExpectedGeometryDataSize};
+    if (GeometryLoadBudget > 0 && ReservedDataGuard.GetTotalSize() > GeometryLoadBudget)
+    {
+        if (ReservedDataGuard.GetTotalSize() == ExpectedGeometryDataSize)
+        {
+            LOG_WARNING_MESSAGE("Syncing rprim ", Id, " requires ", ExpectedGeometryDataSize,
+                                " bytes of geometry data, which exceeds the budget ", GeometryLoadBudget, ".");
+        }
+        else
+        {
+            // Reserved data size exceeds the budget, skip updating the repr
+            return false;
         }
     }
 
@@ -427,7 +506,7 @@ bool HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
     if (IndexDataDirty && m_VertexHandle)
     {
         StagingIndexData StagingInds;
-        UpdateIndexData(StagingInds, StagingVerts.Points, RenderDelegate->AllowPrimitiveRestart());
+        UpdateIndexData(StagingInds, StagingVerts.Points, UseLineStrip);
 
         GeometryPool.AllocateIndices(Id.GetString() + " - faces", pxr::VtValue::Take(StagingInds.FaceIndices), BakedStartVertex, m_IndexData.Faces);
         GeometryPool.AllocateIndices(Id.GetString() + " - edges", pxr::VtValue::Take(StagingInds.EdgeIndices), BakedStartVertex, m_IndexData.Edges);
@@ -709,7 +788,8 @@ bool HnMesh::AddJointInfluencesStagingBufferSource(const pxr::VtValue& NumInflue
 void HnMesh::PrimvarsInfo::AddDirtyPrimvar(pxr::HdDirtyBits&               DirtyBits,
                                            const pxr::SdfPath&             Id,
                                            const pxr::TfToken&             Name,
-                                           const pxr::HdPrimvarDescriptor& PrimDesc)
+                                           const pxr::HdPrimvarDescriptor& PrimDesc,
+                                           size_t                          Size)
 {
     if (pxr::HdChangeTracker::IsPrimvarDirty(DirtyBits, Id, PrimDesc.name))
     {
@@ -717,6 +797,7 @@ void HnMesh::PrimvarsInfo::AddDirtyPrimvar(pxr::HdDirtyBits&               Dirty
     }
 
     ++Count;
+    ExpectedDataSize += Size;
 }
 
 void HnMesh::GetPrimvarsInfo(pxr::HdSceneDelegate& SceneDelegate,
@@ -728,6 +809,8 @@ void HnMesh::GetPrimvarsInfo(pxr::HdSceneDelegate& SceneDelegate,
 
     HnRenderPass::SupportedVertexInputsMapType SupportedPrimvars = GetSupportedPrimvars(SceneDelegate.GetRenderIndex(), GetMaterialId(), m_Topology);
 
+    const size_t ExpectedNumElements = m_HasFaceVaryingPrimvars ? m_Topology.GetNumFaceVaryings() : m_Topology.GetNumPoints();
+
     std::unordered_map<pxr::TfToken, pxr::HdPrimvarDescriptor, pxr::TfToken::HashFunctor> SkippedPrimvarsByRole;
 
     auto UpdatePrimvarsInfo = [&](const pxr::HdInterpolation Interpolation,
@@ -735,7 +818,8 @@ void HnMesh::GetPrimvarsInfo(pxr::HdSceneDelegate& SceneDelegate,
         pxr::HdPrimvarDescriptorVector PrimVarDescs = GetPrimvarDescriptors(&SceneDelegate, Interpolation);
         for (const pxr::HdPrimvarDescriptor& PrimDesc : PrimVarDescs)
         {
-            if (SupportedPrimvars.find(PrimDesc.name) == SupportedPrimvars.end())
+            auto PrimvarIt = SupportedPrimvars.find(PrimDesc.name);
+            if (PrimvarIt == SupportedPrimvars.end())
             {
                 if (PrimDesc.role == pxr::HdPrimvarSchemaTokens->point ||
                     PrimDesc.role == pxr::HdPrimvarSchemaTokens->normal ||
@@ -746,7 +830,9 @@ void HnMesh::GetPrimvarsInfo(pxr::HdSceneDelegate& SceneDelegate,
                 continue;
             }
 
-            PrimvarsInfo.AddDirtyPrimvar(DirtyBits, Id, PrimDesc.name, PrimDesc);
+            // Use role provided by GetSupportedPrimvars, not the role from the primvar descriptor.
+            const size_t DataSize = GetPrimvarElementSize(PrimDesc.name, PrimvarIt->second) * ExpectedNumElements;
+            PrimvarsInfo.AddDirtyPrimvar(DirtyBits, Id, PrimDesc.name, PrimDesc, DataSize);
             SupportedPrimvars.erase(PrimDesc.name);
         }
     };
@@ -783,7 +869,8 @@ void HnMesh::GetPrimvarsInfo(pxr::HdSceneDelegate& SceneDelegate,
                 const pxr::HdPrimvarDescriptor& PrimDesc = PrimIt->second;
                 LOG_WARNING_MESSAGE("Primvar '", PrimDesc.name, "' in mesh ", Id, " is not recognized by the material, but matches primvar '",
                                     Name, "' by role '", PrimDesc.role, "'.");
-                (PrimDesc.interpolation == pxr::HdInterpolationFaceVarying ? FacePrimvarsInfo : VertexPrimvarsInfo).AddDirtyPrimvar(DirtyBits, Id, Name, PrimDesc);
+                const size_t DataSize = GetPrimvarElementSize(PrimDesc.name, Role) * ExpectedNumElements;
+                (PrimDesc.interpolation == pxr::HdInterpolationFaceVarying ? FacePrimvarsInfo : VertexPrimvarsInfo).AddDirtyPrimvar(DirtyBits, Id, Name, PrimDesc, DataSize);
             }
         }
     }

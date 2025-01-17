@@ -164,6 +164,9 @@ private:
         // The total number of supported primvars
         Uint32 Count = 0;
 
+        // The total expected size of the data for all primvars
+        size_t ExpectedDataSize = 0;
+
         // Dirty primvars arranged by name.
         // Typically, the name is the same as the primvar descriptor name,
         // but it may be different if the primvar is found using the role.
@@ -175,7 +178,8 @@ private:
         void AddDirtyPrimvar(pxr::HdDirtyBits&               DirtyBits,
                              const pxr::SdfPath&             Id,
                              const pxr::TfToken&             Name,
-                             const pxr::HdPrimvarDescriptor& PrimDesc);
+                             const pxr::HdPrimvarDescriptor& PrimDesc,
+                             size_t                          Size);
     };
     void GetPrimvarsInfo(pxr::HdSceneDelegate& SceneDelegate,
                          pxr::HdDirtyBits&     DirtyBits,
