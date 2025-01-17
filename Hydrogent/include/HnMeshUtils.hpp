@@ -44,6 +44,27 @@ public:
     {}
     ~HnMeshUtils();
 
+
+    /// Computes the number of triangles in the triangulated mesh.
+    /// If NumFaces is not nullptr, it will be set to the number of faces.
+    ///
+    /// \param[out] NumFaces - The number of faces.
+    /// \return The number of triangles.
+    ///
+    /// \remarks    The number of faces excludes the faces with less than 3 vertices.
+    size_t GetNumTriangles(size_t* NumFaces = nullptr) const;
+
+
+    /// Computes the number of edges in the mesh.
+    /// If NumFaces is not nullptr, it will be set to the number of faces.
+    ///
+    /// \param[out] NumFaces - The number of faces.
+    /// \return The number of triangles.
+    ///
+    /// \remarks    The number of faces excludes the faces with less than 3 vertices.
+    size_t GetNumEdges(size_t* NumFaces = nullptr) const;
+
+
     /// Triangulates the mesh and returns the triangle indices and the start of each subset.
     ///
     /// \param[in]  UseFaceVertexIndices - Whether to use face vertex indices.

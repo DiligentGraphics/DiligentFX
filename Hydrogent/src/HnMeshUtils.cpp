@@ -74,6 +74,22 @@ void HnMeshUtils::ProcessFaces(HandleFaceType&& HandleFace) const
     }
 }
 
+size_t HnMeshUtils::GetNumTriangles(size_t* pNumFaces) const
+{
+    size_t NumTriangles = 0;
+    size_t NumFaces     = 0;
+    ProcessFaces(
+        [&](size_t FaceId, int StartVertex, int VertCount) {
+            NumTriangles += VertCount - 2;
+            ++NumFaces;
+        });
+    if (pNumFaces != nullptr)
+    {
+        *pNumFaces = NumFaces;
+    }
+    return NumTriangles;
+}
+
 void HnMeshUtils::Triangulate(bool                UseFaceVertexIndices,
                               const pxr::VtValue* PointsPrimvar,
                               pxr::VtVec3iArray&  TriangleIndices,
@@ -88,11 +104,7 @@ void HnMeshUtils::Triangulate(bool                UseFaceVertexIndices,
         nullptr;
 
     // Count the number of triangles
-    size_t NumTriangles = 0;
-    ProcessFaces(
-        [&](size_t FaceId, int StartVertex, int VertCount) {
-            NumTriangles += VertCount - 2;
-        });
+    const size_t NumTriangles = GetNumTriangles();
 
     // Triangulate faces
     TriangleIndices.reserve(NumTriangles);
@@ -233,15 +245,26 @@ void HnMeshUtils::Triangulate(bool                UseFaceVertexIndices,
     }
 }
 
-pxr::VtIntArray HnMeshUtils::ComputeEdgeIndices(bool UseFaceVertexIndices, bool UseLineStrip) const
+size_t HnMeshUtils::GetNumEdges(size_t* pNumFaces) const
 {
+    size_t NumFaces = 0;
     size_t NumEdges = 0;
-    size_t NumFaces = 0; // Count the actual number of faces
     ProcessFaces(
         [&](size_t FaceId, int StartVertex, int VertCount) {
             NumEdges += VertCount;
             ++NumFaces;
         });
+    if (pNumFaces != nullptr)
+    {
+        *pNumFaces = NumFaces;
+    }
+    return NumEdges;
+}
+
+pxr::VtIntArray HnMeshUtils::ComputeEdgeIndices(bool UseFaceVertexIndices, bool UseLineStrip) const
+{
+    size_t NumFaces = 0; // Count the actual number of faces
+    size_t NumEdges = GetNumEdges(&NumFaces);
 
     pxr::VtIntArray EdgeIndices;
     if (UseLineStrip)
