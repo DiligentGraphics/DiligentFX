@@ -105,6 +105,7 @@ void HnMeshUtils::Triangulate(bool                UseFaceVertexIndices,
 
     // Count the number of triangles
     const size_t NumTriangles = GetNumTriangles();
+    VERIFY_EXPR(NumTriangles * 3 == GetTotalIndexCount(GET_TOTAL_INDEX_COUNT_FLAG_TRIANGLES));
 
     // Triangulate faces
     TriangleIndices.reserve(NumTriangles);
@@ -280,6 +281,7 @@ pxr::VtIntArray HnMeshUtils::ComputeEdgeIndices(bool UseFaceVertexIndices, bool 
                 EdgeIndices.push_back(-1);
             });
         VERIFY_EXPR(EdgeIndices.size() == NumEdges + NumFaces * 2);
+        VERIFY_EXPR(EdgeIndices.size() == GetTotalIndexCount(GET_TOTAL_INDEX_COUNT_FLAG_EDGES_STRIP));
     }
     else
     {
@@ -295,6 +297,7 @@ pxr::VtIntArray HnMeshUtils::ComputeEdgeIndices(bool UseFaceVertexIndices, bool 
                 EdgeIndices.push_back(StartVertex);
             });
         VERIFY_EXPR(EdgeIndices.size() == NumEdges * 2);
+        VERIFY_EXPR(EdgeIndices.size() == GetTotalIndexCount(GET_TOTAL_INDEX_COUNT_FLAG_EDGES_LIST));
     }
 
     if (UseFaceVertexIndices)
@@ -320,6 +323,7 @@ pxr::VtIntArray HnMeshUtils::ComputePointIndices(bool ConvertToFaceVarying) cons
 
     pxr::VtIntArray PointIndices;
     PointIndices.reserve(NumPoints);
+    VERIFY_EXPR(static_cast<size_t>(NumPoints) == GetTotalIndexCount(GET_TOTAL_INDEX_COUNT_FLAG_POINTS));
     if (ConvertToFaceVarying)
     {
         const int*   FaceVertexIndices = m_Topology.GetFaceVertexIndices().cdata();
@@ -354,6 +358,33 @@ pxr::VtIntArray HnMeshUtils::ComputePointIndices(bool ConvertToFaceVarying) cons
     }
 
     return PointIndices;
+}
+
+size_t HnMeshUtils::GetTotalIndexCount(GET_TOTAL_INDEX_COUNT_FLAGS Flags) const
+{
+    VERIFY((Flags & (GET_TOTAL_INDEX_COUNT_FLAG_EDGES_LIST | GET_TOTAL_INDEX_COUNT_FLAG_EDGES_STRIP)) != (GET_TOTAL_INDEX_COUNT_FLAG_EDGES_LIST | GET_TOTAL_INDEX_COUNT_FLAG_EDGES_STRIP),
+           "COUNT_EDGES_LIST and COUNT_EDGES_STRIP flags are mutually exclusive");
+
+    size_t NumIndices = 0;
+    if (Flags & GET_TOTAL_INDEX_COUNT_FLAG_TRIANGLES)
+    {
+        size_t NumTriangles = GetNumTriangles();
+        NumIndices += NumTriangles * 3;
+    }
+
+    if (Flags & (GET_TOTAL_INDEX_COUNT_FLAG_EDGES_LIST | GET_TOTAL_INDEX_COUNT_FLAG_EDGES_STRIP))
+    {
+        size_t NumFaces = 0;
+        size_t NumEdges = GetNumEdges(&NumFaces);
+        NumIndices += (Flags & GET_TOTAL_INDEX_COUNT_FLAG_EDGES_STRIP) ? NumEdges + NumFaces * 2 : NumEdges * 2;
+    }
+
+    if (Flags & GET_TOTAL_INDEX_COUNT_FLAG_POINTS)
+    {
+        NumIndices += m_Topology.GetNumPoints();
+    }
+
+    return NumIndices;
 }
 
 template <typename T>

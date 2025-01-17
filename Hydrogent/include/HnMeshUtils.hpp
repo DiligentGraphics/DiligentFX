@@ -28,6 +28,7 @@
 
 #include "pxr/imaging/hd/types.h"
 #include "pxr/imaging/hd/meshTopology.h"
+#include "FlagEnum.h"
 
 namespace Diligent
 {
@@ -64,6 +65,17 @@ public:
     /// \remarks    The number of faces excludes the faces with less than 3 vertices.
     size_t GetNumEdges(size_t* NumFaces = nullptr) const;
 
+
+    enum GET_TOTAL_INDEX_COUNT_FLAGS : uint32_t
+    {
+        GET_TOTAL_INDEX_COUNT_FLAG_NONE        = 0u,
+        GET_TOTAL_INDEX_COUNT_FLAG_TRIANGLES   = 1u << 0u,
+        GET_TOTAL_INDEX_COUNT_FLAG_EDGES_LIST  = 1u << 1u,
+        GET_TOTAL_INDEX_COUNT_FLAG_EDGES_STRIP = 1u << 2u,
+        GET_TOTAL_INDEX_COUNT_FLAG_POINTS      = 1u << 3u,
+    };
+    /// Returns the total number of indices (triangles + edges + points)
+    size_t GetTotalIndexCount(GET_TOTAL_INDEX_COUNT_FLAGS Flags) const;
 
     /// Triangulates the mesh and returns the triangle indices and the start of each subset.
     ///
@@ -207,6 +219,7 @@ private:
     const pxr::HdMeshTopology& m_Topology;
     const pxr::SdfPath&        m_MeshId;
 };
+DEFINE_FLAG_ENUM_OPERATORS(HnMeshUtils::GET_TOTAL_INDEX_COUNT_FLAGS);
 
 } // namespace USD
 
