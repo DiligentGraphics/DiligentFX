@@ -119,8 +119,7 @@ template <typename HandleDrawItemFuncType, typename HandleGeomSubsetDrawItemFunc
 void HnMesh::ProcessDrawItems(HandleDrawItemFuncType&&           HandleDrawItem,
                               HandleGeomSubsetDrawItemFuncType&& HandleGeomSubsetDrawItem)
 {
-    const pxr::HdGeomSubsets& GeomSubsets    = m_Topology.GetGeomSubsets();
-    const size_t              NumGeomSubsets = GeomSubsets.size();
+    const size_t NumGeomSubsets = m_Topology.Subsets.size();
     for (auto const& token_repr : _reprs)
     {
         const pxr::TfToken&        Token = token_repr.first;
@@ -146,7 +145,7 @@ void HnMesh::ProcessDrawItems(HandleDrawItemFuncType&&           HandleDrawItem,
                 {
                     if (pxr::HdDrawItem* Item = Repr->GetDrawItemForGeomSubset(GeomSubsetDescIdx, NumGeomSubsets, i))
                     {
-                        HandleGeomSubsetDrawItem(GeomSubsets[i], static_cast<HnDrawItem&>(*Item));
+                        HandleGeomSubsetDrawItem(m_Topology.Subsets[i], static_cast<HnDrawItem&>(*Item));
                     }
                 }
                 ++GeomSubsetDescIdx;
@@ -164,8 +163,8 @@ void HnMesh::UpdateReprMaterials(pxr::HdSceneDelegate* SceneDelegate,
         [&](HnDrawItem& DrawItem) {
             SetDrawItemMaterial(RenderIndex, DrawItem, GetMaterialId());
         },
-        [&](const pxr::HdGeomSubset& Subset, HnDrawItem& DrawItem) {
-            SetDrawItemMaterial(RenderIndex, DrawItem, Subset.materialId);
+        [&](const Topology::Subset& Subset, HnDrawItem& DrawItem) {
+            SetDrawItemMaterial(RenderIndex, DrawItem, Subset.MaterialId);
         });
 }
 
@@ -262,7 +261,7 @@ void HnMesh::AddGeometrySubsetDrawItems(const pxr::HdMeshReprDesc& ReprDesc, pxr
         ReprDesc.geomStyle == pxr::HdMeshGeomStylePoints)
         return;
 
-    const size_t NumGeomSubsets = m_Topology.GetGeomSubsets().size();
+    const size_t NumGeomSubsets = m_Topology.Subsets.size();
     for (size_t i = 0; i < NumGeomSubsets; ++i)
     {
         pxr::HdRepr::DrawItemUniquePtr Item = std::make_unique<HnDrawItem>(_sharedData, *this);
@@ -305,6 +304,36 @@ void HnMesh::Invalidate()
     m_IndexData    = {};
 }
 
+class HnMesh::HdMeshTopologyWrapper
+{
+public:
+    HdMeshTopologyWrapper(pxr::HdSceneDelegate& SceneDelegate,
+                          const pxr::HdMesh&    Mesh) :
+        m_SceneDelegate{SceneDelegate},
+        m_Mesh{Mesh}
+    {
+    }
+
+    pxr::HdMeshTopology& Get()
+    {
+        if (m_Topology.GetNumPoints() == 0)
+        {
+            m_Topology = m_Mesh.GetMeshTopology(&m_SceneDelegate);
+        }
+        return m_Topology;
+    }
+
+    operator pxr::HdMeshTopology &()
+    {
+        return Get();
+    }
+
+private:
+    pxr::HdSceneDelegate& m_SceneDelegate;
+    const pxr::HdMesh&    m_Mesh;
+    pxr::HdMeshTopology   m_Topology;
+};
+
 struct HnMesh::StagingIndexData
 {
     pxr::VtVec3iArray FaceIndices;
@@ -314,6 +343,8 @@ struct HnMesh::StagingIndexData
 
 struct HnMesh::StagingVertexData
 {
+    HdMeshTopologyWrapper& MeshTopology;
+
     pxr::VtValue Points;
 
     // Use map to keep buffer sources sorted by name
@@ -380,10 +411,12 @@ bool HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
     const bool TopologyDirty   = pxr::HdChangeTracker::IsTopologyDirty(DirtyBits, Id);
     const bool AnyPrimvarDirty = pxr::HdChangeTracker::IsAnyPrimvarDirty(DirtyBits, Id);
 
+    HdMeshTopologyWrapper MeshTopology{SceneDelegate, *this};
+
     bool IndexDataDirty = TopologyDirty || !m_IndexData.Faces;
     if (TopologyDirty)
     {
-        UpdateTopology(SceneDelegate, RenderParam, DirtyBits, ReprToken);
+        UpdateTopology(SceneDelegate, RenderParam, DirtyBits, ReprToken, MeshTopology);
         DirtyBits &= ~pxr::HdChangeTracker::DirtyTopology;
         m_IndexData    = {};
         m_VertexHandle = {};
@@ -402,7 +435,7 @@ bool HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
             IndexDataDirty           = true;
         }
 
-        const size_t ExpectedNumElements = m_HasFaceVaryingPrimvars ? m_Topology.GetNumFaceVaryings() : m_Topology.GetNumPoints();
+        const size_t ExpectedNumElements = m_Topology.GetNumElements(m_HasFaceVaryingPrimvars);
         for (const PrimvarsInfo& Primvars : {VertexPrimvarsInfo, FacePrimvarsInfo})
         {
             for (const auto& it : Primvars.Dirty)
@@ -414,25 +447,11 @@ bool HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
         }
     }
 
-    const bool UseLineStrip = RenderDelegate->AllowPrimitiveRestart();
+    const size_t ExpectedTriangleIndexDataSize = m_Topology.ExpectedNumTriangleIndices * sizeof(Uint32);
+    const size_t ExpectedEdgeIndexDataSize     = m_Topology.ExpectedNumEdgeIndices * sizeof(Uint32);
+    const size_t ExpectedPointIndexDataSize    = m_Topology.ExpectedNumPointIndices * sizeof(Uint32);
 
-    size_t ExpectedTriangleIndexDataSize = 0;
-    size_t ExpectedEdgeIndexDataSize     = 0;
-    size_t ExpectedPointIndexDataSize    = 0;
-    if (IndexDataDirty)
-    {
-        HnMeshUtils MeshUtils{m_Topology, GetId()};
-
-        ExpectedTriangleIndexDataSize = MeshUtils.GetTotalIndexCount(HnMeshUtils::GET_TOTAL_INDEX_COUNT_FLAG_TRIANGLES) * sizeof(Uint32);
-        ExpectedEdgeIndexDataSize =
-            MeshUtils.GetTotalIndexCount(UseLineStrip ?
-                                             HnMeshUtils::GET_TOTAL_INDEX_COUNT_FLAG_EDGES_STRIP :
-                                             HnMeshUtils::GET_TOTAL_INDEX_COUNT_FLAG_EDGES_LIST) *
-            sizeof(Uint32);
-        ExpectedPointIndexDataSize = MeshUtils.GetTotalIndexCount(HnMeshUtils::GET_TOTAL_INDEX_COUNT_FLAG_POINTS) * sizeof(Uint32);
-    }
-
-    size_t ExpectedGeometryDataSize =
+    const size_t ExpectedGeometryDataSize =
         ExpectedVertexDataSize +
         ExpectedTriangleIndexDataSize +
         ExpectedEdgeIndexDataSize +
@@ -453,7 +472,7 @@ bool HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
         }
     }
 
-    StagingVertexData StagingVerts;
+    StagingVertexData StagingVerts{MeshTopology};
     if (AnyPrimvarDirty)
     {
         UpdateVertexAndVaryingPrimvars(SceneDelegate, RenderParam, DirtyBits, ReprToken, VertexPrimvarsInfo, StagingVerts);
@@ -469,7 +488,7 @@ bool HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
                 GetVertexBuffer(pxr::HdTokens->normals) == nullptr &&
                 !StagingVerts.Points.IsEmpty())
             {
-                HnMeshUtils  MeshUtils{m_Topology, Id};
+                HnMeshUtils  MeshUtils{MeshTopology, Id};
                 pxr::VtValue Normals = MeshUtils.ComputeSmoothNormals(StagingVerts.Points);
                 if (!Normals.IsEmpty())
                 {
@@ -518,7 +537,7 @@ bool HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
     if (IndexDataDirty && m_VertexHandle)
     {
         StagingIndexData StagingInds;
-        UpdateIndexData(StagingInds, m_Topology, StagingVerts.Points, UseLineStrip);
+        UpdateIndexData(StagingInds, MeshTopology, StagingVerts.Points, RenderDelegate->AllowPrimitiveRestart());
 
         GeometryPool.AllocateIndices(Id.GetString() + " - faces", pxr::VtValue::Take(StagingInds.FaceIndices), BakedStartVertex, m_IndexData.Faces);
         ReservedSpace.Release(ExpectedTriangleIndexDataSize);
@@ -597,19 +616,62 @@ void HnMesh::UpdateDrawItemsForGeometrySubsets(pxr::HdSceneDelegate& SceneDelega
     }
 }
 
-void HnMesh::UpdateTopology(pxr::HdSceneDelegate& SceneDelegate,
-                            pxr::HdRenderParam*   RenderParam,
-                            pxr::HdDirtyBits&     DirtyBits,
-                            const pxr::TfToken&   ReprToken)
+void HnMesh::Topology::Update(const pxr::HdMeshTopology& MeshTopology,
+                              const pxr::SdfPath&        MeshId,
+                              const HnRenderDelegate*    RenderDelegate)
+{
+    NumPoints       = static_cast<size_t>(MeshTopology.GetNumPoints());
+    NumFaceVaryings = static_cast<size_t>(MeshTopology.GetNumFaceVaryings());
+
+    HnMeshUtils MeshUtils{MeshTopology, MeshId};
+
+    const HnMeshUtils::GET_TOTAL_INDEX_COUNT_FLAGS CountEdgesFlag = RenderDelegate->AllowPrimitiveRestart() ?
+        HnMeshUtils::GET_TOTAL_INDEX_COUNT_FLAG_EDGES_STRIP :
+        HnMeshUtils::GET_TOTAL_INDEX_COUNT_FLAG_EDGES_LIST;
+
+    ExpectedNumTriangleIndices = MeshUtils.GetTotalIndexCount(HnMeshUtils::GET_TOTAL_INDEX_COUNT_FLAG_TRIANGLES);
+    ExpectedNumEdgeIndices     = MeshUtils.GetTotalIndexCount(CountEdgesFlag);
+    ExpectedNumPointIndices    = MeshUtils.GetTotalIndexCount(HnMeshUtils::GET_TOTAL_INDEX_COUNT_FLAG_POINTS);
+}
+
+bool HnMesh::Topology::UpdateSubsets(const pxr::HdMeshTopology& MeshTopology)
+{
+    const pxr::HdGeomSubsets GeomSubsets = MeshTopology.GetGeomSubsets();
+
+    bool GeomSubsetsChanged = Subsets.size() != GeomSubsets.size();
+    Subsets.resize(GeomSubsets.size());
+    for (size_t i = 0; i < GeomSubsets.size(); ++i)
+    {
+        const pxr::HdGeomSubset& SrcSubset = GeomSubsets[i];
+
+        Subset NewSubset{
+            SrcSubset.type,
+            SrcSubset.id,
+            SrcSubset.materialId,
+        };
+        if (NewSubset != Subsets[i])
+        {
+            Subsets[i]         = std::move(NewSubset);
+            GeomSubsetsChanged = true;
+        }
+    }
+
+    return GeomSubsetsChanged;
+}
+
+void HnMesh::UpdateTopology(pxr::HdSceneDelegate&  SceneDelegate,
+                            pxr::HdRenderParam*    RenderParam,
+                            pxr::HdDirtyBits&      DirtyBits,
+                            const pxr::TfToken&    ReprToken,
+                            HdMeshTopologyWrapper& MeshTopology)
 {
     const pxr::SdfPath& Id = GetId();
     VERIFY_EXPR(pxr::HdChangeTracker::IsTopologyDirty(DirtyBits, Id));
 
-    pxr::HdMeshTopology Topology           = HdMesh::GetMeshTopology(&SceneDelegate);
-    bool                GeomSubsetsChanged = Topology.GetGeomSubsets() != m_Topology.GetGeomSubsets();
+    HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(SceneDelegate.GetRenderIndex().GetRenderDelegate());
+    m_Topology.Update(MeshTopology, Id, RenderDelegate);
 
-    m_Topology = Topology;
-    if (GeomSubsetsChanged)
+    if (m_Topology.UpdateSubsets(MeshTopology))
     {
         UpdateDrawItemsForGeometrySubsets(SceneDelegate, RenderParam);
         if (RenderParam != nullptr)
@@ -671,7 +733,7 @@ bool HnMesh::AddStagingBufferSourceForPrimvar(HnRenderDelegate*    RenderDelegat
     pxr::VtValue* pSrcPrimvar = &Primvar;
     if ((Interpolation == pxr::HdInterpolationVertex || Interpolation == pxr::HdInterpolationVarying) && m_HasFaceVaryingPrimvars)
     {
-        HnMeshUtils MeshUtils{m_Topology, GetId()};
+        HnMeshUtils MeshUtils{StagingVerts.MeshTopology, GetId()};
         FaceVaryingPrimvar = MeshUtils.ConvertVertexPrimvarToFaceVarying(Primvar, ValuesPerElement);
         pSrcPrimvar        = &FaceVaryingPrimvar;
     }
@@ -689,7 +751,7 @@ bool HnMesh::AddStagingBufferSourceForPrimvar(HnRenderDelegate*    RenderDelegat
     if (BufferSource->GetNumElements() == 0)
         return false;
 
-    const size_t ExpectedNumElements = m_HasFaceVaryingPrimvars ? m_Topology.GetNumFaceVaryings() : m_Topology.GetNumPoints();
+    const size_t ExpectedNumElements = m_Topology.GetNumElements(m_HasFaceVaryingPrimvars);
 
     // Verify primvar length - it is alright to have more data than we index into.
     if (BufferSource->GetNumElements() < ExpectedNumElements)
@@ -713,27 +775,6 @@ bool HnMesh::AddStagingBufferSourceForPrimvar(HnRenderDelegate*    RenderDelegat
     StagingVerts.Sources.emplace(Name, std::move(BufferSource));
 
     return true;
-}
-
-static HnRenderPass::SupportedVertexInputsMapType GetSupportedPrimvars(
-    const pxr::HdRenderIndex&  RenderIndex,
-    const pxr::SdfPath&        MaterialId,
-    const pxr::HdMeshTopology& Topology)
-{
-    HnRenderPass::SupportedVertexInputsMapType SupportedPrimvars =
-        HnRenderPass::GetSupportedVertexInputs(static_cast<const HnMaterial*>(RenderIndex.GetSprim(pxr::HdPrimTypeTokens->material, MaterialId)));
-
-    {
-        const pxr::HdGeomSubsets GeomSubsets = Topology.GetGeomSubsets();
-        for (const pxr::HdGeomSubset& Subset : GeomSubsets)
-        {
-            HnRenderPass::SupportedVertexInputsMapType SubsetPrimvars =
-                HnRenderPass::GetSupportedVertexInputs(static_cast<const HnMaterial*>(RenderIndex.GetSprim(pxr::HdPrimTypeTokens->material, Subset.materialId)));
-            SupportedPrimvars.insert(SubsetPrimvars.begin(), SubsetPrimvars.end());
-        }
-    }
-
-    return SupportedPrimvars;
 }
 
 bool HnMesh::AddJointInfluencesStagingBufferSource(const pxr::VtValue& NumInfluencesPerComponentVal,
@@ -830,9 +871,18 @@ void HnMesh::GetPrimvarsInfo(pxr::HdSceneDelegate& SceneDelegate,
                              PrimvarsInfo&         VertexPrimvarsInfo,
                              PrimvarsInfo&         FacePrimvarsInfo) const
 {
-    const pxr::SdfPath&                        Id                = GetId();
-    const pxr::HdRenderIndex&                  RenderIndex       = SceneDelegate.GetRenderIndex();
-    HnRenderPass::SupportedVertexInputsMapType SupportedPrimvars = GetSupportedPrimvars(RenderIndex, GetMaterialId(), m_Topology);
+    const pxr::SdfPath&       Id          = GetId();
+    const pxr::HdRenderIndex& RenderIndex = SceneDelegate.GetRenderIndex();
+
+    // Collect supported primvars from the materials in the mesh and its subsets.
+    HnRenderPass::SupportedVertexInputsMapType SupportedPrimvars =
+        HnRenderPass::GetSupportedVertexInputs(static_cast<const HnMaterial*>(RenderIndex.GetSprim(pxr::HdPrimTypeTokens->material, GetMaterialId())));
+    for (const Topology::Subset& Subset : m_Topology.Subsets)
+    {
+        HnRenderPass::SupportedVertexInputsMapType SubsetPrimvars =
+            HnRenderPass::GetSupportedVertexInputs(static_cast<const HnMaterial*>(RenderIndex.GetSprim(pxr::HdPrimTypeTokens->material, Subset.MaterialId)));
+        SupportedPrimvars.insert(SubsetPrimvars.begin(), SubsetPrimvars.end());
+    }
 
     std::unordered_map<pxr::TfToken, pxr::HdPrimvarDescriptor, pxr::TfToken::HashFunctor> SkippedPrimvarsByRole;
 
@@ -853,7 +903,7 @@ void HnMesh::GetPrimvarsInfo(pxr::HdSceneDelegate& SceneDelegate,
                 continue;
             }
 
-            // Use role provided by GetSupportedPrimvars, not the role from the primvar descriptor.
+            // Use role provided by HnRenderPass::GetSupportedVertexInputs, not the role from the primvar descriptor.
             const pxr::TfToken& Role = PrimvarIt->second;
             PrimvarsInfo.AddDirtyPrimvar(DirtyBits, Id, PrimDesc.name, PrimDesc, Role);
             SupportedPrimvars.erase(PrimDesc.name);
@@ -1008,9 +1058,9 @@ void HnMesh::UpdateSkinningPrimvars(pxr::HdSceneDelegate&                       
         {
             // There is no way to get the interpolation of the normals primvar from the scene delegate,
             // so rely on the number of elements.
-            if (NormalsPrimvar.GetArraySize() == m_Topology.GetNumPoints())
+            if (NormalsPrimvar.GetArraySize() == m_Topology.NumPoints)
                 AddStagingBufferSourceForPrimvar(RenderDelegate, StagingVerts, pxr::HdTokens->normals, std::move(NormalsPrimvar), pxr::HdInterpolationVertex);
-            else if (NormalsPrimvar.GetArraySize() == m_Topology.GetNumFaceVaryings())
+            else if (NormalsPrimvar.GetArraySize() == m_Topology.NumFaceVaryings)
                 AddStagingBufferSourceForPrimvar(RenderDelegate, StagingVerts, pxr::HdTokens->normals, std::move(NormalsPrimvar), pxr::HdInterpolationFaceVarying);
         }
 
@@ -1145,15 +1195,15 @@ void HnMesh::UpdateConstantPrimvars(pxr::HdSceneDelegate& SceneDelegate,
     }
 }
 
-void HnMesh::UpdateIndexData(StagingIndexData& StagingInds, const pxr::HdMeshTopology& Topology, const pxr::VtValue& Points, bool UseStripTopology)
+void HnMesh::UpdateIndexData(StagingIndexData& StagingInds, const pxr::HdMeshTopology& MeshTopology, const pxr::VtValue& Points, bool UseStripTopology)
 {
-    HnMeshUtils     MeshUtils{Topology, GetId()};
+    HnMeshUtils     MeshUtils{MeshTopology, GetId()};
     pxr::VtIntArray SubsetStart;
     MeshUtils.Triangulate(!m_HasFaceVaryingPrimvars, &Points, StagingInds.FaceIndices, SubsetStart);
     m_IndexData.Subsets.clear();
-    if (!Topology.GetGeomSubsets().empty())
+    if (!m_Topology.Subsets.empty())
     {
-        VERIFY_EXPR(SubsetStart.size() == Topology.GetGeomSubsets().size() + 1);
+        VERIFY_EXPR(SubsetStart.size() == m_Topology.Subsets.size() + 1);
         m_IndexData.Subsets.reserve(SubsetStart.size() - 1);
         for (size_t i = 0; i < SubsetStart.size() - 1; ++i)
         {
@@ -1165,6 +1215,10 @@ void HnMesh::UpdateIndexData(StagingIndexData& StagingInds, const pxr::HdMeshTop
 
     StagingInds.EdgeIndices  = MeshUtils.ComputeEdgeIndices(!m_HasFaceVaryingPrimvars, UseStripTopology);
     StagingInds.PointIndices = MeshUtils.ComputePointIndices(m_HasFaceVaryingPrimvars);
+
+    VERIFY_EXPR(StagingInds.FaceIndices.size() * 3 <= m_Topology.ExpectedNumTriangleIndices);
+    VERIFY_EXPR(StagingInds.EdgeIndices.size() <= m_Topology.ExpectedNumEdgeIndices);
+    VERIFY_EXPR(StagingInds.PointIndices.size() <= m_Topology.ExpectedNumPointIndices);
 }
 
 void HnMesh::UpdateDrawItemGpuGeometry(HnRenderDelegate& RenderDelegate)
@@ -1247,7 +1301,7 @@ void HnMesh::UpdateDrawItemGpuTopology(HnRenderDelegate& RenderDelegate)
                 StartVertex,
             });
         },
-        [&](const pxr::HdGeomSubset&, HnDrawItem& DrawItem) {
+        [&](const Topology::Subset&, HnDrawItem& DrawItem) {
             const GeometrySubsetRange& SubsetRange = m_IndexData.Subsets[SubsetIdx++];
             DrawItem.SetFaces({
                 m_IndexData.Faces->GetBuffer(),

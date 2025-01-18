@@ -151,6 +151,7 @@ private:
            Uint32              UID,
            entt::entity        Entity);
 
+    class HdMeshTopologyWrapper;
     struct StagingIndexData;
     struct StagingVertexData;
 
@@ -230,10 +231,11 @@ private:
 
     void UpdateIndexData(StagingIndexData& StagingInds, const pxr::HdMeshTopology& Topology, const pxr::VtValue& Points, bool UseStripTopology);
 
-    void UpdateTopology(pxr::HdSceneDelegate& SceneDelegate,
-                        pxr::HdRenderParam*   RenderParam,
-                        pxr::HdDirtyBits&     DirtyBits,
-                        const pxr::TfToken&   ReprToken);
+    void UpdateTopology(pxr::HdSceneDelegate&  SceneDelegate,
+                        pxr::HdRenderParam*    RenderParam,
+                        pxr::HdDirtyBits&      DirtyBits,
+                        const pxr::TfToken&    ReprToken,
+                        HdMeshTopologyWrapper& MeshTopology);
 
     void AddGeometrySubsetDrawItems(const pxr::HdMeshReprDesc& ReprDesc,
                                     pxr::HdRepr&               Repr);
@@ -253,7 +255,38 @@ private:
     const Uint32       m_UID;
     const entt::entity m_Entity;
 
-    pxr::HdMeshTopology m_Topology;
+    struct Topology
+    {
+        size_t NumPoints       = 0;
+        size_t NumFaceVaryings = 0;
+
+        size_t ExpectedNumTriangleIndices = 0;
+        size_t ExpectedNumEdgeIndices     = 0;
+        size_t ExpectedNumPointIndices    = 0;
+
+        struct Subset
+        {
+            pxr::HdGeomSubset::Type Type       = pxr::HdGeomSubset::TypeFaceSet;
+            pxr::SdfPath            Id         = {};
+            pxr::SdfPath            MaterialId = {};
+
+            bool operator==(const Subset& rhs) const
+            {
+                return Type == rhs.Type && Id == rhs.Id && MaterialId == rhs.MaterialId;
+            }
+            bool operator!=(const Subset& rhs) const { return !(*this == rhs); }
+        };
+        std::vector<Subset> Subsets;
+
+        size_t GetNumElements(bool HasFaceVaryingPrimvars) const
+        {
+            return HasFaceVaryingPrimvars ? NumFaceVaryings : NumPoints;
+        }
+
+        void Update(const pxr::HdMeshTopology& MeshTopology, const pxr::SdfPath& MeshId, const HnRenderDelegate* RenderDelegate);
+        bool UpdateSubsets(const pxr::HdMeshTopology& MeshTopology);
+    };
+    Topology m_Topology;
 
     struct IndexData
     {
