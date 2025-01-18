@@ -199,7 +199,8 @@ public:
             }
             else if (SourceName == pxr::HdTokens->displayColor)
             {
-                VERIFY(ElementType.type == pxr::HdTypeFloatVec3 && ElementType.count == 1, "Unexpected vertex color element type");
+                VERIFY((ElementType.type == pxr::HdTypeFloatVec3 || ElementType.type == pxr::HdTypeInt32) && ElementType.count == 1,
+                       "Unexpected vertex color element type");
             }
             else if (SourceName == HnTokens->joints)
             {

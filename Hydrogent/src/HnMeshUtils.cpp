@@ -29,6 +29,7 @@
 #include "AdvancedMath.hpp"
 #include "GfTypeConversions.hpp"
 #include "PBR_Renderer.hpp"
+#include "BasicMath.hpp"
 
 #include "pxr/base/gf/vec2i.h"
 #include "pxr/base/gf/vec3i.h"
@@ -522,6 +523,25 @@ pxr::VtValue HnMeshUtils::PackVertexPositions(const pxr::SdfPath& MeshId,
     }
 
     return pxr::VtValue::Take(PackedPositions);
+}
+
+pxr::VtValue HnMeshUtils::PackVertexColors(const pxr::SdfPath& MeshId, const pxr::VtValue& Colors)
+{
+    if (!Colors.IsHolding<pxr::VtVec3fArray>())
+    {
+        LOG_ERROR_MESSAGE("Failed to pack vertex colors for mesh '", MeshId.GetString(), "': ", Colors.GetTypeName(), " is not supported");
+        return {};
+    }
+
+    const pxr::VtVec3fArray& ColorsArray = Colors.UncheckedGet<pxr::VtVec3fArray>();
+    pxr::VtIntArray          PackedColors(ColorsArray.size());
+    Uint32*                  pPackedColors = reinterpret_cast<Uint32*>(PackedColors.data());
+    for (size_t i = 0; i < ColorsArray.size(); ++i)
+    {
+        const pxr::GfVec3f& Color = ColorsArray[i];
+        pPackedColors[i]          = F4Color_To_RGBA8Unorm(float4{Color[0], Color[1], Color[2], 1.f});
+    }
+    return pxr::VtValue::Take(PackedColors);
 }
 
 } // namespace USD

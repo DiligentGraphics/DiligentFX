@@ -335,13 +335,15 @@ static size_t GetPrimvarElementSize(const HnRenderDelegate* RenderDelegate, cons
              Role == pxr::HdPrimvarSchemaTokens->normal)
     {
         return RenderDelegate->GetUSDRenderer()->GetSettings().PackVertexNormals ?
-            sizeof(uint) : // Normals are packed into a single uint
+            sizeof(Uint32) : // Normals are packed into a single uint
             sizeof(float3);
     }
     else if (Name == pxr::HdTokens->displayColor ||
              Role == pxr::HdPrimvarSchemaTokens->color)
     {
-        return sizeof(float3);
+        return RenderDelegate->GetUSDRenderer()->GetSettings().PackVertexColors ?
+            sizeof(Uint32) :
+            sizeof(float3);
     }
     else if (Role == pxr::HdPrimvarSchemaTokens->textureCoordinate)
     {
@@ -638,6 +640,14 @@ void HnMesh::PreprocessPrimvar(HnRenderDelegate* RenderDelegate, const pxr::TfTo
         if (RenderDelegate != nullptr && RenderDelegate->GetUSDRenderer()->GetSettings().PackVertexNormals)
         {
             Primvar = HnMeshUtils::PackVertexNormals(GetId(), Primvar);
+        }
+    }
+    else if (Name == pxr::HdTokens->displayColor)
+    {
+        VERIFY_EXPR(RenderDelegate != nullptr);
+        if (RenderDelegate != nullptr && RenderDelegate->GetUSDRenderer()->GetSettings().PackVertexColors)
+        {
+            Primvar = HnMeshUtils::PackVertexColors(GetId(), Primvar);
         }
     }
 }

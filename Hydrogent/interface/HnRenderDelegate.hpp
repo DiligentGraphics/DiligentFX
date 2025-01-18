@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2024 Diligent Graphics LLC
+ *  Copyright 2023-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -181,11 +181,14 @@ public:
         ///             has no effect and texture loading will be synchronous.
         bool AsyncTextureLoading = false;
 
-        /// Whether to pack vertex normals into a 32-bit uint.
+        /// Whether to pack float3 vertex normals into a 32-bit uint.
         bool PackVertexNormals = false;
 
-        /// Whether to pack vertex positions into two 32-bit uints.
+        /// Whether to pack float3 vertex positions into two 32-bit uints.
         bool PackVertexPositions = false;
+
+        /// Whether to pack float3 vertex colors into a 32-bit uint.
+        bool PackVertexColors = false;
 
         /// When shadows are enabled, the size of the PCF kernel.
         /// Allowed values are 2, 3, 5, 7.

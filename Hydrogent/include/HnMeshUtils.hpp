@@ -211,6 +211,9 @@ public:
                                             pxr::GfVec3f&       Scale,
                                             pxr::GfVec3f&       Bias);
 
+    /// Packs float3 vertex colors into 32-bit unsigned integers.
+    static pxr::VtValue PackVertexColors(const pxr::SdfPath& MeshId, const pxr::VtValue& Colors);
+
 private:
     template <typename HandleFaceType>
     void ProcessFaces(HandleFaceType&& HandleFace) const;

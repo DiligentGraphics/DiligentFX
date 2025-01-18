@@ -183,6 +183,8 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
         USD_Renderer::VERTEX_POS_PACK_MODE_64_BIT :
         USD_Renderer::VERTEX_POS_PACK_MODE_NONE;
 
+    USDRendererCI.PackVertexColors = RenderDelegateCI.PackVertexColors;
+
     const RenderDeviceInfo& DeviceInfo = RenderDelegateCI.pDevice->GetDeviceInfo();
     // There is a major performance degradation when using row-major matrices
     // on Safari/WebGL, so use column-major matrices on OpenGL.
@@ -261,23 +263,31 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
     }
 
     // clang-format off
-    constexpr LayoutElement NormalInput      {USD_Renderer::VERTEX_ATTRIB_ID_NORMAL,   HnRenderPass::VERTEX_BUFFER_SLOT_NORMALS,   3, VT_FLOAT32};       // float3 Normal  : ATTRIB1;
-    constexpr LayoutElement NormalInputPacked{USD_Renderer::VERTEX_ATTRIB_ID_NORMAL,   HnRenderPass::VERTEX_BUFFER_SLOT_NORMALS,   1, VT_UINT32, false}; // uint   Normal  : ATTRIB1;
-    constexpr LayoutElement PosInput         {USD_Renderer::VERTEX_ATTRIB_ID_POSITION, HnRenderPass::VERTEX_BUFFER_SLOT_POSITIONS, 3, VT_FLOAT32};       // float3 Pos     : ATTRIB0;
-    constexpr LayoutElement PosInputPacked64 {USD_Renderer::VERTEX_ATTRIB_ID_POSITION, HnRenderPass::VERTEX_BUFFER_SLOT_POSITIONS, 2, VT_UINT32, false}; // uint2  Pos     : ATTRIB0;
-    // clang-format om
+    constexpr LayoutElement PosInputF3       {USD_Renderer::VERTEX_ATTRIB_ID_POSITION,  HnRenderPass::VERTEX_BUFFER_SLOT_POSITIONS,     3, VT_FLOAT32};       // float3 Pos     : ATTRIB0;
+    constexpr LayoutElement PosInputPacked64 {USD_Renderer::VERTEX_ATTRIB_ID_POSITION,  HnRenderPass::VERTEX_BUFFER_SLOT_POSITIONS,     2, VT_UINT32, false}; // uint2  Pos     : ATTRIB0;
+    constexpr LayoutElement NormalInputF3    {USD_Renderer::VERTEX_ATTRIB_ID_NORMAL,    HnRenderPass::VERTEX_BUFFER_SLOT_NORMALS,       3, VT_FLOAT32};       // float3 Normal  : ATTRIB1;
+    constexpr LayoutElement NormalInputPacked{USD_Renderer::VERTEX_ATTRIB_ID_NORMAL,    HnRenderPass::VERTEX_BUFFER_SLOT_NORMALS,       1, VT_UINT32, false}; // uint   Normal  : ATTRIB1;
+    constexpr LayoutElement TexCoord0Input   {USD_Renderer::VERTEX_ATTRIB_ID_TEXCOORD0, HnRenderPass::VERTEX_BUFFER_SLOT_TEX_COORDS0,   2, VT_FLOAT32};       // float2 UV0     : ATTRIB2;
+    constexpr LayoutElement TexCoord1Input   {USD_Renderer::VERTEX_ATTRIB_ID_TEXCOORD1, HnRenderPass::VERTEX_BUFFER_SLOT_TEX_COORDS1,   2, VT_FLOAT32};       // float2 UV1     : ATTRIB3;
+    constexpr LayoutElement ColorInputF3     {USD_Renderer::VERTEX_ATTRIB_ID_COLOR,     HnRenderPass::VERTEX_BUFFER_SLOT_VERTEX_COLORS, 3, VT_FLOAT32};       // float3 Color   : ATTRIB6;
+    constexpr LayoutElement ColorInputPacked {USD_Renderer::VERTEX_ATTRIB_ID_COLOR,     HnRenderPass::VERTEX_BUFFER_SLOT_VERTEX_COLORS, 4, VT_UINT8,  true};  // float4 Color   : ATTRIB6;
+    constexpr LayoutElement JointsInput      {USD_Renderer::VERTEX_ATTRIB_ID_JOINTS,    HnRenderPass::VERTEX_BUFFER_SLOT_VERTEX_JOINTS, 4, VT_FLOAT32};       // float4 Joint0  : ATTRIB4;
+    constexpr LayoutElement WeightsInput     {USD_Renderer::VERTEX_ATTRIB_ID_WEIGHTS,   HnRenderPass::VERTEX_BUFFER_SLOT_VERTEX_JOINTS, 4, VT_FLOAT32};       // float4 Weight0 : ATTRIB5;
+    // clang-format on
+
+    const LayoutElement& PosInput    = USDRendererCI.VertexPosPackMode == USD_Renderer::VERTEX_POS_PACK_MODE_64_BIT ? PosInputPacked64 : PosInputF3;
+    const LayoutElement& NormalInput = USDRendererCI.PackVertexNormals ? NormalInputPacked : NormalInputF3;
+    const LayoutElement& ColorInput  = USDRendererCI.PackVertexColors ? ColorInputPacked : ColorInputF3;
 
     const LayoutElement Inputs[] =
         {
-            // clang-format off
-            USDRendererCI.VertexPosPackMode == USD_Renderer::VERTEX_POS_PACK_MODE_64_BIT ? PosInputPacked64 : PosInput,
-            USDRendererCI.PackVertexNormals ? NormalInputPacked : NormalInput,
-            {USD_Renderer::VERTEX_ATTRIB_ID_TEXCOORD0, HnRenderPass::VERTEX_BUFFER_SLOT_TEX_COORDS0,   2, VT_FLOAT32}, // float2 UV0     : ATTRIB2;
-            {USD_Renderer::VERTEX_ATTRIB_ID_TEXCOORD1, HnRenderPass::VERTEX_BUFFER_SLOT_TEX_COORDS1,   2, VT_FLOAT32}, // float2 UV1     : ATTRIB3;
-            {USD_Renderer::VERTEX_ATTRIB_ID_COLOR,     HnRenderPass::VERTEX_BUFFER_SLOT_VERTEX_COLORS, 3, VT_FLOAT32}, // float3 Color   : ATTRIB6;
-            {USD_Renderer::VERTEX_ATTRIB_ID_JOINTS,    HnRenderPass::VERTEX_BUFFER_SLOT_VERTEX_JOINTS, 4, VT_FLOAT32}, // float4 Joint0  : ATTRIB4;
-            {USD_Renderer::VERTEX_ATTRIB_ID_WEIGHTS,   HnRenderPass::VERTEX_BUFFER_SLOT_VERTEX_JOINTS, 4, VT_FLOAT32}, // float4 Weight0 : ATTRIB5;
-            // clang-format on
+            PosInput,
+            NormalInput,
+            TexCoord0Input,
+            TexCoord1Input,
+            ColorInput,
+            JointsInput,
+            WeightsInput,
         };
 
     if (DeviceInfo.IsVulkanDevice() ||
