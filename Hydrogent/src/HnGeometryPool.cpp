@@ -924,7 +924,8 @@ void HnGeometryPool::AllocateVertices(const std::string&             Name,
                                                                             m_UseVertexPool ? &m_ResMgr : nullptr,
                                                                             DisallowPoolAllocationReuse, ExistingData);
 
-            m_PendingVertexDataSize.fetch_add(static_cast<Int64>(Data->GetTotalSize()));
+            size_t TotalSize = Data->GetTotalSize();
+            m_PendingVertexDataSize.fetch_add(static_cast<Int64>(TotalSize));
 
             {
                 std::lock_guard<std::mutex> Guard{m_PendingVertexDataMtx};
