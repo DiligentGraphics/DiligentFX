@@ -1036,18 +1036,29 @@ HnGeometryPool::ReservedSpace::ReservedSpace(ReservedSpace&& Other) noexcept :
     Other.m_TotalPendingSize = 0;
 }
 
-void HnGeometryPool::ReservedSpace::Release()
+void HnGeometryPool::ReservedSpace::Release(Uint64 Size)
 {
-    if (m_Size != 0)
+    if (Size == ~Uint64{0})
     {
-        m_Pool.ReleaseReservedSpace(m_Size);
-        m_Size = 0;
+        Size = m_Size;
+    }
+    else
+    {
+        VERIFY_EXPR(Size <= m_Size);
+        Size = std::min(Size, m_Size);
+    }
+
+    if (Size != 0)
+    {
+        m_Pool.ReleaseReservedSpace(Size);
+        m_Size -= Size;
     }
 }
 
 HnGeometryPool::ReservedSpace::~ReservedSpace()
 {
     Release();
+    VERIFY_EXPR(m_Size == 0);
 }
 
 HnGeometryPool::ReservedSpace HnGeometryPool::ReserveSpace(Uint64 Size)

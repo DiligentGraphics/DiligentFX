@@ -391,7 +391,7 @@ bool HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
 
     PrimvarsInfo VertexPrimvarsInfo;
     PrimvarsInfo FacePrimvarsInfo;
-    size_t       ExpectedVertedDataSize = 0;
+    size_t       ExpectedVertexDataSize = 0;
     if (TopologyDirty || AnyPrimvarDirty)
     {
         GetPrimvarsInfo(SceneDelegate, DirtyBits, VertexPrimvarsInfo, FacePrimvarsInfo);
@@ -409,7 +409,7 @@ bool HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
             {
                 const pxr::HdPrimvarDescriptor& PrimDesc    = it.second;
                 const size_t                    ElementSize = GetPrimvarElementSize(RenderDelegate, PrimDesc.name, PrimDesc.role);
-                ExpectedVertedDataSize += ExpectedNumElements * ElementSize;
+                ExpectedVertexDataSize += ExpectedNumElements * ElementSize;
             }
         }
     }
@@ -433,7 +433,7 @@ bool HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
     }
 
     size_t ExpectedGeometryDataSize =
-        ExpectedVertedDataSize +
+        ExpectedVertexDataSize +
         ExpectedTriangleIndexDataSize +
         ExpectedEdgeIndexDataSize +
         ExpectedPointIndexDataSize;
@@ -494,6 +494,7 @@ bool HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
         // we need to know the start vertex now, so we have to disallow pool allocation reuse (with pool allocation reuse
         // enabled, the allocation initialization is delayed until the GeometryPool.Commit() is called later).
         GeometryPool.AllocateVertices(Id.GetString(), StagingVerts.Sources, m_VertexHandle, /*DisallowPoolAllocationReuse = */ !UseNativeStartVertex);
+        ReservedSpace.Release(ExpectedVertexDataSize);
 
         if (!UseNativeStartVertex)
         {
@@ -515,8 +516,13 @@ bool HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
         UpdateIndexData(StagingInds, StagingVerts.Points, UseLineStrip);
 
         GeometryPool.AllocateIndices(Id.GetString() + " - faces", pxr::VtValue::Take(StagingInds.FaceIndices), BakedStartVertex, m_IndexData.Faces);
+        ReservedSpace.Release(ExpectedTriangleIndexDataSize);
+
         GeometryPool.AllocateIndices(Id.GetString() + " - edges", pxr::VtValue::Take(StagingInds.EdgeIndices), BakedStartVertex, m_IndexData.Edges);
+        ReservedSpace.Release(ExpectedEdgeIndexDataSize);
+
         GeometryPool.AllocateIndices(Id.GetString() + " - points", pxr::VtValue::Take(StagingInds.PointIndices), BakedStartVertex, m_IndexData.Points);
+        ReservedSpace.Release(ExpectedPointIndexDataSize);
 
         m_DrawItemGpuTopologyDirty.store(true);
     }

@@ -106,7 +106,7 @@ public:
         ReservedSpace& operator=(ReservedSpace&&) = delete;
 
         ~ReservedSpace();
-        void Release();
+        void Release(Uint64 Size = ~Uint64{0});
 
         Uint64 GetTotalPendingSize() const { return m_TotalPendingSize; }
 
