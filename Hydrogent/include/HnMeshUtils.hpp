@@ -214,6 +214,10 @@ public:
     /// Packs float3 vertex colors into 32-bit unsigned integers.
     static pxr::VtValue PackVertexColors(const pxr::SdfPath& MeshId, const pxr::VtValue& Colors);
 
+
+    /// Computes smooth normals.
+    pxr::VtValue ComputeSmoothNormals(const pxr::VtValue& Points) const;
+
 private:
     template <typename HandleFaceType>
     void ProcessFaces(HandleFaceType&& HandleFace) const;

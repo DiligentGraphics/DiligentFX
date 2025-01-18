@@ -38,6 +38,8 @@
 #include "pxr/base/gf/vec3f.h"
 #include "pxr/base/gf/vec4f.h"
 #include "pxr/imaging/hd/tokens.h"
+#include "pxr/imaging/hd/vertexAdjacency.h"
+#include "pxr/imaging/hd/smoothNormals.h"
 
 namespace Diligent
 {
@@ -542,6 +544,34 @@ pxr::VtValue HnMeshUtils::PackVertexColors(const pxr::SdfPath& MeshId, const pxr
         pPackedColors[i]          = F4Color_To_RGBA8Unorm(float4{Color[0], Color[1], Color[2], 1.f});
     }
     return pxr::VtValue::Take(PackedColors);
+}
+
+pxr::VtValue HnMeshUtils::ComputeSmoothNormals(const pxr::VtValue& Points) const
+{
+    pxr::Hd_VertexAdjacency Adjacency;
+    Adjacency.BuildAdjacencyTable(&m_Topology);
+    if (Adjacency.GetNumPoints() == 0)
+    {
+        LOG_WARNING_MESSAGE("Unable to compute smooth normals for ", m_MeshId, " because its adjacency information is empty.");
+        return {};
+    }
+
+    if (!Points.IsHolding<pxr::VtVec3fArray>())
+    {
+        LOG_ERROR_MESSAGE("Unable to compute smooth normals for ", m_MeshId, " because its points data is not VtVec3fArray.");
+        return {};
+    }
+
+    const pxr::VtVec3fArray& PointsArray = Points.UncheckedGet<pxr::VtVec3fArray>();
+
+    pxr::VtVec3fArray Normals = pxr::Hd_SmoothNormals::ComputeSmoothNormals(&Adjacency, static_cast<int>(PointsArray.size()), PointsArray.data());
+    if (Normals.size() != PointsArray.size())
+    {
+        LOG_ERROR_MESSAGE("Failed to generate smooth normals for ", m_MeshId, ". Expected ", PointsArray.size(), " normals, got ", Normals.size(), ".");
+        return {};
+    }
+
+    return pxr::VtValue::Take(Normals);
 }
 
 } // namespace USD

@@ -222,15 +222,13 @@ private:
                                 const pxr::HdExtComputationPrimvarDescriptor& SkinningCompPrimDesc,
                                 StagingVertexData&                            StagingVerts);
 
-    void GenerateSmoothNormals(HnRenderDelegate& RenderDelegate, StagingVertexData& StagingVerts);
-
     struct GeometrySubsetRange
     {
         Uint32 StartIndex = 0;
         Uint32 NumIndices = 0;
     };
 
-    void UpdateIndexData(StagingIndexData& StagingInds, const pxr::VtValue& Points, bool UseStripTopology);
+    void UpdateIndexData(StagingIndexData& StagingInds, const pxr::HdMeshTopology& Topology, const pxr::VtValue& Points, bool UseStripTopology);
 
     void UpdateTopology(pxr::HdSceneDelegate& SceneDelegate,
                         pxr::HdRenderParam*   RenderParam,

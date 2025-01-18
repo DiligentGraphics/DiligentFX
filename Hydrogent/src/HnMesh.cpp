@@ -46,8 +46,6 @@
 #include "pxr/base/gf/vec2f.h"
 #include "pxr/base/tf/smallVector.h"
 #include "pxr/imaging/hd/vtBufferSource.h"
-#include "pxr/imaging/hd/vertexAdjacency.h"
-#include "pxr/imaging/hd/smoothNormals.h"
 #include "pxr/imaging/hd/primvarSchema.h"
 
 namespace Diligent
@@ -471,7 +469,12 @@ bool HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
                 GetVertexBuffer(pxr::HdTokens->normals) == nullptr &&
                 !StagingVerts.Points.IsEmpty())
             {
-                GenerateSmoothNormals(*RenderDelegate, StagingVerts);
+                HnMeshUtils  MeshUtils{m_Topology, Id};
+                pxr::VtValue Normals = MeshUtils.ComputeSmoothNormals(StagingVerts.Points);
+                if (!Normals.IsEmpty())
+                {
+                    AddStagingBufferSourceForPrimvar(RenderDelegate, StagingVerts, pxr::HdTokens->normals, pxr::VtValue::Take(Normals), pxr::HdInterpolationVertex);
+                }
             }
 
             UpdateConstantPrimvars(SceneDelegate, RenderParam, DirtyBits, ReprToken);
@@ -515,7 +518,7 @@ bool HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
     if (IndexDataDirty && m_VertexHandle)
     {
         StagingIndexData StagingInds;
-        UpdateIndexData(StagingInds, StagingVerts.Points, UseLineStrip);
+        UpdateIndexData(StagingInds, m_Topology, StagingVerts.Points, UseLineStrip);
 
         GeometryPool.AllocateIndices(Id.GetString() + " - faces", pxr::VtValue::Take(StagingInds.FaceIndices), BakedStartVertex, m_IndexData.Faces);
         ReservedSpace.Release(ExpectedTriangleIndexDataSize);
@@ -1142,42 +1145,15 @@ void HnMesh::UpdateConstantPrimvars(pxr::HdSceneDelegate& SceneDelegate,
     }
 }
 
-void HnMesh::GenerateSmoothNormals(HnRenderDelegate& RenderDelegate, StagingVertexData& StagingVerts)
+void HnMesh::UpdateIndexData(StagingIndexData& StagingInds, const pxr::HdMeshTopology& Topology, const pxr::VtValue& Points, bool UseStripTopology)
 {
-    pxr::Hd_VertexAdjacency Adjacency;
-    Adjacency.BuildAdjacencyTable(&m_Topology);
-    if (Adjacency.GetNumPoints() == 0)
-    {
-        LOG_WARNING_MESSAGE("Skipping smooth normal generation for ", GetId(), " because its adjacency information is empty.");
-        return;
-    }
-
-    if (!StagingVerts.Points.IsHolding<pxr::VtVec3fArray>())
-    {
-        LOG_ERROR_MESSAGE("Skipping smooth normal generation for ", GetId(), " because its points data is not float3.");
-        return;
-    }
-
-    const pxr::VtVec3fArray& Points = StagingVerts.Points.UncheckedGet<pxr::VtVec3fArray>();
-
-    pxr::VtVec3fArray Normals = pxr::Hd_SmoothNormals::ComputeSmoothNormals(&Adjacency, static_cast<int>(Points.size()), Points.data());
-    if (Normals.size() != Points.size())
-    {
-        LOG_ERROR_MESSAGE("Failed to generate smooth normals for ", GetId(), ". Expected ", Points.size(), " normals, got ", Normals.size(), ".");
-        return;
-    }
-
-    AddStagingBufferSourceForPrimvar(&RenderDelegate, StagingVerts, pxr::HdTokens->normals, pxr::VtValue::Take(Normals), pxr::HdInterpolationVertex);
-}
-
-void HnMesh::UpdateIndexData(StagingIndexData& StagingInds, const pxr::VtValue& Points, bool UseStripTopology)
-{
-    HnMeshUtils     MeshUtils{m_Topology, GetId()};
+    HnMeshUtils     MeshUtils{Topology, GetId()};
     pxr::VtIntArray SubsetStart;
     MeshUtils.Triangulate(!m_HasFaceVaryingPrimvars, &Points, StagingInds.FaceIndices, SubsetStart);
-    if (!m_Topology.GetGeomSubsets().empty())
+    m_IndexData.Subsets.clear();
+    if (!Topology.GetGeomSubsets().empty())
     {
-        VERIFY_EXPR(SubsetStart.size() == m_Topology.GetGeomSubsets().size() + 1);
+        VERIFY_EXPR(SubsetStart.size() == Topology.GetGeomSubsets().size() + 1);
         m_IndexData.Subsets.reserve(SubsetStart.size() - 1);
         for (size_t i = 0; i < SubsetStart.size() - 1; ++i)
         {
@@ -1185,10 +1161,6 @@ void HnMesh::UpdateIndexData(StagingIndexData& StagingInds, const pxr::VtValue& 
             const Uint32 EndTri   = static_cast<Uint32>(SubsetStart[i + 1]);
             m_IndexData.Subsets.emplace_back(GeometrySubsetRange{StartTri * 3, (EndTri - StartTri) * 3});
         }
-    }
-    else
-    {
-        m_IndexData.Subsets.clear();
     }
 
     StagingInds.EdgeIndices  = MeshUtils.ComputeEdgeIndices(!m_HasFaceVaryingPrimvars, UseStripTopology);
@@ -1244,7 +1216,7 @@ void HnMesh::UpdateDrawItemGpuTopology(HnRenderDelegate& RenderDelegate)
     Uint32 SubsetIdx = 0;
     ProcessDrawItems(
         [&](HnDrawItem& DrawItem) {
-            if (m_Topology.GetGeomSubsets().empty())
+            if (m_IndexData.Subsets.empty())
             {
                 DrawItem.SetFaces({
                     m_IndexData.Faces->GetBuffer(),
@@ -1275,7 +1247,7 @@ void HnMesh::UpdateDrawItemGpuTopology(HnRenderDelegate& RenderDelegate)
                 StartVertex,
             });
         },
-        [&](const pxr::HdGeomSubset& Subset, HnDrawItem& DrawItem) {
+        [&](const pxr::HdGeomSubset&, HnDrawItem& DrawItem) {
             const GeometrySubsetRange& SubsetRange = m_IndexData.Subsets[SubsetIdx++];
             DrawItem.SetFaces({
                 m_IndexData.Faces->GetBuffer(),
