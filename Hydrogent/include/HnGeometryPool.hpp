@@ -97,8 +97,32 @@ public:
     Int64 GetPendingVertexDataSize() const { return m_PendingVertexDataSize.load(); }
     Int64 GetPendingIndexDataSize() const { return m_PendingIndexDataSize.load(); }
 
-    Int64 ReserveDataSize(Uint64 Size);
-    void  ReleaseReservedDataSize(Uint64 Size);
+    class ReservedSpace
+    {
+    public:
+        ReservedSpace(ReservedSpace&& Other) noexcept;
+
+        ReservedSpace& operator=(const ReservedSpace&) = delete;
+        ReservedSpace& operator=(ReservedSpace&&) = delete;
+
+        ~ReservedSpace();
+        void Release();
+
+        Uint64 GetTotalPendingSize() const { return m_TotalPendingSize; }
+
+    private:
+        ReservedSpace(HnGeometryPool& Pool, Uint64 Size, Uint64 TotalPendingSize) noexcept;
+
+    private:
+        friend class HnGeometryPool;
+        HnGeometryPool& m_Pool;
+        Uint64          m_Size             = 0;
+        Uint64          m_TotalPendingSize = 0;
+    };
+    ReservedSpace ReserveSpace(Uint64 Size);
+
+private:
+    void ReleaseReservedSpace(Uint64 Size);
 
 private:
     RefCntAutoPtr<IRenderDevice> m_pDevice;

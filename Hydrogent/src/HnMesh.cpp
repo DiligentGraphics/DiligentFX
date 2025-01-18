@@ -412,30 +412,10 @@ bool HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
         ExpectedGeometryDataSize += MeshUtils.GetTotalIndexCount(IndexCountFlags) * sizeof(Uint32);
     }
 
-    class GeometryPoolReservedDataGuard
+    HnGeometryPool::ReservedSpace ReservedSpace = GeometryPool.ReserveSpace(ExpectedGeometryDataSize);
+    if (GeometryLoadBudget > 0 && ReservedSpace.GetTotalPendingSize() > GeometryLoadBudget)
     {
-    public:
-        GeometryPoolReservedDataGuard(HnGeometryPool& Pool, Uint64 Size) :
-            m_Pool{Pool},
-            m_Size{Size},
-            m_TotalSize{static_cast<Uint64>(Pool.ReserveDataSize(Size))}
-        {
-        }
-        ~GeometryPoolReservedDataGuard()
-        {
-            m_Pool.ReleaseReservedDataSize(m_Size);
-        }
-        Uint64 GetTotalSize() const { return m_TotalSize; }
-
-    private:
-        HnGeometryPool& m_Pool;
-        const Uint64    m_Size;
-        const Uint64    m_TotalSize;
-    };
-    GeometryPoolReservedDataGuard ReservedDataGuard{GeometryPool, ExpectedGeometryDataSize};
-    if (GeometryLoadBudget > 0 && ReservedDataGuard.GetTotalSize() > GeometryLoadBudget)
-    {
-        if (ReservedDataGuard.GetTotalSize() == ExpectedGeometryDataSize)
+        if (ReservedSpace.GetTotalPendingSize() == ExpectedGeometryDataSize)
         {
             LOG_WARNING_MESSAGE("Syncing rprim ", Id, " requires ", ExpectedGeometryDataSize,
                                 " bytes of geometry data, which exceeds the budget ", GeometryLoadBudget, ".");

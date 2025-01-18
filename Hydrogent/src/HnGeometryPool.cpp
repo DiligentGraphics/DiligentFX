@@ -1017,15 +1017,49 @@ void HnGeometryPool::Commit(IDeviceContext* pContext)
     }
 }
 
-Int64 HnGeometryPool::ReserveDataSize(Uint64 Size)
+HnGeometryPool::ReservedSpace::ReservedSpace(HnGeometryPool& Pool,
+                                             Uint64          Size,
+                                             Uint64          TotalPendingSize) noexcept :
+    m_Pool{Pool},
+    m_Size{Size},
+    m_TotalPendingSize{TotalPendingSize}
 {
-    return GetPendingVertexDataSize() +
+}
+
+HnGeometryPool::ReservedSpace::ReservedSpace(ReservedSpace&& Other) noexcept :
+    m_Pool{Other.m_Pool},
+    m_Size{Other.m_Size},
+    m_TotalPendingSize{Other.m_TotalPendingSize}
+{
+    Other.m_Size             = 0;
+    Other.m_TotalPendingSize = 0;
+}
+
+void HnGeometryPool::ReservedSpace::Release()
+{
+    if (m_Size != 0)
+    {
+        m_Pool.ReleaseReservedSpace(m_Size);
+        m_Size = 0;
+    }
+}
+
+HnGeometryPool::ReservedSpace::~ReservedSpace()
+{
+    Release();
+}
+
+HnGeometryPool::ReservedSpace HnGeometryPool::ReserveSpace(Uint64 Size)
+{
+    const Int64 TotalPendingSize =
+        GetPendingVertexDataSize() +
         GetPendingIndexDataSize() +
         m_ReservedDataSize.fetch_add(static_cast<Int64>(Size)) +
         static_cast<Int64>(Size);
+    return {*this, Size, static_cast<Uint64>(TotalPendingSize)};
 }
 
-void HnGeometryPool::ReleaseReservedDataSize(Uint64 Size)
+void HnGeometryPool::ReleaseReservedSpace(Uint64 Size)
 {
     VERIFY_EXPR(m_ReservedDataSize.load() >= static_cast<Int64>(Size));
     m_ReservedDataSize.fetch_add(-static_cast<Int64>(Size));
