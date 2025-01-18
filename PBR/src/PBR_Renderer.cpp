@@ -1,5 +1,5 @@
 /*
- *  Copyright 2019-2024 Diligent Graphics LLC
+ *  Copyright 2019-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -1468,30 +1468,41 @@ void PBR_Renderer::GetVSInputStructAndLayout(PSO_FLAGS         PSOFlags,
             {
                 NumColorComp = Elem.NumComponents;
                 DEV_CHECK_ERR(NumColorComp == 3 || NumColorComp == 4, "Color attribute must have 3 or 4 components");
+                DEV_CHECK_ERR(!m_Settings.PackVertexColors || NumColorComp == 4, "Packed color attribute must have 4 components");
                 break;
             }
         }
     }
 
     // clang-format off
-    constexpr VSAttribInfo VSPosAttrib      {VERTEX_ATTRIB_ID_POSITION, "Pos",    VT_FLOAT32, 3, PSO_FLAG_NONE};
-    constexpr VSAttribInfo VSPosPack64Attrib{VERTEX_ATTRIB_ID_POSITION, "Pos",    VT_UINT32,  2, PSO_FLAG_NONE};
-    constexpr VSAttribInfo VSNormAttrib     {VERTEX_ATTRIB_ID_NORMAL,   "Normal", VT_FLOAT32, 3, PSO_FLAG_USE_VERTEX_NORMALS};
-    constexpr VSAttribInfo VSNormPackAttrib {VERTEX_ATTRIB_ID_NORMAL,   "Normal", VT_UINT32,  1, PSO_FLAG_USE_VERTEX_NORMALS};
+    constexpr VSAttribInfo VSPosAttribF3    {VERTEX_ATTRIB_ID_POSITION,  "Pos",     VT_FLOAT32, 3, PSO_FLAG_NONE}; // float3
+    constexpr VSAttribInfo VSPosPack64Attrib{VERTEX_ATTRIB_ID_POSITION,  "Pos",     VT_UINT32,  2, PSO_FLAG_NONE}; // uint2
+    constexpr VSAttribInfo VSNormAttribF3   {VERTEX_ATTRIB_ID_NORMAL,    "Normal",  VT_FLOAT32, 3, PSO_FLAG_USE_VERTEX_NORMALS}; // float3
+    constexpr VSAttribInfo VSNormPackAttrib {VERTEX_ATTRIB_ID_NORMAL,    "Normal",  VT_UINT32,  1, PSO_FLAG_USE_VERTEX_NORMALS}; // uint
+    constexpr VSAttribInfo VSTexCoord0Attrib{VERTEX_ATTRIB_ID_TEXCOORD0, "UV0",     VT_FLOAT32, 2, PSO_FLAG_USE_TEXCOORD0};
+    constexpr VSAttribInfo VSTexCoord1Attrib{VERTEX_ATTRIB_ID_TEXCOORD1, "UV1",     VT_FLOAT32, 2, PSO_FLAG_USE_TEXCOORD1};
+    constexpr VSAttribInfo VSJointsAttrib   {VERTEX_ATTRIB_ID_JOINTS,    "Joint0",  VT_FLOAT32, 4, PSO_FLAG_USE_JOINTS};
+    constexpr VSAttribInfo VSWeightsAttrib  {VERTEX_ATTRIB_ID_WEIGHTS,   "Weight0", VT_FLOAT32, 4, PSO_FLAG_USE_JOINTS};
+    constexpr VSAttribInfo VSTangentAttrib  {VERTEX_ATTRIB_ID_TANGENT,   "Tangent", VT_FLOAT32, 3, PSO_FLAG_USE_VERTEX_TANGENTS};
+
+    const     VSAttribInfo VSColorAttribF     {VERTEX_ATTRIB_ID_COLOR, "Color",  VT_FLOAT32, NumColorComp, PSO_FLAG_USE_VERTEX_COLORS}; // float3 or float4
+    constexpr VSAttribInfo VSColorPackedAttrib{VERTEX_ATTRIB_ID_COLOR, "Color",  VT_UINT8,   4,            PSO_FLAG_USE_VERTEX_COLORS}; // float4 (normalized uint8x4)
     // clang-format on
 
-    const std::array<VSAttribInfo, 8> VSAttribs = //
+    const VSAttribInfo& VSPosAttrib   = m_Settings.VertexPosPackMode == VERTEX_POS_PACK_MODE_64_BIT ? VSPosPack64Attrib : VSPosAttribF3;
+    const VSAttribInfo& VSNormAttrib  = m_Settings.PackVertexNormals ? VSNormPackAttrib : VSNormAttribF3;
+    const VSAttribInfo& VSColorAttrib = m_Settings.PackVertexColors ? VSColorPackedAttrib : VSColorAttribF;
+
+    const std::array<VSAttribInfo, 8> VSAttribs =
         {
-            // clang-format off
-            m_Settings.VertexPosPackMode == VERTEX_POS_PACK_MODE_64_BIT ? VSPosPack64Attrib : VSPosAttrib,
-            m_Settings.PackVertexNormals ? VSNormPackAttrib : VSNormAttrib,
-            VSAttribInfo{VERTEX_ATTRIB_ID_TEXCOORD0, "UV0",     VT_FLOAT32, 2,            PSO_FLAG_USE_TEXCOORD0},
-            VSAttribInfo{VERTEX_ATTRIB_ID_TEXCOORD1, "UV1",     VT_FLOAT32, 2,            PSO_FLAG_USE_TEXCOORD1},
-            VSAttribInfo{VERTEX_ATTRIB_ID_JOINTS,    "Joint0",  VT_FLOAT32, 4,            PSO_FLAG_USE_JOINTS},
-            VSAttribInfo{VERTEX_ATTRIB_ID_WEIGHTS,   "Weight0", VT_FLOAT32, 4,            PSO_FLAG_USE_JOINTS},
-            VSAttribInfo{VERTEX_ATTRIB_ID_COLOR,     "Color",   VT_FLOAT32, NumColorComp, PSO_FLAG_USE_VERTEX_COLORS},
-            VSAttribInfo{VERTEX_ATTRIB_ID_TANGENT,   "Tangent", VT_FLOAT32, 3,            PSO_FLAG_USE_VERTEX_TANGENTS}
-            // clang-format on
+            VSPosAttrib,
+            VSNormAttrib,
+            VSTexCoord0Attrib,
+            VSTexCoord1Attrib,
+            VSJointsAttrib,
+            VSWeightsAttrib,
+            VSColorAttrib,
+            VSTangentAttrib,
         };
 
     std::stringstream ss;
@@ -1526,6 +1537,9 @@ void PBR_Renderer::GetVSInputStructAndLayout(PSO_FLAGS         PSOFlags,
                     break;
                 case VT_UINT32:
                     ss << "     uint";
+                    break;
+                case VT_UINT8: // Must be normalized
+                    ss << "    float";
                     break;
                 default:
                     UNEXPECTED("Unexpected attribute type");

@@ -1,5 +1,5 @@
 /*
- *  Copyright 2019-2024 Diligent Graphics LLC
+ *  Copyright 2019-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -215,6 +215,9 @@ public:
 
         /// Whether vertex normals are packed into a single 32-bit uint, see PackVertexNormal().
         bool PackVertexNormals = false;
+
+        /// Whether vertex colors are packed into a single 32-bit uint.
+        bool PackVertexColors = false;
 
         /// Vertex position packing mode, see VERTEX_POS_PACK_MODE.
         VERTEX_POS_PACK_MODE VertexPosPackMode = VERTEX_POS_PACK_MODE_NONE;
