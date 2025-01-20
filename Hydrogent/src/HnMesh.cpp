@@ -469,11 +469,14 @@ bool HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
     const size_t ExpectedEdgeIndexDataSize     = m_Topology.ExpectedNumEdgeIndices * sizeof(Uint32);
     const size_t ExpectedPointIndexDataSize    = m_Topology.ExpectedNumPointIndices * sizeof(Uint32);
 
-    const size_t ExpectedGeometryDataSize =
-        ExpectedVertexDataSize +
-        ExpectedTriangleIndexDataSize +
-        ExpectedEdgeIndexDataSize +
-        ExpectedPointIndexDataSize;
+    size_t ExpectedGeometryDataSize = ExpectedVertexDataSize;
+    if (IndexDataDirty)
+    {
+        ExpectedGeometryDataSize +=
+            (ExpectedTriangleIndexDataSize +
+             ExpectedEdgeIndexDataSize +
+             ExpectedPointIndexDataSize);
+    }
 
     HnGeometryPool::ReservedSpace ReservedSpace = GeometryPool.ReserveSpace(ExpectedGeometryDataSize);
     if (GeometryLoadBudget > 0 && ReservedSpace.GetTotalPendingSize() > GeometryLoadBudget)
