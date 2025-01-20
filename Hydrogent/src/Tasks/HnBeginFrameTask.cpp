@@ -346,18 +346,7 @@ void HnBeginFrameTask::Prepare(pxr::HdTaskContext* TaskCtx,
     // Note: we need to mark the prims dirty after the sync finishes, because OpenUSD marks
     //       all prims clean after the sync. There may be a better place to do this, but
     //       it's not clear where that would be.
-    {
-        const auto& DirtyRPrims = pRenderParam->GetDirtyRPrims();
-        if (!DirtyRPrims.empty())
-        {
-            pxr::HdChangeTracker& ChangeTracker = m_RenderIndex->GetChangeTracker();
-            for (const auto& DidrtRPrim : DirtyRPrims)
-            {
-                ChangeTracker.MarkRprimDirty(DidrtRPrim.first, DidrtRPrim.second);
-            }
-            pRenderParam->ClearDirtyRPrims();
-        }
-    }
+    pRenderParam->CommitDirtyRPrims(m_RenderIndex->GetChangeTracker());
 
     m_CurrFrameTime = m_FrameTimer.GetElapsedTime();
 

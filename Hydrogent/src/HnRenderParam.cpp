@@ -50,9 +50,13 @@ void HnRenderParam::AddDirtyRPrim(const pxr::SdfPath& RPrimId, pxr::HdDirtyBits 
     m_DirtyRPrims.emplace_back(RPrimId, DirtyBits);
 }
 
-void HnRenderParam::ClearDirtyRPrims()
+void HnRenderParam::CommitDirtyRPrims(pxr::HdChangeTracker& ChangeTracker)
 {
     std::lock_guard<std::mutex> Lock{m_DirtyRPrimsMtx};
+    for (const auto& DidrtRPrim : m_DirtyRPrims)
+    {
+        ChangeTracker.MarkRprimDirty(DidrtRPrim.first, DidrtRPrim.second);
+    }
     m_DirtyRPrims.clear();
 }
 

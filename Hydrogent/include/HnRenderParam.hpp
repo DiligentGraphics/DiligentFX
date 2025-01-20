@@ -126,9 +126,8 @@ public:
     Uint32 GetFrameNumber() const { return m_FrameNumber; }
     void   SetFrameNumber(Uint32 FrameNumber) { m_FrameNumber = FrameNumber; }
 
-    void        AddDirtyRPrim(const pxr::SdfPath& RPrimId, pxr::HdDirtyBits DirtyBits);
-    void        ClearDirtyRPrims();
-    const auto& GetDirtyRPrims() const { return m_DirtyRPrims; }
+    void AddDirtyRPrim(const pxr::SdfPath& RPrimId, pxr::HdDirtyBits DirtyBits);
+    void CommitDirtyRPrims(pxr::HdChangeTracker& ChangeTracker);
 
 private:
     const Configuration m_Config;
