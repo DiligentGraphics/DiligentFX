@@ -154,11 +154,9 @@ void HnMesh::ProcessDrawItems(HandleDrawItemFuncType&&           HandleDrawItem,
     }
 }
 
-void HnMesh::UpdateReprMaterials(pxr::HdSceneDelegate* SceneDelegate,
-                                 pxr::HdRenderParam*   RenderParam)
+void HnMesh::UpdateReprMaterials(const pxr::HdRenderIndex& RenderIndex,
+                                 pxr::HdRenderParam*       RenderParam)
 {
-    const pxr::HdRenderIndex& RenderIndex = SceneDelegate->GetRenderIndex();
-
     ProcessDrawItems(
         [&](HnDrawItem& DrawItem) {
             SetDrawItemMaterial(RenderIndex, DrawItem, GetMaterialId());
@@ -212,23 +210,19 @@ void HnMesh::Sync(pxr::HdSceneDelegate* Delegate,
         UpdateMaterials = true;
         *DirtyBits &= ~pxr::HdChangeTracker::DirtyMaterialId;
     }
+
     if ((*DirtyBits & pxr::HdChangeTracker::DirtyDisplayStyle) != 0)
     {
         UpdateMaterials = true;
         *DirtyBits &= ~pxr::HdChangeTracker::DirtyDisplayStyle;
     }
 
-    const bool IsNewRepr = (*DirtyBits & pxr::HdChangeTracker::NewRepr) != 0;
-    // UpdateRepr() clears the NewRepr bit
     const bool ReprUpdated = UpdateRepr(*Delegate, RenderParam, *DirtyBits, ReprToken);
-    if (IsNewRepr && ReprUpdated)
-    {
-        UpdateMaterials = true;
-    }
 
+    // Update materials after the repr is updated, so that the draw items are created
     if (UpdateMaterials)
     {
-        UpdateReprMaterials(Delegate, RenderParam);
+        UpdateReprMaterials(Delegate->GetRenderIndex(), RenderParam);
     }
 
     const bool DirtyDoubleSided = (*DirtyBits & pxr::HdChangeTracker::DirtyDoubleSided) != 0;
@@ -273,16 +267,16 @@ pxr::HdDirtyBits HnMesh::_PropagateDirtyBits(pxr::HdDirtyBits bits) const
     return bits;
 }
 
-void HnMesh::AddGeometrySubsetDrawItems(const pxr::HdMeshReprDesc& ReprDesc, pxr::HdRepr& Repr)
+void HnMesh::AddGeometrySubsetDrawItems(const pxr::HdRenderIndex& RenderIndex, const pxr::HdMeshReprDesc& ReprDesc, pxr::HdRepr& Repr)
 {
     if (ReprDesc.geomStyle == pxr::HdMeshGeomStyleInvalid ||
         ReprDesc.geomStyle == pxr::HdMeshGeomStylePoints)
         return;
 
-    const size_t NumGeomSubsets = m_Topology.Subsets.size();
-    for (size_t i = 0; i < NumGeomSubsets; ++i)
+    for (const Topology::Subset& Subset : m_Topology.Subsets)
     {
-        pxr::HdRepr::DrawItemUniquePtr Item = std::make_unique<HnDrawItem>(_sharedData, *this);
+        std::unique_ptr<HnDrawItem> Item = std::make_unique<HnDrawItem>(_sharedData, *this);
+        SetDrawItemMaterial(RenderIndex, *Item, Subset.MaterialId);
         Repr.AddGeomSubsetDrawItem(std::move(Item));
     }
 }
@@ -308,11 +302,7 @@ void HnMesh::_InitRepr(const pxr::TfToken& ReprToken, pxr::HdDirtyBits* DirtyBit
         Repr.AddDrawItem(std::make_unique<HnDrawItem>(_sharedData, *this));
     }
 
-    // Note that geometry susbset items may change later.
-    for (const pxr::HdMeshReprDesc& Desc : ReprDescs)
-    {
-        AddGeometrySubsetDrawItems(Desc, Repr);
-    }
+    // Geometry susbset items will be added after the topology is updated.
 }
 
 void HnMesh::Invalidate()
@@ -635,7 +625,7 @@ void HnMesh::UpdateDrawItemsForGeometrySubsets(pxr::HdSceneDelegate& SceneDelega
         Repr->ClearGeomSubsetDrawItems();
         for (const pxr::HdMeshReprDesc& Desc : Descs)
         {
-            AddGeometrySubsetDrawItems(Desc, *Repr);
+            AddGeometrySubsetDrawItems(SceneDelegate.GetRenderIndex(), Desc, *Repr);
         }
     }
 }

@@ -141,8 +141,8 @@ protected:
     // is used.
     virtual void _InitRepr(const pxr::TfToken& reprToken, pxr::HdDirtyBits* dirtyBits) override final;
 
-    void UpdateReprMaterials(pxr::HdSceneDelegate* SceneDelegate,
-                             pxr::HdRenderParam*   RenderParam);
+    void UpdateReprMaterials(const pxr::HdRenderIndex& RenderIndex,
+                             pxr::HdRenderParam*       RenderParam);
 
 private:
     HnMesh(const pxr::TfToken& typeId,
@@ -237,7 +237,8 @@ private:
                         const pxr::TfToken&    ReprToken,
                         HdMeshTopologyWrapper& MeshTopology);
 
-    void AddGeometrySubsetDrawItems(const pxr::HdMeshReprDesc& ReprDesc,
+    void AddGeometrySubsetDrawItems(const pxr::HdRenderIndex&  RenderIndex,
+                                    const pxr::HdMeshReprDesc& ReprDesc,
                                     pxr::HdRepr&               Repr);
     void UpdateDrawItemsForGeometrySubsets(pxr::HdSceneDelegate& SceneDelegate,
                                            pxr::HdRenderParam*   RenderParam);
