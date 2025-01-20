@@ -398,7 +398,7 @@ bool HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
 
     HnRenderDelegate* RenderDelegate      = static_cast<HnRenderDelegate*>(SceneDelegate.GetRenderIndex().GetRenderDelegate());
     HnGeometryPool&   GeometryPool        = RenderDelegate->GetGeometryPool();
-    const Int64       PendingGeometrySize = GeometryPool.GetPendingVertexDataSize() + GeometryPool.GetPendingIndexDataSize();
+    const Int64       PendingGeometrySize = GeometryPool.GetPendingVertexDataSize() + GeometryPool.GetPendingIndexDataSize() + GeometryPool.GetReservedDataSize();
     const Uint64      GeometryLoadBudget  = static_cast<HnRenderParam*>(RenderParam)->GetConfig().GeometryLoadBudget;
     if (GeometryLoadBudget > 0 && static_cast<Uint64>(PendingGeometrySize) > GeometryLoadBudget)
     {

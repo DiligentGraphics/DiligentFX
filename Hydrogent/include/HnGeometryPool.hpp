@@ -96,6 +96,7 @@ public:
 
     Int64 GetPendingVertexDataSize() const { return m_PendingVertexDataSize.load(); }
     Int64 GetPendingIndexDataSize() const { return m_PendingIndexDataSize.load(); }
+    Int64 GetReservedDataSize() const { return m_ReservedDataSize.load(); }
 
     class ReservedSpace
     {
