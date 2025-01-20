@@ -249,6 +249,9 @@ private:
     void ProcessDrawItems(HandleDrawItemFuncType&&           HandleDrawItem,
                           HandleGeomSubsetDrawItemFuncType&& HandleGeomSubsetDrawItem);
 
+    void UpdateCullMode(const float4x4&     Transform,
+                        pxr::HdRenderParam* RenderParam);
+
     void Invalidate();
 
 private:

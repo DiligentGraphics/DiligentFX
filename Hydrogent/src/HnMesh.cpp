@@ -168,6 +168,28 @@ void HnMesh::UpdateReprMaterials(pxr::HdSceneDelegate* SceneDelegate,
         });
 }
 
+void HnMesh::UpdateCullMode(const float4x4&     Transform,
+                            pxr::HdRenderParam* RenderParam)
+{
+    CULL_MODE CullMode = CULL_MODE_UNDEFINED;
+    if (m_IsDoubleSided)
+    {
+        CullMode = CULL_MODE_NONE;
+    }
+    else
+    {
+        const float Det = Transform.Determinant();
+        // Do NOT use Delegate->GetTransform() as it is very expensive and we have the matrix already
+        //CullMode = Delegate->GetTransform(Id).IsRightHanded() ? CULL_MODE_BACK : CULL_MODE_FRONT;
+        CullMode = Det > 0 ? CULL_MODE_BACK : CULL_MODE_FRONT;
+    }
+
+    if (m_CullMode != CullMode)
+    {
+        m_CullMode = CullMode;
+        static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::MeshCulling);
+    }
+}
 
 void HnMesh::Sync(pxr::HdSceneDelegate* Delegate,
                   pxr::HdRenderParam*   RenderParam,
@@ -188,14 +210,21 @@ void HnMesh::Sync(pxr::HdSceneDelegate* Delegate,
             SetMaterialId(MaterialId);
         }
         UpdateMaterials = true;
+        *DirtyBits &= ~pxr::HdChangeTracker::DirtyMaterialId;
     }
-    if (*DirtyBits & (pxr::HdChangeTracker::DirtyDisplayStyle | pxr::HdChangeTracker::NewRepr))
+    if ((*DirtyBits & pxr::HdChangeTracker::DirtyDisplayStyle) != 0)
+    {
+        UpdateMaterials = true;
+        *DirtyBits &= ~pxr::HdChangeTracker::DirtyDisplayStyle;
+    }
+
+    const bool IsNewRepr = (*DirtyBits & pxr::HdChangeTracker::NewRepr) != 0;
+    // UpdateRepr() clears the NewRepr bit
+    const bool ReprUpdated = UpdateRepr(*Delegate, RenderParam, *DirtyBits, ReprToken);
+    if (IsNewRepr && ReprUpdated)
     {
         UpdateMaterials = true;
     }
-    bool UpdateCullMode = pxr::HdChangeTracker::IsTransformDirty(*DirtyBits, Id) || m_CullMode == CULL_MODE_UNDEFINED;
-
-    const bool ReprUpdated = UpdateRepr(*Delegate, RenderParam, *DirtyBits, ReprToken);
 
     if (UpdateMaterials)
     {
@@ -206,26 +235,15 @@ void HnMesh::Sync(pxr::HdSceneDelegate* Delegate,
     if (DirtyDoubleSided)
     {
         m_IsDoubleSided = Delegate->GetDoubleSided(Id);
-        UpdateCullMode  = true;
+        *DirtyBits &= ~pxr::HdChangeTracker::DirtyDoubleSided;
     }
 
-    if (UpdateCullMode)
+    if (DirtyDoubleSided || m_CullMode == CULL_MODE_UNDEFINED)
     {
-        CULL_MODE CullMode = CULL_MODE_UNDEFINED;
-        if (m_IsDoubleSided)
-        {
-            CullMode = CULL_MODE_NONE;
-        }
-        else
-        {
-            CullMode = Delegate->GetTransform(Id).IsRightHanded() ? CULL_MODE_BACK : CULL_MODE_FRONT;
-        }
-
-        if (m_CullMode != CullMode)
-        {
-            m_CullMode = CullMode;
-            static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::MeshCulling);
-        }
+        HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(Delegate->GetRenderIndex().GetRenderDelegate());
+        entt::registry&   Registry       = RenderDelegate->GetEcsRegistry();
+        const float4x4&   Transform      = Registry.get<Components::Transform>(m_Entity).Matrix;
+        UpdateCullMode(Transform, RenderParam);
     }
 
     if ((DirtyDoubleSided || UpdateMaterials) && RenderParam != nullptr)
@@ -557,6 +575,8 @@ bool HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
         ++m_GeometryVersion;
     }
 
+    // Note that m_SkelLocalToPrimLocal is set by UpdateSkinningPrimvars, so transform
+    // should be updated after the primvars are synced.
     if (pxr::HdChangeTracker::IsTransformDirty(DirtyBits, Id))
     {
         entt::registry& Registry  = RenderDelegate->GetEcsRegistry();
@@ -570,6 +590,7 @@ bool HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
             {
                 static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::MeshTransform);
             }
+            UpdateCullMode(Transform, RenderParam);
         }
 
         DirtyBits &= ~pxr::HdChangeTracker::DirtyTransform;
