@@ -413,29 +413,33 @@ static size_t GetPrimvarElementSize(const HnRenderDelegate* RenderDelegate, cons
     }
 }
 
-bool HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
-                        pxr::HdRenderParam*   RenderParam,
-                        pxr::HdDirtyBits&     DirtyBits,
-                        const pxr::TfToken&   ReprToken)
+bool HnMesh::UpdateGeometry(pxr::HdSceneDelegate& SceneDelegate,
+                            pxr::HdRenderParam*   RenderParam,
+                            pxr::HdDirtyBits&     DirtyBits,
+                            const pxr::TfToken&   ReprToken)
 {
-    const pxr::HdReprSharedPtr& CurrRepr = _GetRepr(ReprToken);
-    if (!CurrRepr)
-        return true;
-
-    HnRenderDelegate* RenderDelegate      = static_cast<HnRenderDelegate*>(SceneDelegate.GetRenderIndex().GetRenderDelegate());
-    HnGeometryPool&   GeometryPool        = RenderDelegate->GetGeometryPool();
-    const Int64       PendingGeometrySize = GeometryPool.GetPendingVertexDataSize() + GeometryPool.GetPendingIndexDataSize() + GeometryPool.GetReservedDataSize();
-    const Uint64      GeometryLoadBudget  = static_cast<HnRenderParam*>(RenderParam)->GetConfig().GeometryLoadBudget;
-    if (GeometryLoadBudget > 0 && static_cast<Uint64>(PendingGeometrySize) > GeometryLoadBudget)
-    {
-        // Pending geometry size exceeds the budget, skip updating the repr
-        return false;
-    }
-
     const pxr::SdfPath& Id = GetId();
 
     const bool TopologyDirty   = pxr::HdChangeTracker::IsTopologyDirty(DirtyBits, Id);
     const bool AnyPrimvarDirty = pxr::HdChangeTracker::IsAnyPrimvarDirty(DirtyBits, Id);
+
+    HnRenderDelegate* RenderDelegate     = static_cast<HnRenderDelegate*>(SceneDelegate.GetRenderIndex().GetRenderDelegate());
+    HnGeometryPool&   GeometryPool       = RenderDelegate->GetGeometryPool();
+    const Uint64      GeometryLoadBudget = static_cast<HnRenderParam*>(RenderParam)->GetConfig().GeometryLoadBudget;
+
+    if (GeometryLoadBudget > 0 && (TopologyDirty || AnyPrimvarDirty))
+    {
+        const Uint64 PendingGeometrySize = static_cast<Uint64>(
+            GeometryPool.GetPendingVertexDataSize() +
+            GeometryPool.GetPendingIndexDataSize() +
+            GeometryPool.GetReservedDataSize());
+        if (PendingGeometrySize > GeometryLoadBudget)
+        {
+            // Pending geometry size exceeds the budget, skip updating.
+            // Note that this will prevent some skinning animations from being updated until all geometry is loaded.
+            return false;
+        }
+    }
 
     HdMeshTopologyWrapper MeshTopology{SceneDelegate, *this};
 
@@ -496,7 +500,7 @@ bool HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
         }
         else
         {
-            // Reserved data size exceeds the budget, skip updating the repr
+            // Reserved data size exceeds the budget, skip updating.
             return false;
         }
     }
@@ -586,14 +590,29 @@ bool HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
         ++m_GeometryVersion;
     }
 
+    return true;
+}
+
+bool HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
+                        pxr::HdRenderParam*   RenderParam,
+                        pxr::HdDirtyBits&     DirtyBits,
+                        const pxr::TfToken&   ReprToken)
+{
+    const pxr::HdReprSharedPtr& CurrRepr = _GetRepr(ReprToken);
+    if (!CurrRepr)
+        return true;
+
+    bool GeometryUpdated = UpdateGeometry(SceneDelegate, RenderParam, DirtyBits, ReprToken);
+
     // Note that m_SkelLocalToPrimLocal is set by UpdateSkinningPrimvars, so transform
     // should be updated after the primvars are synced.
-    if (pxr::HdChangeTracker::IsTransformDirty(DirtyBits, Id))
+    if (pxr::HdChangeTracker::IsTransformDirty(DirtyBits, GetId()))
     {
-        entt::registry& Registry  = RenderDelegate->GetEcsRegistry();
-        float4x4&       Transform = Registry.get<Components::Transform>(m_Entity).Matrix;
+        HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(SceneDelegate.GetRenderIndex().GetRenderDelegate());
+        entt::registry&   Registry       = RenderDelegate->GetEcsRegistry();
+        float4x4&         Transform      = Registry.get<Components::Transform>(m_Entity).Matrix;
 
-        float4x4 NewTransform = m_SkelLocalToPrimLocal * ToFloat4x4(SceneDelegate.GetTransform(Id));
+        float4x4 NewTransform = m_SkelLocalToPrimLocal * ToFloat4x4(SceneDelegate.GetTransform(GetId()));
         if (Transform != NewTransform)
         {
             Transform = NewTransform;
@@ -609,7 +628,7 @@ bool HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
 
     DirtyBits &= ~pxr::HdChangeTracker::NewRepr;
 
-    return true;
+    return GeometryUpdated;
 }
 
 void HnMesh::UpdateDrawItemsForGeometrySubsets(pxr::HdSceneDelegate& SceneDelegate,

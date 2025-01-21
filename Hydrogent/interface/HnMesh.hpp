@@ -243,6 +243,11 @@ private:
     void UpdateDrawItemsForGeometrySubsets(pxr::HdSceneDelegate& SceneDelegate,
                                            pxr::HdRenderParam*   RenderParam);
 
+    bool UpdateGeometry(pxr::HdSceneDelegate& SceneDelegate,
+                        pxr::HdRenderParam*   RenderParam,
+                        pxr::HdDirtyBits&     DirtyBits,
+                        const pxr::TfToken&   ReprToken);
+
     void UpdateDrawItemGpuGeometry(HnRenderDelegate& RenderDelegate);
     void UpdateDrawItemGpuTopology(HnRenderDelegate& RenderDelegate);
 
