@@ -46,18 +46,33 @@ HnRenderParam::~HnRenderParam()
 
 void HnRenderParam::AddDirtyRPrim(const pxr::SdfPath& RPrimId, pxr::HdDirtyBits DirtyBits)
 {
-    std::lock_guard<std::mutex> Lock{m_DirtyRPrimsMtx};
-    m_DirtyRPrims.emplace_back(RPrimId, DirtyBits);
+    DirtyRPrimsVector* pDirtyRPrims = nullptr;
+    {
+        Threading::SpinLockGuard Guard{m_DirtyRPrimsLock};
+
+        auto it = m_DirtyRPrimsPerThread.find(std::this_thread::get_id());
+        if (it == m_DirtyRPrimsPerThread.end())
+        {
+            it = m_DirtyRPrimsPerThread.emplace(std::this_thread::get_id(), DirtyRPrimsVector{}).first;
+            it->second.reserve(16);
+        }
+        pDirtyRPrims = &it->second;
+    }
+    pDirtyRPrims->emplace_back(RPrimId, DirtyBits);
 }
 
 void HnRenderParam::CommitDirtyRPrims(pxr::HdChangeTracker& ChangeTracker)
 {
-    std::lock_guard<std::mutex> Lock{m_DirtyRPrimsMtx};
-    for (const auto& DidrtRPrim : m_DirtyRPrims)
+    Threading::SpinLockGuard Guard{m_DirtyRPrimsLock};
+
+    for (const auto& DirtyRPrims : m_DirtyRPrimsPerThread)
     {
-        ChangeTracker.MarkRprimDirty(DidrtRPrim.first, DidrtRPrim.second);
+        for (const auto& RPrim : DirtyRPrims.second)
+        {
+            ChangeTracker.MarkRprimDirty(RPrim.first, RPrim.second);
+        }
     }
-    m_DirtyRPrims.clear();
+    m_DirtyRPrimsPerThread.clear();
 }
 
 } // namespace USD

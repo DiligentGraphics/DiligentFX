@@ -28,10 +28,12 @@
 
 #include <atomic>
 #include <array>
-#include <mutex>
 #include <vector>
+#include <unordered_map>
+#include <thread>
 
 #include "HnTypes.hpp"
+#include "SpinLock.hpp"
 
 #include "pxr/imaging/hd/renderDelegate.h"
 #include "../../PBR/interface/PBR_Renderer.hpp"
@@ -146,8 +148,11 @@ private:
     float    m_ElapsedTime = 0.0;
     uint32_t m_FrameNumber = 0;
 
-    std::mutex                                             m_DirtyRPrimsMtx;
-    std::vector<std::pair<pxr::SdfPath, pxr::HdDirtyBits>> m_DirtyRPrims;
+    using DirtyRPrimsVector = std::vector<std::pair<pxr::SdfPath, pxr::HdDirtyBits>>;
+
+    // Note: spin lock here works much faster than std::mutex
+    Threading::SpinLock                                    m_DirtyRPrimsLock;
+    std::unordered_map<std::thread::id, DirtyRPrimsVector> m_DirtyRPrimsPerThread;
 };
 
 } // namespace USD
