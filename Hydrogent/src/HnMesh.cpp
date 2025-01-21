@@ -246,6 +246,24 @@ void HnMesh::Sync(pxr::HdSceneDelegate* Delegate,
         ++m_MaterialVersion;
     }
 
+    if (pxr::HdChangeTracker::IsVisibilityDirty(*DirtyBits, Id))
+    {
+        bool Visible = Delegate->GetVisible(Id);
+        if (_sharedData.visible != Visible)
+        {
+            _sharedData.visible = Visible;
+            if (RenderParam != nullptr)
+            {
+                static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::MeshVisibility);
+            }
+            HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(Delegate->GetRenderIndex().GetRenderDelegate());
+            entt::registry&   Registry       = RenderDelegate->GetEcsRegistry();
+            Registry.replace<Components::Visibility>(m_Entity, _sharedData.visible);
+        }
+
+        *DirtyBits &= ~pxr::HdChangeTracker::DirtyVisibility;
+    }
+
     if (!ReprUpdated)
     {
         // We can't mark the prim as dirty here, because OpenUSD marks the prim as clean after Sync() is called.
@@ -469,7 +487,7 @@ bool HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
     }
 
     HnGeometryPool::ReservedSpace ReservedSpace = GeometryPool.ReserveSpace(ExpectedGeometryDataSize);
-    if (GeometryLoadBudget > 0 && ReservedSpace.GetTotalPendingSize() > GeometryLoadBudget)
+    if (GeometryLoadBudget > 0 && ExpectedGeometryDataSize > 0 && ReservedSpace.GetTotalPendingSize() > GeometryLoadBudget)
     {
         if (ReservedSpace.GetTotalPendingSize() == ExpectedGeometryDataSize)
         {
@@ -587,23 +605,6 @@ bool HnMesh::UpdateRepr(pxr::HdSceneDelegate& SceneDelegate,
         }
 
         DirtyBits &= ~pxr::HdChangeTracker::DirtyTransform;
-    }
-
-    if (pxr::HdChangeTracker::IsVisibilityDirty(DirtyBits, Id))
-    {
-        bool Visible = SceneDelegate.GetVisible(Id);
-        if (_sharedData.visible != Visible)
-        {
-            _sharedData.visible = SceneDelegate.GetVisible(Id);
-            if (RenderParam != nullptr)
-            {
-                static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::MeshVisibility);
-            }
-            entt::registry& Registry = RenderDelegate->GetEcsRegistry();
-            Registry.replace<Components::Visibility>(m_Entity, _sharedData.visible);
-        }
-
-        DirtyBits &= ~pxr::HdChangeTracker::DirtyVisibility;
     }
 
     DirtyBits &= ~pxr::HdChangeTracker::NewRepr;
