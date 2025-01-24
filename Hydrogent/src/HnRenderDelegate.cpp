@@ -915,6 +915,8 @@ HnRenderDelegateMemoryStats HnRenderDelegate::GetMemoryStats() const
     MemoryStats.VertexPool.AllocatedVertexCount = VertexUsage.AllocatedVertexCount;
     MemoryStats.VertexPool.PendingDataSize      = m_LastPendingVertexDataSize;
 
+    MemoryStats.ReservedGeometryDataSize = m_GeometryPool->GetReservedDataSize();
+
     MemoryStats.Atlas.CommittedSize   = AtlasUsage.CommittedSize;
     MemoryStats.Atlas.AllocationCount = AtlasUsage.AllocationCount;
     MemoryStats.Atlas.TotalTexels     = AtlasUsage.TotalArea;
