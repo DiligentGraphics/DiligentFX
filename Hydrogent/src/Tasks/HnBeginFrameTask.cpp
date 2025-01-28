@@ -681,9 +681,11 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
                 if (m_FallBackPsoUseStartTime > 0 && m_FallBackPsoUseEndTime > m_FallBackPsoUseStartTime)
                 {
                     float FallbackDuration   = static_cast<float>(m_FallBackPsoUseEndTime - m_FallBackPsoUseStartTime);
-                    float TransitionDuration = std::min(0.5f, FallbackDuration * 0.5f);
-                    LoadingAnimationFactor   = static_cast<float>(m_CurrFrameTime - m_FallBackPsoUseEndTime) / TransitionDuration;
-                    LoadingAnimationFactor   = std::max(1.f - LoadingAnimationFactor, 0.f);
+                    float TransitionDuration = std::min(m_Params.Renderer.LoadingAnimationTransitionDuration, FallbackDuration * 0.5f);
+                    LoadingAnimationFactor   = TransitionDuration > 0.f ?
+                        static_cast<float>(m_CurrFrameTime - m_FallBackPsoUseEndTime) / TransitionDuration :
+                        1.f;
+                    LoadingAnimationFactor = std::max(1.f - LoadingAnimationFactor, 0.f);
                     if (LoadingAnimationFactor == 0)
                     {
                         // Transition is over
