@@ -106,8 +106,8 @@ struct HnRenderDelegateMemoryStats
     /// Vertex pool usage statistics.
     VertexPoolUsage VertexPool;
 
-    /// The total size of geometry data that is reserved for loading, in bytes.
-    Uint64 ReservedGeometryDataSize = 0;
+    /// The number of RPrims currently loading.
+    Uint32 NumRPrimsLoading = 0;
 
     /// Texture atlas usage statistics.
     struct TextureAtlasUsage

@@ -131,6 +131,8 @@ public:
     void AddDirtyRPrim(const pxr::SdfPath& RPrimId, pxr::HdDirtyBits DirtyBits);
     void CommitDirtyRPrims(pxr::HdChangeTracker& ChangeTracker);
 
+    size_t GetLastDirtyRPrimCount() const { return m_LastDirtyRPrimCount; }
+
 private:
     const Configuration m_Config;
 
@@ -153,6 +155,8 @@ private:
     // Note: spin lock here works much faster than std::mutex
     Threading::SpinLock                                    m_DirtyRPrimsLock;
     std::unordered_map<std::thread::id, DirtyRPrimsVector> m_DirtyRPrimsPerThread;
+    // The number of dirty RPrims when CommitDirtyRPrims was last called.
+    size_t m_LastDirtyRPrimCount = 0;
 };
 
 } // namespace USD

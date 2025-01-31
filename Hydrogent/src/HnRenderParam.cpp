@@ -65,12 +65,14 @@ void HnRenderParam::CommitDirtyRPrims(pxr::HdChangeTracker& ChangeTracker)
 {
     Threading::SpinLockGuard Guard{m_DirtyRPrimsLock};
 
+    m_LastDirtyRPrimCount = 0;
     for (const auto& DirtyRPrims : m_DirtyRPrimsPerThread)
     {
         for (const auto& RPrim : DirtyRPrims.second)
         {
             ChangeTracker.MarkRprimDirty(RPrim.first, RPrim.second);
         }
+        m_LastDirtyRPrimCount += DirtyRPrims.second.size();
     }
     m_DirtyRPrimsPerThread.clear();
 }
