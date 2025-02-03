@@ -349,7 +349,8 @@ public:
         return m_Topology;
     }
 
-    operator pxr::HdMeshTopology &()
+    using PxrHdMeshTopology = pxr::HdMeshTopology;
+    operator PxrHdMeshTopology&()
     {
         return Get();
     }

@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2024 Diligent Graphics LLC
+ *  Copyright 2023-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -191,7 +191,8 @@ struct USD_Renderer::USDRendererCreateInfoWrapper
         }
     }
 
-    operator const PBR_Renderer::CreateInfo &() const
+    using PBR_RendererCreateInfo = PBR_Renderer::CreateInfo;
+    operator const PBR_RendererCreateInfo&() const
     {
         return CI;
     }

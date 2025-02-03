@@ -1,5 +1,5 @@
 /*
- *  Copyright 2019-2024 Diligent Graphics LLC
+ *  Copyright 2019-2025 Diligent Graphics LLC
  *  Copyright 2015-2019 Egor Yusov
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -94,7 +94,8 @@ struct PBRRendererCreateInfoWrapper
         }
     }
 
-    operator const PBR_Renderer::CreateInfo &() const
+    using PBR_RendererCreateInfo = PBR_Renderer::CreateInfo;
+    operator const PBR_RendererCreateInfo&() const
     {
         return CI;
     }

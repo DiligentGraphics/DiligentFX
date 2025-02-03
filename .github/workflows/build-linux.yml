@@ -5,7 +5,7 @@ on: [push, pull_request]
 jobs:
   precheks:
     name:    Linux -> Pre-checks
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
 
     steps:
     - name: Clone DiligentCore
@@ -35,7 +35,7 @@ jobs:
         
   build:
     needs:   precheks
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
 
     strategy:
       matrix:
@@ -46,13 +46,13 @@ jobs:
         include:
           - name:            "GCC"
             cmake_generator: "Unix Makefiles"
-            cc:              "gcc-9"
-            cxx:             "g++-9"
+            cc:              "gcc-14"
+            cxx:             "g++-14"
 
           - name:            "Clang"
             cmake_generator: "Ninja"
-            cc:              "clang-12"
-            cxx:             "clang++-12"
+            cc:              "clang-18"
+            cxx:             "clang++-18"
 
     name: Linux -> ${{ matrix.name }}-x64, ${{ matrix.build_type }}
 
