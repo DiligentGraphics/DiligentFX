@@ -30,7 +30,7 @@ before_build:
   - cd c:\projects\DiligentFX\BuildTools\FormatValidation
   - validate_format_win.bat
   - cd c:\projects
-  - echo cmake_minimum_required(VERSION 3.6) > CMakeLists.txt
+  - echo cmake_minimum_required(VERSION 3.10) > CMakeLists.txt
   - echo Project(DiligentFX_Test) >> CMakeLists.txt
   - echo add_subdirectory(DiligentCore) >> CMakeLists.txt
   - echo add_subdirectory(DiligentTools) >> CMakeLists.txt
