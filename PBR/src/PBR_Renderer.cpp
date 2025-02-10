@@ -50,7 +50,7 @@ namespace Diligent
 
 const SamplerDesc PBR_Renderer::CreateInfo::DefaultSampler = Sam_LinearWrap;
 
-#if PLATFORM_EMSCRIPTEN
+#if PLATFORM_WEB
 static constexpr char MultiDrawGLSLExtension[] = "#extension GL_ANGLE_multi_draw : enable";
 #else
 static constexpr char MultiDrawGLSLExtension[] = "#extension GL_ARB_shader_draw_parameters : enable";
@@ -612,7 +612,7 @@ static Uint32 GetDefaultDiffuseSamplesCount(const GraphicsAdapterInfo& AdapterIn
     {
         return 512;
     }
-#elif PLATFORM_EMSCRIPTEN
+#elif PLATFORM_WEB
     {
         return 1024;
     }
@@ -1211,7 +1211,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
         {
             if (m_Device.GetDeviceInfo().IsGLDevice())
             {
-#if PLATFORM_EMSCRIPTEN
+#if PLATFORM_WEB
                 PrimitiveID = "gl_DrawID";
 #else
                 PrimitiveID = "gl_DrawIDARB";
