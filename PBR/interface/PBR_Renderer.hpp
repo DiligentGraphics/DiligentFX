@@ -761,6 +761,8 @@ public:
     ///             one over the maximum vertex position minus the minimum vertex position.
     static inline void PackVertexPos64(const float3& Pos, const float3& Bias, const float3& Scale, Uint32& U0, Uint32& U1);
 
+    static const char* GetDebugViewTypeString(DebugViewType DebugView);
+
 protected:
     ShaderMacroHelper DefineMacros(const PSOKey& Key) const;
 

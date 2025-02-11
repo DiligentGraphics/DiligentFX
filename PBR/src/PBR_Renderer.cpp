@@ -2168,4 +2168,54 @@ void* PBR_Renderer::WriteSkinningData(void* pDst, const WriteSkinningDataAttribs
     return WriteSkinningData(pDst, Attribs, PackMatrixRowMajor, m_Settings.MaxJointCount);
 }
 
+const char* PBR_Renderer::GetDebugViewTypeString(DebugViewType DebugView)
+{
+    static_assert(static_cast<int>(DebugViewType::NumDebugViews) == 34, "Please update the switch below to handle the new debug view type");
+    switch (DebugView)
+    {
+#define DEBUG_VIEW_TYPE_CASE(Type) \
+    case DebugViewType::Type: return #Type
+
+        DEBUG_VIEW_TYPE_CASE(None);
+        DEBUG_VIEW_TYPE_CASE(Texcoord0);
+        DEBUG_VIEW_TYPE_CASE(Texcoord1);
+        DEBUG_VIEW_TYPE_CASE(BaseColor);
+        DEBUG_VIEW_TYPE_CASE(Transparency);
+        DEBUG_VIEW_TYPE_CASE(Occlusion);
+        DEBUG_VIEW_TYPE_CASE(Emissive);
+        DEBUG_VIEW_TYPE_CASE(Metallic);
+        DEBUG_VIEW_TYPE_CASE(Roughness);
+        DEBUG_VIEW_TYPE_CASE(DiffuseColor);
+        DEBUG_VIEW_TYPE_CASE(SpecularColor);
+        DEBUG_VIEW_TYPE_CASE(Reflectance90);
+        DEBUG_VIEW_TYPE_CASE(MeshNormal);
+        DEBUG_VIEW_TYPE_CASE(ShadingNormal);
+        DEBUG_VIEW_TYPE_CASE(MotionVectors);
+        DEBUG_VIEW_TYPE_CASE(NdotV);
+        DEBUG_VIEW_TYPE_CASE(PunctualLighting);
+        DEBUG_VIEW_TYPE_CASE(DiffuseIBL);
+        DEBUG_VIEW_TYPE_CASE(SpecularIBL);
+        DEBUG_VIEW_TYPE_CASE(WhiteBaseColor);
+        DEBUG_VIEW_TYPE_CASE(ClearCoat);
+        DEBUG_VIEW_TYPE_CASE(ClearCoatFactor);
+        DEBUG_VIEW_TYPE_CASE(ClearCoatRoughness);
+        DEBUG_VIEW_TYPE_CASE(ClearCoatNormal);
+        DEBUG_VIEW_TYPE_CASE(Sheen);
+        DEBUG_VIEW_TYPE_CASE(SheenColor);
+        DEBUG_VIEW_TYPE_CASE(SheenRoughness);
+        DEBUG_VIEW_TYPE_CASE(AnisotropyStrength);
+        DEBUG_VIEW_TYPE_CASE(AnisotropyDirection);
+        DEBUG_VIEW_TYPE_CASE(Iridescence);
+        DEBUG_VIEW_TYPE_CASE(IridescenceFactor);
+        DEBUG_VIEW_TYPE_CASE(IridescenceThickness);
+        DEBUG_VIEW_TYPE_CASE(Transmission);
+        DEBUG_VIEW_TYPE_CASE(Thickness);
+#undef DEBUG_VIEW_TYPE_CASE
+
+        default:
+            UNEXPECTED("Unexpected debug view type");
+            return "Unknown";
+    }
+}
+
 } // namespace Diligent
