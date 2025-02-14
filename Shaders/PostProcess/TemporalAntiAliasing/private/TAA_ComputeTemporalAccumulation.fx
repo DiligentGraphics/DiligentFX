@@ -77,12 +77,7 @@ float3 SDRToHDR(float3 Color)
 
 float3 SampleCurrColor(int2 PixelCoord)
 {
-    return g_TextureCurrColor.Load(int3(PixelCoord, 0));
-}
-
-float4 SamplePrevColor(int2 PixelCoord)
-{
-    return g_TexturePrevColor.Load(int3(PixelCoord, 0));
+    return max(g_TextureCurrColor.Load(int3(PixelCoord, 0)), 0.0);
 }
 
 float SampleCurrDepth(int2 PixelCoord)
@@ -207,7 +202,7 @@ PixelStatistic ComputePixelStatisticYCoCgSDR(int2 PixelCoord)
         {
             int2 Location = ClampScreenCoord(PixelCoord + int2(x, y), int2(g_CurrCamera.f4ViewportSize.xy));
             float3 HDRColor = SampleCurrColor(Location);
-            float3 SDRColor = RGBToYCoCg(HDRColor * rcp(1.0 + HDRColor));
+            float3 SDRColor = RGBToYCoCg(HDRToSDR(HDRColor));
 #if TAA_OPTION_GAUSSIAN_WEIGHTING
             float Weight = exp(-3.0 * float(x * x + y * y) / ((float(StatisticRadius) + 1.0) * (float(StatisticRadius) + 1.0)));
 #else
@@ -217,7 +212,6 @@ PixelStatistic ComputePixelStatisticYCoCgSDR(int2 PixelCoord)
             M1 += SDRColor * Weight;
             M2 += SDRColor * SDRColor * Weight;
             WeightSum += Weight;
-
         }
     }
 
@@ -256,7 +250,7 @@ float4 ComputeTemporalAccumulationPS(in FullScreenTriangleVSOutput VSOut) : SV_T
         float3 RGBHDROutput = SDRToHDR(YCoCgToRGB(lerp(YCoCgSDRCurrColor, YCoCgSDRPrevColor, RGBHDRPrevColor.a)));
         return float4(RGBHDROutput, ComputeCorrectedAlpha(RGBHDRPrevColor.a));
     }
-        
+
     float VarianceGamma = lerp(TAA_MIN_VARIANCE_GAMMA, TAA_MAX_VARIANCE_GAMMA, MotionFactor * MotionFactor);
     PixelStatistic PixelStat = ComputePixelStatisticYCoCgSDR(int2(Position.xy));
     float3 YCoCgSDRClampedColor = ClipToAABB(YCoCgSDRPrevColor, YCoCgSDRCurrColor, PixelStat.Mean, VarianceGamma * PixelStat.StdDev);
