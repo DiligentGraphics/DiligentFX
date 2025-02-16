@@ -44,21 +44,21 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: DiligentGraphics/github-action/checkout@v2
+      uses: DiligentGraphics/github-action/checkout@v3
 
     - name: Set up build environment
       if:   success()
-      uses: DiligentGraphics/github-action/setup-build-env@v2
+      uses: DiligentGraphics/github-action/setup-build-env@v3
       with:
         platform: ${{ matrix.platform }}
 
     - name: Configure CMake
       if:   success()
-      uses: DiligentGraphics/github-action/configure-cmake@v2
+      uses: DiligentGraphics/github-action/configure-cmake@v3
       with:
         build-type: ${{ matrix.build_type }}
         cmake-args: ${{ matrix.cmake_args }}
 
     - name: Build
       if:   success()
-      uses: DiligentGraphics/github-action/build@v2
+      uses: DiligentGraphics/github-action/build@v3
