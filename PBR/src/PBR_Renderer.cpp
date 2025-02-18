@@ -367,12 +367,6 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
         };
         // clang-format on
         pCtx->TransitionResourceStates(_countof(Barriers), Barriers);
-
-        RefCntAutoPtr<ISampler> pDefaultSampler = m_Device.CreateSampler(Sam_LinearClamp);
-        m_pWhiteTexSRV->SetSampler(pDefaultSampler);
-        m_pBlackTexSRV->SetSampler(pDefaultSampler);
-        m_pDefaultNormalMapSRV->SetSampler(pDefaultSampler);
-        m_pDefaultPhysDescSRV->SetSampler(pDefaultSampler);
     }
 
     if (m_Settings.EnableSheen)
