@@ -81,7 +81,7 @@ PBR_Renderer::PSOKey::PSOKey(PSO_FLAGS            _Flags,
     {
         AlphaMode = ALPHA_MODE_OPAQUE;
 
-        constexpr auto SupportedUnshadedFlags = PSO_FLAG_USE_JOINTS | PSO_FLAG_ALL_USER_DEFINED | PSO_FLAG_UNSHADED;
+        constexpr PSO_FLAGS SupportedUnshadedFlags = PSO_FLAG_USE_JOINTS | PSO_FLAG_ALL_USER_DEFINED | PSO_FLAG_UNSHADED;
         Flags &= SupportedUnshadedFlags;
 
         DebugView = DebugViewType::None;
@@ -211,7 +211,7 @@ const char* PBR_Renderer::GetAlphaModeString(ALPHA_MODE AlphaMode)
 template <typename FaceHandlerType>
 void ProcessCubemapFaces(IDeviceContext* pCtx, ITexture* pCubemap, FaceHandlerType&& FaceHandler)
 {
-    const auto& CubemapDesc = pCubemap->GetDesc();
+    const TextureDesc& CubemapDesc = pCubemap->GetDesc();
     for (Uint32 mip = 0; mip < CubemapDesc.MipLevels; ++mip)
     {
         for (Uint32 face = 0; face < 6; ++face)
@@ -297,7 +297,7 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
             TexDesc.Format    = IrradianceCubeFmt;
             TexDesc.MipLevels = 1;
 
-            auto IrradainceCubeTex = m_Device.CreateTexture(TexDesc);
+            RefCntAutoPtr<ITexture> IrradainceCubeTex = m_Device.CreateTexture(TexDesc);
             VERIFY_EXPR(IrradainceCubeTex);
             ClearCubemap(pCtx, IrradainceCubeTex);
 
@@ -313,7 +313,7 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
             TexDesc.Format    = PrefilteredEnvMapFmt;
             TexDesc.MipLevels = 0;
 
-            auto PrefilteredEnvMapTex = m_Device.CreateTexture(TexDesc);
+            RefCntAutoPtr<ITexture> PrefilteredEnvMapTex = m_Device.CreateTexture(TexDesc);
             VERIFY_EXPR(PrefilteredEnvMapTex);
             ClearCubemap(pCtx, PrefilteredEnvMapTex);
 
@@ -339,23 +339,23 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
         TextureSubResData   Level0Data{Data.data(), TexDim * 4};
         TextureData         InitData{&Level0Data, 1};
 
-        auto pWhiteTex = m_Device.CreateTexture(TexDesc, &InitData);
-        m_pWhiteTexSRV = pWhiteTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        RefCntAutoPtr<ITexture> pWhiteTex = m_Device.CreateTexture(TexDesc, &InitData);
+        m_pWhiteTexSRV                    = pWhiteTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
 
         TexDesc.Name = "Black texture for PBR renderer";
-        for (auto& c : Data) c = 0;
-        auto pBlackTex = m_Device.CreateTexture(TexDesc, &InitData);
-        m_pBlackTexSRV = pBlackTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        for (Uint32& c : Data) c = 0;
+        RefCntAutoPtr<ITexture> pBlackTex = m_Device.CreateTexture(TexDesc, &InitData);
+        m_pBlackTexSRV                    = pBlackTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
 
         TexDesc.Name = "Default normal map for PBR renderer";
-        for (auto& c : Data) c = 0x00FF7F7F;
-        auto pDefaultNormalMap = m_Device.CreateTexture(TexDesc, &InitData);
-        m_pDefaultNormalMapSRV = pDefaultNormalMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        for (Uint32& c : Data) c = 0x00FF7F7F;
+        RefCntAutoPtr<ITexture> pDefaultNormalMap = m_Device.CreateTexture(TexDesc, &InitData);
+        m_pDefaultNormalMapSRV                    = pDefaultNormalMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
 
         TexDesc.Name = "Default physical description map for PBR renderer";
-        for (auto& c : Data) c = 0x0000FF00;
-        auto pDefaultPhysDesc = m_Device.CreateTexture(TexDesc, &InitData);
-        m_pDefaultPhysDescSRV = pDefaultPhysDesc->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+        for (Uint32& c : Data) c = 0x0000FF00;
+        RefCntAutoPtr<ITexture> pDefaultPhysDesc = m_Device.CreateTexture(TexDesc, &InitData);
+        m_pDefaultPhysDescSRV                    = pDefaultPhysDesc->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
 
         // clang-format off
         StateTransitionDesc Barriers[] = 
@@ -368,7 +368,7 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
         // clang-format on
         pCtx->TransitionResourceStates(_countof(Barriers), Barriers);
 
-        auto pDefaultSampler = m_Device.CreateSampler(Sam_LinearClamp);
+        RefCntAutoPtr<ISampler> pDefaultSampler = m_Device.CreateSampler(Sam_LinearClamp);
         m_pWhiteTexSRV->SetSampler(pDefaultSampler);
         m_pBlackTexSRV->SetSampler(pDefaultSampler);
         m_pDefaultNormalMapSRV->SetSampler(pDefaultSampler);
@@ -507,16 +507,17 @@ void PBR_Renderer::PrecomputeBRDF(IDeviceContext* pCtx,
                                   Uint32          NumBRDFSamples)
 {
     TextureDesc TexDesc;
-    TexDesc.Name            = "Preintegrated GGX";
-    TexDesc.Type            = RESOURCE_DIM_TEX_2D;
-    TexDesc.Usage           = USAGE_DEFAULT;
-    TexDesc.BindFlags       = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
-    TexDesc.Width           = BRDF_LUT_Dim;
-    TexDesc.Height          = BRDF_LUT_Dim;
-    TexDesc.Format          = TEX_FORMAT_RG16_FLOAT;
-    TexDesc.MipLevels       = 1;
-    auto pPreintegratedGGX  = m_Device.CreateTexture(TexDesc);
-    m_pPreintegratedGGX_SRV = pPreintegratedGGX->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+    TexDesc.Name      = "Preintegrated GGX";
+    TexDesc.Type      = RESOURCE_DIM_TEX_2D;
+    TexDesc.Usage     = USAGE_DEFAULT;
+    TexDesc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
+    TexDesc.Width     = BRDF_LUT_Dim;
+    TexDesc.Height    = BRDF_LUT_Dim;
+    TexDesc.Format    = TEX_FORMAT_RG16_FLOAT;
+    TexDesc.MipLevels = 1;
+
+    RefCntAutoPtr<ITexture> pPreintegratedGGX = m_Device.CreateTexture(TexDesc);
+    m_pPreintegratedGGX_SRV                   = pPreintegratedGGX->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
 
     RefCntAutoPtr<IPipelineState> PrecomputeBRDF_PSO;
     {
@@ -680,7 +681,7 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
         .Add("ENV_MAP_TYPE_SPHERE", static_cast<int>(IBL_PSOKey::ENV_MAP_TYPE_SPHERE))
         .Add("ENV_MAP_TYPE", static_cast<int>(EnvMapType));
 
-    auto& PrecomputeIrradianceCubeTech = m_IBL_PSOCache[IBL_PSOKey{IBL_PSOKey::PSO_TYPE_IRRADIANCE_CUBE, EnvMapType, FeatureFlags, m_pIrradianceCubeSRV->GetDesc().Format}];
+    IBL_RenderTechnique& PrecomputeIrradianceCubeTech = m_IBL_PSOCache[IBL_PSOKey{IBL_PSOKey::PSO_TYPE_IRRADIANCE_CUBE, EnvMapType, FeatureFlags, m_pIrradianceCubeSRV->GetDesc().Format}];
     if (!PrecomputeIrradianceCubeTech.IsInitialized())
     {
         ShaderCreateInfo ShaderCI;
@@ -738,7 +739,7 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
         PrecomputeIrradianceCubeTech.PSO->CreateShaderResourceBinding(&PrecomputeIrradianceCubeTech.SRB, true);
     }
 
-    auto& PrefilterEnvMapTech = m_IBL_PSOCache[IBL_PSOKey{IBL_PSOKey::PSO_TYPE_PREFILTERED_ENV_MAP, EnvMapType, FeatureFlags, m_pPrefilteredEnvMapSRV->GetDesc().Format}];
+    IBL_RenderTechnique& PrefilterEnvMapTech = m_IBL_PSOCache[IBL_PSOKey{IBL_PSOKey::PSO_TYPE_PREFILTERED_ENV_MAP, EnvMapType, FeatureFlags, m_pPrefilteredEnvMapSRV->GetDesc().Format}];
     if (!PrefilterEnvMapTech.IsInitialized())
     {
         ShaderCreateInfo ShaderCI;
@@ -810,7 +811,7 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
     pCtx->SetPipelineState(PrecomputeIrradianceCubeTech.PSO);
     PrecomputeIrradianceCubeTech.SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_EnvironmentMap")->Set(pEnvironmentMap);
     pCtx->CommitShaderResources(PrecomputeIrradianceCubeTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    auto* pIrradianceCube = m_pIrradianceCubeSRV->GetTexture();
+    ITexture* pIrradianceCube = m_pIrradianceCubeSRV->GetTexture();
     ProcessCubemapFaces(pCtx, pIrradianceCube, [&](ITextureView* pRTV, Uint32 mip, Uint32 face) {
         VERIFY_EXPR(mip == 0);
         {
@@ -833,7 +834,7 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
     pCtx->SetPipelineState(PrefilterEnvMapTech.PSO);
     PrefilterEnvMapTech.SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_EnvironmentMap")->Set(pEnvironmentMap);
     pCtx->CommitShaderResources(PrefilterEnvMapTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    auto* pPrefilteredEnvMap = m_pPrefilteredEnvMapSRV->GetTexture();
+    ITexture* pPrefilteredEnvMap = m_pPrefilteredEnvMapSRV->GetTexture();
     ProcessCubemapFaces(pCtx, pPrefilteredEnvMap, [&](ITextureView* pRTV, Uint32 mip, Uint32 face) {
         {
             if (MapHelper<PrecomputeEnvMapAttribs> Attribs{pCtx, m_PrecomputeEnvMapAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD})
@@ -955,7 +956,7 @@ void PBR_Renderer::SetMaterialTexture(IShaderResourceBinding* pSRB, ITextureView
     {
         if (m_StaticShaderTextureIds)
         {
-            const auto TextureIdx = (*m_StaticShaderTextureIds)[TextureId];
+            const Uint16 TextureIdx = (*m_StaticShaderTextureIds)[TextureId];
             if (TextureIdx == InvalidMaterialTextureId)
             {
                 UNEXPECTED("Texture is not initialized");
@@ -1010,7 +1011,7 @@ void PBR_Renderer::CreateSignature()
         Samplers.emplace("g_LinearClampSampler");
     }
 
-    auto& MaterialTexturesArraySize = m_Settings.MaterialTexturesArraySize;
+    Uint32& MaterialTexturesArraySize = m_Settings.MaterialTexturesArraySize;
     if (m_Settings.ShaderTexturesArrayMode == SHADER_TEXTURE_ARRAY_MODE_STATIC &&
         m_Settings.GetStaticShaderTextureIds == nullptr)
     {
@@ -1463,7 +1464,7 @@ void PBR_Renderer::GetVSInputStructAndLayout(PSO_FLAGS         PSOFlags,
     {
         for (Uint32 i = 0; i < InputLayout.GetNumElements(); ++i)
         {
-            const auto& Elem = InputLayout[i];
+            const LayoutElement& Elem = InputLayout[i];
             if (Elem.InputIndex == VERTEX_ATTRIB_ID_COLOR)
             {
                 NumColorComp = Elem.NumComponents;
@@ -1509,7 +1510,7 @@ void PBR_Renderer::GetVSInputStructAndLayout(PSO_FLAGS         PSOFlags,
     ss << "struct VSInput" << std::endl
        << "{" << std::endl;
 
-    for (const auto& Attrib : VSAttribs)
+    for (const VSAttribInfo& Attrib : VSAttribs)
     {
         if (Attrib.Flag == PSO_FLAG_NONE || (PSOFlags & Attrib.Flag) != 0)
         {
@@ -1518,7 +1519,7 @@ void PBR_Renderer::GetVSInputStructAndLayout(PSO_FLAGS         PSOFlags,
                 bool AttribFound = false;
                 for (Uint32 i = 0; i < InputLayout.GetNumElements(); ++i)
                 {
-                    const auto& Elem = InputLayout[i];
+                    const LayoutElement& Elem = InputLayout[i];
                     if (Elem.InputIndex == Attrib.Index)
                     {
                         AttribFound = true;
@@ -1559,7 +1560,7 @@ void PBR_Renderer::GetVSInputStructAndLayout(PSO_FLAGS         PSOFlags,
             // Remove attribute from layout
             for (Uint32 i = 0; i < InputLayout.GetNumElements(); ++i)
             {
-                const auto& Elem = InputLayout[i];
+                const LayoutElement& Elem = InputLayout[i];
                 if (Elem.InputIndex == Attrib.Index)
                 {
                     InputLayout.Remove(i);
@@ -1873,7 +1874,7 @@ void PBR_Renderer::CreatePSO(PsoHashMapType&             PsoHashMap,
     {
         VERIFY(!IsUnshaded, "Unshaded mode should use OpaquePSO. The PSOKey's ctor sets the alpha mode to opaque.");
 
-        auto& RT0          = GraphicsPipeline.BlendDesc.RenderTargets[0];
+        RenderTargetBlendDesc& RT0{GraphicsPipeline.BlendDesc.RenderTargets[0]};
         RT0.BlendEnable    = true;
         RT0.SrcBlend       = BLEND_FACTOR_ONE;
         RT0.DestBlend      = BLEND_FACTOR_INV_SRC_ALPHA;

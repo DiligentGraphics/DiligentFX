@@ -153,10 +153,10 @@ void GLTF_PBR_Renderer::InitMaterialSRB(GLTF::Model&            Model,
 
         RefCntAutoPtr<ITextureView> pTexSRV;
 
-        auto TexIdx = Material.GetTextureId(TexAttribId);
+        int TexIdx = Material.GetTextureId(TexAttribId);
         if (TexIdx >= 0)
         {
-            if (auto* pTexture = Model.GetTexture(TexIdx))
+            if (ITexture* pTexture = Model.GetTexture(TexIdx))
             {
                 if (pTexture->GetDesc().Type == RESOURCE_DIM_TEX_2D_ARRAY)
                     pTexSRV = pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
@@ -246,7 +246,7 @@ void GLTF_PBR_Renderer::CreateResourceCacheSRB(IRenderDevice*           pDevice,
 
     auto SetTexture = [&](TEXTURE_FORMAT Fmt, TEXTURE_ATTRIB_ID ID) //
     {
-        if (auto* pTexture = CacheUseInfo.pResourceMgr->UpdateTexture(Fmt, pDevice, pCtx))
+        if (ITexture* pTexture = CacheUseInfo.pResourceMgr->UpdateTexture(Fmt, pDevice, pCtx))
         {
             this->SetMaterialTexture(pSRB, pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE), ID);
         }
@@ -307,7 +307,7 @@ GLTF_PBR_Renderer::ModelResourceBindings GLTF_PBR_Renderer::CreateResourceBindin
     ResourceBindings.MaterialSRB.resize(GLTFModel.Materials.size());
     for (size_t mat = 0; mat < GLTFModel.Materials.size(); ++mat)
     {
-        auto& pMatSRB = ResourceBindings.MaterialSRB[mat];
+        RefCntAutoPtr<IShaderResourceBinding>& pMatSRB = ResourceBindings.MaterialSRB[mat];
         CreateResourceBinding(&pMatSRB);
         InitMaterialSRB(GLTFModel, GLTFModel.Materials[mat], pFrameAttribs, pMatSRB);
     }
@@ -334,7 +334,7 @@ void GLTF_PBR_Renderer::Begin(IRenderDevice*         pDevice,
 
     Begin(pCtx);
 
-    auto TextureVersion = CacheUseInfo.pResourceMgr->GetTextureVersion();
+    Uint32 TextureVersion = CacheUseInfo.pResourceMgr->GetTextureVersion();
     if (!Bindings.pSRB || Bindings.Version != TextureVersion)
     {
         Bindings.pSRB.Release();
@@ -349,9 +349,9 @@ void GLTF_PBR_Renderer::Begin(IRenderDevice*         pDevice,
 
     pCtx->TransitionShaderResources(Bindings.pSRB);
 
-    if (auto* pVertexPool = CacheUseInfo.pResourceMgr->GetVertexPool(CacheUseInfo.VtxLayoutKey))
+    if (IVertexPool* pVertexPool = CacheUseInfo.pResourceMgr->GetVertexPool(CacheUseInfo.VtxLayoutKey))
     {
-        const auto& PoolDesc = pVertexPool->GetDesc();
+        const VertexPoolDesc& PoolDesc = pVertexPool->GetDesc();
 
         std::array<IBuffer*, 8> pVBs; // Do not zero-initialize
         for (Uint32 i = 0; i < PoolDesc.NumElements; ++i)
@@ -364,7 +364,7 @@ void GLTF_PBR_Renderer::Begin(IRenderDevice*         pDevice,
         pCtx->SetVertexBuffers(0, PoolDesc.NumElements, pVBs.data(), nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION, SET_VERTEX_BUFFERS_FLAG_RESET);
     }
 
-    auto* pIndexBuffer = CacheUseInfo.pResourceMgr->UpdateIndexBuffer(pDevice, pCtx);
+    IBuffer* pIndexBuffer = CacheUseInfo.pResourceMgr->UpdateIndexBuffer(pDevice, pCtx);
     pCtx->SetIndexBuffer(pIndexBuffer, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 }
 
@@ -462,7 +462,7 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
         DEV_ERROR("Invalid scene index ", RenderParams.SceneIndex);
         return;
     }
-    const auto& Scene = GLTFModel.Scenes[RenderParams.SceneIndex];
+    const GLTF::Scene& Scene = GLTFModel.Scenes[RenderParams.SceneIndex];
 
     m_RenderParams = RenderParams;
 
@@ -470,24 +470,24 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
     {
         std::array<IBuffer*, 8> pVBs;
 
-        const auto NumVBs = static_cast<Uint32>(GLTFModel.GetVertexBufferCount());
+        const Uint32 NumVBs = static_cast<Uint32>(GLTFModel.GetVertexBufferCount());
         VERIFY_EXPR(NumVBs <= pVBs.size());
         for (Uint32 i = 0; i < NumVBs; ++i)
             pVBs[i] = GLTFModel.GetVertexBuffer(i);
         pCtx->SetVertexBuffers(0, NumVBs, pVBs.data(), nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION, SET_VERTEX_BUFFERS_FLAG_RESET);
 
-        if (auto* pIndexBuffer = GLTFModel.GetIndexBuffer())
+        if (IBuffer* pIndexBuffer = GLTFModel.GetIndexBuffer())
         {
             pCtx->SetIndexBuffer(pIndexBuffer, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         }
     }
 
-    auto VertexAttribFlags = PSO_FLAG_NONE;
+    PSO_FLAGS VertexAttribFlags = PSO_FLAG_NONE;
     for (Uint32 i = 0; i < GLTFModel.GetNumVertexAttributes(); ++i)
     {
         if (!GLTFModel.IsVertexAttributeEnabled(i))
             continue;
-        const auto& Attrib = GLTFModel.GetVertexAttribute(i);
+        const GLTF::VertexAttributeDesc& Attrib = GLTFModel.GetVertexAttribute(i);
         if (strcmp(Attrib.Name, GLTF::PositionAttributeName) == 0)
             VertexAttribFlags |= PSO_FLAG_NONE; // Position is always enabled
         else if (strcmp(Attrib.Name, GLTF::NormalAttributeName) == 0)
@@ -504,22 +504,22 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
             VertexAttribFlags |= PSO_FLAG_USE_VERTEX_TANGENTS;
     }
 
-    for (auto& List : m_RenderLists)
+    for (std::vector<PrimitiveRenderInfo>& List : m_RenderLists)
         List.clear();
 
-    for (const auto* pNode : Scene.LinearNodes)
+    for (const GLTF::Node* pNode : Scene.LinearNodes)
     {
         VERIFY_EXPR(pNode != nullptr);
         if (pNode->pMesh == nullptr)
             continue;
 
-        for (const auto& primitive : pNode->pMesh->Primitives)
+        for (const GLTF::Primitive& primitive : pNode->pMesh->Primitives)
         {
             if (primitive.VertexCount == 0 && primitive.IndexCount == 0)
                 continue;
 
-            const auto& Material  = GLTFModel.Materials[primitive.MaterialId];
-            const auto  AlphaMode = Material.Attribs.AlphaMode;
+            const GLTF::Material& Material  = GLTFModel.Materials[primitive.MaterialId];
+            const int             AlphaMode = Material.Attribs.AlphaMode;
             if ((RenderParams.AlphaModes & (1u << AlphaMode)) == 0)
                 continue;
 
@@ -527,8 +527,8 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
         }
     }
 
-    const auto FirstIndexLocation = GLTFModel.GetFirstIndexLocation();
-    const auto BaseVertex         = GLTFModel.GetBaseVertex();
+    const Uint32 FirstIndexLocation = GLTFModel.GetFirstIndexLocation();
+    const Uint32 BaseVertex         = GLTFModel.GetBaseVertex();
 
     const std::array<GLTF::Material::ALPHA_MODE, 3> AlphaModes //
         {
@@ -545,18 +545,18 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
     if (PrevTransforms == nullptr)
         PrevTransforms = &Transforms;
 
-    for (auto AlphaMode : AlphaModes)
+    for (GLTF::Material::ALPHA_MODE AlphaMode : AlphaModes)
     {
-        const auto& RenderList = m_RenderLists[AlphaMode];
-        for (const auto& PrimRI : RenderList)
+        const std::vector<PrimitiveRenderInfo>& RenderList = m_RenderLists[AlphaMode];
+        for (const PrimitiveRenderInfo& PrimRI : RenderList)
         {
-            const auto& Node                 = PrimRI.Node;
-            const auto& primitive            = PrimRI.Primitive;
-            const auto& material             = GLTFModel.Materials[primitive.MaterialId];
-            const auto& NodeGlobalMatrix     = Transforms.NodeGlobalMatrices[Node.Index];
-            const auto& PrevNodeGlobalMatrix = PrevTransforms->NodeGlobalMatrices[Node.Index];
+            const GLTF::Node&      Node                 = PrimRI.Node;
+            const GLTF::Primitive& primitive            = PrimRI.Primitive;
+            const GLTF::Material&  material             = GLTFModel.Materials[primitive.MaterialId];
+            const float4x4&        NodeGlobalMatrix     = Transforms.NodeGlobalMatrices[Node.Index];
+            const float4x4&        PrevNodeGlobalMatrix = PrevTransforms->NodeGlobalMatrices[Node.Index];
 
-            auto PSOFlags = VertexAttribFlags | GetMaterialPSOFlags(material);
+            PSO_FLAGS PSOFlags = VertexAttribFlags | GetMaterialPSOFlags(material);
 
             // These flags will be filtered out by RenderParams.Flags
             PSOFlags |= PSO_FLAG_USE_TEXTURE_ATLAS |
@@ -621,7 +621,7 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
             size_t JointCount = 0;
             if (Node.SkinTransformsIndex >= 0 && Node.SkinTransformsIndex < static_cast<int>(Transforms.Skins.size()))
             {
-                const auto& JointMatrices = Transforms.Skins[Node.SkinTransformsIndex].JointMatrices;
+                const std::vector<float4x4>& JointMatrices = Transforms.Skins[Node.SkinTransformsIndex].JointMatrices;
 
                 JointCount = JointMatrices.size();
                 if (JointCount > m_Settings.MaxJointCount)
@@ -938,7 +938,7 @@ void GLTF_PBR_Renderer::WritePBRLightShaderAttribs(const PBRLightShaderAttribsDa
 {
     VERIFY_EXPR(pShaderAttribs != nullptr);
     VERIFY_EXPR(AttribsData.Light != nullptr);
-    const auto& Light = *AttribsData.Light;
+    const GLTF::Light& Light = *AttribsData.Light;
 
     pShaderAttribs->Type = static_cast<int>(Light.Type);
 
@@ -958,7 +958,7 @@ void GLTF_PBR_Renderer::WritePBRLightShaderAttribs(const PBRLightShaderAttribsDa
 
     pShaderAttribs->ShadowMapIndex = AttribsData.ShadowMapIndex;
 
-    auto Intensity = Light.Intensity;
+    float Intensity = Light.Intensity;
     if (pShaderAttribs->Type != LIGHT_TYPE_DIRECTIONAL)
     {
         Intensity *= AttribsData.DistanceScale * AttribsData.DistanceScale;

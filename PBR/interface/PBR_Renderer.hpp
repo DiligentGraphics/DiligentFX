@@ -935,7 +935,7 @@ inline void PBR_Renderer::ProcessTexturAttribs(PBR_Renderer::PSO_FLAGS PSOFlags,
     int AttribIndex = 0;
     while (PSOFlags != 0)
     {
-        const auto AttribId = static_cast<PBR_Renderer::TEXTURE_ATTRIB_ID>(PlatformMisc::GetLSB(static_cast<Uint64>(PSOFlags)));
+        const TEXTURE_ATTRIB_ID AttribId = static_cast<TEXTURE_ATTRIB_ID>(PlatformMisc::GetLSB(static_cast<Uint64>(PSOFlags)));
         Handler(AttribIndex++, AttribId);
         PSOFlags &= ~GetTextureAttribPSOFlag(AttribId);
     }
