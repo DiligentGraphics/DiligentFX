@@ -73,6 +73,9 @@ public:
     void SetUseShadows(bool UseShadows) { m_UseShadows = UseShadows; }
     bool GetUseShadows() const { return m_UseShadows; }
 
+    void SetLoadingAnimationActive(bool Active) { m_LoadingAnimationActive = Active; }
+    bool GetLoadingAnimationActive() const { return m_LoadingAnimationActive; }
+
     enum class GlobalAttrib
     {
         // Indicates changes to geometry subset draw items.
@@ -144,7 +147,8 @@ private:
 
     PBR_Renderer::DebugViewType m_DebugView = PBR_Renderer::DebugViewType::None;
 
-    bool m_UseShadows = false;
+    bool m_UseShadows             = false;
+    bool m_LoadingAnimationActive = false;
 
     double   m_FrameTime   = 0.0;
     float    m_ElapsedTime = 0.0;

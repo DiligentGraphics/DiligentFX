@@ -774,6 +774,7 @@ void HnBeginFrameTask::Execute(pxr::HdTaskContext* TaskCtx)
             // Disable temporal AA while loading animation is active
             (*TaskCtx)[HnRenderResourceTokens->suspendSuperSampling] = pxr::VtValue{true};
         }
+        static_cast<HnRenderParam*>(RenderDelegate->GetRenderParam())->SetLoadingAnimationActive(LoadingAnimationActive);
     }
     else
     {

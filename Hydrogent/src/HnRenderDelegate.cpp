@@ -930,6 +930,13 @@ HnRenderDelegateMemoryStats HnRenderDelegate::GetMemoryStats() const
     return MemoryStats;
 }
 
+HnRenderDelegateRenderingStats HnRenderDelegate::GetRenderingStats() const
+{
+    HnRenderDelegateRenderingStats Stats;
+    Stats.LoadingAnimationActive = m_RenderParam->GetLoadingAnimationActive();
+    return Stats;
+}
+
 void HnRenderDelegate::SetDebugView(PBR_Renderer::DebugViewType DebugView)
 {
     m_RenderParam->SetDebugView(DebugView);

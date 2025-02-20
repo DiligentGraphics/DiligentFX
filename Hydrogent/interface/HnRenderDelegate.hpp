@@ -144,6 +144,13 @@ struct HnRenderDelegateMemoryStats
     TextureRegistryUsage TextureRegistry;
 };
 
+/// Rendering statistics of the render delegate.
+struct HnRenderDelegateRenderingStats
+{
+    /// Indicates whether the loading animation is currently active.
+    bool LoadingAnimationActive = false;
+};
+
 /// USD render delegate implementation in Hydrogent.
 class HnRenderDelegate final : public pxr::HdRenderDelegate
 {
@@ -417,7 +424,8 @@ public:
 
     const auto& GetLights() const { return m_Lights; }
 
-    HnRenderDelegateMemoryStats GetMemoryStats() const;
+    HnRenderDelegateMemoryStats    GetMemoryStats() const;
+    HnRenderDelegateRenderingStats GetRenderingStats() const;
 
     void SetDebugView(PBR_Renderer::DebugViewType DebugView);
     void SetRenderMode(HN_RENDER_MODE RenderMode);
