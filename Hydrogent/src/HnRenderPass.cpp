@@ -1017,6 +1017,7 @@ void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
         m_RenderMode == HN_RENDER_MODE_SOLID)
     {
         const PBR_Renderer::PSOKey FallbackPSOKey{
+            PBR_Renderer::RenderPassType::Main,
             GetFallbackPSOFlags(),
             PBR_Renderer::ALPHA_MODE_OPAQUE,
             CULL_MODE_NONE,
@@ -1331,13 +1332,31 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
                 PBR_Renderer::LoadingAnimationMode::Transitioning :
                 PBR_Renderer::LoadingAnimationMode::None;
 
-            ListItem.pPSO = PsoCache.Get({PSOFlags, static_cast<PBR_Renderer::ALPHA_MODE>(State.AlphaMode), CullMode, m_DebugView, LoadingAnimationMode, ShaderTextureIndexingId}, GetPSOFlags);
+            const PBR_Renderer::PSOKey PSOKey{
+                m_Params.Type,
+                PSOFlags,
+                static_cast<PBR_Renderer::ALPHA_MODE>(State.AlphaMode),
+                CullMode,
+                m_DebugView,
+                LoadingAnimationMode,
+                ShaderTextureIndexingId,
+            };
+            ListItem.pPSO = PsoCache.Get(PSOKey, GetPSOFlags);
         }
         else if (m_RenderMode == HN_RENDER_MODE_MESH_EDGES ||
                  m_RenderMode == HN_RENDER_MODE_POINTS)
         {
+            VERIFY_EXPR(m_Params.Type == PBR_Renderer::RenderPassType::Main);
             PSOFlags |= PBR_Renderer::PSO_FLAG_UNSHADED;
-            ListItem.pPSO = PsoCache.Get({PSOFlags, CullMode, PBR_Renderer::DebugViewType::None, PBR_Renderer::LoadingAnimationMode::None, ShaderTextureIndexingId}, GetPSOFlags);
+            const PBR_Renderer::PSOKey PSOKey{
+                m_Params.Type,
+                PSOFlags,
+                CullMode,
+                PBR_Renderer::DebugViewType::None,
+                PBR_Renderer::LoadingAnimationMode::None,
+                ShaderTextureIndexingId,
+            };
+            ListItem.pPSO = PsoCache.Get(PSOKey, GetPSOFlags);
         }
         else
         {

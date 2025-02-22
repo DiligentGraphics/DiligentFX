@@ -158,6 +158,7 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                            {
                                HnRenderResourceTokens->renderPass_OpaqueSelected,
                                HnRenderPassParams::SelectionType::Selected,
+                               USD_Renderer::RenderPassType::Main,
                                USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS,
                            });
     CreateRenderRprimsTask(HnMaterialTagTokens->masked,
@@ -165,6 +166,7 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                            {
                                HnRenderResourceTokens->renderPass_OpaqueSelected,
                                HnRenderPassParams::SelectionType::Selected,
+                               USD_Renderer::RenderPassType::Main,
                                USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS,
                            });
 
@@ -176,6 +178,7 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                            {
                                HnRenderResourceTokens->renderPass_OpaqueUnselected_TransparentAll,
                                HnRenderPassParams::SelectionType::Unselected,
+                               USD_Renderer::RenderPassType::Main,
                                USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS,
                            });
     CreateRenderRprimsTask(HnMaterialTagTokens->masked,
@@ -183,6 +186,7 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                            {
                                HnRenderResourceTokens->renderPass_OpaqueUnselected_TransparentAll,
                                HnRenderPassParams::SelectionType::Unselected,
+                               USD_Renderer::RenderPassType::Main,
                                USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS,
                            });
     CreateRenderEnvMapTask(HnRenderResourceTokens->renderPass_OpaqueUnselected_TransparentAll);
@@ -192,6 +196,7 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                            {
                                HnRenderResourceTokens->renderPass_OpaqueUnselected_TransparentAll,
                                HnRenderPassParams::SelectionType::All,
+                               USD_Renderer::RenderPassType::Main,
                                USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS,
                            });
     CreateRenderRprimsTask(HnMaterialTagTokens->translucent,
@@ -199,6 +204,7 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                            {
                                HnRenderResourceTokens->renderPass_OpaqueUnselected_TransparentAll,
                                HnRenderPassParams::SelectionType::All,
+                               USD_Renderer::RenderPassType::Main,
                                USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS,
                            });
 
@@ -208,6 +214,7 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                            {
                                HnRenderResourceTokens->renderPass_TransparentSelected,
                                HnRenderPassParams::SelectionType::Selected,
+                               USD_Renderer::RenderPassType::Main,
                                USD_Renderer::USD_PSO_FLAG_NONE,
                            });
     CreateRenderRprimsTask(HnMaterialTagTokens->translucent,
@@ -215,6 +222,7 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                            {
                                HnRenderResourceTokens->renderPass_TransparentSelected,
                                HnRenderPassParams::SelectionType::Selected,
+                               USD_Renderer::RenderPassType::Main,
                                USD_Renderer::USD_PSO_FLAG_NONE,
                            });
 
@@ -300,6 +308,7 @@ void HnTaskManager::CreateRenderShadowsTask(const HnShadowMapManager& ShadowMapM
     HnRenderPassParams RPParams{
         HnRenderResourceTokens->renderPass_Shadow,
         HnRenderPassParams::SelectionType::All,
+        USD_Renderer::RenderPassType::Shadow,
         USD_Renderer::USD_PSO_FLAG_NONE,
     };
 

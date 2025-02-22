@@ -576,7 +576,13 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
             if (RenderParams.Wireframe)
                 PSOFlags |= PSO_FLAG_UNSHADED;
 
-            const PSOKey NewKey{PSOFlags, GltfAlphaModeToAlphaMode(AlphaMode), material.DoubleSided ? CULL_MODE_NONE : CULL_MODE_BACK, RenderParams.DebugView};
+            const PSOKey NewKey{
+                RenderPassType::Main,
+                PSOFlags,
+                GltfAlphaModeToAlphaMode(AlphaMode),
+                material.DoubleSided ? CULL_MODE_NONE : CULL_MODE_BACK,
+                RenderParams.DebugView,
+            };
             if (NewKey != CurrPsoKey)
             {
                 CurrPsoKey    = NewKey;

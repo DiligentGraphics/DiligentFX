@@ -64,12 +64,14 @@ namespace HLSL
 
 } // namespace HLSL
 
-PBR_Renderer::PSOKey::PSOKey(PSO_FLAGS            _Flags,
+PBR_Renderer::PSOKey::PSOKey(RenderPassType       _Type,
+                             PSO_FLAGS            _Flags,
                              ALPHA_MODE           _AlphaMode,
                              CULL_MODE            _CullMode,
                              DebugViewType        _DebugView,
                              LoadingAnimationMode _LoadingAnimation,
                              Uint64               _UserValue) noexcept :
+    Type{_Type},
     Flags{_Flags},
     AlphaMode{_AlphaMode},
     CullMode{_CullMode},
@@ -77,6 +79,22 @@ PBR_Renderer::PSOKey::PSOKey(PSO_FLAGS            _Flags,
     LoadingAnimation{_LoadingAnimation},
     UserValue{_UserValue}
 {
+    static_assert(PSO_FLAG_LAST == Uint64{1} << Uint64{38}, "Please handle the new flag below, if necessary");
+    static_assert(static_cast<size_t>(RenderPassType::Count) == 2, "Please handle the new render pass type below, if necessary");
+    if (Type == RenderPassType::Shadow)
+    {
+        static constexpr PSO_FLAGS ShadowPassFlags =
+            PSO_FLAG_USE_COLOR_MAP |
+            PSO_FLAG_USE_TEXCOORD0 |
+            PSO_FLAG_USE_TEXCOORD1 |
+            PSO_FLAG_USE_JOINTS |
+            PSO_FLAG_USE_TEXTURE_ATLAS |
+            PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM |
+            PSO_FLAG_ALL_USER_DEFINED;
+        Flags &= ShadowPassFlags;
+        DebugView = DebugViewType::None;
+    }
+
     if (Flags & PSO_FLAG_UNSHADED)
     {
         AlphaMode = ALPHA_MODE_OPAQUE;
@@ -87,7 +105,7 @@ PBR_Renderer::PSOKey::PSOKey(PSO_FLAGS            _Flags,
         DebugView = DebugViewType::None;
     }
 
-    Hash = ComputeHash(Flags, AlphaMode, CullMode, static_cast<Uint32>(DebugView), static_cast<Uint32>(LoadingAnimation), UserValue);
+    Hash = ComputeHash(Type, Flags, AlphaMode, CullMode, static_cast<Uint32>(DebugView), static_cast<Uint32>(LoadingAnimation), UserValue);
 }
 
 static const char* GetTextureAttribString(PBR_Renderer::TEXTURE_ATTRIB_ID Id)
@@ -1763,6 +1781,7 @@ void PBR_Renderer::CreatePSO(PsoHashMapType&             PsoHashMap,
         (m_Settings.PackMatrixRowMajor ? SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR : SHADER_COMPILE_FLAG_NONE);
 
     RefCntAutoPtr<IShader>& pVS = m_VertexShaders[{
+        RenderPassType::Main, // Vertex shaders are the same for all render passes
         PSOFlags,
         ALPHA_MODE_OPAQUE,
         // Cull mode is irrelevant for the shader, but we need different keys when GL point size is used,
