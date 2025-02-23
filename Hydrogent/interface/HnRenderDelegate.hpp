@@ -473,6 +473,9 @@ private:
     };
     ShadowPassFrameAttribs m_ShadowPassFrameAttribs;
 
+    RefCntAutoPtr<ITextureView> m_pDummyShadowSRV;
+    USD_Renderer::OITResources  m_DummyOITResources;
+
     Uint32 m_MainPassFrameAttribsAlignedSize   = 0;
     Uint32 m_ShadowPassFrameAttribsAlignedSize = 0;
 
