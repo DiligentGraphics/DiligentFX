@@ -1,5 +1,5 @@
 /*
- *  Copyright 2024 Diligent Graphics LLC
+ *  Copyright 2024-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -249,7 +249,7 @@ void HnRenderShadowsTask::Prepare(pxr::HdTaskContext* TaskCtx,
          pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::MeshVisibility) +
          pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::MeshMaterial) +
          pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::SkinningXForms));
-    static_assert(static_cast<int>(HnRenderParam::GlobalAttrib::Count) == 10, "Please update the code above to handle the new attribute, if necessary.");
+    static_assert(static_cast<int>(HnRenderParam::GlobalAttrib::Count) == 11, "Please update the code above to handle the new attribute, if necessary.");
 
     bool GeometryChanged  = m_LastGeometryVersion != GeometryVersion;
     m_LastGeometryVersion = GeometryVersion;

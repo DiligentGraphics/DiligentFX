@@ -501,6 +501,16 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
         pCtx->TransitionResourceStates(static_cast<Uint32>(Barriers.size()), Barriers.data());
     }
 
+    if (m_Settings.OITLayerCount > 0)
+    {
+        if (!m_Device.GetDeviceInfo().Features.ComputeShaders)
+        {
+            // OIT requires compute shaders
+            LOG_WARNING_MESSAGE("OIT is disabled because the device does not support compute shaders");
+            m_Settings.OITLayerCount = 0;
+        }
+    }
+
     if (InitSignature)
     {
         CreateSignature();
@@ -960,6 +970,24 @@ void PBR_Renderer::InitCommonSRBVars(IShaderResourceBinding* pSRB,
     }
 }
 
+void PBR_Renderer::SetOITResources(IShaderResourceBinding* pSRB, const OITResources& OITResources) const
+{
+    if (m_Settings.OITLayerCount > 0)
+    {
+        if (OITResources.Layers)
+        {
+            if (IShaderResourceVariable* pOITLayersVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_OITLayers"))
+                pOITLayersVar->Set(OITResources.Layers->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+        }
+
+        if (OITResources.Tail)
+        {
+            if (IShaderResourceVariable* pOITTailVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_OITTail"))
+                pOITTailVar->Set(OITResources.Tail->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+        }
+    }
+}
+
 void PBR_Renderer::SetMaterialTexture(IShaderResourceBinding* pSRB, ITextureView* pTexSRV, TEXTURE_ATTRIB_ID TextureId) const
 {
     if (m_Settings.ShaderTexturesArrayMode == SHADER_TEXTURE_ARRAY_MODE_NONE)
@@ -1178,6 +1206,12 @@ void PBR_Renderer::CreateSignature()
     {
         constexpr WebGPUResourceAttribs WGPUShadowMap{WEB_GPU_BINDING_TYPE_DEPTH_TEXTURE, RESOURCE_DIM_TEX_2D_ARRAY};
         AddTextureAndSampler("g_ShadowMap", Sam_ComparisonLinearClamp, "g_ShadowMap_sampler", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE, WGPUShadowMap);
+    }
+
+    if (m_Settings.OITLayerCount > 0)
+    {
+        SignatureDesc.AddResource(SHADER_TYPE_PIXEL, "g_OITLayers", 1u, SHADER_RESOURCE_TYPE_BUFFER_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
+        SignatureDesc.AddResource(SHADER_TYPE_PIXEL, "g_OITTail", 1u, SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
     }
 
     CreateCustomSignature(std::move(SignatureDesc));
@@ -2236,6 +2270,46 @@ const char* PBR_Renderer::GetDebugViewTypeString(DebugViewType DebugView)
             UNEXPECTED("Unexpected debug view type");
             return "Unknown";
     }
+}
+
+PBR_Renderer::OITResources PBR_Renderer::CreateOITResources(IRenderDevice* pDevice, Uint32 Width, Uint32 Height, Uint32 LayerCount)
+{
+    VERIFY_EXPR(pDevice != nullptr && Width > 0 && Height > 0 && LayerCount > 0);
+
+    OITResources Resources;
+
+    {
+        BufferDesc BuffDesc;
+        BuffDesc.Name              = "OIT Layers";
+        BuffDesc.Size              = Width * Height * LayerCount * sizeof(Uint32);
+        BuffDesc.Mode              = BUFFER_MODE_STRUCTURED;
+        BuffDesc.ElementByteStride = sizeof(Uint32);
+        BuffDesc.BindFlags         = BIND_SHADER_RESOURCE | BIND_UNORDERED_ACCESS;
+        BuffDesc.Usage             = USAGE_DEFAULT;
+        pDevice->CreateBuffer(BuffDesc, nullptr, &Resources.Layers);
+        VERIFY_EXPR(Resources.Layers != nullptr);
+    }
+
+    {
+        TextureDesc TexDesc;
+        TexDesc.Name      = "OIT Tail";
+        TexDesc.Type      = RESOURCE_DIM_TEX_2D;
+        TexDesc.Width     = Width;
+        TexDesc.Height    = Height;
+        TexDesc.MipLevels = 1;
+        TexDesc.Format    = OITTailFmt;
+        TexDesc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
+        TexDesc.Usage     = USAGE_DEFAULT;
+        pDevice->CreateTexture(TexDesc, nullptr, &Resources.Tail);
+        VERIFY_EXPR(Resources.Tail != nullptr);
+    }
+
+    return Resources;
+}
+
+PBR_Renderer::OITResources PBR_Renderer::CreateOITResources(Uint32 Width, Uint32 Height) const
+{
+    return CreateOITResources(m_Device, Width, Height, m_Settings.OITLayerCount);
 }
 
 } // namespace Diligent

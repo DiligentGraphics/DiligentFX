@@ -48,6 +48,7 @@ namespace USD
 {
 
 class HnCamera;
+class HnRenderDelegate;
 
 struct HnBeginFrameTaskParams
 {
@@ -161,6 +162,7 @@ private:
                               const float2&   Jitter,
                               bool&           CameraTransformDirty,
                               bool&           LoadingAnimationActive);
+    void BindOITResources(HnRenderDelegate* RenderDelegate);
 
 private:
     std::unordered_map<pxr::TfToken, HnRenderPassState, pxr::TfToken::HashFunctor> m_RenderPassStates;
@@ -194,6 +196,8 @@ private:
     double m_CurrFrameTime           = 0;
     double m_FallBackPsoUseStartTime = -1;
     double m_FallBackPsoUseEndTime   = -1;
+
+    Uint32 m_BoundOITResourcesVersion = ~0u;
 };
 
 } // namespace USD

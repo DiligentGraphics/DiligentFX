@@ -247,6 +247,10 @@ public:
         /// The maximum number of shadow-casting lights.
         Uint32 MaxShadowCastingLightCount = 8;
 
+        /// The number of OIT layers.
+        /// If set to 0, OIT will be disabled.
+        Uint32 OITLayerCount = 0;
+
         static const SamplerDesc DefaultSampler;
 
         /// Immutable sampler for color map texture.
@@ -707,6 +711,14 @@ public:
         const GraphicsPipelineDesc* m_pGraphicsDesc = nullptr;
     };
 
+    struct OITResources
+    {
+        RefCntAutoPtr<IBuffer>  Layers;
+        RefCntAutoPtr<ITexture> Tail;
+
+        explicit operator bool() const { return Layers && Tail; }
+    };
+
     PsoCacheAccessor GetPsoCacheAccessor(const GraphicsPipelineDesc& GraphicsDesc);
 
     void InitCommonSRBVars(IShaderResourceBinding* pSRB,
@@ -716,6 +728,8 @@ public:
                            ITextureView*           pShadowMap                 = nullptr) const;
 
     void SetMaterialTexture(IShaderResourceBinding* pSRB, ITextureView* pTexSRV, TEXTURE_ATTRIB_ID TextureId) const;
+
+    void SetOITResources(IShaderResourceBinding* pSRB, const OITResources& OITResources) const;
 
     /// Initializes internal renderer parameters.
     ///
@@ -774,6 +788,9 @@ public:
     static inline void PackVertexPos64(const float3& Pos, const float3& Bias, const float3& Scale, Uint32& U0, Uint32& U1);
 
     static const char* GetDebugViewTypeString(DebugViewType DebugView);
+
+    static OITResources CreateOITResources(IRenderDevice* pDevice, Uint32 Width, Uint32 Height, Uint32 LayerCount);
+    OITResources        CreateOITResources(Uint32 Width, Uint32 Height) const;
 
 protected:
     ShaderMacroHelper DefineMacros(const PSOKey& Key) const;
@@ -885,6 +902,7 @@ protected:
 
     static constexpr TEXTURE_FORMAT PrefilteredEnvMapFmt = TEX_FORMAT_RGBA16_FLOAT;
     static constexpr TEXTURE_FORMAT IrradianceCubeFmt    = TEX_FORMAT_RGBA16_FLOAT;
+    static constexpr TEXTURE_FORMAT OITTailFmt           = TEX_FORMAT_RGBA8_UNORM;
     static constexpr Uint32         IrradianceCubeDim    = 64;
     static constexpr Uint32         PrefilteredEnvMapDim = 256;
 

@@ -271,6 +271,9 @@ void USD_Renderer::CreateCustomSignature(PipelineResourceSignatureDescX&& Signat
     FrameResources.emplace("g_TransmissionMap_sampler");
     static_assert(TEXTURE_ATTRIB_ID_COUNT == 17, "Did you add a new texture? Don't forget to update the list above");
 
+    FrameResources.emplace("g_OITLayers");
+    FrameResources.emplace("g_OITTail");
+
     for (Uint32 ResIdx = 0; ResIdx < SignatureDesc.NumResources;)
     {
         const PipelineResourceDesc& Res = SignatureDesc.GetResource(ResIdx);

@@ -1,5 +1,5 @@
 /*
- *  Copyright 2024 Diligent Graphics LLC
+ *  Copyright 2024-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 #include <array>
 
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/TextureView.h"
+#include "../../../DiligentFX/PBR/interface/PBR_Renderer.hpp"
 
 namespace Diligent
 {
@@ -58,6 +59,8 @@ struct HnFrameRenderTargets
     ITextureView* SelectionDepthDSV = nullptr;
     ITextureView* DepthDSV          = nullptr;
     ITextureView* PrevDepthDSV      = nullptr;
+
+    PBR_Renderer::OITResources OIT;
 
     std::array<ITextureView*, 2> ClosestSelectedLocationRTV = {};
 

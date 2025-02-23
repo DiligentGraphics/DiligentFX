@@ -113,6 +113,13 @@ public:
         // Indicates changes to skinning xforms
         SkinningXForms,
 
+        // Indicates changes to OIT resources.
+        //
+        // \remarks OIT resources are initialized by HnBeginFrameTask. This
+        //          version is tracked by HnRenderDelegate to know when to
+        //          recreate main pass frame attribs SRB.
+        OITResources,
+
         Count
     };
     uint32_t GetAttribVersion(GlobalAttrib Attrib) const { return m_GlobalAttribVersions[static_cast<size_t>(Attrib)].load(); }

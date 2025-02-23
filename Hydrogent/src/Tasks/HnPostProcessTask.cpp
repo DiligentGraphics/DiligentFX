@@ -674,7 +674,7 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
             }
         }
 
-        static_assert(static_cast<int>(HnRenderParam::GlobalAttrib::Count) == 10, "Please update the code below to handle the new attribute, if necessary.");
+        static_assert(static_cast<int>(HnRenderParam::GlobalAttrib::Count) == 11, "Please update the code below to handle the new attribute, if necessary.");
         SuperSamplingFactors CurrSSFactors{
             (pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::MeshGeometry) +
              pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::MeshMaterial) +

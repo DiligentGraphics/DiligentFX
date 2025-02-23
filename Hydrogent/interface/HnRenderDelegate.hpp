@@ -271,6 +271,9 @@ public:
         ///
         /// If set to 0, the budget is unlimited.
         Uint64 GeometryLoadBudget = 0;
+
+        /// The number of OIT layers. If set to 0, OIT is disabled.
+        Uint32 OITLayerCount = 0;
     };
     static std::unique_ptr<HnRenderDelegate> Create(const CreateInfo& CI);
 
@@ -496,6 +499,7 @@ private:
     Uint32 m_MaterialResourcesVersion = ~0u;
     Uint32 m_ShadowAtlasVersion       = ~0u;
     Uint32 m_LightResourcesVersion    = ~0u;
+    Uint32 m_OITResourcesVersion      = ~0u;
 
     // Amount of index data pending upload before the last call to m_GeometryPool->Commit
     Uint64 m_LastPendingIndexDataSize = 0;

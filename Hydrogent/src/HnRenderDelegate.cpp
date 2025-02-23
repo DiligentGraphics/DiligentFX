@@ -197,6 +197,7 @@ static std::shared_ptr<USD_Renderer> CreateUSDRenderer(const HnRenderDelegate::C
     USDRendererCI.EnableShadows              = RenderDelegateCI.EnableShadows;
     USDRendererCI.PCFKernelSize              = RenderDelegateCI.PCFKernelSize;
     USDRendererCI.MaxShadowCastingLightCount = RenderDelegateCI.MaxShadowCastingLightCount;
+    USDRendererCI.OITLayerCount              = RenderDelegateCI.OITLayerCount;
 
     RefCntAutoPtr<IBuffer> pJointsCB;
     if (RenderDelegateCI.MaxJointCount > 0)
@@ -730,6 +731,17 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
         }
     }
 
+    if (m_USDRenderer->GetSettings().OITLayerCount > 0)
+    {
+        // OIT resource version is made dirty by HnBeginFrameTask when the frame size changes.
+        // OIT resources will be set in the SRB by HnBeginFrameTask::Execute().
+        if (m_OITResourcesVersion != m_RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::OITResources))
+        {
+            m_OITResourcesVersion = m_RenderParam->MakeAttribDirty(HnRenderParam::GlobalAttrib::OITResources);
+            m_MainPassFrameAttribsSRB.Release();
+        }
+    }
+
     auto CreateFrameAttribsSRB = [this](Uint32 BufferRange, ITextureView* ShadowSRV) {
         RefCntAutoPtr<IShaderResourceBinding> SRB;
         m_USDRenderer->CreateResourceBinding(&SRB, 0);
@@ -777,22 +789,36 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
         const Uint32     ShadowPassFrameAttribsSize = USD_Renderer::GetPRBFrameAttribsSize(LightCount, ShadowCastingLightCount);
 
         RefCntAutoPtr<ITextureView> pDummyShadowSRV;
-        if (m_ShadowMapManager && m_pDevice->GetDeviceInfo().IsWebGPUDevice())
+        USD_Renderer::OITResources  DummyOITResources;
+        if (m_pDevice->GetDeviceInfo().IsWebGPUDevice())
         {
-            // Even though the shadow map SRV is not used in the shadow pass, WebGPU errors out
-            // if there is a null resource in the bind group. So we have to create a dummy SRV.
-            TextureDesc DummyShadowMapDesc = m_ShadowMapManager->GetAtlasDesc();
-            DummyShadowMapDesc.Name        = "Dummy shadow map SRV";
-            DummyShadowMapDesc.Width       = 16;
-            DummyShadowMapDesc.Height      = 16;
-            DummyShadowMapDesc.ArraySize   = 1;
-            DummyShadowMapDesc.MipLevels   = 1;
-            RefCntAutoPtr<ITexture> pDummyShadowMap;
-            m_pDevice->CreateTexture(DummyShadowMapDesc, nullptr, &pDummyShadowMap);
-            VERIFY_EXPR(pDummyShadowMap);
-            pDummyShadowSRV = pDummyShadowMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+            if (m_ShadowMapManager)
+            {
+                // Even though the shadow map SRV is not used in the shadow pass, WebGPU errors out
+                // if there is a null resource in the bind group. So we have to create a dummy SRV.
+                TextureDesc DummyShadowMapDesc = m_ShadowMapManager->GetAtlasDesc();
+                DummyShadowMapDesc.Name        = "Dummy shadow map SRV";
+                DummyShadowMapDesc.Width       = 16;
+                DummyShadowMapDesc.Height      = 16;
+                DummyShadowMapDesc.ArraySize   = 1;
+                DummyShadowMapDesc.MipLevels   = 1;
+                RefCntAutoPtr<ITexture> pDummyShadowMap;
+                m_pDevice->CreateTexture(DummyShadowMapDesc, nullptr, &pDummyShadowMap);
+                VERIFY_EXPR(pDummyShadowMap);
+                pDummyShadowSRV = pDummyShadowMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+            }
+
+            if (m_USDRenderer->GetSettings().OITLayerCount > 0)
+            {
+                DummyOITResources = m_USDRenderer->CreateOITResources(8, 8);
+            }
         }
-        m_ShadowPassFrameAttribs.SRB             = CreateFrameAttribsSRB(ShadowPassFrameAttribsSize, pDummyShadowSRV);
+
+        m_ShadowPassFrameAttribs.SRB = CreateFrameAttribsSRB(ShadowPassFrameAttribsSize, pDummyShadowSRV);
+        if (DummyOITResources)
+        {
+            m_USDRenderer->SetOITResources(m_ShadowPassFrameAttribs.SRB, DummyOITResources);
+        }
         m_ShadowPassFrameAttribs.FrameAttribsVar = m_ShadowPassFrameAttribs.SRB->GetVariableByName(SHADER_TYPE_VERTEX, "cbFrameAttribs");
         VERIFY_EXPR(m_ShadowPassFrameAttribs.FrameAttribsVar != nullptr);
     }

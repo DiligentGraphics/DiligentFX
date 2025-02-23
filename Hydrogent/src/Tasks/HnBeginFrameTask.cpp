@@ -207,7 +207,12 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
         UNEXPECTED("Final color target RTV is null");
         return;
     }
-    const auto& FinalTargetDesc = pFinalColorRTV->GetTexture()->GetDesc();
+    const TextureDesc& FinalTargetDesc = pFinalColorRTV->GetTexture()->GetDesc();
+
+    HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(RenderIndex->GetRenderDelegate());
+
+    const bool FrameBufferResized = (m_FrameBufferWidth != FinalTargetDesc.Width ||
+                                     m_FrameBufferHeight != FinalTargetDesc.Height);
 
     m_FrameBufferWidth  = FinalTargetDesc.Width;
     m_FrameBufferHeight = FinalTargetDesc.Height;
@@ -216,7 +221,7 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
         if (Format == TEX_FORMAT_UNKNOWN)
             return nullptr;
 
-        IRenderDevice* const pDevice = static_cast<HnRenderDelegate*>(RenderIndex->GetRenderDelegate())->GetDevice();
+        IRenderDevice* const pDevice = RenderDelegate->GetDevice();
         if (!pDevice->GetTextureFormatInfo(Format).Supported)
         {
             Format = GetFallbackTextureFormat(Format);
@@ -231,10 +236,10 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
             return nullptr;
         }
 
-        if (auto* pView = Renderbuffer->GetTarget())
+        if (ITextureView* pView = Renderbuffer->GetTarget())
         {
-            const auto& ViewDesc   = pView->GetDesc();
-            const auto& TargetDesc = pView->GetTexture()->GetDesc();
+            const TextureViewDesc& ViewDesc   = pView->GetDesc();
+            const TextureDesc&     TargetDesc = pView->GetTexture()->GetDesc();
             if (TargetDesc.GetWidth() == FinalTargetDesc.GetWidth() &&
                 TargetDesc.GetHeight() == FinalTargetDesc.GetHeight() &&
                 ViewDesc.Format == Format)
@@ -243,10 +248,10 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
 
         const bool IsDepth = GetTextureFormatAttribs(Format).IsDepthStencil();
 
-        auto TargetDesc      = FinalTargetDesc;
-        TargetDesc.Name      = Name.c_str();
-        TargetDesc.Format    = Format;
-        TargetDesc.BindFlags = (IsDepth ? BIND_DEPTH_STENCIL : BIND_RENDER_TARGET) | BIND_SHADER_RESOURCE;
+        TextureDesc TargetDesc = FinalTargetDesc;
+        TargetDesc.Name        = Name.c_str();
+        TargetDesc.Format      = Format;
+        TargetDesc.BindFlags   = (IsDepth ? BIND_DEPTH_STENCIL : BIND_RENDER_TARGET) | BIND_SHADER_RESOURCE;
 
         RefCntAutoPtr<ITexture> pTarget;
         pDevice->CreateTexture(TargetDesc, nullptr, &pTarget);
@@ -257,7 +262,7 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
         }
         LOG_INFO_MESSAGE("HnBeginFrameTask: created ", TargetDesc.GetWidth(), "x", TargetDesc.GetHeight(), " ", Name, " texture");
 
-        auto* const pView = pTarget->GetDefaultView(IsDepth ? TEXTURE_VIEW_DEPTH_STENCIL : TEXTURE_VIEW_RENDER_TARGET);
+        ITextureView* const pView = pTarget->GetDefaultView(IsDepth ? TEXTURE_VIEW_DEPTH_STENCIL : TEXTURE_VIEW_RENDER_TARGET);
         VERIFY(pView != nullptr, "Failed to get texture view for target ", Name);
 
         Renderbuffer->SetTarget(pView);
@@ -288,6 +293,22 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
     m_FrameRenderTargets.ClosestSelectedLocationRTV[0] = UpdateBrim(m_ClosestSelLocnTargetId[0], m_Params.Formats.ClosestSelectedLocation, "Closest selected location 0");
     m_FrameRenderTargets.ClosestSelectedLocationRTV[1] = UpdateBrim(m_ClosestSelLocnTargetId[1], m_Params.Formats.ClosestSelectedLocation, "Closest selected location 1");
     m_FrameRenderTargets.JitteredFinalColorRTV         = UpdateBrim(m_JitteredFinalColorTargetId, m_Params.Formats.JitteredColor, "Jittered final color");
+
+    const USD_Renderer& Renderer = *RenderDelegate->GetUSDRenderer();
+    if (Renderer.GetSettings().OITLayerCount > 0)
+    {
+        if (FrameBufferResized)
+        {
+            m_FrameRenderTargets.OIT = {};
+        }
+
+        if (!m_FrameRenderTargets.OIT)
+        {
+            m_FrameRenderTargets.OIT = Renderer.CreateOITResources(FinalTargetDesc.Width, FinalTargetDesc.Height);
+            // Mark OIT resources dirty to make render delegate recreate main pass frame attribs SRB.
+            static_cast<HnRenderParam*>(RenderDelegate->GetRenderParam())->MakeAttribDirty(HnRenderParam::GlobalAttrib::OITResources);
+        }
+    }
 
     (*TaskCtx)[HnRenderResourceTokens->frameRenderTargets] = pxr::VtValue{&m_FrameRenderTargets};
 
@@ -718,6 +739,39 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
     pCtx->TransitionResourceStates(static_cast<Uint32>(Barriers.size()), Barriers.data());
 }
 
+void HnBeginFrameTask::BindOITResources(HnRenderDelegate* RenderDelegate)
+{
+    HnRenderParam* RenderParam = static_cast<HnRenderParam*>(RenderDelegate->GetRenderParam());
+    if (m_BoundOITResourcesVersion == RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::OITResources))
+        return;
+
+    if (!m_FrameRenderTargets.OIT)
+    {
+        UNEXPECTED("OIT resources are not initialized. This likely indicates that Prepare() has not been called.");
+        return;
+    }
+
+    USD_Renderer& Renderer = *RenderDelegate->GetUSDRenderer();
+    if (IShaderResourceBinding* pFrameAttribsSRB = RenderDelegate->GetMainPassFrameAttribsSRB())
+    {
+        Renderer.SetOITResources(pFrameAttribsSRB, m_FrameRenderTargets.OIT);
+        m_BoundOITResourcesVersion = RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::OITResources);
+    }
+    else
+    {
+        UNEXPECTED("Main pass frame attribs SRB is null");
+    }
+
+    IDeviceContext* pCtx = RenderDelegate->GetDeviceContext();
+
+    StateTransitionDesc Barriers[] =
+        {
+            {m_FrameRenderTargets.OIT.Layers, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE},
+            {m_FrameRenderTargets.OIT.Tail, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE},
+        };
+    pCtx->TransitionResourceStates(_countof(Barriers), Barriers);
+}
+
 void HnBeginFrameTask::Execute(pxr::HdTaskContext* TaskCtx)
 {
     if (m_RenderIndex == nullptr)
@@ -727,9 +781,16 @@ void HnBeginFrameTask::Execute(pxr::HdTaskContext* TaskCtx)
     }
 
     HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+    HnRenderParam*    RenderParam    = static_cast<HnRenderParam*>(RenderDelegate->GetRenderParam());
+    USD_Renderer&     Renderer       = *RenderDelegate->GetUSDRenderer();
     IDeviceContext*   pCtx           = RenderDelegate->GetDeviceContext();
 
     ScopedDebugGroup DebugGroup{pCtx, "Begin Frame"};
+
+    if (Renderer.GetSettings().OITLayerCount > 0)
+    {
+        BindOITResources(RenderDelegate);
+    }
 
     // NB: we can't move the buffer update to Prepare() because we need TAA parameters
     //     that are set by HnPostProcessTask::Prepare().
@@ -774,7 +835,7 @@ void HnBeginFrameTask::Execute(pxr::HdTaskContext* TaskCtx)
             // Disable temporal AA while loading animation is active
             (*TaskCtx)[HnRenderResourceTokens->suspendSuperSampling] = pxr::VtValue{true};
         }
-        static_cast<HnRenderParam*>(RenderDelegate->GetRenderParam())->SetLoadingAnimationActive(LoadingAnimationActive);
+        RenderParam->SetLoadingAnimationActive(LoadingAnimationActive);
     }
     else
     {
