@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2024 Diligent Graphics LLC
+ *  Copyright 2023-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -61,6 +61,9 @@ public:
     static constexpr TaskUID TaskUID_CopySelectionDepth              = 0xf3026cea7404c64a;
     static constexpr TaskUID TaskUID_RenderRprimsDefaultUnselected   = 0x287af907f3a740a0;
     static constexpr TaskUID TaskUID_RenderRprimsMaskedUnselected    = 0xf5290fec47594711;
+    static constexpr TaskUID TaskUID_BeginOITPass                    = 0x172ab9c0cdc143aa;
+    static constexpr TaskUID TaskUID_RenderRprimsOITLayers           = 0xcd9fa9cc75d544d4;
+    static constexpr TaskUID TaskUID_EndOITPass                      = 0xa4a829379e28420c;
     static constexpr TaskUID TaskUID_RenderRprimsAdditive            = 0x37d45531106c4c52;
     static constexpr TaskUID TaskUID_RenderRprimsTranslucent         = 0xa015c7e45941407e;
     static constexpr TaskUID TaskUID_RenderRprimsAdditiveSelected    = 0x2cb8a35254ec46da;
@@ -102,6 +105,10 @@ public:
     ///                             * Renders only unselected Rprims with the masked material tag
     ///                         - RenderEnvMap
     ///                         - RenderBoundBox
+    ///                         - BeginOITPass
+    ///                             * Binds and clears OIT layers for rendering
+    ///                         - RenderRprimsOITLayers
+    ///                         - EndOITPass
     ///                         - RenderRprimsAdditive
     ///                             * Renders all Rprims with additive material tag
     ///                         - RenderRprimsTranslucent
@@ -127,6 +134,9 @@ public:
     ///     | RenderRprimsMaskedUnselected    |                  |         V         |   V    |     V     |    V     |                  |     V      |
     ///     | RenderEnvMap                    |                  |                   |   V    |           |          |                  |            |
     ///     | RenderBoundBox                  |                  |                   |   V    |           |          |                  |            |
+    ///     | BeginOITPass                    |                  |                   |        |           |          |                  |            |
+    ///     | RenderRprimsOITLayers           |                  |                   |        |           |          |                  |            |
+    ///	    | EndOITPass                      |                  |                   |        |           |          |                  |            |
     ///     | RenderRprimsAdditive            |       V          |         V         |   V    |     V     |    V     |                  |     V      |
     ///     | RenderRprimsTranslucent         |       V          |         V         |   V    |     V     |    V     |                  |     V      |
     ///     | RenderRprimsAdditiveSelected    |       V          |                   |        |           |          |        V         |            |
@@ -242,6 +252,8 @@ private:
     void CreateRenderRprimsTask(const pxr::TfToken& MaterialTag, TaskUID UID, const HnRenderPassParams& RenderPassParams);
     void CreateRenderEnvMapTask(const pxr::TfToken& RenderPassName);
     void CreateRenderBoundBoxTask(const pxr::TfToken& RenderPassName);
+    void CreateBeginOITPassTask();
+    void CreateEndOITPassTask();
     void CreateReadRprimIdTask();
     void CreateCopySelectionDepthTask();
     void CreateProcessSelectionTask();

@@ -459,6 +459,7 @@ public:
     {
         Main,
         Shadow,
+        OITLayers,
         Count
     };
 
@@ -789,6 +790,8 @@ public:
 
     static const char* GetDebugViewTypeString(DebugViewType DebugView);
 
+    static constexpr TEXTURE_FORMAT OITTailFmt = TEX_FORMAT_RGBA8_UNORM;
+
     static OITResources CreateOITResources(IRenderDevice* pDevice, Uint32 Width, Uint32 Height, Uint32 LayerCount);
     OITResources        CreateOITResources(Uint32 Width, Uint32 Height) const;
 
@@ -902,7 +905,6 @@ protected:
 
     static constexpr TEXTURE_FORMAT PrefilteredEnvMapFmt = TEX_FORMAT_RGBA16_FLOAT;
     static constexpr TEXTURE_FORMAT IrradianceCubeFmt    = TEX_FORMAT_RGBA16_FLOAT;
-    static constexpr TEXTURE_FORMAT OITTailFmt           = TEX_FORMAT_RGBA8_UNORM;
     static constexpr Uint32         IrradianceCubeDim    = 64;
     static constexpr Uint32         PrefilteredEnvMapDim = 256;
 

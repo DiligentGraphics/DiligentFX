@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2024 Diligent Graphics LLC
+ *  Copyright 2023-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -120,9 +120,14 @@ public:
     void Begin(Uint32        NumRenderTargets,
                ITextureView* ppRTVs[],
                ITextureView* pDSV,
-               float4*       ClearColors = nullptr,
+               const float4* ClearColors = nullptr,
                float         ClearDepth  = 0,
                Uint32        ClearMask   = 0);
+
+    void Restart()
+    {
+        m_IsCommited = false;
+    }
 
 private:
     Uint32                                         m_NumRenderTargets = 0;

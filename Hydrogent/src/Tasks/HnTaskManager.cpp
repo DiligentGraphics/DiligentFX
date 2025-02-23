@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2024 Diligent Graphics LLC
+ *  Copyright 2023-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -36,6 +36,8 @@
 #include "Tasks/HnCopySelectionDepthTask.hpp"
 #include "Tasks/HnRenderEnvMapTask.hpp"
 #include "Tasks/HnRenderBoundBoxTask.hpp"
+#include "Tasks/HnBeginOITPassTask.hpp"
+#include "Tasks/HnEndOITPassTask.hpp"
 #include "Tasks/HnReadRprimIdTask.hpp"
 #include "Tasks/HnPostProcessTask.hpp"
 #include "Tasks/HnProcessSelectionTask.hpp"
@@ -64,6 +66,8 @@ TF_DEFINE_PRIVATE_TOKENS(
     (copySelectionDepthTask)
     (renderEnvMapTask)
     (renderBoundBoxTask)
+    (beginOITPassTask)
+    (endOITPassTask)
     (readRprimIdTask)
     (processSelectionTask)
     (postProcessTask)
@@ -191,6 +195,22 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                            });
     CreateRenderEnvMapTask(HnRenderResourceTokens->renderPass_OpaqueUnselected_TransparentAll);
     CreateRenderBoundBoxTask(HnRenderResourceTokens->renderPass_OpaqueUnselected_TransparentAll);
+
+    const USD_Renderer& Renderer = *static_cast<const HnRenderDelegate*>(GetRenderIndex().GetRenderDelegate())->GetUSDRenderer();
+    if (Renderer.GetSettings().OITLayerCount > 0)
+    {
+        CreateBeginOITPassTask();
+        CreateRenderRprimsTask(HnMaterialTagTokens->translucent,
+                               TaskUID_RenderRprimsOITLayers,
+                               {
+                                   HnRenderResourceTokens->renderPass_OITLayers,
+                                   HnRenderPassParams::SelectionType::All,
+                                   USD_Renderer::RenderPassType::OITLayers,
+                                   USD_Renderer::USD_PSO_FLAG_NONE,
+                               });
+        CreateEndOITPassTask();
+    }
+
     CreateRenderRprimsTask(HnMaterialTagTokens->additive,
                            TaskUID_RenderRprimsAdditive,
                            {
@@ -426,6 +446,18 @@ void HnTaskManager::CreateRenderBoundBoxTask(const pxr::TfToken& RenderPassName)
     CreateTask<HnRenderBoundBoxTask>(HnTaskManagerTokens->renderBoundBoxTask, TaskUID_RenderBoundBox, TaskParams);
 
     SetParameter(HnTaskManagerTokens->renderBoundBoxTask, HnTokens->renderPassName, RenderPassName);
+}
+
+void HnTaskManager::CreateBeginOITPassTask()
+{
+    HnBeginOITPassTaskParams TaskParams;
+    CreateTask<HnBeginOITPassTask>(HnTaskManagerTokens->beginOITPassTask, TaskUID_BeginOITPass, TaskParams);
+}
+
+void HnTaskManager::CreateEndOITPassTask()
+{
+    HnEndOITPassTaskParams TaskParams;
+    CreateTask<HnEndOITPassTask>(HnTaskManagerTokens->endOITPassTask, TaskUID_EndOITPass, TaskParams);
 }
 
 void HnTaskManager::CreateReadRprimIdTask()

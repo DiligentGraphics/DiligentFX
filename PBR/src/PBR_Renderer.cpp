@@ -80,7 +80,7 @@ PBR_Renderer::PSOKey::PSOKey(RenderPassType       _Type,
     UserValue{_UserValue}
 {
     static_assert(PSO_FLAG_LAST == Uint64{1} << Uint64{38}, "Please handle the new flag below, if necessary");
-    static_assert(static_cast<size_t>(RenderPassType::Count) == 2, "Please handle the new render pass type below, if necessary");
+    static_assert(static_cast<size_t>(RenderPassType::Count) == 3, "Please handle the new render pass type below, if necessary");
     if (Type == RenderPassType::Shadow)
     {
         static constexpr PSO_FLAGS ShadowPassFlags =
@@ -92,7 +92,24 @@ PBR_Renderer::PSOKey::PSOKey(RenderPassType       _Type,
             PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM |
             PSO_FLAG_ALL_USER_DEFINED;
         Flags &= ShadowPassFlags;
-        DebugView = DebugViewType::None;
+
+        LoadingAnimation = LoadingAnimationMode::None;
+        DebugView        = DebugViewType::None;
+    }
+    else if (Type == RenderPassType::OITLayers)
+    {
+        static constexpr PSO_FLAGS OITLayersFlags =
+            PSO_FLAG_USE_COLOR_MAP |
+            PSO_FLAG_USE_TEXCOORD0 |
+            PSO_FLAG_USE_TEXCOORD1 |
+            PSO_FLAG_USE_JOINTS |
+            PSO_FLAG_USE_TEXTURE_ATLAS |
+            PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM;
+        Flags &= OITLayersFlags;
+
+        AlphaMode        = ALPHA_MODE_OPAQUE;
+        LoadingAnimation = LoadingAnimationMode::None;
+        DebugView        = DebugViewType::None;
     }
 
     if (Flags & PSO_FLAG_UNSHADED)

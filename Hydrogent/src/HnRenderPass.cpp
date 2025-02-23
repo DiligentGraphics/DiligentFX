@@ -1468,7 +1468,7 @@ void HnRenderPass::RenderPendingDrawItems(RenderState& State)
         }
         else
         {
-            // In structud buffer mode, we use the first joint index, so we do not need to set the joint buffer offset.
+            // In structured buffer mode, we use the first joint index, so we do not need to set the joint buffer offset.
         }
         State.CommitMaterialSRB(*ListItem.pMaterial, PendingItem.PrimitiveAttribsOffset);
 

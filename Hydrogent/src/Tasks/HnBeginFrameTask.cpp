@@ -191,6 +191,13 @@ void HnBeginFrameTask::Sync(pxr::HdSceneDelegate* Delegate,
                                   m_Params.Formats.Depth,
                                   m_RenderPassStates[HnRenderResourceTokens->renderPass_TransparentSelected]);
 
+            const TEXTURE_FORMAT OITRTVFormats[] = {USD_Renderer::OITTailFmt};
+            UpdateRenderPassState(m_Params,
+                                  OITRTVFormats,
+                                  _countof(OITRTVFormats),
+                                  m_Params.Formats.Depth,
+                                  m_RenderPassStates[HnRenderResourceTokens->renderPass_OITLayers]);
+
             (*TaskCtx)[HnRenderResourceTokens->suspendSuperSampling] = pxr::VtValue{true};
         }
     }
@@ -338,6 +345,21 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
     for (HnRenderPassState* RPState : {&RP_OpaqueSelected, &RP_OpaqueUnselected_TransparentAll, &RP_TransparentSelected})
     {
         RPState->SetCamera(m_pCamera);
+    }
+
+    if (Renderer.GetSettings().OITLayerCount > 0)
+    {
+        HnRenderPassState& RP_OITLayers = m_RenderPassStates[HnRenderResourceTokens->renderPass_OITLayers];
+
+        ITextureView* OITRTVs[] = {m_FrameRenderTargets.OIT.Tail->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET)};
+        const float4  TailClearValue{
+            0, // Layer counter
+            0, // Unused
+            0, // Unused
+            1, // Total tail transmittance
+        };
+        RP_OITLayers.Begin(_countof(OITRTVs), OITRTVs, m_FrameRenderTargets.DepthDSV, &TailClearValue, 0, 0x01u);
+        RP_OITLayers.SetCamera(m_pCamera);
     }
 
     // Register render pass states in the task context
@@ -761,15 +783,6 @@ void HnBeginFrameTask::BindOITResources(HnRenderDelegate* RenderDelegate)
     {
         UNEXPECTED("Main pass frame attribs SRB is null");
     }
-
-    IDeviceContext* pCtx = RenderDelegate->GetDeviceContext();
-
-    StateTransitionDesc Barriers[] =
-        {
-            {m_FrameRenderTargets.OIT.Layers, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE},
-            {m_FrameRenderTargets.OIT.Tail, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE},
-        };
-    pCtx->TransitionResourceStates(_countof(Barriers), Barriers);
 }
 
 void HnBeginFrameTask::Execute(pxr::HdTaskContext* TaskCtx)

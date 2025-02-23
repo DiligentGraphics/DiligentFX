@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2024 Diligent Graphics LLC
+ *  Copyright 2023-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -125,7 +125,7 @@ BlendStateDesc HnRenderPassState::GetBlendState() const
     BlendStateDesc BSState;
     BSState.AlphaToCoverageEnable = _alphaToCoverageEnabled;
 
-    auto& RT0          = BSState.RenderTargets[0];
+    RenderTargetBlendDesc& RT0{BSState.RenderTargets[0]};
     RT0.BlendEnable    = _blendEnabled;
     RT0.SrcBlend       = HdBlendFactorToBlendFactor(_blendColorSrcFactor);
     RT0.DestBlend      = HdBlendFactorToBlendFactor(_blendColorDstFactor);
@@ -138,8 +138,9 @@ BlendStateDesc HnRenderPassState::GetBlendState() const
     {
         for (size_t i = 0; i < std::min(_colorMasks.size(), _countof(BSState.RenderTargets)); ++i)
         {
-            const auto SrcMask = _colorMasks[i];
-            auto&      DstMask = BSState.RenderTargets[i].RenderTargetWriteMask;
+            const pxr::HdRenderPassState::ColorMask SrcMask = _colorMasks[i];
+
+            COLOR_MASK& DstMask = BSState.RenderTargets[i].RenderTargetWriteMask;
             switch (SrcMask)
             {
                 case ColorMaskNone: DstMask = COLOR_MASK_NONE; break;
@@ -172,7 +173,7 @@ GraphicsPipelineDesc HnRenderPassState::GetGraphicsPipelineDesc() const
 void HnRenderPassState::Begin(Uint32        NumRenderTargets,
                               ITextureView* ppRTVs[],
                               ITextureView* pDSV,
-                              float4*       ClearColors,
+                              const float4* ClearColors,
                               float         ClearDepth,
                               Uint32        ClearMask)
 {

@@ -40,6 +40,8 @@ set(SOURCE
     src/Tasks/HnCopySelectionDepthTask.cpp
     src/Tasks/HnBeginFrameTask.cpp
     src/Tasks/HnRenderShadowsTask.cpp
+    src/Tasks/HnBeginOITPassTask.cpp
+    src/Tasks/HnEndOITPassTask.cpp
     src/Tasks/HnBeginMainPassTask.cpp
     src/Tasks/HnRenderRprimsTask.cpp
     src/Tasks/HnRenderEnvMapTask.cpp
@@ -88,6 +90,8 @@ set(INTERFACE
     interface/Tasks/HnBeginFrameTask.hpp
     interface/Tasks/HnBeginMainPassTask.hpp
     interface/Tasks/HnRenderShadowsTask.hpp
+    interface/Tasks/HnBeginOITPassTask.hpp
+    interface/Tasks/HnEndOITPassTask.hpp
     interface/Tasks/HnRenderRprimsTask.hpp
     interface/Tasks/HnRenderEnvMapTask.hpp
     interface/Tasks/HnRenderBoundBoxTask.hpp
