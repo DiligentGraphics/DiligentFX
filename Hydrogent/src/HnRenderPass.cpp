@@ -1017,6 +1017,7 @@ void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
     }
 
     if (m_FallbackPSO == nullptr &&
+        m_Params.Type == PBR_Renderer::RenderPassType::Main &&
         (m_Params.UsdPsoFlags & USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_OUTPUT) != 0 &&
         m_RenderMode == HN_RENDER_MODE_SOLID)
     {
