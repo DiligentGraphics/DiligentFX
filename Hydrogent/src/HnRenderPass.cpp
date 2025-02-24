@@ -374,8 +374,11 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
 
     RenderState State{*this, RPState};
 
-    const std::string DebugGroupName = std::string{"Render Pass - "} + m_MaterialTag.GetString() + " - " + HnRenderPassParams::GetSelectionTypeString(m_Params.Selection);
-    ScopedDebugGroup  DebugGroup{State.pCtx, DebugGroupName.c_str()};
+    const std::string DebugGroupName = std::string{"Render Pass - "} +
+        USD_Renderer::GetRenderPassTypeString(m_Params.Type) + " - " +
+        m_MaterialTag.GetString() + " - " +
+        HnRenderPassParams::GetSelectionTypeString(m_Params.Selection);
+    ScopedDebugGroup DebugGroup{State.pCtx, DebugGroupName.c_str()};
 
     RPState.Commit(State.pCtx);
 
@@ -501,7 +504,8 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
     m_UseFallbackPSO = false;
     if (!m_PendingPSOs.empty() || State.RenderDelegate.GetTextureRegistry().GetNumTexturesLoading() > 0)
     {
-        if ((m_Params.UsdPsoFlags & USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_OUTPUT) != 0 &&
+        if (m_Params.Type == PBR_Renderer::RenderPassType::Main &&
+            (m_Params.UsdPsoFlags & USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_OUTPUT) != 0 &&
             m_FallbackPSO != nullptr &&
             m_FallbackPSO->GetStatus() == PIPELINE_STATE_STATUS_READY)
         {

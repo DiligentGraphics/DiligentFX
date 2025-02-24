@@ -78,7 +78,7 @@ void HnEndOITPassTask::Execute(pxr::HdTaskContext* TaskCtx)
         return;
     }
 
-    StateTransitionDesc Barriers[] =
+    const StateTransitionDesc Barriers[] =
         {
             {FrameTargets->OIT.Layers, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE},
             {FrameTargets->OIT.Tail, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE},

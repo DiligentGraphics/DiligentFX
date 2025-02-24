@@ -243,6 +243,19 @@ const char* PBR_Renderer::GetAlphaModeString(ALPHA_MODE AlphaMode)
     return "";
 }
 
+const char* PBR_Renderer::GetRenderPassTypeString(RenderPassType Type)
+{
+    static_assert(static_cast<size_t>(RenderPassType::Count) == 3, "Please add the new render pass type below");
+    switch (Type)
+    {
+        case RenderPassType::Main: return "main";
+        case RenderPassType::Shadow: return "shadow";
+        case RenderPassType::OITLayers: return "OIT layers";
+        default: UNEXPECTED("Unknown render pass type");
+    }
+    return "";
+}
+
 template <typename FaceHandlerType>
 void ProcessCubemapFaces(IDeviceContext* pCtx, ITexture* pCubemap, FaceHandlerType&& FaceHandler)
 {
@@ -1742,6 +1755,24 @@ static constexpr char DefaultPSMainFooter[] = R"(
     return PSOut;
 )";
 
+// Accumulate the total number of tail layers in R channel (Src * 1 + Dst * 1)
+// Compute the total tail attenuation in A channel (Src * 0 + Dst * SrcA)
+static constexpr BlendStateDesc BS_UpdateOITTail{
+    False,                // AlphaToCoverageEnable
+    False,                // IndependentBlendEnable
+    RenderTargetBlendDesc // Render Target 0
+    {
+        True,                   // BlendEnable
+        False,                  // LogicOperationEnable
+        BLEND_FACTOR_ONE,       // SrcBlend
+        BLEND_FACTOR_ONE,       // DestBlend
+        BLEND_OPERATION_ADD,    // BlendOp
+        BLEND_FACTOR_ZERO,      // SrcBlendAlpha
+        BLEND_FACTOR_SRC_ALPHA, // DestBlendAlpha
+        BLEND_OPERATION_ADD,    // BlendOpAlpha
+    },
+};
+
 void PBR_Renderer::CreatePSO(PsoHashMapType&             PsoHashMap,
                              const GraphicsPipelineDesc& GraphicsDesc,
                              const PSOKey&               Key,
@@ -1760,7 +1791,7 @@ void PBR_Renderer::CreatePSO(PsoHashMapType&             PsoHashMap,
 #ifdef DILIGENT_DEVELOPMENT
     {
         std::stringstream msg_ss;
-        msg_ss << "PBR Renderer: creating PSO with flags: " << GetPSOFlagsString(PSOFlags)
+        msg_ss << "PBR Renderer: creating " << GetRenderPassTypeString(Key.GetType()) << " pass PSO with flags: " << GetPSOFlagsString(PSOFlags)
                << ": cull: " << GetCullModeLiteralName(Key.GetCullMode())
                << "; alpha: " << GetAlphaModeString(Key.GetAlphaMode());
         if (Key.GetDebugView() != DebugViewType::None)
@@ -1908,13 +1939,25 @@ void PBR_Renderer::CreatePSO(PsoHashMapType&             PsoHashMap,
     }];
     if (!pPS)
     {
+        const char* SrcFile    = nullptr;
+        const char* EntryPoint = nullptr;
+        if (Key.GetType() == RenderPassType::OITLayers)
+        {
+            SrcFile    = "UpdateOITLayers.psh";
+            EntryPoint = "main";
+        }
+        else
+        {
+            SrcFile    = !IsUnshaded ? "RenderPBR.psh" : "RenderUnshaded.psh";
+            EntryPoint = !IsUnshaded ? "PBR PS" : "Unshaded PS";
+        }
         ShaderCreateInfo ShaderCI{
-            !IsUnshaded ? "RenderPBR.psh" : "RenderUnshaded.psh",
+            SrcFile,
             pShaderSourceFactory,
             "main",
             Macros,
             SHADER_SOURCE_LANGUAGE_HLSL,
-            {!IsUnshaded ? "PBR PS" : "Unshaded PS", SHADER_TYPE_PIXEL, UseCombinedSamplers},
+            {EntryPoint, SHADER_TYPE_PIXEL, UseCombinedSamplers},
         };
         ShaderCI.CompileFlags                   = ShaderCompileFlags;
         ShaderCI.WebGPUEmulatedArrayIndexSuffix = "_";
@@ -1935,27 +1978,32 @@ void PBR_Renderer::CreatePSO(PsoHashMapType&             PsoHashMap,
     PSOCreateInfo.pPS = pPS;
 
     const ALPHA_MODE AlphaMode = Key.GetAlphaMode();
-    if (AlphaMode == ALPHA_MODE_OPAQUE ||
-        AlphaMode == ALPHA_MODE_MASK)
+    if (Key.GetType() == RenderPassType::OITLayers)
     {
-        PSOCreateInfo.GraphicsPipeline.BlendDesc = BS_Default;
-    }
-    else if (AlphaMode == ALPHA_MODE_BLEND)
-    {
-        VERIFY(!IsUnshaded, "Unshaded mode should use OpaquePSO. The PSOKey's ctor sets the alpha mode to opaque.");
+        VERIFY(GraphicsDesc.NumRenderTargets == 1 && GraphicsDesc.RTVFormats[0] == OITTailFmt,
+               "Invalid render targets for OIT Layers render pass");
+        VERIFY(AlphaMode == ALPHA_MODE_OPAQUE, "Alpha mode must be opaque for OIT Layers render pass");
+        VERIFY(Key.GetLoadingAnimation() == LoadingAnimationMode::None, "Loading animation must be disabled for OIT Layers render pass");
+        VERIFY(Key.GetDebugView() == DebugViewType::None, "Debug view must be disabled for OIT Layers render pass");
 
-        RenderTargetBlendDesc& RT0{GraphicsPipeline.BlendDesc.RenderTargets[0]};
-        RT0.BlendEnable    = true;
-        RT0.SrcBlend       = BLEND_FACTOR_ONE;
-        RT0.DestBlend      = BLEND_FACTOR_INV_SRC_ALPHA;
-        RT0.BlendOp        = BLEND_OPERATION_ADD;
-        RT0.SrcBlendAlpha  = BLEND_FACTOR_ONE;
-        RT0.DestBlendAlpha = BLEND_FACTOR_INV_SRC_ALPHA;
-        RT0.BlendOpAlpha   = BLEND_OPERATION_ADD;
+        PSOCreateInfo.GraphicsPipeline.BlendDesc = BS_UpdateOITTail;
     }
     else
     {
-        UNEXPECTED("Unknown alpha mode");
+        if (AlphaMode == ALPHA_MODE_OPAQUE ||
+            AlphaMode == ALPHA_MODE_MASK)
+        {
+            PSOCreateInfo.GraphicsPipeline.BlendDesc = BS_Default;
+        }
+        else if (AlphaMode == ALPHA_MODE_BLEND)
+        {
+            VERIFY(!IsUnshaded, "Unshaded mode should use OpaquePSO. The PSOKey's ctor sets the alpha mode to opaque.");
+            GraphicsPipeline.BlendDesc = BS_PremultipliedAlphaBlend;
+        }
+        else
+        {
+            UNEXPECTED("Unknown alpha mode");
+        }
     }
 
     std::string PSOName{!IsUnshaded ? "PBR PSO " : "Unshaded PSO "};

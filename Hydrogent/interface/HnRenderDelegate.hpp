@@ -422,6 +422,7 @@ public:
     IBuffer*           GetPrimitiveAttribsCB() const { return m_PrimitiveAttribsCB; }
 
     IShaderResourceBinding* GetMainPassFrameAttribsSRB() const { return m_MainPassFrameAttribsSRB; }
+    IShaderResourceBinding* GetOITPassFrameAttribsSRB() const { return m_OITPassFrameAttribsSRB; }
     IShaderResourceBinding* GetShadowPassFrameAttribsSRB(Uint32 LightId) const;
     Uint32                  GetShadowPassFrameAttribsOffset(Uint32 LightId) const;
 
@@ -465,6 +466,7 @@ private:
     RefCntAutoPtr<IBuffer> m_FrameAttribsCB;
 
     RefCntAutoPtr<IShaderResourceBinding> m_MainPassFrameAttribsSRB;
+    RefCntAutoPtr<IShaderResourceBinding> m_OITPassFrameAttribsSRB;
 
     struct ShadowPassFrameAttribs
     {

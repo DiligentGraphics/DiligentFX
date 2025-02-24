@@ -1,0 +1,47 @@
+#include "BasicStructures.fxh"
+#include "PBR_Shading.fxh"
+#include "RenderPBR_Structures.fxh"
+
+#include "VSOutputStruct.generated"
+
+#include "PBR_Textures.fxh"
+
+cbuffer cbFrameAttribs 
+{
+    PBRFrameAttribs g_Frame;
+}
+
+cbuffer cbPrimitiveAttribs
+{
+#if PRIMITIVE_ARRAY_SIZE > 0
+    PBRPrimitiveAttribs g_Primitive[PRIMITIVE_ARRAY_SIZE];
+#else
+    PBRPrimitiveAttribs g_Primitive;
+#endif
+}
+
+#if PRIMITIVE_ARRAY_SIZE > 0
+#   define PRIMITIVE g_Primitive[VSOut.PrimitiveID]
+#else
+#   define PRIMITIVE g_Primitive
+#endif
+
+cbuffer cbMaterialAttribs
+{
+    PBRMaterialShaderInfo g_Material;
+}
+
+struct PSOutput
+{
+    float4 Color : SV_Target0;
+};
+
+PSOutput main(in VSOutput VSOut,
+              in bool     IsFrontFace : SV_IsFrontFace)
+{
+    float4 BaseColor = GetBaseColor(VSOut, g_Material, g_Frame.Renderer.MipBias, PRIMITIVE.FallbackColor);
+    
+    PSOutput PSOut;
+    PSOut.Color = BaseColor;
+    return PSOut;
+}

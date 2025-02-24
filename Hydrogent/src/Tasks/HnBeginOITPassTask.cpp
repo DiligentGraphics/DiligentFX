@@ -73,7 +73,7 @@ void HnBeginOITPassTask::Execute(pxr::HdTaskContext* TaskCtx)
 
     if (HnRenderPassState* RP_OITLayers = GetRenderPassState(TaskCtx, HnRenderResourceTokens->renderPass_OITLayers))
     {
-        RP_OITLayers->SetFrameAttribsSRB(RenderDelegate->GetMainPassFrameAttribsSRB());
+        RP_OITLayers->SetFrameAttribsSRB(RenderDelegate->GetOITPassFrameAttribsSRB());
         RP_OITLayers->Commit(pCtx);
     }
     else

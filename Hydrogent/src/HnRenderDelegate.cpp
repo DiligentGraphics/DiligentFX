@@ -762,7 +762,8 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
         }
     }
 
-    if (m_USDRenderer->GetSettings().OITLayerCount > 0)
+    const bool EnableOIT = m_USDRenderer->GetSettings().OITLayerCount > 0;
+    if (EnableOIT)
     {
         // OIT resource version is made dirty by HnBeginFrameTask when the frame size changes.
         // OIT resources will be set in the SRB by HnBeginFrameTask::Execute().
@@ -826,6 +827,11 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
 
         m_ShadowPassFrameAttribs.FrameAttribsVar = m_ShadowPassFrameAttribs.SRB->GetVariableByName(SHADER_TYPE_VERTEX, "cbFrameAttribs");
         VERIFY_EXPR(m_ShadowPassFrameAttribs.FrameAttribsVar != nullptr);
+    }
+    if (EnableOIT && !m_OITPassFrameAttribsSRB)
+    {
+        m_OITPassFrameAttribsSRB = CreateFrameAttribsSRB(m_USDRenderer->GetPRBFrameAttribsSize(), m_pDummyShadowSRV);
+        m_USDRenderer->SetOITResources(m_OITPassFrameAttribsSRB, m_DummyOITResources);
     }
 
     {

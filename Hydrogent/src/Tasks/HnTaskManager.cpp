@@ -206,7 +206,7 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                                    HnRenderResourceTokens->renderPass_OITLayers,
                                    HnRenderPassParams::SelectionType::All,
                                    USD_Renderer::RenderPassType::OITLayers,
-                                   USD_Renderer::USD_PSO_FLAG_NONE,
+                                   USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS,
                                });
         CreateEndOITPassTask();
     }
@@ -350,8 +350,12 @@ pxr::SdfPath HnTaskManager::GetTaskId(const pxr::TfToken& TaskName) const
 
 pxr::SdfPath HnTaskManager::GetRenderRprimsTaskId(const pxr::TfToken& MaterialTag, const HnRenderPassParams& RenderPassParams) const
 {
-    std::string Id = std::string{"RenderRprimsTask_"} + MaterialTag.GetString();
-    std::replace(Id.begin(), Id.end(), ':', '_');
+    std::string Id = std::string{"RenderRprimsTask_"} + PBR_Renderer::GetRenderPassTypeString(RenderPassParams.Type) + "_" + MaterialTag.GetString();
+    for (char& c : Id)
+    {
+        if (c == ':' || c == ' ')
+            c = '_';
+    }
     switch (RenderPassParams.Selection)
     {
         case HnRenderPassParams::SelectionType::All:

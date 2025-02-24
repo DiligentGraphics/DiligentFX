@@ -580,6 +580,7 @@ public:
 
     static std::string GetPSOFlagsString(PSO_FLAGS Flags);
     static const char* GetAlphaModeString(ALPHA_MODE AlphaMode);
+    static const char* GetRenderPassTypeString(RenderPassType Type);
 
     class PSOKey
     {
