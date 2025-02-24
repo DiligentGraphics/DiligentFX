@@ -783,6 +783,15 @@ void HnBeginFrameTask::BindOITResources(HnRenderDelegate* RenderDelegate)
     {
         UNEXPECTED("Main pass frame attribs SRB is null");
     }
+
+    IDeviceContext* pCtx = RenderDelegate->GetDeviceContext();
+
+    StateTransitionDesc Barriers[] =
+        {
+            {m_FrameRenderTargets.OIT.Layers, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE},
+            {m_FrameRenderTargets.OIT.Tail, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE},
+        };
+    pCtx->TransitionResourceStates(_countof(Barriers), Barriers);
 }
 
 void HnBeginFrameTask::Execute(pxr::HdTaskContext* TaskCtx)
