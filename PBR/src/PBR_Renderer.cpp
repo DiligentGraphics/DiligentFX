@@ -539,6 +539,11 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
             LOG_WARNING_MESSAGE("OIT is disabled because the device does not support compute shaders");
             m_Settings.OITLayerCount = 0;
         }
+
+        if (m_Settings.OITLayerCount > 0)
+        {
+            CreateClearOITLayersPSO();
+        }
     }
 
     if (InitSignature)
@@ -1379,7 +1384,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
     Macros.Add("DEBUG_VIEW_CLEAR_COAT",            static_cast<int>(DebugViewType::ClearCoat));
     Macros.Add("DEBUG_VIEW_CLEAR_COAT_FACTOR",     static_cast<int>(DebugViewType::ClearCoatFactor));
     Macros.Add("DEBUG_VIEW_CLEAR_COAT_ROUGHNESS",  static_cast<int>(DebugViewType::ClearCoatRoughness));
-	Macros.Add("DEBUG_VIEW_CLEAR_COAT_NORMAL",     static_cast<int>(DebugViewType::ClearCoatNormal));
+    Macros.Add("DEBUG_VIEW_CLEAR_COAT_NORMAL",     static_cast<int>(DebugViewType::ClearCoatNormal));
     Macros.Add("DEBUG_VIEW_SHEEN",                 static_cast<int>(DebugViewType::Sheen));
     Macros.Add("DEBUG_VIEW_SHEEN_COLOR",           static_cast<int>(DebugViewType::SheenColor));
     Macros.Add("DEBUG_VIEW_SHEEN_ROUGHNESS",       static_cast<int>(DebugViewType::SheenRoughness));
@@ -2140,6 +2145,84 @@ IPipelineState* PBR_Renderer::GetPSO(PsoHashMapType&             PsoHashMap,
     }
 
     return it != PsoHashMap.end() ? it->second.RawPtr() : nullptr;
+}
+
+
+void PBR_Renderer::CreateClearOITLayersPSO()
+{
+    ComputePipelineStateCreateInfoX PsoCI{"Clear OIT Layers"};
+
+    ShaderMacroHelper Macros;
+    Macros.Add("THREAD_GROUP_SIZE", static_cast<int>(ClearOITLayersThreadGroupSize));
+    Macros.Add("NUM_OIT_LAYERS", static_cast<int>(m_Settings.OITLayerCount));
+
+    ShaderCreateInfo ShaderCI{
+        "ClearOITLayers.csh",
+        &DiligentFXShaderSourceStreamFactory::GetInstance(),
+        "main",
+        Macros,
+        SHADER_SOURCE_LANGUAGE_HLSL,
+        {"PBR VS", SHADER_TYPE_COMPUTE, true},
+    };
+    ShaderCI.CompileFlags = m_Settings.PackMatrixRowMajor ? SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR : SHADER_COMPILE_FLAG_NONE;
+
+    RefCntAutoPtr<IShader> pCS = m_Device.CreateShader(ShaderCI);
+    if (!pCS)
+    {
+        LOG_ERROR_MESSAGE("Failed to create clear OIT layers compute shader");
+        return;
+    }
+
+    PsoCI.AddShader(pCS);
+    PsoCI.PSODesc.ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
+
+    m_ClearOITLayersPSO = m_Device.CreateComputePipelineState(PsoCI);
+    if (!m_ClearOITLayersPSO)
+    {
+        LOG_ERROR_MESSAGE("Failed to create clear OIT layers PSO");
+    }
+}
+
+void PBR_Renderer::CreateClearOITLayersSRB(IBuffer* pFrameAttribs, IBuffer* OITLayers, IShaderResourceBinding** ppSRB) const
+{
+    if (!m_ClearOITLayersPSO)
+    {
+        LOG_ERROR_MESSAGE("Clear OIT layers PSO is not initialized");
+        return;
+    }
+
+    m_ClearOITLayersPSO->CreateShaderResourceBinding(ppSRB, true);
+    VERIFY_EXPR(*ppSRB);
+    (*ppSRB)->GetVariableByName(SHADER_TYPE_COMPUTE, "cbFrameAttribs")->Set(pFrameAttribs);
+    (*ppSRB)->GetVariableByName(SHADER_TYPE_COMPUTE, "g_rwOITLayers")->Set(OITLayers->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+}
+
+void PBR_Renderer::ClearOITLayers(IDeviceContext* pCtx, IShaderResourceBinding* pSRB, Uint32 Width, Uint32 Height) const
+{
+    if (!m_ClearOITLayersPSO)
+    {
+        LOG_ERROR_MESSAGE("Clear OIT layers PSO is not initialized");
+        return;
+    }
+    if (pCtx == nullptr)
+    {
+        DEV_ERROR("pCtx must not be null");
+        return;
+    }
+    if (pSRB == nullptr)
+    {
+        DEV_ERROR("pSRB must not be null");
+        return;
+    }
+
+    pCtx->SetPipelineState(m_ClearOITLayersPSO);
+    pCtx->CommitShaderResources(pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    DispatchComputeAttribs DispatchAttrs{
+        (Width + ClearOITLayersThreadGroupSize - 1) / ClearOITLayersThreadGroupSize,
+        (Height + ClearOITLayersThreadGroupSize - 1) / ClearOITLayersThreadGroupSize,
+        1,
+    };
+    pCtx->DispatchCompute(DispatchAttrs);
 }
 
 void PBR_Renderer::SetInternalShaderParameters(HLSL::PBRRendererShaderParameters& Renderer)

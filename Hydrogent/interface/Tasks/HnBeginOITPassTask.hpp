@@ -29,6 +29,9 @@
 #include "HnTask.hpp"
 #include "../interface/HnRenderPassState.hpp"
 
+#include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/ShaderResourceBinding.h"
+#include "../../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
+
 namespace Diligent
 {
 
@@ -75,6 +78,8 @@ private:
     const HnFrameRenderTargets* m_FrameTargets = nullptr; // Set in Prepare()
 
     HnRenderPassState m_RenderPassState;
+
+    RefCntAutoPtr<IShaderResourceBinding> m_ClearLayersSRB;
 
     Uint32 m_BoundOITResourcesVersion = ~0u;
 };

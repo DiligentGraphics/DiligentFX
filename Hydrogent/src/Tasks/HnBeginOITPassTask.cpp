@@ -82,6 +82,7 @@ void HnBeginOITPassTask::Prepare(pxr::HdTaskContext* TaskCtx,
         if (OITDesc.Width != ColorTargetDesc.Width || OITDesc.Height != ColorTargetDesc.Height)
         {
             FrameTargets->OIT = {};
+            m_ClearLayersSRB.Release();
         }
     }
 
@@ -134,19 +135,14 @@ void HnBeginOITPassTask::Prepare(pxr::HdTaskContext* TaskCtx,
 
 void HnBeginOITPassTask::BindOITResources(HnRenderDelegate* RenderDelegate)
 {
-    if (m_FrameTargets == nullptr)
-    {
-        UNEXPECTED("Frame targets are null. This likely indicates that Prepare() has not been called.");
-        return;
-    }
-
+    VERIFY_EXPR(m_FrameTargets != nullptr);
     if (!m_FrameTargets->OIT)
     {
         UNEXPECTED("OIT resources are not initialized. This likely indicates that Prepare() has not been called.");
         return;
     }
 
-    USD_Renderer& Renderer = *RenderDelegate->GetUSDRenderer();
+    const USD_Renderer& Renderer = *RenderDelegate->GetUSDRenderer();
     if (IShaderResourceBinding* pFrameAttribsSRB = RenderDelegate->GetFrameAttribsSRB(HnRenderDelegate::FrameAttribsSRBType::Transparent))
     {
         Renderer.SetOITResources(pFrameAttribsSRB, m_FrameTargets->OIT);
@@ -173,6 +169,11 @@ void HnBeginOITPassTask::Execute(pxr::HdTaskContext* TaskCtx)
         UNEXPECTED("Render index is null. This likely indicates that Prepare() has not been called.");
         return;
     }
+    if (m_FrameTargets == nullptr)
+    {
+        UNEXPECTED("Frame targets are null. This likely indicates that Prepare() has not been called.");
+        return;
+    }
 
     HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
     IDeviceContext*   pCtx           = RenderDelegate->GetDeviceContext();
@@ -186,7 +187,16 @@ void HnBeginOITPassTask::Execute(pxr::HdTaskContext* TaskCtx)
 
     ScopedDebugGroup DebugGroup{pCtx, "Begin OIT pass"};
 
-    m_RenderPassState.SetFrameAttribsSRB(RenderDelegate->GetFrameAttribsSRB(HnRenderDelegate::FrameAttribsSRBType::OITLayers));
+    const USD_Renderer& Renderer = *RenderDelegate->GetUSDRenderer();
+    if (!m_ClearLayersSRB)
+    {
+        Renderer.CreateClearOITLayersSRB(RenderDelegate->GetFrameAttribsCB(), m_FrameTargets->OIT.Layers, &m_ClearLayersSRB);
+    }
+    const TextureDesc& OITTailDesc = m_FrameTargets->OIT.Tail->GetDesc();
+    Renderer.ClearOITLayers(pCtx, m_ClearLayersSRB, OITTailDesc.Width, OITTailDesc.Height);
+
+    IShaderResourceBinding* pFrameAttribsSRB = RenderDelegate->GetFrameAttribsSRB(HnRenderDelegate::FrameAttribsSRBType::OITLayers);
+    m_RenderPassState.SetFrameAttribsSRB(pFrameAttribsSRB);
     m_RenderPassState.Commit(pCtx);
 }
 

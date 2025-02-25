@@ -795,6 +795,8 @@ public:
 
     static OITResources CreateOITResources(IRenderDevice* pDevice, Uint32 Width, Uint32 Height, Uint32 LayerCount);
     OITResources        CreateOITResources(Uint32 Width, Uint32 Height) const;
+    void                CreateClearOITLayersSRB(IBuffer* pFrameAttribs, IBuffer* OITLayers, IShaderResourceBinding** ppSRB) const;
+    void                ClearOITLayers(IDeviceContext* pCtx, IShaderResourceBinding* pSRB, Uint32 Width, Uint32 Height) const;
 
 protected:
     ShaderMacroHelper DefineMacros(const PSOKey& Key) const;
@@ -820,6 +822,8 @@ private:
                    const GraphicsPipelineDesc& GraphicsDesc,
                    const PSOKey&               Key,
                    bool                        AsyncCompile);
+
+    void CreateClearOITLayersPSO();
 
 protected:
     enum IBL_FEATURE_FLAGS : Uint32
@@ -927,6 +931,9 @@ protected:
     std::unordered_map<PSOKey, RefCntAutoPtr<IShader>, PSOKey::Hasher> m_PixelShaders;
 
     std::unordered_map<GraphicsPipelineDesc, PsoHashMapType> m_PSOs;
+
+    static constexpr Uint32       ClearOITLayersThreadGroupSize = 16;
+    RefCntAutoPtr<IPipelineState> m_ClearOITLayersPSO;
 
     std::unique_ptr<StaticShaderTextureIdsArrayType> m_StaticShaderTextureIds;
 };
