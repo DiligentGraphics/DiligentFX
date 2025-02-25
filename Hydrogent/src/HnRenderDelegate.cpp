@@ -769,8 +769,8 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
     const bool EnableOIT = m_USDRenderer->GetSettings().OITLayerCount > 0;
     if (EnableOIT)
     {
-        // OIT resource version is made dirty by HnBeginFrameTask when the frame size changes.
-        // OIT resources will be set in the SRB by HnBeginFrameTask::Execute().
+        // OIT resource version is made dirty by HnBeginOITPassTask when the frame size changes.
+        // OIT resources will be set in the SRB by HnBeginOITPassTask::Execute().
         if (m_OITResourcesVersion != m_RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::OITResources))
         {
             m_OITResourcesVersion = m_RenderParam->MakeAttribDirty(HnRenderParam::GlobalAttrib::OITResources);

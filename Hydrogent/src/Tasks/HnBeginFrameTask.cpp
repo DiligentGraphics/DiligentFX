@@ -145,13 +145,6 @@ void HnBeginFrameTask::Sync(pxr::HdSceneDelegate* Delegate,
                 m_Params.Formats.Depth,
                 m_Params.UseReverseDepth);
 
-            const TEXTURE_FORMAT OITRTVFormats[] = {USD_Renderer::OITTailFmt};
-            m_RenderPassStates[HnRenderResourceTokens->renderPass_OITLayers].Init(
-                OITRTVFormats,
-                _countof(OITRTVFormats),
-                m_Params.Formats.Depth,
-                m_Params.UseReverseDepth);
-
             (*TaskCtx)[HnRenderResourceTokens->suspendSuperSampling] = pxr::VtValue{true};
         }
     }
@@ -171,9 +164,6 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
     const TextureDesc& FinalTargetDesc = pFinalColorRTV->GetTexture()->GetDesc();
 
     HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(RenderIndex->GetRenderDelegate());
-
-    const bool FrameBufferResized = (m_FrameBufferWidth != FinalTargetDesc.Width ||
-                                     m_FrameBufferHeight != FinalTargetDesc.Height);
 
     m_FrameBufferWidth  = FinalTargetDesc.Width;
     m_FrameBufferHeight = FinalTargetDesc.Height;
@@ -255,22 +245,6 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
     m_FrameRenderTargets.ClosestSelectedLocationRTV[1] = UpdateBrim(m_ClosestSelLocnTargetId[1], m_Params.Formats.ClosestSelectedLocation, "Closest selected location 1");
     m_FrameRenderTargets.JitteredFinalColorRTV         = UpdateBrim(m_JitteredFinalColorTargetId, m_Params.Formats.JitteredColor, "Jittered final color");
 
-    const USD_Renderer& Renderer = *RenderDelegate->GetUSDRenderer();
-    if (Renderer.GetSettings().OITLayerCount > 0)
-    {
-        if (FrameBufferResized)
-        {
-            m_FrameRenderTargets.OIT = {};
-        }
-
-        if (!m_FrameRenderTargets.OIT)
-        {
-            m_FrameRenderTargets.OIT = Renderer.CreateOITResources(FinalTargetDesc.Width, FinalTargetDesc.Height);
-            // Mark OIT resources dirty to make render delegate recreate main pass frame attribs SRB.
-            static_cast<HnRenderParam*>(RenderDelegate->GetRenderParam())->MakeAttribDirty(HnRenderParam::GlobalAttrib::OITResources);
-        }
-    }
-
     (*TaskCtx)[HnRenderResourceTokens->frameRenderTargets] = pxr::VtValue{&m_FrameRenderTargets};
 
     // Set render pass render targets
@@ -304,21 +278,6 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
                                        &RP_TransparentSelected})
     {
         RPState->SetCamera(m_pCamera);
-    }
-
-    if (Renderer.GetSettings().OITLayerCount > 0)
-    {
-        HnRenderPassState& RP_OITLayers = m_RenderPassStates[HnRenderResourceTokens->renderPass_OITLayers];
-
-        ITextureView* OITRTVs[] = {m_FrameRenderTargets.OIT.Tail->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET)};
-        const float4  TailClearValue{
-            0, // Layer counter
-            0, // Unused
-            0, // Unused
-            1, // Total tail transmittance
-        };
-        RP_OITLayers.Begin(_countof(OITRTVs), OITRTVs, m_FrameRenderTargets.DepthDSV, &TailClearValue, 0, 0x01u);
-        RP_OITLayers.SetCamera(m_pCamera);
     }
 
     // Register render pass states in the task context
@@ -388,6 +347,7 @@ void HnBeginFrameTask::Prepare(pxr::HdTaskContext* TaskCtx,
         {
             LOG_ERROR_MESSAGE("Camera is not set at Id ", m_Params.CameraId);
         }
+        (*TaskCtx)[HnRenderResourceTokens->camera] = pxr::VtValue{static_cast<const HnCamera*>(m_pCamera)};
     }
     else
     {
@@ -720,39 +680,6 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
     pCtx->TransitionResourceStates(static_cast<Uint32>(Barriers.size()), Barriers.data());
 }
 
-void HnBeginFrameTask::BindOITResources(HnRenderDelegate* RenderDelegate)
-{
-    HnRenderParam* RenderParam = static_cast<HnRenderParam*>(RenderDelegate->GetRenderParam());
-    if (m_BoundOITResourcesVersion == RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::OITResources))
-        return;
-
-    if (!m_FrameRenderTargets.OIT)
-    {
-        UNEXPECTED("OIT resources are not initialized. This likely indicates that Prepare() has not been called.");
-        return;
-    }
-
-    USD_Renderer& Renderer = *RenderDelegate->GetUSDRenderer();
-    if (IShaderResourceBinding* pFrameAttribsSRB = RenderDelegate->GetFrameAttribsSRB(HnRenderDelegate::FrameAttribsSRBType::Transparent))
-    {
-        Renderer.SetOITResources(pFrameAttribsSRB, m_FrameRenderTargets.OIT);
-        m_BoundOITResourcesVersion = RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::OITResources);
-    }
-    else
-    {
-        UNEXPECTED("Main pass frame attribs SRB is null");
-    }
-
-    IDeviceContext* pCtx = RenderDelegate->GetDeviceContext();
-
-    StateTransitionDesc Barriers[] =
-        {
-            {m_FrameRenderTargets.OIT.Layers, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE},
-            {m_FrameRenderTargets.OIT.Tail, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE},
-        };
-    pCtx->TransitionResourceStates(_countof(Barriers), Barriers);
-}
-
 void HnBeginFrameTask::Execute(pxr::HdTaskContext* TaskCtx)
 {
     if (m_RenderIndex == nullptr)
@@ -767,11 +694,6 @@ void HnBeginFrameTask::Execute(pxr::HdTaskContext* TaskCtx)
     IDeviceContext*   pCtx           = RenderDelegate->GetDeviceContext();
 
     ScopedDebugGroup DebugGroup{pCtx, "Begin Frame"};
-
-    if (Renderer.GetSettings().OITLayerCount > 0)
-    {
-        BindOITResources(RenderDelegate);
-    }
 
     // NB: we can't move the buffer update to Prepare() because we need TAA parameters
     //     that are set by HnPostProcessTask::Prepare().

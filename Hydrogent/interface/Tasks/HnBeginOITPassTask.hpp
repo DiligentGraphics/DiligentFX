@@ -27,12 +27,16 @@
 #pragma once
 
 #include "HnTask.hpp"
+#include "../interface/HnRenderPassState.hpp"
 
 namespace Diligent
 {
 
 namespace USD
 {
+
+struct HnFrameRenderTargets;
+class HnRenderDelegate;
 
 struct HnBeginOITPassTaskParams
 {
@@ -63,7 +67,16 @@ public:
     virtual void Execute(pxr::HdTaskContext* TaskCtx) override final;
 
 private:
+    void BindOITResources(HnRenderDelegate* RenderDelegate);
+
+private:
     pxr::HdRenderIndex* m_RenderIndex = nullptr;
+
+    const HnFrameRenderTargets* m_FrameTargets = nullptr; // Set in Prepare()
+
+    HnRenderPassState m_RenderPassState;
+
+    Uint32 m_BoundOITResourcesVersion = ~0u;
 };
 
 } // namespace USD

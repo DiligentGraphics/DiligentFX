@@ -105,6 +105,7 @@ namespace USD
     (nearestMipmapNearest)
 
 #define HN_RENDER_RESOURCE_TOKENS        \
+    (camera)                             \
     (cameraAttribsBuffer)                \
     (lightAttribsBuffer)                 \
     (offscreenColorTarget)               \

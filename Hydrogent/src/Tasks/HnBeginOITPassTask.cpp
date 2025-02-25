@@ -29,6 +29,9 @@
 #include "ScopedDebugGroup.hpp"
 #include "HnTokens.hpp"
 #include "HnRenderPassState.hpp"
+#include "HnFrameRenderTargets.hpp"
+#include "HnCamera.hpp"
+#include "HnRenderParam.hpp"
 
 namespace Diligent
 {
@@ -56,6 +59,111 @@ void HnBeginOITPassTask::Prepare(pxr::HdTaskContext* TaskCtx,
                                  pxr::HdRenderIndex* RenderIndex)
 {
     m_RenderIndex = RenderIndex;
+
+    HnFrameRenderTargets* FrameTargets = GetFrameRenderTargets(TaskCtx);
+    if (FrameTargets == nullptr)
+    {
+        UNEXPECTED("Framebuffer targets are null");
+        return;
+    }
+    m_FrameTargets = FrameTargets;
+
+    ITextureView* pColorRTV = FrameTargets->GBufferRTVs[HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR];
+    if (pColorRTV == nullptr)
+    {
+        UNEXPECTED("Scene color target is null");
+        return;
+    }
+
+    const TextureDesc& ColorTargetDesc = pColorRTV->GetTexture()->GetDesc();
+    if (FrameTargets->OIT)
+    {
+        const TextureDesc& OITDesc = FrameTargets->OIT.Tail->GetDesc();
+        if (OITDesc.Width != ColorTargetDesc.Width || OITDesc.Height != ColorTargetDesc.Height)
+        {
+            FrameTargets->OIT = {};
+        }
+    }
+
+    HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(RenderIndex->GetRenderDelegate());
+
+    const USD_Renderer& Renderer = *RenderDelegate->GetUSDRenderer();
+    VERIFY_EXPR(Renderer.GetSettings().OITLayerCount > 0);
+
+    if (!FrameTargets->OIT)
+    {
+        FrameTargets->OIT = Renderer.CreateOITResources(ColorTargetDesc.Width, ColorTargetDesc.Height);
+        // Mark OIT resources dirty to make render delegate recreate transparent pass frame attribs SRB.
+        // We will set the OIT resources in the SBR in Execute().
+        static_cast<HnRenderParam*>(RenderDelegate->GetRenderParam())->MakeAttribDirty(HnRenderParam::GlobalAttrib::OITResources);
+    }
+
+    bool UseReverseDepth = false;
+    GetTaskContextData(TaskCtx, HnRenderResourceTokens->useReverseDepth, UseReverseDepth);
+
+    const TEXTURE_FORMAT DepthFormat = FrameTargets->DepthDSV->GetTexture()->GetDesc().Format;
+    if (m_RenderPassState.GetDepthStencilFormat() != DepthFormat ||
+        m_RenderPassState.GetUseReverseDepth() != UseReverseDepth)
+    {
+        const TEXTURE_FORMAT OITRTVFormats[] = {USD_Renderer::OITTailFmt};
+        m_RenderPassState.Init(
+            OITRTVFormats,
+            _countof(OITRTVFormats),
+            DepthFormat,
+            UseReverseDepth);
+    }
+
+    ITextureView* OITRTVs[] = {FrameTargets->OIT.Tail->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET)};
+    const float4  TailClearValue{
+        0, // Layer counter
+        0, // Unused
+        0, // Unused
+        1, // Total tail transmittance
+    };
+    m_RenderPassState.Begin(_countof(OITRTVs), OITRTVs, FrameTargets->DepthDSV, &TailClearValue, 0, 0x01u);
+
+    const HnCamera* pCamera = nullptr;
+    if (GetTaskContextData(TaskCtx, HnRenderResourceTokens->camera, pCamera))
+    {
+        m_RenderPassState.SetCamera(pCamera);
+    }
+
+    (*TaskCtx)[HnRenderResourceTokens->renderPass_OITLayers] = pxr::VtValue{&m_RenderPassState};
+}
+
+
+void HnBeginOITPassTask::BindOITResources(HnRenderDelegate* RenderDelegate)
+{
+    if (m_FrameTargets == nullptr)
+    {
+        UNEXPECTED("Frame targets are null. This likely indicates that Prepare() has not been called.");
+        return;
+    }
+
+    if (!m_FrameTargets->OIT)
+    {
+        UNEXPECTED("OIT resources are not initialized. This likely indicates that Prepare() has not been called.");
+        return;
+    }
+
+    USD_Renderer& Renderer = *RenderDelegate->GetUSDRenderer();
+    if (IShaderResourceBinding* pFrameAttribsSRB = RenderDelegate->GetFrameAttribsSRB(HnRenderDelegate::FrameAttribsSRBType::Transparent))
+    {
+        Renderer.SetOITResources(pFrameAttribsSRB, m_FrameTargets->OIT);
+    }
+    else
+    {
+        UNEXPECTED("Main pass frame attribs SRB is null");
+    }
+
+    IDeviceContext* pCtx = RenderDelegate->GetDeviceContext();
+
+    StateTransitionDesc Barriers[] =
+        {
+            {m_FrameTargets->OIT.Layers, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE},
+            {m_FrameTargets->OIT.Tail, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE},
+        };
+    pCtx->TransitionResourceStates(_countof(Barriers), Barriers);
 }
 
 void HnBeginOITPassTask::Execute(pxr::HdTaskContext* TaskCtx)
@@ -69,17 +177,17 @@ void HnBeginOITPassTask::Execute(pxr::HdTaskContext* TaskCtx)
     HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
     IDeviceContext*   pCtx           = RenderDelegate->GetDeviceContext();
 
+    HnRenderParam* RenderParam = static_cast<HnRenderParam*>(RenderDelegate->GetRenderParam());
+    if (m_BoundOITResourcesVersion != RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::OITResources))
+    {
+        BindOITResources(RenderDelegate);
+        m_BoundOITResourcesVersion = RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::OITResources);
+    }
+
     ScopedDebugGroup DebugGroup{pCtx, "Begin OIT pass"};
 
-    if (HnRenderPassState* RP_OITLayers = GetRenderPassState(TaskCtx, HnRenderResourceTokens->renderPass_OITLayers))
-    {
-        RP_OITLayers->SetFrameAttribsSRB(RenderDelegate->GetFrameAttribsSRB(HnRenderDelegate::FrameAttribsSRBType::OITLayers));
-        RP_OITLayers->Commit(pCtx);
-    }
-    else
-    {
-        UNEXPECTED("OIT layers render pass state is not set in the task context");
-    }
+    m_RenderPassState.SetFrameAttribsSRB(RenderDelegate->GetFrameAttribsSRB(HnRenderDelegate::FrameAttribsSRBType::OITLayers));
+    m_RenderPassState.Commit(pCtx);
 }
 
 } // namespace USD
