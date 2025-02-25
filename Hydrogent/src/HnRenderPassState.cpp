@@ -87,6 +87,50 @@ void HnRenderPassState::Commit(IDeviceContext* pContext)
     m_IsCommited = true;
 }
 
+void HnRenderPassState::Init(const TEXTURE_FORMAT* RTVFormats,
+                             Uint32                NumRTVs,
+                             TEXTURE_FORMAT        DSVFormat,
+                             bool                  UseReverseDepth)
+{
+    SetNumRenderTargets(NumRTVs);
+    for (Uint32 i = 0; i < NumRTVs; ++i)
+        SetRenderTargetFormat(i, RTVFormats[i]);
+
+    SetDepthStencilFormat(DSVFormat);
+
+    bool FrontFaceCCW = true;
+
+    float                  DepthBias            = 0;
+    float                  SlopeScaledDepthBias = 0;
+    pxr::HdCompareFunction DepthFunc            = UseReverseDepth ? pxr::HdCmpFuncGreater : pxr::HdCmpFuncLess;
+    bool                   DepthBiasEnabled     = false;
+    bool                   DepthTestEnabled     = true;
+    bool                   DepthClampEnabled    = false;
+
+    pxr::HdCullStyle CullStyle = pxr::HdCullStyleBack;
+
+    pxr::HdCompareFunction StencilFunc    = pxr::HdCmpFuncAlways;
+    int                    StencilRef     = 0;
+    int                    StencilMask    = 0xFF;
+    pxr::HdStencilOp       StencilFailOp  = pxr::HdStencilOpKeep;
+    pxr::HdStencilOp       StencilZFailOp = pxr::HdStencilOpKeep;
+    pxr::HdStencilOp       StencilZPassOp = pxr::HdStencilOpKeep;
+    bool                   StencilEnabled = false;
+
+    SetDepthFunc(DepthFunc);
+    SetDepthBias(DepthBias, SlopeScaledDepthBias);
+    SetDepthBiasEnabled(DepthBiasEnabled);
+    SetEnableDepthTest(DepthTestEnabled);
+    SetEnableDepthClamp(DepthClampEnabled);
+
+    SetCullStyle(CullStyle);
+
+    SetStencilEnabled(StencilEnabled);
+    SetStencil(StencilFunc, StencilRef, StencilMask, StencilFailOp, StencilZFailOp, StencilZPassOp);
+
+    SetFrontFaceCCW(FrontFaceCCW);
+}
+
 RasterizerStateDesc HnRenderPassState::GetRasterizerState() const
 {
     VERIFY(!_conservativeRasterizationEnabled, "Conservative rasterization is not supported");

@@ -57,6 +57,11 @@ public:
 
     void Commit(IDeviceContext* pContext);
 
+    void Init(const TEXTURE_FORMAT* RTVFormats,
+              Uint32                NumRTVs,
+              TEXTURE_FORMAT        DSVFormat,
+              bool                  UseReverseDepth);
+
     void SetRenderTargetFormat(Uint32 rt, TEXTURE_FORMAT Fmt)
     {
         m_RTVFormats[rt] = Fmt;

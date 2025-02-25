@@ -134,10 +134,10 @@ public:
     ///     | RenderRprimsMaskedUnselected    |                  |         V         |   V    |     V     |    V     |                  |     V      |
     ///     | RenderEnvMap                    |                  |                   |   V    |           |          |                  |            |
     ///     | RenderBoundBox                  |                  |                   |   V    |           |          |                  |            |
+    ///     | RenderRprimsAdditive            |       V          |         V         |   V    |     V     |    V     |                  |     V      |
     ///     | BeginOITPass                    |                  |                   |        |           |          |                  |            |
     ///     | RenderRprimsOITLayers           |                  |                   |        |           |          |                  |            |
     ///	    | EndOITPass                      |                  |                   |        |           |          |                  |            |
-    ///     | RenderRprimsAdditive            |       V          |         V         |   V    |     V     |    V     |                  |     V      |
     ///     | RenderRprimsTranslucent         |       V          |         V         |   V    |     V     |    V     |                  |     V      |
     ///     | RenderRprimsAdditiveSelected    |       V          |                   |        |           |          |        V         |            |
     ///     | RenderRprimsTranslucentSelected |       V          |                   |        |           |          |        V         |            |

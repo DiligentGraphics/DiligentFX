@@ -92,17 +92,25 @@ void HnBeginMainPassTask::Execute(pxr::HdTaskContext* TaskCtx)
         pCtx->TransitionResourceStates(1, &Barrier);
     }
 
-    HnRenderPassState* RP_OpaqueSelected                  = GetRenderPassState(TaskCtx, HnRenderResourceTokens->renderPass_OpaqueSelected);
-    HnRenderPassState* RP_OpaqueUnselected_TransparentAll = GetRenderPassState(TaskCtx, HnRenderResourceTokens->renderPass_OpaqueUnselected_TransparentAll);
-    HnRenderPassState* RP_TransparentSelected             = GetRenderPassState(TaskCtx, HnRenderResourceTokens->renderPass_TransparentSelected);
+    HnRenderPassState* RP_OpaqueSelected      = GetRenderPassState(TaskCtx, HnRenderResourceTokens->renderPass_OpaqueSelected);
+    HnRenderPassState* RP_OpaqueUnselected    = GetRenderPassState(TaskCtx, HnRenderResourceTokens->renderPass_OpaqueUnselected);
+    HnRenderPassState* RP_TransparentAll      = GetRenderPassState(TaskCtx, HnRenderResourceTokens->renderPass_TransparentAll);
+    HnRenderPassState* RP_TransparentSelected = GetRenderPassState(TaskCtx, HnRenderResourceTokens->renderPass_TransparentSelected);
 
     for (HnRenderPassState* RPState : {RP_OpaqueSelected,
-                                       RP_OpaqueUnselected_TransparentAll,
+                                       RP_OpaqueUnselected})
+    {
+        if (RPState != nullptr)
+        {
+            RPState->SetFrameAttribsSRB(RenderDelegate->GetFrameAttribsSRB(HnRenderDelegate::FrameAttribsSRBType::Opaque));
+        }
+    }
+    for (HnRenderPassState* RPState : {RP_TransparentAll,
                                        RP_TransparentSelected})
     {
         if (RPState != nullptr)
         {
-            RPState->SetFrameAttribsSRB(RenderDelegate->GetMainPassFrameAttribsSRB());
+            RPState->SetFrameAttribsSRB(RenderDelegate->GetFrameAttribsSRB(HnRenderDelegate::FrameAttribsSRBType::Transparent));
         }
     }
 

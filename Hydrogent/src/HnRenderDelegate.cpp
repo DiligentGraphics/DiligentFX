@@ -759,7 +759,10 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
         if (m_ShadowAtlasVersion != ShadowAtlasVersion)
         {
             m_ShadowAtlasVersion = ShadowAtlasVersion;
-            m_MainPassFrameAttribsSRB.Release();
+
+            static_assert(static_cast<size_t>(FrameAttribsSRBType::Count) == 3, "Did you add a new FrameAttribsSRBType? You may need to update this code.");
+            for (FrameAttribsSRBType Type : {FrameAttribsSRBType::Opaque, FrameAttribsSRBType::Transparent})
+                _GetFrameAttribsSRB(Type).Release();
         }
     }
 
@@ -771,7 +774,7 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
         if (m_OITResourcesVersion != m_RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::OITResources))
         {
             m_OITResourcesVersion = m_RenderParam->MakeAttribDirty(HnRenderParam::GlobalAttrib::OITResources);
-            m_MainPassFrameAttribsSRB.Release();
+            _GetFrameAttribsSRB(FrameAttribsSRBType::Transparent).Release();
         }
     }
 
@@ -805,16 +808,47 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
         return SRB;
     };
 
+    ITextureView* pShadowSRV = m_ShadowMapManager ? m_ShadowMapManager->GetShadowSRV() : nullptr;
+
     // FrameAttribs
     //
     // ||                   Main Pass                  ||        Shadow Pass 1       ||  ...  ||       Shadow Pass N        ||
     // || Camera|PrevCamera|Renderer|Lights|ShadowMaps || Camera|PrevCamera|Renderer ||  ...  || Camera|PrevCamera|Renderer ||
     //  |<-------------------------------------------->||<-------------------------->||
     //      m_USDRenderer->GetPRBFrameAttribsSize()       USD_Renderer::GetPRBFrameAttribsSize(0, 0)
-    if (!m_MainPassFrameAttribsSRB)
+    RefCntAutoPtr<IShaderResourceBinding>& OpaquePassFrameAttribsSRB = _GetFrameAttribsSRB(FrameAttribsSRBType::Opaque);
+    if (!OpaquePassFrameAttribsSRB)
     {
-        m_MainPassFrameAttribsSRB = CreateFrameAttribsSRB(m_USDRenderer->GetPRBFrameAttribsSize(), m_ShadowMapManager ? m_ShadowMapManager->GetShadowSRV() : nullptr);
+        OpaquePassFrameAttribsSRB = CreateFrameAttribsSRB(m_USDRenderer->GetPRBFrameAttribsSize(), pShadowSRV);
+        if (EnableOIT)
+        {
+            // Opaque pass doesn't use OIT resources
+            m_USDRenderer->SetOITResources(OpaquePassFrameAttribsSRB, m_DummyOITResources);
+        }
     }
+
+    RefCntAutoPtr<IShaderResourceBinding>& TransparentPassFrameAttribsSRB = _GetFrameAttribsSRB(FrameAttribsSRBType::Transparent);
+    if (EnableOIT)
+    {
+        if (!TransparentPassFrameAttribsSRB)
+        {
+            TransparentPassFrameAttribsSRB = CreateFrameAttribsSRB(m_USDRenderer->GetPRBFrameAttribsSize(), pShadowSRV);
+        }
+
+        RefCntAutoPtr<IShaderResourceBinding>& OITPassFrameAttribsSRB = _GetFrameAttribsSRB(FrameAttribsSRBType::OITLayers);
+        if (!OITPassFrameAttribsSRB)
+        {
+            OITPassFrameAttribsSRB = CreateFrameAttribsSRB(m_USDRenderer->GetPRBFrameAttribsSize(), m_pDummyShadowSRV);
+            // OIT Layers pass updates the OIT layers, but we still need to have something bound in the SRB, so
+            // we bind the dummy OIT resources.
+            m_USDRenderer->SetOITResources(OITPassFrameAttribsSRB, m_DummyOITResources);
+        }
+    }
+    else
+    {
+        TransparentPassFrameAttribsSRB = OpaquePassFrameAttribsSRB;
+    }
+
     if (m_ShadowMapManager && !m_ShadowPassFrameAttribs.SRB)
     {
         constexpr Uint32 LightCount                 = 0;
@@ -828,11 +862,6 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
 
         m_ShadowPassFrameAttribs.FrameAttribsVar = m_ShadowPassFrameAttribs.SRB->GetVariableByName(SHADER_TYPE_VERTEX, "cbFrameAttribs");
         VERIFY_EXPR(m_ShadowPassFrameAttribs.FrameAttribsVar != nullptr);
-    }
-    if (EnableOIT && !m_OITPassFrameAttribsSRB)
-    {
-        m_OITPassFrameAttribsSRB = CreateFrameAttribsSRB(m_USDRenderer->GetPRBFrameAttribsSize(), m_pDummyShadowSRV);
-        m_USDRenderer->SetOITResources(m_OITPassFrameAttribsSRB, m_DummyOITResources);
     }
 
     {

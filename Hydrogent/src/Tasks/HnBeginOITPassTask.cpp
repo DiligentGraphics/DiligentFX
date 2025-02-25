@@ -73,22 +73,12 @@ void HnBeginOITPassTask::Execute(pxr::HdTaskContext* TaskCtx)
 
     if (HnRenderPassState* RP_OITLayers = GetRenderPassState(TaskCtx, HnRenderResourceTokens->renderPass_OITLayers))
     {
-        RP_OITLayers->SetFrameAttribsSRB(RenderDelegate->GetOITPassFrameAttribsSRB());
+        RP_OITLayers->SetFrameAttribsSRB(RenderDelegate->GetFrameAttribsSRB(HnRenderDelegate::FrameAttribsSRBType::OITLayers));
         RP_OITLayers->Commit(pCtx);
     }
     else
     {
         UNEXPECTED("OIT layers render pass state is not set in the task context");
-    }
-
-    if (HnRenderPassState* RP_OpaqueUnselected_TransparentAll = GetRenderPassState(TaskCtx, HnRenderResourceTokens->renderPass_OpaqueUnselected_TransparentAll))
-    {
-        // Make sure opaque render pass is committed next time it is used.
-        RP_OpaqueUnselected_TransparentAll->Restart();
-    }
-    else
-    {
-        UNEXPECTED("OpaqueUnselected_TransparentAll render pass state is not set in the task context");
     }
 }
 

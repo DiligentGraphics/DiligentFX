@@ -132,11 +132,12 @@ namespace USD
     (cameraTransformDirty)               \
     (renderPass_OpaqueSelected)		     \
     (renderPass_TransparentSelected)	 \
-    (renderPass_OpaqueUnselected_TransparentAll) \
+    (renderPass_OpaqueUnselected)        \
+    (renderPass_TransparentAll)          \
     (renderPass_OITLayers)	             \
-    (renderPass_Shadow) \
-    (backgroundDepth)   \
-    (useReverseDepth)   \
+    (renderPass_Shadow)                  \
+    (backgroundDepth)                    \
+    (useReverseDepth)                    \
 	(fallBackPsoInUse)
 
 

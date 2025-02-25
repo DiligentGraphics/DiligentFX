@@ -32,6 +32,7 @@
 #include <string>
 #include <atomic>
 #include <mutex>
+#include <array>
 
 #include "pxr/imaging/hd/renderDelegate.h"
 
@@ -421,8 +422,18 @@ public:
     IBuffer*           GetFrameAttribsCB() const { return m_FrameAttribsCB; }
     IBuffer*           GetPrimitiveAttribsCB() const { return m_PrimitiveAttribsCB; }
 
-    IShaderResourceBinding* GetMainPassFrameAttribsSRB() const { return m_MainPassFrameAttribsSRB; }
-    IShaderResourceBinding* GetOITPassFrameAttribsSRB() const { return m_OITPassFrameAttribsSRB; }
+    enum class FrameAttribsSRBType : Uint32
+    {
+        Opaque,
+        Transparent,
+        OITLayers,
+        Count
+    };
+    IShaderResourceBinding* GetFrameAttribsSRB(FrameAttribsSRBType Type) const
+    {
+        return m_FrameAttribsSRBs[static_cast<size_t>(Type)];
+    }
+
     IShaderResourceBinding* GetShadowPassFrameAttribsSRB(Uint32 LightId) const;
     Uint32                  GetShadowPassFrameAttribsOffset(Uint32 LightId) const;
 
@@ -441,6 +452,12 @@ public:
     HnMaterial* GetFallbackMaterial() const { return m_FallbackMaterial; }
 
     bool AllowPrimitiveRestart() const;
+
+private:
+    RefCntAutoPtr<IShaderResourceBinding>& _GetFrameAttribsSRB(FrameAttribsSRBType Type)
+    {
+        return m_FrameAttribsSRBs[static_cast<size_t>(Type)];
+    }
 
 private:
     static const pxr::TfTokenVector SupportedRPrimTypes;
@@ -465,8 +482,7 @@ private:
     //
     RefCntAutoPtr<IBuffer> m_FrameAttribsCB;
 
-    RefCntAutoPtr<IShaderResourceBinding> m_MainPassFrameAttribsSRB;
-    RefCntAutoPtr<IShaderResourceBinding> m_OITPassFrameAttribsSRB;
+    std::array<RefCntAutoPtr<IShaderResourceBinding>, static_cast<size_t>(FrameAttribsSRBType::Count)> m_FrameAttribsSRBs;
 
     struct ShadowPassFrameAttribs
     {
