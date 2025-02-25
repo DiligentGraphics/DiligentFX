@@ -1250,6 +1250,17 @@ void PBR_Renderer::CreateSignature()
     }
 
     CreateCustomSignature(std::move(SignatureDesc));
+
+    if (m_Settings.OITLayerCount > 0)
+    {
+        PipelineResourceSignatureDescX OITLayersSignDesc{"RW OIT Layers"};
+        OITLayersSignDesc
+            .SetBindingIndex(static_cast<Uint8>(m_ResourceSignatures.size()))
+            .SetUseCombinedTextureSamplers(m_Device.GetDeviceInfo().IsGLDevice())
+            .AddResource(SHADER_TYPE_PIXEL, "g_rwOITLayers", SHADER_RESOURCE_TYPE_BUFFER_UAV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
+        m_RWOITLayersSignature = m_Device.CreatePipelineResourceSignature(OITLayersSignDesc);
+        VERIFY_EXPR(m_RWOITLayersSignature);
+    }
 }
 
 void PBR_Renderer::CreateCustomSignature(PipelineResourceSignatureDescX&& SignatureDesc)
@@ -1861,6 +1872,12 @@ void PBR_Renderer::CreatePSO(PsoHashMapType&             PsoHashMap,
         Macros.Add("USE_GL_POINT_SIZE", "1");
     }
 
+    const Uint32 OITLayerCount = (Key.GetType() == RenderPassType::OITLayers) ||
+            (Key.GetType() == RenderPassType::Main && Key.GetAlphaMode() == ALPHA_MODE_BLEND) ?
+        m_Settings.OITLayerCount :
+        0;
+    Macros.Add("NUM_OIT_LAYERS", static_cast<int>(OITLayerCount));
+
     const bool UseCombinedSamplers = m_Device.GetDeviceInfo().IsGLDevice();
 
     const SHADER_COMPILE_FLAGS ShaderCompileFlags =
@@ -1970,7 +1987,12 @@ void PBR_Renderer::CreatePSO(PsoHashMapType&             PsoHashMap,
         pPS = m_Device.CreateShader(ShaderCI);
     }
 
-    GraphicsPipeline             = GraphicsDesc;
+    GraphicsPipeline = GraphicsDesc;
+    if (Key.GetType() == RenderPassType::OITLayers)
+    {
+        GraphicsPipeline.DepthStencilDesc.DepthWriteEnable = False;
+    }
+
     GraphicsPipeline.InputLayout = InputLayout;
 
     IPipelineResourceSignature* ppSignatures[MAX_RESOURCE_SIGNATURES];
@@ -1978,6 +2000,11 @@ void PBR_Renderer::CreatePSO(PsoHashMapType&             PsoHashMap,
         ppSignatures[i] = m_ResourceSignatures[i];
     PSOCreateInfo.ppResourceSignatures    = ppSignatures;
     PSOCreateInfo.ResourceSignaturesCount = static_cast<Uint32>(m_ResourceSignatures.size());
+    if (Key.GetType() == RenderPassType::OITLayers)
+    {
+        ppSignatures[PSOCreateInfo.ResourceSignaturesCount] = m_RWOITLayersSignature;
+        ++PSOCreateInfo.ResourceSignaturesCount;
+    }
 
     PSOCreateInfo.pVS = pVS;
     PSOCreateInfo.pPS = pPS;
@@ -2193,8 +2220,21 @@ void PBR_Renderer::CreateClearOITLayersSRB(IBuffer* pFrameAttribs, IBuffer* OITL
 
     m_ClearOITLayersPSO->CreateShaderResourceBinding(ppSRB, true);
     VERIFY_EXPR(*ppSRB);
-    (*ppSRB)->GetVariableByName(SHADER_TYPE_COMPUTE, "cbFrameAttribs")->Set(pFrameAttribs);
-    (*ppSRB)->GetVariableByName(SHADER_TYPE_COMPUTE, "g_rwOITLayers")->Set(OITLayers->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+    ShaderResourceVariableX{*ppSRB, SHADER_TYPE_COMPUTE, "cbFrameAttribs"}.Set(pFrameAttribs);
+    ShaderResourceVariableX{*ppSRB, SHADER_TYPE_COMPUTE, "g_rwOITLayers"}.Set(OITLayers->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+}
+
+void PBR_Renderer::CreateRWOITLayersSRB(IBuffer* OITLayers, IShaderResourceBinding** ppSRB) const
+{
+    if (!m_RWOITLayersSignature)
+    {
+        LOG_ERROR_MESSAGE("RW OIT Layers signature is not initialized");
+        return;
+    }
+
+    m_RWOITLayersSignature->CreateShaderResourceBinding(ppSRB, true);
+    VERIFY_EXPR(*ppSRB);
+    ShaderResourceVariableX{*ppSRB, SHADER_TYPE_PIXEL, "g_rwOITLayers"}.Set(OITLayers->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
 }
 
 void PBR_Renderer::ClearOITLayers(IDeviceContext* pCtx, IShaderResourceBinding* pSRB, Uint32 Width, Uint32 Height) const

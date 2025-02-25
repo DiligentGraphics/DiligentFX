@@ -83,6 +83,7 @@ void HnBeginOITPassTask::Prepare(pxr::HdTaskContext* TaskCtx,
         {
             FrameTargets->OIT = {};
             m_ClearLayersSRB.Release();
+            m_RWLayersSRB.Release();
         }
     }
 
@@ -192,11 +193,16 @@ void HnBeginOITPassTask::Execute(pxr::HdTaskContext* TaskCtx)
     {
         Renderer.CreateClearOITLayersSRB(RenderDelegate->GetFrameAttribsCB(), m_FrameTargets->OIT.Layers, &m_ClearLayersSRB);
     }
+    if (!m_RWLayersSRB)
+    {
+        Renderer.CreateRWOITLayersSRB(m_FrameTargets->OIT.Layers, &m_RWLayersSRB);
+    }
     const TextureDesc& OITTailDesc = m_FrameTargets->OIT.Tail->GetDesc();
     Renderer.ClearOITLayers(pCtx, m_ClearLayersSRB, OITTailDesc.Width, OITTailDesc.Height);
 
     IShaderResourceBinding* pFrameAttribsSRB = RenderDelegate->GetFrameAttribsSRB(HnRenderDelegate::FrameAttribsSRBType::OITLayers);
     m_RenderPassState.SetFrameAttribsSRB(pFrameAttribsSRB);
+    m_RenderPassState.SetRWOITLayersSRB(m_RWLayersSRB);
     m_RenderPassState.Commit(pCtx);
 }
 

@@ -21,3 +21,6 @@ uint GetOITLayerDataOffset(uint2 PixelCoord, uint2 ScreenSize, uint NumLayers)
 {
     return (PixelCoord.y * ScreenSize.x + PixelCoord.x) * NumLayers;
 }
+
+// Opacity is stored as 8-bit value. Any value less than 1/255 is flushed to 0.
+#define OIT_OPACITY_THRESHOLD (1.0/255.0)

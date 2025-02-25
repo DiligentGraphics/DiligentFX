@@ -80,6 +80,7 @@ private:
     HnRenderPassState m_RenderPassState;
 
     RefCntAutoPtr<IShaderResourceBinding> m_ClearLayersSRB;
+    RefCntAutoPtr<IShaderResourceBinding> m_RWLayersSRB;
 
     Uint32 m_BoundOITResourcesVersion = ~0u;
 };

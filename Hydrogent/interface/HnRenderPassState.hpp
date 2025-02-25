@@ -84,6 +84,15 @@ public:
         return m_FrameAttribsSRB;
     }
 
+    void SetRWOITLayersSRB(IShaderResourceBinding* pSRB)
+    {
+        m_RWOITLayersSRB = pSRB;
+    }
+    IShaderResourceBinding* GetRWOITLayersSRB() const
+    {
+        return m_RWOITLayersSRB;
+    }
+
     void SetFrontFaceCCW(bool FrontFaceCCW)
     {
         m_FrontFaceCCW = FrontFaceCCW;
@@ -144,6 +153,7 @@ private:
     TEXTURE_FORMAT                                 m_DepthFormat      = TEX_FORMAT_UNKNOWN;
 
     IShaderResourceBinding* m_FrameAttribsSRB = nullptr;
+    IShaderResourceBinding* m_RWOITLayersSRB  = nullptr;
 
     std::array<ITextureView*, MAX_RENDER_TARGETS> m_RTVs        = {};
     ITextureView*                                 m_DSV         = nullptr;

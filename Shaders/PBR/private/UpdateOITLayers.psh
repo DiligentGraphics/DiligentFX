@@ -5,6 +5,7 @@
 #include "VSOutputStruct.generated"
 
 #include "PBR_Textures.fxh"
+#include "OIT.fxh"
 
 cbuffer cbFrameAttribs 
 {
@@ -31,17 +32,72 @@ cbuffer cbMaterialAttribs
     PBRMaterialShaderInfo g_Material;
 }
 
+// WebGPU does not support the earlydepthstencil attribute, so we have
+// to manually perform the depth test in the shader.
+#if USE_MANUAL_DEPTH_TEST
+Texture2D<float> g_DepthBuffer;
+#endif
+
+RWStructuredBuffer<uint> g_rwOITLayers;
+
 struct PSOutput
 {
     float4 Color : SV_Target0;
 };
 
+// By default, early depth stencil will be disabled for this shader because it writes to a UAV.
+// Force it to be enabled.
+[earlydepthstencil]
 PSOutput main(in VSOutput VSOut,
               in bool     IsFrontFace : SV_IsFrontFace)
 {
+    float D = VSOut.ClipPos.z;
+#if USE_MANUAL_DEPTH_TEST
+    if (D >= g_DepthBuffer.Load(int3(VSOut.ClipPos.xy, 0)))
+    {
+        discard;
+    }
+#endif
+ 
     float4 BaseColor = GetBaseColor(VSOut, g_Material, g_Frame.Renderer.MipBias, PRIMITIVE.FallbackColor);
     
+    float A = BaseColor.a;
+    uint Layer = 0xFFFFFFFFu;
+    if (A > OIT_OPACITY_THRESHOLD)
+    {
+        float T = 1.0 - A; // Transmittance
+        Layer = PackOITLayer(D, T);
+        uint Offset = GetOITLayerDataOffset(uint2(VSOut.ClipPos.xy), uint2(g_Frame.Camera.f4ViewportSize.xy), uint(NUM_OIT_LAYERS));
+        for (uint i = 0; i < uint(NUM_OIT_LAYERS); ++i)
+        {
+            uint OrigLayer;
+            InterlockedMin(g_rwOITLayers[Offset + i], Layer, OrigLayer);
+            if (OrigLayer == 0xFFFFFFFFu || // Empty space
+                OrigLayer == Layer)         // Layer matches another one exactly
+            {
+                // Do not update tail transmittance
+                Layer = 0xFFFFFFFFu;
+                break;
+            }
+            // Layer > OrigLayer: we did not insert the layer
+            // Layer < OrigLayer: we inserted the layer, so now we need to insert the original layer
+            Layer = max(Layer, OrigLayer);
+        }
+    }
+    
     PSOutput PSOut;
-    PSOut.Color = BaseColor;
+ 
+    // RGB Blend: Src * 1 + Dst * 1
+    // A   Blend: Src * 0 + Dst * SrcA
+    if (Layer == 0xFFFFFFFFu)
+    {
+        PSOut.Color = float4(0.0, 0.0, 0.0, 1.0);
+    }
+    else
+    {
+        float TailT = GetOITLayerTransmittance(Layer);
+        PSOut.Color = float4(1.0 / 255.0, 0.0, 0.0, TailT);
+    }
+    
     return PSOut;
 }

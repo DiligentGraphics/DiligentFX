@@ -796,6 +796,7 @@ public:
     static OITResources CreateOITResources(IRenderDevice* pDevice, Uint32 Width, Uint32 Height, Uint32 LayerCount);
     OITResources        CreateOITResources(Uint32 Width, Uint32 Height) const;
     void                CreateClearOITLayersSRB(IBuffer* pFrameAttribs, IBuffer* OITLayers, IShaderResourceBinding** ppSRB) const;
+    void                CreateRWOITLayersSRB(IBuffer* OITLayers, IShaderResourceBinding** ppSRB) const;
     void                ClearOITLayers(IDeviceContext* pCtx, IShaderResourceBinding* pSRB, Uint32 Width, Uint32 Height) const;
 
 protected:
@@ -932,8 +933,9 @@ protected:
 
     std::unordered_map<GraphicsPipelineDesc, PsoHashMapType> m_PSOs;
 
-    static constexpr Uint32       ClearOITLayersThreadGroupSize = 16;
-    RefCntAutoPtr<IPipelineState> m_ClearOITLayersPSO;
+    static constexpr Uint32                   ClearOITLayersThreadGroupSize = 16;
+    RefCntAutoPtr<IPipelineState>             m_ClearOITLayersPSO;
+    RefCntAutoPtr<IPipelineResourceSignature> m_RWOITLayersSignature;
 
     std::unique_ptr<StaticShaderTextureIdsArrayType> m_StaticShaderTextureIds;
 };

@@ -114,7 +114,8 @@ struct HnRenderPass::RenderState
 
     IDeviceContext* const pCtx;
 
-    const USD_Renderer::ALPHA_MODE AlphaMode;
+    const USD_Renderer::RenderPassType Type;
+    const USD_Renderer::ALPHA_MODE     AlphaMode;
 
     const Uint32 ConstantBufferOffsetAlignment;
     const bool   NativeMultiDrawSupported;
@@ -129,6 +130,7 @@ struct HnRenderPass::RenderState
         USDRenderer{*RenderDelegate.GetUSDRenderer()},
         RendererSettings{USDRenderer.GetSettings()},
         pCtx{RenderDelegate.GetDeviceContext()},
+        Type{RenderPass.m_Params.Type},
         AlphaMode{MaterialTagToPbrAlphaMode(RenderPass.m_MaterialTag)},
         ConstantBufferOffsetAlignment{RenderDelegate.GetDevice()->GetAdapterInfo().Buffer.ConstantBufferOffsetAlignment},
         NativeMultiDrawSupported{RenderDelegate.GetDevice()->GetDeviceInfo().Features.NativeMultiDraw == DEVICE_FEATURE_STATE_ENABLED}
@@ -168,6 +170,13 @@ struct HnRenderPass::RenderState
             pFrameSRB = RPState.GetFrameAttribsSRB();
             VERIFY_EXPR(pFrameSRB != nullptr);
             pCtx->CommitShaderResources(pFrameSRB, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
+        }
+
+        if (Type == PBR_Renderer::RenderPassType::OITLayers && pRWOITLayersSRB == nullptr)
+        {
+            pRWOITLayersSRB = RPState.GetRWOITLayersSRB();
+            VERIFY_EXPR(pRWOITLayersSRB != nullptr);
+            pCtx->CommitShaderResources(pRWOITLayersSRB, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
         }
 
         pCtx->CommitShaderResources(pNewSRB, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
@@ -221,9 +230,10 @@ struct HnRenderPass::RenderState
     }
 
 private:
-    IPipelineState*         pPSO         = nullptr;
-    IShaderResourceBinding* pMaterialSRB = nullptr;
-    IShaderResourceBinding* pFrameSRB    = nullptr;
+    IPipelineState*         pPSO            = nullptr;
+    IShaderResourceBinding* pMaterialSRB    = nullptr;
+    IShaderResourceBinding* pFrameSRB       = nullptr;
+    IShaderResourceBinding* pRWOITLayersSRB = nullptr;
 
     IBuffer* pIndexBuffer = nullptr;
 
