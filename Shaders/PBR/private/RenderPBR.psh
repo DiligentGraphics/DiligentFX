@@ -10,6 +10,10 @@
 #   include "Iridescence.fxh"
 #endif
 
+#if NUM_OIT_LAYERS > 0
+#   include "OIT.fxh"
+#endif
+
 #include "VSOutputStruct.generated"
 // struct VSOutput
 // {
@@ -66,6 +70,11 @@ cbuffer cbMaterialAttribs
 #if ENABLE_SHADOWS
 Texture2DArray<float>  g_ShadowMap;
 SamplerComparisonState g_ShadowMap_sampler;
+#endif
+
+#if NUM_OIT_LAYERS > 0
+StructuredBuffer<uint> g_OITLayers;
+Texture2D<float4>      g_OITTail;
 #endif
 
 PBRMaterialTextureAttribs GetDefaultTextureAttribs()
@@ -371,6 +380,39 @@ float4 GetLoadingAnimationColor(float3 WorldPos, float Factor)
 }
 #endif
 
+#if NUM_OIT_LAYERS > 0
+float GetOITTransmittance(float Depth, uint2 Pos)
+{
+    uint D = uint(Depth * 16777215.0);
+    float T = 1.0;
+    
+    uint Offset = GetOITLayerDataOffset(uint2(Pos.xy), uint2(g_Frame.Camera.f4ViewportSize.xy), uint(NUM_OIT_LAYERS));
+
+    uint layer = 0u;
+    while (layer < uint(NUM_OIT_LAYERS))
+    {
+        uint LayerDT = g_OITLayers[Offset + layer];
+        uint LayerD = GetOITLayerDepth(LayerDT);
+        // +1u helps to avoid precision issues.
+        if (D <= LayerD + 1u)
+        {
+            break;
+        }
+        float LayerT = GetOITLayerTransmittance(LayerDT);
+        T *= LayerT;
+        ++layer;
+    }
+    if (layer == uint(NUM_OIT_LAYERS))
+    {
+        float4 Tail = g_OITTail.Load(int3(Pos.xy, 0));
+        // Average contribution of all tail layers.
+        T /= max(255.0 * Tail.x, 1.0);
+    }
+
+    return T;
+}
+#endif
+
 PSOutput main(in VSOutput VSOut,
               in bool     IsFrontFace : SV_IsFrontFace)
 {
@@ -497,6 +539,13 @@ PSOutput main(in VSOutput VSOut,
     if (BasicAttribs.AlphaMode == PBR_ALPHA_MODE_BLEND)
     {
         OutColor.rgb *= BaseColor.a;
+#if NUM_OIT_LAYERS > 0
+        if (BaseColor.a > OIT_OPACITY_THRESHOLD)
+        {
+            float T = GetOITTransmittance(VSOut.ClipPos.z, uint2(VSOut.ClipPos.xy));
+            OutColor.rgb *= T;
+        }
+#endif
     }
     
     // Add highlight color

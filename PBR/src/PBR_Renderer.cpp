@@ -1954,8 +1954,8 @@ void PBR_Renderer::CreatePSO(PsoHashMapType&             PsoHashMap,
 
     RefCntAutoPtr<IShader>& pPS = m_PixelShaders[{
         PSOFlags,
-        // Opaque and Blend modes use the same shader
-        Key.GetAlphaMode() == ALPHA_MODE_MASK ? ALPHA_MODE_MASK : ALPHA_MODE_OPAQUE,
+        // Non-OIT blend uses the same shader as opaque
+        (Key.GetAlphaMode() == ALPHA_MODE_BLEND && OITLayerCount == 0) ? ALPHA_MODE_OPAQUE : Key.GetAlphaMode(),
         CULL_MODE_BACK,
         Key,
     }];
@@ -1987,12 +1987,7 @@ void PBR_Renderer::CreatePSO(PsoHashMapType&             PsoHashMap,
         pPS = m_Device.CreateShader(ShaderCI);
     }
 
-    GraphicsPipeline = GraphicsDesc;
-    if (Key.GetType() == RenderPassType::OITLayers)
-    {
-        GraphicsPipeline.DepthStencilDesc.DepthWriteEnable = False;
-    }
-
+    GraphicsPipeline             = GraphicsDesc;
     GraphicsPipeline.InputLayout = InputLayout;
 
     IPipelineResourceSignature* ppSignatures[MAX_RESOURCE_SIGNATURES];
@@ -2018,7 +2013,8 @@ void PBR_Renderer::CreatePSO(PsoHashMapType&             PsoHashMap,
         VERIFY(Key.GetLoadingAnimation() == LoadingAnimationMode::None, "Loading animation must be disabled for OIT Layers render pass");
         VERIFY(Key.GetDebugView() == DebugViewType::None, "Debug view must be disabled for OIT Layers render pass");
 
-        PSOCreateInfo.GraphicsPipeline.BlendDesc = BS_UpdateOITTail;
+        PSOCreateInfo.GraphicsPipeline.BlendDesc           = BS_UpdateOITTail;
+        GraphicsPipeline.DepthStencilDesc.DepthWriteEnable = False;
     }
     else
     {
@@ -2030,7 +2026,15 @@ void PBR_Renderer::CreatePSO(PsoHashMapType&             PsoHashMap,
         else if (AlphaMode == ALPHA_MODE_BLEND)
         {
             VERIFY(!IsUnshaded, "Unshaded mode should use OpaquePSO. The PSOKey's ctor sets the alpha mode to opaque.");
-            GraphicsPipeline.BlendDesc = BS_PremultipliedAlphaBlend;
+            if (OITLayerCount > 0)
+            {
+                PSOCreateInfo.GraphicsPipeline.BlendDesc           = BS_AdditiveBlend;
+                GraphicsPipeline.DepthStencilDesc.DepthWriteEnable = False;
+            }
+            else
+            {
+                GraphicsPipeline.BlendDesc = BS_PremultipliedAlphaBlend;
+            }
         }
         else
         {
