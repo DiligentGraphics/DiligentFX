@@ -1286,8 +1286,8 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
         auto& PsoCache = State.GePsoCache();
         VERIFY_EXPR(PsoCache);
 
-        auto& PSOFlags = ListItem.PSOFlags;
-        PSOFlags       = static_cast<PBR_Renderer::PSO_FLAGS>(m_Params.UsdPsoFlags);
+        PBR_Renderer::PSO_FLAGS& PSOFlags{ListItem.PSOFlags};
+        PSOFlags = static_cast<PBR_Renderer::PSO_FLAGS>(m_Params.UsdPsoFlags);
 
         const HnDrawItem::GeometryData& Geo      = DrawItem.GetGeometryData();
         const CULL_MODE                 CullMode = ListItem.Mesh.GetCullMode();
@@ -1357,6 +1357,8 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
                 ShaderTextureIndexingId,
             };
             ListItem.pPSO = PsoCache.Get(PSOKey, GetPSOFlags);
+            // PSOKey may have cleared some flags - get updated flags
+            PSOFlags = PSOKey.GetFlags();
         }
         else if (m_RenderMode == HN_RENDER_MODE_MESH_EDGES ||
                  m_RenderMode == HN_RENDER_MODE_POINTS)
@@ -1372,6 +1374,8 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
                 ShaderTextureIndexingId,
             };
             ListItem.pPSO = PsoCache.Get(PSOKey, GetPSOFlags);
+            // PSOKey may have cleared some flags - get updated flags
+            PSOFlags = PSOKey.GetFlags();
         }
         else
         {
@@ -1385,7 +1389,7 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
                ListItem.PrimitiveAttribsBufferRange, ") computed from material PSO flags. The latter is used by HnMaterial to set the buffer range.");
 
         // Note: some PSOs (e.g. shadow) may not use the full range of the material attribs buffer.
-        VERIFY(ListItem.pMaterial->GetPBRMaterialAttribsSize() >= State.USDRenderer.GetPBRMaterialAttribsSize(ListItem.PSOFlags),
+        VERIFY(ListItem.pMaterial->GetPBRMaterialAttribsSize() >= State.USDRenderer.GetPBRMaterialAttribsSize(PSOFlags),
                "Material attribs size is smaller than required by the PSO flags");
         VERIFY_EXPR(ListItem.pPSO != nullptr);
         m_PendingPSOs.emplace(ListItem.pPSO, false);
