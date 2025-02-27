@@ -760,7 +760,7 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
         {
             m_ShadowAtlasVersion = ShadowAtlasVersion;
 
-            static_assert(static_cast<size_t>(FrameAttribsSRBType::Count) == 3, "Did you add a new FrameAttribsSRBType? You may need to update this code.");
+            static_assert(static_cast<size_t>(FrameAttribsSRBType::Count) == 2, "Did you add a new FrameAttribsSRBType? You may need to update this code.");
             for (FrameAttribsSRBType Type : {FrameAttribsSRBType::Opaque, FrameAttribsSRBType::Transparent})
                 _GetFrameAttribsSRB(Type).Release();
         }
@@ -833,15 +833,6 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
         if (!TransparentPassFrameAttribsSRB)
         {
             TransparentPassFrameAttribsSRB = CreateFrameAttribsSRB(m_USDRenderer->GetPRBFrameAttribsSize(), pShadowSRV);
-        }
-
-        RefCntAutoPtr<IShaderResourceBinding>& OITPassFrameAttribsSRB = _GetFrameAttribsSRB(FrameAttribsSRBType::OITLayers);
-        if (!OITPassFrameAttribsSRB)
-        {
-            OITPassFrameAttribsSRB = CreateFrameAttribsSRB(m_USDRenderer->GetPRBFrameAttribsSize(), m_pDummyShadowSRV);
-            // OIT Layers pass updates the OIT layers, but we still need to have something bound in the SRB, so
-            // we bind the dummy OIT resources.
-            m_USDRenderer->SetOITResources(OITPassFrameAttribsSRB, m_DummyOITResources);
         }
     }
     else

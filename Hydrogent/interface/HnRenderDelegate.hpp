@@ -426,7 +426,6 @@ public:
     {
         Opaque,
         Transparent,
-        OITLayers,
         Count
     };
     IShaderResourceBinding* GetFrameAttribsSRB(FrameAttribsSRBType Type) const

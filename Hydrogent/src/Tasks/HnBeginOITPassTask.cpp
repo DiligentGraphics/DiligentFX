@@ -200,7 +200,7 @@ void HnBeginOITPassTask::Execute(pxr::HdTaskContext* TaskCtx)
     const TextureDesc& OITTailDesc = m_FrameTargets->OIT.Tail->GetDesc();
     Renderer.ClearOITLayers(pCtx, m_ClearLayersSRB, OITTailDesc.Width, OITTailDesc.Height);
 
-    IShaderResourceBinding* pFrameAttribsSRB = RenderDelegate->GetFrameAttribsSRB(HnRenderDelegate::FrameAttribsSRBType::OITLayers);
+    IShaderResourceBinding* pFrameAttribsSRB = RenderDelegate->GetFrameAttribsSRB(HnRenderDelegate::FrameAttribsSRBType::Opaque);
     m_RenderPassState.SetFrameAttribsSRB(pFrameAttribsSRB);
     m_RenderPassState.SetRWOITLayersSRB(m_RWLayersSRB);
     m_RenderPassState.Commit(pCtx);
