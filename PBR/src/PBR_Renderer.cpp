@@ -1961,17 +1961,17 @@ void PBR_Renderer::CreatePSO(PsoHashMapType&             PsoHashMap,
     }];
     if (!pPS)
     {
-        const char* SrcFile    = nullptr;
-        const char* EntryPoint = nullptr;
+        const char* SrcFile = nullptr;
+        const char* Name    = nullptr;
         if (Key.GetType() == RenderPassType::OITLayers)
         {
-            SrcFile    = "UpdateOITLayers.psh";
-            EntryPoint = "main";
+            SrcFile = "UpdateOITLayers.psh";
+            Name    = "OIT Layers PS";
         }
         else
         {
-            SrcFile    = !IsUnshaded ? "RenderPBR.psh" : "RenderUnshaded.psh";
-            EntryPoint = !IsUnshaded ? "PBR PS" : "Unshaded PS";
+            SrcFile = !IsUnshaded ? "RenderPBR.psh" : "RenderUnshaded.psh";
+            Name    = !IsUnshaded ? "PBR PS" : "Unshaded PS";
         }
         ShaderCreateInfo ShaderCI{
             SrcFile,
@@ -1979,7 +1979,7 @@ void PBR_Renderer::CreatePSO(PsoHashMapType&             PsoHashMap,
             "main",
             Macros,
             SHADER_SOURCE_LANGUAGE_HLSL,
-            {EntryPoint, SHADER_TYPE_PIXEL, UseCombinedSamplers},
+            {Name, SHADER_TYPE_PIXEL, UseCombinedSamplers},
         };
         ShaderCI.CompileFlags                   = ShaderCompileFlags;
         ShaderCI.WebGPUEmulatedArrayIndexSuffix = "_";
