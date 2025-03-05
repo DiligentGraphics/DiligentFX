@@ -542,7 +542,12 @@ PSOutput main(in VSOutput VSOut,
 #if NUM_OIT_LAYERS > 0
         if (BaseColor.a > OIT_OPACITY_THRESHOLD)
         {
-            float T = GetOITTransmittance(VSOut.ClipPos.z, uint2(VSOut.ClipPos.xy));
+            float D = VSOut.ClipPos.z;
+            if (g_Frame.Camera.fNearPlaneDepth > g_Frame.Camera.fFarPlaneDepth)
+            {
+                D = 1.0 - D;
+            }
+            float T = GetOITTransmittance(D, uint2(VSOut.ClipPos.xy));
             OutColor.rgb *= T;
         }
 #endif

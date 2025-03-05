@@ -52,6 +52,10 @@ PSOutput main(in VSOutput VSOut,
               in bool     IsFrontFace : SV_IsFrontFace)
 {
     float D = VSOut.ClipPos.z;
+    if (g_Frame.Camera.fNearPlaneDepth > g_Frame.Camera.fFarPlaneDepth)
+    {
+        D = 1.0 - D;
+    }
 #if USE_MANUAL_DEPTH_TEST
     if (D >= g_DepthBuffer.Load(int3(VSOut.ClipPos.xy, 0)))
     {
