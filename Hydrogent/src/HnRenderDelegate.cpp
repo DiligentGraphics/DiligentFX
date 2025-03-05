@@ -773,7 +773,7 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
         // OIT resources will be set in the SRB by HnBeginOITPassTask::Execute().
         if (m_OITResourcesVersion != m_RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::OITResources))
         {
-            m_OITResourcesVersion = m_RenderParam->MakeAttribDirty(HnRenderParam::GlobalAttrib::OITResources);
+            m_OITResourcesVersion = m_RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::OITResources);
             _GetFrameAttribsSRB(FrameAttribsSRBType::Transparent).Release();
         }
     }

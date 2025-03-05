@@ -29,6 +29,7 @@
 #include "ScopedDebugGroup.hpp"
 #include "HnTokens.hpp"
 #include "HnFrameRenderTargets.hpp"
+#include "HnRenderParam.hpp"
 
 namespace Diligent
 {
@@ -56,6 +57,39 @@ void HnEndOITPassTask::Prepare(pxr::HdTaskContext* TaskCtx,
                                pxr::HdRenderIndex* RenderIndex)
 {
     m_RenderIndex = RenderIndex;
+
+    HnRenderDelegate*   RenderDelegate = static_cast<HnRenderDelegate*>(RenderIndex->GetRenderDelegate());
+    const USD_Renderer& Renderer       = *RenderDelegate->GetUSDRenderer();
+
+    HnFrameRenderTargets* FrameTargets = GetFrameRenderTargets(TaskCtx);
+    if (FrameTargets == nullptr)
+    {
+        UNEXPECTED("Framebuffer targets are null");
+        return;
+    }
+
+    if (!m_ApplyOITAttenuationPSO)
+    {
+        ITextureView* pColorRTV = FrameTargets->GBufferRTVs[HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR];
+        if (pColorRTV == nullptr)
+        {
+            UNEXPECTED("Scene color target is null");
+            return;
+        }
+
+        const TextureViewDesc& ColorDesc = pColorRTV->GetDesc();
+        Renderer.CreateApplyOITAttenuationPSO(ColorDesc.Format, TEX_FORMAT_UNKNOWN, &m_ApplyOITAttenuationPSO);
+        VERIFY_EXPR(m_ApplyOITAttenuationPSO);
+    }
+
+    HnRenderParam* RenderParam = static_cast<HnRenderParam*>(RenderDelegate->GetRenderParam());
+    if (m_OITResourcesVersion != RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::OITResources))
+    {
+        m_ApplyOITAttenuationSRB.Release();
+        Renderer.CreateApplyOITAttenuationSRB(RenderDelegate->GetFrameAttribsCB(), FrameTargets->OIT.Layers, FrameTargets->OIT.Tail, &m_ApplyOITAttenuationSRB);
+        VERIFY_EXPR(m_ApplyOITAttenuationSRB);
+        m_OITResourcesVersion = RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::OITResources);
+    }
 }
 
 void HnEndOITPassTask::Execute(pxr::HdTaskContext* TaskCtx)
@@ -66,8 +100,9 @@ void HnEndOITPassTask::Execute(pxr::HdTaskContext* TaskCtx)
         return;
     }
 
-    HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
-    IDeviceContext*   pCtx           = RenderDelegate->GetDeviceContext();
+    HnRenderDelegate*   RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+    const USD_Renderer& Renderer       = *RenderDelegate->GetUSDRenderer();
+    IDeviceContext*     pCtx           = RenderDelegate->GetDeviceContext();
 
     ScopedDebugGroup DebugGroup{pCtx, "End OIT pass"};
 
@@ -78,12 +113,22 @@ void HnEndOITPassTask::Execute(pxr::HdTaskContext* TaskCtx)
         return;
     }
 
+    ITextureView* pColorRTV = FrameTargets->GBufferRTVs[HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR];
+    if (pColorRTV == nullptr)
+    {
+        UNEXPECTED("Scene color target is null");
+        return;
+    }
+    pCtx->SetRenderTargets(1, &pColorRTV, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
     const StateTransitionDesc Barriers[] =
         {
             {FrameTargets->OIT.Layers, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE},
             {FrameTargets->OIT.Tail, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE},
         };
     pCtx->TransitionResourceStates(_countof(Barriers), Barriers);
+
+    Renderer.ApplyOITAttenuation(pCtx, m_ApplyOITAttenuationPSO, m_ApplyOITAttenuationSRB);
 }
 
 } // namespace USD

@@ -28,6 +28,10 @@
 
 #include "HnTask.hpp"
 
+#include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/PipelineState.h"
+#include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/ShaderResourceBinding.h"
+#include "../../../../DiligentCore/Common/interface/RefCntAutoPtr.hpp"
+
 namespace Diligent
 {
 
@@ -64,6 +68,11 @@ public:
 
 private:
     pxr::HdRenderIndex* m_RenderIndex = nullptr;
+
+    RefCntAutoPtr<IPipelineState>         m_ApplyOITAttenuationPSO;
+    RefCntAutoPtr<IShaderResourceBinding> m_ApplyOITAttenuationSRB;
+
+    Uint32 m_OITResourcesVersion = ~0u;
 };
 
 } // namespace USD
