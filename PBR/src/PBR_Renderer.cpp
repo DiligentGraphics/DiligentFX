@@ -872,7 +872,7 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
     // clang-format on
 
     pCtx->SetPipelineState(PrecomputeIrradianceCubeTech.PSO);
-    PrecomputeIrradianceCubeTech.SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_EnvironmentMap")->Set(pEnvironmentMap);
+    ShaderResourceVariableX{PrecomputeIrradianceCubeTech.SRB, SHADER_TYPE_PIXEL, "g_EnvironmentMap"}.Set(pEnvironmentMap);
     pCtx->CommitShaderResources(PrecomputeIrradianceCubeTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     ITexture* pIrradianceCube = m_pIrradianceCubeSRV->GetTexture();
     ProcessCubemapFaces(pCtx, pIrradianceCube, [&](ITextureView* pRTV, Uint32 mip, Uint32 face) {
@@ -891,11 +891,11 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
         pCtx->Draw(drawAttrs);
     });
     // Release reference to the environment map
-    PrecomputeIrradianceCubeTech.SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_EnvironmentMap")->Set(nullptr);
+    ShaderResourceVariableX{PrecomputeIrradianceCubeTech.SRB, SHADER_TYPE_PIXEL, "g_EnvironmentMap"}.Set(nullptr);
 
 
     pCtx->SetPipelineState(PrefilterEnvMapTech.PSO);
-    PrefilterEnvMapTech.SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_EnvironmentMap")->Set(pEnvironmentMap);
+    ShaderResourceVariableX{PrefilterEnvMapTech.SRB, SHADER_TYPE_PIXEL, "g_EnvironmentMap"}.Set(pEnvironmentMap);
     pCtx->CommitShaderResources(PrefilterEnvMapTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     ITexture* pPrefilteredEnvMap = m_pPrefilteredEnvMapSRV->GetTexture();
     ProcessCubemapFaces(pCtx, pPrefilteredEnvMap, [&](ITextureView* pRTV, Uint32 mip, Uint32 face) {
@@ -916,7 +916,7 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
     });
 
     // Release reference to the environment map
-    PrefilterEnvMapTech.SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_EnvironmentMap")->Set(nullptr);
+    ShaderResourceVariableX{PrefilterEnvMapTech.SRB, SHADER_TYPE_PIXEL, "g_EnvironmentMap"}.Set(nullptr);
 
 
     // clang-format off
@@ -944,36 +944,36 @@ void PBR_Renderer::InitCommonSRBVars(IShaderResourceBinding* pSRB,
 
     if (BindPrimitiveAttribsBuffer)
     {
-        if (IShaderResourceVariable* pVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbPrimitiveAttribs"))
+        if (ShaderResourceVariableX Var{pSRB, SHADER_TYPE_PIXEL, "cbPrimitiveAttribs"})
         {
-            if (pVar->Get() == nullptr)
-                pVar->Set(m_PBRPrimitiveAttribsCB);
+            if (Var.Get() == nullptr)
+                Var.Set(m_PBRPrimitiveAttribsCB);
         }
     }
 
     if (BindMaterialAttribsBuffer)
     {
-        if (IShaderResourceVariable* pVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "cbMaterialAttribs"))
+        if (ShaderResourceVariableX Var{pSRB, SHADER_TYPE_PIXEL, "cbMaterialAttribs"})
         {
-            if (pVar->Get() == nullptr)
-                pVar->Set(m_PBRMaterialAttribsCB);
+            if (Var.Get() == nullptr)
+                Var.Set(m_PBRMaterialAttribsCB);
         }
     }
 
     if (m_Settings.MaxJointCount > 0)
     {
-        if (IShaderResourceVariable* pVar = pSRB->GetVariableByName(SHADER_TYPE_VERTEX, GetJointTransformsVarName()))
+        if (ShaderResourceVariableX Var{pSRB, SHADER_TYPE_VERTEX, GetJointTransformsVarName()})
         {
-            if (pVar->Get() == nullptr)
+            if (Var.Get() == nullptr)
             {
                 if (m_Settings.JointsBufferMode == JOINTS_BUFFER_MODE_UNIFORM)
                 {
                     const Uint32 JointsBufferSize = GetJointsBufferSize();
-                    pVar->SetBufferRange(m_JointsBuffer, 0, JointsBufferSize);
+                    Var.SetBufferRange(m_JointsBuffer, 0, JointsBufferSize);
                 }
                 else if (m_Settings.JointsBufferMode == JOINTS_BUFFER_MODE_STRUCTURED)
                 {
-                    pVar->Set(m_JointsBuffer->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+                    Var.Set(m_JointsBuffer->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
                 }
                 else
                 {
@@ -985,23 +985,18 @@ void PBR_Renderer::InitCommonSRBVars(IShaderResourceBinding* pSRB,
 
     if (pFrameAttribs != nullptr)
     {
-        if (IShaderResourceVariable* pVar = pSRB->GetVariableByName(SHADER_TYPE_VERTEX, "cbFrameAttribs"))
-            pVar->Set(pFrameAttribs);
+        ShaderResourceVariableX{pSRB, SHADER_TYPE_VERTEX, "cbFrameAttribs"}.Set(pFrameAttribs);
     }
 
     if (m_Settings.EnableIBL)
     {
-        if (IShaderResourceVariable* pIrradianceMapPSVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_IrradianceMap"))
-            pIrradianceMapPSVar->Set(m_pIrradianceCubeSRV);
-
-        if (IShaderResourceVariable* pPrefilteredEnvMap = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_PrefilteredEnvMap"))
-            pPrefilteredEnvMap->Set(m_pPrefilteredEnvMapSRV);
+        ShaderResourceVariableX{pSRB, SHADER_TYPE_PIXEL, "g_IrradianceMap"}.Set(m_pIrradianceCubeSRV);
+        ShaderResourceVariableX{pSRB, SHADER_TYPE_PIXEL, "g_PrefilteredEnvMap"}.Set(m_pPrefilteredEnvMapSRV);
     }
 
     if (m_Settings.EnableShadows && pShadowMap != nullptr)
     {
-        if (IShaderResourceVariable* pShadowMapVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_ShadowMap"))
-            pShadowMapVar->Set(pShadowMap);
+        ShaderResourceVariableX{pSRB, SHADER_TYPE_PIXEL, "g_ShadowMap"}.Set(pShadowMap);
     }
 }
 
@@ -1011,14 +1006,14 @@ void PBR_Renderer::SetOITResources(IShaderResourceBinding* pSRB, const OITResour
     {
         if (OITResources.Layers)
         {
-            if (IShaderResourceVariable* pOITLayersVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_OITLayers"))
-                pOITLayersVar->Set(OITResources.Layers->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+            IBufferView* pOITLayersSRV = OITResources.Layers->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE);
+            ShaderResourceVariableX{pSRB, SHADER_TYPE_PIXEL, "g_OITLayers"}.Set(pOITLayersSRV);
         }
 
         if (OITResources.Tail)
         {
-            if (IShaderResourceVariable* pOITTailVar = pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_OITTail"))
-                pOITTailVar->Set(OITResources.Tail->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+            ITextureView* pOITTailSRV = OITResources.Tail->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+            ShaderResourceVariableX{pSRB, SHADER_TYPE_PIXEL, "g_OITTail"}.Set(pOITTailSRV);
         }
     }
 }
