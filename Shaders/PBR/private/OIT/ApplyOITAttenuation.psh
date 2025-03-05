@@ -1,0 +1,52 @@
+#include "FullScreenTriangleVSOutput.fxh"
+#include "BasicStructures.fxh"
+#include "OIT.fxh"
+
+cbuffer cbFrameAttribs 
+{
+    CameraAttribs g_Camera;
+}
+
+StructuredBuffer<uint> g_OITLayers;
+Texture2D<float4>      g_OITTail;
+
+struct PSOutput
+{
+    float4 Color : SV_TARGET;
+};
+
+void main(FullScreenTriangleVSOutput VSOut,
+          out PSOutput PSOut)
+{
+    uint2 Pos = uint2(VSOut.f4PixelPos.xy);
+    
+    uint Offset = GetOITLayerDataOffset(Pos.xy, uint2(g_Camera.f4ViewportSize.xy), uint(NUM_OIT_LAYERS));
+    float T = 1.0;
+    
+    // Apply attenuation of each layer
+    uint layer = 0u;
+    while (layer < uint(NUM_OIT_LAYERS))
+    {
+        uint LayerDT = g_OITLayers[Offset + layer];
+        if (LayerDT == 0xFFFFFFFFu)
+            break;
+        T *= GetOITLayerTransmittance(LayerDT);
+        ++layer;
+    }
+
+    // If we reached the last layer, apply the tail attenuation
+    if (layer == uint(NUM_OIT_LAYERS))
+    {
+        float4 Tail = g_OITTail.Load(int3(Pos.xy, 0));
+        T *= Tail.a;
+    }
+
+    if (T == 1.0)
+    {
+        // Discard fully transparent pixels
+        discard;
+    }
+
+    // RGB blend: Src * 0 + Dst * SrcA
+    PSOut.Color = float4(0.0, 0.0, 0.0, T);
+}

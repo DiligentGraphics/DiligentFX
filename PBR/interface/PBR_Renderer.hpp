@@ -798,6 +798,12 @@ public:
     void                CreateClearOITLayersSRB(IBuffer* pFrameAttribs, IBuffer* OITLayers, IShaderResourceBinding** ppSRB) const;
     void                CreateRWOITLayersSRB(IBuffer* OITLayers, IShaderResourceBinding** ppSRB) const;
     void                ClearOITLayers(IDeviceContext* pCtx, IShaderResourceBinding* pSRB, Uint32 Width, Uint32 Height) const;
+    void                CreateApplyOITAttenuationPSO(TEXTURE_FORMAT ColorFormat, TEXTURE_FORMAT DepthFormat, IPipelineState** ppPSO) const;
+    void                CreateApplyOITAttenuationSRB(IBuffer*                 pFrameAttribs,
+                                                     IBuffer*                 OITLayers,
+                                                     ITexture*                OITTail,
+                                                     IShaderResourceBinding** ppSRB) const;
+    void                ApplyOITAttenuation(IDeviceContext* pCtx, IPipelineState* pPSO, IShaderResourceBinding* pSRB) const;
 
 protected:
     ShaderMacroHelper DefineMacros(const PSOKey& Key) const;
@@ -936,6 +942,7 @@ protected:
     static constexpr Uint32                   ClearOITLayersThreadGroupSize = 16;
     RefCntAutoPtr<IPipelineState>             m_ClearOITLayersPSO;
     RefCntAutoPtr<IPipelineResourceSignature> m_RWOITLayersSignature;
+    RefCntAutoPtr<IPipelineResourceSignature> m_OITAttenuationSignature;
 
     std::unique_ptr<StaticShaderTextureIdsArrayType> m_StaticShaderTextureIds;
 };

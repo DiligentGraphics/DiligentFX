@@ -1253,13 +1253,26 @@ void PBR_Renderer::CreateSignature()
 
     if (m_Settings.OITLayerCount > 0)
     {
-        PipelineResourceSignatureDescX OITLayersSignDesc{"RW OIT Layers"};
-        OITLayersSignDesc
-            .SetBindingIndex(static_cast<Uint8>(m_ResourceSignatures.size()))
-            .SetUseCombinedTextureSamplers(m_Device.GetDeviceInfo().IsGLDevice())
-            .AddResource(SHADER_TYPE_PIXEL, "g_rwOITLayers", SHADER_RESOURCE_TYPE_BUFFER_UAV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
-        m_RWOITLayersSignature = m_Device.CreatePipelineResourceSignature(OITLayersSignDesc);
-        VERIFY_EXPR(m_RWOITLayersSignature);
+        {
+            PipelineResourceSignatureDescX OITLayersSignDesc{"RW OIT Layers"};
+            OITLayersSignDesc
+                .SetBindingIndex(static_cast<Uint8>(m_ResourceSignatures.size()))
+                .SetUseCombinedTextureSamplers(true)
+                .AddResource(SHADER_TYPE_PIXEL, "g_rwOITLayers", SHADER_RESOURCE_TYPE_BUFFER_UAV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
+            m_RWOITLayersSignature = m_Device.CreatePipelineResourceSignature(OITLayersSignDesc);
+            VERIFY_EXPR(m_RWOITLayersSignature);
+        }
+
+        {
+            PipelineResourceSignatureDescX OITAttenuationSignDesc{"OIT Attenuation"};
+            OITAttenuationSignDesc
+                .SetUseCombinedTextureSamplers(true)
+                .AddResource(SHADER_TYPE_PIXEL, "cbFrameAttribs", 1u, SHADER_RESOURCE_TYPE_CONSTANT_BUFFER, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
+                .AddResource(SHADER_TYPE_PIXEL, "g_OITLayers", 1u, SHADER_RESOURCE_TYPE_BUFFER_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
+                .AddResource(SHADER_TYPE_PIXEL, "g_OITTail", 1u, SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
+            m_OITAttenuationSignature = m_Device.CreatePipelineResourceSignature(OITAttenuationSignDesc);
+            VERIFY_EXPR(m_OITAttenuationSignature);
+        }
     }
 }
 
@@ -2214,6 +2227,64 @@ void PBR_Renderer::CreateClearOITLayersPSO()
     }
 }
 
+// Attenuate the background using transmittance (Src * 0 + Dst * SrcA)
+static constexpr BlendStateDesc BS_OITAttenuation{
+    False,                // AlphaToCoverageEnable
+    False,                // IndependentBlendEnable
+    RenderTargetBlendDesc // Render Target 0
+    {
+        True,                   // BlendEnable
+        False,                  // LogicOperationEnable
+        BLEND_FACTOR_ZERO,      // SrcBlend
+        BLEND_FACTOR_SRC_ALPHA, // DestBlend
+        BLEND_OPERATION_ADD,    // BlendOp
+        BLEND_FACTOR_ZERO,      // SrcBlendAlpha
+        BLEND_FACTOR_ONE,       // DestBlendAlpha
+        BLEND_OPERATION_ADD,    // BlendOpAlpha
+    },
+};
+
+void PBR_Renderer::CreateApplyOITAttenuationPSO(TEXTURE_FORMAT ColorFormat, TEXTURE_FORMAT DepthFormat, IPipelineState** ppPSO) const
+{
+    ShaderMacroHelper Macros;
+    Macros.Add("NUM_OIT_LAYERS", static_cast<int>(m_Settings.OITLayerCount));
+
+    ShaderCreateInfo ShaderCI;
+    ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
+    ShaderCI.CompileFlags               = m_Settings.PackMatrixRowMajor ? SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR : SHADER_COMPILE_FLAG_NONE;
+    ShaderCI.pShaderSourceStreamFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();
+    ShaderCI.Macros                     = Macros;
+
+    RefCntAutoPtr<IShader> pScreenTriangleVS;
+    {
+        ShaderCI.Desc       = {"Full screen triangle VS", SHADER_TYPE_VERTEX, true};
+        ShaderCI.EntryPoint = "FullScreenTriangleVS";
+        ShaderCI.FilePath   = "FullScreenTriangleVS.fx";
+
+        pScreenTriangleVS = m_Device.CreateShader(ShaderCI);
+    }
+
+    RefCntAutoPtr<IShader> pAttenuationPS;
+    {
+        ShaderCI.Desc       = {"Apply OIT Attenuation PS", SHADER_TYPE_PIXEL, true};
+        ShaderCI.EntryPoint = "main";
+        ShaderCI.FilePath   = "ApplyOITAttenuation.psh";
+
+        pAttenuationPS = m_Device.CreateShader(ShaderCI);
+    }
+
+    GraphicsPipelineStateCreateInfoX PsoCI{"OIT Attenuation"};
+    PsoCI
+        .AddSignature(m_OITAttenuationSignature)
+        .AddRenderTarget(ColorFormat)
+        .SetDepthFormat(DepthFormat)
+        .SetBlendDesc(BS_OITAttenuation)
+        .SetDepthStencilDesc(DSS_DisableDepth)
+        .AddShader(pScreenTriangleVS)
+        .AddShader(pAttenuationPS);
+    m_Device.GetDevice()->CreateGraphicsPipelineState(PsoCI, ppPSO);
+}
+
 void PBR_Renderer::CreateClearOITLayersSRB(IBuffer* pFrameAttribs, IBuffer* OITLayers, IShaderResourceBinding** ppSRB) const
 {
     if (!m_ClearOITLayersPSO)
@@ -2239,6 +2310,24 @@ void PBR_Renderer::CreateRWOITLayersSRB(IBuffer* OITLayers, IShaderResourceBindi
     m_RWOITLayersSignature->CreateShaderResourceBinding(ppSRB, true);
     VERIFY_EXPR(*ppSRB);
     ShaderResourceVariableX{*ppSRB, SHADER_TYPE_PIXEL, "g_rwOITLayers"}.Set(OITLayers->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+}
+
+void PBR_Renderer::CreateApplyOITAttenuationSRB(IBuffer*                 pFrameAttribs,
+                                                IBuffer*                 OITLayers,
+                                                ITexture*                OITTail,
+                                                IShaderResourceBinding** ppSRB) const
+{
+    if (!m_OITAttenuationSignature)
+    {
+        LOG_ERROR_MESSAGE("OIT attenuation signature is not initialized");
+        return;
+    }
+
+    m_OITAttenuationSignature->CreateShaderResourceBinding(ppSRB, true);
+    VERIFY_EXPR(*ppSRB);
+    ShaderResourceVariableX{*ppSRB, SHADER_TYPE_PIXEL, "cbFrameAttribs"}.Set(pFrameAttribs);
+    ShaderResourceVariableX{*ppSRB, SHADER_TYPE_PIXEL, "g_OITLayers"}.Set(OITLayers->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+    ShaderResourceVariableX{*ppSRB, SHADER_TYPE_PIXEL, "g_OITTail"}.Set(OITTail->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 }
 
 void PBR_Renderer::ClearOITLayers(IDeviceContext* pCtx, IShaderResourceBinding* pSRB, Uint32 Width, Uint32 Height) const
@@ -2267,6 +2356,19 @@ void PBR_Renderer::ClearOITLayers(IDeviceContext* pCtx, IShaderResourceBinding* 
         1,
     };
     pCtx->DispatchCompute(DispatchAttrs);
+}
+
+void PBR_Renderer::ApplyOITAttenuation(IDeviceContext* pCtx, IPipelineState* pPSO, IShaderResourceBinding* pSRB) const
+{
+    if (pCtx == nullptr || pPSO == nullptr || pSRB == nullptr)
+    {
+        DEV_ERROR("pCtx, pPSO, and pSRB must not be null");
+        return;
+    }
+
+    pCtx->SetPipelineState(pPSO);
+    pCtx->CommitShaderResources(pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    pCtx->Draw(DrawAttribs{3, DRAW_FLAG_VERIFY_ALL});
 }
 
 void PBR_Renderer::SetInternalShaderParameters(HLSL::PBRRendererShaderParameters& Renderer)
