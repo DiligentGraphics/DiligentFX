@@ -83,11 +83,13 @@ void HnBeginOITPassTask::Prepare(pxr::HdTaskContext* TaskCtx,
         {
             FrameTargets->OIT = {};
             m_ClearLayersSRB.Release();
-            m_RWLayersSRB.Release();
+            m_RWLayersSRBs = {};
         }
     }
 
     HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(RenderIndex->GetRenderDelegate());
+    IRenderDevice*    pDevice        = RenderDelegate->GetDevice();
+    const bool        IsWebGPUDevice = pDevice->GetDeviceInfo().IsWebGPUDevice();
 
     const USD_Renderer& Renderer = *RenderDelegate->GetUSDRenderer();
     VERIFY_EXPR(Renderer.GetSettings().OITLayerCount > 0);
@@ -103,7 +105,9 @@ void HnBeginOITPassTask::Prepare(pxr::HdTaskContext* TaskCtx,
     bool UseReverseDepth = false;
     GetTaskContextData(TaskCtx, HnRenderResourceTokens->useReverseDepth, UseReverseDepth);
 
-    const TEXTURE_FORMAT DepthFormat = FrameTargets->DepthDSV->GetTexture()->GetDesc().Format;
+    const TEXTURE_FORMAT DepthFormat = !IsWebGPUDevice ?
+        FrameTargets->DepthDSV->GetDesc().Format :
+        TEX_FORMAT_UNKNOWN;
     if (m_RenderPassState.GetDepthStencilFormat() != DepthFormat ||
         m_RenderPassState.GetUseReverseDepth() != UseReverseDepth)
     {
@@ -122,7 +126,10 @@ void HnBeginOITPassTask::Prepare(pxr::HdTaskContext* TaskCtx,
         0, // Unused
         1, // Total tail transmittance
     };
-    m_RenderPassState.Begin(_countof(OITRTVs), OITRTVs, FrameTargets->DepthDSV, &TailClearValue, 0, 0x01u);
+    // WebGPU does not support the earlydepthstencil attribute, so we have to
+    // perform depth testing manually in the shader.
+    ITextureView* pDepthDSV = !IsWebGPUDevice ? FrameTargets->DepthDSV : nullptr;
+    m_RenderPassState.Begin(_countof(OITRTVs), OITRTVs, pDepthDSV, &TailClearValue, 0, 0x01u);
 
     const HnCamera* pCamera = nullptr;
     if (GetTaskContextData(TaskCtx, HnRenderResourceTokens->camera, pCamera))
@@ -177,13 +184,16 @@ void HnBeginOITPassTask::Execute(pxr::HdTaskContext* TaskCtx)
     }
 
     HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
+    IRenderDevice*    pDevice        = RenderDelegate->GetDevice();
+    const bool        IsWebGPUDevice = pDevice->GetDeviceInfo().IsWebGPUDevice();
     IDeviceContext*   pCtx           = RenderDelegate->GetDeviceContext();
 
-    HnRenderParam* RenderParam = static_cast<HnRenderParam*>(RenderDelegate->GetRenderParam());
-    if (m_BoundOITResourcesVersion != RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::OITResources))
+    const HnRenderParam* RenderParam         = static_cast<HnRenderParam*>(RenderDelegate->GetRenderParam());
+    const Uint32         OITResourcesVersion = RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::OITResources);
+    if (m_BoundOITResourcesVersion != OITResourcesVersion)
     {
         BindOITResources(RenderDelegate);
-        m_BoundOITResourcesVersion = RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::OITResources);
+        m_BoundOITResourcesVersion = OITResourcesVersion;
     }
 
     ScopedDebugGroup DebugGroup{pCtx, "Begin OIT pass"};
@@ -193,16 +203,28 @@ void HnBeginOITPassTask::Execute(pxr::HdTaskContext* TaskCtx)
     {
         Renderer.CreateClearOITLayersSRB(RenderDelegate->GetFrameAttribsCB(), m_FrameTargets->OIT.Layers, &m_ClearLayersSRB);
     }
-    if (!m_RWLayersSRB)
+
+    // For WebGPU, we need to ping-pong between two SRBs using odd/even frame depth buffers.
+    // Other APIs can use a single SRB since they support early depth testing.
+    RefCntAutoPtr<IShaderResourceBinding>& RWLayersSRB = m_RWLayersSRBs[IsWebGPUDevice ? (RenderParam->GetFrameNumber() & 0x01) : 0];
+    if (!RWLayersSRB)
     {
-        Renderer.CreateRWOITLayersSRB(m_FrameTargets->OIT.Layers, &m_RWLayersSRB);
+        ITextureView* pDepthSRV = nullptr;
+        if (IsWebGPUDevice)
+        {
+            // WebGPU does not support the earlydepthstencil attribute, so we have to
+            // perform depth testing manually in the shader.
+            pDepthSRV = m_FrameTargets->DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+            DEV_CHECK_ERR(pDepthSRV != nullptr, "Depth buffer shader resource view is null");
+        }
+        Renderer.CreateRWOITLayersSRB(m_FrameTargets->OIT.Layers, pDepthSRV, &RWLayersSRB);
     }
     const TextureDesc& OITTailDesc = m_FrameTargets->OIT.Tail->GetDesc();
     Renderer.ClearOITLayers(pCtx, m_ClearLayersSRB, OITTailDesc.Width, OITTailDesc.Height);
 
     IShaderResourceBinding* pFrameAttribsSRB = RenderDelegate->GetFrameAttribsSRB(HnRenderDelegate::FrameAttribsSRBType::Opaque);
     m_RenderPassState.SetFrameAttribsSRB(pFrameAttribsSRB);
-    m_RenderPassState.SetRWOITLayersSRB(m_RWLayersSRB);
+    m_RenderPassState.SetRWOITLayersSRB(RWLayersSRB);
     m_RenderPassState.Commit(pCtx);
 }
 

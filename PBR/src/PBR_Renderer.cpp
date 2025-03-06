@@ -1254,6 +1254,11 @@ void PBR_Renderer::CreateSignature()
                 .SetBindingIndex(static_cast<Uint8>(m_ResourceSignatures.size()))
                 .SetUseCombinedTextureSamplers(true)
                 .AddResource(SHADER_TYPE_PIXEL, "g_rwOITLayers", SHADER_RESOURCE_TYPE_BUFFER_UAV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
+            if (m_Device.GetDeviceInfo().IsWebGPUDevice())
+            {
+                constexpr WebGPUResourceAttribs WGPUDepthMap{WEB_GPU_BINDING_TYPE_UNFILTERABLE_FLOAT_TEXTURE, RESOURCE_DIM_TEX_2D};
+                OITLayersSignDesc.AddResource(SHADER_TYPE_PIXEL, "g_DepthBuffer", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE, PIPELINE_RESOURCE_FLAG_NONE, WGPUDepthMap);
+            }
             m_RWOITLayersSignature = m_Device.CreatePipelineResourceSignature(OITLayersSignDesc);
             VERIFY_EXPR(m_RWOITLayersSignature);
         }
@@ -1975,6 +1980,9 @@ void PBR_Renderer::CreatePSO(PsoHashMapType&             PsoHashMap,
         {
             SrcFile = "UpdateOITLayers.psh";
             Name    = "OIT Layers PS";
+            // WebGPU does not support the earlydepthstencil attribute, so we have to
+            // perform depth testing manually in the shader.
+            Macros.Add("USE_MANUAL_DEPTH_TEST", m_Device.GetDeviceInfo().IsWebGPUDevice());
         }
         else
         {
@@ -2294,7 +2302,7 @@ void PBR_Renderer::CreateClearOITLayersSRB(IBuffer* pFrameAttribs, IBuffer* OITL
     ShaderResourceVariableX{*ppSRB, SHADER_TYPE_COMPUTE, "g_rwOITLayers"}.Set(OITLayers->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
 }
 
-void PBR_Renderer::CreateRWOITLayersSRB(IBuffer* OITLayers, IShaderResourceBinding** ppSRB) const
+void PBR_Renderer::CreateRWOITLayersSRB(IBuffer* OITLayers, ITextureView* pDepthSRV, IShaderResourceBinding** ppSRB) const
 {
     if (!m_RWOITLayersSignature)
     {
@@ -2305,6 +2313,17 @@ void PBR_Renderer::CreateRWOITLayersSRB(IBuffer* OITLayers, IShaderResourceBindi
     m_RWOITLayersSignature->CreateShaderResourceBinding(ppSRB, true);
     VERIFY_EXPR(*ppSRB);
     ShaderResourceVariableX{*ppSRB, SHADER_TYPE_PIXEL, "g_rwOITLayers"}.Set(OITLayers->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+    if (m_Device.GetDeviceInfo().IsWebGPUDevice())
+    {
+        if (pDepthSRV != nullptr)
+        {
+            ShaderResourceVariableX{*ppSRB, SHADER_TYPE_PIXEL, "g_DepthBuffer"}.Set(pDepthSRV);
+        }
+        else
+        {
+            DEV_ERROR("Depth buffer SRV is required on WebGPU to perform manual depth test");
+        }
+    }
 }
 
 void PBR_Renderer::CreateApplyOITAttenuationSRB(IBuffer*                 pFrameAttribs,

@@ -26,6 +26,8 @@
 
 #pragma once
 
+#include <array>
+
 #include "HnTask.hpp"
 #include "../interface/HnRenderPassState.hpp"
 
@@ -80,7 +82,9 @@ private:
     HnRenderPassState m_RenderPassState;
 
     RefCntAutoPtr<IShaderResourceBinding> m_ClearLayersSRB;
-    RefCntAutoPtr<IShaderResourceBinding> m_RWLayersSRB;
+
+    // Two SRBs for ping-ponging between depth buffers.
+    std::array<RefCntAutoPtr<IShaderResourceBinding>, 2> m_RWLayersSRBs;
 
     Uint32 m_BoundOITResourcesVersion = ~0u;
 };

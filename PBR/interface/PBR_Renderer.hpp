@@ -796,7 +796,7 @@ public:
     static OITResources CreateOITResources(IRenderDevice* pDevice, Uint32 Width, Uint32 Height, Uint32 LayerCount);
     OITResources        CreateOITResources(Uint32 Width, Uint32 Height) const;
     void                CreateClearOITLayersSRB(IBuffer* pFrameAttribs, IBuffer* OITLayers, IShaderResourceBinding** ppSRB) const;
-    void                CreateRWOITLayersSRB(IBuffer* OITLayers, IShaderResourceBinding** ppSRB) const;
+    void                CreateRWOITLayersSRB(IBuffer* OITLayers, ITextureView* pDepthSRV, IShaderResourceBinding** ppSRB) const;
     void                ClearOITLayers(IDeviceContext* pCtx, IShaderResourceBinding* pSRB, Uint32 Width, Uint32 Height) const;
     void                CreateApplyOITAttenuationPSO(TEXTURE_FORMAT ColorFormat, TEXTURE_FORMAT DepthFormat, IPipelineState** ppPSO) const;
     void                CreateApplyOITAttenuationSRB(IBuffer*                 pFrameAttribs,
