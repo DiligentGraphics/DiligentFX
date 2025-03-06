@@ -584,6 +584,14 @@ void HnTaskManager::EnableMaterial(const pxr::TfToken& MaterialTag, bool Enable)
     {
         EnableTask(TaskUID_RenderRprimsTranslucent, Enable);
         EnableTask(TaskUID_RenderRprimsTranslucentSelected, Enable);
+
+        const USD_Renderer& Renderer = *static_cast<const HnRenderDelegate*>(GetRenderIndex().GetRenderDelegate())->GetUSDRenderer();
+        if (Renderer.GetSettings().OITLayerCount > 0)
+        {
+            EnableTask(TaskUID_BeginOITPass, Enable);
+            EnableTask(TaskUID_RenderRprimsOITLayers, Enable);
+            EnableTask(TaskUID_EndOITPass, Enable);
+        }
     }
     else
     {
