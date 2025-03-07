@@ -211,7 +211,7 @@ private:
     void WriteJointsDataBatch(RenderState& State, Uint32 BatchIdx, PBR_Renderer::PSO_FLAGS PSOFlags);
     void RenderPendingDrawItems(RenderState& State);
 
-    GraphicsPipelineDesc GetGraphicsDesc(const HnRenderPassState& RPState, bool UseStripTopology) const;
+    GraphicsPipelineDesc GetGraphicsDesc(const HnRenderPassState& RPState, const USD_Renderer& USDRenderer, bool UseStripTopology) const;
 
     PBR_Renderer::PSO_FLAGS GetFallbackPSOFlags() const;
 

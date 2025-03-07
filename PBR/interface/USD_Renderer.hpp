@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2024 Diligent Graphics LLC
+ *  Copyright 2023-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -72,6 +72,8 @@ public:
             USD_PSO_FLAG_ENABLE_MATERIAL_DATA_OUTPUT |
             USD_PSO_FLAG_ENABLE_IBL_OUTPUT
     };
+
+    Uint32 GetRenderTargetIndex(USD_PSO_FLAGS Flag) const;
 
 protected:
     virtual void CreateCustomSignature(PipelineResourceSignatureDescX&& SignatureDesc) override final;

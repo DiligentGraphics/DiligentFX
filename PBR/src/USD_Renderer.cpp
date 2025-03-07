@@ -324,4 +324,41 @@ void USD_Renderer::CreateCustomSignature(PipelineResourceSignatureDescX&& Signat
     m_ResourceSignatures = {std::move(FrameAttribsSignature), std::move(ResourceSignature)};
 }
 
+Uint32 USD_Renderer::GetRenderTargetIndex(USD_PSO_FLAGS Flag) const
+{
+    if (!IsPowerOfTwo(Flag))
+    {
+        DEV_ERROR("Only one render target flag must be set");
+        return ~0u;
+    }
+
+    switch (Flag)
+    {
+        case USD_PSO_FLAG_ENABLE_COLOR_OUTPUT:
+            return m_ColorTargetIndex;
+
+        case USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT:
+            return m_MeshIdTargetIndex;
+
+        case USD_PSO_FLAG_ENABLE_MOTION_VECTORS_OUTPUT:
+            return m_MotionVectorTargetIndex;
+
+        case USD_PSO_FLAG_ENABLE_NORMAL_OUTPUT:
+            return m_NormalTargetIndex;
+
+        case USD_PSO_FLAG_ENABLE_BASE_COLOR_OUTPUT:
+            return m_BaseColorTargetIndex;
+
+        case USD_PSO_FLAG_ENABLE_MATERIAL_DATA_OUTPUT:
+            return m_MaterialDataTargetIndex;
+
+        case USD_PSO_FLAG_ENABLE_IBL_OUTPUT:
+            return m_IBLTargetIndex;
+
+        default:
+            UNEXPECTED("Unexpected flag");
+            return ~0u;
+    }
+}
+
 } // namespace Diligent

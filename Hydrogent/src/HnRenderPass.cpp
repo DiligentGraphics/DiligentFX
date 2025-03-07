@@ -220,7 +220,7 @@ struct HnRenderPass::RenderState
     {
         if (!PsoCache)
         {
-            GraphicsPipelineDesc GraphicsDesc = RenderPass.GetGraphicsDesc(RPState, RenderDelegate.AllowPrimitiveRestart());
+            GraphicsPipelineDesc GraphicsDesc = RenderPass.GetGraphicsDesc(RPState, USDRenderer, RenderDelegate.AllowPrimitiveRestart());
 
             PsoCache = USDRenderer.GetPsoCacheAccessor(GraphicsDesc);
             VERIFY_EXPR(PsoCache);
@@ -245,14 +245,21 @@ private:
     USD_Renderer::PsoCacheAccessor PsoCache;
 };
 
-GraphicsPipelineDesc HnRenderPass::GetGraphicsDesc(const HnRenderPassState& RPState, bool UseStripTopology) const
+GraphicsPipelineDesc HnRenderPass::GetGraphicsDesc(const HnRenderPassState& RPState, const USD_Renderer& USDRenderer, bool UseStripTopology) const
 {
     GraphicsPipelineDesc GraphicsDesc = RPState.GetGraphicsPipelineDesc();
-    if ((m_Params.UsdPsoFlags & USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS) == 0)
+
+    // Set render targets write masks depending on the output flags
+    for (USD_Renderer::USD_PSO_FLAGS Flags = USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS; Flags != USD_Renderer::PSO_FLAG_NONE;)
     {
-        for (Uint32 i = 0; i < GraphicsDesc.NumRenderTargets; ++i)
-            GraphicsDesc.RTVFormats[i] = TEX_FORMAT_UNKNOWN;
-        GraphicsDesc.NumRenderTargets = 0;
+        USD_Renderer::USD_PSO_FLAGS OutputFlag = ExtractLSB(Flags);
+        if ((m_Params.UsdPsoFlags & OutputFlag) == 0)
+        {
+            const Uint32 RTIdx = USDRenderer.GetRenderTargetIndex(OutputFlag);
+            VERIFY_EXPR(RTIdx != ~0u);
+            if (RTIdx < GraphicsDesc.NumRenderTargets)
+                GraphicsDesc.BlendDesc.RenderTargets[RTIdx].RenderTargetWriteMask = COLOR_MASK_NONE;
+        }
     }
 
     switch (m_RenderMode)
