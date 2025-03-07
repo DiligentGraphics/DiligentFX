@@ -153,9 +153,10 @@ void HnRenderEnvMapTask::Prepare(pxr::HdTaskContext* TaskCtx,
                 EnvMapRndrCI.RTVFormats[rt] = RenderPassState->GetRenderTargetFormat(rt);
             EnvMapRndrCI.DSVFormat = RenderPassState->GetDepthStencilFormat();
 
-            const std::string PSMain = GetEnvMapPSMain(EnvMapRndrCI.pDevice->GetDeviceInfo().IsGLDevice() ||
-                                                       EnvMapRndrCI.pDevice->GetDeviceInfo().IsVulkanDevice() ||
-                                                       EnvMapRndrCI.pDevice->GetDeviceInfo().IsWebGPUDevice());
+            EnvMapRndrCI.RenderTargetMask = ((1u << HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR) |
+                                             (1u << HnFrameRenderTargets::GBUFFER_TARGET_MOTION_VECTOR));
+
+            const std::string PSMain = GetEnvMapPSMain(EnvMapRndrCI.pDevice->GetDeviceInfo().IsGLDevice());
 
             EnvMapRndrCI.PSMainSource = PSMain.c_str();
 

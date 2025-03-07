@@ -60,6 +60,7 @@ EnvMapRenderer::EnvMapRenderer(const CreateInfo& CI) :
     m_pCameraAttribsCB{CI.pCameraAttribsCB},
     m_RTVFormats{CI.RTVFormats, CI.RTVFormats + CI.NumRenderTargets},
     m_DSVFormat{CI.DSVFormat},
+    m_RenderTargetMask{CI.RenderTargetMask},
     m_PSMainSource{CI.PSMainSource != nullptr ? CI.PSMainSource : ""},
     m_PackMatrixRowMajor{CI.PackMatrixRowMajor}
 {
@@ -170,13 +171,19 @@ IPipelineState* EnvMapRenderer::GetPSO(const PSOKey& Key)
         .AddShader(pPS)
         .SetPrimitiveTopology(PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
         .SetDepthFormat(m_DSVFormat);
-    for (auto RTVFormat : m_RTVFormats)
+    for (TEXTURE_FORMAT RTVFormat : m_RTVFormats)
         PsoCI.AddRenderTarget(RTVFormat);
 
     PsoCI.GraphicsPipeline.DepthStencilDesc.DepthFunc        = (Key.Flags & OPTION_FLAG_USE_REVERSE_DEPTH) != 0 ? COMPARISON_FUNC_GREATER_EQUAL : COMPARISON_FUNC_LESS_EQUAL;
     PsoCI.GraphicsPipeline.DepthStencilDesc.DepthWriteEnable = false;
+    for (Uint32 i = 0; i < PsoCI.GraphicsPipeline.NumRenderTargets; ++i)
+    {
+        PsoCI.GraphicsPipeline.BlendDesc.RenderTargets[i].RenderTargetWriteMask = (m_RenderTargetMask & (1u << i)) != 0 ?
+            COLOR_MASK_ALL :
+            COLOR_MASK_NONE;
+    }
 
-    auto PSO = Device.CreateGraphicsPipelineState(PsoCI);
+    RefCntAutoPtr<IPipelineState> PSO = Device.CreateGraphicsPipelineState(PsoCI);
     if (!PSO)
     {
         UNEXPECTED("Failed to create environment map PSO");

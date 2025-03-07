@@ -59,6 +59,12 @@ public:
         TEXTURE_FORMAT RTVFormats[DILIGENT_MAX_RENDER_TARGETS] = {TEX_FORMAT_RGBA8_UNORM_SRGB};
         TEXTURE_FORMAT DSVFormat                               = TEX_FORMAT_D32_FLOAT;
 
+        /// A bit mask that defines the render targets to render to.
+        ///
+        /// \remarks    If bit N is set, the N-th render target's color write mask will be set to
+        ///             COLOR_MASK_ALL. Otherwise, it will be set to COLOR_MASK_NONE.
+        Uint32 RenderTargetMask = 0x1u;
+
         const char* PSMainSource = nullptr;
 
         /// Whether shader matrices are laid out in row-major order in GPU memory.
@@ -148,6 +154,7 @@ private:
 
     const std::vector<TEXTURE_FORMAT> m_RTVFormats;
     const TEXTURE_FORMAT              m_DSVFormat;
+    const Uint32                      m_RenderTargetMask;
     const std::string                 m_PSMainSource;
     const bool                        m_PackMatrixRowMajor;
 
