@@ -56,6 +56,7 @@ BoundBoxRenderer::BoundBoxRenderer(const CreateInfo& CI) :
     m_RTVFormats{CI.RTVFormats, CI.RTVFormats + CI.NumRenderTargets},
     m_DSVFormat{CI.DSVFormat},
     m_PSMainSource{CI.PSMainSource != nullptr ? CI.PSMainSource : ""},
+    m_RenderTargetMask{CI.RenderTargetMask},
     m_PackMatrixRowMajor{CI.PackMatrixRowMajor},
     m_AsyncShaders{CI.AsyncShaders}
 {
@@ -152,17 +153,26 @@ IPipelineState* BoundBoxRenderer::GetPSO(const PSOKey& Key)
         .AddShader(pPS)
         .SetPrimitiveTopology(PRIMITIVE_TOPOLOGY_LINE_LIST)
         .SetDepthFormat(m_DSVFormat);
-    for (auto RTVFormat : m_RTVFormats)
+    for (TEXTURE_FORMAT RTVFormat : m_RTVFormats)
         PsoCI.AddRenderTarget(RTVFormat);
 
     PsoCI.PSODesc.ResourceLayout.DefaultVariableMergeStages  = SHADER_TYPE_VS_PS;
     PsoCI.PSODesc.ResourceLayout.DefaultVariableType         = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
     PsoCI.GraphicsPipeline.DepthStencilDesc.DepthFunc        = (Key.Flags & OPTION_FLAG_USE_REVERSE_DEPTH) != 0 ? COMPARISON_FUNC_GREATER_EQUAL : COMPARISON_FUNC_LESS_EQUAL;
     PsoCI.GraphicsPipeline.DepthStencilDesc.DepthWriteEnable = false;
-    if (m_AsyncShaders)
-        PsoCI.Flags |= PSO_CREATE_FLAG_ASYNCHRONOUS;
+    for (Uint32 i = 0; i < PsoCI.GraphicsPipeline.NumRenderTargets; ++i)
+    {
+        PsoCI.GraphicsPipeline.BlendDesc.RenderTargets[i].RenderTargetWriteMask = (m_RenderTargetMask & (1u << i)) != 0 ?
+            COLOR_MASK_ALL :
+            COLOR_MASK_NONE;
+    }
 
-    auto PSO = Device.CreateGraphicsPipelineState(PsoCI);
+    if (m_AsyncShaders)
+    {
+        PsoCI.Flags |= PSO_CREATE_FLAG_ASYNCHRONOUS;
+    }
+
+    RefCntAutoPtr<IPipelineState> PSO = Device.CreateGraphicsPipelineState(PsoCI);
     if (!PSO)
     {
         UNEXPECTED("Failed to create bound box PSO");

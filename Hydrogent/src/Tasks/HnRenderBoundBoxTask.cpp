@@ -177,11 +177,15 @@ void HnRenderBoundBoxTask::Prepare(pxr::HdTaskContext* TaskCtx,
             BoundBoxRndrCI.pCameraAttribsCB   = pRenderDelegate->GetFrameAttribsCB();
             BoundBoxRndrCI.NumRenderTargets   = RenderPassState->GetNumRenderTargets();
             for (Uint32 rt = 0; rt < BoundBoxRndrCI.NumRenderTargets; ++rt)
+            {
                 BoundBoxRndrCI.RTVFormats[rt] = RenderPassState->GetRenderTargetFormat(rt);
+            }
             BoundBoxRndrCI.DSVFormat = RenderPassState->GetDepthStencilFormat();
 
-            const std::string PSMain = GetBoundBoxPSMain(BoundBoxRndrCI.pDevice->GetDeviceInfo().IsGLDevice() ||
-                                                         BoundBoxRndrCI.pDevice->GetDeviceInfo().IsWebGPUDevice());
+            BoundBoxRndrCI.RenderTargetMask = ((1u << HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR) |
+                                               (1u << HnFrameRenderTargets::GBUFFER_TARGET_MOTION_VECTOR));
+
+            const std::string PSMain = GetBoundBoxPSMain(BoundBoxRndrCI.pDevice->GetDeviceInfo().IsGLDevice());
 
             BoundBoxRndrCI.PSMainSource = PSMain.c_str();
 
