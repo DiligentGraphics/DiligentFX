@@ -205,8 +205,11 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                                USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS,
                            });
 
-    const USD_Renderer& Renderer = *static_cast<const HnRenderDelegate*>(GetRenderIndex().GetRenderDelegate())->GetUSDRenderer();
-    if (Renderer.GetSettings().OITLayerCount > 0)
+    const USD_Renderer& Renderer   = *static_cast<const HnRenderDelegate*>(GetRenderIndex().GetRenderDelegate())->GetUSDRenderer();
+    const bool          OITEnabled = Renderer.GetSettings().OITLayerCount > 0;
+
+    USD_Renderer::USD_PSO_FLAGS TranslucentPassOutputs = USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS;
+    if (OITEnabled)
     {
         CreateBeginOITPassTask();
         CreateRenderRprimsTask(HnMaterialTagTokens->translucent,
@@ -218,6 +221,8 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                                    USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS,
                                });
         CreateEndOITPassTask();
+        // We will write mesh ID and depth in a separate pass
+        TranslucentPassOutputs &= ~USD_Renderer::USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT;
     }
 
     CreateRenderRprimsTask(HnMaterialTagTokens->translucent,
@@ -226,7 +231,7 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                                HnRenderResourceTokens->renderPass_TransparentAll,
                                HnRenderPassParams::SelectionType::All,
                                USD_Renderer::RenderPassType::Main,
-                               USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS,
+                               TranslucentPassOutputs,
                            });
 
     // Transparent selected RPrims  -> {0 + SelectionDepth}
