@@ -2034,22 +2034,49 @@ void PBR_Renderer::CreatePSO(PsoHashMapType&             PsoHashMap,
     }
     else
     {
+        RenderTargetBlendDesc& RT0 = PSOCreateInfo.GraphicsPipeline.BlendDesc.RenderTargets[0];
         if (AlphaMode == ALPHA_MODE_OPAQUE ||
             AlphaMode == ALPHA_MODE_MASK)
         {
-            PSOCreateInfo.GraphicsPipeline.BlendDesc = BS_Default;
+            // Default blend state
+            RT0.BlendEnable    = False;
+            RT0.SrcBlend       = BLEND_FACTOR_ONE;
+            RT0.DestBlend      = BLEND_FACTOR_ZERO;
+            RT0.BlendOp        = BLEND_OPERATION_ADD;
+            RT0.SrcBlendAlpha  = BLEND_FACTOR_ONE;
+            RT0.DestBlendAlpha = BLEND_FACTOR_ZERO;
+            RT0.BlendOpAlpha   = BLEND_OPERATION_ADD;
+            // NB: Do NOT overwrite RenderTargetWriteMask
         }
         else if (AlphaMode == ALPHA_MODE_BLEND)
         {
             VERIFY(!IsUnshaded, "Unshaded mode should use OpaquePSO. The PSOKey's ctor sets the alpha mode to opaque.");
             if (OITLayerCount > 0)
             {
-                PSOCreateInfo.GraphicsPipeline.BlendDesc           = BS_AdditiveBlend;
+                // Use additive blending for OIT
+                RT0.BlendEnable    = True;
+                RT0.SrcBlend       = BLEND_FACTOR_ONE;
+                RT0.DestBlend      = BLEND_FACTOR_ONE;
+                RT0.BlendOp        = BLEND_OPERATION_ADD;
+                RT0.SrcBlendAlpha  = BLEND_FACTOR_ONE;
+                RT0.DestBlendAlpha = BLEND_FACTOR_ONE;
+                RT0.BlendOpAlpha   = BLEND_OPERATION_ADD;
+                // NB: Do NOT overwrite RenderTargetWriteMask
+
+                // Disable depth writes, but keep depth testing enabled
                 GraphicsPipeline.DepthStencilDesc.DepthWriteEnable = False;
             }
             else
             {
-                GraphicsPipeline.BlendDesc = BS_PremultipliedAlphaBlend;
+                // Premultiplied alpha blending
+                RT0.BlendEnable    = True;
+                RT0.SrcBlend       = BLEND_FACTOR_ONE;
+                RT0.DestBlend      = BLEND_FACTOR_INV_SRC_ALPHA;
+                RT0.BlendOp        = BLEND_OPERATION_ADD;
+                RT0.SrcBlendAlpha  = BLEND_FACTOR_ONE;
+                RT0.DestBlendAlpha = BLEND_FACTOR_INV_SRC_ALPHA;
+                RT0.BlendOpAlpha   = BLEND_OPERATION_ADD;
+                // NB: Do NOT overwrite RenderTargetWriteMask
             }
         }
         else
