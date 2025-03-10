@@ -618,6 +618,11 @@ PSOutput main(in VSOutput VSOut,
 #endif
 
     OutColor.rgb *= Transmittance;
+    if (BasicAttribs.AlphaMode != PBR_ALPHA_MODE_BLEND)
+    {
+        // Write 0 alpha to indicate full opacity
+        OutColor.a = 0.0;
+    }
  
 #if CONVERT_OUTPUT_TO_SRGB
     {
