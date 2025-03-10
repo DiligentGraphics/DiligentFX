@@ -66,6 +66,7 @@ public:
     static constexpr TaskUID TaskUID_EndOITPass                      = 0xa4a829379e28420c;
     static constexpr TaskUID TaskUID_RenderRprimsAdditive            = 0x37d45531106c4c52;
     static constexpr TaskUID TaskUID_RenderRprimsTranslucent         = 0xa015c7e45941407e;
+    static constexpr TaskUID TaskUID_RenderRprimsTranslucentMeshId   = 0xb94c6316ea7f480c;
     static constexpr TaskUID TaskUID_RenderRprimsAdditiveSelected    = 0x2cb8a35254ec46da;
     static constexpr TaskUID TaskUID_RenderRprimsTranslucentSelected = 0x50a786394d834b4f;
     static constexpr TaskUID TaskUID_RenderEnvMap                    = 0xf646122e1dc74bab;
@@ -113,6 +114,8 @@ public:
     ///                             * Renders all Rprims with additive material tag
     ///                         - RenderRprimsTranslucent
     ///                             * Renders all Rprims with translucent material tag
+    ///                         - TaskUID_RenderRprimsTranslucentMeshId
+    ///                             * Renders all Rprims with translucent material tag (Mesh ID, Motion Vectors, Depth)
     ///                         - RenderRprimsAdditiveSelected
     ///                             * Renders only selected Rprims with the additive material tag (depth only)
     ///                         - RenderRprimsTranslucentSelected
@@ -139,6 +142,7 @@ public:
     ///     | RenderRprimsOITLayers           |                  |                   |        |           |          |                  |            |
     ///	    | EndOITPass                      |                  |                   |        |           |          |                  |            |
     ///     | RenderRprimsTranslucent         |       V          |         V         |   V    |     V     |    V     |                  |     V      |
+    ///     | RenderRprimsTranslucentMeshId   |       V          |         V         |        |     V     |          |                  |     V      |
     ///     | RenderRprimsAdditiveSelected    |       V          |                   |        |           |          |        V         |            |
     ///     | RenderRprimsTranslucentSelected |       V          |                   |        |           |          |        V         |            |
     ///     | ReadRprimId                     |                  |                   |        |           |          |                  |            |

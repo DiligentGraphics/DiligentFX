@@ -65,6 +65,10 @@ struct HnRenderPassParams
     USD_Renderer::RenderPassType Type        = USD_Renderer::RenderPassType::Main;
     USD_Renderer::USD_PSO_FLAGS  UsdPsoFlags = USD_Renderer::USD_PSO_FLAG_NONE;
 
+    // If not USD_Renderer::ALPHA_MODE_NUM_MODES, the alpha mode to use for the render pass.
+    // Otherwise, the alpha mode is determined by the material tag.
+    USD_Renderer::ALPHA_MODE AlphaMode = USD_Renderer::ALPHA_MODE_NUM_MODES;
+
     constexpr bool operator==(const HnRenderPassParams& rhs) const
     {
         return (Selection == rhs.Selection &&

@@ -221,8 +221,9 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                                    USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS,
                                });
         CreateEndOITPassTask();
-        // We will write mesh ID and depth in a separate pass
-        TranslucentPassOutputs &= ~USD_Renderer::USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT;
+        // We will write mesh ID, motion vectors and depth in a separate pass
+        TranslucentPassOutputs &= ~(USD_Renderer::USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT |
+                                    USD_Renderer::USD_PSO_FLAG_ENABLE_MOTION_VECTORS_OUTPUT);
     }
 
     CreateRenderRprimsTask(HnMaterialTagTokens->translucent,
@@ -233,6 +234,20 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                                USD_Renderer::RenderPassType::Main,
                                TranslucentPassOutputs,
                            });
+
+    if (OITEnabled)
+    {
+        // When OIT is enabled, we do not render mesh ID, motion vectors and depth in translucent pass.
+        CreateRenderRprimsTask(HnMaterialTagTokens->translucent,
+                               TaskUID_RenderRprimsTranslucentMeshId,
+                               {
+                                   HnRenderResourceTokens->renderPass_TransparentAll,
+                                   HnRenderPassParams::SelectionType::All,
+                                   USD_Renderer::RenderPassType::Main,
+                                   USD_Renderer::USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT | USD_Renderer::USD_PSO_FLAG_ENABLE_MOTION_VECTORS_OUTPUT,
+                                   USD_Renderer::ALPHA_MODE_OPAQUE, // Override alpha mode
+                               });
+    }
 
     // Transparent selected RPrims  -> {0 + SelectionDepth}
     CreateRenderRprimsTask(HnMaterialTagTokens->additive,
@@ -250,6 +265,7 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                                HnRenderPassParams::SelectionType::Selected,
                                USD_Renderer::RenderPassType::Main,
                                USD_Renderer::USD_PSO_FLAG_NONE,
+                               USD_Renderer::ALPHA_MODE_OPAQUE, // Override alpha mode
                            });
 
     CreateReadRprimIdTask();
@@ -357,6 +373,11 @@ pxr::SdfPath HnTaskManager::GetTaskId(const pxr::TfToken& TaskName) const
 pxr::SdfPath HnTaskManager::GetRenderRprimsTaskId(const pxr::TfToken& MaterialTag, const HnRenderPassParams& RenderPassParams) const
 {
     std::string Id = std::string{"RenderRprimsTask_"} + PBR_Renderer::GetRenderPassTypeString(RenderPassParams.Type) + "_" + MaterialTag.GetString();
+    if (RenderPassParams.AlphaMode != USD_Renderer::ALPHA_MODE_NUM_MODES)
+    {
+        Id += "_";
+        Id += USD_Renderer::GetAlphaModeString(RenderPassParams.AlphaMode);
+    }
     for (char& c : Id)
     {
         if (c == ':' || c == ' ')

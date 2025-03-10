@@ -131,7 +131,11 @@ struct HnRenderPass::RenderState
         RendererSettings{USDRenderer.GetSettings()},
         pCtx{RenderDelegate.GetDeviceContext()},
         Type{RenderPass.m_Params.Type},
-        AlphaMode{MaterialTagToPbrAlphaMode(RenderPass.m_MaterialTag)},
+        AlphaMode{
+            RenderPass.m_Params.AlphaMode != USD_Renderer::ALPHA_MODE_NUM_MODES ?
+                RenderPass.m_Params.AlphaMode :
+                MaterialTagToPbrAlphaMode(RenderPass.m_MaterialTag),
+        },
         ConstantBufferOffsetAlignment{RenderDelegate.GetDevice()->GetAdapterInfo().Buffer.ConstantBufferOffsetAlignment},
         NativeMultiDrawSupported{RenderDelegate.GetDevice()->GetDeviceInfo().Features.NativeMultiDraw == DEVICE_FEATURE_STATE_ENABLED}
     {
@@ -391,10 +395,15 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
 
     RenderState State{*this, RPState};
 
-    const std::string DebugGroupName = std::string{"Render Pass - "} +
+    std::string DebugGroupName = std::string{"Render Pass - "} +
         USD_Renderer::GetRenderPassTypeString(m_Params.Type) + " - " +
         m_MaterialTag.GetString() + " - " +
         HnRenderPassParams::GetSelectionTypeString(m_Params.Selection);
+    if (m_Params.AlphaMode != USD_Renderer::ALPHA_MODE_NUM_MODES)
+    {
+        DebugGroupName += " - ";
+        DebugGroupName += USD_Renderer::GetAlphaModeString(m_Params.AlphaMode);
+    }
     ScopedDebugGroup DebugGroup{State.pCtx, DebugGroupName.c_str()};
 
     RPState.Commit(State.pCtx);
@@ -1337,7 +1346,8 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
                     PSOFlags |= (MaterialPSOFlags & (PBR_Renderer::PSO_FLAG_USE_COLOR_MAP & PBR_Renderer::PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM));
                 }
 
-                VERIFY(pMaterial->GetMaterialData().Attribs.AlphaMode == State.AlphaMode || pMaterial->GetId().IsEmpty(),
+                VERIFY(((m_Params.AlphaMode != USD_Renderer::ALPHA_MODE_NUM_MODES ? m_Params.AlphaMode : pMaterial->GetMaterialData().Attribs.AlphaMode) == State.AlphaMode ||
+                        pMaterial->GetId().IsEmpty()),
                        "Alpha mode derived from the material tag is not consistent with the alpha mode in the shader attributes. "
                        "This may indicate an issue in how alpha mode is determined in the material, or (less likely) an issue in Rprim sorting by Hydra.");
             }

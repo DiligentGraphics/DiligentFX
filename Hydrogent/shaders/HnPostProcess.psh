@@ -53,8 +53,8 @@ void main(in  FullScreenTriangleVSOutput VSOut,
         float4 BaseColor   = g_BaseColor.Load(int3(Pos.xy, 0));
         float4 Material    = g_MaterialData.Load(int3(Pos.xy, 0));
     
-        float Roughness = Material.x;
-        float Metallic  = Material.y;
+        float Roughness = saturate(Material.x);
+        float Metallic  = saturate(Material.y);
         SurfaceReflectanceInfo SrfInfo = GetSurfaceReflectanceMR(BaseColor.rgb, Metallic, Roughness);
 
         float4 WorldPos = mul(float4(VSOut.f2NormalizedXY, DepthToNormalizedDeviceZ(0.5), 1.0), g_Frame.Camera.mViewProjInv);

@@ -536,6 +536,7 @@ PSOutput main(in VSOutput VSOut,
     }
 #endif
 
+    float Transmittance = 1.0;
     if (BasicAttribs.AlphaMode == PBR_ALPHA_MODE_BLEND)
     {
         OutColor.rgb *= BaseColor.a;
@@ -547,8 +548,8 @@ PSOutput main(in VSOutput VSOut,
             {
                 D = 1.0 - D;
             }
-            float T = GetOITTransmittance(D, uint2(VSOut.ClipPos.xy));
-            OutColor.rgb *= T;
+            Transmittance = GetOITTransmittance(D, uint2(VSOut.ClipPos.xy));
+            OutColor.rgb *= Transmittance;
         }
 #endif
     }
