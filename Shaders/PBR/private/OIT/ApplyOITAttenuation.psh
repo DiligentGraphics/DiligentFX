@@ -10,19 +10,22 @@ cbuffer cbFrameAttribs
 StructuredBuffer<uint> g_OITLayers;
 Texture2D<float4>      g_OITTail;
 
-struct PSOutput
-{
-    float4 Color : SV_TARGET;
-};
+#include "PSOutputStruct.generated"
+//struct PSOutput
+//{
+//    float4 Color0 : SV_Target0;
+//    float4 Color1 : SV_Target1;
+//    float4 Color2 : SV_Target2;
+//};
 
 void main(FullScreenTriangleVSOutput VSOut,
           out PSOutput PSOut)
 {
     uint2 Pos = uint2(VSOut.f4PixelPos.xy);
-    
+
     uint Offset = GetOITLayerDataOffset(Pos.xy, uint2(g_Camera.f4ViewportSize.xy), uint(NUM_OIT_LAYERS));
     float T = 1.0;
-    
+
     // Apply attenuation of each layer
     uint layer = 0u;
     while (layer < uint(NUM_OIT_LAYERS))
@@ -48,5 +51,10 @@ void main(FullScreenTriangleVSOutput VSOut,
     }
 
     // RGB blend: Src * 0 + Dst * SrcA
-    PSOut.Color = float4(0.0, 0.0, 0.0, T);
+    float4 OutColor = float4(0.0, 0.0, 0.0, T);
+
+#include "PSMainFooter.generated"
+    //PSOut.Color0 = OutColor;
+    //PSOut.Color1 = OutColor;
+    //PSOut.Color2 = OutColor;
 }

@@ -798,7 +798,11 @@ public:
     void                CreateClearOITLayersSRB(IBuffer* pFrameAttribs, IBuffer* OITLayers, IShaderResourceBinding** ppSRB) const;
     void                CreateRWOITLayersSRB(IBuffer* OITLayers, ITextureView* pDepthSRV, IShaderResourceBinding** ppSRB) const;
     void                ClearOITLayers(IDeviceContext* pCtx, IShaderResourceBinding* pSRB, Uint32 Width, Uint32 Height) const;
-    void                CreateApplyOITAttenuationPSO(TEXTURE_FORMAT ColorFormat, TEXTURE_FORMAT DepthFormat, IPipelineState** ppPSO) const;
+    void                CreateApplyOITAttenuationPSO(const TEXTURE_FORMAT* RTVFormats,
+                                                     Uint32                NumRenderTargets,
+                                                     Uint32                RenderTargetMask,
+                                                     TEXTURE_FORMAT        DepthFormat,
+                                                     IPipelineState**      ppPSO) const;
     void                CreateApplyOITAttenuationSRB(IBuffer*                 pFrameAttribs,
                                                      IBuffer*                 OITLayers,
                                                      ITexture*                OITTail,

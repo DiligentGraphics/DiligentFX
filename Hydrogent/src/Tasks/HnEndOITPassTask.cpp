@@ -70,15 +70,21 @@ void HnEndOITPassTask::Prepare(pxr::HdTaskContext* TaskCtx,
 
     if (!m_ApplyOITAttenuationPSO)
     {
-        ITextureView* pColorRTV = FrameTargets->GBufferRTVs[HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR];
-        if (pColorRTV == nullptr)
+        ITextureView* pColorRTV     = FrameTargets->GBufferRTVs[HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR];
+        ITextureView* pBaseColorRTV = FrameTargets->GBufferRTVs[HnFrameRenderTargets::GBUFFER_TARGET_BASE_COLOR];
+        ITextureView* pIblRTV       = FrameTargets->GBufferRTVs[HnFrameRenderTargets::GBUFFER_TARGET_IBL];
+        if (pColorRTV == nullptr || pBaseColorRTV == nullptr || pIblRTV == nullptr)
         {
-            UNEXPECTED("Scene color target is null");
+            UNEXPECTED("Scene color, base color or IBL target is null");
             return;
         }
 
-        const TextureViewDesc& ColorDesc = pColorRTV->GetDesc();
-        Renderer.CreateApplyOITAttenuationPSO(ColorDesc.Format, TEX_FORMAT_UNKNOWN, &m_ApplyOITAttenuationPSO);
+        const TextureViewDesc& ColorDesc     = pColorRTV->GetDesc();
+        const TextureViewDesc& BaseColorDesc = pBaseColorRTV->GetDesc();
+        const TextureViewDesc& IblDesc       = pIblRTV->GetDesc();
+        const TEXTURE_FORMAT   RTVFormats[]  = {ColorDesc.Format, BaseColorDesc.Format, IblDesc.Format};
+
+        Renderer.CreateApplyOITAttenuationPSO(RTVFormats, _countof(RTVFormats), ~0u, TEX_FORMAT_UNKNOWN, &m_ApplyOITAttenuationPSO);
         VERIFY_EXPR(m_ApplyOITAttenuationPSO);
     }
 
@@ -113,13 +119,18 @@ void HnEndOITPassTask::Execute(pxr::HdTaskContext* TaskCtx)
         return;
     }
 
-    ITextureView* pColorRTV = FrameTargets->GBufferRTVs[HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR];
-    if (pColorRTV == nullptr)
+    ITextureView* ppRTVs[] = {
+        FrameTargets->GBufferRTVs[HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR],
+        FrameTargets->GBufferRTVs[HnFrameRenderTargets::GBUFFER_TARGET_BASE_COLOR],
+        FrameTargets->GBufferRTVs[HnFrameRenderTargets::GBUFFER_TARGET_IBL],
+    };
+    if (ppRTVs[0] == nullptr || ppRTVs[1] == nullptr || ppRTVs[2] == nullptr)
     {
-        UNEXPECTED("Scene color target is null");
+        UNEXPECTED("Scene color, base color or IBL target is null");
         return;
     }
-    pCtx->SetRenderTargets(1, &pColorRTV, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+    pCtx->SetRenderTargets(_countof(ppRTVs), ppRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
     const StateTransitionDesc Barriers[] =
         {

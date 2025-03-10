@@ -2268,21 +2268,61 @@ static constexpr BlendStateDesc BS_OITAttenuation{
         BLEND_FACTOR_SRC_ALPHA, // DestBlend
         BLEND_OPERATION_ADD,    // BlendOp
         BLEND_FACTOR_ZERO,      // SrcBlendAlpha
-        BLEND_FACTOR_ONE,       // DestBlendAlpha
+        BLEND_FACTOR_SRC_ALPHA, // DestBlendAlpha
         BLEND_OPERATION_ADD,    // BlendOpAlpha
     },
 };
 
-void PBR_Renderer::CreateApplyOITAttenuationPSO(TEXTURE_FORMAT ColorFormat, TEXTURE_FORMAT DepthFormat, IPipelineState** ppPSO) const
+void PBR_Renderer::CreateApplyOITAttenuationPSO(const TEXTURE_FORMAT* RTVFormats,
+                                                Uint32                NumRenderTargets,
+                                                Uint32                RenderTargetMask,
+                                                TEXTURE_FORMAT        DepthFormat,
+                                                IPipelineState**      ppPSO) const
 {
+    GraphicsPipelineStateCreateInfoX PsoCI{"OIT Attenuation"};
+
+    std::stringstream PSOutputSS;
+    std::stringstream PSMainFooterSS;
+    PSOutputSS << "struct PSOutput" << std::endl
+               << "{" << std::endl;
+    for (Uint32 rt = 0; rt < NumRenderTargets; ++rt)
+    {
+        PsoCI.AddRenderTarget(RTVFormats[rt]);
+        if (RTVFormats[rt] == TEX_FORMAT_UNKNOWN || (RenderTargetMask & (1u << rt)) == 0)
+        {
+            PsoCI.GraphicsPipeline.BlendDesc.RenderTargets[rt].RenderTargetWriteMask = COLOR_MASK_NONE;
+        }
+        else
+        {
+            PSOutputSS << "    float4 Color" << rt << " : SV_Target" << rt << ";" << std::endl;
+            PSMainFooterSS << "    PSOut.Color" << rt << " = OutColor;" << std::endl;
+        }
+    }
+    PSOutputSS << "};" << std::endl;
+
+    const std::string PSOutputStruct = PSOutputSS.str();
+    const std::string PSMainFooter   = PSMainFooterSS.str();
+
+    // Keep copies of generated strings in the factory when hot shader reload is allowed.
+    const bool CopyGeneratedStrings = m_Settings.AllowHotShaderReload;
+
+    RefCntAutoPtr<IShaderSourceInputStreamFactory> pMemorySourceFactory =
+        CreateMemoryShaderSourceFactory({
+                                            MemoryShaderSourceFileInfo{"PSOutputStruct.generated", PSOutputStruct},
+                                            MemoryShaderSourceFileInfo{"PSMainFooter.generated", PSMainFooter},
+                                        },
+                                        CopyGeneratedStrings);
+    RefCntAutoPtr<IShaderSourceInputStreamFactory> pShaderSourceFactory =
+        CreateCompoundShaderSourceFactory({&DiligentFXShaderSourceStreamFactory::GetInstance(), pMemorySourceFactory});
+
     ShaderMacroHelper Macros;
     Macros.Add("NUM_OIT_LAYERS", static_cast<int>(m_Settings.OITLayerCount));
 
     ShaderCreateInfo ShaderCI;
     ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
     ShaderCI.CompileFlags               = m_Settings.PackMatrixRowMajor ? SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR : SHADER_COMPILE_FLAG_NONE;
-    ShaderCI.pShaderSourceStreamFactory = &DiligentFXShaderSourceStreamFactory::GetInstance();
     ShaderCI.Macros                     = Macros;
+    ShaderCI.pShaderSourceStreamFactory = pShaderSourceFactory;
 
     RefCntAutoPtr<IShader> pScreenTriangleVS;
     {
@@ -2302,10 +2342,8 @@ void PBR_Renderer::CreateApplyOITAttenuationPSO(TEXTURE_FORMAT ColorFormat, TEXT
         pAttenuationPS = m_Device.CreateShader(ShaderCI);
     }
 
-    GraphicsPipelineStateCreateInfoX PsoCI{"OIT Attenuation"};
     PsoCI
         .AddSignature(m_OITAttenuationSignature)
-        .AddRenderTarget(ColorFormat)
         .SetDepthFormat(DepthFormat)
         .SetBlendDesc(BS_OITAttenuation)
         .SetDepthStencilDesc(DSS_DisableDepth)
