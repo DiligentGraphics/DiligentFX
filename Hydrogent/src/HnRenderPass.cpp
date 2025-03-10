@@ -1333,6 +1333,11 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
             if (Geo.TexCoords[1] != nullptr)
                 PSOFlags |= PBR_Renderer::PSO_FLAG_USE_TEXCOORD1;
 
+            if ((m_Params.UsdPsoFlags & USD_Renderer::USD_PSO_FLAG_ENABLE_MOTION_VECTORS_OUTPUT) != 0)
+            {
+                PSOFlags |= PBR_Renderer::PSO_FLAG_COMPUTE_MOTION_VECTORS;
+            }
+
             if (pMaterial != nullptr)
             {
                 const PBR_Renderer::PSO_FLAGS MaterialPSOFlags = GetMaterialPSOFlags(*pMaterial);
@@ -1343,7 +1348,7 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
                 else
                 {
                     // Color map is needed for alpha-masked materials
-                    PSOFlags |= (MaterialPSOFlags & (PBR_Renderer::PSO_FLAG_USE_COLOR_MAP & PBR_Renderer::PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM));
+                    PSOFlags |= (MaterialPSOFlags & (PBR_Renderer::PSO_FLAG_USE_COLOR_MAP | PBR_Renderer::PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM));
                 }
 
                 VERIFY(((m_Params.AlphaMode != USD_Renderer::ALPHA_MODE_NUM_MODES ? m_Params.AlphaMode : pMaterial->GetMaterialData().Attribs.AlphaMode) == State.AlphaMode ||

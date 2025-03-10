@@ -120,7 +120,6 @@ USD_Renderer::CreateInfo::PSMainSourceInfo USD_Renderer::GetUsdPbrPSMainSource(U
 #   endif
 #endif
 
-    Normal       *= Transmittance;
     MaterialData *= Transmittance;
     IBL          *= Transmittance;
 )";

@@ -208,7 +208,11 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
     const USD_Renderer& Renderer   = *static_cast<const HnRenderDelegate*>(GetRenderIndex().GetRenderDelegate())->GetUSDRenderer();
     const bool          OITEnabled = Renderer.GetSettings().OITLayerCount > 0;
 
-    USD_Renderer::USD_PSO_FLAGS TranslucentPassOutputs = USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS;
+    USD_Renderer::USD_PSO_FLAGS           TranslucentPassOutputs = USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS;
+    constexpr USD_Renderer::USD_PSO_FLAGS TranslucentMeshIdPassOutputs =
+        USD_Renderer::USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT |
+        USD_Renderer::USD_PSO_FLAG_ENABLE_MOTION_VECTORS_OUTPUT |
+        USD_Renderer::USD_PSO_FLAG_ENABLE_NORMAL_OUTPUT;
     if (OITEnabled)
     {
         CreateBeginOITPassTask();
@@ -222,8 +226,7 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                                });
         CreateEndOITPassTask();
         // We will write mesh ID, motion vectors and depth in a separate pass
-        TranslucentPassOutputs &= ~(USD_Renderer::USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT |
-                                    USD_Renderer::USD_PSO_FLAG_ENABLE_MOTION_VECTORS_OUTPUT);
+        TranslucentPassOutputs &= ~TranslucentMeshIdPassOutputs;
     }
 
     CreateRenderRprimsTask(HnMaterialTagTokens->translucent,
@@ -244,7 +247,7 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                                    HnRenderResourceTokens->renderPass_TransparentAll,
                                    HnRenderPassParams::SelectionType::All,
                                    USD_Renderer::RenderPassType::Main,
-                                   USD_Renderer::USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT | USD_Renderer::USD_PSO_FLAG_ENABLE_MOTION_VECTORS_OUTPUT,
+                                   TranslucentMeshIdPassOutputs,
                                    USD_Renderer::ALPHA_MODE_OPAQUE, // Override alpha mode
                                });
     }

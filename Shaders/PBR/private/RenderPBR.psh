@@ -549,7 +549,6 @@ PSOutput main(in VSOutput VSOut,
                 D = 1.0 - D;
             }
             Transmittance = GetOITTransmittance(D, uint2(VSOut.ClipPos.xy));
-            OutColor.rgb *= Transmittance;
         }
 #endif
     }
@@ -618,6 +617,8 @@ PSOutput main(in VSOutput VSOut,
     }
 #endif
 
+    OutColor.rgb *= Transmittance;
+ 
 #if CONVERT_OUTPUT_TO_SRGB
     {
         OutColor.rgb = FastLinearToSRGB(OutColor.rgb);
