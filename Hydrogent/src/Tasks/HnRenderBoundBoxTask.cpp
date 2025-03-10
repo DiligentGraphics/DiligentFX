@@ -72,7 +72,7 @@ void HnRenderBoundBoxTask::Sync(pxr::HdSceneDelegate* Delegate,
     *DirtyBits = pxr::HdChangeTracker::Clean;
 }
 
-static std::string GetBoundBoxPSMain(bool IsGL)
+static std::string GetBoundBoxPSMain()
 {
     static_assert(HnFrameRenderTargets::GBUFFER_TARGET_COUNT == 7, "Did you change the number of G-buffer targets? You may need to update the code below.");
 
@@ -83,21 +83,6 @@ void main(in BoundBoxVSOutput VSOut,
     ss << "          out float4 Color     : SV_Target" << HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR << ',' << std::endl
        << "          out float4 MotionVec : SV_Target" << HnFrameRenderTargets::GBUFFER_TARGET_MOTION_VECTOR;
 
-    if (IsGL)
-    {
-        // Normally, bound box shader does not need to write to anything but
-        // color and motion vector targets.
-        // However, in OpenGL this somehow results in color output also being
-        // written to the MeshID target. To work around this issue, we use a
-        // custom shader that writes 0.
-        ss << ',' << std::endl
-           << "          out float4 MeshId    : SV_Target" << HnFrameRenderTargets::GBUFFER_TARGET_MESH_ID << ',' << std::endl
-           << "          out float4 Normal    : SV_Target" << HnFrameRenderTargets::GBUFFER_TARGET_NORMAL << ',' << std::endl
-           << "          out float4 BaseColor : SV_Target" << HnFrameRenderTargets::GBUFFER_TARGET_BASE_COLOR << ',' << std::endl
-           << "          out float4 Material  : SV_Target" << HnFrameRenderTargets::GBUFFER_TARGET_MATERIAL << ',' << std::endl
-           << "          out float4 IBL       : SV_Target" << HnFrameRenderTargets::GBUFFER_TARGET_IBL;
-    }
-
     ss << R"()
 {
     BoundBoxOutput BoundBox = GetBoundBoxOutput(VSOut);
@@ -107,20 +92,8 @@ void main(in BoundBoxVSOutput VSOut,
     Color = float4(BoundBox.Color.rgb, 0.0);
 
     MotionVec = float4(BoundBox.MotionVector, 0.0, 1.0);
+}
 )";
-
-    if (IsGL)
-    {
-        ss << R"(
-    MeshId    = float4(0.0, 0.0, 0.0, 1.0);
-    Normal    = float4(0.0, 0.0, 1.0, 1.0);
-    BaseColor = float4(0.0, 0.0, 0.0, 0.0);
-    Material  = float4(0.0, 0.0, 0.0, 0.0);
-    IBL       = float4(0.0, 0.0, 0.0, 0.0);
-)";
-    }
-
-    ss << "}\n";
 
     return ss.str();
 }
@@ -185,7 +158,7 @@ void HnRenderBoundBoxTask::Prepare(pxr::HdTaskContext* TaskCtx,
             BoundBoxRndrCI.RenderTargetMask = ((1u << HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR) |
                                                (1u << HnFrameRenderTargets::GBUFFER_TARGET_MOTION_VECTOR));
 
-            const std::string PSMain = GetBoundBoxPSMain(BoundBoxRndrCI.pDevice->GetDeviceInfo().IsGLDevice());
+            const std::string PSMain = GetBoundBoxPSMain();
 
             BoundBoxRndrCI.PSMainSource = PSMain.c_str();
 

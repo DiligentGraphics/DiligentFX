@@ -81,7 +81,7 @@ void HnRenderEnvMapTask::Sync(pxr::HdSceneDelegate* Delegate,
     *DirtyBits = pxr::HdChangeTracker::Clean;
 }
 
-static std::string GetEnvMapPSMain(bool WriteAllTargets)
+static std::string GetEnvMapPSMain()
 {
     static_assert(HnFrameRenderTargets::GBUFFER_TARGET_COUNT == 7, "Did you change the number of G-buffer targets? You may need to update the code below.");
 
@@ -93,36 +93,14 @@ void main(in  float4 Pos       : SV_Position,
     ss << "          out float4 Color     : SV_Target" << HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR << ',' << std::endl
        << "          out float4 MotionVec : SV_Target" << HnFrameRenderTargets::GBUFFER_TARGET_MOTION_VECTOR;
 
-    if (WriteAllTargets)
-    {
-        ss << ',' << std::endl
-           << "          out float4 MeshId    : SV_Target" << HnFrameRenderTargets::GBUFFER_TARGET_MESH_ID << ',' << std::endl
-           << "          out float4 Normal    : SV_Target" << HnFrameRenderTargets::GBUFFER_TARGET_NORMAL << ',' << std::endl
-           << "          out float4 BaseColor : SV_Target" << HnFrameRenderTargets::GBUFFER_TARGET_BASE_COLOR << ',' << std::endl
-           << "          out float4 Material  : SV_Target" << HnFrameRenderTargets::GBUFFER_TARGET_MATERIAL << ',' << std::endl
-           << "          out float4 IBL       : SV_Target" << HnFrameRenderTargets::GBUFFER_TARGET_IBL;
-    }
-
     ss << R"()
 {
     SampleEnvMapOutput EnvMap = SampleEnvMap(ClipPos);
 
     Color     = EnvMap.Color;
     MotionVec = float4(EnvMap.MotionVector, 0.0, 1.0);
+}
 )";
-
-    if (WriteAllTargets)
-    {
-        ss << R"(
-    MeshId    = float4(0.0, 0.0, 0.0, 1.0);
-    Normal    = float4(0.0, 0.0, 0.0, 0.0);
-    BaseColor = float4(0.0, 0.0, 0.0, 0.0);
-    Material  = float4(0.0, 0.0, 0.0, 0.0);
-    IBL       = float4(0.0, 0.0, 0.0, 0.0);
-)";
-    }
-
-    ss << "}\n";
 
     return ss.str();
 }
@@ -156,7 +134,7 @@ void HnRenderEnvMapTask::Prepare(pxr::HdTaskContext* TaskCtx,
             EnvMapRndrCI.RenderTargetMask = ((1u << HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR) |
                                              (1u << HnFrameRenderTargets::GBUFFER_TARGET_MOTION_VECTOR));
 
-            const std::string PSMain = GetEnvMapPSMain(EnvMapRndrCI.pDevice->GetDeviceInfo().IsGLDevice());
+            const std::string PSMain = GetEnvMapPSMain();
 
             EnvMapRndrCI.PSMainSource = PSMain.c_str();
 
