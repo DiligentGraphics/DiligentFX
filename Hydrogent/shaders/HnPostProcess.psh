@@ -43,8 +43,9 @@ void main(in  FullScreenTriangleVSOutput VSOut,
     float4 Pos = VSOut.f4PixelPos;
 
     Color = g_ColorBuffer.Load(int3(Pos.xy, 0));
+    float Opacity = 1.0 - Color.a;
     
-    float SSRScale = g_Attribs.SSRScale * Color.a;
+    float SSRScale = g_Attribs.SSRScale * Opacity;
     if (SSRScale > 0.0)
     {
         float4 SpecularIBL = g_SpecularIBL.Load(int3(Pos.xy, 0));
@@ -71,7 +72,7 @@ void main(in  FullScreenTriangleVSOutput VSOut,
         Color.rgb += (SSR.rgb - SpecularIBL.rgb) * SSRRadiance.w * SSRScale;
     }
 
-    float SSAOScale = g_Attribs.SSAOScale * Color.a;
+    float SSAOScale = g_Attribs.SSAOScale * Opacity;
     if (SSAOScale > 0.0)
     {
         // Since Color.rgb may be blended with background, we need to attenuate the occlusion

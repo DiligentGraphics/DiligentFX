@@ -120,8 +120,9 @@ USD_Renderer::CreateInfo::PSMainSourceInfo USD_Renderer::GetUsdPbrPSMainSource(U
 #   endif
 #endif
 
-    MaterialData *= Transmittance;
-    IBL          *= Transmittance;
+    MaterialData  *= Transmittance;
+    IBL           *= Transmittance;
+    BaseColor.rgb *= Transmittance;
 )";
 
     if (PSOFlags & USD_PSO_FLAG_ENABLE_ALL_OUTPUTS)
