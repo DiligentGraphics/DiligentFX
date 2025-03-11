@@ -71,6 +71,8 @@ public:
 
     virtual void Execute(pxr::HdTaskContext* TaskCtx) override final;
 
+    virtual bool IsActive(pxr::HdRenderIndex& RenderIndex) const override final;
+
 private:
     void BindOITResources(HnRenderDelegate* RenderDelegate);
 

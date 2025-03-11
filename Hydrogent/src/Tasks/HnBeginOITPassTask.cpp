@@ -55,6 +55,15 @@ void HnBeginOITPassTask::Sync(pxr::HdSceneDelegate* Delegate,
     *DirtyBits = pxr::HdChangeTracker::Clean;
 }
 
+bool HnBeginOITPassTask::IsActive(pxr::HdRenderIndex& RenderIndex) const
+{
+    pxr::HdRenderDelegate* RenderDelegate = RenderIndex.GetRenderDelegate();
+    const HnRenderParam*   RenderParam    = static_cast<const HnRenderParam*>(RenderDelegate->GetRenderParam());
+    const HN_RENDER_MODE   RenderMode     = RenderParam->GetRenderMode();
+
+    return RenderMode == HN_RENDER_MODE_SOLID;
+}
+
 void HnBeginOITPassTask::Prepare(pxr::HdTaskContext* TaskCtx,
                                  pxr::HdRenderIndex* RenderIndex)
 {
@@ -188,8 +197,9 @@ void HnBeginOITPassTask::Execute(pxr::HdTaskContext* TaskCtx)
     const bool        IsWebGPUDevice = pDevice->GetDeviceInfo().IsWebGPUDevice();
     IDeviceContext*   pCtx           = RenderDelegate->GetDeviceContext();
 
-    const HnRenderParam* RenderParam         = static_cast<HnRenderParam*>(RenderDelegate->GetRenderParam());
-    const Uint32         OITResourcesVersion = RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::OITResources);
+    const HnRenderParam* RenderParam = static_cast<HnRenderParam*>(RenderDelegate->GetRenderParam());
+    VERIFY_EXPR(RenderParam->GetRenderMode() == HN_RENDER_MODE_SOLID);
+    const Uint32 OITResourcesVersion = RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::OITResources);
     if (m_BoundOITResourcesVersion != OITResourcesVersion)
     {
         BindOITResources(RenderDelegate);

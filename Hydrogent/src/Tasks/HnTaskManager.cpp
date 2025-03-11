@@ -223,6 +223,9 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                                    HnRenderPassParams::SelectionType::All,
                                    USD_Renderer::RenderPassType::OITLayers,
                                    USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS,
+                               },
+                               {
+                                   HnRenderRprimsTaskParams::RENDER_MODE_FLAG_SOLID,
                                });
         CreateEndOITPassTask();
         // We will write mesh ID, motion vectors and depth in a separate pass
@@ -406,10 +409,12 @@ pxr::SdfPath HnTaskManager::GetRenderRprimsTaskId(const pxr::TfToken& MaterialTa
     return GetTaskId(TfToken{Id});
 }
 
-void HnTaskManager::CreateRenderRprimsTask(const pxr::TfToken& MaterialTag, TaskUID UID, const HnRenderPassParams& RenderPassParams)
+void HnTaskManager::CreateRenderRprimsTask(const pxr::TfToken&             MaterialTag,
+                                           TaskUID                         UID,
+                                           const HnRenderPassParams&       RenderPassParams,
+                                           const HnRenderRprimsTaskParams& TaskParams)
 {
-    HnRenderRprimsTaskParams TaskParams;
-    pxr::SdfPath             RenderRprimsTaskId = GetRenderRprimsTaskId(MaterialTag, RenderPassParams);
+    pxr::SdfPath RenderRprimsTaskId = GetRenderRprimsTaskId(MaterialTag, RenderPassParams);
     // Note that we pass the delegate to the scene index. This delegate will be passed
     // to the task's Sync() method.
     CreateTask<HnRenderRprimsTask>(RenderRprimsTaskId, UID, TaskParams);
@@ -437,14 +442,6 @@ void HnTaskManager::CreateRenderRprimsTask(const pxr::TfToken& MaterialTag, Task
 void HnTaskManager::SetFrameParams(const HnBeginFrameTaskParams& Params)
 {
     SetTaskParams(TaskUID_BeginFrame, Params);
-}
-
-void HnTaskManager::SetRenderRprimParams(const HnRenderRprimsTaskParams& Params)
-{
-    for (const auto& TaskId : m_RenderTaskIds)
-    {
-        SetTaskParams(TaskId, Params);
-    }
 }
 
 void HnTaskManager::CreatePostProcessTask()
@@ -507,7 +504,7 @@ const pxr::HdTaskSharedPtrVector HnTaskManager::GetTasks(const std::vector<TaskU
 
     pxr::HdTaskSharedPtrVector Tasks;
     Tasks.reserve(TaskOrder->size());
-    for (auto UID : *TaskOrder)
+    for (TaskUID UID : *TaskOrder)
     {
         auto it = m_TaskInfo.find(UID);
         if (it == m_TaskInfo.end())
@@ -516,7 +513,17 @@ const pxr::HdTaskSharedPtrVector HnTaskManager::GetTasks(const std::vector<TaskU
         if (!it->second.Enabled)
             continue;
 
-        Tasks.push_back(m_RenderIndex.GetTask(it->second.Id));
+        if (pxr::HdTaskSharedPtr pTask = m_RenderIndex.GetTask(it->second.Id))
+        {
+            if (static_cast<const HnTask*>(pTask.get())->IsActive(m_RenderIndex))
+            {
+                Tasks.push_back(std::move(pTask));
+            }
+        }
+        else
+        {
+            UNEXPECTED("Task ", it->second.Id, " is not found in the render index");
+        }
     }
 
     return Tasks;
@@ -542,7 +549,7 @@ void HnTaskManager::SetCollection(const pxr::HdRprimCollection& Collection)
 
 void HnTaskManager::SetRenderTags(const pxr::TfTokenVector& RenderTags)
 {
-    for (const auto& TaskId : m_RenderTaskIds)
+    for (const pxr::SdfPath& TaskId : m_RenderTaskIds)
     {
         pxr::TfTokenVector OldRenderTags = m_ParamsDelegate.GetParameter<pxr::TfTokenVector>(TaskId, pxr::HdTokens->renderTags);
         if (OldRenderTags == RenderTags)

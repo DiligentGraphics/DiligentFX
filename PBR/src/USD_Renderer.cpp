@@ -118,11 +118,11 @@ USD_Renderer::CreateInfo::PSMainSourceInfo USD_Renderer::GetUsdPbrPSMainSource(U
 #   if LOADING_ANIMATION
         MaterialData = lerp(MaterialData, float2(1.0, 0.0), g_Frame.Renderer.LoadingAnimation.Factor);
 #   endif
-#endif
 
     MaterialData  *= Transmittance;
     IBL           *= Transmittance;
     BaseColor.rgb *= Transmittance;
+#endif
 )";
 
     if (PSOFlags & USD_PSO_FLAG_ENABLE_ALL_OUTPUTS)

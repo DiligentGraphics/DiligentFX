@@ -29,7 +29,8 @@
 #include "HnTask.hpp"
 #include "HnTypes.hpp"
 
-#include "../../../Common/interface/BasicMath.hpp"
+#include "../../../../DiligentCore/Common/interface/BasicMath.hpp"
+#include "../../../../DiligentCore/Primitives/interface/FlagEnum.h"
 
 #include "pxr/imaging/hd/renderPass.h"
 
@@ -43,9 +44,24 @@ class HnRenderPass;
 
 struct HnRenderRprimsTaskParams
 {
+    static_assert(HN_RENDER_MODE_COUNT == 3, "Did you add a new render mode? Please update the flags!");
+    enum RENDER_MODE_FLAGS : Uint32
+    {
+        RENDER_MODE_FLAG_NONE = 0u,
+
+        RENDER_MODE_FLAG_SOLID = 1u << HN_RENDER_MODE_SOLID,
+
+        RENDER_MODE_FLAG_MESH_EDGES = 1u << HN_RENDER_MODE_MESH_EDGES,
+
+        RENDER_MODE_FLAG_POINTS = 1u << HN_RENDER_MODE_POINTS,
+
+        RENDER_MODE_FLAG_ALL = RENDER_MODE_FLAG_SOLID | RENDER_MODE_FLAG_MESH_EDGES | RENDER_MODE_FLAG_POINTS
+    };
+    RENDER_MODE_FLAGS RenderModes = RENDER_MODE_FLAG_ALL;
+
     constexpr bool operator==(const HnRenderRprimsTaskParams& rhs) const
     {
-        return true;
+        return RenderModes == rhs.RenderModes;
     }
 
     constexpr bool operator!=(const HnRenderRprimsTaskParams& rhs) const
@@ -53,6 +69,7 @@ struct HnRenderRprimsTaskParams
         return !(*this == rhs);
     }
 };
+DEFINE_FLAG_ENUM_OPERATORS(HnRenderRprimsTaskParams::RENDER_MODE_FLAGS);
 
 /// Renders the Rprims by executing the render pass.
 /// The task should be executed after the HnSetupRenderingTask that prepares
@@ -79,7 +96,10 @@ public:
         return m_RenderTags;
     }
 
+    virtual bool IsActive(pxr::HdRenderIndex& RenderIndex) const override final;
+
 private:
+    HnRenderRprimsTaskParams      m_Params;
     pxr::TfTokenVector            m_RenderTags;
     std::shared_ptr<HnRenderPass> m_RenderPass;
 };

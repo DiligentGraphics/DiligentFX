@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2024 Diligent Graphics LLC
+ *  Copyright 2023-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ namespace USD
 {
 
 /// Renering mode
-enum HN_RENDER_MODE
+enum HN_RENDER_MODE : Uint8
 {
     /// Render solid geometry
     HN_RENDER_MODE_SOLID,

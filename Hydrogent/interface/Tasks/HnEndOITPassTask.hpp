@@ -66,6 +66,8 @@ public:
 
     virtual void Execute(pxr::HdTaskContext* TaskCtx) override final;
 
+    virtual bool IsActive(pxr::HdRenderIndex& RenderIndex) const override final;
+
 private:
     pxr::HdRenderIndex* m_RenderIndex = nullptr;
 

@@ -29,6 +29,7 @@
 #include "HnRenderPassState.hpp"
 #include "HnRenderPass.hpp"
 #include "HnTokens.hpp"
+#include "HnRenderParam.hpp"
 
 #include "pxr/imaging/hd/renderDelegate.h"
 
@@ -100,6 +101,7 @@ void HnRenderRprimsTask::Sync(pxr::HdSceneDelegate* Delegate,
         HnRenderRprimsTaskParams Params;
         if (GetTaskParams(Delegate, Params))
         {
+            m_Params = Params;
         }
     }
 
@@ -119,6 +121,15 @@ void HnRenderRprimsTask::Sync(pxr::HdSceneDelegate* Delegate,
 void HnRenderRprimsTask::Prepare(pxr::HdTaskContext* TaskCtx,
                                  pxr::HdRenderIndex* RenderIndex)
 {
+}
+
+bool HnRenderRprimsTask::IsActive(pxr::HdRenderIndex& RenderIndex) const
+{
+    pxr::HdRenderDelegate* RenderDelegate = RenderIndex.GetRenderDelegate();
+    const HnRenderParam*   RenderParam    = static_cast<const HnRenderParam*>(RenderDelegate->GetRenderParam());
+    const HN_RENDER_MODE   RenderMode     = RenderParam->GetRenderMode();
+
+    return (m_Params.RenderModes & (1u << RenderMode)) != 0;
 }
 
 void HnRenderRprimsTask::Execute(pxr::HdTaskContext* TaskCtx)

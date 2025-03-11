@@ -690,7 +690,6 @@ void HnBeginFrameTask::Execute(pxr::HdTaskContext* TaskCtx)
 
     HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
     HnRenderParam*    RenderParam    = static_cast<HnRenderParam*>(RenderDelegate->GetRenderParam());
-    USD_Renderer&     Renderer       = *RenderDelegate->GetUSDRenderer();
     IDeviceContext*   pCtx           = RenderDelegate->GetDeviceContext();
 
     ScopedDebugGroup DebugGroup{pCtx, "Begin Frame"};

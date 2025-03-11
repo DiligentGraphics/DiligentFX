@@ -30,6 +30,7 @@
 #include <vector>
 
 #include "Tasks/HnTask.hpp"
+#include "Tasks/HnRenderRprimsTask.hpp"
 
 #include "../../../../DiligentCore/Platforms/Basic/interface/DebugUtilities.hpp"
 
@@ -201,7 +202,6 @@ public:
                        TaskParamsType&&    Params);
 
     void SetFrameParams(const HnBeginFrameTaskParams& Params);
-    void SetRenderRprimParams(const HnRenderRprimsTaskParams& Params);
     void SetPostProcessParams(const HnPostProcessTaskParams& Params);
     void SetReadRprimIdParams(const HnReadRprimIdTaskParams& Params);
     void SetRenderBoundBoxParams(const HnRenderBoundBoxTaskParams& Params);
@@ -253,7 +253,10 @@ private:
     void CreateBeginFrameTask();
     void CreateBeginMainPassTask();
     void CreateRenderShadowsTask(const HnShadowMapManager& ShadowMapMgr);
-    void CreateRenderRprimsTask(const pxr::TfToken& MaterialTag, TaskUID UID, const HnRenderPassParams& RenderPassParams);
+    void CreateRenderRprimsTask(const pxr::TfToken&             MaterialTag,
+                                TaskUID                         UID,
+                                const HnRenderPassParams&       RenderPassParams,
+                                const HnRenderRprimsTaskParams& TaskParams = {});
     void CreateRenderEnvMapTask(const pxr::TfToken& RenderPassName);
     void CreateRenderBoundBoxTask(const pxr::TfToken& RenderPassName);
     void CreateBeginOITPassTask();

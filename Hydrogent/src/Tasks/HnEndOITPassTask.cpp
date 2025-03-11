@@ -53,6 +53,15 @@ void HnEndOITPassTask::Sync(pxr::HdSceneDelegate* Delegate,
     *DirtyBits = pxr::HdChangeTracker::Clean;
 }
 
+bool HnEndOITPassTask::IsActive(pxr::HdRenderIndex& RenderIndex) const
+{
+    pxr::HdRenderDelegate* RenderDelegate = RenderIndex.GetRenderDelegate();
+    const HnRenderParam*   RenderParam    = static_cast<const HnRenderParam*>(RenderDelegate->GetRenderParam());
+    const HN_RENDER_MODE   RenderMode     = RenderParam->GetRenderMode();
+
+    return RenderMode == HN_RENDER_MODE_SOLID;
+}
+
 void HnEndOITPassTask::Prepare(pxr::HdTaskContext* TaskCtx,
                                pxr::HdRenderIndex* RenderIndex)
 {
@@ -89,6 +98,7 @@ void HnEndOITPassTask::Prepare(pxr::HdTaskContext* TaskCtx,
     }
 
     HnRenderParam* RenderParam = static_cast<HnRenderParam*>(RenderDelegate->GetRenderParam());
+    VERIFY_EXPR(RenderParam->GetRenderMode() == HN_RENDER_MODE_SOLID);
     if (m_OITResourcesVersion != RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::OITResources))
     {
         m_ApplyOITAttenuationSRB.Release();
