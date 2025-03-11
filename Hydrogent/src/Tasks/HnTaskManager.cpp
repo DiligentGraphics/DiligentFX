@@ -208,11 +208,6 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
     const USD_Renderer& Renderer   = *static_cast<const HnRenderDelegate*>(GetRenderIndex().GetRenderDelegate())->GetUSDRenderer();
     const bool          OITEnabled = Renderer.GetSettings().OITLayerCount > 0;
 
-    USD_Renderer::USD_PSO_FLAGS           TranslucentPassOutputs = USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS;
-    constexpr USD_Renderer::USD_PSO_FLAGS TranslucentMeshIdPassOutputs =
-        USD_Renderer::USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT |
-        USD_Renderer::USD_PSO_FLAG_ENABLE_MOTION_VECTORS_OUTPUT |
-        USD_Renderer::USD_PSO_FLAG_ENABLE_NORMAL_OUTPUT;
     if (OITEnabled)
     {
         CreateBeginOITPassTask();
@@ -228,8 +223,6 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                                    HnRenderRprimsTaskParams::RENDER_MODE_FLAG_SOLID,
                                });
         CreateEndOITPassTask();
-        // We will write mesh ID, motion vectors and depth in a separate pass
-        TranslucentPassOutputs &= ~TranslucentMeshIdPassOutputs;
     }
 
     CreateRenderRprimsTask(HnMaterialTagTokens->translucent,
@@ -238,12 +231,20 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                                HnRenderResourceTokens->renderPass_TransparentAll,
                                HnRenderPassParams::SelectionType::All,
                                USD_Renderer::RenderPassType::Main,
-                               TranslucentPassOutputs,
+                               OITEnabled ? USD_Renderer::USD_PSO_FLAG_OIT_BLEND_OUTPUTS : USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS,
                            });
 
     if (OITEnabled)
     {
-        // When OIT is enabled, we do not render mesh ID, motion vectors and depth in translucent pass.
+        // Write outputs not produced by the OIT translucent pass (mesh id, motion vectors, normals)
+        constexpr USD_Renderer::USD_PSO_FLAGS TranslucentMeshIdPassOutputs =
+            USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS &
+            ~USD_Renderer::USD_PSO_FLAG_OIT_BLEND_OUTPUTS;
+        static_assert(TranslucentMeshIdPassOutputs ==
+                          (USD_Renderer::USD_PSO_FLAG_ENABLE_MOTION_VECTORS_OUTPUT |
+                           USD_Renderer::USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT |
+                           USD_Renderer::USD_PSO_FLAG_ENABLE_NORMAL_OUTPUT),
+                      "Unexpected translucent mesh id pass outputs - double check this is correct");
         CreateRenderRprimsTask(HnMaterialTagTokens->translucent,
                                TaskUID_RenderRprimsTranslucentMeshId,
                                {

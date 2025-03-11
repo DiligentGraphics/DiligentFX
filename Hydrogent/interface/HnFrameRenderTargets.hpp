@@ -29,7 +29,7 @@
 #include <array>
 
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/TextureView.h"
-#include "../../../DiligentFX/PBR/interface/PBR_Renderer.hpp"
+#include "../../../DiligentFX/PBR/interface/USD_Renderer.hpp"
 
 namespace Diligent
 {
@@ -67,6 +67,26 @@ struct HnFrameRenderTargets
     ITextureView* JitteredFinalColorRTV = nullptr;
 
     static const char* GetGBufferTargetName(GBUFFER_TARGET Id);
+
+    static constexpr GBUFFER_TARGET GetGBufferTargetFromRendererOutputFlag(USD_Renderer::USD_PSO_FLAGS OutputFlag)
+    {
+        static_assert(GBUFFER_TARGET_COUNT == 7, "Did you add a new GBuffer target? Please handle it here.");
+        switch (OutputFlag)
+        {
+                // clang-format off
+            case USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_OUTPUT:          return GBUFFER_TARGET_SCENE_COLOR;
+            case USD_Renderer::USD_PSO_FLAG_ENABLE_MESH_ID_OUTPUT:        return GBUFFER_TARGET_MESH_ID;
+            case USD_Renderer::USD_PSO_FLAG_ENABLE_MOTION_VECTORS_OUTPUT: return GBUFFER_TARGET_MOTION_VECTOR;
+            case USD_Renderer::USD_PSO_FLAG_ENABLE_NORMAL_OUTPUT:         return GBUFFER_TARGET_NORMAL;
+            case USD_Renderer::USD_PSO_FLAG_ENABLE_BASE_COLOR_OUTPUT:     return GBUFFER_TARGET_BASE_COLOR;
+            case USD_Renderer::USD_PSO_FLAG_ENABLE_MATERIAL_DATA_OUTPUT:  return GBUFFER_TARGET_MATERIAL;
+            case USD_Renderer::USD_PSO_FLAG_ENABLE_IBL_OUTPUT:            return GBUFFER_TARGET_IBL;
+                // clang-format on
+
+            default:
+                return GBUFFER_TARGET_COUNT;
+        }
+    }
 };
 
 } // namespace USD

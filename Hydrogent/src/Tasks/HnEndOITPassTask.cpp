@@ -62,6 +62,19 @@ bool HnEndOITPassTask::IsActive(pxr::HdRenderIndex& RenderIndex) const
     return RenderMode == HN_RENDER_MODE_SOLID;
 }
 
+static_assert(USD_Renderer::USD_PSO_FLAG_OIT_BLEND_OUTPUTS ==
+                  (USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_OUTPUT |
+                   USD_Renderer::USD_PSO_FLAG_ENABLE_BASE_COLOR_OUTPUT |
+                   USD_Renderer::USD_PSO_FLAG_ENABLE_MATERIAL_DATA_OUTPUT |
+                   USD_Renderer::USD_PSO_FLAG_ENABLE_IBL_OUTPUT),
+              "Did you change OIT blend output targets? You may need to update this code.");
+static constexpr std::array<HnFrameRenderTargets::GBUFFER_TARGET, 4> OITBlendTargetIds{
+    HnFrameRenderTargets::GetGBufferTargetFromRendererOutputFlag(USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_OUTPUT),
+    HnFrameRenderTargets::GetGBufferTargetFromRendererOutputFlag(USD_Renderer::USD_PSO_FLAG_ENABLE_BASE_COLOR_OUTPUT),
+    HnFrameRenderTargets::GetGBufferTargetFromRendererOutputFlag(USD_Renderer::USD_PSO_FLAG_ENABLE_MATERIAL_DATA_OUTPUT),
+    HnFrameRenderTargets::GetGBufferTargetFromRendererOutputFlag(USD_Renderer::USD_PSO_FLAG_ENABLE_IBL_OUTPUT),
+};
+
 void HnEndOITPassTask::Prepare(pxr::HdTaskContext* TaskCtx,
                                pxr::HdRenderIndex* RenderIndex)
 {
@@ -79,21 +92,18 @@ void HnEndOITPassTask::Prepare(pxr::HdTaskContext* TaskCtx,
 
     if (!m_ApplyOITAttenuationPSO)
     {
-        ITextureView* pColorRTV     = FrameTargets->GBufferRTVs[HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR];
-        ITextureView* pBaseColorRTV = FrameTargets->GBufferRTVs[HnFrameRenderTargets::GBUFFER_TARGET_BASE_COLOR];
-        ITextureView* pIblRTV       = FrameTargets->GBufferRTVs[HnFrameRenderTargets::GBUFFER_TARGET_IBL];
-        if (pColorRTV == nullptr || pBaseColorRTV == nullptr || pIblRTV == nullptr)
+        std::array<TEXTURE_FORMAT, OITBlendTargetIds.size()> RTVFormats;
+        for (size_t i = 0; i < RTVFormats.size(); ++i)
         {
-            UNEXPECTED("Scene color, base color or IBL target is null");
-            return;
+            ITextureView* pRTV = FrameTargets->GBufferRTVs[OITBlendTargetIds[i]];
+            if (pRTV == nullptr)
+            {
+                UNEXPECTED("Frame render target ", HnFrameRenderTargets::GetGBufferTargetName(OITBlendTargetIds[i]), " is null");
+                return;
+            }
+            RTVFormats[i] = pRTV->GetDesc().Format;
         }
-
-        const TextureViewDesc& ColorDesc     = pColorRTV->GetDesc();
-        const TextureViewDesc& BaseColorDesc = pBaseColorRTV->GetDesc();
-        const TextureViewDesc& IblDesc       = pIblRTV->GetDesc();
-        const TEXTURE_FORMAT   RTVFormats[]  = {ColorDesc.Format, BaseColorDesc.Format, IblDesc.Format};
-
-        Renderer.CreateApplyOITAttenuationPSO(RTVFormats, _countof(RTVFormats), ~0u, TEX_FORMAT_UNKNOWN, &m_ApplyOITAttenuationPSO);
+        Renderer.CreateApplyOITAttenuationPSO(RTVFormats.data(), static_cast<Uint32>(RTVFormats.size()), ~0u, TEX_FORMAT_UNKNOWN, &m_ApplyOITAttenuationPSO);
         VERIFY_EXPR(m_ApplyOITAttenuationPSO);
     }
 
@@ -116,6 +126,12 @@ void HnEndOITPassTask::Execute(pxr::HdTaskContext* TaskCtx)
         return;
     }
 
+    if (!m_ApplyOITAttenuationPSO)
+    {
+        UNEXPECTED("Apply OIT attenuation PSO is null.");
+        return;
+    }
+
     HnRenderDelegate*   RenderDelegate = static_cast<HnRenderDelegate*>(m_RenderIndex->GetRenderDelegate());
     const USD_Renderer& Renderer       = *RenderDelegate->GetUSDRenderer();
     IDeviceContext*     pCtx           = RenderDelegate->GetDeviceContext();
@@ -129,18 +145,17 @@ void HnEndOITPassTask::Execute(pxr::HdTaskContext* TaskCtx)
         return;
     }
 
-    ITextureView* ppRTVs[] = {
-        FrameTargets->GBufferRTVs[HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR],
-        FrameTargets->GBufferRTVs[HnFrameRenderTargets::GBUFFER_TARGET_BASE_COLOR],
-        FrameTargets->GBufferRTVs[HnFrameRenderTargets::GBUFFER_TARGET_IBL],
-    };
-    if (ppRTVs[0] == nullptr || ppRTVs[1] == nullptr || ppRTVs[2] == nullptr)
+    std::array<ITextureView*, OITBlendTargetIds.size()> ppRTVs;
+    for (size_t i = 0; i < ppRTVs.size(); ++i)
     {
-        UNEXPECTED("Scene color, base color or IBL target is null");
-        return;
+        ppRTVs[i] = FrameTargets->GBufferRTVs[OITBlendTargetIds[i]];
+        if (ppRTVs[i] == nullptr)
+        {
+            UNEXPECTED("Frame render target ", HnFrameRenderTargets::GetGBufferTargetName(OITBlendTargetIds[i]), " is null");
+            return;
+        }
     }
-
-    pCtx->SetRenderTargets(_countof(ppRTVs), ppRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    pCtx->SetRenderTargets(static_cast<Uint32>(ppRTVs.size()), ppRTVs.data(), nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
     const StateTransitionDesc Barriers[] =
         {

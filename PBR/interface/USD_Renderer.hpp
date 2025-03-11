@@ -70,6 +70,14 @@ public:
             USD_PSO_FLAG_ENABLE_NORMAL_OUTPUT |
             USD_PSO_FLAG_ENABLE_BASE_COLOR_OUTPUT |
             USD_PSO_FLAG_ENABLE_MATERIAL_DATA_OUTPUT |
+            USD_PSO_FLAG_ENABLE_IBL_OUTPUT,
+
+        // Outputs of the OIT blend pass.
+        // Do not render motion vectors, mesh ids and normals as blending them does not make sense.
+        USD_PSO_FLAG_OIT_BLEND_OUTPUTS =
+            USD_PSO_FLAG_ENABLE_COLOR_OUTPUT |
+            USD_PSO_FLAG_ENABLE_BASE_COLOR_OUTPUT |
+            USD_PSO_FLAG_ENABLE_MATERIAL_DATA_OUTPUT |
             USD_PSO_FLAG_ENABLE_IBL_OUTPUT
     };
 
