@@ -103,6 +103,9 @@ void HnBeginOITPassTask::Prepare(pxr::HdTaskContext* TaskCtx,
     const USD_Renderer& Renderer = *RenderDelegate->GetUSDRenderer();
     VERIFY_EXPR(Renderer.GetSettings().OITLayerCount > 0);
 
+    // If no translucent draw items were rendered in the last frame, we can skip clearing the layers.
+    m_OITLayersCleared = static_cast<bool>(FrameTargets->OIT) && m_RenderPassState.GetStats().NumDrawItems == 0;
+
     if (!FrameTargets->OIT)
     {
         FrameTargets->OIT = Renderer.CreateOITResources(ColorTargetDesc.Width, ColorTargetDesc.Height);
@@ -229,13 +232,15 @@ void HnBeginOITPassTask::Execute(pxr::HdTaskContext* TaskCtx)
         }
         Renderer.CreateRWOITLayersSRB(m_FrameTargets->OIT.Layers, pDepthSRV, &RWLayersSRB);
     }
-    const TextureDesc& OITTailDesc = m_FrameTargets->OIT.Tail->GetDesc();
-    Renderer.ClearOITLayers(pCtx, m_ClearLayersSRB, OITTailDesc.Width, OITTailDesc.Height);
+    if (!m_OITLayersCleared)
+    {
+        const TextureDesc& OITTailDesc = m_FrameTargets->OIT.Tail->GetDesc();
+        Renderer.ClearOITLayers(pCtx, m_ClearLayersSRB, OITTailDesc.Width, OITTailDesc.Height);
+    }
 
     IShaderResourceBinding* pFrameAttribsSRB = RenderDelegate->GetFrameAttribsSRB(HnRenderDelegate::FrameAttribsSRBType::Opaque);
     m_RenderPassState.SetFrameAttribsSRB(pFrameAttribsSRB);
     m_RenderPassState.SetRWOITLayersSRB(RWLayersSRB);
-    m_RenderPassState.Commit(pCtx);
 }
 
 } // namespace USD

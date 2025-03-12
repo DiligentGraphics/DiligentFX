@@ -47,6 +47,17 @@ namespace Diligent
 namespace USD
 {
 
+struct HnRenderPassStats
+{
+    Uint32 NumDrawItems = 0;
+
+    HnRenderPassStats& operator+=(const HnRenderPassStats& Stats)
+    {
+        NumDrawItems += Stats.NumDrawItems;
+        return *this;
+    }
+};
+
 /// Hydra render pass state implementation in Hydrogent.
 class HnRenderPassState final : public pxr::HdRenderPassState
 {
@@ -147,6 +158,14 @@ public:
         m_IsCommited = false;
     }
 
+
+    const HnRenderPassStats& GetStats() const { return m_Stats; }
+
+    void UpdateStats(const HnRenderPassStats& Stats)
+    {
+        m_Stats += Stats;
+    }
+
 private:
     Uint32                                         m_NumRenderTargets = 0;
     std::array<TEXTURE_FORMAT, MAX_RENDER_TARGETS> m_RTVFormats       = {};
@@ -163,6 +182,8 @@ private:
     bool                                          m_IsCommited  = false;
 
     bool m_FrontFaceCCW = false;
+
+    HnRenderPassStats m_Stats;
 };
 
 } // namespace USD

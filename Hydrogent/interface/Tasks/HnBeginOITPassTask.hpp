@@ -89,6 +89,7 @@ private:
     std::array<RefCntAutoPtr<IShaderResourceBinding>, 2> m_RWLayersSRBs;
 
     Uint32 m_BoundOITResourcesVersion = ~0u;
+    bool   m_OITLayersCleared         = false;
 };
 
 } // namespace USD

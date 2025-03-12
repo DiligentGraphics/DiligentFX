@@ -120,6 +120,8 @@ struct HnRenderPass::RenderState
     const Uint32 ConstantBufferOffsetAlignment;
     const bool   NativeMultiDrawSupported;
 
+    HnRenderPassStats Stats;
+
     RenderState(const HnRenderPass&      _RenderPass,
                 const HnRenderPassState& _RPState) :
         RenderPass{_RenderPass},
@@ -777,6 +779,8 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
     {
         FlushPendingDraws();
     }
+
+    RPState.UpdateStats(State.Stats);
 
     return m_UseFallbackPSO ? EXECUTE_RESULT_FALLBACK : EXECUTE_RESULT_OK;
 }
@@ -1612,6 +1616,8 @@ void HnRenderPass::RenderPendingDrawItems(RenderState& State)
 
         item_idx += PendingItem.DrawCount;
     }
+
+    State.Stats.NumDrawItems += static_cast<Uint32>(m_PendingDrawItems.size());
 
     m_PendingDrawItems.clear();
 }

@@ -30,6 +30,7 @@
 #include "HnTokens.hpp"
 #include "HnFrameRenderTargets.hpp"
 #include "HnRenderParam.hpp"
+#include "HnRenderPassState.hpp"
 
 namespace Diligent
 {
@@ -164,7 +165,12 @@ void HnEndOITPassTask::Execute(pxr::HdTaskContext* TaskCtx)
         };
     pCtx->TransitionResourceStates(_countof(Barriers), Barriers);
 
-    Renderer.ApplyOITAttenuation(pCtx, m_ApplyOITAttenuationPSO, m_ApplyOITAttenuationSRB);
+    HnRenderPassState* RenderPassState = GetRenderPassState(TaskCtx, HnRenderResourceTokens->renderPass_OITLayers);
+    VERIFY_EXPR(RenderPassState != nullptr);
+    if (RenderPassState != nullptr && RenderPassState->GetStats().NumDrawItems > 0)
+    {
+        Renderer.ApplyOITAttenuation(pCtx, m_ApplyOITAttenuationPSO, m_ApplyOITAttenuationSRB);
+    }
 }
 
 } // namespace USD

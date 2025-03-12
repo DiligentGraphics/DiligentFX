@@ -239,6 +239,7 @@ void HnRenderPassState::Begin(Uint32        NumRenderTargets,
     m_ClearDepth = ClearDepth;
 
     m_IsCommited = false;
+    m_Stats      = {};
 }
 
 } // namespace USD
