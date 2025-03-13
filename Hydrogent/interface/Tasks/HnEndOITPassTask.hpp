@@ -50,7 +50,8 @@ struct HnEndOITPassTaskParams
     }
 };
 
-/// Updates OIT layers
+/// Ends OIT pass
+/// - Applies OIT attenuation to the color, base color, material and IBL targets
 class HnEndOITPassTask final : public HnTask
 {
 public:

@@ -181,7 +181,7 @@ struct HnRenderPass::RenderState
         if (Type == PBR_Renderer::RenderPassType::OITLayers && pRWOITLayersSRB == nullptr)
         {
             pRWOITLayersSRB = RPState.GetRWOITLayersSRB();
-            VERIFY_EXPR(pRWOITLayersSRB != nullptr);
+            VERIFY_EXPR(pRWOITLayersSRB != nullptr, "RW OIT layers SRB is null. It should have been set in the render pass state by HnBeginOITPassTask::Execute().");
             pCtx->CommitShaderResources(pRWOITLayersSRB, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
         }
 

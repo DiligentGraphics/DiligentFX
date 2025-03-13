@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2024 Diligent Graphics LLC
+ *  Copyright 2023-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -72,7 +72,7 @@ struct HnRenderRprimsTaskParams
 DEFINE_FLAG_ENUM_OPERATORS(HnRenderRprimsTaskParams::RENDER_MODE_FLAGS);
 
 /// Renders the Rprims by executing the render pass.
-/// The task should be executed after the HnSetupRenderingTask that prepares
+/// The task should be executed after the HnBeginMainPassTask that prepares
 /// the render targets and sets the required task context and render pass state
 /// parameters.
 class HnRenderRprimsTask final : public HnTask

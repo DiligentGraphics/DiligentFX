@@ -55,7 +55,9 @@ struct HnBeginOITPassTaskParams
     }
 };
 
-/// Updates OIT layers
+/// Begins OIT pass
+/// - Binds OIT resources
+/// - Clears OIT layers
 class HnBeginOITPassTask final : public HnTask
 {
 public:

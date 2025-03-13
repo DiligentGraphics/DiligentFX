@@ -146,18 +146,8 @@ void HnEndOITPassTask::Execute(pxr::HdTaskContext* TaskCtx)
         return;
     }
 
-    std::array<ITextureView*, OITBlendTargetIds.size()> ppRTVs;
-    for (size_t i = 0; i < ppRTVs.size(); ++i)
-    {
-        ppRTVs[i] = FrameTargets->GBufferRTVs[OITBlendTargetIds[i]];
-        if (ppRTVs[i] == nullptr)
-        {
-            UNEXPECTED("Frame render target ", HnFrameRenderTargets::GetGBufferTargetName(OITBlendTargetIds[i]), " is null");
-            return;
-        }
-    }
-    pCtx->SetRenderTargets(static_cast<Uint32>(ppRTVs.size()), ppRTVs.data(), nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-
+    // Ubind OIT resources from output and transition to shader resource state
+    pCtx->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     const StateTransitionDesc Barriers[] =
         {
             {FrameTargets->OIT.Layers, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE},
@@ -169,6 +159,18 @@ void HnEndOITPassTask::Execute(pxr::HdTaskContext* TaskCtx)
     VERIFY_EXPR(RenderPassState != nullptr);
     if (RenderPassState != nullptr && RenderPassState->GetStats().NumDrawItems > 0)
     {
+        std::array<ITextureView*, OITBlendTargetIds.size()> ppRTVs;
+        for (size_t i = 0; i < ppRTVs.size(); ++i)
+        {
+            ppRTVs[i] = FrameTargets->GBufferRTVs[OITBlendTargetIds[i]];
+            if (ppRTVs[i] == nullptr)
+            {
+                UNEXPECTED("Frame render target ", HnFrameRenderTargets::GetGBufferTargetName(OITBlendTargetIds[i]), " is null");
+                return;
+            }
+        }
+        pCtx->SetRenderTargets(static_cast<Uint32>(ppRTVs.size()), ppRTVs.data(), nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
         Renderer.ApplyOITAttenuation(pCtx, m_ApplyOITAttenuationPSO, m_ApplyOITAttenuationSRB);
     }
 }

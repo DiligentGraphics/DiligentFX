@@ -48,7 +48,6 @@ namespace USD
 {
 
 class HnCamera;
-class HnRenderDelegate;
 
 struct HnBeginFrameTaskParams
 {
@@ -99,15 +98,16 @@ struct HnBeginFrameTaskParams
         constexpr bool operator==(const RendererParams& rhs) const
         {
             // clang-format off
-            return OcclusionStrength          == rhs.OcclusionStrength &&
-                   EmissionScale              == rhs.EmissionScale &&
-                   IBLScale                   == rhs.IBLScale &&
-                   UnshadedColor              == rhs.UnshadedColor &&
-                   PointSize                  == rhs.PointSize &&
-                   LoadingAnimationColor0     == rhs.LoadingAnimationColor0 &&
-                   LoadingAnimationColor1     == rhs.LoadingAnimationColor1 &&
-                   LoadingAnimationWorldScale == rhs.LoadingAnimationWorldScale &&
-                   LoadingAnimationSpeed      == rhs.LoadingAnimationSpeed;
+            return OcclusionStrength                  == rhs.OcclusionStrength &&
+                   EmissionScale                      == rhs.EmissionScale &&
+                   IBLScale                           == rhs.IBLScale &&
+                   UnshadedColor                      == rhs.UnshadedColor &&
+                   PointSize                          == rhs.PointSize &&
+                   LoadingAnimationColor0             == rhs.LoadingAnimationColor0 &&
+                   LoadingAnimationColor1             == rhs.LoadingAnimationColor1 &&
+                   LoadingAnimationWorldScale         == rhs.LoadingAnimationWorldScale &&
+                   LoadingAnimationSpeed              == rhs.LoadingAnimationSpeed &&
+                   LoadingAnimationTransitionDuration == rhs.LoadingAnimationTransitionDuration;
             // clang-format on
         }
     };

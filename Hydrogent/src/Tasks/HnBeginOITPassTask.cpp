@@ -104,12 +104,13 @@ void HnBeginOITPassTask::Prepare(pxr::HdTaskContext* TaskCtx,
     VERIFY_EXPR(Renderer.GetSettings().OITLayerCount > 0);
 
     // If no translucent draw items were rendered in the last frame, we can skip clearing the layers.
+    // Note that m_RenderPassState.Begin() clears the stats, so we need to check the stats before calling it.
     m_OITLayersCleared = static_cast<bool>(FrameTargets->OIT) && m_RenderPassState.GetStats().NumDrawItems == 0;
 
     if (!FrameTargets->OIT)
     {
         FrameTargets->OIT = Renderer.CreateOITResources(ColorTargetDesc.Width, ColorTargetDesc.Height);
-        // Mark OIT resources dirty to make render delegate recreate transparent pass frame attribs SRB.
+        // Mark OIT resources dirty to make render delegate recreate transparent pass frame attribs SRB in HnRenderDelegate::CommitResources().
         // We will set the OIT resources in the SBR in Execute().
         static_cast<HnRenderParam*>(RenderDelegate->GetRenderParam())->MakeAttribDirty(HnRenderParam::GlobalAttrib::OITResources);
     }

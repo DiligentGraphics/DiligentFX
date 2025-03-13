@@ -73,7 +73,8 @@ struct HnRenderPassParams
     {
         return (Selection == rhs.Selection &&
                 Type == rhs.Type &&
-                UsdPsoFlags == rhs.UsdPsoFlags);
+                UsdPsoFlags == rhs.UsdPsoFlags &&
+                AlphaMode == rhs.AlphaMode);
     }
 
     static const char* GetSelectionTypeString(SelectionType Type);

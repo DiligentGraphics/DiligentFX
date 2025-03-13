@@ -760,6 +760,7 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
         {
             m_ShadowAtlasVersion = ShadowAtlasVersion;
 
+            // Release the frame attribs SRBs to update the shadow map SRV.
             static_assert(static_cast<size_t>(FrameAttribsSRBType::Count) == 2, "Did you add a new FrameAttribsSRBType? You may need to update this code.");
             for (FrameAttribsSRBType Type : {FrameAttribsSRBType::Opaque, FrameAttribsSRBType::Transparent})
                 _GetFrameAttribsSRB(Type).Release();
@@ -769,8 +770,7 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
     const bool EnableOIT = m_USDRenderer->GetSettings().OITLayerCount > 0;
     if (EnableOIT)
     {
-        // OIT resource version is made dirty by HnBeginOITPassTask when the frame size changes.
-        // OIT resources will be set in the SRB by HnBeginOITPassTask::Execute().
+        // OIT resource version is made dirty by HnBeginOITPassTask::Prepare() when the frame size changes.
         if (m_OITResourcesVersion != m_RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::OITResources))
         {
             m_OITResourcesVersion = m_RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::OITResources);
@@ -832,6 +832,7 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
     {
         if (!TransparentPassFrameAttribsSRB)
         {
+            // OIT resources are set in the transparent pass SRB by HnBeginOITPassTask::Execute().
             TransparentPassFrameAttribsSRB = CreateFrameAttribsSRB(m_USDRenderer->GetPRBFrameAttribsSize(), pShadowSRV);
         }
     }

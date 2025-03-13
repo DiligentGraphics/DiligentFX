@@ -88,7 +88,6 @@ void main(in BoundBoxVSOutput VSOut,
     BoundBoxOutput BoundBox = GetBoundBoxOutput(VSOut);
 
     // Write 1.0 alpha as if bound box was fully transparent.
-    // In particular, this disables SSR.
     Color = float4(BoundBox.Color.rgb, 1.0);
 
     MotionVec = float4(BoundBox.MotionVector, 0.0, 1.0);

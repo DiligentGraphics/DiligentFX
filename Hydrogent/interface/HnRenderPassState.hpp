@@ -141,7 +141,7 @@ public:
     }
     bool GetUseReverseDepth() const
     {
-        return GetDepthFunc() == pxr::HdCmpFuncGreater;
+        return GetDepthFunc() == pxr::HdCmpFuncGreater || GetDepthFunc() == pxr::HdCmpFuncGEqual;
     }
 
     static constexpr Uint32 ClearDepthBit = 1u << 31u;

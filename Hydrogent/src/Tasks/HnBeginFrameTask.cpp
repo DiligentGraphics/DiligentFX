@@ -252,7 +252,7 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
     std::array<float4, HnFrameRenderTargets::GBUFFER_TARGET_COUNT> ClearValues; // No need to zero-initialize
     for (Uint32 i = 0; i < HnFrameRenderTargets::GBUFFER_TARGET_COUNT; ++i)
     {
-        // NB: we should clear alpha to one as it accumulates total transmittance
+        // NB: we should clear alpha to one as it accumulates the total transmittance
         ClearValues[i] = (i == HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR) ?
             float4{m_Params.ClearColor.r, m_Params.ClearColor.g, m_Params.ClearColor.b, 1.0} :
             float4{0};

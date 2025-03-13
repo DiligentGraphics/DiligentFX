@@ -628,6 +628,7 @@ void HnTaskManager::EnableMaterial(const pxr::TfToken& MaterialTag, bool Enable)
             EnableTask(TaskUID_BeginOITPass, Enable);
             EnableTask(TaskUID_RenderRprimsOITLayers, Enable);
             EnableTask(TaskUID_EndOITPass, Enable);
+            EnableTask(TaskUID_RenderRprimsTranslucentMeshId, Enable);
         }
     }
     else

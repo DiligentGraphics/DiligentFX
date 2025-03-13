@@ -111,12 +111,14 @@ public:
     ///                             * Binds and clears OIT layers for rendering
     ///                         - RenderRprimsOITLayers
     ///                         - EndOITPass
+    ///                             * Applies OIT attenuation to color, base color, material and IBL targets
     ///                         - RenderRprimsAdditive
     ///                             * Renders all Rprims with additive material tag
     ///                         - RenderRprimsTranslucent
     ///                             * Renders all Rprims with translucent material tag
-    ///                         - TaskUID_RenderRprimsTranslucentMeshId
-    ///                             * Renders all Rprims with translucent material tag (Mesh ID, Motion Vectors, Depth)
+    ///                             * If OIT is enabled, does not write Mesh ID, Motion Vectors, Normals, Depth
+    ///                         - RenderRprimsTranslucentMeshId
+    ///                             * Renders all Rprims with translucent material tag (Mesh ID, Motion Vectors, Normals, Depth)
     ///                         - RenderRprimsAdditiveSelected
     ///                             * Renders only selected Rprims with the additive material tag (depth only)
     ///                         - RenderRprimsTranslucentSelected
@@ -140,10 +142,10 @@ public:
     ///     | RenderBoundBox                  |                  |                   |   V    |           |          |                  |            |
     ///     | RenderRprimsAdditive            |       V          |         V         |   V    |     V     |    V     |                  |     V      |
     ///     | BeginOITPass                    |                  |                   |        |           |          |                  |            |
-    ///     | RenderRprimsOITLayers           |                  |                   |        |           |          |                  |            |
+    ///     | RenderRprimsOITLayers           |       V          |         V         |        |           |          |                  |            |
     ///	    | EndOITPass                      |                  |                   |        |           |          |                  |            |
     ///     | RenderRprimsTranslucent         |       V          |         V         |   V    |     V     |    V     |                  |     V      |
-    ///     | RenderRprimsTranslucentMeshId   |       V          |         V         |        |     V     |          |                  |     V      |
+    ///     | RenderRprimsTranslucentMeshId   |       V          |         V         |        |     V     |  MV, N   |                  |     V      |
     ///     | RenderRprimsAdditiveSelected    |       V          |                   |        |           |          |        V         |            |
     ///     | RenderRprimsTranslucentSelected |       V          |                   |        |           |          |        V         |            |
     ///     | ReadRprimId                     |                  |                   |        |           |          |                  |            |
