@@ -444,6 +444,7 @@ public:
         IridescenceThickness,
         Transmission,
         Thickness,
+        SceneDepth,
         NumDebugViews
     };
 

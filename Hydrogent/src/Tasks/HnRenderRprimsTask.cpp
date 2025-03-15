@@ -129,14 +129,23 @@ bool HnRenderRprimsTask::IsActive(pxr::HdRenderIndex& RenderIndex) const
     const HnRenderParam*   RenderParam    = static_cast<const HnRenderParam*>(RenderDelegate->GetRenderParam());
     const HN_RENDER_MODE   RenderMode     = RenderParam->GetRenderMode();
 
-    return (m_Params.RenderModes & (1u << RenderMode)) != 0;
+    if ((m_Params.RenderModes & (1u << RenderMode)) == 0)
+        return false;
+
+    if (m_RenderPass && m_RenderPass->GetParams().Type == USD_Renderer::RenderPassType::OITLayers)
+    {
+        // Scene depth debug view for transparent objects is rendered in opaque mode and does not need OIT layers.
+        return RenderParam->GetDebugView() != PBR_Renderer::DebugViewType::SceneDepth;
+    }
+
+    return true;
 }
 
 void HnRenderRprimsTask::Execute(pxr::HdTaskContext* TaskCtx)
 {
     if (m_RenderPass)
     {
-        const pxr::TfToken& RenderPassName = m_RenderPass->GetName();
+        const pxr::TfToken& RenderPassName = m_RenderPass->GetParams().Name;
 
         // Render pass state is initialized by HnBeginFrameTask.
         if (HnRenderPassState* RenderPassState = GetRenderPassState(TaskCtx, RenderPassName))

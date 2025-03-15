@@ -163,7 +163,8 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
     }
     const TextureDesc& FinalTargetDesc = pFinalColorRTV->GetTexture()->GetDesc();
 
-    HnRenderDelegate* RenderDelegate = static_cast<HnRenderDelegate*>(RenderIndex->GetRenderDelegate());
+    const HnRenderDelegate* RenderDelegate = static_cast<const HnRenderDelegate*>(RenderIndex->GetRenderDelegate());
+    const HnRenderParam*    RenderParam    = static_cast<const HnRenderParam*>(RenderDelegate->GetRenderParam());
 
     m_FrameBufferWidth  = FinalTargetDesc.Width;
     m_FrameBufferHeight = FinalTargetDesc.Height;
@@ -252,10 +253,23 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
     std::array<float4, HnFrameRenderTargets::GBUFFER_TARGET_COUNT> ClearValues; // No need to zero-initialize
     for (Uint32 i = 0; i < HnFrameRenderTargets::GBUFFER_TARGET_COUNT; ++i)
     {
-        // NB: we should clear alpha to one as it accumulates the total transmittance
-        ClearValues[i] = (i == HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR) ?
-            float4{m_Params.ClearColor.r, m_Params.ClearColor.g, m_Params.ClearColor.b, 1.0} :
-            float4{0};
+        if (i == HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR)
+        {
+            if (RenderParam->GetDebugView() != PBR_Renderer::DebugViewType::SceneDepth)
+            {
+                // NB: we should clear alpha to one as it accumulates the total transmittance
+                ClearValues[i] = float4{m_Params.ClearColor.r, m_Params.ClearColor.g, m_Params.ClearColor.b, 1.0};
+            }
+            else
+            {
+                // Clear background to white in scene depth debug view mode
+                ClearValues[i] = float4{1};
+            }
+        }
+        else
+        {
+            ClearValues[i] = float4{0};
+        }
     }
 
     HnRenderPassState& RP_OpaqueSelected      = m_RenderPassStates[HnRenderResourceTokens->renderPass_OpaqueSelected];

@@ -92,9 +92,9 @@ public:
 
     void SetParams(const HnRenderPassParams& Params);
 
-    const pxr::TfToken& GetName() const
+    const HnRenderPassParams& GetParams() const
     {
-        return m_Params.Name;
+        return m_Params;
     }
 
     // A mapping from the primvar name to its role (e.g. "points" -> "point", "normals" -> "normal", "st0" -> "textureCoordinate", etc.)

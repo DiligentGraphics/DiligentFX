@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023 Diligent Graphics LLC
+ *  Copyright 2023-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -66,6 +66,8 @@ public:
 
 
     virtual void Execute(pxr::HdTaskContext* TaskCtx) override final;
+
+    virtual bool IsActive(pxr::HdRenderIndex& RenderIndex) const override final;
 
 private:
     pxr::TfToken m_RenderPassName;

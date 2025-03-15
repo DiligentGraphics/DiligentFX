@@ -112,6 +112,13 @@ PBR_Renderer::PSOKey::PSOKey(RenderPassType       _Type,
         DebugView        = DebugViewType::None;
     }
 
+    if (DebugView == DebugViewType::SceneDepth)
+    {
+        // Rendering scene depth with blending does not make sense,
+        // so force alpha mode to opaque.
+        AlphaMode = ALPHA_MODE_OPAQUE;
+    }
+
     if (Flags & PSO_FLAG_UNSHADED)
     {
         AlphaMode = ALPHA_MODE_OPAQUE;
@@ -1382,7 +1389,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
         Macros.Add("PCF_FILTER_SIZE", KernelSize);
     }
 
-    static_assert(static_cast<int>(DebugViewType::NumDebugViews) == 34, "Did you add debug view? You may need to handle it here.");
+    static_assert(static_cast<int>(DebugViewType::NumDebugViews) == 35, "Did you add debug view? You may need to handle it here.");
     // clang-format off
     Macros.Add("DEBUG_VIEW",                       static_cast<int>(Key.GetDebugView()));
     Macros.Add("DEBUG_VIEW_NONE",                  static_cast<int>(DebugViewType::None));
@@ -1419,6 +1426,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
     Macros.Add("DEBUG_VIEW_IRIDESCENCE_THICKNESS", static_cast<int>(DebugViewType::IridescenceThickness));
     Macros.Add("DEBUG_VIEW_TRANSMISSION",          static_cast<int>(DebugViewType::Transmission));
     Macros.Add("DEBUG_VIEW_THICKNESS",             static_cast<int>(DebugViewType::Thickness));
+    Macros.Add("DEBUG_VIEW_SCENE_DEPTH",           static_cast<int>(DebugViewType::SceneDepth));
     // clang-format on
 
     static_assert(static_cast<int>(LoadingAnimationMode::Count) == 3, "Did you add new loading animation mode? You may need to handle it here.");
@@ -2596,7 +2604,7 @@ void* PBR_Renderer::WriteSkinningData(void* pDst, const WriteSkinningDataAttribs
 
 const char* PBR_Renderer::GetDebugViewTypeString(DebugViewType DebugView)
 {
-    static_assert(static_cast<int>(DebugViewType::NumDebugViews) == 34, "Please update the switch below to handle the new debug view type");
+    static_assert(static_cast<int>(DebugViewType::NumDebugViews) == 35, "Please update the switch below to handle the new debug view type");
     switch (DebugView)
     {
 #define DEBUG_VIEW_TYPE_CASE(Type) \
@@ -2636,6 +2644,7 @@ const char* PBR_Renderer::GetDebugViewTypeString(DebugViewType DebugView)
         DEBUG_VIEW_TYPE_CASE(IridescenceThickness);
         DEBUG_VIEW_TYPE_CASE(Transmission);
         DEBUG_VIEW_TYPE_CASE(Thickness);
+        DEBUG_VIEW_TYPE_CASE(SceneDepth);
 #undef DEBUG_VIEW_TYPE_CASE
 
         default:
