@@ -1360,7 +1360,7 @@ ShaderMacroHelper PBR_Renderer::DefineMacros(const PSOKey& Key) const
     }
 
     Macros.Add("PBR_WORKFLOW_METALLIC_ROUGHNESS", static_cast<int>(PBR_WORKFLOW_METALL_ROUGH));
-    Macros.Add("PBR_WORKFLOW_SPECULAR_GLOSINESS", static_cast<int>(PBR_WORKFLOW_SPEC_GLOSS));
+    Macros.Add("PBR_WORKFLOW_SPECULAR_GLOSSINESS", static_cast<int>(PBR_WORKFLOW_SPEC_GLOSS));
     Macros.Add("PBR_WORKFLOW_UNLIT", static_cast<int>(PBR_WORKFLOW_UNLIT));
 
     Macros.Add("PBR_ALPHA_MODE_OPAQUE", static_cast<int>(ALPHA_MODE_OPAQUE));

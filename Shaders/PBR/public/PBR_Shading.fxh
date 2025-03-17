@@ -368,7 +368,7 @@ float3 GetSpecularIBL_Charlie(in float3       SheenColor,
 
 /// Calculates surface reflectance info
 
-/// \param [in]  Workflow     - PBR workflow (PBR_WORKFLOW_SPECULAR_GLOSINESS or PBR_WORKFLOW_METALLIC_ROUGHNESS).
+/// \param [in]  Workflow     - PBR workflow (PBR_WORKFLOW_SPECULAR_GLOSSINESS or PBR_WORKFLOW_METALLIC_ROUGHNESS).
 /// \param [in]  BaseColor    - Material base color.
 /// \param [in]  PhysicalDesc - Physical material description. For Metallic-roughness workflow,
 ///                             'g' channel stores roughness, 'b' channel stores metallic.
@@ -387,7 +387,7 @@ SurfaceReflectanceInfo GetSurfaceReflectance(int       Workflow,
     // Metallic and Roughness material properties are packed together
     // In glTF, these factors can be specified by fixed scalar values
     // or from a metallic-roughness map
-    if (Workflow == PBR_WORKFLOW_SPECULAR_GLOSINESS)
+    if (Workflow == PBR_WORKFLOW_SPECULAR_GLOSSINESS)
     {
         SrfInfo.PerceptualRoughness = 1.0 - PhysicalDesc.a; // glossiness to roughness
         f0 = PhysicalDesc.rgb;
