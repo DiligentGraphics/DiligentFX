@@ -129,6 +129,59 @@ GLTF_PBR_Renderer::GLTF_PBR_Renderer(IRenderDevice*     pDevice,
     }
 }
 
+static RefCntAutoPtr<ITextureView> GetPBRTextureSRV(ITexture*                                           pTexture,
+                                                    PBR_Renderer::TEXTURE_ATTRIB_ID                     ID,
+                                                    PBR_Renderer::CreateInfo::TEX_COLOR_CONVERSION_MODE ConversionMode)
+{
+    if (pTexture == nullptr)
+    {
+        UNEXPECTED("Texture is null");
+        return {};
+    }
+
+    const TextureDesc& TexDesc = pTexture->GetDesc();
+    TEXTURE_FORMAT     ViewFmt = TexDesc.Format;
+    static_assert(PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT == 17, "Did you add a new texture attribute? It may need to be handled here.");
+    if ((ConversionMode == PBR_Renderer::CreateInfo::TEX_COLOR_CONVERSION_MODE_NONE) &&
+        (ID == PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR ||
+         ID == PBR_Renderer::TEXTURE_ATTRIB_ID_EMISSIVE ||
+         ID == PBR_Renderer::TEXTURE_ATTRIB_ID_SHEEN_COLOR))
+    {
+        const TextureFormatAttribs& FmtInfo = GetTextureFormatAttribs(ViewFmt);
+        if (FmtInfo.ComponentType != COMPONENT_TYPE_UNORM_SRGB)
+        {
+            if (FmtInfo.IsTypeless)
+            {
+                ViewFmt = TypelessFormatToSRGB(ViewFmt);
+            }
+            else
+            {
+                LOG_WARNING_MESSAGE("Unable to create sRGB view for texture '", pTexture->GetDesc().Name,
+                                    "' as its format (", FmtInfo.Name,
+                                    ") is not typeless. Expect images to be too bright. To fix this, either use "
+                                    "TEX_COLOR_CONVERSION_MODE_SRGB_TO_LINEAR or use typeless format for the texture.");
+            }
+        }
+    }
+
+    RefCntAutoPtr<ITextureView> pTexSRV;
+
+    if (TexDesc.Type == RESOURCE_DIM_TEX_2D_ARRAY && TexDesc.Format == ViewFmt)
+    {
+        pTexSRV = pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+    }
+    else
+    {
+        TextureViewDesc SRVDesc;
+        SRVDesc.ViewType   = TEXTURE_VIEW_SHADER_RESOURCE;
+        SRVDesc.TextureDim = RESOURCE_DIM_TEX_2D_ARRAY;
+        SRVDesc.Format     = ViewFmt;
+        pTexture->CreateView(SRVDesc, &pTexSRV);
+    }
+
+    return pTexSRV;
+}
+
 void GLTF_PBR_Renderer::InitMaterialSRB(GLTF::Model&            Model,
                                         GLTF::Material&         Material,
                                         IBuffer*                pFrameAttribs,
@@ -158,15 +211,7 @@ void GLTF_PBR_Renderer::InitMaterialSRB(GLTF::Model&            Model,
         {
             if (ITexture* pTexture = Model.GetTexture(TexIdx))
             {
-                if (pTexture->GetDesc().Type == RESOURCE_DIM_TEX_2D_ARRAY)
-                    pTexSRV = pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-                else
-                {
-                    TextureViewDesc SRVDesc;
-                    SRVDesc.ViewType   = TEXTURE_VIEW_SHADER_RESOURCE;
-                    SRVDesc.TextureDim = RESOURCE_DIM_TEX_2D_ARRAY;
-                    pTexture->CreateView(SRVDesc, &pTexSRV);
-                }
+                pTexSRV = GetPBRTextureSRV(pTexture, ID, m_Settings.TexColorConversionMode);
             }
         }
 
@@ -249,7 +294,14 @@ void GLTF_PBR_Renderer::CreateResourceCacheSRB(IRenderDevice*           pDevice,
         TEXTURE_FORMAT Fmt = CacheUseInfo.AtlasFormats[ID];
         if (ITexture* pTexture = CacheUseInfo.pResourceMgr->UpdateTexture(Fmt, pDevice, pCtx))
         {
-            this->SetMaterialTexture(pSRB, pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE), ID);
+            if (RefCntAutoPtr<ITextureView> pTexSRV = GetPBRTextureSRV(pTexture, ID, m_Settings.TexColorConversionMode))
+            {
+                this->SetMaterialTexture(pSRB, pTexSRV, ID);
+            }
+            else
+            {
+                UNEXPECTED("Failed to get SRV for atlas '", pTexture->GetDesc().Name, "'");
+            }
         }
     };
 

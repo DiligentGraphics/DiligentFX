@@ -174,7 +174,7 @@ public:
 
         ResourceCacheUseInfo() noexcept
         {
-            AtlasFormats.fill(TEX_FORMAT_RGBA8_UNORM);
+            AtlasFormats.fill(TEX_FORMAT_RGBA8_TYPELESS);
         }
 
         void SetAtlasFormats(TEXTURE_FORMAT Format)

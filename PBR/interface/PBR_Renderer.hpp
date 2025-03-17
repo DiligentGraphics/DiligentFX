@@ -341,7 +341,7 @@ public:
             ///             but the texture views are in linear color space.
             TEX_COLOR_CONVERSION_MODE_SRGB_TO_LINEAR,
         };
-        TEX_COLOR_CONVERSION_MODE TexColorConversionMode = TEX_COLOR_CONVERSION_MODE_SRGB_TO_LINEAR;
+        TEX_COLOR_CONVERSION_MODE TexColorConversionMode = TEX_COLOR_CONVERSION_MODE_NONE;
 
         struct PSMainSourceInfo
         {
