@@ -150,7 +150,12 @@ BaseLayerShadingInfo ReadBaseLayerProperties(in VSOutput              VSOut,
     PBRMaterialBasicAttribs BasicAttribs = Material.Basic;
     if (BasicAttribs.Workflow == PBR_WORKFLOW_SPECULAR_GLOSINESS)
     {
-        PhysicalDesc.rgb = TO_LINEAR(PhysicalDesc.rgb);
+        // Note that physical desc texture is always in linear space.
+        // Since specular/glossiness workflow expects it to be in sRGB space, we always
+        // need to convert it to linear space whether texture color conversion mode is
+        // TEX_COLOR_CONVERSION_MODE_NONE or TEX_COLOR_CONVERSION_MODE_SRGB_TO_LINEAR.
+        PhysicalDesc.rgb = FastSRGBToLinear(PhysicalDesc.rgb);
+
         PhysicalDesc.r *= BasicAttribs.SpecularFactorR;
         PhysicalDesc.g *= BasicAttribs.SpecularFactorG;
         PhysicalDesc.b *= BasicAttribs.SpecularFactorB;
