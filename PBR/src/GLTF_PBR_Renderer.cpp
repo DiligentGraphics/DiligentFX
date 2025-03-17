@@ -244,58 +244,59 @@ void GLTF_PBR_Renderer::CreateResourceCacheSRB(IRenderDevice*           pDevice,
 
     InitCommonSRBVars(pSRB, pFrameAttribs);
 
-    auto SetTexture = [&](TEXTURE_FORMAT Fmt, TEXTURE_ATTRIB_ID ID) //
+    auto SetTexture = [&](TEXTURE_ATTRIB_ID ID) //
     {
+        TEXTURE_FORMAT Fmt = CacheUseInfo.AtlasFormats[ID];
         if (ITexture* pTexture = CacheUseInfo.pResourceMgr->UpdateTexture(Fmt, pDevice, pCtx))
         {
             this->SetMaterialTexture(pSRB, pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE), ID);
         }
     };
 
-    SetTexture(CacheUseInfo.BaseColorFormat, TEXTURE_ATTRIB_ID_BASE_COLOR);
-    SetTexture(CacheUseInfo.PhysicalDescFormat, TEXTURE_ATTRIB_ID_PHYS_DESC);
-    SetTexture(CacheUseInfo.NormalFormat, TEXTURE_ATTRIB_ID_NORMAL);
+    SetTexture(TEXTURE_ATTRIB_ID_BASE_COLOR);
+    SetTexture(TEXTURE_ATTRIB_ID_PHYS_DESC);
+    SetTexture(TEXTURE_ATTRIB_ID_NORMAL);
     if (m_Settings.EnableAO)
     {
-        SetTexture(CacheUseInfo.OcclusionFormat, TEXTURE_ATTRIB_ID_OCCLUSION);
+        SetTexture(TEXTURE_ATTRIB_ID_OCCLUSION);
     }
     if (m_Settings.EnableEmissive)
     {
-        SetTexture(CacheUseInfo.EmissiveFormat, TEXTURE_ATTRIB_ID_EMISSIVE);
+        SetTexture(TEXTURE_ATTRIB_ID_EMISSIVE);
     }
 
     if (m_Settings.EnableClearCoat)
     {
-        SetTexture(CacheUseInfo.ClearCoatFormat, TEXTURE_ATTRIB_ID_CLEAR_COAT);
-        SetTexture(CacheUseInfo.ClearCoatRoughnessFormat, TEXTURE_ATTRIB_ID_CLEAR_COAT_ROUGHNESS);
-        SetTexture(CacheUseInfo.ClearCoatNormalFormat, TEXTURE_ATTRIB_ID_CLEAR_COAT_NORMAL);
+        SetTexture(TEXTURE_ATTRIB_ID_CLEAR_COAT);
+        SetTexture(TEXTURE_ATTRIB_ID_CLEAR_COAT_ROUGHNESS);
+        SetTexture(TEXTURE_ATTRIB_ID_CLEAR_COAT_NORMAL);
     }
 
     if (m_Settings.EnableSheen)
     {
-        SetTexture(CacheUseInfo.SheenColorFormat, TEXTURE_ATTRIB_ID_SHEEN_COLOR);
-        SetTexture(CacheUseInfo.SheenRoughnessFormat, TEXTURE_ATTRIB_ID_SHEEN_ROUGHNESS);
+        SetTexture(TEXTURE_ATTRIB_ID_SHEEN_COLOR);
+        SetTexture(TEXTURE_ATTRIB_ID_SHEEN_ROUGHNESS);
     }
 
     if (m_Settings.EnableAnisotropy)
     {
-        SetTexture(CacheUseInfo.AnisotropyFormat, TEXTURE_ATTRIB_ID_ANISOTROPY);
+        SetTexture(TEXTURE_ATTRIB_ID_ANISOTROPY);
     }
 
     if (m_Settings.EnableIridescence)
     {
-        SetTexture(CacheUseInfo.IridescenceFormat, TEXTURE_ATTRIB_ID_IRIDESCENCE);
-        SetTexture(CacheUseInfo.IridescenceThicknessFormat, TEXTURE_ATTRIB_ID_IRIDESCENCE_THICKNESS);
+        SetTexture(TEXTURE_ATTRIB_ID_IRIDESCENCE);
+        SetTexture(TEXTURE_ATTRIB_ID_IRIDESCENCE_THICKNESS);
     }
 
     if (m_Settings.EnableTransmission)
     {
-        SetTexture(CacheUseInfo.TransmissionFormat, TEXTURE_ATTRIB_ID_TRANSMISSION);
+        SetTexture(TEXTURE_ATTRIB_ID_TRANSMISSION);
     }
 
     if (m_Settings.EnableVolume)
     {
-        SetTexture(CacheUseInfo.ThicknessFormat, TEXTURE_ATTRIB_ID_THICKNESS);
+        SetTexture(TEXTURE_ATTRIB_ID_THICKNESS);
     }
 }
 

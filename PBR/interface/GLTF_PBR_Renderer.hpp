@@ -1,5 +1,5 @@
 /*
- *  Copyright 2019-2024 Diligent Graphics LLC
+ *  Copyright 2019-2025 Diligent Graphics LLC
  *  Copyright 2015-2019 Egor Yusov
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -169,53 +169,18 @@ public:
         /// Vertex layout key.
         GLTF::ResourceManager::VertexLayoutKey VtxLayoutKey;
 
-        /// Base color texture format.
-        TEXTURE_FORMAT BaseColorFormat = TEX_FORMAT_RGBA8_UNORM;
+        /// Texture atlas format for each texture attribute.
+        std::array<TEXTURE_FORMAT, TEXTURE_ATTRIB_ID_COUNT> AtlasFormats{};
 
-        /// Base color texture format for alpha-cut and alpha-blend materials.
-        TEXTURE_FORMAT BaseColorAlphaFormat = TEX_FORMAT_RGBA8_UNORM;
+        ResourceCacheUseInfo() noexcept
+        {
+            AtlasFormats.fill(TEX_FORMAT_RGBA8_UNORM);
+        }
 
-        /// Physical descriptor texture format.
-        TEXTURE_FORMAT PhysicalDescFormat = TEX_FORMAT_RGBA8_UNORM;
-
-        /// Normal map format.
-        TEXTURE_FORMAT NormalFormat = TEX_FORMAT_RGBA8_UNORM;
-
-        /// Occlusion texture format.
-        TEXTURE_FORMAT OcclusionFormat = TEX_FORMAT_RGBA8_UNORM;
-
-        /// Emissive texture format.
-        TEXTURE_FORMAT EmissiveFormat = TEX_FORMAT_RGBA8_UNORM;
-
-        /// Clear coat texture format.
-        TEXTURE_FORMAT ClearCoatFormat = TEX_FORMAT_RGBA8_UNORM;
-
-        /// Clear coat roughness texture format.
-        TEXTURE_FORMAT ClearCoatRoughnessFormat = TEX_FORMAT_RGBA8_UNORM;
-
-        /// Clear coat normal texture format.
-        TEXTURE_FORMAT ClearCoatNormalFormat = TEX_FORMAT_RGBA8_UNORM;
-
-        /// Sheen color texture format.
-        TEXTURE_FORMAT SheenColorFormat = TEX_FORMAT_RGBA8_UNORM;
-
-        /// Sheen roughness texture format.
-        TEXTURE_FORMAT SheenRoughnessFormat = TEX_FORMAT_RGBA8_UNORM;
-
-        /// Anisotropy texture format.
-        TEXTURE_FORMAT AnisotropyFormat = TEX_FORMAT_RGBA8_UNORM;
-
-        /// Iridescence texture format.
-        TEXTURE_FORMAT IridescenceFormat = TEX_FORMAT_RGBA8_UNORM;
-
-        /// Iridescence thickness texture format.
-        TEXTURE_FORMAT IridescenceThicknessFormat = TEX_FORMAT_RGBA8_UNORM;
-
-        /// Transmission texture format.
-        TEXTURE_FORMAT TransmissionFormat = TEX_FORMAT_RGBA8_UNORM;
-
-        /// Thickness texture format.
-        TEXTURE_FORMAT ThicknessFormat = TEX_FORMAT_RGBA8_UNORM;
+        void SetAtlasFormats(TEXTURE_FORMAT Format)
+        {
+            AtlasFormats.fill(Format);
+        }
     };
 
     /// Creates a shader resource binding for a GTLF resource cache.
