@@ -637,9 +637,13 @@ void EpipolarLightScattering::PrecomputeScatteringLUT(IRenderDevice* pDevice, IR
         ShaderMacroHelper Macros;
         DefineMacros(Macros);
         Macros.AddShaderMacro("THREAD_GROUP_SIZE", ThreadGroupSize);
+        // Vulkan requires image format to be specified in the shader, but glslang does not support
+        // the [[vk::image_format]] attribute (https://github.com/KhronosGroup/glslang/issues/3790).
+        // So we have to convert HLSL to GLSL so that the converter can add the attribute from the
+        // /*format=...*/ comment.
         RefCntAutoPtr<IShader> pPrecomputeSingleSctrCS =
             CreateShader(pDevice, pStateCache, "PrecomputeSingleScattering.fx", "PrecomputeSingleScatteringCS",
-                         SHADER_TYPE_COMPUTE, m_ShaderFlags, Macros);
+                         SHADER_TYPE_COMPUTE, m_ShaderFlags | SHADER_COMPILE_FLAG_HLSL_TO_SPIRV_VIA_GLSL, Macros);
         PipelineResourceLayoutDesc ResourceLayout;
         ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC;
         PrecomputeSingleSctrTech.InitializeComputeTechnique(pDevice, pStateCache, "PrecomputeSingleScattering", pPrecomputeSingleSctrCS, ResourceLayout);
@@ -683,9 +687,13 @@ void EpipolarLightScattering::PrecomputeScatteringLUT(IRenderDevice* pDevice, IR
         ShaderMacroHelper Macros;
         DefineMacros(Macros);
         Macros.AddShaderMacro("THREAD_GROUP_SIZE", ThreadGroupSize);
+        // Vulkan requires image format to be specified in the shader, but glslang does not support
+        // the [[vk::image_format]] attribute (https://github.com/KhronosGroup/glslang/issues/3790).
+        // So we have to convert HLSL to GLSL so that the converter can add the attribute from the
+        // /*format=...*/ comment.
         RefCntAutoPtr<IShader> pInitHighOrderScatteringCS =
             CreateShader(pDevice, pStateCache, "InitHighOrderScattering.fx", "InitHighOrderScatteringCS",
-                         SHADER_TYPE_COMPUTE, m_ShaderFlags, Macros);
+                         SHADER_TYPE_COMPUTE, m_ShaderFlags | SHADER_COMPILE_FLAG_HLSL_TO_SPIRV_VIA_GLSL, Macros);
         PipelineResourceLayoutDesc ResourceLayout;
         ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC;
         InitHighOrderScatteringTech.InitializeComputeTechnique(pDevice, pStateCache, "InitHighOrderScattering", pInitHighOrderScatteringCS, ResourceLayout);
@@ -698,9 +706,13 @@ void EpipolarLightScattering::PrecomputeScatteringLUT(IRenderDevice* pDevice, IR
         ShaderMacroHelper Macros;
         DefineMacros(Macros);
         Macros.AddShaderMacro("THREAD_GROUP_SIZE", ThreadGroupSize);
+        // Vulkan requires image format to be specified in the shader, but glslang does not support
+        // the [[vk::image_format]] attribute (https://github.com/KhronosGroup/glslang/issues/3790).
+        // So we have to convert HLSL to GLSL so that the converter can add the attribute from the
+        // /*format=...*/ comment.
         RefCntAutoPtr<IShader> pUpdateHighOrderScatteringCS =
             CreateShader(pDevice, pStateCache, "UpdateHighOrderScattering.fx", "UpdateHighOrderScatteringCS",
-                         SHADER_TYPE_COMPUTE, m_ShaderFlags, Macros);
+                         SHADER_TYPE_COMPUTE, m_ShaderFlags | SHADER_COMPILE_FLAG_HLSL_TO_SPIRV_VIA_GLSL, Macros);
         PipelineResourceLayoutDesc ResourceLayout;
         ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC;
         UpdateHighOrderScatteringTech.InitializeComputeTechnique(pDevice, pStateCache, "UpdateHighOrderScattering", pUpdateHighOrderScatteringCS, ResourceLayout);
@@ -713,9 +725,13 @@ void EpipolarLightScattering::PrecomputeScatteringLUT(IRenderDevice* pDevice, IR
         ShaderMacroHelper Macros;
         DefineMacros(Macros);
         Macros.AddShaderMacro("THREAD_GROUP_SIZE", ThreadGroupSize);
+        // Vulkan requires image format to be specified in the shader, but glslang does not support
+        // the [[vk::image_format]] attribute (https://github.com/KhronosGroup/glslang/issues/3790).
+        // So we have to convert HLSL to GLSL so that the converter can add the attribute from the
+        // /*format=...*/ comment.
         RefCntAutoPtr<IShader> pCombineScatteringOrdersCS =
             CreateShader(pDevice, pStateCache, "CombineScatteringOrders.fx", "CombineScatteringOrdersCS",
-                         SHADER_TYPE_COMPUTE, m_ShaderFlags, Macros);
+                         SHADER_TYPE_COMPUTE, m_ShaderFlags | SHADER_COMPILE_FLAG_HLSL_TO_SPIRV_VIA_GLSL, Macros);
         PipelineResourceLayoutDesc ResourceLayout;
         ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC;
         CombineScatteringOrdersTech.InitializeComputeTechnique(pDevice, pStateCache, "CombineScatteringOrders", pCombineScatteringOrdersCS, ResourceLayout);
