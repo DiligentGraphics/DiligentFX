@@ -41,10 +41,6 @@
 #include "Utilities/interface/DiligentFXShaderSourceStreamFactory.hpp"
 #include "ShaderSourceFactoryUtils.hpp"
 
-#if HLSL2GLSL_CONVERTER_SUPPORTED
-#    include "../include/HLSL2GLSLConverterImpl.hpp"
-#endif
-
 namespace Diligent
 {
 
@@ -1941,24 +1937,7 @@ void PBR_Renderer::CreatePSO(PsoHashMapType&             PsoHashMap,
                 {
 #ifdef HLSL2GLSL_CONVERTER_SUPPORTED
                     // Since we use gl_DrawID in HLSL, we need to manually convert the shader to GLSL
-                    HLSL2GLSLConverterImpl::ConversionAttribs Attribs;
-                    Attribs.pSourceStreamFactory       = ShaderCI.pShaderSourceStreamFactory;
-                    Attribs.EntryPoint                 = ShaderCI.EntryPoint;
-                    Attribs.ShaderType                 = ShaderCI.Desc.ShaderType;
-                    Attribs.InputFileName              = ShaderCI.FilePath;
-                    Attribs.SamplerSuffix              = UseCombinedSamplers ? ShaderCI.Desc.CombinedSamplerSuffix : ShaderDesc{}.CombinedSamplerSuffix;
-                    Attribs.UseInOutLocationQualifiers = true;
-                    Attribs.IncludeDefinitions         = true;
-
-                    GLSLSource = HLSL2GLSLConverterImpl::GetInstance().Convert(Attribs);
-                    if (GLSLSource.empty())
-                    {
-                        UNEXPECTED("Failed to convert HLSL source to GLSL");
-                    }
-                    ShaderCI.FilePath       = nullptr;
-                    ShaderCI.Source         = GLSLSource.c_str();
-                    ShaderCI.SourceLength   = GLSLSource.length();
-                    ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_GLSL;
+                    ShaderCI.CompileFlags |= SHADER_COMPILE_FLAG_HLSL_TO_SPIRV_VIA_GLSL;
 #else
                     UNSUPPORTED("Primitive array on Vulkan requires HLSL2GLSL converter");
 #endif

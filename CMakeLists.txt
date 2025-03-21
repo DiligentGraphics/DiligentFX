@@ -30,7 +30,6 @@ PUBLIC
 )
 
 if (TARGET Diligent-HLSL2GLSLConverterLib)
-    target_link_libraries(DiligentFX PRIVATE Diligent-HLSL2GLSLConverterLib)
     target_compile_definitions(DiligentFX PRIVATE HLSL2GLSL_CONVERTER_SUPPORTED=1)
 endif()
 
