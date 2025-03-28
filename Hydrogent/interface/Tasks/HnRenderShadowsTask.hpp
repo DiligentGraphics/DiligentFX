@@ -1,5 +1,5 @@
 /*
- *  Copyright 2024 Diligent Graphics LLC
+ *  Copyright 2024-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -105,6 +105,8 @@ public:
                          pxr::HdRenderIndex* RenderIndex) override final;
 
     virtual void Execute(pxr::HdTaskContext* TaskCtx) override final;
+
+    virtual bool IsActive(pxr::HdRenderIndex& RenderIndex) const override final;
 
 private:
     void PrepareClearDepthPSO(const HnRenderDelegate& RenderDelegate);
