@@ -130,7 +130,7 @@ float3 ToneMap(in float3 f3Color, ToneMappingAttribs Attribs, float fAveLogLum)
         float3 whiteScale = float3(1.0, 1.0, 1.0) / Uncharted2Tonemap(float3(whitePoint, whitePoint, whitePoint));
         return curr*whiteScale;
     }
-#elif TONE_MAPPING_MODE == TONE_MAPPING_FILMIC_ALU
+#elif TONE_MAPPING_MODE == TONE_MAPPING_MODE_FILMIC_ALU
     {
         // http://www.gdcvault.com/play/1012459/Uncharted_2__HDR_Lighting
         float3 f3ToneMappedColor = max(f3ScaledColor - float3(0.004, 0.004, 0.004), float3(0.0, 0.0, 0.0));
@@ -139,13 +139,13 @@ float3 ToneMap(in float3 f3Color, ToneMappingAttribs Attribs, float fAveLogLum)
         // result has 1/2.2 gamma baked in
         return pow(f3ToneMappedColor, float3(2.2, 2.2, 2.2));
     }
-#elif TONE_MAPPING_MODE == TONE_MAPPING_LOGARITHMIC
+#elif TONE_MAPPING_MODE == TONE_MAPPING_MODE_LOGARITHMIC
     {
         // http://www.mpi-inf.mpg.de/resources/tmo/logmap/logmap.pdf
         float fToneMappedLum = log10(1.0 + fScaledPixelLum) / log10(1.0 + whitePoint);
 	    return fToneMappedLum * pow(f3Color / fInitialPixelLum, Attribs.fLuminanceSaturation * float3(1.0, 1.0, 1.0));
     }
-#elif TONE_MAPPING_MODE == TONE_MAPPING_ADAPTIVE_LOG
+#elif TONE_MAPPING_MODE == TONE_MAPPING_MODE_ADAPTIVE_LOG
     {
         // http://www.mpi-inf.mpg.de/resources/tmo/logmap/logmap.pdf
         float Bias = 0.85;
@@ -154,14 +154,14 @@ float3 ToneMap(in float3 f3Color, ToneMappingAttribs Attribs, float fAveLogLum)
             log(1.0 + fScaledPixelLum) / log( 2.0 + 8.0 * pow( fScaledPixelLum / whitePoint, log(Bias) / log(0.5)) );
 	    return fToneMappedLum * pow(f3Color / fInitialPixelLum, Attribs.fLuminanceSaturation * float3(1.0, 1.0, 1.0));
     }
-#elif TONE_MAPPING_MODE == TONE_MAPPING_AGX
+#elif TONE_MAPPING_MODE == TONE_MAPPING_MODE_AGX
     {
         // https://iolite-engine.com/blog_posts/minimal_agx_implementation
         float3 f3ToneMappedColor  = AgX(f3ScaledColor);
         f3ToneMappedColor = AgXEotf(f3ToneMappedColor);
         return f3ToneMappedColor;
     }
-#elif TONE_MAPPING_MODE == TONE_MAPPING_AGX_CUSTOM
+#elif TONE_MAPPING_MODE == TONE_MAPPING_MODE_AGX_CUSTOM
     {
         // https://iolite-engine.com/blog_posts/minimal_agx_implementation
         // The constant was chosen experimentally to preserve the brightness when changing the tone mapper

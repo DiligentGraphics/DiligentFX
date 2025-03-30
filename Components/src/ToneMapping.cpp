@@ -1,5 +1,5 @@
 /*
- *  Copyright 2024 Diligent Graphics LLC
+ *  Copyright 2024-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -92,11 +92,11 @@ bool ToneMappingUpdateUI(HLSL::ToneMappingAttribs& Attribs, float* AverageLogLum
         ToneMappingMode[TONE_MAPPING_MODE_REINHARD]     = "Reinhard";
         ToneMappingMode[TONE_MAPPING_MODE_REINHARD_MOD] = "Reinhard Mod";
         ToneMappingMode[TONE_MAPPING_MODE_UNCHARTED2]   = "Uncharted 2";
-        ToneMappingMode[TONE_MAPPING_FILMIC_ALU]        = "Filmic ALU";
-        ToneMappingMode[TONE_MAPPING_LOGARITHMIC]       = "Logarithmic";
-        ToneMappingMode[TONE_MAPPING_ADAPTIVE_LOG]      = "Adaptive log";
-        ToneMappingMode[TONE_MAPPING_AGX]               = "AgX";
-        ToneMappingMode[TONE_MAPPING_AGX_CUSTOM]        = "AgX Custom";
+        ToneMappingMode[TONE_MAPPING_MODE_FILMIC_ALU]   = "Filmic ALU";
+        ToneMappingMode[TONE_MAPPING_MODE_LOGARITHMIC]  = "Logarithmic";
+        ToneMappingMode[TONE_MAPPING_MODE_ADAPTIVE_LOG] = "Adaptive log";
+        ToneMappingMode[TONE_MAPPING_MODE_AGX]          = "AgX";
+        ToneMappingMode[TONE_MAPPING_MODE_AGX_CUSTOM]   = "AgX Custom";
         if (ImGui::Combo("Tone Mapping Mode", &Attribs.iToneMappingMode, ToneMappingMode.data(), static_cast<int>(ToneMappingMode.size())))
             AttribsChanged = true;
     }
@@ -112,14 +112,14 @@ bool ToneMappingUpdateUI(HLSL::ToneMappingAttribs& Attribs, float* AverageLogLum
 
     if (Attribs.iToneMappingMode == TONE_MAPPING_MODE_REINHARD_MOD ||
         Attribs.iToneMappingMode == TONE_MAPPING_MODE_UNCHARTED2 ||
-        Attribs.iToneMappingMode == TONE_MAPPING_LOGARITHMIC ||
-        Attribs.iToneMappingMode == TONE_MAPPING_ADAPTIVE_LOG)
+        Attribs.iToneMappingMode == TONE_MAPPING_MODE_LOGARITHMIC ||
+        Attribs.iToneMappingMode == TONE_MAPPING_MODE_ADAPTIVE_LOG)
     {
         if (ImGui::SliderFloat("White point", &Attribs.fWhitePoint, 0.1f, 20.0f))
             AttribsChanged = true;
     }
 
-    if (Attribs.iToneMappingMode == TONE_MAPPING_AGX_CUSTOM)
+    if (Attribs.iToneMappingMode == TONE_MAPPING_MODE_AGX_CUSTOM)
     {
         if (ImGui::SliderFloat("AgX Saturation", &Attribs.AgX.Saturation, 0.0f, 2.0f))
             AttribsChanged = true;
