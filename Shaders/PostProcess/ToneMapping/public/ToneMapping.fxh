@@ -170,6 +170,29 @@ float3 ToneMap(in float3 f3Color, ToneMappingAttribs Attribs, float fAveLogLum)
         f3ToneMappedColor = AgXEotf(f3ToneMappedColor);
         return f3ToneMappedColor;
     }
+#elif TONE_MAPPING_MODE == TONE_MAPPING_MODE_PBR_NEUTRAL
+    {
+        // https://www.khronos.org/news/press/khronos-pbr-neutral-tone-mapper-released-for-true-to-life-color-rendering-of-3d-products
+        // https://github.com/KhronosGroup/ToneMapping/blob/main/PBR_Neutral/pbrNeutral.glsl
+        float StartCompression = 0.8 - 0.04;
+        float Desaturation     = 0.15;
+    
+        float x = min(f3Color.r, min(f3Color.g, f3Color.b));
+        float Offset = x < 0.08 ? x - 6.25 * x * x : 0.04;
+        f3Color -= Offset;
+
+        float Peak = max(f3Color.r, max(f3Color.g, f3Color.b));
+        if (Peak >= StartCompression)
+        {
+            float d = 1.0 - StartCompression;
+            float NewPeak = 1.0 - d * d / (Peak + d - StartCompression);
+            f3Color *= NewPeak / Peak;
+
+            float g = 1.0 - 1.0 / (Desaturation * (Peak - NewPeak) + 1.0);
+            f3Color = lerp(f3Color, float3(NewPeak, NewPeak, NewPeak), g);
+        }
+        return f3Color;    
+    }
 #else
     {
         return f3Color;

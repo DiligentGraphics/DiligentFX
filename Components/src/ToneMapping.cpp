@@ -86,7 +86,7 @@ bool ToneMappingUpdateUI(HLSL::ToneMappingAttribs& Attribs, float* AverageLogLum
 {
     bool AttribsChanged = false;
     {
-        std::array<const char*, 10> ToneMappingMode{};
+        std::array<const char*, 11> ToneMappingMode{};
         ToneMappingMode[TONE_MAPPING_MODE_NONE]         = "None";
         ToneMappingMode[TONE_MAPPING_MODE_EXP]          = "Exp";
         ToneMappingMode[TONE_MAPPING_MODE_REINHARD]     = "Reinhard";
@@ -97,6 +97,7 @@ bool ToneMappingUpdateUI(HLSL::ToneMappingAttribs& Attribs, float* AverageLogLum
         ToneMappingMode[TONE_MAPPING_MODE_ADAPTIVE_LOG] = "Adaptive log";
         ToneMappingMode[TONE_MAPPING_MODE_AGX]          = "AgX";
         ToneMappingMode[TONE_MAPPING_MODE_AGX_CUSTOM]   = "AgX Custom";
+        ToneMappingMode[TONE_MAPPING_MODE_PBR_NEUTRAL]  = "PBR Neutral";
         if (ImGui::Combo("Tone Mapping Mode", &Attribs.iToneMappingMode, ToneMappingMode.data(), static_cast<int>(ToneMappingMode.size())))
             AttribsChanged = true;
     }
