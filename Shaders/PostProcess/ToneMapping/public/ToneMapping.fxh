@@ -117,10 +117,10 @@ float3 ToneMap(in float3 f3Color, ToneMappingAttribs Attribs, float fAveLogLum)
         }
 #       else
         {
-	        fToneMappedLum = L_xy * (1.0 + L_xy / (whitePoint*whitePoint)) / (1.0 + L_xy);
+            fToneMappedLum = L_xy * (1.0 + L_xy / (whitePoint*whitePoint)) / (1.0 + L_xy);
         }
 #       endif
-	    return fToneMappedLum * pow(f3Color / fInitialPixelLum, Attribs.fLuminanceSaturation * float3(1.0, 1.0, 1.0));
+        return fToneMappedLum * pow(f3Color / fInitialPixelLum, Attribs.fLuminanceSaturation * float3(1.0, 1.0, 1.0));
     }
 #elif TONE_MAPPING_MODE == TONE_MAPPING_MODE_UNCHARTED2
     {
@@ -143,7 +143,7 @@ float3 ToneMap(in float3 f3Color, ToneMappingAttribs Attribs, float fAveLogLum)
     {
         // http://www.mpi-inf.mpg.de/resources/tmo/logmap/logmap.pdf
         float fToneMappedLum = log10(1.0 + fScaledPixelLum) / log10(1.0 + whitePoint);
-	    return fToneMappedLum * pow(f3Color / fInitialPixelLum, Attribs.fLuminanceSaturation * float3(1.0, 1.0, 1.0));
+        return fToneMappedLum * pow(f3Color / fInitialPixelLum, Attribs.fLuminanceSaturation * float3(1.0, 1.0, 1.0));
     }
 #elif TONE_MAPPING_MODE == TONE_MAPPING_MODE_ADAPTIVE_LOG
     {
@@ -152,7 +152,7 @@ float3 ToneMap(in float3 f3Color, ToneMappingAttribs Attribs, float fAveLogLum)
         float fToneMappedLum = 
             1.0 / log10(1.0 + whitePoint) *
             log(1.0 + fScaledPixelLum) / log( 2.0 + 8.0 * pow( fScaledPixelLum / whitePoint, log(Bias) / log(0.5)) );
-	    return fToneMappedLum * pow(f3Color / fInitialPixelLum, Attribs.fLuminanceSaturation * float3(1.0, 1.0, 1.0));
+        return fToneMappedLum * pow(f3Color / fInitialPixelLum, Attribs.fLuminanceSaturation * float3(1.0, 1.0, 1.0));
     }
 #elif TONE_MAPPING_MODE == TONE_MAPPING_MODE_AGX
     {
@@ -176,7 +176,7 @@ float3 ToneMap(in float3 f3Color, ToneMappingAttribs Attribs, float fAveLogLum)
         // https://github.com/KhronosGroup/ToneMapping/blob/main/PBR_Neutral/pbrNeutral.glsl
         float StartCompression = 0.8 - 0.04;
         float Desaturation     = 0.15;
-    
+
         float x = min(f3Color.r, min(f3Color.g, f3Color.b));
         float Offset = x < 0.08 ? x - 6.25 * x * x : 0.04;
         f3Color -= Offset;
@@ -191,7 +191,28 @@ float3 ToneMap(in float3 f3Color, ToneMappingAttribs Attribs, float fAveLogLum)
             float g = 1.0 - 1.0 / (Desaturation * (Peak - NewPeak) + 1.0);
             f3Color = lerp(f3Color, float3(NewPeak, NewPeak, NewPeak), g);
         }
-        return f3Color;    
+        return f3Color;
+    }
+#elif TONE_MAPPING_MODE == TONE_MAPPING_MODE_COMMERCE
+    {
+        // https://github.com/google/model-viewer/pull/4495
+        float StartCompression = 0.8;
+        float Desaturation = 0.5;
+
+        float d = 1.0 - StartCompression;
+        float Peak = max(f3Color.r, max(f3Color.g, f3Color.b));
+        if (Peak >= StartCompression)
+        {
+            float NewPeak = 1.0 - d * d / (Peak + d - StartCompression);
+            float InvPeak = 1.0 / Peak;
+
+            float ExtraBrightness = dot(f3Color * (1.0 - StartCompression * InvPeak), float3(1.0, 1.0, 1.0));
+
+            f3Color *= NewPeak * InvPeak;
+            float g = 1.0 - 3.0 / (Desaturation * ExtraBrightness + 3.0);
+            f3Color = lerp(f3Color, float3(1.0, 1.0, 1.0), g); 
+        }
+        return f3Color;
     }
 #else
     {

@@ -19,6 +19,7 @@
 #define TONE_MAPPING_MODE_AGX           8
 #define TONE_MAPPING_MODE_AGX_CUSTOM    9
 #define TONE_MAPPING_MODE_PBR_NEUTRAL  10
+#define TONE_MAPPING_MODE_COMMERCE     11
 
 struct AgXAttribs
 {
