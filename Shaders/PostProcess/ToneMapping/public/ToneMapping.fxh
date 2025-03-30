@@ -172,6 +172,8 @@ float3 ToneMap(in float3 f3Color, ToneMappingAttribs Attribs, float fAveLogLum)
     }
 #elif TONE_MAPPING_MODE == TONE_MAPPING_MODE_PBR_NEUTRAL
     {
+        f3Color *= 0.3 / fAveLogLum;
+ 
         // https://www.khronos.org/news/press/khronos-pbr-neutral-tone-mapper-released-for-true-to-life-color-rendering-of-3d-products
         // https://github.com/KhronosGroup/ToneMapping/blob/main/PBR_Neutral/pbrNeutral.glsl
         float StartCompression = 0.8 - 0.04;
@@ -195,6 +197,8 @@ float3 ToneMap(in float3 f3Color, ToneMappingAttribs Attribs, float fAveLogLum)
     }
 #elif TONE_MAPPING_MODE == TONE_MAPPING_MODE_COMMERCE
     {
+        f3Color *= 0.3 / fAveLogLum;
+    
         // https://github.com/google/model-viewer/pull/4495
         float StartCompression = 0.8;
         float Desaturation = 0.5;
