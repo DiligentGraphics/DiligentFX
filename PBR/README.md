@@ -68,7 +68,7 @@ m_GLTFRenderer->Render(m_pImmediateContext, *m_Model, m_RenderParams);
 
 For more details, see [GLTFViewer.cpp](https://github.com/DiligentGraphics/DiligentSamples/blob/master/Samples/GLTFViewer/src/GLTFViewer.cpp).
 
-# References
+## References
 
 [GLTF Sampler Viewer][1]
 
