@@ -601,9 +601,10 @@ PSOutput main(in VSOutput VSOut,
     }
 #   elif (DEBUG_VIEW == DEBUG_VIEW_SCENE_DEPTH)
     {
-        float CameraZ = DepthToCameraZ(VSOut.ClipPos.z, g_Frame.Camera.mProj);
-        CameraZ = (CameraZ - g_Frame.Camera.fNearPlaneZ) / (g_Frame.Camera.fFarPlaneZ - g_Frame.Camera.fNearPlaneZ);
-        OutColor.rgb = float3(CameraZ, CameraZ, CameraZ);
+        float CameraZ     = DepthToCameraZ(VSOut.ClipPos.z, g_Frame.Camera.mProj);
+        float SceneZRange = max(g_Frame.Camera.fSceneFarZ - g_Frame.Camera.fSceneNearZ, 1e-6);
+        float RelSceneZ   = saturate((CameraZ - g_Frame.Camera.fSceneNearZ) / SceneZRange);
+        OutColor.rgb = float3(RelSceneZ, RelSceneZ, RelSceneZ);
     }
 #   elif (DEBUG_VIEW != DEBUG_VIEW_NONE)
     {

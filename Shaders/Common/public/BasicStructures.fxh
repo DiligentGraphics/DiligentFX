@@ -90,12 +90,18 @@ struct CameraAttribs
     float fFarPlaneZ;  // fNearPlaneZ < fFarPlaneZ
     float fNearPlaneDepth;
     float fFarPlaneDepth;
-    
+
+    // Tight scene bounds
+    float fSceneNearZ;
+    float fSceneFarZ; // fSceneNearZ < fSceneFarZ
+    float fSceneNearDepth;
+    float fSceneFarDepth;
+
     float fHandness;   // +1.0 for right-handed coordinate system, -1.0 for left-handed
     uint  uiFrameIndex;
     float Padding0;
     float Padding1;
-    
+
     // Distance to the point of focus
     float fFocusDistance DEFAULT_VALUE(10.0f); 
     // Ratio of the aperture (known as f-stop or f-number)
@@ -104,14 +110,14 @@ struct CameraAttribs
     float fFocalLength   DEFAULT_VALUE(50.0f);
     // Sensor width in mm
     float fSensorWidth   DEFAULT_VALUE(36.0f);
-    
+
     // Sensor height in mm
     float  fSensorHeight  DEFAULT_VALUE(24.0f);
     // 	Exposure adjustment as a log base-2 value.
     float  fExposure      DEFAULT_VALUE(0.0f);
     // TAA jitter
     float2 f2Jitter;
-    
+
     float4x4 mView;
     float4x4 mProj;
     float4x4 mViewProj;
@@ -120,6 +126,26 @@ struct CameraAttribs
     float4x4 mViewProjInv;
 
     float4 f4ExtraData[5]; // Any appliation-specific data
+
+#ifdef __cplusplus
+    // Set the near and far clip planes z and depth values.
+    //
+    // fNearZ > fFarZ means that the depth buffer is reversed.
+    void SetClipPlanes(float fNearZ, float fFarZ)
+    {
+        bool UseReverseDepth = fNearZ > fFarZ;
+
+        fNearPlaneZ     = UseReverseDepth ? fFarZ  : fNearZ;
+        fFarPlaneZ      = UseReverseDepth ? fNearZ : fFarZ;
+        fNearPlaneDepth = UseReverseDepth ? 1.f : 0.f;
+        fFarPlaneDepth  = UseReverseDepth ? 0.f : 1.f;
+
+        fSceneNearZ     = fNearPlaneZ;
+        fSceneFarZ      = fFarPlaneZ;
+        fSceneNearDepth = fNearPlaneDepth;
+        fSceneFarDepth  = fFarPlaneDepth;
+    }
+#endif
 };
 #ifdef CHECK_STRUCT_ALIGNMENT
     CHECK_STRUCT_ALIGNMENT(CameraAttribs);

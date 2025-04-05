@@ -534,20 +534,9 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
 
             float fNearPlaneZ, fFarPlaneZ;
             ProjMatrix.GetNearFarClipPlanes(fNearPlaneZ, fFarPlaneZ, pDevice->GetDeviceInfo().NDC.MinZ == -1);
-            if (m_Params.UseReverseDepth)
-            {
-                CamAttribs.fNearPlaneZ     = fFarPlaneZ;
-                CamAttribs.fFarPlaneZ      = fNearPlaneZ;
-                CamAttribs.fNearPlaneDepth = 1.f;
-                CamAttribs.fFarPlaneDepth  = 0.f;
-            }
-            else
-            {
-                CamAttribs.fNearPlaneZ     = fNearPlaneZ;
-                CamAttribs.fFarPlaneZ      = fFarPlaneZ;
-                CamAttribs.fNearPlaneDepth = 0.f;
-                CamAttribs.fFarPlaneDepth  = 1.f;
-            }
+            VERIFY_EXPR((!m_Params.UseReverseDepth && (fNearPlaneZ <= fFarPlaneZ)) ||
+                        (m_Params.UseReverseDepth && (fNearPlaneZ >= fFarPlaneZ)));
+            CamAttribs.SetClipPlanes(fNearPlaneZ, fFarPlaneZ);
 
             if (CamAttribs.mView != PrevCamera.mView)
             {
