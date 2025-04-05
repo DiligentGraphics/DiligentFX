@@ -144,6 +144,7 @@ void HnRenderBoundBoxTask::Prepare(pxr::HdTaskContext* TaskCtx,
         {
             BoundBoxRenderer::CreateInfo BoundBoxRndrCI;
             BoundBoxRndrCI.pDevice            = pRenderDelegate->GetDevice();
+            BoundBoxRndrCI.pStateCache        = pRenderDelegate->GetRenderStateCache();
             BoundBoxRndrCI.PackMatrixRowMajor = pRenderDelegate->GetUSDRenderer()->GetSettings().PackMatrixRowMajor;
             BoundBoxRndrCI.AsyncShaders       = pRenderParam->GetConfig().AsyncShaderCompilation;
             BoundBoxRndrCI.pCameraAttribsCB   = pRenderDelegate->GetFrameAttribsCB();

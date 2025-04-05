@@ -135,6 +135,7 @@ void HnRenderEnvMapTask::Prepare(pxr::HdTaskContext* TaskCtx,
         {
             EnvMapRenderer::CreateInfo EnvMapRndrCI;
             EnvMapRndrCI.pDevice            = pRenderDelegate->GetDevice();
+            EnvMapRndrCI.pStateCache        = pRenderDelegate->GetRenderStateCache();
             EnvMapRndrCI.pCameraAttribsCB   = pRenderDelegate->GetFrameAttribsCB();
             EnvMapRndrCI.PackMatrixRowMajor = USDRenderer->GetSettings().PackMatrixRowMajor;
             EnvMapRndrCI.NumRenderTargets   = RenderPassState->GetNumRenderTargets();
