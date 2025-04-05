@@ -795,7 +795,7 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
                                          BindPrimitiveAttribsBuffer,
                                          BindMaterialAttribsBuffer,
                                          ShadowSRV);
-        if (auto* pVar = SRB->GetVariableByName(SHADER_TYPE_VERTEX, "cbFrameAttribs"))
+        if (IShaderResourceVariable* pVar = SRB->GetVariableByName(SHADER_TYPE_VERTEX, "cbFrameAttribs"))
         {
             // m_FrameAttribsCB has space for the main pass and all shadow passes.
             pVar->SetBufferRange(m_FrameAttribsCB, 0, BufferRange);
@@ -863,7 +863,7 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
 
             HnMaterial::BeginResourceUpdate(*this);
             bool AllMaterialsUpdated = true;
-            for (auto* pMat : m_Materials)
+            for (HnMaterial* pMat : m_Materials)
             {
                 if (!pMat->UpdateSRB(*this))
                     AllMaterialsUpdated = false;
@@ -880,13 +880,13 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
     }
 
     {
-        const auto MeshVersion =
+        const uint32_t MeshVersion =
             m_RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::MeshGeometry) +
             HnMesh::GetCacheResourceVersion(*this);
         if (m_MeshResourcesVersion != MeshVersion)
         {
             std::lock_guard<std::mutex> Guard{m_MeshesMtx};
-            for (auto* pMesh : m_Meshes)
+            for (HnMesh* pMesh : m_Meshes)
             {
                 pMesh->CommitGPUResources(*this);
             }
@@ -895,7 +895,7 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
     }
 
     {
-        const auto LightResourcesVersion = m_RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::LightResources);
+        const uint32_t LightResourcesVersion = m_RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::LightResources);
         if (m_LightResourcesVersion != LightResourcesVersion)
         {
             std::lock_guard<std::mutex> Guard{m_LightsMtx};
