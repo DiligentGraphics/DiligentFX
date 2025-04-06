@@ -2222,7 +2222,7 @@ void PBR_Renderer::CreateClearOITLayersPSO()
         "main",
         Macros,
         SHADER_SOURCE_LANGUAGE_HLSL,
-        {"PBR VS", SHADER_TYPE_COMPUTE, true},
+        {"Clear OIT Layers CS", SHADER_TYPE_COMPUTE, true},
     };
     ShaderCI.CompileFlags = m_Settings.PackMatrixRowMajor ? SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR : SHADER_COMPILE_FLAG_NONE;
 
