@@ -124,7 +124,8 @@ void HnBeginOITPassTask::Prepare(pxr::HdTaskContext* TaskCtx,
         FrameTargets->DepthDSV->GetDesc().Format :
         TEX_FORMAT_UNKNOWN;
     if (m_RenderPassState.GetDepthStencilFormat() != DepthFormat ||
-        m_RenderPassState.GetUseReverseDepth() != UseReverseDepth)
+        m_RenderPassState.GetUseReverseDepth() != UseReverseDepth ||
+        m_RenderPassState.GetNumRenderTargets() != 1)
     {
         const TEXTURE_FORMAT OITRTVFormats[] = {USD_Renderer::OITTailFmt};
         m_RenderPassState.Init(
