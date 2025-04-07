@@ -202,6 +202,7 @@ void HnPostProcessTask::PostProcessingTechnique::PreparePSO(TEXTURE_FORMAT RTVFo
         ShaderMacroHelper Macros;
         Macros.Add("CONVERT_OUTPUT_TO_SRGB", ConvertOutputToSRGB);
         Macros.Add("TONE_MAPPING_MODE", ToneMappingMode);
+        Macros.Add("DEBUG_VIEW_SCENE_DEPTH", static_cast<int>(PBR_Renderer::DebugViewType::SceneDepth));
         if (GridFeatureFlags != CoordinateGridRenderer::FEATURE_FLAG_NONE)
         {
             Macros.Add("ENABLE_GRID", 1);

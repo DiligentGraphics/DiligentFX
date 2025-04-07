@@ -41,6 +41,7 @@ set(SOURCE
     src/Tasks/HnBeginFrameTask.cpp
     src/Tasks/HnRenderShadowsTask.cpp
     src/Tasks/HnBeginOITPassTask.cpp
+    src/Tasks/HnComputeDepthBoundsTask.cpp
     src/Tasks/HnEndOITPassTask.cpp
     src/Tasks/HnBeginMainPassTask.cpp
     src/Tasks/HnRenderRprimsTask.cpp
@@ -91,6 +92,7 @@ set(INTERFACE
     interface/Tasks/HnBeginMainPassTask.hpp
     interface/Tasks/HnRenderShadowsTask.hpp
     interface/Tasks/HnBeginOITPassTask.hpp
+    interface/Tasks/HnComputeDepthBoundsTask.hpp
     interface/Tasks/HnEndOITPassTask.hpp
     interface/Tasks/HnRenderRprimsTask.hpp
     interface/Tasks/HnRenderEnvMapTask.hpp

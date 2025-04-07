@@ -74,6 +74,7 @@ public:
     static constexpr TaskUID TaskUID_RenderBoundBox                  = 0x1e7e47f37e6445b4;
     static constexpr TaskUID TaskUID_ReadRprimId                     = 0x199572fe7ff144ef;
     static constexpr TaskUID TaskUID_ProcessSelection                = 0x87ef181ec6d4cf83;
+    static constexpr TaskUID TaskUID_ComputeDepthBounds              = 0xff2b5caa64354557;
     static constexpr TaskUID TaskUID_PostProcess                     = 0x1f5367e65d034500;
 
     HnTaskManager(pxr::HdRenderIndex& RenderIndex,
@@ -123,6 +124,7 @@ public:
     ///                             * Renders only selected Rprims with the additive material tag (depth only)
     ///                         - RenderRprimsTranslucentSelected
     ///                             * Renders only selected Rprims with the translucent material tag (depth only)
+    ///                         - ComputeDepthBounds
     ///                         - ReadRprimId
     ///                         - ProcessSelection
     ///                             * Generates the closest selected location texture using the Jump-Flood algorithm
@@ -148,6 +150,7 @@ public:
     ///     | RenderRprimsTranslucentMeshId   |       V          |         V         |        |     V     |  MV, N   |                  |     V      |
     ///     | RenderRprimsAdditiveSelected    |       V          |                   |        |           |          |        V         |            |
     ///     | RenderRprimsTranslucentSelected |       V          |                   |        |           |          |        V         |            |
+    ///     | ComputeDepthBounds              |                  |                   |        |           |          |                  |            |
     ///     | ReadRprimId                     |                  |                   |        |           |          |                  |            |
     ///     | ProcessSelection                |                  |                   |        |           |          |                  |            |
     ///     | PostProcess                     |                  |                   |        |           |          |                  |            |
@@ -265,6 +268,7 @@ private:
     void CreateEndOITPassTask();
     void CreateReadRprimIdTask();
     void CreateCopySelectionDepthTask();
+    void CreateComputeDepthBoundsTask();
     void CreateProcessSelectionTask();
     void CreatePostProcessTask();
 

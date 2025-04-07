@@ -39,6 +39,7 @@
 #include "Tasks/HnBeginOITPassTask.hpp"
 #include "Tasks/HnEndOITPassTask.hpp"
 #include "Tasks/HnReadRprimIdTask.hpp"
+#include "Tasks/HnComputeDepthBoundsTask.hpp"
 #include "Tasks/HnPostProcessTask.hpp"
 #include "Tasks/HnProcessSelectionTask.hpp"
 #include "HnTokens.hpp"
@@ -70,6 +71,7 @@ TF_DEFINE_PRIVATE_TOKENS(
     (endOITPassTask)
     (readRprimIdTask)
     (processSelectionTask)
+    (computeDepthBoundsTask)
     (postProcessTask)
 
     (renderBufferDescriptor)
@@ -148,9 +150,12 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
     m_ManagerId{ManagerId},
     m_ParamsDelegate{RenderIndex, ManagerId}
 {
+    const HnRenderDelegate* RenderDelegate = static_cast<const HnRenderDelegate*>(RenderIndex.GetRenderDelegate());
+    const USD_Renderer&     Renderer       = *RenderDelegate->GetUSDRenderer();
+
     // Task creation order defines the default task order
     CreateBeginFrameTask();
-    if (const HnShadowMapManager* pShadowMapMgr = static_cast<const HnRenderDelegate*>(RenderIndex.GetRenderDelegate())->GetShadowMapManager())
+    if (const HnShadowMapManager* pShadowMapMgr = RenderDelegate->GetShadowMapManager())
     {
         CreateRenderShadowsTask(*pShadowMapMgr);
     }
@@ -205,9 +210,7 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                                USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS,
                            });
 
-    const USD_Renderer& Renderer   = *static_cast<const HnRenderDelegate*>(GetRenderIndex().GetRenderDelegate())->GetUSDRenderer();
-    const bool          OITEnabled = Renderer.GetSettings().OITLayerCount > 0;
-
+    const bool OITEnabled = Renderer.GetSettings().OITLayerCount > 0;
     if (OITEnabled)
     {
         CreateBeginOITPassTask();
@@ -274,6 +277,11 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                                USD_Renderer::USD_PSO_FLAG_NONE,
                                USD_Renderer::ALPHA_MODE_OPAQUE, // Override alpha mode
                            });
+
+    if (RenderDelegate->GetDevice()->GetDeviceInfo().Features.ComputeShaders)
+    {
+        CreateComputeDepthBoundsTask();
+    }
 
     CreateReadRprimIdTask();
     CreateProcessSelectionTask();
@@ -455,6 +463,12 @@ void HnTaskManager::CreateCopySelectionDepthTask()
 {
     HnCopySelectionDepthTaskParams TaskParams;
     CreateTask<HnCopySelectionDepthTask>(HnTaskManagerTokens->copySelectionDepthTask, TaskUID_CopySelectionDepth, TaskParams);
+}
+
+void HnTaskManager::CreateComputeDepthBoundsTask()
+{
+    HnComputeDepthBoundsTaskParams TaskParams;
+    CreateTask<HnComputeDepthBoundsTask>(HnTaskManagerTokens->computeDepthBoundsTask, TaskUID_ComputeDepthBounds, TaskParams);
 }
 
 void HnTaskManager::CreateProcessSelectionTask()

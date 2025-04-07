@@ -43,6 +43,19 @@ void main(in  FullScreenTriangleVSOutput VSOut,
     float4 Pos = VSOut.f4PixelPos;
 
     Color = g_ColorBuffer.Load(int3(Pos.xy, 0));
+    if (g_Frame.Renderer.DebugView == DEBUG_VIEW_SCENE_DEPTH)
+    {
+        // The overlay was rendered with Scene Range == Camera Range. 
+        // At the end of the frame, we computed the accurate scene depth range in HnComputeDepthBoundsTask,
+        // so now we can use it to rescale the depth value.
+        float RelZ = Color.r;
+
+        RelZ = RelZ * (g_Frame.Camera.fFarPlaneZ - g_Frame.Camera.fNearPlaneZ) + g_Frame.Camera.fNearPlaneZ;
+        RelZ = (RelZ - g_Frame.Camera.fSceneNearZ) / max(g_Frame.Camera.fSceneFarZ - g_Frame.Camera.fSceneNearZ, 1e-6);
+        RelZ = saturate(RelZ);
+        Color.rgb = float3(RelZ, RelZ, RelZ);
+    }
+    
     float Opacity = 1.0 - Color.a;
     
     float SSRScale = g_Attribs.SSRScale * Opacity;

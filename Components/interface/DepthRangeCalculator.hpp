@@ -140,6 +140,11 @@ public:
         float fSceneFarZ      = 0;
         float fSceneNearDepth = 0;
         float fSceneFarDepth  = 0;
+
+        constexpr operator bool() const
+        {
+            return fSceneNearDepth > 0 && fSceneFarDepth > 0;
+        }
     };
 
     /// Returns the depth range read back to the CPU.
