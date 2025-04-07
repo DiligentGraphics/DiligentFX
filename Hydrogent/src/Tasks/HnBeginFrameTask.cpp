@@ -219,6 +219,8 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
 
         Renderbuffer->SetTarget(pView);
 
+        ++m_FrameRenderTargets.Version;
+
         return pView;
     };
 

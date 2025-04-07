@@ -66,6 +66,8 @@ struct HnFrameRenderTargets
 
     ITextureView* JitteredFinalColorRTV = nullptr;
 
+    uint32_t Version = 0;
+
     static const char* GetGBufferTargetName(GBUFFER_TARGET Id);
 
     static constexpr GBUFFER_TARGET GetGBufferTargetFromRendererOutputFlag(USD_Renderer::USD_PSO_FLAGS OutputFlag)
