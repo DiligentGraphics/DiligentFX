@@ -641,7 +641,8 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
             RendererParams.MiddleGray    = HLSL::ToneMappingAttribs{}.fMiddleGray;
             RendererParams.WhitePoint    = HLSL::ToneMappingAttribs{}.fWhitePoint;
 
-            RendererParams.Time = static_cast<float>(m_CurrFrameTime);
+            RendererParams.Time      = static_cast<float>(m_CurrFrameTime);
+            RendererParams.DebugView = static_cast<int>(RenderParam->GetDebugView());
 
             {
                 float LoadingAnimationFactor = m_FallBackPsoUseStartTime > 0 ? 1.0 : 0.0;

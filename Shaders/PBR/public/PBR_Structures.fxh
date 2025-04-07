@@ -139,8 +139,8 @@ struct PBRRendererShaderParameters
 
     int   LightCount;
     float Time;
+    int   DebugView;
     float Padding0;
-    float Padding1;
     
     float4 UnshadedColor;
     float4 HighlightColor;
