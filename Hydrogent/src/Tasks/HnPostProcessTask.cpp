@@ -130,15 +130,15 @@ static GraphicsPipelineStateCreateInfoX& CreateShaders(RenderDeviceWithCache_E& 
     ShaderCI.Macros         = Macros;
     ShaderCI.CompileFlags   = PackMatrixRowMajor ? SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR : SHADER_COMPILE_FLAG_NONE;
 
-    auto pHnFxCompoundSourceFactory     = HnShaderSourceFactory::CreateHnFxCompoundFactory();
-    ShaderCI.pShaderSourceStreamFactory = pHnFxCompoundSourceFactory;
+    RefCntAutoPtr<IShaderSourceInputStreamFactory> pHnFxCompoundSourceFactory = HnShaderSourceFactory::CreateHnFxCompoundFactory();
+    ShaderCI.pShaderSourceStreamFactory                                       = pHnFxCompoundSourceFactory;
 
     {
         ShaderCI.Desc       = {"Full-screen Triangle VS", SHADER_TYPE_VERTEX, true};
         ShaderCI.EntryPoint = "FullScreenTriangleVS";
         ShaderCI.FilePath   = "FullScreenTriangleVS.fx";
 
-        auto pVS = Device.CreateShader(ShaderCI); // Throws exception in case of error
+        RefCntAutoPtr<IShader> pVS = Device.CreateShader(ShaderCI); // Throws exception in case of error
         PsoCI.AddShader(pVS);
     }
 
@@ -147,7 +147,7 @@ static GraphicsPipelineStateCreateInfoX& CreateShaders(RenderDeviceWithCache_E& 
         ShaderCI.EntryPoint = "main";
         ShaderCI.FilePath   = PSFilePath;
 
-        auto pPS = Device.CreateShader(ShaderCI); // Throws exception in case of error
+        RefCntAutoPtr<IShader> pPS = Device.CreateShader(ShaderCI); // Throws exception in case of error
         PsoCI.AddShader(pPS);
     }
 
@@ -233,7 +233,7 @@ void HnPostProcessTask::PostProcessingTechnique::PreparePSO(TEXTURE_FORMAT RTVFo
 
 void HnPostProcessTask::PostProcessingTechnique::PrepareSRB(ITextureView* pClosestSelectedLocationSRV, Uint32 FrameIdx)
 {
-    const auto* FrameTargets = PPTask.m_FrameTargets;
+    const HnFrameRenderTargets* FrameTargets = PPTask.m_FrameTargets;
 
     for (Uint32 i = 0; i < HnFrameRenderTargets::GBUFFER_TARGET_COUNT; ++i)
     {
@@ -264,9 +264,9 @@ void HnPostProcessTask::PostProcessingTechnique::PrepareSRB(ITextureView* pClose
     ITextureView* pSSAO = PPTask.m_SSAO->GetAmbientOcclusionSRV();
     VERIFY_EXPR(pSSAO != nullptr);
 
-    size_t ResIdx     = FrameIdx % Resources.size();
-    auto&  SRB        = Resources[ResIdx].SRB;
-    auto&  ShaderVars = Resources[ResIdx].Vars;
+    const size_t                           ResIdx     = FrameIdx % Resources.size();
+    RefCntAutoPtr<IShaderResourceBinding>& SRB        = Resources[ResIdx].SRB;
+    ShaderResources::ShaderVariables&      ShaderVars = Resources[ResIdx].Vars;
 
     ITextureView* pOffscreenColorSRV = FrameTargets->GBufferSRVs[HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR];
     ITextureView* pSpecularIblSRV    = FrameTargets->GBufferSRVs[HnFrameRenderTargets::GBUFFER_TARGET_IBL];
@@ -439,9 +439,9 @@ void HnPostProcessTask::CopyFrameTechnique::PrepareSRB(Uint32 FrameIdx)
         return;
     }
 
-    size_t ResIdx     = FrameIdx % Resources.size();
-    auto&  SRB        = Resources[ResIdx].SRB;
-    auto&  ShaderVars = Resources[ResIdx].Vars;
+    const size_t                           ResIdx     = FrameIdx % Resources.size();
+    RefCntAutoPtr<IShaderResourceBinding>& SRB        = Resources[ResIdx].SRB;
+    ShaderResources::ShaderVariables&      ShaderVars = Resources[ResIdx].Vars;
 
     ITextureView* pAccumulatedFrameSRV = pAccumulatedFrame->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
     ITextureView* pDepthSRV            = PPTask.m_FrameTargets->DepthDSV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
@@ -519,7 +519,7 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
     }
 
     ITextureView* ClosestSelectedLocationSRV = nullptr;
-    if (auto* ClosestSelectedLocationRTV = GetRenderBufferTarget(*RenderIndex, TaskCtx, HnRenderResourceTokens->closestSelectedLocationFinalTarget))
+    if (ITextureView* ClosestSelectedLocationRTV = GetRenderBufferTarget(*RenderIndex, TaskCtx, HnRenderResourceTokens->closestSelectedLocationFinalTarget))
     {
         ClosestSelectedLocationSRV = ClosestSelectedLocationRTV->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
         if (ClosestSelectedLocationSRV == nullptr)
