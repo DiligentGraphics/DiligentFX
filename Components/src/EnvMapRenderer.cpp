@@ -105,12 +105,8 @@ IPipelineState* EnvMapRenderer::GetPSO(const PSOKey& Key)
 
     RenderDeviceWithCache_N Device{m_pDevice, m_pStateCache};
 
-    std::string PSMainSource = m_PSMainSource;
-    if (PSMainSource.empty())
-        PSMainSource = DefaultPSMain;
-
     RefCntAutoPtr<IShaderSourceInputStreamFactory> pMemorySourceFactory =
-        CreateMemoryShaderSourceFactory({MemoryShaderSourceFileInfo{"PSMainGenerated.generated", PSMainSource}});
+        CreateMemoryShaderSourceFactory({MemoryShaderSourceFileInfo{"PSMainGenerated.generated", !m_PSMainSource.empty() ? m_PSMainSource.c_str() : DefaultPSMain}});
     RefCntAutoPtr<IShaderSourceInputStreamFactory> pShaderSourceFactory =
         CreateCompoundShaderSourceFactory({&DiligentFXShaderSourceStreamFactory::GetInstance(), pMemorySourceFactory});
 
