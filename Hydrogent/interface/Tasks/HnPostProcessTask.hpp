@@ -283,6 +283,7 @@ private:
                 ShaderResourceVariableX Normal;
                 ShaderResourceVariableX BaseColor;
                 ShaderResourceVariableX Material;
+                ShaderResourceVariableX MeshID;
             };
             ShaderVariables Vars{};
         };

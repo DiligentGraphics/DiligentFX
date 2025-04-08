@@ -70,7 +70,7 @@ HnPostProcessTask::~HnPostProcessTask()
 {
 }
 
-static constexpr WebGPUResourceAttribs kWGPUDepthMapAttribs{WEB_GPU_BINDING_TYPE_UNFILTERABLE_FLOAT_TEXTURE, RESOURCE_DIM_TEX_2D};
+static constexpr WebGPUResourceAttribs kWGPUUnfilterableTex2D{WEB_GPU_BINDING_TYPE_UNFILTERABLE_FLOAT_TEXTURE, RESOURCE_DIM_TEX_2D};
 
 void HnPostProcessTask::PostProcessingTechnique::PreparePRS()
 {
@@ -93,15 +93,16 @@ void HnPostProcessTask::PostProcessingTechnique::PreparePRS()
 
     PRSDesc
         .AddResource(SHADER_TYPE_PIXEL, "g_ColorBuffer", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
-        .AddResource(SHADER_TYPE_PIXEL, "g_Depth", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE, PIPELINE_RESOURCE_FLAG_NONE, kWGPUDepthMapAttribs)
-        .AddResource(SHADER_TYPE_PIXEL, "g_SelectionDepth", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE, PIPELINE_RESOURCE_FLAG_NONE, kWGPUDepthMapAttribs)
+        .AddResource(SHADER_TYPE_PIXEL, "g_Depth", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE, PIPELINE_RESOURCE_FLAG_NONE, kWGPUUnfilterableTex2D)
+        .AddResource(SHADER_TYPE_PIXEL, "g_SelectionDepth", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE, PIPELINE_RESOURCE_FLAG_NONE, kWGPUUnfilterableTex2D)
         .AddResource(SHADER_TYPE_PIXEL, "g_ClosestSelectedLocation", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
         .AddResource(SHADER_TYPE_PIXEL, "g_SSR", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
         .AddResource(SHADER_TYPE_PIXEL, "g_SSAO", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
         .AddResource(SHADER_TYPE_PIXEL, "g_SpecularIBL", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
         .AddResource(SHADER_TYPE_PIXEL, "g_Normal", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
         .AddResource(SHADER_TYPE_PIXEL, "g_MaterialData", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
-        .AddResource(SHADER_TYPE_PIXEL, "g_BaseColor", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE);
+        .AddResource(SHADER_TYPE_PIXEL, "g_BaseColor", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
+        .AddResource(SHADER_TYPE_PIXEL, "g_MeshID", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE, PIPELINE_RESOURCE_FLAG_NONE, kWGPUUnfilterableTex2D);
 
     PRS = RenderDeviceWithCache_N{pDevice, pStateCache}.CreatePipelineResourceSignature(PRSDesc);
     VERIFY_EXPR(PRS);
@@ -186,8 +187,12 @@ void HnPostProcessTask::PostProcessingTechnique::PreparePSO(TEXTURE_FORMAT RTVFo
     }
 
     {
-        if (_ViewMode != HN_VIEW_MODE_SCENE_DEPTH && _ViewMode != HN_VIEW_MODE_EDGE_MAP)
+        if (_ViewMode != HN_VIEW_MODE_SCENE_DEPTH &&
+            _ViewMode != HN_VIEW_MODE_EDGE_MAP &&
+            _ViewMode != HN_VIEW_MODE_MESH_ID)
+        {
             _ViewMode = HN_VIEW_MODE_SHADED;
+        }
 
         if (ViewMode != _ViewMode)
         {
@@ -216,6 +221,7 @@ void HnPostProcessTask::PostProcessingTechnique::PreparePSO(TEXTURE_FORMAT RTVFo
 
         Macros.Add("VIEW_MODE_SCENE_DEPTH", static_cast<int>(HN_VIEW_MODE_SCENE_DEPTH));
         Macros.Add("VIEW_MODE_EDGE_MAP", static_cast<int>(HN_VIEW_MODE_EDGE_MAP));
+        Macros.Add("VIEW_MODE_MESH_ID", static_cast<int>(HN_VIEW_MODE_MESH_ID));
         Macros.Add("VIEW_MODE", static_cast<int>(ViewMode));
 
         if (GridFeatureFlags != CoordinateGridRenderer::FEATURE_FLAG_NONE)
@@ -288,6 +294,7 @@ void HnPostProcessTask::PostProcessingTechnique::PrepareSRB(ITextureView* pClose
     ITextureView* pNormalSRV         = FrameTargets->GBufferSRVs[HnFrameRenderTargets::GBUFFER_TARGET_NORMAL];
     ITextureView* pMaterialSRV       = FrameTargets->GBufferSRVs[HnFrameRenderTargets::GBUFFER_TARGET_MATERIAL];
     ITextureView* pBaseColorSRV      = FrameTargets->GBufferSRVs[HnFrameRenderTargets::GBUFFER_TARGET_BASE_COLOR];
+    ITextureView* pMeshID            = FrameTargets->GBufferSRVs[HnFrameRenderTargets::GBUFFER_TARGET_MESH_ID];
     if (SRB)
     {
         auto VarValueChanged = [](const ShaderResourceVariableX& Var, IDeviceObject* pValue) {
@@ -303,7 +310,8 @@ void HnPostProcessTask::PostProcessingTechnique::PrepareSRB(ITextureView* pClose
             VarValueChanged(ShaderVars.SpecularIBL, pSpecularIblSRV) ||
             VarValueChanged(ShaderVars.Normal, pNormalSRV) ||
             VarValueChanged(ShaderVars.Material, pMaterialSRV) ||
-            VarValueChanged(ShaderVars.BaseColor, pBaseColorSRV))
+            VarValueChanged(ShaderVars.BaseColor, pBaseColorSRV) ||
+            VarValueChanged(ShaderVars.MeshID, pMeshID))
         {
             Resources = {};
             CurrSRB   = nullptr;
@@ -331,6 +339,7 @@ void HnPostProcessTask::PostProcessingTechnique::PrepareSRB(ITextureView* pClose
         SetVar(ShaderVars.Normal,                  "g_Normal",                  pNormalSRV);
         SetVar(ShaderVars.Material,                "g_MaterialData",            pMaterialSRV);
         SetVar(ShaderVars.BaseColor,               "g_BaseColor",               pBaseColorSRV);
+        SetVar(ShaderVars.MeshID,                  "g_MeshID",                  pMeshID);
         // clang-format on
     }
 
@@ -356,7 +365,7 @@ void HnPostProcessTask::CopyFrameTechnique::PreparePRS()
         .AddResource(SHADER_TYPE_PIXEL, "cbPostProcessAttribs", SHADER_RESOURCE_TYPE_CONSTANT_BUFFER, SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
         .AddResource(SHADER_TYPE_PIXEL, "cbFrameAttribs", SHADER_RESOURCE_TYPE_CONSTANT_BUFFER, SHADER_RESOURCE_VARIABLE_TYPE_STATIC)
         .AddResource(SHADER_TYPE_PIXEL, "g_ColorBuffer", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE)
-        .AddResource(SHADER_TYPE_PIXEL, "g_Depth", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE, PIPELINE_RESOURCE_FLAG_NONE, kWGPUDepthMapAttribs);
+        .AddResource(SHADER_TYPE_PIXEL, "g_Depth", SHADER_RESOURCE_TYPE_TEXTURE_SRV, SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE, PIPELINE_RESOURCE_FLAG_NONE, kWGPUUnfilterableTex2D);
 
     PRS = RenderDeviceWithCache_N{pDevice, pStateCache}.CreatePipelineResourceSignature(PRSDesc);
     VERIFY_EXPR(PRS);

@@ -346,7 +346,7 @@ const pxr::TfToken& PBRTextureAttribIdToPxrName(PBR_Renderer::TEXTURE_ATTRIB_ID 
 
 PBR_Renderer::DebugViewType HnViewModeToDebugViewType(HN_VIEW_MODE ViewMode)
 {
-    static_assert(HN_VIEW_MODE_COUNT == 26, "Please handle the new view mode below");
+    static_assert(HN_VIEW_MODE_COUNT == 27, "Please handle the new view mode below");
 
     static const std::array<PBR_Renderer::DebugViewType, HN_VIEW_MODE_COUNT> ViewModeToDebugViewType = []() {
         std::array<PBR_Renderer::DebugViewType, HN_VIEW_MODE_COUNT> DebugViewTypes;
@@ -377,6 +377,7 @@ PBR_Renderer::DebugViewType HnViewModeToDebugViewType(HN_VIEW_MODE ViewMode)
         DebugViewTypes[HN_VIEW_MODE_CLEARCOAT_NORMAL]    = PBR_Renderer::DebugViewType::ClearCoatNormal;
         DebugViewTypes[HN_VIEW_MODE_SCENE_DEPTH]         = PBR_Renderer::DebugViewType::SceneDepth;
         DebugViewTypes[HN_VIEW_MODE_EDGE_MAP]            = PBR_Renderer::DebugViewType::MeshNormal;
+        DebugViewTypes[HN_VIEW_MODE_MESH_ID]             = PBR_Renderer::DebugViewType::BaseColor;
         return DebugViewTypes;
     }();
     if (ViewMode < 0 || ViewMode >= HN_VIEW_MODE_COUNT)

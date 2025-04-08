@@ -150,6 +150,9 @@ enum HN_VIEW_MODE : Uint8
     /// Display edge map.
     HN_VIEW_MODE_EDGE_MAP,
 
+    /// Display mesh ID.
+    HN_VIEW_MODE_MESH_ID,
+
     /// The total number of view modes.
     HN_VIEW_MODE_COUNT
 };

@@ -33,6 +33,7 @@ Texture2D g_Normal;
 Texture2D g_SpecularIBL;
 Texture2D g_MaterialData;
 Texture2D g_BaseColor;
+Texture2D g_MeshID;
 
 Texture2D    g_PreintegratedGGX;
 SamplerState g_PreintegratedGGX_sampler;
@@ -114,12 +115,18 @@ float ComputeDepthEdge(int2 Pos, float Depth)
 }
 #endif
 
+float PseudoRandom(float n)
+{
+    return frac(sin(n) * 43758.5453);
+}
+
 void main(in  FullScreenTriangleVSOutput VSOut,
           out float4                     Color : SV_Target0)
 {
     float4 Pos = VSOut.f4PixelPos;
 
     Color = g_ColorBuffer.Load(int3(Pos.xy, 0));
+
 #if VIEW_MODE == VIEW_MODE_SCENE_DEPTH
     if (g_Frame.Renderer.LoadingAnimation.Factor == 0.0)
     {
@@ -192,6 +199,13 @@ void main(in  FullScreenTriangleVSOutput VSOut,
         float EdgeFactor = min(ColorEdgeFactor + DepthEdgeFactor, 1.0);
         Color.rgb = float3(EdgeFactor, EdgeFactor, EdgeFactor);
     }
+#endif
+
+#if VIEW_MODE == VIEW_MODE_MESH_ID
+    float MeshID = g_MeshID.Load(int3(Pos.xy, 0)).r + 1.0;
+    Color.rgb = (Depth != g_Frame.Camera.fFarPlaneDepth) ?
+        float3(PseudoRandom(MeshID * 3.0 + 0.0), PseudoRandom(MeshID * 3.0 + 1.0), PseudoRandom(MeshID * 3.0 + 2.0)) :
+        float3(0.0, 0.0, 0.0);
 #endif
 
     float SelectionDepth = g_SelectionDepth.Load(int3(Pos.xy, 0)).r;
