@@ -68,6 +68,8 @@ const pxr::TfToken& PBRTextureAttribIdToPxrName(PBR_Renderer::TEXTURE_ATTRIB_ID 
 
 PBR_Renderer::DebugViewType HnViewModeToDebugViewType(HN_VIEW_MODE ViewMode);
 
+const char* GetViewModeString(HN_VIEW_MODE ViewMode);
+
 } // namespace USD
 
 } // namespace Diligent

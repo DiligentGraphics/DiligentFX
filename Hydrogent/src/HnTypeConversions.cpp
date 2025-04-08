@@ -389,6 +389,52 @@ PBR_Renderer::DebugViewType HnViewModeToDebugViewType(HN_VIEW_MODE ViewMode)
     return ViewModeToDebugViewType[ViewMode];
 }
 
+const char* GetViewModeString(HN_VIEW_MODE ViewMode)
+{
+    static_assert(HN_VIEW_MODE_COUNT == 27, "Please handle the new view mode below");
+
+    static const std::array<const char*, HN_VIEW_MODE_COUNT> ViewModeToStr = []() {
+        std::array<const char*, HN_VIEW_MODE_COUNT> Strs;
+
+        Strs[HN_VIEW_MODE_SHADED]              = "Shaded";
+        Strs[HN_VIEW_MODE_TEXCOORD0]           = "Texcoord0";
+        Strs[HN_VIEW_MODE_TEXCOORD1]           = "Texcoord1";
+        Strs[HN_VIEW_MODE_BASE_COLOR]          = "BaseColor";
+        Strs[HN_VIEW_MODE_TRANSPARENCY]        = "Transparency";
+        Strs[HN_VIEW_MODE_OCCLUSION]           = "Occlusion";
+        Strs[HN_VIEW_MODE_EMISSIVE]            = "Emissive";
+        Strs[HN_VIEW_MODE_METALLIC]            = "Metallic";
+        Strs[HN_VIEW_MODE_ROUGHNESS]           = "Roughness";
+        Strs[HN_VIEW_MODE_DIFFUSE_COLOR]       = "DiffuseColor";
+        Strs[HN_VIEW_MODE_SPECULAR_COLOR]      = "SpecularColor";
+        Strs[HN_VIEW_MODE_REFLECTANCE90]       = "Reflectance90";
+        Strs[HN_VIEW_MODE_MESH_NORMAL]         = "MeshNormal";
+        Strs[HN_VIEW_MODE_SHADING_NORMAL]      = "ShadingNormal";
+        Strs[HN_VIEW_MODE_MOTION_VECTORS]      = "MotionVectors";
+        Strs[HN_VIEW_MODE_NDOTV]               = "NdotV";
+        Strs[HN_VIEW_MODE_PUNCTUAL_LIGHTING]   = "PunctualLighting";
+        Strs[HN_VIEW_MODE_DIFFUSE_IBL]         = "DiffuseIBL";
+        Strs[HN_VIEW_MODE_SPECULAR_IBL]        = "SpecularIBL";
+        Strs[HN_VIEW_MODE_WHITE_BASE_COLOR]    = "WhiteBaseColor";
+        Strs[HN_VIEW_MODE_CLEARCOAT]           = "ClearCoat";
+        Strs[HN_VIEW_MODE_CLEARCOAT_FACTOR]    = "ClearCoatFactor";
+        Strs[HN_VIEW_MODE_CLEARCOAT_ROUGHNESS] = "ClearCoatRoughness";
+        Strs[HN_VIEW_MODE_CLEARCOAT_NORMAL]    = "ClearCoatNormal";
+        Strs[HN_VIEW_MODE_SCENE_DEPTH]         = "SceneDepth";
+        Strs[HN_VIEW_MODE_EDGE_MAP]            = "EdgeMap";
+        Strs[HN_VIEW_MODE_MESH_ID]             = "MeshID";
+        return Strs;
+    }();
+
+    if (ViewMode < 0 || ViewMode >= HN_VIEW_MODE_COUNT)
+    {
+        UNEXPECTED("Unexpected view mode");
+        return "Unknown";
+    }
+
+    return ViewModeToStr[ViewMode];
+}
+
 } // namespace USD
 
 } // namespace Diligent
