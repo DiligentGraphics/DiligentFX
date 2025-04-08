@@ -223,7 +223,7 @@ private:
 private:
     HnRenderPassParams m_Params;
 
-    HN_RENDER_MODE              m_RenderMode     = HN_RENDER_MODE_SOLID;
+    HN_GEOMETRY_MODE            m_GeometryMode   = HN_GEOMETRY_MODE_SOLID;
     PBR_Renderer::DebugViewType m_DebugView      = PBR_Renderer::DebugViewType::None;
     bool                        m_UseShadows     = false;
     bool                        m_UseFallbackPSO = false;

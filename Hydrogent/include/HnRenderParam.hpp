@@ -64,8 +64,8 @@ public:
 
     const Configuration& GetConfig() const { return m_Config; }
 
-    HN_RENDER_MODE GetRenderMode() const { return m_RenderMode; }
-    void           SetRenderMode(HN_RENDER_MODE Mode) { m_RenderMode = Mode; }
+    HN_GEOMETRY_MODE GetGeometryMode() const { return m_GeometryMode; }
+    void             SetGeometryMode(HN_GEOMETRY_MODE Mode) { m_GeometryMode = Mode; }
 
     const pxr::SdfPath& GetSelectedPrimId() const { return m_SelectedPrimId; }
     void                SetSelectedPrimId(const pxr::SdfPath& PrimId) { m_SelectedPrimId = PrimId; }
@@ -146,7 +146,7 @@ public:
 private:
     const Configuration m_Config;
 
-    HN_RENDER_MODE m_RenderMode = HN_RENDER_MODE_SOLID;
+    HN_GEOMETRY_MODE m_GeometryMode = HN_GEOMETRY_MODE_SOLID;
 
     pxr::SdfPath m_SelectedPrimId;
 

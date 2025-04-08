@@ -236,18 +236,18 @@ private:
         bool   UseSSAO    = false;
         bool   UseShadows = false;
 
-        PBR_Renderer::DebugViewType DebugView  = PBR_Renderer::DebugViewType::NumDebugViews;
-        HN_RENDER_MODE              RenderMode = HN_RENDER_MODE_COUNT;
+        PBR_Renderer::DebugViewType DebugView    = PBR_Renderer::DebugViewType::NumDebugViews;
+        HN_GEOMETRY_MODE            GeometryMode = HN_GEOMETRY_MODE_COUNT;
 
         constexpr bool operator==(const SuperSamplingFactors& rhs) const
         {
             // clang-format off
-            return (Version    == rhs.Version &&
-                    UseSSR     == rhs.UseSSR &&
-                    UseSSAO    == rhs.UseSSAO &&
-                    UseShadows == rhs.UseShadows &&
-                    DebugView  == rhs.DebugView &&
-                    RenderMode == rhs.RenderMode);
+            return (Version      == rhs.Version &&
+                    UseSSR       == rhs.UseSSR &&
+                    UseSSAO      == rhs.UseSSAO &&
+                    UseShadows   == rhs.UseShadows &&
+                    DebugView    == rhs.DebugView &&
+                    GeometryMode == rhs.GeometryMode);
             // clang-format on
         }
         constexpr bool operator!=(const SuperSamplingFactors& rhs) const

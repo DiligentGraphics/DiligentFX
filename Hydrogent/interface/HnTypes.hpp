@@ -36,19 +36,19 @@ namespace Diligent
 namespace USD
 {
 
-/// Renering mode
-enum HN_RENDER_MODE : Uint8
+/// Geometry renering mode
+enum HN_GEOMETRY_MODE : Uint8
 {
     /// Render solid geometry
-    HN_RENDER_MODE_SOLID,
+    HN_GEOMETRY_MODE_SOLID,
 
     /// Render wireframe
-    HN_RENDER_MODE_MESH_EDGES,
+    HN_GEOMETRY_MODE_MESH_EDGES,
 
     /// Render points
-    HN_RENDER_MODE_POINTS,
+    HN_GEOMETRY_MODE_POINTS,
 
-    HN_RENDER_MODE_COUNT
+    HN_GEOMETRY_MODE_COUNT
 };
 
 /// Material texture binding mode.

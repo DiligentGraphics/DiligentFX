@@ -58,11 +58,11 @@ bool HnEndOITPassTask::IsActive(pxr::HdRenderIndex& RenderIndex) const
 {
     pxr::HdRenderDelegate*            RenderDelegate = RenderIndex.GetRenderDelegate();
     const HnRenderParam*              RenderParam    = static_cast<const HnRenderParam*>(RenderDelegate->GetRenderParam());
-    const HN_RENDER_MODE              RenderMode     = RenderParam->GetRenderMode();
+    const HN_GEOMETRY_MODE            GeometryMode   = RenderParam->GetGeometryMode();
     const PBR_Renderer::DebugViewType DebugView      = RenderParam->GetDebugView();
 
     // Scene depth debug view for transparent objects is rendered in opaque mode and does not need OIT layers.
-    return RenderMode == HN_RENDER_MODE_SOLID && DebugView != PBR_Renderer::DebugViewType::SceneDepth;
+    return GeometryMode == HN_GEOMETRY_MODE_SOLID && DebugView != PBR_Renderer::DebugViewType::SceneDepth;
 }
 
 static_assert(USD_Renderer::USD_PSO_FLAG_OIT_BLEND_OUTPUTS ==
@@ -111,7 +111,7 @@ void HnEndOITPassTask::Prepare(pxr::HdTaskContext* TaskCtx,
     }
 
     HnRenderParam* RenderParam = static_cast<HnRenderParam*>(RenderDelegate->GetRenderParam());
-    VERIFY_EXPR(RenderParam->GetRenderMode() == HN_RENDER_MODE_SOLID);
+    VERIFY_EXPR(RenderParam->GetGeometryMode() == HN_GEOMETRY_MODE_SOLID);
     if (m_OITResourcesVersion != RenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::OITResources))
     {
         m_ApplyOITAttenuationSRB.Release();

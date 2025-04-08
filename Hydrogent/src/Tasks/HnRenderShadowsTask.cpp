@@ -287,7 +287,7 @@ bool HnRenderShadowsTask::IsActive(pxr::HdRenderIndex& RenderIndex) const
 {
     pxr::HdRenderDelegate* RenderDelegate = RenderIndex.GetRenderDelegate();
     const HnRenderParam*   RenderParam    = static_cast<const HnRenderParam*>(RenderDelegate->GetRenderParam());
-    return RenderParam->GetRenderMode() == HN_RENDER_MODE_SOLID;
+    return RenderParam->GetGeometryMode() == HN_GEOMETRY_MODE_SOLID;
 }
 
 void HnRenderShadowsTask::Execute(pxr::HdTaskContext* TaskCtx)

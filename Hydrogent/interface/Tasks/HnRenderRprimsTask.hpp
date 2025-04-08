@@ -44,24 +44,24 @@ class HnRenderPass;
 
 struct HnRenderRprimsTaskParams
 {
-    static_assert(HN_RENDER_MODE_COUNT == 3, "Did you add a new render mode? Please update the flags!");
-    enum RENDER_MODE_FLAGS : Uint32
+    static_assert(HN_GEOMETRY_MODE_COUNT == 3, "Did you add a new geometry render mode? Please update the flags!");
+    enum GEOMETRY_MODE_FLAGS : Uint32
     {
-        RENDER_MODE_FLAG_NONE = 0u,
+        GEOMETRY_MODE_FLAG_NONE = 0u,
 
-        RENDER_MODE_FLAG_SOLID = 1u << HN_RENDER_MODE_SOLID,
+        GEOMETRY_MODE_FLAG_SOLID = 1u << HN_GEOMETRY_MODE_SOLID,
 
-        RENDER_MODE_FLAG_MESH_EDGES = 1u << HN_RENDER_MODE_MESH_EDGES,
+        GEOMETRY_MODE_FLAG_MESH_EDGES = 1u << HN_GEOMETRY_MODE_MESH_EDGES,
 
-        RENDER_MODE_FLAG_POINTS = 1u << HN_RENDER_MODE_POINTS,
+        GEOMETRY_MODE_FLAG_POINTS = 1u << HN_GEOMETRY_MODE_POINTS,
 
-        RENDER_MODE_FLAG_ALL = RENDER_MODE_FLAG_SOLID | RENDER_MODE_FLAG_MESH_EDGES | RENDER_MODE_FLAG_POINTS
+        GEOMETRY_MODE_FLAG_ALL = GEOMETRY_MODE_FLAG_SOLID | GEOMETRY_MODE_FLAG_MESH_EDGES | GEOMETRY_MODE_FLAG_POINTS
     };
-    RENDER_MODE_FLAGS RenderModes = RENDER_MODE_FLAG_ALL;
+    GEOMETRY_MODE_FLAGS GeometryModes = GEOMETRY_MODE_FLAG_ALL;
 
     constexpr bool operator==(const HnRenderRprimsTaskParams& rhs) const
     {
-        return RenderModes == rhs.RenderModes;
+        return GeometryModes == rhs.GeometryModes;
     }
 
     constexpr bool operator!=(const HnRenderRprimsTaskParams& rhs) const
@@ -69,7 +69,7 @@ struct HnRenderRprimsTaskParams
         return !(*this == rhs);
     }
 };
-DEFINE_FLAG_ENUM_OPERATORS(HnRenderRprimsTaskParams::RENDER_MODE_FLAGS);
+DEFINE_FLAG_ENUM_OPERATORS(HnRenderRprimsTaskParams::GEOMETRY_MODE_FLAGS);
 
 /// Renders the Rprims by executing the render pass.
 /// The task should be executed after the HnBeginMainPassTask that prepares

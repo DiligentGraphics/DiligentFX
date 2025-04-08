@@ -127,9 +127,9 @@ bool HnRenderRprimsTask::IsActive(pxr::HdRenderIndex& RenderIndex) const
 {
     pxr::HdRenderDelegate* RenderDelegate = RenderIndex.GetRenderDelegate();
     const HnRenderParam*   RenderParam    = static_cast<const HnRenderParam*>(RenderDelegate->GetRenderParam());
-    const HN_RENDER_MODE   RenderMode     = RenderParam->GetRenderMode();
+    const HN_GEOMETRY_MODE GeometryMode   = RenderParam->GetGeometryMode();
 
-    if ((m_Params.RenderModes & (1u << RenderMode)) == 0)
+    if ((m_Params.GeometryModes & (1u << GeometryMode)) == 0)
         return false;
 
     if (m_RenderPass && m_RenderPass->GetParams().Type == USD_Renderer::RenderPassType::OITLayers)

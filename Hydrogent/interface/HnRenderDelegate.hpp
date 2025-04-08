@@ -442,7 +442,7 @@ public:
     HnRenderDelegateRenderingStats GetRenderingStats() const;
 
     void SetDebugView(PBR_Renderer::DebugViewType DebugView);
-    void SetRenderMode(HN_RENDER_MODE RenderMode);
+    void SetGeometryMode(HN_GEOMETRY_MODE GeometryMode);
     void SetSelectedRPrimId(const pxr::SdfPath& RPrimID);
     void SetUseShadows(bool UseShadows);
 

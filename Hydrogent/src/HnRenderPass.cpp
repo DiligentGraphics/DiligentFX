@@ -268,24 +268,24 @@ GraphicsPipelineDesc HnRenderPass::GetGraphicsDesc(const HnRenderPassState& RPSt
         }
     }
 
-    switch (m_RenderMode)
+    switch (m_GeometryMode)
     {
-        case HN_RENDER_MODE_SOLID:
+        case HN_GEOMETRY_MODE_SOLID:
             GraphicsDesc.PrimitiveTopology = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
             break;
 
-        case HN_RENDER_MODE_MESH_EDGES:
+        case HN_GEOMETRY_MODE_MESH_EDGES:
             GraphicsDesc.PrimitiveTopology = UseStripTopology ? PRIMITIVE_TOPOLOGY_LINE_STRIP : PRIMITIVE_TOPOLOGY_LINE_LIST;
             break;
 
-        case HN_RENDER_MODE_POINTS:
+        case HN_GEOMETRY_MODE_POINTS:
             GraphicsDesc.PrimitiveTopology = PRIMITIVE_TOPOLOGY_POINT_LIST;
             break;
 
         default:
             UNEXPECTED("Unexpected render mode");
     }
-    static_assert(HN_RENDER_MODE_COUNT == 3, "Please handle the new render mode in the switch above");
+    static_assert(HN_GEOMETRY_MODE_COUNT == 3, "Please handle the new geometry render mode in the switch above");
 
     return GraphicsDesc;
 }
@@ -420,10 +420,10 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
     }
 
     {
-        HN_RENDER_MODE RenderMode = State.RenderParam.GetRenderMode();
-        if (m_RenderMode != RenderMode)
+        HN_GEOMETRY_MODE GeometryMode = State.RenderParam.GetGeometryMode();
+        if (m_GeometryMode != GeometryMode)
         {
-            m_RenderMode = RenderMode;
+            m_GeometryMode = GeometryMode;
             m_DrawListItemsDirtyFlags |= DRAW_LIST_ITEM_DIRTY_FLAG_PSO | DRAW_LIST_ITEM_DIRTY_FLAG_MESH_DATA;
             // Reset fallback PSO so that it is updated in UpdateDrawListGPUResources
             m_FallbackPSO = nullptr;
@@ -1033,7 +1033,7 @@ void HnRenderPass::UpdateDrawListJoints(HnRenderDelegate& RenderDelegate)
 
 PBR_Renderer::PSO_FLAGS HnRenderPass::GetFallbackPSOFlags() const
 {
-    return (m_RenderMode == HN_RENDER_MODE_SOLID ?
+    return (m_GeometryMode == HN_GEOMETRY_MODE_SOLID ?
                 PBR_Renderer::PSO_FLAG_COMPUTE_MOTION_VECTORS :
                 PBR_Renderer::PSO_FLAG_UNSHADED) |
         static_cast<PBR_Renderer::PSO_FLAGS>(m_Params.UsdPsoFlags);
@@ -1049,7 +1049,7 @@ void HnRenderPass::UpdateDrawListGPUResources(RenderState& State)
     if (m_FallbackPSO == nullptr &&
         m_Params.Type == PBR_Renderer::RenderPassType::Main &&
         (m_Params.UsdPsoFlags & USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_OUTPUT) != 0 &&
-        m_RenderMode == HN_RENDER_MODE_SOLID)
+        m_GeometryMode == HN_GEOMETRY_MODE_SOLID)
     {
         const PBR_Renderer::PSOKey FallbackPSOKey{
             PBR_Renderer::RenderPassType::Main,
@@ -1323,7 +1323,7 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
         if (Geo.Joints != nullptr)
             PSOFlags |= PBR_Renderer::PSO_FLAG_USE_JOINTS;
 
-        if (m_RenderMode == HN_RENDER_MODE_SOLID)
+        if (m_GeometryMode == HN_GEOMETRY_MODE_SOLID)
         {
             if ((m_Params.UsdPsoFlags & USD_Renderer::USD_PSO_FLAG_ENABLE_COLOR_OUTPUT) != 0)
             {
@@ -1386,8 +1386,8 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
             // PSOKey may have cleared some flags - get updated flags
             PSOFlags = PSOKey.GetFlags();
         }
-        else if (m_RenderMode == HN_RENDER_MODE_MESH_EDGES ||
-                 m_RenderMode == HN_RENDER_MODE_POINTS)
+        else if (m_GeometryMode == HN_GEOMETRY_MODE_MESH_EDGES ||
+                 m_GeometryMode == HN_GEOMETRY_MODE_POINTS)
         {
             VERIFY_EXPR(m_Params.Type == PBR_Renderer::RenderPassType::Main);
             PSOFlags |= PBR_Renderer::PSO_FLAG_UNSHADED;
@@ -1425,12 +1425,12 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
     {
         const HnDrawItem::GeometryData& Geo = DrawItem.GetGeometryData();
 
-        static_assert(HN_RENDER_MODE_COUNT == 3, "Please handle the new render mode here");
+        static_assert(HN_GEOMETRY_MODE_COUNT == 3, "Please handle the new geometry render mode here");
 
         // Input layout is defined by HnRenderDelegate when creating USD renderer.
         ListItem.VertexBuffers[VERTEX_BUFFER_SLOT_POSITIONS]     = Geo.Positions;
         ListItem.VertexBuffers[VERTEX_BUFFER_SLOT_VERTEX_JOINTS] = Geo.Joints;
-        if (m_RenderMode == HN_RENDER_MODE_SOLID)
+        if (m_GeometryMode == HN_GEOMETRY_MODE_SOLID)
         {
             ListItem.VertexBuffers[VERTEX_BUFFER_SLOT_NORMALS]       = Geo.Normals;
             ListItem.VertexBuffers[VERTEX_BUFFER_SLOT_TEX_COORDS0]   = Geo.TexCoords[0];
@@ -1440,8 +1440,8 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
             // It is OK if some buffers are null
             ListItem.NumVertexBuffers = VERTEX_BUFFER_SLOT_COUNT;
         }
-        else if (m_RenderMode == HN_RENDER_MODE_MESH_EDGES ||
-                 m_RenderMode == HN_RENDER_MODE_POINTS)
+        else if (m_GeometryMode == HN_GEOMETRY_MODE_MESH_EDGES ||
+                 m_GeometryMode == HN_GEOMETRY_MODE_POINTS)
         {
             // Only positions and joints are used
             ListItem.VertexBuffers[VERTEX_BUFFER_SLOT_NORMALS]       = nullptr;
@@ -1457,17 +1457,17 @@ void HnRenderPass::UpdateDrawListItemGPUResources(DrawListItem& ListItem, Render
         }
 
         const HnDrawItem::TopologyData* Topology = nullptr;
-        switch (m_RenderMode)
+        switch (m_GeometryMode)
         {
-            case HN_RENDER_MODE_SOLID:
+            case HN_GEOMETRY_MODE_SOLID:
                 Topology = &DrawItem.GetFaces();
                 break;
 
-            case HN_RENDER_MODE_MESH_EDGES:
+            case HN_GEOMETRY_MODE_MESH_EDGES:
                 Topology = &DrawItem.GetEdges();
                 break;
 
-            case HN_RENDER_MODE_POINTS:
+            case HN_GEOMETRY_MODE_POINTS:
                 Topology = &DrawItem.GetPoints();
                 break;
 

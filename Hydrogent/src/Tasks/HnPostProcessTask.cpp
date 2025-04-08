@@ -598,12 +598,12 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
         m_Bloom = std::make_unique<Bloom>(pDevice, Bloom::CreateInfo{AsyncShaderCompilation});
     }
 
-    const PBR_Renderer::DebugViewType DebugView  = pRenderParam->GetDebugView();
-    const HN_RENDER_MODE              RenderMode = pRenderParam->GetRenderMode();
+    const PBR_Renderer::DebugViewType DebugView    = pRenderParam->GetDebugView();
+    const HN_GEOMETRY_MODE            GeometryMode = pRenderParam->GetGeometryMode();
 
     const bool EnablePostProcessing =
         (DebugView == PBR_Renderer::DebugViewType::None || DebugView == PBR_Renderer::DebugViewType::WhiteBaseColor) &&
-        (RenderMode == HN_RENDER_MODE_SOLID);
+        (GeometryMode == HN_GEOMETRY_MODE_SOLID);
 
     float SSRScale  = 0;
     float SSAOScale = 0;
@@ -625,7 +625,7 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
         m_AttribsCBDirty = true;
     }
     m_UseSSAO  = m_SSAOScale > 0;
-    m_UseTAA   = m_Params.EnableTAA && (RenderMode == HN_RENDER_MODE_SOLID) && (DebugView != PBR_Renderer::DebugViewType::MotionVectors);
+    m_UseTAA   = m_Params.EnableTAA && (GeometryMode == HN_GEOMETRY_MODE_SOLID) && (DebugView != PBR_Renderer::DebugViewType::MotionVectors);
     m_UseBloom = m_Params.EnableBloom && EnablePostProcessing && m_UseTAA;
     m_UseDOF   = m_Params.EnableDOF && EnablePostProcessing && m_UseTAA;
 
@@ -688,7 +688,7 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
             m_UseSSAO,
             pRenderParam->GetUseShadows(),
             DebugView,
-            RenderMode,
+            GeometryMode,
         };
 
         if (CurrSSFactors != m_LastSuperSamplingFactors || m_AttribsCBDirty)

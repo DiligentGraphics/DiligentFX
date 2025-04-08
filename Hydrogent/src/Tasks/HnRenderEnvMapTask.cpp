@@ -85,11 +85,11 @@ bool HnRenderEnvMapTask::IsActive(pxr::HdRenderIndex& RenderIndex) const
 {
     pxr::HdRenderDelegate*            RenderDelegate = RenderIndex.GetRenderDelegate();
     const HnRenderParam*              RenderParam    = static_cast<const HnRenderParam*>(RenderDelegate->GetRenderParam());
-    const HN_RENDER_MODE              RenderMode     = RenderParam->GetRenderMode();
+    const HN_GEOMETRY_MODE            GeometryMode   = RenderParam->GetGeometryMode();
     const PBR_Renderer::DebugViewType DebugView      = RenderParam->GetDebugView();
 
     // Background is cleared to white in scene depth debug view mode
-    return !(RenderMode == HN_RENDER_MODE_SOLID && DebugView == PBR_Renderer::DebugViewType::SceneDepth);
+    return !(GeometryMode == HN_GEOMETRY_MODE_SOLID && DebugView == PBR_Renderer::DebugViewType::SceneDepth);
 }
 
 static std::string GetEnvMapPSMain()

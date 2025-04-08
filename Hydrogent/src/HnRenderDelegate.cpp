@@ -1001,9 +1001,9 @@ void HnRenderDelegate::SetDebugView(PBR_Renderer::DebugViewType DebugView)
     m_RenderParam->SetDebugView(DebugView);
 }
 
-void HnRenderDelegate::SetRenderMode(HN_RENDER_MODE RenderMode)
+void HnRenderDelegate::SetGeometryMode(HN_GEOMETRY_MODE GeometryMode)
 {
-    m_RenderParam->SetRenderMode(RenderMode);
+    m_RenderParam->SetGeometryMode(GeometryMode);
 }
 
 void HnRenderDelegate::SetSelectedRPrimId(const pxr::SdfPath& RPrimID)

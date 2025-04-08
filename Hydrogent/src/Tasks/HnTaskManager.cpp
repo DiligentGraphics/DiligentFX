@@ -223,7 +223,7 @@ HnTaskManager::HnTaskManager(pxr::HdRenderIndex& RenderIndex,
                                    USD_Renderer::USD_PSO_FLAG_ENABLE_ALL_OUTPUTS,
                                },
                                {
-                                   HnRenderRprimsTaskParams::RENDER_MODE_FLAG_SOLID,
+                                   HnRenderRprimsTaskParams::GEOMETRY_MODE_FLAG_SOLID,
                                });
         CreateEndOITPassTask();
     }

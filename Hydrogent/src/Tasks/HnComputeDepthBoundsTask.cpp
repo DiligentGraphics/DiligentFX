@@ -64,11 +64,11 @@ bool HnComputeDepthBoundsTask::IsActive(pxr::HdRenderIndex& RenderIndex) const
 {
     pxr::HdRenderDelegate*            RenderDelegate = RenderIndex.GetRenderDelegate();
     const HnRenderParam*              RenderParam    = static_cast<const HnRenderParam*>(RenderDelegate->GetRenderParam());
-    const HN_RENDER_MODE              RenderMode     = RenderParam->GetRenderMode();
+    const HN_GEOMETRY_MODE            GeometryMode   = RenderParam->GetGeometryMode();
     const PBR_Renderer::DebugViewType DebugView      = RenderParam->GetDebugView();
 
     // Only run this task when scene depth debug view is enabled
-    return RenderMode == HN_RENDER_MODE_SOLID && DebugView == PBR_Renderer::DebugViewType::SceneDepth;
+    return GeometryMode == HN_GEOMETRY_MODE_SOLID && DebugView == PBR_Renderer::DebugViewType::SceneDepth;
 }
 
 void HnComputeDepthBoundsTask::Prepare(pxr::HdTaskContext* TaskCtx,
