@@ -34,6 +34,7 @@
 #include "HnLight.hpp"
 #include "HnRenderParam.hpp"
 #include "HnShadowMapManager.hpp"
+#include "HnTypeConversions.hpp"
 
 #include "DebugUtilities.hpp"
 #include "GraphicsAccessories.hpp"
@@ -257,7 +258,7 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
     {
         if (i == HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR)
         {
-            if (RenderParam->GetDebugView() != PBR_Renderer::DebugViewType::SceneDepth)
+            if (RenderParam->GetViewMode() != HN_VIEW_MODE_SCENE_DEPTH)
             {
                 // NB: we should clear alpha to one as it accumulates the total transmittance
                 ClearValues[i] = float4{m_Params.ClearColor.r, m_Params.ClearColor.g, m_Params.ClearColor.b, 1.0};
@@ -642,7 +643,7 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
             RendererParams.WhitePoint    = HLSL::ToneMappingAttribs{}.fWhitePoint;
 
             RendererParams.Time      = static_cast<float>(m_CurrFrameTime);
-            RendererParams.DebugView = static_cast<int>(RenderParam->GetDebugView());
+            RendererParams.DebugView = static_cast<int>(HnViewModeToDebugViewType(RenderParam->GetViewMode()));
 
             {
                 float LoadingAnimationFactor = m_FallBackPsoUseStartTime > 0 ? 1.0 : 0.0;

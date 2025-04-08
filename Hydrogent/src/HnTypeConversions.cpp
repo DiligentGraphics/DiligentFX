@@ -1,5 +1,5 @@
 /*
- *  Copyright 2024 Diligent Graphics LLC
+ *  Copyright 2024-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -342,6 +342,49 @@ const pxr::TfToken& PBRTextureAttribIdToPxrName(PBR_Renderer::TEXTURE_ATTRIB_ID 
     }();
 
     return TexAttribIdToName[Id];
+}
+
+PBR_Renderer::DebugViewType HnViewModeToDebugViewType(HN_VIEW_MODE ViewMode)
+{
+    static_assert(HN_VIEW_MODE_COUNT == 25, "Please handle the new view mode below");
+
+    static const std::array<PBR_Renderer::DebugViewType, HN_VIEW_MODE_COUNT> ViewModeToDebugViewType = []() {
+        std::array<PBR_Renderer::DebugViewType, HN_VIEW_MODE_COUNT> DebugViewTypes;
+
+        DebugViewTypes[HN_VIEW_MODE_SHADED]              = PBR_Renderer::DebugViewType::None;
+        DebugViewTypes[HN_VIEW_MODE_TEXCOORD0]           = PBR_Renderer::DebugViewType::Texcoord0;
+        DebugViewTypes[HN_VIEW_MODE_TEXCOORD1]           = PBR_Renderer::DebugViewType::Texcoord1;
+        DebugViewTypes[HN_VIEW_MODE_BASE_COLOR]          = PBR_Renderer::DebugViewType::BaseColor;
+        DebugViewTypes[HN_VIEW_MODE_TRANSPARENCY]        = PBR_Renderer::DebugViewType::Transparency;
+        DebugViewTypes[HN_VIEW_MODE_OCCLUSION]           = PBR_Renderer::DebugViewType::Occlusion;
+        DebugViewTypes[HN_VIEW_MODE_EMISSIVE]            = PBR_Renderer::DebugViewType::Emissive;
+        DebugViewTypes[HN_VIEW_MODE_METALLIC]            = PBR_Renderer::DebugViewType::Metallic;
+        DebugViewTypes[HN_VIEW_MODE_ROUGHNESS]           = PBR_Renderer::DebugViewType::Roughness;
+        DebugViewTypes[HN_VIEW_MODE_DIFFUSE_COLOR]       = PBR_Renderer::DebugViewType::DiffuseColor;
+        DebugViewTypes[HN_VIEW_MODE_SPECULAR_COLOR]      = PBR_Renderer::DebugViewType::SpecularColor;
+        DebugViewTypes[HN_VIEW_MODE_REFLECTANCE90]       = PBR_Renderer::DebugViewType::Reflectance90;
+        DebugViewTypes[HN_VIEW_MODE_MESH_NORMAL]         = PBR_Renderer::DebugViewType::MeshNormal;
+        DebugViewTypes[HN_VIEW_MODE_SHADING_NORMAL]      = PBR_Renderer::DebugViewType::ShadingNormal;
+        DebugViewTypes[HN_VIEW_MODE_MOTION_VECTORS]      = PBR_Renderer::DebugViewType::MotionVectors;
+        DebugViewTypes[HN_VIEW_MODE_NDOTV]               = PBR_Renderer::DebugViewType::NdotV;
+        DebugViewTypes[HN_VIEW_MODE_PUNCTUAL_LIGHTING]   = PBR_Renderer::DebugViewType::PunctualLighting;
+        DebugViewTypes[HN_VIEW_MODE_DIFFUSE_IBL]         = PBR_Renderer::DebugViewType::DiffuseIBL;
+        DebugViewTypes[HN_VIEW_MODE_SPECULAR_IBL]        = PBR_Renderer::DebugViewType::SpecularIBL;
+        DebugViewTypes[HN_VIEW_MODE_WHITE_BASE_COLOR]    = PBR_Renderer::DebugViewType::WhiteBaseColor;
+        DebugViewTypes[HN_VIEW_MODE_CLEARCOAT]           = PBR_Renderer::DebugViewType::ClearCoat;
+        DebugViewTypes[HN_VIEW_MODE_CLEARCOAT_FACTOR]    = PBR_Renderer::DebugViewType::ClearCoatFactor;
+        DebugViewTypes[HN_VIEW_MODE_CLEARCOAT_ROUGHNESS] = PBR_Renderer::DebugViewType::ClearCoatRoughness;
+        DebugViewTypes[HN_VIEW_MODE_CLEARCOAT_NORMAL]    = PBR_Renderer::DebugViewType::ClearCoatNormal;
+        DebugViewTypes[HN_VIEW_MODE_SCENE_DEPTH]         = PBR_Renderer::DebugViewType::SceneDepth;
+        return DebugViewTypes;
+    }();
+    if (ViewMode < 0 || ViewMode >= HN_VIEW_MODE_COUNT)
+    {
+        UNEXPECTED("Unexpected view mode");
+        return PBR_Renderer::DebugViewType::None;
+    }
+
+    return ViewModeToDebugViewType[ViewMode];
 }
 
 } // namespace USD

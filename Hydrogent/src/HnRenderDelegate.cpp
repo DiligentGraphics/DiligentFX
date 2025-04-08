@@ -996,9 +996,9 @@ HnRenderDelegateRenderingStats HnRenderDelegate::GetRenderingStats() const
     return Stats;
 }
 
-void HnRenderDelegate::SetDebugView(PBR_Renderer::DebugViewType DebugView)
+void HnRenderDelegate::SetViewMode(HN_VIEW_MODE ViewMode)
 {
-    m_RenderParam->SetDebugView(DebugView);
+    m_RenderParam->SetViewMode(ViewMode);
 }
 
 void HnRenderDelegate::SetGeometryMode(HN_GEOMETRY_MODE GeometryMode)

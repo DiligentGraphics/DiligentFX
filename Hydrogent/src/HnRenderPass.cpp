@@ -411,7 +411,7 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
     RPState.Commit(State.pCtx);
 
     {
-        PBR_Renderer::DebugViewType DebugView = State.RenderParam.GetDebugView();
+        PBR_Renderer::DebugViewType DebugView = HnViewModeToDebugViewType(State.RenderParam.GetViewMode());
         if (m_DebugView != DebugView)
         {
             m_DrawListItemsDirtyFlags |= DRAW_LIST_ITEM_DIRTY_FLAG_PSO;

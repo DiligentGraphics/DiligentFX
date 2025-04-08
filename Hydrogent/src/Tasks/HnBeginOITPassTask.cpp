@@ -57,13 +57,13 @@ void HnBeginOITPassTask::Sync(pxr::HdSceneDelegate* Delegate,
 
 bool HnBeginOITPassTask::IsActive(pxr::HdRenderIndex& RenderIndex) const
 {
-    pxr::HdRenderDelegate*            RenderDelegate = RenderIndex.GetRenderDelegate();
-    const HnRenderParam*              RenderParam    = static_cast<const HnRenderParam*>(RenderDelegate->GetRenderParam());
-    const HN_GEOMETRY_MODE            GeometryMode   = RenderParam->GetGeometryMode();
-    const PBR_Renderer::DebugViewType DebugView      = RenderParam->GetDebugView();
+    pxr::HdRenderDelegate* RenderDelegate = RenderIndex.GetRenderDelegate();
+    const HnRenderParam*   RenderParam    = static_cast<const HnRenderParam*>(RenderDelegate->GetRenderParam());
+    const HN_GEOMETRY_MODE GeometryMode   = RenderParam->GetGeometryMode();
+    const HN_VIEW_MODE     ViewMode       = RenderParam->GetViewMode();
 
     // Scene depth debug view for transparent objects is rendered in opaque mode and does not need OIT layers.
-    return GeometryMode == HN_GEOMETRY_MODE_SOLID && DebugView != PBR_Renderer::DebugViewType::SceneDepth;
+    return GeometryMode == HN_GEOMETRY_MODE_SOLID && ViewMode != HN_VIEW_MODE_SCENE_DEPTH;
 }
 
 void HnBeginOITPassTask::Prepare(pxr::HdTaskContext* TaskCtx,

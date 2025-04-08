@@ -236,8 +236,8 @@ private:
         bool   UseSSAO    = false;
         bool   UseShadows = false;
 
-        PBR_Renderer::DebugViewType DebugView    = PBR_Renderer::DebugViewType::NumDebugViews;
-        HN_GEOMETRY_MODE            GeometryMode = HN_GEOMETRY_MODE_COUNT;
+        HN_VIEW_MODE     ViewMode     = HN_VIEW_MODE_COUNT;
+        HN_GEOMETRY_MODE GeometryMode = HN_GEOMETRY_MODE_COUNT;
 
         constexpr bool operator==(const SuperSamplingFactors& rhs) const
         {
@@ -246,7 +246,7 @@ private:
                     UseSSR       == rhs.UseSSR &&
                     UseSSAO      == rhs.UseSSAO &&
                     UseShadows   == rhs.UseShadows &&
-                    DebugView    == rhs.DebugView &&
+                    ViewMode     == rhs.ViewMode &&
                     GeometryMode == rhs.GeometryMode);
             // clang-format on
         }

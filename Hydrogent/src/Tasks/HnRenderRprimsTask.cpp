@@ -135,7 +135,7 @@ bool HnRenderRprimsTask::IsActive(pxr::HdRenderIndex& RenderIndex) const
     if (m_RenderPass && m_RenderPass->GetParams().Type == USD_Renderer::RenderPassType::OITLayers)
     {
         // Scene depth debug view for transparent objects is rendered in opaque mode and does not need OIT layers.
-        return RenderParam->GetDebugView() != PBR_Renderer::DebugViewType::SceneDepth;
+        return RenderParam->GetViewMode() != HN_VIEW_MODE_SCENE_DEPTH;
     }
 
     return true;

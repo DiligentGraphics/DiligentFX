@@ -36,7 +36,7 @@ namespace Diligent
 namespace USD
 {
 
-/// Geometry renering mode
+/// Geometry rendering mode
 enum HN_GEOMETRY_MODE : Uint8
 {
     /// Render solid geometry
@@ -67,6 +67,88 @@ enum HN_MATERIAL_TEXTURES_BINDING_MODE : Uint8
     ///
     /// \note   This mode requires bindless support from the device.
     HN_MATERIAL_TEXTURES_BINDING_MODE_DYNAMIC
+};
+
+/// Renderer view mode.
+enum HN_VIEW_MODE : Uint8
+{
+    /// Render shaded geometry.
+    HN_VIEW_MODE_SHADED,
+
+    /// Display texture coordinate set 0.
+    HN_VIEW_MODE_TEXCOORD0,
+
+    /// Display texture coordinate set 1.
+    HN_VIEW_MODE_TEXCOORD1,
+
+    /// Display base color texture.
+    HN_VIEW_MODE_BASE_COLOR,
+
+    /// Display transparency.
+    HN_VIEW_MODE_TRANSPARENCY,
+
+    /// Display occlusion.
+    HN_VIEW_MODE_OCCLUSION,
+
+    /// Display emissive texture.
+    HN_VIEW_MODE_EMISSIVE,
+
+    /// Display metallic.
+    HN_VIEW_MODE_METALLIC,
+
+    /// Display roughness.
+    HN_VIEW_MODE_ROUGHNESS,
+
+    /// Display diffuse color.
+    HN_VIEW_MODE_DIFFUSE_COLOR,
+
+    /// Display specular color.
+    HN_VIEW_MODE_SPECULAR_COLOR,
+
+    /// Display normal reflectance.
+    HN_VIEW_MODE_REFLECTANCE90,
+
+    /// Display mesh normals.
+    HN_VIEW_MODE_MESH_NORMAL,
+
+    /// Display shading normals.
+    HN_VIEW_MODE_SHADING_NORMAL,
+
+    /// Display motion vectors.
+    HN_VIEW_MODE_MOTION_VECTORS,
+
+    /// Display (Normal, View) product.
+    HN_VIEW_MODE_NDOTV,
+
+    /// Display punctual lighting.
+    HN_VIEW_MODE_PUNCTUAL_LIGHTING,
+
+    /// Display diffuse IBL.
+    HN_VIEW_MODE_DIFFUSE_IBL,
+
+    /// Display specular IBL.
+    HN_VIEW_MODE_SPECULAR_IBL,
+
+    /// Render the scene with white base color.
+    HN_VIEW_MODE_WHITE_BASE_COLOR,
+
+    /// Display clear coat.
+    HN_VIEW_MODE_CLEARCOAT,
+
+    /// Display clear coat factor.
+    HN_VIEW_MODE_CLEARCOAT_FACTOR,
+
+    /// Display clear coat roughness.
+    HN_VIEW_MODE_CLEARCOAT_ROUGHNESS,
+
+    /// Display clear coat normal.
+    HN_VIEW_MODE_CLEARCOAT_NORMAL,
+
+    /// Display scene depth.
+    HN_VIEW_MODE_SCENE_DEPTH,
+
+    /// The total number of view modes.
+    HN_VIEW_MODE_COUNT
 };
 
 } // namespace USD

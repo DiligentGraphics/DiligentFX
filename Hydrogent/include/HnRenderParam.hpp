@@ -125,9 +125,8 @@ public:
     uint32_t GetAttribVersion(GlobalAttrib Attrib) const { return m_GlobalAttribVersions[static_cast<size_t>(Attrib)].load(); }
     uint32_t MakeAttribDirty(GlobalAttrib Attrib) { return m_GlobalAttribVersions[static_cast<size_t>(Attrib)].fetch_add(1) + 1; }
 
-    PBR_Renderer::DebugViewType GetDebugView() const { return m_DebugView; }
-
-    void SetDebugView(PBR_Renderer::DebugViewType DebugView) { m_DebugView = DebugView; }
+    HN_VIEW_MODE GetViewMode() const { return m_ViewMode; }
+    void         SetViewMode(HN_VIEW_MODE ViewMode) { m_ViewMode = ViewMode; }
 
     double GetFrameTime() const { return m_FrameTime; }
     void   SetFrameTime(double FrameTime) { m_FrameTime = FrameTime; }
@@ -152,7 +151,7 @@ private:
 
     std::array<std::atomic<uint32_t>, static_cast<size_t>(GlobalAttrib::Count)> m_GlobalAttribVersions{};
 
-    PBR_Renderer::DebugViewType m_DebugView = PBR_Renderer::DebugViewType::None;
+    HN_VIEW_MODE m_ViewMode = HN_VIEW_MODE_SHADED;
 
     bool m_UseShadows             = false;
     bool m_LoadingAnimationActive = false;
