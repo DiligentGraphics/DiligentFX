@@ -43,7 +43,8 @@ void main(in  FullScreenTriangleVSOutput VSOut,
     float4 Pos = VSOut.f4PixelPos;
 
     Color = g_ColorBuffer.Load(int3(Pos.xy, 0));
-    if (g_Frame.Renderer.DebugView == DEBUG_VIEW_SCENE_DEPTH && g_Frame.Renderer.LoadingAnimation.Factor == 0.0)
+#if VIEW_MODE == VIEW_MODE_SCENE_DEPTH
+    if (g_Frame.Renderer.LoadingAnimation.Factor == 0.0)
     {
         // The overlay was rendered with Scene Range == Camera Range. 
         // At the end of the frame, we computed the accurate scene depth range in HnComputeDepthBoundsTask,
@@ -55,9 +56,10 @@ void main(in  FullScreenTriangleVSOutput VSOut,
         RelZ = saturate(RelZ);
         Color.rgb = float3(RelZ, RelZ, RelZ);
     }
-    
+#endif
+
     float Opacity = 1.0 - Color.a;
-    
+
     float SSRScale = g_Attribs.SSRScale * Opacity;
     if (SSRScale > 0.0)
     {
@@ -66,7 +68,7 @@ void main(in  FullScreenTriangleVSOutput VSOut,
         float3 Normal      = g_Normal.Load(int3(VSOut.f4PixelPos.xy, 0)).xyz;
         float4 BaseColor   = g_BaseColor.Load(int3(Pos.xy, 0));
         float4 Material    = g_MaterialData.Load(int3(Pos.xy, 0));
-    
+
         float Roughness = saturate(Material.x);
         float Metallic  = saturate(Material.y);
         SurfaceReflectanceInfo SrfInfo = GetSurfaceReflectanceMR(BaseColor.rgb, Metallic, Roughness);
@@ -79,9 +81,9 @@ void main(in  FullScreenTriangleVSOutput VSOut,
                                                      g_PreintegratedGGX_sampler,
                                                      Normal,
                                                      ViewDir);
-    
+
         float3 SSR = GetSpecularIBL_GGX(SrfInfo, IBLInfo, SSRRadiance.rgb);
-    
+
         Color.rgb += (SSR.rgb - SpecularIBL.rgb) * SSRRadiance.w * SSRScale;
     }
 
@@ -93,7 +95,7 @@ void main(in  FullScreenTriangleVSOutput VSOut,
         float Occlusion = lerp(1.0, g_SSAO.Load(int3(Pos.xy, 0)).x, SSAOScale);
         Color.rgb *= Occlusion;
     }
-    
+
 #if TONE_MAPPING_MODE > TONE_MAPPING_MODE_NONE
     Color.rgb = ToneMap(Color.rgb, g_Attribs.ToneMapping, g_Attribs.AverageLogLum * exp2(-g_Frame.Camera.fExposure));
 #endif

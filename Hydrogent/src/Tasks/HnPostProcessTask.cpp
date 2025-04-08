@@ -154,7 +154,7 @@ static GraphicsPipelineStateCreateInfoX& CreateShaders(RenderDeviceWithCache_E& 
     return PsoCI;
 }
 
-void HnPostProcessTask::PostProcessingTechnique::PreparePSO(TEXTURE_FORMAT RTVFormat)
+void HnPostProcessTask::PostProcessingTechnique::PreparePSO(TEXTURE_FORMAT RTVFormat, HN_VIEW_MODE _ViewMode)
 {
     bool IsDirty = PSO && PSO->GetGraphicsPipelineDesc().RTVFormats[0] != RTVFormat;
 
@@ -185,6 +185,17 @@ void HnPostProcessTask::PostProcessingTechnique::PreparePSO(TEXTURE_FORMAT RTVFo
         }
     }
 
+    {
+        if (_ViewMode != HN_VIEW_MODE_SCENE_DEPTH)
+            _ViewMode = HN_VIEW_MODE_SHADED;
+
+        if (ViewMode != _ViewMode)
+        {
+            ViewMode = _ViewMode;
+            IsDirty  = true;
+        }
+    }
+
     if (IsDirty)
         PSO.Release();
 
@@ -202,7 +213,8 @@ void HnPostProcessTask::PostProcessingTechnique::PreparePSO(TEXTURE_FORMAT RTVFo
         ShaderMacroHelper Macros;
         Macros.Add("CONVERT_OUTPUT_TO_SRGB", ConvertOutputToSRGB);
         Macros.Add("TONE_MAPPING_MODE", ToneMappingMode);
-        Macros.Add("DEBUG_VIEW_SCENE_DEPTH", static_cast<int>(PBR_Renderer::DebugViewType::SceneDepth));
+        Macros.Add("VIEW_MODE_SCENE_DEPTH", static_cast<int>(HN_VIEW_MODE_SCENE_DEPTH));
+        Macros.Add("VIEW_MODE", static_cast<int>(ViewMode));
         if (GridFeatureFlags != CoordinateGridRenderer::FEATURE_FLAG_NONE)
         {
             Macros.Add("ENABLE_GRID", 1);
@@ -632,7 +644,7 @@ void HnPostProcessTask::Prepare(pxr::HdTaskContext* TaskCtx,
     // Initialize post-processing and copy frame techniques first as they
     // don't use async shader compilation.
     m_PostProcessTech.PreparePRS();
-    m_PostProcessTech.PreparePSO((m_UseTAA ? m_FrameTargets->JitteredFinalColorRTV : m_FinalColorRTV)->GetDesc().Format);
+    m_PostProcessTech.PreparePSO((m_UseTAA ? m_FrameTargets->JitteredFinalColorRTV : m_FinalColorRTV)->GetDesc().Format, ViewMode);
 
     m_CopyFrameTech.PreparePRS();
     m_CopyFrameTech.PreparePSO(m_FinalColorRTV->GetDesc().Format);

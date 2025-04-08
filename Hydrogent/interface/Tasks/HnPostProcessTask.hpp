@@ -294,12 +294,13 @@ private:
             PPTask{_PPTask}
         {}
         void PreparePRS();
-        void PreparePSO(TEXTURE_FORMAT RTVFormat);
+        void PreparePSO(TEXTURE_FORMAT RTVFormat, HN_VIEW_MODE _ViewMode);
         void PrepareSRB(ITextureView* pClosestSelectedLocationSRV, Uint32 FrameIdx);
 
     private:
-        bool ConvertOutputToSRGB = false;
-        int  ToneMappingMode     = 0;
+        HN_VIEW_MODE ViewMode            = HN_VIEW_MODE_SHADED;
+        bool         ConvertOutputToSRGB = false;
+        int          ToneMappingMode     = 0;
 
         CoordinateGridRenderer::FEATURE_FLAGS GridFeatureFlags = CoordinateGridRenderer::FEATURE_FLAG_NONE;
     } m_PostProcessTech;
