@@ -147,6 +147,9 @@ enum HN_VIEW_MODE : Uint8
     /// Display scene depth.
     HN_VIEW_MODE_SCENE_DEPTH,
 
+    /// Display edge map.
+    HN_VIEW_MODE_EDGE_MAP,
+
     /// The total number of view modes.
     HN_VIEW_MODE_COUNT
 };

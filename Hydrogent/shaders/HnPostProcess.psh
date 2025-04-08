@@ -37,6 +37,83 @@ Texture2D g_BaseColor;
 Texture2D    g_PreintegratedGGX;
 SamplerState g_PreintegratedGGX_sampler;
 
+#if VIEW_MODE == VIEW_MODE_EDGE_MAP
+float ComputeColorEdge(int2 Pos)
+{
+    int Width, Height;
+    g_ColorBuffer.GetDimensions(Width, Height);
+
+    // t *  *  *
+    //   *  *  *
+    // b *  *  *
+    //   l     r
+    int l = max(Pos.x - 1, 0);
+    int b = max(Pos.y - 1, 0);
+    int r = min(Pos.x + 1, Width - 1);
+    int t = min(Pos.y + 1, Height - 1);
+    
+    float3 LB = g_ColorBuffer.Load(int3(l, b, 0)).rgb;
+    float3 RB = g_ColorBuffer.Load(int3(r, b, 0)).rgb;
+    float3 LT = g_ColorBuffer.Load(int3(l, t, 0)).rgb;
+    float3 RT = g_ColorBuffer.Load(int3(r, t, 0)).rgb;
+    
+    float3 LL = g_ColorBuffer.Load(int3(l, Pos.y, 0)).rgb;
+    float3 RR = g_ColorBuffer.Load(int3(r, Pos.y, 0)).rgb;
+    float3 BB = g_ColorBuffer.Load(int3(Pos.x, b, 0)).rgb;
+    float3 TT = g_ColorBuffer.Load(int3(Pos.x, t, 0)).rgb;
+    
+    float3 H  = (RR - LL) * 0.5;
+    float3 V  = (TT - BB) * 0.5;
+    float3 D0 = (RT - LB) * 0.5;
+    float3 D1 = (LT - RB) * 0.5;
+
+    float MaxGrad = max(max(length(H), length(V)), max(length(D0), length(D1)));
+    
+    float Threshold = 0.2;
+    float Scale     = 5.0;
+    return saturate((MaxGrad - Threshold) / (1.0 - Threshold) * Scale); 
+}
+
+float ComputeDepthEdge(int2 Pos, float Depth)
+{
+    int Width, Height;
+    g_Depth.GetDimensions(Width, Height);
+           
+    // t *  *  *
+    //   *  *  *
+    // b *  *  *
+    //   l     r
+    int l = max(Pos.x - 1, 0);
+    int b = max(Pos.y - 1, 0);
+    int r = min(Pos.x + 1, Width - 1);
+    int t = min(Pos.y + 1, Height - 1);
+   
+    float Z = DepthToCameraZ(Depth, g_Frame.Camera.mProj);
+    
+    float LB = DepthToCameraZ(g_Depth.Load(int3(l, b, 0)).r, g_Frame.Camera.mProj);
+    float RB = DepthToCameraZ(g_Depth.Load(int3(r, b, 0)).r, g_Frame.Camera.mProj);
+    float LT = DepthToCameraZ(g_Depth.Load(int3(l, t, 0)).r, g_Frame.Camera.mProj);
+    float RT = DepthToCameraZ(g_Depth.Load(int3(r, t, 0)).r, g_Frame.Camera.mProj);
+    
+    float LL = DepthToCameraZ(g_Depth.Load(int3(l, Pos.y, 0)).r, g_Frame.Camera.mProj);
+    float RR = DepthToCameraZ(g_Depth.Load(int3(r, Pos.y, 0)).r, g_Frame.Camera.mProj);
+    float BB = DepthToCameraZ(g_Depth.Load(int3(Pos.x, b, 0)).r, g_Frame.Camera.mProj);
+    float TT = DepthToCameraZ(g_Depth.Load(int3(Pos.x, t, 0)).r, g_Frame.Camera.mProj);
+    
+    float H = abs(RR - LL) * 0.5;
+    float V = abs(TT - BB) * 0.5;
+    float D0 = abs(RT - LB) * 0.5;
+    float D1 = abs(LT - RB) * 0.5;
+    
+    float MaxGrad = max(max(H, V), max(D0, D1));
+    
+    // Note: lower threshold makes planes at steep angles detected as edges
+    float Threshold = 0.1;
+    float Scale     = 10.0;
+    return saturate((abs(MaxGrad / Z) - Threshold) / (1.0 - Threshold) * Scale);
+}
+#endif
+
 void main(in  FullScreenTriangleVSOutput VSOut,
           out float4                     Color : SV_Target0)
 {
@@ -100,8 +177,24 @@ void main(in  FullScreenTriangleVSOutput VSOut,
     Color.rgb = ToneMap(Color.rgb, g_Attribs.ToneMapping, g_Attribs.AverageLogLum * exp2(-g_Frame.Camera.fExposure));
 #endif
 
+    float Depth = g_Depth.Load(int3(Pos.xy, 0)).r;
+ 
+#if VIEW_MODE == VIEW_MODE_EDGE_MAP
+    {
+        // Note that in the edge map mode, the scene is rendered with mesh normal debug view.
+        float ColorEdgeFactor = ComputeColorEdge(int2(Pos.xy));
+        if (Depth == g_Frame.Camera.fFarPlaneDepth)
+        {
+            // Don't detect color edges on the background
+            ColorEdgeFactor = 0.0;
+        }
+        float DepthEdgeFactor = ComputeDepthEdge(int2(Pos.xy), Depth);
+        float EdgeFactor = min(ColorEdgeFactor + DepthEdgeFactor, 1.0);
+        Color.rgb = float3(EdgeFactor, EdgeFactor, EdgeFactor);
+    }
+#endif
+
     float SelectionDepth = g_SelectionDepth.Load(int3(Pos.xy, 0)).r;
-    float Depth          = g_Depth.Load(int3(Pos.xy, 0)).r;
     bool  IsSelected     = Depth != g_Attribs.ClearDepth && SelectionDepth == Depth;
 
     // Desaturate all unselected pixels

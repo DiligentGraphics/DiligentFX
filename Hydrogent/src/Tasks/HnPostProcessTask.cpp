@@ -186,7 +186,7 @@ void HnPostProcessTask::PostProcessingTechnique::PreparePSO(TEXTURE_FORMAT RTVFo
     }
 
     {
-        if (_ViewMode != HN_VIEW_MODE_SCENE_DEPTH)
+        if (_ViewMode != HN_VIEW_MODE_SCENE_DEPTH && _ViewMode != HN_VIEW_MODE_EDGE_MAP)
             _ViewMode = HN_VIEW_MODE_SHADED;
 
         if (ViewMode != _ViewMode)
@@ -213,8 +213,11 @@ void HnPostProcessTask::PostProcessingTechnique::PreparePSO(TEXTURE_FORMAT RTVFo
         ShaderMacroHelper Macros;
         Macros.Add("CONVERT_OUTPUT_TO_SRGB", ConvertOutputToSRGB);
         Macros.Add("TONE_MAPPING_MODE", ToneMappingMode);
+
         Macros.Add("VIEW_MODE_SCENE_DEPTH", static_cast<int>(HN_VIEW_MODE_SCENE_DEPTH));
+        Macros.Add("VIEW_MODE_EDGE_MAP", static_cast<int>(HN_VIEW_MODE_EDGE_MAP));
         Macros.Add("VIEW_MODE", static_cast<int>(ViewMode));
+
         if (GridFeatureFlags != CoordinateGridRenderer::FEATURE_FLAG_NONE)
         {
             Macros.Add("ENABLE_GRID", 1);
