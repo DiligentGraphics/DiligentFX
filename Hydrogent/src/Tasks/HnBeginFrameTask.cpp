@@ -371,6 +371,12 @@ void HnBeginFrameTask::Prepare(pxr::HdTaskContext* TaskCtx,
         LOG_ERROR_MESSAGE("Camera Id is empty");
     }
 
+    if (m_ViewMode != pRenderParam->GetViewMode())
+    {
+        m_ViewMode = pRenderParam->GetViewMode();
+        ResetTAA   = true;
+    }
+
     (*TaskCtx)[HnRenderResourceTokens->taaReset] = pxr::VtValue{ResetTAA};
 
     if (ITextureView* pFinalColorRTV = GetRenderBufferTarget(*RenderIndex, m_Params.FinalColorTargetId))

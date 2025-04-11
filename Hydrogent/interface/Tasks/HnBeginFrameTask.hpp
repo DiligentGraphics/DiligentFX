@@ -192,6 +192,8 @@ private:
 
     Timer m_FrameTimer;
 
+    HN_VIEW_MODE m_ViewMode = HN_VIEW_MODE_SHADED;
+
     double m_CurrFrameTime           = 0;
     double m_FallBackPsoUseStartTime = -1;
     double m_FallBackPsoUseEndTime   = -1;
