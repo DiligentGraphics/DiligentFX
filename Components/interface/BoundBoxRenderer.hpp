@@ -24,6 +24,11 @@
  *  of the possibility of such damages.
  */
 
+#pragma once
+
+/// \file
+/// Defines BoundBoxRenderer class
+
 #include <unordered_map>
 #include <vector>
 #include <memory>
@@ -39,34 +44,45 @@
 namespace Diligent
 {
 
-/// Renders the bounding box.
+/// Bounding box renderer.
 class BoundBoxRenderer
 {
 public:
+    /// Bound box renderer creation info.
     struct CreateInfo
     {
-        IRenderDevice*     pDevice          = nullptr;
-        IRenderStateCache* pStateCache      = nullptr;
-        IBuffer*           pCameraAttribsCB = nullptr;
+        /// Render device.
+        IRenderDevice* pDevice = nullptr;
 
-        Uint8          NumRenderTargets                        = 1;
+        /// An optional render state cache.
+        IRenderStateCache* pStateCache = nullptr;
+
+        /// A buffer that contains camera attributes.
+        IBuffer* pCameraAttribsCB = nullptr;
+
+        /// The number of render targets.
+        Uint8 NumRenderTargets = 1;
+
+        /// Render target formats.
         TEXTURE_FORMAT RTVFormats[DILIGENT_MAX_RENDER_TARGETS] = {TEX_FORMAT_RGBA8_UNORM_SRGB};
-        TEXTURE_FORMAT DSVFormat                               = TEX_FORMAT_D32_FLOAT;
+
+        /// Depth-stencil view format.
+        TEXTURE_FORMAT DSVFormat = TEX_FORMAT_D32_FLOAT;
 
         /// A bit mask that defines the render targets to render to.
-        ///
-        /// \remarks    If bit N is set, the N-th render target's color write mask will be set to
-        ///             COLOR_MASK_ALL. Otherwise, it will be set to COLOR_MASK_NONE.
+
+        /// If bit N is set, the N-th render target's color write mask will be set to
+        /// Diligent::COLOR_MASK_ALL. Otherwise, it will be set to Diligent::COLOR_MASK_NONE.
         Uint32 RenderTargetMask = 0x1u;
 
         const char* PSMainSource = nullptr;
 
         /// Whether shader matrices are laid out in row-major order in GPU memory.
-        ///
-        /// \remarks    By default, shader matrices are laid out in column-major order
-        ///             in GPU memory. If this option is set to true, shaders will be compiled
-        ///             with the SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR flag and
-        ///             use the row-major layout.
+
+        /// By default, shader matrices are laid out in column-major order
+        /// in GPU memory. If this option is set to true, shaders will be compiled
+        /// with the Diligent::SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR flag and
+        /// use the row-major layout.
         bool PackMatrixRowMajor = false;
 
         /// Whether to compile shaders asynchronously.
@@ -78,6 +94,7 @@ public:
     /// Option flags.
     enum OPTION_FLAGS : Uint32
     {
+        /// No options.
         OPTION_FLAG_NONE = 0u,
 
         /// Manually convert shader output to sRGB color space.
@@ -90,13 +107,16 @@ public:
         OPTION_FLAG_USE_REVERSE_DEPTH = 1u << 2u
     };
 
+    /// Render attributes.
     struct RenderAttribs
     {
         /// Bounding box transformation matrix.
+
         /// Can't be null.
         const float4x4* BoundBoxTransform = nullptr;
 
         /// Bounding box color.
+
         /// If null, white color will be used.
         const float4* Color = nullptr;
 
@@ -104,6 +124,7 @@ public:
         float PatternLength = 32;
 
         /// Pattern mask.
+
         /// Each bit defines whether the corresponding 1/32 section of the pattern is filled or not.
         /// For example, use 0x0000FFFFu to draw a dashed line.
         Uint32 PatternMask = 0xFFFFFFFFu;
@@ -111,7 +132,14 @@ public:
         /// Render options.
         OPTION_FLAGS Options = OPTION_FLAG_NONE;
     };
+
+    /// Prepares the renderer.
+
+    /// \param [in] pContext - Device context.
+    /// \param [in] Attribs  - Render attributes.
     void Prepare(IDeviceContext* pContext, const RenderAttribs& Attribs);
+
+    /// Renders the bounding box.
     void Render(IDeviceContext* pContext);
 
 private:

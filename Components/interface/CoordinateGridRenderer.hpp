@@ -26,6 +26,9 @@
 
 #pragma once
 
+/// \file
+/// Defines CoordinateGridRenderer class
+
 #include <unordered_map>
 #include <vector>
 
@@ -47,21 +50,40 @@ struct CameraAttribs;
 struct CoordinateGridAttribs;
 } // namespace HLSL
 
+
+/// Coordinate grid renderer.
 class CoordinateGridRenderer
 {
 public:
+    /// Feature flags.
     enum FEATURE_FLAGS : Uint32
     {
-        FEATURE_FLAG_NONE            = 0u,
+        /// No feature flags.
+        FEATURE_FLAG_NONE = 0u,
+
+        /// Convert pixel shader output to sRGB.
         FEATURE_FLAG_CONVERT_TO_SRGB = 1u << 0u,
+
+        /// Render grid in YZ plane.
         FEATURE_FLAG_RENDER_PLANE_YZ = 1u << 1u,
+
+        /// Render grid in XZ plane.
         FEATURE_FLAG_RENDER_PLANE_XZ = 1u << 2u,
+
+        /// Render grid in XY plane.
         FEATURE_FLAG_RENDER_PLANE_XY = 1u << 3u,
-        FEATURE_FLAG_RENDER_AXIS_X   = 1u << 4u,
-        FEATURE_FLAG_RENDER_AXIS_Y   = 1u << 5u,
-        FEATURE_FLAG_RENDER_AXIS_Z   = 1u << 6u,
+
+        /// Render X axis.
+        FEATURE_FLAG_RENDER_AXIS_X = 1u << 4u,
+
+        /// Render Y axis.
+        FEATURE_FLAG_RENDER_AXIS_Y = 1u << 5u,
+
+        /// Render Z axis.
+        FEATURE_FLAG_RENDER_AXIS_Z = 1u << 6u,
     };
 
+    /// Render attributes.
     struct RenderAttributes
     {
         /// Render device that may be used to create new objects needed for this frame, if any.
@@ -92,18 +114,29 @@ public:
         const HLSL::CoordinateGridAttribs* pAttribs = nullptr;
     };
 
+    /// Create info.
     struct CreateInfo
     {
+        /// Whether shader matrices are laid out in row-major order in GPU memory.
+
+        /// By default, shader matrices are laid out in column-major order
+        /// in GPU memory. If this option is set to true, shaders will be compiled
+        /// with the Diligent::SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR flag and
+        /// use the row-major layout.
         bool PackMatrixRowMajor = false;
     };
 
 public:
+    /// Creates a new coordinate grid renderer.
     CoordinateGridRenderer(IRenderDevice* pDevice, const CreateInfo& CI);
 
+    /// Renders the coordinate grid.
     void Render(const RenderAttributes& Attribs);
 
+    /// Adds the coordinate grid UI elements.
     static bool UpdateUI(HLSL::CoordinateGridAttribs& Attribs, FEATURE_FLAGS& FeatureFlags);
 
+    /// Adds the coordinate grid shader macros.
     static void AddShaderMacros(FEATURE_FLAGS FeatureFlags, ShaderMacroHelper& Macros);
 
 private:

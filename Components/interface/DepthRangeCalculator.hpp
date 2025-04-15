@@ -24,6 +24,11 @@
  *  of the possibility of such damages.
  */
 
+#pragma once
+
+/// \file
+/// Defines DepthRangeCalculator class
+
 #include <memory>
 
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
@@ -48,12 +53,12 @@ namespace Diligent
 ///         float SceneFarDepth;
 ///     };
 ///
-/// SceneNearZ is always less than SceneFarZ.
-/// SceneNearDepth is the depth value corresponding to SceneNearZ.
-/// SceneFarDepth is the depth value corresponding to SceneFarZ.
-/// Note that if reverse depth is used, SceneNearDepth will be greater than SceneFarDepth.
+/// * `SceneNearZ` is always less than `SceneFarZ`.
+/// * `SceneNearDepth` is the depth value corresponding to `SceneNearZ`.
+/// * `SceneFarDepth` is the depth value corresponding to `SceneFarZ`.
+/// * Note that if reverse depth is used, `SceneNearDepth` will be greater than `SceneFarDepth`.
 ///
-/// \remarks SceneNearZ and SceneFarZ must be positive values.
+/// \remarks `SceneNearZ` and `SceneFarZ` must be positive values.
 class DepthRangeCalculator
 {
 public:
@@ -68,10 +73,10 @@ public:
 
         /// Whether shader matrices are laid out in row-major order in GPU memory.
         ///
-        /// \remarks    By default, shader matrices are laid out in column-major order
-        ///             in GPU memory. If this option is set to true, shaders will be compiled
-        ///             with the SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR flag and
-        ///             use the row-major layout.
+        /// By default, shader matrices are laid out in column-major order
+        /// in GPU memory. If this option is set to true, shaders will be compiled
+        /// with the SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR flag and
+        /// use the row-major layout.
         bool PackMatrixRowMajor = false;
 
         /// Whether to compile shaders asynchronously.
@@ -82,7 +87,7 @@ public:
     };
 
     /// Constructs a depth range calculator object.
-    ///
+
     /// \param [in] CI  Create info.
     ///
     /// In case of failure, an exception is thrown.
@@ -105,7 +110,7 @@ public:
         IDeviceContext* pContext = nullptr;
 
         /// Shader resource binding object.
-        ///
+
         /// The SRB must be created using the CreateSRB() method.
         IShaderResourceBinding* pSRB = nullptr;
 
@@ -117,11 +122,11 @@ public:
     };
 
     /// Computes the depth range.
-    ///
+
     /// \param [in] Attribs  Method attributes.
     ///
     /// The near/far depth values are written to the depth range buffer.
-    /// If the ReadBackData option was set to true in the CreateInfo structure,
+    /// If the `ReadBackData` option was set to true in the `CreateInfo` structure,
     /// the depth range will also be read back to the CPU and can be accessed using
     /// the GetDepthRange() method.
     ///
@@ -148,7 +153,7 @@ public:
     };
 
     /// Returns the depth range read back to the CPU.
-    ///
+
     /// \param [in] pCtx  If not null, the function will poll the read back queue for the latest data.
     /// \return           The depth range read back to the CPU.
     const DepthRange& GetDepthRange(IDeviceContext* pCtx = nullptr);

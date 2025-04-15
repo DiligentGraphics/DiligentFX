@@ -24,6 +24,11 @@
  *  of the possibility of such damages.
  */
 
+#pragma once
+
+/// \file
+/// Defines EnvMapRenderer class
+
 #include <unordered_map>
 #include <vector>
 #include <memory>
@@ -45,42 +50,57 @@ namespace HLSL
 struct ToneMappingAttribs;
 } // namespace HLSL
 
-/// Renders the environment map.
+
+/// Environment map renderer.
 class EnvMapRenderer
 {
 public:
+    /// Environment map renderer creation info.
     struct CreateInfo
     {
-        IRenderDevice*     pDevice          = nullptr;
-        IRenderStateCache* pStateCache      = nullptr;
-        IBuffer*           pCameraAttribsCB = nullptr;
+        /// Render device.
+        IRenderDevice* pDevice = nullptr;
 
-        Uint8          NumRenderTargets                        = 1;
+        /// An optional render state cache.
+        IRenderStateCache* pStateCache = nullptr;
+
+        /// A buffer that contains camera attributes.
+        IBuffer* pCameraAttribsCB = nullptr;
+
+        /// The number of render targets.
+        Uint8 NumRenderTargets = 1;
+
+        /// Render target formats.
         TEXTURE_FORMAT RTVFormats[DILIGENT_MAX_RENDER_TARGETS] = {TEX_FORMAT_RGBA8_UNORM_SRGB};
-        TEXTURE_FORMAT DSVFormat                               = TEX_FORMAT_D32_FLOAT;
+
+        /// Depth-stencil view format.
+        TEXTURE_FORMAT DSVFormat = TEX_FORMAT_D32_FLOAT;
 
         /// A bit mask that defines the render targets to render to.
-        ///
-        /// \remarks    If bit N is set, the N-th render target's color write mask will be set to
-        ///             COLOR_MASK_ALL. Otherwise, it will be set to COLOR_MASK_NONE.
+
+        /// If bit N is set, the N-th render target's color write mask will be set to
+        /// Diligent::COLOR_MASK_ALL. Otherwise, it will be set to Diligent::COLOR_MASK_NONE.
         Uint32 RenderTargetMask = 0x1u;
 
         const char* PSMainSource = nullptr;
 
         /// Whether shader matrices are laid out in row-major order in GPU memory.
-        ///
-        /// \remarks    By default, shader matrices are laid out in column-major order
-        ///             in GPU memory. If this option is set to true, shaders will be compiled
-        ///             with the SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR flag and
-        ///             use the row-major layout.
+
+        /// By default, shader matrices are laid out in column-major order
+        /// in GPU memory. If this option is set to true, shaders will be compiled
+        /// with the Diligent::SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR flag and
+        /// use the row-major layout.
         bool PackMatrixRowMajor = false;
     };
+    /// Creates a new environment map renderer.
     EnvMapRenderer(const CreateInfo& CI);
+
     ~EnvMapRenderer();
 
     /// Option flags.
     enum OPTION_FLAGS : Uint32
     {
+        /// No options.
         OPTION_FLAG_NONE = 0u,
 
         /// Manually convert shader output to sRGB color space.
@@ -93,19 +113,31 @@ public:
         OPTION_FLAG_USE_REVERSE_DEPTH = 1u << 2u
     };
 
+    /// Environment map renderer attributes.
     struct RenderAttribs
     {
+        /// Environment map cube map or sphere map.
         ITextureView* pEnvMap = nullptr;
 
+        /// Average log luminance for tone mapping.
         float AverageLogLum = 1;
-        float MipLevel      = 0;
-        float Alpha         = 1;
 
+        /// Mip level of the environment map to use.
+        float MipLevel = 0;
+
+        /// Alpha value to write to the output render target.
+        float Alpha = 1;
+
+        /// Option flags.
         OPTION_FLAGS Options = OPTION_FLAG_NONE;
     };
+
+    /// Prepares the environment map renderer for rendering.
     void Prepare(IDeviceContext*                 pContext,
                  const RenderAttribs&            Attribs,
                  const HLSL::ToneMappingAttribs& ToneMapping);
+
+    /// Renders the environment map.
     void Render(IDeviceContext* pContext);
 
 private:

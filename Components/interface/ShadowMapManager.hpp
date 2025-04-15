@@ -1,5 +1,5 @@
 /*
- *  Copyright 2019-2024 Diligent Graphics LLC
+ *  Copyright 2019-2025 Diligent Graphics LLC
  *  Copyright 2015-2019 Egor Yusov
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,6 +27,9 @@
 
 #pragma once
 
+/// \file
+/// Defines ShadowMapManager class
+
 #include <vector>
 #include <array>
 
@@ -43,6 +46,7 @@ namespace Diligent
 
 #include "Shaders/Common/public/BasicStructures.fxh"
 
+/// Shadow map manager.
 class ShadowMapManager
 {
 public:
@@ -53,7 +57,7 @@ public:
     /// Shadow map manager initialization info
     struct InitInfo
     {
-        /// Shadow map format. This parameter must not be TEX_FORMAT_UNKNOWN.
+        /// Shadow map format. This parameter must not be Diligent::TEX_FORMAT_UNKNOWN.
         TEXTURE_FORMAT Format                      = TEX_FORMAT_UNKNOWN;
 
         /// Shadow map resolution, must not be 0.
@@ -74,12 +78,19 @@ public:
         /// Optional sampler to be set in the filterable shadow map representation
         ISampler*      pFilterableShadowMapSampler = nullptr;
     };
+    /// Initializes the shadow map manager.
     void Initialize(IRenderDevice* pDevice, IRenderStateCache* pStateCache, const InitInfo& initInfo);
 
+    /// Returns the shadow map SRV.
     ITextureView* GetSRV()                     { return m_pShadowMapSRV;           }
+
+    /// Returns the shadow map DSV for the specified cascade.
     ITextureView* GetCascadeDSV(Uint32 Cascade){ return m_pShadowMapDSVs[Cascade]; }
+
+    /// Returns the filterable shadow map SRV.
     ITextureView* GetFilterableSRV()           { return m_pFilterableShadowMapSRV; }
 
+    /// Shadow cascade distribution info
     struct DistributeCascadeInfo
     {
         /// Pointer to camera view matrix, must not be null.
@@ -115,6 +126,7 @@ public:
         bool               PackMatrixRowMajor = false;
 
         /// Callback that allows the application to adjust z range of every cascade.
+
         /// The callback is also called with cascade value -1 to adjust that entire camera range.
         ///
         /// \param [in]  CascadeIdx - Cascade index, or -1 for the entire camera range.
@@ -123,7 +135,7 @@ public:
         std::function<void(int CascadeIdx, float& MinZ, float& MaxZ)> AdjustCascadeRange;
 
         /// Callback that allows the application to adjust cascade center.
-        ///
+
         /// \param [in]    Cascade                   - Cascade index.
         /// \param [in]    WorldToLightViewSpaceMatr - World to light view space transform matrix.
         /// \param [in]    TexelXSize                - Shadow map texel size along X axis.
@@ -131,25 +143,32 @@ public:
         /// \param [inout] CascadeCenterX            - Cascade center X coordinate.
         /// \param [inout] CascadeCenterY            - Cascade center Y coordinate.
         ///
-        /// \ramarks    The main use case for this callback is to adjust the cascade center to
-        ///             to snap it to texels in light view space in scenarios where global
-        ///             origin is dynamic (such as terrain rendering). 
+        /// The main use case for this callback is to adjust the cascade center to
+        /// to snap it to texels in light view space in scenarios where global
+        /// origin is dynamic (such as terrain rendering). 
         std::function<void(int Cascade, const float4x4& WorldToLightViewSpaceMatr, float TexelXSize, float TexelYSize, float& CascadeCenterX, float& CascadeCenterY)> AdjustCascadeCenter;
     };
 
     // clang-format on
 
+    /// Cascade transforms.
     struct CascadeTransforms
     {
+        /// Projection matrix
         float4x4 Proj;
+
+        /// World to light projection space matrix
         float4x4 WorldToLightProjSpace;
     };
 
+    /// Distributes shadow cascades.
     void DistributeCascades(const DistributeCascadeInfo& Info,
                             ShadowMapAttribs&            shadowMapAttribs);
 
+    /// Converts the shadow map to filterable format.
     void ConvertToFilterable(IDeviceContext* pCtx, const ShadowMapAttribs& ShadowAttribs);
 
+    /// Returns the cascade transforms for the specified cascade.
     const CascadeTransforms& GetCascadeTransform(Uint32 Cascade) const { return m_CascadeTransforms[Cascade]; }
 
 private:

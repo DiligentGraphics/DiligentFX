@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2024 Diligent Graphics LLC
+ *  Copyright 2023-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -24,6 +24,11 @@
  *  of the possibility of such damages.
  */
 
+#pragma once
+
+/// \file
+/// Defines VectorFieldRenderer class
+
 #include <unordered_map>
 #include <vector>
 
@@ -38,48 +43,63 @@ namespace Diligent
 {
 
 /// Renders 2D vector field (e.g. motion vectors).
-///
+
 /// The renderer draws a grid of lines, where direction and length of each line is
 /// determined by the vector field texture.
 class VectorFieldRenderer
 {
 public:
+    /// Vector field renderer creation info.
     struct CreateInfo
     {
-        IRenderDevice*     pDevice     = nullptr;
+        /// Render device.
+        IRenderDevice* pDevice = nullptr;
+
+        /// An optional render state cache.
         IRenderStateCache* pStateCache = nullptr;
 
-        Uint8          NumRenderTargets                        = 0;
-        TEXTURE_FORMAT RTVFormats[DILIGENT_MAX_RENDER_TARGETS] = {};
-        TEXTURE_FORMAT DSVFormat                               = TEX_FORMAT_UNKNOWN;
+        /// The number of render targets.
+        Uint8 NumRenderTargets = 0;
 
+        /// Render target formats.
+        TEXTURE_FORMAT RTVFormats[DILIGENT_MAX_RENDER_TARGETS] = {};
+
+        /// Depth-stencil view format.
+        TEXTURE_FORMAT DSVFormat = TEX_FORMAT_UNKNOWN;
+
+        /// Custom pixel shader main function source code.
         const char* PSMainSource = nullptr;
 
         /// Whether shader matrices are laid out in row-major order in GPU memory.
-        ///
-        /// \remarks    By default, shader matrices are laid out in column-major order
-        ///             in GPU memory. If this option is set to true, shaders will be compiled
-        ///             with the SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR flag and
-        ///             use the row-major layout.
+
+        /// By default, shader matrices are laid out in column-major order
+        /// in GPU memory. If this option is set to true, shaders will be compiled
+        /// with the Diligent::SHADER_COMPILE_FLAG_PACK_MATRIX_ROW_MAJOR flag and
+        /// use the row-major layout.
         bool PackMatrixRowMajor = false;
 
         /// Whether to compile shaders asynchronously.
         bool AsyncShaders = false;
     };
+    /// Constructs the vector field renderer object.
     VectorFieldRenderer(const CreateInfo& CI);
 
+    /// Vector field rendering attributes.
     struct RenderAttribs
     {
-        IDeviceContext* pContext     = nullptr;
-        ITextureView*   pVectorField = nullptr;
+        /// Device context to use for rendering.
+        IDeviceContext* pContext = nullptr;
+
+        /// Vector field texture.
+        ITextureView* pVectorField = nullptr;
 
         // Bias to apply to the vector field values.
-        //
+
         // \remarks The bias is applied before the scale.
         float2 Bias = float2{0};
 
         // Scale to apply to the vector field values.
-        //
+
         // \remarks The scale is applied after the bias.
         float2 Scale = float2{1};
 
@@ -95,9 +115,11 @@ public:
         /// Manually convert shader output to sRGB color space.
         bool ConvertOutputToSRGB = false;
     };
+    /// Renders the vector field.
     void Render(const RenderAttribs& Attribs);
 
 
+    /// Pipeline state object key.
     struct PSOKey
     {
         const bool ConvertOutputToSRGB;
@@ -119,6 +141,7 @@ public:
             }
         };
     };
+    /// Returns the pipeline state object for the specified key.
     IPipelineState* GetPSO(const PSOKey& Key);
 
 private:

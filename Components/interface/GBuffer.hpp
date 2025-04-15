@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2024 Diligent Graphics LLC
+ *  Copyright 2023-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -24,6 +24,11 @@
  *  of the possibility of such damages.
  */
 
+#pragma once
+
+/// \file
+/// Defines GBuffer class
+
 #include <vector>
 
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
@@ -39,20 +44,23 @@ public:
     /// G-buffer element description
     struct ElementDesc
     {
-        /// Texture format. Must not be TEX_FORMAT_UNKNOWN.
+        /// Texture format. Must not be Diligent::TEX_FORMAT_UNKNOWN.
         TEXTURE_FORMAT Format = TEX_FORMAT_UNKNOWN;
 
-        /// Texture bind flags. If BIND_NONE is specified, the following rules are used:
-        /// - If the format is a depth-stencil format, BIND_DEPTH_STENCIL | BIND_SHADER_RESOURCE is used.
-        /// - Otherwise, BIND_RENDER_TARGET | BIND_SHADER_RESOURCE is used.
+        /// Texture bind flags. If Diligent::BIND_NONE is specified, the following rules are used:
+
+        /// - If the format is a depth-stencil format, Diligent::BIND_DEPTH_STENCIL | Diligent::BIND_SHADER_RESOURCE is used.
+        /// - Otherwise, Diligent::BIND_RENDER_TARGET | Diligent::BIND_SHADER_RESOURCE is used.
         BIND_FLAGS BindFlags = BIND_NONE;
 
         /// Clear value.
+
         /// This value is used to clear the textures by the GBuffer::Clear() method.
         OptimizedClearValue ClearValue = {};
     };
 
     /// Initializes the G-buffer object.
+
     /// The textures will be created when the GBuffer::Resize() method is called.
     GBuffer(const ElementDesc* Elements,
             size_t             NumElements);
@@ -64,14 +72,19 @@ public:
             Uint32             Width,
             Uint32             Height);
 
+    /// Gets the element description for the specified index.
     const ElementDesc& GetElementDesc(Uint32 Index) const
     {
         return m_ElemDesc[Index];
     }
+
+    /// Gets the buffer texture for the specified index.
     ITexture* GetBuffer(Uint32 Index) const
     {
         return m_Buffers[Index];
     }
+
+    /// Gets the number of buffers in the G-buffer.
     size_t GetBufferCount() const
     {
         return m_Buffers.size();
@@ -81,7 +94,7 @@ public:
     void Resize(IRenderDevice* pDevice, Uint32 Width, Uint32 Height);
 
     /// Binds the G-buffer textures to the device context.
-    ///
+
     /// \param [in] pContext    - Device context to bind the textures to.
     /// \param [in] BuffersMask - Bitmask indicating which buffers to bind.
     /// \param [in] pDSV        - Depth-stencil view to set.
@@ -90,12 +103,15 @@ public:
     ///                           If null, the buffer index is used.
     ///                           The array must contain one index for each buffer specified by the BuffersMask.
     ///
-    /// \remarks    The method binds all textures in the order they were specified in the constructor.
-    ///             If the corresponding bit in the BuffersMask is not set, null view is bound.
-    ///             If there are depth-stencil textures in the G-buffer and the corresponding bit in the BuffersMask is set,
-    ///             the texture is bound as depth-stencil view. Otherwise, the user-provided depth-stencil view is bound.
-    ///             If the corresponding bit in the ClearMask is set, the texture is cleared with the clear value
-    ///             specified in the corresponding element description.
+    /// The method binds all textures in the order they were specified in the constructor.
+    ///
+    /// If the corresponding bit in the `BuffersMask` is not set, null view is bound.
+    ///
+    /// If there are depth-stencil textures in the G-buffer and the corresponding bit in the `BuffersMask` is set,
+    /// the texture is bound as depth-stencil view. Otherwise, the user-provided depth-stencil view is bound.
+    ///
+    /// If the corresponding bit in the `ClearMask` is set, the texture is cleared with the clear value
+    /// specified in the corresponding element description.
     void Bind(IDeviceContext* pContext,
               Uint32          BuffersMask,
               ITextureView*   pDSV,

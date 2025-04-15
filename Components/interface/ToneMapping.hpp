@@ -1,5 +1,5 @@
 /*
- *  Copyright 2024 Diligent Graphics LLC
+ *  Copyright 2024-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -24,6 +24,11 @@
  *  of the possibility of such damages.
  */
 
+#pragma once
+
+/// \file
+/// Defines tone mapping functions
+
 #include "../../../DiligentCore/Common/interface/BasicMath.hpp"
 
 namespace Diligent
@@ -34,17 +39,19 @@ namespace HLSL
 struct ToneMappingAttribs;
 } // namespace HLSL
 
+
 /// Computes approximate reverse tone mapping for the given tone-mapped color.
-/// \param               - Tone-mapped color.
+/// \param Color         - Tone-mapped color.
 /// \param MiddleGray    - Middle gray value used by the tone mapping operator.
 /// \param AverageLogLum - Average log luminance of the original image.
 /// \return  Approximate reverse tone-mapped color.
 ///
-/// \remarks The function computes approximate reverse tone mapping assuming the
-///          exponential tone mapping operator. The value is not exact, but
-///          works well for practical purposes.
+/// The function computes approximate reverse tone mapping assuming the
+/// exponential tone mapping operator. The value is not exact, but
+/// works well for practical purposes.
 float3 ReverseExpToneMap(const float3& Color, float MiddleGray, float AverageLogLum);
 
+/// Adds tone mapping UI elements
 bool ToneMappingUpdateUI(HLSL::ToneMappingAttribs& Attribs, float* AverageLogLum = nullptr);
 
 } // namespace Diligent
