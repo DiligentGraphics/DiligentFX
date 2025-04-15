@@ -512,8 +512,9 @@ private:
     std::unordered_set<HnMaterial*> m_Materials;
     HnMaterial*                     m_FallbackMaterial = nullptr;
 
-    std::mutex                   m_LightsMtx;
-    std::unordered_set<HnLight*> m_Lights;
+    std::mutex m_LightsMtx;
+    // Light type -> light prim
+    std::unordered_multimap<pxr::TfToken, HnLight*, pxr::TfToken::HashFunctor> m_Lights;
 
     Uint32 m_MeshResourcesVersion     = ~0u;
     Uint32 m_MaterialResourcesVersion = ~0u;

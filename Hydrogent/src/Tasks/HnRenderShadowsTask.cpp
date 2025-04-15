@@ -257,8 +257,9 @@ void HnRenderShadowsTask::Prepare(pxr::HdTaskContext* TaskCtx,
     const auto& Lights = RenderDelegate->GetLights();
 
     // Sort all shadow lights with dirty shadow maps by shadow map slice
-    for (HnLight* Light : Lights)
+    for (auto light_it : Lights)
     {
+        HnLight* Light = light_it.second;
         if (!Light->ShadowsEnabled())
             continue;
 

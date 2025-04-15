@@ -654,7 +654,7 @@ pxr::HdSprim* HnRenderDelegate::CreateSprim(const pxr::TfToken& TypeId,
         HnLight* Light = HnLight::Create(SPrimId, TypeId);
         {
             std::lock_guard<std::mutex> Guard{m_LightsMtx};
-            m_Lights.emplace(Light);
+            m_Lights.emplace(TypeId, Light);
         }
         SPrim = Light;
     }
@@ -710,7 +710,16 @@ void HnRenderDelegate::DestroySprim(pxr::HdSprim* SPrim)
     else if (dynamic_cast<HnLight*>(SPrim) != nullptr)
     {
         std::lock_guard<std::mutex> Guard{m_LightsMtx};
-        m_Lights.erase(static_cast<HnLight*>(SPrim));
+
+        auto it_range = m_Lights.equal_range(static_cast<HnLight*>(SPrim)->GetTypeId());
+        for (auto it = it_range.first; it != it_range.second; ++it)
+        {
+            if (it->second == SPrim)
+            {
+                m_Lights.erase(it);
+                break;
+            }
+        }
     }
 
     delete SPrim;
@@ -901,19 +910,21 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
             std::lock_guard<std::mutex> Guard{m_LightsMtx};
 
             HnLight* DomeLight = nullptr;
-            for (HnLight* pLight : m_Lights)
+
+            auto dome_lights_range = m_Lights.equal_range(pxr::HdPrimTypeTokens->domeLight);
+            for (auto it = dome_lights_range.first; it != dome_lights_range.second; ++it)
             {
-                if (pLight->GetTypeId() == pxr::HdPrimTypeTokens->domeLight)
+                HnLight* pLight = it->second;
+                VERIFY_EXPR(pLight->GetTypeId() == pxr::HdPrimTypeTokens->domeLight);
+
+                if (DomeLight == nullptr)
                 {
-                    if (DomeLight == nullptr)
-                    {
-                        pLight->PrecomputeIBLCubemaps(*this);
-                        DomeLight = pLight;
-                    }
-                    else
-                    {
-                        LOG_WARNING_MESSAGE("Only one dome light is supported. ", pLight->GetId(), " will be ignored");
-                    }
+                    pLight->PrecomputeIBLCubemaps(*this);
+                    DomeLight = pLight;
+                }
+                else
+                {
+                    LOG_WARNING_MESSAGE("Only one dome light is supported. ", pLight->GetId(), " will be ignored");
                 }
             }
             m_LightResourcesVersion = LightResourcesVersion;

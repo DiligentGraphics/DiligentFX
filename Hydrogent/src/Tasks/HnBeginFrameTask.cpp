@@ -396,8 +396,9 @@ void HnBeginFrameTask::Prepare(pxr::HdTaskContext* TaskCtx,
         const auto&  Lights                 = RenderDelegate->GetLights();
 
         Uint32 ShadowCastingLightIdx = 0;
-        for (HnLight* Light : Lights)
+        for (auto light_it : Lights)
         {
+            HnLight* Light = light_it.second;
             if (Light->ShadowsEnabled() && Light->IsVisible() && ShadowCastingLightIdx < NumShadowCastingLights)
             {
                 Light->SetFrameAttribsIndex(ShadowCastingLightIdx++);
@@ -439,9 +440,10 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
         const TextureDesc& ShadowAtlasDesc = ShadowMapMgr->GetAtlasDesc();
 
         const auto& Lights = RenderDelegate->GetLights();
-        for (const HnLight* Light : Lights)
+        for (auto light_it : Lights)
         {
-            const Int32 ShadowCastingLightIdx = Light->GetFrameAttribsIndex();
+            const HnLight* Light                 = light_it.second;
+            const Int32    ShadowCastingLightIdx = Light->GetFrameAttribsIndex();
             VERIFY_EXPR((ShadowCastingLightIdx < 0) == (!Light->ShadowsEnabled() || !Light->IsVisible() || ShadowCastingLightIdx >= static_cast<Int32>(NumShadowCastingLights)));
             if (ShadowCastingLightIdx < 0)
                 continue;
@@ -574,8 +576,9 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
         }
 
         int LightCount = 0;
-        for (HnLight* Light : RenderDelegate->GetLights())
+        for (auto light_it : RenderDelegate->GetLights())
         {
+            HnLight* Light = light_it.second;
             if (!Light->IsVisible())
                 continue;
 
