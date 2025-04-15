@@ -29,6 +29,7 @@
 #include "HnRenderPassState.hpp"
 #include "HnFrameRenderTargets.hpp"
 #include "HnTokens.hpp"
+#include "HnLight.hpp"
 
 #include "EnvMapRenderer.hpp"
 #include "USD_Renderer.hpp"
@@ -177,6 +178,18 @@ void HnRenderEnvMapTask::Prepare(pxr::HdTaskContext* TaskCtx,
     EnvMapAttribs.MipLevel      = 1;
     EnvMapAttribs.Alpha         = 1;
     EnvMapAttribs.Options       = EnvMapRenderer::OPTION_FLAG_COMPUTE_MOTION_VECTORS;
+
+    {
+        const auto& Lights        = pRenderDelegate->GetLights();
+        const auto  dome_light_it = Lights.find(pxr::HdPrimTypeTokens->domeLight);
+        if (dome_light_it != Lights.end())
+        {
+            if (const HnLight* pDomeLight = dome_light_it->second)
+            {
+                EnvMapAttribs.Scale = pDomeLight->GetParams().Color * pDomeLight->GetParams().Intensity;
+            }
+        }
+    }
 
     bool UseReverseDepth = false;
     GetTaskContextData(TaskCtx, HnRenderResourceTokens->useReverseDepth, UseReverseDepth);
