@@ -130,6 +130,9 @@ public:
 
         /// Option flags.
         OPTION_FLAGS Options = OPTION_FLAG_NONE;
+
+        /// Scaling factor to apply to the environment map.
+        float3 Scale = {1, 1, 1};
     };
 
     /// Prepares the environment map renderer for rendering.

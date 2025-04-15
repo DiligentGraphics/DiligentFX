@@ -12,10 +12,12 @@ cbuffer cbEnvMapRenderAttribs
 {
     ToneMappingAttribs g_ToneMappingAttribs;
 
-    float AverageLogLum;
-    float MipLevel;
-    float Alpha;
+    float g_AverageLogLum;
+    float g_MipLevel;
+    float g_Alpha;
     float Unusued2;
+    
+    float4 g_Scale;
 }
 
 #if ENV_MAP_TYPE == ENV_MAP_TYPE_CUBE
@@ -25,12 +27,12 @@ Texture2D    EnvMap;
 #endif
 SamplerState EnvMap_sampler;
 
-float3 SampleEnvrionmentMap(float3 R, float MipLevel)
+float3 SampleEnvrionmentMap(float3 R, float g_MipLevel)
 {
 #if ENV_MAP_TYPE == ENV_MAP_TYPE_CUBE
-    return EnvMap.SampleLevel(EnvMap_sampler, R, MipLevel).rgb;
+    return EnvMap.SampleLevel(EnvMap_sampler, R, g_MipLevel).rgb;
 #elif ENV_MAP_TYPE == ENV_MAP_TYPE_SPHERE
-    return EnvMap.SampleLevel(EnvMap_sampler, TransformDirectionToSphereMapUV(R), MipLevel).rgb;
+    return EnvMap.SampleLevel(EnvMap_sampler, TransformDirectionToSphereMapUV(R), g_MipLevel).rgb;
 #endif
 }
 
@@ -44,10 +46,10 @@ SampleEnvMapOutput SampleEnvMap(in float4 ClipPos)
 {
     float4 WorldPos  = mul(ClipPos, g_Camera.mViewProjInv);
     float3 Direction = WorldPos.xyz / WorldPos.w - g_Camera.f4Position.xyz;
-    float3 Color = SampleEnvrionmentMap(normalize(Direction), MipLevel);
+    float3 Color = SampleEnvrionmentMap(normalize(Direction), g_MipLevel) * g_Scale.rgb;
 
 #if TONE_MAPPING_MODE > TONE_MAPPING_MODE_NONE    
-    Color.rgb = ToneMap(Color.rgb, g_ToneMappingAttribs, AverageLogLum);
+    Color.rgb = ToneMap(Color.rgb, g_ToneMappingAttribs, g_AverageLogLum);
 #endif
 
 #if CONVERT_OUTPUT_TO_SRGB
@@ -63,7 +65,7 @@ SampleEnvMapOutput SampleEnvMap(in float4 ClipPos)
 #endif
 
     SampleEnvMapOutput Output;
-    Output.Color        = float4(Color.rgb, Alpha);
+    Output.Color        = float4(Color.rgb, g_Alpha);
     Output.MotionVector = MotionVector;
     return Output;
 }

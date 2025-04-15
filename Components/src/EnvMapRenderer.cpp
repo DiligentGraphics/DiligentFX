@@ -52,6 +52,8 @@ struct EnvMapRenderer::EnvMapShaderAttribs
     float MipLevel      = 0.f;
     float Alpha         = 0.f;
     float Padding       = 0.f;
+
+    float4 Scale;
 };
 
 EnvMapRenderer::EnvMapRenderer(const CreateInfo& CI) :
@@ -233,6 +235,7 @@ void EnvMapRenderer::Prepare(IDeviceContext*                 pContext,
             m_ShaderAttribs->AverageLogLum = Attribs.AverageLogLum;
             m_ShaderAttribs->MipLevel      = Attribs.MipLevel;
             m_ShaderAttribs->Alpha         = Attribs.Alpha;
+            m_ShaderAttribs->Scale         = float4{Attribs.Scale, 1};
 
             pContext->UpdateBuffer(m_RenderAttribsCB, 0, sizeof(EnvMapShaderAttribs), m_ShaderAttribs.get(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
             StateTransitionDesc Barrier{m_RenderAttribsCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE};
