@@ -25,6 +25,9 @@
  */
 #pragma once
 
+/// \file
+/// Defines Diligent::ScreenSpaceAmbientOcclusion class implementing screen-space ambient occlusion post-process effect.
+
 #include <unordered_map>
 #include <vector>
 #include <memory>
@@ -46,17 +49,29 @@ namespace HLSL
 struct ScreenSpaceAmbientOcclusionAttribs;
 }
 
+/// Implements [screen-space ambient occlusion post-process effect](https://github.com/DiligentGraphics/DiligentFX/tree/master/PostProcess/ScreenSpaceAmbientOcclusion).
+
+/// \include{doc} DiligentFX/PostProcess/ScreenSpaceAmbientOcclusion/README.md
 class ScreenSpaceAmbientOcclusion
 {
 public:
+    /// Feature flags that control the behavior of the effect.
     enum FEATURE_FLAGS : Uint32
     {
-        FEATURE_FLAG_NONE                 = 0u,
+        /// No feature flags are set.
+        FEATURE_FLAG_NONE = 0u,
+
+        /// Use half-precision depth buffer.
         FEATURE_FLAG_HALF_PRECISION_DEPTH = 1u << 0u,
-        FEATURE_FLAG_HALF_RESOLUTION      = 1u << 1u,
-        FEATURE_FLAG_UNIFORM_WEIGHTING    = 1u << 2u
+
+        /// Compute the effect in half resolution.
+        FEATURE_FLAG_HALF_RESOLUTION = 1u << 1u,
+
+        /// Use uniform weighting for the occlusion.
+        FEATURE_FLAG_UNIFORM_WEIGHTING = 1u << 2u
     };
 
+    /// Render attributes.
     struct RenderAttributes
     {
         /// Render device that may be used to create new objects needed for this frame, if any.
@@ -81,22 +96,33 @@ public:
         const HLSL::ScreenSpaceAmbientOcclusionAttribs* pSSAOAttribs = nullptr;
     };
 
+    /// Create info.
     struct CreateInfo
     {
+        /// Whether to enable asynchronous shader and pipeline state creation.
+
+        /// If enabled, the shaders and pipeline state objects will be created using
+        /// the engine's asynchronous creation mechanism. While shaders are being
+        /// compiled, the effect will do nothing.
         bool EnableAsyncCreation = false;
     };
 
 public:
+    /// Creates a new instance of the ScreenSpaceAmbientOcclusion class.
     ScreenSpaceAmbientOcclusion(IRenderDevice* pDevice, const CreateInfo& CI);
 
     ~ScreenSpaceAmbientOcclusion();
 
+    /// Prepares the effect for rendering.
     void PrepareResources(IRenderDevice* pDevice, IDeviceContext* pDeviceContext, PostFXContext* pPostFXContext, FEATURE_FLAGS FeatureFlags);
 
+    /// Executes the effect.
     void Execute(const RenderAttributes& RenderAttribs);
 
+    /// Adds the ImGui controls to the UI.
     static bool UpdateUI(HLSL::ScreenSpaceAmbientOcclusionAttribs& SSRAttribs, FEATURE_FLAGS& FeatureFlags);
 
+    /// Returns the shader resource view of the occlusion texture.
     ITextureView* GetAmbientOcclusionSRV() const;
 
 private:

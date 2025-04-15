@@ -1,5 +1,5 @@
 /*
- *  Copyright 2024 Diligent Graphics LLC
+ *  Copyright 2024-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -25,6 +25,9 @@
  */
 #pragma once
 
+/// \file
+/// Defines Diligent::SuperResolution class implementing super-resolution post-process effect.
+
 #include <unordered_map>
 #include <vector>
 #include <memory>
@@ -46,14 +49,17 @@ namespace HLSL
 struct SuperResolutionAttribs;
 }
 
+/// Implements [super-resolution post-process effect](https://github.com/DiligentGraphics/DiligentFX/tree/master/PostProcess/SuperResolution).
 class SuperResolution
 {
 public:
+    /// Feature flags that control the behavior of the effect.
     enum FEATURE_FLAGS : Uint32
     {
         FEATURE_FLAG_NONE = 0u,
     };
 
+    /// Render attributes that are passed to the effect.
     struct RenderAttributes
     {
         /// Render device that may be used to create new objects needed for this frame, if any.
@@ -75,22 +81,33 @@ public:
         const HLSL::SuperResolutionAttribs* pFSRAttribs = nullptr;
     };
 
+    /// Create info.
     struct CreateInfo
     {
+        /// Whether to enable asynchronous shader and pipeline state creation.
+
+        /// If enabled, the shaders and pipeline state objects will be created using
+        /// the engine's asynchronous creation mechanism. While shaders are being
+        /// compiled, the effect will perform a simple bilinear upsampling.
         bool EnableAsyncCreation = false;
     };
 
 public:
+    /// Creates a new instance of the effect.
     SuperResolution(IRenderDevice* pDevice, const CreateInfo& CI);
 
     ~SuperResolution();
 
+    /// Prepares the effect for rendering.
     void PrepareResources(IRenderDevice* pDevice, IDeviceContext* pDeviceContext, PostFXContext* pPostFXContext, FEATURE_FLAGS FeatureFlags);
 
+    /// Executes the effect.
     void Execute(const RenderAttributes& RenderAttribs);
 
+    /// Adds the ImGui controls to the UI.
     static bool UpdateUI(HLSL::SuperResolutionAttribs& Attribs, FEATURE_FLAGS& FeatureFlags);
 
+    /// Returns the shader resource view of the upsampled texture.
     ITextureView* GetUpsampledTextureSRV() const;
 
 private:

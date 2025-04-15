@@ -1,5 +1,5 @@
 /*
- *  Copyright 2024 Diligent Graphics LLC
+ *  Copyright 2024-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -25,6 +25,9 @@
  */
 #pragma once
 
+/// \file
+/// Defines Diligent::DepthOfField class implementing depth-of-field post-process effect.
+
 #include <unordered_map>
 #include <memory>
 
@@ -46,16 +49,25 @@ namespace HLSL
 struct DepthOfFieldAttribs;
 }
 
+/// Implements [depth-of-field post-process effect](https://github.com/DiligentGraphics/DiligentFX/tree/master/PostProcess/DepthOfField).
+
+/// \include{doc} DiligentFX/PostProcess/DepthOfField/README.md
 class DepthOfField
 {
 public:
+    /// Feature flags that control the behavior of the effect.
     enum FEATURE_FLAGS : Uint32
     {
-        FEATURE_FLAG_NONE                      = 0u,
+        /// No feature flags are set.
+        FEATURE_FLAG_NONE = 0u,
+
+        /// Enable temporal smoothing.
         FEATURE_FLAG_ENABLE_TEMPORAL_SMOOTHING = 1u << 0u,
-        FEATURE_FLAG_ENABLE_KARIS_INVERSE      = 1u << 1u
+
+        FEATURE_FLAG_ENABLE_KARIS_INVERSE = 1u << 1u
     };
 
+    /// Render attributes.
     struct RenderAttributes
     {
         /// Render device that may be used to create new objects needed for this frame, if any.
@@ -80,22 +92,33 @@ public:
         const HLSL::DepthOfFieldAttribs* pDOFAttribs = nullptr;
     };
 
+    /// Create info.
     struct CreateInfo
     {
+        /// Whether to enable asynchronous shader and pipeline state creation.
+
+        /// If enabled, the shaders and pipeline state objects will be created using
+        /// the engine's asynchronous creation mechanism. While shaders are being
+        /// compiled, the effect will do nothing and return the input color.
         bool EnableAsyncCreation = false;
     };
 
 public:
+    /// Creates a new instance of the DepthOfField class.
     DepthOfField(IRenderDevice* pDevice, const CreateInfo& CI);
 
     ~DepthOfField();
 
+    /// Prepares resources for the effect.
     void PrepareResources(IRenderDevice* pDevice, IDeviceContext* pDeviceContext, PostFXContext* pPostFXContext, FEATURE_FLAGS FeatureFlags);
 
+    /// Executes the effect.
     void Execute(const RenderAttributes& RenderAttribs);
 
+    /// Adds the ImGui controls to the UI.
     static bool UpdateUI(HLSL::DepthOfFieldAttribs& Attribs, FEATURE_FLAGS& FeatureFlags);
 
+    /// Returns the shader resource view of the depth-of-field texture.
     ITextureView* GetDepthOfFieldTextureSRV() const;
 
 private:

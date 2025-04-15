@@ -47,10 +47,9 @@ We needed to add screen space reflections to our project with the following requ
 
 ### Input resources
 
-The following table enumerates all external inputs required by SSR.
+#### Input Textures
 
-| **Input Textures**      |
-| ----------------------- |
+The following table enumerates all external inputs required by SSR.
 
 | **Name**            			    |  **Format**                        | **Notes**                                           |  
 | --------------------------------- |------------------------------------|---------------------------------------------------- |
@@ -61,8 +60,7 @@ The following table enumerates all external inputs required by SSR.
 | Motion vectors  					| `APPLICATION SPECIFIED (2x FLOAT)` | The 2D motion vectors for the current frame provided by the application in the NDC space |
 
 
-| **HLSL::ScreenSpaceReflectionAttribs**  |
-| --------------------------------------- |
+#### HLSL::ScreenSpaceReflectionAttribs
 
 | **Name**                                 | **Notes** |
 | -----------------------------------------|-----------|
@@ -77,6 +75,7 @@ The following table enumerates all external inputs required by SSR.
 | Temporal radiance stability factor       | A factor to control the accmulation of history values of radiance buffer. Higher values reduce noise, but are more likely to exhibit ghosting artefacts  |
 | Temporal variance stability factor       | A factor to control the accmulation of history values of variance buffer. Higher values reduce noise, but are more likely to exhibit ghosting artefacts         |
 | Bilateral cleanup spatial sigma factor   | This parameter represents the standard deviation ($\sigma$) in the Gaussian kernel, which forms the spatial component of the [bilateral filter](#cross-bilateral-filtering) |
+
 
 The effect can be configured using the `ScreenSpaceReflection::FEATURE_FLAGS` enumeration. The following table lists the flags and their descriptions.
 

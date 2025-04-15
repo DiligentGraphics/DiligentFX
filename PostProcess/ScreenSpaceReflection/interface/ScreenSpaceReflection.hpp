@@ -26,6 +26,9 @@
 
 #pragma once
 
+/// \file
+/// Defines Diligent::ScreenSpaceReflection class implementing screen-space reflection post-process effect.
+
 #include <vector>
 #include <unordered_map>
 #include <memory>
@@ -51,11 +54,16 @@ struct ScreenSpaceReflectionAttribs;
 
 // TODO: Implement SPD for depth buffer
 
+/// Implements [screen-space reflection post-process effect](https://github.com/DiligentGraphics/DiligentFX/tree/master/PostProcess/ScreenSpaceReflection).
+
+/// \include{doc} DiligentFX/PostProcess/ScreenSpaceReflection/README.md
 class ScreenSpaceReflection
 {
 public:
+    /// Feature flags that control the behavior of the effect.
     enum FEATURE_FLAGS : Uint32
     {
+        /// No feature flags are set.
         FEATURE_FLAG_NONE = 0u,
 
         // When using this flag, you only need to pass the color buffer of the previous frame.
@@ -67,6 +75,7 @@ public:
         FEATURE_FLAG_HALF_RESOLUTION = 1u << 1u
     };
 
+    /// Render attributes.
     struct RenderAttributes
     {
         /// Render device that may be used to create new objects needed for this frame, if any.
@@ -100,22 +109,33 @@ public:
         const HLSL::ScreenSpaceReflectionAttribs* pSSRAttribs = nullptr;
     };
 
+    /// Create info.
     struct CreateInfo
     {
+        /// Whether to enable asynchronous shader and pipeline state creation.
+
+        /// If enabled, the shaders and pipeline state objects will be created using
+        /// the engine's asynchronous creation mechanism. While shaders are being
+        /// compiled, the effect will do nothing and return a black texture.
         bool EnableAsyncCreation = false;
     };
 
 public:
+    /// Creates a new instance of the ScreenSpaceReflection class.
     ScreenSpaceReflection(IRenderDevice* pDevice, const CreateInfo& CI);
 
     ~ScreenSpaceReflection();
 
+    /// Prepares resources for the effect.
     void PrepareResources(IRenderDevice* pDevice, IDeviceContext* pDeviceContext, PostFXContext* pPostFXContext, FEATURE_FLAGS FeatureFlags);
 
+    /// Executes the screen-space reflection effect.
     void Execute(const RenderAttributes& RenderAttribs);
 
+    /// Adds the ImGui controls to the UI.
     static bool UpdateUI(HLSL::ScreenSpaceReflectionAttribs& SSRAttribs, FEATURE_FLAGS& FeatureFlags, Uint32& DisplayMode);
 
+    /// Returns the shader resource view of the screen-space reflection texture.
     ITextureView* GetSSRRadianceSRV() const;
 
 private:

@@ -1,5 +1,5 @@
 /*
- *  Copyright 2019-2024 Diligent Graphics LLC
+ *  Copyright 2019-2025 Diligent Graphics LLC
  *  Copyright 2015-2019 Egor Yusov
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,6 +26,9 @@
  */
 #pragma once
 
+/// \file
+/// Defines Diligent::EpipolarLightScattering class implementing epipolar light scattering post-process effect.
+
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/DeviceContext.h"
 #include "../../../../DiligentCore/Graphics/GraphicsEngine/interface/Buffer.h"
@@ -45,10 +48,13 @@ using uint = uint32_t;
 #include "Shaders/PostProcess/ToneMapping/public/ToneMappingStructures.fxh"
 #include "Shaders/PostProcess/EpipolarLightScattering/public/EpipolarLightScatteringStructures.fxh"
 
+/// Implements the [epipolar light scattering post-process effect](https://github.com/DiligentGraphics/DiligentFX/tree/master/PostProcess/EpipolarLightScattering).
 
+/// \include{doc} DiligentFX/PostProcess/EpipolarLightScattering/README.md
 class EpipolarLightScattering
 {
 public:
+    /// Frame attributes that are passed to the effect at the beginning of each frame.
     struct FrameAttribs
     {
         /// Render device that may be used to create new objects needed for this frame, if any.
@@ -60,13 +66,19 @@ public:
         /// Device context that will record the rendering commands.
         IDeviceContext* pDeviceContext = nullptr;
 
+        /// The time elapsed since the last frame.
         double dElapsedTime = 0;
 
-        const LightAttribs*  pLightAttribs  = nullptr;
+        /// A pointer to the light attributes CPU data.
+        const LightAttribs* pLightAttribs = nullptr;
+
+        /// A pointer to the camera attributes CPU data.
         const CameraAttribs* pCameraAttribs = nullptr;
-        // If this parameter is null, the effect will use its own buffer.
+
+        /// If this parameter is null, the effect will use its own buffer.
         IBuffer* pcbLightAttribs = nullptr;
-        // If this parameter is null, the effect will use its own buffer.
+
+        /// If this parameter is null, the effect will use its own buffer.
         IBuffer* pcbCameraAttribs = nullptr;
 
         /// Shader resource view of the source color buffer.
@@ -85,19 +97,37 @@ public:
         ITextureView* ptex2DShadowMapSRV = nullptr;
     };
 
+    /// Create info.
     struct CreateInfo
     {
-        IRenderDevice*       pDevice             = nullptr;
-        IRenderStateCache*   pStateCache         = nullptr;
-        IDeviceContext*      pContext            = nullptr;
-        TEXTURE_FORMAT       BackBufferFmt       = TEX_FORMAT_RGBA8_UNORM_SRGB;
-        TEXTURE_FORMAT       DepthBufferFmt      = TEX_FORMAT_D32_FLOAT;
-        TEXTURE_FORMAT       OffscreenBackBuffer = TEX_FORMAT_R11G11B10_FLOAT;
-        bool                 PackMatrixRowMajor  = false;
-        AirScatteringAttribs ScatteringAttibs    = {};
+        /// A pointer to the render device that will be used to create the effect.
+        IRenderDevice* pDevice = nullptr;
+
+        /// An optional render state cache to optimize state loading.
+        IRenderStateCache* pStateCache = nullptr;
+
+        /// The render device context that will be used to record the rendering commands.
+        IDeviceContext* pContext = nullptr;
+
+        /// Back buffer format.
+        TEXTURE_FORMAT BackBufferFmt = TEX_FORMAT_RGBA8_UNORM_SRGB;
+
+        /// Depth buffer format.
+        TEXTURE_FORMAT DepthBufferFmt = TEX_FORMAT_D32_FLOAT;
+
+        /// Offscreen back buffer format.
+        TEXTURE_FORMAT OffscreenBackBuffer = TEX_FORMAT_R11G11B10_FLOAT;
+
+        /// Whether to use row-major packing for the matrix data.
+        bool PackMatrixRowMajor = false;
+
+        /// Air scattering attributes.
+        AirScatteringAttribs ScatteringAttibs = {};
     };
 
+    /// Creates a new instance of the EpipolarLightScattering class.
     EpipolarLightScattering(const CreateInfo& CI);
+
     ~EpipolarLightScattering();
 
 
@@ -109,20 +139,28 @@ public:
     void PrepareForNewFrame(FrameAttribs&                   FrameAttribs,
                             EpipolarLightScatteringAttribs& PPAttribs);
 
+    /// Computes the sun color and ambient light color based on the given direction on the sun and extraterrestrial sun color.
     void ComputeSunColor(const float3& vDirectionOnSun,
                          const float4& f4ExtraterrestrialSunColor,
                          float4&       f4SunColorAtGround,
                          float4&       f4AmbientLight);
 
+    /// Renders the sun.
     void RenderSun(TEXTURE_FORMAT RTVFormat,
                    TEXTURE_FORMAT DSVFormat,
                    Uint8          SampleCount);
 
+    /// Runs the post-processing effect.
     void PerformPostProcessing();
 
 
-    IBuffer*      GetMediaAttribsCB() { return m_pcbMediaAttribs; }
+    /// Returns the media attributes buffer.
+    IBuffer* GetMediaAttribsCB() { return m_pcbMediaAttribs; }
+
+    /// Returns the precomputed net density look-up texture.
     ITextureView* GetPrecomputedNetDensitySRV() { return m_ptex2DOccludedNetDensityToAtmTopSRV; }
+
+    /// Returns the ambient sky light texture.
     ITextureView* GetAmbientSkyLightSRV(IRenderDevice* pDevice, IRenderStateCache* pStateCache, IDeviceContext* pContext);
 
 private:

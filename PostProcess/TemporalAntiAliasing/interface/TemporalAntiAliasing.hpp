@@ -26,6 +26,9 @@
 
 #pragma once
 
+/// \file
+/// Defines Diligent::TemporalAntiAliasing class implementing temporal anti-aliasing post-process effect.
+
 #include <unordered_map>
 #include <memory>
 
@@ -48,9 +51,14 @@ namespace HLSL
 #include "../../../Shaders/PostProcess/TemporalAntiAliasing/public/TemporalAntiAliasingStructures.fxh"
 } // namespace HLSL
 
+
+/// Implements [temporal anti-aliasing](https://github.com/DiligentGraphics/DiligentFX/tree/master/PostProcess/TemporalAntiAliasing).
+
+/// \include{doc} DiligentFX/PostProcess/TemporalAntiAliasing/README.md
 class TemporalAntiAliasing
 {
 public:
+    /// Feature flags that control the behavior of the effect.
     enum FEATURE_FLAGS : Uint32
     {
         FEATURE_FLAG_NONE = 0u,
@@ -65,6 +73,7 @@ public:
         FEATURE_FLAG_YCOCG_COLOR_SPACE = 1u << 2u
     };
 
+    /// Render attributes that are passed to the effect.
     struct RenderAttributes
     {
         /// Render device that may be used to create new objects needed for this frame, if any.
@@ -89,30 +98,43 @@ public:
         Uint32 AccumulationBufferIdx = 0;
     };
 
+    /// Create info.
     struct CreateInfo
     {
+        /// Whether to enable asynchronous shader and pipeline state creation.
+
+        /// If enabled, the shaders and pipeline state objects will be created using
+        /// the engine's asynchronous creation mechanism. While shaders are being
+        /// compiled, the effect will do nothing and return the input color.
         bool EnableAsyncCreation = false;
     };
 
 public:
+    /// Creates a new instance of the effect.
     TemporalAntiAliasing(IRenderDevice* pDevice, const CreateInfo& CI);
 
     ~TemporalAntiAliasing();
 
+    /// Returns the jitter offset for the specified accumulation buffer index.
     float2 GetJitterOffset(Uint32 AccumulationBufferIdx = 0) const;
 
+    /// Prepares the effect for rendering.
     void PrepareResources(IRenderDevice*  pDevice,
                           IDeviceContext* pDeviceContext,
                           PostFXContext*  pPostFXContext,
                           FEATURE_FLAGS   FeatureFlag,
                           Uint32          AccumulationBufferIdx = 0);
 
+    /// Executes the effect.
     void Execute(const RenderAttributes& RenderAttribs);
 
+    /// Adds the ImGui controls to the UI.
     static bool UpdateUI(HLSL::TemporalAntiAliasingAttribs& TAAAttribs, FEATURE_FLAGS& FeatureFlags);
 
+    /// Returns the shader resource view of the accumulated frame.
     ITextureView* GetAccumulatedFrameSRV(bool IsPrevFrame = false, Uint32 AccumulationBufferIdx = 0) const;
 
+    /// Computes the jittered projection matrix.
     static inline float4x4 GetJitteredProjMatrix(float4x4 Proj, const float2& Jitter)
     {
         if (Proj.m33 == 0.f)
