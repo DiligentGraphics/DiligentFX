@@ -53,7 +53,7 @@ struct EnvMapRenderer::EnvMapShaderAttribs
     float Alpha         = 0.f;
     float Padding       = 0.f;
 
-    float4 Scale;
+    float4 Scale{1, 1, 1, 1};
 };
 
 EnvMapRenderer::EnvMapRenderer(const CreateInfo& CI) :
@@ -229,7 +229,8 @@ void EnvMapRenderer::Prepare(IDeviceContext*                 pContext,
         if (std::memcmp(&m_ShaderAttribs->ToneMapping, &ToneMapping, sizeof(ToneMapping)) != 0 ||
             m_ShaderAttribs->AverageLogLum != Attribs.AverageLogLum ||
             m_ShaderAttribs->MipLevel != Attribs.MipLevel ||
-            m_ShaderAttribs->Alpha != Attribs.Alpha)
+            m_ShaderAttribs->Alpha != Attribs.Alpha ||
+            m_ShaderAttribs->Scale != float4{Attribs.Scale, 1})
         {
             m_ShaderAttribs->ToneMapping   = ToneMapping;
             m_ShaderAttribs->AverageLogLum = Attribs.AverageLogLum;
@@ -250,6 +251,7 @@ void EnvMapRenderer::Prepare(IDeviceContext*                 pContext,
             EnvMapAttribs->AverageLogLum = Attribs.AverageLogLum;
             EnvMapAttribs->MipLevel      = Attribs.MipLevel;
             EnvMapAttribs->Alpha         = Attribs.Alpha;
+            EnvMapAttribs->Scale         = float4{Attribs.Scale, 1};
         }
     }
 }
