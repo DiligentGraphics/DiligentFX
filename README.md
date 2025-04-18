@@ -17,6 +17,7 @@ DiligentFX is the [Diligent Engine](https://github.com/DiligentGraphics/Diligent
 [![Appveyor Build Status](https://ci.appveyor.com/api/projects/status/github/DiligentGraphics/DiligentFX?svg=true)](https://ci.appveyor.com/project/DiligentGraphics/diligentfx)
 [![MSVC Code Analysis](https://github.com/DiligentGraphics/DiligentFX/actions/workflows/msvc_analysis.yml/badge.svg?branch=master)](https://github.com/DiligentGraphics/DiligentFX/actions/workflows/msvc_analysis.yml?query=branch%3Amaster)
 [![Lines of code](https://sloc.xyz/github/DiligentGraphics/DiligentFX)](https://github.com/DiligentGraphics/DiligentFX)
+[![Documentation](https://img.shields.io/badge/Documentation-blue)](https://diligentgraphics.github.io/docs)
 
 The following components are now available:
 
