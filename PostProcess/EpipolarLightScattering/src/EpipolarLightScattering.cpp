@@ -2294,7 +2294,7 @@ void EpipolarLightScattering::PrepareForNewFrame(FrameAttribs&                  
     f4LightPosPS.x /= f4LightPosPS.w;
     f4LightPosPS.y /= f4LightPosPS.w;
     f4LightPosPS.z /= f4LightPosPS.w;
-    float fDistToLightOnScreen = length((float2&)f4LightPosPS);
+    float fDistToLightOnScreen = length(float2{f4LightPosPS.x, f4LightPosPS.y});
     float fMaxDist             = 100;
     if (fDistToLightOnScreen > fMaxDist)
     {
@@ -2611,13 +2611,13 @@ void EpipolarLightScattering::ComputeSunColor(const float3& vDirectionOnSun,
     float2 f2NetParticleDensityToAtmTop = GetDensityIntegralFromChapmanFunc(0, float3(0, 1, 0), vDirectionOnSun, m_MediaParams);
 
 
-    float3      f3RlghExtCoeff     = std::max((float3&)m_MediaParams.f4RayleighExtinctionCoeff, float3(1e-8f, 1e-8f, 1e-8f));
+    float3      f3RlghExtCoeff     = std::max(static_cast<float3>(m_MediaParams.f4RayleighExtinctionCoeff), float3{1e-8f, 1e-8f, 1e-8f});
     float3      f3RlghOpticalDepth = f3RlghExtCoeff * f2NetParticleDensityToAtmTop.x;
-    float3      f3MieExtCoeff      = std::max((float3&)m_MediaParams.f4MieExtinctionCoeff, float3(1e-8f, 1e-8f, 1e-8f));
+    float3      f3MieExtCoeff      = std::max(static_cast<float3>(m_MediaParams.f4MieExtinctionCoeff), float3{1e-8f, 1e-8f, 1e-8f});
     float3      f3MieOpticalDepth  = f3MieExtCoeff * f2NetParticleDensityToAtmTop.y;
     float3      f3TotalExtinction  = exp(-(f3RlghOpticalDepth + f3MieOpticalDepth));
     const float fEarthReflectance  = 0.1f; // See [BN08]
-    (float3&)f4SunColorAtGround    = ((float3&)f4ExtraterrestrialSunColor) * f3TotalExtinction * fEarthReflectance;
+    f4SunColorAtGround             = float4{static_cast<float3>(f4ExtraterrestrialSunColor) * f3TotalExtinction * fEarthReflectance, f4ExtraterrestrialSunColor.a};
 }
 
 void EpipolarLightScattering::ComputeScatteringCoefficients(IDeviceContext* pDeviceCtx)
