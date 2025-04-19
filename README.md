@@ -12,12 +12,12 @@ DiligentFX is the [Diligent Engine](https://github.com/DiligentGraphics/Diligent
 | <img src="https://github.com/DiligentGraphics/DiligentCore/blob/master/media/tvos-logo.png" width=24 valign="middle"> tvOS                  | [![Build Status](https://github.com/DiligentGraphics/DiligentFX/actions/workflows/build-apple.yml/badge.svg?branch=master)](https://github.com/DiligentGraphics/DiligentFX/actions/workflows/build-apple.yml?query=branch%3Amaster) |
 | <img src="https://github.com/DiligentGraphics/DiligentCore/blob/master/media/emscripten-logo.png" width=24 valign="middle"> Web             | [![Build Status](https://github.com/DiligentGraphics/DiligentFX/actions/workflows/build-emscripten.yml/badge.svg?branch=master)](https://github.com/DiligentGraphics/DiligentFX/actions/workflows/build-emscripten.yml?query=branch%3Amaster) | 
 
+[![Documentation](https://img.shields.io/badge/Documentation-online-0072B1?logo=readthedocs&logoColor=white)](https://diligentgraphics.github.io/docs)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](License.txt)
 [![Chat on Discord](https://img.shields.io/discord/730091778081947680?logo=discord)](https://discord.gg/t7HGBK7)
+[![Lines of code](https://sloc.xyz/github/DiligentGraphics/DiligentFX)](https://github.com/DiligentGraphics/DiligentFX)
 [![Appveyor Build Status](https://ci.appveyor.com/api/projects/status/github/DiligentGraphics/DiligentFX?svg=true)](https://ci.appveyor.com/project/DiligentGraphics/diligentfx)
 [![MSVC Code Analysis](https://github.com/DiligentGraphics/DiligentFX/actions/workflows/msvc_analysis.yml/badge.svg?branch=master)](https://github.com/DiligentGraphics/DiligentFX/actions/workflows/msvc_analysis.yml?query=branch%3Amaster)
-[![Lines of code](https://sloc.xyz/github/DiligentGraphics/DiligentFX)](https://github.com/DiligentGraphics/DiligentFX)
-[![Documentation](https://img.shields.io/badge/Documentation-blue)](https://diligentgraphics.github.io/docs)
 
 The following components are now available:
 
