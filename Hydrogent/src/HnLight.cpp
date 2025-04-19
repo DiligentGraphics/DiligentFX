@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2024 Diligent Graphics LLC
+ *  Copyright 2023-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -433,8 +433,8 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
 
     const pxr::SdfPath& Id = GetId();
 
-    bool LightDirty = false;
-
+    bool LightDirty      = false;
+    bool IBLCubemapDirty = false;
     {
         bool IsVisible = SceneDelegate->GetVisible(Id);
         if (IsVisible != m_IsVisible)
@@ -442,6 +442,13 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
             m_IsVisible        = IsVisible;
             LightDirty         = true;
             m_IsShadowMapDirty = true;
+            if (m_TypeId == pxr::HdPrimTypeTokens->domeLight)
+            {
+                // NB: we need to update IBL cube maps even if the light became invisible since
+                //     if multiple dome lights were visible, the IBL was precomputed for
+                //     the first one, which might be any of them.
+                IBLCubemapDirty = true;
+            }
         }
     }
 
@@ -527,9 +534,10 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
             std::string TexturePath = GetTextureFile(*SceneDelegate, Id).GetAssetPath();
             if (TexturePath != m_TexturePath)
             {
-                m_TexturePath    = std::move(TexturePath);
-                LightDirty       = true;
-                m_IsTextureDirty = true;
+                m_TexturePath = std::move(TexturePath);
+                LightDirty    = true;
+                // If the dome light is invisible, we will precompute its IBL cubemaps when it becomes visible
+                IBLCubemapDirty = m_IsVisible;
             }
         }
 
@@ -627,7 +635,7 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
         if (LightDirty)
             static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::Light);
 
-        if (m_IsTextureDirty)
+        if (IBLCubemapDirty)
             static_cast<HnRenderParam*>(RenderParam)->MakeAttribDirty(HnRenderParam::GlobalAttrib::LightResources);
     }
 
@@ -637,7 +645,9 @@ void HnLight::Sync(pxr::HdSceneDelegate* SceneDelegate,
 void HnLight::PrecomputeIBLCubemaps(HnRenderDelegate& RenderDelegate)
 {
     VERIFY_EXPR(m_TypeId == pxr::HdPrimTypeTokens->domeLight);
-    if (!m_IsTextureDirty)
+    const HnRenderParam* pRenderParam          = static_cast<const HnRenderParam*>(RenderDelegate.GetRenderParam());
+    const uint32_t       LightResourcesVersion = pRenderParam->GetAttribVersion(HnRenderParam::GlobalAttrib::LightResources);
+    if (LightResourcesVersion == m_LightResourcesVersion)
         return;
 
     IRenderDevice*  pDevice = RenderDelegate.GetDevice();
@@ -681,7 +691,7 @@ void HnLight::PrecomputeIBLCubemaps(HnRenderDelegate& RenderDelegate)
 
     RenderDelegate.GetUSDRenderer()->PrecomputeCubemaps(pCtx, pEnvMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 
-    m_IsTextureDirty = false;
+    m_LightResourcesVersion = LightResourcesVersion;
 }
 
 } // namespace USD

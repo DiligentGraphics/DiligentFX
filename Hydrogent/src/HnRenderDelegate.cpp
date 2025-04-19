@@ -917,6 +917,12 @@ void HnRenderDelegate::CommitResources(pxr::HdChangeTracker* tracker)
                 HnLight* pLight = it->second;
                 VERIFY_EXPR(pLight->GetTypeId() == pxr::HdPrimTypeTokens->domeLight);
 
+                if (!pLight->IsVisible())
+                {
+                    // Skip invisible dome lights
+                    continue;
+                }
+
                 if (DomeLight == nullptr)
                 {
                     pLight->PrecomputeIBLCubemaps(*this);

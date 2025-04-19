@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2024 Diligent Graphics LLC
+ *  Copyright 2023-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -102,9 +102,9 @@ private:
     float3      m_Position;
     float3      m_Direction;
     GLTF::Light m_Params;
-    bool        m_IsVisible        = true;
-    bool        m_IsShadowMapDirty = true;
-    bool        m_IsTextureDirty   = true;
+    bool        m_IsVisible             = true;
+    bool        m_IsShadowMapDirty      = true;
+    Uint32      m_LightResourcesVersion = ~0u;
 
     float4x4 m_ViewMatrix;
     float4x4 m_ProjMatrix;

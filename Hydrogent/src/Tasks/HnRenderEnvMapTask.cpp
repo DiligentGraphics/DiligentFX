@@ -180,15 +180,33 @@ void HnRenderEnvMapTask::Prepare(pxr::HdTaskContext* TaskCtx,
     EnvMapAttribs.Options       = EnvMapRenderer::OPTION_FLAG_COMPUTE_MOTION_VECTORS;
 
     {
-        const auto& Lights        = pRenderDelegate->GetLights();
-        const auto  dome_light_it = Lights.find(pxr::HdPrimTypeTokens->domeLight);
-        if (dome_light_it != Lights.end())
+        const auto& Lights            = pRenderDelegate->GetLights();
+        auto        dome_lights_range = Lights.equal_range(pxr::HdPrimTypeTokens->domeLight);
+        HnLight*    pDomeLight        = nullptr;
+        for (auto it = dome_lights_range.first; it != dome_lights_range.second; ++it)
         {
-            if (const HnLight* pDomeLight = dome_light_it->second)
+            pDomeLight = it->second;
+            if (pDomeLight == nullptr)
             {
-                EnvMapAttribs.Scale = pDomeLight->GetParams().Color * pDomeLight->GetParams().Intensity;
+                UNEXPECTED("Dome light is null");
+                continue;
+            }
+            VERIFY_EXPR(pDomeLight->GetTypeId() == pxr::HdPrimTypeTokens->domeLight);
+
+            if (pDomeLight->IsVisible())
+            {
+                break;
+            }
+            else
+            {
+                // Skip invisible dome lights
+                pDomeLight = nullptr;
             }
         }
+
+        EnvMapAttribs.Scale = pDomeLight != nullptr ?
+            pDomeLight->GetParams().Color * pDomeLight->GetParams().Intensity :
+            float3{0};
     }
 
     bool UseReverseDepth = false;
