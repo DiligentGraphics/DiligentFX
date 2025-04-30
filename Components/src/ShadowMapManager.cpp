@@ -1,5 +1,5 @@
 /*
- *  Copyright 2019-2024 Diligent Graphics LLC
+ *  Copyright 2019-2025 Diligent Graphics LLC
  *  Copyright 2015-2019 Egor Yusov
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -139,9 +139,9 @@ void ShadowMapManager::DistributeCascades(const DistributeCascadeInfo& Info,
     VERIFY(Info.pLightDir, "Light direction must not be null");
     VERIFY(m_pDevice, "Shadow map manager is not initialized");
 
-    const auto& DevInfo = m_pDevice->GetDeviceInfo();
-    const auto  IsGL    = DevInfo.IsGLDevice();
-    const auto& SMDesc  = m_pShadowMapSRV->GetTexture()->GetDesc();
+    const RenderDeviceInfo& DevInfo = m_pDevice->GetDeviceInfo();
+    const bool              IsGL    = DevInfo.IsGLDevice();
+    const TextureDesc&      SMDesc  = m_pShadowMapSRV->GetTexture()->GetDesc();
 
     float2 f2ShadowMapSize = float2(static_cast<float>(SMDesc.Width), static_cast<float>(SMDesc.Height));
 
@@ -153,8 +153,8 @@ void ShadowMapManager::DistributeCascades(const DistributeCascadeInfo& Info,
     if (m_ShadowMode == SHADOW_MODE_VSM || m_ShadowMode == SHADOW_MODE_EVSM2 || m_ShadowMode == SHADOW_MODE_EVSM4)
     {
         VERIFY_EXPR(m_pFilterableShadowMapSRV);
-        const auto& FilterableSMDesc = m_pFilterableShadowMapSRV->GetTexture()->GetDesc();
-        ShadowAttribs.bIs32BitEVSM   = FilterableSMDesc.Format == TEX_FORMAT_RGBA32_FLOAT || FilterableSMDesc.Format == TEX_FORMAT_RG32_FLOAT;
+        const TextureDesc& FilterableSMDesc = m_pFilterableShadowMapSRV->GetTexture()->GetDesc();
+        ShadowAttribs.bIs32BitEVSM          = FilterableSMDesc.Format == TEX_FORMAT_RGBA32_FLOAT || FilterableSMDesc.Format == TEX_FORMAT_RG32_FLOAT;
     }
 
     float3 LightSpaceX, LightSpaceY, LightSpaceZ;
@@ -165,7 +165,7 @@ void ShadowMapManager::DistributeCascades(const DistributeCascadeInfo& Info,
 
     WriteShaderMatrix(&ShadowAttribs.mWorldToLightView, WorldToLightViewSpaceMatr, !Info.PackMatrixRowMajor);
 
-    const auto& CameraWorld = Info.pCameraWorld != nullptr ? *Info.pCameraWorld : Info.pCameraView->Inverse();
+    const float4x4& CameraWorld = Info.pCameraWorld != nullptr ? *Info.pCameraWorld : Info.pCameraView->Inverse();
     //const float3 f3CameraPos = {CameraWorld._41, CameraWorld._42, CameraWorld._43};
     //const float3 f3CameraPosInLightSpace = f3CameraPos * WorldToLightViewSpaceMatr;
 
@@ -186,7 +186,8 @@ void ShadowMapManager::DistributeCascades(const DistributeCascadeInfo& Info,
     m_CascadeTransforms.resize(iNumCascades);
     for (int iCascade = 0; iCascade < iNumCascades; ++iCascade)
     {
-        auto&  CurrCascade   = ShadowAttribs.Cascades[iCascade];
+        CascadeAttribs& CurrCascade = ShadowAttribs.Cascades[iCascade];
+
         float  fCascadeNearZ = (iCascade == 0) ? fMainCamNearPlane : ShadowAttribs.fCascadeCamSpaceZEnd[iCascade - 1];
         float& fCascadeFarZ  = ShadowAttribs.fCascadeCamSpaceZEnd[iCascade];
         if (iCascade < iNumCascades - 1)
@@ -224,9 +225,10 @@ void ShadowMapManager::DistributeCascades(const DistributeCascadeInfo& Info,
             float3 f3MinimalSphereCenter;
             float  fMinimalSphereRadius;
             GetFrustumMinimumBoundingSphere(Info.pCameraProj->_11, Info.pCameraProj->_22, fCascadeNearZ, fCascadeFarZ, f3MinimalSphereCenter, fMinimalSphereRadius);
-            auto f3CenterLightSpace = f3MinimalSphereCenter * CameraWorld * WorldToLightViewSpaceMatr;
-            f3MinXYZ                = f3CenterLightSpace - float3(fMinimalSphereRadius, fMinimalSphereRadius, fMinimalSphereRadius);
-            f3MaxXYZ                = f3CenterLightSpace + float3(fMinimalSphereRadius, fMinimalSphereRadius, fMinimalSphereRadius);
+            float3 f3CenterLightSpace = f3MinimalSphereCenter * CameraWorld * WorldToLightViewSpaceMatr;
+
+            f3MinXYZ = f3CenterLightSpace - float3(fMinimalSphereRadius, fMinimalSphereRadius, fMinimalSphereRadius);
+            f3MaxXYZ = f3CenterLightSpace + float3(fMinimalSphereRadius, fMinimalSphereRadius, fMinimalSphereRadius);
         }
         else
         {
@@ -383,9 +385,10 @@ void ShadowMapManager::DistributeCascades(const DistributeCascadeInfo& Info,
         float4x4& WorldToLightProjSpaceMatr = m_CascadeTransforms[iCascade].WorldToLightProjSpace;
         WorldToLightProjSpaceMatr           = WorldToLightViewSpaceMatr * CascadeProjMatr;
 
-        const auto& NDCAttribs    = DevInfo.GetNDCAttribs();
-        float4x4    ProjToUVScale = float4x4::Scale(0.5f, NDCAttribs.YtoVScale, NDCAttribs.ZtoDepthScale);
-        float4x4    ProjToUVBias  = float4x4::Translation(0.5f, 0.5f, NDCAttribs.GetZtoDepthBias());
+        const NDCAttribs& NDC = DevInfo.GetNDCAttribs();
+
+        float4x4 ProjToUVScale = float4x4::Scale(0.5f, NDC.YtoVScale, NDC.ZtoDepthScale);
+        float4x4 ProjToUVBias  = float4x4::Translation(0.5f, 0.5f, NDC.GetZtoDepthBias());
 
         float4x4 WorldToShadowMapUVDepthMatr = WorldToLightProjSpaceMatr * ProjToUVScale * ProjToUVBias;
         WriteShaderMatrix(ShadowAttribs.mWorldToShadowMapUVDepth + iCascade, WorldToShadowMapUVDepthMatr, !Info.PackMatrixRowMajor);
@@ -404,7 +407,7 @@ void ShadowMapManager::InitializeConversionTechniques(TEXTURE_FORMAT FilterableS
     RefCntAutoPtr<IShader> pScreenSizeTriVS;
     for (int mode = SHADOW_MODE_VSM; mode <= SHADOW_MODE_EVSM4; ++mode)
     {
-        auto& Tech = m_ConversionTech[mode];
+        ShadowConversionTechnique& Tech = m_ConversionTech[mode];
         if (mode == SHADOW_MODE_EVSM4)
         {
             Tech = m_ConversionTech[SHADOW_MODE_EVSM2];
@@ -454,7 +457,7 @@ void ShadowMapManager::InitializeConversionTechniques(TEXTURE_FORMAT FilterableS
         {
             UNEXPECTED("Unexpected shadow mode");
         }
-        auto pVSMHorzPS = DeviceWithCache.CreateShader(ShaderCI);
+        RefCntAutoPtr<IShader> pVSMHorzPS = DeviceWithCache.CreateShader(ShaderCI);
 
         ShaderResourceVariableDesc Variables[] =
             {
@@ -476,8 +479,7 @@ void ShadowMapManager::InitializeConversionTechniques(TEXTURE_FORMAT FilterableS
         PSODesc.ResourceLayout.Variables    = Variables;
         PSODesc.ResourceLayout.NumVariables = _countof(Variables);
 
-        auto& GraphicsPipeline = PSOCreateInfo.GraphicsPipeline;
-
+        GraphicsPipelineDesc& GraphicsPipeline{PSOCreateInfo.GraphicsPipeline};
         GraphicsPipeline.RasterizerDesc.FillMode      = FILL_MODE_SOLID;
         GraphicsPipeline.RasterizerDesc.CullMode      = CULL_MODE_NONE;
         GraphicsPipeline.DepthStencilDesc.DepthEnable = False;
@@ -499,7 +501,8 @@ void ShadowMapManager::InitializeConversionTechniques(TEXTURE_FORMAT FilterableS
             ShaderCI.Desc.Name  = "Vertical blur pass PS";
             PSODesc.Name        = "Vertical blur pass PSO";
 
-            auto pVertBlurPS   = DeviceWithCache.CreateShader(ShaderCI);
+            RefCntAutoPtr<IShader> pVertBlurPS = DeviceWithCache.CreateShader(ShaderCI);
+
             PSOCreateInfo.pPS  = pVertBlurPS;
             m_BlurVertTech.PSO = DeviceWithCache.CreateGraphicsPipelineState(PSOCreateInfo);
             m_BlurVertTech.PSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbConversionAttribs")->Set(m_pConversionAttribsBuffer);
@@ -511,7 +514,7 @@ void ShadowMapManager::InitializeResourceBindings()
 {
     for (int mode = SHADOW_MODE_VSM; mode <= SHADOW_MODE_EVSM4; ++mode)
     {
-        auto& Tech = m_ConversionTech[mode];
+        ShadowConversionTechnique& Tech = m_ConversionTech[mode];
         if (mode == SHADOW_MODE_EVSM4)
         {
             Tech.SRB = m_ConversionTech[SHADOW_MODE_EVSM2].SRB;
@@ -531,10 +534,10 @@ void ShadowMapManager::ConvertToFilterable(IDeviceContext* pCtx, const ShadowMap
 {
     if (m_ShadowMode == SHADOW_MODE_VSM || m_ShadowMode == SHADOW_MODE_EVSM2 || m_ShadowMode == SHADOW_MODE_EVSM4)
     {
-        auto&       Tech          = m_ConversionTech[m_ShadowMode];
-        const auto& ShadowMapDesc = m_pShadowMapSRV->GetTexture()->GetDesc();
+        ShadowConversionTechnique& Tech          = m_ConversionTech[m_ShadowMode];
+        const TextureDesc&         ShadowMapDesc = m_pShadowMapSRV->GetTexture()->GetDesc();
         VERIFY(static_cast<int>(ShadowMapDesc.ArraySize) == ShadowAttribs.iNumCascades, "Inconsistent number of cascades");
-        const auto& FilterableSMDesc = m_pFilterableShadowMapSRV->GetTexture()->GetDesc();
+        const TextureDesc& FilterableSMDesc = m_pFilterableShadowMapSRV->GetTexture()->GetDesc();
         VERIFY(ShadowAttribs.bIs32BitEVSM == (FilterableSMDesc.Format == TEX_FORMAT_RGBA32_FLOAT || FilterableSMDesc.Format == TEX_FORMAT_RG32_FLOAT),
                "Incorrect 32-bit VSM flag");
         (void)FilterableSMDesc;
@@ -566,10 +569,11 @@ void ShadowMapManager::ConvertToFilterable(IDeviceContext* pCtx, const ShadowMap
                     }
                     else
                     {
-                        const auto& Cascade         = ShadowAttribs.Cascades[i];
-                        float       fNDCtoUVScale   = 0.5f;
-                        float       fFilterWidth    = ShadowAttribs.fFilterWorldSize * Cascade.f4LightSpaceScale.x * fNDCtoUVScale;
-                        float       fFilterHeight   = ShadowAttribs.fFilterWorldSize * Cascade.f4LightSpaceScale.y * fNDCtoUVScale;
+                        const CascadeAttribs& Cascade = ShadowAttribs.Cascades[i];
+
+                        float fNDCtoUVScale         = 0.5f;
+                        float fFilterWidth          = ShadowAttribs.fFilterWorldSize * Cascade.f4LightSpaceScale.x * fNDCtoUVScale;
+                        float fFilterHeight         = ShadowAttribs.fFilterWorldSize * Cascade.f4LightSpaceScale.y * fNDCtoUVScale;
                         pAttribs->fHorzFilterRadius = fFilterWidth / 2.f * static_cast<float>(ShadowMapDesc.Width);
                         pAttribs->fVertFilterRadius = fFilterHeight / 2.f * static_cast<float>(ShadowMapDesc.Height);
                     }

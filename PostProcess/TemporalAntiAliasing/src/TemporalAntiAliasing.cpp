@@ -66,7 +66,7 @@ float2 TemporalAntiAliasing::GetJitterOffset(Uint32 AccumulationBufferIdx) const
     if (Iter == m_AccumulationBuffers.end())
         return float2{0.0f, 0.0f};
 
-    const auto& AccBuffer = Iter->second;
+    const AccumulationBufferInfo& AccBuffer = Iter->second;
 
     if (AccBuffer.Width == 0 || AccBuffer.Height == 0 || !m_AllPSOsReady)
         return float2{0.0f, 0.0f};
@@ -107,7 +107,8 @@ void TemporalAntiAliasing::AccumulationBufferInfo::Prepare(PostFXContext* pPostF
         Desc.Format    = TEX_FORMAT_RGBA16_FLOAT;
         Desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
 
-        auto  pTexture     = Device.CreateTexture(Desc);
+        RefCntAutoPtr<ITexture> pTexture = Device.CreateTexture(Desc);
+
         float ClearColor[] = {0.0, 0.0, 0.0, 0.0};
 
 
@@ -150,7 +151,7 @@ void TemporalAntiAliasing::PrepareResources(IRenderDevice*  pDevice,
     DEV_CHECK_ERR(pDevice != nullptr, "pDevice must not be null");
     DEV_CHECK_ERR(pPostFXContext != nullptr, "pPostFXContext must not be null");
 
-    const auto& FrameDesc = pPostFXContext->GetFrameDesc();
+    const PostFXContext::FrameDesc& FrameDesc = pPostFXContext->GetFrameDesc();
     m_AccumulationBuffers[AccumulationBufferIdx].Prepare(pPostFXContext, pDevice, pDeviceContext, FrameDesc.Width, FrameDesc.Height, FrameDesc.Index, FeatureFlags);
 
     m_AllPSOsReady = true;
@@ -182,7 +183,7 @@ void TemporalAntiAliasing::Execute(const RenderAttributes& RenderAttribs)
         return;
     }
 
-    auto& AccBuffer = Iter->second;
+    AccumulationBufferInfo& AccBuffer = Iter->second;
     PrepareShadersAndPSO(RenderAttribs, AccBuffer.FeatureFlags, AccBuffer.Resources[AccumulationBufferInfo::RESOURCE_ID_ACCUMULATED_BUFFER0].AsTexture()->GetDesc().Format);
 
     ScopedDebugGroup DebugGroup{RenderAttribs.pDeviceContext, "TemporalAccumulation"};
@@ -218,7 +219,7 @@ void TemporalAntiAliasing::PrepareShadersAndPSO(const RenderAttributes& RenderAt
     const SHADER_COMPILE_FLAGS ShaderFlags = RenderAttribs.pPostFXContext->GetShaderCompileFlags(m_Settings.EnableAsyncCreation);
     const PSO_CREATE_FLAGS     PSOFlags    = m_Settings.EnableAsyncCreation ? PSO_CREATE_FLAG_ASYNCHRONOUS : PSO_CREATE_FLAG_NONE;
 
-    auto& RenderTech = m_RenderTech[{RENDER_TECH_COMPUTE_TEMPORAL_ACCUMULATION, FeatureFlags}];
+    RenderTechnique& RenderTech = m_RenderTech[{RENDER_TECH_COMPUTE_TEMPORAL_ACCUMULATION, FeatureFlags}];
     if (!RenderTech.IsInitializedPSO())
     {
         PipelineResourceLayoutDescX ResourceLayout;
@@ -237,8 +238,15 @@ void TemporalAntiAliasing::PrepareShadersAndPSO(const RenderAttributes& RenderAt
         Macros.Add("TAA_OPTION_BICUBIC_FILTER", (FeatureFlags & FEATURE_FLAG_BICUBIC_FILTER) != 0);
         Macros.Add("TAA_OPTION_YCOCG_COLOR_SPACE", (FeatureFlags & FEATURE_FLAG_YCOCG_COLOR_SPACE) != 0);
 
-        const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
-        const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "TAA_ComputeTemporalAccumulation.fx", "ComputeTemporalAccumulationPS", SHADER_TYPE_PIXEL, Macros, ShaderFlags);
+        RefCntAutoPtr<IShader> VS = PostFXRenderTechnique::CreateShader(
+            RenderAttribs.pDevice, RenderAttribs.pStateCache,
+            "FullScreenTriangleVS.fx", "FullScreenTriangleVS",
+            SHADER_TYPE_VERTEX, {}, ShaderFlags);
+
+        RefCntAutoPtr<IShader> PS = PostFXRenderTechnique::CreateShader(
+            RenderAttribs.pDevice, RenderAttribs.pStateCache,
+            "TAA_ComputeTemporalAccumulation.fx", "ComputeTemporalAccumulationPS",
+            SHADER_TYPE_PIXEL, Macros, ShaderFlags);
 
         RenderTech.InitializePSO(RenderAttribs.pDevice,
                                  RenderAttribs.pStateCache, "TemporalAntiAliasing::ComputeTemporalAccumulation",
@@ -251,8 +259,9 @@ void TemporalAntiAliasing::PrepareShadersAndPSO(const RenderAttributes& RenderAt
 
 void TemporalAntiAliasing::ComputeTemporalAccumulation(const RenderAttributes& RenderAttribs, AccumulationBufferInfo& AccBuff)
 {
-    auto& RenderTech = m_RenderTech[{RENDER_TECH_COMPUTE_TEMPORAL_ACCUMULATION, AccBuff.FeatureFlags}];
-    auto& SRB        = AccBuff.SRB;
+    RenderTechnique& RenderTech = m_RenderTech[{RENDER_TECH_COMPUTE_TEMPORAL_ACCUMULATION, AccBuff.FeatureFlags}];
+
+    RefCntAutoPtr<IShaderResourceBinding>& SRB = AccBuff.SRB;
     if (!SRB)
     {
         ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbCameraAttribs"}.Set(RenderAttribs.pPostFXContext->GetCameraAttribsCB());

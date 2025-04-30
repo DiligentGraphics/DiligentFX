@@ -1,5 +1,5 @@
 /*
- *  Copyright 2024 Diligent Graphics LLC
+ *  Copyright 2024-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -71,8 +71,7 @@ void PostFXRenderTechnique::InitializePSO(IRenderDevice*                     pDe
     PSODesc.Name           = PSOName;
     PSODesc.ResourceLayout = ResourceLayout;
 
-    auto& GraphicsPipeline = PSOCreateInfo.GraphicsPipeline;
-
+    GraphicsPipelineDesc& GraphicsPipeline{PSOCreateInfo.GraphicsPipeline};
     GraphicsPipeline.RasterizerDesc.FillMode              = FILL_MODE_SOLID;
     GraphicsPipeline.RasterizerDesc.CullMode              = CULL_MODE_BACK;
     GraphicsPipeline.RasterizerDesc.FrontCounterClockwise = false;

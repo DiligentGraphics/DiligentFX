@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2024 Diligent Graphics LLC
+ *  Copyright 2023-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -153,13 +153,13 @@ IPipelineState* VectorFieldRenderer::GetPSO(const PSOKey& Key)
         .SetPrimitiveTopology(PRIMITIVE_TOPOLOGY_LINE_LIST)
         .SetDepthFormat(m_DSVFormat)
         .SetDepthStencilDesc(DSS_DisableDepth);
-    for (auto RTVFormat : m_RTVFormats)
+    for (TEXTURE_FORMAT RTVFormat : m_RTVFormats)
         PsoCI.AddRenderTarget(RTVFormat);
 
     if (m_AsyncShaders)
         PsoCI.Flags |= PSO_CREATE_FLAG_ASYNCHRONOUS;
 
-    auto PSO = Device.CreateGraphicsPipelineState(PsoCI);
+    RefCntAutoPtr<IPipelineState> PSO = Device.CreateGraphicsPipelineState(PsoCI);
     if (!PSO)
     {
         UNEXPECTED("Failed to create vector field PSO");
@@ -187,7 +187,7 @@ void VectorFieldRenderer::Render(const RenderAttribs& Attribs)
         return;
     }
 
-    auto* pPSO = GetPSO({Attribs.ConvertOutputToSRGB});
+    IPipelineState* pPSO = GetPSO({Attribs.ConvertOutputToSRGB});
     if (pPSO == nullptr)
     {
         UNEXPECTED("Failed to get PSO");

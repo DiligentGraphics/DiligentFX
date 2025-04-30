@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2024 Diligent Graphics LLC
+ *  Copyright 2023-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -38,13 +38,13 @@ static std::vector<GBuffer::ElementDesc> GetGBufferElementDescs(const GBuffer::E
                                                                 size_t                      NumElements)
 {
     std::vector<GBuffer::ElementDesc> Elems{Elements, Elements + NumElements};
-    for (auto& ElemDesc : Elems)
+    for (GBuffer::ElementDesc& ElemDesc : Elems)
     {
         DEV_CHECK_ERR(ElemDesc.Format != TEX_FORMAT_UNKNOWN, "GBuffer element format is not specified");
 
         if (ElemDesc.BindFlags == BIND_NONE)
         {
-            const auto& FmtAttribs = GetTextureFormatAttribs(ElemDesc.Format);
+            const TextureFormatAttribs& FmtAttribs = GetTextureFormatAttribs(ElemDesc.Format);
             if (FmtAttribs.ComponentType == COMPONENT_TYPE_DEPTH || FmtAttribs.ComponentType == COMPONENT_TYPE_DEPTH_STENCIL)
             {
                 ElemDesc.BindFlags = BIND_DEPTH_STENCIL | BIND_SHADER_RESOURCE;
@@ -97,7 +97,7 @@ void GBuffer::Resize(IRenderDevice* pDevice, Uint32 Width, Uint32 Height)
     TexDesc.Usage     = USAGE_DEFAULT;
     TexDesc.Type      = RESOURCE_DIM_TEX_2D;
 
-    for (const auto& ElemDesc : m_ElemDesc)
+    for (const ElementDesc& ElemDesc : m_ElemDesc)
     {
         TexDesc.Format     = ElemDesc.Format;
         TexDesc.BindFlags  = ElemDesc.BindFlags;
@@ -134,8 +134,8 @@ void GBuffer::Bind(IDeviceContext* pContext,
         if ((BuffersMask & BufferBit) == 0)
             continue;
 
-        const auto& ElemDesc  = GetElementDesc(i);
-        const auto& BindFlags = ElemDesc.BindFlags;
+        const ElementDesc& ElemDesc  = GetElementDesc(i);
+        const BIND_FLAGS&  BindFlags = ElemDesc.BindFlags;
         if (BindFlags & BIND_RENDER_TARGET)
         {
             const Uint32 RTIdx = RTIndex != nullptr ? *(RTIndex++) : i;

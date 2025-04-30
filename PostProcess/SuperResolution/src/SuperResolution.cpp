@@ -1,5 +1,5 @@
 /*
- *  Copyright 2024 Diligent Graphics LLC
+ *  Copyright 2024-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -57,7 +57,7 @@ void SuperResolution::PrepareResources(IRenderDevice* pDevice, IDeviceContext* p
     DEV_CHECK_ERR(pDevice != nullptr, "pDevice must not be null");
     DEV_CHECK_ERR(pPostFXContext != nullptr, "pPostFXContext must not be null");
 
-    const auto& FrameDesc = pPostFXContext->GetFrameDesc();
+    const PostFXContext::FrameDesc& FrameDesc = pPostFXContext->GetFrameDesc();
 
     m_CurrentFrameIdx = FrameDesc.Index;
 
@@ -164,11 +164,18 @@ bool SuperResolution::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs
     const PSO_CREATE_FLAGS     PSOFlags    = m_Settings.EnableAsyncCreation ? PSO_CREATE_FLAG_ASYNCHRONOUS : PSO_CREATE_FLAG_NONE;
 
     {
-        auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_EDGE_ADAPTIVE_UPSAMPLING, FeatureFlags);
+        RenderTechnique& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_EDGE_ADAPTIVE_UPSAMPLING, FeatureFlags);
         if (!RenderTech.IsInitializedPSO())
         {
-            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
-            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FSR_EdgeAdaptiveUpsampling.fx", "ComputeEdgeAdaptiveUpsamplingPS", SHADER_TYPE_PIXEL, {}, ShaderFlags);
+            RefCntAutoPtr<IShader> VS = PostFXRenderTechnique::CreateShader(
+                RenderAttribs.pDevice, RenderAttribs.pStateCache,
+                "FullScreenTriangleVS.fx", "FullScreenTriangleVS",
+                SHADER_TYPE_VERTEX, {}, ShaderFlags);
+
+            RefCntAutoPtr<IShader> PS = PostFXRenderTechnique::CreateShader(
+                RenderAttribs.pDevice, RenderAttribs.pStateCache,
+                "FSR_EdgeAdaptiveUpsampling.fx", "ComputeEdgeAdaptiveUpsamplingPS",
+                SHADER_TYPE_PIXEL, {}, ShaderFlags);
 
             PipelineResourceLayoutDescX ResourceLayout;
             ResourceLayout
@@ -190,11 +197,18 @@ bool SuperResolution::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs
     }
 
     {
-        auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_CONTRAST_ADAPTIVE_SHARPENING, FeatureFlags);
+        RenderTechnique& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_CONTRAST_ADAPTIVE_SHARPENING, FeatureFlags);
         if (!RenderTech.IsInitializedPSO())
         {
-            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
-            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FSR_ContrastAdaptiveSharpening.fx", "ComputeContrastAdaptiveSharpeningPS", SHADER_TYPE_PIXEL, {}, ShaderFlags);
+            RefCntAutoPtr<IShader> VS = PostFXRenderTechnique::CreateShader(
+                RenderAttribs.pDevice, RenderAttribs.pStateCache,
+                "FullScreenTriangleVS.fx", "FullScreenTriangleVS",
+                SHADER_TYPE_VERTEX, {}, ShaderFlags);
+
+            RefCntAutoPtr<IShader> PS = PostFXRenderTechnique::CreateShader(
+                RenderAttribs.pDevice, RenderAttribs.pStateCache,
+                "FSR_ContrastAdaptiveSharpening.fx", "ComputeContrastAdaptiveSharpeningPS",
+                SHADER_TYPE_PIXEL, {}, ShaderFlags);
 
             PipelineResourceLayoutDescX ResourceLayout;
             ResourceLayout
@@ -227,7 +241,7 @@ void SuperResolution::UpdateConstantBuffer(const RenderAttributes& RenderAttribs
 
 void SuperResolution::ComputeEdgeAdaptiveUpsampling(const RenderAttributes& RenderAttribs)
 {
-    auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_EDGE_ADAPTIVE_UPSAMPLING, m_FeatureFlags);
+    RenderTechnique& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_EDGE_ADAPTIVE_UPSAMPLING, m_FeatureFlags);
     if (!RenderTech.IsInitializedSRB())
     {
         ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbFSRAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);
@@ -250,7 +264,7 @@ void SuperResolution::ComputeEdgeAdaptiveUpsampling(const RenderAttributes& Rend
 
 void SuperResolution::ComputeContrastAdaptiveSharpening(const RenderAttributes& RenderAttribs)
 {
-    auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_CONTRAST_ADAPTIVE_SHARPENING, m_FeatureFlags);
+    RenderTechnique& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_CONTRAST_ADAPTIVE_SHARPENING, m_FeatureFlags);
     if (!RenderTech.IsInitializedSRB())
     {
         ShaderResourceVariableX{RenderTech.PSO, SHADER_TYPE_PIXEL, "cbFSRAttribs"}.Set(m_Resources[RESOURCE_IDENTIFIER_CONSTANT_BUFFER]);

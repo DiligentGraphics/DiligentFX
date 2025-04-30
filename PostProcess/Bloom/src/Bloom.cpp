@@ -1,5 +1,5 @@
 /*
- *  Copyright 2024 Diligent Graphics LLC
+ *  Copyright 2024-2025 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -75,8 +75,8 @@ void Bloom::PrepareResources(IRenderDevice* pDevice, IDeviceContext* pDeviceCont
     DEV_CHECK_ERR(pDevice != nullptr, "pDevice must not be null");
     DEV_CHECK_ERR(pPostFXContext != nullptr, "pPostFXContext must not be null");
 
-    const auto& FrameDesc         = pPostFXContext->GetFrameDesc();
-    const auto& SupportedFeatures = pPostFXContext->GetSupportedFeatures();
+    const PostFXContext::FrameDesc&               FrameDesc         = pPostFXContext->GetFrameDesc();
+    const PostFXContext::SupportedDeviceFeatures& SupportedFeatures = pPostFXContext->GetSupportedFeatures();
 
     m_CurrentFrameIdx = FrameDesc.Index;
 
@@ -159,11 +159,18 @@ bool Bloom::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_
     const PSO_CREATE_FLAGS     PSOFlags    = m_Settings.EnableAsyncCreation ? PSO_CREATE_FLAG_ASYNCHRONOUS : PSO_CREATE_FLAG_NONE;
 
     {
-        auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_PREFILTERED_TEXTURE, FeatureFlags);
+        RenderTechnique& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_PREFILTERED_TEXTURE, FeatureFlags);
         if (!RenderTech.IsInitializedPSO())
         {
-            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
-            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "Bloom_ComputePrefilteredTexture.fx", "ComputePrefilteredTexturePS", SHADER_TYPE_PIXEL, {}, ShaderFlags);
+            RefCntAutoPtr<IShader> VS = PostFXRenderTechnique::CreateShader(
+                RenderAttribs.pDevice, RenderAttribs.pStateCache,
+                "FullScreenTriangleVS.fx", "FullScreenTriangleVS",
+                SHADER_TYPE_VERTEX, {}, ShaderFlags);
+
+            RefCntAutoPtr<IShader> PS = PostFXRenderTechnique::CreateShader(
+                RenderAttribs.pDevice, RenderAttribs.pStateCache,
+                "Bloom_ComputePrefilteredTexture.fx", "ComputePrefilteredTexturePS",
+                SHADER_TYPE_PIXEL, {}, ShaderFlags);
 
             const bool BorderSamplingModeSupported = RenderAttribs.pDevice->GetAdapterInfo().Sampler.BorderSamplingModeSupported;
 
@@ -187,11 +194,18 @@ bool Bloom::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_
     }
 
     {
-        auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_DOWNSAMPLED_TEXTURE, FeatureFlags);
+        RenderTechnique& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_DOWNSAMPLED_TEXTURE, FeatureFlags);
         if (!RenderTech.IsInitializedPSO())
         {
-            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
-            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "Bloom_ComputeDownsampledTexture.fx", "ComputeDownsampledTexturePS", SHADER_TYPE_PIXEL, {}, ShaderFlags);
+            RefCntAutoPtr<IShader> VS = PostFXRenderTechnique::CreateShader(
+                RenderAttribs.pDevice, RenderAttribs.pStateCache,
+                "FullScreenTriangleVS.fx", "FullScreenTriangleVS",
+                SHADER_TYPE_VERTEX, {}, ShaderFlags);
+
+            RefCntAutoPtr<IShader> PS = PostFXRenderTechnique::CreateShader(
+                RenderAttribs.pDevice, RenderAttribs.pStateCache,
+                "Bloom_ComputeDownsampledTexture.fx", "ComputeDownsampledTexturePS",
+                SHADER_TYPE_PIXEL, {}, ShaderFlags);
 
             const bool BorderSamplingModeSupported = RenderAttribs.pDevice->GetAdapterInfo().Sampler.BorderSamplingModeSupported;
 
@@ -214,11 +228,18 @@ bool Bloom::PrepareShadersAndPSO(const RenderAttributes& RenderAttribs, FEATURE_
     }
 
     {
-        auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_UPSAMPLED_TEXTURE, FeatureFlags);
+        RenderTechnique& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_UPSAMPLED_TEXTURE, FeatureFlags);
         if (!RenderTech.IsInitializedPSO())
         {
-            const auto VS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "FullScreenTriangleVS.fx", "FullScreenTriangleVS", SHADER_TYPE_VERTEX, {}, ShaderFlags);
-            const auto PS = PostFXRenderTechnique::CreateShader(RenderAttribs.pDevice, RenderAttribs.pStateCache, "Bloom_ComputeUpsampledTexture.fx", "ComputeUpsampledTexturePS", SHADER_TYPE_PIXEL, {}, ShaderFlags);
+            RefCntAutoPtr<IShader> VS = PostFXRenderTechnique::CreateShader(
+                RenderAttribs.pDevice, RenderAttribs.pStateCache,
+                "FullScreenTriangleVS.fx", "FullScreenTriangleVS",
+                SHADER_TYPE_VERTEX, {}, ShaderFlags);
+
+            RefCntAutoPtr<IShader> PS = PostFXRenderTechnique::CreateShader(
+                RenderAttribs.pDevice, RenderAttribs.pStateCache,
+                "Bloom_ComputeUpsampledTexture.fx", "ComputeUpsampledTexturePS",
+                SHADER_TYPE_PIXEL, {}, ShaderFlags);
 
             PipelineResourceLayoutDescX ResourceLayout;
             ResourceLayout
@@ -262,7 +283,7 @@ void Bloom::UpdateConstantBuffer(const RenderAttributes& RenderAttribs, bool Res
 
 void Bloom::ComputePrefilteredTexture(const RenderAttributes& RenderAttribs)
 {
-    auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_PREFILTERED_TEXTURE, m_FeatureFlags);
+    RenderTechnique& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_PREFILTERED_TEXTURE, m_FeatureFlags);
 
     if (!RenderTech.IsInitializedSRB())
     {
@@ -287,7 +308,7 @@ void Bloom::ComputePrefilteredTexture(const RenderAttributes& RenderAttribs)
 
 void Bloom::ComputeDownsampledTextures(const RenderAttributes& RenderAttribs)
 {
-    auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_DOWNSAMPLED_TEXTURE, m_FeatureFlags);
+    RenderTechnique& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_DOWNSAMPLED_TEXTURE, m_FeatureFlags);
 
     if (!RenderTech.IsInitializedSRB())
         RenderTech.InitializeSRB(false);
@@ -313,7 +334,7 @@ void Bloom::ComputeDownsampledTextures(const RenderAttributes& RenderAttribs)
 
 void Bloom::ComputeUpsampledTextures(const RenderAttributes& RenderAttribs)
 {
-    auto& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_UPSAMPLED_TEXTURE, m_FeatureFlags);
+    RenderTechnique& RenderTech = GetRenderTechnique(RENDER_TECH_COMPUTE_UPSAMPLED_TEXTURE, m_FeatureFlags);
 
     if (!RenderTech.IsInitializedSRB())
     {
