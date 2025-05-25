@@ -142,7 +142,7 @@ void main(in  FullScreenTriangleVSOutput VSOut,
     }
 #endif
 
-    float Opacity = 1.0 - Color.a;
+    float Opacity = Color.a;
 
     float SSRScale = g_Attribs.SSRScale * Opacity;
     if (SSRScale > 0.0)

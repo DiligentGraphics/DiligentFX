@@ -2057,9 +2057,14 @@ void PBR_Renderer::CreatePSO(PsoHashMapType&             PsoHashMap,
                 RT0.BlendOp   = BLEND_OPERATION_ADD;
             }
 
-            // Compute total transmittance, e.g. (1.0 - A0) * (1.0 - A1) ... * (1.0 - An),
+            // Compute total opacity, e.g. 1.0 - (1.0 - A0) * (1.0 - A1) ... * (1.0 - An),
             // in alpha channel.
-            RT0.SrcBlendAlpha  = BLEND_FACTOR_ZERO;          // SrcA * 0
+            // Dst[n]   = 1.0 - (1.0 - A[0]) * ... * (1.0 - A[n])
+            // Dst[n+1] = 1.0 - (1.0 - A[0]) * ... * (1.0 - A[n]) * (1.0 - A[n+1])
+            // Dst[n+1] = 1.0 - (1.0 - Dst[n]) * (1.0 - A[n+1]) = Dst[n] + A[n+1] - Dst[n] * A[n+1]
+            // Dst[n+1] = A[n+1] * 1.0 + Dst[n] * (1.0 - A[n+1])
+            //            SrcA           DstA            SrcA
+            RT0.SrcBlendAlpha  = BLEND_FACTOR_ONE;           // SrcA * 1.0
             RT0.DestBlendAlpha = BLEND_FACTOR_INV_SRC_ALPHA; // DstA * (1.0 - SrcA)
             RT0.BlendOpAlpha   = BLEND_OPERATION_ADD;
 

@@ -176,7 +176,7 @@ void HnRenderEnvMapTask::Prepare(pxr::HdTaskContext* TaskCtx,
     EnvMapAttribs.pEnvMap       = pEnvMapSRV;
     EnvMapAttribs.AverageLogLum = 0.3f;
     EnvMapAttribs.MipLevel      = 1;
-    EnvMapAttribs.Alpha         = 1;
+    EnvMapAttribs.Alpha         = 0; // Fully transparent
     EnvMapAttribs.Options       = EnvMapRenderer::OPTION_FLAG_COMPUTE_MOTION_VECTORS;
 
     {

@@ -73,7 +73,7 @@ struct HnBeginFrameTaskParams
     };
     RenderTargetFormats Formats;
 
-    float4 ClearColor = {0, 0, 0, 0};
+    float3 ClearColor = {0, 0, 0};
 
     bool UseReverseDepth = false;
 
@@ -89,8 +89,8 @@ struct HnBeginFrameTaskParams
         float4 UnshadedColor = {1, 1, 1, 1};
         float  PointSize     = 1;
 
-        float4 LoadingAnimationColor0             = {0.1f, 0.100f, 0.10f, 1.0f};
-        float4 LoadingAnimationColor1             = {1.0f, 0.675f, 0.25f, 1.0f};
+        float3 LoadingAnimationColor0             = {0.1f, 0.100f, 0.10f};
+        float3 LoadingAnimationColor1             = {1.0f, 0.675f, 0.25f};
         float  LoadingAnimationWorldScale         = 1.0f;
         float  LoadingAnimationSpeed              = 0.25f;
         float  LoadingAnimationTransitionDuration = 0.5f;

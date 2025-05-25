@@ -258,16 +258,14 @@ void HnBeginFrameTask::PrepareRenderTargets(pxr::HdRenderIndex* RenderIndex,
     {
         if (i == HnFrameRenderTargets::GBUFFER_TARGET_SCENE_COLOR)
         {
-            if (RenderParam->GetViewMode() != HN_VIEW_MODE_SCENE_DEPTH)
-            {
-                // NB: we should clear alpha to one as it accumulates the total transmittance
-                ClearValues[i] = float4{m_Params.ClearColor.r, m_Params.ClearColor.g, m_Params.ClearColor.b, 1.0};
-            }
-            else
+            float3 ClearColor = m_Params.ClearColor;
+            if (RenderParam->GetViewMode() == HN_VIEW_MODE_SCENE_DEPTH)
             {
                 // Clear background to white in scene depth debug view mode
-                ClearValues[i] = float4{1};
+                ClearColor = float3{1.0};
             }
+            // NB: we should clear alpha to zero as it accumulates the total opacity
+            ClearValues[i] = float4{ClearColor, 0.0};
         }
         else
         {
@@ -672,8 +670,8 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
                 }
 
                 RendererParams.LoadingAnimation.Factor     = LoadingAnimationFactor;
-                RendererParams.LoadingAnimation.Color0     = m_Params.Renderer.LoadingAnimationColor0;
-                RendererParams.LoadingAnimation.Color1     = m_Params.Renderer.LoadingAnimationColor1;
+                RendererParams.LoadingAnimation.Color0     = float4{m_Params.Renderer.LoadingAnimationColor0, 0.0};
+                RendererParams.LoadingAnimation.Color1     = float4{m_Params.Renderer.LoadingAnimationColor1, 0.0};
                 RendererParams.LoadingAnimation.WorldScale = m_Params.Renderer.LoadingAnimationWorldScale;
                 RendererParams.LoadingAnimation.Speed      = m_Params.Renderer.LoadingAnimationSpeed;
 
