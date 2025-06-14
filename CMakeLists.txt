@@ -1,5 +1,14 @@
 cmake_minimum_required (VERSION 3.10)
 
+if(NOT DILIGENT_CORE_FOUND)
+	message(FATAL_ERROR "DiligentCore module is not found. Please add DiligentCore module to the project before DiligentFX module.")
+endif()
+if(NOT DILIGENT_TOOLS_FOUND)
+	message(FATAL_ERROR "DiligentTools module is not found. Please add DiligentTools module to the project before DiligentFX module.")
+endif()
+
+set(DILIGENT_FX_FOUND TRUE CACHE INTERNAL "DiligentFX module is found")
+
 include(BuildUtils.cmake)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
