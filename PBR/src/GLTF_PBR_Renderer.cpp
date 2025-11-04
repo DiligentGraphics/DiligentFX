@@ -774,7 +774,8 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
             else
             {
                 DrawAttribs drawAttrs{primitive.VertexCount, DRAW_FLAG_VERIFY_ALL};
-                drawAttrs.StartVertexLocation = BaseVertex;
+                //drawAttrs.StartVertexLocation = BaseVertex;
+                drawAttrs.StartVertexLocation = BaseVertex + primitive.VertexStart;
                 pCtx->Draw(drawAttrs);
             }
         }
