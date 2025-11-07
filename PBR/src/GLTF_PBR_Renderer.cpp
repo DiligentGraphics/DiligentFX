@@ -768,7 +768,7 @@ void GLTF_PBR_Renderer::Render(IDeviceContext*              pCtx,
             {
                 DrawIndexedAttribs drawAttrs{primitive.IndexCount, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
                 drawAttrs.FirstIndexLocation = FirstIndexLocation + primitive.FirstIndex;
-                drawAttrs.BaseVertex         = BaseVertex;
+                drawAttrs.BaseVertex         = BaseVertex + primitive.FirstVertex;
                 pCtx->DrawIndexed(drawAttrs);
             }
             else
