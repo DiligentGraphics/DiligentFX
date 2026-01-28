@@ -12,9 +12,9 @@ Texture2D    g_EnvironmentMap;
 #endif
 SamplerState g_EnvironmentMap_sampler;
 
-cbuffer FilterAttribs
+cbuffer cbConstants
 {
-    float4x4 g_RotationUnused;
+    float4x4 g_Rotation;
 
     float g_Roughness;
     float g_EnvMapWidth;
@@ -22,9 +22,9 @@ cbuffer FilterAttribs
     float g_EnvMipCount;
     
     uint  g_NumSamples;
-    uint  _Padding0;
-    uint  _Padding1;
-    uint  _Padding2;
+    uint  g_Padding0;
+    uint  g_Padding1;
+    uint  g_Padding2;
 }
 
 float3 SampleEnvrionmentMap(float3 R, float MipLevel)

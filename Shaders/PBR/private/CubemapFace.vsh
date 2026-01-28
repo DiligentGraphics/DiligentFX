@@ -1,6 +1,16 @@
-cbuffer cbTransform
+cbuffer cbConstants
 {
     float4x4 g_Rotation;
+
+    float g_Roughness;
+    float g_EnvMapWidth;
+    float g_EnvMapHeight;
+    float g_EnvMipCount;
+    
+    uint  g_NumSamples;
+    uint  g_Padding0;
+    uint  g_Padding1;
+    uint  g_Padding2;
 }
 
 void main(in uint VertexId     : SV_VertexID,

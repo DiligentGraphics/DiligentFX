@@ -1,5 +1,5 @@
 /*
- *  Copyright 2019-2025 Diligent Graphics LLC
+ *  Copyright 2019-2026 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -491,7 +491,7 @@ public:
     /// \remarks If NumDiffuseSamples or NumSpecularSamples is 0,
     ///          the renderer will choose the optimal number of samples.
     void PrecomputeCubemaps(IDeviceContext* pCtx,
-                            ITextureView*   pEnvironmentMap,
+                            ITextureView*   pEnvMapSRV,
                             Uint32          NumDiffuseSamples  = 0,
                             Uint32          NumSpecularSamples = 0,
                             bool            OptimizeSamples    = true);
@@ -932,7 +932,6 @@ protected:
 
     RefCntAutoPtr<IBuffer> m_PBRPrimitiveAttribsCB;
     RefCntAutoPtr<IBuffer> m_PBRMaterialAttribsCB;
-    RefCntAutoPtr<IBuffer> m_PrecomputeEnvMapAttribsCB;
     RefCntAutoPtr<IBuffer> m_JointsBuffer;
 
     std::unordered_set<std::string> m_GeneratedIncludes;
