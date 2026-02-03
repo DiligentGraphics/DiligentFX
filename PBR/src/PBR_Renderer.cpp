@@ -438,7 +438,7 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
             {
                 m_pSheenAlbedoScaling_LUT_SRV = SheenAlbedoScalingLUT->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
                 StateTransitionDesc Barriers{SheenAlbedoScalingLUT, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE};
-                pCtx->TransitionResourceStates(1, &Barriers);
+                pCtx->TransitionResourceState(Barriers);
             }
             else
             {
@@ -463,7 +463,7 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
                 {
                     m_pPreintegratedCharlie_SRV = PreintegratedCharlieBRDF->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
                     StateTransitionDesc Barriers{PreintegratedCharlieBRDF, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE};
-                    pCtx->TransitionResourceStates(1, &Barriers);
+                    pCtx->TransitionResourceState(Barriers);
                 }
                 else
                 {

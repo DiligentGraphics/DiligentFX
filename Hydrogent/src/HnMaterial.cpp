@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2024 Diligent Graphics LLC
+ *  Copyright 2023-2026 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -1378,7 +1378,7 @@ void HnMaterial::EndResourceUpdate(HnRenderDelegate& RenderDelegate)
         IDeviceContext*     pContext = RenderDelegate.GetDeviceContext();
         IBuffer*            pBuffer  = SRBCache->CommitUpdates(RenderDelegate.GetDevice(), pContext);
         StateTransitionDesc Barrier{pBuffer, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE};
-        pContext->TransitionResourceStates(1, &Barrier);
+        pContext->TransitionResourceState(Barrier);
     }
     else
     {

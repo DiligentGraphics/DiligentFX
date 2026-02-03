@@ -1,5 +1,5 @@
 /*
- *  Copyright 2024-2025 Diligent Graphics LLC
+ *  Copyright 2024-2026 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -374,7 +374,7 @@ public:
             if (!m_PoolAllocation)
             {
                 StateTransitionDesc Barrier{Stream.Buffer, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_VERTEX_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE};
-                pContext->TransitionResourceStates(1, &Barrier);
+                pContext->TransitionResourceState(Barrier);
             }
         }
 
@@ -728,7 +728,7 @@ public:
         if (!m_Suballocation)
         {
             StateTransitionDesc Barrier{pBuffer, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_INDEX_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE};
-            pContext->TransitionResourceStates(1, &Barrier);
+            pContext->TransitionResourceState(Barrier);
         }
 
         m_StagingData.reset();

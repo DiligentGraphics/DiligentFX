@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2025 Diligent Graphics LLC
+ *  Copyright 2023-2026 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -518,7 +518,7 @@ HnRenderDelegate::HnRenderDelegate(const CreateInfo& CI) :
 
         const RESOURCE_STATE ShadowMapState = m_pDevice->GetDeviceInfo().IsVulkanDevice() ? RESOURCE_STATE_DEPTH_READ : RESOURCE_STATE_SHADER_RESOURCE;
         StateTransitionDesc  Barrier{pDummyShadowMap, RESOURCE_STATE_UNKNOWN, ShadowMapState, STATE_TRANSITION_FLAG_UPDATE_STATE};
-        CI.pContext->TransitionResourceStates(1, &Barrier);
+        CI.pContext->TransitionResourceState(Barrier);
     }
 
     if (m_USDRenderer->GetSettings().OITLayerCount > 0)

@@ -1,5 +1,5 @@
 /*
- *  Copyright 2025 Diligent Graphics LLC
+ *  Copyright 2025-2026 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -177,7 +177,7 @@ void HnComputeDepthBoundsTask::Execute(pxr::HdTaskContext* TaskCtx)
                          pFrameAttribsCB, offsetof(HLSL::CameraAttribs, fSceneNearZ), sizeof(HLSL::DepthRangeI), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
         StateTransitionDesc Barrier{pFrameAttribsCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE};
-        pCtx->TransitionResourceStates(1, &Barrier);
+        pCtx->TransitionResourceState(Barrier);
     }
     else
     {

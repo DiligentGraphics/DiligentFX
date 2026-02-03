@@ -1,5 +1,5 @@
 /*
- *  Copyright 2024-2025 Diligent Graphics LLC
+ *  Copyright 2024-2026 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -218,7 +218,7 @@ void HnRenderShadowsTask::PrepareClearDepthVB(const HnRenderDelegate& RenderDele
     }
 
     StateTransitionDesc Barrier{m_ClearDepthVB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_VERTEX_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE};
-    RenderDelegate.GetDeviceContext()->TransitionResourceStates(1, &Barrier);
+    RenderDelegate.GetDeviceContext()->TransitionResourceState(Barrier);
 }
 
 void HnRenderShadowsTask::Prepare(pxr::HdTaskContext* TaskCtx,

@@ -1,5 +1,5 @@
 /*
- *  Copyright 2024 Diligent Graphics LLC
+ *  Copyright 2024-2026 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -89,7 +89,7 @@ void HnBeginMainPassTask::Execute(pxr::HdTaskContext* TaskCtx)
         StateTransitionDesc Barrier{ShadowMapMgr->GetShadowTexture(), RESOURCE_STATE_UNKNOWN,
                                     DeviceInfo.IsD3DDevice() ? RESOURCE_STATE_SHADER_RESOURCE : RESOURCE_STATE_DEPTH_READ,
                                     STATE_TRANSITION_FLAG_UPDATE_STATE};
-        pCtx->TransitionResourceStates(1, &Barrier);
+        pCtx->TransitionResourceState(Barrier);
     }
 
     HnRenderPassState* RP_OpaqueSelected      = GetRenderPassState(TaskCtx, HnRenderResourceTokens->renderPass_OpaqueSelected);

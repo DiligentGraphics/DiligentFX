@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2025 Diligent Graphics LLC
+ *  Copyright 2023-2026 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -385,7 +385,7 @@ void HnRenderPass::WriteJointsDataBatch(RenderState& State, Uint32 BatchIdx, PBR
     {
         State.pCtx->UpdateBuffer(pJointsCB, 0, JointsDataSize, m_JointsData.data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         StateTransitionDesc Barrier{pJointsCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE};
-        State.pCtx->TransitionResourceStates(1, &Barrier);
+        State.pCtx->TransitionResourceState(Barrier);
     }
 }
 
@@ -580,7 +580,7 @@ HnRenderPass::EXECUTE_RESULT HnRenderPass::Execute(HnRenderPassState& RPState, c
         {
             State.pCtx->UpdateBuffer(pPrimitiveAttribsCB, 0, AttribsBufferOffset, m_PrimitiveAttribsData.data(), RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
             StateTransitionDesc Barrier{pPrimitiveAttribsCB, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_CONSTANT_BUFFER, STATE_TRANSITION_FLAG_UPDATE_STATE};
-            State.pCtx->TransitionResourceStates(1, &Barrier);
+            State.pCtx->TransitionResourceState(Barrier);
         }
         AttribsBufferOffset = 0;
 

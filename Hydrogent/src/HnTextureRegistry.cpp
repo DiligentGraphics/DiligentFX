@@ -1,5 +1,5 @@
 /*
- *  Copyright 2023-2024 Diligent Graphics LLC
+ *  Copyright 2023-2026 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -174,7 +174,7 @@ void HnTextureRegistry::TextureHandle::Initialize(IRenderDevice*                
             if (m_pTexture)
             {
                 StateTransitionDesc Barrier{m_pTexture, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE};
-                pContext->TransitionResourceStates(1, &Barrier);
+                pContext->TransitionResourceState(Barrier);
             }
 
             // Set the IsInitialized flag even if the texture creation failed
