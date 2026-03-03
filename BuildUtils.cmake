@@ -16,7 +16,7 @@ function(convert_shaders_to_headers _SHADERS _SHADER_OUTPUT_DIR _SHADERS_LIST_FI
             set(CONVERTED_FILE ${_SHADER_OUTPUT_DIR}/${FILE_NAME}.h)
             add_custom_command(OUTPUT ${CONVERTED_FILE}
                                COMMAND ${Python3_EXECUTABLE} ${FILE2STRING_PATH} ${FILE} ${CONVERTED_FILE}
-                               MAIN_DEPENDENCY ${FILE} # the primary input source file to the command
+                               DEPENDS ${FILE}
                                COMMENT "Processing shader ${FILE}"
                                VERBATIM)
 
