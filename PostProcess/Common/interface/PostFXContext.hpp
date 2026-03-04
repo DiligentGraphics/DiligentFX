@@ -52,7 +52,8 @@ public:
     {
         FEATURE_FLAG_NONE                 = 0u,
         FEATURE_FLAG_REVERSED_DEPTH       = 1u << 0u,
-        FEATURE_FLAG_HALF_PRECISION_DEPTH = 1u << 1u
+        FEATURE_FLAG_HALF_PRECISION_DEPTH = 1u << 1u,
+        FEATURE_FLAG_TEMPORAL_UPSCALING   = 1u << 2u,
     };
 
     struct FrameDesc

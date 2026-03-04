@@ -27,6 +27,7 @@
 
 #include "Bloom.hpp"
 #include "CommonlyUsedStates.h"
+#include "PostFXContext.hpp"
 #include "RenderStateCache.hpp"
 #include "GraphicsUtilities.h"
 #include "MapHelper.hpp"
@@ -80,14 +81,17 @@ void Bloom::PrepareResources(IRenderDevice* pDevice, IDeviceContext* pDeviceCont
 
     m_CurrentFrameIdx = FrameDesc.Index;
 
-    if (m_BackBufferWidth == FrameDesc.Width && m_BackBufferHeight == FrameDesc.Height && m_FeatureFlags == FeatureFlags)
+    Uint32 Width  = (pPostFXContext->GetFeatureFlags() & PostFXContext::FEATURE_FLAG_TEMPORAL_UPSCALING) ? FrameDesc.OutputWidth : FrameDesc.Width;
+    Uint32 Height = (pPostFXContext->GetFeatureFlags() & PostFXContext::FEATURE_FLAG_TEMPORAL_UPSCALING) ? FrameDesc.OutputHeight : FrameDesc.Height;
+
+    if (m_BackBufferWidth == Width && m_BackBufferHeight == Height && m_FeatureFlags == FeatureFlags)
         return;
 
     for (auto& Iter : m_RenderTech)
         Iter.second.SRB.Release();
 
-    m_BackBufferWidth  = FrameDesc.Width;
-    m_BackBufferHeight = FrameDesc.Height;
+    m_BackBufferWidth  = Width;
+    m_BackBufferHeight = Height;
     m_FeatureFlags     = FeatureFlags;
 
     Uint32 HalfWidth    = m_BackBufferWidth / 2u;
