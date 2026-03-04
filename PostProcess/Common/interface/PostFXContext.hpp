@@ -1,5 +1,5 @@
 /*
- *  Copyright 2024-2025 Diligent Graphics LLC
+ *  Copyright 2024-2026 Diligent Graphics LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -52,7 +52,8 @@ public:
     {
         FEATURE_FLAG_NONE                 = 0u,
         FEATURE_FLAG_REVERSED_DEPTH       = 1u << 0u,
-        FEATURE_FLAG_HALF_PRECISION_DEPTH = 1u << 1u
+        FEATURE_FLAG_HALF_PRECISION_DEPTH = 1u << 1u,
+        FEATURE_FLAG_TEMPORAL_UPSCALING   = 1u << 2u,
     };
 
     struct FrameDesc
