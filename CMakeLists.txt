@@ -9,8 +9,6 @@ endif()
 
 set(DILIGENT_FX_FOUND TRUE CACHE INTERNAL "DiligentFX module is found")
 
-include(BuildUtils.cmake)
-
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 project(DiligentFX CXX)
