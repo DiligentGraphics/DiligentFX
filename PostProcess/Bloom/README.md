@@ -26,7 +26,7 @@ The following table enumerates all external inputs required by Bloom effect.
 | Color buffer                      | `APPLICATION SPECIFIED (3x FLOAT)` | The HDR render target of the current frame containing the scene radiance |
 
 
-The effect uses a number of parameters that control the quality and performance and are organized into the `HLSL::ScreenSpaceAmbientOcclusionAttribs` structure.
+The effect uses a number of parameters that control the quality and performance and are organized into the `HLSL::BloomAttribs` structure.
 The following table lists the parameters and their descriptions.
 
 | **Name**                                 | **Notes** |
