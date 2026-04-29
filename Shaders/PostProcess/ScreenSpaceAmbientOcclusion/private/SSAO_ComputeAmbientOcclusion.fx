@@ -46,8 +46,9 @@ float2 ComputeSliceDirection(float Xi, int Index)
 
 float FastACos(float Value)
 {
-    float Result = -0.156583 * Value + M_HALF_PI;
-    Result *= sqrt(1.0 - abs(Value));
+    float AbsValue = abs(Value);
+    float Result = -0.156583 * AbsValue + M_HALF_PI;
+    Result *= sqrt(1.0 - AbsValue);
     return (Value >= 0.0) ? Result : M_PI - Result;
 }
 
@@ -117,7 +118,7 @@ float ComputeAmbientOcclusionPS(in FullScreenTriangleVSOutput VSOut) : SV_Target
 
         float3 SliceDirection = float3(Omega, 0.0);
         float3 OrthoSliceDir = SliceDirection - dot(SliceDirection, ViewVS) * ViewVS;
-        float3 Axis = cross(SliceDirection, ViewVS);
+        float3 Axis = normalize(cross(SliceDirection, ViewVS));
         float3 ProjNormal = NormalVS - Axis * dot(NormalVS, Axis);
 
         float ProjNormalLen = length(ProjNormal);
@@ -146,7 +147,7 @@ float ComputeAmbientOcclusionPS(in FullScreenTriangleVSOutput VSOut) : SV_Target
 
             float MipLevel = clamp(log2(length(SampleOffset * g_Camera.f4ViewportSize.xy)) - g_SSAOAttribs.DepthMIPSamplingOffset, 0.0, float(SSAO_DEPTH_PREFILTERED_MAX_MIP));
             float3 SamplePositionVS0 = ScreenXYDepthToViewSpace(float3(SamplePositionSS0, SamplePrefilteredDepth(SamplePositionSS0, MipLevel)), g_Camera.mProj);
-            float3 SamplePositionVS1 = ScreenXYDepthToViewSpace(float3(SamplePositionSS0, SamplePrefilteredDepth(SamplePositionSS1, MipLevel)), g_Camera.mProj);
+            float3 SamplePositionVS1 = ScreenXYDepthToViewSpace(float3(SamplePositionSS1, SamplePrefilteredDepth(SamplePositionSS1, MipLevel)), g_Camera.mProj);
 
             float3 SampleDifference0 = SamplePositionVS0 - PositionVS;
             float3 SampleDifference1 = SamplePositionVS1 - PositionVS;
