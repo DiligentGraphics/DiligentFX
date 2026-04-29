@@ -46,8 +46,9 @@ float2 ComputeSliceDirection(float Xi, int Index)
 
 float FastACos(float Value)
 {
-    float Result = -0.156583 * Value + M_HALF_PI;
-    Result *= sqrt(1.0 - abs(Value));
+    float AbsValue = abs(Value);
+    float Result = -0.156583 * AbsValue + M_HALF_PI;
+    Result *= sqrt(1.0 - AbsValue);
     return (Value >= 0.0) ? Result : M_PI - Result;
 }
 
