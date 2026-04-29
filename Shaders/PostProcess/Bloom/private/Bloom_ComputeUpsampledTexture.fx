@@ -20,7 +20,7 @@ float3 SampleColor(float2 Texcoord, float2 Offset)
 float3 ComputeUpsampledTexturePS(in FullScreenTriangleVSOutput VSOut) : SV_Target0
 {
     float2 TextureResolution;
-    g_TextureInput.GetDimensions(TextureResolution.x, TextureResolution.y);
+    g_TextureDownsampled.GetDimensions(TextureResolution.x, TextureResolution.y);
 
     float2 TexelSize = rcp(TextureResolution);
     float2 CenterTexcoord = NormalizedDeviceXYToTexUV(VSOut.f2NormalizedXY);
