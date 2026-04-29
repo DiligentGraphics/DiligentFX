@@ -358,7 +358,7 @@ void Bloom::ComputeUpsampledTextures(const RenderAttributes& RenderAttribs)
                 m_UpsampledTextures[TextureIdx - 1]->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET),
             };
 
-            TextureInputSV.Set(m_DownsampledTextures[TextureIdx]->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+            TextureInputSV.Set(m_DownsampledTextures[TextureIdx - 1]->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
             TextureDowsampledSV.Set(TextureIdx != MipCount ? m_UpsampledTextures[TextureIdx]->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE) : m_DownsampledTextures[TextureIdx]->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 
             RenderAttribs.pDeviceContext->SetRenderTargets(1, pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
