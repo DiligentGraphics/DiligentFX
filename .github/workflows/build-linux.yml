@@ -58,18 +58,18 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: DiligentGraphics/github-action/checkout@v11
+      uses: DiligentGraphics/github-action/checkout@v12
 
     - name: Set up build environment
       if:   success()
-      uses: DiligentGraphics/github-action/setup-build-env@v11
+      uses: DiligentGraphics/github-action/setup-build-env@v12
       with:
         platform:        Linux
         cmake-generator: ${{ matrix.cmake_generator }}
 
     - name: Configure CMake
       if:   success()
-      uses: DiligentGraphics/github-action/configure-cmake@v11
+      uses: DiligentGraphics/github-action/configure-cmake@v12
       with:
         cc:         ${{ matrix.cc }}
         cxx:        ${{ matrix.cxx }}
@@ -79,4 +79,4 @@ jobs:
 
     - name: Build
       if: success()
-      uses: DiligentGraphics/github-action/build@v11
+      uses: DiligentGraphics/github-action/build@v12

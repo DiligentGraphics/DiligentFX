@@ -5,7 +5,7 @@ on: [push, pull_request]
 jobs:
   precheks:
     name:    MacOS -> Pre-Checks
-    runs-on: macos-15
+    runs-on: macos-26
 
     steps:
     - name: Clone DiligentCore
@@ -27,7 +27,7 @@ jobs:
 
   build:
     needs:   precheks
-    runs-on: macos-15
+    runs-on: macos-26
 
     strategy:
       matrix:
@@ -44,21 +44,21 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: DiligentGraphics/github-action/checkout@v11
+      uses: DiligentGraphics/github-action/checkout@v12
 
     - name: Set up build environment
       if:   success()
-      uses: DiligentGraphics/github-action/setup-build-env@v11
+      uses: DiligentGraphics/github-action/setup-build-env@v12
       with:
         platform: ${{ matrix.platform }}
 
     - name: Configure CMake
       if:   success()
-      uses: DiligentGraphics/github-action/configure-cmake@v11
+      uses: DiligentGraphics/github-action/configure-cmake@v12
       with:
         build-type: ${{ matrix.build_type }}
         cmake-args: ${{ matrix.cmake_args }}
 
     - name: Build
       if:   success()
-      uses: DiligentGraphics/github-action/build@v11
+      uses: DiligentGraphics/github-action/build@v12
