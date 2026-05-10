@@ -9,13 +9,13 @@ jobs:
 
     steps:
     - name: Clone DiligentCore
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         repository: DiligentGraphics/DiligentCore
         path:       DiligentCore
 
     - name: Clone DiligentFX
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         path: DiligentFX
 
@@ -58,18 +58,18 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: DiligentGraphics/github-action/checkout@v12
+      uses: DiligentGraphics/github-action/checkout@v14
 
     - name: Set up build environment
       if:   success()
-      uses: DiligentGraphics/github-action/setup-build-env@v12
+      uses: DiligentGraphics/github-action/setup-build-env@v14
       with:
         platform:        Linux
         cmake-generator: ${{ matrix.cmake_generator }}
 
     - name: Configure CMake
       if:   success()
-      uses: DiligentGraphics/github-action/configure-cmake@v12
+      uses: DiligentGraphics/github-action/configure-cmake@v14
       with:
         cc:         ${{ matrix.cc }}
         cxx:        ${{ matrix.cxx }}
@@ -79,4 +79,4 @@ jobs:
 
     - name: Build
       if: success()
-      uses: DiligentGraphics/github-action/build@v12
+      uses: DiligentGraphics/github-action/build@v14
