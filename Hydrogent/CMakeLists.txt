@@ -1,6 +1,6 @@
 cmake_minimum_required (VERSION 3.13)
 
-project(Diligent-Hydrogent CXX)
+project(Hydrogent CXX)
 
 include(FetchContent)
 
@@ -112,9 +112,9 @@ set(SHADERS_LIST_FILE ${SHADER_OUTPUT_DIR}/shaders_list.h)
 convert_shaders_to_headers("${SHADERS}" ${SHADER_OUTPUT_DIR} ${SHADERS_LIST_FILE} SHADERS_INC_LIST)
 
 set(HYDROGENT_SOURCE ${SOURCE} ${INCLUDE} ${INTERFACE} ${SHADERS} readme.md)
-add_library(Diligent-Hydrogent STATIC ${HYDROGENT_SOURCE} ${SHADERS_LIST_FILE} ${SHADERS_INC_LIST})
+add_library(Hydrogent STATIC ${HYDROGENT_SOURCE} ${SHADERS_LIST_FILE} ${SHADERS_INC_LIST})
 
-set_common_target_properties(Diligent-Hydrogent)
+set_common_target_properties(Hydrogent)
 
 add_library(USD-Libraries INTERFACE)
 
@@ -149,7 +149,7 @@ if(MSVC)
     target_compile_definitions(USD-Libraries INTERFACE NOMINMAX)
     # Silence compiler warnings and enable RTTI
     target_compile_options(USD-Libraries INTERFACE /wd4244 /wd4305 /wd4127 /wd4267 /wd4003 /GR)
-    target_compile_options(Diligent-Hydrogent PRIVATE /permissive-)
+    target_compile_options(Hydrogent PRIVATE /permissive-)
 else()
     target_compile_definitions(USD-Libraries INTERFACE _LIBCPP_ENABLE_CXX17_REMOVED_UNARY_BINARY_FUNCTION=1)
     target_compile_options(USD-Libraries INTERFACE
@@ -159,7 +159,7 @@ else()
         -Wno-missing-field-initializers)
 
     # Set default visibility or there will be issues with VtType
-    set_target_properties(Diligent-Hydrogent PROPERTIES CXX_VISIBILITY_PRESET default)
+    set_target_properties(Hydrogent PROPERTIES CXX_VISIBILITY_PRESET default)
 endif()
 
 set(USD_LIBS
@@ -212,7 +212,7 @@ endif()
 
 target_link_libraries(USD-Libraries INTERFACE ${USD_LIBS})
 
-target_include_directories(Diligent-Hydrogent
+target_include_directories(Hydrogent
 PUBLIC
     interface
 PRIVATE
@@ -220,7 +220,7 @@ PRIVATE
     ${SHADER_OUTPUT_DIR}
 )
 
-target_link_libraries(Diligent-Hydrogent
+target_link_libraries(Hydrogent
 PRIVATE
     Diligent-BuildSettings 
     NO_WERROR
@@ -235,7 +235,7 @@ PUBLIC
     USD-Libraries
 )
 
-set_target_properties(Diligent-Hydrogent PROPERTIES
+set_target_properties(Hydrogent PROPERTIES
     FOLDER DiligentFX
 )
 
