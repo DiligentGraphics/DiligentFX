@@ -2,7 +2,7 @@ cmake_minimum_required (VERSION 3.10)
 
 project(DiligentFX-IncludeTest)
 
-file(GLOB_RECURSE SOURCE LIST_DIRECTORIES false *.cpp)
+file(GLOB_RECURSE SOURCE LIST_DIRECTORIES false *.cpp *.c)
 
 add_library(DiligentFX-IncludeTest ${SOURCE})
 
