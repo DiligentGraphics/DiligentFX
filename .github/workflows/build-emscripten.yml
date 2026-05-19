@@ -32,21 +32,21 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: DiligentGraphics/github-action/checkout@v14
+      uses: DiligentGraphics/github-action/checkout@v15
 
     - name: Set up build environment
       if:   success()
-      uses: DiligentGraphics/github-action/setup-build-env@v14
+      uses: DiligentGraphics/github-action/setup-build-env@v15
       with:
         platform: Web
 
     - name: Configure CMake
       if:   success()
-      uses: DiligentGraphics/github-action/configure-cmake@v14
+      uses: DiligentGraphics/github-action/configure-cmake@v15
       with:
         build-type: ${{ matrix.build_type }}
         cmake-args: ${{ matrix.cmake_args }}
 
     - name: Build
       if:   success()
-      uses: DiligentGraphics/github-action/build@v14
+      uses: DiligentGraphics/github-action/build@v15

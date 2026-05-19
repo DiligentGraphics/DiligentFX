@@ -35,7 +35,7 @@ jobs:
         toolset:         ["Win32", "x64"]
         build_type:      ["Debug", "Release"]
         cmake_generator: ["Visual Studio 17 2022"]
-        cmake_args:      ["-DDILIGENT_NO_GLSLANG=ON -DDILIGENT_NO_HLSL=ON -DDILIGENT_BUILD_FX_INCLUDE_TEST=ON"]
+        cmake_args:      ["-DDILIGENT_NO_GLSLANG=ON -DDILIGENT_NO_HLSL=ON -DDILIGENT_BUILD_FX_INCLUDE_TEST=ON -DDILIGENT_BUILD_FX_TESTS=ON"]
         platform:        ["Win32"]
 
         include:
@@ -44,21 +44,21 @@ jobs:
             toolset:         "x64"
             build_type:      "RelWithDebInfo"
             cmake_generator: "Visual Studio 17 2022"
-            cmake_args:      "-DDILIGENT_NO_GLSLANG=ON -DDILIGENT_NO_HLSL=ON -DDILIGENT_DEVELOPMENT=ON"
+            cmake_args:      "-DDILIGENT_NO_GLSLANG=ON -DDILIGENT_NO_HLSL=ON -DDILIGENT_DEVELOPMENT=ON -DDILIGENT_BUILD_FX_TESTS=ON"
 
           - name:            "Win10-Ninja"
             platform:        "Win32"
             toolset:         "x64"
             build_type:      "Debug"
             cmake_generator: "Ninja"
-            cmake_args:      "-DDILIGENT_NO_GLSLANG=ON -DDILIGENT_NO_HLSL=ON"
+            cmake_args:      "-DDILIGENT_NO_GLSLANG=ON -DDILIGENT_NO_HLSL=ON -DDILIGENT_BUILD_FX_TESTS=ON"
 
           - name:            "MinGW"
             platform:        "Win32"
             toolset:         "x64"
             build_type:      "Release"
             cmake_generator: "MinGW Makefiles"
-            cmake_args:      "-DDILIGENT_NO_GLSLANG=ON -DDILIGENT_NO_HLSL=ON"
+            cmake_args:      "-DDILIGENT_NO_GLSLANG=ON -DDILIGENT_NO_HLSL=ON -DDILIGENT_BUILD_FX_TESTS=ON -DDILIGENT_BUILD_FX_TESTS=ON"
 
           - name:            "UWP"
             platform:        "UWP"
@@ -78,11 +78,11 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: DiligentGraphics/github-action/checkout@v14
+      uses: DiligentGraphics/github-action/checkout@v15
 
     - name: Set up build environment
       if: success()
-      uses: DiligentGraphics/github-action/setup-build-env@v14
+      uses: DiligentGraphics/github-action/setup-build-env@v15
       with:
         platform:        ${{ matrix.platform }}
         cmake-generator: ${{ matrix.cmake_generator }}
@@ -90,7 +90,7 @@ jobs:
 
     - name: Configure CMake
       if: success()
-      uses: DiligentGraphics/github-action/configure-cmake@v14
+      uses: DiligentGraphics/github-action/configure-cmake@v15
       with:
         generator:  ${{ matrix.cmake_generator }}
         vs-arch:    ${{ matrix.toolset }}
@@ -99,4 +99,8 @@ jobs:
 
     - name: Build
       if: success()
-      uses: DiligentGraphics/github-action/build@v14
+      uses: DiligentGraphics/github-action/build@v15
+
+    - name: RadientTest
+      if:   ${{ success() && matrix.name != 'UWP'}}
+      uses: DiligentGraphics/github-action/run-radient-tests@v15

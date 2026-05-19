@@ -42,7 +42,7 @@ jobs:
         name:       ["GCC", "Clang"]
         build_type: ["Debug", "Release"]
         # Do not build GLSLang and friends to save time as it is built by Core and Engine CI.
-        cmake_args: ["-DDILIGENT_NO_GLSLANG=ON -DDILIGENT_NO_HLSL=ON -DDILIGENT_BUILD_FX_INCLUDE_TEST=ON"]
+        cmake_args: ["-DDILIGENT_NO_GLSLANG=ON -DDILIGENT_NO_HLSL=ON -DDILIGENT_BUILD_FX_INCLUDE_TEST=ON -DDILIGENT_BUILD_FX_TESTS=ON"]
         include:
           - name:            "GCC"
             cmake_generator: "Unix Makefiles"
@@ -58,7 +58,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: DiligentGraphics/github-action/checkout@v14
+      uses: DiligentGraphics/github-action/checkout@v15
 
     - name: Set up build environment
       if:   success()
@@ -80,3 +80,7 @@ jobs:
     - name: Build
       if: success()
       uses: DiligentGraphics/github-action/build@v14
+
+    - name: RadientTest
+      if:   success()
+      uses: DiligentGraphics/github-action/run-radient-tests@v15

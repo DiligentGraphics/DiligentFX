@@ -33,8 +33,23 @@ jobs:
       matrix:
         platform:   ["MacOS", "iOS", "tvOS"]
         build_type: ["Debug", "Release"]
-        # Do not build GLSLang and friends to save time as it is built by Core and Engine CI.
-        cmake_args: ["-DDILIGENT_NO_GLSLANG=ON -DDILIGENT_NO_HLSL=ON -DDILIGENT_BUILD_FX_INCLUDE_TEST=ON"]
+
+        include:
+          - platform:   "MacOS"
+            build_type: "Debug"
+            cmake_args: "-DDILIGENT_NO_GLSLANG=ON -DDILIGENT_NO_HLSL=ON -DDILIGENT_BUILD_FX_INCLUDE_TEST=ON -DDILIGENT_BUILD_FX_TESTS=ON"
+
+          - platform:   "MacOS"
+            build_type: "Release"
+            # For some reason AVX2 causes invalid instruction exception on CI, so disable it
+            cmake_args: "-DDILIGENT_BUILD_TOOLS_TESTS=ON -DDILIGENT_BUILD_FX_TESTS=ON -DDILIGENT_CLANG_RELEASE_COMPILE_OPTIONS=\"\""
+
+          - platform:  "iOS"
+            cmake_args: "-DDILIGENT_NO_GLSLANG=ON -DDILIGENT_NO_HLSL=ON"
+
+          - platform:   "tvOS"
+            cmake_args: "-DDILIGENT_NO_GLSLANG=ON -DDILIGENT_NO_HLSL=ON"
+
         exclude:
           # Exclude tvOS-Release
           - platform:   "tvOS"
@@ -44,21 +59,25 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: DiligentGraphics/github-action/checkout@v14
+      uses: DiligentGraphics/github-action/checkout@v15
 
     - name: Set up build environment
       if:   success()
-      uses: DiligentGraphics/github-action/setup-build-env@v14
+      uses: DiligentGraphics/github-action/setup-build-env@v15
       with:
         platform: ${{ matrix.platform }}
 
     - name: Configure CMake
       if:   success()
-      uses: DiligentGraphics/github-action/configure-cmake@v14
+      uses: DiligentGraphics/github-action/configure-cmake@v15
       with:
         build-type: ${{ matrix.build_type }}
         cmake-args: ${{ matrix.cmake_args }}
 
     - name: Build
       if:   success()
-      uses: DiligentGraphics/github-action/build@v14
+      uses: DiligentGraphics/github-action/build@v15
+
+    - name: RadientTest
+      if:   ${{ success() && matrix.platform == 'MacOS' }}
+      uses: DiligentGraphics/github-action/run-radient-tests@v15
