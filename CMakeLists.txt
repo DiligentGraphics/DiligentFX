@@ -13,6 +13,18 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 project(DiligentFX CXX)
 
+include(FetchContent)
+
+message("Fetching entt repository...")
+FetchContent_Declare(
+    entt
+    GIT_REPOSITORY https://github.com/skypjack/entt
+    GIT_TAG        v3.16.0
+)
+FetchContent_MakeAvailable(entt)
+set_directory_root_folder(${entt_SOURCE_DIR} "DiligentFX/ThirdParty/entt")
+
+
 file(GLOB_RECURSE SHADERS LIST_DIRECTORIES false Shaders/*.*)
 
 add_library(DiligentFX STATIC README.md ${SHADERS})

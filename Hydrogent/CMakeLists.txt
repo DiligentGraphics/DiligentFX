@@ -2,17 +2,6 @@ cmake_minimum_required (VERSION 3.13)
 
 project(Hydrogent CXX)
 
-include(FetchContent)
-
-message("Fetching entt repository...")
-FetchContent_Declare(
-    entt
-    GIT_REPOSITORY https://github.com/skypjack/entt
-    GIT_TAG        v3.13.1
-)
-FetchContent_MakeAvailable(entt)
-set_directory_root_folder(${entt_SOURCE_DIR} "DiligentFX/ThirdParty/entt")
-
 set(SOURCE
     src/HnMaterial.cpp
     src/HnMaterialNetwork.cpp
