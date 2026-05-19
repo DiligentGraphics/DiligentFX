@@ -63,6 +63,7 @@ add_subdirectory(Utilities)
 add_subdirectory(Components)
 add_subdirectory(PostProcess)
 add_subdirectory(PBR)
+add_subdirectory(Radient)
 
 if(DILIGENT_USD_PATH)
     add_subdirectory(Hydrogent)
@@ -130,6 +131,9 @@ if(DILIGENT_INSTALL_FX)
     )
     install(DIRECTORY    PBR/interface
             DESTINATION  "${CMAKE_INSTALL_INCLUDEDIR}/${DILIGENT_FX_DIR}/PBR"
+    )
+    install(DIRECTORY    Radient/interface
+            DESTINATION  "${CMAKE_INSTALL_INCLUDEDIR}/${DILIGENT_FX_DIR}/Radient"
     )
     install(DIRECTORY    Shaders
             DESTINATION  "."
