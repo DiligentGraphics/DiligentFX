@@ -11,6 +11,11 @@ file(GLOB_RECURSE SOURCE  src/*.*)
 add_executable(RadientTest ${SOURCE})
 set_common_target_properties(RadientTest)
 
+target_include_directories(RadientTest
+PRIVATE
+    ../../Radient/include
+)
+
 if (PLATFORM_WEB)  
     set(RESOURCE_PATH "${PROJECT_SOURCE_DIR}/assets/")
     set(HTML_TEMPLATE_FILE ${PROJECT_SOURCE_DIR}/resources/emscripten_template.html)      

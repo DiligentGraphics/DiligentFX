@@ -1,0 +1,104 @@
+/*
+ *  Copyright 2026 Diligent Graphics LLC
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ *  In no event and under no legal theory, whether in tort (including negligence),
+ *  contract, or otherwise, unless required by applicable law (such as deliberate
+ *  and grossly negligent acts) or agreed to in writing, shall any Contributor be
+ *  liable for any damages, including any direct, indirect, special, incidental,
+ *  or consequential damages of any character arising as a result of this License or
+ *  out of the use or inability to use the software (including but not limited to damages
+ *  for loss of goodwill, work stoppage, computer failure or malfunction, or any and
+ *  all other commercial damages or losses), even if such Contributor has been advised
+ *  of the possibility of such damages.
+ */
+
+#pragma once
+
+#include "RadientMath.h"
+#include "BasicMath.hpp"
+
+namespace Diligent
+{
+
+namespace RadientMath
+{
+
+inline constexpr float2 ToFloat2(const RadientFloat2& Value)
+{
+    return float2{Value.x, Value.y};
+}
+
+inline constexpr float3 ToFloat3(const RadientFloat3& Value)
+{
+    return float3{Value.x, Value.y, Value.z};
+}
+
+inline constexpr float4 ToFloat4(const RadientFloat4& Value)
+{
+    return float4{Value.x, Value.y, Value.z, Value.w};
+}
+
+inline QuaternionF ToQuaternion(const RadientQuaternion& Value)
+{
+    return (Value.x != 0.f || Value.y != 0.f || Value.z != 0.f || Value.w != 0.f) ?
+        normalize(QuaternionF{Value.x, Value.y, Value.z, Value.w}) :
+        QuaternionF{};
+}
+
+inline float4x4 ToFloat4x4(const RadientMatrix4x4& Matrix)
+{
+    return float4x4::MakeMatrix(Matrix.Data);
+}
+
+inline RadientMatrix4x4 ToRadientMatrix(const float4x4& Matrix)
+{
+    return RadientMatrix4x4{Matrix.Data()};
+}
+
+inline RadientMatrix4x4 TransformToMatrix(const RadientTransform& Transform)
+{
+    const float3      S = ToFloat3(Transform.Scale);
+    const float3      T = ToFloat3(Transform.Position);
+    const QuaternionF Q = ToQuaternion(Transform.Rotation);
+
+    float4x4 R = Q.ToMatrix();
+
+    // S * R * T for row-vector convention:
+    R._11 *= S.x;
+    R._12 *= S.x;
+    R._13 *= S.x;
+    R._21 *= S.y;
+    R._22 *= S.y;
+    R._23 *= S.y;
+    R._31 *= S.z;
+    R._32 *= S.z;
+    R._33 *= S.z;
+
+    R._41 = T.x;
+    R._42 = T.y;
+    R._43 = T.z;
+    R._44 = 1.f;
+
+    return ToRadientMatrix(R);
+}
+
+inline RadientMatrix4x4 MultiplyMatrices(const RadientMatrix4x4& A, const RadientMatrix4x4& B)
+{
+    return ToRadientMatrix(ToFloat4x4(A) * ToFloat4x4(B));
+}
+
+} // namespace RadientMath
+
+} // namespace Diligent

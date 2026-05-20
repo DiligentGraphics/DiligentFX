@@ -31,6 +31,10 @@
 
 #include "../../../DiligentCore/Primitives/interface/BasicTypes.h"
 
+#if DILIGENT_CPP_INTERFACE
+#    include <cstring>
+#endif
+
 DILIGENT_BEGIN_NAMESPACE(Diligent)
 
 /// Two-component floating-point vector.
@@ -84,7 +88,7 @@ struct RadientTransform
 typedef struct RadientTransform RadientTransform;
 
 
-/// Column-major 4x4 matrix.
+/// Diligent-style row-major 4x4 matrix.
 struct RadientMatrix4x4
 {
     Float32 Data[16] DEFAULT_INITIALIZER(
@@ -92,6 +96,38 @@ struct RadientMatrix4x4
          0.f, 1.f, 0.f, 0.f,
          0.f, 0.f, 1.f, 0.f,
          0.f, 0.f, 0.f, 1.f});
+
+#if DILIGENT_CPP_INTERFACE
+    constexpr RadientMatrix4x4() noexcept = default;
+
+    // clang-format off
+    constexpr RadientMatrix4x4(float m00, float m01, float m02, float m03,
+                               float m10, float m11, float m12, float m13,
+                               float m20, float m21, float m22, float m23,
+                               float m30, float m31, float m32, float m33) noexcept :
+        // clang-format on
+        Data{m00, m01, m02, m03,
+             m10, m11, m12, m13,
+             m20, m21, m22, m23,
+             m30, m31, m32, m33}
+    {
+    }
+
+    explicit RadientMatrix4x4(const Float32* InData) noexcept
+    {
+        std::memcpy(Data, InData, sizeof(Data));
+    }
+
+    bool operator==(const RadientMatrix4x4& Rhs) const
+    {
+        return std::memcmp(Data, Rhs.Data, sizeof(Data)) == 0;
+    }
+
+    bool operator!=(const RadientMatrix4x4& Rhs) const
+    {
+        return !(*this == Rhs);
+    }
+#endif
 };
 typedef struct RadientMatrix4x4 RadientMatrix4x4;
 

@@ -8,6 +8,7 @@ set(SOURCE
 )
 
 set(INCLUDE
+    include/RadientMath.hpp
     include/RadientSceneImpl.hpp
     include/RadientSceneWriterImpl.hpp
 )
