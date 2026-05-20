@@ -47,31 +47,14 @@ public:
 
     virtual const RadientSceneDesc& DILIGENT_CALL_TYPE GetDesc() const override final;
 
-    virtual RadientEntityID DILIGENT_CALL_TYPE CreateEntity(const RadientEntityDesc& Desc) override final;
-
-    virtual void DILIGENT_CALL_TYPE DestroyEntity(RadientEntityID Entity) override final;
-
     virtual Bool DILIGENT_CALL_TYPE IsEntityAlive(RadientEntityID Entity) const override final;
-
-    virtual void DILIGENT_CALL_TYPE SetEntityFlags(RadientEntityID      Entity,
-                                                   RADIENT_ENTITY_FLAGS Flags) override final;
 
     virtual Bool DILIGENT_CALL_TYPE GetEntityFlags(RadientEntityID       Entity,
                                                    RADIENT_ENTITY_FLAGS& Flags) const override final;
 
-    virtual void DILIGENT_CALL_TYPE SetEntityVisible(RadientEntityID Entity,
-                                                     Bool            Visible) override final;
-
     virtual Bool DILIGENT_CALL_TYPE IsEntityVisible(RadientEntityID Entity) const override final;
 
-    virtual void DILIGENT_CALL_TYPE SetParent(RadientEntityID Entity,
-                                              RadientEntityID Parent,
-                                              Bool            KeepWorldTransform) override final;
-
     virtual RadientEntityID DILIGENT_CALL_TYPE GetParent(RadientEntityID Entity) const override final;
-
-    virtual void DILIGENT_CALL_TYPE SetLocalTransform(RadientEntityID         Entity,
-                                                      const RadientTransform& Transform) override final;
 
     virtual Bool DILIGENT_CALL_TYPE GetLocalTransform(RadientEntityID   Entity,
                                                       RadientTransform& Transform) const override final;
@@ -79,32 +62,11 @@ public:
     virtual Bool DILIGENT_CALL_TYPE GetWorldMatrix(RadientEntityID   Entity,
                                                    RadientMatrix4x4& Matrix) const override final;
 
-    virtual void DILIGENT_CALL_TYPE SetCamera(RadientEntityID               Entity,
-                                              const RadientCameraComponent& Camera) override final;
-
-    virtual void DILIGENT_CALL_TYPE SetMesh(RadientEntityID             Entity,
-                                            const RadientMeshComponent& Mesh) override final;
-
-    virtual void DILIGENT_CALL_TYPE SetMeshRenderer(RadientEntityID                     Entity,
-                                                    const RadientMeshRendererComponent& Renderer) override final;
-
-    virtual void DILIGENT_CALL_TYPE SetLight(RadientEntityID              Entity,
-                                             const RadientLightComponent& Light) override final;
-
-    virtual void DILIGENT_CALL_TYPE SetCustomComponentData(RadientEntityID                   Entity,
-                                                           const RadientCustomComponentData& Component) override final;
-
-    virtual void DILIGENT_CALL_TYPE RemoveComponent(RadientEntityID        Entity,
-                                                    RADIENT_COMPONENT_TYPE Type,
-                                                    RadientComponentTypeID CustomType) override final;
-
     virtual Bool DILIGENT_CALL_TYPE HasComponent(RadientEntityID        Entity,
                                                  RADIENT_COMPONENT_TYPE Type,
                                                  RadientComponentTypeID CustomType) const override final;
 
     virtual RadientRevision DILIGENT_CALL_TYPE GetRevision() const override final;
-
-    virtual void DILIGENT_CALL_TYPE CommitChanges() override final;
 
 private:
     RadientSceneDesc m_Desc;

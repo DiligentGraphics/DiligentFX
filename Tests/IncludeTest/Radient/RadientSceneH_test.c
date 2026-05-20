@@ -36,8 +36,8 @@ void RadientScene_C_UseCameraComponent(void)
     Camera.HorizontalApertureOffset = 0.f;
     Camera.VerticalApertureOffset   = 0.f;
     Camera.FocalLength              = 5.f;
-    Camera.ClippingRange.x          = 1.f;
-    Camera.ClippingRange.y          = 1000000.f;
+    Camera.ClippingRange.x          = 0.1f;
+    Camera.ClippingRange.y          = 1000.f;
     Camera.FStop                    = 0.f;
     Camera.FocusDistance            = 0.f;
 
@@ -84,37 +84,19 @@ void RadientScene_C_UseCustomComponentData(void)
 
 void RadientScene_C_TestMacros(IRadientScene* pScene)
 {
-    RadientEntityID              Entity          = 0;
-    RadientEntityDesc            EntityDesc      = {0};
-    RADIENT_ENTITY_FLAGS         EntityFlags     = 0;
-    RadientTransform             Transform       = {0};
-    RadientMatrix4x4             WorldMatrix     = {0};
-    RadientCameraComponent       Camera          = {0};
-    RadientMeshComponent         Mesh            = {0};
-    RadientMeshRendererComponent MeshRenderer    = {0};
-    RadientLightComponent        Light           = {0};
-    RadientCustomComponentData   CustomComponent = {0};
+    RadientEntityID            Entity          = 0;
+    RADIENT_ENTITY_FLAGS       EntityFlags     = 0;
+    RadientTransform           Transform       = {0};
+    RadientMatrix4x4           WorldMatrix     = {0};
+    RadientCustomComponentData CustomComponent = {0};
 
     IRadientScene_GetDesc(pScene);
-    Entity = IRadientScene_CreateEntity(pScene, &EntityDesc);
-    IRadientScene_DestroyEntity(pScene, Entity);
     IRadientScene_IsEntityAlive(pScene, Entity);
-    IRadientScene_SetEntityFlags(pScene, Entity, EntityFlags);
     IRadientScene_GetEntityFlags(pScene, Entity, &EntityFlags);
-    IRadientScene_SetEntityVisible(pScene, Entity, True);
     IRadientScene_IsEntityVisible(pScene, Entity);
-    IRadientScene_SetParent(pScene, Entity, InvalidRadientEntityID, True);
     IRadientScene_GetParent(pScene, Entity);
-    IRadientScene_SetLocalTransform(pScene, Entity, &Transform);
     IRadientScene_GetLocalTransform(pScene, Entity, &Transform);
     IRadientScene_GetWorldMatrix(pScene, Entity, &WorldMatrix);
-    IRadientScene_SetCamera(pScene, Entity, &Camera);
-    IRadientScene_SetMesh(pScene, Entity, &Mesh);
-    IRadientScene_SetMeshRenderer(pScene, Entity, &MeshRenderer);
-    IRadientScene_SetLight(pScene, Entity, &Light);
-    IRadientScene_SetCustomComponentData(pScene, Entity, &CustomComponent);
-    IRadientScene_RemoveComponent(pScene, Entity, RADIENT_COMPONENT_TYPE_CUSTOM, CustomComponent.CustomType);
     IRadientScene_HasComponent(pScene, Entity, RADIENT_COMPONENT_TYPE_CUSTOM, CustomComponent.CustomType);
     IRadientScene_GetRevision(pScene);
-    IRadientScene_CommitChanges(pScene);
 }

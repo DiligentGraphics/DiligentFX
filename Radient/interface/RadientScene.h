@@ -12,6 +12,16 @@
  *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
+ *
+ *  In no event and under no legal theory, whether in tort (including negligence),
+ *  contract, or otherwise, unless required by applicable law (such as deliberate
+ *  and grossly negligent acts) or agreed to in writing, shall any Contributor be
+ *  liable for any damages, including any direct, indirect, special, incidental,
+ *  or consequential damages of any character arising as a result of this License or
+ *  out of the use or inability to use the software (including but not limited to damages
+ *  for loss of goodwill, work stoppage, computer failure or malfunction, or any and
+ *  all other commercial damages or losses), even if such Contributor has been advised
+ *  of the possibility of such damages.
  */
 
 #pragma once
@@ -238,51 +248,22 @@ DILIGENT_BEGIN_INTERFACE(IRadientScene, IObject)
     /// Returns the scene description.
     VIRTUAL const RadientSceneDesc REF METHOD(GetDesc)(THIS) CONST PURE;
 
-    /// Creates an entity.
-    VIRTUAL RadientEntityID METHOD(CreateEntity)(THIS_
-                                                 const RadientEntityDesc REF Desc) PURE;
-
-    /// Destroys an entity and its owned components.
-    VIRTUAL void METHOD(DestroyEntity)(THIS_
-                                       RadientEntityID Entity) PURE;
-
     /// Checks if the entity is alive.
     VIRTUAL Bool METHOD(IsEntityAlive)(THIS_
                                        RadientEntityID Entity) CONST PURE;
-
-    /// Sets entity flags.
-    VIRTUAL void METHOD(SetEntityFlags)(THIS_
-                                        RadientEntityID      Entity,
-                                        RADIENT_ENTITY_FLAGS Flags) PURE;
 
     /// Gets entity flags.
     VIRTUAL Bool METHOD(GetEntityFlags)(THIS_
                                         RadientEntityID          Entity,
                                         RADIENT_ENTITY_FLAGS REF Flags) CONST PURE;
 
-    /// Sets entity visibility.
-    VIRTUAL void METHOD(SetEntityVisible)(THIS_
-                                          RadientEntityID Entity,
-                                          Bool            Visible) PURE;
-
     /// Returns true if the entity is visible.
     VIRTUAL Bool METHOD(IsEntityVisible)(THIS_
                                          RadientEntityID Entity) CONST PURE;
 
-    /// Sets the entity parent.
-    VIRTUAL void METHOD(SetParent)(THIS_
-                                   RadientEntityID Entity,
-                                   RadientEntityID Parent,
-                                   Bool            KeepWorldTransform DEFAULT_VALUE(True)) PURE;
-
     /// Returns the entity parent, or InvalidRadientEntityID.
     VIRTUAL RadientEntityID METHOD(GetParent)(THIS_
                                               RadientEntityID Entity) CONST PURE;
-
-    /// Sets local transform.
-    VIRTUAL void METHOD(SetLocalTransform)(THIS_
-                                           RadientEntityID            Entity,
-                                           const RadientTransform REF Transform) PURE;
 
     /// Gets local transform.
     VIRTUAL Bool METHOD(GetLocalTransform)(THIS_
@@ -294,37 +275,6 @@ DILIGENT_BEGIN_INTERFACE(IRadientScene, IObject)
                                         RadientEntityID      Entity,
                                         RadientMatrix4x4 REF Matrix) CONST PURE;
 
-    /// Adds or updates a camera component.
-    VIRTUAL void METHOD(SetCamera)(THIS_
-                                   RadientEntityID                  Entity,
-                                   const RadientCameraComponent REF Camera) PURE;
-
-    /// Adds or updates a mesh component.
-    VIRTUAL void METHOD(SetMesh)(THIS_
-                                 RadientEntityID                Entity,
-                                 const RadientMeshComponent REF Mesh) PURE;
-
-    /// Adds or updates a mesh renderer component.
-    VIRTUAL void METHOD(SetMeshRenderer)(THIS_
-                                         RadientEntityID                        Entity,
-                                         const RadientMeshRendererComponent REF Renderer) PURE;
-
-    /// Adds or updates a light component.
-    VIRTUAL void METHOD(SetLight)(THIS_
-                                  RadientEntityID                 Entity,
-                                  const RadientLightComponent REF Light) PURE;
-
-    /// Adds or updates a custom serialized component.
-    VIRTUAL void METHOD(SetCustomComponentData)(THIS_
-                                                RadientEntityID                       Entity,
-                                                const RadientCustomComponentData REF Component) PURE;
-
-    /// Removes a component from the entity.
-    VIRTUAL void METHOD(RemoveComponent)(THIS_
-                                         RadientEntityID        Entity,
-                                         RADIENT_COMPONENT_TYPE Type,
-                                         RadientComponentTypeID CustomType DEFAULT_VALUE(InvalidRadientComponentTypeID)) PURE;
-
     /// Returns true when the entity has the requested component.
     VIRTUAL Bool METHOD(HasComponent)(THIS_
                                       RadientEntityID        Entity,
@@ -333,9 +283,6 @@ DILIGENT_BEGIN_INTERFACE(IRadientScene, IObject)
 
     /// Returns current scene revision.
     VIRTUAL RadientRevision METHOD(GetRevision)(THIS) CONST PURE;
-
-    /// Commits pending scene changes to the active backend.
-    VIRTUAL void METHOD(CommitChanges)(THIS) PURE;
 };
 DILIGENT_END_INTERFACE
 
@@ -343,28 +290,15 @@ DILIGENT_END_INTERFACE
 
 #if DILIGENT_C_INTERFACE
 
-#    define IRadientScene_GetDesc(This)                    CALL_IFACE_METHOD(RadientScene, GetDesc,           This)
-#    define IRadientScene_CreateEntity(This, ...)           CALL_IFACE_METHOD(RadientScene, CreateEntity,      This, __VA_ARGS__)
-#    define IRadientScene_DestroyEntity(This, ...)          CALL_IFACE_METHOD(RadientScene, DestroyEntity,     This, __VA_ARGS__)
-#    define IRadientScene_IsEntityAlive(This, ...)          CALL_IFACE_METHOD(RadientScene, IsEntityAlive,     This, __VA_ARGS__)
-#    define IRadientScene_SetEntityFlags(This, ...)         CALL_IFACE_METHOD(RadientScene, SetEntityFlags,    This, __VA_ARGS__)
-#    define IRadientScene_GetEntityFlags(This, ...)         CALL_IFACE_METHOD(RadientScene, GetEntityFlags,    This, __VA_ARGS__)
-#    define IRadientScene_SetEntityVisible(This, ...)       CALL_IFACE_METHOD(RadientScene, SetEntityVisible,  This, __VA_ARGS__)
-#    define IRadientScene_IsEntityVisible(This, ...)        CALL_IFACE_METHOD(RadientScene, IsEntityVisible,   This, __VA_ARGS__)
-#    define IRadientScene_SetParent(This, ...)              CALL_IFACE_METHOD(RadientScene, SetParent,         This, __VA_ARGS__)
-#    define IRadientScene_GetParent(This, ...)              CALL_IFACE_METHOD(RadientScene, GetParent,         This, __VA_ARGS__)
-#    define IRadientScene_SetLocalTransform(This, ...)      CALL_IFACE_METHOD(RadientScene, SetLocalTransform, This, __VA_ARGS__)
-#    define IRadientScene_GetLocalTransform(This, ...)      CALL_IFACE_METHOD(RadientScene, GetLocalTransform, This, __VA_ARGS__)
-#    define IRadientScene_GetWorldMatrix(This, ...)         CALL_IFACE_METHOD(RadientScene, GetWorldMatrix,    This, __VA_ARGS__)
-#    define IRadientScene_SetCamera(This, ...)              CALL_IFACE_METHOD(RadientScene, SetCamera,         This, __VA_ARGS__)
-#    define IRadientScene_SetMesh(This, ...)                CALL_IFACE_METHOD(RadientScene, SetMesh,           This, __VA_ARGS__)
-#    define IRadientScene_SetMeshRenderer(This, ...)        CALL_IFACE_METHOD(RadientScene, SetMeshRenderer,   This, __VA_ARGS__)
-#    define IRadientScene_SetLight(This, ...)               CALL_IFACE_METHOD(RadientScene, SetLight,          This, __VA_ARGS__)
-#    define IRadientScene_SetCustomComponentData(This, ...) CALL_IFACE_METHOD(RadientScene, SetCustomComponentData,  This, __VA_ARGS__)
-#    define IRadientScene_RemoveComponent(This, ...)        CALL_IFACE_METHOD(RadientScene, RemoveComponent,   This, __VA_ARGS__)
-#    define IRadientScene_HasComponent(This, ...)           CALL_IFACE_METHOD(RadientScene, HasComponent,      This, __VA_ARGS__)
-#    define IRadientScene_GetRevision(This)                 CALL_IFACE_METHOD(RadientScene, GetRevision,       This)
-#    define IRadientScene_CommitChanges(This)               CALL_IFACE_METHOD(RadientScene, CommitChanges,     This)
+#    define IRadientScene_GetDesc(This)               CALL_IFACE_METHOD(RadientScene, GetDesc,           This)
+#    define IRadientScene_IsEntityAlive(This, ...)     CALL_IFACE_METHOD(RadientScene, IsEntityAlive,     This, __VA_ARGS__)
+#    define IRadientScene_GetEntityFlags(This, ...)    CALL_IFACE_METHOD(RadientScene, GetEntityFlags,    This, __VA_ARGS__)
+#    define IRadientScene_IsEntityVisible(This, ...)   CALL_IFACE_METHOD(RadientScene, IsEntityVisible,   This, __VA_ARGS__)
+#    define IRadientScene_GetParent(This, ...)         CALL_IFACE_METHOD(RadientScene, GetParent,         This, __VA_ARGS__)
+#    define IRadientScene_GetLocalTransform(This, ...) CALL_IFACE_METHOD(RadientScene, GetLocalTransform, This, __VA_ARGS__)
+#    define IRadientScene_GetWorldMatrix(This, ...)    CALL_IFACE_METHOD(RadientScene, GetWorldMatrix,    This, __VA_ARGS__)
+#    define IRadientScene_HasComponent(This, ...)      CALL_IFACE_METHOD(RadientScene, HasComponent,      This, __VA_ARGS__)
+#    define IRadientScene_GetRevision(This)            CALL_IFACE_METHOD(RadientScene, GetRevision,       This)
 
 #endif
 

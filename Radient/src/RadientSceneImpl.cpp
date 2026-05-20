@@ -47,27 +47,10 @@ const RadientSceneDesc& RadientSceneImpl::GetDesc() const
     return m_Desc;
 }
 
-RadientEntityID RadientSceneImpl::CreateEntity(const RadientEntityDesc& Desc)
-{
-    (void)Desc;
-    return InvalidRadientEntityID;
-}
-
-void RadientSceneImpl::DestroyEntity(RadientEntityID Entity)
-{
-    (void)Entity;
-}
-
 Bool RadientSceneImpl::IsEntityAlive(RadientEntityID Entity) const
 {
     (void)Entity;
     return False;
-}
-
-void RadientSceneImpl::SetEntityFlags(RadientEntityID Entity, RADIENT_ENTITY_FLAGS Flags)
-{
-    (void)Entity;
-    (void)Flags;
 }
 
 Bool RadientSceneImpl::GetEntityFlags(RadientEntityID Entity, RADIENT_ENTITY_FLAGS& Flags) const
@@ -77,35 +60,16 @@ Bool RadientSceneImpl::GetEntityFlags(RadientEntityID Entity, RADIENT_ENTITY_FLA
     return False;
 }
 
-void RadientSceneImpl::SetEntityVisible(RadientEntityID Entity, Bool Visible)
-{
-    (void)Entity;
-    (void)Visible;
-}
-
 Bool RadientSceneImpl::IsEntityVisible(RadientEntityID Entity) const
 {
     (void)Entity;
     return False;
 }
 
-void RadientSceneImpl::SetParent(RadientEntityID Entity, RadientEntityID Parent, Bool KeepWorldTransform)
-{
-    (void)Entity;
-    (void)Parent;
-    (void)KeepWorldTransform;
-}
-
 RadientEntityID RadientSceneImpl::GetParent(RadientEntityID Entity) const
 {
     (void)Entity;
     return InvalidRadientEntityID;
-}
-
-void RadientSceneImpl::SetLocalTransform(RadientEntityID Entity, const RadientTransform& Transform)
-{
-    (void)Entity;
-    (void)Transform;
 }
 
 Bool RadientSceneImpl::GetLocalTransform(RadientEntityID Entity, RadientTransform& Transform) const
@@ -122,43 +86,6 @@ Bool RadientSceneImpl::GetWorldMatrix(RadientEntityID Entity, RadientMatrix4x4& 
     return False;
 }
 
-void RadientSceneImpl::SetCamera(RadientEntityID Entity, const RadientCameraComponent& Camera)
-{
-    (void)Entity;
-    (void)Camera;
-}
-
-void RadientSceneImpl::SetMesh(RadientEntityID Entity, const RadientMeshComponent& Mesh)
-{
-    (void)Entity;
-    (void)Mesh;
-}
-
-void RadientSceneImpl::SetMeshRenderer(RadientEntityID Entity, const RadientMeshRendererComponent& Renderer)
-{
-    (void)Entity;
-    (void)Renderer;
-}
-
-void RadientSceneImpl::SetLight(RadientEntityID Entity, const RadientLightComponent& Light)
-{
-    (void)Entity;
-    (void)Light;
-}
-
-void RadientSceneImpl::SetCustomComponentData(RadientEntityID Entity, const RadientCustomComponentData& Component)
-{
-    (void)Entity;
-    (void)Component;
-}
-
-void RadientSceneImpl::RemoveComponent(RadientEntityID Entity, RADIENT_COMPONENT_TYPE Type, RadientComponentTypeID CustomType)
-{
-    (void)Entity;
-    (void)Type;
-    (void)CustomType;
-}
-
 Bool RadientSceneImpl::HasComponent(RadientEntityID Entity, RADIENT_COMPONENT_TYPE Type, RadientComponentTypeID CustomType) const
 {
     (void)Entity;
@@ -170,10 +97,6 @@ Bool RadientSceneImpl::HasComponent(RadientEntityID Entity, RADIENT_COMPONENT_TY
 RadientRevision RadientSceneImpl::GetRevision() const
 {
     return 0;
-}
-
-void RadientSceneImpl::CommitChanges()
-{
 }
 
 } // namespace Diligent

@@ -4,15 +4,18 @@ project(Radient CXX)
 
 set(SOURCE
     src/RadientSceneImpl.cpp
+    src/RadientSceneWriterImpl.cpp
 )
 
 set(INCLUDE
     include/RadientSceneImpl.hpp
+    include/RadientSceneWriterImpl.hpp
 )
 
 set(INTERFACE
     interface/RadientMath.h
     interface/RadientScene.h
+    interface/RadientSceneWriter.h
     interface/RadientTypes.h
 )
 
