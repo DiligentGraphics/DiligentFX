@@ -85,7 +85,9 @@ void RadientScene_C_UseCustomComponentData(void)
 void RadientScene_C_TestMacros(IRadientScene* pScene)
 {
     RadientEntityID            Entity          = 0;
+    RadientEntityID            Children[1]     = {0};
     RADIENT_ENTITY_FLAGS       EntityFlags     = 0;
+    Uint32                     ChildCount      = 1;
     RadientTransform           Transform       = {0};
     RadientMatrix4x4           WorldMatrix     = {0};
     RadientCustomComponentData CustomComponent = {0};
@@ -95,6 +97,8 @@ void RadientScene_C_TestMacros(IRadientScene* pScene)
     IRadientScene_GetEntityFlags(pScene, Entity, &EntityFlags);
     IRadientScene_IsEntityVisible(pScene, Entity);
     IRadientScene_GetParent(pScene, Entity);
+    IRadientScene_GetChildCount(pScene, Entity);
+    IRadientScene_GetChildren(pScene, Entity, 0, ChildCount, Children);
     IRadientScene_GetLocalTransform(pScene, Entity, &Transform);
     IRadientScene_GetWorldMatrix(pScene, Entity, &WorldMatrix);
     IRadientScene_HasComponent(pScene, Entity, RADIENT_COMPONENT_TYPE_CUSTOM, CustomComponent.CustomType);

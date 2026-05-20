@@ -72,6 +72,21 @@ RadientEntityID RadientSceneImpl::GetParent(RadientEntityID Entity) const
     return InvalidRadientEntityID;
 }
 
+Uint32 RadientSceneImpl::GetChildCount(RadientEntityID Entity) const
+{
+    (void)Entity;
+    return 0;
+}
+
+Uint32 RadientSceneImpl::GetChildren(RadientEntityID Entity, Uint32 StartChild, Uint32 ChildCount, RadientEntityID* pChildren) const
+{
+    (void)Entity;
+    (void)StartChild;
+    (void)ChildCount;
+    (void)pChildren;
+    return 0;
+}
+
 Bool RadientSceneImpl::GetLocalTransform(RadientEntityID Entity, RadientTransform& Transform) const
 {
     (void)Entity;

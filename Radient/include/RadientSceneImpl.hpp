@@ -56,6 +56,13 @@ public:
 
     virtual RadientEntityID DILIGENT_CALL_TYPE GetParent(RadientEntityID Entity) const override final;
 
+    virtual Uint32 DILIGENT_CALL_TYPE GetChildCount(RadientEntityID Entity) const override final;
+
+    virtual Uint32 DILIGENT_CALL_TYPE GetChildren(RadientEntityID  Entity,
+                                                  Uint32           StartChild,
+                                                  Uint32           ChildCount,
+                                                  RadientEntityID* pChildren) const override final;
+
     virtual Bool DILIGENT_CALL_TYPE GetLocalTransform(RadientEntityID   Entity,
                                                       RadientTransform& Transform) const override final;
 

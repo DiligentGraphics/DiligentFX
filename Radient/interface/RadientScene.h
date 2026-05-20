@@ -265,6 +265,17 @@ DILIGENT_BEGIN_INTERFACE(IRadientScene, IObject)
     VIRTUAL RadientEntityID METHOD(GetParent)(THIS_
                                               RadientEntityID Entity) CONST PURE;
 
+    /// Returns the number of child entities.
+    VIRTUAL Uint32 METHOD(GetChildCount)(THIS_
+                                         RadientEntityID Entity) CONST PURE;
+
+    /// Gets child entities starting from StartChild. Returns the number of entities written to pChildren.
+    VIRTUAL Uint32 METHOD(GetChildren)(THIS_
+                                       RadientEntityID  Entity,
+                                       Uint32           StartChild,
+                                       Uint32           ChildCount,
+                                       RadientEntityID* pChildren) CONST PURE;
+
     /// Gets local transform.
     VIRTUAL Bool METHOD(GetLocalTransform)(THIS_
                                            RadientEntityID      Entity,
@@ -295,6 +306,8 @@ DILIGENT_END_INTERFACE
 #    define IRadientScene_GetEntityFlags(This, ...)    CALL_IFACE_METHOD(RadientScene, GetEntityFlags,    This, __VA_ARGS__)
 #    define IRadientScene_IsEntityVisible(This, ...)   CALL_IFACE_METHOD(RadientScene, IsEntityVisible,   This, __VA_ARGS__)
 #    define IRadientScene_GetParent(This, ...)         CALL_IFACE_METHOD(RadientScene, GetParent,         This, __VA_ARGS__)
+#    define IRadientScene_GetChildCount(This, ...)     CALL_IFACE_METHOD(RadientScene, GetChildCount,     This, __VA_ARGS__)
+#    define IRadientScene_GetChildren(This, ...)       CALL_IFACE_METHOD(RadientScene, GetChildren,       This, __VA_ARGS__)
 #    define IRadientScene_GetLocalTransform(This, ...) CALL_IFACE_METHOD(RadientScene, GetLocalTransform, This, __VA_ARGS__)
 #    define IRadientScene_GetWorldMatrix(This, ...)    CALL_IFACE_METHOD(RadientScene, GetWorldMatrix,    This, __VA_ARGS__)
 #    define IRadientScene_HasComponent(This, ...)      CALL_IFACE_METHOD(RadientScene, HasComponent,      This, __VA_ARGS__)
