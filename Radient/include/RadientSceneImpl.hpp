@@ -70,8 +70,7 @@ public:
                                                    RadientMatrix4x4& Matrix) const override final;
 
     virtual Bool DILIGENT_CALL_TYPE HasComponent(RadientEntityID        Entity,
-                                                 RADIENT_COMPONENT_TYPE Type,
-                                                 RadientComponentTypeID CustomType) const override final;
+                                                 RadientComponentTypeID ComponentType) const override final;
 
     virtual RadientRevision DILIGENT_CALL_TYPE GetRevision() const override final;
 

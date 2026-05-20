@@ -35,30 +35,13 @@
 
 DILIGENT_BEGIN_NAMESPACE(Diligent)
 
-// clang-format off
-
-/// Built-in Radient component classes.
-DILIGENT_TYPED_ENUM(RADIENT_COMPONENT_TYPE, Uint8)
-{
-    RADIENT_COMPONENT_TYPE_UNKNOWN = 0,
-    RADIENT_COMPONENT_TYPE_TRANSFORM,
-    RADIENT_COMPONENT_TYPE_CAMERA,
-    RADIENT_COMPONENT_TYPE_MESH,
-    RADIENT_COMPONENT_TYPE_MESH_RENDERER,
-    RADIENT_COMPONENT_TYPE_LIGHT,
-    RADIENT_COMPONENT_TYPE_CUSTOM
-};
-
-// clang-format on
-
-
 /// Stable handle used by Radient objects and remote protocol objects.
 typedef Uint64 RadientHandle;
 
 /// Stable entity identifier.
 typedef Uint64 RadientEntityID;
 
-/// Stable component type identifier for custom ECS components.
+/// Stable component type identifier for ECS components.
 typedef Uint64 RadientComponentTypeID;
 
 /// Monotonic scene or object revision.
@@ -71,6 +54,13 @@ static DILIGENT_CONSTEXPR RadientHandle          InvalidRadientHandle          =
 static DILIGENT_CONSTEXPR RadientEntityID        InvalidRadientEntityID        = 0;
 static DILIGENT_CONSTEXPR RadientComponentTypeID InvalidRadientComponentTypeID = 0;
 static DILIGENT_CONSTEXPR RadientFrameID         InvalidRadientFrameID         = 0;
+
+/// Reserved component type identifiers for built-in components.
+static DILIGENT_CONSTEXPR RadientComponentTypeID RADIENT_COMPONENT_TYPE_TRANSFORM     = 1;
+static DILIGENT_CONSTEXPR RadientComponentTypeID RADIENT_COMPONENT_TYPE_CAMERA        = 2;
+static DILIGENT_CONSTEXPR RadientComponentTypeID RADIENT_COMPONENT_TYPE_MESH          = 3;
+static DILIGENT_CONSTEXPR RadientComponentTypeID RADIENT_COMPONENT_TYPE_MESH_RENDERER = 4;
+static DILIGENT_CONSTEXPR RadientComponentTypeID RADIENT_COMPONENT_TYPE_LIGHT         = 5;
 
 /// Asset reference used by scenes, components, and render features.
 struct RadientAssetReference

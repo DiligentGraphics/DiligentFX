@@ -107,8 +107,7 @@ DILIGENT_BEGIN_INTERFACE(IRadientSceneWriter, IObject)
     /// Removes a component from the entity.
     VIRTUAL void METHOD(RemoveComponent)(THIS_
                                          RadientEntityID        Entity,
-                                         RADIENT_COMPONENT_TYPE Type,
-                                         RadientComponentTypeID CustomType DEFAULT_VALUE(InvalidRadientComponentTypeID)) PURE;
+                                         RadientComponentTypeID ComponentType) PURE;
 
     /// Commits pending scene changes to the active backend.
     VIRTUAL void METHOD(CommitChanges)(THIS) PURE;

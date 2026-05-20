@@ -109,11 +109,10 @@ void RadientSceneWriterImpl::SetCustomComponentData(RadientEntityID Entity, cons
     (void)Component;
 }
 
-void RadientSceneWriterImpl::RemoveComponent(RadientEntityID Entity, RADIENT_COMPONENT_TYPE Type, RadientComponentTypeID CustomType)
+void RadientSceneWriterImpl::RemoveComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType)
 {
     (void)Entity;
-    (void)Type;
-    (void)CustomType;
+    (void)ComponentType;
 }
 
 void RadientSceneWriterImpl::CommitChanges()

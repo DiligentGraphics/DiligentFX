@@ -101,11 +101,10 @@ Bool RadientSceneImpl::GetWorldMatrix(RadientEntityID Entity, RadientMatrix4x4& 
     return False;
 }
 
-Bool RadientSceneImpl::HasComponent(RadientEntityID Entity, RADIENT_COMPONENT_TYPE Type, RadientComponentTypeID CustomType) const
+Bool RadientSceneImpl::HasComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType) const
 {
     (void)Entity;
-    (void)Type;
-    (void)CustomType;
+    (void)ComponentType;
     return False;
 }
 

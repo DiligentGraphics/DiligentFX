@@ -77,7 +77,7 @@ static_assert(DefaultLight.ShapingConeSoftness == 0.f, "Unexpected RadientLightC
 static_assert(DefaultLight.ShapingFocus == 0.f, "Unexpected RadientLightComponent shaping focus default value");
 
 constexpr RadientCustomComponentData DefaultCustomComponent{};
-static_assert(DefaultCustomComponent.CustomType == InvalidRadientComponentTypeID, "Unexpected RadientCustomComponentData custom type default value");
+static_assert(DefaultCustomComponent.ComponentType == InvalidRadientComponentTypeID, "Unexpected RadientCustomComponentData component type default value");
 static_assert(DefaultCustomComponent.Name == nullptr, "Unexpected RadientCustomComponentData name default value");
 static_assert(DefaultCustomComponent.Schema == nullptr, "Unexpected RadientCustomComponentData schema default value");
 static_assert(DefaultCustomComponent.Version == 0, "Unexpected RadientCustomComponentData version default value");

@@ -49,6 +49,6 @@ void RadientSceneWriter_C_TestMacros(IRadientSceneWriter* pWriter)
     IRadientSceneWriter_SetMeshRenderer(pWriter, Entity, &MeshRenderer);
     IRadientSceneWriter_SetLight(pWriter, Entity, &Light);
     IRadientSceneWriter_SetCustomComponentData(pWriter, Entity, &CustomComponent);
-    IRadientSceneWriter_RemoveComponent(pWriter, Entity, RADIENT_COMPONENT_TYPE_CUSTOM, CustomComponent.CustomType);
+    IRadientSceneWriter_RemoveComponent(pWriter, Entity, CustomComponent.ComponentType);
     IRadientSceneWriter_CommitChanges(pWriter);
 }

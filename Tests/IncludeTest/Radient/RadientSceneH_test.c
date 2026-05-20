@@ -72,12 +72,12 @@ void RadientScene_C_UseCustomComponentData(void)
 {
     RadientCustomComponentData Component;
 
-    Component.CustomType = InvalidRadientComponentTypeID;
-    Component.Name       = 0;
-    Component.Schema     = 0;
-    Component.Version    = 0;
-    Component.pData      = 0;
-    Component.DataSize   = 0;
+    Component.ComponentType = InvalidRadientComponentTypeID;
+    Component.Name          = 0;
+    Component.Schema        = 0;
+    Component.Version       = 0;
+    Component.pData         = 0;
+    Component.DataSize      = 0;
 
     (void)Component;
 }
@@ -101,6 +101,6 @@ void RadientScene_C_TestMacros(IRadientScene* pScene)
     IRadientScene_GetChildren(pScene, Entity, 0, ChildCount, Children);
     IRadientScene_GetLocalTransform(pScene, Entity, &Transform);
     IRadientScene_GetWorldMatrix(pScene, Entity, &WorldMatrix);
-    IRadientScene_HasComponent(pScene, Entity, RADIENT_COMPONENT_TYPE_CUSTOM, CustomComponent.CustomType);
+    IRadientScene_HasComponent(pScene, Entity, CustomComponent.ComponentType);
     IRadientScene_GetRevision(pScene);
 }

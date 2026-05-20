@@ -78,8 +78,7 @@ public:
                                                            const RadientCustomComponentData& Component) override final;
 
     virtual void DILIGENT_CALL_TYPE RemoveComponent(RadientEntityID        Entity,
-                                                    RADIENT_COMPONENT_TYPE Type,
-                                                    RadientComponentTypeID CustomType) override final;
+                                                    RadientComponentTypeID ComponentType) override final;
 
     virtual void DILIGENT_CALL_TYPE CommitChanges() override final;
 

@@ -208,7 +208,7 @@ typedef struct RadientLightComponent RadientLightComponent;
 struct RadientCustomComponentData
 {
     /// Custom component type identifier.
-    RadientComponentTypeID CustomType DEFAULT_INITIALIZER(InvalidRadientComponentTypeID);
+    RadientComponentTypeID ComponentType DEFAULT_INITIALIZER(InvalidRadientComponentTypeID);
 
     /// Optional component name.
     const Char* Name DEFAULT_INITIALIZER(nullptr);
@@ -289,8 +289,7 @@ DILIGENT_BEGIN_INTERFACE(IRadientScene, IObject)
     /// Returns true when the entity has the requested component.
     VIRTUAL Bool METHOD(HasComponent)(THIS_
                                       RadientEntityID        Entity,
-                                      RADIENT_COMPONENT_TYPE Type,
-                                      RadientComponentTypeID CustomType DEFAULT_VALUE(InvalidRadientComponentTypeID)) CONST PURE;
+                                      RadientComponentTypeID ComponentType) CONST PURE;
 
     /// Returns current scene revision.
     VIRTUAL RadientRevision METHOD(GetRevision)(THIS) CONST PURE;
