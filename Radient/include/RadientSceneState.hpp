@@ -30,6 +30,7 @@
 #include "FlagEnum.h"
 
 #include "entt/entity/registry.hpp"
+#include "entt/entity/storage.hpp"
 
 #include <string>
 #include <unordered_map>
@@ -124,10 +125,12 @@ private:
         std::vector<Uint8> Data;
     };
 
-    struct CustomComponentSet
+    struct CustomComponentIndexComponent
     {
-        std::unordered_map<RadientComponentTypeID, CustomComponentStorage> Components;
+        std::vector<RadientComponentTypeID> ComponentTypes;
     };
+
+    using CustomComponentStore = entt::storage<CustomComponentStorage>;
 
     template <typename ComponentType>
     RADIENT_STATUS EmplaceOrReplaceComponent(RadientEntityID Entity, const ComponentType& Component);
@@ -136,6 +139,7 @@ private:
     bool         IsDescendant(entt::entity Entity, entt::entity PotentialAncestor) const;
     void         DetachFromParent(entt::entity Entity);
     void         DestroyEntitySubtree(entt::entity Entity);
+    void         RemoveCustomComponents(entt::entity Entity);
     DIRTY_FLAGS  MarkDirty(entt::entity Entity, DIRTY_FLAGS Flags);
     void         PropagateDirtyFlags();
     void         PropagateDirtyFlags(entt::entity Entity, DIRTY_FLAGS Flags);
@@ -145,11 +149,12 @@ private:
 
     RadientSceneDesc m_Desc;
 
-    mutable entt::registry                            m_Registry;
-    std::unordered_map<RadientEntityID, entt::entity> m_EntityMap;
-    std::vector<RadientEntityID>                      m_DirtyEntities;
-    RadientEntityID                                   m_NextEntityID = 1;
-    RadientRevision                                   m_Revision     = 0;
+    mutable entt::registry                                           m_Registry;
+    std::unordered_map<RadientEntityID, entt::entity>                m_EntityMap;
+    std::unordered_map<RadientComponentTypeID, CustomComponentStore> m_CustomComponentStores;
+    std::vector<RadientEntityID>                                     m_DirtyEntities;
+    RadientEntityID                                                  m_NextEntityID = 1;
+    RadientRevision                                                  m_Revision     = 0;
 };
 
 } // namespace Diligent

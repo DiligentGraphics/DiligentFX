@@ -26,9 +26,11 @@
 
 #include "RadientSceneState.hpp"
 
+#include "DebugUtilities.hpp"
 #include "RadientMath.hpp"
 
 #include <algorithm>
+#include <utility>
 
 namespace Diligent
 {
@@ -208,9 +210,8 @@ RADIENT_STATUS RadientSceneState::HasComponent(RadientEntityID Entity, RadientCo
 
         default:
         {
-            const CustomComponentSet* pCustomComponents = m_Registry.try_get<CustomComponentSet>(E);
-
-            HasComponent = pCustomComponents != nullptr && pCustomComponents->Components.find(ComponentType) != pCustomComponents->Components.end() ? True : False;
+            auto It      = m_CustomComponentStores.find(ComponentType);
+            HasComponent = It != m_CustomComponentStores.end() && It->second.contains(E) ? True : False;
             break;
         }
     }
@@ -405,18 +406,35 @@ RADIENT_STATUS RadientSceneState::SetCustomComponentData(RadientEntityID Entity,
         return RADIENT_STATUS_INVALID_ARGUMENT;
     }
 
-    std::unordered_map<RadientComponentTypeID, CustomComponentStorage>& CustomComponents = m_Registry.get_or_emplace<CustomComponentSet>(E).Components;
-    CustomComponentStorage&                                             CustomComponent  = CustomComponents[Component.ComponentType];
-
+    CustomComponentStorage CustomComponent;
     CustomComponent.Name    = Component.Name != nullptr ? Component.Name : "";
     CustomComponent.Schema  = Component.Schema != nullptr ? Component.Schema : "";
     CustomComponent.Version = Component.Version;
-    CustomComponent.Data.clear();
 
     if (Component.pData != nullptr && Component.DataSize != 0)
     {
         const Uint8* pData = static_cast<const Uint8*>(Component.pData);
         CustomComponent.Data.assign(pData, pData + Component.DataSize);
+    }
+
+    CustomComponentStore& Store = m_CustomComponentStores[Component.ComponentType];
+    if (Store.contains(E))
+    {
+#ifdef DILIGENT_DEBUG
+        const CustomComponentIndexComponent* pIndex = m_Registry.try_get<CustomComponentIndexComponent>(E);
+        VERIFY(pIndex != nullptr &&
+                   std::find(pIndex->ComponentTypes.begin(), pIndex->ComponentTypes.end(), Component.ComponentType) != pIndex->ComponentTypes.end(),
+               "Custom component index is missing component type ", Component.ComponentType);
+#endif
+        Store.get(E) = std::move(CustomComponent);
+    }
+    else
+    {
+        Store.emplace(E, std::move(CustomComponent));
+
+        CustomComponentIndexComponent& Index = m_Registry.get_or_emplace<CustomComponentIndexComponent>(E);
+        if (std::find(Index.ComponentTypes.begin(), Index.ComponentTypes.end(), Component.ComponentType) == Index.ComponentTypes.end())
+            Index.ComponentTypes.push_back(Component.ComponentType);
     }
 
     Touch();
@@ -456,12 +474,28 @@ RADIENT_STATUS RadientSceneState::RemoveComponent(RadientEntityID Entity, Radien
 
         default:
         {
-            CustomComponentSet* pCustomComponents = m_Registry.try_get<CustomComponentSet>(E);
-            if (pCustomComponents != nullptr)
+            CustomComponentIndexComponent* pIndex = m_Registry.try_get<CustomComponentIndexComponent>(E);
+            if (pIndex != nullptr)
             {
-                Removed = pCustomComponents->Components.erase(ComponentType) != 0;
-                if (pCustomComponents->Components.empty())
-                    m_Registry.remove<CustomComponentSet>(E);
+                std::vector<RadientComponentTypeID>::iterator ComponentIt = std::find(pIndex->ComponentTypes.begin(), pIndex->ComponentTypes.end(), ComponentType);
+                if (ComponentIt != pIndex->ComponentTypes.end())
+                {
+                    pIndex->ComponentTypes.erase(ComponentIt);
+                    if (pIndex->ComponentTypes.empty())
+                        m_Registry.remove<CustomComponentIndexComponent>(E);
+
+                    std::unordered_map<RadientComponentTypeID, CustomComponentStore>::iterator StoreIt = m_CustomComponentStores.find(ComponentType);
+                    VERIFY(StoreIt != m_CustomComponentStores.end() && StoreIt->second.contains(E),
+                           "Custom component store is missing component type ", ComponentType, " listed in the entity index");
+                    if (StoreIt != m_CustomComponentStores.end())
+                    {
+                        StoreIt->second.remove(E);
+                        if (StoreIt->second.empty())
+                            m_CustomComponentStores.erase(StoreIt);
+                    }
+
+                    Removed = true;
+                }
             }
             break;
         }
@@ -547,8 +581,29 @@ void RadientSceneState::DestroyEntitySubtree(entt::entity Entity)
             DestroyEntitySubtree(ChildEntity);
     }
 
+    RemoveCustomComponents(Entity);
     m_EntityMap.erase(m_Registry.get<EntityComponent>(Entity).ID);
     m_Registry.destroy(Entity);
+}
+
+void RadientSceneState::RemoveCustomComponents(entt::entity Entity)
+{
+    CustomComponentIndexComponent* pIndex = m_Registry.try_get<CustomComponentIndexComponent>(Entity);
+    if (pIndex == nullptr)
+        return;
+
+    for (const RadientComponentTypeID ComponentType : pIndex->ComponentTypes)
+    {
+        std::unordered_map<RadientComponentTypeID, CustomComponentStore>::iterator It = m_CustomComponentStores.find(ComponentType);
+        if (It != m_CustomComponentStores.end())
+        {
+            It->second.remove(Entity);
+            if (It->second.empty())
+                m_CustomComponentStores.erase(It);
+        }
+    }
+
+    m_Registry.remove<CustomComponentIndexComponent>(Entity);
 }
 
 RadientSceneState::DIRTY_FLAGS RadientSceneState::MarkDirty(entt::entity Entity, DIRTY_FLAGS Flags)
@@ -618,9 +673,9 @@ void RadientSceneState::UpdateDerivedState(entt::entity Entity)
 
     const HierarchyComponent& Hierarchy = m_Registry.get<HierarchyComponent>(Entity);
 
-    entt::entity Parent = entt::null;
-    const RadientMatrix4x4* pParentWorldMatrix = nullptr;
-    const EffectiveVisibilityComponent* pParentVisibility = nullptr;
+    entt::entity                        Parent             = entt::null;
+    const RadientMatrix4x4*             pParentWorldMatrix = nullptr;
+    const EffectiveVisibilityComponent* pParentVisibility  = nullptr;
     if (Hierarchy.Parent != InvalidRadientEntityID)
     {
         Parent = FindEntity(Hierarchy.Parent);
@@ -646,11 +701,11 @@ void RadientSceneState::UpdateDerivedState(entt::entity Entity)
 
     if ((Flags & DIRTY_FLAG_VISIBILITY) != DIRTY_FLAG_NONE)
     {
-        const EntityStateComponent& State = m_Registry.get<EntityStateComponent>(Entity);
+        const EntityStateComponent&   State      = m_Registry.get<EntityStateComponent>(Entity);
         EffectiveVisibilityComponent& Visibility = m_Registry.get<EffectiveVisibilityComponent>(Entity);
 
         const Bool OwnVisible = (State.Flags & RADIENT_ENTITY_FLAG_VISIBLE) != 0 ? True : False;
-        Visibility.Visible   = OwnVisible && (pParentVisibility == nullptr || pParentVisibility->Visible) ? True : False;
+        Visibility.Visible    = OwnVisible && (pParentVisibility == nullptr || pParentVisibility->Visible) ? True : False;
     }
 
     DirtyState.Flags &= ~DIRTY_FLAGS_REQUIRING_PROPAGATION;
