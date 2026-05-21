@@ -87,30 +87,14 @@ RADIENT_STATUS RadientSceneState::GetEntityOwnVisibility(RadientEntityID Entity,
 
 RADIENT_STATUS RadientSceneState::GetEntityEffectiveVisibility(RadientEntityID Entity, Bool& Visible) const
 {
-    Visible = False;
-
-    entt::entity Current = FindEntity(Entity);
-    if (Current == entt::null)
-        return RADIENT_STATUS_NOT_FOUND;
-
-    while (Current != entt::null)
+    const entt::entity E = FindEntity(Entity);
+    if (E == entt::null)
     {
-        const EntityStateComponent& State = m_Registry.get<EntityStateComponent>(Current);
-        if ((State.Flags & RADIENT_ENTITY_FLAG_VISIBLE) == 0)
-            return RADIENT_STATUS_OK;
-
-        const HierarchyComponent& Hierarchy = m_Registry.get<HierarchyComponent>(Current);
-        if (Hierarchy.Parent == InvalidRadientEntityID)
-        {
-            Visible = True;
-            return RADIENT_STATUS_OK;
-        }
-
-        Current = FindEntity(Hierarchy.Parent);
-        if (Current == entt::null)
-            return RADIENT_STATUS_NOT_FOUND;
+        Visible = False;
+        return RADIENT_STATUS_NOT_FOUND;
     }
 
+    Visible = m_Registry.get<EffectiveVisibilityComponent>(E).Visible;
     return RADIENT_STATUS_OK;
 }
 
@@ -259,6 +243,7 @@ RADIENT_STATUS RadientSceneState::CreateEntity(const RadientEntityDesc& Desc, Ra
     m_Registry.emplace<HierarchyComponent>(E);
     m_Registry.emplace<LocalTransformComponent>(E, LocalTransformComponent{Desc.Transform});
     m_Registry.emplace<WorldTransformComponent>(E);
+    m_Registry.emplace<EffectiveVisibilityComponent>(E);
     m_Registry.emplace<DirtyStateComponent>(E);
 
     m_EntityMap.emplace(Entity, E);
@@ -621,42 +606,54 @@ void RadientSceneState::UpdateDirtyEntities()
         if (Entity == entt::null)
             continue;
 
-        DirtyStateComponent& DirtyState = m_Registry.get<DirtyStateComponent>(Entity);
-        if ((DirtyState.Flags & DIRTY_FLAG_TRANSFORM) != DIRTY_FLAG_NONE)
-            UpdateTransform(Entity);
-
-        DirtyState.Flags = DIRTY_FLAG_NONE;
+        UpdateDerivedState(Entity);
     }
 }
 
-void RadientSceneState::UpdateTransform(entt::entity Entity)
+void RadientSceneState::UpdateDerivedState(entt::entity Entity)
 {
     DirtyStateComponent& DirtyState = m_Registry.get<DirtyStateComponent>(Entity);
-    if ((DirtyState.Flags & DIRTY_FLAG_TRANSFORM) == DIRTY_FLAG_NONE)
+    if ((DirtyState.Flags & DIRTY_FLAGS_REQUIRING_PROPAGATION) == DIRTY_FLAG_NONE)
         return;
 
     const HierarchyComponent& Hierarchy = m_Registry.get<HierarchyComponent>(Entity);
 
+    entt::entity Parent = entt::null;
     const RadientMatrix4x4* pParentWorldMatrix = nullptr;
+    const EffectiveVisibilityComponent* pParentVisibility = nullptr;
     if (Hierarchy.Parent != InvalidRadientEntityID)
     {
-        const entt::entity Parent = FindEntity(Hierarchy.Parent);
+        Parent = FindEntity(Hierarchy.Parent);
         if (Parent != entt::null)
         {
-            UpdateTransform(Parent);
+            UpdateDerivedState(Parent);
             pParentWorldMatrix = &m_Registry.get<WorldTransformComponent>(Parent).Matrix;
+            pParentVisibility  = &m_Registry.get<EffectiveVisibilityComponent>(Parent);
         }
     }
 
-    const LocalTransformComponent& LocalTransform = m_Registry.get<LocalTransformComponent>(Entity);
-    const RadientMatrix4x4         LocalMatrix    = RadientMath::TransformToMatrix(LocalTransform.Transform);
+    const DIRTY_FLAGS Flags = DirtyState.Flags;
+    if ((Flags & DIRTY_FLAG_TRANSFORM) != DIRTY_FLAG_NONE)
+    {
+        const LocalTransformComponent& LocalTransform = m_Registry.get<LocalTransformComponent>(Entity);
+        const RadientMatrix4x4         LocalMatrix    = RadientMath::TransformToMatrix(LocalTransform.Transform);
 
-    WorldTransformComponent& WorldTransform = m_Registry.get<WorldTransformComponent>(Entity);
-    WorldTransform.Matrix                   = pParentWorldMatrix != nullptr ?
-                          RadientMath::MultiplyMatrices(LocalMatrix, *pParentWorldMatrix) :
-                          LocalMatrix;
+        WorldTransformComponent& WorldTransform = m_Registry.get<WorldTransformComponent>(Entity);
+        WorldTransform.Matrix                   = pParentWorldMatrix != nullptr ?
+                              RadientMath::MultiplyMatrices(LocalMatrix, *pParentWorldMatrix) :
+                              LocalMatrix;
+    }
 
-    DirtyState.Flags &= ~DIRTY_FLAG_TRANSFORM;
+    if ((Flags & DIRTY_FLAG_VISIBILITY) != DIRTY_FLAG_NONE)
+    {
+        const EntityStateComponent& State = m_Registry.get<EntityStateComponent>(Entity);
+        EffectiveVisibilityComponent& Visibility = m_Registry.get<EffectiveVisibilityComponent>(Entity);
+
+        const Bool OwnVisible = (State.Flags & RADIENT_ENTITY_FLAG_VISIBLE) != 0 ? True : False;
+        Visibility.Visible   = OwnVisible && (pParentVisibility == nullptr || pParentVisibility->Visible) ? True : False;
+    }
+
+    DirtyState.Flags &= ~DIRTY_FLAGS_REQUIRING_PROPAGATION;
 }
 
 void RadientSceneState::Touch()

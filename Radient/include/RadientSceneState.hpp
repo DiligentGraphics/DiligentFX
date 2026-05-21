@@ -106,6 +106,11 @@ private:
         RadientMatrix4x4 Matrix;
     };
 
+    struct EffectiveVisibilityComponent
+    {
+        Bool Visible = True;
+    };
+
     struct DirtyStateComponent
     {
         DIRTY_FLAGS Flags = DIRTY_FLAG_NONE;
@@ -135,7 +140,7 @@ private:
     void         PropagateDirtyFlags();
     void         PropagateDirtyFlags(entt::entity Entity, DIRTY_FLAGS Flags);
     void         UpdateDirtyEntities();
-    void         UpdateTransform(entt::entity Entity);
+    void         UpdateDerivedState(entt::entity Entity);
     void         Touch();
 
     RadientSceneDesc m_Desc;

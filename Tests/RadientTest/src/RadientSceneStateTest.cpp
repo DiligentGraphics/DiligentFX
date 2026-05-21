@@ -180,6 +180,10 @@ TEST(RadientSceneStateTest, GetEntityEffectiveVisibility)
     EXPECT_EQ(State.GetEntityOwnVisibility(Child, Visible), RADIENT_STATUS_OK);
     EXPECT_EQ(Visible, True);
     EXPECT_EQ(State.GetEntityEffectiveVisibility(Child, Visible), RADIENT_STATUS_OK);
+    EXPECT_EQ(Visible, True);
+
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.GetEntityEffectiveVisibility(Child, Visible), RADIENT_STATUS_OK);
     EXPECT_EQ(Visible, False);
 
     EXPECT_EQ(State.SetEntityOwnVisibility(Root, True), RADIENT_STATUS_OK);
@@ -187,7 +191,15 @@ TEST(RadientSceneStateTest, GetEntityEffectiveVisibility)
     EXPECT_EQ(State.GetEntityEffectiveVisibility(Child, Visible), RADIENT_STATUS_OK);
     EXPECT_EQ(Visible, False);
 
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.GetEntityEffectiveVisibility(Child, Visible), RADIENT_STATUS_OK);
+    EXPECT_EQ(Visible, False);
+
     EXPECT_EQ(State.SetEntityOwnVisibility(Child, True), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.GetEntityEffectiveVisibility(Child, Visible), RADIENT_STATUS_OK);
+    EXPECT_EQ(Visible, False);
+
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
     EXPECT_EQ(State.GetEntityEffectiveVisibility(Child, Visible), RADIENT_STATUS_OK);
     EXPECT_EQ(Visible, True);
 
@@ -203,6 +215,10 @@ TEST(RadientSceneStateTest, GetEntityEffectiveVisibility)
     EXPECT_EQ(State.GetEntityOwnVisibility(GrandChild, Visible), RADIENT_STATUS_OK);
     EXPECT_EQ(Visible, True);
     EXPECT_EQ(State.GetEntityEffectiveVisibility(GrandChild, Visible), RADIENT_STATUS_OK);
+    EXPECT_EQ(Visible, True);
+
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.GetEntityEffectiveVisibility(GrandChild, Visible), RADIENT_STATUS_OK);
     EXPECT_EQ(Visible, False);
 
     EXPECT_EQ(State.SetEntityOwnVisibility(Child, True), RADIENT_STATUS_OK);
@@ -210,7 +226,15 @@ TEST(RadientSceneStateTest, GetEntityEffectiveVisibility)
     EXPECT_EQ(State.GetEntityEffectiveVisibility(GrandChild, Visible), RADIENT_STATUS_OK);
     EXPECT_EQ(Visible, False);
 
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.GetEntityEffectiveVisibility(GrandChild, Visible), RADIENT_STATUS_OK);
+    EXPECT_EQ(Visible, False);
+
     EXPECT_EQ(State.SetParent(GrandChild, InvalidRadientEntityID, True), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.GetEntityEffectiveVisibility(GrandChild, Visible), RADIENT_STATUS_OK);
+    EXPECT_EQ(Visible, False);
+
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
     EXPECT_EQ(State.GetEntityEffectiveVisibility(GrandChild, Visible), RADIENT_STATUS_OK);
     EXPECT_EQ(Visible, True);
 
