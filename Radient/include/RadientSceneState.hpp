@@ -28,6 +28,12 @@
 
 #include "RadientScene.h"
 
+#include "entt/entity/registry.hpp"
+
+#include <string>
+#include <unordered_map>
+#include <vector>
+
 namespace Diligent
 {
 
@@ -47,19 +53,78 @@ public:
     RADIENT_STATUS  HasComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType, Bool& HasComponent) const;
     RadientRevision GetRevision() const;
 
-    RADIENT_STATUS  CreateEntity(const RadientEntityDesc& Desc, RadientEntityID& Entity);
-    RADIENT_STATUS  DestroyEntity(RadientEntityID Entity);
-    RADIENT_STATUS  SetEntityFlags(RadientEntityID Entity, RADIENT_ENTITY_FLAGS Flags);
-    RADIENT_STATUS  SetEntityVisible(RadientEntityID Entity, Bool Visible);
-    RADIENT_STATUS  SetParent(RadientEntityID Entity, RadientEntityID Parent, Bool KeepWorldTransform);
-    RADIENT_STATUS  SetLocalTransform(RadientEntityID Entity, const RadientTransform& Transform);
-    RADIENT_STATUS  SetCamera(RadientEntityID Entity, const RadientCameraComponent& Camera);
-    RADIENT_STATUS  SetMesh(RadientEntityID Entity, const RadientMeshComponent& Mesh);
-    RADIENT_STATUS  SetMeshRenderer(RadientEntityID Entity, const RadientMeshRendererComponent& Renderer);
-    RADIENT_STATUS  SetLight(RadientEntityID Entity, const RadientLightComponent& Light);
-    RADIENT_STATUS  SetCustomComponentData(RadientEntityID Entity, const RadientCustomComponentData& Component);
-    RADIENT_STATUS  RemoveComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType);
-    RADIENT_STATUS  CommitChanges();
+    RADIENT_STATUS CreateEntity(const RadientEntityDesc& Desc, RadientEntityID& Entity);
+    RADIENT_STATUS DestroyEntity(RadientEntityID Entity);
+    RADIENT_STATUS SetEntityFlags(RadientEntityID Entity, RADIENT_ENTITY_FLAGS Flags);
+    RADIENT_STATUS SetEntityVisible(RadientEntityID Entity, Bool Visible);
+    RADIENT_STATUS SetParent(RadientEntityID Entity, RadientEntityID Parent, Bool KeepWorldTransform);
+    RADIENT_STATUS SetLocalTransform(RadientEntityID Entity, const RadientTransform& Transform);
+    RADIENT_STATUS SetCamera(RadientEntityID Entity, const RadientCameraComponent& Camera);
+    RADIENT_STATUS SetMesh(RadientEntityID Entity, const RadientMeshComponent& Mesh);
+    RADIENT_STATUS SetMeshRenderer(RadientEntityID Entity, const RadientMeshRendererComponent& Renderer);
+    RADIENT_STATUS SetLight(RadientEntityID Entity, const RadientLightComponent& Light);
+    RADIENT_STATUS SetCustomComponentData(RadientEntityID Entity, const RadientCustomComponentData& Component);
+    RADIENT_STATUS RemoveComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType);
+    RADIENT_STATUS CommitChanges();
+
+private:
+    struct EntityComponent
+    {
+        RadientEntityID ID = InvalidRadientEntityID;
+        std::string     Name;
+    };
+
+    struct EntityStateComponent
+    {
+        RADIENT_ENTITY_FLAGS Flags = RADIENT_ENTITY_FLAG_VISIBLE;
+    };
+
+    struct HierarchyComponent
+    {
+        RadientEntityID              Parent = InvalidRadientEntityID;
+        std::vector<RadientEntityID> Children;
+    };
+
+    struct LocalTransformComponent
+    {
+        RadientTransform Transform;
+    };
+
+    struct WorldTransformComponent
+    {
+        RadientMatrix4x4 Matrix;
+        bool             Dirty = true;
+    };
+
+    struct CustomComponentStorage
+    {
+        std::string        Name;
+        std::string        Schema;
+        Uint32             Version = 0;
+        std::vector<Uint8> Data;
+    };
+
+    struct CustomComponentSet
+    {
+        std::unordered_map<RadientComponentTypeID, CustomComponentStorage> Components;
+    };
+
+    template <typename ComponentType>
+    RADIENT_STATUS EmplaceOrReplaceComponent(RadientEntityID Entity, const ComponentType& Component);
+
+    entt::entity FindEntity(RadientEntityID Entity) const;
+    bool         IsDescendant(entt::entity Entity, entt::entity PotentialAncestor) const;
+    void         DetachFromParent(entt::entity Entity);
+    void         MarkWorldMatrixDirty(entt::entity Entity);
+    void         UpdateWorldMatrix(entt::entity Entity) const;
+    void         Touch();
+
+    RadientSceneDesc m_Desc;
+
+    mutable entt::registry                            m_Registry;
+    std::unordered_map<RadientEntityID, entt::entity> m_EntityMap;
+    RadientEntityID                                   m_NextEntityID = 1;
+    RadientRevision                                   m_Revision     = 0;
 };
 
 } // namespace Diligent

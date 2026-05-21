@@ -31,6 +31,7 @@ PRIVATE
     Diligent-TestFramework
     Diligent-Common
     Radient
+    EnTT
 )
 
 if(WEBGPU_SUPPORTED)
