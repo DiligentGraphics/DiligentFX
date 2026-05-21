@@ -39,10 +39,6 @@ if (MSVC)
     target_compile_options(RadientTest PRIVATE /wd4324)
 endif()
 
-if(WEBGPU_SUPPORTED)
-    target_link_libraries(RadientTest PRIVATE libtint)
-endif()
-
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${SOURCE})
 
 set_target_properties(RadientTest

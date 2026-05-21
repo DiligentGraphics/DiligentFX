@@ -154,7 +154,7 @@ RADIENT_STATUS RadientSceneState::GetChildren(RadientEntityID Entity, Uint32 Sta
 
     const std::vector<RadientEntityID>& Children = m_Registry.get<HierarchyComponent>(E).Children;
     if (StartChild >= Children.size())
-        return RADIENT_STATUS_OK;
+        return RADIENT_STATUS_INVALID_ARGUMENT;
 
     NumChildrenWritten = std::min(ChildCount, static_cast<Uint32>(Children.size() - StartChild));
     std::copy_n(Children.begin() + StartChild, NumChildrenWritten, pChildren);
@@ -277,13 +277,8 @@ RADIENT_STATUS RadientSceneState::DestroyEntity(RadientEntityID Entity)
     if (E == entt::null)
         return RADIENT_STATUS_NOT_FOUND;
 
-    const std::vector<RadientEntityID> Children = m_Registry.get<HierarchyComponent>(E).Children;
-    for (const RadientEntityID Child : Children)
-        DestroyEntity(Child);
-
     DetachFromParent(E);
-    m_EntityMap.erase(Entity);
-    m_Registry.destroy(E);
+    DestroyEntitySubtree(E);
     Touch();
     return RADIENT_STATUS_OK;
 }
@@ -550,6 +545,20 @@ void RadientSceneState::DetachFromParent(entt::entity Entity)
     }
 
     Hierarchy.Parent = InvalidRadientEntityID;
+}
+
+void RadientSceneState::DestroyEntitySubtree(entt::entity Entity)
+{
+    const std::vector<RadientEntityID>& Children = m_Registry.get<HierarchyComponent>(Entity).Children;
+    for (const RadientEntityID Child : Children)
+    {
+        const entt::entity ChildEntity = FindEntity(Child);
+        if (ChildEntity != entt::null)
+            DestroyEntitySubtree(ChildEntity);
+    }
+
+    m_EntityMap.erase(m_Registry.get<EntityComponent>(Entity).ID);
+    m_Registry.destroy(Entity);
 }
 
 void RadientSceneState::MarkWorldMatrixDirty(entt::entity Entity)

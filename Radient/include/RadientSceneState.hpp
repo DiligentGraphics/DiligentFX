@@ -116,6 +116,7 @@ private:
     entt::entity FindEntity(RadientEntityID Entity) const;
     bool         IsDescendant(entt::entity Entity, entt::entity PotentialAncestor) const;
     void         DetachFromParent(entt::entity Entity);
+    void         DestroyEntitySubtree(entt::entity Entity);
     void         MarkWorldMatrixDirty(entt::entity Entity);
     void         UpdateWorldMatrix(entt::entity Entity) const;
     void         Touch();
