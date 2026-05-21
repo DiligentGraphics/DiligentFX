@@ -33,6 +33,8 @@
 namespace Diligent
 {
 
+DEFINE_FLAG_ENUM_OPERATORS(RadientSceneState::DIRTY_FLAGS);
+
 namespace
 {
 
@@ -183,7 +185,6 @@ RADIENT_STATUS RadientSceneState::GetWorldMatrix(RadientEntityID Entity, Radient
         return RADIENT_STATUS_NOT_FOUND;
     }
 
-    UpdateWorldMatrix(E);
     Matrix = m_Registry.get<WorldTransformComponent>(E).Matrix;
     return RADIENT_STATUS_OK;
 }
@@ -258,8 +259,10 @@ RADIENT_STATUS RadientSceneState::CreateEntity(const RadientEntityDesc& Desc, Ra
     m_Registry.emplace<HierarchyComponent>(E);
     m_Registry.emplace<LocalTransformComponent>(E, LocalTransformComponent{Desc.Transform});
     m_Registry.emplace<WorldTransformComponent>(E);
+    m_Registry.emplace<DirtyStateComponent>(E);
 
     m_EntityMap.emplace(Entity, E);
+    MarkDirty(E, DIRTY_FLAGS_REQUIRING_PROPAGATION);
 
     if (Parent != entt::null)
     {
@@ -294,6 +297,7 @@ RADIENT_STATUS RadientSceneState::SetEntityFlags(RadientEntityID Entity, RADIENT
         return RADIENT_STATUS_NO_CHANGE;
 
     State.Flags = Flags;
+    MarkDirty(E, DIRTY_FLAG_VISIBILITY);
     Touch();
     return RADIENT_STATUS_OK;
 }
@@ -312,6 +316,7 @@ RADIENT_STATUS RadientSceneState::SetEntityOwnVisibility(RadientEntityID Entity,
         return RADIENT_STATUS_NO_CHANGE;
 
     State.Flags = Flags;
+    MarkDirty(E, DIRTY_FLAG_VISIBILITY);
     Touch();
     return RADIENT_STATUS_OK;
 }
@@ -340,13 +345,10 @@ RADIENT_STATUS RadientSceneState::SetParent(RadientEntityID Entity, RadientEntit
     RadientTransform LocalTransform = m_Registry.get<LocalTransformComponent>(E).Transform;
     if (KeepWorldTransform)
     {
-        UpdateWorldMatrix(E);
         RadientMatrix4x4 LocalMatrix = m_Registry.get<WorldTransformComponent>(E).Matrix;
 
         if (NewParent != entt::null)
         {
-            UpdateWorldMatrix(NewParent);
-
             RadientMatrix4x4 ParentWorldInverse;
             if (!RadientMath::TryInverseMatrix(m_Registry.get<WorldTransformComponent>(NewParent).Matrix, ParentWorldInverse))
                 return RADIENT_STATUS_INVALID_OPERATION;
@@ -368,7 +370,7 @@ RADIENT_STATUS RadientSceneState::SetParent(RadientEntityID Entity, RadientEntit
     }
 
     m_Registry.get<LocalTransformComponent>(E).Transform = LocalTransform;
-    MarkWorldMatrixDirty(E);
+    MarkDirty(E, DIRTY_FLAGS_REQUIRING_PROPAGATION);
     Touch();
     return RADIENT_STATUS_OK;
 }
@@ -380,7 +382,7 @@ RADIENT_STATUS RadientSceneState::SetLocalTransform(RadientEntityID Entity, cons
         return RADIENT_STATUS_NOT_FOUND;
 
     m_Registry.get<LocalTransformComponent>(E).Transform = Transform;
-    MarkWorldMatrixDirty(E);
+    MarkDirty(E, DIRTY_FLAG_TRANSFORM);
     Touch();
     return RADIENT_STATUS_OK;
 }
@@ -491,6 +493,9 @@ RADIENT_STATUS RadientSceneState::RemoveComponent(RadientEntityID Entity, Radien
 
 RADIENT_STATUS RadientSceneState::CommitChanges()
 {
+    PropagateDirtyFlags();
+    UpdateDirtyEntities();
+    m_DirtyEntities.clear();
     return RADIENT_STATUS_OK;
 }
 
@@ -549,7 +554,7 @@ void RadientSceneState::DetachFromParent(entt::entity Entity)
 
 void RadientSceneState::DestroyEntitySubtree(entt::entity Entity)
 {
-    const std::vector<RadientEntityID>& Children = m_Registry.get<HierarchyComponent>(Entity).Children;
+    const std::vector<RadientEntityID> Children = m_Registry.get<HierarchyComponent>(Entity).Children;
     for (const RadientEntityID Child : Children)
     {
         const entt::entity ChildEntity = FindEntity(Child);
@@ -561,48 +566,97 @@ void RadientSceneState::DestroyEntitySubtree(entt::entity Entity)
     m_Registry.destroy(Entity);
 }
 
-void RadientSceneState::MarkWorldMatrixDirty(entt::entity Entity)
+RadientSceneState::DIRTY_FLAGS RadientSceneState::MarkDirty(entt::entity Entity, DIRTY_FLAGS Flags)
 {
-    m_Registry.get<WorldTransformComponent>(Entity).Dirty = true;
+    if (Flags == DIRTY_FLAG_NONE)
+        return DIRTY_FLAG_NONE;
 
+    DirtyStateComponent& DirtyState = m_Registry.get<DirtyStateComponent>(Entity);
+    const DIRTY_FLAGS    AddedFlags = Flags & ~DirtyState.Flags;
+    if (DirtyState.Flags == DIRTY_FLAG_NONE)
+        m_DirtyEntities.push_back(m_Registry.get<EntityComponent>(Entity).ID);
+
+    DirtyState.Flags |= Flags;
+    return AddedFlags;
+}
+
+void RadientSceneState::PropagateDirtyFlags()
+{
+    const size_t DirtyEntityCount = m_DirtyEntities.size();
+    for (size_t Index = 0; Index < DirtyEntityCount; ++Index)
+    {
+        const entt::entity Entity = FindEntity(m_DirtyEntities[Index]);
+        if (Entity == entt::null)
+            continue;
+
+        const DirtyStateComponent& DirtyState       = m_Registry.get<DirtyStateComponent>(Entity);
+        const DIRTY_FLAGS          FlagsToPropagate = DirtyState.Flags & DIRTY_FLAGS_REQUIRING_PROPAGATION;
+        if (FlagsToPropagate == DIRTY_FLAG_NONE)
+            continue;
+
+        PropagateDirtyFlags(Entity, FlagsToPropagate);
+    }
+}
+
+void RadientSceneState::PropagateDirtyFlags(entt::entity Entity, DIRTY_FLAGS Flags)
+{
     const std::vector<RadientEntityID>& Children = m_Registry.get<HierarchyComponent>(Entity).Children;
     for (const RadientEntityID Child : Children)
     {
         const entt::entity ChildEntity = FindEntity(Child);
-        if (ChildEntity != entt::null)
-            MarkWorldMatrixDirty(ChildEntity);
+        if (ChildEntity == entt::null)
+            continue;
+
+        const DIRTY_FLAGS AddedFlags = MarkDirty(ChildEntity, Flags);
+        if (AddedFlags != DIRTY_FLAG_NONE)
+            PropagateDirtyFlags(ChildEntity, AddedFlags);
     }
 }
 
-void RadientSceneState::UpdateWorldMatrix(entt::entity Entity) const
+void RadientSceneState::UpdateDirtyEntities()
 {
-    WorldTransformComponent& WorldTransform = m_Registry.get<WorldTransformComponent>(Entity);
-    if (!WorldTransform.Dirty)
+    for (const RadientEntityID EntityID : m_DirtyEntities)
+    {
+        const entt::entity Entity = FindEntity(EntityID);
+        if (Entity == entt::null)
+            continue;
+
+        DirtyStateComponent& DirtyState = m_Registry.get<DirtyStateComponent>(Entity);
+        if ((DirtyState.Flags & DIRTY_FLAG_TRANSFORM) != DIRTY_FLAG_NONE)
+            UpdateTransform(Entity);
+
+        DirtyState.Flags = DIRTY_FLAG_NONE;
+    }
+}
+
+void RadientSceneState::UpdateTransform(entt::entity Entity)
+{
+    DirtyStateComponent& DirtyState = m_Registry.get<DirtyStateComponent>(Entity);
+    if ((DirtyState.Flags & DIRTY_FLAG_TRANSFORM) == DIRTY_FLAG_NONE)
         return;
 
-    const LocalTransformComponent& LocalTransform = m_Registry.get<LocalTransformComponent>(Entity);
-    const HierarchyComponent&      Hierarchy      = m_Registry.get<HierarchyComponent>(Entity);
+    const HierarchyComponent& Hierarchy = m_Registry.get<HierarchyComponent>(Entity);
 
-    const RadientMatrix4x4 LocalMatrix = RadientMath::TransformToMatrix(LocalTransform.Transform);
-    if (Hierarchy.Parent == InvalidRadientEntityID)
-    {
-        WorldTransform.Matrix = LocalMatrix;
-    }
-    else
+    const RadientMatrix4x4* pParentWorldMatrix = nullptr;
+    if (Hierarchy.Parent != InvalidRadientEntityID)
     {
         const entt::entity Parent = FindEntity(Hierarchy.Parent);
         if (Parent != entt::null)
         {
-            UpdateWorldMatrix(Parent);
-            WorldTransform.Matrix = RadientMath::MultiplyMatrices(LocalMatrix, m_Registry.get<WorldTransformComponent>(Parent).Matrix);
-        }
-        else
-        {
-            WorldTransform.Matrix = LocalMatrix;
+            UpdateTransform(Parent);
+            pParentWorldMatrix = &m_Registry.get<WorldTransformComponent>(Parent).Matrix;
         }
     }
 
-    WorldTransform.Dirty = false;
+    const LocalTransformComponent& LocalTransform = m_Registry.get<LocalTransformComponent>(Entity);
+    const RadientMatrix4x4         LocalMatrix    = RadientMath::TransformToMatrix(LocalTransform.Transform);
+
+    WorldTransformComponent& WorldTransform = m_Registry.get<WorldTransformComponent>(Entity);
+    WorldTransform.Matrix                   = pParentWorldMatrix != nullptr ?
+                          RadientMath::MultiplyMatrices(LocalMatrix, *pParentWorldMatrix) :
+                          LocalMatrix;
+
+    DirtyState.Flags &= ~DIRTY_FLAG_TRANSFORM;
 }
 
 void RadientSceneState::Touch()

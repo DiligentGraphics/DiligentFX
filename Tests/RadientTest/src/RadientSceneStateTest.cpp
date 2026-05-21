@@ -403,6 +403,10 @@ TEST(RadientSceneStateTest, GetWorldMatrix)
     RadientEntityID Root = InvalidRadientEntityID;
     EXPECT_EQ(State.CreateEntity(RootDesc, Root), RADIENT_STATUS_OK);
     EXPECT_EQ(State.GetWorldMatrix(Root, Matrix), RADIENT_STATUS_OK);
+    ExpectMatrixNear(Matrix, RadientMatrix4x4{});
+
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.GetWorldMatrix(Root, Matrix), RADIENT_STATUS_OK);
     ExpectMatrixNear(Matrix, RadientMath::TransformToMatrix(RootTransform));
 
     RadientTransform ChildTransform;
@@ -420,28 +424,46 @@ TEST(RadientSceneStateTest, GetWorldMatrix)
         RadientMath::TransformToMatrix(ChildTransform),
         RadientMath::TransformToMatrix(RootTransform));
     EXPECT_EQ(State.GetWorldMatrix(Child, Matrix), RADIENT_STATUS_OK);
+    ExpectMatrixNear(Matrix, RadientMatrix4x4{});
+
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.GetWorldMatrix(Child, Matrix), RADIENT_STATUS_OK);
     ExpectMatrixNear(Matrix, ExpectedChildWorld);
+
+    RadientMatrix4x4 CommittedChildWorld = ExpectedChildWorld;
 
     RootTransform.Position = {10.f, 20.f, 30.f};
     EXPECT_EQ(State.SetLocalTransform(Root, RootTransform), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.GetWorldMatrix(Child, Matrix), RADIENT_STATUS_OK);
+    ExpectMatrixNear(Matrix, CommittedChildWorld);
 
     ExpectedChildWorld = RadientMath::MultiplyMatrices(
         RadientMath::TransformToMatrix(ChildTransform),
         RadientMath::TransformToMatrix(RootTransform));
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
     EXPECT_EQ(State.GetWorldMatrix(Child, Matrix), RADIENT_STATUS_OK);
     ExpectMatrixNear(Matrix, ExpectedChildWorld);
+    CommittedChildWorld = ExpectedChildWorld;
 
     ChildTransform.Position = {8.f, 9.f, 10.f};
     ChildTransform.Scale    = {4.f, 5.f, 6.f};
     EXPECT_EQ(State.SetLocalTransform(Child, ChildTransform), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.GetWorldMatrix(Child, Matrix), RADIENT_STATUS_OK);
+    ExpectMatrixNear(Matrix, CommittedChildWorld);
 
     ExpectedChildWorld = RadientMath::MultiplyMatrices(
         RadientMath::TransformToMatrix(ChildTransform),
         RadientMath::TransformToMatrix(RootTransform));
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
     EXPECT_EQ(State.GetWorldMatrix(Child, Matrix), RADIENT_STATUS_OK);
     ExpectMatrixNear(Matrix, ExpectedChildWorld);
+    CommittedChildWorld = ExpectedChildWorld;
 
     EXPECT_EQ(State.SetParent(Child, InvalidRadientEntityID, True), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.GetWorldMatrix(Child, Matrix), RADIENT_STATUS_OK);
+    ExpectMatrixNear(Matrix, CommittedChildWorld);
+
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
     EXPECT_EQ(State.GetWorldMatrix(Child, Matrix), RADIENT_STATUS_OK);
     ExpectMatrixNear(Matrix, ExpectedChildWorld);
 

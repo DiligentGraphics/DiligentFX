@@ -27,6 +27,7 @@
 #pragma once
 
 #include "RadientScene.h"
+#include "FlagEnum.h"
 
 #include "entt/entity/registry.hpp"
 
@@ -69,6 +70,15 @@ public:
     RADIENT_STATUS CommitChanges();
 
 private:
+    enum DIRTY_FLAGS : Uint32
+    {
+        DIRTY_FLAG_NONE                   = 0u,
+        DIRTY_FLAG_TRANSFORM              = 1u << 0u,
+        DIRTY_FLAG_VISIBILITY             = 1u << 1u,
+        DIRTY_FLAGS_REQUIRING_PROPAGATION = DIRTY_FLAG_TRANSFORM | DIRTY_FLAG_VISIBILITY
+    };
+    DECLARE_FRIEND_FLAG_ENUM_OPERATORS(DIRTY_FLAGS);
+
     struct EntityComponent
     {
         RadientEntityID ID = InvalidRadientEntityID;
@@ -94,7 +104,11 @@ private:
     struct WorldTransformComponent
     {
         RadientMatrix4x4 Matrix;
-        bool             Dirty = true;
+    };
+
+    struct DirtyStateComponent
+    {
+        DIRTY_FLAGS Flags = DIRTY_FLAG_NONE;
     };
 
     struct CustomComponentStorage
@@ -117,14 +131,18 @@ private:
     bool         IsDescendant(entt::entity Entity, entt::entity PotentialAncestor) const;
     void         DetachFromParent(entt::entity Entity);
     void         DestroyEntitySubtree(entt::entity Entity);
-    void         MarkWorldMatrixDirty(entt::entity Entity);
-    void         UpdateWorldMatrix(entt::entity Entity) const;
+    DIRTY_FLAGS  MarkDirty(entt::entity Entity, DIRTY_FLAGS Flags);
+    void         PropagateDirtyFlags();
+    void         PropagateDirtyFlags(entt::entity Entity, DIRTY_FLAGS Flags);
+    void         UpdateDirtyEntities();
+    void         UpdateTransform(entt::entity Entity);
     void         Touch();
 
     RadientSceneDesc m_Desc;
 
     mutable entt::registry                            m_Registry;
     std::unordered_map<RadientEntityID, entt::entity> m_EntityMap;
+    std::vector<RadientEntityID>                      m_DirtyEntities;
     RadientEntityID                                   m_NextEntityID = 1;
     RadientRevision                                   m_Revision     = 0;
 };
