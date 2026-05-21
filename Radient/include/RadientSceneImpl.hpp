@@ -30,8 +30,13 @@
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
 
+#include <memory>
+
 namespace Diligent
 {
+
+class RadientSceneState;
+class RadientSceneWriterImpl;
 
 class RadientSceneImpl final : public ObjectBase<IRadientScene>
 {
@@ -43,39 +48,46 @@ public:
 
     IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientScene, TBase)
 
-    static RefCntAutoPtr<IRadientScene> Create();
-
+    static RefCntAutoPtr<RadientSceneImpl> Create();
+    
     virtual const RadientSceneDesc& DILIGENT_CALL_TYPE GetDesc() const override final;
 
-    virtual Bool DILIGENT_CALL_TYPE IsEntityAlive(RadientEntityID Entity) const override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE IsEntityAlive(RadientEntityID Entity) const override final;
 
-    virtual Bool DILIGENT_CALL_TYPE GetEntityFlags(RadientEntityID       Entity,
-                                                   RADIENT_ENTITY_FLAGS& Flags) const override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetEntityFlags(RadientEntityID       Entity,
+                                                             RADIENT_ENTITY_FLAGS& Flags) const override final;
 
-    virtual Bool DILIGENT_CALL_TYPE IsEntityVisible(RadientEntityID Entity) const override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE IsEntityVisible(RadientEntityID Entity,
+                                                              Bool&           Visible) const override final;
 
-    virtual RadientEntityID DILIGENT_CALL_TYPE GetParent(RadientEntityID Entity) const override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetParent(RadientEntityID  Entity,
+                                                        RadientEntityID& Parent) const override final;
 
-    virtual Uint32 DILIGENT_CALL_TYPE GetChildCount(RadientEntityID Entity) const override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetChildCount(RadientEntityID Entity,
+                                                            Uint32&         ChildCount) const override final;
 
-    virtual Uint32 DILIGENT_CALL_TYPE GetChildren(RadientEntityID  Entity,
-                                                  Uint32           StartChild,
-                                                  Uint32           ChildCount,
-                                                  RadientEntityID* pChildren) const override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetChildren(RadientEntityID  Entity,
+                                                          Uint32           StartChild,
+                                                          Uint32           ChildCount,
+                                                          RadientEntityID* pChildren,
+                                                          Uint32&          NumChildrenWritten) const override final;
 
-    virtual Bool DILIGENT_CALL_TYPE GetLocalTransform(RadientEntityID   Entity,
-                                                      RadientTransform& Transform) const override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetLocalTransform(RadientEntityID   Entity,
+                                                                RadientTransform& Transform) const override final;
 
-    virtual Bool DILIGENT_CALL_TYPE GetWorldMatrix(RadientEntityID   Entity,
-                                                   RadientMatrix4x4& Matrix) const override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetWorldMatrix(RadientEntityID   Entity,
+                                                             RadientMatrix4x4& Matrix) const override final;
 
-    virtual Bool DILIGENT_CALL_TYPE HasComponent(RadientEntityID        Entity,
-                                                 RadientComponentTypeID ComponentType) const override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE HasComponent(RadientEntityID        Entity,
+                                                           RadientComponentTypeID ComponentType,
+                                                           Bool&                  HasComponent) const override final;
 
     virtual RadientRevision DILIGENT_CALL_TYPE GetRevision() const override final;
 
 private:
-    RadientSceneDesc m_Desc;
+    friend class RadientSceneWriterImpl;
+
+    std::shared_ptr<RadientSceneState> m_pState;
 };
 
 } // namespace Diligent

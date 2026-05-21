@@ -248,48 +248,53 @@ DILIGENT_BEGIN_INTERFACE(IRadientScene, IObject)
     /// Returns the scene description.
     VIRTUAL const RadientSceneDesc REF METHOD(GetDesc)(THIS) CONST PURE;
 
-    /// Checks if the entity is alive.
-    VIRTUAL Bool METHOD(IsEntityAlive)(THIS_
-                                       RadientEntityID Entity) CONST PURE;
+    /// Returns RADIENT_STATUS_OK if the entity is alive.
+    VIRTUAL RADIENT_STATUS METHOD(IsEntityAlive)(THIS_
+                                                 RadientEntityID Entity) CONST PURE;
 
     /// Gets entity flags.
-    VIRTUAL Bool METHOD(GetEntityFlags)(THIS_
-                                        RadientEntityID          Entity,
-                                        RADIENT_ENTITY_FLAGS REF Flags) CONST PURE;
+    VIRTUAL RADIENT_STATUS METHOD(GetEntityFlags)(THIS_
+                                                  RadientEntityID          Entity,
+                                                  RADIENT_ENTITY_FLAGS REF Flags) CONST PURE;
 
-    /// Returns true if the entity is visible.
-    VIRTUAL Bool METHOD(IsEntityVisible)(THIS_
-                                         RadientEntityID Entity) CONST PURE;
+    /// Gets entity visibility.
+    VIRTUAL RADIENT_STATUS METHOD(IsEntityVisible)(THIS_
+                                                   RadientEntityID Entity,
+                                                   Bool REF        Visible) CONST PURE;
 
-    /// Returns the entity parent, or InvalidRadientEntityID.
-    VIRTUAL RadientEntityID METHOD(GetParent)(THIS_
-                                              RadientEntityID Entity) CONST PURE;
+    /// Gets the entity parent, or InvalidRadientEntityID for a root entity.
+    VIRTUAL RADIENT_STATUS METHOD(GetParent)(THIS_
+                                             RadientEntityID     Entity,
+                                             RadientEntityID REF Parent) CONST PURE;
 
     /// Returns the number of child entities.
-    VIRTUAL Uint32 METHOD(GetChildCount)(THIS_
-                                         RadientEntityID Entity) CONST PURE;
+    VIRTUAL RADIENT_STATUS METHOD(GetChildCount)(THIS_
+                                                 RadientEntityID Entity,
+                                                 Uint32 REF      ChildCount) CONST PURE;
 
-    /// Gets child entities starting from StartChild. Returns the number of entities written to pChildren.
-    VIRTUAL Uint32 METHOD(GetChildren)(THIS_
-                                       RadientEntityID  Entity,
-                                       Uint32           StartChild,
-                                       Uint32           ChildCount,
-                                       RadientEntityID* pChildren) CONST PURE;
+    /// Gets child entities starting from StartChild.
+    VIRTUAL RADIENT_STATUS METHOD(GetChildren)(THIS_
+                                               RadientEntityID  Entity,
+                                               Uint32           StartChild,
+                                               Uint32           ChildCount,
+                                               RadientEntityID* pChildren,
+                                               Uint32 REF       NumChildrenWritten) CONST PURE;
 
     /// Gets local transform.
-    VIRTUAL Bool METHOD(GetLocalTransform)(THIS_
-                                           RadientEntityID      Entity,
-                                           RadientTransform REF Transform) CONST PURE;
+    VIRTUAL RADIENT_STATUS METHOD(GetLocalTransform)(THIS_
+                                                     RadientEntityID      Entity,
+                                                     RadientTransform REF Transform) CONST PURE;
 
     /// Gets world transform matrix.
-    VIRTUAL Bool METHOD(GetWorldMatrix)(THIS_
-                                        RadientEntityID      Entity,
-                                        RadientMatrix4x4 REF Matrix) CONST PURE;
+    VIRTUAL RADIENT_STATUS METHOD(GetWorldMatrix)(THIS_
+                                                  RadientEntityID      Entity,
+                                                  RadientMatrix4x4 REF Matrix) CONST PURE;
 
-    /// Returns true when the entity has the requested component.
-    VIRTUAL Bool METHOD(HasComponent)(THIS_
-                                      RadientEntityID        Entity,
-                                      RadientComponentTypeID ComponentType) CONST PURE;
+    /// Checks if the entity has the requested component.
+    VIRTUAL RADIENT_STATUS METHOD(HasComponent)(THIS_
+                                                RadientEntityID        Entity,
+                                                RadientComponentTypeID ComponentType,
+                                                Bool REF               HasComponent) CONST PURE;
 
     /// Returns current scene revision.
     VIRTUAL RadientRevision METHOD(GetRevision)(THIS) CONST PURE;

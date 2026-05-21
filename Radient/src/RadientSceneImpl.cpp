@@ -26,91 +26,78 @@
 
 #include "RadientSceneImpl.hpp"
 
+#include "RadientSceneState.hpp"
+
 namespace Diligent
 {
 
 RadientSceneImpl::RadientSceneImpl(IReferenceCounters* pRefCounters) :
-    TBase{pRefCounters}
+    TBase{pRefCounters},
+    m_pState{std::make_shared<RadientSceneState>()}
 {}
 
 RadientSceneImpl::~RadientSceneImpl()
 {
 }
 
-RefCntAutoPtr<IRadientScene> RadientSceneImpl::Create()
+RefCntAutoPtr<RadientSceneImpl> RadientSceneImpl::Create()
 {
     return RefCntAutoPtr<RadientSceneImpl>{MakeNewRCObj<RadientSceneImpl>()()};
 }
 
 const RadientSceneDesc& RadientSceneImpl::GetDesc() const
 {
-    return m_Desc;
+    return m_pState->GetDesc();
 }
 
-Bool RadientSceneImpl::IsEntityAlive(RadientEntityID Entity) const
+RADIENT_STATUS RadientSceneImpl::IsEntityAlive(RadientEntityID Entity) const
 {
-    (void)Entity;
-    return False;
+    return m_pState->IsEntityAlive(Entity);
 }
 
-Bool RadientSceneImpl::GetEntityFlags(RadientEntityID Entity, RADIENT_ENTITY_FLAGS& Flags) const
+RADIENT_STATUS RadientSceneImpl::GetEntityFlags(RadientEntityID Entity, RADIENT_ENTITY_FLAGS& Flags) const
 {
-    (void)Entity;
-    Flags = RADIENT_ENTITY_FLAG_NONE;
-    return False;
+    return m_pState->GetEntityFlags(Entity, Flags);
 }
 
-Bool RadientSceneImpl::IsEntityVisible(RadientEntityID Entity) const
+RADIENT_STATUS RadientSceneImpl::IsEntityVisible(RadientEntityID Entity, Bool& Visible) const
 {
-    (void)Entity;
-    return False;
+    return m_pState->IsEntityVisible(Entity, Visible);
 }
 
-RadientEntityID RadientSceneImpl::GetParent(RadientEntityID Entity) const
+RADIENT_STATUS RadientSceneImpl::GetParent(RadientEntityID Entity, RadientEntityID& Parent) const
 {
-    (void)Entity;
-    return InvalidRadientEntityID;
+    return m_pState->GetParent(Entity, Parent);
 }
 
-Uint32 RadientSceneImpl::GetChildCount(RadientEntityID Entity) const
+RADIENT_STATUS RadientSceneImpl::GetChildCount(RadientEntityID Entity, Uint32& ChildCount) const
 {
-    (void)Entity;
-    return 0;
+    return m_pState->GetChildCount(Entity, ChildCount);
 }
 
-Uint32 RadientSceneImpl::GetChildren(RadientEntityID Entity, Uint32 StartChild, Uint32 ChildCount, RadientEntityID* pChildren) const
+RADIENT_STATUS RadientSceneImpl::GetChildren(RadientEntityID Entity, Uint32 StartChild, Uint32 ChildCount, RadientEntityID* pChildren, Uint32& NumChildrenWritten) const
 {
-    (void)Entity;
-    (void)StartChild;
-    (void)ChildCount;
-    (void)pChildren;
-    return 0;
+    return m_pState->GetChildren(Entity, StartChild, ChildCount, pChildren, NumChildrenWritten);
 }
 
-Bool RadientSceneImpl::GetLocalTransform(RadientEntityID Entity, RadientTransform& Transform) const
+RADIENT_STATUS RadientSceneImpl::GetLocalTransform(RadientEntityID Entity, RadientTransform& Transform) const
 {
-    (void)Entity;
-    Transform = {};
-    return False;
+    return m_pState->GetLocalTransform(Entity, Transform);
 }
 
-Bool RadientSceneImpl::GetWorldMatrix(RadientEntityID Entity, RadientMatrix4x4& Matrix) const
+RADIENT_STATUS RadientSceneImpl::GetWorldMatrix(RadientEntityID Entity, RadientMatrix4x4& Matrix) const
 {
-    (void)Entity;
-    Matrix = {};
-    return False;
+    return m_pState->GetWorldMatrix(Entity, Matrix);
 }
 
-Bool RadientSceneImpl::HasComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType) const
+RADIENT_STATUS RadientSceneImpl::HasComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType, Bool& HasComponent) const
 {
-    (void)Entity;
-    (void)ComponentType;
-    return False;
+    return m_pState->HasComponent(Entity, ComponentType, HasComponent);
 }
 
 RadientRevision RadientSceneImpl::GetRevision() const
 {
-    return 0;
+    return m_pState->GetRevision();
 }
 
 } // namespace Diligent

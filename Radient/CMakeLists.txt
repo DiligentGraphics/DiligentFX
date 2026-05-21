@@ -4,12 +4,14 @@ project(Radient CXX)
 
 set(SOURCE
     src/RadientSceneImpl.cpp
+    src/RadientSceneState.cpp
     src/RadientSceneWriterImpl.cpp
 )
 
 set(INCLUDE
     include/RadientMath.hpp
     include/RadientSceneImpl.hpp
+    include/RadientSceneState.hpp
     include/RadientSceneWriterImpl.hpp
 )
 

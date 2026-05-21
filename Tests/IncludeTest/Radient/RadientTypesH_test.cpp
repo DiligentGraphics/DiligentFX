@@ -40,6 +40,18 @@ static_assert(std::is_same<RadientComponentTypeID, Uint64>::value, "RadientCompo
 static_assert(std::is_same<RadientRevision, Uint64>::value, "RadientRevision must be Uint64");
 static_assert(std::is_same<RadientFrameID, Uint64>::value, "RadientFrameID must be Uint64");
 
+static_assert(sizeof(RADIENT_STATUS) == sizeof(Int32), "RADIENT_STATUS must be Int32-sized");
+static_assert(RADIENT_STATUS_OK == 0, "Unexpected RADIENT_STATUS_OK value");
+static_assert(RADIENT_STATUS_NO_CHANGE == 1, "Unexpected RADIENT_STATUS_NO_CHANGE value");
+static_assert(RADIENT_STATUS_NOT_FOUND == -1, "Unexpected RADIENT_STATUS_NOT_FOUND value");
+static_assert(RADIENT_STATUS_INVALID_ARGUMENT == -2, "Unexpected RADIENT_STATUS_INVALID_ARGUMENT value");
+static_assert(RADIENT_STATUS_INVALID_OPERATION == -3, "Unexpected RADIENT_STATUS_INVALID_OPERATION value");
+static_assert(RADIENT_SUCCEEDED(RADIENT_STATUS_OK), "RADIENT_STATUS_OK must be successful");
+static_assert(RADIENT_SUCCEEDED(RADIENT_STATUS_NO_CHANGE), "RADIENT_STATUS_NO_CHANGE must be successful");
+static_assert(RADIENT_FAILED(RADIENT_STATUS_NOT_FOUND), "RADIENT_STATUS_NOT_FOUND must be a failure");
+static_assert(RADIENT_FAILED(RADIENT_STATUS_INVALID_ARGUMENT), "RADIENT_STATUS_INVALID_ARGUMENT must be a failure");
+static_assert(RADIENT_FAILED(RADIENT_STATUS_INVALID_OPERATION), "RADIENT_STATUS_INVALID_OPERATION must be a failure");
+
 static_assert(InvalidRadientHandle == 0, "Unexpected InvalidRadientHandle value");
 static_assert(InvalidRadientEntityID == 0, "Unexpected InvalidRadientEntityID value");
 static_assert(InvalidRadientComponentTypeID == 0, "Unexpected InvalidRadientComponentTypeID value");

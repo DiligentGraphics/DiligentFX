@@ -85,22 +85,33 @@ void RadientScene_C_UseCustomComponentData(void)
 void RadientScene_C_TestMacros(IRadientScene* pScene)
 {
     RadientEntityID            Entity          = 0;
+    RadientEntityID            Parent          = 0;
     RadientEntityID            Children[1]     = {0};
     RADIENT_ENTITY_FLAGS       EntityFlags     = 0;
     Uint32                     ChildCount      = 1;
+    Uint32                     NumChildren     = 0;
+    Bool                       Visible         = False;
+    Bool                       HasComponent    = False;
     RadientTransform           Transform       = {0};
     RadientMatrix4x4           WorldMatrix     = {0};
     RadientCustomComponentData CustomComponent = {0};
+    RADIENT_STATUS             Status          = RADIENT_STATUS_OK;
 
     IRadientScene_GetDesc(pScene);
-    IRadientScene_IsEntityAlive(pScene, Entity);
-    IRadientScene_GetEntityFlags(pScene, Entity, &EntityFlags);
-    IRadientScene_IsEntityVisible(pScene, Entity);
-    IRadientScene_GetParent(pScene, Entity);
-    IRadientScene_GetChildCount(pScene, Entity);
-    IRadientScene_GetChildren(pScene, Entity, 0, ChildCount, Children);
-    IRadientScene_GetLocalTransform(pScene, Entity, &Transform);
-    IRadientScene_GetWorldMatrix(pScene, Entity, &WorldMatrix);
-    IRadientScene_HasComponent(pScene, Entity, CustomComponent.ComponentType);
+    Status = IRadientScene_IsEntityAlive(pScene, Entity);
+    Status = IRadientScene_GetEntityFlags(pScene, Entity, &EntityFlags);
+    Status = IRadientScene_IsEntityVisible(pScene, Entity, &Visible);
+    Status = IRadientScene_GetParent(pScene, Entity, &Parent);
+    Status = IRadientScene_GetChildCount(pScene, Entity, &ChildCount);
+    Status = IRadientScene_GetChildren(pScene, Entity, 0, ChildCount, Children, &NumChildren);
+    Status = IRadientScene_GetLocalTransform(pScene, Entity, &Transform);
+    Status = IRadientScene_GetWorldMatrix(pScene, Entity, &WorldMatrix);
+    Status = IRadientScene_HasComponent(pScene, Entity, CustomComponent.ComponentType, &HasComponent);
     IRadientScene_GetRevision(pScene);
+
+    (void)Parent;
+    (void)NumChildren;
+    (void)Visible;
+    (void)HasComponent;
+    (void)Status;
 }

@@ -35,6 +35,32 @@
 
 DILIGENT_BEGIN_NAMESPACE(Diligent)
 
+// clang-format off
+
+/// Generic status returned by Radient operations.
+DILIGENT_TYPED_ENUM(RADIENT_STATUS, Int32)
+{
+    /// Operation completed successfully.
+    RADIENT_STATUS_OK = 0,
+
+    /// The operation was valid, but did not change any state.
+    RADIENT_STATUS_NO_CHANGE = 1,
+
+    /// The requested entity, component, or resource was not found.
+    RADIENT_STATUS_NOT_FOUND = -1,
+
+    /// One or more arguments are invalid.
+    RADIENT_STATUS_INVALID_ARGUMENT = -2,
+
+    /// The operation is not valid for the current state.
+    RADIENT_STATUS_INVALID_OPERATION = -3
+};
+
+// clang-format on
+
+#define RADIENT_SUCCEEDED(Status) ((Status) >= 0)
+#define RADIENT_FAILED(Status)    ((Status) < 0)
+
 /// Stable handle used by Radient objects and remote protocol objects.
 typedef Uint64 RadientHandle;
 

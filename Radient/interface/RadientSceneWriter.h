@@ -51,66 +51,67 @@ static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientSceneWriter =
 DILIGENT_BEGIN_INTERFACE(IRadientSceneWriter, IObject)
 {
     /// Creates an entity.
-    VIRTUAL RadientEntityID METHOD(CreateEntity)(THIS_
-                                                 const RadientEntityDesc REF Desc) PURE;
+    VIRTUAL RADIENT_STATUS METHOD(CreateEntity)(THIS_
+                                                const RadientEntityDesc REF Desc,
+                                                RadientEntityID REF         Entity) PURE;
 
     /// Destroys an entity and its owned components.
-    VIRTUAL void METHOD(DestroyEntity)(THIS_
-                                       RadientEntityID Entity) PURE;
+    VIRTUAL RADIENT_STATUS METHOD(DestroyEntity)(THIS_
+                                                 RadientEntityID Entity) PURE;
 
     /// Sets entity flags.
-    VIRTUAL void METHOD(SetEntityFlags)(THIS_
-                                        RadientEntityID      Entity,
-                                        RADIENT_ENTITY_FLAGS Flags) PURE;
+    VIRTUAL RADIENT_STATUS METHOD(SetEntityFlags)(THIS_
+                                                  RadientEntityID      Entity,
+                                                  RADIENT_ENTITY_FLAGS Flags) PURE;
 
     /// Sets entity visibility.
-    VIRTUAL void METHOD(SetEntityVisible)(THIS_
-                                          RadientEntityID Entity,
-                                          Bool            Visible) PURE;
+    VIRTUAL RADIENT_STATUS METHOD(SetEntityVisible)(THIS_
+                                                    RadientEntityID Entity,
+                                                    Bool            Visible) PURE;
 
     /// Sets the entity parent.
-    VIRTUAL void METHOD(SetParent)(THIS_
-                                   RadientEntityID Entity,
-                                   RadientEntityID Parent,
-                                   Bool            KeepWorldTransform DEFAULT_VALUE(True)) PURE;
+    VIRTUAL RADIENT_STATUS METHOD(SetParent)(THIS_
+                                             RadientEntityID Entity,
+                                             RadientEntityID Parent,
+                                             Bool            KeepWorldTransform DEFAULT_VALUE(True)) PURE;
 
     /// Sets local transform.
-    VIRTUAL void METHOD(SetLocalTransform)(THIS_
-                                           RadientEntityID            Entity,
-                                           const RadientTransform REF Transform) PURE;
+    VIRTUAL RADIENT_STATUS METHOD(SetLocalTransform)(THIS_
+                                                     RadientEntityID            Entity,
+                                                     const RadientTransform REF Transform) PURE;
 
     /// Adds or updates a camera component.
-    VIRTUAL void METHOD(SetCamera)(THIS_
-                                   RadientEntityID                  Entity,
-                                   const RadientCameraComponent REF Camera) PURE;
+    VIRTUAL RADIENT_STATUS METHOD(SetCamera)(THIS_
+                                             RadientEntityID                  Entity,
+                                             const RadientCameraComponent REF Camera) PURE;
 
     /// Adds or updates a mesh component.
-    VIRTUAL void METHOD(SetMesh)(THIS_
-                                 RadientEntityID                Entity,
-                                 const RadientMeshComponent REF Mesh) PURE;
+    VIRTUAL RADIENT_STATUS METHOD(SetMesh)(THIS_
+                                           RadientEntityID                Entity,
+                                           const RadientMeshComponent REF Mesh) PURE;
 
     /// Adds or updates a mesh renderer component.
-    VIRTUAL void METHOD(SetMeshRenderer)(THIS_
-                                         RadientEntityID                        Entity,
-                                         const RadientMeshRendererComponent REF Renderer) PURE;
+    VIRTUAL RADIENT_STATUS METHOD(SetMeshRenderer)(THIS_
+                                                   RadientEntityID                        Entity,
+                                                   const RadientMeshRendererComponent REF Renderer) PURE;
 
     /// Adds or updates a light component.
-    VIRTUAL void METHOD(SetLight)(THIS_
-                                  RadientEntityID                 Entity,
-                                  const RadientLightComponent REF Light) PURE;
+    VIRTUAL RADIENT_STATUS METHOD(SetLight)(THIS_
+                                            RadientEntityID                 Entity,
+                                            const RadientLightComponent REF Light) PURE;
 
     /// Adds or updates a custom serialized component.
-    VIRTUAL void METHOD(SetCustomComponentData)(THIS_
-                                                RadientEntityID                       Entity,
-                                                const RadientCustomComponentData REF Component) PURE;
+    VIRTUAL RADIENT_STATUS METHOD(SetCustomComponentData)(THIS_
+                                                          RadientEntityID                       Entity,
+                                                          const RadientCustomComponentData REF Component) PURE;
 
     /// Removes a component from the entity.
-    VIRTUAL void METHOD(RemoveComponent)(THIS_
-                                         RadientEntityID        Entity,
-                                         RadientComponentTypeID ComponentType) PURE;
+    VIRTUAL RADIENT_STATUS METHOD(RemoveComponent)(THIS_
+                                                   RadientEntityID        Entity,
+                                                   RadientComponentTypeID ComponentType) PURE;
 
     /// Commits pending scene changes to the active backend.
-    VIRTUAL void METHOD(CommitChanges)(THIS) PURE;
+    VIRTUAL RADIENT_STATUS METHOD(CommitChanges)(THIS) PURE;
 };
 DILIGENT_END_INTERFACE
 

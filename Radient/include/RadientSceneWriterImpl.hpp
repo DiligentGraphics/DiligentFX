@@ -30,60 +30,66 @@
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
 
+#include <memory>
+
 namespace Diligent
 {
+
+class RadientSceneImpl;
+class RadientSceneState;
 
 class RadientSceneWriterImpl final : public ObjectBase<IRadientSceneWriter>
 {
 public:
     using TBase = ObjectBase<IRadientSceneWriter>;
 
-    RadientSceneWriterImpl(IReferenceCounters* pRefCounters, IRadientScene* pScene);
+    RadientSceneWriterImpl(IReferenceCounters* pRefCounters, std::shared_ptr<RadientSceneState> pState);
     ~RadientSceneWriterImpl();
 
     IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientSceneWriter, TBase)
 
-    static RefCntAutoPtr<IRadientSceneWriter> Create(IRadientScene* pScene);
+    static RefCntAutoPtr<IRadientSceneWriter> Create(RadientSceneImpl* pScene);
 
-    virtual RadientEntityID DILIGENT_CALL_TYPE CreateEntity(const RadientEntityDesc& Desc) override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateEntity(const RadientEntityDesc& Desc,
+                                                           RadientEntityID&        Entity) override final;
 
-    virtual void DILIGENT_CALL_TYPE DestroyEntity(RadientEntityID Entity) override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE DestroyEntity(RadientEntityID Entity) override final;
 
-    virtual void DILIGENT_CALL_TYPE SetEntityFlags(RadientEntityID      Entity,
-                                                   RADIENT_ENTITY_FLAGS Flags) override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetEntityFlags(RadientEntityID      Entity,
+                                                             RADIENT_ENTITY_FLAGS Flags) override final;
 
-    virtual void DILIGENT_CALL_TYPE SetEntityVisible(RadientEntityID Entity,
-                                                     Bool            Visible) override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetEntityVisible(RadientEntityID Entity,
+                                                               Bool            Visible) override final;
 
-    virtual void DILIGENT_CALL_TYPE SetParent(RadientEntityID Entity,
-                                              RadientEntityID Parent,
-                                              Bool            KeepWorldTransform) override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetParent(RadientEntityID Entity,
+                                                        RadientEntityID Parent,
+                                                        Bool            KeepWorldTransform) override final;
 
-    virtual void DILIGENT_CALL_TYPE SetLocalTransform(RadientEntityID         Entity,
-                                                      const RadientTransform& Transform) override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetLocalTransform(RadientEntityID         Entity,
+                                                                const RadientTransform& Transform) override final;
 
-    virtual void DILIGENT_CALL_TYPE SetCamera(RadientEntityID               Entity,
-                                              const RadientCameraComponent& Camera) override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetCamera(RadientEntityID               Entity,
+                                                        const RadientCameraComponent& Camera) override final;
 
-    virtual void DILIGENT_CALL_TYPE SetMesh(RadientEntityID             Entity,
-                                            const RadientMeshComponent& Mesh) override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetMesh(RadientEntityID             Entity,
+                                                      const RadientMeshComponent& Mesh) override final;
 
-    virtual void DILIGENT_CALL_TYPE SetMeshRenderer(RadientEntityID                     Entity,
-                                                    const RadientMeshRendererComponent& Renderer) override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetMeshRenderer(RadientEntityID                     Entity,
+                                                              const RadientMeshRendererComponent& Renderer) override final;
 
-    virtual void DILIGENT_CALL_TYPE SetLight(RadientEntityID              Entity,
-                                             const RadientLightComponent& Light) override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetLight(RadientEntityID              Entity,
+                                                       const RadientLightComponent& Light) override final;
 
-    virtual void DILIGENT_CALL_TYPE SetCustomComponentData(RadientEntityID                   Entity,
-                                                           const RadientCustomComponentData& Component) override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetCustomComponentData(RadientEntityID                   Entity,
+                                                                     const RadientCustomComponentData& Component) override final;
 
-    virtual void DILIGENT_CALL_TYPE RemoveComponent(RadientEntityID        Entity,
-                                                    RadientComponentTypeID ComponentType) override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE RemoveComponent(RadientEntityID        Entity,
+                                                              RadientComponentTypeID ComponentType) override final;
 
-    virtual void DILIGENT_CALL_TYPE CommitChanges() override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CommitChanges() override final;
 
 private:
-    RefCntAutoPtr<IRadientScene> m_pScene;
+    std::shared_ptr<RadientSceneState> m_pState;
 };
 
 } // namespace Diligent

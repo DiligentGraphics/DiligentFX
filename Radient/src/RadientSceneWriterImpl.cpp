@@ -26,97 +26,92 @@
 
 #include "RadientSceneWriterImpl.hpp"
 
+#include "RadientSceneImpl.hpp"
+#include "RadientSceneState.hpp"
+
+#include <utility>
+
 namespace Diligent
 {
 
-RadientSceneWriterImpl::RadientSceneWriterImpl(IReferenceCounters* pRefCounters, IRadientScene* pScene) :
+RadientSceneWriterImpl::RadientSceneWriterImpl(IReferenceCounters* pRefCounters, std::shared_ptr<RadientSceneState> pState) :
     TBase{pRefCounters},
-    m_pScene{pScene}
+    m_pState{std::move(pState)}
 {}
 
 RadientSceneWriterImpl::~RadientSceneWriterImpl()
 {
 }
 
-RefCntAutoPtr<IRadientSceneWriter> RadientSceneWriterImpl::Create(IRadientScene* pScene)
+RefCntAutoPtr<IRadientSceneWriter> RadientSceneWriterImpl::Create(RadientSceneImpl* pScene)
 {
-    return RefCntAutoPtr<RadientSceneWriterImpl>{MakeNewRCObj<RadientSceneWriterImpl>()(pScene)};
+    return RefCntAutoPtr<RadientSceneWriterImpl>{MakeNewRCObj<RadientSceneWriterImpl>()(pScene != nullptr ? pScene->m_pState : nullptr)};
 }
 
-RadientEntityID RadientSceneWriterImpl::CreateEntity(const RadientEntityDesc& Desc)
+RADIENT_STATUS RadientSceneWriterImpl::CreateEntity(const RadientEntityDesc& Desc, RadientEntityID& Entity)
 {
-    (void)Desc;
-    return InvalidRadientEntityID;
+    Entity = InvalidRadientEntityID;
+    return m_pState ? m_pState->CreateEntity(Desc, Entity) : RADIENT_STATUS_INVALID_ARGUMENT;
 }
 
-void RadientSceneWriterImpl::DestroyEntity(RadientEntityID Entity)
+RADIENT_STATUS RadientSceneWriterImpl::DestroyEntity(RadientEntityID Entity)
 {
-    (void)Entity;
+    return m_pState ? m_pState->DestroyEntity(Entity) : RADIENT_STATUS_INVALID_ARGUMENT;
 }
 
-void RadientSceneWriterImpl::SetEntityFlags(RadientEntityID Entity, RADIENT_ENTITY_FLAGS Flags)
+RADIENT_STATUS RadientSceneWriterImpl::SetEntityFlags(RadientEntityID Entity, RADIENT_ENTITY_FLAGS Flags)
 {
-    (void)Entity;
-    (void)Flags;
+    return m_pState ? m_pState->SetEntityFlags(Entity, Flags) : RADIENT_STATUS_INVALID_ARGUMENT;
 }
 
-void RadientSceneWriterImpl::SetEntityVisible(RadientEntityID Entity, Bool Visible)
+RADIENT_STATUS RadientSceneWriterImpl::SetEntityVisible(RadientEntityID Entity, Bool Visible)
 {
-    (void)Entity;
-    (void)Visible;
+    return m_pState ? m_pState->SetEntityVisible(Entity, Visible) : RADIENT_STATUS_INVALID_ARGUMENT;
 }
 
-void RadientSceneWriterImpl::SetParent(RadientEntityID Entity, RadientEntityID Parent, Bool KeepWorldTransform)
+RADIENT_STATUS RadientSceneWriterImpl::SetParent(RadientEntityID Entity, RadientEntityID Parent, Bool KeepWorldTransform)
 {
-    (void)Entity;
-    (void)Parent;
-    (void)KeepWorldTransform;
+    return m_pState ? m_pState->SetParent(Entity, Parent, KeepWorldTransform) : RADIENT_STATUS_INVALID_ARGUMENT;
 }
 
-void RadientSceneWriterImpl::SetLocalTransform(RadientEntityID Entity, const RadientTransform& Transform)
+RADIENT_STATUS RadientSceneWriterImpl::SetLocalTransform(RadientEntityID Entity, const RadientTransform& Transform)
 {
-    (void)Entity;
-    (void)Transform;
+    return m_pState ? m_pState->SetLocalTransform(Entity, Transform) : RADIENT_STATUS_INVALID_ARGUMENT;
 }
 
-void RadientSceneWriterImpl::SetCamera(RadientEntityID Entity, const RadientCameraComponent& Camera)
+RADIENT_STATUS RadientSceneWriterImpl::SetCamera(RadientEntityID Entity, const RadientCameraComponent& Camera)
 {
-    (void)Entity;
-    (void)Camera;
+    return m_pState ? m_pState->SetCamera(Entity, Camera) : RADIENT_STATUS_INVALID_ARGUMENT;
 }
 
-void RadientSceneWriterImpl::SetMesh(RadientEntityID Entity, const RadientMeshComponent& Mesh)
+RADIENT_STATUS RadientSceneWriterImpl::SetMesh(RadientEntityID Entity, const RadientMeshComponent& Mesh)
 {
-    (void)Entity;
-    (void)Mesh;
+    return m_pState ? m_pState->SetMesh(Entity, Mesh) : RADIENT_STATUS_INVALID_ARGUMENT;
 }
 
-void RadientSceneWriterImpl::SetMeshRenderer(RadientEntityID Entity, const RadientMeshRendererComponent& Renderer)
+RADIENT_STATUS RadientSceneWriterImpl::SetMeshRenderer(RadientEntityID Entity, const RadientMeshRendererComponent& Renderer)
 {
-    (void)Entity;
-    (void)Renderer;
+    return m_pState ? m_pState->SetMeshRenderer(Entity, Renderer) : RADIENT_STATUS_INVALID_ARGUMENT;
 }
 
-void RadientSceneWriterImpl::SetLight(RadientEntityID Entity, const RadientLightComponent& Light)
+RADIENT_STATUS RadientSceneWriterImpl::SetLight(RadientEntityID Entity, const RadientLightComponent& Light)
 {
-    (void)Entity;
-    (void)Light;
+    return m_pState ? m_pState->SetLight(Entity, Light) : RADIENT_STATUS_INVALID_ARGUMENT;
 }
 
-void RadientSceneWriterImpl::SetCustomComponentData(RadientEntityID Entity, const RadientCustomComponentData& Component)
+RADIENT_STATUS RadientSceneWriterImpl::SetCustomComponentData(RadientEntityID Entity, const RadientCustomComponentData& Component)
 {
-    (void)Entity;
-    (void)Component;
+    return m_pState ? m_pState->SetCustomComponentData(Entity, Component) : RADIENT_STATUS_INVALID_ARGUMENT;
 }
 
-void RadientSceneWriterImpl::RemoveComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType)
+RADIENT_STATUS RadientSceneWriterImpl::RemoveComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType)
 {
-    (void)Entity;
-    (void)ComponentType;
+    return m_pState ? m_pState->RemoveComponent(Entity, ComponentType) : RADIENT_STATUS_INVALID_ARGUMENT;
 }
 
-void RadientSceneWriterImpl::CommitChanges()
+RADIENT_STATUS RadientSceneWriterImpl::CommitChanges()
 {
+    return m_pState ? m_pState->CommitChanges() : RADIENT_STATUS_INVALID_ARGUMENT;
 }
 
 } // namespace Diligent

@@ -27,7 +27,7 @@
 #include "TestingEnvironment.hpp"
 #include "gtest/gtest.h"
 
-#include "../include/RadientSceneImpl.hpp"
+#include "RadientSceneImpl.hpp"
 
 using namespace Diligent;
 using namespace Diligent::Testing;
