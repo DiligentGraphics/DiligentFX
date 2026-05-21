@@ -70,7 +70,7 @@ RADIENT_STATUS RadientSceneState::GetEntityFlags(RadientEntityID Entity, RADIENT
     return RADIENT_STATUS_OK;
 }
 
-RADIENT_STATUS RadientSceneState::IsEntityVisible(RadientEntityID Entity, Bool& Visible) const
+RADIENT_STATUS RadientSceneState::GetEntityOwnVisibility(RadientEntityID Entity, Bool& Visible) const
 {
     const entt::entity E = FindEntity(Entity);
     if (E == entt::null)
@@ -80,6 +80,35 @@ RADIENT_STATUS RadientSceneState::IsEntityVisible(RadientEntityID Entity, Bool& 
     }
 
     Visible = (m_Registry.get<EntityStateComponent>(E).Flags & RADIENT_ENTITY_FLAG_VISIBLE) != 0 ? True : False;
+    return RADIENT_STATUS_OK;
+}
+
+RADIENT_STATUS RadientSceneState::GetEntityEffectiveVisibility(RadientEntityID Entity, Bool& Visible) const
+{
+    Visible = False;
+
+    entt::entity Current = FindEntity(Entity);
+    if (Current == entt::null)
+        return RADIENT_STATUS_NOT_FOUND;
+
+    while (Current != entt::null)
+    {
+        const EntityStateComponent& State = m_Registry.get<EntityStateComponent>(Current);
+        if ((State.Flags & RADIENT_ENTITY_FLAG_VISIBLE) == 0)
+            return RADIENT_STATUS_OK;
+
+        const HierarchyComponent& Hierarchy = m_Registry.get<HierarchyComponent>(Current);
+        if (Hierarchy.Parent == InvalidRadientEntityID)
+        {
+            Visible = True;
+            return RADIENT_STATUS_OK;
+        }
+
+        Current = FindEntity(Hierarchy.Parent);
+        if (Current == entt::null)
+            return RADIENT_STATUS_NOT_FOUND;
+    }
+
     return RADIENT_STATUS_OK;
 }
 
@@ -274,7 +303,7 @@ RADIENT_STATUS RadientSceneState::SetEntityFlags(RadientEntityID Entity, RADIENT
     return RADIENT_STATUS_OK;
 }
 
-RADIENT_STATUS RadientSceneState::SetEntityVisible(RadientEntityID Entity, Bool Visible)
+RADIENT_STATUS RadientSceneState::SetEntityOwnVisibility(RadientEntityID Entity, Bool Visible)
 {
     const entt::entity E = FindEntity(Entity);
     if (E == entt::null)

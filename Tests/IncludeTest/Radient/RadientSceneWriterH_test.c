@@ -42,7 +42,7 @@ void RadientSceneWriter_C_TestMacros(IRadientSceneWriter* pWriter)
     Status = IRadientSceneWriter_CreateEntity(pWriter, &EntityDesc, &Entity);
     Status = IRadientSceneWriter_DestroyEntity(pWriter, Entity);
     Status = IRadientSceneWriter_SetEntityFlags(pWriter, Entity, EntityFlags);
-    Status = IRadientSceneWriter_SetEntityVisible(pWriter, Entity, True);
+    Status = IRadientSceneWriter_SetEntityOwnVisibility(pWriter, Entity, True);
     Status = IRadientSceneWriter_SetParent(pWriter, Entity, InvalidRadientEntityID, True);
     Status = IRadientSceneWriter_SetLocalTransform(pWriter, Entity, &Transform);
     Status = IRadientSceneWriter_SetCamera(pWriter, Entity, &Camera);

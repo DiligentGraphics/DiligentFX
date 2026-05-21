@@ -58,8 +58,8 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetEntityFlags(RadientEntityID      Entity,
                                                              RADIENT_ENTITY_FLAGS Flags) override final;
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetEntityVisible(RadientEntityID Entity,
-                                                               Bool            Visible) override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetEntityOwnVisibility(RadientEntityID Entity,
+                                                                     Bool            Visible) override final;
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetParent(RadientEntityID Entity,
                                                         RadientEntityID Parent,

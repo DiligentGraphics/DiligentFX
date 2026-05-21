@@ -64,10 +64,10 @@ DILIGENT_BEGIN_INTERFACE(IRadientSceneWriter, IObject)
                                                   RadientEntityID      Entity,
                                                   RADIENT_ENTITY_FLAGS Flags) PURE;
 
-    /// Sets entity visibility.
-    VIRTUAL RADIENT_STATUS METHOD(SetEntityVisible)(THIS_
-                                                    RadientEntityID Entity,
-                                                    Bool            Visible) PURE;
+    /// Sets entity's own visibility flag.
+    VIRTUAL RADIENT_STATUS METHOD(SetEntityOwnVisibility)(THIS_
+                                                          RadientEntityID Entity,
+                                                          Bool            Visible) PURE;
 
     /// Sets the entity parent.
     VIRTUAL RADIENT_STATUS METHOD(SetParent)(THIS_
@@ -122,7 +122,7 @@ DILIGENT_END_INTERFACE
 #    define IRadientSceneWriter_CreateEntity(This, ...)           CALL_IFACE_METHOD(RadientSceneWriter, CreateEntity,      This, __VA_ARGS__)
 #    define IRadientSceneWriter_DestroyEntity(This, ...)          CALL_IFACE_METHOD(RadientSceneWriter, DestroyEntity,     This, __VA_ARGS__)
 #    define IRadientSceneWriter_SetEntityFlags(This, ...)         CALL_IFACE_METHOD(RadientSceneWriter, SetEntityFlags,    This, __VA_ARGS__)
-#    define IRadientSceneWriter_SetEntityVisible(This, ...)       CALL_IFACE_METHOD(RadientSceneWriter, SetEntityVisible,  This, __VA_ARGS__)
+#    define IRadientSceneWriter_SetEntityOwnVisibility(This, ...) CALL_IFACE_METHOD(RadientSceneWriter, SetEntityOwnVisibility, This, __VA_ARGS__)
 #    define IRadientSceneWriter_SetParent(This, ...)              CALL_IFACE_METHOD(RadientSceneWriter, SetParent,         This, __VA_ARGS__)
 #    define IRadientSceneWriter_SetLocalTransform(This, ...)      CALL_IFACE_METHOD(RadientSceneWriter, SetLocalTransform, This, __VA_ARGS__)
 #    define IRadientSceneWriter_SetCamera(This, ...)              CALL_IFACE_METHOD(RadientSceneWriter, SetCamera,         This, __VA_ARGS__)

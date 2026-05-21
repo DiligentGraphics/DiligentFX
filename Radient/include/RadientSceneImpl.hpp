@@ -57,8 +57,11 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetEntityFlags(RadientEntityID       Entity,
                                                              RADIENT_ENTITY_FLAGS& Flags) const override final;
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE IsEntityVisible(RadientEntityID Entity,
-                                                              Bool&           Visible) const override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetEntityOwnVisibility(RadientEntityID Entity,
+                                                                     Bool&           Visible) const override final;
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetEntityEffectiveVisibility(RadientEntityID Entity,
+                                                                           Bool&           Visible) const override final;
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetParent(RadientEntityID  Entity,
                                                         RadientEntityID& Parent) const override final;

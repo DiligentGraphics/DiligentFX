@@ -60,9 +60,14 @@ RADIENT_STATUS RadientSceneImpl::GetEntityFlags(RadientEntityID Entity, RADIENT_
     return m_pState->GetEntityFlags(Entity, Flags);
 }
 
-RADIENT_STATUS RadientSceneImpl::IsEntityVisible(RadientEntityID Entity, Bool& Visible) const
+RADIENT_STATUS RadientSceneImpl::GetEntityOwnVisibility(RadientEntityID Entity, Bool& Visible) const
 {
-    return m_pState->IsEntityVisible(Entity, Visible);
+    return m_pState->GetEntityOwnVisibility(Entity, Visible);
+}
+
+RADIENT_STATUS RadientSceneImpl::GetEntityEffectiveVisibility(RadientEntityID Entity, Bool& Visible) const
+{
+    return m_pState->GetEntityEffectiveVisibility(Entity, Visible);
 }
 
 RADIENT_STATUS RadientSceneImpl::GetParent(RadientEntityID Entity, RadientEntityID& Parent) const

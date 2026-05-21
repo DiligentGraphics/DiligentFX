@@ -100,7 +100,7 @@ void RadientScene_C_TestMacros(IRadientScene* pScene)
     IRadientScene_GetDesc(pScene);
     Status = IRadientScene_IsEntityAlive(pScene, Entity);
     Status = IRadientScene_GetEntityFlags(pScene, Entity, &EntityFlags);
-    Status = IRadientScene_IsEntityVisible(pScene, Entity, &Visible);
+    Status = IRadientScene_GetEntityOwnVisibility(pScene, Entity, &Visible);
     Status = IRadientScene_GetParent(pScene, Entity, &Parent);
     Status = IRadientScene_GetChildCount(pScene, Entity, &ChildCount);
     Status = IRadientScene_GetChildren(pScene, Entity, 0, ChildCount, Children, &NumChildren);

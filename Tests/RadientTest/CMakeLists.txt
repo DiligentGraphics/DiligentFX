@@ -34,6 +34,11 @@ PRIVATE
     EnTT
 )
 
+if (MSVC)
+    # Disable warning C4324: structure was padded due to alignment specifier
+    target_compile_options(RadientTest PRIVATE /wd4324)
+endif()
+
 if(WEBGPU_SUPPORTED)
     target_link_libraries(RadientTest PRIVATE libtint)
 endif()

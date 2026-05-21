@@ -44,6 +44,11 @@ PRIVATE
     EnTT
 )
 
+if (MSVC)
+    # Disable warning C4324: structure was padded due to alignment specifier
+    target_compile_options(Radient PRIVATE /wd4324)
+endif()
+
 set_target_properties(Radient PROPERTIES
     FOLDER DiligentFX
 )

@@ -43,7 +43,7 @@ DILIGENT_TYPED_ENUM(RADIENT_ENTITY_FLAGS, Uint32)
 {
     RADIENT_ENTITY_FLAG_NONE = 0u,
 
-    /// Entity participates in rendering.
+    /// Entity's own visibility flag. Effective visibility also depends on parent entities.
     RADIENT_ENTITY_FLAG_VISIBLE = 1u << 0u,
 
     RADIENT_ENTITY_FLAG_LAST = RADIENT_ENTITY_FLAG_VISIBLE
@@ -257,10 +257,15 @@ DILIGENT_BEGIN_INTERFACE(IRadientScene, IObject)
                                                   RadientEntityID          Entity,
                                                   RADIENT_ENTITY_FLAGS REF Flags) CONST PURE;
 
-    /// Gets entity visibility.
-    VIRTUAL RADIENT_STATUS METHOD(IsEntityVisible)(THIS_
-                                                   RadientEntityID Entity,
-                                                   Bool REF        Visible) CONST PURE;
+    /// Gets entity's own visibility flag.
+    VIRTUAL RADIENT_STATUS METHOD(GetEntityOwnVisibility)(THIS_
+                                                          RadientEntityID Entity,
+                                                          Bool REF        Visible) CONST PURE;
+
+    /// Gets effective entity visibility, accounting for parent visibility.
+    VIRTUAL RADIENT_STATUS METHOD(GetEntityEffectiveVisibility)(THIS_
+                                                                RadientEntityID Entity,
+                                                                Bool REF        Visible) CONST PURE;
 
     /// Gets the entity parent, or InvalidRadientEntityID for a root entity.
     VIRTUAL RADIENT_STATUS METHOD(GetParent)(THIS_
@@ -305,17 +310,18 @@ DILIGENT_END_INTERFACE
 
 #if DILIGENT_C_INTERFACE
 
-#    define IRadientScene_GetDesc(This)               CALL_IFACE_METHOD(RadientScene, GetDesc,           This)
-#    define IRadientScene_IsEntityAlive(This, ...)     CALL_IFACE_METHOD(RadientScene, IsEntityAlive,     This, __VA_ARGS__)
-#    define IRadientScene_GetEntityFlags(This, ...)    CALL_IFACE_METHOD(RadientScene, GetEntityFlags,    This, __VA_ARGS__)
-#    define IRadientScene_IsEntityVisible(This, ...)   CALL_IFACE_METHOD(RadientScene, IsEntityVisible,   This, __VA_ARGS__)
-#    define IRadientScene_GetParent(This, ...)         CALL_IFACE_METHOD(RadientScene, GetParent,         This, __VA_ARGS__)
-#    define IRadientScene_GetChildCount(This, ...)     CALL_IFACE_METHOD(RadientScene, GetChildCount,     This, __VA_ARGS__)
-#    define IRadientScene_GetChildren(This, ...)       CALL_IFACE_METHOD(RadientScene, GetChildren,       This, __VA_ARGS__)
-#    define IRadientScene_GetLocalTransform(This, ...) CALL_IFACE_METHOD(RadientScene, GetLocalTransform, This, __VA_ARGS__)
-#    define IRadientScene_GetWorldMatrix(This, ...)    CALL_IFACE_METHOD(RadientScene, GetWorldMatrix,    This, __VA_ARGS__)
-#    define IRadientScene_HasComponent(This, ...)      CALL_IFACE_METHOD(RadientScene, HasComponent,      This, __VA_ARGS__)
-#    define IRadientScene_GetRevision(This)            CALL_IFACE_METHOD(RadientScene, GetRevision,       This)
+#    define IRadientScene_GetDesc(This)                         CALL_IFACE_METHOD(RadientScene, GetDesc,                     This)
+#    define IRadientScene_IsEntityAlive(This, ...)               CALL_IFACE_METHOD(RadientScene, IsEntityAlive,               This, __VA_ARGS__)
+#    define IRadientScene_GetEntityFlags(This, ...)              CALL_IFACE_METHOD(RadientScene, GetEntityFlags,              This, __VA_ARGS__)
+#    define IRadientScene_GetEntityOwnVisibility(This, ...)      CALL_IFACE_METHOD(RadientScene, GetEntityOwnVisibility,      This, __VA_ARGS__)
+#    define IRadientScene_GetEntityEffectiveVisibility(This, ...) CALL_IFACE_METHOD(RadientScene, GetEntityEffectiveVisibility, This, __VA_ARGS__)
+#    define IRadientScene_GetParent(This, ...)                   CALL_IFACE_METHOD(RadientScene, GetParent,                   This, __VA_ARGS__)
+#    define IRadientScene_GetChildCount(This, ...)               CALL_IFACE_METHOD(RadientScene, GetChildCount,               This, __VA_ARGS__)
+#    define IRadientScene_GetChildren(This, ...)                 CALL_IFACE_METHOD(RadientScene, GetChildren,                 This, __VA_ARGS__)
+#    define IRadientScene_GetLocalTransform(This, ...)           CALL_IFACE_METHOD(RadientScene, GetLocalTransform,           This, __VA_ARGS__)
+#    define IRadientScene_GetWorldMatrix(This, ...)              CALL_IFACE_METHOD(RadientScene, GetWorldMatrix,              This, __VA_ARGS__)
+#    define IRadientScene_HasComponent(This, ...)                CALL_IFACE_METHOD(RadientScene, HasComponent,                This, __VA_ARGS__)
+#    define IRadientScene_GetRevision(This)                      CALL_IFACE_METHOD(RadientScene, GetRevision,                 This)
 
 #endif
 

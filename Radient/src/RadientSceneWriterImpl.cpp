@@ -64,9 +64,9 @@ RADIENT_STATUS RadientSceneWriterImpl::SetEntityFlags(RadientEntityID Entity, RA
     return m_pState ? m_pState->SetEntityFlags(Entity, Flags) : RADIENT_STATUS_INVALID_ARGUMENT;
 }
 
-RADIENT_STATUS RadientSceneWriterImpl::SetEntityVisible(RadientEntityID Entity, Bool Visible)
+RADIENT_STATUS RadientSceneWriterImpl::SetEntityOwnVisibility(RadientEntityID Entity, Bool Visible)
 {
-    return m_pState ? m_pState->SetEntityVisible(Entity, Visible) : RADIENT_STATUS_INVALID_ARGUMENT;
+    return m_pState ? m_pState->SetEntityOwnVisibility(Entity, Visible) : RADIENT_STATUS_INVALID_ARGUMENT;
 }
 
 RADIENT_STATUS RadientSceneWriterImpl::SetParent(RadientEntityID Entity, RadientEntityID Parent, Bool KeepWorldTransform)
