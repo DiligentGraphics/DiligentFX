@@ -67,6 +67,17 @@ inline RadientMatrix4x4 ToRadientMatrix(const float4x4& Matrix)
     return RadientMatrix4x4{Matrix.Data()};
 }
 
+inline constexpr RadientFloat3 ToRadientFloat3(const float3& Value)
+{
+    return RadientFloat3{Value.x, Value.y, Value.z};
+}
+
+inline RadientQuaternion ToRadientQuaternion(const QuaternionF& Value)
+{
+    const QuaternionF Q = Value.q != float4{} ? normalize(Value) : QuaternionF{};
+    return RadientQuaternion{Q.q.x, Q.q.y, Q.q.z, Q.q.w};
+}
+
 inline RadientMatrix4x4 TransformToMatrix(const RadientTransform& Transform)
 {
     const float3      S = ToFloat3(Transform.Scale);
@@ -97,6 +108,33 @@ inline RadientMatrix4x4 TransformToMatrix(const RadientTransform& Transform)
 inline RadientMatrix4x4 MultiplyMatrices(const RadientMatrix4x4& A, const RadientMatrix4x4& B)
 {
     return ToRadientMatrix(ToFloat4x4(A) * ToFloat4x4(B));
+}
+
+inline bool TryInverseMatrix(const RadientMatrix4x4& Matrix, RadientMatrix4x4& Inverse)
+{
+    float4x4 InverseMatrix;
+    if (!ToFloat4x4(Matrix).TryInverse(InverseMatrix))
+        return false;
+
+    Inverse = ToRadientMatrix(InverseMatrix);
+    return true;
+}
+
+inline RadientTransform MatrixToTransform(const RadientMatrix4x4& Matrix)
+{
+    const float4x4 M = ToFloat4x4(Matrix);
+
+    RadientTransform Result;
+
+    float3      Position;
+    float3      Scale;
+    QuaternionF Rotation;
+    M.Decompose(Position, Rotation, Scale);
+
+    Result.Position = ToRadientFloat3(Position);
+    Result.Rotation = ToRadientQuaternion(Rotation);
+    Result.Scale    = ToRadientFloat3(Scale);
+    return Result;
 }
 
 } // namespace RadientMath

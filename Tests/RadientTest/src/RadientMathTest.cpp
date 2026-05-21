@@ -44,6 +44,30 @@ void ExpectMatrixNear(const RadientMatrix4x4& Matrix,
         EXPECT_NEAR(Matrix.Data[i], Reference.Data[i], EPSILON) << "i = " << i;
 }
 
+void ExpectFloat3Near(const RadientFloat3& Value,
+                      const RadientFloat3& Reference)
+{
+    EXPECT_NEAR(Value.x, Reference.x, EPSILON);
+    EXPECT_NEAR(Value.y, Reference.y, EPSILON);
+    EXPECT_NEAR(Value.z, Reference.z, EPSILON);
+}
+
+void ExpectQuaternionNear(const RadientQuaternion& Value,
+                          const RadientQuaternion& Reference)
+{
+    const float Dot =
+        Value.x * Reference.x +
+        Value.y * Reference.y +
+        Value.z * Reference.z +
+        Value.w * Reference.w;
+    const float Sign = Dot < 0.f ? -1.f : 1.f;
+
+    EXPECT_NEAR(Value.x * Sign, Reference.x, EPSILON);
+    EXPECT_NEAR(Value.y * Sign, Reference.y, EPSILON);
+    EXPECT_NEAR(Value.z * Sign, Reference.z, EPSILON);
+    EXPECT_NEAR(Value.w * Sign, Reference.w, EPSILON);
+}
+
 TEST(RadientMathTest, ToFloat2)
 {
     const float2 Value = RadientMath::ToFloat2(RadientFloat2{1.f, 2.f});
@@ -173,6 +197,51 @@ TEST(RadientMathTest, BuildsTransformMatrixWithScaleRotationAndPosition)
         0.f, 0.f, 4.f, 0.f,
         1.f, 2.f, 3.f, 1.f};
     ExpectMatrixNear(Matrix, Reference);
+}
+
+TEST(RadientMathTest, InvertsTransformMatrix)
+{
+    RadientTransform Transform;
+    Transform.Position   = {1.f, 2.f, 3.f};
+    Transform.Scale      = {2.f, 3.f, 4.f};
+    Transform.Rotation.z = 0.70710678f;
+    Transform.Rotation.w = 0.70710678f;
+
+    const RadientMatrix4x4 Matrix = RadientMath::TransformToMatrix(Transform);
+
+    RadientMatrix4x4 Inverse;
+    EXPECT_TRUE(RadientMath::TryInverseMatrix(Matrix, Inverse));
+
+    const RadientMatrix4x4 Identity = RadientMath::MultiplyMatrices(Matrix, Inverse);
+    const RadientMatrix4x4 Reference{
+        1.f, 0.f, 0.f, 0.f,
+        0.f, 1.f, 0.f, 0.f,
+        0.f, 0.f, 1.f, 0.f,
+        0.f, 0.f, 0.f, 1.f};
+    ExpectMatrixNear(Identity, Reference);
+}
+
+TEST(RadientMathTest, RejectsSingularMatrixInverse)
+{
+    RadientTransform Transform;
+    Transform.Scale = {0.f, 1.f, 1.f};
+
+    RadientMatrix4x4 Inverse;
+    EXPECT_FALSE(RadientMath::TryInverseMatrix(RadientMath::TransformToMatrix(Transform), Inverse));
+}
+
+TEST(RadientMathTest, DecomposesTransformMatrix)
+{
+    RadientTransform Transform;
+    Transform.Position   = {1.f, 2.f, 3.f};
+    Transform.Scale      = {2.f, 3.f, 4.f};
+    Transform.Rotation.z = 0.70710678f;
+    Transform.Rotation.w = 0.70710678f;
+
+    const RadientTransform Decomposed = RadientMath::MatrixToTransform(RadientMath::TransformToMatrix(Transform));
+    ExpectFloat3Near(Decomposed.Position, Transform.Position);
+    ExpectFloat3Near(Decomposed.Scale, Transform.Scale);
+    ExpectQuaternionNear(Decomposed.Rotation, Transform.Rotation);
 }
 
 } // namespace
