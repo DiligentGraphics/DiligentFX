@@ -50,6 +50,9 @@ DILIGENT_TYPED_ENUM(RADIENT_STATUS, Int32)
     /// The operation was valid, but did not change any state.
     RADIENT_STATUS_NO_CHANGE = 1,
 
+    /// The operation completed successfully, but returned cached data may be out of date.
+    RADIENT_STATUS_OUT_OF_DATE = 2,
+
     /// The requested entity, component, or resource was not found.
     RADIENT_STATUS_NOT_FOUND = -1,
 

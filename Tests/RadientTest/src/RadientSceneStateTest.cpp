@@ -268,6 +268,9 @@ TEST(RadientSceneStateTest, GetEntityEffectiveVisibility)
     EXPECT_EQ(Visible, False);
 
     EXPECT_EQ(State.SetEntityOwnVisibility(Root, True), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.GetCachedEntityEffectiveVisibility(Child, Visible), RADIENT_STATUS_OUT_OF_DATE);
+    EXPECT_EQ(Visible, False);
+
     EXPECT_EQ(State.SetEntityOwnVisibility(Child, False), RADIENT_STATUS_OK);
     EXPECT_EQ(State.GetEntityEffectiveVisibility(Child, Visible), RADIENT_STATUS_OK);
     EXPECT_EQ(Visible, False);
@@ -580,6 +583,9 @@ TEST(RadientSceneStateTest, GetWorldMatrix)
 
     RootTransform.Position = {10.f, 20.f, 30.f};
     EXPECT_EQ(State.SetLocalTransform(Root, RootTransform), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.GetCachedWorldMatrix(Child, Matrix), RADIENT_STATUS_OUT_OF_DATE);
+    ExpectMatrixNear(Matrix, CommittedChildWorld);
+
     ExpectedChildWorld = RadientMath::MultiplyMatrices(
         RadientMath::TransformToMatrix(ChildTransform),
         RadientMath::TransformToMatrix(RootTransform));

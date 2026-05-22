@@ -43,11 +43,13 @@ static_assert(std::is_same<RadientFrameID, Uint64>::value, "RadientFrameID must 
 static_assert(sizeof(RADIENT_STATUS) == sizeof(Int32), "RADIENT_STATUS must be Int32-sized");
 static_assert(RADIENT_STATUS_OK == 0, "Unexpected RADIENT_STATUS_OK value");
 static_assert(RADIENT_STATUS_NO_CHANGE == 1, "Unexpected RADIENT_STATUS_NO_CHANGE value");
+static_assert(RADIENT_STATUS_OUT_OF_DATE == 2, "Unexpected RADIENT_STATUS_OUT_OF_DATE value");
 static_assert(RADIENT_STATUS_NOT_FOUND == -1, "Unexpected RADIENT_STATUS_NOT_FOUND value");
 static_assert(RADIENT_STATUS_INVALID_ARGUMENT == -2, "Unexpected RADIENT_STATUS_INVALID_ARGUMENT value");
 static_assert(RADIENT_STATUS_INVALID_OPERATION == -3, "Unexpected RADIENT_STATUS_INVALID_OPERATION value");
 static_assert(RADIENT_SUCCEEDED(RADIENT_STATUS_OK), "RADIENT_STATUS_OK must be successful");
 static_assert(RADIENT_SUCCEEDED(RADIENT_STATUS_NO_CHANGE), "RADIENT_STATUS_NO_CHANGE must be successful");
+static_assert(RADIENT_SUCCEEDED(RADIENT_STATUS_OUT_OF_DATE), "RADIENT_STATUS_OUT_OF_DATE must be successful");
 static_assert(RADIENT_FAILED(RADIENT_STATUS_NOT_FOUND), "RADIENT_STATUS_NOT_FOUND must be a failure");
 static_assert(RADIENT_FAILED(RADIENT_STATUS_INVALID_ARGUMENT), "RADIENT_STATUS_INVALID_ARGUMENT must be a failure");
 static_assert(RADIENT_FAILED(RADIENT_STATUS_INVALID_OPERATION), "RADIENT_STATUS_INVALID_OPERATION must be a failure");

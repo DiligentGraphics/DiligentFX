@@ -150,11 +150,10 @@ RADIENT_STATUS RadientSceneState::GetCachedEntityEffectiveVisibility(RadientEnti
         return RADIENT_STATUS_NOT_FOUND;
     }
 
-    VERIFY((m_DirtyFlags & DIRTY_FLAG_VISIBILITY) == DIRTY_FLAG_NONE,
-           "Cached effective visibility is being queried while visibility state is dirty");
-
     Visible = m_Registry.get<EffectiveVisibilityComponent>(E).Visible;
-    return RADIENT_STATUS_OK;
+    return (m_DirtyFlags & DIRTY_FLAG_VISIBILITY) != DIRTY_FLAG_NONE ?
+        RADIENT_STATUS_OUT_OF_DATE :
+        RADIENT_STATUS_OK;
 }
 
 RADIENT_STATUS RadientSceneState::GetParent(RadientEntityID Entity, RadientEntityID& Parent) const
@@ -251,11 +250,10 @@ RADIENT_STATUS RadientSceneState::GetCachedWorldMatrix(RadientEntityID Entity, R
         return RADIENT_STATUS_NOT_FOUND;
     }
 
-    VERIFY((m_DirtyFlags & DIRTY_FLAG_TRANSFORM) == DIRTY_FLAG_NONE,
-           "Cached world matrix is being queried while transform state is dirty");
-
     Matrix = m_Registry.get<WorldTransformComponent>(E).Matrix;
-    return RADIENT_STATUS_OK;
+    return (m_DirtyFlags & DIRTY_FLAG_TRANSFORM) != DIRTY_FLAG_NONE ?
+        RADIENT_STATUS_OUT_OF_DATE :
+        RADIENT_STATUS_OK;
 }
 
 RADIENT_STATUS RadientSceneState::HasComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType, Bool& HasComponent) const
