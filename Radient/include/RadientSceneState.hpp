@@ -178,12 +178,13 @@ private:
     void         DetachFromParent(entt::entity Entity);
     void         DestroyEntitySubtree(entt::entity Entity);
     void         RemoveCustomComponents(entt::entity Entity);
-    DIRTY_FLAGS  MarkDirty(entt::entity Entity, DIRTY_FLAGS Flags);
+    DIRTY_FLAGS  MarkDirty(entt::entity Entity, DIRTY_FLAGS Flags, bool AddToDirtySet = true);
     void         ClearDirtyFlags(entt::entity Entity, DIRTY_FLAGS Flags);
     void         PropagateDirtyFlags(entt::entity Entity, DIRTY_FLAGS Flags);
     void         MarkChildrenDirtyExcept(entt::entity Entity, DIRTY_FLAGS Flags, entt::entity ExcludedChild);
     void         UpdateDirtyEntities();
-    void         UpdateDerivedState(entt::entity Entity, DIRTY_FLAGS Flags);
+    void         UpdateDirtySubtree(entt::entity Entity, DIRTY_FLAGS InheritedFlags);
+    void         UpdateDerivedStatePathToRoot(entt::entity Entity, DIRTY_FLAGS Flags);
     void         UpdateEntityDerivedState(entt::entity Entity, DIRTY_FLAGS Flags);
     void         Touch();
 
@@ -196,10 +197,8 @@ private:
     RadientEntityID                                                  m_NextEntityID = 1;
     RadientRevision                                                  m_Revision     = 0;
 
-    // Entities with any dirty flag currently set. MarkDirty/ClearDirtyFlags keep this set in sync.
+    // Entities where dirty state was introduced directly. Commit propagates these flags to descendants without adding them here.
     std::unordered_set<entt::entity> m_DirtyEntities;
-    // Reused snapshot buffer; commit cannot iterate m_DirtyEntities directly because processing mutates it.
-    std::vector<entt::entity> m_DirtyEntityBuffer;
     // Reused path scratch buffer for lazy parent-to-child derived-state updates.
     std::vector<entt::entity> m_TmpEntityBuffer;
 };

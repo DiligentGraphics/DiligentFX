@@ -32,6 +32,7 @@
 
 #include <cstring>
 #include <memory>
+#include <vector>
 
 using namespace Diligent;
 using namespace Diligent::Testing;
@@ -68,6 +69,28 @@ RadientTransform MakeTranslation(float X, float Y, float Z)
     RadientTransform Transform;
     Transform.Position = {X, Y, Z};
     return Transform;
+}
+
+std::vector<RadientEntityID> CreateLinearChain(RadientSceneState& State, Uint32 NodeCount)
+{
+    std::vector<RadientEntityID> Entities(NodeCount, InvalidRadientEntityID);
+
+    RadientEntityDesc Desc;
+    for (Uint32 NodeIndex = 0; NodeIndex < NodeCount; ++NodeIndex)
+    {
+        Desc.Parent = NodeIndex > 0 ? Entities[NodeIndex - 1] : InvalidRadientEntityID;
+        EXPECT_EQ(State.CreateEntity(Desc, Entities[NodeIndex]), RADIENT_STATUS_OK);
+    }
+
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+    return Entities;
+}
+
+void ExpectLinearChainWorldTranslation(RadientSceneState& State, RadientEntityID Entity, float X)
+{
+    RadientMatrix4x4 Matrix;
+    EXPECT_EQ(State.GetWorldMatrix(Entity, Matrix), RADIENT_STATUS_OK);
+    ExpectMatrixNear(Matrix, RadientMath::TransformToMatrix(MakeTranslation(X, 0.f, 0.f)));
 }
 
 TEST(RadientSceneStateTest, GetDesc)
@@ -631,6 +654,177 @@ TEST(RadientSceneStateTest, LazyWorldMatrixUpdatePreservesCommitPropagation)
         RadientMath::TransformToMatrix(RootTransform));
     EXPECT_EQ(State.GetWorldMatrix(Child1, Matrix), RADIENT_STATUS_OK);
     ExpectMatrixNear(Matrix, ExpectedWorld);
+}
+
+TEST(RadientSceneStateTest, CommitUpdatesDirtyParentBeforeDirtyChild)
+{
+    RadientSceneState State;
+
+    RadientEntityID Child = InvalidRadientEntityID;
+    EXPECT_EQ(State.CreateEntity({}, Child), RADIENT_STATUS_OK);
+
+    RadientEntityID Parent = InvalidRadientEntityID;
+    EXPECT_EQ(State.CreateEntity({}, Parent), RADIENT_STATUS_OK);
+
+    EXPECT_EQ(State.SetParent(Child, Parent, False), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+    const RadientTransform ParentTransform = MakeTranslation(10.f, 20.f, 30.f);
+    const RadientTransform ChildTransform  = MakeTranslation(1.f, 2.f, 3.f);
+
+    EXPECT_EQ(State.SetLocalTransform(Parent, ParentTransform), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetLocalTransform(Child, ChildTransform), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+    RadientMatrix4x4 ExpectedWorld = RadientMath::MultiplyMatrices(
+        RadientMath::TransformToMatrix(ChildTransform),
+        RadientMath::TransformToMatrix(ParentTransform));
+
+    RadientMatrix4x4 Matrix;
+    EXPECT_EQ(State.GetWorldMatrix(Child, Matrix), RADIENT_STATUS_OK);
+    ExpectMatrixNear(Matrix, ExpectedWorld);
+
+    const RadientTransform UpdatedChildTransform = MakeTranslation(4.f, 5.f, 6.f);
+    EXPECT_EQ(State.SetEntityOwnVisibility(Parent, False), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetLocalTransform(Child, UpdatedChildTransform), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+    Bool Visible = True;
+    EXPECT_EQ(State.GetEntityEffectiveVisibility(Child, Visible), RADIENT_STATUS_OK);
+    EXPECT_EQ(Visible, False);
+
+    ExpectedWorld = RadientMath::MultiplyMatrices(
+        RadientMath::TransformToMatrix(UpdatedChildTransform),
+        RadientMath::TransformToMatrix(ParentTransform));
+    EXPECT_EQ(State.GetWorldMatrix(Child, Matrix), RADIENT_STATUS_OK);
+    ExpectMatrixNear(Matrix, ExpectedWorld);
+}
+
+TEST(RadientSceneStateTest, CommitHandlesPathologicalDirtyLinearChains)
+{
+    static constexpr Uint32 NodeCount = 1000;
+
+    {
+        RadientSceneState            State;
+        std::vector<RadientEntityID> Entities  = CreateLinearChain(State, NodeCount);
+        const RadientTransform       Transform = MakeTranslation(1.f, 0.f, 0.f);
+
+        for (const RadientEntityID Entity : Entities)
+            EXPECT_EQ(State.SetLocalTransform(Entity, Transform), RADIENT_STATUS_OK);
+
+        EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+        ExpectLinearChainWorldTranslation(State, Entities.back(), static_cast<float>(NodeCount));
+    }
+
+    {
+        RadientSceneState            State;
+        std::vector<RadientEntityID> Entities  = CreateLinearChain(State, NodeCount);
+        const RadientTransform       Transform = MakeTranslation(1.f, 0.f, 0.f);
+
+        EXPECT_EQ(State.SetLocalTransform(Entities.front(), Transform), RADIENT_STATUS_OK);
+        EXPECT_EQ(State.SetLocalTransform(Entities.back(), Transform), RADIENT_STATUS_OK);
+
+        EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+        ExpectLinearChainWorldTranslation(State, Entities.back(), 2.f);
+    }
+
+    {
+        RadientSceneState            State;
+        std::vector<RadientEntityID> Entities       = CreateLinearChain(State, NodeCount);
+        const RadientTransform       Transform      = MakeTranslation(1.f, 0.f, 0.f);
+        Uint32                       DirtyNodeCount = 0;
+
+        for (Uint32 NodeIndex = 0; NodeIndex < NodeCount; NodeIndex += 3)
+        {
+            EXPECT_EQ(State.SetLocalTransform(Entities[NodeIndex], Transform), RADIENT_STATUS_OK);
+            ++DirtyNodeCount;
+        }
+
+        EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+        ExpectLinearChainWorldTranslation(State, Entities.back(), static_cast<float>(DirtyNodeCount));
+    }
+}
+
+TEST(RadientSceneStateTest, CommitCombinesParentAndChildDirtyFlags)
+{
+    RadientSceneState State;
+
+    RadientEntityID Parent = InvalidRadientEntityID;
+    EXPECT_EQ(State.CreateEntity({}, Parent), RADIENT_STATUS_OK);
+
+    RadientEntityDesc ChildDesc;
+    ChildDesc.Parent = Parent;
+
+    RadientEntityID Child = InvalidRadientEntityID;
+    EXPECT_EQ(State.CreateEntity(ChildDesc, Child), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+    RadientTransform ParentTransform = MakeTranslation(10.f, 0.f, 0.f);
+    RadientTransform ChildTransform  = MakeTranslation(1.f, 0.f, 0.f);
+
+    EXPECT_EQ(State.SetLocalTransform(Parent, ParentTransform), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetEntityOwnVisibility(Parent, False), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetLocalTransform(Child, ChildTransform), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+    RadientMatrix4x4 ExpectedWorld = RadientMath::MultiplyMatrices(
+        RadientMath::TransformToMatrix(ChildTransform),
+        RadientMath::TransformToMatrix(ParentTransform));
+
+    RadientMatrix4x4 Matrix;
+    EXPECT_EQ(State.GetWorldMatrix(Child, Matrix), RADIENT_STATUS_OK);
+    ExpectMatrixNear(Matrix, ExpectedWorld);
+
+    Bool Visible = True;
+    EXPECT_EQ(State.GetEntityEffectiveVisibility(Child, Visible), RADIENT_STATUS_OK);
+    EXPECT_EQ(Visible, False);
+
+    ParentTransform = MakeTranslation(20.f, 0.f, 0.f);
+
+    EXPECT_EQ(State.SetLocalTransform(Parent, ParentTransform), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetEntityOwnVisibility(Parent, True), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetEntityOwnVisibility(Child, False), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+    ExpectedWorld = RadientMath::MultiplyMatrices(
+        RadientMath::TransformToMatrix(ChildTransform),
+        RadientMath::TransformToMatrix(ParentTransform));
+
+    EXPECT_EQ(State.GetWorldMatrix(Child, Matrix), RADIENT_STATUS_OK);
+    ExpectMatrixNear(Matrix, ExpectedWorld);
+    EXPECT_EQ(State.GetEntityEffectiveVisibility(Child, Visible), RADIENT_STATUS_OK);
+    EXPECT_EQ(Visible, False);
+}
+
+TEST(RadientSceneStateTest, CommitUpdatesDirtyVisibilityParentBeforeDirtyTransformVisibilityChild)
+{
+    RadientSceneState State;
+
+    RadientEntityID Parent = InvalidRadientEntityID;
+    EXPECT_EQ(State.CreateEntity({}, Parent), RADIENT_STATUS_OK);
+
+    RadientEntityDesc ChildDesc;
+    ChildDesc.Parent = Parent;
+    ChildDesc.Flags  = RADIENT_ENTITY_FLAG_NONE;
+
+    RadientEntityID Child = InvalidRadientEntityID;
+    EXPECT_EQ(State.CreateEntity(ChildDesc, Child), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+    const RadientTransform ChildTransform = MakeTranslation(1.f, 2.f, 3.f);
+
+    EXPECT_EQ(State.SetEntityOwnVisibility(Parent, False), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetLocalTransform(Child, ChildTransform), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetEntityOwnVisibility(Child, True), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+    RadientMatrix4x4 Matrix;
+    EXPECT_EQ(State.GetWorldMatrix(Child, Matrix), RADIENT_STATUS_OK);
+    ExpectMatrixNear(Matrix, RadientMath::TransformToMatrix(ChildTransform));
+
+    Bool Visible = True;
+    EXPECT_EQ(State.GetEntityEffectiveVisibility(Child, Visible), RADIENT_STATUS_OK);
+    EXPECT_EQ(Visible, False);
 }
 
 TEST(RadientSceneStateTest, SetParentKeepWorldTransformUsesPendingTransforms)

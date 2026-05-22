@@ -136,7 +136,7 @@ RADIENT_STATUS RadientSceneState::GetEntityEffectiveVisibility(RadientEntityID E
         return RADIENT_STATUS_NOT_FOUND;
     }
 
-    UpdateDerivedState(E, DIRTY_FLAG_VISIBILITY);
+    UpdateDerivedStatePathToRoot(E, DIRTY_FLAG_VISIBILITY);
     Visible = m_Registry.get<EffectiveVisibilityComponent>(E).Visible;
     return RADIENT_STATUS_OK;
 }
@@ -221,7 +221,7 @@ RADIENT_STATUS RadientSceneState::GetWorldMatrix(RadientEntityID Entity, Radient
         return RADIENT_STATUS_NOT_FOUND;
     }
 
-    UpdateDerivedState(E, DIRTY_FLAG_TRANSFORM);
+    UpdateDerivedStatePathToRoot(E, DIRTY_FLAG_TRANSFORM);
     Matrix = m_Registry.get<WorldTransformComponent>(E).Matrix;
     return RADIENT_STATUS_OK;
 }
@@ -393,12 +393,12 @@ RADIENT_STATUS RadientSceneState::SetParent(RadientEntityID Entity, RadientEntit
     RadientTransform LocalTransform = m_Registry.get<LocalTransformComponent>(E).Transform;
     if (KeepWorldTransform)
     {
-        UpdateDerivedState(E, DIRTY_FLAG_TRANSFORM);
+        UpdateDerivedStatePathToRoot(E, DIRTY_FLAG_TRANSFORM);
         RadientMatrix4x4 LocalMatrix = m_Registry.get<WorldTransformComponent>(E).Matrix;
 
         if (NewParent != entt::null)
         {
-            UpdateDerivedState(NewParent, DIRTY_FLAG_TRANSFORM);
+            UpdateDerivedStatePathToRoot(NewParent, DIRTY_FLAG_TRANSFORM);
 
             RadientMatrix4x4 ParentWorldInverse;
             if (!RadientMath::TryInverseMatrix(m_Registry.get<WorldTransformComponent>(NewParent).Matrix, ParentWorldInverse))
@@ -717,7 +717,7 @@ void RadientSceneState::RemoveCustomComponents(entt::entity Entity)
     m_Registry.remove<CustomComponentIndexComponent>(Entity);
 }
 
-RadientSceneState::DIRTY_FLAGS RadientSceneState::MarkDirty(entt::entity Entity, DIRTY_FLAGS Flags)
+RadientSceneState::DIRTY_FLAGS RadientSceneState::MarkDirty(entt::entity Entity, DIRTY_FLAGS Flags, bool AddToDirtySet)
 {
     if (Flags == DIRTY_FLAG_NONE)
         return DIRTY_FLAG_NONE;
@@ -730,12 +730,15 @@ RadientSceneState::DIRTY_FLAGS RadientSceneState::MarkDirty(entt::entity Entity,
     if (AddedFlags == DIRTY_FLAG_NONE)
         return DIRTY_FLAG_NONE;
 
-    // Only the clean -> dirty transition inserts the entity into the global dirty set.
-    if (DirtyState.Flags == DIRTY_FLAG_NONE)
+    // m_DirtyEntities tracks only nodes where dirtiness was introduced directly by a scene edit or a lazy
+    // path repair. Descendants dirtied by propagation are intentionally not inserted there, otherwise commit
+    // would have to filter a much larger set and could revisit the same subtree many times.
+    if (AddToDirtySet && DirtyState.Flags == DIRTY_FLAG_NONE)
     {
-        bool Inserted = m_DirtyEntities.insert(Entity).second;
+        const bool Inserted = m_DirtyEntities.insert(Entity).second;
         VERIFY(Inserted, "Entity was already in the dirty set. This should not happen as the entity had no dirty flags set");
     }
+
     DirtyState.Flags |= AddedFlags;
 
     return AddedFlags;
@@ -752,7 +755,6 @@ void RadientSceneState::ClearDirtyFlags(entt::entity Entity, DIRTY_FLAGS Flags)
     DirtyStateComponent& DirtyState = m_Registry.get<DirtyStateComponent>(Entity);
     DirtyState.Flags &= ~Flags;
 
-    // The dirty set mirrors entities with non-zero dirty flags.
     if (DirtyState.Flags == DIRTY_FLAG_NONE)
         m_DirtyEntities.erase(Entity);
 }
@@ -768,8 +770,10 @@ void RadientSceneState::PropagateDirtyFlags(entt::entity Entity, DIRTY_FLAGS Fla
     const std::vector<entt::entity>& Children = m_Registry.get<HierarchyComponent>(Entity).Children;
     for (const entt::entity Child : Children)
     {
-        // Recurse only for newly added flags; this avoids reprocessing overlapping dirty subtrees.
-        const DIRTY_FLAGS AddedFlags = MarkDirty(Child, Flags) & DIRTY_FLAGS_REQUIRING_PROPAGATION;
+        // Propagation is a marking pass only. Newly dirtied descendants inherit the subset of flags that was
+        // not already present, and recursion stops as soon as a subtree already has all requested flags. This
+        // keeps overlapping dirty roots from repeatedly walking the same descendants.
+        const DIRTY_FLAGS AddedFlags = MarkDirty(Child, Flags, false) & DIRTY_FLAGS_REQUIRING_PROPAGATION;
         if (AddedFlags != DIRTY_FLAG_NONE)
             PropagateDirtyFlags(Child, AddedFlags);
     }
@@ -796,16 +800,11 @@ void RadientSceneState::MarkChildrenDirtyExcept(entt::entity Entity, DIRTY_FLAGS
 
 void RadientSceneState::UpdateDirtyEntities()
 {
-    // Snapshot the current dirty roots because propagation inserts into m_DirtyEntities.
-    m_DirtyEntityBuffer.clear();
-    m_DirtyEntityBuffer.reserve(m_DirtyEntities.size());
+    // Commit is optimized for batch updates. It does not repair each originally dirty entity by walking up to
+    // the root. Instead, it first expands dirty flags down from the directly edited nodes. Propagation marks
+    // descendants dirty without adding them to m_DirtyEntities, so this pass can iterate the set directly.
     for (const entt::entity Entity : m_DirtyEntities)
-        m_DirtyEntityBuffer.push_back(Entity);
-
-    const size_t DirtyRootCount = m_DirtyEntityBuffer.size();
-    for (size_t Index = 0; Index < DirtyRootCount; ++Index)
     {
-        const entt::entity Entity = m_DirtyEntityBuffer[Index];
         if (!VerifyInternalEntity(Entity))
             continue;
 
@@ -813,27 +812,79 @@ void RadientSceneState::UpdateDirtyEntities()
         PropagateDirtyFlags(Entity, Flags);
     }
 
-    // Process the expanded dirty set. UpdateDerivedState clears flags and may erase from m_DirtyEntities.
-    m_DirtyEntityBuffer.clear();
-    m_DirtyEntityBuffer.reserve(m_DirtyEntities.size());
-    for (const entt::entity Entity : m_DirtyEntities)
-        m_DirtyEntityBuffer.push_back(Entity);
+    // After propagation, every affected descendant has the inherited dirty flags. To update the scene in linear
+    // time, keep only the highest original dirty roots: if an original dirty entity has a dirty parent, it will
+    // be reached by the parent's subtree traversal. Checking the immediate parent is enough because propagation
+    // makes the whole path from a dirty ancestor to this node dirty.
+    std::vector<entt::entity>& DirtyRoots = m_TmpEntityBuffer;
+    DirtyRoots.clear();
+    DirtyRoots.reserve(m_DirtyEntities.size());
 
-    for (const entt::entity Entity : m_DirtyEntityBuffer)
+    for (const entt::entity Entity : m_DirtyEntities)
     {
         if (!VerifyInternalEntity(Entity))
             continue;
 
         const DIRTY_FLAGS Flags = m_Registry.get<DirtyStateComponent>(Entity).Flags & DIRTY_FLAGS_REQUIRING_PROPAGATION;
-        UpdateDerivedState(Entity, Flags);
+        if (Flags == DIRTY_FLAG_NONE)
+            continue;
+
+        const entt::entity Parent = m_Registry.get<HierarchyComponent>(Entity).Parent;
+        if (Parent != entt::null)
+        {
+            if (!VerifyInternalEntity(Parent))
+                continue;
+
+            const DIRTY_FLAGS ParentFlags = m_Registry.get<DirtyStateComponent>(Parent).Flags & DIRTY_FLAGS_REQUIRING_PROPAGATION;
+            if (ParentFlags != DIRTY_FLAG_NONE)
+                continue;
+        }
+
+        DirtyRoots.push_back(Entity);
+    }
+
+    // Each selected root is updated top-down. Parents are repaired before children, so the direct per-entity
+    // recompute can use cached parent world transform and effective visibility without doing an upward walk.
+    for (const entt::entity Entity : DirtyRoots)
+    {
+        if (!VerifyInternalEntity(Entity))
+            continue;
+
+        const DIRTY_FLAGS Flags = m_Registry.get<DirtyStateComponent>(Entity).Flags & DIRTY_FLAGS_REQUIRING_PROPAGATION;
+        if (Flags != DIRTY_FLAG_NONE)
+            UpdateDirtySubtree(Entity, DIRTY_FLAG_NONE);
     }
 
     VERIFY(m_DirtyEntities.empty(), "All dirty entities should have been processed and cleared at this point");
     m_DirtyEntities.clear();
-    m_DirtyEntityBuffer.clear();
+    DirtyRoots.clear();
 }
 
-void RadientSceneState::UpdateDerivedState(entt::entity Entity, DIRTY_FLAGS Flags)
+void RadientSceneState::UpdateDirtySubtree(entt::entity Entity, DIRTY_FLAGS InheritedFlags)
+{
+    InheritedFlags &= DIRTY_FLAGS_REQUIRING_PROPAGATION;
+
+    if (!VerifyInternalEntity(Entity))
+        return;
+
+    DirtyStateComponent& DirtyState = m_Registry.get<DirtyStateComponent>(Entity);
+    const DIRTY_FLAGS    Flags      = (DirtyState.Flags | InheritedFlags) & DIRTY_FLAGS_REQUIRING_PROPAGATION;
+    if (Flags == DIRTY_FLAG_NONE)
+        return;
+
+    // This function is only used by commit's top-down traversal. The parent has already been updated, and
+    // InheritedFlags carries the dirty state caused by ancestors, so this node can be updated directly.
+    UpdateEntityDerivedState(Entity, Flags);
+    ClearDirtyFlags(Entity, Flags);
+
+    // Pass the effective dirty flags to all children. A child may also have its own dirty flags; the recursive
+    // call combines both sets before updating it.
+    const std::vector<entt::entity>& Children = m_Registry.get<HierarchyComponent>(Entity).Children;
+    for (const entt::entity Child : Children)
+        UpdateDirtySubtree(Child, Flags);
+}
+
+void RadientSceneState::UpdateDerivedStatePathToRoot(entt::entity Entity, DIRTY_FLAGS Flags)
 {
     Flags &= DIRTY_FLAGS_REQUIRING_PROPAGATION;
     if (Flags == DIRTY_FLAG_NONE)
@@ -845,7 +896,8 @@ void RadientSceneState::UpdateDerivedState(entt::entity Entity, DIRTY_FLAGS Flag
     std::vector<entt::entity>& Path = m_TmpEntityBuffer;
     Path.clear();
 
-    // Build the path from the requested entity up to the root. It is consumed in reverse order below.
+    // Lazy queries repair only the path needed by the query. Build the path from the requested entity up to the
+    // root; it is consumed in reverse order so dirty ancestors are updated before their descendants.
     for (entt::entity Current = Entity; Current != entt::null;)
     {
         if (!VerifyInternalEntity(Current))
@@ -855,7 +907,8 @@ void RadientSceneState::UpdateDerivedState(entt::entity Entity, DIRTY_FLAGS Flag
         Current = m_Registry.get<HierarchyComponent>(Current).Parent;
     }
 
-    // Start updating at the highest dirty ancestor on this path so parent cached state is valid first.
+    // Find the highest dirty ancestor on the path. Nodes above it are already clean for the requested flags, so
+    // their cached values can be trusted; nodes below it inherit the repaired state as we walk back down.
     size_t FirstDirtyIndex = Path.size();
     for (size_t Index = Path.size(); Index > 0; --Index)
     {
@@ -882,10 +935,13 @@ void RadientSceneState::UpdateDerivedState(entt::entity Entity, DIRTY_FLAGS Flag
         if (ActiveFlags == DIRTY_FLAG_NONE)
             continue;
 
+        // Update this path node directly. Parent state is already valid because the loop walks from the highest
+        // dirty ancestor down toward the originally requested entity.
         UpdateEntityDerivedState(Current, ActiveFlags);
         ClearDirtyFlags(Current, ActiveFlags);
 
-        // Off-path children inherit the updated parent's dirtiness but are not repaired by this path walk.
+        // Only the requested path is repaired. Off-path children inherit the parent's change and remain dirty so
+        // a later query or CommitChanges() can update their subtrees.
         const entt::entity ExcludedChild = PathIndex > 0 ? Path[PathIndex - 1] : entt::null;
         MarkChildrenDirtyExcept(Current, ActiveFlags, ExcludedChild);
     }
@@ -908,7 +964,8 @@ void RadientSceneState::UpdateEntityDerivedState(entt::entity Entity, DIRTY_FLAG
         if (!VerifyInternalEntity(Parent))
             return;
 
-        // Callers must update parents first; this function only recomputes the requested entity.
+        // This low-level helper never walks the hierarchy. Both commit and lazy path repair must update parents
+        // before calling it for a child.
         VERIFY((m_Registry.get<DirtyStateComponent>(Parent).Flags & Flags) == DIRTY_FLAG_NONE,
                "Parent derived state must be up to date before updating child derived state");
     }
