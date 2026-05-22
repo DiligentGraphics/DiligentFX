@@ -339,6 +339,11 @@ DILIGENT_BEGIN_INTERFACE(IRadientScene, IObject)
                                                                 RadientEntityID Entity,
                                                                 Bool REF        Visible) PURE;
 
+    /// Gets cached effective entity visibility without updating dirty derived state.
+    VIRTUAL RADIENT_STATUS METHOD(GetCachedEntityEffectiveVisibility)(THIS_
+                                                                      RadientEntityID Entity,
+                                                                      Bool REF        Visible) CONST PURE;
+
     /// Gets the entity parent, or InvalidRadientEntityID for a root entity.
     VIRTUAL RADIENT_STATUS METHOD(GetParent)(THIS_
                                              RadientEntityID     Entity,
@@ -367,6 +372,11 @@ DILIGENT_BEGIN_INTERFACE(IRadientScene, IObject)
                                                   RadientEntityID      Entity,
                                                   RadientMatrix4x4 REF Matrix) PURE;
 
+    /// Gets cached world transform matrix without updating dirty derived state.
+    VIRTUAL RADIENT_STATUS METHOD(GetCachedWorldMatrix)(THIS_
+                                                        RadientEntityID      Entity,
+                                                        RadientMatrix4x4 REF Matrix) CONST PURE;
+
     /// Checks if the entity has the requested component.
     VIRTUAL RADIENT_STATUS METHOD(HasComponent)(THIS_
                                                 RadientEntityID        Entity,
@@ -387,11 +397,13 @@ DILIGENT_END_INTERFACE
 #    define IRadientScene_GetEntityFlags(This, ...)              CALL_IFACE_METHOD(RadientScene, GetEntityFlags,              This, __VA_ARGS__)
 #    define IRadientScene_GetEntityOwnVisibility(This, ...)      CALL_IFACE_METHOD(RadientScene, GetEntityOwnVisibility,      This, __VA_ARGS__)
 #    define IRadientScene_GetEntityEffectiveVisibility(This, ...) CALL_IFACE_METHOD(RadientScene, GetEntityEffectiveVisibility, This, __VA_ARGS__)
+#    define IRadientScene_GetCachedEntityEffectiveVisibility(This, ...) CALL_IFACE_METHOD(RadientScene, GetCachedEntityEffectiveVisibility, This, __VA_ARGS__)
 #    define IRadientScene_GetParent(This, ...)                   CALL_IFACE_METHOD(RadientScene, GetParent,                   This, __VA_ARGS__)
 #    define IRadientScene_GetChildCount(This, ...)               CALL_IFACE_METHOD(RadientScene, GetChildCount,               This, __VA_ARGS__)
 #    define IRadientScene_GetChildren(This, ...)                 CALL_IFACE_METHOD(RadientScene, GetChildren,                 This, __VA_ARGS__)
 #    define IRadientScene_GetLocalTransform(This, ...)           CALL_IFACE_METHOD(RadientScene, GetLocalTransform,           This, __VA_ARGS__)
 #    define IRadientScene_GetWorldMatrix(This, ...)              CALL_IFACE_METHOD(RadientScene, GetWorldMatrix,              This, __VA_ARGS__)
+#    define IRadientScene_GetCachedWorldMatrix(This, ...)        CALL_IFACE_METHOD(RadientScene, GetCachedWorldMatrix,        This, __VA_ARGS__)
 #    define IRadientScene_HasComponent(This, ...)                CALL_IFACE_METHOD(RadientScene, HasComponent,                This, __VA_ARGS__)
 #    define IRadientScene_GetRevision(This)                      CALL_IFACE_METHOD(RadientScene, GetRevision,                 This)
 

@@ -70,6 +70,11 @@ RADIENT_STATUS RadientSceneImpl::GetEntityEffectiveVisibility(RadientEntityID En
     return m_pState->GetEntityEffectiveVisibility(Entity, Visible);
 }
 
+RADIENT_STATUS RadientSceneImpl::GetCachedEntityEffectiveVisibility(RadientEntityID Entity, Bool& Visible) const
+{
+    return m_pState->GetCachedEntityEffectiveVisibility(Entity, Visible);
+}
+
 RADIENT_STATUS RadientSceneImpl::GetParent(RadientEntityID Entity, RadientEntityID& Parent) const
 {
     return m_pState->GetParent(Entity, Parent);
@@ -93,6 +98,11 @@ RADIENT_STATUS RadientSceneImpl::GetLocalTransform(RadientEntityID Entity, Radie
 RADIENT_STATUS RadientSceneImpl::GetWorldMatrix(RadientEntityID Entity, RadientMatrix4x4& Matrix)
 {
     return m_pState->GetWorldMatrix(Entity, Matrix);
+}
+
+RADIENT_STATUS RadientSceneImpl::GetCachedWorldMatrix(RadientEntityID Entity, RadientMatrix4x4& Matrix) const
+{
+    return m_pState->GetCachedWorldMatrix(Entity, Matrix);
 }
 
 RADIENT_STATUS RadientSceneImpl::HasComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType, Bool& HasComponent) const

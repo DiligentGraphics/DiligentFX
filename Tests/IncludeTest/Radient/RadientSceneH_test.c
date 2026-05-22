@@ -103,11 +103,14 @@ void RadientScene_C_TestMacros(IRadientScene* pScene)
     Status = IRadientScene_IsEntityAlive(pScene, Entity);
     Status = IRadientScene_GetEntityFlags(pScene, Entity, &EntityFlags);
     Status = IRadientScene_GetEntityOwnVisibility(pScene, Entity, &Visible);
+    Status = IRadientScene_GetEntityEffectiveVisibility(pScene, Entity, &Visible);
+    Status = IRadientScene_GetCachedEntityEffectiveVisibility(pScene, Entity, &Visible);
     Status = IRadientScene_GetParent(pScene, Entity, &Parent);
     Status = IRadientScene_GetChildCount(pScene, Entity, &ChildCount);
     Status = IRadientScene_GetChildren(pScene, Entity, 0, ChildCount, Children, &NumChildren);
     Status = IRadientScene_GetLocalTransform(pScene, Entity, &Transform);
     Status = IRadientScene_GetWorldMatrix(pScene, Entity, &WorldMatrix);
+    Status = IRadientScene_GetCachedWorldMatrix(pScene, Entity, &WorldMatrix);
     Status = IRadientScene_HasComponent(pScene, Entity, CustomComponent.ComponentType, &HasComponent);
     IRadientScene_GetRevision(pScene);
 

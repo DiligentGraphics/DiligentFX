@@ -59,11 +59,13 @@ public:
     RADIENT_STATUS  GetEntityFlags(RadientEntityID Entity, RADIENT_ENTITY_FLAGS& Flags) const;
     RADIENT_STATUS  GetEntityOwnVisibility(RadientEntityID Entity, Bool& Visible) const;
     RADIENT_STATUS  GetEntityEffectiveVisibility(RadientEntityID Entity, Bool& Visible);
+    RADIENT_STATUS  GetCachedEntityEffectiveVisibility(RadientEntityID Entity, Bool& Visible) const;
     RADIENT_STATUS  GetParent(RadientEntityID Entity, RadientEntityID& Parent) const;
     RADIENT_STATUS  GetChildCount(RadientEntityID Entity, Uint32& ChildCount) const;
     RADIENT_STATUS  GetChildren(RadientEntityID Entity, Uint32 StartChild, Uint32 ChildCount, RadientEntityID* pChildren, Uint32& NumChildrenWritten) const;
     RADIENT_STATUS  GetLocalTransform(RadientEntityID Entity, RadientTransform& Transform) const;
     RADIENT_STATUS  GetWorldMatrix(RadientEntityID Entity, RadientMatrix4x4& Matrix);
+    RADIENT_STATUS  GetCachedWorldMatrix(RadientEntityID Entity, RadientMatrix4x4& Matrix) const;
     RADIENT_STATUS  HasComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType, Bool& HasComponent) const;
     RadientRevision GetRevision() const;
 

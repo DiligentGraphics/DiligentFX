@@ -141,6 +141,22 @@ RADIENT_STATUS RadientSceneState::GetEntityEffectiveVisibility(RadientEntityID E
     return RADIENT_STATUS_OK;
 }
 
+RADIENT_STATUS RadientSceneState::GetCachedEntityEffectiveVisibility(RadientEntityID Entity, Bool& Visible) const
+{
+    const entt::entity E = FindEntity(Entity);
+    if (E == entt::null)
+    {
+        Visible = False;
+        return RADIENT_STATUS_NOT_FOUND;
+    }
+
+    VERIFY((m_DirtyFlags & DIRTY_FLAG_VISIBILITY) == DIRTY_FLAG_NONE,
+           "Cached effective visibility is being queried while visibility state is dirty");
+
+    Visible = m_Registry.get<EffectiveVisibilityComponent>(E).Visible;
+    return RADIENT_STATUS_OK;
+}
+
 RADIENT_STATUS RadientSceneState::GetParent(RadientEntityID Entity, RadientEntityID& Parent) const
 {
     const entt::entity E = FindEntity(Entity);
@@ -222,6 +238,22 @@ RADIENT_STATUS RadientSceneState::GetWorldMatrix(RadientEntityID Entity, Radient
     }
 
     UpdateDerivedStatePathToRoot(E, DIRTY_FLAG_TRANSFORM);
+    Matrix = m_Registry.get<WorldTransformComponent>(E).Matrix;
+    return RADIENT_STATUS_OK;
+}
+
+RADIENT_STATUS RadientSceneState::GetCachedWorldMatrix(RadientEntityID Entity, RadientMatrix4x4& Matrix) const
+{
+    const entt::entity E = FindEntity(Entity);
+    if (E == entt::null)
+    {
+        Matrix = {};
+        return RADIENT_STATUS_NOT_FOUND;
+    }
+
+    VERIFY((m_DirtyFlags & DIRTY_FLAG_TRANSFORM) == DIRTY_FLAG_NONE,
+           "Cached world matrix is being queried while transform state is dirty");
+
     Matrix = m_Registry.get<WorldTransformComponent>(E).Matrix;
     return RADIENT_STATUS_OK;
 }
