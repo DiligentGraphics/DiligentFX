@@ -30,6 +30,8 @@
 #include "RadientMath.hpp"
 #include "RadientSceneState.hpp"
 
+#include <memory>
+
 using namespace Diligent;
 using namespace Diligent::Testing;
 
@@ -65,6 +67,38 @@ RadientTransform MakeTranslation(float X, float Y, float Z)
     RadientTransform Transform;
     Transform.Position = {X, Y, Z};
     return Transform;
+}
+
+TEST(RadientSceneStateTest, GetDesc)
+{
+    RadientSceneState DefaultState;
+    EXPECT_EQ(DefaultState.GetDesc().Name, nullptr);
+
+    char Name[] = "Scene A";
+
+    RadientSceneDesc Desc;
+    Desc.Name = Name;
+
+    RadientSceneState State{Desc};
+
+    Name[0] = 'X';
+
+    EXPECT_STREQ(State.GetDesc().Name, "Scene A");
+    EXPECT_NE(State.GetDesc().Name, Desc.Name);
+}
+
+TEST(RadientSceneStateTest, GetDescCopiesHeapName)
+{
+    std::unique_ptr<std::string> Name = std::make_unique<std::string>("Heap Scene");
+
+    RadientSceneDesc Desc;
+    Desc.Name = Name->c_str();
+
+    RadientSceneState State{Desc};
+
+    Name.reset();
+
+    EXPECT_STREQ(State.GetDesc().Name, "Heap Scene");
 }
 
 TEST(RadientSceneStateTest, IsEntityAlive)
@@ -201,7 +235,7 @@ TEST(RadientSceneStateTest, GetEntityEffectiveVisibility)
     EXPECT_EQ(State.GetEntityOwnVisibility(Child, Visible), RADIENT_STATUS_OK);
     EXPECT_EQ(Visible, True);
     EXPECT_EQ(State.GetEntityEffectiveVisibility(Child, Visible), RADIENT_STATUS_OK);
-    EXPECT_EQ(Visible, True);
+    EXPECT_EQ(Visible, False);
 
     EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
     EXPECT_EQ(State.GetEntityEffectiveVisibility(Child, Visible), RADIENT_STATUS_OK);
@@ -218,7 +252,7 @@ TEST(RadientSceneStateTest, GetEntityEffectiveVisibility)
 
     EXPECT_EQ(State.SetEntityOwnVisibility(Child, True), RADIENT_STATUS_OK);
     EXPECT_EQ(State.GetEntityEffectiveVisibility(Child, Visible), RADIENT_STATUS_OK);
-    EXPECT_EQ(Visible, False);
+    EXPECT_EQ(Visible, True);
 
     EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
     EXPECT_EQ(State.GetEntityEffectiveVisibility(Child, Visible), RADIENT_STATUS_OK);
@@ -236,7 +270,7 @@ TEST(RadientSceneStateTest, GetEntityEffectiveVisibility)
     EXPECT_EQ(State.GetEntityOwnVisibility(GrandChild, Visible), RADIENT_STATUS_OK);
     EXPECT_EQ(Visible, True);
     EXPECT_EQ(State.GetEntityEffectiveVisibility(GrandChild, Visible), RADIENT_STATUS_OK);
-    EXPECT_EQ(Visible, True);
+    EXPECT_EQ(Visible, False);
 
     EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
     EXPECT_EQ(State.GetEntityEffectiveVisibility(GrandChild, Visible), RADIENT_STATUS_OK);
@@ -253,7 +287,7 @@ TEST(RadientSceneStateTest, GetEntityEffectiveVisibility)
 
     EXPECT_EQ(State.SetParent(GrandChild, InvalidRadientEntityID, True), RADIENT_STATUS_OK);
     EXPECT_EQ(State.GetEntityEffectiveVisibility(GrandChild, Visible), RADIENT_STATUS_OK);
-    EXPECT_EQ(Visible, False);
+    EXPECT_EQ(Visible, True);
 
     EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
     EXPECT_EQ(State.GetEntityEffectiveVisibility(GrandChild, Visible), RADIENT_STATUS_OK);
@@ -262,6 +296,33 @@ TEST(RadientSceneStateTest, GetEntityEffectiveVisibility)
     EXPECT_EQ(State.DestroyEntity(GrandChild), RADIENT_STATUS_OK);
     Visible = True;
     EXPECT_EQ(State.GetEntityEffectiveVisibility(GrandChild, Visible), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(Visible, False);
+}
+
+TEST(RadientSceneStateTest, LazyEffectiveVisibilityUpdatePreservesCommitPropagation)
+{
+    RadientSceneState State;
+
+    RadientEntityID Root = InvalidRadientEntityID;
+    EXPECT_EQ(State.CreateEntity({}, Root), RADIENT_STATUS_OK);
+
+    RadientEntityDesc ChildDesc;
+    ChildDesc.Parent = Root;
+
+    RadientEntityID Child0 = InvalidRadientEntityID;
+    RadientEntityID Child1 = InvalidRadientEntityID;
+    EXPECT_EQ(State.CreateEntity(ChildDesc, Child0), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.CreateEntity(ChildDesc, Child1), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+    EXPECT_EQ(State.SetEntityOwnVisibility(Root, False), RADIENT_STATUS_OK);
+
+    Bool Visible = True;
+    EXPECT_EQ(State.GetEntityEffectiveVisibility(Child0, Visible), RADIENT_STATUS_OK);
+    EXPECT_EQ(Visible, False);
+
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.GetEntityEffectiveVisibility(Child1, Visible), RADIENT_STATUS_OK);
     EXPECT_EQ(Visible, False);
 }
 
@@ -455,7 +516,7 @@ TEST(RadientSceneStateTest, GetWorldMatrix)
     RadientEntityID Root = InvalidRadientEntityID;
     EXPECT_EQ(State.CreateEntity(RootDesc, Root), RADIENT_STATUS_OK);
     EXPECT_EQ(State.GetWorldMatrix(Root, Matrix), RADIENT_STATUS_OK);
-    ExpectMatrixNear(Matrix, RadientMatrix4x4{});
+    ExpectMatrixNear(Matrix, RadientMath::TransformToMatrix(RootTransform));
 
     EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
     EXPECT_EQ(State.GetWorldMatrix(Root, Matrix), RADIENT_STATUS_OK);
@@ -476,7 +537,7 @@ TEST(RadientSceneStateTest, GetWorldMatrix)
         RadientMath::TransformToMatrix(ChildTransform),
         RadientMath::TransformToMatrix(RootTransform));
     EXPECT_EQ(State.GetWorldMatrix(Child, Matrix), RADIENT_STATUS_OK);
-    ExpectMatrixNear(Matrix, RadientMatrix4x4{});
+    ExpectMatrixNear(Matrix, ExpectedChildWorld);
 
     EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
     EXPECT_EQ(State.GetWorldMatrix(Child, Matrix), RADIENT_STATUS_OK);
@@ -486,12 +547,12 @@ TEST(RadientSceneStateTest, GetWorldMatrix)
 
     RootTransform.Position = {10.f, 20.f, 30.f};
     EXPECT_EQ(State.SetLocalTransform(Root, RootTransform), RADIENT_STATUS_OK);
-    EXPECT_EQ(State.GetWorldMatrix(Child, Matrix), RADIENT_STATUS_OK);
-    ExpectMatrixNear(Matrix, CommittedChildWorld);
-
     ExpectedChildWorld = RadientMath::MultiplyMatrices(
         RadientMath::TransformToMatrix(ChildTransform),
         RadientMath::TransformToMatrix(RootTransform));
+    EXPECT_EQ(State.GetWorldMatrix(Child, Matrix), RADIENT_STATUS_OK);
+    ExpectMatrixNear(Matrix, ExpectedChildWorld);
+
     EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
     EXPECT_EQ(State.GetWorldMatrix(Child, Matrix), RADIENT_STATUS_OK);
     ExpectMatrixNear(Matrix, ExpectedChildWorld);
@@ -500,12 +561,12 @@ TEST(RadientSceneStateTest, GetWorldMatrix)
     ChildTransform.Position = {8.f, 9.f, 10.f};
     ChildTransform.Scale    = {4.f, 5.f, 6.f};
     EXPECT_EQ(State.SetLocalTransform(Child, ChildTransform), RADIENT_STATUS_OK);
-    EXPECT_EQ(State.GetWorldMatrix(Child, Matrix), RADIENT_STATUS_OK);
-    ExpectMatrixNear(Matrix, CommittedChildWorld);
-
     ExpectedChildWorld = RadientMath::MultiplyMatrices(
         RadientMath::TransformToMatrix(ChildTransform),
         RadientMath::TransformToMatrix(RootTransform));
+    EXPECT_EQ(State.GetWorldMatrix(Child, Matrix), RADIENT_STATUS_OK);
+    ExpectMatrixNear(Matrix, ExpectedChildWorld);
+
     EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
     EXPECT_EQ(State.GetWorldMatrix(Child, Matrix), RADIENT_STATUS_OK);
     ExpectMatrixNear(Matrix, ExpectedChildWorld);
@@ -523,6 +584,52 @@ TEST(RadientSceneStateTest, GetWorldMatrix)
     Matrix = ExpectedChildWorld;
     EXPECT_EQ(State.GetWorldMatrix(Child, Matrix), RADIENT_STATUS_NOT_FOUND);
     ExpectMatrixNear(Matrix, RadientMatrix4x4{});
+}
+
+TEST(RadientSceneStateTest, LazyWorldMatrixUpdatePreservesCommitPropagation)
+{
+    RadientSceneState State;
+
+    RadientTransform RootTransform = MakeTranslation(1.f, 2.f, 3.f);
+
+    RadientEntityDesc RootDesc;
+    RootDesc.Transform = RootTransform;
+
+    RadientEntityID Root = InvalidRadientEntityID;
+    EXPECT_EQ(State.CreateEntity(RootDesc, Root), RADIENT_STATUS_OK);
+
+    RadientEntityDesc Child0Desc;
+    Child0Desc.Parent    = Root;
+    Child0Desc.Transform = MakeTranslation(4.f, 5.f, 6.f);
+
+    RadientEntityDesc Child1Desc;
+    Child1Desc.Parent    = Root;
+    Child1Desc.Transform = MakeTranslation(7.f, 8.f, 9.f);
+
+    RadientEntityID Child0 = InvalidRadientEntityID;
+    RadientEntityID Child1 = InvalidRadientEntityID;
+    EXPECT_EQ(State.CreateEntity(Child0Desc, Child0), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.CreateEntity(Child1Desc, Child1), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+    RootTransform = MakeTranslation(10.f, 20.f, 30.f);
+    EXPECT_EQ(State.SetLocalTransform(Root, RootTransform), RADIENT_STATUS_OK);
+
+    RadientMatrix4x4 ExpectedWorld = RadientMath::MultiplyMatrices(
+        RadientMath::TransformToMatrix(Child0Desc.Transform),
+        RadientMath::TransformToMatrix(RootTransform));
+
+    RadientMatrix4x4 Matrix;
+    EXPECT_EQ(State.GetWorldMatrix(Child0, Matrix), RADIENT_STATUS_OK);
+    ExpectMatrixNear(Matrix, ExpectedWorld);
+
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+    ExpectedWorld = RadientMath::MultiplyMatrices(
+        RadientMath::TransformToMatrix(Child1Desc.Transform),
+        RadientMath::TransformToMatrix(RootTransform));
+    EXPECT_EQ(State.GetWorldMatrix(Child1, Matrix), RADIENT_STATUS_OK);
+    ExpectMatrixNear(Matrix, ExpectedWorld);
 }
 
 TEST(RadientSceneStateTest, SetParentKeepWorldTransformUsesPendingTransforms)

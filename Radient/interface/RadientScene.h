@@ -268,7 +268,7 @@ DILIGENT_BEGIN_INTERFACE(IRadientScene, IObject)
     /// Gets effective entity visibility, accounting for parent visibility.
     VIRTUAL RADIENT_STATUS METHOD(GetEntityEffectiveVisibility)(THIS_
                                                                 RadientEntityID Entity,
-                                                                Bool REF        Visible) CONST PURE;
+                                                                Bool REF        Visible) PURE;
 
     /// Gets the entity parent, or InvalidRadientEntityID for a root entity.
     VIRTUAL RADIENT_STATUS METHOD(GetParent)(THIS_
@@ -296,7 +296,7 @@ DILIGENT_BEGIN_INTERFACE(IRadientScene, IObject)
     /// Gets world transform matrix.
     VIRTUAL RADIENT_STATUS METHOD(GetWorldMatrix)(THIS_
                                                   RadientEntityID      Entity,
-                                                  RadientMatrix4x4 REF Matrix) CONST PURE;
+                                                  RadientMatrix4x4 REF Matrix) PURE;
 
     /// Checks if the entity has the requested component.
     VIRTUAL RADIENT_STATUS METHOD(HasComponent)(THIS_

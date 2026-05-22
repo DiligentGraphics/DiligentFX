@@ -34,6 +34,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace Diligent
@@ -42,22 +43,26 @@ namespace Diligent
 class RadientSceneState
 {
 public:
+    RadientSceneState();
+    explicit RadientSceneState(const RadientSceneDesc& Desc);
+
     const RadientSceneDesc& GetDesc() const;
 
     RADIENT_STATUS  IsEntityAlive(RadientEntityID Entity) const;
     RADIENT_STATUS  GetEntityFlags(RadientEntityID Entity, RADIENT_ENTITY_FLAGS& Flags) const;
     RADIENT_STATUS  GetEntityOwnVisibility(RadientEntityID Entity, Bool& Visible) const;
-    RADIENT_STATUS  GetEntityEffectiveVisibility(RadientEntityID Entity, Bool& Visible) const;
+    RADIENT_STATUS  GetEntityEffectiveVisibility(RadientEntityID Entity, Bool& Visible);
     RADIENT_STATUS  GetParent(RadientEntityID Entity, RadientEntityID& Parent) const;
     RADIENT_STATUS  GetChildCount(RadientEntityID Entity, Uint32& ChildCount) const;
     RADIENT_STATUS  GetChildren(RadientEntityID Entity, Uint32 StartChild, Uint32 ChildCount, RadientEntityID* pChildren, Uint32& NumChildrenWritten) const;
     RADIENT_STATUS  GetLocalTransform(RadientEntityID Entity, RadientTransform& Transform) const;
-    RADIENT_STATUS  GetWorldMatrix(RadientEntityID Entity, RadientMatrix4x4& Matrix) const;
+    RADIENT_STATUS  GetWorldMatrix(RadientEntityID Entity, RadientMatrix4x4& Matrix);
     RADIENT_STATUS  HasComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType, Bool& HasComponent) const;
     RadientRevision GetRevision() const;
 
     RADIENT_STATUS CreateEntity(const RadientEntityDesc& Desc, RadientEntityID& Entity);
     RADIENT_STATUS DestroyEntity(RadientEntityID Entity);
+
     RADIENT_STATUS SetEntityFlags(RadientEntityID Entity, RADIENT_ENTITY_FLAGS Flags);
     RADIENT_STATUS SetEntityOwnVisibility(RadientEntityID Entity, Bool Visible);
     RADIENT_STATUS SetParent(RadientEntityID Entity, RadientEntityID Parent, Bool KeepWorldTransform);
@@ -73,9 +78,15 @@ public:
 private:
     enum DIRTY_FLAGS : Uint32
     {
-        DIRTY_FLAG_NONE                   = 0u,
-        DIRTY_FLAG_TRANSFORM              = 1u << 0u,
-        DIRTY_FLAG_VISIBILITY             = 1u << 1u,
+        DIRTY_FLAG_NONE = 0u,
+
+        // Local transform changed; cached world transform must be recomputed.
+        DIRTY_FLAG_TRANSFORM = 1u << 0u,
+
+        // Own visibility changed; cached effective visibility must be recomputed.
+        DIRTY_FLAG_VISIBILITY = 1u << 1u,
+
+        // These flags affect descendants and must be propagated through the hierarchy.
         DIRTY_FLAGS_REQUIRING_PROPAGATION = DIRTY_FLAG_TRANSFORM | DIRTY_FLAG_VISIBILITY
     };
     DECLARE_FRIEND_FLAG_ENUM_OPERATORS(DIRTY_FLAGS);
@@ -137,23 +148,34 @@ private:
 
     entt::entity FindEntity(RadientEntityID Entity) const;
     bool         IsDescendant(entt::entity Entity, entt::entity PotentialAncestor) const;
+    bool         VerifyInternalEntity(entt::entity Entity) const;
     void         DetachFromParent(entt::entity Entity);
     void         DestroyEntitySubtree(entt::entity Entity);
     void         RemoveCustomComponents(entt::entity Entity);
     DIRTY_FLAGS  MarkDirty(entt::entity Entity, DIRTY_FLAGS Flags);
+    void         ClearDirtyFlags(entt::entity Entity, DIRTY_FLAGS Flags);
     void         PropagateDirtyFlags(entt::entity Entity, DIRTY_FLAGS Flags);
+    void         MarkChildrenDirtyExcept(entt::entity Entity, DIRTY_FLAGS Flags, entt::entity ExcludedChild);
     void         UpdateDirtyEntities();
-    void         UpdateDerivedState(entt::entity Entity);
+    void         UpdateDerivedState(entt::entity Entity, DIRTY_FLAGS Flags);
+    void         UpdateEntityDerivedState(entt::entity Entity, DIRTY_FLAGS Flags);
     void         Touch();
 
-    RadientSceneDesc m_Desc;
+    const std::string m_Name;
+    RadientSceneDesc  m_Desc;
 
-    mutable entt::registry                                           m_Registry;
+    entt::registry                                                   m_Registry;
     std::unordered_map<RadientEntityID, entt::entity>                m_EntityMap;
     std::unordered_map<RadientComponentTypeID, CustomComponentStore> m_CustomComponentStores;
-    std::vector<RadientEntityID>                                     m_DirtyEntities;
     RadientEntityID                                                  m_NextEntityID = 1;
     RadientRevision                                                  m_Revision     = 0;
+
+    // Entities with any dirty flag currently set. MarkDirty/ClearDirtyFlags keep this set in sync.
+    std::unordered_set<entt::entity> m_DirtyEntities;
+    // Reused snapshot buffer; commit cannot iterate m_DirtyEntities directly because processing mutates it.
+    std::vector<entt::entity> m_DirtyEntityBuffer;
+    // Reused path scratch buffer for lazy parent-to-child derived-state updates.
+    std::vector<entt::entity> m_TmpEntityBuffer;
 };
 
 } // namespace Diligent

@@ -56,6 +56,18 @@ bool IsValidEntityFlags(RADIENT_ENTITY_FLAGS Flags)
 
 } // namespace
 
+RadientSceneState::RadientSceneState() :
+    m_Desc{}
+{
+}
+
+RadientSceneState::RadientSceneState(const RadientSceneDesc& Desc) :
+    m_Name{Desc.Name != nullptr ? Desc.Name : ""},
+    m_Desc{Desc}
+{
+    m_Desc.Name = m_Name.c_str();
+}
+
 const RadientSceneDesc& RadientSceneState::GetDesc() const
 {
     return m_Desc;
@@ -92,7 +104,7 @@ RADIENT_STATUS RadientSceneState::GetEntityOwnVisibility(RadientEntityID Entity,
     return RADIENT_STATUS_OK;
 }
 
-RADIENT_STATUS RadientSceneState::GetEntityEffectiveVisibility(RadientEntityID Entity, Bool& Visible) const
+RADIENT_STATUS RadientSceneState::GetEntityEffectiveVisibility(RadientEntityID Entity, Bool& Visible)
 {
     const entt::entity E = FindEntity(Entity);
     if (E == entt::null)
@@ -101,15 +113,7 @@ RADIENT_STATUS RadientSceneState::GetEntityEffectiveVisibility(RadientEntityID E
         return RADIENT_STATUS_NOT_FOUND;
     }
 
-#ifdef DILIGENT_DEVELOPMENT
-    const DirtyStateComponent& DirtyState = m_Registry.get<DirtyStateComponent>(E);
-    if ((DirtyState.Flags & DIRTY_FLAG_VISIBILITY) != DIRTY_FLAG_NONE)
-    {
-        LOG_WARNING_MESSAGE("Radient scene entity ", Entity,
-                            " effective visibility is dirty. Call CommitChanges() before querying effective visibility to get up-to-date value.");
-    }
-#endif
-
+    UpdateDerivedState(E, DIRTY_FLAG_VISIBILITY);
     Visible = m_Registry.get<EffectiveVisibilityComponent>(E).Visible;
     return RADIENT_STATUS_OK;
 }
@@ -185,7 +189,7 @@ RADIENT_STATUS RadientSceneState::GetLocalTransform(RadientEntityID Entity, Radi
     return RADIENT_STATUS_OK;
 }
 
-RADIENT_STATUS RadientSceneState::GetWorldMatrix(RadientEntityID Entity, RadientMatrix4x4& Matrix) const
+RADIENT_STATUS RadientSceneState::GetWorldMatrix(RadientEntityID Entity, RadientMatrix4x4& Matrix)
 {
     const entt::entity E = FindEntity(Entity);
     if (E == entt::null)
@@ -194,15 +198,7 @@ RADIENT_STATUS RadientSceneState::GetWorldMatrix(RadientEntityID Entity, Radient
         return RADIENT_STATUS_NOT_FOUND;
     }
 
-#ifdef DILIGENT_DEVELOPMENT
-    const DirtyStateComponent& DirtyState = m_Registry.get<DirtyStateComponent>(E);
-    if ((DirtyState.Flags & DIRTY_FLAG_TRANSFORM) != DIRTY_FLAG_NONE)
-    {
-        LOG_WARNING_MESSAGE("Radient scene entity ", Entity,
-                            " world matrix is dirty. Call CommitChanges() before querying world matrix to get up-to-date value.");
-    }
-#endif
-
+    UpdateDerivedState(E, DIRTY_FLAG_TRANSFORM);
     Matrix = m_Registry.get<WorldTransformComponent>(E).Matrix;
     return RADIENT_STATUS_OK;
 }
@@ -374,12 +370,12 @@ RADIENT_STATUS RadientSceneState::SetParent(RadientEntityID Entity, RadientEntit
     RadientTransform LocalTransform = m_Registry.get<LocalTransformComponent>(E).Transform;
     if (KeepWorldTransform)
     {
-        UpdateDerivedState(E);
+        UpdateDerivedState(E, DIRTY_FLAG_TRANSFORM);
         RadientMatrix4x4 LocalMatrix = m_Registry.get<WorldTransformComponent>(E).Matrix;
 
         if (NewParent != entt::null)
         {
-            UpdateDerivedState(NewParent);
+            UpdateDerivedState(NewParent, DIRTY_FLAG_TRANSFORM);
 
             RadientMatrix4x4 ParentWorldInverse;
             if (!RadientMath::TryInverseMatrix(m_Registry.get<WorldTransformComponent>(NewParent).Matrix, ParentWorldInverse))
@@ -563,7 +559,6 @@ RADIENT_STATUS RadientSceneState::RemoveComponent(RadientEntityID Entity, Radien
 RADIENT_STATUS RadientSceneState::CommitChanges()
 {
     UpdateDirtyEntities();
-    m_DirtyEntities.clear();
     return RADIENT_STATUS_OK;
 }
 
@@ -592,6 +587,23 @@ bool RadientSceneState::IsDescendant(entt::entity Entity, entt::entity Potential
     return false;
 }
 
+bool RadientSceneState::VerifyInternalEntity(entt::entity Entity) const
+{
+    if (Entity == entt::null)
+    {
+        UNEXPECTED("Entity is null. This should never happen.");
+        return false;
+    }
+
+    if (!m_Registry.valid(Entity))
+    {
+        UNEXPECTED("Entity is not valid. This should never happen.");
+        return false;
+    }
+
+    return true;
+}
+
 template <typename ComponentType>
 RADIENT_STATUS RadientSceneState::EmplaceOrReplaceComponent(RadientEntityID Entity, const ComponentType& Component)
 {
@@ -606,36 +618,46 @@ RADIENT_STATUS RadientSceneState::EmplaceOrReplaceComponent(RadientEntityID Enti
 
 void RadientSceneState::DetachFromParent(entt::entity Entity)
 {
+    if (!VerifyInternalEntity(Entity))
+        return;
+
     HierarchyComponent& Hierarchy = m_Registry.get<HierarchyComponent>(Entity);
     if (Hierarchy.Parent == entt::null)
         return;
 
     const entt::entity Parent = Hierarchy.Parent;
-    if (m_Registry.valid(Parent))
-    {
-        std::vector<entt::entity>& Siblings = m_Registry.get<HierarchyComponent>(Parent).Children;
-        Siblings.erase(std::remove(Siblings.begin(), Siblings.end(), Entity), Siblings.end());
-    }
+    if (!VerifyInternalEntity(Parent))
+        return;
+
+    std::vector<entt::entity>& Siblings = m_Registry.get<HierarchyComponent>(Parent).Children;
+    Siblings.erase(std::remove(Siblings.begin(), Siblings.end(), Entity), Siblings.end());
 
     Hierarchy.Parent = entt::null;
 }
 
 void RadientSceneState::DestroyEntitySubtree(entt::entity Entity)
 {
+    if (!VerifyInternalEntity(Entity))
+        return;
+
     const std::vector<entt::entity> Children = m_Registry.get<HierarchyComponent>(Entity).Children;
     for (const entt::entity Child : Children)
     {
-        if (m_Registry.valid(Child))
+        if (VerifyInternalEntity(Child))
             DestroyEntitySubtree(Child);
     }
 
     RemoveCustomComponents(Entity);
+    m_DirtyEntities.erase(Entity);
     m_EntityMap.erase(m_Registry.get<EntityComponent>(Entity).ID);
     m_Registry.destroy(Entity);
 }
 
 void RadientSceneState::RemoveCustomComponents(entt::entity Entity)
 {
+    if (!VerifyInternalEntity(Entity))
+        return;
+
     CustomComponentIndexComponent* pIndex = m_Registry.try_get<CustomComponentIndexComponent>(Entity);
     if (pIndex == nullptr)
         return;
@@ -659,88 +681,223 @@ RadientSceneState::DIRTY_FLAGS RadientSceneState::MarkDirty(entt::entity Entity,
     if (Flags == DIRTY_FLAG_NONE)
         return DIRTY_FLAG_NONE;
 
+    if (!VerifyInternalEntity(Entity))
+        return DIRTY_FLAG_NONE;
+
     DirtyStateComponent& DirtyState = m_Registry.get<DirtyStateComponent>(Entity);
     const DIRTY_FLAGS    AddedFlags = Flags & ~DirtyState.Flags;
+    if (AddedFlags == DIRTY_FLAG_NONE)
+        return DIRTY_FLAG_NONE;
+
+    // Only the clean -> dirty transition inserts the entity into the global dirty set.
     if (DirtyState.Flags == DIRTY_FLAG_NONE)
-        m_DirtyEntities.push_back(m_Registry.get<EntityComponent>(Entity).ID);
-
-    DirtyState.Flags |= Flags;
-
-    const DIRTY_FLAGS AddedPropagationFlags = AddedFlags & DIRTY_FLAGS_REQUIRING_PROPAGATION;
-    if (AddedPropagationFlags != DIRTY_FLAG_NONE)
-        PropagateDirtyFlags(Entity, AddedPropagationFlags);
+    {
+        bool Inserted = m_DirtyEntities.insert(Entity).second;
+        VERIFY(Inserted, "Entity was already in the dirty set. This should not happen as the entity had no dirty flags set");
+    }
+    DirtyState.Flags |= AddedFlags;
 
     return AddedFlags;
 }
 
+void RadientSceneState::ClearDirtyFlags(entt::entity Entity, DIRTY_FLAGS Flags)
+{
+    if (Flags == DIRTY_FLAG_NONE)
+        return;
+
+    if (!VerifyInternalEntity(Entity))
+        return;
+
+    DirtyStateComponent& DirtyState = m_Registry.get<DirtyStateComponent>(Entity);
+    DirtyState.Flags &= ~Flags;
+
+    // The dirty set mirrors entities with non-zero dirty flags.
+    if (DirtyState.Flags == DIRTY_FLAG_NONE)
+        m_DirtyEntities.erase(Entity);
+}
+
 void RadientSceneState::PropagateDirtyFlags(entt::entity Entity, DIRTY_FLAGS Flags)
 {
+    if (Flags == DIRTY_FLAG_NONE)
+        return;
+
+    if (!VerifyInternalEntity(Entity))
+        return;
+
     const std::vector<entt::entity>& Children = m_Registry.get<HierarchyComponent>(Entity).Children;
     for (const entt::entity Child : Children)
     {
-        if (!m_Registry.valid(Child))
+        // Recurse only for newly added flags; this avoids reprocessing overlapping dirty subtrees.
+        const DIRTY_FLAGS AddedFlags = MarkDirty(Child, Flags) & DIRTY_FLAGS_REQUIRING_PROPAGATION;
+        if (AddedFlags != DIRTY_FLAG_NONE)
+            PropagateDirtyFlags(Child, AddedFlags);
+    }
+}
+
+void RadientSceneState::MarkChildrenDirtyExcept(entt::entity Entity, DIRTY_FLAGS Flags, entt::entity ExcludedChild)
+{
+    if (Flags == DIRTY_FLAG_NONE)
+        return;
+
+    if (!VerifyInternalEntity(Entity))
+        return;
+
+    const std::vector<entt::entity>& Children = m_Registry.get<HierarchyComponent>(Entity).Children;
+    for (const entt::entity Child : Children)
+    {
+        if (Child == ExcludedChild)
             continue;
 
+        // The excluded child is already repaired by the active path update; siblings remain invalidated.
         MarkDirty(Child, Flags);
     }
 }
 
 void RadientSceneState::UpdateDirtyEntities()
 {
-    for (const RadientEntityID EntityID : m_DirtyEntities)
+    // Snapshot the current dirty roots because propagation inserts into m_DirtyEntities.
+    m_DirtyEntityBuffer.clear();
+    m_DirtyEntityBuffer.reserve(m_DirtyEntities.size());
+    for (const entt::entity Entity : m_DirtyEntities)
+        m_DirtyEntityBuffer.push_back(Entity);
+
+    const size_t DirtyRootCount = m_DirtyEntityBuffer.size();
+    for (size_t Index = 0; Index < DirtyRootCount; ++Index)
     {
-        const entt::entity Entity = FindEntity(EntityID);
-        if (Entity == entt::null)
+        const entt::entity Entity = m_DirtyEntityBuffer[Index];
+        if (!VerifyInternalEntity(Entity))
             continue;
 
-        UpdateDerivedState(Entity);
+        const DIRTY_FLAGS Flags = m_Registry.get<DirtyStateComponent>(Entity).Flags & DIRTY_FLAGS_REQUIRING_PROPAGATION;
+        PropagateDirtyFlags(Entity, Flags);
+    }
+
+    // Process the expanded dirty set. UpdateDerivedState clears flags and may erase from m_DirtyEntities.
+    m_DirtyEntityBuffer.clear();
+    m_DirtyEntityBuffer.reserve(m_DirtyEntities.size());
+    for (const entt::entity Entity : m_DirtyEntities)
+        m_DirtyEntityBuffer.push_back(Entity);
+
+    for (const entt::entity Entity : m_DirtyEntityBuffer)
+    {
+        if (!VerifyInternalEntity(Entity))
+            continue;
+
+        const DIRTY_FLAGS Flags = m_Registry.get<DirtyStateComponent>(Entity).Flags & DIRTY_FLAGS_REQUIRING_PROPAGATION;
+        UpdateDerivedState(Entity, Flags);
+    }
+
+    VERIFY(m_DirtyEntities.empty(), "All dirty entities should have been processed and cleared at this point");
+    m_DirtyEntities.clear();
+    m_DirtyEntityBuffer.clear();
+}
+
+void RadientSceneState::UpdateDerivedState(entt::entity Entity, DIRTY_FLAGS Flags)
+{
+    Flags &= DIRTY_FLAGS_REQUIRING_PROPAGATION;
+    if (Flags == DIRTY_FLAG_NONE)
+        return;
+
+    if (!VerifyInternalEntity(Entity))
+        return;
+
+    std::vector<entt::entity>& Path = m_TmpEntityBuffer;
+    Path.clear();
+
+    // Build the path from the requested entity up to the root. It is consumed in reverse order below.
+    for (entt::entity Current = Entity; Current != entt::null;)
+    {
+        if (!VerifyInternalEntity(Current))
+            break;
+
+        Path.push_back(Current);
+        Current = m_Registry.get<HierarchyComponent>(Current).Parent;
+    }
+
+    // Start updating at the highest dirty ancestor on this path so parent cached state is valid first.
+    size_t FirstDirtyIndex = Path.size();
+    for (size_t Index = Path.size(); Index > 0; --Index)
+    {
+        const size_t      PathIndex   = Index - 1;
+        const DIRTY_FLAGS EntityFlags = m_Registry.get<DirtyStateComponent>(Path[PathIndex]).Flags & Flags;
+        if (EntityFlags != DIRTY_FLAG_NONE)
+        {
+            FirstDirtyIndex = PathIndex;
+            break;
+        }
+    }
+
+    if (FirstDirtyIndex == Path.size())
+        return;
+
+    DIRTY_FLAGS ActiveFlags = DIRTY_FLAG_NONE;
+    for (size_t Index = FirstDirtyIndex + 1; Index > 0; --Index)
+    {
+        const size_t       PathIndex   = Index - 1;
+        const entt::entity Current     = Path[PathIndex];
+        const DIRTY_FLAGS  EntityFlags = m_Registry.get<DirtyStateComponent>(Current).Flags & Flags;
+        // Once a parent is dirty, the same flags are inherited by every descendant on this path.
+        ActiveFlags |= EntityFlags;
+        if (ActiveFlags == DIRTY_FLAG_NONE)
+            continue;
+
+        UpdateEntityDerivedState(Current, ActiveFlags);
+        ClearDirtyFlags(Current, ActiveFlags);
+
+        // Off-path children inherit the updated parent's dirtiness but are not repaired by this path walk.
+        const entt::entity ExcludedChild = PathIndex > 0 ? Path[PathIndex - 1] : entt::null;
+        MarkChildrenDirtyExcept(Current, ActiveFlags, ExcludedChild);
     }
 }
 
-void RadientSceneState::UpdateDerivedState(entt::entity Entity)
+void RadientSceneState::UpdateEntityDerivedState(entt::entity Entity, DIRTY_FLAGS Flags)
 {
-    DirtyStateComponent& DirtyState = m_Registry.get<DirtyStateComponent>(Entity);
-    if ((DirtyState.Flags & DIRTY_FLAGS_REQUIRING_PROPAGATION) == DIRTY_FLAG_NONE)
+    Flags &= DIRTY_FLAGS_REQUIRING_PROPAGATION;
+    if (Flags == DIRTY_FLAG_NONE)
+        return;
+
+    if (!VerifyInternalEntity(Entity))
         return;
 
     const HierarchyComponent& Hierarchy = m_Registry.get<HierarchyComponent>(Entity);
 
-    entt::entity                        Parent             = entt::null;
-    const RadientMatrix4x4*             pParentWorldMatrix = nullptr;
-    const EffectiveVisibilityComponent* pParentVisibility  = nullptr;
-    if (Hierarchy.Parent != entt::null)
+    entt::entity Parent = Hierarchy.Parent;
+    if (Parent != entt::null)
     {
-        Parent = Hierarchy.Parent;
-        if (m_Registry.valid(Parent))
-        {
-            UpdateDerivedState(Parent);
-            pParentWorldMatrix = &m_Registry.get<WorldTransformComponent>(Parent).Matrix;
-            pParentVisibility  = &m_Registry.get<EffectiveVisibilityComponent>(Parent);
-        }
+        if (!VerifyInternalEntity(Parent))
+            return;
+
+        // Callers must update parents first; this function only recomputes the requested entity.
+        VERIFY((m_Registry.get<DirtyStateComponent>(Parent).Flags & Flags) == DIRTY_FLAG_NONE,
+               "Parent derived state must be up to date before updating child derived state");
     }
 
-    const DIRTY_FLAGS Flags = DirtyState.Flags;
     if ((Flags & DIRTY_FLAG_TRANSFORM) != DIRTY_FLAG_NONE)
     {
-        const LocalTransformComponent& LocalTransform = m_Registry.get<LocalTransformComponent>(Entity);
-        const RadientMatrix4x4         LocalMatrix    = RadientMath::TransformToMatrix(LocalTransform.Transform);
+        const LocalTransformComponent& LocalTransform        = m_Registry.get<LocalTransformComponent>(Entity);
+        const RadientMatrix4x4         LocalMatrix           = RadientMath::TransformToMatrix(LocalTransform.Transform);
+        const WorldTransformComponent* pParentWorldTransform = (Parent != entt::null) ?
+            &m_Registry.get<WorldTransformComponent>(Parent) :
+            nullptr;
 
         WorldTransformComponent& WorldTransform = m_Registry.get<WorldTransformComponent>(Entity);
-        WorldTransform.Matrix                   = pParentWorldMatrix != nullptr ?
-                              RadientMath::MultiplyMatrices(LocalMatrix, *pParentWorldMatrix) :
-                              LocalMatrix;
+
+        WorldTransform.Matrix = pParentWorldTransform != nullptr ?
+            RadientMath::MultiplyMatrices(LocalMatrix, pParentWorldTransform->Matrix) :
+            LocalMatrix;
     }
 
     if ((Flags & DIRTY_FLAG_VISIBILITY) != DIRTY_FLAG_NONE)
     {
-        const EntityStateComponent&   State      = m_Registry.get<EntityStateComponent>(Entity);
-        EffectiveVisibilityComponent& Visibility = m_Registry.get<EffectiveVisibilityComponent>(Entity);
+        const EntityStateComponent&         State             = m_Registry.get<EntityStateComponent>(Entity);
+        EffectiveVisibilityComponent&       Visibility        = m_Registry.get<EffectiveVisibilityComponent>(Entity);
+        const EffectiveVisibilityComponent* pParentVisibility = (Parent != entt::null) ?
+            &m_Registry.get<EffectiveVisibilityComponent>(Parent) :
+            nullptr;
 
         const Bool OwnVisible = (State.Flags & RADIENT_ENTITY_FLAG_VISIBLE) != 0 ? True : False;
         Visibility.Visible    = OwnVisible && (pParentVisibility == nullptr || pParentVisibility->Visible) ? True : False;
     }
-
-    DirtyState.Flags &= ~DIRTY_FLAGS_REQUIRING_PROPAGATION;
 }
 
 void RadientSceneState::Touch()

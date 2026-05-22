@@ -61,7 +61,7 @@ public:
                                                                      Bool&           Visible) const override final;
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetEntityEffectiveVisibility(RadientEntityID Entity,
-                                                                           Bool&           Visible) const override final;
+                                                                           Bool&           Visible) override final;
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetParent(RadientEntityID  Entity,
                                                         RadientEntityID& Parent) const override final;
@@ -79,7 +79,7 @@ public:
                                                                 RadientTransform& Transform) const override final;
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetWorldMatrix(RadientEntityID   Entity,
-                                                             RadientMatrix4x4& Matrix) const override final;
+                                                             RadientMatrix4x4& Matrix) override final;
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE HasComponent(RadientEntityID        Entity,
                                                            RadientComponentTypeID ComponentType,
