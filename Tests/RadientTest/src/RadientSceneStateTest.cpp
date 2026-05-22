@@ -816,4 +816,63 @@ TEST(RadientSceneStateTest, HasComponent)
     EXPECT_EQ(HasComponent, False);
 }
 
+TEST(RadientSceneStateTest, SetBuiltInComponentReturnsNoChangeForSameValue)
+{
+    RadientSceneState State;
+
+    RadientEntityID Entity = InvalidRadientEntityID;
+    EXPECT_EQ(State.CreateEntity({}, Entity), RADIENT_STATUS_OK);
+
+    RadientCameraComponent Camera;
+    Camera.FocalLength = 35.f;
+
+    EXPECT_EQ(State.SetCamera(Entity, Camera), RADIENT_STATUS_OK);
+    RadientRevision Revision = State.GetRevision();
+    EXPECT_EQ(State.SetCamera(Entity, Camera), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(State.GetRevision(), Revision);
+
+    Camera.FocalLength = 50.f;
+    EXPECT_EQ(State.SetCamera(Entity, Camera), RADIENT_STATUS_OK);
+
+    char MeshURI0[] = "mesh://asset";
+    char MeshURI1[] = "mesh://asset";
+
+    RadientMeshComponent Mesh;
+    Mesh.Mesh.URI     = MeshURI0;
+    Mesh.Mesh.Version = 7;
+
+    EXPECT_EQ(State.SetMesh(Entity, Mesh), RADIENT_STATUS_OK);
+    Revision = State.GetRevision();
+
+    RadientMeshComponent SameMesh = Mesh;
+    SameMesh.Mesh.URI             = MeshURI1;
+    EXPECT_EQ(State.SetMesh(Entity, SameMesh), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(State.GetRevision(), Revision);
+
+    Mesh.Mesh.Version = 8;
+    EXPECT_EQ(State.SetMesh(Entity, Mesh), RADIENT_STATUS_OK);
+
+    RadientMeshRendererComponent Renderer;
+    Renderer.VisibilityMask = 0x0F;
+
+    EXPECT_EQ(State.SetMeshRenderer(Entity, Renderer), RADIENT_STATUS_OK);
+    Revision = State.GetRevision();
+    EXPECT_EQ(State.SetMeshRenderer(Entity, Renderer), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(State.GetRevision(), Revision);
+
+    Renderer.VisibilityMask = 0xF0;
+    EXPECT_EQ(State.SetMeshRenderer(Entity, Renderer), RADIENT_STATUS_OK);
+
+    RadientLightComponent Light;
+    Light.Intensity = 4.f;
+
+    EXPECT_EQ(State.SetLight(Entity, Light), RADIENT_STATUS_OK);
+    Revision = State.GetRevision();
+    EXPECT_EQ(State.SetLight(Entity, Light), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(State.GetRevision(), Revision);
+
+    Light.Intensity = 8.f;
+    EXPECT_EQ(State.SetLight(Entity, Light), RADIENT_STATUS_OK);
+}
+
 } // namespace

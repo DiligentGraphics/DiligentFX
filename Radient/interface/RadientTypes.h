@@ -33,6 +33,10 @@
 
 #include "../../../DiligentCore/Primitives/interface/BasicTypes.h"
 
+#if DILIGENT_CPP_INTERFACE
+#    include <cstring>
+#endif
+
 DILIGENT_BEGIN_NAMESPACE(Diligent)
 
 // clang-format off
@@ -96,6 +100,20 @@ struct RadientAssetReference
 
     /// Optional asset version supplied by the source.
     Uint64 Version DEFAULT_INITIALIZER(0);
+
+#if DILIGENT_CPP_INTERFACE
+    bool operator==(const RadientAssetReference& Rhs) const
+    {
+        return Version == Rhs.Version &&
+            (URI == Rhs.URI ||
+             (URI != nullptr && Rhs.URI != nullptr && std::strcmp(URI, Rhs.URI) == 0));
+    }
+
+    bool operator!=(const RadientAssetReference& Rhs) const
+    {
+        return !(*this == Rhs);
+    }
+#endif
 };
 typedef struct RadientAssetReference RadientAssetReference;
 

@@ -611,6 +611,10 @@ RADIENT_STATUS RadientSceneState::EmplaceOrReplaceComponent(RadientEntityID Enti
     if (E == entt::null)
         return RADIENT_STATUS_NOT_FOUND;
 
+    const ComponentType* pExistingComponent = m_Registry.try_get<ComponentType>(E);
+    if (pExistingComponent != nullptr && *pExistingComponent == Component)
+        return RADIENT_STATUS_NO_CHANGE;
+
     m_Registry.emplace_or_replace<ComponentType>(E, Component);
     Touch();
     return RADIENT_STATUS_OK;

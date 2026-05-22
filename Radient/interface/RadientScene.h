@@ -137,6 +137,26 @@ struct RadientCameraComponent
 
     /// Distance from the camera to the focus plane in scene units.
     Float32 FocusDistance DEFAULT_INITIALIZER(0.f);
+
+#if DILIGENT_CPP_INTERFACE
+    constexpr bool operator==(const RadientCameraComponent& Rhs) const
+    {
+        return (Projection == Rhs.Projection &&
+                HorizontalAperture == Rhs.HorizontalAperture &&
+                VerticalAperture == Rhs.VerticalAperture &&
+                HorizontalApertureOffset == Rhs.HorizontalApertureOffset &&
+                VerticalApertureOffset == Rhs.VerticalApertureOffset &&
+                FocalLength == Rhs.FocalLength &&
+                ClippingRange == Rhs.ClippingRange &&
+                FStop == Rhs.FStop &&
+                FocusDistance == Rhs.FocusDistance);
+    }
+
+    constexpr bool operator!=(const RadientCameraComponent& Rhs) const
+    {
+        return !(*this == Rhs);
+    }
+#endif
 };
 typedef struct RadientCameraComponent RadientCameraComponent;
 
@@ -146,6 +166,18 @@ struct RadientMeshComponent
 {
     /// Mesh asset reference.
     RadientAssetReference Mesh DEFAULT_INITIALIZER({});
+
+#if DILIGENT_CPP_INTERFACE
+    bool operator==(const RadientMeshComponent& Rhs) const
+    {
+        return Mesh == Rhs.Mesh;
+    }
+
+    bool operator!=(const RadientMeshComponent& Rhs) const
+    {
+        return !(*this == Rhs);
+    }
+#endif
 };
 typedef struct RadientMeshComponent RadientMeshComponent;
 
@@ -155,6 +187,18 @@ struct RadientMeshRendererComponent
 {
     /// Per-renderer visibility mask.
     Uint64 VisibilityMask DEFAULT_INITIALIZER(~0ull);
+
+#if DILIGENT_CPP_INTERFACE
+    constexpr bool operator==(const RadientMeshRendererComponent& Rhs) const
+    {
+        return VisibilityMask == Rhs.VisibilityMask;
+    }
+
+    constexpr bool operator!=(const RadientMeshRendererComponent& Rhs) const
+    {
+        return !(*this == Rhs);
+    }
+#endif
 };
 typedef struct RadientMeshRendererComponent RadientMeshRendererComponent;
 
@@ -203,6 +247,31 @@ struct RadientLightComponent
 
     /// Shaping focus.
     Float32 ShapingFocus DEFAULT_INITIALIZER(0.f);
+
+#if DILIGENT_CPP_INTERFACE
+    constexpr bool operator==(const RadientLightComponent& Rhs) const
+    {
+        return (Type == Rhs.Type &&
+                Color == Rhs.Color &&
+                Intensity == Rhs.Intensity &&
+                Exposure == Rhs.Exposure &&
+                Diffuse == Rhs.Diffuse &&
+                Specular == Rhs.Specular &&
+                Normalize == Rhs.Normalize &&
+                EnableColorTemperature == Rhs.EnableColorTemperature &&
+                ColorTemperature == Rhs.ColorTemperature &&
+                Radius == Rhs.Radius &&
+                Angle == Rhs.Angle &&
+                ShapingConeAngle == Rhs.ShapingConeAngle &&
+                ShapingConeSoftness == Rhs.ShapingConeSoftness &&
+                ShapingFocus == Rhs.ShapingFocus);
+    }
+
+    constexpr bool operator!=(const RadientLightComponent& Rhs) const
+    {
+        return !(*this == Rhs);
+    }
+#endif
 };
 typedef struct RadientLightComponent RadientLightComponent;
 
