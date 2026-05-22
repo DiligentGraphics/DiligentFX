@@ -97,6 +97,8 @@ void RadientScene_C_TestMacros(IRadientScene* pScene)
     RadientCustomComponentData CustomComponent = {0};
     RADIENT_STATUS             Status          = RADIENT_STATUS_OK;
 
+    EntityFlags = RADIENT_ENTITY_FLAGS_ALL;
+
     IRadientScene_GetDesc(pScene);
     Status = IRadientScene_IsEntityAlive(pScene, Entity);
     Status = IRadientScene_GetEntityFlags(pScene, Entity, &EntityFlags);

@@ -33,6 +33,8 @@ namespace
 
 using namespace Diligent;
 
+static_assert(static_cast<Uint32>(RADIENT_ENTITY_FLAG_LAST) == static_cast<Uint32>(RADIENT_ENTITY_FLAG_VISIBLE), "Unexpected RADIENT_ENTITY_FLAGS_ALL value");
+
 static_assert(sizeof(RADIENT_CAMERA_PROJECTION) == sizeof(Uint8), "Unexpected RADIENT_CAMERA_PROJECTION size");
 static_assert(static_cast<Uint8>(RADIENT_CAMERA_PROJECTION_PERSPECTIVE) == 0, "Unexpected RADIENT_CAMERA_PROJECTION_PERSPECTIVE value");
 static_assert(static_cast<Uint8>(RADIENT_CAMERA_PROJECTION_ORTHOGRAPHIC) == 1, "Unexpected RADIENT_CAMERA_PROJECTION_ORTHOGRAPHIC value");

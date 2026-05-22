@@ -49,6 +49,11 @@ bool IsBuiltInComponentType(const RadientComponentTypeID ComponentType)
             ComponentType == RADIENT_COMPONENT_TYPE_LIGHT);
 }
 
+bool IsValidEntityFlags(RADIENT_ENTITY_FLAGS Flags)
+{
+    return (Flags & ~RADIENT_ENTITY_FLAGS_ALL) == RADIENT_ENTITY_FLAG_NONE;
+}
+
 } // namespace
 
 const RadientSceneDesc& RadientSceneState::GetDesc() const
@@ -155,7 +160,7 @@ RADIENT_STATUS RadientSceneState::GetChildren(RadientEntityID Entity, Uint32 Sta
 
     const std::vector<entt::entity>& Children = m_Registry.get<HierarchyComponent>(E).Children;
     if (StartChild >= Children.size())
-        return RADIENT_STATUS_INVALID_ARGUMENT;
+        return RADIENT_STATUS_OK;
 
     NumChildrenWritten = std::min(ChildCount, static_cast<Uint32>(Children.size() - StartChild));
     for (Uint32 ChildIndex = 0; ChildIndex < NumChildrenWritten; ++ChildIndex)
@@ -256,6 +261,9 @@ RADIENT_STATUS RadientSceneState::CreateEntity(const RadientEntityDesc& Desc, Ra
 {
     Entity = InvalidRadientEntityID;
 
+    if (!IsValidEntityFlags(Desc.Flags))
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
     entt::entity Parent = entt::null;
     if (Desc.Parent != InvalidRadientEntityID)
     {
@@ -305,6 +313,9 @@ RADIENT_STATUS RadientSceneState::SetEntityFlags(RadientEntityID Entity, RADIENT
     const entt::entity E = FindEntity(Entity);
     if (E == entt::null)
         return RADIENT_STATUS_NOT_FOUND;
+
+    if (!IsValidEntityFlags(Flags))
+        return RADIENT_STATUS_INVALID_ARGUMENT;
 
     EntityStateComponent& State = m_Registry.get<EntityStateComponent>(E);
     if (State.Flags == Flags)

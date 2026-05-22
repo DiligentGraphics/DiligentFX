@@ -87,12 +87,26 @@ TEST(RadientSceneStateTest, GetEntityFlags)
 {
     RadientSceneState State;
 
+    const RADIENT_ENTITY_FLAGS InvalidEntityFlags =
+        static_cast<RADIENT_ENTITY_FLAGS>(static_cast<Uint32>(RADIENT_ENTITY_FLAGS_ALL) << 1u);
+
     RADIENT_ENTITY_FLAGS Flags = RADIENT_ENTITY_FLAG_VISIBLE;
     EXPECT_EQ(State.GetEntityFlags(1, Flags), RADIENT_STATUS_NOT_FOUND);
     EXPECT_EQ(Flags, RADIENT_ENTITY_FLAG_NONE);
 
+    RadientEntityDesc InvalidEntityDesc;
+    InvalidEntityDesc.Flags = InvalidEntityFlags;
+
+    RadientEntityID InvalidEntity = 123;
+    EXPECT_EQ(State.CreateEntity(InvalidEntityDesc, InvalidEntity), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(InvalidEntity, InvalidRadientEntityID);
+
     RadientEntityID DefaultEntity = InvalidRadientEntityID;
     EXPECT_EQ(State.CreateEntity({}, DefaultEntity), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.GetEntityFlags(DefaultEntity, Flags), RADIENT_STATUS_OK);
+    EXPECT_EQ(Flags, RADIENT_ENTITY_FLAG_VISIBLE);
+
+    EXPECT_EQ(State.SetEntityFlags(DefaultEntity, InvalidEntityFlags), RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(State.GetEntityFlags(DefaultEntity, Flags), RADIENT_STATUS_OK);
     EXPECT_EQ(Flags, RADIENT_ENTITY_FLAG_VISIBLE);
 
@@ -342,7 +356,10 @@ TEST(RadientSceneStateTest, GetChildCountAndChildren)
     EXPECT_EQ(Children[0], Child1);
     EXPECT_EQ(Children[1], Child2);
 
-    EXPECT_EQ(State.GetChildren(Root, 3, 1, Children, NumChildrenWritten), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(State.GetChildren(Root, 3, 1, Children, NumChildrenWritten), RADIENT_STATUS_OK);
+    EXPECT_EQ(NumChildrenWritten, 0u);
+
+    EXPECT_EQ(State.GetChildren(Root, 4, 1, Children, NumChildrenWritten), RADIENT_STATUS_OK);
     EXPECT_EQ(NumChildrenWritten, 0u);
 
     EXPECT_EQ(State.SetParent(Child1, InvalidRadientEntityID, True), RADIENT_STATUS_OK);

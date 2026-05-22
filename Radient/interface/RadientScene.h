@@ -46,7 +46,10 @@ DILIGENT_TYPED_ENUM(RADIENT_ENTITY_FLAGS, Uint32)
     /// Entity's own visibility flag. Effective visibility also depends on parent entities.
     RADIENT_ENTITY_FLAG_VISIBLE = 1u << 0u,
 
-    RADIENT_ENTITY_FLAG_LAST = RADIENT_ENTITY_FLAG_VISIBLE
+    RADIENT_ENTITY_FLAG_LAST = RADIENT_ENTITY_FLAG_VISIBLE,
+
+    /// All currently defined entity flags.
+    RADIENT_ENTITY_FLAGS_ALL = (RADIENT_ENTITY_FLAG_LAST << 1u) - 1u
 };
 DEFINE_FLAG_ENUM_OPERATORS(RADIENT_ENTITY_FLAGS)
 
