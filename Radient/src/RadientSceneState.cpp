@@ -740,6 +740,7 @@ RadientSceneState::DIRTY_FLAGS RadientSceneState::MarkDirty(entt::entity Entity,
     }
 
     DirtyState.Flags |= AddedFlags;
+    m_DirtyFlags |= AddedFlags;
 
     return AddedFlags;
 }
@@ -857,6 +858,7 @@ void RadientSceneState::UpdateDirtyEntities()
 
     VERIFY(m_DirtyEntities.empty(), "All dirty entities should have been processed and cleared at this point");
     m_DirtyEntities.clear();
+    m_DirtyFlags = DIRTY_FLAG_NONE;
     DirtyRoots.clear();
 }
 
@@ -891,6 +893,12 @@ void RadientSceneState::UpdateDerivedStatePathToRoot(entt::entity Entity, DIRTY_
         return;
 
     if (!VerifyInternalEntity(Entity))
+        return;
+
+    // If the scene has no pending dirtiness for the requested derived state, the cached value is valid and no
+    // path walk is needed. m_DirtyFlags is conservative while the scene is dirty, so a set bit may cause extra
+    // work, but a clear bit is always safe to trust.
+    if ((m_DirtyFlags & Flags) == DIRTY_FLAG_NONE)
         return;
 
     std::vector<entt::entity>& Path = m_TmpEntityBuffer;

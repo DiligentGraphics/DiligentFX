@@ -713,7 +713,12 @@ TEST(RadientSceneStateTest, CommitHandlesPathologicalDirtyLinearChains)
             EXPECT_EQ(State.SetLocalTransform(Entity, Transform), RADIENT_STATUS_OK);
 
         EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
-        ExpectLinearChainWorldTranslation(State, Entities.back(), static_cast<float>(NodeCount));
+
+        for (Uint32 NodeIndex = 0; NodeIndex < NodeCount; ++NodeIndex)
+        {
+            SCOPED_TRACE(NodeIndex);
+            ExpectLinearChainWorldTranslation(State, Entities[NodeIndex], static_cast<float>(NodeIndex + 1));
+        }
     }
 
     {
@@ -725,23 +730,30 @@ TEST(RadientSceneStateTest, CommitHandlesPathologicalDirtyLinearChains)
         EXPECT_EQ(State.SetLocalTransform(Entities.back(), Transform), RADIENT_STATUS_OK);
 
         EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
-        ExpectLinearChainWorldTranslation(State, Entities.back(), 2.f);
+
+        for (Uint32 NodeIndex = 0; NodeIndex < NodeCount; ++NodeIndex)
+        {
+            SCOPED_TRACE(NodeIndex);
+            const float ExpectedX = NodeIndex + 1 == NodeCount ? 2.f : 1.f;
+            ExpectLinearChainWorldTranslation(State, Entities[NodeIndex], ExpectedX);
+        }
     }
 
     {
         RadientSceneState            State;
-        std::vector<RadientEntityID> Entities       = CreateLinearChain(State, NodeCount);
-        const RadientTransform       Transform      = MakeTranslation(1.f, 0.f, 0.f);
-        Uint32                       DirtyNodeCount = 0;
+        std::vector<RadientEntityID> Entities  = CreateLinearChain(State, NodeCount);
+        const RadientTransform       Transform = MakeTranslation(1.f, 0.f, 0.f);
 
         for (Uint32 NodeIndex = 0; NodeIndex < NodeCount; NodeIndex += 3)
-        {
             EXPECT_EQ(State.SetLocalTransform(Entities[NodeIndex], Transform), RADIENT_STATUS_OK);
-            ++DirtyNodeCount;
-        }
 
         EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
-        ExpectLinearChainWorldTranslation(State, Entities.back(), static_cast<float>(DirtyNodeCount));
+
+        for (Uint32 NodeIndex = 0; NodeIndex < NodeCount; ++NodeIndex)
+        {
+            SCOPED_TRACE(NodeIndex);
+            ExpectLinearChainWorldTranslation(State, Entities[NodeIndex], static_cast<float>(NodeIndex / 3 + 1));
+        }
     }
 }
 

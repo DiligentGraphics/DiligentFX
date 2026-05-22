@@ -197,8 +197,12 @@ private:
     RadientEntityID                                                  m_NextEntityID = 1;
     RadientRevision                                                  m_Revision     = 0;
 
+    // Conservative scene-wide mask of derived states that may be dirty anywhere in the scene.
+    DIRTY_FLAGS m_DirtyFlags = DIRTY_FLAG_NONE;
+
     // Entities where dirty state was introduced directly. Commit propagates these flags to descendants without adding them here.
     std::unordered_set<entt::entity> m_DirtyEntities;
+
     // Reused path scratch buffer for lazy parent-to-child derived-state updates.
     std::vector<entt::entity> m_TmpEntityBuffer;
 };
