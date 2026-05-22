@@ -42,6 +42,19 @@ struct RadientFloat2
 {
     Float32 x DEFAULT_INITIALIZER(0.f);
     Float32 y DEFAULT_INITIALIZER(0.f);
+
+#if DILIGENT_CPP_INTERFACE
+    constexpr bool operator==(const RadientFloat2& Rhs) const
+    {
+        return (x == Rhs.x &&
+                y == Rhs.y);
+    }
+
+    constexpr bool operator!=(const RadientFloat2& Rhs) const
+    {
+        return !(*this == Rhs);
+    }
+#endif
 };
 typedef struct RadientFloat2 RadientFloat2;
 
@@ -52,6 +65,20 @@ struct RadientFloat3
     Float32 x DEFAULT_INITIALIZER(0.f);
     Float32 y DEFAULT_INITIALIZER(0.f);
     Float32 z DEFAULT_INITIALIZER(0.f);
+
+#if DILIGENT_CPP_INTERFACE
+    constexpr bool operator==(const RadientFloat3& Rhs) const
+    {
+        return (x == Rhs.x &&
+                y == Rhs.y &&
+                z == Rhs.z);
+    }
+
+    constexpr bool operator!=(const RadientFloat3& Rhs) const
+    {
+        return !(*this == Rhs);
+    }
+#endif
 };
 typedef struct RadientFloat3 RadientFloat3;
 
@@ -63,6 +90,21 @@ struct RadientFloat4
     Float32 y DEFAULT_INITIALIZER(0.f);
     Float32 z DEFAULT_INITIALIZER(0.f);
     Float32 w DEFAULT_INITIALIZER(0.f);
+
+#if DILIGENT_CPP_INTERFACE
+    constexpr bool operator==(const RadientFloat4& Rhs) const
+    {
+        return (x == Rhs.x &&
+                y == Rhs.y &&
+                z == Rhs.z &&
+                w == Rhs.w);
+    }
+
+    constexpr bool operator!=(const RadientFloat4& Rhs) const
+    {
+        return !(*this == Rhs);
+    }
+#endif
 };
 typedef struct RadientFloat4 RadientFloat4;
 
@@ -74,6 +116,21 @@ struct RadientQuaternion
     Float32 y DEFAULT_INITIALIZER(0.f);
     Float32 z DEFAULT_INITIALIZER(0.f);
     Float32 w DEFAULT_INITIALIZER(1.f);
+
+#if DILIGENT_CPP_INTERFACE
+    constexpr bool operator==(const RadientQuaternion& Rhs) const
+    {
+        return (x == Rhs.x &&
+                y == Rhs.y &&
+                z == Rhs.z &&
+                w == Rhs.w);
+    }
+
+    constexpr bool operator!=(const RadientQuaternion& Rhs) const
+    {
+        return !(*this == Rhs);
+    }
+#endif
 };
 typedef struct RadientQuaternion RadientQuaternion;
 
@@ -84,6 +141,20 @@ struct RadientTransform
     RadientFloat3 Position     DEFAULT_INITIALIZER({});
     RadientQuaternion Rotation DEFAULT_INITIALIZER({});
     RadientFloat3 Scale        DEFAULT_INITIALIZER((RadientFloat3{1.f, 1.f, 1.f}));
+
+#if DILIGENT_CPP_INTERFACE
+    constexpr bool operator==(const RadientTransform& Rhs) const
+    {
+        return (Position == Rhs.Position &&
+                Rotation == Rhs.Rotation &&
+                Scale == Rhs.Scale);
+    }
+
+    constexpr bool operator!=(const RadientTransform& Rhs) const
+    {
+        return !(*this == Rhs);
+    }
+#endif
 };
 typedef struct RadientTransform RadientTransform;
 
@@ -137,6 +208,19 @@ struct RadientBounds
 {
     RadientFloat3 Min DEFAULT_INITIALIZER({});
     RadientFloat3 Max DEFAULT_INITIALIZER({});
+
+#if DILIGENT_CPP_INTERFACE
+    constexpr bool operator==(const RadientBounds& Rhs) const
+    {
+        return Min == Rhs.Min &&
+            Max == Rhs.Max;
+    }
+
+    constexpr bool operator!=(const RadientBounds& Rhs) const
+    {
+        return !(*this == Rhs);
+    }
+#endif
 };
 typedef struct RadientBounds RadientBounds;
 
@@ -146,6 +230,19 @@ struct RadientExtent2D
 {
     Uint32 Width  DEFAULT_INITIALIZER(0);
     Uint32 Height DEFAULT_INITIALIZER(0);
+
+#if DILIGENT_CPP_INTERFACE
+    constexpr bool operator==(const RadientExtent2D& Rhs) const
+    {
+        return Width == Rhs.Width &&
+            Height == Rhs.Height;
+    }
+
+    constexpr bool operator!=(const RadientExtent2D& Rhs) const
+    {
+        return !(*this == Rhs);
+    }
+#endif
 };
 typedef struct RadientExtent2D RadientExtent2D;
 

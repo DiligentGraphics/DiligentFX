@@ -93,8 +93,8 @@ private:
 
     struct HierarchyComponent
     {
-        RadientEntityID              Parent = InvalidRadientEntityID;
-        std::vector<RadientEntityID> Children;
+        entt::entity              Parent = entt::null;
+        std::vector<entt::entity> Children;
     };
 
     struct LocalTransformComponent
@@ -141,7 +141,6 @@ private:
     void         DestroyEntitySubtree(entt::entity Entity);
     void         RemoveCustomComponents(entt::entity Entity);
     DIRTY_FLAGS  MarkDirty(entt::entity Entity, DIRTY_FLAGS Flags);
-    void         PropagateDirtyFlags();
     void         PropagateDirtyFlags(entt::entity Entity, DIRTY_FLAGS Flags);
     void         UpdateDirtyEntities();
     void         UpdateDerivedState(entt::entity Entity);

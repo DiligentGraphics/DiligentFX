@@ -60,6 +60,13 @@ void ExpectMatrixNear(const RadientMatrix4x4& Matrix, const RadientMatrix4x4& Re
         EXPECT_NEAR(Matrix.Data[i], Reference.Data[i], EPSILON) << "i = " << i;
 }
 
+RadientTransform MakeTranslation(float X, float Y, float Z)
+{
+    RadientTransform Transform;
+    Transform.Position = {X, Y, Z};
+    return Transform;
+}
+
 TEST(RadientSceneStateTest, IsEntityAlive)
 {
     RadientSceneState State;
@@ -394,6 +401,10 @@ TEST(RadientSceneStateTest, GetLocalTransform)
     EXPECT_EQ(State.GetLocalTransform(TransformedEntity, Transform), RADIENT_STATUS_OK);
     ExpectTransformEq(Transform, UpdatedTransform);
 
+    EXPECT_EQ(State.SetLocalTransform(TransformedEntity, UpdatedTransform), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(State.GetLocalTransform(TransformedEntity, Transform), RADIENT_STATUS_OK);
+    ExpectTransformEq(Transform, UpdatedTransform);
+
     EXPECT_EQ(State.GetLocalTransform(Entity, Transform), RADIENT_STATUS_OK);
     ExpectTransformEq(Transform, RadientTransform{});
 
@@ -495,6 +506,120 @@ TEST(RadientSceneStateTest, GetWorldMatrix)
     Matrix = ExpectedChildWorld;
     EXPECT_EQ(State.GetWorldMatrix(Child, Matrix), RADIENT_STATUS_NOT_FOUND);
     ExpectMatrixNear(Matrix, RadientMatrix4x4{});
+}
+
+TEST(RadientSceneStateTest, SetParentKeepWorldTransformUsesPendingTransforms)
+{
+    {
+        RadientSceneState State;
+
+        RadientEntityDesc OldParentDesc;
+        OldParentDesc.Transform = MakeTranslation(10.f, 20.f, 30.f);
+
+        RadientEntityID OldParent = InvalidRadientEntityID;
+        EXPECT_EQ(State.CreateEntity(OldParentDesc, OldParent), RADIENT_STATUS_OK);
+
+        RadientEntityDesc ChildDesc;
+        ChildDesc.Parent    = OldParent;
+        ChildDesc.Transform = MakeTranslation(1.f, 2.f, 3.f);
+
+        RadientEntityID Child = InvalidRadientEntityID;
+        EXPECT_EQ(State.CreateEntity(ChildDesc, Child), RADIENT_STATUS_OK);
+
+        RadientEntityDesc NewParentDesc;
+        NewParentDesc.Transform = MakeTranslation(100.f, 200.f, 300.f);
+
+        RadientEntityID NewParent = InvalidRadientEntityID;
+        EXPECT_EQ(State.CreateEntity(NewParentDesc, NewParent), RADIENT_STATUS_OK);
+        EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+        const RadientTransform PendingChildTransform = MakeTranslation(4.f, 5.f, 6.f);
+        const RadientMatrix4x4 ExpectedWorld         = RadientMath::MultiplyMatrices(
+            RadientMath::TransformToMatrix(PendingChildTransform),
+            RadientMath::TransformToMatrix(OldParentDesc.Transform));
+
+        EXPECT_EQ(State.SetLocalTransform(Child, PendingChildTransform), RADIENT_STATUS_OK);
+        EXPECT_EQ(State.SetParent(Child, NewParent, True), RADIENT_STATUS_OK);
+        EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+        RadientMatrix4x4 Matrix;
+        EXPECT_EQ(State.GetWorldMatrix(Child, Matrix), RADIENT_STATUS_OK);
+        ExpectMatrixNear(Matrix, ExpectedWorld);
+    }
+
+    {
+        RadientSceneState State;
+
+        RadientEntityDesc OldParentDesc;
+        OldParentDesc.Transform = MakeTranslation(10.f, 20.f, 30.f);
+
+        RadientEntityID OldParent = InvalidRadientEntityID;
+        EXPECT_EQ(State.CreateEntity(OldParentDesc, OldParent), RADIENT_STATUS_OK);
+
+        RadientEntityDesc ChildDesc;
+        ChildDesc.Parent    = OldParent;
+        ChildDesc.Transform = MakeTranslation(1.f, 2.f, 3.f);
+
+        RadientEntityID Child = InvalidRadientEntityID;
+        EXPECT_EQ(State.CreateEntity(ChildDesc, Child), RADIENT_STATUS_OK);
+
+        RadientEntityDesc NewParentDesc;
+        NewParentDesc.Transform = MakeTranslation(100.f, 200.f, 300.f);
+
+        RadientEntityID NewParent = InvalidRadientEntityID;
+        EXPECT_EQ(State.CreateEntity(NewParentDesc, NewParent), RADIENT_STATUS_OK);
+        EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+        const RadientTransform PendingOldParentTransform = MakeTranslation(40.f, 50.f, 60.f);
+        const RadientMatrix4x4 ExpectedWorld             = RadientMath::MultiplyMatrices(
+            RadientMath::TransformToMatrix(ChildDesc.Transform),
+            RadientMath::TransformToMatrix(PendingOldParentTransform));
+
+        EXPECT_EQ(State.SetLocalTransform(OldParent, PendingOldParentTransform), RADIENT_STATUS_OK);
+        EXPECT_EQ(State.SetParent(Child, NewParent, True), RADIENT_STATUS_OK);
+        EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+        RadientMatrix4x4 Matrix;
+        EXPECT_EQ(State.GetWorldMatrix(Child, Matrix), RADIENT_STATUS_OK);
+        ExpectMatrixNear(Matrix, ExpectedWorld);
+    }
+
+    {
+        RadientSceneState State;
+
+        RadientEntityDesc OldParentDesc;
+        OldParentDesc.Transform = MakeTranslation(10.f, 20.f, 30.f);
+
+        RadientEntityID OldParent = InvalidRadientEntityID;
+        EXPECT_EQ(State.CreateEntity(OldParentDesc, OldParent), RADIENT_STATUS_OK);
+
+        RadientEntityDesc ChildDesc;
+        ChildDesc.Parent    = OldParent;
+        ChildDesc.Transform = MakeTranslation(1.f, 2.f, 3.f);
+
+        RadientEntityID Child = InvalidRadientEntityID;
+        EXPECT_EQ(State.CreateEntity(ChildDesc, Child), RADIENT_STATUS_OK);
+
+        RadientEntityDesc NewParentDesc;
+        NewParentDesc.Transform = MakeTranslation(100.f, 200.f, 300.f);
+
+        RadientEntityID NewParent = InvalidRadientEntityID;
+        EXPECT_EQ(State.CreateEntity(NewParentDesc, NewParent), RADIENT_STATUS_OK);
+        EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+        const RadientTransform PendingNewParentTransform = MakeTranslation(400.f, 500.f, 600.f);
+        const RadientMatrix4x4 ExpectedWorld             = RadientMath::MultiplyMatrices(
+            RadientMath::TransformToMatrix(ChildDesc.Transform),
+            RadientMath::TransformToMatrix(OldParentDesc.Transform));
+
+        EXPECT_EQ(State.SetLocalTransform(NewParent, PendingNewParentTransform), RADIENT_STATUS_OK);
+        EXPECT_EQ(State.SetParent(Child, NewParent, True), RADIENT_STATUS_OK);
+        EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+        RadientMatrix4x4 Matrix;
+        EXPECT_EQ(State.GetWorldMatrix(Child, Matrix), RADIENT_STATUS_OK);
+        ExpectMatrixNear(Matrix, ExpectedWorld);
+    }
 }
 
 TEST(RadientSceneStateTest, HasComponent)

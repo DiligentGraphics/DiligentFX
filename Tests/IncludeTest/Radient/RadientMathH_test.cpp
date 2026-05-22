@@ -68,20 +68,29 @@ static_assert(offsetof(RadientExtent2D, Height) == sizeof(Uint32), "Unexpected R
 
 constexpr RadientFloat2 DefaultFloat2{};
 static_assert(DefaultFloat2.x == 0.f && DefaultFloat2.y == 0.f, "Unexpected RadientFloat2 default value");
+static_assert(DefaultFloat2 == RadientFloat2{}, "Unexpected RadientFloat2 equality result");
+static_assert(DefaultFloat2 != RadientFloat2{1.f, 0.f}, "Unexpected RadientFloat2 inequality result");
 
 constexpr RadientFloat3 DefaultFloat3{};
 static_assert(DefaultFloat3.x == 0.f && DefaultFloat3.y == 0.f && DefaultFloat3.z == 0.f, "Unexpected RadientFloat3 default value");
+static_assert(DefaultFloat3 == RadientFloat3{}, "Unexpected RadientFloat3 equality result");
+static_assert(DefaultFloat3 != RadientFloat3{0.f, 1.f, 0.f}, "Unexpected RadientFloat3 inequality result");
 
 constexpr RadientFloat4 DefaultFloat4{};
 static_assert(DefaultFloat4.x == 0.f && DefaultFloat4.y == 0.f && DefaultFloat4.z == 0.f && DefaultFloat4.w == 0.f, "Unexpected RadientFloat4 default value");
+static_assert(DefaultFloat4 == RadientFloat4{}, "Unexpected RadientFloat4 equality result");
+static_assert(DefaultFloat4 != RadientFloat4{0.f, 0.f, 1.f, 0.f}, "Unexpected RadientFloat4 inequality result");
 
 constexpr RadientQuaternion DefaultQuaternion{};
 static_assert(DefaultQuaternion.x == 0.f && DefaultQuaternion.y == 0.f && DefaultQuaternion.z == 0.f && DefaultQuaternion.w == 1.f, "Unexpected RadientQuaternion default value");
+static_assert(DefaultQuaternion == RadientQuaternion{}, "Unexpected RadientQuaternion equality result");
+static_assert(DefaultQuaternion != RadientQuaternion{0.f, 0.f, 0.f, 0.f}, "Unexpected RadientQuaternion inequality result");
 
 constexpr RadientTransform DefaultTransform{};
 static_assert(DefaultTransform.Position.x == 0.f && DefaultTransform.Position.y == 0.f && DefaultTransform.Position.z == 0.f, "Unexpected RadientTransform position default value");
 static_assert(DefaultTransform.Rotation.x == 0.f && DefaultTransform.Rotation.y == 0.f && DefaultTransform.Rotation.z == 0.f && DefaultTransform.Rotation.w == 1.f, "Unexpected RadientTransform rotation default value");
 static_assert(DefaultTransform.Scale.x == 1.f && DefaultTransform.Scale.y == 1.f && DefaultTransform.Scale.z == 1.f, "Unexpected RadientTransform scale default value");
+static_assert(DefaultTransform == RadientTransform{}, "Unexpected RadientTransform equality result");
 
 constexpr RadientMatrix4x4 DefaultMatrix{};
 static_assert(DefaultMatrix.Data[0] == 1.f && DefaultMatrix.Data[5] == 1.f && DefaultMatrix.Data[10] == 1.f && DefaultMatrix.Data[15] == 1.f, "Unexpected RadientMatrix4x4 default diagonal value");
@@ -89,8 +98,11 @@ static_assert(DefaultMatrix.Data[1] == 0.f && DefaultMatrix.Data[4] == 0.f && De
 
 constexpr RadientBounds DefaultBounds{};
 static_assert(DefaultBounds.Min.x == 0.f && DefaultBounds.Max.z == 0.f, "Unexpected RadientBounds default value");
+static_assert(DefaultBounds == RadientBounds{}, "Unexpected RadientBounds equality result");
 
 constexpr RadientExtent2D DefaultExtent{};
 static_assert(DefaultExtent.Width == 0 && DefaultExtent.Height == 0, "Unexpected RadientExtent2D default value");
+static_assert(DefaultExtent == RadientExtent2D{}, "Unexpected RadientExtent2D equality result");
+static_assert(DefaultExtent != RadientExtent2D{1, 0}, "Unexpected RadientExtent2D inequality result");
 
 } // namespace
