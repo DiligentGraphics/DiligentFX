@@ -56,6 +56,29 @@ bool IsValidEntityFlags(RADIENT_ENTITY_FLAGS Flags)
 
 } // namespace
 
+
+RadientSceneState::MeshComponentStorage::MeshComponentStorage() = default;
+
+RadientSceneState::MeshComponentStorage::MeshComponentStorage(MeshComponentStorage&& Rhs) noexcept :
+    Component{Rhs.Component},
+    MeshURI{std::move(Rhs.MeshURI)}
+{
+    FixupURI();
+}
+
+void RadientSceneState::MeshComponentStorage::Assign(const RadientMeshComponent& Mesh)
+{
+    Component = Mesh;
+    MeshURI   = Mesh.Mesh.URI != nullptr ? Mesh.Mesh.URI : "";
+    FixupURI();
+}
+
+void RadientSceneState::MeshComponentStorage::FixupURI()
+{
+    // Component.Mesh.URI points into MeshURI and must be repaired after move.
+    Component.Mesh.URI = Component.Mesh.URI != nullptr ? MeshURI.c_str() : nullptr;
+}
+
 RadientSceneState::RadientSceneState() :
     m_Desc{}
 {
@@ -225,7 +248,7 @@ RADIENT_STATUS RadientSceneState::HasComponent(RadientEntityID Entity, RadientCo
             break;
 
         case RADIENT_COMPONENT_TYPE_MESH:
-            HasComponent = m_Registry.all_of<RadientMeshComponent>(E) ? True : False;
+            HasComponent = m_Registry.all_of<MeshComponentStorage>(E) ? True : False;
             break;
 
         case RADIENT_COMPONENT_TYPE_MESH_RENDERER:
@@ -426,7 +449,21 @@ RADIENT_STATUS RadientSceneState::SetCamera(RadientEntityID Entity, const Radien
 
 RADIENT_STATUS RadientSceneState::SetMesh(RadientEntityID Entity, const RadientMeshComponent& Mesh)
 {
-    return EmplaceOrReplaceComponent(Entity, Mesh);
+    const entt::entity E = FindEntity(Entity);
+    if (E == entt::null)
+        return RADIENT_STATUS_NOT_FOUND;
+
+    MeshComponentStorage* pExistingMesh = m_Registry.try_get<MeshComponentStorage>(E);
+    if (pExistingMesh != nullptr && pExistingMesh->Component == Mesh)
+        return RADIENT_STATUS_NO_CHANGE;
+
+    MeshComponentStorage& MeshStorage = pExistingMesh != nullptr ?
+        *pExistingMesh :
+        m_Registry.emplace<MeshComponentStorage>(E);
+
+    MeshStorage.Assign(Mesh);
+    Touch();
+    return RADIENT_STATUS_OK;
 }
 
 RADIENT_STATUS RadientSceneState::SetMeshRenderer(RadientEntityID Entity, const RadientMeshRendererComponent& Renderer)
@@ -507,7 +544,7 @@ RADIENT_STATUS RadientSceneState::RemoveComponent(RadientEntityID Entity, Radien
             break;
 
         case RADIENT_COMPONENT_TYPE_MESH:
-            Removed = m_Registry.remove<RadientMeshComponent>(E) != 0;
+            Removed = m_Registry.remove<MeshComponentStorage>(E) != 0;
             break;
 
         case RADIENT_COMPONENT_TYPE_MESH_RENDERER:

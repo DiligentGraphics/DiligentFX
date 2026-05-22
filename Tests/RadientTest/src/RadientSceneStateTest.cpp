@@ -30,6 +30,7 @@
 #include "RadientMath.hpp"
 #include "RadientSceneState.hpp"
 
+#include <cstring>
 #include <memory>
 
 using namespace Diligent;
@@ -873,6 +874,37 @@ TEST(RadientSceneStateTest, SetBuiltInComponentReturnsNoChangeForSameValue)
 
     Light.Intensity = 8.f;
     EXPECT_EQ(State.SetLight(Entity, Light), RADIENT_STATUS_OK);
+}
+
+TEST(RadientSceneStateTest, SetMeshCopiesURI)
+{
+    RadientSceneState State;
+
+    RadientEntityID Entity = InvalidRadientEntityID;
+    EXPECT_EQ(State.CreateEntity({}, Entity), RADIENT_STATUS_OK);
+
+    const char OriginalURI[] = "mesh://heap";
+    const char ChangedURI[]  = "mesh://changed";
+
+    std::unique_ptr<char[]> MeshURI = std::make_unique<char[]>(64);
+    std::memcpy(MeshURI.get(), OriginalURI, sizeof(OriginalURI));
+
+    RadientMeshComponent Mesh;
+    Mesh.Mesh.URI     = MeshURI.get();
+    Mesh.Mesh.Version = 1;
+
+    EXPECT_EQ(State.SetMesh(Entity, Mesh), RADIENT_STATUS_OK);
+    const RadientRevision Revision = State.GetRevision();
+
+    std::memcpy(MeshURI.get(), ChangedURI, sizeof(ChangedURI));
+    MeshURI.reset();
+
+    RadientMeshComponent SameMesh;
+    SameMesh.Mesh.URI     = "mesh://heap";
+    SameMesh.Mesh.Version = 1;
+
+    EXPECT_EQ(State.SetMesh(Entity, SameMesh), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(State.GetRevision(), Revision);
 }
 
 } // namespace

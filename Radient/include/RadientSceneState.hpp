@@ -46,6 +46,13 @@ public:
     RadientSceneState();
     explicit RadientSceneState(const RadientSceneDesc& Desc);
 
+    // clang-format off
+    RadientSceneState           (const RadientSceneState&) = delete;
+    RadientSceneState& operator=(const RadientSceneState&) = delete;
+    RadientSceneState           (RadientSceneState&&)      = delete;
+    RadientSceneState& operator=(RadientSceneState&&)      = delete;
+    // clang-format on
+
     const RadientSceneDesc& GetDesc() const;
 
     RADIENT_STATUS  IsEntityAlive(RadientEntityID Entity) const;
@@ -126,6 +133,25 @@ private:
     struct DirtyStateComponent
     {
         DIRTY_FLAGS Flags = DIRTY_FLAG_NONE;
+    };
+
+    struct MeshComponentStorage
+    {
+        RadientMeshComponent Component;
+        std::string          MeshURI;
+
+        MeshComponentStorage();
+
+        MeshComponentStorage(const MeshComponentStorage& Rhs)        = delete;
+        MeshComponentStorage& operator=(const MeshComponentStorage&) = delete;
+        MeshComponentStorage& operator=(MeshComponentStorage&&)      = delete;
+
+        MeshComponentStorage(MeshComponentStorage&& Rhs) noexcept;
+
+        void Assign(const RadientMeshComponent& Mesh);
+
+    private:
+        void FixupURI();
     };
 
     struct CustomComponentStorage
