@@ -721,7 +721,18 @@ void RadientSceneState::DestroyEntitySubtree(entt::entity Entity)
     }
 
     RemoveCustomComponents(Entity);
-    m_DirtyEntities.erase(Entity);
+    DirtyStateComponent& DirtyState = m_Registry.get<DirtyStateComponent>(Entity);
+    if (DirtyState.InDirtySet)
+    {
+        const size_t Erased = m_DirtyEntities.erase(Entity);
+        VERIFY(Erased == 1, "Entity was marked as being in the dirty set, but was not found there");
+        DirtyState.InDirtySet = false;
+    }
+    else
+    {
+        VERIFY(m_DirtyEntities.find(Entity) == m_DirtyEntities.end(),
+               "Entity is not marked as being in the dirty set, but is present there");
+    }
     m_EntityMap.erase(m_Registry.get<EntityComponent>(Entity).ID);
     m_Registry.destroy(Entity);
 }
@@ -758,21 +769,29 @@ RadientSceneState::DIRTY_FLAGS RadientSceneState::MarkDirty(entt::entity Entity,
         return DIRTY_FLAG_NONE;
 
     DirtyStateComponent& DirtyState = m_Registry.get<DirtyStateComponent>(Entity);
-    const DIRTY_FLAGS    AddedFlags = Flags & ~DirtyState.Flags;
-    if (AddedFlags == DIRTY_FLAG_NONE)
-        return DIRTY_FLAG_NONE;
 
     // m_DirtyEntities tracks only nodes where dirtiness was introduced directly by a scene edit or a lazy
     // path repair. Descendants dirtied by propagation are intentionally not inserted there, otherwise commit
-    // would have to filter a much larger set and could revisit the same subtree many times.
-    if (AddToDirtySet && DirtyState.Flags == DIRTY_FLAG_NONE)
+    // would have to filter a much larger set and could revisit the same subtree many times. Track membership
+    // explicitly because an entity may already have inherited dirty flags without being a direct dirty root.
+    if (AddToDirtySet)
     {
-        const bool Inserted = m_DirtyEntities.insert(Entity).second;
-        VERIFY(Inserted, "Entity was already in the dirty set. This should not happen as the entity had no dirty flags set");
+        if (!DirtyState.InDirtySet)
+        {
+            const bool Inserted = m_DirtyEntities.insert(Entity).second;
+            VERIFY(Inserted, "Entity was already in the dirty set");
+            DirtyState.InDirtySet = true;
+        }
+        else
+        {
+            VERIFY(m_DirtyEntities.find(Entity) != m_DirtyEntities.end(),
+                   "Entity is marked as being in the dirty set, but is not present there");
+        }
     }
 
+    const DIRTY_FLAGS AddedFlags = Flags & ~DirtyState.Flags;
     DirtyState.Flags |= AddedFlags;
-    m_DirtyFlags |= AddedFlags;
+    m_DirtyFlags |= Flags;
 
     return AddedFlags;
 }
@@ -789,7 +808,19 @@ void RadientSceneState::ClearDirtyFlags(entt::entity Entity, DIRTY_FLAGS Flags)
     DirtyState.Flags &= ~Flags;
 
     if (DirtyState.Flags == DIRTY_FLAG_NONE)
-        m_DirtyEntities.erase(Entity);
+    {
+        if (DirtyState.InDirtySet)
+        {
+            const size_t Erased = m_DirtyEntities.erase(Entity);
+            VERIFY(Erased == 1, "Entity was marked as being in the dirty set, but was not found there");
+            DirtyState.InDirtySet = false;
+        }
+        else
+        {
+            VERIFY(m_DirtyEntities.find(Entity) == m_DirtyEntities.end(),
+                   "Entity is not marked as being in the dirty set, but is present there");
+        }
+    }
 }
 
 void RadientSceneState::PropagateDirtyFlags(entt::entity Entity, DIRTY_FLAGS Flags)

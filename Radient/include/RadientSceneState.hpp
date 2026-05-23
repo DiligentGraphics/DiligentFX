@@ -134,7 +134,8 @@ private:
 
     struct DirtyStateComponent
     {
-        DIRTY_FLAGS Flags = DIRTY_FLAG_NONE;
+        DIRTY_FLAGS Flags      = DIRTY_FLAG_NONE;
+        bool        InDirtySet = false;
     };
 
     struct MeshComponentStorage
