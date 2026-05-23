@@ -333,7 +333,6 @@ RADIENT_STATUS RadientSceneState::CreateEntity(const RadientEntityDesc& Desc, Ra
     m_Registry.emplace<DirtyStateComponent>(E);
 
     m_EntityMap.emplace(Entity, E);
-    MarkDirty(E, DIRTY_FLAGS_REQUIRING_PROPAGATION);
 
     if (Parent != entt::null)
     {
@@ -341,6 +340,7 @@ RADIENT_STATUS RadientSceneState::CreateEntity(const RadientEntityDesc& Desc, Ra
         m_Registry.get<HierarchyComponent>(Parent).Children.push_back(E);
     }
 
+    MarkDirty(E, DIRTY_FLAGS_REQUIRING_PROPAGATION);
     Touch();
     return RADIENT_STATUS_OK;
 }
