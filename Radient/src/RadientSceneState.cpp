@@ -353,6 +353,8 @@ RADIENT_STATUS RadientSceneState::DestroyEntity(RadientEntityID Entity)
 
     DetachFromParent(E);
     DestroyEntitySubtree(E);
+    if (m_DirtyEntities.empty())
+        m_DirtyFlags = DIRTY_FLAG_NONE;
     Touch();
     return RADIENT_STATUS_OK;
 }
