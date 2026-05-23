@@ -70,6 +70,8 @@ DILIGENT_BEGIN_INTERFACE(IRadientSceneWriter, IObject)
                                                           Bool            Visible) PURE;
 
     /// Sets the entity parent.
+    /// If KeepWorldTransform is true, the world transform is preserved exactly only when the
+    /// resulting local matrix can be represented as translation, rotation, and scale.
     VIRTUAL RADIENT_STATUS METHOD(SetParent)(THIS_
                                              RadientEntityID Entity,
                                              RadientEntityID Parent,
