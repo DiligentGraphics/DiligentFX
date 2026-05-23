@@ -44,11 +44,13 @@ public:
     using TBase = ObjectBase<IRadientScene>;
 
     RadientSceneImpl(IReferenceCounters* pRefCounters);
+    RadientSceneImpl(IReferenceCounters* pRefCounters, const RadientSceneDesc& Desc);
     ~RadientSceneImpl();
 
     IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientScene, TBase)
 
     static RefCntAutoPtr<RadientSceneImpl> Create();
+    static RefCntAutoPtr<RadientSceneImpl> Create(const RadientSceneDesc& Desc);
     
     virtual const RadientSceneDesc& DILIGENT_CALL_TYPE GetDesc() const override final;
 

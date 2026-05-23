@@ -3,20 +3,30 @@ cmake_minimum_required (VERSION 3.13)
 project(Radient CXX)
 
 set(SOURCE
+    src/RadientBackendImpl.cpp
+    src/RadientEngineImpl.cpp
+    src/RadientRendererImpl.cpp
     src/RadientSceneImpl.cpp
     src/RadientSceneState.cpp
     src/RadientSceneWriterImpl.cpp
 )
 
 set(INCLUDE
+    include/RadientBackendImpl.hpp
+    include/RadientEngineImpl.hpp
     include/RadientMath.hpp
+    include/RadientRendererImpl.hpp
     include/RadientSceneImpl.hpp
     include/RadientSceneState.hpp
     include/RadientSceneWriterImpl.hpp
 )
 
 set(INTERFACE
+    interface/Radient.h
+    interface/RadientBackend.h
+    interface/RadientEngine.h
     interface/RadientMath.h
+    interface/RadientRenderer.h
     interface/RadientScene.h
     interface/RadientSceneWriter.h
     interface/RadientTypes.h

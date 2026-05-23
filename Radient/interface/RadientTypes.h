@@ -41,6 +41,17 @@ DILIGENT_BEGIN_NAMESPACE(Diligent)
 
 // clang-format off
 
+/// Radient execution backend type.
+DILIGENT_TYPED_ENUM(RADIENT_BACKEND_TYPE, Uint8)
+{
+    /// Radient runs in the current process and uses native Diligent interfaces directly.
+    RADIENT_BACKEND_TYPE_LOCAL = 0,
+
+    /// Radient commands are sent to another process or server.
+    RADIENT_BACKEND_TYPE_REMOTE
+};
+
+
 /// Generic status returned by Radient operations.
 DILIGENT_TYPED_ENUM(RADIENT_STATUS, Int32)
 {

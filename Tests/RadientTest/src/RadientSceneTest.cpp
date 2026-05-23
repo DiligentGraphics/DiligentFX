@@ -27,6 +27,7 @@
 #include "TestingEnvironment.hpp"
 #include "gtest/gtest.h"
 
+#include "RadientEngine.h"
 #include "RadientSceneImpl.hpp"
 
 using namespace Diligent;
@@ -39,6 +40,56 @@ TEST(RadientSceneTest, Create)
 {
     RefCntAutoPtr<IRadientScene> pScene = RadientSceneImpl::Create();
     EXPECT_NE(pScene, nullptr);
+}
+
+TEST(RadientEngineTest, CreateObjects)
+{
+    RadientEngineCreateInfo EngineCI{};
+
+    RefCntAutoPtr<IRadientEngine> pEngine;
+    EXPECT_EQ(CreateRadientEngine(EngineCI, &pEngine), RADIENT_STATUS_OK);
+    ASSERT_NE(pEngine, nullptr);
+
+    RefCntAutoPtr<IRadientBackend> pBackend;
+    EXPECT_EQ(pEngine->GetBackend(&pBackend), RADIENT_STATUS_OK);
+    ASSERT_NE(pBackend, nullptr);
+    EXPECT_EQ(pBackend->GetDesc().Type, RADIENT_BACKEND_TYPE_LOCAL);
+
+    RadientSceneDesc SceneDesc{};
+    SceneDesc.Name = "Radient test scene";
+
+    RefCntAutoPtr<IRadientScene> pScene;
+    EXPECT_EQ(pEngine->CreateScene(SceneDesc, &pScene), RADIENT_STATUS_OK);
+    ASSERT_NE(pScene, nullptr);
+    EXPECT_STREQ(pScene->GetDesc().Name, SceneDesc.Name);
+
+    RefCntAutoPtr<IRadientSceneWriter> pWriter;
+    EXPECT_EQ(pEngine->CreateSceneWriter(pScene, &pWriter), RADIENT_STATUS_OK);
+    ASSERT_NE(pWriter, nullptr);
+
+    RadientRendererDesc RendererDesc{};
+    RendererDesc.Name = "Radient test renderer";
+
+    RefCntAutoPtr<IRadientRenderer> pRenderer;
+    EXPECT_EQ(pEngine->CreateRenderer(RendererDesc, &pRenderer), RADIENT_STATUS_OK);
+    ASSERT_NE(pRenderer, nullptr);
+    EXPECT_STREQ(pRenderer->GetDesc().Name, RendererDesc.Name);
+
+    RadientRenderTargetDesc TargetDesc{};
+    TargetDesc.Name = "Radient test target";
+    TargetDesc.Size = {640, 480};
+
+    RefCntAutoPtr<IRadientRenderTarget> pTarget;
+    EXPECT_EQ(pRenderer->CreateRenderTarget(TargetDesc, &pTarget), RADIENT_STATUS_OK);
+    ASSERT_NE(pTarget, nullptr);
+    EXPECT_STREQ(pTarget->GetDesc().Name, TargetDesc.Name);
+    EXPECT_EQ(pTarget->GetDesc().Size, TargetDesc.Size);
+
+    RadientRenderAttribs RenderAttribs{};
+    RenderAttribs.pScene        = pScene;
+    RenderAttribs.pRenderTarget = pTarget;
+
+    EXPECT_EQ(pRenderer->Render(RenderAttribs), RADIENT_STATUS_OK);
 }
 
 } // namespace
