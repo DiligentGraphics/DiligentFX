@@ -100,11 +100,12 @@ static DILIGENT_CONSTEXPR RadientComponentTypeID InvalidRadientComponentTypeID =
 static DILIGENT_CONSTEXPR RadientFrameID         InvalidRadientFrameID         = 0;
 
 /// Reserved component type identifiers for built-in components.
-static DILIGENT_CONSTEXPR RadientComponentTypeID RADIENT_COMPONENT_TYPE_TRANSFORM     = 1;
-static DILIGENT_CONSTEXPR RadientComponentTypeID RADIENT_COMPONENT_TYPE_CAMERA        = 2;
-static DILIGENT_CONSTEXPR RadientComponentTypeID RADIENT_COMPONENT_TYPE_MESH          = 3;
-static DILIGENT_CONSTEXPR RadientComponentTypeID RADIENT_COMPONENT_TYPE_MESH_RENDERER = 4;
-static DILIGENT_CONSTEXPR RadientComponentTypeID RADIENT_COMPONENT_TYPE_LIGHT         = 5;
+static DILIGENT_CONSTEXPR RadientComponentTypeID RADIENT_COMPONENT_TYPE_TRANSFORM         = 1;
+static DILIGENT_CONSTEXPR RadientComponentTypeID RADIENT_COMPONENT_TYPE_CAMERA            = 2;
+static DILIGENT_CONSTEXPR RadientComponentTypeID RADIENT_COMPONENT_TYPE_MESH              = 3;
+static DILIGENT_CONSTEXPR RadientComponentTypeID RADIENT_COMPONENT_TYPE_MESH_RENDERER     = 4;
+static DILIGENT_CONSTEXPR RadientComponentTypeID RADIENT_COMPONENT_TYPE_LIGHT             = 5;
+static DILIGENT_CONSTEXPR RadientComponentTypeID RADIENT_COMPONENT_TYPE_MATERIAL_BINDINGS = 6;
 
 /// Asset reference used by scenes, components, and render features.
 struct RadientAssetReference

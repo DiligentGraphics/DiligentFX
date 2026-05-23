@@ -24,16 +24,36 @@
  *  of the possibility of such damages.
  */
 
-#pragma once
+#include "Radient/interface/RadientAssets.h"
 
-/// \file
-/// Umbrella include for Radient public interfaces.
+void RadientAssets_C_UseTypes(void)
+{
+    RadientAssetManagerDesc        AssetManagerDesc = {0};
+    RadientAssetManagerCreateInfo  AssetManagerCI   = {0};
+    RadientMeshPrimitiveCreateInfo Primitive        = {0};
+    RadientMeshCreateInfo          MeshCI           = {0};
+    RadientMaterialCreateInfo      MaterialCI       = {0};
+    RadientAssetReference          Asset            = {0};
 
-#include "RadientMath.h"
-#include "RadientTypes.h"
-#include "RadientAssets.h"
-#include "RadientScene.h"
-#include "RadientSceneWriter.h"
-#include "RadientBackend.h"
-#include "RadientRenderer.h"
-#include "RadientEngine.h"
+    (void)AssetManagerDesc;
+    (void)AssetManagerCI;
+    (void)Primitive;
+    (void)MeshCI;
+    (void)MaterialCI;
+    (void)Asset;
+}
+
+void RadientAssets_C_TestMacros(IRadientAssetManager* pAssetManager)
+{
+    const RadientAssetManagerDesc* pDesc      = IRadientAssetManager_GetDesc(pAssetManager);
+    RadientMeshCreateInfo          MeshCI     = {0};
+    RadientMaterialCreateInfo      MaterialCI = {0};
+    RadientAssetReference          Asset      = {0};
+    RADIENT_STATUS                 Status     = RADIENT_STATUS_OK;
+
+    Status = IRadientAssetManager_CreateMesh(pAssetManager, &MeshCI, &Asset);
+    Status = IRadientAssetManager_CreateMaterial(pAssetManager, &MaterialCI, &Asset);
+
+    (void)pDesc;
+    (void)Status;
+}

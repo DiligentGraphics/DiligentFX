@@ -47,6 +47,7 @@ bool IsBuiltInComponentType(const RadientComponentTypeID ComponentType)
             ComponentType == RADIENT_COMPONENT_TYPE_CAMERA ||
             ComponentType == RADIENT_COMPONENT_TYPE_MESH ||
             ComponentType == RADIENT_COMPONENT_TYPE_MESH_RENDERER ||
+            ComponentType == RADIENT_COMPONENT_TYPE_MATERIAL_BINDINGS ||
             ComponentType == RADIENT_COMPONENT_TYPE_LIGHT);
 }
 
@@ -57,28 +58,6 @@ bool IsValidEntityFlags(RADIENT_ENTITY_FLAGS Flags)
 
 } // namespace
 
-
-RadientSceneState::MeshComponentStorage::MeshComponentStorage() = default;
-
-RadientSceneState::MeshComponentStorage::MeshComponentStorage(MeshComponentStorage&& Rhs) noexcept :
-    Component{Rhs.Component},
-    MeshURI{std::move(Rhs.MeshURI)}
-{
-    FixupURI();
-}
-
-void RadientSceneState::MeshComponentStorage::Assign(const RadientMeshComponent& Mesh)
-{
-    Component = Mesh;
-    MeshURI   = Mesh.Mesh.URI != nullptr ? Mesh.Mesh.URI : "";
-    FixupURI();
-}
-
-void RadientSceneState::MeshComponentStorage::FixupURI()
-{
-    // Component.Mesh.URI points into MeshURI and must be repaired after move.
-    Component.Mesh.URI = Component.Mesh.URI != nullptr ? MeshURI.c_str() : nullptr;
-}
 
 RadientSceneState::RadientSceneState() :
     m_Desc{}
@@ -284,6 +263,10 @@ RADIENT_STATUS RadientSceneState::HasComponent(RadientEntityID Entity, RadientCo
 
         case RADIENT_COMPONENT_TYPE_MESH_RENDERER:
             HasComponent = m_Registry.all_of<RadientMeshRendererComponent>(E) ? True : False;
+            break;
+
+        case RADIENT_COMPONENT_TYPE_MATERIAL_BINDINGS:
+            HasComponent = m_Registry.all_of<MaterialBindingsStorage>(E) ? True : False;
             break;
 
         case RADIENT_COMPONENT_TYPE_LIGHT:
@@ -509,6 +492,28 @@ RADIENT_STATUS RadientSceneState::SetMeshRenderer(RadientEntityID Entity, const 
     return EmplaceOrReplaceComponent(Entity, Renderer);
 }
 
+RADIENT_STATUS RadientSceneState::SetMaterialBindings(RadientEntityID Entity, const RadientMaterialBindingsComponent& Bindings)
+{
+    const entt::entity E = FindEntity(Entity);
+    if (E == entt::null)
+        return RADIENT_STATUS_NOT_FOUND;
+
+    if (Bindings.pBindings == nullptr && Bindings.BindingCount != 0)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    MaterialBindingsStorage* pExistingBindings = m_Registry.try_get<MaterialBindingsStorage>(E);
+    if (pExistingBindings != nullptr && pExistingBindings->Equals(Bindings))
+        return RADIENT_STATUS_NO_CHANGE;
+
+    MaterialBindingsStorage& BindingStorage = pExistingBindings != nullptr ?
+        *pExistingBindings :
+        m_Registry.emplace<MaterialBindingsStorage>(E);
+
+    BindingStorage.Assign(Bindings);
+    Touch();
+    return RADIENT_STATUS_OK;
+}
+
 RADIENT_STATUS RadientSceneState::SetLight(RadientEntityID Entity, const RadientLightComponent& Light)
 {
     return EmplaceOrReplaceComponent(Entity, Light);
@@ -587,6 +592,10 @@ RADIENT_STATUS RadientSceneState::RemoveComponent(RadientEntityID Entity, Radien
 
         case RADIENT_COMPONENT_TYPE_MESH_RENDERER:
             Removed = m_Registry.remove<RadientMeshRendererComponent>(E) != 0;
+            break;
+
+        case RADIENT_COMPONENT_TYPE_MATERIAL_BINDINGS:
+            Removed = m_Registry.remove<MaterialBindingsStorage>(E) != 0;
             break;
 
         case RADIENT_COMPONENT_TYPE_LIGHT:

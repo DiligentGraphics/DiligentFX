@@ -28,20 +28,23 @@
 
 void RadientEngine_C_TestMacros(IRadientEngine* pEngine)
 {
-    RadientSceneDesc     SceneDesc    = {0};
-    RadientRendererDesc  RendererDesc = {0};
-    IRadientBackend*     pBackend     = 0;
-    IRadientScene*       pScene       = 0;
-    IRadientSceneWriter* pWriter      = 0;
-    IRadientRenderer*    pRenderer    = 0;
-    RADIENT_STATUS       Status       = RADIENT_STATUS_OK;
+    RadientSceneDesc      SceneDesc     = {0};
+    RadientRendererDesc   RendererDesc  = {0};
+    IRadientBackend*      pBackend      = 0;
+    IRadientAssetManager* pAssetManager = 0;
+    IRadientScene*        pScene        = 0;
+    IRadientSceneWriter*  pWriter       = 0;
+    IRadientRenderer*     pRenderer     = 0;
+    RADIENT_STATUS        Status        = RADIENT_STATUS_OK;
 
     Status = IRadientEngine_GetBackend(pEngine, &pBackend);
+    Status = IRadientEngine_GetAssetManager(pEngine, &pAssetManager);
     Status = IRadientEngine_CreateScene(pEngine, &SceneDesc, &pScene);
     Status = IRadientEngine_CreateSceneWriter(pEngine, pScene, &pWriter);
     Status = IRadientEngine_CreateRenderer(pEngine, &RendererDesc, &pRenderer);
 
     (void)pBackend;
+    (void)pAssetManager;
     (void)pScene;
     (void)pWriter;
     (void)pRenderer;

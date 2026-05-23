@@ -94,6 +94,11 @@ RADIENT_STATUS RadientSceneWriterImpl::SetMeshRenderer(RadientEntityID Entity, c
     return m_pState ? m_pState->SetMeshRenderer(Entity, Renderer) : RADIENT_STATUS_INVALID_ARGUMENT;
 }
 
+RADIENT_STATUS RadientSceneWriterImpl::SetMaterialBindings(RadientEntityID Entity, const RadientMaterialBindingsComponent& Bindings)
+{
+    return m_pState ? m_pState->SetMaterialBindings(Entity, Bindings) : RADIENT_STATUS_INVALID_ARGUMENT;
+}
+
 RADIENT_STATUS RadientSceneWriterImpl::SetLight(RadientEntityID Entity, const RadientLightComponent& Light)
 {
     return m_pState ? m_pState->SetLight(Entity, Light) : RADIENT_STATUS_INVALID_ARGUMENT;

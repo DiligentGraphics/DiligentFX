@@ -24,16 +24,13 @@
  *  of the possibility of such damages.
  */
 
-#pragma once
+#include "Radient/interface/RadientAssets.h"
 
-/// \file
-/// Umbrella include for Radient public interfaces.
+using namespace Diligent;
 
-#include "RadientMath.h"
-#include "RadientTypes.h"
-#include "RadientAssets.h"
-#include "RadientScene.h"
-#include "RadientSceneWriter.h"
-#include "RadientBackend.h"
-#include "RadientRenderer.h"
-#include "RadientEngine.h"
+static_assert(RADIENT_ASSET_TYPE_MESH == 0, "Unexpected RADIENT_ASSET_TYPE_MESH value");
+static_assert(RADIENT_ASSET_TYPE_MATERIAL == 1, "Unexpected RADIENT_ASSET_TYPE_MATERIAL value");
+
+static_assert(RADIENT_INDEX_TYPE_NONE == 0, "Unexpected RADIENT_INDEX_TYPE_NONE value");
+static_assert(RADIENT_INDEX_TYPE_UINT16 == 1, "Unexpected RADIENT_INDEX_TYPE_UINT16 value");
+static_assert(RADIENT_INDEX_TYPE_UINT32 == 2, "Unexpected RADIENT_INDEX_TYPE_UINT32 value");

@@ -82,6 +82,21 @@ void RadientScene_C_UseCustomComponentData(void)
     (void)Component;
 }
 
+void RadientScene_C_UseMaterialBindingsComponent(void)
+{
+    RadientMaterialBinding           Binding;
+    RadientMaterialBindingsComponent Bindings;
+
+    Binding.PrimitiveIndex   = 0;
+    Binding.Material.URI     = 0;
+    Binding.Material.Version = 0;
+
+    Bindings.pBindings    = &Binding;
+    Bindings.BindingCount = 1;
+
+    (void)Bindings;
+}
+
 void RadientScene_C_TestMacros(IRadientScene* pScene)
 {
     RadientEntityID            Entity          = 0;

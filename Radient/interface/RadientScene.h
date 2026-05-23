@@ -203,6 +203,73 @@ struct RadientMeshRendererComponent
 typedef struct RadientMeshRendererComponent RadientMeshRendererComponent;
 
 
+/// Material override for one mesh primitive.
+struct RadientMaterialBinding
+{
+    /// Primitive index in the mesh asset.
+    Uint32 PrimitiveIndex DEFAULT_INITIALIZER(0);
+
+    /// Material asset reference.
+    RadientAssetReference Material DEFAULT_INITIALIZER({});
+
+#if DILIGENT_CPP_INTERFACE
+    bool operator==(const RadientMaterialBinding& Rhs) const
+    {
+        return PrimitiveIndex == Rhs.PrimitiveIndex &&
+            Material == Rhs.Material;
+    }
+
+    bool operator!=(const RadientMaterialBinding& Rhs) const
+    {
+        return !(*this == Rhs);
+    }
+#endif
+};
+typedef struct RadientMaterialBinding RadientMaterialBinding;
+
+
+/// Per-primitive material overrides.
+struct RadientMaterialBindingsComponent
+{
+    /// Material bindings. The scene stores a copy.
+    const RadientMaterialBinding* pBindings DEFAULT_INITIALIZER(nullptr);
+
+    /// Number of material bindings.
+    Uint32 BindingCount DEFAULT_INITIALIZER(0);
+
+#if DILIGENT_CPP_INTERFACE
+    bool operator==(const RadientMaterialBindingsComponent& Rhs) const
+    {
+        if (BindingCount != Rhs.BindingCount)
+            return false;
+
+        if (BindingCount == 0)
+            return true;
+
+        if (pBindings == Rhs.pBindings)
+            return true;
+
+        if (pBindings == nullptr || Rhs.pBindings == nullptr)
+            return false;
+
+        for (Uint32 BindingIndex = 0; BindingIndex < BindingCount; ++BindingIndex)
+        {
+            if (pBindings[BindingIndex] != Rhs.pBindings[BindingIndex])
+                return false;
+        }
+
+        return true;
+    }
+
+    bool operator!=(const RadientMaterialBindingsComponent& Rhs) const
+    {
+        return !(*this == Rhs);
+    }
+#endif
+};
+typedef struct RadientMaterialBindingsComponent RadientMaterialBindingsComponent;
+
+
 /// Light component.
 struct RadientLightComponent
 {

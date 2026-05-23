@@ -29,6 +29,7 @@
 /// \file
 /// Defines the main Radient engine interface.
 
+#include "RadientAssets.h"
 #include "RadientRenderer.h"
 #include "RadientSceneWriter.h"
 
@@ -41,6 +42,9 @@ struct RadientEngineCreateInfo
 {
     /// Backend creation attributes.
     RadientBackendCreateInfo Backend DEFAULT_INITIALIZER({});
+
+    /// Asset manager creation attributes.
+    RadientAssetManagerCreateInfo Assets DEFAULT_INITIALIZER({});
 };
 typedef struct RadientEngineCreateInfo RadientEngineCreateInfo;
 
@@ -66,6 +70,10 @@ DILIGENT_BEGIN_INTERFACE(IRadientEngine, IObject)
     VIRTUAL RADIENT_STATUS METHOD(GetBackend)(THIS_
                                               IRadientBackend** ppBackend) PURE;
 
+    /// Returns the asset manager.
+    VIRTUAL RADIENT_STATUS METHOD(GetAssetManager)(THIS_
+                                                   IRadientAssetManager** ppAssetManager) PURE;
+
     /// Creates a scene.
     VIRTUAL RADIENT_STATUS METHOD(CreateScene)(THIS_
                                                const RadientSceneDesc REF Desc,
@@ -88,6 +96,7 @@ DILIGENT_END_INTERFACE
 #if DILIGENT_C_INTERFACE
 
 #    define IRadientEngine_GetBackend(This, ...)        CALL_IFACE_METHOD(RadientEngine, GetBackend,        This, __VA_ARGS__)
+#    define IRadientEngine_GetAssetManager(This, ...)   CALL_IFACE_METHOD(RadientEngine, GetAssetManager,   This, __VA_ARGS__)
 #    define IRadientEngine_CreateScene(This, ...)       CALL_IFACE_METHOD(RadientEngine, CreateScene,       This, __VA_ARGS__)
 #    define IRadientEngine_CreateSceneWriter(This, ...) CALL_IFACE_METHOD(RadientEngine, CreateSceneWriter, This, __VA_ARGS__)
 #    define IRadientEngine_CreateRenderer(This, ...)    CALL_IFACE_METHOD(RadientEngine, CreateRenderer,    This, __VA_ARGS__)

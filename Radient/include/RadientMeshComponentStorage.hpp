@@ -26,14 +26,30 @@
 
 #pragma once
 
-/// \file
-/// Umbrella include for Radient public interfaces.
-
-#include "RadientMath.h"
-#include "RadientTypes.h"
-#include "RadientAssets.h"
 #include "RadientScene.h"
-#include "RadientSceneWriter.h"
-#include "RadientBackend.h"
-#include "RadientRenderer.h"
-#include "RadientEngine.h"
+
+#include <string>
+
+namespace Diligent
+{
+
+struct MeshComponentStorage
+{
+    RadientMeshComponent Component;
+    std::string          MeshURI;
+
+    MeshComponentStorage();
+
+    MeshComponentStorage(const MeshComponentStorage& Rhs)        = delete;
+    MeshComponentStorage& operator=(const MeshComponentStorage&) = delete;
+
+    MeshComponentStorage(MeshComponentStorage&& Rhs) noexcept;
+    MeshComponentStorage& operator=(MeshComponentStorage&& Rhs) noexcept;
+
+    void Assign(const RadientMeshComponent& Mesh);
+
+private:
+    void FixupURI();
+};
+
+} // namespace Diligent

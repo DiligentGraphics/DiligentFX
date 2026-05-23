@@ -28,6 +28,8 @@
 
 #include "RadientScene.h"
 #include "FlagEnum.h"
+#include "RadientMaterialBindingsStorage.hpp"
+#include "RadientMeshComponentStorage.hpp"
 
 #include "entt/entity/registry.hpp"
 #include "entt/entity/storage.hpp"
@@ -79,6 +81,7 @@ public:
     RADIENT_STATUS SetCamera(RadientEntityID Entity, const RadientCameraComponent& Camera);
     RADIENT_STATUS SetMesh(RadientEntityID Entity, const RadientMeshComponent& Mesh);
     RADIENT_STATUS SetMeshRenderer(RadientEntityID Entity, const RadientMeshRendererComponent& Renderer);
+    RADIENT_STATUS SetMaterialBindings(RadientEntityID Entity, const RadientMaterialBindingsComponent& Bindings);
     RADIENT_STATUS SetLight(RadientEntityID Entity, const RadientLightComponent& Light);
     RADIENT_STATUS SetCustomComponentData(RadientEntityID Entity, const RadientCustomComponentData& Component);
     RADIENT_STATUS RemoveComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType);
@@ -155,25 +158,6 @@ private:
     {
         entt::entity Entity         = entt::null;
         size_t       NextChildIndex = 0;
-    };
-
-    struct MeshComponentStorage
-    {
-        RadientMeshComponent Component;
-        std::string          MeshURI;
-
-        MeshComponentStorage();
-
-        MeshComponentStorage(const MeshComponentStorage& Rhs)        = delete;
-        MeshComponentStorage& operator=(const MeshComponentStorage&) = delete;
-        MeshComponentStorage& operator=(MeshComponentStorage&&)      = delete;
-
-        MeshComponentStorage(MeshComponentStorage&& Rhs) noexcept;
-
-        void Assign(const RadientMeshComponent& Mesh);
-
-    private:
-        void FixupURI();
     };
 
     struct CustomComponentStorage

@@ -26,6 +26,7 @@
 
 #include "RadientEngineImpl.hpp"
 
+#include "RadientAssetManagerImpl.hpp"
 #include "RadientBackendImpl.hpp"
 #include "RadientRendererImpl.hpp"
 #include "RadientSceneImpl.hpp"
@@ -36,7 +37,8 @@ namespace Diligent
 
 RadientEngineImpl::RadientEngineImpl(IReferenceCounters* pRefCounters, const RadientEngineCreateInfo& CreateInfo) :
     TBase{pRefCounters},
-    m_pBackend{RadientBackendImpl::Create(CreateInfo.Backend)}
+    m_pBackend{RadientBackendImpl::Create(CreateInfo.Backend)},
+    m_pAssetManager{RadientAssetManagerImpl::Create(CreateInfo.Assets)}
 {
 }
 
@@ -60,6 +62,20 @@ RADIENT_STATUS RadientEngineImpl::GetBackend(IRadientBackend** ppBackend)
 
     m_pBackend->AddRef();
     *ppBackend = m_pBackend.RawPtr();
+    return RADIENT_STATUS_OK;
+}
+
+RADIENT_STATUS RadientEngineImpl::GetAssetManager(IRadientAssetManager** ppAssetManager)
+{
+    if (ppAssetManager == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    *ppAssetManager = nullptr;
+    if (m_pAssetManager == nullptr)
+        return RADIENT_STATUS_INVALID_OPERATION;
+
+    m_pAssetManager->AddRef();
+    *ppAssetManager = m_pAssetManager;
     return RADIENT_STATUS_OK;
 }
 

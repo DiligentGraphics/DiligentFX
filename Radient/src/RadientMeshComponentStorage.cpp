@@ -24,16 +24,49 @@
  *  of the possibility of such damages.
  */
 
-#pragma once
+#include "RadientMeshComponentStorage.hpp"
 
-/// \file
-/// Umbrella include for Radient public interfaces.
+#include <utility>
 
-#include "RadientMath.h"
-#include "RadientTypes.h"
-#include "RadientAssets.h"
-#include "RadientScene.h"
-#include "RadientSceneWriter.h"
-#include "RadientBackend.h"
-#include "RadientRenderer.h"
-#include "RadientEngine.h"
+namespace Diligent
+{
+
+MeshComponentStorage::MeshComponentStorage() = default;
+
+MeshComponentStorage::MeshComponentStorage(MeshComponentStorage&& Rhs) noexcept :
+    Component{Rhs.Component},
+    MeshURI{std::move(Rhs.MeshURI)}
+{
+    FixupURI();
+    Rhs.Component = {};
+    Rhs.MeshURI.clear();
+}
+
+MeshComponentStorage& MeshComponentStorage::operator=(MeshComponentStorage&& Rhs) noexcept
+{
+    if (this != &Rhs)
+    {
+        Component = Rhs.Component;
+        MeshURI   = std::move(Rhs.MeshURI);
+        FixupURI();
+        Rhs.Component = {};
+        Rhs.MeshURI.clear();
+    }
+
+    return *this;
+}
+
+void MeshComponentStorage::Assign(const RadientMeshComponent& Mesh)
+{
+    Component = Mesh;
+    MeshURI   = Mesh.Mesh.URI != nullptr ? Mesh.Mesh.URI : "";
+    FixupURI();
+}
+
+void MeshComponentStorage::FixupURI()
+{
+    // Component.Mesh.URI points into MeshURI and must be repaired after move.
+    Component.Mesh.URI = Component.Mesh.URI != nullptr ? MeshURI.c_str() : nullptr;
+}
+
+} // namespace Diligent

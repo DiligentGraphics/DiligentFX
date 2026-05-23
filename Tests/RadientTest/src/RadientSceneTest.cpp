@@ -55,6 +55,42 @@ TEST(RadientEngineTest, CreateObjects)
     ASSERT_NE(pBackend, nullptr);
     EXPECT_EQ(pBackend->GetDesc().Type, RADIENT_BACKEND_TYPE_LOCAL);
 
+    RefCntAutoPtr<IRadientAssetManager> pAssetManager;
+    EXPECT_EQ(pEngine->GetAssetManager(&pAssetManager), RADIENT_STATUS_OK);
+    ASSERT_NE(pAssetManager, nullptr);
+
+    RadientMaterialCreateInfo MaterialCI{};
+    MaterialCI.Name            = "Radient test material";
+    MaterialCI.BaseColorFactor = {1.f, 0.f, 0.f, 1.f};
+
+    RadientAssetReference Material{};
+    EXPECT_EQ(pAssetManager->CreateMaterial(MaterialCI, Material), RADIENT_STATUS_OK);
+    ASSERT_NE(Material.URI, nullptr);
+    EXPECT_NE(Material.Version, 0u);
+
+    const RadientFloat3 Positions[] =
+        {
+            {0.f, 0.f, 0.f},
+            {1.f, 0.f, 0.f},
+            {0.f, 1.f, 0.f},
+        };
+
+    RadientMeshPrimitiveCreateInfo PrimitiveCI{};
+    PrimitiveCI.Name        = "Radient test primitive";
+    PrimitiveCI.pPositions  = Positions;
+    PrimitiveCI.VertexCount = 3;
+    PrimitiveCI.Material    = Material;
+
+    RadientMeshCreateInfo MeshCI{};
+    MeshCI.Name           = "Radient test mesh";
+    MeshCI.pPrimitives    = &PrimitiveCI;
+    MeshCI.PrimitiveCount = 1;
+
+    RadientAssetReference Mesh{};
+    EXPECT_EQ(pAssetManager->CreateMesh(MeshCI, Mesh), RADIENT_STATUS_OK);
+    ASSERT_NE(Mesh.URI, nullptr);
+    EXPECT_NE(Mesh.Version, 0u);
+
     RadientSceneDesc SceneDesc{};
     SceneDesc.Name = "Radient test scene";
 
@@ -66,6 +102,24 @@ TEST(RadientEngineTest, CreateObjects)
     RefCntAutoPtr<IRadientSceneWriter> pWriter;
     EXPECT_EQ(pEngine->CreateSceneWriter(pScene, &pWriter), RADIENT_STATUS_OK);
     ASSERT_NE(pWriter, nullptr);
+
+    RadientEntityID Entity = InvalidRadientEntityID;
+    EXPECT_EQ(pWriter->CreateEntity({}, Entity), RADIENT_STATUS_OK);
+    ASSERT_NE(Entity, InvalidRadientEntityID);
+
+    RadientMeshComponent MeshComponent{};
+    MeshComponent.Mesh = Mesh;
+    EXPECT_EQ(pWriter->SetMesh(Entity, MeshComponent), RADIENT_STATUS_OK);
+    EXPECT_EQ(pWriter->SetMeshRenderer(Entity, {}), RADIENT_STATUS_OK);
+
+    RadientMaterialBinding MaterialBinding{};
+    MaterialBinding.PrimitiveIndex = 0;
+    MaterialBinding.Material       = Material;
+
+    RadientMaterialBindingsComponent MaterialBindings{};
+    MaterialBindings.pBindings    = &MaterialBinding;
+    MaterialBindings.BindingCount = 1;
+    EXPECT_EQ(pWriter->SetMaterialBindings(Entity, MaterialBindings), RADIENT_STATUS_OK);
 
     RadientRendererDesc RendererDesc{};
     RendererDesc.Name = "Radient test renderer";

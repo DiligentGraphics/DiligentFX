@@ -64,6 +64,7 @@ static_assert(RADIENT_COMPONENT_TYPE_CAMERA == 2, "Unexpected RADIENT_COMPONENT_
 static_assert(RADIENT_COMPONENT_TYPE_MESH == 3, "Unexpected RADIENT_COMPONENT_TYPE_MESH value");
 static_assert(RADIENT_COMPONENT_TYPE_MESH_RENDERER == 4, "Unexpected RADIENT_COMPONENT_TYPE_MESH_RENDERER value");
 static_assert(RADIENT_COMPONENT_TYPE_LIGHT == 5, "Unexpected RADIENT_COMPONENT_TYPE_LIGHT value");
+static_assert(RADIENT_COMPONENT_TYPE_MATERIAL_BINDINGS == 6, "Unexpected RADIENT_COMPONENT_TYPE_MATERIAL_BINDINGS value");
 
 static_assert(std::is_standard_layout<RadientAssetReference>::value, "RadientAssetReference must be a standard-layout type");
 static_assert(std::is_trivially_copyable<RadientAssetReference>::value, "RadientAssetReference must be trivially copyable");

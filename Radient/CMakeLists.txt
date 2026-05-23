@@ -3,8 +3,11 @@ cmake_minimum_required (VERSION 3.13)
 project(Radient CXX)
 
 set(SOURCE
+    src/RadientAssetManagerImpl.cpp
     src/RadientBackendImpl.cpp
     src/RadientEngineImpl.cpp
+    src/RadientMaterialBindingsStorage.cpp
+    src/RadientMeshComponentStorage.cpp
     src/RadientRendererImpl.cpp
     src/RadientSceneImpl.cpp
     src/RadientSceneState.cpp
@@ -12,9 +15,12 @@ set(SOURCE
 )
 
 set(INCLUDE
+    include/RadientAssetManagerImpl.hpp
     include/RadientBackendImpl.hpp
     include/RadientEngineImpl.hpp
+    include/RadientMaterialBindingsStorage.hpp
     include/RadientMath.hpp
+    include/RadientMeshComponentStorage.hpp
     include/RadientRendererImpl.hpp
     include/RadientSceneImpl.hpp
     include/RadientSceneState.hpp
@@ -23,6 +29,7 @@ set(INCLUDE
 
 set(INTERFACE
     interface/Radient.h
+    interface/RadientAssets.h
     interface/RadientBackend.h
     interface/RadientEngine.h
     interface/RadientMath.h

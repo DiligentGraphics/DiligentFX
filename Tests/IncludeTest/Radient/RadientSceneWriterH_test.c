@@ -28,16 +28,17 @@
 
 void RadientSceneWriter_C_TestMacros(IRadientSceneWriter* pWriter)
 {
-    RadientEntityID              Entity          = 0;
-    RadientEntityDesc            EntityDesc      = {0};
-    RADIENT_ENTITY_FLAGS         EntityFlags     = 0;
-    RadientTransform             Transform       = {0};
-    RadientCameraComponent       Camera          = {0};
-    RadientMeshComponent         Mesh            = {0};
-    RadientMeshRendererComponent MeshRenderer    = {0};
-    RadientLightComponent        Light           = {0};
-    RadientCustomComponentData   CustomComponent = {0};
-    RADIENT_STATUS               Status          = RADIENT_STATUS_OK;
+    RadientEntityID                  Entity           = 0;
+    RadientEntityDesc                EntityDesc       = {0};
+    RADIENT_ENTITY_FLAGS             EntityFlags      = 0;
+    RadientTransform                 Transform        = {0};
+    RadientCameraComponent           Camera           = {0};
+    RadientMeshComponent             Mesh             = {0};
+    RadientMeshRendererComponent     MeshRenderer     = {0};
+    RadientMaterialBindingsComponent MaterialBindings = {0};
+    RadientLightComponent            Light            = {0};
+    RadientCustomComponentData       CustomComponent  = {0};
+    RADIENT_STATUS                   Status           = RADIENT_STATUS_OK;
 
     Status = IRadientSceneWriter_CreateEntity(pWriter, &EntityDesc, &Entity);
     Status = IRadientSceneWriter_DestroyEntity(pWriter, Entity);
@@ -48,6 +49,7 @@ void RadientSceneWriter_C_TestMacros(IRadientSceneWriter* pWriter)
     Status = IRadientSceneWriter_SetCamera(pWriter, Entity, &Camera);
     Status = IRadientSceneWriter_SetMesh(pWriter, Entity, &Mesh);
     Status = IRadientSceneWriter_SetMeshRenderer(pWriter, Entity, &MeshRenderer);
+    Status = IRadientSceneWriter_SetMaterialBindings(pWriter, Entity, &MaterialBindings);
     Status = IRadientSceneWriter_SetLight(pWriter, Entity, &Light);
     Status = IRadientSceneWriter_SetCustomComponentData(pWriter, Entity, &CustomComponent);
     Status = IRadientSceneWriter_RemoveComponent(pWriter, Entity, CustomComponent.ComponentType);

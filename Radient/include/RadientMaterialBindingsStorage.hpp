@@ -26,14 +26,33 @@
 
 #pragma once
 
-/// \file
-/// Umbrella include for Radient public interfaces.
-
-#include "RadientMath.h"
-#include "RadientTypes.h"
-#include "RadientAssets.h"
 #include "RadientScene.h"
-#include "RadientSceneWriter.h"
-#include "RadientBackend.h"
-#include "RadientRenderer.h"
-#include "RadientEngine.h"
+
+#include <string>
+#include <vector>
+
+namespace Diligent
+{
+
+struct MaterialBindingsStorage
+{
+    RadientMaterialBindingsComponent    Component;
+    std::vector<RadientMaterialBinding> Bindings;
+    std::vector<std::string>            MaterialURIs;
+
+    MaterialBindingsStorage();
+
+    MaterialBindingsStorage(const MaterialBindingsStorage& Rhs)        = delete;
+    MaterialBindingsStorage& operator=(const MaterialBindingsStorage&) = delete;
+
+    MaterialBindingsStorage(MaterialBindingsStorage&& Rhs) noexcept;
+    MaterialBindingsStorage& operator=(MaterialBindingsStorage&& Rhs) noexcept;
+
+    bool Equals(const RadientMaterialBindingsComponent& Bindings) const;
+    void Assign(const RadientMaterialBindingsComponent& Bindings);
+
+private:
+    void FixupURIs();
+};
+
+} // namespace Diligent

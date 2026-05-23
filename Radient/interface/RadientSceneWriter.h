@@ -97,6 +97,11 @@ DILIGENT_BEGIN_INTERFACE(IRadientSceneWriter, IObject)
                                                    RadientEntityID                        Entity,
                                                    const RadientMeshRendererComponent REF Renderer) PURE;
 
+    /// Adds or updates per-primitive material overrides.
+    VIRTUAL RADIENT_STATUS METHOD(SetMaterialBindings)(THIS_
+                                                       RadientEntityID                            Entity,
+                                                       const RadientMaterialBindingsComponent REF Bindings) PURE;
+
     /// Adds or updates a light component.
     VIRTUAL RADIENT_STATUS METHOD(SetLight)(THIS_
                                             RadientEntityID                 Entity,
@@ -130,6 +135,7 @@ DILIGENT_END_INTERFACE
 #    define IRadientSceneWriter_SetCamera(This, ...)              CALL_IFACE_METHOD(RadientSceneWriter, SetCamera,         This, __VA_ARGS__)
 #    define IRadientSceneWriter_SetMesh(This, ...)                CALL_IFACE_METHOD(RadientSceneWriter, SetMesh,           This, __VA_ARGS__)
 #    define IRadientSceneWriter_SetMeshRenderer(This, ...)        CALL_IFACE_METHOD(RadientSceneWriter, SetMeshRenderer,   This, __VA_ARGS__)
+#    define IRadientSceneWriter_SetMaterialBindings(This, ...)    CALL_IFACE_METHOD(RadientSceneWriter, SetMaterialBindings, This, __VA_ARGS__)
 #    define IRadientSceneWriter_SetLight(This, ...)               CALL_IFACE_METHOD(RadientSceneWriter, SetLight,          This, __VA_ARGS__)
 #    define IRadientSceneWriter_SetCustomComponentData(This, ...) CALL_IFACE_METHOD(RadientSceneWriter, SetCustomComponentData,  This, __VA_ARGS__)
 #    define IRadientSceneWriter_RemoveComponent(This, ...)        CALL_IFACE_METHOD(RadientSceneWriter, RemoveComponent,   This, __VA_ARGS__)

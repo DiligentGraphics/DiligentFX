@@ -77,6 +77,9 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetMeshRenderer(RadientEntityID                     Entity,
                                                               const RadientMeshRendererComponent& Renderer) override final;
 
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetMaterialBindings(RadientEntityID                         Entity,
+                                                                  const RadientMaterialBindingsComponent& Bindings) override final;
+
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetLight(RadientEntityID              Entity,
                                                        const RadientLightComponent& Light) override final;
 

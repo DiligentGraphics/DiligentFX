@@ -47,6 +47,8 @@ public:
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetBackend(IRadientBackend** ppBackend) override final;
 
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetAssetManager(IRadientAssetManager** ppAssetManager) override final;
+
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateScene(const RadientSceneDesc& Desc,
                                                           IRadientScene**        ppScene) override final;
 
@@ -57,7 +59,8 @@ public:
                                                              IRadientRenderer**        ppRenderer) override final;
 
 private:
-    RefCntAutoPtr<IRadientBackend> m_pBackend;
+    RefCntAutoPtr<IRadientBackend>      m_pBackend;
+    RefCntAutoPtr<IRadientAssetManager> m_pAssetManager;
 };
 
 } // namespace Diligent
