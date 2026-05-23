@@ -30,6 +30,7 @@
 #include "RadientMath.hpp"
 
 #include <algorithm>
+#include <limits>
 #include <utility>
 
 namespace Diligent
@@ -320,6 +321,10 @@ RADIENT_STATUS RadientSceneState::CreateEntity(const RadientEntityDesc& Desc, Ra
         if (Parent == entt::null)
             return RADIENT_STATUS_NOT_FOUND;
     }
+
+    if (m_NextEntityID == InvalidRadientEntityID ||
+        m_NextEntityID == std::numeric_limits<RadientEntityID>::max())
+        return RADIENT_STATUS_INVALID_OPERATION;
 
     Entity               = m_NextEntityID++;
     const entt::entity E = m_Registry.create();
