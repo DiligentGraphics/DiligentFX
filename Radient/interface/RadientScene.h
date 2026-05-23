@@ -340,6 +340,7 @@ DILIGENT_BEGIN_INTERFACE(IRadientScene, IObject)
                                                                 Bool REF        Visible) PURE;
 
     /// Gets cached effective entity visibility without updating dirty derived state.
+    /// If the scene has changed, call CommitChanges() first to guarantee the cached value is up to date.
     /// Returns RADIENT_STATUS_OUT_OF_DATE if the cached value may be stale.
     VIRTUAL RADIENT_STATUS METHOD(GetCachedEntityEffectiveVisibility)(THIS_
                                                                       RadientEntityID Entity,
@@ -374,6 +375,7 @@ DILIGENT_BEGIN_INTERFACE(IRadientScene, IObject)
                                                   RadientMatrix4x4 REF Matrix) PURE;
 
     /// Gets cached world transform matrix without updating dirty derived state.
+    /// If the scene has changed, call CommitChanges() first to guarantee the cached value is up to date.
     /// Returns RADIENT_STATUS_OUT_OF_DATE if the cached value may be stale.
     VIRTUAL RADIENT_STATUS METHOD(GetCachedWorldMatrix)(THIS_
                                                         RadientEntityID      Entity,
