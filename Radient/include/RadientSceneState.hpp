@@ -35,7 +35,6 @@
 #include <cstddef>
 #include <string>
 #include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 namespace Diligent
@@ -101,6 +100,8 @@ private:
     };
     DECLARE_FRIEND_FLAG_ENUM_OPERATORS(DIRTY_FLAGS);
 
+    static constexpr size_t InvalidDirtyListIndex = static_cast<size_t>(-1);
+
     struct EntityComponent
     {
         RadientEntityID ID = InvalidRadientEntityID;
@@ -135,8 +136,13 @@ private:
 
     struct DirtyStateComponent
     {
-        DIRTY_FLAGS Flags      = DIRTY_FLAG_NONE;
-        bool        InDirtySet = false;
+        DIRTY_FLAGS Flags          = DIRTY_FLAG_NONE;
+        size_t      DirtyListIndex = InvalidDirtyListIndex;
+
+        bool IsInDirtyList() const
+        {
+            return DirtyListIndex != InvalidDirtyListIndex;
+        }
     };
 
     struct DirtyWorkItem
@@ -194,8 +200,9 @@ private:
     void         DetachFromParent(entt::entity Entity);
     void         DestroyEntitySubtree(entt::entity Entity);
     void         RemoveCustomComponents(entt::entity Entity);
-    DIRTY_FLAGS  MarkDirty(entt::entity Entity, DIRTY_FLAGS Flags, bool AddToDirtySet = true);
+    DIRTY_FLAGS  MarkDirty(entt::entity Entity, DIRTY_FLAGS Flags, bool AddToDirtyList = true);
     void         ClearDirtyFlags(entt::entity Entity, DIRTY_FLAGS Flags);
+    void         RemoveFromDirtyList(entt::entity Entity, DirtyStateComponent& DirtyState);
     void         PropagateDirtyFlags(entt::entity Entity, DIRTY_FLAGS Flags);
     void         MarkChildrenDirtyExcept(entt::entity Entity, DIRTY_FLAGS Flags, entt::entity ExcludedChild);
     void         UpdateDirtyEntities();
@@ -218,8 +225,9 @@ private:
     // Conservative scene-wide mask of derived states that may be dirty anywhere in the scene.
     DIRTY_FLAGS m_DirtyFlags = DIRTY_FLAG_NONE;
 
-    // Entities where dirty state was introduced directly. Commit propagates these flags to descendants without adding them here.
-    std::unordered_set<entt::entity> m_DirtyEntities;
+    // Entities where dirty state was introduced directly. DirtyStateComponent::DirtyListIndex stores the entity's
+    // slot and prevents duplicate insertions. Removal uses swap-erase, so the list contains only live dirty entries.
+    std::vector<entt::entity> m_DirtyEntities;
 
     // Reused path scratch buffer for lazy parent-to-child derived-state updates.
     std::vector<entt::entity> m_TmpEntityBuffer;

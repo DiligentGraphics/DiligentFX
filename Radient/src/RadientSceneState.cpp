@@ -749,17 +749,7 @@ void RadientSceneState::DestroyEntitySubtree(entt::entity Entity)
 
         RemoveCustomComponents(Current);
         DirtyStateComponent& DirtyState = m_Registry.get<DirtyStateComponent>(Current);
-        if (DirtyState.InDirtySet)
-        {
-            const size_t Erased = m_DirtyEntities.erase(Current);
-            VERIFY(Erased == 1, "Entity was marked as being in the dirty set, but was not found there");
-            DirtyState.InDirtySet = false;
-        }
-        else
-        {
-            VERIFY(m_DirtyEntities.find(Current) == m_DirtyEntities.end(),
-                   "Entity is not marked as being in the dirty set, but is present there");
-        }
+        RemoveFromDirtyList(Current, DirtyState);
         m_EntityMap.erase(m_Registry.get<EntityComponent>(Current).ID);
         m_Registry.destroy(Current);
     }
@@ -790,7 +780,7 @@ void RadientSceneState::RemoveCustomComponents(entt::entity Entity)
     m_Registry.remove<CustomComponentIndexComponent>(Entity);
 }
 
-RadientSceneState::DIRTY_FLAGS RadientSceneState::MarkDirty(entt::entity Entity, DIRTY_FLAGS Flags, bool AddToDirtySet)
+RadientSceneState::DIRTY_FLAGS RadientSceneState::MarkDirty(entt::entity Entity, DIRTY_FLAGS Flags, bool AddToDirtyList)
 {
     if (Flags == DIRTY_FLAG_NONE)
         return DIRTY_FLAG_NONE;
@@ -802,20 +792,19 @@ RadientSceneState::DIRTY_FLAGS RadientSceneState::MarkDirty(entt::entity Entity,
 
     // m_DirtyEntities tracks only nodes where dirtiness was introduced directly by a scene edit or a lazy
     // path repair. Descendants dirtied by propagation are intentionally not inserted there, otherwise commit
-    // would have to filter a much larger set and could revisit the same subtree many times. Track membership
-    // explicitly because an entity may already have inherited dirty flags without being a direct dirty root.
-    if (AddToDirtySet)
+    // would have to filter a much larger worklist and could revisit the same subtree many times.
+    if (AddToDirtyList)
     {
-        if (!DirtyState.InDirtySet)
+        if (!DirtyState.IsInDirtyList())
         {
-            const bool Inserted = m_DirtyEntities.insert(Entity).second;
-            VERIFY(Inserted, "Entity was already in the dirty set");
-            DirtyState.InDirtySet = true;
+            DirtyState.DirtyListIndex = m_DirtyEntities.size();
+            m_DirtyEntities.push_back(Entity);
         }
         else
         {
-            VERIFY(m_DirtyEntities.find(Entity) != m_DirtyEntities.end(),
-                   "Entity is marked as being in the dirty set, but is not present there");
+            VERIFY(DirtyState.DirtyListIndex < m_DirtyEntities.size() &&
+                       m_DirtyEntities[DirtyState.DirtyListIndex] == Entity,
+                   "Dirty list index points to the wrong entity");
         }
     }
 
@@ -839,18 +828,30 @@ void RadientSceneState::ClearDirtyFlags(entt::entity Entity, DIRTY_FLAGS Flags)
 
     if (DirtyState.Flags == DIRTY_FLAG_NONE)
     {
-        if (DirtyState.InDirtySet)
-        {
-            const size_t Erased = m_DirtyEntities.erase(Entity);
-            VERIFY(Erased == 1, "Entity was marked as being in the dirty set, but was not found there");
-            DirtyState.InDirtySet = false;
-        }
-        else
-        {
-            VERIFY(m_DirtyEntities.find(Entity) == m_DirtyEntities.end(),
-                   "Entity is not marked as being in the dirty set, but is present there");
-        }
+        RemoveFromDirtyList(Entity, DirtyState);
     }
+}
+
+void RadientSceneState::RemoveFromDirtyList(entt::entity Entity, DirtyStateComponent& DirtyState)
+{
+    if (!DirtyState.IsInDirtyList())
+        return;
+
+    VERIFY(DirtyState.DirtyListIndex < m_DirtyEntities.size() &&
+               m_DirtyEntities[DirtyState.DirtyListIndex] == Entity,
+           "Dirty list index points to the wrong entity");
+
+    const size_t       RemovedIndex = DirtyState.DirtyListIndex;
+    const entt::entity LastEntity   = m_DirtyEntities.back();
+
+    if (RemovedIndex + 1 < m_DirtyEntities.size())
+    {
+        m_DirtyEntities[RemovedIndex] = LastEntity;
+        m_Registry.get<DirtyStateComponent>(LastEntity).DirtyListIndex = RemovedIndex;
+    }
+
+    m_DirtyEntities.pop_back();
+    DirtyState.DirtyListIndex = InvalidDirtyListIndex;
 }
 
 // Propagate directly tracked dirty flags down the subtree. Propagation is a marking pass only: it does not add
@@ -883,8 +884,8 @@ void RadientSceneState::PropagateDirtyFlags(entt::entity Entity, DIRTY_FLAGS Fla
             // Propagation is a marking pass only. Newly dirtied descendants inherit the subset of flags that was
             // not already present, and traversal stops as soon as a subtree already has all requested flags. This
             // keeps overlapping dirty roots from repeatedly walking the same descendants.
-            constexpr bool    AddToDirtySet = false;
-            const DIRTY_FLAGS AddedFlags    = MarkDirty(Child, Item.Flags, AddToDirtySet) & DIRTY_FLAGS_REQUIRING_PROPAGATION;
+            constexpr bool    AddToDirtyList = false;
+            const DIRTY_FLAGS AddedFlags     = MarkDirty(Child, Item.Flags, AddToDirtyList) & DIRTY_FLAGS_REQUIRING_PROPAGATION;
             if (AddedFlags != DIRTY_FLAG_NONE)
                 Stack.push_back({Child, AddedFlags});
         }
@@ -915,6 +916,12 @@ void RadientSceneState::MarkChildrenDirtyExcept(entt::entity Entity, DIRTY_FLAGS
 
 void RadientSceneState::UpdateDirtyEntities()
 {
+    if (m_DirtyEntities.empty())
+    {
+        m_DirtyFlags = DIRTY_FLAG_NONE;
+        return;
+    }
+
     // Commit updates dirty derived state in three phases:
     // 1. Propagate directly tracked dirty flags down affected subtrees without adding descendants to
     //    m_DirtyEntities. Propagation stops when a subtree already has the requested flags.
@@ -925,13 +932,16 @@ void RadientSceneState::UpdateDirtyEntities()
 
     // Commit is optimized for batch updates. It does not repair each originally dirty entity by walking up to
     // the root. Instead, it first expands dirty flags down from the directly edited nodes. Propagation marks
-    // descendants dirty without adding them to m_DirtyEntities, so this pass can iterate the set directly.
+    // descendants dirty without adding them to m_DirtyEntities, so this pass can iterate the worklist directly.
     for (const entt::entity Entity : m_DirtyEntities)
     {
         if (!VerifyInternalEntity(Entity))
             continue;
 
-        const DIRTY_FLAGS Flags = m_Registry.get<DirtyStateComponent>(Entity).Flags & DIRTY_FLAGS_REQUIRING_PROPAGATION;
+        const DirtyStateComponent& DirtyState = m_Registry.get<DirtyStateComponent>(Entity);
+        VERIFY(DirtyState.IsInDirtyList(), "Dirty entity is not marked as being in the dirty list");
+
+        const DIRTY_FLAGS Flags = DirtyState.Flags & DIRTY_FLAGS_REQUIRING_PROPAGATION;
         PropagateDirtyFlags(Entity, Flags);
     }
 
@@ -948,7 +958,10 @@ void RadientSceneState::UpdateDirtyEntities()
         if (!VerifyInternalEntity(Entity))
             continue;
 
-        const DIRTY_FLAGS Flags = m_Registry.get<DirtyStateComponent>(Entity).Flags & DIRTY_FLAGS_REQUIRING_PROPAGATION;
+        const DirtyStateComponent& DirtyState = m_Registry.get<DirtyStateComponent>(Entity);
+        VERIFY(DirtyState.IsInDirtyList(), "Dirty entity is not marked as being in the dirty list");
+
+        const DIRTY_FLAGS Flags = DirtyState.Flags & DIRTY_FLAGS_REQUIRING_PROPAGATION;
         if (Flags == DIRTY_FLAG_NONE)
             continue;
 
@@ -973,7 +986,10 @@ void RadientSceneState::UpdateDirtyEntities()
         if (!VerifyInternalEntity(Entity))
             continue;
 
-        const DIRTY_FLAGS Flags = m_Registry.get<DirtyStateComponent>(Entity).Flags & DIRTY_FLAGS_REQUIRING_PROPAGATION;
+        const DirtyStateComponent& DirtyState = m_Registry.get<DirtyStateComponent>(Entity);
+        VERIFY(DirtyState.IsInDirtyList(), "Dirty root is not in the dirty list");
+
+        const DIRTY_FLAGS Flags = DirtyState.Flags & DIRTY_FLAGS_REQUIRING_PROPAGATION;
         if (Flags != DIRTY_FLAG_NONE)
             UpdateDirtySubtree(Entity, DIRTY_FLAG_NONE);
     }
