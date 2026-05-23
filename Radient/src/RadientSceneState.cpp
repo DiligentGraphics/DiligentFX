@@ -983,6 +983,9 @@ void RadientSceneState::UpdateDerivedStatePathToRoot(entt::entity Entity, DIRTY_
         const entt::entity ExcludedChild = PathIndex > 0 ? Path[PathIndex - 1] : entt::null;
         MarkChildrenDirtyExcept(Current, ActiveFlags, ExcludedChild);
     }
+
+    if (m_DirtyEntities.empty())
+        m_DirtyFlags = DIRTY_FLAG_NONE;
 }
 
 void RadientSceneState::UpdateEntityDerivedState(entt::entity Entity, DIRTY_FLAGS Flags)

@@ -676,6 +676,39 @@ TEST(RadientSceneStateTest, LazyWorldMatrixUpdatePreservesCommitPropagation)
     ExpectMatrixNear(Matrix, ExpectedWorld);
 }
 
+TEST(RadientSceneStateTest, LazyWorldMatrixUpdateClearsGlobalDirtyFlags)
+{
+    RadientSceneState State;
+
+    RadientEntityDesc Branch0Desc;
+    Branch0Desc.Transform = MakeTranslation(1.f, 0.f, 0.f);
+
+    RadientEntityDesc Branch1Desc;
+    Branch1Desc.Transform = MakeTranslation(2.f, 0.f, 0.f);
+
+    RadientEntityID Branch0 = InvalidRadientEntityID;
+    RadientEntityID Branch1 = InvalidRadientEntityID;
+    EXPECT_EQ(State.CreateEntity(Branch0Desc, Branch0), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.CreateEntity(Branch1Desc, Branch1), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+    RadientMatrix4x4 Matrix;
+    EXPECT_EQ(State.GetCachedWorldMatrix(Branch1, Matrix), RADIENT_STATUS_OK);
+    ExpectMatrixNear(Matrix, RadientMath::TransformToMatrix(Branch1Desc.Transform));
+
+    const RadientTransform UpdatedBranch0Transform = MakeTranslation(10.f, 0.f, 0.f);
+    EXPECT_EQ(State.SetLocalTransform(Branch0, UpdatedBranch0Transform), RADIENT_STATUS_OK);
+
+    EXPECT_EQ(State.GetCachedWorldMatrix(Branch1, Matrix), RADIENT_STATUS_OUT_OF_DATE);
+    ExpectMatrixNear(Matrix, RadientMath::TransformToMatrix(Branch1Desc.Transform));
+
+    EXPECT_EQ(State.GetWorldMatrix(Branch0, Matrix), RADIENT_STATUS_OK);
+    ExpectMatrixNear(Matrix, RadientMath::TransformToMatrix(UpdatedBranch0Transform));
+
+    EXPECT_EQ(State.GetCachedWorldMatrix(Branch1, Matrix), RADIENT_STATUS_OK);
+    ExpectMatrixNear(Matrix, RadientMath::TransformToMatrix(Branch1Desc.Transform));
+}
+
 TEST(RadientSceneStateTest, CommitUpdatesDirtyParentBeforeDirtyChild)
 {
     RadientSceneState State;
