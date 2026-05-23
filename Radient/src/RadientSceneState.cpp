@@ -900,6 +900,14 @@ void RadientSceneState::MarkChildrenDirtyExcept(entt::entity Entity, DIRTY_FLAGS
 
 void RadientSceneState::UpdateDirtyEntities()
 {
+    // Commit updates dirty derived state in three phases:
+    // 1. Propagate directly tracked dirty flags down affected subtrees without adding descendants to
+    //    m_DirtyEntities. Propagation stops when a subtree already has the requested flags.
+    // 2. Select only the highest directly tracked dirty roots. Descendants of another dirty node are skipped
+    //    because the ancestor's subtree update will reach them.
+    // 3. Update each selected subtree top-down. Parent state is repaired before child state, so each entity can
+    //    use cached parent world transform and effective visibility without walking back to the root.
+
     // Commit is optimized for batch updates. It does not repair each originally dirty entity by walking up to
     // the root. Instead, it first expands dirty flags down from the directly edited nodes. Propagation marks
     // descendants dirty without adding them to m_DirtyEntities, so this pass can iterate the set directly.
