@@ -34,3 +34,19 @@ static_assert(RADIENT_ASSET_TYPE_MATERIAL == 1, "Unexpected RADIENT_ASSET_TYPE_M
 static_assert(RADIENT_INDEX_TYPE_NONE == 0, "Unexpected RADIENT_INDEX_TYPE_NONE value");
 static_assert(RADIENT_INDEX_TYPE_UINT16 == 1, "Unexpected RADIENT_INDEX_TYPE_UINT16 value");
 static_assert(RADIENT_INDEX_TYPE_UINT32 == 2, "Unexpected RADIENT_INDEX_TYPE_UINT32 value");
+
+static_assert(sizeof(RadientColorRGBA8) == 4, "Unexpected RadientColorRGBA8 size");
+static_assert(sizeof(RadientBoneIndices4) == 8, "Unexpected RadientBoneIndices4 size");
+
+void RadientAssets_CPP_UseMeshCreateInfo()
+{
+    RadientVertexBufferCreateInfo  VertexBuffer;
+    RadientIndexBufferCreateInfo   IndexBuffer;
+    RadientMeshPrimitiveCreateInfo Primitive;
+    RadientMeshCreateInfo          MeshCI;
+
+    (void)VertexBuffer;
+    (void)IndexBuffer;
+    (void)Primitive;
+    (void)MeshCI;
+}

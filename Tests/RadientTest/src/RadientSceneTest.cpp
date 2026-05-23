@@ -75,16 +75,56 @@ TEST(RadientEngineTest, CreateObjects)
             {0.f, 1.f, 0.f},
         };
 
+    const RadientColorRGBA8 Colors[] =
+        {
+            {255, 0, 0, 255},
+            {0, 255, 0, 255},
+            {0, 0, 255, 255},
+        };
+
+    const RadientBoneIndices4 BoneIndices[] =
+        {
+            {0, 0, 0, 0},
+            {0, 0, 0, 0},
+            {0, 0, 0, 0},
+        };
+
+    const RadientFloat4 BoneWeights[] =
+        {
+            {1.f, 0.f, 0.f, 0.f},
+            {1.f, 0.f, 0.f, 0.f},
+            {1.f, 0.f, 0.f, 0.f},
+        };
+
+    const Uint32 Indices[] = {0, 1, 2};
+
+    RadientVertexBufferCreateInfo VertexBufferCI{};
+    VertexBufferCI.Name          = "Radient test vertices";
+    VertexBufferCI.pPositions    = Positions;
+    VertexBufferCI.pColors0      = Colors;
+    VertexBufferCI.pBoneIndices0 = BoneIndices;
+    VertexBufferCI.pBoneWeights0 = BoneWeights;
+    VertexBufferCI.VertexCount   = 3;
+
+    RadientIndexBufferCreateInfo IndexBufferCI{};
+    IndexBufferCI.pIndices   = Indices;
+    IndexBufferCI.IndexCount = 3;
+    IndexBufferCI.IndexType  = RADIENT_INDEX_TYPE_UINT32;
+
     RadientMeshPrimitiveCreateInfo PrimitiveCI{};
-    PrimitiveCI.Name        = "Radient test primitive";
-    PrimitiveCI.pPositions  = Positions;
-    PrimitiveCI.VertexCount = 3;
-    PrimitiveCI.Material    = Material;
+    PrimitiveCI.Name              = "Radient test primitive";
+    PrimitiveCI.VertexBufferIndex = 0;
+    PrimitiveCI.FirstIndex        = 0;
+    PrimitiveCI.IndexCount        = 3;
+    PrimitiveCI.Material          = Material;
 
     RadientMeshCreateInfo MeshCI{};
-    MeshCI.Name           = "Radient test mesh";
-    MeshCI.pPrimitives    = &PrimitiveCI;
-    MeshCI.PrimitiveCount = 1;
+    MeshCI.Name              = "Radient test mesh";
+    MeshCI.pVertexBuffers    = &VertexBufferCI;
+    MeshCI.VertexBufferCount = 1;
+    MeshCI.IndexBuffer       = IndexBufferCI;
+    MeshCI.pPrimitives       = &PrimitiveCI;
+    MeshCI.PrimitiveCount    = 1;
 
     RadientAssetReference Mesh{};
     EXPECT_EQ(pAssetManager->CreateMesh(MeshCI, Mesh), RADIENT_STATUS_OK);

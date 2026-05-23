@@ -79,6 +79,33 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMesh(const RadientMeshCreateInfo& 
     Record.Name = MeshCI.Name != nullptr ? MeshCI.Name : "";
     Record.URI  = MakeURI("mesh");
 
+    Record.VertexBuffers.reserve(MeshCI.VertexBufferCount);
+    for (Uint32 BufferIndex = 0; BufferIndex < MeshCI.VertexBufferCount; ++BufferIndex)
+    {
+        const RadientVertexBufferCreateInfo& VertexBufferCI = MeshCI.pVertexBuffers[BufferIndex];
+
+        MeshVertexBufferStorage VertexBuffer;
+        VertexBuffer.Name         = VertexBufferCI.Name != nullptr ? VertexBufferCI.Name : "";
+        VertexBuffer.Positions    = CopyArray(VertexBufferCI.pPositions, VertexBufferCI.VertexCount);
+        VertexBuffer.Normals      = CopyArray(VertexBufferCI.pNormals, VertexBufferCI.VertexCount);
+        VertexBuffer.Tangents     = CopyArray(VertexBufferCI.pTangents, VertexBufferCI.VertexCount);
+        VertexBuffer.TexCoords0   = CopyArray(VertexBufferCI.pTexCoords0, VertexBufferCI.VertexCount);
+        VertexBuffer.Colors0      = CopyArray(VertexBufferCI.pColors0, VertexBufferCI.VertexCount);
+        VertexBuffer.BoneIndices0 = CopyArray(VertexBufferCI.pBoneIndices0, VertexBufferCI.VertexCount);
+        VertexBuffer.BoneWeights0 = CopyArray(VertexBufferCI.pBoneWeights0, VertexBufferCI.VertexCount);
+        Record.VertexBuffers.emplace_back(std::move(VertexBuffer));
+    }
+
+    Record.IndexBuffer.IndexType  = MeshCI.IndexBuffer.IndexType;
+    Record.IndexBuffer.IndexCount = MeshCI.IndexBuffer.IndexCount;
+    if (MeshCI.IndexBuffer.IndexCount != 0)
+    {
+        const size_t IndexSize =
+            MeshCI.IndexBuffer.IndexType == RADIENT_INDEX_TYPE_UINT16 ? sizeof(Uint16) : sizeof(Uint32);
+        const Uint8* pIndexData = static_cast<const Uint8*>(MeshCI.IndexBuffer.pIndices);
+        Record.IndexBuffer.Indices.assign(pIndexData, pIndexData + MeshCI.IndexBuffer.IndexCount * IndexSize);
+    }
+
     Record.MeshPrimitives.reserve(MeshCI.PrimitiveCount);
     for (Uint32 PrimitiveIndex = 0; PrimitiveIndex < MeshCI.PrimitiveCount; ++PrimitiveIndex)
     {
@@ -86,22 +113,11 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMesh(const RadientMeshCreateInfo& 
 
         MeshPrimitiveStorage Primitive;
         Primitive.Name            = PrimitiveCI.Name != nullptr ? PrimitiveCI.Name : "";
-        Primitive.Positions       = CopyArray(PrimitiveCI.pPositions, PrimitiveCI.VertexCount);
-        Primitive.Normals         = CopyArray(PrimitiveCI.pNormals, PrimitiveCI.VertexCount);
-        Primitive.Tangents        = CopyArray(PrimitiveCI.pTangents, PrimitiveCI.VertexCount);
-        Primitive.TexCoords0      = CopyArray(PrimitiveCI.pTexCoords0, PrimitiveCI.VertexCount);
-        Primitive.Colors0         = CopyArray(PrimitiveCI.pColors0, PrimitiveCI.VertexCount);
-        Primitive.IndexType       = PrimitiveCI.IndexType;
+        Primitive.VertexBufferIndex = PrimitiveCI.VertexBufferIndex;
+        Primitive.FirstIndex      = PrimitiveCI.FirstIndex;
+        Primitive.IndexCount      = PrimitiveCI.IndexCount;
         Primitive.MaterialVersion = PrimitiveCI.Material.Version;
         Primitive.MaterialURI     = PrimitiveCI.Material.URI != nullptr ? PrimitiveCI.Material.URI : "";
-
-        if (PrimitiveCI.IndexCount != 0)
-        {
-            const size_t IndexSize =
-                PrimitiveCI.IndexType == RADIENT_INDEX_TYPE_UINT16 ? sizeof(Uint16) : sizeof(Uint32);
-            const Uint8* pIndexData = static_cast<const Uint8*>(PrimitiveCI.pIndices);
-            Primitive.Indices.assign(pIndexData, pIndexData + PrimitiveCI.IndexCount * IndexSize);
-        }
 
         Record.MeshPrimitives.emplace_back(std::move(Primitive));
     }
@@ -138,28 +154,43 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMaterial(const RadientMaterialCrea
 
 bool RadientAssetManagerImpl::ValidateMesh(const RadientMeshCreateInfo& MeshCI) const
 {
-    if (MeshCI.PrimitiveCount == 0 || MeshCI.pPrimitives == nullptr)
+    if (MeshCI.VertexBufferCount == 0 || MeshCI.pVertexBuffers == nullptr ||
+        MeshCI.PrimitiveCount == 0 || MeshCI.pPrimitives == nullptr)
         return false;
+
+    for (Uint32 BufferIndex = 0; BufferIndex < MeshCI.VertexBufferCount; ++BufferIndex)
+    {
+        const RadientVertexBufferCreateInfo& VertexBufferCI = MeshCI.pVertexBuffers[BufferIndex];
+        if (VertexBufferCI.VertexCount == 0 || VertexBufferCI.pPositions == nullptr)
+            return false;
+
+        const bool HasBoneIndices = VertexBufferCI.pBoneIndices0 != nullptr;
+        const bool HasBoneWeights = VertexBufferCI.pBoneWeights0 != nullptr;
+        if (HasBoneIndices != HasBoneWeights)
+            return false;
+    }
+
+    if (MeshCI.IndexBuffer.IndexCount == 0 ||
+        MeshCI.IndexBuffer.pIndices == nullptr ||
+        (MeshCI.IndexBuffer.IndexType != RADIENT_INDEX_TYPE_UINT16 &&
+         MeshCI.IndexBuffer.IndexType != RADIENT_INDEX_TYPE_UINT32))
+    {
+        return false;
+    }
 
     for (Uint32 PrimitiveIndex = 0; PrimitiveIndex < MeshCI.PrimitiveCount; ++PrimitiveIndex)
     {
         const RadientMeshPrimitiveCreateInfo& PrimitiveCI = MeshCI.pPrimitives[PrimitiveIndex];
-        if (PrimitiveCI.VertexCount == 0 || PrimitiveCI.pPositions == nullptr)
+        if (PrimitiveCI.VertexBufferIndex >= MeshCI.VertexBufferCount ||
+            PrimitiveCI.IndexCount == 0 ||
+            PrimitiveCI.FirstIndex >= MeshCI.IndexBuffer.IndexCount)
+        {
             return false;
-
-        if (PrimitiveCI.IndexCount == 0)
-        {
-            if (PrimitiveCI.IndexType != RADIENT_INDEX_TYPE_NONE || PrimitiveCI.pIndices != nullptr)
-                return false;
         }
-        else
+
+        if (PrimitiveCI.IndexCount > MeshCI.IndexBuffer.IndexCount - PrimitiveCI.FirstIndex)
         {
-            if (PrimitiveCI.pIndices == nullptr ||
-                (PrimitiveCI.IndexType != RADIENT_INDEX_TYPE_UINT16 &&
-                 PrimitiveCI.IndexType != RADIENT_INDEX_TYPE_UINT32))
-            {
-                return false;
-            }
+            return false;
         }
     }
 

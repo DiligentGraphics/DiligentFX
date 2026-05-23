@@ -82,10 +82,32 @@ struct RadientAssetManagerCreateInfo
 typedef struct RadientAssetManagerCreateInfo RadientAssetManagerCreateInfo;
 
 
-/// CPU-side mesh primitive creation attributes.
-struct RadientMeshPrimitiveCreateInfo
+/// Four 8-bit color channels in RGBA order.
+struct RadientColorRGBA8
 {
-    /// Optional primitive name.
+    Uint8 r DEFAULT_INITIALIZER(0);
+    Uint8 g DEFAULT_INITIALIZER(0);
+    Uint8 b DEFAULT_INITIALIZER(0);
+    Uint8 a DEFAULT_INITIALIZER(255);
+};
+typedef struct RadientColorRGBA8 RadientColorRGBA8;
+
+
+/// Four bone indices.
+struct RadientBoneIndices4
+{
+    Uint16 x DEFAULT_INITIALIZER(0);
+    Uint16 y DEFAULT_INITIALIZER(0);
+    Uint16 z DEFAULT_INITIALIZER(0);
+    Uint16 w DEFAULT_INITIALIZER(0);
+};
+typedef struct RadientBoneIndices4 RadientBoneIndices4;
+
+
+/// CPU-side vertex buffer creation attributes.
+struct RadientVertexBufferCreateInfo
+{
+    /// Optional buffer name.
     const Char* Name DEFAULT_INITIALIZER(nullptr);
 
     /// Vertex positions. Required when VertexCount is not zero.
@@ -100,12 +122,24 @@ struct RadientMeshPrimitiveCreateInfo
     /// Primary texture coordinates.
     const RadientFloat2* pTexCoords0 DEFAULT_INITIALIZER(nullptr);
 
-    /// Primary vertex colors.
-    const RadientFloat4* pColors0 DEFAULT_INITIALIZER(nullptr);
+    /// Primary vertex colors as 8-bit RGBA values.
+    const RadientColorRGBA8* pColors0 DEFAULT_INITIALIZER(nullptr);
+
+    /// Four bone indices matching pBoneWeights0.
+    const RadientBoneIndices4* pBoneIndices0 DEFAULT_INITIALIZER(nullptr);
+
+    /// Four bone weights matching pBoneIndices0.
+    const RadientFloat4* pBoneWeights0 DEFAULT_INITIALIZER(nullptr);
 
     /// Number of vertices.
     Uint32 VertexCount DEFAULT_INITIALIZER(0);
+};
+typedef struct RadientVertexBufferCreateInfo RadientVertexBufferCreateInfo;
 
+
+/// CPU-side index buffer creation attributes.
+struct RadientIndexBufferCreateInfo
+{
     /// Index data. Type is controlled by IndexType.
     const void* pIndices DEFAULT_INITIALIZER(nullptr);
 
@@ -114,6 +148,24 @@ struct RadientMeshPrimitiveCreateInfo
 
     /// Index type.
     RADIENT_INDEX_TYPE IndexType DEFAULT_INITIALIZER(RADIENT_INDEX_TYPE_NONE);
+};
+typedef struct RadientIndexBufferCreateInfo RadientIndexBufferCreateInfo;
+
+
+/// CPU-side mesh primitive creation attributes.
+struct RadientMeshPrimitiveCreateInfo
+{
+    /// Optional primitive name.
+    const Char* Name DEFAULT_INITIALIZER(nullptr);
+
+    /// Vertex buffer index in RadientMeshCreateInfo::pVertexBuffers.
+    Uint32 VertexBufferIndex DEFAULT_INITIALIZER(0);
+
+    /// First index in RadientMeshCreateInfo::IndexBuffer.
+    Uint32 FirstIndex DEFAULT_INITIALIZER(0);
+
+    /// Number of indices in RadientMeshCreateInfo::IndexBuffer.
+    Uint32 IndexCount DEFAULT_INITIALIZER(0);
 
     /// Default material for this primitive.
     RadientAssetReference Material DEFAULT_INITIALIZER({});
@@ -126,6 +178,15 @@ struct RadientMeshCreateInfo
 {
     /// Mesh name.
     const Char* Name DEFAULT_INITIALIZER(nullptr);
+
+    /// Mesh vertex buffers.
+    const RadientVertexBufferCreateInfo* pVertexBuffers DEFAULT_INITIALIZER(nullptr);
+
+    /// Number of vertex buffers.
+    Uint32 VertexBufferCount DEFAULT_INITIALIZER(0);
+
+    /// Mesh index buffer.
+    RadientIndexBufferCreateInfo IndexBuffer DEFAULT_INITIALIZER({});
 
     /// Mesh primitives.
     const RadientMeshPrimitiveCreateInfo* pPrimitives DEFAULT_INITIALIZER(nullptr);

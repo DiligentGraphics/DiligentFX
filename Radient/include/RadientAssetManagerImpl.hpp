@@ -62,17 +62,32 @@ private:
     {
         std::string Name;
 
-        std::vector<RadientFloat3> Positions;
-        std::vector<RadientFloat3> Normals;
-        std::vector<RadientFloat4> Tangents;
-        std::vector<RadientFloat2> TexCoords0;
-        std::vector<RadientFloat4> Colors0;
-
-        RADIENT_INDEX_TYPE IndexType = RADIENT_INDEX_TYPE_NONE;
-        std::vector<Uint8> Indices;
+        Uint32 VertexBufferIndex = 0;
+        Uint32 FirstIndex        = 0;
+        Uint32 IndexCount        = 0;
 
         std::string MaterialURI;
         Uint64      MaterialVersion = 0;
+    };
+
+    struct MeshVertexBufferStorage
+    {
+        std::string Name;
+
+        std::vector<RadientFloat3>       Positions;
+        std::vector<RadientFloat3>       Normals;
+        std::vector<RadientFloat4>       Tangents;
+        std::vector<RadientFloat2>       TexCoords0;
+        std::vector<RadientColorRGBA8>   Colors0;
+        std::vector<RadientBoneIndices4> BoneIndices0;
+        std::vector<RadientFloat4>       BoneWeights0;
+    };
+
+    struct MeshIndexBufferStorage
+    {
+        RADIENT_INDEX_TYPE IndexType = RADIENT_INDEX_TYPE_NONE;
+        Uint32             IndexCount = 0;
+        std::vector<Uint8> Indices;
     };
 
     struct MaterialStorage
@@ -103,7 +118,9 @@ private:
         std::string        URI;
         std::string        Name;
 
-        std::vector<MeshPrimitiveStorage> MeshPrimitives;
+        std::vector<MeshVertexBufferStorage> VertexBuffers;
+        MeshIndexBufferStorage              IndexBuffer;
+        std::vector<MeshPrimitiveStorage>   MeshPrimitives;
         MaterialStorage                   Material;
     };
 
