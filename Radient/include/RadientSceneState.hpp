@@ -207,11 +207,13 @@ private:
     const std::string m_Name;
     RadientSceneDesc  m_Desc;
 
-    entt::registry                                                   m_Registry;
-    std::unordered_map<RadientEntityID, entt::entity>                m_EntityMap;
-    std::unordered_map<RadientComponentTypeID, CustomComponentStore> m_CustomComponentStores;
-    RadientEntityID                                                  m_NextEntityID = 1;
-    RadientRevision                                                  m_Revision     = 0;
+    using CustomComponentStoresMapType = std::unordered_map<RadientComponentTypeID, CustomComponentStore>;
+    using EntityMapType                = std::unordered_map<RadientEntityID, entt::entity>;
+    entt::registry               m_Registry;
+    EntityMapType                m_EntityMap;
+    CustomComponentStoresMapType m_CustomComponentStores;
+    RadientEntityID              m_NextEntityID = 1;
+    RadientRevision              m_Revision     = 0;
 
     // Conservative scene-wide mask of derived states that may be dirty anywhere in the scene.
     DIRTY_FLAGS m_DirtyFlags = DIRTY_FLAG_NONE;

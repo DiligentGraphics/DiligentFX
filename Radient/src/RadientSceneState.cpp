@@ -291,7 +291,7 @@ RADIENT_STATUS RadientSceneState::HasComponent(RadientEntityID Entity, RadientCo
 
         default:
         {
-            const std::unordered_map<RadientComponentTypeID, CustomComponentStore>::const_iterator It = m_CustomComponentStores.find(ComponentType);
+            const CustomComponentStoresMapType::const_iterator It = m_CustomComponentStores.find(ComponentType);
 
             HasComponent = It != m_CustomComponentStores.end() && It->second.contains(E) ? True : False;
             break;
@@ -600,7 +600,7 @@ RADIENT_STATUS RadientSceneState::RemoveComponent(RadientEntityID Entity, Radien
                     if (pIndex->ComponentTypes.empty())
                         m_Registry.remove<CustomComponentIndexComponent>(E);
 
-                    std::unordered_map<RadientComponentTypeID, CustomComponentStore>::iterator StoreIt = m_CustomComponentStores.find(ComponentType);
+                    CustomComponentStoresMapType::iterator StoreIt = m_CustomComponentStores.find(ComponentType);
                     VERIFY(StoreIt != m_CustomComponentStores.end() && StoreIt->second.contains(E),
                            "Custom component store is missing component type ", ComponentType, " listed in the entity index");
                     if (StoreIt != m_CustomComponentStores.end())
@@ -634,7 +634,7 @@ RADIENT_STATUS RadientSceneState::CommitChanges()
 
 entt::entity RadientSceneState::FindEntity(RadientEntityID Entity) const
 {
-    const std::unordered_map<RadientEntityID, entt::entity>::const_iterator It = m_EntityMap.find(Entity);
+    const EntityMapType::const_iterator It = m_EntityMap.find(Entity);
     if (It == m_EntityMap.end())
         return entt::null;
 
@@ -710,6 +710,8 @@ void RadientSceneState::DetachFromParent(entt::entity Entity)
         return;
 
     std::vector<entt::entity>& Siblings = m_Registry.get<HierarchyComponent>(Parent).Children;
+    VERIFY(std::find(Siblings.begin(), Siblings.end(), Entity) != Siblings.end(),
+           "Entity is not listed as a child of its parent");
     Siblings.erase(std::remove(Siblings.begin(), Siblings.end(), Entity), Siblings.end());
 
     Hierarchy.Parent = entt::null;
@@ -776,7 +778,7 @@ void RadientSceneState::RemoveCustomComponents(entt::entity Entity)
 
     for (const RadientComponentTypeID ComponentType : pIndex->ComponentTypes)
     {
-        std::unordered_map<RadientComponentTypeID, CustomComponentStore>::iterator It = m_CustomComponentStores.find(ComponentType);
+        CustomComponentStoresMapType::iterator It = m_CustomComponentStores.find(ComponentType);
         if (It != m_CustomComponentStores.end())
         {
             It->second.remove(Entity);
@@ -851,6 +853,10 @@ void RadientSceneState::ClearDirtyFlags(entt::entity Entity, DIRTY_FLAGS Flags)
     }
 }
 
+// Propagate directly tracked dirty flags down the subtree. Propagation is a marking pass only: it does not add
+// descendants to m_DirtyEntities, but it does update their DirtyStateComponent.Flags so they are included in the
+// subtree update. Propagation stops when a subtree already has all requested flags, so overlapping dirty roots do not
+// repeatedly walk the same descendants.
 void RadientSceneState::PropagateDirtyFlags(entt::entity Entity, DIRTY_FLAGS Flags)
 {
     if (Flags == DIRTY_FLAG_NONE)
@@ -877,7 +883,8 @@ void RadientSceneState::PropagateDirtyFlags(entt::entity Entity, DIRTY_FLAGS Fla
             // Propagation is a marking pass only. Newly dirtied descendants inherit the subset of flags that was
             // not already present, and traversal stops as soon as a subtree already has all requested flags. This
             // keeps overlapping dirty roots from repeatedly walking the same descendants.
-            const DIRTY_FLAGS AddedFlags = MarkDirty(Child, Item.Flags, false) & DIRTY_FLAGS_REQUIRING_PROPAGATION;
+            constexpr bool    AddToDirtySet = false;
+            const DIRTY_FLAGS AddedFlags    = MarkDirty(Child, Item.Flags, AddToDirtySet) & DIRTY_FLAGS_REQUIRING_PROPAGATION;
             if (AddedFlags != DIRTY_FLAG_NONE)
                 Stack.push_back({Child, AddedFlags});
         }
@@ -886,6 +893,7 @@ void RadientSceneState::PropagateDirtyFlags(entt::entity Entity, DIRTY_FLAGS Fla
     Stack.clear();
 }
 
+// Mark all children dirty except the excluded child.
 void RadientSceneState::MarkChildrenDirtyExcept(entt::entity Entity, DIRTY_FLAGS Flags, entt::entity ExcludedChild)
 {
     if (Flags == DIRTY_FLAG_NONE)
@@ -976,6 +984,11 @@ void RadientSceneState::UpdateDirtyEntities()
     DirtyRoots.clear();
 }
 
+// Update the subtree with the given inherited dirty flags. This function is used by commit's top-down traversal,
+// so the parent is already updated and Item.Flags carries the dirty state caused by ancestors. Update this node
+// directly, then pass the effective dirty flags to children. A child may also have its own dirty flags (for example,
+// the parent has a dirty visibility flag and the child has a dirty transform flag); the stack item combines both sets
+// before updating it.
 void RadientSceneState::UpdateDirtySubtree(entt::entity Entity, DIRTY_FLAGS InheritedFlags)
 {
     InheritedFlags &= DIRTY_FLAGS_REQUIRING_PROPAGATION;

@@ -414,6 +414,45 @@ TEST(RadientSceneStateTest, GetParent)
     EXPECT_EQ(Parent, InvalidRadientEntityID);
 }
 
+TEST(RadientSceneStateTest, SetParentRejectsCycles)
+{
+    RadientSceneState State;
+
+    RadientEntityID Root = InvalidRadientEntityID;
+    EXPECT_EQ(State.CreateEntity({}, Root), RADIENT_STATUS_OK);
+
+    RadientEntityDesc ChildDesc;
+    ChildDesc.Parent = Root;
+
+    RadientEntityID Child = InvalidRadientEntityID;
+    EXPECT_EQ(State.CreateEntity(ChildDesc, Child), RADIENT_STATUS_OK);
+
+    RadientEntityDesc GrandChildDesc;
+    GrandChildDesc.Parent = Child;
+
+    RadientEntityID GrandChild = InvalidRadientEntityID;
+    EXPECT_EQ(State.CreateEntity(GrandChildDesc, GrandChild), RADIENT_STATUS_OK);
+
+    RadientEntityID Parent = InvalidRadientEntityID;
+    EXPECT_EQ(State.SetParent(Child, Child, True), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(State.GetParent(Child, Parent), RADIENT_STATUS_OK);
+    EXPECT_EQ(Parent, Root);
+
+    EXPECT_EQ(State.SetParent(Root, GrandChild, True), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(State.GetParent(Root, Parent), RADIENT_STATUS_OK);
+    EXPECT_EQ(Parent, InvalidRadientEntityID);
+    EXPECT_EQ(State.GetParent(Child, Parent), RADIENT_STATUS_OK);
+    EXPECT_EQ(Parent, Root);
+    EXPECT_EQ(State.GetParent(GrandChild, Parent), RADIENT_STATUS_OK);
+    EXPECT_EQ(Parent, Child);
+
+    EXPECT_EQ(State.SetParent(Child, GrandChild, True), RADIENT_STATUS_INVALID_OPERATION);
+    EXPECT_EQ(State.GetParent(Child, Parent), RADIENT_STATUS_OK);
+    EXPECT_EQ(Parent, Root);
+    EXPECT_EQ(State.GetParent(GrandChild, Parent), RADIENT_STATUS_OK);
+    EXPECT_EQ(Parent, Child);
+}
+
 TEST(RadientSceneStateTest, GetChildCountAndChildren)
 {
     RadientSceneState State;
