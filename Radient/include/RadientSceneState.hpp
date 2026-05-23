@@ -32,6 +32,7 @@
 #include "entt/entity/registry.hpp"
 #include "entt/entity/storage.hpp"
 
+#include <cstddef>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -138,6 +139,18 @@ private:
         bool        InDirtySet = false;
     };
 
+    struct DirtyWorkItem
+    {
+        entt::entity Entity = entt::null;
+        DIRTY_FLAGS  Flags  = DIRTY_FLAG_NONE;
+    };
+
+    struct DestroyWorkItem
+    {
+        entt::entity Entity         = entt::null;
+        size_t       NextChildIndex = 0;
+    };
+
     struct MeshComponentStorage
     {
         RadientMeshComponent Component;
@@ -208,6 +221,12 @@ private:
 
     // Reused path scratch buffer for lazy parent-to-child derived-state updates.
     std::vector<entt::entity> m_TmpEntityBuffer;
+
+    // Reused stack for iterative post-order destruction.
+    std::vector<DestroyWorkItem> m_TmpDestroyStack;
+
+    // Reused stack for iterative dirty subtree traversal.
+    std::vector<DirtyWorkItem> m_TmpDirtyWorkItems;
 };
 
 } // namespace Diligent

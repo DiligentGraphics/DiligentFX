@@ -713,28 +713,49 @@ void RadientSceneState::DestroyEntitySubtree(entt::entity Entity)
     if (!VerifyInternalEntity(Entity))
         return;
 
-    const std::vector<entt::entity> Children = m_Registry.get<HierarchyComponent>(Entity).Children;
-    for (const entt::entity Child : Children)
+    std::vector<DestroyWorkItem>& Stack = m_TmpDestroyStack;
+    Stack.clear();
+    Stack.push_back({Entity, 0});
+
+    while (!Stack.empty())
     {
-        if (VerifyInternalEntity(Child))
-            DestroyEntitySubtree(Child);
+        DestroyWorkItem& Item = Stack.back();
+        if (!VerifyInternalEntity(Item.Entity))
+        {
+            Stack.pop_back();
+            continue;
+        }
+
+        const std::vector<entt::entity>& Children = m_Registry.get<HierarchyComponent>(Item.Entity).Children;
+        if (Item.NextChildIndex < Children.size())
+        {
+            const entt::entity Child = Children[Item.NextChildIndex++];
+            if (VerifyInternalEntity(Child))
+                Stack.push_back({Child, 0});
+            continue;
+        }
+
+        const entt::entity Current = Item.Entity;
+        Stack.pop_back();
+
+        RemoveCustomComponents(Current);
+        DirtyStateComponent& DirtyState = m_Registry.get<DirtyStateComponent>(Current);
+        if (DirtyState.InDirtySet)
+        {
+            const size_t Erased = m_DirtyEntities.erase(Current);
+            VERIFY(Erased == 1, "Entity was marked as being in the dirty set, but was not found there");
+            DirtyState.InDirtySet = false;
+        }
+        else
+        {
+            VERIFY(m_DirtyEntities.find(Current) == m_DirtyEntities.end(),
+                   "Entity is not marked as being in the dirty set, but is present there");
+        }
+        m_EntityMap.erase(m_Registry.get<EntityComponent>(Current).ID);
+        m_Registry.destroy(Current);
     }
 
-    RemoveCustomComponents(Entity);
-    DirtyStateComponent& DirtyState = m_Registry.get<DirtyStateComponent>(Entity);
-    if (DirtyState.InDirtySet)
-    {
-        const size_t Erased = m_DirtyEntities.erase(Entity);
-        VERIFY(Erased == 1, "Entity was marked as being in the dirty set, but was not found there");
-        DirtyState.InDirtySet = false;
-    }
-    else
-    {
-        VERIFY(m_DirtyEntities.find(Entity) == m_DirtyEntities.end(),
-               "Entity is not marked as being in the dirty set, but is present there");
-    }
-    m_EntityMap.erase(m_Registry.get<EntityComponent>(Entity).ID);
-    m_Registry.destroy(Entity);
+    Stack.clear();
 }
 
 void RadientSceneState::RemoveCustomComponents(entt::entity Entity)
@@ -831,16 +852,31 @@ void RadientSceneState::PropagateDirtyFlags(entt::entity Entity, DIRTY_FLAGS Fla
     if (!VerifyInternalEntity(Entity))
         return;
 
-    const std::vector<entt::entity>& Children = m_Registry.get<HierarchyComponent>(Entity).Children;
-    for (const entt::entity Child : Children)
+    std::vector<DirtyWorkItem>& Stack = m_TmpDirtyWorkItems;
+    Stack.clear();
+    Stack.push_back({Entity, Flags});
+
+    while (!Stack.empty())
     {
-        // Propagation is a marking pass only. Newly dirtied descendants inherit the subset of flags that was
-        // not already present, and recursion stops as soon as a subtree already has all requested flags. This
-        // keeps overlapping dirty roots from repeatedly walking the same descendants.
-        const DIRTY_FLAGS AddedFlags = MarkDirty(Child, Flags, false) & DIRTY_FLAGS_REQUIRING_PROPAGATION;
-        if (AddedFlags != DIRTY_FLAG_NONE)
-            PropagateDirtyFlags(Child, AddedFlags);
+        const DirtyWorkItem Item = Stack.back();
+        Stack.pop_back();
+
+        if (!VerifyInternalEntity(Item.Entity))
+            continue;
+
+        const std::vector<entt::entity>& Children = m_Registry.get<HierarchyComponent>(Item.Entity).Children;
+        for (const entt::entity Child : Children)
+        {
+            // Propagation is a marking pass only. Newly dirtied descendants inherit the subset of flags that was
+            // not already present, and traversal stops as soon as a subtree already has all requested flags. This
+            // keeps overlapping dirty roots from repeatedly walking the same descendants.
+            const DIRTY_FLAGS AddedFlags = MarkDirty(Child, Item.Flags, false) & DIRTY_FLAGS_REQUIRING_PROPAGATION;
+            if (AddedFlags != DIRTY_FLAG_NONE)
+                Stack.push_back({Child, AddedFlags});
+        }
     }
+
+    Stack.clear();
 }
 
 void RadientSceneState::MarkChildrenDirtyExcept(entt::entity Entity, DIRTY_FLAGS Flags, entt::entity ExcludedChild)
@@ -932,21 +968,36 @@ void RadientSceneState::UpdateDirtySubtree(entt::entity Entity, DIRTY_FLAGS Inhe
     if (!VerifyInternalEntity(Entity))
         return;
 
-    DirtyStateComponent& DirtyState = m_Registry.get<DirtyStateComponent>(Entity);
-    const DIRTY_FLAGS    Flags      = (DirtyState.Flags | InheritedFlags) & DIRTY_FLAGS_REQUIRING_PROPAGATION;
-    if (Flags == DIRTY_FLAG_NONE)
-        return;
+    std::vector<DirtyWorkItem>& Stack = m_TmpDirtyWorkItems;
+    Stack.clear();
+    Stack.push_back({Entity, InheritedFlags});
 
-    // This function is only used by commit's top-down traversal. The parent has already been updated, and
-    // InheritedFlags carries the dirty state caused by ancestors, so this node can be updated directly.
-    UpdateEntityDerivedState(Entity, Flags);
-    ClearDirtyFlags(Entity, Flags);
+    while (!Stack.empty())
+    {
+        const DirtyWorkItem Item = Stack.back();
+        Stack.pop_back();
 
-    // Pass the effective dirty flags to all children. A child may also have its own dirty flags; the recursive
-    // call combines both sets before updating it.
-    const std::vector<entt::entity>& Children = m_Registry.get<HierarchyComponent>(Entity).Children;
-    for (const entt::entity Child : Children)
-        UpdateDirtySubtree(Child, Flags);
+        if (!VerifyInternalEntity(Item.Entity))
+            continue;
+
+        DirtyStateComponent& DirtyState = m_Registry.get<DirtyStateComponent>(Item.Entity);
+        const DIRTY_FLAGS    Flags      = (DirtyState.Flags | Item.Flags) & DIRTY_FLAGS_REQUIRING_PROPAGATION;
+        if (Flags == DIRTY_FLAG_NONE)
+            continue;
+
+        // This function is only used by commit's top-down traversal. The parent has already been updated, and
+        // Item.Flags carries the dirty state caused by ancestors, so this node can be updated directly.
+        UpdateEntityDerivedState(Item.Entity, Flags);
+        ClearDirtyFlags(Item.Entity, Flags);
+
+        // Pass the effective dirty flags to all children. A child may also have its own dirty flags; the stack
+        // item combines both sets before updating it.
+        const std::vector<entt::entity>& Children = m_Registry.get<HierarchyComponent>(Item.Entity).Children;
+        for (const entt::entity Child : Children)
+            Stack.push_back({Child, Flags});
+    }
+
+    Stack.clear();
 }
 
 void RadientSceneState::UpdateDerivedStatePathToRoot(entt::entity Entity, DIRTY_FLAGS Flags)

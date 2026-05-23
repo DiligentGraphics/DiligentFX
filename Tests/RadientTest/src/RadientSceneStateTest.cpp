@@ -141,6 +141,19 @@ TEST(RadientSceneStateTest, IsEntityAlive)
     EXPECT_EQ(State.IsEntityAlive(Entity), RADIENT_STATUS_NOT_FOUND);
 }
 
+TEST(RadientSceneStateTest, DestroyEntityHandlesDeepHierarchy)
+{
+    static constexpr Uint32 NodeCount = 1000;
+
+    RadientSceneState            State;
+    std::vector<RadientEntityID> Entities = CreateLinearChain(State, NodeCount);
+
+    EXPECT_EQ(State.DestroyEntity(Entities.front()), RADIENT_STATUS_OK);
+
+    for (const RadientEntityID Entity : Entities)
+        EXPECT_EQ(State.IsEntityAlive(Entity), RADIENT_STATUS_NOT_FOUND);
+}
+
 TEST(RadientSceneStateTest, GetEntityFlags)
 {
     RadientSceneState State;
