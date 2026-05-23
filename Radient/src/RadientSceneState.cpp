@@ -448,8 +448,9 @@ RADIENT_STATUS RadientSceneState::SetParent(RadientEntityID Entity, RadientEntit
     if (NewParent != entt::null)
     {
         std::vector<entt::entity>& Siblings = m_Registry.get<HierarchyComponent>(NewParent).Children;
-        if (std::find(Siblings.begin(), Siblings.end(), E) == Siblings.end())
-            Siblings.push_back(E);
+        VERIFY(std::find(Siblings.begin(), Siblings.end(), E) == Siblings.end(),
+               "Entity is already listed as a child of the new parent");
+        Siblings.push_back(E);
     }
 
     m_Registry.get<LocalTransformComponent>(E).Transform = LocalTransform;
@@ -642,6 +643,12 @@ entt::entity RadientSceneState::FindEntity(RadientEntityID Entity) const
 
 bool RadientSceneState::IsDescendant(entt::entity Entity, entt::entity PotentialAncestor) const
 {
+    if (!VerifyInternalEntity(Entity) || !VerifyInternalEntity(PotentialAncestor))
+        return false;
+
+    if (m_Registry.get<HierarchyComponent>(PotentialAncestor).Children.empty())
+        return false;
+
     while (Entity != entt::null)
     {
         const HierarchyComponent& Hierarchy = m_Registry.get<HierarchyComponent>(Entity);

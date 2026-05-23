@@ -470,6 +470,16 @@ TEST(RadientSceneStateTest, GetChildCountAndChildren)
     EXPECT_EQ(State.GetChildren(Root, 4, 1, Children, NumChildrenWritten), RADIENT_STATUS_OK);
     EXPECT_EQ(NumChildrenWritten, 0u);
 
+    EXPECT_EQ(State.SetParent(Child2, Root, True), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(State.GetChildCount(Root, ChildCount), RADIENT_STATUS_OK);
+    EXPECT_EQ(ChildCount, 3u);
+
+    EXPECT_EQ(State.GetChildren(Root, 0, 4, Children, NumChildrenWritten), RADIENT_STATUS_OK);
+    EXPECT_EQ(NumChildrenWritten, 3u);
+    EXPECT_EQ(Children[0], Child0);
+    EXPECT_EQ(Children[1], Child1);
+    EXPECT_EQ(Children[2], Child2);
+
     EXPECT_EQ(State.SetParent(Child1, InvalidRadientEntityID, True), RADIENT_STATUS_OK);
     EXPECT_EQ(State.GetChildCount(Root, ChildCount), RADIENT_STATUS_OK);
     EXPECT_EQ(ChildCount, 2u);
