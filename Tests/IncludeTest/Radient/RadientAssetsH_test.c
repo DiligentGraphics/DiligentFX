@@ -35,6 +35,7 @@ void RadientAssets_C_UseTypes(void)
     RadientMeshPrimitiveCreateInfo Primitive        = {0};
     RadientMeshCreateInfo          MeshCI           = {0};
     RadientMaterialCreateInfo      MaterialCI       = {0};
+    RadientGLTFLoadInfo            GLTFLoadInfo     = {0};
     RadientAssetReference          Asset            = {0};
 
     (void)AssetManagerDesc;
@@ -44,19 +45,22 @@ void RadientAssets_C_UseTypes(void)
     (void)Primitive;
     (void)MeshCI;
     (void)MaterialCI;
+    (void)GLTFLoadInfo;
     (void)Asset;
 }
 
 void RadientAssets_C_TestMacros(IRadientAssetManager* pAssetManager)
 {
-    const RadientAssetManagerDesc* pDesc      = IRadientAssetManager_GetDesc(pAssetManager);
-    RadientMeshCreateInfo          MeshCI     = {0};
-    RadientMaterialCreateInfo      MaterialCI = {0};
-    RadientAssetReference          Asset      = {0};
-    RADIENT_STATUS                 Status     = RADIENT_STATUS_OK;
+    const RadientAssetManagerDesc* pDesc        = IRadientAssetManager_GetDesc(pAssetManager);
+    RadientMeshCreateInfo          MeshCI       = {0};
+    RadientMaterialCreateInfo      MaterialCI   = {0};
+    RadientGLTFLoadInfo            GLTFLoadInfo = {0};
+    RadientAssetReference          Asset        = {0};
+    RADIENT_STATUS                 Status       = RADIENT_STATUS_OK;
 
     Status = IRadientAssetManager_CreateMesh(pAssetManager, &MeshCI, &Asset);
     Status = IRadientAssetManager_CreateMaterial(pAssetManager, &MaterialCI, &Asset);
+    Status = IRadientAssetManager_LoadGLTF(pAssetManager, &GLTFLoadInfo, &Asset);
 
     (void)pDesc;
     (void)Status;

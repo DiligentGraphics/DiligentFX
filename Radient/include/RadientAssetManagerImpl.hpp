@@ -57,6 +57,9 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateMaterial(const RadientMaterialCreateInfo& MaterialCI,
                                                              RadientAssetReference&           Material) override final;
 
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE LoadGLTF(const RadientGLTFLoadInfo& LoadInfo,
+                                                       RadientAssetReference&     Model) override final;
+
 private:
     struct MeshPrimitiveStorage
     {
@@ -112,6 +115,11 @@ private:
         std::string EmissiveTextureURI;
     };
 
+    struct GLTFModelStorage
+    {
+        std::string SourceURI;
+    };
+
     struct AssetRecord
     {
         RADIENT_ASSET_TYPE Type = RADIENT_ASSET_TYPE_MESH;
@@ -119,12 +127,14 @@ private:
         std::string        Name;
 
         std::vector<MeshVertexBufferStorage> VertexBuffers;
-        MeshIndexBufferStorage              IndexBuffer;
-        std::vector<MeshPrimitiveStorage>   MeshPrimitives;
-        MaterialStorage                   Material;
+        MeshIndexBufferStorage               IndexBuffer;
+        std::vector<MeshPrimitiveStorage>    MeshPrimitives;
+        MaterialStorage                      Material;
+        GLTFModelStorage                     GLTFModel;
     };
 
     bool ValidateMesh(const RadientMeshCreateInfo& MeshCI) const;
+    bool ValidateGLTF(const RadientGLTFLoadInfo& LoadInfo) const;
 
     std::string MakeURI(const char* Type);
 

@@ -152,6 +152,25 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMaterial(const RadientMaterialCrea
     return RADIENT_STATUS_OK;
 }
 
+RADIENT_STATUS RadientAssetManagerImpl::LoadGLTF(const RadientGLTFLoadInfo& LoadInfo,
+                                                 RadientAssetReference&     Model)
+{
+    Model = {};
+
+    if (!ValidateGLTF(LoadInfo))
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    AssetRecord Record;
+    Record.Type = RADIENT_ASSET_TYPE_GLTF_MODEL;
+    Record.URI  = MakeURI("gltf");
+    Record.Name = LoadInfo.URI;
+
+    Record.GLTFModel.SourceURI = LoadInfo.URI;
+
+    Model = StoreAsset(std::move(Record));
+    return RADIENT_STATUS_OK;
+}
+
 bool RadientAssetManagerImpl::ValidateMesh(const RadientMeshCreateInfo& MeshCI) const
 {
     if (MeshCI.VertexBufferCount == 0 || MeshCI.pVertexBuffers == nullptr ||
@@ -195,6 +214,11 @@ bool RadientAssetManagerImpl::ValidateMesh(const RadientMeshCreateInfo& MeshCI) 
     }
 
     return true;
+}
+
+bool RadientAssetManagerImpl::ValidateGLTF(const RadientGLTFLoadInfo& LoadInfo) const
+{
+    return LoadInfo.URI != nullptr && *LoadInfo.URI != 0;
 }
 
 std::string RadientAssetManagerImpl::MakeURI(const char* Type)

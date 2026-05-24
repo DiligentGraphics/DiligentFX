@@ -28,6 +28,7 @@
 
 #include "RadientGeometryPass.hpp"
 #include "RadientPostProcessPipeline.hpp"
+#include "RadientRenderResourceCache.hpp"
 #include "RadientSceneRenderCache.hpp"
 
 #include "RadientBackend.h"
@@ -49,6 +50,7 @@ public:
 private:
     RefCntAutoPtr<IRadientBackend> m_pBackend;
 
+    RadientRenderResourceCache m_ResourceCache;
     RadientSceneRenderCache    m_SceneCache;
     RadientFrameRenderTargets  m_FrameTargets;
     RadientGeometryPass        m_ShadowPass;

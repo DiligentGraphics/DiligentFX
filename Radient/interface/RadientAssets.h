@@ -44,7 +44,10 @@ DILIGENT_TYPED_ENUM(RADIENT_ASSET_TYPE, Uint8)
     RADIENT_ASSET_TYPE_MESH = 0,
 
     /// Material asset.
-    RADIENT_ASSET_TYPE_MATERIAL
+    RADIENT_ASSET_TYPE_MATERIAL,
+
+    /// GLTF model asset.
+    RADIENT_ASSET_TYPE_GLTF_MODEL
 };
 
 
@@ -239,6 +242,15 @@ struct RadientMaterialCreateInfo
 typedef struct RadientMaterialCreateInfo RadientMaterialCreateInfo;
 
 
+/// GLTF model load attributes.
+struct RadientGLTFLoadInfo
+{
+    /// Source URI. The scheme may identify a local file, remote resource, or memory-backed source.
+    const Char* URI DEFAULT_INITIALIZER(nullptr);
+};
+typedef struct RadientGLTFLoadInfo RadientGLTFLoadInfo;
+
+
 // {0B806532-011B-490C-A3AE-3AA6C8DB266C}
 static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientAssetManager =
     { 0xb806532, 0x11b, 0x490c, { 0xa3, 0xae, 0x3a, 0xa6, 0xc8, 0xdb, 0x26, 0x6c } };
@@ -268,6 +280,11 @@ DILIGENT_BEGIN_INTERFACE(IRadientAssetManager, IObject)
     VIRTUAL RADIENT_STATUS METHOD(CreateMaterial)(THIS_
                                                   const RadientMaterialCreateInfo REF MaterialCI,
                                                   RadientAssetReference REF           Material) PURE;
+
+    /// Loads a GLTF model asset from a URI.
+    VIRTUAL RADIENT_STATUS METHOD(LoadGLTF)(THIS_
+                                            const RadientGLTFLoadInfo REF LoadInfo,
+                                            RadientAssetReference REF     Model) PURE;
 };
 DILIGENT_END_INTERFACE
 
@@ -278,6 +295,7 @@ DILIGENT_END_INTERFACE
 #    define IRadientAssetManager_GetDesc(This)                 CALL_IFACE_METHOD(RadientAssetManager, GetDesc,        This)
 #    define IRadientAssetManager_CreateMesh(This, ...)         CALL_IFACE_METHOD(RadientAssetManager, CreateMesh,     This, __VA_ARGS__)
 #    define IRadientAssetManager_CreateMaterial(This, ...)     CALL_IFACE_METHOD(RadientAssetManager, CreateMaterial, This, __VA_ARGS__)
+#    define IRadientAssetManager_LoadGLTF(This, ...)           CALL_IFACE_METHOD(RadientAssetManager, LoadGLTF,       This, __VA_ARGS__)
 
 #endif
 

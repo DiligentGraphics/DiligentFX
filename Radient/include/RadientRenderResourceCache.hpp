@@ -24,32 +24,41 @@
  *  of the possibility of such damages.
  */
 
-#include "Radient/interface/RadientAssets.h"
+#pragma once
 
-using namespace Diligent;
+#include "RadientTypes.h"
+#include "RefCntAutoPtr.hpp"
 
-static_assert(RADIENT_ASSET_TYPE_MESH == 0, "Unexpected RADIENT_ASSET_TYPE_MESH value");
-static_assert(RADIENT_ASSET_TYPE_MATERIAL == 1, "Unexpected RADIENT_ASSET_TYPE_MATERIAL value");
-static_assert(RADIENT_ASSET_TYPE_GLTF_MODEL == 2, "Unexpected RADIENT_ASSET_TYPE_GLTF_MODEL value");
+#include "GLTFResourceManager.hpp"
+#include "GPUUploadManager.h"
 
-static_assert(RADIENT_INDEX_TYPE_NONE == 0, "Unexpected RADIENT_INDEX_TYPE_NONE value");
-static_assert(RADIENT_INDEX_TYPE_UINT16 == 1, "Unexpected RADIENT_INDEX_TYPE_UINT16 value");
-static_assert(RADIENT_INDEX_TYPE_UINT32 == 2, "Unexpected RADIENT_INDEX_TYPE_UINT32 value");
-
-static_assert(sizeof(RadientColorRGBA8) == 4, "Unexpected RadientColorRGBA8 size");
-static_assert(sizeof(RadientBoneIndices4) == 8, "Unexpected RadientBoneIndices4 size");
-
-void RadientAssets_CPP_UseMeshCreateInfo()
+namespace Diligent
 {
-    RadientVertexBufferCreateInfo  VertexBuffer;
-    RadientIndexBufferCreateInfo   IndexBuffer;
-    RadientMeshPrimitiveCreateInfo Primitive;
-    RadientMeshCreateInfo          MeshCI;
-    RadientGLTFLoadInfo            GLTFLoadInfo;
 
-    (void)VertexBuffer;
-    (void)IndexBuffer;
-    (void)Primitive;
-    (void)MeshCI;
-    (void)GLTFLoadInfo;
-}
+/// Renderer-owned cache for uploaded Radient asset data.
+///
+/// CPU asset payloads are expected to be transient: they are copied into
+/// upload work items and released once the upload has been scheduled.
+class RadientRenderResourceCache
+{
+public:
+    RadientRenderResourceCache();
+    ~RadientRenderResourceCache();
+
+    RADIENT_STATUS Prepare(IRenderDevice* pDevice,
+                           IDeviceContext* pContext);
+
+    IGPUUploadManager*     GetUploadManager() const;
+    GLTF::ResourceManager* GetResourceManager() const;
+
+private:
+    void Reset();
+    void CreateResources(IRenderDevice* pDevice,
+                         IDeviceContext* pContext);
+
+    RefCntAutoPtr<IRenderDevice>         m_pDevice;
+    RefCntAutoPtr<IGPUUploadManager>     m_pUploadManager;
+    RefCntAutoPtr<GLTF::ResourceManager> m_pResourceManager;
+};
+
+} // namespace Diligent

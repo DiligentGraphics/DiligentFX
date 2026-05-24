@@ -131,6 +131,15 @@ TEST(RadientEngineTest, CreateObjects)
     ASSERT_NE(Mesh.URI, nullptr);
     EXPECT_NE(Mesh.Version, 0u);
 
+    RadientGLTFLoadInfo   GLTFLoadInfo{};
+    RadientAssetReference GLTFModel{};
+    EXPECT_EQ(pAssetManager->LoadGLTF(GLTFLoadInfo, GLTFModel), RADIENT_STATUS_INVALID_ARGUMENT);
+
+    GLTFLoadInfo.URI = "memory://radient/test-model.gltf";
+    EXPECT_EQ(pAssetManager->LoadGLTF(GLTFLoadInfo, GLTFModel), RADIENT_STATUS_OK);
+    ASSERT_NE(GLTFModel.URI, nullptr);
+    EXPECT_NE(GLTFModel.Version, 0u);
+
     RadientSceneDesc SceneDesc{};
     SceneDesc.Name = "Radient test scene";
 

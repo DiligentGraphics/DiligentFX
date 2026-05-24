@@ -65,7 +65,11 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
     if (pDevice == nullptr || pContext == nullptr)
         return RADIENT_STATUS_OK;
 
-    RADIENT_STATUS Status = m_ShadowPass.Prepare(pDevice, pContext, m_FrameTargets);
+    RADIENT_STATUS Status = m_ResourceCache.Prepare(pDevice, pContext);
+    if (RADIENT_FAILED(Status))
+        return Status;
+
+    Status = m_ShadowPass.Prepare(pDevice, pContext, m_FrameTargets);
     if (RADIENT_FAILED(Status))
         return Status;
 
