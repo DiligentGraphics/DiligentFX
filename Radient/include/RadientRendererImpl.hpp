@@ -30,10 +30,13 @@
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
 
+#include <memory>
 #include <string>
 
 namespace Diligent
 {
+
+class RadientRenderPipeline;
 
 class RadientRenderTargetImpl final : public ObjectBase<IRadientRenderTarget>
 {
@@ -94,6 +97,7 @@ private:
     RadientRendererDesc m_Desc;
 
     RefCntAutoPtr<IRadientBackend> m_pBackend;
+    std::unique_ptr<RadientRenderPipeline> m_RenderPipeline;
 };
 
 } // namespace Diligent

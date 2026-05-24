@@ -5,11 +5,17 @@ project(Radient CXX)
 set(SOURCE
     src/RadientAssetManagerImpl.cpp
     src/RadientBackendImpl.cpp
+    src/RadientDrawList.cpp
     src/RadientEngineImpl.cpp
+    src/RadientFrameRenderTargets.cpp
+    src/RadientGeometryPass.cpp
     src/RadientMaterialBindingsStorage.cpp
     src/RadientMeshComponentStorage.cpp
+    src/RadientPostProcessPipeline.cpp
+    src/RadientRenderPipeline.cpp
     src/RadientRendererImpl.cpp
     src/RadientSceneImpl.cpp
+    src/RadientSceneRenderCache.cpp
     src/RadientSceneState.cpp
     src/RadientSceneWriterImpl.cpp
 )
@@ -17,12 +23,18 @@ set(SOURCE
 set(INCLUDE
     include/RadientAssetManagerImpl.hpp
     include/RadientBackendImpl.hpp
+    include/RadientDrawList.hpp
     include/RadientEngineImpl.hpp
+    include/RadientFrameRenderTargets.hpp
+    include/RadientGeometryPass.hpp
     include/RadientMaterialBindingsStorage.hpp
     include/RadientMath.hpp
     include/RadientMeshComponentStorage.hpp
+    include/RadientPostProcessPipeline.hpp
+    include/RadientRenderPipeline.hpp
     include/RadientRendererImpl.hpp
     include/RadientSceneImpl.hpp
+    include/RadientSceneRenderCache.hpp
     include/RadientSceneState.hpp
     include/RadientSceneWriterImpl.hpp
 )

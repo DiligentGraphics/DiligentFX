@@ -25,6 +25,7 @@
  */
 
 #include "RadientRendererImpl.hpp"
+#include "RadientRenderPipeline.hpp"
 
 namespace Diligent
 {
@@ -84,7 +85,8 @@ RadientRendererImpl::RadientRendererImpl(IReferenceCounters* pRefCounters, const
     TBase{pRefCounters},
     m_Name{Desc.Name != nullptr ? Desc.Name : ""},
     m_Desc{Desc},
-    m_pBackend{pBackend}
+    m_pBackend{pBackend},
+    m_RenderPipeline{std::make_unique<RadientRenderPipeline>(pBackend)}
 {
     m_Desc.Name = m_Name.c_str();
 }
@@ -118,11 +120,12 @@ RADIENT_STATUS RadientRendererImpl::CreateRenderTarget(const RadientRenderTarget
 RADIENT_STATUS RadientRendererImpl::Render(const RadientRenderAttribs& Attribs)
 {
     if (m_pBackend == nullptr ||
+        m_RenderPipeline == nullptr ||
         Attribs.pScene == nullptr ||
         Attribs.pRenderTarget == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    return RADIENT_STATUS_OK;
+    return m_RenderPipeline->Render(Attribs);
 }
 
 } // namespace Diligent
