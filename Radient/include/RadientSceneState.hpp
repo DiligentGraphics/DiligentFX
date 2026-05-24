@@ -45,6 +45,16 @@ namespace Diligent
 class RadientSceneState
 {
 public:
+    struct RenderableMesh
+    {
+        RadientEntityID                         Entity = InvalidRadientEntityID;
+        const RadientMeshComponent&             Mesh;
+        const RadientMeshRendererComponent&     Renderer;
+        const RadientMaterialBindingsComponent* pMaterialBindings = nullptr;
+        const RadientMatrix4x4&                 WorldMatrix;
+        Bool                                    EffectiveVisible = False;
+    };
+
     RadientSceneState();
     explicit RadientSceneState(const RadientSceneDesc& Desc);
 
@@ -70,6 +80,9 @@ public:
     RADIENT_STATUS  GetCachedWorldMatrix(RadientEntityID Entity, RadientMatrix4x4& Matrix) const;
     RADIENT_STATUS  HasComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType, Bool& HasComponent) const;
     RadientRevision GetRevision() const;
+
+    template <typename CallbackType>
+    RADIENT_STATUS EnumerateRenderableMeshes(CallbackType&& Callback) const;
 
     RADIENT_STATUS CreateEntity(const RadientEntityDesc& Desc, RadientEntityID& Entity);
     RADIENT_STATUS DestroyEntity(RadientEntityID Entity);
@@ -222,5 +235,42 @@ private:
     // Reused stack for iterative dirty subtree traversal.
     std::vector<DirtyWorkItem> m_TmpDirtyWorkItems;
 };
+
+DEFINE_FLAG_ENUM_OPERATORS(RadientSceneState::DIRTY_FLAGS);
+
+template <typename CallbackType>
+RADIENT_STATUS RadientSceneState::EnumerateRenderableMeshes(CallbackType&& Callback) const
+{
+    auto View = m_Registry.view<const EntityComponent,
+                                const MeshComponentStorage,
+                                const RadientMeshRendererComponent,
+                                const WorldTransformComponent,
+                                const EffectiveVisibilityComponent>();
+
+    for (const entt::entity Entity : View)
+    {
+        const EntityComponent&              EntityData       = View.get<const EntityComponent>(Entity);
+        const MeshComponentStorage&         MeshStorage      = View.get<const MeshComponentStorage>(Entity);
+        const RadientMeshRendererComponent& Renderer         = View.get<const RadientMeshRendererComponent>(Entity);
+        const WorldTransformComponent&      WorldTransform   = View.get<const WorldTransformComponent>(Entity);
+        const EffectiveVisibilityComponent& EffectiveVisible = View.get<const EffectiveVisibilityComponent>(Entity);
+
+        const MaterialBindingsStorage* pMaterialBindings = m_Registry.try_get<MaterialBindingsStorage>(Entity);
+
+        const RenderableMesh Mesh{
+            EntityData.ID,
+            MeshStorage.Component,
+            Renderer,
+            pMaterialBindings != nullptr ? &pMaterialBindings->Component : nullptr,
+            WorldTransform.Matrix,
+            EffectiveVisible.Visible};
+
+        Callback(Mesh);
+    }
+
+    return (m_DirtyFlags & DIRTY_FLAGS_REQUIRING_PROPAGATION) != DIRTY_FLAG_NONE ?
+        RADIENT_STATUS_OUT_OF_DATE :
+        RADIENT_STATUS_OK;
+}
 
 } // namespace Diligent

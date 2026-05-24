@@ -30,8 +30,10 @@
 #include "RadientMath.hpp"
 #include "RadientSceneState.hpp"
 
+#include <algorithm>
 #include <cstring>
 #include <memory>
+#include <string>
 #include <vector>
 
 using namespace Diligent;
@@ -91,6 +93,59 @@ void ExpectLinearChainWorldTranslation(RadientSceneState& State, RadientEntityID
     RadientMatrix4x4 Matrix;
     EXPECT_EQ(State.GetWorldMatrix(Entity, Matrix), RADIENT_STATUS_OK);
     ExpectMatrixNear(Matrix, RadientMath::TransformToMatrix(MakeTranslation(X, 0.f, 0.f)));
+}
+
+struct CapturedRenderableMesh
+{
+    RadientEntityID  Entity = InvalidRadientEntityID;
+    std::string      MeshURI;
+    Uint64           MeshVersion      = 0;
+    Uint64           VisibilityMask   = 0;
+    Bool             EffectiveVisible = False;
+    RadientMatrix4x4 WorldMatrix;
+    bool             HasMaterialBindings    = false;
+    Uint32           MaterialBindingCount   = 0;
+    Uint32           MaterialPrimitiveIndex = 0;
+    std::string      MaterialURI;
+    Uint64           MaterialVersion = 0;
+};
+
+CapturedRenderableMesh CaptureRenderableMesh(const RadientSceneState::RenderableMesh& RenderableMesh)
+{
+    CapturedRenderableMesh Captured;
+    Captured.Entity           = RenderableMesh.Entity;
+    Captured.MeshURI          = RenderableMesh.Mesh.Mesh.URI != nullptr ? RenderableMesh.Mesh.Mesh.URI : "";
+    Captured.MeshVersion      = RenderableMesh.Mesh.Mesh.Version;
+    Captured.VisibilityMask   = RenderableMesh.Renderer.VisibilityMask;
+    Captured.EffectiveVisible = RenderableMesh.EffectiveVisible;
+    Captured.WorldMatrix      = RenderableMesh.WorldMatrix;
+
+    if (RenderableMesh.pMaterialBindings != nullptr)
+    {
+        Captured.HasMaterialBindings  = true;
+        Captured.MaterialBindingCount = RenderableMesh.pMaterialBindings->BindingCount;
+
+        if (RenderableMesh.pMaterialBindings->BindingCount != 0)
+        {
+            const RadientMaterialBinding& Binding = RenderableMesh.pMaterialBindings->pBindings[0];
+            Captured.MaterialPrimitiveIndex       = Binding.PrimitiveIndex;
+            Captured.MaterialURI                  = Binding.Material.URI != nullptr ? Binding.Material.URI : "";
+            Captured.MaterialVersion              = Binding.Material.Version;
+        }
+    }
+
+    return Captured;
+}
+
+const CapturedRenderableMesh* FindRenderableMesh(const std::vector<CapturedRenderableMesh>& RenderableMeshes, RadientEntityID Entity)
+{
+    const std::vector<CapturedRenderableMesh>::const_iterator It =
+        std::find_if(RenderableMeshes.begin(), RenderableMeshes.end(),
+                     [Entity](const CapturedRenderableMesh& Mesh) {
+                         return Mesh.Entity == Entity;
+                     });
+
+    return It != RenderableMeshes.end() ? &*It : nullptr;
 }
 
 TEST(RadientSceneStateTest, GetDesc)
@@ -1106,6 +1161,149 @@ TEST(RadientSceneStateTest, SetParentKeepWorldTransformUsesPendingTransforms)
         EXPECT_EQ(State.GetWorldMatrix(Child, Matrix), RADIENT_STATUS_OK);
         ExpectMatrixNear(Matrix, ExpectedWorld);
     }
+}
+
+TEST(RadientSceneStateTest, EnumerateRenderableMeshes)
+{
+    RadientSceneState State;
+
+    RadientEntityDesc ParentDesc;
+    ParentDesc.Transform = MakeTranslation(10.f, 20.f, 30.f);
+
+    RadientEntityID Parent = InvalidRadientEntityID;
+    EXPECT_EQ(State.CreateEntity(ParentDesc, Parent), RADIENT_STATUS_OK);
+
+    RadientEntityID MeshOnly = InvalidRadientEntityID;
+    EXPECT_EQ(State.CreateEntity({}, MeshOnly), RADIENT_STATUS_OK);
+
+    RadientMeshComponent MeshOnlyComponent;
+    MeshOnlyComponent.Mesh.URI     = "mesh://mesh-only";
+    MeshOnlyComponent.Mesh.Version = 1;
+    EXPECT_EQ(State.SetMesh(MeshOnly, MeshOnlyComponent), RADIENT_STATUS_OK);
+
+    RadientEntityID RendererOnly = InvalidRadientEntityID;
+    EXPECT_EQ(State.CreateEntity({}, RendererOnly), RADIENT_STATUS_OK);
+
+    RadientMeshRendererComponent RendererOnlyComponent;
+    RendererOnlyComponent.VisibilityMask = 0x10;
+    EXPECT_EQ(State.SetMeshRenderer(RendererOnly, RendererOnlyComponent), RADIENT_STATUS_OK);
+
+    RadientEntityDesc DrawableDesc;
+    DrawableDesc.Parent    = Parent;
+    DrawableDesc.Transform = MakeTranslation(1.f, 2.f, 3.f);
+
+    RadientEntityID Drawable = InvalidRadientEntityID;
+    EXPECT_EQ(State.CreateEntity(DrawableDesc, Drawable), RADIENT_STATUS_OK);
+
+    RadientMeshComponent DrawableMesh;
+    DrawableMesh.Mesh.URI     = "mesh://cube";
+    DrawableMesh.Mesh.Version = 7;
+    EXPECT_EQ(State.SetMesh(Drawable, DrawableMesh), RADIENT_STATUS_OK);
+
+    RadientMeshRendererComponent DrawableRenderer;
+    DrawableRenderer.VisibilityMask = 0x55;
+    EXPECT_EQ(State.SetMeshRenderer(Drawable, DrawableRenderer), RADIENT_STATUS_OK);
+
+    RadientMaterialBinding MaterialBinding;
+    MaterialBinding.PrimitiveIndex   = 2;
+    MaterialBinding.Material.URI     = "material://red";
+    MaterialBinding.Material.Version = 3;
+
+    RadientMaterialBindingsComponent MaterialBindings;
+    MaterialBindings.pBindings    = &MaterialBinding;
+    MaterialBindings.BindingCount = 1;
+    EXPECT_EQ(State.SetMaterialBindings(Drawable, MaterialBindings), RADIENT_STATUS_OK);
+
+    RadientEntityDesc HiddenDrawableDesc;
+    HiddenDrawableDesc.Flags     = RADIENT_ENTITY_FLAG_NONE;
+    HiddenDrawableDesc.Transform = MakeTranslation(4.f, 5.f, 6.f);
+
+    RadientEntityID HiddenDrawable = InvalidRadientEntityID;
+    EXPECT_EQ(State.CreateEntity(HiddenDrawableDesc, HiddenDrawable), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetMesh(HiddenDrawable, DrawableMesh), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetMeshRenderer(HiddenDrawable, DrawableRenderer), RADIENT_STATUS_OK);
+
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+    std::vector<CapturedRenderableMesh> RenderableMeshes;
+    const RADIENT_STATUS                Status = State.EnumerateRenderableMeshes(
+        [&RenderableMeshes](const RadientSceneState::RenderableMesh& RenderableMesh) {
+            RenderableMeshes.push_back(CaptureRenderableMesh(RenderableMesh));
+        });
+
+    EXPECT_EQ(Status, RADIENT_STATUS_OK);
+    ASSERT_EQ(RenderableMeshes.size(), 2u);
+
+    const CapturedRenderableMesh* pDrawable = FindRenderableMesh(RenderableMeshes, Drawable);
+    ASSERT_NE(pDrawable, nullptr);
+    EXPECT_EQ(pDrawable->MeshURI, "mesh://cube");
+    EXPECT_EQ(pDrawable->MeshVersion, 7u);
+    EXPECT_EQ(pDrawable->VisibilityMask, 0x55u);
+    EXPECT_EQ(pDrawable->EffectiveVisible, True);
+    ASSERT_TRUE(pDrawable->HasMaterialBindings);
+    EXPECT_EQ(pDrawable->MaterialBindingCount, 1u);
+    EXPECT_EQ(pDrawable->MaterialPrimitiveIndex, 2u);
+    EXPECT_EQ(pDrawable->MaterialURI, "material://red");
+    EXPECT_EQ(pDrawable->MaterialVersion, 3u);
+
+    const RadientMatrix4x4 ExpectedDrawableWorld = RadientMath::MultiplyMatrices(
+        RadientMath::TransformToMatrix(DrawableDesc.Transform),
+        RadientMath::TransformToMatrix(ParentDesc.Transform));
+    ExpectMatrixNear(pDrawable->WorldMatrix, ExpectedDrawableWorld);
+
+    const CapturedRenderableMesh* pHiddenDrawable = FindRenderableMesh(RenderableMeshes, HiddenDrawable);
+    ASSERT_NE(pHiddenDrawable, nullptr);
+    EXPECT_EQ(pHiddenDrawable->EffectiveVisible, False);
+    EXPECT_FALSE(pHiddenDrawable->HasMaterialBindings);
+    ExpectMatrixNear(pHiddenDrawable->WorldMatrix, RadientMath::TransformToMatrix(HiddenDrawableDesc.Transform));
+}
+
+TEST(RadientSceneStateTest, EnumerateRenderableMeshesReportsOutOfDateDerivedState)
+{
+    RadientSceneState State;
+
+    RadientEntityID Entity = InvalidRadientEntityID;
+    EXPECT_EQ(State.CreateEntity({}, Entity), RADIENT_STATUS_OK);
+
+    RadientMeshComponent Mesh;
+    Mesh.Mesh.URI = "mesh://cube";
+    EXPECT_EQ(State.SetMesh(Entity, Mesh), RADIENT_STATUS_OK);
+
+    RadientMeshRendererComponent Renderer;
+    EXPECT_EQ(State.SetMeshRenderer(Entity, Renderer), RADIENT_STATUS_OK);
+
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+    Uint32 RenderableMeshCount = 0;
+    EXPECT_EQ(State.EnumerateRenderableMeshes(
+                  [&RenderableMeshCount](const RadientSceneState::RenderableMesh&) {
+                      ++RenderableMeshCount;
+                  }),
+              RADIENT_STATUS_OK);
+    EXPECT_EQ(RenderableMeshCount, 1u);
+
+    const RadientTransform Transform = MakeTranslation(1.f, 2.f, 3.f);
+    EXPECT_EQ(State.SetLocalTransform(Entity, Transform), RADIENT_STATUS_OK);
+
+    RenderableMeshCount = 0;
+    EXPECT_EQ(State.EnumerateRenderableMeshes(
+                  [&RenderableMeshCount](const RadientSceneState::RenderableMesh&) {
+                      ++RenderableMeshCount;
+                  }),
+              RADIENT_STATUS_OUT_OF_DATE);
+    EXPECT_EQ(RenderableMeshCount, 1u);
+
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+    std::vector<CapturedRenderableMesh> RenderableMeshes;
+    EXPECT_EQ(State.EnumerateRenderableMeshes(
+                  [&RenderableMeshes](const RadientSceneState::RenderableMesh& RenderableMesh) {
+                      RenderableMeshes.push_back(CaptureRenderableMesh(RenderableMesh));
+                  }),
+              RADIENT_STATUS_OK);
+
+    ASSERT_EQ(RenderableMeshes.size(), 1u);
+    ExpectMatrixNear(RenderableMeshes[0].WorldMatrix, RadientMath::TransformToMatrix(Transform));
 }
 
 TEST(RadientSceneStateTest, HasComponent)

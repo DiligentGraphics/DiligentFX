@@ -36,8 +36,6 @@
 namespace Diligent
 {
 
-DEFINE_FLAG_ENUM_OPERATORS(RadientSceneState::DIRTY_FLAGS);
-
 namespace
 {
 
@@ -860,7 +858,7 @@ void RadientSceneState::RemoveFromDirtyList(entt::entity Entity, DirtyStateCompo
 
     if (RemovedIndex + 1 < m_DirtyEntities.size())
     {
-        m_DirtyEntities[RemovedIndex] = LastEntity;
+        m_DirtyEntities[RemovedIndex]                                  = LastEntity;
         m_Registry.get<DirtyStateComponent>(LastEntity).DirtyListIndex = RemovedIndex;
     }
 
