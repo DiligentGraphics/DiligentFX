@@ -95,6 +95,8 @@ public:
 
     virtual RadientRevision DILIGENT_CALL_TYPE GetRevision() const override final;
 
+    const RadientSceneState& GetState() const;
+
 private:
     friend class RadientSceneWriterImpl;
 

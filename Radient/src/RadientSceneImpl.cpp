@@ -125,4 +125,9 @@ RadientRevision RadientSceneImpl::GetRevision() const
     return m_pState->GetRevision();
 }
 
+const RadientSceneState& RadientSceneImpl::GetState() const
+{
+    return *m_pState;
+}
+
 } // namespace Diligent
