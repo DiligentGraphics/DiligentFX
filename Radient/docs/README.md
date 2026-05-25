@@ -3,3 +3,4 @@
 This folder contains design and usage notes for Radient.
 
 - [Camera Conventions](CameraConventions.md)
+- [Light Conventions](LightConventions.md)

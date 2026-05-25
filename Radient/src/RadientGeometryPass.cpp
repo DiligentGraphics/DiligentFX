@@ -157,10 +157,8 @@ GLTF::Light GetGLTFLight(const RadientLightComponent& Source)
 
     if (Light.Type == GLTF::Light::TYPE::SPOT)
     {
-        const float OuterConeAngle = std::min(DegToRad(Source.ShapingConeAngle), PI_F * 0.5f);
-        const float Softness       = clamp(Source.ShapingConeSoftness, 0.f, 1.f);
-        Light.OuterConeAngle       = OuterConeAngle;
-        Light.InnerConeAngle       = OuterConeAngle * (1.f - Softness);
+        Light.OuterConeAngle = clamp(Source.OuterConeAngle, 0.f, PI_F * 0.5f);
+        Light.InnerConeAngle = clamp(Source.InnerConeAngle, 0.f, Light.OuterConeAngle);
     }
 
     return Light;

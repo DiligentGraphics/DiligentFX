@@ -61,8 +61,8 @@ void RadientScene_C_UseLightComponent(void)
     Light.ColorTemperature       = 6500.f;
     Light.Radius                 = 0.5f;
     Light.Angle                  = 0.53f;
-    Light.ShapingConeAngle       = 90.f;
-    Light.ShapingConeSoftness    = 0.f;
+    Light.InnerConeAngle         = 0.f;
+    Light.OuterConeAngle         = 0.7853981633974483f;
     Light.ShapingFocus           = 0.f;
 
     (void)Light;

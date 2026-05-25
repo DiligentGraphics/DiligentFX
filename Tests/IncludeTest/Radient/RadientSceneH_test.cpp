@@ -74,8 +74,7 @@ static_assert(DefaultLight.EnableColorTemperature == False, "Unexpected RadientL
 static_assert(DefaultLight.ColorTemperature == 6500.f, "Unexpected RadientLightComponent color temperature default value");
 static_assert(DefaultLight.Radius == 0.5f, "Unexpected RadientLightComponent radius default value");
 static_assert(DefaultLight.Angle == 0.53f, "Unexpected RadientLightComponent angle default value");
-static_assert(DefaultLight.ShapingConeAngle == 90.f, "Unexpected RadientLightComponent shaping cone angle default value");
-static_assert(DefaultLight.ShapingConeSoftness == 0.f, "Unexpected RadientLightComponent shaping cone softness default value");
+static_assert(DefaultLight.InnerConeAngle == 0.f, "Unexpected RadientLightComponent inner cone angle default value");
 static_assert(DefaultLight.ShapingFocus == 0.f, "Unexpected RadientLightComponent shaping focus default value");
 
 constexpr RadientCustomComponentData DefaultCustomComponent{};

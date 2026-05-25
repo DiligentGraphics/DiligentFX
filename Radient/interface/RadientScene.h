@@ -306,11 +306,11 @@ struct RadientLightComponent
     /// Angular diameter for distant lights, in degrees.
     Float32 Angle DEFAULT_INITIALIZER(0.53f);
 
-    /// Shaping cone angle in degrees.
-    Float32 ShapingConeAngle DEFAULT_INITIALIZER(90.f);
+    /// Inner spot cone angle in radians.
+    Float32 InnerConeAngle DEFAULT_INITIALIZER(0.f);
 
-    /// Shaping cone softness.
-    Float32 ShapingConeSoftness DEFAULT_INITIALIZER(0.f);
+    /// Outer spot cone angle in radians.
+    Float32 OuterConeAngle DEFAULT_INITIALIZER(0.7853981633974483f);
 
     /// Shaping focus.
     Float32 ShapingFocus DEFAULT_INITIALIZER(0.f);
@@ -329,8 +329,8 @@ struct RadientLightComponent
                 ColorTemperature == Rhs.ColorTemperature &&
                 Radius == Rhs.Radius &&
                 Angle == Rhs.Angle &&
-                ShapingConeAngle == Rhs.ShapingConeAngle &&
-                ShapingConeSoftness == Rhs.ShapingConeSoftness &&
+                InnerConeAngle == Rhs.InnerConeAngle &&
+                OuterConeAngle == Rhs.OuterConeAngle &&
                 ShapingFocus == Rhs.ShapingFocus);
     }
 
