@@ -55,6 +55,14 @@ public:
         Bool                                    EffectiveVisible = False;
     };
 
+    struct RenderableLight
+    {
+        RadientEntityID              Entity = InvalidRadientEntityID;
+        const RadientLightComponent& Light;
+        const RadientMatrix4x4&      WorldMatrix;
+        Bool                         EffectiveVisible = False;
+    };
+
     RadientSceneState();
     explicit RadientSceneState(const RadientSceneDesc& Desc);
 
@@ -84,6 +92,8 @@ public:
 
     template <typename CallbackType>
     RADIENT_STATUS EnumerateRenderableMeshes(CallbackType&& Callback) const;
+    template <typename CallbackType>
+    RADIENT_STATUS EnumerateRenderableLights(CallbackType&& Callback) const;
 
     RADIENT_STATUS CreateEntity(const RadientEntityDesc& Desc, RadientEntityID& Entity);
     RADIENT_STATUS DestroyEntity(RadientEntityID Entity);
@@ -267,6 +277,35 @@ RADIENT_STATUS RadientSceneState::EnumerateRenderableMeshes(CallbackType&& Callb
             EffectiveVisible.Visible};
 
         Callback(Mesh);
+    }
+
+    return (m_DirtyFlags & DIRTY_FLAGS_REQUIRING_PROPAGATION) != DIRTY_FLAG_NONE ?
+        RADIENT_STATUS_OUT_OF_DATE :
+        RADIENT_STATUS_OK;
+}
+
+template <typename CallbackType>
+RADIENT_STATUS RadientSceneState::EnumerateRenderableLights(CallbackType&& Callback) const
+{
+    auto View = m_Registry.view<const EntityComponent,
+                                const RadientLightComponent,
+                                const WorldTransformComponent,
+                                const EffectiveVisibilityComponent>();
+
+    for (const entt::entity Entity : View)
+    {
+        const EntityComponent&              EntityData       = View.get<const EntityComponent>(Entity);
+        const RadientLightComponent&        Light            = View.get<const RadientLightComponent>(Entity);
+        const WorldTransformComponent&      WorldTransform   = View.get<const WorldTransformComponent>(Entity);
+        const EffectiveVisibilityComponent& EffectiveVisible = View.get<const EffectiveVisibilityComponent>(Entity);
+
+        const RenderableLight Renderable{
+            EntityData.ID,
+            Light,
+            WorldTransform.Matrix,
+            EffectiveVisible.Visible};
+
+        Callback(Renderable);
     }
 
     return (m_DirtyFlags & DIRTY_FLAGS_REQUIRING_PROPAGATION) != DIRTY_FLAG_NONE ?

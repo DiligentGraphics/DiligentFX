@@ -148,6 +148,35 @@ const CapturedRenderableMesh* FindRenderableMesh(const std::vector<CapturedRende
     return It != RenderableMeshes.end() ? &*It : nullptr;
 }
 
+struct CapturedRenderableLight
+{
+    RadientEntityID       Entity = InvalidRadientEntityID;
+    RadientLightComponent Light;
+    RadientMatrix4x4      WorldMatrix;
+    Bool                  EffectiveVisible = False;
+};
+
+CapturedRenderableLight CaptureRenderableLight(const RadientSceneState::RenderableLight& RenderableLight)
+{
+    CapturedRenderableLight Captured;
+    Captured.Entity           = RenderableLight.Entity;
+    Captured.Light            = RenderableLight.Light;
+    Captured.WorldMatrix      = RenderableLight.WorldMatrix;
+    Captured.EffectiveVisible = RenderableLight.EffectiveVisible;
+    return Captured;
+}
+
+const CapturedRenderableLight* FindRenderableLight(const std::vector<CapturedRenderableLight>& RenderableLights, RadientEntityID Entity)
+{
+    const std::vector<CapturedRenderableLight>::const_iterator It =
+        std::find_if(RenderableLights.begin(), RenderableLights.end(),
+                     [Entity](const CapturedRenderableLight& Light) {
+                         return Light.Entity == Entity;
+                     });
+
+    return It != RenderableLights.end() ? &*It : nullptr;
+}
+
 TEST(RadientSceneStateTest, GetDesc)
 {
     RadientSceneState DefaultState;
@@ -1304,6 +1333,110 @@ TEST(RadientSceneStateTest, EnumerateRenderableMeshesReportsOutOfDateDerivedStat
 
     ASSERT_EQ(RenderableMeshes.size(), 1u);
     ExpectMatrixNear(RenderableMeshes[0].WorldMatrix, RadientMath::TransformToMatrix(Transform));
+}
+
+TEST(RadientSceneStateTest, EnumerateRenderableLights)
+{
+    RadientSceneState State;
+
+    RadientEntityDesc ParentDesc;
+    ParentDesc.Transform = MakeTranslation(10.f, 0.f, 0.f);
+
+    RadientEntityID Parent = InvalidRadientEntityID;
+    EXPECT_EQ(State.CreateEntity(ParentDesc, Parent), RADIENT_STATUS_OK);
+
+    RadientEntityDesc LightDesc;
+    LightDesc.Parent    = Parent;
+    LightDesc.Transform = MakeTranslation(1.f, 2.f, 3.f);
+
+    RadientEntityID LightEntity = InvalidRadientEntityID;
+    EXPECT_EQ(State.CreateEntity(LightDesc, LightEntity), RADIENT_STATUS_OK);
+
+    RadientLightComponent Light;
+    Light.Type      = RADIENT_LIGHT_TYPE_POINT;
+    Light.Color     = {0.25f, 0.5f, 1.f};
+    Light.Intensity = 7.f;
+    EXPECT_EQ(State.SetLight(LightEntity, Light), RADIENT_STATUS_OK);
+
+    RadientEntityDesc HiddenLightDesc;
+    HiddenLightDesc.Flags     = RADIENT_ENTITY_FLAG_NONE;
+    HiddenLightDesc.Transform = MakeTranslation(4.f, 5.f, 6.f);
+
+    RadientEntityID HiddenLight = InvalidRadientEntityID;
+    EXPECT_EQ(State.CreateEntity(HiddenLightDesc, HiddenLight), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetLight(HiddenLight, {}), RADIENT_STATUS_OK);
+
+    RadientEntityID MeshOnly = InvalidRadientEntityID;
+    EXPECT_EQ(State.CreateEntity({}, MeshOnly), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetMesh(MeshOnly, {}), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetMeshRenderer(MeshOnly, {}), RADIENT_STATUS_OK);
+
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+    std::vector<CapturedRenderableLight> RenderableLights;
+    const RADIENT_STATUS                 Status = State.EnumerateRenderableLights(
+        [&RenderableLights](const RadientSceneState::RenderableLight& RenderableLight) {
+            RenderableLights.push_back(CaptureRenderableLight(RenderableLight));
+        });
+
+    EXPECT_EQ(Status, RADIENT_STATUS_OK);
+    ASSERT_EQ(RenderableLights.size(), 2u);
+
+    const CapturedRenderableLight* pLight = FindRenderableLight(RenderableLights, LightEntity);
+    ASSERT_NE(pLight, nullptr);
+    EXPECT_TRUE(pLight->Light == Light);
+    EXPECT_EQ(pLight->EffectiveVisible, True);
+
+    const RadientMatrix4x4 ExpectedLightWorld = RadientMath::MultiplyMatrices(
+        RadientMath::TransformToMatrix(LightDesc.Transform),
+        RadientMath::TransformToMatrix(ParentDesc.Transform));
+    ExpectMatrixNear(pLight->WorldMatrix, ExpectedLightWorld);
+
+    const CapturedRenderableLight* pHiddenLight = FindRenderableLight(RenderableLights, HiddenLight);
+    ASSERT_NE(pHiddenLight, nullptr);
+    EXPECT_EQ(pHiddenLight->EffectiveVisible, False);
+    ExpectMatrixNear(pHiddenLight->WorldMatrix, RadientMath::TransformToMatrix(HiddenLightDesc.Transform));
+}
+
+TEST(RadientSceneStateTest, EnumerateRenderableLightsReportsOutOfDateDerivedState)
+{
+    RadientSceneState State;
+
+    RadientEntityID Entity = InvalidRadientEntityID;
+    EXPECT_EQ(State.CreateEntity({}, Entity), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetLight(Entity, {}), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+    Uint32 RenderableLightCount = 0;
+    EXPECT_EQ(State.EnumerateRenderableLights(
+                  [&RenderableLightCount](const RadientSceneState::RenderableLight&) {
+                      ++RenderableLightCount;
+                  }),
+              RADIENT_STATUS_OK);
+    EXPECT_EQ(RenderableLightCount, 1u);
+
+    const RadientTransform Transform = MakeTranslation(1.f, 2.f, 3.f);
+    EXPECT_EQ(State.SetLocalTransform(Entity, Transform), RADIENT_STATUS_OK);
+
+    RenderableLightCount = 0;
+    EXPECT_EQ(State.EnumerateRenderableLights(
+                  [&RenderableLightCount](const RadientSceneState::RenderableLight&) {
+                      ++RenderableLightCount;
+                  }),
+              RADIENT_STATUS_OUT_OF_DATE);
+    EXPECT_EQ(RenderableLightCount, 1u);
+
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+    std::vector<CapturedRenderableLight> RenderableLights;
+    EXPECT_EQ(State.EnumerateRenderableLights(
+                  [&RenderableLights](const RadientSceneState::RenderableLight& RenderableLight) {
+                      RenderableLights.push_back(CaptureRenderableLight(RenderableLight));
+                  }),
+              RADIENT_STATUS_OK);
+
+    ASSERT_EQ(RenderableLights.size(), 1u);
+    ExpectMatrixNear(RenderableLights[0].WorldMatrix, RadientMath::TransformToMatrix(Transform));
 }
 
 TEST(RadientSceneStateTest, HasComponent)
