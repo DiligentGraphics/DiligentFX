@@ -27,6 +27,7 @@
 #pragma once
 
 #include "RadientMath.h"
+#include "RadientScene.h"
 #include "BasicMath.hpp"
 
 namespace Diligent
@@ -136,6 +137,21 @@ inline RadientTransform MatrixToTransform(const RadientMatrix4x4& Matrix)
     Result.Scale    = ToRadientFloat3(Scale);
     return Result;
 }
+
+struct CameraProjection
+{
+    float4x4 Matrix = float4x4::Identity();
+
+    float NearPlaneZ         = 0.f;
+    float FarPlaneZ          = 0.f;
+    float FocalLength        = 0.f;
+    float HorizontalAperture = 0.f;
+    float VerticalAperture   = 0.f;
+};
+
+CameraProjection GetCameraProjection(const RadientCameraComponent& Camera,
+                                     float                         Aspect,
+                                     bool                          NDCMinusOneToOne);
 
 } // namespace RadientMath
 

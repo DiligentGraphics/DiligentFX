@@ -24,7 +24,7 @@
  *  of the possibility of such damages.
  */
 
-#include "RadientMath.h"
+#include "RadientMath.hpp"
 
 #include <cmath>
 
@@ -76,6 +76,47 @@ void MakeZRotation(Float32 Angle, RadientQuaternion& Rotation)
 {
     Rotation = MakeUnitAxisRotation(0.f, 0.f, 1.f, Angle);
 }
+
+namespace RadientMath
+{
+
+CameraProjection GetCameraProjection(const RadientCameraComponent& Camera,
+                                     float                         Aspect,
+                                     bool                          NDCMinusOneToOne)
+{
+    static constexpr RadientCameraComponent DefaultCamera{};
+
+    CameraProjection Projection;
+    Projection.FocalLength        = Camera.FocalLength > 0.f ? Camera.FocalLength : DefaultCamera.FocalLength;
+    Projection.HorizontalAperture = Camera.HorizontalAperture > 0.f ? Camera.HorizontalAperture : DefaultCamera.HorizontalAperture;
+    Projection.VerticalAperture   = Camera.VerticalAperture > 0.f ? Camera.VerticalAperture : DefaultCamera.VerticalAperture;
+    Projection.NearPlaneZ         = Camera.ClippingRange.x > 0.f ? Camera.ClippingRange.x : DefaultCamera.ClippingRange.x;
+    Projection.FarPlaneZ          = Camera.ClippingRange.y > Projection.NearPlaneZ ? Camera.ClippingRange.y : Projection.NearPlaneZ + 1.f;
+
+    if (Camera.Projection == RADIENT_CAMERA_PROJECTION_ORTHOGRAPHIC)
+    {
+        Projection.Matrix = float4x4::Ortho(Projection.HorizontalAperture, Projection.VerticalAperture,
+                                            Projection.NearPlaneZ, Projection.FarPlaneZ, NDCMinusOneToOne);
+    }
+    else
+    {
+        const float FovY  = 2.f * std::atan(Projection.VerticalAperture / (2.f * Projection.FocalLength));
+        Projection.Matrix = float4x4::Projection(FovY, Aspect, Projection.NearPlaneZ, Projection.FarPlaneZ, NDCMinusOneToOne);
+    }
+
+    // Radient cameras follow OpenUSD/glTF convention and look along local -Z,
+    // while Diligent projection helpers expect +Z camera space. Bake the
+    // adapter into the projection matrix. With row-vector convention, this is
+    // equivalent to Scale(1, 1, -1) * Projection, i.e. negating the third row.
+    Projection.Matrix._31 = -Projection.Matrix._31;
+    Projection.Matrix._32 = -Projection.Matrix._32;
+    Projection.Matrix._33 = -Projection.Matrix._33;
+    Projection.Matrix._34 = -Projection.Matrix._34;
+
+    return Projection;
+}
+
+} // namespace RadientMath
 
 } // namespace Diligent
 

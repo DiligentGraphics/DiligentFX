@@ -46,9 +46,6 @@ namespace HLSL
 namespace
 {
 
-constexpr float RadientDefaultCameraFov  = PI_F / 4.f;
-constexpr float RadientDefaultNearPlaneZ = 0.1f;
-constexpr float RadientDefaultFarPlaneZ  = 1000.f;
 constexpr float RadientDefaultSceneScale = 1.f;
 
 TEXTURE_FORMAT GetTextureViewFormat(ITextureView* pView)
@@ -70,47 +67,59 @@ bool RequiresOutputSRGBConversion(TEXTURE_FORMAT Format)
         Format == TEX_FORMAT_BGRA8_UNORM;
 }
 
+RadientCameraComponent GetCameraComponent(const RadientRenderAttribs& Attribs)
+{
+    RadientCameraComponent Camera{};
+    if (Attribs.pScene != nullptr && Attribs.Camera != InvalidRadientEntityID)
+        (void)Attribs.pScene->GetCamera(Attribs.Camera, Camera);
+
+    return Camera;
+}
+
 HLSL::CameraAttribs GetCameraAttribs(IRenderDevice*                   pDevice,
                                      const RadientRenderAttribs&      Attribs,
                                      const RadientFrameRenderTargets& Targets,
                                      Uint32                           FrameIndex)
 {
-    float4x4 CameraView = float4x4::Identity();
-    if (Attribs.pScene != nullptr && Attribs.Camera != InvalidRadientEntityID)
-    {
-        RadientMatrix4x4 CameraWorldMatrix{};
-        if (RADIENT_SUCCEEDED(Attribs.pScene->GetCachedWorldMatrix(Attribs.Camera, CameraWorldMatrix)))
-            CameraView = RadientMath::ToFloat4x4(CameraWorldMatrix).Inverse();
-    }
+    const RadientCameraComponent Camera = GetCameraComponent(Attribs);
 
     const RadientExtent2D& TargetSize       = Targets.GetSize();
     const float            Width            = static_cast<float>(TargetSize.Width);
     const float            Height           = static_cast<float>(TargetSize.Height);
     const float            Aspect           = Height > 0.f ? Width / Height : 1.f;
     const bool             NDCMinusOneToOne = pDevice != nullptr && pDevice->GetDeviceInfo().NDC.MinZ < 0.f;
-    const float4x4         CameraProj       = float4x4::Projection(RadientDefaultCameraFov, Aspect, RadientDefaultNearPlaneZ, RadientDefaultFarPlaneZ, NDCMinusOneToOne);
-    const float4x4         CameraViewProj   = CameraView * CameraProj;
-    const float4x4         CameraWorld      = CameraView.Inverse();
+
+    float4x4 CameraWorld = float4x4::Identity();
+    if (Attribs.pScene != nullptr && Attribs.Camera != InvalidRadientEntityID)
+    {
+        RadientMatrix4x4 CameraWorldMatrix{};
+        if (RADIENT_SUCCEEDED(Attribs.pScene->GetCachedWorldMatrix(Attribs.Camera, CameraWorldMatrix)))
+            CameraWorld = RadientMath::ToFloat4x4(CameraWorldMatrix);
+    }
+    const RadientMath::CameraProjection CameraProj     = RadientMath::GetCameraProjection(Camera, Aspect, NDCMinusOneToOne);
+    const float4x4                      CameraView     = CameraWorld.Inverse();
+    const float4x4                      CameraViewProj = CameraView * CameraProj.Matrix;
+    const float4x4                      CameraViewInv  = CameraWorld;
 
     HLSL::CameraAttribs CameraAttribs{};
     CameraAttribs.f4ViewportSize = float4{Width, Height, Width > 0.f ? 1.f / Width : 0.f, Height > 0.f ? 1.f / Height : 0.f};
-    CameraAttribs.SetClipPlanes(RadientDefaultNearPlaneZ, RadientDefaultFarPlaneZ);
+    CameraAttribs.SetClipPlanes(CameraProj.NearPlaneZ, CameraProj.FarPlaneZ);
     CameraAttribs.fSceneNearZ     = CameraAttribs.fNearPlaneZ;
     CameraAttribs.fSceneFarZ      = CameraAttribs.fFarPlaneZ;
     CameraAttribs.fSceneNearDepth = CameraAttribs.fNearPlaneDepth;
     CameraAttribs.fSceneFarDepth  = CameraAttribs.fFarPlaneDepth;
     CameraAttribs.fHandness       = CameraView.Determinant() > 0.f ? 1.f : -1.f;
     CameraAttribs.uiFrameIndex    = FrameIndex;
-    CameraAttribs.fFocusDistance  = 10.f;
-    CameraAttribs.fFStop          = 5.6f;
-    CameraAttribs.fFocalLength    = 50.f;
-    CameraAttribs.fSensorWidth    = 36.f;
-    CameraAttribs.fSensorHeight   = 24.f;
+    CameraAttribs.fFocusDistance  = Camera.FocusDistance;
+    CameraAttribs.fFStop          = Camera.FStop;
+    CameraAttribs.fFocalLength    = CameraProj.FocalLength;
+    CameraAttribs.fSensorWidth    = CameraProj.HorizontalAperture;
+    CameraAttribs.fSensorHeight   = CameraProj.VerticalAperture;
     CameraAttribs.mView           = CameraView;
-    CameraAttribs.mProj           = CameraProj;
+    CameraAttribs.mProj           = CameraProj.Matrix;
     CameraAttribs.mViewProj       = CameraViewProj;
-    CameraAttribs.mViewInv        = CameraWorld;
-    CameraAttribs.mProjInv        = CameraProj.Inverse();
+    CameraAttribs.mViewInv        = CameraViewInv;
+    CameraAttribs.mProjInv        = CameraProj.Matrix.Inverse();
     CameraAttribs.mViewProjInv    = CameraViewProj.Inverse();
     CameraAttribs.f4Position      = float4{float3::MakeVector(CameraWorld[3]), 1.f};
 
@@ -259,7 +268,7 @@ RADIENT_STATUS RadientGeometryPass::CreateRenderer(IRenderDevice*  pDevice,
     RendererCI.EnableAO                = true;
     RendererCI.EnableEmissive          = true;
     RendererCI.EnableShadows           = false;
-    RendererCI.FrontCounterClockwise   = false;
+    RendererCI.FrontCounterClockwise   = true;
     RendererCI.PackMatrixRowMajor      = true;
     RendererCI.ShaderTexturesArrayMode = PBR_Renderer::SHADER_TEXTURE_ARRAY_MODE_NONE;
     RendererCI.NumRenderTargets        = 1;
