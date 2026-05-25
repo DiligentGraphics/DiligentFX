@@ -234,6 +234,22 @@ RADIENT_STATUS RadientSceneState::GetCachedWorldMatrix(RadientEntityID Entity, R
         RADIENT_STATUS_OK;
 }
 
+RADIENT_STATUS RadientSceneState::GetCamera(RadientEntityID Entity, RadientCameraComponent& Camera) const
+{
+    Camera = {};
+
+    const entt::entity E = FindEntity(Entity);
+    if (E == entt::null)
+        return RADIENT_STATUS_NOT_FOUND;
+
+    const RadientCameraComponent* pCamera = m_Registry.try_get<RadientCameraComponent>(E);
+    if (pCamera == nullptr)
+        return RADIENT_STATUS_NOT_FOUND;
+
+    Camera = *pCamera;
+    return RADIENT_STATUS_OK;
+}
+
 RADIENT_STATUS RadientSceneState::HasComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType, Bool& HasComponent) const
 {
     HasComponent = False;

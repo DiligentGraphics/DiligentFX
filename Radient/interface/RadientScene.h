@@ -448,6 +448,11 @@ DILIGENT_BEGIN_INTERFACE(IRadientScene, IObject)
                                                         RadientEntityID      Entity,
                                                         RadientMatrix4x4 REF Matrix) CONST PURE;
 
+    /// Gets camera component.
+    VIRTUAL RADIENT_STATUS METHOD(GetCamera)(THIS_
+                                             RadientEntityID            Entity,
+                                             RadientCameraComponent REF Camera) CONST PURE;
+
     /// Checks if the entity has the requested component.
     VIRTUAL RADIENT_STATUS METHOD(HasComponent)(THIS_
                                                 RadientEntityID        Entity,
@@ -475,6 +480,7 @@ DILIGENT_END_INTERFACE
 #    define IRadientScene_GetLocalTransform(This, ...)           CALL_IFACE_METHOD(RadientScene, GetLocalTransform,           This, __VA_ARGS__)
 #    define IRadientScene_GetWorldMatrix(This, ...)              CALL_IFACE_METHOD(RadientScene, GetWorldMatrix,              This, __VA_ARGS__)
 #    define IRadientScene_GetCachedWorldMatrix(This, ...)        CALL_IFACE_METHOD(RadientScene, GetCachedWorldMatrix,        This, __VA_ARGS__)
+#    define IRadientScene_GetCamera(This, ...)                   CALL_IFACE_METHOD(RadientScene, GetCamera,                   This, __VA_ARGS__)
 #    define IRadientScene_HasComponent(This, ...)                CALL_IFACE_METHOD(RadientScene, HasComponent,                This, __VA_ARGS__)
 #    define IRadientScene_GetRevision(This)                      CALL_IFACE_METHOD(RadientScene, GetRevision,                 This)
 

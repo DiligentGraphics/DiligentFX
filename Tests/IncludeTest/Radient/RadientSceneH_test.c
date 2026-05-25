@@ -109,6 +109,7 @@ void RadientScene_C_TestMacros(IRadientScene* pScene)
     Bool                       HasComponent    = False;
     RadientTransform           Transform       = {0};
     RadientMatrix4x4           WorldMatrix     = {0};
+    RadientCameraComponent     Camera          = {0};
     RadientCustomComponentData CustomComponent = {0};
     RADIENT_STATUS             Status          = RADIENT_STATUS_OK;
 
@@ -126,6 +127,7 @@ void RadientScene_C_TestMacros(IRadientScene* pScene)
     Status = IRadientScene_GetLocalTransform(pScene, Entity, &Transform);
     Status = IRadientScene_GetWorldMatrix(pScene, Entity, &WorldMatrix);
     Status = IRadientScene_GetCachedWorldMatrix(pScene, Entity, &WorldMatrix);
+    Status = IRadientScene_GetCamera(pScene, Entity, &Camera);
     Status = IRadientScene_HasComponent(pScene, Entity, CustomComponent.ComponentType, &HasComponent);
     IRadientScene_GetRevision(pScene);
 
@@ -133,5 +135,6 @@ void RadientScene_C_TestMacros(IRadientScene* pScene)
     (void)NumChildren;
     (void)Visible;
     (void)HasComponent;
+    (void)Camera;
     (void)Status;
 }

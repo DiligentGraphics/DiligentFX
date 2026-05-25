@@ -115,6 +115,11 @@ RADIENT_STATUS RadientSceneImpl::GetCachedWorldMatrix(RadientEntityID Entity, Ra
     return m_pState->GetCachedWorldMatrix(Entity, Matrix);
 }
 
+RADIENT_STATUS RadientSceneImpl::GetCamera(RadientEntityID Entity, RadientCameraComponent& Camera) const
+{
+    return m_pState->GetCamera(Entity, Camera);
+}
+
 RADIENT_STATUS RadientSceneImpl::HasComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType, Bool& HasComponent) const
 {
     return m_pState->HasComponent(Entity, ComponentType, HasComponent);

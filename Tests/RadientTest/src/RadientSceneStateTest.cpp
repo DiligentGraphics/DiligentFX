@@ -1390,6 +1390,45 @@ TEST(RadientSceneStateTest, HasComponent)
     EXPECT_EQ(HasComponent, False);
 }
 
+TEST(RadientSceneStateTest, GetCamera)
+{
+    RadientSceneState State;
+
+    RadientCameraComponent Camera;
+    Camera.FocalLength = 35.f;
+    EXPECT_EQ(State.GetCamera(1, Camera), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(Camera, RadientCameraComponent{});
+
+    RadientEntityID Entity = InvalidRadientEntityID;
+    EXPECT_EQ(State.CreateEntity({}, Entity), RADIENT_STATUS_OK);
+
+    Camera.FocalLength = 35.f;
+    EXPECT_EQ(State.GetCamera(Entity, Camera), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(Camera, RadientCameraComponent{});
+
+    RadientCameraComponent ExpectedCamera;
+    ExpectedCamera.Projection         = RADIENT_CAMERA_PROJECTION_ORTHOGRAPHIC;
+    ExpectedCamera.HorizontalAperture = 10.f;
+    ExpectedCamera.VerticalAperture   = 5.f;
+    ExpectedCamera.FocalLength        = 50.f;
+    ExpectedCamera.ClippingRange      = {0.2f, 250.f};
+    ExpectedCamera.FStop              = 8.f;
+    ExpectedCamera.FocusDistance      = 12.f;
+
+    EXPECT_EQ(State.SetCamera(Entity, ExpectedCamera), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.GetCamera(Entity, Camera), RADIENT_STATUS_OK);
+    EXPECT_EQ(Camera, ExpectedCamera);
+
+    ExpectedCamera.FocalLength = 85.f;
+    EXPECT_EQ(State.SetCamera(Entity, ExpectedCamera), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.GetCamera(Entity, Camera), RADIENT_STATUS_OK);
+    EXPECT_EQ(Camera, ExpectedCamera);
+
+    EXPECT_EQ(State.RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_CAMERA), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.GetCamera(Entity, Camera), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(Camera, RadientCameraComponent{});
+}
+
 TEST(RadientSceneStateTest, SetBuiltInComponentReturnsNoChangeForSameValue)
 {
     RadientSceneState State;
