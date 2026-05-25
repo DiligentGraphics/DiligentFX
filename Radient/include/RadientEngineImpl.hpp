@@ -27,6 +27,7 @@
 #pragma once
 
 #include "RadientEngine.h"
+#include "RadientAssetManagerImpl.hpp"
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
 
@@ -62,8 +63,8 @@ public:
                                                              IRadientRenderer**        ppRenderer) override final;
 
 private:
-    RefCntAutoPtr<IRadientBackend>      m_pBackend;
-    RefCntAutoPtr<IRadientAssetManager> m_pAssetManager;
+    RefCntAutoPtr<IRadientBackend>         m_pBackend;
+    RefCntAutoPtr<RadientAssetManagerImpl> m_pAssetManager;
 };
 
 } // namespace Diligent

@@ -26,6 +26,7 @@
 
 #include "RadientAssetManagerImpl.hpp"
 
+#include <cstring>
 #include <utility>
 
 namespace Diligent
@@ -56,7 +57,7 @@ RadientAssetManagerImpl::~RadientAssetManagerImpl()
 {
 }
 
-RefCntAutoPtr<IRadientAssetManager> RadientAssetManagerImpl::Create(const RadientAssetManagerCreateInfo& CreateInfo)
+RefCntAutoPtr<RadientAssetManagerImpl> RadientAssetManagerImpl::Create(const RadientAssetManagerCreateInfo& CreateInfo)
 {
     return RefCntAutoPtr<RadientAssetManagerImpl>{MakeNewRCObj<RadientAssetManagerImpl>()(CreateInfo)};
 }
@@ -171,6 +172,22 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadGLTF(const RadientGLTFLoadInfo& Load
     return RADIENT_STATUS_OK;
 }
 
+RADIENT_STATUS RadientAssetManagerImpl::GetGLTFSourceURI(const RadientAssetReference& Model,
+                                                         const Char*&                 SourceURI) const
+{
+    SourceURI = nullptr;
+
+    const AssetRecord* pRecord = FindAsset(Model);
+    if (pRecord == nullptr)
+        return RADIENT_STATUS_NOT_FOUND;
+
+    if (pRecord->Type != RADIENT_ASSET_TYPE_GLTF_MODEL)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    SourceURI = pRecord->GLTFModel.SourceURI.c_str();
+    return RADIENT_STATUS_OK;
+}
+
 bool RadientAssetManagerImpl::ValidateMesh(const RadientMeshCreateInfo& MeshCI) const
 {
     if (MeshCI.VertexBufferCount == 0 || MeshCI.pVertexBuffers == nullptr ||
@@ -221,6 +238,20 @@ bool RadientAssetManagerImpl::ValidateGLTF(const RadientGLTFLoadInfo& LoadInfo) 
     return LoadInfo.URI != nullptr && *LoadInfo.URI != 0;
 }
 
+const RadientAssetManagerImpl::AssetRecord* RadientAssetManagerImpl::FindAsset(const RadientAssetReference& Ref) const
+{
+    if (Ref.URI == nullptr || *Ref.URI == 0 || Ref.Version == 0)
+        return nullptr;
+
+    for (const AssetRecord& Record : m_Assets)
+    {
+        if (Record.Version == Ref.Version && std::strcmp(Record.URI.c_str(), Ref.URI) == 0)
+            return &Record;
+    }
+
+    return nullptr;
+}
+
 std::string RadientAssetManagerImpl::MakeURI(const char* Type)
 {
     const RadientHandle AssetID = m_NextAssetID++;
@@ -234,7 +265,7 @@ RadientAssetReference RadientAssetManagerImpl::StoreAsset(AssetRecord&& Record)
 
     RadientAssetReference Ref;
     Ref.URI     = m_Assets.back().URI.c_str();
-    Ref.Version = 1;
+    Ref.Version = m_Assets.back().Version;
     return Ref;
 }
 

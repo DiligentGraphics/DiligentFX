@@ -26,6 +26,11 @@
 
 #include "RadientSceneRenderCache.hpp"
 
+#include "RadientSceneImpl.hpp"
+#include "RadientSceneState.hpp"
+
+#include "Cast.hpp"
+
 namespace Diligent
 {
 
@@ -35,12 +40,30 @@ RADIENT_STATUS RadientSceneRenderCache::SyncScene(IRadientScene& Scene)
     if (m_SceneRevision == SceneRevision)
         return RADIENT_STATUS_NO_CHANGE;
 
-    // The public scene reader does not yet expose entity iteration or component reads.
-    // The first rendering implementation will fill this list from the scene state/view layer.
     m_DrawList.Clear();
+
+    RadientSceneImpl* pSceneImpl = ClassPtrCast<RadientSceneImpl>(&Scene);
+    if (pSceneImpl == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    const RADIENT_STATUS Status = pSceneImpl->GetState().EnumerateRenderableMeshes(
+        [this](const RadientSceneState::RenderableMesh& Mesh) {
+            if (!Mesh.EffectiveVisible)
+                return;
+
+            RadientDrawItem Item{};
+            Item.Entity         = Mesh.Entity;
+            Item.Mesh           = Mesh.Mesh.Mesh;
+            Item.WorldMatrix    = Mesh.WorldMatrix;
+            Item.VisibilityMask = Mesh.Renderer.VisibilityMask;
+            m_DrawList.Add(Item);
+        });
+    if (RADIENT_FAILED(Status))
+        return Status;
+
     m_SceneRevision = SceneRevision;
 
-    return RADIENT_STATUS_OK;
+    return Status;
 }
 
 const RadientDrawList& RadientSceneRenderCache::GetDrawList() const

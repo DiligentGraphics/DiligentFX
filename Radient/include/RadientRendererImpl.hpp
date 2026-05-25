@@ -37,6 +37,7 @@ namespace Diligent
 {
 
 class RadientRenderPipeline;
+class RadientAssetManagerImpl;
 
 class RadientRenderTargetImpl final : public ObjectBase<IRadientRenderTarget>
 {
@@ -77,17 +78,25 @@ class RadientRendererImpl final : public ObjectBase<IRadientRenderer>
 public:
     using TBase = ObjectBase<IRadientRenderer>;
 
-    RadientRendererImpl(IReferenceCounters* pRefCounters, const RadientRendererDesc& Desc, IRadientBackend* pBackend);
+    struct CreateInfo
+    {
+        RadientRendererDesc      Desc;
+        IRadientBackend*         pBackend      = nullptr;
+        RadientAssetManagerImpl* pAssetManager = nullptr;
+    };
+
+    RadientRendererImpl(IReferenceCounters* pRefCounters,
+                        const CreateInfo&   CI);
     ~RadientRendererImpl();
 
     IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientRenderer, TBase)
 
-    static RefCntAutoPtr<IRadientRenderer> Create(const RadientRendererDesc& Desc, IRadientBackend* pBackend);
+    static RefCntAutoPtr<IRadientRenderer> Create(const CreateInfo& CI);
 
     virtual const RadientRendererDesc& DILIGENT_CALL_TYPE GetDesc() const override final;
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateRenderTarget(const RadientRenderTargetDesc& Desc,
-                                                                 IRadientRenderTarget**        ppTarget) override final;
+                                                                 IRadientRenderTarget**         ppTarget) override final;
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE Render(const RadientRenderAttribs& Attribs) override final;
 
@@ -96,7 +105,7 @@ private:
 
     RadientRendererDesc m_Desc;
 
-    RefCntAutoPtr<IRadientBackend> m_pBackend;
+    RefCntAutoPtr<IRadientBackend>         m_pBackend;
     std::unique_ptr<RadientRenderPipeline> m_RenderPipeline;
 };
 

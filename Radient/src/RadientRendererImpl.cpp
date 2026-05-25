@@ -81,12 +81,13 @@ ISwapChain* RadientRenderTargetImpl::GetSwapChain()
 }
 
 
-RadientRendererImpl::RadientRendererImpl(IReferenceCounters* pRefCounters, const RadientRendererDesc& Desc, IRadientBackend* pBackend) :
+RadientRendererImpl::RadientRendererImpl(IReferenceCounters* pRefCounters,
+                                         const CreateInfo&   CI) :
     TBase{pRefCounters},
-    m_Name{Desc.Name != nullptr ? Desc.Name : ""},
-    m_Desc{Desc},
-    m_pBackend{pBackend},
-    m_RenderPipeline{std::make_unique<RadientRenderPipeline>(pBackend)}
+    m_Name{CI.Desc.Name != nullptr ? CI.Desc.Name : ""},
+    m_Desc{CI.Desc},
+    m_pBackend{CI.pBackend},
+    m_RenderPipeline{std::make_unique<RadientRenderPipeline>(CI.pBackend, CI.pAssetManager)}
 {
     m_Desc.Name = m_Name.c_str();
 }
@@ -95,9 +96,9 @@ RadientRendererImpl::~RadientRendererImpl()
 {
 }
 
-RefCntAutoPtr<IRadientRenderer> RadientRendererImpl::Create(const RadientRendererDesc& Desc, IRadientBackend* pBackend)
+RefCntAutoPtr<IRadientRenderer> RadientRendererImpl::Create(const CreateInfo& CI)
 {
-    return RefCntAutoPtr<RadientRendererImpl>{MakeNewRCObj<RadientRendererImpl>()(Desc, pBackend)};
+    return RefCntAutoPtr<RadientRendererImpl>{MakeNewRCObj<RadientRendererImpl>()(CI)};
 }
 
 const RadientRendererDesc& RadientRendererImpl::GetDesc() const

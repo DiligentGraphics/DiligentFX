@@ -38,11 +38,14 @@
 namespace Diligent
 {
 
+class RadientAssetManagerImpl;
+
 /// Backend-facing render pipeline for one Radient renderer instance.
 class RadientRenderPipeline
 {
 public:
-    explicit RadientRenderPipeline(IRadientBackend* pBackend);
+    RadientRenderPipeline(IRadientBackend*         pBackend,
+                          RadientAssetManagerImpl* pAssetManager);
     ~RadientRenderPipeline();
 
     RADIENT_STATUS Render(const RadientRenderAttribs& Attribs);

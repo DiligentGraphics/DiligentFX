@@ -47,7 +47,7 @@ public:
 
     IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientAssetManager, TBase)
 
-    static RefCntAutoPtr<IRadientAssetManager> Create(const RadientAssetManagerCreateInfo& CreateInfo);
+    static RefCntAutoPtr<RadientAssetManagerImpl> Create(const RadientAssetManagerCreateInfo& CreateInfo);
 
     virtual const RadientAssetManagerDesc& DILIGENT_CALL_TYPE GetDesc() const override final;
 
@@ -59,6 +59,9 @@ public:
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE LoadGLTF(const RadientGLTFLoadInfo& LoadInfo,
                                                        RadientAssetReference&     Model) override final;
+
+    RADIENT_STATUS GetGLTFSourceURI(const RadientAssetReference& Model,
+                                    const Char*&                 SourceURI) const;
 
 private:
     struct MeshPrimitiveStorage
@@ -123,6 +126,7 @@ private:
     struct AssetRecord
     {
         RADIENT_ASSET_TYPE Type = RADIENT_ASSET_TYPE_MESH;
+        Uint64             Version = 1;
         std::string        URI;
         std::string        Name;
 
@@ -135,6 +139,7 @@ private:
 
     bool ValidateMesh(const RadientMeshCreateInfo& MeshCI) const;
     bool ValidateGLTF(const RadientGLTFLoadInfo& LoadInfo) const;
+    const AssetRecord* FindAsset(const RadientAssetReference& Ref) const;
 
     std::string MakeURI(const char* Type);
 

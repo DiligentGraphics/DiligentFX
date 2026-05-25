@@ -84,9 +84,24 @@ RADIENT_STATUS RadientSceneImporterImpl::InstantiateGLTF(const RadientAssetRefer
     RootDesc.Flags     = InstantiateInfo.RootFlags;
     RootDesc.Transform = InstantiateInfo.RootTransform;
 
-    // The GLTF loader metadata will be walked here to create nodes, meshes, materials,
-    // cameras, lights, skins, and animations once the internal resource package is wired in.
-    return m_pWriter->CreateEntity(RootDesc, RootEntity);
+    RADIENT_STATUS Status = m_pWriter->CreateEntity(RootDesc, RootEntity);
+    if (RADIENT_FAILED(Status))
+        return Status;
+
+    // First rendering slice: attach the whole GLTF asset to the root entity.
+    // The importer will expand the internal GLTF scene graph in a later pass.
+    RadientMeshComponent Mesh{};
+    Mesh.Mesh = Model;
+    Status    = m_pWriter->SetMesh(RootEntity, Mesh);
+    if (RADIENT_FAILED(Status))
+        return Status;
+
+    RadientMeshRendererComponent Renderer{};
+    Status = m_pWriter->SetMeshRenderer(RootEntity, Renderer);
+    if (RADIENT_FAILED(Status))
+        return Status;
+
+    return RADIENT_STATUS_OK;
 }
 
 } // namespace Diligent

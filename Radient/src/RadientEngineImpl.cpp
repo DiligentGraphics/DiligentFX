@@ -132,7 +132,12 @@ RADIENT_STATUS RadientEngineImpl::CreateRenderer(const RadientRendererDesc& Desc
     if (m_pBackend == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
-    RefCntAutoPtr<IRadientRenderer> pRenderer = RadientRendererImpl::Create(Desc, m_pBackend);
+    RadientRendererImpl::CreateInfo RendererCI{};
+    RendererCI.Desc          = Desc;
+    RendererCI.pBackend      = m_pBackend;
+    RendererCI.pAssetManager = m_pAssetManager;
+
+    RefCntAutoPtr<IRadientRenderer> pRenderer = RadientRendererImpl::Create(RendererCI);
     *ppRenderer                               = pRenderer.Detach();
     return RADIENT_STATUS_OK;
 }

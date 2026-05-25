@@ -26,6 +26,10 @@
 
 #include "RadientRenderResourceCache.hpp"
 
+#include "DebugUtilities.hpp"
+
+#include <exception>
+
 namespace Diligent
 {
 
@@ -68,9 +72,15 @@ GLTF::ResourceManager::CreateInfo CreateResourceManagerInfo()
     return CreateInfo;
 }
 
+std::string MakeAssetCacheKey(const RadientAssetReference& Asset)
+{
+    return std::string{Asset.URI} + "#" + std::to_string(Asset.Version);
+}
+
 } // namespace
 
-RadientRenderResourceCache::RadientRenderResourceCache()
+RadientRenderResourceCache::RadientRenderResourceCache(RadientAssetManagerImpl* pAssetManager) :
+    m_pAssetManager{pAssetManager}
 {
 }
 
@@ -96,7 +106,85 @@ RADIENT_STATUS RadientRenderResourceCache::Prepare(IRenderDevice*  pDevice,
     if (m_pResourceManager != nullptr && pContext != nullptr)
         m_pResourceManager->UpdateAllResources(pDevice, pContext);
 
+    if (pContext != nullptr)
+    {
+        for (auto& GLTFResourceIt : m_GLTFResources)
+        {
+            GLTFResource& Resource = GLTFResourceIt.second;
+            PrepareGLTFResource(Resource, pDevice, pContext);
+        }
+    }
+
     return RADIENT_STATUS_OK;
+}
+
+RADIENT_STATUS RadientRenderResourceCache::EnsureGLTFLoaded(const RadientAssetReference& Model,
+                                                            IRenderDevice*               pDevice,
+                                                            IDeviceContext*              pContext)
+{
+    if (Model.URI == nullptr || *Model.URI == 0)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    if (pDevice == nullptr)
+        return RADIENT_STATUS_INVALID_OPERATION;
+
+    if (m_pAssetManager == nullptr)
+        return RADIENT_STATUS_INVALID_OPERATION;
+
+    if (m_pDevice != pDevice)
+    {
+        Reset();
+        CreateResources(pDevice, pContext);
+    }
+
+    if (m_pResourceManager == nullptr || m_pUploadManager == nullptr)
+        return RADIENT_STATUS_INVALID_OPERATION;
+
+    const Char* pSourceURI = nullptr;
+    const RADIENT_STATUS SourceStatus = m_pAssetManager->GetGLTFSourceURI(Model, pSourceURI);
+    if (RADIENT_FAILED(SourceStatus))
+        return SourceStatus;
+
+    const std::string CacheKey = MakeAssetCacheKey(Model);
+    GLTFResource& Resource = m_GLTFResources[CacheKey];
+    if (Resource.pModel == nullptr)
+    {
+        Resource.SourceURI = pSourceURI;
+
+        GLTF::ModelCreateInfo ModelCI;
+        ModelCI.FileName         = Resource.SourceURI.c_str();
+        ModelCI.pResourceManager = m_pResourceManager;
+        ModelCI.pUploadMgr       = m_pUploadManager;
+
+        try
+        {
+            Resource.pModel = std::make_unique<GLTF::Model>(pDevice, pContext, ModelCI);
+        }
+        catch (const std::exception& Error)
+        {
+            LOG_ERROR_MESSAGE("Failed to load Radient GLTF asset '", Resource.SourceURI, "': ", Error.what());
+            m_GLTFResources.erase(CacheKey);
+            return RADIENT_STATUS_INVALID_OPERATION;
+        }
+        catch (...)
+        {
+            LOG_ERROR_MESSAGE("Failed to load Radient GLTF asset '", Resource.SourceURI, "'");
+            m_GLTFResources.erase(CacheKey);
+            return RADIENT_STATUS_INVALID_OPERATION;
+        }
+    }
+
+    return PrepareGLTFResource(Resource, pDevice, pContext);
+}
+
+const GLTF::Model* RadientRenderResourceCache::GetGLTFModel(const RadientAssetReference& Model) const
+{
+    if (Model.URI == nullptr || *Model.URI == 0)
+        return nullptr;
+
+    const std::string CacheKey = MakeAssetCacheKey(Model);
+    std::unordered_map<std::string, GLTFResource>::const_iterator ResourceIt = m_GLTFResources.find(CacheKey);
+    return ResourceIt != m_GLTFResources.end() ? ResourceIt->second.pModel.get() : nullptr;
 }
 
 IGPUUploadManager* RadientRenderResourceCache::GetUploadManager() const
@@ -111,6 +199,7 @@ GLTF::ResourceManager* RadientRenderResourceCache::GetResourceManager() const
 
 void RadientRenderResourceCache::Reset()
 {
+    m_GLTFResources.clear();
     m_pUploadManager.Release();
     m_pResourceManager.Release();
     m_pDevice.Release();
@@ -128,6 +217,24 @@ void RadientRenderResourceCache::CreateResources(IRenderDevice*  pDevice,
 
     const GLTF::ResourceManager::CreateInfo ResourceCI = CreateResourceManagerInfo();
     m_pResourceManager                                 = GLTF::ResourceManager::Create(pDevice, ResourceCI);
+}
+
+RADIENT_STATUS RadientRenderResourceCache::PrepareGLTFResource(GLTFResource&  Resource,
+                                                               IRenderDevice* pDevice,
+                                                               IDeviceContext* pContext)
+{
+    if (Resource.pModel == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    if (pDevice == nullptr)
+        return RADIENT_STATUS_INVALID_OPERATION;
+
+    if (pContext == nullptr)
+        return RADIENT_STATUS_OUT_OF_DATE;
+
+    return Resource.pModel->PrepareGPUResources(pDevice, pContext) ?
+        RADIENT_STATUS_OK :
+        RADIENT_STATUS_OUT_OF_DATE;
 }
 
 } // namespace Diligent

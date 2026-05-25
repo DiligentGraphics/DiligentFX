@@ -29,8 +29,10 @@
 namespace Diligent
 {
 
-RadientRenderPipeline::RadientRenderPipeline(IRadientBackend* pBackend) :
-    m_pBackend{pBackend}
+RadientRenderPipeline::RadientRenderPipeline(IRadientBackend*         pBackend,
+                                             RadientAssetManagerImpl* pAssetManager) :
+    m_pBackend{pBackend},
+    m_ResourceCache{pAssetManager}
 {
 }
 
@@ -69,10 +71,6 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
     if (RADIENT_FAILED(Status))
         return Status;
 
-    Status = m_ShadowPass.Prepare(pDevice, pContext, m_FrameTargets);
-    if (RADIENT_FAILED(Status))
-        return Status;
-
     Status = m_ForwardPass.Prepare(pDevice, pContext, m_FrameTargets);
     if (RADIENT_FAILED(Status))
         return Status;
@@ -81,11 +79,7 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
     if (RADIENT_FAILED(Status))
         return Status;
 
-    Status = m_ShadowPass.Execute(pContext, m_SceneCache.GetDrawList());
-    if (RADIENT_FAILED(Status))
-        return Status;
-
-    Status = m_ForwardPass.Execute(pContext, m_SceneCache.GetDrawList());
+    Status = m_ForwardPass.Execute(pDevice, pContext, m_SceneCache.GetDrawList(), m_ResourceCache, Attribs, m_FrameTargets);
     if (RADIENT_FAILED(Status))
         return Status;
 

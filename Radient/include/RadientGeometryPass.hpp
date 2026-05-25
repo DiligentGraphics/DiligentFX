@@ -28,6 +28,13 @@
 
 #include "RadientDrawList.hpp"
 #include "RadientFrameRenderTargets.hpp"
+#include "RadientRenderResourceCache.hpp"
+
+#include "GLTFLoader.hpp"
+#include "GLTF_PBR_Renderer.hpp"
+#include "RefCntAutoPtr.hpp"
+
+#include <memory>
 
 namespace Diligent
 {
@@ -37,7 +44,34 @@ class RadientGeometryPass
 {
 public:
     RADIENT_STATUS Prepare(IRenderDevice* pDevice, IDeviceContext* pContext, const RadientFrameRenderTargets& Targets);
-    RADIENT_STATUS Execute(IDeviceContext* pContext, const RadientDrawList& DrawList);
+    RADIENT_STATUS Execute(IRenderDevice*               pDevice,
+                           IDeviceContext*              pContext,
+                           const RadientDrawList&       DrawList,
+                           RadientRenderResourceCache&  ResourceCache,
+                           const RadientRenderAttribs&  Attribs,
+                           const RadientFrameRenderTargets& Targets);
+
+private:
+    RADIENT_STATUS CreateRenderer(IRenderDevice* pDevice,
+                                  IDeviceContext* pContext,
+                                  TEXTURE_FORMAT RTVFormat,
+                                  TEXTURE_FORMAT DSVFormat);
+    void InitializeResourceCacheUseInfo();
+
+private:
+    std::unique_ptr<GLTF_PBR_Renderer> m_pGLTFRenderer;
+    RefCntAutoPtr<IBuffer>             m_pFrameAttribsCB;
+
+    GLTF_PBR_Renderer::RenderInfo            m_RenderInfo;
+    GLTF_PBR_Renderer::ResourceCacheUseInfo  m_CacheUseInfo;
+    GLTF_PBR_Renderer::ResourceCacheBindings m_CacheBindings;
+
+    GLTF::ModelTransforms m_Transforms;
+    GLTF::ModelTransforms m_PrevTransforms;
+
+    TEXTURE_FORMAT m_RTVFormat = TEX_FORMAT_UNKNOWN;
+    TEXTURE_FORMAT m_DSVFormat = TEX_FORMAT_UNKNOWN;
+    Uint32         m_FrameIndex = 0;
 };
 
 } // namespace Diligent

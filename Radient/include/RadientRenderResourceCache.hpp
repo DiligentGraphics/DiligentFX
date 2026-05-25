@@ -26,11 +26,17 @@
 
 #pragma once
 
+#include "RadientAssetManagerImpl.hpp"
 #include "RadientTypes.h"
 #include "RefCntAutoPtr.hpp"
 
+#include "GLTFLoader.hpp"
 #include "GLTFResourceManager.hpp"
 #include "GPUUploadManager.h"
+
+#include <memory>
+#include <string>
+#include <unordered_map>
 
 namespace Diligent
 {
@@ -42,23 +48,41 @@ namespace Diligent
 class RadientRenderResourceCache
 {
 public:
-    RadientRenderResourceCache();
+    explicit RadientRenderResourceCache(RadientAssetManagerImpl* pAssetManager);
     ~RadientRenderResourceCache();
 
     RADIENT_STATUS Prepare(IRenderDevice* pDevice,
                            IDeviceContext* pContext);
 
+    RADIENT_STATUS EnsureGLTFLoaded(const RadientAssetReference& Model,
+                                    IRenderDevice*               pDevice,
+                                    IDeviceContext*              pContext);
+
+    const GLTF::Model* GetGLTFModel(const RadientAssetReference& Model) const;
+
     IGPUUploadManager*     GetUploadManager() const;
     GLTF::ResourceManager* GetResourceManager() const;
 
 private:
+    struct GLTFResource
+    {
+        std::string                  SourceURI;
+        std::unique_ptr<GLTF::Model> pModel;
+    };
+
     void Reset();
     void CreateResources(IRenderDevice* pDevice,
                          IDeviceContext* pContext);
+    RADIENT_STATUS PrepareGLTFResource(GLTFResource& Resource,
+                                       IRenderDevice* pDevice,
+                                       IDeviceContext* pContext);
 
-    RefCntAutoPtr<IRenderDevice>         m_pDevice;
-    RefCntAutoPtr<IGPUUploadManager>     m_pUploadManager;
-    RefCntAutoPtr<GLTF::ResourceManager> m_pResourceManager;
+    RefCntAutoPtr<RadientAssetManagerImpl> m_pAssetManager;
+    RefCntAutoPtr<IRenderDevice>           m_pDevice;
+    RefCntAutoPtr<IGPUUploadManager>       m_pUploadManager;
+    RefCntAutoPtr<GLTF::ResourceManager>   m_pResourceManager;
+
+    std::unordered_map<std::string, GLTFResource> m_GLTFResources;
 };
 
 } // namespace Diligent
