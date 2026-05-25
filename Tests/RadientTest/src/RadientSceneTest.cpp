@@ -152,6 +152,23 @@ TEST(RadientEngineTest, CreateObjects)
     EXPECT_EQ(pEngine->CreateSceneWriter(pScene, &pWriter), RADIENT_STATUS_OK);
     ASSERT_NE(pWriter, nullptr);
 
+    RefCntAutoPtr<IRadientSceneImporter> pImporter;
+    EXPECT_EQ(pEngine->CreateSceneImporter(pWriter, &pImporter), RADIENT_STATUS_OK);
+    ASSERT_NE(pImporter, nullptr);
+
+    RadientGLTFInstantiateInfo InstantiateInfo{};
+    InstantiateInfo.Name = "Radient imported GLTF root";
+
+    RadientAssetReference ImportedModel{};
+    RadientEntityID       ImportedRoot = InvalidRadientEntityID;
+    EXPECT_EQ(pImporter->ImportGLTF({}, InstantiateInfo, ImportedModel, ImportedRoot), RADIENT_STATUS_INVALID_ARGUMENT);
+
+    EXPECT_EQ(pImporter->ImportGLTF(GLTFLoadInfo, InstantiateInfo, ImportedModel, ImportedRoot), RADIENT_STATUS_OK);
+    ASSERT_NE(ImportedModel.URI, nullptr);
+    EXPECT_NE(ImportedModel.Version, 0u);
+    EXPECT_NE(ImportedRoot, InvalidRadientEntityID);
+    EXPECT_EQ(pScene->IsEntityAlive(ImportedRoot), RADIENT_STATUS_OK);
+
     RadientEntityID Entity = InvalidRadientEntityID;
     EXPECT_EQ(pWriter->CreateEntity({}, Entity), RADIENT_STATUS_OK);
     ASSERT_NE(Entity, InvalidRadientEntityID);

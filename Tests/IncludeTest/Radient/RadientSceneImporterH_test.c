@@ -24,42 +24,25 @@
  *  of the possibility of such damages.
  */
 
-#include "Radient/interface/RadientEngine.h"
+#include "Radient/interface/RadientSceneImporter.h"
 
-void RadientEngine_C_TestMacros(IRadientEngine* pEngine)
+void RadientSceneImporter_C_UseTypes(void)
 {
-    RadientSceneDesc       SceneDesc     = {0};
-    RadientRendererDesc    RendererDesc  = {0};
-    IRadientBackend*       pBackend      = 0;
-    IRadientAssetManager*  pAssetManager = 0;
-    IRadientScene*         pScene        = 0;
-    IRadientSceneWriter*   pWriter       = 0;
-    IRadientSceneImporter* pImporter     = 0;
-    IRadientRenderer*      pRenderer     = 0;
-    RADIENT_STATUS         Status        = RADIENT_STATUS_OK;
+    RadientGLTFInstantiateInfo InstantiateInfo = {0};
 
-    Status = IRadientEngine_GetBackend(pEngine, &pBackend);
-    Status = IRadientEngine_GetAssetManager(pEngine, &pAssetManager);
-    Status = IRadientEngine_CreateScene(pEngine, &SceneDesc, &pScene);
-    Status = IRadientEngine_CreateSceneWriter(pEngine, pScene, &pWriter);
-    Status = IRadientEngine_CreateSceneImporter(pEngine, pWriter, &pImporter);
-    Status = IRadientEngine_CreateRenderer(pEngine, &RendererDesc, &pRenderer);
-
-    (void)pBackend;
-    (void)pAssetManager;
-    (void)pScene;
-    (void)pWriter;
-    (void)pImporter;
-    (void)pRenderer;
-    (void)Status;
+    (void)InstantiateInfo;
 }
 
-void RadientEngine_C_TestCreateFunction(void)
+void RadientSceneImporter_C_TestMacros(IRadientSceneImporter* pImporter)
 {
-    RadientEngineCreateInfo EngineCI = {0};
-    IRadientEngine*         pEngine  = 0;
-    RADIENT_STATUS          Status   = Diligent_CreateRadientEngine(&EngineCI, &pEngine);
+    RadientGLTFLoadInfo        LoadInfo        = {0};
+    RadientGLTFInstantiateInfo InstantiateInfo = {0};
+    RadientAssetReference      Model           = {0};
+    RadientEntityID            RootEntity      = 0;
+    RADIENT_STATUS             Status          = RADIENT_STATUS_OK;
 
-    (void)pEngine;
+    Status = IRadientSceneImporter_ImportGLTF(pImporter, &LoadInfo, &InstantiateInfo, &Model, &RootEntity);
+    Status = IRadientSceneImporter_InstantiateGLTF(pImporter, &Model, &InstantiateInfo, &RootEntity);
+
     (void)Status;
 }

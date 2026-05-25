@@ -33,10 +33,9 @@
 
 DILIGENT_BEGIN_NAMESPACE(Diligent)
 
-// {0E75833D-1529-4C50-8C87-F5DA2F491E5B}
+// {A8E0ADCC-C8C3-4D2E-8732-D7A4E555A8F4}
 static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientSceneWriter =
-    {0xe75833d, 0x1529, 0x4c50, {0x8c, 0x87, 0xf5, 0xda, 0x2f, 0x49, 0x1e, 0x5b}};
-
+    { 0xa8e0adcc, 0xc8c3, 0x4d2e, { 0x87, 0x32, 0xd7, 0xa4, 0xe5, 0x55, 0xa8, 0xf4 } };
 
 #define DILIGENT_INTERFACE_NAME IRadientSceneWriter
 #include "../../../DiligentCore/Primitives/interface/DefineInterfaceHelperMacros.h"

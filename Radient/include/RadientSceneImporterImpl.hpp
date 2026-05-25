@@ -26,44 +26,41 @@
 
 #pragma once
 
-#include "RadientEngine.h"
+#include "RadientSceneImporter.h"
+#include "RadientSceneWriter.h"
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
 
 namespace Diligent
 {
 
-class RadientEngineImpl final : public ObjectBase<IRadientEngine>
+class RadientSceneImporterImpl final : public ObjectBase<IRadientSceneImporter>
 {
 public:
-    using TBase = ObjectBase<IRadientEngine>;
+    using TBase = ObjectBase<IRadientSceneImporter>;
 
-    RadientEngineImpl(IReferenceCounters* pRefCounters, const RadientEngineCreateInfo& CreateInfo);
-    ~RadientEngineImpl();
+    RadientSceneImporterImpl(IReferenceCounters* pRefCounters,
+                             IRadientAssetManager* pAssetManager,
+                             IRadientSceneWriter*  pWriter);
+    ~RadientSceneImporterImpl();
 
-    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientEngine, TBase)
+    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientSceneImporter, TBase)
 
-    static RefCntAutoPtr<IRadientEngine> Create(const RadientEngineCreateInfo& CreateInfo);
+    static RefCntAutoPtr<IRadientSceneImporter> Create(IRadientAssetManager* pAssetManager,
+                                                       IRadientSceneWriter*  pWriter);
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetBackend(IRadientBackend** ppBackend) override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE ImportGLTF(const RadientGLTFLoadInfo&        LoadInfo,
+                                                         const RadientGLTFInstantiateInfo& InstantiateInfo,
+                                                         RadientAssetReference&            Model,
+                                                         RadientEntityID&                  RootEntity) override final;
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE GetAssetManager(IRadientAssetManager** ppAssetManager) override final;
-
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateScene(const RadientSceneDesc& Desc,
-                                                          IRadientScene**        ppScene) override final;
-
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateSceneWriter(IRadientScene*        pScene,
-                                                                IRadientSceneWriter** ppWriter) override final;
-
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateSceneImporter(IRadientSceneWriter*   pWriter,
-                                                                  IRadientSceneImporter** ppImporter) override final;
-
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateRenderer(const RadientRendererDesc& Desc,
-                                                             IRadientRenderer**        ppRenderer) override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE InstantiateGLTF(const RadientAssetReference&     Model,
+                                                              const RadientGLTFInstantiateInfo& InstantiateInfo,
+                                                              RadientEntityID&                 RootEntity) override final;
 
 private:
-    RefCntAutoPtr<IRadientBackend>      m_pBackend;
     RefCntAutoPtr<IRadientAssetManager> m_pAssetManager;
+    RefCntAutoPtr<IRadientSceneWriter>  m_pWriter;
 };
 
 } // namespace Diligent

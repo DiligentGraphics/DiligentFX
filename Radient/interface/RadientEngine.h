@@ -31,6 +31,7 @@
 
 #include "RadientAssets.h"
 #include "RadientRenderer.h"
+#include "RadientSceneImporter.h"
 #include "RadientSceneWriter.h"
 
 DILIGENT_BEGIN_NAMESPACE(Diligent)
@@ -84,6 +85,11 @@ DILIGENT_BEGIN_INTERFACE(IRadientEngine, IObject)
                                                      IRadientScene*        pScene,
                                                      IRadientSceneWriter** ppWriter) PURE;
 
+    /// Creates a scene importer that writes into the scene through the specified writer.
+    VIRTUAL RADIENT_STATUS METHOD(CreateSceneImporter)(THIS_
+                                                       IRadientSceneWriter*   pWriter,
+                                                       IRadientSceneImporter** ppImporter) PURE;
+
     /// Creates a renderer.
     VIRTUAL RADIENT_STATUS METHOD(CreateRenderer)(THIS_
                                                   const RadientRendererDesc REF Desc,
@@ -99,6 +105,7 @@ DILIGENT_END_INTERFACE
 #    define IRadientEngine_GetAssetManager(This, ...)   CALL_IFACE_METHOD(RadientEngine, GetAssetManager,   This, __VA_ARGS__)
 #    define IRadientEngine_CreateScene(This, ...)       CALL_IFACE_METHOD(RadientEngine, CreateScene,       This, __VA_ARGS__)
 #    define IRadientEngine_CreateSceneWriter(This, ...) CALL_IFACE_METHOD(RadientEngine, CreateSceneWriter, This, __VA_ARGS__)
+#    define IRadientEngine_CreateSceneImporter(This, ...) CALL_IFACE_METHOD(RadientEngine, CreateSceneImporter, This, __VA_ARGS__)
 #    define IRadientEngine_CreateRenderer(This, ...)    CALL_IFACE_METHOD(RadientEngine, CreateRenderer,    This, __VA_ARGS__)
 
 #endif

@@ -16,6 +16,7 @@ set(SOURCE
     src/RadientRenderPipeline.cpp
     src/RadientRendererImpl.cpp
     src/RadientSceneImpl.cpp
+    src/RadientSceneImporterImpl.cpp
     src/RadientSceneRenderCache.cpp
     src/RadientSceneState.cpp
     src/RadientSceneWriterImpl.cpp
@@ -36,6 +37,7 @@ set(INCLUDE
     include/RadientRenderPipeline.hpp
     include/RadientRendererImpl.hpp
     include/RadientSceneImpl.hpp
+    include/RadientSceneImporterImpl.hpp
     include/RadientSceneRenderCache.hpp
     include/RadientSceneState.hpp
     include/RadientSceneWriterImpl.hpp
@@ -49,6 +51,7 @@ set(INTERFACE
     interface/RadientMath.h
     interface/RadientRenderer.h
     interface/RadientScene.h
+    interface/RadientSceneImporter.h
     interface/RadientSceneWriter.h
     interface/RadientTypes.h
 )

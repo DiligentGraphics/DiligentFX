@@ -24,17 +24,13 @@
  *  of the possibility of such damages.
  */
 
-#pragma once
+#include "Radient/interface/RadientSceneImporter.h"
 
-/// \file
-/// Umbrella include for Radient public interfaces.
+using namespace Diligent;
 
-#include "RadientMath.h"
-#include "RadientTypes.h"
-#include "RadientAssets.h"
-#include "RadientScene.h"
-#include "RadientSceneWriter.h"
-#include "RadientSceneImporter.h"
-#include "RadientBackend.h"
-#include "RadientRenderer.h"
-#include "RadientEngine.h"
+void RadientSceneImporter_CPP_UseTypes()
+{
+    RadientGLTFInstantiateInfo InstantiateInfo;
+
+    (void)InstantiateInfo;
+}

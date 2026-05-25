@@ -30,6 +30,7 @@
 #include "RadientBackendImpl.hpp"
 #include "RadientRendererImpl.hpp"
 #include "RadientSceneImpl.hpp"
+#include "RadientSceneImporterImpl.hpp"
 #include "RadientSceneWriterImpl.hpp"
 
 namespace Diligent
@@ -102,6 +103,23 @@ RADIENT_STATUS RadientEngineImpl::CreateSceneWriter(IRadientScene* pScene, IRadi
 
     RefCntAutoPtr<IRadientSceneWriter> pWriter = RadientSceneWriterImpl::Create(static_cast<RadientSceneImpl*>(pScene));
     *ppWriter                                  = pWriter.Detach();
+    return RADIENT_STATUS_OK;
+}
+
+RADIENT_STATUS RadientEngineImpl::CreateSceneImporter(IRadientSceneWriter* pWriter, IRadientSceneImporter** ppImporter)
+{
+    if (ppImporter == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    *ppImporter = nullptr;
+    if (pWriter == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    if (m_pAssetManager == nullptr)
+        return RADIENT_STATUS_INVALID_OPERATION;
+
+    RefCntAutoPtr<IRadientSceneImporter> pImporter = RadientSceneImporterImpl::Create(m_pAssetManager, pWriter);
+    *ppImporter                                    = pImporter.Detach();
     return RADIENT_STATUS_OK;
 }
 
