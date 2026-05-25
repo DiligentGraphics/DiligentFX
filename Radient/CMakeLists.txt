@@ -10,6 +10,7 @@ set(SOURCE
     src/RadientFrameRenderTargets.cpp
     src/RadientGeometryPass.cpp
     src/RadientMaterialBindingsStorage.cpp
+    src/RadientMath.cpp
     src/RadientMeshComponentStorage.cpp
     src/RadientPostProcessPipeline.cpp
     src/RadientRenderResourceCache.cpp
@@ -76,6 +77,7 @@ PRIVATE
     Diligent-GraphicsTools
     Diligent-AssetLoader
     Diligent-Common
+    DiligentFX
     EnTT
 )
 

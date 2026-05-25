@@ -246,4 +246,54 @@ struct RadientExtent2D
 };
 typedef struct RadientExtent2D RadientExtent2D;
 
+
+#include "../../../DiligentCore/Primitives/interface/DefineGlobalFuncHelperMacros.h"
+
+/// Creates a quaternion that rotates around the specified axis by the specified angle, in radians.
+/// If the axis is zero, returns the identity rotation.
+void DILIGENT_GLOBAL_FUNCTION(MakeAxisRotation)(const RadientFloat3 REF Axis, Float32 Angle, RadientQuaternion REF Rotation);
+
+/// Creates a quaternion that rotates around the X axis by the specified angle, in radians.
+void DILIGENT_GLOBAL_FUNCTION(MakeXRotation)(Float32 Angle, RadientQuaternion REF Rotation);
+
+/// Creates a quaternion that rotates around the Y axis by the specified angle, in radians.
+void DILIGENT_GLOBAL_FUNCTION(MakeYRotation)(Float32 Angle, RadientQuaternion REF Rotation);
+
+/// Creates a quaternion that rotates around the Z axis by the specified angle, in radians.
+void DILIGENT_GLOBAL_FUNCTION(MakeZRotation)(Float32 Angle, RadientQuaternion REF Rotation);
+
+#if DILIGENT_CPP_INTERFACE
+
+inline RadientQuaternion MakeAxisRotation(const RadientFloat3& Axis, Float32 Angle)
+{
+    RadientQuaternion Rotation;
+    MakeAxisRotation(Axis, Angle, Rotation);
+    return Rotation;
+}
+
+inline RadientQuaternion MakeXRotation(Float32 Angle)
+{
+    RadientQuaternion Rotation;
+    MakeXRotation(Angle, Rotation);
+    return Rotation;
+}
+
+inline RadientQuaternion MakeYRotation(Float32 Angle)
+{
+    RadientQuaternion Rotation;
+    MakeYRotation(Angle, Rotation);
+    return Rotation;
+}
+
+inline RadientQuaternion MakeZRotation(Float32 Angle)
+{
+    RadientQuaternion Rotation;
+    MakeZRotation(Angle, Rotation);
+    return Rotation;
+}
+
+#endif
+
+#include "../../../DiligentCore/Primitives/interface/UndefGlobalFuncHelperMacros.h"
+
 DILIGENT_END_NAMESPACE // namespace Diligent
