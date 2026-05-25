@@ -24,28 +24,34 @@
  *  of the possibility of such damages.
  */
 
-#pragma once
-
-#include "RadientDrawList.hpp"
 #include "RadientLightList.hpp"
 
 namespace Diligent
 {
 
-/// Converts Radient scene and asset state into renderer-facing caches.
-class RadientSceneRenderCache
+void RadientLightList::Clear()
 {
-public:
-    RADIENT_STATUS SyncScene(IRadientScene& Scene);
+    m_Items.clear();
+}
 
-    const RadientDrawList&  GetDrawList() const;
-    const RadientLightList& GetLightList() const;
-    RadientRevision         GetSceneRevision() const;
+void RadientLightList::Add(const RadientLightItem& Item)
+{
+    m_Items.emplace_back(Item);
+}
 
-private:
-    RadientDrawList  m_DrawList;
-    RadientLightList m_LightList;
-    RadientRevision  m_SceneRevision = 0;
-};
+size_t RadientLightList::GetItemCount() const
+{
+    return m_Items.size();
+}
+
+bool RadientLightList::IsEmpty() const
+{
+    return m_Items.empty();
+}
+
+const RadientLightList::ItemListType& RadientLightList::GetItems() const
+{
+    return m_Items;
+}
 
 } // namespace Diligent

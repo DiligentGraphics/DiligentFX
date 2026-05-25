@@ -189,6 +189,15 @@ struct RadientMatrix4x4
         std::memcpy(Data, InData, sizeof(Data));
     }
 
+    constexpr RadientFloat4 GetRow(Uint32 Row) const
+    {
+        return RadientFloat4{
+            Data[Row * 4u + 0u],
+            Data[Row * 4u + 1u],
+            Data[Row * 4u + 2u],
+            Data[Row * 4u + 3u]};
+    }
+
     bool operator==(const RadientMatrix4x4& Rhs) const
     {
         return std::memcmp(Data, Rhs.Data, sizeof(Data)) == 0;

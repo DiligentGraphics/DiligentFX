@@ -41,6 +41,7 @@ RADIENT_STATUS RadientSceneRenderCache::SyncScene(IRadientScene& Scene)
         return RADIENT_STATUS_NO_CHANGE;
 
     m_DrawList.Clear();
+    m_LightList.Clear();
 
     RadientSceneImpl* pSceneImpl = ClassPtrCast<RadientSceneImpl>(&Scene);
     if (pSceneImpl == nullptr)
@@ -61,7 +62,24 @@ RADIENT_STATUS RadientSceneRenderCache::SyncScene(IRadientScene& Scene)
     if (RADIENT_FAILED(Status))
         return Status;
 
+    const RADIENT_STATUS LightStatus = pSceneImpl->GetState().EnumerateRenderableLights(
+        [this](const RadientSceneState::RenderableLight& Light) {
+            if (!Light.EffectiveVisible)
+                return;
+
+            RadientLightItem LightItem{};
+            LightItem.Entity      = Light.Entity;
+            LightItem.Light       = Light.Light;
+            LightItem.WorldMatrix = Light.WorldMatrix;
+            m_LightList.Add(LightItem);
+        });
+    if (RADIENT_FAILED(LightStatus))
+        return LightStatus;
+
     m_SceneRevision = SceneRevision;
+
+    if (Status == RADIENT_STATUS_OUT_OF_DATE || LightStatus == RADIENT_STATUS_OUT_OF_DATE)
+        return RADIENT_STATUS_OUT_OF_DATE;
 
     return Status;
 }
@@ -69,6 +87,11 @@ RADIENT_STATUS RadientSceneRenderCache::SyncScene(IRadientScene& Scene)
 const RadientDrawList& RadientSceneRenderCache::GetDrawList() const
 {
     return m_DrawList;
+}
+
+const RadientLightList& RadientSceneRenderCache::GetLightList() const
+{
+    return m_LightList;
 }
 
 RadientRevision RadientSceneRenderCache::GetSceneRevision() const

@@ -28,6 +28,7 @@
 
 #include "RadientDrawList.hpp"
 #include "RadientFrameRenderTargets.hpp"
+#include "RadientLightList.hpp"
 #include "RadientRenderResourceCache.hpp"
 
 #include "GLTFLoader.hpp"
@@ -47,6 +48,7 @@ public:
     RADIENT_STATUS Execute(IRenderDevice*               pDevice,
                            IDeviceContext*              pContext,
                            const RadientDrawList&       DrawList,
+                           const RadientLightList&      LightList,
                            RadientRenderResourceCache&  ResourceCache,
                            const RadientRenderAttribs&  Attribs,
                            const RadientFrameRenderTargets& Targets);

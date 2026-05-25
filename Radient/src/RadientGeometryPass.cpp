@@ -31,6 +31,8 @@
 #include "GraphicsUtilities.h"
 #include "MapHelper.hpp"
 
+#include <algorithm>
+#include <cmath>
 #include <vector>
 
 namespace Diligent
@@ -46,7 +48,8 @@ namespace HLSL
 namespace
 {
 
-constexpr float RadientDefaultSceneScale = 1.f;
+constexpr float  RadientDefaultSceneScale = 1.f;
+constexpr Uint32 RadientMaxLightCount     = 16;
 
 TEXTURE_FORMAT GetTextureViewFormat(ITextureView* pView)
 {
@@ -126,18 +129,92 @@ HLSL::CameraAttribs GetCameraAttribs(IRenderDevice*                   pDevice,
     return CameraAttribs;
 }
 
-void WriteAdHocLight(GLTF_PBR_Renderer&     Renderer,
-                     HLSL::PBRFrameAttribs& FrameAttribs)
+GLTF::Light::TYPE GetGLTFLightType(RADIENT_LIGHT_TYPE Type)
+{
+    switch (Type)
+    {
+        case RADIENT_LIGHT_TYPE_DIRECTIONAL:
+            return GLTF::Light::TYPE::DIRECTIONAL;
+
+        case RADIENT_LIGHT_TYPE_POINT:
+            return GLTF::Light::TYPE::POINT;
+
+        case RADIENT_LIGHT_TYPE_SPOT:
+            return GLTF::Light::TYPE::SPOT;
+
+        default:
+            UNEXPECTED("Unexpected Radient light type");
+            return GLTF::Light::TYPE::UNKNOWN;
+    }
+}
+
+GLTF::Light GetGLTFLight(const RadientLightComponent& Source)
 {
     GLTF::Light Light;
-    Light.Type      = GLTF::Light::TYPE::DIRECTIONAL;
-    Light.Color     = float3{1.f, 1.f, 1.f};
-    Light.Intensity = 3.f;
+    Light.Type      = GetGLTFLightType(Source.Type);
+    Light.Color     = RadientMath::ToFloat3(Source.Color);
+    Light.Intensity = Source.Intensity * std::exp2(Source.Exposure);
 
-    const float3 Direction = normalize(float3{-0.45f, -0.75f, 0.5f});
+    if (Light.Type == GLTF::Light::TYPE::SPOT)
+    {
+        const float OuterConeAngle = std::min(DegToRad(Source.ShapingConeAngle), PI_F * 0.5f);
+        const float Softness       = clamp(Source.ShapingConeSoftness, 0.f, 1.f);
+        Light.OuterConeAngle       = OuterConeAngle;
+        Light.InnerConeAngle       = OuterConeAngle * (1.f - Softness);
+    }
 
+    return Light;
+}
+
+float3 GetLightPosition(const RadientMatrix4x4& WorldMatrix)
+{
+    const RadientFloat4 Position = WorldMatrix.GetRow(3);
+    return float3{Position.x, Position.y, Position.z};
+}
+
+float3 GetLightDirection(const RadientMatrix4x4& WorldMatrix)
+{
+    const RadientFloat4 LocalZ    = WorldMatrix.GetRow(2);
+    const float3        Direction = {-LocalZ.x, -LocalZ.y, -LocalZ.z};
+    const float         Length    = length(Direction);
+    return Length > 0.f ? Direction / Length : float3{0.f, 0.f, -1.f};
+}
+
+void WriteSceneLights(GLTF_PBR_Renderer&      Renderer,
+                      const RadientLightList& LightList,
+                      HLSL::PBRFrameAttribs&  FrameAttribs)
+{
     HLSL::PBRLightAttribs* Lights = reinterpret_cast<HLSL::PBRLightAttribs*>(&FrameAttribs + 1);
-    GLTF_PBR_Renderer::WritePBRLightShaderAttribs({&Light, nullptr, &Direction, RadientDefaultSceneScale}, Lights);
+
+    Uint32 LightCount = 0;
+    for (const RadientLightItem& LightItem : LightList.GetItems())
+    {
+        if (LightCount >= RadientMaxLightCount)
+            break;
+
+        const GLTF::Light Light     = GetGLTFLight(LightItem.Light);
+        const float3      Position  = GetLightPosition(LightItem.WorldMatrix);
+        const float3      Direction = GetLightDirection(LightItem.WorldMatrix);
+
+        GLTF_PBR_Renderer::PBRLightShaderAttribsData LightAttribs;
+        LightAttribs.Light         = &Light;
+        LightAttribs.DistanceScale = RadientDefaultSceneScale;
+
+        if (Light.Type == GLTF::Light::TYPE::POINT ||
+            Light.Type == GLTF::Light::TYPE::SPOT)
+        {
+            LightAttribs.Position = &Position;
+        }
+
+        if (Light.Type == GLTF::Light::TYPE::DIRECTIONAL ||
+            Light.Type == GLTF::Light::TYPE::SPOT)
+        {
+            LightAttribs.Direction = &Direction;
+        }
+
+        GLTF_PBR_Renderer::WritePBRLightShaderAttribs(LightAttribs, Lights + LightCount);
+        ++LightCount;
+    }
 
     HLSL::PBRRendererShaderParameters& RendererAttribs = FrameAttribs.Renderer;
     Renderer.SetInternalShaderParameters(RendererAttribs);
@@ -151,7 +228,7 @@ void WriteAdHocLight(GLTF_PBR_Renderer&     Renderer,
     RendererAttribs.UnshadedColor     = float4{1.f, 1.f, 1.f, 1.f};
     RendererAttribs.PointSize         = 1.f;
     RendererAttribs.MipBias           = 0.f;
-    RendererAttribs.LightCount        = 1;
+    RendererAttribs.LightCount        = static_cast<int>(LightCount);
     RendererAttribs.DebugView         = 0;
 }
 
@@ -180,6 +257,7 @@ RADIENT_STATUS RadientGeometryPass::Prepare(IRenderDevice*                   pDe
 RADIENT_STATUS RadientGeometryPass::Execute(IRenderDevice*                   pDevice,
                                             IDeviceContext*                  pContext,
                                             const RadientDrawList&           DrawList,
+                                            const RadientLightList&          LightList,
                                             RadientRenderResourceCache&      ResourceCache,
                                             const RadientRenderAttribs&      Attribs,
                                             const RadientFrameRenderTargets& Targets)
@@ -208,7 +286,7 @@ RADIENT_STATUS RadientGeometryPass::Execute(IRenderDevice*                   pDe
 
         pFrameAttribs->Camera     = GetCameraAttribs(pDevice, Attribs, Targets, m_FrameIndex);
         pFrameAttribs->PrevCamera = pFrameAttribs->Camera;
-        WriteAdHocLight(*m_pGLTFRenderer, *pFrameAttribs);
+        WriteSceneLights(*m_pGLTFRenderer, LightList, *pFrameAttribs);
     }
 
     GLTF::ResourceManager* pResourceManager = ResourceCache.GetResourceManager();
@@ -269,6 +347,7 @@ RADIENT_STATUS RadientGeometryPass::CreateRenderer(IRenderDevice*  pDevice,
     RendererCI.EnableEmissive          = true;
     RendererCI.EnableShadows           = false;
     RendererCI.FrontCounterClockwise   = true;
+    RendererCI.MaxLightCount           = RadientMaxLightCount;
     RendererCI.PackMatrixRowMajor      = true;
     RendererCI.ShaderTexturesArrayMode = PBR_Renderer::SHADER_TEXTURE_ARRAY_MODE_NONE;
     RendererCI.NumRenderTargets        = 1;

@@ -26,26 +26,38 @@
 
 #pragma once
 
-#include "RadientDrawList.hpp"
-#include "RadientLightList.hpp"
+#include "RadientScene.h"
+
+#include <vector>
 
 namespace Diligent
 {
 
-/// Converts Radient scene and asset state into renderer-facing caches.
-class RadientSceneRenderCache
+/// One scene light after scene traversal.
+struct RadientLightItem
+{
+    RadientEntityID       Entity = InvalidRadientEntityID;
+    RadientLightComponent Light;
+    RadientMatrix4x4      WorldMatrix;
+};
+
+
+/// Cached list of scene lights prepared for backend rendering.
+class RadientLightList
 {
 public:
-    RADIENT_STATUS SyncScene(IRadientScene& Scene);
+    using ItemListType = std::vector<RadientLightItem>;
 
-    const RadientDrawList&  GetDrawList() const;
-    const RadientLightList& GetLightList() const;
-    RadientRevision         GetSceneRevision() const;
+    void Clear();
+    void Add(const RadientLightItem& Item);
+
+    size_t GetItemCount() const;
+    bool   IsEmpty() const;
+
+    const ItemListType& GetItems() const;
 
 private:
-    RadientDrawList  m_DrawList;
-    RadientLightList m_LightList;
-    RadientRevision  m_SceneRevision = 0;
+    ItemListType m_Items;
 };
 
 } // namespace Diligent

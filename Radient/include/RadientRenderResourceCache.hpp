@@ -51,7 +51,7 @@ public:
     explicit RadientRenderResourceCache(RadientAssetManagerImpl* pAssetManager);
     ~RadientRenderResourceCache();
 
-    RADIENT_STATUS Prepare(IRenderDevice* pDevice,
+    RADIENT_STATUS Prepare(IRenderDevice*  pDevice,
                            IDeviceContext* pContext);
 
     RADIENT_STATUS EnsureGLTFLoaded(const RadientAssetReference& Model,
@@ -70,11 +70,11 @@ private:
         std::unique_ptr<GLTF::Model> pModel;
     };
 
-    void Reset();
-    void CreateResources(IRenderDevice* pDevice,
-                         IDeviceContext* pContext);
-    RADIENT_STATUS PrepareGLTFResource(GLTFResource& Resource,
-                                       IRenderDevice* pDevice,
+    void           Reset();
+    void           CreateResources(IRenderDevice*  pDevice,
+                                   IDeviceContext* pContext);
+    RADIENT_STATUS PrepareGLTFResource(GLTFResource&   Resource,
+                                       IRenderDevice*  pDevice,
                                        IDeviceContext* pContext);
 
     RefCntAutoPtr<RadientAssetManagerImpl> m_pAssetManager;
