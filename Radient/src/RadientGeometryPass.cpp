@@ -295,7 +295,7 @@ RADIENT_STATUS RadientGeometryPass::Execute(IRenderDevice*                   pDe
     ReadyItems.reserve(DrawList.GetItemCount());
     for (const RadientDrawItem& Item : DrawList.GetItems())
     {
-        const RADIENT_STATUS LoadStatus = ResourceCache.EnsureGLTFLoaded(Item.Mesh, pDevice, pContext);
+        const RADIENT_STATUS LoadStatus = ResourceCache.EnsureGLTFLoaded(Item.Mesh.Mesh, pDevice, pContext);
         if (RADIENT_FAILED(LoadStatus))
             return LoadStatus;
         if (LoadStatus == RADIENT_STATUS_OK)
@@ -313,7 +313,7 @@ RADIENT_STATUS RadientGeometryPass::Execute(IRenderDevice*                   pDe
         VERIFY_EXPR(pItem != nullptr);
         const RadientDrawItem& Item = *pItem;
 
-        const GLTF::Model* pModel = ResourceCache.GetGLTFModel(Item.Mesh);
+        const GLTF::Model* pModel = ResourceCache.GetGLTFModel(Item.Mesh.Mesh);
         if (pModel == nullptr)
             continue;
 

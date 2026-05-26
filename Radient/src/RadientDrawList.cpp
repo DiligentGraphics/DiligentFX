@@ -34,9 +34,13 @@ void RadientDrawList::Clear()
     m_Items.clear();
 }
 
-void RadientDrawList::Add(const RadientDrawItem& Item)
+void RadientDrawList::Add(RadientEntityID                         Entity,
+                          const RadientMeshComponent&             Mesh,
+                          const RadientMeshRendererComponent&     Renderer,
+                          const RadientMaterialBindingsComponent* pMaterialBindings,
+                          const RadientMatrix4x4&                 WorldMatrix)
 {
-    m_Items.emplace_back(Item);
+    m_Items.emplace_back(Entity, Mesh, Renderer, pMaterialBindings, WorldMatrix);
 }
 
 size_t RadientDrawList::GetItemCount() const

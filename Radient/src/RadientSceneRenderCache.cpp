@@ -52,12 +52,11 @@ RADIENT_STATUS RadientSceneRenderCache::SyncScene(IRadientScene& Scene)
             if (!Mesh.EffectiveVisible)
                 return;
 
-            RadientDrawItem Item{};
-            Item.Entity         = Mesh.Entity;
-            Item.Mesh           = Mesh.Mesh.Mesh;
-            Item.WorldMatrix    = Mesh.WorldMatrix;
-            Item.VisibilityMask = Mesh.Renderer.VisibilityMask;
-            m_DrawList.Add(Item);
+            m_DrawList.Add(Mesh.Entity,
+                           Mesh.Mesh,
+                           Mesh.Renderer,
+                           Mesh.pMaterialBindings,
+                           Mesh.WorldMatrix);
         });
     if (RADIENT_FAILED(Status))
         return Status;
@@ -67,11 +66,7 @@ RADIENT_STATUS RadientSceneRenderCache::SyncScene(IRadientScene& Scene)
             if (!Light.EffectiveVisible)
                 return;
 
-            RadientLightItem LightItem{};
-            LightItem.Entity      = Light.Entity;
-            LightItem.Light       = Light.Light;
-            LightItem.WorldMatrix = Light.WorldMatrix;
-            m_LightList.Add(LightItem);
+            m_LightList.Add(Light.Entity, Light.Light, Light.WorldMatrix);
         });
     if (RADIENT_FAILED(LightStatus))
         return LightStatus;

@@ -36,9 +36,17 @@ namespace Diligent
 /// One scene light after scene traversal.
 struct RadientLightItem
 {
-    RadientEntityID       Entity = InvalidRadientEntityID;
-    RadientLightComponent Light;
-    RadientMatrix4x4      WorldMatrix;
+    RadientLightItem(RadientEntityID               _Entity,
+                     const RadientLightComponent&  _Light,
+                     const RadientMatrix4x4&       _WorldMatrix) :
+        Entity{_Entity},
+        Light{_Light},
+        WorldMatrix{_WorldMatrix}
+    {}
+
+    RadientEntityID              Entity = InvalidRadientEntityID;
+    const RadientLightComponent& Light;
+    const RadientMatrix4x4&      WorldMatrix;
 };
 
 
@@ -49,7 +57,9 @@ public:
     using ItemListType = std::vector<RadientLightItem>;
 
     void Clear();
-    void Add(const RadientLightItem& Item);
+    void Add(RadientEntityID              Entity,
+             const RadientLightComponent& Light,
+             const RadientMatrix4x4&      WorldMatrix);
 
     size_t GetItemCount() const;
     bool   IsEmpty() const;

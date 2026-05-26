@@ -36,12 +36,23 @@ namespace Diligent
 /// One renderable mesh primitive after scene traversal and material resolution.
 struct RadientDrawItem
 {
-    RadientEntityID       Entity = InvalidRadientEntityID;
-    RadientAssetReference Mesh;
-    Uint32                PrimitiveIndex = 0;
-    RadientAssetReference Material;
-    RadientMatrix4x4      WorldMatrix;
-    Uint64                VisibilityMask = ~0ull;
+    RadientDrawItem(RadientEntityID                         _Entity,
+                    const RadientMeshComponent&             _Mesh,
+                    const RadientMeshRendererComponent&     _Renderer,
+                    const RadientMaterialBindingsComponent* _pMaterialBindings,
+                    const RadientMatrix4x4&                 _WorldMatrix) :
+        Entity{_Entity},
+        Mesh{_Mesh},
+        Renderer{_Renderer},
+        pMaterialBindings{_pMaterialBindings},
+        WorldMatrix{_WorldMatrix}
+    {}
+
+    RadientEntityID                         Entity = InvalidRadientEntityID;
+    const RadientMeshComponent&             Mesh;
+    const RadientMeshRendererComponent&     Renderer;
+    const RadientMaterialBindingsComponent* pMaterialBindings = nullptr;
+    const RadientMatrix4x4&                 WorldMatrix;
 };
 
 
@@ -52,7 +63,11 @@ public:
     using ItemListType = std::vector<RadientDrawItem>;
 
     void Clear();
-    void Add(const RadientDrawItem& Item);
+    void Add(RadientEntityID                         Entity,
+             const RadientMeshComponent&             Mesh,
+             const RadientMeshRendererComponent&     Renderer,
+             const RadientMaterialBindingsComponent* pMaterialBindings,
+             const RadientMatrix4x4&                 WorldMatrix);
 
     size_t GetItemCount() const;
     bool   IsEmpty() const;

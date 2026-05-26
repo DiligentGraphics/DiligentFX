@@ -34,9 +34,11 @@ void RadientLightList::Clear()
     m_Items.clear();
 }
 
-void RadientLightList::Add(const RadientLightItem& Item)
+void RadientLightList::Add(RadientEntityID              Entity,
+                           const RadientLightComponent& Light,
+                           const RadientMatrix4x4&      WorldMatrix)
 {
-    m_Items.emplace_back(Item);
+    m_Items.emplace_back(Entity, Light, WorldMatrix);
 }
 
 size_t RadientLightList::GetItemCount() const
