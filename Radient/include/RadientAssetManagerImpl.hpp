@@ -60,6 +60,15 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE LoadGLTF(const RadientGLTFLoadInfo& LoadInfo,
                                                        RadientAssetReference&     Model) override final;
 
+    RADIENT_STATUS CreateMeshFromGLTFMesh(const RadientAssetReference& Model,
+                                          Uint32                       MeshIndex,
+                                          const Char*                  Name,
+                                          RadientAssetReference&       Mesh);
+
+    RADIENT_STATUS GetMeshGLTFSource(const RadientAssetReference& Mesh,
+                                     RadientAssetReference&       Model,
+                                     Uint32&                      MeshIndex) const;
+
     RADIENT_STATUS GetGLTFSourceURI(const RadientAssetReference& Model,
                                     const Char*&                 SourceURI) const;
 
@@ -91,7 +100,7 @@ private:
 
     struct MeshIndexBufferStorage
     {
-        RADIENT_INDEX_TYPE IndexType = RADIENT_INDEX_TYPE_NONE;
+        RADIENT_INDEX_TYPE IndexType  = RADIENT_INDEX_TYPE_NONE;
         Uint32             IndexCount = 0;
         std::vector<Uint8> Indices;
     };
@@ -123,9 +132,16 @@ private:
         std::string SourceURI;
     };
 
+    struct GLTFMeshStorage
+    {
+        RadientAssetReference Model;
+        std::string           ModelURI;
+        Uint32                MeshIndex = ~0u;
+    };
+
     struct AssetRecord
     {
-        RADIENT_ASSET_TYPE Type = RADIENT_ASSET_TYPE_MESH;
+        RADIENT_ASSET_TYPE Type    = RADIENT_ASSET_TYPE_MESH;
         Uint64             Version = 1;
         std::string        URI;
         std::string        Name;
@@ -135,10 +151,11 @@ private:
         std::vector<MeshPrimitiveStorage>    MeshPrimitives;
         MaterialStorage                      Material;
         GLTFModelStorage                     GLTFModel;
+        GLTFMeshStorage                      GLTFMesh;
     };
 
-    bool ValidateMesh(const RadientMeshCreateInfo& MeshCI) const;
-    bool ValidateGLTF(const RadientGLTFLoadInfo& LoadInfo) const;
+    bool               ValidateMesh(const RadientMeshCreateInfo& MeshCI) const;
+    bool               ValidateGLTF(const RadientGLTFLoadInfo& LoadInfo) const;
     const AssetRecord* FindAsset(const RadientAssetReference& Ref) const;
 
     std::string MakeURI(const char* Type);

@@ -58,7 +58,15 @@ public:
                                     IRenderDevice*               pDevice,
                                     IDeviceContext*              pContext);
 
+    RADIENT_STATUS EnsureMeshLoaded(const RadientAssetReference& Mesh,
+                                    IRenderDevice*               pDevice,
+                                    IDeviceContext*              pContext);
+
     const GLTF::Model* GetGLTFModel(const RadientAssetReference& Model) const;
+
+    RADIENT_STATUS GetMeshGLTFSource(const RadientAssetReference& Mesh,
+                                     RadientAssetReference&       Model,
+                                     Uint32&                      MeshIndex) const;
 
     IGPUUploadManager*     GetUploadManager() const;
     GLTF::ResourceManager* GetResourceManager() const;

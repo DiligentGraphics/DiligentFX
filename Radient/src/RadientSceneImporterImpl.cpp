@@ -130,7 +130,7 @@ RADIENT_STATUS RadientSceneImporterImpl::InstantiateGLTF(const RadientAssetRefer
     if (pModel == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
-    return RadientGLTFConverter::InstantiateSceneGraph(*pModel, Model, InstantiateInfo, *m_pWriter, RootEntity);
+    return RadientGLTFConverter::InstantiateSceneGraph(*pModel, Model, InstantiateInfo, *pAssetManagerImpl, *m_pWriter, RootEntity);
 }
 
 } // namespace Diligent

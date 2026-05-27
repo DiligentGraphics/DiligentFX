@@ -29,6 +29,7 @@
 #include "gtest/gtest.h"
 
 #include "RadientEngine.h"
+#include "RadientAssetManagerImpl.hpp"
 #include "RadientSceneImpl.hpp"
 #include "RadientSceneState.hpp"
 
@@ -330,7 +331,7 @@ TEST(RadientSceneImporterTest, ImportsMeshNodeMetadataWithoutDevice)
                                                R"GLTF({
     "asset": {"version": "2.0"},
     "scene": 0,
-    "scenes": [{"nodes": [0]}],
+    "scenes": [{"nodes": [0, 1]}],
     "buffers": [{"uri": "mesh.bin", "byteLength": 42}],
     "bufferViews": [
         {"buffer": 0, "byteOffset": 0, "byteLength": 36},
@@ -341,7 +342,10 @@ TEST(RadientSceneImporterTest, ImportsMeshNodeMetadataWithoutDevice)
         {"bufferView": 1, "componentType": 5123, "count": 3, "type": "SCALAR"}
     ],
     "meshes": [{"name": "Triangle", "primitives": [{"attributes": {"POSITION": 0}, "indices": 1}]}],
-    "nodes": [{"name": "MeshNode", "mesh": 0}]
+    "nodes": [
+        {"name": "MeshNodeA", "mesh": 0},
+        {"name": "MeshNodeB", "mesh": 0, "translation": [1, 0, 0]}
+    ]
 })GLTF");
 
     ImportFixture Fixture = CreateImportFixture();
@@ -359,7 +363,54 @@ TEST(RadientSceneImporterTest, ImportsMeshNodeMetadataWithoutDevice)
     EXPECT_EQ(Fixture.pImporter->ImportGLTF(LoadInfo, InstantiateInfo, Model, ImportedRoot), RADIENT_STATUS_OK);
 
     const std::vector<RadientEntityID> RootChildren = GetChildren(*Fixture.pScene, ImportedRoot);
-    ASSERT_EQ(RootChildren.size(), 1u);
+    ASSERT_EQ(RootChildren.size(), 2u);
+
+    Bool HasComponent = True;
+    EXPECT_EQ(Fixture.pScene->HasComponent(ImportedRoot, RADIENT_COMPONENT_TYPE_MESH, HasComponent), RADIENT_STATUS_OK);
+    EXPECT_EQ(HasComponent, False);
+    EXPECT_EQ(Fixture.pScene->HasComponent(ImportedRoot, RADIENT_COMPONENT_TYPE_MESH_RENDERER, HasComponent), RADIENT_STATUS_OK);
+    EXPECT_EQ(HasComponent, False);
+
+    for (const RadientEntityID MeshNode : RootChildren)
+    {
+        EXPECT_EQ(Fixture.pScene->HasComponent(MeshNode, RADIENT_COMPONENT_TYPE_MESH, HasComponent), RADIENT_STATUS_OK);
+        EXPECT_EQ(HasComponent, True);
+        EXPECT_EQ(Fixture.pScene->HasComponent(MeshNode, RADIENT_COMPONENT_TYPE_MESH_RENDERER, HasComponent), RADIENT_STATUS_OK);
+        EXPECT_EQ(HasComponent, True);
+    }
+
+    ASSERT_NE(Fixture.pWriter, nullptr);
+    EXPECT_EQ(Fixture.pWriter->CommitChanges(), RADIENT_STATUS_OK);
+
+    const RadientSceneImpl* pSceneImpl = ClassPtrCast<RadientSceneImpl>(Fixture.pScene.RawPtr());
+    ASSERT_NE(pSceneImpl, nullptr);
+
+    std::vector<RadientEntityID>       RenderableEntities;
+    std::vector<RadientAssetReference> RenderableMeshes;
+    EXPECT_EQ(pSceneImpl->GetState().EnumerateRenderableMeshes(
+                  [&RenderableEntities, &RenderableMeshes](const RadientSceneState::RenderableMesh& Mesh) {
+                      RenderableEntities.push_back(Mesh.Entity);
+                      RenderableMeshes.push_back(Mesh.Mesh.Mesh);
+                  }),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(RenderableEntities.size(), 2u);
+    EXPECT_NE(std::find(RenderableEntities.begin(), RenderableEntities.end(), RootChildren[0]), RenderableEntities.end());
+    EXPECT_NE(std::find(RenderableEntities.begin(), RenderableEntities.end(), RootChildren[1]), RenderableEntities.end());
+    ASSERT_NE(RenderableMeshes[0].URI, nullptr);
+    EXPECT_NE(std::string{RenderableMeshes[0].URI}, std::string{Model.URI});
+    EXPECT_EQ(RenderableMeshes[0], RenderableMeshes[1]);
+
+    const RadientAssetManagerImpl* pAssetManagerImpl = ClassPtrCast<RadientAssetManagerImpl>(Fixture.pAssetManager.RawPtr());
+    ASSERT_NE(pAssetManagerImpl, nullptr);
+
+    RadientAssetReference SourceModel{};
+    Uint32                SourceMeshIndex = ~0u;
+    for (const RadientAssetReference& Mesh : RenderableMeshes)
+    {
+        EXPECT_EQ(pAssetManagerImpl->GetMeshGLTFSource(Mesh, SourceModel, SourceMeshIndex), RADIENT_STATUS_OK);
+        EXPECT_EQ(SourceModel, Model);
+        EXPECT_EQ(SourceMeshIndex, 0u);
+    }
 }
 
 TEST(RadientSceneImporterTest, ImportsLights)

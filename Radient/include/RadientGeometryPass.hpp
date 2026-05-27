@@ -31,48 +31,71 @@
 #include "RadientLightList.hpp"
 #include "RadientRenderResourceCache.hpp"
 
-#include "GLTFLoader.hpp"
-#include "GLTF_PBR_Renderer.hpp"
+#include "PBR_Renderer.hpp"
 #include "RefCntAutoPtr.hpp"
 
+#include <array>
 #include <memory>
 
 namespace Diligent
 {
+
+struct RadientGeometryResourceCacheUseInfo
+{
+    GLTF::ResourceManager* pResourceMgr = nullptr;
+
+    GLTF::ResourceManager::VertexLayoutKey VtxLayoutKey;
+
+    std::array<TEXTURE_FORMAT, PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT> AtlasFormats{};
+
+    RadientGeometryResourceCacheUseInfo() noexcept
+    {
+        AtlasFormats.fill(TEX_FORMAT_RGBA8_TYPELESS);
+    }
+};
+
+struct RadientGeometryResourceCacheBindings
+{
+    Uint32 Version = ~0u;
+
+    RefCntAutoPtr<IShaderResourceBinding> pSRB;
+};
 
 /// Mesh geometry render pass used by shadow and forward rendering stages.
 class RadientGeometryPass
 {
 public:
     RADIENT_STATUS Prepare(IRenderDevice* pDevice, IDeviceContext* pContext, const RadientFrameRenderTargets& Targets);
-    RADIENT_STATUS Execute(IRenderDevice*               pDevice,
-                           IDeviceContext*              pContext,
-                           const RadientDrawList&       DrawList,
-                           const RadientLightList&      LightList,
-                           RadientRenderResourceCache&  ResourceCache,
-                           const RadientRenderAttribs&  Attribs,
+    RADIENT_STATUS Execute(IRenderDevice*                   pDevice,
+                           IDeviceContext*                  pContext,
+                           const RadientDrawList&           DrawList,
+                           const RadientLightList&          LightList,
+                           RadientRenderResourceCache&      ResourceCache,
+                           const RadientRenderAttribs&      Attribs,
                            const RadientFrameRenderTargets& Targets);
 
 private:
-    RADIENT_STATUS CreateRenderer(IRenderDevice* pDevice,
+    RADIENT_STATUS CreateRenderer(IRenderDevice*  pDevice,
                                   IDeviceContext* pContext,
-                                  TEXTURE_FORMAT RTVFormat,
-                                  TEXTURE_FORMAT DSVFormat);
+                                  TEXTURE_FORMAT  RTVFormat,
+                                  TEXTURE_FORMAT  DSVFormat);
+
     void InitializeResourceCacheUseInfo();
 
 private:
-    std::unique_ptr<GLTF_PBR_Renderer> m_pGLTFRenderer;
-    RefCntAutoPtr<IBuffer>             m_pFrameAttribsCB;
+    std::unique_ptr<PBR_Renderer> m_pRenderer;
+    RefCntAutoPtr<IBuffer>        m_pFrameAttribsCB;
 
-    GLTF_PBR_Renderer::RenderInfo            m_RenderInfo;
-    GLTF_PBR_Renderer::ResourceCacheUseInfo  m_CacheUseInfo;
-    GLTF_PBR_Renderer::ResourceCacheBindings m_CacheBindings;
+    PBR_Renderer::PsoCacheAccessor m_PbrPSOCache;
+    PBR_Renderer::PsoCacheAccessor m_WireframePSOCache;
 
-    GLTF::ModelTransforms m_Transforms;
-    GLTF::ModelTransforms m_PrevTransforms;
+    RadientGeometryResourceCacheUseInfo  m_CacheUseInfo;
+    RadientGeometryResourceCacheBindings m_CacheBindings;
 
-    TEXTURE_FORMAT m_RTVFormat = TEX_FORMAT_UNKNOWN;
-    TEXTURE_FORMAT m_DSVFormat = TEX_FORMAT_UNKNOWN;
+    PBR_Renderer::PSO_FLAGS m_RenderFlags = PBR_Renderer::PSO_FLAG_NONE;
+
+    TEXTURE_FORMAT m_RTVFormat  = TEX_FORMAT_UNKNOWN;
+    TEXTURE_FORMAT m_DSVFormat  = TEX_FORMAT_UNKNOWN;
     Uint32         m_FrameIndex = 0;
 };
 

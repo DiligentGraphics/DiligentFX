@@ -113,12 +113,12 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMesh(const RadientMeshCreateInfo& 
         const RadientMeshPrimitiveCreateInfo& PrimitiveCI = MeshCI.pPrimitives[PrimitiveIndex];
 
         MeshPrimitiveStorage Primitive;
-        Primitive.Name            = PrimitiveCI.Name != nullptr ? PrimitiveCI.Name : "";
+        Primitive.Name              = PrimitiveCI.Name != nullptr ? PrimitiveCI.Name : "";
         Primitive.VertexBufferIndex = PrimitiveCI.VertexBufferIndex;
-        Primitive.FirstIndex      = PrimitiveCI.FirstIndex;
-        Primitive.IndexCount      = PrimitiveCI.IndexCount;
-        Primitive.MaterialVersion = PrimitiveCI.Material.Version;
-        Primitive.MaterialURI     = PrimitiveCI.Material.URI != nullptr ? PrimitiveCI.Material.URI : "";
+        Primitive.FirstIndex        = PrimitiveCI.FirstIndex;
+        Primitive.IndexCount        = PrimitiveCI.IndexCount;
+        Primitive.MaterialVersion   = PrimitiveCI.Material.Version;
+        Primitive.MaterialURI       = PrimitiveCI.Material.URI != nullptr ? PrimitiveCI.Material.URI : "";
 
         Record.MeshPrimitives.emplace_back(std::move(Primitive));
     }
@@ -169,6 +169,53 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadGLTF(const RadientGLTFLoadInfo& Load
     Record.GLTFModel.SourceURI = LoadInfo.URI;
 
     Model = StoreAsset(std::move(Record));
+    return RADIENT_STATUS_OK;
+}
+
+RADIENT_STATUS RadientAssetManagerImpl::CreateMeshFromGLTFMesh(const RadientAssetReference& Model,
+                                                               Uint32                       MeshIndex,
+                                                               const Char*                  Name,
+                                                               RadientAssetReference&       Mesh)
+{
+    Mesh = {};
+
+    const AssetRecord* pModelRecord = FindAsset(Model);
+    if (pModelRecord == nullptr)
+        return RADIENT_STATUS_NOT_FOUND;
+
+    if (pModelRecord->Type != RADIENT_ASSET_TYPE_GLTF_MODEL)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    AssetRecord Record;
+    Record.Type               = RADIENT_ASSET_TYPE_MESH;
+    Record.Name               = Name != nullptr ? Name : "";
+    Record.URI                = MakeURI("mesh");
+    Record.GLTFMesh.Model     = CopyAssetReference(Model, Record.GLTFMesh.ModelURI);
+    Record.GLTFMesh.MeshIndex = MeshIndex;
+
+    Mesh = StoreAsset(std::move(Record));
+    return RADIENT_STATUS_OK;
+}
+
+RADIENT_STATUS RadientAssetManagerImpl::GetMeshGLTFSource(const RadientAssetReference& Mesh,
+                                                          RadientAssetReference&       Model,
+                                                          Uint32&                      MeshIndex) const
+{
+    Model     = {};
+    MeshIndex = ~0u;
+
+    const AssetRecord* pRecord = FindAsset(Mesh);
+    if (pRecord == nullptr)
+        return RADIENT_STATUS_NOT_FOUND;
+
+    if (pRecord->Type != RADIENT_ASSET_TYPE_MESH)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    if (pRecord->GLTFMesh.Model.URI == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    Model     = pRecord->GLTFMesh.Model;
+    MeshIndex = pRecord->GLTFMesh.MeshIndex;
     return RADIENT_STATUS_OK;
 }
 
@@ -276,6 +323,7 @@ void RadientAssetManagerImpl::FixupAssetRecord(AssetRecord& Record)
     FixupAssetReference(Record.Material.NormalTexture, Record.Material.NormalTextureURI);
     FixupAssetReference(Record.Material.OcclusionTexture, Record.Material.OcclusionTextureURI);
     FixupAssetReference(Record.Material.EmissiveTexture, Record.Material.EmissiveTextureURI);
+    FixupAssetReference(Record.GLTFMesh.Model, Record.GLTFMesh.ModelURI);
 }
 
 void RadientAssetManagerImpl::FixupAssetReference(RadientAssetReference& Ref, const std::string& URIStorage)

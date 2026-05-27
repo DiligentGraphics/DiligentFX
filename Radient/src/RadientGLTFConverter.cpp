@@ -26,6 +26,7 @@
 
 #include "RadientGLTFConverter.hpp"
 
+#include "RadientAssetManagerImpl.hpp"
 #include "RadientMath.hpp"
 #include "RadientSceneWriter.h"
 
@@ -112,9 +113,52 @@ RadientLightComponent ToRadientLight(const GLTF::Light& Light)
     return Result;
 }
 
-RADIENT_STATUS CreateNode(IRadientSceneWriter& Writer,
-                          const GLTF::Node&    Node,
-                          RadientEntityID      Parent)
+bool GetMeshIndex(const GLTF::Model& GLTFModel, const GLTF::Mesh& Mesh, Uint32& MeshIndex)
+{
+    for (size_t Index = 0; Index < GLTFModel.Meshes.size(); ++Index)
+    {
+        if (&GLTFModel.Meshes[Index] == &Mesh)
+        {
+            MeshIndex = static_cast<Uint32>(Index);
+            return true;
+        }
+    }
+
+    MeshIndex = ~0u;
+    return false;
+}
+
+RADIENT_STATUS GetOrCreateMeshAsset(RadientAssetManagerImpl&                  AssetManager,
+                                    const RadientAssetReference&              Model,
+                                    const GLTF::Model&                        GLTFModel,
+                                    const GLTF::Mesh&                         Mesh,
+                                    std::vector<RadientAssetReference>&       MeshAssets,
+                                    RadientAssetReference&                    MeshAsset)
+{
+    Uint32 MeshIndex = ~0u;
+    if (!GetMeshIndex(GLTFModel, Mesh, MeshIndex) || MeshIndex >= MeshAssets.size())
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    MeshAsset = MeshAssets[MeshIndex];
+    if (MeshAsset.URI != nullptr)
+        return RADIENT_STATUS_OK;
+
+    const Char* MeshName = !Mesh.Name.empty() ? Mesh.Name.c_str() : nullptr;
+    const RADIENT_STATUS Status = AssetManager.CreateMeshFromGLTFMesh(Model, MeshIndex, MeshName, MeshAsset);
+    if (RADIENT_FAILED(Status))
+        return Status;
+
+    MeshAssets[MeshIndex] = MeshAsset;
+    return RADIENT_STATUS_OK;
+}
+
+RADIENT_STATUS CreateNode(IRadientSceneWriter&                  Writer,
+                          RadientAssetManagerImpl&              AssetManager,
+                          const GLTF::Model&                    GLTFModel,
+                          const RadientAssetReference&          Model,
+                          const GLTF::Node&                     Node,
+                          RadientEntityID                       Parent,
+                          std::vector<RadientAssetReference>&   MeshAssets)
 {
     const std::string FallbackName = std::string{"GLTF Node "} + std::to_string(Node.Index);
 
@@ -142,12 +186,31 @@ RADIENT_STATUS CreateNode(IRadientSceneWriter& Writer,
             return Status;
     }
 
+    if (Node.pMesh != nullptr)
+    {
+        RadientAssetReference MeshAsset{};
+        Status = GetOrCreateMeshAsset(AssetManager, Model, GLTFModel, *Node.pMesh, MeshAssets, MeshAsset);
+        if (RADIENT_FAILED(Status))
+            return Status;
+
+        RadientMeshComponent Mesh{};
+        Mesh.Mesh = MeshAsset;
+        Status    = Writer.SetMesh(NodeEntity, Mesh);
+        if (RADIENT_FAILED(Status))
+            return Status;
+
+        RadientMeshRendererComponent Renderer{};
+        Status = Writer.SetMeshRenderer(NodeEntity, Renderer);
+        if (RADIENT_FAILED(Status))
+            return Status;
+    }
+
     for (const GLTF::Node* pChild : Node.Children)
     {
         if (pChild == nullptr)
             continue;
 
-        Status = CreateNode(Writer, *pChild, NodeEntity);
+        Status = CreateNode(Writer, AssetManager, GLTFModel, Model, *pChild, NodeEntity, MeshAssets);
         if (RADIENT_FAILED(Status))
             return Status;
     }
@@ -187,6 +250,7 @@ namespace RadientGLTFConverter
 RADIENT_STATUS InstantiateSceneGraph(const GLTF::Model&                GLTFModel,
                                      const RadientAssetReference&      Model,
                                      const RadientGLTFInstantiateInfo& InstantiateInfo,
+                                     RadientAssetManagerImpl&          AssetManager,
                                      IRadientSceneWriter&              Writer,
                                      RadientEntityID&                  RootEntity)
 {
@@ -207,6 +271,8 @@ RADIENT_STATUS InstantiateSceneGraph(const GLTF::Model&                GLTFModel
     if (RADIENT_FAILED(Status))
         return Status;
 
+    std::vector<RadientAssetReference> MeshAssets(GLTFModel.Meshes.size());
+
     if (SceneIndex < GLTFModel.Scenes.size())
     {
         for (const GLTF::Node* pNode : GLTFModel.Scenes[SceneIndex].RootNodes)
@@ -214,24 +280,11 @@ RADIENT_STATUS InstantiateSceneGraph(const GLTF::Model&                GLTFModel
             if (pNode == nullptr)
                 continue;
 
-            Status = CreateNode(Writer, *pNode, RootEntity);
+            Status = CreateNode(Writer, AssetManager, GLTFModel, Model, *pNode, RootEntity, MeshAssets);
             if (RADIENT_FAILED(Status))
                 return Status;
         }
     }
-
-    // Temporary rendering slice: keep the full GLTF asset on the instance root
-    // until GLTF meshes are imported as individual Radient mesh assets.
-    RadientMeshComponent Mesh{};
-    Mesh.Mesh = Model;
-    Status    = Writer.SetMesh(RootEntity, Mesh);
-    if (RADIENT_FAILED(Status))
-        return Status;
-
-    RadientMeshRendererComponent Renderer{};
-    Status = Writer.SetMeshRenderer(RootEntity, Renderer);
-    if (RADIENT_FAILED(Status))
-        return Status;
 
     return RADIENT_STATUS_OK;
 }

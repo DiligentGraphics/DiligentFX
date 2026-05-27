@@ -32,6 +32,7 @@ namespace Diligent
 {
 
 struct IRadientSceneWriter;
+class RadientAssetManagerImpl;
 
 namespace GLTF
 {
@@ -46,6 +47,7 @@ namespace RadientGLTFConverter
 RADIENT_STATUS InstantiateSceneGraph(const GLTF::Model&                GLTFModel,
                                      const RadientAssetReference&      Model,
                                      const RadientGLTFInstantiateInfo& InstantiateInfo,
+                                     RadientAssetManagerImpl&          AssetManager,
                                      IRadientSceneWriter&              Writer,
                                      RadientEntityID&                  RootEntity);
 
