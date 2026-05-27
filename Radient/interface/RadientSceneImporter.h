@@ -36,6 +36,9 @@ DILIGENT_BEGIN_NAMESPACE(Diligent)
 
 struct IRadientSceneImporter;
 
+/// Uses the GLTF model default scene.
+static DILIGENT_CONSTEXPR Uint32 InvalidRadientGLTFSceneIndex = ~0u;
+
 
 /// GLTF model instantiation attributes.
 struct RadientGLTFInstantiateInfo
@@ -51,6 +54,9 @@ struct RadientGLTFInstantiateInfo
 
     /// Root entity local transform.
     RadientTransform RootTransform DEFAULT_INITIALIZER({});
+
+    /// Optional GLTF scene index to instantiate. InvalidRadientGLTFSceneIndex uses the model default scene.
+    Uint32 SceneIndex DEFAULT_INITIALIZER(InvalidRadientGLTFSceneIndex);
 };
 typedef struct RadientGLTFInstantiateInfo RadientGLTFInstantiateInfo;
 

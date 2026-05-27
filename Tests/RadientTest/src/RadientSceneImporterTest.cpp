@@ -208,6 +208,63 @@ TEST(RadientSceneImporterTest, ImportsNodeHierarchy)
     ExpectFloat3Near(Transform.Scale, {2.f, 3.f, 4.f});
 }
 
+TEST(RadientSceneImporterTest, UsesExplicitSceneIndex)
+{
+    TempDirectory     TempDir{"RadientSceneImporterTest"};
+    const std::string GLTFPath = WriteGLTFFile(TempDir, "scene_index.gltf",
+                                               R"GLTF({
+    "asset": {"version": "2.0"},
+    "scene": 1,
+    "scenes": [
+        {"nodes": [0]},
+        {"nodes": [1]}
+    ],
+    "nodes": [
+        {"name": "Scene0Node", "translation": [1, 0, 0]},
+        {"name": "DefaultSceneNode", "translation": [2, 0, 0]}
+    ]
+})GLTF");
+
+    ImportFixture Fixture = CreateImportFixture();
+    ASSERT_NE(Fixture.pImporter, nullptr);
+    ASSERT_NE(Fixture.pScene, nullptr);
+
+    RadientGLTFLoadInfo LoadInfo{};
+    LoadInfo.URI = GLTFPath.c_str();
+
+    RadientGLTFInstantiateInfo InstantiateInfo{};
+    InstantiateInfo.Name = "Default scene";
+
+    RadientAssetReference Model{};
+    RadientEntityID       ImportedRoot = InvalidRadientEntityID;
+    EXPECT_EQ(Fixture.pImporter->ImportGLTF(LoadInfo, InstantiateInfo, Model, ImportedRoot), RADIENT_STATUS_OK);
+
+    std::vector<RadientEntityID> RootChildren = GetChildren(*Fixture.pScene, ImportedRoot);
+    ASSERT_EQ(RootChildren.size(), 1u);
+
+    RadientTransform Transform{};
+    EXPECT_EQ(Fixture.pScene->GetLocalTransform(RootChildren[0], Transform), RADIENT_STATUS_OK);
+    ExpectFloat3Near(Transform.Position, {2.f, 0.f, 0.f});
+
+    InstantiateInfo.Name       = "Explicit scene 0";
+    InstantiateInfo.SceneIndex = 0;
+
+    EXPECT_EQ(Fixture.pImporter->ImportGLTF(LoadInfo, InstantiateInfo, Model, ImportedRoot), RADIENT_STATUS_OK);
+
+    RootChildren = GetChildren(*Fixture.pScene, ImportedRoot);
+    ASSERT_EQ(RootChildren.size(), 1u);
+
+    EXPECT_EQ(Fixture.pScene->GetLocalTransform(RootChildren[0], Transform), RADIENT_STATUS_OK);
+    ExpectFloat3Near(Transform.Position, {1.f, 0.f, 0.f});
+
+    InstantiateInfo.Name       = "Invalid scene";
+    InstantiateInfo.SceneIndex = 2;
+    ImportedRoot               = InvalidRadientEntityID;
+
+    EXPECT_EQ(Fixture.pImporter->ImportGLTF(LoadInfo, InstantiateInfo, Model, ImportedRoot), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(ImportedRoot, InvalidRadientEntityID);
+}
+
 TEST(RadientSceneImporterTest, ImportsCameras)
 {
     TempDirectory     TempDir{"RadientSceneImporterTest"};

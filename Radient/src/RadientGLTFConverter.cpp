@@ -162,6 +162,23 @@ Uint32 GetDefaultSceneIndex(const GLTF::Model& Model)
         0;
 }
 
+RADIENT_STATUS ResolveSceneIndex(const GLTF::Model&                Model,
+                                 const RadientGLTFInstantiateInfo& InstantiateInfo,
+                                 Uint32&                           SceneIndex)
+{
+    if (InstantiateInfo.SceneIndex == InvalidRadientGLTFSceneIndex)
+    {
+        SceneIndex = GetDefaultSceneIndex(Model);
+        return RADIENT_STATUS_OK;
+    }
+
+    if (InstantiateInfo.SceneIndex >= Model.Scenes.size())
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    SceneIndex = InstantiateInfo.SceneIndex;
+    return RADIENT_STATUS_OK;
+}
+
 } // namespace
 
 namespace RadientGLTFConverter
@@ -175,17 +192,21 @@ RADIENT_STATUS InstantiateSceneGraph(const GLTF::Model&                GLTFModel
 {
     RootEntity = InvalidRadientEntityID;
 
+    Uint32         SceneIndex = 0;
+    RADIENT_STATUS Status     = ResolveSceneIndex(GLTFModel, InstantiateInfo, SceneIndex);
+    if (RADIENT_FAILED(Status))
+        return Status;
+
     RadientEntityDesc RootDesc{};
     RootDesc.Name      = InstantiateInfo.Name != nullptr ? InstantiateInfo.Name : Model.URI;
     RootDesc.Parent    = InstantiateInfo.Parent;
     RootDesc.Flags     = InstantiateInfo.RootFlags;
     RootDesc.Transform = InstantiateInfo.RootTransform;
 
-    RADIENT_STATUS Status = Writer.CreateEntity(RootDesc, RootEntity);
+    Status = Writer.CreateEntity(RootDesc, RootEntity);
     if (RADIENT_FAILED(Status))
         return Status;
 
-    const Uint32 SceneIndex = GetDefaultSceneIndex(GLTFModel);
     if (SceneIndex < GLTFModel.Scenes.size())
     {
         for (const GLTF::Node* pNode : GLTFModel.Scenes[SceneIndex].RootNodes)
