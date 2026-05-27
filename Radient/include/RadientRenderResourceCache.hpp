@@ -28,18 +28,49 @@
 
 #include "RadientAssetManagerImpl.hpp"
 #include "RadientTypes.h"
+#include "PBR_Renderer.hpp"
 #include "RefCntAutoPtr.hpp"
 
-#include "GLTFLoader.hpp"
 #include "GLTFResourceManager.hpp"
 #include "GPUUploadManager.h"
 
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace Diligent
 {
+
+namespace GLTF
+{
+struct Material;
+struct Model;
+} // namespace GLTF
+
+struct RadientRenderMeshPrimitive
+{
+    Uint32 FirstIndex  = 0;
+    Uint32 IndexCount  = 0;
+    Uint32 FirstVertex = 0;
+    Uint32 VertexCount = 0;
+    Uint32 MaterialId  = 0;
+
+    bool HasIndices() const
+    {
+        return IndexCount > 0;
+    }
+};
+
+struct RadientRenderMesh
+{
+    std::vector<RadientRenderMeshPrimitive> Primitives;
+    std::vector<const GLTF::Material*>      Materials;
+
+    PBR_Renderer::PSO_FLAGS VertexAttribFlags  = PBR_Renderer::PSO_FLAG_NONE;
+    Uint32                  FirstIndexLocation = 0;
+    Uint32                  BaseVertex         = 0;
+};
 
 /// Renderer-owned cache for uploaded Radient asset data.
 ///
@@ -54,19 +85,11 @@ public:
     RADIENT_STATUS Prepare(IRenderDevice*  pDevice,
                            IDeviceContext* pContext);
 
-    RADIENT_STATUS EnsureGLTFLoaded(const RadientAssetReference& Model,
-                                    IRenderDevice*               pDevice,
-                                    IDeviceContext*              pContext);
-
     RADIENT_STATUS EnsureMeshLoaded(const RadientAssetReference& Mesh,
                                     IRenderDevice*               pDevice,
                                     IDeviceContext*              pContext);
 
-    const GLTF::Model* GetGLTFModel(const RadientAssetReference& Model) const;
-
-    RADIENT_STATUS GetMeshGLTFSource(const RadientAssetReference& Mesh,
-                                     RadientAssetReference&       Model,
-                                     Uint32&                      MeshIndex) const;
+    const RadientRenderMesh* GetMesh(const RadientAssetReference& Mesh) const;
 
     IGPUUploadManager*     GetUploadManager() const;
     GLTF::ResourceManager* GetResourceManager() const;
@@ -81,6 +104,9 @@ private:
     void           Reset();
     void           CreateResources(IRenderDevice*  pDevice,
                                    IDeviceContext* pContext);
+    RADIENT_STATUS EnsureGLTFLoaded(const RadientAssetReference& Model,
+                                    IRenderDevice*               pDevice,
+                                    IDeviceContext*              pContext);
     RADIENT_STATUS PrepareGLTFResource(GLTFResource&   Resource,
                                        IRenderDevice*  pDevice,
                                        IDeviceContext* pContext);
@@ -90,7 +116,8 @@ private:
     RefCntAutoPtr<IGPUUploadManager>       m_pUploadManager;
     RefCntAutoPtr<GLTF::ResourceManager>   m_pResourceManager;
 
-    std::unordered_map<std::string, GLTFResource> m_GLTFResources;
+    std::unordered_map<std::string, GLTFResource>      m_GLTFResources;
+    std::unordered_map<std::string, RadientRenderMesh> m_MeshResources;
 };
 
 } // namespace Diligent

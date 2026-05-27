@@ -27,8 +27,11 @@
 #include "RadientRenderResourceCache.hpp"
 
 #include "DebugUtilities.hpp"
+#include "GLTFLoader.hpp"
 
+#include <cstring>
 #include <exception>
+#include <utility>
 
 namespace Diligent
 {
@@ -75,6 +78,71 @@ GLTF::ResourceManager::CreateInfo CreateResourceManagerInfo()
 std::string MakeAssetCacheKey(const RadientAssetReference& Asset)
 {
     return std::string{Asset.URI} + "#" + std::to_string(Asset.Version);
+}
+
+PBR_Renderer::PSO_FLAGS GetVertexAttribFlags(const GLTF::Model& Model)
+{
+    PBR_Renderer::PSO_FLAGS Flags = PBR_Renderer::PSO_FLAG_NONE;
+    for (Uint32 AttribIndex = 0; AttribIndex < Model.GetNumVertexAttributes(); ++AttribIndex)
+    {
+        if (!Model.IsVertexAttributeEnabled(AttribIndex))
+            continue;
+
+        const GLTF::VertexAttributeDesc& Attrib = Model.GetVertexAttribute(AttribIndex);
+        if (std::strcmp(Attrib.Name, GLTF::NormalAttributeName) == 0)
+            Flags |= PBR_Renderer::PSO_FLAG_USE_VERTEX_NORMALS;
+        else if (std::strcmp(Attrib.Name, GLTF::Texcoord0AttributeName) == 0)
+            Flags |= PBR_Renderer::PSO_FLAG_USE_TEXCOORD0;
+        else if (std::strcmp(Attrib.Name, GLTF::Texcoord1AttributeName) == 0)
+            Flags |= PBR_Renderer::PSO_FLAG_USE_TEXCOORD1;
+        else if (std::strcmp(Attrib.Name, GLTF::JointsAttributeName) == 0)
+        {
+            // Radient skinning is not wired yet; keep the pass on the rigid path.
+        }
+        else if (std::strcmp(Attrib.Name, GLTF::VertexColorAttributeName) == 0)
+            Flags |= PBR_Renderer::PSO_FLAG_USE_VERTEX_COLORS;
+        else if (std::strcmp(Attrib.Name, GLTF::TangentAttributeName) == 0)
+            Flags |= PBR_Renderer::PSO_FLAG_USE_VERTEX_TANGENTS;
+    }
+
+    return Flags;
+}
+
+RadientRenderMeshPrimitive ConvertPrimitive(const GLTF::Primitive& Primitive)
+{
+    RadientRenderMeshPrimitive Result;
+    Result.FirstIndex  = Primitive.FirstIndex;
+    Result.IndexCount  = Primitive.IndexCount;
+    Result.FirstVertex = Primitive.FirstVertex;
+    Result.VertexCount = Primitive.VertexCount;
+    Result.MaterialId  = Primitive.MaterialId;
+    return Result;
+}
+
+RADIENT_STATUS BuildMeshResource(const GLTF::Model& GLTFModel,
+                                 Uint32             MeshIndex,
+                                 RadientRenderMesh& Mesh)
+{
+    Mesh = {};
+
+    if (MeshIndex >= GLTFModel.Meshes.size())
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    const GLTF::Mesh& GLTFMesh = GLTFModel.Meshes[MeshIndex];
+
+    Mesh.VertexAttribFlags  = GetVertexAttribFlags(GLTFModel);
+    Mesh.FirstIndexLocation = GLTFModel.GetFirstIndexLocation();
+    Mesh.BaseVertex         = GLTFModel.GetBaseVertex();
+
+    Mesh.Primitives.reserve(GLTFMesh.Primitives.size());
+    for (const GLTF::Primitive& Primitive : GLTFMesh.Primitives)
+        Mesh.Primitives.emplace_back(ConvertPrimitive(Primitive));
+
+    Mesh.Materials.reserve(GLTFModel.Materials.size());
+    for (const GLTF::Material& Material : GLTFModel.Materials)
+        Mesh.Materials.emplace_back(&Material);
+
+    return RADIENT_STATUS_OK;
 }
 
 } // namespace
@@ -140,13 +208,13 @@ RADIENT_STATUS RadientRenderResourceCache::EnsureGLTFLoaded(const RadientAssetRe
     if (m_pResourceManager == nullptr || m_pUploadManager == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
-    const Char* pSourceURI = nullptr;
+    const Char*          pSourceURI   = nullptr;
     const RADIENT_STATUS SourceStatus = m_pAssetManager->GetGLTFSourceURI(Model, pSourceURI);
     if (RADIENT_FAILED(SourceStatus))
         return SourceStatus;
 
     const std::string CacheKey = MakeAssetCacheKey(Model);
-    GLTFResource& Resource = m_GLTFResources[CacheKey];
+    GLTFResource&     Resource = m_GLTFResources[CacheKey];
     if (Resource.pModel == nullptr)
     {
         Resource.SourceURI = pSourceURI;
@@ -181,36 +249,48 @@ RADIENT_STATUS RadientRenderResourceCache::EnsureMeshLoaded(const RadientAssetRe
                                                             IRenderDevice*               pDevice,
                                                             IDeviceContext*              pContext)
 {
-    RadientAssetReference Model{};
-    Uint32                MeshIndex = ~0u;
-    const RADIENT_STATUS  SourceStatus = GetMeshGLTFSource(Mesh, Model, MeshIndex);
-    if (RADIENT_FAILED(SourceStatus))
-        return SourceStatus;
+    if (Mesh.URI == nullptr || *Mesh.URI == 0)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    return EnsureGLTFLoaded(Model, pDevice, pContext);
-}
-
-const GLTF::Model* RadientRenderResourceCache::GetGLTFModel(const RadientAssetReference& Model) const
-{
-    if (Model.URI == nullptr || *Model.URI == 0)
-        return nullptr;
-
-    const std::string CacheKey = MakeAssetCacheKey(Model);
-    std::unordered_map<std::string, GLTFResource>::const_iterator ResourceIt = m_GLTFResources.find(CacheKey);
-    return ResourceIt != m_GLTFResources.end() ? ResourceIt->second.pModel.get() : nullptr;
-}
-
-RADIENT_STATUS RadientRenderResourceCache::GetMeshGLTFSource(const RadientAssetReference& Mesh,
-                                                             RadientAssetReference&       Model,
-                                                             Uint32&                      MeshIndex) const
-{
-    Model     = {};
-    MeshIndex = ~0u;
+    const std::string MeshCacheKey = MakeAssetCacheKey(Mesh);
+    if (m_MeshResources.find(MeshCacheKey) != m_MeshResources.end())
+        return RADIENT_STATUS_OK;
 
     if (m_pAssetManager == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
-    return m_pAssetManager->GetMeshGLTFSource(Mesh, Model, MeshIndex);
+    RadientAssetReference Model{};
+    Uint32                MeshIndex    = ~0u;
+    const RADIENT_STATUS  SourceStatus = m_pAssetManager->GetMeshGLTFSource(Mesh, Model, MeshIndex);
+    if (RADIENT_FAILED(SourceStatus))
+        return SourceStatus;
+
+    const RADIENT_STATUS LoadStatus = EnsureGLTFLoaded(Model, pDevice, pContext);
+    if (RADIENT_FAILED(LoadStatus) || LoadStatus != RADIENT_STATUS_OK)
+        return LoadStatus;
+
+    const std::string                                       ModelCacheKey = MakeAssetCacheKey(Model);
+    std::unordered_map<std::string, GLTFResource>::iterator ResourceIt    = m_GLTFResources.find(ModelCacheKey);
+    if (ResourceIt == m_GLTFResources.end() || ResourceIt->second.pModel == nullptr)
+        return RADIENT_STATUS_INVALID_OPERATION;
+
+    RadientRenderMesh    MeshResource;
+    const RADIENT_STATUS BuildStatus = BuildMeshResource(*ResourceIt->second.pModel, MeshIndex, MeshResource);
+    if (RADIENT_FAILED(BuildStatus))
+        return BuildStatus;
+
+    m_MeshResources.emplace(MeshCacheKey, std::move(MeshResource));
+    return RADIENT_STATUS_OK;
+}
+
+const RadientRenderMesh* RadientRenderResourceCache::GetMesh(const RadientAssetReference& Mesh) const
+{
+    if (Mesh.URI == nullptr || *Mesh.URI == 0)
+        return nullptr;
+
+    const std::string                                                  CacheKey = MakeAssetCacheKey(Mesh);
+    std::unordered_map<std::string, RadientRenderMesh>::const_iterator MeshIt   = m_MeshResources.find(CacheKey);
+    return MeshIt != m_MeshResources.end() ? &MeshIt->second : nullptr;
 }
 
 IGPUUploadManager* RadientRenderResourceCache::GetUploadManager() const
@@ -225,6 +305,7 @@ GLTF::ResourceManager* RadientRenderResourceCache::GetResourceManager() const
 
 void RadientRenderResourceCache::Reset()
 {
+    m_MeshResources.clear();
     m_GLTFResources.clear();
     m_pUploadManager.Release();
     m_pResourceManager.Release();
@@ -245,8 +326,8 @@ void RadientRenderResourceCache::CreateResources(IRenderDevice*  pDevice,
     m_pResourceManager                                 = GLTF::ResourceManager::Create(pDevice, ResourceCI);
 }
 
-RADIENT_STATUS RadientRenderResourceCache::PrepareGLTFResource(GLTFResource&  Resource,
-                                                               IRenderDevice* pDevice,
+RADIENT_STATUS RadientRenderResourceCache::PrepareGLTFResource(GLTFResource&   Resource,
+                                                               IRenderDevice*  pDevice,
                                                                IDeviceContext* pContext)
 {
     if (Resource.pModel == nullptr)

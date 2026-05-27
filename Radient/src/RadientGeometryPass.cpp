@@ -30,6 +30,7 @@
 
 #include "GraphicsAccessories.hpp"
 #include "GraphicsUtilities.h"
+#include "GLTFLoader.hpp"
 #include "MapHelper.hpp"
 
 #include <algorithm>
@@ -250,14 +251,6 @@ void WriteSceneLights(PBR_Renderer&           Renderer,
     RendererAttribs.DebugView         = 0;
 }
 
-PBR_Renderer::ALPHA_MODE ToPBRAlphaMode(GLTF::Material::ALPHA_MODE AlphaMode)
-{
-    static_assert(static_cast<PBR_Renderer::ALPHA_MODE>(GLTF::Material::ALPHA_MODE_OPAQUE) == PBR_Renderer::ALPHA_MODE_OPAQUE, "GLTF opaque alpha mode must match PBR alpha mode");
-    static_assert(static_cast<PBR_Renderer::ALPHA_MODE>(GLTF::Material::ALPHA_MODE_MASK) == PBR_Renderer::ALPHA_MODE_MASK, "GLTF mask alpha mode must match PBR alpha mode");
-    static_assert(static_cast<PBR_Renderer::ALPHA_MODE>(GLTF::Material::ALPHA_MODE_BLEND) == PBR_Renderer::ALPHA_MODE_BLEND, "GLTF blend alpha mode must match PBR alpha mode");
-    return static_cast<PBR_Renderer::ALPHA_MODE>(AlphaMode);
-}
-
 void SetGLTFTextureAttribIndices(PBR_Renderer::CreateInfo& CI)
 {
     CI.TextureAttribIndices[PBR_Renderer::TEXTURE_ATTRIB_ID_BASE_COLOR]            = GLTF::DefaultBaseColorTextureAttribId;
@@ -278,32 +271,12 @@ void SetGLTFTextureAttribIndices(PBR_Renderer::CreateInfo& CI)
     static_assert(PBR_Renderer::TEXTURE_ATTRIB_ID_COUNT == 17, "Please update the GLTF texture attribute mapping");
 }
 
-PBR_Renderer::PSO_FLAGS GetVertexAttribFlags(const GLTF::Model& Model)
+PBR_Renderer::ALPHA_MODE ToPBRAlphaMode(GLTF::Material::ALPHA_MODE AlphaMode)
 {
-    PBR_Renderer::PSO_FLAGS Flags = PBR_Renderer::PSO_FLAG_NONE;
-    for (Uint32 AttribIndex = 0; AttribIndex < Model.GetNumVertexAttributes(); ++AttribIndex)
-    {
-        if (!Model.IsVertexAttributeEnabled(AttribIndex))
-            continue;
-
-        const GLTF::VertexAttributeDesc& Attrib = Model.GetVertexAttribute(AttribIndex);
-        if (std::strcmp(Attrib.Name, GLTF::NormalAttributeName) == 0)
-            Flags |= PBR_Renderer::PSO_FLAG_USE_VERTEX_NORMALS;
-        else if (std::strcmp(Attrib.Name, GLTF::Texcoord0AttributeName) == 0)
-            Flags |= PBR_Renderer::PSO_FLAG_USE_TEXCOORD0;
-        else if (std::strcmp(Attrib.Name, GLTF::Texcoord1AttributeName) == 0)
-            Flags |= PBR_Renderer::PSO_FLAG_USE_TEXCOORD1;
-        else if (std::strcmp(Attrib.Name, GLTF::JointsAttributeName) == 0)
-        {
-            // Radient skinning is not wired yet; keep the pass on the rigid path.
-        }
-        else if (std::strcmp(Attrib.Name, GLTF::VertexColorAttributeName) == 0)
-            Flags |= PBR_Renderer::PSO_FLAG_USE_VERTEX_COLORS;
-        else if (std::strcmp(Attrib.Name, GLTF::TangentAttributeName) == 0)
-            Flags |= PBR_Renderer::PSO_FLAG_USE_VERTEX_TANGENTS;
-    }
-
-    return Flags;
+    static_assert(static_cast<PBR_Renderer::ALPHA_MODE>(GLTF::Material::ALPHA_MODE_OPAQUE) == PBR_Renderer::ALPHA_MODE_OPAQUE, "GLTF opaque alpha mode must match PBR alpha mode");
+    static_assert(static_cast<PBR_Renderer::ALPHA_MODE>(GLTF::Material::ALPHA_MODE_MASK) == PBR_Renderer::ALPHA_MODE_MASK, "GLTF mask alpha mode must match PBR alpha mode");
+    static_assert(static_cast<PBR_Renderer::ALPHA_MODE>(GLTF::Material::ALPHA_MODE_BLEND) == PBR_Renderer::ALPHA_MODE_BLEND, "GLTF blend alpha mode must match PBR alpha mode");
+    return static_cast<PBR_Renderer::ALPHA_MODE>(AlphaMode);
 }
 
 PBR_Renderer::PSO_FLAGS GetMaterialPSOFlags(const PBR_Renderer&   Renderer,
@@ -771,28 +744,26 @@ RADIENT_STATUS RadientGeometryPass::Execute(IRenderDevice*                   pDe
 
     struct ReadyDrawItem
     {
-        const RadientDrawItem* pItem = nullptr;
-        RadientAssetReference  Model;
-        Uint32                 MeshIndex = ~0u;
+        const RadientDrawItem*   pItem = nullptr;
+        const RadientRenderMesh* pMesh = nullptr;
     };
 
     std::vector<ReadyDrawItem> ReadyItems;
     ReadyItems.reserve(DrawList.GetItemCount());
     for (const RadientDrawItem& Item : DrawList.GetItems())
     {
-        RadientAssetReference Model{};
-        Uint32                MeshIndex    = ~0u;
-        const RADIENT_STATUS  SourceStatus = ResourceCache.GetMeshGLTFSource(Item.Mesh.Mesh, Model, MeshIndex);
-        if (SourceStatus == RADIENT_STATUS_INVALID_ARGUMENT)
+        const RADIENT_STATUS LoadStatus = ResourceCache.EnsureMeshLoaded(Item.Mesh.Mesh, pDevice, pContext);
+        if (LoadStatus == RADIENT_STATUS_INVALID_ARGUMENT)
             continue; // Native Radient mesh upload is not implemented yet.
-        if (RADIENT_FAILED(SourceStatus))
-            return SourceStatus;
-
-        const RADIENT_STATUS LoadStatus = ResourceCache.EnsureGLTFLoaded(Model, pDevice, pContext);
         if (RADIENT_FAILED(LoadStatus))
             return LoadStatus;
-        if (LoadStatus == RADIENT_STATUS_OK)
-            ReadyItems.push_back({&Item, Model, MeshIndex});
+
+        if (LoadStatus != RADIENT_STATUS_OK)
+            continue;
+
+        const RadientRenderMesh* pMesh = ResourceCache.GetMesh(Item.Mesh.Mesh);
+        if (pMesh != nullptr)
+            ReadyItems.push_back({&Item, pMesh});
     }
 
     if (ReadyItems.empty())
@@ -815,22 +786,16 @@ RADIENT_STATUS RadientGeometryPass::Execute(IRenderDevice*                   pDe
     for (const ReadyDrawItem& ReadyItem : ReadyItems)
     {
         VERIFY_EXPR(ReadyItem.pItem != nullptr);
+        VERIFY_EXPR(ReadyItem.pMesh != nullptr);
         const RadientDrawItem& Item = *ReadyItem.pItem;
+        const RadientRenderMesh& Mesh = *ReadyItem.pMesh;
 
-        const GLTF::Model* pModel = ResourceCache.GetGLTFModel(ReadyItem.Model);
-        if (pModel == nullptr)
-            continue;
-
-        if (ReadyItem.MeshIndex >= pModel->Meshes.size())
-            continue;
-
-        const GLTF::Mesh& Mesh = pModel->Meshes[ReadyItem.MeshIndex];
         if (Mesh.Primitives.empty())
             continue;
 
-        const PBR_Renderer::PSO_FLAGS VertexAttribFlags  = GetVertexAttribFlags(*pModel);
-        const Uint32                  FirstIndexLocation = pModel->GetFirstIndexLocation();
-        const Uint32                  BaseVertex         = pModel->GetBaseVertex();
+        const PBR_Renderer::PSO_FLAGS VertexAttribFlags  = Mesh.VertexAttribFlags;
+        const Uint32                  FirstIndexLocation = Mesh.FirstIndexLocation;
+        const Uint32                  BaseVertex         = Mesh.BaseVertex;
 
         PBR_Renderer::PSOKey  CurrPsoKey;
         IPipelineState*       pCurrPSO      = nullptr;
@@ -838,15 +803,19 @@ RADIENT_STATUS RadientGeometryPass::Execute(IRenderDevice*                   pDe
 
         for (GLTF::Material::ALPHA_MODE AlphaMode : AlphaModes)
         {
-            for (const GLTF::Primitive& Primitive : Mesh.Primitives)
+            for (const RadientRenderMeshPrimitive& Primitive : Mesh.Primitives)
             {
                 if (Primitive.VertexCount == 0 && Primitive.IndexCount == 0)
                     continue;
 
-                if (Primitive.MaterialId >= pModel->Materials.size())
+                if (Primitive.MaterialId >= Mesh.Materials.size())
                     continue;
 
-                const GLTF::Material& Material = pModel->Materials[Primitive.MaterialId];
+                const GLTF::Material* pMaterial = Mesh.Materials[Primitive.MaterialId];
+                if (pMaterial == nullptr)
+                    continue;
+
+                const GLTF::Material& Material = *pMaterial;
                 if (Material.Attribs.AlphaMode != AlphaMode)
                     continue;
 
