@@ -282,6 +282,9 @@ struct RadientLightComponent
     /// Light intensity.
     Float32 Intensity DEFAULT_INITIALIZER(1.f);
 
+    /// Maximum effective distance for point and spot lights, in scene units. A value of 0 means unbounded.
+    Float32 Range DEFAULT_INITIALIZER(0.f);
+
     /// Exposure multiplier as a power of 2.
     Float32 Exposure DEFAULT_INITIALIZER(0.f);
 
@@ -321,6 +324,7 @@ struct RadientLightComponent
         return (Type == Rhs.Type &&
                 Color == Rhs.Color &&
                 Intensity == Rhs.Intensity &&
+                Range == Rhs.Range &&
                 Exposure == Rhs.Exposure &&
                 Diffuse == Rhs.Diffuse &&
                 Specular == Rhs.Specular &&

@@ -154,6 +154,7 @@ GLTF::Light GetGLTFLight(const RadientLightComponent& Source)
     Light.Type      = GetGLTFLightType(Source.Type);
     Light.Color     = RadientMath::ToFloat3(Source.Color);
     Light.Intensity = Source.Intensity * std::exp2(Source.Exposure);
+    Light.Range     = Source.Range;
 
     if (Light.Type == GLTF::Light::TYPE::SPOT)
     {

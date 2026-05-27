@@ -26,8 +26,52 @@
 
 #include "RadientSceneImporterImpl.hpp"
 
+#include "RadientAssetManagerImpl.hpp"
+#include "RadientGLTFConverter.hpp"
+
+#include "Cast.hpp"
+#include "GLTFLoader.hpp"
+#include "Errors.hpp"
+
+#include <exception>
+#include <memory>
+
 namespace Diligent
 {
+
+namespace
+{
+
+std::unique_ptr<GLTF::Model> LoadGLTFModelMetadata(RadientAssetManagerImpl&     AssetManager,
+                                                   const RadientAssetReference& Model)
+{
+    const Char* pSourceURI = nullptr;
+    if (RADIENT_FAILED(AssetManager.GetGLTFSourceURI(Model, pSourceURI)) ||
+        pSourceURI == nullptr || *pSourceURI == 0)
+    {
+        return {};
+    }
+
+    GLTF::ModelCreateInfo ModelCI;
+    ModelCI.FileName = pSourceURI;
+
+    try
+    {
+        return std::make_unique<GLTF::Model>(nullptr, nullptr, ModelCI);
+    }
+    catch (const std::exception& Error)
+    {
+        LOG_ERROR_MESSAGE("Failed to load Radient GLTF scene metadata '", pSourceURI, "': ", Error.what());
+    }
+    catch (...)
+    {
+        LOG_ERROR_MESSAGE("Failed to load Radient GLTF scene metadata '", pSourceURI, "'");
+    }
+
+    return {};
+}
+
+} // namespace
 
 RadientSceneImporterImpl::RadientSceneImporterImpl(IReferenceCounters* pRefCounters,
                                                    IRadientAssetManager* pAssetManager,
@@ -78,30 +122,15 @@ RADIENT_STATUS RadientSceneImporterImpl::InstantiateGLTF(const RadientAssetRefer
     if (Model.URI == nullptr || *Model.URI == 0)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    RadientEntityDesc RootDesc{};
-    RootDesc.Name      = InstantiateInfo.Name != nullptr ? InstantiateInfo.Name : Model.URI;
-    RootDesc.Parent    = InstantiateInfo.Parent;
-    RootDesc.Flags     = InstantiateInfo.RootFlags;
-    RootDesc.Transform = InstantiateInfo.RootTransform;
+    RadientAssetManagerImpl* pAssetManagerImpl = ClassPtrCast<RadientAssetManagerImpl>(m_pAssetManager.RawPtr());
+    if (pAssetManagerImpl == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    RADIENT_STATUS Status = m_pWriter->CreateEntity(RootDesc, RootEntity);
-    if (RADIENT_FAILED(Status))
-        return Status;
+    std::unique_ptr<GLTF::Model> pModel = LoadGLTFModelMetadata(*pAssetManagerImpl, Model);
+    if (pModel == nullptr)
+        return RADIENT_STATUS_INVALID_OPERATION;
 
-    // First rendering slice: attach the whole GLTF asset to the root entity.
-    // The importer will expand the internal GLTF scene graph in a later pass.
-    RadientMeshComponent Mesh{};
-    Mesh.Mesh = Model;
-    Status    = m_pWriter->SetMesh(RootEntity, Mesh);
-    if (RADIENT_FAILED(Status))
-        return Status;
-
-    RadientMeshRendererComponent Renderer{};
-    Status = m_pWriter->SetMeshRenderer(RootEntity, Renderer);
-    if (RADIENT_FAILED(Status))
-        return Status;
-
-    return RADIENT_STATUS_OK;
+    return RadientGLTFConverter::InstantiateSceneGraph(*pModel, Model, InstantiateInfo, *m_pWriter, RootEntity);
 }
 
 } // namespace Diligent

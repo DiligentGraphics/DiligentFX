@@ -9,6 +9,7 @@ set(SOURCE
     src/RadientEngineImpl.cpp
     src/RadientFrameRenderTargets.cpp
     src/RadientGeometryPass.cpp
+    src/RadientGLTFConverter.cpp
     src/RadientLightList.cpp
     src/RadientMaterialBindingsStorage.cpp
     src/RadientMath.cpp
@@ -31,6 +32,7 @@ set(INCLUDE
     include/RadientEngineImpl.hpp
     include/RadientFrameRenderTargets.hpp
     include/RadientGeometryPass.hpp
+    include/RadientGLTFConverter.hpp
     include/RadientLightList.hpp
     include/RadientMaterialBindingsStorage.hpp
     include/RadientMath.hpp

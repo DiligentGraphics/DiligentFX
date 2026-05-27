@@ -33,6 +33,13 @@ The cone angle is an off-axis half-angle, not the full cone aperture. For exampl
 
 The inner cone is the region of full intensity. The outer cone is where spot falloff reaches zero. The default values match glTF: inner cone angle is `0`, and outer cone angle is `PI / 4`.
 
+## Light Range
+
+Radient follows the glTF `KHR_lights_punctual` convention for point and spot light range:
+
+- `RadientLightComponent::Range` is stored in scene units.
+- A range of `0` means the light is unbounded.
+
 ## Renderer Direction
 
 Radient passes light direction to the PBR renderer as the direction the light emits or travels. Shader code that needs the direction from a shaded point toward the light uses the negated direction for directional and spot lighting.
