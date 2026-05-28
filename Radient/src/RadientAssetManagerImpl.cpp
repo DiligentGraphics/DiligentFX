@@ -26,7 +26,11 @@
 
 #include "RadientAssetManagerImpl.hpp"
 
+#include "Errors.hpp"
+#include "GLTFLoader.hpp"
+
 #include <cstring>
+#include <exception>
 #include <utility>
 
 namespace Diligent
@@ -168,6 +172,24 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadGLTF(const RadientGLTFLoadInfo& Load
 
     Record.GLTFModel.SourceURI = LoadInfo.URI;
 
+    GLTF::ModelCreateInfo ModelCI;
+    ModelCI.FileName = Record.GLTFModel.SourceURI.c_str();
+
+    try
+    {
+        Record.GLTFModel.pModel = std::make_unique<GLTF::Model>(nullptr, nullptr, ModelCI);
+    }
+    catch (const std::exception& Error)
+    {
+        LOG_ERROR_MESSAGE("Failed to load Radient GLTF asset '", Record.GLTFModel.SourceURI, "': ", Error.what());
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
+    catch (...)
+    {
+        LOG_ERROR_MESSAGE("Failed to load Radient GLTF asset '", Record.GLTFModel.SourceURI, "'");
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
+
     Model = StoreAsset(std::move(Record));
     return RADIENT_STATUS_OK;
 }
@@ -233,6 +255,15 @@ RADIENT_STATUS RadientAssetManagerImpl::GetGLTFSourceURI(const RadientAssetRefer
 
     SourceURI = pRecord->GLTFModel.SourceURI.c_str();
     return RADIENT_STATUS_OK;
+}
+
+const GLTF::Model* RadientAssetManagerImpl::GetGLTFModel(const RadientAssetReference& Model) const
+{
+    const AssetRecord* pRecord = FindAsset(Model);
+    if (pRecord == nullptr || pRecord->Type != RADIENT_ASSET_TYPE_GLTF_MODEL)
+        return nullptr;
+
+    return pRecord->GLTFModel.pModel.get();
 }
 
 bool RadientAssetManagerImpl::ValidateMesh(const RadientMeshCreateInfo& MeshCI) const

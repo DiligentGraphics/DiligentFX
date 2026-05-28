@@ -37,6 +37,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <fstream>
 #include <string>
@@ -264,6 +265,39 @@ TEST(RadientSceneImporterTest, UsesExplicitSceneIndex)
 
     EXPECT_EQ(Fixture.pImporter->ImportGLTF(LoadInfo, InstantiateInfo, Model, ImportedRoot), RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(ImportedRoot, InvalidRadientEntityID);
+}
+
+TEST(RadientSceneImporterTest, InstantiateGLTFUsesCachedModel)
+{
+    TempDirectory     TempDir{"RadientSceneImporterTest"};
+    const std::string GLTFPath = WriteGLTFFile(TempDir, "cached_model.gltf",
+                                               R"GLTF({
+    "asset": {"version": "2.0"},
+    "scene": 0,
+    "scenes": [{"nodes": [0]}],
+    "nodes": [{"name": "CachedNode"}]
+})GLTF");
+
+    ImportFixture Fixture = CreateImportFixture();
+    ASSERT_NE(Fixture.pAssetManager, nullptr);
+    ASSERT_NE(Fixture.pImporter, nullptr);
+    ASSERT_NE(Fixture.pScene, nullptr);
+
+    RadientGLTFLoadInfo LoadInfo{};
+    LoadInfo.URI = GLTFPath.c_str();
+
+    RadientAssetReference Model{};
+    ASSERT_EQ(Fixture.pAssetManager->LoadGLTF(LoadInfo, Model), RADIENT_STATUS_OK);
+    ASSERT_NE(Model.URI, nullptr);
+
+    EXPECT_EQ(std::remove(GLTFPath.c_str()), 0);
+
+    RadientEntityID RootEntity = InvalidRadientEntityID;
+    EXPECT_EQ(Fixture.pImporter->InstantiateGLTF(Model, {}, RootEntity), RADIENT_STATUS_OK);
+    ASSERT_NE(RootEntity, InvalidRadientEntityID);
+
+    const std::vector<RadientEntityID> RootChildren = GetChildren(*Fixture.pScene, RootEntity);
+    ASSERT_EQ(RootChildren.size(), 1u);
 }
 
 TEST(RadientSceneImporterTest, ImportsCameras)

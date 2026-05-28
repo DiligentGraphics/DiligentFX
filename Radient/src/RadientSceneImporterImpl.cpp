@@ -30,48 +30,9 @@
 #include "RadientGLTFConverter.hpp"
 
 #include "Cast.hpp"
-#include "GLTFLoader.hpp"
-#include "Errors.hpp"
-
-#include <exception>
-#include <memory>
 
 namespace Diligent
 {
-
-namespace
-{
-
-std::unique_ptr<GLTF::Model> LoadGLTFModelMetadata(RadientAssetManagerImpl&     AssetManager,
-                                                   const RadientAssetReference& Model)
-{
-    const Char* pSourceURI = nullptr;
-    if (RADIENT_FAILED(AssetManager.GetGLTFSourceURI(Model, pSourceURI)) ||
-        pSourceURI == nullptr || *pSourceURI == 0)
-    {
-        return {};
-    }
-
-    GLTF::ModelCreateInfo ModelCI;
-    ModelCI.FileName = pSourceURI;
-
-    try
-    {
-        return std::make_unique<GLTF::Model>(nullptr, nullptr, ModelCI);
-    }
-    catch (const std::exception& Error)
-    {
-        LOG_ERROR_MESSAGE("Failed to load Radient GLTF scene metadata '", pSourceURI, "': ", Error.what());
-    }
-    catch (...)
-    {
-        LOG_ERROR_MESSAGE("Failed to load Radient GLTF scene metadata '", pSourceURI, "'");
-    }
-
-    return {};
-}
-
-} // namespace
 
 RadientSceneImporterImpl::RadientSceneImporterImpl(IReferenceCounters* pRefCounters,
                                                    IRadientAssetManager* pAssetManager,
@@ -126,7 +87,7 @@ RADIENT_STATUS RadientSceneImporterImpl::InstantiateGLTF(const RadientAssetRefer
     if (pAssetManagerImpl == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    std::unique_ptr<GLTF::Model> pModel = LoadGLTFModelMetadata(*pAssetManagerImpl, Model);
+    const GLTF::Model* pModel = pAssetManagerImpl->GetGLTFModel(Model);
     if (pModel == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 

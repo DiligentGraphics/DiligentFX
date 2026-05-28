@@ -31,11 +31,17 @@
 #include "RefCntAutoPtr.hpp"
 
 #include <deque>
+#include <memory>
 #include <string>
 #include <vector>
 
 namespace Diligent
 {
+
+namespace GLTF
+{
+struct Model;
+} // namespace GLTF
 
 class RadientAssetManagerImpl final : public ObjectBase<IRadientAssetManager>
 {
@@ -71,6 +77,8 @@ public:
 
     RADIENT_STATUS GetGLTFSourceURI(const RadientAssetReference& Model,
                                     const Char*&                 SourceURI) const;
+
+    const GLTF::Model* GetGLTFModel(const RadientAssetReference& Model) const;
 
 private:
     struct MeshPrimitiveStorage
@@ -129,7 +137,8 @@ private:
 
     struct GLTFModelStorage
     {
-        std::string SourceURI;
+        std::string                 SourceURI;
+        std::unique_ptr<GLTF::Model> pModel;
     };
 
     struct GLTFMeshStorage

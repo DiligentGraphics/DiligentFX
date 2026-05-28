@@ -331,7 +331,10 @@ TEST(RadientAssetManagerTest, LoadGLTF)
     RadientAssetReference GLTFModel{};
     EXPECT_EQ(pAssetManager->LoadGLTF(GLTFLoadInfo, GLTFModel), RADIENT_STATUS_INVALID_ARGUMENT);
 
-    GLTFLoadInfo.URI = "memory://radient/test-model.gltf";
+    TempDirectory     TempDir{"RadientAssetManagerTest"};
+    const std::string GLTFPath = WriteBasicGLTFFile(TempDir);
+
+    GLTFLoadInfo.URI = GLTFPath.c_str();
     EXPECT_EQ(pAssetManager->LoadGLTF(GLTFLoadInfo, GLTFModel), RADIENT_STATUS_OK);
     EXPECT_NE(GLTFModel.URI, nullptr);
     EXPECT_NE(GLTFModel.Version, 0u);
