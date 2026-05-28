@@ -27,6 +27,7 @@
 #pragma once
 
 #include "RadientAssets.h"
+#include "ThreadPool.h"
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
 
@@ -48,12 +49,15 @@ class RadientAssetManagerImpl final : public ObjectBase<IRadientAssetManager>
 public:
     using TBase = ObjectBase<IRadientAssetManager>;
 
-    RadientAssetManagerImpl(IReferenceCounters* pRefCounters, const RadientAssetManagerCreateInfo& CreateInfo);
+    RadientAssetManagerImpl(IReferenceCounters*                  pRefCounters,
+                            const RadientAssetManagerCreateInfo& CreateInfo,
+                            IThreadPool*                         pThreadPool);
     ~RadientAssetManagerImpl();
 
     IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientAssetManager, TBase)
 
-    static RefCntAutoPtr<RadientAssetManagerImpl> Create(const RadientAssetManagerCreateInfo& CreateInfo);
+    static RefCntAutoPtr<RadientAssetManagerImpl> Create(const RadientAssetManagerCreateInfo& CreateInfo,
+                                                         IThreadPool*                         pThreadPool = nullptr);
 
     virtual const RadientAssetManagerDesc& DILIGENT_CALL_TYPE GetDesc() const override final;
 
@@ -79,6 +83,8 @@ public:
                                     const Char*&                 SourceURI) const;
 
     const GLTF::Model* GetGLTFModel(const RadientAssetReference& Model) const;
+
+    IThreadPool* GetThreadPool() const { return m_pThreadPool; }
 
 private:
     struct MeshPrimitiveStorage
@@ -177,8 +183,9 @@ private:
     std::string             m_Name;
     RadientAssetManagerDesc m_Desc;
 
-    RadientHandle           m_NextAssetID = 1;
-    std::deque<AssetRecord> m_Assets;
+    RadientHandle              m_NextAssetID = 1;
+    std::deque<AssetRecord>    m_Assets;
+    RefCntAutoPtr<IThreadPool> m_pThreadPool;
 };
 
 } // namespace Diligent

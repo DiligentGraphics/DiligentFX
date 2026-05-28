@@ -49,10 +49,13 @@ std::vector<ValueType> CopyArray(const ValueType* pData, Uint32 Count)
 
 } // namespace
 
-RadientAssetManagerImpl::RadientAssetManagerImpl(IReferenceCounters* pRefCounters, const RadientAssetManagerCreateInfo& CreateInfo) :
+RadientAssetManagerImpl::RadientAssetManagerImpl(IReferenceCounters*                  pRefCounters,
+                                                 const RadientAssetManagerCreateInfo& CreateInfo,
+                                                 IThreadPool*                         pThreadPool) :
     TBase{pRefCounters},
     m_Name{CreateInfo.Desc.Name != nullptr ? CreateInfo.Desc.Name : ""},
-    m_Desc{CreateInfo.Desc}
+    m_Desc{CreateInfo.Desc},
+    m_pThreadPool{pThreadPool}
 {
     m_Desc.Name = m_Name.c_str();
 }
@@ -61,9 +64,10 @@ RadientAssetManagerImpl::~RadientAssetManagerImpl()
 {
 }
 
-RefCntAutoPtr<RadientAssetManagerImpl> RadientAssetManagerImpl::Create(const RadientAssetManagerCreateInfo& CreateInfo)
+RefCntAutoPtr<RadientAssetManagerImpl> RadientAssetManagerImpl::Create(const RadientAssetManagerCreateInfo& CreateInfo,
+                                                                       IThreadPool*                         pThreadPool)
 {
-    return RefCntAutoPtr<RadientAssetManagerImpl>{MakeNewRCObj<RadientAssetManagerImpl>()(CreateInfo)};
+    return RefCntAutoPtr<RadientAssetManagerImpl>{MakeNewRCObj<RadientAssetManagerImpl>()(CreateInfo, pThreadPool)};
 }
 
 const RadientAssetManagerDesc& RadientAssetManagerImpl::GetDesc() const

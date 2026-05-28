@@ -33,18 +33,54 @@
 #include "RadientSceneImporterImpl.hpp"
 #include "RadientSceneWriterImpl.hpp"
 
+#include "ThreadPool.hpp"
+
+#include <algorithm>
+#include <thread>
+
 namespace Diligent
 {
 
+namespace
+{
+
+size_t GetDefaultRadientWorkerThreadCount()
+{
+    const unsigned int HardwareThreads = std::thread::hardware_concurrency();
+    return std::max(1u, HardwareThreads != 0 ? HardwareThreads - 1u : 1u);
+}
+
+} // namespace
+
 RadientEngineImpl::RadientEngineImpl(IReferenceCounters* pRefCounters, const RadientEngineCreateInfo& CreateInfo) :
     TBase{pRefCounters},
-    m_pBackend{RadientBackendImpl::Create(CreateInfo.Backend)},
-    m_pAssetManager{RadientAssetManagerImpl::Create(CreateInfo.Assets)}
+    m_pBackend{RadientBackendImpl::Create(CreateInfo.Backend)}
 {
+    if (CreateInfo.pThreadPool != nullptr)
+    {
+        m_pThreadPool = CreateInfo.pThreadPool;
+    }
+    else
+    {
+        ThreadPoolCreateInfo ThreadPoolCI;
+        ThreadPoolCI.NumThreads = CreateInfo.WorkerThreadCount != 0 ?
+            CreateInfo.WorkerThreadCount :
+            GetDefaultRadientWorkerThreadCount();
+
+        m_pThreadPool    = CreateThreadPool(ThreadPoolCI);
+        m_OwnsThreadPool = true;
+    }
+
+    m_pAssetManager = RadientAssetManagerImpl::Create(CreateInfo.Assets, m_pThreadPool);
 }
 
 RadientEngineImpl::~RadientEngineImpl()
 {
+    if (m_OwnsThreadPool && m_pThreadPool)
+    {
+        m_pThreadPool->WaitForAllTasks();
+        m_pThreadPool->StopThreads();
+    }
 }
 
 RefCntAutoPtr<IRadientEngine> RadientEngineImpl::Create(const RadientEngineCreateInfo& CreateInfo)

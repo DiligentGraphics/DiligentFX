@@ -28,6 +28,7 @@
 
 #include "RadientEngine.h"
 #include "RadientAssetManagerImpl.hpp"
+#include "ThreadPool.h"
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
 
@@ -63,8 +64,10 @@ public:
                                                              IRadientRenderer**        ppRenderer) override final;
 
 private:
+    RefCntAutoPtr<IThreadPool>             m_pThreadPool;
     RefCntAutoPtr<IRadientBackend>         m_pBackend;
     RefCntAutoPtr<RadientAssetManagerImpl> m_pAssetManager;
+    bool                                   m_OwnsThreadPool = false;
 };
 
 } // namespace Diligent

@@ -31,6 +31,8 @@
 #include "RadientEngine.h"
 #include "RadientSceneImpl.hpp"
 
+#include "ThreadPool.hpp"
+
 #include <fstream>
 #include <string>
 
@@ -288,6 +290,24 @@ TEST(RadientEngineTest, CreateAssetManager)
 
     RefCntAutoPtr<IRadientAssetManager> pAssetManager = GetTestAssetManager(*pEngine);
     EXPECT_NE(pAssetManager, nullptr);
+}
+
+TEST(RadientEngineTest, CreateWithExternalThreadPool)
+{
+    RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
+    ASSERT_NE(pThreadPool, nullptr);
+
+    RadientEngineCreateInfo EngineCI{};
+    EngineCI.pThreadPool = pThreadPool;
+
+    RefCntAutoPtr<IRadientEngine> pEngine;
+    EXPECT_EQ(CreateRadientEngine(EngineCI, &pEngine), RADIENT_STATUS_OK);
+    EXPECT_NE(pEngine, nullptr);
+
+    RefCntAutoPtr<IRadientAssetManager> pAssetManager = GetTestAssetManager(*pEngine);
+    EXPECT_NE(pAssetManager, nullptr);
+
+    pThreadPool->StopThreads();
 }
 
 TEST(RadientAssetManagerTest, CreateMaterial)

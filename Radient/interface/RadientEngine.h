@@ -37,6 +37,7 @@
 DILIGENT_BEGIN_NAMESPACE(Diligent)
 
 struct IRadientEngine;
+struct IThreadPool;
 
 /// Engine creation attributes.
 struct RadientEngineCreateInfo
@@ -46,6 +47,14 @@ struct RadientEngineCreateInfo
 
     /// Asset manager creation attributes.
     RadientAssetManagerCreateInfo Assets DEFAULT_INITIALIZER({});
+
+    /// Optional thread pool used by Radient for asynchronous CPU work.
+    /// If null, Radient creates an internal thread pool.
+    IThreadPool* pThreadPool DEFAULT_INITIALIZER(nullptr);
+
+    /// Number of worker threads for the internal thread pool.
+    /// Zero lets Radient choose a default based on the host system.
+    Uint32 WorkerThreadCount DEFAULT_INITIALIZER(0);
 };
 typedef struct RadientEngineCreateInfo RadientEngineCreateInfo;
 
