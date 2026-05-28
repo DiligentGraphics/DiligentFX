@@ -93,6 +93,11 @@ RefCntAutoPtr<IRadientAssetManager> GetTestAssetManager(IRadientEngine& Engine)
     return pAssetManager;
 }
 
+RADIENT_STATUS ProcessTestGLTFLoad(IRadientAssetManager& AssetManager, const RadientAssetReference& Model)
+{
+    return AssetManager.WaitForAssetLoad(Model);
+}
+
 RadientAssetReference CreateTestMaterial(IRadientAssetManager& AssetManager)
 {
     RadientMaterialCreateInfo MaterialCI{};
@@ -354,10 +359,12 @@ TEST(RadientAssetManagerTest, LoadGLTF)
     TempDirectory     TempDir{"RadientAssetManagerTest"};
     const std::string GLTFPath = WriteBasicGLTFFile(TempDir);
 
-    GLTFLoadInfo.URI = GLTFPath.c_str();
-    EXPECT_EQ(pAssetManager->LoadGLTF(GLTFLoadInfo, GLTFModel), RADIENT_STATUS_OK);
+    GLTFLoadInfo.URI                = GLTFPath.c_str();
+    const RADIENT_STATUS LoadStatus = pAssetManager->LoadGLTF(GLTFLoadInfo, GLTFModel);
+    EXPECT_TRUE(LoadStatus == RADIENT_STATUS_OK || LoadStatus == RADIENT_STATUS_PENDING);
     EXPECT_NE(GLTFModel.URI, nullptr);
     EXPECT_NE(GLTFModel.Version, 0u);
+    EXPECT_EQ(ProcessTestGLTFLoad(*pAssetManager, GLTFModel), RADIENT_STATUS_OK);
 }
 
 TEST(RadientEngineTest, CreateScene)
@@ -407,6 +414,9 @@ TEST(RadientSceneImporterTest, ImportGLTF)
     RefCntAutoPtr<IRadientSceneWriter> pWriter = CreateTestSceneWriter(*pEngine, pScene);
     ASSERT_NE(pWriter, nullptr);
 
+    RefCntAutoPtr<IRadientAssetManager> pAssetManager = GetTestAssetManager(*pEngine);
+    ASSERT_NE(pAssetManager, nullptr);
+
     RefCntAutoPtr<IRadientSceneImporter> pImporter = CreateTestSceneImporter(*pEngine, pWriter);
     ASSERT_NE(pImporter, nullptr);
 
@@ -423,7 +433,13 @@ TEST(RadientSceneImporterTest, ImportGLTF)
     RadientGLTFLoadInfo GLTFLoadInfo{};
     GLTFLoadInfo.URI = ImportGLTFPath.c_str();
 
-    EXPECT_EQ(pImporter->ImportGLTF(GLTFLoadInfo, InstantiateInfo, ImportedModel, ImportedRoot), RADIENT_STATUS_OK);
+    RADIENT_STATUS ImportStatus = pImporter->ImportGLTF(GLTFLoadInfo, InstantiateInfo, ImportedModel, ImportedRoot);
+    if (ImportStatus == RADIENT_STATUS_PENDING)
+    {
+        ASSERT_EQ(ProcessTestGLTFLoad(*pAssetManager, ImportedModel), RADIENT_STATUS_OK);
+        ImportStatus = pImporter->ProcessPendingImports();
+    }
+    EXPECT_EQ(ImportStatus, RADIENT_STATUS_OK);
     EXPECT_NE(ImportedModel.URI, nullptr);
     EXPECT_NE(ImportedModel.Version, 0u);
     EXPECT_NE(ImportedRoot, InvalidRadientEntityID);

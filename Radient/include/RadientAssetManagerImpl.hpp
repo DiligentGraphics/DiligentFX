@@ -28,12 +28,14 @@
 
 #include "RadientAssets.h"
 #include "ThreadPool.h"
+#include "HashUtils.hpp"
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
 
-#include <deque>
 #include <memory>
+#include <shared_mutex>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace Diligent
@@ -70,6 +72,8 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE LoadGLTF(const RadientGLTFLoadInfo& LoadInfo,
                                                        RadientAssetReference&     Model) override final;
 
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE WaitForAssetLoad(const RadientAssetReference& Asset) override final;
+
     RADIENT_STATUS CreateMeshFromGLTFMesh(const RadientAssetReference& Model,
                                           Uint32                       MeshIndex,
                                           const Char*                  Name,
@@ -83,8 +87,7 @@ public:
                                     const Char*&                 SourceURI) const;
 
     const GLTF::Model* GetGLTFModel(const RadientAssetReference& Model) const;
-
-    IThreadPool* GetThreadPool() const { return m_pThreadPool; }
+    RADIENT_STATUS     GetGLTFLoadStatus(const RadientAssetReference& Model) const;
 
 private:
     struct MeshPrimitiveStorage
@@ -143,8 +146,9 @@ private:
 
     struct GLTFModelStorage
     {
-        std::string                 SourceURI;
+        std::string                  SourceURI;
         std::unique_ptr<GLTF::Model> pModel;
+        RADIENT_STATUS               LoadStatus = RADIENT_STATUS_OK;
     };
 
     struct GLTFMeshStorage
@@ -171,7 +175,9 @@ private:
 
     bool               ValidateMesh(const RadientMeshCreateInfo& MeshCI) const;
     bool               ValidateGLTF(const RadientGLTFLoadInfo& LoadInfo) const;
-    const AssetRecord* FindAsset(const RadientAssetReference& Ref) const;
+    AssetRecord*       FindAssetLocked(const RadientAssetReference& Ref);
+    const AssetRecord* FindAssetLocked(const RadientAssetReference& Ref) const;
+    RADIENT_STATUS     GetAssetLoadStatusLocked(const RadientAssetReference& Asset) const;
 
     std::string MakeURI(const char* Type);
 
@@ -179,13 +185,20 @@ private:
     void                  FixupAssetRecord(AssetRecord& Record);
     void                  FixupAssetReference(RadientAssetReference& Ref, const std::string& URIStorage);
     RadientAssetReference CopyAssetReference(const RadientAssetReference& Ref, std::string& URIStorage);
+    void                  CompleteGLTFLoad(const RadientAssetReference& Model,
+                                           std::unique_ptr<GLTF::Model> pModel,
+                                           RADIENT_STATUS               Status);
 
     std::string             m_Name;
     RadientAssetManagerDesc m_Desc;
 
-    RadientHandle              m_NextAssetID = 1;
-    std::deque<AssetRecord>    m_Assets;
     RefCntAutoPtr<IThreadPool> m_pThreadPool;
+
+    mutable std::shared_mutex m_Mutex;
+    RadientHandle             m_NextAssetID = 1;
+
+    using AssetMapType = std::unordered_map<HashMapStringKey, std::unique_ptr<AssetRecord>>;
+    AssetMapType m_Assets;
 };
 
 } // namespace Diligent

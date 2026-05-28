@@ -28,9 +28,10 @@
 
 #include "Errors.hpp"
 #include "GLTFLoader.hpp"
+#include "ThreadPool.hpp"
 
-#include <cstring>
 #include <exception>
+#include <thread>
 #include <utility>
 
 namespace Diligent
@@ -45,6 +46,26 @@ std::vector<ValueType> CopyArray(const ValueType* pData, Uint32 Count)
     return pData != nullptr && Count != 0 ?
         std::vector<ValueType>{pData, pData + Count} :
         std::vector<ValueType>{};
+}
+
+RADIENT_STATUS LoadGLTFModel(const std::string& SourceURI, std::unique_ptr<GLTF::Model>& pModel)
+{
+    try
+    {
+        GLTF::ModelCreateInfo ModelCI{SourceURI.c_str()};
+        pModel = std::make_unique<GLTF::Model>(nullptr, nullptr, ModelCI);
+        return RADIENT_STATUS_OK;
+    }
+    catch (const std::exception& Error)
+    {
+        LOG_ERROR_MESSAGE("Failed to load Radient GLTF asset '", SourceURI, "': ", Error.what());
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
+    catch (...)
+    {
+        LOG_ERROR_MESSAGE("Failed to load Radient GLTF asset '", SourceURI, "'");
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
 }
 
 } // namespace
@@ -176,26 +197,57 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadGLTF(const RadientGLTFLoadInfo& Load
 
     Record.GLTFModel.SourceURI = LoadInfo.URI;
 
-    GLTF::ModelCreateInfo ModelCI;
-    ModelCI.FileName = Record.GLTFModel.SourceURI.c_str();
+    if (m_pThreadPool == nullptr)
+    {
+        const RADIENT_STATUS Status = LoadGLTFModel(Record.GLTFModel.SourceURI, Record.GLTFModel.pModel);
+        if (Status != RADIENT_STATUS_OK)
+            return Status;
 
-    try
-    {
-        Record.GLTFModel.pModel = std::make_unique<GLTF::Model>(nullptr, nullptr, ModelCI);
-    }
-    catch (const std::exception& Error)
-    {
-        LOG_ERROR_MESSAGE("Failed to load Radient GLTF asset '", Record.GLTFModel.SourceURI, "': ", Error.what());
-        return RADIENT_STATUS_INVALID_OPERATION;
-    }
-    catch (...)
-    {
-        LOG_ERROR_MESSAGE("Failed to load Radient GLTF asset '", Record.GLTFModel.SourceURI, "'");
-        return RADIENT_STATUS_INVALID_OPERATION;
+        Record.GLTFModel.LoadStatus = RADIENT_STATUS_OK;
+        Model                       = StoreAsset(std::move(Record));
+        return RADIENT_STATUS_OK;
     }
 
-    Model = StoreAsset(std::move(Record));
-    return RADIENT_STATUS_OK;
+    Record.GLTFModel.LoadStatus = RADIENT_STATUS_PENDING;
+    Model                       = StoreAsset(std::move(Record));
+
+    RefCntAutoPtr<RadientAssetManagerImpl> pSelf{this};
+    const RadientAssetReference            ModelRef = Model;
+    const std::string                      SourceURI{LoadInfo.URI};
+
+    EnqueueAsyncWork(
+        m_pThreadPool,
+        [pSelf, ModelRef, SourceURI](Uint32) //
+        {
+            std::unique_ptr<GLTF::Model> pModel;
+            const RADIENT_STATUS         Status = LoadGLTFModel(SourceURI, pModel);
+
+            pSelf->CompleteGLTFLoad(ModelRef, std::move(pModel), Status);
+            return ASYNC_TASK_STATUS_COMPLETE;
+        });
+
+    return GetGLTFLoadStatus(Model);
+}
+
+RADIENT_STATUS RadientAssetManagerImpl::WaitForAssetLoad(const RadientAssetReference& Asset)
+{
+    for (;;)
+    {
+        RADIENT_STATUS Status = RADIENT_STATUS_INVALID_OPERATION;
+        {
+            std::shared_lock<std::shared_mutex> Lock{m_Mutex};
+            Status = GetAssetLoadStatusLocked(Asset);
+        }
+
+        if (Status != RADIENT_STATUS_PENDING)
+            return Status;
+
+        if (m_pThreadPool == nullptr)
+            return RADIENT_STATUS_INVALID_OPERATION;
+
+        if (!m_pThreadPool->ProcessTask(0, false))
+            std::this_thread::yield();
+    }
 }
 
 RADIENT_STATUS RadientAssetManagerImpl::CreateMeshFromGLTFMesh(const RadientAssetReference& Model,
@@ -205,12 +257,19 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMeshFromGLTFMesh(const RadientAsse
 {
     Mesh = {};
 
-    const AssetRecord* pModelRecord = FindAsset(Model);
-    if (pModelRecord == nullptr)
-        return RADIENT_STATUS_NOT_FOUND;
+    {
+        std::shared_lock<std::shared_mutex> Lock{m_Mutex};
 
-    if (pModelRecord->Type != RADIENT_ASSET_TYPE_GLTF_MODEL)
-        return RADIENT_STATUS_INVALID_ARGUMENT;
+        const AssetRecord* pModelRecord = FindAssetLocked(Model);
+        if (pModelRecord == nullptr)
+            return RADIENT_STATUS_NOT_FOUND;
+
+        if (pModelRecord->Type != RADIENT_ASSET_TYPE_GLTF_MODEL)
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+
+        if (pModelRecord->GLTFModel.LoadStatus != RADIENT_STATUS_OK)
+            return pModelRecord->GLTFModel.LoadStatus;
+    }
 
     AssetRecord Record;
     Record.Type               = RADIENT_ASSET_TYPE_MESH;
@@ -230,7 +289,9 @@ RADIENT_STATUS RadientAssetManagerImpl::GetMeshGLTFSource(const RadientAssetRefe
     Model     = {};
     MeshIndex = ~0u;
 
-    const AssetRecord* pRecord = FindAsset(Mesh);
+    std::shared_lock<std::shared_mutex> Lock{m_Mutex};
+
+    const AssetRecord* pRecord = FindAssetLocked(Mesh);
     if (pRecord == nullptr)
         return RADIENT_STATUS_NOT_FOUND;
 
@@ -250,7 +311,9 @@ RADIENT_STATUS RadientAssetManagerImpl::GetGLTFSourceURI(const RadientAssetRefer
 {
     SourceURI = nullptr;
 
-    const AssetRecord* pRecord = FindAsset(Model);
+    std::shared_lock<std::shared_mutex> Lock{m_Mutex};
+
+    const AssetRecord* pRecord = FindAssetLocked(Model);
     if (pRecord == nullptr)
         return RADIENT_STATUS_NOT_FOUND;
 
@@ -263,11 +326,30 @@ RADIENT_STATUS RadientAssetManagerImpl::GetGLTFSourceURI(const RadientAssetRefer
 
 const GLTF::Model* RadientAssetManagerImpl::GetGLTFModel(const RadientAssetReference& Model) const
 {
-    const AssetRecord* pRecord = FindAsset(Model);
+    std::shared_lock<std::shared_mutex> Lock{m_Mutex};
+
+    const AssetRecord* pRecord = FindAssetLocked(Model);
     if (pRecord == nullptr || pRecord->Type != RADIENT_ASSET_TYPE_GLTF_MODEL)
         return nullptr;
 
+    if (pRecord->GLTFModel.LoadStatus != RADIENT_STATUS_OK)
+        return nullptr;
+
     return pRecord->GLTFModel.pModel.get();
+}
+
+RADIENT_STATUS RadientAssetManagerImpl::GetGLTFLoadStatus(const RadientAssetReference& Model) const
+{
+    std::shared_lock<std::shared_mutex> Lock{m_Mutex};
+
+    const AssetRecord* pRecord = FindAssetLocked(Model);
+    if (pRecord == nullptr)
+        return RADIENT_STATUS_NOT_FOUND;
+
+    if (pRecord->Type != RADIENT_ASSET_TYPE_GLTF_MODEL)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    return pRecord->GLTFModel.LoadStatus;
 }
 
 bool RadientAssetManagerImpl::ValidateMesh(const RadientMeshCreateInfo& MeshCI) const
@@ -320,34 +402,57 @@ bool RadientAssetManagerImpl::ValidateGLTF(const RadientGLTFLoadInfo& LoadInfo) 
     return LoadInfo.URI != nullptr && *LoadInfo.URI != 0;
 }
 
-const RadientAssetManagerImpl::AssetRecord* RadientAssetManagerImpl::FindAsset(const RadientAssetReference& Ref) const
+RadientAssetManagerImpl::AssetRecord* RadientAssetManagerImpl::FindAssetLocked(const RadientAssetReference& Ref)
+{
+    return const_cast<AssetRecord*>(static_cast<const RadientAssetManagerImpl*>(this)->FindAssetLocked(Ref));
+}
+
+const RadientAssetManagerImpl::AssetRecord* RadientAssetManagerImpl::FindAssetLocked(const RadientAssetReference& Ref) const
 {
     if (Ref.URI == nullptr || *Ref.URI == 0 || Ref.Version == 0)
         return nullptr;
 
-    for (const AssetRecord& Record : m_Assets)
-    {
-        if (Record.Version == Ref.Version && std::strcmp(Record.URI.c_str(), Ref.URI) == 0)
-            return &Record;
-    }
+    const auto It = m_Assets.find(HashMapStringKey{Ref.URI});
+    if (It == m_Assets.end())
+        return nullptr;
 
-    return nullptr;
+    const AssetRecord* pRecord = It->second.get();
+    return pRecord != nullptr && pRecord->Version == Ref.Version ? pRecord : nullptr;
+}
+
+RADIENT_STATUS RadientAssetManagerImpl::GetAssetLoadStatusLocked(const RadientAssetReference& Asset) const
+{
+    const AssetRecord* pRecord = FindAssetLocked(Asset);
+    if (pRecord == nullptr)
+        return RADIENT_STATUS_NOT_FOUND;
+
+    return pRecord->Type == RADIENT_ASSET_TYPE_GLTF_MODEL ?
+        pRecord->GLTFModel.LoadStatus :
+        RADIENT_STATUS_OK;
 }
 
 std::string RadientAssetManagerImpl::MakeURI(const char* Type)
 {
+    std::unique_lock<std::shared_mutex> Lock{m_Mutex};
+
     const RadientHandle AssetID = m_NextAssetID++;
     return std::string{"radient://session/"} + Type + "/" + std::to_string(AssetID);
 }
 
 RadientAssetReference RadientAssetManagerImpl::StoreAsset(AssetRecord&& Record)
 {
-    m_Assets.emplace_back(std::move(Record));
-    FixupAssetRecord(m_Assets.back());
+    std::unique_lock<std::shared_mutex> Lock{m_Mutex};
+
+    auto pRecord = std::make_unique<AssetRecord>(std::move(Record));
+    FixupAssetRecord(*pRecord);
 
     RadientAssetReference Ref;
-    Ref.URI     = m_Assets.back().URI.c_str();
-    Ref.Version = m_Assets.back().Version;
+    Ref.URI     = pRecord->URI.c_str();
+    Ref.Version = pRecord->Version;
+
+    const auto InsertResult = m_Assets.emplace(HashMapStringKey{pRecord->URI.c_str(), true}, std::move(pRecord));
+    VERIFY(InsertResult.second, "Asset URI already exists");
+
     return Ref;
 }
 
@@ -373,6 +478,20 @@ RadientAssetReference RadientAssetManagerImpl::CopyAssetReference(const RadientA
     RadientAssetReference Result = Ref;
     Result.URI                   = Ref.URI != nullptr ? URIStorage.c_str() : nullptr;
     return Result;
+}
+
+void RadientAssetManagerImpl::CompleteGLTFLoad(const RadientAssetReference& Model,
+                                               std::unique_ptr<GLTF::Model> pModel,
+                                               RADIENT_STATUS               Status)
+{
+    std::unique_lock<std::shared_mutex> Lock{m_Mutex};
+
+    AssetRecord* pRecord = FindAssetLocked(Model);
+    if (pRecord == nullptr || pRecord->Type != RADIENT_ASSET_TYPE_GLTF_MODEL)
+        return;
+
+    pRecord->GLTFModel.pModel     = std::move(pModel);
+    pRecord->GLTFModel.LoadStatus = Status;
 }
 
 } // namespace Diligent

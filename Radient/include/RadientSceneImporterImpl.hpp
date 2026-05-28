@@ -31,6 +31,9 @@
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
 
+#include <string>
+#include <vector>
+
 namespace Diligent
 {
 
@@ -39,7 +42,7 @@ class RadientSceneImporterImpl final : public ObjectBase<IRadientSceneImporter>
 public:
     using TBase = ObjectBase<IRadientSceneImporter>;
 
-    RadientSceneImporterImpl(IReferenceCounters* pRefCounters,
+    RadientSceneImporterImpl(IReferenceCounters*   pRefCounters,
                              IRadientAssetManager* pAssetManager,
                              IRadientSceneWriter*  pWriter);
     ~RadientSceneImporterImpl();
@@ -54,13 +57,37 @@ public:
                                                          RadientAssetReference&            Model,
                                                          RadientEntityID&                  RootEntity) override final;
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE InstantiateGLTF(const RadientAssetReference&     Model,
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE InstantiateGLTF(const RadientAssetReference&      Model,
                                                               const RadientGLTFInstantiateInfo& InstantiateInfo,
-                                                              RadientEntityID&                 RootEntity) override final;
+                                                              RadientEntityID&                  RootEntity) override final;
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE ProcessPendingImports() override final;
 
 private:
+    struct PendingGLTFInstantiation
+    {
+        std::string     ModelURI;
+        Uint64          ModelVersion = 0;
+        Uint32          SceneIndex   = InvalidRadientGLTFSceneIndex;
+        RadientEntityID RootEntity   = InvalidRadientEntityID;
+    };
+
+    RADIENT_STATUS CreateGLTFRoot(const RadientAssetReference&      Model,
+                                  const RadientGLTFInstantiateInfo& InstantiateInfo,
+                                  RadientEntityID&                  RootEntity);
+
+    RADIENT_STATUS PopulateGLTFRoot(const RadientAssetReference& Model,
+                                    Uint32                       SceneIndex,
+                                    RadientEntityID              RootEntity);
+
+    void AddPendingGLTFInstantiation(const RadientAssetReference&      Model,
+                                     const RadientGLTFInstantiateInfo& InstantiateInfo,
+                                     RadientEntityID                   RootEntity);
+
     RefCntAutoPtr<IRadientAssetManager> m_pAssetManager;
     RefCntAutoPtr<IRadientSceneWriter>  m_pWriter;
+
+    std::vector<PendingGLTFInstantiation> m_PendingGLTFInstantiations;
 };
 
 } // namespace Diligent

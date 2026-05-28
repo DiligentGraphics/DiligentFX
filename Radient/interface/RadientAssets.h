@@ -281,10 +281,16 @@ DILIGENT_BEGIN_INTERFACE(IRadientAssetManager, IObject)
                                                   const RadientMaterialCreateInfo REF MaterialCI,
                                                   RadientAssetReference REF           Material) PURE;
 
-    /// Loads a GLTF model asset from a URI.
+    /// Starts loading a GLTF model asset from a URI.
+    /// Returns RADIENT_STATUS_PENDING when loading continues asynchronously.
     VIRTUAL RADIENT_STATUS METHOD(LoadGLTF)(THIS_
                                             const RadientGLTFLoadInfo REF LoadInfo,
                                             RadientAssetReference REF     Model) PURE;
+
+    /// Blocks the calling thread until the asset load has completed.
+    /// This is intended for tests and explicit synchronization points only; normal rendering/import code should avoid it.
+    VIRTUAL RADIENT_STATUS METHOD(WaitForAssetLoad)(THIS_
+                                                    const RadientAssetReference REF Asset) PURE;
 };
 DILIGENT_END_INTERFACE
 
@@ -296,6 +302,7 @@ DILIGENT_END_INTERFACE
 #    define IRadientAssetManager_CreateMesh(This, ...)         CALL_IFACE_METHOD(RadientAssetManager, CreateMesh,     This, __VA_ARGS__)
 #    define IRadientAssetManager_CreateMaterial(This, ...)     CALL_IFACE_METHOD(RadientAssetManager, CreateMaterial, This, __VA_ARGS__)
 #    define IRadientAssetManager_LoadGLTF(This, ...)           CALL_IFACE_METHOD(RadientAssetManager, LoadGLTF,       This, __VA_ARGS__)
+#    define IRadientAssetManager_WaitForAssetLoad(This, ...)   CALL_IFACE_METHOD(RadientAssetManager, WaitForAssetLoad, This, __VA_ARGS__)
 
 #endif
 

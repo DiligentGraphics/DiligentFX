@@ -79,6 +79,8 @@ static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientSceneImporter =
 DILIGENT_BEGIN_INTERFACE(IRadientSceneImporter, IObject)
 {
     /// Loads a GLTF model asset from a URI and instantiates its scene graph.
+    /// If loading continues asynchronously, this method creates the import root,
+    /// schedules the GLTF scene graph instantiation, and returns RADIENT_STATUS_PENDING.
     VIRTUAL RADIENT_STATUS METHOD(ImportGLTF)(THIS_
                                               const RadientGLTFLoadInfo REF        LoadInfo,
                                               const RadientGLTFInstantiateInfo REF InstantiateInfo,
@@ -86,10 +88,15 @@ DILIGENT_BEGIN_INTERFACE(IRadientSceneImporter, IObject)
                                               RadientEntityID REF                  RootEntity) PURE;
 
     /// Instantiates a previously loaded GLTF model asset into the scene graph.
+    /// If the model metadata is still loading, this method creates the import root,
+    /// schedules the GLTF scene graph instantiation, and returns RADIENT_STATUS_PENDING.
     VIRTUAL RADIENT_STATUS METHOD(InstantiateGLTF)(THIS_
-                                                   const RadientAssetReference REF     Model,
+                                                   const RadientAssetReference REF      Model,
                                                    const RadientGLTFInstantiateInfo REF InstantiateInfo,
-                                                   RadientEntityID REF                 RootEntity) PURE;
+                                                   RadientEntityID REF                  RootEntity) PURE;
+
+    /// Completes pending asynchronous imports whose assets have finished loading.
+    VIRTUAL RADIENT_STATUS METHOD(ProcessPendingImports)(THIS) PURE;
 };
 DILIGENT_END_INTERFACE
 
@@ -97,8 +104,9 @@ DILIGENT_END_INTERFACE
 
 #if DILIGENT_C_INTERFACE
 
-#    define IRadientSceneImporter_ImportGLTF(This, ...)      CALL_IFACE_METHOD(RadientSceneImporter, ImportGLTF,      This, __VA_ARGS__)
-#    define IRadientSceneImporter_InstantiateGLTF(This, ...) CALL_IFACE_METHOD(RadientSceneImporter, InstantiateGLTF, This, __VA_ARGS__)
+#    define IRadientSceneImporter_ImportGLTF(This, ...)              CALL_IFACE_METHOD(RadientSceneImporter, ImportGLTF,             This, __VA_ARGS__)
+#    define IRadientSceneImporter_InstantiateGLTF(This, ...)         CALL_IFACE_METHOD(RadientSceneImporter, InstantiateGLTF,        This, __VA_ARGS__)
+#    define IRadientSceneImporter_ProcessPendingImports(This)        CALL_IFACE_METHOD(RadientSceneImporter, ProcessPendingImports,  This)
 
 #endif
 

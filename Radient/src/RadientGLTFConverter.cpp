@@ -225,20 +225,20 @@ Uint32 GetDefaultSceneIndex(const GLTF::Model& Model)
         0;
 }
 
-RADIENT_STATUS ResolveSceneIndex(const GLTF::Model&                Model,
-                                 const RadientGLTFInstantiateInfo& InstantiateInfo,
-                                 Uint32&                           SceneIndex)
+RADIENT_STATUS ResolveSceneIndex(const GLTF::Model& Model,
+                                 Uint32            RequestedSceneIndex,
+                                 Uint32&           SceneIndex)
 {
-    if (InstantiateInfo.SceneIndex == InvalidRadientGLTFSceneIndex)
+    if (RequestedSceneIndex == InvalidRadientGLTFSceneIndex)
     {
         SceneIndex = GetDefaultSceneIndex(Model);
         return RADIENT_STATUS_OK;
     }
 
-    if (InstantiateInfo.SceneIndex >= Model.Scenes.size())
+    if (RequestedSceneIndex >= Model.Scenes.size())
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    SceneIndex = InstantiateInfo.SceneIndex;
+    SceneIndex = RequestedSceneIndex;
     return RADIENT_STATUS_OK;
 }
 
@@ -247,35 +247,23 @@ RADIENT_STATUS ResolveSceneIndex(const GLTF::Model&                Model,
 namespace RadientGLTFConverter
 {
 
-RADIENT_STATUS InstantiateSceneGraph(const GLTF::Model&                GLTFModel,
-                                     const RadientAssetReference&      Model,
-                                     const RadientGLTFInstantiateInfo& InstantiateInfo,
-                                     RadientAssetManagerImpl&          AssetManager,
-                                     IRadientSceneWriter&              Writer,
-                                     RadientEntityID&                  RootEntity)
+RADIENT_STATUS InstantiateSceneGraph(const GLTF::Model&           GLTFModel,
+                                     const RadientAssetReference& Model,
+                                     Uint32                       SceneIndex,
+                                     RadientAssetManagerImpl&     AssetManager,
+                                     IRadientSceneWriter&         Writer,
+                                     RadientEntityID              RootEntity)
 {
-    RootEntity = InvalidRadientEntityID;
-
-    Uint32         SceneIndex = 0;
-    RADIENT_STATUS Status     = ResolveSceneIndex(GLTFModel, InstantiateInfo, SceneIndex);
-    if (RADIENT_FAILED(Status))
-        return Status;
-
-    RadientEntityDesc RootDesc{};
-    RootDesc.Name      = InstantiateInfo.Name != nullptr ? InstantiateInfo.Name : Model.URI;
-    RootDesc.Parent    = InstantiateInfo.Parent;
-    RootDesc.Flags     = InstantiateInfo.RootFlags;
-    RootDesc.Transform = InstantiateInfo.RootTransform;
-
-    Status = Writer.CreateEntity(RootDesc, RootEntity);
+    Uint32         ResolvedSceneIndex = 0;
+    RADIENT_STATUS Status             = ResolveSceneIndex(GLTFModel, SceneIndex, ResolvedSceneIndex);
     if (RADIENT_FAILED(Status))
         return Status;
 
     std::vector<RadientAssetReference> MeshAssets(GLTFModel.Meshes.size());
 
-    if (SceneIndex < GLTFModel.Scenes.size())
+    if (ResolvedSceneIndex < GLTFModel.Scenes.size())
     {
-        for (const GLTF::Node* pNode : GLTFModel.Scenes[SceneIndex].RootNodes)
+        for (const GLTF::Node* pNode : GLTFModel.Scenes[ResolvedSceneIndex].RootNodes)
         {
             if (pNode == nullptr)
                 continue;
