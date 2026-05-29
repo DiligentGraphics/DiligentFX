@@ -85,11 +85,11 @@ public:
     RADIENT_STATUS Prepare(IRenderDevice*  pDevice,
                            IDeviceContext* pContext);
 
-    RADIENT_STATUS EnsureMeshLoaded(const RadientAssetReference& Mesh,
-                                    IRenderDevice*               pDevice,
-                                    IDeviceContext*              pContext);
-
-    const RadientRenderMesh* GetMesh(const RadientAssetReference& Mesh) const;
+    /// Returns the renderer-ready mesh, or null if the asset is still loading
+    /// or failed to load.
+    const RadientRenderMesh* ResolveMesh(const RadientAssetReference& Mesh,
+                                         IRenderDevice*               pDevice,
+                                         IDeviceContext*              pContext);
 
     IGPUUploadManager*     GetUploadManager() const;
     GLTF::ResourceManager* GetResourceManager() const;
@@ -99,6 +99,23 @@ private:
     {
         std::string                  SourceURI;
         std::unique_ptr<GLTF::Model> pModel;
+    };
+
+    struct MeshResource
+    {
+        enum class STATE
+        {
+            NotRequested,
+            Loading,
+            Ready,
+            Failed
+        };
+
+        STATE                 State = STATE::NotRequested;
+        RadientAssetReference SourceModel;
+        std::string           SourceModelURI;
+        Uint32                SourceMeshIndex = ~0u;
+        RadientRenderMesh     Mesh;
     };
 
     void           Reset();
@@ -116,8 +133,8 @@ private:
     RefCntAutoPtr<IGPUUploadManager>       m_pUploadManager;
     RefCntAutoPtr<GLTF::ResourceManager>   m_pResourceManager;
 
-    std::unordered_map<std::string, GLTFResource>      m_GLTFResources;
-    std::unordered_map<std::string, RadientRenderMesh> m_MeshResources;
+    std::unordered_map<std::string, GLTFResource> m_GLTFResources;
+    std::unordered_map<std::string, MeshResource> m_MeshResources;
 };
 
 } // namespace Diligent

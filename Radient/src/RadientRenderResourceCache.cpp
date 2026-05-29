@@ -245,52 +245,77 @@ RADIENT_STATUS RadientRenderResourceCache::EnsureGLTFLoaded(const RadientAssetRe
     return PrepareGLTFResource(Resource, pDevice, pContext);
 }
 
-RADIENT_STATUS RadientRenderResourceCache::EnsureMeshLoaded(const RadientAssetReference& Mesh,
-                                                            IRenderDevice*               pDevice,
-                                                            IDeviceContext*              pContext)
-{
-    if (Mesh.URI == nullptr || *Mesh.URI == 0)
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-
-    const std::string MeshCacheKey = MakeAssetCacheKey(Mesh);
-    if (m_MeshResources.find(MeshCacheKey) != m_MeshResources.end())
-        return RADIENT_STATUS_OK;
-
-    if (m_pAssetManager == nullptr)
-        return RADIENT_STATUS_INVALID_OPERATION;
-
-    RadientAssetReference Model{};
-    Uint32                MeshIndex    = ~0u;
-    const RADIENT_STATUS  SourceStatus = m_pAssetManager->GetMeshGLTFSource(Mesh, Model, MeshIndex);
-    if (RADIENT_FAILED(SourceStatus))
-        return SourceStatus;
-
-    const RADIENT_STATUS LoadStatus = EnsureGLTFLoaded(Model, pDevice, pContext);
-    if (RADIENT_FAILED(LoadStatus) || LoadStatus != RADIENT_STATUS_OK)
-        return LoadStatus;
-
-    const std::string                                       ModelCacheKey = MakeAssetCacheKey(Model);
-    std::unordered_map<std::string, GLTFResource>::iterator ResourceIt    = m_GLTFResources.find(ModelCacheKey);
-    if (ResourceIt == m_GLTFResources.end() || ResourceIt->second.pModel == nullptr)
-        return RADIENT_STATUS_INVALID_OPERATION;
-
-    RadientRenderMesh    MeshResource;
-    const RADIENT_STATUS BuildStatus = BuildMeshResource(*ResourceIt->second.pModel, MeshIndex, MeshResource);
-    if (RADIENT_FAILED(BuildStatus))
-        return BuildStatus;
-
-    m_MeshResources.emplace(MeshCacheKey, std::move(MeshResource));
-    return RADIENT_STATUS_OK;
-}
-
-const RadientRenderMesh* RadientRenderResourceCache::GetMesh(const RadientAssetReference& Mesh) const
+const RadientRenderMesh* RadientRenderResourceCache::ResolveMesh(const RadientAssetReference& Mesh,
+                                                                 IRenderDevice*               pDevice,
+                                                                 IDeviceContext*              pContext)
 {
     if (Mesh.URI == nullptr || *Mesh.URI == 0)
         return nullptr;
 
-    const std::string                                                  CacheKey = MakeAssetCacheKey(Mesh);
-    std::unordered_map<std::string, RadientRenderMesh>::const_iterator MeshIt   = m_MeshResources.find(CacheKey);
-    return MeshIt != m_MeshResources.end() ? &MeshIt->second : nullptr;
+    const std::string MeshCacheKey = MakeAssetCacheKey(Mesh);
+    MeshResource&     Record       = m_MeshResources[MeshCacheKey];
+
+    switch (Record.State)
+    {
+        case MeshResource::STATE::Ready:
+            return &Record.Mesh;
+
+        case MeshResource::STATE::Failed:
+            return nullptr;
+
+        case MeshResource::STATE::NotRequested:
+        case MeshResource::STATE::Loading:
+            break;
+    }
+
+    if (m_pAssetManager == nullptr)
+        return nullptr;
+
+    if (Record.State == MeshResource::STATE::NotRequested)
+    {
+        RadientAssetReference SourceModel{};
+        Uint32                SourceMeshIndex = ~0u;
+        const RADIENT_STATUS  SourceStatus    = m_pAssetManager->GetMeshGLTFSource(Mesh, SourceModel, SourceMeshIndex);
+        if (RADIENT_FAILED(SourceStatus))
+        {
+            Record.State = MeshResource::STATE::Failed;
+            return nullptr;
+        }
+
+        Record.SourceModelURI  = SourceModel.URI != nullptr ? SourceModel.URI : "";
+        Record.SourceModel     = SourceModel;
+        Record.SourceModel.URI = Record.SourceModelURI.c_str();
+        Record.SourceMeshIndex = SourceMeshIndex;
+        Record.State           = MeshResource::STATE::Loading;
+    }
+
+    const RADIENT_STATUS LoadStatus = EnsureGLTFLoaded(Record.SourceModel, pDevice, pContext);
+    if (RADIENT_FAILED(LoadStatus) || LoadStatus != RADIENT_STATUS_OK)
+    {
+        if (RADIENT_FAILED(LoadStatus))
+            Record.State = MeshResource::STATE::Failed;
+        return nullptr;
+    }
+
+    const std::string                                       ModelCacheKey = MakeAssetCacheKey(Record.SourceModel);
+    std::unordered_map<std::string, GLTFResource>::iterator ResourceIt    = m_GLTFResources.find(ModelCacheKey);
+    if (ResourceIt == m_GLTFResources.end() || ResourceIt->second.pModel == nullptr)
+    {
+        Record.State = MeshResource::STATE::Failed;
+        return nullptr;
+    }
+
+    RadientRenderMesh    RenderMesh;
+    const RADIENT_STATUS BuildStatus = BuildMeshResource(*ResourceIt->second.pModel, Record.SourceMeshIndex, RenderMesh);
+    if (RADIENT_FAILED(BuildStatus))
+    {
+        Record.State = MeshResource::STATE::Failed;
+        return nullptr;
+    }
+
+    Record.Mesh  = std::move(RenderMesh);
+    Record.State = MeshResource::STATE::Ready;
+    return &Record.Mesh;
 }
 
 IGPUUploadManager* RadientRenderResourceCache::GetUploadManager() const

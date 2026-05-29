@@ -752,17 +752,7 @@ RADIENT_STATUS RadientGeometryPass::Execute(IRenderDevice*                   pDe
     ReadyItems.reserve(DrawList.GetItemCount());
     for (const RadientDrawItem& Item : DrawList.GetItems())
     {
-        const RADIENT_STATUS LoadStatus = ResourceCache.EnsureMeshLoaded(Item.Mesh.Mesh, pDevice, pContext);
-        if (LoadStatus == RADIENT_STATUS_INVALID_ARGUMENT)
-            continue; // Native Radient mesh upload is not implemented yet.
-        if (RADIENT_FAILED(LoadStatus))
-            return LoadStatus;
-
-        if (LoadStatus != RADIENT_STATUS_OK)
-            continue;
-
-        const RadientRenderMesh* pMesh = ResourceCache.GetMesh(Item.Mesh.Mesh);
-        if (pMesh != nullptr)
+        if (const RadientRenderMesh* pMesh = ResourceCache.ResolveMesh(Item.Mesh.Mesh, pDevice, pContext))
             ReadyItems.push_back({&Item, pMesh});
     }
 
@@ -787,7 +777,7 @@ RADIENT_STATUS RadientGeometryPass::Execute(IRenderDevice*                   pDe
     {
         VERIFY_EXPR(ReadyItem.pItem != nullptr);
         VERIFY_EXPR(ReadyItem.pMesh != nullptr);
-        const RadientDrawItem& Item = *ReadyItem.pItem;
+        const RadientDrawItem&   Item = *ReadyItem.pItem;
         const RadientRenderMesh& Mesh = *ReadyItem.pMesh;
 
         if (Mesh.Primitives.empty())
