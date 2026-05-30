@@ -96,7 +96,7 @@ public:
                                                            RadientComponentTypeID ComponentType,
                                                            Bool&                  HasComponent) const override final;
 
-    virtual RadientRevision DILIGENT_CALL_TYPE GetRevision() const override final;
+    virtual const RadientSceneRevisions& DILIGENT_CALL_TYPE GetSceneRevisions() const override final;
 
     const RadientSceneState& GetState() const;
 

@@ -99,42 +99,44 @@ void RadientScene_C_UseMaterialBindingsComponent(void)
 
 void RadientScene_C_TestMacros(IRadientScene* pScene)
 {
-    RadientEntityID            Entity          = 0;
-    RadientEntityID            Parent          = 0;
-    RadientEntityID            Children[1]     = {0};
-    RADIENT_ENTITY_FLAGS       EntityFlags     = 0;
-    Uint32                     ChildCount      = 1;
-    Uint32                     NumChildren     = 0;
-    Bool                       Visible         = False;
-    Bool                       HasComponent    = False;
-    RadientTransform           Transform       = {0};
-    RadientMatrix4x4           WorldMatrix     = {0};
-    RadientCameraComponent     Camera          = {0};
-    RadientCustomComponentData CustomComponent = {0};
-    RADIENT_STATUS             Status          = RADIENT_STATUS_OK;
+    RadientEntityID              Entity          = 0;
+    RadientEntityID              Parent          = 0;
+    RadientEntityID              Children[1]     = {0};
+    RADIENT_ENTITY_FLAGS         EntityFlags     = 0;
+    Uint32                       ChildCount      = 1;
+    Uint32                       NumChildren     = 0;
+    Bool                         Visible         = False;
+    Bool                         HasComponent    = False;
+    RadientTransform             Transform       = {0};
+    RadientMatrix4x4             WorldMatrix     = {0};
+    RadientCameraComponent       Camera          = {0};
+    RadientCustomComponentData   CustomComponent = {0};
+    const RadientSceneRevisions* pRevisions      = 0;
+    RADIENT_STATUS               Status          = RADIENT_STATUS_OK;
 
     EntityFlags = RADIENT_ENTITY_FLAGS_ALL;
 
     IRadientScene_GetDesc(pScene);
-    Status = IRadientScene_IsEntityAlive(pScene, Entity);
-    Status = IRadientScene_GetEntityFlags(pScene, Entity, &EntityFlags);
-    Status = IRadientScene_GetEntityOwnVisibility(pScene, Entity, &Visible);
-    Status = IRadientScene_GetEntityEffectiveVisibility(pScene, Entity, &Visible);
-    Status = IRadientScene_GetCachedEntityEffectiveVisibility(pScene, Entity, &Visible);
-    Status = IRadientScene_GetParent(pScene, Entity, &Parent);
-    Status = IRadientScene_GetChildCount(pScene, Entity, &ChildCount);
-    Status = IRadientScene_GetChildren(pScene, Entity, 0, ChildCount, Children, &NumChildren);
-    Status = IRadientScene_GetLocalTransform(pScene, Entity, &Transform);
-    Status = IRadientScene_GetWorldMatrix(pScene, Entity, &WorldMatrix);
-    Status = IRadientScene_GetCachedWorldMatrix(pScene, Entity, &WorldMatrix);
-    Status = IRadientScene_GetCamera(pScene, Entity, &Camera);
-    Status = IRadientScene_HasComponent(pScene, Entity, CustomComponent.ComponentType, &HasComponent);
-    IRadientScene_GetRevision(pScene);
+    Status     = IRadientScene_IsEntityAlive(pScene, Entity);
+    Status     = IRadientScene_GetEntityFlags(pScene, Entity, &EntityFlags);
+    Status     = IRadientScene_GetEntityOwnVisibility(pScene, Entity, &Visible);
+    Status     = IRadientScene_GetEntityEffectiveVisibility(pScene, Entity, &Visible);
+    Status     = IRadientScene_GetCachedEntityEffectiveVisibility(pScene, Entity, &Visible);
+    Status     = IRadientScene_GetParent(pScene, Entity, &Parent);
+    Status     = IRadientScene_GetChildCount(pScene, Entity, &ChildCount);
+    Status     = IRadientScene_GetChildren(pScene, Entity, 0, ChildCount, Children, &NumChildren);
+    Status     = IRadientScene_GetLocalTransform(pScene, Entity, &Transform);
+    Status     = IRadientScene_GetWorldMatrix(pScene, Entity, &WorldMatrix);
+    Status     = IRadientScene_GetCachedWorldMatrix(pScene, Entity, &WorldMatrix);
+    Status     = IRadientScene_GetCamera(pScene, Entity, &Camera);
+    Status     = IRadientScene_HasComponent(pScene, Entity, CustomComponent.ComponentType, &HasComponent);
+    pRevisions = IRadientScene_GetSceneRevisions(pScene);
 
     (void)Parent;
     (void)NumChildren;
     (void)Visible;
     (void)HasComponent;
     (void)Camera;
+    (void)pRevisions;
     (void)Status;
 }

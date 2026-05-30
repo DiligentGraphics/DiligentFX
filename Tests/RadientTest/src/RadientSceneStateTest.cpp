@@ -66,6 +66,20 @@ void ExpectMatrixNear(const RadientMatrix4x4& Matrix, const RadientMatrix4x4& Re
         EXPECT_NEAR(Matrix.Data[i], Reference.Data[i], EPSILON) << "i = " << i;
 }
 
+void ExpectSceneRevisions(const RadientSceneRevisions& Revisions,
+                          RadientRevision              Drawables,
+                          RadientRevision              Lights,
+                          RadientRevision              Transforms,
+                          RadientRevision              Visibility,
+                          RadientRevision              Cameras = 0)
+{
+    EXPECT_EQ(Revisions.Drawables, Drawables);
+    EXPECT_EQ(Revisions.Lights, Lights);
+    EXPECT_EQ(Revisions.Transforms, Transforms);
+    EXPECT_EQ(Revisions.Visibility, Visibility);
+    EXPECT_EQ(Revisions.Cameras, Cameras);
+}
+
 RadientTransform MakeTranslation(float X, float Y, float Z)
 {
     RadientTransform Transform;
@@ -1573,9 +1587,9 @@ TEST(RadientSceneStateTest, SetBuiltInComponentReturnsNoChangeForSameValue)
     Camera.FocalLength = 35.f;
 
     EXPECT_EQ(State.SetCamera(Entity, Camera), RADIENT_STATUS_OK);
-    RadientRevision Revision = State.GetRevision();
+    RadientSceneRevisions Revisions = State.GetSceneRevisions();
     EXPECT_EQ(State.SetCamera(Entity, Camera), RADIENT_STATUS_NO_CHANGE);
-    EXPECT_EQ(State.GetRevision(), Revision);
+    EXPECT_EQ(State.GetSceneRevisions(), Revisions);
 
     Camera.FocalLength = 50.f;
     EXPECT_EQ(State.SetCamera(Entity, Camera), RADIENT_STATUS_OK);
@@ -1588,12 +1602,12 @@ TEST(RadientSceneStateTest, SetBuiltInComponentReturnsNoChangeForSameValue)
     Mesh.Mesh.Version = 7;
 
     EXPECT_EQ(State.SetMesh(Entity, Mesh), RADIENT_STATUS_OK);
-    Revision = State.GetRevision();
+    Revisions = State.GetSceneRevisions();
 
     RadientMeshComponent SameMesh = Mesh;
     SameMesh.Mesh.URI             = MeshURI1;
     EXPECT_EQ(State.SetMesh(Entity, SameMesh), RADIENT_STATUS_NO_CHANGE);
-    EXPECT_EQ(State.GetRevision(), Revision);
+    EXPECT_EQ(State.GetSceneRevisions(), Revisions);
 
     Mesh.Mesh.Version = 8;
     EXPECT_EQ(State.SetMesh(Entity, Mesh), RADIENT_STATUS_OK);
@@ -1602,9 +1616,9 @@ TEST(RadientSceneStateTest, SetBuiltInComponentReturnsNoChangeForSameValue)
     Renderer.VisibilityMask = 0x0F;
 
     EXPECT_EQ(State.SetMeshRenderer(Entity, Renderer), RADIENT_STATUS_OK);
-    Revision = State.GetRevision();
+    Revisions = State.GetSceneRevisions();
     EXPECT_EQ(State.SetMeshRenderer(Entity, Renderer), RADIENT_STATUS_NO_CHANGE);
-    EXPECT_EQ(State.GetRevision(), Revision);
+    EXPECT_EQ(State.GetSceneRevisions(), Revisions);
 
     Renderer.VisibilityMask = 0xF0;
     EXPECT_EQ(State.SetMeshRenderer(Entity, Renderer), RADIENT_STATUS_OK);
@@ -1622,7 +1636,7 @@ TEST(RadientSceneStateTest, SetBuiltInComponentReturnsNoChangeForSameValue)
     MaterialBindings.BindingCount = 1;
 
     EXPECT_EQ(State.SetMaterialBindings(Entity, MaterialBindings), RADIENT_STATUS_OK);
-    Revision = State.GetRevision();
+    Revisions = State.GetSceneRevisions();
 
     RadientMaterialBinding SameMaterialBinding = MaterialBinding;
     SameMaterialBinding.Material.URI           = MaterialURI1;
@@ -1631,7 +1645,7 @@ TEST(RadientSceneStateTest, SetBuiltInComponentReturnsNoChangeForSameValue)
     SameMaterialBindings.pBindings    = &SameMaterialBinding;
     SameMaterialBindings.BindingCount = 1;
     EXPECT_EQ(State.SetMaterialBindings(Entity, SameMaterialBindings), RADIENT_STATUS_NO_CHANGE);
-    EXPECT_EQ(State.GetRevision(), Revision);
+    EXPECT_EQ(State.GetSceneRevisions(), Revisions);
 
     MaterialBinding.Material.Version = 3;
     EXPECT_EQ(State.SetMaterialBindings(Entity, MaterialBindings), RADIENT_STATUS_OK);
@@ -1640,12 +1654,100 @@ TEST(RadientSceneStateTest, SetBuiltInComponentReturnsNoChangeForSameValue)
     Light.Intensity = 4.f;
 
     EXPECT_EQ(State.SetLight(Entity, Light), RADIENT_STATUS_OK);
-    Revision = State.GetRevision();
+    Revisions = State.GetSceneRevisions();
     EXPECT_EQ(State.SetLight(Entity, Light), RADIENT_STATUS_NO_CHANGE);
-    EXPECT_EQ(State.GetRevision(), Revision);
+    EXPECT_EQ(State.GetSceneRevisions(), Revisions);
 
     Light.Intensity = 8.f;
     EXPECT_EQ(State.SetLight(Entity, Light), RADIENT_STATUS_OK);
+}
+
+TEST(RadientSceneStateTest, TracksSceneRevisions)
+{
+    RadientSceneState State;
+    ExpectSceneRevisions(State.GetSceneRevisions(), 0, 0, 0, 0);
+
+    RadientEntityID Entity = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity({}, Entity), RADIENT_STATUS_OK);
+    ExpectSceneRevisions(State.GetSceneRevisions(), 0, 0, 1, 1);
+
+    const RadientSceneRevisions AfterCreate = State.GetSceneRevisions();
+    EXPECT_EQ(State.SetLocalTransform(Entity, {}), RADIENT_STATUS_NO_CHANGE);
+    EXPECT_EQ(State.GetSceneRevisions(), AfterCreate);
+
+    EXPECT_EQ(State.SetLocalTransform(Entity, MakeTranslation(1.f, 2.f, 3.f)), RADIENT_STATUS_OK);
+    ExpectSceneRevisions(State.GetSceneRevisions(), 0, 0, 2, 1);
+
+    EXPECT_EQ(State.SetEntityOwnVisibility(Entity, False), RADIENT_STATUS_OK);
+    ExpectSceneRevisions(State.GetSceneRevisions(), 0, 0, 2, 2);
+
+    RadientMeshComponent Mesh;
+    Mesh.Mesh.URI     = "mesh://revision-test";
+    Mesh.Mesh.Version = 1;
+    EXPECT_EQ(State.SetMesh(Entity, Mesh), RADIENT_STATUS_OK);
+    ExpectSceneRevisions(State.GetSceneRevisions(), 1, 0, 2, 2);
+
+    EXPECT_EQ(State.SetMesh(Entity, Mesh), RADIENT_STATUS_NO_CHANGE);
+    ExpectSceneRevisions(State.GetSceneRevisions(), 1, 0, 2, 2);
+
+    RadientMeshRendererComponent Renderer;
+    Renderer.VisibilityMask = 7;
+    EXPECT_EQ(State.SetMeshRenderer(Entity, Renderer), RADIENT_STATUS_OK);
+    ExpectSceneRevisions(State.GetSceneRevisions(), 2, 0, 2, 2);
+
+    RadientMaterialBinding MaterialBinding;
+    MaterialBinding.PrimitiveIndex   = 0;
+    MaterialBinding.Material.URI     = "material://revision-test";
+    MaterialBinding.Material.Version = 1;
+
+    RadientMaterialBindingsComponent MaterialBindings;
+    MaterialBindings.pBindings    = &MaterialBinding;
+    MaterialBindings.BindingCount = 1;
+    EXPECT_EQ(State.SetMaterialBindings(Entity, MaterialBindings), RADIENT_STATUS_OK);
+    ExpectSceneRevisions(State.GetSceneRevisions(), 3, 0, 2, 2);
+
+    RadientLightComponent Light;
+    Light.Intensity = 4.f;
+    EXPECT_EQ(State.SetLight(Entity, Light), RADIENT_STATUS_OK);
+    ExpectSceneRevisions(State.GetSceneRevisions(), 3, 1, 2, 2);
+
+    RadientCameraComponent Camera;
+    Camera.FocalLength = 35.f;
+    EXPECT_EQ(State.SetCamera(Entity, Camera), RADIENT_STATUS_OK);
+    ExpectSceneRevisions(State.GetSceneRevisions(), 3, 1, 2, 2, 1);
+
+    EXPECT_EQ(State.SetCamera(Entity, Camera), RADIENT_STATUS_NO_CHANGE);
+    ExpectSceneRevisions(State.GetSceneRevisions(), 3, 1, 2, 2, 1);
+
+    Camera.FocalLength = 50.f;
+    EXPECT_EQ(State.SetCamera(Entity, Camera), RADIENT_STATUS_OK);
+    ExpectSceneRevisions(State.GetSceneRevisions(), 3, 1, 2, 2, 2);
+
+    EXPECT_EQ(State.RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_MESH_RENDERER), RADIENT_STATUS_OK);
+    ExpectSceneRevisions(State.GetSceneRevisions(), 4, 1, 2, 2, 2);
+
+    EXPECT_EQ(State.RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_LIGHT), RADIENT_STATUS_OK);
+    ExpectSceneRevisions(State.GetSceneRevisions(), 4, 2, 2, 2, 2);
+
+    EXPECT_EQ(State.RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_CAMERA), RADIENT_STATUS_OK);
+    ExpectSceneRevisions(State.GetSceneRevisions(), 4, 2, 2, 2, 3);
+}
+
+TEST(RadientSceneStateTest, HierarchyChangesUpdateSceneRevisions)
+{
+    RadientSceneState State;
+
+    RadientEntityID Parent = InvalidRadientEntityID;
+    RadientEntityID Child  = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity({}, Parent), RADIENT_STATUS_OK);
+    ASSERT_EQ(State.CreateEntity({}, Child), RADIENT_STATUS_OK);
+    ExpectSceneRevisions(State.GetSceneRevisions(), 0, 0, 2, 2);
+
+    EXPECT_EQ(State.SetParent(Child, Parent, False), RADIENT_STATUS_OK);
+    ExpectSceneRevisions(State.GetSceneRevisions(), 0, 0, 3, 3);
+
+    EXPECT_EQ(State.DestroyEntity(Parent), RADIENT_STATUS_OK);
+    ExpectSceneRevisions(State.GetSceneRevisions(), 1, 1, 4, 4, 1);
 }
 
 } // namespace

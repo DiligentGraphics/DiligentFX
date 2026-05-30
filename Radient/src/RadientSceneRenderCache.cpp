@@ -36,47 +36,63 @@ namespace Diligent
 
 RADIENT_STATUS RadientSceneRenderCache::SyncScene(IRadientScene& Scene)
 {
-    const RadientRevision SceneRevision = Scene.GetRevision();
-    if (m_SceneRevision == SceneRevision)
+    const RadientSceneRevisions& SceneRevisions = Scene.GetSceneRevisions();
+    if (m_SceneRevisions == SceneRevisions)
         return RADIENT_STATUS_NO_CHANGE;
 
-    m_DrawList.Clear();
-    m_LightList.Clear();
+    const bool UpdateDrawList =
+        m_SceneRevisions.Drawables != SceneRevisions.Drawables ||
+        m_SceneRevisions.Visibility != SceneRevisions.Visibility;
+    const bool UpdateLightList =
+        m_SceneRevisions.Lights != SceneRevisions.Lights ||
+        m_SceneRevisions.Visibility != SceneRevisions.Visibility;
 
     RadientSceneImpl* pSceneImpl = ClassPtrCast<RadientSceneImpl>(&Scene);
     if (pSceneImpl == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    const RADIENT_STATUS Status = pSceneImpl->GetState().EnumerateRenderableMeshes(
-        [this](const RadientSceneState::RenderableMesh& Mesh) {
-            if (!Mesh.EffectiveVisible)
-                return;
+    RADIENT_STATUS Status = RADIENT_STATUS_NO_CHANGE;
+    if (UpdateDrawList)
+    {
+        m_DrawList.Clear();
 
-            m_DrawList.Add(Mesh.Entity,
-                           Mesh.Mesh,
-                           Mesh.Renderer,
-                           Mesh.pMaterialBindings,
-                           Mesh.WorldMatrix);
-        });
-    if (RADIENT_FAILED(Status))
-        return Status;
+        Status = pSceneImpl->GetState().EnumerateRenderableMeshes(
+            [this](const RadientSceneState::RenderableMesh& Mesh) {
+                if (!Mesh.EffectiveVisible)
+                    return;
 
-    const RADIENT_STATUS LightStatus = pSceneImpl->GetState().EnumerateRenderableLights(
-        [this](const RadientSceneState::RenderableLight& Light) {
-            if (!Light.EffectiveVisible)
-                return;
+                m_DrawList.Add(Mesh.Entity,
+                               Mesh.Mesh,
+                               Mesh.Renderer,
+                               Mesh.pMaterialBindings,
+                               Mesh.WorldMatrix);
+            });
+        if (RADIENT_FAILED(Status))
+            return Status;
+    }
 
-            m_LightList.Add(Light.Entity, Light.Light, Light.WorldMatrix);
-        });
-    if (RADIENT_FAILED(LightStatus))
-        return LightStatus;
+    RADIENT_STATUS LightStatus = RADIENT_STATUS_NO_CHANGE;
+    if (UpdateLightList)
+    {
+        m_LightList.Clear();
 
-    m_SceneRevision = SceneRevision;
+        LightStatus = pSceneImpl->GetState().EnumerateRenderableLights(
+            [this](const RadientSceneState::RenderableLight& Light) {
+                if (!Light.EffectiveVisible)
+                    return;
+
+                m_LightList.Add(Light.Entity, Light.Light, Light.WorldMatrix);
+            });
+        if (RADIENT_FAILED(LightStatus))
+            return LightStatus;
+    }
+
+    m_SceneRevisions = SceneRevisions;
 
     if (Status == RADIENT_STATUS_OUT_OF_DATE || LightStatus == RADIENT_STATUS_OUT_OF_DATE)
         return RADIENT_STATUS_OUT_OF_DATE;
 
-    return Status;
+    return RADIENT_STATUS_OK;
 }
 
 const RadientDrawList& RadientSceneRenderCache::GetDrawList() const
@@ -89,9 +105,9 @@ const RadientLightList& RadientSceneRenderCache::GetLightList() const
     return m_LightList;
 }
 
-RadientRevision RadientSceneRenderCache::GetSceneRevision() const
+const RadientSceneRevisions& RadientSceneRenderCache::GetSceneRevisions() const
 {
-    return m_SceneRevision;
+    return m_SceneRevisions;
 }
 
 } // namespace Diligent

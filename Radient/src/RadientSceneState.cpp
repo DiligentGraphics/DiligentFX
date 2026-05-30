@@ -299,9 +299,9 @@ RADIENT_STATUS RadientSceneState::HasComponent(RadientEntityID Entity, RadientCo
     return RADIENT_STATUS_OK;
 }
 
-RadientRevision RadientSceneState::GetRevision() const
+const RadientSceneRevisions& RadientSceneState::GetSceneRevisions() const
 {
-    return m_Revision;
+    return m_SceneRevisions;
 }
 
 RADIENT_STATUS RadientSceneState::CreateEntity(const RadientEntityDesc& Desc, RadientEntityID& Entity)
@@ -343,7 +343,7 @@ RADIENT_STATUS RadientSceneState::CreateEntity(const RadientEntityDesc& Desc, Ra
     }
 
     MarkDirty(E, DIRTY_FLAGS_REQUIRING_PROPAGATION);
-    Touch();
+    Touch(CHANGE_FLAG_TRANSFORMS | CHANGE_FLAG_VISIBILITY);
     return RADIENT_STATUS_OK;
 }
 
@@ -357,7 +357,7 @@ RADIENT_STATUS RadientSceneState::DestroyEntity(RadientEntityID Entity)
     DestroyEntitySubtree(E);
     if (m_DirtyEntities.empty())
         m_DirtyFlags = DIRTY_FLAG_NONE;
-    Touch();
+    Touch(CHANGE_FLAG_DRAWABLES | CHANGE_FLAG_LIGHTS | CHANGE_FLAG_TRANSFORMS | CHANGE_FLAG_VISIBILITY | CHANGE_FLAG_CAMERAS);
     return RADIENT_STATUS_OK;
 }
 
@@ -380,7 +380,7 @@ RADIENT_STATUS RadientSceneState::SetEntityFlags(RadientEntityID Entity, RADIENT
     State.Flags = Flags;
     if (VisibilityChanged)
         MarkDirty(E, DIRTY_FLAG_VISIBILITY);
-    Touch();
+    Touch(VisibilityChanged ? CHANGE_FLAG_VISIBILITY : CHANGE_FLAG_NONE);
     return RADIENT_STATUS_OK;
 }
 
@@ -399,7 +399,7 @@ RADIENT_STATUS RadientSceneState::SetEntityOwnVisibility(RadientEntityID Entity,
 
     State.Flags = Flags;
     MarkDirty(E, DIRTY_FLAG_VISIBILITY);
-    Touch();
+    Touch(CHANGE_FLAG_VISIBILITY);
     return RADIENT_STATUS_OK;
 }
 
@@ -457,7 +457,7 @@ RADIENT_STATUS RadientSceneState::SetParent(RadientEntityID Entity, RadientEntit
 
     m_Registry.get<LocalTransformComponent>(E).Transform = LocalTransform;
     MarkDirty(E, DIRTY_FLAGS_REQUIRING_PROPAGATION);
-    Touch();
+    Touch(CHANGE_FLAG_TRANSFORMS | CHANGE_FLAG_VISIBILITY);
     return RADIENT_STATUS_OK;
 }
 
@@ -473,13 +473,13 @@ RADIENT_STATUS RadientSceneState::SetLocalTransform(RadientEntityID Entity, cons
 
     LocalTransform.Transform = Transform;
     MarkDirty(E, DIRTY_FLAG_TRANSFORM);
-    Touch();
+    Touch(CHANGE_FLAG_TRANSFORMS);
     return RADIENT_STATUS_OK;
 }
 
 RADIENT_STATUS RadientSceneState::SetCamera(RadientEntityID Entity, const RadientCameraComponent& Camera)
 {
-    return EmplaceOrReplaceComponent(Entity, Camera);
+    return EmplaceOrReplaceComponent(Entity, Camera, CHANGE_FLAG_CAMERAS);
 }
 
 RADIENT_STATUS RadientSceneState::SetMesh(RadientEntityID Entity, const RadientMeshComponent& Mesh)
@@ -497,13 +497,13 @@ RADIENT_STATUS RadientSceneState::SetMesh(RadientEntityID Entity, const RadientM
         m_Registry.emplace<MeshComponentStorage>(E);
 
     MeshStorage.Assign(Mesh);
-    Touch();
+    Touch(CHANGE_FLAG_DRAWABLES);
     return RADIENT_STATUS_OK;
 }
 
 RADIENT_STATUS RadientSceneState::SetMeshRenderer(RadientEntityID Entity, const RadientMeshRendererComponent& Renderer)
 {
-    return EmplaceOrReplaceComponent(Entity, Renderer);
+    return EmplaceOrReplaceComponent(Entity, Renderer, CHANGE_FLAG_DRAWABLES);
 }
 
 RADIENT_STATUS RadientSceneState::SetMaterialBindings(RadientEntityID Entity, const RadientMaterialBindingsComponent& Bindings)
@@ -524,13 +524,13 @@ RADIENT_STATUS RadientSceneState::SetMaterialBindings(RadientEntityID Entity, co
         m_Registry.emplace<MaterialBindingsStorage>(E);
 
     BindingStorage.Assign(Bindings);
-    Touch();
+    Touch(CHANGE_FLAG_DRAWABLES);
     return RADIENT_STATUS_OK;
 }
 
 RADIENT_STATUS RadientSceneState::SetLight(RadientEntityID Entity, const RadientLightComponent& Light)
 {
-    return EmplaceOrReplaceComponent(Entity, Light);
+    return EmplaceOrReplaceComponent(Entity, Light, CHANGE_FLAG_LIGHTS);
 }
 
 RADIENT_STATUS RadientSceneState::SetCustomComponentData(RadientEntityID Entity, const RadientCustomComponentData& Component)
@@ -590,30 +590,36 @@ RADIENT_STATUS RadientSceneState::RemoveComponent(RadientEntityID Entity, Radien
     if (ComponentType == InvalidRadientComponentTypeID)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    bool Removed = false;
+    bool         Removed     = false;
+    CHANGE_FLAGS ChangeFlags = CHANGE_FLAG_NONE;
     switch (ComponentType)
     {
         case RADIENT_COMPONENT_TYPE_TRANSFORM:
             return RADIENT_STATUS_INVALID_OPERATION;
 
         case RADIENT_COMPONENT_TYPE_CAMERA:
-            Removed = m_Registry.remove<RadientCameraComponent>(E) != 0;
+            Removed     = m_Registry.remove<RadientCameraComponent>(E) != 0;
+            ChangeFlags = CHANGE_FLAG_CAMERAS;
             break;
 
         case RADIENT_COMPONENT_TYPE_MESH:
-            Removed = m_Registry.remove<MeshComponentStorage>(E) != 0;
+            Removed     = m_Registry.remove<MeshComponentStorage>(E) != 0;
+            ChangeFlags = CHANGE_FLAG_DRAWABLES;
             break;
 
         case RADIENT_COMPONENT_TYPE_MESH_RENDERER:
-            Removed = m_Registry.remove<RadientMeshRendererComponent>(E) != 0;
+            Removed     = m_Registry.remove<RadientMeshRendererComponent>(E) != 0;
+            ChangeFlags = CHANGE_FLAG_DRAWABLES;
             break;
 
         case RADIENT_COMPONENT_TYPE_MATERIAL_BINDINGS:
-            Removed = m_Registry.remove<MaterialBindingsStorage>(E) != 0;
+            Removed     = m_Registry.remove<MaterialBindingsStorage>(E) != 0;
+            ChangeFlags = CHANGE_FLAG_DRAWABLES;
             break;
 
         case RADIENT_COMPONENT_TYPE_LIGHT:
-            Removed = m_Registry.remove<RadientLightComponent>(E) != 0;
+            Removed     = m_Registry.remove<RadientLightComponent>(E) != 0;
+            ChangeFlags = CHANGE_FLAG_LIGHTS;
             break;
 
         default:
@@ -647,7 +653,7 @@ RADIENT_STATUS RadientSceneState::RemoveComponent(RadientEntityID Entity, Radien
 
     if (Removed)
     {
-        Touch();
+        Touch(ChangeFlags);
         return RADIENT_STATUS_OK;
     }
 
@@ -709,7 +715,7 @@ bool RadientSceneState::VerifyInternalEntity(entt::entity Entity) const
 }
 
 template <typename ComponentType>
-RADIENT_STATUS RadientSceneState::EmplaceOrReplaceComponent(RadientEntityID Entity, const ComponentType& Component)
+RADIENT_STATUS RadientSceneState::EmplaceOrReplaceComponent(RadientEntityID Entity, const ComponentType& Component, CHANGE_FLAGS ChangeFlags)
 {
     const entt::entity E = FindEntity(Entity);
     if (E == entt::null)
@@ -720,7 +726,7 @@ RADIENT_STATUS RadientSceneState::EmplaceOrReplaceComponent(RadientEntityID Enti
         return RADIENT_STATUS_NO_CHANGE;
 
     m_Registry.emplace_or_replace<ComponentType>(E, Component);
-    Touch();
+    Touch(ChangeFlags);
     return RADIENT_STATUS_OK;
 }
 
@@ -1195,9 +1201,22 @@ void RadientSceneState::UpdateEntityDerivedState(entt::entity Entity, DIRTY_FLAG
     }
 }
 
-void RadientSceneState::Touch()
+void RadientSceneState::Touch(CHANGE_FLAGS ChangeFlags)
 {
-    ++m_Revision;
+    if ((ChangeFlags & CHANGE_FLAG_DRAWABLES) != CHANGE_FLAG_NONE)
+        ++m_SceneRevisions.Drawables;
+
+    if ((ChangeFlags & CHANGE_FLAG_LIGHTS) != CHANGE_FLAG_NONE)
+        ++m_SceneRevisions.Lights;
+
+    if ((ChangeFlags & CHANGE_FLAG_TRANSFORMS) != CHANGE_FLAG_NONE)
+        ++m_SceneRevisions.Transforms;
+
+    if ((ChangeFlags & CHANGE_FLAG_VISIBILITY) != CHANGE_FLAG_NONE)
+        ++m_SceneRevisions.Visibility;
+
+    if ((ChangeFlags & CHANGE_FLAG_CAMERAS) != CHANGE_FLAG_NONE)
+        ++m_SceneRevisions.Cameras;
 }
 
 } // namespace Diligent

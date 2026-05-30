@@ -40,12 +40,12 @@ public:
 
     const RadientDrawList&  GetDrawList() const;
     const RadientLightList& GetLightList() const;
-    RadientRevision         GetSceneRevision() const;
+    const RadientSceneRevisions& GetSceneRevisions() const;
 
 private:
     RadientDrawList  m_DrawList;
     RadientLightList m_LightList;
-    RadientRevision  m_SceneRevision = 0;
+    RadientSceneRevisions m_SceneRevisions;
 };
 
 } // namespace Diligent

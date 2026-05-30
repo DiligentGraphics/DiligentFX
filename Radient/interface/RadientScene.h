@@ -90,6 +90,43 @@ struct RadientSceneDesc
 typedef struct RadientSceneDesc RadientSceneDesc;
 
 
+/// Scene revisions grouped by renderer-relevant data category.
+struct RadientSceneRevisions
+{
+    /// Mesh, mesh renderer, or material binding data changed.
+    RadientRevision Drawables DEFAULT_INITIALIZER(0);
+
+    /// Light component data changed.
+    RadientRevision Lights DEFAULT_INITIALIZER(0);
+
+    /// Local transforms or hierarchy changed.
+    RadientRevision Transforms DEFAULT_INITIALIZER(0);
+
+    /// Own visibility or hierarchy changed.
+    RadientRevision Visibility DEFAULT_INITIALIZER(0);
+
+    /// Camera component data changed.
+    RadientRevision Cameras DEFAULT_INITIALIZER(0);
+
+#if DILIGENT_CPP_INTERFACE
+    constexpr bool operator==(const RadientSceneRevisions& Rhs) const
+    {
+        return Drawables == Rhs.Drawables &&
+            Lights == Rhs.Lights &&
+            Transforms == Rhs.Transforms &&
+            Visibility == Rhs.Visibility &&
+            Cameras == Rhs.Cameras;
+    }
+
+    constexpr bool operator!=(const RadientSceneRevisions& Rhs) const
+    {
+        return !(*this == Rhs);
+    }
+#endif
+};
+typedef struct RadientSceneRevisions RadientSceneRevisions;
+
+
 /// Entity creation attributes.
 struct RadientEntityDesc
 {
@@ -463,8 +500,8 @@ DILIGENT_BEGIN_INTERFACE(IRadientScene, IObject)
                                                 RadientComponentTypeID ComponentType,
                                                 Bool REF               HasComponent) CONST PURE;
 
-    /// Returns current scene revision.
-    VIRTUAL RadientRevision METHOD(GetRevision)(THIS) CONST PURE;
+    /// Returns renderer-relevant scene revisions.
+    VIRTUAL const RadientSceneRevisions REF METHOD(GetSceneRevisions)(THIS) CONST PURE;
 };
 DILIGENT_END_INTERFACE
 
@@ -486,7 +523,7 @@ DILIGENT_END_INTERFACE
 #    define IRadientScene_GetCachedWorldMatrix(This, ...)        CALL_IFACE_METHOD(RadientScene, GetCachedWorldMatrix,        This, __VA_ARGS__)
 #    define IRadientScene_GetCamera(This, ...)                   CALL_IFACE_METHOD(RadientScene, GetCamera,                   This, __VA_ARGS__)
 #    define IRadientScene_HasComponent(This, ...)                CALL_IFACE_METHOD(RadientScene, HasComponent,                This, __VA_ARGS__)
-#    define IRadientScene_GetRevision(This)                      CALL_IFACE_METHOD(RadientScene, GetRevision,                 This)
+#    define IRadientScene_GetSceneRevisions(This)                CALL_IFACE_METHOD(RadientScene, GetSceneRevisions,           This)
 
 #endif
 

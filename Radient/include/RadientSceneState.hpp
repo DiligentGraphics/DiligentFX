@@ -75,20 +75,21 @@ public:
 
     const RadientSceneDesc& GetDesc() const;
 
-    RADIENT_STATUS  IsEntityAlive(RadientEntityID Entity) const;
-    RADIENT_STATUS  GetEntityFlags(RadientEntityID Entity, RADIENT_ENTITY_FLAGS& Flags) const;
-    RADIENT_STATUS  GetEntityOwnVisibility(RadientEntityID Entity, Bool& Visible) const;
-    RADIENT_STATUS  GetEntityEffectiveVisibility(RadientEntityID Entity, Bool& Visible);
-    RADIENT_STATUS  GetCachedEntityEffectiveVisibility(RadientEntityID Entity, Bool& Visible) const;
-    RADIENT_STATUS  GetParent(RadientEntityID Entity, RadientEntityID& Parent) const;
-    RADIENT_STATUS  GetChildCount(RadientEntityID Entity, Uint32& ChildCount) const;
-    RADIENT_STATUS  GetChildren(RadientEntityID Entity, Uint32 StartChild, Uint32 ChildCount, RadientEntityID* pChildren, Uint32& NumChildrenWritten) const;
-    RADIENT_STATUS  GetLocalTransform(RadientEntityID Entity, RadientTransform& Transform) const;
-    RADIENT_STATUS  GetWorldMatrix(RadientEntityID Entity, RadientMatrix4x4& Matrix);
-    RADIENT_STATUS  GetCachedWorldMatrix(RadientEntityID Entity, RadientMatrix4x4& Matrix) const;
-    RADIENT_STATUS  GetCamera(RadientEntityID Entity, RadientCameraComponent& Camera) const;
-    RADIENT_STATUS  HasComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType, Bool& HasComponent) const;
-    RadientRevision GetRevision() const;
+    RADIENT_STATUS IsEntityAlive(RadientEntityID Entity) const;
+    RADIENT_STATUS GetEntityFlags(RadientEntityID Entity, RADIENT_ENTITY_FLAGS& Flags) const;
+    RADIENT_STATUS GetEntityOwnVisibility(RadientEntityID Entity, Bool& Visible) const;
+    RADIENT_STATUS GetEntityEffectiveVisibility(RadientEntityID Entity, Bool& Visible);
+    RADIENT_STATUS GetCachedEntityEffectiveVisibility(RadientEntityID Entity, Bool& Visible) const;
+    RADIENT_STATUS GetParent(RadientEntityID Entity, RadientEntityID& Parent) const;
+    RADIENT_STATUS GetChildCount(RadientEntityID Entity, Uint32& ChildCount) const;
+    RADIENT_STATUS GetChildren(RadientEntityID Entity, Uint32 StartChild, Uint32 ChildCount, RadientEntityID* pChildren, Uint32& NumChildrenWritten) const;
+    RADIENT_STATUS GetLocalTransform(RadientEntityID Entity, RadientTransform& Transform) const;
+    RADIENT_STATUS GetWorldMatrix(RadientEntityID Entity, RadientMatrix4x4& Matrix);
+    RADIENT_STATUS GetCachedWorldMatrix(RadientEntityID Entity, RadientMatrix4x4& Matrix) const;
+    RADIENT_STATUS GetCamera(RadientEntityID Entity, RadientCameraComponent& Camera) const;
+    RADIENT_STATUS HasComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType, Bool& HasComponent) const;
+
+    const RadientSceneRevisions& GetSceneRevisions() const;
 
     template <typename CallbackType>
     RADIENT_STATUS EnumerateRenderableMeshes(CallbackType&& Callback) const;
@@ -126,6 +127,27 @@ private:
         DIRTY_FLAGS_REQUIRING_PROPAGATION = DIRTY_FLAG_TRANSFORM | DIRTY_FLAG_VISIBILITY
     };
     DECLARE_FRIEND_FLAG_ENUM_OPERATORS(DIRTY_FLAGS);
+
+    enum CHANGE_FLAGS : Uint32
+    {
+        CHANGE_FLAG_NONE = 0u,
+
+        // Mesh, mesh renderer, or material bindings changed.
+        CHANGE_FLAG_DRAWABLES = 1u << 0u,
+
+        // Light component data changed.
+        CHANGE_FLAG_LIGHTS = 1u << 1u,
+
+        // Local transform or hierarchy changed.
+        CHANGE_FLAG_TRANSFORMS = 1u << 2u,
+
+        // Own visibility or hierarchy changed.
+        CHANGE_FLAG_VISIBILITY = 1u << 3u,
+
+        // Camera component data changed.
+        CHANGE_FLAG_CAMERAS = 1u << 4u
+    };
+    DECLARE_FRIEND_FLAG_ENUM_OPERATORS(CHANGE_FLAGS);
 
     static constexpr size_t InvalidDirtyListIndex = static_cast<size_t>(-1);
 
@@ -200,7 +222,7 @@ private:
     using CustomComponentStore = entt::storage<CustomComponentStorage>;
 
     template <typename ComponentType>
-    RADIENT_STATUS EmplaceOrReplaceComponent(RadientEntityID Entity, const ComponentType& Component);
+    RADIENT_STATUS EmplaceOrReplaceComponent(RadientEntityID Entity, const ComponentType& Component, CHANGE_FLAGS ChangeFlags = CHANGE_FLAG_NONE);
 
     entt::entity FindEntity(RadientEntityID Entity) const;
     bool         IsDescendant(entt::entity Entity, entt::entity PotentialAncestor) const;
@@ -217,7 +239,7 @@ private:
     void         UpdateDirtySubtree(entt::entity Entity, DIRTY_FLAGS InheritedFlags);
     void         UpdateDerivedStatePathToRoot(entt::entity Entity, DIRTY_FLAGS Flags);
     void         UpdateEntityDerivedState(entt::entity Entity, DIRTY_FLAGS Flags);
-    void         Touch();
+    void         Touch(CHANGE_FLAGS ChangeFlags = CHANGE_FLAG_NONE);
 
     const std::string m_Name;
     RadientSceneDesc  m_Desc;
@@ -228,7 +250,7 @@ private:
     EntityMapType                m_EntityMap;
     CustomComponentStoresMapType m_CustomComponentStores;
     RadientEntityID              m_NextEntityID = 1;
-    RadientRevision              m_Revision     = 0;
+    RadientSceneRevisions        m_SceneRevisions;
 
     // Conservative scene-wide mask of derived states that may be dirty anywhere in the scene.
     DIRTY_FLAGS m_DirtyFlags = DIRTY_FLAG_NONE;
@@ -248,6 +270,7 @@ private:
 };
 
 DEFINE_FLAG_ENUM_OPERATORS(RadientSceneState::DIRTY_FLAGS);
+DEFINE_FLAG_ENUM_OPERATORS(RadientSceneState::CHANGE_FLAGS);
 
 template <typename CallbackType>
 RADIENT_STATUS RadientSceneState::EnumerateRenderableMeshes(CallbackType&& Callback) const

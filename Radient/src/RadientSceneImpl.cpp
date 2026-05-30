@@ -125,9 +125,9 @@ RADIENT_STATUS RadientSceneImpl::HasComponent(RadientEntityID Entity, RadientCom
     return m_pState->HasComponent(Entity, ComponentType, HasComponent);
 }
 
-RadientRevision RadientSceneImpl::GetRevision() const
+const RadientSceneRevisions& RadientSceneImpl::GetSceneRevisions() const
 {
-    return m_pState->GetRevision();
+    return m_pState->GetSceneRevisions();
 }
 
 const RadientSceneState& RadientSceneImpl::GetState() const
