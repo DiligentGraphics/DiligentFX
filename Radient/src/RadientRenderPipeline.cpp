@@ -32,7 +32,9 @@ namespace Diligent
 RadientRenderPipeline::RadientRenderPipeline(IRadientBackend*         pBackend,
                                              RadientAssetManagerImpl* pAssetManager) :
     m_pBackend{pBackend},
-    m_ResourceCache{pAssetManager}
+    m_ResourceCache{
+        pAssetManager,
+        pBackend != nullptr ? pBackend->GetNativeDevice() : nullptr}
 {
 }
 

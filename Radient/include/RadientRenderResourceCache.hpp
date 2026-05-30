@@ -79,7 +79,8 @@ struct RadientRenderMesh
 class RadientRenderResourceCache
 {
 public:
-    explicit RadientRenderResourceCache(RadientAssetManagerImpl* pAssetManager);
+    RadientRenderResourceCache(RadientAssetManagerImpl* pAssetManager,
+                               IRenderDevice*           pDevice);
     ~RadientRenderResourceCache();
 
     RADIENT_STATUS Prepare(IRenderDevice*  pDevice,
@@ -118,9 +119,6 @@ private:
         RadientRenderMesh     Mesh;
     };
 
-    void           Reset();
-    void           CreateResources(IRenderDevice*  pDevice,
-                                   IDeviceContext* pContext);
     RADIENT_STATUS EnsureGLTFLoaded(const RadientAssetReference& Model,
                                     IRenderDevice*               pDevice,
                                     IDeviceContext*              pContext);

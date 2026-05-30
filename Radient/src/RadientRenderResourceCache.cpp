@@ -147,9 +147,20 @@ RADIENT_STATUS BuildMeshResource(const GLTF::Model& GLTFModel,
 
 } // namespace
 
-RadientRenderResourceCache::RadientRenderResourceCache(RadientAssetManagerImpl* pAssetManager) :
-    m_pAssetManager{pAssetManager}
+RadientRenderResourceCache::RadientRenderResourceCache(RadientAssetManagerImpl* pAssetManager,
+                                                       IRenderDevice*           pDevice) :
+    m_pAssetManager{pAssetManager},
+    m_pDevice{pDevice}
 {
+    if (pDevice == nullptr)
+        return;
+
+    GPUUploadManagerCreateInfo UploadCI;
+    UploadCI.pDevice = pDevice;
+    CreateGPUUploadManager(UploadCI, &m_pUploadManager);
+
+    const GLTF::ResourceManager::CreateInfo ResourceCI = CreateResourceManagerInfo();
+    m_pResourceManager                                 = GLTF::ResourceManager::Create(pDevice, ResourceCI);
 }
 
 RadientRenderResourceCache::~RadientRenderResourceCache()
@@ -164,8 +175,8 @@ RADIENT_STATUS RadientRenderResourceCache::Prepare(IRenderDevice*  pDevice,
 
     if (m_pDevice != pDevice)
     {
-        Reset();
-        CreateResources(pDevice, pContext);
+        UNEXPECTED("Radient render resource cache device changed. This should never happen.");
+        return RADIENT_STATUS_INVALID_OPERATION;
     }
 
     if (m_pUploadManager != nullptr && pContext != nullptr)
@@ -201,8 +212,8 @@ RADIENT_STATUS RadientRenderResourceCache::EnsureGLTFLoaded(const RadientAssetRe
 
     if (m_pDevice != pDevice)
     {
-        Reset();
-        CreateResources(pDevice, pContext);
+        UNEXPECTED("Radient render resource cache device changed. This should never happen.");
+        return RADIENT_STATUS_INVALID_OPERATION;
     }
 
     if (m_pResourceManager == nullptr || m_pUploadManager == nullptr)
@@ -326,29 +337,6 @@ IGPUUploadManager* RadientRenderResourceCache::GetUploadManager() const
 GLTF::ResourceManager* RadientRenderResourceCache::GetResourceManager() const
 {
     return m_pResourceManager;
-}
-
-void RadientRenderResourceCache::Reset()
-{
-    m_MeshResources.clear();
-    m_GLTFResources.clear();
-    m_pUploadManager.Release();
-    m_pResourceManager.Release();
-    m_pDevice.Release();
-}
-
-void RadientRenderResourceCache::CreateResources(IRenderDevice*  pDevice,
-                                                 IDeviceContext* pContext)
-{
-    m_pDevice = pDevice;
-
-    GPUUploadManagerCreateInfo UploadCI;
-    UploadCI.pDevice  = pDevice;
-    UploadCI.pContext = pContext;
-    CreateGPUUploadManager(UploadCI, &m_pUploadManager);
-
-    const GLTF::ResourceManager::CreateInfo ResourceCI = CreateResourceManagerInfo();
-    m_pResourceManager                                 = GLTF::ResourceManager::Create(pDevice, ResourceCI);
 }
 
 RADIENT_STATUS RadientRenderResourceCache::PrepareGLTFResource(GLTFResource&   Resource,
