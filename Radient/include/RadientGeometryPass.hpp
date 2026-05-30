@@ -70,18 +70,23 @@ struct RadientPreparedDrawItem
 
 using RadientPreparedDrawList = std::vector<RadientPreparedDrawItem>;
 
-/// Mesh geometry render pass used by shadow and forward rendering stages.
-class RadientGeometryPass
+/// Shared renderer state used by geometry passes.
+class RadientGeometryRenderer
 {
 public:
     RADIENT_STATUS Prepare(IRenderDevice* pDevice, IDeviceContext* pContext, const RadientFrameRenderTargets& Targets);
-    RADIENT_STATUS Execute(IRenderDevice*                   pDevice,
-                           IDeviceContext*                  pContext,
-                           const RadientPreparedDrawList&   DrawList,
-                           const RadientLightList&          LightList,
-                           GLTF::ResourceManager*           pResourceManager,
-                           const RadientRenderAttribs&      Attribs,
-                           const RadientFrameRenderTargets& Targets);
+    RADIENT_STATUS BeginFrame(IRenderDevice*                   pDevice,
+                              IDeviceContext*                  pContext,
+                              const RadientLightList&          LightList,
+                              GLTF::ResourceManager*           pResourceManager,
+                              const RadientRenderAttribs&      Attribs,
+                              const RadientFrameRenderTargets& Targets);
+    void           EndFrame();
+
+    PBR_Renderer*                   GetRenderer() const { return m_pRenderer.get(); }
+    IShaderResourceBinding*         GetResourceCacheSRB() const { return m_CacheBindings.pSRB.RawPtr(); }
+    PBR_Renderer::PsoCacheAccessor& GetPsoCache() { return m_PbrPSOCache; }
+    PBR_Renderer::PSO_FLAGS         GetRenderFlags() const { return m_RenderFlags; }
 
 private:
     RADIENT_STATUS CreateRenderer(IRenderDevice*  pDevice,
@@ -106,6 +111,17 @@ private:
     TEXTURE_FORMAT m_RTVFormat  = TEX_FORMAT_UNKNOWN;
     TEXTURE_FORMAT m_DSVFormat  = TEX_FORMAT_UNKNOWN;
     Uint32         m_FrameIndex = 0;
+};
+
+/// Mesh geometry render pass used by shadow and forward rendering stages.
+class RadientGeometryPass
+{
+public:
+    RADIENT_STATUS Execute(RadientGeometryRenderer&         Renderer,
+                           IRenderDevice*                   pDevice,
+                           IDeviceContext*                  pContext,
+                           const RadientPreparedDrawList&   DrawList,
+                           const RadientFrameRenderTargets& Targets);
 };
 
 } // namespace Diligent

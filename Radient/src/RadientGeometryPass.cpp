@@ -683,9 +683,9 @@ void WriteMaterialAttribs(PBR_Renderer&           Renderer,
 
 } // namespace
 
-RADIENT_STATUS RadientGeometryPass::Prepare(IRenderDevice*                   pDevice,
-                                            IDeviceContext*                  pContext,
-                                            const RadientFrameRenderTargets& Targets)
+RADIENT_STATUS RadientGeometryRenderer::Prepare(IRenderDevice*                   pDevice,
+                                                IDeviceContext*                  pContext,
+                                                const RadientFrameRenderTargets& Targets)
 {
     ITextureView* pColorRTV = Targets.GetColorRTV();
     if (pDevice == nullptr || pContext == nullptr || pColorRTV == nullptr)
@@ -703,15 +703,14 @@ RADIENT_STATUS RadientGeometryPass::Prepare(IRenderDevice*                   pDe
     return RADIENT_STATUS_OK;
 }
 
-RADIENT_STATUS RadientGeometryPass::Execute(IRenderDevice*                   pDevice,
-                                            IDeviceContext*                  pContext,
-                                            const RadientPreparedDrawList&   DrawList,
-                                            const RadientLightList&          LightList,
-                                            GLTF::ResourceManager*           pResourceManager,
-                                            const RadientRenderAttribs&      Attribs,
-                                            const RadientFrameRenderTargets& Targets)
+RADIENT_STATUS RadientGeometryRenderer::BeginFrame(IRenderDevice*                   pDevice,
+                                                   IDeviceContext*                  pContext,
+                                                   const RadientLightList&          LightList,
+                                                   GLTF::ResourceManager*           pResourceManager,
+                                                   const RadientRenderAttribs&      Attribs,
+                                                   const RadientFrameRenderTargets& Targets)
 {
-    if (pDevice == nullptr || pContext == nullptr || DrawList.empty())
+    if (pDevice == nullptr || pContext == nullptr)
         return RADIENT_STATUS_OK;
 
     if (m_pRenderer == nullptr)
@@ -722,10 +721,6 @@ RADIENT_STATUS RadientGeometryPass::Execute(IRenderDevice*                   pDe
     }
     if (m_pRenderer == nullptr || m_pFrameAttribsCB == nullptr)
         return RADIENT_STATUS_OK;
-
-    ITextureView* pColorRTV = Targets.GetColorRTV();
-    ITextureView* pDepthDSV = Targets.GetDepthDSV();
-    pContext->SetRenderTargets(1, &pColorRTV, pDepthDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
     {
         MapHelper<HLSL::PBRFrameAttribs> FrameAttribs{pContext, m_pFrameAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
@@ -745,6 +740,35 @@ RADIENT_STATUS RadientGeometryPass::Execute(IRenderDevice*                   pDe
     BeginResourceCache(*m_pRenderer, pDevice, pContext, m_CacheUseInfo, m_CacheBindings, m_pFrameAttribsCB);
     if (!m_CacheBindings.pSRB)
         return RADIENT_STATUS_OUT_OF_DATE;
+
+    return RADIENT_STATUS_OK;
+}
+
+void RadientGeometryRenderer::EndFrame()
+{
+    ++m_FrameIndex;
+}
+
+RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&         Renderer,
+                                            IRenderDevice*                   pDevice,
+                                            IDeviceContext*                  pContext,
+                                            const RadientPreparedDrawList&   DrawList,
+                                            const RadientFrameRenderTargets& Targets)
+{
+    if (pDevice == nullptr || pContext == nullptr || DrawList.empty())
+        return RADIENT_STATUS_OK;
+
+    PBR_Renderer* const pRenderer = Renderer.GetRenderer();
+    if (pRenderer == nullptr)
+        return RADIENT_STATUS_OK;
+
+    IShaderResourceBinding* const pResourceCacheSRB = Renderer.GetResourceCacheSRB();
+    if (pResourceCacheSRB == nullptr)
+        return RADIENT_STATUS_OUT_OF_DATE;
+
+    ITextureView* pColorRTV = Targets.GetColorRTV();
+    ITextureView* pDepthDSV = Targets.GetDepthDSV();
+    pContext->SetRenderTargets(1, &pColorRTV, pDepthDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
     const std::array<GLTF::Material::ALPHA_MODE, 3> AlphaModes =
         {
@@ -791,13 +815,13 @@ RADIENT_STATUS RadientGeometryPass::Execute(IRenderDevice*                   pDe
                 if (Material.Attribs.AlphaMode != AlphaMode)
                     continue;
 
-                PBR_Renderer::PSO_FLAGS PSOFlags = VertexAttribFlags | GetMaterialPSOFlags(*m_pRenderer, Material);
+                PBR_Renderer::PSO_FLAGS PSOFlags = VertexAttribFlags | GetMaterialPSOFlags(*pRenderer, Material);
                 PSOFlags |=
                     PBR_Renderer::PSO_FLAG_USE_TEXTURE_ATLAS |
                     PBR_Renderer::PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM |
                     PBR_Renderer::PSO_FLAG_CONVERT_OUTPUT_TO_SRGB |
                     PBR_Renderer::PSO_FLAG_USE_LIGHTS;
-                PSOFlags &= m_RenderFlags;
+                PSOFlags &= Renderer.GetRenderFlags();
 
                 const PBR_Renderer::PSOKey NewKey{
                     PBR_Renderer::RenderPassType::Main,
@@ -816,23 +840,23 @@ RADIENT_STATUS RadientGeometryPass::Execute(IRenderDevice*                   pDe
 
                 if (pCurrPSO == nullptr)
                 {
-                    pCurrPSO = m_PbrPSOCache.Get(NewKey, PBR_Renderer::PsoCacheAccessor::GET_FLAG_CREATE_IF_NULL);
+                    pCurrPSO = Renderer.GetPsoCache().Get(NewKey, PBR_Renderer::PsoCacheAccessor::GET_FLAG_CREATE_IF_NULL);
                     VERIFY_EXPR(pCurrPSO != nullptr);
                     if (pCurrPSO != nullptr)
                         pContext->SetPipelineState(pCurrPSO);
                 }
 
-                if (pCurrSRB != m_CacheBindings.pSRB)
+                if (pCurrSRB != pResourceCacheSRB)
                 {
-                    pCurrSRB = m_CacheBindings.pSRB;
+                    pCurrSRB = pResourceCacheSRB;
                     pContext->CommitShaderResources(pCurrSRB, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
                 }
 
-                WritePrimitiveAttribs(*m_pRenderer, pContext, PSOFlags, Item.WorldMatrix);
+                WritePrimitiveAttribs(*pRenderer, pContext, PSOFlags, Item.WorldMatrix);
 
                 if (pCurrMaterial != &Material)
                 {
-                    WriteMaterialAttribs(*m_pRenderer, pContext, PSOFlags, Material);
+                    WriteMaterialAttribs(*pRenderer, pContext, PSOFlags, Material);
                     pCurrMaterial = &Material;
                 }
 
@@ -853,15 +877,13 @@ RADIENT_STATUS RadientGeometryPass::Execute(IRenderDevice*                   pDe
         }
     }
 
-    ++m_FrameIndex;
-
     return RADIENT_STATUS_OK;
 }
 
-RADIENT_STATUS RadientGeometryPass::CreateRenderer(IRenderDevice*  pDevice,
-                                                   IDeviceContext* pContext,
-                                                   TEXTURE_FORMAT  RTVFormat,
-                                                   TEXTURE_FORMAT  DSVFormat)
+RADIENT_STATUS RadientGeometryRenderer::CreateRenderer(IRenderDevice*  pDevice,
+                                                       IDeviceContext* pContext,
+                                                       TEXTURE_FORMAT  RTVFormat,
+                                                       TEXTURE_FORMAT  DSVFormat)
 {
     if (pDevice == nullptr || pContext == nullptr || RTVFormat == TEX_FORMAT_UNKNOWN)
         return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -925,7 +947,7 @@ RADIENT_STATUS RadientGeometryPass::CreateRenderer(IRenderDevice*  pDevice,
     return RADIENT_STATUS_OK;
 }
 
-void RadientGeometryPass::InitializeResourceCacheUseInfo()
+void RadientGeometryRenderer::InitializeResourceCacheUseInfo()
 {
     if (!m_CacheUseInfo.VtxLayoutKey.Elements.empty())
         return;

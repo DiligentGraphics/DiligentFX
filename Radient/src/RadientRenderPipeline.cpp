@@ -90,7 +90,7 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
     if (RADIENT_FAILED(Status))
         return Status;
 
-    Status = m_ForwardPass.Prepare(pDevice, pContext, m_FrameTargets);
+    Status = m_GeometryRenderer.Prepare(pDevice, pContext, m_FrameTargets);
     if (RADIENT_FAILED(Status))
         return Status;
 
@@ -100,15 +100,27 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
 
     PrepareDrawList(pDevice, pContext);
 
-    Status = m_ForwardPass.Execute(pDevice,
-                                   pContext,
-                                   m_PreparedDrawList,
-                                   m_SceneCache.GetLightList(),
-                                   m_ResourceCache.GetResourceManager(),
-                                   Attribs,
-                                   m_FrameTargets);
-    if (RADIENT_FAILED(Status))
-        return Status;
+    if (!m_PreparedDrawList.empty())
+    {
+        Status = m_GeometryRenderer.BeginFrame(pDevice,
+                                               pContext,
+                                               m_SceneCache.GetLightList(),
+                                               m_ResourceCache.GetResourceManager(),
+                                               Attribs,
+                                               m_FrameTargets);
+        if (RADIENT_FAILED(Status))
+            return Status;
+
+        Status = m_ForwardPass.Execute(m_GeometryRenderer,
+                                       pDevice,
+                                       pContext,
+                                       m_PreparedDrawList,
+                                       m_FrameTargets);
+        if (RADIENT_FAILED(Status))
+            return Status;
+
+        m_GeometryRenderer.EndFrame();
+    }
 
     return m_PostProcessPipeline.Execute(pContext, m_FrameTargets);
 }

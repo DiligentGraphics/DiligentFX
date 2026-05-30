@@ -60,7 +60,7 @@ private:
     RadientSceneRenderCache    m_SceneCache;
     RadientPreparedDrawList    m_PreparedDrawList;
     RadientFrameRenderTargets  m_FrameTargets;
-    RadientGeometryPass        m_ShadowPass;
+    RadientGeometryRenderer    m_GeometryRenderer;
     RadientGeometryPass        m_ForwardPass;
     RadientPostProcessPipeline m_PostProcessPipeline;
 };
