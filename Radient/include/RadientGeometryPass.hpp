@@ -36,6 +36,7 @@
 
 #include <array>
 #include <memory>
+#include <vector>
 
 namespace Diligent
 {
@@ -61,6 +62,14 @@ struct RadientGeometryResourceCacheBindings
     RefCntAutoPtr<IShaderResourceBinding> pSRB;
 };
 
+struct RadientPreparedDrawItem
+{
+    const RadientDrawItem*   pDrawItem = nullptr;
+    const RadientRenderMesh* pMesh     = nullptr;
+};
+
+using RadientPreparedDrawList = std::vector<RadientPreparedDrawItem>;
+
 /// Mesh geometry render pass used by shadow and forward rendering stages.
 class RadientGeometryPass
 {
@@ -68,9 +77,9 @@ public:
     RADIENT_STATUS Prepare(IRenderDevice* pDevice, IDeviceContext* pContext, const RadientFrameRenderTargets& Targets);
     RADIENT_STATUS Execute(IRenderDevice*                   pDevice,
                            IDeviceContext*                  pContext,
-                           const RadientDrawList&           DrawList,
+                           const RadientPreparedDrawList&   DrawList,
                            const RadientLightList&          LightList,
-                           RadientRenderResourceCache&      ResourceCache,
+                           GLTF::ResourceManager*           pResourceManager,
                            const RadientRenderAttribs&      Attribs,
                            const RadientFrameRenderTargets& Targets);
 

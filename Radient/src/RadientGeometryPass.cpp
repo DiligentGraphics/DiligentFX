@@ -705,13 +705,13 @@ RADIENT_STATUS RadientGeometryPass::Prepare(IRenderDevice*                   pDe
 
 RADIENT_STATUS RadientGeometryPass::Execute(IRenderDevice*                   pDevice,
                                             IDeviceContext*                  pContext,
-                                            const RadientDrawList&           DrawList,
+                                            const RadientPreparedDrawList&   DrawList,
                                             const RadientLightList&          LightList,
-                                            RadientRenderResourceCache&      ResourceCache,
+                                            GLTF::ResourceManager*           pResourceManager,
                                             const RadientRenderAttribs&      Attribs,
                                             const RadientFrameRenderTargets& Targets)
 {
-    if (pDevice == nullptr || pContext == nullptr || DrawList.IsEmpty())
+    if (pDevice == nullptr || pContext == nullptr || DrawList.empty())
         return RADIENT_STATUS_OK;
 
     if (m_pRenderer == nullptr)
@@ -738,26 +738,8 @@ RADIENT_STATUS RadientGeometryPass::Execute(IRenderDevice*                   pDe
         WriteSceneLights(*m_pRenderer, LightList, *pFrameAttribs);
     }
 
-    GLTF::ResourceManager* pResourceManager = ResourceCache.GetResourceManager();
     if (pResourceManager == nullptr)
         return RADIENT_STATUS_OUT_OF_DATE;
-
-    struct ReadyDrawItem
-    {
-        const RadientDrawItem*   pItem = nullptr;
-        const RadientRenderMesh* pMesh = nullptr;
-    };
-
-    std::vector<ReadyDrawItem> ReadyItems;
-    ReadyItems.reserve(DrawList.GetItemCount());
-    for (const RadientDrawItem& Item : DrawList.GetItems())
-    {
-        if (const RadientRenderMesh* pMesh = ResourceCache.ResolveMesh(Item.Mesh.Mesh, pDevice, pContext))
-            ReadyItems.push_back({&Item, pMesh});
-    }
-
-    if (ReadyItems.empty())
-        return RADIENT_STATUS_OK;
 
     m_CacheUseInfo.pResourceMgr = pResourceManager;
     BeginResourceCache(*m_pRenderer, pDevice, pContext, m_CacheUseInfo, m_CacheBindings, m_pFrameAttribsCB);
@@ -773,12 +755,12 @@ RADIENT_STATUS RadientGeometryPass::Execute(IRenderDevice*                   pDe
 
     IShaderResourceBinding* pCurrSRB = nullptr;
 
-    for (const ReadyDrawItem& ReadyItem : ReadyItems)
+    for (const RadientPreparedDrawItem& DrawItem : DrawList)
     {
-        VERIFY_EXPR(ReadyItem.pItem != nullptr);
-        VERIFY_EXPR(ReadyItem.pMesh != nullptr);
-        const RadientDrawItem&   Item = *ReadyItem.pItem;
-        const RadientRenderMesh& Mesh = *ReadyItem.pMesh;
+        VERIFY_EXPR(DrawItem.pDrawItem != nullptr);
+        VERIFY_EXPR(DrawItem.pMesh != nullptr);
+        const RadientDrawItem&   Item = *DrawItem.pDrawItem;
+        const RadientRenderMesh& Mesh = *DrawItem.pMesh;
 
         if (Mesh.Primitives.empty())
             continue;

@@ -42,6 +42,23 @@ RadientRenderPipeline::~RadientRenderPipeline()
 {
 }
 
+void RadientRenderPipeline::PrepareDrawList(IRenderDevice*  pDevice,
+                                            IDeviceContext* pContext)
+{
+    m_PreparedDrawList.clear();
+
+    const RadientDrawList& DrawList = m_SceneCache.GetDrawList();
+    if (DrawList.IsEmpty())
+        return;
+
+    m_PreparedDrawList.reserve(DrawList.GetItemCount());
+    for (const RadientDrawItem& DrawItem : DrawList.GetItems())
+    {
+        if (const RadientRenderMesh* pMesh = m_ResourceCache.ResolveMesh(DrawItem.Mesh.Mesh, pDevice, pContext))
+            m_PreparedDrawList.push_back({&DrawItem, pMesh});
+    }
+}
+
 RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs)
 {
     if (m_pBackend == nullptr ||
@@ -81,11 +98,13 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
     if (RADIENT_FAILED(Status))
         return Status;
 
+    PrepareDrawList(pDevice, pContext);
+
     Status = m_ForwardPass.Execute(pDevice,
                                    pContext,
-                                   m_SceneCache.GetDrawList(),
+                                   m_PreparedDrawList,
                                    m_SceneCache.GetLightList(),
-                                   m_ResourceCache,
+                                   m_ResourceCache.GetResourceManager(),
                                    Attribs,
                                    m_FrameTargets);
     if (RADIENT_FAILED(Status))
