@@ -28,54 +28,103 @@
 
 #include "RadientScene.h"
 
+#include "GLTFLoader.hpp"
+
+#include <array>
 #include <vector>
 
 namespace Diligent
 {
 
-/// One renderable mesh primitive after scene traversal and material resolution.
+struct RadientRenderMesh;
+struct RadientRenderMeshPrimitive;
+
+/// One renderable primitive after mesh and material resolution.
 struct RadientDrawItem
 {
-    RadientDrawItem(RadientEntityID                         _Entity,
-                    const RadientMeshComponent&             _Mesh,
-                    const RadientMeshRendererComponent&     _Renderer,
-                    const RadientMaterialBindingsComponent* _pMaterialBindings,
-                    const RadientMatrix4x4&                 _WorldMatrix) :
+    RadientDrawItem(RadientEntityID                     _Entity,
+                    const RadientMeshRendererComponent& _Renderer,
+                    const RadientMatrix4x4&             _WorldMatrix,
+                    const RadientRenderMesh&            _Mesh,
+                    const RadientRenderMeshPrimitive&   _Primitive,
+                    const GLTF::Material&               _Material) :
         Entity{_Entity},
-        Mesh{_Mesh},
         Renderer{_Renderer},
-        pMaterialBindings{_pMaterialBindings},
-        WorldMatrix{_WorldMatrix}
+        WorldMatrix{_WorldMatrix},
+        Mesh{_Mesh},
+        Primitive{_Primitive},
+        Material{_Material}
     {}
 
-    RadientEntityID                         Entity = InvalidRadientEntityID;
-    const RadientMeshComponent&             Mesh;
-    const RadientMeshRendererComponent&     Renderer;
-    const RadientMaterialBindingsComponent* pMaterialBindings = nullptr;
-    const RadientMatrix4x4&                 WorldMatrix;
+    const RadientEntityID               Entity;
+    const RadientMeshRendererComponent& Renderer;
+    const RadientMatrix4x4&             WorldMatrix;
+    const RadientRenderMesh&            Mesh;
+    const RadientRenderMeshPrimitive&   Primitive;
+    const GLTF::Material&               Material;
 };
 
-
-/// Cached list of renderable scene items prepared for backend rendering.
+/// Cached list of renderable primitives prepared for backend rendering.
 class RadientDrawList
 {
 public:
     using ItemListType = std::vector<RadientDrawItem>;
 
     void Clear();
-    void Add(RadientEntityID                         Entity,
-             const RadientMeshComponent&             Mesh,
-             const RadientMeshRendererComponent&     Renderer,
-             const RadientMaterialBindingsComponent* pMaterialBindings,
-             const RadientMatrix4x4&                 WorldMatrix);
+    void Add(RadientEntityID                     Entity,
+             const RadientMeshRendererComponent& Renderer,
+             const RadientMatrix4x4&             WorldMatrix,
+             const RadientRenderMesh&            Mesh,
+             const RadientRenderMeshPrimitive&   Primitive,
+             const GLTF::Material&               Material)
+    {
+        m_Items.emplace_back(Entity, Renderer, WorldMatrix, Mesh, Primitive, Material);
+    }
 
-    size_t GetItemCount() const;
-    bool   IsEmpty() const;
+    size_t GetItemCount() const
+    {
+        return m_Items.size();
+    }
 
-    const ItemListType& GetItems() const;
+    bool IsEmpty() const
+    {
+        return m_Items.empty();
+    }
+
+    const ItemListType& GetItems() const
+    {
+        return m_Items;
+    }
+
 
 private:
     ItemListType m_Items;
+};
+
+class RadientDrawLists
+{
+public:
+    void Clear();
+    void Add(GLTF::Material::ALPHA_MODE          AlphaMode,
+             RadientEntityID                     Entity,
+             const RadientMeshRendererComponent& Renderer,
+             const RadientMatrix4x4&             WorldMatrix,
+             const RadientRenderMesh&            Mesh,
+             const RadientRenderMeshPrimitive&   Primitive,
+             const GLTF::Material&               Material)
+    {
+        m_DrawLists[AlphaMode].Add(Entity, Renderer, WorldMatrix, Mesh, Primitive, Material);
+    }
+
+    bool IsEmpty() const;
+
+    const RadientDrawList& GetDrawList(GLTF::Material::ALPHA_MODE AlphaMode) const
+    {
+        return m_DrawLists[AlphaMode];
+    }
+
+private:
+    std::array<RadientDrawList, GLTF::Material::ALPHA_MODE_NUM_MODES> m_DrawLists;
 };
 
 } // namespace Diligent

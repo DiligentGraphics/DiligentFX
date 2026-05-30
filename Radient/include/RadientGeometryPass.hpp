@@ -62,14 +62,6 @@ struct RadientGeometryResourceCacheBindings
     RefCntAutoPtr<IShaderResourceBinding> pSRB;
 };
 
-struct RadientPreparedDrawItem
-{
-    const RadientDrawItem*   pDrawItem = nullptr;
-    const RadientRenderMesh* pMesh     = nullptr;
-};
-
-using RadientPreparedDrawList = std::vector<RadientPreparedDrawItem>;
-
 /// Shared renderer state used by geometry passes.
 class RadientGeometryRenderer
 {
@@ -116,7 +108,7 @@ public:
     RADIENT_STATUS Execute(RadientGeometryRenderer&         Renderer,
                            IRenderDevice*                   pDevice,
                            IDeviceContext*                  pContext,
-                           const RadientPreparedDrawList&   DrawList,
+                           const RadientDrawList&           DrawList,
                            const RadientFrameRenderTargets& Targets);
 
 private:

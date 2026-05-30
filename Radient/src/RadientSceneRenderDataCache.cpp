@@ -24,7 +24,7 @@
  *  of the possibility of such damages.
  */
 
-#include "RadientSceneRenderCache.hpp"
+#include "RadientSceneRenderDataCache.hpp"
 
 #include "RadientSceneImpl.hpp"
 #include "RadientSceneState.hpp"
@@ -34,7 +34,36 @@
 namespace Diligent
 {
 
-RADIENT_STATUS RadientSceneRenderCache::SyncScene(IRadientScene& Scene)
+void RadientRenderableMeshList::Clear()
+{
+    m_Items.clear();
+}
+
+void RadientRenderableMeshList::Add(RadientEntityID                         Entity,
+                                    const RadientMeshComponent&             Mesh,
+                                    const RadientMeshRendererComponent&     Renderer,
+                                    const RadientMaterialBindingsComponent* pMaterialBindings,
+                                    const RadientMatrix4x4&                 WorldMatrix)
+{
+    m_Items.emplace_back(Entity, Mesh, Renderer, pMaterialBindings, WorldMatrix);
+}
+
+size_t RadientRenderableMeshList::GetItemCount() const
+{
+    return m_Items.size();
+}
+
+bool RadientRenderableMeshList::IsEmpty() const
+{
+    return m_Items.empty();
+}
+
+const RadientRenderableMeshList::ItemListType& RadientRenderableMeshList::GetItems() const
+{
+    return m_Items;
+}
+
+RADIENT_STATUS RadientSceneRenderDataCache::SyncScene(IRadientScene& Scene)
 {
     const RadientSceneRevisions& SceneRevisions = Scene.GetSceneRevisions();
     if (m_SceneRevisions == SceneRevisions)
@@ -54,18 +83,18 @@ RADIENT_STATUS RadientSceneRenderCache::SyncScene(IRadientScene& Scene)
     RADIENT_STATUS Status = RADIENT_STATUS_NO_CHANGE;
     if (UpdateDrawList)
     {
-        m_DrawList.Clear();
+        m_RenderableMeshes.Clear();
 
         Status = pSceneImpl->GetState().EnumerateRenderableMeshes(
             [this](const RadientSceneState::RenderableMesh& Mesh) {
                 if (!Mesh.EffectiveVisible)
                     return;
 
-                m_DrawList.Add(Mesh.Entity,
-                               Mesh.Mesh,
-                               Mesh.Renderer,
-                               Mesh.pMaterialBindings,
-                               Mesh.WorldMatrix);
+                m_RenderableMeshes.Add(Mesh.Entity,
+                                       Mesh.Mesh,
+                                       Mesh.Renderer,
+                                       Mesh.pMaterialBindings,
+                                       Mesh.WorldMatrix);
             });
         if (RADIENT_FAILED(Status))
             return Status;
@@ -95,17 +124,17 @@ RADIENT_STATUS RadientSceneRenderCache::SyncScene(IRadientScene& Scene)
     return RADIENT_STATUS_OK;
 }
 
-const RadientDrawList& RadientSceneRenderCache::GetDrawList() const
+const RadientRenderableMeshList& RadientSceneRenderDataCache::GetRenderableMeshes() const
 {
-    return m_DrawList;
+    return m_RenderableMeshes;
 }
 
-const RadientLightList& RadientSceneRenderCache::GetLightList() const
+const RadientLightList& RadientSceneRenderDataCache::GetLightList() const
 {
     return m_LightList;
 }
 
-const RadientSceneRevisions& RadientSceneRenderCache::GetSceneRevisions() const
+const RadientSceneRevisions& RadientSceneRenderDataCache::GetSceneRevisions() const
 {
     return m_SceneRevisions;
 }

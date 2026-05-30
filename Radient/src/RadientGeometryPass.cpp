@@ -779,10 +779,10 @@ RADIENT_STATUS RadientGeometryPass::Prepare(RadientGeometryRenderer&         Ren
 RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&         Renderer,
                                             IRenderDevice*                   pDevice,
                                             IDeviceContext*                  pContext,
-                                            const RadientPreparedDrawList&   DrawList,
+                                            const RadientDrawList&           DrawList,
                                             const RadientFrameRenderTargets& Targets)
 {
-    if (pDevice == nullptr || pContext == nullptr || DrawList.empty())
+    if (pDevice == nullptr || pContext == nullptr || DrawList.IsEmpty())
         return RADIENT_STATUS_OK;
 
     PBR_Renderer* const pRenderer = Renderer.GetRenderer();
@@ -806,110 +806,81 @@ RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&         Ren
     ITextureView* pDepthDSV = Targets.GetDepthDSV();
     pContext->SetRenderTargets(1, &pColorRTV, pDepthDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
-    const std::array<GLTF::Material::ALPHA_MODE, 3> AlphaModes =
-        {
-            GLTF::Material::ALPHA_MODE_OPAQUE,
-            GLTF::Material::ALPHA_MODE_MASK,
-            GLTF::Material::ALPHA_MODE_BLEND,
-        };
-
     IShaderResourceBinding* pCurrSRB = nullptr;
+    PBR_Renderer::PSOKey    CurrPsoKey;
+    IPipelineState*         pCurrPSO      = nullptr;
+    const GLTF::Material*   pCurrMaterial = nullptr;
 
-    for (const RadientPreparedDrawItem& DrawItem : DrawList)
+    for (const RadientDrawItem& DrawItem : DrawList.GetItems())
     {
-        VERIFY_EXPR(DrawItem.pDrawItem != nullptr);
-        VERIFY_EXPR(DrawItem.pMesh != nullptr);
-        const RadientDrawItem&   Item = *DrawItem.pDrawItem;
-        const RadientRenderMesh& Mesh = *DrawItem.pMesh;
+        const RadientRenderMesh&          Mesh               = DrawItem.Mesh;
+        const RadientRenderMeshPrimitive& Primitive          = DrawItem.Primitive;
+        const GLTF::Material&             Material           = DrawItem.Material;
+        const GLTF::Material::ALPHA_MODE  AlphaMode          = static_cast<GLTF::Material::ALPHA_MODE>(Material.Attribs.AlphaMode);
+        const PBR_Renderer::PSO_FLAGS     VertexAttribFlags  = Mesh.VertexAttribFlags;
+        const Uint32                      FirstIndexLocation = Mesh.FirstIndexLocation;
+        const Uint32                      BaseVertex         = Mesh.BaseVertex;
 
-        if (Mesh.Primitives.empty())
+        if (Primitive.VertexCount == 0 && Primitive.IndexCount == 0)
             continue;
 
-        const PBR_Renderer::PSO_FLAGS VertexAttribFlags  = Mesh.VertexAttribFlags;
-        const Uint32                  FirstIndexLocation = Mesh.FirstIndexLocation;
-        const Uint32                  BaseVertex         = Mesh.BaseVertex;
+        PBR_Renderer::PSO_FLAGS PSOFlags = VertexAttribFlags | GetMaterialPSOFlags(*pRenderer, Material);
+        PSOFlags |=
+            PBR_Renderer::PSO_FLAG_USE_TEXTURE_ATLAS |
+            PBR_Renderer::PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM |
+            PBR_Renderer::PSO_FLAG_CONVERT_OUTPUT_TO_SRGB |
+            PBR_Renderer::PSO_FLAG_USE_LIGHTS;
+        PSOFlags &= m_RenderFlags;
 
-        PBR_Renderer::PSOKey  CurrPsoKey;
-        IPipelineState*       pCurrPSO      = nullptr;
-        const GLTF::Material* pCurrMaterial = nullptr;
+        const PBR_Renderer::PSOKey NewKey{
+            PBR_Renderer::RenderPassType::Main,
+            PSOFlags,
+            ToPBRAlphaMode(AlphaMode),
+            Material.DoubleSided ? CULL_MODE_NONE : CULL_MODE_BACK,
+            PBR_Renderer::DebugViewType::None,
+        };
 
-        for (GLTF::Material::ALPHA_MODE AlphaMode : AlphaModes)
+        if (NewKey != CurrPsoKey)
         {
-            for (const RadientRenderMeshPrimitive& Primitive : Mesh.Primitives)
-            {
-                if (Primitive.VertexCount == 0 && Primitive.IndexCount == 0)
-                    continue;
+            CurrPsoKey    = NewKey;
+            pCurrPSO      = nullptr;
+            pCurrMaterial = nullptr;
+        }
 
-                if (Primitive.MaterialId >= Mesh.Materials.size())
-                    continue;
+        if (pCurrPSO == nullptr)
+        {
+            pCurrPSO = m_PbrPSOCache.Get(NewKey, PBR_Renderer::PsoCacheAccessor::GET_FLAG_CREATE_IF_NULL);
+            VERIFY_EXPR(pCurrPSO != nullptr);
+            if (pCurrPSO != nullptr)
+                pContext->SetPipelineState(pCurrPSO);
+        }
 
-                const GLTF::Material* pMaterial = Mesh.Materials[Primitive.MaterialId];
-                if (pMaterial == nullptr)
-                    continue;
+        if (pCurrSRB != pResourceCacheSRB)
+        {
+            pCurrSRB = pResourceCacheSRB;
+            pContext->CommitShaderResources(pCurrSRB, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
+        }
 
-                const GLTF::Material& Material = *pMaterial;
-                if (Material.Attribs.AlphaMode != AlphaMode)
-                    continue;
+        WritePrimitiveAttribs(*pRenderer, pContext, PSOFlags, DrawItem.WorldMatrix);
 
-                PBR_Renderer::PSO_FLAGS PSOFlags = VertexAttribFlags | GetMaterialPSOFlags(*pRenderer, Material);
-                PSOFlags |=
-                    PBR_Renderer::PSO_FLAG_USE_TEXTURE_ATLAS |
-                    PBR_Renderer::PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM |
-                    PBR_Renderer::PSO_FLAG_CONVERT_OUTPUT_TO_SRGB |
-                    PBR_Renderer::PSO_FLAG_USE_LIGHTS;
-                PSOFlags &= m_RenderFlags;
+        if (pCurrMaterial != &Material)
+        {
+            WriteMaterialAttribs(*pRenderer, pContext, PSOFlags, Material);
+            pCurrMaterial = &Material;
+        }
 
-                const PBR_Renderer::PSOKey NewKey{
-                    PBR_Renderer::RenderPassType::Main,
-                    PSOFlags,
-                    ToPBRAlphaMode(AlphaMode),
-                    Material.DoubleSided ? CULL_MODE_NONE : CULL_MODE_BACK,
-                    PBR_Renderer::DebugViewType::None,
-                };
-
-                if (NewKey != CurrPsoKey)
-                {
-                    CurrPsoKey    = NewKey;
-                    pCurrPSO      = nullptr;
-                    pCurrMaterial = nullptr;
-                }
-
-                if (pCurrPSO == nullptr)
-                {
-                    pCurrPSO = m_PbrPSOCache.Get(NewKey, PBR_Renderer::PsoCacheAccessor::GET_FLAG_CREATE_IF_NULL);
-                    VERIFY_EXPR(pCurrPSO != nullptr);
-                    if (pCurrPSO != nullptr)
-                        pContext->SetPipelineState(pCurrPSO);
-                }
-
-                if (pCurrSRB != pResourceCacheSRB)
-                {
-                    pCurrSRB = pResourceCacheSRB;
-                    pContext->CommitShaderResources(pCurrSRB, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
-                }
-
-                WritePrimitiveAttribs(*pRenderer, pContext, PSOFlags, Item.WorldMatrix);
-
-                if (pCurrMaterial != &Material)
-                {
-                    WriteMaterialAttribs(*pRenderer, pContext, PSOFlags, Material);
-                    pCurrMaterial = &Material;
-                }
-
-                if (Primitive.HasIndices())
-                {
-                    DrawIndexedAttribs DrawAttrs{Primitive.IndexCount, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
-                    DrawAttrs.FirstIndexLocation = FirstIndexLocation + Primitive.FirstIndex;
-                    DrawAttrs.BaseVertex         = BaseVertex + Primitive.FirstVertex;
-                    pContext->DrawIndexed(DrawAttrs);
-                }
-                else
-                {
-                    DrawAttribs DrawAttrs{Primitive.VertexCount, DRAW_FLAG_VERIFY_ALL};
-                    DrawAttrs.StartVertexLocation = BaseVertex + Primitive.FirstVertex;
-                    pContext->Draw(DrawAttrs);
-                }
-            }
+        if (Primitive.HasIndices())
+        {
+            DrawIndexedAttribs DrawAttrs{Primitive.IndexCount, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
+            DrawAttrs.FirstIndexLocation = FirstIndexLocation + Primitive.FirstIndex;
+            DrawAttrs.BaseVertex         = BaseVertex + Primitive.FirstVertex;
+            pContext->DrawIndexed(DrawAttrs);
+        }
+        else
+        {
+            DrawAttribs DrawAttrs{Primitive.VertexCount, DRAW_FLAG_VERIFY_ALL};
+            DrawAttrs.StartVertexLocation = BaseVertex + Primitive.FirstVertex;
+            pContext->Draw(DrawAttrs);
         }
     }
 

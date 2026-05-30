@@ -34,28 +34,21 @@ void RadientDrawList::Clear()
     m_Items.clear();
 }
 
-void RadientDrawList::Add(RadientEntityID                         Entity,
-                          const RadientMeshComponent&             Mesh,
-                          const RadientMeshRendererComponent&     Renderer,
-                          const RadientMaterialBindingsComponent* pMaterialBindings,
-                          const RadientMatrix4x4&                 WorldMatrix)
+void RadientDrawLists::Clear()
 {
-    m_Items.emplace_back(Entity, Mesh, Renderer, pMaterialBindings, WorldMatrix);
+    for (RadientDrawList& DrawList : m_DrawLists)
+        DrawList.Clear();
 }
 
-size_t RadientDrawList::GetItemCount() const
+bool RadientDrawLists::IsEmpty() const
 {
-    return m_Items.size();
-}
+    for (const RadientDrawList& DrawList : m_DrawLists)
+    {
+        if (!DrawList.IsEmpty())
+            return false;
+    }
 
-bool RadientDrawList::IsEmpty() const
-{
-    return m_Items.empty();
-}
-
-const RadientDrawList::ItemListType& RadientDrawList::GetItems() const
-{
-    return m_Items;
+    return true;
 }
 
 } // namespace Diligent

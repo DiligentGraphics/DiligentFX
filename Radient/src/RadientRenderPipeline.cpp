@@ -29,6 +29,25 @@
 namespace Diligent
 {
 
+namespace
+{
+
+GLTF::Material::ALPHA_MODE GetMaterialAlphaMode(const GLTF::Material& Material)
+{
+    switch (Material.Attribs.AlphaMode)
+    {
+        case GLTF::Material::ALPHA_MODE_OPAQUE:
+        case GLTF::Material::ALPHA_MODE_MASK:
+        case GLTF::Material::ALPHA_MODE_BLEND:
+            return static_cast<GLTF::Material::ALPHA_MODE>(Material.Attribs.AlphaMode);
+
+        default:
+            return GLTF::Material::ALPHA_MODE_OPAQUE;
+    }
+}
+
+} // namespace
+
 RadientRenderPipeline::RadientRenderPipeline(IRadientBackend*         pBackend,
                                              RadientAssetManagerImpl* pAssetManager) :
     m_pBackend{pBackend},
@@ -45,17 +64,38 @@ RadientRenderPipeline::~RadientRenderPipeline()
 void RadientRenderPipeline::PrepareDrawList(IRenderDevice*  pDevice,
                                             IDeviceContext* pContext)
 {
-    m_PreparedDrawList.clear();
+    m_DrawLists.Clear();
 
-    const RadientDrawList& DrawList = m_SceneCache.GetDrawList();
-    if (DrawList.IsEmpty())
+    const RadientRenderableMeshList& RenderableMeshes = m_SceneDataCache.GetRenderableMeshes();
+    if (RenderableMeshes.IsEmpty())
         return;
 
-    m_PreparedDrawList.reserve(DrawList.GetItemCount());
-    for (const RadientDrawItem& DrawItem : DrawList.GetItems())
+    for (const RadientRenderableMeshItem& MeshItem : RenderableMeshes.GetItems())
     {
-        if (const RadientRenderMesh* pMesh = m_ResourceCache.ResolveMesh(DrawItem.Mesh.Mesh, pDevice, pContext))
-            m_PreparedDrawList.push_back({&DrawItem, pMesh});
+        const RadientRenderMesh* pMesh = m_ResourceCache.ResolveMesh(MeshItem.Mesh.Mesh, pDevice, pContext);
+        if (pMesh == nullptr)
+            continue;
+
+        for (const RadientRenderMeshPrimitive& Primitive : pMesh->Primitives)
+        {
+            if (Primitive.VertexCount == 0 && Primitive.IndexCount == 0)
+                continue;
+
+            if (Primitive.MaterialId >= pMesh->Materials.size())
+                continue;
+
+            const GLTF::Material* pMaterial = pMesh->Materials[Primitive.MaterialId];
+            if (pMaterial == nullptr)
+                continue;
+
+            m_DrawLists.Add(GetMaterialAlphaMode(*pMaterial),
+                            MeshItem.Entity,
+                            MeshItem.Renderer,
+                            MeshItem.WorldMatrix,
+                            *pMesh,
+                            Primitive,
+                            *pMaterial);
+        }
     }
 }
 
@@ -68,7 +108,7 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
         return RADIENT_STATUS_INVALID_ARGUMENT;
     }
 
-    const RADIENT_STATUS SyncStatus = m_SceneCache.SyncScene(*Attribs.pScene);
+    const RADIENT_STATUS SyncStatus = m_SceneDataCache.SyncScene(*Attribs.pScene);
     if (RADIENT_FAILED(SyncStatus))
         return SyncStatus;
 
@@ -104,24 +144,34 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
 
     PrepareDrawList(pDevice, pContext);
 
-    if (!m_PreparedDrawList.empty())
+    if (!m_DrawLists.IsEmpty())
     {
         Status = m_GeometryRenderer.BeginFrame(pDevice,
                                                pContext,
-                                               m_SceneCache.GetLightList(),
+                                               m_SceneDataCache.GetLightList(),
                                                m_ResourceCache.GetResourceManager(),
                                                Attribs,
                                                m_FrameTargets);
         if (RADIENT_FAILED(Status))
             return Status;
 
-        Status = m_ForwardPass.Execute(m_GeometryRenderer,
-                                       pDevice,
-                                       pContext,
-                                       m_PreparedDrawList,
-                                       m_FrameTargets);
-        if (RADIENT_FAILED(Status))
-            return Status;
+        const std::array<GLTF::Material::ALPHA_MODE, 3> AlphaModes =
+            {
+                GLTF::Material::ALPHA_MODE_OPAQUE,
+                GLTF::Material::ALPHA_MODE_MASK,
+                GLTF::Material::ALPHA_MODE_BLEND,
+            };
+
+        for (const GLTF::Material::ALPHA_MODE AlphaMode : AlphaModes)
+        {
+            Status = m_ForwardPass.Execute(m_GeometryRenderer,
+                                           pDevice,
+                                           pContext,
+                                           m_DrawLists.GetDrawList(AlphaMode),
+                                           m_FrameTargets);
+            if (RADIENT_FAILED(Status))
+                return Status;
+        }
 
         m_GeometryRenderer.EndFrame();
     }

@@ -29,7 +29,7 @@
 #include "RadientGeometryPass.hpp"
 #include "RadientPostProcessPipeline.hpp"
 #include "RadientRenderResourceCache.hpp"
-#include "RadientSceneRenderCache.hpp"
+#include "RadientSceneRenderDataCache.hpp"
 
 #include "RadientBackend.h"
 #include "RadientRenderer.h"
@@ -56,13 +56,13 @@ private:
 
     RefCntAutoPtr<IRadientBackend> m_pBackend;
 
-    RadientRenderResourceCache m_ResourceCache;
-    RadientSceneRenderCache    m_SceneCache;
-    RadientPreparedDrawList    m_PreparedDrawList;
-    RadientFrameRenderTargets  m_FrameTargets;
-    RadientGeometryRenderer    m_GeometryRenderer;
-    RadientGeometryPass        m_ForwardPass;
-    RadientPostProcessPipeline m_PostProcessPipeline;
+    RadientRenderResourceCache  m_ResourceCache;
+    RadientSceneRenderDataCache m_SceneDataCache;
+    RadientDrawLists            m_DrawLists;
+    RadientFrameRenderTargets   m_FrameTargets;
+    RadientGeometryRenderer     m_GeometryRenderer;
+    RadientGeometryPass         m_ForwardPass;
+    RadientPostProcessPipeline  m_PostProcessPipeline;
 };
 
 } // namespace Diligent
