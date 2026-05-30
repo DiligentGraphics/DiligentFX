@@ -74,7 +74,7 @@ using RadientPreparedDrawList = std::vector<RadientPreparedDrawItem>;
 class RadientGeometryRenderer
 {
 public:
-    RADIENT_STATUS Prepare(IRenderDevice* pDevice, IDeviceContext* pContext, const RadientFrameRenderTargets& Targets);
+    RADIENT_STATUS Prepare(IRenderDevice* pDevice, IDeviceContext* pContext);
     RADIENT_STATUS BeginFrame(IRenderDevice*                   pDevice,
                               IDeviceContext*                  pContext,
                               const RadientLightList&          LightList,
@@ -83,16 +83,13 @@ public:
                               const RadientFrameRenderTargets& Targets);
     void           EndFrame();
 
-    PBR_Renderer*                   GetRenderer() const { return m_pRenderer.get(); }
-    IShaderResourceBinding*         GetResourceCacheSRB() const { return m_CacheBindings.pSRB.RawPtr(); }
-    PBR_Renderer::PsoCacheAccessor& GetPsoCache() { return m_PbrPSOCache; }
-    PBR_Renderer::PSO_FLAGS         GetRenderFlags() const { return m_RenderFlags; }
+    PBR_Renderer*           GetRenderer() const { return m_pRenderer.get(); }
+    IShaderResourceBinding* GetResourceCacheSRB() const { return m_CacheBindings.pSRB.RawPtr(); }
+    PBR_Renderer::PSO_FLAGS GetBaseRenderFlags() const { return m_BaseRenderFlags; }
 
 private:
     RADIENT_STATUS CreateRenderer(IRenderDevice*  pDevice,
-                                  IDeviceContext* pContext,
-                                  TEXTURE_FORMAT  RTVFormat,
-                                  TEXTURE_FORMAT  DSVFormat);
+                                  IDeviceContext* pContext);
 
     void InitializeResourceCacheUseInfo();
 
@@ -100,28 +97,42 @@ private:
     std::unique_ptr<PBR_Renderer> m_pRenderer;
     RefCntAutoPtr<IBuffer>        m_pFrameAttribsCB;
 
-    PBR_Renderer::PsoCacheAccessor m_PbrPSOCache;
-    PBR_Renderer::PsoCacheAccessor m_WireframePSOCache;
-
     RadientGeometryResourceCacheUseInfo  m_CacheUseInfo;
     RadientGeometryResourceCacheBindings m_CacheBindings;
 
-    PBR_Renderer::PSO_FLAGS m_RenderFlags = PBR_Renderer::PSO_FLAG_NONE;
+    PBR_Renderer::PSO_FLAGS m_BaseRenderFlags = PBR_Renderer::PSO_FLAG_NONE;
 
-    TEXTURE_FORMAT m_RTVFormat  = TEX_FORMAT_UNKNOWN;
-    TEXTURE_FORMAT m_DSVFormat  = TEX_FORMAT_UNKNOWN;
-    Uint32         m_FrameIndex = 0;
+    Uint32 m_FrameIndex = 0;
 };
 
 /// Mesh geometry render pass used by shadow and forward rendering stages.
 class RadientGeometryPass
 {
 public:
+    RADIENT_STATUS Prepare(RadientGeometryRenderer&         Renderer,
+                           IRenderDevice*                   pDevice,
+                           IDeviceContext*                  pContext,
+                           const RadientFrameRenderTargets& Targets);
     RADIENT_STATUS Execute(RadientGeometryRenderer&         Renderer,
                            IRenderDevice*                   pDevice,
                            IDeviceContext*                  pContext,
                            const RadientPreparedDrawList&   DrawList,
                            const RadientFrameRenderTargets& Targets);
+
+private:
+    RADIENT_STATUS CreatePsoCaches(PBR_Renderer&           Renderer,
+                                   PBR_Renderer::PSO_FLAGS BaseRenderFlags,
+                                   TEXTURE_FORMAT          RTVFormat,
+                                   TEXTURE_FORMAT          DSVFormat);
+
+private:
+    PBR_Renderer::PsoCacheAccessor m_PbrPSOCache;
+    PBR_Renderer::PsoCacheAccessor m_WireframePSOCache;
+
+    PBR_Renderer::PSO_FLAGS m_RenderFlags = PBR_Renderer::PSO_FLAG_NONE;
+
+    TEXTURE_FORMAT m_RTVFormat = TEX_FORMAT_UNKNOWN;
+    TEXTURE_FORMAT m_DSVFormat = TEX_FORMAT_UNKNOWN;
 };
 
 } // namespace Diligent

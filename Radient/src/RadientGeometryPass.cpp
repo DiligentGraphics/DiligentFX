@@ -683,22 +683,14 @@ void WriteMaterialAttribs(PBR_Renderer&           Renderer,
 
 } // namespace
 
-RADIENT_STATUS RadientGeometryRenderer::Prepare(IRenderDevice*                   pDevice,
-                                                IDeviceContext*                  pContext,
-                                                const RadientFrameRenderTargets& Targets)
+RADIENT_STATUS RadientGeometryRenderer::Prepare(IRenderDevice*  pDevice,
+                                                IDeviceContext* pContext)
 {
-    ITextureView* pColorRTV = Targets.GetColorRTV();
-    if (pDevice == nullptr || pContext == nullptr || pColorRTV == nullptr)
+    if (pDevice == nullptr || pContext == nullptr)
         return RADIENT_STATUS_OK;
 
-    const TEXTURE_FORMAT RTVFormat = GetTextureViewFormat(pColorRTV);
-    const TEXTURE_FORMAT DSVFormat = GetTextureViewFormat(Targets.GetDepthDSV());
-    if (m_pRenderer == nullptr ||
-        m_RTVFormat != RTVFormat ||
-        m_DSVFormat != DSVFormat)
-    {
-        return CreateRenderer(pDevice, pContext, RTVFormat, DSVFormat);
-    }
+    if (m_pRenderer == nullptr)
+        return CreateRenderer(pDevice, pContext);
 
     return RADIENT_STATUS_OK;
 }
@@ -715,7 +707,7 @@ RADIENT_STATUS RadientGeometryRenderer::BeginFrame(IRenderDevice*               
 
     if (m_pRenderer == nullptr)
     {
-        const RADIENT_STATUS PrepareStatus = Prepare(pDevice, pContext, Targets);
+        const RADIENT_STATUS PrepareStatus = Prepare(pDevice, pContext);
         if (RADIENT_FAILED(PrepareStatus))
             return PrepareStatus;
     }
@@ -749,6 +741,41 @@ void RadientGeometryRenderer::EndFrame()
     ++m_FrameIndex;
 }
 
+RADIENT_STATUS RadientGeometryPass::Prepare(RadientGeometryRenderer&         Renderer,
+                                            IRenderDevice*                   pDevice,
+                                            IDeviceContext*                  pContext,
+                                            const RadientFrameRenderTargets& Targets)
+{
+    if (pDevice == nullptr || pContext == nullptr)
+        return RADIENT_STATUS_OK;
+
+    PBR_Renderer* pRenderer = Renderer.GetRenderer();
+    if (pRenderer == nullptr)
+    {
+        const RADIENT_STATUS PrepareStatus = Renderer.Prepare(pDevice, pContext);
+        if (RADIENT_FAILED(PrepareStatus))
+            return PrepareStatus;
+
+        pRenderer = Renderer.GetRenderer();
+    }
+    if (pRenderer == nullptr)
+        return RADIENT_STATUS_OK;
+
+    ITextureView* pColorRTV = Targets.GetColorRTV();
+    if (pColorRTV == nullptr)
+        return RADIENT_STATUS_OK;
+
+    const TEXTURE_FORMAT RTVFormat = GetTextureViewFormat(pColorRTV);
+    const TEXTURE_FORMAT DSVFormat = GetTextureViewFormat(Targets.GetDepthDSV());
+    if (m_RTVFormat != RTVFormat ||
+        m_DSVFormat != DSVFormat)
+    {
+        return CreatePsoCaches(*pRenderer, Renderer.GetBaseRenderFlags(), RTVFormat, DSVFormat);
+    }
+
+    return RADIENT_STATUS_OK;
+}
+
 RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&         Renderer,
                                             IRenderDevice*                   pDevice,
                                             IDeviceContext*                  pContext,
@@ -760,6 +787,15 @@ RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&         Ren
 
     PBR_Renderer* const pRenderer = Renderer.GetRenderer();
     if (pRenderer == nullptr)
+        return RADIENT_STATUS_OK;
+
+    if (!m_PbrPSOCache)
+    {
+        const RADIENT_STATUS PrepareStatus = Prepare(Renderer, pDevice, pContext, Targets);
+        if (RADIENT_FAILED(PrepareStatus))
+            return PrepareStatus;
+    }
+    if (!m_PbrPSOCache)
         return RADIENT_STATUS_OK;
 
     IShaderResourceBinding* const pResourceCacheSRB = Renderer.GetResourceCacheSRB();
@@ -821,7 +857,7 @@ RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&         Ren
                     PBR_Renderer::PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM |
                     PBR_Renderer::PSO_FLAG_CONVERT_OUTPUT_TO_SRGB |
                     PBR_Renderer::PSO_FLAG_USE_LIGHTS;
-                PSOFlags &= Renderer.GetRenderFlags();
+                PSOFlags &= m_RenderFlags;
 
                 const PBR_Renderer::PSOKey NewKey{
                     PBR_Renderer::RenderPassType::Main,
@@ -840,7 +876,7 @@ RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&         Ren
 
                 if (pCurrPSO == nullptr)
                 {
-                    pCurrPSO = Renderer.GetPsoCache().Get(NewKey, PBR_Renderer::PsoCacheAccessor::GET_FLAG_CREATE_IF_NULL);
+                    pCurrPSO = m_PbrPSOCache.Get(NewKey, PBR_Renderer::PsoCacheAccessor::GET_FLAG_CREATE_IF_NULL);
                     VERIFY_EXPR(pCurrPSO != nullptr);
                     if (pCurrPSO != nullptr)
                         pContext->SetPipelineState(pCurrPSO);
@@ -881,11 +917,9 @@ RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&         Ren
 }
 
 RADIENT_STATUS RadientGeometryRenderer::CreateRenderer(IRenderDevice*  pDevice,
-                                                       IDeviceContext* pContext,
-                                                       TEXTURE_FORMAT  RTVFormat,
-                                                       TEXTURE_FORMAT  DSVFormat)
+                                                       IDeviceContext* pContext)
 {
-    if (pDevice == nullptr || pContext == nullptr || RTVFormat == TEX_FORMAT_UNKNOWN)
+    if (pDevice == nullptr || pContext == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
     PBR_Renderer::CreateInfo RendererCI;
@@ -906,19 +940,6 @@ RADIENT_STATUS RadientGeometryRenderer::CreateRenderer(IRenderDevice*  pDevice,
 
     m_pRenderer = std::make_unique<PBR_Renderer>(pDevice, nullptr, pContext, RendererCI);
 
-    GraphicsPipelineDesc GraphicsDesc;
-    GraphicsDesc.NumRenderTargets = 1;
-    GraphicsDesc.RTVFormats[0]    = RTVFormat;
-    GraphicsDesc.DSVFormat        = DSVFormat;
-
-    GraphicsDesc.PrimitiveTopology                    = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    GraphicsDesc.RasterizerDesc.FrontCounterClockwise = true;
-
-    m_PbrPSOCache = m_pRenderer->GetPsoCacheAccessor(GraphicsDesc);
-
-    GraphicsDesc.RasterizerDesc.FillMode = FILL_MODE_WIREFRAME;
-    m_WireframePSOCache                  = m_pRenderer->GetPsoCacheAccessor(GraphicsDesc);
-
     m_pFrameAttribsCB.Release();
     CreateUniformBuffer(pDevice,
                         m_pRenderer->GetPRBFrameAttribsSize(),
@@ -929,20 +950,47 @@ RADIENT_STATUS RadientGeometryRenderer::CreateRenderer(IRenderDevice*  pDevice,
 
     InitializeResourceCacheUseInfo();
 
-    m_RenderFlags =
+    m_BaseRenderFlags =
         PBR_Renderer::PSO_FLAG_DEFAULT |
         PBR_Renderer::PSO_FLAG_ALL_TEXTURES |
         PBR_Renderer::PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM |
         PBR_Renderer::PSO_FLAG_USE_TEXTURE_ATLAS;
-    m_RenderFlags &= ~PBR_Renderer::PSO_FLAG_USE_IBL;
-    m_RenderFlags &= ~PBR_Renderer::PSO_FLAG_ENABLE_TONE_MAPPING;
-    m_RenderFlags &= ~PBR_Renderer::PSO_FLAG_COMPUTE_MOTION_VECTORS;
+    m_BaseRenderFlags &= ~PBR_Renderer::PSO_FLAG_USE_IBL;
+    m_BaseRenderFlags &= ~PBR_Renderer::PSO_FLAG_ENABLE_TONE_MAPPING;
+    m_BaseRenderFlags &= ~PBR_Renderer::PSO_FLAG_COMPUTE_MOTION_VECTORS;
+
+    m_CacheBindings = {};
+
+    return RADIENT_STATUS_OK;
+}
+
+RADIENT_STATUS RadientGeometryPass::CreatePsoCaches(PBR_Renderer&           Renderer,
+                                                    PBR_Renderer::PSO_FLAGS BaseRenderFlags,
+                                                    TEXTURE_FORMAT          RTVFormat,
+                                                    TEXTURE_FORMAT          DSVFormat)
+{
+    if (RTVFormat == TEX_FORMAT_UNKNOWN)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    GraphicsPipelineDesc GraphicsDesc;
+    GraphicsDesc.NumRenderTargets = 1;
+    GraphicsDesc.RTVFormats[0]    = RTVFormat;
+    GraphicsDesc.DSVFormat        = DSVFormat;
+
+    GraphicsDesc.PrimitiveTopology                    = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    GraphicsDesc.RasterizerDesc.FrontCounterClockwise = true;
+
+    m_PbrPSOCache = Renderer.GetPsoCacheAccessor(GraphicsDesc);
+
+    GraphicsDesc.RasterizerDesc.FillMode = FILL_MODE_WIREFRAME;
+    m_WireframePSOCache                  = Renderer.GetPsoCacheAccessor(GraphicsDesc);
+
+    m_RenderFlags = BaseRenderFlags;
     if (RequiresOutputSRGBConversion(RTVFormat))
         m_RenderFlags |= PBR_Renderer::PSO_FLAG_CONVERT_OUTPUT_TO_SRGB;
 
-    m_CacheBindings = {};
-    m_RTVFormat     = RTVFormat;
-    m_DSVFormat     = DSVFormat;
+    m_RTVFormat = RTVFormat;
+    m_DSVFormat = DSVFormat;
 
     return RADIENT_STATUS_OK;
 }
