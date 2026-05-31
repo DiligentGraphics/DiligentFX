@@ -27,7 +27,7 @@
 #include "RadientGeometryPass.hpp"
 
 #include "RadientMath.hpp"
-#include "RadientSceneRenderDataCache.hpp"
+#include "RadientSceneDrawableCache.hpp"
 
 #include "GraphicsAccessories.hpp"
 #include "GraphicsUtilities.h"
@@ -742,11 +742,11 @@ void RadientGeometryRenderer::EndFrame()
     ++m_FrameIndex;
 }
 
-RADIENT_STATUS RadientGeometryPass::Prepare(RadientGeometryRenderer&           Renderer,
-                                            IRenderDevice*                     pDevice,
-                                            IDeviceContext*                    pContext,
-                                            const RadientSceneRenderDataCache& SceneDataCache,
-                                            const RadientFrameRenderTargets&   Targets)
+RADIENT_STATUS RadientGeometryPass::Prepare(RadientGeometryRenderer&         Renderer,
+                                            IRenderDevice*                   pDevice,
+                                            IDeviceContext*                  pContext,
+                                            const RadientSceneDrawableCache& DrawableCache,
+                                            const RadientFrameRenderTargets& Targets)
 {
     if (pDevice == nullptr || pContext == nullptr)
         return RADIENT_STATUS_OK;
@@ -780,16 +780,16 @@ RADIENT_STATUS RadientGeometryPass::Prepare(RadientGeometryRenderer&           R
         RebuildDrawablePassData = true;
     }
 
-    SyncDrawablePassData(*pRenderer, SceneDataCache, RebuildDrawablePassData);
+    SyncDrawablePassData(*pRenderer, DrawableCache, RebuildDrawablePassData);
     return RADIENT_STATUS_OK;
 }
 
-RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&           Renderer,
-                                            IRenderDevice*                     pDevice,
-                                            IDeviceContext*                    pContext,
-                                            const RadientDrawList&             DrawList,
-                                            const RadientSceneRenderDataCache& SceneDataCache,
-                                            const RadientFrameRenderTargets&   Targets)
+RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&         Renderer,
+                                            IRenderDevice*                   pDevice,
+                                            IDeviceContext*                  pContext,
+                                            const RadientDrawList&           DrawList,
+                                            const RadientSceneDrawableCache& DrawableCache,
+                                            const RadientFrameRenderTargets& Targets)
 {
     if (pDevice == nullptr || pContext == nullptr || DrawList.IsEmpty())
         return RADIENT_STATUS_OK;
@@ -800,7 +800,7 @@ RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&           R
 
     if (!m_PbrPSOCache)
     {
-        const RADIENT_STATUS PrepareStatus = Prepare(Renderer, pDevice, pContext, SceneDataCache, Targets);
+        const RADIENT_STATUS PrepareStatus = Prepare(Renderer, pDevice, pContext, DrawableCache, Targets);
         if (RADIENT_FAILED(PrepareStatus))
             return PrepareStatus;
     }
@@ -815,7 +815,7 @@ RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&           R
     ITextureView* pDepthDSV = Targets.GetDepthDSV();
     pContext->SetRenderTargets(1, &pColorRTV, pDepthDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
-    BuildSortedDrawableIDs(DrawList, SceneDataCache);
+    BuildSortedDrawableIDs(DrawList, DrawableCache);
 
     IShaderResourceBinding* pCurrSRB      = nullptr;
     IPipelineState*         pCurrPSO      = nullptr;
@@ -876,15 +876,15 @@ RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&           R
     return RADIENT_STATUS_OK;
 }
 
-void RadientGeometryPass::BuildSortedDrawableIDs(const RadientDrawList&             DrawList,
-                                                 const RadientSceneRenderDataCache& SceneDataCache)
+void RadientGeometryPass::BuildSortedDrawableIDs(const RadientDrawList&           DrawList,
+                                                 const RadientSceneDrawableCache& DrawableCache)
 {
     m_SortedDrawableIDs.clear();
     m_SortedDrawableIDs.reserve(DrawList.GetItemCount());
 
     for (const RadientDrawItem& DrawItem : DrawList.GetItems())
     {
-        const RadientDrawableSlot* pDrawable = SceneDataCache.GetDrawableSlot(DrawItem.DrawableID);
+        const RadientDrawableSlot* pDrawable = DrawableCache.GetDrawableSlot(DrawItem.DrawableID);
         if (pDrawable == nullptr ||
             pDrawable->pPrimitive == nullptr ||
             pDrawable->pMaterial == nullptr)
@@ -940,9 +940,9 @@ void RadientGeometryPass::BuildSortedDrawableIDs(const RadientDrawList&         
               });
 }
 
-void RadientGeometryPass::SyncDrawablePassData(PBR_Renderer&                      Renderer,
-                                               const RadientSceneRenderDataCache& SceneDataCache,
-                                               bool                               RebuildAll)
+void RadientGeometryPass::SyncDrawablePassData(PBR_Renderer&                    Renderer,
+                                               const RadientSceneDrawableCache& DrawableCache,
+                                               bool                             RebuildAll)
 {
     if (!m_PbrPSOCache)
         return;
@@ -960,9 +960,9 @@ void RadientGeometryPass::SyncDrawablePassData(PBR_Renderer&                    
 
         for (const GLTF::Material::ALPHA_MODE AlphaMode : AlphaModes)
         {
-            for (const RadientDrawItem& DrawItem : SceneDataCache.GetDrawList(AlphaMode).GetItems())
+            for (const RadientDrawItem& DrawItem : DrawableCache.GetDrawList(AlphaMode).GetItems())
             {
-                const RadientDrawableSlot* pDrawable = SceneDataCache.GetDrawableSlot(DrawItem.DrawableID);
+                const RadientDrawableSlot* pDrawable = DrawableCache.GetDrawableSlot(DrawItem.DrawableID);
                 if (pDrawable != nullptr)
                     UpdateDrawablePassData(Renderer, *pDrawable, DrawItem.DrawableID);
             }
@@ -970,7 +970,7 @@ void RadientGeometryPass::SyncDrawablePassData(PBR_Renderer&                    
         return;
     }
 
-    for (const RadientDrawableChange& Change : SceneDataCache.GetDrawableChanges())
+    for (const RadientDrawableChange& Change : DrawableCache.GetDrawableChanges())
     {
         if (Change.Type == RadientDrawableChangeType::Removed)
         {
@@ -978,7 +978,7 @@ void RadientGeometryPass::SyncDrawablePassData(PBR_Renderer&                    
             continue;
         }
 
-        const RadientDrawableSlot* pDrawable = SceneDataCache.GetDrawableSlot(Change.DrawableID);
+        const RadientDrawableSlot* pDrawable = DrawableCache.GetDrawableSlot(Change.DrawableID);
         if (pDrawable != nullptr)
             UpdateDrawablePassData(Renderer, *pDrawable, Change.DrawableID);
         else

@@ -70,7 +70,7 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
     if (RADIENT_FAILED(Status))
         return Status;
 
-    const RADIENT_STATUS SyncStatus = m_SceneDataCache.SyncScene(*Attribs.pScene, m_ResourceCache);
+    const RADIENT_STATUS SyncStatus = m_DrawableCache.SyncScene(*Attribs.pScene, m_ResourceCache);
     if (RADIENT_FAILED(SyncStatus))
         return SyncStatus;
 
@@ -78,7 +78,7 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
     if (RADIENT_FAILED(Status))
         return Status;
 
-    Status = m_ForwardPass.Prepare(m_GeometryRenderer, pDevice, pContext, m_SceneDataCache, m_FrameTargets);
+    Status = m_ForwardPass.Prepare(m_GeometryRenderer, pDevice, pContext, m_DrawableCache, m_FrameTargets);
     if (RADIENT_FAILED(Status))
         return Status;
 
@@ -86,11 +86,11 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
     if (RADIENT_FAILED(Status))
         return Status;
 
-    if (!m_SceneDataCache.GetDrawLists().IsEmpty())
+    if (!m_DrawableCache.GetDrawLists().IsEmpty())
     {
         Status = m_GeometryRenderer.BeginFrame(pDevice,
                                                pContext,
-                                               m_SceneDataCache.GetLightList(),
+                                               m_DrawableCache.GetLightList(),
                                                m_pAssetManager->GetResourceManager(),
                                                Attribs,
                                                m_FrameTargets);
@@ -109,8 +109,8 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
             Status = m_ForwardPass.Execute(m_GeometryRenderer,
                                            pDevice,
                                            pContext,
-                                           m_SceneDataCache.GetDrawList(AlphaMode),
-                                           m_SceneDataCache,
+                                           m_DrawableCache.GetDrawList(AlphaMode),
+                                           m_DrawableCache,
                                            m_FrameTargets);
             if (RADIENT_FAILED(Status))
                 return Status;

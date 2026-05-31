@@ -85,7 +85,7 @@ struct RadientDrawableChange
 };
 
 /// Converts Radient scene state into renderer-facing render data.
-class RadientSceneRenderDataCache
+class RadientSceneDrawableCache
 {
 public:
     RADIENT_STATUS SyncScene(IRadientScene&              Scene,

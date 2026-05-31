@@ -20,7 +20,7 @@ set(SOURCE
     src/RadientRendererImpl.cpp
     src/RadientSceneImpl.cpp
     src/RadientSceneImporterImpl.cpp
-    src/RadientSceneRenderDataCache.cpp
+    src/RadientSceneDrawableCache.cpp
     src/RadientSceneState.cpp
     src/RadientSceneWriterImpl.cpp
 )
@@ -43,7 +43,7 @@ set(INCLUDE
     include/RadientRendererImpl.hpp
     include/RadientSceneImpl.hpp
     include/RadientSceneImporterImpl.hpp
-    include/RadientSceneRenderDataCache.hpp
+    include/RadientSceneDrawableCache.hpp
     include/RadientSceneState.hpp
     include/RadientSceneWriterImpl.hpp
 )

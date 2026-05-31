@@ -24,7 +24,7 @@
  *  of the possibility of such damages.
  */
 
-#include "RadientSceneRenderDataCache.hpp"
+#include "RadientSceneDrawableCache.hpp"
 
 #include "RadientSceneImpl.hpp"
 
@@ -47,8 +47,8 @@ bool IsSameMeshAsset(const RadientMeshComponent& Mesh0,
 
 } // namespace
 
-RADIENT_STATUS RadientSceneRenderDataCache::SyncScene(IRadientScene&              Scene,
-                                                      RadientRenderResourceCache& ResourceCache)
+RADIENT_STATUS RadientSceneDrawableCache::SyncScene(IRadientScene&              Scene,
+                                                    RadientRenderResourceCache& ResourceCache)
 {
     m_DrawableChanges.clear();
 
@@ -114,8 +114,8 @@ RADIENT_STATUS RadientSceneRenderDataCache::SyncScene(IRadientScene&            
     return RADIENT_STATUS_OK;
 }
 
-void RadientSceneRenderDataCache::ProcessRenderableMeshAddedOrUpdated(const RadientSceneState::RenderableMesh& Mesh,
-                                                                      RadientRenderResourceCache&              ResourceCache)
+void RadientSceneDrawableCache::ProcessRenderableMeshAddedOrUpdated(const RadientSceneState::RenderableMesh& Mesh,
+                                                                    RadientRenderResourceCache&              ResourceCache)
 {
     RenderableRecord& Record = m_Renderables[Mesh.Entity];
 
@@ -155,7 +155,7 @@ void RadientSceneRenderDataCache::ProcessRenderableMeshAddedOrUpdated(const Radi
     }
 }
 
-void RadientSceneRenderDataCache::ProcessRenderableMeshRemoved(RadientEntityID Entity)
+void RadientSceneDrawableCache::ProcessRenderableMeshRemoved(RadientEntityID Entity)
 {
     std::unordered_map<RadientEntityID, RenderableRecord>::iterator It = m_Renderables.find(Entity);
     if (It == m_Renderables.end())
@@ -165,7 +165,7 @@ void RadientSceneRenderDataCache::ProcessRenderableMeshRemoved(RadientEntityID E
     m_Renderables.erase(It);
 }
 
-void RadientSceneRenderDataCache::ResolvePendingRenderableMeshes(RadientRenderResourceCache& ResourceCache)
+void RadientSceneDrawableCache::ResolvePendingRenderableMeshes(RadientRenderResourceCache& ResourceCache)
 {
     std::vector<RadientEntityID> Pending;
     Pending.swap(m_PendingRenderableEntities);
@@ -185,8 +185,8 @@ void RadientSceneRenderDataCache::ResolvePendingRenderableMeshes(RadientRenderRe
     }
 }
 
-bool RadientSceneRenderDataCache::TryExpandRenderable(RenderableRecord&           Record,
-                                                      RadientRenderResourceCache& ResourceCache)
+bool RadientSceneDrawableCache::TryExpandRenderable(RenderableRecord&           Record,
+                                                    RadientRenderResourceCache& ResourceCache)
 {
     const RadientRenderMesh* pMesh = ResourceCache.ResolveMesh(Record.Mesh.Mesh);
     if (pMesh == nullptr)
@@ -234,7 +234,7 @@ bool RadientSceneRenderDataCache::TryExpandRenderable(RenderableRecord&         
     return true;
 }
 
-RadientDrawableID RadientSceneRenderDataCache::AllocateDrawableID()
+RadientDrawableID RadientSceneDrawableCache::AllocateDrawableID()
 {
     RadientDrawableID DrawableID = InvalidRadientDrawableID;
     if (!m_FreeDrawableIDs.empty())
@@ -257,7 +257,7 @@ RadientDrawableID RadientSceneRenderDataCache::AllocateDrawableID()
     return DrawableID;
 }
 
-void RadientSceneRenderDataCache::FreeDrawableID(RadientDrawableID DrawableID)
+void RadientSceneDrawableCache::FreeDrawableID(RadientDrawableID DrawableID)
 {
     VERIFY(DrawableID < m_DrawableSlots.size(), "Invalid drawable ID");
     if (DrawableID >= m_DrawableSlots.size())
@@ -276,7 +276,7 @@ void RadientSceneRenderDataCache::FreeDrawableID(RadientDrawableID DrawableID)
     m_FreeDrawableIDs.push_back(DrawableID);
 }
 
-void RadientSceneRenderDataCache::AddDrawableToDrawList(RadientDrawableID DrawableID)
+void RadientSceneDrawableCache::AddDrawableToDrawList(RadientDrawableID DrawableID)
 {
     VERIFY(DrawableID < m_DrawableSlots.size(), "Invalid drawable ID");
     if (DrawableID >= m_DrawableSlots.size())
@@ -292,7 +292,7 @@ void RadientSceneRenderDataCache::AddDrawableToDrawList(RadientDrawableID Drawab
     Slot.InDrawList    = true;
 }
 
-void RadientSceneRenderDataCache::RemoveDrawableFromDrawList(RadientDrawableID DrawableID)
+void RadientSceneDrawableCache::RemoveDrawableFromDrawList(RadientDrawableID DrawableID)
 {
     VERIFY(DrawableID < m_DrawableSlots.size(), "Invalid drawable ID");
     if (DrawableID >= m_DrawableSlots.size())
@@ -316,14 +316,14 @@ void RadientSceneRenderDataCache::RemoveDrawableFromDrawList(RadientDrawableID D
     Slot.DrawListIndex = ~size_t{0};
 }
 
-void RadientSceneRenderDataCache::RemoveRenderableDrawables(RenderableRecord& Record)
+void RadientSceneDrawableCache::RemoveRenderableDrawables(RenderableRecord& Record)
 {
     for (const RadientDrawableID DrawableID : Record.DrawableIDs)
         FreeDrawableID(DrawableID);
     Record.DrawableIDs.clear();
 }
 
-void RadientSceneRenderDataCache::AddPendingResolution(RenderableRecord& Record)
+void RadientSceneDrawableCache::AddPendingResolution(RenderableRecord& Record)
 {
     if (Record.PendingResolution)
         return;
@@ -332,7 +332,7 @@ void RadientSceneRenderDataCache::AddPendingResolution(RenderableRecord& Record)
     m_PendingRenderableEntities.push_back(Record.Entity);
 }
 
-void RadientSceneRenderDataCache::RecordDrawableChange(RadientDrawableID DrawableID, RadientDrawableChangeType Type)
+void RadientSceneDrawableCache::RecordDrawableChange(RadientDrawableID DrawableID, RadientDrawableChangeType Type)
 {
     if (DrawableID == InvalidRadientDrawableID)
         return;
@@ -340,22 +340,22 @@ void RadientSceneRenderDataCache::RecordDrawableChange(RadientDrawableID Drawabl
     m_DrawableChanges.push_back({DrawableID, Type});
 }
 
-const RadientDrawLists& RadientSceneRenderDataCache::GetDrawLists() const
+const RadientDrawLists& RadientSceneDrawableCache::GetDrawLists() const
 {
     return m_DrawLists;
 }
 
-const RadientDrawList& RadientSceneRenderDataCache::GetDrawList(GLTF::Material::ALPHA_MODE AlphaMode) const
+const RadientDrawList& RadientSceneDrawableCache::GetDrawList(GLTF::Material::ALPHA_MODE AlphaMode) const
 {
     return m_DrawLists.GetDrawList(AlphaMode);
 }
 
-const std::vector<RadientDrawableChange>& RadientSceneRenderDataCache::GetDrawableChanges() const
+const std::vector<RadientDrawableChange>& RadientSceneDrawableCache::GetDrawableChanges() const
 {
     return m_DrawableChanges;
 }
 
-const RadientDrawableSlot* RadientSceneRenderDataCache::GetDrawableSlot(RadientDrawableID DrawableID) const
+const RadientDrawableSlot* RadientSceneDrawableCache::GetDrawableSlot(RadientDrawableID DrawableID) const
 {
     if (DrawableID >= m_DrawableSlots.size())
         return nullptr;
@@ -364,12 +364,12 @@ const RadientDrawableSlot* RadientSceneRenderDataCache::GetDrawableSlot(RadientD
     return Slot.Alive ? &Slot : nullptr;
 }
 
-const RadientLightList& RadientSceneRenderDataCache::GetLightList() const
+const RadientLightList& RadientSceneDrawableCache::GetLightList() const
 {
     return m_LightList;
 }
 
-const RadientSceneRevisions& RadientSceneRenderDataCache::GetSceneRevisions() const
+const RadientSceneRevisions& RadientSceneDrawableCache::GetSceneRevisions() const
 {
     return m_SceneRevisions;
 }

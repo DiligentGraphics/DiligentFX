@@ -41,7 +41,7 @@
 namespace Diligent
 {
 
-class RadientSceneRenderDataCache;
+class RadientSceneDrawableCache;
 struct RadientDrawableSlot;
 
 struct RadientGeometryResourceCacheUseInfo
@@ -104,17 +104,17 @@ private:
 class RadientGeometryPass
 {
 public:
-    RADIENT_STATUS Prepare(RadientGeometryRenderer&           Renderer,
-                           IRenderDevice*                     pDevice,
-                           IDeviceContext*                    pContext,
-                           const RadientSceneRenderDataCache& SceneDataCache,
-                           const RadientFrameRenderTargets&   Targets);
-    RADIENT_STATUS Execute(RadientGeometryRenderer&           Renderer,
-                           IRenderDevice*                     pDevice,
-                           IDeviceContext*                    pContext,
-                           const RadientDrawList&             DrawList,
-                           const RadientSceneRenderDataCache& SceneDataCache,
-                           const RadientFrameRenderTargets&   Targets);
+    RADIENT_STATUS Prepare(RadientGeometryRenderer&         Renderer,
+                           IRenderDevice*                   pDevice,
+                           IDeviceContext*                  pContext,
+                           const RadientSceneDrawableCache& DrawableCache,
+                           const RadientFrameRenderTargets& Targets);
+    RADIENT_STATUS Execute(RadientGeometryRenderer&         Renderer,
+                           IRenderDevice*                   pDevice,
+                           IDeviceContext*                  pContext,
+                           const RadientDrawList&           DrawList,
+                           const RadientSceneDrawableCache& DrawableCache,
+                           const RadientFrameRenderTargets& Targets);
 
 private:
     RADIENT_STATUS CreatePsoCaches(PBR_Renderer&           Renderer,
@@ -130,16 +130,16 @@ private:
         IPipelineState*            pPSO       = nullptr;
     };
 
-    void SyncDrawablePassData(PBR_Renderer&                      Renderer,
-                              const RadientSceneRenderDataCache& SceneDataCache,
-                              bool                               RebuildAll);
+    void SyncDrawablePassData(PBR_Renderer&                    Renderer,
+                              const RadientSceneDrawableCache& DrawableCache,
+                              bool                             RebuildAll);
     void UpdateDrawablePassData(PBR_Renderer&              Renderer,
                                 const RadientDrawableSlot& Drawable,
                                 RadientDrawableID          DrawableID);
     void InvalidateDrawablePassData(RadientDrawableID DrawableID);
 
-    void BuildSortedDrawableIDs(const RadientDrawList&             DrawList,
-                                const RadientSceneRenderDataCache& SceneDataCache);
+    void BuildSortedDrawableIDs(const RadientDrawList&           DrawList,
+                                const RadientSceneDrawableCache& DrawableCache);
 
 private:
     PBR_Renderer::PsoCacheAccessor m_PbrPSOCache;
