@@ -98,6 +98,7 @@ public:
 
     virtual const RadientSceneRevisions& DILIGENT_CALL_TYPE GetSceneRevisions() const override final;
 
+    RadientSceneState&       GetState();
     const RadientSceneState& GetState() const;
 
 private:

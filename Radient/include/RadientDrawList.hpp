@@ -36,32 +36,18 @@
 namespace Diligent
 {
 
-struct RadientRenderMesh;
-struct RadientRenderMeshPrimitive;
+using RadientDrawableID = Uint32;
 
-/// One renderable primitive after mesh and material resolution.
+static constexpr RadientDrawableID InvalidRadientDrawableID = ~RadientDrawableID{0};
+
+/// Lightweight reference to renderer-facing drawable data.
 struct RadientDrawItem
 {
-    RadientDrawItem(RadientEntityID                     _Entity,
-                    const RadientMeshRendererComponent& _Renderer,
-                    const RadientMatrix4x4&             _WorldMatrix,
-                    const RadientRenderMesh&            _Mesh,
-                    const RadientRenderMeshPrimitive&   _Primitive,
-                    const GLTF::Material&               _Material) :
-        Entity{_Entity},
-        Renderer{_Renderer},
-        WorldMatrix{_WorldMatrix},
-        Mesh{_Mesh},
-        Primitive{_Primitive},
-        Material{_Material}
+    explicit RadientDrawItem(RadientDrawableID _DrawableID) :
+        DrawableID{_DrawableID}
     {}
 
-    const RadientEntityID               Entity;
-    const RadientMeshRendererComponent& Renderer;
-    const RadientMatrix4x4&             WorldMatrix;
-    const RadientRenderMesh&            Mesh;
-    const RadientRenderMeshPrimitive&   Primitive;
-    const GLTF::Material&               Material;
+    RadientDrawableID DrawableID = InvalidRadientDrawableID;
 };
 
 /// Cached list of renderable primitives prepared for backend rendering.
@@ -70,16 +56,9 @@ class RadientDrawList
 public:
     using ItemListType = std::vector<RadientDrawItem>;
 
-    void Clear();
-    void Add(RadientEntityID                     Entity,
-             const RadientMeshRendererComponent& Renderer,
-             const RadientMatrix4x4&             WorldMatrix,
-             const RadientRenderMesh&            Mesh,
-             const RadientRenderMeshPrimitive&   Primitive,
-             const GLTF::Material&               Material)
-    {
-        m_Items.emplace_back(Entity, Renderer, WorldMatrix, Mesh, Primitive, Material);
-    }
+    void              Clear();
+    size_t            Add(RadientDrawableID DrawableID);
+    RadientDrawableID RemoveAt(size_t Index);
 
     size_t GetItemCount() const
     {
@@ -104,17 +83,11 @@ private:
 class RadientDrawLists
 {
 public:
-    void Clear();
-    void Add(GLTF::Material::ALPHA_MODE          AlphaMode,
-             RadientEntityID                     Entity,
-             const RadientMeshRendererComponent& Renderer,
-             const RadientMatrix4x4&             WorldMatrix,
-             const RadientRenderMesh&            Mesh,
-             const RadientRenderMeshPrimitive&   Primitive,
-             const GLTF::Material&               Material)
-    {
-        m_DrawLists[AlphaMode].Add(Entity, Renderer, WorldMatrix, Mesh, Primitive, Material);
-    }
+    void              Clear();
+    size_t            Add(GLTF::Material::ALPHA_MODE AlphaMode,
+                          RadientDrawableID          DrawableID);
+    RadientDrawableID RemoveAt(GLTF::Material::ALPHA_MODE AlphaMode,
+                               size_t                     Index);
 
     bool IsEmpty() const;
 

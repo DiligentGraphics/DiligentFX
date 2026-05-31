@@ -29,25 +29,6 @@
 namespace Diligent
 {
 
-namespace
-{
-
-GLTF::Material::ALPHA_MODE GetMaterialAlphaMode(const GLTF::Material& Material)
-{
-    switch (Material.Attribs.AlphaMode)
-    {
-        case GLTF::Material::ALPHA_MODE_OPAQUE:
-        case GLTF::Material::ALPHA_MODE_MASK:
-        case GLTF::Material::ALPHA_MODE_BLEND:
-            return static_cast<GLTF::Material::ALPHA_MODE>(Material.Attribs.AlphaMode);
-
-        default:
-            return GLTF::Material::ALPHA_MODE_OPAQUE;
-    }
-}
-
-} // namespace
-
 RadientRenderPipeline::RadientRenderPipeline(IRadientBackend*         pBackend,
                                              RadientAssetManagerImpl* pAssetManager) :
     m_pBackend{pBackend},
@@ -61,44 +42,6 @@ RadientRenderPipeline::~RadientRenderPipeline()
 {
 }
 
-void RadientRenderPipeline::PrepareDrawList(IRenderDevice*  pDevice,
-                                            IDeviceContext* pContext)
-{
-    m_DrawLists.Clear();
-
-    const RadientRenderableMeshList& RenderableMeshes = m_SceneDataCache.GetRenderableMeshes();
-    if (RenderableMeshes.IsEmpty())
-        return;
-
-    for (const RadientRenderableMeshItem& MeshItem : RenderableMeshes.GetItems())
-    {
-        const RadientRenderMesh* pMesh = m_ResourceCache.ResolveMesh(MeshItem.Mesh.Mesh, pDevice, pContext);
-        if (pMesh == nullptr)
-            continue;
-
-        for (const RadientRenderMeshPrimitive& Primitive : pMesh->Primitives)
-        {
-            if (Primitive.VertexCount == 0 && Primitive.IndexCount == 0)
-                continue;
-
-            if (Primitive.MaterialId >= pMesh->Materials.size())
-                continue;
-
-            const GLTF::Material* pMaterial = pMesh->Materials[Primitive.MaterialId];
-            if (pMaterial == nullptr)
-                continue;
-
-            m_DrawLists.Add(GetMaterialAlphaMode(*pMaterial),
-                            MeshItem.Entity,
-                            MeshItem.Renderer,
-                            MeshItem.WorldMatrix,
-                            *pMesh,
-                            Primitive,
-                            *pMaterial);
-        }
-    }
-}
-
 RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs)
 {
     if (m_pBackend == nullptr ||
@@ -107,10 +50,6 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
     {
         return RADIENT_STATUS_INVALID_ARGUMENT;
     }
-
-    const RADIENT_STATUS SyncStatus = m_SceneDataCache.SyncScene(*Attribs.pScene);
-    if (RADIENT_FAILED(SyncStatus))
-        return SyncStatus;
 
     IRenderDevice*  pDevice  = m_pBackend->GetNativeDevice();
     IDeviceContext* pContext = Attribs.pDeviceContext != nullptr ?
@@ -130,6 +69,10 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
     if (RADIENT_FAILED(Status))
         return Status;
 
+    const RADIENT_STATUS SyncStatus = m_SceneDataCache.SyncScene(*Attribs.pScene, m_ResourceCache, pDevice, pContext);
+    if (RADIENT_FAILED(SyncStatus))
+        return SyncStatus;
+
     Status = m_GeometryRenderer.Prepare(pDevice, pContext);
     if (RADIENT_FAILED(Status))
         return Status;
@@ -142,9 +85,7 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
     if (RADIENT_FAILED(Status))
         return Status;
 
-    PrepareDrawList(pDevice, pContext);
-
-    if (!m_DrawLists.IsEmpty())
+    if (!m_SceneDataCache.GetDrawLists().IsEmpty())
     {
         Status = m_GeometryRenderer.BeginFrame(pDevice,
                                                pContext,
@@ -167,7 +108,8 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
             Status = m_ForwardPass.Execute(m_GeometryRenderer,
                                            pDevice,
                                            pContext,
-                                           m_DrawLists.GetDrawList(AlphaMode),
+                                           m_SceneDataCache.GetDrawList(AlphaMode),
+                                           m_SceneDataCache,
                                            m_FrameTargets);
             if (RADIENT_FAILED(Status))
                 return Status;

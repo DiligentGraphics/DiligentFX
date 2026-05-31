@@ -26,72 +26,110 @@
 
 #pragma once
 
+#include "RadientDrawList.hpp"
 #include "RadientLightList.hpp"
+#include "RadientRenderResourceCache.hpp"
 #include "RadientScene.h"
+#include "RadientSceneState.hpp"
 
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace Diligent
 {
 
-/// One renderable mesh entity after scene traversal.
-struct RadientRenderableMeshItem
+/// Per-frame drawable state owned by the scene and referenced by stable drawable slots.
+struct RadientDrawableFrameData
 {
-    RadientRenderableMeshItem(RadientEntityID                         _Entity,
-                              const RadientMeshComponent&             _Mesh,
-                              const RadientMeshRendererComponent&     _Renderer,
-                              const RadientMaterialBindingsComponent* _pMaterialBindings,
-                              const RadientMatrix4x4&                 _WorldMatrix) :
-        Entity{_Entity},
-        Mesh{_Mesh},
-        Renderer{_Renderer},
-        pMaterialBindings{_pMaterialBindings},
-        WorldMatrix{_WorldMatrix}
-    {}
-
-    RadientEntityID                         Entity = InvalidRadientEntityID;
-    const RadientMeshComponent&             Mesh;
-    const RadientMeshRendererComponent&     Renderer;
-    const RadientMaterialBindingsComponent* pMaterialBindings = nullptr;
-    const RadientMatrix4x4&                 WorldMatrix;
+    const RadientMatrix4x4* pWorldMatrix      = nullptr;
+    const Bool*             pEffectiveVisible = nullptr;
 };
 
-/// Cached list of visible renderable mesh entities.
-class RadientRenderableMeshList
+/// Renderer-facing primitive data addressed by a stable drawable ID.
+struct RadientDrawableSlot
 {
-public:
-    using ItemListType = std::vector<RadientRenderableMeshItem>;
+    bool   Alive      = false;
+    bool   InDrawList = false;
+    Uint32 Generation = 0;
 
-    void Clear();
-    void Add(RadientEntityID                         Entity,
-             const RadientMeshComponent&             Mesh,
-             const RadientMeshRendererComponent&     Renderer,
-             const RadientMaterialBindingsComponent* pMaterialBindings,
-             const RadientMatrix4x4&                 WorldMatrix);
+    RadientEntityID Entity         = InvalidRadientEntityID;
+    Uint32          PrimitiveIndex = 0;
 
-    size_t GetItemCount() const;
-    bool   IsEmpty() const;
+    const RadientMeshRendererComponent* pRenderer = nullptr;
+    RadientDrawableFrameData            FrameData;
 
-    const ItemListType& GetItems() const;
+    const RadientRenderMesh*          pMesh      = nullptr;
+    const RadientRenderMeshPrimitive* pPrimitive = nullptr;
+    const GLTF::Material*             pMaterial  = nullptr;
 
-private:
-    ItemListType m_Items;
+    GLTF::Material::ALPHA_MODE AlphaMode     = GLTF::Material::ALPHA_MODE_OPAQUE;
+    size_t                     DrawListIndex = ~size_t{0};
 };
 
 /// Converts Radient scene state into renderer-facing render data.
 class RadientSceneRenderDataCache
 {
 public:
-    RADIENT_STATUS SyncScene(IRadientScene& Scene);
+    RADIENT_STATUS SyncScene(IRadientScene&              Scene,
+                             RadientRenderResourceCache& ResourceCache,
+                             IRenderDevice*              pDevice,
+                             IDeviceContext*             pContext);
 
-    const RadientRenderableMeshList& GetRenderableMeshes() const;
-    const RadientLightList&          GetLightList() const;
-    const RadientSceneRevisions&     GetSceneRevisions() const;
+    const RadientDrawLists&      GetDrawLists() const;
+    const RadientDrawList&       GetDrawList(GLTF::Material::ALPHA_MODE AlphaMode) const;
+    const RadientDrawableSlot*   GetDrawableSlot(RadientDrawableID DrawableID) const;
+    const RadientLightList&      GetLightList() const;
+    const RadientSceneRevisions& GetSceneRevisions() const;
 
 private:
-    RadientRenderableMeshList m_RenderableMeshes;
-    RadientLightList          m_LightList;
-    RadientSceneRevisions     m_SceneRevisions;
+    struct RenderableRecord
+    {
+        RadientEntityID Entity = InvalidRadientEntityID;
+
+        RadientMeshComponent Mesh;
+        std::string          MeshURI;
+
+        const RadientMeshRendererComponent* pRenderer         = nullptr;
+        const RadientMatrix4x4*             pWorldMatrix      = nullptr;
+        const Bool*                         pEffectiveVisible = nullptr;
+
+        bool PendingResolution = false;
+
+        std::vector<RadientDrawableID> DrawableIDs;
+    };
+
+    void ProcessRenderableMeshAddedOrUpdated(const RadientSceneState::RenderableMesh& Mesh,
+                                             RadientRenderResourceCache&              ResourceCache,
+                                             IRenderDevice*                           pDevice,
+                                             IDeviceContext*                          pContext);
+    void ProcessRenderableMeshRemoved(RadientEntityID Entity);
+    void ResolvePendingRenderableMeshes(RadientRenderResourceCache& ResourceCache,
+                                        IRenderDevice*              pDevice,
+                                        IDeviceContext*             pContext);
+
+    bool TryExpandRenderable(RenderableRecord&           Record,
+                             RadientRenderResourceCache& ResourceCache,
+                             IRenderDevice*              pDevice,
+                             IDeviceContext*             pContext);
+
+    RadientDrawableID AllocateDrawableID();
+    void              FreeDrawableID(RadientDrawableID DrawableID);
+    void              AddDrawableToDrawList(RadientDrawableID DrawableID);
+    void              RemoveDrawableFromDrawList(RadientDrawableID DrawableID);
+    void              RemoveRenderableDrawables(RenderableRecord& Record);
+    void              AddPendingResolution(RenderableRecord& Record);
+
+private:
+    std::unordered_map<RadientEntityID, RenderableRecord> m_Renderables;
+
+    std::vector<RadientDrawableSlot> m_DrawableSlots;
+    std::vector<RadientDrawableID>   m_FreeDrawableIDs;
+    std::vector<RadientEntityID>     m_PendingRenderableEntities;
+
+    RadientDrawLists      m_DrawLists;
+    RadientLightList      m_LightList;
+    RadientSceneRevisions m_SceneRevisions;
 };
 
 } // namespace Diligent

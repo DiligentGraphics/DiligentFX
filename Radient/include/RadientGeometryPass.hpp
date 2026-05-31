@@ -41,6 +41,8 @@
 namespace Diligent
 {
 
+class RadientSceneRenderDataCache;
+
 struct RadientGeometryResourceCacheUseInfo
 {
     GLTF::ResourceManager* pResourceMgr = nullptr;
@@ -105,11 +107,12 @@ public:
                            IRenderDevice*                   pDevice,
                            IDeviceContext*                  pContext,
                            const RadientFrameRenderTargets& Targets);
-    RADIENT_STATUS Execute(RadientGeometryRenderer&         Renderer,
-                           IRenderDevice*                   pDevice,
-                           IDeviceContext*                  pContext,
-                           const RadientDrawList&           DrawList,
-                           const RadientFrameRenderTargets& Targets);
+    RADIENT_STATUS Execute(RadientGeometryRenderer&           Renderer,
+                           IRenderDevice*                     pDevice,
+                           IDeviceContext*                    pContext,
+                           const RadientDrawList&             DrawList,
+                           const RadientSceneRenderDataCache& SceneDataCache,
+                           const RadientFrameRenderTargets&   Targets);
 
 private:
     RADIENT_STATUS CreatePsoCaches(PBR_Renderer&           Renderer,

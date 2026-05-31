@@ -51,14 +51,10 @@ public:
     RADIENT_STATUS Render(const RadientRenderAttribs& Attribs);
 
 private:
-    void PrepareDrawList(IRenderDevice*  pDevice,
-                         IDeviceContext* pContext);
-
     RefCntAutoPtr<IRadientBackend> m_pBackend;
 
     RadientRenderResourceCache  m_ResourceCache;
     RadientSceneRenderDataCache m_SceneDataCache;
-    RadientDrawLists            m_DrawLists;
     RadientFrameRenderTargets   m_FrameTargets;
     RadientGeometryRenderer     m_GeometryRenderer;
     RadientGeometryPass         m_ForwardPass;

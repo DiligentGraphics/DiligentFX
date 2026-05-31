@@ -27,6 +27,7 @@
 #include "RadientGeometryPass.hpp"
 
 #include "RadientMath.hpp"
+#include "RadientSceneRenderDataCache.hpp"
 
 #include "GraphicsAccessories.hpp"
 #include "GraphicsUtilities.h"
@@ -776,11 +777,12 @@ RADIENT_STATUS RadientGeometryPass::Prepare(RadientGeometryRenderer&         Ren
     return RADIENT_STATUS_OK;
 }
 
-RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&         Renderer,
-                                            IRenderDevice*                   pDevice,
-                                            IDeviceContext*                  pContext,
-                                            const RadientDrawList&           DrawList,
-                                            const RadientFrameRenderTargets& Targets)
+RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&           Renderer,
+                                            IRenderDevice*                     pDevice,
+                                            IDeviceContext*                    pContext,
+                                            const RadientDrawList&             DrawList,
+                                            const RadientSceneRenderDataCache& SceneDataCache,
+                                            const RadientFrameRenderTargets&   Targets)
 {
     if (pDevice == nullptr || pContext == nullptr || DrawList.IsEmpty())
         return RADIENT_STATUS_OK;
@@ -813,9 +815,25 @@ RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&         Ren
 
     for (const RadientDrawItem& DrawItem : DrawList.GetItems())
     {
-        const RadientRenderMesh&          Mesh               = DrawItem.Mesh;
-        const RadientRenderMeshPrimitive& Primitive          = DrawItem.Primitive;
-        const GLTF::Material&             Material           = DrawItem.Material;
+        const RadientDrawableSlot* pDrawable = SceneDataCache.GetDrawableSlot(DrawItem.DrawableID);
+        if (pDrawable == nullptr ||
+            pDrawable->pMesh == nullptr ||
+            pDrawable->pPrimitive == nullptr ||
+            pDrawable->pMaterial == nullptr)
+        {
+            continue;
+        }
+
+        if (pDrawable->FrameData.pWorldMatrix == nullptr ||
+            pDrawable->FrameData.pEffectiveVisible == nullptr ||
+            !*pDrawable->FrameData.pEffectiveVisible)
+        {
+            continue;
+        }
+
+        const RadientRenderMesh&          Mesh               = *pDrawable->pMesh;
+        const RadientRenderMeshPrimitive& Primitive          = *pDrawable->pPrimitive;
+        const GLTF::Material&             Material           = *pDrawable->pMaterial;
         const GLTF::Material::ALPHA_MODE  AlphaMode          = static_cast<GLTF::Material::ALPHA_MODE>(Material.Attribs.AlphaMode);
         const PBR_Renderer::PSO_FLAGS     VertexAttribFlags  = Mesh.VertexAttribFlags;
         const Uint32                      FirstIndexLocation = Mesh.FirstIndexLocation;
@@ -861,7 +879,7 @@ RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&         Ren
             pContext->CommitShaderResources(pCurrSRB, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
         }
 
-        WritePrimitiveAttribs(*pRenderer, pContext, PSOFlags, DrawItem.WorldMatrix);
+        WritePrimitiveAttribs(*pRenderer, pContext, PSOFlags, *pDrawable->FrameData.pWorldMatrix);
 
         if (pCurrMaterial != &Material)
         {

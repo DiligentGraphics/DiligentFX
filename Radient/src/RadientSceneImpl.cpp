@@ -130,6 +130,11 @@ const RadientSceneRevisions& RadientSceneImpl::GetSceneRevisions() const
     return m_pState->GetSceneRevisions();
 }
 
+RadientSceneState& RadientSceneImpl::GetState()
+{
+    return *m_pState;
+}
+
 const RadientSceneState& RadientSceneImpl::GetState() const
 {
     return *m_pState;
