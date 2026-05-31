@@ -227,10 +227,12 @@ bool RadientSceneRenderDataCache::TryExpandRenderable(RenderableRecord&         
         Slot.PrimitiveIndex = PrimitiveIndex;
         Slot.pRenderer      = Record.pRenderer;
         Slot.FrameData      = {Record.pWorldMatrix, Record.pEffectiveVisible};
-        Slot.pMesh          = pMesh;
-        Slot.pPrimitive     = &Primitive;
-        Slot.pMaterial      = pMaterial;
-        Slot.AlphaMode      = static_cast<GLTF::Material::ALPHA_MODE>(pMaterial->Attribs.AlphaMode);
+        Slot.pPrimitive         = &Primitive;
+        Slot.pMaterial          = pMaterial;
+        Slot.VertexAttribFlags  = pMesh->VertexAttribFlags;
+        Slot.FirstIndexLocation = pMesh->FirstIndexLocation;
+        Slot.BaseVertex         = pMesh->BaseVertex;
+        Slot.AlphaMode          = static_cast<GLTF::Material::ALPHA_MODE>(pMaterial->Attribs.AlphaMode);
 
         Record.DrawableIDs.push_back(DrawableID);
         AddDrawableToDrawList(DrawableID);

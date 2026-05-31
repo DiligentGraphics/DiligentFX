@@ -59,9 +59,12 @@ struct RadientDrawableSlot
     const RadientMeshRendererComponent* pRenderer = nullptr;
     RadientDrawableFrameData            FrameData;
 
-    const RadientRenderMesh*          pMesh      = nullptr;
     const RadientRenderMeshPrimitive* pPrimitive = nullptr;
     const GLTF::Material*             pMaterial  = nullptr;
+
+    PBR_Renderer::PSO_FLAGS VertexAttribFlags  = PBR_Renderer::PSO_FLAG_NONE;
+    Uint32                  FirstIndexLocation = 0;
+    Uint32                  BaseVertex         = 0;
 
     GLTF::Material::ALPHA_MODE AlphaMode     = GLTF::Material::ALPHA_MODE_OPAQUE;
     size_t                     DrawListIndex = ~size_t{0};

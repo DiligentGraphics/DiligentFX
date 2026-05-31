@@ -823,7 +823,6 @@ RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&           R
     {
         const RadientDrawableSlot* pDrawable = SceneDataCache.GetDrawableSlot(DrawItem.DrawableID);
         if (pDrawable == nullptr ||
-            pDrawable->pMesh == nullptr ||
             pDrawable->pPrimitive == nullptr ||
             pDrawable->pMaterial == nullptr)
         {
@@ -837,11 +836,8 @@ RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&           R
             continue;
         }
 
-        const RadientRenderMesh&          Mesh               = *pDrawable->pMesh;
-        const RadientRenderMeshPrimitive& Primitive          = *pDrawable->pPrimitive;
-        const GLTF::Material&             Material           = *pDrawable->pMaterial;
-        const Uint32                      FirstIndexLocation = Mesh.FirstIndexLocation;
-        const Uint32                      BaseVertex         = Mesh.BaseVertex;
+        const RadientRenderMeshPrimitive& Primitive = *pDrawable->pPrimitive;
+        const GLTF::Material&             Material  = *pDrawable->pMaterial;
 
         if (Primitive.VertexCount == 0 && Primitive.IndexCount == 0)
             continue;
@@ -877,14 +873,14 @@ RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&           R
         if (Primitive.HasIndices())
         {
             DrawIndexedAttribs DrawAttrs{Primitive.IndexCount, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
-            DrawAttrs.FirstIndexLocation = FirstIndexLocation + Primitive.FirstIndex;
-            DrawAttrs.BaseVertex         = BaseVertex + Primitive.FirstVertex;
+            DrawAttrs.FirstIndexLocation = pDrawable->FirstIndexLocation + Primitive.FirstIndex;
+            DrawAttrs.BaseVertex         = pDrawable->BaseVertex + Primitive.FirstVertex;
             pContext->DrawIndexed(DrawAttrs);
         }
         else
         {
             DrawAttribs DrawAttrs{Primitive.VertexCount, DRAW_FLAG_VERIFY_ALL};
-            DrawAttrs.StartVertexLocation = BaseVertex + Primitive.FirstVertex;
+            DrawAttrs.StartVertexLocation = pDrawable->BaseVertex + Primitive.FirstVertex;
             pContext->Draw(DrawAttrs);
         }
     }
@@ -949,17 +945,16 @@ void RadientGeometryPass::UpdateDrawablePassData(PBR_Renderer&              Rend
         m_DrawablePassData.resize(static_cast<size_t>(DrawableID) + 1);
 
     DrawablePassData& PassData = m_DrawablePassData[DrawableID];
-    if (Drawable.pMesh == nullptr || Drawable.pMaterial == nullptr)
+    if (Drawable.pMaterial == nullptr)
     {
         PassData = {};
         return;
     }
 
-    const RadientRenderMesh&         Mesh      = *Drawable.pMesh;
     const GLTF::Material&            Material  = *Drawable.pMaterial;
     const GLTF::Material::ALPHA_MODE AlphaMode = static_cast<GLTF::Material::ALPHA_MODE>(Material.Attribs.AlphaMode);
 
-    PBR_Renderer::PSO_FLAGS PSOFlags = Mesh.VertexAttribFlags | GetMaterialPSOFlags(Renderer, Material);
+    PBR_Renderer::PSO_FLAGS PSOFlags = Drawable.VertexAttribFlags | GetMaterialPSOFlags(Renderer, Material);
     PSOFlags |=
         PBR_Renderer::PSO_FLAG_USE_TEXTURE_ATLAS |
         PBR_Renderer::PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM |
