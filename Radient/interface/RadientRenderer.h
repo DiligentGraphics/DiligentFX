@@ -44,6 +44,12 @@ struct RadientRendererDesc
 {
     /// Renderer name.
     const Char* Name DEFAULT_INITIALIZER(nullptr);
+
+    /// Enables asynchronous geometry pipeline compilation.
+    ///
+    /// When enabled, geometry drawables are skipped until their pipeline state
+    /// is ready instead of blocking the render call.
+    Bool EnableAsyncPipelineCompilation DEFAULT_INITIALIZER(True);
 };
 typedef struct RadientRendererDesc RadientRendererDesc;
 

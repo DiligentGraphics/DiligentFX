@@ -44,8 +44,9 @@ class RadientAssetManagerImpl;
 class RadientRenderPipeline
 {
 public:
-    RadientRenderPipeline(IRadientBackend*         pBackend,
-                          RadientAssetManagerImpl* pAssetManager);
+    RadientRenderPipeline(IRadientBackend*           pBackend,
+                          RadientAssetManagerImpl*   pAssetManager,
+                          const RadientRendererDesc& Desc);
     ~RadientRenderPipeline();
 
     RADIENT_STATUS Render(const RadientRenderAttribs& Attribs);

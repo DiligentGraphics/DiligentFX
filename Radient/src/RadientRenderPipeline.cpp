@@ -29,11 +29,13 @@
 namespace Diligent
 {
 
-RadientRenderPipeline::RadientRenderPipeline(IRadientBackend*         pBackend,
-                                             RadientAssetManagerImpl* pAssetManager) :
+RadientRenderPipeline::RadientRenderPipeline(IRadientBackend*           pBackend,
+                                             RadientAssetManagerImpl*   pAssetManager,
+                                             const RadientRendererDesc& Desc) :
     m_pBackend{pBackend},
     m_pAssetManager{pAssetManager},
-    m_ResourceCache{pAssetManager}
+    m_ResourceCache{pAssetManager},
+    m_ForwardPass{Desc.EnableAsyncPipelineCompilation == True}
 {
 }
 

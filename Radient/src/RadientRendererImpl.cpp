@@ -87,7 +87,7 @@ RadientRendererImpl::RadientRendererImpl(IReferenceCounters* pRefCounters,
     m_Name{CI.Desc.Name != nullptr ? CI.Desc.Name : ""},
     m_Desc{CI.Desc},
     m_pBackend{CI.pBackend},
-    m_RenderPipeline{std::make_unique<RadientRenderPipeline>(CI.pBackend, CI.pAssetManager)}
+    m_RenderPipeline{std::make_unique<RadientRenderPipeline>(CI.pBackend, CI.pAssetManager, m_Desc)}
 {
     m_Desc.Name = m_Name.c_str();
 }

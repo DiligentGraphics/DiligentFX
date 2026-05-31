@@ -74,6 +74,11 @@ bool RequiresOutputSRGBConversion(TEXTURE_FORMAT Format)
         Format == TEX_FORMAT_BGRA8_UNORM;
 }
 
+bool IsPipelineReady(IPipelineState* pPSO)
+{
+    return pPSO != nullptr && pPSO->GetStatus() == PIPELINE_STATE_STATUS_READY;
+}
+
 RadientCameraComponent GetCameraComponent(const RadientRenderAttribs& Attribs)
 {
     RadientCameraComponent Camera{};
@@ -684,6 +689,11 @@ void WriteMaterialAttribs(PBR_Renderer&           Renderer,
 
 } // namespace
 
+RadientGeometryPass::RadientGeometryPass(bool EnableAsyncPipelineCompilation) noexcept :
+    m_EnableAsyncPipelineCompilation{EnableAsyncPipelineCompilation}
+{
+}
+
 RADIENT_STATUS RadientGeometryRenderer::Prepare(IRenderDevice*  pDevice,
                                                 IDeviceContext* pContext)
 {
@@ -827,7 +837,7 @@ RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&         Ren
         const DrawablePassData& PassData = m_DrawablePassData[DrawableID];
         VERIFY(PassData.pDrawable != nullptr &&
                    PassData.Generation == PassData.pDrawable->Generation &&
-                   PassData.pPSO != nullptr,
+                   IsPipelineReady(PassData.pPSO),
                "Sorted drawable ID references stale pass data");
 
         const RadientDrawableSlot&        Drawable  = *PassData.pDrawable;
@@ -909,7 +919,7 @@ void RadientGeometryPass::BuildSortedDrawableIDs(const RadientDrawList&         
         const DrawablePassData& PassData = m_DrawablePassData[DrawItem.DrawableID];
         if (PassData.pDrawable != pDrawable ||
             PassData.Generation != pDrawable->Generation ||
-            PassData.pPSO == nullptr)
+            !IsPipelineReady(PassData.pPSO))
         {
             continue;
         }
@@ -929,8 +939,8 @@ void RadientGeometryPass::BuildSortedDrawableIDs(const RadientDrawList&         
                           RhsPassData.pDrawable != nullptr &&
                           LhsPassData.Generation == LhsPassData.pDrawable->Generation &&
                           RhsPassData.Generation == RhsPassData.pDrawable->Generation &&
-                          LhsPassData.pPSO != nullptr &&
-                          RhsPassData.pPSO != nullptr),
+                          IsPipelineReady(LhsPassData.pPSO) &&
+                          IsPipelineReady(RhsPassData.pPSO)),
                          "Sorted drawable ID references stale pass data");
 
                   if (LhsPassData.pPSO != RhsPassData.pPSO)
@@ -1022,10 +1032,17 @@ void RadientGeometryPass::UpdateDrawablePassData(PBR_Renderer&              Rend
         PBR_Renderer::DebugViewType::None,
     };
 
+    PBR_Renderer::PsoCacheAccessor::GET_FLAGS GetFlags =
+        PBR_Renderer::PsoCacheAccessor::GET_FLAG_CREATE_IF_NULL;
+    if (m_EnableAsyncPipelineCompilation)
+    {
+        GetFlags |= PBR_Renderer::PsoCacheAccessor::GET_FLAG_ASYNC_COMPILE;
+    }
+
     PassData.pDrawable  = &Drawable;
     PassData.Generation = Drawable.Generation;
     PassData.PSOFlags   = PSOFlags;
-    PassData.pPSO       = m_PbrPSOCache.Get(PsoKey, PBR_Renderer::PsoCacheAccessor::GET_FLAG_CREATE_IF_NULL);
+    PassData.pPSO       = m_PbrPSOCache.Get(PsoKey, GetFlags);
     VERIFY_EXPR(PassData.pPSO != nullptr);
 }
 

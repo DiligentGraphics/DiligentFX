@@ -104,6 +104,8 @@ private:
 class RadientGeometryPass
 {
 public:
+    explicit RadientGeometryPass(bool EnableAsyncPipelineCompilation = true) noexcept;
+
     RADIENT_STATUS Prepare(RadientGeometryRenderer&         Renderer,
                            IRenderDevice*                   pDevice,
                            IDeviceContext*                  pContext,
@@ -152,6 +154,8 @@ private:
 
     TEXTURE_FORMAT m_RTVFormat = TEX_FORMAT_UNKNOWN;
     TEXTURE_FORMAT m_DSVFormat = TEX_FORMAT_UNKNOWN;
+
+    bool m_EnableAsyncPipelineCompilation = true;
 };
 
 } // namespace Diligent
