@@ -105,9 +105,8 @@ public:
     const RadientSceneRevisions& GetSceneRevisions() const;
 
     template <typename CallbackType>
-    RADIENT_STATUS GetRenderableMesh(RadientEntityID Entity, CallbackType&& Callback) const;
-    template <typename CallbackType>
     RADIENT_STATUS EnumerateRenderableMeshes(CallbackType&& Callback) const;
+    // The renderable mesh pointer is valid only during the callback and is null for removed renderables.
     template <typename CallbackType>
     RADIENT_STATUS EnumerateRenderableMeshChanges(CallbackType&& Callback) const;
     template <typename CallbackType>
@@ -329,23 +328,6 @@ inline RadientSceneState::RenderableMesh RadientSceneState::MakeRenderableMesh(e
 }
 
 template <typename CallbackType>
-RADIENT_STATUS RadientSceneState::GetRenderableMesh(RadientEntityID Entity, CallbackType&& Callback) const
-{
-    const entt::entity E = FindEntity(Entity);
-    if (E == entt::null)
-        return RADIENT_STATUS_NOT_FOUND;
-
-    if (!IsRenderableMeshEntity(E))
-        return RADIENT_STATUS_NOT_FOUND;
-
-    Callback(MakeRenderableMesh(E, m_Registry));
-
-    return (m_DirtyFlags & DIRTY_FLAGS_REQUIRING_PROPAGATION) != DIRTY_FLAG_NONE ?
-        RADIENT_STATUS_OUT_OF_DATE :
-        RADIENT_STATUS_OK;
-}
-
-template <typename CallbackType>
 RADIENT_STATUS RadientSceneState::EnumerateRenderableMeshes(CallbackType&& Callback) const
 {
     auto View = m_Registry.view<const EntityComponent,
@@ -368,14 +350,23 @@ template <typename CallbackType>
 RADIENT_STATUS RadientSceneState::EnumerateRenderableMeshChanges(CallbackType&& Callback) const
 {
     for (const RenderableMeshChange& Change : m_RemovedRenderableMeshChanges)
-        Callback(Change);
+        Callback(Change, static_cast<const RenderableMesh*>(nullptr));
 
     auto View = m_Registry.view<const EntityComponent, const PendingRenderableMeshChangeComponent>();
     for (const entt::entity Entity : View)
     {
         const EntityComponent&                      EntityData = View.get<const EntityComponent>(Entity);
-        const PendingRenderableMeshChangeComponent& Change     = View.get<const PendingRenderableMeshChangeComponent>(Entity);
-        Callback(RenderableMeshChange{EntityData.ID, Change.Type});
+        const PendingRenderableMeshChangeComponent& Pending    = View.get<const PendingRenderableMeshChangeComponent>(Entity);
+        const RenderableMeshChange                  Change{EntityData.ID, Pending.Type};
+
+        if (Pending.Type == RenderableMeshChangeType::Removed || !IsRenderableMeshEntity(Entity))
+        {
+            Callback(Change, static_cast<const RenderableMesh*>(nullptr));
+            continue;
+        }
+
+        const RenderableMesh Mesh = MakeRenderableMesh(Entity, m_Registry);
+        Callback(Change, &Mesh);
     }
 
     return RADIENT_STATUS_OK;
