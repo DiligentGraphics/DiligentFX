@@ -830,9 +830,9 @@ RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&           R
                    PassData.pPSO != nullptr,
                "Sorted drawable ID references stale pass data");
 
-        const RadientDrawableSlot* const  pDrawable = PassData.pDrawable;
-        const RadientRenderMeshPrimitive& Primitive = *pDrawable->pPrimitive;
-        const GLTF::Material&             Material  = *pDrawable->pMaterial;
+        const RadientDrawableSlot&        Drawable  = *PassData.pDrawable;
+        const RadientRenderMeshPrimitive& Primitive = *Drawable.pPrimitive;
+        const GLTF::Material&             Material  = *Drawable.pMaterial;
 
         const PBR_Renderer::PSO_FLAGS PSOFlags = PassData.PSOFlags;
         if (pCurrPSO != PassData.pPSO)
@@ -850,7 +850,7 @@ RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&           R
             pContext->CommitShaderResources(pCurrSRB, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
         }
 
-        WritePrimitiveAttribs(*pRenderer, pContext, PSOFlags, *pDrawable->FrameData.pWorldMatrix);
+        WritePrimitiveAttribs(*pRenderer, pContext, PSOFlags, *Drawable.FrameData.pWorldMatrix);
 
         if (pCurrMaterial != &Material)
         {
@@ -861,14 +861,14 @@ RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&           R
         if (Primitive.HasIndices())
         {
             DrawIndexedAttribs DrawAttrs{Primitive.IndexCount, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
-            DrawAttrs.FirstIndexLocation = pDrawable->FirstIndexLocation + Primitive.FirstIndex;
-            DrawAttrs.BaseVertex         = pDrawable->BaseVertex + Primitive.FirstVertex;
+            DrawAttrs.FirstIndexLocation = Drawable.FirstIndexLocation + Primitive.FirstIndex;
+            DrawAttrs.BaseVertex         = Drawable.BaseVertex + Primitive.FirstVertex;
             pContext->DrawIndexed(DrawAttrs);
         }
         else
         {
             DrawAttribs DrawAttrs{Primitive.VertexCount, DRAW_FLAG_VERIFY_ALL};
-            DrawAttrs.StartVertexLocation = pDrawable->BaseVertex + Primitive.FirstVertex;
+            DrawAttrs.StartVertexLocation = Drawable.BaseVertex + Primitive.FirstVertex;
             pContext->Draw(DrawAttrs);
         }
     }
