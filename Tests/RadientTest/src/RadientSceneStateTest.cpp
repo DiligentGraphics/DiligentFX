@@ -1678,6 +1678,30 @@ TEST(RadientSceneStateTest, TracksRenderableMeshChanges)
     EXPECT_TRUE(CaptureRenderableMeshChanges(State).empty());
 }
 
+TEST(RadientSceneStateTest, TransformAndVisibilityDoNotEmitRenderableMeshChanges)
+{
+    // Renderable mesh changes describe immutable drawable structure. Transform
+    // and visibility remain mutable per-frame state, so changing them should not
+    // force the renderer to rebuild draw lists or primitive/material data.
+    RadientSceneState State;
+
+    RadientEntityID Entity = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity({}, Entity), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetMesh(Entity, MakeMeshComponent("mesh://cube")), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetMeshRenderer(Entity, {}), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+    State.ClearRenderableMeshChanges();
+
+    EXPECT_EQ(State.SetLocalTransform(Entity, MakeTranslation(1.f, 2.f, 3.f)), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+    EXPECT_TRUE(CaptureRenderableMeshChanges(State).empty());
+
+    EXPECT_EQ(State.SetEntityOwnVisibility(Entity, False), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+    EXPECT_TRUE(CaptureRenderableMeshChanges(State).empty());
+}
+
 TEST(RadientSceneStateTest, CoalescesRenderableMeshChanges)
 {
     // Multiple edits before the renderer consumes changes should coalesce to

@@ -52,7 +52,7 @@ public:
         const RadientMeshRendererComponent&     Renderer;
         const RadientMaterialBindingsComponent* pMaterialBindings = nullptr;
         const RadientMatrix4x4&                 WorldMatrix;
-        Bool                                    EffectiveVisible = False;
+        const Bool&                             EffectiveVisible;
     };
 
     struct RenderableLight
