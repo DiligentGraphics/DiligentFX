@@ -42,6 +42,7 @@ namespace Diligent
 {
 
 class RadientSceneRenderDataCache;
+struct RadientDrawableSlot;
 
 struct RadientGeometryResourceCacheUseInfo
 {
@@ -103,10 +104,11 @@ private:
 class RadientGeometryPass
 {
 public:
-    RADIENT_STATUS Prepare(RadientGeometryRenderer&         Renderer,
-                           IRenderDevice*                   pDevice,
-                           IDeviceContext*                  pContext,
-                           const RadientFrameRenderTargets& Targets);
+    RADIENT_STATUS Prepare(RadientGeometryRenderer&           Renderer,
+                           IRenderDevice*                     pDevice,
+                           IDeviceContext*                    pContext,
+                           const RadientSceneRenderDataCache& SceneDataCache,
+                           const RadientFrameRenderTargets&   Targets);
     RADIENT_STATUS Execute(RadientGeometryRenderer&           Renderer,
                            IRenderDevice*                     pDevice,
                            IDeviceContext*                    pContext,
@@ -120,9 +122,30 @@ private:
                                    TEXTURE_FORMAT          RTVFormat,
                                    TEXTURE_FORMAT          DSVFormat);
 
+    struct DrawablePassData
+    {
+        bool                    Valid      = false;
+        Uint32                  Generation = 0;
+        PBR_Renderer::PSO_FLAGS PSOFlags   = PBR_Renderer::PSO_FLAG_NONE;
+        IPipelineState*         pPSO       = nullptr;
+    };
+
+    void SyncDrawablePassData(PBR_Renderer&                      Renderer,
+                              const RadientSceneRenderDataCache& SceneDataCache,
+                              bool                               RebuildAll);
+    void UpdateDrawablePassData(PBR_Renderer&              Renderer,
+                                const RadientDrawableSlot& Drawable,
+                                RadientDrawableID          DrawableID);
+    void InvalidateDrawablePassData(RadientDrawableID DrawableID);
+
+    const DrawablePassData* GetDrawablePassData(const RadientDrawableSlot& Drawable,
+                                                RadientDrawableID          DrawableID) const;
+
 private:
     PBR_Renderer::PsoCacheAccessor m_PbrPSOCache;
     PBR_Renderer::PsoCacheAccessor m_WireframePSOCache;
+
+    std::vector<DrawablePassData> m_DrawablePassData;
 
     PBR_Renderer::PSO_FLAGS m_RenderFlags = PBR_Renderer::PSO_FLAG_NONE;
 

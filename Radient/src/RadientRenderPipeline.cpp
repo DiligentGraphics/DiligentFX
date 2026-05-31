@@ -77,7 +77,7 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
     if (RADIENT_FAILED(Status))
         return Status;
 
-    Status = m_ForwardPass.Prepare(m_GeometryRenderer, pDevice, pContext, m_FrameTargets);
+    Status = m_ForwardPass.Prepare(m_GeometryRenderer, pDevice, pContext, m_SceneDataCache, m_FrameTargets);
     if (RADIENT_FAILED(Status))
         return Status;
 

@@ -52,6 +52,8 @@ RADIENT_STATUS RadientSceneRenderDataCache::SyncScene(IRadientScene&            
                                                       IRenderDevice*              pDevice,
                                                       IDeviceContext*             pContext)
 {
+    m_DrawableChanges.clear();
+
     const RadientSceneRevisions& SceneRevisions = Scene.GetSceneRevisions();
     if (m_SceneRevisions == SceneRevisions && m_PendingRenderableEntities.empty())
         return RADIENT_STATUS_NO_CHANGE;
@@ -153,6 +155,7 @@ void RadientSceneRenderDataCache::ProcessRenderableMeshAddedOrUpdated(const Radi
 
         Slot.pRenderer = Record.pRenderer;
         Slot.FrameData = {Record.pWorldMatrix, Record.pEffectiveVisible};
+        RecordDrawableChange(DrawableID, RadientDrawableChangeType::Updated);
     }
 }
 
@@ -231,6 +234,7 @@ bool RadientSceneRenderDataCache::TryExpandRenderable(RenderableRecord&         
 
         Record.DrawableIDs.push_back(DrawableID);
         AddDrawableToDrawList(DrawableID);
+        RecordDrawableChange(DrawableID, RadientDrawableChangeType::Added);
     }
 
     return true;
@@ -274,6 +278,7 @@ void RadientSceneRenderDataCache::FreeDrawableID(RadientDrawableID DrawableID)
     Slot                    = {};
     Slot.Generation         = Generation;
 
+    RecordDrawableChange(DrawableID, RadientDrawableChangeType::Removed);
     m_FreeDrawableIDs.push_back(DrawableID);
 }
 
@@ -333,6 +338,14 @@ void RadientSceneRenderDataCache::AddPendingResolution(RenderableRecord& Record)
     m_PendingRenderableEntities.push_back(Record.Entity);
 }
 
+void RadientSceneRenderDataCache::RecordDrawableChange(RadientDrawableID DrawableID, RadientDrawableChangeType Type)
+{
+    if (DrawableID == InvalidRadientDrawableID)
+        return;
+
+    m_DrawableChanges.push_back({DrawableID, Type});
+}
+
 const RadientDrawLists& RadientSceneRenderDataCache::GetDrawLists() const
 {
     return m_DrawLists;
@@ -341,6 +354,11 @@ const RadientDrawLists& RadientSceneRenderDataCache::GetDrawLists() const
 const RadientDrawList& RadientSceneRenderDataCache::GetDrawList(GLTF::Material::ALPHA_MODE AlphaMode) const
 {
     return m_DrawLists.GetDrawList(AlphaMode);
+}
+
+const std::vector<RadientDrawableChange>& RadientSceneRenderDataCache::GetDrawableChanges() const
+{
+    return m_DrawableChanges;
 }
 
 const RadientDrawableSlot* RadientSceneRenderDataCache::GetDrawableSlot(RadientDrawableID DrawableID) const

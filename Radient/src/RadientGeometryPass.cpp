@@ -742,10 +742,11 @@ void RadientGeometryRenderer::EndFrame()
     ++m_FrameIndex;
 }
 
-RADIENT_STATUS RadientGeometryPass::Prepare(RadientGeometryRenderer&         Renderer,
-                                            IRenderDevice*                   pDevice,
-                                            IDeviceContext*                  pContext,
-                                            const RadientFrameRenderTargets& Targets)
+RADIENT_STATUS RadientGeometryPass::Prepare(RadientGeometryRenderer&           Renderer,
+                                            IRenderDevice*                     pDevice,
+                                            IDeviceContext*                    pContext,
+                                            const RadientSceneRenderDataCache& SceneDataCache,
+                                            const RadientFrameRenderTargets&   Targets)
 {
     if (pDevice == nullptr || pContext == nullptr)
         return RADIENT_STATUS_OK;
@@ -762,7 +763,8 @@ RADIENT_STATUS RadientGeometryPass::Prepare(RadientGeometryRenderer&         Ren
     if (pRenderer == nullptr)
         return RADIENT_STATUS_OK;
 
-    ITextureView* pColorRTV = Targets.GetColorRTV();
+    bool          RebuildDrawablePassData = false;
+    ITextureView* pColorRTV               = Targets.GetColorRTV();
     if (pColorRTV == nullptr)
         return RADIENT_STATUS_OK;
 
@@ -771,9 +773,14 @@ RADIENT_STATUS RadientGeometryPass::Prepare(RadientGeometryRenderer&         Ren
     if (m_RTVFormat != RTVFormat ||
         m_DSVFormat != DSVFormat)
     {
-        return CreatePsoCaches(*pRenderer, Renderer.GetBaseRenderFlags(), RTVFormat, DSVFormat);
+        const RADIENT_STATUS Status = CreatePsoCaches(*pRenderer, Renderer.GetBaseRenderFlags(), RTVFormat, DSVFormat);
+        if (RADIENT_FAILED(Status))
+            return Status;
+
+        RebuildDrawablePassData = true;
     }
 
+    SyncDrawablePassData(*pRenderer, SceneDataCache, RebuildDrawablePassData);
     return RADIENT_STATUS_OK;
 }
 
@@ -793,7 +800,7 @@ RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&           R
 
     if (!m_PbrPSOCache)
     {
-        const RADIENT_STATUS PrepareStatus = Prepare(Renderer, pDevice, pContext, Targets);
+        const RADIENT_STATUS PrepareStatus = Prepare(Renderer, pDevice, pContext, SceneDataCache, Targets);
         if (RADIENT_FAILED(PrepareStatus))
             return PrepareStatus;
     }
@@ -808,8 +815,7 @@ RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&           R
     ITextureView* pDepthDSV = Targets.GetDepthDSV();
     pContext->SetRenderTargets(1, &pColorRTV, pDepthDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
-    IShaderResourceBinding* pCurrSRB = nullptr;
-    PBR_Renderer::PSOKey    CurrPsoKey;
+    IShaderResourceBinding* pCurrSRB      = nullptr;
     IPipelineState*         pCurrPSO      = nullptr;
     const GLTF::Material*   pCurrMaterial = nullptr;
 
@@ -834,41 +840,22 @@ RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&           R
         const RadientRenderMesh&          Mesh               = *pDrawable->pMesh;
         const RadientRenderMeshPrimitive& Primitive          = *pDrawable->pPrimitive;
         const GLTF::Material&             Material           = *pDrawable->pMaterial;
-        const GLTF::Material::ALPHA_MODE  AlphaMode          = static_cast<GLTF::Material::ALPHA_MODE>(Material.Attribs.AlphaMode);
-        const PBR_Renderer::PSO_FLAGS     VertexAttribFlags  = Mesh.VertexAttribFlags;
         const Uint32                      FirstIndexLocation = Mesh.FirstIndexLocation;
         const Uint32                      BaseVertex         = Mesh.BaseVertex;
 
         if (Primitive.VertexCount == 0 && Primitive.IndexCount == 0)
             continue;
 
-        PBR_Renderer::PSO_FLAGS PSOFlags = VertexAttribFlags | GetMaterialPSOFlags(*pRenderer, Material);
-        PSOFlags |=
-            PBR_Renderer::PSO_FLAG_USE_TEXTURE_ATLAS |
-            PBR_Renderer::PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM |
-            PBR_Renderer::PSO_FLAG_CONVERT_OUTPUT_TO_SRGB |
-            PBR_Renderer::PSO_FLAG_USE_LIGHTS;
-        PSOFlags &= m_RenderFlags;
+        const DrawablePassData* pPassData = GetDrawablePassData(*pDrawable, DrawItem.DrawableID);
+        if (pPassData == nullptr || pPassData->pPSO == nullptr)
+            continue;
 
-        const PBR_Renderer::PSOKey NewKey{
-            PBR_Renderer::RenderPassType::Main,
-            PSOFlags,
-            ToPBRAlphaMode(AlphaMode),
-            Material.DoubleSided ? CULL_MODE_NONE : CULL_MODE_BACK,
-            PBR_Renderer::DebugViewType::None,
-        };
-
-        if (NewKey != CurrPsoKey)
+        const PBR_Renderer::PSO_FLAGS PSOFlags = pPassData->PSOFlags;
+        if (pCurrPSO != pPassData->pPSO)
         {
-            CurrPsoKey    = NewKey;
-            pCurrPSO      = nullptr;
+            pCurrPSO      = pPassData->pPSO;
             pCurrMaterial = nullptr;
-        }
 
-        if (pCurrPSO == nullptr)
-        {
-            pCurrPSO = m_PbrPSOCache.Get(NewKey, PBR_Renderer::PsoCacheAccessor::GET_FLAG_CREATE_IF_NULL);
-            VERIFY_EXPR(pCurrPSO != nullptr);
             if (pCurrPSO != nullptr)
                 pContext->SetPipelineState(pCurrPSO);
         }
@@ -903,6 +890,115 @@ RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&           R
     }
 
     return RADIENT_STATUS_OK;
+}
+
+void RadientGeometryPass::SyncDrawablePassData(PBR_Renderer&                      Renderer,
+                                               const RadientSceneRenderDataCache& SceneDataCache,
+                                               bool                               RebuildAll)
+{
+    if (!m_PbrPSOCache)
+        return;
+
+    if (RebuildAll)
+    {
+        m_DrawablePassData.clear();
+
+        const std::array<GLTF::Material::ALPHA_MODE, 3> AlphaModes =
+            {
+                GLTF::Material::ALPHA_MODE_OPAQUE,
+                GLTF::Material::ALPHA_MODE_MASK,
+                GLTF::Material::ALPHA_MODE_BLEND,
+            };
+
+        for (const GLTF::Material::ALPHA_MODE AlphaMode : AlphaModes)
+        {
+            for (const RadientDrawItem& DrawItem : SceneDataCache.GetDrawList(AlphaMode).GetItems())
+            {
+                const RadientDrawableSlot* pDrawable = SceneDataCache.GetDrawableSlot(DrawItem.DrawableID);
+                if (pDrawable != nullptr)
+                    UpdateDrawablePassData(Renderer, *pDrawable, DrawItem.DrawableID);
+            }
+        }
+        return;
+    }
+
+    for (const RadientDrawableChange& Change : SceneDataCache.GetDrawableChanges())
+    {
+        if (Change.Type == RadientDrawableChangeType::Removed)
+        {
+            InvalidateDrawablePassData(Change.DrawableID);
+            continue;
+        }
+
+        const RadientDrawableSlot* pDrawable = SceneDataCache.GetDrawableSlot(Change.DrawableID);
+        if (pDrawable != nullptr)
+            UpdateDrawablePassData(Renderer, *pDrawable, Change.DrawableID);
+        else
+            InvalidateDrawablePassData(Change.DrawableID);
+    }
+}
+
+void RadientGeometryPass::UpdateDrawablePassData(PBR_Renderer&              Renderer,
+                                                 const RadientDrawableSlot& Drawable,
+                                                 RadientDrawableID          DrawableID)
+{
+    if (DrawableID == InvalidRadientDrawableID)
+        return;
+
+    if (DrawableID >= m_DrawablePassData.size())
+        m_DrawablePassData.resize(static_cast<size_t>(DrawableID) + 1);
+
+    DrawablePassData& PassData = m_DrawablePassData[DrawableID];
+    if (Drawable.pMesh == nullptr || Drawable.pMaterial == nullptr)
+    {
+        PassData = {};
+        return;
+    }
+
+    const RadientRenderMesh&         Mesh      = *Drawable.pMesh;
+    const GLTF::Material&            Material  = *Drawable.pMaterial;
+    const GLTF::Material::ALPHA_MODE AlphaMode = static_cast<GLTF::Material::ALPHA_MODE>(Material.Attribs.AlphaMode);
+
+    PBR_Renderer::PSO_FLAGS PSOFlags = Mesh.VertexAttribFlags | GetMaterialPSOFlags(Renderer, Material);
+    PSOFlags |=
+        PBR_Renderer::PSO_FLAG_USE_TEXTURE_ATLAS |
+        PBR_Renderer::PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM |
+        PBR_Renderer::PSO_FLAG_CONVERT_OUTPUT_TO_SRGB |
+        PBR_Renderer::PSO_FLAG_USE_LIGHTS;
+    PSOFlags &= m_RenderFlags;
+
+    const PBR_Renderer::PSOKey PsoKey{
+        PBR_Renderer::RenderPassType::Main,
+        PSOFlags,
+        ToPBRAlphaMode(AlphaMode),
+        Material.DoubleSided ? CULL_MODE_NONE : CULL_MODE_BACK,
+        PBR_Renderer::DebugViewType::None,
+    };
+
+    PassData.Valid      = true;
+    PassData.Generation = Drawable.Generation;
+    PassData.PSOFlags   = PSOFlags;
+    PassData.pPSO       = m_PbrPSOCache.Get(PsoKey, PBR_Renderer::PsoCacheAccessor::GET_FLAG_CREATE_IF_NULL);
+    VERIFY_EXPR(PassData.pPSO != nullptr);
+}
+
+void RadientGeometryPass::InvalidateDrawablePassData(RadientDrawableID DrawableID)
+{
+    if (DrawableID < m_DrawablePassData.size())
+        m_DrawablePassData[DrawableID] = {};
+}
+
+const RadientGeometryPass::DrawablePassData* RadientGeometryPass::GetDrawablePassData(const RadientDrawableSlot& Drawable,
+                                                                                      RadientDrawableID          DrawableID) const
+{
+    if (DrawableID >= m_DrawablePassData.size())
+        return nullptr;
+
+    const DrawablePassData& PassData = m_DrawablePassData[DrawableID];
+    if (!PassData.Valid || PassData.Generation != Drawable.Generation)
+        return nullptr;
+
+    return &PassData;
 }
 
 RADIENT_STATUS RadientGeometryRenderer::CreateRenderer(IRenderDevice*  pDevice,
@@ -980,6 +1076,7 @@ RADIENT_STATUS RadientGeometryPass::CreatePsoCaches(PBR_Renderer&           Rend
 
     m_RTVFormat = RTVFormat;
     m_DSVFormat = DSVFormat;
+    m_DrawablePassData.clear();
 
     return RADIENT_STATUS_OK;
 }

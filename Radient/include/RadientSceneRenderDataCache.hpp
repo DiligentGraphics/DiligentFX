@@ -67,6 +67,19 @@ struct RadientDrawableSlot
     size_t                     DrawListIndex = ~size_t{0};
 };
 
+enum class RadientDrawableChangeType
+{
+    Added,
+    Removed,
+    Updated
+};
+
+struct RadientDrawableChange
+{
+    RadientDrawableID         DrawableID = InvalidRadientDrawableID;
+    RadientDrawableChangeType Type       = RadientDrawableChangeType::Updated;
+};
+
 /// Converts Radient scene state into renderer-facing render data.
 class RadientSceneRenderDataCache
 {
@@ -76,11 +89,12 @@ public:
                              IRenderDevice*              pDevice,
                              IDeviceContext*             pContext);
 
-    const RadientDrawLists&      GetDrawLists() const;
-    const RadientDrawList&       GetDrawList(GLTF::Material::ALPHA_MODE AlphaMode) const;
-    const RadientDrawableSlot*   GetDrawableSlot(RadientDrawableID DrawableID) const;
-    const RadientLightList&      GetLightList() const;
-    const RadientSceneRevisions& GetSceneRevisions() const;
+    const RadientDrawLists&                   GetDrawLists() const;
+    const RadientDrawList&                    GetDrawList(GLTF::Material::ALPHA_MODE AlphaMode) const;
+    const std::vector<RadientDrawableChange>& GetDrawableChanges() const;
+    const RadientDrawableSlot*                GetDrawableSlot(RadientDrawableID DrawableID) const;
+    const RadientLightList&                   GetLightList() const;
+    const RadientSceneRevisions&              GetSceneRevisions() const;
 
 private:
     struct RenderableRecord
@@ -119,13 +133,15 @@ private:
     void              RemoveDrawableFromDrawList(RadientDrawableID DrawableID);
     void              RemoveRenderableDrawables(RenderableRecord& Record);
     void              AddPendingResolution(RenderableRecord& Record);
+    void              RecordDrawableChange(RadientDrawableID DrawableID, RadientDrawableChangeType Type);
 
 private:
     std::unordered_map<RadientEntityID, RenderableRecord> m_Renderables;
 
-    std::vector<RadientDrawableSlot> m_DrawableSlots;
-    std::vector<RadientDrawableID>   m_FreeDrawableIDs;
-    std::vector<RadientEntityID>     m_PendingRenderableEntities;
+    std::vector<RadientDrawableSlot>   m_DrawableSlots;
+    std::vector<RadientDrawableID>     m_FreeDrawableIDs;
+    std::vector<RadientEntityID>       m_PendingRenderableEntities;
+    std::vector<RadientDrawableChange> m_DrawableChanges;
 
     RadientDrawLists      m_DrawLists;
     RadientLightList      m_LightList;
