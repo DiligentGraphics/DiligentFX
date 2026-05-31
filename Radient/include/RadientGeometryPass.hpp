@@ -74,7 +74,7 @@ public:
                               IDeviceContext*                  pContext,
                               const RadientLightList&          LightList,
                               GLTF::ResourceManager*           pResourceManager,
-                              const RadientRenderAttribs&      Attribs,
+                              const RadientViewDesc&           ViewDesc,
                               const RadientFrameRenderTargets& Targets);
     void           EndFrame();
 

@@ -45,19 +45,21 @@ RadientRenderPipeline::~RadientRenderPipeline()
 
 RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs)
 {
-    if (m_pBackend == nullptr ||
-        Attribs.pScene == nullptr ||
-        Attribs.pRenderTarget == nullptr)
+    if (m_pBackend == nullptr || Attribs.pView == nullptr)
     {
         return RADIENT_STATUS_INVALID_ARGUMENT;
     }
+
+    const RadientViewDesc& ViewDesc = Attribs.pView->GetDesc();
+    if (ViewDesc.pScene == nullptr || ViewDesc.pRenderTarget == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
 
     IRenderDevice*  pDevice  = m_pBackend->GetNativeDevice();
     IDeviceContext* pContext = Attribs.pDeviceContext != nullptr ?
         Attribs.pDeviceContext :
         m_pBackend->GetNativeImmediateContext();
 
-    const RADIENT_STATUS TargetStatus = m_FrameTargets.Prepare(pDevice, *Attribs.pRenderTarget);
+    const RADIENT_STATUS TargetStatus = m_FrameTargets.Prepare(pDevice, *ViewDesc.pRenderTarget);
     if (RADIENT_FAILED(TargetStatus))
         return TargetStatus;
 
@@ -72,7 +74,7 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
     if (RADIENT_FAILED(Status))
         return Status;
 
-    const RADIENT_STATUS SyncStatus = m_DrawableCache.SyncScene(*Attribs.pScene, m_ResourceCache);
+    const RADIENT_STATUS SyncStatus = m_DrawableCache.SyncScene(*ViewDesc.pScene, m_ResourceCache);
     if (RADIENT_FAILED(SyncStatus))
         return SyncStatus;
 
@@ -94,7 +96,7 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
                                                pContext,
                                                m_DrawableCache.GetLightList(),
                                                m_pAssetManager->GetResourceManager(),
-                                               Attribs,
+                                               ViewDesc,
                                                m_FrameTargets);
         if (RADIENT_FAILED(Status))
             return Status;

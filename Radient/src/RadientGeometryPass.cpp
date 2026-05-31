@@ -79,21 +79,21 @@ bool IsPipelineReady(IPipelineState* pPSO)
     return pPSO != nullptr && pPSO->GetStatus() == PIPELINE_STATE_STATUS_READY;
 }
 
-RadientCameraComponent GetCameraComponent(const RadientRenderAttribs& Attribs)
+RadientCameraComponent GetCameraComponent(const RadientViewDesc& ViewDesc)
 {
     RadientCameraComponent Camera{};
-    if (Attribs.pScene != nullptr && Attribs.Camera != InvalidRadientEntityID)
-        (void)Attribs.pScene->GetCamera(Attribs.Camera, Camera);
+    if (ViewDesc.pScene != nullptr && ViewDesc.Camera != InvalidRadientEntityID)
+        (void)ViewDesc.pScene->GetCamera(ViewDesc.Camera, Camera);
 
     return Camera;
 }
 
 HLSL::CameraAttribs GetCameraAttribs(IRenderDevice*                   pDevice,
-                                     const RadientRenderAttribs&      Attribs,
+                                     const RadientViewDesc&           ViewDesc,
                                      const RadientFrameRenderTargets& Targets,
                                      Uint32                           FrameIndex)
 {
-    const RadientCameraComponent Camera = GetCameraComponent(Attribs);
+    const RadientCameraComponent Camera = GetCameraComponent(ViewDesc);
 
     const RadientExtent2D& TargetSize       = Targets.GetSize();
     const float            Width            = static_cast<float>(TargetSize.Width);
@@ -102,10 +102,10 @@ HLSL::CameraAttribs GetCameraAttribs(IRenderDevice*                   pDevice,
     const bool             NDCMinusOneToOne = pDevice != nullptr && pDevice->GetDeviceInfo().NDC.MinZ < 0.f;
 
     float4x4 CameraWorld = float4x4::Identity();
-    if (Attribs.pScene != nullptr && Attribs.Camera != InvalidRadientEntityID)
+    if (ViewDesc.pScene != nullptr && ViewDesc.Camera != InvalidRadientEntityID)
     {
         RadientMatrix4x4 CameraWorldMatrix{};
-        if (RADIENT_SUCCEEDED(Attribs.pScene->GetCachedWorldMatrix(Attribs.Camera, CameraWorldMatrix)))
+        if (RADIENT_SUCCEEDED(ViewDesc.pScene->GetCachedWorldMatrix(ViewDesc.Camera, CameraWorldMatrix)))
             CameraWorld = RadientMath::ToFloat4x4(CameraWorldMatrix);
     }
     const RadientMath::CameraProjection CameraProj     = RadientMath::GetCameraProjection(Camera, Aspect, NDCMinusOneToOne);
@@ -710,7 +710,7 @@ RADIENT_STATUS RadientGeometryRenderer::BeginFrame(IRenderDevice*               
                                                    IDeviceContext*                  pContext,
                                                    const RadientLightList&          LightList,
                                                    GLTF::ResourceManager*           pResourceManager,
-                                                   const RadientRenderAttribs&      Attribs,
+                                                   const RadientViewDesc&           ViewDesc,
                                                    const RadientFrameRenderTargets& Targets)
 {
     if (pDevice == nullptr || pContext == nullptr)
@@ -731,7 +731,7 @@ RADIENT_STATUS RadientGeometryRenderer::BeginFrame(IRenderDevice*               
         if (pFrameAttribs == nullptr)
             return RADIENT_STATUS_INVALID_OPERATION;
 
-        pFrameAttribs->Camera     = GetCameraAttribs(pDevice, Attribs, Targets, m_FrameIndex);
+        pFrameAttribs->Camera     = GetCameraAttribs(pDevice, ViewDesc, Targets, m_FrameIndex);
         pFrameAttribs->PrevCamera = pFrameAttribs->Camera;
         WriteSceneLights(*m_pRenderer, LightList, *pFrameAttribs);
     }

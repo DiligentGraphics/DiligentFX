@@ -26,6 +26,7 @@
 
 #include "RadientRendererImpl.hpp"
 #include "RadientRenderPipeline.hpp"
+#include "RadientViewImpl.hpp"
 
 namespace Diligent
 {
@@ -118,12 +119,25 @@ RADIENT_STATUS RadientRendererImpl::CreateRenderTarget(const RadientRenderTarget
     return RADIENT_STATUS_OK;
 }
 
+RADIENT_STATUS RadientRendererImpl::CreateView(const RadientViewDesc& Desc, IRadientView** ppView)
+{
+    if (ppView == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    *ppView = nullptr;
+
+    RefCntAutoPtr<IRadientView> pView = RadientViewImpl::Create(Desc);
+    *ppView                          = pView.Detach();
+    return RADIENT_STATUS_OK;
+}
+
 RADIENT_STATUS RadientRendererImpl::Render(const RadientRenderAttribs& Attribs)
 {
-    if (m_pBackend == nullptr ||
-        m_RenderPipeline == nullptr ||
-        Attribs.pScene == nullptr ||
-        Attribs.pRenderTarget == nullptr)
+    if (m_pBackend == nullptr || m_RenderPipeline == nullptr || Attribs.pView == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    const RadientViewDesc& ViewDesc = Attribs.pView->GetDesc();
+    if (ViewDesc.pScene == nullptr || ViewDesc.pRenderTarget == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
     return m_RenderPipeline->Render(Attribs);

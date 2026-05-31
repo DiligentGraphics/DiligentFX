@@ -24,18 +24,17 @@
  *  of the possibility of such damages.
  */
 
-#pragma once
+#include "Radient/interface/RadientView.h"
 
-/// \file
-/// Umbrella include for Radient public interfaces.
+void RadientViewHeader_C_TestMacros(IRadientView* pView)
+{
+    const RadientViewDesc* pDesc  = IRadientView_GetDesc(pView);
+    RADIENT_STATUS         Status = RADIENT_STATUS_OK;
 
-#include "RadientMath.h"
-#include "RadientTypes.h"
-#include "RadientAssets.h"
-#include "RadientScene.h"
-#include "RadientSceneWriter.h"
-#include "RadientSceneImporter.h"
-#include "RadientBackend.h"
-#include "RadientView.h"
-#include "RadientRenderer.h"
-#include "RadientEngine.h"
+    Status = IRadientView_SetScene(pView, 0);
+    Status = IRadientView_SetCamera(pView, InvalidRadientEntityID);
+    Status = IRadientView_SetRenderTarget(pView, 0);
+
+    (void)pDesc;
+    (void)Status;
+}

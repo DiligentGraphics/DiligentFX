@@ -244,6 +244,31 @@ RefCntAutoPtr<IRadientRenderTarget> CreateTestRenderTarget(IRadientRenderer& Ren
     return pTarget;
 }
 
+RefCntAutoPtr<IRadientView> CreateTestView(IRadientRenderer&     Renderer,
+                                           IRadientScene*        pScene,
+                                           IRadientRenderTarget* pTarget,
+                                           RadientEntityID       Camera = InvalidRadientEntityID)
+{
+    RadientViewDesc ViewDesc{};
+    ViewDesc.Name          = "Radient test view";
+    ViewDesc.pScene        = pScene;
+    ViewDesc.Camera        = Camera;
+    ViewDesc.pRenderTarget = pTarget;
+
+    RefCntAutoPtr<IRadientView> pView;
+    EXPECT_EQ(Renderer.CreateView(ViewDesc, &pView), RADIENT_STATUS_OK);
+    EXPECT_NE(pView, nullptr);
+    if (pView != nullptr)
+    {
+        EXPECT_STREQ(pView->GetDesc().Name, ViewDesc.Name);
+        EXPECT_EQ(pView->GetDesc().pScene, pScene);
+        EXPECT_EQ(pView->GetDesc().Camera, Camera);
+        EXPECT_EQ(pView->GetDesc().pRenderTarget, pTarget);
+    }
+
+    return pView;
+}
+
 RadientEntityID CreateTestRenderableEntity(IRadientSceneWriter&         Writer,
                                            const RadientAssetReference& Mesh,
                                            const RadientAssetReference& Material)
@@ -515,6 +540,36 @@ TEST(RadientRendererTest, CreateRenderTarget)
     EXPECT_NE(pTarget, nullptr);
 }
 
+TEST(RadientRendererTest, CreateView)
+{
+    // Views keep persistent scene/camera/target state that can be reused by
+    // subsequent render calls.
+    RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
+    ASSERT_NE(pEngine, nullptr);
+
+    RefCntAutoPtr<IRadientScene> pScene = CreateTestScene(*pEngine);
+    ASSERT_NE(pScene, nullptr);
+
+    RefCntAutoPtr<IRadientRenderer> pRenderer = CreateTestRenderer(*pEngine);
+    ASSERT_NE(pRenderer, nullptr);
+
+    RefCntAutoPtr<IRadientRenderTarget> pTarget = CreateTestRenderTarget(*pRenderer);
+    ASSERT_NE(pTarget, nullptr);
+
+    RefCntAutoPtr<IRadientView> pView = CreateTestView(*pRenderer, pScene, pTarget);
+    ASSERT_NE(pView, nullptr);
+
+    // View setters update the descriptor returned to callers.
+    EXPECT_EQ(pView->SetCamera(42), RADIENT_STATUS_OK);
+    EXPECT_EQ(pView->GetDesc().Camera, 42);
+
+    EXPECT_EQ(pView->SetScene(nullptr), RADIENT_STATUS_OK);
+    EXPECT_EQ(pView->GetDesc().pScene, nullptr);
+
+    EXPECT_EQ(pView->SetRenderTarget(nullptr), RADIENT_STATUS_OK);
+    EXPECT_EQ(pView->GetDesc().pRenderTarget, nullptr);
+}
+
 TEST(RadientRendererTest, RenderHeadlessScene)
 {
     // Builds a minimal material, mesh, scene, renderer, and target to verify
@@ -546,9 +601,11 @@ TEST(RadientRendererTest, RenderHeadlessScene)
     RefCntAutoPtr<IRadientRenderTarget> pTarget = CreateTestRenderTarget(*pRenderer);
     ASSERT_NE(pTarget, nullptr);
 
+    RefCntAutoPtr<IRadientView> pView = CreateTestView(*pRenderer, pScene, pTarget);
+    ASSERT_NE(pView, nullptr);
+
     RadientRenderAttribs RenderAttribs{};
-    RenderAttribs.pScene        = pScene;
-    RenderAttribs.pRenderTarget = pTarget;
+    RenderAttribs.pView = pView;
 
     // The test only checks successful submission; image correctness belongs to
     // renderer-specific tests.

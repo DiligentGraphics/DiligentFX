@@ -47,14 +47,18 @@ void RadientRenderer_C_TestMacros(IRadientRenderer* pRenderer)
 {
     const RadientRendererDesc* pDesc         = IRadientRenderer_GetDesc(pRenderer);
     RadientRenderTargetDesc    TargetDesc    = {0};
+    RadientViewDesc            ViewDesc      = {0};
     RadientRenderAttribs       RenderAttribs = {0};
     IRadientRenderTarget*      pTarget       = 0;
+    IRadientView*              pView         = 0;
     RADIENT_STATUS             Status        = RADIENT_STATUS_OK;
 
     Status = IRadientRenderer_CreateRenderTarget(pRenderer, &TargetDesc, &pTarget);
+    Status = IRadientRenderer_CreateView(pRenderer, &ViewDesc, &pView);
     Status = IRadientRenderer_Render(pRenderer, &RenderAttribs);
 
     (void)pDesc;
     (void)pTarget;
+    (void)pView;
     (void)Status;
 }

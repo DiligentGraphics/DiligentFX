@@ -98,6 +98,9 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateRenderTarget(const RadientRenderTargetDesc& Desc,
                                                                  IRadientRenderTarget**         ppTarget) override final;
 
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateView(const RadientViewDesc& Desc,
+                                                         IRadientView**         ppView) override final;
+
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE Render(const RadientRenderAttribs& Attribs) override final;
 
 private:

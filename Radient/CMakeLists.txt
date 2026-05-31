@@ -23,6 +23,7 @@ set(SOURCE
     src/RadientSceneDrawableCache.cpp
     src/RadientSceneState.cpp
     src/RadientSceneWriterImpl.cpp
+    src/RadientViewImpl.cpp
 )
 
 set(INCLUDE
@@ -46,6 +47,7 @@ set(INCLUDE
     include/RadientSceneDrawableCache.hpp
     include/RadientSceneState.hpp
     include/RadientSceneWriterImpl.hpp
+    include/RadientViewImpl.hpp
 )
 
 set(INTERFACE
@@ -59,6 +61,7 @@ set(INTERFACE
     interface/RadientSceneImporter.h
     interface/RadientSceneWriter.h
     interface/RadientTypes.h
+    interface/RadientView.h
 )
 
 set(RADIENT_SOURCE ${SOURCE} ${INCLUDE} ${INTERFACE} readme.md)

@@ -24,18 +24,4 @@
  *  of the possibility of such damages.
  */
 
-#pragma once
-
-/// \file
-/// Umbrella include for Radient public interfaces.
-
-#include "RadientMath.h"
-#include "RadientTypes.h"
-#include "RadientAssets.h"
-#include "RadientScene.h"
-#include "RadientSceneWriter.h"
-#include "RadientSceneImporter.h"
-#include "RadientBackend.h"
-#include "RadientView.h"
-#include "RadientRenderer.h"
-#include "RadientEngine.h"
+#include "Radient/interface/RadientView.h"

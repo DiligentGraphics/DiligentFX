@@ -31,6 +31,7 @@
 
 #include "RadientBackend.h"
 #include "RadientScene.h"
+#include "RadientView.h"
 
 #include "../../../DiligentCore/Graphics/GraphicsEngine/interface/TextureView.h"
 
@@ -78,14 +79,8 @@ typedef struct RadientRenderTargetDesc RadientRenderTargetDesc;
 /// Render call attributes.
 struct RadientRenderAttribs
 {
-    /// Scene to render.
-    IRadientScene* pScene DEFAULT_INITIALIZER(nullptr);
-
-    /// Camera entity to render from.
-    RadientEntityID Camera DEFAULT_INITIALIZER(InvalidRadientEntityID);
-
-    /// Render target.
-    IRadientRenderTarget* pRenderTarget DEFAULT_INITIALIZER(nullptr);
+    /// View to render.
+    IRadientView* pView DEFAULT_INITIALIZER(nullptr);
 
     /// Optional device context override for local rendering.
     IDeviceContext* pDeviceContext DEFAULT_INITIALIZER(nullptr);
@@ -169,6 +164,11 @@ DILIGENT_BEGIN_INTERFACE(IRadientRenderer, IObject)
                                                       const RadientRenderTargetDesc REF Desc,
                                                       IRadientRenderTarget**            ppTarget) PURE;
 
+    /// Creates a persistent render view.
+    VIRTUAL RADIENT_STATUS METHOD(CreateView)(THIS_
+                                              const RadientViewDesc REF Desc,
+                                              IRadientView**            ppView) PURE;
+
     /// Renders one frame.
     VIRTUAL RADIENT_STATUS METHOD(Render)(THIS_
                                           const RadientRenderAttribs REF Attribs) PURE;
@@ -181,6 +181,7 @@ DILIGENT_END_INTERFACE
 
 #    define IRadientRenderer_GetDesc(This)                  CALL_IFACE_METHOD(RadientRenderer, GetDesc,            This)
 #    define IRadientRenderer_CreateRenderTarget(This, ...)  CALL_IFACE_METHOD(RadientRenderer, CreateRenderTarget, This, __VA_ARGS__)
+#    define IRadientRenderer_CreateView(This, ...)          CALL_IFACE_METHOD(RadientRenderer, CreateView,         This, __VA_ARGS__)
 #    define IRadientRenderer_Render(This, ...)              CALL_IFACE_METHOD(RadientRenderer, Render,             This, __VA_ARGS__)
 
 #endif

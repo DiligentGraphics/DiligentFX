@@ -26,16 +26,42 @@
 
 #pragma once
 
-/// \file
-/// Umbrella include for Radient public interfaces.
-
-#include "RadientMath.h"
-#include "RadientTypes.h"
-#include "RadientAssets.h"
-#include "RadientScene.h"
-#include "RadientSceneWriter.h"
-#include "RadientSceneImporter.h"
-#include "RadientBackend.h"
-#include "RadientView.h"
 #include "RadientRenderer.h"
-#include "RadientEngine.h"
+#include "ObjectBase.hpp"
+#include "RefCntAutoPtr.hpp"
+
+#include <string>
+
+namespace Diligent
+{
+
+class RadientViewImpl final : public ObjectBase<IRadientView>
+{
+public:
+    using TBase = ObjectBase<IRadientView>;
+
+    RadientViewImpl(IReferenceCounters* pRefCounters, const RadientViewDesc& Desc);
+    ~RadientViewImpl();
+
+    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientView, TBase)
+
+    static RefCntAutoPtr<IRadientView> Create(const RadientViewDesc& Desc);
+
+    virtual const RadientViewDesc& DILIGENT_CALL_TYPE GetDesc() const override final;
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetScene(IRadientScene* pScene) override final;
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetCamera(RadientEntityID Camera) override final;
+
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetRenderTarget(IRadientRenderTarget* pRenderTarget) override final;
+
+private:
+    std::string m_Name;
+
+    RadientViewDesc m_Desc;
+
+    RefCntAutoPtr<IRadientScene>        m_pScene;
+    RefCntAutoPtr<IRadientRenderTarget> m_pRenderTarget;
+};
+
+} // namespace Diligent
