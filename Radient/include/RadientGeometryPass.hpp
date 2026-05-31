@@ -141,11 +141,15 @@ private:
     const DrawablePassData* GetDrawablePassData(const RadientDrawableSlot& Drawable,
                                                 RadientDrawableID          DrawableID) const;
 
+    void BuildSortedDrawableIDs(const RadientDrawList&             DrawList,
+                                const RadientSceneRenderDataCache& SceneDataCache);
+
 private:
     PBR_Renderer::PsoCacheAccessor m_PbrPSOCache;
     PBR_Renderer::PsoCacheAccessor m_WireframePSOCache;
 
-    std::vector<DrawablePassData> m_DrawablePassData;
+    std::vector<DrawablePassData>  m_DrawablePassData;
+    std::vector<RadientDrawableID> m_SortedDrawableIDs;
 
     PBR_Renderer::PSO_FLAGS m_RenderFlags = PBR_Renderer::PSO_FLAG_NONE;
 

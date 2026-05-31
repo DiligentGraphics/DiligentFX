@@ -223,10 +223,10 @@ bool RadientSceneRenderDataCache::TryExpandRenderable(RenderableRecord&         
         const RadientDrawableID DrawableID = AllocateDrawableID();
         RadientDrawableSlot&    Slot       = m_DrawableSlots[DrawableID];
 
-        Slot.Entity         = Record.Entity;
-        Slot.PrimitiveIndex = PrimitiveIndex;
-        Slot.pRenderer      = Record.pRenderer;
-        Slot.FrameData      = {Record.pWorldMatrix, Record.pEffectiveVisible};
+        Slot.Entity             = Record.Entity;
+        Slot.PrimitiveIndex     = PrimitiveIndex;
+        Slot.pRenderer          = Record.pRenderer;
+        Slot.FrameData          = {Record.pWorldMatrix, Record.pEffectiveVisible};
         Slot.pPrimitive         = &Primitive;
         Slot.pMaterial          = pMaterial;
         Slot.VertexAttribFlags  = pMesh->VertexAttribFlags;
