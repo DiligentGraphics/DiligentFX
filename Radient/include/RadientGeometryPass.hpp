@@ -124,10 +124,10 @@ private:
 
     struct DrawablePassData
     {
-        bool                    Valid      = false;
-        Uint32                  Generation = 0;
-        PBR_Renderer::PSO_FLAGS PSOFlags   = PBR_Renderer::PSO_FLAG_NONE;
-        IPipelineState*         pPSO       = nullptr;
+        const RadientDrawableSlot* pDrawable  = nullptr;
+        Uint32                     Generation = 0;
+        PBR_Renderer::PSO_FLAGS    PSOFlags   = PBR_Renderer::PSO_FLAG_NONE;
+        IPipelineState*            pPSO       = nullptr;
     };
 
     void SyncDrawablePassData(PBR_Renderer&                      Renderer,
@@ -137,9 +137,6 @@ private:
                                 const RadientDrawableSlot& Drawable,
                                 RadientDrawableID          DrawableID);
     void InvalidateDrawablePassData(RadientDrawableID DrawableID);
-
-    const DrawablePassData* GetDrawablePassData(const RadientDrawableSlot& Drawable,
-                                                RadientDrawableID          DrawableID) const;
 
     void BuildSortedDrawableIDs(const RadientDrawList&             DrawList,
                                 const RadientSceneRenderDataCache& SceneDataCache);

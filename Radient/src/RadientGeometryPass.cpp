@@ -823,18 +823,14 @@ RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&           R
 
     for (const RadientDrawableID DrawableID : m_SortedDrawableIDs)
     {
-        const RadientDrawableSlot* pDrawable = SceneDataCache.GetDrawableSlot(DrawableID);
-        VERIFY(pDrawable != nullptr && DrawableID < m_DrawablePassData.size(),
-               "Sorted drawable ID references invalid drawable data");
-        if (pDrawable == nullptr || DrawableID >= m_DrawablePassData.size())
-            continue;
-
+        VERIFY(DrawableID < m_DrawablePassData.size(), "Sorted drawable ID references invalid pass data");
         const DrawablePassData& PassData = m_DrawablePassData[DrawableID];
-        VERIFY(PassData.Valid &&
-                   PassData.Generation == pDrawable->Generation &&
+        VERIFY(PassData.pDrawable != nullptr &&
+                   PassData.Generation == PassData.pDrawable->Generation &&
                    PassData.pPSO != nullptr,
                "Sorted drawable ID references stale pass data");
 
+        const RadientDrawableSlot* const  pDrawable = PassData.pDrawable;
         const RadientRenderMeshPrimitive& Primitive = *pDrawable->pPrimitive;
         const GLTF::Material&             Material  = *pDrawable->pMaterial;
 
@@ -907,29 +903,32 @@ void RadientGeometryPass::BuildSortedDrawableIDs(const RadientDrawList&         
         if (Primitive.VertexCount == 0 && Primitive.IndexCount == 0)
             continue;
 
-        const DrawablePassData* pPassData = GetDrawablePassData(*pDrawable, DrawItem.DrawableID);
-        if (pPassData == nullptr || pPassData->pPSO == nullptr)
+        if (DrawItem.DrawableID >= m_DrawablePassData.size())
             continue;
+
+        const DrawablePassData& PassData = m_DrawablePassData[DrawItem.DrawableID];
+        if (PassData.pDrawable != pDrawable ||
+            PassData.Generation != pDrawable->Generation ||
+            PassData.pPSO == nullptr)
+        {
+            continue;
+        }
 
         m_SortedDrawableIDs.push_back(DrawItem.DrawableID);
     }
 
     std::sort(m_SortedDrawableIDs.begin(), m_SortedDrawableIDs.end(),
-              [this, &SceneDataCache](RadientDrawableID LhsDrawableID, RadientDrawableID RhsDrawableID) {
-                  const RadientDrawableSlot* pLhsDrawable = SceneDataCache.GetDrawableSlot(LhsDrawableID);
-                  const RadientDrawableSlot* pRhsDrawable = SceneDataCache.GetDrawableSlot(RhsDrawableID);
-                  VERIFY(pLhsDrawable != nullptr && pRhsDrawable != nullptr,
-                         "Sorted drawable ID references invalid drawable data");
+              [this](RadientDrawableID LhsDrawableID, RadientDrawableID RhsDrawableID) {
                   VERIFY(LhsDrawableID < m_DrawablePassData.size() &&
                              RhsDrawableID < m_DrawablePassData.size(),
                          "Sorted drawable ID references missing pass data");
 
                   const DrawablePassData& LhsPassData = m_DrawablePassData[LhsDrawableID];
                   const DrawablePassData& RhsPassData = m_DrawablePassData[RhsDrawableID];
-                  VERIFY((LhsPassData.Valid &&
-                          RhsPassData.Valid &&
-                          LhsPassData.Generation == pLhsDrawable->Generation &&
-                          RhsPassData.Generation == pRhsDrawable->Generation &&
+                  VERIFY((LhsPassData.pDrawable != nullptr &&
+                          RhsPassData.pDrawable != nullptr &&
+                          LhsPassData.Generation == LhsPassData.pDrawable->Generation &&
+                          RhsPassData.Generation == RhsPassData.pDrawable->Generation &&
                           LhsPassData.pPSO != nullptr &&
                           RhsPassData.pPSO != nullptr),
                          "Sorted drawable ID references stale pass data");
@@ -1023,7 +1022,7 @@ void RadientGeometryPass::UpdateDrawablePassData(PBR_Renderer&              Rend
         PBR_Renderer::DebugViewType::None,
     };
 
-    PassData.Valid      = true;
+    PassData.pDrawable  = &Drawable;
     PassData.Generation = Drawable.Generation;
     PassData.PSOFlags   = PSOFlags;
     PassData.pPSO       = m_PbrPSOCache.Get(PsoKey, PBR_Renderer::PsoCacheAccessor::GET_FLAG_CREATE_IF_NULL);
@@ -1034,19 +1033,6 @@ void RadientGeometryPass::InvalidateDrawablePassData(RadientDrawableID DrawableI
 {
     if (DrawableID < m_DrawablePassData.size())
         m_DrawablePassData[DrawableID] = {};
-}
-
-const RadientGeometryPass::DrawablePassData* RadientGeometryPass::GetDrawablePassData(const RadientDrawableSlot& Drawable,
-                                                                                      RadientDrawableID          DrawableID) const
-{
-    if (DrawableID >= m_DrawablePassData.size())
-        return nullptr;
-
-    const DrawablePassData& PassData = m_DrawablePassData[DrawableID];
-    if (!PassData.Valid || PassData.Generation != Drawable.Generation)
-        return nullptr;
-
-    return &PassData;
 }
 
 RADIENT_STATUS RadientGeometryRenderer::CreateRenderer(IRenderDevice*  pDevice,

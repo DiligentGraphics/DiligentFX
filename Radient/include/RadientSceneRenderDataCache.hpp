@@ -32,6 +32,7 @@
 #include "RadientScene.h"
 #include "RadientSceneState.hpp"
 
+#include <deque>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -141,7 +142,9 @@ private:
 private:
     std::unordered_map<RadientEntityID, RenderableRecord> m_Renderables;
 
-    std::vector<RadientDrawableSlot>   m_DrawableSlots;
+    // Geometry passes cache pointers to drawable slots; deque keeps existing slot
+    // addresses stable when new drawable IDs append more slots.
+    std::deque<RadientDrawableSlot>    m_DrawableSlots;
     std::vector<RadientDrawableID>     m_FreeDrawableIDs;
     std::vector<RadientEntityID>       m_PendingRenderableEntities;
     std::vector<RadientDrawableChange> m_DrawableChanges;
