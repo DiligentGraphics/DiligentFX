@@ -63,6 +63,19 @@ public:
         Bool                         EffectiveVisible = False;
     };
 
+    enum class RenderableMeshChangeType
+    {
+        Added,
+        Removed,
+        Updated
+    };
+
+    struct RenderableMeshChange
+    {
+        RadientEntityID          Entity = InvalidRadientEntityID;
+        RenderableMeshChangeType Type   = RenderableMeshChangeType::Updated;
+    };
+
     RadientSceneState();
     explicit RadientSceneState(const RadientSceneDesc& Desc);
 
@@ -92,9 +105,14 @@ public:
     const RadientSceneRevisions& GetSceneRevisions() const;
 
     template <typename CallbackType>
+    RADIENT_STATUS GetRenderableMesh(RadientEntityID Entity, CallbackType&& Callback) const;
+    template <typename CallbackType>
     RADIENT_STATUS EnumerateRenderableMeshes(CallbackType&& Callback) const;
     template <typename CallbackType>
+    RADIENT_STATUS EnumerateRenderableMeshChanges(CallbackType&& Callback) const;
+    template <typename CallbackType>
     RADIENT_STATUS EnumerateRenderableLights(CallbackType&& Callback) const;
+    void           ClearRenderableMeshChanges();
 
     RADIENT_STATUS CreateEntity(const RadientEntityDesc& Desc, RadientEntityID& Entity);
     RADIENT_STATUS DestroyEntity(RadientEntityID Entity);
@@ -183,6 +201,16 @@ private:
         Bool Visible = True;
     };
 
+    struct RenderableMeshStateComponent
+    {
+        bool IsRenderable = false;
+    };
+
+    struct PendingRenderableMeshChangeComponent
+    {
+        RenderableMeshChangeType Type = RenderableMeshChangeType::Updated;
+    };
+
     struct DirtyStateComponent
     {
         DIRTY_FLAGS Flags          = DIRTY_FLAG_NONE;
@@ -223,13 +251,20 @@ private:
 
     template <typename ComponentType>
     RADIENT_STATUS EmplaceOrReplaceComponent(RadientEntityID Entity, const ComponentType& Component, CHANGE_FLAGS ChangeFlags = CHANGE_FLAG_NONE);
+    template <typename ComponentSourceType>
+    RenderableMesh MakeRenderableMesh(entt::entity Entity, const ComponentSourceType& ComponentSource) const;
 
     entt::entity FindEntity(RadientEntityID Entity) const;
     bool         IsDescendant(entt::entity Entity, entt::entity PotentialAncestor) const;
+    bool         IsRenderableMeshEntity(entt::entity Entity) const;
     bool         VerifyInternalEntity(entt::entity Entity) const;
     void         DetachFromParent(entt::entity Entity);
     void         DestroyEntitySubtree(entt::entity Entity);
     void         RemoveCustomComponents(entt::entity Entity);
+    void         RecordRenderableMeshChange(entt::entity Entity, RenderableMeshChangeType Type);
+    void         RecordRenderableMeshUpdated(entt::entity Entity);
+    void         RecordRenderableMeshRemoved(entt::entity Entity);
+    void         UpdateRenderableMeshState(entt::entity Entity);
     DIRTY_FLAGS  MarkDirty(entt::entity Entity, DIRTY_FLAGS Flags, bool AddToDirtyList = true);
     void         ClearDirtyFlags(entt::entity Entity, DIRTY_FLAGS Flags);
     void         RemoveFromDirtyList(entt::entity Entity, DirtyStateComponent& DirtyState);
@@ -246,11 +281,12 @@ private:
 
     using CustomComponentStoresMapType = std::unordered_map<RadientComponentTypeID, CustomComponentStore>;
     using EntityMapType                = std::unordered_map<RadientEntityID, entt::entity>;
-    entt::registry               m_Registry;
-    EntityMapType                m_EntityMap;
-    CustomComponentStoresMapType m_CustomComponentStores;
-    RadientEntityID              m_NextEntityID = 1;
-    RadientSceneRevisions        m_SceneRevisions;
+    entt::registry                    m_Registry;
+    EntityMapType                     m_EntityMap;
+    CustomComponentStoresMapType      m_CustomComponentStores;
+    RadientEntityID                   m_NextEntityID = 1;
+    RadientSceneRevisions             m_SceneRevisions;
+    std::vector<RenderableMeshChange> m_RemovedRenderableMeshChanges;
 
     // Conservative scene-wide mask of derived states that may be dirty anywhere in the scene.
     DIRTY_FLAGS m_DirtyFlags = DIRTY_FLAG_NONE;
@@ -272,6 +308,43 @@ private:
 DEFINE_FLAG_ENUM_OPERATORS(RadientSceneState::DIRTY_FLAGS);
 DEFINE_FLAG_ENUM_OPERATORS(RadientSceneState::CHANGE_FLAGS);
 
+template <typename ComponentSourceType>
+inline RadientSceneState::RenderableMesh RadientSceneState::MakeRenderableMesh(entt::entity Entity, const ComponentSourceType& ComponentSource) const
+{
+    const EntityComponent&              EntityData       = ComponentSource.template get<const EntityComponent>(Entity);
+    const MeshComponentStorage&         MeshStorage      = ComponentSource.template get<const MeshComponentStorage>(Entity);
+    const RadientMeshRendererComponent& Renderer         = ComponentSource.template get<const RadientMeshRendererComponent>(Entity);
+    const WorldTransformComponent&      WorldTransform   = ComponentSource.template get<const WorldTransformComponent>(Entity);
+    const EffectiveVisibilityComponent& EffectiveVisible = ComponentSource.template get<const EffectiveVisibilityComponent>(Entity);
+
+    const MaterialBindingsStorage* pMaterialBindings = m_Registry.try_get<MaterialBindingsStorage>(Entity);
+
+    return RenderableMesh{
+        EntityData.ID,
+        MeshStorage.Component,
+        Renderer,
+        pMaterialBindings != nullptr ? &pMaterialBindings->Component : nullptr,
+        WorldTransform.Matrix,
+        EffectiveVisible.Visible};
+}
+
+template <typename CallbackType>
+RADIENT_STATUS RadientSceneState::GetRenderableMesh(RadientEntityID Entity, CallbackType&& Callback) const
+{
+    const entt::entity E = FindEntity(Entity);
+    if (E == entt::null)
+        return RADIENT_STATUS_NOT_FOUND;
+
+    if (!IsRenderableMeshEntity(E))
+        return RADIENT_STATUS_NOT_FOUND;
+
+    Callback(MakeRenderableMesh(E, m_Registry));
+
+    return (m_DirtyFlags & DIRTY_FLAGS_REQUIRING_PROPAGATION) != DIRTY_FLAG_NONE ?
+        RADIENT_STATUS_OUT_OF_DATE :
+        RADIENT_STATUS_OK;
+}
+
 template <typename CallbackType>
 RADIENT_STATUS RadientSceneState::EnumerateRenderableMeshes(CallbackType&& Callback) const
 {
@@ -283,28 +356,29 @@ RADIENT_STATUS RadientSceneState::EnumerateRenderableMeshes(CallbackType&& Callb
 
     for (const entt::entity Entity : View)
     {
-        const EntityComponent&              EntityData       = View.get<const EntityComponent>(Entity);
-        const MeshComponentStorage&         MeshStorage      = View.get<const MeshComponentStorage>(Entity);
-        const RadientMeshRendererComponent& Renderer         = View.get<const RadientMeshRendererComponent>(Entity);
-        const WorldTransformComponent&      WorldTransform   = View.get<const WorldTransformComponent>(Entity);
-        const EffectiveVisibilityComponent& EffectiveVisible = View.get<const EffectiveVisibilityComponent>(Entity);
-
-        const MaterialBindingsStorage* pMaterialBindings = m_Registry.try_get<MaterialBindingsStorage>(Entity);
-
-        const RenderableMesh Mesh{
-            EntityData.ID,
-            MeshStorage.Component,
-            Renderer,
-            pMaterialBindings != nullptr ? &pMaterialBindings->Component : nullptr,
-            WorldTransform.Matrix,
-            EffectiveVisible.Visible};
-
-        Callback(Mesh);
+        Callback(MakeRenderableMesh(Entity, View));
     }
 
     return (m_DirtyFlags & DIRTY_FLAGS_REQUIRING_PROPAGATION) != DIRTY_FLAG_NONE ?
         RADIENT_STATUS_OUT_OF_DATE :
         RADIENT_STATUS_OK;
+}
+
+template <typename CallbackType>
+RADIENT_STATUS RadientSceneState::EnumerateRenderableMeshChanges(CallbackType&& Callback) const
+{
+    for (const RenderableMeshChange& Change : m_RemovedRenderableMeshChanges)
+        Callback(Change);
+
+    auto View = m_Registry.view<const EntityComponent, const PendingRenderableMeshChangeComponent>();
+    for (const entt::entity Entity : View)
+    {
+        const EntityComponent&                      EntityData = View.get<const EntityComponent>(Entity);
+        const PendingRenderableMeshChangeComponent& Change     = View.get<const PendingRenderableMeshChangeComponent>(Entity);
+        Callback(RenderableMeshChange{EntityData.ID, Change.Type});
+    }
+
+    return RADIENT_STATUS_OK;
 }
 
 template <typename CallbackType>

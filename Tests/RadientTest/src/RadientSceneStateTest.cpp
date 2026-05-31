@@ -162,6 +162,44 @@ const CapturedRenderableMesh* FindRenderableMesh(const std::vector<CapturedRende
     return It != RenderableMeshes.end() ? &*It : nullptr;
 }
 
+using RenderableMeshChangeType = RadientSceneState::RenderableMeshChangeType;
+
+struct CapturedRenderableMeshChange
+{
+    RadientEntityID          Entity = InvalidRadientEntityID;
+    RenderableMeshChangeType Type   = RenderableMeshChangeType::Updated;
+};
+
+std::vector<CapturedRenderableMeshChange> CaptureRenderableMeshChanges(const RadientSceneState& State)
+{
+    std::vector<CapturedRenderableMeshChange> Changes;
+    EXPECT_EQ(State.EnumerateRenderableMeshChanges(
+                  [&Changes](const RadientSceneState::RenderableMeshChange& Change) {
+                      Changes.push_back({Change.Entity, Change.Type});
+                  }),
+              RADIENT_STATUS_OK);
+    return Changes;
+}
+
+const CapturedRenderableMeshChange* FindRenderableMeshChange(const std::vector<CapturedRenderableMeshChange>& Changes, RadientEntityID Entity)
+{
+    const std::vector<CapturedRenderableMeshChange>::const_iterator It =
+        std::find_if(Changes.begin(), Changes.end(),
+                     [Entity](const CapturedRenderableMeshChange& Change) {
+                         return Change.Entity == Entity;
+                     });
+
+    return It != Changes.end() ? &*It : nullptr;
+}
+
+RadientMeshComponent MakeMeshComponent(const char* URI, Uint64 Version = 1)
+{
+    RadientMeshComponent Mesh;
+    Mesh.Mesh.URI     = URI;
+    Mesh.Mesh.Version = Version;
+    return Mesh;
+}
+
 struct CapturedRenderableLight
 {
     RadientEntityID       Entity = InvalidRadientEntityID;
@@ -1347,6 +1385,205 @@ TEST(RadientSceneStateTest, EnumerateRenderableMeshesReportsOutOfDateDerivedStat
 
     ASSERT_EQ(RenderableMeshes.size(), 1u);
     ExpectMatrixNear(RenderableMeshes[0].WorldMatrix, RadientMath::TransformToMatrix(Transform));
+}
+
+TEST(RadientSceneStateTest, TracksRenderableMeshChanges)
+{
+    RadientSceneState State;
+
+    RadientEntityID Entity = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity({}, Entity), RADIENT_STATUS_OK);
+
+    EXPECT_TRUE(CaptureRenderableMeshChanges(State).empty());
+
+    EXPECT_EQ(State.SetMesh(Entity, MakeMeshComponent("mesh://cube", 1)), RADIENT_STATUS_OK);
+    EXPECT_TRUE(CaptureRenderableMeshChanges(State).empty());
+
+    RadientMeshRendererComponent Renderer;
+    Renderer.VisibilityMask = 0x55;
+    EXPECT_EQ(State.SetMeshRenderer(Entity, Renderer), RADIENT_STATUS_OK);
+
+    std::vector<CapturedRenderableMeshChange> Changes = CaptureRenderableMeshChanges(State);
+    ASSERT_EQ(Changes.size(), 1u);
+    EXPECT_EQ(Changes[0].Entity, Entity);
+    EXPECT_EQ(Changes[0].Type, RenderableMeshChangeType::Added);
+    State.ClearRenderableMeshChanges();
+    EXPECT_TRUE(CaptureRenderableMeshChanges(State).empty());
+
+    CapturedRenderableMesh Renderable;
+    EXPECT_EQ(State.GetRenderableMesh(
+                  Entity,
+                  [&Renderable](const RadientSceneState::RenderableMesh& Mesh) {
+                      Renderable = CaptureRenderableMesh(Mesh);
+                  }),
+              RADIENT_STATUS_OUT_OF_DATE);
+    EXPECT_EQ(Renderable.Entity, Entity);
+    EXPECT_EQ(Renderable.MeshURI, "mesh://cube");
+    EXPECT_EQ(Renderable.VisibilityMask, 0x55u);
+
+    EXPECT_EQ(State.SetMesh(Entity, MakeMeshComponent("mesh://sphere", 2)), RADIENT_STATUS_OK);
+
+    Changes = CaptureRenderableMeshChanges(State);
+    ASSERT_EQ(Changes.size(), 1u);
+    EXPECT_EQ(Changes[0].Entity, Entity);
+    EXPECT_EQ(Changes[0].Type, RenderableMeshChangeType::Updated);
+    State.ClearRenderableMeshChanges();
+
+    RadientMaterialBinding MaterialBinding;
+    MaterialBinding.PrimitiveIndex   = 1;
+    MaterialBinding.Material.URI     = "material://blue";
+    MaterialBinding.Material.Version = 3;
+
+    RadientMaterialBindingsComponent MaterialBindings;
+    MaterialBindings.pBindings    = &MaterialBinding;
+    MaterialBindings.BindingCount = 1;
+    EXPECT_EQ(State.SetMaterialBindings(Entity, MaterialBindings), RADIENT_STATUS_OK);
+
+    Changes = CaptureRenderableMeshChanges(State);
+    ASSERT_EQ(Changes.size(), 1u);
+    EXPECT_EQ(Changes[0].Entity, Entity);
+    EXPECT_EQ(Changes[0].Type, RenderableMeshChangeType::Updated);
+    State.ClearRenderableMeshChanges();
+
+    EXPECT_EQ(State.RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_MATERIAL_BINDINGS), RADIENT_STATUS_OK);
+
+    Changes = CaptureRenderableMeshChanges(State);
+    ASSERT_EQ(Changes.size(), 1u);
+    EXPECT_EQ(Changes[0].Entity, Entity);
+    EXPECT_EQ(Changes[0].Type, RenderableMeshChangeType::Updated);
+    State.ClearRenderableMeshChanges();
+
+    EXPECT_EQ(State.RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_MESH_RENDERER), RADIENT_STATUS_OK);
+
+    Changes = CaptureRenderableMeshChanges(State);
+    ASSERT_EQ(Changes.size(), 1u);
+    EXPECT_EQ(Changes[0].Entity, Entity);
+    EXPECT_EQ(Changes[0].Type, RenderableMeshChangeType::Removed);
+    EXPECT_EQ(State.GetRenderableMesh(Entity, [](const RadientSceneState::RenderableMesh&) {}), RADIENT_STATUS_NOT_FOUND);
+    State.ClearRenderableMeshChanges();
+
+    EXPECT_EQ(State.SetMeshRenderer(Entity, Renderer), RADIENT_STATUS_OK);
+
+    Changes = CaptureRenderableMeshChanges(State);
+    ASSERT_EQ(Changes.size(), 1u);
+    EXPECT_EQ(Changes[0].Entity, Entity);
+    EXPECT_EQ(Changes[0].Type, RenderableMeshChangeType::Added);
+    State.ClearRenderableMeshChanges();
+
+    EXPECT_EQ(State.RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_MESH), RADIENT_STATUS_OK);
+
+    Changes = CaptureRenderableMeshChanges(State);
+    ASSERT_EQ(Changes.size(), 1u);
+    EXPECT_EQ(Changes[0].Entity, Entity);
+    EXPECT_EQ(Changes[0].Type, RenderableMeshChangeType::Removed);
+    EXPECT_EQ(State.GetRenderableMesh(Entity, [](const RadientSceneState::RenderableMesh&) {}), RADIENT_STATUS_NOT_FOUND);
+    State.ClearRenderableMeshChanges();
+    EXPECT_TRUE(CaptureRenderableMeshChanges(State).empty());
+}
+
+TEST(RadientSceneStateTest, CoalescesRenderableMeshChanges)
+{
+    RadientSceneState State;
+
+    RadientEntityID Entity = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity({}, Entity), RADIENT_STATUS_OK);
+
+    EXPECT_EQ(State.SetMesh(Entity, MakeMeshComponent("mesh://temporary", 1)), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetMeshRenderer(Entity, {}), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetMesh(Entity, MakeMeshComponent("mesh://temporary", 2)), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_MESH_RENDERER), RADIENT_STATUS_OK);
+    EXPECT_TRUE(CaptureRenderableMeshChanges(State).empty());
+
+    EXPECT_EQ(State.SetMeshRenderer(Entity, {}), RADIENT_STATUS_OK);
+    std::vector<CapturedRenderableMeshChange> Changes = CaptureRenderableMeshChanges(State);
+    ASSERT_EQ(Changes.size(), 1u);
+    EXPECT_EQ(Changes[0].Entity, Entity);
+    EXPECT_EQ(Changes[0].Type, RenderableMeshChangeType::Added);
+    State.ClearRenderableMeshChanges();
+
+    EXPECT_EQ(State.SetMesh(Entity, MakeMeshComponent("mesh://updated", 3)), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_MESH_RENDERER), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetMeshRenderer(Entity, {}), RADIENT_STATUS_OK);
+
+    Changes = CaptureRenderableMeshChanges(State);
+    ASSERT_EQ(Changes.size(), 1u);
+    EXPECT_EQ(Changes[0].Entity, Entity);
+    EXPECT_EQ(Changes[0].Type, RenderableMeshChangeType::Updated);
+    State.ClearRenderableMeshChanges();
+
+    RadientEntityID Transient = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity({}, Transient), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetMesh(Transient, MakeMeshComponent("mesh://transient")), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetMeshRenderer(Transient, {}), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.DestroyEntity(Transient), RADIENT_STATUS_OK);
+    EXPECT_TRUE(CaptureRenderableMeshChanges(State).empty());
+
+    RadientEntityID RemovedBeforeDestroy = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity({}, RemovedBeforeDestroy), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetMesh(RemovedBeforeDestroy, MakeMeshComponent("mesh://removed-before-destroy")), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetMeshRenderer(RemovedBeforeDestroy, {}), RADIENT_STATUS_OK);
+    State.ClearRenderableMeshChanges();
+
+    EXPECT_EQ(State.RemoveComponent(RemovedBeforeDestroy, RADIENT_COMPONENT_TYPE_MESH_RENDERER), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.DestroyEntity(RemovedBeforeDestroy), RADIENT_STATUS_OK);
+
+    Changes = CaptureRenderableMeshChanges(State);
+    ASSERT_EQ(Changes.size(), 1u);
+    EXPECT_EQ(Changes[0].Entity, RemovedBeforeDestroy);
+    EXPECT_EQ(Changes[0].Type, RenderableMeshChangeType::Removed);
+}
+
+TEST(RadientSceneStateTest, DestroyEntityRecordsRenderableMeshChangesForSubtree)
+{
+    RadientSceneState State;
+
+    RadientEntityID Root = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity({}, Root), RADIENT_STATUS_OK);
+
+    RadientEntityDesc ChildDesc;
+    ChildDesc.Parent = Root;
+
+    RadientEntityID Child = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity(ChildDesc, Child), RADIENT_STATUS_OK);
+
+    RadientEntityDesc GrandChildDesc;
+    GrandChildDesc.Parent = Child;
+
+    RadientEntityID GrandChild = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity(GrandChildDesc, GrandChild), RADIENT_STATUS_OK);
+
+    RadientEntityID Sibling = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity({}, Sibling), RADIENT_STATUS_OK);
+
+    EXPECT_EQ(State.SetMesh(Root, MakeMeshComponent("mesh://root")), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetMeshRenderer(Root, {}), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetMesh(Child, MakeMeshComponent("mesh://child")), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetMeshRenderer(Child, {}), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetMesh(GrandChild, MakeMeshComponent("mesh://grand-child")), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetMeshRenderer(GrandChild, {}), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetMesh(Sibling, MakeMeshComponent("mesh://sibling")), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetMeshRenderer(Sibling, {}), RADIENT_STATUS_OK);
+
+    State.ClearRenderableMeshChanges();
+    EXPECT_EQ(State.DestroyEntity(Root), RADIENT_STATUS_OK);
+
+    const std::vector<CapturedRenderableMeshChange> Changes = CaptureRenderableMeshChanges(State);
+    ASSERT_EQ(Changes.size(), 3u);
+
+    const CapturedRenderableMeshChange* pRootChange = FindRenderableMeshChange(Changes, Root);
+    ASSERT_NE(pRootChange, nullptr);
+    EXPECT_EQ(pRootChange->Type, RenderableMeshChangeType::Removed);
+
+    const CapturedRenderableMeshChange* pChildChange = FindRenderableMeshChange(Changes, Child);
+    ASSERT_NE(pChildChange, nullptr);
+    EXPECT_EQ(pChildChange->Type, RenderableMeshChangeType::Removed);
+
+    const CapturedRenderableMeshChange* pGrandChildChange = FindRenderableMeshChange(Changes, GrandChild);
+    ASSERT_NE(pGrandChildChange, nullptr);
+    EXPECT_EQ(pGrandChildChange->Type, RenderableMeshChangeType::Removed);
+
+    EXPECT_EQ(FindRenderableMeshChange(Changes, Sibling), nullptr);
+    EXPECT_EQ(State.GetRenderableMesh(Sibling, [](const RadientSceneState::RenderableMesh&) {}), RADIENT_STATUS_OUT_OF_DATE);
 }
 
 TEST(RadientSceneStateTest, EnumerateRenderableLights)

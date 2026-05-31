@@ -332,6 +332,7 @@ RADIENT_STATUS RadientSceneState::CreateEntity(const RadientEntityDesc& Desc, Ra
     m_Registry.emplace<LocalTransformComponent>(E, LocalTransformComponent{Desc.Transform});
     m_Registry.emplace<WorldTransformComponent>(E);
     m_Registry.emplace<EffectiveVisibilityComponent>(E);
+    m_Registry.emplace<RenderableMeshStateComponent>(E);
     m_Registry.emplace<DirtyStateComponent>(E);
 
     m_EntityMap.emplace(Entity, E);
@@ -498,12 +499,24 @@ RADIENT_STATUS RadientSceneState::SetMesh(RadientEntityID Entity, const RadientM
 
     MeshStorage.Assign(Mesh);
     Touch(CHANGE_FLAG_DRAWABLES);
+    UpdateRenderableMeshState(E);
     return RADIENT_STATUS_OK;
 }
 
 RADIENT_STATUS RadientSceneState::SetMeshRenderer(RadientEntityID Entity, const RadientMeshRendererComponent& Renderer)
 {
-    return EmplaceOrReplaceComponent(Entity, Renderer, CHANGE_FLAG_DRAWABLES);
+    const entt::entity E = FindEntity(Entity);
+    if (E == entt::null)
+        return RADIENT_STATUS_NOT_FOUND;
+
+    const RadientMeshRendererComponent* pExistingRenderer = m_Registry.try_get<RadientMeshRendererComponent>(E);
+    if (pExistingRenderer != nullptr && *pExistingRenderer == Renderer)
+        return RADIENT_STATUS_NO_CHANGE;
+
+    m_Registry.emplace_or_replace<RadientMeshRendererComponent>(E, Renderer);
+    Touch(CHANGE_FLAG_DRAWABLES);
+    UpdateRenderableMeshState(E);
+    return RADIENT_STATUS_OK;
 }
 
 RADIENT_STATUS RadientSceneState::SetMaterialBindings(RadientEntityID Entity, const RadientMaterialBindingsComponent& Bindings)
@@ -525,6 +538,7 @@ RADIENT_STATUS RadientSceneState::SetMaterialBindings(RadientEntityID Entity, co
 
     BindingStorage.Assign(Bindings);
     Touch(CHANGE_FLAG_DRAWABLES);
+    RecordRenderableMeshUpdated(E);
     return RADIENT_STATUS_OK;
 }
 
@@ -654,6 +668,13 @@ RADIENT_STATUS RadientSceneState::RemoveComponent(RadientEntityID Entity, Radien
     if (Removed)
     {
         Touch(ChangeFlags);
+        if (ChangeFlags == CHANGE_FLAG_DRAWABLES)
+        {
+            if (ComponentType == RADIENT_COMPONENT_TYPE_MATERIAL_BINDINGS)
+                RecordRenderableMeshUpdated(E);
+            else
+                UpdateRenderableMeshState(E);
+        }
         return RADIENT_STATUS_OK;
     }
 
@@ -664,6 +685,26 @@ RADIENT_STATUS RadientSceneState::CommitChanges()
 {
     UpdateDirtyEntities();
     return RADIENT_STATUS_OK;
+}
+
+void RadientSceneState::ClearRenderableMeshChanges()
+{
+    m_RemovedRenderableMeshChanges.clear();
+
+    std::vector<entt::entity>& Entities = m_TmpEntityBuffer;
+    Entities.clear();
+
+    auto View = m_Registry.view<PendingRenderableMeshChangeComponent>();
+    for (const entt::entity Entity : View)
+        Entities.push_back(Entity);
+
+    for (const entt::entity Entity : Entities)
+    {
+        if (m_Registry.valid(Entity))
+            m_Registry.remove<PendingRenderableMeshChangeComponent>(Entity);
+    }
+
+    Entities.clear();
 }
 
 entt::entity RadientSceneState::FindEntity(RadientEntityID Entity) const
@@ -695,6 +736,14 @@ bool RadientSceneState::IsDescendant(entt::entity Entity, entt::entity Potential
     }
 
     return false;
+}
+
+bool RadientSceneState::IsRenderableMeshEntity(entt::entity Entity) const
+{
+    if (!VerifyInternalEntity(Entity))
+        return false;
+
+    return m_Registry.all_of<MeshComponentStorage, RadientMeshRendererComponent>(Entity);
 }
 
 bool RadientSceneState::VerifyInternalEntity(entt::entity Entity) const
@@ -781,6 +830,7 @@ void RadientSceneState::DestroyEntitySubtree(entt::entity Entity)
         const entt::entity Current = Item.Entity;
         Stack.pop_back();
 
+        RecordRenderableMeshRemoved(Current);
         RemoveCustomComponents(Current);
         DirtyStateComponent& DirtyState = m_Registry.get<DirtyStateComponent>(Current);
         RemoveFromDirtyList(Current, DirtyState);
@@ -812,6 +862,90 @@ void RadientSceneState::RemoveCustomComponents(entt::entity Entity)
     }
 
     m_Registry.remove<CustomComponentIndexComponent>(Entity);
+}
+
+void RadientSceneState::RecordRenderableMeshChange(entt::entity Entity, RenderableMeshChangeType Type)
+{
+    if (!VerifyInternalEntity(Entity))
+        return;
+
+    PendingRenderableMeshChangeComponent* pPendingChange = m_Registry.try_get<PendingRenderableMeshChangeComponent>(Entity);
+    if (pPendingChange == nullptr)
+    {
+        m_Registry.emplace<PendingRenderableMeshChangeComponent>(Entity, PendingRenderableMeshChangeComponent{Type});
+        return;
+    }
+
+    switch (pPendingChange->Type)
+    {
+        case RenderableMeshChangeType::Added:
+            if (Type == RenderableMeshChangeType::Removed)
+                m_Registry.remove<PendingRenderableMeshChangeComponent>(Entity);
+            break;
+
+        case RenderableMeshChangeType::Removed:
+            if (Type == RenderableMeshChangeType::Added)
+                pPendingChange->Type = RenderableMeshChangeType::Updated;
+            break;
+
+        case RenderableMeshChangeType::Updated:
+            if (Type == RenderableMeshChangeType::Removed)
+                pPendingChange->Type = RenderableMeshChangeType::Removed;
+            break;
+    }
+}
+
+void RadientSceneState::RecordRenderableMeshUpdated(entt::entity Entity)
+{
+    if (!VerifyInternalEntity(Entity))
+        return;
+
+    const RenderableMeshStateComponent& RenderableState = m_Registry.get<RenderableMeshStateComponent>(Entity);
+    if (RenderableState.IsRenderable)
+        RecordRenderableMeshChange(Entity, RenderableMeshChangeType::Updated);
+}
+
+void RadientSceneState::RecordRenderableMeshRemoved(entt::entity Entity)
+{
+    if (!VerifyInternalEntity(Entity))
+        return;
+
+    RenderableMeshStateComponent&         RenderableState = m_Registry.get<RenderableMeshStateComponent>(Entity);
+    PendingRenderableMeshChangeComponent* pPendingChange  = m_Registry.try_get<PendingRenderableMeshChangeComponent>(Entity);
+    const bool                            WasAddedThisFrame =
+        pPendingChange != nullptr && pPendingChange->Type == RenderableMeshChangeType::Added;
+    const bool NeedsRemovedChange = RenderableState.IsRenderable || pPendingChange != nullptr;
+
+    if (NeedsRemovedChange && !WasAddedThisFrame)
+    {
+        const RadientEntityID EntityID = m_Registry.get<EntityComponent>(Entity).ID;
+        m_RemovedRenderableMeshChanges.push_back({EntityID, RenderableMeshChangeType::Removed});
+    }
+
+    if (pPendingChange != nullptr)
+        m_Registry.remove<PendingRenderableMeshChangeComponent>(Entity);
+
+    RenderableState.IsRenderable = false;
+}
+
+void RadientSceneState::UpdateRenderableMeshState(entt::entity Entity)
+{
+    if (!VerifyInternalEntity(Entity))
+        return;
+
+    RenderableMeshStateComponent& RenderableState = m_Registry.get<RenderableMeshStateComponent>(Entity);
+    const bool                    WasRenderable   = RenderableState.IsRenderable;
+    const bool                    IsRenderable    = IsRenderableMeshEntity(Entity);
+
+    if (WasRenderable == IsRenderable)
+    {
+        if (IsRenderable)
+            RecordRenderableMeshChange(Entity, RenderableMeshChangeType::Updated);
+        return;
+    }
+
+    RenderableState.IsRenderable = IsRenderable;
+    RecordRenderableMeshChange(Entity, IsRenderable ? RenderableMeshChangeType::Added : RenderableMeshChangeType::Removed);
 }
 
 RadientSceneState::DIRTY_FLAGS RadientSceneState::MarkDirty(entt::entity Entity, DIRTY_FLAGS Flags, bool AddToDirtyList)
