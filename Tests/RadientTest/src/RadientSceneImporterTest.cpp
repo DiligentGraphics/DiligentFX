@@ -189,6 +189,8 @@ const CapturedRenderableLight* FindLight(const std::vector<CapturedRenderableLig
 
 TEST(RadientSceneImporterTest, ImportsNodeHierarchy)
 {
+    // Imports a small glTF hierarchy and verifies that Radient creates the
+    // matching parent/child structure with local transforms preserved.
     TempDirectory     TempDir{"RadientSceneImporterTest"};
     const std::string GLTFPath = WriteGLTFFile(TempDir, "hierarchy.gltf",
                                                R"GLTF({
@@ -217,6 +219,8 @@ TEST(RadientSceneImporterTest, ImportsNodeHierarchy)
     EXPECT_EQ(ImportGLTFAndFinishPending(Fixture, LoadInfo, InstantiateInfo, Model, ImportedRoot), RADIENT_STATUS_OK);
     EXPECT_NE(ImportedRoot, InvalidRadientEntityID);
 
+    // The importer creates an explicit Radient root, with the glTF scene root
+    // as its only child.
     const std::vector<RadientEntityID> RootChildren = GetChildren(*Fixture.pScene, ImportedRoot);
     ASSERT_EQ(RootChildren.size(), 1u);
 
@@ -232,6 +236,7 @@ TEST(RadientSceneImporterTest, ImportsNodeHierarchy)
     const std::vector<RadientEntityID> Children = GetChildren(*Fixture.pScene, RootChildren[0]);
     ASSERT_EQ(Children.size(), 2u);
 
+    // Both glTF child nodes should be attached below the imported scene root.
     EXPECT_EQ(Fixture.pScene->GetParent(Children[0], Parent), RADIENT_STATUS_OK);
     EXPECT_EQ(Parent, RootChildren[0]);
     EXPECT_EQ(Fixture.pScene->GetParent(Children[1], Parent), RADIENT_STATUS_OK);
@@ -246,6 +251,8 @@ TEST(RadientSceneImporterTest, ImportsNodeHierarchy)
 
 TEST(RadientSceneImporterTest, UsesExplicitSceneIndex)
 {
+    // Verifies that import uses glTF's default scene unless the caller
+    // explicitly requests a scene index.
     TempDirectory     TempDir{"RadientSceneImporterTest"};
     const std::string GLTFPath = WriteGLTFFile(TempDir, "scene_index.gltf",
                                                R"GLTF({
@@ -280,6 +287,7 @@ TEST(RadientSceneImporterTest, UsesExplicitSceneIndex)
 
     RadientTransform Transform{};
     EXPECT_EQ(Fixture.pScene->GetLocalTransform(RootChildren[0], Transform), RADIENT_STATUS_OK);
+    // No explicit index means the glTF default scene, scene 1, is imported.
     ExpectFloat3Near(Transform.Position, {2.f, 0.f, 0.f});
 
     InstantiateInfo.Name       = "Explicit scene 0";
@@ -291,18 +299,22 @@ TEST(RadientSceneImporterTest, UsesExplicitSceneIndex)
     ASSERT_EQ(RootChildren.size(), 1u);
 
     EXPECT_EQ(Fixture.pScene->GetLocalTransform(RootChildren[0], Transform), RADIENT_STATUS_OK);
+    // Requesting scene 0 should instantiate the alternate root node.
     ExpectFloat3Near(Transform.Position, {1.f, 0.f, 0.f});
 
     InstantiateInfo.Name       = "Invalid scene";
     InstantiateInfo.SceneIndex = 2;
     ImportedRoot               = InvalidRadientEntityID;
 
+    // Invalid scene indices should fail without returning a created root.
     EXPECT_EQ(Fixture.pImporter->InstantiateGLTF(Model, InstantiateInfo, ImportedRoot), RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(ImportedRoot, InvalidRadientEntityID);
 }
 
 TEST(RadientSceneImporterTest, InstantiateGLTFUsesCachedModel)
 {
+    // Loads a glTF once, removes the file, then instantiates from the cached
+    // in-memory model to prove instantiation does not re-read the source URI.
     TempDirectory     TempDir{"RadientSceneImporterTest"};
     const std::string GLTFPath = WriteGLTFFile(TempDir, "cached_model.gltf",
                                                R"GLTF({
@@ -328,6 +340,7 @@ TEST(RadientSceneImporterTest, InstantiateGLTFUsesCachedModel)
 
     EXPECT_EQ(std::remove(GLTFPath.c_str()), 0);
 
+    // The cached model should still be available after the source file is gone.
     RadientEntityID RootEntity = InvalidRadientEntityID;
     EXPECT_EQ(Fixture.pImporter->InstantiateGLTF(Model, {}, RootEntity), RADIENT_STATUS_OK);
     ASSERT_NE(RootEntity, InvalidRadientEntityID);
@@ -338,6 +351,8 @@ TEST(RadientSceneImporterTest, InstantiateGLTFUsesCachedModel)
 
 TEST(RadientSceneImporterTest, InstantiateGLTFReportsPendingWhileModelLoads)
 {
+    // Uses a stopped thread pool so LoadGLTF can enter the pending state and
+    // InstantiateGLTF can create a placeholder root without blocking.
     RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
     ASSERT_NE(pThreadPool, nullptr);
 
@@ -366,9 +381,12 @@ TEST(RadientSceneImporterTest, InstantiateGLTFReportsPendingWhileModelLoads)
     EXPECT_EQ(Fixture.pImporter->InstantiateGLTF(Model, {}, RootEntity), RADIENT_STATUS_PENDING);
     ASSERT_NE(RootEntity, InvalidRadientEntityID);
 
+    // Pending imports should expose an empty root until the model load completes.
     std::vector<RadientEntityID> RootChildren = GetChildren(*Fixture.pScene, RootEntity);
     EXPECT_TRUE(RootChildren.empty());
 
+    // Once the asset is loaded and pending imports are processed, the root
+    // should be populated with the glTF scene graph.
     ASSERT_EQ(ProcessGLTFLoad(Fixture, Model), RADIENT_STATUS_OK);
     EXPECT_EQ(Fixture.pImporter->ProcessPendingImports(), RADIENT_STATUS_OK);
 
@@ -380,6 +398,8 @@ TEST(RadientSceneImporterTest, InstantiateGLTFReportsPendingWhileModelLoads)
 
 TEST(RadientSceneImporterTest, PendingGLTFImportDestroysRootWhenSceneIndexIsInvalid)
 {
+    // If a pending import later resolves to an invalid scene index, the
+    // placeholder root must be removed instead of leaving a dead import shell.
     RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
     ASSERT_NE(pThreadPool, nullptr);
 
@@ -412,6 +432,7 @@ TEST(RadientSceneImporterTest, PendingGLTFImportDestroysRootWhenSceneIndexIsInva
     ASSERT_NE(RootEntity, InvalidRadientEntityID);
     EXPECT_EQ(Fixture.pScene->IsEntityAlive(RootEntity), RADIENT_STATUS_OK);
 
+    // Processing the completed load should fail and destroy the placeholder.
     ASSERT_EQ(ProcessGLTFLoad(Fixture, Model), RADIENT_STATUS_OK);
     EXPECT_EQ(Fixture.pImporter->ProcessPendingImports(), RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(Fixture.pScene->IsEntityAlive(RootEntity), RADIENT_STATUS_NOT_FOUND);
@@ -421,6 +442,8 @@ TEST(RadientSceneImporterTest, PendingGLTFImportDestroysRootWhenSceneIndexIsInva
 
 TEST(RadientSceneImporterTest, ImportsCameras)
 {
+    // Imports perspective and orthographic glTF cameras and verifies their
+    // Radient camera parameters are converted correctly.
     TempDirectory     TempDir{"RadientSceneImporterTest"};
     const std::string GLTFPath = WriteGLTFFile(TempDir, "camera.gltf",
                                                R"GLTF({
@@ -455,12 +478,15 @@ TEST(RadientSceneImporterTest, ImportsCameras)
     ASSERT_EQ(CameraNodes.size(), 2u);
 
     RadientCameraComponent Camera{};
+    // Perspective yfov/aspect should be converted into Radient aperture and
+    // focal-length values while preserving clipping range.
     EXPECT_EQ(Fixture.pScene->GetCamera(CameraNodes[0], Camera), RADIENT_STATUS_OK);
     EXPECT_EQ(Camera.Projection, RADIENT_CAMERA_PROJECTION_PERSPECTIVE);
     ExpectFloat2Near(Camera.ClippingRange, {0.2f, 250.f});
     EXPECT_NEAR(Camera.HorizontalAperture, Camera.VerticalAperture * 1.5f, EPSILON);
     EXPECT_NEAR(Camera.FocalLength, Camera.VerticalAperture / (2.f * std::tan(0.7f * 0.5f)), EPSILON);
 
+    // Orthographic xmag/ymag map directly to Radient aperture values.
     EXPECT_EQ(Fixture.pScene->GetCamera(CameraNodes[1], Camera), RADIENT_STATUS_OK);
     EXPECT_EQ(Camera.Projection, RADIENT_CAMERA_PROJECTION_ORTHOGRAPHIC);
     EXPECT_NEAR(Camera.HorizontalAperture, 4.f, EPSILON);
@@ -470,6 +496,8 @@ TEST(RadientSceneImporterTest, ImportsCameras)
 
 TEST(RadientSceneImporterTest, ImportsMeshNodeMetadataWithoutDevice)
 {
+    // Imports mesh nodes without creating GPU resources. The scene should still
+    // get Radient mesh references and mesh-renderer components for each glTF node.
     TempDirectory TempDir{"RadientSceneImporterTest"};
 
     const float  Positions[] = {0.f, 0.f, 0.f, 1.f, 0.f, 0.f, 0.f, 1.f, 0.f};
@@ -518,6 +546,7 @@ TEST(RadientSceneImporterTest, ImportsMeshNodeMetadataWithoutDevice)
     const std::vector<RadientEntityID> RootChildren = GetChildren(*Fixture.pScene, ImportedRoot);
     ASSERT_EQ(RootChildren.size(), 2u);
 
+    // The synthetic import root is only a grouping node and should not be renderable.
     Bool HasComponent = True;
     EXPECT_EQ(Fixture.pScene->HasComponent(ImportedRoot, RADIENT_COMPONENT_TYPE_MESH, HasComponent), RADIENT_STATUS_OK);
     EXPECT_EQ(HasComponent, False);
@@ -526,6 +555,7 @@ TEST(RadientSceneImporterTest, ImportsMeshNodeMetadataWithoutDevice)
 
     for (const RadientEntityID MeshNode : RootChildren)
     {
+        // Each glTF mesh node should receive both mesh data and a renderer component.
         EXPECT_EQ(Fixture.pScene->HasComponent(MeshNode, RADIENT_COMPONENT_TYPE_MESH, HasComponent), RADIENT_STATUS_OK);
         EXPECT_EQ(HasComponent, True);
         EXPECT_EQ(Fixture.pScene->HasComponent(MeshNode, RADIENT_COMPONENT_TYPE_MESH_RENDERER, HasComponent), RADIENT_STATUS_OK);
@@ -540,6 +570,8 @@ TEST(RadientSceneImporterTest, ImportsMeshNodeMetadataWithoutDevice)
 
     std::vector<RadientEntityID>       RenderableEntities;
     std::vector<RadientAssetReference> RenderableMeshes;
+    // Renderable enumeration should expose the imported mesh nodes, not the
+    // grouping root.
     EXPECT_EQ(pSceneImpl->GetState().EnumerateRenderableMeshes(
                   [&RenderableEntities, &RenderableMeshes](const RadientSceneState::RenderableMesh& Mesh) {
                       RenderableEntities.push_back(Mesh.Entity);
@@ -551,6 +583,7 @@ TEST(RadientSceneImporterTest, ImportsMeshNodeMetadataWithoutDevice)
     EXPECT_NE(std::find(RenderableEntities.begin(), RenderableEntities.end(), RootChildren[1]), RenderableEntities.end());
     ASSERT_NE(RenderableMeshes[0].URI, nullptr);
     EXPECT_NE(std::string{RenderableMeshes[0].URI}, std::string{Model.URI});
+    // Both nodes reference the same converted Radient mesh asset.
     EXPECT_EQ(RenderableMeshes[0], RenderableMeshes[1]);
 
     const RadientAssetManagerImpl* pAssetManagerImpl = ClassPtrCast<RadientAssetManagerImpl>(Fixture.pAssetManager.RawPtr());
@@ -560,6 +593,8 @@ TEST(RadientSceneImporterTest, ImportsMeshNodeMetadataWithoutDevice)
     Uint32                SourceMeshIndex = ~0u;
     for (const RadientAssetReference& Mesh : RenderableMeshes)
     {
+        // The asset manager should remember which glTF model and mesh index
+        // produced each converted Radient mesh.
         EXPECT_EQ(pAssetManagerImpl->GetMeshGLTFSource(Mesh, SourceModel, SourceMeshIndex), RADIENT_STATUS_OK);
         EXPECT_EQ(SourceModel, Model);
         EXPECT_EQ(SourceMeshIndex, 0u);
@@ -568,6 +603,8 @@ TEST(RadientSceneImporterTest, ImportsMeshNodeMetadataWithoutDevice)
 
 TEST(RadientSceneImporterTest, ImportsLights)
 {
+    // Imports KHR_lights_punctual lights and verifies that Radient light
+    // components preserve type, color, intensity, range, and cone angles.
     TempDirectory     TempDir{"RadientSceneImporterTest"};
     const std::string GLTFPath = WriteGLTFFile(TempDir, "lights.gltf",
                                                R"GLTF({
@@ -622,6 +659,7 @@ TEST(RadientSceneImporterTest, ImportsLights)
               RADIENT_STATUS_OK);
     ASSERT_EQ(Lights.size(), 3u);
 
+    // Directional lights should keep color/intensity and become visible render lights.
     const CapturedRenderableLight* pDirectional = FindLight(Lights, LightNodes[0]);
     ASSERT_NE(pDirectional, nullptr);
     EXPECT_EQ(pDirectional->Light.Type, RADIENT_LIGHT_TYPE_DIRECTIONAL);
@@ -629,6 +667,7 @@ TEST(RadientSceneImporterTest, ImportsLights)
     EXPECT_NEAR(pDirectional->Light.Intensity, 2.f, EPSILON);
     EXPECT_EQ(pDirectional->EffectiveVisible, True);
 
+    // Point lights should also carry the glTF range value.
     const CapturedRenderableLight* pPoint = FindLight(Lights, LightNodes[1]);
     ASSERT_NE(pPoint, nullptr);
     EXPECT_EQ(pPoint->Light.Type, RADIENT_LIGHT_TYPE_POINT);
@@ -637,6 +676,7 @@ TEST(RadientSceneImporterTest, ImportsLights)
     EXPECT_NEAR(pPoint->Light.Range, 10.f, EPSILON);
     EXPECT_EQ(pPoint->EffectiveVisible, True);
 
+    // Spot light cone angles use glTF radians and should be copied directly.
     const CapturedRenderableLight* pSpot = FindLight(Lights, LightNodes[2]);
     ASSERT_NE(pSpot, nullptr);
     EXPECT_EQ(pSpot->Light.Type, RADIENT_LIGHT_TYPE_SPOT);

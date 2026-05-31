@@ -47,6 +47,8 @@ RadientMaterialBindingsComponent MakeBindings(RadientMaterialBinding* pBindings,
 
 TEST(RadientMaterialBindingsStorageTest, AssignCopiesURIs)
 {
+    // Verifies that material bindings storage owns copies of binding arrays
+    // and any raw material URI strings supplied by the caller.
     const char OriginalURI[] = "material://heap";
     const char ChangedURI[]  = "material://changed";
 
@@ -67,18 +69,24 @@ TEST(RadientMaterialBindingsStorageTest, AssignCopiesURIs)
     std::memcpy(MaterialURI.get(), ChangedURI, sizeof(ChangedURI));
     MaterialURI.reset();
 
+    // The copied binding array should be exposed through Component, and the
+    // first URI should still point to storage-owned memory after the source is gone.
     ASSERT_EQ(Storage.Component.BindingCount, 2u);
     ASSERT_NE(Storage.Component.pBindings, nullptr);
     EXPECT_EQ(Storage.Component.pBindings, Storage.Bindings.data());
     EXPECT_STREQ(Storage.Component.pBindings[0].Material.URI, OriginalURI);
     EXPECT_EQ(Storage.Component.pBindings[0].Material.URI, Storage.MaterialURIs[0].c_str());
     EXPECT_EQ(Storage.Component.pBindings[0].Material.Version, 17u);
+    // Bindings with null material URIs should remain null while preserving
+    // their version metadata.
     EXPECT_EQ(Storage.Component.pBindings[1].Material.URI, nullptr);
     EXPECT_EQ(Storage.Component.pBindings[1].Material.Version, 19u);
 }
 
 TEST(RadientMaterialBindingsStorageTest, MoveConstructorRepairsURIs)
 {
+    // Moving storage must repair both the binding-array pointer and each
+    // non-null material URI pointer.
     RadientMaterialBinding Binding;
     Binding.PrimitiveIndex   = 1;
     Binding.Material.URI     = "material://move";
@@ -89,6 +97,8 @@ TEST(RadientMaterialBindingsStorageTest, MoveConstructorRepairsURIs)
 
     MaterialBindingsStorage Moved{std::move(Source)};
 
+    // The moved component should expose the destination-owned binding vector
+    // and material URI string.
     ASSERT_EQ(Moved.Component.BindingCount, 1u);
     ASSERT_NE(Moved.Component.pBindings, nullptr);
     EXPECT_EQ(Moved.Component.pBindings, Moved.Bindings.data());
@@ -99,6 +109,8 @@ TEST(RadientMaterialBindingsStorageTest, MoveConstructorRepairsURIs)
 
 TEST(RadientMaterialBindingsStorageTest, MoveAssignmentRepairsURIs)
 {
+    // Move assignment must replace any existing destination bindings and
+    // reconnect raw pointers to the moved data.
     RadientMaterialBinding Binding;
     Binding.PrimitiveIndex   = 2;
     Binding.Material.URI     = "material://assigned";
@@ -116,6 +128,8 @@ TEST(RadientMaterialBindingsStorageTest, MoveAssignmentRepairsURIs)
     Destination.Assign(MakeBindings(&OtherBinding, 1));
     Destination = std::move(Source);
 
+    // The destination should now describe the source binding, not the old
+    // "other" binding assigned before the move.
     ASSERT_EQ(Destination.Component.BindingCount, 1u);
     ASSERT_NE(Destination.Component.pBindings, nullptr);
     EXPECT_EQ(Destination.Component.pBindings, Destination.Bindings.data());
@@ -126,6 +140,8 @@ TEST(RadientMaterialBindingsStorageTest, MoveAssignmentRepairsURIs)
 
 TEST(RadientMaterialBindingsStorageTest, EmptyBindingsRemainEmptyAfterMoveAssignment)
 {
+    // Moving an empty binding set over a non-empty destination must leave the
+    // public component in a clean empty state.
     MaterialBindingsStorage Source;
     Source.Assign({});
 
@@ -138,6 +154,7 @@ TEST(RadientMaterialBindingsStorageTest, EmptyBindingsRemainEmptyAfterMoveAssign
     Destination.Assign(MakeBindings(&Binding, 1));
     Destination = std::move(Source);
 
+    // No stale binding pointer or URI storage should survive the move.
     EXPECT_EQ(Destination.Component.pBindings, nullptr);
     EXPECT_EQ(Destination.Component.BindingCount, 0u);
     EXPECT_TRUE(Destination.Bindings.empty());

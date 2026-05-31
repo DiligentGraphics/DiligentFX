@@ -39,12 +39,15 @@ namespace
 
 TEST(TestingEnvironment, MessageCallback)
 {
-    // This error will not occur
+    // Verifies that the test environment reports an expected-error mismatch as
+    // a gtest non-fatal failure.
     Diligent::Testing::TestingEnvironment::ErrorScope Errors{"Different error"};
 
     auto LogError = []() {
         LOG_ERROR_MESSAGE("Testing environment error handling self-test error");
     };
+    // The logged message intentionally does not contain "Different error", so
+    // the error scope should produce the diagnostic checked below.
     EXPECT_NONFATAL_FAILURE(LogError(), "Expected error substring 'Different error' was not found in the error message");
 }
 

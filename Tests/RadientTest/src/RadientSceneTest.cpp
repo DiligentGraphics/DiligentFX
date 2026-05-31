@@ -274,12 +274,14 @@ RadientEntityID CreateTestRenderableEntity(IRadientSceneWriter&         Writer,
 
 TEST(RadientSceneTest, Create)
 {
+    // Verifies direct scene implementation creation returns a valid interface.
     RefCntAutoPtr<IRadientScene> pScene = RadientSceneImpl::Create();
     EXPECT_NE(pScene, nullptr);
 }
 
 TEST(RadientEngineTest, CreateBackend)
 {
+    // The default engine should expose a local backend instance.
     RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
     ASSERT_NE(pEngine, nullptr);
 
@@ -290,6 +292,7 @@ TEST(RadientEngineTest, CreateBackend)
 
 TEST(RadientEngineTest, CreateAssetManager)
 {
+    // The engine owns an asset manager that can be queried through the public API.
     RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
     ASSERT_NE(pEngine, nullptr);
 
@@ -299,6 +302,8 @@ TEST(RadientEngineTest, CreateAssetManager)
 
 TEST(RadientEngineTest, CreateWithExternalThreadPool)
 {
+    // Passing an external thread pool should be accepted and used by engine
+    // services such as the asset manager.
     RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
     ASSERT_NE(pThreadPool, nullptr);
 
@@ -317,6 +322,7 @@ TEST(RadientEngineTest, CreateWithExternalThreadPool)
 
 TEST(RadientAssetManagerTest, CreateMaterial)
 {
+    // Creating a material should allocate a stable asset URI and non-zero version.
     RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
     ASSERT_NE(pEngine, nullptr);
 
@@ -330,6 +336,8 @@ TEST(RadientAssetManagerTest, CreateMaterial)
 
 TEST(RadientAssetManagerTest, CreateMesh)
 {
+    // Creating a mesh should accept vertex/index buffers and primitive material
+    // references, returning a usable asset reference.
     RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
     ASSERT_NE(pEngine, nullptr);
 
@@ -346,6 +354,8 @@ TEST(RadientAssetManagerTest, CreateMesh)
 
 TEST(RadientAssetManagerTest, LoadGLTF)
 {
+    // LoadGLTF should reject missing input, then accept a valid URI and finish
+    // through WaitForAssetLoad.
     RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
     ASSERT_NE(pEngine, nullptr);
 
@@ -354,6 +364,7 @@ TEST(RadientAssetManagerTest, LoadGLTF)
 
     RadientGLTFLoadInfo   GLTFLoadInfo{};
     RadientAssetReference GLTFModel{};
+    // A missing URI is invalid and should not create an asset reference.
     EXPECT_EQ(pAssetManager->LoadGLTF(GLTFLoadInfo, GLTFModel), RADIENT_STATUS_INVALID_ARGUMENT);
 
     TempDirectory     TempDir{"RadientAssetManagerTest"};
@@ -361,6 +372,7 @@ TEST(RadientAssetManagerTest, LoadGLTF)
 
     GLTFLoadInfo.URI                = GLTFPath.c_str();
     const RADIENT_STATUS LoadStatus = pAssetManager->LoadGLTF(GLTFLoadInfo, GLTFModel);
+    // Depending on threading, the load may complete immediately or remain pending.
     EXPECT_TRUE(LoadStatus == RADIENT_STATUS_OK || LoadStatus == RADIENT_STATUS_PENDING);
     EXPECT_NE(GLTFModel.URI, nullptr);
     EXPECT_NE(GLTFModel.Version, 0u);
@@ -369,6 +381,7 @@ TEST(RadientAssetManagerTest, LoadGLTF)
 
 TEST(RadientEngineTest, CreateScene)
 {
+    // Scene creation should preserve the public scene description.
     RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
     ASSERT_NE(pEngine, nullptr);
 
@@ -378,6 +391,7 @@ TEST(RadientEngineTest, CreateScene)
 
 TEST(RadientEngineTest, CreateSceneWriter)
 {
+    // A writer can be created for an existing scene and used for mutations.
     RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
     ASSERT_NE(pEngine, nullptr);
 
@@ -390,6 +404,7 @@ TEST(RadientEngineTest, CreateSceneWriter)
 
 TEST(RadientEngineTest, CreateSceneImporter)
 {
+    // A scene importer can be created on top of a scene writer.
     RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
     ASSERT_NE(pEngine, nullptr);
 
@@ -405,6 +420,8 @@ TEST(RadientEngineTest, CreateSceneImporter)
 
 TEST(RadientSceneImporterTest, ImportGLTF)
 {
+    // Public ImportGLTF should reject invalid load info and then import a
+    // simple valid glTF into a live scene root.
     RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
     ASSERT_NE(pEngine, nullptr);
 
@@ -425,6 +442,7 @@ TEST(RadientSceneImporterTest, ImportGLTF)
 
     RadientAssetReference ImportedModel{};
     RadientEntityID       ImportedRoot = InvalidRadientEntityID;
+    // Empty load info is invalid and should not instantiate anything.
     EXPECT_EQ(pImporter->ImportGLTF({}, InstantiateInfo, ImportedModel, ImportedRoot), RADIENT_STATUS_INVALID_ARGUMENT);
 
     TempDirectory     ImportTempDir{"RadientSceneTest"};
@@ -436,6 +454,8 @@ TEST(RadientSceneImporterTest, ImportGLTF)
     RADIENT_STATUS ImportStatus = pImporter->ImportGLTF(GLTFLoadInfo, InstantiateInfo, ImportedModel, ImportedRoot);
     if (ImportStatus == RADIENT_STATUS_PENDING)
     {
+        // Pending loads are completed explicitly in tests so the imported root
+        // can be verified deterministically.
         ASSERT_EQ(ProcessTestGLTFLoad(*pAssetManager, ImportedModel), RADIENT_STATUS_OK);
         ImportStatus = pImporter->ProcessPendingImports();
     }
@@ -448,6 +468,8 @@ TEST(RadientSceneImporterTest, ImportGLTF)
 
 TEST(RadientSceneWriterTest, CreateRenderableEntity)
 {
+    // A renderable scene entity requires mesh, mesh-renderer, and material
+    // binding data to be accepted by the writer.
     RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
     ASSERT_NE(pEngine, nullptr);
 
@@ -472,6 +494,7 @@ TEST(RadientSceneWriterTest, CreateRenderableEntity)
 
 TEST(RadientEngineTest, CreateRenderer)
 {
+    // Renderer creation should preserve the public renderer description.
     RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
     ASSERT_NE(pEngine, nullptr);
 
@@ -481,6 +504,7 @@ TEST(RadientEngineTest, CreateRenderer)
 
 TEST(RadientRendererTest, CreateRenderTarget)
 {
+    // Render targets should preserve name and size metadata after creation.
     RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
     ASSERT_NE(pEngine, nullptr);
 
@@ -493,6 +517,8 @@ TEST(RadientRendererTest, CreateRenderTarget)
 
 TEST(RadientRendererTest, RenderHeadlessScene)
 {
+    // Builds a minimal material, mesh, scene, renderer, and target to verify
+    // the headless render path can execute without a swap chain.
     RefCntAutoPtr<IRadientEngine> pEngine = CreateTestEngine();
     ASSERT_NE(pEngine, nullptr);
 
@@ -524,6 +550,8 @@ TEST(RadientRendererTest, RenderHeadlessScene)
     RenderAttribs.pScene        = pScene;
     RenderAttribs.pRenderTarget = pTarget;
 
+    // The test only checks successful submission; image correctness belongs to
+    // renderer-specific tests.
     EXPECT_EQ(pRenderer->Render(RenderAttribs), RADIENT_STATUS_OK);
 }
 

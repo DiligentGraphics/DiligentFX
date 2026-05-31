@@ -241,6 +241,8 @@ const CapturedRenderableLight* FindRenderableLight(const std::vector<CapturedRen
 
 TEST(RadientSceneStateTest, GetDesc)
 {
+    // Verifies that the default scene has no name and that a provided desc
+    // name is copied into scene-owned storage.
     RadientSceneState DefaultState;
     EXPECT_EQ(DefaultState.GetDesc().Name, nullptr);
 
@@ -253,12 +255,15 @@ TEST(RadientSceneStateTest, GetDesc)
 
     Name[0] = 'X';
 
+    // Mutating the original buffer should not affect the stored description.
     EXPECT_STREQ(State.GetDesc().Name, "Scene A");
     EXPECT_NE(State.GetDesc().Name, Desc.Name);
 }
 
 TEST(RadientSceneStateTest, GetDescCopiesHeapName)
 {
+    // Verifies that the desc name remains valid after heap memory supplied by
+    // the caller is released.
     std::unique_ptr<std::string> Name = std::make_unique<std::string>("Heap Scene");
 
     RadientSceneDesc Desc;
@@ -268,13 +273,16 @@ TEST(RadientSceneStateTest, GetDescCopiesHeapName)
 
     Name.reset();
 
+    // The stored name should still be readable because SceneState made a copy.
     EXPECT_STREQ(State.GetDesc().Name, "Heap Scene");
 }
 
 TEST(RadientSceneStateTest, IsEntityAlive)
 {
+    // Exercises entity lifetime queries for missing, created, and destroyed entities.
     RadientSceneState State;
 
+    // Unknown entity IDs should report not found.
     EXPECT_EQ(State.IsEntityAlive(1), RADIENT_STATUS_NOT_FOUND);
 
     RadientEntityID Entity = InvalidRadientEntityID;
@@ -283,12 +291,15 @@ TEST(RadientSceneStateTest, IsEntityAlive)
 
     EXPECT_EQ(State.IsEntityAlive(Entity), RADIENT_STATUS_OK);
 
+    // After destruction, the same public ID must no longer be alive.
     EXPECT_EQ(State.DestroyEntity(Entity), RADIENT_STATUS_OK);
     EXPECT_EQ(State.IsEntityAlive(Entity), RADIENT_STATUS_NOT_FOUND);
 }
 
 TEST(RadientSceneStateTest, DestroyEntityHandlesDeepHierarchy)
 {
+    // Destroys a 1000-node chain to verify subtree destruction is robust for
+    // deep imported hierarchies.
     static constexpr Uint32 NodeCount = 1000;
 
     RadientSceneState            State;
@@ -296,18 +307,22 @@ TEST(RadientSceneStateTest, DestroyEntityHandlesDeepHierarchy)
 
     EXPECT_EQ(State.DestroyEntity(Entities.front()), RADIENT_STATUS_OK);
 
+    // Destroying the root should remove every descendant in the chain.
     for (const RadientEntityID Entity : Entities)
         EXPECT_EQ(State.IsEntityAlive(Entity), RADIENT_STATUS_NOT_FOUND);
 }
 
 TEST(RadientSceneStateTest, GetEntityFlags)
 {
+    // Validates entity flag creation, mutation, no-change handling, and error
+    // behavior for invalid flags and missing entities.
     RadientSceneState State;
 
     const RADIENT_ENTITY_FLAGS InvalidEntityFlags =
         static_cast<RADIENT_ENTITY_FLAGS>(static_cast<Uint32>(RADIENT_ENTITY_FLAGS_ALL) << 1u);
 
     RADIENT_ENTITY_FLAGS Flags = RADIENT_ENTITY_FLAG_VISIBLE;
+    // Missing entities reset the output to a safe default.
     EXPECT_EQ(State.GetEntityFlags(1, Flags), RADIENT_STATUS_NOT_FOUND);
     EXPECT_EQ(Flags, RADIENT_ENTITY_FLAG_NONE);
 
@@ -315,6 +330,7 @@ TEST(RadientSceneStateTest, GetEntityFlags)
     InvalidEntityDesc.Flags = InvalidEntityFlags;
 
     RadientEntityID InvalidEntity = 123;
+    // Invalid flag bits should reject entity creation and clear the output ID.
     EXPECT_EQ(State.CreateEntity(InvalidEntityDesc, InvalidEntity), RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(InvalidEntity, InvalidRadientEntityID);
 
@@ -323,6 +339,7 @@ TEST(RadientSceneStateTest, GetEntityFlags)
     EXPECT_EQ(State.GetEntityFlags(DefaultEntity, Flags), RADIENT_STATUS_OK);
     EXPECT_EQ(Flags, RADIENT_ENTITY_FLAG_VISIBLE);
 
+    // Failed flag updates must leave the existing flags unchanged.
     EXPECT_EQ(State.SetEntityFlags(DefaultEntity, InvalidEntityFlags), RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(State.GetEntityFlags(DefaultEntity, Flags), RADIENT_STATUS_OK);
     EXPECT_EQ(Flags, RADIENT_ENTITY_FLAG_VISIBLE);
@@ -339,6 +356,7 @@ TEST(RadientSceneStateTest, GetEntityFlags)
     EXPECT_EQ(State.GetEntityFlags(HiddenEntity, Flags), RADIENT_STATUS_OK);
     EXPECT_EQ(Flags, RADIENT_ENTITY_FLAG_VISIBLE);
 
+    // Setting the same value should report NO_CHANGE and preserve the value.
     EXPECT_EQ(State.SetEntityFlags(HiddenEntity, RADIENT_ENTITY_FLAG_VISIBLE), RADIENT_STATUS_NO_CHANGE);
     EXPECT_EQ(State.GetEntityFlags(HiddenEntity, Flags), RADIENT_STATUS_OK);
     EXPECT_EQ(Flags, RADIENT_ENTITY_FLAG_VISIBLE);
@@ -348,15 +366,19 @@ TEST(RadientSceneStateTest, GetEntityFlags)
 
     EXPECT_EQ(State.DestroyEntity(HiddenEntity), RADIENT_STATUS_OK);
     Flags = RADIENT_ENTITY_FLAG_VISIBLE;
+    // Destroyed entities should report not found and reset the output flags.
     EXPECT_EQ(State.GetEntityFlags(HiddenEntity, Flags), RADIENT_STATUS_NOT_FOUND);
     EXPECT_EQ(Flags, RADIENT_ENTITY_FLAG_NONE);
 }
 
 TEST(RadientSceneStateTest, GetEntityOwnVisibility)
 {
+    // Own visibility is derived directly from entity flags and should not be
+    // affected by parent visibility.
     RadientSceneState State;
 
     Bool Visible = True;
+    // Missing entities reset the output to false.
     EXPECT_EQ(State.GetEntityOwnVisibility(1, Visible), RADIENT_STATUS_NOT_FOUND);
     EXPECT_EQ(Visible, False);
 
@@ -377,6 +399,7 @@ TEST(RadientSceneStateTest, GetEntityOwnVisibility)
     EXPECT_EQ(State.GetEntityOwnVisibility(HiddenEntity, Visible), RADIENT_STATUS_OK);
     EXPECT_EQ(Visible, True);
 
+    // Reapplying the same visibility should be a no-op.
     EXPECT_EQ(State.SetEntityOwnVisibility(HiddenEntity, True), RADIENT_STATUS_NO_CHANGE);
     EXPECT_EQ(State.GetEntityOwnVisibility(HiddenEntity, Visible), RADIENT_STATUS_OK);
     EXPECT_EQ(Visible, True);
@@ -387,15 +410,19 @@ TEST(RadientSceneStateTest, GetEntityOwnVisibility)
 
     EXPECT_EQ(State.DestroyEntity(HiddenEntity), RADIENT_STATUS_OK);
     Visible = True;
+    // Destroyed entities should report not found and reset output visibility.
     EXPECT_EQ(State.GetEntityOwnVisibility(HiddenEntity, Visible), RADIENT_STATUS_NOT_FOUND);
     EXPECT_EQ(Visible, False);
 }
 
 TEST(RadientSceneStateTest, GetEntityEffectiveVisibility)
 {
+    // Effective visibility combines an entity's own visibility with all visible
+    // ancestors, and supports both lazy queries and committed cached queries.
     RadientSceneState State;
 
     Bool Visible = True;
+    // Missing entities reset the output to false.
     EXPECT_EQ(State.GetEntityEffectiveVisibility(1, Visible), RADIENT_STATUS_NOT_FOUND);
     EXPECT_EQ(Visible, False);
 
@@ -414,6 +441,8 @@ TEST(RadientSceneStateTest, GetEntityEffectiveVisibility)
     EXPECT_EQ(State.GetEntityEffectiveVisibility(Child, Visible), RADIENT_STATUS_OK);
     EXPECT_EQ(Visible, True);
 
+    // Hiding the root should make the child effectively invisible while its own
+    // visibility remains true.
     EXPECT_EQ(State.SetEntityOwnVisibility(Root, False), RADIENT_STATUS_OK);
     EXPECT_EQ(State.GetEntityOwnVisibility(Child, Visible), RADIENT_STATUS_OK);
     EXPECT_EQ(Visible, True);
@@ -426,6 +455,8 @@ TEST(RadientSceneStateTest, GetEntityEffectiveVisibility)
     EXPECT_EQ(State.GetCachedEntityEffectiveVisibility(Child, Visible), RADIENT_STATUS_OK);
     EXPECT_EQ(Visible, False);
 
+    // Cached access should report OUT_OF_DATE while global dirty visibility
+    // still exists elsewhere in the scene.
     EXPECT_EQ(State.SetEntityOwnVisibility(Root, True), RADIENT_STATUS_OK);
     EXPECT_EQ(State.GetCachedEntityEffectiveVisibility(Child, Visible), RADIENT_STATUS_OUT_OF_DATE);
     EXPECT_EQ(Visible, False);
@@ -457,6 +488,7 @@ TEST(RadientSceneStateTest, GetEntityEffectiveVisibility)
     EXPECT_EQ(Visible, True);
 
     EXPECT_EQ(State.SetEntityOwnVisibility(Child, False), RADIENT_STATUS_OK);
+    // A visible grandchild under a hidden child should still be effectively hidden.
     EXPECT_EQ(State.GetEntityOwnVisibility(GrandChild, Visible), RADIENT_STATUS_OK);
     EXPECT_EQ(Visible, True);
     EXPECT_EQ(State.GetEntityEffectiveVisibility(GrandChild, Visible), RADIENT_STATUS_OK);
@@ -468,6 +500,8 @@ TEST(RadientSceneStateTest, GetEntityEffectiveVisibility)
 
     EXPECT_EQ(State.SetEntityOwnVisibility(Child, True), RADIENT_STATUS_OK);
     EXPECT_EQ(State.SetEntityOwnVisibility(Root, False), RADIENT_STATUS_OK);
+    // A hidden ancestor still hides the grandchild even when its direct parent
+    // is visible.
     EXPECT_EQ(State.GetEntityEffectiveVisibility(GrandChild, Visible), RADIENT_STATUS_OK);
     EXPECT_EQ(Visible, False);
 
@@ -476,6 +510,7 @@ TEST(RadientSceneStateTest, GetEntityEffectiveVisibility)
     EXPECT_EQ(Visible, False);
 
     EXPECT_EQ(State.SetParent(GrandChild, InvalidRadientEntityID, True), RADIENT_STATUS_OK);
+    // Detaching the grandchild from the hidden root should make it visible again.
     EXPECT_EQ(State.GetEntityEffectiveVisibility(GrandChild, Visible), RADIENT_STATUS_OK);
     EXPECT_EQ(Visible, True);
 
@@ -485,6 +520,7 @@ TEST(RadientSceneStateTest, GetEntityEffectiveVisibility)
 
     EXPECT_EQ(State.DestroyEntity(GrandChild), RADIENT_STATUS_OK);
     Visible = True;
+    // Missing entities reset both lazy and cached visibility outputs.
     EXPECT_EQ(State.GetEntityEffectiveVisibility(GrandChild, Visible), RADIENT_STATUS_NOT_FOUND);
     EXPECT_EQ(Visible, False);
     Visible = True;
@@ -494,6 +530,8 @@ TEST(RadientSceneStateTest, GetEntityEffectiveVisibility)
 
 TEST(RadientSceneStateTest, LazyEffectiveVisibilityUpdatePreservesCommitPropagation)
 {
+    // Querying one dirty branch lazily must not prevent CommitChanges from
+    // propagating the same visibility change to sibling branches.
     RadientSceneState State;
 
     RadientEntityID Root = InvalidRadientEntityID;
@@ -510,20 +548,26 @@ TEST(RadientSceneStateTest, LazyEffectiveVisibilityUpdatePreservesCommitPropagat
 
     EXPECT_EQ(State.SetEntityOwnVisibility(Root, False), RADIENT_STATUS_OK);
 
+    // Lazily repairing Child0 should compute it as hidden.
     Bool Visible = True;
     EXPECT_EQ(State.GetEntityEffectiveVisibility(Child0, Visible), RADIENT_STATUS_OK);
     EXPECT_EQ(Visible, False);
 
     EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+    // Commit should still propagate the hidden root to Child1, which was not
+    // queried before commit.
     EXPECT_EQ(State.GetEntityEffectiveVisibility(Child1, Visible), RADIENT_STATUS_OK);
     EXPECT_EQ(Visible, False);
 }
 
 TEST(RadientSceneStateTest, GetParent)
 {
+    // Verifies parent queries across root entities, reparenting, detaching,
+    // and destruction of a parent subtree.
     RadientSceneState State;
 
     RadientEntityID Parent = 1;
+    // Missing entities should return not found and clear the output parent.
     EXPECT_EQ(State.GetParent(1, Parent), RADIENT_STATUS_NOT_FOUND);
     EXPECT_EQ(Parent, InvalidRadientEntityID);
 
@@ -532,6 +576,7 @@ TEST(RadientSceneStateTest, GetParent)
     EXPECT_EQ(State.GetParent(Root, Parent), RADIENT_STATUS_OK);
     EXPECT_EQ(Parent, InvalidRadientEntityID);
 
+    // A created child should report the requested parent.
     RadientEntityDesc ChildDesc;
     ChildDesc.Parent = Root;
 
@@ -543,10 +588,12 @@ TEST(RadientSceneStateTest, GetParent)
     RadientEntityID NewParent = InvalidRadientEntityID;
     EXPECT_EQ(State.CreateEntity({}, NewParent), RADIENT_STATUS_OK);
     EXPECT_EQ(State.SetParent(Child, NewParent, True), RADIENT_STATUS_OK);
+    // Reparenting should update the child to the new parent.
     EXPECT_EQ(State.GetParent(Child, Parent), RADIENT_STATUS_OK);
     EXPECT_EQ(Parent, NewParent);
 
     EXPECT_EQ(State.SetParent(Child, InvalidRadientEntityID, True), RADIENT_STATUS_OK);
+    // Detaching should make the child a root.
     EXPECT_EQ(State.GetParent(Child, Parent), RADIENT_STATUS_OK);
     EXPECT_EQ(Parent, InvalidRadientEntityID);
 
@@ -556,12 +603,15 @@ TEST(RadientSceneStateTest, GetParent)
 
     EXPECT_EQ(State.DestroyEntity(Root), RADIENT_STATUS_OK);
     Parent = NewParent;
+    // Destroying Root also destroys Child because it was reattached under Root.
     EXPECT_EQ(State.GetParent(Child, Parent), RADIENT_STATUS_NOT_FOUND);
     EXPECT_EQ(Parent, InvalidRadientEntityID);
 }
 
 TEST(RadientSceneStateTest, SetParentRejectsCycles)
 {
+    // Reparenting must reject self-parenting and ancestor/descendant cycles
+    // without mutating the existing hierarchy.
     RadientSceneState State;
 
     RadientEntityID Root = InvalidRadientEntityID;
@@ -580,10 +630,12 @@ TEST(RadientSceneStateTest, SetParentRejectsCycles)
     EXPECT_EQ(State.CreateEntity(GrandChildDesc, GrandChild), RADIENT_STATUS_OK);
 
     RadientEntityID Parent = InvalidRadientEntityID;
+    // An entity cannot become its own parent.
     EXPECT_EQ(State.SetParent(Child, Child, True), RADIENT_STATUS_INVALID_OPERATION);
     EXPECT_EQ(State.GetParent(Child, Parent), RADIENT_STATUS_OK);
     EXPECT_EQ(Parent, Root);
 
+    // A root cannot be parented under one of its descendants.
     EXPECT_EQ(State.SetParent(Root, GrandChild, True), RADIENT_STATUS_INVALID_OPERATION);
     EXPECT_EQ(State.GetParent(Root, Parent), RADIENT_STATUS_OK);
     EXPECT_EQ(Parent, InvalidRadientEntityID);
@@ -592,6 +644,7 @@ TEST(RadientSceneStateTest, SetParentRejectsCycles)
     EXPECT_EQ(State.GetParent(GrandChild, Parent), RADIENT_STATUS_OK);
     EXPECT_EQ(Parent, Child);
 
+    // A middle node also cannot be parented under its own child.
     EXPECT_EQ(State.SetParent(Child, GrandChild, True), RADIENT_STATUS_INVALID_OPERATION);
     EXPECT_EQ(State.GetParent(Child, Parent), RADIENT_STATUS_OK);
     EXPECT_EQ(Parent, Root);
@@ -601,9 +654,12 @@ TEST(RadientSceneStateTest, SetParentRejectsCycles)
 
 TEST(RadientSceneStateTest, GetChildCountAndChildren)
 {
+    // Validates child-count queries, paged child enumeration, stable child
+    // order, no-op reparenting, detaching, and child destruction.
     RadientSceneState State;
 
     Uint32 ChildCount = 1;
+    // Missing parents should report not found and clear output counts.
     EXPECT_EQ(State.GetChildCount(1, ChildCount), RADIENT_STATUS_NOT_FOUND);
     EXPECT_EQ(ChildCount, 0u);
 
@@ -620,6 +676,7 @@ TEST(RadientSceneStateTest, GetChildCountAndChildren)
     EXPECT_EQ(State.GetChildren(Root, 0, 0, nullptr, NumChildrenWritten), RADIENT_STATUS_OK);
     EXPECT_EQ(NumChildrenWritten, 0u);
 
+    // Asking to write children requires a non-null output buffer.
     EXPECT_EQ(State.GetChildren(Root, 0, 1, nullptr, NumChildrenWritten), RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(NumChildrenWritten, 0u);
 
@@ -636,6 +693,7 @@ TEST(RadientSceneStateTest, GetChildCountAndChildren)
     EXPECT_EQ(State.GetChildCount(Root, ChildCount), RADIENT_STATUS_OK);
     EXPECT_EQ(ChildCount, 3u);
 
+    // Full enumeration should return all children in insertion order.
     EXPECT_EQ(State.GetChildren(Root, 0, 4, Children, NumChildrenWritten), RADIENT_STATUS_OK);
     EXPECT_EQ(NumChildrenWritten, 3u);
     EXPECT_EQ(Children[0], Child0);
@@ -644,6 +702,7 @@ TEST(RadientSceneStateTest, GetChildCountAndChildren)
 
     Children[0] = InvalidRadientEntityID;
     Children[1] = InvalidRadientEntityID;
+    // Offset enumeration should return the requested suffix.
     EXPECT_EQ(State.GetChildren(Root, 1, 2, Children, NumChildrenWritten), RADIENT_STATUS_OK);
     EXPECT_EQ(NumChildrenWritten, 2u);
     EXPECT_EQ(Children[0], Child1);
@@ -656,6 +715,7 @@ TEST(RadientSceneStateTest, GetChildCountAndChildren)
     EXPECT_EQ(NumChildrenWritten, 0u);
 
     EXPECT_EQ(State.SetParent(Child2, Root, True), RADIENT_STATUS_NO_CHANGE);
+    // Reparenting to the same parent should not duplicate the child entry.
     EXPECT_EQ(State.GetChildCount(Root, ChildCount), RADIENT_STATUS_OK);
     EXPECT_EQ(ChildCount, 3u);
 
@@ -666,6 +726,7 @@ TEST(RadientSceneStateTest, GetChildCountAndChildren)
     EXPECT_EQ(Children[2], Child2);
 
     EXPECT_EQ(State.SetParent(Child1, InvalidRadientEntityID, True), RADIENT_STATUS_OK);
+    // Detaching a child should remove it from the old parent's list.
     EXPECT_EQ(State.GetChildCount(Root, ChildCount), RADIENT_STATUS_OK);
     EXPECT_EQ(ChildCount, 2u);
 
@@ -675,6 +736,7 @@ TEST(RadientSceneStateTest, GetChildCountAndChildren)
     EXPECT_EQ(Children[1], Child2);
 
     EXPECT_EQ(State.DestroyEntity(Child0), RADIENT_STATUS_OK);
+    // Destroying a child should also remove it from the parent's list.
     EXPECT_EQ(State.GetChildCount(Root, ChildCount), RADIENT_STATUS_OK);
     EXPECT_EQ(ChildCount, 1u);
 
@@ -685,10 +747,13 @@ TEST(RadientSceneStateTest, GetChildCountAndChildren)
 
 TEST(RadientSceneStateTest, GetLocalTransform)
 {
+    // Validates local transform creation, mutation, no-change detection, and
+    // missing-entity output reset.
     RadientSceneState State;
 
     RadientTransform Transform;
     Transform.Position = {1.f, 2.f, 3.f};
+    // Missing entities should return not found and reset the output transform.
     EXPECT_EQ(State.GetLocalTransform(1, Transform), RADIENT_STATUS_NOT_FOUND);
     ExpectTransformEq(Transform, RadientTransform{});
 
@@ -697,6 +762,7 @@ TEST(RadientSceneStateTest, GetLocalTransform)
     EXPECT_EQ(State.GetLocalTransform(Entity, Transform), RADIENT_STATUS_OK);
     ExpectTransformEq(Transform, RadientTransform{});
 
+    // Creation with an initial transform should preserve the exact TRS values.
     RadientTransform InitialTransform;
     InitialTransform.Position   = {1.f, 2.f, 3.f};
     InitialTransform.Rotation.z = 0.70710678f;
@@ -721,6 +787,7 @@ TEST(RadientSceneStateTest, GetLocalTransform)
     EXPECT_EQ(State.GetLocalTransform(TransformedEntity, Transform), RADIENT_STATUS_OK);
     ExpectTransformEq(Transform, UpdatedTransform);
 
+    // Setting the same transform again should report no change.
     EXPECT_EQ(State.SetLocalTransform(TransformedEntity, UpdatedTransform), RADIENT_STATUS_NO_CHANGE);
     EXPECT_EQ(State.GetLocalTransform(TransformedEntity, Transform), RADIENT_STATUS_OK);
     ExpectTransformEq(Transform, UpdatedTransform);
@@ -730,16 +797,20 @@ TEST(RadientSceneStateTest, GetLocalTransform)
 
     EXPECT_EQ(State.DestroyEntity(TransformedEntity), RADIENT_STATUS_OK);
     Transform = UpdatedTransform;
+    // Destroyed entities should report not found and reset output transform.
     EXPECT_EQ(State.GetLocalTransform(TransformedEntity, Transform), RADIENT_STATUS_NOT_FOUND);
     ExpectTransformEq(Transform, RadientTransform{});
 }
 
 TEST(RadientSceneStateTest, GetWorldMatrix)
 {
+    // Exercises world matrix computation for roots, children, dirty cached
+    // state, local changes, reparenting with KeepWorldTransform, and destruction.
     RadientSceneState State;
 
     RadientMatrix4x4 Matrix;
     Matrix.Data[0] = 2.f;
+    // Missing entities should return not found and reset the output matrix.
     EXPECT_EQ(State.GetWorldMatrix(1, Matrix), RADIENT_STATUS_NOT_FOUND);
     ExpectMatrixNear(Matrix, RadientMatrix4x4{});
 
@@ -760,6 +831,7 @@ TEST(RadientSceneStateTest, GetWorldMatrix)
     EXPECT_EQ(State.GetWorldMatrix(Root, Matrix), RADIENT_STATUS_OK);
     ExpectMatrixNear(Matrix, RadientMath::TransformToMatrix(RootTransform));
 
+    // After commit, cached and lazy world matrices should agree.
     EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
     EXPECT_EQ(State.GetWorldMatrix(Root, Matrix), RADIENT_STATUS_OK);
     ExpectMatrixNear(Matrix, RadientMath::TransformToMatrix(RootTransform));
@@ -780,6 +852,7 @@ TEST(RadientSceneStateTest, GetWorldMatrix)
     RadientMatrix4x4 ExpectedChildWorld = RadientMath::MultiplyMatrices(
         RadientMath::TransformToMatrix(ChildTransform),
         RadientMath::TransformToMatrix(RootTransform));
+    // Child world is local * parent world in Radient row-vector convention.
     EXPECT_EQ(State.GetWorldMatrix(Child, Matrix), RADIENT_STATUS_OK);
     ExpectMatrixNear(Matrix, ExpectedChildWorld);
 
@@ -791,6 +864,7 @@ TEST(RadientSceneStateTest, GetWorldMatrix)
 
     RootTransform.Position = {10.f, 20.f, 30.f};
     EXPECT_EQ(State.SetLocalTransform(Root, RootTransform), RADIENT_STATUS_OK);
+    // Cached access should expose the previous value and report that it is stale.
     EXPECT_EQ(State.GetCachedWorldMatrix(Child, Matrix), RADIENT_STATUS_OUT_OF_DATE);
     ExpectMatrixNear(Matrix, CommittedChildWorld);
 
@@ -810,6 +884,7 @@ TEST(RadientSceneStateTest, GetWorldMatrix)
     ChildTransform.Position = {8.f, 9.f, 10.f};
     ChildTransform.Scale    = {4.f, 5.f, 6.f};
     EXPECT_EQ(State.SetLocalTransform(Child, ChildTransform), RADIENT_STATUS_OK);
+    // Updating the child should recompute its world against the current parent.
     ExpectedChildWorld = RadientMath::MultiplyMatrices(
         RadientMath::TransformToMatrix(ChildTransform),
         RadientMath::TransformToMatrix(RootTransform));
@@ -822,6 +897,8 @@ TEST(RadientSceneStateTest, GetWorldMatrix)
     CommittedChildWorld = ExpectedChildWorld;
 
     EXPECT_EQ(State.SetParent(Child, InvalidRadientEntityID, True), RADIENT_STATUS_OK);
+    // KeepWorldTransform should preserve the committed world matrix while the
+    // local transform is adjusted for the new parent.
     EXPECT_EQ(State.GetWorldMatrix(Child, Matrix), RADIENT_STATUS_OK);
     ExpectMatrixNear(Matrix, CommittedChildWorld);
 
@@ -831,6 +908,7 @@ TEST(RadientSceneStateTest, GetWorldMatrix)
 
     EXPECT_EQ(State.DestroyEntity(Child), RADIENT_STATUS_OK);
     Matrix = ExpectedChildWorld;
+    // Destroyed entities should reset both lazy and cached world-matrix outputs.
     EXPECT_EQ(State.GetWorldMatrix(Child, Matrix), RADIENT_STATUS_NOT_FOUND);
     ExpectMatrixNear(Matrix, RadientMatrix4x4{});
     Matrix = ExpectedChildWorld;
@@ -840,6 +918,8 @@ TEST(RadientSceneStateTest, GetWorldMatrix)
 
 TEST(RadientSceneStateTest, LazyWorldMatrixUpdatePreservesCommitPropagation)
 {
+    // Lazily repairing one child after a parent transform change must not
+    // prevent commit from propagating that change to sibling branches.
     RadientSceneState State;
 
     RadientTransform RootTransform = MakeTranslation(1.f, 2.f, 3.f);
@@ -872,6 +952,7 @@ TEST(RadientSceneStateTest, LazyWorldMatrixUpdatePreservesCommitPropagation)
         RadientMath::TransformToMatrix(RootTransform));
 
     RadientMatrix4x4 Matrix;
+    // Child0 is repaired by the direct query before commit.
     EXPECT_EQ(State.GetWorldMatrix(Child0, Matrix), RADIENT_STATUS_OK);
     ExpectMatrixNear(Matrix, ExpectedWorld);
 
@@ -880,12 +961,15 @@ TEST(RadientSceneStateTest, LazyWorldMatrixUpdatePreservesCommitPropagation)
     ExpectedWorld = RadientMath::MultiplyMatrices(
         RadientMath::TransformToMatrix(Child1Desc.Transform),
         RadientMath::TransformToMatrix(RootTransform));
+    // Child1 was not queried before commit, so commit must still update it.
     EXPECT_EQ(State.GetWorldMatrix(Child1, Matrix), RADIENT_STATUS_OK);
     ExpectMatrixNear(Matrix, ExpectedWorld);
 }
 
 TEST(RadientSceneStateTest, LazyWorldMatrixUpdateClearsGlobalDirtyFlags)
 {
+    // If the only dirty state is repaired lazily, unrelated cached getters
+    // should stop reporting OUT_OF_DATE.
     RadientSceneState State;
 
     RadientEntityDesc Branch0Desc;
@@ -907,18 +991,24 @@ TEST(RadientSceneStateTest, LazyWorldMatrixUpdateClearsGlobalDirtyFlags)
     const RadientTransform UpdatedBranch0Transform = MakeTranslation(10.f, 0.f, 0.f);
     EXPECT_EQ(State.SetLocalTransform(Branch0, UpdatedBranch0Transform), RADIENT_STATUS_OK);
 
+    // Branch1 data is unchanged, but global dirty state makes cached access
+    // conservatively report that it may be stale.
     EXPECT_EQ(State.GetCachedWorldMatrix(Branch1, Matrix), RADIENT_STATUS_OUT_OF_DATE);
     ExpectMatrixNear(Matrix, RadientMath::TransformToMatrix(Branch1Desc.Transform));
 
     EXPECT_EQ(State.GetWorldMatrix(Branch0, Matrix), RADIENT_STATUS_OK);
     ExpectMatrixNear(Matrix, RadientMath::TransformToMatrix(UpdatedBranch0Transform));
 
+    // Repairing Branch0 clears the global dirty flag because no other dirty
+    // entities remain.
     EXPECT_EQ(State.GetCachedWorldMatrix(Branch1, Matrix), RADIENT_STATUS_OK);
     ExpectMatrixNear(Matrix, RadientMath::TransformToMatrix(Branch1Desc.Transform));
 }
 
 TEST(RadientSceneStateTest, DestroyEntityClearsGlobalDirtyFlags)
 {
+    // Destroying the only dirty branch should clear global dirty state so
+    // cached getters on unaffected branches become valid again.
     RadientSceneState State;
 
     RadientEntityDesc Branch0Desc;
@@ -944,6 +1034,7 @@ TEST(RadientSceneStateTest, DestroyEntityClearsGlobalDirtyFlags)
     EXPECT_EQ(State.SetLocalTransform(Branch0, MakeTranslation(10.f, 0.f, 0.f)), RADIENT_STATUS_OK);
     EXPECT_EQ(State.SetEntityOwnVisibility(Branch0, False), RADIENT_STATUS_OK);
 
+    // Dirty state in Branch0 makes unrelated cached data conservatively stale.
     EXPECT_EQ(State.GetCachedWorldMatrix(Branch1, Matrix), RADIENT_STATUS_OUT_OF_DATE);
     ExpectMatrixNear(Matrix, RadientMath::TransformToMatrix(Branch1Desc.Transform));
     EXPECT_EQ(State.GetCachedEntityEffectiveVisibility(Branch1, Visible), RADIENT_STATUS_OUT_OF_DATE);
@@ -951,6 +1042,7 @@ TEST(RadientSceneStateTest, DestroyEntityClearsGlobalDirtyFlags)
 
     EXPECT_EQ(State.DestroyEntity(Branch0), RADIENT_STATUS_OK);
 
+    // Removing the dirty branch should leave no pending dirty state.
     EXPECT_EQ(State.GetCachedWorldMatrix(Branch1, Matrix), RADIENT_STATUS_OK);
     ExpectMatrixNear(Matrix, RadientMath::TransformToMatrix(Branch1Desc.Transform));
     EXPECT_EQ(State.GetCachedEntityEffectiveVisibility(Branch1, Visible), RADIENT_STATUS_OK);
@@ -959,6 +1051,8 @@ TEST(RadientSceneStateTest, DestroyEntityClearsGlobalDirtyFlags)
 
 TEST(RadientSceneStateTest, CommitUpdatesDirtyParentBeforeDirtyChild)
 {
+    // Commit should update dirty ancestors before dirty descendants so child
+    // world transforms and effective visibility use current parent state.
     RadientSceneState State;
 
     RadientEntityID Child = InvalidRadientEntityID;
@@ -977,6 +1071,7 @@ TEST(RadientSceneStateTest, CommitUpdatesDirtyParentBeforeDirtyChild)
     EXPECT_EQ(State.SetLocalTransform(Child, ChildTransform), RADIENT_STATUS_OK);
     EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
 
+    // Child world should include the parent's transform even though both were dirty.
     RadientMatrix4x4 ExpectedWorld = RadientMath::MultiplyMatrices(
         RadientMath::TransformToMatrix(ChildTransform),
         RadientMath::TransformToMatrix(ParentTransform));
@@ -990,6 +1085,7 @@ TEST(RadientSceneStateTest, CommitUpdatesDirtyParentBeforeDirtyChild)
     EXPECT_EQ(State.SetLocalTransform(Child, UpdatedChildTransform), RADIENT_STATUS_OK);
     EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
 
+    // Parent visibility should be applied before evaluating the child.
     Bool Visible = True;
     EXPECT_EQ(State.GetEntityEffectiveVisibility(Child, Visible), RADIENT_STATUS_OK);
     EXPECT_EQ(Visible, False);
@@ -1003,9 +1099,13 @@ TEST(RadientSceneStateTest, CommitUpdatesDirtyParentBeforeDirtyChild)
 
 TEST(RadientSceneStateTest, CommitHandlesPathologicalDirtyLinearChains)
 {
+    // Exercises worst-case deep chains to ensure commit updates dirty subtrees
+    // without quadratic path walks or missed descendants.
     static constexpr Uint32 NodeCount = 1000;
 
     {
+        // Every node is dirty. Each world translation should accumulate all
+        // ancestors up to that node.
         RadientSceneState            State;
         std::vector<RadientEntityID> Entities  = CreateLinearChain(State, NodeCount);
         const RadientTransform       Transform = MakeTranslation(1.f, 0.f, 0.f);
@@ -1023,6 +1123,8 @@ TEST(RadientSceneStateTest, CommitHandlesPathologicalDirtyLinearChains)
     }
 
     {
+        // Only root and leaf are dirty. Intermediate nodes should inherit the
+        // root transform, while the leaf adds its own local transform.
         RadientSceneState            State;
         std::vector<RadientEntityID> Entities  = CreateLinearChain(State, NodeCount);
         const RadientTransform       Transform = MakeTranslation(1.f, 0.f, 0.f);
@@ -1041,6 +1143,8 @@ TEST(RadientSceneStateTest, CommitHandlesPathologicalDirtyLinearChains)
     }
 
     {
+        // Every third node is dirty. Each node should accumulate one unit of X
+        // for each dirty ancestor on its path.
         RadientSceneState            State;
         std::vector<RadientEntityID> Entities  = CreateLinearChain(State, NodeCount);
         const RadientTransform       Transform = MakeTranslation(1.f, 0.f, 0.f);
@@ -1060,6 +1164,8 @@ TEST(RadientSceneStateTest, CommitHandlesPathologicalDirtyLinearChains)
 
 TEST(RadientSceneStateTest, CommitCombinesParentAndChildDirtyFlags)
 {
+    // Parent and child may carry different dirty flags; commit must combine
+    // inherited and local flags so transform and visibility are both correct.
     RadientSceneState State;
 
     RadientEntityID Parent = InvalidRadientEntityID;
@@ -1080,6 +1186,7 @@ TEST(RadientSceneStateTest, CommitCombinesParentAndChildDirtyFlags)
     EXPECT_EQ(State.SetLocalTransform(Child, ChildTransform), RADIENT_STATUS_OK);
     EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
 
+    // Parent transform and hidden visibility should both affect the child.
     RadientMatrix4x4 ExpectedWorld = RadientMath::MultiplyMatrices(
         RadientMath::TransformToMatrix(ChildTransform),
         RadientMath::TransformToMatrix(ParentTransform));
@@ -1099,6 +1206,8 @@ TEST(RadientSceneStateTest, CommitCombinesParentAndChildDirtyFlags)
     EXPECT_EQ(State.SetEntityOwnVisibility(Child, False), RADIENT_STATUS_OK);
     EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
 
+    // The updated parent transform should apply, while the child's own hidden
+    // visibility keeps effective visibility false.
     ExpectedWorld = RadientMath::MultiplyMatrices(
         RadientMath::TransformToMatrix(ChildTransform),
         RadientMath::TransformToMatrix(ParentTransform));
@@ -1111,6 +1220,8 @@ TEST(RadientSceneStateTest, CommitCombinesParentAndChildDirtyFlags)
 
 TEST(RadientSceneStateTest, CommitUpdatesDirtyVisibilityParentBeforeDirtyTransformVisibilityChild)
 {
+    // Covers the case where a parent has visibility dirty and a child has both
+    // transform and visibility dirty. Parent visibility must be applied first.
     RadientSceneState State;
 
     RadientEntityID Parent = InvalidRadientEntityID;
@@ -1131,18 +1242,25 @@ TEST(RadientSceneStateTest, CommitUpdatesDirtyVisibilityParentBeforeDirtyTransfo
     EXPECT_EQ(State.SetEntityOwnVisibility(Child, True), RADIENT_STATUS_OK);
     EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
 
+    // The child transform is local because the parent has identity transform.
     RadientMatrix4x4 Matrix;
     EXPECT_EQ(State.GetWorldMatrix(Child, Matrix), RADIENT_STATUS_OK);
     ExpectMatrixNear(Matrix, RadientMath::TransformToMatrix(ChildTransform));
 
     Bool Visible = True;
+    // The parent remains hidden, so the child is still effectively invisible
+    // even after its own visibility was set to true.
     EXPECT_EQ(State.GetEntityEffectiveVisibility(Child, Visible), RADIENT_STATUS_OK);
     EXPECT_EQ(Visible, False);
 }
 
 TEST(RadientSceneStateTest, SetParentKeepWorldTransformUsesPendingTransforms)
 {
+    // Reparenting with KeepWorldTransform must account for pending dirty
+    // transforms on the child, old parent, and new parent.
     {
+        // Pending child transform should be used as the source world transform
+        // before the child is attached to the new parent.
         RadientSceneState State;
 
         RadientEntityDesc OldParentDesc;
@@ -1174,12 +1292,16 @@ TEST(RadientSceneStateTest, SetParentKeepWorldTransformUsesPendingTransforms)
         EXPECT_EQ(State.SetParent(Child, NewParent, True), RADIENT_STATUS_OK);
         EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
 
+        // The committed world should match the child's pending local transform
+        // under the old parent.
         RadientMatrix4x4 Matrix;
         EXPECT_EQ(State.GetWorldMatrix(Child, Matrix), RADIENT_STATUS_OK);
         ExpectMatrixNear(Matrix, ExpectedWorld);
     }
 
     {
+        // Pending old-parent transform should be used when computing the
+        // child's old world transform.
         RadientSceneState State;
 
         RadientEntityDesc OldParentDesc;
@@ -1211,12 +1333,15 @@ TEST(RadientSceneStateTest, SetParentKeepWorldTransformUsesPendingTransforms)
         EXPECT_EQ(State.SetParent(Child, NewParent, True), RADIENT_STATUS_OK);
         EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
 
+        // The child should keep the world matrix it had under the pending old parent.
         RadientMatrix4x4 Matrix;
         EXPECT_EQ(State.GetWorldMatrix(Child, Matrix), RADIENT_STATUS_OK);
         ExpectMatrixNear(Matrix, ExpectedWorld);
     }
 
     {
+        // Pending new-parent transform should be considered when computing the
+        // local transform needed to preserve the child's world.
         RadientSceneState State;
 
         RadientEntityDesc OldParentDesc;
@@ -1248,6 +1373,7 @@ TEST(RadientSceneStateTest, SetParentKeepWorldTransformUsesPendingTransforms)
         EXPECT_EQ(State.SetParent(Child, NewParent, True), RADIENT_STATUS_OK);
         EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
 
+        // The child's world should remain the old committed world after reparenting.
         RadientMatrix4x4 Matrix;
         EXPECT_EQ(State.GetWorldMatrix(Child, Matrix), RADIENT_STATUS_OK);
         ExpectMatrixNear(Matrix, ExpectedWorld);
@@ -1256,6 +1382,9 @@ TEST(RadientSceneStateTest, SetParentKeepWorldTransformUsesPendingTransforms)
 
 TEST(RadientSceneStateTest, EnumerateRenderableMeshes)
 {
+    // Enumerates mesh+renderer entities and verifies that incomplete entities
+    // are skipped while renderable metadata, visibility, bindings, and world
+    // matrices are captured.
     RadientSceneState State;
 
     RadientEntityDesc ParentDesc;
@@ -1272,6 +1401,7 @@ TEST(RadientSceneStateTest, EnumerateRenderableMeshes)
     MeshOnlyComponent.Mesh.Version = 1;
     EXPECT_EQ(State.SetMesh(MeshOnly, MeshOnlyComponent), RADIENT_STATUS_OK);
 
+    // Mesh without a renderer is not renderable.
     RadientEntityID RendererOnly = InvalidRadientEntityID;
     EXPECT_EQ(State.CreateEntity({}, RendererOnly), RADIENT_STATUS_OK);
 
@@ -1279,6 +1409,7 @@ TEST(RadientSceneStateTest, EnumerateRenderableMeshes)
     RendererOnlyComponent.VisibilityMask = 0x10;
     EXPECT_EQ(State.SetMeshRenderer(RendererOnly, RendererOnlyComponent), RADIENT_STATUS_OK);
 
+    // This entity has both mesh and renderer components and should be enumerated.
     RadientEntityDesc DrawableDesc;
     DrawableDesc.Parent    = Parent;
     DrawableDesc.Transform = MakeTranslation(1.f, 2.f, 3.f);
@@ -1305,6 +1436,7 @@ TEST(RadientSceneStateTest, EnumerateRenderableMeshes)
     MaterialBindings.BindingCount = 1;
     EXPECT_EQ(State.SetMaterialBindings(Drawable, MaterialBindings), RADIENT_STATUS_OK);
 
+    // Hidden renderables are still enumerated, but report effective visibility false.
     RadientEntityDesc HiddenDrawableDesc;
     HiddenDrawableDesc.Flags     = RADIENT_ENTITY_FLAG_NONE;
     HiddenDrawableDesc.Transform = MakeTranslation(4.f, 5.f, 6.f);
@@ -1323,8 +1455,11 @@ TEST(RadientSceneStateTest, EnumerateRenderableMeshes)
         });
 
     EXPECT_EQ(Status, RADIENT_STATUS_OK);
+    // Only the complete visible/hidden drawables should be returned.
     ASSERT_EQ(RenderableMeshes.size(), 2u);
 
+    // The visible drawable should preserve mesh, renderer, material binding,
+    // visibility, and inherited transform data.
     const CapturedRenderableMesh* pDrawable = FindRenderableMesh(RenderableMeshes, Drawable);
     ASSERT_NE(pDrawable, nullptr);
     EXPECT_EQ(pDrawable->MeshURI, "mesh://cube");
@@ -1344,6 +1479,7 @@ TEST(RadientSceneStateTest, EnumerateRenderableMeshes)
 
     const CapturedRenderableMesh* pHiddenDrawable = FindRenderableMesh(RenderableMeshes, HiddenDrawable);
     ASSERT_NE(pHiddenDrawable, nullptr);
+    // Hidden entity is still a renderable, but render code can cull it by flag.
     EXPECT_EQ(pHiddenDrawable->EffectiveVisible, False);
     EXPECT_FALSE(pHiddenDrawable->HasMaterialBindings);
     ExpectMatrixNear(pHiddenDrawable->WorldMatrix, RadientMath::TransformToMatrix(HiddenDrawableDesc.Transform));
@@ -1351,6 +1487,8 @@ TEST(RadientSceneStateTest, EnumerateRenderableMeshes)
 
 TEST(RadientSceneStateTest, EnumerateRenderableMeshesReportsOutOfDateDerivedState)
 {
+    // Renderable enumeration should still produce data when derived transforms
+    // are dirty, but report OUT_OF_DATE so callers know cached values may be stale.
     RadientSceneState State;
 
     RadientEntityID Entity = InvalidRadientEntityID;
@@ -1376,6 +1514,8 @@ TEST(RadientSceneStateTest, EnumerateRenderableMeshesReportsOutOfDateDerivedStat
     const RadientTransform Transform = MakeTranslation(1.f, 2.f, 3.f);
     EXPECT_EQ(State.SetLocalTransform(Entity, Transform), RADIENT_STATUS_OK);
 
+    // The entity is still enumerable, but the status tells the renderer to
+    // commit or repair before trusting cached transforms.
     RenderableMeshCount = 0;
     EXPECT_EQ(State.EnumerateRenderableMeshes(
                   [&RenderableMeshCount](const RadientSceneState::RenderableMesh&) {
@@ -1394,11 +1534,14 @@ TEST(RadientSceneStateTest, EnumerateRenderableMeshesReportsOutOfDateDerivedStat
               RADIENT_STATUS_OK);
 
     ASSERT_EQ(RenderableMeshes.size(), 1u);
+    // After commit, enumeration is up-to-date and returns the new world matrix.
     ExpectMatrixNear(RenderableMeshes[0].WorldMatrix, RadientMath::TransformToMatrix(Transform));
 }
 
 TEST(RadientSceneStateTest, TracksRenderableMeshChanges)
 {
+    // Tracks renderable mesh delta events as components are added, updated, and
+    // removed from a single entity.
     RadientSceneState State;
 
     RadientEntityID Entity = InvalidRadientEntityID;
@@ -1407,6 +1550,7 @@ TEST(RadientSceneStateTest, TracksRenderableMeshChanges)
     EXPECT_TRUE(CaptureRenderableMeshChanges(State).empty());
 
     EXPECT_EQ(State.SetMesh(Entity, MakeMeshComponent("mesh://cube", 1)), RADIENT_STATUS_OK);
+    // Mesh alone is not renderable, so no change should be emitted yet.
     EXPECT_TRUE(CaptureRenderableMeshChanges(State).empty());
 
     RadientMeshRendererComponent Renderer;
@@ -1414,6 +1558,8 @@ TEST(RadientSceneStateTest, TracksRenderableMeshChanges)
     EXPECT_EQ(State.SetMeshRenderer(Entity, Renderer), RADIENT_STATUS_OK);
 
     std::vector<CapturedRenderableMeshChange> Changes = CaptureRenderableMeshChanges(State);
+    // Adding the renderer completes the renderable and should emit Added with
+    // the current renderable mesh payload.
     ASSERT_EQ(Changes.size(), 1u);
     EXPECT_EQ(Changes[0].Entity, Entity);
     EXPECT_EQ(Changes[0].Type, RenderableMeshChangeType::Added);
@@ -1426,6 +1572,8 @@ TEST(RadientSceneStateTest, TracksRenderableMeshChanges)
     EXPECT_TRUE(CaptureRenderableMeshChanges(State).empty());
 
     std::vector<CapturedRenderableMesh> RenderableMeshes;
+    // The renderable is visible to full enumeration even before committing
+    // derived state; the status reports that transform data is out of date.
     EXPECT_EQ(State.EnumerateRenderableMeshes(
                   [&RenderableMeshes](const RadientSceneState::RenderableMesh& Mesh) {
                       RenderableMeshes.push_back(CaptureRenderableMesh(Mesh));
@@ -1439,6 +1587,7 @@ TEST(RadientSceneStateTest, TracksRenderableMeshChanges)
     EXPECT_EQ(State.SetMesh(Entity, MakeMeshComponent("mesh://sphere", 2)), RADIENT_STATUS_OK);
 
     Changes = CaptureRenderableMeshChanges(State);
+    // Changing the mesh reference on an existing renderable should emit Updated.
     ASSERT_EQ(Changes.size(), 1u);
     EXPECT_EQ(Changes[0].Entity, Entity);
     EXPECT_EQ(Changes[0].Type, RenderableMeshChangeType::Updated);
@@ -1458,6 +1607,7 @@ TEST(RadientSceneStateTest, TracksRenderableMeshChanges)
     EXPECT_EQ(State.SetMaterialBindings(Entity, MaterialBindings), RADIENT_STATUS_OK);
 
     Changes = CaptureRenderableMeshChanges(State);
+    // Adding material bindings changes renderer-visible data, so it is an update.
     ASSERT_EQ(Changes.size(), 1u);
     EXPECT_EQ(Changes[0].Entity, Entity);
     EXPECT_EQ(Changes[0].Type, RenderableMeshChangeType::Updated);
@@ -1472,6 +1622,7 @@ TEST(RadientSceneStateTest, TracksRenderableMeshChanges)
     EXPECT_EQ(State.RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_MATERIAL_BINDINGS), RADIENT_STATUS_OK);
 
     Changes = CaptureRenderableMeshChanges(State);
+    // Removing optional material bindings keeps the entity renderable and emits Updated.
     ASSERT_EQ(Changes.size(), 1u);
     EXPECT_EQ(Changes[0].Entity, Entity);
     EXPECT_EQ(Changes[0].Type, RenderableMeshChangeType::Updated);
@@ -1482,6 +1633,8 @@ TEST(RadientSceneStateTest, TracksRenderableMeshChanges)
     EXPECT_EQ(State.RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_MESH_RENDERER), RADIENT_STATUS_OK);
 
     Changes = CaptureRenderableMeshChanges(State);
+    // Removing the renderer makes the entity non-renderable, so the change has
+    // no renderable mesh payload.
     ASSERT_EQ(Changes.size(), 1u);
     EXPECT_EQ(Changes[0].Entity, Entity);
     EXPECT_EQ(Changes[0].Type, RenderableMeshChangeType::Removed);
@@ -1498,6 +1651,7 @@ TEST(RadientSceneStateTest, TracksRenderableMeshChanges)
     EXPECT_EQ(State.SetMeshRenderer(Entity, Renderer), RADIENT_STATUS_OK);
 
     Changes = CaptureRenderableMeshChanges(State);
+    // Re-adding the renderer recreates the renderable and emits Added.
     ASSERT_EQ(Changes.size(), 1u);
     EXPECT_EQ(Changes[0].Entity, Entity);
     EXPECT_EQ(Changes[0].Type, RenderableMeshChangeType::Added);
@@ -1508,6 +1662,7 @@ TEST(RadientSceneStateTest, TracksRenderableMeshChanges)
     EXPECT_EQ(State.RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_MESH), RADIENT_STATUS_OK);
 
     Changes = CaptureRenderableMeshChanges(State);
+    // Removing the mesh also removes the renderable from enumeration.
     ASSERT_EQ(Changes.size(), 1u);
     EXPECT_EQ(Changes[0].Entity, Entity);
     EXPECT_EQ(Changes[0].Type, RenderableMeshChangeType::Removed);
@@ -1525,6 +1680,8 @@ TEST(RadientSceneStateTest, TracksRenderableMeshChanges)
 
 TEST(RadientSceneStateTest, CoalescesRenderableMeshChanges)
 {
+    // Multiple edits before the renderer consumes changes should coalesce to
+    // the final renderable state instead of emitting noisy intermediate events.
     RadientSceneState State;
 
     RadientEntityID Entity = InvalidRadientEntityID;
@@ -1534,10 +1691,13 @@ TEST(RadientSceneStateTest, CoalescesRenderableMeshChanges)
     EXPECT_EQ(State.SetMeshRenderer(Entity, {}), RADIENT_STATUS_OK);
     EXPECT_EQ(State.SetMesh(Entity, MakeMeshComponent("mesh://temporary", 2)), RADIENT_STATUS_OK);
     EXPECT_EQ(State.RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_MESH_RENDERER), RADIENT_STATUS_OK);
+    // Added then removed before sync means no net renderable change.
     EXPECT_TRUE(CaptureRenderableMeshChanges(State).empty());
 
     EXPECT_EQ(State.SetMeshRenderer(Entity, {}), RADIENT_STATUS_OK);
     std::vector<CapturedRenderableMeshChange> Changes = CaptureRenderableMeshChanges(State);
+    // Re-adding the renderer after mesh edits emits one Added change with the
+    // latest mesh version.
     ASSERT_EQ(Changes.size(), 1u);
     EXPECT_EQ(Changes[0].Entity, Entity);
     EXPECT_EQ(Changes[0].Type, RenderableMeshChangeType::Added);
@@ -1551,6 +1711,7 @@ TEST(RadientSceneStateTest, CoalescesRenderableMeshChanges)
     EXPECT_EQ(State.SetMeshRenderer(Entity, {}), RADIENT_STATUS_OK);
 
     Changes = CaptureRenderableMeshChanges(State);
+    // Updated, removed, and added again before consumption coalesces to Updated.
     ASSERT_EQ(Changes.size(), 1u);
     EXPECT_EQ(Changes[0].Entity, Entity);
     EXPECT_EQ(Changes[0].Type, RenderableMeshChangeType::Updated);
@@ -1564,6 +1725,7 @@ TEST(RadientSceneStateTest, CoalescesRenderableMeshChanges)
     EXPECT_EQ(State.SetMesh(Transient, MakeMeshComponent("mesh://transient")), RADIENT_STATUS_OK);
     EXPECT_EQ(State.SetMeshRenderer(Transient, {}), RADIENT_STATUS_OK);
     EXPECT_EQ(State.DestroyEntity(Transient), RADIENT_STATUS_OK);
+    // A renderable created and destroyed before sync should leave no change.
     EXPECT_TRUE(CaptureRenderableMeshChanges(State).empty());
 
     RadientEntityID RemovedBeforeDestroy = InvalidRadientEntityID;
@@ -1576,6 +1738,8 @@ TEST(RadientSceneStateTest, CoalescesRenderableMeshChanges)
     EXPECT_EQ(State.DestroyEntity(RemovedBeforeDestroy), RADIENT_STATUS_OK);
 
     Changes = CaptureRenderableMeshChanges(State);
+    // If a previously synchronized renderable is removed before destruction,
+    // the renderer should still receive exactly one Removed event.
     ASSERT_EQ(Changes.size(), 1u);
     EXPECT_EQ(Changes[0].Entity, RemovedBeforeDestroy);
     EXPECT_EQ(Changes[0].Type, RenderableMeshChangeType::Removed);
@@ -1584,6 +1748,8 @@ TEST(RadientSceneStateTest, CoalescesRenderableMeshChanges)
 
 TEST(RadientSceneStateTest, DestroyEntityRecordsRenderableMeshChangesForSubtree)
 {
+    // Destroying a parent subtree should emit Removed changes for every
+    // renderable entity inside the subtree and leave unrelated siblings alone.
     RadientSceneState State;
 
     RadientEntityID Root = InvalidRadientEntityID;
@@ -1617,10 +1783,12 @@ TEST(RadientSceneStateTest, DestroyEntityRecordsRenderableMeshChangesForSubtree)
     EXPECT_EQ(State.DestroyEntity(Root), RADIENT_STATUS_OK);
 
     const std::vector<CapturedRenderableMeshChange> Changes = CaptureRenderableMeshChanges(State);
+    // Root, child, and grandchild were renderable and should all be removed.
     ASSERT_EQ(Changes.size(), 3u);
 
     const CapturedRenderableMeshChange* pRootChange = FindRenderableMeshChange(Changes, Root);
     ASSERT_NE(pRootChange, nullptr);
+    // Removed changes do not include a renderable payload because the entity is gone.
     EXPECT_EQ(pRootChange->Type, RenderableMeshChangeType::Removed);
     EXPECT_FALSE(pRootChange->HasMesh);
 
@@ -1636,6 +1804,7 @@ TEST(RadientSceneStateTest, DestroyEntityRecordsRenderableMeshChangesForSubtree)
 
     EXPECT_EQ(FindRenderableMeshChange(Changes, Sibling), nullptr);
     std::vector<CapturedRenderableMesh> RenderableMeshes;
+    // The sibling was outside the destroyed subtree and should remain renderable.
     EXPECT_EQ(State.EnumerateRenderableMeshes(
                   [&RenderableMeshes](const RadientSceneState::RenderableMesh& Mesh) {
                       RenderableMeshes.push_back(CaptureRenderableMesh(Mesh));
@@ -1646,6 +1815,8 @@ TEST(RadientSceneStateTest, DestroyEntityRecordsRenderableMeshChangesForSubtree)
 
 TEST(RadientSceneStateTest, EnumerateRenderableLights)
 {
+    // Enumerates light components and verifies that unrelated mesh renderables
+    // are ignored while light world transforms and visibility are reported.
     RadientSceneState State;
 
     RadientEntityDesc ParentDesc;
@@ -1689,10 +1860,12 @@ TEST(RadientSceneStateTest, EnumerateRenderableLights)
         });
 
     EXPECT_EQ(Status, RADIENT_STATUS_OK);
+    // Only light entities should be returned.
     ASSERT_EQ(RenderableLights.size(), 2u);
 
     const CapturedRenderableLight* pLight = FindRenderableLight(RenderableLights, LightEntity);
     ASSERT_NE(pLight, nullptr);
+    // The visible light should preserve component data and inherited transform.
     EXPECT_TRUE(pLight->Light == Light);
     EXPECT_EQ(pLight->EffectiveVisible, True);
 
@@ -1703,12 +1876,15 @@ TEST(RadientSceneStateTest, EnumerateRenderableLights)
 
     const CapturedRenderableLight* pHiddenLight = FindRenderableLight(RenderableLights, HiddenLight);
     ASSERT_NE(pHiddenLight, nullptr);
+    // Hidden lights are still enumerated and report effective visibility false.
     EXPECT_EQ(pHiddenLight->EffectiveVisible, False);
     ExpectMatrixNear(pHiddenLight->WorldMatrix, RadientMath::TransformToMatrix(HiddenLightDesc.Transform));
 }
 
 TEST(RadientSceneStateTest, EnumerateRenderableLightsReportsOutOfDateDerivedState)
 {
+    // Light enumeration mirrors mesh enumeration: data is returned while dirty,
+    // but the status tells callers that cached derived values may be stale.
     RadientSceneState State;
 
     RadientEntityID Entity = InvalidRadientEntityID;
@@ -1727,6 +1903,7 @@ TEST(RadientSceneStateTest, EnumerateRenderableLightsReportsOutOfDateDerivedStat
     const RadientTransform Transform = MakeTranslation(1.f, 2.f, 3.f);
     EXPECT_EQ(State.SetLocalTransform(Entity, Transform), RADIENT_STATUS_OK);
 
+    // The light is still found, but the stale transform makes the status out of date.
     RenderableLightCount = 0;
     EXPECT_EQ(State.EnumerateRenderableLights(
                   [&RenderableLightCount](const RadientSceneState::RenderableLight&) {
@@ -1745,14 +1922,18 @@ TEST(RadientSceneStateTest, EnumerateRenderableLightsReportsOutOfDateDerivedStat
               RADIENT_STATUS_OK);
 
     ASSERT_EQ(RenderableLights.size(), 1u);
+    // After commit, the enumerated light should contain the updated world matrix.
     ExpectMatrixNear(RenderableLights[0].WorldMatrix, RadientMath::TransformToMatrix(Transform));
 }
 
 TEST(RadientSceneStateTest, HasComponent)
 {
+    // Validates HasComponent for built-in, custom, removed, and mandatory
+    // components, including invalid component IDs and missing entities.
     RadientSceneState State;
 
     Bool HasComponent = True;
+    // Missing entities should report not found and reset the output flag.
     EXPECT_EQ(State.HasComponent(1, RADIENT_COMPONENT_TYPE_TRANSFORM, HasComponent), RADIENT_STATUS_NOT_FOUND);
     EXPECT_EQ(HasComponent, False);
 
@@ -1760,12 +1941,15 @@ TEST(RadientSceneStateTest, HasComponent)
     EXPECT_EQ(State.CreateEntity({}, Entity), RADIENT_STATUS_OK);
 
     HasComponent = True;
+    // Invalid component type IDs are rejected and clear the output flag.
     EXPECT_EQ(State.HasComponent(Entity, InvalidRadientComponentTypeID, HasComponent), RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(HasComponent, False);
 
     EXPECT_EQ(State.HasComponent(Entity, RADIENT_COMPONENT_TYPE_TRANSFORM, HasComponent), RADIENT_STATUS_OK);
     EXPECT_EQ(HasComponent, True);
 
+    // Each optional built-in component should report absent before Set* and
+    // present after Set*.
     EXPECT_EQ(State.HasComponent(Entity, RADIENT_COMPONENT_TYPE_CAMERA, HasComponent), RADIENT_STATUS_OK);
     EXPECT_EQ(HasComponent, False);
     EXPECT_EQ(State.SetCamera(Entity, {}), RADIENT_STATUS_OK);
@@ -1808,6 +1992,7 @@ TEST(RadientSceneStateTest, HasComponent)
     EXPECT_EQ(State.HasComponent(Entity, CustomComponentType, HasComponent), RADIENT_STATUS_OK);
     EXPECT_EQ(HasComponent, False);
 
+    // Custom component data should be tracked by its caller-provided type ID.
     RadientCustomComponentData CustomComponent;
     CustomComponent.ComponentType = CustomComponentType;
     EXPECT_EQ(State.SetCustomComponentData(Entity, CustomComponent), RADIENT_STATUS_OK);
@@ -1815,6 +2000,7 @@ TEST(RadientSceneStateTest, HasComponent)
     EXPECT_EQ(HasComponent, True);
 
     EXPECT_EQ(State.RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_CAMERA), RADIENT_STATUS_OK);
+    // Removed optional components should return absent.
     EXPECT_EQ(State.HasComponent(Entity, RADIENT_COMPONENT_TYPE_CAMERA, HasComponent), RADIENT_STATUS_OK);
     EXPECT_EQ(HasComponent, False);
 
@@ -1823,21 +2009,26 @@ TEST(RadientSceneStateTest, HasComponent)
     EXPECT_EQ(HasComponent, False);
 
     EXPECT_EQ(State.RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_TRANSFORM), RADIENT_STATUS_INVALID_OPERATION);
+    // Transform is mandatory and should still be present after a failed remove.
     EXPECT_EQ(State.HasComponent(Entity, RADIENT_COMPONENT_TYPE_TRANSFORM, HasComponent), RADIENT_STATUS_OK);
     EXPECT_EQ(HasComponent, True);
 
     EXPECT_EQ(State.DestroyEntity(Entity), RADIENT_STATUS_OK);
     HasComponent = True;
+    // Destroyed entities should report not found and clear the output flag.
     EXPECT_EQ(State.HasComponent(Entity, RADIENT_COMPONENT_TYPE_TRANSFORM, HasComponent), RADIENT_STATUS_NOT_FOUND);
     EXPECT_EQ(HasComponent, False);
 }
 
 TEST(RadientSceneStateTest, GetCamera)
 {
+    // Verifies camera component get/set/update/remove behavior and that
+    // missing cameras reset the output component to defaults.
     RadientSceneState State;
 
     RadientCameraComponent Camera;
     Camera.FocalLength = 35.f;
+    // Missing entities should report not found and reset output.
     EXPECT_EQ(State.GetCamera(1, Camera), RADIENT_STATUS_NOT_FOUND);
     EXPECT_EQ(Camera, RadientCameraComponent{});
 
@@ -1845,6 +2036,7 @@ TEST(RadientSceneStateTest, GetCamera)
     EXPECT_EQ(State.CreateEntity({}, Entity), RADIENT_STATUS_OK);
 
     Camera.FocalLength = 35.f;
+    // Existing entities without a camera should also report not found.
     EXPECT_EQ(State.GetCamera(Entity, Camera), RADIENT_STATUS_NOT_FOUND);
     EXPECT_EQ(Camera, RadientCameraComponent{});
 
@@ -1858,21 +2050,26 @@ TEST(RadientSceneStateTest, GetCamera)
     ExpectedCamera.FocusDistance      = 12.f;
 
     EXPECT_EQ(State.SetCamera(Entity, ExpectedCamera), RADIENT_STATUS_OK);
+    // The initial camera set should be retrieved exactly.
     EXPECT_EQ(State.GetCamera(Entity, Camera), RADIENT_STATUS_OK);
     EXPECT_EQ(Camera, ExpectedCamera);
 
     ExpectedCamera.FocalLength = 85.f;
     EXPECT_EQ(State.SetCamera(Entity, ExpectedCamera), RADIENT_STATUS_OK);
+    // Updating camera data should replace the stored component.
     EXPECT_EQ(State.GetCamera(Entity, Camera), RADIENT_STATUS_OK);
     EXPECT_EQ(Camera, ExpectedCamera);
 
     EXPECT_EQ(State.RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_CAMERA), RADIENT_STATUS_OK);
+    // After removal, GetCamera should again return not found and defaults.
     EXPECT_EQ(State.GetCamera(Entity, Camera), RADIENT_STATUS_NOT_FOUND);
     EXPECT_EQ(Camera, RadientCameraComponent{});
 }
 
 TEST(RadientSceneStateTest, SetBuiltInComponentReturnsNoChangeForSameValue)
 {
+    // Built-in component setters should report NO_CHANGE and avoid revision
+    // bumps when the new value is equivalent to the stored value.
     RadientSceneState State;
 
     RadientEntityID Entity = InvalidRadientEntityID;
@@ -1883,6 +2080,7 @@ TEST(RadientSceneStateTest, SetBuiltInComponentReturnsNoChangeForSameValue)
 
     EXPECT_EQ(State.SetCamera(Entity, Camera), RADIENT_STATUS_OK);
     RadientSceneRevisions Revisions = State.GetSceneRevisions();
+    // Re-setting identical camera data should not change revisions.
     EXPECT_EQ(State.SetCamera(Entity, Camera), RADIENT_STATUS_NO_CHANGE);
     EXPECT_EQ(State.GetSceneRevisions(), Revisions);
 
@@ -1899,6 +2097,8 @@ TEST(RadientSceneStateTest, SetBuiltInComponentReturnsNoChangeForSameValue)
     EXPECT_EQ(State.SetMesh(Entity, Mesh), RADIENT_STATUS_OK);
     Revisions = State.GetSceneRevisions();
 
+    // Mesh URI string identity is irrelevant; equal URI contents and version
+    // should compare as no change.
     RadientMeshComponent SameMesh = Mesh;
     SameMesh.Mesh.URI             = MeshURI1;
     EXPECT_EQ(State.SetMesh(Entity, SameMesh), RADIENT_STATUS_NO_CHANGE);
@@ -1912,6 +2112,7 @@ TEST(RadientSceneStateTest, SetBuiltInComponentReturnsNoChangeForSameValue)
 
     EXPECT_EQ(State.SetMeshRenderer(Entity, Renderer), RADIENT_STATUS_OK);
     Revisions = State.GetSceneRevisions();
+    // Same renderer flags should not bump drawable revisions.
     EXPECT_EQ(State.SetMeshRenderer(Entity, Renderer), RADIENT_STATUS_NO_CHANGE);
     EXPECT_EQ(State.GetSceneRevisions(), Revisions);
 
@@ -1933,6 +2134,8 @@ TEST(RadientSceneStateTest, SetBuiltInComponentReturnsNoChangeForSameValue)
     EXPECT_EQ(State.SetMaterialBindings(Entity, MaterialBindings), RADIENT_STATUS_OK);
     Revisions = State.GetSceneRevisions();
 
+    // Material binding URI content should compare equal even when stored in a
+    // different input buffer.
     RadientMaterialBinding SameMaterialBinding = MaterialBinding;
     SameMaterialBinding.Material.URI           = MaterialURI1;
 
@@ -1950,6 +2153,7 @@ TEST(RadientSceneStateTest, SetBuiltInComponentReturnsNoChangeForSameValue)
 
     EXPECT_EQ(State.SetLight(Entity, Light), RADIENT_STATUS_OK);
     Revisions = State.GetSceneRevisions();
+    // Same light values should not bump light revisions.
     EXPECT_EQ(State.SetLight(Entity, Light), RADIENT_STATUS_NO_CHANGE);
     EXPECT_EQ(State.GetSceneRevisions(), Revisions);
 
@@ -1959,35 +2163,45 @@ TEST(RadientSceneStateTest, SetBuiltInComponentReturnsNoChangeForSameValue)
 
 TEST(RadientSceneStateTest, TracksSceneRevisions)
 {
+    // Verifies that each scene revision counter advances only for the category
+    // affected by a mutation.
     RadientSceneState State;
+    // A fresh state starts with all revision counters at zero.
     ExpectSceneRevisions(State.GetSceneRevisions(), 0, 0, 0, 0);
 
     RadientEntityID Entity = InvalidRadientEntityID;
     ASSERT_EQ(State.CreateEntity({}, Entity), RADIENT_STATUS_OK);
+    // Creating an entity affects transform and visibility derived data.
     ExpectSceneRevisions(State.GetSceneRevisions(), 0, 0, 1, 1);
 
     const RadientSceneRevisions AfterCreate = State.GetSceneRevisions();
     EXPECT_EQ(State.SetLocalTransform(Entity, {}), RADIENT_STATUS_NO_CHANGE);
+    // No-change transform updates should leave all counters unchanged.
     EXPECT_EQ(State.GetSceneRevisions(), AfterCreate);
 
     EXPECT_EQ(State.SetLocalTransform(Entity, MakeTranslation(1.f, 2.f, 3.f)), RADIENT_STATUS_OK);
+    // Local transform changes bump transform revisions only.
     ExpectSceneRevisions(State.GetSceneRevisions(), 0, 0, 2, 1);
 
     EXPECT_EQ(State.SetEntityOwnVisibility(Entity, False), RADIENT_STATUS_OK);
+    // Own visibility changes bump visibility revisions only.
     ExpectSceneRevisions(State.GetSceneRevisions(), 0, 0, 2, 2);
 
     RadientMeshComponent Mesh;
     Mesh.Mesh.URI     = "mesh://revision-test";
     Mesh.Mesh.Version = 1;
     EXPECT_EQ(State.SetMesh(Entity, Mesh), RADIENT_STATUS_OK);
+    // Mesh data affects drawable revisions.
     ExpectSceneRevisions(State.GetSceneRevisions(), 1, 0, 2, 2);
 
     EXPECT_EQ(State.SetMesh(Entity, Mesh), RADIENT_STATUS_NO_CHANGE);
+    // Identical mesh data is a no-op.
     ExpectSceneRevisions(State.GetSceneRevisions(), 1, 0, 2, 2);
 
     RadientMeshRendererComponent Renderer;
     Renderer.VisibilityMask = 7;
     EXPECT_EQ(State.SetMeshRenderer(Entity, Renderer), RADIENT_STATUS_OK);
+    // Mesh renderer state also affects drawable revisions.
     ExpectSceneRevisions(State.GetSceneRevisions(), 2, 0, 2, 2);
 
     RadientMaterialBinding MaterialBinding;
@@ -1999,19 +2213,23 @@ TEST(RadientSceneStateTest, TracksSceneRevisions)
     MaterialBindings.pBindings    = &MaterialBinding;
     MaterialBindings.BindingCount = 1;
     EXPECT_EQ(State.SetMaterialBindings(Entity, MaterialBindings), RADIENT_STATUS_OK);
+    // Material bindings are part of drawable data.
     ExpectSceneRevisions(State.GetSceneRevisions(), 3, 0, 2, 2);
 
     RadientLightComponent Light;
     Light.Intensity = 4.f;
     EXPECT_EQ(State.SetLight(Entity, Light), RADIENT_STATUS_OK);
+    // Light components have their own revision counter.
     ExpectSceneRevisions(State.GetSceneRevisions(), 3, 1, 2, 2);
 
     RadientCameraComponent Camera;
     Camera.FocalLength = 35.f;
     EXPECT_EQ(State.SetCamera(Entity, Camera), RADIENT_STATUS_OK);
+    // Cameras are tracked separately from drawables and lights.
     ExpectSceneRevisions(State.GetSceneRevisions(), 3, 1, 2, 2, 1);
 
     EXPECT_EQ(State.SetCamera(Entity, Camera), RADIENT_STATUS_NO_CHANGE);
+    // Re-setting identical camera data should not advance revisions.
     ExpectSceneRevisions(State.GetSceneRevisions(), 3, 1, 2, 2, 1);
 
     Camera.FocalLength = 50.f;
@@ -2019,29 +2237,38 @@ TEST(RadientSceneStateTest, TracksSceneRevisions)
     ExpectSceneRevisions(State.GetSceneRevisions(), 3, 1, 2, 2, 2);
 
     EXPECT_EQ(State.RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_MESH_RENDERER), RADIENT_STATUS_OK);
+    // Removing renderer data changes drawable membership.
     ExpectSceneRevisions(State.GetSceneRevisions(), 4, 1, 2, 2, 2);
 
     EXPECT_EQ(State.RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_LIGHT), RADIENT_STATUS_OK);
+    // Removing light data advances light revisions.
     ExpectSceneRevisions(State.GetSceneRevisions(), 4, 2, 2, 2, 2);
 
     EXPECT_EQ(State.RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_CAMERA), RADIENT_STATUS_OK);
+    // Removing camera data advances camera revisions.
     ExpectSceneRevisions(State.GetSceneRevisions(), 4, 2, 2, 2, 3);
 }
 
 TEST(RadientSceneStateTest, HierarchyChangesUpdateSceneRevisions)
 {
+    // Parent changes and subtree destruction affect transform and visibility
+    // derived data, and destroying entities also removes renderable categories.
     RadientSceneState State;
 
     RadientEntityID Parent = InvalidRadientEntityID;
     RadientEntityID Child  = InvalidRadientEntityID;
     ASSERT_EQ(State.CreateEntity({}, Parent), RADIENT_STATUS_OK);
     ASSERT_EQ(State.CreateEntity({}, Child), RADIENT_STATUS_OK);
+    // Two independent roots each add transform and visibility state.
     ExpectSceneRevisions(State.GetSceneRevisions(), 0, 0, 2, 2);
 
     EXPECT_EQ(State.SetParent(Child, Parent, False), RADIENT_STATUS_OK);
+    // Reparenting dirties child transform and visibility inheritance.
     ExpectSceneRevisions(State.GetSceneRevisions(), 0, 0, 3, 3);
 
     EXPECT_EQ(State.DestroyEntity(Parent), RADIENT_STATUS_OK);
+    // Destroying the parent removes the child subtree and advances all affected
+    // render data categories.
     ExpectSceneRevisions(State.GetSceneRevisions(), 1, 1, 4, 4, 1);
 }
 

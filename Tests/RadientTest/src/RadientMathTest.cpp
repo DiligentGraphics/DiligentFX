@@ -70,6 +70,7 @@ void ExpectQuaternionNear(const RadientQuaternion& Value,
 
 TEST(RadientMathTest, ToFloat2)
 {
+    // Converts RadientFloat2 to Diligent float2 without changing component values.
     const float2 Value = RadientMath::ToFloat2(RadientFloat2{1.f, 2.f});
     EXPECT_EQ(Value.x, 1.f);
     EXPECT_EQ(Value.y, 2.f);
@@ -77,6 +78,7 @@ TEST(RadientMathTest, ToFloat2)
 
 TEST(RadientMathTest, ToFloat3)
 {
+    // Converts RadientFloat3 to Diligent float3 without changing component values.
     const float3 Value = RadientMath::ToFloat3(RadientFloat3{1.f, 2.f, 3.f});
     EXPECT_EQ(Value.x, 1.f);
     EXPECT_EQ(Value.y, 2.f);
@@ -85,6 +87,7 @@ TEST(RadientMathTest, ToFloat3)
 
 TEST(RadientMathTest, ToFloat4)
 {
+    // Converts RadientFloat4 to Diligent float4 without changing component values.
     const float4 Value = RadientMath::ToFloat4(RadientFloat4{1.f, 2.f, 3.f, 4.f});
     EXPECT_EQ(Value.x, 1.f);
     EXPECT_EQ(Value.y, 2.f);
@@ -94,12 +97,15 @@ TEST(RadientMathTest, ToFloat4)
 
 TEST(RadientMathTest, ToQuaternion)
 {
+    // A zero-length Radient quaternion is treated as identity to avoid invalid
+    // downstream rotation math.
     const QuaternionF ZeroQuat = RadientMath::ToQuaternion(RadientQuaternion{0.f, 0.f, 0.f, 0.f});
     EXPECT_EQ(ZeroQuat.q.x, 0.f);
     EXPECT_EQ(ZeroQuat.q.y, 0.f);
     EXPECT_EQ(ZeroQuat.q.z, 0.f);
     EXPECT_EQ(ZeroQuat.q.w, 1.f);
 
+    // Non-unit input should be normalized before being exposed as QuaternionF.
     const QuaternionF NormalizedQuat = RadientMath::ToQuaternion(RadientQuaternion{0.f, 0.f, 0.f, 2.f});
     EXPECT_EQ(NormalizedQuat.q.x, 0.f);
     EXPECT_EQ(NormalizedQuat.q.y, 0.f);
@@ -109,6 +115,7 @@ TEST(RadientMathTest, ToQuaternion)
 
 TEST(RadientMathTest, RoundTripsMatrixType)
 {
+    // Matrix layout conversion should be lossless in both directions.
     const float4x4 Source{
         1.f, 2.f, 3.f, 4.f,
         5.f, 6.f, 7.f, 8.f,
@@ -118,12 +125,14 @@ TEST(RadientMathTest, RoundTripsMatrixType)
     const RadientMatrix4x4 RadientMatrix = RadientMath::ToRadientMatrix(Source);
     const float4x4         RoundTrip     = RadientMath::ToFloat4x4(RadientMatrix);
 
+    // Every element should survive the round trip unchanged.
     for (Uint32 i = 0; i < 16; ++i)
         EXPECT_EQ(RoundTrip.Data()[i], Source.Data()[i]);
 }
 
 TEST(RadientMathTest, BuildsTransformMatrixWithPositionOnly)
 {
+    // Position-only transforms should produce a translation matrix.
     RadientTransform Transform;
     Transform.Position = {1.f, 2.f, 3.f};
     Transform.Scale    = {1.f, 1.f, 1.f};
@@ -134,11 +143,13 @@ TEST(RadientMathTest, BuildsTransformMatrixWithPositionOnly)
         0.f, 1.f, 0.f, 0.f,
         0.f, 0.f, 1.f, 0.f,
         1.f, 2.f, 3.f, 1.f};
+    // With row-vector math, translation lives in the last row.
     EXPECT_EQ(Matrix, Reference);
 }
 
 TEST(RadientMathTest, BuildsTransformMatrixWithScaleOnly)
 {
+    // Scale-only transforms should place scale on the diagonal.
     RadientTransform Transform;
     Transform.Scale = {2.f, 3.f, 4.f};
 
@@ -148,11 +159,13 @@ TEST(RadientMathTest, BuildsTransformMatrixWithScaleOnly)
         0.f, 3.f, 0.f, 0.f,
         0.f, 0.f, 4.f, 0.f,
         0.f, 0.f, 0.f, 1.f};
+    // No translation or rotation should be introduced.
     EXPECT_EQ(Matrix, Reference);
 }
 
 TEST(RadientMathTest, BuildsTransformMatrixWithRotationOnly)
 {
+    // A unit Z rotation quaternion should rotate X into +Y.
     RadientTransform Transform;
     Transform.Scale      = {1.f, 1.f, 1.f};
     Transform.Rotation.z = 0.70710678f;
@@ -164,11 +177,14 @@ TEST(RadientMathTest, BuildsTransformMatrixWithRotationOnly)
         -1.f, 0.f, 0.f, 0.f,
         0.f, 0.f, 1.f, 0.f,
         0.f, 0.f, 0.f, 1.f};
+    // Quaternion conversion may introduce tiny floating-point differences.
     ExpectMatrixNear(Matrix, Reference);
 }
 
 TEST(RadientMathTest, BuildsTransformMatrixWithScaleAndPosition)
 {
+    // Scale and translation should compose without cross-contaminating each
+    // other when there is no rotation.
     RadientTransform Transform;
     Transform.Position = {1.f, 2.f, 3.f};
     Transform.Scale    = {2.f, 3.f, 4.f};
@@ -179,11 +195,13 @@ TEST(RadientMathTest, BuildsTransformMatrixWithScaleAndPosition)
         0.f, 3.f, 0.f, 0.f,
         0.f, 0.f, 4.f, 0.f,
         1.f, 2.f, 3.f, 1.f};
+    // Scale stays on the diagonal and translation stays in the last row.
     EXPECT_EQ(Matrix, Reference);
 }
 
 TEST(RadientMathTest, BuildsTransformMatrixWithScaleRotationAndPosition)
 {
+    // Full TRS composition should apply local scale, then rotation, then translation.
     RadientTransform Transform;
     Transform.Position   = {1.f, 2.f, 3.f};
     Transform.Scale      = {2.f, 3.f, 4.f};
@@ -196,11 +214,14 @@ TEST(RadientMathTest, BuildsTransformMatrixWithScaleRotationAndPosition)
         -3.f, 0.f, 0.f, 0.f,
         0.f, 0.f, 4.f, 0.f,
         1.f, 2.f, 3.f, 1.f};
+    // The expected matrix verifies both non-uniform scale and the rotated axes.
     ExpectMatrixNear(Matrix, Reference);
 }
 
 TEST(RadientMathTest, InvertsTransformMatrix)
 {
+    // A non-singular TRS matrix should produce an inverse that multiplies back
+    // to identity.
     RadientTransform Transform;
     Transform.Position   = {1.f, 2.f, 3.f};
     Transform.Scale      = {2.f, 3.f, 4.f};
@@ -218,11 +239,13 @@ TEST(RadientMathTest, InvertsTransformMatrix)
         0.f, 1.f, 0.f, 0.f,
         0.f, 0.f, 1.f, 0.f,
         0.f, 0.f, 0.f, 1.f};
+    // Matrix * inverse should be identity within numerical tolerance.
     ExpectMatrixNear(Identity, Reference);
 }
 
 TEST(RadientMathTest, RejectsSingularMatrixInverse)
 {
+    // Zero scale makes the transform singular, so inversion must fail.
     RadientTransform Transform;
     Transform.Scale = {0.f, 1.f, 1.f};
 
@@ -232,6 +255,7 @@ TEST(RadientMathTest, RejectsSingularMatrixInverse)
 
 TEST(RadientMathTest, DecomposesTransformMatrix)
 {
+    // Matrix decomposition should recover the original representable TRS values.
     RadientTransform Transform;
     Transform.Position   = {1.f, 2.f, 3.f};
     Transform.Scale      = {2.f, 3.f, 4.f};
@@ -239,6 +263,7 @@ TEST(RadientMathTest, DecomposesTransformMatrix)
     Transform.Rotation.w = 0.70710678f;
 
     const RadientTransform Decomposed = RadientMath::MatrixToTransform(RadientMath::TransformToMatrix(Transform));
+    // Position, scale, and quaternion should round-trip within tolerance.
     ExpectFloat3Near(Decomposed.Position, Transform.Position);
     ExpectFloat3Near(Decomposed.Scale, Transform.Scale);
     ExpectQuaternionNear(Decomposed.Rotation, Transform.Rotation);
