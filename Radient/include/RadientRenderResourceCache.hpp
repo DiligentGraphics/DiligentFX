@@ -31,10 +31,6 @@
 #include "PBR_Renderer.hpp"
 #include "RefCntAutoPtr.hpp"
 
-#include "GLTFResourceManager.hpp"
-#include "GPUUploadManager.h"
-
-#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -72,36 +68,22 @@ struct RadientRenderMesh
     Uint32                  BaseVertex         = 0;
 };
 
-/// Renderer-owned cache for uploaded Radient asset data.
+/// Renderer-owned cache for renderer-facing mesh data.
 ///
-/// CPU asset payloads are expected to be transient: they are copied into
-/// upload work items and released once the upload has been scheduled.
+/// GLTF model loading and GPU resource preparation are owned by the asset
+/// manager. This cache only expands loaded mesh assets into render mesh
+/// metadata used by draw lists and geometry passes.
 class RadientRenderResourceCache
 {
 public:
-    RadientRenderResourceCache(RadientAssetManagerImpl* pAssetManager,
-                               IRenderDevice*           pDevice);
+    explicit RadientRenderResourceCache(RadientAssetManagerImpl* pAssetManager);
     ~RadientRenderResourceCache();
-
-    RADIENT_STATUS Prepare(IRenderDevice*  pDevice,
-                           IDeviceContext* pContext);
 
     /// Returns the renderer-ready mesh, or null if the asset is still loading
     /// or failed to load.
-    const RadientRenderMesh* ResolveMesh(const RadientAssetReference& Mesh,
-                                         IRenderDevice*               pDevice,
-                                         IDeviceContext*              pContext);
-
-    IGPUUploadManager*     GetUploadManager() const;
-    GLTF::ResourceManager* GetResourceManager() const;
+    const RadientRenderMesh* ResolveMesh(const RadientAssetReference& Mesh);
 
 private:
-    struct GLTFResource
-    {
-        std::string                  SourceURI;
-        std::unique_ptr<GLTF::Model> pModel;
-    };
-
     struct MeshResource
     {
         enum class STATE
@@ -119,19 +101,8 @@ private:
         RadientRenderMesh     Mesh;
     };
 
-    RADIENT_STATUS EnsureGLTFLoaded(const RadientAssetReference& Model,
-                                    IRenderDevice*               pDevice,
-                                    IDeviceContext*              pContext);
-    RADIENT_STATUS PrepareGLTFResource(GLTFResource&   Resource,
-                                       IRenderDevice*  pDevice,
-                                       IDeviceContext* pContext);
-
     RefCntAutoPtr<RadientAssetManagerImpl> m_pAssetManager;
-    RefCntAutoPtr<IRenderDevice>           m_pDevice;
-    RefCntAutoPtr<IGPUUploadManager>       m_pUploadManager;
-    RefCntAutoPtr<GLTF::ResourceManager>   m_pResourceManager;
 
-    std::unordered_map<std::string, GLTFResource> m_GLTFResources;
     std::unordered_map<std::string, MeshResource> m_MeshResources;
 };
 

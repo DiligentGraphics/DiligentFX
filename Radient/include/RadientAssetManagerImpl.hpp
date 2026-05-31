@@ -41,9 +41,14 @@
 namespace Diligent
 {
 
+struct IDeviceContext;
+struct IRenderDevice;
+struct IGPUUploadManager;
+
 namespace GLTF
 {
 struct Model;
+class ResourceManager;
 } // namespace GLTF
 
 class RadientAssetManagerImpl final : public ObjectBase<IRadientAssetManager>
@@ -51,15 +56,20 @@ class RadientAssetManagerImpl final : public ObjectBase<IRadientAssetManager>
 public:
     using TBase = ObjectBase<IRadientAssetManager>;
 
-    RadientAssetManagerImpl(IReferenceCounters*                  pRefCounters,
-                            const RadientAssetManagerCreateInfo& CreateInfo,
-                            IThreadPool*                         pThreadPool);
+    struct CreateInfo
+    {
+        RadientAssetManagerCreateInfo Assets;
+        IThreadPool*                  pThreadPool = nullptr;
+        IRenderDevice*                pDevice     = nullptr;
+    };
+
+    RadientAssetManagerImpl(IReferenceCounters* pRefCounters,
+                            const CreateInfo&   CreateInfo);
     ~RadientAssetManagerImpl();
 
     IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientAssetManager, TBase)
 
-    static RefCntAutoPtr<RadientAssetManagerImpl> Create(const RadientAssetManagerCreateInfo& CreateInfo,
-                                                         IThreadPool*                         pThreadPool = nullptr);
+    static RefCntAutoPtr<RadientAssetManagerImpl> Create(const CreateInfo& CreateInfo);
 
     virtual const RadientAssetManagerDesc& DILIGENT_CALL_TYPE GetDesc() const override final;
 
@@ -86,8 +96,14 @@ public:
     RADIENT_STATUS GetGLTFSourceURI(const RadientAssetReference& Model,
                                     const Char*&                 SourceURI) const;
 
-    const GLTF::Model* GetGLTFModel(const RadientAssetReference& Model) const;
+    const GLTF::Model* GetGLTFModel(const RadientAssetReference& Model,
+                                    bool                         RequireGPUResourcesReady = false) const;
     RADIENT_STATUS     GetGLTFLoadStatus(const RadientAssetReference& Model) const;
+
+    RADIENT_STATUS UpdateGPUResources(IRenderDevice*  pDevice,
+                                      IDeviceContext* pContext);
+
+    GLTF::ResourceManager* GetResourceManager() const;
 
 private:
     struct MeshPrimitiveStorage
@@ -148,7 +164,8 @@ private:
     {
         std::string                  SourceURI;
         std::unique_ptr<GLTF::Model> pModel;
-        RADIENT_STATUS               LoadStatus = RADIENT_STATUS_OK;
+        RADIENT_STATUS               LoadStatus        = RADIENT_STATUS_OK;
+        bool                         GPUResourcesReady = false;
     };
 
     struct GLTFMeshStorage
@@ -192,7 +209,10 @@ private:
     std::string             m_Name;
     RadientAssetManagerDesc m_Desc;
 
-    RefCntAutoPtr<IThreadPool> m_pThreadPool;
+    RefCntAutoPtr<IThreadPool>           m_pThreadPool;
+    RefCntAutoPtr<IRenderDevice>         m_pDevice;
+    RefCntAutoPtr<GLTF::ResourceManager> m_pResourceManager;
+    RefCntAutoPtr<IGPUUploadManager>     m_pUploadManager;
 
     mutable std::shared_mutex m_Mutex;
     RadientHandle             m_NextAssetID = 1;

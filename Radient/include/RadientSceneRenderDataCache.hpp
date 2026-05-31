@@ -89,9 +89,7 @@ class RadientSceneRenderDataCache
 {
 public:
     RADIENT_STATUS SyncScene(IRadientScene&              Scene,
-                             RadientRenderResourceCache& ResourceCache,
-                             IRenderDevice*              pDevice,
-                             IDeviceContext*             pContext);
+                             RadientRenderResourceCache& ResourceCache);
 
     const RadientDrawLists&                   GetDrawLists() const;
     const RadientDrawList&                    GetDrawList(GLTF::Material::ALPHA_MODE AlphaMode) const;
@@ -118,18 +116,12 @@ private:
     };
 
     void ProcessRenderableMeshAddedOrUpdated(const RadientSceneState::RenderableMesh& Mesh,
-                                             RadientRenderResourceCache&              ResourceCache,
-                                             IRenderDevice*                           pDevice,
-                                             IDeviceContext*                          pContext);
+                                             RadientRenderResourceCache&              ResourceCache);
     void ProcessRenderableMeshRemoved(RadientEntityID Entity);
-    void ResolvePendingRenderableMeshes(RadientRenderResourceCache& ResourceCache,
-                                        IRenderDevice*              pDevice,
-                                        IDeviceContext*             pContext);
+    void ResolvePendingRenderableMeshes(RadientRenderResourceCache& ResourceCache);
 
     bool TryExpandRenderable(RenderableRecord&           Record,
-                             RadientRenderResourceCache& ResourceCache,
-                             IRenderDevice*              pDevice,
-                             IDeviceContext*             pContext);
+                             RadientRenderResourceCache& ResourceCache);
 
     RadientDrawableID AllocateDrawableID();
     void              FreeDrawableID(RadientDrawableID DrawableID);

@@ -51,7 +51,8 @@ public:
     RADIENT_STATUS Render(const RadientRenderAttribs& Attribs);
 
 private:
-    RefCntAutoPtr<IRadientBackend> m_pBackend;
+    RefCntAutoPtr<IRadientBackend>         m_pBackend;
+    RefCntAutoPtr<RadientAssetManagerImpl> m_pAssetManager;
 
     RadientRenderResourceCache  m_ResourceCache;
     RadientSceneRenderDataCache m_SceneDataCache;

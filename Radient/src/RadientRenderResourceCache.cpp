@@ -26,11 +26,9 @@
 
 #include "RadientRenderResourceCache.hpp"
 
-#include "DebugUtilities.hpp"
 #include "GLTFLoader.hpp"
 
 #include <cstring>
-#include <exception>
 #include <utility>
 
 namespace Diligent
@@ -38,42 +36,6 @@ namespace Diligent
 
 namespace
 {
-
-constexpr Uint64 RadientDefaultIndexBufferSize       = 16ull * 1024ull * 1024ull;
-constexpr Uint64 RadientDefaultMaxIndexBufferSize    = 256ull * 1024ull * 1024ull;
-constexpr Uint32 RadientDefaultVertexPoolSize        = 1024u * 1024u;
-constexpr Uint32 RadientDefaultTextureAtlasSize      = 4096u;
-constexpr Uint32 RadientDefaultTextureAtlasSlices    = 1u;
-constexpr Uint32 RadientDefaultTextureAtlasMaxSlices = 2048u;
-
-GLTF::ResourceManager::CreateInfo CreateResourceManagerInfo()
-{
-    GLTF::ResourceManager::CreateInfo CreateInfo;
-
-    CreateInfo.IndexAllocatorCI.Desc.Name      = "Radient index pool";
-    CreateInfo.IndexAllocatorCI.Desc.Size      = RadientDefaultIndexBufferSize;
-    CreateInfo.IndexAllocatorCI.Desc.Usage     = USAGE_DEFAULT;
-    CreateInfo.IndexAllocatorCI.Desc.BindFlags = BIND_INDEX_BUFFER;
-    CreateInfo.IndexAllocatorCI.ExpansionSize  = static_cast<Uint32>(RadientDefaultIndexBufferSize);
-    CreateInfo.IndexAllocatorCI.MaxSize        = RadientDefaultMaxIndexBufferSize;
-
-    CreateInfo.DefaultPoolDesc.Name        = "Radient vertex pool";
-    CreateInfo.DefaultPoolDesc.VertexCount = RadientDefaultVertexPoolSize;
-    CreateInfo.DefaultPoolDesc.Usage       = USAGE_DEFAULT;
-    CreateInfo.DefaultPoolDesc.Mode        = BUFFER_MODE_UNDEFINED;
-
-    CreateInfo.DefaultAtlasDesc.Desc.Name      = "Radient texture atlas";
-    CreateInfo.DefaultAtlasDesc.Desc.Type      = RESOURCE_DIM_TEX_2D_ARRAY;
-    CreateInfo.DefaultAtlasDesc.Desc.Width     = RadientDefaultTextureAtlasSize;
-    CreateInfo.DefaultAtlasDesc.Desc.Height    = RadientDefaultTextureAtlasSize;
-    CreateInfo.DefaultAtlasDesc.Desc.ArraySize = RadientDefaultTextureAtlasSlices;
-    CreateInfo.DefaultAtlasDesc.Desc.Format    = TEX_FORMAT_RGBA8_UNORM;
-    CreateInfo.DefaultAtlasDesc.Desc.Usage     = USAGE_DEFAULT;
-    CreateInfo.DefaultAtlasDesc.Desc.BindFlags = BIND_SHADER_RESOURCE;
-    CreateInfo.DefaultAtlasDesc.MaxSliceCount  = RadientDefaultTextureAtlasMaxSlices;
-
-    return CreateInfo;
-}
 
 std::string MakeAssetCacheKey(const RadientAssetReference& Asset)
 {
@@ -147,118 +109,16 @@ RADIENT_STATUS BuildMeshResource(const GLTF::Model& GLTFModel,
 
 } // namespace
 
-RadientRenderResourceCache::RadientRenderResourceCache(RadientAssetManagerImpl* pAssetManager,
-                                                       IRenderDevice*           pDevice) :
-    m_pAssetManager{pAssetManager},
-    m_pDevice{pDevice}
+RadientRenderResourceCache::RadientRenderResourceCache(RadientAssetManagerImpl* pAssetManager) :
+    m_pAssetManager{pAssetManager}
 {
-    if (pDevice == nullptr)
-        return;
-
-    GPUUploadManagerCreateInfo UploadCI;
-    UploadCI.pDevice = pDevice;
-    CreateGPUUploadManager(UploadCI, &m_pUploadManager);
-
-    const GLTF::ResourceManager::CreateInfo ResourceCI = CreateResourceManagerInfo();
-    m_pResourceManager                                 = GLTF::ResourceManager::Create(pDevice, ResourceCI);
 }
 
 RadientRenderResourceCache::~RadientRenderResourceCache()
 {
 }
 
-RADIENT_STATUS RadientRenderResourceCache::Prepare(IRenderDevice*  pDevice,
-                                                   IDeviceContext* pContext)
-{
-    if (pDevice == nullptr)
-        return RADIENT_STATUS_OK;
-
-    if (m_pDevice != pDevice)
-    {
-        UNEXPECTED("Radient render resource cache device changed. This should never happen.");
-        return RADIENT_STATUS_INVALID_OPERATION;
-    }
-
-    if (m_pUploadManager != nullptr && pContext != nullptr)
-        m_pUploadManager->RenderThreadUpdate(pContext);
-
-    if (m_pResourceManager != nullptr && pContext != nullptr)
-        m_pResourceManager->UpdateAllResources(pDevice, pContext);
-
-    if (pContext != nullptr)
-    {
-        for (auto& GLTFResourceIt : m_GLTFResources)
-        {
-            GLTFResource& Resource = GLTFResourceIt.second;
-            PrepareGLTFResource(Resource, pDevice, pContext);
-        }
-    }
-
-    return RADIENT_STATUS_OK;
-}
-
-RADIENT_STATUS RadientRenderResourceCache::EnsureGLTFLoaded(const RadientAssetReference& Model,
-                                                            IRenderDevice*               pDevice,
-                                                            IDeviceContext*              pContext)
-{
-    if (Model.URI == nullptr || *Model.URI == 0)
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-
-    if (pDevice == nullptr)
-        return RADIENT_STATUS_INVALID_OPERATION;
-
-    if (m_pAssetManager == nullptr)
-        return RADIENT_STATUS_INVALID_OPERATION;
-
-    if (m_pDevice != pDevice)
-    {
-        UNEXPECTED("Radient render resource cache device changed. This should never happen.");
-        return RADIENT_STATUS_INVALID_OPERATION;
-    }
-
-    if (m_pResourceManager == nullptr || m_pUploadManager == nullptr)
-        return RADIENT_STATUS_INVALID_OPERATION;
-
-    const Char*          pSourceURI   = nullptr;
-    const RADIENT_STATUS SourceStatus = m_pAssetManager->GetGLTFSourceURI(Model, pSourceURI);
-    if (RADIENT_FAILED(SourceStatus))
-        return SourceStatus;
-
-    const std::string CacheKey = MakeAssetCacheKey(Model);
-    GLTFResource&     Resource = m_GLTFResources[CacheKey];
-    if (Resource.pModel == nullptr)
-    {
-        Resource.SourceURI = pSourceURI;
-
-        GLTF::ModelCreateInfo ModelCI;
-        ModelCI.FileName         = Resource.SourceURI.c_str();
-        ModelCI.pResourceManager = m_pResourceManager;
-        ModelCI.pUploadMgr       = m_pUploadManager;
-
-        try
-        {
-            Resource.pModel = std::make_unique<GLTF::Model>(pDevice, pContext, ModelCI);
-        }
-        catch (const std::exception& Error)
-        {
-            LOG_ERROR_MESSAGE("Failed to load Radient GLTF asset '", Resource.SourceURI, "': ", Error.what());
-            m_GLTFResources.erase(CacheKey);
-            return RADIENT_STATUS_INVALID_OPERATION;
-        }
-        catch (...)
-        {
-            LOG_ERROR_MESSAGE("Failed to load Radient GLTF asset '", Resource.SourceURI, "'");
-            m_GLTFResources.erase(CacheKey);
-            return RADIENT_STATUS_INVALID_OPERATION;
-        }
-    }
-
-    return PrepareGLTFResource(Resource, pDevice, pContext);
-}
-
-const RadientRenderMesh* RadientRenderResourceCache::ResolveMesh(const RadientAssetReference& Mesh,
-                                                                 IRenderDevice*               pDevice,
-                                                                 IDeviceContext*              pContext)
+const RadientRenderMesh* RadientRenderResourceCache::ResolveMesh(const RadientAssetReference& Mesh)
 {
     if (Mesh.URI == nullptr || *Mesh.URI == 0)
         return nullptr;
@@ -300,24 +160,22 @@ const RadientRenderMesh* RadientRenderResourceCache::ResolveMesh(const RadientAs
         Record.State           = MeshResource::STATE::Loading;
     }
 
-    const RADIENT_STATUS LoadStatus = EnsureGLTFLoaded(Record.SourceModel, pDevice, pContext);
-    if (RADIENT_FAILED(LoadStatus) || LoadStatus != RADIENT_STATUS_OK)
-    {
-        if (RADIENT_FAILED(LoadStatus))
-            Record.State = MeshResource::STATE::Failed;
-        return nullptr;
-    }
-
-    const std::string                                       ModelCacheKey = MakeAssetCacheKey(Record.SourceModel);
-    std::unordered_map<std::string, GLTFResource>::iterator ResourceIt    = m_GLTFResources.find(ModelCacheKey);
-    if (ResourceIt == m_GLTFResources.end() || ResourceIt->second.pModel == nullptr)
+    const RADIENT_STATUS LoadStatus = m_pAssetManager->GetGLTFLoadStatus(Record.SourceModel);
+    if (RADIENT_FAILED(LoadStatus))
     {
         Record.State = MeshResource::STATE::Failed;
         return nullptr;
     }
 
+    if (LoadStatus != RADIENT_STATUS_OK)
+        return nullptr;
+
+    const GLTF::Model* pModel = m_pAssetManager->GetGLTFModel(Record.SourceModel, true);
+    if (pModel == nullptr)
+        return nullptr;
+
     RadientRenderMesh    RenderMesh;
-    const RADIENT_STATUS BuildStatus = BuildMeshResource(*ResourceIt->second.pModel, Record.SourceMeshIndex, RenderMesh);
+    const RADIENT_STATUS BuildStatus = BuildMeshResource(*pModel, Record.SourceMeshIndex, RenderMesh);
     if (RADIENT_FAILED(BuildStatus))
     {
         Record.State = MeshResource::STATE::Failed;
@@ -327,34 +185,6 @@ const RadientRenderMesh* RadientRenderResourceCache::ResolveMesh(const RadientAs
     Record.Mesh  = std::move(RenderMesh);
     Record.State = MeshResource::STATE::Ready;
     return &Record.Mesh;
-}
-
-IGPUUploadManager* RadientRenderResourceCache::GetUploadManager() const
-{
-    return m_pUploadManager;
-}
-
-GLTF::ResourceManager* RadientRenderResourceCache::GetResourceManager() const
-{
-    return m_pResourceManager;
-}
-
-RADIENT_STATUS RadientRenderResourceCache::PrepareGLTFResource(GLTFResource&   Resource,
-                                                               IRenderDevice*  pDevice,
-                                                               IDeviceContext* pContext)
-{
-    if (Resource.pModel == nullptr)
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-
-    if (pDevice == nullptr)
-        return RADIENT_STATUS_INVALID_OPERATION;
-
-    if (pContext == nullptr)
-        return RADIENT_STATUS_OUT_OF_DATE;
-
-    return Resource.pModel->PrepareGPUResources(pDevice, pContext) ?
-        RADIENT_STATUS_OK :
-        RADIENT_STATUS_OUT_OF_DATE;
 }
 
 } // namespace Diligent

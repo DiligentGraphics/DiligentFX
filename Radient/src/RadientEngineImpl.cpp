@@ -71,7 +71,11 @@ RadientEngineImpl::RadientEngineImpl(IReferenceCounters* pRefCounters, const Rad
         m_OwnsThreadPool = true;
     }
 
-    m_pAssetManager = RadientAssetManagerImpl::Create(CreateInfo.Assets, m_pThreadPool);
+    RadientAssetManagerImpl::CreateInfo AssetManagerCI{};
+    AssetManagerCI.Assets      = CreateInfo.Assets;
+    AssetManagerCI.pThreadPool = m_pThreadPool;
+    AssetManagerCI.pDevice     = m_pBackend != nullptr ? m_pBackend->GetNativeDevice() : nullptr;
+    m_pAssetManager            = RadientAssetManagerImpl::Create(AssetManagerCI);
 }
 
 RadientEngineImpl::~RadientEngineImpl()

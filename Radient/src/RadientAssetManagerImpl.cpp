@@ -28,6 +28,8 @@
 
 #include "Errors.hpp"
 #include "GLTFLoader.hpp"
+#include "GLTFResourceManager.hpp"
+#include "GPUUploadManager.h"
 #include "ThreadPool.hpp"
 
 #include <exception>
@@ -40,6 +42,13 @@ namespace Diligent
 namespace
 {
 
+struct GLTFModelToPrepare
+{
+    std::string  URI;
+    Uint64       Version = 0;
+    GLTF::Model* pModel  = nullptr;
+};
+
 template <typename ValueType>
 std::vector<ValueType> CopyArray(const ValueType* pData, Uint32 Count)
 {
@@ -48,12 +57,54 @@ std::vector<ValueType> CopyArray(const ValueType* pData, Uint32 Count)
         std::vector<ValueType>{};
 }
 
-RADIENT_STATUS LoadGLTFModel(const std::string& SourceURI, std::unique_ptr<GLTF::Model>& pModel)
+constexpr Uint64 RadientDefaultIndexBufferSize       = 16ull * 1024ull * 1024ull;
+constexpr Uint64 RadientDefaultMaxIndexBufferSize    = 256ull * 1024ull * 1024ull;
+constexpr Uint32 RadientDefaultVertexPoolSize        = 1024u * 1024u;
+constexpr Uint32 RadientDefaultTextureAtlasSize      = 4096u;
+constexpr Uint32 RadientDefaultTextureAtlasSlices    = 1u;
+constexpr Uint32 RadientDefaultTextureAtlasMaxSlices = 2048u;
+
+GLTF::ResourceManager::CreateInfo CreateResourceManagerInfo()
+{
+    GLTF::ResourceManager::CreateInfo CreateInfo;
+
+    CreateInfo.IndexAllocatorCI.Desc.Name      = "Radient index pool";
+    CreateInfo.IndexAllocatorCI.Desc.Size      = RadientDefaultIndexBufferSize;
+    CreateInfo.IndexAllocatorCI.Desc.Usage     = USAGE_DEFAULT;
+    CreateInfo.IndexAllocatorCI.Desc.BindFlags = BIND_INDEX_BUFFER;
+    CreateInfo.IndexAllocatorCI.ExpansionSize  = static_cast<Uint32>(RadientDefaultIndexBufferSize);
+    CreateInfo.IndexAllocatorCI.MaxSize        = RadientDefaultMaxIndexBufferSize;
+
+    CreateInfo.DefaultPoolDesc.Name        = "Radient vertex pool";
+    CreateInfo.DefaultPoolDesc.VertexCount = RadientDefaultVertexPoolSize;
+    CreateInfo.DefaultPoolDesc.Usage       = USAGE_DEFAULT;
+    CreateInfo.DefaultPoolDesc.Mode        = BUFFER_MODE_UNDEFINED;
+
+    CreateInfo.DefaultAtlasDesc.Desc.Name      = "Radient texture atlas";
+    CreateInfo.DefaultAtlasDesc.Desc.Type      = RESOURCE_DIM_TEX_2D_ARRAY;
+    CreateInfo.DefaultAtlasDesc.Desc.Width     = RadientDefaultTextureAtlasSize;
+    CreateInfo.DefaultAtlasDesc.Desc.Height    = RadientDefaultTextureAtlasSize;
+    CreateInfo.DefaultAtlasDesc.Desc.ArraySize = RadientDefaultTextureAtlasSlices;
+    CreateInfo.DefaultAtlasDesc.Desc.Format    = TEX_FORMAT_RGBA8_UNORM;
+    CreateInfo.DefaultAtlasDesc.Desc.Usage     = USAGE_DEFAULT;
+    CreateInfo.DefaultAtlasDesc.Desc.BindFlags = BIND_SHADER_RESOURCE;
+    CreateInfo.DefaultAtlasDesc.MaxSliceCount  = RadientDefaultTextureAtlasMaxSlices;
+
+    return CreateInfo;
+}
+
+RADIENT_STATUS LoadGLTFModel(const std::string&            SourceURI,
+                             IRenderDevice*                pDevice,
+                             GLTF::ResourceManager*        pResourceManager,
+                             IGPUUploadManager*            pUploadManager,
+                             std::unique_ptr<GLTF::Model>& pModel)
 {
     try
     {
         GLTF::ModelCreateInfo ModelCI{SourceURI.c_str()};
-        pModel = std::make_unique<GLTF::Model>(nullptr, nullptr, ModelCI);
+        ModelCI.pResourceManager = pResourceManager;
+        ModelCI.pUploadMgr       = pUploadManager;
+        pModel                   = std::make_unique<GLTF::Model>(pDevice, nullptr, ModelCI);
         return RADIENT_STATUS_OK;
     }
     catch (const std::exception& Error)
@@ -70,25 +121,35 @@ RADIENT_STATUS LoadGLTFModel(const std::string& SourceURI, std::unique_ptr<GLTF:
 
 } // namespace
 
-RadientAssetManagerImpl::RadientAssetManagerImpl(IReferenceCounters*                  pRefCounters,
-                                                 const RadientAssetManagerCreateInfo& CreateInfo,
-                                                 IThreadPool*                         pThreadPool) :
+RadientAssetManagerImpl::RadientAssetManagerImpl(IReferenceCounters* pRefCounters,
+                                                 const CreateInfo&   CreateInfo) :
     TBase{pRefCounters},
-    m_Name{CreateInfo.Desc.Name != nullptr ? CreateInfo.Desc.Name : ""},
-    m_Desc{CreateInfo.Desc},
-    m_pThreadPool{pThreadPool}
+    m_Name{CreateInfo.Assets.Desc.Name != nullptr ? CreateInfo.Assets.Desc.Name : ""},
+    m_Desc{CreateInfo.Assets.Desc},
+    m_pThreadPool{CreateInfo.pThreadPool}
 {
     m_Desc.Name = m_Name.c_str();
+
+    if (CreateInfo.pDevice != nullptr)
+    {
+        GPUUploadManagerCreateInfo UploadCI;
+        UploadCI.pDevice = CreateInfo.pDevice;
+        CreateGPUUploadManager(UploadCI, &m_pUploadManager);
+
+        const GLTF::ResourceManager::CreateInfo ResourceCI = CreateResourceManagerInfo();
+
+        m_pDevice          = CreateInfo.pDevice;
+        m_pResourceManager = GLTF::ResourceManager::Create(CreateInfo.pDevice, ResourceCI);
+    }
 }
 
 RadientAssetManagerImpl::~RadientAssetManagerImpl()
 {
 }
 
-RefCntAutoPtr<RadientAssetManagerImpl> RadientAssetManagerImpl::Create(const RadientAssetManagerCreateInfo& CreateInfo,
-                                                                       IThreadPool*                         pThreadPool)
+RefCntAutoPtr<RadientAssetManagerImpl> RadientAssetManagerImpl::Create(const CreateInfo& CreateInfo)
 {
-    return RefCntAutoPtr<RadientAssetManagerImpl>{MakeNewRCObj<RadientAssetManagerImpl>()(CreateInfo, pThreadPool)};
+    return RefCntAutoPtr<RadientAssetManagerImpl>{MakeNewRCObj<RadientAssetManagerImpl>()(CreateInfo)};
 }
 
 const RadientAssetManagerDesc& RadientAssetManagerImpl::GetDesc() const
@@ -199,7 +260,11 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadGLTF(const RadientGLTFLoadInfo& Load
 
     if (m_pThreadPool == nullptr)
     {
-        const RADIENT_STATUS Status = LoadGLTFModel(Record.GLTFModel.SourceURI, Record.GLTFModel.pModel);
+        const RADIENT_STATUS Status = LoadGLTFModel(Record.GLTFModel.SourceURI,
+                                                    m_pDevice,
+                                                    m_pResourceManager,
+                                                    m_pUploadManager,
+                                                    Record.GLTFModel.pModel);
         if (Status != RADIENT_STATUS_OK)
             return Status;
 
@@ -220,7 +285,11 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadGLTF(const RadientGLTFLoadInfo& Load
         [pSelf, ModelRef, SourceURI](Uint32) //
         {
             std::unique_ptr<GLTF::Model> pModel;
-            const RADIENT_STATUS         Status = LoadGLTFModel(SourceURI, pModel);
+            const RADIENT_STATUS         Status = LoadGLTFModel(SourceURI,
+                                                                pSelf->m_pDevice,
+                                                                pSelf->m_pResourceManager,
+                                                                pSelf->m_pUploadManager,
+                                                                pModel);
 
             pSelf->CompleteGLTFLoad(ModelRef, std::move(pModel), Status);
             return ASYNC_TASK_STATUS_COMPLETE;
@@ -324,7 +393,8 @@ RADIENT_STATUS RadientAssetManagerImpl::GetGLTFSourceURI(const RadientAssetRefer
     return RADIENT_STATUS_OK;
 }
 
-const GLTF::Model* RadientAssetManagerImpl::GetGLTFModel(const RadientAssetReference& Model) const
+const GLTF::Model* RadientAssetManagerImpl::GetGLTFModel(const RadientAssetReference& Model,
+                                                         bool                         RequireGPUResourcesReady) const
 {
     std::shared_lock<std::shared_mutex> Lock{m_Mutex};
 
@@ -332,8 +402,11 @@ const GLTF::Model* RadientAssetManagerImpl::GetGLTFModel(const RadientAssetRefer
     if (pRecord == nullptr || pRecord->Type != RADIENT_ASSET_TYPE_GLTF_MODEL)
         return nullptr;
 
-    if (pRecord->GLTFModel.LoadStatus != RADIENT_STATUS_OK)
+    if (pRecord->GLTFModel.LoadStatus != RADIENT_STATUS_OK ||
+        (RequireGPUResourcesReady && !pRecord->GLTFModel.GPUResourcesReady))
+    {
         return nullptr;
+    }
 
     return pRecord->GLTFModel.pModel.get();
 }
@@ -350,6 +423,83 @@ RADIENT_STATUS RadientAssetManagerImpl::GetGLTFLoadStatus(const RadientAssetRefe
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
     return pRecord->GLTFModel.LoadStatus;
+}
+
+RADIENT_STATUS RadientAssetManagerImpl::UpdateGPUResources(IRenderDevice*  pDevice,
+                                                           IDeviceContext* pContext)
+{
+    if (pDevice == nullptr)
+        return RADIENT_STATUS_OK;
+
+    if (pContext == nullptr)
+        return RADIENT_STATUS_OUT_OF_DATE;
+
+    std::vector<GLTFModelToPrepare> ModelsToPrepare;
+
+    if (m_pDevice == nullptr)
+        return RADIENT_STATUS_INVALID_OPERATION;
+
+    if (m_pDevice != pDevice)
+    {
+        UNEXPECTED("Radient asset manager device changed. This should never happen.");
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
+
+    {
+        std::shared_lock<std::shared_mutex> Lock{m_Mutex};
+
+        for (const auto& AssetIt : m_Assets)
+        {
+            const AssetRecord* pRecord = AssetIt.second.get();
+            if (pRecord == nullptr ||
+                pRecord->Type != RADIENT_ASSET_TYPE_GLTF_MODEL ||
+                pRecord->GLTFModel.LoadStatus != RADIENT_STATUS_OK ||
+                pRecord->GLTFModel.GPUResourcesReady ||
+                pRecord->GLTFModel.pModel == nullptr)
+            {
+                continue;
+            }
+
+            ModelsToPrepare.push_back({pRecord->URI, pRecord->Version, pRecord->GLTFModel.pModel.get()});
+        }
+    }
+
+    if (m_pUploadManager != nullptr)
+        m_pUploadManager->RenderThreadUpdate(pContext);
+
+    if (m_pResourceManager != nullptr)
+        m_pResourceManager->UpdateAllResources(pDevice, pContext);
+
+    RADIENT_STATUS Status = RADIENT_STATUS_OK;
+    for (const GLTFModelToPrepare& Model : ModelsToPrepare)
+    {
+        if (!Model.pModel->PrepareGPUResources(pDevice, pContext))
+        {
+            Status = RADIENT_STATUS_OUT_OF_DATE;
+            continue;
+        }
+
+        RadientAssetReference ModelRef;
+        ModelRef.URI     = Model.URI.c_str();
+        ModelRef.Version = Model.Version;
+
+        std::unique_lock<std::shared_mutex> Lock{m_Mutex};
+
+        AssetRecord* pRecord = FindAssetLocked(ModelRef);
+        if (pRecord != nullptr &&
+            pRecord->Type == RADIENT_ASSET_TYPE_GLTF_MODEL &&
+            pRecord->GLTFModel.pModel.get() == Model.pModel)
+        {
+            pRecord->GLTFModel.GPUResourcesReady = true;
+        }
+    }
+
+    return Status;
+}
+
+GLTF::ResourceManager* RadientAssetManagerImpl::GetResourceManager() const
+{
+    return m_pResourceManager;
 }
 
 bool RadientAssetManagerImpl::ValidateMesh(const RadientMeshCreateInfo& MeshCI) const

@@ -32,9 +32,8 @@ namespace Diligent
 RadientRenderPipeline::RadientRenderPipeline(IRadientBackend*         pBackend,
                                              RadientAssetManagerImpl* pAssetManager) :
     m_pBackend{pBackend},
-    m_ResourceCache{
-        pAssetManager,
-        pBackend != nullptr ? pBackend->GetNativeDevice() : nullptr}
+    m_pAssetManager{pAssetManager},
+    m_ResourceCache{pAssetManager}
 {
 }
 
@@ -65,11 +64,13 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
     if (pDevice == nullptr || pContext == nullptr)
         return RADIENT_STATUS_OK;
 
-    RADIENT_STATUS Status = m_ResourceCache.Prepare(pDevice, pContext);
+    RADIENT_STATUS Status = m_pAssetManager != nullptr ?
+        m_pAssetManager->UpdateGPUResources(pDevice, pContext) :
+        RADIENT_STATUS_INVALID_OPERATION;
     if (RADIENT_FAILED(Status))
         return Status;
 
-    const RADIENT_STATUS SyncStatus = m_SceneDataCache.SyncScene(*Attribs.pScene, m_ResourceCache, pDevice, pContext);
+    const RADIENT_STATUS SyncStatus = m_SceneDataCache.SyncScene(*Attribs.pScene, m_ResourceCache);
     if (RADIENT_FAILED(SyncStatus))
         return SyncStatus;
 
@@ -90,7 +91,7 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
         Status = m_GeometryRenderer.BeginFrame(pDevice,
                                                pContext,
                                                m_SceneDataCache.GetLightList(),
-                                               m_ResourceCache.GetResourceManager(),
+                                               m_pAssetManager->GetResourceManager(),
                                                Attribs,
                                                m_FrameTargets);
         if (RADIENT_FAILED(Status))

@@ -48,9 +48,7 @@ bool IsSameMeshAsset(const RadientMeshComponent& Mesh0,
 } // namespace
 
 RADIENT_STATUS RadientSceneRenderDataCache::SyncScene(IRadientScene&              Scene,
-                                                      RadientRenderResourceCache& ResourceCache,
-                                                      IRenderDevice*              pDevice,
-                                                      IDeviceContext*             pContext)
+                                                      RadientRenderResourceCache& ResourceCache)
 {
     m_DrawableChanges.clear();
 
@@ -74,15 +72,15 @@ RADIENT_STATUS RadientSceneRenderDataCache::SyncScene(IRadientScene&            
     if (UpdateRenderables)
     {
         Status = State.EnumerateRenderableMeshChanges(
-            [this, &ResourceCache, pDevice, pContext](const RadientSceneState::RenderableMeshChange& Change,
-                                                      const RadientSceneState::RenderableMesh*       pMesh) {
+            [this, &ResourceCache](const RadientSceneState::RenderableMeshChange& Change,
+                                   const RadientSceneState::RenderableMesh*       pMesh) {
                 if (pMesh == nullptr)
                 {
                     ProcessRenderableMeshRemoved(Change.Entity);
                     return;
                 }
 
-                ProcessRenderableMeshAddedOrUpdated(*pMesh, ResourceCache, pDevice, pContext);
+                ProcessRenderableMeshAddedOrUpdated(*pMesh, ResourceCache);
             });
         if (RADIENT_FAILED(Status))
             return Status;
@@ -90,7 +88,7 @@ RADIENT_STATUS RadientSceneRenderDataCache::SyncScene(IRadientScene&            
         State.ClearRenderableMeshChanges();
     }
 
-    ResolvePendingRenderableMeshes(ResourceCache, pDevice, pContext);
+    ResolvePendingRenderableMeshes(ResourceCache);
 
     RADIENT_STATUS LightStatus = RADIENT_STATUS_NO_CHANGE;
     if (UpdateLightList)
@@ -117,9 +115,7 @@ RADIENT_STATUS RadientSceneRenderDataCache::SyncScene(IRadientScene&            
 }
 
 void RadientSceneRenderDataCache::ProcessRenderableMeshAddedOrUpdated(const RadientSceneState::RenderableMesh& Mesh,
-                                                                      RadientRenderResourceCache&              ResourceCache,
-                                                                      IRenderDevice*                           pDevice,
-                                                                      IDeviceContext*                          pContext)
+                                                                      RadientRenderResourceCache&              ResourceCache)
 {
     RenderableRecord& Record = m_Renderables[Mesh.Entity];
 
@@ -143,7 +139,7 @@ void RadientSceneRenderDataCache::ProcessRenderableMeshAddedOrUpdated(const Radi
 
     if (Record.DrawableIDs.empty())
     {
-        TryExpandRenderable(Record, ResourceCache, pDevice, pContext);
+        TryExpandRenderable(Record, ResourceCache);
         return;
     }
 
@@ -169,9 +165,7 @@ void RadientSceneRenderDataCache::ProcessRenderableMeshRemoved(RadientEntityID E
     m_Renderables.erase(It);
 }
 
-void RadientSceneRenderDataCache::ResolvePendingRenderableMeshes(RadientRenderResourceCache& ResourceCache,
-                                                                 IRenderDevice*              pDevice,
-                                                                 IDeviceContext*             pContext)
+void RadientSceneRenderDataCache::ResolvePendingRenderableMeshes(RadientRenderResourceCache& ResourceCache)
 {
     std::vector<RadientEntityID> Pending;
     Pending.swap(m_PendingRenderableEntities);
@@ -187,16 +181,14 @@ void RadientSceneRenderDataCache::ResolvePendingRenderableMeshes(RadientRenderRe
             continue;
 
         Record.PendingResolution = false;
-        TryExpandRenderable(Record, ResourceCache, pDevice, pContext);
+        TryExpandRenderable(Record, ResourceCache);
     }
 }
 
 bool RadientSceneRenderDataCache::TryExpandRenderable(RenderableRecord&           Record,
-                                                      RadientRenderResourceCache& ResourceCache,
-                                                      IRenderDevice*              pDevice,
-                                                      IDeviceContext*             pContext)
+                                                      RadientRenderResourceCache& ResourceCache)
 {
-    const RadientRenderMesh* pMesh = ResourceCache.ResolveMesh(Record.Mesh.Mesh, pDevice, pContext);
+    const RadientRenderMesh* pMesh = ResourceCache.ResolveMesh(Record.Mesh.Mesh);
     if (pMesh == nullptr)
     {
         AddPendingResolution(Record);
