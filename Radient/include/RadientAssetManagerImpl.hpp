@@ -36,6 +36,7 @@
 #include <shared_mutex>
 #include <string>
 #include <unordered_map>
+#include <variant>
 #include <vector>
 
 namespace Diligent
@@ -82,7 +83,7 @@ public:
                                                              RadientAssetReference&           Material) override final;
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE LoadTexture(const RadientTextureLoadInfo& LoadInfo,
-                                                          RadientAssetReference&       Texture) override final;
+                                                          RadientAssetReference&        Texture) override final;
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE LoadGLTF(const RadientGLTFLoadInfo& LoadInfo,
                                                        RadientAssetReference&     Model) override final;
@@ -144,6 +145,13 @@ private:
         std::vector<Uint8> Indices;
     };
 
+    struct MeshStorage
+    {
+        std::vector<MeshVertexBufferStorage> VertexBuffers;
+        MeshIndexBufferStorage               IndexBuffer;
+        std::vector<MeshPrimitiveStorage>    MeshPrimitives;
+    };
+
     struct MaterialStorage
     {
         RadientFloat4 BaseColorFactor = {1.f, 1.f, 1.f, 1.f};
@@ -195,13 +203,12 @@ private:
         std::string        URI;
         std::string        Name;
 
-        std::vector<MeshVertexBufferStorage> VertexBuffers;
-        MeshIndexBufferStorage               IndexBuffer;
-        std::vector<MeshPrimitiveStorage>    MeshPrimitives;
-        MaterialStorage                      Material;
-        GLTFModelStorage                     GLTFModel;
-        GLTFMeshStorage                      GLTFMesh;
-        TextureStorage                       Texture;
+        std::variant<MeshStorage,
+                     MaterialStorage,
+                     GLTFModelStorage,
+                     GLTFMeshStorage,
+                     TextureStorage>
+            Storage;
     };
 
     bool               ValidateMesh(const RadientMeshCreateInfo& MeshCI) const;
