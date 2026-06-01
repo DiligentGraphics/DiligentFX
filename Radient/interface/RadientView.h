@@ -36,6 +36,64 @@ DILIGENT_BEGIN_NAMESPACE(Diligent)
 typedef struct IRadientRenderTarget IRadientRenderTarget;
 typedef struct IRadientView         IRadientView;
 
+// clang-format off
+
+/// Skybox source.
+DILIGENT_TYPED_ENUM(RADIENT_SKYBOX_SOURCE, Uint8)
+{
+    /// Do not render a skybox.
+    RADIENT_SKYBOX_SOURCE_NONE = 0,
+
+    /// Render the scene environment map as the skybox.
+    RADIENT_SKYBOX_SOURCE_SCENE_ENVIRONMENT,
+
+    /// Render the explicit texture asset as the skybox.
+    RADIENT_SKYBOX_SOURCE_TEXTURE
+};
+
+// clang-format on
+
+
+/// Skybox description.
+struct RadientSkyboxDesc
+{
+    /// Skybox source.
+    RADIENT_SKYBOX_SOURCE Source DEFAULT_INITIALIZER(RADIENT_SKYBOX_SOURCE_NONE);
+
+    /// Explicit skybox texture used when Source is RADIENT_SKYBOX_SOURCE_TEXTURE.
+    RadientAssetReference Texture DEFAULT_INITIALIZER({});
+
+    /// Skybox color multiplier.
+    RadientFloat3 Color DEFAULT_INITIALIZER({1.f, 1.f, 1.f});
+
+    /// Skybox intensity multiplier.
+    Float32 Intensity DEFAULT_INITIALIZER(1.f);
+
+    /// Exposure multiplier as a power of 2.
+    Float32 Exposure DEFAULT_INITIALIZER(0.f);
+
+    /// Mip level used for skybox sampling.
+    Float32 MipLevel DEFAULT_INITIALIZER(0.f);
+
+#if DILIGENT_CPP_INTERFACE
+    bool operator==(const RadientSkyboxDesc& Rhs) const
+    {
+        return Source == Rhs.Source &&
+            Texture == Rhs.Texture &&
+            Color == Rhs.Color &&
+            Intensity == Rhs.Intensity &&
+            Exposure == Rhs.Exposure &&
+            MipLevel == Rhs.MipLevel;
+    }
+
+    bool operator!=(const RadientSkyboxDesc& Rhs) const
+    {
+        return !(*this == Rhs);
+    }
+#endif
+};
+typedef struct RadientSkyboxDesc RadientSkyboxDesc;
+
 /// View description.
 ///
 /// A view describes one persistent way to render a scene: which scene is
@@ -53,6 +111,9 @@ struct RadientViewDesc
 
     /// Render target.
     IRadientRenderTarget* pRenderTarget DEFAULT_INITIALIZER(nullptr);
+
+    /// Skybox rendered by the view.
+    RadientSkyboxDesc Skybox DEFAULT_INITIALIZER({});
 };
 typedef struct RadientViewDesc RadientViewDesc;
 
@@ -86,6 +147,10 @@ DILIGENT_BEGIN_INTERFACE(IRadientView, IObject)
     /// Sets the render target used by the view.
     VIRTUAL RADIENT_STATUS METHOD(SetRenderTarget)(THIS_
                                                    IRadientRenderTarget* pRenderTarget) PURE;
+
+    /// Sets the skybox rendered by the view.
+    VIRTUAL RADIENT_STATUS METHOD(SetSkybox)(THIS_
+                                             const RadientSkyboxDesc REF Skybox) PURE;
 };
 DILIGENT_END_INTERFACE
 
@@ -97,6 +162,7 @@ DILIGENT_END_INTERFACE
 #    define IRadientView_SetScene(This, ...)          CALL_IFACE_METHOD(RadientView, SetScene,        This, __VA_ARGS__)
 #    define IRadientView_SetCamera(This, ...)         CALL_IFACE_METHOD(RadientView, SetCamera,       This, __VA_ARGS__)
 #    define IRadientView_SetRenderTarget(This, ...)   CALL_IFACE_METHOD(RadientView, SetRenderTarget, This, __VA_ARGS__)
+#    define IRadientView_SetSkybox(This, ...)         CALL_IFACE_METHOD(RadientView, SetSkybox,       This, __VA_ARGS__)
 
 #endif
 

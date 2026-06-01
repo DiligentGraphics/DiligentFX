@@ -55,8 +55,14 @@ public:
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetRenderTarget(IRadientRenderTarget* pRenderTarget) override final;
 
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetSkybox(const RadientSkyboxDesc& Skybox) override final;
+
+private:
+    void CopySkybox(const RadientSkyboxDesc& Skybox);
+
 private:
     std::string m_Name;
+    std::string m_SkyboxTextureURI;
 
     RadientViewDesc m_Desc;
 

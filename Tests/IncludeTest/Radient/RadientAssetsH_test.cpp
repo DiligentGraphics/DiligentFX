@@ -30,7 +30,8 @@ using namespace Diligent;
 
 static_assert(RADIENT_ASSET_TYPE_MESH == 0, "Unexpected RADIENT_ASSET_TYPE_MESH value");
 static_assert(RADIENT_ASSET_TYPE_MATERIAL == 1, "Unexpected RADIENT_ASSET_TYPE_MATERIAL value");
-static_assert(RADIENT_ASSET_TYPE_GLTF_MODEL == 2, "Unexpected RADIENT_ASSET_TYPE_GLTF_MODEL value");
+static_assert(RADIENT_ASSET_TYPE_TEXTURE == 2, "Unexpected RADIENT_ASSET_TYPE_TEXTURE value");
+static_assert(RADIENT_ASSET_TYPE_GLTF_MODEL == 3, "Unexpected RADIENT_ASSET_TYPE_GLTF_MODEL value");
 
 static_assert(RADIENT_INDEX_TYPE_NONE == 0, "Unexpected RADIENT_INDEX_TYPE_NONE value");
 static_assert(RADIENT_INDEX_TYPE_UINT16 == 1, "Unexpected RADIENT_INDEX_TYPE_UINT16 value");

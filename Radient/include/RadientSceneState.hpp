@@ -100,6 +100,7 @@ public:
     RADIENT_STATUS GetWorldMatrix(RadientEntityID Entity, RadientMatrix4x4& Matrix);
     RADIENT_STATUS GetCachedWorldMatrix(RadientEntityID Entity, RadientMatrix4x4& Matrix) const;
     RADIENT_STATUS GetCamera(RadientEntityID Entity, RadientCameraComponent& Camera) const;
+    const RadientEnvironmentDesc& GetEnvironment() const;
     RADIENT_STATUS HasComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType, Bool& HasComponent) const;
 
     const RadientSceneRevisions& GetSceneRevisions() const;
@@ -125,6 +126,7 @@ public:
     RADIENT_STATUS SetMeshRenderer(RadientEntityID Entity, const RadientMeshRendererComponent& Renderer);
     RADIENT_STATUS SetMaterialBindings(RadientEntityID Entity, const RadientMaterialBindingsComponent& Bindings);
     RADIENT_STATUS SetLight(RadientEntityID Entity, const RadientLightComponent& Light);
+    RADIENT_STATUS SetEnvironment(const RadientEnvironmentDesc& Environment);
     RADIENT_STATUS SetCustomComponentData(RadientEntityID Entity, const RadientCustomComponentData& Component);
     RADIENT_STATUS RemoveComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType);
     RADIENT_STATUS CommitChanges();
@@ -162,7 +164,10 @@ private:
         CHANGE_FLAG_VISIBILITY = 1u << 3u,
 
         // Camera component data changed.
-        CHANGE_FLAG_CAMERAS = 1u << 4u
+        CHANGE_FLAG_CAMERAS = 1u << 4u,
+
+        // Scene environment data changed.
+        CHANGE_FLAG_ENVIRONMENT = 1u << 5u
     };
     DECLARE_FRIEND_FLAG_ENUM_OPERATORS(CHANGE_FLAGS);
 
@@ -285,6 +290,8 @@ private:
     CustomComponentStoresMapType      m_CustomComponentStores;
     RadientEntityID                   m_NextEntityID = 1;
     RadientSceneRevisions             m_SceneRevisions;
+    RadientEnvironmentDesc            m_Environment;
+    std::string                       m_EnvironmentMapURI;
     std::vector<RenderableMeshChange> m_RemovedRenderableMeshChanges;
 
     // Conservative scene-wide mask of derived states that may be dirty anywhere in the scene.

@@ -71,13 +71,15 @@ void ExpectSceneRevisions(const RadientSceneRevisions& Revisions,
                           RadientRevision              Lights,
                           RadientRevision              Transforms,
                           RadientRevision              Visibility,
-                          RadientRevision              Cameras = 0)
+                          RadientRevision              Cameras     = 0,
+                          RadientRevision              Environment = 0)
 {
     EXPECT_EQ(Revisions.Drawables, Drawables);
     EXPECT_EQ(Revisions.Lights, Lights);
     EXPECT_EQ(Revisions.Transforms, Transforms);
     EXPECT_EQ(Revisions.Visibility, Visibility);
     EXPECT_EQ(Revisions.Cameras, Cameras);
+    EXPECT_EQ(Revisions.Environment, Environment);
 }
 
 RadientTransform MakeTranslation(float X, float Y, float Z)
@@ -275,6 +277,54 @@ TEST(RadientSceneStateTest, GetDescCopiesHeapName)
 
     // The stored name should still be readable because SceneState made a copy.
     EXPECT_STREQ(State.GetDesc().Name, "Heap Scene");
+}
+
+TEST(RadientSceneStateTest, SetEnvironmentCopiesTextureURI)
+{
+    // Environment is scene-level render state, so it is tracked outside the
+    // entity/component hierarchy and owns any raw string pointers passed in.
+    RadientSceneState State;
+
+    const RadientEnvironmentDesc& DefaultEnvironment = State.GetEnvironment();
+    EXPECT_EQ(DefaultEnvironment.EnvironmentMap.URI, nullptr);
+    EXPECT_EQ(DefaultEnvironment.EnvironmentMap.Version, 0u);
+    EXPECT_EQ(DefaultEnvironment.Color.x, 1.f);
+    EXPECT_EQ(DefaultEnvironment.Color.y, 1.f);
+    EXPECT_EQ(DefaultEnvironment.Color.z, 1.f);
+    EXPECT_EQ(DefaultEnvironment.Intensity, 1.f);
+    EXPECT_EQ(DefaultEnvironment.Exposure, 0.f);
+
+    std::unique_ptr<std::string> EnvironmentURI{new std::string{"texture://environment"}};
+
+    RadientEnvironmentDesc Environment{};
+    Environment.EnvironmentMap.URI     = EnvironmentURI->c_str();
+    Environment.EnvironmentMap.Version = 7;
+    Environment.Color                  = {0.25f, 0.5f, 1.f};
+    Environment.Intensity              = 2.f;
+    Environment.Exposure               = -1.f;
+
+    EXPECT_EQ(State.SetEnvironment(Environment), RADIENT_STATUS_OK);
+    ExpectSceneRevisions(State.GetSceneRevisions(), 0, 0, 0, 0, 0, 1);
+
+    EnvironmentURI.reset();
+
+    const RadientEnvironmentDesc& StoredEnvironment = State.GetEnvironment();
+    ASSERT_NE(StoredEnvironment.EnvironmentMap.URI, nullptr);
+    EXPECT_STREQ(StoredEnvironment.EnvironmentMap.URI, "texture://environment");
+    EXPECT_EQ(StoredEnvironment.EnvironmentMap.Version, 7u);
+    EXPECT_EQ(StoredEnvironment.Color.x, 0.25f);
+    EXPECT_EQ(StoredEnvironment.Color.y, 0.5f);
+    EXPECT_EQ(StoredEnvironment.Color.z, 1.f);
+    EXPECT_EQ(StoredEnvironment.Intensity, 2.f);
+    EXPECT_EQ(StoredEnvironment.Exposure, -1.f);
+
+    EXPECT_EQ(State.SetEnvironment(StoredEnvironment), RADIENT_STATUS_NO_CHANGE);
+    ExpectSceneRevisions(State.GetSceneRevisions(), 0, 0, 0, 0, 0, 1);
+
+    RadientEnvironmentDesc UpdatedEnvironment = StoredEnvironment;
+    UpdatedEnvironment.Intensity              = 4.f;
+    EXPECT_EQ(State.SetEnvironment(UpdatedEnvironment), RADIENT_STATUS_OK);
+    ExpectSceneRevisions(State.GetSceneRevisions(), 0, 0, 0, 0, 0, 2);
 }
 
 TEST(RadientSceneStateTest, IsEntityAlive)

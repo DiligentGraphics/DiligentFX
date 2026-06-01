@@ -104,6 +104,11 @@ RADIENT_STATUS RadientSceneWriterImpl::SetLight(RadientEntityID Entity, const Ra
     return m_pState ? m_pState->SetLight(Entity, Light) : RADIENT_STATUS_INVALID_ARGUMENT;
 }
 
+RADIENT_STATUS RadientSceneWriterImpl::SetEnvironment(const RadientEnvironmentDesc& Environment)
+{
+    return m_pState ? m_pState->SetEnvironment(Environment) : RADIENT_STATUS_INVALID_ARGUMENT;
+}
+
 RADIENT_STATUS RadientSceneWriterImpl::SetCustomComponentData(RadientEntityID Entity, const RadientCustomComponentData& Component)
 {
     return m_pState ? m_pState->SetCustomComponentData(Entity, Component) : RADIENT_STATUS_INVALID_ARGUMENT;

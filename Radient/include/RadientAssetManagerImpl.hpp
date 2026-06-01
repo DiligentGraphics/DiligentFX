@@ -44,6 +44,8 @@ namespace Diligent
 struct IDeviceContext;
 struct IRenderDevice;
 struct IGPUUploadManager;
+struct ITexture;
+struct ITextureView;
 
 namespace GLTF
 {
@@ -79,6 +81,9 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateMaterial(const RadientMaterialCreateInfo& MaterialCI,
                                                              RadientAssetReference&           Material) override final;
 
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE LoadTexture(const RadientTextureLoadInfo& LoadInfo,
+                                                          RadientAssetReference&       Texture) override final;
+
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE LoadGLTF(const RadientGLTFLoadInfo& LoadInfo,
                                                        RadientAssetReference&     Model) override final;
 
@@ -99,6 +104,7 @@ public:
     const GLTF::Model* GetGLTFModel(const RadientAssetReference& Model,
                                     bool                         RequireGPUResourcesReady = false) const;
     RADIENT_STATUS     GetGLTFLoadStatus(const RadientAssetReference& Model) const;
+    ITextureView*      GetTextureSRV(const RadientAssetReference& Texture) const;
 
     RADIENT_STATUS UpdateGPUResources(IRenderDevice*  pDevice,
                                       IDeviceContext* pContext);
@@ -175,6 +181,13 @@ private:
         Uint32                MeshIndex = ~0u;
     };
 
+    struct TextureStorage
+    {
+        std::string             SourceURI;
+        RADIENT_STATUS          LoadStatus = RADIENT_STATUS_OK;
+        RefCntAutoPtr<ITexture> pTexture;
+    };
+
     struct AssetRecord
     {
         RADIENT_ASSET_TYPE Type    = RADIENT_ASSET_TYPE_MESH;
@@ -188,10 +201,12 @@ private:
         MaterialStorage                      Material;
         GLTFModelStorage                     GLTFModel;
         GLTFMeshStorage                      GLTFMesh;
+        TextureStorage                       Texture;
     };
 
     bool               ValidateMesh(const RadientMeshCreateInfo& MeshCI) const;
     bool               ValidateGLTF(const RadientGLTFLoadInfo& LoadInfo) const;
+    bool               ValidateTexture(const RadientTextureLoadInfo& LoadInfo) const;
     AssetRecord*       FindAssetLocked(const RadientAssetReference& Ref);
     const AssetRecord* FindAssetLocked(const RadientAssetReference& Ref) const;
     RADIENT_STATUS     GetAssetLoadStatusLocked(const RadientAssetReference& Asset) const;

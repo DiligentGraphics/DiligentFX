@@ -86,34 +86,70 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
     if (RADIENT_FAILED(Status))
         return Status;
 
+    Status = m_SkyboxPass.Prepare(m_GeometryRenderer, pDevice, m_FrameTargets);
+    if (RADIENT_FAILED(Status))
+        return Status;
+
     Status = m_PostProcessPipeline.Prepare(pDevice, pContext, m_FrameTargets);
     if (RADIENT_FAILED(Status))
         return Status;
 
-    if (!m_DrawableCache.GetDrawLists().IsEmpty())
+    const bool HasDrawables = !m_DrawableCache.GetDrawLists().IsEmpty();
+    const bool HasSkybox    = ViewDesc.Skybox.Source != RADIENT_SKYBOX_SOURCE_NONE;
+
+    if (HasDrawables || HasSkybox)
     {
         Status = m_GeometryRenderer.BeginFrame(pDevice,
                                                pContext,
                                                m_DrawableCache.GetLightList(),
+                                               m_pAssetManager,
                                                m_pAssetManager->GetResourceManager(),
                                                ViewDesc,
                                                m_FrameTargets);
         if (RADIENT_FAILED(Status))
             return Status;
 
-        const std::array<GLTF::Material::ALPHA_MODE, 3> AlphaModes =
-            {
-                GLTF::Material::ALPHA_MODE_OPAQUE,
-                GLTF::Material::ALPHA_MODE_MASK,
-                GLTF::Material::ALPHA_MODE_BLEND,
-            };
-
-        for (const GLTF::Material::ALPHA_MODE AlphaMode : AlphaModes)
+        if (HasDrawables)
         {
             Status = m_ForwardPass.Execute(m_GeometryRenderer,
                                            pDevice,
                                            pContext,
-                                           m_DrawableCache.GetDrawList(AlphaMode),
+                                           m_DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_OPAQUE),
+                                           m_DrawableCache,
+                                           m_FrameTargets);
+            if (RADIENT_FAILED(Status))
+                return Status;
+
+            Status = m_ForwardPass.Execute(m_GeometryRenderer,
+                                           pDevice,
+                                           pContext,
+                                           m_DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_MASK),
+                                           m_DrawableCache,
+                                           m_FrameTargets);
+            if (RADIENT_FAILED(Status))
+                return Status;
+        }
+
+        if (HasSkybox)
+        {
+            const RadientEnvironmentDesc& Environment = ViewDesc.pScene->GetEnvironment();
+
+            Status = m_SkyboxPass.Execute(m_GeometryRenderer,
+                                          pContext,
+                                          ViewDesc,
+                                          Environment,
+                                          m_pAssetManager,
+                                          m_FrameTargets);
+            if (RADIENT_FAILED(Status))
+                return Status;
+        }
+
+        if (HasDrawables)
+        {
+            Status = m_ForwardPass.Execute(m_GeometryRenderer,
+                                           pDevice,
+                                           pContext,
+                                           m_DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_BLEND),
                                            m_DrawableCache,
                                            m_FrameTargets);
             if (RADIENT_FAILED(Status))

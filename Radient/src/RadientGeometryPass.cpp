@@ -26,6 +26,7 @@
 
 #include "RadientGeometryPass.hpp"
 
+#include "RadientAssetManagerImpl.hpp"
 #include "RadientMath.hpp"
 #include "RadientSceneDrawableCache.hpp"
 
@@ -108,6 +109,12 @@ RefCntAutoPtr<ITextureView> CreateDefaultIBLCubemap(IRenderDevice* pDevice)
         return {};
 
     return RefCntAutoPtr<ITextureView>{pEnvMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE)};
+}
+
+float3 GetLightingScale(const RadientFloat3& Color, Float32 Intensity, Float32 Exposure)
+{
+    const float Scale = Intensity * std::exp2(Exposure);
+    return float3{Color.x * Scale, Color.y * Scale, Color.z * Scale};
 }
 
 RadientCameraComponent GetCameraComponent(const RadientViewDesc& ViewDesc)
@@ -244,9 +251,10 @@ void WritePBRLightShaderAttribs(const RadientLightComponent& Light,
     ShaderAttribs.SpotAngleScale  = SpotAngleScale;
 }
 
-void WriteSceneLights(PBR_Renderer&           Renderer,
-                      const RadientLightList& LightList,
-                      HLSL::PBRFrameAttribs&  FrameAttribs)
+void WriteSceneLights(PBR_Renderer&                 Renderer,
+                      const RadientLightList&       LightList,
+                      const RadientEnvironmentDesc& Environment,
+                      HLSL::PBRFrameAttribs&        FrameAttribs)
 {
     HLSL::PBRLightAttribs* Lights = reinterpret_cast<HLSL::PBRLightAttribs*>(&FrameAttribs + 1);
 
@@ -279,7 +287,7 @@ void WriteSceneLights(PBR_Renderer&           Renderer,
     RendererAttribs.AverageLogLum     = 0.f;
     RendererAttribs.MiddleGray        = 0.18f;
     RendererAttribs.WhitePoint        = 3.f;
-    RendererAttribs.IBLScale          = float4{1.f};
+    RendererAttribs.IBLScale          = float4{GetLightingScale(Environment.Color, Environment.Intensity, Environment.Exposure), 1.f};
     RendererAttribs.HighlightColor    = float4{0.f, 0.f, 0.f, 0.f};
     RendererAttribs.UnshadedColor     = float4{1.f, 1.f, 1.f, 1.f};
     RendererAttribs.PointSize         = 1.f;
@@ -740,6 +748,7 @@ RADIENT_STATUS RadientGeometryRenderer::Prepare(IRenderDevice*  pDevice,
 RADIENT_STATUS RadientGeometryRenderer::BeginFrame(IRenderDevice*                   pDevice,
                                                    IDeviceContext*                  pContext,
                                                    const RadientLightList&          LightList,
+                                                   RadientAssetManagerImpl*         pAssetManager,
                                                    GLTF::ResourceManager*           pResourceManager,
                                                    const RadientViewDesc&           ViewDesc,
                                                    const RadientFrameRenderTargets& Targets)
@@ -756,6 +765,13 @@ RADIENT_STATUS RadientGeometryRenderer::BeginFrame(IRenderDevice*               
     if (m_pRenderer == nullptr || m_pFrameAttribsCB == nullptr)
         return RADIENT_STATUS_OK;
 
+    const RadientEnvironmentDesc Environment       = ViewDesc.pScene != nullptr ?
+              ViewDesc.pScene->GetEnvironment() :
+              RadientEnvironmentDesc{};
+    const RADIENT_STATUS         EnvironmentStatus = UpdateEnvironment(pContext, pAssetManager, Environment);
+    if (RADIENT_FAILED(EnvironmentStatus))
+        return EnvironmentStatus;
+
     {
         MapHelper<HLSL::PBRFrameAttribs> FrameAttribs{pContext, m_pFrameAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD};
         HLSL::PBRFrameAttribs*           pFrameAttribs = FrameAttribs;
@@ -764,7 +780,7 @@ RADIENT_STATUS RadientGeometryRenderer::BeginFrame(IRenderDevice*               
 
         pFrameAttribs->Camera     = GetCameraAttribs(pDevice, ViewDesc, Targets, m_FrameIndex);
         pFrameAttribs->PrevCamera = pFrameAttribs->Camera;
-        WriteSceneLights(*m_pRenderer, LightList, *pFrameAttribs);
+        WriteSceneLights(*m_pRenderer, LightList, Environment, *pFrameAttribs);
     }
 
     if (pResourceManager == nullptr)
@@ -1084,6 +1100,45 @@ void RadientGeometryPass::InvalidateDrawablePassData(RadientDrawableID DrawableI
         m_DrawablePassData[DrawableID] = {};
 }
 
+RADIENT_STATUS RadientGeometryRenderer::UpdateEnvironment(IDeviceContext*               pContext,
+                                                          RadientAssetManagerImpl*      pAssetManager,
+                                                          const RadientEnvironmentDesc& Environment)
+{
+    if (m_pRenderer == nullptr || m_pDefaultIBLCubemapSRV == nullptr)
+        return RADIENT_STATUS_INVALID_OPERATION;
+
+    ITextureView* pEnvironmentMap = nullptr;
+    if (pAssetManager != nullptr && Environment.EnvironmentMap.URI != nullptr)
+        pEnvironmentMap = pAssetManager->GetTextureSRV(Environment.EnvironmentMap);
+
+    if (pEnvironmentMap == nullptr)
+    {
+        if (!m_UsingDefaultEnvironment)
+        {
+            m_pRenderer->PrecomputeCubemaps(pContext, m_pDefaultIBLCubemapSRV);
+            m_CurrentEnvironmentMap    = {};
+            m_CurrentEnvironmentMapURI = {};
+            m_UsingDefaultEnvironment  = true;
+        }
+        return RADIENT_STATUS_OK;
+    }
+
+    const bool EnvironmentChanged =
+        m_UsingDefaultEnvironment ||
+        m_CurrentEnvironmentMap.Version != Environment.EnvironmentMap.Version ||
+        m_CurrentEnvironmentMapURI != Environment.EnvironmentMap.URI;
+    if (!EnvironmentChanged)
+        return RADIENT_STATUS_OK;
+
+    m_pRenderer->PrecomputeCubemaps(pContext, pEnvironmentMap);
+    m_CurrentEnvironmentMapURI  = Environment.EnvironmentMap.URI;
+    m_CurrentEnvironmentMap     = Environment.EnvironmentMap;
+    m_CurrentEnvironmentMap.URI = m_CurrentEnvironmentMapURI.c_str();
+    m_UsingDefaultEnvironment   = false;
+
+    return RADIENT_STATUS_OK;
+}
+
 RADIENT_STATUS RadientGeometryRenderer::CreateRenderer(IRenderDevice*  pDevice,
                                                        IDeviceContext* pContext)
 {
@@ -1106,10 +1161,11 @@ RADIENT_STATUS RadientGeometryRenderer::CreateRenderer(IRenderDevice*  pDevice,
          PBR_Renderer::CreateInfo::TEX_COLOR_CONVERSION_MODE_SRGB_TO_LINEAR;
     SetGLTFTextureAttribIndices(RendererCI);
 
-    m_pRenderer = std::make_unique<PBR_Renderer>(pDevice, nullptr, pContext, RendererCI);
-    if (RefCntAutoPtr<ITextureView> pDefaultIBLCubemap = CreateDefaultIBLCubemap(pDevice))
+    m_pRenderer             = std::make_unique<PBR_Renderer>(pDevice, nullptr, pContext, RendererCI);
+    m_pDefaultIBLCubemapSRV = CreateDefaultIBLCubemap(pDevice);
+    if (m_pDefaultIBLCubemapSRV != nullptr)
     {
-        m_pRenderer->PrecomputeCubemaps(pContext, pDefaultIBLCubemap);
+        m_pRenderer->PrecomputeCubemaps(pContext, m_pDefaultIBLCubemapSRV);
     }
     else
     {

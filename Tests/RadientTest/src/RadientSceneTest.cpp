@@ -568,6 +568,35 @@ TEST(RadientRendererTest, CreateView)
 
     EXPECT_EQ(pView->SetRenderTarget(nullptr), RADIENT_STATUS_OK);
     EXPECT_EQ(pView->GetDesc().pRenderTarget, nullptr);
+
+    // Skybox settings are view-local and copy raw texture URI strings.
+    std::string SkyboxURI = "texture://skybox";
+
+    RadientSkyboxDesc Skybox{};
+    Skybox.Source          = RADIENT_SKYBOX_SOURCE_TEXTURE;
+    Skybox.Texture.URI     = SkyboxURI.c_str();
+    Skybox.Texture.Version = 3;
+    Skybox.Color           = {0.25f, 0.5f, 1.f};
+    Skybox.Intensity       = 2.f;
+    Skybox.Exposure        = -1.f;
+    Skybox.MipLevel        = 1.f;
+
+    EXPECT_EQ(pView->SetSkybox(Skybox), RADIENT_STATUS_OK);
+    SkyboxURI[0] = 'X';
+
+    const RadientSkyboxDesc& StoredSkybox = pView->GetDesc().Skybox;
+    EXPECT_EQ(StoredSkybox.Source, RADIENT_SKYBOX_SOURCE_TEXTURE);
+    ASSERT_NE(StoredSkybox.Texture.URI, nullptr);
+    EXPECT_STREQ(StoredSkybox.Texture.URI, "texture://skybox");
+    EXPECT_EQ(StoredSkybox.Texture.Version, 3u);
+    EXPECT_EQ(StoredSkybox.Color.x, 0.25f);
+    EXPECT_EQ(StoredSkybox.Color.y, 0.5f);
+    EXPECT_EQ(StoredSkybox.Color.z, 1.f);
+    EXPECT_EQ(StoredSkybox.Intensity, 2.f);
+    EXPECT_EQ(StoredSkybox.Exposure, -1.f);
+    EXPECT_EQ(StoredSkybox.MipLevel, 1.f);
+
+    EXPECT_EQ(pView->SetSkybox(StoredSkybox), RADIENT_STATUS_NO_CHANGE);
 }
 
 TEST(RadientRendererTest, RenderHeadlessScene)

@@ -23,6 +23,7 @@ set(SOURCE
     src/RadientSceneDrawableCache.cpp
     src/RadientSceneState.cpp
     src/RadientSceneWriterImpl.cpp
+    src/RadientSkyboxPass.cpp
     src/RadientViewImpl.cpp
 )
 
@@ -47,6 +48,7 @@ set(INCLUDE
     include/RadientSceneDrawableCache.hpp
     include/RadientSceneState.hpp
     include/RadientSceneWriterImpl.hpp
+    include/RadientSkyboxPass.hpp
     include/RadientViewImpl.hpp
 )
 
@@ -83,6 +85,7 @@ PRIVATE
     Diligent-BasicPlatform
     Diligent-GraphicsTools
     Diligent-AssetLoader
+    Diligent-TextureLoader
     Diligent-Common
     DiligentFX
     EnTT

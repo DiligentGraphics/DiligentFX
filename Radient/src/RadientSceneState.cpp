@@ -250,6 +250,11 @@ RADIENT_STATUS RadientSceneState::GetCamera(RadientEntityID Entity, RadientCamer
     return RADIENT_STATUS_OK;
 }
 
+const RadientEnvironmentDesc& RadientSceneState::GetEnvironment() const
+{
+    return m_Environment;
+}
+
 RADIENT_STATUS RadientSceneState::HasComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType, Bool& HasComponent) const
 {
     HasComponent = False;
@@ -545,6 +550,23 @@ RADIENT_STATUS RadientSceneState::SetMaterialBindings(RadientEntityID Entity, co
 RADIENT_STATUS RadientSceneState::SetLight(RadientEntityID Entity, const RadientLightComponent& Light)
 {
     return EmplaceOrReplaceComponent(Entity, Light, CHANGE_FLAG_LIGHTS);
+}
+
+RADIENT_STATUS RadientSceneState::SetEnvironment(const RadientEnvironmentDesc& Environment)
+{
+    std::string NewEnvironmentMapURI = Environment.EnvironmentMap.URI != nullptr ? Environment.EnvironmentMap.URI : "";
+
+    RadientEnvironmentDesc NewEnvironment = Environment;
+    NewEnvironment.EnvironmentMap.URI     = !NewEnvironmentMapURI.empty() ? NewEnvironmentMapURI.c_str() : nullptr;
+
+    if (m_Environment == NewEnvironment)
+        return RADIENT_STATUS_NO_CHANGE;
+
+    m_EnvironmentMapURI               = std::move(NewEnvironmentMapURI);
+    NewEnvironment.EnvironmentMap.URI = !m_EnvironmentMapURI.empty() ? m_EnvironmentMapURI.c_str() : nullptr;
+    m_Environment                     = NewEnvironment;
+    Touch(CHANGE_FLAG_ENVIRONMENT);
+    return RADIENT_STATUS_OK;
 }
 
 RADIENT_STATUS RadientSceneState::SetCustomComponentData(RadientEntityID Entity, const RadientCustomComponentData& Component)
@@ -1351,6 +1373,9 @@ void RadientSceneState::Touch(CHANGE_FLAGS ChangeFlags)
 
     if ((ChangeFlags & CHANGE_FLAG_CAMERAS) != CHANGE_FLAG_NONE)
         ++m_SceneRevisions.Cameras;
+
+    if ((ChangeFlags & CHANGE_FLAG_ENVIRONMENT) != CHANGE_FLAG_NONE)
+        ++m_SceneRevisions.Environment;
 }
 
 } // namespace Diligent

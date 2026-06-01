@@ -83,6 +83,8 @@ public:
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetLight(RadientEntityID              Entity,
                                                        const RadientLightComponent& Light) override final;
 
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetEnvironment(const RadientEnvironmentDesc& Environment) override final;
+
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE SetCustomComponentData(RadientEntityID                   Entity,
                                                                      const RadientCustomComponentData& Component) override final;
 

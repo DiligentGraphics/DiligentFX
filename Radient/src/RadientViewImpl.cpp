@@ -26,6 +26,8 @@
 
 #include "RadientViewImpl.hpp"
 
+#include <utility>
+
 namespace Diligent
 {
 
@@ -37,6 +39,7 @@ RadientViewImpl::RadientViewImpl(IReferenceCounters* pRefCounters, const Radient
     m_pRenderTarget{Desc.pRenderTarget}
 {
     m_Desc.Name = m_Name.c_str();
+    CopySkybox(Desc.Skybox);
 }
 
 RadientViewImpl::~RadientViewImpl()
@@ -80,6 +83,29 @@ RADIENT_STATUS RadientViewImpl::SetRenderTarget(IRadientRenderTarget* pRenderTar
     m_pRenderTarget      = pRenderTarget;
     m_Desc.pRenderTarget = m_pRenderTarget;
     return RADIENT_STATUS_OK;
+}
+
+RADIENT_STATUS RadientViewImpl::SetSkybox(const RadientSkyboxDesc& Skybox)
+{
+    std::string NewSkyboxTextureURI = Skybox.Texture.URI != nullptr ? Skybox.Texture.URI : "";
+
+    RadientSkyboxDesc NewSkybox = Skybox;
+    NewSkybox.Texture.URI       = !NewSkyboxTextureURI.empty() ? NewSkyboxTextureURI.c_str() : nullptr;
+
+    if (m_Desc.Skybox == NewSkybox)
+        return RADIENT_STATUS_NO_CHANGE;
+
+    m_SkyboxTextureURI    = std::move(NewSkyboxTextureURI);
+    NewSkybox.Texture.URI = !m_SkyboxTextureURI.empty() ? m_SkyboxTextureURI.c_str() : nullptr;
+    m_Desc.Skybox         = NewSkybox;
+    return RADIENT_STATUS_OK;
+}
+
+void RadientViewImpl::CopySkybox(const RadientSkyboxDesc& Skybox)
+{
+    m_SkyboxTextureURI        = Skybox.Texture.URI != nullptr ? Skybox.Texture.URI : "";
+    m_Desc.Skybox             = Skybox;
+    m_Desc.Skybox.Texture.URI = !m_SkyboxTextureURI.empty() ? m_SkyboxTextureURI.c_str() : nullptr;
 }
 
 } // namespace Diligent

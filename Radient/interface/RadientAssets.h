@@ -46,6 +46,9 @@ DILIGENT_TYPED_ENUM(RADIENT_ASSET_TYPE, Uint8)
     /// Material asset.
     RADIENT_ASSET_TYPE_MATERIAL,
 
+    /// Texture asset.
+    RADIENT_ASSET_TYPE_TEXTURE,
+
     /// GLTF model asset.
     RADIENT_ASSET_TYPE_GLTF_MODEL
 };
@@ -242,6 +245,18 @@ struct RadientMaterialCreateInfo
 typedef struct RadientMaterialCreateInfo RadientMaterialCreateInfo;
 
 
+/// Texture load attributes.
+struct RadientTextureLoadInfo
+{
+    /// Source URI. The scheme may identify a local file, remote resource, or memory-backed source.
+    const Char* URI DEFAULT_INITIALIZER(nullptr);
+
+    /// Interpret the texture as sRGB.
+    Bool IsSRGB DEFAULT_INITIALIZER(False);
+};
+typedef struct RadientTextureLoadInfo RadientTextureLoadInfo;
+
+
 /// GLTF model load attributes.
 struct RadientGLTFLoadInfo
 {
@@ -281,6 +296,11 @@ DILIGENT_BEGIN_INTERFACE(IRadientAssetManager, IObject)
                                                   const RadientMaterialCreateInfo REF MaterialCI,
                                                   RadientAssetReference REF           Material) PURE;
 
+    /// Loads a texture asset from a URI.
+    VIRTUAL RADIENT_STATUS METHOD(LoadTexture)(THIS_
+                                               const RadientTextureLoadInfo REF LoadInfo,
+                                               RadientAssetReference REF        Texture) PURE;
+
     /// Starts loading a GLTF model asset from a URI.
     /// Returns RADIENT_STATUS_PENDING when loading continues asynchronously.
     VIRTUAL RADIENT_STATUS METHOD(LoadGLTF)(THIS_
@@ -301,6 +321,7 @@ DILIGENT_END_INTERFACE
 #    define IRadientAssetManager_GetDesc(This)                 CALL_IFACE_METHOD(RadientAssetManager, GetDesc,        This)
 #    define IRadientAssetManager_CreateMesh(This, ...)         CALL_IFACE_METHOD(RadientAssetManager, CreateMesh,     This, __VA_ARGS__)
 #    define IRadientAssetManager_CreateMaterial(This, ...)     CALL_IFACE_METHOD(RadientAssetManager, CreateMaterial, This, __VA_ARGS__)
+#    define IRadientAssetManager_LoadTexture(This, ...)        CALL_IFACE_METHOD(RadientAssetManager, LoadTexture,    This, __VA_ARGS__)
 #    define IRadientAssetManager_LoadGLTF(This, ...)           CALL_IFACE_METHOD(RadientAssetManager, LoadGLTF,       This, __VA_ARGS__)
 #    define IRadientAssetManager_WaitForAssetLoad(This, ...)   CALL_IFACE_METHOD(RadientAssetManager, WaitForAssetLoad, This, __VA_ARGS__)
 

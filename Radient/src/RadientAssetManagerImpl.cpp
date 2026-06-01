@@ -31,6 +31,7 @@
 #include "GLTFResourceManager.hpp"
 #include "GPUUploadManager.h"
 #include "ThreadPool.hpp"
+#include "TextureUtilities.h"
 
 #include <exception>
 #include <thread>
@@ -115,6 +116,33 @@ RADIENT_STATUS LoadGLTFModel(const std::string&            SourceURI,
     catch (...)
     {
         LOG_ERROR_MESSAGE("Failed to load Radient GLTF asset '", SourceURI, "'");
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
+}
+
+RADIENT_STATUS LoadTextureAsset(const std::string& SourceURI,
+                                Bool               IsSRGB,
+                                IRenderDevice*     pDevice,
+                                RefCntAutoPtr<ITexture>& pTexture)
+{
+    if (pDevice == nullptr)
+        return RADIENT_STATUS_INVALID_OPERATION;
+
+    try
+    {
+        TextureLoadInfo LoadInfo{SourceURI.c_str()};
+        LoadInfo.IsSRGB = IsSRGB;
+        CreateTextureFromFile(SourceURI.c_str(), LoadInfo, pDevice, &pTexture);
+        return pTexture != nullptr ? RADIENT_STATUS_OK : RADIENT_STATUS_INVALID_OPERATION;
+    }
+    catch (const std::exception& Error)
+    {
+        LOG_ERROR_MESSAGE("Failed to load Radient texture asset '", SourceURI, "': ", Error.what());
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
+    catch (...)
+    {
+        LOG_ERROR_MESSAGE("Failed to load Radient texture asset '", SourceURI, "'");
         return RADIENT_STATUS_INVALID_OPERATION;
     }
 }
@@ -240,6 +268,30 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMaterial(const RadientMaterialCrea
     Record.Material.EmissiveTexture          = CopyAssetReference(MaterialCI.EmissiveTexture, Record.Material.EmissiveTextureURI);
 
     Material = StoreAsset(std::move(Record));
+    return RADIENT_STATUS_OK;
+}
+
+RADIENT_STATUS RadientAssetManagerImpl::LoadTexture(const RadientTextureLoadInfo& LoadInfo,
+                                                    RadientAssetReference&       Texture)
+{
+    Texture = {};
+
+    if (!ValidateTexture(LoadInfo))
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    AssetRecord Record;
+    Record.Type              = RADIENT_ASSET_TYPE_TEXTURE;
+    Record.URI               = MakeURI("texture");
+    Record.Name              = LoadInfo.URI;
+    Record.Texture.SourceURI = LoadInfo.URI;
+    Record.Texture.LoadStatus = LoadTextureAsset(Record.Texture.SourceURI,
+                                                 LoadInfo.IsSRGB,
+                                                 m_pDevice,
+                                                 Record.Texture.pTexture);
+    if (RADIENT_FAILED(Record.Texture.LoadStatus))
+        return Record.Texture.LoadStatus;
+
+    Texture = StoreAsset(std::move(Record));
     return RADIENT_STATUS_OK;
 }
 
@@ -425,6 +477,22 @@ RADIENT_STATUS RadientAssetManagerImpl::GetGLTFLoadStatus(const RadientAssetRefe
     return pRecord->GLTFModel.LoadStatus;
 }
 
+ITextureView* RadientAssetManagerImpl::GetTextureSRV(const RadientAssetReference& Texture) const
+{
+    std::shared_lock<std::shared_mutex> Lock{m_Mutex};
+
+    const AssetRecord* pRecord = FindAssetLocked(Texture);
+    if (pRecord == nullptr ||
+        pRecord->Type != RADIENT_ASSET_TYPE_TEXTURE ||
+        pRecord->Texture.LoadStatus != RADIENT_STATUS_OK ||
+        pRecord->Texture.pTexture == nullptr)
+    {
+        return nullptr;
+    }
+
+    return pRecord->Texture.pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+}
+
 RADIENT_STATUS RadientAssetManagerImpl::UpdateGPUResources(IRenderDevice*  pDevice,
                                                            IDeviceContext* pContext)
 {
@@ -552,6 +620,11 @@ bool RadientAssetManagerImpl::ValidateGLTF(const RadientGLTFLoadInfo& LoadInfo) 
     return LoadInfo.URI != nullptr && *LoadInfo.URI != 0;
 }
 
+bool RadientAssetManagerImpl::ValidateTexture(const RadientTextureLoadInfo& LoadInfo) const
+{
+    return LoadInfo.URI != nullptr && *LoadInfo.URI != 0;
+}
+
 RadientAssetManagerImpl::AssetRecord* RadientAssetManagerImpl::FindAssetLocked(const RadientAssetReference& Ref)
 {
     return const_cast<AssetRecord*>(static_cast<const RadientAssetManagerImpl*>(this)->FindAssetLocked(Ref));
@@ -576,9 +649,17 @@ RADIENT_STATUS RadientAssetManagerImpl::GetAssetLoadStatusLocked(const RadientAs
     if (pRecord == nullptr)
         return RADIENT_STATUS_NOT_FOUND;
 
-    return pRecord->Type == RADIENT_ASSET_TYPE_GLTF_MODEL ?
-        pRecord->GLTFModel.LoadStatus :
-        RADIENT_STATUS_OK;
+    switch (pRecord->Type)
+    {
+        case RADIENT_ASSET_TYPE_GLTF_MODEL:
+            return pRecord->GLTFModel.LoadStatus;
+
+        case RADIENT_ASSET_TYPE_TEXTURE:
+            return pRecord->Texture.LoadStatus;
+
+        default:
+            return RADIENT_STATUS_OK;
+    }
 }
 
 std::string RadientAssetManagerImpl::MakeURI(const char* Type)

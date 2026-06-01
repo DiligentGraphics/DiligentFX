@@ -26,43 +26,38 @@
 
 #pragma once
 
-#include "RadientGeometryPass.hpp"
-#include "RadientPostProcessPipeline.hpp"
-#include "RadientRenderResourceCache.hpp"
-#include "RadientSceneDrawableCache.hpp"
-#include "RadientSkyboxPass.hpp"
+#include "RadientFrameRenderTargets.hpp"
 
-#include "RadientBackend.h"
-#include "RadientRenderer.h"
-#include "RefCntAutoPtr.hpp"
+#include <memory>
 
 namespace Diligent
 {
 
+class EnvMapRenderer;
 class RadientAssetManagerImpl;
+class RadientGeometryRenderer;
 
-/// Backend-facing render pipeline for one Radient renderer instance.
-class RadientRenderPipeline
+/// Skybox render pass.
+class RadientSkyboxPass
 {
 public:
-    RadientRenderPipeline(IRadientBackend*           pBackend,
-                          RadientAssetManagerImpl*   pAssetManager,
-                          const RadientRendererDesc& Desc);
-    ~RadientRenderPipeline();
+    RadientSkyboxPass();
+    ~RadientSkyboxPass();
 
-    RADIENT_STATUS Render(const RadientRenderAttribs& Attribs);
+    RADIENT_STATUS Prepare(RadientGeometryRenderer&         Renderer,
+                           IRenderDevice*                   pDevice,
+                           const RadientFrameRenderTargets& Targets);
+    RADIENT_STATUS Execute(RadientGeometryRenderer&         Renderer,
+                           IDeviceContext*                  pContext,
+                           const RadientViewDesc&           ViewDesc,
+                           const RadientEnvironmentDesc&    Environment,
+                           RadientAssetManagerImpl*         pAssetManager,
+                           const RadientFrameRenderTargets& Targets);
 
 private:
-    RefCntAutoPtr<IRadientBackend>         m_pBackend;
-    RefCntAutoPtr<RadientAssetManagerImpl> m_pAssetManager;
-
-    RadientRenderResourceCache m_ResourceCache;
-    RadientSceneDrawableCache  m_DrawableCache;
-    RadientFrameRenderTargets  m_FrameTargets;
-    RadientGeometryRenderer    m_GeometryRenderer;
-    RadientGeometryPass        m_ForwardPass;
-    RadientSkyboxPass          m_SkyboxPass;
-    RadientPostProcessPipeline m_PostProcessPipeline;
+    std::unique_ptr<EnvMapRenderer> m_pRenderer;
+    TEXTURE_FORMAT                  m_RTVFormat = TEX_FORMAT_UNKNOWN;
+    TEXTURE_FORMAT                  m_DSVFormat = TEX_FORMAT_UNKNOWN;
 };
 
 } // namespace Diligent
