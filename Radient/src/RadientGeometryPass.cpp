@@ -79,6 +79,37 @@ bool IsPipelineReady(IPipelineState* pPSO)
     return pPSO != nullptr && pPSO->GetStatus() == PIPELINE_STATE_STATUS_READY;
 }
 
+RefCntAutoPtr<ITextureView> CreateDefaultIBLCubemap(IRenderDevice* pDevice)
+{
+    TextureDesc TexDesc;
+    TexDesc.Name      = "Radient default IBL cubemap";
+    TexDesc.Type      = RESOURCE_DIM_TEX_CUBE;
+    TexDesc.Usage     = USAGE_IMMUTABLE;
+    TexDesc.BindFlags = BIND_SHADER_RESOURCE;
+    TexDesc.Format    = TEX_FORMAT_RGBA8_UNORM;
+    TexDesc.Width     = 16;
+    TexDesc.Height    = 16;
+    TexDesc.MipLevels = 1;
+    TexDesc.ArraySize = 6;
+
+    std::vector<Uint32>            Data(TexDesc.Width * TexDesc.Height, 0xFFFFFFFFu);
+    std::vector<TextureSubResData> SubResData(6);
+    for (TextureSubResData& Subres : SubResData)
+    {
+        Subres.pData  = Data.data();
+        Subres.Stride = TexDesc.Width * sizeof(Uint32);
+    }
+
+    TextureData InitData{SubResData.data(), static_cast<Uint32>(SubResData.size())};
+
+    RefCntAutoPtr<ITexture> pEnvMap;
+    pDevice->CreateTexture(TexDesc, &InitData, &pEnvMap);
+    if (pEnvMap == nullptr)
+        return {};
+
+    return RefCntAutoPtr<ITextureView>{pEnvMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE)};
+}
+
 RadientCameraComponent GetCameraComponent(const RadientViewDesc& ViewDesc)
 {
     RadientCameraComponent Camera{};
@@ -248,7 +279,7 @@ void WriteSceneLights(PBR_Renderer&           Renderer,
     RendererAttribs.AverageLogLum     = 0.f;
     RendererAttribs.MiddleGray        = 0.18f;
     RendererAttribs.WhitePoint        = 3.f;
-    RendererAttribs.IBLScale          = float4{0.f, 0.f, 0.f, 0.f};
+    RendererAttribs.IBLScale          = float4{1.f};
     RendererAttribs.HighlightColor    = float4{0.f, 0.f, 0.f, 0.f};
     RendererAttribs.UnshadedColor     = float4{1.f, 1.f, 1.f, 1.f};
     RendererAttribs.PointSize         = 1.f;
@@ -1021,6 +1052,7 @@ void RadientGeometryPass::UpdateDrawablePassData(PBR_Renderer&              Rend
         PBR_Renderer::PSO_FLAG_USE_TEXTURE_ATLAS |
         PBR_Renderer::PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM |
         PBR_Renderer::PSO_FLAG_CONVERT_OUTPUT_TO_SRGB |
+        PBR_Renderer::PSO_FLAG_USE_IBL |
         PBR_Renderer::PSO_FLAG_USE_LIGHTS;
     PSOFlags &= m_RenderFlags;
 
@@ -1059,7 +1091,7 @@ RADIENT_STATUS RadientGeometryRenderer::CreateRenderer(IRenderDevice*  pDevice,
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
     PBR_Renderer::CreateInfo RendererCI;
-    RendererCI.EnableIBL               = false;
+    RendererCI.EnableIBL               = true;
     RendererCI.EnableAO                = true;
     RendererCI.EnableEmissive          = true;
     RendererCI.EnableShadows           = false;
@@ -1075,6 +1107,15 @@ RADIENT_STATUS RadientGeometryRenderer::CreateRenderer(IRenderDevice*  pDevice,
     SetGLTFTextureAttribIndices(RendererCI);
 
     m_pRenderer = std::make_unique<PBR_Renderer>(pDevice, nullptr, pContext, RendererCI);
+    if (RefCntAutoPtr<ITextureView> pDefaultIBLCubemap = CreateDefaultIBLCubemap(pDevice))
+    {
+        m_pRenderer->PrecomputeCubemaps(pContext, pDefaultIBLCubemap);
+    }
+    else
+    {
+        UNEXPECTED("Failed to create Radient default IBL cubemap");
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
 
     m_pFrameAttribsCB.Release();
     CreateUniformBuffer(pDevice,
@@ -1091,7 +1132,6 @@ RADIENT_STATUS RadientGeometryRenderer::CreateRenderer(IRenderDevice*  pDevice,
         PBR_Renderer::PSO_FLAG_ALL_TEXTURES |
         PBR_Renderer::PSO_FLAG_ENABLE_TEXCOORD_TRANSFORM |
         PBR_Renderer::PSO_FLAG_USE_TEXTURE_ATLAS;
-    m_BaseRenderFlags &= ~PBR_Renderer::PSO_FLAG_USE_IBL;
     m_BaseRenderFlags &= ~PBR_Renderer::PSO_FLAG_ENABLE_TONE_MAPPING;
     m_BaseRenderFlags &= ~PBR_Renderer::PSO_FLAG_COMPUTE_MOTION_VECTORS;
 
