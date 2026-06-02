@@ -887,9 +887,9 @@ RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&         Ren
                    IsPipelineReady(PassData.pPSO),
                "Sorted drawable ID references stale pass data");
 
-        const RadientDrawableSlot&        Drawable  = *PassData.pDrawable;
-        const RadientRenderMeshPrimitive& Primitive = *Drawable.pPrimitive;
-        const GLTF::Material&             Material  = *Drawable.pMaterial;
+        const RadientDrawableSlot&      Drawable  = *PassData.pDrawable;
+        const RadientDrawablePrimitive& Primitive = Drawable.Primitive;
+        const GLTF::Material&           Material  = *Drawable.pMaterial;
 
         const PBR_Renderer::PSO_FLAGS PSOFlags = PassData.PSOFlags;
         if (pCurrPSO != PassData.pPSO)
@@ -943,7 +943,6 @@ void RadientGeometryPass::BuildSortedDrawableIDs(const RadientDrawList&         
     {
         const RadientDrawableSlot* pDrawable = DrawableCache.GetDrawableSlot(DrawItem.DrawableID);
         if (pDrawable == nullptr ||
-            pDrawable->pPrimitive == nullptr ||
             pDrawable->pMaterial == nullptr)
         {
             continue;
@@ -956,7 +955,7 @@ void RadientGeometryPass::BuildSortedDrawableIDs(const RadientDrawList&         
             continue;
         }
 
-        const RadientRenderMeshPrimitive& Primitive = *pDrawable->pPrimitive;
+        const RadientDrawablePrimitive& Primitive = pDrawable->Primitive;
         if (Primitive.VertexCount == 0 && Primitive.IndexCount == 0)
             continue;
 

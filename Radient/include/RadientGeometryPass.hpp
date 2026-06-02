@@ -29,8 +29,8 @@
 #include "RadientDrawList.hpp"
 #include "RadientFrameRenderTargets.hpp"
 #include "RadientLightList.hpp"
-#include "RadientRenderResourceCache.hpp"
 
+#include "GLTFLoader.hpp"
 #include "PBR_Renderer.hpp"
 #include "RefCntAutoPtr.hpp"
 

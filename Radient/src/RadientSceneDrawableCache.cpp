@@ -26,12 +26,15 @@
 
 #include "RadientSceneDrawableCache.hpp"
 
+#include "RadientAssetManagerImpl.hpp"
 #include "RadientSceneImpl.hpp"
 
 #include "Cast.hpp"
 #include "DebugUtilities.hpp"
+#include "GLTFLoader.hpp"
 
 #include <algorithm>
+#include <cstring>
 
 namespace Diligent
 {
@@ -45,10 +48,104 @@ bool IsSameMeshAsset(const RadientMeshComponent& Mesh0,
     return Mesh0.pMesh == Mesh1.pMesh;
 }
 
+PBR_Renderer::PSO_FLAGS GetVertexAttribFlags(const GLTF::Model& Model)
+{
+    PBR_Renderer::PSO_FLAGS Flags = PBR_Renderer::PSO_FLAG_NONE;
+    for (Uint32 AttribIndex = 0; AttribIndex < Model.GetNumVertexAttributes(); ++AttribIndex)
+    {
+        if (!Model.IsVertexAttributeEnabled(AttribIndex))
+            continue;
+
+        const GLTF::VertexAttributeDesc& Attrib = Model.GetVertexAttribute(AttribIndex);
+        if (std::strcmp(Attrib.Name, GLTF::NormalAttributeName) == 0)
+            Flags |= PBR_Renderer::PSO_FLAG_USE_VERTEX_NORMALS;
+        else if (std::strcmp(Attrib.Name, GLTF::Texcoord0AttributeName) == 0)
+            Flags |= PBR_Renderer::PSO_FLAG_USE_TEXCOORD0;
+        else if (std::strcmp(Attrib.Name, GLTF::Texcoord1AttributeName) == 0)
+            Flags |= PBR_Renderer::PSO_FLAG_USE_TEXCOORD1;
+        else if (std::strcmp(Attrib.Name, GLTF::JointsAttributeName) == 0)
+        {
+            // Radient skinning is not wired yet; keep the pass on the rigid path.
+        }
+        else if (std::strcmp(Attrib.Name, GLTF::VertexColorAttributeName) == 0)
+            Flags |= PBR_Renderer::PSO_FLAG_USE_VERTEX_COLORS;
+        else if (std::strcmp(Attrib.Name, GLTF::TangentAttributeName) == 0)
+            Flags |= PBR_Renderer::PSO_FLAG_USE_VERTEX_TANGENTS;
+    }
+
+    return Flags;
+}
+
+RadientDrawablePrimitive ConvertPrimitive(const GLTF::Primitive& Primitive)
+{
+    RadientDrawablePrimitive Result;
+    Result.FirstIndex  = Primitive.FirstIndex;
+    Result.IndexCount  = Primitive.IndexCount;
+    Result.FirstVertex = Primitive.FirstVertex;
+    Result.VertexCount = Primitive.VertexCount;
+    Result.MaterialId  = Primitive.MaterialId;
+    return Result;
+}
+
+enum class MeshResolveStatus
+{
+    Ready,
+    Pending,
+    Failed
+};
+
+struct ResolvedMesh
+{
+    const GLTF::Model* pModel = nullptr;
+    const GLTF::Mesh*  pMesh  = nullptr;
+
+    PBR_Renderer::PSO_FLAGS VertexAttribFlags  = PBR_Renderer::PSO_FLAG_NONE;
+    Uint32                  FirstIndexLocation = 0;
+    Uint32                  BaseVertex         = 0;
+};
+
+MeshResolveStatus ResolveMesh(RadientAssetManagerImpl* pAssetManager,
+                              IRadientMeshAsset*       pMeshAsset,
+                              ResolvedMesh&            Mesh)
+{
+    Mesh = {};
+
+    if (pAssetManager == nullptr || pMeshAsset == nullptr)
+        return MeshResolveStatus::Failed;
+
+    RefCntAutoPtr<IRadientSceneAsset> pSourceModel;
+    Uint32                            SourceMeshIndex = ~0u;
+    const RADIENT_STATUS              SourceStatus    = pAssetManager->GetMeshGLTFSource(pMeshAsset, &pSourceModel, SourceMeshIndex);
+    if (RADIENT_FAILED(SourceStatus))
+        return MeshResolveStatus::Failed;
+
+    const RADIENT_STATUS LoadStatus = pAssetManager->GetGLTFLoadStatus(pSourceModel);
+    if (RADIENT_FAILED(LoadStatus))
+        return MeshResolveStatus::Failed;
+
+    if (LoadStatus != RADIENT_STATUS_OK)
+        return MeshResolveStatus::Pending;
+
+    const GLTF::Model* pModel = pAssetManager->GetGLTFModel(pSourceModel, true);
+    if (pModel == nullptr)
+        return MeshResolveStatus::Pending;
+
+    if (SourceMeshIndex >= pModel->Meshes.size())
+        return MeshResolveStatus::Failed;
+
+    Mesh.pModel             = pModel;
+    Mesh.pMesh              = &pModel->Meshes[SourceMeshIndex];
+    Mesh.VertexAttribFlags  = GetVertexAttribFlags(*pModel);
+    Mesh.FirstIndexLocation = pModel->GetFirstIndexLocation();
+    Mesh.BaseVertex         = pModel->GetBaseVertex();
+
+    return MeshResolveStatus::Ready;
+}
+
 } // namespace
 
-RADIENT_STATUS RadientSceneDrawableCache::SyncScene(IRadientScene&              Scene,
-                                                    RadientRenderResourceCache& ResourceCache)
+RADIENT_STATUS RadientSceneDrawableCache::SyncScene(IRadientScene&            Scene,
+                                                    RadientAssetManagerImpl* pAssetManager)
 {
     m_DrawableChanges.clear();
 
@@ -72,15 +169,15 @@ RADIENT_STATUS RadientSceneDrawableCache::SyncScene(IRadientScene&              
     if (UpdateRenderables)
     {
         Status = State.EnumerateRenderableMeshChanges(
-            [this, &ResourceCache](const RadientSceneState::RenderableMeshChange& Change,
-                                   const RadientSceneState::RenderableMesh*       pMesh) {
+            [this, pAssetManager](const RadientSceneState::RenderableMeshChange& Change,
+                                  const RadientSceneState::RenderableMesh*       pMesh) {
                 if (pMesh == nullptr)
                 {
                     ProcessRenderableMeshRemoved(Change.Entity);
                     return;
                 }
 
-                ProcessRenderableMeshAddedOrUpdated(*pMesh, ResourceCache);
+                ProcessRenderableMeshAddedOrUpdated(*pMesh, pAssetManager);
             });
         if (RADIENT_FAILED(Status))
             return Status;
@@ -88,7 +185,7 @@ RADIENT_STATUS RadientSceneDrawableCache::SyncScene(IRadientScene&              
         State.ClearRenderableMeshChanges();
     }
 
-    ResolvePendingRenderableMeshes(ResourceCache);
+    ResolvePendingRenderableMeshes(pAssetManager);
 
     RADIENT_STATUS LightStatus = RADIENT_STATUS_NO_CHANGE;
     if (UpdateLightList)
@@ -115,7 +212,7 @@ RADIENT_STATUS RadientSceneDrawableCache::SyncScene(IRadientScene&              
 }
 
 void RadientSceneDrawableCache::ProcessRenderableMeshAddedOrUpdated(const RadientSceneState::RenderableMesh& Mesh,
-                                                                    RadientRenderResourceCache&              ResourceCache)
+                                                                    RadientAssetManagerImpl*                 pAssetManager)
 {
     RenderableRecord& Record = m_Renderables[Mesh.Entity];
 
@@ -139,7 +236,7 @@ void RadientSceneDrawableCache::ProcessRenderableMeshAddedOrUpdated(const Radien
 
     if (Record.DrawableIDs.empty())
     {
-        TryExpandRenderable(Record, ResourceCache);
+        TryExpandRenderable(Record, pAssetManager);
         return;
     }
 
@@ -165,7 +262,7 @@ void RadientSceneDrawableCache::ProcessRenderableMeshRemoved(RadientEntityID Ent
     m_Renderables.erase(It);
 }
 
-void RadientSceneDrawableCache::ResolvePendingRenderableMeshes(RadientRenderResourceCache& ResourceCache)
+void RadientSceneDrawableCache::ResolvePendingRenderableMeshes(RadientAssetManagerImpl* pAssetManager)
 {
     std::vector<RadientEntityID> Pending;
     Pending.swap(m_PendingRenderableEntities);
@@ -181,49 +278,53 @@ void RadientSceneDrawableCache::ResolvePendingRenderableMeshes(RadientRenderReso
             continue;
 
         Record.PendingResolution = false;
-        TryExpandRenderable(Record, ResourceCache);
+        TryExpandRenderable(Record, pAssetManager);
     }
 }
 
-bool RadientSceneDrawableCache::TryExpandRenderable(RenderableRecord&           Record,
-                                                    RadientRenderResourceCache& ResourceCache)
+bool RadientSceneDrawableCache::TryExpandRenderable(RenderableRecord&   Record,
+                                                    RadientAssetManagerImpl* pAssetManager)
 {
-    const RadientRenderMesh* pMesh = ResourceCache.ResolveMesh(Record.Mesh.pMesh);
-    if (pMesh == nullptr)
+    ResolvedMesh Mesh;
+    switch (ResolveMesh(pAssetManager, Record.Mesh.pMesh, Mesh))
     {
-        AddPendingResolution(Record);
-        return false;
+        case MeshResolveStatus::Ready:
+            break;
+
+        case MeshResolveStatus::Pending:
+            AddPendingResolution(Record);
+            return false;
+
+        case MeshResolveStatus::Failed:
+            return false;
     }
 
     Record.PendingResolution = false;
     RemoveRenderableDrawables(Record);
 
-    Record.DrawableIDs.reserve(pMesh->Primitives.size());
-    for (Uint32 PrimitiveIndex = 0; PrimitiveIndex < pMesh->Primitives.size(); ++PrimitiveIndex)
+    Record.DrawableIDs.reserve(Mesh.pMesh->Primitives.size());
+    for (Uint32 PrimitiveIndex = 0; PrimitiveIndex < Mesh.pMesh->Primitives.size(); ++PrimitiveIndex)
     {
-        const RadientRenderMeshPrimitive& Primitive = pMesh->Primitives[PrimitiveIndex];
+        const RadientDrawablePrimitive Primitive = ConvertPrimitive(Mesh.pMesh->Primitives[PrimitiveIndex]);
         if (Primitive.VertexCount == 0 && Primitive.IndexCount == 0)
             continue;
 
-        if (Primitive.MaterialId >= pMesh->Materials.size())
+        if (Primitive.MaterialId >= Mesh.pModel->Materials.size())
             continue;
 
-        const GLTF::Material* pMaterial = pMesh->Materials[Primitive.MaterialId];
-        if (pMaterial == nullptr)
-            continue;
+        const GLTF::Material* pMaterial = &Mesh.pModel->Materials[Primitive.MaterialId];
 
         const RadientDrawableID DrawableID = AllocateDrawableID();
         RadientDrawableSlot&    Slot       = m_DrawableSlots[DrawableID];
 
         Slot.Entity             = Record.Entity;
-        Slot.PrimitiveIndex     = PrimitiveIndex;
         Slot.pRenderer          = Record.pRenderer;
         Slot.FrameData          = {Record.pWorldMatrix, Record.pEffectiveVisible};
-        Slot.pPrimitive         = &Primitive;
+        Slot.Primitive          = Primitive;
         Slot.pMaterial          = pMaterial;
-        Slot.VertexAttribFlags  = pMesh->VertexAttribFlags;
-        Slot.FirstIndexLocation = pMesh->FirstIndexLocation;
-        Slot.BaseVertex         = pMesh->BaseVertex;
+        Slot.VertexAttribFlags  = Mesh.VertexAttribFlags;
+        Slot.FirstIndexLocation = Mesh.FirstIndexLocation;
+        Slot.BaseVertex         = Mesh.BaseVertex;
         Slot.AlphaMode          = static_cast<GLTF::Material::ALPHA_MODE>(pMaterial->Attribs.AlphaMode);
 
         Record.DrawableIDs.push_back(DrawableID);

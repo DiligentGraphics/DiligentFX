@@ -26,6 +26,8 @@
 
 #include "RadientRenderPipeline.hpp"
 
+#include "RadientAssetManagerImpl.hpp"
+
 namespace Diligent
 {
 
@@ -34,7 +36,6 @@ RadientRenderPipeline::RadientRenderPipeline(IRadientBackend*           pBackend
                                              const RadientRendererDesc& Desc) :
     m_pBackend{pBackend},
     m_pAssetManager{pAssetManager},
-    m_ResourceCache{pAssetManager},
     m_ForwardPass{Desc.EnableAsyncPipelineCompilation == True}
 {
 }
@@ -74,7 +75,7 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
     if (RADIENT_FAILED(Status))
         return Status;
 
-    const RADIENT_STATUS SyncStatus = m_DrawableCache.SyncScene(*ViewDesc.pScene, m_ResourceCache);
+    const RADIENT_STATUS SyncStatus = m_DrawableCache.SyncScene(*ViewDesc.pScene, m_pAssetManager);
     if (RADIENT_FAILED(SyncStatus))
         return SyncStatus;
 

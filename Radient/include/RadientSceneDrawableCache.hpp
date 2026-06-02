@@ -28,9 +28,11 @@
 
 #include "RadientDrawList.hpp"
 #include "RadientLightList.hpp"
-#include "RadientRenderResourceCache.hpp"
 #include "RadientScene.h"
 #include "RadientSceneState.hpp"
+
+#include "GLTFLoader.hpp"
+#include "PBR_Renderer.hpp"
 
 #include <deque>
 #include <string>
@@ -40,11 +42,27 @@
 namespace Diligent
 {
 
+class RadientAssetManagerImpl;
+
 /// Per-frame drawable state owned by the scene and referenced by stable drawable slots.
 struct RadientDrawableFrameData
 {
     const RadientMatrix4x4* pWorldMatrix      = nullptr;
     const Bool*             pEffectiveVisible = nullptr;
+};
+
+struct RadientDrawablePrimitive
+{
+    Uint32 FirstIndex  = 0;
+    Uint32 IndexCount  = 0;
+    Uint32 FirstVertex = 0;
+    Uint32 VertexCount = 0;
+    Uint32 MaterialId  = 0;
+
+    bool HasIndices() const
+    {
+        return IndexCount > 0;
+    }
 };
 
 /// Renderer-facing primitive data addressed by a stable drawable ID.
@@ -54,14 +72,13 @@ struct RadientDrawableSlot
     bool   InDrawList = false;
     Uint32 Generation = 0;
 
-    RadientEntityID Entity         = InvalidRadientEntityID;
-    Uint32          PrimitiveIndex = 0;
+    RadientEntityID Entity = InvalidRadientEntityID;
 
     const RadientMeshRendererComponent* pRenderer = nullptr;
     RadientDrawableFrameData            FrameData;
 
-    const RadientRenderMeshPrimitive* pPrimitive = nullptr;
-    const GLTF::Material*             pMaterial  = nullptr;
+    RadientDrawablePrimitive Primitive;
+    const GLTF::Material*    pMaterial = nullptr;
 
     PBR_Renderer::PSO_FLAGS VertexAttribFlags  = PBR_Renderer::PSO_FLAG_NONE;
     Uint32                  FirstIndexLocation = 0;
@@ -88,8 +105,8 @@ struct RadientDrawableChange
 class RadientSceneDrawableCache
 {
 public:
-    RADIENT_STATUS SyncScene(IRadientScene&              Scene,
-                             RadientRenderResourceCache& ResourceCache);
+    RADIENT_STATUS SyncScene(IRadientScene&           Scene,
+                             RadientAssetManagerImpl* pAssetManager);
 
     const RadientDrawLists&                   GetDrawLists() const;
     const RadientDrawList&                    GetDrawList(GLTF::Material::ALPHA_MODE AlphaMode) const;
@@ -115,12 +132,12 @@ private:
     };
 
     void ProcessRenderableMeshAddedOrUpdated(const RadientSceneState::RenderableMesh& Mesh,
-                                             RadientRenderResourceCache&              ResourceCache);
+                                             RadientAssetManagerImpl*                 pAssetManager);
     void ProcessRenderableMeshRemoved(RadientEntityID Entity);
-    void ResolvePendingRenderableMeshes(RadientRenderResourceCache& ResourceCache);
+    void ResolvePendingRenderableMeshes(RadientAssetManagerImpl* pAssetManager);
 
-    bool TryExpandRenderable(RenderableRecord&           Record,
-                             RadientRenderResourceCache& ResourceCache);
+    bool TryExpandRenderable(RenderableRecord&        Record,
+                             RadientAssetManagerImpl* pAssetManager);
 
     RadientDrawableID AllocateDrawableID();
     void              FreeDrawableID(RadientDrawableID DrawableID);

@@ -15,7 +15,6 @@ set(SOURCE
     src/RadientMath.cpp
     src/RadientMeshComponentStorage.cpp
     src/RadientPostProcessPipeline.cpp
-    src/RadientRenderResourceCache.cpp
     src/RadientRenderPipeline.cpp
     src/RadientRendererImpl.cpp
     src/RadientSceneImpl.cpp
@@ -40,7 +39,6 @@ set(INCLUDE
     include/RadientMath.hpp
     include/RadientMeshComponentStorage.hpp
     include/RadientPostProcessPipeline.hpp
-    include/RadientRenderResourceCache.hpp
     include/RadientRenderPipeline.hpp
     include/RadientRendererImpl.hpp
     include/RadientSceneImpl.hpp
