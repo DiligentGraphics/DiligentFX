@@ -29,7 +29,7 @@
 /// \file
 /// Defines Radient scene graph and ECS interfaces.
 
-#include "RadientTypes.h"
+#include "RadientAssets.h"
 
 #include "../../../DiligentCore/Primitives/interface/Object.h"
 #include "../../../DiligentCore/Primitives/interface/FlagEnum.h"
@@ -134,8 +134,8 @@ typedef struct RadientSceneRevisions RadientSceneRevisions;
 /// Scene environment used for image-based lighting.
 struct RadientEnvironmentDesc
 {
-    /// Environment map texture asset. When empty or not loaded, renderer default IBL is used.
-    RadientAssetReference EnvironmentMap DEFAULT_INITIALIZER({});
+    /// Environment map texture asset. When null or not loaded, renderer default IBL is used.
+    IRadientTextureAsset* pEnvironmentMap DEFAULT_INITIALIZER(nullptr);
 
     /// Environment color multiplier.
     RadientFloat3 Color DEFAULT_INITIALIZER({1.f, 1.f, 1.f});
@@ -149,7 +149,7 @@ struct RadientEnvironmentDesc
 #if DILIGENT_CPP_INTERFACE
     bool operator==(const RadientEnvironmentDesc& Rhs) const
     {
-        return EnvironmentMap == Rhs.EnvironmentMap &&
+        return pEnvironmentMap == Rhs.pEnvironmentMap &&
             Color == Rhs.Color &&
             Intensity == Rhs.Intensity &&
             Exposure == Rhs.Exposure;
@@ -238,13 +238,13 @@ typedef struct RadientCameraComponent RadientCameraComponent;
 /// Mesh component.
 struct RadientMeshComponent
 {
-    /// Mesh asset reference.
-    RadientAssetReference Mesh DEFAULT_INITIALIZER({});
+    /// Mesh asset.
+    IRadientMeshAsset* pMesh DEFAULT_INITIALIZER(nullptr);
 
 #if DILIGENT_CPP_INTERFACE
     bool operator==(const RadientMeshComponent& Rhs) const
     {
-        return Mesh == Rhs.Mesh;
+        return pMesh == Rhs.pMesh;
     }
 
     bool operator!=(const RadientMeshComponent& Rhs) const
@@ -283,14 +283,14 @@ struct RadientMaterialBinding
     /// Primitive index in the mesh asset.
     Uint32 PrimitiveIndex DEFAULT_INITIALIZER(0);
 
-    /// Material asset reference.
-    RadientAssetReference Material DEFAULT_INITIALIZER({});
+    /// Material asset.
+    IRadientMaterialAsset* pMaterial DEFAULT_INITIALIZER(nullptr);
 
 #if DILIGENT_CPP_INTERFACE
     bool operator==(const RadientMaterialBinding& Rhs) const
     {
         return PrimitiveIndex == Rhs.PrimitiveIndex &&
-            Material == Rhs.Material;
+            pMaterial == Rhs.pMaterial;
     }
 
     bool operator!=(const RadientMaterialBinding& Rhs) const

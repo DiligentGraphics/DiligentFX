@@ -44,12 +44,12 @@ struct Model;
 namespace RadientGLTFConverter
 {
 
-RADIENT_STATUS InstantiateSceneGraph(const GLTF::Model&           GLTFModel,
-                                     const RadientAssetReference& Model,
-                                     Uint32                       SceneIndex,
-                                     RadientAssetManagerImpl&     AssetManager,
-                                     IRadientSceneWriter&         Writer,
-                                     RadientEntityID              RootEntity);
+RADIENT_STATUS InstantiateSceneGraph(const GLTF::Model&       GLTFModel,
+                                     IRadientSceneAsset*      pModel,
+                                     Uint32                   SceneIndex,
+                                     RadientAssetManagerImpl& AssetManager,
+                                     IRadientSceneWriter&     Writer,
+                                     RadientEntityID          RootEntity);
 
 } // namespace RadientGLTFConverter
 

@@ -28,14 +28,17 @@
 
 #include "RadientAssets.h"
 #include "ThreadPool.h"
+#include "Cast.hpp"
 #include "HashUtils.hpp"
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
 
 #include <memory>
+#include <mutex>
 #include <shared_mutex>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -77,35 +80,35 @@ public:
     virtual const RadientAssetManagerDesc& DILIGENT_CALL_TYPE GetDesc() const override final;
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateMesh(const RadientMeshCreateInfo& MeshCI,
-                                                         RadientAssetReference&       Mesh) override final;
+                                                         IRadientMeshAsset**          ppMesh) override final;
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE CreateMaterial(const RadientMaterialCreateInfo& MaterialCI,
-                                                             RadientAssetReference&           Material) override final;
+                                                             IRadientMaterialAsset**          ppMaterial) override final;
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE LoadTexture(const RadientTextureLoadInfo& LoadInfo,
-                                                          RadientAssetReference&        Texture) override final;
+                                                          IRadientTextureAsset**        ppTexture) override final;
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE LoadGLTF(const RadientGLTFLoadInfo& LoadInfo,
-                                                       RadientAssetReference&     Model) override final;
+                                                       IRadientSceneAsset**       ppModel) override final;
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE WaitForAssetLoad(const RadientAssetReference& Asset) override final;
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE WaitForAssetLoad(IRadientAsset* pAsset) override final;
 
-    RADIENT_STATUS CreateMeshFromGLTFMesh(const RadientAssetReference& Model,
-                                          Uint32                       MeshIndex,
-                                          const Char*                  Name,
-                                          RadientAssetReference&       Mesh);
+    RADIENT_STATUS CreateMeshFromGLTFMesh(IRadientSceneAsset* pModel,
+                                          Uint32              MeshIndex,
+                                          const Char*         Name,
+                                          IRadientMeshAsset** ppMesh);
 
-    RADIENT_STATUS GetMeshGLTFSource(const RadientAssetReference& Mesh,
-                                     RadientAssetReference&       Model,
-                                     Uint32&                      MeshIndex) const;
+    RADIENT_STATUS GetMeshGLTFSource(IRadientMeshAsset*   pMesh,
+                                     IRadientSceneAsset** ppModel,
+                                     Uint32&              MeshIndex) const;
 
-    RADIENT_STATUS GetGLTFSourceURI(const RadientAssetReference& Model,
-                                    const Char*&                 SourceURI) const;
+    RADIENT_STATUS GetGLTFSourceURI(IRadientSceneAsset* pModel,
+                                    const Char*&        SourceURI) const;
 
-    const GLTF::Model* GetGLTFModel(const RadientAssetReference& Model,
-                                    bool                         RequireGPUResourcesReady = false) const;
-    RADIENT_STATUS     GetGLTFLoadStatus(const RadientAssetReference& Model) const;
-    ITextureView*      GetTextureSRV(const RadientAssetReference& Texture) const;
+    const GLTF::Model* GetGLTFModel(IRadientSceneAsset* pModel,
+                                    bool                RequireGPUResourcesReady = false) const;
+    RADIENT_STATUS     GetGLTFLoadStatus(IRadientSceneAsset* pModel) const;
+    ITextureView*      GetTextureSRV(IRadientTextureAsset* pTexture) const;
 
     RADIENT_STATUS UpdateGPUResources(IRenderDevice*  pDevice,
                                       IDeviceContext* pContext);
@@ -121,8 +124,7 @@ private:
         Uint32 FirstIndex        = 0;
         Uint32 IndexCount        = 0;
 
-        std::string MaterialURI;
-        Uint64      MaterialVersion = 0;
+        RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
     };
 
     struct MeshVertexBufferStorage
@@ -161,17 +163,11 @@ private:
         Float32       AlphaCutoff     = 0.5f;
         Bool          DoubleSided     = False;
 
-        RadientAssetReference BaseColorTexture;
-        RadientAssetReference MetallicRoughnessTexture;
-        RadientAssetReference NormalTexture;
-        RadientAssetReference OcclusionTexture;
-        RadientAssetReference EmissiveTexture;
-
-        std::string BaseColorTextureURI;
-        std::string MetallicRoughnessTextureURI;
-        std::string NormalTextureURI;
-        std::string OcclusionTextureURI;
-        std::string EmissiveTextureURI;
+        RefCntAutoPtr<IRadientTextureAsset> pBaseColorTexture;
+        RefCntAutoPtr<IRadientTextureAsset> pMetallicRoughnessTexture;
+        RefCntAutoPtr<IRadientTextureAsset> pNormalTexture;
+        RefCntAutoPtr<IRadientTextureAsset> pOcclusionTexture;
+        RefCntAutoPtr<IRadientTextureAsset> pEmissiveTexture;
     };
 
     struct GLTFModelStorage
@@ -184,9 +180,8 @@ private:
 
     struct GLTFMeshStorage
     {
-        RadientAssetReference Model;
-        std::string           ModelURI;
-        Uint32                MeshIndex = ~0u;
+        RefCntAutoPtr<IRadientSceneAsset> pModel;
+        Uint32                            MeshIndex = ~0u;
     };
 
     struct TextureStorage
@@ -198,10 +193,11 @@ private:
 
     struct AssetRecord
     {
-        RADIENT_ASSET_TYPE Type    = RADIENT_ASSET_TYPE_MESH;
-        Uint64             Version = 1;
-        std::string        URI;
-        std::string        Name;
+        RADIENT_ASSET_TYPE    Type    = RADIENT_ASSET_TYPE_MESH;
+        Uint64                Version = 1;
+        std::string           URI;
+        std::string           Name;
+        RadientAssetReference Ref;
 
         std::variant<MeshStorage,
                      MaterialStorage,
@@ -211,22 +207,52 @@ private:
             Storage;
     };
 
-    bool               ValidateMesh(const RadientMeshCreateInfo& MeshCI) const;
-    bool               ValidateGLTF(const RadientGLTFLoadInfo& LoadInfo) const;
-    bool               ValidateTexture(const RadientTextureLoadInfo& LoadInfo) const;
-    AssetRecord*       FindAssetLocked(const RadientAssetReference& Ref);
-    const AssetRecord* FindAssetLocked(const RadientAssetReference& Ref) const;
-    RADIENT_STATUS     GetAssetLoadStatusLocked(const RadientAssetReference& Asset) const;
+    template <typename InterfaceType, const INTERFACE_ID& InterfaceID>
+    class AssetImpl final : public ObjectBase<InterfaceType>
+    {
+    public:
+        using TBase = ObjectBase<InterfaceType>;
+
+        AssetImpl(IReferenceCounters* pRefCounters, AssetRecord&& Record);
+
+        virtual const RadientAssetReference& DILIGENT_CALL_TYPE GetReference() const override final;
+        virtual RADIENT_ASSET_TYPE DILIGENT_CALL_TYPE           GetType() const override final;
+
+        AssetRecord&       GetRecord();
+        const AssetRecord& GetRecord() const;
+
+        virtual void DILIGENT_CALL_TYPE QueryInterface(const INTERFACE_ID& IID, IObject** ppInterface) override final;
+        using IObject::QueryInterface;
+
+    private:
+        AssetRecord m_Record;
+    };
+
+    using MeshAssetImpl     = AssetImpl<IRadientMeshAsset, IID_RadientMeshAsset>;
+    using MaterialAssetImpl = AssetImpl<IRadientMaterialAsset, IID_RadientMaterialAsset>;
+    using TextureAssetImpl  = AssetImpl<IRadientTextureAsset, IID_RadientTextureAsset>;
+    using SceneAssetImpl    = AssetImpl<IRadientSceneAsset, IID_RadientSceneAsset>;
+
+    bool                         ValidateMesh(const RadientMeshCreateInfo& MeshCI) const;
+    bool                         ValidateGLTF(const RadientGLTFLoadInfo& LoadInfo) const;
+    bool                         ValidateTexture(const RadientTextureLoadInfo& LoadInfo) const;
+    RefCntAutoPtr<IRadientAsset> FindAssetLocked(const RadientAssetReference& Ref) const;
+    RADIENT_STATUS               GetAssetLoadStatusLocked(IRadientAsset* pAsset) const;
 
     std::string MakeURI(const char* Type);
 
-    RadientAssetReference StoreAsset(AssetRecord&& Record);
-    void                  FixupAssetRecord(AssetRecord& Record);
-    void                  FixupAssetReference(RadientAssetReference& Ref, const std::string& URIStorage);
-    RadientAssetReference CopyAssetReference(const RadientAssetReference& Ref, std::string& URIStorage);
-    void                  CompleteGLTFLoad(const RadientAssetReference& Model,
-                                           std::unique_ptr<GLTF::Model> pModel,
-                                           RADIENT_STATUS               Status);
+    template <typename InterfaceType, typename ImplType>
+    RefCntAutoPtr<InterfaceType> StoreAsset(AssetRecord&& Record);
+
+    static void FixupAssetRecord(AssetRecord& Record);
+    void        CompleteGLTFLoad(IRadientSceneAsset*          pModel,
+                                 std::unique_ptr<GLTF::Model> pModelData,
+                                 RADIENT_STATUS               Status);
+
+    template <typename InterfaceType, typename ImplType>
+    static ImplType*          GetAssetImpl(InterfaceType* pAsset);
+    static AssetRecord*       GetAssetRecord(IRadientAsset* pAsset);
+    static const AssetRecord* GetAssetRecord(const IRadientAsset* pAsset);
 
     std::string             m_Name;
     RadientAssetManagerDesc m_Desc;
@@ -239,8 +265,81 @@ private:
     mutable std::shared_mutex m_Mutex;
     RadientHandle             m_NextAssetID = 1;
 
-    using AssetMapType = std::unordered_map<HashMapStringKey, std::unique_ptr<AssetRecord>>;
-    AssetMapType m_Assets;
+    using AssetMapType = std::unordered_map<HashMapStringKey, RefCntWeakPtr<IRadientAsset>>;
+    mutable AssetMapType m_Assets;
 };
+
+template <typename InterfaceType, const INTERFACE_ID& InterfaceID>
+RadientAssetManagerImpl::AssetImpl<InterfaceType, InterfaceID>::AssetImpl(IReferenceCounters* pRefCounters, AssetRecord&& Record) :
+    TBase{pRefCounters},
+    m_Record{std::move(Record)}
+{
+    FixupAssetRecord(m_Record);
+}
+
+template <typename InterfaceType, const INTERFACE_ID& InterfaceID>
+const RadientAssetReference& RadientAssetManagerImpl::AssetImpl<InterfaceType, InterfaceID>::GetReference() const
+{
+    return m_Record.Ref;
+}
+
+template <typename InterfaceType, const INTERFACE_ID& InterfaceID>
+RADIENT_ASSET_TYPE RadientAssetManagerImpl::AssetImpl<InterfaceType, InterfaceID>::GetType() const
+{
+    return m_Record.Type;
+}
+
+template <typename InterfaceType, const INTERFACE_ID& InterfaceID>
+RadientAssetManagerImpl::AssetRecord& RadientAssetManagerImpl::AssetImpl<InterfaceType, InterfaceID>::GetRecord()
+{
+    return m_Record;
+}
+
+template <typename InterfaceType, const INTERFACE_ID& InterfaceID>
+const RadientAssetManagerImpl::AssetRecord& RadientAssetManagerImpl::AssetImpl<InterfaceType, InterfaceID>::GetRecord() const
+{
+    return m_Record;
+}
+
+template <typename InterfaceType, const INTERFACE_ID& InterfaceID>
+void RadientAssetManagerImpl::AssetImpl<InterfaceType, InterfaceID>::QueryInterface(const INTERFACE_ID& IID, IObject** ppInterface)
+{
+    if (ppInterface == nullptr)
+        return;
+
+    if (IID == InterfaceID || IID == IID_RadientAsset)
+    {
+        *ppInterface = this;
+        (*ppInterface)->AddRef();
+    }
+    else
+    {
+        TBase::QueryInterface(IID, ppInterface);
+    }
+}
+
+template <typename InterfaceType, typename ImplType>
+RefCntAutoPtr<InterfaceType> RadientAssetManagerImpl::StoreAsset(AssetRecord&& Record)
+{
+    RefCntAutoPtr<ImplType> pAsset{MakeNewRCObj<ImplType>()(std::move(Record))};
+
+    RefCntAutoPtr<IRadientAsset> pBase{pAsset, IID_RadientAsset};
+    VERIFY(pBase != nullptr, "Radient asset object does not expose IRadientAsset");
+
+    {
+        std::unique_lock<std::shared_mutex> Lock{m_Mutex};
+        const auto                          InsertResult = m_Assets.emplace(HashMapStringKey{pBase->GetReference().URI, true},
+                                                                            RefCntWeakPtr<IRadientAsset>{pBase});
+        VERIFY(InsertResult.second, "Asset URI already exists");
+    }
+
+    return RefCntAutoPtr<InterfaceType>{pAsset};
+}
+
+template <typename InterfaceType, typename ImplType>
+ImplType* RadientAssetManagerImpl::GetAssetImpl(InterfaceType* pAsset)
+{
+    return pAsset != nullptr ? ClassPtrCast<ImplType>(pAsset) : nullptr;
+}
 
 } // namespace Diligent

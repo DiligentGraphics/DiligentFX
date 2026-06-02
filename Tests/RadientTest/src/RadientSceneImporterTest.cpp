@@ -110,32 +110,32 @@ ImportFixture CreateImportFixture(IThreadPool* pThreadPool = nullptr)
     return Fixture;
 }
 
-RADIENT_STATUS ProcessGLTFLoad(ImportFixture& Fixture, const RadientAssetReference& Model)
+RADIENT_STATUS ProcessGLTFLoad(ImportFixture& Fixture, IRadientSceneAsset* pModel)
 {
     if (Fixture.pAssetManager == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
-    return Fixture.pAssetManager->WaitForAssetLoad(Model);
+    return Fixture.pAssetManager->WaitForAssetLoad(pModel);
 }
 
-RADIENT_STATUS FinishPendingGLTFImports(ImportFixture& Fixture, const RadientAssetReference& Model)
+RADIENT_STATUS FinishPendingGLTFImports(ImportFixture& Fixture, IRadientSceneAsset* pModel)
 {
-    const RADIENT_STATUS LoadStatus = ProcessGLTFLoad(Fixture, Model);
+    const RADIENT_STATUS LoadStatus = ProcessGLTFLoad(Fixture, pModel);
     if (RADIENT_FAILED(LoadStatus) || LoadStatus == RADIENT_STATUS_PENDING)
         return LoadStatus;
 
     return Fixture.pImporter != nullptr ? Fixture.pImporter->ProcessPendingImports() : RADIENT_STATUS_INVALID_OPERATION;
 }
 
-RADIENT_STATUS ImportGLTFAndFinishPending(ImportFixture&                    Fixture,
-                                          const RadientGLTFLoadInfo&        LoadInfo,
-                                          const RadientGLTFInstantiateInfo& InstantiateInfo,
-                                          RadientAssetReference&            Model,
-                                          RadientEntityID&                  RootEntity)
+RADIENT_STATUS ImportGLTFAndFinishPending(ImportFixture&                     Fixture,
+                                          const RadientGLTFLoadInfo&         LoadInfo,
+                                          const RadientGLTFInstantiateInfo&  InstantiateInfo,
+                                          RefCntAutoPtr<IRadientSceneAsset>& pModel,
+                                          RadientEntityID&                   RootEntity)
 {
-    RADIENT_STATUS Status = Fixture.pImporter->ImportGLTF(LoadInfo, InstantiateInfo, Model, RootEntity);
+    RADIENT_STATUS Status = Fixture.pImporter->ImportGLTF(LoadInfo, InstantiateInfo, &pModel, RootEntity);
     if (Status == RADIENT_STATUS_PENDING)
-        Status = FinishPendingGLTFImports(Fixture, Model);
+        Status = FinishPendingGLTFImports(Fixture, pModel);
 
     return Status;
 }
@@ -214,9 +214,9 @@ TEST(RadientSceneImporterTest, ImportsNodeHierarchy)
     RadientGLTFInstantiateInfo InstantiateInfo{};
     InstantiateInfo.Name = "Imported hierarchy";
 
-    RadientAssetReference Model{};
-    RadientEntityID       ImportedRoot = InvalidRadientEntityID;
-    EXPECT_EQ(ImportGLTFAndFinishPending(Fixture, LoadInfo, InstantiateInfo, Model, ImportedRoot), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientSceneAsset> pModel;
+    RadientEntityID                   ImportedRoot = InvalidRadientEntityID;
+    EXPECT_EQ(ImportGLTFAndFinishPending(Fixture, LoadInfo, InstantiateInfo, pModel, ImportedRoot), RADIENT_STATUS_OK);
     EXPECT_NE(ImportedRoot, InvalidRadientEntityID);
 
     // The importer creates an explicit Radient root, with the glTF scene root
@@ -278,9 +278,9 @@ TEST(RadientSceneImporterTest, UsesExplicitSceneIndex)
     RadientGLTFInstantiateInfo InstantiateInfo{};
     InstantiateInfo.Name = "Default scene";
 
-    RadientAssetReference Model{};
-    RadientEntityID       ImportedRoot = InvalidRadientEntityID;
-    EXPECT_EQ(ImportGLTFAndFinishPending(Fixture, LoadInfo, InstantiateInfo, Model, ImportedRoot), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientSceneAsset> pModel;
+    RadientEntityID                   ImportedRoot = InvalidRadientEntityID;
+    EXPECT_EQ(ImportGLTFAndFinishPending(Fixture, LoadInfo, InstantiateInfo, pModel, ImportedRoot), RADIENT_STATUS_OK);
 
     std::vector<RadientEntityID> RootChildren = GetChildren(*Fixture.pScene, ImportedRoot);
     ASSERT_EQ(RootChildren.size(), 1u);
@@ -293,7 +293,7 @@ TEST(RadientSceneImporterTest, UsesExplicitSceneIndex)
     InstantiateInfo.Name       = "Explicit scene 0";
     InstantiateInfo.SceneIndex = 0;
 
-    EXPECT_EQ(ImportGLTFAndFinishPending(Fixture, LoadInfo, InstantiateInfo, Model, ImportedRoot), RADIENT_STATUS_OK);
+    EXPECT_EQ(ImportGLTFAndFinishPending(Fixture, LoadInfo, InstantiateInfo, pModel, ImportedRoot), RADIENT_STATUS_OK);
 
     RootChildren = GetChildren(*Fixture.pScene, ImportedRoot);
     ASSERT_EQ(RootChildren.size(), 1u);
@@ -307,7 +307,7 @@ TEST(RadientSceneImporterTest, UsesExplicitSceneIndex)
     ImportedRoot               = InvalidRadientEntityID;
 
     // Invalid scene indices should fail without returning a created root.
-    EXPECT_EQ(Fixture.pImporter->InstantiateGLTF(Model, InstantiateInfo, ImportedRoot), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(Fixture.pImporter->InstantiateGLTF(pModel, InstantiateInfo, ImportedRoot), RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(ImportedRoot, InvalidRadientEntityID);
 }
 
@@ -332,17 +332,18 @@ TEST(RadientSceneImporterTest, InstantiateGLTFUsesCachedModel)
     RadientGLTFLoadInfo LoadInfo{};
     LoadInfo.URI = GLTFPath.c_str();
 
-    RadientAssetReference Model{};
-    const RADIENT_STATUS  LoadStatus = Fixture.pAssetManager->LoadGLTF(LoadInfo, Model);
+    RefCntAutoPtr<IRadientSceneAsset> pModel;
+    const RADIENT_STATUS              LoadStatus = Fixture.pAssetManager->LoadGLTF(LoadInfo, &pModel);
     ASSERT_TRUE(LoadStatus == RADIENT_STATUS_OK || LoadStatus == RADIENT_STATUS_PENDING);
-    ASSERT_NE(Model.URI, nullptr);
-    ASSERT_EQ(ProcessGLTFLoad(Fixture, Model), RADIENT_STATUS_OK);
+    ASSERT_NE(pModel, nullptr);
+    ASSERT_NE(pModel->GetReference().URI, nullptr);
+    ASSERT_EQ(ProcessGLTFLoad(Fixture, pModel), RADIENT_STATUS_OK);
 
     EXPECT_EQ(std::remove(GLTFPath.c_str()), 0);
 
     // The cached model should still be available after the source file is gone.
     RadientEntityID RootEntity = InvalidRadientEntityID;
-    EXPECT_EQ(Fixture.pImporter->InstantiateGLTF(Model, {}, RootEntity), RADIENT_STATUS_OK);
+    EXPECT_EQ(Fixture.pImporter->InstantiateGLTF(pModel, {}, RootEntity), RADIENT_STATUS_OK);
     ASSERT_NE(RootEntity, InvalidRadientEntityID);
 
     const std::vector<RadientEntityID> RootChildren = GetChildren(*Fixture.pScene, RootEntity);
@@ -373,12 +374,13 @@ TEST(RadientSceneImporterTest, InstantiateGLTFReportsPendingWhileModelLoads)
     RadientGLTFLoadInfo LoadInfo{};
     LoadInfo.URI = GLTFPath.c_str();
 
-    RadientAssetReference Model{};
-    EXPECT_EQ(Fixture.pAssetManager->LoadGLTF(LoadInfo, Model), RADIENT_STATUS_PENDING);
-    ASSERT_NE(Model.URI, nullptr);
+    RefCntAutoPtr<IRadientSceneAsset> pModel;
+    EXPECT_EQ(Fixture.pAssetManager->LoadGLTF(LoadInfo, &pModel), RADIENT_STATUS_PENDING);
+    ASSERT_NE(pModel, nullptr);
+    ASSERT_NE(pModel->GetReference().URI, nullptr);
 
     RadientEntityID RootEntity = InvalidRadientEntityID;
-    EXPECT_EQ(Fixture.pImporter->InstantiateGLTF(Model, {}, RootEntity), RADIENT_STATUS_PENDING);
+    EXPECT_EQ(Fixture.pImporter->InstantiateGLTF(pModel, {}, RootEntity), RADIENT_STATUS_PENDING);
     ASSERT_NE(RootEntity, InvalidRadientEntityID);
 
     // Pending imports should expose an empty root until the model load completes.
@@ -387,7 +389,7 @@ TEST(RadientSceneImporterTest, InstantiateGLTFReportsPendingWhileModelLoads)
 
     // Once the asset is loaded and pending imports are processed, the root
     // should be populated with the glTF scene graph.
-    ASSERT_EQ(ProcessGLTFLoad(Fixture, Model), RADIENT_STATUS_OK);
+    ASSERT_EQ(ProcessGLTFLoad(Fixture, pModel), RADIENT_STATUS_OK);
     EXPECT_EQ(Fixture.pImporter->ProcessPendingImports(), RADIENT_STATUS_OK);
 
     RootChildren = GetChildren(*Fixture.pScene, RootEntity);
@@ -420,20 +422,21 @@ TEST(RadientSceneImporterTest, PendingGLTFImportDestroysRootWhenSceneIndexIsInva
     RadientGLTFLoadInfo LoadInfo{};
     LoadInfo.URI = GLTFPath.c_str();
 
-    RadientAssetReference Model{};
-    EXPECT_EQ(Fixture.pAssetManager->LoadGLTF(LoadInfo, Model), RADIENT_STATUS_PENDING);
-    ASSERT_NE(Model.URI, nullptr);
+    RefCntAutoPtr<IRadientSceneAsset> pModel;
+    EXPECT_EQ(Fixture.pAssetManager->LoadGLTF(LoadInfo, &pModel), RADIENT_STATUS_PENDING);
+    ASSERT_NE(pModel, nullptr);
+    ASSERT_NE(pModel->GetReference().URI, nullptr);
 
     RadientGLTFInstantiateInfo InstantiateInfo{};
     InstantiateInfo.SceneIndex = 1;
 
     RadientEntityID RootEntity = InvalidRadientEntityID;
-    EXPECT_EQ(Fixture.pImporter->InstantiateGLTF(Model, InstantiateInfo, RootEntity), RADIENT_STATUS_PENDING);
+    EXPECT_EQ(Fixture.pImporter->InstantiateGLTF(pModel, InstantiateInfo, RootEntity), RADIENT_STATUS_PENDING);
     ASSERT_NE(RootEntity, InvalidRadientEntityID);
     EXPECT_EQ(Fixture.pScene->IsEntityAlive(RootEntity), RADIENT_STATUS_OK);
 
     // Processing the completed load should fail and destroy the placeholder.
-    ASSERT_EQ(ProcessGLTFLoad(Fixture, Model), RADIENT_STATUS_OK);
+    ASSERT_EQ(ProcessGLTFLoad(Fixture, pModel), RADIENT_STATUS_OK);
     EXPECT_EQ(Fixture.pImporter->ProcessPendingImports(), RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(Fixture.pScene->IsEntityAlive(RootEntity), RADIENT_STATUS_NOT_FOUND);
 
@@ -470,9 +473,9 @@ TEST(RadientSceneImporterTest, ImportsCameras)
     RadientGLTFInstantiateInfo InstantiateInfo{};
     InstantiateInfo.Name = "Imported cameras";
 
-    RadientAssetReference Model{};
-    RadientEntityID       ImportedRoot = InvalidRadientEntityID;
-    EXPECT_EQ(ImportGLTFAndFinishPending(Fixture, LoadInfo, InstantiateInfo, Model, ImportedRoot), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientSceneAsset> pModel;
+    RadientEntityID                   ImportedRoot = InvalidRadientEntityID;
+    EXPECT_EQ(ImportGLTFAndFinishPending(Fixture, LoadInfo, InstantiateInfo, pModel, ImportedRoot), RADIENT_STATUS_OK);
 
     const std::vector<RadientEntityID> CameraNodes = GetChildren(*Fixture.pScene, ImportedRoot);
     ASSERT_EQ(CameraNodes.size(), 2u);
@@ -539,9 +542,9 @@ TEST(RadientSceneImporterTest, ImportsMeshNodeMetadataWithoutDevice)
     RadientGLTFInstantiateInfo InstantiateInfo{};
     InstantiateInfo.Name = "Imported mesh metadata";
 
-    RadientAssetReference Model{};
-    RadientEntityID       ImportedRoot = InvalidRadientEntityID;
-    EXPECT_EQ(ImportGLTFAndFinishPending(Fixture, LoadInfo, InstantiateInfo, Model, ImportedRoot), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientSceneAsset> pModel;
+    RadientEntityID                   ImportedRoot = InvalidRadientEntityID;
+    EXPECT_EQ(ImportGLTFAndFinishPending(Fixture, LoadInfo, InstantiateInfo, pModel, ImportedRoot), RADIENT_STATUS_OK);
 
     const std::vector<RadientEntityID> RootChildren = GetChildren(*Fixture.pScene, ImportedRoot);
     ASSERT_EQ(RootChildren.size(), 2u);
@@ -568,35 +571,36 @@ TEST(RadientSceneImporterTest, ImportsMeshNodeMetadataWithoutDevice)
     const RadientSceneImpl* pSceneImpl = ClassPtrCast<RadientSceneImpl>(Fixture.pScene.RawPtr());
     ASSERT_NE(pSceneImpl, nullptr);
 
-    std::vector<RadientEntityID>       RenderableEntities;
-    std::vector<RadientAssetReference> RenderableMeshes;
+    std::vector<RadientEntityID>    RenderableEntities;
+    std::vector<IRadientMeshAsset*> RenderableMeshes;
     // Renderable enumeration should expose the imported mesh nodes, not the
     // grouping root.
     EXPECT_EQ(pSceneImpl->GetState().EnumerateRenderableMeshes(
                   [&RenderableEntities, &RenderableMeshes](const RadientSceneState::RenderableMesh& Mesh) {
                       RenderableEntities.push_back(Mesh.Entity);
-                      RenderableMeshes.push_back(Mesh.Mesh.Mesh);
+                      RenderableMeshes.push_back(Mesh.Mesh.pMesh);
                   }),
               RADIENT_STATUS_OK);
     ASSERT_EQ(RenderableEntities.size(), 2u);
     EXPECT_NE(std::find(RenderableEntities.begin(), RenderableEntities.end(), RootChildren[0]), RenderableEntities.end());
     EXPECT_NE(std::find(RenderableEntities.begin(), RenderableEntities.end(), RootChildren[1]), RenderableEntities.end());
-    ASSERT_NE(RenderableMeshes[0].URI, nullptr);
-    EXPECT_NE(std::string{RenderableMeshes[0].URI}, std::string{Model.URI});
+    ASSERT_NE(RenderableMeshes[0], nullptr);
+    ASSERT_NE(RenderableMeshes[0]->GetReference().URI, nullptr);
+    EXPECT_NE(std::string{RenderableMeshes[0]->GetReference().URI}, std::string{pModel->GetReference().URI});
     // Both nodes reference the same converted Radient mesh asset.
     EXPECT_EQ(RenderableMeshes[0], RenderableMeshes[1]);
 
     const RadientAssetManagerImpl* pAssetManagerImpl = ClassPtrCast<RadientAssetManagerImpl>(Fixture.pAssetManager.RawPtr());
     ASSERT_NE(pAssetManagerImpl, nullptr);
 
-    RadientAssetReference SourceModel{};
-    Uint32                SourceMeshIndex = ~0u;
-    for (const RadientAssetReference& Mesh : RenderableMeshes)
+    RefCntAutoPtr<IRadientSceneAsset> pSourceModel;
+    Uint32                            SourceMeshIndex = ~0u;
+    for (IRadientMeshAsset* pMesh : RenderableMeshes)
     {
         // The asset manager should remember which glTF model and mesh index
         // produced each converted Radient mesh.
-        EXPECT_EQ(pAssetManagerImpl->GetMeshGLTFSource(Mesh, SourceModel, SourceMeshIndex), RADIENT_STATUS_OK);
-        EXPECT_EQ(SourceModel, Model);
+        EXPECT_EQ(pAssetManagerImpl->GetMeshGLTFSource(pMesh, &pSourceModel, SourceMeshIndex), RADIENT_STATUS_OK);
+        EXPECT_EQ(pSourceModel, pModel);
         EXPECT_EQ(SourceMeshIndex, 0u);
     }
 }
@@ -640,9 +644,9 @@ TEST(RadientSceneImporterTest, ImportsLights)
     RadientGLTFInstantiateInfo InstantiateInfo{};
     InstantiateInfo.Name = "Imported lights";
 
-    RadientAssetReference Model{};
-    RadientEntityID       ImportedRoot = InvalidRadientEntityID;
-    EXPECT_EQ(ImportGLTFAndFinishPending(Fixture, LoadInfo, InstantiateInfo, Model, ImportedRoot), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientSceneAsset> pModel;
+    RadientEntityID                   ImportedRoot = InvalidRadientEntityID;
+    EXPECT_EQ(ImportGLTFAndFinishPending(Fixture, LoadInfo, InstantiateInfo, pModel, ImportedRoot), RADIENT_STATUS_OK);
     EXPECT_EQ(Fixture.pWriter->CommitChanges(), RADIENT_STATUS_OK);
 
     const std::vector<RadientEntityID> LightNodes = GetChildren(*Fixture.pScene, ImportedRoot);

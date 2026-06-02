@@ -106,9 +106,7 @@ private:
 
     PBR_Renderer::PSO_FLAGS m_BaseRenderFlags = PBR_Renderer::PSO_FLAG_NONE;
 
-    RadientAssetReference m_CurrentEnvironmentMap;
-    std::string           m_CurrentEnvironmentMapURI;
-    bool                  m_UsingDefaultEnvironment = true;
+    RefCntAutoPtr<IRadientTextureAsset> m_pCurrentEnvironmentMap;
 
     Uint32 m_FrameIndex = 0;
 };

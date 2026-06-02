@@ -35,11 +35,10 @@ MeshComponentStorage::MeshComponentStorage() = default;
 
 MeshComponentStorage::MeshComponentStorage(MeshComponentStorage&& Rhs) noexcept :
     Component{Rhs.Component},
-    MeshURI{std::move(Rhs.MeshURI)}
+    pMesh{std::move(Rhs.pMesh)}
 {
-    FixupURI();
+    FixupPointer();
     Rhs.Component = {};
-    Rhs.MeshURI.clear();
 }
 
 MeshComponentStorage& MeshComponentStorage::operator=(MeshComponentStorage&& Rhs) noexcept
@@ -47,10 +46,9 @@ MeshComponentStorage& MeshComponentStorage::operator=(MeshComponentStorage&& Rhs
     if (this != &Rhs)
     {
         Component = Rhs.Component;
-        MeshURI   = std::move(Rhs.MeshURI);
-        FixupURI();
+        pMesh     = std::move(Rhs.pMesh);
+        FixupPointer();
         Rhs.Component = {};
-        Rhs.MeshURI.clear();
     }
 
     return *this;
@@ -59,14 +57,13 @@ MeshComponentStorage& MeshComponentStorage::operator=(MeshComponentStorage&& Rhs
 void MeshComponentStorage::Assign(const RadientMeshComponent& Mesh)
 {
     Component = Mesh;
-    MeshURI   = Mesh.Mesh.URI != nullptr ? Mesh.Mesh.URI : "";
-    FixupURI();
+    pMesh     = Mesh.pMesh;
+    FixupPointer();
 }
 
-void MeshComponentStorage::FixupURI()
+void MeshComponentStorage::FixupPointer()
 {
-    // Component.Mesh.URI points into MeshURI and must be repaired after move.
-    Component.Mesh.URI = Component.Mesh.URI != nullptr ? MeshURI.c_str() : nullptr;
+    Component.pMesh = pMesh;
 }
 
 } // namespace Diligent

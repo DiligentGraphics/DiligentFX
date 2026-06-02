@@ -81,7 +81,7 @@ public:
 
     /// Returns the renderer-ready mesh, or null if the asset is still loading
     /// or failed to load.
-    const RadientRenderMesh* ResolveMesh(const RadientAssetReference& Mesh);
+    const RadientRenderMesh* ResolveMesh(IRadientMeshAsset* pMeshAsset);
 
 private:
     struct MeshResource
@@ -94,11 +94,10 @@ private:
             Failed
         };
 
-        STATE                 State = STATE::NotRequested;
-        RadientAssetReference SourceModel;
-        std::string           SourceModelURI;
-        Uint32                SourceMeshIndex = ~0u;
-        RadientRenderMesh     Mesh;
+        STATE                             State = STATE::NotRequested;
+        RefCntAutoPtr<IRadientSceneAsset> pSourceModel;
+        Uint32                            SourceMeshIndex = ~0u;
+        RadientRenderMesh                 Mesh;
     };
 
     RefCntAutoPtr<RadientAssetManagerImpl> m_pAssetManager;

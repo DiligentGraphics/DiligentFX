@@ -27,16 +27,15 @@
 #pragma once
 
 #include "RadientScene.h"
-
-#include <string>
+#include "RefCntAutoPtr.hpp"
 
 namespace Diligent
 {
 
 struct MeshComponentStorage
 {
-    RadientMeshComponent Component;
-    std::string          MeshURI;
+    RadientMeshComponent             Component;
+    RefCntAutoPtr<IRadientMeshAsset> pMesh;
 
     MeshComponentStorage();
 
@@ -49,7 +48,7 @@ struct MeshComponentStorage
     void Assign(const RadientMeshComponent& Mesh);
 
 private:
-    void FixupURI();
+    void FixupPointer();
 };
 
 } // namespace Diligent

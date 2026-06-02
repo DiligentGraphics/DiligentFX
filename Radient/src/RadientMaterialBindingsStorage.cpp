@@ -36,25 +36,25 @@ MaterialBindingsStorage::MaterialBindingsStorage() = default;
 MaterialBindingsStorage::MaterialBindingsStorage(MaterialBindingsStorage&& Rhs) noexcept :
     Component{Rhs.Component},
     Bindings{std::move(Rhs.Bindings)},
-    MaterialURIs{std::move(Rhs.MaterialURIs)}
+    Materials{std::move(Rhs.Materials)}
 {
-    FixupURIs();
+    FixupPointers();
     Rhs.Component = {};
     Rhs.Bindings.clear();
-    Rhs.MaterialURIs.clear();
+    Rhs.Materials.clear();
 }
 
 MaterialBindingsStorage& MaterialBindingsStorage::operator=(MaterialBindingsStorage&& Rhs) noexcept
 {
     if (this != &Rhs)
     {
-        Component    = Rhs.Component;
-        Bindings     = std::move(Rhs.Bindings);
-        MaterialURIs = std::move(Rhs.MaterialURIs);
-        FixupURIs();
+        Component = Rhs.Component;
+        Bindings  = std::move(Rhs.Bindings);
+        Materials = std::move(Rhs.Materials);
+        FixupPointers();
         Rhs.Component = {};
         Rhs.Bindings.clear();
-        Rhs.MaterialURIs.clear();
+        Rhs.Materials.clear();
     }
 
     return *this;
@@ -67,33 +67,31 @@ bool MaterialBindingsStorage::Equals(const RadientMaterialBindingsComponent& Rhs
 
 void MaterialBindingsStorage::Assign(const RadientMaterialBindingsComponent& Rhs)
 {
-    Component    = Rhs;
-    Bindings     = {};
-    MaterialURIs = {};
+    Component = Rhs;
+    Bindings  = {};
+    Materials = {};
 
     if (Rhs.BindingCount != 0)
     {
         Bindings.assign(Rhs.pBindings, Rhs.pBindings + Rhs.BindingCount);
-        MaterialURIs.reserve(Rhs.BindingCount);
+        Materials.reserve(Rhs.BindingCount);
         for (Uint32 BindingIndex = 0; BindingIndex < Rhs.BindingCount; ++BindingIndex)
         {
-            const Char* URI = Rhs.pBindings[BindingIndex].Material.URI;
-            MaterialURIs.emplace_back(URI != nullptr ? URI : "");
+            Materials.emplace_back(Rhs.pBindings[BindingIndex].pMaterial);
         }
     }
 
-    FixupURIs();
+    FixupPointers();
 }
 
-void MaterialBindingsStorage::FixupURIs()
+void MaterialBindingsStorage::FixupPointers()
 {
-    Component.pBindings   = Bindings.empty() ? nullptr : Bindings.data();
+    Component.pBindings    = Bindings.empty() ? nullptr : Bindings.data();
     Component.BindingCount = static_cast<Uint32>(Bindings.size());
 
     for (Uint32 BindingIndex = 0; BindingIndex < Component.BindingCount; ++BindingIndex)
     {
-        Bindings[BindingIndex].Material.URI =
-            Bindings[BindingIndex].Material.URI != nullptr ? MaterialURIs[BindingIndex].c_str() : nullptr;
+        Bindings[BindingIndex].pMaterial = Materials[BindingIndex];
     }
 }
 

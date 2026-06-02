@@ -30,6 +30,7 @@
 
 #include "RadientEngine.h"
 #include "RadientSceneImpl.hpp"
+#include "RadientTestAssetHelpers.hpp"
 
 #include "ThreadPool.hpp"
 
@@ -93,26 +94,30 @@ RefCntAutoPtr<IRadientAssetManager> GetTestAssetManager(IRadientEngine& Engine)
     return pAssetManager;
 }
 
-RADIENT_STATUS ProcessTestGLTFLoad(IRadientAssetManager& AssetManager, const RadientAssetReference& Model)
+RADIENT_STATUS ProcessTestGLTFLoad(IRadientAssetManager& AssetManager, IRadientSceneAsset* pModel)
 {
-    return AssetManager.WaitForAssetLoad(Model);
+    return AssetManager.WaitForAssetLoad(pModel);
 }
 
-RadientAssetReference CreateTestMaterial(IRadientAssetManager& AssetManager)
+RefCntAutoPtr<IRadientMaterialAsset> CreateTestMaterial(IRadientAssetManager& AssetManager)
 {
     RadientMaterialCreateInfo MaterialCI{};
     MaterialCI.Name            = "Radient test material";
     MaterialCI.BaseColorFactor = {1.f, 0.f, 0.f, 1.f};
 
-    RadientAssetReference Material{};
-    EXPECT_EQ(AssetManager.CreateMaterial(MaterialCI, Material), RADIENT_STATUS_OK);
-    EXPECT_NE(Material.URI, nullptr);
-    EXPECT_NE(Material.Version, 0u);
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    EXPECT_EQ(AssetManager.CreateMaterial(MaterialCI, &pMaterial), RADIENT_STATUS_OK);
+    EXPECT_NE(pMaterial, nullptr);
+    if (pMaterial != nullptr)
+    {
+        EXPECT_NE(pMaterial->GetReference().URI, nullptr);
+        EXPECT_NE(pMaterial->GetReference().Version, 0u);
+    }
 
-    return Material;
+    return pMaterial;
 }
 
-RadientAssetReference CreateTestMesh(IRadientAssetManager& AssetManager, const RadientAssetReference& Material)
+RefCntAutoPtr<IRadientMeshAsset> CreateTestMesh(IRadientAssetManager& AssetManager, IRadientMaterialAsset* pMaterial)
 {
     const RadientFloat3 Positions[] =
         {
@@ -162,7 +167,7 @@ RadientAssetReference CreateTestMesh(IRadientAssetManager& AssetManager, const R
     PrimitiveCI.VertexBufferIndex = 0;
     PrimitiveCI.FirstIndex        = 0;
     PrimitiveCI.IndexCount        = 3;
-    PrimitiveCI.Material          = Material;
+    PrimitiveCI.pMaterial         = pMaterial;
 
     RadientMeshCreateInfo MeshCI{};
     MeshCI.Name              = "Radient test mesh";
@@ -172,12 +177,16 @@ RadientAssetReference CreateTestMesh(IRadientAssetManager& AssetManager, const R
     MeshCI.pPrimitives       = &PrimitiveCI;
     MeshCI.PrimitiveCount    = 1;
 
-    RadientAssetReference Mesh{};
-    EXPECT_EQ(AssetManager.CreateMesh(MeshCI, Mesh), RADIENT_STATUS_OK);
-    EXPECT_NE(Mesh.URI, nullptr);
-    EXPECT_NE(Mesh.Version, 0u);
+    RefCntAutoPtr<IRadientMeshAsset> pMesh;
+    EXPECT_EQ(AssetManager.CreateMesh(MeshCI, &pMesh), RADIENT_STATUS_OK);
+    EXPECT_NE(pMesh, nullptr);
+    if (pMesh != nullptr)
+    {
+        EXPECT_NE(pMesh->GetReference().URI, nullptr);
+        EXPECT_NE(pMesh->GetReference().Version, 0u);
+    }
 
-    return Mesh;
+    return pMesh;
 }
 
 RefCntAutoPtr<IRadientScene> CreateTestScene(IRadientEngine& Engine)
@@ -269,9 +278,9 @@ RefCntAutoPtr<IRadientView> CreateTestView(IRadientRenderer&     Renderer,
     return pView;
 }
 
-RadientEntityID CreateTestRenderableEntity(IRadientSceneWriter&         Writer,
-                                           const RadientAssetReference& Mesh,
-                                           const RadientAssetReference& Material)
+RadientEntityID CreateTestRenderableEntity(IRadientSceneWriter&   Writer,
+                                           IRadientMeshAsset*     pMesh,
+                                           IRadientMaterialAsset* pMaterial)
 {
     RadientEntityID Entity = InvalidRadientEntityID;
     EXPECT_EQ(Writer.CreateEntity({}, Entity), RADIENT_STATUS_OK);
@@ -281,13 +290,13 @@ RadientEntityID CreateTestRenderableEntity(IRadientSceneWriter&         Writer,
         return Entity;
 
     RadientMeshComponent MeshComponent{};
-    MeshComponent.Mesh = Mesh;
+    MeshComponent.pMesh = pMesh;
     EXPECT_EQ(Writer.SetMesh(Entity, MeshComponent), RADIENT_STATUS_OK);
     EXPECT_EQ(Writer.SetMeshRenderer(Entity, {}), RADIENT_STATUS_OK);
 
     RadientMaterialBinding MaterialBinding{};
     MaterialBinding.PrimitiveIndex = 0;
-    MaterialBinding.Material       = Material;
+    MaterialBinding.pMaterial      = pMaterial;
 
     RadientMaterialBindingsComponent MaterialBindings{};
     MaterialBindings.pBindings    = &MaterialBinding;
@@ -354,9 +363,10 @@ TEST(RadientAssetManagerTest, CreateMaterial)
     RefCntAutoPtr<IRadientAssetManager> pAssetManager = GetTestAssetManager(*pEngine);
     ASSERT_NE(pAssetManager, nullptr);
 
-    const RadientAssetReference Material = CreateTestMaterial(*pAssetManager);
-    EXPECT_NE(Material.URI, nullptr);
-    EXPECT_NE(Material.Version, 0u);
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial = CreateTestMaterial(*pAssetManager);
+    ASSERT_NE(pMaterial, nullptr);
+    EXPECT_NE(pMaterial->GetReference().URI, nullptr);
+    EXPECT_NE(pMaterial->GetReference().Version, 0u);
 }
 
 TEST(RadientAssetManagerTest, CreateMesh)
@@ -369,12 +379,13 @@ TEST(RadientAssetManagerTest, CreateMesh)
     RefCntAutoPtr<IRadientAssetManager> pAssetManager = GetTestAssetManager(*pEngine);
     ASSERT_NE(pAssetManager, nullptr);
 
-    const RadientAssetReference Material = CreateTestMaterial(*pAssetManager);
-    ASSERT_NE(Material.URI, nullptr);
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial = CreateTestMaterial(*pAssetManager);
+    ASSERT_NE(pMaterial, nullptr);
 
-    const RadientAssetReference Mesh = CreateTestMesh(*pAssetManager, Material);
-    EXPECT_NE(Mesh.URI, nullptr);
-    EXPECT_NE(Mesh.Version, 0u);
+    RefCntAutoPtr<IRadientMeshAsset> pMesh = CreateTestMesh(*pAssetManager, pMaterial);
+    ASSERT_NE(pMesh, nullptr);
+    EXPECT_NE(pMesh->GetReference().URI, nullptr);
+    EXPECT_NE(pMesh->GetReference().Version, 0u);
 }
 
 TEST(RadientAssetManagerTest, LoadGLTF)
@@ -387,21 +398,22 @@ TEST(RadientAssetManagerTest, LoadGLTF)
     RefCntAutoPtr<IRadientAssetManager> pAssetManager = GetTestAssetManager(*pEngine);
     ASSERT_NE(pAssetManager, nullptr);
 
-    RadientGLTFLoadInfo   GLTFLoadInfo{};
-    RadientAssetReference GLTFModel{};
+    RadientGLTFLoadInfo               GLTFLoadInfo{};
+    RefCntAutoPtr<IRadientSceneAsset> pGLTFModel;
     // A missing URI is invalid and should not create an asset reference.
-    EXPECT_EQ(pAssetManager->LoadGLTF(GLTFLoadInfo, GLTFModel), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pAssetManager->LoadGLTF(GLTFLoadInfo, &pGLTFModel), RADIENT_STATUS_INVALID_ARGUMENT);
 
     TempDirectory     TempDir{"RadientAssetManagerTest"};
     const std::string GLTFPath = WriteBasicGLTFFile(TempDir);
 
     GLTFLoadInfo.URI                = GLTFPath.c_str();
-    const RADIENT_STATUS LoadStatus = pAssetManager->LoadGLTF(GLTFLoadInfo, GLTFModel);
+    const RADIENT_STATUS LoadStatus = pAssetManager->LoadGLTF(GLTFLoadInfo, &pGLTFModel);
     // Depending on threading, the load may complete immediately or remain pending.
     EXPECT_TRUE(LoadStatus == RADIENT_STATUS_OK || LoadStatus == RADIENT_STATUS_PENDING);
-    EXPECT_NE(GLTFModel.URI, nullptr);
-    EXPECT_NE(GLTFModel.Version, 0u);
-    EXPECT_EQ(ProcessTestGLTFLoad(*pAssetManager, GLTFModel), RADIENT_STATUS_OK);
+    ASSERT_NE(pGLTFModel, nullptr);
+    EXPECT_NE(pGLTFModel->GetReference().URI, nullptr);
+    EXPECT_NE(pGLTFModel->GetReference().Version, 0u);
+    EXPECT_EQ(ProcessTestGLTFLoad(*pAssetManager, pGLTFModel), RADIENT_STATUS_OK);
 }
 
 TEST(RadientEngineTest, CreateScene)
@@ -465,10 +477,10 @@ TEST(RadientSceneImporterTest, ImportGLTF)
     RadientGLTFInstantiateInfo InstantiateInfo{};
     InstantiateInfo.Name = "Radient imported GLTF root";
 
-    RadientAssetReference ImportedModel{};
-    RadientEntityID       ImportedRoot = InvalidRadientEntityID;
+    RefCntAutoPtr<IRadientSceneAsset> ImportedModel;
+    RadientEntityID                   ImportedRoot = InvalidRadientEntityID;
     // Empty load info is invalid and should not instantiate anything.
-    EXPECT_EQ(pImporter->ImportGLTF({}, InstantiateInfo, ImportedModel, ImportedRoot), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(pImporter->ImportGLTF({}, InstantiateInfo, &ImportedModel, ImportedRoot), RADIENT_STATUS_INVALID_ARGUMENT);
 
     TempDirectory     ImportTempDir{"RadientSceneTest"};
     const std::string ImportGLTFPath = WriteBasicGLTFFile(ImportTempDir);
@@ -476,7 +488,7 @@ TEST(RadientSceneImporterTest, ImportGLTF)
     RadientGLTFLoadInfo GLTFLoadInfo{};
     GLTFLoadInfo.URI = ImportGLTFPath.c_str();
 
-    RADIENT_STATUS ImportStatus = pImporter->ImportGLTF(GLTFLoadInfo, InstantiateInfo, ImportedModel, ImportedRoot);
+    RADIENT_STATUS ImportStatus = pImporter->ImportGLTF(GLTFLoadInfo, InstantiateInfo, &ImportedModel, ImportedRoot);
     if (ImportStatus == RADIENT_STATUS_PENDING)
     {
         // Pending loads are completed explicitly in tests so the imported root
@@ -485,8 +497,9 @@ TEST(RadientSceneImporterTest, ImportGLTF)
         ImportStatus = pImporter->ProcessPendingImports();
     }
     EXPECT_EQ(ImportStatus, RADIENT_STATUS_OK);
-    EXPECT_NE(ImportedModel.URI, nullptr);
-    EXPECT_NE(ImportedModel.Version, 0u);
+    ASSERT_NE(ImportedModel, nullptr);
+    EXPECT_NE(ImportedModel->GetReference().URI, nullptr);
+    EXPECT_NE(ImportedModel->GetReference().Version, 0u);
     EXPECT_NE(ImportedRoot, InvalidRadientEntityID);
     EXPECT_EQ(pScene->IsEntityAlive(ImportedRoot), RADIENT_STATUS_OK);
 }
@@ -501,11 +514,11 @@ TEST(RadientSceneWriterTest, CreateRenderableEntity)
     RefCntAutoPtr<IRadientAssetManager> pAssetManager = GetTestAssetManager(*pEngine);
     ASSERT_NE(pAssetManager, nullptr);
 
-    const RadientAssetReference Material = CreateTestMaterial(*pAssetManager);
-    ASSERT_NE(Material.URI, nullptr);
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial = CreateTestMaterial(*pAssetManager);
+    ASSERT_NE(pMaterial, nullptr);
 
-    const RadientAssetReference Mesh = CreateTestMesh(*pAssetManager, Material);
-    ASSERT_NE(Mesh.URI, nullptr);
+    RefCntAutoPtr<IRadientMeshAsset> pMesh = CreateTestMesh(*pAssetManager, pMaterial);
+    ASSERT_NE(pMesh, nullptr);
 
     RefCntAutoPtr<IRadientScene> pScene = CreateTestScene(*pEngine);
     ASSERT_NE(pScene, nullptr);
@@ -513,7 +526,7 @@ TEST(RadientSceneWriterTest, CreateRenderableEntity)
     RefCntAutoPtr<IRadientSceneWriter> pWriter = CreateTestSceneWriter(*pEngine, pScene);
     ASSERT_NE(pWriter, nullptr);
 
-    const RadientEntityID Entity = CreateTestRenderableEntity(*pWriter, Mesh, Material);
+    const RadientEntityID Entity = CreateTestRenderableEntity(*pWriter, pMesh, pMaterial);
     EXPECT_NE(Entity, InvalidRadientEntityID);
 }
 
@@ -572,23 +585,24 @@ TEST(RadientRendererTest, CreateView)
     // Skybox settings are view-local and copy raw texture URI strings.
     std::string SkyboxURI = "texture://skybox";
 
+    RefCntAutoPtr<IRadientTextureAsset> pSkyboxTexture = MakeTestTextureAsset(SkyboxURI.c_str(), 3);
+
     RadientSkyboxDesc Skybox{};
-    Skybox.Source          = RADIENT_SKYBOX_SOURCE_TEXTURE;
-    Skybox.Texture.URI     = SkyboxURI.c_str();
-    Skybox.Texture.Version = 3;
-    Skybox.Color           = {0.25f, 0.5f, 1.f};
-    Skybox.Intensity       = 2.f;
-    Skybox.Exposure        = -1.f;
-    Skybox.MipLevel        = 1.f;
+    Skybox.Source    = RADIENT_SKYBOX_SOURCE_TEXTURE;
+    Skybox.pTexture  = pSkyboxTexture;
+    Skybox.Color     = {0.25f, 0.5f, 1.f};
+    Skybox.Intensity = 2.f;
+    Skybox.Exposure  = -1.f;
+    Skybox.MipLevel  = 1.f;
 
     EXPECT_EQ(pView->SetSkybox(Skybox), RADIENT_STATUS_OK);
     SkyboxURI[0] = 'X';
 
     const RadientSkyboxDesc& StoredSkybox = pView->GetDesc().Skybox;
     EXPECT_EQ(StoredSkybox.Source, RADIENT_SKYBOX_SOURCE_TEXTURE);
-    ASSERT_NE(StoredSkybox.Texture.URI, nullptr);
-    EXPECT_STREQ(StoredSkybox.Texture.URI, "texture://skybox");
-    EXPECT_EQ(StoredSkybox.Texture.Version, 3u);
+    ASSERT_NE(StoredSkybox.pTexture, nullptr);
+    EXPECT_STREQ(StoredSkybox.pTexture->GetReference().URI, "texture://skybox");
+    EXPECT_EQ(StoredSkybox.pTexture->GetReference().Version, 3u);
     EXPECT_EQ(StoredSkybox.Color.x, 0.25f);
     EXPECT_EQ(StoredSkybox.Color.y, 0.5f);
     EXPECT_EQ(StoredSkybox.Color.z, 1.f);
@@ -609,11 +623,11 @@ TEST(RadientRendererTest, RenderHeadlessScene)
     RefCntAutoPtr<IRadientAssetManager> pAssetManager = GetTestAssetManager(*pEngine);
     ASSERT_NE(pAssetManager, nullptr);
 
-    const RadientAssetReference Material = CreateTestMaterial(*pAssetManager);
-    ASSERT_NE(Material.URI, nullptr);
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial = CreateTestMaterial(*pAssetManager);
+    ASSERT_NE(pMaterial, nullptr);
 
-    const RadientAssetReference Mesh = CreateTestMesh(*pAssetManager, Material);
-    ASSERT_NE(Mesh.URI, nullptr);
+    RefCntAutoPtr<IRadientMeshAsset> pMesh = CreateTestMesh(*pAssetManager, pMaterial);
+    ASSERT_NE(pMesh, nullptr);
 
     RefCntAutoPtr<IRadientScene> pScene = CreateTestScene(*pEngine);
     ASSERT_NE(pScene, nullptr);
@@ -621,7 +635,7 @@ TEST(RadientRendererTest, RenderHeadlessScene)
     RefCntAutoPtr<IRadientSceneWriter> pWriter = CreateTestSceneWriter(*pEngine, pScene);
     ASSERT_NE(pWriter, nullptr);
 
-    const RadientEntityID Entity = CreateTestRenderableEntity(*pWriter, Mesh, Material);
+    const RadientEntityID Entity = CreateTestRenderableEntity(*pWriter, pMesh, pMaterial);
     ASSERT_NE(Entity, InvalidRadientEntityID);
 
     RefCntAutoPtr<IRadientRenderer> pRenderer = CreateTestRenderer(*pEngine);

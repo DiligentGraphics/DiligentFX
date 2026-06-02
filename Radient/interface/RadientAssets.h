@@ -35,6 +35,12 @@
 
 DILIGENT_BEGIN_NAMESPACE(Diligent)
 
+typedef struct IRadientAsset         IRadientAsset;
+typedef struct IRadientMeshAsset     IRadientMeshAsset;
+typedef struct IRadientMaterialAsset IRadientMaterialAsset;
+typedef struct IRadientTextureAsset  IRadientTextureAsset;
+typedef struct IRadientSceneAsset    IRadientSceneAsset;
+
 // clang-format off
 
 /// Asset type.
@@ -49,8 +55,8 @@ DILIGENT_TYPED_ENUM(RADIENT_ASSET_TYPE, Uint8)
     /// Texture asset.
     RADIENT_ASSET_TYPE_TEXTURE,
 
-    /// GLTF model asset.
-    RADIENT_ASSET_TYPE_GLTF_MODEL
+    /// Imported scene/model asset.
+    RADIENT_ASSET_TYPE_SCENE
 };
 
 
@@ -174,7 +180,7 @@ struct RadientMeshPrimitiveCreateInfo
     Uint32 IndexCount DEFAULT_INITIALIZER(0);
 
     /// Default material for this primitive.
-    RadientAssetReference Material DEFAULT_INITIALIZER({});
+    IRadientMaterialAsset* pMaterial DEFAULT_INITIALIZER(nullptr);
 };
 typedef struct RadientMeshPrimitiveCreateInfo RadientMeshPrimitiveCreateInfo;
 
@@ -228,19 +234,19 @@ struct RadientMaterialCreateInfo
     Bool DoubleSided DEFAULT_INITIALIZER(False);
 
     /// Optional base color texture.
-    RadientAssetReference BaseColorTexture DEFAULT_INITIALIZER({});
+    IRadientTextureAsset* pBaseColorTexture DEFAULT_INITIALIZER(nullptr);
 
     /// Optional metallic-roughness texture.
-    RadientAssetReference MetallicRoughnessTexture DEFAULT_INITIALIZER({});
+    IRadientTextureAsset* pMetallicRoughnessTexture DEFAULT_INITIALIZER(nullptr);
 
     /// Optional normal texture.
-    RadientAssetReference NormalTexture DEFAULT_INITIALIZER({});
+    IRadientTextureAsset* pNormalTexture DEFAULT_INITIALIZER(nullptr);
 
     /// Optional occlusion texture.
-    RadientAssetReference OcclusionTexture DEFAULT_INITIALIZER({});
+    IRadientTextureAsset* pOcclusionTexture DEFAULT_INITIALIZER(nullptr);
 
     /// Optional emissive texture.
-    RadientAssetReference EmissiveTexture DEFAULT_INITIALIZER({});
+    IRadientTextureAsset* pEmissiveTexture DEFAULT_INITIALIZER(nullptr);
 };
 typedef struct RadientMaterialCreateInfo RadientMaterialCreateInfo;
 
@@ -265,10 +271,76 @@ struct RadientGLTFLoadInfo
 };
 typedef struct RadientGLTFLoadInfo RadientGLTFLoadInfo;
 
+// {81E53AF7-3CBD-4750-ACA9-72D301E8E286}
+static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientAsset =
+    {0x81e53af7, 0x3cbd, 0x4750, {0xac, 0xa9, 0x72, 0xd3, 0x1, 0xe8, 0xe2, 0x86}};
 
-// {0B806532-011B-490C-A3AE-3AA6C8DB266C}
+// {DADF2017-67FE-485A-802D-98C607831509}
+static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientMeshAsset =
+    {0xdadf2017, 0x67fe, 0x485a, {0x80, 0x2d, 0x98, 0xc6, 0x7, 0x83, 0x15, 0x9}};
+
+// {D73346B3-A9F9-4FBB-9803-8B60C6D60E4A}
+static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientMaterialAsset =
+    {0xd73346b3, 0xa9f9, 0x4fbb, {0x98, 0x3, 0x8b, 0x60, 0xc6, 0xd6, 0xe, 0x4a}};
+
+// {A24C6739-3521-4517-9D5E-0A0D2C8F4BC3}
+static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientTextureAsset =
+    {0xa24c6739, 0x3521, 0x4517, {0x9d, 0x5e, 0xa, 0xd, 0x2c, 0x8f, 0x4b, 0xc3}};
+
+// {E7A3CF57-50F4-4D57-BC23-A75814DC6B93}
+static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientSceneAsset =
+    {0xe7a3cf57, 0x50f4, 0x4d57, {0xbc, 0x23, 0xa7, 0x58, 0x14, 0xdc, 0x6b, 0x93}};
+
+// {F7333555-956A-4CE1-83EB-BAC3D2E9E0BD}
 static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientAssetManager =
-    { 0xb806532, 0x11b, 0x490c, { 0xa3, 0xae, 0x3a, 0xa6, 0xc8, 0xdb, 0x26, 0x6c } };
+    {0xf7333555, 0x956a, 0x4ce1, {0x83, 0xeb, 0xba, 0xc3, 0xd2, 0xe9, 0xe0, 0xbd}};
+
+
+#define DILIGENT_INTERFACE_NAME IRadientAsset
+#include "../../../DiligentCore/Primitives/interface/DefineInterfaceHelperMacros.h"
+
+#define IRadientAssetInclusiveMethods \
+    IObjectInclusiveMethods;          \
+    IRadientAssetMethods RadientAsset
+
+// clang-format off
+
+/// Common base interface for all Radient assets.
+DILIGENT_BEGIN_INTERFACE(IRadientAsset, IObject)
+{
+    /// Returns the asset reference identity.
+    VIRTUAL const RadientAssetReference REF METHOD(GetReference)(THIS) CONST PURE;
+
+    /// Returns the concrete asset type.
+    VIRTUAL RADIENT_ASSET_TYPE METHOD(GetType)(THIS) CONST PURE;
+};
+DILIGENT_END_INTERFACE
+
+#include "../../../DiligentCore/Primitives/interface/UndefInterfaceHelperMacros.h"
+
+#if DILIGENT_CPP_INTERFACE
+
+/// Mesh asset.
+struct IRadientMeshAsset : public IRadientAsset
+{
+};
+
+/// Material asset.
+struct IRadientMaterialAsset : public IRadientAsset
+{
+};
+
+/// Texture asset.
+struct IRadientTextureAsset : public IRadientAsset
+{
+};
+
+/// Imported scene/model asset.
+struct IRadientSceneAsset : public IRadientAsset
+{
+};
+
+#endif
 
 
 #define DILIGENT_INTERFACE_NAME IRadientAssetManager
@@ -289,28 +361,28 @@ DILIGENT_BEGIN_INTERFACE(IRadientAssetManager, IObject)
     /// Creates a mesh asset from CPU-side primitive data.
     VIRTUAL RADIENT_STATUS METHOD(CreateMesh)(THIS_
                                               const RadientMeshCreateInfo REF MeshCI,
-                                              RadientAssetReference REF       Mesh) PURE;
+                                              IRadientMeshAsset**             ppMesh) PURE;
 
     /// Creates a material asset.
     VIRTUAL RADIENT_STATUS METHOD(CreateMaterial)(THIS_
                                                   const RadientMaterialCreateInfo REF MaterialCI,
-                                                  RadientAssetReference REF           Material) PURE;
+                                                  IRadientMaterialAsset**             ppMaterial) PURE;
 
     /// Loads a texture asset from a URI.
     VIRTUAL RADIENT_STATUS METHOD(LoadTexture)(THIS_
                                                const RadientTextureLoadInfo REF LoadInfo,
-                                               RadientAssetReference REF        Texture) PURE;
+                                               IRadientTextureAsset**           ppTexture) PURE;
 
     /// Starts loading a GLTF model asset from a URI.
     /// Returns RADIENT_STATUS_PENDING when loading continues asynchronously.
     VIRTUAL RADIENT_STATUS METHOD(LoadGLTF)(THIS_
                                             const RadientGLTFLoadInfo REF LoadInfo,
-                                            RadientAssetReference REF     Model) PURE;
+                                            IRadientSceneAsset**          ppModel) PURE;
 
     /// Blocks the calling thread until the asset load has completed.
     /// This is intended for tests and explicit synchronization points only; normal rendering/import code should avoid it.
     VIRTUAL RADIENT_STATUS METHOD(WaitForAssetLoad)(THIS_
-                                                    const RadientAssetReference REF Asset) PURE;
+                                                    IRadientAsset* pAsset) PURE;
 };
 DILIGENT_END_INTERFACE
 

@@ -87,25 +87,23 @@ RADIENT_STATUS RadientViewImpl::SetRenderTarget(IRadientRenderTarget* pRenderTar
 
 RADIENT_STATUS RadientViewImpl::SetSkybox(const RadientSkyboxDesc& Skybox)
 {
-    std::string NewSkyboxTextureURI = Skybox.Texture.URI != nullptr ? Skybox.Texture.URI : "";
-
     RadientSkyboxDesc NewSkybox = Skybox;
-    NewSkybox.Texture.URI       = !NewSkyboxTextureURI.empty() ? NewSkyboxTextureURI.c_str() : nullptr;
+    NewSkybox.pTexture          = Skybox.pTexture;
 
     if (m_Desc.Skybox == NewSkybox)
         return RADIENT_STATUS_NO_CHANGE;
 
-    m_SkyboxTextureURI    = std::move(NewSkyboxTextureURI);
-    NewSkybox.Texture.URI = !m_SkyboxTextureURI.empty() ? m_SkyboxTextureURI.c_str() : nullptr;
-    m_Desc.Skybox         = NewSkybox;
+    m_pSkyboxTexture   = Skybox.pTexture;
+    NewSkybox.pTexture = m_pSkyboxTexture;
+    m_Desc.Skybox      = NewSkybox;
     return RADIENT_STATUS_OK;
 }
 
 void RadientViewImpl::CopySkybox(const RadientSkyboxDesc& Skybox)
 {
-    m_SkyboxTextureURI        = Skybox.Texture.URI != nullptr ? Skybox.Texture.URI : "";
-    m_Desc.Skybox             = Skybox;
-    m_Desc.Skybox.Texture.URI = !m_SkyboxTextureURI.empty() ? m_SkyboxTextureURI.c_str() : nullptr;
+    m_pSkyboxTexture       = Skybox.pTexture;
+    m_Desc.Skybox          = Skybox;
+    m_Desc.Skybox.pTexture = m_pSkyboxTexture;
 }
 
 } // namespace Diligent

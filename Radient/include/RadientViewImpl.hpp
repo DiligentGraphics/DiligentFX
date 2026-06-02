@@ -62,12 +62,12 @@ private:
 
 private:
     std::string m_Name;
-    std::string m_SkyboxTextureURI;
 
     RadientViewDesc m_Desc;
 
     RefCntAutoPtr<IRadientScene>        m_pScene;
     RefCntAutoPtr<IRadientRenderTarget> m_pRenderTarget;
+    RefCntAutoPtr<IRadientTextureAsset> m_pSkyboxTexture;
 };
 
 } // namespace Diligent

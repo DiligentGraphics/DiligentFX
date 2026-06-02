@@ -87,9 +87,8 @@ void RadientScene_C_UseMaterialBindingsComponent(void)
     RadientMaterialBinding           Binding;
     RadientMaterialBindingsComponent Bindings;
 
-    Binding.PrimitiveIndex   = 0;
-    Binding.Material.URI     = 0;
-    Binding.Material.Version = 0;
+    Binding.PrimitiveIndex = 0;
+    Binding.pMaterial      = 0;
 
     Bindings.pBindings    = &Binding;
     Bindings.BindingCount = 1;

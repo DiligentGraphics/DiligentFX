@@ -27,110 +27,101 @@
 #include "gtest/gtest.h"
 
 #include "RadientMeshComponentStorage.hpp"
+#include "RadientTestAssetHelpers.hpp"
 
-#include <cstring>
-#include <memory>
 #include <utility>
 
 using namespace Diligent;
+using namespace Diligent::Testing;
 
 namespace
 {
 
-TEST(RadientMeshComponentStorageTest, AssignCopiesURI)
+TEST(RadientMeshComponentStorageTest, AssignKeepsStrongMeshReference)
 {
-    // Verifies that mesh component storage owns a URI copy instead of keeping
-    // the caller-provided raw string pointer.
-    const char OriginalURI[] = "mesh://heap";
-    const char ChangedURI[]  = "mesh://changed";
-
-    std::unique_ptr<char[]> MeshURI = std::make_unique<char[]>(64);
-    std::memcpy(MeshURI.get(), OriginalURI, sizeof(OriginalURI));
+    // Mesh storage should keep the asset alive even if the caller releases its reference.
+    RefCntAutoPtr<IRadientMeshAsset> pMesh = MakeTestMeshAsset("mesh://heap", 7);
 
     RadientMeshComponent Mesh;
-    Mesh.Mesh.URI     = MeshURI.get();
-    Mesh.Mesh.Version = 7;
+    Mesh.pMesh = pMesh;
 
     MeshComponentStorage Storage;
     Storage.Assign(Mesh);
 
-    std::memcpy(MeshURI.get(), ChangedURI, sizeof(ChangedURI));
-    MeshURI.reset();
+    const IRadientMeshAsset* pExpectedMesh = pMesh;
+    pMesh.Release();
 
-    // The stored component should still point to the internal string copy and
-    // preserve the original asset version after the source buffer is gone.
-    EXPECT_STREQ(Storage.Component.Mesh.URI, OriginalURI);
-    EXPECT_EQ(Storage.Component.Mesh.URI, Storage.MeshURI.c_str());
-    EXPECT_EQ(Storage.Component.Mesh.Version, 7u);
+    EXPECT_EQ(Storage.Component.pMesh, pExpectedMesh);
+    ASSERT_NE(Storage.pMesh, nullptr);
+    EXPECT_STREQ(Storage.pMesh->GetReference().URI, "mesh://heap");
+    EXPECT_EQ(Storage.pMesh->GetReference().Version, 7u);
 }
 
-TEST(RadientMeshComponentStorageTest, MoveConstructorRepairsURI)
+TEST(RadientMeshComponentStorageTest, MoveConstructorRepairsMeshPointer)
 {
-    // Moving storage must repair the component URI pointer so it points into
-    // the moved-to storage object.
+    // Moving storage must repair the component pointer so it points to the
+    // moved-to storage object's retained asset reference.
+    RefCntAutoPtr<IRadientMeshAsset> pMesh = MakeTestMeshAsset("mesh://move", 11);
+
     RadientMeshComponent Mesh;
-    Mesh.Mesh.URI     = "mesh://move";
-    Mesh.Mesh.Version = 11;
+    Mesh.pMesh = pMesh;
 
     MeshComponentStorage Source;
     Source.Assign(Mesh);
 
     MeshComponentStorage Moved{std::move(Source)};
 
-    // The moved component should retain the asset identity and point at the
-    // destination-owned string.
-    EXPECT_STREQ(Moved.Component.Mesh.URI, "mesh://move");
-    EXPECT_EQ(Moved.Component.Mesh.URI, Moved.MeshURI.c_str());
-    EXPECT_EQ(Moved.Component.Mesh.Version, 11u);
+    EXPECT_EQ(Moved.Component.pMesh, pMesh.RawPtr());
+    EXPECT_EQ(Moved.Component.pMesh, Moved.pMesh.RawPtr());
+    ASSERT_NE(Moved.Component.pMesh, nullptr);
+    EXPECT_STREQ(Moved.Component.pMesh->GetReference().URI, "mesh://move");
+    EXPECT_EQ(Moved.Component.pMesh->GetReference().Version, 11u);
 }
 
-TEST(RadientMeshComponentStorageTest, MoveAssignmentRepairsURI)
+TEST(RadientMeshComponentStorageTest, MoveAssignmentRepairsMeshPointer)
 {
-    // Move assignment must replace the previous component data and reconnect
-    // raw URI pointers to the destination storage.
+    // Move assignment must replace the previous retained asset and reconnect
+    // the public component pointer to the destination storage.
+    RefCntAutoPtr<IRadientMeshAsset> pMesh      = MakeTestMeshAsset("mesh://assigned", 13);
+    RefCntAutoPtr<IRadientMeshAsset> pOtherMesh = MakeTestMeshAsset("mesh://other", 1);
+
     RadientMeshComponent Mesh;
-    Mesh.Mesh.URI     = "mesh://assigned";
-    Mesh.Mesh.Version = 13;
+    Mesh.pMesh = pMesh;
 
     MeshComponentStorage Source;
     Source.Assign(Mesh);
 
     RadientMeshComponent OtherMesh;
-    OtherMesh.Mesh.URI     = "mesh://other";
-    OtherMesh.Mesh.Version = 1;
+    OtherMesh.pMesh = pOtherMesh;
 
     MeshComponentStorage Destination;
     Destination.Assign(OtherMesh);
     Destination = std::move(Source);
 
-    // The old destination URI should be discarded; the assigned component
-    // should expose the moved asset and destination-owned URI storage.
-    EXPECT_STREQ(Destination.Component.Mesh.URI, "mesh://assigned");
-    EXPECT_EQ(Destination.Component.Mesh.URI, Destination.MeshURI.c_str());
-    EXPECT_EQ(Destination.Component.Mesh.Version, 13u);
+    EXPECT_EQ(Destination.Component.pMesh, pMesh.RawPtr());
+    EXPECT_EQ(Destination.Component.pMesh, Destination.pMesh.RawPtr());
+    ASSERT_NE(Destination.Component.pMesh, nullptr);
+    EXPECT_STREQ(Destination.Component.pMesh->GetReference().URI, "mesh://assigned");
+    EXPECT_EQ(Destination.Component.pMesh->GetReference().Version, 13u);
 }
 
-TEST(RadientMeshComponentStorageTest, KeepsNullURI)
+TEST(RadientMeshComponentStorageTest, KeepsNullMesh)
 {
-    // Null asset URIs are valid for an empty mesh reference and should stay
+    // Null mesh assets are valid for an empty mesh component and should stay
     // null through assign and move operations.
     RadientMeshComponent Mesh;
-    Mesh.Mesh.URI     = nullptr;
-    Mesh.Mesh.Version = 5;
 
     MeshComponentStorage Storage;
     Storage.Assign(Mesh);
 
-    EXPECT_EQ(Storage.Component.Mesh.URI, nullptr);
-    EXPECT_TRUE(Storage.MeshURI.empty());
+    EXPECT_EQ(Storage.Component.pMesh, nullptr);
+    EXPECT_EQ(Storage.pMesh, nullptr);
 
     MeshComponentStorage Moved;
     Moved = std::move(Storage);
 
-    // Moving an empty URI should not synthesize a string or leave a dangling
-    // pointer in the component.
-    EXPECT_EQ(Moved.Component.Mesh.URI, nullptr);
-    EXPECT_TRUE(Moved.MeshURI.empty());
+    EXPECT_EQ(Moved.Component.pMesh, nullptr);
+    EXPECT_EQ(Moved.pMesh, nullptr);
 }
 
 } // namespace

@@ -61,7 +61,7 @@ struct RadientSkyboxDesc
     RADIENT_SKYBOX_SOURCE Source DEFAULT_INITIALIZER(RADIENT_SKYBOX_SOURCE_NONE);
 
     /// Explicit skybox texture used when Source is RADIENT_SKYBOX_SOURCE_TEXTURE.
-    RadientAssetReference Texture DEFAULT_INITIALIZER({});
+    IRadientTextureAsset* pTexture DEFAULT_INITIALIZER(nullptr);
 
     /// Skybox color multiplier.
     RadientFloat3 Color DEFAULT_INITIALIZER({1.f, 1.f, 1.f});
@@ -79,7 +79,7 @@ struct RadientSkyboxDesc
     bool operator==(const RadientSkyboxDesc& Rhs) const
     {
         return Source == Rhs.Source &&
-            Texture == Rhs.Texture &&
+            pTexture == Rhs.pTexture &&
             Color == Rhs.Color &&
             Intensity == Rhs.Intensity &&
             Exposure == Rhs.Exposure &&

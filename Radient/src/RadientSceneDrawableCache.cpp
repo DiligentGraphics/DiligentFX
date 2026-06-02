@@ -42,7 +42,7 @@ namespace
 bool IsSameMeshAsset(const RadientMeshComponent& Mesh0,
                      const RadientMeshComponent& Mesh1)
 {
-    return Mesh0.Mesh == Mesh1.Mesh;
+    return Mesh0.pMesh == Mesh1.pMesh;
 }
 
 } // namespace
@@ -128,9 +128,9 @@ void RadientSceneDrawableCache::ProcessRenderableMeshAddedOrUpdated(const Radien
     if (IsNewRecord || MeshChanged)
     {
         RemoveRenderableDrawables(Record);
-        Record.MeshURI       = Mesh.Mesh.Mesh.URI != nullptr ? Mesh.Mesh.Mesh.URI : "";
-        Record.Mesh          = Mesh.Mesh;
-        Record.Mesh.Mesh.URI = Record.MeshURI.empty() ? nullptr : Record.MeshURI.c_str();
+        Record.pMesh      = Mesh.Mesh.pMesh;
+        Record.Mesh       = Mesh.Mesh;
+        Record.Mesh.pMesh = Record.pMesh;
     }
 
     Record.pRenderer         = &Mesh.Renderer;
@@ -188,7 +188,7 @@ void RadientSceneDrawableCache::ResolvePendingRenderableMeshes(RadientRenderReso
 bool RadientSceneDrawableCache::TryExpandRenderable(RenderableRecord&           Record,
                                                     RadientRenderResourceCache& ResourceCache)
 {
-    const RadientRenderMesh* pMesh = ResourceCache.ResolveMesh(Record.Mesh.Mesh);
+    const RadientRenderMesh* pMesh = ResourceCache.ResolveMesh(Record.Mesh.pMesh);
     if (pMesh == nullptr)
     {
         AddPendingResolution(Record);

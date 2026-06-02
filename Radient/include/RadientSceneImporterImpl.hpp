@@ -54,10 +54,10 @@ public:
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE ImportGLTF(const RadientGLTFLoadInfo&        LoadInfo,
                                                          const RadientGLTFInstantiateInfo& InstantiateInfo,
-                                                         RadientAssetReference&            Model,
+                                                         IRadientSceneAsset**              ppModel,
                                                          RadientEntityID&                  RootEntity) override final;
 
-    virtual RADIENT_STATUS DILIGENT_CALL_TYPE InstantiateGLTF(const RadientAssetReference&      Model,
+    virtual RADIENT_STATUS DILIGENT_CALL_TYPE InstantiateGLTF(IRadientSceneAsset*               pModel,
                                                               const RadientGLTFInstantiateInfo& InstantiateInfo,
                                                               RadientEntityID&                  RootEntity) override final;
 
@@ -66,21 +66,20 @@ public:
 private:
     struct PendingGLTFInstantiation
     {
-        std::string     ModelURI;
-        Uint64          ModelVersion = 0;
-        Uint32          SceneIndex   = InvalidRadientGLTFSceneIndex;
-        RadientEntityID RootEntity   = InvalidRadientEntityID;
+        RefCntAutoPtr<IRadientSceneAsset> pModel;
+        Uint32                            SceneIndex = InvalidRadientGLTFSceneIndex;
+        RadientEntityID                   RootEntity = InvalidRadientEntityID;
     };
 
-    RADIENT_STATUS CreateGLTFRoot(const RadientAssetReference&      Model,
+    RADIENT_STATUS CreateGLTFRoot(IRadientSceneAsset*               pModel,
                                   const RadientGLTFInstantiateInfo& InstantiateInfo,
                                   RadientEntityID&                  RootEntity);
 
-    RADIENT_STATUS PopulateGLTFRoot(const RadientAssetReference& Model,
+    RADIENT_STATUS PopulateGLTFRoot(IRadientSceneAsset*          pModel,
                                     Uint32                       SceneIndex,
                                     RadientEntityID              RootEntity);
 
-    void AddPendingGLTFInstantiation(const RadientAssetReference&      Model,
+    void AddPendingGLTFInstantiation(IRadientSceneAsset*               pModel,
                                      const RadientGLTFInstantiateInfo& InstantiateInfo,
                                      RadientEntityID                   RootEntity);
 

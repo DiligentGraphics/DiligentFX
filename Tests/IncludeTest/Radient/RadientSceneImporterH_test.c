@@ -37,12 +37,13 @@ void RadientSceneImporter_C_TestMacros(IRadientSceneImporter* pImporter)
 {
     RadientGLTFLoadInfo        LoadInfo        = {0};
     RadientGLTFInstantiateInfo InstantiateInfo = {0};
-    RadientAssetReference      Model           = {0};
+    IRadientSceneAsset*        pModel          = 0;
     RadientEntityID            RootEntity      = 0;
     RADIENT_STATUS             Status          = RADIENT_STATUS_OK;
 
-    Status = IRadientSceneImporter_ImportGLTF(pImporter, &LoadInfo, &InstantiateInfo, &Model, &RootEntity);
-    Status = IRadientSceneImporter_InstantiateGLTF(pImporter, &Model, &InstantiateInfo, &RootEntity);
+    Status = IRadientSceneImporter_ImportGLTF(pImporter, &LoadInfo, &InstantiateInfo, &pModel, &RootEntity);
+    Status = IRadientSceneImporter_InstantiateGLTF(pImporter, pModel, &InstantiateInfo, &RootEntity);
 
+    (void)pModel;
     (void)Status;
 }

@@ -554,17 +554,15 @@ RADIENT_STATUS RadientSceneState::SetLight(RadientEntityID Entity, const Radient
 
 RADIENT_STATUS RadientSceneState::SetEnvironment(const RadientEnvironmentDesc& Environment)
 {
-    std::string NewEnvironmentMapURI = Environment.EnvironmentMap.URI != nullptr ? Environment.EnvironmentMap.URI : "";
-
     RadientEnvironmentDesc NewEnvironment = Environment;
-    NewEnvironment.EnvironmentMap.URI     = !NewEnvironmentMapURI.empty() ? NewEnvironmentMapURI.c_str() : nullptr;
+    NewEnvironment.pEnvironmentMap        = Environment.pEnvironmentMap;
 
     if (m_Environment == NewEnvironment)
         return RADIENT_STATUS_NO_CHANGE;
 
-    m_EnvironmentMapURI               = std::move(NewEnvironmentMapURI);
-    NewEnvironment.EnvironmentMap.URI = !m_EnvironmentMapURI.empty() ? m_EnvironmentMapURI.c_str() : nullptr;
-    m_Environment                     = NewEnvironment;
+    m_pEnvironmentMap              = Environment.pEnvironmentMap;
+    NewEnvironment.pEnvironmentMap = m_pEnvironmentMap;
+    m_Environment                  = NewEnvironment;
     Touch(CHANGE_FLAG_ENVIRONMENT);
     return RADIENT_STATUS_OK;
 }

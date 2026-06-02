@@ -27,12 +27,12 @@
 #include "gtest/gtest.h"
 
 #include "RadientMaterialBindingsStorage.hpp"
+#include "RadientTestAssetHelpers.hpp"
 
-#include <cstring>
-#include <memory>
 #include <utility>
 
 using namespace Diligent;
+using namespace Diligent::Testing;
 
 namespace
 {
@@ -45,97 +45,89 @@ RadientMaterialBindingsComponent MakeBindings(RadientMaterialBinding* pBindings,
     return Bindings;
 }
 
-TEST(RadientMaterialBindingsStorageTest, AssignCopiesURIs)
+TEST(RadientMaterialBindingsStorageTest, AssignKeepsStrongMaterialReferences)
 {
-    // Verifies that material bindings storage owns copies of binding arrays
-    // and any raw material URI strings supplied by the caller.
-    const char OriginalURI[] = "material://heap";
-    const char ChangedURI[]  = "material://changed";
-
-    std::unique_ptr<char[]> MaterialURI = std::make_unique<char[]>(64);
-    std::memcpy(MaterialURI.get(), OriginalURI, sizeof(OriginalURI));
+    // Material binding storage should copy the binding array and retain each
+    // material asset referenced by the caller.
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial = MakeTestMaterialAsset("material://heap", 17);
 
     RadientMaterialBinding Bindings[2];
-    Bindings[0].PrimitiveIndex   = 3;
-    Bindings[0].Material.URI     = MaterialURI.get();
-    Bindings[0].Material.Version = 17;
-    Bindings[1].PrimitiveIndex   = 5;
-    Bindings[1].Material.URI     = nullptr;
-    Bindings[1].Material.Version = 19;
+    Bindings[0].PrimitiveIndex = 3;
+    Bindings[0].pMaterial      = pMaterial;
+    Bindings[1].PrimitiveIndex = 5;
+    Bindings[1].pMaterial      = nullptr;
 
     MaterialBindingsStorage Storage;
     Storage.Assign(MakeBindings(Bindings, 2));
 
-    std::memcpy(MaterialURI.get(), ChangedURI, sizeof(ChangedURI));
-    MaterialURI.reset();
+    const IRadientMaterialAsset* pExpectedMaterial = pMaterial;
+    pMaterial.Release();
 
-    // The copied binding array should be exposed through Component, and the
-    // first URI should still point to storage-owned memory after the source is gone.
     ASSERT_EQ(Storage.Component.BindingCount, 2u);
     ASSERT_NE(Storage.Component.pBindings, nullptr);
     EXPECT_EQ(Storage.Component.pBindings, Storage.Bindings.data());
-    EXPECT_STREQ(Storage.Component.pBindings[0].Material.URI, OriginalURI);
-    EXPECT_EQ(Storage.Component.pBindings[0].Material.URI, Storage.MaterialURIs[0].c_str());
-    EXPECT_EQ(Storage.Component.pBindings[0].Material.Version, 17u);
-    // Bindings with null material URIs should remain null while preserving
-    // their version metadata.
-    EXPECT_EQ(Storage.Component.pBindings[1].Material.URI, nullptr);
-    EXPECT_EQ(Storage.Component.pBindings[1].Material.Version, 19u);
+    EXPECT_EQ(Storage.Component.pBindings[0].pMaterial, pExpectedMaterial);
+    EXPECT_EQ(Storage.Component.pBindings[0].pMaterial, Storage.Materials[0].RawPtr());
+    ASSERT_NE(Storage.Component.pBindings[0].pMaterial, nullptr);
+    EXPECT_STREQ(Storage.Component.pBindings[0].pMaterial->GetReference().URI, "material://heap");
+    EXPECT_EQ(Storage.Component.pBindings[0].pMaterial->GetReference().Version, 17u);
+    EXPECT_EQ(Storage.Component.pBindings[1].pMaterial, nullptr);
+    EXPECT_EQ(Storage.Materials[1], nullptr);
 }
 
-TEST(RadientMaterialBindingsStorageTest, MoveConstructorRepairsURIs)
+TEST(RadientMaterialBindingsStorageTest, MoveConstructorRepairsMaterialPointers)
 {
     // Moving storage must repair both the binding-array pointer and each
-    // non-null material URI pointer.
+    // material pointer so they reference the moved-to retained assets.
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial = MakeTestMaterialAsset("material://move", 23);
+
     RadientMaterialBinding Binding;
-    Binding.PrimitiveIndex   = 1;
-    Binding.Material.URI     = "material://move";
-    Binding.Material.Version = 23;
+    Binding.PrimitiveIndex = 1;
+    Binding.pMaterial      = pMaterial;
 
     MaterialBindingsStorage Source;
     Source.Assign(MakeBindings(&Binding, 1));
 
     MaterialBindingsStorage Moved{std::move(Source)};
 
-    // The moved component should expose the destination-owned binding vector
-    // and material URI string.
     ASSERT_EQ(Moved.Component.BindingCount, 1u);
     ASSERT_NE(Moved.Component.pBindings, nullptr);
     EXPECT_EQ(Moved.Component.pBindings, Moved.Bindings.data());
-    EXPECT_STREQ(Moved.Component.pBindings[0].Material.URI, "material://move");
-    EXPECT_EQ(Moved.Component.pBindings[0].Material.URI, Moved.MaterialURIs[0].c_str());
-    EXPECT_EQ(Moved.Component.pBindings[0].Material.Version, 23u);
+    EXPECT_EQ(Moved.Component.pBindings[0].pMaterial, pMaterial.RawPtr());
+    EXPECT_EQ(Moved.Component.pBindings[0].pMaterial, Moved.Materials[0].RawPtr());
+    EXPECT_STREQ(Moved.Component.pBindings[0].pMaterial->GetReference().URI, "material://move");
+    EXPECT_EQ(Moved.Component.pBindings[0].pMaterial->GetReference().Version, 23u);
 }
 
-TEST(RadientMaterialBindingsStorageTest, MoveAssignmentRepairsURIs)
+TEST(RadientMaterialBindingsStorageTest, MoveAssignmentRepairsMaterialPointers)
 {
     // Move assignment must replace any existing destination bindings and
-    // reconnect raw pointers to the moved data.
+    // reconnect raw pointers to the moved retained assets.
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial      = MakeTestMaterialAsset("material://assigned", 29);
+    RefCntAutoPtr<IRadientMaterialAsset> pOtherMaterial = MakeTestMaterialAsset("material://other", 1);
+
     RadientMaterialBinding Binding;
-    Binding.PrimitiveIndex   = 2;
-    Binding.Material.URI     = "material://assigned";
-    Binding.Material.Version = 29;
+    Binding.PrimitiveIndex = 2;
+    Binding.pMaterial      = pMaterial;
 
     MaterialBindingsStorage Source;
     Source.Assign(MakeBindings(&Binding, 1));
 
     RadientMaterialBinding OtherBinding;
-    OtherBinding.PrimitiveIndex   = 0;
-    OtherBinding.Material.URI     = "material://other";
-    OtherBinding.Material.Version = 1;
+    OtherBinding.PrimitiveIndex = 0;
+    OtherBinding.pMaterial      = pOtherMaterial;
 
     MaterialBindingsStorage Destination;
     Destination.Assign(MakeBindings(&OtherBinding, 1));
     Destination = std::move(Source);
 
-    // The destination should now describe the source binding, not the old
-    // "other" binding assigned before the move.
     ASSERT_EQ(Destination.Component.BindingCount, 1u);
     ASSERT_NE(Destination.Component.pBindings, nullptr);
     EXPECT_EQ(Destination.Component.pBindings, Destination.Bindings.data());
-    EXPECT_STREQ(Destination.Component.pBindings[0].Material.URI, "material://assigned");
-    EXPECT_EQ(Destination.Component.pBindings[0].Material.URI, Destination.MaterialURIs[0].c_str());
-    EXPECT_EQ(Destination.Component.pBindings[0].Material.Version, 29u);
+    EXPECT_EQ(Destination.Component.pBindings[0].pMaterial, pMaterial.RawPtr());
+    EXPECT_EQ(Destination.Component.pBindings[0].pMaterial, Destination.Materials[0].RawPtr());
+    EXPECT_STREQ(Destination.Component.pBindings[0].pMaterial->GetReference().URI, "material://assigned");
+    EXPECT_EQ(Destination.Component.pBindings[0].pMaterial->GetReference().Version, 29u);
 }
 
 TEST(RadientMaterialBindingsStorageTest, EmptyBindingsRemainEmptyAfterMoveAssignment)
@@ -145,20 +137,20 @@ TEST(RadientMaterialBindingsStorageTest, EmptyBindingsRemainEmptyAfterMoveAssign
     MaterialBindingsStorage Source;
     Source.Assign({});
 
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial = MakeTestMaterialAsset("material://other", 1);
+
     RadientMaterialBinding Binding;
-    Binding.PrimitiveIndex   = 0;
-    Binding.Material.URI     = "material://other";
-    Binding.Material.Version = 1;
+    Binding.PrimitiveIndex = 0;
+    Binding.pMaterial      = pMaterial;
 
     MaterialBindingsStorage Destination;
     Destination.Assign(MakeBindings(&Binding, 1));
     Destination = std::move(Source);
 
-    // No stale binding pointer or URI storage should survive the move.
     EXPECT_EQ(Destination.Component.pBindings, nullptr);
     EXPECT_EQ(Destination.Component.BindingCount, 0u);
     EXPECT_TRUE(Destination.Bindings.empty());
-    EXPECT_TRUE(Destination.MaterialURIs.empty());
+    EXPECT_TRUE(Destination.Materials.empty());
 }
 
 } // namespace

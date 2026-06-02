@@ -1108,33 +1108,24 @@ RADIENT_STATUS RadientGeometryRenderer::UpdateEnvironment(IDeviceContext*       
         return RADIENT_STATUS_INVALID_OPERATION;
 
     ITextureView* pEnvironmentMap = nullptr;
-    if (pAssetManager != nullptr && Environment.EnvironmentMap.URI != nullptr)
-        pEnvironmentMap = pAssetManager->GetTextureSRV(Environment.EnvironmentMap);
+    if (pAssetManager != nullptr && Environment.pEnvironmentMap != nullptr)
+        pEnvironmentMap = pAssetManager->GetTextureSRV(Environment.pEnvironmentMap);
 
     if (pEnvironmentMap == nullptr)
     {
-        if (!m_UsingDefaultEnvironment)
+        if (m_pCurrentEnvironmentMap != nullptr)
         {
             m_pRenderer->PrecomputeCubemaps(pContext, m_pDefaultIBLCubemapSRV);
-            m_CurrentEnvironmentMap    = {};
-            m_CurrentEnvironmentMapURI = {};
-            m_UsingDefaultEnvironment  = true;
+            m_pCurrentEnvironmentMap.Release();
         }
         return RADIENT_STATUS_OK;
     }
 
-    const bool EnvironmentChanged =
-        m_UsingDefaultEnvironment ||
-        m_CurrentEnvironmentMap.Version != Environment.EnvironmentMap.Version ||
-        m_CurrentEnvironmentMapURI != Environment.EnvironmentMap.URI;
-    if (!EnvironmentChanged)
+    if (m_pCurrentEnvironmentMap == Environment.pEnvironmentMap)
         return RADIENT_STATUS_OK;
 
     m_pRenderer->PrecomputeCubemaps(pContext, pEnvironmentMap);
-    m_CurrentEnvironmentMapURI  = Environment.EnvironmentMap.URI;
-    m_CurrentEnvironmentMap     = Environment.EnvironmentMap;
-    m_CurrentEnvironmentMap.URI = m_CurrentEnvironmentMapURI.c_str();
-    m_UsingDefaultEnvironment   = false;
+    m_pCurrentEnvironmentMap = Environment.pEnvironmentMap;
 
     return RADIENT_STATUS_OK;
 }

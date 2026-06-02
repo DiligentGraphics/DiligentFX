@@ -88,20 +88,20 @@ public:
 
     const RadientSceneDesc& GetDesc() const;
 
-    RADIENT_STATUS IsEntityAlive(RadientEntityID Entity) const;
-    RADIENT_STATUS GetEntityFlags(RadientEntityID Entity, RADIENT_ENTITY_FLAGS& Flags) const;
-    RADIENT_STATUS GetEntityOwnVisibility(RadientEntityID Entity, Bool& Visible) const;
-    RADIENT_STATUS GetEntityEffectiveVisibility(RadientEntityID Entity, Bool& Visible);
-    RADIENT_STATUS GetCachedEntityEffectiveVisibility(RadientEntityID Entity, Bool& Visible) const;
-    RADIENT_STATUS GetParent(RadientEntityID Entity, RadientEntityID& Parent) const;
-    RADIENT_STATUS GetChildCount(RadientEntityID Entity, Uint32& ChildCount) const;
-    RADIENT_STATUS GetChildren(RadientEntityID Entity, Uint32 StartChild, Uint32 ChildCount, RadientEntityID* pChildren, Uint32& NumChildrenWritten) const;
-    RADIENT_STATUS GetLocalTransform(RadientEntityID Entity, RadientTransform& Transform) const;
-    RADIENT_STATUS GetWorldMatrix(RadientEntityID Entity, RadientMatrix4x4& Matrix);
-    RADIENT_STATUS GetCachedWorldMatrix(RadientEntityID Entity, RadientMatrix4x4& Matrix) const;
-    RADIENT_STATUS GetCamera(RadientEntityID Entity, RadientCameraComponent& Camera) const;
+    RADIENT_STATUS                IsEntityAlive(RadientEntityID Entity) const;
+    RADIENT_STATUS                GetEntityFlags(RadientEntityID Entity, RADIENT_ENTITY_FLAGS& Flags) const;
+    RADIENT_STATUS                GetEntityOwnVisibility(RadientEntityID Entity, Bool& Visible) const;
+    RADIENT_STATUS                GetEntityEffectiveVisibility(RadientEntityID Entity, Bool& Visible);
+    RADIENT_STATUS                GetCachedEntityEffectiveVisibility(RadientEntityID Entity, Bool& Visible) const;
+    RADIENT_STATUS                GetParent(RadientEntityID Entity, RadientEntityID& Parent) const;
+    RADIENT_STATUS                GetChildCount(RadientEntityID Entity, Uint32& ChildCount) const;
+    RADIENT_STATUS                GetChildren(RadientEntityID Entity, Uint32 StartChild, Uint32 ChildCount, RadientEntityID* pChildren, Uint32& NumChildrenWritten) const;
+    RADIENT_STATUS                GetLocalTransform(RadientEntityID Entity, RadientTransform& Transform) const;
+    RADIENT_STATUS                GetWorldMatrix(RadientEntityID Entity, RadientMatrix4x4& Matrix);
+    RADIENT_STATUS                GetCachedWorldMatrix(RadientEntityID Entity, RadientMatrix4x4& Matrix) const;
+    RADIENT_STATUS                GetCamera(RadientEntityID Entity, RadientCameraComponent& Camera) const;
     const RadientEnvironmentDesc& GetEnvironment() const;
-    RADIENT_STATUS HasComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType, Bool& HasComponent) const;
+    RADIENT_STATUS                HasComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType, Bool& HasComponent) const;
 
     const RadientSceneRevisions& GetSceneRevisions() const;
 
@@ -285,14 +285,14 @@ private:
 
     using CustomComponentStoresMapType = std::unordered_map<RadientComponentTypeID, CustomComponentStore>;
     using EntityMapType                = std::unordered_map<RadientEntityID, entt::entity>;
-    entt::registry                    m_Registry;
-    EntityMapType                     m_EntityMap;
-    CustomComponentStoresMapType      m_CustomComponentStores;
-    RadientEntityID                   m_NextEntityID = 1;
-    RadientSceneRevisions             m_SceneRevisions;
-    RadientEnvironmentDesc            m_Environment;
-    std::string                       m_EnvironmentMapURI;
-    std::vector<RenderableMeshChange> m_RemovedRenderableMeshChanges;
+    entt::registry                      m_Registry;
+    EntityMapType                       m_EntityMap;
+    CustomComponentStoresMapType        m_CustomComponentStores;
+    RadientEntityID                     m_NextEntityID = 1;
+    RadientSceneRevisions               m_SceneRevisions;
+    RadientEnvironmentDesc              m_Environment;
+    RefCntAutoPtr<IRadientTextureAsset> m_pEnvironmentMap;
+    std::vector<RenderableMeshChange>   m_RemovedRenderableMeshChanges;
 
     // Conservative scene-wide mask of derived states that may be dirty anywhere in the scene.
     DIRTY_FLAGS m_DirtyFlags = DIRTY_FLAG_NONE;

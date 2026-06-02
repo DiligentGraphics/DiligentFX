@@ -84,14 +84,14 @@ DILIGENT_BEGIN_INTERFACE(IRadientSceneImporter, IObject)
     VIRTUAL RADIENT_STATUS METHOD(ImportGLTF)(THIS_
                                               const RadientGLTFLoadInfo REF        LoadInfo,
                                               const RadientGLTFInstantiateInfo REF InstantiateInfo,
-                                              RadientAssetReference REF            Model,
+                                              IRadientSceneAsset**                 ppModel,
                                               RadientEntityID REF                  RootEntity) PURE;
 
     /// Instantiates a previously loaded GLTF model asset into the scene graph.
     /// If the model metadata is still loading, this method creates the import root,
     /// schedules the GLTF scene graph instantiation, and returns RADIENT_STATUS_PENDING.
     VIRTUAL RADIENT_STATUS METHOD(InstantiateGLTF)(THIS_
-                                                   const RadientAssetReference REF      Model,
+                                                   IRadientSceneAsset*                  pModel,
                                                    const RadientGLTFInstantiateInfo REF InstantiateInfo,
                                                    RadientEntityID REF                  RootEntity) PURE;
 

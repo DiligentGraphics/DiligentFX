@@ -27,8 +27,8 @@
 #pragma once
 
 #include "RadientScene.h"
+#include "RefCntAutoPtr.hpp"
 
-#include <string>
 #include <vector>
 
 namespace Diligent
@@ -36,9 +36,9 @@ namespace Diligent
 
 struct MaterialBindingsStorage
 {
-    RadientMaterialBindingsComponent    Component;
-    std::vector<RadientMaterialBinding> Bindings;
-    std::vector<std::string>            MaterialURIs;
+    RadientMaterialBindingsComponent                  Component;
+    std::vector<RadientMaterialBinding>               Bindings;
+    std::vector<RefCntAutoPtr<IRadientMaterialAsset>> Materials;
 
     MaterialBindingsStorage();
 
@@ -52,7 +52,7 @@ struct MaterialBindingsStorage
     void Assign(const RadientMaterialBindingsComponent& Bindings);
 
 private:
-    void FixupURIs();
+    void FixupPointers();
 };
 
 } // namespace Diligent

@@ -128,23 +128,23 @@ bool GetMeshIndex(const GLTF::Model& GLTFModel, const GLTF::Mesh& Mesh, Uint32& 
     return false;
 }
 
-RADIENT_STATUS GetOrCreateMeshAsset(RadientAssetManagerImpl&                  AssetManager,
-                                    const RadientAssetReference&              Model,
-                                    const GLTF::Model&                        GLTFModel,
-                                    const GLTF::Mesh&                         Mesh,
-                                    std::vector<RadientAssetReference>&       MeshAssets,
-                                    RadientAssetReference&                    MeshAsset)
+RADIENT_STATUS GetOrCreateMeshAsset(RadientAssetManagerImpl&                       AssetManager,
+                                    IRadientSceneAsset*                            pModel,
+                                    const GLTF::Model&                             GLTFModel,
+                                    const GLTF::Mesh&                              Mesh,
+                                    std::vector<RefCntAutoPtr<IRadientMeshAsset>>& MeshAssets,
+                                    RefCntAutoPtr<IRadientMeshAsset>&              MeshAsset)
 {
     Uint32 MeshIndex = ~0u;
     if (!GetMeshIndex(GLTFModel, Mesh, MeshIndex) || MeshIndex >= MeshAssets.size())
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
     MeshAsset = MeshAssets[MeshIndex];
-    if (MeshAsset.URI != nullptr)
+    if (MeshAsset != nullptr)
         return RADIENT_STATUS_OK;
 
-    const Char* MeshName = !Mesh.Name.empty() ? Mesh.Name.c_str() : nullptr;
-    const RADIENT_STATUS Status = AssetManager.CreateMeshFromGLTFMesh(Model, MeshIndex, MeshName, MeshAsset);
+    const Char*          MeshName = !Mesh.Name.empty() ? Mesh.Name.c_str() : nullptr;
+    const RADIENT_STATUS Status   = AssetManager.CreateMeshFromGLTFMesh(pModel, MeshIndex, MeshName, &MeshAsset);
     if (RADIENT_FAILED(Status))
         return Status;
 
@@ -152,13 +152,13 @@ RADIENT_STATUS GetOrCreateMeshAsset(RadientAssetManagerImpl&                  As
     return RADIENT_STATUS_OK;
 }
 
-RADIENT_STATUS CreateNode(IRadientSceneWriter&                  Writer,
-                          RadientAssetManagerImpl&              AssetManager,
-                          const GLTF::Model&                    GLTFModel,
-                          const RadientAssetReference&          Model,
-                          const GLTF::Node&                     Node,
-                          RadientEntityID                       Parent,
-                          std::vector<RadientAssetReference>&   MeshAssets)
+RADIENT_STATUS CreateNode(IRadientSceneWriter&                           Writer,
+                          RadientAssetManagerImpl&                       AssetManager,
+                          const GLTF::Model&                             GLTFModel,
+                          IRadientSceneAsset*                            pModel,
+                          const GLTF::Node&                              Node,
+                          RadientEntityID                                Parent,
+                          std::vector<RefCntAutoPtr<IRadientMeshAsset>>& MeshAssets)
 {
     const std::string FallbackName = std::string{"GLTF Node "} + std::to_string(Node.Index);
 
@@ -188,14 +188,14 @@ RADIENT_STATUS CreateNode(IRadientSceneWriter&                  Writer,
 
     if (Node.pMesh != nullptr)
     {
-        RadientAssetReference MeshAsset{};
-        Status = GetOrCreateMeshAsset(AssetManager, Model, GLTFModel, *Node.pMesh, MeshAssets, MeshAsset);
+        RefCntAutoPtr<IRadientMeshAsset> MeshAsset;
+        Status = GetOrCreateMeshAsset(AssetManager, pModel, GLTFModel, *Node.pMesh, MeshAssets, MeshAsset);
         if (RADIENT_FAILED(Status))
             return Status;
 
         RadientMeshComponent Mesh{};
-        Mesh.Mesh = MeshAsset;
-        Status    = Writer.SetMesh(NodeEntity, Mesh);
+        Mesh.pMesh = MeshAsset;
+        Status     = Writer.SetMesh(NodeEntity, Mesh);
         if (RADIENT_FAILED(Status))
             return Status;
 
@@ -210,7 +210,7 @@ RADIENT_STATUS CreateNode(IRadientSceneWriter&                  Writer,
         if (pChild == nullptr)
             continue;
 
-        Status = CreateNode(Writer, AssetManager, GLTFModel, Model, *pChild, NodeEntity, MeshAssets);
+        Status = CreateNode(Writer, AssetManager, GLTFModel, pModel, *pChild, NodeEntity, MeshAssets);
         if (RADIENT_FAILED(Status))
             return Status;
     }
@@ -226,8 +226,8 @@ Uint32 GetDefaultSceneIndex(const GLTF::Model& Model)
 }
 
 RADIENT_STATUS ResolveSceneIndex(const GLTF::Model& Model,
-                                 Uint32            RequestedSceneIndex,
-                                 Uint32&           SceneIndex)
+                                 Uint32             RequestedSceneIndex,
+                                 Uint32&            SceneIndex)
 {
     if (RequestedSceneIndex == InvalidRadientGLTFSceneIndex)
     {
@@ -247,19 +247,19 @@ RADIENT_STATUS ResolveSceneIndex(const GLTF::Model& Model,
 namespace RadientGLTFConverter
 {
 
-RADIENT_STATUS InstantiateSceneGraph(const GLTF::Model&           GLTFModel,
-                                     const RadientAssetReference& Model,
-                                     Uint32                       SceneIndex,
-                                     RadientAssetManagerImpl&     AssetManager,
-                                     IRadientSceneWriter&         Writer,
-                                     RadientEntityID              RootEntity)
+RADIENT_STATUS InstantiateSceneGraph(const GLTF::Model&       GLTFModel,
+                                     IRadientSceneAsset*      pModel,
+                                     Uint32                   SceneIndex,
+                                     RadientAssetManagerImpl& AssetManager,
+                                     IRadientSceneWriter&     Writer,
+                                     RadientEntityID          RootEntity)
 {
     Uint32         ResolvedSceneIndex = 0;
     RADIENT_STATUS Status             = ResolveSceneIndex(GLTFModel, SceneIndex, ResolvedSceneIndex);
     if (RADIENT_FAILED(Status))
         return Status;
 
-    std::vector<RadientAssetReference> MeshAssets(GLTFModel.Meshes.size());
+    std::vector<RefCntAutoPtr<IRadientMeshAsset>> MeshAssets(GLTFModel.Meshes.size());
 
     if (ResolvedSceneIndex < GLTFModel.Scenes.size())
     {
@@ -268,7 +268,7 @@ RADIENT_STATUS InstantiateSceneGraph(const GLTF::Model&           GLTFModel,
             if (pNode == nullptr)
                 continue;
 
-            Status = CreateNode(Writer, AssetManager, GLTFModel, Model, *pNode, RootEntity, MeshAssets);
+            Status = CreateNode(Writer, AssetManager, GLTFModel, pModel, *pNode, RootEntity, MeshAssets);
             if (RADIENT_FAILED(Status))
                 return Status;
         }

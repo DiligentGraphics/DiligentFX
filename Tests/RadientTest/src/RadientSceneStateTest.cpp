@@ -29,6 +29,7 @@
 
 #include "RadientMath.hpp"
 #include "RadientSceneState.hpp"
+#include "RadientTestAssetHelpers.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -130,8 +131,8 @@ CapturedRenderableMesh CaptureRenderableMesh(const RadientSceneState::Renderable
 {
     CapturedRenderableMesh Captured;
     Captured.Entity           = RenderableMesh.Entity;
-    Captured.MeshURI          = RenderableMesh.Mesh.Mesh.URI != nullptr ? RenderableMesh.Mesh.Mesh.URI : "";
-    Captured.MeshVersion      = RenderableMesh.Mesh.Mesh.Version;
+    Captured.MeshURI          = RenderableMesh.Mesh.pMesh != nullptr && RenderableMesh.Mesh.pMesh->GetReference().URI != nullptr ? RenderableMesh.Mesh.pMesh->GetReference().URI : "";
+    Captured.MeshVersion      = RenderableMesh.Mesh.pMesh != nullptr ? RenderableMesh.Mesh.pMesh->GetReference().Version : 0;
     Captured.VisibilityMask   = RenderableMesh.Renderer.VisibilityMask;
     Captured.EffectiveVisible = RenderableMesh.EffectiveVisible;
     Captured.WorldMatrix      = RenderableMesh.WorldMatrix;
@@ -145,8 +146,8 @@ CapturedRenderableMesh CaptureRenderableMesh(const RadientSceneState::Renderable
         {
             const RadientMaterialBinding& Binding = RenderableMesh.pMaterialBindings->pBindings[0];
             Captured.MaterialPrimitiveIndex       = Binding.PrimitiveIndex;
-            Captured.MaterialURI                  = Binding.Material.URI != nullptr ? Binding.Material.URI : "";
-            Captured.MaterialVersion              = Binding.Material.Version;
+            Captured.MaterialURI                  = Binding.pMaterial != nullptr && Binding.pMaterial->GetReference().URI != nullptr ? Binding.pMaterial->GetReference().URI : "";
+            Captured.MaterialVersion              = Binding.pMaterial != nullptr ? Binding.pMaterial->GetReference().Version : 0;
         }
     }
 
@@ -206,10 +207,25 @@ const CapturedRenderableMeshChange* FindRenderableMeshChange(const std::vector<C
 
 RadientMeshComponent MakeMeshComponent(const char* URI, Uint64 Version = 1)
 {
+    static std::vector<RefCntAutoPtr<IRadientMeshAsset>> MeshAssets;
+    RefCntAutoPtr<IRadientMeshAsset>                     pMesh = MakeTestMeshAsset(URI, Version);
+    MeshAssets.push_back(pMesh);
+
     RadientMeshComponent Mesh;
-    Mesh.Mesh.URI     = URI;
-    Mesh.Mesh.Version = Version;
+    Mesh.pMesh = pMesh;
     return Mesh;
+}
+
+RadientMaterialBinding MakeMaterialBinding(Uint32 PrimitiveIndex, const char* URI, Uint64 Version = 1)
+{
+    static std::vector<RefCntAutoPtr<IRadientMaterialAsset>> MaterialAssets;
+    RefCntAutoPtr<IRadientMaterialAsset>                     pMaterial = MakeTestMaterialAsset(URI, Version);
+    MaterialAssets.push_back(pMaterial);
+
+    RadientMaterialBinding Binding;
+    Binding.PrimitiveIndex = PrimitiveIndex;
+    Binding.pMaterial      = pMaterial;
+    return Binding;
 }
 
 struct CapturedRenderableLight
@@ -279,39 +295,39 @@ TEST(RadientSceneStateTest, GetDescCopiesHeapName)
     EXPECT_STREQ(State.GetDesc().Name, "Heap Scene");
 }
 
-TEST(RadientSceneStateTest, SetEnvironmentCopiesTextureURI)
+TEST(RadientSceneStateTest, SetEnvironmentKeepsTextureAsset)
 {
     // Environment is scene-level render state, so it is tracked outside the
-    // entity/component hierarchy and owns any raw string pointers passed in.
+    // entity/component hierarchy and retains the texture asset it references.
     RadientSceneState State;
 
     const RadientEnvironmentDesc& DefaultEnvironment = State.GetEnvironment();
-    EXPECT_EQ(DefaultEnvironment.EnvironmentMap.URI, nullptr);
-    EXPECT_EQ(DefaultEnvironment.EnvironmentMap.Version, 0u);
+    EXPECT_EQ(DefaultEnvironment.pEnvironmentMap, nullptr);
     EXPECT_EQ(DefaultEnvironment.Color.x, 1.f);
     EXPECT_EQ(DefaultEnvironment.Color.y, 1.f);
     EXPECT_EQ(DefaultEnvironment.Color.z, 1.f);
     EXPECT_EQ(DefaultEnvironment.Intensity, 1.f);
     EXPECT_EQ(DefaultEnvironment.Exposure, 0.f);
 
-    std::unique_ptr<std::string> EnvironmentURI{new std::string{"texture://environment"}};
+    RefCntAutoPtr<IRadientTextureAsset> pEnvironmentMap = MakeTestTextureAsset("texture://environment", 7);
 
     RadientEnvironmentDesc Environment{};
-    Environment.EnvironmentMap.URI     = EnvironmentURI->c_str();
-    Environment.EnvironmentMap.Version = 7;
-    Environment.Color                  = {0.25f, 0.5f, 1.f};
-    Environment.Intensity              = 2.f;
-    Environment.Exposure               = -1.f;
+    Environment.pEnvironmentMap = pEnvironmentMap;
+    Environment.Color           = {0.25f, 0.5f, 1.f};
+    Environment.Intensity       = 2.f;
+    Environment.Exposure        = -1.f;
 
     EXPECT_EQ(State.SetEnvironment(Environment), RADIENT_STATUS_OK);
     ExpectSceneRevisions(State.GetSceneRevisions(), 0, 0, 0, 0, 0, 1);
 
-    EnvironmentURI.reset();
+    const IRadientTextureAsset* pExpectedEnvironmentMap = pEnvironmentMap;
+    pEnvironmentMap.Release();
 
     const RadientEnvironmentDesc& StoredEnvironment = State.GetEnvironment();
-    ASSERT_NE(StoredEnvironment.EnvironmentMap.URI, nullptr);
-    EXPECT_STREQ(StoredEnvironment.EnvironmentMap.URI, "texture://environment");
-    EXPECT_EQ(StoredEnvironment.EnvironmentMap.Version, 7u);
+    ASSERT_NE(StoredEnvironment.pEnvironmentMap, nullptr);
+    EXPECT_EQ(StoredEnvironment.pEnvironmentMap, pExpectedEnvironmentMap);
+    EXPECT_STREQ(StoredEnvironment.pEnvironmentMap->GetReference().URI, "texture://environment");
+    EXPECT_EQ(StoredEnvironment.pEnvironmentMap->GetReference().Version, 7u);
     EXPECT_EQ(StoredEnvironment.Color.x, 0.25f);
     EXPECT_EQ(StoredEnvironment.Color.y, 0.5f);
     EXPECT_EQ(StoredEnvironment.Color.z, 1.f);
@@ -1446,9 +1462,7 @@ TEST(RadientSceneStateTest, EnumerateRenderableMeshes)
     RadientEntityID MeshOnly = InvalidRadientEntityID;
     EXPECT_EQ(State.CreateEntity({}, MeshOnly), RADIENT_STATUS_OK);
 
-    RadientMeshComponent MeshOnlyComponent;
-    MeshOnlyComponent.Mesh.URI     = "mesh://mesh-only";
-    MeshOnlyComponent.Mesh.Version = 1;
+    RadientMeshComponent MeshOnlyComponent = MakeMeshComponent("mesh://mesh-only", 1);
     EXPECT_EQ(State.SetMesh(MeshOnly, MeshOnlyComponent), RADIENT_STATUS_OK);
 
     // Mesh without a renderer is not renderable.
@@ -1467,19 +1481,14 @@ TEST(RadientSceneStateTest, EnumerateRenderableMeshes)
     RadientEntityID Drawable = InvalidRadientEntityID;
     EXPECT_EQ(State.CreateEntity(DrawableDesc, Drawable), RADIENT_STATUS_OK);
 
-    RadientMeshComponent DrawableMesh;
-    DrawableMesh.Mesh.URI     = "mesh://cube";
-    DrawableMesh.Mesh.Version = 7;
+    RadientMeshComponent DrawableMesh = MakeMeshComponent("mesh://cube", 7);
     EXPECT_EQ(State.SetMesh(Drawable, DrawableMesh), RADIENT_STATUS_OK);
 
     RadientMeshRendererComponent DrawableRenderer;
     DrawableRenderer.VisibilityMask = 0x55;
     EXPECT_EQ(State.SetMeshRenderer(Drawable, DrawableRenderer), RADIENT_STATUS_OK);
 
-    RadientMaterialBinding MaterialBinding;
-    MaterialBinding.PrimitiveIndex   = 2;
-    MaterialBinding.Material.URI     = "material://red";
-    MaterialBinding.Material.Version = 3;
+    RadientMaterialBinding MaterialBinding = MakeMaterialBinding(2, "material://red", 3);
 
     RadientMaterialBindingsComponent MaterialBindings;
     MaterialBindings.pBindings    = &MaterialBinding;
@@ -1544,8 +1553,7 @@ TEST(RadientSceneStateTest, EnumerateRenderableMeshesReportsOutOfDateDerivedStat
     RadientEntityID Entity = InvalidRadientEntityID;
     EXPECT_EQ(State.CreateEntity({}, Entity), RADIENT_STATUS_OK);
 
-    RadientMeshComponent Mesh;
-    Mesh.Mesh.URI = "mesh://cube";
+    RadientMeshComponent Mesh = MakeMeshComponent("mesh://cube");
     EXPECT_EQ(State.SetMesh(Entity, Mesh), RADIENT_STATUS_OK);
 
     RadientMeshRendererComponent Renderer;
@@ -1646,10 +1654,7 @@ TEST(RadientSceneStateTest, TracksRenderableMeshChanges)
     EXPECT_EQ(Changes[0].Mesh.MeshVersion, 2u);
     State.ClearRenderableMeshChanges();
 
-    RadientMaterialBinding MaterialBinding;
-    MaterialBinding.PrimitiveIndex   = 1;
-    MaterialBinding.Material.URI     = "material://blue";
-    MaterialBinding.Material.Version = 3;
+    RadientMaterialBinding MaterialBinding = MakeMaterialBinding(1, "material://blue", 3);
 
     RadientMaterialBindingsComponent MaterialBindings;
     MaterialBindings.pBindings    = &MaterialBinding;
@@ -2042,10 +2047,7 @@ TEST(RadientSceneStateTest, HasComponent)
     EXPECT_EQ(State.HasComponent(Entity, RADIENT_COMPONENT_TYPE_MESH_RENDERER, HasComponent), RADIENT_STATUS_OK);
     EXPECT_EQ(HasComponent, True);
 
-    RadientMaterialBinding MaterialBinding;
-    MaterialBinding.PrimitiveIndex   = 0;
-    MaterialBinding.Material.URI     = "material://asset";
-    MaterialBinding.Material.Version = 1;
+    RadientMaterialBinding           MaterialBinding = MakeMaterialBinding(0, "material://asset", 1);
     RadientMaterialBindingsComponent MaterialBindings;
     MaterialBindings.pBindings    = &MaterialBinding;
     MaterialBindings.BindingCount = 1;
@@ -2161,24 +2163,21 @@ TEST(RadientSceneStateTest, SetBuiltInComponentReturnsNoChangeForSameValue)
     Camera.FocalLength = 50.f;
     EXPECT_EQ(State.SetCamera(Entity, Camera), RADIENT_STATUS_OK);
 
-    char MeshURI0[] = "mesh://asset";
-    char MeshURI1[] = "mesh://asset";
+    RefCntAutoPtr<IRadientMeshAsset> pMesh = MakeTestMeshAsset("mesh://asset", 7);
 
     RadientMeshComponent Mesh;
-    Mesh.Mesh.URI     = MeshURI0;
-    Mesh.Mesh.Version = 7;
+    Mesh.pMesh = pMesh;
 
     EXPECT_EQ(State.SetMesh(Entity, Mesh), RADIENT_STATUS_OK);
     Revisions = State.GetSceneRevisions();
 
-    // Mesh URI string identity is irrelevant; equal URI contents and version
-    // should compare as no change.
+    // Re-setting the same mesh asset should compare as no change.
     RadientMeshComponent SameMesh = Mesh;
-    SameMesh.Mesh.URI             = MeshURI1;
     EXPECT_EQ(State.SetMesh(Entity, SameMesh), RADIENT_STATUS_NO_CHANGE);
     EXPECT_EQ(State.GetSceneRevisions(), Revisions);
 
-    Mesh.Mesh.Version = 8;
+    RefCntAutoPtr<IRadientMeshAsset> pUpdatedMesh = MakeTestMeshAsset("mesh://asset", 8);
+    Mesh.pMesh                                    = pUpdatedMesh;
     EXPECT_EQ(State.SetMesh(Entity, Mesh), RADIENT_STATUS_OK);
 
     RadientMeshRendererComponent Renderer;
@@ -2193,13 +2192,11 @@ TEST(RadientSceneStateTest, SetBuiltInComponentReturnsNoChangeForSameValue)
     Renderer.VisibilityMask = 0xF0;
     EXPECT_EQ(State.SetMeshRenderer(Entity, Renderer), RADIENT_STATUS_OK);
 
-    char MaterialURI0[] = "material://asset";
-    char MaterialURI1[] = "material://asset";
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial = MakeTestMaterialAsset("material://asset", 2);
 
     RadientMaterialBinding MaterialBinding;
-    MaterialBinding.PrimitiveIndex   = 0;
-    MaterialBinding.Material.URI     = MaterialURI0;
-    MaterialBinding.Material.Version = 2;
+    MaterialBinding.PrimitiveIndex = 0;
+    MaterialBinding.pMaterial      = pMaterial;
 
     RadientMaterialBindingsComponent MaterialBindings;
     MaterialBindings.pBindings    = &MaterialBinding;
@@ -2208,10 +2205,8 @@ TEST(RadientSceneStateTest, SetBuiltInComponentReturnsNoChangeForSameValue)
     EXPECT_EQ(State.SetMaterialBindings(Entity, MaterialBindings), RADIENT_STATUS_OK);
     Revisions = State.GetSceneRevisions();
 
-    // Material binding URI content should compare equal even when stored in a
-    // different input buffer.
+    // Re-setting the same material asset should compare as no change.
     RadientMaterialBinding SameMaterialBinding = MaterialBinding;
-    SameMaterialBinding.Material.URI           = MaterialURI1;
 
     RadientMaterialBindingsComponent SameMaterialBindings;
     SameMaterialBindings.pBindings    = &SameMaterialBinding;
@@ -2219,7 +2214,8 @@ TEST(RadientSceneStateTest, SetBuiltInComponentReturnsNoChangeForSameValue)
     EXPECT_EQ(State.SetMaterialBindings(Entity, SameMaterialBindings), RADIENT_STATUS_NO_CHANGE);
     EXPECT_EQ(State.GetSceneRevisions(), Revisions);
 
-    MaterialBinding.Material.Version = 3;
+    RefCntAutoPtr<IRadientMaterialAsset> pUpdatedMaterial = MakeTestMaterialAsset("material://asset", 3);
+    MaterialBinding.pMaterial                             = pUpdatedMaterial;
     EXPECT_EQ(State.SetMaterialBindings(Entity, MaterialBindings), RADIENT_STATUS_OK);
 
     RadientLightComponent Light;
@@ -2261,9 +2257,7 @@ TEST(RadientSceneStateTest, TracksSceneRevisions)
     // Own visibility changes bump visibility revisions only.
     ExpectSceneRevisions(State.GetSceneRevisions(), 0, 0, 2, 2);
 
-    RadientMeshComponent Mesh;
-    Mesh.Mesh.URI     = "mesh://revision-test";
-    Mesh.Mesh.Version = 1;
+    RadientMeshComponent Mesh = MakeMeshComponent("mesh://revision-test", 1);
     EXPECT_EQ(State.SetMesh(Entity, Mesh), RADIENT_STATUS_OK);
     // Mesh data affects drawable revisions.
     ExpectSceneRevisions(State.GetSceneRevisions(), 1, 0, 2, 2);
@@ -2278,10 +2272,7 @@ TEST(RadientSceneStateTest, TracksSceneRevisions)
     // Mesh renderer state also affects drawable revisions.
     ExpectSceneRevisions(State.GetSceneRevisions(), 2, 0, 2, 2);
 
-    RadientMaterialBinding MaterialBinding;
-    MaterialBinding.PrimitiveIndex   = 0;
-    MaterialBinding.Material.URI     = "material://revision-test";
-    MaterialBinding.Material.Version = 1;
+    RadientMaterialBinding MaterialBinding = MakeMaterialBinding(0, "material://revision-test", 1);
 
     RadientMaterialBindingsComponent MaterialBindings;
     MaterialBindings.pBindings    = &MaterialBinding;

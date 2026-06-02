@@ -37,9 +37,10 @@ namespace Diligent
 namespace
 {
 
-std::string MakeAssetCacheKey(const RadientAssetReference& Asset)
+std::string MakeAssetCacheKey(IRadientAsset* pAsset)
 {
-    return std::string{Asset.URI} + "#" + std::to_string(Asset.Version);
+    const RadientAssetReference& Ref = pAsset->GetReference();
+    return std::string{Ref.URI} + "#" + std::to_string(Ref.Version);
 }
 
 PBR_Renderer::PSO_FLAGS GetVertexAttribFlags(const GLTF::Model& Model)
@@ -118,12 +119,12 @@ RadientRenderResourceCache::~RadientRenderResourceCache()
 {
 }
 
-const RadientRenderMesh* RadientRenderResourceCache::ResolveMesh(const RadientAssetReference& Mesh)
+const RadientRenderMesh* RadientRenderResourceCache::ResolveMesh(IRadientMeshAsset* pMeshAsset)
 {
-    if (Mesh.URI == nullptr || *Mesh.URI == 0)
+    if (pMeshAsset == nullptr)
         return nullptr;
 
-    const std::string MeshCacheKey = MakeAssetCacheKey(Mesh);
+    const std::string MeshCacheKey = MakeAssetCacheKey(pMeshAsset);
     MeshResource&     Record       = m_MeshResources[MeshCacheKey];
 
     switch (Record.State)
@@ -144,23 +145,21 @@ const RadientRenderMesh* RadientRenderResourceCache::ResolveMesh(const RadientAs
 
     if (Record.State == MeshResource::STATE::NotRequested)
     {
-        RadientAssetReference SourceModel{};
-        Uint32                SourceMeshIndex = ~0u;
-        const RADIENT_STATUS  SourceStatus    = m_pAssetManager->GetMeshGLTFSource(Mesh, SourceModel, SourceMeshIndex);
+        RefCntAutoPtr<IRadientSceneAsset> pSourceModel;
+        Uint32                            SourceMeshIndex = ~0u;
+        const RADIENT_STATUS              SourceStatus    = m_pAssetManager->GetMeshGLTFSource(pMeshAsset, &pSourceModel, SourceMeshIndex);
         if (RADIENT_FAILED(SourceStatus))
         {
             Record.State = MeshResource::STATE::Failed;
             return nullptr;
         }
 
-        Record.SourceModelURI  = SourceModel.URI != nullptr ? SourceModel.URI : "";
-        Record.SourceModel     = SourceModel;
-        Record.SourceModel.URI = Record.SourceModelURI.c_str();
+        Record.pSourceModel    = pSourceModel;
         Record.SourceMeshIndex = SourceMeshIndex;
         Record.State           = MeshResource::STATE::Loading;
     }
 
-    const RADIENT_STATUS LoadStatus = m_pAssetManager->GetGLTFLoadStatus(Record.SourceModel);
+    const RADIENT_STATUS LoadStatus = m_pAssetManager->GetGLTFLoadStatus(Record.pSourceModel);
     if (RADIENT_FAILED(LoadStatus))
     {
         Record.State = MeshResource::STATE::Failed;
@@ -170,7 +169,7 @@ const RadientRenderMesh* RadientRenderResourceCache::ResolveMesh(const RadientAs
     if (LoadStatus != RADIENT_STATUS_OK)
         return nullptr;
 
-    const GLTF::Model* pModel = m_pAssetManager->GetGLTFModel(Record.SourceModel, true);
+    const GLTF::Model* pModel = m_pAssetManager->GetGLTFModel(Record.pSourceModel, true);
     if (pModel == nullptr)
         return nullptr;
 
