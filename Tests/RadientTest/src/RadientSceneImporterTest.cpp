@@ -593,10 +593,11 @@ TEST(RadientSceneImporterTest, ImportsMeshNodeMetadataWithoutDevice)
     const RadientAssetManagerImpl* pAssetManagerImpl = ClassPtrCast<RadientAssetManagerImpl>(Fixture.pAssetManager.RawPtr());
     ASSERT_NE(pAssetManagerImpl, nullptr);
 
-    RefCntAutoPtr<IRadientSceneAsset> pSourceModel;
-    Uint32                            SourceMeshIndex = ~0u;
     for (IRadientMeshAsset* pMesh : RenderableMeshes)
     {
+        RefCntAutoPtr<IRadientSceneAsset> pSourceModel;
+        Uint32                            SourceMeshIndex = ~0u;
+
         // The asset manager should remember which glTF model and mesh index
         // produced each converted Radient mesh.
         EXPECT_EQ(pAssetManagerImpl->GetMeshGLTFSource(pMesh, &pSourceModel, SourceMeshIndex), RADIENT_STATUS_OK);
