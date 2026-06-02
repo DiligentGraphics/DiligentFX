@@ -412,6 +412,10 @@ public:
 
     std::shared_ptr<USD_Renderer> GetUSDRenderer() const { return m_USDRenderer; }
 
+    ITextureView* GetIrradianceCubeSRV() const { return m_pIrradianceCubeSRV; }
+    ITextureView* GetPrefilteredEnvMapSRV() const { return m_pPrefilteredEnvMapSRV; }
+    bool          PrecomputeIBLCubemaps(ITextureView* pEnvironmentMapSRV);
+
     entt::registry& GetEcsRegistry() { return m_EcsRegistry; }
 
     GLTF::ResourceManager& GetResourceManager() const { return *m_ResourceMgr; }
@@ -471,6 +475,8 @@ private:
     RefCntAutoPtr<IBuffer>               m_PrimitiveAttribsCB;
     RefCntAutoPtr<IObject>               m_MaterialSRBCache;
     std::shared_ptr<USD_Renderer>        m_USDRenderer;
+    RefCntAutoPtr<ITextureView>          m_pIrradianceCubeSRV;
+    RefCntAutoPtr<ITextureView>          m_pPrefilteredEnvMapSRV;
 
     entt::registry m_EcsRegistry;
 

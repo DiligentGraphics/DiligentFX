@@ -84,6 +84,8 @@ public:
     PBR_Renderer*           GetRenderer() const { return m_pRenderer.get(); }
     IBuffer*                GetFrameAttribsCB() const { return m_pFrameAttribsCB; }
     ITextureView*           GetDefaultIBLCubemapSRV() const { return m_pDefaultIBLCubemapSRV; }
+    ITextureView*           GetIrradianceCubeSRV() const { return m_pIrradianceCubeSRV; }
+    ITextureView*           GetPrefilteredEnvMapSRV() const { return m_pPrefilteredEnvMapSRV; }
     IShaderResourceBinding* GetResourceCacheSRB() const { return m_CacheBindings.pSRB.RawPtr(); }
     PBR_Renderer::PSO_FLAGS GetBaseRenderFlags() const { return m_BaseRenderFlags; }
 
@@ -100,6 +102,8 @@ private:
     std::unique_ptr<PBR_Renderer> m_pRenderer;
     RefCntAutoPtr<IBuffer>        m_pFrameAttribsCB;
     RefCntAutoPtr<ITextureView>   m_pDefaultIBLCubemapSRV;
+    RefCntAutoPtr<ITextureView>   m_pIrradianceCubeSRV;
+    RefCntAutoPtr<ITextureView>   m_pPrefilteredEnvMapSRV;
 
     RadientGeometryResourceCacheUseInfo  m_CacheUseInfo;
     RadientGeometryResourceCacheBindings m_CacheBindings;

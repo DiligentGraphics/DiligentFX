@@ -1221,6 +1221,7 @@ bool HnMaterial::UpdateSRB(HnRenderDelegate& RenderDelegate)
                                       nullptr, // Frame attribs buffer is in SRB0
                                       BindPrimitiveAttribsBuffer,
                                       BindMaterialAttribsBuffer);
+        UsdRenderer.SetIBLResourceViews(pSRB, RenderDelegate.GetIrradianceCubeSRV(), RenderDelegate.GetPrefilteredEnvMapSRV());
 
         if (BindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_ATLAS ||
             BindingMode == HN_MATERIAL_TEXTURES_BINDING_MODE_DYNAMIC)

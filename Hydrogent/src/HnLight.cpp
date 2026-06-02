@@ -689,7 +689,7 @@ void HnLight::PrecomputeIBLCubemaps(HnRenderDelegate& RenderDelegate)
     };
     pCtx->TransitionResourceStates(_countof(Barriers), Barriers);
 
-    RenderDelegate.GetUSDRenderer()->PrecomputeCubemaps(pCtx, pEnvMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+    RenderDelegate.PrecomputeIBLCubemaps(pEnvMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 
     m_LightResourcesVersion = LightResourcesVersion;
 }

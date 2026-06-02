@@ -111,6 +111,37 @@ RefCntAutoPtr<ITextureView> CreateDefaultIBLCubemap(IRenderDevice* pDevice)
     return RefCntAutoPtr<ITextureView>{pEnvMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE)};
 }
 
+bool CreatePBRIBLCubemaps(PBR_Renderer&                Renderer,
+                          IDeviceContext*              pContext,
+                          RefCntAutoPtr<ITextureView>& pIrradianceCubeSRV,
+                          RefCntAutoPtr<ITextureView>& pPrefilteredEnvMapSRV)
+{
+    if (pContext == nullptr)
+        return false;
+
+    RefCntAutoPtr<ITexture> pIrradianceCube    = Renderer.CreateIrradianceCube(pContext, "Radient irradiance cube map");
+    RefCntAutoPtr<ITexture> pPrefilteredEnvMap = Renderer.CreatePrefilteredEnvMap(pContext, "Radient prefiltered environment map");
+    if (pIrradianceCube == nullptr || pPrefilteredEnvMap == nullptr)
+        return false;
+
+    pIrradianceCubeSRV    = pIrradianceCube->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+    pPrefilteredEnvMapSRV = pPrefilteredEnvMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+    return pIrradianceCubeSRV != nullptr && pPrefilteredEnvMapSRV != nullptr;
+}
+
+void PrecomputeIBLCubemaps(PBR_Renderer&   Renderer,
+                           IDeviceContext* pContext,
+                           ITextureView*   pEnvironmentMapSRV,
+                           ITextureView*   pIrradianceCubeSRV,
+                           ITextureView*   pPrefilteredEnvMapSRV)
+{
+    PBR_Renderer::PrecomputeCubemapsAttribs Attribs;
+    Attribs.pEnvironmentMapSRV = pEnvironmentMapSRV;
+    Attribs.pIrradianceCube    = pIrradianceCubeSRV != nullptr ? pIrradianceCubeSRV->GetTexture() : nullptr;
+    Attribs.pPrefilteredEnvMap = pPrefilteredEnvMapSRV != nullptr ? pPrefilteredEnvMapSRV->GetTexture() : nullptr;
+    Renderer.PrecomputeCubemaps(pContext, Attribs);
+}
+
 float3 GetLightingScale(const RadientFloat3& Color, Float32 Intensity, Float32 Exposure)
 {
     const float Scale = Intensity * std::exp2(Exposure);
@@ -254,6 +285,7 @@ void WritePBRLightShaderAttribs(const RadientLightComponent& Light,
 void WriteSceneLights(PBR_Renderer&                 Renderer,
                       const RadientLightList&       LightList,
                       const RadientEnvironmentDesc& Environment,
+                      ITextureView*                 pPrefilteredEnvMapSRV,
                       HLSL::PBRFrameAttribs&        FrameAttribs)
 {
     HLSL::PBRLightAttribs* Lights = reinterpret_cast<HLSL::PBRLightAttribs*>(&FrameAttribs + 1);
@@ -281,7 +313,7 @@ void WriteSceneLights(PBR_Renderer&                 Renderer,
     }
 
     HLSL::PBRRendererShaderParameters& RendererAttribs = FrameAttribs.Renderer;
-    Renderer.SetInternalShaderParameters(RendererAttribs);
+    Renderer.SetInternalShaderParameters(RendererAttribs, pPrefilteredEnvMapSRV);
     RendererAttribs.OcclusionStrength = 1.f;
     RendererAttribs.EmissionScale     = 1.f;
     RendererAttribs.AverageLogLum     = 0.f;
@@ -562,6 +594,8 @@ void CreateResourceCacheSRB(PBR_Renderer&                        Renderer,
                             IDeviceContext*                      pContext,
                             RadientGeometryResourceCacheUseInfo& CacheUseInfo,
                             IBuffer*                             pFrameAttribs,
+                            ITextureView*                        pIrradianceCubeSRV,
+                            ITextureView*                        pPrefilteredEnvMapSRV,
                             IShaderResourceBinding**             ppCacheSRB)
 {
     DEV_CHECK_ERR(CacheUseInfo.pResourceMgr != nullptr, "Resource manager must not be null");
@@ -575,6 +609,7 @@ void CreateResourceCacheSRB(PBR_Renderer&                        Renderer,
     }
 
     Renderer.InitCommonSRBVars(pSRB, pFrameAttribs);
+    Renderer.SetIBLResourceViews(pSRB, pIrradianceCubeSRV, pPrefilteredEnvMapSRV);
 
     const PBR_Renderer::CreateInfo& Settings   = Renderer.GetSettings();
     auto                            SetTexture = [&](PBR_Renderer::TEXTURE_ATTRIB_ID ID) {
@@ -628,7 +663,9 @@ void BeginResourceCache(PBR_Renderer&                         Renderer,
                         IDeviceContext*                       pContext,
                         RadientGeometryResourceCacheUseInfo&  CacheUseInfo,
                         RadientGeometryResourceCacheBindings& Bindings,
-                        IBuffer*                              pFrameAttribs)
+                        IBuffer*                              pFrameAttribs,
+                        ITextureView*                         pIrradianceCubeSRV,
+                        ITextureView*                         pPrefilteredEnvMapSRV)
 {
     VERIFY(CacheUseInfo.pResourceMgr != nullptr, "Resource manager must not be null.");
     VERIFY(CacheUseInfo.VtxLayoutKey != GLTF::ResourceManager::VertexLayoutKey{}, "Vertex layout key must not be empty.");
@@ -642,7 +679,7 @@ void BeginResourceCache(PBR_Renderer&                         Renderer,
     if (!Bindings.pSRB || Bindings.Version != TextureVersion)
     {
         Bindings.pSRB.Release();
-        CreateResourceCacheSRB(Renderer, pDevice, pContext, CacheUseInfo, pFrameAttribs, &Bindings.pSRB);
+        CreateResourceCacheSRB(Renderer, pDevice, pContext, CacheUseInfo, pFrameAttribs, pIrradianceCubeSRV, pPrefilteredEnvMapSRV, &Bindings.pSRB);
         if (!Bindings.pSRB)
         {
             LOG_ERROR_MESSAGE("Failed to create an SRB for Radient resource cache");
@@ -780,14 +817,15 @@ RADIENT_STATUS RadientGeometryRenderer::BeginFrame(IRenderDevice*               
 
         pFrameAttribs->Camera     = GetCameraAttribs(pDevice, ViewDesc, Targets, m_FrameIndex);
         pFrameAttribs->PrevCamera = pFrameAttribs->Camera;
-        WriteSceneLights(*m_pRenderer, LightList, Environment, *pFrameAttribs);
+        WriteSceneLights(*m_pRenderer, LightList, Environment, m_pPrefilteredEnvMapSRV, *pFrameAttribs);
     }
 
     if (pResourceManager == nullptr)
         return RADIENT_STATUS_OUT_OF_DATE;
 
     m_CacheUseInfo.pResourceMgr = pResourceManager;
-    BeginResourceCache(*m_pRenderer, pDevice, pContext, m_CacheUseInfo, m_CacheBindings, m_pFrameAttribsCB);
+    BeginResourceCache(*m_pRenderer, pDevice, pContext, m_CacheUseInfo, m_CacheBindings,
+                       m_pFrameAttribsCB, m_pIrradianceCubeSRV, m_pPrefilteredEnvMapSRV);
     if (!m_CacheBindings.pSRB)
         return RADIENT_STATUS_OUT_OF_DATE;
 
@@ -1103,8 +1141,13 @@ RADIENT_STATUS RadientGeometryRenderer::UpdateEnvironment(IDeviceContext*       
                                                           RadientAssetManagerImpl*      pAssetManager,
                                                           const RadientEnvironmentDesc& Environment)
 {
-    if (m_pRenderer == nullptr || m_pDefaultIBLCubemapSRV == nullptr)
+    if (m_pRenderer == nullptr ||
+        m_pDefaultIBLCubemapSRV == nullptr ||
+        m_pIrradianceCubeSRV == nullptr ||
+        m_pPrefilteredEnvMapSRV == nullptr)
+    {
         return RADIENT_STATUS_INVALID_OPERATION;
+    }
 
     ITextureView* pEnvironmentMap = nullptr;
     if (pAssetManager != nullptr && Environment.pEnvironmentMap != nullptr)
@@ -1114,7 +1157,8 @@ RADIENT_STATUS RadientGeometryRenderer::UpdateEnvironment(IDeviceContext*       
     {
         if (m_pCurrentEnvironmentMap != nullptr)
         {
-            m_pRenderer->PrecomputeCubemaps(pContext, m_pDefaultIBLCubemapSRV);
+            PrecomputeIBLCubemaps(*m_pRenderer, pContext, m_pDefaultIBLCubemapSRV,
+                                  m_pIrradianceCubeSRV, m_pPrefilteredEnvMapSRV);
             m_pCurrentEnvironmentMap.Release();
         }
         return RADIENT_STATUS_OK;
@@ -1123,7 +1167,8 @@ RADIENT_STATUS RadientGeometryRenderer::UpdateEnvironment(IDeviceContext*       
     if (m_pCurrentEnvironmentMap == Environment.pEnvironmentMap)
         return RADIENT_STATUS_OK;
 
-    m_pRenderer->PrecomputeCubemaps(pContext, pEnvironmentMap);
+    PrecomputeIBLCubemaps(*m_pRenderer, pContext, pEnvironmentMap,
+                          m_pIrradianceCubeSRV, m_pPrefilteredEnvMapSRV);
     m_pCurrentEnvironmentMap = Environment.pEnvironmentMap;
 
     return RADIENT_STATUS_OK;
@@ -1153,15 +1198,19 @@ RADIENT_STATUS RadientGeometryRenderer::CreateRenderer(IRenderDevice*  pDevice,
 
     m_pRenderer             = std::make_unique<PBR_Renderer>(pDevice, nullptr, pContext, RendererCI);
     m_pDefaultIBLCubemapSRV = CreateDefaultIBLCubemap(pDevice);
-    if (m_pDefaultIBLCubemapSRV != nullptr)
-    {
-        m_pRenderer->PrecomputeCubemaps(pContext, m_pDefaultIBLCubemapSRV);
-    }
-    else
+    if (m_pDefaultIBLCubemapSRV == nullptr)
     {
         UNEXPECTED("Failed to create Radient default IBL cubemap");
         return RADIENT_STATUS_INVALID_OPERATION;
     }
+    if (!CreatePBRIBLCubemaps(*m_pRenderer, pContext, m_pIrradianceCubeSRV, m_pPrefilteredEnvMapSRV))
+    {
+        UNEXPECTED("Failed to create Radient IBL cubemaps");
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
+
+    PrecomputeIBLCubemaps(*m_pRenderer, pContext, m_pDefaultIBLCubemapSRV,
+                          m_pIrradianceCubeSRV, m_pPrefilteredEnvMapSRV);
 
     m_pFrameAttribsCB.Release();
     CreateUniformBuffer(pDevice,

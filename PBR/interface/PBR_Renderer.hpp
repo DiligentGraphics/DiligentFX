@@ -475,26 +475,72 @@ public:
 
     // clang-format off
     IRenderDevice* GetDevice() const               { return m_Device; }
-    ITextureView* GetIrradianceCubeSRV() const     { return m_pIrradianceCubeSRV; }
-    ITextureView* GetPrefilteredEnvMapSRV() const  { return m_pPrefilteredEnvMapSRV; }
     ITextureView* GetPreintegratedGGX_SRV() const  { return m_pPreintegratedGGX_SRV; }
     ITextureView* GetWhiteTexSRV() const           { return m_pWhiteTexSRV; }
     ITextureView* GetBlackTexSRV() const           { return m_pBlackTexSRV; }
     ITextureView* GetDefaultNormalMapSRV() const   { return m_pDefaultNormalMapSRV; }
-    IBuffer*      GetPBRPrimitiveAttribsCB() const {return m_PBRPrimitiveAttribsCB;}
-    IBuffer*      GetPBRMaterialAttribsCB() const  {return m_PBRMaterialAttribsCB;}
-    IBuffer*      GetJointsBuffer() const          {return m_JointsBuffer;}
+    IBuffer*      GetPBRPrimitiveAttribsCB() const { return m_PBRPrimitiveAttribsCB; }
+    IBuffer*      GetPBRMaterialAttribsCB() const  { return m_PBRMaterialAttribsCB; }
+    IBuffer*      GetJointsBuffer() const          { return m_JointsBuffer; }
     // clang-format on
+
+    static constexpr TEXTURE_FORMAT PrefilteredEnvMapFmt = TEX_FORMAT_RGBA16_FLOAT;
+    static constexpr TEXTURE_FORMAT IrradianceCubeFmt    = TEX_FORMAT_RGBA16_FLOAT;
+    static constexpr Uint32         IrradianceCubeDim    = 64;
+    static constexpr Uint32         PrefilteredEnvMapDim = 256;
+
+    /// Returns a texture description for an irradiance cube map.
+    static TextureDesc GetIrradianceCubeDesc(const char*    Name      = "Irradiance cube map",
+                                             TEXTURE_FORMAT Format    = IrradianceCubeFmt,
+                                             Uint32         Dimension = IrradianceCubeDim);
+
+    /// Returns a texture description for a prefiltered environment map.
+    static TextureDesc GetPrefilteredEnvMapDesc(const char*    Name      = "Prefiltered environment map",
+                                                TEXTURE_FORMAT Format    = PrefilteredEnvMapFmt,
+                                                Uint32         Dimension = PrefilteredEnvMapDim);
+
+    /// Creates and clears an irradiance cube map.
+    RefCntAutoPtr<ITexture> CreateIrradianceCube(IDeviceContext* pCtx,
+                                                 const char*     Name      = "Irradiance cube map",
+                                                 TEXTURE_FORMAT  Format    = IrradianceCubeFmt,
+                                                 Uint32          Dimension = IrradianceCubeDim) const;
+
+    /// Creates and clears a prefiltered environment map.
+    RefCntAutoPtr<ITexture> CreatePrefilteredEnvMap(IDeviceContext* pCtx,
+                                                    const char*     Name      = "Prefiltered environment map",
+                                                    TEXTURE_FORMAT  Format    = PrefilteredEnvMapFmt,
+                                                    Uint32          Dimension = PrefilteredEnvMapDim) const;
+
+    struct PrecomputeCubemapsAttribs
+    {
+        /// Source environment map shader resource view.
+        ITextureView* pEnvironmentMapSRV = nullptr;
+
+        /// Output irradiance cube map texture.
+        ITexture* pIrradianceCube = nullptr;
+
+        /// Output prefiltered environment map texture.
+        ITexture* pPrefilteredEnvMap = nullptr;
+
+        /// Number of samples for diffuse irradiance precomputation.
+        /// If 0, the renderer will choose the optimal number of samples.
+        Uint32 NumDiffuseSamples = 0;
+
+        /// Number of samples for specular prefiltering.
+        /// If 0, the renderer will choose the optimal number of samples.
+        Uint32 NumSpecularSamples = 0;
+
+        /// Whether to optimize samples.
+        bool OptimizeSamples = true;
+    };
 
     /// Precompute cubemaps used by IBL.
     ///
-    /// \remarks If NumDiffuseSamples or NumSpecularSamples is 0,
-    ///          the renderer will choose the optimal number of samples.
-    void PrecomputeCubemaps(IDeviceContext* pCtx,
-                            ITextureView*   pEnvMapSRV,
-                            Uint32          NumDiffuseSamples  = 0,
-                            Uint32          NumSpecularSamples = 0,
-                            bool            OptimizeSamples    = true);
+    /// \remarks Output textures must be cube textures with render target and shader
+    ///          resource bind flags. See GetIrradianceCubeDesc() and
+    ///          GetPrefilteredEnvMapDesc().
+    void PrecomputeCubemaps(IDeviceContext*                  pCtx,
+                            const PrecomputeCubemapsAttribs& Attribs);
 
     void CreateResourceBinding(IShaderResourceBinding** ppSRB, Uint32 Idx = 0) const;
 
@@ -732,13 +778,18 @@ public:
 
     void SetMaterialTexture(IShaderResourceBinding* pSRB, ITextureView* pTexSRV, TEXTURE_ATTRIB_ID TextureId) const;
 
+    void SetIBLResourceViews(IShaderResourceBinding* pSRB,
+                             ITextureView*           pIrradianceCubeSRV,
+                             ITextureView*           pPrefilteredEnvMapSRV) const;
+
     void SetOITResources(IShaderResourceBinding* pSRB, const OITResources& OITResources) const;
 
     /// Initializes internal renderer parameters.
     ///
     /// \remarks    The function initializes the following parameters:
     ///             - PrefilteredCubeLastMip
-    void SetInternalShaderParameters(HLSL::PBRRendererShaderParameters& Renderer);
+    void SetInternalShaderParameters(HLSL::PBRRendererShaderParameters& Renderer,
+                                     ITextureView*                      pPrefilteredEnvMapSRV) const;
 
     /// Returns the PBR primitive attributes shader data size for the given PSO flags.
     Uint32 GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags, Uint32 CustomDataSize = sizeof(float4)) const;
@@ -919,14 +970,6 @@ protected:
     RefCntAutoPtr<ITextureView> m_pBlackTexSRV;
     RefCntAutoPtr<ITextureView> m_pDefaultNormalMapSRV;
     RefCntAutoPtr<ITextureView> m_pDefaultPhysDescSRV;
-
-    static constexpr TEXTURE_FORMAT PrefilteredEnvMapFmt = TEX_FORMAT_RGBA16_FLOAT;
-    static constexpr TEXTURE_FORMAT IrradianceCubeFmt    = TEX_FORMAT_RGBA16_FLOAT;
-    static constexpr Uint32         IrradianceCubeDim    = 64;
-    static constexpr Uint32         PrefilteredEnvMapDim = 256;
-
-    RefCntAutoPtr<ITextureView> m_pIrradianceCubeSRV;
-    RefCntAutoPtr<ITextureView> m_pPrefilteredEnvMapSRV;
 
     IBL_PipelineStateObjectCache m_IBL_PSOCache;
 

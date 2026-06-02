@@ -46,7 +46,17 @@ for specular component:
 RefCntAutoPtr<ITexture> EnvironmentMap;
 CreateTextureFromFile("textures/papermill.ktx", TextureLoadInfo{"Environment map"}, m_pDevice, &EnvironmentMap);
 m_EnvironmentMapSRV = EnvironmentMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-m_GLTFRenderer->PrecomputeCubemaps(m_pDevice, m_pImmediateContext, m_EnvironmentMapSRV);
+
+RefCntAutoPtr<ITexture> IrradianceCube;
+RefCntAutoPtr<ITexture> PrefilteredEnvMap;
+IrradianceCube    = m_GLTFRenderer->CreateIrradianceCube(m_pImmediateContext);
+PrefilteredEnvMap = m_GLTFRenderer->CreatePrefilteredEnvMap(m_pImmediateContext);
+
+PBR_Renderer::PrecomputeCubemapsAttribs Attribs;
+Attribs.pEnvironmentMapSRV = m_EnvironmentMapSRV;
+Attribs.pIrradianceCube    = IrradianceCube;
+Attribs.pPrefilteredEnvMap = PrefilteredEnvMap;
+m_GLTFRenderer->PrecomputeCubemaps(m_pImmediateContext, Attribs);
 ```
 
 The renderer itself does not implement any loading functionality. Use

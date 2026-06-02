@@ -627,7 +627,7 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
 
         {
             HLSL::PBRRendererShaderParameters& RendererParams = FrameAttribs->Renderer;
-            RenderDelegate->GetUSDRenderer()->SetInternalShaderParameters(RendererParams);
+            RenderDelegate->GetUSDRenderer()->SetInternalShaderParameters(RendererParams, RenderDelegate->GetPrefilteredEnvMapSRV());
 
             RendererParams.LightCount = LightCount;
 
@@ -687,9 +687,11 @@ void HnBeginFrameTask::UpdateFrameConstants(IDeviceContext* pCtx,
         };
     if (DomeLight == nullptr)
     {
-        // Since there is no dome light, IBL cube maps may still be in RTV state after they were cleared during the initialization.
-        Barriers.emplace_back(Renderer.GetIrradianceCubeSRV()->GetTexture(), RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE);
-        Barriers.emplace_back(Renderer.GetPrefilteredEnvMapSRV()->GetTexture(), RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE);
+        // Since there is no dome light, IBL cube maps may still be in RTV state after default initialization.
+        if (ITextureView* pIrradianceCubeSRV = RenderDelegate->GetIrradianceCubeSRV())
+            Barriers.emplace_back(pIrradianceCubeSRV->GetTexture(), RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE);
+        if (ITextureView* pPrefilteredEnvMapSRV = RenderDelegate->GetPrefilteredEnvMapSRV())
+            Barriers.emplace_back(pPrefilteredEnvMapSRV->GetTexture(), RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE);
     }
     pCtx->TransitionResourceStates(static_cast<Uint32>(Barriers.size()), Barriers.data());
 }

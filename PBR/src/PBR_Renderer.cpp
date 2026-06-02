@@ -285,6 +285,12 @@ void ProcessCubemapFaces(IDeviceContext* pCtx, ITexture* pCubemap, FaceHandlerTy
 
 static void ClearCubemap(IDeviceContext* pCtx, ITexture* pCubemap)
 {
+    if (pCtx == nullptr || pCubemap == nullptr)
+    {
+        UNEXPECTED("Device context and cubemap must not be null");
+        return;
+    }
+
     ProcessCubemapFaces(pCtx, pCubemap, [pCtx](ITextureView* pRTV, Uint32 mip, Uint32 face) {
         pCtx->ClearRenderTarget(pRTV, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     });
@@ -334,43 +340,6 @@ PBR_Renderer::PBR_Renderer(IRenderDevice*     pDevice,
     if (m_Settings.EnableIBL)
     {
         PrecomputeBRDF(pCtx, m_Settings.NumBRDFSamples);
-
-        TextureDesc TexDesc;
-        TexDesc.Type      = RESOURCE_DIM_TEX_CUBE;
-        TexDesc.Usage     = USAGE_DEFAULT;
-        TexDesc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
-        TexDesc.ArraySize = 6;
-
-        {
-            TexDesc.Name      = "Irradiance cube map for PBR renderer";
-            TexDesc.Width     = IrradianceCubeDim;
-            TexDesc.Height    = IrradianceCubeDim;
-            TexDesc.Format    = IrradianceCubeFmt;
-            TexDesc.MipLevels = 1;
-
-            RefCntAutoPtr<ITexture> IrradainceCubeTex = m_Device.CreateTexture(TexDesc);
-            VERIFY_EXPR(IrradainceCubeTex);
-            ClearCubemap(pCtx, IrradainceCubeTex);
-
-            m_pIrradianceCubeSRV = IrradainceCubeTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-            VERIFY_EXPR(m_pIrradianceCubeSRV);
-        }
-
-
-        {
-            TexDesc.Name      = "Prefiltered environment map for PBR renderer";
-            TexDesc.Width     = PrefilteredEnvMapDim;
-            TexDesc.Height    = PrefilteredEnvMapDim;
-            TexDesc.Format    = PrefilteredEnvMapFmt;
-            TexDesc.MipLevels = 0;
-
-            RefCntAutoPtr<ITexture> PrefilteredEnvMapTex = m_Device.CreateTexture(TexDesc);
-            VERIFY_EXPR(PrefilteredEnvMapTex);
-            ClearCubemap(pCtx, PrefilteredEnvMapTex);
-
-            m_pPrefilteredEnvMapSRV = PrefilteredEnvMapTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-            VERIFY_EXPR(m_pPrefilteredEnvMapSRV);
-        }
     }
 
     if (m_Settings.CreateDefaultTextures)
@@ -690,11 +659,68 @@ static Uint32 GetDefaultDiffuseSamplesCount(const GraphicsAdapterInfo& AdapterIn
 #endif
 }
 
-void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
-                                      ITextureView*   pEnvMapSRV,
-                                      Uint32          NumDiffuseSamples,
-                                      Uint32          NumSpecularSamples,
-                                      bool            OptimizeSamples)
+TextureDesc PBR_Renderer::GetIrradianceCubeDesc(const char*    Name,
+                                                TEXTURE_FORMAT Format,
+                                                Uint32         Dimension)
+{
+    TextureDesc TexDesc;
+    TexDesc.Name      = Name;
+    TexDesc.Type      = RESOURCE_DIM_TEX_CUBE;
+    TexDesc.Usage     = USAGE_DEFAULT;
+    TexDesc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
+    TexDesc.Format    = Format;
+    TexDesc.Width     = Dimension;
+    TexDesc.Height    = Dimension;
+    TexDesc.MipLevels = 1;
+    TexDesc.ArraySize = 6;
+    return TexDesc;
+}
+
+TextureDesc PBR_Renderer::GetPrefilteredEnvMapDesc(const char*    Name,
+                                                   TEXTURE_FORMAT Format,
+                                                   Uint32         Dimension)
+{
+    TextureDesc TexDesc;
+    TexDesc.Name      = Name;
+    TexDesc.Type      = RESOURCE_DIM_TEX_CUBE;
+    TexDesc.Usage     = USAGE_DEFAULT;
+    TexDesc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
+    TexDesc.Format    = Format;
+    TexDesc.Width     = Dimension;
+    TexDesc.Height    = Dimension;
+    TexDesc.MipLevels = 0;
+    TexDesc.ArraySize = 6;
+    return TexDesc;
+}
+
+RefCntAutoPtr<ITexture> PBR_Renderer::CreateIrradianceCube(IDeviceContext* pCtx,
+                                                           const char*     Name,
+                                                           TEXTURE_FORMAT  Format,
+                                                           Uint32          Dimension) const
+{
+    RefCntAutoPtr<ITexture> pIrradianceCube = m_Device.CreateTexture(GetIrradianceCubeDesc(Name, Format, Dimension), nullptr);
+    VERIFY_EXPR(pIrradianceCube);
+    if (pIrradianceCube != nullptr && pCtx != nullptr)
+        ClearCubemap(pCtx, pIrradianceCube);
+
+    return pIrradianceCube;
+}
+
+RefCntAutoPtr<ITexture> PBR_Renderer::CreatePrefilteredEnvMap(IDeviceContext* pCtx,
+                                                              const char*     Name,
+                                                              TEXTURE_FORMAT  Format,
+                                                              Uint32          Dimension) const
+{
+    RefCntAutoPtr<ITexture> pPrefilteredEnvMap = m_Device.CreateTexture(GetPrefilteredEnvMapDesc(Name, Format, Dimension), nullptr);
+    VERIFY_EXPR(pPrefilteredEnvMap);
+    if (pPrefilteredEnvMap != nullptr && pCtx != nullptr)
+        ClearCubemap(pCtx, pPrefilteredEnvMap);
+
+    return pPrefilteredEnvMap;
+}
+
+void PBR_Renderer::PrecomputeCubemaps(IDeviceContext*                  pCtx,
+                                      const PrecomputeCubemapsAttribs& Attribs)
 {
     if (!m_Settings.EnableIBL)
     {
@@ -702,6 +728,17 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
         return;
     }
 
+    if (pCtx == nullptr ||
+        Attribs.pEnvironmentMapSRV == nullptr ||
+        Attribs.pIrradianceCube == nullptr ||
+        Attribs.pPrefilteredEnvMap == nullptr)
+    {
+        UNEXPECTED("Device context, environment map SRV, and output cubemaps must not be null");
+        return;
+    }
+
+    Uint32 NumDiffuseSamples  = Attribs.NumDiffuseSamples;
+    Uint32 NumSpecularSamples = Attribs.NumSpecularSamples;
     if (NumSpecularSamples == 0)
     {
         NumSpecularSamples = 256;
@@ -737,13 +774,16 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
 
     IBL_FEATURE_FLAGS FeatureFlags = IBL_FEATURE_FLAG_NONE;
 
-    if (OptimizeSamples)
+    if (Attribs.OptimizeSamples)
         FeatureFlags |= IBL_FEATURE_FLAG_OPTIMIZE_SAMPLES;
 
-    const TextureDesc&             EnvMapDesc = pEnvMapSRV->GetTexture()->GetDesc();
+    const TextureDesc&             EnvMapDesc = Attribs.pEnvironmentMapSRV->GetTexture()->GetDesc();
     const IBL_PSOKey::ENV_MAP_TYPE EnvMapType = EnvMapDesc.IsCube() ?
         IBL_PSOKey::ENV_MAP_TYPE_CUBE :
         IBL_PSOKey::ENV_MAP_TYPE_SPHERE;
+
+    const TextureDesc& IrradianceCubeDesc    = Attribs.pIrradianceCube->GetDesc();
+    const TextureDesc& PrefilteredEnvMapDesc = Attribs.pPrefilteredEnvMap->GetDesc();
 
     ShaderMacroHelper Macros;
     Macros
@@ -752,7 +792,7 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
         .Add("ENV_MAP_TYPE_SPHERE", static_cast<int>(IBL_PSOKey::ENV_MAP_TYPE_SPHERE))
         .Add("ENV_MAP_TYPE", static_cast<int>(EnvMapType));
 
-    IBL_RenderTechnique& PrecomputeIrradianceCubeTech = m_IBL_PSOCache[IBL_PSOKey{IBL_PSOKey::PSO_TYPE_IRRADIANCE_CUBE, EnvMapType, FeatureFlags, m_pIrradianceCubeSRV->GetDesc().Format}];
+    IBL_RenderTechnique& PrecomputeIrradianceCubeTech = m_IBL_PSOCache[IBL_PSOKey{IBL_PSOKey::PSO_TYPE_IRRADIANCE_CUBE, EnvMapType, FeatureFlags, IrradianceCubeDesc.Format}];
     if (!PrecomputeIrradianceCubeTech.IsInitialized())
     {
         ShaderCreateInfo ShaderCI;
@@ -789,7 +829,7 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
         PSODesc.PipelineType = PIPELINE_TYPE_GRAPHICS;
 
         GraphicsPipeline.NumRenderTargets             = 1;
-        GraphicsPipeline.RTVFormats[0]                = m_pIrradianceCubeSRV->GetDesc().Format;
+        GraphicsPipeline.RTVFormats[0]                = IrradianceCubeDesc.Format;
         GraphicsPipeline.PrimitiveTopology            = PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
         GraphicsPipeline.RasterizerDesc.CullMode      = CULL_MODE_NONE;
         GraphicsPipeline.DepthStencilDesc.DepthEnable = False;
@@ -808,7 +848,7 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
         PrecomputeIrradianceCubeTech.PSO->CreateShaderResourceBinding(&PrecomputeIrradianceCubeTech.SRB, true);
     }
 
-    IBL_RenderTechnique& PrefilterEnvMapTech = m_IBL_PSOCache[IBL_PSOKey{IBL_PSOKey::PSO_TYPE_PREFILTERED_ENV_MAP, EnvMapType, FeatureFlags, m_pPrefilteredEnvMapSRV->GetDesc().Format}];
+    IBL_RenderTechnique& PrefilterEnvMapTech = m_IBL_PSOCache[IBL_PSOKey{IBL_PSOKey::PSO_TYPE_PREFILTERED_ENV_MAP, EnvMapType, FeatureFlags, PrefilteredEnvMapDesc.Format}];
     if (!PrefilterEnvMapTech.IsInitialized())
     {
         ShaderCreateInfo ShaderCI;
@@ -844,7 +884,7 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
         PSODesc.PipelineType = PIPELINE_TYPE_GRAPHICS;
 
         GraphicsPipeline.NumRenderTargets             = 1;
-        GraphicsPipeline.RTVFormats[0]                = m_pPrefilteredEnvMapSRV->GetDesc().Format;
+        GraphicsPipeline.RTVFormats[0]                = PrefilteredEnvMapDesc.Format;
         GraphicsPipeline.PrimitiveTopology            = PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
         GraphicsPipeline.RasterizerDesc.CullMode      = CULL_MODE_NONE;
         GraphicsPipeline.DepthStencilDesc.DepthEnable = False;
@@ -876,15 +916,14 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
     // clang-format on
 
     pCtx->SetPipelineState(PrecomputeIrradianceCubeTech.PSO);
-    ShaderResourceVariableX{PrecomputeIrradianceCubeTech.SRB, SHADER_TYPE_PIXEL, "g_EnvironmentMap"}.Set(pEnvMapSRV);
+    ShaderResourceVariableX{PrecomputeIrradianceCubeTech.SRB, SHADER_TYPE_PIXEL, "g_EnvironmentMap"}.Set(Attribs.pEnvironmentMapSRV);
     pCtx->CommitShaderResources(PrecomputeIrradianceCubeTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    ITexture*               pIrradianceCube = m_pIrradianceCubeSRV->GetTexture();
     ShaderResourceVariableX cbConstantsVar{PrecomputeIrradianceCubeTech.SRB, SHADER_TYPE_VERTEX, "cbConstants"};
     VERIFY_EXPR(cbConstantsVar);
-    ProcessCubemapFaces(pCtx, pIrradianceCube, [&](ITextureView* pRTV, Uint32 mip, Uint32 face) {
+    ProcessCubemapFaces(pCtx, Attribs.pIrradianceCube, [&](ITextureView* pRTV, Uint32 mip, Uint32 face) {
         VERIFY_EXPR(mip == 0);
-        PrecomputeEnvMapAttribs Attribs{EnvMapDesc, Matrices[face], NumDiffuseSamples};
-        cbConstantsVar.SetInlineConstants(&Attribs, 0, (sizeof(Attribs)) / sizeof(Uint32));
+        PrecomputeEnvMapAttribs EnvMapAttribs{EnvMapDesc, Matrices[face], NumDiffuseSamples};
+        cbConstantsVar.SetInlineConstants(&EnvMapAttribs, 0, (sizeof(EnvMapAttribs)) / sizeof(Uint32));
 
         DrawAttribs drawAttrs{4, DRAW_FLAG_VERIFY_ALL};
         pCtx->Draw(drawAttrs);
@@ -894,17 +933,16 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
 
 
     pCtx->SetPipelineState(PrefilterEnvMapTech.PSO);
-    ShaderResourceVariableX{PrefilterEnvMapTech.SRB, SHADER_TYPE_PIXEL, "g_EnvironmentMap"}.Set(pEnvMapSRV);
+    ShaderResourceVariableX{PrefilterEnvMapTech.SRB, SHADER_TYPE_PIXEL, "g_EnvironmentMap"}.Set(Attribs.pEnvironmentMapSRV);
     pCtx->CommitShaderResources(PrefilterEnvMapTech.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    ITexture*    pPrefilteredEnvMap         = m_pPrefilteredEnvMapSRV->GetTexture();
-    const Uint32 PrefilteredEnvMapMipLevels = pPrefilteredEnvMap->GetDesc().MipLevels;
+    const Uint32 PrefilteredEnvMapMipLevels = PrefilteredEnvMapDesc.MipLevels;
 
     cbConstantsVar = ShaderResourceVariableX{PrefilterEnvMapTech.SRB, SHADER_TYPE_VERTEX, "cbConstants"};
     VERIFY_EXPR(cbConstantsVar);
-    ProcessCubemapFaces(pCtx, pPrefilteredEnvMap, [&](ITextureView* pRTV, Uint32 mip, Uint32 face) {
-        PrecomputeEnvMapAttribs Attribs{EnvMapDesc, Matrices[face], NumSpecularSamples};
-        Attribs.Roughness = static_cast<float>(mip) / static_cast<float>(PrefilteredEnvMapMipLevels - 1);
-        cbConstantsVar.SetInlineConstants(&Attribs, 0, (sizeof(Attribs)) / sizeof(Uint32));
+    ProcessCubemapFaces(pCtx, Attribs.pPrefilteredEnvMap, [&](ITextureView* pRTV, Uint32 mip, Uint32 face) {
+        PrecomputeEnvMapAttribs EnvMapAttribs{EnvMapDesc, Matrices[face], NumSpecularSamples};
+        EnvMapAttribs.Roughness = static_cast<float>(mip) / static_cast<float>(PrefilteredEnvMapMipLevels - 1);
+        cbConstantsVar.SetInlineConstants(&EnvMapAttribs, 0, (sizeof(EnvMapAttribs)) / sizeof(Uint32));
 
         DrawAttribs drawAttrs{4, DRAW_FLAG_VERIFY_ALL};
         pCtx->Draw(drawAttrs);
@@ -917,8 +955,8 @@ void PBR_Renderer::PrecomputeCubemaps(IDeviceContext* pCtx,
     // clang-format off
     StateTransitionDesc Barriers[] = 
     {
-        {m_pPrefilteredEnvMapSRV->GetTexture(), RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE},
-        {m_pIrradianceCubeSRV->GetTexture(),    RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE}
+        {Attribs.pPrefilteredEnvMap, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE},
+        {Attribs.pIrradianceCube,    RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, STATE_TRANSITION_FLAG_UPDATE_STATE}
     };
     // clang-format on
     pCtx->TransitionResourceStates(_countof(Barriers), Barriers);
@@ -983,16 +1021,27 @@ void PBR_Renderer::InitCommonSRBVars(IShaderResourceBinding* pSRB,
         ShaderResourceVariableX{pSRB, SHADER_TYPE_VERTEX, "cbFrameAttribs"}.Set(pFrameAttribs);
     }
 
-    if (m_Settings.EnableIBL)
-    {
-        ShaderResourceVariableX{pSRB, SHADER_TYPE_PIXEL, "g_IrradianceMap"}.Set(m_pIrradianceCubeSRV);
-        ShaderResourceVariableX{pSRB, SHADER_TYPE_PIXEL, "g_PrefilteredEnvMap"}.Set(m_pPrefilteredEnvMapSRV);
-    }
-
     if (m_Settings.EnableShadows && pShadowMap != nullptr)
     {
         ShaderResourceVariableX{pSRB, SHADER_TYPE_PIXEL, "g_ShadowMap"}.Set(pShadowMap);
     }
+}
+
+void PBR_Renderer::SetIBLResourceViews(IShaderResourceBinding* pSRB,
+                                       ITextureView*           pIrradianceCubeSRV,
+                                       ITextureView*           pPrefilteredEnvMapSRV) const
+{
+    if (!m_Settings.EnableIBL)
+        return;
+
+    if (pSRB == nullptr)
+    {
+        UNEXPECTED("SRB must not be null");
+        return;
+    }
+
+    ShaderResourceVariableX{pSRB, SHADER_TYPE_PIXEL, "g_IrradianceMap"}.Set(pIrradianceCubeSRV);
+    ShaderResourceVariableX{pSRB, SHADER_TYPE_PIXEL, "g_PrefilteredEnvMap"}.Set(pPrefilteredEnvMapSRV);
 }
 
 void PBR_Renderer::SetOITResources(IShaderResourceBinding* pSRB, const OITResources& OITResources) const
@@ -2433,9 +2482,12 @@ void PBR_Renderer::ApplyOITAttenuation(IDeviceContext* pCtx, IPipelineState* pPS
     pCtx->Draw(DrawAttribs{3, DRAW_FLAG_VERIFY_ALL});
 }
 
-void PBR_Renderer::SetInternalShaderParameters(HLSL::PBRRendererShaderParameters& Renderer)
+void PBR_Renderer::SetInternalShaderParameters(HLSL::PBRRendererShaderParameters& Renderer,
+                                               ITextureView*                      pPrefilteredEnvMapSRV) const
 {
-    Renderer.PrefilteredCubeLastMip = m_Settings.EnableIBL ? static_cast<float>(m_pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels - 1) : 0.f;
+    Renderer.PrefilteredCubeLastMip = m_Settings.EnableIBL && pPrefilteredEnvMapSRV != nullptr ?
+        static_cast<float>(pPrefilteredEnvMapSRV->GetTexture()->GetDesc().MipLevels - 1) :
+        0.f;
 }
 
 Uint32 PBR_Renderer::GetPBRPrimitiveAttribsSize(PSO_FLAGS Flags, Uint32 CustomDataSize) const

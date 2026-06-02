@@ -191,12 +191,16 @@ public:
     ///                             internal objects.
     /// \param [in] CacheUseInfo  - GLTF resource cache usage information.
     /// \param [in] pFrameAttribs - Frame attributes constant buffer to set in the SRB.
+    /// \param [in] pIrradianceCubeSRV    - Irradiance cube map shader resource view to set in the SRB.
+    /// \param [in] pPrefilteredEnvMapSRV - Prefiltered environment map shader resource view to set in the SRB.
     /// \param [out] ppCacheSRB   - Pointer to memory location where the pointer to the SRB object
     ///                             will be written.
     void CreateResourceCacheSRB(IRenderDevice*           pDevice,
                                 IDeviceContext*          pCtx,
                                 ResourceCacheUseInfo&    CacheUseInfo,
                                 IBuffer*                 pFrameAttribs,
+                                ITextureView*            pIrradianceCubeSRV,
+                                ITextureView*            pPrefilteredEnvMapSRV,
                                 IShaderResourceBinding** ppCacheSRB);
 
     /// Prepares the renderer for rendering objects.
@@ -211,7 +215,9 @@ public:
                IDeviceContext*        pCtx,
                ResourceCacheUseInfo&  CacheUseInfo,
                ResourceCacheBindings& Bindings,
-               IBuffer*               pFrameAttribs);
+               IBuffer*               pFrameAttribs,
+               ITextureView*          pIrradianceCubeSRV    = nullptr,
+               ITextureView*          pPrefilteredEnvMapSRV = nullptr);
 
     struct PBRPrimitiveShaderAttribsData
     {

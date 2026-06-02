@@ -274,6 +274,8 @@ void GLTF_PBR_Renderer::CreateResourceCacheSRB(IRenderDevice*           pDevice,
                                                IDeviceContext*          pCtx,
                                                ResourceCacheUseInfo&    CacheUseInfo,
                                                IBuffer*                 pFrameAttribs,
+                                               ITextureView*            pIrradianceCubeSRV,
+                                               ITextureView*            pPrefilteredEnvMapSRV,
                                                IShaderResourceBinding** ppCacheSRB)
 {
     DEV_CHECK_ERR(CacheUseInfo.pResourceMgr != nullptr, "Resource manager must not be null");
@@ -288,6 +290,7 @@ void GLTF_PBR_Renderer::CreateResourceCacheSRB(IRenderDevice*           pDevice,
     }
 
     InitCommonSRBVars(pSRB, pFrameAttribs);
+    SetIBLResourceViews(pSRB, pIrradianceCubeSRV, pPrefilteredEnvMapSRV);
 
     auto SetTexture = [&](TEXTURE_ATTRIB_ID ID) //
     {
@@ -380,7 +383,9 @@ void GLTF_PBR_Renderer::Begin(IRenderDevice*         pDevice,
                               IDeviceContext*        pCtx,
                               ResourceCacheUseInfo&  CacheUseInfo,
                               ResourceCacheBindings& Bindings,
-                              IBuffer*               pFrameAttribs)
+                              IBuffer*               pFrameAttribs,
+                              ITextureView*          pIrradianceCubeSRV,
+                              ITextureView*          pPrefilteredEnvMapSRV)
 {
     VERIFY(CacheUseInfo.pResourceMgr != nullptr, "Resource manager must not be null.");
     VERIFY(CacheUseInfo.VtxLayoutKey != GLTF::ResourceManager::VertexLayoutKey{}, "Vertex layout key must not be null.");
@@ -391,7 +396,7 @@ void GLTF_PBR_Renderer::Begin(IRenderDevice*         pDevice,
     if (!Bindings.pSRB || Bindings.Version != TextureVersion)
     {
         Bindings.pSRB.Release();
-        CreateResourceCacheSRB(pDevice, pCtx, CacheUseInfo, pFrameAttribs, &Bindings.pSRB);
+        CreateResourceCacheSRB(pDevice, pCtx, CacheUseInfo, pFrameAttribs, pIrradianceCubeSRV, pPrefilteredEnvMapSRV, &Bindings.pSRB);
         if (!Bindings.pSRB)
         {
             LOG_ERROR_MESSAGE("Failed to create an SRB for GLTF resource cache");

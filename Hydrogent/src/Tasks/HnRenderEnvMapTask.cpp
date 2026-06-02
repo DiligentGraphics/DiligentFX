@@ -159,7 +159,7 @@ void HnRenderEnvMapTask::Prepare(pxr::HdTaskContext* TaskCtx,
         }
     }
 
-    auto* pEnvMapSRV = USDRenderer->GetPrefilteredEnvMapSRV();
+    auto* pEnvMapSRV = pRenderDelegate->GetPrefilteredEnvMapSRV();
     if (pEnvMapSRV == nullptr)
         return;
 
