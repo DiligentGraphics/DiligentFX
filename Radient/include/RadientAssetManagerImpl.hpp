@@ -328,9 +328,18 @@ RefCntAutoPtr<InterfaceType> RadientAssetManagerImpl::StoreAsset(AssetRecord&& R
 
     {
         std::unique_lock<std::shared_mutex> Lock{m_Mutex};
-        const auto                          InsertResult = m_Assets.emplace(HashMapStringKey{pBase->GetReference().URI, true},
-                                                                            RefCntWeakPtr<IRadientAsset>{pBase});
-        VERIFY(InsertResult.second, "Asset URI already exists");
+
+        const auto It = m_Assets.find(HashMapStringKey{pBase->GetReference().URI});
+        if (It != m_Assets.end())
+        {
+            VERIFY(It->second.Lock() == nullptr, "Asset URI already exists");
+            It->second = RefCntWeakPtr<IRadientAsset>{pBase};
+        }
+        else
+        {
+            m_Assets.emplace(HashMapStringKey{pBase->GetReference().URI, true},
+                             RefCntWeakPtr<IRadientAsset>{pBase});
+        }
     }
 
     return RefCntAutoPtr<InterfaceType>{pAsset};

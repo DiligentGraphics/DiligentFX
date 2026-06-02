@@ -103,8 +103,7 @@ private:
     {
         RadientEntityID Entity = InvalidRadientEntityID;
 
-        RadientMeshComponent             Mesh;
-        RefCntAutoPtr<IRadientMeshAsset> pMesh;
+        RadientMeshComponent Mesh;
 
         const RadientMeshRendererComponent* pRenderer         = nullptr;
         const RadientMatrix4x4*             pWorldMatrix      = nullptr;

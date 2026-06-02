@@ -128,9 +128,9 @@ void RadientSceneDrawableCache::ProcessRenderableMeshAddedOrUpdated(const Radien
     if (IsNewRecord || MeshChanged)
     {
         RemoveRenderableDrawables(Record);
-        Record.pMesh      = Mesh.Mesh.pMesh;
-        Record.Mesh       = Mesh.Mesh;
-        Record.Mesh.pMesh = Record.pMesh;
+
+        Record.Mesh              = Mesh.Mesh;
+        Record.PendingResolution = false;
     }
 
     Record.pRenderer         = &Mesh.Renderer;

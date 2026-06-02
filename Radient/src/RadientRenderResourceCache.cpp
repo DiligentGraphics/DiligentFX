@@ -26,6 +26,7 @@
 
 #include "RadientRenderResourceCache.hpp"
 
+#include "DebugUtilities.hpp"
 #include "GLTFLoader.hpp"
 
 #include <cstring>
@@ -125,12 +126,36 @@ const RadientRenderMesh* RadientRenderResourceCache::ResolveMesh(IRadientMeshAss
         return nullptr;
 
     const std::string MeshCacheKey = MakeAssetCacheKey(pMeshAsset);
-    MeshResource&     Record       = m_MeshResources[MeshCacheKey];
+    auto              It           = m_MeshResources.emplace(MeshCacheKey, MeshResource{}).first;
+    MeshResource&     Record       = It->second;
+
+    RefCntAutoPtr<IRadientMeshAsset> pCachedMesh = Record.pMeshAsset.Lock();
+    if (pCachedMesh == nullptr)
+    {
+        Record            = {};
+        Record.pMeshAsset = RefCntWeakPtr<IRadientMeshAsset>{pMeshAsset};
+    }
+    else if (pCachedMesh != pMeshAsset)
+    {
+        VERIFY(false, "Mesh cache key is shared by different live mesh assets");
+        Record            = {};
+        Record.pMeshAsset = RefCntWeakPtr<IRadientMeshAsset>{pMeshAsset};
+    }
 
     switch (Record.State)
     {
         case MeshResource::STATE::Ready:
+        {
+            RefCntAutoPtr<IRadientSceneAsset> pSourceModel = Record.pSourceModel.Lock();
+            if (pSourceModel == nullptr)
+            {
+                Record            = {};
+                Record.pMeshAsset = RefCntWeakPtr<IRadientMeshAsset>{pMeshAsset};
+                break;
+            }
+
             return &Record.Mesh;
+        }
 
         case MeshResource::STATE::Failed:
             return nullptr;
@@ -143,23 +168,27 @@ const RadientRenderMesh* RadientRenderResourceCache::ResolveMesh(IRadientMeshAss
     if (m_pAssetManager == nullptr)
         return nullptr;
 
+    RefCntAutoPtr<IRadientSceneAsset> pSourceModel;
+    Uint32                            SourceMeshIndex = ~0u;
+
+    const RADIENT_STATUS SourceStatus = m_pAssetManager->GetMeshGLTFSource(pMeshAsset, &pSourceModel, SourceMeshIndex);
+    if (RADIENT_FAILED(SourceStatus))
+    {
+        Record.State = MeshResource::STATE::Failed;
+        return nullptr;
+    }
+
     if (Record.State == MeshResource::STATE::NotRequested)
     {
-        RefCntAutoPtr<IRadientSceneAsset> pSourceModel;
-        Uint32                            SourceMeshIndex = ~0u;
-        const RADIENT_STATUS              SourceStatus    = m_pAssetManager->GetMeshGLTFSource(pMeshAsset, &pSourceModel, SourceMeshIndex);
-        if (RADIENT_FAILED(SourceStatus))
-        {
-            Record.State = MeshResource::STATE::Failed;
-            return nullptr;
-        }
-
         Record.pSourceModel    = pSourceModel;
         Record.SourceMeshIndex = SourceMeshIndex;
         Record.State           = MeshResource::STATE::Loading;
     }
 
-    const RADIENT_STATUS LoadStatus = m_pAssetManager->GetGLTFLoadStatus(Record.pSourceModel);
+    VERIFY(Record.SourceMeshIndex == SourceMeshIndex,
+           "Mesh asset GLTF source changed after the mesh resource was requested");
+
+    const RADIENT_STATUS LoadStatus = m_pAssetManager->GetGLTFLoadStatus(pSourceModel);
     if (RADIENT_FAILED(LoadStatus))
     {
         Record.State = MeshResource::STATE::Failed;
@@ -169,7 +198,7 @@ const RadientRenderMesh* RadientRenderResourceCache::ResolveMesh(IRadientMeshAss
     if (LoadStatus != RADIENT_STATUS_OK)
         return nullptr;
 
-    const GLTF::Model* pModel = m_pAssetManager->GetGLTFModel(Record.pSourceModel, true);
+    const GLTF::Model* pModel = m_pAssetManager->GetGLTFModel(pSourceModel, true);
     if (pModel == nullptr)
         return nullptr;
 

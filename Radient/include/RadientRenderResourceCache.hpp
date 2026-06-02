@@ -95,7 +95,8 @@ private:
         };
 
         STATE                             State = STATE::NotRequested;
-        RefCntAutoPtr<IRadientSceneAsset> pSourceModel;
+        RefCntWeakPtr<IRadientMeshAsset>  pMeshAsset;
+        RefCntWeakPtr<IRadientSceneAsset> pSourceModel;
         Uint32                            SourceMeshIndex = ~0u;
         RadientRenderMesh                 Mesh;
     };

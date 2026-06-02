@@ -205,27 +205,49 @@ const CapturedRenderableMeshChange* FindRenderableMeshChange(const std::vector<C
     return It != Changes.end() ? &*It : nullptr;
 }
 
-RadientMeshComponent MakeMeshComponent(const char* URI, Uint64 Version = 1)
+struct TestMeshComponent
 {
-    static std::vector<RefCntAutoPtr<IRadientMeshAsset>> MeshAssets;
-    RefCntAutoPtr<IRadientMeshAsset>                     pMesh = MakeTestMeshAsset(URI, Version);
-    MeshAssets.push_back(pMesh);
+    explicit TestMeshComponent(const char* URI, Uint64 Version = 1) :
+        pMesh{MakeTestMeshAsset(URI, Version)}
+    {
+        Component.pMesh = pMesh;
+    }
 
-    RadientMeshComponent Mesh;
-    Mesh.pMesh = pMesh;
-    return Mesh;
+    operator const RadientMeshComponent&() const
+    {
+        return Component;
+    }
+
+    RefCntAutoPtr<IRadientMeshAsset> pMesh;
+    RadientMeshComponent             Component;
+};
+
+TestMeshComponent MakeMeshComponent(const char* URI, Uint64 Version = 1)
+{
+    return TestMeshComponent{URI, Version};
 }
 
-RadientMaterialBinding MakeMaterialBinding(Uint32 PrimitiveIndex, const char* URI, Uint64 Version = 1)
+struct TestMaterialBinding
 {
-    static std::vector<RefCntAutoPtr<IRadientMaterialAsset>> MaterialAssets;
-    RefCntAutoPtr<IRadientMaterialAsset>                     pMaterial = MakeTestMaterialAsset(URI, Version);
-    MaterialAssets.push_back(pMaterial);
+    TestMaterialBinding(Uint32 PrimitiveIndex, const char* URI, Uint64 Version = 1) :
+        pMaterial{MakeTestMaterialAsset(URI, Version)}
+    {
+        Binding.PrimitiveIndex = PrimitiveIndex;
+        Binding.pMaterial      = pMaterial;
+    }
 
-    RadientMaterialBinding Binding;
-    Binding.PrimitiveIndex = PrimitiveIndex;
-    Binding.pMaterial      = pMaterial;
-    return Binding;
+    operator const RadientMaterialBinding&() const
+    {
+        return Binding;
+    }
+
+    RefCntAutoPtr<IRadientMaterialAsset> pMaterial;
+    RadientMaterialBinding               Binding;
+};
+
+TestMaterialBinding MakeMaterialBinding(Uint32 PrimitiveIndex, const char* URI, Uint64 Version = 1)
+{
+    return TestMaterialBinding{PrimitiveIndex, URI, Version};
 }
 
 struct CapturedRenderableLight
@@ -1462,7 +1484,7 @@ TEST(RadientSceneStateTest, EnumerateRenderableMeshes)
     RadientEntityID MeshOnly = InvalidRadientEntityID;
     EXPECT_EQ(State.CreateEntity({}, MeshOnly), RADIENT_STATUS_OK);
 
-    RadientMeshComponent MeshOnlyComponent = MakeMeshComponent("mesh://mesh-only", 1);
+    TestMeshComponent MeshOnlyComponent = MakeMeshComponent("mesh://mesh-only", 1);
     EXPECT_EQ(State.SetMesh(MeshOnly, MeshOnlyComponent), RADIENT_STATUS_OK);
 
     // Mesh without a renderer is not renderable.
@@ -1481,17 +1503,17 @@ TEST(RadientSceneStateTest, EnumerateRenderableMeshes)
     RadientEntityID Drawable = InvalidRadientEntityID;
     EXPECT_EQ(State.CreateEntity(DrawableDesc, Drawable), RADIENT_STATUS_OK);
 
-    RadientMeshComponent DrawableMesh = MakeMeshComponent("mesh://cube", 7);
+    TestMeshComponent DrawableMesh = MakeMeshComponent("mesh://cube", 7);
     EXPECT_EQ(State.SetMesh(Drawable, DrawableMesh), RADIENT_STATUS_OK);
 
     RadientMeshRendererComponent DrawableRenderer;
     DrawableRenderer.VisibilityMask = 0x55;
     EXPECT_EQ(State.SetMeshRenderer(Drawable, DrawableRenderer), RADIENT_STATUS_OK);
 
-    RadientMaterialBinding MaterialBinding = MakeMaterialBinding(2, "material://red", 3);
+    TestMaterialBinding MaterialBinding = MakeMaterialBinding(2, "material://red", 3);
 
     RadientMaterialBindingsComponent MaterialBindings;
-    MaterialBindings.pBindings    = &MaterialBinding;
+    MaterialBindings.pBindings    = &MaterialBinding.Binding;
     MaterialBindings.BindingCount = 1;
     EXPECT_EQ(State.SetMaterialBindings(Drawable, MaterialBindings), RADIENT_STATUS_OK);
 
@@ -1553,7 +1575,7 @@ TEST(RadientSceneStateTest, EnumerateRenderableMeshesReportsOutOfDateDerivedStat
     RadientEntityID Entity = InvalidRadientEntityID;
     EXPECT_EQ(State.CreateEntity({}, Entity), RADIENT_STATUS_OK);
 
-    RadientMeshComponent Mesh = MakeMeshComponent("mesh://cube");
+    TestMeshComponent Mesh = MakeMeshComponent("mesh://cube");
     EXPECT_EQ(State.SetMesh(Entity, Mesh), RADIENT_STATUS_OK);
 
     RadientMeshRendererComponent Renderer;
@@ -1654,10 +1676,10 @@ TEST(RadientSceneStateTest, TracksRenderableMeshChanges)
     EXPECT_EQ(Changes[0].Mesh.MeshVersion, 2u);
     State.ClearRenderableMeshChanges();
 
-    RadientMaterialBinding MaterialBinding = MakeMaterialBinding(1, "material://blue", 3);
+    TestMaterialBinding MaterialBinding = MakeMaterialBinding(1, "material://blue", 3);
 
     RadientMaterialBindingsComponent MaterialBindings;
-    MaterialBindings.pBindings    = &MaterialBinding;
+    MaterialBindings.pBindings    = &MaterialBinding.Binding;
     MaterialBindings.BindingCount = 1;
     EXPECT_EQ(State.SetMaterialBindings(Entity, MaterialBindings), RADIENT_STATUS_OK);
 
@@ -2047,9 +2069,9 @@ TEST(RadientSceneStateTest, HasComponent)
     EXPECT_EQ(State.HasComponent(Entity, RADIENT_COMPONENT_TYPE_MESH_RENDERER, HasComponent), RADIENT_STATUS_OK);
     EXPECT_EQ(HasComponent, True);
 
-    RadientMaterialBinding           MaterialBinding = MakeMaterialBinding(0, "material://asset", 1);
+    TestMaterialBinding              MaterialBinding = MakeMaterialBinding(0, "material://asset", 1);
     RadientMaterialBindingsComponent MaterialBindings;
-    MaterialBindings.pBindings    = &MaterialBinding;
+    MaterialBindings.pBindings    = &MaterialBinding.Binding;
     MaterialBindings.BindingCount = 1;
 
     EXPECT_EQ(State.HasComponent(Entity, RADIENT_COMPONENT_TYPE_MATERIAL_BINDINGS, HasComponent), RADIENT_STATUS_OK);
@@ -2257,7 +2279,7 @@ TEST(RadientSceneStateTest, TracksSceneRevisions)
     // Own visibility changes bump visibility revisions only.
     ExpectSceneRevisions(State.GetSceneRevisions(), 0, 0, 2, 2);
 
-    RadientMeshComponent Mesh = MakeMeshComponent("mesh://revision-test", 1);
+    TestMeshComponent Mesh = MakeMeshComponent("mesh://revision-test", 1);
     EXPECT_EQ(State.SetMesh(Entity, Mesh), RADIENT_STATUS_OK);
     // Mesh data affects drawable revisions.
     ExpectSceneRevisions(State.GetSceneRevisions(), 1, 0, 2, 2);
@@ -2272,10 +2294,10 @@ TEST(RadientSceneStateTest, TracksSceneRevisions)
     // Mesh renderer state also affects drawable revisions.
     ExpectSceneRevisions(State.GetSceneRevisions(), 2, 0, 2, 2);
 
-    RadientMaterialBinding MaterialBinding = MakeMaterialBinding(0, "material://revision-test", 1);
+    TestMaterialBinding MaterialBinding = MakeMaterialBinding(0, "material://revision-test", 1);
 
     RadientMaterialBindingsComponent MaterialBindings;
-    MaterialBindings.pBindings    = &MaterialBinding;
+    MaterialBindings.pBindings    = &MaterialBinding.Binding;
     MaterialBindings.BindingCount = 1;
     EXPECT_EQ(State.SetMaterialBindings(Entity, MaterialBindings), RADIENT_STATUS_OK);
     // Material bindings are part of drawable data.
