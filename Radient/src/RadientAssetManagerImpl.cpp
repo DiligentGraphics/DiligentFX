@@ -348,7 +348,8 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadGLTF(const RadientGLTFLoadInfo& Load
 
         GLTFModelData.LoadStatus                      = RADIENT_STATUS_OK;
         RefCntAutoPtr<IRadientSceneAsset> pModelAsset = StoreAsset<IRadientSceneAsset, SceneAssetImpl>(std::move(Record));
-        *ppModel                                      = pModelAsset.Detach();
+        EnqueueGPUResourceUpdate(pModelAsset);
+        *ppModel = pModelAsset.Detach();
         return RADIENT_STATUS_OK;
     }
 
@@ -577,34 +578,39 @@ RADIENT_STATUS RadientAssetManagerImpl::UpdateGPUResources(IRenderDevice*  pDevi
     }
 
     {
-        std::shared_lock<std::shared_mutex> Lock{m_Mutex};
-
-        for (auto& AssetIt : m_Assets)
-        {
-            RefCntAutoPtr<IRadientAsset> pAsset = AssetIt.second.Lock();
-            if (pAsset == nullptr)
-                continue;
-
-            const AssetRecord*      pRecord    = GetAssetRecord(pAsset);
-            const GLTFModelStorage* pGLTFModel = pRecord != nullptr ?
-                std::get_if<GLTFModelStorage>(&pRecord->Storage) :
-                nullptr;
-            if (pRecord == nullptr ||
-                pRecord->Type != RADIENT_ASSET_TYPE_SCENE ||
-                pGLTFModel == nullptr ||
-                pGLTFModel->LoadStatus != RADIENT_STATUS_OK ||
-                pGLTFModel->GPUResourcesReady ||
-                pGLTFModel->pModel == nullptr)
-            {
-                continue;
-            }
-
-            RefCntAutoPtr<IRadientSceneAsset> pSceneAsset{pAsset, IID_RadientSceneAsset};
-            VERIFY(pSceneAsset != nullptr, "Scene asset does not expose IRadientSceneAsset");
-            if (pSceneAsset != nullptr)
-                ModelsToPrepare.push_back({pSceneAsset, pGLTFModel->pModel.get()});
-        }
+        std::unique_lock<std::shared_mutex> Lock{m_Mutex};
+        m_GPUResourceUpdateScratch.swap(m_PendingGPUResourceUpdates);
     }
+
+    ModelsToPrepare.reserve(m_GPUResourceUpdateScratch.size());
+    for (RefCntWeakPtr<IRadientSceneAsset>& WeakAsset : m_GPUResourceUpdateScratch)
+    {
+        RefCntAutoPtr<IRadientSceneAsset> pSceneAsset = WeakAsset.Lock();
+        if (pSceneAsset == nullptr)
+            continue;
+
+        AssetRecord* pRecord = GetAssetRecord(pSceneAsset);
+        VERIFY(pRecord != nullptr && pRecord->Type == RADIENT_ASSET_TYPE_SCENE,
+               "Pending GPU resource update references an invalid asset");
+        if (pRecord == nullptr || pRecord->Type != RADIENT_ASSET_TYPE_SCENE)
+            continue;
+
+        GLTFModelStorage* pGLTFModel = std::get_if<GLTFModelStorage>(&pRecord->Storage);
+        VERIFY(pGLTFModel != nullptr, "Scene asset has unexpected storage");
+        if (pGLTFModel == nullptr)
+            continue;
+
+        if (pGLTFModel->GPUResourcesReady ||
+            pGLTFModel->LoadStatus != RADIENT_STATUS_OK ||
+            pGLTFModel->pModel == nullptr)
+        {
+            pGLTFModel->GPUUpdateQueued = false;
+            continue;
+        }
+
+        ModelsToPrepare.push_back({pSceneAsset, pGLTFModel->pModel.get()});
+    }
+    m_GPUResourceUpdateScratch.clear();
 
     if (m_pUploadManager != nullptr)
         m_pUploadManager->RenderThreadUpdate(pContext);
@@ -613,26 +619,54 @@ RADIENT_STATUS RadientAssetManagerImpl::UpdateGPUResources(IRenderDevice*  pDevi
         m_pResourceManager->UpdateAllResources(pDevice, pContext);
 
     RADIENT_STATUS Status = RADIENT_STATUS_OK;
+
+    auto GetQueuedGLTFModelLocked = [](const GLTFModelToPrepare& Model) -> GLTFModelStorage* //
+    {
+        AssetRecord* pRecord = GetAssetRecord(Model.pAsset);
+        VERIFY(pRecord != nullptr, "Queued GPU resource update references an unknown asset");
+        if (pRecord == nullptr)
+            return nullptr;
+
+        VERIFY(pRecord->Type == RADIENT_ASSET_TYPE_SCENE,
+               "Queued GPU resource update references an asset of unexpected type");
+        if (pRecord->Type != RADIENT_ASSET_TYPE_SCENE)
+            return nullptr;
+
+        GLTFModelStorage* pGLTFModel = std::get_if<GLTFModelStorage>(&pRecord->Storage);
+        VERIFY(pGLTFModel != nullptr, "Scene asset has unexpected storage");
+        if (pGLTFModel == nullptr)
+            return nullptr;
+
+        VERIFY(pGLTFModel->pModel.get() == Model.pModel,
+               "Queued GPU resource update references a stale GLTF model");
+        if (pGLTFModel->pModel.get() != Model.pModel)
+            return nullptr;
+
+        return pGLTFModel;
+    };
+
     for (const GLTFModelToPrepare& Model : ModelsToPrepare)
     {
         if (!Model.pModel->PrepareGPUResources(pDevice, pContext))
         {
+            std::unique_lock<std::shared_mutex> Lock{m_Mutex};
+
+            if (GLTFModelStorage* pGLTFModel = GetQueuedGLTFModelLocked(Model))
+            {
+                pGLTFModel->GPUUpdateQueued = false;
+                EnqueueGPUResourceUpdateLocked(Model.pAsset, *pGLTFModel);
+            }
+
             Status = RADIENT_STATUS_OUT_OF_DATE;
             continue;
         }
 
         std::unique_lock<std::shared_mutex> Lock{m_Mutex};
 
-        AssetRecord*      pRecord    = GetAssetRecord(Model.pAsset);
-        GLTFModelStorage* pGLTFModel = pRecord != nullptr ?
-            std::get_if<GLTFModelStorage>(&pRecord->Storage) :
-            nullptr;
-        if (pRecord != nullptr &&
-            pRecord->Type == RADIENT_ASSET_TYPE_SCENE &&
-            pGLTFModel != nullptr &&
-            pGLTFModel->pModel.get() == Model.pModel)
+        if (GLTFModelStorage* pGLTFModel = GetQueuedGLTFModelLocked(Model))
         {
             pGLTFModel->GPUResourcesReady = true;
+            pGLTFModel->GPUUpdateQueued   = false;
         }
     }
 
@@ -753,6 +787,36 @@ void RadientAssetManagerImpl::FixupAssetRecord(AssetRecord& Record)
     Record.Ref.Version = Record.Version;
 }
 
+void RadientAssetManagerImpl::EnqueueGPUResourceUpdate(IRadientSceneAsset* pModel)
+{
+    AssetRecord* pRecord = GetAssetRecord(pModel);
+    if (pRecord == nullptr || pRecord->Type != RADIENT_ASSET_TYPE_SCENE)
+        return;
+
+    GLTFModelStorage* pGLTFModel = std::get_if<GLTFModelStorage>(&pRecord->Storage);
+    if (pGLTFModel == nullptr)
+        return;
+
+    std::unique_lock<std::shared_mutex> Lock{m_Mutex};
+    EnqueueGPUResourceUpdateLocked(pModel, *pGLTFModel);
+}
+
+void RadientAssetManagerImpl::EnqueueGPUResourceUpdateLocked(IRadientSceneAsset* pModel,
+                                                             GLTFModelStorage&   GLTFModel)
+{
+    if (pModel == nullptr ||
+        GLTFModel.LoadStatus != RADIENT_STATUS_OK ||
+        GLTFModel.GPUResourcesReady ||
+        GLTFModel.GPUUpdateQueued ||
+        GLTFModel.pModel == nullptr)
+    {
+        return;
+    }
+
+    GLTFModel.GPUUpdateQueued = true;
+    m_PendingGPUResourceUpdates.emplace_back(pModel);
+}
+
 RadientAssetManagerImpl::AssetRecord* RadientAssetManagerImpl::GetAssetRecord(IRadientAsset* pAsset)
 {
     return const_cast<AssetRecord*>(GetAssetRecord(static_cast<const IRadientAsset*>(pAsset)));
@@ -812,8 +876,12 @@ void RadientAssetManagerImpl::CompleteGLTFLoad(IRadientSceneAsset*          pMod
     if (pGLTFModel == nullptr)
         return;
 
-    pGLTFModel->pModel     = std::move(pModelData);
-    pGLTFModel->LoadStatus = Status;
+    pGLTFModel->pModel            = std::move(pModelData);
+    pGLTFModel->LoadStatus        = Status;
+    pGLTFModel->GPUResourcesReady = false;
+    pGLTFModel->GPUUpdateQueued   = false;
+
+    EnqueueGPUResourceUpdateLocked(pModel, *pGLTFModel);
 }
 
 } // namespace Diligent

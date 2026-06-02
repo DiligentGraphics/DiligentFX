@@ -176,6 +176,7 @@ private:
         std::unique_ptr<GLTF::Model> pModel;
         RADIENT_STATUS               LoadStatus        = RADIENT_STATUS_OK;
         bool                         GPUResourcesReady = false;
+        bool                         GPUUpdateQueued   = false;
     };
 
     struct GLTFMeshStorage
@@ -245,6 +246,9 @@ private:
     RefCntAutoPtr<InterfaceType> StoreAsset(AssetRecord&& Record);
 
     static void FixupAssetRecord(AssetRecord& Record);
+    void        EnqueueGPUResourceUpdate(IRadientSceneAsset* pModel);
+    void        EnqueueGPUResourceUpdateLocked(IRadientSceneAsset* pModel,
+                                               GLTFModelStorage&   GLTFModel);
     void        CompleteGLTFLoad(IRadientSceneAsset*          pModel,
                                  std::unique_ptr<GLTF::Model> pModelData,
                                  RADIENT_STATUS               Status);
@@ -267,6 +271,9 @@ private:
 
     using AssetMapType = std::unordered_map<HashMapStringKey, RefCntWeakPtr<IRadientAsset>>;
     mutable AssetMapType m_Assets;
+
+    std::vector<RefCntWeakPtr<IRadientSceneAsset>> m_PendingGPUResourceUpdates;
+    std::vector<RefCntWeakPtr<IRadientSceneAsset>> m_GPUResourceUpdateScratch;
 };
 
 template <typename InterfaceType, const INTERFACE_ID& InterfaceID>
