@@ -741,9 +741,7 @@ RADIENT_STATUS RadientAssetManagerImpl::GetAssetLoadStatusLocked(IRadientAsset* 
 
 std::string RadientAssetManagerImpl::MakeURI(const char* Type)
 {
-    std::unique_lock<std::shared_mutex> Lock{m_Mutex};
-
-    const RadientHandle AssetID = m_NextAssetID++;
+    const RadientHandle AssetID = m_NextAssetID.fetch_add(1, std::memory_order_relaxed);
     return std::string{"radient://session/"} + Type + "/" + std::to_string(AssetID);
 }
 

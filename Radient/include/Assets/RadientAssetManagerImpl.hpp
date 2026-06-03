@@ -33,6 +33,7 @@
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
 
+#include <atomic>
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
@@ -275,8 +276,8 @@ private:
     RefCntAutoPtr<GLTF::ResourceManager> m_pResourceManager;
     RefCntAutoPtr<IGPUUploadManager>     m_pUploadManager;
 
-    mutable std::shared_mutex m_Mutex;
-    RadientHandle             m_NextAssetID = 1;
+    mutable std::shared_mutex  m_Mutex;
+    std::atomic<RadientHandle> m_NextAssetID{1};
 
     using AssetMapType = std::unordered_map<HashMapStringKey, RefCntWeakPtr<IRadientAsset>>;
     mutable AssetMapType m_Assets;
