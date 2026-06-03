@@ -450,7 +450,7 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMeshFromGLTFMesh(IRadientSceneAsse
 
 RADIENT_STATUS RadientAssetManagerImpl::GetMeshGLTFSource(IRadientMeshAsset*   pMesh,
                                                           IRadientSceneAsset** ppModel,
-                                                          Uint32&              MeshIndex) const
+                                                          Uint32&              MeshIndex)
 {
     if (ppModel == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -472,7 +472,7 @@ RADIENT_STATUS RadientAssetManagerImpl::GetMeshGLTFSource(IRadientMeshAsset*   p
 }
 
 RADIENT_STATUS RadientAssetManagerImpl::GetGLTFSourceURI(IRadientSceneAsset* pModel,
-                                                         const Char*&        SourceURI) const
+                                                         const Char*&        SourceURI)
 {
     SourceURI = nullptr;
 
@@ -485,7 +485,7 @@ RADIENT_STATUS RadientAssetManagerImpl::GetGLTFSourceURI(IRadientSceneAsset* pMo
 }
 
 const GLTF::Model* RadientAssetManagerImpl::GetGLTFModel(IRadientSceneAsset* pModel,
-                                                         bool                RequireGPUResourcesReady) const
+                                                         bool                RequireGPUResourcesReady)
 {
     const SceneAssetImpl* pImpl = GetAssetImpl<const IRadientSceneAsset, const SceneAssetImpl>(pModel);
     if (pImpl == nullptr)
@@ -501,7 +501,7 @@ const GLTF::Model* RadientAssetManagerImpl::GetGLTFModel(IRadientSceneAsset* pMo
     return GLTFModel.pModel.get();
 }
 
-RADIENT_STATUS RadientAssetManagerImpl::GetGLTFLoadStatus(IRadientSceneAsset* pModel) const
+RADIENT_STATUS RadientAssetManagerImpl::GetGLTFLoadStatus(IRadientSceneAsset* pModel)
 {
     const SceneAssetImpl* pImpl = GetAssetImpl<const IRadientSceneAsset, const SceneAssetImpl>(pModel);
     if (pImpl == nullptr)
@@ -510,10 +510,8 @@ RADIENT_STATUS RadientAssetManagerImpl::GetGLTFLoadStatus(IRadientSceneAsset* pM
     return pImpl->GetStorage().LoadStatus.load(std::memory_order_acquire);
 }
 
-ITextureView* RadientAssetManagerImpl::GetTextureSRV(IRadientTextureAsset* pTextureAsset) const
+ITextureView* RadientAssetManagerImpl::GetTextureSRV(IRadientTextureAsset* pTextureAsset)
 {
-    std::shared_lock<std::shared_mutex> Lock{m_Mutex};
-
     const TextureAssetImpl* pImpl = GetAssetImpl<const IRadientTextureAsset, const TextureAssetImpl>(pTextureAsset);
     if (pImpl == nullptr)
         return nullptr;
@@ -624,7 +622,7 @@ GLTF::ResourceManager* RadientAssetManagerImpl::GetResourceManager() const
     return m_pResourceManager;
 }
 
-bool RadientAssetManagerImpl::ValidateMesh(const RadientMeshCreateInfo& MeshCI) const
+bool RadientAssetManagerImpl::ValidateMesh(const RadientMeshCreateInfo& MeshCI)
 {
     if (MeshCI.VertexBufferCount == 0 || MeshCI.pVertexBuffers == nullptr ||
         MeshCI.PrimitiveCount == 0 || MeshCI.pPrimitives == nullptr)
@@ -669,17 +667,17 @@ bool RadientAssetManagerImpl::ValidateMesh(const RadientMeshCreateInfo& MeshCI) 
     return true;
 }
 
-bool RadientAssetManagerImpl::ValidateGLTF(const RadientGLTFLoadInfo& LoadInfo) const
+bool RadientAssetManagerImpl::ValidateGLTF(const RadientGLTFLoadInfo& LoadInfo)
 {
     return LoadInfo.URI != nullptr && *LoadInfo.URI != 0;
 }
 
-bool RadientAssetManagerImpl::ValidateTexture(const RadientTextureLoadInfo& LoadInfo) const
+bool RadientAssetManagerImpl::ValidateTexture(const RadientTextureLoadInfo& LoadInfo)
 {
     return LoadInfo.URI != nullptr && *LoadInfo.URI != 0;
 }
 
-RADIENT_STATUS RadientAssetManagerImpl::GetAssetLoadStatus(IRadientAsset* pAsset) const
+RADIENT_STATUS RadientAssetManagerImpl::GetAssetLoadStatus(IRadientAsset* pAsset)
 {
     if (pAsset == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;

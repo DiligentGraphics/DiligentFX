@@ -100,17 +100,17 @@ public:
                                           const Char*         Name,
                                           IRadientMeshAsset** ppMesh);
 
-    RADIENT_STATUS GetMeshGLTFSource(IRadientMeshAsset*   pMesh,
-                                     IRadientSceneAsset** ppModel,
-                                     Uint32&              MeshIndex) const;
+    static RADIENT_STATUS GetMeshGLTFSource(IRadientMeshAsset*   pMesh,
+                                            IRadientSceneAsset** ppModel,
+                                            Uint32&              MeshIndex);
 
-    RADIENT_STATUS GetGLTFSourceURI(IRadientSceneAsset* pModel,
-                                    const Char*&        SourceURI) const;
+    static RADIENT_STATUS GetGLTFSourceURI(IRadientSceneAsset* pModel,
+                                           const Char*&        SourceURI);
 
-    const GLTF::Model* GetGLTFModel(IRadientSceneAsset* pModel,
-                                    bool                RequireGPUResourcesReady = false) const;
-    RADIENT_STATUS     GetGLTFLoadStatus(IRadientSceneAsset* pModel) const;
-    ITextureView*      GetTextureSRV(IRadientTextureAsset* pTexture) const;
+    static const GLTF::Model* GetGLTFModel(IRadientSceneAsset* pModel,
+                                           bool                RequireGPUResourcesReady = false);
+    static RADIENT_STATUS     GetGLTFLoadStatus(IRadientSceneAsset* pModel);
+    static ITextureView*      GetTextureSRV(IRadientTextureAsset* pTexture);
 
     RADIENT_STATUS UpdateGPUResources(IRenderDevice*  pDevice,
                                       IDeviceContext* pContext);
@@ -253,10 +253,10 @@ private:
     using SceneAssetImpl =
         AssetImpl<IRadientSceneAsset, IID_RadientSceneAsset, RADIENT_ASSET_TYPE_SCENE, GLTFModelStorage>;
 
-    bool           ValidateMesh(const RadientMeshCreateInfo& MeshCI) const;
-    bool           ValidateGLTF(const RadientGLTFLoadInfo& LoadInfo) const;
-    bool           ValidateTexture(const RadientTextureLoadInfo& LoadInfo) const;
-    RADIENT_STATUS GetAssetLoadStatus(IRadientAsset* pAsset) const;
+    static bool           ValidateMesh(const RadientMeshCreateInfo& MeshCI);
+    static bool           ValidateGLTF(const RadientGLTFLoadInfo& LoadInfo);
+    static bool           ValidateTexture(const RadientTextureLoadInfo& LoadInfo);
+    static RADIENT_STATUS GetAssetLoadStatus(IRadientAsset* pAsset);
 
     std::string MakeURI(const char* Type);
 

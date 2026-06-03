@@ -42,8 +42,6 @@
 namespace Diligent
 {
 
-class RadientAssetManagerImpl;
-
 /// Per-frame drawable state owned by the scene and referenced by stable drawable slots.
 struct RadientDrawableFrameData
 {
@@ -107,8 +105,7 @@ struct RadientDrawableChange
 class RadientSceneDrawableCache
 {
 public:
-    RADIENT_STATUS SyncScene(IRadientScene&           Scene,
-                             RadientAssetManagerImpl* pAssetManager);
+    RADIENT_STATUS SyncScene(IRadientScene& Scene);
 
     const RadientDrawLists& GetDrawLists() const
     {
@@ -153,13 +150,11 @@ private:
         std::vector<RadientDrawableID> DrawableIDs;
     };
 
-    void ProcessRenderableMeshAddedOrUpdated(const RadientSceneState::RenderableMesh& Mesh,
-                                             RadientAssetManagerImpl*                 pAssetManager);
+    void ProcessRenderableMeshAddedOrUpdated(const RadientSceneState::RenderableMesh& Mesh);
     void ProcessRenderableMeshRemoved(RadientEntityID Entity);
-    void ResolvePendingRenderableMeshes(RadientAssetManagerImpl* pAssetManager);
+    void ResolvePendingRenderableMeshes();
 
-    bool TryExpandRenderable(RenderableRecord&        Record,
-                             RadientAssetManagerImpl* pAssetManager);
+    bool TryExpandRenderable(RenderableRecord& Record);
 
     RadientDrawableID AllocateDrawableID();
 

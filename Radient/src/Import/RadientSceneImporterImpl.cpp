@@ -69,12 +69,12 @@ RADIENT_STATUS RadientSceneImporterImpl::ImportGLTF(const RadientGLTFLoadInfo&  
         return RADIENT_STATUS_INVALID_OPERATION;
 
     RefCntAutoPtr<IRadientSceneAsset> pModel;
-    const RADIENT_STATUS LoadStatus = m_pAssetManager->LoadGLTF(LoadInfo, &pModel);
+    const RADIENT_STATUS              LoadStatus = m_pAssetManager->LoadGLTF(LoadInfo, &pModel);
     if (RADIENT_FAILED(LoadStatus))
         return LoadStatus;
 
     const RADIENT_STATUS Status = InstantiateGLTF(pModel, InstantiateInfo, RootEntity);
-    *ppModel = pModel.Detach();
+    *ppModel                    = pModel.Detach();
     return Status;
 }
 
@@ -90,11 +90,7 @@ RADIENT_STATUS RadientSceneImporterImpl::InstantiateGLTF(IRadientSceneAsset*    
     if (pModel == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    RadientAssetManagerImpl* pAssetManagerImpl = ClassPtrCast<RadientAssetManagerImpl>(m_pAssetManager.RawPtr());
-    if (pAssetManagerImpl == nullptr)
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-
-    const RADIENT_STATUS LoadStatus = pAssetManagerImpl->GetGLTFLoadStatus(pModel);
+    const RADIENT_STATUS LoadStatus = RadientAssetManagerImpl::GetGLTFLoadStatus(pModel);
     if (RADIENT_FAILED(LoadStatus))
         return LoadStatus;
 
@@ -126,15 +122,13 @@ RADIENT_STATUS RadientSceneImporterImpl::ProcessPendingImports()
     if (m_pWriter == nullptr || m_pAssetManager == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
-    RadientAssetManagerImpl* pAssetManagerImpl = m_pAssetManager.RawPtr<RadientAssetManagerImpl>();
-
     RADIENT_STATUS Result = RADIENT_STATUS_OK;
 
     for (size_t Index = 0; Index < m_PendingGLTFInstantiations.size();)
     {
         const PendingGLTFInstantiation& Pending = m_PendingGLTFInstantiations[Index];
 
-        const RADIENT_STATUS LoadStatus = pAssetManagerImpl->GetGLTFLoadStatus(Pending.pModel);
+        const RADIENT_STATUS LoadStatus = RadientAssetManagerImpl::GetGLTFLoadStatus(Pending.pModel);
         if (LoadStatus == RADIENT_STATUS_PENDING)
         {
             Result = Result == RADIENT_STATUS_OK ? RADIENT_STATUS_PENDING : Result;
@@ -179,15 +173,17 @@ RADIENT_STATUS RadientSceneImporterImpl::CreateGLTFRoot(IRadientSceneAsset*     
 }
 
 RADIENT_STATUS RadientSceneImporterImpl::PopulateGLTFRoot(IRadientSceneAsset* pModel,
-                                                          Uint32                       SceneIndex,
-                                                          RadientEntityID              RootEntity)
+                                                          Uint32              SceneIndex,
+                                                          RadientEntityID     RootEntity)
 {
     if (m_pWriter == nullptr || m_pAssetManager == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 
     RadientAssetManagerImpl* pAssetManagerImpl = m_pAssetManager.RawPtr<RadientAssetManagerImpl>();
+    if (pAssetManagerImpl == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    const GLTF::Model* pGLTFModel = pAssetManagerImpl->GetGLTFModel(pModel);
+    const GLTF::Model* pGLTFModel = RadientAssetManagerImpl::GetGLTFModel(pModel);
     if (pGLTFModel == nullptr)
         return RADIENT_STATUS_INVALID_OPERATION;
 

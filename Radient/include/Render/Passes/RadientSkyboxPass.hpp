@@ -34,7 +34,6 @@ namespace Diligent
 {
 
 class EnvMapRenderer;
-class RadientAssetManagerImpl;
 class RadientGeometryRenderer;
 
 /// Skybox render pass.
@@ -51,7 +50,6 @@ public:
                            IDeviceContext*                  pContext,
                            const RadientViewDesc&           ViewDesc,
                            const RadientEnvironmentDesc&    Environment,
-                           RadientAssetManagerImpl*         pAssetManager,
                            const RadientFrameRenderTargets& Targets);
 
 private:

@@ -75,9 +75,9 @@ private:
                                   const RadientGLTFInstantiateInfo& InstantiateInfo,
                                   RadientEntityID&                  RootEntity);
 
-    RADIENT_STATUS PopulateGLTFRoot(IRadientSceneAsset*          pModel,
-                                    Uint32                       SceneIndex,
-                                    RadientEntityID              RootEntity);
+    RADIENT_STATUS PopulateGLTFRoot(IRadientSceneAsset* pModel,
+                                    Uint32              SceneIndex,
+                                    RadientEntityID     RootEntity);
 
     void AddPendingGLTFInstantiation(IRadientSceneAsset*               pModel,
                                      const RadientGLTFInstantiateInfo& InstantiateInfo,

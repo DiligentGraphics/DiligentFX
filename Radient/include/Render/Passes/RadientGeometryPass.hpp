@@ -44,7 +44,6 @@ namespace Diligent
 
 class RadientSceneDrawableCache;
 struct RadientDrawableSlot;
-class RadientAssetManagerImpl;
 
 struct RadientGeometryResourceCacheUseInfo
 {
@@ -75,7 +74,6 @@ public:
     RADIENT_STATUS BeginFrame(IRenderDevice*                   pDevice,
                               IDeviceContext*                  pContext,
                               const RadientLightList&          LightList,
-                              RadientAssetManagerImpl*         pAssetManager,
                               GLTF::ResourceManager*           pResourceManager,
                               const RadientViewDesc&           ViewDesc,
                               const RadientFrameRenderTargets& Targets);
@@ -95,7 +93,6 @@ private:
 
     void           InitializeResourceCacheUseInfo();
     RADIENT_STATUS UpdateEnvironment(IDeviceContext*               pContext,
-                                     RadientAssetManagerImpl*      pAssetManager,
                                      const RadientEnvironmentDesc& Environment);
 
 private:

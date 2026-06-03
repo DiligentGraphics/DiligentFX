@@ -104,29 +104,28 @@ struct ResolvedMesh
     Uint32                  BaseVertex         = 0;
 };
 
-MeshResolveStatus ResolveMesh(RadientAssetManagerImpl* pAssetManager,
-                              IRadientMeshAsset*       pMeshAsset,
+MeshResolveStatus ResolveMesh(IRadientMeshAsset*       pMeshAsset,
                               ResolvedMesh&            Mesh)
 {
     Mesh = {};
 
-    if (pAssetManager == nullptr || pMeshAsset == nullptr)
+    if (pMeshAsset == nullptr)
         return MeshResolveStatus::Failed;
 
     RefCntAutoPtr<IRadientSceneAsset> pSourceModel;
     Uint32                            SourceMeshIndex = ~0u;
-    const RADIENT_STATUS              SourceStatus    = pAssetManager->GetMeshGLTFSource(pMeshAsset, &pSourceModel, SourceMeshIndex);
+    const RADIENT_STATUS              SourceStatus    = RadientAssetManagerImpl::GetMeshGLTFSource(pMeshAsset, &pSourceModel, SourceMeshIndex);
     if (RADIENT_FAILED(SourceStatus))
         return MeshResolveStatus::Failed;
 
-    const RADIENT_STATUS LoadStatus = pAssetManager->GetGLTFLoadStatus(pSourceModel);
+    const RADIENT_STATUS LoadStatus = RadientAssetManagerImpl::GetGLTFLoadStatus(pSourceModel);
     if (RADIENT_FAILED(LoadStatus))
         return MeshResolveStatus::Failed;
 
     if (LoadStatus != RADIENT_STATUS_OK)
         return MeshResolveStatus::Pending;
 
-    const GLTF::Model* pModel = pAssetManager->GetGLTFModel(pSourceModel, true);
+    const GLTF::Model* pModel = RadientAssetManagerImpl::GetGLTFModel(pSourceModel, true);
     if (pModel == nullptr)
         return MeshResolveStatus::Pending;
 
@@ -144,8 +143,7 @@ MeshResolveStatus ResolveMesh(RadientAssetManagerImpl* pAssetManager,
 
 } // namespace
 
-RADIENT_STATUS RadientSceneDrawableCache::SyncScene(IRadientScene&           Scene,
-                                                    RadientAssetManagerImpl* pAssetManager)
+RADIENT_STATUS RadientSceneDrawableCache::SyncScene(IRadientScene& Scene)
 {
     m_DrawableChanges.clear();
 
@@ -169,15 +167,15 @@ RADIENT_STATUS RadientSceneDrawableCache::SyncScene(IRadientScene&           Sce
     if (UpdateRenderables)
     {
         Status = State.EnumerateRenderableMeshChanges(
-            [this, pAssetManager](const RadientSceneState::RenderableMeshChange& Change,
-                                  const RadientSceneState::RenderableMesh*       pMesh) {
+            [this](const RadientSceneState::RenderableMeshChange& Change,
+                   const RadientSceneState::RenderableMesh*       pMesh) {
                 if (pMesh == nullptr)
                 {
                     ProcessRenderableMeshRemoved(Change.Entity);
                     return;
                 }
 
-                ProcessRenderableMeshAddedOrUpdated(*pMesh, pAssetManager);
+                ProcessRenderableMeshAddedOrUpdated(*pMesh);
             });
         if (RADIENT_FAILED(Status))
             return Status;
@@ -185,7 +183,7 @@ RADIENT_STATUS RadientSceneDrawableCache::SyncScene(IRadientScene&           Sce
         State.ClearRenderableMeshChanges();
     }
 
-    ResolvePendingRenderableMeshes(pAssetManager);
+    ResolvePendingRenderableMeshes();
 
     RADIENT_STATUS LightStatus = RADIENT_STATUS_NO_CHANGE;
     if (UpdateLightList)
@@ -211,8 +209,7 @@ RADIENT_STATUS RadientSceneDrawableCache::SyncScene(IRadientScene&           Sce
     return RADIENT_STATUS_OK;
 }
 
-void RadientSceneDrawableCache::ProcessRenderableMeshAddedOrUpdated(const RadientSceneState::RenderableMesh& Mesh,
-                                                                    RadientAssetManagerImpl*                 pAssetManager)
+void RadientSceneDrawableCache::ProcessRenderableMeshAddedOrUpdated(const RadientSceneState::RenderableMesh& Mesh)
 {
     RenderableRecord& Record = m_Renderables[Mesh.Entity];
 
@@ -236,7 +233,7 @@ void RadientSceneDrawableCache::ProcessRenderableMeshAddedOrUpdated(const Radien
 
     if (Record.DrawableIDs.empty())
     {
-        TryExpandRenderable(Record, pAssetManager);
+        TryExpandRenderable(Record);
         return;
     }
 
@@ -262,7 +259,7 @@ void RadientSceneDrawableCache::ProcessRenderableMeshRemoved(RadientEntityID Ent
     m_Renderables.erase(It);
 }
 
-void RadientSceneDrawableCache::ResolvePendingRenderableMeshes(RadientAssetManagerImpl* pAssetManager)
+void RadientSceneDrawableCache::ResolvePendingRenderableMeshes()
 {
     std::vector<RadientEntityID> Pending;
     Pending.swap(m_PendingRenderableEntities);
@@ -278,15 +275,14 @@ void RadientSceneDrawableCache::ResolvePendingRenderableMeshes(RadientAssetManag
             continue;
 
         Record.PendingResolution = false;
-        TryExpandRenderable(Record, pAssetManager);
+        TryExpandRenderable(Record);
     }
 }
 
-bool RadientSceneDrawableCache::TryExpandRenderable(RenderableRecord&        Record,
-                                                    RadientAssetManagerImpl* pAssetManager)
+bool RadientSceneDrawableCache::TryExpandRenderable(RenderableRecord& Record)
 {
     ResolvedMesh Mesh;
-    switch (ResolveMesh(pAssetManager, Record.Mesh.pMesh, Mesh))
+    switch (ResolveMesh(Record.Mesh.pMesh, Mesh))
     {
         case MeshResolveStatus::Ready:
             break;

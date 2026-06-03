@@ -75,7 +75,7 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
     if (RADIENT_FAILED(Status))
         return Status;
 
-    const RADIENT_STATUS SyncStatus = m_DrawableCache.SyncScene(*ViewDesc.pScene, m_pAssetManager);
+    const RADIENT_STATUS SyncStatus = m_DrawableCache.SyncScene(*ViewDesc.pScene);
     if (RADIENT_FAILED(SyncStatus))
         return SyncStatus;
 
@@ -103,7 +103,6 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
         Status = m_GeometryRenderer.BeginFrame(pDevice,
                                                pContext,
                                                m_DrawableCache.GetLightList(),
-                                               m_pAssetManager,
                                                m_pAssetManager->GetResourceManager(),
                                                ViewDesc,
                                                m_FrameTargets);
@@ -139,7 +138,6 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
                                           pContext,
                                           ViewDesc,
                                           Environment,
-                                          m_pAssetManager,
                                           m_FrameTargets);
             if (RADIENT_FAILED(Status))
                 return Status;

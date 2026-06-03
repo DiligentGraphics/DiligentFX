@@ -785,7 +785,6 @@ RADIENT_STATUS RadientGeometryRenderer::Prepare(IRenderDevice*  pDevice,
 RADIENT_STATUS RadientGeometryRenderer::BeginFrame(IRenderDevice*                   pDevice,
                                                    IDeviceContext*                  pContext,
                                                    const RadientLightList&          LightList,
-                                                   RadientAssetManagerImpl*         pAssetManager,
                                                    GLTF::ResourceManager*           pResourceManager,
                                                    const RadientViewDesc&           ViewDesc,
                                                    const RadientFrameRenderTargets& Targets)
@@ -805,7 +804,7 @@ RADIENT_STATUS RadientGeometryRenderer::BeginFrame(IRenderDevice*               
     const RadientEnvironmentDesc Environment       = ViewDesc.pScene != nullptr ?
               ViewDesc.pScene->GetEnvironment() :
               RadientEnvironmentDesc{};
-    const RADIENT_STATUS         EnvironmentStatus = UpdateEnvironment(pContext, pAssetManager, Environment);
+    const RADIENT_STATUS         EnvironmentStatus = UpdateEnvironment(pContext, Environment);
     if (RADIENT_FAILED(EnvironmentStatus))
         return EnvironmentStatus;
 
@@ -1138,7 +1137,6 @@ void RadientGeometryPass::InvalidateDrawablePassData(RadientDrawableID DrawableI
 }
 
 RADIENT_STATUS RadientGeometryRenderer::UpdateEnvironment(IDeviceContext*               pContext,
-                                                          RadientAssetManagerImpl*      pAssetManager,
                                                           const RadientEnvironmentDesc& Environment)
 {
     if (m_pRenderer == nullptr ||
@@ -1150,8 +1148,8 @@ RADIENT_STATUS RadientGeometryRenderer::UpdateEnvironment(IDeviceContext*       
     }
 
     ITextureView* pEnvironmentMap = nullptr;
-    if (pAssetManager != nullptr && Environment.pEnvironmentMap != nullptr)
-        pEnvironmentMap = pAssetManager->GetTextureSRV(Environment.pEnvironmentMap);
+    if (Environment.pEnvironmentMap != nullptr)
+        pEnvironmentMap = RadientAssetManagerImpl::GetTextureSRV(Environment.pEnvironmentMap);
 
     if (pEnvironmentMap == nullptr)
     {
