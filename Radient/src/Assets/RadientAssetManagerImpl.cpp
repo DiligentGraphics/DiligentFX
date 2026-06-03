@@ -148,6 +148,55 @@ RADIENT_STATUS LoadTextureAsset(const std::string&       SourceURI,
 
 } // namespace
 
+template <typename InterfaceType, const INTERFACE_ID& InterfaceID, RADIENT_ASSET_TYPE AssetType, typename StorageType>
+RadientAssetManagerImpl::AssetImpl<InterfaceType, InterfaceID, AssetType, StorageType>::AssetImpl(IReferenceCounters* pRefCounters,
+                                                                                                  std::string&&       URI,
+                                                                                                  const Char*         Name,
+                                                                                                  StorageType&&       Storage) :
+    TBase{pRefCounters},
+    m_URI{std::move(URI)},
+    m_Name{Name != nullptr ? Name : ""},
+    m_Storage{std::move(Storage)}
+{
+    m_Ref.URI     = m_URI.c_str();
+    m_Ref.Version = 1;
+}
+
+template <typename InterfaceType, typename ImplType>
+InterfaceType* RadientAssetManagerImpl::StoreAsset(const char*                  Type,
+                                                   const Char*                  Name,
+                                                   typename ImplType::Storage&& Storage)
+{
+    RefCntAutoPtr<ImplType> pAsset{MakeNewRCObj<ImplType>()(MakeURI(Type), Name, std::move(Storage))};
+
+    RefCntAutoPtr<IRadientAsset> pBase{pAsset, IID_RadientAsset};
+    VERIFY(pBase != nullptr, "Radient asset object does not expose IRadientAsset");
+
+    {
+        std::unique_lock<std::shared_mutex> Lock{m_Mutex};
+
+        const auto It = m_Assets.find(HashMapStringKey{pBase->GetReference().URI});
+        if (It != m_Assets.end())
+        {
+            VERIFY(It->second.Lock() == nullptr, "Asset URI already exists");
+            It->second = RefCntWeakPtr<IRadientAsset>{pBase};
+        }
+        else
+        {
+            m_Assets.emplace(HashMapStringKey{pBase->GetReference().URI, true},
+                             RefCntWeakPtr<IRadientAsset>{pBase});
+        }
+    }
+
+    return pAsset.Detach();
+}
+
+template <typename InterfaceType, typename ImplType>
+ImplType* RadientAssetManagerImpl::GetAssetImpl(InterfaceType* pAsset)
+{
+    return pAsset != nullptr ? ClassPtrCast<ImplType>(pAsset) : nullptr;
+}
+
 RadientAssetManagerImpl::RadientAssetManagerImpl(IReferenceCounters* pRefCounters,
                                                  const CreateInfo&   CreateInfo) :
     TBase{pRefCounters},
@@ -194,12 +243,7 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMesh(const RadientMeshCreateInfo& 
     if (!ValidateMesh(MeshCI))
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    AssetRecord Record;
-    Record.Type = RADIENT_ASSET_TYPE_MESH;
-    Record.Name = MeshCI.Name != nullptr ? MeshCI.Name : "";
-    Record.URI  = MakeURI("mesh");
-
-    MeshStorage& MeshData = Record.Storage.emplace<MeshStorage>();
+    MeshStorage MeshData;
 
     MeshData.VertexBuffers.reserve(MeshCI.VertexBufferCount);
     for (Uint32 BufferIndex = 0; BufferIndex < MeshCI.VertexBufferCount; ++BufferIndex)
@@ -243,11 +287,7 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMesh(const RadientMeshCreateInfo& 
         MeshData.MeshPrimitives.emplace_back(std::move(Primitive));
     }
 
-    Record.Ref.URI     = Record.URI.c_str();
-    Record.Ref.Version = Record.Version;
-
-    RefCntAutoPtr<IRadientMeshAsset> pMesh = StoreAsset<IRadientMeshAsset, MeshAssetImpl>(std::move(Record));
-    *ppMesh                                = pMesh.Detach();
+    *ppMesh = StoreAsset<IRadientMeshAsset, MeshAssetImpl>("mesh", MeshCI.Name, MeshAssetStorage{std::move(MeshData)});
     return RADIENT_STATUS_OK;
 }
 
@@ -258,12 +298,7 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMaterial(const RadientMaterialCrea
         return RADIENT_STATUS_INVALID_ARGUMENT;
     *ppMaterial = nullptr;
 
-    AssetRecord Record;
-    Record.Type = RADIENT_ASSET_TYPE_MATERIAL;
-    Record.Name = MaterialCI.Name != nullptr ? MaterialCI.Name : "";
-    Record.URI  = MakeURI("material");
-
-    MaterialStorage& MaterialData          = Record.Storage.emplace<MaterialStorage>();
+    MaterialStorage MaterialData;
     MaterialData.BaseColorFactor           = MaterialCI.BaseColorFactor;
     MaterialData.MetallicFactor            = MaterialCI.MetallicFactor;
     MaterialData.RoughnessFactor           = MaterialCI.RoughnessFactor;
@@ -276,11 +311,7 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMaterial(const RadientMaterialCrea
     MaterialData.pOcclusionTexture         = MaterialCI.pOcclusionTexture;
     MaterialData.pEmissiveTexture          = MaterialCI.pEmissiveTexture;
 
-    Record.Ref.URI     = Record.URI.c_str();
-    Record.Ref.Version = Record.Version;
-
-    RefCntAutoPtr<IRadientMaterialAsset> pMaterial = StoreAsset<IRadientMaterialAsset, MaterialAssetImpl>(std::move(Record));
-    *ppMaterial                                    = pMaterial.Detach();
+    *ppMaterial = StoreAsset<IRadientMaterialAsset, MaterialAssetImpl>("material", MaterialCI.Name, std::move(MaterialData));
     return RADIENT_STATUS_OK;
 }
 
@@ -294,25 +325,16 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadTexture(const RadientTextureLoadInfo
     if (!ValidateTexture(LoadInfo))
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    AssetRecord Record;
-    Record.Type = RADIENT_ASSET_TYPE_TEXTURE;
-    Record.URI  = MakeURI("texture");
-    Record.Name = LoadInfo.URI;
-
-    TextureStorage& TextureData = Record.Storage.emplace<TextureStorage>();
-    TextureData.SourceURI       = LoadInfo.URI;
-    TextureData.LoadStatus      = LoadTextureAsset(TextureData.SourceURI,
-                                                   LoadInfo.IsSRGB,
-                                                   m_pDevice,
-                                                   TextureData.pTexture);
+    TextureStorage TextureData;
+    TextureData.SourceURI  = LoadInfo.URI;
+    TextureData.LoadStatus = LoadTextureAsset(TextureData.SourceURI,
+                                              LoadInfo.IsSRGB,
+                                              m_pDevice,
+                                              TextureData.pTexture);
     if (RADIENT_FAILED(TextureData.LoadStatus))
         return TextureData.LoadStatus;
 
-    Record.Ref.URI     = Record.URI.c_str();
-    Record.Ref.Version = Record.Version;
-
-    RefCntAutoPtr<IRadientTextureAsset> pTexture = StoreAsset<IRadientTextureAsset, TextureAssetImpl>(std::move(Record));
-    *ppTexture                                   = pTexture.Detach();
+    *ppTexture = StoreAsset<IRadientTextureAsset, TextureAssetImpl>("texture", LoadInfo.URI, std::move(TextureData));
     return RADIENT_STATUS_OK;
 }
 
@@ -326,15 +348,8 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadGLTF(const RadientGLTFLoadInfo& Load
     if (!ValidateGLTF(LoadInfo))
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    AssetRecord Record;
-    Record.Type        = RADIENT_ASSET_TYPE_SCENE;
-    Record.URI         = MakeURI("gltf");
-    Record.Name        = LoadInfo.URI;
-    Record.Ref.URI     = Record.URI.c_str();
-    Record.Ref.Version = Record.Version;
-
-    GLTFModelStorage& GLTFModelData = Record.Storage.emplace<GLTFModelStorage>();
-    GLTFModelData.SourceURI         = LoadInfo.URI;
+    GLTFModelStorage GLTFModelData;
+    GLTFModelData.SourceURI = LoadInfo.URI;
 
     if (m_pThreadPool == nullptr)
     {
@@ -346,19 +361,17 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadGLTF(const RadientGLTFLoadInfo& Load
         if (Status != RADIENT_STATUS_OK)
             return Status;
 
-        GLTFModelData.LoadStatus                      = RADIENT_STATUS_OK;
-        RefCntAutoPtr<IRadientSceneAsset> pModelAsset = StoreAsset<IRadientSceneAsset, SceneAssetImpl>(std::move(Record));
-        EnqueueGPUResourceUpdate(pModelAsset);
-        *ppModel = pModelAsset.Detach();
+        GLTFModelData.LoadStatus = RADIENT_STATUS_OK;
+        *ppModel                 = StoreAsset<IRadientSceneAsset, SceneAssetImpl>("gltf", LoadInfo.URI, std::move(GLTFModelData));
+        EnqueueGPUResourceUpdate(*ppModel);
         return RADIENT_STATUS_OK;
     }
 
-    GLTFModelData.LoadStatus                       = RADIENT_STATUS_PENDING;
-    RefCntAutoPtr<IRadientSceneAsset> pModelAsset  = StoreAsset<IRadientSceneAsset, SceneAssetImpl>(std::move(Record));
-    RefCntAutoPtr<IRadientSceneAsset> pReturnModel = pModelAsset;
-    *ppModel                                       = pReturnModel.Detach();
+    GLTFModelData.LoadStatus = RADIENT_STATUS_PENDING;
+    *ppModel                 = StoreAsset<IRadientSceneAsset, SceneAssetImpl>("gltf", LoadInfo.URI, std::move(GLTFModelData));
 
     RefCntAutoPtr<RadientAssetManagerImpl> pSelf{this};
+    RefCntAutoPtr<IRadientSceneAsset>      pModelAsset{*ppModel};
     const std::string                      SourceURI{LoadInfo.URI};
 
     EnqueueAsyncWork(
@@ -418,35 +431,20 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMeshFromGLTFMesh(IRadientSceneAsse
     {
         std::shared_lock<std::shared_mutex> Lock{m_Mutex};
 
-        const AssetRecord* pModelRecord = GetAssetRecord(pModel);
-        if (pModelRecord == nullptr)
+        const SceneAssetImpl* pModelImpl = GetAssetImpl<const IRadientSceneAsset, const SceneAssetImpl>(pModel);
+        if (pModelImpl == nullptr)
             return RADIENT_STATUS_INVALID_ARGUMENT;
 
-        if (pModelRecord->Type != RADIENT_ASSET_TYPE_SCENE)
-            return RADIENT_STATUS_INVALID_ARGUMENT;
-
-        const GLTFModelStorage* pGLTFModel = std::get_if<GLTFModelStorage>(&pModelRecord->Storage);
-        VERIFY(pGLTFModel != nullptr, "GLTF model asset has unexpected storage");
-        if (pGLTFModel == nullptr)
-            return RADIENT_STATUS_INVALID_OPERATION;
-
-        if (pGLTFModel->LoadStatus != RADIENT_STATUS_OK)
-            return pGLTFModel->LoadStatus;
+        const GLTFModelStorage& GLTFModel = pModelImpl->GetStorage();
+        if (GLTFModel.LoadStatus != RADIENT_STATUS_OK)
+            return GLTFModel.LoadStatus;
     }
 
-    AssetRecord Record;
-    Record.Type        = RADIENT_ASSET_TYPE_MESH;
-    Record.Name        = Name != nullptr ? Name : "";
-    Record.URI         = MakeURI("mesh");
-    Record.Ref.URI     = Record.URI.c_str();
-    Record.Ref.Version = Record.Version;
+    GLTFMeshStorage GLTFMeshData;
+    GLTFMeshData.pModel    = pModel;
+    GLTFMeshData.MeshIndex = MeshIndex;
 
-    GLTFMeshStorage& GLTFMeshData = Record.Storage.emplace<GLTFMeshStorage>();
-    GLTFMeshData.pModel           = pModel;
-    GLTFMeshData.MeshIndex        = MeshIndex;
-
-    RefCntAutoPtr<IRadientMeshAsset> pMesh = StoreAsset<IRadientMeshAsset, MeshAssetImpl>(std::move(Record));
-    *ppMesh                                = pMesh.Detach();
+    *ppMesh = StoreAsset<IRadientMeshAsset, MeshAssetImpl>("mesh", Name, MeshAssetStorage{std::move(GLTFMeshData)});
     return RADIENT_STATUS_OK;
 }
 
@@ -461,14 +459,11 @@ RADIENT_STATUS RadientAssetManagerImpl::GetMeshGLTFSource(IRadientMeshAsset*   p
 
     std::shared_lock<std::shared_mutex> Lock{m_Mutex};
 
-    const AssetRecord* pRecord = GetAssetRecord(pMesh);
-    if (pRecord == nullptr)
+    const MeshAssetImpl* pImpl = GetAssetImpl<const IRadientMeshAsset, const MeshAssetImpl>(pMesh);
+    if (pImpl == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    if (pRecord->Type != RADIENT_ASSET_TYPE_MESH)
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-
-    const GLTFMeshStorage* pGLTFMesh = std::get_if<GLTFMeshStorage>(&pRecord->Storage);
+    const GLTFMeshStorage* pGLTFMesh = std::get_if<GLTFMeshStorage>(&pImpl->GetStorage());
     if (pGLTFMesh == nullptr || pGLTFMesh->pModel == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
@@ -485,19 +480,11 @@ RADIENT_STATUS RadientAssetManagerImpl::GetGLTFSourceURI(IRadientSceneAsset* pMo
 
     std::shared_lock<std::shared_mutex> Lock{m_Mutex};
 
-    const AssetRecord* pRecord = GetAssetRecord(pModel);
-    if (pRecord == nullptr)
+    const SceneAssetImpl* pImpl = GetAssetImpl<const IRadientSceneAsset, const SceneAssetImpl>(pModel);
+    if (pImpl == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    if (pRecord->Type != RADIENT_ASSET_TYPE_SCENE)
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-
-    const GLTFModelStorage* pGLTFModel = std::get_if<GLTFModelStorage>(&pRecord->Storage);
-    VERIFY(pGLTFModel != nullptr, "GLTF model asset has unexpected storage");
-    if (pGLTFModel == nullptr)
-        return RADIENT_STATUS_INVALID_OPERATION;
-
-    SourceURI = pGLTFModel->SourceURI.c_str();
+    SourceURI = pImpl->GetStorage().SourceURI.c_str();
     return RADIENT_STATUS_OK;
 }
 
@@ -506,55 +493,47 @@ const GLTF::Model* RadientAssetManagerImpl::GetGLTFModel(IRadientSceneAsset* pMo
 {
     std::shared_lock<std::shared_mutex> Lock{m_Mutex};
 
-    const AssetRecord* pRecord = GetAssetRecord(pModel);
-    if (pRecord == nullptr || pRecord->Type != RADIENT_ASSET_TYPE_SCENE)
+    const SceneAssetImpl* pImpl = GetAssetImpl<const IRadientSceneAsset, const SceneAssetImpl>(pModel);
+    if (pImpl == nullptr)
         return nullptr;
 
-    const GLTFModelStorage* pGLTFModel = std::get_if<GLTFModelStorage>(&pRecord->Storage);
-    if (pGLTFModel == nullptr ||
-        pGLTFModel->LoadStatus != RADIENT_STATUS_OK ||
-        (RequireGPUResourcesReady && !pGLTFModel->GPUResourcesReady))
+    const GLTFModelStorage& GLTFModel = pImpl->GetStorage();
+    if (GLTFModel.LoadStatus != RADIENT_STATUS_OK ||
+        (RequireGPUResourcesReady && !GLTFModel.GPUResourcesReady))
     {
         return nullptr;
     }
 
-    return pGLTFModel->pModel.get();
+    return GLTFModel.pModel.get();
 }
 
 RADIENT_STATUS RadientAssetManagerImpl::GetGLTFLoadStatus(IRadientSceneAsset* pModel) const
 {
     std::shared_lock<std::shared_mutex> Lock{m_Mutex};
 
-    const AssetRecord* pRecord = GetAssetRecord(pModel);
-    if (pRecord == nullptr)
+    const SceneAssetImpl* pImpl = GetAssetImpl<const IRadientSceneAsset, const SceneAssetImpl>(pModel);
+    if (pImpl == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    if (pRecord->Type != RADIENT_ASSET_TYPE_SCENE)
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-
-    const GLTFModelStorage* pGLTFModel = std::get_if<GLTFModelStorage>(&pRecord->Storage);
-    VERIFY(pGLTFModel != nullptr, "GLTF model asset has unexpected storage");
-    return pGLTFModel != nullptr ? pGLTFModel->LoadStatus : RADIENT_STATUS_INVALID_OPERATION;
+    return pImpl->GetStorage().LoadStatus;
 }
 
 ITextureView* RadientAssetManagerImpl::GetTextureSRV(IRadientTextureAsset* pTextureAsset) const
 {
     std::shared_lock<std::shared_mutex> Lock{m_Mutex};
 
-    const AssetRecord*    pRecord  = GetAssetRecord(pTextureAsset);
-    const TextureStorage* pTexture = pRecord != nullptr ?
-        std::get_if<TextureStorage>(&pRecord->Storage) :
-        nullptr;
-    if (pRecord == nullptr ||
-        pRecord->Type != RADIENT_ASSET_TYPE_TEXTURE ||
-        pTexture == nullptr ||
-        pTexture->LoadStatus != RADIENT_STATUS_OK ||
-        pTexture->pTexture == nullptr)
+    const TextureAssetImpl* pImpl = GetAssetImpl<const IRadientTextureAsset, const TextureAssetImpl>(pTextureAsset);
+    if (pImpl == nullptr)
+        return nullptr;
+
+    const TextureStorage& Texture = pImpl->GetStorage();
+    if (Texture.LoadStatus != RADIENT_STATUS_OK ||
+        Texture.pTexture == nullptr)
     {
         return nullptr;
     }
 
-    return pTexture->pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+    return Texture.pTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
 }
 
 RADIENT_STATUS RadientAssetManagerImpl::UpdateGPUResources(IRenderDevice*  pDevice,
@@ -589,26 +568,23 @@ RADIENT_STATUS RadientAssetManagerImpl::UpdateGPUResources(IRenderDevice*  pDevi
         if (pSceneAsset == nullptr)
             continue;
 
-        AssetRecord* pRecord = GetAssetRecord(pSceneAsset);
-        VERIFY(pRecord != nullptr && pRecord->Type == RADIENT_ASSET_TYPE_SCENE,
+        SceneAssetImpl* pImpl = GetAssetImpl<IRadientSceneAsset, SceneAssetImpl>(pSceneAsset);
+        VERIFY(pImpl != nullptr,
                "Pending GPU resource update references an invalid asset");
-        if (pRecord == nullptr || pRecord->Type != RADIENT_ASSET_TYPE_SCENE)
+        if (pImpl == nullptr)
             continue;
 
-        GLTFModelStorage* pGLTFModel = std::get_if<GLTFModelStorage>(&pRecord->Storage);
-        VERIFY(pGLTFModel != nullptr, "Scene asset has unexpected storage");
-        if (pGLTFModel == nullptr)
-            continue;
+        GLTFModelStorage& GLTFModel = pImpl->GetStorage();
 
-        if (pGLTFModel->GPUResourcesReady ||
-            pGLTFModel->LoadStatus != RADIENT_STATUS_OK ||
-            pGLTFModel->pModel == nullptr)
+        if (GLTFModel.GPUResourcesReady ||
+            GLTFModel.LoadStatus != RADIENT_STATUS_OK ||
+            GLTFModel.pModel == nullptr)
         {
-            pGLTFModel->GPUUpdateQueued = false;
+            GLTFModel.GPUUpdateQueued = false;
             continue;
         }
 
-        ModelsToPrepare.push_back({pSceneAsset, pGLTFModel->pModel.get()});
+        ModelsToPrepare.push_back({pSceneAsset, GLTFModel.pModel.get()});
     }
     m_GPUResourceUpdateScratch.clear();
 
@@ -622,27 +598,18 @@ RADIENT_STATUS RadientAssetManagerImpl::UpdateGPUResources(IRenderDevice*  pDevi
 
     auto GetQueuedGLTFModelLocked = [](const GLTFModelToPrepare& Model) -> GLTFModelStorage* //
     {
-        AssetRecord* pRecord = GetAssetRecord(Model.pAsset);
-        VERIFY(pRecord != nullptr, "Queued GPU resource update references an unknown asset");
-        if (pRecord == nullptr)
+        SceneAssetImpl* pImpl = GetAssetImpl<IRadientSceneAsset, SceneAssetImpl>(Model.pAsset);
+        VERIFY(pImpl != nullptr, "Queued GPU resource update references an invalid asset");
+        if (pImpl == nullptr)
             return nullptr;
 
-        VERIFY(pRecord->Type == RADIENT_ASSET_TYPE_SCENE,
-               "Queued GPU resource update references an asset of unexpected type");
-        if (pRecord->Type != RADIENT_ASSET_TYPE_SCENE)
-            return nullptr;
-
-        GLTFModelStorage* pGLTFModel = std::get_if<GLTFModelStorage>(&pRecord->Storage);
-        VERIFY(pGLTFModel != nullptr, "Scene asset has unexpected storage");
-        if (pGLTFModel == nullptr)
-            return nullptr;
-
-        VERIFY(pGLTFModel->pModel.get() == Model.pModel,
+        GLTFModelStorage& GLTFModel = pImpl->GetStorage();
+        VERIFY(GLTFModel.pModel.get() == Model.pModel,
                "Queued GPU resource update references a stale GLTF model");
-        if (pGLTFModel->pModel.get() != Model.pModel)
+        if (GLTFModel.pModel.get() != Model.pModel)
             return nullptr;
 
-        return pGLTFModel;
+        return &GLTFModel;
     };
 
     for (const GLTFModelToPrepare& Model : ModelsToPrepare)
@@ -748,24 +715,23 @@ RefCntAutoPtr<IRadientAsset> RadientAssetManagerImpl::FindAssetLocked(const Radi
 
 RADIENT_STATUS RadientAssetManagerImpl::GetAssetLoadStatusLocked(IRadientAsset* pAsset) const
 {
-    const AssetRecord* pRecord = GetAssetRecord(pAsset);
-    if (pRecord == nullptr)
+    if (pAsset == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    switch (pRecord->Type)
+    switch (pAsset->GetType())
     {
         case RADIENT_ASSET_TYPE_SCENE:
         {
-            const GLTFModelStorage* pGLTFModel = std::get_if<GLTFModelStorage>(&pRecord->Storage);
-            VERIFY(pGLTFModel != nullptr, "GLTF model asset has unexpected storage");
-            return pGLTFModel != nullptr ? pGLTFModel->LoadStatus : RADIENT_STATUS_INVALID_OPERATION;
+            RefCntAutoPtr<IRadientSceneAsset> pScene{pAsset, IID_RadientSceneAsset};
+            const SceneAssetImpl*             pImpl = GetAssetImpl<const IRadientSceneAsset, const SceneAssetImpl>(pScene);
+            return pImpl != nullptr ? pImpl->GetStorage().LoadStatus : RADIENT_STATUS_INVALID_ARGUMENT;
         }
 
         case RADIENT_ASSET_TYPE_TEXTURE:
         {
-            const TextureStorage* pTexture = std::get_if<TextureStorage>(&pRecord->Storage);
-            VERIFY(pTexture != nullptr, "Texture asset has unexpected storage");
-            return pTexture != nullptr ? pTexture->LoadStatus : RADIENT_STATUS_INVALID_OPERATION;
+            RefCntAutoPtr<IRadientTextureAsset> pTexture{pAsset, IID_RadientTextureAsset};
+            const TextureAssetImpl*             pImpl = GetAssetImpl<const IRadientTextureAsset, const TextureAssetImpl>(pTexture);
+            return pImpl != nullptr ? pImpl->GetStorage().LoadStatus : RADIENT_STATUS_INVALID_ARGUMENT;
         }
 
         default:
@@ -781,24 +747,14 @@ std::string RadientAssetManagerImpl::MakeURI(const char* Type)
     return std::string{"radient://session/"} + Type + "/" + std::to_string(AssetID);
 }
 
-void RadientAssetManagerImpl::FixupAssetRecord(AssetRecord& Record)
-{
-    Record.Ref.URI     = Record.URI.empty() ? nullptr : Record.URI.c_str();
-    Record.Ref.Version = Record.Version;
-}
-
 void RadientAssetManagerImpl::EnqueueGPUResourceUpdate(IRadientSceneAsset* pModel)
 {
-    AssetRecord* pRecord = GetAssetRecord(pModel);
-    if (pRecord == nullptr || pRecord->Type != RADIENT_ASSET_TYPE_SCENE)
-        return;
-
-    GLTFModelStorage* pGLTFModel = std::get_if<GLTFModelStorage>(&pRecord->Storage);
-    if (pGLTFModel == nullptr)
+    SceneAssetImpl* pImpl = GetAssetImpl<IRadientSceneAsset, SceneAssetImpl>(pModel);
+    if (pImpl == nullptr)
         return;
 
     std::unique_lock<std::shared_mutex> Lock{m_Mutex};
-    EnqueueGPUResourceUpdateLocked(pModel, *pGLTFModel);
+    EnqueueGPUResourceUpdateLocked(pModel, pImpl->GetStorage());
 }
 
 void RadientAssetManagerImpl::EnqueueGPUResourceUpdateLocked(IRadientSceneAsset* pModel,
@@ -817,71 +773,23 @@ void RadientAssetManagerImpl::EnqueueGPUResourceUpdateLocked(IRadientSceneAsset*
     m_PendingGPUResourceUpdates.emplace_back(pModel);
 }
 
-RadientAssetManagerImpl::AssetRecord* RadientAssetManagerImpl::GetAssetRecord(IRadientAsset* pAsset)
-{
-    return const_cast<AssetRecord*>(GetAssetRecord(static_cast<const IRadientAsset*>(pAsset)));
-}
-
-const RadientAssetManagerImpl::AssetRecord* RadientAssetManagerImpl::GetAssetRecord(const IRadientAsset* pAsset)
-{
-    if (pAsset == nullptr)
-        return nullptr;
-
-    switch (pAsset->GetType())
-    {
-        case RADIENT_ASSET_TYPE_MESH:
-        {
-            RefCntAutoPtr<IRadientMeshAsset> pMesh{const_cast<IRadientAsset*>(pAsset), IID_RadientMeshAsset};
-            const MeshAssetImpl*             pImpl = GetAssetImpl<const IRadientMeshAsset, const MeshAssetImpl>(pMesh);
-            return pImpl != nullptr ? &pImpl->GetRecord() : nullptr;
-        }
-
-        case RADIENT_ASSET_TYPE_MATERIAL:
-        {
-            RefCntAutoPtr<IRadientMaterialAsset> pMaterial{const_cast<IRadientAsset*>(pAsset), IID_RadientMaterialAsset};
-            const MaterialAssetImpl*             pImpl = GetAssetImpl<const IRadientMaterialAsset, const MaterialAssetImpl>(pMaterial);
-            return pImpl != nullptr ? &pImpl->GetRecord() : nullptr;
-        }
-
-        case RADIENT_ASSET_TYPE_TEXTURE:
-        {
-            RefCntAutoPtr<IRadientTextureAsset> pTexture{const_cast<IRadientAsset*>(pAsset), IID_RadientTextureAsset};
-            const TextureAssetImpl*             pImpl = GetAssetImpl<const IRadientTextureAsset, const TextureAssetImpl>(pTexture);
-            return pImpl != nullptr ? &pImpl->GetRecord() : nullptr;
-        }
-
-        case RADIENT_ASSET_TYPE_SCENE:
-        {
-            RefCntAutoPtr<IRadientSceneAsset> pScene{const_cast<IRadientAsset*>(pAsset), IID_RadientSceneAsset};
-            const SceneAssetImpl*             pImpl = GetAssetImpl<const IRadientSceneAsset, const SceneAssetImpl>(pScene);
-            return pImpl != nullptr ? &pImpl->GetRecord() : nullptr;
-        }
-    }
-
-    return nullptr;
-}
-
 void RadientAssetManagerImpl::CompleteGLTFLoad(IRadientSceneAsset*          pModel,
                                                std::unique_ptr<GLTF::Model> pModelData,
                                                RADIENT_STATUS               Status)
 {
     std::unique_lock<std::shared_mutex> Lock{m_Mutex};
 
-    AssetRecord* pRecord = GetAssetRecord(pModel);
-    if (pRecord == nullptr || pRecord->Type != RADIENT_ASSET_TYPE_SCENE)
+    SceneAssetImpl* pImpl = GetAssetImpl<IRadientSceneAsset, SceneAssetImpl>(pModel);
+    if (pImpl == nullptr)
         return;
 
-    GLTFModelStorage* pGLTFModel = std::get_if<GLTFModelStorage>(&pRecord->Storage);
-    VERIFY(pGLTFModel != nullptr, "GLTF model asset has unexpected storage");
-    if (pGLTFModel == nullptr)
-        return;
+    GLTFModelStorage& GLTFModel = pImpl->GetStorage();
+    GLTFModel.pModel            = std::move(pModelData);
+    GLTFModel.LoadStatus        = Status;
+    GLTFModel.GPUResourcesReady = false;
+    GLTFModel.GPUUpdateQueued   = false;
 
-    pGLTFModel->pModel            = std::move(pModelData);
-    pGLTFModel->LoadStatus        = Status;
-    pGLTFModel->GPUResourcesReady = false;
-    pGLTFModel->GPUUpdateQueued   = false;
-
-    EnqueueGPUResourceUpdateLocked(pModel, *pGLTFModel);
+    EnqueueGPUResourceUpdateLocked(pModel, GLTFModel);
 }
 
 } // namespace Diligent
