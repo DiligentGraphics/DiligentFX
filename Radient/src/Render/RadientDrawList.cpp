@@ -31,26 +31,17 @@
 namespace Diligent
 {
 
-void RadientDrawList::Clear()
-{
-    m_Items.clear();
-}
-
-size_t RadientDrawList::Add(RadientDrawableID DrawableID)
-{
-    const size_t Index = m_Items.size();
-    m_Items.emplace_back(DrawableID);
-    return Index;
-}
-
 RadientDrawableID RadientDrawList::RemoveAt(size_t Index)
 {
-    VERIFY(Index < m_Items.size(), "Invalid draw list item index");
     if (Index >= m_Items.size())
+    {
+        UNEXPECTED("Draw list item index (", Index, ") exceeds the number of items in the list (", m_Items.size(), ")");
         return InvalidRadientDrawableID;
+    }
 
     const RadientDrawableID MovedDrawableID = m_Items.back().DrawableID;
-    m_Items[Index]                          = m_Items.back();
+
+    m_Items[Index] = m_Items.back();
     m_Items.pop_back();
 
     return Index < m_Items.size() ? MovedDrawableID : InvalidRadientDrawableID;
@@ -60,18 +51,6 @@ void RadientDrawLists::Clear()
 {
     for (RadientDrawList& DrawList : m_DrawLists)
         DrawList.Clear();
-}
-
-size_t RadientDrawLists::Add(GLTF::Material::ALPHA_MODE AlphaMode,
-                             RadientDrawableID          DrawableID)
-{
-    return m_DrawLists[AlphaMode].Add(DrawableID);
-}
-
-RadientDrawableID RadientDrawLists::RemoveAt(GLTF::Material::ALPHA_MODE AlphaMode,
-                                             size_t                     Index)
-{
-    return m_DrawLists[AlphaMode].RemoveAt(Index);
 }
 
 bool RadientDrawLists::IsEmpty() const

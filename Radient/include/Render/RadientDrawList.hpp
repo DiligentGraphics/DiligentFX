@@ -50,14 +50,20 @@ struct RadientDrawItem
     RadientDrawableID DrawableID = InvalidRadientDrawableID;
 };
 
+
 /// Cached list of renderable primitives prepared for backend rendering.
 class RadientDrawList
 {
 public:
     using ItemListType = std::vector<RadientDrawItem>;
 
-    void              Clear();
-    size_t            Add(RadientDrawableID DrawableID);
+    size_t Add(RadientDrawableID DrawableID)
+    {
+        const size_t Index = m_Items.size();
+        m_Items.emplace_back(DrawableID);
+        return Index;
+    }
+
     RadientDrawableID RemoveAt(size_t Index);
 
     size_t GetItemCount() const
@@ -75,19 +81,33 @@ public:
         return m_Items;
     }
 
+    void Clear()
+    {
+        m_Items.clear();
+    }
 
 private:
     ItemListType m_Items;
 };
 
+
+/// Collection of draw lists for different material alpha modes.
 class RadientDrawLists
 {
 public:
-    void              Clear();
-    size_t            Add(GLTF::Material::ALPHA_MODE AlphaMode,
-                          RadientDrawableID          DrawableID);
+    void Clear();
+
+    size_t Add(GLTF::Material::ALPHA_MODE AlphaMode,
+               RadientDrawableID          DrawableID)
+    {
+        return m_DrawLists[AlphaMode].Add(DrawableID);
+    }
+
     RadientDrawableID RemoveAt(GLTF::Material::ALPHA_MODE AlphaMode,
-                               size_t                     Index);
+                               size_t                     Index)
+    {
+        return m_DrawLists[AlphaMode].RemoveAt(Index);
+    }
 
     bool IsEmpty() const;
 

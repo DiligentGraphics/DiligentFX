@@ -28,32 +28,4 @@
 
 namespace Diligent
 {
-
-void RadientLightList::Clear()
-{
-    m_Items.clear();
-}
-
-void RadientLightList::Add(RadientEntityID              Entity,
-                           const RadientLightComponent& Light,
-                           const RadientMatrix4x4&      WorldMatrix)
-{
-    m_Items.emplace_back(Entity, Light, WorldMatrix);
-}
-
-size_t RadientLightList::GetItemCount() const
-{
-    return m_Items.size();
-}
-
-bool RadientLightList::IsEmpty() const
-{
-    return m_Items.empty();
-}
-
-const RadientLightList::ItemListType& RadientLightList::GetItems() const
-{
-    return m_Items;
-}
-
 } // namespace Diligent
