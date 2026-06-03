@@ -590,16 +590,18 @@ TEST(RadientSceneImporterTest, ImportsMeshNodeMetadataWithoutDevice)
     // Both nodes reference the same converted Radient mesh asset.
     EXPECT_EQ(RenderableMeshes[0], RenderableMeshes[1]);
 
+    const GLTF::Model* pExpectedModel = RadientAssetManagerImpl::GetGLTFModel(pModel);
+    ASSERT_NE(pExpectedModel, nullptr);
+
     for (IRadientMeshAsset* pMesh : RenderableMeshes)
     {
-        RefCntAutoPtr<IRadientSceneAsset> pSourceModel;
-        Uint32                            SourceMeshIndex = ~0u;
-
         // The asset manager should remember which glTF model and mesh index
         // produced each converted Radient mesh.
-        EXPECT_EQ(RadientAssetManagerImpl::GetMeshGLTFSource(pMesh, &pSourceModel, SourceMeshIndex), RADIENT_STATUS_OK);
-        EXPECT_EQ(pSourceModel, pModel);
-        EXPECT_EQ(SourceMeshIndex, 0u);
+        const RadientAssetManagerImpl::GLTFMeshResolveResult Result =
+            RadientAssetManagerImpl::GetGLTFMesh(pMesh, false);
+        EXPECT_EQ(Result.Status, RADIENT_STATUS_OK);
+        EXPECT_EQ(Result.pModel, pExpectedModel);
+        EXPECT_EQ(Result.MeshIndex, 0u);
     }
 }
 

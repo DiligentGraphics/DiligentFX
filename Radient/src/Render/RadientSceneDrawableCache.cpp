@@ -104,39 +104,30 @@ struct ResolvedMesh
     Uint32                  BaseVertex         = 0;
 };
 
-MeshResolveStatus ResolveMesh(IRadientMeshAsset*       pMeshAsset,
-                              ResolvedMesh&            Mesh)
+MeshResolveStatus ResolveMesh(IRadientMeshAsset* pMeshAsset,
+                              ResolvedMesh&      Mesh)
 {
     Mesh = {};
 
     if (pMeshAsset == nullptr)
         return MeshResolveStatus::Failed;
 
-    RefCntAutoPtr<IRadientSceneAsset> pSourceModel;
-    Uint32                            SourceMeshIndex = ~0u;
-    const RADIENT_STATUS              SourceStatus    = RadientAssetManagerImpl::GetMeshGLTFSource(pMeshAsset, &pSourceModel, SourceMeshIndex);
-    if (RADIENT_FAILED(SourceStatus))
+    const RadientAssetManagerImpl::GLTFMeshResolveResult Result =
+        RadientAssetManagerImpl::GetGLTFMesh(pMeshAsset, true);
+    if (RADIENT_FAILED(Result.Status))
         return MeshResolveStatus::Failed;
 
-    const RADIENT_STATUS LoadStatus = RadientAssetManagerImpl::GetGLTFLoadStatus(pSourceModel);
-    if (RADIENT_FAILED(LoadStatus))
-        return MeshResolveStatus::Failed;
-
-    if (LoadStatus != RADIENT_STATUS_OK)
+    if (Result.Status != RADIENT_STATUS_OK)
         return MeshResolveStatus::Pending;
 
-    const GLTF::Model* pModel = RadientAssetManagerImpl::GetGLTFModel(pSourceModel, true);
-    if (pModel == nullptr)
-        return MeshResolveStatus::Pending;
-
-    if (SourceMeshIndex >= pModel->Meshes.size())
+    if (Result.pModel == nullptr || Result.MeshIndex >= Result.pModel->Meshes.size())
         return MeshResolveStatus::Failed;
 
-    Mesh.pModel             = pModel;
-    Mesh.pMesh              = &pModel->Meshes[SourceMeshIndex];
-    Mesh.VertexAttribFlags  = GetVertexAttribFlags(*pModel);
-    Mesh.FirstIndexLocation = pModel->GetFirstIndexLocation();
-    Mesh.BaseVertex         = pModel->GetBaseVertex();
+    Mesh.pModel             = Result.pModel;
+    Mesh.pMesh              = &Result.pModel->Meshes[Result.MeshIndex];
+    Mesh.VertexAttribFlags  = GetVertexAttribFlags(*Result.pModel);
+    Mesh.FirstIndexLocation = Result.pModel->GetFirstIndexLocation();
+    Mesh.BaseVertex         = Result.pModel->GetBaseVertex();
 
     return MeshResolveStatus::Ready;
 }

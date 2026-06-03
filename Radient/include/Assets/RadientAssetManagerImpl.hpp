@@ -100,12 +100,18 @@ public:
                                           const Char*         Name,
                                           IRadientMeshAsset** ppMesh);
 
-    static RADIENT_STATUS GetMeshGLTFSource(IRadientMeshAsset*   pMesh,
-                                            IRadientSceneAsset** ppModel,
-                                            Uint32&              MeshIndex);
-
     static RADIENT_STATUS GetGLTFSourceURI(IRadientSceneAsset* pModel,
                                            const Char*&        SourceURI);
+
+    struct GLTFMeshResolveResult
+    {
+        RADIENT_STATUS     Status    = RADIENT_STATUS_INVALID_ARGUMENT;
+        const GLTF::Model* pModel    = nullptr;
+        Uint32             MeshIndex = ~0u;
+    };
+
+    static GLTFMeshResolveResult GetGLTFMesh(IRadientMeshAsset* pMesh,
+                                             bool               RequireGPUResourcesReady);
 
     static const GLTF::Model* GetGLTFModel(IRadientSceneAsset* pModel,
                                            bool                RequireGPUResourcesReady = false);
