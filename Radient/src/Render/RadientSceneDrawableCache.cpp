@@ -144,7 +144,7 @@ MeshResolveStatus ResolveMesh(RadientAssetManagerImpl* pAssetManager,
 
 } // namespace
 
-RADIENT_STATUS RadientSceneDrawableCache::SyncScene(IRadientScene&            Scene,
+RADIENT_STATUS RadientSceneDrawableCache::SyncScene(IRadientScene&           Scene,
                                                     RadientAssetManagerImpl* pAssetManager)
 {
     m_DrawableChanges.clear();
@@ -282,7 +282,7 @@ void RadientSceneDrawableCache::ResolvePendingRenderableMeshes(RadientAssetManag
     }
 }
 
-bool RadientSceneDrawableCache::TryExpandRenderable(RenderableRecord&   Record,
+bool RadientSceneDrawableCache::TryExpandRenderable(RenderableRecord&        Record,
                                                     RadientAssetManagerImpl* pAssetManager)
 {
     ResolvedMesh Mesh;
@@ -441,21 +441,6 @@ void RadientSceneDrawableCache::RecordDrawableChange(RadientDrawableID DrawableI
     m_DrawableChanges.push_back({DrawableID, Type});
 }
 
-const RadientDrawLists& RadientSceneDrawableCache::GetDrawLists() const
-{
-    return m_DrawLists;
-}
-
-const RadientDrawList& RadientSceneDrawableCache::GetDrawList(GLTF::Material::ALPHA_MODE AlphaMode) const
-{
-    return m_DrawLists.GetDrawList(AlphaMode);
-}
-
-const std::vector<RadientDrawableChange>& RadientSceneDrawableCache::GetDrawableChanges() const
-{
-    return m_DrawableChanges;
-}
-
 const RadientDrawableSlot* RadientSceneDrawableCache::GetDrawableSlot(RadientDrawableID DrawableID) const
 {
     if (DrawableID >= m_DrawableSlots.size())
@@ -463,16 +448,6 @@ const RadientDrawableSlot* RadientSceneDrawableCache::GetDrawableSlot(RadientDra
 
     const RadientDrawableSlot& Slot = m_DrawableSlots[DrawableID];
     return Slot.Alive ? &Slot : nullptr;
-}
-
-const RadientLightList& RadientSceneDrawableCache::GetLightList() const
-{
-    return m_LightList;
-}
-
-const RadientSceneRevisions& RadientSceneDrawableCache::GetSceneRevisions() const
-{
-    return m_SceneRevisions;
 }
 
 } // namespace Diligent

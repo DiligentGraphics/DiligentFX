@@ -77,15 +77,17 @@ struct RadientDrawableSlot
     const RadientMeshRendererComponent* pRenderer = nullptr;
     RadientDrawableFrameData            FrameData;
 
-    RadientDrawablePrimitive Primitive;
-    const GLTF::Material*    pMaterial = nullptr;
+    RadientDrawablePrimitive   Primitive;
+    GLTF::Material::ALPHA_MODE AlphaMode = GLTF::Material::ALPHA_MODE_OPAQUE;
 
-    PBR_Renderer::PSO_FLAGS VertexAttribFlags  = PBR_Renderer::PSO_FLAG_NONE;
-    Uint32                  FirstIndexLocation = 0;
-    Uint32                  BaseVertex         = 0;
+    const GLTF::Material* pMaterial = nullptr;
 
-    GLTF::Material::ALPHA_MODE AlphaMode     = GLTF::Material::ALPHA_MODE_OPAQUE;
-    size_t                     DrawListIndex = ~size_t{0};
+    PBR_Renderer::PSO_FLAGS VertexAttribFlags = PBR_Renderer::PSO_FLAG_NONE;
+
+    Uint32 FirstIndexLocation = 0;
+    Uint32 BaseVertex         = 0;
+
+    size_t DrawListIndex = ~size_t{0};
 };
 
 enum class RadientDrawableChangeType
@@ -108,12 +110,32 @@ public:
     RADIENT_STATUS SyncScene(IRadientScene&           Scene,
                              RadientAssetManagerImpl* pAssetManager);
 
-    const RadientDrawLists&                   GetDrawLists() const;
-    const RadientDrawList&                    GetDrawList(GLTF::Material::ALPHA_MODE AlphaMode) const;
-    const std::vector<RadientDrawableChange>& GetDrawableChanges() const;
-    const RadientDrawableSlot*                GetDrawableSlot(RadientDrawableID DrawableID) const;
-    const RadientLightList&                   GetLightList() const;
-    const RadientSceneRevisions&              GetSceneRevisions() const;
+    const RadientDrawLists& GetDrawLists() const
+    {
+        return m_DrawLists;
+    }
+
+    const RadientDrawList& GetDrawList(GLTF::Material::ALPHA_MODE AlphaMode) const
+    {
+        return m_DrawLists.GetDrawList(AlphaMode);
+    }
+
+    const std::vector<RadientDrawableChange>& GetDrawableChanges() const
+    {
+        return m_DrawableChanges;
+    }
+
+    const RadientLightList& GetLightList() const
+    {
+        return m_LightList;
+    }
+
+    const RadientSceneRevisions& GetSceneRevisions() const
+    {
+        return m_SceneRevisions;
+    }
+
+    const RadientDrawableSlot* GetDrawableSlot(RadientDrawableID DrawableID) const;
 
 private:
     struct RenderableRecord
@@ -140,12 +162,13 @@ private:
                              RadientAssetManagerImpl* pAssetManager);
 
     RadientDrawableID AllocateDrawableID();
-    void              FreeDrawableID(RadientDrawableID DrawableID);
-    void              AddDrawableToDrawList(RadientDrawableID DrawableID);
-    void              RemoveDrawableFromDrawList(RadientDrawableID DrawableID);
-    void              RemoveRenderableDrawables(RenderableRecord& Record);
-    void              AddPendingResolution(RenderableRecord& Record);
-    void              RecordDrawableChange(RadientDrawableID DrawableID, RadientDrawableChangeType Type);
+
+    void FreeDrawableID(RadientDrawableID DrawableID);
+    void AddDrawableToDrawList(RadientDrawableID DrawableID);
+    void RemoveDrawableFromDrawList(RadientDrawableID DrawableID);
+    void RemoveRenderableDrawables(RenderableRecord& Record);
+    void AddPendingResolution(RenderableRecord& Record);
+    void RecordDrawableChange(RadientDrawableID DrawableID, RadientDrawableChangeType Type);
 
 private:
     std::unordered_map<RadientEntityID, RenderableRecord> m_Renderables;
