@@ -253,11 +253,10 @@ private:
     using SceneAssetImpl =
         AssetImpl<IRadientSceneAsset, IID_RadientSceneAsset, RADIENT_ASSET_TYPE_SCENE, GLTFModelStorage>;
 
-    bool                         ValidateMesh(const RadientMeshCreateInfo& MeshCI) const;
-    bool                         ValidateGLTF(const RadientGLTFLoadInfo& LoadInfo) const;
-    bool                         ValidateTexture(const RadientTextureLoadInfo& LoadInfo) const;
-    RefCntAutoPtr<IRadientAsset> FindAssetLocked(const RadientAssetReference& Ref) const;
-    RADIENT_STATUS               GetAssetLoadStatus(IRadientAsset* pAsset) const;
+    bool           ValidateMesh(const RadientMeshCreateInfo& MeshCI) const;
+    bool           ValidateGLTF(const RadientGLTFLoadInfo& LoadInfo) const;
+    bool           ValidateTexture(const RadientTextureLoadInfo& LoadInfo) const;
+    RADIENT_STATUS GetAssetLoadStatus(IRadientAsset* pAsset) const;
 
     std::string MakeURI(const char* Type);
 
@@ -269,8 +268,7 @@ private:
     void TryEnqueueGPUResourceUpdate(IRadientSceneAsset* pModel,
                                      GLTFModelStorage&   GLTFModel);
     void CompleteGLTFLoad(IRadientSceneAsset*          pModel,
-                          std::unique_ptr<GLTF::Model> pModelData,
-                          RADIENT_STATUS               Status);
+                          std::unique_ptr<GLTF::Model> pModelData);
 
     template <typename InterfaceType, typename ImplType>
     static ImplType* GetAssetImpl(InterfaceType* pAsset);

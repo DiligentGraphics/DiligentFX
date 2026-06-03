@@ -93,29 +93,27 @@ GLTF::ResourceManager::CreateInfo CreateResourceManagerInfo()
     return CreateInfo;
 }
 
-RADIENT_STATUS LoadGLTFModel(const std::string&            SourceURI,
-                             IRenderDevice*                pDevice,
-                             GLTF::ResourceManager*        pResourceManager,
-                             IGPUUploadManager*            pUploadManager,
-                             std::unique_ptr<GLTF::Model>& pModel)
+std::unique_ptr<GLTF::Model> LoadGLTFModel(const std::string&     SourceURI,
+                                           IRenderDevice*         pDevice,
+                                           GLTF::ResourceManager* pResourceManager,
+                                           IGPUUploadManager*     pUploadManager)
 {
     try
     {
         GLTF::ModelCreateInfo ModelCI{SourceURI.c_str()};
         ModelCI.pResourceManager = pResourceManager;
         ModelCI.pUploadMgr       = pUploadManager;
-        pModel                   = std::make_unique<GLTF::Model>(pDevice, nullptr, ModelCI);
-        return RADIENT_STATUS_OK;
+        return std::make_unique<GLTF::Model>(pDevice, nullptr, ModelCI);
     }
     catch (const std::exception& Error)
     {
         LOG_ERROR_MESSAGE("Failed to load Radient GLTF asset '", SourceURI, "': ", Error.what());
-        return RADIENT_STATUS_INVALID_OPERATION;
+        return {};
     }
     catch (...)
     {
         LOG_ERROR_MESSAGE("Failed to load Radient GLTF asset '", SourceURI, "'");
-        return RADIENT_STATUS_INVALID_OPERATION;
+        return {};
     }
 }
 
@@ -362,13 +360,12 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadGLTF(const RadientGLTFLoadInfo& Load
 
     if (m_pThreadPool == nullptr)
     {
-        const RADIENT_STATUS Status = LoadGLTFModel(GLTFModelData.SourceURI,
-                                                    m_pDevice,
-                                                    m_pResourceManager,
-                                                    m_pUploadManager,
-                                                    GLTFModelData.pModel);
-        if (Status != RADIENT_STATUS_OK)
-            return Status;
+        GLTFModelData.pModel = LoadGLTFModel(GLTFModelData.SourceURI,
+                                             m_pDevice,
+                                             m_pResourceManager,
+                                             m_pUploadManager);
+        if (GLTFModelData.pModel == nullptr)
+            return RADIENT_STATUS_INVALID_OPERATION;
 
         GLTFModelData.LoadStatus.store(RADIENT_STATUS_OK);
         GLTFModelData.GPUUpdateQueued.store(true);
@@ -390,14 +387,12 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadGLTF(const RadientGLTFLoadInfo& Load
         m_pThreadPool,
         [pSelf, pModelAsset, SourceURI](Uint32) //
         {
-            std::unique_ptr<GLTF::Model> pModel;
-            const RADIENT_STATUS         Status = LoadGLTFModel(SourceURI,
+            std::unique_ptr<GLTF::Model> pModel = LoadGLTFModel(SourceURI,
                                                                 pSelf->m_pDevice,
                                                                 pSelf->m_pResourceManager,
-                                                                pSelf->m_pUploadManager,
-                                                                pModel);
+                                                                pSelf->m_pUploadManager);
 
-            pSelf->CompleteGLTFLoad(pModelAsset, std::move(pModel), Status);
+            pSelf->CompleteGLTFLoad(pModelAsset, std::move(pModel));
             return ASYNC_TASK_STATUS_COMPLETE;
         });
 
@@ -684,19 +679,6 @@ bool RadientAssetManagerImpl::ValidateTexture(const RadientTextureLoadInfo& Load
     return LoadInfo.URI != nullptr && *LoadInfo.URI != 0;
 }
 
-RefCntAutoPtr<IRadientAsset> RadientAssetManagerImpl::FindAssetLocked(const RadientAssetReference& Ref) const
-{
-    if (Ref.URI == nullptr || *Ref.URI == 0 || Ref.Version == 0)
-        return {};
-
-    const auto It = m_Assets.find(HashMapStringKey{Ref.URI});
-    if (It == m_Assets.end())
-        return {};
-
-    RefCntAutoPtr<IRadientAsset> pAsset = It->second.Lock();
-    return pAsset != nullptr && pAsset->GetReference().Version == Ref.Version ? pAsset : RefCntAutoPtr<IRadientAsset>{};
-}
-
 RADIENT_STATUS RadientAssetManagerImpl::GetAssetLoadStatus(IRadientAsset* pAsset) const
 {
     if (pAsset == nullptr)
@@ -749,12 +731,13 @@ void RadientAssetManagerImpl::TryEnqueueGPUResourceUpdate(IRadientSceneAsset* pM
 }
 
 void RadientAssetManagerImpl::CompleteGLTFLoad(IRadientSceneAsset*          pModel,
-                                               std::unique_ptr<GLTF::Model> pModelData,
-                                               RADIENT_STATUS               Status)
+                                               std::unique_ptr<GLTF::Model> pModelData)
 {
     SceneAssetImpl* pImpl = GetAssetImpl<IRadientSceneAsset, SceneAssetImpl>(pModel);
     if (pImpl == nullptr)
         return;
+
+    const RADIENT_STATUS Status = pModelData != nullptr ? RADIENT_STATUS_OK : RADIENT_STATUS_INVALID_OPERATION;
 
     GLTFModelStorage& GLTFModel = pImpl->GetStorage();
     GLTFModel.pModel            = std::move(pModelData);
