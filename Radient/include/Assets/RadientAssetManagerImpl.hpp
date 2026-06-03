@@ -173,11 +173,18 @@ private:
 
     struct GLTFModelStorage
     {
+        GLTFModelStorage() = default;
+        GLTFModelStorage(GLTFModelStorage&& Rhs) noexcept;
+
+        GLTFModelStorage& operator=(GLTFModelStorage&& Rhs)  = delete;
+        GLTFModelStorage(const GLTFModelStorage&)            = delete;
+        GLTFModelStorage& operator=(const GLTFModelStorage&) = delete;
+
         std::string                  SourceURI;
         std::unique_ptr<GLTF::Model> pModel;
-        RADIENT_STATUS               LoadStatus        = RADIENT_STATUS_OK;
-        bool                         GPUResourcesReady = false;
-        bool                         GPUUpdateQueued   = false;
+        std::atomic<RADIENT_STATUS>  LoadStatus{RADIENT_STATUS_OK};
+        std::atomic_bool             GPUResourcesReady{false};
+        bool                         GPUUpdateQueued = false;
     };
 
     struct GLTFMeshStorage
@@ -249,7 +256,7 @@ private:
     bool                         ValidateGLTF(const RadientGLTFLoadInfo& LoadInfo) const;
     bool                         ValidateTexture(const RadientTextureLoadInfo& LoadInfo) const;
     RefCntAutoPtr<IRadientAsset> FindAssetLocked(const RadientAssetReference& Ref) const;
-    RADIENT_STATUS               GetAssetLoadStatusLocked(IRadientAsset* pAsset) const;
+    RADIENT_STATUS               GetAssetLoadStatus(IRadientAsset* pAsset) const;
 
     std::string MakeURI(const char* Type);
 

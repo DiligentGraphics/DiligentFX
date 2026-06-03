@@ -148,6 +148,15 @@ RADIENT_STATUS LoadTextureAsset(const std::string&       SourceURI,
 
 } // namespace
 
+RadientAssetManagerImpl::GLTFModelStorage::GLTFModelStorage(GLTFModelStorage&& Rhs) noexcept :
+    SourceURI{std::move(Rhs.SourceURI)},
+    pModel{std::move(Rhs.pModel)},
+    LoadStatus{Rhs.LoadStatus.load(std::memory_order_relaxed)},
+    GPUResourcesReady{Rhs.GPUResourcesReady.load(std::memory_order_relaxed)},
+    GPUUpdateQueued{Rhs.GPUUpdateQueued}
+{
+}
+
 template <typename InterfaceType, const INTERFACE_ID& InterfaceID, RADIENT_ASSET_TYPE AssetType, typename StorageType>
 RadientAssetManagerImpl::AssetImpl<InterfaceType, InterfaceID, AssetType, StorageType>::AssetImpl(IReferenceCounters* pRefCounters,
                                                                                                   std::string&&       URI,
@@ -361,14 +370,14 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadGLTF(const RadientGLTFLoadInfo& Load
         if (Status != RADIENT_STATUS_OK)
             return Status;
 
-        GLTFModelData.LoadStatus = RADIENT_STATUS_OK;
-        *ppModel                 = StoreAsset<IRadientSceneAsset, SceneAssetImpl>("gltf", LoadInfo.URI, std::move(GLTFModelData));
+        GLTFModelData.LoadStatus.store(RADIENT_STATUS_OK, std::memory_order_relaxed);
+        *ppModel = StoreAsset<IRadientSceneAsset, SceneAssetImpl>("gltf", LoadInfo.URI, std::move(GLTFModelData));
         EnqueueGPUResourceUpdate(*ppModel);
         return RADIENT_STATUS_OK;
     }
 
-    GLTFModelData.LoadStatus = RADIENT_STATUS_PENDING;
-    *ppModel                 = StoreAsset<IRadientSceneAsset, SceneAssetImpl>("gltf", LoadInfo.URI, std::move(GLTFModelData));
+    GLTFModelData.LoadStatus.store(RADIENT_STATUS_PENDING, std::memory_order_relaxed);
+    *ppModel = StoreAsset<IRadientSceneAsset, SceneAssetImpl>("gltf", LoadInfo.URI, std::move(GLTFModelData));
 
     RefCntAutoPtr<RadientAssetManagerImpl> pSelf{this};
     RefCntAutoPtr<IRadientSceneAsset>      pModelAsset{*ppModel};
@@ -399,11 +408,7 @@ RADIENT_STATUS RadientAssetManagerImpl::WaitForAssetLoad(IRadientAsset* pAsset)
 
     for (;;)
     {
-        RADIENT_STATUS Status = RADIENT_STATUS_INVALID_OPERATION;
-        {
-            std::shared_lock<std::shared_mutex> Lock{m_Mutex};
-            Status = GetAssetLoadStatusLocked(pAsset);
-        }
+        const RADIENT_STATUS Status = GetAssetLoadStatus(pAsset);
 
         if (Status != RADIENT_STATUS_PENDING)
             return Status;
@@ -428,17 +433,14 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMeshFromGLTFMesh(IRadientSceneAsse
     if (pModel == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    {
-        std::shared_lock<std::shared_mutex> Lock{m_Mutex};
+    const SceneAssetImpl* pModelImpl = GetAssetImpl<const IRadientSceneAsset, const SceneAssetImpl>(pModel);
+    if (pModelImpl == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
 
-        const SceneAssetImpl* pModelImpl = GetAssetImpl<const IRadientSceneAsset, const SceneAssetImpl>(pModel);
-        if (pModelImpl == nullptr)
-            return RADIENT_STATUS_INVALID_ARGUMENT;
-
-        const GLTFModelStorage& GLTFModel = pModelImpl->GetStorage();
-        if (GLTFModel.LoadStatus != RADIENT_STATUS_OK)
-            return GLTFModel.LoadStatus;
-    }
+    const GLTFModelStorage& GLTFModel  = pModelImpl->GetStorage();
+    const RADIENT_STATUS    LoadStatus = GLTFModel.LoadStatus.load(std::memory_order_acquire);
+    if (LoadStatus != RADIENT_STATUS_OK)
+        return LoadStatus;
 
     GLTFMeshStorage GLTFMeshData;
     GLTFMeshData.pModel    = pModel;
@@ -456,8 +458,6 @@ RADIENT_STATUS RadientAssetManagerImpl::GetMeshGLTFSource(IRadientMeshAsset*   p
         return RADIENT_STATUS_INVALID_ARGUMENT;
     *ppModel  = nullptr;
     MeshIndex = ~0u;
-
-    std::shared_lock<std::shared_mutex> Lock{m_Mutex};
 
     const MeshAssetImpl* pImpl = GetAssetImpl<const IRadientMeshAsset, const MeshAssetImpl>(pMesh);
     if (pImpl == nullptr)
@@ -478,8 +478,6 @@ RADIENT_STATUS RadientAssetManagerImpl::GetGLTFSourceURI(IRadientSceneAsset* pMo
 {
     SourceURI = nullptr;
 
-    std::shared_lock<std::shared_mutex> Lock{m_Mutex};
-
     const SceneAssetImpl* pImpl = GetAssetImpl<const IRadientSceneAsset, const SceneAssetImpl>(pModel);
     if (pImpl == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -491,15 +489,13 @@ RADIENT_STATUS RadientAssetManagerImpl::GetGLTFSourceURI(IRadientSceneAsset* pMo
 const GLTF::Model* RadientAssetManagerImpl::GetGLTFModel(IRadientSceneAsset* pModel,
                                                          bool                RequireGPUResourcesReady) const
 {
-    std::shared_lock<std::shared_mutex> Lock{m_Mutex};
-
     const SceneAssetImpl* pImpl = GetAssetImpl<const IRadientSceneAsset, const SceneAssetImpl>(pModel);
     if (pImpl == nullptr)
         return nullptr;
 
     const GLTFModelStorage& GLTFModel = pImpl->GetStorage();
-    if (GLTFModel.LoadStatus != RADIENT_STATUS_OK ||
-        (RequireGPUResourcesReady && !GLTFModel.GPUResourcesReady))
+    if (GLTFModel.LoadStatus.load(std::memory_order_acquire) != RADIENT_STATUS_OK ||
+        (RequireGPUResourcesReady && !GLTFModel.GPUResourcesReady.load(std::memory_order_acquire)))
     {
         return nullptr;
     }
@@ -509,13 +505,11 @@ const GLTF::Model* RadientAssetManagerImpl::GetGLTFModel(IRadientSceneAsset* pMo
 
 RADIENT_STATUS RadientAssetManagerImpl::GetGLTFLoadStatus(IRadientSceneAsset* pModel) const
 {
-    std::shared_lock<std::shared_mutex> Lock{m_Mutex};
-
     const SceneAssetImpl* pImpl = GetAssetImpl<const IRadientSceneAsset, const SceneAssetImpl>(pModel);
     if (pImpl == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    return pImpl->GetStorage().LoadStatus;
+    return pImpl->GetStorage().LoadStatus.load(std::memory_order_acquire);
 }
 
 ITextureView* RadientAssetManagerImpl::GetTextureSRV(IRadientTextureAsset* pTextureAsset) const
@@ -576,8 +570,8 @@ RADIENT_STATUS RadientAssetManagerImpl::UpdateGPUResources(IRenderDevice*  pDevi
 
         GLTFModelStorage& GLTFModel = pImpl->GetStorage();
 
-        if (GLTFModel.GPUResourcesReady ||
-            GLTFModel.LoadStatus != RADIENT_STATUS_OK ||
+        if (GLTFModel.GPUResourcesReady.load(std::memory_order_acquire) ||
+            GLTFModel.LoadStatus.load(std::memory_order_acquire) != RADIENT_STATUS_OK ||
             GLTFModel.pModel == nullptr)
         {
             GLTFModel.GPUUpdateQueued = false;
@@ -632,8 +626,8 @@ RADIENT_STATUS RadientAssetManagerImpl::UpdateGPUResources(IRenderDevice*  pDevi
 
         if (GLTFModelStorage* pGLTFModel = GetQueuedGLTFModelLocked(Model))
         {
-            pGLTFModel->GPUResourcesReady = true;
-            pGLTFModel->GPUUpdateQueued   = false;
+            pGLTFModel->GPUResourcesReady.store(true, std::memory_order_release);
+            pGLTFModel->GPUUpdateQueued = false;
         }
     }
 
@@ -713,7 +707,7 @@ RefCntAutoPtr<IRadientAsset> RadientAssetManagerImpl::FindAssetLocked(const Radi
     return pAsset != nullptr && pAsset->GetReference().Version == Ref.Version ? pAsset : RefCntAutoPtr<IRadientAsset>{};
 }
 
-RADIENT_STATUS RadientAssetManagerImpl::GetAssetLoadStatusLocked(IRadientAsset* pAsset) const
+RADIENT_STATUS RadientAssetManagerImpl::GetAssetLoadStatus(IRadientAsset* pAsset) const
 {
     if (pAsset == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
@@ -724,7 +718,9 @@ RADIENT_STATUS RadientAssetManagerImpl::GetAssetLoadStatusLocked(IRadientAsset* 
         {
             RefCntAutoPtr<IRadientSceneAsset> pScene{pAsset, IID_RadientSceneAsset};
             const SceneAssetImpl*             pImpl = GetAssetImpl<const IRadientSceneAsset, const SceneAssetImpl>(pScene);
-            return pImpl != nullptr ? pImpl->GetStorage().LoadStatus : RADIENT_STATUS_INVALID_ARGUMENT;
+            return pImpl != nullptr ?
+                pImpl->GetStorage().LoadStatus.load(std::memory_order_acquire) :
+                RADIENT_STATUS_INVALID_ARGUMENT;
         }
 
         case RADIENT_ASSET_TYPE_TEXTURE:
@@ -759,8 +755,8 @@ void RadientAssetManagerImpl::EnqueueGPUResourceUpdateLocked(IRadientSceneAsset*
                                                              GLTFModelStorage&   GLTFModel)
 {
     if (pModel == nullptr ||
-        GLTFModel.LoadStatus != RADIENT_STATUS_OK ||
-        GLTFModel.GPUResourcesReady ||
+        GLTFModel.LoadStatus.load(std::memory_order_acquire) != RADIENT_STATUS_OK ||
+        GLTFModel.GPUResourcesReady.load(std::memory_order_acquire) ||
         GLTFModel.GPUUpdateQueued ||
         GLTFModel.pModel == nullptr)
     {
@@ -783,9 +779,9 @@ void RadientAssetManagerImpl::CompleteGLTFLoad(IRadientSceneAsset*          pMod
 
     GLTFModelStorage& GLTFModel = pImpl->GetStorage();
     GLTFModel.pModel            = std::move(pModelData);
-    GLTFModel.LoadStatus        = Status;
-    GLTFModel.GPUResourcesReady = false;
-    GLTFModel.GPUUpdateQueued   = false;
+    GLTFModel.GPUResourcesReady.store(false, std::memory_order_release);
+    GLTFModel.GPUUpdateQueued = false;
+    GLTFModel.LoadStatus.store(Status, std::memory_order_release);
 
     EnqueueGPUResourceUpdateLocked(pModel, GLTFModel);
 }
