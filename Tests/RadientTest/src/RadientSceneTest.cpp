@@ -29,7 +29,7 @@
 #include "gtest/gtest.h"
 
 #include "RadientEngine.h"
-#include "RadientSceneImpl.hpp"
+#include "Scene/RadientSceneImpl.hpp"
 #include "RadientTestAssetHelpers.hpp"
 
 #include "ThreadPool.hpp"

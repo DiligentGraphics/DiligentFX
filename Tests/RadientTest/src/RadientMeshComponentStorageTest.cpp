@@ -26,7 +26,7 @@
 
 #include "gtest/gtest.h"
 
-#include "RadientMeshComponentStorage.hpp"
+#include "Scene/Components/RadientMeshComponentStorage.hpp"
 #include "RadientTestAssetHelpers.hpp"
 
 #include <utility>

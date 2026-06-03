@@ -3,51 +3,51 @@ cmake_minimum_required (VERSION 3.13)
 project(Radient CXX)
 
 set(SOURCE
-    src/RadientAssetManagerImpl.cpp
-    src/RadientBackendImpl.cpp
-    src/RadientDrawList.cpp
-    src/RadientEngineImpl.cpp
-    src/RadientFrameRenderTargets.cpp
-    src/RadientGeometryPass.cpp
-    src/RadientGLTFConverter.cpp
-    src/RadientLightList.cpp
-    src/RadientMaterialBindingsStorage.cpp
-    src/RadientMath.cpp
-    src/RadientMeshComponentStorage.cpp
-    src/RadientPostProcessPipeline.cpp
-    src/RadientRenderPipeline.cpp
-    src/RadientRendererImpl.cpp
-    src/RadientSceneImpl.cpp
-    src/RadientSceneImporterImpl.cpp
-    src/RadientSceneDrawableCache.cpp
-    src/RadientSceneState.cpp
-    src/RadientSceneWriterImpl.cpp
-    src/RadientSkyboxPass.cpp
-    src/RadientViewImpl.cpp
+    src/Assets/RadientAssetManagerImpl.cpp
+    src/Core/RadientBackendImpl.cpp
+    src/Core/RadientEngineImpl.cpp
+    src/Core/RadientViewImpl.cpp
+    src/Import/RadientGLTFConverter.cpp
+    src/Import/RadientSceneImporterImpl.cpp
+    src/Math/RadientMath.cpp
+    src/Render/Passes/RadientGeometryPass.cpp
+    src/Render/Passes/RadientPostProcessPipeline.cpp
+    src/Render/Passes/RadientSkyboxPass.cpp
+    src/Render/RadientDrawList.cpp
+    src/Render/RadientFrameRenderTargets.cpp
+    src/Render/RadientLightList.cpp
+    src/Render/RadientRenderPipeline.cpp
+    src/Render/RadientRendererImpl.cpp
+    src/Render/RadientSceneDrawableCache.cpp
+    src/Scene/Components/RadientMaterialBindingsStorage.cpp
+    src/Scene/Components/RadientMeshComponentStorage.cpp
+    src/Scene/RadientSceneImpl.cpp
+    src/Scene/RadientSceneState.cpp
+    src/Scene/RadientSceneWriterImpl.cpp
 )
 
 set(INCLUDE
-    include/RadientAssetManagerImpl.hpp
-    include/RadientBackendImpl.hpp
-    include/RadientDrawList.hpp
-    include/RadientEngineImpl.hpp
-    include/RadientFrameRenderTargets.hpp
-    include/RadientGeometryPass.hpp
-    include/RadientGLTFConverter.hpp
-    include/RadientLightList.hpp
-    include/RadientMaterialBindingsStorage.hpp
-    include/RadientMath.hpp
-    include/RadientMeshComponentStorage.hpp
-    include/RadientPostProcessPipeline.hpp
-    include/RadientRenderPipeline.hpp
-    include/RadientRendererImpl.hpp
-    include/RadientSceneImpl.hpp
-    include/RadientSceneImporterImpl.hpp
-    include/RadientSceneDrawableCache.hpp
-    include/RadientSceneState.hpp
-    include/RadientSceneWriterImpl.hpp
-    include/RadientSkyboxPass.hpp
-    include/RadientViewImpl.hpp
+    include/Assets/RadientAssetManagerImpl.hpp
+    include/Core/RadientBackendImpl.hpp
+    include/Core/RadientEngineImpl.hpp
+    include/Core/RadientViewImpl.hpp
+    include/Import/RadientGLTFConverter.hpp
+    include/Import/RadientSceneImporterImpl.hpp
+    include/Math/RadientMath.hpp
+    include/Render/Passes/RadientGeometryPass.hpp
+    include/Render/Passes/RadientPostProcessPipeline.hpp
+    include/Render/Passes/RadientSkyboxPass.hpp
+    include/Render/RadientDrawList.hpp
+    include/Render/RadientFrameRenderTargets.hpp
+    include/Render/RadientLightList.hpp
+    include/Render/RadientRenderPipeline.hpp
+    include/Render/RadientRendererImpl.hpp
+    include/Render/RadientSceneDrawableCache.hpp
+    include/Scene/Components/RadientMaterialBindingsStorage.hpp
+    include/Scene/Components/RadientMeshComponentStorage.hpp
+    include/Scene/RadientSceneImpl.hpp
+    include/Scene/RadientSceneState.hpp
+    include/Scene/RadientSceneWriterImpl.hpp
 )
 
 set(INTERFACE

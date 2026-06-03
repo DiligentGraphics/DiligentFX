@@ -27,8 +27,8 @@
 #include "TestingEnvironment.hpp"
 #include "gtest/gtest.h"
 
-#include "RadientMath.hpp"
-#include "RadientSceneState.hpp"
+#include "Math/RadientMath.hpp"
+#include "Scene/RadientSceneState.hpp"
 #include "RadientTestAssetHelpers.hpp"
 
 #include <algorithm>

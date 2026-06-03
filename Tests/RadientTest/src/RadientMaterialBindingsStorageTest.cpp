@@ -26,7 +26,7 @@
 
 #include "gtest/gtest.h"
 
-#include "RadientMaterialBindingsStorage.hpp"
+#include "Scene/Components/RadientMaterialBindingsStorage.hpp"
 #include "RadientTestAssetHelpers.hpp"
 
 #include <utility>

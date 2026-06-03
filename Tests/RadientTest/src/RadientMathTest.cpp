@@ -27,7 +27,7 @@
 #include "TestingEnvironment.hpp"
 #include "gtest/gtest.h"
 
-#include "RadientMath.hpp"
+#include "Math/RadientMath.hpp"
 
 using namespace Diligent;
 using namespace Diligent::Testing;

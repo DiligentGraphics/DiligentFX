@@ -29,9 +29,9 @@
 #include "gtest/gtest.h"
 
 #include "RadientEngine.h"
-#include "RadientAssetManagerImpl.hpp"
-#include "RadientSceneImpl.hpp"
-#include "RadientSceneState.hpp"
+#include "Assets/RadientAssetManagerImpl.hpp"
+#include "Scene/RadientSceneImpl.hpp"
+#include "Scene/RadientSceneState.hpp"
 
 #include "Cast.hpp"
 #include "ThreadPool.hpp"
