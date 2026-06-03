@@ -30,6 +30,7 @@
 #include "ThreadPool.h"
 #include "Cast.hpp"
 #include "HashUtils.hpp"
+#include "MPSCQueue.hpp"
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
 
@@ -184,7 +185,7 @@ private:
         std::unique_ptr<GLTF::Model> pModel;
         std::atomic<RADIENT_STATUS>  LoadStatus{RADIENT_STATUS_OK};
         std::atomic_bool             GPUResourcesReady{false};
-        bool                         GPUUpdateQueued = false;
+        std::atomic_bool             GPUUpdateQueued{false};
     };
 
     struct GLTFMeshStorage
@@ -265,9 +266,8 @@ private:
                               const Char*                  Name,
                               typename ImplType::Storage&& Storage);
 
-    void EnqueueGPUResourceUpdate(IRadientSceneAsset* pModel);
-    void EnqueueGPUResourceUpdateLocked(IRadientSceneAsset* pModel,
-                                        GLTFModelStorage&   GLTFModel);
+    void TryEnqueueGPUResourceUpdate(IRadientSceneAsset* pModel,
+                                     GLTFModelStorage&   GLTFModel);
     void CompleteGLTFLoad(IRadientSceneAsset*          pModel,
                           std::unique_ptr<GLTF::Model> pModelData,
                           RADIENT_STATUS               Status);
@@ -289,8 +289,7 @@ private:
     using AssetMapType = std::unordered_map<HashMapStringKey, RefCntWeakPtr<IRadientAsset>>;
     mutable AssetMapType m_Assets;
 
-    std::vector<RefCntWeakPtr<IRadientSceneAsset>> m_PendingGPUResourceUpdates;
-    std::vector<RefCntWeakPtr<IRadientSceneAsset>> m_GPUResourceUpdateScratch;
+    MPSCQueue<RefCntWeakPtr<IRadientSceneAsset>> m_PendingGPUResourceUpdates;
 };
 
 } // namespace Diligent
