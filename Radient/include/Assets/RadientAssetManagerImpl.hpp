@@ -33,6 +33,7 @@
 #include "MPSCQueue.hpp"
 #include "ObjectBase.hpp"
 #include "RefCntAutoPtr.hpp"
+#include "../../../PBR/interface/PBR_Renderer.hpp"
 
 #include <atomic>
 #include <memory>
@@ -105,9 +106,10 @@ public:
 
     struct GLTFMeshResolveResult
     {
-        RADIENT_STATUS     Status    = RADIENT_STATUS_INVALID_ARGUMENT;
-        const GLTF::Model* pModel    = nullptr;
-        Uint32             MeshIndex = ~0u;
+        const GLTF::Model*      pModel            = nullptr;
+        PBR_Renderer::PSO_FLAGS VertexAttribFlags = PBR_Renderer::PSO_FLAG_NONE;
+        Uint32                  MeshIndex         = ~0u;
+        RADIENT_STATUS          Status            = RADIENT_STATUS_INVALID_ARGUMENT;
     };
 
     static GLTFMeshResolveResult GetGLTFMesh(IRadientMeshAsset* pMesh,
@@ -189,6 +191,7 @@ private:
 
         std::string                  SourceURI;
         std::unique_ptr<GLTF::Model> pModel;
+        PBR_Renderer::PSO_FLAGS      VertexAttribFlags = PBR_Renderer::PSO_FLAG_NONE;
         std::atomic<RADIENT_STATUS>  LoadStatus{RADIENT_STATUS_OK};
         std::atomic_bool             GPUResourcesReady{false};
         std::atomic_bool             GPUUpdateQueued{false};

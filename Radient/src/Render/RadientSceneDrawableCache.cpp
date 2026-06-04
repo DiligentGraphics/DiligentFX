@@ -34,7 +34,6 @@
 #include "GLTFLoader.hpp"
 
 #include <algorithm>
-#include <cstring>
 
 namespace Diligent
 {
@@ -46,34 +45,6 @@ bool IsSameMeshAsset(const RadientMeshComponent& Mesh0,
                      const RadientMeshComponent& Mesh1)
 {
     return Mesh0.pMesh == Mesh1.pMesh;
-}
-
-PBR_Renderer::PSO_FLAGS GetVertexAttribFlags(const GLTF::Model& Model)
-{
-    PBR_Renderer::PSO_FLAGS Flags = PBR_Renderer::PSO_FLAG_NONE;
-    for (Uint32 AttribIndex = 0; AttribIndex < Model.GetNumVertexAttributes(); ++AttribIndex)
-    {
-        if (!Model.IsVertexAttributeEnabled(AttribIndex))
-            continue;
-
-        const GLTF::VertexAttributeDesc& Attrib = Model.GetVertexAttribute(AttribIndex);
-        if (std::strcmp(Attrib.Name, GLTF::NormalAttributeName) == 0)
-            Flags |= PBR_Renderer::PSO_FLAG_USE_VERTEX_NORMALS;
-        else if (std::strcmp(Attrib.Name, GLTF::Texcoord0AttributeName) == 0)
-            Flags |= PBR_Renderer::PSO_FLAG_USE_TEXCOORD0;
-        else if (std::strcmp(Attrib.Name, GLTF::Texcoord1AttributeName) == 0)
-            Flags |= PBR_Renderer::PSO_FLAG_USE_TEXCOORD1;
-        else if (std::strcmp(Attrib.Name, GLTF::JointsAttributeName) == 0)
-        {
-            // Radient skinning is not wired yet; keep the pass on the rigid path.
-        }
-        else if (std::strcmp(Attrib.Name, GLTF::VertexColorAttributeName) == 0)
-            Flags |= PBR_Renderer::PSO_FLAG_USE_VERTEX_COLORS;
-        else if (std::strcmp(Attrib.Name, GLTF::TangentAttributeName) == 0)
-            Flags |= PBR_Renderer::PSO_FLAG_USE_VERTEX_TANGENTS;
-    }
-
-    return Flags;
 }
 
 RadientDrawablePrimitive ConvertPrimitive(const GLTF::Primitive& Primitive)
@@ -125,7 +96,7 @@ MeshResolveStatus ResolveMesh(IRadientMeshAsset* pMeshAsset,
 
     Mesh.pModel             = Result.pModel;
     Mesh.pMesh              = &Result.pModel->Meshes[Result.MeshIndex];
-    Mesh.VertexAttribFlags  = GetVertexAttribFlags(*Result.pModel);
+    Mesh.VertexAttribFlags  = Result.VertexAttribFlags;
     Mesh.FirstIndexLocation = Result.pModel->GetFirstIndexLocation();
     Mesh.BaseVertex         = Result.pModel->GetBaseVertex();
 

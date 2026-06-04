@@ -33,6 +33,7 @@
 #include "ThreadPool.hpp"
 #include "TextureUtilities.h"
 
+#include <cstring>
 #include <exception>
 #include <thread>
 #include <utility>
@@ -144,11 +145,40 @@ RADIENT_STATUS LoadTextureAsset(const std::string&       SourceURI,
     }
 }
 
+PBR_Renderer::PSO_FLAGS GetVertexAttribFlags(const GLTF::Model& Model)
+{
+    PBR_Renderer::PSO_FLAGS Flags = PBR_Renderer::PSO_FLAG_NONE;
+    for (Uint32 AttribIndex = 0; AttribIndex < Model.GetNumVertexAttributes(); ++AttribIndex)
+    {
+        if (!Model.IsVertexAttributeEnabled(AttribIndex))
+            continue;
+
+        const GLTF::VertexAttributeDesc& Attrib = Model.GetVertexAttribute(AttribIndex);
+        if (std::strcmp(Attrib.Name, GLTF::NormalAttributeName) == 0)
+            Flags |= PBR_Renderer::PSO_FLAG_USE_VERTEX_NORMALS;
+        else if (std::strcmp(Attrib.Name, GLTF::Texcoord0AttributeName) == 0)
+            Flags |= PBR_Renderer::PSO_FLAG_USE_TEXCOORD0;
+        else if (std::strcmp(Attrib.Name, GLTF::Texcoord1AttributeName) == 0)
+            Flags |= PBR_Renderer::PSO_FLAG_USE_TEXCOORD1;
+        else if (std::strcmp(Attrib.Name, GLTF::JointsAttributeName) == 0)
+        {
+            // Radient skinning is not wired yet; keep the pass on the rigid path.
+        }
+        else if (std::strcmp(Attrib.Name, GLTF::VertexColorAttributeName) == 0)
+            Flags |= PBR_Renderer::PSO_FLAG_USE_VERTEX_COLORS;
+        else if (std::strcmp(Attrib.Name, GLTF::TangentAttributeName) == 0)
+            Flags |= PBR_Renderer::PSO_FLAG_USE_VERTEX_TANGENTS;
+    }
+
+    return Flags;
+}
+
 } // namespace
 
 RadientAssetManagerImpl::GLTFModelStorage::GLTFModelStorage(GLTFModelStorage&& Rhs) noexcept :
     SourceURI{std::move(Rhs.SourceURI)},
     pModel{std::move(Rhs.pModel)},
+    VertexAttribFlags{Rhs.VertexAttribFlags},
     LoadStatus{Rhs.LoadStatus.load(std::memory_order_relaxed)},
     GPUResourcesReady{Rhs.GPUResourcesReady.load(std::memory_order_relaxed)},
     GPUUpdateQueued{Rhs.GPUUpdateQueued.load(std::memory_order_relaxed)}
@@ -361,6 +391,7 @@ RADIENT_STATUS RadientAssetManagerImpl::LoadGLTF(const RadientGLTFLoadInfo& Load
         if (GLTFModelData.pModel == nullptr)
             return RADIENT_STATUS_INVALID_OPERATION;
 
+        GLTFModelData.VertexAttribFlags = GetVertexAttribFlags(*GLTFModelData.pModel);
         GLTFModelData.LoadStatus.store(RADIENT_STATUS_OK);
         GLTFModelData.GPUUpdateQueued.store(true);
         *ppModel = StoreAsset<IRadientSceneAsset, SceneAssetImpl>("gltf", LoadInfo.URI, std::move(GLTFModelData));
@@ -491,9 +522,10 @@ RadientAssetManagerImpl::GLTFMeshResolveResult RadientAssetManagerImpl::GetGLTFM
         return Result;
     }
 
-    Result.Status    = RADIENT_STATUS_OK;
-    Result.pModel    = GLTFModel.pModel.get();
-    Result.MeshIndex = pGLTFMeshStorage->MeshIndex;
+    Result.Status            = RADIENT_STATUS_OK;
+    Result.pModel            = GLTFModel.pModel.get();
+    Result.MeshIndex         = pGLTFMeshStorage->MeshIndex;
+    Result.VertexAttribFlags = GLTFModel.VertexAttribFlags;
     return Result;
 }
 
@@ -751,6 +783,9 @@ void RadientAssetManagerImpl::CompleteGLTFLoad(IRadientSceneAsset*          pMod
     const RADIENT_STATUS Status = pModelData != nullptr ? RADIENT_STATUS_OK : RADIENT_STATUS_INVALID_OPERATION;
 
     GLTFModelStorage& GLTFModel = pImpl->GetStorage();
+    GLTFModel.VertexAttribFlags = pModelData != nullptr ?
+        GetVertexAttribFlags(*pModelData) :
+        PBR_Renderer::PSO_FLAG_NONE;
     GLTFModel.pModel            = std::move(pModelData);
     GLTFModel.GPUResourcesReady.store(false, std::memory_order_release);
     GLTFModel.GPUUpdateQueued.store(false, std::memory_order_release);
