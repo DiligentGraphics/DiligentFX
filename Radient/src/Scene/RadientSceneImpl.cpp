@@ -135,14 +135,14 @@ const RadientSceneRevisions& RadientSceneImpl::GetSceneRevisions() const
     return m_pState->GetSceneRevisions();
 }
 
-RadientSceneState& RadientSceneImpl::GetState()
+const RadientSceneState& RadientSceneImpl::GetState() const
 {
     return *m_pState;
 }
 
-const RadientSceneState& RadientSceneImpl::GetState() const
+void RadientSceneImpl::ClearPendingRenderChanges()
 {
-    return *m_pState;
+    m_pState->ClearRenderableMeshChanges();
 }
 
 } // namespace Diligent

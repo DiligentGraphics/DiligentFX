@@ -51,7 +51,7 @@ public:
 
     static RefCntAutoPtr<RadientSceneImpl> Create();
     static RefCntAutoPtr<RadientSceneImpl> Create(const RadientSceneDesc& Desc);
-    
+
     virtual const RadientSceneDesc& DILIGENT_CALL_TYPE GetDesc() const override final;
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE IsEntityAlive(RadientEntityID Entity) const override final;
@@ -100,8 +100,9 @@ public:
 
     virtual const RadientSceneRevisions& DILIGENT_CALL_TYPE GetSceneRevisions() const override final;
 
-    RadientSceneState&       GetState();
     const RadientSceneState& GetState() const;
+
+    void ClearPendingRenderChanges();
 
 private:
     friend class RadientSceneWriterImpl;

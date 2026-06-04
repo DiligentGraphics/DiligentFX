@@ -28,7 +28,6 @@
 
 #include "Assets/RadientAssetManagerImpl.hpp"
 #include "Scene/RadientSceneImpl.hpp"
-#include "Scene/RadientSceneState.hpp"
 
 #include "Cast.hpp"
 
@@ -86,7 +85,7 @@ RADIENT_STATUS RadientRenderPipeline::Update(const RadientRenderAttribs& Attribs
     const RADIENT_STATUS SyncStatus = m_DrawableCache.SyncScene(*ViewDesc.pScene);
     if (RADIENT_FAILED(SyncStatus))
         return SyncStatus;
-    pSceneImpl->GetState().ClearRenderableMeshChanges();
+    pSceneImpl->ClearPendingRenderChanges();
 
     Status = m_GeometryRenderer.Prepare(pDevice, pContext);
     if (RADIENT_FAILED(Status))
