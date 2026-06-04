@@ -198,12 +198,6 @@ InterfaceType* RadientAssetManagerImpl::StoreAsset(const char*                  
     return pAsset.Detach();
 }
 
-template <typename InterfaceType, typename ImplType>
-ImplType* RadientAssetManagerImpl::GetAssetImpl(InterfaceType* pAsset)
-{
-    return pAsset != nullptr ? ClassPtrCast<ImplType>(pAsset) : nullptr;
-}
-
 RadientAssetManagerImpl::RadientAssetManagerImpl(IReferenceCounters* pRefCounters,
                                                  const CreateInfo&   CreateInfo) :
     TBase{pRefCounters},
@@ -428,10 +422,7 @@ RADIENT_STATUS RadientAssetManagerImpl::CreateMeshFromGLTFMesh(IRadientSceneAsse
         return RADIENT_STATUS_INVALID_ARGUMENT;
     *ppMesh = nullptr;
 
-    if (pModel == nullptr)
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-
-    const SceneAssetImpl* pModelImpl = GetAssetImpl<const IRadientSceneAsset, const SceneAssetImpl>(pModel);
+    const SceneAssetImpl* pModelImpl = ClassPtrCast<const SceneAssetImpl>(pModel);
     if (pModelImpl == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
@@ -453,7 +444,7 @@ RADIENT_STATUS RadientAssetManagerImpl::GetGLTFSourceURI(IRadientSceneAsset* pMo
 {
     SourceURI = nullptr;
 
-    const SceneAssetImpl* pImpl = GetAssetImpl<const IRadientSceneAsset, const SceneAssetImpl>(pModel);
+    const SceneAssetImpl* pImpl = ClassPtrCast<const SceneAssetImpl>(pModel);
     if (pImpl == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
@@ -466,7 +457,7 @@ RadientAssetManagerImpl::GLTFMeshResolveResult RadientAssetManagerImpl::GetGLTFM
 {
     GLTFMeshResolveResult Result;
 
-    const MeshAssetImpl* pMeshImpl = GetAssetImpl<const IRadientMeshAsset, const MeshAssetImpl>(pMesh);
+    const MeshAssetImpl* pMeshImpl = ClassPtrCast<const MeshAssetImpl>(pMesh);
     if (pMeshImpl == nullptr)
         return Result;
 
@@ -474,7 +465,7 @@ RadientAssetManagerImpl::GLTFMeshResolveResult RadientAssetManagerImpl::GetGLTFM
     if (pGLTFMeshStorage == nullptr || pGLTFMeshStorage->pModel == nullptr)
         return Result;
 
-    const SceneAssetImpl* pModelImpl = GetAssetImpl<const IRadientSceneAsset, const SceneAssetImpl>(pGLTFMeshStorage->pModel);
+    const SceneAssetImpl* pModelImpl = pGLTFMeshStorage->pModel.RawPtr<SceneAssetImpl>();
     if (pModelImpl == nullptr)
         return Result;
 
@@ -509,7 +500,7 @@ RadientAssetManagerImpl::GLTFMeshResolveResult RadientAssetManagerImpl::GetGLTFM
 const GLTF::Model* RadientAssetManagerImpl::GetGLTFModel(IRadientSceneAsset* pModel,
                                                          bool                RequireGPUResourcesReady)
 {
-    const SceneAssetImpl* pImpl = GetAssetImpl<const IRadientSceneAsset, const SceneAssetImpl>(pModel);
+    const SceneAssetImpl* pImpl = ClassPtrCast<const SceneAssetImpl>(pModel);
     if (pImpl == nullptr)
         return nullptr;
 
@@ -525,7 +516,7 @@ const GLTF::Model* RadientAssetManagerImpl::GetGLTFModel(IRadientSceneAsset* pMo
 
 RADIENT_STATUS RadientAssetManagerImpl::GetGLTFLoadStatus(IRadientSceneAsset* pModel)
 {
-    const SceneAssetImpl* pImpl = GetAssetImpl<const IRadientSceneAsset, const SceneAssetImpl>(pModel);
+    const SceneAssetImpl* pImpl = ClassPtrCast<const SceneAssetImpl>(pModel);
     if (pImpl == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
@@ -534,7 +525,7 @@ RADIENT_STATUS RadientAssetManagerImpl::GetGLTFLoadStatus(IRadientSceneAsset* pM
 
 ITextureView* RadientAssetManagerImpl::GetTextureSRV(IRadientTextureAsset* pTextureAsset)
 {
-    const TextureAssetImpl* pImpl = GetAssetImpl<const IRadientTextureAsset, const TextureAssetImpl>(pTextureAsset);
+    const TextureAssetImpl* pImpl = ClassPtrCast<const TextureAssetImpl>(pTextureAsset);
     if (pImpl == nullptr)
         return nullptr;
 
@@ -575,7 +566,7 @@ RADIENT_STATUS RadientAssetManagerImpl::UpdateGPUResources(IRenderDevice*  pDevi
         if (pSceneAsset == nullptr)
             continue;
 
-        SceneAssetImpl* pImpl = GetAssetImpl<IRadientSceneAsset, SceneAssetImpl>(pSceneAsset);
+        SceneAssetImpl* pImpl = pSceneAsset.RawPtr<SceneAssetImpl>();
         VERIFY(pImpl != nullptr,
                "Pending GPU resource update references an invalid asset");
         if (pImpl == nullptr)
@@ -604,7 +595,7 @@ RADIENT_STATUS RadientAssetManagerImpl::UpdateGPUResources(IRenderDevice*  pDevi
 
     auto GetQueuedGLTFModel = [](const GLTFModelToPrepare& Model) -> GLTFModelStorage* //
     {
-        SceneAssetImpl* pImpl = GetAssetImpl<IRadientSceneAsset, SceneAssetImpl>(Model.pAsset);
+        SceneAssetImpl* pImpl = Model.pAsset.RawPtr<SceneAssetImpl>();
         VERIFY(pImpl != nullptr, "Queued GPU resource update references an invalid asset");
         if (pImpl == nullptr)
             return nullptr;
@@ -709,7 +700,7 @@ RADIENT_STATUS RadientAssetManagerImpl::GetAssetLoadStatus(IRadientAsset* pAsset
         case RADIENT_ASSET_TYPE_SCENE:
         {
             RefCntAutoPtr<IRadientSceneAsset> pScene{pAsset, IID_RadientSceneAsset};
-            const SceneAssetImpl*             pImpl = GetAssetImpl<const IRadientSceneAsset, const SceneAssetImpl>(pScene);
+            const SceneAssetImpl*             pImpl = pScene.RawPtr<SceneAssetImpl>();
             return pImpl != nullptr ?
                 pImpl->GetStorage().LoadStatus.load(std::memory_order_acquire) :
                 RADIENT_STATUS_INVALID_ARGUMENT;
@@ -718,7 +709,7 @@ RADIENT_STATUS RadientAssetManagerImpl::GetAssetLoadStatus(IRadientAsset* pAsset
         case RADIENT_ASSET_TYPE_TEXTURE:
         {
             RefCntAutoPtr<IRadientTextureAsset> pTexture{pAsset, IID_RadientTextureAsset};
-            const TextureAssetImpl*             pImpl = GetAssetImpl<const IRadientTextureAsset, const TextureAssetImpl>(pTexture);
+            const TextureAssetImpl*             pImpl = pTexture.RawPtr<TextureAssetImpl>();
             return pImpl != nullptr ? pImpl->GetStorage().LoadStatus : RADIENT_STATUS_INVALID_ARGUMENT;
         }
 
@@ -753,7 +744,7 @@ void RadientAssetManagerImpl::TryEnqueueGPUResourceUpdate(IRadientSceneAsset* pM
 void RadientAssetManagerImpl::CompleteGLTFLoad(IRadientSceneAsset*          pModel,
                                                std::unique_ptr<GLTF::Model> pModelData)
 {
-    SceneAssetImpl* pImpl = GetAssetImpl<IRadientSceneAsset, SceneAssetImpl>(pModel);
+    SceneAssetImpl* pImpl = ClassPtrCast<SceneAssetImpl>(pModel);
     if (pImpl == nullptr)
         return;
 

@@ -276,9 +276,6 @@ private:
     void CompleteGLTFLoad(IRadientSceneAsset*          pModel,
                           std::unique_ptr<GLTF::Model> pModelData);
 
-    template <typename InterfaceType, typename ImplType>
-    static ImplType* GetAssetImpl(InterfaceType* pAsset);
-
     std::string             m_Name;
     RadientAssetManagerDesc m_Desc;
 
