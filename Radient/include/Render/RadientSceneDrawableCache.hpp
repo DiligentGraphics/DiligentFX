@@ -42,42 +42,20 @@
 namespace Diligent
 {
 
-/// Per-frame drawable state owned by the scene and referenced by stable drawable slots.
-struct RadientDrawableFrameData
-{
-    const RadientMatrix4x4* pWorldMatrix      = nullptr;
-    const Bool*             pEffectiveVisible = nullptr;
-};
-
-struct RadientDrawablePrimitive
-{
-    Uint32 FirstIndex  = 0;
-    Uint32 IndexCount  = 0;
-    Uint32 FirstVertex = 0;
-    Uint32 VertexCount = 0;
-    Uint32 MaterialId  = 0;
-
-    bool HasIndices() const
-    {
-        return IndexCount > 0;
-    }
-};
-
 /// Renderer-facing primitive data addressed by a stable drawable ID.
 struct RadientDrawableSlot
 {
     static constexpr size_t InvalidDrawListIndex = ~size_t{0};
 
-    bool   Alive      = false;
-    Uint32 Generation = 0;
-
     RadientEntityID Entity = InvalidRadientEntityID;
 
-    const RadientMeshRendererComponent* pRenderer = nullptr;
-    RadientDrawableFrameData            FrameData;
+    Uint32 Generation = 0;
+    bool   IsIndexed  = false;
+    Uint8  AlphaMode  = GLTF::Material::ALPHA_MODE_OPAQUE;
 
-    RadientDrawablePrimitive   Primitive;
-    GLTF::Material::ALPHA_MODE AlphaMode = GLTF::Material::ALPHA_MODE_OPAQUE;
+    const RadientMeshRendererComponent* pRenderer         = nullptr;
+    const RadientMatrix4x4*             pWorldMatrix      = nullptr;
+    const Bool*                         pEffectiveVisible = nullptr;
 
     const GLTF::Material* pMaterial = nullptr;
 
@@ -85,8 +63,15 @@ struct RadientDrawableSlot
 
     Uint32 FirstIndexLocation = 0;
     Uint32 BaseVertex         = 0;
+    Uint32 FirstElement       = 0;
+    Uint32 ElementCount       = 0;
 
     size_t DrawListIndex = InvalidDrawListIndex;
+
+    bool IsValid() const
+    {
+        return Entity != InvalidRadientEntityID;
+    }
 
     bool IsInDrawList() const
     {

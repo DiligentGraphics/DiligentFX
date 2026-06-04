@@ -47,17 +47,6 @@ bool IsSameMeshAsset(const RadientMeshComponent& Mesh0,
     return Mesh0.pMesh == Mesh1.pMesh;
 }
 
-RadientDrawablePrimitive ConvertPrimitive(const GLTF::Primitive& Primitive)
-{
-    RadientDrawablePrimitive Result;
-    Result.FirstIndex  = Primitive.FirstIndex;
-    Result.IndexCount  = Primitive.IndexCount;
-    Result.FirstVertex = Primitive.FirstVertex;
-    Result.VertexCount = Primitive.VertexCount;
-    Result.MaterialId  = Primitive.MaterialId;
-    return Result;
-}
-
 enum class MeshResolveStatus
 {
     Ready,
@@ -201,10 +190,11 @@ void RadientSceneDrawableCache::ProcessRenderableMeshAddedOrUpdated(const Radien
     {
         VERIFY(DrawableID < m_DrawableSlots.size(), "Invalid drawable ID in renderable record");
         RadientDrawableSlot& Slot = m_DrawableSlots[DrawableID];
-        VERIFY(Slot.Alive, "Renderable record references a dead drawable slot");
+        VERIFY(Slot.IsValid(), "Renderable record references an invalid drawable slot");
 
-        Slot.pRenderer = Record.pRenderer;
-        Slot.FrameData = {Record.pWorldMatrix, Record.pEffectiveVisible};
+        Slot.pRenderer         = Record.pRenderer;
+        Slot.pWorldMatrix      = Record.pWorldMatrix;
+        Slot.pEffectiveVisible = Record.pEffectiveVisible;
         RecordDrawableChange(DrawableID, RadientDrawableChangeType::Updated);
     }
 }
@@ -261,8 +251,13 @@ bool RadientSceneDrawableCache::TryExpandRenderable(RenderableRecord& Record)
     Record.DrawableIDs.reserve(Mesh.pMesh->Primitives.size());
     for (Uint32 PrimitiveIndex = 0; PrimitiveIndex < Mesh.pMesh->Primitives.size(); ++PrimitiveIndex)
     {
-        const RadientDrawablePrimitive Primitive = ConvertPrimitive(Mesh.pMesh->Primitives[PrimitiveIndex]);
-        if (Primitive.VertexCount == 0 && Primitive.IndexCount == 0)
+        const GLTF::Primitive& Primitive = Mesh.pMesh->Primitives[PrimitiveIndex];
+
+        const bool   IsIndexed    = Primitive.HasIndices();
+        const Uint32 FirstElement = IsIndexed ? Primitive.FirstIndex : Primitive.FirstVertex;
+        const Uint32 ElementCount = IsIndexed ? Primitive.IndexCount : Primitive.VertexCount;
+
+        if (ElementCount == 0)
             continue;
 
         if (Primitive.MaterialId >= Mesh.pModel->Materials.size())
@@ -275,13 +270,16 @@ bool RadientSceneDrawableCache::TryExpandRenderable(RenderableRecord& Record)
 
         Slot.Entity             = Record.Entity;
         Slot.pRenderer          = Record.pRenderer;
-        Slot.FrameData          = {Record.pWorldMatrix, Record.pEffectiveVisible};
-        Slot.Primitive          = Primitive;
+        Slot.pWorldMatrix       = Record.pWorldMatrix;
+        Slot.pEffectiveVisible  = Record.pEffectiveVisible;
+        Slot.IsIndexed          = IsIndexed;
         Slot.pMaterial          = pMaterial;
         Slot.VertexAttribFlags  = Mesh.VertexAttribFlags;
         Slot.FirstIndexLocation = Mesh.FirstIndexLocation;
         Slot.BaseVertex         = Mesh.BaseVertex;
-        Slot.AlphaMode          = static_cast<GLTF::Material::ALPHA_MODE>(pMaterial->Attribs.AlphaMode);
+        Slot.FirstElement       = FirstElement;
+        Slot.ElementCount       = ElementCount;
+        Slot.AlphaMode          = static_cast<Uint8>(pMaterial->Attribs.AlphaMode);
 
         Record.DrawableIDs.push_back(DrawableID);
         AddDrawableToDrawList(DrawableID);
@@ -308,7 +306,6 @@ RadientDrawableID RadientSceneDrawableCache::AllocateDrawableID()
     RadientDrawableSlot& Slot       = m_DrawableSlots[DrawableID];
     const Uint32         Generation = Slot.Generation + 1u;
     Slot                            = {};
-    Slot.Alive                      = true;
     Slot.Generation                 = Generation;
 
     return DrawableID;
@@ -325,7 +322,7 @@ void RadientSceneDrawableCache::FreeDrawableID(RadientDrawableID DrawableID)
     RemoveDrawableFromDrawList(DrawableID);
 
     RadientDrawableSlot& Slot = m_DrawableSlots[DrawableID];
-    VERIFY(Slot.Alive, "Trying to free a dead drawable slot");
+    VERIFY(Slot.IsValid(), "Trying to free an invalid drawable slot");
 
     const Uint32 Generation = Slot.Generation + 1u;
     Slot                    = {};
@@ -344,7 +341,7 @@ void RadientSceneDrawableCache::AddDrawableToDrawList(RadientDrawableID Drawable
     }
 
     RadientDrawableSlot& Slot = m_DrawableSlots[DrawableID];
-    VERIFY(Slot.Alive, "Trying to add a dead drawable slot to a draw list");
+    VERIFY(Slot.IsValid(), "Trying to add an invalid drawable slot to a draw list");
 
     if (Slot.IsInDrawList())
     {
@@ -352,7 +349,7 @@ void RadientSceneDrawableCache::AddDrawableToDrawList(RadientDrawableID Drawable
         return;
     }
 
-    Slot.DrawListIndex = m_DrawLists.Add(Slot.AlphaMode, DrawableID);
+    Slot.DrawListIndex = m_DrawLists.Add(static_cast<GLTF::Material::ALPHA_MODE>(Slot.AlphaMode), DrawableID);
 }
 
 void RadientSceneDrawableCache::RemoveDrawableFromDrawList(RadientDrawableID DrawableID)
@@ -370,7 +367,7 @@ void RadientSceneDrawableCache::RemoveDrawableFromDrawList(RadientDrawableID Dra
         return;
     }
 
-    const RadientDrawableID MovedDrawableID = m_DrawLists.RemoveAt(Slot.AlphaMode, Slot.DrawListIndex);
+    const RadientDrawableID MovedDrawableID = m_DrawLists.RemoveAt(static_cast<GLTF::Material::ALPHA_MODE>(Slot.AlphaMode), Slot.DrawListIndex);
     if (MovedDrawableID != InvalidRadientDrawableID && MovedDrawableID != DrawableID)
     {
         VERIFY(MovedDrawableID < m_DrawableSlots.size(), "Draw list returned invalid moved drawable ID");
@@ -413,7 +410,7 @@ const RadientDrawableSlot* RadientSceneDrawableCache::GetDrawableSlot(RadientDra
         return nullptr;
 
     const RadientDrawableSlot& Slot = m_DrawableSlots[DrawableID];
-    return Slot.Alive ? &Slot : nullptr;
+    return Slot.IsValid() ? &Slot : nullptr;
 }
 
 } // namespace Diligent

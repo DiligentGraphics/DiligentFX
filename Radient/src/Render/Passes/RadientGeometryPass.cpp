@@ -924,9 +924,8 @@ RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&         Ren
                    IsPipelineReady(PassData.pPSO),
                "Sorted drawable ID references stale pass data");
 
-        const RadientDrawableSlot&      Drawable  = *PassData.pDrawable;
-        const RadientDrawablePrimitive& Primitive = Drawable.Primitive;
-        const GLTF::Material&           Material  = *Drawable.pMaterial;
+        const RadientDrawableSlot& Drawable = *PassData.pDrawable;
+        const GLTF::Material&      Material = *Drawable.pMaterial;
 
         const PBR_Renderer::PSO_FLAGS PSOFlags = PassData.PSOFlags;
         if (pCurrPSO != PassData.pPSO)
@@ -944,7 +943,7 @@ RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&         Ren
             pContext->CommitShaderResources(pCurrSRB, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
         }
 
-        WritePrimitiveAttribs(*pRenderer, pContext, PSOFlags, *Drawable.FrameData.pWorldMatrix);
+        WritePrimitiveAttribs(*pRenderer, pContext, PSOFlags, *Drawable.pWorldMatrix);
 
         if (pCurrMaterial != &Material)
         {
@@ -952,17 +951,17 @@ RADIENT_STATUS RadientGeometryPass::Execute(RadientGeometryRenderer&         Ren
             pCurrMaterial = &Material;
         }
 
-        if (Primitive.HasIndices())
+        if (Drawable.IsIndexed)
         {
-            DrawIndexedAttribs DrawAttrs{Primitive.IndexCount, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
-            DrawAttrs.FirstIndexLocation = Drawable.FirstIndexLocation + Primitive.FirstIndex;
-            DrawAttrs.BaseVertex         = Drawable.BaseVertex + Primitive.FirstVertex;
+            DrawIndexedAttribs DrawAttrs{Drawable.ElementCount, VT_UINT32, DRAW_FLAG_VERIFY_ALL};
+            DrawAttrs.FirstIndexLocation = Drawable.FirstIndexLocation + Drawable.FirstElement;
+            DrawAttrs.BaseVertex         = Drawable.BaseVertex;
             pContext->DrawIndexed(DrawAttrs);
         }
         else
         {
-            DrawAttribs DrawAttrs{Primitive.VertexCount, DRAW_FLAG_VERIFY_ALL};
-            DrawAttrs.StartVertexLocation = Drawable.BaseVertex + Primitive.FirstVertex;
+            DrawAttribs DrawAttrs{Drawable.ElementCount, DRAW_FLAG_VERIFY_ALL};
+            DrawAttrs.StartVertexLocation = Drawable.BaseVertex + Drawable.FirstElement;
             pContext->Draw(DrawAttrs);
         }
     }
@@ -985,15 +984,14 @@ void RadientGeometryPass::BuildSortedDrawableIDs(const RadientDrawList&         
             continue;
         }
 
-        if (pDrawable->FrameData.pWorldMatrix == nullptr ||
-            pDrawable->FrameData.pEffectiveVisible == nullptr ||
-            !*pDrawable->FrameData.pEffectiveVisible)
+        if (pDrawable->pWorldMatrix == nullptr ||
+            pDrawable->pEffectiveVisible == nullptr ||
+            !*pDrawable->pEffectiveVisible)
         {
             continue;
         }
 
-        const RadientDrawablePrimitive& Primitive = pDrawable->Primitive;
-        if (Primitive.VertexCount == 0 && Primitive.IndexCount == 0)
+        if (pDrawable->ElementCount == 0)
             continue;
 
         if (DrawItem.DrawableID >= m_DrawablePassData.size())
