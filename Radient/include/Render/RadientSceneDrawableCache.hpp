@@ -128,8 +128,6 @@ public:
 private:
     struct RenderableRecord
     {
-        RadientEntityID Entity = InvalidRadientEntityID;
-
         RadientMeshComponent Mesh;
 
         const RadientMeshRendererComponent* pRenderer         = nullptr;
@@ -145,7 +143,7 @@ private:
     void ProcessRenderableMeshRemoved(RadientEntityID Entity);
     void ResolvePendingRenderableMeshes();
 
-    bool TryExpandRenderable(RenderableRecord& Record);
+    bool TryExpandRenderable(RadientEntityID Entity, RenderableRecord& Record);
 
     RadientDrawableID AllocateDrawableID();
 
@@ -153,7 +151,7 @@ private:
     void AddDrawableToDrawList(RadientDrawableID DrawableID);
     void RemoveDrawableFromDrawList(RadientDrawableID DrawableID);
     void RemoveRenderableDrawables(RenderableRecord& Record);
-    void AddPendingResolution(RenderableRecord& Record);
+    void AddPendingResolution(RadientEntityID Entity, RenderableRecord& Record);
     void RecordDrawableChange(RadientDrawableID DrawableID, RadientDrawableChangeType Type);
 
 private:
@@ -164,6 +162,7 @@ private:
     std::deque<RadientDrawableSlot>    m_DrawableSlots;
     std::vector<RadientDrawableID>     m_FreeDrawableIDs;
     std::vector<RadientEntityID>       m_PendingRenderableEntities;
+    std::vector<RadientEntityID>       m_PendingRenderableEntitiesScratch;
     std::vector<RadientDrawableChange> m_DrawableChanges;
 
     RadientDrawLists      m_DrawLists;

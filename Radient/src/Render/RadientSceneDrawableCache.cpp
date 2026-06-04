@@ -80,8 +80,9 @@ MeshResolveStatus ResolveMesh(IRadientMeshAsset* pMeshAsset,
     if (Result.Status != RADIENT_STATUS_OK)
         return MeshResolveStatus::Pending;
 
-    if (Result.pModel == nullptr || Result.MeshIndex >= Result.pModel->Meshes.size())
-        return MeshResolveStatus::Failed;
+    VERIFY(Result.pModel != nullptr, "GLTF mesh resolve result has null model pointer. This should not happen when the status is RADIENT_STATUS_OK");
+    VERIFY(Result.MeshIndex < Result.pModel->Meshes.size(), "GLTF mesh index (", Result.MeshIndex, ") is out of range for the model (", Result.pModel->Meshes.size(),
+           " meshes). This should not happen when the status is RADIENT_STATUS_OK");
 
     Mesh.pModel             = Result.pModel;
     Mesh.pMesh              = &Result.pModel->Meshes[Result.MeshIndex];
@@ -108,11 +109,8 @@ RADIENT_STATUS RadientSceneDrawableCache::SyncScene(const IRadientScene& Scene)
         m_SceneRevisions.Lights != SceneRevisions.Lights ||
         m_SceneRevisions.Visibility != SceneRevisions.Visibility;
 
-    const RadientSceneImpl* pSceneImpl = ClassPtrCast<const RadientSceneImpl>(&Scene);
-    if (pSceneImpl == nullptr)
-        return RADIENT_STATUS_INVALID_ARGUMENT;
-
-    const RadientSceneState& State = pSceneImpl->GetState();
+    const RadientSceneImpl*  pSceneImpl = ClassPtrCast<const RadientSceneImpl>(&Scene);
+    const RadientSceneState& State      = pSceneImpl->GetState();
 
     RADIENT_STATUS Status = RADIENT_STATUS_NO_CHANGE;
     if (UpdateRenderables)
@@ -120,13 +118,14 @@ RADIENT_STATUS RadientSceneDrawableCache::SyncScene(const IRadientScene& Scene)
         Status = State.EnumerateRenderableMeshChanges(
             [this](const RadientSceneState::RenderableMeshChange& Change,
                    const RadientSceneState::RenderableMesh*       pMesh) {
-                if (pMesh == nullptr)
+                if (pMesh != nullptr)
+                {
+                    ProcessRenderableMeshAddedOrUpdated(*pMesh);
+                }
+                else
                 {
                     ProcessRenderableMeshRemoved(Change.Entity);
-                    return;
                 }
-
-                ProcessRenderableMeshAddedOrUpdated(*pMesh);
             });
         if (RADIENT_FAILED(Status))
             return Status;
@@ -160,13 +159,15 @@ RADIENT_STATUS RadientSceneDrawableCache::SyncScene(const IRadientScene& Scene)
 
 void RadientSceneDrawableCache::ProcessRenderableMeshAddedOrUpdated(const RadientSceneState::RenderableMesh& Mesh)
 {
-    RenderableRecord& Record = m_Renderables[Mesh.Entity];
+    auto record_it = m_Renderables.find(Mesh.Entity);
 
-    const bool IsNewRecord = Record.Entity == InvalidRadientEntityID;
-    const bool MeshChanged = !IsNewRecord && !IsSameMeshAsset(Record.Mesh, Mesh.Mesh);
-
+    const bool IsNewRecord = record_it == m_Renderables.end();
     if (IsNewRecord)
-        Record.Entity = Mesh.Entity;
+    {
+        record_it = m_Renderables.emplace(Mesh.Entity, RenderableRecord{}).first;
+    }
+    RenderableRecord& Record      = record_it->second;
+    const bool        MeshChanged = !IsNewRecord && !IsSameMeshAsset(Record.Mesh, Mesh.Mesh);
 
     if (IsNewRecord || MeshChanged)
     {
@@ -182,20 +183,21 @@ void RadientSceneDrawableCache::ProcessRenderableMeshAddedOrUpdated(const Radien
 
     if (Record.DrawableIDs.empty())
     {
-        TryExpandRenderable(Record);
-        return;
+        TryExpandRenderable(Mesh.Entity, Record);
     }
-
-    for (const RadientDrawableID DrawableID : Record.DrawableIDs)
+    else
     {
-        VERIFY(DrawableID < m_DrawableSlots.size(), "Invalid drawable ID in renderable record");
-        RadientDrawableSlot& Slot = m_DrawableSlots[DrawableID];
-        VERIFY(Slot.IsValid(), "Renderable record references an invalid drawable slot");
+        for (const RadientDrawableID DrawableID : Record.DrawableIDs)
+        {
+            VERIFY(DrawableID < m_DrawableSlots.size(), "Invalid drawable ID in renderable record");
+            RadientDrawableSlot& Slot = m_DrawableSlots[DrawableID];
+            VERIFY(Slot.IsValid(), "Renderable record references an invalid drawable slot");
 
-        Slot.pRenderer         = Record.pRenderer;
-        Slot.pWorldMatrix      = Record.pWorldMatrix;
-        Slot.pEffectiveVisible = Record.pEffectiveVisible;
-        RecordDrawableChange(DrawableID, RadientDrawableChangeType::Updated);
+            Slot.pRenderer         = Record.pRenderer;
+            Slot.pWorldMatrix      = Record.pWorldMatrix;
+            Slot.pEffectiveVisible = Record.pEffectiveVisible;
+            RecordDrawableChange(DrawableID, RadientDrawableChangeType::Updated);
+        }
     }
 }
 
@@ -211,10 +213,10 @@ void RadientSceneDrawableCache::ProcessRenderableMeshRemoved(RadientEntityID Ent
 
 void RadientSceneDrawableCache::ResolvePendingRenderableMeshes()
 {
-    std::vector<RadientEntityID> Pending;
-    Pending.swap(m_PendingRenderableEntities);
+    m_PendingRenderableEntitiesScratch.clear();
+    m_PendingRenderableEntitiesScratch.swap(m_PendingRenderableEntities);
 
-    for (const RadientEntityID Entity : Pending)
+    for (const RadientEntityID Entity : m_PendingRenderableEntitiesScratch)
     {
         std::unordered_map<RadientEntityID, RenderableRecord>::iterator It = m_Renderables.find(Entity);
         if (It == m_Renderables.end())
@@ -225,11 +227,12 @@ void RadientSceneDrawableCache::ResolvePendingRenderableMeshes()
             continue;
 
         Record.PendingResolution = false;
-        TryExpandRenderable(Record);
+        TryExpandRenderable(Entity, Record);
     }
+    m_PendingRenderableEntitiesScratch.clear();
 }
 
-bool RadientSceneDrawableCache::TryExpandRenderable(RenderableRecord& Record)
+bool RadientSceneDrawableCache::TryExpandRenderable(RadientEntityID Entity, RenderableRecord& Record)
 {
     ResolvedMesh Mesh;
     switch (ResolveMesh(Record.Mesh.pMesh, Mesh))
@@ -238,7 +241,7 @@ bool RadientSceneDrawableCache::TryExpandRenderable(RenderableRecord& Record)
             break;
 
         case MeshResolveStatus::Pending:
-            AddPendingResolution(Record);
+            AddPendingResolution(Entity, Record);
             return false;
 
         case MeshResolveStatus::Failed:
@@ -268,7 +271,7 @@ bool RadientSceneDrawableCache::TryExpandRenderable(RenderableRecord& Record)
         const RadientDrawableID DrawableID = AllocateDrawableID();
         RadientDrawableSlot&    Slot       = m_DrawableSlots[DrawableID];
 
-        Slot.Entity             = Record.Entity;
+        Slot.Entity             = Entity;
         Slot.pRenderer          = Record.pRenderer;
         Slot.pWorldMatrix       = Record.pWorldMatrix;
         Slot.pEffectiveVisible  = Record.pEffectiveVisible;
@@ -387,13 +390,13 @@ void RadientSceneDrawableCache::RemoveRenderableDrawables(RenderableRecord& Reco
     Record.DrawableIDs.clear();
 }
 
-void RadientSceneDrawableCache::AddPendingResolution(RenderableRecord& Record)
+void RadientSceneDrawableCache::AddPendingResolution(RadientEntityID Entity, RenderableRecord& Record)
 {
     if (Record.PendingResolution)
         return;
 
     Record.PendingResolution = true;
-    m_PendingRenderableEntities.push_back(Record.Entity);
+    m_PendingRenderableEntities.push_back(Entity);
 }
 
 void RadientSceneDrawableCache::RecordDrawableChange(RadientDrawableID DrawableID, RadientDrawableChangeType Type)
