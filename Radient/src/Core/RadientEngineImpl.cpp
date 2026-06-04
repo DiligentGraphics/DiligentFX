@@ -33,9 +33,11 @@
 #include "Import/RadientSceneImporterImpl.hpp"
 #include "Scene/RadientSceneWriterImpl.hpp"
 
+#include "Errors.hpp"
 #include "ThreadPool.hpp"
 
 #include <algorithm>
+#include <exception>
 #include <thread>
 
 namespace Diligent
@@ -177,8 +179,22 @@ RADIENT_STATUS RadientEngineImpl::CreateRenderer(const RadientRendererDesc& Desc
     RendererCI.pBackend      = m_pBackend;
     RendererCI.pAssetManager = m_pAssetManager;
 
-    RefCntAutoPtr<IRadientRenderer> pRenderer = RadientRendererImpl::Create(RendererCI);
-    *ppRenderer                               = pRenderer.Detach();
+    try
+    {
+        RefCntAutoPtr<IRadientRenderer> pRenderer = RadientRendererImpl::Create(RendererCI);
+        *ppRenderer                               = pRenderer.Detach();
+    }
+    catch (const std::exception& Error)
+    {
+        LOG_ERROR_MESSAGE("Failed to create Radient renderer: ", Error.what());
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
+    catch (...)
+    {
+        LOG_ERROR_MESSAGE("Failed to create Radient renderer");
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
+
     return RADIENT_STATUS_OK;
 }
 

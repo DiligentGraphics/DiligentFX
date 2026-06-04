@@ -30,6 +30,7 @@
 #include "Scene/RadientSceneImpl.hpp"
 
 #include "Cast.hpp"
+#include "Errors.hpp"
 
 namespace Diligent
 {
@@ -41,6 +42,10 @@ RadientRenderPipeline::RadientRenderPipeline(IRadientBackend*           pBackend
     m_pAssetManager{pAssetManager},
     m_ForwardPass{Desc.EnableAsyncPipelineCompilation == True}
 {
+    if (m_pBackend == nullptr)
+        LOG_ERROR_AND_THROW("Radient render pipeline backend must not be null");
+    if (m_pAssetManager == nullptr)
+        LOG_ERROR_AND_THROW("Radient render pipeline asset manager must not be null");
 }
 
 RadientRenderPipeline::~RadientRenderPipeline()
@@ -49,7 +54,7 @@ RadientRenderPipeline::~RadientRenderPipeline()
 
 RADIENT_STATUS RadientRenderPipeline::Update(const RadientRenderAttribs& Attribs)
 {
-    if (m_pBackend == nullptr || Attribs.pView == nullptr)
+    if (Attribs.pView == nullptr)
     {
         return RADIENT_STATUS_INVALID_ARGUMENT;
     }
@@ -76,9 +81,7 @@ RADIENT_STATUS RadientRenderPipeline::Update(const RadientRenderAttribs& Attribs
     if (pDevice == nullptr || pContext == nullptr)
         return RADIENT_STATUS_OK;
 
-    RADIENT_STATUS Status = m_pAssetManager != nullptr ?
-        m_pAssetManager->UpdateGPUResources(pDevice, pContext) :
-        RADIENT_STATUS_INVALID_OPERATION;
+    RADIENT_STATUS Status = m_pAssetManager->UpdateGPUResources(pDevice, pContext);
     if (RADIENT_FAILED(Status))
         return Status;
 
@@ -108,7 +111,7 @@ RADIENT_STATUS RadientRenderPipeline::Update(const RadientRenderAttribs& Attribs
 
 RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs)
 {
-    if (m_pBackend == nullptr || Attribs.pView == nullptr)
+    if (Attribs.pView == nullptr)
     {
         return RADIENT_STATUS_INVALID_ARGUMENT;
     }
@@ -126,9 +129,6 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
     // The concrete command serialization/GPU execution will be plugged in behind this pipeline.
     if (pDevice == nullptr || pContext == nullptr)
         return RADIENT_STATUS_OK;
-
-    if (m_pAssetManager == nullptr)
-        return RADIENT_STATUS_INVALID_OPERATION;
 
     RADIENT_STATUS Status = RADIENT_STATUS_OK;
 
