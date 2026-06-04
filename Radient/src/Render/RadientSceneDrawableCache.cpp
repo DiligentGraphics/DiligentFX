@@ -345,9 +345,11 @@ RadientDrawableID RadientSceneDrawableCache::AllocateDrawableID()
 
 void RadientSceneDrawableCache::FreeDrawableID(RadientDrawableID DrawableID)
 {
-    VERIFY(DrawableID < m_DrawableSlots.size(), "Invalid drawable ID");
     if (DrawableID >= m_DrawableSlots.size())
+    {
+        UNEXPECTED("Trying to free an invalid drawable ID");
         return;
+    }
 
     RemoveDrawableFromDrawList(DrawableID);
 
@@ -364,42 +366,50 @@ void RadientSceneDrawableCache::FreeDrawableID(RadientDrawableID DrawableID)
 
 void RadientSceneDrawableCache::AddDrawableToDrawList(RadientDrawableID DrawableID)
 {
-    VERIFY(DrawableID < m_DrawableSlots.size(), "Invalid drawable ID");
     if (DrawableID >= m_DrawableSlots.size())
+    {
+        UNEXPECTED("Trying to add an invalid drawable ID to a draw list");
         return;
+    }
 
     RadientDrawableSlot& Slot = m_DrawableSlots[DrawableID];
     VERIFY(Slot.Alive, "Trying to add a dead drawable slot to a draw list");
 
-    if (Slot.InDrawList)
+    if (Slot.IsInDrawList())
+    {
+        UNEXPECTED("Trying to add a drawable slot that is already in a draw list");
         return;
+    }
 
     Slot.DrawListIndex = m_DrawLists.Add(Slot.AlphaMode, DrawableID);
-    Slot.InDrawList    = true;
 }
 
 void RadientSceneDrawableCache::RemoveDrawableFromDrawList(RadientDrawableID DrawableID)
 {
-    VERIFY(DrawableID < m_DrawableSlots.size(), "Invalid drawable ID");
     if (DrawableID >= m_DrawableSlots.size())
+    {
+        UNEXPECTED("Trying to remove an invalid drawable ID from a draw list");
         return;
+    }
 
     RadientDrawableSlot& Slot = m_DrawableSlots[DrawableID];
-    if (!Slot.InDrawList)
+    if (!Slot.IsInDrawList())
+    {
+        UNEXPECTED("Trying to remove a drawable slot that is not in a draw list");
         return;
+    }
 
     const RadientDrawableID MovedDrawableID = m_DrawLists.RemoveAt(Slot.AlphaMode, Slot.DrawListIndex);
     if (MovedDrawableID != InvalidRadientDrawableID && MovedDrawableID != DrawableID)
     {
         VERIFY(MovedDrawableID < m_DrawableSlots.size(), "Draw list returned invalid moved drawable ID");
         RadientDrawableSlot& MovedSlot = m_DrawableSlots[MovedDrawableID];
-        VERIFY(MovedSlot.InDrawList && MovedSlot.AlphaMode == Slot.AlphaMode,
+        VERIFY(MovedSlot.IsInDrawList() && MovedSlot.AlphaMode == Slot.AlphaMode,
                "Moved drawable slot does not match the draw list it was moved inside");
         MovedSlot.DrawListIndex = Slot.DrawListIndex;
     }
 
-    Slot.InDrawList    = false;
-    Slot.DrawListIndex = ~size_t{0};
+    Slot.DrawListIndex = RadientDrawableSlot::InvalidDrawListIndex;
 }
 
 void RadientSceneDrawableCache::RemoveRenderableDrawables(RenderableRecord& Record)

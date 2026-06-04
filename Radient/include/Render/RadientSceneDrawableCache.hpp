@@ -66,8 +66,9 @@ struct RadientDrawablePrimitive
 /// Renderer-facing primitive data addressed by a stable drawable ID.
 struct RadientDrawableSlot
 {
+    static constexpr size_t InvalidDrawListIndex = ~size_t{0};
+
     bool   Alive      = false;
-    bool   InDrawList = false;
     Uint32 Generation = 0;
 
     RadientEntityID Entity = InvalidRadientEntityID;
@@ -85,7 +86,12 @@ struct RadientDrawableSlot
     Uint32 FirstIndexLocation = 0;
     Uint32 BaseVertex         = 0;
 
-    size_t DrawListIndex = ~size_t{0};
+    size_t DrawListIndex = InvalidDrawListIndex;
+
+    bool IsInDrawList() const
+    {
+        return DrawListIndex != InvalidDrawListIndex;
+    }
 };
 
 enum class RadientDrawableChangeType
