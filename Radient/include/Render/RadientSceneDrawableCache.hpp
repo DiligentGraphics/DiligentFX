@@ -105,7 +105,7 @@ struct RadientDrawableChange
 class RadientSceneDrawableCache
 {
 public:
-    RADIENT_STATUS SyncScene(IRadientScene& Scene);
+    RADIENT_STATUS SyncScene(const IRadientScene& Scene);
 
     const RadientDrawLists& GetDrawLists() const
     {

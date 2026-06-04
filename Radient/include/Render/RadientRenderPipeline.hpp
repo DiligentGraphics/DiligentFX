@@ -49,6 +49,7 @@ public:
                           const RadientRendererDesc& Desc);
     ~RadientRenderPipeline();
 
+    RADIENT_STATUS Update(const RadientRenderAttribs& Attribs);
     RADIENT_STATUS Render(const RadientRenderAttribs& Attribs);
 
 private:

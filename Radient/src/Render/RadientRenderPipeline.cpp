@@ -27,6 +27,10 @@
 #include "Render/RadientRenderPipeline.hpp"
 
 #include "Assets/RadientAssetManagerImpl.hpp"
+#include "Scene/RadientSceneImpl.hpp"
+#include "Scene/RadientSceneState.hpp"
+
+#include "Cast.hpp"
 
 namespace Diligent
 {
@@ -44,7 +48,7 @@ RadientRenderPipeline::~RadientRenderPipeline()
 {
 }
 
-RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs)
+RADIENT_STATUS RadientRenderPipeline::Update(const RadientRenderAttribs& Attribs)
 {
     if (m_pBackend == nullptr || Attribs.pView == nullptr)
     {
@@ -53,6 +57,10 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
 
     const RadientViewDesc& ViewDesc = Attribs.pView->GetDesc();
     if (ViewDesc.pScene == nullptr || ViewDesc.pRenderTarget == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    RadientSceneImpl* pSceneImpl = ClassPtrCast<RadientSceneImpl>(ViewDesc.pScene);
+    if (pSceneImpl == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
     IRenderDevice*  pDevice  = m_pBackend->GetNativeDevice();
@@ -78,6 +86,7 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
     const RADIENT_STATUS SyncStatus = m_DrawableCache.SyncScene(*ViewDesc.pScene);
     if (RADIENT_FAILED(SyncStatus))
         return SyncStatus;
+    pSceneImpl->GetState().ClearRenderableMeshChanges();
 
     Status = m_GeometryRenderer.Prepare(pDevice, pContext);
     if (RADIENT_FAILED(Status))
@@ -94,6 +103,35 @@ RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs
     Status = m_PostProcessPipeline.Prepare(pDevice, pContext, m_FrameTargets);
     if (RADIENT_FAILED(Status))
         return Status;
+
+    return RADIENT_STATUS_OK;
+}
+
+RADIENT_STATUS RadientRenderPipeline::Render(const RadientRenderAttribs& Attribs)
+{
+    if (m_pBackend == nullptr || Attribs.pView == nullptr)
+    {
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    }
+
+    const RadientViewDesc& ViewDesc = Attribs.pView->GetDesc();
+    if (ViewDesc.pScene == nullptr || ViewDesc.pRenderTarget == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    IRenderDevice*  pDevice  = m_pBackend->GetNativeDevice();
+    IDeviceContext* pContext = Attribs.pDeviceContext != nullptr ?
+        Attribs.pDeviceContext :
+        m_pBackend->GetNativeImmediateContext();
+
+    // Remote execution and headless local tests use the same public renderer object.
+    // The concrete command serialization/GPU execution will be plugged in behind this pipeline.
+    if (pDevice == nullptr || pContext == nullptr)
+        return RADIENT_STATUS_OK;
+
+    if (m_pAssetManager == nullptr)
+        return RADIENT_STATUS_INVALID_OPERATION;
+
+    RADIENT_STATUS Status = RADIENT_STATUS_OK;
 
     const bool HasDrawables = !m_DrawableCache.GetDrawLists().IsEmpty();
     const bool HasSkybox    = ViewDesc.Skybox.Source != RADIENT_SKYBOX_SOURCE_NONE;

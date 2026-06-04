@@ -134,7 +134,7 @@ MeshResolveStatus ResolveMesh(IRadientMeshAsset* pMeshAsset,
 
 } // namespace
 
-RADIENT_STATUS RadientSceneDrawableCache::SyncScene(IRadientScene& Scene)
+RADIENT_STATUS RadientSceneDrawableCache::SyncScene(const IRadientScene& Scene)
 {
     m_DrawableChanges.clear();
 
@@ -148,11 +148,11 @@ RADIENT_STATUS RadientSceneDrawableCache::SyncScene(IRadientScene& Scene)
         m_SceneRevisions.Lights != SceneRevisions.Lights ||
         m_SceneRevisions.Visibility != SceneRevisions.Visibility;
 
-    RadientSceneImpl* pSceneImpl = ClassPtrCast<RadientSceneImpl>(&Scene);
+    const RadientSceneImpl* pSceneImpl = ClassPtrCast<const RadientSceneImpl>(&Scene);
     if (pSceneImpl == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    RadientSceneState& State = pSceneImpl->GetState();
+    const RadientSceneState& State = pSceneImpl->GetState();
 
     RADIENT_STATUS Status = RADIENT_STATUS_NO_CHANGE;
     if (UpdateRenderables)
@@ -170,8 +170,6 @@ RADIENT_STATUS RadientSceneDrawableCache::SyncScene(IRadientScene& Scene)
             });
         if (RADIENT_FAILED(Status))
             return Status;
-
-        State.ClearRenderableMeshChanges();
     }
 
     ResolvePendingRenderableMeshes();

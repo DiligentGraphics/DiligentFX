@@ -127,7 +127,7 @@ RADIENT_STATUS RadientRendererImpl::CreateView(const RadientViewDesc& Desc, IRad
     *ppView = nullptr;
 
     RefCntAutoPtr<IRadientView> pView = RadientViewImpl::Create(Desc);
-    *ppView                          = pView.Detach();
+    *ppView                           = pView.Detach();
     return RADIENT_STATUS_OK;
 }
 
@@ -139,6 +139,10 @@ RADIENT_STATUS RadientRendererImpl::Render(const RadientRenderAttribs& Attribs)
     const RadientViewDesc& ViewDesc = Attribs.pView->GetDesc();
     if (ViewDesc.pScene == nullptr || ViewDesc.pRenderTarget == nullptr)
         return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    const RADIENT_STATUS UpdateStatus = m_RenderPipeline->Update(Attribs);
+    if (RADIENT_FAILED(UpdateStatus))
+        return UpdateStatus;
 
     return m_RenderPipeline->Render(Attribs);
 }
