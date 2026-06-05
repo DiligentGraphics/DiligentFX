@@ -73,7 +73,7 @@ public:
     RADIENT_STATUS Prepare(IRenderDevice* pDevice, IDeviceContext* pContext);
     RADIENT_STATUS BeginFrame(IRenderDevice*                   pDevice,
                               IDeviceContext*                  pContext,
-                              const RadientLightList&          LightList,
+                              const RadientLightLists&         LightList,
                               GLTF::ResourceManager*           pResourceManager,
                               const RadientViewDesc&           ViewDesc,
                               const RadientFrameRenderTargets& Targets);

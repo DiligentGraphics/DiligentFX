@@ -244,6 +244,67 @@ void ExpectDrawableChangeCounts(const RadientSceneDrawableCache& Cache,
     EXPECT_EQ(Updated, ExpectedUpdated);
 }
 
+void ExpectLightChangeCounts(const RadientSceneDrawableCache& Cache,
+                             size_t                           ExpectedAdded,
+                             size_t                           ExpectedRemoved,
+                             size_t                           ExpectedUpdated)
+{
+    size_t Added   = 0;
+    size_t Removed = 0;
+    size_t Updated = 0;
+
+    for (const RadientLightChange& Change : Cache.GetLightChanges())
+    {
+        switch (Change.Change)
+        {
+            case RadientLightChangeType::Added:
+                ++Added;
+                break;
+
+            case RadientLightChangeType::Removed:
+                ++Removed;
+                break;
+
+            case RadientLightChangeType::Updated:
+                ++Updated;
+                break;
+        }
+    }
+
+    EXPECT_EQ(Added, ExpectedAdded);
+    EXPECT_EQ(Removed, ExpectedRemoved);
+    EXPECT_EQ(Updated, ExpectedUpdated);
+}
+
+RadientEntityID AddLightEntity(IRadientSceneWriter&         Writer,
+                               const RadientLightComponent& Light,
+                               RadientEntityID              Parent = InvalidRadientEntityID)
+{
+    RadientEntityID Entity = InvalidRadientEntityID;
+
+    RadientEntityDesc Desc;
+    Desc.Parent = Parent;
+
+    EXPECT_EQ(Writer.CreateEntity(Desc, Entity), RADIENT_STATUS_OK);
+    EXPECT_NE(Entity, InvalidRadientEntityID);
+    EXPECT_EQ(Writer.SetLight(Entity, Light), RADIENT_STATUS_OK);
+    EXPECT_EQ(Writer.CommitChanges(), RADIENT_STATUS_OK);
+
+    return Entity;
+}
+
+const RadientLightItem* FindLightItem(const RadientLightList& LightList,
+                                      RadientEntityID         Entity)
+{
+    const RadientLightList::ItemListType& Items = LightList.GetItems();
+
+    const auto It = std::find_if(Items.begin(), Items.end(),
+                                 [Entity](const RadientLightItem& Item) {
+                                     return Item.Entity == Entity;
+                                 });
+    return It != Items.end() ? &*It : nullptr;
+}
+
 RadientEntityID AddReadyRenderableEntity(TestDrawableMeshProvider&  MeshProvider,
                                          RadientSceneDrawableCache& DrawableCache,
                                          RadientSceneImpl&          Scene,
@@ -1224,4 +1285,209 @@ TEST(RadientSceneDrawableCacheTest, VisibilityPointerTracksHierarchyWithoutDrawa
     EXPECT_EQ(pSlot->pEffectiveVisible, pEffectiveVisible);
     EXPECT_FALSE(*pEffectiveVisible);
     ExpectDrawListsForEntities(DrawableCache, Model, {Entity});
+}
+
+TEST(RadientSceneDrawableCacheTest, LightListsUpdateIncrementallyByType)
+{
+    RadientSceneDrawableCache       DrawableCache;
+    RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
+
+    ASSERT_NE(pScene, nullptr);
+
+    RefCntAutoPtr<IRadientSceneWriter> pWriter = RadientSceneWriterImpl::Create(pScene);
+
+    RadientLightComponent DirectionalLight;
+    DirectionalLight.Type      = RADIENT_LIGHT_TYPE_DIRECTIONAL;
+    DirectionalLight.Intensity = 2.f;
+
+    RadientLightComponent PointLight;
+    PointLight.Type      = RADIENT_LIGHT_TYPE_POINT;
+    PointLight.Intensity = 3.f;
+
+    RadientLightComponent SpotLight;
+    SpotLight.Type      = RADIENT_LIGHT_TYPE_SPOT;
+    SpotLight.Intensity = 4.f;
+
+    // Initial sync adds one light to each type-specific list.
+    const RadientEntityID DirectionalEntity = AddLightEntity(*pWriter, DirectionalLight);
+    const RadientEntityID PointEntity       = AddLightEntity(*pWriter, PointLight);
+    const RadientEntityID SpotEntity        = AddLightEntity(*pWriter, SpotLight);
+
+    EXPECT_EQ(DrawableCache.SyncScene(*pScene), RADIENT_STATUS_OK);
+    ExpectLightChangeCounts(DrawableCache, 3u, 0u, 0u);
+    EXPECT_EQ(DrawableCache.GetLightList(RADIENT_LIGHT_TYPE_DIRECTIONAL).GetItemCount(), 1u);
+    EXPECT_EQ(DrawableCache.GetLightList(RADIENT_LIGHT_TYPE_POINT).GetItemCount(), 1u);
+    EXPECT_EQ(DrawableCache.GetLightList(RADIENT_LIGHT_TYPE_SPOT).GetItemCount(), 1u);
+    EXPECT_NE(FindLightItem(DrawableCache.GetLightList(RADIENT_LIGHT_TYPE_DIRECTIONAL), DirectionalEntity), nullptr);
+    EXPECT_NE(FindLightItem(DrawableCache.GetLightList(RADIENT_LIGHT_TYPE_POINT), PointEntity), nullptr);
+    EXPECT_NE(FindLightItem(DrawableCache.GetLightList(RADIENT_LIGHT_TYPE_SPOT), SpotEntity), nullptr);
+    pScene->ClearPendingRenderChanges();
+
+    // Updating component data without changing type stays in the same list and
+    // is reported as an update.
+    PointLight.Intensity = 6.f;
+    EXPECT_EQ(pWriter->SetLight(PointEntity, PointLight), RADIENT_STATUS_OK);
+    EXPECT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+
+    EXPECT_EQ(DrawableCache.SyncScene(*pScene), RADIENT_STATUS_OK);
+    ExpectLightChangeCounts(DrawableCache, 0u, 0u, 1u);
+    const RadientLightItem* pUpdatedPoint = FindLightItem(DrawableCache.GetLightList(RADIENT_LIGHT_TYPE_POINT), PointEntity);
+    ASSERT_NE(pUpdatedPoint, nullptr);
+    ASSERT_NE(pUpdatedPoint->pLight, nullptr);
+    EXPECT_EQ(pUpdatedPoint->pLight->Intensity, 6.f);
+    EXPECT_EQ(DrawableCache.GetLightList(RADIENT_LIGHT_TYPE_POINT).GetItemCount(), 1u);
+    pScene->ClearPendingRenderChanges();
+
+    // Changing the type moves the light between lists: remove from the old type
+    // and add to the new type.
+    PointLight.Type = RADIENT_LIGHT_TYPE_SPOT;
+    EXPECT_EQ(pWriter->SetLight(PointEntity, PointLight), RADIENT_STATUS_OK);
+    EXPECT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+
+    EXPECT_EQ(DrawableCache.SyncScene(*pScene), RADIENT_STATUS_OK);
+    ExpectLightChangeCounts(DrawableCache, 1u, 1u, 0u);
+    EXPECT_EQ(DrawableCache.GetLightList(RADIENT_LIGHT_TYPE_POINT).GetItemCount(), 0u);
+    EXPECT_EQ(DrawableCache.GetLightList(RADIENT_LIGHT_TYPE_SPOT).GetItemCount(), 2u);
+    EXPECT_NE(FindLightItem(DrawableCache.GetLightList(RADIENT_LIGHT_TYPE_SPOT), PointEntity), nullptr);
+    EXPECT_NE(FindLightItem(DrawableCache.GetLightList(RADIENT_LIGHT_TYPE_SPOT), SpotEntity), nullptr);
+    pScene->ClearPendingRenderChanges();
+
+    // Removing a light removes it from the type-specific list that currently
+    // owns it.
+    EXPECT_EQ(pWriter->RemoveComponent(SpotEntity, RADIENT_COMPONENT_TYPE_LIGHT), RADIENT_STATUS_OK);
+    EXPECT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+
+    EXPECT_EQ(DrawableCache.SyncScene(*pScene), RADIENT_STATUS_OK);
+    ExpectLightChangeCounts(DrawableCache, 0u, 1u, 0u);
+    EXPECT_EQ(DrawableCache.GetLightList(RADIENT_LIGHT_TYPE_SPOT).GetItemCount(), 1u);
+    EXPECT_EQ(FindLightItem(DrawableCache.GetLightList(RADIENT_LIGHT_TYPE_SPOT), SpotEntity), nullptr);
+    EXPECT_NE(FindLightItem(DrawableCache.GetLightList(RADIENT_LIGHT_TYPE_SPOT), PointEntity), nullptr);
+}
+
+TEST(RadientSceneDrawableCacheTest, LightWorldMatrixPointerTracksHierarchyWithoutLightUpdate)
+{
+    RadientSceneDrawableCache       DrawableCache;
+    RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
+
+    ASSERT_NE(pScene, nullptr);
+
+    RefCntAutoPtr<IRadientSceneWriter> pWriter = RadientSceneWriterImpl::Create(pScene);
+
+    RadientEntityDesc RootDesc;
+
+    RadientEntityID Root0 = InvalidRadientEntityID;
+    RadientEntityID Root1 = InvalidRadientEntityID;
+    EXPECT_EQ(pWriter->CreateEntity(RootDesc, Root0), RADIENT_STATUS_OK);
+
+    RootDesc.Transform = MakeTranslation(10.f, 0.f, 0.f);
+    EXPECT_EQ(pWriter->CreateEntity(RootDesc, Root1), RADIENT_STATUS_OK);
+    ASSERT_NE(Root0, InvalidRadientEntityID);
+    ASSERT_NE(Root1, InvalidRadientEntityID);
+
+    RadientEntityDesc BranchDesc;
+    BranchDesc.Parent = Root0;
+
+    RadientEntityID Branch = InvalidRadientEntityID;
+    EXPECT_EQ(pWriter->CreateEntity(BranchDesc, Branch), RADIENT_STATUS_OK);
+    ASSERT_NE(Branch, InvalidRadientEntityID);
+
+    RadientLightComponent PointLight;
+    PointLight.Type = RADIENT_LIGHT_TYPE_POINT;
+
+    const RadientEntityID LightEntity = AddLightEntity(*pWriter, PointLight, Branch);
+
+    EXPECT_EQ(DrawableCache.SyncScene(*pScene), RADIENT_STATUS_OK);
+    ExpectLightChangeCounts(DrawableCache, 1u, 0u, 0u);
+
+    const RadientLightItem* pLightItem = FindLightItem(DrawableCache.GetLightList(RADIENT_LIGHT_TYPE_POINT), LightEntity);
+    ASSERT_NE(pLightItem, nullptr);
+    ASSERT_NE(pLightItem->pWorldMatrix, nullptr);
+
+    const RadientMatrix4x4* const pWorldMatrix = pLightItem->pWorldMatrix;
+    ExpectMatrixNear(*pWorldMatrix, RadientMath::TransformToMatrix(MakeTranslation(0.f, 0.f, 0.f)));
+    pScene->ClearPendingRenderChanges();
+
+    // Reparenting an ancestor changes the light's world matrix through the
+    // cached pointer, but does not change the light list.
+    EXPECT_EQ(pWriter->SetParent(Branch, Root1, False), RADIENT_STATUS_OK);
+    EXPECT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+
+    EXPECT_EQ(DrawableCache.SyncScene(*pScene), RADIENT_STATUS_OK);
+    ExpectLightChangeCounts(DrawableCache, 0u, 0u, 0u);
+    EXPECT_EQ(DrawableCache.GetLightList(RADIENT_LIGHT_TYPE_POINT).GetItemCount(), 1u);
+    pLightItem = FindLightItem(DrawableCache.GetLightList(RADIENT_LIGHT_TYPE_POINT), LightEntity);
+    ASSERT_NE(pLightItem, nullptr);
+    EXPECT_EQ(pLightItem->pWorldMatrix, pWorldMatrix);
+    ExpectMatrixNear(*pWorldMatrix, RadientMath::TransformToMatrix(MakeTranslation(10.f, 0.f, 0.f)));
+    pScene->ClearPendingRenderChanges();
+
+    // Reparenting the light entity itself is still mutable transform state, so
+    // the cache should not emit a light update.
+    EXPECT_EQ(pWriter->SetParent(LightEntity, Root0, False), RADIENT_STATUS_OK);
+    EXPECT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+
+    EXPECT_EQ(DrawableCache.SyncScene(*pScene), RADIENT_STATUS_OK);
+    ExpectLightChangeCounts(DrawableCache, 0u, 0u, 0u);
+    EXPECT_EQ(DrawableCache.GetLightList(RADIENT_LIGHT_TYPE_POINT).GetItemCount(), 1u);
+    pLightItem = FindLightItem(DrawableCache.GetLightList(RADIENT_LIGHT_TYPE_POINT), LightEntity);
+    ASSERT_NE(pLightItem, nullptr);
+    EXPECT_EQ(pLightItem->pWorldMatrix, pWorldMatrix);
+    ExpectMatrixNear(*pWorldMatrix, RadientMath::TransformToMatrix(MakeTranslation(0.f, 0.f, 0.f)));
+}
+
+TEST(RadientSceneDrawableCacheTest, LightVisibilityIsSkippedByGeometryPass)
+{
+    RadientSceneDrawableCache       DrawableCache;
+    RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
+
+    ASSERT_NE(pScene, nullptr);
+
+    RefCntAutoPtr<IRadientSceneWriter> pWriter = RadientSceneWriterImpl::Create(pScene);
+
+    RadientLightComponent PointLight;
+    PointLight.Type = RADIENT_LIGHT_TYPE_POINT;
+
+    RadientEntityDesc ParentDesc;
+    RadientEntityID   Parent = InvalidRadientEntityID;
+    EXPECT_EQ(pWriter->CreateEntity(ParentDesc, Parent), RADIENT_STATUS_OK);
+    ASSERT_NE(Parent, InvalidRadientEntityID);
+
+    // The visible child light is added to the point-light list.
+    const RadientEntityID LightEntity = AddLightEntity(*pWriter, PointLight, Parent);
+    EXPECT_EQ(DrawableCache.SyncScene(*pScene), RADIENT_STATUS_OK);
+    ExpectLightChangeCounts(DrawableCache, 1u, 0u, 0u);
+    EXPECT_EQ(DrawableCache.GetLightList(RADIENT_LIGHT_TYPE_POINT).GetItemCount(), 1u);
+    const RadientLightItem* pVisibleLight = FindLightItem(DrawableCache.GetLightList(RADIENT_LIGHT_TYPE_POINT), LightEntity);
+    ASSERT_NE(pVisibleLight, nullptr);
+    ASSERT_NE(pVisibleLight->pEffectiveVisible, nullptr);
+    EXPECT_TRUE(*pVisibleLight->pEffectiveVisible);
+    pScene->ClearPendingRenderChanges();
+
+    // Hiding the parent only changes effective visibility. The light component
+    // itself is unchanged, so the cache keeps the light in the typed list and
+    // lets the geometry pass skip it through the visibility pointer.
+    EXPECT_EQ(pWriter->SetEntityOwnVisibility(Parent, False), RADIENT_STATUS_OK);
+    EXPECT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+
+    EXPECT_EQ(DrawableCache.SyncScene(*pScene), RADIENT_STATUS_OK);
+    ExpectLightChangeCounts(DrawableCache, 0u, 0u, 0u);
+    EXPECT_EQ(DrawableCache.GetLightList(RADIENT_LIGHT_TYPE_POINT).GetItemCount(), 1u);
+    const RadientLightItem* pHiddenLight = FindLightItem(DrawableCache.GetLightList(RADIENT_LIGHT_TYPE_POINT), LightEntity);
+    ASSERT_NE(pHiddenLight, nullptr);
+    ASSERT_NE(pHiddenLight->pEffectiveVisible, nullptr);
+    EXPECT_FALSE(*pHiddenLight->pEffectiveVisible);
+    pScene->ClearPendingRenderChanges();
+
+    // Restoring parent visibility flips the same pointer back without emitting
+    // a light-list delta.
+    EXPECT_EQ(pWriter->SetEntityOwnVisibility(Parent, True), RADIENT_STATUS_OK);
+    EXPECT_EQ(pWriter->CommitChanges(), RADIENT_STATUS_OK);
+
+    EXPECT_EQ(DrawableCache.SyncScene(*pScene), RADIENT_STATUS_OK);
+    ExpectLightChangeCounts(DrawableCache, 0u, 0u, 0u);
+    EXPECT_EQ(DrawableCache.GetLightList(RADIENT_LIGHT_TYPE_POINT).GetItemCount(), 1u);
+    const RadientLightItem* pShownLight = FindLightItem(DrawableCache.GetLightList(RADIENT_LIGHT_TYPE_POINT), LightEntity);
+    ASSERT_NE(pShownLight, nullptr);
+    ASSERT_NE(pShownLight->pEffectiveVisible, nullptr);
+    EXPECT_TRUE(*pShownLight->pEffectiveVisible);
 }

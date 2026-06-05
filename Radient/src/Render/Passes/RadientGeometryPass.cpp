@@ -283,7 +283,7 @@ void WritePBRLightShaderAttribs(const RadientLightComponent& Light,
 }
 
 void WriteSceneLights(PBR_Renderer&                 Renderer,
-                      const RadientLightList&       LightList,
+                      const RadientLightLists&      LightList,
                       const RadientEnvironmentDesc& Environment,
                       ITextureView*                 pPrefilteredEnvMapSRV,
                       HLSL::PBRFrameAttribs&        FrameAttribs)
@@ -291,26 +291,36 @@ void WriteSceneLights(PBR_Renderer&                 Renderer,
     HLSL::PBRLightAttribs* Lights = reinterpret_cast<HLSL::PBRLightAttribs*>(&FrameAttribs + 1);
 
     Uint32 LightCount = 0;
-    for (const RadientLightItem& LightItem : LightList.GetItems())
-    {
+    LightList.Enumerate([&](const RadientLightItem& LightItem) {
         if (LightCount >= RadientMaxLightCount)
-            break;
+            return;
 
-        const float3 Position  = GetLightPosition(LightItem.WorldMatrix);
-        const float3 Direction = GetLightDirection(LightItem.WorldMatrix);
+        VERIFY(LightItem.pLight != nullptr, "Light list item has null light pointer");
+        VERIFY(LightItem.pWorldMatrix != nullptr, "Light list item has null world matrix pointer");
+        VERIFY(LightItem.pEffectiveVisible != nullptr, "Light list item has null visibility pointer");
+        if (LightItem.pLight == nullptr ||
+            LightItem.pWorldMatrix == nullptr ||
+            LightItem.pEffectiveVisible == nullptr ||
+            !*LightItem.pEffectiveVisible)
+            return;
+
+        const RadientLightComponent& Light = *LightItem.pLight;
+
+        const float3 Position  = GetLightPosition(*LightItem.pWorldMatrix);
+        const float3 Direction = GetLightDirection(*LightItem.pWorldMatrix);
         const bool   HasPosition =
-            LightItem.Light.Type == RADIENT_LIGHT_TYPE_POINT ||
-            LightItem.Light.Type == RADIENT_LIGHT_TYPE_SPOT;
+            Light.Type == RADIENT_LIGHT_TYPE_POINT ||
+            Light.Type == RADIENT_LIGHT_TYPE_SPOT;
         const bool HasDirection =
-            LightItem.Light.Type == RADIENT_LIGHT_TYPE_DIRECTIONAL ||
-            LightItem.Light.Type == RADIENT_LIGHT_TYPE_SPOT;
+            Light.Type == RADIENT_LIGHT_TYPE_DIRECTIONAL ||
+            Light.Type == RADIENT_LIGHT_TYPE_SPOT;
 
-        WritePBRLightShaderAttribs(LightItem.Light,
+        WritePBRLightShaderAttribs(Light,
                                    HasPosition ? &Position : nullptr,
                                    HasDirection ? &Direction : nullptr,
                                    Lights[LightCount]);
         ++LightCount;
-    }
+    });
 
     HLSL::PBRRendererShaderParameters& RendererAttribs = FrameAttribs.Renderer;
     Renderer.SetInternalShaderParameters(RendererAttribs, pPrefilteredEnvMapSRV);
@@ -784,7 +794,7 @@ RADIENT_STATUS RadientGeometryRenderer::Prepare(IRenderDevice*  pDevice,
 
 RADIENT_STATUS RadientGeometryRenderer::BeginFrame(IRenderDevice*                   pDevice,
                                                    IDeviceContext*                  pContext,
-                                                   const RadientLightList&          LightList,
+                                                   const RadientLightLists&         LightList,
                                                    GLTF::ResourceManager*           pResourceManager,
                                                    const RadientViewDesc&           ViewDesc,
                                                    const RadientFrameRenderTargets& Targets)

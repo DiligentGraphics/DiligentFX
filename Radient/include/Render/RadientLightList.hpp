@@ -28,6 +28,7 @@
 
 #include "RadientScene.h"
 
+#include <array>
 #include <vector>
 
 namespace Diligent
@@ -38,15 +39,18 @@ struct RadientLightItem
 {
     RadientLightItem(RadientEntityID              _Entity,
                      const RadientLightComponent& _Light,
-                     const RadientMatrix4x4&      _WorldMatrix) :
+                     const RadientMatrix4x4&      _WorldMatrix,
+                     const Bool&                  _EffectiveVisible) :
         Entity{_Entity},
-        Light{_Light},
-        WorldMatrix{_WorldMatrix}
+        pLight{&_Light},
+        pWorldMatrix{&_WorldMatrix},
+        pEffectiveVisible{&_EffectiveVisible}
     {}
 
-    RadientEntityID              Entity = InvalidRadientEntityID;
-    const RadientLightComponent& Light;
-    const RadientMatrix4x4&      WorldMatrix;
+    RadientEntityID              Entity       = InvalidRadientEntityID;
+    const RadientLightComponent* pLight       = nullptr;
+    const RadientMatrix4x4*      pWorldMatrix = nullptr;
+    const Bool*                  pEffectiveVisible = nullptr;
 };
 
 
@@ -63,10 +67,23 @@ public:
 
     void Add(RadientEntityID              Entity,
              const RadientLightComponent& Light,
-             const RadientMatrix4x4&      WorldMatrix)
+             const RadientMatrix4x4&      WorldMatrix,
+             const Bool&                  EffectiveVisible)
     {
-        m_Items.emplace_back(Entity, Light, WorldMatrix);
+        m_Items.emplace_back(Entity, Light, WorldMatrix, EffectiveVisible);
     }
+
+    size_t AddAndGetIndex(RadientEntityID              Entity,
+                          const RadientLightComponent& Light,
+                          const RadientMatrix4x4&      WorldMatrix,
+                          const Bool&                  EffectiveVisible)
+    {
+        const size_t Index = m_Items.size();
+        Add(Entity, Light, WorldMatrix, EffectiveVisible);
+        return Index;
+    }
+
+    RadientEntityID RemoveAt(size_t Index);
 
     size_t GetItemCount() const
     {
@@ -85,6 +102,52 @@ public:
 
 private:
     ItemListType m_Items;
+};
+
+
+/// Collection of light lists for each Radient light type.
+class RadientLightLists
+{
+public:
+    static constexpr size_t LightTypeCount = static_cast<size_t>(RADIENT_LIGHT_TYPE_SPOT) + 1u;
+
+    void Clear();
+
+    size_t Add(RADIENT_LIGHT_TYPE           Type,
+               RadientEntityID              Entity,
+               const RadientLightComponent& Light,
+               const RadientMatrix4x4&      WorldMatrix,
+               const Bool&                  EffectiveVisible)
+    {
+        return GetMutableLightList(Type).AddAndGetIndex(Entity, Light, WorldMatrix, EffectiveVisible);
+    }
+
+    RadientEntityID RemoveAt(RADIENT_LIGHT_TYPE Type,
+                             size_t             Index)
+    {
+        return GetMutableLightList(Type).RemoveAt(Index);
+    }
+
+    bool IsEmpty() const;
+
+    size_t GetItemCount() const;
+
+    const RadientLightList& GetLightList(RADIENT_LIGHT_TYPE Type) const;
+
+    template <typename CallbackType>
+    void Enumerate(CallbackType&& Callback) const
+    {
+        for (const RadientLightList& LightList : m_LightLists)
+        {
+            for (const RadientLightItem& Item : LightList.GetItems())
+                Callback(Item);
+        }
+    }
+
+private:
+    RadientLightList& GetMutableLightList(RADIENT_LIGHT_TYPE Type);
+
+    std::array<RadientLightList, LightTypeCount> m_LightLists;
 };
 
 } // namespace Diligent

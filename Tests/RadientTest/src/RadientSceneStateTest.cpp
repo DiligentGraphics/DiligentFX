@@ -2050,6 +2050,46 @@ TEST(RadientSceneStateTest, TransformAndVisibilityDoNotEmitRenderableLightChange
     EXPECT_TRUE(CaptureRenderableLightChanges(State).empty());
 }
 
+TEST(RadientSceneStateTest, HierarchyChangesDoNotEmitRenderableLightChanges)
+{
+    // Reparenting changes derived transforms for affected lights, but it does
+    // not change light component membership/data.
+    RadientSceneState State;
+
+    RadientEntityID Root0 = InvalidRadientEntityID;
+    RadientEntityID Root1 = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity({}, Root0), RADIENT_STATUS_OK);
+    ASSERT_EQ(State.CreateEntity({}, Root1), RADIENT_STATUS_OK);
+
+    RadientEntityDesc BranchDesc;
+    BranchDesc.Parent = Root0;
+
+    RadientEntityID Branch = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity(BranchDesc, Branch), RADIENT_STATUS_OK);
+
+    RadientEntityDesc LightDesc;
+    LightDesc.Parent = Branch;
+
+    RadientEntityID LightEntity = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity(LightDesc, LightEntity), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetLight(LightEntity, {}), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+    State.ClearRenderableLightChanges();
+
+    // Reparenting an ancestor affects the light's world transform through the
+    // hierarchy, but should not emit a renderable-light update.
+    EXPECT_EQ(State.SetParent(Branch, Root1, False), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+    EXPECT_TRUE(CaptureRenderableLightChanges(State).empty());
+
+    // Reparenting the light entity itself is still only a hierarchy/transform
+    // change, not a light component update.
+    EXPECT_EQ(State.SetParent(LightEntity, Root0, True), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+    EXPECT_TRUE(CaptureRenderableLightChanges(State).empty());
+}
+
 TEST(RadientSceneStateTest, CoalescesRenderableLightChanges)
 {
     // Multiple light edits before render sync should coalesce to the final

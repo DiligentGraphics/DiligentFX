@@ -92,6 +92,20 @@ struct RadientDrawableChange
     RadientDrawableChangeType Type       = RadientDrawableChangeType::Updated;
 };
 
+enum class RadientLightChangeType
+{
+    Added,
+    Removed,
+    Updated
+};
+
+struct RadientLightChange
+{
+    RadientEntityID        Entity = InvalidRadientEntityID;
+    RADIENT_LIGHT_TYPE     Type   = RADIENT_LIGHT_TYPE_DIRECTIONAL;
+    RadientLightChangeType Change = RadientLightChangeType::Updated;
+};
+
 enum class RadientDrawableMeshStatus
 {
     Ready,
@@ -142,9 +156,19 @@ public:
         return m_DrawableChanges;
     }
 
-    const RadientLightList& GetLightList() const
+    const RadientLightLists& GetLightList() const
     {
-        return m_LightList;
+        return m_LightLists;
+    }
+
+    const RadientLightList& GetLightList(RADIENT_LIGHT_TYPE Type) const
+    {
+        return m_LightLists.GetLightList(Type);
+    }
+
+    const std::vector<RadientLightChange>& GetLightChanges() const
+    {
+        return m_LightChanges;
     }
 
     const RadientSceneRevisions& GetSceneRevisions() const
@@ -168,9 +192,29 @@ private:
         std::vector<RadientDrawableID> DrawableIDs;
     };
 
+    struct LightRecord
+    {
+        static constexpr size_t InvalidListIndex = ~size_t{0};
+
+        const RadientLightComponent* pLight            = nullptr;
+        const RadientMatrix4x4*      pWorldMatrix      = nullptr;
+        const Bool*                  pEffectiveVisible = nullptr;
+
+        RADIENT_LIGHT_TYPE Type      = RADIENT_LIGHT_TYPE_DIRECTIONAL;
+        size_t             ListIndex = InvalidListIndex;
+
+        bool IsInLightList() const
+        {
+            return ListIndex != InvalidListIndex;
+        }
+    };
+
     void ProcessRenderableMeshAddedOrUpdated(const RadientSceneState::RenderableMesh& Mesh);
     void ProcessRenderableMeshRemoved(RadientEntityID Entity);
     void ResolvePendingRenderableMeshes();
+
+    void ProcessRenderableLightAddedOrUpdated(const RadientSceneState::RenderableLight& Light);
+    void ProcessRenderableLightRemoved(RadientEntityID Entity);
 
     bool TryExpandRenderable(RadientEntityID Entity, RenderableRecord& Record);
 
@@ -182,11 +226,15 @@ private:
     void RemoveRenderableDrawables(RenderableRecord& Record);
     void AddPendingResolution(RadientEntityID Entity, RenderableRecord& Record);
     void RecordDrawableChange(RadientDrawableID DrawableID, RadientDrawableChangeType Type);
+    void AddLightToList(RadientEntityID Entity, LightRecord& Record);
+    void RemoveLightFromList(RadientEntityID Entity, LightRecord& Record);
+    void RecordLightChange(RadientEntityID Entity, RADIENT_LIGHT_TYPE Type, RadientLightChangeType Change);
 
 private:
     IRadientDrawableMeshProvider& m_MeshProvider;
 
     std::unordered_map<RadientEntityID, RenderableRecord> m_Renderables;
+    std::unordered_map<RadientEntityID, LightRecord>      m_Lights;
 
     // Geometry passes cache pointers to drawable slots; deque keeps existing slot
     // addresses stable when new drawable IDs append more slots.
@@ -195,9 +243,10 @@ private:
     std::vector<RadientEntityID>       m_PendingRenderableEntities;
     std::vector<RadientEntityID>       m_PendingRenderableEntitiesScratch;
     std::vector<RadientDrawableChange> m_DrawableChanges;
+    std::vector<RadientLightChange>    m_LightChanges;
 
     RadientDrawLists      m_DrawLists;
-    RadientLightList      m_LightList;
+    RadientLightLists     m_LightLists;
     RadientSceneRevisions m_SceneRevisions;
 };
 

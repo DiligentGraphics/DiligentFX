@@ -26,6 +26,73 @@
 
 #include "Render/RadientLightList.hpp"
 
+#include "DebugUtilities.hpp"
+
 namespace Diligent
 {
+
+namespace
+{
+
+size_t GetLightTypeIndex(RADIENT_LIGHT_TYPE Type)
+{
+    const size_t Index = static_cast<size_t>(Type);
+    VERIFY(Index < RadientLightLists::LightTypeCount, "Invalid Radient light type");
+    return Index < RadientLightLists::LightTypeCount ? Index : 0;
+}
+
+} // namespace
+
+RadientEntityID RadientLightList::RemoveAt(size_t Index)
+{
+    if (Index >= m_Items.size())
+    {
+        UNEXPECTED("Light list item index (", Index, ") exceeds the number of items in the list (", m_Items.size(), ")");
+        return InvalidRadientEntityID;
+    }
+
+    const RadientEntityID MovedEntity = m_Items.back().Entity;
+
+    m_Items[Index] = m_Items.back();
+    m_Items.pop_back();
+
+    return Index < m_Items.size() ? MovedEntity : InvalidRadientEntityID;
+}
+
+void RadientLightLists::Clear()
+{
+    for (RadientLightList& LightList : m_LightLists)
+        LightList.Clear();
+}
+
+bool RadientLightLists::IsEmpty() const
+{
+    for (const RadientLightList& LightList : m_LightLists)
+    {
+        if (!LightList.IsEmpty())
+            return false;
+    }
+
+    return true;
+}
+
+size_t RadientLightLists::GetItemCount() const
+{
+    size_t ItemCount = 0;
+    for (const RadientLightList& LightList : m_LightLists)
+        ItemCount += LightList.GetItemCount();
+
+    return ItemCount;
+}
+
+const RadientLightList& RadientLightLists::GetLightList(RADIENT_LIGHT_TYPE Type) const
+{
+    return m_LightLists[GetLightTypeIndex(Type)];
+}
+
+RadientLightList& RadientLightLists::GetMutableLightList(RADIENT_LIGHT_TYPE Type)
+{
+    return m_LightLists[GetLightTypeIndex(Type)];
+}
+
 } // namespace Diligent
