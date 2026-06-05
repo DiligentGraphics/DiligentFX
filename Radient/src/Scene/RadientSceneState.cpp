@@ -363,7 +363,7 @@ RADIENT_STATUS RadientSceneState::DestroyEntity(RadientEntityID Entity)
     DestroyEntitySubtree(E);
     if (m_DirtyEntities.empty())
         m_DirtyFlags = DIRTY_FLAG_NONE;
-    Touch(CHANGE_FLAG_DRAWABLES | CHANGE_FLAG_LIGHTS | CHANGE_FLAG_TRANSFORMS | CHANGE_FLAG_VISIBILITY | CHANGE_FLAG_CAMERAS);
+    Touch(CHANGE_FLAG_DRAWABLES | CHANGE_FLAG_LIGHTS | CHANGE_FLAG_TRANSFORMS | CHANGE_FLAG_VISIBILITY | CHANGE_FLAG_CAMERAS | CHANGE_FLAG_CUSTOM_COMPONENTS);
     return RADIENT_STATUS_OK;
 }
 
@@ -622,7 +622,7 @@ RADIENT_STATUS RadientSceneState::SetCustomComponentData(RadientEntityID Entity,
             Index.ComponentTypes.push_back(Component.ComponentType);
     }
 
-    Touch();
+    Touch(CHANGE_FLAG_CUSTOM_COMPONENTS);
     return RADIENT_STATUS_OK;
 }
 
@@ -673,6 +673,7 @@ RADIENT_STATUS RadientSceneState::RemoveComponent(RadientEntityID Entity, Radien
 
         default:
         {
+            ChangeFlags = CHANGE_FLAG_CUSTOM_COMPONENTS;
             CustomComponentIndexComponent* pIndex = m_Registry.try_get<CustomComponentIndexComponent>(E);
             if (pIndex != nullptr)
             {
@@ -1484,6 +1485,9 @@ void RadientSceneState::Touch(CHANGE_FLAGS ChangeFlags)
 
     if ((ChangeFlags & CHANGE_FLAG_ENVIRONMENT) != CHANGE_FLAG_NONE)
         ++m_SceneRevisions.Environment;
+
+    if ((ChangeFlags & CHANGE_FLAG_CUSTOM_COMPONENTS) != CHANGE_FLAG_NONE)
+        ++m_SceneRevisions.CustomComponents;
 }
 
 } // namespace Diligent

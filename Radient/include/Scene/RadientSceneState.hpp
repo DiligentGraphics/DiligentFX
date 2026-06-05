@@ -185,7 +185,10 @@ private:
         CHANGE_FLAG_CAMERAS = 1u << 4u,
 
         // Scene environment data changed.
-        CHANGE_FLAG_ENVIRONMENT = 1u << 5u
+        CHANGE_FLAG_ENVIRONMENT = 1u << 5u,
+
+        // Custom component data changed.
+        CHANGE_FLAG_CUSTOM_COMPONENTS = 1u << 6u
     };
     DECLARE_FRIEND_FLAG_ENUM_OPERATORS(CHANGE_FLAGS);
 

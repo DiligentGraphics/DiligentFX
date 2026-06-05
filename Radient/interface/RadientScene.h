@@ -111,6 +111,9 @@ struct RadientSceneRevisions
     /// Scene environment data changed.
     RadientRevision Environment DEFAULT_INITIALIZER(0);
 
+    /// Custom component data changed.
+    RadientRevision CustomComponents DEFAULT_INITIALIZER(0);
+
 #if DILIGENT_CPP_INTERFACE
     constexpr bool operator==(const RadientSceneRevisions& Rhs) const
     {
@@ -119,7 +122,8 @@ struct RadientSceneRevisions
             Transforms == Rhs.Transforms &&
             Visibility == Rhs.Visibility &&
             Cameras == Rhs.Cameras &&
-            Environment == Rhs.Environment;
+            Environment == Rhs.Environment &&
+            CustomComponents == Rhs.CustomComponents;
     }
 
     constexpr bool operator!=(const RadientSceneRevisions& Rhs) const

@@ -72,8 +72,9 @@ void ExpectSceneRevisions(const RadientSceneRevisions& Revisions,
                           RadientRevision              Lights,
                           RadientRevision              Transforms,
                           RadientRevision              Visibility,
-                          RadientRevision              Cameras     = 0,
-                          RadientRevision              Environment = 0)
+                          RadientRevision              Cameras          = 0,
+                          RadientRevision              Environment      = 0,
+                          RadientRevision              CustomComponents = 0)
 {
     EXPECT_EQ(Revisions.Drawables, Drawables);
     EXPECT_EQ(Revisions.Lights, Lights);
@@ -81,6 +82,7 @@ void ExpectSceneRevisions(const RadientSceneRevisions& Revisions,
     EXPECT_EQ(Revisions.Visibility, Visibility);
     EXPECT_EQ(Revisions.Cameras, Cameras);
     EXPECT_EQ(Revisions.Environment, Environment);
+    EXPECT_EQ(Revisions.CustomComponents, CustomComponents);
 }
 
 RadientTransform MakeTranslation(float X, float Y, float Z)
@@ -2633,17 +2635,37 @@ TEST(RadientSceneStateTest, TracksSceneRevisions)
     EXPECT_EQ(State.SetCamera(Entity, Camera), RADIENT_STATUS_OK);
     ExpectSceneRevisions(State.GetSceneRevisions(), 3, 1, 2, 2, 2);
 
+    static constexpr RadientComponentTypeID CustomComponentType = 100;
+    Uint32                                  CustomValue         = 42;
+    RadientCustomComponentData              CustomComponent;
+    CustomComponent.ComponentType = CustomComponentType;
+    CustomComponent.Name          = "RevisionTest";
+    CustomComponent.pData         = &CustomValue;
+    CustomComponent.DataSize      = sizeof(CustomValue);
+    EXPECT_EQ(State.SetCustomComponentData(Entity, CustomComponent), RADIENT_STATUS_OK);
+    // Custom components are opaque scene data and have a separate revision.
+    ExpectSceneRevisions(State.GetSceneRevisions(), 3, 1, 2, 2, 2, 0, 1);
+
+    CustomValue = 43;
+    EXPECT_EQ(State.SetCustomComponentData(Entity, CustomComponent), RADIENT_STATUS_OK);
+    // Updating existing custom component payload advances only custom revisions.
+    ExpectSceneRevisions(State.GetSceneRevisions(), 3, 1, 2, 2, 2, 0, 2);
+
+    EXPECT_EQ(State.RemoveComponent(Entity, CustomComponentType), RADIENT_STATUS_OK);
+    // Removing custom component data also advances only custom revisions.
+    ExpectSceneRevisions(State.GetSceneRevisions(), 3, 1, 2, 2, 2, 0, 3);
+
     EXPECT_EQ(State.RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_MESH_RENDERER), RADIENT_STATUS_OK);
     // Removing renderer data changes drawable membership.
-    ExpectSceneRevisions(State.GetSceneRevisions(), 4, 1, 2, 2, 2);
+    ExpectSceneRevisions(State.GetSceneRevisions(), 4, 1, 2, 2, 2, 0, 3);
 
     EXPECT_EQ(State.RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_LIGHT), RADIENT_STATUS_OK);
     // Removing light data advances light revisions.
-    ExpectSceneRevisions(State.GetSceneRevisions(), 4, 2, 2, 2, 2);
+    ExpectSceneRevisions(State.GetSceneRevisions(), 4, 2, 2, 2, 2, 0, 3);
 
     EXPECT_EQ(State.RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_CAMERA), RADIENT_STATUS_OK);
     // Removing camera data advances camera revisions.
-    ExpectSceneRevisions(State.GetSceneRevisions(), 4, 2, 2, 2, 3);
+    ExpectSceneRevisions(State.GetSceneRevisions(), 4, 2, 2, 2, 3, 0, 3);
 }
 
 TEST(RadientSceneStateTest, HierarchyChangesUpdateSceneRevisions)
@@ -2663,10 +2685,16 @@ TEST(RadientSceneStateTest, HierarchyChangesUpdateSceneRevisions)
     // Reparenting dirties child transform and visibility inheritance.
     ExpectSceneRevisions(State.GetSceneRevisions(), 0, 0, 3, 3);
 
+    RadientCustomComponentData CustomComponent;
+    CustomComponent.ComponentType = 101;
+    ASSERT_EQ(State.SetCustomComponentData(Child, CustomComponent), RADIENT_STATUS_OK);
+    // Custom data attached to a child is tracked independently of hierarchy.
+    ExpectSceneRevisions(State.GetSceneRevisions(), 0, 0, 3, 3, 0, 0, 1);
+
     EXPECT_EQ(State.DestroyEntity(Parent), RADIENT_STATUS_OK);
     // Destroying the parent removes the child subtree and advances all affected
-    // render data categories.
-    ExpectSceneRevisions(State.GetSceneRevisions(), 1, 1, 4, 4, 1);
+    // render data categories, including custom components removed from the subtree.
+    ExpectSceneRevisions(State.GetSceneRevisions(), 1, 1, 4, 4, 1, 0, 2);
 }
 
 } // namespace
