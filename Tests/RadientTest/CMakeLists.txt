@@ -30,6 +30,8 @@ PRIVATE
     Diligent-TargetPlatform
     Diligent-TestFramework
     Diligent-Common
+    Diligent-AssetLoader
+    DiligentFX
     Radient
     EnTT
 )
