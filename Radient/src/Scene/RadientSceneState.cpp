@@ -549,7 +549,18 @@ RADIENT_STATUS RadientSceneState::SetMaterialBindings(RadientEntityID Entity, co
 
 RADIENT_STATUS RadientSceneState::SetLight(RadientEntityID Entity, const RadientLightComponent& Light)
 {
-    return EmplaceOrReplaceComponent(Entity, Light, CHANGE_FLAG_LIGHTS);
+    const entt::entity E = FindEntity(Entity);
+    if (E == entt::null)
+        return RADIENT_STATUS_NOT_FOUND;
+
+    const RadientLightComponent* pExistingLight = m_Registry.try_get<RadientLightComponent>(E);
+    if (pExistingLight != nullptr && *pExistingLight == Light)
+        return RADIENT_STATUS_NO_CHANGE;
+
+    m_Registry.emplace_or_replace<RadientLightComponent>(E, Light);
+    Touch(CHANGE_FLAG_LIGHTS);
+    RecordRenderableLightChange(E, pExistingLight != nullptr ? RenderableLightChangeType::Updated : RenderableLightChangeType::Added);
+    return RADIENT_STATUS_OK;
 }
 
 RADIENT_STATUS RadientSceneState::SetEnvironment(const RadientEnvironmentDesc& Environment)
@@ -652,7 +663,11 @@ RADIENT_STATUS RadientSceneState::RemoveComponent(RadientEntityID Entity, Radien
             break;
 
         case RADIENT_COMPONENT_TYPE_LIGHT:
-            Removed     = m_Registry.remove<RadientLightComponent>(E) != 0;
+            if (m_Registry.all_of<RadientLightComponent>(E))
+            {
+                RecordRenderableLightChange(E, RenderableLightChangeType::Removed);
+                Removed = m_Registry.remove<RadientLightComponent>(E) != 0;
+            }
             ChangeFlags = CHANGE_FLAG_LIGHTS;
             break;
 
@@ -727,6 +742,32 @@ void RadientSceneState::ClearRenderableMeshChanges()
     Entities.clear();
 }
 
+void RadientSceneState::ClearRenderableLightChanges()
+{
+    m_RemovedRenderableLightChanges.clear();
+
+    std::vector<entt::entity>& Entities = m_TmpEntityBuffer;
+    Entities.clear();
+
+    auto View = m_Registry.view<PendingRenderableLightChangeComponent>();
+    for (const entt::entity Entity : View)
+        Entities.push_back(Entity);
+
+    for (const entt::entity Entity : Entities)
+    {
+        if (m_Registry.valid(Entity))
+            m_Registry.remove<PendingRenderableLightChangeComponent>(Entity);
+    }
+
+    Entities.clear();
+}
+
+void RadientSceneState::ClearRenderableChanges()
+{
+    ClearRenderableMeshChanges();
+    ClearRenderableLightChanges();
+}
+
 entt::entity RadientSceneState::FindEntity(RadientEntityID Entity) const
 {
     const EntityMapType::const_iterator It = m_EntityMap.find(Entity);
@@ -764,6 +805,14 @@ bool RadientSceneState::IsRenderableMeshEntity(entt::entity Entity) const
         return false;
 
     return m_Registry.all_of<MeshComponentStorage, RadientMeshRendererComponent>(Entity);
+}
+
+bool RadientSceneState::IsRenderableLightEntity(entt::entity Entity) const
+{
+    if (!VerifyInternalEntity(Entity))
+        return false;
+
+    return m_Registry.all_of<RadientLightComponent>(Entity);
 }
 
 bool RadientSceneState::VerifyInternalEntity(entt::entity Entity) const
@@ -851,6 +900,7 @@ void RadientSceneState::DestroyEntitySubtree(entt::entity Entity)
         Stack.pop_back();
 
         RecordRenderableMeshRemoved(Current);
+        RecordRenderableLightRemoved(Current);
         RemoveCustomComponents(Current);
         DirtyStateComponent& DirtyState = m_Registry.get<DirtyStateComponent>(Current);
         RemoveFromDirtyList(Current, DirtyState);
@@ -966,6 +1016,66 @@ void RadientSceneState::UpdateRenderableMeshState(entt::entity Entity)
 
     RenderableState.IsRenderable = IsRenderable;
     RecordRenderableMeshChange(Entity, IsRenderable ? RenderableMeshChangeType::Added : RenderableMeshChangeType::Removed);
+}
+
+void RadientSceneState::RecordRenderableLightChange(entt::entity Entity, RenderableLightChangeType Type)
+{
+    if (!VerifyInternalEntity(Entity))
+        return;
+
+    PendingRenderableLightChangeComponent* pPendingChange = m_Registry.try_get<PendingRenderableLightChangeComponent>(Entity);
+    if (pPendingChange == nullptr)
+    {
+        m_Registry.emplace<PendingRenderableLightChangeComponent>(Entity, PendingRenderableLightChangeComponent{Type});
+        return;
+    }
+
+    switch (pPendingChange->Type)
+    {
+        case RenderableLightChangeType::Added:
+            if (Type == RenderableLightChangeType::Removed)
+                m_Registry.remove<PendingRenderableLightChangeComponent>(Entity);
+            break;
+
+        case RenderableLightChangeType::Removed:
+            if (Type == RenderableLightChangeType::Added)
+                pPendingChange->Type = RenderableLightChangeType::Updated;
+            break;
+
+        case RenderableLightChangeType::Updated:
+            if (Type == RenderableLightChangeType::Removed)
+                pPendingChange->Type = RenderableLightChangeType::Removed;
+            break;
+    }
+}
+
+void RadientSceneState::RecordRenderableLightUpdated(entt::entity Entity)
+{
+    if (!VerifyInternalEntity(Entity))
+        return;
+
+    if (m_Registry.all_of<RadientLightComponent>(Entity))
+        RecordRenderableLightChange(Entity, RenderableLightChangeType::Updated);
+}
+
+void RadientSceneState::RecordRenderableLightRemoved(entt::entity Entity)
+{
+    if (!VerifyInternalEntity(Entity))
+        return;
+
+    PendingRenderableLightChangeComponent* pPendingChange = m_Registry.try_get<PendingRenderableLightChangeComponent>(Entity);
+    const bool                             WasAddedThisFrame =
+        pPendingChange != nullptr && pPendingChange->Type == RenderableLightChangeType::Added;
+    const bool NeedsRemovedChange = m_Registry.all_of<RadientLightComponent>(Entity) || pPendingChange != nullptr;
+
+    if (NeedsRemovedChange && !WasAddedThisFrame)
+    {
+        const RadientEntityID EntityID = m_Registry.get<EntityComponent>(Entity).ID;
+        m_RemovedRenderableLightChanges.push_back({EntityID, RenderableLightChangeType::Removed});
+    }
+
+    if (pPendingChange != nullptr)
+        m_Registry.remove<PendingRenderableLightChangeComponent>(Entity);
 }
 
 RadientSceneState::DIRTY_FLAGS RadientSceneState::MarkDirty(entt::entity Entity, DIRTY_FLAGS Flags, bool AddToDirtyList)

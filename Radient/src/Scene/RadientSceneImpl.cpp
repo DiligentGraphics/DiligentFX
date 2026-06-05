@@ -142,7 +142,7 @@ const RadientSceneState& RadientSceneImpl::GetState() const
 
 void RadientSceneImpl::ClearPendingRenderChanges()
 {
-    m_pState->ClearRenderableMeshChanges();
+    m_pState->ClearRenderableChanges();
 }
 
 } // namespace Diligent

@@ -60,7 +60,7 @@ public:
         RadientEntityID              Entity = InvalidRadientEntityID;
         const RadientLightComponent& Light;
         const RadientMatrix4x4&      WorldMatrix;
-        Bool                         EffectiveVisible = False;
+        const Bool&                  EffectiveVisible;
     };
 
     enum class RenderableMeshChangeType
@@ -74,6 +74,19 @@ public:
     {
         RadientEntityID          Entity = InvalidRadientEntityID;
         RenderableMeshChangeType Type   = RenderableMeshChangeType::Updated;
+    };
+
+    enum class RenderableLightChangeType
+    {
+        Added,
+        Removed,
+        Updated
+    };
+
+    struct RenderableLightChange
+    {
+        RadientEntityID           Entity = InvalidRadientEntityID;
+        RenderableLightChangeType Type   = RenderableLightChangeType::Updated;
     };
 
     RadientSceneState();
@@ -112,7 +125,12 @@ public:
     RADIENT_STATUS EnumerateRenderableMeshChanges(CallbackType&& Callback) const;
     template <typename CallbackType>
     RADIENT_STATUS EnumerateRenderableLights(CallbackType&& Callback) const;
+    // The renderable light pointer is valid only during the callback and is null for removed lights.
+    template <typename CallbackType>
+    RADIENT_STATUS EnumerateRenderableLightChanges(CallbackType&& Callback) const;
+    void           ClearRenderableChanges();
     void           ClearRenderableMeshChanges();
+    void           ClearRenderableLightChanges();
 
     RADIENT_STATUS CreateEntity(const RadientEntityDesc& Desc, RadientEntityID& Entity);
     RADIENT_STATUS DestroyEntity(RadientEntityID Entity);
@@ -215,6 +233,11 @@ private:
         RenderableMeshChangeType Type = RenderableMeshChangeType::Updated;
     };
 
+    struct PendingRenderableLightChangeComponent
+    {
+        RenderableLightChangeType Type = RenderableLightChangeType::Updated;
+    };
+
     struct DirtyStateComponent
     {
         DIRTY_FLAGS Flags          = DIRTY_FLAG_NONE;
@@ -257,10 +280,13 @@ private:
     RADIENT_STATUS EmplaceOrReplaceComponent(RadientEntityID Entity, const ComponentType& Component, CHANGE_FLAGS ChangeFlags = CHANGE_FLAG_NONE);
     template <typename ComponentSourceType>
     RenderableMesh MakeRenderableMesh(entt::entity Entity, const ComponentSourceType& ComponentSource) const;
+    template <typename ComponentSourceType>
+    RenderableLight MakeRenderableLight(entt::entity Entity, const ComponentSourceType& ComponentSource) const;
 
     entt::entity FindEntity(RadientEntityID Entity) const;
     bool         IsDescendant(entt::entity Entity, entt::entity PotentialAncestor) const;
     bool         IsRenderableMeshEntity(entt::entity Entity) const;
+    bool         IsRenderableLightEntity(entt::entity Entity) const;
     bool         VerifyInternalEntity(entt::entity Entity) const;
     void         DetachFromParent(entt::entity Entity);
     void         DestroyEntitySubtree(entt::entity Entity);
@@ -269,6 +295,9 @@ private:
     void         RecordRenderableMeshUpdated(entt::entity Entity);
     void         RecordRenderableMeshRemoved(entt::entity Entity);
     void         UpdateRenderableMeshState(entt::entity Entity);
+    void         RecordRenderableLightChange(entt::entity Entity, RenderableLightChangeType Type);
+    void         RecordRenderableLightUpdated(entt::entity Entity);
+    void         RecordRenderableLightRemoved(entt::entity Entity);
     DIRTY_FLAGS  MarkDirty(entt::entity Entity, DIRTY_FLAGS Flags, bool AddToDirtyList = true);
     void         ClearDirtyFlags(entt::entity Entity, DIRTY_FLAGS Flags);
     void         RemoveFromDirtyList(entt::entity Entity, DirtyStateComponent& DirtyState);
@@ -293,6 +322,7 @@ private:
     RadientEnvironmentDesc              m_Environment;
     RefCntAutoPtr<IRadientTextureAsset> m_pEnvironmentMap;
     std::vector<RenderableMeshChange>   m_RemovedRenderableMeshChanges;
+    std::vector<RenderableLightChange>  m_RemovedRenderableLightChanges;
 
     // Conservative scene-wide mask of derived states that may be dirty anywhere in the scene.
     DIRTY_FLAGS m_DirtyFlags = DIRTY_FLAG_NONE;
@@ -330,6 +360,21 @@ inline RadientSceneState::RenderableMesh RadientSceneState::MakeRenderableMesh(e
         MeshStorage.Component,
         Renderer,
         pMaterialBindings != nullptr ? &pMaterialBindings->Component : nullptr,
+        WorldTransform.Matrix,
+        EffectiveVisible.Visible};
+}
+
+template <typename ComponentSourceType>
+inline RadientSceneState::RenderableLight RadientSceneState::MakeRenderableLight(entt::entity Entity, const ComponentSourceType& ComponentSource) const
+{
+    const EntityComponent&              EntityData       = ComponentSource.template get<const EntityComponent>(Entity);
+    const RadientLightComponent&        Light            = ComponentSource.template get<const RadientLightComponent>(Entity);
+    const WorldTransformComponent&      WorldTransform   = ComponentSource.template get<const WorldTransformComponent>(Entity);
+    const EffectiveVisibilityComponent& EffectiveVisible = ComponentSource.template get<const EffectiveVisibilityComponent>(Entity);
+
+    return RenderableLight{
+        EntityData.ID,
+        Light,
         WorldTransform.Matrix,
         EffectiveVisible.Visible};
 }
@@ -389,18 +434,35 @@ RADIENT_STATUS RadientSceneState::EnumerateRenderableLights(CallbackType&& Callb
 
     for (const entt::entity Entity : View)
     {
-        const EntityComponent&              EntityData       = View.get<const EntityComponent>(Entity);
-        const RadientLightComponent&        Light            = View.get<const RadientLightComponent>(Entity);
-        const WorldTransformComponent&      WorldTransform   = View.get<const WorldTransformComponent>(Entity);
-        const EffectiveVisibilityComponent& EffectiveVisible = View.get<const EffectiveVisibilityComponent>(Entity);
+        Callback(MakeRenderableLight(Entity, View));
+    }
 
-        const RenderableLight Renderable{
-            EntityData.ID,
-            Light,
-            WorldTransform.Matrix,
-            EffectiveVisible.Visible};
+    return (m_DirtyFlags & DIRTY_FLAGS_REQUIRING_PROPAGATION) != DIRTY_FLAG_NONE ?
+        RADIENT_STATUS_OUT_OF_DATE :
+        RADIENT_STATUS_OK;
+}
 
-        Callback(Renderable);
+template <typename CallbackType>
+RADIENT_STATUS RadientSceneState::EnumerateRenderableLightChanges(CallbackType&& Callback) const
+{
+    for (const RenderableLightChange& Change : m_RemovedRenderableLightChanges)
+        Callback(Change, static_cast<const RenderableLight*>(nullptr));
+
+    auto View = m_Registry.view<const EntityComponent, const PendingRenderableLightChangeComponent>();
+    for (const entt::entity Entity : View)
+    {
+        const EntityComponent&                       EntityData = View.get<const EntityComponent>(Entity);
+        const PendingRenderableLightChangeComponent& Pending    = View.get<const PendingRenderableLightChangeComponent>(Entity);
+        const RenderableLightChange                  Change{EntityData.ID, Pending.Type};
+
+        if (Pending.Type == RenderableLightChangeType::Removed || !IsRenderableLightEntity(Entity))
+        {
+            Callback(Change, static_cast<const RenderableLight*>(nullptr));
+            continue;
+        }
+
+        const RenderableLight Light = MakeRenderableLight(Entity, m_Registry);
+        Callback(Change, &Light);
     }
 
     return (m_DirtyFlags & DIRTY_FLAGS_REQUIRING_PROPAGATION) != DIRTY_FLAG_NONE ?

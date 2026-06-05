@@ -279,6 +279,46 @@ const CapturedRenderableLight* FindRenderableLight(const std::vector<CapturedRen
     return It != RenderableLights.end() ? &*It : nullptr;
 }
 
+using RenderableLightChangeType = RadientSceneState::RenderableLightChangeType;
+
+struct CapturedRenderableLightChange
+{
+    RadientEntityID           Entity   = InvalidRadientEntityID;
+    RenderableLightChangeType Type     = RenderableLightChangeType::Updated;
+    bool                      HasLight = false;
+    CapturedRenderableLight   Light;
+};
+
+std::vector<CapturedRenderableLightChange> CaptureRenderableLightChanges(const RadientSceneState& State)
+{
+    std::vector<CapturedRenderableLightChange> Changes;
+    const RADIENT_STATUS                       Status = State.EnumerateRenderableLightChanges(
+        [&Changes](const RadientSceneState::RenderableLightChange& Change,
+                   const RadientSceneState::RenderableLight*       pLight) {
+            CapturedRenderableLightChange Captured;
+            Captured.Entity   = Change.Entity;
+            Captured.Type     = Change.Type;
+            Captured.HasLight = pLight != nullptr;
+            if (pLight != nullptr)
+                Captured.Light = CaptureRenderableLight(*pLight);
+
+            Changes.push_back(Captured);
+        });
+    EXPECT_TRUE(Status == RADIENT_STATUS_OK || Status == RADIENT_STATUS_OUT_OF_DATE);
+    return Changes;
+}
+
+const CapturedRenderableLightChange* FindRenderableLightChange(const std::vector<CapturedRenderableLightChange>& Changes, RadientEntityID Entity)
+{
+    const std::vector<CapturedRenderableLightChange>::const_iterator It =
+        std::find_if(Changes.begin(), Changes.end(),
+                     [Entity](const CapturedRenderableLightChange& Change) {
+                         return Change.Entity == Entity;
+                     });
+
+    return It != Changes.end() ? &*It : nullptr;
+}
+
 TEST(RadientSceneStateTest, GetDesc)
 {
     // Verifies that the default scene has no name and that a provided desc
@@ -1912,6 +1952,234 @@ TEST(RadientSceneStateTest, DestroyEntityRecordsRenderableMeshChangesForSubtree)
                   }),
               RADIENT_STATUS_OUT_OF_DATE);
     EXPECT_NE(FindRenderableMesh(RenderableMeshes, Sibling), nullptr);
+}
+
+TEST(RadientSceneStateTest, TracksRenderableLightChanges)
+{
+    // Tracks renderable light delta events as the light component is added,
+    // updated, changes type, and is removed from a single entity.
+    RadientSceneState State;
+
+    RadientEntityID Entity = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity({}, Entity), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+    EXPECT_TRUE(CaptureRenderableLightChanges(State).empty());
+
+    RadientLightComponent Light;
+    Light.Type      = RADIENT_LIGHT_TYPE_DIRECTIONAL;
+    Light.Color     = {0.25f, 0.5f, 1.f};
+    Light.Intensity = 7.f;
+    EXPECT_EQ(State.SetLight(Entity, Light), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+    std::vector<CapturedRenderableLightChange> Changes = CaptureRenderableLightChanges(State);
+    // Adding the light component should emit Added with the current light payload.
+    ASSERT_EQ(Changes.size(), 1u);
+    EXPECT_EQ(Changes[0].Entity, Entity);
+    EXPECT_EQ(Changes[0].Type, RenderableLightChangeType::Added);
+    ASSERT_TRUE(Changes[0].HasLight);
+    EXPECT_EQ(Changes[0].Light.Entity, Entity);
+    EXPECT_TRUE(Changes[0].Light.Light == Light);
+    EXPECT_EQ(Changes[0].Light.EffectiveVisible, True);
+    State.ClearRenderableLightChanges();
+    EXPECT_TRUE(CaptureRenderableLightChanges(State).empty());
+
+    Light.Intensity = 9.f;
+    EXPECT_EQ(State.SetLight(Entity, Light), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+    Changes = CaptureRenderableLightChanges(State);
+    // Updating light data while keeping the same component should emit Updated.
+    ASSERT_EQ(Changes.size(), 1u);
+    EXPECT_EQ(Changes[0].Entity, Entity);
+    EXPECT_EQ(Changes[0].Type, RenderableLightChangeType::Updated);
+    ASSERT_TRUE(Changes[0].HasLight);
+    EXPECT_TRUE(Changes[0].Light.Light == Light);
+    State.ClearRenderableLightChanges();
+
+    Light.Type = RADIENT_LIGHT_TYPE_SPOT;
+    EXPECT_EQ(State.SetLight(Entity, Light), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+    Changes = CaptureRenderableLightChanges(State);
+    // Scene state only tracks component changes. The drawable cache turns type
+    // changes into remove/add between type-specific lists.
+    ASSERT_EQ(Changes.size(), 1u);
+    EXPECT_EQ(Changes[0].Entity, Entity);
+    EXPECT_EQ(Changes[0].Type, RenderableLightChangeType::Updated);
+    ASSERT_TRUE(Changes[0].HasLight);
+    EXPECT_EQ(Changes[0].Light.Light.Type, RADIENT_LIGHT_TYPE_SPOT);
+    State.ClearRenderableLightChanges();
+
+    EXPECT_EQ(State.RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_LIGHT), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+    Changes = CaptureRenderableLightChanges(State);
+    // Removing the component makes the entity non-renderable as a light, so the
+    // change has no renderable light payload.
+    ASSERT_EQ(Changes.size(), 1u);
+    EXPECT_EQ(Changes[0].Entity, Entity);
+    EXPECT_EQ(Changes[0].Type, RenderableLightChangeType::Removed);
+    EXPECT_FALSE(Changes[0].HasLight);
+    State.ClearRenderableLightChanges();
+    EXPECT_TRUE(CaptureRenderableLightChanges(State).empty());
+}
+
+TEST(RadientSceneStateTest, TransformAndVisibilityDoNotEmitRenderableLightChanges)
+{
+    // Light changes describe light component membership/data. Transform and
+    // visibility are mutable derived state, so they should not create light
+    // component deltas.
+    RadientSceneState State;
+
+    RadientEntityID Entity = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity({}, Entity), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetLight(Entity, {}), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+    State.ClearRenderableLightChanges();
+
+    EXPECT_EQ(State.SetLocalTransform(Entity, MakeTranslation(1.f, 2.f, 3.f)), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+    EXPECT_TRUE(CaptureRenderableLightChanges(State).empty());
+
+    EXPECT_EQ(State.SetEntityOwnVisibility(Entity, False), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+    EXPECT_TRUE(CaptureRenderableLightChanges(State).empty());
+}
+
+TEST(RadientSceneStateTest, CoalescesRenderableLightChanges)
+{
+    // Multiple light edits before render sync should coalesce to the final
+    // component state when the entity remains alive.
+    RadientSceneState State;
+
+    RadientEntityID Entity = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity({}, Entity), RADIENT_STATUS_OK);
+
+    RadientLightComponent Light;
+    Light.Type      = RADIENT_LIGHT_TYPE_POINT;
+    Light.Intensity = 2.f;
+
+    EXPECT_EQ(State.SetLight(Entity, Light), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_LIGHT), RADIENT_STATUS_OK);
+    // Added then removed before sync means no net light change.
+    EXPECT_TRUE(CaptureRenderableLightChanges(State).empty());
+
+    EXPECT_EQ(State.SetLight(Entity, Light), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+    std::vector<CapturedRenderableLightChange> Changes = CaptureRenderableLightChanges(State);
+    // Re-adding after the canceled add/remove emits one Added change.
+    ASSERT_EQ(Changes.size(), 1u);
+    EXPECT_EQ(Changes[0].Entity, Entity);
+    EXPECT_EQ(Changes[0].Type, RenderableLightChangeType::Added);
+    ASSERT_TRUE(Changes[0].HasLight);
+    EXPECT_EQ(Changes[0].Light.Light.Type, RADIENT_LIGHT_TYPE_POINT);
+    State.ClearRenderableLightChanges();
+
+    Light.Intensity = 5.f;
+    EXPECT_EQ(State.SetLight(Entity, Light), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.RemoveComponent(Entity, RADIENT_COMPONENT_TYPE_LIGHT), RADIENT_STATUS_OK);
+
+    Light.Type      = RADIENT_LIGHT_TYPE_SPOT;
+    Light.Intensity = 8.f;
+    EXPECT_EQ(State.SetLight(Entity, Light), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+    Changes = CaptureRenderableLightChanges(State);
+    // Updated, removed, and added again before consumption coalesces to one
+    // Updated change with the final light component payload.
+    ASSERT_EQ(Changes.size(), 1u);
+    EXPECT_EQ(Changes[0].Entity, Entity);
+    EXPECT_EQ(Changes[0].Type, RenderableLightChangeType::Updated);
+    ASSERT_TRUE(Changes[0].HasLight);
+    EXPECT_EQ(Changes[0].Light.Light.Type, RADIENT_LIGHT_TYPE_SPOT);
+    EXPECT_EQ(Changes[0].Light.Light.Intensity, 8.f);
+    State.ClearRenderableLightChanges();
+
+    RadientEntityID Transient = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity({}, Transient), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetLight(Transient, {}), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.DestroyEntity(Transient), RADIENT_STATUS_OK);
+    // A light created and destroyed before sync should leave no change.
+    EXPECT_EQ(FindRenderableLightChange(CaptureRenderableLightChanges(State), Transient), nullptr);
+}
+
+TEST(RadientSceneStateTest, DestroyEntityRecordsRenderableLightChangesForSubtree)
+{
+    // Destroying a parent subtree should emit Removed changes for every light
+    // entity inside the subtree and leave unrelated siblings alone.
+    RadientSceneState State;
+
+    RadientEntityID Root = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity({}, Root), RADIENT_STATUS_OK);
+
+    RadientEntityDesc ChildDesc;
+    ChildDesc.Parent = Root;
+
+    RadientEntityID Child = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity(ChildDesc, Child), RADIENT_STATUS_OK);
+
+    RadientEntityDesc GrandChildDesc;
+    GrandChildDesc.Parent = Child;
+
+    RadientEntityID GrandChild = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity(GrandChildDesc, GrandChild), RADIENT_STATUS_OK);
+
+    RadientEntityID Sibling = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity({}, Sibling), RADIENT_STATUS_OK);
+
+    RadientLightComponent RootLight;
+    RootLight.Type = RADIENT_LIGHT_TYPE_DIRECTIONAL;
+    RadientLightComponent ChildLight;
+    ChildLight.Type = RADIENT_LIGHT_TYPE_POINT;
+    RadientLightComponent GrandChildLight;
+    GrandChildLight.Type = RADIENT_LIGHT_TYPE_SPOT;
+    RadientLightComponent SiblingLight;
+    SiblingLight.Type = RADIENT_LIGHT_TYPE_POINT;
+
+    EXPECT_EQ(State.SetLight(Root, RootLight), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetLight(Child, ChildLight), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetLight(GrandChild, GrandChildLight), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.SetLight(Sibling, SiblingLight), RADIENT_STATUS_OK);
+
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+    State.ClearRenderableLightChanges();
+
+    EXPECT_EQ(State.DestroyEntity(Root), RADIENT_STATUS_OK);
+
+    const std::vector<CapturedRenderableLightChange> Changes = CaptureRenderableLightChanges(State);
+    // Root, child, and grandchild had light components and should all be removed.
+    ASSERT_EQ(Changes.size(), 3u);
+
+    const CapturedRenderableLightChange* pRootChange = FindRenderableLightChange(Changes, Root);
+    ASSERT_NE(pRootChange, nullptr);
+    EXPECT_EQ(pRootChange->Type, RenderableLightChangeType::Removed);
+    EXPECT_FALSE(pRootChange->HasLight);
+
+    const CapturedRenderableLightChange* pChildChange = FindRenderableLightChange(Changes, Child);
+    ASSERT_NE(pChildChange, nullptr);
+    EXPECT_EQ(pChildChange->Type, RenderableLightChangeType::Removed);
+    EXPECT_FALSE(pChildChange->HasLight);
+
+    const CapturedRenderableLightChange* pGrandChildChange = FindRenderableLightChange(Changes, GrandChild);
+    ASSERT_NE(pGrandChildChange, nullptr);
+    EXPECT_EQ(pGrandChildChange->Type, RenderableLightChangeType::Removed);
+    EXPECT_FALSE(pGrandChildChange->HasLight);
+
+    EXPECT_EQ(FindRenderableLightChange(Changes, Sibling), nullptr);
+    std::vector<CapturedRenderableLight> RenderableLights;
+    // The sibling was outside the destroyed subtree and should remain a light.
+    EXPECT_EQ(State.EnumerateRenderableLights(
+                  [&RenderableLights](const RadientSceneState::RenderableLight& Light) {
+                      RenderableLights.push_back(CaptureRenderableLight(Light));
+                  }),
+              RADIENT_STATUS_OK);
+    EXPECT_NE(FindRenderableLight(RenderableLights, Sibling), nullptr);
 }
 
 TEST(RadientSceneStateTest, EnumerateRenderableLights)
