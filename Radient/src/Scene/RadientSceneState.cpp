@@ -66,7 +66,7 @@ RadientSceneState::RadientSceneState(const RadientSceneDesc& Desc) :
     m_Name{Desc.Name != nullptr ? Desc.Name : ""},
     m_Desc{Desc}
 {
-    m_Desc.Name = m_Name.c_str();
+    m_Desc.Name = Desc.Name != nullptr ? m_Name.c_str() : nullptr;
 }
 
 const RadientSceneDesc& RadientSceneState::GetDesc() const

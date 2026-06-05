@@ -324,6 +324,10 @@ TEST(RadientSceneStateTest, GetDesc)
     RadientSceneState DefaultState;
     EXPECT_EQ(DefaultState.GetDesc().Name, nullptr);
 
+    RadientSceneDesc  EmptyDesc;
+    RadientSceneState EmptyDescState{EmptyDesc};
+    EXPECT_EQ(EmptyDescState.GetDesc().Name, nullptr);
+
     char Name[] = "Scene A";
 
     RadientSceneDesc Desc;
