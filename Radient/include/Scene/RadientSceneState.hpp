@@ -122,15 +122,15 @@ public:
     RADIENT_STATUS EnumerateRenderableMeshes(CallbackType&& Callback) const;
     // The renderable mesh pointer is valid only during the callback and is null for removed renderables.
     template <typename CallbackType>
-    RADIENT_STATUS EnumerateRenderableMeshChanges(CallbackType&& Callback) const;
+    void EnumerateRenderableMeshChanges(CallbackType&& Callback) const;
     template <typename CallbackType>
     RADIENT_STATUS EnumerateRenderableLights(CallbackType&& Callback) const;
     // The renderable light pointer is valid only during the callback and is null for removed lights.
     template <typename CallbackType>
-    RADIENT_STATUS EnumerateRenderableLightChanges(CallbackType&& Callback) const;
-    void           ClearRenderableChanges();
-    void           ClearRenderableMeshChanges();
-    void           ClearRenderableLightChanges();
+    void EnumerateRenderableLightChanges(CallbackType&& Callback) const;
+    void ClearRenderableChanges();
+    void ClearRenderableMeshChanges();
+    void ClearRenderableLightChanges();
 
     RADIENT_STATUS CreateEntity(const RadientEntityDesc& Desc, RadientEntityID& Entity);
     RADIENT_STATUS DestroyEntity(RadientEntityID Entity);
@@ -399,7 +399,7 @@ RADIENT_STATUS RadientSceneState::EnumerateRenderableMeshes(CallbackType&& Callb
 }
 
 template <typename CallbackType>
-RADIENT_STATUS RadientSceneState::EnumerateRenderableMeshChanges(CallbackType&& Callback) const
+void RadientSceneState::EnumerateRenderableMeshChanges(CallbackType&& Callback) const
 {
     for (const RenderableMeshChange& Change : m_RemovedRenderableMeshChanges)
         Callback(Change, static_cast<const RenderableMesh*>(nullptr));
@@ -420,8 +420,6 @@ RADIENT_STATUS RadientSceneState::EnumerateRenderableMeshChanges(CallbackType&& 
         const RenderableMesh Mesh = MakeRenderableMesh(Entity, m_Registry);
         Callback(Change, &Mesh);
     }
-
-    return RADIENT_STATUS_OK;
 }
 
 template <typename CallbackType>
@@ -443,7 +441,7 @@ RADIENT_STATUS RadientSceneState::EnumerateRenderableLights(CallbackType&& Callb
 }
 
 template <typename CallbackType>
-RADIENT_STATUS RadientSceneState::EnumerateRenderableLightChanges(CallbackType&& Callback) const
+void RadientSceneState::EnumerateRenderableLightChanges(CallbackType&& Callback) const
 {
     for (const RenderableLightChange& Change : m_RemovedRenderableLightChanges)
         Callback(Change, static_cast<const RenderableLight*>(nullptr));
@@ -464,10 +462,6 @@ RADIENT_STATUS RadientSceneState::EnumerateRenderableLightChanges(CallbackType&&
         const RenderableLight Light = MakeRenderableLight(Entity, m_Registry);
         Callback(Change, &Light);
     }
-
-    return (m_DirtyFlags & DIRTY_FLAGS_REQUIRING_PROPAGATION) != DIRTY_FLAG_NONE ?
-        RADIENT_STATUS_OUT_OF_DATE :
-        RADIENT_STATUS_OK;
 }
 
 } // namespace Diligent

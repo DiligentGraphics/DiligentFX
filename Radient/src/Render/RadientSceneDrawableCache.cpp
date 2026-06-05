@@ -110,10 +110,9 @@ RADIENT_STATUS RadientSceneDrawableCache::SyncScene(const IRadientScene& Scene)
     const RadientSceneImpl*  pSceneImpl = ClassPtrCast<const RadientSceneImpl>(&Scene);
     const RadientSceneState& State      = pSceneImpl->GetState();
 
-    RADIENT_STATUS Status = RADIENT_STATUS_NO_CHANGE;
     if (UpdateRenderables)
     {
-        Status = State.EnumerateRenderableMeshChanges(
+        State.EnumerateRenderableMeshChanges(
             [this](const RadientSceneState::RenderableMeshChange& Change,
                    const RadientSceneState::RenderableMesh*       pMesh) {
                 if (pMesh != nullptr)
@@ -125,16 +124,13 @@ RADIENT_STATUS RadientSceneDrawableCache::SyncScene(const IRadientScene& Scene)
                     ProcessRenderableMeshRemoved(Change.Entity);
                 }
             });
-        if (RADIENT_FAILED(Status))
-            return Status;
     }
 
     ResolvePendingRenderableMeshes();
 
-    RADIENT_STATUS LightStatus = RADIENT_STATUS_NO_CHANGE;
     if (UpdateLights)
     {
-        LightStatus = State.EnumerateRenderableLightChanges(
+        State.EnumerateRenderableLightChanges(
             [this](const RadientSceneState::RenderableLightChange& Change,
                    const RadientSceneState::RenderableLight*       pLight) {
                 if (pLight != nullptr)
@@ -146,14 +142,9 @@ RADIENT_STATUS RadientSceneDrawableCache::SyncScene(const IRadientScene& Scene)
                     ProcessRenderableLightRemoved(Change.Entity);
                 }
             });
-        if (RADIENT_FAILED(LightStatus))
-            return LightStatus;
     }
 
     m_SceneRevisions = SceneRevisions;
-
-    if (Status == RADIENT_STATUS_OUT_OF_DATE || LightStatus == RADIENT_STATUS_OUT_OF_DATE)
-        return RADIENT_STATUS_OUT_OF_DATE;
 
     return RADIENT_STATUS_OK;
 }

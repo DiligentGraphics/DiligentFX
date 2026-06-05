@@ -178,19 +178,18 @@ struct CapturedRenderableMeshChange
 std::vector<CapturedRenderableMeshChange> CaptureRenderableMeshChanges(const RadientSceneState& State)
 {
     std::vector<CapturedRenderableMeshChange> Changes;
-    EXPECT_EQ(State.EnumerateRenderableMeshChanges(
-                  [&Changes](const RadientSceneState::RenderableMeshChange& Change,
-                             const RadientSceneState::RenderableMesh*       pMesh) {
-                      CapturedRenderableMeshChange Captured;
-                      Captured.Entity  = Change.Entity;
-                      Captured.Type    = Change.Type;
-                      Captured.HasMesh = pMesh != nullptr;
-                      if (pMesh != nullptr)
-                          Captured.Mesh = CaptureRenderableMesh(*pMesh);
+    State.EnumerateRenderableMeshChanges(
+        [&Changes](const RadientSceneState::RenderableMeshChange& Change,
+                   const RadientSceneState::RenderableMesh*       pMesh) {
+            CapturedRenderableMeshChange Captured;
+            Captured.Entity  = Change.Entity;
+            Captured.Type    = Change.Type;
+            Captured.HasMesh = pMesh != nullptr;
+            if (pMesh != nullptr)
+                Captured.Mesh = CaptureRenderableMesh(*pMesh);
 
-                      Changes.push_back(Captured);
-                  }),
-              RADIENT_STATUS_OK);
+            Changes.push_back(Captured);
+        });
     return Changes;
 }
 
@@ -292,7 +291,7 @@ struct CapturedRenderableLightChange
 std::vector<CapturedRenderableLightChange> CaptureRenderableLightChanges(const RadientSceneState& State)
 {
     std::vector<CapturedRenderableLightChange> Changes;
-    const RADIENT_STATUS                       Status = State.EnumerateRenderableLightChanges(
+    State.EnumerateRenderableLightChanges(
         [&Changes](const RadientSceneState::RenderableLightChange& Change,
                    const RadientSceneState::RenderableLight*       pLight) {
             CapturedRenderableLightChange Captured;
@@ -304,7 +303,6 @@ std::vector<CapturedRenderableLightChange> CaptureRenderableLightChanges(const R
 
             Changes.push_back(Captured);
         });
-    EXPECT_TRUE(Status == RADIENT_STATUS_OK || Status == RADIENT_STATUS_OUT_OF_DATE);
     return Changes;
 }
 
