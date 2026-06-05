@@ -42,6 +42,10 @@
 namespace Diligent
 {
 
+// RadientSceneState is not internally synchronized. Access from multiple threads must be externally synchronized.
+// Enumeration callbacks must not mutate the scene or call methods that may update cached derived state.
+// Renderable data passed to enumeration callbacks references registry-owned storage and is valid only
+// for the duration of the callback.
 class RadientSceneState
 {
 public:
@@ -118,11 +122,13 @@ public:
 
     const RadientSceneRevisions& GetSceneRevisions() const;
 
+    // Callback receives RenderableMesh by value, but its members reference registry-owned component data.
     template <typename CallbackType>
     RADIENT_STATUS EnumerateRenderableMeshes(CallbackType&& Callback) const;
     // The renderable mesh pointer is valid only during the callback and is null for removed renderables.
     template <typename CallbackType>
     void EnumerateRenderableMeshChanges(CallbackType&& Callback) const;
+    // Callback receives RenderableLight by value, but its members reference registry-owned component data.
     template <typename CallbackType>
     RADIENT_STATUS EnumerateRenderableLights(CallbackType&& Callback) const;
     // The renderable light pointer is valid only during the callback and is null for removed lights.

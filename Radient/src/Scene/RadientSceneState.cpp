@@ -673,7 +673,7 @@ RADIENT_STATUS RadientSceneState::RemoveComponent(RadientEntityID Entity, Radien
 
         default:
         {
-            ChangeFlags = CHANGE_FLAG_CUSTOM_COMPONENTS;
+            ChangeFlags                           = CHANGE_FLAG_CUSTOM_COMPONENTS;
             CustomComponentIndexComponent* pIndex = m_Registry.try_get<CustomComponentIndexComponent>(E);
             if (pIndex != nullptr)
             {
@@ -863,9 +863,16 @@ void RadientSceneState::DetachFromParent(entt::entity Entity)
         return;
 
     std::vector<entt::entity>& Siblings = m_Registry.get<HierarchyComponent>(Parent).Children;
-    VERIFY(std::find(Siblings.begin(), Siblings.end(), Entity) != Siblings.end(),
-           "Entity is not listed as a child of its parent");
-    Siblings.erase(std::remove(Siblings.begin(), Siblings.end(), Entity), Siblings.end());
+
+    auto It = std::find(Siblings.begin(), Siblings.end(), Entity);
+    if (It != Siblings.end())
+    {
+        Siblings.erase(It);
+    }
+    else
+    {
+        UNEXPECTED("Entity is not listed as a child of its parent");
+    }
 
     Hierarchy.Parent = entt::null;
 }
