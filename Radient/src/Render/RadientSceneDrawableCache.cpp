@@ -47,53 +47,51 @@ bool IsSameMeshAsset(const RadientMeshComponent& Mesh0,
     return Mesh0.pMesh == Mesh1.pMesh;
 }
 
-enum class MeshResolveStatus
+class RadientAssetDrawableMeshProvider final : public IRadientDrawableMeshProvider
 {
-    Ready,
-    Pending,
-    Failed
+public:
+    RadientDrawableMeshStatus GetDrawableMesh(IRadientMeshAsset*   pMeshAsset,
+                                              RadientDrawableMesh& Mesh) override final
+    {
+        Mesh = {};
+
+        if (pMeshAsset == nullptr)
+            return RadientDrawableMeshStatus::Failed;
+
+        const RadientAssetManagerImpl::GLTFMeshResolveResult Result =
+            RadientAssetManagerImpl::GetGLTFMesh(pMeshAsset, true);
+        if (RADIENT_FAILED(Result.Status))
+            return RadientDrawableMeshStatus::Failed;
+
+        if (Result.Status != RADIENT_STATUS_OK)
+            return RadientDrawableMeshStatus::Pending;
+
+        VERIFY(Result.pModel != nullptr, "GLTF mesh resolve result has null model pointer. This should not happen when the status is RADIENT_STATUS_OK");
+        VERIFY(Result.MeshIndex < Result.pModel->Meshes.size(), "GLTF mesh index (", Result.MeshIndex, ") is out of range for the model (", Result.pModel->Meshes.size(),
+               " meshes). This should not happen when the status is RADIENT_STATUS_OK");
+
+        Mesh.pModel             = Result.pModel;
+        Mesh.pMesh              = &Result.pModel->Meshes[Result.MeshIndex];
+        Mesh.VertexAttribFlags  = Result.VertexAttribFlags;
+        Mesh.FirstIndexLocation = Result.pModel->GetFirstIndexLocation();
+        Mesh.BaseVertex         = Result.pModel->GetBaseVertex();
+
+        return RadientDrawableMeshStatus::Ready;
+    }
 };
 
-struct ResolvedMesh
+IRadientDrawableMeshProvider& GetDefaultDrawableMeshProvider()
 {
-    const GLTF::Model* pModel = nullptr;
-    const GLTF::Mesh*  pMesh  = nullptr;
-
-    PBR_Renderer::PSO_FLAGS VertexAttribFlags  = PBR_Renderer::PSO_FLAG_NONE;
-    Uint32                  FirstIndexLocation = 0;
-    Uint32                  BaseVertex         = 0;
-};
-
-MeshResolveStatus ResolveMesh(IRadientMeshAsset* pMeshAsset,
-                              ResolvedMesh&      Mesh)
-{
-    Mesh = {};
-
-    if (pMeshAsset == nullptr)
-        return MeshResolveStatus::Failed;
-
-    const RadientAssetManagerImpl::GLTFMeshResolveResult Result =
-        RadientAssetManagerImpl::GetGLTFMesh(pMeshAsset, true);
-    if (RADIENT_FAILED(Result.Status))
-        return MeshResolveStatus::Failed;
-
-    if (Result.Status != RADIENT_STATUS_OK)
-        return MeshResolveStatus::Pending;
-
-    VERIFY(Result.pModel != nullptr, "GLTF mesh resolve result has null model pointer. This should not happen when the status is RADIENT_STATUS_OK");
-    VERIFY(Result.MeshIndex < Result.pModel->Meshes.size(), "GLTF mesh index (", Result.MeshIndex, ") is out of range for the model (", Result.pModel->Meshes.size(),
-           " meshes). This should not happen when the status is RADIENT_STATUS_OK");
-
-    Mesh.pModel             = Result.pModel;
-    Mesh.pMesh              = &Result.pModel->Meshes[Result.MeshIndex];
-    Mesh.VertexAttribFlags  = Result.VertexAttribFlags;
-    Mesh.FirstIndexLocation = Result.pModel->GetFirstIndexLocation();
-    Mesh.BaseVertex         = Result.pModel->GetBaseVertex();
-
-    return MeshResolveStatus::Ready;
+    static RadientAssetDrawableMeshProvider Provider;
+    return Provider;
 }
 
 } // namespace
+
+RadientSceneDrawableCache::RadientSceneDrawableCache(IRadientDrawableMeshProvider* pMeshProvider) :
+    m_MeshProvider{pMeshProvider != nullptr ? *pMeshProvider : GetDefaultDrawableMeshProvider()}
+{
+}
 
 RADIENT_STATUS RadientSceneDrawableCache::SyncScene(const IRadientScene& Scene)
 {
@@ -234,17 +232,17 @@ void RadientSceneDrawableCache::ResolvePendingRenderableMeshes()
 
 bool RadientSceneDrawableCache::TryExpandRenderable(RadientEntityID Entity, RenderableRecord& Record)
 {
-    ResolvedMesh Mesh;
-    switch (ResolveMesh(Record.Mesh.pMesh, Mesh))
+    RadientDrawableMesh Mesh;
+    switch (m_MeshProvider.GetDrawableMesh(Record.Mesh.pMesh, Mesh))
     {
-        case MeshResolveStatus::Ready:
+        case RadientDrawableMeshStatus::Ready:
             break;
 
-        case MeshResolveStatus::Pending:
+        case RadientDrawableMeshStatus::Pending:
             AddPendingResolution(Entity, Record);
             return false;
 
-        case MeshResolveStatus::Failed:
+        case RadientDrawableMeshStatus::Failed:
             return false;
     }
 

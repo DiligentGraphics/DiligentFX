@@ -92,10 +92,39 @@ struct RadientDrawableChange
     RadientDrawableChangeType Type       = RadientDrawableChangeType::Updated;
 };
 
+enum class RadientDrawableMeshStatus
+{
+    Ready,
+    Pending,
+    Failed
+};
+
+struct RadientDrawableMesh
+{
+    const GLTF::Model* pModel = nullptr;
+    const GLTF::Mesh*  pMesh  = nullptr;
+
+    PBR_Renderer::PSO_FLAGS VertexAttribFlags = PBR_Renderer::PSO_FLAG_NONE;
+
+    Uint32 FirstIndexLocation = 0;
+    Uint32 BaseVertex         = 0;
+};
+
+class IRadientDrawableMeshProvider
+{
+public:
+    virtual ~IRadientDrawableMeshProvider() = default;
+
+    virtual RadientDrawableMeshStatus GetDrawableMesh(IRadientMeshAsset*   pMesh,
+                                                      RadientDrawableMesh& Mesh) = 0;
+};
+
 /// Converts Radient scene state into renderer-facing render data.
 class RadientSceneDrawableCache
 {
 public:
+    explicit RadientSceneDrawableCache(IRadientDrawableMeshProvider* pMeshProvider = nullptr);
+
     RADIENT_STATUS SyncScene(const IRadientScene& Scene);
 
     const RadientDrawLists& GetDrawLists() const
@@ -155,6 +184,8 @@ private:
     void RecordDrawableChange(RadientDrawableID DrawableID, RadientDrawableChangeType Type);
 
 private:
+    IRadientDrawableMeshProvider& m_MeshProvider;
+
     std::unordered_map<RadientEntityID, RenderableRecord> m_Renderables;
 
     // Geometry passes cache pointers to drawable slots; deque keeps existing slot
