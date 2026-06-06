@@ -383,6 +383,11 @@ const RadientSceneRevisions& RadientSceneState::GetSceneRevisions() const
     return m_SceneRevisions;
 }
 
+const RadientSceneState::RenderableChangeLogState& RadientSceneState::GetRenderableChangeLogState() const
+{
+    return m_RenderableChangeLogState;
+}
+
 RADIENT_STATUS RadientSceneState::CreateEntity(const RadientEntityDesc& Desc, RadientEntityID& Entity)
 {
     Entity = InvalidRadientEntityID;
@@ -831,6 +836,8 @@ void RadientSceneState::ClearRenderableMeshChanges()
     }
 
     Entities.clear();
+
+    m_RenderableChangeLogState.MeshesBaseRevision = m_SceneRevisions.Drawables;
 }
 
 void RadientSceneState::ClearRenderableLightChanges()
@@ -851,6 +858,8 @@ void RadientSceneState::ClearRenderableLightChanges()
     }
 
     Entities.clear();
+
+    m_RenderableChangeLogState.LightsBaseRevision = m_SceneRevisions.Lights;
 }
 
 void RadientSceneState::ClearRenderableChanges()

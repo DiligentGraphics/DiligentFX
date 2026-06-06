@@ -107,8 +107,37 @@ RADIENT_STATUS RadientSceneDrawableCache::SyncScene(const IRadientScene& Scene)
     const bool UpdateRenderables = (m_SceneRevisions.Drawables != SceneRevisions.Drawables);
     const bool UpdateLights      = (m_SceneRevisions.Lights != SceneRevisions.Lights);
 
-    const RadientSceneImpl*  pSceneImpl = ClassPtrCast<const RadientSceneImpl>(&Scene);
-    const RadientSceneState& State      = pSceneImpl->GetState();
+    const RadientSceneImpl*                            pSceneImpl     = ClassPtrCast<const RadientSceneImpl>(&Scene);
+    const RadientSceneState&                           State          = pSceneImpl->GetState();
+    const RadientSceneState::RenderableChangeLogState& ChangeLogState = State.GetRenderableChangeLogState();
+
+    // Scene state keeps renderable mesh/light changes as delta logs. Clearing a log
+    // moves its base revision forward to the current scene revision. If this cache
+    // is older than that base, the changes it needs have already been discarded and
+    // an incremental sync would silently miss updates.
+    if (UpdateRenderables && m_SceneRevisions.Drawables < ChangeLogState.MeshesBaseRevision)
+    {
+        LOG_ERROR_MESSAGE("Failed to sync Radient drawable cache: renderable mesh changes were cleared before the cache consumed them. "
+                          "Cache drawable revision: ",
+                          m_SceneRevisions.Drawables,
+                          ", change log base revision: ",
+                          ChangeLogState.MeshesBaseRevision,
+                          ", scene drawable revision: ",
+                          SceneRevisions.Drawables);
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
+
+    if (UpdateLights && m_SceneRevisions.Lights < ChangeLogState.LightsBaseRevision)
+    {
+        LOG_ERROR_MESSAGE("Failed to sync Radient drawable cache: renderable light changes were cleared before the cache consumed them. "
+                          "Cache light revision: ",
+                          m_SceneRevisions.Lights,
+                          ", change log base revision: ",
+                          ChangeLogState.LightsBaseRevision,
+                          ", scene light revision: ",
+                          SceneRevisions.Lights);
+        return RADIENT_STATUS_INVALID_OPERATION;
+    }
 
     if (UpdateRenderables)
     {

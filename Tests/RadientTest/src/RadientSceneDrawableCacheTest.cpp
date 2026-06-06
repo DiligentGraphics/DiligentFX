@@ -518,6 +518,70 @@ TEST(RadientSceneDrawableCacheTest, SyncEmptyScene)
     pScene->ClearPendingRenderChanges();
 }
 
+TEST(RadientSceneDrawableCacheTest, DetectsClearedRenderableMeshChangesBeforeSync)
+{
+    TestDrawableMeshProvider        MeshProvider;
+    RadientSceneDrawableCache       DrawableCache{&MeshProvider};
+    RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
+
+    ASSERT_NE(pScene, nullptr);
+
+    GLTF::Model Model;
+    InitTestModel(Model);
+
+    RefCntAutoPtr<IRadientMeshAsset>   pMesh   = MakeTestMeshAsset("mesh://drawable-cache-cleared-mesh-changes", 1);
+    RefCntAutoPtr<IRadientSceneWriter> pWriter = RadientSceneWriterImpl::Create(pScene);
+    MeshProvider.RegisterMesh(pMesh, Model, RadientDrawableMeshStatus::Ready);
+
+    EXPECT_EQ(DrawableCache.SyncScene(*pScene), RADIENT_STATUS_NO_CHANGE);
+
+    const RadientEntityID Entity = AddRenderableEntity(*pWriter, pMesh);
+    ASSERT_NE(Entity, InvalidRadientEntityID);
+
+    // Clearing pending changes before the drawable cache consumes them makes
+    // incremental sync unsafe: the scene revision changed, but the delta log is gone.
+    pScene->ClearPendingRenderChanges();
+
+    {
+        TestingEnvironment::ErrorScope ExpectedErrors{
+            "Failed to sync Radient drawable cache: renderable mesh changes were cleared before the cache consumed them"};
+        EXPECT_EQ(DrawableCache.SyncScene(*pScene), RADIENT_STATUS_INVALID_OPERATION);
+    }
+    EXPECT_TRUE(DrawableCache.GetDrawLists().IsEmpty());
+    EXPECT_TRUE(DrawableCache.GetDrawableChanges().empty());
+}
+
+TEST(RadientSceneDrawableCacheTest, DetectsClearedRenderableLightChangesBeforeSync)
+{
+    RadientSceneDrawableCache       DrawableCache;
+    RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
+
+    ASSERT_NE(pScene, nullptr);
+
+    RefCntAutoPtr<IRadientSceneWriter> pWriter = RadientSceneWriterImpl::Create(pScene);
+
+    EXPECT_EQ(DrawableCache.SyncScene(*pScene), RADIENT_STATUS_NO_CHANGE);
+
+    RadientLightComponent Light;
+    Light.Type      = RADIENT_LIGHT_TYPE_POINT;
+    Light.Intensity = 2.f;
+
+    const RadientEntityID Entity = AddLightEntity(*pWriter, Light);
+    ASSERT_NE(Entity, InvalidRadientEntityID);
+
+    // Clearing pending changes before the drawable cache consumes them makes
+    // incremental light-list sync unsafe.
+    pScene->ClearPendingRenderChanges();
+
+    {
+        TestingEnvironment::ErrorScope ExpectedErrors{
+            "Failed to sync Radient drawable cache: renderable light changes were cleared before the cache consumed them"};
+        EXPECT_EQ(DrawableCache.SyncScene(*pScene), RADIENT_STATUS_INVALID_OPERATION);
+    }
+    EXPECT_TRUE(DrawableCache.GetLightList(RADIENT_LIGHT_TYPE_POINT).IsEmpty());
+    EXPECT_TRUE(DrawableCache.GetLightChanges().empty());
+}
+
 TEST(RadientSceneDrawableCacheTest, InvalidAlphaModeDefaultsToOpaque)
 {
     TestDrawableMeshProvider        MeshProvider;

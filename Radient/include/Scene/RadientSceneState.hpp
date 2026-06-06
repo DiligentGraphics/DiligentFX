@@ -103,6 +103,15 @@ public:
         RenderableLightChangeType Type   = RenderableLightChangeType::Updated;
     };
 
+    struct RenderableChangeLogState
+    {
+        // Pending renderable changes are a delta log. When the log is cleared,
+        // the base revision moves to the current scene revision; caches older
+        // than this base can no longer safely consume incremental changes.
+        RadientRevision MeshesBaseRevision = 0;
+        RadientRevision LightsBaseRevision = 0;
+    };
+
     RadientSceneState();
     explicit RadientSceneState(const RadientSceneDesc& Desc);
 
@@ -130,7 +139,8 @@ public:
     const RadientEnvironmentDesc& GetEnvironment() const;
     RADIENT_STATUS                HasComponent(RadientEntityID Entity, RadientComponentTypeID ComponentType, Bool& HasComponent) const;
 
-    const RadientSceneRevisions& GetSceneRevisions() const;
+    const RadientSceneRevisions&    GetSceneRevisions() const;
+    const RenderableChangeLogState& GetRenderableChangeLogState() const;
 
     // Callback receives RenderableMesh by value, but its members reference registry-owned component data.
     template <typename CallbackType>
@@ -336,6 +346,7 @@ private:
     CustomComponentStoresMapType        m_CustomComponentStores;
     RadientEntityID                     m_NextEntityID = 1;
     RadientSceneRevisions               m_SceneRevisions;
+    RenderableChangeLogState            m_RenderableChangeLogState;
     RadientEnvironmentDesc              m_Environment;
     RefCntAutoPtr<IRadientTextureAsset> m_pEnvironmentMap;
     std::vector<RenderableMeshChange>   m_RemovedRenderableMeshChanges;
