@@ -54,6 +54,11 @@ bool IsValidEntityFlags(RADIENT_ENTITY_FLAGS Flags)
     return (Flags & ~RADIENT_ENTITY_FLAGS_ALL) == RADIENT_ENTITY_FLAG_NONE;
 }
 
+bool IsValidLightType(RADIENT_LIGHT_TYPE Type)
+{
+    return static_cast<Uint8>(Type) < static_cast<Uint8>(RADIENT_LIGHT_TYPE_COUNT);
+}
+
 } // namespace
 
 
@@ -552,6 +557,9 @@ RADIENT_STATUS RadientSceneState::SetLight(RadientEntityID Entity, const Radient
     const entt::entity E = FindEntity(Entity);
     if (E == entt::null)
         return RADIENT_STATUS_NOT_FOUND;
+
+    if (!IsValidLightType(Light.Type))
+        return RADIENT_STATUS_INVALID_ARGUMENT;
 
     const RadientLightComponent* pExistingLight = m_Registry.try_get<RadientLightComponent>(E);
     if (pExistingLight != nullptr && *pExistingLight == Light)

@@ -2030,6 +2030,58 @@ TEST(RadientSceneStateTest, TracksRenderableLightChanges)
     EXPECT_TRUE(CaptureRenderableLightChanges(State).empty());
 }
 
+TEST(RadientSceneStateTest, RejectsInvalidLightTypes)
+{
+    // Invalid light types should be rejected before the component enters the
+    // registry, since renderer light lists use the type as an array index.
+    RadientSceneState State;
+
+    RadientEntityID Entity = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity({}, Entity), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+    const RadientSceneRevisions InitialRevisions = State.GetSceneRevisions();
+
+    RadientLightComponent Light;
+    Light.Type = RADIENT_LIGHT_TYPE_COUNT;
+    EXPECT_EQ(State.SetLight(Entity, Light), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(State.GetSceneRevisions(), InitialRevisions);
+    EXPECT_TRUE(CaptureRenderableLightChanges(State).empty());
+
+    Uint32 RenderableLightCount = 0;
+    EXPECT_EQ(State.EnumerateRenderableLights(
+                  [&RenderableLightCount](const RadientSceneState::RenderableLight&) {
+                      ++RenderableLightCount;
+                  }),
+              RADIENT_STATUS_OK);
+    EXPECT_EQ(RenderableLightCount, 0u);
+
+    Light.Type      = RADIENT_LIGHT_TYPE_POINT;
+    Light.Intensity = 5.f;
+    EXPECT_EQ(State.SetLight(Entity, Light), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+    State.ClearRenderableLightChanges();
+
+    const RadientSceneRevisions ValidLightRevisions = State.GetSceneRevisions();
+
+    RadientLightComponent InvalidLight = Light;
+    InvalidLight.Type                  = static_cast<RADIENT_LIGHT_TYPE>(255);
+    EXPECT_EQ(State.SetLight(Entity, InvalidLight), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(State.GetSceneRevisions(), ValidLightRevisions);
+    EXPECT_TRUE(CaptureRenderableLightChanges(State).empty());
+
+    std::vector<CapturedRenderableLight> RenderableLights;
+    EXPECT_EQ(State.EnumerateRenderableLights(
+                  [&RenderableLights](const RadientSceneState::RenderableLight& RenderableLight) {
+                      RenderableLights.push_back(CaptureRenderableLight(RenderableLight));
+                  }),
+              RADIENT_STATUS_OK);
+    ASSERT_EQ(RenderableLights.size(), 1u);
+    EXPECT_EQ(RenderableLights[0].Entity, Entity);
+    EXPECT_EQ(RenderableLights[0].Light.Type, RADIENT_LIGHT_TYPE_POINT);
+    EXPECT_EQ(RenderableLights[0].Light.Intensity, 5.f);
+}
+
 TEST(RadientSceneStateTest, TransformAndVisibilityDoNotEmitRenderableLightChanges)
 {
     // Light changes describe light component membership/data. Transform and
