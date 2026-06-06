@@ -285,8 +285,6 @@ private:
 
     using CustomComponentStore = entt::storage<CustomComponentStorage>;
 
-    template <typename ComponentType>
-    RADIENT_STATUS EmplaceOrReplaceComponent(RadientEntityID Entity, const ComponentType& Component, CHANGE_FLAGS ChangeFlags = CHANGE_FLAG_NONE);
     template <typename ComponentSourceType>
     RenderableMesh MakeRenderableMesh(entt::entity Entity, const ComponentSourceType& ComponentSource) const;
     template <typename ComponentSourceType>

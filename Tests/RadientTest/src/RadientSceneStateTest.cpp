@@ -33,6 +33,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
@@ -2082,6 +2083,104 @@ TEST(RadientSceneStateTest, RejectsInvalidLightTypes)
     EXPECT_EQ(RenderableLights[0].Light.Intensity, 5.f);
 }
 
+TEST(RadientSceneStateTest, RejectsInvalidLightProperties)
+{
+    // Light component values are validated before storage so render code can
+    // trust type-specific light lists and shader inputs.
+    RadientSceneState State;
+
+    RadientEntityID Entity = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity({}, Entity), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+
+    RadientLightComponent Light;
+    Light.Type           = RADIENT_LIGHT_TYPE_SPOT;
+    Light.Intensity      = 5.f;
+    Light.Range          = 25.f;
+    Light.InnerConeAngle = 0.25f;
+    Light.OuterConeAngle = 0.5f;
+    EXPECT_EQ(State.SetLight(Entity, Light), RADIENT_STATUS_OK);
+    EXPECT_EQ(State.CommitChanges(), RADIENT_STATUS_OK);
+    State.ClearRenderableLightChanges();
+
+    const RadientSceneRevisions ValidLightRevisions = State.GetSceneRevisions();
+
+    auto ExpectInvalidLight = [&](const char* Name, RadientLightComponent InvalidLight) {
+        SCOPED_TRACE(Name);
+
+        EXPECT_EQ(State.SetLight(Entity, InvalidLight), RADIENT_STATUS_INVALID_ARGUMENT);
+        EXPECT_EQ(State.GetSceneRevisions(), ValidLightRevisions);
+        EXPECT_TRUE(CaptureRenderableLightChanges(State).empty());
+
+        std::vector<CapturedRenderableLight> RenderableLights;
+        EXPECT_EQ(State.EnumerateRenderableLights(
+                      [&RenderableLights](const RadientSceneState::RenderableLight& RenderableLight) {
+                          RenderableLights.push_back(CaptureRenderableLight(RenderableLight));
+                      }),
+                  RADIENT_STATUS_OK);
+        ASSERT_EQ(RenderableLights.size(), 1u);
+        EXPECT_EQ(RenderableLights[0].Entity, Entity);
+        EXPECT_EQ(RenderableLights[0].Light, Light);
+    };
+
+    RadientLightComponent InvalidLight = Light;
+    InvalidLight.Color.x               = -1.f;
+    ExpectInvalidLight("Negative color", InvalidLight);
+
+    InvalidLight         = Light;
+    InvalidLight.Color.y = std::numeric_limits<Float32>::infinity();
+    ExpectInvalidLight("Infinite color", InvalidLight);
+
+    InvalidLight           = Light;
+    InvalidLight.Intensity = -1.f;
+    ExpectInvalidLight("Negative intensity", InvalidLight);
+
+    InvalidLight       = Light;
+    InvalidLight.Range = -1.f;
+    ExpectInvalidLight("Negative range", InvalidLight);
+
+    InvalidLight          = Light;
+    InvalidLight.Exposure = std::numeric_limits<Float32>::infinity();
+    ExpectInvalidLight("Infinite exposure", InvalidLight);
+
+    InvalidLight         = Light;
+    InvalidLight.Diffuse = -1.f;
+    ExpectInvalidLight("Negative diffuse", InvalidLight);
+
+    InvalidLight          = Light;
+    InvalidLight.Specular = -1.f;
+    ExpectInvalidLight("Negative specular", InvalidLight);
+
+    InvalidLight                  = Light;
+    InvalidLight.ColorTemperature = 0.f;
+    ExpectInvalidLight("Invalid color temperature", InvalidLight);
+
+    InvalidLight        = Light;
+    InvalidLight.Radius = -1.f;
+    ExpectInvalidLight("Negative radius", InvalidLight);
+
+    InvalidLight       = Light;
+    InvalidLight.Angle = -1.f;
+    ExpectInvalidLight("Negative angle", InvalidLight);
+
+    InvalidLight                = Light;
+    InvalidLight.InnerConeAngle = -0.1f;
+    ExpectInvalidLight("Negative inner cone", InvalidLight);
+
+    InvalidLight                = Light;
+    InvalidLight.InnerConeAngle = 0.6f;
+    InvalidLight.OuterConeAngle = 0.5f;
+    ExpectInvalidLight("Inner cone larger than outer cone", InvalidLight);
+
+    InvalidLight                = Light;
+    InvalidLight.OuterConeAngle = 1.6f;
+    ExpectInvalidLight("Outer cone above glTF maximum", InvalidLight);
+
+    InvalidLight              = Light;
+    InvalidLight.ShapingFocus = std::numeric_limits<Float32>::quiet_NaN();
+    ExpectInvalidLight("Non-finite shaping focus", InvalidLight);
+}
+
 TEST(RadientSceneStateTest, TransformAndVisibilityDoNotEmitRenderableLightChanges)
 {
     // Light changes describe light component membership/data. Transform and
@@ -2526,6 +2625,88 @@ TEST(RadientSceneStateTest, GetCamera)
     // After removal, GetCamera should again return not found and defaults.
     EXPECT_EQ(State.GetCamera(Entity, Camera), RADIENT_STATUS_NOT_FOUND);
     EXPECT_EQ(Camera, RadientCameraComponent{});
+}
+
+TEST(RadientSceneStateTest, RejectsInvalidCameraProperties)
+{
+    // Camera component values are validated at the scene boundary; rejected
+    // updates must not replace an existing valid camera or advance revisions.
+    RadientSceneState State;
+
+    RadientEntityID Entity = InvalidRadientEntityID;
+    ASSERT_EQ(State.CreateEntity({}, Entity), RADIENT_STATUS_OK);
+
+    const RadientSceneRevisions InitialRevisions = State.GetSceneRevisions();
+
+    RadientCameraComponent InvalidCamera;
+    InvalidCamera.Projection = static_cast<RADIENT_CAMERA_PROJECTION>(255);
+    EXPECT_EQ(State.SetCamera(Entity, InvalidCamera), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(State.GetSceneRevisions(), InitialRevisions);
+
+    RadientCameraComponent Camera;
+    Camera.FocalLength = 35.f;
+    EXPECT_EQ(State.GetCamera(Entity, Camera), RADIENT_STATUS_NOT_FOUND);
+    EXPECT_EQ(Camera, RadientCameraComponent{});
+
+    RadientCameraComponent ValidCamera;
+    ValidCamera.HorizontalAperture       = 3.f;
+    ValidCamera.VerticalAperture         = 2.f;
+    ValidCamera.HorizontalApertureOffset = 0.25f;
+    ValidCamera.VerticalApertureOffset   = -0.125f;
+    ValidCamera.FocalLength              = 45.f;
+    ValidCamera.ClippingRange            = {0.25f, 500.f};
+    ValidCamera.FStop                    = 4.f;
+    ValidCamera.FocusDistance            = 12.f;
+    EXPECT_EQ(State.SetCamera(Entity, ValidCamera), RADIENT_STATUS_OK);
+
+    const RadientSceneRevisions ValidCameraRevisions = State.GetSceneRevisions();
+
+    auto ExpectInvalidCamera = [&](const char* Name, RadientCameraComponent Invalid) {
+        SCOPED_TRACE(Name);
+
+        EXPECT_EQ(State.SetCamera(Entity, Invalid), RADIENT_STATUS_INVALID_ARGUMENT);
+        EXPECT_EQ(State.GetSceneRevisions(), ValidCameraRevisions);
+
+        RadientCameraComponent StoredCamera;
+        EXPECT_EQ(State.GetCamera(Entity, StoredCamera), RADIENT_STATUS_OK);
+        EXPECT_EQ(StoredCamera, ValidCamera);
+    };
+
+    InvalidCamera            = ValidCamera;
+    InvalidCamera.Projection = static_cast<RADIENT_CAMERA_PROJECTION>(255);
+    ExpectInvalidCamera("Invalid projection", InvalidCamera);
+
+    InvalidCamera                    = ValidCamera;
+    InvalidCamera.HorizontalAperture = 0.f;
+    ExpectInvalidCamera("Non-positive horizontal aperture", InvalidCamera);
+
+    InvalidCamera                  = ValidCamera;
+    InvalidCamera.VerticalAperture = -1.f;
+    ExpectInvalidCamera("Non-positive vertical aperture", InvalidCamera);
+
+    InvalidCamera                          = ValidCamera;
+    InvalidCamera.HorizontalApertureOffset = std::numeric_limits<Float32>::infinity();
+    ExpectInvalidCamera("Infinite horizontal aperture offset", InvalidCamera);
+
+    InvalidCamera             = ValidCamera;
+    InvalidCamera.FocalLength = 0.f;
+    ExpectInvalidCamera("Non-positive focal length", InvalidCamera);
+
+    InvalidCamera                 = ValidCamera;
+    InvalidCamera.ClippingRange.x = 0.f;
+    ExpectInvalidCamera("Non-positive near plane", InvalidCamera);
+
+    InvalidCamera                 = ValidCamera;
+    InvalidCamera.ClippingRange.y = InvalidCamera.ClippingRange.x;
+    ExpectInvalidCamera("Far plane not greater than near plane", InvalidCamera);
+
+    InvalidCamera       = ValidCamera;
+    InvalidCamera.FStop = -1.f;
+    ExpectInvalidCamera("Negative f-stop", InvalidCamera);
+
+    InvalidCamera               = ValidCamera;
+    InvalidCamera.FocusDistance = -1.f;
+    ExpectInvalidCamera("Negative focus distance", InvalidCamera);
 }
 
 TEST(RadientSceneStateTest, SetBuiltInComponentReturnsNoChangeForSameValue)

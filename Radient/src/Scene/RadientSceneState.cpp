@@ -30,6 +30,7 @@
 #include "Math/RadientMath.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
 #include <utility>
 
@@ -57,6 +58,70 @@ bool IsValidEntityFlags(RADIENT_ENTITY_FLAGS Flags)
 bool IsValidLightType(RADIENT_LIGHT_TYPE Type)
 {
     return static_cast<Uint8>(Type) < static_cast<Uint8>(RADIENT_LIGHT_TYPE_COUNT);
+}
+
+bool IsValidCameraProjection(RADIENT_CAMERA_PROJECTION Projection)
+{
+    return Projection == RADIENT_CAMERA_PROJECTION_PERSPECTIVE ||
+        Projection == RADIENT_CAMERA_PROJECTION_ORTHOGRAPHIC;
+}
+
+bool IsFinite(Float32 Value)
+{
+    return std::isfinite(Value);
+}
+
+bool IsFinitePositive(Float32 Value)
+{
+    return IsFinite(Value) && Value > 0.f;
+}
+
+bool IsFiniteNonNegative(Float32 Value)
+{
+    return IsFinite(Value) && Value >= 0.f;
+}
+
+bool IsFiniteNonNegative(const RadientFloat3& Value)
+{
+    return IsFiniteNonNegative(Value.x) &&
+        IsFiniteNonNegative(Value.y) &&
+        IsFiniteNonNegative(Value.z);
+}
+
+bool IsValidCameraComponent(const RadientCameraComponent& Camera)
+{
+    return IsValidCameraProjection(Camera.Projection) &&
+        IsFinitePositive(Camera.HorizontalAperture) &&
+        IsFinitePositive(Camera.VerticalAperture) &&
+        IsFinite(Camera.HorizontalApertureOffset) &&
+        IsFinite(Camera.VerticalApertureOffset) &&
+        IsFinitePositive(Camera.FocalLength) &&
+        IsFinitePositive(Camera.ClippingRange.x) &&
+        IsFinite(Camera.ClippingRange.y) &&
+        Camera.ClippingRange.y > Camera.ClippingRange.x &&
+        IsFiniteNonNegative(Camera.FStop) &&
+        IsFiniteNonNegative(Camera.FocusDistance);
+}
+
+bool IsValidLightComponent(const RadientLightComponent& Light)
+{
+    static constexpr Float32 MaxSpotConeAngle = 1.5707963267948966f;
+
+    return IsValidLightType(Light.Type) &&
+        IsFiniteNonNegative(Light.Color) &&
+        IsFiniteNonNegative(Light.Intensity) &&
+        IsFiniteNonNegative(Light.Range) &&
+        IsFinite(Light.Exposure) &&
+        IsFiniteNonNegative(Light.Diffuse) &&
+        IsFiniteNonNegative(Light.Specular) &&
+        IsFinitePositive(Light.ColorTemperature) &&
+        IsFiniteNonNegative(Light.Radius) &&
+        IsFiniteNonNegative(Light.Angle) &&
+        IsFiniteNonNegative(Light.InnerConeAngle) &&
+        IsFinite(Light.OuterConeAngle) &&
+        Light.OuterConeAngle >= Light.InnerConeAngle &&
+        Light.OuterConeAngle <= MaxSpotConeAngle &&
+        IsFinite(Light.ShapingFocus);
 }
 
 } // namespace
@@ -490,7 +555,20 @@ RADIENT_STATUS RadientSceneState::SetLocalTransform(RadientEntityID Entity, cons
 
 RADIENT_STATUS RadientSceneState::SetCamera(RadientEntityID Entity, const RadientCameraComponent& Camera)
 {
-    return EmplaceOrReplaceComponent(Entity, Camera, CHANGE_FLAG_CAMERAS);
+    const entt::entity E = FindEntity(Entity);
+    if (E == entt::null)
+        return RADIENT_STATUS_NOT_FOUND;
+
+    if (!IsValidCameraComponent(Camera))
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+
+    const RadientCameraComponent* pExistingCamera = m_Registry.try_get<RadientCameraComponent>(E);
+    if (pExistingCamera != nullptr && *pExistingCamera == Camera)
+        return RADIENT_STATUS_NO_CHANGE;
+
+    m_Registry.emplace_or_replace<RadientCameraComponent>(E, Camera);
+    Touch(CHANGE_FLAG_CAMERAS);
+    return RADIENT_STATUS_OK;
 }
 
 RADIENT_STATUS RadientSceneState::SetMesh(RadientEntityID Entity, const RadientMeshComponent& Mesh)
@@ -558,7 +636,7 @@ RADIENT_STATUS RadientSceneState::SetLight(RadientEntityID Entity, const Radient
     if (E == entt::null)
         return RADIENT_STATUS_NOT_FOUND;
 
-    if (!IsValidLightType(Light.Type))
+    if (!IsValidLightComponent(Light))
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
     const RadientLightComponent* pExistingLight = m_Registry.try_get<RadientLightComponent>(E);
@@ -839,22 +917,6 @@ bool RadientSceneState::VerifyInternalEntity(entt::entity Entity) const
     }
 
     return true;
-}
-
-template <typename ComponentType>
-RADIENT_STATUS RadientSceneState::EmplaceOrReplaceComponent(RadientEntityID Entity, const ComponentType& Component, CHANGE_FLAGS ChangeFlags)
-{
-    const entt::entity E = FindEntity(Entity);
-    if (E == entt::null)
-        return RADIENT_STATUS_NOT_FOUND;
-
-    const ComponentType* pExistingComponent = m_Registry.try_get<ComponentType>(E);
-    if (pExistingComponent != nullptr && *pExistingComponent == Component)
-        return RADIENT_STATUS_NO_CHANGE;
-
-    m_Registry.emplace_or_replace<ComponentType>(E, Component);
-    Touch(ChangeFlags);
-    return RADIENT_STATUS_OK;
 }
 
 void RadientSceneState::DetachFromParent(entt::entity Entity)
