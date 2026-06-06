@@ -41,6 +41,14 @@ namespace Diligent
 namespace
 {
 
+Uint8 CorrectMaterialAlphaMode(int AlphaMode)
+{
+    if (AlphaMode < GLTF::Material::ALPHA_MODE_OPAQUE || AlphaMode >= GLTF::Material::ALPHA_MODE_NUM_MODES)
+        AlphaMode = GLTF::Material::ALPHA_MODE_OPAQUE;
+
+    return static_cast<Uint8>(AlphaMode);
+}
+
 class RadientAssetDrawableMeshProvider final : public IRadientDrawableMeshProvider
 {
 public:
@@ -304,7 +312,7 @@ bool RadientSceneDrawableCache::TryExpandRenderable(RadientEntityID Entity, Rend
         Slot.BaseVertex         = Mesh.BaseVertex;
         Slot.FirstElement       = FirstElement;
         Slot.ElementCount       = ElementCount;
-        Slot.AlphaMode          = static_cast<Uint8>(pMaterial->Attribs.AlphaMode);
+        Slot.AlphaMode          = CorrectMaterialAlphaMode(pMaterial->Attribs.AlphaMode);
 
         Slot.DrawListIndex = m_DrawLists.Add(static_cast<GLTF::Material::ALPHA_MODE>(Slot.AlphaMode), DrawableID);
         Record.DrawableIDs.push_back(DrawableID);

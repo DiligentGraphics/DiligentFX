@@ -518,6 +518,47 @@ TEST(RadientSceneDrawableCacheTest, SyncEmptyScene)
     pScene->ClearPendingRenderChanges();
 }
 
+TEST(RadientSceneDrawableCacheTest, InvalidAlphaModeDefaultsToOpaque)
+{
+    TestDrawableMeshProvider        MeshProvider;
+    RadientSceneDrawableCache       DrawableCache{&MeshProvider};
+    RefCntAutoPtr<RadientSceneImpl> pScene = RadientSceneImpl::Create();
+
+    ASSERT_NE(pScene, nullptr);
+
+    GLTF::Model Model;
+    Model.Materials.resize(2);
+    Model.Materials[0].Attribs.AlphaMode = GLTF::Material::ALPHA_MODE_NUM_MODES;
+    Model.Materials[1].Attribs.AlphaMode = -1;
+    Model.Meshes.resize(1);
+    Model.Meshes[0].Primitives.emplace_back(MakePrimitive(0, 3, 0, 0, 0));
+    Model.Meshes[0].Primitives.emplace_back(MakePrimitive(3, 3, 0, 0, 1));
+
+    RefCntAutoPtr<IRadientMeshAsset>   pMesh   = MakeTestMeshAsset("mesh://drawable-cache-invalid-alpha-mode", 1);
+    RefCntAutoPtr<IRadientSceneWriter> pWriter = RadientSceneWriterImpl::Create(pScene);
+    MeshProvider.RegisterMesh(pMesh, Model, RadientDrawableMeshStatus::Ready);
+    const RadientEntityID Entity = AddRenderableEntity(*pWriter, pMesh);
+    ASSERT_NE(Entity, InvalidRadientEntityID);
+
+    // Invalid material alpha modes must be clamped to opaque before they are
+    // used as draw-list indices.
+    EXPECT_EQ(DrawableCache.SyncScene(*pScene), RADIENT_STATUS_OK);
+    ExpectDrawableChangeCounts(DrawableCache, 2u, 0u, 0u);
+
+    const RadientDrawList::ItemListType& OpaqueItems = DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_OPAQUE).GetItems();
+    ASSERT_EQ(OpaqueItems.size(), 2u);
+    EXPECT_TRUE(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_MASK).IsEmpty());
+    EXPECT_TRUE(DrawableCache.GetDrawList(GLTF::Material::ALPHA_MODE_BLEND).IsEmpty());
+
+    for (const RadientDrawItem& Item : OpaqueItems)
+    {
+        const RadientDrawableSlot* pSlot = DrawableCache.GetDrawableSlot(Item.DrawableID);
+        ASSERT_NE(pSlot, nullptr);
+        EXPECT_EQ(pSlot->Entity, Entity);
+        EXPECT_EQ(pSlot->AlphaMode, GLTF::Material::ALPHA_MODE_OPAQUE);
+    }
+}
+
 TEST(RadientSceneDrawableCacheTest, PendingRenderableMeshCanFail)
 {
     TestDrawableMeshProvider        MeshProvider;
