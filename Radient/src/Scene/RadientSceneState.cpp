@@ -40,6 +40,8 @@ namespace Diligent
 namespace
 {
 
+constexpr size_t InitialEntityMapCapacity = 1024;
+
 bool IsBuiltInComponentType(const RadientComponentTypeID ComponentType)
 {
     return (ComponentType == RADIENT_COMPONENT_TYPE_TRANSFORM ||
@@ -130,6 +132,7 @@ bool IsValidLightComponent(const RadientLightComponent& Light)
 RadientSceneState::RadientSceneState() :
     m_Desc{}
 {
+    m_EntityMap.reserve(InitialEntityMapCapacity);
 }
 
 RadientSceneState::RadientSceneState(const RadientSceneDesc& Desc) :
@@ -137,6 +140,7 @@ RadientSceneState::RadientSceneState(const RadientSceneDesc& Desc) :
     m_Desc{Desc}
 {
     m_Desc.Name = Desc.Name != nullptr ? m_Name.c_str() : nullptr;
+    m_EntityMap.reserve(InitialEntityMapCapacity);
 }
 
 const RadientSceneDesc& RadientSceneState::GetDesc() const

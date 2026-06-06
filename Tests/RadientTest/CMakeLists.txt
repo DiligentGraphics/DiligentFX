@@ -34,6 +34,7 @@ PRIVATE
     DiligentFX
     Radient
     EnTT
+    absl::flat_hash_map
 )
 
 if (MSVC)

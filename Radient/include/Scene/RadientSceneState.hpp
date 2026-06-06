@@ -34,6 +34,16 @@
 #include "entt/entity/registry.hpp"
 #include "entt/entity/storage.hpp"
 
+#ifdef _MSC_VER
+#    pragma warning(push)
+#    pragma warning(disable : 4127) // conditional expression is constant
+#    pragma warning(disable : 4702) // unreachable code
+#endif
+#include "absl/container/flat_hash_map.h"
+#ifdef _MSC_VER
+#    pragma warning(pop)
+#endif
+
 #include <cstddef>
 #include <string>
 #include <unordered_map>
@@ -320,7 +330,7 @@ private:
     RadientSceneDesc  m_Desc;
 
     using CustomComponentStoresMapType = std::unordered_map<RadientComponentTypeID, CustomComponentStore>;
-    using EntityMapType                = std::unordered_map<RadientEntityID, entt::entity>;
+    using EntityMapType                = absl::flat_hash_map<RadientEntityID, entt::entity>;
     entt::registry                      m_Registry;
     EntityMapType                       m_EntityMap;
     CustomComponentStoresMapType        m_CustomComponentStores;

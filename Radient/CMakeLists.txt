@@ -87,6 +87,7 @@ PRIVATE
     Diligent-Common
     DiligentFX
     EnTT
+    absl::flat_hash_map
 )
 
 if (MSVC)
